@@ -117,7 +117,7 @@ export function ViecCuaToScreen({
   return (
     <div className="kit flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-[17px] font-semibold text-[var(--ink)]">
+        <h1 className="text-k-title font-semibold text-[var(--ink)]">
           Việc của {teamName ?? 'tổ'}
         </h1>
         {canPick && teams.length > 0 && (
@@ -132,7 +132,7 @@ export function ViecCuaToScreen({
             ]}
           />
         )}
-        <span className="ml-auto text-[var(--fs-sm)] text-[var(--ink-3)]">
+        <span className="text-k-sm ml-auto text-[var(--ink-3)]">
           Màn chỉ để XEM — số liệu do thống kê ghi ở sổ sản lượng.
         </span>
       </div>
@@ -206,13 +206,13 @@ export function ViecCuaToScreen({
                 <GridRow key={c.id}>
                   <Td>
                     <b className="num">{c.lsx_code}</b>
-                    <span className="mt-[2px] block text-[var(--fs-sm)] text-[var(--ink-3)]">
+                    <span className="text-k-sm mt-0.5 block text-[var(--ink-3)]">
                       {c.customer_name}
                     </span>
                   </Td>
                   <Td>
                     <span className="num">{c.product_code}</span>
-                    <span className="mt-[2px] block text-[var(--fs-sm)] text-[var(--ink-3)]">
+                    <span className="text-k-sm mt-0.5 block text-[var(--ink-3)]">
                       {c.product_name}
                     </span>
                   </Td>

@@ -132,12 +132,14 @@ export function TinhHinhScreen({
       </WorkTiles>
 
       <section>
-        <h2 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
+        <h2 className="text-k-label mb-2 flex items-center gap-2 font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
           Nhịp hôm nay · {fmtDate(pulse.date)}
           {/* Lăng kính TUẦN của cùng bộ số — rút khỏi nav 18/09, đứng ở đây vì
               đây là chỗ người ta nảy ra nhu cầu "thế cả tuần thì sao". */}
           <span className="ml-auto normal-case">
-            <Btn href="/kehoach-sx/tuan">Xem theo tuần</Btn>
+            <Btn icon="baoCao" href="/kehoach-sx/tuan">
+              Xem theo tuần
+            </Btn>
           </span>
         </h2>
         <MetricStrip>
@@ -189,12 +191,14 @@ export function TinhHinhScreen({
       </section>
 
       <section>
-        <h2 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
+        <h2 className="text-k-label mb-2 flex items-center gap-2 font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
           Tổ hôm nay
           {/* Bảng này chỉ nói HÔM NAY. Luỹ kế theo tổ (cần/đạt/%/dự kiến xong)
               là câu hỏi khác, nằm ở màn riêng. */}
           <span className="ml-auto normal-case">
-            <Btn href="/kehoach-sx/theo-to">Tiến độ luỹ kế theo tổ</Btn>
+            <Btn icon="baoCao" href="/kehoach-sx/theo-to">
+              Tiến độ luỹ kế theo tổ
+            </Btn>
           </span>
         </h2>
         <Grid minWidth={760}>
@@ -244,10 +248,12 @@ export function TinhHinhScreen({
       </section>
 
       <section>
-        <h2 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
+        <h2 className="text-k-label mb-2 flex items-center gap-2 font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
           Lệnh cần chú ý
           <span className="ml-auto normal-case">
-            <Btn href="/thongke/lenh">Xem tất cả {fmt(rows.length)} lệnh</Btn>
+            <Btn icon="lenh" href="/thongke/lenh">
+              Xem tất cả {fmt(rows.length)} lệnh
+            </Btn>
           </span>
         </h2>
         <Grid minWidth={700}>
@@ -275,9 +281,13 @@ export function TinhHinhScreen({
                 <Td>
                   <span className="flex justify-end gap-1">
                     {canRecord && r.component_count > 0 && (
-                      <Btn href={`/thongke/ghi?lsx=${r.lsx.id}`}>Ghi sổ</Btn>
+                      <Btn icon="ghiSo" href={`/thongke/ghi?lsx=${r.lsx.id}`}>
+                        Ghi sổ
+                      </Btn>
                     )}
-                    <Btn href={`/thongke/lsx/${r.lsx.id}`}>Mở</Btn>
+                    <Btn icon="mo" href={`/thongke/lsx/${r.lsx.id}`}>
+                      Mở
+                    </Btn>
                   </span>
                 </Td>
               </GridRow>

@@ -38,40 +38,40 @@ export default async function DinhHinhPage({
   // vẫn cấp. Bỏ lớp bọc này khi màn được dựng lại bằng kit.
   return (
     <div className="mx-auto max-w-[1600px] p-6">
-    <DinhHinhScreen
-      lsx={{ id: lsx.id, code: lsx.code, customer_name: lsx.customer_name }}
-      orderLines={rawLines.map((l) => ({
-        id: l.id,
-        product_code: l.product_code,
-        product_name: l.name_vi ?? l.product_code,
-        qty: l.qty,
-        group_title: groupTitle.get(l.group_id) ?? '',
-      }))}
-      initialRows={data.lines.map((r) => ({
-        production_order_line_id: r.production_order_line_id,
-        kind: r.kind,
-        cluster: r.cluster,
-        name: r.name,
-        group_code: r.group_code,
-        material_id: r.material_id,
-        material_type: r.material_type,
-        spec_thickness_mm: r.spec_thickness_mm,
-        spec_width_mm: r.spec_width_mm,
-        spec_length_mm: r.spec_length_mm,
-        wall_thickness_mm: r.wall_thickness_mm,
-        unit: r.unit,
-        qty_per_unit: r.qty_per_unit,
-        dm_kg: r.dm_kg,
-        pcs_per_bar: r.pcs_per_bar,
-        qty_per_assembly: r.qty_per_assembly,
-        first_stage: r.first_stage,
-        final_stage: r.final_stage,
-        note: r.note,
-      }))}
-      lockedByEntries={data.locked_by_entries}
-      lsxClosed={data.lsx_status === 'completed' || data.lsx_status === 'cancelled'}
-      canEdit={canEdit}
-    />
+      <DinhHinhScreen
+        lsx={{ id: lsx.id, code: lsx.code, customer_name: lsx.customer_name }}
+        orderLines={rawLines.map((l) => ({
+          id: l.id,
+          product_code: l.product_code,
+          product_name: l.name_vi ?? l.product_code,
+          qty: l.qty,
+          group_title: groupTitle.get(l.group_id) ?? '',
+        }))}
+        initialRows={data.lines.map((r) => ({
+          production_order_line_id: r.production_order_line_id,
+          kind: r.kind,
+          cluster: r.cluster,
+          name: r.name,
+          group_code: r.group_code,
+          material_id: r.material_id,
+          material_type: r.material_type,
+          spec_thickness_mm: r.spec_thickness_mm,
+          spec_width_mm: r.spec_width_mm,
+          spec_length_mm: r.spec_length_mm,
+          wall_thickness_mm: r.wall_thickness_mm,
+          unit: r.unit,
+          qty_per_unit: r.qty_per_unit,
+          dm_kg: r.dm_kg,
+          pcs_per_bar: r.pcs_per_bar,
+          qty_per_assembly: r.qty_per_assembly,
+          first_stage: r.first_stage,
+          final_stage: r.final_stage,
+          note: r.note,
+        }))}
+        lockedByEntries={data.locked_by_entries}
+        lsxClosed={data.lsx_status === 'completed' || data.lsx_status === 'cancelled'}
+        canEdit={canEdit}
+      />
     </div>
   )
 }

@@ -4,7 +4,6 @@ import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
-import { useToast } from '@/components/ui/Toast'
 import { nhanLyDo } from '@/lib/kho-ma-ly-do'
 import type { KetQuaDao } from '@/lib/kho-dao-phieu'
 import {
@@ -32,6 +31,7 @@ import {
   Td,
   TextArea,
   Th,
+  useToast,
 } from '@/components/kit'
 
 export type PhieuDoc = {
@@ -176,15 +176,19 @@ export function PhieuChiTietScreen({
         <ActionPane>
           <ActionGroup label="Chứng từ">
             <Action
+              icon="in"
               strong
               onClick={() => window.open(`/print/warehouse/${doc.id}`, '_blank')}
             >
               In phiếu
             </Action>
-            <Action onClick={() => router.push('/warehouse/phieu')}>Về sổ phiếu</Action>
+            <Action icon="quayLai" onClick={() => router.push('/warehouse/phieu')}>
+              Về sổ phiếu
+            </Action>
           </ActionGroup>
           <ActionGroup label="Sửa sai">
             <Action
+              icon="dao"
               disabled={!canEdit || !dao.duoc}
               title={
                 !canEdit
@@ -283,7 +287,7 @@ export function PhieuChiTietScreen({
 
               {doc.note && (
                 <FactSection title="Ghi chú">
-                  <p className="px-[var(--gutter)] py-[6px] text-[12px] text-[var(--ink-2)]">
+                  <p className="text-k-sm px-[var(--gutter)] py-1.5 text-[var(--ink-2)]">
                     {doc.note}
                   </p>
                 </FactSection>
@@ -328,7 +332,7 @@ export function PhieuChiTietScreen({
                         title={nhanLyDo(l.ma_ly_do) ?? undefined}
                       >
                         <span className="num font-bold">{l.ma_ly_do}</span>
-                        <span className="ml-1.5 text-[11px] text-[var(--ink-3)]">
+                        <span className="text-k-label ml-1.5 text-[var(--ink-3)]">
                           {nhanLyDo(l.ma_ly_do)}
                         </span>
                       </span>
@@ -393,7 +397,7 @@ export function PhieuChiTietScreen({
           />
         }
       >
-        <div className="flex flex-col gap-3 p-[var(--gutter)] text-[12.5px]">
+        <div className="text-k-sm flex flex-col gap-3 p-[var(--gutter)]">
           <p className="text-[var(--ink-2)]">
             Hệ thống lập một phiếu {laNhap ? 'xuất' : 'nhập'} mới ghi ngược{' '}
             <b className="num">{so(tongQty)}</b> đơn vị trên {lines.length} dòng. Tồn về
@@ -406,7 +410,7 @@ export function PhieuChiTietScreen({
             </p>
           )}
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold tracking-[.04em] text-[var(--ink-2)] uppercase">
+            <span className="text-k-label font-semibold tracking-[.04em] text-[var(--ink-2)] uppercase">
               Vì sao đảo — bắt buộc
             </span>
             <TextArea
@@ -415,7 +419,7 @@ export function PhieuChiTietScreen({
               rows={3}
               placeholder="Ví dụ: ghi nhầm mã vật tư, đã nhập lại bằng phiếu khác"
             />
-            <span className="text-[11px] text-[var(--ink-3)]">
+            <span className="text-k-label text-[var(--ink-3)]">
               Câu này đi vào sổ và người đi soát sẽ đọc. Viết đủ để người khác hiểu mà
               không phải hỏi lại.
             </span>

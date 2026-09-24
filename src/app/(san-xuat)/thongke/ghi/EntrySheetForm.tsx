@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Btn,
   Cell,
+  DayStrip,
   Chip,
   CommitBar,
   DateInput,
@@ -21,8 +22,8 @@ import {
   Table,
   Tag,
   TextInput,
+  useToast,
 } from '@/components/kit'
-import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { isFinishRowId } from '@/lib/finish-stages'
@@ -135,6 +136,75 @@ function writeMore(v: boolean) {
   for (const cb of moreListeners) cb()
 }
 
+/**
+ * BẢN GÕ DỞ — cứu lưới khi người nhập lỡ rời trang (lỗi L4 đo 22/09/2026).
+ *
+ * Lưới vài chục dòng gõ mất 15–20 phút; trước bản này chỉ cần bấm nhầm một liên
+ * kết là mất sạch, không cảnh báo gì.
+ *
+ * KHÔI PHỤC PHẢI DO NGƯỜI BẤM, không tự đổ lại. Tự đổ số cũ vào lưới là cách
+ * chắc chắn để một ngày nào đó ai đó ghi nhầm số của hôm trước mà không biết —
+ * sổ sản lượng là căn cứ tính lương, không đánh cược vào phỏng đoán.
+ *
+ * Kèm luôn NGÀY và TỔ của lúc gõ: khôi phục mà để nguyên ngày/tổ đang chọn thì
+ * số rơi vào đúng lưới nhưng sai chỗ ghi.
+ *
+ * Khoá theo (lệnh × công đoạn) — hai công đoạn khác nhau là hai phiếu khác nhau.
+ */
+const DRAFT_PREFIX = 'hg:thongke-nhap-do:'
+const draftListeners = new Set<() => void>()
+
+type SavedDraft = {
+  at: number
+  date: string
+  team_id: string
+  note: string
+  meta: Record<string, string>
+  lines: Record<string, LineDraft>
+}
+
+function draftKey(lsxId: string, stage: string) {
+  return `${DRAFT_PREFIX}${lsxId}|${stage}`
+}
+
+function subscribeDraft(cb: () => void) {
+  draftListeners.add(cb)
+  return () => {
+    draftListeners.delete(cb)
+  }
+}
+
+/**
+ * Ảnh chụp là CHUỖI THÔ chứ không phải object đã parse: `useSyncExternalStore`
+ * so sánh bằng `Object.is`, trả object mới mỗi lượt gọi là vòng lặp vô tận.
+ */
+function readDraftRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Đóng dấu giờ NGAY TẠI ĐÂY chứ không nhận từ chỗ gọi: `Date.now()` là hàm
+ * không thuần, gọi trong thân component thì luật `react-hooks/purity` chặn.
+ */
+function writeDraftRaw(key: string, value: Omit<SavedDraft, 'at'> | null) {
+  try {
+    if (value) localStorage.setItem(key, JSON.stringify({ ...value, at: Date.now() }))
+    else localStorage.removeItem(key)
+  } catch {
+    /* chế độ riêng tư chặn storage — phiên này vẫn gõ được, chỉ là không cứu được */
+  }
+  for (const cb of draftListeners) cb()
+}
+
+/** Có ô nào thực sự có chữ không — đừng lưu một bản nháp rỗng rồi mời khôi phục. */
+function hasAnyValue(lines: Record<string, LineDraft>): boolean {
+  return Object.values(lines).some((d) => Object.values(d).some((v) => v.trim() !== ''))
+}
+
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 const num = (s: string) => {
   const n = Number(s.replace(',', '.'))
@@ -180,9 +250,40 @@ export function EntrySheetForm({
   const more = useSyncExternalStore(subscribeMore, readMore, () => false)
   const toggleMore = () => writeMore(!more)
 
+  // ── Bản gõ dở ────────────────────────────────────────────────────────────
+  const dKey = draftKey(sheet.lsx?.id ?? 'all', sheet.stage)
+  const savedRaw = useSyncExternalStore(
+    subscribeDraft,
+    () => readDraftRaw(dKey),
+    () => null,
+  )
+  const saved = useMemo(() => {
+    if (!savedRaw) return null
+    try {
+      return JSON.parse(savedRaw) as SavedDraft
+    } catch {
+      return null
+    }
+  }, [savedRaw])
+  const [draftHidden, setDraftHidden] = useState(false)
+
+  /**
+   * Lưu ngay trong tay người gõ (sự kiện blur / dán), KHÔNG qua effect — effect
+   * chạy sau render nên có cửa sổ mất dữ liệu đúng lúc đang rời trang.
+   */
+  const persist = (lines: Record<string, LineDraft>) => {
+    writeDraftRaw(
+      dKey,
+      hasAnyValue(lines) ? { date, team_id: teamId, note: docNote, meta, lines } : null,
+    )
+  }
+
   const draftOf = (id: string) => drafts[id] ?? EMPTY
-  const patch = (id: string, p: Partial<LineDraft>) =>
-    setDrafts((d) => ({ ...d, [id]: { ...(d[id] ?? EMPTY), ...p } }))
+  const patch = (id: string, p: Partial<LineDraft>) => {
+    const next = { ...drafts, [id]: { ...(drafts[id] ?? EMPTY), ...p } }
+    setDrafts(next)
+    persist(next)
+  }
 
   // Chấm ● cho dòng hệ đề xuất theo TỔ đang chọn (được giao / ghi 7 ngày qua).
   const suggestedSet = useMemo(
@@ -242,17 +343,50 @@ export function EntrySheetForm({
     (t) => (num(t.d.defect) > 0 || num(t.d.rework) > 0) && !t.d.reason.trim(),
   )
 
+  /**
+   * SỔ NGÀY ĐÃ CHỐT — phải biết TRƯỚC khi gõ, không phải lúc bấm Ghi.
+   *
+   * Đo 22/09/2026: màn không có tín hiệu nào, thống kê gõ xong cả lưới mới ăn
+   * lỗi từ service. Trái đúng luật của dự án ("hành động bị chặn phải nói vướng
+   * gì và cách gỡ, ngay tại chỗ"). `entriesService.record` vẫn là hàng rào cuối.
+   */
+  const lockedTeamIds = useMemo(
+    () => new Set(sheet.locks.filter((l) => l.entry_date === date).map((l) => l.team_id)),
+    [sheet.locks, date],
+  )
+  const lockedNow = teamId ? lockedTeamIds.has(teamId) : false
+  const lockedBy =
+    sheet.locks.find((l) => l.entry_date === date && l.team_id === teamId)
+      ?.locked_by_name ?? null
+
+  /**
+   * Ngày TƯƠNG LAI không ghi được (`entries.service` chặn). Đo 22/09/2026: màn
+   * cho chọn thoải mái rồi còn gọi nhầm là "ghi lùi ngày" — người nhập gõ xong
+   * cả lưới mới biết. Ô lịch nay có `max`, và đây là vế chặn cho đường gõ tay.
+   */
+  const dateFuture = date > sheet.today
+
   const blocked = !sheet.can_record
     ? 'lệnh chưa được duyệt hoặc đã kết thúc — màn chỉ để xem'
-    : !teamId
-      ? 'chưa chọn tổ — sổ ngày khoá theo tổ nên bản ghi phải có chủ'
-      : typed.length === 0
-        ? 'chưa gõ số nào — điền SL đạt, phế hoặc sửa lại vào ít nhất một dòng'
-        : missingReason
-          ? `"${missingReason.name}" có phế/sửa lại nhưng chưa ghi vì sao`
-          : undefined
+    : dateFuture
+      ? `ngày ${date.split('-').reverse().join('/')} chưa tới — sổ chỉ ghi được cho hôm nay hoặc ngày đã qua`
+      : !teamId
+        ? 'chưa chọn tổ — sổ ngày khoá theo tổ nên bản ghi phải có chủ'
+        : lockedNow
+          ? `sổ ngày ${date.split('-').reverse().join('/')} của tổ này đã chốt — mở khoá ở Sổ ngày rồi ghi tiếp`
+          : typed.length === 0
+            ? 'chưa gõ số nào — điền SL đạt, phế hoặc sửa lại vào ít nhất một dòng'
+            : missingReason
+              ? `"${missingReason.name}" có phế/sửa lại nhưng chưa ghi vì sao`
+              : undefined
 
   const goBlocked = () => {
+    // Sổ đã chốt thì chỗ gỡ nằm ở MÀN KHÁC — đưa thẳng tới đó, đừng focus một ô
+    // trên màn này vì không ô nào sửa được tình trạng đó.
+    if (lockedNow) {
+      router.push(`/thongke/ngay?date=${date}`)
+      return
+    }
     const id = !teamId ? 'sheet-team' : `reason-${missingReason?.component_id ?? ''}`
     const el = document.getElementById(id)
     el?.scrollIntoView({ block: 'center' })
@@ -324,6 +458,10 @@ export function EntrySheetForm({
       setWarnings(allWarnings)
       setDrafts({})
       setDocNote('')
+      // Ghi được rồi thì bản gõ dở hết việc — để lại là lần sau mời khôi phục
+      // đúng những số vừa vào sổ, tức mời ghi đúp.
+      writeDraftRaw(dKey, null)
+      setDraftHidden(true)
       const what = submit ? 'ghi chính thức' : 'lưu nháp'
       toast.success(
         docNos.length === 1
@@ -414,29 +552,31 @@ export function EntrySheetForm({
       e.preventDefault()
       const size = { rows: qtyOrder.length, cols: EDIT_COLS }
       const { fills, dropped } = pasteFootprint(grid, { row, col }, size)
-      setDrafts((d) => {
-        const next = { ...d }
-        for (let r = 0; r < grid.length; r++) {
-          const id = qtyOrder[row + r]
-          if (!id) continue
-          const cur = { ...(next[id] ?? EMPTY) }
-          for (let c = 0; c < grid[r].length; c++) {
-            const field = EDIT_FIELDS[col + c]
-            if (!field) continue
-            const raw = grid[r][c]
-            // Cột số đi qua luật số VN/Excel dùng chung ("1.390" = 1390);
-            // cột chữ giữ nguyên văn.
-            cur[field] =
-              field === 'reason' || field === 'worker' || field === 'note'
-                ? raw
-                : raw === ''
-                  ? ''
-                  : (parsePasteNumber(raw)?.toString() ?? '')
-          }
-          next[id] = cur
+      // Dựng state kế tiếp NGOÀI updater rồi mới `setDrafts` + lưu: vùng dán
+      // không phụ thuộc giá trị trước đó, và có lưu ra localStorage ở đây nên
+      // không được đặt trong updater (StrictMode gọi updater hai lần).
+      const next = { ...drafts }
+      for (let r = 0; r < grid.length; r++) {
+        const id = qtyOrder[row + r]
+        if (!id) continue
+        const cur = { ...(next[id] ?? EMPTY) }
+        for (let c = 0; c < grid[r].length; c++) {
+          const field = EDIT_FIELDS[col + c]
+          if (!field) continue
+          const raw = grid[r][c]
+          // Cột số đi qua luật số VN/Excel dùng chung ("1.390" = 1390);
+          // cột chữ giữ nguyên văn.
+          cur[field] =
+            field === 'reason' || field === 'worker' || field === 'note'
+              ? raw
+              : raw === ''
+                ? ''
+                : (parsePasteNumber(raw)?.toString() ?? '')
         }
-        return next
-      })
+        next[id] = cur
+      }
+      setDrafts(next)
+      persist(next)
       toast.success(
         `Đã dán ${fills} ô`,
         dropped > 0
@@ -445,14 +585,22 @@ export function EntrySheetForm({
       )
     }
 
-  const cols = more ? 10 : 7
+  // BẰNG ĐÚNG số <th> — dòng tiêu đề nhóm trải hết bề ngang. Trước 24/09 biến này
+  // là 7/10 trong khi bảng có 8/11 cột: dòng nhóm hụt một ô ở mép phải.
+  const cols = more ? 12 : 9
   const teamName = sheet.teams.find((t) => t.id === teamId)?.name ?? null
-  const dateWarn = date !== sheet.today
+  /** Ghi LÙI ngày: hợp lệ, chỉ cần nhắc. Khác hẳn ngày chưa tới (`dateFuture`). */
+  const datePast = date < sheet.today
 
   return (
     // `dense`: màn này gõ hàng trăm dòng mỗi ngày nên số hàng nhìn thấy cùng
     // lúc là thứ quý nhất. Hàng 39px → ~30px, thấy thêm khoảng 3 hàng mỗi màn.
-    <ScreenFrame dense>
+    // `tableMin` KHAI THEO SỐ CỘT THẬT — mặc định 680px của `Table` chỉ vừa
+    // bảng 4–5 cột. Lưới này 8 cột, bật "Cột chi tiết" thành 11. Thiếu khai thì
+    // bảng KHÔNG cuộn ngang mà bị BÓP: ô nhập co lại, tên chi tiết cắt cụt.
+    // Đổi theo `more` chứ không đóng cứng số lớn, kẻo lúc gấp cột lại thì bảng
+    // cuộn ngang vô cớ.
+    <ScreenFrame dense tableMin={more ? 1430 : 1070}>
       <div
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -475,7 +623,7 @@ export function EntrySheetForm({
           // Dòng này PHẢI mỏng hơn hẳn dải chip nó thay, nếu không thu lại
           // chẳng lợi gì (đo lần đầu: 630 → 632px, đúng 2px). Không dùng `Btn`
           // ở đây — nút cao 28px kéo cả dòng lên 43px, xấp xỉ dải chip 45px.
-          <div className="flex h-[22px] shrink-0 items-center gap-x-[10px] overflow-hidden border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] text-[12px] whitespace-nowrap">
+          <div className="text-k-sm flex h-[22px] shrink-0 items-center gap-x-2.5 overflow-hidden border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] whitespace-nowrap">
             <b>{sheet.lsx?.code ?? 'Mọi lệnh'}</b>
             <span className="text-[var(--ink-3)]">·</span>
             <span>{sheet.stage_label}</span>
@@ -505,31 +653,32 @@ export function EntrySheetForm({
         {!headUp && (
           <HeadChips>
             {/*
-            LỆNH LÀ BỘ LỌC, KHÔNG PHẢI PHẠM VI BẮT BUỘC (21/09). Mặc định để
-            trống = thấy việc của MỌI lệnh đang chạy ở công đoạn này, gom theo
-            lệnh trong lưới — vì số lệnh một tổ đụng trong ngày không cố định.
-            Ai muốn hẹp về một lệnh vẫn chọn được.
+            MỘT LỆNH MỘT LƯỢT (22/09). Bỏ lựa chọn "Mọi lệnh đang chạy": gộp
+            nhiều lệnh vào một lưới đo ra 208 dòng / 8 lệnh ở công đoạn Phôi —
+            chủ dự án chê rối, và đúng là không đối chiếu nổi với sổ giấy.
+
+            Nhưng KHÔNG quay lại màn "Bước 1 chọn lệnh" (bản đó bị chê 21/09):
+            đổi lệnh là một lượt bấm ngay tại đây, lưới đổi tại chỗ.
           */}
             <Pick
               label="Lệnh"
               value={sheet.lsx?.id ?? ''}
-              onChange={(v) =>
-                router.push(
-                  v
-                    ? `/thongke/ghi?lsx=${v}&stage=${sheet.stage}`
-                    : `/thongke/ghi?stage=${sheet.stage}`,
-                )
-              }
+              onChange={(v) => {
+                if (!v) return
+                // Nhớ cho lần sau. Cookie chứ không localStorage — server đọc
+                // được nên lượt vào sau render thẳng đúng lệnh, không nháy.
+                document.cookie = `sx_ghi_lsx=${v}; path=/; max-age=${60 * 60 * 24 * 90}; samesite=lax`
+                router.push(`/thongke/ghi?lsx=${v}&stage=${sheet.stage}`)
+              }}
               width={230}
-              options={[
-                { value: '', label: 'Mọi lệnh đang chạy' },
-                ...lsxOptions.map((o) => ({
-                  value: o.id,
-                  label: `${o.code}${o.open_count > 0 ? ` · còn ${o.open_count} việc` : ' · đủ số'}`,
-                })),
-              ]}
+              options={lsxOptions.map((o) => ({
+                value: o.id,
+                label: `${o.code}${o.open_count > 0 ? ` · còn ${o.open_count} việc` : ' · đủ số'}`,
+              }))}
             />
-            <DateInput label="Ngày" value={date} onChange={setDate} />
+            {/* `max` chặn đường bấm lịch; ô chữ vẫn gõ được nên còn hàng rào
+                `blocked` bên dưới và hàng rào cuối ở service. */}
+            <DateInput label="Ngày" value={date} onChange={setDate} max={sheet.today} />
             <Pick
               label="Tổ"
               value={teamId}
@@ -537,7 +686,12 @@ export function EntrySheetForm({
               width={165}
               options={[
                 { value: '', label: '— chọn tổ —' },
-                ...sheet.teams.map((t) => ({ value: t.id, label: t.name })),
+                // Tổ đã chốt sổ NGÀY ĐANG CHỌN mang dấu khoá ngay trong danh
+                // sách — thấy trước khi chọn, không phải sau khi gõ xong lưới.
+                ...sheet.teams.map((t) => ({
+                  value: t.id,
+                  label: lockedTeamIds.has(t.id) ? `🔒 ${t.name}` : t.name,
+                })),
               ]}
             />
             {/*
@@ -590,7 +744,7 @@ export function EntrySheetForm({
         )}
 
         {/* DẢI CÔNG ĐOẠN — như dãy tab sheet của sổ Excel thống kê đang dùng */}
-        <div className="flex flex-wrap items-center gap-[6px] border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
           {sheet.stages.map((s) => (
             <Chip
               key={s.code}
@@ -608,7 +762,76 @@ export function EntrySheetForm({
           ))}
         </div>
 
-        {dateWarn && (
+        {/*
+          BẢN GÕ DỞ. Chỉ mời khi lưới ĐANG TRỐNG — đang gõ dở mà hiện lên thì
+          vừa che chỗ vừa mời đè lên chính việc đang làm.
+        */}
+        {saved && !draftHidden && typed.length === 0 && (
+          <NoticeBar
+            tag="Bản gõ dở"
+            action={{
+              label: 'Khôi phục',
+              onClick: () => {
+                setDrafts(saved.lines)
+                setDate(saved.date)
+                setTeamId(saved.team_id)
+                setDocNote(saved.note)
+                setMeta(saved.meta ?? {})
+                setDraftHidden(true)
+                toast.success(
+                  'Đã khôi phục bản gõ dở',
+                  'Kiểm lại ngày và tổ trước khi ghi sổ',
+                )
+              },
+            }}
+          >
+            {`Lần trước bạn gõ dở ${fmt(Object.keys(saved.lines).length)} dòng ở đây, ${new Date(
+              saved.at,
+            ).toLocaleDateString('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+            })} lúc ${new Date(saved.at).toLocaleTimeString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}, mà chưa ghi sổ. Khôi phục sẽ đặt lại cả ngày và tổ của lúc đó.`}
+          </NoticeBar>
+        )}
+
+        {/*
+          SỔ ĐÃ CHỐT — nói ngay, và chỉ thẳng chỗ gỡ. Đặt TRƯỚC thanh ghi lùi
+          ngày vì nó nặng hơn: ghi lùi ngày vẫn lưu được, sổ chốt thì không.
+        */}
+        {lockedNow && (
+          <NoticeBar
+            tone="stop"
+            tag="Sổ đã chốt"
+            action={{
+              label: 'Mở khoá ở Sổ ngày',
+              onClick: () => router.push(`/thongke/ngay?date=${date}`),
+            }}
+          >
+            {`Sổ ngày ${date.split('-').reverse().join('/')} của tổ này đã chốt${
+              lockedBy ? ` — ${lockedBy} chốt` : ''
+            }. Gõ thêm sẽ không lưu được. Mở khoá rồi ghi tiếp, hoặc đổi sang tổ/ngày khác.`}
+          </NoticeBar>
+        )}
+
+        {/*
+          NGÀY CHƯA TỚI — chặn hẳn, không phải nhắc. Trước 22/09 màn gộp chung
+          với ghi lùi ngày và gọi cả hai là "Ghi lùi ngày", nên chọn nhầm ngày
+          mai thì vừa không ai cản vừa bị mô tả sai.
+        */}
+        {dateFuture && (
+          <NoticeBar
+            tone="stop"
+            tag="Ngày chưa tới"
+            action={{ label: 'Về hôm nay', onClick: () => setDate(sheet.today) }}
+          >
+            {`Ngày ${date.split('-').reverse().join('/')} chưa tới nên không ghi sổ được — xưởng chưa làm thì chưa có số để báo.`}
+          </NoticeBar>
+        )}
+
+        {datePast && (
           <NoticeBar tone="warn" tag="Ghi lùi ngày">
             Phiếu này sẽ mang ngày {date.split('-').reverse().join('/')}, không phải hôm
             nay. Sổ cộng dồn — ngày đó đã ghi rồi thì gõ thêm là cộng vào, không thay thế.
@@ -622,7 +845,7 @@ export function EntrySheetForm({
         */}
         {sheet.truncated > 0 && (
           <NoticeBar tag="Chưa bày hết">
-            {`Còn ${fmt(sheet.truncated)} dòng nữa chưa hiện. Chọn một lệnh ở ô “Lệnh” để xem đủ và gõ cho chắc.`}
+            {`Còn ${fmt(sheet.truncated)} dòng nữa của lệnh này chưa hiện — lưới bày tối đa 200 dòng một lượt. Ghi xong phần đang thấy rồi tải lại để gõ tiếp.`}
           </NoticeBar>
         )}
 
@@ -648,6 +871,8 @@ export function EntrySheetForm({
             <th style={{ textAlign: 'right' }}>Cần</th>
             <th style={{ textAlign: 'right' }}>Đã đạt</th>
             <th style={{ textAlign: 'right' }}>Còn</th>
+            {/* Nhịp 14 ngày — CHỈ ĐỌC (T4). Đọc trước khi gõ: hôm qua tổ làm bao nhiêu. */}
+            <th>14 ngày</th>
             <th style={{ textAlign: 'right' }}>SL đạt</th>
             <th style={{ textAlign: 'right' }}>Phế</th>
             <th style={{ textAlign: 'right' }}>Sửa lại</th>
@@ -700,7 +925,7 @@ export function EntrySheetForm({
                   return (
                     <Row key={l.component_id}>
                       <Cell pin grow title={l.name}>
-                        <span className="flex flex-wrap items-center gap-[6px]">
+                        <span className="flex flex-wrap items-center gap-1.5">
                           {suggestedSet.has(l.component_id) && (
                             <span
                               className="text-[var(--act)]"
@@ -717,7 +942,7 @@ export function EntrySheetForm({
                             <Tag tone="neutral">{l.unit.toUpperCase()}</Tag>
                           )}
                         </span>
-                        <span className="mt-[2px] block text-[var(--fs-sm)] text-[var(--ink-3)]">
+                        <span className="text-k-sm mt-0.5 block text-[var(--ink-3)]">
                           {l.is_virtual &&
                             (isFinishRowId(l.component_id)
                               ? `Đếm theo ${l.unit ?? 'cái'} hoàn chỉnh — gõ số đã qua bước này · `
@@ -746,6 +971,33 @@ export function EntrySheetForm({
                           >
                             {fmt(l.remaining)}
                           </Btn>
+                        )}
+                      </Cell>
+                      <Cell>
+                        {/*
+                          THANG RIÊNG TỪNG DÒNG (không `max` chung): dòng này là
+                          chân ×4, dòng kia là tựa ×1 — so chiều cao cột giữa hai
+                          dòng là so hai đơn vị khác nhau. Dải ở đây để đọc NHỊP
+                          của chính dòng đó; số thật nằm trong ô rê chuột và bảng
+                          ẩn cho trình đọc màn hình.
+                        */}
+                        {l.days.length > 0 ? (
+                          <DayStrip
+                            days={l.days.map((d) => ({
+                              date: d.date,
+                              value: d.qty,
+                              note: d.docs > 0 ? `${d.docs} phiếu` : undefined,
+                            }))}
+                            today={sheet.today}
+                            label={`${l.name} · 14 ngày`}
+                          />
+                        ) : (
+                          <span
+                            className="text-k-label text-[var(--ink-3)]"
+                            title="Dòng do hệ suy ra, chưa có sổ riêng — chưa có nhịp để bày"
+                          >
+                            —
+                          </span>
                         )}
                       </Cell>
                       <Cell num>
@@ -876,14 +1128,14 @@ export function EntrySheetForm({
             label={
               <td>
                 Sắp ghi {typed.length} dòng
-                <span className="ml-[6px] text-[11.5px] font-normal text-[var(--ink-3)]">
+                <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
                   · chỉ cộng dòng đang gõ, chưa gồm số đã ghi trước đó
                 </span>
               </td>
             }
             cells={
               <>
-                <td colSpan={3} />
+                <td colSpan={4} />
                 <td className="num" style={{ textAlign: 'right' }}>
                   {fmt(typedQty)}
                 </td>
@@ -895,8 +1147,9 @@ export function EntrySheetForm({
                 </td>
                 {/*
                   ĐẾM CỘT CHO KHỚP với `THead`, kẻo chân bảng tràn:
-                  nhãn(1) + 3 + 1 + 1 + 1 + ô cuối = 8 khi gấp cột chi tiết,
-                  = 11 khi bật (thêm kg · Người làm · Ghi chú).
+                  nhãn(1) + 4 + 1 + 1 + 1 + ô cuối = 9 khi gấp cột chi tiết,
+                  = 12 khi bật (thêm kg · Người làm · Ghi chú). Cột "14 ngày"
+                  (B6) nằm trong khối 4 ô trống đầu.
 
                   Sai chỗ này KHÔNG ném lỗi nào — trình duyệt lặng lẽ bóp cột
                   cuối lại, và chữ trong đó xếp DỌC một ký tự mỗi dòng, cao
@@ -910,7 +1163,7 @@ export function EntrySheetForm({
 
         {/* Đứng NGOÀI khung cuộn: gõ tới dòng 40 mà phải cuộn về đáy mới ghi
             chú được là thao tác thừa lặp cả ngày. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-[9px]">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-2">
           <TextInput
             value={docNote}
             onCommit={setDocNote}
@@ -956,11 +1209,17 @@ export function EntrySheetForm({
         onGoBlocked={goBlocked}
         actions={
           <>
-            <Btn onClick={() => save(false)} disabled={busy || !!blocked}>
+            <Btn icon="luuNhap" onClick={() => save(false)} disabled={busy || !!blocked}>
               Lưu nháp
             </Btn>
             {/* User chốt 27/08: không cần tổ trưởng xác nhận — gửi là chính thức. */}
-            <Btn primary onClick={() => save(true)} disabled={busy} blockedBy={blocked}>
+            <Btn
+              icon="ghiSo"
+              primary
+              onClick={() => save(true)}
+              disabled={busy}
+              blockedBy={blocked}
+            >
               Ghi sổ chính thức
             </Btn>
           </>

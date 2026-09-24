@@ -249,6 +249,17 @@ Hai luật ESLint riêng, chạy trên `src/app/**/*.tsx` + `src/components/**/*
 - `hg/no-raw-control` — cấm `<table> <button> <input> <select> <textarea>` thô,
   chỉ ra đúng thành phần kit thay thế.
 
+Ba luật nữa (24/09/2026) chỉ canh file THUỘC hệ kit (import `@/components/kit`,
+tự dò — không đụng màn theme v3, không làm baseline dài ra); `components/kit/**`
+KHÔNG được miễn ở ba luật này:
+
+- `hg/no-arbitrary-size` / `hg/no-arbitrary-space` — cỡ chữ qua `text-k-*`
+  (thang 11·12·13·15·18·24), khoảng theo bậc Tailwind. Lớp `text-` bọc biến
+  `--fs-*` trong ngoặc vuông bị chặn ở MỌI file: Tailwind v4 hiểu nó là MÀU.
+- `hg/kit-icon` — icon chỉ đi qua `<Ico name>` / prop `icon` của `Btn`·`Chip`·
+  `Action` (bản đồ khái niệm `kit/Icon.tsx`, tra ở `/design-lab/thanh-phan/icon`);
+  nút có động từ quen thuộc phải có icon; nút chỉ có icon phải có `aria-label`.
+
 **Được miễn**: `components/erp/*`, `components/shadcn/*`, `components/ui/*`,
 `app/design-lab/*` — đó là nơi ĐỊNH NGHĨA chuẩn, không phải nơi tiêu thụ chuẩn.
 
@@ -277,8 +288,9 @@ workspace trượt khỏi baseline.
 
 ## Skills (`.claude/skills/`)
 
-Skill nội bộ (commit trong repo) — gọi khi hợp. (13/09/2026: đã gỡ TẠM hai skill làm UI `add-erp-page` và `frontend-design` theo yêu cầu chủ dự án — màn mới theo sổ `/design-lab`, cần lại thì `git revert`.)
+Skill nội bộ (commit trong repo) — gọi khi hợp.
 
+- `erp-ui` — **gọi trước khi làm/sửa bất kỳ màn nào.** QUY TRÌNH, không phải máy sinh trang: nhiệm vụ → luồng → khuôn làm điểm xuất phát → **artboard được user duyệt (cổng cứng)** → dựng bằng kit → luật kiểm 20 dòng + trình duyệt 1280×800 + `npm run check`. Kèm `references/`: bảng "cần gì → dùng gì" (test `kit-docs.test.tsx` canh đủ mọi họ kit), luật kiểm, 24 bẫy đã dính. Thay cho hai skill `add-erp-page`/`frontend-design` gỡ 13/09/2026 — chúng dựng sẵn trang danh sách + CRUD bằng kit cũ, đúng lối mòn "mỗi màn một bảng".
 - `sync-types` — regen `database.types.ts` sau migration.
 - `add-module` — scaffold domain module 3 lớp + route.
 - `add-migration` — file SQL đúng chuẩn RLS + đánh số.

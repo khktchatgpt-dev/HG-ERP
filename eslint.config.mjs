@@ -68,6 +68,22 @@ export default defineConfig([
       'hg/no-raw-control': 'error',
     },
   },
+  /* Thang chữ + khoảng của kit (B3, 24/09/2026). Luật TỰ DÒ file thuộc hệ kit
+   * (import `@/components/kit`), nên màn hệ cũ không bị đụng và baseline không
+   * phải dài ra. Khác khối trên ở chỗ `components/kit/**` KHÔNG được miễn: kit
+   * định nghĩa màu thật được, nhưng cỡ và khoảng của nó phải đi qua thang như
+   * mọi màn khác. `design-lab` vẫn miễn — nó trưng cả giá trị thô để so sánh. */
+  {
+    name: 'hg/kit-scale',
+    files: ['src/app/**/*.tsx', 'src/components/**/*.tsx'],
+    ignores: KIT.filter((p) => p !== 'src/components/kit/**'),
+    plugins: { hg: hgUi },
+    rules: {
+      'hg/no-arbitrary-size': 'error',
+      'hg/no-arbitrary-space': 'error',
+      'hg/kit-icon': 'error',
+    },
+  },
   {
     name: 'hg/ui-consistency-legacy',
     files: baseline.files.map(escapeGlob),

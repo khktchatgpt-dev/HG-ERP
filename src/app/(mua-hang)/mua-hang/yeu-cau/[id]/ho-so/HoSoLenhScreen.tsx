@@ -90,8 +90,13 @@ export function HoSoLenhScreen({
         ]}
         actions={
           <>
-            <Btn href={`/mua-hang/yeu-cau/${lsx.id}`}>Vật tư của lệnh</Btn>
-            <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
+            <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
+              Vật tư của lệnh
+            </Btn>
+            <Btn
+              icon="baoCao"
+              href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}
+            >
               Báo cáo lệnh
             </Btn>
           </>
@@ -157,7 +162,11 @@ export function HoSoLenhScreen({
             <Empty
               headline="Lệnh chưa có dòng sản phẩm nào"
               reason="Dòng lệnh do Bán hàng soạn. Lệnh không có dòng thì không tính ra được cần mua gì — mọi con số vật tư của lệnh này bằng 0 vì lý do đó, không phải vì đã mua đủ."
-              next={<Btn href={`/mua-hang/yeu-cau/${lsx.id}`}>Xem vật tư của lệnh</Btn>}
+              next={
+                <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
+                  Xem vật tư của lệnh
+                </Btn>
+              }
             />
           ) : (
             <Table>
@@ -185,7 +194,7 @@ export function HoSoLenhScreen({
                         ) : (
                           /* Ô trống CHIẾM CHỖ và nói ra: ảnh thiếu là việc của
                              Kỹ thuật, giấu đi thì không ai biết mà bổ sung. */
-                          <span className="flex h-10 w-10 items-center justify-center rounded-[3px] border border-dashed border-[var(--line)] text-[10px] text-[var(--ink-3)]">
+                          <span className="text-k-label flex h-10 w-10 items-center justify-center rounded-[3px] border border-dashed border-[var(--line)] text-[var(--ink-3)]">
                             chưa
                           </span>
                         )}
@@ -231,7 +240,11 @@ export function HoSoLenhScreen({
             <Empty
               headline="Lệnh chưa khai thông số nào"
               reason="Sơn, gỗ, kính, nệm được Bán hàng khai trên dòng lệnh lúc soạn. Chưa có thì người mua không có gì để chép sang đơn — phải hỏi trước khi đặt, đừng đoán theo lệnh cũ."
-              next={<Btn href={`/mua-hang/yeu-cau/${lsx.id}`}>Về vật tư của lệnh</Btn>}
+              next={
+                <Btn icon="quayLai" href={`/mua-hang/yeu-cau/${lsx.id}`}>
+                  Về vật tư của lệnh
+                </Btn>
+              }
             />
           ) : (
             <Table>
@@ -251,7 +264,7 @@ export function HoSoLenhScreen({
                       {g.chung ? (
                         <b>{g.chung}</b>
                       ) : g.theoGiaTri.length > 0 ? (
-                        <span className="flex flex-col gap-[3px]">
+                        <span className="flex flex-col gap-1">
                           {g.theoGiaTri.map((v) => (
                             <span key={v.value}>
                               <b>{v.value}</b>{' '}
@@ -295,7 +308,7 @@ export function HoSoLenhScreen({
 function Muc({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-b border-[var(--line)]">
-      <h2 className="bg-[var(--surface-raised)] px-[var(--gutter)] py-[6px] font-semibold tracking-[.06em] text-[var(--fs-label)] text-[var(--ink-2)] uppercase">
+      <h2 className="text-k-label bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5 font-semibold tracking-[.06em] text-[var(--ink-2)] uppercase">
         {title}
       </h2>
       {children}

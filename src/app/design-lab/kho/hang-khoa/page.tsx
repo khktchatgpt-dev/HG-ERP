@@ -87,7 +87,11 @@ export default function Page() {
           { label: 'Khoá quá 7 ngày', value: String(LOTS.filter((l) => l.state === 'blocked' && l.days >= 7).length), tone: 'stop' }, // prettier-ignore
           { label: 'Nhà cung cấp liên quan', value: String(new Set(LOTS.map((l) => l.supplier)).size) }, // prettier-ignore
         ]}
-        actions={<Btn href="/design-lab/kho">Về bàn làm việc</Btn>}
+        actions={
+          <Btn icon="quayLai" href="/design-lab/kho">
+            Về bàn làm việc
+          </Btn>
+        }
       >
         <WorkLanes lanes={LANES} activeId={lane} onPick={setLane} />
       </ScreenHeader>
@@ -156,7 +160,7 @@ export default function Page() {
             */}
             {bySupplier.size > 0 && (
               <div className="shrink-0 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-[10px]">
-                <div className="mb-[7px] font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+                <div className="text-k-label mb-[7px] font-bold tracking-[.1em] text-[var(--ink-3)] uppercase">
                   Gom để trả nhà cung cấp
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -165,15 +169,15 @@ export default function Page() {
                       key={sup}
                       className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] px-[10px] py-[6px]"
                     >
-                      <b className="text-[var(--fs-sm)]">{sup}</b>
-                      <span className="num text-[var(--fs-sm)] text-[var(--ink-3)]">
+                      <b className="text-k-sm">{sup}</b>
+                      <span className="num text-k-sm text-[var(--ink-3)]">
                         {lots.length} lô ·{' '}
                         {lots.map((x) => `${n(x.qty)} ${m(x.code).unit}`).join(' + ')}
                       </span>
-                      <Btn>Lập phiếu trả X3</Btn>
+                      <Btn icon="xuatKho">Lập phiếu trả X3</Btn>
                     </div>
                   ))}
-                  <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                  <span className="text-k-sm text-[var(--ink-3)]">
                     Trả hàng là một chuyến xe cho một NCC — gom trước khi gọi.
                   </span>
                 </div>
@@ -196,7 +200,9 @@ export default function Page() {
                       visible.holder.startsWith('Cung ứng') ? 'Cung ứng quyết' : undefined
                     }
                   />
-                  <Btn danger>Xuất huỷ / phế (X4)</Btn>
+                  <Btn icon="xuatKho" danger>
+                    Xuất huỷ / phế (X4)
+                  </Btn>
                   <Btn>Mở khoá — nhận dùng được (C2)</Btn>
                 </>
               ) : (
@@ -232,7 +238,7 @@ export default function Page() {
             </InspectSection>
 
             <InspectSection title="Vì sao lô này mắc">
-              <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-[10px] leading-relaxed text-[var(--fs-body)]">
+              <div className="text-k-body rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-[10px] leading-relaxed">
                 {visible.why}
               </div>
               <p className="mt-[7px] text-[11.5px] text-[var(--ink-3)]">

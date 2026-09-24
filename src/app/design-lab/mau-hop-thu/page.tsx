@@ -130,7 +130,11 @@ export default function Page() {
           { label: 'Đã trễ', value: String(LANES[0].rows.length), tone: 'stop' },
           { label: 'Loại chứng từ', value: '5' },
         ]}
-        actions={<Btn href="/design-lab/mau-vao-viec">Về trang vào việc</Btn>}
+        actions={
+          <Btn icon="quayLai" href="/design-lab/mau-vao-viec">
+            Về trang vào việc
+          </Btn>
+        }
       >
         <WorkLanes lanes={LANES} activeId={lane} onPick={setLane} />
       </ScreenHeader>
@@ -198,7 +202,7 @@ export default function Page() {
                       : undefined
                   }
                 />
-                <Btn>Chuyển việc cho người khác</Btn>
+                <Btn icon="toi">Chuyển việc cho người khác</Btn>
               </>
             }
           >

@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { targetsService } from '@/modules/dept/production/targets.service'
 import { canManagePlan } from '@/modules/dept/production/perms'
 import { TargetsGrid } from './TargetsGrid'
+import { vnTodayIso } from '@/lib/local-date'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,9 +18,7 @@ export default async function TargetsPage({
 }) {
   const user = await authService.requirePageUser()
   const sp = await searchParams
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '')
-    ? sp.date!
-    : new Date().toISOString().slice(0, 10)
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? sp.date! : vnTodayIso()
   const [data, canEdit] = await Promise.all([
     targetsService.getDay(user, date),
     canManagePlan(user),

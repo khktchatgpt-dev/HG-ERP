@@ -2,27 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Btn,
-  Cell,
-  Chip,
-  Code,
-  Empty,
-  GroupRow,
-  Lookup,
-  NoticeBar,
-  Num,
-  Pick,
-  Row,
-  ScreenFrame,
-  ScreenHeader,
-  SearchInput,
-  StatusBar,
-  TFoot,
-  THead,
-  Table,
-  Tag,
-} from '@/components/kit'
+import { Btn, Cell, Chip, Code, Empty, GroupRow, NoticeBar, Num, Pick, Row, ScreenFrame, ScreenHeader, SearchInput, StatusBar, TFoot, THead, Table, Tag, Combobox } from '@/components/kit'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { assessPoFit } from '@/lib/po-fit'
 import {
@@ -129,7 +109,7 @@ const DEFAULT_COLS: ColKey[] = ['ncc', 'chuoi', 'trang_thai', 'hen', 'phu_trach'
  * lúc tốn một hàng lọc mà không thêm thông tin nào.
  *
  * Tìm trên mảng ĐÃ NẠP SẴN nên không có vòng server; bọc trong Promise vì
- * `Lookup` của kit khai `search` là bất đồng bộ (nó dựng cho danh mục 13k
+ * `Combobox` (kiểu TRA) của kit khai `search` là bất đồng bộ (nó dựng cho danh mục 13k
  * dòng phải hỏi server). Trần 20 dòng: danh sách gợi ý dài hơn thế thì người
  * dùng gõ thêm chữ nhanh hơn là đọc.
  */
@@ -162,7 +142,7 @@ function LocLookup<T>({
     )
   }
   return (
-    <Lookup<T>
+    <Combobox<T>
       label={label}
       placeholder={placeholder}
       width={210}
@@ -431,7 +411,7 @@ export function DonScreen({
       />
 
       {/* Hàng 1: tìm + rổ trạng thái + hai ô gõ-tìm */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[4px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
         <SearchInput
           value={view.filter.q}
           onChange={(q) => patchFilter({ q })}
@@ -509,7 +489,7 @@ export function DonScreen({
         niệm, hai chỗ, hai số. Nay hai thẻ ở trên bấm được và lọc đúng phía của
         mình, nên chip này chỉ còn là đường thứ hai làm cùng một việc.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[4px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
         <Chip
           on={view.filter.mine}
           count={counts.mine}
@@ -614,10 +594,12 @@ export function DonScreen({
               reason={`Bộ lọc đang bật không còn dòng nào trong ${pos.length} đơn của sổ.`}
               next={
                 <>
-                  <Btn onClick={() => setView(ALL_VIEW)}>Xem tất cả {pos.length} đơn</Btn>
+                  <Btn icon="boLoc" onClick={() => setView(ALL_VIEW)}>
+                    Xem tất cả {pos.length} đơn
+                  </Btn>
                   {canEdit && (
-                    <Btn primary href="/mua-hang/don/moi">
-                      + Soạn đơn mua
+                    <Btn icon="them" primary href="/mua-hang/don/moi">
+                      Soạn đơn mua
                     </Btn>
                   )}
                 </>
@@ -739,7 +721,7 @@ export function DonScreen({
                                 {PO_STATUS_LABEL[p.status as PoStatus]}
                               </Tag>
                               {PO_NEXT_HINT[p.status as PoStatus] && (
-                                <span className="ml-1 text-[11px] text-[var(--ink-3)]">
+                                <span className="text-k-label ml-1 text-[var(--ink-3)]">
                                   → {PO_NEXT_HINT[p.status as PoStatus]}
                                 </span>
                               )}
@@ -768,12 +750,12 @@ export function DonScreen({
                                 <>
                                   {dmy(p.expected_at)}
                                   {late === 'overdue' && (
-                                    <span className="ml-1 text-[11px]">
+                                    <span className="text-k-label ml-1">
                                       quá {daysBetween(p.expected_at, today)} ng
                                     </span>
                                   )}
                                   {late === 'due_soon' && (
-                                    <span className="ml-1 text-[11px] text-[var(--warn)]">
+                                    <span className="text-k-label ml-1 text-[var(--warn)]">
                                       còn {-daysBetween(p.expected_at, today)} ng
                                     </span>
                                   )}

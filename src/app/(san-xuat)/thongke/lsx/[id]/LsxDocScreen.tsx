@@ -8,6 +8,7 @@ import {
   DocBody,
   DocHead,
   DocScreen,
+  Empty,
   FastTab,
   Grid,
   GridBody,
@@ -24,13 +25,14 @@ import {
   Th,
   TextInput,
   type TrackTone,
+  useToast,
 } from '@/components/kit'
 import { DocNotesPanel } from '@/components/doc/DocNotesPanel'
-import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { isStale, type Holder } from '@/lib/lsx-holder'
 import type { WorklistRow } from '@/modules/dept/production/worklist.service'
 import { PhieuTab, type DocRow } from './PhieuTab'
+import { DongBoTab } from './DongBoTab'
 
 /**
  * M3 — CHI TIẾT LỆNH SẢN XUẤT (Khuôn D, trang chứng từ).
@@ -108,6 +110,7 @@ export function LsxDocScreen({
   imageByLine,
   meId,
   meName,
+  unshaped = 0,
 }: {
   lsx: Lsx
   holder: Holder
@@ -120,6 +123,8 @@ export function LsxDocScreen({
   imageByLine: Record<string, string>
   meId: string
   meName: string
+  /** Dòng SP chưa định hình chi tiết — bảng đồng bộ nói rõ nó không gồm các dòng này. */
+  unshaped?: number
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -142,6 +147,20 @@ export function LsxDocScreen({
       ),
     [rows, stage, onlyOpen],
   )
+
+  /**
+   * CỘT "CHỜ DUYỆT" CHỈ MỌC KHI CÓ SỐ.
+   *
+   * Đo 23/09/2026 trên lệnh `02/26-27 - MX`: 72/72 ô của cột này trống trơn,
+   * vì `pending` chỉ khác 0 khi còn phiếu NHÁP chưa chốt — mà từ 27/08/2026
+   * phiếu ghi sổ là chính thức luôn, không qua tầng tổ trưởng. Một cột rỗng
+   * suốt vừa ăn ~90px của bảng vốn đã tràn ngang, vừa bắt mắt phải nhảy qua
+   * một khoảng trắng để nối "Đạt" với "Còn".
+   *
+   * Không XOÁ hẳn cột: khi thống kê có phiếu nháp chưa chốt thì đó đúng là
+   * con số họ cần thấy. Ẩn theo dữ liệu chứ không theo cấu hình.
+   */
+  const hasPending = useMemo(() => shown.some((r) => r.pending > 0), [shown])
 
   /** Gom theo SẢN PHẨM: đọc dọc là thấy SP đó đang nằm ở khâu nào. */
   const groups = useMemo(() => {
@@ -274,8 +293,8 @@ export function LsxDocScreen({
       />
 
       {canComplete && closable && !blocked && (
-        <div className="flex items-center gap-[11px] border-b border-[var(--line)] px-[var(--gutter)] py-[9px]">
-          <span className="text-[12.5px] text-[var(--ink-2)]">
+        <div className="flex items-center gap-3 border-b border-[var(--line)] px-[var(--gutter)] py-2">
+          <span className="text-k-sm text-[var(--ink-2)]">
             Mọi công việc đã xong — đóng lệnh để đơn hàng chuyển sang hoàn thành.
           </span>
           <Btn primary onClick={() => doComplete(false)} disabled={closing}>
@@ -303,7 +322,7 @@ export function LsxDocScreen({
               : `Còn ${fmt(openCount)} việc chưa xong. Công đoạn tự chuyển sang “xong” khi sổ ghi đủ số.`}
           </NoticeBar>
           {forceOpen && (
-            <div className="flex items-center gap-[9px] border-b border-[var(--line)] px-[var(--gutter)] py-[9px]">
+            <div className="flex items-center gap-2 border-b border-[var(--line)] px-[var(--gutter)] py-2">
               {/*
                 `onCommit` chốt lúc RỜI Ô. Bấm "Ép đóng" vẫn lấy được chữ vừa
                 gõ vì blur chạy trước click; nhưng gõ xong mà bấm Enter thì
@@ -385,6 +404,38 @@ export function LsxDocScreen({
       </MetricStrip>
 
       <DocBody>
+        {/*
+          T2 — BẢNG ĐỒNG BỘ (B6, 24/09/2026). Đứng TRÊN danh sách việc: bảng chéo
+          trả lời "giao được bao nhiêu bộ, kẹt ở đâu" trong một nhịp mắt; bấm ô
+          nào thì danh sách bên dưới lọc đúng công đoạn đó để đi xử lý.
+        */}
+        <FastTab
+          title="Bảng đồng bộ"
+          defaultOpen
+          flush
+          // KHÔNG nhắc lại "bộ xong" ở đây: dải chỉ số đếm theo công đoạn CUỐI,
+          // bảng đếm theo công đoạn CHẬM NHẤT — hai hàm, dữ liệu lệch là màn tự
+          // mâu thuẫn. Một số, một chỗ.
+          summary={[
+            ['SP', fmt(lastByLine.size)],
+            ['Công đoạn', fmt(stagesInLsx.length)],
+          ]}
+        >
+          <DongBoTab
+            rows={rows}
+            stages={stagesInLsx}
+            unshaped={unshaped}
+            onPickStage={(code) => {
+              setStage(code)
+              setOnlyOpen(false)
+              document
+                .getElementById('tien-do-sp')
+                ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+            }}
+          />
+        </FastTab>
+
+        <div id="tien-do-sp" />
         <FastTab
           title="Tiến độ theo sản phẩm"
           defaultOpen
@@ -396,13 +447,13 @@ export function LsxDocScreen({
           ]}
           actions={
             canRecord ? (
-              <Btn primary href={`/thongke/ghi?lsx=${lsx.id}`}>
+              <Btn icon="ghiSo" primary href={`/thongke/ghi?lsx=${lsx.id}`}>
                 Ghi sản lượng
               </Btn>
             ) : undefined
           }
         >
-          <div className="flex flex-wrap gap-[6px] border-b border-[var(--line)] px-[var(--gutter)] py-[9px]">
+          <div className="flex flex-wrap gap-1.5 border-b border-[var(--line)] px-[var(--gutter)] py-2">
             <Chip on={!stage} onClick={() => setStage('')}>
               Mọi công đoạn
             </Chip>
@@ -418,64 +469,150 @@ export function LsxDocScreen({
             </span>
           </div>
 
-          <Grid minWidth={760}>
-            <GridHead>
-              <Th width={190}>Công đoạn</Th>
-              <Th num>Kế hoạch</Th>
-              <Th num>Đạt</Th>
-              <Th num>Chờ duyệt</Th>
-              <Th num>Còn</Th>
-              <Th num>%</Th>
-              <Th>Trạng thái</Th>
-              <Th />
-            </GridHead>
-            <GridBody>
-              {groups.map(([lineId, g]) => {
-                const last = lastByLine.get(lineId)
-                return (
-                  <Fragment key={lineId}>
-                    <GroupRow
-                      name={`${g.code} · ${g.name}`}
-                      meta={
-                        <>
-                          {fmt(g.qty)} bộ
-                          {last && ` · xong ${fmt(last.done)}`}
-                          {imageByLine[lineId] && ' · có ảnh'}
-                        </>
-                      }
-                      cols={8}
-                    />
-                    {g.items.map((r) => (
-                      <GridRow key={r.stage}>
-                        <Td>{r.stage_label}</Td>
-                        <Td num>{fmt(r.planned)}</Td>
-                        <Td num>{fmt(r.done)}</Td>
-                        <Td num tone={r.pending > 0 ? 'warn' : undefined}>
-                          {r.pending > 0 ? `+${fmt(r.pending)}` : ''}
-                        </Td>
-                        <Td num tone={r.remaining > 0 ? 'warn' : 'done'}>
-                          {r.remaining > 0 ? fmt(r.remaining) : 'đủ'}
-                        </Td>
-                        <Td num>{Math.round(r.pct * 100)}%</Td>
-                        <Td>
-                          <Tag tone={ROW_TONE[r.status].tone}>
-                            {ROW_TONE[r.status].label}
-                          </Tag>
-                        </Td>
-                        <Td>
-                          {canRecord && r.status !== 'done' && (
-                            <Btn href={`/thongke/ghi?lsx=${lsx.id}&stage=${r.stage}`}>
-                              Ghi
-                            </Btn>
+          {/*
+            TRẠNG THÁI RỖNG — luật kiểm dòng 7 của `/design-lab`.
+
+            Bản trước dựng thẳng `Grid`, nên lọc hẹp tới mức không còn dòng nào
+            thì bảng chỉ còn hàng tiêu đề, không một chữ giải thích.
+
+            CHỈ HAI LÝ DO Ở ĐÂY, không ba: lệnh chưa định hình (`rows` rỗng) đã
+            được trang chặn từ tầng server bằng `Empty` riêng của nó, nên
+            `LsxDocScreen` không bao giờ thấy tình huống đó. Thêm nhánh cho nó
+            là mã chết mang chú thích tự tin — thứ gây hiểu nhầm cho người sửa
+            sau, chứ không phải lớp phòng bị.
+
+            Tách hai lý do chứ không dùng một câu chung, vì "đã xong hết" là
+            TIN MỪNG — bày nó ra như màn hỏng là nói sai bằng giọng điệu.
+          */}
+          {groups.length === 0 ? (
+            onlyOpen ? (
+              <Empty
+                headline="Không còn việc nào chưa xong"
+                reason={
+                  stage
+                    ? `Mọi việc ở công đoạn “${stagesInLsx.find((s) => s.code === stage)?.label ?? stage}” đã đủ số. Bảng trống đúng, không phải hỏng.`
+                    : 'Mọi công đoạn của lệnh đã đủ số. Bảng trống đúng, không phải hỏng.'
+                }
+                next={
+                  <Btn icon="boLoc" onClick={() => setOnlyOpen(false)}>
+                    Xem cả việc đã xong
+                  </Btn>
+                }
+              />
+            ) : (
+              <Empty
+                headline="Không có việc nào ở công đoạn này"
+                reason="Công đoạn đang lọc không có dòng việc nào trong lệnh — có thể lộ trình của lệnh không đi qua nó."
+                next={
+                  <Btn icon="boLoc" onClick={() => setStage('')}>
+                    Xem mọi công đoạn
+                  </Btn>
+                }
+              />
+            )
+          ) : (
+            <Grid minWidth={760}>
+              <GridHead>
+                <Th width={190}>Công đoạn</Th>
+                <Th num>Kế hoạch</Th>
+                <Th num>Đạt</Th>
+                {hasPending && <Th num>Chờ duyệt</Th>}
+                <Th num>Còn</Th>
+                <Th num>%</Th>
+                <Th>Trạng thái</Th>
+                <Th />
+              </GridHead>
+              <GridBody>
+                {groups.map(([lineId, g]) => {
+                  const last = lastByLine.get(lineId)
+                  return (
+                    <Fragment key={lineId}>
+                      <GroupRow
+                        name={`${g.code} · ${g.name}`}
+                        meta={
+                          <>
+                            {fmt(g.qty)} bộ
+                            {last && ` · xong ${fmt(last.done)}`}
+                            {imageByLine[lineId] && ' · có ảnh'}
+                          </>
+                        }
+                        cols={hasPending ? 8 : 7}
+                      />
+                      {g.items.map((r) => (
+                        <GridRow key={r.stage}>
+                          <Td>{r.stage_label}</Td>
+                          <Td num>{fmt(r.planned)}</Td>
+                          <Td num>{fmt(r.done)}</Td>
+                          {hasPending && (
+                            <Td num tone={r.pending > 0 ? 'warn' : undefined}>
+                              {r.pending > 0 ? `+${fmt(r.pending)}` : ''}
+                            </Td>
                           )}
-                        </Td>
-                      </GridRow>
-                    ))}
-                  </Fragment>
-                )
-              })}
-            </GridBody>
-          </Grid>
+                          {/*
+                            CHƯA BẮT ĐẦU KHÔNG PHẢI LÀ CẢNH BÁO.
+
+                            Luật cũ `remaining > 0 ? 'warn' : 'done'` tô cam
+                            mọi ô còn số. Đo 23/09/2026 trên lệnh
+                            `02/26-27 - MX`: **72/72 ô cột "Còn" đều mang
+                            `--warn`** — cả cột một màu, tức màu mất sạch sức
+                            phân biệt đúng lúc cần nó nhất. "Còn 150/150" ở
+                            lệnh chưa ai động vào là con số BÌNH THƯỜNG.
+
+                            Đây là nguyên tắc 3 của sổ ở dạng nghịch đảo: "số 0
+                            không phải lúc nào cũng xấu" — số ĐẦY ĐỦ cũng vậy.
+                            Cam để dành cho việc ĐANG DỞ mà còn thiếu, vì đó
+                            mới là chỗ có người đang chờ.
+                          */}
+                          <Td
+                            num
+                            tone={
+                              r.remaining <= 0
+                                ? 'done'
+                                : r.status === 'not_started'
+                                  ? undefined
+                                  : 'warn'
+                            }
+                          >
+                            {r.remaining > 0 ? fmt(r.remaining) : 'đủ'}
+                          </Td>
+                          <Td num>{Math.round(r.pct * 100)}%</Td>
+                          <Td>
+                            {/*
+                            ĐANG DỞ MÀ CHƯA ĐỦ MỘT BỘ: nói kèm mẫu số chi tiết.
+                            Cột "Đạt" đếm theo BỘ (chi tiết chậm nhất quyết
+                            định) nên nó đứng 0 rất lâu; chỉ dán nhãn "Đang làm"
+                            mà không nói vì sao 0 thì người vừa ghi 150 sẽ tưởng
+                            mất dữ liệu (lỗi L3, 22/09/2026).
+                          */}
+                            <Tag tone={ROW_TONE[r.status].tone}>
+                              {ROW_TONE[r.status].label}
+                            </Tag>
+                            {r.status === 'in_progress' &&
+                              r.done === 0 &&
+                              r.parts_started > 0 && (
+                                <span className="text-k-sm ml-1.5 text-[var(--ink-3)]">
+                                  {`${fmt(r.parts_started)}/${fmt(r.parts_total)} chi tiết có số — chưa đủ bộ nào`}
+                                </span>
+                              )}
+                          </Td>
+                          <Td>
+                            {canRecord && r.status !== 'done' && (
+                              <Btn
+                                icon="ghiSo"
+                                href={`/thongke/ghi?lsx=${lsx.id}&stage=${r.stage}`}
+                              >
+                                Ghi
+                              </Btn>
+                            )}
+                          </Td>
+                        </GridRow>
+                      ))}
+                    </Fragment>
+                  )
+                })}
+              </GridBody>
+            </Grid>
+          )}
         </FastTab>
 
         <FastTab
@@ -488,7 +625,9 @@ export function LsxDocScreen({
           ]}
           actions={
             canRecord ? (
-              <Btn href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>Định hình</Btn>
+              <Btn icon="dinhHinh" href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>
+                Định hình
+              </Btn>
             ) : undefined
           }
         >

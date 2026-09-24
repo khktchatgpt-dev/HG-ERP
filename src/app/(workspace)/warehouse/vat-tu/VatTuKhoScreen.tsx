@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 import {
+  Ico,
   Btn,
   Cell,
   Chip,
@@ -22,6 +22,7 @@ import {
   THead,
   Table,
   TextInput,
+  useToast,
 } from '@/components/kit'
 import { RO_VT, RO_VT_NHAN, RO_VT_VIEC, type RoVatTu } from './ro-vat-tu'
 
@@ -145,7 +146,11 @@ export function VatTuKhoScreen({
             { label: 'Chưa khai ngưỡng', value: fmt(counts.no_min) },
             { label: 'Tất cả', value: fmt(counts.all) },
           ]}
-          actions={<Btn href="/warehouse/ton">Xem tồn kho ›</Btn>}
+          actions={
+            <Btn icon="kho" href="/warehouse/ton">
+              Xem tồn kho
+            </Btn>
+          }
         />
 
         <FilterBar>
@@ -155,7 +160,9 @@ export function VatTuKhoScreen({
             placeholder="Tìm mã hoặc tên vật tư…"
             width={280}
           />
-          <Btn onClick={() => dat({ q: q.trim() || null })}>Tìm</Btn>
+          <Btn icon="tim" onClick={() => dat({ q: q.trim() || null })}>
+            Tìm
+          </Btn>
           <Pick
             value={nhom}
             onChange={(v) => dat({ nhom: v || null })}
@@ -211,11 +218,11 @@ export function VatTuKhoScreen({
             }
             next={
               dangLoc ? (
-                <Btn primary onClick={() => dat({ q: null, nhom: null })}>
+                <Btn icon="boLoc" primary onClick={() => dat({ q: null, nhom: null })}>
                   Bỏ lọc
                 </Btn>
               ) : (
-                <Btn primary onClick={() => dat({ ro: 'all' })}>
+                <Btn icon="boLoc" primary onClick={() => dat({ ro: 'all' })}>
                   Xem tất cả {fmt(counts.all)} mã
                 </Btn>
               )
@@ -268,7 +275,7 @@ export function VatTuKhoScreen({
                     <span className="block truncate" title={r.group_name ?? ''}>
                       {r.group_name ?? '—'}
                     </span>
-                    <span className="block text-[10.5px] text-[var(--ink-3)]">
+                    <span className="text-k-label block text-[var(--ink-3)]">
                       {r.sub_group ?? 'chưa có nhóm phụ'}
                     </span>
                   </Cell>
@@ -319,14 +326,15 @@ export function VatTuKhoScreen({
                           primary
                           disabled={busy === r.id}
                           onClick={() => void daRaXong(r)}
-                          className="h-6 px-[9px] text-[12px]"
+                          className="text-k-sm h-6 px-2"
                         >
                           Đã rà xong
                         </Btn>
                       )}
                       <Btn
+                        icon="kho"
                         href={`/warehouse/ton?ro=all&q=${encodeURIComponent(r.code)}`}
-                        className="h-6 px-[9px] text-[12px]"
+                        className="text-k-sm h-6 px-2"
                       >
                         Xem tồn
                       </Btn>
@@ -339,14 +347,15 @@ export function VatTuKhoScreen({
         )}
 
         {soTrang > 1 && (
-          <div className="flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[6px] text-[var(--fs-sm)]">
+          <div className="text-k-sm flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
             <span className="text-[var(--ink-3)]">Trang</span>
             <Btn
+              icon="truoc"
               disabled={trang <= 1}
               onClick={() => dat({ trang: String(trang - 1) })}
-              className="h-6 px-[9px] text-[12px]"
+              className="text-k-sm h-6 px-2"
             >
-              ‹ Trước
+              Trước
             </Btn>
             <span className="num">
               {trang} / {soTrang}
@@ -354,9 +363,10 @@ export function VatTuKhoScreen({
             <Btn
               disabled={trang >= soTrang}
               onClick={() => dat({ trang: String(trang + 1) })}
-              className="h-6 px-[9px] text-[12px]"
+              className="text-k-sm h-6 px-2"
             >
-              Sau ›
+              Sau
+              <Ico name="sau" />
             </Btn>
             <span className="ml-auto text-[var(--ink-3)]">50 dòng mỗi trang</span>
           </div>

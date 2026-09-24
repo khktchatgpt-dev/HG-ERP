@@ -165,6 +165,7 @@ export function YeuCauScreen({
           width={300}
         />
         <Chip
+          icon="toi"
           on={muc === 'toi'}
           count={dem.toi ?? 0}
           onClick={() => setMuc(muc === 'toi' ? 'all' : 'toi')}
@@ -193,6 +194,7 @@ export function YeuCauScreen({
           }
           next={
             <Btn
+              icon="boLoc"
               primary
               onClick={() => {
                 setQ('')
@@ -244,7 +246,7 @@ export function YeuCauScreen({
                       <span className="truncate" title={r.customer_name}>
                         {r.customer_name}
                       </span>
-                      <span className="shrink-0 text-[10.5px] text-[var(--ink-3)]">
+                      <span className="text-k-label shrink-0 text-[var(--ink-3)]">
                         {r.products} SP
                       </span>
                     </span>
@@ -286,12 +288,12 @@ export function YeuCauScreen({
                     <span className="flex items-baseline justify-end gap-2">
                       <Num value={String(r.posTotal || '')} strong />
                       {r.posUnsent > 0 && (
-                        <span className="text-[10.5px] text-[var(--warn)]">
+                        <span className="text-k-label text-[var(--warn)]">
                           {r.posUnsent} chưa gửi
                         </span>
                       )}
                       {r.posLate > 0 && (
-                        <span className="text-[10.5px] text-[var(--stop)]">
+                        <span className="text-k-label text-[var(--stop)]">
                           {r.posLate} trễ
                         </span>
                       )}
@@ -301,12 +303,29 @@ export function YeuCauScreen({
               )
             })}
           </tbody>
+          {/*
+            CỘT CHÂN BẢNG = 6, BẰNG `THead`. Bản cũ cộng ra 7 (4 + 1 + caveat 2)
+            và ô số nằm lệch sang cột "Ai cầm bóng" thay vì "Đơn mua".
+
+            Chú thích đi CÙNG ô nhãn chứ không dùng prop `caveat`: `caveat`
+            render thành <td> ở CUỐI hàng, mà cột cuối đây là cột số hẹp — câu
+            dài nhét vào đó bị bóp cho chữ xếp gần như dọc, ô cao vài trăm px,
+            và vì nó `sticky bottom-0` nên ĐÈ LÊN thân bảng. Cùng cách
+            `EntrySheetForm` đã xử lý sau khi dính đúng lỗi này (21/09/2026).
+          */}
           <TFoot
-            label={<td colSpan={4}>Cộng {kept.length} lệnh đang hiện</td>}
+            label={
+              <td colSpan={5}>
+                Cộng {kept.length} lệnh đang hiện
+                <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
+                  · mức rủi ro tính bằng ĐÚNG hàm của bảng họp và file Excel họp — ba chỗ
+                  không thể nói khác nhau
+                </span>
+              </td>
+            }
             cells={
               <td className="num">{kept.reduce((s, r) => s + r.posTotal, 0) || ''}</td>
             }
-            caveat="Mức rủi ro tính bằng ĐÚNG hàm của bảng họp và file Excel họp — ba chỗ không thể nói khác nhau."
           />
         </Table>
       )}

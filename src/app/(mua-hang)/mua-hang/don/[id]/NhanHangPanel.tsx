@@ -111,7 +111,7 @@ export function DotGiaoGrid({
 
   if (shipments.length === 0) {
     return (
-      <div className="px-[var(--gutter)] py-3 text-[var(--fs-sm)] text-[var(--ink-2)]">
+      <div className="text-k-sm px-[var(--gutter)] py-3 text-[var(--ink-2)]">
         <b>Chưa chia đợt</b> — hiểu là giao một lần vào hạn giao của đơn. {emptyHint}
       </div>
     )
@@ -120,7 +120,7 @@ export function DotGiaoGrid({
   return (
     <>
       {confirmedNote && (
-        <div className="border-b border-[var(--hair)] px-[var(--gutter)] py-1.5 text-[var(--fs-sm)] text-[var(--ink-2)]">
+        <div className="text-k-sm border-b border-[var(--hair)] px-[var(--gutter)] py-1.5 text-[var(--ink-2)]">
           NCC cam kết: “{confirmedNote}”
         </div>
       )}
@@ -147,7 +147,11 @@ export function DotGiaoGrid({
                     việc, và hai bên phải gọi nó bằng cùng một cái tên. Đợt cũ
                     chưa có mã thì vẫn hiện số thứ tự, không để ô trống. */}
                 <Td>
-                  {s.code ? <Code>{s.code}</Code> : <span className="num">đợt {s.seq}</span>}
+                  {s.code ? (
+                    <Code>{s.code}</Code>
+                  ) : (
+                    <span className="num">đợt {s.seq}</span>
+                  )}
                 </Td>
                 <Td num tone={overdue ? 'stop' : undefined}>
                   {dmy(s.expected_date)}
@@ -278,7 +282,7 @@ export function NhanTheoDotGrid({
         {batches.map((b, i) => (
           <Th key={b.doc_id ?? `day:${b.date}`} num>
             Đợt {i + 1} · {dmy(b.date).slice(0, 5)}
-            <div className="text-[10px] font-normal tracking-normal text-[var(--ink-3)]">
+            <div className="text-k-label font-normal tracking-normal text-[var(--ink-3)]">
               {b.doc_code ?? 'không phiếu'}
               {b.supplier_doc_no ? ` · NCC ${b.supplier_doc_no}` : ''}
             </div>
@@ -306,7 +310,7 @@ export function NhanTheoDotGrid({
                   <Td key={b.doc_id ?? `day:${b.date}`} num>
                     {c ? num(c.qty) : '—'}
                     {c && c.rejected > 0 && (
-                      <span className="k-t-stop block text-[11px]">
+                      <span className="k-t-stop text-k-label block">
                         loại {num(c.rejected)}
                       </span>
                     )}
@@ -333,7 +337,8 @@ export function NhanTheoDotGrid({
                     <GridBtn
                       disabled={busy || !!act.blocked}
                       title={act.blocked}
-                      onClick={() =>
+                      onClick={
+                        () =>
                         act.kind === 'reopen'
                           ? onReopen({ id: l.id, label })
                           : onCloseShort({ id: l.id, label, missing: Math.max(v.missing, 0), unit: l.unit }) // prettier-ignore
@@ -459,7 +464,7 @@ export function XacNhanSheet({
         />
       }
     >
-      <div className="mb-2 flex items-center gap-2 text-[var(--fs-sm)]">
+      <div className="text-k-sm mb-2 flex items-center gap-2">
         <span className="k-strong">Tất cả giao ngày</span>
         <span className="w-[130px]">
           <DateInput value={allDate} onChange={setAllDate} label="Tất cả giao ngày" />
@@ -550,7 +555,7 @@ export function XacNhanSheet({
       </Grid>
 
       {draftMoney.priced && shipments.length > 0 && (
-        <p className="mt-2 text-right text-[var(--fs-sm)] text-[var(--ink-2)]">
+        <p className="text-k-sm mt-2 text-right text-[var(--ink-2)]">
           Tiền theo các đợt đang khai:{' '}
           <b className="num text-[var(--ink)]">
             {draftMoney.approx && '≈ '}
@@ -559,14 +564,14 @@ export function XacNhanSheet({
         </p>
       )}
       {v.errors.length > 0 && (
-        <ul className="k-t-stop mt-2 text-[var(--fs-sm)]">
+        <ul className="k-t-stop text-k-sm mt-2">
           {v.errors.map((e) => (
             <li key={e}>• {e}</li>
           ))}
         </ul>
       )}
       {warnings.length > 0 && (
-        <ul className="k-t-warn mt-2 text-[var(--fs-sm)]">
+        <ul className="k-t-warn text-k-sm mt-2">
           {warnings.map((w) => (
             <li key={w}>• {w}</li>
           ))}
@@ -574,7 +579,7 @@ export function XacNhanSheet({
       )}
       {mode === 'confirm' && (
         <label className="mt-3 block">
-          <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+          <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
             Ghi chú cam kết
           </span>
           <TextInput
@@ -638,14 +643,14 @@ export function DotSheet({
       )}
       {kind === 'reschedule' && (
         <label className="mb-3 block">
-          <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+          <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
             Ngày giao mới
           </span>
           <DateInput value={date} onChange={setDate} label="Ngày giao mới" />
         </label>
       )}
       <label className="block">
-        <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+        <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
           Lý do
         </span>
         <TextArea

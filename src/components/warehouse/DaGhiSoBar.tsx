@@ -30,22 +30,26 @@ export function DaGhiSoBar({
   onClose: () => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-[11px] border-b border-[var(--done-line)] bg-[var(--done-wash)] px-[var(--gutter)] py-[9px] text-[12.5px]">
-      <span className="shrink-0 text-[10.5px] font-bold tracking-[.06em] text-[var(--done)] uppercase">
+    <div className="text-k-sm flex flex-wrap items-center gap-3 border-b border-[var(--done-line)] bg-[var(--done-wash)] px-[var(--gutter)] py-2">
+      <span className="text-k-label shrink-0 font-bold tracking-[.06em] text-[var(--done)] uppercase">
         Đã ghi sổ
       </span>
       <span className="text-[var(--ink-2)]">
         <b className="num">{code}</b> · {detail}
       </span>
-      <Btn href={`/print/warehouse/${docId}`} className="h-[24px] px-[9px] text-[12px]">
+      <Btn
+        icon="in"
+        href={`/print/warehouse/${docId}`}
+        className="text-k-sm h-[24px] px-2"
+      >
         In phiếu
       </Btn>
-      <Btn href={soPhieuHref} className="h-[24px] px-[9px] text-[12px]">
+      <Btn icon="so" href={soPhieuHref} className="text-k-sm h-[24px] px-2">
         Xem ở sổ phiếu
       </Btn>
       <Btn
         onClick={onClose}
-        className="ml-auto h-[24px] border-0 bg-transparent px-[9px] text-[12px]"
+        className="text-k-sm ml-auto h-[24px] border-0 bg-transparent px-2"
       >
         Đóng
       </Btn>

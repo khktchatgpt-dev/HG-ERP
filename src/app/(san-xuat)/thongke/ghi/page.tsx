@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import {
@@ -11,21 +12,29 @@ import { EntrySheetForm } from './EntrySheetForm'
 export const dynamic = 'force-dynamic'
 
 /**
- * GHI SẢN LƯỢNG — MỞ THẲNG VÀO LƯỚI, không qua bước chọn lệnh (21/09/2026).
+ * GHI SẢN LƯỢNG — MỘT LỆNH MỘT LƯỢT, KHÔNG có màn chọn lệnh đứng trước.
  *
- * BỎ MÀN "CHỌN LỆNH" đứng trước. Nó có từ 27/08 với lý do "đừng gộp mọi lệnh
- * vào một màn", nhưng đối chiếu bốn hệ ERP cho thấy cách đó chỉ giống NetSuite
- * — hệ duy nhất còn bắt chọn một lệnh trước khi nhập. SAP Fiori mở theo work
- * center và để lệnh làm ô tìm; D365 mở thẳng "All jobs" với LỆNH LÀ MỘT CỘT.
+ * Lịch sử hai lần đảo, ghi lại để đừng đảo lần ba mà quên vì sao:
  *
- * Lý do thực tế: số lệnh một tổ đụng trong một ngày KHÔNG CỐ ĐỊNH (chủ dự án
- * 21/09). Bắt chọn lệnh trước nghĩa là hôm nào tổ làm ba lệnh thì phải đi qua
- * màn chọn ba lần, gõ vài dòng rồi quay ra.
+ * - Tới 21/09/2026: có màn "Bước 1 chọn lệnh" chặn trước lưới. Chủ dự án chê
+ *   "khó dùng và bất tiện" → bỏ.
+ * - 21/09: đổi sang mở MỌI lệnh đang chạy, lệnh tụt xuống làm bộ lọc (theo cách
+ *   SAP Fiori / D365 mở theo work center, lệnh chỉ là một cột).
+ * - 22/09: chủ dự án chê tiếp — gộp nhiều lệnh vào một lưới là rối. Đo lại:
+ *   công đoạn Phôi mở mọi lệnh ra **208 dòng của 8 lệnh**, kèm băng "chưa bày
+ *   hết". Đúng là không gõ nổi.
  *
- * Nỗi lo cũ vẫn đúng và được giải bằng cách khác: lưới KHÔNG đổ hết mọi dòng —
- * nó lọc theo CÔNG ĐOẠN đang mở, gom theo lệnh, và còn ô lọc lệnh cho ai muốn
- * hẹp lại. `?lsx=` vẫn chạy nguyên nên mọi liên kết cũ không gãy.
+ * Bản này lấy phần đúng của cả hai: **phạm vi là MỘT lệnh** (hết trộn), nhưng
+ * **không có màn chặn** — đổi lệnh bằng ô ngay đầu phiếu, đúng một lượt bấm.
+ *
+ * Lệnh mặc định: lệnh dùng lần trước (cookie `sx_ghi_lsx`), không có thì lệnh
+ * còn NHIỀU VIỆC NHẤT. Dùng cookie chứ không localStorage vì server đọc được →
+ * chọn xong render một lần, không nháy màn rồi nhảy sang lệnh khác.
+ *
+ * `?lsx=` vẫn ưu tiên cao nhất nên mọi liên kết cũ không gãy.
  */
+export const GHI_LSX_COOKIE = 'sx_ghi_lsx'
+
 export default async function GhiSanLuongPage({
   searchParams,
 }: {
@@ -36,10 +45,20 @@ export default async function GhiSanLuongPage({
   const canRecord = user.role === 'admin' || (await isProductionStaff(user))
   if (!canRecord) redirect('/thongke/lenh')
 
-  const [sheet, data] = await Promise.all([
-    loadEntrySheet({ stage: sp.stage ?? null, lsxId: sp.lsx ?? null }),
-    worklistService.list(user, {}),
-  ])
+  // Danh sách lệnh phải có TRƯỚC để chọn lệnh mặc định, nên hai lượt tải này
+  // không song song được nữa. Đổi lại lưới không bao giờ mở ra ở trạng thái
+  // trộn 8 lệnh.
+  const data = await worklistService.list(user, {})
+  const remembered = (await cookies()).get(GHI_LSX_COOKIE)?.value ?? null
+  const openable = data.lsx_cards
+  const pick =
+    openable.find((c) => c.lsx_id === sp.lsx)?.lsx_id ??
+    openable.find((c) => c.lsx_id === remembered)?.lsx_id ??
+    // Còn nhiều việc nhất = nơi thống kê nhiều khả năng phải ghi hôm nay.
+    [...openable].sort((a, b) => b.open_count - a.open_count)[0]?.lsx_id ??
+    null
+
+  const sheet = await loadEntrySheet({ stage: sp.stage ?? null, lsxId: pick })
 
   if (!sheet) {
     return (
@@ -47,7 +66,7 @@ export default async function GhiSanLuongPage({
         headline="Chưa có việc nào để ghi sản lượng"
         reason="Lệnh phải được duyệt VÀ định hình chi tiết thì mới sinh ra dòng để ghi."
         next={
-          <Btn primary href="/thongke/lenh">
+          <Btn icon="lenh" primary href="/thongke/lenh">
             Xem lệnh sản xuất
           </Btn>
         }

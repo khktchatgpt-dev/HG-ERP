@@ -15,10 +15,10 @@ import { Loading, ScreenFrame } from '@/components/kit'
 export default function MuaHangLoading() {
   return (
     <ScreenFrame>
-      <div className="animate-pulse border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[10px]">
+      <div className="animate-pulse border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2.5">
         <span className="block h-3 w-[190px] rounded bg-[var(--surface-raised)]" />
       </div>
-      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
         {/*
           KEY THEO VỊ TRÍ, không theo bề rộng: hai ô lọc giữa cùng rộng 110px
           nên `key={w}` sinh ra hai key `110` trùng nhau — React cảnh báo và

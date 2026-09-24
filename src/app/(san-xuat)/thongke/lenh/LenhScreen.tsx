@@ -5,6 +5,7 @@ import {
   Btn,
   Cell,
   Chip,
+  Code,
   CoverageBar,
   Empty,
   FilterBar,
@@ -81,8 +82,37 @@ function StageStrip({
   stages: { code: string; label: string }[]
 }) {
   const byCode = new Map(chips.map((c) => [c.stage, c]))
+  /*
+    CẢ CỘT NÀY TỪNG CÂM VỚI TRÌNH ĐỌC MÀN HÌNH.
+
+    12 ô chỉ mang `title`, không một ký tự văn bản — nên với trình đọc màn
+    hình, và cả khi bôi đen sao chép bảng, toàn bộ thông tin tiến độ biến mất.
+    `title` cũng không hiện được trên thiết bị cảm ứng.
+
+    Vá bằng `role="img"` + một câu tóm tắt, thay vì rắc `aria-label` vào từng
+    ô: đọc 12 nhãn rời cho MỖI dòng của bảng 14 dòng là 168 lần phát ngôn —
+    đúng kiểu "có aria" mà không dùng nổi. Dải là MỘT hình, nên nói một câu.
+
+    Chỉ kể công đoạn NẰM TRONG lộ trình: đọc cả bảy công đoạn lệnh không đi
+    qua là thêm nhiễu, đúng thứ ô sọc sinh ra để loại bỏ bằng mắt.
+  */
+  const tomTat = stages
+    .map((s) => {
+      const c = byCode.get(s.code)
+      if (!c || c.total === 0) return null
+      return `${s.label} ${Math.round(Math.min(1, c.done / c.total) * 100)}%`
+    })
+    .filter(Boolean)
   return (
-    <span className="flex gap-[2px]">
+    <span
+      role="img"
+      aria-label={
+        tomTat.length > 0
+          ? `Tiến độ công đoạn — ${tomTat.join(', ')}`
+          : 'Chưa có công đoạn nào trong lộ trình của lệnh này'
+      }
+      className="flex gap-0.5"
+    >
       {stages.map((s) => {
         const c = byCode.get(s.code)
         if (!c || c.total === 0) {
@@ -103,7 +133,9 @@ function StageStrip({
             className="relative h-[14px] w-[15px] overflow-hidden rounded-[2px] bg-[var(--track)]"
           >
             <i
-              className={`absolute bottom-0 left-0 w-full ${full ? 'bg-[var(--done)]' : 'bg-[var(--act)]'}`}
+              // `--fill` chứ không `--act`: ô này là DỮ LIỆU, không bấm được.
+              // Cùng luật với `CoverageBar` — xem token `--fill` ở tokens.css.
+              className={`absolute bottom-0 left-0 w-full ${full ? 'bg-[var(--done)]' : 'bg-[var(--fill)]'}`}
               style={{ height: `${Math.max(pct * 100, pct > 0 ? 12 : 0)}%` }}
             />
           </span>
@@ -149,7 +181,13 @@ export function LenhScreen({
   const doneSets = shown.reduce((a, r) => a + r.qty_done, 0)
 
   return (
-    <ScreenFrame>
+    /*
+      BỀ RỘNG TỐI THIỂU: 9 cột, trong đó "Công đoạn" là dải 12 ô công đoạn —
+      riêng nó đã ~200px (12 × 15px + khe). Mặc định 680px của `Table` chỉ vừa
+      bảng 4–5 cột; để nguyên thì bảng không cuộn ngang mà BÓP cột, và "Vướng
+      gì" — cột nói việc phải làm — là cột cắt chữ đầu tiên.
+    */
+    <ScreenFrame tableMin={1180}>
       <ScreenHeader
         eyebrow="Sản xuất"
         title="Lệnh sản xuất"
@@ -202,6 +240,7 @@ export function LenhScreen({
           }
           next={
             <Btn
+              icon="boLoc"
               onClick={() => {
                 setQ('')
                 setView('all')
@@ -230,11 +269,48 @@ export function LenhScreen({
               const s = snag(r)
               return (
                 <Row key={r.lsx.id}>
-                  <Cell pin title={r.lsx.code}>
-                    <b className="num">{r.lsx.code}</b>
+                  {/*
+                    DÒNG MÃ ĐƠN PHẢI CHẶN BỀ RỘNG.
+
+                    Đo 23/09/2026 ở 1366px: lệnh `01/26-27 - ROSCO` gộp 13 đơn,
+                    nối bằng ` · ` trong một ô `white-space: nowrap` không có
+                    `max-width` → cột "Lệnh" nở ra **1415px**, kéo cả bảng lên
+                    **2647px** trong khung 1299px. Mọi dòng khác cũng rộng theo
+                    vì cột dùng chung bề rộng, nên muốn đọc "Vướng gì" phải cuộn
+                    ngang qua một cột gần như trống.
+
+                    Đây là lỗi DỮ LIỆU THẬT làm vỡ bố cục, không phải thiếu bề
+                    rộng tối thiểu — một dòng cá biệt định đoạt cả bảng.
+                  */}
+                  <Cell pin title={r.lsx.code} className="max-w-[240px]">
+                    {/*
+                      MÃ LỆNH LÀ ĐƯỜNG VÀO LỆNH.
+
+                      Trước 23/09/2026 mã chỉ là chữ đậm, và đường vào DUY NHẤT
+                      là nút "Mở" ở cột CUỐI — dòng không bấm được (đo:
+                      `cursor: auto`, không `onClick`). Ở 1366px bảng rộng hơn
+                      khung 174px nên chính cột đó rơi ngoài màn: người dùng
+                      không có cách nào mở lệnh mà không mò ra thanh cuộn ngang.
+
+                      Cột này `pin` nên luôn nhìn thấy dù cuộn tới đâu. `Code`
+                      đi bằng `next/link` — `<a>` trần là tải lại cả tài liệu,
+                      mất bộ lọc đang đặt.
+                    */}
+                    <Code
+                      as="a"
+                      href={`/thongke/lsx/${r.lsx.id}`}
+                      className="text-k-body"
+                    >
+                      {r.lsx.code}
+                    </Code>
                     {r.lsx.order_codes.length > 0 && (
-                      <span className="mt-[2px] block text-[var(--fs-sm)] text-[var(--ink-3)]">
-                        {r.lsx.order_codes.join(' · ')}
+                      <span
+                        title={r.lsx.order_codes.join(' · ')}
+                        className="text-k-sm mt-0.5 block truncate text-[var(--ink-3)]"
+                      >
+                        {r.lsx.order_codes.slice(0, 2).join(' · ')}
+                        {r.lsx.order_codes.length > 2 &&
+                          ` +${fmt(r.lsx.order_codes.length - 2)} đơn nữa`}
                       </span>
                     )}
                   </Cell>
@@ -247,7 +323,7 @@ export function LenhScreen({
                         <span className="num">{fmtDate(r.lsx.ship_date)}</span>
                         {d != null && (
                           <span
-                            className={`ml-1 text-[var(--fs-sm)] ${
+                            className={`text-k-sm ml-1 ${
                               d < 0
                                 ? 'font-semibold text-[var(--stop)]'
                                 : d <= 7
@@ -292,7 +368,7 @@ export function LenhScreen({
                     {r.holder.who}
                     {r.holder.days != null && !r.holder.closed && (
                       <span
-                        className={`ml-1 text-[var(--fs-sm)] ${
+                        className={`text-k-sm ml-1 ${
                           isStale(r.holder)
                             ? 'font-semibold text-[var(--warn)]'
                             : 'text-[var(--ink-3)]'
@@ -303,14 +379,29 @@ export function LenhScreen({
                     )}
                   </Cell>
                   <Cell>
-                    {s ? <Tag tone={s.tone}>{s.text}</Tag> : <Tag tone="done">trôi</Tag>}
+                    {/*
+                      "KHÔNG VƯỚNG" chứ không phải "trôi" (đổi 23/09/2026 theo
+                      chủ dự án). Cột hỏi "Vướng gì" thì ô phải TRẢ LỜI câu đó —
+                      "trôi" là tiếng nghề tả cả lệnh đang chạy ngon, đọc trong
+                      cột này thành nước đôi: người mới không rõ đang khen hay
+                      đang báo lệnh bị trôi hạn.
+                    */}
+                    {s ? (
+                      <Tag tone={s.tone}>{s.text}</Tag>
+                    ) : (
+                      <Tag tone="done">không vướng</Tag>
+                    )}
                   </Cell>
                   <Cell>
                     <span className="flex justify-end gap-1">
                       {canRecord && r.component_count > 0 && (
-                        <Btn href={`/thongke/ghi?lsx=${r.lsx.id}`}>Ghi sổ</Btn>
+                        <Btn icon="ghiSo" href={`/thongke/ghi?lsx=${r.lsx.id}`}>
+                          Ghi sổ
+                        </Btn>
                       )}
-                      <Btn href={`/thongke/lsx/${r.lsx.id}`}>Mở</Btn>
+                      <Btn icon="mo" href={`/thongke/lsx/${r.lsx.id}`}>
+                        Mở
+                      </Btn>
                     </span>
                   </Cell>
                 </Row>
@@ -319,15 +410,27 @@ export function LenhScreen({
           </tbody>
           <TFoot
             label={<td>Cộng {fmt(shown.length)} lệnh</td>}
+            /*
+              CỘT CHÂN BẢNG PHẢI CỘNG ĐÚNG 9 — bằng `THead`.
+
+              Bản cũ cộng ra 11 (nhãn 1 + 3 + 1 + 4 + caveat 2), và đúng như
+              chú thích của `TFoot` cảnh báo, trình duyệt không ném lỗi nào:
+              nó bóp ô caveat lại cho chữ xếp gần như DỌC, ô cao **313px** thay
+              vì 36px. Mà ô đó `position: sticky; bottom: 0` — nên nó ĐÈ LÊN
+              dòng 4 tới 14, đo 23/09/2026: hit-test ở y=420..620 đều trả về ô
+              "Cộng 14 lệnh". Bảng 14 dòng nhìn ra chỉ có 3.
+
+              Nay: 1 (nhãn) + 3 + 1 (ô %) + 4 (caveat) = 9.
+            */
             cells={
               <>
                 <td colSpan={3} />
                 <td className="num" style={{ textAlign: 'right' }}>
                   {totalSets > 0 ? `${Math.round((doneSets / totalSets) * 100)}%` : '—'}
                 </td>
-                <td colSpan={4} />
               </>
             }
+            caveatSpan={4}
             caveat="“Bộ xong” cộng theo Σ cần / Σ đã làm của mọi công đoạn — không phải số bộ đã đóng gói."
           />
         </Table>

@@ -3,19 +3,15 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  Package,
-  Printer,
-  ShieldCheck,
-  StickyNote,
-  TrendingUp,
-  TriangleAlert,
-  Truck,
-  Undo2,
-} from 'lucide-react'
-import { Btn, DocChain, FactKv, ScreenFrame, StatusBar, Timeline } from '@/components/kit'
+  Btn,
+  DocChain,
+  FactKv,
+  Ico,
+  ScreenFrame,
+  StatusBar,
+  Timeline,
+  type IcoName,
+} from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { money, moneyByCurrency, waitingDays } from './approval-helpers'
 import {
@@ -84,9 +80,9 @@ export function ApprovalDetailScreen(
     <div className="flex flex-col gap-3">
       <Link
         href="/exec/approvals"
-        className="-ml-1 inline-flex w-fit items-center gap-1 text-[var(--fs-sm)] text-[var(--ink-3)] hover:text-[var(--ink)]"
+        className="text-k-sm -ml-1 inline-flex w-fit items-center gap-1 text-[var(--ink-3)] hover:text-[var(--ink)]"
       >
-        <ChevronLeft className="size-4" /> Chờ tôi phê duyệt
+        <Ico name="quayLai" /> Chờ tôi phê duyệt
       </Link>
 
       {/*
@@ -125,7 +121,7 @@ type Dec = ReturnType<typeof useApprovalDecision>
  */
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <section className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[11px]">
+    <section className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-3">
       {children}
     </section>
   )
@@ -239,7 +235,7 @@ function DecisionCard({
       */}
       <div className="@xl:grid @xl:grid-cols-[minmax(0,1fr)_auto] @xl:items-start @xl:gap-x-5 @xl:gap-y-3 @xl:p-4">
         <div className="border-b border-[var(--line)] p-4 @xl:col-start-1 @xl:row-start-1 @xl:border-b-0 @xl:p-0">
-          <div className="flex flex-wrap items-center gap-x-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <div className="text-k-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-3)]">
             <span className="font-medium tracking-wide uppercase">
               {kind === 'lsx'
                 ? 'Lệnh sản xuất'
@@ -263,9 +259,7 @@ function DecisionCard({
             >
               {metric}
             </span>
-            <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
-              {metricLabel}
-            </span>
+            <span className="text-k-label text-[var(--ink-3)]">{metricLabel}</span>
           </div>
         </div>
 
@@ -279,7 +273,7 @@ function DecisionCard({
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 @xl:col-start-1 @xl:row-start-3 @xl:flex @xl:flex-wrap @xl:items-baseline @xl:gap-x-5 @xl:gap-y-1.5">
             {stats.map((s, i) => (
               <div key={i} className="min-w-0 @xl:flex @xl:items-baseline @xl:gap-1.5">
-                <dt className="text-[var(--fs-micro)] text-[var(--ink-3)]">{s.label}</dt>
+                <dt className="text-k-label text-[var(--ink-3)]">{s.label}</dt>
                 <dd
                   className={cn(
                     'mt-0.5 text-sm font-semibold @xl:mt-0',
@@ -301,8 +295,9 @@ function DecisionCard({
               className="w-full justify-center @xl:w-36"
               disabled={busy}
               onClick={onApprove}
+              icon="duyet"
             >
-              <ShieldCheck className="size-4" aria-hidden /> Phê duyệt
+              Phê duyệt
             </Btn>
             {/*
               "TRẢ LẠI ĐỂ SỬA" — cùng một tên với Trung tâm phê duyệt và sổ
@@ -313,12 +308,13 @@ function DecisionCard({
               className="w-full justify-center @xl:w-36"
               disabled={busy}
               onClick={onReject}
+              icon="traLai"
             >
-              <Undo2 className="size-4" aria-hidden /> Trả lại để sửa
+              Trả lại để sửa
             </Btn>
           </div>
 
-          <div className="flex flex-col gap-1.5 border-t border-[var(--line)] pt-3 text-[var(--fs-sm)] @xl:col-start-2 @xl:row-start-3 @xl:flex-row @xl:justify-end @xl:gap-4 @xl:border-t-0 @xl:pt-0">
+          <div className="text-k-sm flex flex-col gap-1.5 border-t border-[var(--line)] pt-3 @xl:col-start-2 @xl:row-start-3 @xl:flex-row @xl:justify-end @xl:gap-4 @xl:border-t-0 @xl:pt-0">
             {links}
           </div>
         </div>
@@ -384,10 +380,10 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
               { label: 'LSX', code: l.code },
             ]}
           />
-          <h1 className="mt-[6px] font-semibold tracking-[-.01em] text-[var(--fs-title)]">
+          <h1 className="text-k-title mt-1.5 font-semibold tracking-[-.01em]">
             {l.customer_name}
           </h1>
-          <div className="mt-[2px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <div className="text-k-sm mt-0.5 text-[var(--ink-3)]">
             Lệnh sản xuất chờ Giám đốc duyệt
           </div>
 
@@ -401,7 +397,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
                 {/* Ngày và "còn N ngày" tách hai dòng: gộp một dòng thì ở cột
  hẹp nó ngắt bừa giữa cụm, bỏ icon lại trơ một mình. */}
                 <span className="flex items-center gap-1 whitespace-nowrap">
-                  <Truck className="size-3.5 shrink-0" />
+                  <Ico name="hen" size={14} className="shrink-0" />
                   {fmtD(l.ship_date)}
                 </span>
                 <span className="block text-xs font-normal">{due.text}</span>
@@ -425,7 +421,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
               <div>
                 <SectionLabel>
                   <span className="inline-flex items-center gap-1">
-                    <StickyNote className="size-3.5" /> Ghi chú
+                    <Ico name="ghiChu" size={14} /> Ghi chú
                   </span>
                 </SectionLabel>
                 <p className="mt-1 text-sm whitespace-pre-wrap">{l.note}</p>
@@ -487,13 +483,14 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
         links={
           <>
             <QuickLink href={`/print/lsx/${l.id}`}>
-              <Printer className="mr-1 inline size-3.5" /> Bản in LSX
+              <Ico name="in" size={14} className="mr-1 inline" /> Bản in LSX
             </QuickLink>
             <Link
               href={`/exec/lsx/${l.id}`}
               className="text-[var(--primary)] hover:underline"
             >
-              <FileText className="mr-1 inline size-3.5" /> Hồ sơ sản xuất đầy đủ →
+              <Ico name="lenh" size={14} className="mr-1 inline" /> Hồ sơ sản xuất đầy đủ
+              →
             </Link>
           </>
         }
@@ -539,10 +536,10 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
       <div className="order-2 flex flex-col gap-4 xl:order-1">
         <Card>
           <DocChain links={[{ label: 'Báo giá', code: q.code }]} />
-          <h1 className="mt-[6px] font-semibold tracking-[-.01em] text-[var(--fs-title)]">
+          <h1 className="text-k-title mt-1.5 font-semibold tracking-[-.01em]">
             {q.customer_name}
           </h1>
-          <div className="mt-[2px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <div className="text-k-sm mt-0.5 text-[var(--ink-3)]">
             Báo giá chờ Giám đốc duyệt — duyệt xong Sale mới chốt &amp; gửi khách
           </div>
 
@@ -611,7 +608,7 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
               <div>
                 <SectionLabel>
                   <span className="inline-flex items-center gap-1">
-                    <StickyNote className="size-3.5" /> Ghi chú
+                    <Ico name="ghiChu" size={14} /> Ghi chú
                   </span>
                 </SectionLabel>
                 <p className="mt-1 text-sm whitespace-pre-wrap">{q.note}</p>
@@ -672,7 +669,7 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
         onReject={() => dec.askReject(targetQuote(q))}
         links={
           <QuickLink href={`/print/quotes/${q.id}`}>
-            <Printer className="mr-1 inline size-3.5" /> Bản in báo giá
+            <Ico name="in" size={14} className="mr-1 inline" /> Bản in báo giá
           </QuickLink>
         }
       />
@@ -734,12 +731,12 @@ function PoBody({
     .map((ln) => ({ ln, cmp: comparePrice(ln, p.last_prices, p.currency) }))
     .filter((x) => x.cmp != null && x.cmp.pct >= 5)
 
-  type Canh = { tone: 'stop' | 'warn'; icon: typeof TriangleAlert; title: string; body: React.ReactNode; action?: { label: string; href: string } } // prettier-ignore
+  type Canh = { tone: 'stop' | 'warn'; icon: IcoName; title: string; body: React.ReactNode; action?: { label: string; href: string } } // prettier-ignore
   const canhBao: Canh[] = []
   if (big) {
     canhBao.push({
       tone: 'stop',
-      icon: TriangleAlert,
+      icon: 'canhBao',
       title: noThreshold
         ? `Chưa đặt ngưỡng cho ${p.currency}`
         : `Giá trị lớn (≥ ${money(p.threshold!, p.currency)})`,
@@ -755,7 +752,7 @@ function PoBody({
     const d = tangGia[0]
     canhBao.push({
       tone: 'warn',
-      icon: TrendingUp,
+      icon: 'giaTang',
       title: `Giá cao hơn lần mua trước ${tangGia.length > 1 ? 'ở ' + tangGia.length + ' dòng' : Math.round(d.cmp!.pct) + '%'}`, // prettier-ignore
       body:
         tangGia.length === 1
@@ -766,7 +763,7 @@ function PoBody({
   if (missingPrice > 0) {
     canhBao.push({
       tone: 'warn',
-      icon: TriangleAlert,
+      icon: 'canhBao',
       title: `${missingPrice} dòng chưa có đơn giá`,
       body: 'Tổng cam kết chi ở trên đang tính THIẾU đúng bằng những dòng đó.',
     })
@@ -774,7 +771,7 @@ function PoBody({
   if (due.tone === 'red') {
     canhBao.push({
       tone: 'warn',
-      icon: Truck,
+      icon: 'hen',
       title: `Hàng hẹn về ${fmtD(p.expected_at)} — ${due.text}`,
       body: 'Duyệt để Cung ứng kịp gửi đơn cho nhà cung cấp.',
     })
@@ -783,29 +780,30 @@ function PoBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ── DẢI 1: định vị + đi tuyến tính ‹n/N› ───────────────────────── */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-[5px]">
-        <Btn href="/exec/approvals">
-          <ChevronLeft className="size-4" aria-hidden />
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+        <Btn href="/exec/approvals" icon="quayLai">
           Chờ tôi phê duyệt
         </Btn>
         {nav && nav.total > 1 && (
-          <span className="flex items-center gap-[2px]">
+          <span className="flex items-center gap-0.5">
             <Btn
               href={nav.prevHref ?? undefined}
               disabled={!nav.prevHref}
               title={nav.prevHref ? 'Phiếu trước' : 'Đây là phiếu đầu'}
+              aria-label="Phiếu trước"
             >
-              ‹
+              <Ico name="truoc" />
             </Btn>
-            <span className="num px-[6px] text-[var(--fs-sm)] text-[var(--ink-2)]">
+            <span className="num text-k-sm px-1.5 text-[var(--ink-2)]">
               {nav.index || '—'} / {nav.total}
             </span>
             <Btn
               href={nav.nextHref ?? undefined}
               disabled={!nav.nextHref}
               title={nav.nextHref ? 'Phiếu sau' : 'Đây là phiếu cuối'}
+              aria-label="Phiếu sau"
             >
-              ›
+              <Ico name="sau" />
             </Btn>
           </span>
         )}
@@ -818,23 +816,22 @@ function PoBody({
           ]}
         />
         <span className="ml-auto flex gap-2">
-          <Btn href={`/print/supply/${p.id}`}>
-            <Printer className="size-4" aria-hidden />
+          <Btn href={`/print/supply/${p.id}`} icon="in">
             Bản in
           </Btn>
         </span>
       </div>
 
       {/* ── DẢI 2: QUYẾT ĐỊNH — ngang, luôn thấy ───────────────────────── */}
-      <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[var(--line)] bg-[var(--surface-hover)] px-[var(--gutter)] py-[9px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[var(--line)] bg-[var(--surface-hover)] px-[var(--gutter)] py-2">
         <div className="min-w-0">
-          <div className="font-semibold tracking-[.05em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+          <div className="text-k-label font-semibold tracking-[.05em] text-[var(--ink-3)] uppercase">
             Đơn đặt vật tư · tổng cam kết chi
           </div>
-          <div className="mt-[1px] flex flex-wrap items-baseline gap-[10px]">
+          <div className="mt-px flex flex-wrap items-baseline gap-2.5">
             <span
               className={cn(
-                'num text-[24px] leading-tight font-bold',
+                'num text-k-doc leading-tight font-bold',
                 big && 'text-[var(--stop)]',
               )}
             >
@@ -845,19 +842,26 @@ function PoBody({
         </div>
 
         {canhBao.length === 0 && (
-          <span className="inline-flex items-center gap-[7px] rounded-[var(--radius)] bg-[var(--done-wash)] px-[10px] py-[5px] font-semibold text-[var(--done)] text-[var(--fs-sm)]">
-            <ShieldCheck className="size-4" aria-hidden />
+          <span className="text-k-sm inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--done-wash)] px-2.5 py-1 font-semibold text-[var(--done)]">
+            <Ico name="xong" />
             Không có gì bất thường — dưới ngưỡng, đủ giá, đúng hẹn
           </span>
         )}
 
         <span className="ml-auto flex flex-wrap items-center gap-2">
-          <Btn disabled={dec.busy} onClick={() => dec.askReject(targetPo(p))}>
-            <Undo2 className="size-4" aria-hidden />
+          <Btn
+            disabled={dec.busy}
+            onClick={() => dec.askReject(targetPo(p))}
+            icon="traLai"
+          >
             Trả lại để sửa
           </Btn>
-          <Btn primary disabled={dec.busy} onClick={() => dec.askApprove(targetPo(p))}>
-            <ShieldCheck className="size-4" aria-hidden />
+          <Btn
+            primary
+            disabled={dec.busy}
+            onClick={() => dec.askApprove(targetPo(p))}
+            icon="duyet"
+          >
             Phê duyệt
           </Btn>
           {/*
@@ -873,7 +877,7 @@ function PoBody({
               onClick={() => dec.askApprove(targetPo(p), nav.nextHref ?? undefined)}
             >
               Ký &amp; sang phiếu sau
-              <ChevronRight className="size-4" aria-hidden />
+              <Ico name="sau" />
             </Btn>
           )}
         </span>
@@ -886,13 +890,15 @@ function PoBody({
             <div
               key={i}
               className={cn(
-                'flex flex-wrap items-center gap-[9px] px-[var(--gutter)] py-[6px] text-[var(--fs-sm)] text-[var(--ink-2)]',
+                'text-k-sm flex flex-wrap items-center gap-2 px-[var(--gutter)] py-1.5 text-[var(--ink-2)]',
                 i > 0 && 'border-t border-[var(--hair)]',
                 c.tone === 'stop' ? 'bg-[var(--stop-wash)]' : 'bg-[var(--warn-wash)]',
               )}
             >
-              <c.icon
-                className="size-[14px] shrink-0"
+              <Ico
+                name={c.icon}
+                size={14}
+                className="shrink-0"
                 style={{
                   color: c.tone === 'stop' ? 'var(--stop)' : 'var(--warn)',
                 }}
@@ -919,8 +925,8 @@ function PoBody({
       {/* ── DẢI 4: LƯỚI VẬT TƯ + khay đọc ──────────────────────────────── */}
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-[26px] shrink-0 items-center gap-[6px] border-b border-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] font-bold tracking-[.08em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
-            <Package className="size-[14px]" aria-hidden />
+          <div className="text-k-label flex h-[26px] shrink-0 items-center gap-1.5 border-b border-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] font-bold tracking-[.08em] text-[var(--ink-label)] uppercase">
+            <Ico name="vattu" size={14} />
             Dòng vật tư
             <span className="num ml-1 font-normal tracking-normal text-[var(--ink-3)] normal-case">
               {lines.length} dòng
@@ -934,10 +940,11 @@ function PoBody({
               lastPrices={p.last_prices}
             />
             {p.note && p.note.trim() && (
-              <div className="flex items-start gap-2 border-t border-[var(--hair)] px-[var(--gutter)] py-[9px] text-[var(--fs-sm)] text-[var(--ink-2)]">
-                <StickyNote
-                  className="mt-[2px] size-[14px] shrink-0 text-[var(--ink-3)]"
-                  aria-hidden
+              <div className="text-k-sm flex items-start gap-2 border-t border-[var(--hair)] px-[var(--gutter)] py-2 text-[var(--ink-2)]">
+                <Ico
+                  name="ghiChu"
+                  size={14}
+                  className="mt-0.5 shrink-0 text-[var(--ink-3)]"
                 />
                 <span>
                   <b className="text-[var(--ink)]">Ghi chú đơn:</b>{' '}
@@ -953,8 +960,8 @@ function PoBody({
           nên ở màn hẹp khay xếp chồng và đẩy lưới xuống dưới nếp gấp.
         */}
         <aside className="hidden w-[300px] max-w-[300px] min-w-[300px] shrink-0 flex-col overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)] xl:flex">
-          <div className="border-b border-[var(--hair)] px-[12px] py-[10px]">
-            <div className="mb-[7px] font-bold tracking-[.08em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+          <div className="border-b border-[var(--hair)] px-3 py-2.5">
+            <div className="text-k-label mb-2 font-bold tracking-[.08em] text-[var(--ink-label)] uppercase">
               Số liệu chốt
             </div>
             <FactKv
@@ -978,7 +985,7 @@ function PoBody({
             />
           </div>
 
-          <div className="border-b border-[var(--hair)] px-[12px] py-[10px]">
+          <div className="border-b border-[var(--hair)] px-3 py-2.5">
             <FlowSteps
               nowIso={nowIso}
               steps={[
@@ -1007,11 +1014,11 @@ function PoBody({
             này rồi thì lệnh đó xong chưa, hay còn mấy tờ nữa nằm trong chồng.
           */}
           {p.lsx_code && nav && nav.sameLsxPending > 0 && (
-            <div className="px-[12px] py-[10px]">
-              <div className="mb-[7px] font-bold tracking-[.08em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+            <div className="px-3 py-2.5">
+              <div className="text-k-label mb-2 font-bold tracking-[.08em] text-[var(--ink-label)] uppercase">
                 Lệnh này còn chờ gì
               </div>
-              <p className="leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
+              <p className="text-k-sm leading-relaxed text-[var(--ink-2)]">
                 Lệnh <b className="num text-[var(--ink)]">{p.lsx_code}</b> có{' '}
                 <b className="text-[var(--ink)]">{nav.sameLsxPending} đơn</b> còn chờ chữ
                 ký của bạn

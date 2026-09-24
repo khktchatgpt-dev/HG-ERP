@@ -77,8 +77,11 @@ export function DocNotesPanel({
       if (!r.ok) throw new Error(String(r.status))
       const d: { note: DocNote } = await r.json()
       setNotes((cur) => [{ ...d.note, author_name: meName }, ...(cur ?? [])])
-    } catch {
+    } catch (e) {
       setLoi('Chưa ghi được. Nội dung vẫn còn trong ô — thử lại.')
+      // NÉM TIẾP để `NoteComposer` biết lưu hỏng mà giữ chữ trong ô — nuốt ở đây
+      // là ô tự xoá và câu báo lỗi ngay trên nói sai (B7½, 24/09/2026).
+      throw e
     } finally {
       setBusy(false)
     }
@@ -101,7 +104,7 @@ export function DocNotesPanel({
     <div className="kit flex flex-col gap-3">
       <NoteComposer onSubmit={ghi} busy={busy} />
       {loi && (
-        <p className="rounded-[var(--radius)] border border-[var(--stop)] bg-[var(--stop-wash)] px-3 py-2 text-[11.5px] text-[var(--stop)]">
+        <p className="text-k-sm rounded-[var(--radius)] border border-[var(--stop)] bg-[var(--stop-wash)] px-3 py-2 text-[var(--stop)]">
           {loi}
         </p>
       )}
@@ -118,13 +121,9 @@ export function DocNotesPanel({
         }}
       />
       {notes === null ? (
-        <p className="py-3 text-[12px] text-[var(--ink-3)]">Đang tải ghi chú…</p>
+        <p className="text-k-sm py-3 text-[var(--ink-3)]">Đang tải ghi chú…</p>
       ) : (
-        <NoteStream
-          rows={rows}
-          now={now}
-          empty={emptyHint}
-        />
+        <NoteStream rows={rows} now={now} empty={emptyHint} />
       )}
     </div>
   )

@@ -132,32 +132,39 @@ export default function Page() {
         ]}
       >
         <ActionGroup label="Đợt">
-          <Action strong>Sửa phạm vi</Action>
-          <Action>Thêm mã vào đợt</Action>
-          <Action>Huỷ đợt</Action>
+          <Action icon="sua" strong>
+            Sửa phạm vi
+          </Action>
+          <Action icon="them">Thêm mã vào đợt</Action>
+          <Action icon="huy">Huỷ đợt</Action>
         </ActionGroup>
         <ActionGroup label="Chốt">
           <Action
+            icon="gui"
             primary
             disabled={blocked}
             title={blocked ? `Còn ${stop.length} lỗi chặn — xem bảng kiểm phía trên` : undefined} // prettier-ignore
           >
             Gửi đối chiếu
           </Action>
-          <Action>Lưu tạm</Action>
-          <Action disabled title="Chỉ quản lý kho duyệt được, và chỉ sau bước đối chiếu">
+          <Action icon="luuNhap">Lưu tạm</Action>
+          <Action
+            icon="duyet"
+            disabled
+            title="Chỉ quản lý kho duyệt được, và chỉ sau bước đối chiếu"
+          >
             Duyệt đợt
           </Action>
         </ActionGroup>
         <ActionGroup label="Khi không thuận">
           <Action>Đếm lại một mã</Action>
-          <Action>Chuyển người đếm</Action>
+          <Action icon="toi">Chuyển người đếm</Action>
           <Action>Tách mã sang đợt sau</Action>
         </ActionGroup>
         <ActionGroup label="In &amp; xuất">
-          <Action>Phiếu đếm giấy</Action>
-          <Action>Biên bản kiểm kê</Action>
-          <Action>Xuất Excel</Action>
+          <Action icon="in">Phiếu đếm giấy</Action>
+          <Action icon="in">Biên bản kiểm kê</Action>
+          <Action icon="excel">Xuất Excel</Action>
         </ActionGroup>
       </ActionPane>
 
@@ -370,7 +377,19 @@ export default function Page() {
               })}
             </GridBody>
             <GridFoot>
-              <Td colSpan={showBook ? 4 : 3}>
+              {/*
+                LUÔN 4, KHÔNG phải `showBook ? 4 : 3`.
+
+                Bốn cột đầu (# · Mã/Tên · Kệ · ĐVT) KHÔNG phụ thuộc `showBook`
+                — cột bật/tắt theo nó là "Sổ" và "Lệch", nằm sau. Ternary cũ
+                làm chân bảng thiếu 1 cột khi GẤP cột sổ: head 6, foot 5.
+
+                Lệch cột chân bảng là lỗi trình duyệt không báo — ô cuối bị bóp
+                cho chữ xếp gần như dọc rồi ĐÈ LÊN thân bảng. Chuông
+                `useColSpanGuard` trong kit bắt được ca này (23/09/2026), còn
+                rà tay bằng grep `<TFoot` thì KHÔNG: màn này dùng `GridFoot`.
+              */}
+              <Td colSpan={4}>
                 {counted.length}/{rows.length} đã đếm · {diffs.length} dòng lệch ·{' '}
                 {notYet.length} chưa đếm
               </Td>
@@ -385,7 +404,7 @@ export default function Page() {
             </GridFoot>
           </Grid>
 
-          <p className="px-[var(--gutter)] py-[9px] leading-relaxed text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm px-[var(--gutter)] py-[9px] leading-relaxed text-[var(--ink-3)]">
             Chân bảng KHÔNG cộng thành một con số duy nhất: các mã khác đơn vị tính, cộng
             “cây” với “con” ra một số vô nghĩa. Nó cộng để{' '}
             <b>soát xem có bỏ sót dòng nào</b>, và nói rõ như vậy.

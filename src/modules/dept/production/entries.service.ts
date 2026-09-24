@@ -421,8 +421,11 @@ export const entriesService = {
     }
     const lock = await dayLocksRepo.find(team, input.entry_date)
     if (lock) {
+      // KHÔNG bảo "nhờ quản lý": từ 0205 (18/09/2026) chính thống kê có
+      // `production.daylock.unlock`, tự mở được ở màn Sổ ngày. Câu cũ đẩy họ đi
+      // xin phép thứ họ tự làm được — đo thấy 22/09 lúc chạy test case.
       throw BadRequest(
-        `Sổ ngày ${input.entry_date} của tổ đã chốt — nhờ quản lý mở khoá trước khi ghi thêm`,
+        `Sổ ngày ${input.entry_date} của tổ đã chốt — mở khoá ở màn Sổ ngày rồi ghi tiếp`,
       )
     }
 

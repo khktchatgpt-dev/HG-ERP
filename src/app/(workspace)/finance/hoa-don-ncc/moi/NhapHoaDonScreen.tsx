@@ -22,9 +22,9 @@ import {
   Td,
   TextInput,
   Th,
+  useToast,
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 import {
   draftBlockers,
   invoiceTotals,
@@ -123,6 +123,25 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
   })
 
   /*
+    CÂU CHẶN PHẢI BẤM ĐƯỢC (CLAUDE.md, khuôn F; B7½ 24/09/2026). Trước đây thanh
+    chốt nói "Chưa có số hoá đơn" mà bấm vào không làm gì — `CommitBar` vẽ một
+    nút chết. Xét ĐÚNG thứ tự của `draftBlockers` (câu đang hiện là `blockers[0]`)
+    để nhảy tới đúng ô nó đang nói.
+  */
+  function goBlocked(): void {
+    const q = (sel: string) => document.querySelector<HTMLElement>(sel)
+    let el: HTMLElement | null = null
+    if (!invoiceNo.trim()) el = q('[aria-label="Số hoá đơn NCC"]')
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate))
+      el = q('[aria-label="Ngày hoá đơn"]')
+    // Chưa chọn dòng / dòng SL 0 / dòng thiếu tên: đưa tới ô tích dòng đầu tiên
+    // của lưới — mọi lỗi về dòng đều gỡ ở đó.
+    else el = q('[aria-label^="Đưa "][aria-label$=" vào hoá đơn"]')
+    el?.scrollIntoView({ block: 'center' })
+    el?.focus()
+  }
+
+  /*
     Cảnh báo KHÔNG chặn lưu — chúng là chuyện có thật ngoài đời (NCC đòi trước
     khi giao, NCC đổi giá), việc của màn là bày ra để mắt soát chứ không phải
     cấm. Chặn những thứ này là đẩy kế toán ra ngoài hệ thống.
@@ -187,8 +206,12 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
           title={`Nhập hoá đơn NCC cho ${draft.po.code}`}
           actions={
             <>
-              <Btn href={`/finance/hoa-don-ncc?don=${draft.po.id}`}>Về đối chiếu</Btn>
-              <Btn href={`/mua-hang/don/${draft.po.id}`}>Mở đơn mua</Btn>
+              <Btn icon="quayLai" href={`/finance/hoa-don-ncc?don=${draft.po.id}`}>
+                Về đối chiếu
+              </Btn>
+              <Btn icon="don" href={`/mua-hang/don/${draft.po.id}`}>
+                Mở đơn mua
+              </Btn>
             </>
           }
         />
@@ -278,7 +301,11 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
             <Empty
               headline="Đơn mua này không có dòng nào"
               reason="Hoá đơn NCC được lập từ các dòng của đơn mua. Đơn không có dòng thì không có gì để đòi tiền."
-              next={<Btn href={`/mua-hang/don/${draft.po.id}`}>Mở đơn mua</Btn>}
+              next={
+                <Btn icon="don" href={`/mua-hang/don/${draft.po.id}`}>
+                  Mở đơn mua
+                </Btn>
+              }
             />
           ) : (
             <Grid minWidth={1060}>
@@ -322,8 +349,8 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
                       <div
                         className={
                           BASIS[r.basis].tone
-                            ? `k-t-${BASIS[r.basis].tone} text-[11px]`
-                            : 'text-[11px] text-[var(--ink-3)]'
+                            ? `k-t-${BASIS[r.basis].tone} text-k-label`
+                            : 'text-k-label text-[var(--ink-3)]'
                         }
                       >
                         {BASIS[r.basis].label}
@@ -357,7 +384,7 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
           )}
 
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--hair)] px-[var(--gutter)] py-3">
-            <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">Ghi chú</span>
+            <span className="text-k-sm text-[var(--ink-3)]">Ghi chú</span>
             <div className="min-w-[320px] flex-1">
               <TextInput
                 value={note}
@@ -380,6 +407,7 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
             value: `${money(totals.total, cur)} ${cur}`,
           }}
           blocked={blockers[0]}
+          onGoBlocked={goBlocked}
           actions={
             <Btn primary onClick={save} disabled={blockers.length > 0 || busy}>
               {busy ? 'Đang lưu…' : 'Lưu hoá đơn nháp'}
@@ -392,7 +420,7 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
           công nợ thì họ sẽ không bao giờ bấm Vào sổ, và sổ TK 331 vĩnh viễn
           trống trong khi màn hoá đơn đầy.
         */}
-        <div className="border-t border-[var(--hair)] px-[var(--gutter)] py-2 text-[11.5px] text-[var(--ink-3)]">
+        <div className="text-k-sm border-t border-[var(--hair)] px-[var(--gutter)] py-2 text-[var(--ink-3)]">
           Lưu ra <b>NHÁP</b> — chưa sinh công nợ. Công nợ phát sinh khi bấm <b>Vào sổ</b>{' '}
           ở màn Hoá đơn; lúc đó tờ này mới vào sổ TK 331 và vào bảng tuổi nợ
           {dueDate ? ` (hạn ${dmy(dueDate)})` : ' — hiện CHƯA có hạn'}.

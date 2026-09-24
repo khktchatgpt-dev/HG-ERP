@@ -84,8 +84,12 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn href="/design-lab/kho/kiem-ke">Mở đợt kiểm kê</Btn>
-            <Btn primary>+ Thêm khu</Btn>
+            <Btn icon="mo" href="/design-lab/kho/kiem-ke">
+              Mở đợt kiểm kê
+            </Btn>
+            <Btn icon="them" primary>
+              Thêm khu
+            </Btn>
           </>
         }
       />
@@ -150,7 +154,7 @@ export default function Page() {
           </Table>
         </div>
 
-        <p className="mt-[13px] max-w-[76ch] leading-relaxed text-[var(--fs-sm)] text-[var(--ink-3)]">
+        <p className="text-k-sm mt-[13px] max-w-[76ch] leading-relaxed text-[var(--ink-3)]">
           Ba khu ảo <b>không kiểm kê</b> — và đó không phải là bỏ sót. Hàng ở{' '}
           <span className="num">TIEP-NHAN</span> vừa được đếm lúc nhận; hàng ở{' '}
           <span className="num">KHOA-01</span> đã có biên bản khoá ghi rõ số; hàng ở{' '}

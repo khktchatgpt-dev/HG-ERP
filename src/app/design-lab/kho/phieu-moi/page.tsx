@@ -184,7 +184,7 @@ export default function Page() {
         không được nằm trong một hộp chọn lẫn giữa các ô khác.
       */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[8px]">
-        <span className="font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+        <span className="text-k-label font-bold tracking-[.1em] text-[var(--ink-3)] uppercase">
           Soạn phiếu gì
         </span>
         {QUICK.map((c) => {
@@ -206,7 +206,7 @@ export default function Page() {
           width={250}
         />
         {r.needs.length > 0 && (
-          <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <span className="text-k-sm text-[var(--ink-3)]">
             Bắt buộc: {r.needs.join(' · ')}
           </span>
         )}
@@ -215,7 +215,7 @@ export default function Page() {
       {needsWhy && (
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-[8px]">
           <span
-            className="font-bold tracking-[.06em] text-[var(--fs-label)] uppercase"
+            className="text-k-label font-bold tracking-[.06em] uppercase"
             style={{ color: why.trim() ? 'var(--ink-3)' : 'var(--stop)' }}
           >
             Lý do (bắt buộc với {r.code})
@@ -337,6 +337,7 @@ export default function Page() {
               width={300}
             />
             <Btn
+              icon="them"
               onClick={() =>
                 setLines((ls) => [
                   ...ls,
@@ -344,11 +345,11 @@ export default function Page() {
                 ])
               }
             >
-              + Thêm dòng
+              Thêm dòng
             </Btn>
             <Btn>Quét mã vạch</Btn>
-            <Btn>Dán từ Excel</Btn>
-            <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+            <Btn icon="excel">Dán từ Excel</Btn>
+            <span className="text-k-sm text-[var(--ink-3)]">
               {isMove
                 ? 'Chuyển kệ không đổi tổng tồn — chỉ đổi chỗ.'
                 : isIn
@@ -371,7 +372,7 @@ export default function Page() {
         blocked={blocked}
         actions={
           <>
-            <Btn>Lưu nháp</Btn>
+            <Btn icon="luuNhap">Lưu nháp</Btn>
             <Btn primary disabled={!!blocked} title={blocked}>
               {r.approve ? 'Gửi quản lý kho duyệt' : 'Ghi sổ'}
             </Btn>

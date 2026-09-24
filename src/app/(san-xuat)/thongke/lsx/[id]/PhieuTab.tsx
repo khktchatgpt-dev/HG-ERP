@@ -12,8 +12,8 @@ import {
   Tag,
   Td,
   Th,
+  useToast,
 } from '@/components/kit'
-import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { STATUS_LABEL, type EntryDocStatus } from '@/lib/entry-doc-flow'
 
@@ -151,9 +151,11 @@ export function PhieuTab({
               <span className="flex justify-end gap-1">
                 {/* In được ở MỌI trạng thái: tổ trưởng ký trên giấy, kể cả
                     phiếu còn nháp thống kê vẫn cầm đi đối chiếu. */}
-                <Btn href={`/print/phieu-sx/${d.id}`}>In</Btn>
+                <Btn icon="in" href={`/print/phieu-sx/${d.id}`}>
+                  In
+                </Btn>
                 {canRecord && (d.status === 'nhap' || d.status === 'tu_choi') && (
-                  <Btn primary disabled={busy} onClick={() => submit(d)}>
+                  <Btn icon="ghiSo" primary disabled={busy} onClick={() => submit(d)}>
                     Ghi chính thức
                   </Btn>
                 )}

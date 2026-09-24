@@ -88,9 +88,11 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn href="/design-lab/mau-danh-sach">Mở danh sách đơn</Btn>
-            <Btn primary href="/design-lab/mau-erp">
-              + Đơn mới
+            <Btn icon="mo" href="/design-lab/mau-danh-sach">
+              Mở danh sách đơn
+            </Btn>
+            <Btn icon="them" primary href="/design-lab/mau-erp">
+              Đơn mới
             </Btn>
           </>
         }
@@ -149,7 +151,7 @@ export default function Page() {
         </div>
 
         <section className="mt-[15px]">
-          <h2 className="mb-[7px] font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-2)] uppercase">
+          <h2 className="text-k-label mb-[7px] font-bold tracking-[.1em] text-[var(--ink-2)] uppercase">
             Cần tôi quyết hôm nay
           </h2>
           <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
@@ -182,7 +184,7 @@ export default function Page() {
               </tbody>
             </Table>
           </div>
-          <p className="mt-[7px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm mt-[7px] text-[var(--ink-3)]">
             Cột giữa nói <b>quyết định cần ra</b>, không nói tên trạng thái. Hiện mỗi mã
             chứng từ thì người đọc vẫn phải mở từng cái mới biết phải làm gì — lúc đó màn
             này không tiết kiệm được thao tác nào.

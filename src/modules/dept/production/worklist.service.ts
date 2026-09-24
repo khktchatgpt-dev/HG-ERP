@@ -26,6 +26,7 @@ import { countsAsOfficial, countsAsPending } from '@/lib/entry-doc-flow'
 import type { EntryDocStatus } from '@/lib/entry-doc-flow'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { transfersRepo } from './transfers.repo'
+import { dayLocksRepo } from './day-locks.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { fileImageSrc } from '@/server/file-image'
@@ -67,6 +68,28 @@ export type WorklistRow = {
   remaining: number
   pct: number
   status: 'not_started' | 'in_progress' | 'done'
+  /** Số chi tiết của dòng SP có việc ở công đoạn này. */
+  parts_total: number
+  /**
+   * Số chi tiết ĐÃ CÓ SỐ ở công đoạn này (đạt hoặc chờ duyệt).
+   *
+   * Vì sao cần: `done` đếm theo BỘ nên nó là MIN qua mọi chi tiết — ghi 150 cái
+   * chân mà chưa ghi tựa thì `done` vẫn 0. Không có số này thì màn báo "Chưa
+   * bắt đầu · 0%" ngay sau khi thống kê vừa ghi 150 (lỗi L3 đo 22/09/2026):
+   * số đúng, nhưng nói dối về việc đã có ai làm hay chưa.
+   */
+  parts_started: number
+  /**
+   * TIẾN ĐỘ THEO MẢNH (B6, 24/09/2026 — docs/thong-ke-thiet-ke-tu-excel.md §3b).
+   *
+   * `done`/`planned` đếm theo BỘ (MIN qua chi tiết): trả lời "giao được bao
+   * nhiêu bộ". Còn "xưởng có làm việc không" thì phải đếm theo MẢNH: tổng số
+   * cái đã làm ÷ tổng số cái cần, cộng qua mọi chi tiết của công đoạn — file
+   * Excel `TONG_HOP.G12` bày chính số này. Mỗi chi tiết kẹp ở mức cần của
+   * nó: làm dư chân không bù được cho thiếu tựa.
+   */
+  pieces_needed: number
+  pieces_done: number
 }
 
 /**
@@ -242,6 +265,15 @@ export const worklistService = {
               remaining: fp.remaining,
               pct: fp.pct,
               status: fp.status,
+              // Chặng thành phẩm đếm THẲNG theo bộ trên một dòng duy nhất, nên
+              // không có cảnh "đã ghi mà `done` vẫn 0" như các công đoạn suy
+              // theo chi tiết — `parts_started` bám đúng `done` để màn không
+              // bày một câu giải thích không có gì để giải thích.
+              parts_total: 1,
+              parts_started: fp.done > 0 ? 1 : 0,
+              // Chặng thành phẩm: một mảnh = một bộ.
+              pieces_needed: fp.planned,
+              pieces_done: fp.done,
             })
             continue
           }
@@ -280,6 +312,11 @@ export const worklistService = {
             pending: { qty: Math.max(0, pending - done), defect: 0 },
           })
 
+          // Đã có người động vào chưa — hỏi ở tầng CHI TIẾT, không hỏi số bộ.
+          // `done` là MIN nên nó im lặng suốt từ lúc ghi chi tiết đầu tiên cho
+          // tới lúc đủ một bộ; lấy nó làm căn cứ "chưa bắt đầu" là sai.
+          const partsStarted = measured.filter((m) => m.done > 0 || m.pending > 0).length
+
           rows.push({
             lsx_id: lsx.id,
             lsx_code: lsx.code,
@@ -295,7 +332,18 @@ export const worklistService = {
             pending: p.pending_qty,
             remaining: p.remaining,
             pct: p.pct,
-            status: p.status,
+            // `stageProgress` suy trạng thái từ SỐ BỘ; ở đây bổ sung vế "đã có
+            // chi tiết nào có số chưa" để không gọi một dòng đang làm dở là
+            // "chưa bắt đầu".
+            status:
+              p.status === 'not_started' && partsStarted > 0 ? 'in_progress' : p.status,
+            parts_total: measured.length,
+            parts_started: partsStarted,
+            pieces_needed: measured.reduce((a, m) => a + m.total_needed, 0),
+            pieces_done: measured.reduce(
+              (a, m) => a + Math.min(m.done, m.total_needed),
+              0,
+            ),
           })
         }
       }
@@ -399,7 +447,14 @@ export type EntrySheetLine = {
   remaining: number
   /** Đã ghi HÔM NAY (mọi trạng thái phiếu, kể cả nháp) — chống gõ đúp. */
   today_qty: number
+  /** Nhịp 14 ngày gần nhất (mọi phiếu đã ghi), cũ → mới; rỗng ở dòng ảo. */
+  days: EntrySheetDay[]
 }
+
+export type EntrySheetDay = { date: string; qty: number; docs: number }
+
+/** Số ngày của dải nhịp ở màn ghi — hai tuần làm việc, như khối 14 ngày của file Excel. */
+export const DAY_STRIP_DAYS = 14
 
 export type EntrySheetGroup = {
   order_line_id: string
@@ -423,9 +478,12 @@ export type EntrySheetGroup = {
 
 export type EntrySheet = {
   /**
-   * Lệnh đang được LỌC HẸP, null = đang mở mọi lệnh đang chạy (mặc định).
-   * Không còn là "lệnh của phiếu" nữa: một lượt gõ có thể trải nhiều lệnh và
-   * lúc Ghi sổ sẽ tách thành nhiều phiếu, mỗi lệnh một phiếu.
+   * Lệnh đang mở. Từ 22/09/2026 màn ghi LUÔN ở phạm vi MỘT lệnh (gộp nhiều
+   * lệnh vào một lưới bị chê rối — 208 dòng/8 lệnh ở Phôi), nên thực tế trường
+   * này chỉ null khi không có lệnh nào đang chạy.
+   *
+   * Tầng ghi vẫn tách phiếu theo lệnh như cũ, nên nếu sau này mở lại chế độ
+   * nhiều lệnh thì đường ghi không phải sửa.
    */
   lsx: {
     id: string
@@ -457,6 +515,14 @@ export type EntrySheet = {
   today: string
   /** false = lệnh chưa duyệt / đã kết thúc → màn chỉ xem. */
   can_record: boolean
+  /**
+   * Sổ ngày ĐÃ CHỐT trong 30 ngày gần đây, để màn báo TRƯỚC thay vì để người
+   * ta gõ xong cả lưới rồi mới bị service chặn (lỗi L1 đo 22/09/2026).
+   *
+   * Cửa sổ 30 ngày, không phải mọi ngày: ghi hồi tố xa hơn thế là chuyện hiếm,
+   * và hàng rào thật vẫn nằm ở `entriesService.record`. Đây chỉ là lớp báo sớm.
+   */
+  locks: { team_id: string; entry_date: string; locked_by_name: string | null }[]
 }
 
 /**
@@ -572,8 +638,24 @@ export async function loadEntrySheet(
   const todayIso = vnTodayIso()
   const tally = new Map<string, EntryTally>()
   const todayQty = new Map<string, number>()
+  /*
+    NHỊP 14 NGÀY của từng chi tiết ở công đoạn này (B6 — T4, dải `DayStrip`).
+    Lấy từ CHÍNH lượt đọc sổ ở trên, không thêm truy vấn. Đếm mọi phiếu đã ghi
+    (kể cả nháp): dải trả lời "ngày nào có người ghi bao nhiêu", đúng như cột
+    ngày của sheet `CD_*` — còn "đạt chính thức" đã có ở cột Đạt.
+  */
+  const from14 = shiftIso(todayIso, -(DAY_STRIP_DAYS - 1))
+  const dayMap = new Map<string, Map<string, { qty: number; docs: Set<string> }>>()
   for (const e of entries) {
     if (e.stage !== stage) continue
+    if (e.entry_date >= from14 && e.entry_date <= todayIso) {
+      const m = dayMap.get(e.component_id) ?? new Map()
+      const x = m.get(e.entry_date) ?? { qty: 0, docs: new Set<string>() }
+      x.qty += Number(e.qty)
+      if (e.doc_id) x.docs.add(e.doc_id)
+      m.set(e.entry_date, x)
+      dayMap.set(e.component_id, m)
+    }
     const t = tally.get(e.component_id) ?? {
       confirmed: { qty: 0, defect: 0 },
       pending: { qty: 0, defect: 0 },
@@ -586,6 +668,14 @@ export async function loadEntrySheet(
       todayQty.set(e.component_id, (todayQty.get(e.component_id) ?? 0) + Number(e.qty))
     }
   }
+
+  /** 14 ngày liền, ngày không ai ghi vẫn có mặt với số 0 — dải không được co lại. */
+  const daysOf = (componentId: string): EntrySheetDay[] =>
+    Array.from({ length: DAY_STRIP_DAYS }, (_, i) => {
+      const date = shiftIso(from14, i)
+      const x = dayMap.get(componentId)?.get(date)
+      return { date, qty: x?.qty ?? 0, docs: x?.docs.size ?? 0 }
+    })
 
   const groups: EntrySheetGroup[] = []
   for (const line of lines) {
@@ -613,6 +703,7 @@ export async function loadEntrySheet(
           pending: t?.pending.qty ?? 0,
           remaining: Math.max(0, needed - done),
           today_qty: todayQty.get(c.id) ?? 0,
+          days: daysOf(c.id),
         }
       })
 
@@ -653,6 +744,8 @@ export async function loadEntrySheet(
         pending: Math.max(0, vAll - vDone),
         remaining: Math.max(0, line.qty - vDone),
         today_qty: 0,
+        // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
+        days: [],
       })
     }
 
@@ -672,6 +765,8 @@ export async function loadEntrySheet(
         pending: 0,
         remaining: line.qty,
         today_qty: 0,
+        // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
+        days: [],
       })
     }
 
@@ -720,6 +815,7 @@ export async function loadEntrySheet(
   }
   const from7 = shiftIso(todayIso, -7)
   const from30 = shiftIso(todayIso, -30)
+  const dayLocks = await dayLocksRepo.listRange(from30, todayIso)
   const reasonSeen = new Set<string>()
   const reasons: { reason: string; at: string }[] = []
   for (const e of entries) {
@@ -798,5 +894,10 @@ export async function loadEntrySheet(
     can_record: only
       ? only.status === 'approved' || only.status === 'in_progress'
       : scope.length > 0,
+    locks: dayLocks.map((l) => ({
+      team_id: l.team_department_id,
+      entry_date: l.entry_date,
+      locked_by_name: l.locked_by_name,
+    })),
   }
 }

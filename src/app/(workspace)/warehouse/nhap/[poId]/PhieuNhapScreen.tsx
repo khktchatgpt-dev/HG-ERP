@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
 import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 import {
   WarehouseDocPrintSheet,
   type WarehousePrintLine,
@@ -53,6 +52,7 @@ import {
   TextArea,
   TextInput,
   Th,
+  useToast,
 } from '@/components/kit'
 
 const TINH_TRANG: { value: TinhTrang; label: string }[] = [
@@ -261,15 +261,21 @@ export function PhieuNhapScreen({
             >
               {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
             </Action>
-            <Action disabled={busy} onClick={() => router.push('/warehouse/nhap')}>
+            <Action
+              icon="huy"
+              disabled={busy}
+              onClick={() => router.push('/warehouse/nhap')}
+            >
               Huỷ
             </Action>
           </ActionGroup>
           <ActionGroup label="Bản in">
-            <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
+            <Action icon="in" onClick={() => setXemIn(true)}>
+              Xem bản in
+            </Action>
           </ActionGroup>
           <ActionGroup label="Đơn">
-            <Action onClick={() => router.push(`/mua-hang/don/${po.id}`)}>
+            <Action icon="don" onClick={() => router.push(`/mua-hang/don/${po.id}`)}>
               Mở đơn mua
             </Action>
           </ActionGroup>
@@ -385,7 +391,7 @@ export function PhieuNhapScreen({
         <GridToolbar
           count={`${rows.length} dòng · ${rows.filter((r) => !r.editable).length} đã đủ`}
         >
-          <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <span className="text-k-sm text-[var(--ink-3)]">
             Nhận theo phần <b>còn mở</b> của {dot ? 'đợt' : 'đơn'} — dòng đã đủ không có ô
             nhập
           </span>
@@ -420,7 +426,7 @@ export function PhieuNhapScreen({
                     <td>
                       <Code>{r.code}</Code>
                     </td>
-                    <td className="text-[var(--fs-micro)]">
+                    <td className="text-k-label">
                       {(() => {
                         const n = nhan.get(r.po_line_id) ?? { kind: 'none' as const }
                         if (n.kind === 'this')
@@ -554,9 +560,7 @@ export function PhieuNhapScreen({
           onGoBlocked={kiem.ok ? undefined : nhayToi}
           actions={
             <>
-              <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
-                Ctrl + Enter
-              </span>
+              <span className="text-k-label text-[var(--ink-3)]">Ctrl + Enter</span>
               <Action
                 primary
                 disabled={!ghiDuoc}
@@ -605,7 +609,7 @@ export function PhieuNhapScreen({
               }))}
             />
             <div className="mt-3">
-              <div className="mb-1 font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+              <div className="text-k-label mb-1 font-bold tracking-[.09em] text-[var(--ink-label)] uppercase">
                 Lý do nhận vượt · bắt buộc
               </div>
               <TextArea

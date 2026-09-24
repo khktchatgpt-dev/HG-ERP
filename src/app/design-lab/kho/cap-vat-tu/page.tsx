@@ -82,7 +82,11 @@ export default function Page() {
           { label: 'Quá ngày vào chuyền', value: String(LANES[0].rows.length), tone: 'stop' }, // prettier-ignore
           { label: 'Mã còn thiếu', value: String(LSXS.flatMap((l) => l.lines).filter((x) => !done(x)).length), tone: 'warn' }, // prettier-ignore
         ]}
-        actions={<Btn href="/design-lab/kho">Về bàn làm việc</Btn>}
+        actions={
+          <Btn icon="quayLai" href="/design-lab/kho">
+            Về bàn làm việc
+          </Btn>
+        }
       >
         <WorkLanes lanes={LANES} activeId={lane} onPick={setLane} />
       </ScreenHeader>
@@ -106,8 +110,8 @@ export default function Page() {
                 >
                   <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-[12px] py-[9px]">
                     <Code>{x.code}</Code>
-                    <b className="text-[var(--fs-body)]">{x.product}</b>
-                    <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                    <b className="text-k-body">{x.product}</b>
+                    <span className="text-k-sm text-[var(--ink-3)]">
                       {x.qty} · vào chuyền {x.start}
                       {x.inDays < 0 && (
                         <b className="text-[var(--stop)]"> · quá {-x.inDays} ngày</b>
@@ -162,18 +166,18 @@ export default function Page() {
                               >
                                 {mark.icon}
                               </span>
-                              <b className="num text-[var(--fs-body)]">{l.code}</b>
-                              <span className="min-w-[160px] flex-1 truncate text-[var(--fs-sm)] text-[var(--ink-3)]">
+                              <b className="num text-k-body">{l.code}</b>
+                              <span className="text-k-sm min-w-[160px] flex-1 truncate text-[var(--ink-3)]">
                                 {mat.name}
                               </span>
-                              <span className="num text-[var(--fs-sm)]">
+                              <span className="num text-k-sm">
                                 cần <b>{n(l.need)}</b> {mat.unit}
                               </span>
-                              <span className="num text-[var(--fs-sm)] text-[var(--ink-3)]">
+                              <span className="num text-k-sm text-[var(--ink-3)]">
                                 đã cấp {n(l.issued)}
                               </span>
                               <span
-                                className="num text-[var(--fs-sm)]"
+                                className="num text-k-sm"
                                 title="Tồn DÙNG ĐƯỢC — không gồm lô đang chờ kiểm hay đang khoá"
                               >
                                 dùng được <b>{n(l.usable)}</b>
@@ -194,7 +198,7 @@ export default function Page() {
                             {!done(l) && l.fix && (
                               <div className="mt-[5px] flex flex-wrap items-center gap-2 pl-[26px]">
                                 <span
-                                  className="leading-snug text-[var(--fs-sm)]"
+                                  className="text-k-sm leading-snug"
                                   style={{ color: TONE_VAR[mark.tone] }}
                                 >
                                   → {l.fix}
@@ -204,7 +208,7 @@ export default function Page() {
                                   <Btn href="/design-lab/kho/ton">Xem lô khoá</Btn>
                                 )}
                                 {!l.stuck && <Btn>Xin mua gấp</Btn>}
-                                <Btn>Cắt chỗ của lệnh khác</Btn>
+                                <Btn icon="lenh">Cắt chỗ của lệnh khác</Btn>
                               </div>
                             )}
                             {!done(l) && l.stuck && (
@@ -223,7 +227,7 @@ export default function Page() {
           </div>
         )}
 
-        <p className="mt-[13px] max-w-[74ch] leading-relaxed text-[var(--fs-sm)] text-[var(--ink-3)]">
+        <p className="text-k-sm mt-[13px] max-w-[74ch] leading-relaxed text-[var(--ink-3)]">
           Bốn nhãn dòng là <b>bốn tình huống khác nhau</b> và không được gộp: đã cấp đủ ·
           hàng có nhưng chờ kiểm · một phần đang khoá · chưa có hàng. Gộp ba cái sau thành
           “thiếu” thì thủ kho mất đúng thông tin quyết định việc phải làm tiếp — đi nhắc

@@ -1,9 +1,10 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Ico } from './Icon'
+import { useModKeyLabel } from './Nav'
 import type { Lane, Tone } from './kit-core'
 
 /**
@@ -32,18 +33,42 @@ export function CommandBar({
   onSearch,
   user,
 }: {
+  /** Tên / logo ở đầu thanh, chữ đậm cỡ nhỏ. Kit không tự biến nó thành liên kết về trang chủ — cần thì truyền sẵn một thẻ link. */
   brand: ReactNode
+  /**
+   * Đường dẫn trái → phải. Mắt có `href` là thẻ `<a>` thật; mắt KHÔNG có `href`
+   * là trang đang đứng, in đậm. Thường chỉ mắt cuối để trống `href`.
+   */
   crumbs: { label: string; href?: string }[]
+  /**
+   * Gọi khi bấm ô "Đi tới…". Không có = không vẽ ô (nút không làm gì là lời hứa
+   * suông). Thanh CHỈ vẽ ô và gợi ý phím ("Ctrl K", máy Apple "⌘ K") — nó không
+   * tự bắt phím tắt, không tự mở hộp tìm. Màn gọi phải lo cả hai.
+   */
   onSearch?: () => void
+  /** Người đang đăng nhập: `initials` vào chấm tròn, `name · role` in cạnh. Chỉ để đọc, không phải menu. */
   user: { initials: string; name: string; role: string }
 }) {
+  const mod = useModKeyLabel()
   return (
-    <div className="flex h-11 shrink-0 items-center gap-[14px] border-b border-[var(--line)] bg-[var(--surface-card)] px-[14px]">
-      <div className="text-[12.5px] font-bold tracking-[.02em]">{brand}</div>
-      <nav className="flex min-w-0 items-center gap-[7px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+    <div className="flex h-11 shrink-0 items-center gap-3.5 border-b border-[var(--line)] bg-[var(--surface-card)] px-3.5">
+      <div className="text-k-sm font-bold tracking-[.02em]">{brand}</div>
+      {/*
+        Mốc có TÊN + mảnh cuối `aria-current` (B7½, 24/09/2026): `<nav>` không
+        tên đứng cạnh thanh điều hướng chính là hai mốc trùng tên — trình đọc
+        đọc "điều hướng, điều hướng" và axe báo `landmark-unique`.
+      */}
+      <nav
+        aria-label="Đường dẫn"
+        className="text-k-sm flex min-w-0 items-center gap-2 text-[var(--ink-3)]"
+      >
         {crumbs.map((c, i) => (
-          <span key={i} className="flex items-center gap-[7px]">
-            {i > 0 && <span className="text-[var(--line-faint)]">/</span>}
+          <span key={i} className="flex items-center gap-2">
+            {i > 0 && (
+              <span aria-hidden className="text-[var(--line-faint)]">
+                /
+              </span>
+            )}
             {c.href ? (
               <a
                 href={c.href}
@@ -52,28 +77,38 @@ export function CommandBar({
                 {c.label}
               </a>
             ) : (
-              <span className="font-semibold text-[var(--ink)]">{c.label}</span>
+              <span
+                aria-current={i === crumbs.length - 1 ? 'page' : undefined}
+                className="font-semibold text-[var(--ink)]"
+              >
+                {c.label}
+              </span>
             )}
           </span>
         ))}
       </nav>
       <div className="flex-1" />
-      <button
-        onClick={onSearch}
-        className="flex h-7 min-w-[190px] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-[10px] text-[var(--fs-sm)] text-[var(--ink-3)] hover:border-[var(--act)] hover:text-[var(--ink-2)]"
-      >
-        Đi tới lệnh, đơn, vật tư…
-        <span className="ml-auto flex gap-1">
-          <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">
-            ⌘
-          </kbd>
-          <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">
-            K
-          </kbd>
-        </span>
-      </button>
-      <div className="flex items-center gap-2 text-[var(--fs-sm)] text-[var(--ink-2)]">
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--act-wash)] text-[10.5px] font-bold text-[var(--act)]">
+      {/* Không `onSearch` thì không vẽ ô — một nút bấm không làm gì là lời hứa
+          suông. Phím gợi ý theo máy người xem: Windows "Ctrl", Apple "⌘". */}
+      {onSearch && (
+        <button
+          type="button"
+          onClick={onSearch}
+          className="text-k-sm flex h-7 min-w-[190px] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 text-[var(--ink-3)] hover:border-[var(--act)] hover:text-[var(--ink-2)]"
+        >
+          Đi tới lệnh, đơn, vật tư…
+          <span className="ml-auto flex gap-1">
+            <kbd className="text-k-label rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-1 font-[family-name:var(--font-mono)]">
+              {mod}
+            </kbd>
+            <kbd className="text-k-label rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-1 font-[family-name:var(--font-mono)]">
+              K
+            </kbd>
+          </span>
+        </button>
+      )}
+      <div className="text-k-sm flex items-center gap-2 text-[var(--ink-2)]">
+        <span className="text-k-label grid h-6 w-6 place-items-center rounded-full bg-[var(--act-wash)] font-bold text-[var(--act)]">
           {user.initials}
         </span>
         {user.name} · {user.role}
@@ -96,26 +131,73 @@ export function WorkLanes<T>({
   lanes,
   activeId,
   onPick,
+  panelId,
 }: {
+  /**
+   * Các làn, theo thứ tự hiện. Số trên tab là `rows.length` — kit TỰ ĐẾM, không
+   * nhận số rời, nên số trên tab và danh sách bên dưới không lệch được. Dựng bằng
+   * `toLanes()`. Làn rỗng vẫn hiện, số 0 là thông tin.
+   */
   lanes: Lane<T>[]
+  /** `id` của làn đang mở. Có kiểm soát: kit không giữ trạng thái chọn. */
   activeId: string
+  /** Gọi với `id` của làn khi bấm tab hoặc đi bằng mũi tên. Màn tự đổi `activeId` và lọc bảng. */
   onPick: (id: string) => void
+  /**
+   * Id vùng nội dung (`role="tabpanel"`) do MÀN dựng. Có thì mọi tab mang
+   * `aria-controls` trỏ tới đó, và tab có id `${panelId}-tab-${lane.id}` để vùng
+   * đặt `aria-labelledby` theo tab đang chọn. Không có = tab không trỏ đi đâu.
+   */
+  panelId?: string
 }) {
+  const auto = useId()
+  const tabId = (id: string) => `${panelId ?? auto}-tab-${id}`
+  /*
+    PHÍM THEO MẪU TAB CỦA WAI-ARIA (B7½, 24/09/2026). Trước đây mỗi tab một
+    điểm dừng Tab và không mũi tên nào chạy: đi qua bốn làn là bốn lần Tab mới
+    tới bảng. Nay chỉ tab ĐANG CHỌN nhận Tab (roving tabindex); ← → vòng giữa
+    các làn, Home/End về đầu/cuối, đi tới đâu CHỌN luôn tới đó (làn chỉ là bộ
+    lọc, đổi làn không tốn gì nên không cần bước Enter).
+  */
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const i = lanes.findIndex((l) => l.id === activeId)
+    const n = lanes.length
+    const to =
+      e.key === 'ArrowRight'
+        ? (i + 1) % n
+        : e.key === 'ArrowLeft'
+          ? (i - 1 + n) % n
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? n - 1
+              : -1
+    if (to < 0 || !n) return
+    e.preventDefault()
+    const id = lanes[to].id
+    onPick(id)
+    document.getElementById(tabId(id))?.focus()
+  }
   return (
     <div
       role="tablist"
-      className="-mb-px flex items-end gap-[2px] overflow-x-auto px-[var(--gutter)] pt-[13px]"
+      onKeyDown={onKeyDown}
+      className="-mb-px flex items-end gap-0.5 overflow-x-auto px-[var(--gutter)] pt-3"
     >
       {lanes.map((l) => {
         const on = l.id === activeId
         return (
           <button
             key={l.id}
+            id={tabId(l.id)}
+            type="button"
             role="tab"
             aria-selected={on}
+            aria-controls={panelId}
+            tabIndex={on ? 0 : -1}
             onClick={() => onPick(l.id)}
             className={cn(
-              'relative flex h-[37px] shrink-0 items-center gap-[9px] rounded-t-[var(--radius)] border border-b-0 px-[15px] text-[13px] whitespace-nowrap',
+              'text-k-body relative flex h-[37px] shrink-0 items-center gap-2 rounded-t-[var(--radius)] border border-b-0 px-4 whitespace-nowrap',
               on
                 ? 'border-[var(--line)] bg-[var(--surface)] font-semibold text-[var(--ink)] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-[var(--surface)] after:content-[""]'
                 : 'border-transparent font-medium text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]',
@@ -125,7 +207,7 @@ export function WorkLanes<T>({
             {l.label}
             <span
               className={cn(
-                'num grid h-[19px] min-w-[22px] place-items-center rounded-[10px] px-[6px] text-[11.5px] font-semibold',
+                'num text-k-sm grid h-[19px] min-w-[22px] place-items-center rounded-[10px] px-1.5 font-semibold',
                 on
                   ? l.tone === 'stop'
                     ? 'bg-[var(--stop)] text-white'
@@ -152,8 +234,9 @@ export function WorkLanes<T>({
  * việc "duyệt qua một danh sách", giữ nguyên vị trí quan trọng hơn màn chi
  * tiết rộng.
  *
- * Ẩn dưới 1240px: dưới ngưỡng đó khay bóp bảng quá nhiều, lúc ấy mới đáng
- * đánh đổi sang trang riêng.
+ * Ẩn dưới 1280px (lớp `xl:flex` — mốc `xl` mặc định của Tailwind; chú thích
+ * cũ ghi 1240px là lệch mã): dưới ngưỡng đó khay bóp bảng quá nhiều, lúc ấy
+ * mới đáng đánh đổi sang trang riêng.
  */
 export function InspectPanel({
   code,
@@ -162,10 +245,15 @@ export function InspectPanel({
   children,
   actions,
 }: {
+  /** Mã chứng từ ở đỉnh khay — chữ đơn cách, màu hành động. Thứ mắt tìm đầu tiên khi khay vừa mở. */
   code: string
+  /** Một dòng nói việc/đối tượng. Ở hộp thư là QUYẾT ĐỊNH cần ra ("Nhập đơn giá rồi gửi duyệt"), không phải tên trạng thái. */
   title: string
+  /** Dòng phụ đơn cách dưới tiêu đề — thường "NCC · lệnh". Trống thì không vẽ. */
   subtitle?: string
+  /** Thân khay — thường là các `InspectSection`. Khay tự cuộn dọc khi dài. */
   children: ReactNode
+  /** Nút ở ĐÁY khay, xếp dọc, bị đẩy xuống đáy khi thân ngắn. Nút chính đặt trước. */
   actions?: ReactNode
 }) {
   /*
@@ -176,22 +264,25 @@ export function InspectPanel({
     kích thước BẤT BIẾN, phần thừa dồn cho bảng tự cuộn ngang.
   */
   return (
-    <aside className="hidden w-[316px] max-w-[316px] min-w-[316px] shrink-0 flex-col overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)] xl:flex">
-      <div className="border-b border-[var(--line)] bg-[var(--surface)] px-[15px] py-[13px]">
-        <div className="font-[family-name:var(--font-mono)] text-[13px] font-bold text-[var(--act)]">
+    // Mốc có TÊN (B7½, 24/09/2026): `<aside>` không tên cạnh một mốc bổ sung
+    // khác (FactBox, khay thứ hai) là hai mốc trùng — trình đọc không phân biệt.
+    <aside
+      aria-label={`${code} — ${title}`}
+      className="hidden w-[316px] max-w-[316px] min-w-[316px] shrink-0 flex-col overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)] xl:flex"
+    >
+      <div className="border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+        <div className="text-k-body font-[family-name:var(--font-mono)] font-bold text-[var(--act)]">
           {code}
         </div>
-        <div className="mt-[3px] text-[13.5px] leading-snug font-semibold">{title}</div>
+        <div className="text-k-body mt-1 leading-snug font-semibold">{title}</div>
         {subtitle && (
-          <div className="mt-1 font-[family-name:var(--font-mono)] text-[11.5px] text-[var(--ink-3)]">
+          <div className="text-k-sm mt-1 font-[family-name:var(--font-mono)] text-[var(--ink-3)]">
             {subtitle}
           </div>
         )}
       </div>
       {children}
-      {actions && (
-        <div className="mt-auto flex flex-col gap-2 px-[15px] py-[13px]">{actions}</div>
-      )}
+      {actions && <div className="mt-auto flex flex-col gap-2 px-4 py-3">{actions}</div>}
     </aside>
   )
 }
@@ -200,15 +291,25 @@ export function InspectPanel({
 export function InspectSection({
   title,
   children,
+  level = 4,
 }: {
+  /** Tiêu đề khối, in hoa nhỏ, là thẻ tiêu đề cấp `level`. */
   title: string
+  /** Nội dung khối. Các khối ngăn nhau bằng một vạch tóc, không đóng khung. */
   children: ReactNode
+  /**
+   * Cấp thẻ tiêu đề (mặc định 4 — giữ dàn tiêu đề các màn đang dùng). Màn chỉ
+   * có `h1` thì truyền 2, để trình đọc không thấy thứ bậc nhảy cóc h1 → h4.
+   * Đổi cấp không đổi hình.
+   */
+  level?: 2 | 3 | 4 | 5 | 6
 }) {
+  const H = `h${level}` as const
   return (
-    <div className="border-b border-[var(--hair)] px-[15px] py-3">
-      <h4 className="mb-[9px] text-[10.5px] font-bold tracking-[.08em] text-[var(--ink-3)] uppercase">
+    <div className="border-b border-[var(--hair)] px-4 py-3">
+      <H className="text-k-label mb-2 font-bold tracking-[.08em] text-[var(--ink-3)] uppercase">
         {title}
-      </h4>
+      </H>
       {children}
     </div>
   )
@@ -224,11 +325,28 @@ export function InspectSection({
  * Nhận từng dòng phép tính để hiển thị nguyên văn cách tính — KHÔNG diễn
  * giải lại, không làm tròn khác với số trên bảng.
  */
-export function WhyBox({ lines, result }: { lines: string[]; result: string }) {
+export function WhyBox({
+  lines,
+  result,
+}: {
+  /**
+   * Từng dòng phép tính, NGUYÊN VĂN, mỗi phần tử một dòng. Chữ đơn cách và GIỮ
+   * khoảng trắng — dóng cột bằng nhiều dấu cách thì thẳng hàng; dòng quá dài vẫn
+   * tự xuống dòng.
+   */
+  lines: string[]
+  /** Kết quả — kit tự thêm `= ` phía trước, in đậm màu hành động. Phải trùng từng chữ số với con số đang được giải thích. */
+  result: string
+}) {
   return (
-    <div className="mt-[9px] rounded-[var(--radius)] border border-[var(--hair)] bg-[var(--surface)] px-[10px] py-[9px] font-[family-name:var(--font-mono)] text-[11.5px] leading-[1.75] text-[var(--ink-2)]">
+    <div className="text-k-sm mt-2 rounded-[var(--radius)] border border-[var(--hair)] bg-[var(--surface)] px-2.5 py-2 font-[family-name:var(--font-mono)] leading-[1.75] text-[var(--ink-2)]">
+      {/* `whitespace-pre-wrap` (B7½, 24/09/2026): trước đây HTML gộp dãy dấu
+          cách làm một, nên cột mà TheoLenhScreen / DoiChieuTable dóng bằng dấu
+          cách bị xô lệch — đúng thứ "phép tính NGUYÊN VĂN" hứa không làm. */}
       {lines.map((l, i) => (
-        <div key={i}>{l}</div>
+        <div key={i} className="whitespace-pre-wrap">
+          {l}
+        </div>
       ))}
       <div className="font-bold text-[var(--act)]">= {result}</div>
     </div>
@@ -246,17 +364,37 @@ export function Empty({
   headline,
   reason,
   next,
+  level,
 }: {
+  /** Một dòng: CHUYỆN GÌ. Viết như câu người nói, không phải mã trạng thái. */
   headline: string
+  /** VÌ SAO trống. Nếu trống là đúng (lọc hẹp, đã xong hết) thì nói vậy. */
   reason: string
+  /**
+   * Việc làm tiếp — thường là một hai `Btn`. Không có việc gì để làm thì chính
+   * điều đó là dấu hiệu nên xem lại vì sao màn này tồn tại.
+   */
   next: ReactNode
+  /**
+   * Cấp thẻ tiêu đề cho dòng `headline`. Bỏ trống = `<div>` như cũ (không chen
+   * một tiêu đề vào dàn tiêu đề của màn đang dùng). Truyền cấp khi khối rỗng
+   * đứng thay cả một vùng nội dung — trình đọc nhảy tới được bằng phím tiêu đề.
+   */
+  level?: 2 | 3 | 4
 }) {
+  const H = level ? (`h${level}` as const) : 'div'
   return (
     <div className="mx-auto max-w-[560px] px-6 py-16 text-center">
-      <div className="text-[15px] font-semibold text-[var(--ink)]">{headline}</div>
-      <p className="mt-2 leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
-        {reason}
-      </p>
+      {/*
+        VÙNG STATUS (B7½, 24/09/2026): bộ lọc làm bảng trống thì khối này hiện
+        ra — trước đây trong im lặng, người không nhìn màn hình không biết bảng
+        vừa trống. Chỉ bọc CHỮ (dòng đầu + lý do), không bọc nút: vùng thông báo
+        mà chứa nút thì trình đọc đọc cả nhãn nút như một phần của tin.
+      */}
+      <div role="status">
+        <H className="text-k-lg font-semibold text-[var(--ink)]">{headline}</H>
+        <p className="text-k-sm mt-2 leading-relaxed text-[var(--ink-2)]">{reason}</p>
+      </div>
       <div className="mt-4 flex justify-center gap-2">{next}</div>
     </div>
   )
@@ -318,7 +456,7 @@ function Fact({
       aria-pressed={f.on}
       onClick={f.onClick}
       className={cn(
-        '-mx-[5px] rounded-[var(--radius)] px-[5px] hover:bg-[var(--surface-hover)]',
+        '-mx-1 rounded-[var(--radius)] px-1 hover:bg-[var(--surface-hover)]',
         f.on && 'bg-[var(--act-wash)] font-semibold text-[var(--act-text)]',
       )}
     >
@@ -337,9 +475,13 @@ export function ScreenHeader({
   children,
   compact = false,
 }: {
+  /** Nhãn nhỏ in hoa trên tiêu đề: tên phòng hoặc loại chứng từ ("Cung ứng", "Đơn mua"). */
   eyebrow: string
+  /** Tên màn hoặc mã chứng từ. Nằm trong `<h1>` — nên mỗi màn đúng một `ScreenHeader`. */
   title: ReactNode
+  /** Nhãn trạng thái (thường một `Tag`) đứng ngay sau tiêu đề, trong cùng `<h1>` — trình đọc đọc liền với tên. */
   status?: ReactNode
+  /** Chuỗi cha→con (`DocChain`) ngay trong đầu trang: nó là DANH TÍNH của trang, không phải một khối nội dung riêng. */
   chain?: ReactNode
   /**
    * Dữ kiện đầu trang. Có `onClick` = con số ĐƯA ĐI ĐƯỢC: bấm là lọc danh
@@ -351,14 +493,20 @@ export function ScreenHeader({
    * thì bỏ được hàng chip trùng, và con số giữ đúng lời hứa của nó.
    */
   facts?: {
+    /** Nhãn chữ thường, đứng trước giá trị. */
     label: string
+    /** Giá trị in đậm; ở biến thể `compact` thì chữ đơn cách. */
     value: ReactNode
+    /** Chỉ `stop`/`warn` đổi màu giá trị; tone khác giữ màu mực. */
     tone?: Tone
+    /** Có thì dữ kiện thành nút lọc (`aria-pressed`), vẫn giữ hình chữ. */
     onClick?: () => void
     /** Đang là bộ lọc hiện hành — chỉ có nghĩa khi có `onClick`. */
     on?: boolean
   }[]
+  /** Hành động ở GÓC PHẢI: nút chính + nút phụ + menu ⋯. Không co lại khi hàng chật — dữ kiện xuống dòng trước. */
   actions?: ReactNode
+  /** Hàng thêm dưới đầu trang, vẫn nằm TRONG `<header>` — chỗ của `WorkLanes` hay một hàng gắn liền đầu trang. */
   children?: ReactNode
   /**
    * MỘT HÀNG — SAP List Report / Dynamics list page: tiêu đề, dữ kiện và nút
@@ -371,17 +519,17 @@ export function ScreenHeader({
   if (compact) {
     return (
       <header className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)]">
-        <div className="flex min-h-[38px] flex-wrap items-center gap-x-[14px] gap-y-1 py-1">
-          <span className="font-semibold tracking-[.09em] text-[var(--fs-micro)] text-[var(--ink-3)] uppercase">
+        <div className="flex min-h-[38px] flex-wrap items-center gap-x-3.5 gap-y-1 py-1">
+          <span className="text-k-label font-semibold tracking-[.09em] text-[var(--ink-3)] uppercase">
             {eyebrow}
           </span>
-          <h1 className="flex items-center gap-[9px] text-[15px] font-semibold tracking-[-.01em]">
+          <h1 className="text-k-lg flex items-center gap-2 font-semibold tracking-[-.01em]">
             {title}
             {status}
           </h1>
           {chain && <span className="flex flex-wrap items-center gap-2">{chain}</span>}
           {facts && (
-            <span className="flex flex-wrap gap-x-[16px] text-[var(--fs-sm)] text-[var(--ink-2)]">
+            <span className="text-k-sm flex flex-wrap gap-x-4 text-[var(--ink-2)]">
               {facts.map((f, i) => (
                 <Fact key={i} f={f} num />
               ))}
@@ -396,19 +544,19 @@ export function ScreenHeader({
     )
   }
   return (
-    <header className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] pt-[14px]">
-      <div className="flex items-start gap-[18px]">
+    <header className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] pt-3.5">
+      <div className="flex items-start gap-4.5">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold tracking-[.09em] text-[var(--fs-micro)] text-[var(--ink-3)] uppercase">
+          <div className="text-k-label font-semibold tracking-[.09em] text-[var(--ink-3)] uppercase">
             {eyebrow}
           </div>
-          <h1 className="mt-[3px] flex items-center gap-[11px] font-semibold tracking-[-.015em] text-[var(--fs-title)]">
+          <h1 className="text-k-title mt-1 flex items-center gap-3 font-semibold tracking-[-.015em]">
             {title}
             {status}
           </h1>
           {chain && <div className="mt-2 flex flex-wrap items-center gap-2">{chain}</div>}
           {facts && (
-            <div className="mt-[11px] flex flex-wrap gap-[22px] text-[var(--fs-sm)] text-[var(--ink-2)]">
+            <div className="text-k-sm mt-3 flex flex-wrap gap-5.5 text-[var(--ink-2)]">
               {facts.map((f, i) => (
                 <Fact key={i} f={f} />
               ))}
@@ -450,8 +598,29 @@ export function ScreenHeader({
 export function ScreenFrame({
   children,
   dense = false,
+  tableMin,
 }: {
+  /**
+   * Cả màn, xếp dọc: đầu trang, hàng lọc, bảng, thanh đáy. Bảng chính phải là
+   * con TRỰC TIẾP (không bọc thêm thẻ) để nhận `flex-1` — phần cao còn lại — và
+   * tự cuộn bên trong, giữ tiêu đề cột và chân tổng dính.
+   */
   children: ReactNode
+  /**
+   * Bề rộng tối thiểu của bảng chính, px — `Table` đọc qua biến `--table-min`.
+   *
+   * VÌ SAO LÀ PROP CHỨ KHÔNG PHẢI MỘT CON SỐ MẶC ĐỊNH TO HƠN: `Table` đã ghi
+   * rõ "MÀN tự khai theo số cột của mình", nhưng trước 23/09/2026 kit KHÔNG
+   * có cửa nào để khai — `ScreenFrame` không nhận `style`, mà bọc thêm một
+   * thẻ quanh `Table` thì đứt chuỗi flex và bảng mất `flex-1`. Kết quả: cả
+   * app đúng MỘT file khai được biến này (bên Mua hàng, nhờ nó tự dựng thẻ
+   * bọc riêng), mọi màn còn lại rơi về 680px mặc định.
+   *
+   * 680px chỉ vừa cho bảng 4–5 cột. Bảng nào rộng hơn thì KHÔNG cuộn ngang
+   * mà bị BÓP: cột co lại, chữ cắt cụt. Màn Lệnh sản xuất là ca nặng nhất —
+   * riêng dải 12 công đoạn đã ~200px, cộng năm cột chữ nữa.
+   */
+  tableMin?: number
   /**
    * Bật mật độ DÀY (`.kit-dense`: hàng 25px thay 30px, đệm dọc 2px thay 5px)
    * cho riêng màn này.
@@ -492,7 +661,13 @@ export function ScreenFrame({
   return (
     <div
       ref={ref}
-      style={{ height: box?.h ?? 'calc(100dvh - 60px)', margin: box?.m }}
+      style={
+        {
+          height: box?.h ?? 'calc(100dvh - 60px)',
+          margin: box?.m,
+          ...(tableMin ? { '--table-min': `${tableMin}px` } : null),
+        } as CSSProperties
+      }
       // `kit` phải đi CÙNG `kit-dense` trên một thẻ: token dày khai ở
       // `.kit.kit-dense`, thiếu vế đầu là không ăn.
       className={cn('flex flex-col overflow-hidden', dense && 'kit kit-dense')}
@@ -530,7 +705,12 @@ export function WorkTile({
   tone = 'neutral',
   strong = false,
 }: {
+  /** Việc phải làm, bằng lời nghiệp vụ ("Chờ Giám đốc ký") — không phải tên trạng thái trong DB. In hoa nhỏ. */
   label: string
+  /**
+   * Số việc. Phải đếm bằng ĐÚNG hàm mà trang đích dùng để lọc — con số là lời
+   * hứa. Bằng 0 thì hiện dấu ✓ thay số và bỏ màu `tone`.
+   */
   count: number
   /** Nói rõ đếm cái gì — người dùng phải kiểm được lời hứa của con số. */
   hint: string
@@ -547,6 +727,7 @@ export function WorkTile({
   onClick?: () => void
   /** Ô đang là bộ lọc hiện hành — chỉ có nghĩa khi dùng `onClick`. */
   on?: boolean
+  /** Màu con số khi CÓ việc: `stop` trễ, `warn` đang chờ, `done` xong. Số 0 luôn về trung tính — không tô đỏ tin mừng. */
   tone?: Tone
   /** Ô của CHÍNH người đang xem — nổi hơn các ô còn lại. */
   strong?: boolean
@@ -566,7 +747,7 @@ export function WorkTile({
           : 'border-[var(--line)] bg-[var(--surface-card)] hover:border-[var(--ink-3)]',
       )}
     >
-      <span className="leading-tight font-semibold tracking-[.05em] text-[var(--fs-micro)] text-[var(--ink-2)] uppercase">
+      <span className="text-k-label leading-tight font-semibold tracking-[.05em] text-[var(--ink-2)] uppercase">
         {label}
       </span>
       <span className="flex items-baseline gap-1.5">
@@ -580,7 +761,7 @@ export function WorkTile({
         */}
         {count === 0 ? (
           <span
-            className="text-[22px] leading-none text-[var(--done)]"
+            className="text-k-doc leading-none text-[var(--done)]"
             title="Không còn việc nào"
           >
             ✓
@@ -588,7 +769,7 @@ export function WorkTile({
         ) : (
           <span
             className={cn(
-              'num text-[26px] leading-none font-bold tracking-[-.02em]',
+              'num text-k-doc leading-none font-bold tracking-[-.02em]',
               t === 'stop'
                 ? 'text-[var(--stop)]'
                 : t === 'warn'
@@ -604,13 +785,18 @@ export function WorkTile({
           </span>
         )}
       </span>
-      <span className="text-[10.5px] leading-snug text-[var(--ink-3)]">{hint}</span>
+      <span className="text-k-label leading-snug text-[var(--ink-3)]">{hint}</span>
     </Box>
   )
 }
 
 /** Hàng ô việc — tự xuống dòng, không ép số cột. */
-export function WorkTiles({ children }: { children: ReactNode }) {
+export function WorkTiles({
+  children,
+}: {
+  /** Các `WorkTile`. Lưới 2 cột, lên 3 từ 640px, lên 6 từ 1024px; hơn sáu ô thì xuống hàng. */
+  children: ReactNode
+}) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">{children}</div>
   )

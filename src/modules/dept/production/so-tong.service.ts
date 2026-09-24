@@ -6,6 +6,7 @@ import {
   type MaterialSection,
 } from '@/lib/production-section'
 import type { User } from '@/modules/core/users/users.repo'
+import { vnTodayIso } from '@/lib/local-date'
 
 /**
  * SỔ TỔNG toàn xưởng (GĐ1 — thay sheet `quan li` của file "TỔNG TĐ SX"):
@@ -332,7 +333,7 @@ export const soTongService = {
       stages: stagesCat.filter((s) => used.has(s.code)),
       months: [...months].sort().reverse(),
       lsx: blocks,
-      today: new Date().toISOString().slice(0, 10),
+      today: vnTodayIso(),
       hidden_count: active.length - shown.length,
     }
   },

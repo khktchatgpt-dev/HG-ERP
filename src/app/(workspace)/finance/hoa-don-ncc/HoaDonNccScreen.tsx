@@ -53,9 +53,15 @@ export function HoaDonNccScreen({
           title="Đối chiếu hoá đơn nhà cung cấp"
           actions={
             <>
-              <Btn href="/finance/hoa-don-ncc/so">Sổ hoá đơn NCC</Btn>
+              <Btn icon="hoaDon" href="/finance/hoa-don-ncc/so">
+                Sổ hoá đơn NCC
+              </Btn>
               {canManage && current && (
-                <Btn primary href={`/finance/hoa-don-ncc/moi?don=${current.id}`}>
+                <Btn
+                  icon="hoaDon"
+                  primary
+                  href={`/finance/hoa-don-ncc/moi?don=${current.id}`}
+                >
                   Nhập hoá đơn cho {current.code}
                 </Btn>
               )}
@@ -63,7 +69,7 @@ export function HoaDonNccScreen({
           }
         />
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hair)] px-[var(--gutter)] py-2 text-[var(--fs-sm)]">
+        <div className="text-k-sm flex flex-wrap items-center gap-2 border-b border-[var(--hair)] px-[var(--gutter)] py-2">
           <span className="text-[var(--ink-3)]">Đơn mua đã gửi NCC</span>
           <Pick
             label="Chọn đơn mua để đối chiếu"
@@ -102,10 +108,12 @@ export function HoaDonNccScreen({
               reason="Đối chiếu cần đơn ĐÃ GỬI nhà cung cấp. Hiện mọi đơn còn ở nháp hoặc chờ duyệt, nên chưa có hàng về và cũng chưa có hoá đơn nào."
               next={
                 <>
-                  <Btn primary href="/mua-hang/don">
+                  <Btn icon="don" primary href="/mua-hang/don">
                     Mở danh sách đơn mua
                   </Btn>
-                  <Btn href="/finance/cong-no-ncc">Xem công nợ hiện tại</Btn>
+                  <Btn icon="so" href="/finance/cong-no-ncc">
+                    Xem công nợ hiện tại
+                  </Btn>
                 </>
               }
             />

@@ -154,9 +154,11 @@ export default function Page() {
         duy nhất đáng làm.
       */}
       <div className="flex flex-wrap items-center gap-[var(--sp-2)] border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[var(--sp-3)]">
-        <Btn primary>Gửi Giám đốc duyệt</Btn>
-        <Btn>Sửa</Btn>
-        <Btn>In phiếu</Btn>
+        <Btn icon="gui" primary>
+          Gửi Giám đốc duyệt
+        </Btn>
+        <Btn icon="sua">Sửa</Btn>
+        <Btn icon="in">In phiếu</Btn>
         <Menu
           label="Thao tác ▾"
           items={[
@@ -203,14 +205,14 @@ export default function Page() {
         />
 
         <div className="px-[var(--gutter)] pt-[var(--sp-4)] pb-[var(--sp-2)]">
-          <div className="font-bold tracking-[.11em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+          <div className="text-k-label font-bold tracking-[.11em] text-[var(--ink-3)] uppercase">
             Đơn đặt vật tư
           </div>
           <div className="flex flex-wrap items-baseline gap-[var(--sp-5)]">
             <h1 className="num m-0 text-[24px] leading-tight font-bold tracking-[-.02em]">
               PO-2026-0065
             </h1>
-            <span className="flex items-center gap-[var(--sp-2)] text-[var(--fs-sm)] text-[var(--ink-2)]">
+            <span className="text-k-sm flex items-center gap-[var(--sp-2)] text-[var(--ink-2)]">
               Nhận hàng <Tag tone="warn">Chưa nhận</Tag>
             </span>
           </div>
@@ -254,8 +256,8 @@ export default function Page() {
           cấp" vì đây là lúc người mua cần nó: đang quyết có gửi đơn cho bên
           này không. Một hàng, không phải một cột.
         */}
-        <div className="flex flex-wrap gap-x-[var(--sp-7)] gap-y-[var(--sp-1)] border-y border-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] py-[var(--sp-3)] text-[var(--fs-sm)]">
-          <span className="font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+        <div className="text-k-sm flex flex-wrap gap-x-[var(--sp-7)] gap-y-[var(--sp-1)] border-y border-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] py-[var(--sp-3)]">
+          <span className="text-k-label font-bold tracking-[.09em] text-[var(--ink-3)] uppercase">
             Nhà cung cấp này
           </span>
           <span>
@@ -338,7 +340,7 @@ export default function Page() {
                 <Td />
               </GridFoot>
             </Grid>
-            <div className="flex flex-wrap justify-end gap-x-[var(--sp-7)] border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)] text-[var(--fs-sm)]">
+            <div className="text-k-sm flex flex-wrap justify-end gap-x-[var(--sp-7)] border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)]">
               <span>
                 Tiền hàng <b className="num">{money(TIEN_HANG)} USD</b>
               </span>
@@ -346,12 +348,11 @@ export default function Page() {
                 VAT <b className="num">0% · 0,00 USD</b>
               </span>
               <span>
-                Tổng thanh toán{' '}
-                <b className="num text-[var(--fs-num-lg)]">{money(TIEN_HANG)} USD</b>
+                Tổng thanh toán <b className="num text-k-lg">{money(TIEN_HANG)} USD</b>
               </span>
             </div>
             <LineDetail index={pick + 1} code={cur.code}>
-              <div className="grid gap-x-[var(--sp-7)] gap-y-[var(--sp-1)] px-[var(--gutter)] py-[var(--sp-3)] text-[var(--fs-sm)] sm:grid-cols-2 lg:grid-cols-3">
+              <div className="text-k-sm grid gap-x-[var(--sp-7)] gap-y-[var(--sp-1)] px-[var(--gutter)] py-[var(--sp-3)] sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Quy cách">{cur.quyCach}</Field>
                 <Field label="Loại kính">{cur.loai}</Field>
                 <Field label="m² / tấm">
@@ -388,14 +389,14 @@ export default function Page() {
               <GridBtn>Chốt phần thiếu</GridBtn>
               <GridBtn>Nghiệm thu ngoài sổ</GridBtn>
             </GridToolbar>
-            <div className="px-[var(--gutter)] py-[var(--sp-5)] text-[var(--fs-sm)] text-[var(--ink-2)]">
+            <div className="text-k-sm px-[var(--gutter)] py-[var(--sp-5)] text-[var(--ink-2)]">
               <b>Chưa chia đợt</b> — hiểu là giao một lần vào hạn giao của đơn. Đơn chưa
               gửi nhà cung cấp nên chưa ghi lịch được; bấm <b>Gửi Giám đốc duyệt</b> rồi{' '}
               <b>Gửi NCC</b> trước.
             </div>
             <div className="px-[var(--gutter)] pb-[var(--sp-5)]">
               <div className="k-fgrp-h">Chứng từ kho · 0 phiếu</div>
-              <p className="text-[var(--fs-sm)] text-[var(--ink-2)]">
+              <p className="text-k-sm text-[var(--ink-2)]">
                 Chưa có phiếu nhập hay xuất trả nào ghi vào đơn này.
               </p>
             </div>

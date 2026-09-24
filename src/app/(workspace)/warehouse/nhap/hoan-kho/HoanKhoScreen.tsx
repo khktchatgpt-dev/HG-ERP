@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 import {
   WarehouseDocPrintSheet,
   type WarehousePrintLine,
@@ -17,38 +16,7 @@ import {
   type DauPhieuHoan,
   type DongHoan,
 } from '@/lib/kho-hoan-kho'
-import {
-  Action,
-  ActionGroup,
-  ActionPane,
-  Btn,
-  CellHint,
-  Code,
-  CommitBar,
-  Crumb,
-  DateInput,
-  DocHead,
-  Empty,
-  FastTab,
-  Field,
-  FieldGrid,
-  Grid,
-  GridBody,
-  GridFoot,
-  GridHead,
-  GridRow,
-  GridToolbar,
-  NumInput,
-  Pick,
-  PickFind,
-  ScreenFrame,
-  Sheet,
-  StatusBar,
-  StatusTrack,
-  Tag,
-  TextInput,
-  Th,
-} from '@/components/kit'
+import { Action, ActionGroup, ActionPane, Btn, CellHint, Code, CommitBar, Crumb, DateInput, DocHead, Empty, FastTab, Field, FieldGrid, Grid, GridBody, GridFoot, GridHead, GridRow, GridToolbar, NumInput, Pick, ScreenFrame, Sheet, StatusBar, StatusTrack, Tag, TextInput, Th, useToast, Combobox } from '@/components/kit'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 
@@ -174,7 +142,7 @@ export function HoanKhoScreen({
     <FastTab title="Đầu phiếu" defaultOpen>
       <FieldGrid>
         <Field label="Lệnh sản xuất" tone={thieu('lenh') ? 'stop' : undefined}>
-          <PickFind
+          <Combobox
             value={head.lsx_id}
             onChange={doiLenh}
             options={lsx.map((l) => ({
@@ -254,17 +222,22 @@ export function HoanKhoScreen({
             >
               {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
             </Action>
-            <Action disabled={busy} onClick={() => router.push('/warehouse/nhap')}>
+            <Action
+              icon="huy"
+              disabled={busy}
+              onClick={() => router.push('/warehouse/nhap')}
+            >
               Huỷ
             </Action>
           </ActionGroup>
           <ActionGroup label="Bản in">
-            <Action disabled={rows.length === 0} onClick={() => setXemIn(true)}>
+            <Action icon="in" disabled={rows.length === 0} onClick={() => setXemIn(true)}>
               Xem bản in
             </Action>
           </ActionGroup>
           <ActionGroup label="Lệnh">
             <Action
+              icon="xuatKho"
               disabled={!head.lsx_id}
               title={head.lsx_id ? undefined : 'Chọn lệnh trước'}
               onClick={() => router.push(`/warehouse/xuat?lsx=${head.lsx_id}`)}
@@ -301,7 +274,7 @@ export function HoanKhoScreen({
             headline="Chọn lệnh sản xuất để xem có gì hoàn được"
             reason={`Chỉ trả lại được thứ lệnh đã lấy ra khỏi kho, nên lưới dựng từ chính lệnh. Đang có ${lsx.length} lệnh hoàn kho được (đã duyệt, đang SX, hoặc đã xong).`}
             next={
-              <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+              <span className="text-k-sm text-[var(--ink-3)]">
                 Chọn ở ô “Lệnh sản xuất” phía trên
               </span>
             }
@@ -313,7 +286,7 @@ export function HoanKhoScreen({
             next={
               // `Btn` chứ không `Action`: Action là nút của thanh hành động
               // (k-pane), đặt lẻ trong khối rỗng là mượn kiểu của chỗ khác.
-              <Btn primary href={`/warehouse/xuat?lsx=${head.lsx_id}`}>
+              <Btn icon="xuatKho" primary href={`/warehouse/xuat?lsx=${head.lsx_id}`}>
                 Lập phiếu xuất cho lệnh này
               </Btn>
             }
@@ -321,7 +294,7 @@ export function HoanKhoScreen({
         ) : (
           <>
             <GridToolbar count={`${rows.length} dòng · ${tong.so_dong} dòng có số`}>
-              <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+              <span className="text-k-sm text-[var(--ink-3)]">
                 Lưới điền sẵn từ <b>phần lệnh đã lĩnh chưa hoàn</b> — không có ô tìm mã:
                 chỉ trả được thứ đã lấy
               </span>
@@ -406,9 +379,7 @@ export function HoanKhoScreen({
               onGoBlocked={kiem.ok ? undefined : nhayToi}
               actions={
                 <>
-                  <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
-                    Ctrl + Enter
-                  </span>
+                  <span className="text-k-label text-[var(--ink-3)]">Ctrl + Enter</span>
                   <Action
                     primary
                     disabled={!ghiDuoc}

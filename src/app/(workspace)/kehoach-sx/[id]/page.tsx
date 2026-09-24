@@ -7,6 +7,7 @@ import { canManagePlan, isProductionStaff } from '@/modules/dept/production/perm
 import { lsxStageProgress } from '@/lib/production-summary'
 import { HttpError } from '@/server/http'
 import { PlanEditor } from './PlanEditor'
+import { vnTodayIso } from '@/lib/local-date'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export default async function PlanDetailPage({
   // nhiêu, vướng gì" — SL quy về BỘ SP theo quy tắc đồng bộ SP=MIN của sổ
   // thống kê; việc/quá hạn/ghi chú đọc từ jobs. Nghẽn WIP & thiếu vật tư xem
   // ở Toàn cảnh (cần transfers, không kéo vào đây).
-  const today = new Date().toISOString().slice(0, 10)
+  const today = vnTodayIso()
   const progress = lsxStageProgress(
     prod.stages.map((s) => s.code),
     data.lines.map((l) => ({ id: l.order_line_id, qty: l.qty })),

@@ -1,10 +1,4 @@
-import {
-  ArrowDown,
-  ArrowUp,
-  Package,
-  ShieldCheck,
-  TriangleAlert,
-} from 'lucide-react'
+import { ArrowDown, ArrowUp, Package, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { poLineAmount } from '@/lib/po-line'
 import { colKey, LSX_FORM, specColumnsOf } from '@/modules/dept/sales/lsx-template'
@@ -390,7 +384,7 @@ export function LsxProductTable({ lines }: { lines: ApprovalLsxLine[] }) {
 export type LastPriceOf = Record<
   string,
   { unit_price: number; currency: string; po_code: string; at: string }
->;
+>
 
 /**
  * So giá dòng này với lần mua gần nhất cùng mã vật tư.
@@ -404,15 +398,14 @@ export function comparePrice(
   last: LastPriceOf | undefined,
   currency: string,
 ): { pct: number; prev: number; poCode: string } | null {
-  if (!last || ln.unit_price == null || !ln.material_id) return null;
-  const p = last[ln.material_id];
-  if (!p || p.currency !== currency || p.unit_price <= 0) return null;
+  if (!last || ln.unit_price == null || !ln.material_id) return null
+  const p = last[ln.material_id]
+  if (!p || p.currency !== currency || p.unit_price <= 0) return null
   return {
-    pct:
-      Math.round(((ln.unit_price - p.unit_price) / p.unit_price) * 1000) / 10,
+    pct: Math.round(((ln.unit_price - p.unit_price) / p.unit_price) * 1000) / 10,
     prev: p.unit_price,
     poCode: p.po_code,
-  };
+  }
 }
 
 /**
@@ -433,36 +426,36 @@ export function PoLineTable({
   currency,
   lastPrices,
 }: {
-  lines: PoLine[];
-  total: number;
-  currency: string;
-  lastPrices?: LastPriceOf;
+  lines: PoLine[]
+  total: number
+  currency: string
+  lastPrices?: LastPriceOf
 }) {
-  if (!lines.length) return null;
-  const hasQty2 = lines.some((ln) => ln.qty2 != null);
-  const missingPrice = lines.filter((ln) => ln.unit_price == null).length;
+  if (!lines.length) return null
+  const hasQty2 = lines.some((ln) => ln.qty2 != null)
+  const missingPrice = lines.filter((ln) => ln.unit_price == null).length
 
   const cols = [
-    { k: "stt", t: "", w: 30, num: true },
-    { k: "ten", t: "Tên vật tư" },
-    { k: "dvt", t: "ĐVT", w: 70 },
-    { k: "sl", t: "Số lượng", w: 96, num: true },
-    ...(hasQty2 ? [{ k: "qd", t: "Quy đổi", w: 104, num: true }] : []),
-    { k: "gia", t: "Đơn giá (" + currency + ")", w: 116, num: true },
-    { k: "truoc", t: "Giá lần trước", w: 136, num: true },
-    { k: "tien", t: "Thành tiền (" + currency + ")", w: 130, num: true },
-  ];
+    { k: 'stt', t: '', w: 30, num: true },
+    { k: 'ten', t: 'Tên vật tư' },
+    { k: 'dvt', t: 'ĐVT', w: 70 },
+    { k: 'sl', t: 'Số lượng', w: 96, num: true },
+    ...(hasQty2 ? [{ k: 'qd', t: 'Quy đổi', w: 104, num: true }] : []),
+    { k: 'gia', t: 'Đơn giá (' + currency + ')', w: 116, num: true },
+    { k: 'truoc', t: 'Giá lần trước', w: 136, num: true },
+    { k: 'tien', t: 'Thành tiền (' + currency + ')', w: 130, num: true },
+  ]
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-[var(--fs-body)]">
+      <table className="text-k-body w-full border-collapse">
         <thead>
           <tr>
             {cols.map((c) => (
               <th
                 key={c.k}
-                style={{ width: c.w, textAlign: c.num ? "right" : "left" }}
-                className="h-[26px] border-b border-[var(--line)] bg-[var(--surface-raised)] px-2 font-bold tracking-[.06em] whitespace-nowrap text-[var(--fs-label)] text-[var(--ink-label)] uppercase"
+                style={{ width: c.w, textAlign: c.num ? 'right' : 'left' }}
+                className="text-k-label h-[26px] border-b border-[var(--line)] bg-[var(--surface-raised)] px-2 font-bold tracking-[.06em] whitespace-nowrap text-[var(--ink-label)] uppercase"
               >
                 {c.t}
               </th>
@@ -471,17 +464,17 @@ export function PoLineTable({
         </thead>
         <tbody>
           {lines.map((ln, i) => {
-            const cmp = comparePrice(ln, lastPrices, currency);
+            const cmp = comparePrice(ln, lastPrices, currency)
             /* Ngưỡng 5%: dưới mức đó là dao động thường ngày của thị trường,
                tô màu mọi chênh lệch thì cột này thành một dải màu vô nghĩa. */
-            const tang = cmp != null && cmp.pct >= 5;
-            const giam = cmp != null && cmp.pct <= -5;
+            const tang = cmp != null && cmp.pct >= 5
+            const giam = cmp != null && cmp.pct <= -5
             return (
               <tr
                 key={ln.id}
                 className={cn(
-                  "border-b border-[var(--hair)]",
-                  tang && "bg-[var(--warn-wash)]",
+                  'border-b border-[var(--hair)]',
+                  tang && 'bg-[var(--warn-wash)]',
                 )}
               >
                 <td className="num h-[30px] px-2 text-right text-[var(--ink-3)]">
@@ -490,31 +483,29 @@ export function PoLineTable({
                 <td className="px-2">
                   <span className="flex min-w-0 items-baseline gap-2">
                     <span className="truncate">{ln.material_name}</span>
-                    <span className="num shrink-0 text-[var(--fs-micro)] text-[var(--ink-3)]">
+                    <span className="num text-k-label shrink-0 text-[var(--ink-3)]">
                       {ln.material_code}
-                      {ln.spec ? " · " + ln.spec : ""}
+                      {ln.spec ? ' · ' + ln.spec : ''}
                     </span>
                   </span>
                 </td>
                 <td className="px-2 whitespace-nowrap">{ln.material_unit}</td>
                 <td className="num px-2 text-right">
-                  {Number(ln.qty_ordered).toLocaleString("vi-VN")}
+                  {Number(ln.qty_ordered).toLocaleString('vi-VN')}
                 </td>
                 {hasQty2 && (
                   <td className="num px-2 text-right whitespace-nowrap text-[var(--act)]">
                     {ln.qty2 != null
-                      ? Number(ln.qty2).toLocaleString("vi-VN") +
-                        " " +
-                        (ln.unit2 ?? "")
-                      : "—"}
+                      ? Number(ln.qty2).toLocaleString('vi-VN') + ' ' + (ln.unit2 ?? '')
+                      : '—'}
                   </td>
                 )}
                 <td className="num px-2 text-right whitespace-nowrap">
                   {ln.unit_price != null ? (
                     <>
                       {fmtVnd(ln.unit_price)}
-                      {ln.price_basis === "unit2" && ln.unit2 && (
-                        <span className="text-[var(--fs-micro)] text-[var(--act)]">
+                      {ln.price_basis === 'unit2' && ln.unit2 && (
+                        <span className="text-k-label text-[var(--act)]">
                           /{ln.unit2}
                         </span>
                       )}
@@ -525,51 +516,49 @@ export function PoLineTable({
                 </td>
                 <td className="px-2 text-right whitespace-nowrap">
                   {cmp == null ? (
-                    <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
+                    <span className="text-k-label text-[var(--ink-3)]">
                       {ln.unit_price == null
-                        ? "—"
+                        ? '—'
                         : !ln.material_id
-                          ? "dòng tự do"
-                          : "chưa từng mua"}
+                          ? 'dòng tự do'
+                          : 'chưa từng mua'}
                     </span>
                   ) : (
                     <span
                       title={
-                        "Lần trước " +
+                        'Lần trước ' +
                         fmtVnd(cmp.prev) +
-                        " " +
+                        ' ' +
                         currency +
-                        " — đơn " +
+                        ' — đơn ' +
                         cmp.poCode
                       }
                       className={cn(
-                        "num inline-flex items-center justify-end gap-1 text-[var(--fs-sm)]",
+                        'num text-k-sm inline-flex items-center justify-end gap-1',
                         tang
-                          ? "font-semibold text-[var(--warn)]"
+                          ? 'font-semibold text-[var(--warn)]'
                           : giam
-                            ? "text-[var(--done)]"
-                            : "text-[var(--ink-3)]",
+                            ? 'text-[var(--done)]'
+                            : 'text-[var(--ink-3)]',
                       )}
                     >
                       {tang && <ArrowUp className="size-[12px]" aria-hidden />}
-                      {giam && (
-                        <ArrowDown className="size-[12px]" aria-hidden />
-                      )}
+                      {giam && <ArrowDown className="size-[12px]" aria-hidden />}
                       {fmtVnd(cmp.prev)}
                       <span>
-                        {" · "}
+                        {' · '}
                         {Math.abs(cmp.pct) < 0.1
-                          ? "không đổi"
-                          : (cmp.pct > 0 ? "+" : "") + cmp.pct + "%"}
+                          ? 'không đổi'
+                          : (cmp.pct > 0 ? '+' : '') + cmp.pct + '%'}
                       </span>
                     </span>
                   )}
                 </td>
                 <td className="num px-2 text-right font-semibold whitespace-nowrap">
-                  {ln.unit_price != null ? fmtVnd(poLineAmount(ln)) : "—"}
+                  {ln.unit_price != null ? fmtVnd(poLineAmount(ln)) : '—'}
                 </td>
               </tr>
-            );
+            )
           })}
         </tbody>
         <tfoot>
@@ -593,7 +582,7 @@ export function PoLineTable({
             <tr>
               <td
                 colSpan={hasQty2 ? 8 : 7}
-                className="px-2 py-[5px] text-[var(--fs-micro)] text-[var(--warn)]"
+                className="text-k-label px-2 py-[5px] text-[var(--warn)]"
               >
                 Tổng CHƯA gồm {missingPrice} dòng chưa có đơn giá.
               </td>
@@ -602,5 +591,5 @@ export function PoLineTable({
         </tfoot>
       </table>
     </div>
-  );
+  )
 }

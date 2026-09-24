@@ -63,7 +63,13 @@ export function NoteComposer({
   busy = false,
   partnerLabel = 'Gửi nhà cung cấp',
 }: {
-  onSubmit: (body: string, audience: 'internal' | 'partner') => void
+  /**
+   * Nhận nội dung đã cắt khoảng trắng hai đầu + người đọc đang chọn. Trả Promise
+   * thì ô CHỜ: lưu được mới xoá, lưu hỏng (Promise bị từ chối) thì chữ còn
+   * nguyên để người dùng bấm lại. Không trả Promise thì ô xoá ngay như trước.
+   */
+  onSubmit: (body: string, audience: 'internal' | 'partner') => void | Promise<unknown>
+  /** Đang lưu: nút đổi chữ thành "Đang lưu…" và khoá cứng; Ctrl+Enter cũng bị nuốt. */
   busy?: boolean
   /** Tên bên ngoài cụ thể — "Gửi NCC" mơ hồ hơn "Gửi Thép Asia". */
   partnerLabel?: string
@@ -72,11 +78,21 @@ export function NoteComposer({
   const [audience, setAudience] = useState<'internal' | 'partner'>('internal')
   const ngoai = audience === 'partner'
 
-  function gui() {
+  /*
+    CHỜ LƯU XONG MỚI XOÁ Ô (B7½, 24/09/2026). Bản cũ xoá ngay sau khi gọi —
+    trong khi `DocNotesPanel` báo lỗi "Nội dung vẫn còn trong ô", tức màn nói
+    một điều mà kit đã làm ngược lại: lưu hỏng là mất sạch câu vừa gõ. Lỗi thì
+    NUỐT ở đây (chỗ gọi đã tự báo lỗi), chỉ để ô giữ chữ.
+  */
+  async function gui() {
     const t = body.trim()
     if (!t || busy) return
-    onSubmit(t, audience)
-    setBody('')
+    try {
+      await onSubmit(t, audience)
+      setBody('')
+    } catch {
+      /* chỗ gọi đã báo lỗi — giữ nguyên chữ trong ô */
+    }
   }
 
   return (
@@ -95,9 +111,11 @@ export function NoteComposer({
           <button
             key={a}
             type="button"
+            // Đang chọn người đọc nào phải NÓI ra được, không chỉ bằng màu nền.
+            aria-pressed={audience === a}
             onClick={() => setAudience(a)}
             className={cn(
-              'h-[22px] rounded-[var(--radius-sm)] px-2 text-[11.5px] font-medium',
+              'text-k-sm h-[22px] rounded-[var(--radius-sm)] px-2 font-medium',
               audience === a
                 ? a === 'partner'
                   ? 'bg-[var(--warn)] text-white'
@@ -124,10 +142,10 @@ export function NoteComposer({
             ? 'Nội dung gửi ra ngoài — viết như đang nói với họ…'
             : 'Chuyện gì đang xảy ra với chứng từ này…'
         }
-        className="w-full resize-none bg-transparent px-3 py-2 text-[12.5px] leading-relaxed outline-none placeholder:text-[var(--ink-3)]"
+        className="text-k-sm w-full resize-none bg-transparent px-3 py-2 leading-relaxed outline-none placeholder:text-[var(--ink-3)]"
       />
       <div className="flex items-center justify-between gap-2 px-3 pb-2">
-        <span className="text-[10.5px] text-[var(--ink-3)]">
+        <span className="text-k-label text-[var(--ink-3)]">
           {ngoai
             ? '⚠ Nội dung này gửi ra ngoài công ty'
             : 'Chỉ người trong công ty đọc được · ⌘+Enter để gửi'}
@@ -153,15 +171,21 @@ export function NoteStream({
   onDelete,
   empty,
 }: {
+  /**
+   * Ghi chú + mốc máy ghi, ĐÃ trộn và sắp sẵn (`mergeStream` của `lib/doc-notes`).
+   * Kit vẽ đúng thứ tự nhận được, không tự sắp.
+   */
   rows: StreamRow[]
   /** Thời điểm tham chiếu, TÍNH Ở NGOÀI — không đọc đồng hồ trong render. */
   now: Date
+  /** Gỡ một ghi chú. Nút "gỡ" chỉ hiện trên ghi chú `mine: true`, và kit KHÔNG hỏi lại trước khi gọi. */
   onDelete?: (id: string) => void
+  /** Câu khi chưa có dòng nào — nói VIỆC nên ghi. Mặc định: "Chưa ai ghi gì về chứng từ này." */
   empty?: ReactNode
 }) {
   if (rows.length === 0) {
     return (
-      <p className="py-3 text-[12px] leading-relaxed text-[var(--ink-2)]">
+      <p className="text-k-sm py-3 leading-relaxed text-[var(--ink-2)]">
         {empty ?? 'Chưa ai ghi gì về chứng từ này.'}
       </p>
     )
@@ -179,7 +203,7 @@ export function NoteStream({
               nền sáng, mà đây là thứ giải thích thứ tự sự việc. Nhãn lấy màu
               mực thường, chỉ phần thời gian mới nhạt.
             */
-            className="flex items-baseline gap-2 pl-1 text-[11.5px]"
+            className="text-k-sm flex items-baseline gap-2 pl-1"
           >
             <span className="size-[5px] shrink-0 rounded-full bg-[var(--ink-3)]" />
             <span className="font-medium text-[var(--ink-2)]">{r.label}</span>
@@ -197,11 +221,11 @@ export function NoteStream({
             )}
           >
             <div className="flex items-baseline gap-2">
-              <span className="text-[12px] font-semibold">
+              <span className="text-k-sm font-semibold">
                 {r.note.author_name ?? 'Không rõ'}
               </span>
               {r.note.audience === 'partner' && <Tag tone="warn">đã gửi ra ngoài</Tag>}
-              <span className="num text-[10.5px] text-[var(--ink-3)]">
+              <span className="num text-k-label text-[var(--ink-3)]">
                 {khiNao(r.note.created_at, now)}
               </span>
               <span className="flex-1" />
@@ -209,7 +233,7 @@ export function NoteStream({
                 <button
                   type="button"
                   onClick={() => onDelete(r.note.id)}
-                  className="text-[10.5px] text-[var(--ink-3)] hover:text-[var(--stop)]"
+                  className="text-k-label text-[var(--ink-3)] hover:text-[var(--stop)]"
                 >
                   gỡ
                 </button>
@@ -217,7 +241,7 @@ export function NoteStream({
             </div>
             {/* `whitespace-pre-wrap`: người ta xuống dòng có chủ đích ("đã gọi
                 / hẹn lại 12/09"), ép về một dòng là mất ý. */}
-            <p className="mt-[3px] text-[12.5px] leading-relaxed whitespace-pre-wrap">
+            <p className="text-k-sm mt-1 leading-relaxed whitespace-pre-wrap">
               {r.note.body}
             </p>
           </li>
@@ -238,13 +262,15 @@ export function Followers({
   muted,
   onToggle,
 }: {
+  /** Tên người được báo khi có ghi chú mới. Rỗng thì hiện "chưa ai". */
   names: string[]
   /** Người đang xem đã tắt theo dõi chưa. */
   muted: boolean
+  /** Bấm "bỏ theo dõi" / "theo dõi lại". Kit không tự đổi `muted` — màn đổi và gọi API. */
   onToggle: () => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
+    <div className="text-k-sm flex flex-wrap items-center gap-1.5">
       <span className="text-[var(--ink-3)]">Theo dõi:</span>
       {names.length === 0 ? (
         <span className="text-[var(--ink-empty)]">chưa ai</span>
@@ -252,7 +278,7 @@ export function Followers({
         names.map((n) => (
           <span
             key={n}
-            className="rounded-[var(--radius-sm)] bg-[var(--surface)] px-1.5 py-[1px] text-[var(--ink-2)]"
+            className="rounded-[var(--radius-sm)] bg-[var(--surface)] px-1.5 py-px text-[var(--ink-2)]"
           >
             {n}
           </span>

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PoNotesPanel } from './PoNotesPanel'
 import Link from 'next/link'
+// eslint-disable-next-line hg/kit-icon -- màn chuyển kit dở dang, còn 6 import hệ cũ truyền icon lucide cho erp/*; dọn cùng lượt B8, không vá lẻ
 import {
   Ban,
   CalendarDays,
@@ -53,10 +54,10 @@ import {
   daysHeld,
   poHolder,
   type Check as KitCheck,
+  useToast,
 } from '@/components/kit'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
-import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import { DocumentFiles } from '@/components/DocumentFiles'
 import { type ChainNode } from '@/components/erp/RefChain'
@@ -698,6 +699,7 @@ export function PoDetailScreen({
       >
         <ActionGroup label="Duy trì">
           <Action
+            icon="sua"
             strong
             disabled={!canEdit || po.status !== 'draft'}
             title={
@@ -707,7 +709,11 @@ export function PoDetailScreen({
           >
             Sửa đơn
           </Action>
-          <Action disabled={!isSupply} onClick={() => router.push('/planning/pos/new')}>
+          <Action
+            icon="them"
+            disabled={!isSupply}
+            onClick={() => router.push('/planning/pos/new')}
+          >
             Mới
           </Action>
           <Action
@@ -717,6 +723,7 @@ export function PoDetailScreen({
             {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
           </Action>
           <Action
+            icon="xoa"
             disabled={!canEdit || po.status !== 'draft'}
             title={po.status !== 'draft' ? 'Chỉ xoá được đơn còn ở bước Nháp' : undefined}
             onClick={() => void removeDraft()}
@@ -748,6 +755,7 @@ export function PoDetailScreen({
             lối Action Pane của cả thanh này.
           */}
           <Action
+            icon="traLai"
             disabled={!canEdit || po.status !== 'pending_approval' || act.busy}
             title={
               po.status === 'pending_approval'
@@ -764,6 +772,7 @@ export function PoDetailScreen({
             thì chỉ còn "huỷ rồi nhân bản" (mất số PO đã gửi NCC).
           */}
           <Action
+            icon="traLai"
             disabled={!canEdit || !reopenGuard.ok}
             title={
               reopenGuard.ok
@@ -775,6 +784,7 @@ export function PoDetailScreen({
             Hạ về nháp để sửa
           </Action>
           <Action
+            icon="hen"
             disabled={!canEdit || !canReschedule(po.status).ok}
             title={
               canReschedule(po.status).ok
@@ -792,12 +802,14 @@ export function PoDetailScreen({
             Đổi hẹn giao
           </Action>
           <Action
+            icon="toi"
             disabled={!canReassign || ['received', 'cancelled'].includes(po.status)}
             onClick={() => setReassigning({ po, toId: '' })}
           >
             Bàn giao phụ trách
           </Action>
           <Action
+            icon="huy"
             disabled={!canEdit || ['draft', 'received', 'cancelled'].includes(po.status)}
             title={po.status === 'draft' ? 'Đơn nháp thì xoá, không cần huỷ' : undefined}
             onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
@@ -823,6 +835,7 @@ export function PoDetailScreen({
               do thay vì dẫn vào 404. Vẫn KHÔNG dựng form nhập hàng ở đây —
               hai đường ghi vào cùng một sổ là nguồn sai số kinh điển. */}
           <Action
+            icon="ghiSo"
             disabled
             title="Khu Kho tạm gỡ (16/09/2026) — màn lập phiếu nhập sẽ dựng lại. Nút hiện MỜ chứ không giấu: người dùng cần biết việc này vẫn thuộc về Kho, chỉ là chưa bấm được."
           >
@@ -848,10 +861,14 @@ export function PoDetailScreen({
         </ActionGroup>
 
         <ActionGroup label="In &amp; xuất">
-          <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
+          <Action
+            icon="in"
+            onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}
+          >
             Phiếu đặt hàng
           </Action>
           <Action
+            icon="excel"
             onClick={() => window.open(`/api/dept/supply/pos/${po.id}/export`, '_blank')}
           >
             Xuất Excel

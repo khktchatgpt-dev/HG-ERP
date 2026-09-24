@@ -71,6 +71,7 @@ import { targetsRepo } from './targets.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { HttpError } from '@/server/http'
+import { vnTodayIso } from '@/lib/local-date'
 
 const admin = { id: 'u-adm', role: 'admin', department_id: null } as unknown as User
 const manager = { id: 'u-mgr', role: 'manager', department_id: null } as unknown as User
@@ -306,7 +307,7 @@ describe('jobsService.overview — nhịp hôm nay + vật tư thiếu (GĐ1)', 
   })
 
   it('chỉ tiêu hôm nay SUY từ lộ trình: hạn = hôm nay → dồn phần còn lại (GĐ2)', async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = vnTodayIso()
     // Việc HÀN hạn chót hôm nay; đã làm 40/100 tính đến hết hôm qua.
     vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
       { ...JOB, planned_end: today },
@@ -339,7 +340,7 @@ describe('jobsService.overview — nhịp hôm nay + vật tư thiếu (GĐ1)', 
   })
 
   it('chỉ tiêu THẬT (0168) đè số suy cho đúng (tổ × công đoạn) đó (GĐ 2.2)', async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = vnTodayIso()
     vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
       { ...JOB, planned_end: today }, // suy: 100 cần → 100/hạn chót
     ])

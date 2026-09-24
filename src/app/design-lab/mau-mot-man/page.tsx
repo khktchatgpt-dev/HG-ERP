@@ -175,7 +175,7 @@ export default function Page() {
     <div className="kit kit-dense flex h-dvh flex-col overflow-hidden">
       {/* ── THANH TRÊN: đổi đối tượng · khung nhìn · tìm ─────────────── */}
       <div className="flex flex-wrap items-center gap-[var(--sp-4)] border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[var(--sp-3)]">
-        <span className="font-bold tracking-[.11em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+        <span className="text-k-label font-bold tracking-[.11em] text-[var(--ink-3)] uppercase">
           Mua hàng
         </span>
         {/*
@@ -217,7 +217,9 @@ export default function Page() {
         />
         <span className="ml-auto flex items-center gap-[var(--sp-2)]">
           <Btn>Hộp thư việc · 3</Btn>
-          <Btn primary>+ Soạn đơn</Btn>
+          <Btn icon="them" primary>
+            Soạn đơn
+          </Btn>
         </span>
       </div>
 
@@ -235,6 +237,7 @@ export default function Page() {
               Tất cả
             </Chip>
             <Chip
+              icon="toi"
               on={loc === 'cua-toi'}
               count={DON.filter((d) => d.cuaToi).length}
               onClick={() => setLoc('cua-toi')}
@@ -255,10 +258,12 @@ export default function Page() {
             Luật: hành động tác động lên NHIỀU bản ghi thì sống cạnh danh sách.
           */}
           {tick.length > 0 && (
-            <div className="flex flex-wrap items-center gap-[var(--sp-2)] border-b border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-[var(--sp-3)] text-[var(--fs-sm)]">
+            <div className="text-k-sm flex flex-wrap items-center gap-[var(--sp-2)] border-b border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-[var(--sp-3)]">
               <b className="num">{tick.length} đơn</b>
-              <Btn primary>Gửi duyệt</Btn>
-              <Btn>Xuất Excel</Btn>
+              <Btn icon="gui" primary>
+                Gửi duyệt
+              </Btn>
+              <Btn icon="excel">Xuất Excel</Btn>
               <Btn onClick={() => setTick([])}>Bỏ chọn</Btn>
             </div>
           )}
@@ -356,14 +361,14 @@ export default function Page() {
         {dongChon && !rong && (
           <div className="flex min-w-0 flex-col overflow-auto border-l border-[var(--line)] bg-[var(--surface-raised)]">
             <div className="border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)]">
-              <div className="font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              <div className="text-k-label font-bold tracking-[.09em] text-[var(--ink-3)] uppercase">
                 Dòng {(dong ?? 0) + 1}
               </div>
               <div className="num text-[13px] font-bold text-[var(--act-text)]">
                 {dongChon.code}
               </div>
             </div>
-            <div className="flex flex-col gap-[var(--sp-3)] px-[var(--gutter)] py-[var(--sp-4)] text-[var(--fs-sm)]">
+            <div className="text-k-sm flex flex-col gap-[var(--sp-3)] px-[var(--gutter)] py-[var(--sp-4)]">
               <Kv k="Tên vật tư" v={dongChon.ten} />
               <Kv k="SL đặt" v={`${tien(dongChon.sl)} ${dongChon.dvt}`} />
               <Kv k="Đã về" v={`${tien(dongChon.ve)} ${dongChon.dvt}`} />
@@ -382,8 +387,8 @@ export default function Page() {
             */}
             <div className="mt-auto flex flex-wrap gap-[var(--sp-2)] border-t border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)]">
               <Btn>Chốt phần thiếu</Btn>
-              <Btn>Lịch sử giá</Btn>
-              <Btn>Mở hồ sơ vật tư</Btn>
+              <Btn icon="lichSu">Lịch sử giá</Btn>
+              <Btn icon="vattu">Mở hồ sơ vật tư</Btn>
             </div>
           </div>
         )}
@@ -417,7 +422,7 @@ function BanLamViec({
   return (
     <div className="px-[var(--gutter)] py-[var(--sp-6)]">
       <h2 className="text-[15px] font-semibold">Hôm nay bạn cần động vào ba việc</h2>
-      <p className="mt-[var(--sp-1)] text-[var(--fs-sm)] text-[var(--ink-2)]">
+      <p className="text-k-sm mt-[var(--sp-1)] text-[var(--ink-2)]">
         Bấm một ô để lọc danh sách bên trái. Bấm một đơn để mở tờ đơn ngay tại đây — danh
         sách không mất đi.
       </p>
@@ -458,7 +463,7 @@ function BanLamViec({
         <Empty
           headline="Chưa chọn đơn nào"
           reason="Cột này là chỗ tờ đơn mở ra. Chọn một đơn ở danh sách bên trái để xem và xử lý ngay tại đây."
-          next={<span className="text-[var(--fs-sm)] text-[var(--ink-3)]">↖ chọn một dòng</span>} // prettier-ignore
+          next={<span className="text-k-sm text-[var(--ink-3)]">↖ chọn một dòng</span>} // prettier-ignore
         />
       </div>
     </div>
@@ -490,8 +495,8 @@ function ChungTu({
       {/* Thanh hành động của MỘT bản ghi — luật phân bổ, cột 2 */}
       <div className="flex flex-wrap items-center gap-[var(--sp-2)] border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)]">
         <Btn primary>{don.buoc === 0 ? 'Gửi Giám đốc duyệt' : 'Ghi việc đã giục'}</Btn>
-        <Btn>Sửa</Btn>
-        <Btn>In phiếu</Btn>
+        <Btn icon="sua">Sửa</Btn>
+        <Btn icon="in">In phiếu</Btn>
         <Menu
           label="Thao tác ▾"
           items={[
@@ -509,7 +514,7 @@ function ChungTu({
 
       <div className="flex flex-wrap items-baseline gap-[var(--sp-5)] px-[var(--gutter)] pt-[var(--sp-4)]">
         <h1 className="num m-0 text-[20px] leading-tight font-bold">{don.code}</h1>
-        <span className="text-[var(--fs-sm)] text-[var(--ink-2)]">{don.ncc}</span>
+        <span className="text-k-sm text-[var(--ink-2)]">{don.ncc}</span>
         <span className="ml-auto">
           <StatusTrack label="Trạng thái" steps={BUOC} at={don.buoc} />
         </span>
@@ -542,7 +547,7 @@ function ChungTu({
       </GridToolbar>
 
       {dongCua.length === 0 ? (
-        <p className="px-[var(--gutter)] py-[var(--sp-5)] text-[var(--fs-sm)] text-[var(--ink-2)]">
+        <p className="text-k-sm px-[var(--gutter)] py-[var(--sp-5)] text-[var(--ink-2)]">
           Đơn mẫu này chưa khai dòng hàng.
         </p>
       ) : (
@@ -578,13 +583,13 @@ function ChungTu({
         </Grid>
       )}
 
-      <div className="flex justify-end gap-[var(--sp-7)] border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)] text-[var(--fs-sm)]">
+      <div className="text-k-sm flex justify-end gap-[var(--sp-7)] border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)]">
         <span>
-          Tổng thanh toán <b className="num text-[var(--fs-num-lg)]">{tien(tongTien)}</b>
+          Tổng thanh toán <b className="num text-k-lg">{tien(tongTien)}</b>
         </span>
       </div>
 
-      <p className="px-[var(--gutter)] py-[var(--sp-4)] text-[var(--fs-sm)] text-[var(--ink-3)]">
+      <p className="text-k-sm px-[var(--gutter)] py-[var(--sp-4)] text-[var(--ink-3)]">
         Bấm một dòng để mở cột thứ ba — chi tiết dòng và các hành động của riêng dòng đó.
       </p>
     </>
@@ -597,8 +602,10 @@ function HoSoNcc({ ncc }: { ncc: Ncc }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-[var(--sp-2)] border-b border-[var(--line)] px-[var(--gutter)] py-[var(--sp-3)]">
-        <Btn primary>+ Soạn đơn cho NCC này</Btn>
-        <Btn>Sửa hồ sơ</Btn>
+        <Btn icon="them" primary>
+          Soạn đơn cho NCC này
+        </Btn>
+        <Btn icon="sua">Sửa hồ sơ</Btn>
         <Menu
           label="Thao tác ▾"
           items={[{ label: 'Bảng giá' }, { label: 'Ngưng giao dịch', danger: true }]}
@@ -607,14 +614,14 @@ function HoSoNcc({ ncc }: { ncc: Ncc }) {
       </div>
       <div className="px-[var(--gutter)] pt-[var(--sp-4)]">
         <h1 className="m-0 text-[20px] leading-tight font-bold">{ncc.ten}</h1>
-        <span className="num text-[var(--fs-sm)] text-[var(--ink-2)]">{ncc.ma}</span>
+        <span className="num text-k-sm text-[var(--ink-2)]">{ncc.ma}</span>
       </div>
       {/*
         HỒ SƠ DANH MỤC KHÔNG CÓ VÒNG ĐỜI DUYỆT — chỗ của trục trạng thái ở đây
         là DẢI HIỆU SUẤT, mỗi ô kèm mẫu số. Cùng một khung ba cột, nhưng cột 2
         đổi hình theo loại đối tượng.
       */}
-      <div className="mt-[var(--sp-4)] flex flex-wrap gap-[var(--sp-7)] border-y border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-[var(--sp-4)] text-[var(--fs-sm)]">
+      <div className="text-k-sm mt-[var(--sp-4)] flex flex-wrap gap-[var(--sp-7)] border-y border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-[var(--sp-4)]">
         <span>
           Giao đúng hẹn <b>{ncc.dungHen}</b>
         </span>

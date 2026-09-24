@@ -112,21 +112,25 @@ export default function Page() {
         ]}
       >
         <ActionGroup label="Duy trì">
-          <Action strong>Sửa</Action>
-          <Action>Nhân bản</Action>
+          <Action icon="sua" strong>
+            Sửa
+          </Action>
+          <Action icon="saoChep">Nhân bản</Action>
         </ActionGroup>
         {/* KHÔNG có nhóm "Luồng phê duyệt" — hồ sơ danh mục không ai duyệt. */}
         <ActionGroup label="Mua hàng">
-          <Action primary>+ Soạn đơn cho NCC này</Action>
+          <Action icon="them" primary>
+            Soạn đơn cho NCC này
+          </Action>
           <Action>Bảng giá chào</Action>
         </ActionGroup>
         <ActionGroup label="Trạng thái">
-          <Action>Ngừng giao dịch</Action>
-          <Action>Khoá đặt hàng</Action>
+          <Action icon="huy">Ngừng giao dịch</Action>
+          <Action icon="khoa">Khoá đặt hàng</Action>
         </ActionGroup>
         <ActionGroup label="In &amp; xuất">
           <Action>Hồ sơ năng lực</Action>
-          <Action>Xuất Excel</Action>
+          <Action icon="excel">Xuất Excel</Action>
         </ActionGroup>
       </ActionPane>
 

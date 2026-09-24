@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 import {
@@ -34,6 +33,7 @@ import {
   TextArea,
   TextInput,
   showMoney,
+  useToast,
 } from '@/components/kit'
 
 type Ncc = {
@@ -295,7 +295,7 @@ function SuaHoSo({
         Giấu đường đó đi thì người cần khai số tài khoản sẽ đi tìm trong vô
         vọng — tệ hơn là cứ để một dòng nhỏ ở đáy phiếu.
       */}
-      <div className="mt-4 text-[var(--fs-sm)] text-[var(--ink-3)]">
+      <div className="text-k-sm mt-4 text-[var(--ink-3)]">
         Pháp lý, ngân hàng, chứng chỉ và chấm điểm nằm ở{' '}
         <a
           className="font-semibold text-[var(--act)] hover:underline"
@@ -361,7 +361,7 @@ export function HoSoNccScreen({
           <span className="flex items-center gap-2">
             {ncc.name}
             {ncc.code && (
-              <span className="num text-[11px] text-[var(--ink-3)]">{ncc.code}</span>
+              <span className="num text-k-label text-[var(--ink-3)]">{ncc.code}</span>
             )}
             {ngung && <Tag tone="warn">Ngừng giao dịch</Tag>}
             {!ncc.can_order && <Tag tone="stop">Khoá đặt hàng</Tag>}
@@ -443,10 +443,20 @@ export function HoSoNccScreen({
         mang sẵn SỐ ĐẾM, nên người đọc biết bên kia có gì trước khi bấm sang.
       */}
       <FilterBar>
-        <Chip on={tab === 'don'} count={pos.length} onClick={() => setTab('don')}>
+        <Chip
+          icon="don"
+          on={tab === 'don'}
+          count={pos.length}
+          onClick={() => setTab('don')}
+        >
           Đơn mua
         </Chip>
-        <Chip on={tab === 'gia'} count={gia.length} onClick={() => setTab('gia')}>
+        <Chip
+          icon="tien"
+          on={tab === 'gia'}
+          count={gia.length}
+          onClick={() => setTab('gia')}
+        >
           Giá đã mua
         </Chip>
       </FilterBar>
@@ -458,11 +468,13 @@ export function HoSoNccScreen({
             reason="Hồ sơ đã khai nhưng chưa có lần mua nào qua hệ thống — đó là chuyện bình thường với NCC mới hoặc NCC dự phòng, không phải dữ liệu thiếu."
             next={
               canEdit ? (
-                <Btn primary href={`/mua-hang/don/moi?ncc=${ncc.id}`}>
+                <Btn icon="them" primary href={`/mua-hang/don/moi?ncc=${ncc.id}`}>
                   Soạn đơn đầu tiên
                 </Btn>
               ) : (
-                <Btn href="/mua-hang/ncc">Về danh sách</Btn>
+                <Btn icon="quayLai" href="/mua-hang/ncc">
+                  Về danh sách
+                </Btn>
               )
             }
           />
@@ -522,14 +534,24 @@ export function HoSoNccScreen({
                   </Row>
                 ))}
             </tbody>
+            {/*
+              CỘT CHÂN BẢNG = 6, BẰNG `THead`. Bản cũ cộng ra 7 (4 + 1 +
+              caveat 2), và ô số đứng ở cột "Hẹn giao" thay vì "Giá trị".
+              Chú thích gộp vào ô nhãn — xem bẫy ở `TFoot`.
+            */}
             <TFoot
-              label={<td colSpan={4}>Cộng {pos.length} đơn</td>}
-              cells={<td className="num">{tien.join(' · ')}</td>}
-              caveat={
-                pos.length > song.length
-                  ? `Chưa gồm ${pos.length - song.length} đơn đã huỷ. Cộng riêng từng loại tiền, KHÔNG quy đổi.`
-                  : 'Cộng riêng từng loại tiền, KHÔNG quy đổi.'
+              label={
+                <td colSpan={5}>
+                  Cộng {pos.length} đơn
+                  <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
+                    ·{' '}
+                    {pos.length > song.length
+                      ? `chưa gồm ${pos.length - song.length} đơn đã huỷ; cộng riêng từng loại tiền, KHÔNG quy đổi`
+                      : 'cộng riêng từng loại tiền, KHÔNG quy đổi'}
+                  </span>
+                </td>
               }
+              cells={<td className="num">{tien.join(' · ')}</td>}
             />
           </Table>
         )
@@ -537,7 +559,11 @@ export function HoSoNccScreen({
         <Empty
           headline="Chưa có giá nào của nhà cung cấp này"
           reason="Giá chỉ tính từ ĐƠN ĐÃ GỬI NCC trở đi — đơn còn nháp hay chờ duyệt thì giá chưa phải giá chốt."
-          next={<Btn onClick={() => setTab('don')}>Xem đơn mua</Btn>}
+          next={
+            <Btn icon="don" onClick={() => setTab('don')}>
+              Xem đơn mua
+            </Btn>
+          }
         />
       ) : (
         <Table>
@@ -574,7 +600,7 @@ export function HoSoNccScreen({
                         })}
                         strong
                       />
-                      <span className="text-[10.5px] text-[var(--ink-3)]">
+                      <span className="text-k-label text-[var(--ink-3)]">
                         {g.currency === 'VND' ? '₫' : g.currency}/{g.price_unit ?? g.unit}
                       </span>
                     </span>
@@ -588,9 +614,11 @@ export function HoSoNccScreen({
                 </Row>
               ))}
           </tbody>
+          {/* CỘT CHÂN BẢNG = 5, BẰNG `THead` (bản cũ: 4 + caveat 2 = 6). */}
           <TFoot
-            label={<td colSpan={4}>Cộng {gia.length} mã đã mua của NCC này</td>}
+            label={<td colSpan={2}>Cộng {gia.length} mã đã mua của NCC này</td>}
             cells={null}
+            caveatSpan={3}
             caveat="Giá của lần mua gần nhất. So giá giữa các NCC thì mở trang Bảng giá."
           />
         </Table>

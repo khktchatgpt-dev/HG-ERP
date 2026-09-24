@@ -140,7 +140,7 @@ export function BanLamViecScreen({
           LIÊN KẾT dán ở mép phải — không phải một hàng nút rơi xuống đáy trang
           để lại khoảng trống (đo 10/09/2026 ở 1366×768: 40% màn dưới trống). */}
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-[1fr_232px]">
-        <div className="min-w-0 px-[var(--gutter)] py-[10px]">
+        <div className="min-w-0 px-[var(--gutter)] py-2.5">
           {/* Tầng 1 — ô số. Sáu ô, mỗi ô là một lời hứa dẫn tới đúng danh sách. */}
           <WorkTiles>
             <WorkTile
@@ -187,7 +187,7 @@ export function BanLamViecScreen({
           </WorkTiles>
 
           {truncatedAt != null && (
-            <div className="mt-[13px]">
+            <div className="mt-3">
               <NoticeBar
                 tone="warn"
                 tag="Cắt đuôi"
@@ -200,7 +200,7 @@ export function BanLamViecScreen({
           )}
 
           {/* Tầng 2 — danh sách theo tab. Ba câu hỏi, một trang. */}
-          <section className="mt-[12px] border-y border-[var(--line)] bg-[var(--surface-card)]">
+          <section className="mt-3 border-y border-[var(--line)] bg-[var(--surface-card)]">
             <div className="border-b border-[var(--line)] bg-[var(--surface)]">
               <WorkLanes lanes={lanes} activeId={tab} onPick={setTab} />
             </div>
@@ -251,7 +251,7 @@ export function BanLamViecScreen({
 
             {tab === 'lenh' &&
               (issues.length === 0 ? (
-                <Empty headline="Không lệnh nào có nguy cơ" reason="Mọi lệnh đang chạy đều đủ vật tư hoặc hàng đang về." next={<Btn href="/mua-hang/yeu-cau">Xem yêu cầu mua</Btn>} /> // prettier-ignore
+                <Empty headline="Không lệnh nào có nguy cơ" reason="Mọi lệnh đang chạy đều đủ vật tư hoặc hàng đang về." next={<Btn icon="lenh" href="/mua-hang/yeu-cau">Xem yêu cầu mua</Btn>} /> // prettier-ignore
               ) : (
                 <Table>
                   <THead>
@@ -298,7 +298,7 @@ export function BanLamViecScreen({
 
             {tab === 'hop' &&
               (agendaSorted.length === 0 ? (
-                <Empty headline="Không có việc gì cần quyết" reason="Không lệnh nào ở mức khẩn và không đơn nào chờ ký." next={<Btn href="/mua-hang/don?nhin=cho-duyet">Xem đơn chờ duyệt</Btn>} /> // prettier-ignore
+                <Empty headline="Không có việc gì cần quyết" reason="Không lệnh nào ở mức khẩn và không đơn nào chờ ký." next={<Btn icon="don" href="/mua-hang/don?nhin=cho-duyet">Xem đơn chờ duyệt</Btn>} /> // prettier-ignore
               ) : (
                 <Table>
                   <THead>
@@ -353,7 +353,7 @@ export function BanLamViecScreen({
             <LinkRow href="/mua-hang/vat-tu">Vật tư</LinkRow>
             <LinkRow href="/mua-hang/bang-gia">Bảng giá</LinkRow>
           </LinkGroup>
-          <p className="px-[var(--gutter)] py-2 text-[11.5px] leading-relaxed text-[var(--ink-3)]">
+          <p className="text-k-sm px-[var(--gutter)] py-2 leading-relaxed text-[var(--ink-3)]">
             Số trên ô và trên tab đếm bằng đúng hàm mà danh sách đích dùng.
           </p>
         </aside>
@@ -365,8 +365,8 @@ export function BanLamViecScreen({
 /* Nhóm liên kết ở cột phải — tiêu đề nhỏ in hoa, mỗi dòng một đích. */
 function LinkGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-[var(--hair)] py-[7px]">
-      <h2 className="px-[var(--gutter)] pb-[3px] font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+    <section className="border-b border-[var(--hair)] py-2">
+      <h2 className="text-k-label px-[var(--gutter)] pb-1 font-bold tracking-[.1em] text-[var(--ink-3)] uppercase">
         {title}
       </h2>
       {children}
@@ -377,7 +377,7 @@ function LinkRow({ href, children }: { href: string; children: React.ReactNode }
   return (
     <a
       href={href}
-      className="block px-[var(--gutter)] py-[3px] text-[var(--act-text)] text-[var(--fs-sm)] hover:bg-[var(--surface-hover)] hover:underline"
+      className="text-k-sm block px-[var(--gutter)] py-1 text-[var(--act-text)] hover:bg-[var(--surface-hover)] hover:underline"
     >
       {children}
     </a>

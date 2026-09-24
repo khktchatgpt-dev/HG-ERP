@@ -95,8 +95,10 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn href="/design-lab/kho/vat-tu">Mở một hồ sơ vật tư</Btn>
-            <Btn>Xuất Excel</Btn>
+            <Btn icon="vattu" href="/design-lab/kho/vat-tu">
+              Mở một hồ sơ vật tư
+            </Btn>
+            <Btn icon="excel">Xuất Excel</Btn>
           </>
         }
       >
@@ -129,10 +131,10 @@ export default function Page() {
               reason={`Chỉ ${STOCK.length} mã đang có tồn hoặc có phát sinh trong 90 ngày. ${n(CATALOG - STOCK.length)} mã còn lại là danh mục: chúng có thật, chỉ là chưa động tới. Đổ hết ra thì mỗi lần vào màn là kéo cả danh mục xuống trình duyệt để lọc bằng tay.`}
               next={
                 <>
-                  <Btn primary onClick={() => setBucket('live')}>
+                  <Btn icon="quayLai" primary onClick={() => setBucket('live')}>
                     Về tập đang dùng
                   </Btn>
-                  <Btn>Tìm trong cả danh mục</Btn>
+                  <Btn icon="tim">Tìm trong cả danh mục</Btn>
                 </>
               }
             />
@@ -148,11 +150,13 @@ export default function Page() {
               }
               next={
                 q ? (
-                  <Btn primary onClick={() => setQ('')}>
+                  <Btn icon="boLoc" primary onClick={() => setQ('')}>
                     Xoá ô tìm
                   </Btn>
                 ) : (
-                  <Btn onClick={() => setBucket('live')}>Về tập đang dùng</Btn>
+                  <Btn icon="quayLai" onClick={() => setBucket('live')}>
+                    Về tập đang dùng
+                  </Btn>
                 )
               }
             />
@@ -248,8 +252,19 @@ export default function Page() {
               được thì không ai tin": một tổng không nói phạm vi là một tổng
               người đọc phải tự đoán, và họ sẽ mở Excel cộng lại.
             */}
+            {/*
+              HAI LỖI của bản cũ, đều thuộc loại trình duyệt KHÔNG báo:
+
+              1. `label` truyền CHUỖI chứ không phải <td>. `TFoot` render
+                 `{label}` thẳng vào <tr>, nên chuỗi trần nằm trong <tr> —
+                 HTML không hợp lệ, trình duyệt hất nó ra ngoài bảng.
+              2. Cột cộng ra 10 (1 + 5 + 3 + caveat 2) trong khi `THead` có 9.
+
+              Trang này là MẪU để chép, nên sai ở đây là sai lan ra nhiều màn.
+              Nay: nhãn 1 + năm ô số 5 + caveat 3 = 9.
+            */}
             <TFoot
-              label={`Cộng ${rows.length} mã trong rổ`}
+              label={<td>Cộng {rows.length} mã trong rổ</td>}
               cells={
                 <>
                   <td className="num">{n(sum((s) => s.usable))}</td>
@@ -257,9 +272,9 @@ export default function Page() {
                   <td className="num">{n(sum((s) => s.blocked))}</td>
                   <td className="num">{n(sum((s) => s.held))}</td>
                   <td className="num">{n(sum(free))}</td>
-                  <td colSpan={3} />
                 </>
               }
+              caveatSpan={3}
               caveat={`Tổng cộng các mã KHÁC ĐƠN VỊ TÍNH nên chỉ dùng để soát, không dùng để báo cáo. KHÔNG gồm ${n(CATALOG - STOCK.length)} mã danh mục chưa phát sinh.`}
             />
           </Table>

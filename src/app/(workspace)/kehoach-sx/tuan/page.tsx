@@ -4,6 +4,7 @@ import { weekService } from '@/modules/dept/production/week.service'
 import { weekStartIso } from '@/lib/exec-ops'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Badge } from '@/components/Badge'
+import { vnTodayIso } from '@/lib/local-date'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,7 @@ export default async function WeekPage({
 }) {
   const user = await authService.requirePageUser()
   const sp = await searchParams
-  const today = new Date().toISOString().slice(0, 10)
+  const today = vnTodayIso()
   const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(sp.week ?? '')
     ? weekStartIso(sp.week!)
     : weekStartIso(today)

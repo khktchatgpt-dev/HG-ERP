@@ -107,6 +107,34 @@
   --done-wash: #e5f3ea;
   --done-line: #bcdcc9;
 
+  /* ── PHẦN ĐÃ LÀM trên thanh tiến độ ──────────────────────────────────
+     Thêm 23/09/2026. Trước đó `CoverageBar` và dải công đoạn tô phần đã làm
+     bằng `--act` — đúng thứ luật siết 16/09 cấm: "Xanh `--act` chỉ còn nghĩa
+     BẤM ĐƯỢC; dải trạng thái mượn nó thì màn hình chỉ còn xanh với trắng."
+     Thanh tiến độ không bấm được, nên nó không có quyền mặc màu hành động.
+
+     VÌ SAO KHÔNG DÙNG LUÔN `--done`: thanh xanh lá lúc mới 30% đọc ra "ổn
+     rồi". Giữ `--done` cho lúc ĐỦ thì mắt bắt được "xong" mà không phải đọc
+     số — còn dở thì là dữ liệu trung tính, không khen không chê.
+
+     Trung tính nhưng phải ĐỌC ĐƯỢC trên `--track` (#dde2ea), nên lấy mực
+     xám-lam đủ đậm chứ không phải một sắc nhạt. */
+  --fill: #5a6577;
+
+  /* ── MÀU DỮ LIỆU (B6, 24/09/2026) ────────────────────────────────────
+     Cho các thành phần VẼ số (DayStrip, MiniBars). Chọn bằng bộ kiểm màu của
+     hướng dẫn dataviz (không chọn bằng mắt), với ràng buộc riêng của kit: KHÔNG
+     được trùng nghĩa với `--act` (bấm được) hay `--stop/--warn/--done` (vòng
+     đời). Loại: tím #6f45c2 (cách `--act` chỉ ΔE 10,9 — dưới ngưỡng 15, trông
+     như bấm được), xanh ngọc đậm (dính `--done`).
+
+     --viz-1  chuỗi CHÍNH (sản lượng nội bộ) — 4,0:1 trên nền trắng.
+     --viz-2  chuỗi PHỤ (gia công ngoài) — cặp tốt nhất tìm được vẫn ở vùng
+              "phải kèm mã phụ" (mù màu ΔE 7,1; 2,6:1), nên thành phần dùng nó
+              BẮT BUỘC khe 2px + chú giải + nhãn số trực tiếp. */
+  --viz-1: #008c9e;
+  --viz-2: #d884c6;
+
   /* ── MẬT ĐỘ ──────────────────────────────────────────────────────────
      ERP mặc định DÀY. Người quen Excel bật `.kit-dense` để dày hơn nữa. */
   --row-h: 30px;
@@ -142,26 +170,45 @@
   --sp-7: 24px;
   --sp-8: 32px;
 
-  /* ── CHỮ ─────────────────────────────────────────────────────────────
+  /* ── CHỮ — NĂM BẬC (siết 24/09/2026, B3; chủ dự án chốt Q6) ──────────
      Thang hẹp có chủ ý. 13px là nền — GIỮ NGUYÊN độ dày của ERP; dễ đọc đến
      từ căn chỉnh và tương phản, không từ việc phóng to chữ.
 
-     `--fs-doc` là bậc MỚI: số hiệu chứng từ. Nó là thứ duy nhất được to,
-     vì nó là danh tính của trang — mắt cần một chỗ đậu và chỉ một. */
+       11  nhãn   — nhãn cột, nhãn nhóm, chữ in hoa giãn chữ
+       12  phụ    — ghi chú, dòng thứ hai, đơn vị
+       13  thân   — chữ và số làm việc chính
+       15  mục    — tiêu đề hộp thoại, trạng thái rỗng, số tóm tắt
+       18  tiêu đề trang
+       24  số hiệu chứng từ — danh tính của trang, mắt cần một chỗ đậu và chỉ một
+
+     VÌ SAO GỘP. Đo 24/09: mã nguồn dùng TÁM cỡ trong khoảng 10–13px (10 · 10,5 ·
+     11 · 11,5 · 12 · 12,5 · 13 · 13,5), hai cỡ không hề có trong thang. Mắt
+     người không phân biệt được 11px với 11,5px — tám bậc trong 5px là tám lựa
+     chọn tuỳ hứng mà người viết mã phải phân vân mỗi lần, không phải một thang.
+
+     DÙNG QUA TAILWIND: `text-k-label / k-sm / k-body / k-lg / k-title / k-doc`
+     (khai ở `@theme inline` của globals.css). KHÔNG viết `text-[var(--fs-sm)]`:
+     Tailwind v4 hiểu lớp `text-` bọc `var()` trong ngoặc vuông là MÀU, không phải cỡ chữ — 226 chỗ viết
+     như vậy trong mã nguồn đều KHÔNG có tác dụng, đo được ngày 24/09. Luật
+     `hg/no-arbitrary-size` chặn cách viết đó. */
   --fs-doc: 24px;
   --fs-title: 18px;
-  --fs-section: 13.5px;
+  --fs-lg: 15px;
+  /* Tiêu đề mục trong khối: gộp về thân (13,5 → 13) — phân cấp bằng ĐỘ ĐẬM,
+     không bằng nửa pixel. */
+  --fs-section: 13px;
   --fs-body: 13px;
-  --fs-sm: 12.5px;
-  --fs-micro: 11px;
+  --fs-sm: 12px;
   /* Nhãn cột và nhãn nhóm nút: nhỏ nhưng in hoa + giãn chữ nên vẫn đọc được. */
-  --fs-label: 10.5px;
+  --fs-label: 11px;
+  /* Bí danh cũ — giữ để CSS cũ không gãy, trỏ về đúng bậc của thang. */
+  --fs-micro: var(--fs-label);
 
-  /* SỐ có thang riêng: số CHÍNH là con số người dùng mang đi làm việc. */
-  --fs-num: 13px;
-  --fs-num-sm: 11.5px;
+  /* SỐ đi cùng thang chữ — không còn thang riêng lệch nửa pixel. */
+  --fs-num: var(--fs-body);
+  --fs-num-sm: var(--fs-sm);
   /* Số tóm tắt trên FactBox / chân bảng. */
-  --fs-num-lg: 15px;
+  --fs-num-lg: var(--fs-lg);
 
   /* ── HÌNH ────────────────────────────────────────────────────────────
      ĐẢO LẠI 09/09/2026 theo yêu cầu chủ dự án: bản trước tôi tự kéo bo góc
@@ -186,14 +233,59 @@
   --z-sticky: 5;
   --z-bar: 6;
   --z-float: 40;
-  /* Trên --z-float: tooltip trong hộp thoại phải nổi hơn chính hộp. */
   --z-modal: 60;
+  /* LỚP NỔI ĐI QUA PORTAL — tooltip, menu thả, popover (thêm 24/09/2026, B1).
+
+     Trước B1 các lớp nổi này nằm `absolute` BÊN TRONG cây DOM của nơi gọi,
+     nên một tooltip đặt trong hộp thoại có z 40 tính TRONG ngữ cảnh xếp chồng
+     của hộp (z 60) — vẫn nổi trên nội dung hộp. Từ B1 chúng đi qua portal ra
+     `<body>` (để khỏi bị cắt bởi vùng `overflow`), và ở gốc thì z 40 < 60:
+     tooltip trong hộp thoại sẽ CHÌM XUỐNG DƯỚI hộp. Nên tầng này phải cao hơn
+     modal. `--z-float` giữ cho thứ còn nằm tại chỗ (thanh dính, gợi ý ô). */
+  --z-pop: 70;
+  /* Toast nổi trên TẤT CẢ, kể cả hộp thoại và menu (B2, 24/09/2026): lỗi hay
+     bật ra đúng lúc người dùng vừa bấm xác nhận TRONG hộp — nằm dưới hộp là
+     người ta không thấy vì sao việc mình vừa làm không thành. */
+  --z-toast: 80;
+
+  /* ── BẬC NỔI — ba bậc, theo KHOẢNG CÁCH khỏi mặt trang (B3, 24/09/2026) ──
+     Trước B3 chỉ có một bóng (`--shadow-modal`); tooltip, menu, popover, toast
+     mỗi cái tự gõ một bóng riêng, bốn con số khác nhau cho cùng một việc.
+       · float — tooltip: sát mặt trang, chỉ cần tách khỏi nền.
+       · drop  — menu thả, popover, toast: khung nổi có thao tác bên trong.
+       · modal — hộp thoại: một TẦNG khác, cắt đứt phần còn lại.
+     Không có bậc thứ tư: thêm là bắt đầu có bóng trang trí. */
+  --shadow-float: 0 4px 14px rgba(17, 24, 38, 0.22);
+  --shadow-drop: 0 8px 24px rgba(17, 24, 38, 0.15);
   --shadow-modal: 0 18px 48px rgba(17, 24, 38, 0.24);
+
+  /* ── CHUYỂN ĐỘNG — ba thời lượng, một đường cong (B3, 24/09/2026) ─────
+     ERP không cần diễn hoạt: chuyển động chỉ để mắt THEO KỊP một thay đổi
+     (hộp trượt vào, nền tối dần), không để trang trí. Đủ ba thời lượng:
+       · fast 120ms — đổi màu khi rê chuột, hiện tooltip
+       · base 180ms — mở menu, popover, nền phủ tối dần
+       · slow 240ms — hộp thoại trượt vào từ mép
+     Người bật "giảm chuyển động" ở hệ điều hành thì tất cả về 0 — xem khối
+     `prefers-reduced-motion` ngay dưới. */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   color: var(--ink);
   background: var(--surface);
   font-size: var(--fs-body);
   line-height: 1.45;
+}
+
+/* Người dùng bật "giảm chuyển động" ở hệ điều hành — WCAG 2.3.3. Đặt thời
+   lượng về 0 thay vì gỡ từng hiệu ứng: mọi chỗ dùng token tự tuân theo. */
+@media (prefers-reduced-motion: reduce) {
+  .kit {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
 }
 
 /* Chế độ DÀY — cho người quen Excel. Chỉ đổi thang mật độ, không đổi gì khác. */

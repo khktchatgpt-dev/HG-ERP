@@ -191,20 +191,24 @@ export default function Page() {
         ]}
       >
         <ActionGroup label="Duy trì">
-          <Action strong>Sửa</Action>
-          <Action>Thêm dòng ngoài đơn</Action>
-          <Action>Xoá nháp</Action>
+          <Action icon="sua" strong>
+            Sửa
+          </Action>
+          <Action icon="them">Thêm dòng ngoài đơn</Action>
+          <Action icon="xoa">Xoá nháp</Action>
         </ActionGroup>
         <ActionGroup label="Ghi sổ">
           <Action
+            icon="ghiSo"
             primary
             disabled={blocked}
             title={blocked ? `Còn ${stop.length} lỗi chặn — xem bảng kiểm bên dưới` : undefined} // prettier-ignore
           >
             Ghi sổ
           </Action>
-          <Action>Lưu nháp</Action>
+          <Action icon="luuNhap">Lưu nháp</Action>
           <Action
+            icon="dao"
             disabled
             title="Chỉ bật sau khi phiếu đã ghi sổ — nháp thì xoá thẳng, không cần đảo"
           >
@@ -218,13 +222,13 @@ export default function Page() {
         */}
         <ActionGroup label="Khi không thuận">
           <Action>Chốt thiếu dòng</Action>
-          <Action>Khoá cả phiếu</Action>
-          <Action>Lập phiếu trả NCC</Action>
+          <Action icon="khoa">Khoá cả phiếu</Action>
+          <Action icon="xuatKho">Lập phiếu trả NCC</Action>
           <Action>Báo Cung ứng</Action>
         </ActionGroup>
         <ActionGroup label="Chứng từ liên quan">
-          <Action>Đơn mua PO-2609-044</Action>
-          <Action>Lệnh SX 07/26-14</Action>
+          <Action icon="don">Đơn mua PO-2609-044</Action>
+          <Action icon="lenh">Lệnh SX 07/26-14</Action>
         </ActionGroup>
       </ActionPane>
 
@@ -460,7 +464,7 @@ export default function Page() {
               <Td colSpan={3} />
             </GridFoot>
           </Grid>
-          <p className="px-[var(--gutter)] py-[9px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm px-[var(--gutter)] py-[9px] text-[var(--ink-3)]">
             Chân bảng nói rõ <b>tổng chia về đâu</b>. Một tổng duy nhất “580 đơn vị” là
             con số đúng mà vô dụng: thứ người đọc cần biết là bao nhiêu trong đó{' '}
             <b>cấp đi được ngay</b>.

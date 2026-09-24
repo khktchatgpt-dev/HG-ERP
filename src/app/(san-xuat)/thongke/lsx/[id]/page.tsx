@@ -42,7 +42,7 @@ export default async function LsxDocPage({
         headline="Không tìm thấy lệnh sản xuất này"
         reason="Lệnh có thể đã bị xoá, hoặc đường dẫn mang một mã không còn tồn tại."
         next={
-          <Btn primary href="/thongke/lenh">
+          <Btn icon="quayLai" primary href="/thongke/lenh">
             Về danh sách lệnh
           </Btn>
         }
@@ -56,7 +56,7 @@ export default async function LsxDocPage({
         headline={`Lệnh ${lsx.code} chưa có việc nào để ghi nhận`}
         reason="Lệnh chưa ĐỊNH HÌNH chi tiết — không có bảng chi tiết thì không biết phải ghi sản lượng cho cái gì."
         next={
-          <Btn primary href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>
+          <Btn icon="dinhHinh" primary href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>
             Định hình từ BOM
           </Btn>
         }
@@ -126,6 +126,9 @@ export default async function LsxDocPage({
       imageByLine={imageByLine}
       meId={user.id}
       meName={user.name ?? user.email}
+      unshaped={
+        lines.filter((l) => !data.rows.some((r) => r.order_line_id === l.id)).length
+      }
     />
   )
 }
