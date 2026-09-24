@@ -123,12 +123,12 @@ chính thức luôn, người chốt là chính thống kê.
 Chốt nhầm lúc 5 giờ chiều là phải gọi Giám đốc. Đây là loại ma sát giết một đợt
 chạy thử.
 
-### 2.4 Phiếu giao tổ (`production_transfers`) — CÓ BẢNG, 0 DÒNG
+### 2.4 Phiếu giao tổ (`production_transfers`) — CÓ BẢNG, 0 DÒNG, Q3 ĐÃ CHỐT: SỐNG
 
 Bàn giao WIP vào tổ theo đợt (`issue` / `return`), dựng từ cột "SL giao 1..4"
-của sổ Excel thật. Tồn WIP tại tổ = giao − trả − đã làm. **Chưa ai dùng.** Câu
-hỏi thật là xưởng có đếm hàng lúc giao giữa tổ không (Q3) — nếu không thì bảng
-này nên tắt khỏi giao diện chứ không để đứng đó rỗng.
+của sổ Excel thật. Tồn WIP tại tổ = giao − trả − đã làm. **Chưa ai dùng vì chưa
+có màn** — Q3 (22/09) xác nhận xưởng thật sự đếm hàng lúc giao giữa tổ, nên
+bảng này không tắt: cần dựng màn Giao tổ.
 
 ### 2.5 Chặng từ "sơn xong" tới "giao được" — ĐÃ CHỐT VÀ ĐÃ DỰNG 18/09
 
@@ -282,7 +282,9 @@ chạm vào màn đó — không chuyển vì thẩm mỹ.
 
 Không có câu trả lời thì thiết kế nào cũng là đoán.
 
-> **Q4 và Q5 đã chốt 18/09** — xem khung ở §2.5. Bốn câu còn lại vẫn treo.
+> **Q3, Q4 và Q5 đã chốt** (Q3: 22/09, Q4+Q5: 18/09) — xem khung ở §2.5 và dưới
+> đây. Q1, Q2, Q6 vẫn treo (Q2, Q6 xem cập nhật ở [[san-xuat-quy-trinh-vai-tro]]
+> trong memory — có thể đã chốt sau ngày viết tài liệu này, chưa đồng bộ lại).
 
 - **Q1 — Ai ghi sổ?** Một thống kê cho mỗi tổ (đúng như 7 tài khoản đang có),
   hay hai thống kê ôm nhiều tổ (đúng như ghi chép 07/2026)? Trả lời này quyết
@@ -291,8 +293,11 @@ Không có câu trả lời thì thiết kế nào cũng là đoán.
   duyệt" (máy luật còn nguyên, chỉ đổi một khối). Không thì nên thu 4 tài khoản
   `production_leader` lại, vì quyền `production.jobs.confirm` hiện không ai
   khác bấm được.
-- **Q3 — Giao hàng giữa tổ có đếm không?** Có thì `production_transfers` sống
-  và cần một màn; không thì nên tắt khỏi giao diện thay vì để rỗng.
+- ~~**Q3 — Giao hàng giữa tổ có đếm không?**~~ **CHỐT 22/09: CÓ.** Xưởng thực
+  sự đếm số lượng lúc chuyển WIP giữa tổ. `production_transfers` sống —
+  `transfers.service.ts`/`transfers.repo.ts` đã có sẵn (backend đủ từ trước),
+  còn thiếu duy nhất màn giao diện. Việc tiếp theo: dựng màn Giao tổ (khuôn F
+  hoặc khay nhanh từ M3/M5, theo mẫu cột "SL giao 1..4" của sổ Excel cũ).
 - ~~**Q4 — Sau sơn thì còn những bước nào?**~~ **CHỐT 18/09: tách đếm riêng cả
   bốn** — lắp ráp · bao bì · đóng gói · hoàn thiện. Đã dựng, xem §2.5.
 - ~~**Q5 — Thành phẩm có nhập kho không?**~~ **CHỐT 18/09: không.** Đóng gói
