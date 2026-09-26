@@ -58,6 +58,7 @@ export type ActionId =
   | 'delete'
   | 'cancel'
   | 'edit_terms'
+  | 'adjust'
   | 'reassign'
   | 'open'
   /** Tab Nhận hàng của màn chứng từ — định nghĩa tại màn, không qua actionsFor. */
@@ -162,6 +163,24 @@ const EDIT_TERMS = (blocked?: string): Action => ({
   label: 'Sửa điều khoản',
   ui: 'link',
   stakes: 'nhe',
+  blocked,
+})
+
+/**
+ * ĐIỀU CHỈNH ĐƠN — sửa đơn ĐÃ DUYỆT / ĐÃ GỬI ngay tại chỗ (0210, chốt
+ * 25/09/2026): SL, giá, thêm/bỏ dòng. Không hạ về nháp, không duyệt lại —
+ * phần chênh ghi thành phát sinh riêng cho kế toán, người duyệt nhận thông
+ * báo. Đây là đường sửa HẰNG NGÀY của người mua; "Hạ về nháp" chỉ còn cho
+ * Ban quản lý khi phải làm lại cả đơn.
+ *
+ * `ui: 'link'` chỉ để `start()` bắt lấy — nó bật chế độ điều chỉnh trên chính
+ * màn chứng từ, không gọi route nào ngay.
+ */
+const ADJUST = (blocked?: string): Action => ({
+  id: 'adjust',
+  label: 'Điều chỉnh đơn',
+  ui: 'link',
+  stakes: 'vua',
   blocked,
 })
 
@@ -365,6 +384,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
             { path: `/api/dept/supply/pos/${id}/advance`, method: 'POST', body: { to: 'ordered' } }, // prettier-ignore
           ],
         },
+        ADJUST(notOwn),
         reschedule(status, notOwn),
         EDIT_TERMS(notOwn),
         REOPEN(notReopen),
@@ -381,6 +401,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
     case 'partial':
       return [
         { ...OPEN, primary: true, label: 'Mở đơn · ghi nhận nhận hàng ở Kho' },
+        ADJUST(notOwn),
         /**
          * GHI VIỆC ĐÃ GIỤC — cùng nhịp với hộp thư việc: gọi NCC xong thì để lại
          * vết trên đơn, kèm hẹn mới nếu NCC hứa. Không có vết thì mai người thứ
@@ -415,6 +436,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
     case 'received':
       return [
         { ...OPEN, primary: true },
+        ADJUST('Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn'),
         EDIT_TERMS(notOwn),
         DUP,
         DELETE('Đơn đã đóng sổ — không xoá được nữa'),

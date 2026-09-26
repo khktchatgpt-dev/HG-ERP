@@ -48,6 +48,11 @@ export type PoWithRefs = Po & {
   order_code: string | null
   /** Tên người phụ trách (0128) — cột "Phụ trách" trên danh sách. */
   assignee_name: string | null
+  /**
+   * Tên người DUYỆT (`approved_by`). Mốc "Giám đốc duyệt" trên dòng thời gian
+   * từng chỉ có giờ, không có tên — đơn duyệt rồi mà không đọc ra được AI duyệt.
+   */
+  approver_name: string | null
 }
 
 /** Ô nhập riêng của từng mẫu đơn (0106) — mẫu nào dùng ô nấy, còn lại null. */
@@ -136,7 +141,7 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   note?: string | null
 }
 
-const TEMPLATE_LINE_COLS = [
+export const TEMPLATE_LINE_COLS = [
   'material_grade',
   'dm_per_sp',
   'qty_demand',
@@ -206,6 +211,10 @@ type Raw = Po & {
     | { name: string | null; email: string }
     | { name: string | null; email: string }[]
     | null
+  approver?:
+    | { name: string | null; email: string }
+    | { name: string | null; email: string }[]
+    | null
 }
 
 function unwrap(rows: Raw[] | null): PoWithRefs[] {
@@ -214,8 +223,10 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
     const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
     const ord = lx ? (Array.isArray(lx.order) ? lx.order[0] : lx.order) : null
     const asg = Array.isArray(r.assignee) ? r.assignee[0] : r.assignee
+    const apv = Array.isArray(r.approver) ? r.approver[0] : r.approver
     return {
       ...r,
+      approver_name: apv ? (apv.name ?? apv.email) : null,
       supplier_name: sp?.name ?? '?',
       // production_order_id null (PO ngoài LSX) → join rỗng → lsx_code null.
       lsx_code: lx?.code ?? null,
@@ -235,7 +246,7 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
  * Embed `users` cũng phải CHỈ ĐÍCH DANH FK: bảng có 3 FK sang users
  * (created_by / approved_by / assigned_to) — để PostgREST tự đoán là mơ hồ.
  */
-const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email)`
+const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email), approver:users!supply_purchase_orders_approved_by_fkey(name, email)`
 
 /** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
 export type PurchasedMaterial = {
@@ -593,6 +604,25 @@ export const posRepo = {
   },
 
   /** LSX PHỤ gộp vào đơn (0125) — kèm mã để hiện lên chi tiết + phiếu in. */
+  /**
+   * Mẫu của đơn GẦN NHẤT theo từng NCC — soạn đơn mới, chọn NCC là mẫu tự theo
+   * (26/09/2026: 17/19 NCC có ≥ 2 đơn luôn dùng một mẫu). Đơn huỷ không tính.
+   */
+  async lastTemplateBySupplier(): Promise<Record<string, PoTemplate>> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select('supplier_id, template, created_at')
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    const out: Record<string, PoTemplate> = {}
+    for (const r of (data ?? []) as { supplier_id: string; template: string }[]) {
+      if (!(r.supplier_id in out)) out[r.supplier_id] = r.template as PoTemplate
+    }
+    return out
+  },
+
   async listExtraLsx(poId: string): Promise<{ id: string; code: string }[]> {
     const { data } = await db()
       .from('supply_po_extra_lsx')

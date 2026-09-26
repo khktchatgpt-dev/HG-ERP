@@ -85,8 +85,16 @@ describe('splitLineFields — không mẫu nào mất ô nhập', () => {
     for (const f of all) expect(grid.includes(f) || detail.includes(f)).toBe(true)
   })
 
-  it.each(PO_TEMPLATES)('mẫu %s: lưới không quá 3 ô', (t) => {
-    expect(splitLineFields(PO_FIELDS[t]).grid.length).toBeLessThanOrEqual(GRID_MAX)
+  it.each(PO_TEMPLATES)('mẫu %s: lưới không quá 3 ô THƯỜNG (ô gọn không tính)', (t) => {
+    const g = splitLineFields(PO_FIELDS[t]).grid as { compact?: boolean }[]
+    expect(g.filter((f) => !f.compact).length).toBeLessThanOrEqual(GRID_MAX)
+  })
+
+  it('mẫu phụ kiện: Đm/sp là ô GỌN đứng ngay sau SL đơn hàng trên lưới (như đơn giấy)', () => {
+    // PO-2026-0091 (26/09/2026): Đm/sp từng rơi xuống khay "Chi tiết dòng" vì
+    // lưới giữ tối đa 3 ô — xa ô SL đơn hàng, gõ 40 dòng là 40 lần mở khay.
+    const { grid } = splitLineFields(PO_FIELDS.accessory)
+    expect(grid.map((f) => f.key)).toEqual(['grade', 'spec', 'demand', 'dm'])
   })
 
   it('ô kiểu đặc thù luôn xuống khay, kể cả khi đứng đầu', () => {

@@ -83,6 +83,7 @@ export type Database = {
           description: string
           id: string
           invoice_id: string
+          po_cost_allocation_id: string | null
           po_line_id: string | null
           qty: number
           sort_order: number
@@ -96,6 +97,7 @@ export type Database = {
           description: string
           id?: string
           invoice_id: string
+          po_cost_allocation_id?: string | null
           po_line_id?: string | null
           qty: number
           sort_order?: number
@@ -109,6 +111,7 @@ export type Database = {
           description?: string
           id?: string
           invoice_id?: string
+          po_cost_allocation_id?: string | null
           po_line_id?: string | null
           qty?: number
           sort_order?: number
@@ -122,6 +125,13 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "accounting_supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_supplier_invoice_lines_po_cost_allocation_id_fkey"
+            columns: ["po_cost_allocation_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_cost_allocations"
             referencedColumns: ["id"]
           },
           {
@@ -3273,6 +3283,227 @@ export type Database = {
           {
             foreignKeyName: "supply_lsx_needs_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_adjustments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          delta_by_price: number
+          delta_by_qty: number
+          discount_after: number
+          discount_before: number
+          header_changes: Json | null
+          id: string
+          lines: Json
+          po_id: string
+          po_status: string
+          reason: string
+          sent_at: string | null
+          sent_by: string | null
+          sent_note: string | null
+          seq: number
+          subtotal_after: number
+          subtotal_before: number
+          total_after: number
+          total_before: number
+          vat_after: number
+          vat_before: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          delta_by_price?: number
+          delta_by_qty?: number
+          discount_after?: number
+          discount_before?: number
+          header_changes?: Json | null
+          id?: string
+          lines?: Json
+          po_id: string
+          po_status: string
+          reason: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_note?: string | null
+          seq: number
+          subtotal_after: number
+          subtotal_before: number
+          total_after: number
+          total_before: number
+          vat_after: number
+          vat_before: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          delta_by_price?: number
+          delta_by_qty?: number
+          discount_after?: number
+          discount_before?: number
+          header_changes?: Json | null
+          id?: string
+          lines?: Json
+          po_id?: string
+          po_status?: string
+          reason?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_note?: string | null
+          seq?: number
+          subtotal_after?: number
+          subtotal_before?: number
+          total_after?: number
+          total_before?: number
+          vat_after?: number
+          vat_before?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_adjustments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustments_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustments_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_cost_allocations: {
+        Row: {
+          amount: number
+          base: number
+          cost_id: string
+          id: string
+          po_id: string
+        }
+        Insert: {
+          amount: number
+          base: number
+          cost_id: string
+          id?: string
+          po_id: string
+        }
+        Update: {
+          amount?: number
+          base?: number
+          cost_id?: string
+          id?: string
+          po_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_cost_allocations_cost_id_fkey"
+            columns: ["cost_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_costs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_cost_allocations_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_costs: {
+        Row: {
+          amount: number
+          cost_date: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          doc_no: string | null
+          id: string
+          kind: string
+          note: string | null
+          payee_supplier_id: string
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_rate: number | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount: number
+          cost_date: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          doc_no?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          payee_supplier_id: string
+          total: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number
+          cost_date?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          doc_no?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          payee_supplier_id?: string
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_costs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_payee_supplier_id_fkey"
+            columns: ["payee_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_voided_by_fkey"
+            columns: ["voided_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -6845,6 +7076,25 @@ export type Database = {
       next_doc_code: { Args: { p_kind: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      supply_po_apply_adjustment: {
+        Args: {
+          p_actor: string
+          p_base_seq: number
+          p_delete_ids: string[]
+          p_header: Json
+          p_inserts: Json
+          p_po_id: string
+          p_reason: string
+          p_record: Json
+          p_splits: Json
+          p_updates: Json
+        }
+        Returns: number
+      }
+      supply_po_cost_create: {
+        Args: { p_actor: string; p_allocs: Json; p_cost: Json }
+        Returns: string
+      }
       sweep_supply_alerts: { Args: never; Returns: undefined }
       technical_product_counts: {
         Args: never

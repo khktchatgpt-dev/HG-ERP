@@ -14,6 +14,7 @@ import {
   totalRow,
 } from '@/modules/dept/supply/excel-kit'
 import type { apLedgerService } from './ap-ledger.service'
+import { entryLabel } from '@/lib/ap-ledger'
 
 /**
  * XUẤT EXCEL SỔ CÔNG NỢ PHẢI TRẢ (TK 331).
@@ -143,7 +144,7 @@ function sheetDetail(wb: ExcelJS.Workbook, book: Book): void {
       const row = ws.addRow([
         dateCell(l.date),
         l.doc_no,
-        l.kind === 'invoice' ? 'Hoá đơn NCC' : 'Thanh toán',
+        entryLabel(l),
         d.currency,
         l.kind === 'invoice' ? l.amount : null,
         l.kind === 'payment' ? l.amount : null,

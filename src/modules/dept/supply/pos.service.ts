@@ -1,5 +1,7 @@
 import { splitProblem } from '@/lib/po-lsx-split'
-import { posRepo, type Po, type PoLineInput } from './pos.repo'
+import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.repo'
+import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
+import { canAdjust, planAdjustment } from '@/lib/po-adjust'
 import {
   FREE_LINE_TEMPLATES,
   deriveLine,
@@ -22,7 +24,7 @@ import {
   type CatalogSuggestion,
 } from '@/lib/po-catalog-backfill'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 import { canReopenForEdit, reopenNote } from '@/lib/po-reopen'
 import { stampNote } from '@/lib/po-note'
@@ -1128,6 +1130,222 @@ export const posService = {
       approver_ids: await approverIds(user.id),
     })
     return po
+  },
+
+  /**
+   * ĐIỀU CHỈNH ĐƠN ĐÃ GỬI (0210, chốt 25/09/2026) — sửa tại chỗ, không hạ về
+   * nháp, không duyệt lại. Phần chênh vào sổ phát sinh (lần N, tách vì giá /
+   * vì lượng) cho kế toán; người duyệt nhận thông báo.
+   *
+   * Khác `update` (đơn nháp) ở chỗ sống còn: dòng giữ nguyên id. `update` xoá
+   * rồi chèn lại dòng — trên đơn đang chạy nó xoá đợt giao, phần chia lệnh và
+   * làm phiếu nhập / hoá đơn NCC mồ côi. Ghi qua hàm DB một giao dịch, hàm đó
+   * kiểm lại ràng buộc cứng dưới khoá (Kho có thể vừa nhập thêm).
+   */
+  async adjust(
+    user: User,
+    id: string,
+    input: {
+      base_seq: number
+      reason: string
+      vat_rate?: number | null
+      discount_amount?: number | null
+      lines: (PoLineInput & { id?: string | null })[]
+    },
+  ): Promise<{ po: Po; seq: number; delta_total: number }> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    const gate = canAdjust(before.status)
+    if (!gate.ok) throw BadRequest(gate.reason)
+    /*
+      Bản client đang cầm đã cũ (có người vừa điều chỉnh) → báo tải lại TRƯỚC:
+      lỗi theo dòng tính trên bản cũ là lỗi ma. Hàm DB vẫn kiểm lại dưới khoá.
+    */
+    const last = await poAdjustmentsRepo.lastSeq(id)
+    if (last !== input.base_seq) {
+      throw Conflict(
+        `Đơn vừa được điều chỉnh (lần ${last}) trong lúc bạn đang sửa — tải lại đơn rồi sửa tiếp`,
+        'PO_ADJUST_STALE',
+      )
+    }
+
+    const template = (before.template ?? 'simple') as PoTemplate
+    assertFreeLinesAllowed(template, input.lines)
+    const extra = await posRepo.listExtraLsx(id)
+    assertSplits(input.lines, [before.production_order_id, ...extra.map((x) => x.id)])
+
+    const [lines, status, shipments] = await Promise.all([
+      posRepo.listLines(id),
+      supplyRepo.lineStatus(id),
+      poShipmentsRepo.listByPo(id),
+    ])
+    const receivedBy = new Map(status.map((s) => [s.id, Number(s.qty_received ?? 0)]))
+    const plannedBy = new Map<string, number>()
+    for (const s of shipments) {
+      if (s.status !== 'planned' && s.status !== 'arrived') continue
+      for (const l of s.lines)
+        plannedBy.set(l.po_line_id, (plannedBy.get(l.po_line_id) ?? 0) + l.qty)
+    }
+    const invoiced = await poAdjustmentsRepo.invoicedLineIds(lines.map((l) => l.id))
+    const derived = input.lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
+    const newMatIds = derived
+      .filter((l) => !l.id && l.material_id)
+      .map((l) => l.material_id!)
+    const labels = await poAdjustmentsRepo.materialLabels(newMatIds)
+    const beforeById = new Map(lines.map((l) => [l.id, l]))
+
+    const plan = planAdjustment({
+      currency: before.currency,
+      priceIncludesVat: !!before.price_includes_vat,
+      before: {
+        header: { vatRate: before.vat_rate, discount: before.discount_amount },
+        lines: lines.map((l) => ({
+          ...l,
+          code: l.material_id ? l.material_code : null,
+          name: l.material_name ?? l.line_name ?? '?',
+          unit: l.material_unit ?? l.line_unit ?? null,
+          received: receivedBy.get(l.id) ?? 0,
+          planned: plannedBy.get(l.id) ?? 0,
+          invoiced: invoiced.has(l.id),
+        })),
+      },
+      after: {
+        header: {
+          vatRate: input.vat_rate === undefined ? before.vat_rate : input.vat_rate,
+          discount:
+            input.discount_amount === undefined
+              ? before.discount_amount
+              : input.discount_amount,
+        },
+        lines: derived.map((l) => {
+          const cu = l.id ? beforeById.get(l.id) : undefined
+          const m = l.material_id ? labels.get(l.material_id) : undefined
+          return {
+            ...l,
+            price_basis: l.price_basis ?? 'unit',
+            qty2: l.qty2 ?? null,
+            unit_price: l.unit_price ?? null,
+            material_id: l.material_id ?? null,
+            code: cu ? (cu.material_id ? cu.material_code : null) : (m?.code ?? null),
+            name: cu
+              ? (cu.material_name ?? cu.line_name ?? '?')
+              : (m?.name ?? l.line_name ?? '?'),
+            unit: cu
+              ? (cu.material_unit ?? cu.line_unit ?? null)
+              : (m?.unit ?? l.line_unit ?? null),
+          }
+        }),
+      },
+    })
+    if (plan.errors.length > 0)
+      throw BadRequest(plan.errors.join(' · '), 'PO_ADJUST_INVALID')
+
+    const row = (l: PoLineInput & { sort_order: number }) => {
+      const tpl: Record<string, unknown> = {}
+      for (const k of TEMPLATE_LINE_COLS) tpl[k] = l[k] ?? null
+      return {
+        material_id: l.material_id ?? null,
+        line_name: l.line_name ?? null,
+        line_unit: l.line_unit ?? null,
+        qty_ordered: l.qty_ordered,
+        unit_price: l.unit_price ?? null,
+        price_basis: l.price_basis ?? 'unit',
+        spec: l.spec ?? null,
+        qty2: l.qty2 ?? null,
+        unit2: l.unit2 ?? null,
+        note: l.note ?? null,
+        sort_order: l.sort_order,
+        ...tpl,
+      }
+    }
+    const splits = [
+      ...plan.updates.flatMap(
+        (l) =>
+        (l.lsx_split ?? []).map((s) => ({ line_id: l.id, production_order_id: s.production_order_id, qty: s.qty })), // prettier-ignore
+      ),
+      ...plan.inserts.flatMap(
+        (l) =>
+        (l.lsx_split ?? []).map((s) => ({ sort_order: l.sort_order, production_order_id: s.production_order_id, qty: s.qty })), // prettier-ignore
+      ),
+    ]
+    const header: Record<string, unknown> = {}
+    if (plan.headerChanges?.vat_rate) header.vat_rate = plan.headerChanges.vat_rate[1]
+    if (plan.headerChanges?.discount_amount)
+      header.discount_amount = plan.headerChanges.discount_amount[1]
+
+    let seq: number
+    try {
+      seq = await poAdjustmentsRepo.apply({
+        poId: id,
+        baseSeq: input.base_seq,
+        actorId: user.id,
+        reason: input.reason.trim(),
+        updates: plan.updates.map((l) => ({ id: l.id, ...row(l as PoLineInput & { sort_order: number }) })), // prettier-ignore
+        inserts: plan.inserts.map((l) => row(l as PoLineInput & { sort_order: number })),
+        deleteIds: plan.deleteIds,
+        splits,
+        header,
+        record: {
+          currency: before.currency ?? 'VND',
+          subtotal_before: plan.money.before.subtotal,
+          subtotal_after: plan.money.after.subtotal,
+          discount_before: plan.money.before.discountAmount,
+          discount_after: plan.money.after.discountAmount,
+          vat_before: plan.money.before.vatAmount,
+          vat_after: plan.money.after.vatAmount,
+          total_before: plan.money.before.grandTotal,
+          total_after: plan.money.after.grandTotal,
+          delta_by_price: plan.delta.byPrice,
+          delta_by_qty: plan.delta.byQty,
+          lines: plan.changes,
+          header_changes: plan.headerChanges,
+        },
+      })
+    } catch (e) {
+      if (e instanceof PoAdjustDbError) {
+        throw e.stale ? Conflict(e.message, 'PO_ADJUST_STALE') : BadRequest(e.message, 'PO_ADJUST_INVALID') // prettier-ignore
+      }
+      throw e
+    }
+
+    // Đơn đang về một phần mà bớt SL xuống đúng phần đã nhận → về đủ.
+    if (before.status === 'partial') await supplyRepo.refreshStatusFromReceipts(id)
+    const po = (await posRepo.findById(id)) ?? before
+    await emit({
+      name: 'po.adjusted',
+      po_id: id,
+      code: before.code,
+      seq,
+      adjusted_by: user.id,
+      reason: input.reason.trim(),
+      currency: before.currency ?? 'VND',
+      delta_total: plan.delta.total,
+      total_after: plan.money.after.grandTotal,
+      // Báo người đã ký duyệt đơn này; đơn nạp tay không có người ký thì báo
+      // mọi người có quyền duyệt.
+      notify_ids: before.approved_by
+        ? [before.approved_by].filter((x) => x !== user.id)
+        : await approverIds(user.id),
+    })
+    return { po, seq, delta_total: plan.delta.total }
+  },
+
+  /** Sổ điều chỉnh của đơn — mọi NV đăng nhập đọc được (Kế toán đối chiếu). */
+  async listAdjustments(_user: User, id: string) {
+    return poAdjustmentsRepo.listByPo(id)
+  },
+
+  /** Đóng dấu "đã gửi NCC bản điều chỉnh lần N" (chốt Q4 25/09). */
+  async markAdjustmentSent(user: User, id: string, seq: number, note?: string | null) {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    const ok = await poAdjustmentsRepo.markSent(id, seq, user.id, note?.trim() || null)
+    if (!ok) throw BadRequest(`Lần điều chỉnh ${seq} không có hoặc đã ghi gửi NCC rồi`)
+    return poAdjustmentsRepo.listByPo(id)
   },
 
   /** Huỷ (trước khi nhận hàng) — kèm lý do. Nháp thì dùng `remove` (xoá hẳn). */

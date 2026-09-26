@@ -157,10 +157,29 @@ export function lsxJoinedLabel(
 export const GRID_KINDS: ReadonlySet<string> = new Set(['text', 'number', 'calc'])
 export const GRID_MAX = 3
 
-export function splitLineFields<T extends { kind: string }>(
+export function splitLineFields<T extends { kind: string; compact?: boolean }>(
   all: T[],
 ): { grid: T[]; detail: T[] } {
-  const grid = all.filter((f) => GRID_KINDS.has(f.kind)).slice(0, GRID_MAX)
+  /*
+    Ô GỌN (`compact`, 26/09/2026): ô số hẹp (Đm/sp 64px) KHÔNG tính vào trần 3
+    ô — nó đứng ngay sau ô trước nó trên lưới nếu ô đó lên lưới. Đo mẫu phụ kiện
+    ở 1280: lưới vừa khít 945px, cột tên vật tư co giãn 269px nên nhường được
+    64px mà cột tiền vẫn trong màn.
+  */
+  const grid: T[] = []
+  let normal = 0
+  let prevIn = false
+  for (const f of all) {
+    const ok = GRID_KINDS.has(f.kind)
+    if (ok && f.compact) {
+      // Đi theo ô đứng trước: ô đó lên lưới thì ô gọn lên theo, không thì xuống khay.
+      if (prevIn) grid.push(f)
+    } else if (ok && normal < GRID_MAX) {
+      grid.push(f)
+      normal++
+      prevIn = true
+    } else prevIn = false
+  }
   const inGrid = new Set(grid)
   return { grid, detail: all.filter((f) => !inGrid.has(f)) }
 }

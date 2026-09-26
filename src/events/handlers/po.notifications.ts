@@ -1,4 +1,5 @@
 import { on } from '../bus'
+import { fmtMoney } from '@/lib/po-line'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
 
 /**
@@ -57,6 +58,23 @@ export function registerPoNotificationHandlers(): void {
           actorId: e.reopened_by,
           type: 'po_reopened',
           payload: { title: e.code, reason: e.reason },
+        }),
+      ),
+    )
+  })
+
+  // Điều chỉnh đơn đã gửi (0210): không chặn gì, chỉ để người ký biết đơn
+  // mình duyệt vừa đổi bao nhiêu tiền và vì sao.
+  on('po.adjusted', async (e) => {
+    const sign = e.delta_total > 0 ? '+' : ''
+    const money = `${sign}${fmtMoney(e.delta_total, e.currency)} ${e.currency}`
+    await Promise.all(
+      e.notify_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.adjusted_by,
+          type: 'po_adjusted',
+          payload: { title: `${e.code} · điều chỉnh lần ${e.seq} · phát sinh ${money}`, reason: e.reason },
         }),
       ),
     )

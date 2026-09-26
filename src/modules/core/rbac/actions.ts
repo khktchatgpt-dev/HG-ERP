@@ -317,6 +317,14 @@ export const ACTIONS: Action[] = [
     domain: 'supply',
     rule: perm('supply.po.approve'),
   },
+  {
+    // 0211 — phí vận chuyển / bốc xếp của đơn mua. Mở cho cả Kế toán như hoá
+    // đơn NCC: hoá đơn nhà xe hay tới tay Kế toán trước.
+    key: 'supply.po_cost.manage',
+    label: 'Ghi / huỷ phiếu chi phí mua hàng (vận chuyển, bốc xếp)',
+    domain: 'supply',
+    rule: anyOf(perm('supply.member'), perm('accounting.member')),
+  },
 
   // ── Kho (vật tư, tồn, nhập/xuất) ─────────────────────────────────────────
   {

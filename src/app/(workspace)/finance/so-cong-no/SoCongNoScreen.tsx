@@ -19,6 +19,7 @@ import {
   WhyBox,
 } from '@/components/kit'
 import type { ApLedgerResult } from '@/modules/dept/accounting/ap-ledger.service'
+import { entryLabel } from '@/lib/ap-ledger'
 
 const digits = (cur: string) => (cur === 'VND' ? 0 : 2)
 const money = (n: number, cur: string) =>
@@ -325,7 +326,7 @@ export function SoCongNoScreen(p: ApLedgerResult) {
                         <span className="num">{l.doc_no}</span>
                       </Td>
                       <Td>
-                        {l.kind === 'invoice' ? 'Hoá đơn NCC' : 'Thanh toán'}
+                        {entryLabel(l)}
                         {l.note ? (
                           <span className="ml-1 text-[var(--ink-3)]">· {l.note}</span>
                         ) : null}

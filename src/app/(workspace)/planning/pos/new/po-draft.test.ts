@@ -173,6 +173,25 @@ describe('buildPoPayload', () => {
     expect(l.unit_price).toBeNull()
   })
 
+  /*
+   * Hai lựa chọn NGƯỜI DÙNG chốt trên dòng phải tới được server. Tới 26/09/2026
+   * payload bỏ sót cả hai: chọn "giá theo cây" cho đơn thép tính theo kg thì
+   * lưu xong server dẫn xuất lại theo mẫu (kg) — tiền dòng đổi vài lần mà không
+   * ai bấm gì; chia SL cho hai lệnh thì phần chia biến mất. Điều chỉnh đơn đã
+   * gửi (0210) còn tệ hơn: đẻ ra "phát sinh" ma.
+   */
+  it('gửi kèm "giá theo đơn vị nào" và phần chia SL theo lệnh', () => {
+    const l = buildPoPayload(header(), [
+      line({ price_per: 'unit', qty: 100, lsx_split: { a: 60, b: 40 } }),
+    ]).lines[0]
+    expect(l.price_per).toBe('unit')
+    expect(l.lsx_split).toEqual([
+      { production_order_id: 'a', qty: 60 },
+      { production_order_id: 'b', qty: 40 },
+    ])
+    expect(buildPoPayload(header(), [line()]).lines[0]).toMatchObject({ price_per: null, lsx_split: null })
+  })
+
   it('chiết khấu 0 gửi null cho sạch chứng từ', () => {
     expect(buildPoPayload(header({ discount: '' }), [line()]).discount_amount).toBeNull()
     expect(buildPoPayload(header({ discount: 50_000 }), [line()]).discount_amount).toBe(

@@ -132,7 +132,7 @@ export function shipmentEmptyHint(status: string, hasStockLines: boolean): strin
     case 'approved':
       return 'Lịch giao sẽ ghi ở bước "NCC xác nhận" sau khi gửi đơn.'
     case 'ordered':
-      return 'Bấm "NCC xác nhận" ở tab Nhận hàng để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
+      return 'Bấm "NCC xác nhận" trên thanh hành động để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
     default:
       return hasStockLines
         ? 'Chưa ghi đợt nào — hiểu là giao một lần vào hạn giao của đơn.'

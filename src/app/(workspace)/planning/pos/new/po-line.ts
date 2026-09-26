@@ -21,6 +21,14 @@ export type Num = number | ''
 
 export type Line = {
   /**
+   * Mã DÒNG trong DB — có khi dòng mở từ đơn đã lưu, trống ở dòng vừa thêm.
+   * Điều chỉnh đơn đã gửi (0210) sửa dòng THEO MÃ NÀY để phiếu nhập, đợt giao,
+   * hoá đơn NCC vẫn trỏ đúng; lưới cũng định danh dòng bằng nó vì một đơn có
+   * thể có hai dòng CÙNG vật tư (chia hai lệnh) — định danh theo material_id
+   * thì bấm xoá một dòng là mất cả hai.
+   */
+  po_line_id?: string
+  /**
    * DÒNG TỰ DO (0134): `is_free` = true thì material_id chỉ là KHÓA CỤC BỘ của
    * form (`free-…`), payload gửi material_id null + line_name/line_unit. Đơn
    * gỗ/gia công đặt theo MÃ SP — tên và ĐVT gõ thẳng trên dòng.
@@ -542,6 +550,7 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     lsx_split: Object.fromEntries(
       (l.lsx_split ?? []).map((sp) => [sp.production_order_id, sp.qty as Num]),
     ),
+    po_line_id: l.id,
     is_free: isFree,
     material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,

@@ -29,6 +29,8 @@ export type SupplierInvoiceLineRow = {
   id: string
   invoice_id: string
   po_line_id: string | null
+  /** Phần phí mua hàng (0212) dòng này đòi — dòng PHÍ, không phải dòng hàng. */
+  po_cost_allocation_id: string | null
   description: string
   qty: number
   unit: string | null
@@ -40,6 +42,7 @@ export type SupplierInvoiceLineRow = {
 
 export type LineInput = {
   po_line_id?: string | null
+  po_cost_allocation_id?: string | null
   description: string
   qty: number
   unit?: string | null
@@ -50,7 +53,7 @@ export type LineInput = {
 const COLS =
   'id, supplier_id, invoice_no, invoice_date, due_date, currency, subtotal, vat_amount, total, status, note, created_by, created_at, updated_at'
 const LINE_COLS =
-  'id, invoice_id, po_line_id, description, qty, unit, unit_price, amount, vat_rate, sort_order'
+  'id, invoice_id, po_line_id, po_cost_allocation_id, description, qty, unit, unit_price, amount, vat_rate, sort_order'
 
 const num = (v: unknown): number => Number(v ?? 0)
 const mapRow = (r: Record<string, unknown>): SupplierInvoiceRow => ({
@@ -200,6 +203,7 @@ export const supplierInvoicesRepo = {
         lines.map((l, i) => ({
           invoice_id: invoiceId,
           po_line_id: l.po_line_id ?? null,
+          po_cost_allocation_id: l.po_cost_allocation_id ?? null,
           description: l.description,
           qty: l.qty,
           unit: l.unit ?? null,

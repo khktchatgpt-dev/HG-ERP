@@ -1,4 +1,6 @@
 import { db } from '@/server/db'
+import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
+import { PO_COST_KIND_LABEL } from '@/lib/po-cost'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
@@ -115,6 +117,7 @@ export const supplierInvoicesService = {
   ): Promise<SupplierInvoiceRow> {
     await assertAction(user, 'accounting.supplier_invoice.manage')
     await assertLinesBelongToSupplier(input.supplier_id, input.lines)
+    await assertFeeLines(input.supplier_id, input.lines)
     return supplierInvoicesRepo.insert(
       {
         supplier_id: input.supplier_id,
@@ -160,6 +163,7 @@ export const supplierInvoicesService = {
     if (before.status === 'cancelled') throw BadRequest('Hoá đơn đã huỷ')
     if (input.lines) {
       await assertLinesBelongToSupplier(input.supplier_id ?? before.supplier_id, input.lines) // prettier-ignore
+      await assertFeeLines(input.supplier_id ?? before.supplier_id, input.lines, id)
       await supplierInvoicesRepo.replaceLines(
         id,
         input.lines.map((l) => ({ ...l, amount: lineAmount(l) })),
@@ -274,6 +278,12 @@ export const supplierInvoicesService = {
   ): Promise<{
     po: { id: string; code: string; currency: string; supplier_id: string; supplier_name: string } // prettier-ignore
     lines: DraftLine[]
+    /**
+     * PHÍ NCC tính trên hoá đơn (0211/0212) — phần phí vận chuyển của đơn này mà
+     * người nhận tiền là CHÍNH NCC, chưa nằm trên tờ hoá đơn nào còn hiệu lực.
+     * Mồi thành dòng phí; phí trả nhà xe KHÔNG có ở đây (đã vào sổ 331 thẳng).
+     */
+    fees: FeeDraftLine[]
     /** Hạn thanh toán suy từ điều khoản NCC. null = NCC chưa khai `net_days`. */
     suggested_due_date: string | null
     net_days: number | null
@@ -294,7 +304,27 @@ export const supplierInvoicesService = {
     const netDays = s?.payment_net_days ?? null
 
     const today = new Date().toISOString().slice(0, 10)
+    const [costs, taken] = await Promise.all([
+      poCostsRepo.forAccounting(),
+      poCostsRepo.invoicedAllocations(false),
+    ])
+    const fees: FeeDraftLine[] = costs
+      .filter((c) => c.role === 'po_supplier' && c.payee_supplier_id === po.supplier_id)
+      .flatMap((c) =>
+        c.allocations
+          // Phần của đơn này, cộng phần rơi vào đơn của NCC KHÁC đi chung chuyến
+          // (chỉ NCC nhận tiền đòi được phần đó). Phần của đơn khác CÙNG NCC thì
+          // mồi khi lập hoá đơn cho chính đơn đó.
+          .filter((a) => (a.po_id === po.id || a.po_supplier_id !== c.payee_supplier_id) && !taken.has(a.id)) // prettier-ignore
+          .map((a) => ({
+            allocation_id: a.id,
+            description: `${PO_COST_KIND_LABEL[c.kind]}${c.doc_no ? ` ${c.doc_no}` : ''} · ${a.po_code} · ${c.cost_date.split('-').reverse().join('/')}`, // prettier-ignore
+            amount: a.amount,
+            vat_rate: c.vat_rate,
+          })),
+      )
     return {
+      fees,
       po: {
         id: po.id,
         code: po.code,
@@ -333,6 +363,14 @@ export const supplierInvoicesService = {
  *
  * Tách theo tiền tệ, không gộp (bài học 0134 — USD/VND không cộng lẫn).
  */
+/** Một dòng phí mồi sẵn cho hoá đơn NCC — SL 1, đơn giá = phần phí chưa VAT. */
+export type FeeDraftLine = {
+  allocation_id: string
+  description: string
+  amount: number
+  vat_rate: number | null
+}
+
 export async function awaitingInvoiceSummary(): Promise<{
   by_currency: { currency: string; amount: number; line_count: number }[]
   supplier_count: number
@@ -343,7 +381,8 @@ export async function awaitingInvoiceSummary(): Promise<{
     .not('po_line_id', 'is', null)
   type Mv = { po_line_id: string; direction: 'in' | 'out'; qty: unknown; unit_cost: unknown } // prettier-ignore
   const mvs = (mvRaw ?? []) as Mv[]
-  if (mvs.length === 0) return { by_currency: [], supplier_count: 0 }
+  const fees = await ncFeesAwaitingInvoice()
+  if (mvs.length === 0 && fees.length === 0) return { by_currency: [], supplier_count: 0 }
 
   const lineIds = [...new Set(mvs.map((m) => m.po_line_id))]
   const { data: lineRaw } = await db()
@@ -384,10 +423,41 @@ export async function awaitingInvoiceSummary(): Promise<{
     byCcy.set(c.currency, cur)
     suppliers.add(c.supplier_id)
   }
+  /*
+    PHÍ NCC TÍNH TRÊN HOÁ ĐƠN (0211/0212) — phiếu phí mà người nhận là NCC của
+    đơn: nợ có thật, nhưng chứng từ ghi sổ là HOÁ ĐƠN NCC. Chưa có hoá đơn đã
+    vào sổ nào đòi phần đó thì nằm ở đây, CHƯA VAT như phần hàng.
+  */
+  for (const f of fees) {
+    const cur = byCcy.get(f.currency) ?? { amount: 0, line_count: 0 }
+    cur.amount = r2(cur.amount + f.amount)
+    cur.line_count += 1
+    byCcy.set(f.currency, cur)
+    suppliers.add(f.supplier_id)
+  }
   return {
     by_currency: [...byCcy].map(([currency, v]) => ({ currency, ...v })),
     supplier_count: suppliers.size,
   }
+}
+
+/** Phần phí (chưa VAT) NCC tính trên hoá đơn mà chưa hoá đơn ĐÃ VÀO SỔ nào đòi. */
+async function ncFeesAwaitingInvoice(): Promise<
+  { supplier_id: string; currency: string; amount: number }[]
+> {
+  const [costs, invoiced] = await Promise.all([
+    poCostsRepo.forAccounting(),
+    poCostsRepo.invoicedAllocations(true),
+  ])
+  return costs
+    .filter((c) => c.role === 'po_supplier')
+    .flatMap((c) =>
+      c.allocations
+        // MỌI phần chia của phiếu — kể cả phần rơi vào đơn của NCC khác đi
+        // chung chuyến: người đòi vẫn là NCC nhận tiền, trên hoá đơn của họ.
+        .filter((a) => !invoiced.has(a.id) && a.amount > 0)
+        .map((a) => ({ supplier_id: c.payee_supplier_id, currency: c.currency, amount: a.amount })),
+    )
 }
 
 /**
@@ -419,6 +489,50 @@ async function assertLinesBelongToSupplier(
       throw BadRequest('Có dòng trỏ sang đơn mua của nhà cung cấp khác')
     }
   }
+}
+
+/**
+ * DÒNG PHÍ (0212) — phần phí vận chuyển mà NCC đòi trên tờ này.
+ *
+ * Ba chốt, cùng lý do với chốt dòng hàng ở trên: (1) phí phải do CHÍNH NCC này
+ * nhận tiền — phí trả nhà xe đã vào sổ 331 thẳng, đưa vào hoá đơn NCC là nợ hai
+ * lần; (2) phiếu phí chưa bị huỷ; (3) một phần phí chỉ nằm trên MỘT tờ hoá đơn
+ * còn hiệu lực. Một dòng không được vừa là dòng hàng vừa là dòng phí.
+ */
+async function assertFeeLines(
+  supplierId: string,
+  lines: LineInput[],
+  currentInvoiceId?: string,
+): Promise<void> {
+  if (lines.some((l) => l.po_line_id && l.po_cost_allocation_id)) {
+    throw BadRequest('Một dòng không thể vừa là hàng vừa là phí')
+  }
+  const ids = [...new Set(lines.map((l) => l.po_cost_allocation_id).filter((x): x is string => !!x))] // prettier-ignore
+  if (ids.length === 0) return
+  const [{ data: allocs }, { data: used }] = await Promise.all([
+    db()
+      .from('supply_po_cost_allocations')
+      .select('id, cost:supply_po_costs!inner(payee_supplier_id, voided_at)')
+      .in('id', ids),
+    db()
+      .from('accounting_supplier_invoice_lines')
+      .select('po_cost_allocation_id, invoice_id, invoice:accounting_supplier_invoices!inner(status, invoice_no)')
+      .in('po_cost_allocation_id', ids),
+  ])
+  type A = { id: string; cost: { payee_supplier_id: string; voided_at: string | null } | null }
+  const rows = (allocs ?? []) as unknown as A[]
+  if (rows.length !== ids.length) throw BadRequest('Có dòng phí trỏ tới phần phí không tồn tại')
+  for (const r of rows) {
+    if (r.cost?.voided_at) throw BadRequest('Có dòng phí thuộc phiếu phí đã huỷ')
+    if (r.cost?.payee_supplier_id !== supplierId) {
+      throw BadRequest('Có dòng phí không do nhà cung cấp này nhận tiền (phí trả nhà xe đã vào sổ 331)')
+    }
+  }
+  type U = { po_cost_allocation_id: string; invoice_id: string; invoice: { status: string; invoice_no: string } | null } // prettier-ignore
+  const clash = ((used ?? []) as unknown as U[]).find(
+    (u) => u.invoice_id !== currentInvoiceId && u.invoice?.status !== 'cancelled',
+  )
+  if (clash) throw BadRequest(`Phần phí này đã nằm trên hoá đơn ${clash.invoice?.invoice_no ?? ''}`)
 }
 
 /** Movement gắn dòng đơn — vế "VỀ". Phiếu đảo (`out`) để nguyên chiều, lõi trừ. */

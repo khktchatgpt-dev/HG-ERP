@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('./pos.repo', () => ({
+  // Điều chỉnh (0210) chép ô mẫu đơn theo danh sách này — bản rút gọn là đủ.
+  TEMPLATE_LINE_COLS: ['material_grade', 'dm_per_sp', 'qty_demand'],
   posRepo: {
     nextCode: vi.fn(),
     list: vi.fn(),
@@ -30,6 +32,25 @@ vi.mock('./supply.repo', () => ({
 vi.mock('./po-shipments.repo', () => ({
   poShipmentsRepo: { listByPo: vi.fn(async () => []), patch: vi.fn() },
 }))
+// Điều chỉnh đơn đã gửi (0210): ghi qua hàm DB — mock cả repo sổ điều chỉnh.
+vi.mock('./po-adjustments.repo', () => ({
+  poAdjustmentsRepo: {
+    lastSeq: vi.fn(async () => 0),
+    invoicedLineIds: vi.fn(async () => new Set()),
+    materialLabels: vi.fn(async () => new Map()),
+    apply: vi.fn(async () => 1),
+    listByPo: vi.fn(async () => []),
+    markSent: vi.fn(async () => true),
+  },
+  PoAdjustDbError: class extends Error {
+    constructor(
+      m: string,
+      readonly stale: boolean,
+    ) {
+      super(m)
+    }
+  },
+}))
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { list: vi.fn(async () => []) },
 }))
@@ -51,6 +72,7 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
+import { poAdjustmentsRepo } from './po-adjustments.repo'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -868,5 +890,64 @@ describe('posService.closeShort — chốt phần thiếu (0154)', () => {
         reason: 'x',
       }),
     ).rejects.toMatchObject({ status: 403 })
+  })
+})
+
+describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => {
+  const SENT = { ...PO, status: 'ordered', template: 'simple', currency: 'VND', vat_rate: 8, price_includes_vat: false, discount_amount: null, approved_by: 'u-boss' } // prettier-ignore
+  const LINE = { id: 'l1', material_id: 'm1', material_code: 'BUL0029', material_name: 'Bulon', material_unit: 'Con', qty_ordered: 100, unit_price: 110, price_basis: 'unit', qty2: null, spec: null, note: null, sort_order: 0, line_name: null, line_unit: null } // prettier-ignore
+  beforeEach(() => {
+    vi.mocked(posRepo.findById).mockResolvedValue(SENT as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([LINE] as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([{ id: 'l1', qty_received: 0 }] as never)
+  })
+  const input = (over = {}) => ({
+    base_seq: 0,
+    reason: 'NCC tăng giá',
+    lines: [{ id: 'l1', material_id: 'm1', qty_ordered: 100, unit_price: 120 }],
+    ...over,
+  })
+
+  it('áp dụng: gửi dòng theo id sang hàm DB, phát sinh đúng, báo người đã duyệt', async () => {
+    const r = await posService.adjust(staff, 'po1', input())
+    expect(r).toMatchObject({ seq: 1, delta_total: 1_080 })
+    const call = vi.mocked(poAdjustmentsRepo.apply).mock.calls[0][0]
+    expect(call.updates).toEqual([expect.objectContaining({ id: 'l1', unit_price: 120, sort_order: 0 })])
+    expect(call.inserts).toEqual([])
+    expect(call.record).toMatchObject({ delta_by_price: 1_000, delta_by_qty: 0, total_before: 11_880, total_after: 12_960 })
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'po.adjusted', notify_ids: ['u-boss'] }))
+  })
+
+  it('bản client đang cầm đã cũ → 409 TRƯỚC mọi lỗi theo dòng', async () => {
+    vi.mocked(poAdjustmentsRepo.lastSeq).mockResolvedValueOnce(2)
+    await expect(posService.adjust(staff, 'po1', input({ lines: [] }))).rejects.toMatchObject({ status: 409 })
+    expect(poAdjustmentsRepo.apply).not.toHaveBeenCalled()
+  })
+
+  it('đơn đã về đủ → khoá, nói đường đi tiếp', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...SENT, status: 'received' } as never)
+    await expect(posService.adjust(staff, 'po1', input())).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringMatching(/đối chiếu hoá đơn/),
+    })
+  })
+
+  it('NV khác không phụ trách đơn → 403', async () => {
+    await expect(posService.adjust(staff2, 'po1', input())).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('đặt thấp hơn số đã nhận → 400, không gọi hàm DB', async () => {
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([{ id: 'l1', qty_received: 150 }] as never)
+    await expect(posService.adjust(staff, 'po1', input())).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringMatching(/đã nhận 150/),
+    })
+    expect(poAdjustmentsRepo.apply).not.toHaveBeenCalled()
+  })
+
+  it('đơn đang về một phần: làm tươi trạng thái theo sổ kho sau khi ghi', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...SENT, status: 'partial' } as never)
+    await posService.adjust(staff, 'po1', input())
+    expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
   })
 })

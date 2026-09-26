@@ -126,6 +126,15 @@ describe('mẫu bao bì — chọn giá theo thùng hoặc theo m² từng dòng
  * Gợi ý nay là phép trừ trần trụi: nhu cầu − tồn.
  */
 describe('SL cần đặt gợi ý — chỉ trừ tồn, KHÔNG cộng hao hụt', () => {
+  it('có Đm/sp: SL đơn hàng là số SẢN PHẨM → nhân định mức rồi mới trừ tồn', () => {
+    // PO-2026-0091 (An Thành Phát, 26/09): 2126 bàn × 4 tăng đơ/bàn = 8504.
+    expect(suggestOrderQty(2126, 0, 4)).toBe(8504)
+    expect(suggestOrderQty(2126, 500, 4)).toBe(8004)
+    // Đm/sp trống / 0 → như cũ (SL đơn hàng đã là số vật tư).
+    expect(suggestOrderQty(2126, 0, null)).toBe(2126)
+    expect(suggestOrderQty(2126, 0, 0)).toBe(2126)
+  })
+
   it('nhu cầu trừ tồn, không nhân thêm gì', () => {
     expect(suggestOrderQty(200, 0)).toBe(200)
     expect(suggestOrderQty(400, 0)).toBe(400)
@@ -260,6 +269,20 @@ describe('deriveLine — xốp theo m³ (DDH Tân Hoàng Long, "Xốp Casual")',
     expect(Math.round(poLineAmount({ qty_ordered: 1, unit_price: 556_200, ...d }))).toBe(
       7778,
     )
+  })
+
+  /*
+    Đơn xốp Danh Sơn 1/2026- HG/DS (25/09/2026): tờ đơn tính khối CHÍNH XÁC rồi
+    nhân giá/m³. Bản cũ làm tròn m³ của TỪNG TẤM về 6 lẻ trước khi nhân SL — thanh
+    485×60×25 = 0,0007275 m³ thành 0,000728 (+0,07%), nhân 17.008 thanh là lệch
+    11.480 đ so với hoá đơn; tấm 555×555×20 lệch 1.435 đ. Làm tròn một lần, ở TỔNG.
+  */
+  it('SL lớn × tấm mỏng: khối tính chính xác rồi mới làm tròn — khớp tờ đơn Danh Sơn', () => {
+    const hong = deriveLine('foam', { qty_ordered: 17_008, inner_l_mm: 485, inner_w_mm: 60, inner_h_mm: 25, carton_basis: 'm3' }) // prettier-ignore
+    expect(hong.qty2).toBe(12.37332)
+    expect(Math.round(poLineAmount({ qty_ordered: 17_008, unit_price: 1_350_000, ...hong }))).toBe(16_703_982) // prettier-ignore
+    const mat = deriveLine('foam', { qty_ordered: 2_126, inner_l_mm: 555, inner_w_mm: 555, inner_h_mm: 20, carton_basis: 'm3' }) // prettier-ignore
+    expect(Math.round(poLineAmount({ qty_ordered: 2_126, unit_price: 1_350_000, ...mat }))).toBe(17_681_251) // prettier-ignore
   })
 
   it('mút cuộn giữ nguyên SL × giá (basis mặc định)', () => {

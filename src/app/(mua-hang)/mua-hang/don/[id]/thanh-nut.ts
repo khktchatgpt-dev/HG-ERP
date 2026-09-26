@@ -1,0 +1,123 @@
+/**
+ * THANH HÀNH ĐỘNG MỘT HÀNG của màn đơn mua (duyệt 26/09/2026, canvas "Đơn mua —
+ * gọn thanh nút & Trao đổi").
+ *
+ * Bản trước là 3 tab (Đơn hàng 16 nút · Nhận hàng 11 nút · Tài chính khoá vĩnh
+ * viễn), cao 150px: nút hiếm (Nhân bản, Bàn giao, Hạ về nháp) nằm ngang nút
+ * hằng ngày, và việc kế tiếp của đơn nằm ở TAB KHÁC với trục trạng thái. Nay:
+ *
+ *   [nút chính = việc kế tiếp của BƯỚC]  [≤ 3 việc hay làm ở bước đó]  [⋯ Thêm]
+ *
+ * "⋯ Thêm" chứa MỌI việc còn lại, gom nhóm cố định, Huỷ/Xoá đứng riêng cuối.
+ * Hàm thuần: chỉ quyết CHỖ ĐẶT (khoá nào lên thanh, khoá nào vào menu); màn
+ * ánh xạ khoá → nhãn, icon, hành động và lý do khoá.
+ */
+
+/** `doc:<id>` = việc từ `actionsFor` (actions.ts); còn lại là việc của màn. */
+export type BarKey =
+  | `doc:${string}`
+  | 'edit'
+  | 'confirm'
+  | 'addShipment'
+  | 'transit'
+  | 'receive'
+  | 'closeShort'
+  | 'acceptByHand'
+  | 'cost'
+  | 'print'
+  | 'excel'
+  | 'new'
+  | 'dense'
+
+export type BarGroup = 'Giao & nhận' | 'Đơn' | 'In & hiển thị' | 'Huỷ'
+
+export type BarLayout = {
+  primary: BarKey | null
+  quick: BarKey[]
+  more: { key: BarKey; group: BarGroup }[]
+}
+
+const SENT = ['ordered', 'confirmed', 'in_transit', 'partial']
+// Bước còn việc giao nhận. Đơn về đủ thì KHÔNG: mọi việc nhận đều khoá, và câu
+// lý do của `receiveActions` viết cho đơn chưa gửi ("chỉ ghi được sau khi đã gửi
+// đơn") — bày ra trên đơn đã về đủ là nói sai.
+const RECEIVING = ['approved', ...SENT]
+const DANGER = ['cancel', 'delete']
+
+/**
+ * @param status  trạng thái đơn
+ * @param docIds  id các việc `actionsFor` trả cho bước này (kể cả edit/adjust)
+ */
+export function barLayout(status: string, docIds: readonly string[]): BarLayout {
+  const has = (id: string) => docIds.includes(id)
+  const doc = (id: string): BarKey | null => (has(id) ? `doc:${id}` : null)
+  const canEdit = has('edit') || has('adjust')
+
+  const primary: BarKey | null =
+    status === 'draft'
+      ? doc('submit')
+      : status === 'pending_approval'
+        ? doc('approve')
+        : status === 'approved'
+          ? doc('send')
+          : status === 'ordered'
+            ? 'confirm'
+            : SENT.includes(status)
+              ? 'receive'
+              : null
+
+  const quickWanted: (BarKey | null)[] =
+    status === 'draft'
+      ? [canEdit ? 'edit' : null, 'print']
+      : status === 'pending_approval'
+        ? [doc('withdraw'), doc('reject'), 'print']
+        : status === 'approved'
+          ? [canEdit ? 'edit' : null, 'print']
+          : status === 'ordered'
+            ? [canEdit ? 'edit' : null, doc('nudge'), 'print']
+            : SENT.includes(status)
+              ? [canEdit ? 'edit' : null, 'cost', 'print']
+              : status === 'received'
+                ? ['cost', 'print']
+                : ['print']
+  const quick = quickWanted.filter((k): k is BarKey => !!k && k !== primary).slice(0, 3)
+
+  const shown = new Set<BarKey>([...(primary ? [primary] : []), ...quick])
+  const more: BarLayout['more'] = []
+  const add = (key: BarKey | null, group: BarGroup) => {
+    if (key && !shown.has(key) && !more.some((m) => m.key === key))
+      more.push({ key, group })
+  }
+
+  if (RECEIVING.includes(status)) {
+    for (const k of [
+      'confirm',
+      'addShipment',
+      'transit',
+      'receive',
+      'closeShort',
+      'acceptByHand',
+      'cost',
+    ] as const)
+      // prettier-ignore
+      add(k, 'Giao & nhận')
+    add(doc('reschedule'), 'Giao & nhận')
+  }
+  if (canEdit) add('edit', 'Đơn')
+  for (const id of docIds) {
+    // 'open' là lối vào CHÍNH đơn này (dùng ở danh sách) — trên màn đơn nó là
+    // nút tự trỏ về mình.
+    if (['open', 'edit', 'adjust', 'reschedule', ...DANGER].includes(id)) continue
+    add(`doc:${id}`, 'Đơn')
+  }
+  add('new', 'Đơn')
+  add('print', 'In & hiển thị')
+  add('excel', 'In & hiển thị')
+  add('dense', 'In & hiển thị')
+  // Xoá chỉ có nghĩa với NHÁP (đơn đã ra khỏi cửa thì huỷ, không xoá); Huỷ chỉ
+  // có nghĩa khi đơn đã ra khỏi nháp. Mục không bao giờ làm được ở bước này là
+  // rác, không phải "mục khoá có lý do".
+  add(status === 'draft' ? doc('delete') : doc('cancel'), 'Huỷ')
+
+  return { primary, quick, more }
+}

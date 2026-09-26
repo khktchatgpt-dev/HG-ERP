@@ -487,8 +487,14 @@ export function foamM3PerSheet(
   const R = Number(w) || 0
   const T = Number(t) || 0
   if (D <= 0 || R <= 0 || T <= 0) return null
-  // round6 chứ không round4: tấm xốp mỏng ~0,004 m³ — 4 số lẻ là mất sạch số.
-  return Math.round(((D * R * T) / 1e9) * 1e6) / 1e6
+  /*
+    KHÔNG làm tròn khối của TỪNG TẤM (25/09/2026). Bản trước tròn 6 lẻ ở đây rồi
+    `deriveLine` mới nhân SL: thanh 485×60×25 = 0,0007275 m³ thành 0,000728, nhân
+    17.008 thanh lệch 11.480 đ so với tờ đơn Danh Sơn (tờ tính khối chính xác).
+    Kích thước là mm nguyên nên 9 số lẻ là CHÍNH XÁC — chỉ để gột sai số dấu phẩy
+    động; làm tròn thật (round6) chỉ một lần, ở tổng m³ của dòng.
+  */
+  return Math.round(((D * R * T) / 1e9) * 1e9) / 1e9
 }
 
 /**
@@ -531,8 +537,15 @@ export function cartonAreaM2(
 export function suggestOrderQty(
   demand: number | null | undefined,
   onHand: number | null | undefined,
+  /**
+   * Định mức / SP (26/09/2026). Có giá trị thì "SL đơn hàng" là số SẢN PHẨM
+   * (2126 bàn) và nhu cầu vật tư = SL đơn hàng × Đm (× 4 tăng đơ/bàn = 8504).
+   * Trống / 0 → như cũ: SL đơn hàng đã là số vật tư.
+   */
+  dmPerSp?: number | null,
 ): number {
-  const short = (Number(demand) || 0) - (Number(onHand) || 0)
+  const perSp = Number(dmPerSp) > 0 ? Number(dmPerSp) : 1
+  const short = (Number(demand) || 0) * perSp - (Number(onHand) || 0)
   if (short <= 0) return 0
   return Math.ceil(short)
 }

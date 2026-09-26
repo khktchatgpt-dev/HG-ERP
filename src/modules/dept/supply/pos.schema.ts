@@ -340,3 +340,41 @@ export const poRescheduleSchema = z.object({
   expected_at: z.string().trim().min(1, 'Chọn ngày giao mới').max(30),
   reason: z.string().trim().min(1, 'Dời hẹn giao phải kèm lý do').max(1000),
 })
+
+/**
+ * ĐIỀU CHỈNH ĐƠN ĐÃ GỬI (0210, chốt 25/09/2026) — gửi CẢ bộ dòng của bản mới.
+ * Dòng có `id` = sửa dòng đang chạy (giữ nguyên mã dòng để phiếu nhập, đợt
+ * giao, hoá đơn NCC vẫn trỏ đúng); không `id` = dòng thêm; dòng cũ vắng mặt =
+ * bỏ. Không chặn trùng vật tư ở đây như lúc soạn: đơn nạp từ file có sẵn hai
+ * dòng cùng mã (chia hai lệnh) — `planAdjustment` chỉ chặn DÒNG MỚI trùng.
+ *
+ * `base_seq` = số lần điều chỉnh client đã thấy (0 nếu chưa lần nào) — hàm DB
+ * so với sổ để chặn hai người áp dụng chen nhau.
+ * `vat_rate` / `discount_amount` vắng mặt = giữ nguyên.
+ */
+export const poAdjustLineSchema = poLineInputSchema.extend({
+  id: z.string().uuid().nullish(),
+})
+export const poAdjustSchema = z.object({
+  base_seq: z.coerce.number().int().min(0),
+  reason: z
+    .string()
+    .trim()
+    .min(5, 'Ghi rõ vì sao điều chỉnh (ít nhất 5 ký tự) — lý do vào sổ phát sinh và thông báo')
+    .max(1000),
+  vat_rate: z.coerce.number().min(0).max(100).nullish(),
+  discount_amount: z.coerce.number().min(0).nullish(),
+  lines: z
+    .array(poAdjustLineSchema)
+    .max(200)
+    .refine(
+      (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
+      'Dòng không gắn vật tư phải có tên hàng',
+    ),
+})
+
+/** Ghi mốc "đã gửi NCC bản điều chỉnh lần N" (chốt Q4 25/09). */
+export const poAdjustmentSentSchema = z.object({
+  seq: z.coerce.number().int().min(1),
+  note: optText(500),
+})

@@ -2,14 +2,69 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Action, ActionGroup, ActionPane, Affected, Checks, Consequence, CoverageBar, Crumb, DateInput, DocBody, DocHead, DocScreen, FactBox, FactKv, FactSection, FastTab, Field, FieldGroup, Grid, Btn, GridBody, GridBtn, GridCheck, GridFoot, GridHead, GridRow, GridSep, GridToolbar, HolderBar, LineDetail, LineStatus, NoticeBar, NumInput, Pick, Sheet, SheetActions, SmartLinks, StatusBar, StatusTrack, CellHint, Td, TextArea, TextInput, Th, Tag, Tick, Timeline, poHolder, type Mark, useToast, Combobox } from '@/components/kit'
+import {
+  Action,
+  ActionGroup,
+  ActionPane,
+  Affected,
+  Checks,
+  Consequence,
+  CoverageBar,
+  Crumb,
+  DateInput,
+  DocBody,
+  DocHead,
+  DocScreen,
+  FactBox,
+  FactKv,
+  FactSection,
+  FastTab,
+  Field,
+  FieldGroup,
+  Grid,
+  Btn,
+  GridBody,
+  GridBtn,
+  GridCheck,
+  GridFoot,
+  GridHead,
+  GridRow,
+  GridSep,
+  GridToolbar,
+  HolderBar,
+  LineDetail,
+  LineStatus,
+  NoticeBar,
+  NumInput,
+  Pick,
+  Sheet,
+  SheetActions,
+  SmartLinks,
+  StatusBar,
+  StatusTrack,
+  CellHint,
+  Td,
+  TextArea,
+  TextInput,
+  Th,
+  Tag,
+  Tick,
+  Timeline,
+  poHolder,
+  type Mark,
+  useToast,
+  Combobox,
+  Menu,
+  type IcoName,
+} from '@/components/kit'
 import { DocumentFiles } from '@/components/DocumentFiles'
 import { PoNotesPanel } from '@/app/(workspace)/planning/pos/[id]/PoNotesPanel'
-import { api, apiErrorText } from '@/lib/api'
+import { ApiError, api, apiErrorText } from '@/lib/api'
 import { PO_FIELDS, type PoField } from '@/lib/po-fields'
 import {
   FREE_LINE_TEMPLATES,
   PO_TEMPLATE_META,
+  deriveLine,
   poTemplateMeta,
   suggestOrderQty,
   type PoTemplate,
@@ -50,8 +105,24 @@ import {
 import { useLocalPref } from '@/lib/use-local-pref'
 import { DENSE_KEY } from '../../../_shell/KitFrame'
 import { actionsFor, type Action as DocAction } from '../actions'
-import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'
+import {
+  headerFromPo,
+  lineIssues,
+  newHeader,
+  poChecks,
+  retemplate,
+  templateForSupplier,
+} from './chung-tu'
 import { receiveActions, shipmentEmptyHint, type ShipmentLineRef, type ShipmentLite } from './nhan-hang' // prettier-ignore
+import {
+  ChiPhiGrid,
+  costShareOf,
+  GhiPhiSheet,
+  HuyPhiSheet,
+  type CostRow,
+} from './ChiPhiPanel'
+import { canCarryCost } from '@/lib/po-cost'
+import { barLayout, type BarKey } from './thanh-nut'
 import { ChungTuKhoGrid, DotGiaoGrid, DotSheet, NhanTheoDotGrid, XacNhanSheet } from './NhanHangPanel' // prettier-ignore
 import { CapNhatDanhMucSheet, ChiaDotSoanGrid, DanExcelSheet, NhuCauGrid, type PasteConfirm } from './SoanDonPanels' // prettier-ignore
 import { clearDraft, columnsToShipments, draftKeyFor, draftSignature, lsxJoinedLabel, pendingNeeds, planColumnsFromShipments, lineDetailSummary, readDraft, splitLineFields, writeDraft, type Need, type PlanColumn, type SavedDraft } from './soan-don' // prettier-ignore
@@ -62,6 +133,8 @@ import {
 import { EditMaterialDialog } from '@/app/(workspace)/planning/pos/new/EditMaterialDialog'
 import { fetchMaterialByCode, fetchMaterialsByIds, invalidateMaterialPickCache } from '@/components/supply/MaterialPicker' // prettier-ignore
 import { allocationNote } from '@/lib/po-allocation'
+import { isoToVn, todayVn } from '@/lib/date-vn'
+import { planAdjustment, type AdjBeforeLine, type AdjChange } from '@/lib/po-adjust'
 import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import type { DocTemplate } from '@/lib/doc-templates'
@@ -117,6 +190,8 @@ export type PoDoc = {
   terms_lead_time: string | null
   assigned_to: string | null
   assignee_name: string | null
+  /** Người duyệt — hiện ở mốc "Giám đốc duyệt" trên dòng thời gian. */
+  approver_name?: string | null
   approved_at: string | null
   ordered_at: string | null
   confirmed_at: string | null
@@ -132,6 +207,27 @@ export type StatusLineLite = {
   qty_missing: number
   qty_open: number
   closed_short_at: string | null
+}
+
+/** Một lần ĐIỀU CHỈNH đơn đã gửi (0210) — đúng hình `poAdjustmentsRepo.listByPo`. */
+export type AdjustmentLite = {
+  seq: number
+  reason: string
+  created_at: string
+  created_by_name: string | null
+  currency: string
+  subtotal_before: number
+  subtotal_after: number
+  vat_before: number
+  vat_after: number
+  total_before: number
+  total_after: number
+  delta_by_price: number
+  delta_by_qty: number
+  lines: AdjChange[]
+  sent_at: string | null
+  sent_by_name: string | null
+  sent_note: string | null
 }
 
 type Props = {
@@ -171,6 +267,8 @@ type Props = {
     isSupply: boolean
     /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp để sửa. */
     privileged?: boolean
+    /** Ghi / huỷ phiếu chi phí mua hàng (0211) — Cung ứng + Kế toán. */
+    canRecordCost?: boolean
   }
   me: { id: string; name: string }
   seed?: { supplierId?: string; lsxId?: string }
@@ -181,10 +279,22 @@ type Props = {
   /** Đầu phiếu + mẫu in cho "Xem trước phiếu" — từ Cài đặt, server nạp. */
   company?: Record<string, string | null>
   tpl?: DocTemplate
+  /** Sổ điều chỉnh của đơn (0210) — bản duyệt → phát sinh lần N → hiện hành. */
+  adjustments?: AdjustmentLite[]
+  /** Mẫu của đơn gần nhất theo NCC — đơn mới chọn NCC thì mẫu tự theo (`templateForSupplier`). */
+  lastTemplates?: Record<string, PoTemplate>
+  /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */
+  costs?: CostRow[]
 }
 
 const dmy = (iso: string | null | undefined) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
+/**
+ * Ngày của một MỐC GIỜ (timestamptz) theo lịch VIỆT NAM. `dmy` cắt chuỗi ISO
+ * nên đọc ngày UTC: điều chỉnh lúc 2 giờ sáng 26/09 hiện thành 25/09.
+ */
+const dmyAt = (ts: string | null | undefined) =>
+  ts ? isoToVn(todayVn(new Date(ts))) : ''
 /**
  * TIỀN theo đúng loại tiền tệ — VND không lẻ, USD đủ 2 số lẻ.
  *
@@ -194,6 +304,15 @@ const dmy = (iso: string | null | undefined) =>
  * ba nơi không bao giờ lệch nhau một đồng.
  */
 const money = (v: number, cur: string) => `${fmtMoney(roundMoney(v, cur), cur)} ${cur}`
+/** Tiền có dấu — phát sinh: "+1.707.632 VND", "−538.100 VND", "0 VND". */
+const signed = (v: number, cur: string) =>
+  `${v > 0 ? '+' : v < 0 ? '−' : ''}${money(Math.abs(v), cur)}`
+/**
+ * ĐỊNH DANH DÒNG trên lưới: mã dòng DB nếu có, không thì mã vật tư. Một đơn có
+ * thể có HAI dòng cùng vật tư (đơn nạp từ file chia hai lệnh) — định danh
+ * theo material_id thì chọn một dòng là chọn cả hai, bấm xoá là mất cả hai.
+ */
+const rowKey = (l: Line) => l.po_line_id ?? l.material_id
 const numStr = (v: Num) => (v === '' ? '' : String(v))
 const fmtNum = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 const toNum = (s: string): Num => (s.trim() === '' ? '' : Number(s.replace(',', '.')))
@@ -229,6 +348,23 @@ export function DonChungTuScreen(p: Props) {
 
   const [editing, setEditing] = useState(p.mode !== 'view')
   /**
+   * ĐIỀU CHỈNH ĐƠN ĐÃ GỬI (0210, chốt 25/09/2026) — dùng CHUNG lưới sửa với
+   * đơn nháp, khác ở ba chỗ: đầu đơn khoá (NCC, lệnh, mẫu, tiền tệ), dòng giữ
+   * mã dòng, và lưu đi `POST …/adjustments` (áp dụng ngay, phần chênh vào sổ
+   * phát sinh) thay vì `PATCH` đơn nháp.
+   */
+  const [adjusting, setAdjusting] = useState(false)
+  /** Đang SOẠN đơn nháp / đơn mới — đầu đơn, nhu cầu lệnh, chia đợt, nháp tự lưu chỉ dành cho việc này. */
+  const drafting = editing && !adjusting
+  const [adjSheet, setAdjSheet] = useState(false)
+  const [adjReason, setAdjReason] = useState('')
+  const [sentSheet, setSentSheet] = useState<number | null>(null)
+  const [sentNote, setSentNote] = useState('')
+  const adjustments = useMemo(() => p.adjustments ?? [], [p.adjustments])
+  const costs = useMemo(() => p.costs ?? [], [p.costs])
+  const [phiOpen, setPhiOpen] = useState(false)
+  const [phiVoid, setPhiVoid] = useState<CostRow | null>(null)
+  /**
    * SỬA ĐIỀU KHOẢN — chế độ sửa HẸP cho đơn đã duyệt / đã gửi: chỉ chữ in lên
    * phiếu (5 điều khoản + số hợp đồng + người ký + ghi chú), không đụng dòng
    * hàng hay giá. Đi qua `PATCH …/terms`, không phải `PATCH …/pos/:id`.
@@ -251,7 +387,6 @@ export function DonChungTuScreen(p: Props) {
   const [pick, setPick] = useState<number>(0)
   const [busy, setBusy] = useState(false)
   const [sheet, setSheet] = useState<null | { action: DocAction }>(null)
-  const [paneTab, setPaneTab] = useState<'don' | 'nhan'>('don')
   const [xacNhan, setXacNhan] = useState<null | 'confirm' | 'add'>(null)
   const [dot, setDot] = useState<null | { kind: 'reschedule' | 'cancel'; s: ShipmentLite }>(null) // prettier-ignore
   /* ── soạn đơn: đợt giao khai lúc soạn, nhu cầu lệnh, dán Excel, danh mục ── */
@@ -269,7 +404,7 @@ export function DonChungTuScreen(p: Props) {
   const [enrichBusy, setEnrichBusy] = useState(false)
   const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
   /** Người dùng đã tự chỉnh VAT / tiền tệ — đổi mẫu / đổi NCC không áp đè lại. */
-  const dirty = useRef({ vat: !!po || !!p.seedHeader, currency: !!po || !!p.seedHeader })
+  const dirty = useRef({ vat: !!po || !!p.seedHeader, currency: !!po || !!p.seedHeader, template: !!po || !!p.seedHeader }) // prettier-ignore
   const [askCancel, setAskCancel] = useState(false)
   const [headOpen, setHeadOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -305,7 +440,7 @@ export function DonChungTuScreen(p: Props) {
   const totals = poTotals(header, lines)
   const issues = lineIssues(template, lines, lineProblem)
   /** Ô chữ-trên-phiếu mở ra khi sửa đầy đủ (nháp) HOẶC sửa hẹp (đơn đã gửi). */
-  const termsEditing = editing || termsEdit
+  const termsEditing = drafting || termsEdit
   const problem = editing ? draftProblem(header, lines) : null
   /**
    * Ghi chú vượt trần của `poTermsPatchSchema` bao nhiêu ký tự (0 = còn trong
@@ -317,6 +452,61 @@ export function DonChungTuScreen(p: Props) {
   const NOTE_MAX = 2000
   const noteOver = Math.max(header.note.trim().length - NOTE_MAX, 0)
   const statusById = useMemo(() => new Map(p.statusLines.map((s) => [s.id, s])), [p.statusLines]) // prettier-ignore
+  /** SL từng dòng đã hẹn trong đợt giao CÒN SỐNG — cùng luật hàm DB 0210. */
+  const plannedLive = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const sh of p.shipments) {
+      if (sh.status !== 'planned' && sh.status !== 'arrived') continue
+      for (const x of sh.lines) m.set(x.po_line_id, (m.get(x.po_line_id) ?? 0) + x.qty)
+    }
+    return m
+  }, [p.shipments])
+  const origById = useMemo(() => new Map(p.lines.flatMap((l) => (l.id ? [[l.id, l] as const] : []))), [p.lines]) // prettier-ignore
+  /** Vì sao dòng này không bỏ được khỏi đơn đang chạy — null = bỏ được. */
+  const lockedLine = (l: Line): string | null => {
+    if (!l.po_line_id) return null
+    const got = statusById.get(l.po_line_id)?.qty_received ?? 0
+    if (got > 1e-9)
+      return `đã nhận ${fmtNum(got)} — NCC không giao nữa thì dùng "Chốt thiếu"`
+    if ((plannedLive.get(l.po_line_id) ?? 0) > 1e-9)
+      return 'đang nằm trong đợt giao — gỡ khỏi đợt ở khối Giao & nhận hàng trước'
+    return null
+  }
+  /*
+    CHÊNH LỆCH TÍNH NGAY TRÊN MÀN bằng ĐÚNG hàm server dùng (`planAdjustment`)
+    — số người mua thấy trước khi bấm là số sẽ vào sổ phát sinh, không phải
+    một phép tính thứ hai. Dòng lấy qua `buildPoPayload` + `deriveLine`, cùng
+    đường lưu đi.
+  */
+  const adjPlan = useMemo(() => {
+    if (!adjusting || !po) return null
+    const body = buildPoPayload(header, lines)
+    const before: AdjBeforeLine[] = p.lines.flatMap((l) =>
+      l.id
+        ? [{ ...(l as unknown as Record<string, unknown>), id: l.id, material_id: l.material_id, qty_ordered: Number(l.qty_ordered), unit_price: l.unit_price == null ? null : Number(l.unit_price), price_basis: l.price_basis === 'unit2' ? 'unit2' : 'unit', qty2: (l as { qty2?: number | null }).qty2 == null ? null : Number((l as { qty2?: number | null }).qty2), lsx_split: l.lsx_split ?? null, code: l.material_id ? l.material_code : null, name: l.material_name, unit: l.material_unit, received: statusById.get(l.id)?.qty_received ?? 0, planned: plannedLive.get(l.id) ?? 0, invoiced: false }] // prettier-ignore
+        : [],
+    )
+    return planAdjustment({
+      currency: po.currency,
+      priceIncludesVat: po.price_includes_vat,
+      before: {
+        lines: before,
+        header: { vatRate: po.vat_rate, discount: po.discount_amount },
+      },
+      after: {
+        header: { vatRate: body.vat_rate, discount: body.discount_amount },
+        lines: body.lines.map((pl, i) => ({ ...pl, ...deriveLine(template, pl as Parameters<typeof deriveLine>[1]), id: lines[i].po_line_id ?? null, material_id: pl.material_id ?? null, unit_price: pl.unit_price ?? null, code: lines[i].is_free ? null : lines[i].code, name: lines[i].name, unit: lines[i].unit })), // prettier-ignore
+      },
+    })
+  }, [adjusting, po, header, lines, p.lines, statusById, plannedLive, template])
+  /** Chênh theo HÀNG trên lưới (dòng sửa + dòng thêm), khoá bằng chỉ số dòng. */
+  const adjRow = useMemo(() => new Map((adjPlan?.changes ?? []).filter((c) => c.kind !== 'removed').map((c) => [c.no - 1, c])), [adjPlan]) // prettier-ignore
+  const adjErrors = adjPlan ? [...(problem ? [problem] : []), ...adjPlan.errors] : []
+  const adjBlocked = adjErrors[0] ?? null
+  const nextSeq = (adjustments.at(-1)?.seq ?? 0) + 1
+  const unsentAdj = [...adjustments].reverse().find((a) => !a.sent_at) ?? null
+  /** Ai nhận thông báo khi áp dụng — cùng luật server: người đã ký duyệt, trừ chính mình. */
+  const notifyWho = !po?.approver_name ? 'người có quyền duyệt đơn mua' : po.approver_name === me.name ? null : po.approver_name // prettier-ignore
   const checks = po ? poChecks(po, p.lines, today) : []
   const blockers = checks.filter((c) => c.level === 'stop')
   const cur = lines[Math.min(pick, lines.length - 1)] ?? null
@@ -382,7 +572,17 @@ export function DonChungTuScreen(p: Props) {
     setPick(lines.length)
   }
   const removeSel = () => {
-    setLines((ls) => ls.filter((l) => !sel.includes(l.material_id)))
+    const stuck = adjusting
+      ? lines.filter((l) => sel.includes(rowKey(l)) && lockedLine(l))
+      : []
+    if (stuck.length > 0) {
+      toast.warning(
+        `Không bỏ được ${stuck.length} dòng`,
+        `${stuck[0].code || stuck[0].name}: ${lockedLine(stuck[0])}`,
+      )
+      return
+    }
+    setLines((ls) => ls.filter((l) => !sel.includes(rowKey(l))))
     setSel([])
     setPick(0)
   }
@@ -465,6 +665,60 @@ export function DonChungTuScreen(p: Props) {
       setBusy(false)
     }
   }
+  /** Vào chế độ điều chỉnh đơn đang chạy — cùng lưới, lưu đi đường khác. */
+  function startAdjust() {
+    setAdjReason('')
+    setAdjusting(true)
+    setEditing(true)
+  }
+  async function applyAdjust() {
+    if (!po || !adjPlan) return
+    setBusy(true)
+    try {
+      const body = buildPoPayload(header, lines)
+      const r = await api<{ seq: number; delta_total: number }>(
+        `/api/dept/supply/pos/${po.id}/adjustments`,
+        {
+          method: 'POST',
+          body: {
+            base_seq: adjustments.at(-1)?.seq ?? 0,
+            reason: adjReason.trim(),
+            vat_rate: body.vat_rate,
+            discount_amount: body.discount_amount,
+            lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })),
+          },
+        },
+      )
+      toast.success(
+        `Đã áp dụng điều chỉnh lần ${r.seq} · ${po.code}`,
+        `Phát sinh ${signed(r.delta_total, po.currency)} — in phiếu gửi lại NCC rồi ghi đã gửi`,
+      )
+      setAdjSheet(false)
+      setAdjusting(false)
+      setEditing(false)
+      router.refresh()
+    } catch (e) {
+      const stale = e instanceof ApiError && e.status === 409
+      toast.error(
+        stale ? 'Đơn vừa được điều chỉnh' : 'Chưa áp dụng được',
+        apiErrorText(e),
+      )
+      if (stale) router.refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function markSent() {
+    if (!po || sentSheet == null) return
+    const ok = await call(
+      `/api/dept/supply/pos/${po.id}/adjustments/sent`,
+      'POST',
+      { seq: sentSheet, note: sentNote.trim() || null },
+      `Đã ghi gửi NCC bản điều chỉnh lần ${sentSheet}`,
+    )
+    if (ok) setSentSheet(null)
+  }
+
   /** Bỏ sửa điều khoản: trả mọi ô về đúng bản đang lưu. */
   function cancelTermsEdit() {
     setTermsEdit(false)
@@ -472,7 +726,7 @@ export function DonChungTuScreen(p: Props) {
   }
 
   /** Đã khác bản gốc chưa — để Huỷ hỏi lại, và để chặn rời trang mất dữ liệu. */
-  const isDirty = () => baseline.current != null && draftSignature({ header, lines, shipCols }) !== baseline.current // prettier-ignore
+  const isDirty = () => adjusting ? !!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges) : baseline.current != null && draftSignature({ header, lines, shipCols }) !== baseline.current // prettier-ignore
   function askCancelEdit() {
     if (isDirty()) setAskCancel(true)
     else cancelEdit()
@@ -497,6 +751,7 @@ export function DonChungTuScreen(p: Props) {
     )
     setSel([])
     setEditing(false)
+    setAdjusting(false)
   }
 
   /* ── hành động theo bước (chế độ xem) ──────────────────────────────── */
@@ -530,6 +785,7 @@ export function DonChungTuScreen(p: Props) {
   function start(a: DocAction) {
     if (a.blocked || !po) return
     if (a.id === 'edit') return setEditing(true)
+    if (a.id === 'adjust') return startAdjust()
     // Bật chế độ sửa hẹp tại chỗ — không rời trang, không gọi route nào ngay.
     if (a.id === 'edit_terms') return setTermsEdit(true)
     if (a.id === 'open') return
@@ -586,19 +842,101 @@ export function DonChungTuScreen(p: Props) {
   const marks: Mark[] = po
     ? [
         { key: 'tao', at: po.created_at, label: 'Tạo đơn', actor: po.assignee_name },
-        { key: 'duyet', at: po.approved_at, label: 'Giám đốc duyệt', tone: po.approved_at ? 'done' : undefined }, // prettier-ignore
+        { key: 'duyet', at: po.approved_at, label: 'Giám đốc duyệt', actor: po.approver_name ?? undefined, tone: po.approved_at ? 'done' : undefined }, // prettier-ignore
         { key: 'gui', at: po.ordered_at, label: 'Gửi nhà cung cấp' },
         { key: 'xn', at: po.confirmed_at, label: 'NCC nhận' },
         ...p.shipments.map((s, i) => ({ key: `dot${i}`, at: s.expected_date, label: `Đợt giao ${i + 1} · ${s.status}` })), // prettier-ignore
         ...p.warehouseDocs.map((d) => ({ key: d.doc_id, at: d.at, label: `${d.kind === 'receipt' ? 'Phiếu nhập' : 'Trả NCC'} ${d.code}`, detail: `${d.qty_total.toLocaleString('vi-VN')} đơn vị`, tone: 'done' as const })), // prettier-ignore
+        ...adjustments.map((a) => ({ key: `dc${a.seq}`, at: a.created_at, label: `Điều chỉnh lần ${a.seq} · phát sinh ${signed(a.total_after - a.total_before, a.currency)}`, actor: a.created_by_name ?? undefined, detail: a.reason })), // prettier-ignore
+        ...costs.map((c) => ({ key: `phi${c.id}`, at: c.cost_date, label: `Ghi phí ${c.kind === 'boc_xep' ? 'bốc xếp' : c.kind === 'khac' ? 'khác' : 'vận chuyển'}${c.doc_no ? ` ${c.doc_no}` : ''} · ${money(c.amount, c.currency)}${c.voided_at ? ' · đã huỷ' : ''}`, actor: c.created_by_name ?? undefined, detail: c.payee_name ?? undefined })), // prettier-ignore
+        ...adjustments.flatMap((a) => (a.sent_at ? [{ key: `dcg${a.seq}`, at: a.sent_at, label: `Gửi NCC bản điều chỉnh lần ${a.seq}`, actor: a.sent_by_name ?? undefined, detail: a.sent_note ?? undefined }] : [])), // prettier-ignore
       ]
     : []
+  /*
+    GHI PHÍ VẬN CHUYỂN (0211) — mở ở đơn đã duyệt trở đi, kể cả đơn đã về đủ
+    (hoá đơn nhà xe hay tới sau khi hàng đã nhập kho). Câu lý do dùng CHUNG với
+    lỗi server (`canCarryCost`) — một nguồn.
+  */
+  const costWhy = !po
+    ? 'Lưu đơn trước'
+    : !p.perms.canRecordCost
+      ? 'Chỉ Cung ứng hoặc Kế toán ghi được phí mua hàng'
+      : ((g) => (g.ok ? undefined : g.reason))(canCarryCost(po.status))
+  const costShare = po ? costShareOf(costs, po.id) : 0
+  /* ── thanh hành động một hàng: khoá → nhãn, icon, việc, lý do khoá ─────── */
+  const bar = po
+    ? barLayout(
+        po.status,
+        docActions.map((a) => a.id),
+      )
+    : null
+  const DOC_ICON: Record<string, IcoName> = {
+    submit: 'gui',
+    approve: 'duyet',
+    send: 'gui',
+    withdraw: 'traLai',
+    reject: 'traLai',
+    nudge: 'ghiChu',
+    reschedule: 'lich',
+    edit_terms: 'sua',
+    reopen: 'mo',
+    reassign: 'gui',
+    duplicate: 'saoChep',
+    cancel: 'huy',
+    delete: 'xoa',
+  }
+  type BarItem = { label: string; icon?: IcoName; run: () => void; blocked?: string; danger?: boolean } // prettier-ignore
+  function barItem(k: BarKey): BarItem | null {
+    if (!po) return null
+    if (k.startsWith('doc:')) {
+      const a = docActions.find((x) => x.id === k.slice(4))
+      if (!a) return null
+      const loi = a.id === 'submit' && blockers.length > 0 ? `Còn ${blockers.length} lỗi chặn — xem danh sách kiểm dưới đầu đơn` : undefined // prettier-ignore
+      return { label: a.label, icon: DOC_ICON[a.id], run: () => start(a), blocked: a.blocked ?? loi, danger: a.id === 'cancel' || a.id === 'delete' } // prettier-ignore
+    }
+    const lyDo = (x: { ok: boolean; why?: string }) => (x.ok ? undefined : x.why)
+    const poId = po.id
+    switch (k) {
+      case 'edit':
+        return editAct ? { label: editLabel, icon: 'sua', run: () => start(editAct), blocked: editAct.blocked } : null // prettier-ignore
+      case 'confirm':
+        return { label: 'NCC xác nhận', icon: 'xong', run: () => (shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN)), blocked: lyDo(recv.confirm) } // prettier-ignore
+      case 'addShipment':
+        return { label: 'Thêm đợt giao', icon: 'them', run: () => setXacNhan('add'), blocked: lyDo(recv.addShipment) } // prettier-ignore
+      case 'transit':
+        return { label: 'Hàng đang trên đường', icon: 'nhanHang', run: () => start(TRANSIT), blocked: lyDo(recv.transit) } // prettier-ignore
+      case 'receive':
+        return { label: 'Ghi nhận nhận hàng · Kho', icon: 'ghiSo', run: () => router.push(`/warehouse/don-ncc/${poId}`), blocked: lyDo(recv.receive) } // prettier-ignore
+      case 'closeShort':
+        return { label: 'Chốt phần thiếu', run: () => start(CLOSE_SHORT), blocked: lyDo(recv.closeShort) } // prettier-ignore
+      case 'acceptByHand':
+        return { label: 'Nghiệm thu ngoài sổ', run: () => start(ACCEPT), blocked: lyDo(recv.acceptByHand) } // prettier-ignore
+      case 'cost':
+        return { label: 'Ghi phí vận chuyển', icon: 'tien', run: () => setPhiOpen(true), blocked: costWhy } // prettier-ignore
+      case 'print':
+        return { label: 'Phiếu đặt hàng', icon: 'in', run: () => window.open(`/print/supply/${poId}`, '_blank') } // prettier-ignore
+      case 'excel':
+        return { label: 'Xuất Excel', icon: 'excel', run: () => window.open(`/api/dept/supply/pos/${poId}/export`, '_blank') } // prettier-ignore
+      case 'new':
+        return {
+          label: 'Tạo đơn mới',
+          icon: 'them',
+          run: () => router.push('/mua-hang/don/moi'),
+        }
+      case 'dense':
+        return { label: dense ? 'Lưới thưa' : 'Lưới dày', run: () => setDenseRaw(dense ? '0' : '1') } // prettier-ignore
+      default:
+        return null
+    }
+  }
   const code = po?.code ?? 'Đơn mới'
   const primary = docActions.find((a) => a.primary && a.id !== 'open')
   const secondary = docActions.filter(
-    (a) => !a.primary && a.id !== 'open' && a.id !== 'edit',
+    (a) => !a.primary && a.id !== 'open' && a.id !== 'edit' && a.id !== 'adjust',
   )
-  const editAct = docActions.find((a) => a.id === 'edit')
+  // Đơn đã gửi: ô "Sửa" thành "Điều chỉnh" — cùng chỗ, người dùng không phải đi tìm.
+  const editAct = docActions.find((a) => a.id === 'edit' || a.id === 'adjust')
+  const editLabel = editAct?.id === 'adjust' ? 'Điều chỉnh' : 'Sửa'
   /* ── giao & nhận hàng ─────────────────────────────────────────────── */
   // Dòng chia đợt được = dòng gắn vật tư kho, đã có id. Tiền dòng tính đúng
   // hàm form dùng (giá theo đơn vị 2 thì qty2 của dòng form).
@@ -617,21 +955,6 @@ export function DonChungTuScreen(p: Props) {
   const shipmentsDone = liveShipments.filter((s) => s.status === 'received').length
   const openStockLines = p.statusLines.filter((s) => s.material_id != null && s.qty_open > 0 && !s.closed_short_at) // prettier-ignore
   const recv = receiveActions({ status: po?.status ?? 'draft', canEdit: perms.canEdit, hasStockLines: shipLines.length > 0, openStockLines: openStockLines.length }) // prettier-ignore
-  /*
-    BƯỚC KẾ TIẾP của đơn — một hàm, dùng cho cả dấu chỉ đường ở đầu chứng từ.
-    Chỉ những bước mà nút thật nằm ở TAB KHÁC mới cần chỉ đường; bước nào đã có
-    nút trên thanh hành động chính (gửi duyệt, duyệt, gửi NCC) thì để yên, thêm
-    nữa là hai nút cùng việc.
-  */
-  const buocKeTiep: { label: string; why?: string; go: () => void } | null = !po
-    ? null
-    : po.status === 'ordered' && recv.confirm.ok
-      ? { label: 'NCC xác nhận', go: () => { setPaneTab('nhan'); shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN) } } // prettier-ignore
-      : po.status === 'confirmed' && recv.transit.ok
-        ? { label: 'Hàng đang trên đường', go: () => { setPaneTab('nhan'); start(TRANSIT) } } // prettier-ignore
-        : ['in_transit', 'partial'].includes(po.status) && recv.receive.ok
-          ? { label: 'Ghi nhận hàng về', why: 'Mở khu Nhận hàng để lập phiếu nhập kho', go: () => setPaneTab('nhan') } // prettier-ignore
-          : null
 
   const sentToSupplier = ['ordered', 'confirmed', 'in_transit', 'partial', 'received'].includes(po?.status ?? '') // prettier-ignore
 
@@ -715,7 +1038,7 @@ export function DonChungTuScreen(p: Props) {
   // Nhu cầu của CẢ BỘ lệnh (chính + phụ), gộp ở server — cộng từng lệnh ở
   // client sẽ trừ tồn hai lần. Chỉ nạp khi đang soạn.
   useEffect(() => {
-    if (!editing || header.poType !== 'lsx' || !header.lsxId) {
+    if (!drafting || header.poType !== 'lsx' || !header.lsxId) {
       const t = setTimeout(() => setNeeds([]), 0)
       return () => clearTimeout(t)
     }
@@ -739,7 +1062,7 @@ export function DonChungTuScreen(p: Props) {
     }
     // toast ổn định theo provider
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, header.poType, header.lsxId, header.extraLsxIds])
+  }, [drafting, header.poType, header.lsxId, header.extraLsxIds])
 
   /** Thêm nhiều vật tư một lượt, kèm SL/giá/ghi chú (dán Excel, mồi từ URL). */
   function addMaterials(
@@ -854,12 +1177,12 @@ export function DonChungTuScreen(p: Props) {
   const draftKey = draftKeyFor(po?.id ?? null)
   const baseline = useRef<string | null>(null)
   useEffect(() => {
-    if (!editing) return
+    if (!drafting) return
     const t = setTimeout(() => setSavedDraft(readDraft(draftKey)), 0)
     return () => clearTimeout(t)
-  }, [editing, draftKey])
+  }, [drafting, draftKey])
   useEffect(() => {
-    if (!editing || savedDraft) return
+    if (!drafting || savedDraft) return
     const snap = { header, lines, shipCols }
     const sig = draftSignature(snap)
     if (baseline.current == null) {
@@ -872,14 +1195,16 @@ export function DonChungTuScreen(p: Props) {
     }
     const t = setTimeout(() => writeDraft(draftKey, snap), 700)
     return () => clearTimeout(t)
-  }, [editing, savedDraft, header, lines, shipCols, draftKey])
+  }, [drafting, savedDraft, header, lines, shipCols, draftKey])
   // Ctrl+S = Lưu (phản xạ Excel); rời trang bằng trình duyệt khi đang sửa dở thì hỏi.
   useEffect(() => {
     if (!editing) return
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        if (!problem && !busy) void save()
+        if (adjusting) {
+          if (!adjBlocked && !busy) setAdjSheet(true)
+        } else if (!problem && !busy) void save()
       }
     }
     const onLeave = (e: BeforeUnloadEvent) => {
@@ -896,7 +1221,7 @@ export function DonChungTuScreen(p: Props) {
     setHeader(d.header)
     setLines(d.lines)
     setShipCols(d.shipCols ?? [])
-    dirty.current = { vat: true, currency: true }
+    dirty.current = { vat: true, currency: true, template: true }
     setSavedDraft(null)
   }
 
@@ -952,16 +1277,15 @@ export function DonChungTuScreen(p: Props) {
         position={p.position ? [p.position.index, p.position.total] : undefined}
       />
 
-      <ActionPane
-        tabs={[
-          // `termsEditing` chứ không phải `editing`: đang sửa hẹp mà nhảy sang
-          // tab Nhận hàng thì ô điều khoản khuất, còn thanh trên vẫn bày "Lưu
-          // điều khoản" — không ai đoán được mình đang sửa cái gì.
-          { label: 'Đơn hàng', active: termsEditing || paneTab === 'don', onClick: () => setPaneTab('don') }, // prettier-ignore
-          { label: 'Nhận hàng', active: !termsEditing && paneTab === 'nhan', disabled: termsEditing || !po, title: termsEditing ? 'Lưu hoặc huỷ sửa trước' : undefined, onClick: () => setPaneTab('nhan') }, // prettier-ignore
-          { label: 'Tài chính', disabled: true, title: 'Phân hệ Kế toán chưa mở' },
-        ]}
-      >
+      {/*
+        THANH HÀNH ĐỘNG MỘT HÀNG (duyệt 26/09/2026, canvas "Đơn mua — gọn thanh
+        nút & Trao đổi"). Bỏ 3 tab Đơn hàng / Nhận hàng / Tài chính (16 + 11 nút,
+        tab Tài chính khoá vĩnh viễn, cao 150px): việc kế tiếp của đơn từng nằm ở
+        TAB KHÁC với trục trạng thái. Nay nút chính = việc kế tiếp của BƯỚC, ≤ 3
+        việc hay làm, còn lại vào "⋯ Thêm" theo nhóm — chỗ đặt do `barLayout`
+        (thanh-nut.ts, có test) quyết.
+      */}
+      <ActionPane>
         {' '}
         {/* prettier-ignore */}
         {termsEdit && !editing ? (
@@ -982,15 +1306,29 @@ export function DonChungTuScreen(p: Props) {
           </ActionGroup>
         ) : editing ? (
           <>
-            <ActionGroup label="Đang sửa">
-              <Action
-                primary
-                disabled={busy || !!problem}
-                title={problem ?? undefined}
-                onClick={() => void save()}
-              >
-                {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
-              </Action>
+            <ActionGroup label={adjusting ? 'Đang điều chỉnh' : 'Đang sửa'}>
+              {adjusting ? (
+                <Action
+                  primary
+                  disabled={busy || adjBlocked != null}
+                  title={
+                    adjBlocked ??
+                    'Áp dụng ngay — không duyệt lại; phần chênh ghi thành phát sinh'
+                  }
+                  onClick={() => setAdjSheet(true)}
+                >
+                  Áp dụng điều chỉnh
+                </Action>
+              ) : (
+                <Action
+                  primary
+                  disabled={busy || !!problem}
+                  title={problem ?? undefined}
+                  onClick={() => void save()}
+                >
+                  {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
+                </Action>
+              )}
               <Action icon="huy" disabled={busy} onClick={askCancelEdit}>
                 Huỷ
               </Action>
@@ -1028,160 +1366,49 @@ export function DonChungTuScreen(p: Props) {
               </Action>
             </ActionGroup>
           </>
-        ) : paneTab === 'nhan' && po ? (
+        ) : bar ? (
           <>
-            <ActionGroup label="Kế hoạch giao">
-              <Action
-                primary={po.status === 'ordered'}
-                disabled={busy || !recv.confirm.ok}
-                title={recv.confirm.why}
-                onClick={() => (shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN))} // prettier-ignore
-              >
-                NCC xác nhận
-              </Action>
-              <Action
-                icon="them"
-                disabled={busy || !recv.addShipment.ok}
-                title={recv.addShipment.why}
-                onClick={() => setXacNhan('add')}
-              >
-                Thêm đợt giao
-              </Action>
-              <Action
-                icon="nhanHang"
-                disabled={busy || !recv.transit.ok}
-                title={recv.transit.why}
-                onClick={() => start(TRANSIT)}
-              >
-                Hàng đang trên đường
-              </Action>
+            <ActionGroup label="Bước này">
+              {[bar.primary, ...bar.quick].map((k, i) => {
+                const it = k ? barItem(k) : null
+                return (
+                  it && (
+                    <Action
+                      key={k}
+                      primary={i === 0 && k === bar.primary}
+                      icon={it.icon}
+                      disabled={busy || !!it.blocked}
+                      title={it.blocked}
+                      onClick={it.run}
+                    >
+                      {it.label}
+                    </Action>
+                  )
+                )
+              })}
             </ActionGroup>
-            <ActionGroup label="Nhận hàng">
-              {/* Lập phiếu nhập là việc của KHO và màn đó đã có. Dựng lại một
-                  form nhập ở đây là hai đường ghi vào cùng một sổ. Nút DẪN. */}
-              <Action
-                icon="ghiSo"
-                primary={['confirmed', 'in_transit', 'partial'].includes(po.status)}
-                disabled={!recv.receive.ok}
-                title={recv.receive.why ?? 'Mở màn lập phiếu nhập bên Kho cho đơn này'}
-                onClick={() => router.push(`/warehouse/don-ncc/${po.id}`)}
-              >
-                Ghi nhận nhận hàng · Kho
-              </Action>
-              <Action
-                disabled={busy || !recv.closeShort.ok}
-                title={recv.closeShort.why}
-                onClick={() => start(CLOSE_SHORT)}
-              >
-                Chốt phần thiếu
-              </Action>
-              <Action
-                disabled={busy || !recv.acceptByHand.ok}
-                title={recv.acceptByHand.why}
-                onClick={() => start(ACCEPT)}
-              >
-                Nghiệm thu ngoài sổ
-              </Action>
-            </ActionGroup>
-            <ActionGroup label="Hiển thị">
-              <Action
-                onClick={() => setDenseRaw(dense ? '0' : '1')}
-                title="Mật độ hàng của lưới"
-              >
-                {dense ? 'Thưa' : 'Dày'}
-              </Action>
+            <ActionGroup label="Khác">
+              <Menu
+                label="⋯ Thêm"
+                ariaLabel="Các việc khác của đơn"
+                items={bar.more.flatMap(({ key, group }) => {
+                  const it = barItem(key)
+                  return it
+                    ? [
+                        {
+                          label: it.label,
+                          group,
+                          danger: it.danger,
+                          why: busy ? 'Đang xử lý việc trước…' : it.blocked,
+                          onClick: it.run,
+                        },
+                      ]
+                    : []
+                })}
+              />
             </ActionGroup>
           </>
-        ) : (
-          <>
-            <ActionGroup label="Duy trì">
-              <Action
-                icon="sua"
-                strong
-                disabled={!editAct || !!editAct.blocked}
-                title={
-                  editAct?.blocked ??
-                  (po?.status !== 'draft' ? 'Chỉ sửa được đơn nháp' : undefined)
-                }
-                onClick={() => editAct && start(editAct)}
-              >
-                Sửa
-              </Action>
-              <Action icon="them" onClick={() => router.push('/mua-hang/don/moi')}>
-                Mới
-              </Action>
-              {secondary
-                .filter((a) => a.id === 'duplicate' || a.id === 'delete')
-                .map((a) => (
-                  <Action
-                    key={a.id}
-                    disabled={busy || !!a.blocked}
-                    title={a.blocked}
-                    onClick={() => start(a)}
-                  >
-                    {a.label}
-                  </Action>
-                ))}
-            </ActionGroup>
-            <ActionGroup label="Luồng phê duyệt">
-              {primary && (
-                <Action
-                  primary
-                  disabled={
-                    busy ||
-                    !!primary.blocked ||
-                    (primary.id === 'submit' && blockers.length > 0)
-                  }
-                  title={
-                    primary.blocked ??
-                    (blockers.length > 0 ? `Còn ${blockers.length} lỗi chặn` : undefined)
-                  }
-                  onClick={() => start(primary)}
-                >
-                  {primary.label}
-                </Action>
-              )}
-              {secondary
-                .filter((a) => a.id !== 'duplicate' && a.id !== 'delete')
-                .map((a) => (
-                  <Action
-                    key={a.id}
-                    disabled={busy || !!a.blocked}
-                    title={a.blocked}
-                    onClick={() => start(a)}
-                  >
-                    {a.label}
-                  </Action>
-                ))}
-            </ActionGroup>
-            <ActionGroup label="In &amp; xuất">
-              <Action
-                icon="in"
-                disabled={!po}
-                onClick={() => po && window.open(`/print/supply/${po.id}`, '_blank')}
-              >
-                Phiếu đặt hàng
-              </Action>
-              <Action
-                icon="excel"
-                disabled={!po}
-                onClick={() =>
-                  po && window.open(`/api/dept/supply/pos/${po.id}/export`, '_blank')
-                }
-              >
-                Xuất Excel
-              </Action>
-            </ActionGroup>
-            <ActionGroup label="Hiển thị">
-              <Action
-                onClick={() => setDenseRaw(dense ? '0' : '1')}
-                title="Mật độ hàng của lưới"
-              >
-                {dense ? 'Thưa' : 'Dày'}
-              </Action>
-            </ActionGroup>
-          </>
-        )}
+        ) : null}
       </ActionPane>
 
       <DocHead
@@ -1202,7 +1429,11 @@ export function DonChungTuScreen(p: Props) {
           editing ? (
             <>
               <Tag tone="warn">
-                {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa · chưa lưu'}
+                {adjusting
+                  ? `Đang điều chỉnh lần ${nextSeq} · chưa áp dụng`
+                  : p.mode === 'create'
+                    ? 'Đang tạo · chưa lưu'
+                    : 'Đang sửa · chưa lưu'}
               </Tag>{' '}
               {po?.supplier_name ?? supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
             </>
@@ -1266,32 +1497,6 @@ export function DonChungTuScreen(p: Props) {
                 />
               </div>
             )}
-            {/* BƯỚC KẾ TIẾP — đứng NGAY CẠNH trục trạng thái.
-
-                Lỗi chủ dự án báo 15/09/2026: "không có chuyển trạng thái". Đo
-                lại thì có, nhưng nằm ở TAB KHÁC — trục trạng thái vẽ ở tab Đơn
-                hàng, còn nút "NCC xác nhận" / "Hàng đang trên đường" nằm ở tab
-                Nhận hàng. Nhìn chỗ này, bấm chỗ kia, không một dấu chỉ đường.
-                Lộ rõ hơn nữa vì bước TRƯỚC nó (Đã duyệt → "Gửi nhà cung cấp")
-                lại nằm ngay trên thanh hành động chính: cùng một loại việc mà
-                hai chỗ khác nhau.
-
-                KHÔNG chép nút sang đây. Bước "NCC xác nhận" mở phiếu khai lịch
-                giao NCC hẹn; dựng một bản rút gọn ở đây là đẻ ra đường thứ hai
-                bỏ qua việc khai lịch. Nút này ĐƯA NGƯỜI DÙNG TỚI đúng nút thật
-                — một chỗ làm việc, một dấu chỉ đường. */}
-            {buocKeTiep && (
-              <span className="flex items-center gap-2">
-                <Btn
-                  primary
-                  disabled={busy}
-                  title={buocKeTiep.why}
-                  onClick={buocKeTiep.go}
-                >
-                  {buocKeTiep.label} →
-                </Btn>
-              </span>
-            )}
           </>
         )}
       </DocHead>
@@ -1302,6 +1507,7 @@ export function DonChungTuScreen(p: Props) {
           items={[
             { label: 'đợt giao', count: liveShipments.length, onClick: () => goTo('dot-giao'), title: 'Kế hoạch giao NCC hẹn' }, // prettier-ignore
             { label: 'phiếu kho', count: p.warehouseDocs.length, onClick: () => goTo('kho'), title: 'Phiếu nhập / trả đã ghi vào đơn' }, // prettier-ignore
+            ...(costs.length > 0 ? [{ label: 'phiếu phí', count: costs.length, onClick: () => goTo('chi-phi'), title: 'Phí vận chuyển / bốc xếp gắn đơn này (kể cả phiếu đã huỷ)' }] : []), // prettier-ignore
             { label: 'lệnh SX', count: (po.production_order_id ? 1 : 0) + p.extraLsx.length, onClick: () => po.production_order_id && router.push(`/mua-hang/yeu-cau/${po.production_order_id}`), disabled: !po.production_order_id }, // prettier-ignore
             { label: 'trao đổi', count: null, onClick: () => goTo('trao-doi'), title: 'Ghi chú và mốc máy ghi trên đơn này' }, // prettier-ignore
             { label: 'tài liệu', count: null, onClick: () => goTo('tai-lieu'), title: 'Báo giá, hợp đồng, chứng từ giao nhận' }, // prettier-ignore
@@ -1332,7 +1538,7 @@ export function DonChungTuScreen(p: Props) {
           items={checks}
         />
       )}
-      {editing && savedDraft && (
+      {drafting && savedDraft && (
         <NoticeBar
           tone="warn"
           tag="Bản nháp"
@@ -1362,7 +1568,51 @@ export function DonChungTuScreen(p: Props) {
           hết vướng thì nói "còn thay đổi chưa lưu" và cho Lưu ngay tại chỗ. Nút
           Lưu trên thanh hành động vẫn còn — người dùng cuộn xuống giữa lưới 40
           dòng thì thanh này là chỗ gần tay nhất. */}
-      {editing &&
+      {adjusting &&
+        adjPlan &&
+        (adjBlocked ? (
+          <NoticeBar
+            tone="warn"
+            tag={
+              adjPlan.changes.length === 0 && !adjPlan.headerChanges
+                ? 'Chưa có thay đổi'
+                : 'Chưa áp dụng được'
+            }
+            action={{ label: 'Xem dòng hàng', onClick: () => goTo('dong-hang') }}
+          >
+            {adjBlocked}
+            {adjErrors.length > 1 ? ` · và ${adjErrors.length - 1} vướng nữa` : ''}
+          </NoticeBar>
+        ) : (
+          <NoticeBar
+            tone="warn"
+            tag={`Đang điều chỉnh · lần ${nextSeq}`}
+            action={{ label: 'Áp dụng', onClick: () => setAdjSheet(true) }}
+          >
+            Phát sinh{' '}
+            <b className="num">{signed(adjPlan.delta.total, header.currency)}</b> so với
+            bản đang chạy — áp dụng ngay, không duyệt lại;{' '}
+            {notifyWho
+              ? `${notifyWho} nhận thông báo`
+              : 'bạn là người đã duyệt đơn này nên không báo ai'}
+            . Tới lúc bấm Áp dụng, Kho vẫn nhận theo bản cũ.
+          </NoticeBar>
+        ))}
+      {!editing && unsentAdj && po && (
+        <NoticeBar
+          tone="warn"
+          tag={`Điều chỉnh lần ${unsentAdj.seq} chưa tới NCC`}
+          action={
+            perms.canEdit
+              ? { label: 'Ghi đã gửi NCC', onClick: () => { setSentNote(''); setSentSheet(unsentAdj.seq) } } // prettier-ignore
+              : undefined
+          }
+        >
+          Áp dụng {dmyAt(unsentAdj.created_at)} — in phiếu đặt hàng gửi lại{' '}
+          {po.supplier_name} để NCC làm theo số mới.
+        </NoticeBar>
+      )}
+      {drafting &&
         (problem ? (
           <NoticeBar
             tone="warn"
@@ -1389,8 +1639,21 @@ export function DonChungTuScreen(p: Props) {
         ))}
 
       <DocBody
+        wideAside={!!po}
         aside={
           <FactBox>
+            <FactSection title="Tiền">
+              <FactKv
+                rows={[
+                  ['Tiền hàng', <span key="a" className="num">{money(totals.subtotal, header.currency)}</span>], // prettier-ignore
+                  ['VAT', <span key="b" className="num">{header.vat === '' ? 0 : header.vat}% · {money(totals.vatAmount, header.currency)}</span>], // prettier-ignore
+                  ['Tổng thanh toán', <b key="c" className="num">{money(totals.grandTotal, header.currency)}</b>], // prettier-ignore
+                  ...(!editing && adjustments.length > 0 ? [['Bản duyệt', <span key="e" className="num">{money(adjustments[0].total_before, header.currency)}</span>], ['Phát sinh sau duyệt', <span key="f" className="num" title="Cộng các lần điều chỉnh — chi tiết ở khối Tiền của đơn">{signed(adjustments.at(-1)!.total_after - adjustments[0].total_before, header.currency)}</span>]] as [string, React.ReactNode][] : []), // prettier-ignore
+                  ...(!editing && costShare > 0 ? [['Chi phí mua · chưa VAT', <span key="g" className="num" title="Phí vận chuyển / bốc xếp chia cho đơn này — trả nhà xe hoặc NCC, chưa vào giá nhập kho">{money(costShare, header.currency)}</span>], ['Giá trị đơn + phí', <span key="h" className="num" title="Tiền hàng sau chiết khấu + chi phí mua, cùng CHƯA VAT">{money(totals.grandTotal - totals.vatAmount + costShare, header.currency)}</span>]] as [string, React.ReactNode][] : []), // prettier-ignore
+                  ...(issues.length > 0 ? [['Chưa gồm', <span key="d" className="k-t-warn">{issues.length} dòng thiếu số</span>] as [string, React.ReactNode]] : []), // prettier-ignore
+                ]}
+              />
+            </FactSection>
             <FactSection title="Nhà cung cấp">
               <div className="k-strong" style={{ marginBottom: 4 }}>
                 {p.supplier?.name ?? supplierOpt?.name ?? '—'}
@@ -1413,25 +1676,37 @@ export function DonChungTuScreen(p: Props) {
                 <FactKv
                   rows={[
                     ['Giao đúng hẹn', p.facts.onTime ? <span key="a" className="num k-t-done">{p.facts.onTime.hit} / {p.facts.onTime.of} đơn</span> : <span key="a" className="k-t-warn">chưa có lịch sử</span>], // prettier-ignore
-                    ['Đã đặt', <span key="b" className="num">{p.facts.orders} đơn</span>], // prettier-ignore
-                    ['Nhận đủ', <span key="c" className="num">{p.facts.received} đơn</span>], // prettier-ignore
-                    ['Mua gần nhất', <span key="d" className="num">{dmy(p.facts.lastOrderAt) || '—'}</span>], // prettier-ignore
-                    ['Mã NCC', <span key="e" className="num">{p.supplier?.code ?? '—'}</span>], // prettier-ignore
-                    ['Mã số thuế', <span key="f" className="num">{p.supplier?.tax_no ?? '—'}</span>], // prettier-ignore
+                    // GỌN 3 dòng (26/09/2026): cột phải nhường chỗ cho khối Trao đổi — 6
+                    // dòng dữ kiện NCC đẩy ô viết xuống gần đáy màn. "Mua gần nhất" bỏ:
+                    // hồ sơ NCC có đủ, ở đây nó không trả lời câu nào của đơn này.
+                    ['Đã đặt · nhận đủ', <span key="b" className="num">{p.facts.orders} · {p.facts.received} đơn</span>], // prettier-ignore
+                    ['Mã · MST', <span key="e" className="num">{p.supplier?.code ?? '—'} · {p.supplier?.tax_no ?? '—'}</span>], // prettier-ignore
                   ]}
                 />
               )}
             </FactSection>
-            <FactSection title="Tiền">
-              <FactKv
-                rows={[
-                  ['Tiền hàng', <span key="a" className="num">{money(totals.subtotal, header.currency)}</span>], // prettier-ignore
-                  ['VAT', <span key="b" className="num">{header.vat === '' ? 0 : header.vat}% · {money(totals.vatAmount, header.currency)}</span>], // prettier-ignore
-                  ['Tổng thanh toán', <b key="c" className="num">{money(totals.grandTotal, header.currency)}</b>], // prettier-ignore
-                  ...(issues.length > 0 ? [['Chưa gồm', <span key="d" className="k-t-warn">{issues.length} dòng thiếu số</span>] as [string, React.ReactNode]] : []), // prettier-ignore
-                ]}
-              />
-            </FactSection>
+            {/*
+              TRAO ĐỔI Ở CỘT PHẢI (duyệt 26/09/2026 — chép chatter Odoo 17). Trước
+              đó là khối gập thứ 6 ở thân, đỉnh y≈981: mở đơn ra không thấy ai đã
+              nói gì, và cả hệ thống mới có 1 ghi chú. Mở sẵn lọc "Ghi chú" — mốc
+              máy đã có khối "Dòng thời gian" riêng. "Gửi nhà cung cấp" đổi thành
+              "Đã báo NCC · ghi lại": hệ thống KHÔNG gửi gì cho NCC, nhãn cũ nói sai.
+            */}
+            {po && (
+              <div id="trao-doi">
+                <FactSection title="Trao đổi">
+                  <PoNotesPanel
+                    poId={po.id}
+                    meId={me.id}
+                    meName={me.name}
+                    marks={marks.map((m) => ({ key: m.key, at: m.at, label: m.label, actor: m.actor }))} // prettier-ignore
+                    followerNames={[po.assignee_name].filter((x): x is string => !!x)}
+                    partnerLabel="Đã báo NCC · ghi lại"
+                    filters
+                  />
+                </FactSection>
+              </div>
+            )}
           </FactBox>
         }
       >
@@ -1455,7 +1730,68 @@ export function DonChungTuScreen(p: Props) {
             `div` riêng để luật `.k-fgrp + .k-fgrp` không kẻ vạch ngang giữa các
             cột. Nền TRẮNG — xem ghi chú ở `.k-gbar`: dưới nó là thanh công cụ rồi
             tới hàng tiêu đề cột, ba dải cùng tô là một mảng xám câm. */}
-        {editing && (
+        {adjusting && adjPlan && po && (
+          <div className="grid grid-cols-1 gap-x-4 border-b border-[var(--line)] bg-[var(--surface-card)] md:grid-cols-2">
+            <div>
+              <FieldGroup title="Chênh lệch so với bản đang chạy">
+                <Field label="Tổng đang chạy">
+                  <span className="num">
+                    {money(adjPlan.money.before.grandTotal, header.currency)}
+                  </span>
+                </Field>
+                <Field label="Tổng sau điều chỉnh">
+                  <span className="num">
+                    {money(adjPlan.money.after.grandTotal, header.currency)}
+                  </span>
+                </Field>
+                <Field label={`Phát sinh lần ${nextSeq}`}>
+                  <b className="num">{signed(adjPlan.delta.total, header.currency)}</b>
+                </Field>
+                <Field label="Tiền hàng: vì giá · vì lượng">
+                  <span
+                    className="num"
+                    title="vì giá = SL mới × (giá mới − giá cũ) · vì lượng = (SL mới − SL cũ) × giá cũ"
+                  >
+                    {signed(adjPlan.delta.byPrice, header.currency)} ·{' '}
+                    {signed(adjPlan.delta.byQty, header.currency)}
+                  </span>
+                </Field>
+              </FieldGroup>
+            </div>
+            <div>
+              <FieldGroup title="Giữ nguyên khi điều chỉnh">
+                <Field label="Nhà cung cấp" inherited>
+                  {po.supplier_name}
+                </Field>
+                <Field label="Lệnh · mẫu · tiền tệ" inherited>
+                  <span className="num">{po.lsx_code ?? 'ngoài LSX'}</span> · {meta.label}{' '}
+                  · {po.currency}
+                </Field>
+                <Field label="Thuế suất %">
+                  <NumInput
+                    aria-label="Thuế suất"
+                    value={numStr(header.vat)}
+                    onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
+                  />
+                </Field>
+                {meta.hasDiscount && (
+                  <Field label="Chiết khấu">
+                    <NumInput
+                      aria-label="Chiết khấu"
+                      value={numStr(header.discount)}
+                      onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
+                    />
+                  </Field>
+                )}
+              </FieldGroup>
+              <div className="text-k-label px-[var(--gutter)] pb-2 text-[var(--ink-3)]">
+                Đổi nhà cung cấp thì Huỷ đơn rồi Nhân bản sang NCC mới. Điều khoản in lên
+                phiếu sửa bằng “Sửa điều khoản”.
+              </div>
+            </div>
+          </div>
+        )}
+        {drafting && (
           <div className="grid grid-cols-1 gap-x-4 border-b border-[var(--line)] bg-[var(--surface-card)] md:grid-cols-2 xl:grid-cols-3">
             <div>
               <FieldGroup title="Đặt cho lệnh nào">
@@ -1463,7 +1799,10 @@ export function DonChungTuScreen(p: Props) {
                   <Pick
                     label="Mẫu đơn"
                     value={template}
-                    onChange={(t) => changeTemplate(t as PoTemplate)}
+                    onChange={(t) => {
+                      dirty.current.template = true
+                      changeTemplate(t as PoTemplate)
+                    }}
                     options={Object.values(PO_TEMPLATE_META).map((m) => ({ value: m.key, label: m.label }))} // prettier-ignore
                   />
                 </Field>
@@ -1546,6 +1885,13 @@ export function DonChungTuScreen(p: Props) {
                           // Tiền tệ theo NCC (gỗ báo USD) — trừ khi đã tự chọn.
                           currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
                         }))
+                        // Mẫu theo đơn gần nhất của NCC (kéo theo VAT / "giá gồm VAT"
+                        // của mẫu đó) — chỉ khi đơn mới và người soạn chưa tự chọn mẫu.
+                        const t = templateForSupplier({ supplierId: v, current: template, touched: dirty.current.template, isNew: !po, last: p.lastTemplates ?? {} }) // prettier-ignore
+                        if (t) {
+                          changeTemplate(t)
+                          toast.info(`Mẫu đơn: ${PO_TEMPLATE_META[t].label}`, 'Theo đơn gần nhất của NCC này — đổi được ở ô "Mẫu đơn".') // prettier-ignore
+                        }
                       }}
                       emptyLabel="— chọn NCC —"
                       placeholder="Gõ tên nhà cung cấp…"
@@ -1607,7 +1953,11 @@ export function DonChungTuScreen(p: Props) {
                   <Tick
                     label="Đơn giá đã gồm VAT"
                     checked={header.inclVat}
-                    onChange={(v) => setHeader((h) => ({ ...h, inclVat: v }))}
+                    onChange={(v) => {
+                      // Tự tick / bỏ tick = đã tự chỉnh: đổi mẫu sau đó không được áp lại.
+                      dirty.current.vat = true
+                      setHeader((h) => ({ ...h, inclVat: v }))
+                    }}
                   />
                 </Field>
                 {meta.hasDiscount && (
@@ -1661,14 +2011,11 @@ export function DonChungTuScreen(p: Props) {
                   title={editAct?.blocked}
                   onClick={() => editAct && start(editAct)}
                 >
-                  Chỉnh sửa vật tư
+                  {editAct?.id === 'adjust' ? 'Điều chỉnh đơn' : 'Chỉnh sửa vật tư'}
                 </GridBtn>
                 <GridSep />
                 <GridBtn
-                  onClick={() => {
-                    setPaneTab('nhan')
-                    goTo('dot-giao')
-                  }}
+                  onClick={() => goTo('dot-giao')}
                   disabled={!po}
                   title="Đợt giao, ma trận nhận và các nút nhận hàng"
                 >
@@ -1764,19 +2111,23 @@ export function DonChungTuScreen(p: Props) {
                 </GridBtn>
                 {/* Chuyển xuống từ thanh hành động: nó đẻ ra dòng, nên đứng
                     cạnh hai nút kia chứ không nằm trên đầu chứng từ. */}
-                <GridBtn
-                  disabled={pending.length === 0}
-                  title={pending.length === 0 ? (header.poType === 'lsx' && header.lsxId ? 'Lệnh không còn nhu cầu nào chưa lên đơn' : 'Chọn lệnh sản xuất trước') : 'Thêm mọi mã lệnh còn thiếu vào đơn'} // prettier-ignore
-                  onClick={() => void addFromNeeds(pending)}
-                >
-                  Thêm {pending.length > 0 ? `${pending.length} mã ` : ''}còn thiếu
-                </GridBtn>
+                {drafting && (
+                  <GridBtn
+                    disabled={pending.length === 0}
+                    title={pending.length === 0 ? (header.poType === 'lsx' && header.lsxId ? 'Lệnh không còn nhu cầu nào chưa lên đơn' : 'Chọn lệnh sản xuất trước') : 'Thêm mọi mã lệnh còn thiếu vào đơn'} // prettier-ignore
+                    onClick={() => void addFromNeeds(pending)}
+                  >
+                    Thêm {pending.length > 0 ? `${pending.length} mã ` : ''}còn thiếu
+                  </GridBtn>
+                )}
               </>
             </GridToolbar>
           )}
 
           <div onKeyDown={editing ? gridKeys : undefined}>
-            <Grid minWidth={640 + gridFields.length * 100}>
+            {/* Ô GỌN (Đm/sp) không cộng bề rộng tối thiểu: nó lấy chỗ của cột tên vật tư
+                (co giãn) để cột tiền vẫn trong màn ở 1280 — đo 26/09/2026. */}
+            <Grid minWidth={640 + gridFields.filter((f) => !f.compact).length * 100}>
               <GridHead>
                 <Th width={30} />
                 <Th width={36}>#</Th>
@@ -1790,12 +2141,18 @@ export function DonChungTuScreen(p: Props) {
                 <Th num>SL đặt</Th>
                 <Th num>Đơn giá</Th>
                 <Th num>Thành tiền</Th>
+                {adjusting && <Th num>Đã nhận</Th>}
+                {adjusting && <Th num>Phát sinh</Th>}
                 {!editing && <Th>Trạng thái</Th>}
               </GridHead>
               <GridBody>
                 {lines.map((l, i) => {
                   const why = issues.find((x) => x.index === i)?.why ?? null
-                  const st = statusById.get(p.lines[i]?.id ?? '')
+                  const st = statusById.get(l.po_line_id ?? '')
+                  const org =
+                    adjusting && l.po_line_id ? origById.get(l.po_line_id) : undefined
+                  const got = adjusting && l.po_line_id ? (st?.qty_received ?? 0) : 0
+                  const underGot = adjusting && l.qty !== '' && Number(l.qty) < got - 1e-9
                   const kind: 'idle' | 'part' | 'done' | 'short' = !st
                     ? 'idle'
                     : st.closed_short_at
@@ -1807,18 +2164,18 @@ export function DonChungTuScreen(p: Props) {
                           : 'idle'
                   return (
                     <GridRow
-                      key={l.material_id}
+                      key={rowKey(l)}
                       selected={i === curIdx}
                       onClick={() => setPick(i)}
                     >
                       <GridCheck
-                        checked={sel.includes(l.material_id)}
+                        checked={sel.includes(rowKey(l))}
                         label={`Chọn dòng ${l.code || l.name}`}
                         onChange={() =>
                           setSel((s) =>
-                            s.includes(l.material_id)
-                              ? s.filter((x) => x !== l.material_id)
-                              : [...s, l.material_id],
+                            s.includes(rowKey(l))
+                              ? s.filter((x) => x !== rowKey(l))
+                              : [...s, rowKey(l)],
                           )
                         }
                       />
@@ -1870,7 +2227,7 @@ export function DonChungTuScreen(p: Props) {
                           l.unit
                         )}
                       </Td>
-                      <Td num tone={why?.includes('SL') ? 'warn' : undefined}>
+                      <Td num tone={why?.includes('SL') || underGot ? 'warn' : undefined}>
                         {editing ? (
                           <>
                             <NumInput
@@ -1878,17 +2235,32 @@ export function DonChungTuScreen(p: Props) {
                               value={numStr(l.qty)}
                               onCommit={(v) => patch(i, { qty: toNum(v) })}
                             />
+                            {underGot && (
+                              <CellHint
+                                tone="warn"
+                                title='Không đặt thấp hơn số Kho đã nhận. NCC không giao nữa thì dùng "Chốt thiếu" ở khối Giao & nhận hàng.'
+                              >
+                                ⚠ dưới SL đã nhận {fmtNum(got)}
+                              </CellHint>
+                            )}
+                            {org &&
+                              !underGot &&
+                              Number(org.qty_ordered) !== Number(l.qty) && (
+                                <CellHint title="Số của bản đang chạy">
+                                  từ {fmtNum(Number(org.qty_ordered))}
+                                </CellHint>
+                              )}
                             {(() => {
                               // Ô còn TRỐNG mới mời; đã gõ số thì gợi ý là nhiễu.
                               if (l.qty !== '') return null
-                              const short = l.qty_demand !== '' ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0) : null // prettier-ignore
+                              const short = l.qty_demand !== '' ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, l.dm_per_sp === '' ? null : Number(l.dm_per_sp)) : null // prettier-ignore
                               const raw = short ?? suggestByMat.get(l.material_id) ?? null
                               if (raw == null || raw <= 0) return null
                               const use = roundUpToPack(raw, l.pack_size)
                               return (
                                 <CellHint
                                   onClick={() => patch(i, { qty: use })}
-                                  title={`${short != null ? 'SL cần cho lệnh − tồn kho' : 'Đề xuất từ nhu cầu của lệnh'}${use !== raw ? ` (${fmtNum(raw)} làm tròn lên nguyên ${l.pack_unit || 'bao'})` : ''} — bấm để dùng`} // prettier-ignore
+                                  title={`${short != null ? (l.dm_per_sp !== '' && Number(l.dm_per_sp) > 0 ? `SL đơn hàng × Đm/sp (${fmtNum(Number(l.dm_per_sp))}) − tồn kho` : 'SL cần cho lệnh − tồn kho') : 'Đề xuất từ nhu cầu của lệnh'}${use !== raw ? ` (${fmtNum(raw)} làm tròn lên nguyên ${l.pack_unit || 'bao'})` : ''} — bấm để dùng`} // prettier-ignore
                                 >
                                   dùng {fmtNum(use)} ↩
                                 </CellHint>
@@ -1938,6 +2310,12 @@ export function DonChungTuScreen(p: Props) {
                               value={numStr(l.price)}
                               onCommit={(v) => patch(i, { price: toNum(v) })}
                             />
+                            {org &&
+                              Number(org.unit_price ?? 0) !== Number(l.price || 0) && (
+                                <CellHint title="Đơn giá của bản đang chạy">
+                                  từ {fmtNum(Number(org.unit_price ?? 0))}
+                                </CellHint>
+                              )}
                             {(() => {
                               // Mẫu bao bì tính theo m²: máy dựng sẵn giá thùng
                               // để người mua đối chiếu với giá NCC chào.
@@ -1969,6 +2347,35 @@ export function DonChungTuScreen(p: Props) {
                           )
                         )}
                       </Td>
+                      {adjusting && (
+                        <Td num>
+                          {l.po_line_id ? (
+                            fmtNum(got)
+                          ) : (
+                            <span className="text-[var(--ink-3)]">mới</span>
+                          )}
+                        </Td>
+                      )}
+                      {adjusting && (
+                        <Td num>
+                          {(() => {
+                            const c = adjRow.get(i)
+                            if (!c) return <span className="text-[var(--ink-3)]">—</span>
+                            const d = c.amount_after - c.amount_before
+                            return (
+                              <span
+                                title={
+                                  c.kind === 'added'
+                                    ? 'Dòng thêm mới'
+                                    : `vì giá ${signed(c.by_price, header.currency)} · vì lượng ${signed(c.by_qty, header.currency)}${c.fields.length ? ` · đổi ${c.fields.join(', ')}` : ''}`
+                                }
+                              >
+                                {signed(d, header.currency)}
+                              </span>
+                            )
+                          })()}
+                        </Td>
+                      )}
                       {!editing && (
                         <Td>
                           <LineStatus kind={kind}>
@@ -2004,6 +2411,12 @@ export function DonChungTuScreen(p: Props) {
                     header.currency,
                   )}
                 </Td>
+                {adjusting && <Td />}
+                {adjusting && (
+                  <Td num>
+                    {adjPlan ? signed(adjPlan.delta.subtotal, header.currency) : null}
+                  </Td>
+                )}
                 {!editing && <Td />}
               </GridFoot>
             </Grid>
@@ -2204,8 +2617,164 @@ export function DonChungTuScreen(p: Props) {
           )}
         </FastTab>
 
+        {/* ══ 1c. TIỀN CỦA ĐƠN — bản duyệt + phát sinh sau duyệt (0210) ══════
+            Chỉ có khi đơn từng được điều chỉnh. Kế toán đối chiếu hoá đơn theo
+            tổng HIỆN HÀNH; các khoản phát sinh nói tiền tăng/giảm từ đâu — vì
+            giá hay vì lượng — và đã tới NCC chưa. */}
+        {!editing && po && adjustments.length > 0 && (
+          <FastTab
+            id="phat-sinh"
+            title="Tiền của đơn · bản duyệt và phát sinh"
+            flush
+            defaultOpen
+            summary={[
+              ['Lần điều chỉnh', <span key="a" className="num">{adjustments.length}</span>], // prettier-ignore
+              ['Phát sinh', <span key="b" className="num">{signed(adjustments.at(-1)!.total_after - adjustments[0].total_before, po.currency)}</span>], // prettier-ignore
+            ]}
+          >
+            <Grid minWidth={700}>
+              <GridHead>
+                <Th width={120}>Khoản</Th>
+                <Th width={170}>Ngày · người</Th>
+                <Th num>Tiền hàng</Th>
+                <Th num>VAT</Th>
+                <Th num>Tổng thanh toán</Th>
+                <Th>Lý do · gửi NCC</Th>
+              </GridHead>
+              <GridBody>
+                <GridRow>
+                  <Td>
+                    <b>Bản duyệt</b>
+                  </Td>
+                  <Td>
+                    {dmyAt(po.approved_at) || '—'} · {po.approver_name ?? '—'}
+                  </Td>
+                  <Td num>{money(adjustments[0].subtotal_before, po.currency)}</Td>
+                  <Td num>{money(adjustments[0].vat_before, po.currency)}</Td>
+                  <Td num>{money(adjustments[0].total_before, po.currency)}</Td>
+                  <Td>Tiền đã ký duyệt</Td>
+                </GridRow>
+                {adjustments.map((a) => (
+                  <GridRow key={a.seq}>
+                    <Td>
+                      <b>Phát sinh lần {a.seq}</b>
+                    </Td>
+                    <Td>
+                      {dmyAt(a.created_at)} · {a.created_by_name ?? '—'}
+                    </Td>
+                    <Td num>
+                      {signed(a.subtotal_after - a.subtotal_before, a.currency)}
+                    </Td>
+                    <Td num>{signed(a.vat_after - a.vat_before, a.currency)}</Td>
+                    <Td num>{signed(a.total_after - a.total_before, a.currency)}</Td>
+                    <Td>
+                      {a.reason} ·{' '}
+                      {a.sent_at ? (
+                        `đã gửi NCC ${dmyAt(a.sent_at)}`
+                      ) : (
+                        <span className="k-t-warn">chưa gửi NCC</span>
+                      )}
+                    </Td>
+                  </GridRow>
+                ))}
+              </GridBody>
+              <GridFoot>
+                <Td colSpan={2}>Hiện hành — đối chiếu hoá đơn NCC theo dòng này</Td>
+                <Td num>{money(adjustments.at(-1)!.subtotal_after, po.currency)}</Td>
+                <Td num>{money(adjustments.at(-1)!.vat_after, po.currency)}</Td>
+                <Td num>{money(adjustments.at(-1)!.total_after, po.currency)}</Td>
+                <Td />
+              </GridFoot>
+            </Grid>
+            <div className="px-[var(--gutter)] pt-3">
+              <h3 className="k-fgrp-h">
+                Chi tiết phát sinh theo dòng · tách vì giá và vì lượng
+              </h3>
+            </div>
+            <Grid minWidth={720}>
+              <GridHead>
+                <Th width={44} num>
+                  Lần
+                </Th>
+                <Th>Mã · tên vật tư</Th>
+                <Th width={90}>Loại</Th>
+                <Th num>Cũ</Th>
+                <Th num>Mới</Th>
+                <Th num>Vì giá</Th>
+                <Th num>Vì lượng</Th>
+                <Th num>Cộng</Th>
+              </GridHead>
+              <GridBody>
+                {adjustments.flatMap((a) =>
+                  a.lines.map((c, k) => (
+                    <GridRow key={`${a.seq}-${k}`}>
+                      <Td num>{a.seq}</Td>
+                      <Td>
+                        <span className="num k-strong">{c.code}</span>
+                        {c.code ? ' · ' : ''}
+                        {c.name}
+                      </Td>
+                      <Td>
+                        {c.kind === 'added'
+                          ? 'Dòng mới'
+                          : c.kind === 'removed'
+                            ? 'Bỏ dòng'
+                            : c.by_price !== 0 && c.by_qty !== 0
+                              ? 'Giá + lượng'
+                              : c.by_price !== 0
+                                ? 'Giá'
+                                : c.by_qty !== 0
+                                  ? 'Lượng'
+                                  : 'Thông số'}{' '}
+                        {/* prettier-ignore */}
+                      </Td>
+                      <Td num>
+                        {c.qty_before == null
+                          ? '—'
+                          : `${fmtNum(c.qty_before)} × ${fmtNum(c.price_before ?? 0)}`}
+                      </Td>
+                      <Td num>
+                        {c.qty_after == null
+                          ? '—'
+                          : `${fmtNum(c.qty_after)} × ${fmtNum(c.price_after ?? 0)}`}
+                      </Td>
+                      <Td num>{c.by_price ? signed(c.by_price, a.currency) : '—'}</Td>
+                      <Td num>{c.by_qty ? signed(c.by_qty, a.currency) : '—'}</Td>
+                      <Td num>{signed(c.amount_after - c.amount_before, a.currency)}</Td>
+                    </GridRow>
+                  )),
+                )}
+              </GridBody>
+              <GridFoot>
+                <Td colSpan={5}>Cộng phát sinh tiền hàng (chưa VAT)</Td>
+                <Td num>
+                  {signed(
+                    adjustments.reduce((t, a) => t + a.delta_by_price, 0),
+                    po.currency,
+                  )}
+                </Td>
+                <Td num>
+                  {signed(
+                    adjustments.reduce((t, a) => t + a.delta_by_qty, 0),
+                    po.currency,
+                  )}
+                </Td>
+                <Td num>
+                  {signed(
+                    adjustments.reduce(
+                      (t, a) => t + a.subtotal_after - a.subtotal_before,
+                      0,
+                    ),
+                    po.currency,
+                  )}
+                </Td>
+              </GridFoot>
+            </Grid>
+          </FastTab>
+        )}
+
         {/* ══ 1a. NHU CẦU CỦA LỆNH — chỉ khi đang soạn đơn theo lệnh ═══════ */}
-        {editing && header.poType === 'lsx' && header.lsxId && (
+        {drafting && header.poType === 'lsx' && header.lsxId && (
           <FastTab
             id="nhu-cau"
             title="Nhu cầu của lệnh"
@@ -2236,14 +2805,14 @@ export function DonChungTuScreen(p: Props) {
         {/* ══ 1b. GIAO & NHẬN HÀNG — hai sổ: NCC hẹn gì, Kho thực nhận gì ═══
             Mở sẵn khi đơn đã gửi NCC (từ đó trở đi đây là câu hỏi hằng ngày);
             trước đó gấp lại, chỉ tiêu đề nói "chưa có đợt". */}
-        {(po || editing) && (
+        {(po || drafting) && (
           <FastTab
             id="dot-giao"
-            title={editing ? 'Chia đợt giao' : 'Giao & nhận hàng'}
+            title={drafting ? 'Chia đợt giao' : 'Giao & nhận hàng'}
             flush
-            defaultOpen={editing ? shipCols.length > 0 : sentToSupplier}
+            defaultOpen={drafting ? shipCols.length > 0 : sentToSupplier}
             summary={
-              editing
+              drafting
                 ? [
                     [
                       'Đợt',
@@ -2260,7 +2829,7 @@ export function DonChungTuScreen(p: Props) {
                   ]
             }
             actions={
-              !editing ? (
+              !drafting ? (
                 <>
                   <GridBtn
                     disabled={busy || !recv.addShipment.ok}
@@ -2283,7 +2852,7 @@ export function DonChungTuScreen(p: Props) {
               ) : undefined
             }
           >
-            {editing ? (
+            {drafting ? (
               <ChiaDotSoanGrid lines={lines} columns={shipCols} onChange={setShipCols} />
             ) : !po ? null : po.status === 'cancelled' ? (
               <div className="text-k-sm px-[var(--gutter)] py-3 text-[var(--ink-2)]">
@@ -2302,7 +2871,7 @@ export function DonChungTuScreen(p: Props) {
                   linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
                   confirmedNote={po.confirmed_note}
                   emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0)}
-                  canAct={perms.canEdit && !editing}
+                  canAct={perms.canEdit && !drafting}
                   busy={busy}
                   today={today}
                   onArrived={(id) => void shipmentAct(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')} // prettier-ignore
@@ -2351,9 +2920,50 @@ export function DonChungTuScreen(p: Props) {
           </FastTab>
         )}
 
+        {/* ══ 1c. CHI PHÍ MUA HÀNG (0211) — phí vận chuyển / bốc xếp của đơn.
+            Artboard 11a: sau Giao & nhận, vì phí phát sinh lúc hàng về. */}
+        {po && !editing && (
+          <FastTab
+            // Phiếu đầu tiên vừa ghi thì mở khối ra — defaultOpen chỉ đọc lúc dựng.
+            key={costs.length > 0 ? 'chi-phi-co' : 'chi-phi-rong'}
+            id="chi-phi"
+            title="Chi phí mua hàng"
+            flush
+            defaultOpen={costs.length > 0}
+            summary={[
+              [
+                'Phiếu',
+                <span key="a" className="num">
+                  {costs.length}
+                </span>,
+              ],
+              ['Phần của đơn · chưa VAT', <span key="b" className="num">{money(costShare, po.currency)}</span>], // prettier-ignore
+            ]}
+            actions={
+              <GridBtn
+                disabled={busy || !!costWhy}
+                title={costWhy ?? 'Ghi phí vận chuyển / bốc xếp cho đơn này'}
+                onClick={() => setPhiOpen(true)}
+              >
+                + Ghi phí
+              </GridBtn>
+            }
+          >
+            <ChiPhiGrid
+              costs={costs}
+              poId={po.id}
+              currency={po.currency}
+              canRecord={!costWhy}
+              onRecord={() => setPhiOpen(true)}
+              onVoid={(c) => setPhiVoid(c)}
+              onOpenPo={(id) => router.push(`/mua-hang/don/${id}`)}
+            />
+          </FastTab>
+        )}
+
         {/* ══ 2. ĐẦU ĐƠN — gấp, nhóm có tên, 3 cột ═══════════════════════ */}
         <FastTab
-          key={headOpen ? 'dau-don-mo' : editing ? 'dau-don-sua' : 'dau-don-xem'}
+          key={headOpen ? 'dau-don-mo' : drafting ? 'dau-don-sua' : 'dau-don-xem'}
           id="dau-don"
           /*
             Lúc SỬA, khối này chỉ còn điều khoản + ghi chú (mọi ô đầu đơn đã lên
@@ -2361,11 +2971,11 @@ export function DonChungTuScreen(p: Props) {
             Hạn giao lặp y nguyên thứ vừa hiện cách đó hai dòng. Lúc ĐỌC thì khối
             này đúng là cả đầu đơn, giữ nguyên tên và tóm tắt.
           */
-          title={editing ? 'Điều khoản & ghi chú' : 'Đầu đơn'}
-          defaultOpen={editing || headOpen}
+          title={drafting ? 'Điều khoản & ghi chú' : 'Đầu đơn'}
+          defaultOpen={drafting || headOpen}
           flush
           summary={
-            editing
+            drafting
               ? []
               : [
                   ['NCC', po?.supplier_name ?? supplierOpt?.name ?? '—'],
@@ -2378,10 +2988,10 @@ export function DonChungTuScreen(p: Props) {
           {/* Ba nhom nay CHI hien khi DOC don: luc sua, moi o cua chung
               da nam tren DAI DAU DON o dau luoi. Hai cho sua cung mot o
               la nguoi dung phai tu hoi cho nao moi that. */}
-          {!editing && (
+          {!drafting && (
             <>
               <FieldGroup title="Chung">
-                {editing ? (
+                {drafting ? (
                   <>
                     {/* Mẫu đơn / Loại đơn / Lệnh / NCC KHÔNG lặp lại ở đây khi đang
                     sửa — chúng đã ở DẢI QUYẾT ĐỊNH trên đầu lưới. Hai chỗ sửa
@@ -2456,7 +3066,7 @@ export function DonChungTuScreen(p: Props) {
                 )}
               </FieldGroup>
               <FieldGroup title="Giao hàng">
-                {editing /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */ ? null : (
+                {drafting /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */ ? null : (
                   <Field
                     label="Hạn giao"
                     tone={
@@ -2477,7 +3087,7 @@ export function DonChungTuScreen(p: Props) {
                 </Field>
               </FieldGroup>
               <FieldGroup title="Giá &amp; thuế">
-                {editing ? (
+                {drafting ? (
                   <>
                     <Field label="Tiền tệ">
                       <Pick
@@ -2501,7 +3111,11 @@ export function DonChungTuScreen(p: Props) {
                       <Tick
                         label="Đơn giá đã gồm VAT"
                         checked={header.inclVat}
-                        onChange={(v) => setHeader((h) => ({ ...h, inclVat: v }))}
+                        onChange={(v) => {
+                          // Tự tick / bỏ tick = đã tự chỉnh: đổi mẫu sau đó không được áp lại.
+                          dirty.current.vat = true
+                          setHeader((h) => ({ ...h, inclVat: v }))
+                        }}
                       />
                     </Field>
                     {meta.hasDiscount && (
@@ -2631,21 +3245,6 @@ export function DonChungTuScreen(p: Props) {
           </FieldGroup>
         </FastTab>
 
-        {/* ══ 3. TRAO ĐỔI — Odoo chatter. Người mở tới đây hỏi "vì sao đơn đứng
-            im"; câu trả lời là lời người viết, nên ghi chú đứng trước, mốc máy
-            ghi trộn vào cùng dòng (PoNotesPanel lo). Khối "Dòng thời gian" giữ
-            riêng cho ai muốn xem mỗi phần máy ghi. ═══════════════════════ */}
-        {po && (
-          <FastTab id="trao-doi" title="Trao đổi" defaultOpen>
-            <PoNotesPanel
-              poId={po.id}
-              meId={me.id}
-              meName={me.name}
-              marks={marks.map((m) => ({ key: m.key, at: m.at, label: m.label, actor: m.actor }))} // prettier-ignore
-              followerNames={[po.assignee_name].filter((x): x is string => !!x)}
-            />
-          </FastTab>
-        )}
         {po && (
           <FastTab
             id="dong-thoi-gian"
@@ -2679,9 +3278,11 @@ export function DonChungTuScreen(p: Props) {
           <>
             <b>{me.name}</b> · Mua hàng
           </>,
-          editing
-            ? 'Đang sửa — chưa lưu'
-            : (PO_NEXT_HINT[(po?.status ?? 'draft') as PoStatus] ?? ''),
+          adjusting
+            ? 'Đang điều chỉnh — chưa áp dụng'
+            : editing
+              ? 'Đang sửa — chưa lưu'
+              : (PO_NEXT_HINT[(po?.status ?? 'draft') as PoStatus] ?? ''),
         ]}
         right={
           po
@@ -2695,21 +3296,124 @@ export function DonChungTuScreen(p: Props) {
           open
           onClose={() => setAskCancel(false)}
           stakes="nang"
-          title={p.mode === 'create' ? 'Bỏ đơn đang soạn?' : 'Bỏ các thay đổi?'}
-          subtitle={`${lines.length} dòng đang gõ sẽ mất. Bản nháp tự lưu cũng bị xoá.`}
+          title={
+            adjusting
+              ? 'Bỏ điều chỉnh?'
+              : p.mode === 'create'
+                ? 'Bỏ đơn đang soạn?'
+                : 'Bỏ các thay đổi?'
+          }
+          subtitle={
+            adjusting
+              ? 'Các thay đổi chưa áp dụng sẽ mất — đơn giữ nguyên bản đang chạy.'
+              : `${lines.length} dòng đang gõ sẽ mất. Bản nháp tự lưu cũng bị xoá.`
+          }
           footer={
             <SheetActions
               stakes="nang"
               onCancel={() => setAskCancel(false)}
               onConfirm={cancelEdit}
-              cancelLabel="Soạn tiếp"
-              confirmLabel={p.mode === 'create' ? 'Bỏ đơn' : 'Bỏ thay đổi'}
+              cancelLabel={adjusting ? 'Sửa tiếp' : 'Soạn tiếp'}
+              confirmLabel={
+                adjusting
+                  ? 'Bỏ điều chỉnh'
+                  : p.mode === 'create'
+                    ? 'Bỏ đơn'
+                    : 'Bỏ thay đổi'
+              }
             />
           }
         >
           <Consequence>
-            Muốn giữ lại để làm tiếp sau thì bấm “Soạn tiếp” rồi Lưu — đơn lưu ở nháp,
-            chưa gửi ai.
+            {adjusting
+              ? 'Chưa có gì vào sổ: đơn, Kho và NCC vẫn theo bản đang chạy.'
+              : 'Muốn giữ lại để làm tiếp sau thì bấm “Soạn tiếp” rồi Lưu — đơn lưu ở nháp, chưa gửi ai.'}
+          </Consequence>
+        </Sheet>
+      )}
+      {adjSheet && po && adjPlan && (
+        <Sheet
+          open
+          onClose={() => setAdjSheet(false)}
+          stakes="vua"
+          width={640}
+          title={`Áp dụng điều chỉnh lần ${nextSeq} · ${po.code}`}
+          subtitle="Không cần duyệt lại. Phần chênh ghi thành phát sinh riêng để kế toán theo dõi."
+          footer={
+            <SheetActions
+              stakes="vua"
+              busy={busy}
+              onCancel={() => setAdjSheet(false)}
+              onConfirm={() => void applyAdjust()}
+              cancelLabel="Quay lại sửa"
+              confirmLabel="Áp dụng"
+              disabled={adjReason.trim().length < 5 || adjBlocked != null}
+            />
+          }
+        >
+          <Affected
+            max={20}
+            items={[
+              ...adjPlan.changes.map((c) => ({ code: c.kind === 'added' ? `Thêm · dòng ${c.no}` : c.kind === 'removed' ? `Bỏ · dòng cũ ${c.no}` : `Dòng ${c.no}`, label: `${c.code ? `${c.code} ` : ''}${c.name}${c.kind === 'changed' ? ` — ${c.qty_before !== c.qty_after ? `SL ${fmtNum(c.qty_before ?? 0)} → ${fmtNum(c.qty_after ?? 0)} ` : ''}${c.price_before !== c.price_after ? `giá ${fmtNum(c.price_before ?? 0)} → ${fmtNum(c.price_after ?? 0)} ` : ''}${c.fields.length ? `đổi ${c.fields.join(', ')}` : ''}` : ''}`, amount: signed(c.amount_after - c.amount_before, header.currency) })), // prettier-ignore
+              ...(adjPlan.headerChanges?.vat_rate ? [{ code: 'VAT', label: `${adjPlan.headerChanges.vat_rate[0] ?? 0}% → ${adjPlan.headerChanges.vat_rate[1] ?? 0}%` }] : []), // prettier-ignore
+              ...(adjPlan.headerChanges?.discount_amount ? [{ code: 'Chiết khấu', label: `${fmtNum(adjPlan.headerChanges.discount_amount[0])} → ${fmtNum(adjPlan.headerChanges.discount_amount[1])}` }] : []), // prettier-ignore
+            ]}
+          />
+          <FactKv
+            rows={[
+              ['Tổng đang chạy', <span key="a" className="num">{money(adjPlan.money.before.grandTotal, header.currency)}</span>], // prettier-ignore
+              ['Tổng mới', <span key="b" className="num">{money(adjPlan.money.after.grandTotal, header.currency)}</span>], // prettier-ignore
+              [`Phát sinh lần ${nextSeq}`, <b key="c" className="num">{signed(adjPlan.delta.total, header.currency)}</b>], // prettier-ignore
+              ['Báo cho', <span key="d">{notifyWho ?? 'không ai — bạn là người đã duyệt đơn này'}</span>], // prettier-ignore
+            ]}
+          />
+          <Field label="Vì sao điều chỉnh">
+            <TextArea
+              aria-label="Vì sao điều chỉnh"
+              value={adjReason}
+              onChange={setAdjReason}
+              placeholder="VD: NCC báo tăng giá từ 25/09 (Zalo anh Nguyên); lệnh tăng 20 bộ"
+            />
+          </Field>
+          {adjReason.trim().length < 5 && (
+            <div className="k-t-warn text-k-sm">
+              Ghi lý do (ít nhất 5 ký tự) — vào sổ phát sinh và thông báo.
+            </div>
+          )}
+          <Consequence>
+            Bản mới thay ngay bản đang chạy: Kho nhận theo số mới từ lúc này, đơn vẫn ở
+            bước hiện tại. Khoản phát sinh vào sổ, không xoá được — muốn đảo thì điều
+            chỉnh lần sau. Nhớ in phiếu gửi lại NCC rồi bấm “Ghi đã gửi NCC”.
+          </Consequence>
+        </Sheet>
+      )}
+      {sentSheet != null && po && (
+        <Sheet
+          open
+          onClose={() => setSentSheet(null)}
+          stakes="nhe"
+          title={`Ghi đã gửi NCC bản điều chỉnh lần ${sentSheet}`}
+          subtitle={`${po.code} · ${po.supplier_name}`}
+          footer={
+            <SheetActions
+              stakes="nhe"
+              busy={busy}
+              onCancel={() => setSentSheet(null)}
+              onConfirm={() => void markSent()}
+              confirmLabel="Ghi đã gửi"
+            />
+          }
+        >
+          <Field label="Gửi qua đâu (tuỳ chọn)">
+            <TextInput
+              label="Gửi qua đâu"
+              value={sentNote}
+              onCommit={setSentNote}
+              placeholder="Zalo anh Nguyên · email · in giấy gửi xe…"
+            />
+          </Field>
+          <Consequence>
+            Ghi mốc lên dòng thời gian đơn, tắt nhắc “chưa tới NCC”.
           </Consequence>
         </Sheet>
       )}
@@ -2763,6 +3467,34 @@ export function DonChungTuScreen(p: Props) {
             lines={previewLinesFromDraft(template, lines)}
           />
         </Sheet>
+      )}
+      {phiOpen && po && (
+        <GhiPhiSheet
+          poId={po.id}
+          poCode={po.code}
+          supplierId={po.supplier_id}
+          supplierName={po.supplier_name}
+          busy={busy}
+          onClose={() => setPhiOpen(false)}
+          onSubmit={(body) =>
+            call('/api/dept/supply/po-costs', 'POST', body, 'Đã ghi phiếu chi phí')
+          }
+        />
+      )}
+      {phiVoid && (
+        <HuyPhiSheet
+          cost={phiVoid}
+          busy={busy}
+          onClose={() => setPhiVoid(null)}
+          onSubmit={(reason) =>
+            call(
+              `/api/dept/supply/po-costs/${phiVoid.id}/void`,
+              'POST',
+              { reason },
+              'Đã huỷ phiếu chi phí',
+            )
+          }
+        />
       )}
       {xacNhan && po && (
         <XacNhanSheet

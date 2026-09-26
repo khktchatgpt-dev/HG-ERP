@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { posService } from '@/modules/dept/supply/pos.service'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
@@ -91,6 +92,7 @@ export default async function Page({
       shipments={[]}
       shipmentReceipts={{}}
       receiptBatches={[]}
+      lastTemplates={await posRepo.lastTemplateBySupplier()}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null }))} // prettier-ignore
       lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
       perms={{ canEdit: true, canApprove, isSupply: true }}
