@@ -15,6 +15,8 @@ export function PoNotesPanel({
   meId,
   meName,
   followerNames,
+  partnerLabel,
+  filters,
 }: {
   poId: string
   /** Mốc máy ghi của đơn — trộn chung dòng với ghi chú của người. */
@@ -22,6 +24,10 @@ export function PoNotesPanel({
   meId: string
   meName: string
   followerNames: string[]
+  /** Nhãn lựa chọn "bên ngoài" của ô viết — xem `DocNotesPanel`. */
+  partnerLabel?: string
+  /** Bày nút lọc Ghi chú / Mốc máy / Tất cả — xem `DocNotesPanel`. */
+  filters?: boolean
 }) {
   return (
     <DocNotesPanel
@@ -31,6 +37,8 @@ export function PoNotesPanel({
       meId={meId}
       meName={meName}
       followerNames={followerNames}
+      partnerLabel={partnerLabel}
+      filters={filters}
       emptyHint={
         <>
           Chưa ai ghi gì về đơn này. Ghi lại những gì đang xảy ra ngoài hệ thống — NCC hẹn

@@ -1150,6 +1150,10 @@
   .k-body:not(.k-body-wide) {
     grid-template-columns: 1fr 268px;
   }
+  /* Cột phải có ô viết (Trao đổi) — xem `DocBody wideAside`. */
+  .k-body.k-body-aside-wide {
+    grid-template-columns: 1fr 340px;
+  }
 }
 .k-main {
   min-width: 0;

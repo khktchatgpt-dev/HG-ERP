@@ -545,6 +545,19 @@ export function Menu({
      * hỏi vòng quanh.
      */
     blockedBy?: string
+    /**
+     * Câu LÝ DO khoá, in NGUYÊN VĂN dưới nhãn ("NCC chưa xác nhận — bấm NCC xác
+     * nhận trước"). Dùng khi vướng là NGHIỆP VỤ chứ không phải bộ phận giữ quyền
+     * — `blockedBy` ghép thành "Việc này do … quản lý", đọc sai với một câu lý do.
+     * Có giá trị = mục khoá mềm, câu là mô tả đọc được (`aria-describedby`).
+     */
+    why?: string
+    /**
+     * Tên NHÓM của mục ("Giao & nhận", "Đơn"). Nhóm đổi thì menu kẻ một vạch và
+     * in tên nhóm làm tiêu đề — menu dài hơn ~8 mục mà không nhóm thì mắt phải
+     * đọc từng dòng. Các mục cùng nhóm phải đứng LIỀN nhau.
+     */
+    group?: string
   }[]
   /**
    * Chữ trên nút mở. Một ký tự ("⋯") thì nút vuông; có chữ ("Thao tác ▾")
@@ -568,7 +581,8 @@ export function Menu({
        ngày 16/09 (chữ 2,2:1, trượt AA);
      · nằm `absolute` trong DOM nơi gọi → bị cắt trong vùng `overflow`, và
        nằm dưới hộp thoại khi mở từ trong hộp.
-    Giữ nguyên API (`items`, `label`) — chỉ THÊM `ariaLabel` và `blockedBy`.
+    Giữ nguyên API (`items`, `label`) — chỉ THÊM `ariaLabel`, `blockedBy`, và
+    (26/09/2026) `why` + `group` cho thanh hành động một hàng của đơn mua.
   */
   const ten = ariaLabel ?? ([...label].length === 1 ? 'Thêm thao tác' : undefined)
   return (
@@ -598,19 +612,30 @@ export function Menu({
             align="end"
             sideOffset={4}
             collisionPadding={8}
-            className="z-[var(--z-pop)] min-w-[196px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] py-1 shadow-[var(--shadow-drop)]"
+            /* Menu dài (thanh một hàng của đơn mua gom ~20 mục) không được tràn
+               khỏi màn: cao tối đa đúng phần Radix đo còn trống, dư thì cuộn. */
+            className="z-[var(--z-pop)] max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[196px] overflow-y-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] py-1 shadow-[var(--shadow-drop)]"
           >
-            {items.map((it, i) => (
-              <Fragment key={i}>
-                {/* Mục NGUY HIỂM tách xuống dưới một vạch — kề sát mục thường
-                    thì sớm muộn có người bấm nhầm. Một vạch cho cả CỤM mục
-                    nguy hiểm, không phải mỗi mục một vạch. */}
-                {it.danger && i > 0 && !items[i - 1].danger && (
-                  <DropdownMenu.Separator className="my-1 h-px bg-[var(--hair)]" />
-                )}
-                <MenuRow it={it} />
-              </Fragment>
-            ))}
+            {items.map((it, i) => {
+              const newGroup = !!it.group && it.group !== items[i - 1]?.group
+              return (
+                <Fragment key={i}>
+                  {/* Mục NGUY HIỂM tách xuống dưới một vạch — kề sát mục thường
+                      thì sớm muộn có người bấm nhầm. Một vạch cho cả CỤM mục
+                      nguy hiểm, không phải mỗi mục một vạch. Nhóm mới cũng mở
+                      bằng một vạch — nhưng không vạch trên mục đầu tiên. */}
+                  {i > 0 && (newGroup || (it.danger && !items[i - 1].danger)) && (
+                    <DropdownMenu.Separator className="my-1 h-px bg-[var(--hair)]" />
+                  )}
+                  {newGroup && (
+                    <DropdownMenu.Label className="text-k-label px-3 pt-1 pb-0.5 font-semibold tracking-wide text-[var(--ink-3)] uppercase">
+                      {it.group}
+                    </DropdownMenu.Label>
+                  )}
+                  <MenuRow it={it} />
+                </Fragment>
+              )
+            })}
           </DropdownMenu.Content>
         </div>
       </DropdownMenu.Portal>
@@ -638,15 +663,16 @@ function MenuRow({
     danger?: boolean
     disabled?: boolean
     blockedBy?: string
+    why?: string
   }
 }) {
   const id = useId()
-  const khoa = !!it.blockedBy || !!it.disabled
+  const khoa = !!it.blockedBy || !!it.why || !!it.disabled
   return (
     <DropdownMenu.Item
       aria-disabled={khoa || undefined}
       aria-labelledby={`${id}-ten`}
-      aria-describedby={it.blockedBy ? `${id}-vi-sao` : undefined}
+      aria-describedby={it.blockedBy || it.why ? `${id}-vi-sao` : undefined}
       // Gõ chữ cái để nhảy: Radix đọc `textContent`, mà nội dung có cả câu lý do.
       textValue={it.label}
       onSelect={(e) => {
@@ -676,6 +702,14 @@ function MenuRow({
           className="text-k-label mt-px block text-[var(--ink-3)]"
         >
           Việc này do {it.blockedBy} quản lý
+        </span>
+      )}
+      {it.why && !it.blockedBy && (
+        <span
+          id={`${id}-vi-sao`}
+          className="text-k-label mt-px block text-[var(--ink-3)]"
+        >
+          {it.why}
         </span>
       )}
     </DropdownMenu.Item>

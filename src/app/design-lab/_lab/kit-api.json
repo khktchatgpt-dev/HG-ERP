@@ -731,6 +731,13 @@
         "optional": true,
         "def": null,
         "doc": "Cột phải 268px (thường là `<FactBox>`), chỉ đứng cạnh từ 1100px trở lên; hẹp hơn thì rơi xuống dưới. Bỏ trống thì cột chính chiếm trọn bề ngang."
+      },
+      {
+        "name": "wideAside",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Cột phải rộng 340px thay vì 268px — khi cột phải chứa ô VIẾT (khối Trao đổi của chứng từ): 268px thì ô gõ chỉ còn ~230px, mỗi dòng 4–5 chữ. Chỉ bật khi cột phải có chỗ nhập; FactBox chỉ-đọc giữ 268px để bảng chính rộng."
       }
     ],
     "extends": []

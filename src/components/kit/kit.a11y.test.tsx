@@ -579,6 +579,39 @@ describe('Menu — menu thả ⋯', () => {
     expect(chay).not.toHaveBeenCalled()
     expect(screen.getByRole('menu')).toBeTruthy()
   })
+
+  /*
+    26/09/2026 — thanh hành động một hàng của đơn mua gom ~14 việc vào "⋯ Thêm".
+    Không nhóm thì mắt đọc từng dòng; lý do khoá là câu NGHIỆP VỤ nên in nguyên
+    văn (`why`), không ghép "Việc này do … quản lý" như `blockedBy`.
+  */
+  it('group: tiêu đề nhóm hiện đúng chỗ nhóm đổi; why: câu lý do nguyên văn, mục khoá mềm', async () => {
+    const chay = vi.fn()
+    render(
+      <Menu
+        label="⋯ Thêm"
+        items={[
+          { label: 'Thêm đợt giao', group: 'Giao & nhận', onClick: chay },
+          { label: 'Chốt phần thiếu', group: 'Giao & nhận', why: 'Chưa có hàng về — chưa có gì để chốt', onClick: chay }, // prettier-ignore
+          { label: 'Nhân bản đơn', group: 'Đơn', onClick: () => {} },
+          { label: 'Huỷ đơn…', group: 'Huỷ', danger: true, onClick: () => {} },
+        ]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: '⋯ Thêm' }))
+    const menu = screen.getByRole('menu')
+    await expectNoViolations(menu)
+    // Ba nhóm → ba tiêu đề, đứng đúng trước mục đầu của nhóm.
+    expect(menu.textContent).toMatch(/Giao & nhận.*Thêm đợt giao.*Chốt phần thiếu.*Đơn.*Nhân bản đơn.*Huỷ.*Huỷ đơn…/) // prettier-ignore
+    const khoa = screen.getByRole('menuitem', {
+      name: 'Chốt phần thiếu',
+      description: 'Chưa có hàng về — chưa có gì để chốt',
+    })
+    expect(khoa.getAttribute('aria-disabled')).toBe('true')
+    await userEvent.click(khoa)
+    expect(chay).not.toHaveBeenCalled()
+    expect(screen.getByRole('menu')).toBeTruthy()
+  })
 })
 
 describe('Popover — khung nổi', () => {

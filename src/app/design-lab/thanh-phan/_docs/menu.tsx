@@ -69,6 +69,24 @@ export default function DocMenu() {
           ),
         },
         {
+          name: 'Nhóm + lý do nghiệp vụ',
+          when: 'menu dài (~8 mục trở lên) của thanh hành động một hàng. group in tiêu đề nhóm khi nhóm đổi (các mục cùng nhóm đứng liền); why in NGUYÊN VĂN câu lý do khoá — dùng khi vướng là nghiệp vụ, không phải bộ phận giữ quyền.',
+          demo: (
+            <Menu
+              label="⋯ Thêm"
+              items={[
+                { label: 'Thêm đợt giao', group: 'Giao & nhận' },
+                { label: 'Ghi nhận nhận hàng · Kho', group: 'Giao & nhận', why: 'NCC chưa xác nhận — bấm “NCC xác nhận” trước' },
+                { label: 'Chốt phần thiếu', group: 'Giao & nhận', why: 'Không còn dòng nào đang chờ về' },
+                { label: 'Sửa điều khoản', group: 'Đơn' },
+                { label: 'Bàn giao', group: 'Đơn' },
+                { label: 'Xuất Excel', group: 'In & hiển thị' },
+                { label: 'Huỷ đơn…', group: 'Huỷ', danger: true },
+              ]}
+            />
+          ),
+        },
+        {
           name: 'Nhãn có chữ',
           when: 'nút đứng một mình, không có nút chính bên cạnh để nói nó là gì. Chữ trên nút chính là tên.',
           demo: (
@@ -99,9 +117,9 @@ export default function DocMenu() {
           behaves: 'Enter / Space / bấm chuột chạy onClick, đóng menu, tiêu điểm về nút.',
         },
         {
-          state: 'Mục khoá (disabled / blockedBy)',
+          state: 'Mục khoá (disabled / blockedBy / why)',
           looks:
-            'Chữ xám đọc được (không mờ bằng opacity); blockedBy thêm dòng “Việc này do … quản lý”.',
+            'Chữ xám đọc được (không mờ bằng opacity); blockedBy thêm dòng “Việc này do … quản lý”; why in nguyên văn câu lý do.',
           behaves:
             'Khoá MỀM: aria-disabled, mũi tên vẫn dừng trên nó; chọn (Enter / Space / chuột) bị nuốt — không chạy onClick, menu không đóng.',
         },
@@ -151,6 +169,11 @@ export default function DocMenu() {
           do: 'Để mục nguy hiểm (xoá, huỷ) cuối danh sách — kit tự tách chúng bằng một vạch.',
           dont: 'Xếp “Huỷ đơn” sát “Sao chép đơn”: sớm muộn có người bấm nhầm.',
           source: 'chú thích MENU ⋯ trong kit/Nav.tsx',
+        },
+        {
+          do: 'Menu dài thì chia nhóm (group) và nói lý do khoá bằng câu nghiệp vụ (why).',
+          dont: 'Mười bốn mục xếp một cột không tiêu đề, mục khoá câm — người dùng đọc từng dòng rồi bấm thử.',
+          source: 'đo màn đơn mua 26/09/2026: 16 + 11 nút trên 3 tab gom vào một “⋯ Thêm”',
         },
         {
           do: 'Nút chính đứng riêng ở góc phải header; Menu chỉ gom tác vụ phụ.',

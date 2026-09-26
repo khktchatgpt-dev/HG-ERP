@@ -1100,6 +1100,7 @@ export function AuditTable({
 export function DocBody({
   children,
   aside,
+  wideAside = false,
 }: {
   /** Cột chính: các `FastTab`, lưới dòng, bảng kiểm. */
   children: ReactNode
@@ -1108,9 +1109,21 @@ export function DocBody({
    * hẹp hơn thì rơi xuống dưới. Bỏ trống thì cột chính chiếm trọn bề ngang.
    */
   aside?: ReactNode
+  /**
+   * Cột phải rộng 340px thay vì 268px — khi cột phải chứa ô VIẾT (khối Trao
+   * đổi của chứng từ): 268px thì ô gõ chỉ còn ~230px, mỗi dòng 4–5 chữ. Chỉ bật
+   * khi cột phải có chỗ nhập; FactBox chỉ-đọc giữ 268px để bảng chính rộng.
+   */
+  wideAside?: boolean
 }) {
   return (
-    <div className={cx('k-body', !aside && 'k-body-wide')}>
+    <div
+      className={cx(
+        'k-body',
+        !aside && 'k-body-wide',
+        !!aside && wideAside && 'k-body-aside-wide',
+      )}
+    >
       <div className="k-main">{children}</div>
       {aside}
     </div>

@@ -38,7 +38,7 @@ export const AUDIENCE_LABEL: Record<Audience, string> = {
 /** Câu nhắc dưới ô nhập — nói HỆ QUẢ, không nói tên trường. */
 export const AUDIENCE_HINT: Record<Audience, string> = {
   internal: 'Chỉ người trong công ty đọc được.',
-  partner: 'Nội dung đã hoặc sẽ gửi ra ngoài — viết như đang nói với họ.',
+  partner: 'Ghi lại điều đã báo cho bên ngoài — hệ thống không gửi gì ra ngoài.',
 }
 
 export type DocNote = {
