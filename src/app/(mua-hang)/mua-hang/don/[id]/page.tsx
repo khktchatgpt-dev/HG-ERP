@@ -53,26 +53,47 @@ export default async function Page({
 }) {
   const [{ id }, sp] = await Promise.all([params, searchParams])
   const user = await authService.requirePageUser()
-  const [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice] =
-    await Promise.all([
-      isSupplyStaff(user),
-      canAction(user, 'supply.po.manage_any'),
-      canAction(user, 'supply.po.approve'),
-      canAction(user, 'supply.po_cost.manage'),
-      canAction(user, 'accounting.supplier_invoice.manage'),
-    ])
+
+  /*
+    HAI CHẶNG, không phải bốn (28/09/2026). Bản trước chờ nối đuôi: quyền → đơn →
+    nhóm lớn → mẫu đơn theo NCC — ~2,2 s mỗi lần mở đơn đo trên máy dev, mỗi lượt
+    đi–về Supabase ~145 ms. Mọi thứ KHÔNG cần biết đơn (quyền, danh sách NCC /
+    lệnh, đầu phiếu, mẫu in) nay khởi động CÙNG LÚC với tải đơn; chỉ phần cần
+    `po` mới đợi đơn về.
+  */
+  const indep = Promise.all([
+    isSupplyStaff(user),
+    canAction(user, 'supply.po.manage_any'),
+    canAction(user, 'supply.po.approve'),
+    canAction(user, 'supply.po_cost.manage'),
+    canAction(user, 'accounting.supplier_invoice.manage'),
+    canAction(user, 'supply.po_issue.manage'),
+    suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
+    productionRepo.listActive(),
+    // Đầu phiếu + mẫu in cho "Xem trước phiếu" lúc sửa — settings có cache.
+    settingsService.getAll(),
+    docTemplatesService.get('PO'),
+    posRepo.lastTemplateBySupplier(),
+  ])
 
   let detail
   try {
     detail = await posService.detail(user, id)
   } catch (e) {
+    // Đơn hỏng thì nhóm trên vẫn đang bay — gắn catch để lỗi muộn của nó
+    // không thành unhandled rejection.
+    indep.catch(() => {})
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches, company, tpl, adjustments, costs, finance, tracking, links, canIssue, submittedAt] = // prettier-ignore
-    await Promise.all([
+  const [
+    [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates], // prettier-ignore
+    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt], // prettier-ignore
+  ] = await Promise.all([
+    indep,
+    Promise.all([
       poPosition(po.id),
       po.supplier_id ? suppliersRepo.findById(po.supplier_id) : Promise.resolve(null),
       po.supplier_id ? supplierFacts(po.supplier_id, po.id) : Promise.resolve(null),
@@ -80,16 +101,11 @@ export default async function Page({
         lines.map((l) => l.material_id).filter((x): x is string => x != null),
       ),
       posService.listShipments(user, po.id),
-      suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
-      productionRepo.listActive(),
       // Đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id) — phần không nối đợt
       // thì client suy diễn, xem allocateReceiptsToShipments.
       posService.shipmentReceipts(user, po.id),
       // Đợt về theo PHIẾU cho ma trận dòng × đợt — cùng hàm với Excel lệnh.
       loadReceiptBatches([po.id]).then((r) => r[po.id] ?? []),
-      // Đầu phiếu + mẫu in cho "Xem trước phiếu" lúc sửa — settings có cache.
-      settingsService.getAll(),
-      docTemplatesService.get('PO'),
       // Sổ điều chỉnh (0210): bản duyệt → phát sinh lần N → hiện hành.
       posService.listAdjustments(user, po.id),
       // Phiếu chi phí mua hàng (0211): phí vận chuyển / bốc xếp gắn đơn này.
@@ -101,20 +117,24 @@ export default async function Page({
       poTrackingService.forPo(user, po.id),
       // Đơn bổ sung ↔ đơn gốc (0213).
       posRepo.supplementLinks(po),
-      canAction(user, 'supply.po_issue.manage'),
       // Mốc gửi duyệt cuối — dải "ai giữ" đếm ngày chờ duyệt từ đây (27/09/2026).
       po.status === 'pending_approval'
         ? approvalEventsRepo
             .lastSubmittedAt('po', [po.id])
             .then((m) => m.get(po.id) ?? null)
         : Promise.resolve(null),
-    ])
+    ]),
+  ])
   const stock: Record<string, number> = {}
   for (const r of stockRows) stock[r.material_id] = r.on_hand
 
   const isSupply = user.role === 'admin' || supplyStaff
   const manageAny = user.role === 'admin' || canManageAny
   const canEdit = isSupply && (manageAny || (po.assigned_to != null && po.assigned_to === user.id)) // prettier-ignore
+
+  // Danh sách NCC (~32 KB, 72% dữ liệu của trang) chỉ nuôi ô CHỌN NCC lúc sửa —
+  // người không sửa được đơn (GĐ, kho, kế toán) chỉ cần đúng NCC của đơn này.
+  const pickable = canEdit ? suppliers : suppliers.filter((s) => s.id === po.supplier_id)
 
   return (
     <DonChungTuScreen
@@ -145,8 +165,8 @@ export default async function Page({
       receiptBatches={receiptBatches}
       company={company}
       tpl={tpl}
-      lastTemplates={await posRepo.lastTemplateBySupplier()}
-      suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null }))} // prettier-ignore
+      lastTemplates={canEdit ? lastTemplates : undefined}
+      suppliers={pickable.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null }))} // prettier-ignore
       lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
       perms={{
         canEdit,

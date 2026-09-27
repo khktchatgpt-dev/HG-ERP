@@ -356,14 +356,17 @@ export const posService = {
   },
 
   async detail(_user: User, id: string) {
-    const po = await posRepo.findById(id)
-    if (!po) throw NotFound('Đơn đặt không tồn tại')
-    const [lines, rawStatus, extra_lsx, warehouse_docs] = await Promise.all([
+    // Bốn truy vấn dưới chỉ cần MÃ đơn, không cần đầu đơn — chạy CÙNG LÚC với
+    // findById thay vì chờ nó (bớt một lượt đi–về Supabase, ~150 ms, 28/09/2026).
+    // Đơn không tồn tại thì chúng trả rỗng, vô hại.
+    const [po, lines, rawStatus, extra_lsx, warehouse_docs] = await Promise.all([
+      posRepo.findById(id),
       posRepo.listLines(id),
       supplyRepo.lineStatus(id), // đặt / đã nhận / còn thiếu (BR-08, FR-SUP-05)
       posRepo.listExtraLsx(id), // LSX phụ gộp vào đơn (0125)
       supplyRepo.docsByPo(id), // PNK/phiếu trả — mốc timeline (GĐ3)
     ])
+    if (!po) throw NotFound('Đơn đặt không tồn tại')
     // Lý do chốt thiếu (0154) — view đối chiếu không mang cột này; chỉ trang
     // chi tiết cần (tooltip trên badge) nên tra thêm một lượt, đúng các dòng chốt.
     const reasons = rawStatus.some((l) => l.closed_short_at != null)
