@@ -20,7 +20,7 @@ vi.mock('@/modules/dept/sales/quotes.repo', () => ({
 }))
 vi.mock('@/modules/dept/warehouse/stock.repo', () => ({ stockRepo: { list: vi.fn() } }))
 vi.mock('@/modules/core/approvals/approvals.repo', () => ({
-  approvalEventsRepo: { listRecent: vi.fn() },
+  approvalEventsRepo: { listRecent: vi.fn(), lastSubmittedAt: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({
   usersRepo: { displayNamesByIds: vi.fn() },
@@ -96,6 +96,7 @@ beforeEach(() => {
     total: 1,
   } as never)
   vi.mocked(approvalEventsRepo.listRecent).mockResolvedValue([] as never)
+  vi.mocked(approvalEventsRepo.lastSubmittedAt).mockResolvedValue(new Map())
   vi.mocked(settingsService.approvalThresholds).mockResolvedValue({
     VND: 50_000_000,
   })
@@ -145,6 +146,28 @@ describe('execService.signBox — xếp phiếu', () => {
 
     expect(box.items.map((i) => i.code)).toEqual(['PO-CU', 'PO-TO'])
     expect(box.stats.oldest_days).toBe(5)
+  })
+
+  it('đơn mua: ĐÃ CHỜ tính từ lần GỬI DUYỆT cuối, không từ ngày lập (27/09/2026)', async () => {
+    mockLists({
+      pos: [
+        // Lập 20 ngày trước, gửi duyệt 3 ngày trước.
+        PO({ id: 'lap-som', code: 'PO-LAP-SOM', created_at: daysAgo(20) }),
+        // Chưa từng có mốc gửi (đơn trước 0128) → lùi về ngày lập.
+        PO({ id: 'cu', code: 'PO-CU', created_at: daysAgo(6) }),
+      ],
+    })
+    vi.mocked(approvalEventsRepo.lastSubmittedAt).mockResolvedValue(
+      new Map([["lap-som", daysAgo(3)]]),
+    )
+
+    const box = await execService.signBox(gd)
+
+    const by = new Map(box.items.map((i) => [i.code, i]))
+    expect(by.get('PO-LAP-SOM')?.waiting_days).toBe(3)
+    expect(by.get('PO-CU')?.waiting_days).toBe(6)
+    // Xếp theo chờ THẬT: đơn gửi 6 ngày trước đứng trước đơn lập 20 ngày trước.
+    expect(box.items.map((i) => i.code)).toEqual(['PO-CU', 'PO-LAP-SOM'])
   })
 
   it('cùng số ngày chờ thì phiếu to đứng trước', async () => {

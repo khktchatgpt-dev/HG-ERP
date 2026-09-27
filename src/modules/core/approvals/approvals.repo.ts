@@ -95,6 +95,36 @@ export const approvalEventsRepo = {
     })
   },
 
+  /**
+   * MỐC GỬI DUYỆT GẦN NHẤT của từng hồ sơ — cho "đã chờ bao lâu" (27/09/2026).
+   *
+   * Trước đó hộp ký đếm từ `created_at`: đơn lập 01/09 mà 15/09 mới gửi thì
+   * hiện "chờ 26 ngày"; còn Bàn làm việc Mua hàng đếm từ `updated_at` — bất kỳ
+   * lượt sửa nào (kể cả script dời ghi chú) cũng đặt lại đồng hồ về 0. Mốc đúng
+   * là lần GỬI DUYỆT cuối: trả lại rồi gửi lại thì tính từ lần gửi lại.
+   * Hồ sơ không có mốc (trước 0128) → không có trong Map, chỗ gọi tự lùi.
+   */
+  async lastSubmittedAt(
+    entity_type: ApprovalEntityType,
+    ids: string[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await db()
+        .from('approval_events')
+        .select('entity_id, created_at')
+        .eq('entity_type', entity_type)
+        .eq('action', 'submitted')
+        .in('entity_id', ids.slice(i, i + 150))
+      if (error) throw new Error(error.message)
+      for (const r of data ?? []) {
+        const cur = out.get(r.entity_id)
+        if (!cur || r.created_at > cur) out.set(r.entity_id, r.created_at)
+      }
+    }
+    return out
+  },
+
   async listRecent(filter: {
     entity_type?: ApprovalEntityType
     action?: ApprovalAction

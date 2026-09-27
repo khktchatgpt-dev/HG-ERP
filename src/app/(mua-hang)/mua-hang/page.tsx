@@ -1,6 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import {
   loadWatchPos,
@@ -142,11 +143,19 @@ export default async function Page({
 
   let approver: { pending: PendingRow[]; buyers: BuyerRow[] } | null = null
   if (canApprove && !viewAsUser) {
-    const pending: PendingRow[] = rows
-      .filter((p) => p.status === 'pending_approval')
-      .sort((a, b) =>
-        (a.updated_at ?? a.created_at).localeCompare(b.updated_at ?? b.created_at),
-      )
+    /*
+      ĐÃ CHỜ TỪ LẦN GỬI DUYỆT CUỐI (27/09/2026) — cùng mốc với hộp ký của
+      Giám đốc. Trước đó lấy `updated_at`: mọi lượt sửa (kể cả script dời ghi
+      chú) đặt lại đồng hồ, 14 đơn gửi 15/09 hiện "chờ từ 27/09".
+    */
+    const pendingRows = rows.filter((p) => p.status === 'pending_approval')
+    const submitted = await approvalEventsRepo.lastSubmittedAt(
+      'po',
+      pendingRows.map((p) => p.id),
+    )
+    const sentAt = (p: WatchPo) => submitted.get(p.id) ?? p.created_at
+    const pending: PendingRow[] = pendingRows
+      .sort((a, b) => sentAt(a).localeCompare(sentAt(b)))
       .map((p) => ({
         id: p.id,
         code: p.code,
@@ -155,7 +164,7 @@ export default async function Page({
         lsx: p.lsx_code ?? null,
         total: p.total,
         currency: p.currency,
-        since: (p.updated_at ?? p.created_at).slice(0, 10),
+        since: sentAt(p).slice(0, 10),
       }))
     // Theo người mua: người đang cầm ít nhất một đơn còn chạy.
     const byOwner = new Map<string, WatchPo[]>()

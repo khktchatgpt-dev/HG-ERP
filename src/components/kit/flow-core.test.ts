@@ -171,3 +171,16 @@ describe('buildPoMarks — dòng thời gian', () => {
     expect(marks.find((m) => m.key === 'approved')?.actor).toBe('GĐ Hùng')
   })
 })
+
+describe('poHolder — chờ duyệt đếm từ lần gửi duyệt (27/09/2026)', () => {
+  it('có submitted_at thì dùng nó, không dùng updated_at (bị mọi lượt sửa đặt lại)', () => {
+    const h = poHolder(
+      { status: 'pending_approval', submitted_at: '2026-09-15T02:00:00Z', updated_at: '2026-09-27T09:00:00Z' },
+      null,
+    )
+    expect(h.since).toBe('2026-09-15T02:00:00Z')
+  })
+  it('thiếu mốc gửi thì lùi về updated_at như cũ', () => {
+    expect(poHolder({ status: 'pending_approval', updated_at: '2026-09-20T00:00:00Z' }, null).since).toBe('2026-09-20T00:00:00Z')
+  })
+})

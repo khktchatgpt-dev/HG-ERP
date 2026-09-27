@@ -267,7 +267,7 @@ export const execService = {
 
     // Tiền tệ nằm ở ĐƠN HÀNG, không ở dòng đơn và cũng không ở lệnh — nên phải
     // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
-    const [poTotals, orderLines, orderList, creatorNames, quoteLineCounts] =
+    const [poTotals, orderLines, orderList, creatorNames, quoteLineCounts, poSubmitted] =
       await Promise.all([
         posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
         ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
@@ -282,6 +282,7 @@ export const execService = {
           ].filter((x): x is string => !!x),
         ),
         quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
+        approvalEventsRepo.lastSubmittedAt('po', pendingPos.rows.map((p) => p.id)),
       ])
 
     const items: SignItem[] = []
@@ -305,8 +306,9 @@ export const execService = {
         ],
         currency: p.currency,
         value,
-        waiting_days: daysSince(p.created_at, today) ?? 0,
-        submitted_at: p.created_at,
+        // Đã chờ tính từ lần GỬI DUYỆT cuối, không từ ngày lập (27/09/2026).
+        waiting_days: daysSince(poSubmitted.get(p.id) ?? p.created_at, today) ?? 0,
+        submitted_at: poSubmitted.get(p.id) ?? p.created_at,
         submitted_by: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
         warnings,
         big: isBigApprovalWith(value, p.currency, thresholds),
@@ -424,11 +426,15 @@ export const execService = {
 
     // Tiền của đơn mua: Σ dòng — 1 truy vấn gộp cho mọi đơn đang xét.
     const poIds = [...new Set([...pendingPos.rows, ...allPos.rows].map((p) => p.id))]
-    const poTotals = await posRepo.totalsByPoIds(poIds)
+    const [poTotals, poSubmitted] = await Promise.all([
+      posRepo.totalsByPoIds(poIds),
+      approvalEventsRepo.lastSubmittedAt('po', pendingPos.rows.map((p) => p.id)),
+    ])
 
     // ── Cần Giám đốc quyết ──────────────────────────────────────────────────
+    // Đơn mua: đã chờ tính từ lần GỬI DUYỆT cuối — cùng số với hộp ký.
     const poWaitDays = pendingPos.rows
-      .map((p) => daysSince(p.created_at, today))
+      .map((p) => daysSince(poSubmitted.get(p.id) ?? p.created_at, today))
       .filter((d): d is number => d != null)
     const lsxWaitDays = pendingLsx.rows
       .map((l) => daysSince(l.created_at, today))

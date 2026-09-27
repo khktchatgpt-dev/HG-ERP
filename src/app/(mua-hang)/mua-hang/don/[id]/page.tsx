@@ -17,6 +17,7 @@ import { HttpError } from '@/server/http'
 import { poFinanceForPo } from '@/modules/dept/accounting/supplier-invoices.service'
 import { poTrackingService } from '@/modules/dept/supply/po-tracking.service'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
+import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { DonChungTuScreen } from './DonChungTuScreen'
 
 export const dynamic = 'force-dynamic'
@@ -70,7 +71,7 @@ export default async function Page({
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches, company, tpl, adjustments, costs, finance, tracking, links, canIssue] = // prettier-ignore
+  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches, company, tpl, adjustments, costs, finance, tracking, links, canIssue, submittedAt] = // prettier-ignore
     await Promise.all([
       poPosition(po.id),
       po.supplier_id ? suppliersRepo.findById(po.supplier_id) : Promise.resolve(null),
@@ -101,6 +102,10 @@ export default async function Page({
       // Đơn bổ sung ↔ đơn gốc (0213).
       posRepo.supplementLinks(po),
       canAction(user, 'supply.po_issue.manage'),
+      // Mốc gửi duyệt cuối — dải "ai giữ" đếm ngày chờ duyệt từ đây (27/09/2026).
+      po.status === 'pending_approval'
+        ? approvalEventsRepo.lastSubmittedAt('po', [po.id]).then((m) => m.get(po.id) ?? null)
+        : Promise.resolve(null),
     ])
   const stock: Record<string, number> = {}
   for (const r of stockRows) stock[r.material_id] = r.on_hand
@@ -124,7 +129,7 @@ export default async function Page({
       costs={costs.map((c) => ({ id: c.id, kind: c.kind, cost_date: c.cost_date, payee_name: c.payee_name, doc_no: c.doc_no, currency: c.currency, amount: c.amount, vat_rate: c.vat_rate, vat_amount: c.vat_amount, note: c.note, created_by_name: c.created_by_name, voided_at: c.voided_at, voided_by_name: c.voided_by_name, void_reason: c.void_reason, allocations: c.allocations }))} // prettier-ignore
       mode={sp.sua === '1' && canEdit && po.status === 'draft' ? 'edit' : 'view'}
       today={todayIso()}
-      po={po}
+      po={{ ...po, submitted_at: submittedAt }}
       lines={lines}
       statusLines={status_lines}
       extraLsx={extra_lsx}

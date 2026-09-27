@@ -183,6 +183,8 @@ import {
 export type PoDoc = {
   id: string
   code: string
+  /** Lần gửi duyệt cuối — dải "ai giữ" đếm ngày chờ duyệt từ đây. */
+  submitted_at?: string | null
   status: string
   template: PoTemplate
   supplier_id: string
