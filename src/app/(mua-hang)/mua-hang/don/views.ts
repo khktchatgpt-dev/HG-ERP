@@ -6,6 +6,7 @@ import {
 } from '@/app/(workspace)/planning/pos/po-filter'
 import type { Po } from '@/app/(workspace)/planning/pos/po-types'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { fmtMoney } from '@/lib/po-line'
 
 /**
  * TRẠNG THÁI XEM của màn Phiếu mua — bộ lọc + gom + sắp, mã hoá lên URL.
@@ -221,7 +222,7 @@ function money(pos: Po[]): string {
   }
   return [...by.entries()]
     .filter(([, v]) => v > 0)
-    .map(([c, v]) => `${v.toLocaleString('vi-VN')} ${c}`)
+    .map(([c, v]) => `${fmtMoney(v, c)} ${c}`)
     .join(' · ')
 }
 

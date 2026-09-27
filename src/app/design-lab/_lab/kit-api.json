@@ -3159,6 +3159,40 @@
       "InputHTMLAttributes"
     ]
   },
+  "TextLink": {
+    "file": "src/components/kit/Primitives.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Tên hiển thị."
+      },
+      {
+        "name": "href",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Đường nội bộ (`/mua-hang/ncc/…`) — đi bằng `next/link`, không tải lại trang."
+      },
+      {
+        "name": "strong",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Đậm — khi tên là thứ chính của dòng (cột đầu)."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Chữ đầy đủ khi rê chuột — khi tên đang là bản rút gọn."
+      }
+    ],
+    "extends": []
+  },
   "TFoot": {
     "file": "src/components/kit/Table.tsx",
     "props": [

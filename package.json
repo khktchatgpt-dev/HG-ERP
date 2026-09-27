@@ -16,7 +16,9 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "ui:baseline": "node scripts/ui-baseline.mjs",
     "kit:api": "node scripts/kit-api.mjs",
-    "lint:all": "eslint"
+    "lint:all": "eslint",
+    "ui:shots": "playwright test",
+    "ui:shots:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
@@ -48,6 +50,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

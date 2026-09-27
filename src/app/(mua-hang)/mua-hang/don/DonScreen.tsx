@@ -31,6 +31,7 @@ import {
 import { isMyPo, poOwner, type SupplyScope } from '@/lib/supply-scope'
 import { givenNames, materialSummary, supplierShortName } from '@/lib/po-list-labels'
 import { poTemplateShort } from '@/lib/po-template'
+import { fmtMoney } from '@/lib/po-line'
 import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
@@ -476,14 +477,14 @@ export function DonScreen({
                 {' '}
                 ·{' '}
                 <span className="num">
-                  {x.total.toLocaleString('vi-VN')} {x.currency}
+                  {fmtMoney(x.total, x.currency)} {x.currency}
                 </span>
               </span>
             )}{' '}
             {/* prettier-ignore */}
             {x.otherTotals.map(
               (t) =>
-              <span key={t.currency}> · <span className="num">{t.total.toLocaleString('vi-VN')} {t.currency}</span></span>, // prettier-ignore
+              <span key={t.currency}> · <span className="num">{fmtMoney(t.total, t.currency)} {t.currency}</span></span>, // prettier-ignore
             )}
             {x.late > 0 && (
               <span className="text-[var(--stop)]"> · {x.late} quá hẹn</span>
@@ -1140,7 +1141,7 @@ export function DonScreen({
                                 value={
                                   p.total
                                     ? // VND ngầm hiểu (chân bảng ghi ₫); ngoại tệ thì ghi rõ.
-                                      `${p.total.toLocaleString('vi-VN')}${p.currency === 'VND' ? '' : ` ${p.currency}`}`
+                                      `${fmtMoney(p.total, p.currency)}${p.currency === 'VND' ? '' : ` ${p.currency}`}`
                                     : ''
                                 }
                                 strong
@@ -1169,13 +1170,31 @@ export function DonScreen({
                 TIỀN CỘNG RIÊNG TỪNG LOẠI, không quy đổi — cùng luật với ba
                 màn kia của khu. Chân bảng nói luôn phần KHÔNG gồm: đơn đã huỷ.
               */}
+              {/*
+                Chú thích nằm TRONG ô nhãn (28/09/2026): để ở ô caveat riêng thì
+                nó bị nhét vào cột cuối hẹp và xuống hai dòng, đè lên tổng tiền
+                (thấy khi soi ảnh chụp 1:1). Tiền mỗi loại một dòng.
+              */}
               <TFoot
-                label={<td colSpan={Math.max(1, shownCols.length - 2)}>Cộng {shown.length} đơn đang hiện</td>} // prettier-ignore
-                cells={<td className="num">{tongHien.tien.join(' · ') || ''}</td>}
-                caveat={
-                  tongHien.huy > 0
-                    ? `Chưa gồm ${tongHien.huy} đơn đã huỷ đang hiện trong danh sách.`
-                    : 'Cộng riêng từng loại tiền, KHÔNG quy đổi.'
+                label={
+                  <td colSpan={shownCols.length - 1}>
+                    Cộng {shown.length} đơn đang hiện{' '}
+                    <span className="font-normal">
+                      <Hint size="sm">
+                        ·{' '}
+                        {tongHien.huy > 0
+                          ? `chưa gồm ${tongHien.huy} đơn đã huỷ đang hiện`
+                          : 'cộng riêng từng loại tiền, KHÔNG quy đổi'}
+                      </Hint>
+                    </span>
+                  </td>
+                }
+                cells={
+                  <td className="num" colSpan={2}>
+                    {tongHien.tien.map((t) => (
+                      <div key={t}>{t}</div>
+                    ))}
+                  </td>
                 }
               />
             </Table>

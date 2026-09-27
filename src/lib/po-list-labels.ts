@@ -59,3 +59,16 @@ export function materialSummary(
   const uniq = [...new Set(names.map((n) => n.trim()).filter(Boolean))]
   return { head: uniq.slice(0, take).join(', '), more: Math.max(0, uniq.length - take) }
 }
+
+/**
+ * HỌ TÊN VIẾT HOA CHỮ ĐẦU — tài khoản gõ tên thường ("nguyễn đình huy") hiện
+ * nguyên như vậy trên chip, lệch với tên khác (28/09/2026, soi ảnh hộp ký).
+ * Chỉ để HIỂN THỊ; không sửa dữ liệu.
+ */
+export function properName(name: string | null | undefined): string {
+  return (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toLocaleUpperCase('vi') + w.slice(1))
+    .join(' ')
+}

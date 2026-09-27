@@ -16,6 +16,7 @@ import {
   Tick,
   Hint,
   ToneText,
+  TextLink,
 } from './Primitives'
 import { Combobox } from './Combobox'
 import { a11yViolations, formatViolations } from '@/test/a11y'
@@ -503,6 +504,22 @@ describe('Hint + ToneText — chữ phụ và chữ nhấn (28/09/2026)', () => 
     expect(screen.getByText('qua 28 ng').className).toContain('font-semibold')
     expect(screen.getByText('còn 1 ng').className).toContain('text-[var(--warn)]')
     expect(screen.getByText('về đủ').className).not.toContain('font-semibold')
+    const v = await a11yViolations(container)
+    expect(v, formatViolations(v)).toEqual([])
+  })
+})
+
+describe('TextLink — tên bấm được, không phải mã (28/09/2026)', () => {
+  it('là link có tên, chữ thường (không đơn cách), title giữ nguyên; qua axe', async () => {
+    const { container } = render(
+      <TextLink href="/mua-hang/ncc/1" title="CÔNG TY TNHH NHÔM TIẾN ĐẠT">
+        Nhôm Tiến Đạt
+      </TextLink>,
+    )
+    const a = screen.getByRole('link', { name: 'Nhôm Tiến Đạt' })
+    expect(a.getAttribute('href')).toBe('/mua-hang/ncc/1')
+    expect(a.getAttribute('title')).toBe('CÔNG TY TNHH NHÔM TIẾN ĐẠT')
+    expect(a.className).not.toContain('font-mono')
     const v = await a11yViolations(container)
     expect(v, formatViolations(v)).toEqual([])
   })

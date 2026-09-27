@@ -104,7 +104,9 @@ export default async function Page({
       canAction(user, 'supply.po_issue.manage'),
       // Mốc gửi duyệt cuối — dải "ai giữ" đếm ngày chờ duyệt từ đây (27/09/2026).
       po.status === 'pending_approval'
-        ? approvalEventsRepo.lastSubmittedAt('po', [po.id]).then((m) => m.get(po.id) ?? null)
+        ? approvalEventsRepo
+            .lastSubmittedAt('po', [po.id])
+            .then((m) => m.get(po.id) ?? null)
         : Promise.resolve(null),
     ])
   const stock: Record<string, number> = {}

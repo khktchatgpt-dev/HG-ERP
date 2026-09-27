@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { givenNames, materialSummary, supplierShortName } from './po-list-labels'
+import {
+  givenNames,
+  materialSummary,
+  properName,
+  supplierShortName,
+} from './po-list-labels'
 
 describe('supplierShortName — bỏ loại hình công ty, giữ phần gọi nhau', () => {
   it.each([
@@ -63,5 +68,13 @@ describe('materialSummary — đơn mua cái gì', () => {
   it('đơn một dòng / không dòng', () => {
     expect(materialSummary(['Xơ gòn tấm'])).toEqual({ head: 'Xơ gòn tấm', more: 0 })
     expect(materialSummary([])).toEqual({ head: '', more: 0 })
+  })
+})
+
+describe('properName', () => {
+  it('viết hoa chữ đầu mỗi tiếng, giữ nguyên phần còn lại', () => {
+    expect(properName('nguyễn đình huy')).toBe('Nguyễn Đình Huy')
+    expect(properName('Đặng Thị Thanh Nga')).toBe('Đặng Thị Thanh Nga')
+    expect(properName(null)).toBe('')
   })
 })

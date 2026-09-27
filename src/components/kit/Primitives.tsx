@@ -1049,3 +1049,40 @@ export function ToneText({
     </span>
   )
 }
+
+/**
+ * ĐƯỜNG LINK CHO TÊN — nhà cung cấp, người mua, khách hàng (28/09/2026).
+ *
+ * `Code` là MÃ chứng từ: chữ đơn cách, đậm, số đều bề ngang. Dùng nó làm link
+ * cho TÊN ("Nhôm Tiến Đạt", "Nga") thì tên in bằng chữ máy chữ — thấy ngay khi
+ * soi ảnh chụp màn Giám sát mua hàng ở 1280×800. Tên đi bằng chữ thường, màu
+ * hành động; gạch chân khi rê chuột / focus để biết là bấm được.
+ */
+export function TextLink({
+  href,
+  children,
+  title,
+  strong = false,
+}: {
+  /** Đường nội bộ (`/mua-hang/ncc/…`) — đi bằng `next/link`, không tải lại trang. */
+  href: string
+  /** Tên hiển thị. */
+  children: ReactNode
+  /** Chữ đầy đủ khi rê chuột — khi tên đang là bản rút gọn. */
+  title?: string
+  /** Đậm — khi tên là thứ chính của dòng (cột đầu). */
+  strong?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className={cn(
+        'text-[var(--act-text)] underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none',
+        strong && 'font-semibold',
+      )}
+    >
+      {children}
+    </Link>
+  )
+}

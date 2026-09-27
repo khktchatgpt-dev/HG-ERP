@@ -38,6 +38,7 @@ Mọi thứ import từ `@/components/kit`.
 | Trang đa nhiệm: bấm mục nào chỉ hiện mục đó                          | `DocMenu`, `DocMenuPanel`                            | `doc-menu`                   |
 | Phạm vi Của tôi / Cả phòng cho cả màn (nhớ theo tài khoản)           | `ScopeSwitch` (+ `useScopePref`, `lib/supply-scope`) | `scope-switch`               |
 | Chữ phụ nhạt / chữ nhấn trễ-để ý-xong (thay tự tô màu)               | `Hint`, `ToneText`                                   | `hint`                       |
+| Tên bấm được (NCC, người mua, khách) — không phải mã chứng từ        | `TextLink`                                           | `text-link`                  |
 | Nhãn nhóm + vạch ngăn trên hàng lọc; hàng lọc mảnh / thanh hành động | `BarLabel`, `BarSep`, `FilterBar dense tone`         | `filter-bar`                 |
 | Việc tiếp theo + người giữ                                           | `NextAction`                                         | `next-action`                |
 | Bước chính duy nhất, và lý do chưa bấm được                          | `PrimaryStep` (`why`)                                | `primary-step`               |

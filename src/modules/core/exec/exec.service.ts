@@ -10,7 +10,7 @@ import { settingsService } from '@/modules/core/settings/settings.service'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Forbidden } from '@/server/http'
 import { poTemplateShort } from '@/lib/po-template'
-import { supplierShortName } from '@/lib/po-list-labels'
+import { properName, supplierShortName } from '@/lib/po-list-labels'
 import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -339,7 +339,9 @@ export const execService = {
         big: isBigApprovalWith(value, p.currency, thresholds),
         href: full ? `/exec/approvals/po/${p.id}` : `/mua-hang/don/${p.id}`,
         owner_id: poOwnerOf(p),
-        owner_name: poOwnerOf(p) ? (creatorNames.get(poOwnerOf(p)!) ?? null) : null,
+        owner_name: poOwnerOf(p)
+          ? properName(creatorNames.get(poOwnerOf(p)!)) || null
+          : null,
         po: {
           supplier_short: supplierShortName(p.supplier_name),
           loai: poTemplateShort((p as { template?: string | null }).template),
@@ -387,7 +389,9 @@ export const execService = {
         submitted_at: l.created_at,
         submitted_by: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
         owner_id: l.issued_by ?? null,
-        owner_name: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
+        owner_name: l.issued_by
+          ? properName(creatorNames.get(l.issued_by)) || null
+          : null,
         warnings,
         // Lệnh SX KHÔNG bao giờ mang cờ "giá trị lớn" dù số tiền to. Ngưỡng đó
         // canh CAM KẾT CHI TIỀN (đơn mua): ký là công ty mất tiền. Tiền của lệnh
@@ -417,7 +421,9 @@ export const execService = {
         submitted_at: q.submitted_at ?? q.created_at,
         submitted_by: q.submitted_by ? (creatorNames.get(q.submitted_by) ?? null) : null,
         owner_id: q.submitted_by ?? null,
-        owner_name: q.submitted_by ? (creatorNames.get(q.submitted_by) ?? null) : null,
+        owner_name: q.submitted_by
+          ? properName(creatorNames.get(q.submitted_by)) || null
+          : null,
         warnings: [],
         // Không có tiền cam kết chi — không bao giờ mang cờ "giá trị lớn".
         big: false,

@@ -3,7 +3,7 @@
 import {
   Btn,
   Cell,
-  Code,
+  TextLink,
   FastTab,
   Ico,
   NoticeBar,
@@ -168,12 +168,12 @@ export function GiamSatMuaHangScreen({
                         <span className="flex items-center gap-1.5">
                           <Ico name="toi" size={14} />
                           {b.id ? (
-                            <Code
-                              as="a"
+                            <TextLink
                               href={`/mua-hang/don?nguoi=${b.id}&pham_vi=phong&trang_thai=open`}
+                              strong
                             >
                               {nick}
-                            </Code>
+                            </TextLink>
                           ) : (
                             nick
                           )}
@@ -235,15 +235,15 @@ export function GiamSatMuaHangScreen({
               <THead>
                 <th>Nhà cung cấp</th>
                 <th style={{ textAlign: 'right', width: 48 }}>Đơn</th>
-                <th style={{ textAlign: 'right', width: 132 }}>Giá trị</th>
+                <th style={{ textAlign: 'right', width: 150 }}>Giá trị</th>
               </THead>
               <tbody>
                 {w.suppliers.slice(0, TOP).map((s) => (
                   <Row key={s.id}>
                     <Cell grow title={s.name}>
-                      <Code as="a" href={`/mua-hang/ncc/${s.id}`}>
+                      <TextLink href={`/mua-hang/ncc/${s.id}`} title={s.name}>
                         {s.short}
-                      </Code>
+                      </TextLink>
                     </Cell>
                     <Cell num>{s.count}</Cell>
                     <Cell num>{moneyLines(s.committed)}</Cell>
@@ -259,10 +259,9 @@ export function GiamSatMuaHangScreen({
                   </td>
                 }
                 cells={
-                  <>
-                    <td />
-                    <td className="num">{moneyLines(w.committed)}</td>
-                  </>
+                  <td className="num" colSpan={2}>
+                    {moneyLines(w.committed)}
+                  </td>
                 }
               />
             </Table>

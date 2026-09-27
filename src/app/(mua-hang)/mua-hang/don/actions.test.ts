@@ -280,7 +280,9 @@ describe('bulkActionsFor — bày đủ việc, khoá kèm lý do đếm đượ
     const r = bulkActionsFor([{ status: 'pending_approval', own: true }], { approve: true }) // prettier-ignore
     expect(r.find((x) => x.action.id === 'approve')).toBeUndefined()
     // Đơn lẻ vẫn duyệt được trên trang đơn.
-    expect(actionsFor('pending_approval', boss).some((a) => a.id === 'approve')).toBe(true)
+    expect(actionsFor('pending_approval', boss).some((a) => a.id === 'approve')).toBe(
+      true,
+    )
   })
 })
 

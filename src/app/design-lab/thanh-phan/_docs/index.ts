@@ -29,6 +29,7 @@ import D_doc_status from './doc-status'
 import D_doc_menu from './doc-menu'
 import D_scope_switch from './scope-switch'
 import D_hint from './hint'
+import D_text_link from './text-link'
 import D_checks from './checks'
 import D_fast_tab from './fast-tab'
 import D_field_grid from './field-grid'
@@ -93,6 +94,7 @@ export const DOCS: Record<string, ComponentType> = {
   'doc-menu': D_doc_menu,
   'scope-switch': D_scope_switch,
   hint: D_hint,
+  'text-link': D_text_link,
   'checks': D_checks,
   'fast-tab': D_fast_tab,
   'field-grid': D_field_grid,

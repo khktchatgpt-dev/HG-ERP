@@ -43,6 +43,7 @@ export const KIT_FAMILIES: KitFamily[] = [
   { slug: 'tag', title: 'Tag', group: 'Nền', members: ['Tag'], blurb: 'Nhãn trạng thái theo tone vòng đời.' }, // prettier-ignore
   { slug: 'hint', title: 'Hint', group: 'Nền', members: ['Hint', 'ToneText'], blurb: 'Chữ phụ nhạt + chữ nhấn theo màu vòng đời — thay cho tự tô màu.' }, // prettier-ignore
   { slug: 'code', title: 'Code', group: 'Nền', members: ['Code'], blurb: 'Mã chứng từ / vật tư, chữ đơn cách.' }, // prettier-ignore
+  { slug: 'text-link', title: 'TextLink', group: 'Nền', members: ['TextLink'], blurb: 'Đường link cho TÊN (NCC, người, khách) — chữ thường, không phải mã.' }, // prettier-ignore
   { slug: 'num', title: 'Num', group: 'Nền', members: ['Num'], blurb: 'Số và tiền: định dạng VN, số 0 không tô đỏ.' }, // prettier-ignore
   { slug: 'coverage-bar', title: 'CoverageBar', group: 'Nền', members: ['CoverageBar'], blurb: 'Thanh tỉ lệ phủ có nhãn.' }, // prettier-ignore
   { slug: 'notice-bar', title: 'NoticeBar', group: 'Nền', members: ['NoticeBar'], blurb: 'Dải thông báo một dòng kèm việc gỡ.' }, // prettier-ignore

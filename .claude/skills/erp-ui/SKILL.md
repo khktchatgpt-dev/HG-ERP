@@ -106,6 +106,9 @@ Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. U
    - Tab hết màn: vòng focus phải luôn nhìn thấy, không bị đầu/chân dính che.
    - Thử trạng thái rỗng và bị chặn bằng dữ liệu thật, hoặc bằng một bộ lọc.
 3. Chạy `npm run check` (typecheck + lint + test) và phải sạch. Đỏ thì chưa xong.
+4. Màn có ảnh chuẩn (hoặc sửa kit): `npm run ui:shots`, rồi MỞ ảnh ở `e2e/__anh-chuan__/` ra nhìn ở 1:1 —
+   soi bằng số (độ rộng cột, số dòng) không thay được việc nhìn. Màn mới quan trọng thì thêm vào
+   `/design-lab/chup/[man]` + `e2e/ui-shots.spec.ts`.
 
 ### 7. Báo cáo và dừng
 
