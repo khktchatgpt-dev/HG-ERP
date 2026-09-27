@@ -1,6 +1,7 @@
 import { classifyTodo, type SupplyTodoKind, type SupplyWatchInput } from './supply-watch'
 import { poOwner } from './supply-scope'
 import { supplierShortName } from './po-list-labels'
+import { isPoOfDoneLsx } from './po-lsx-done'
 
 /**
  * GIÁM SÁT MUA HÀNG cho Ban Giám đốc — phép tính THUẦN (27/09/2026, artboard 6).
@@ -23,6 +24,9 @@ export type WatchInput = SupplyWatchInput & {
   created_by?: string | null
   supplier_id: string
   supplier_name: string
+  production_order_id?: string | null
+  lsx_status?: string | null
+  extra_lsx?: { status?: string | null }[]
 }
 
 export const SENT_STATUSES: ReadonlySet<string> = new Set([
@@ -56,6 +60,11 @@ export type SupplierRow = {
 export type PurchasingWatch = {
   open: number
   tiles: Record<'pending' | SupplyTodoKind, number>
+  /**
+   * Đơn còn mở của lệnh đã hoàn thành (28/09/2026) — đếm trên MỌI đơn chưa
+   * đóng sổ, KỂ CẢ NHÁP, vì trang đích (Đơn mua, rổ "Còn mở") cũng gồm nháp.
+   */
+  lsx_done: number
   buyers: BuyerRow[]
   suppliers: SupplierRow[]
   committed: MoneyByCurrency
@@ -75,6 +84,9 @@ export function buildPurchasingWatch(pos: WatchInput[], today: string): Purchasi
   const open = pos.filter(
     (p) => p.status !== 'draft' && p.status !== 'received' && p.status !== 'cancelled',
   )
+  const lsxDone = pos.filter((p) =>
+    isPoOfDoneLsx({ ...p, production_order_id: p.production_order_id ?? null }),
+  ).length
   const tiles = {
     pending: 0,
     overdue: 0,
@@ -130,6 +142,7 @@ export function buildPurchasingWatch(pos: WatchInput[], today: string): Purchasi
   return {
     open: open.length,
     tiles,
+    lsx_done: lsxDone,
     buyers: [...byBuyer.values()]
       .map(strip)
       .sort((a, b) => b.pending + b.sent + b.unsent - (a.pending + a.sent + a.unsent)),

@@ -1,6 +1,7 @@
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import type { PoStatus } from '@/lib/po-status'
 import { isMyPo, poOwner } from '@/lib/supply-scope'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import type { Po } from './po-types'
 
 /**
@@ -125,6 +126,12 @@ export type PoFilterState = {
   ownerId: string
   /** LOẠI ĐƠN (mẫu đơn: accessory, wood…; 'all' = không lọc). 87/87 đơn có. */
   template: string
+  /**
+   * CHỈ ĐƠN CÒN MỞ CỦA LỆNH ĐÃ HOÀN THÀNH (28/09/2026) — đơn không ai cập nhật
+   * sau khi sản xuất xong (lib/po-lsx-done). Ô việc ở Bàn làm việc / Giám sát
+   * mua hàng dẫn về đây.
+   */
+  lsxDone: boolean
 }
 
 const mine = (p: Po, meId: string | null) =>
@@ -147,6 +154,7 @@ export const EMPTY_FILTER: PoFilterState = {
   noEta: false,
   ownerId: 'all',
   template: 'all',
+  lsxDone: false,
 }
 
 export function isFilterActive(f: PoFilterState): boolean {
@@ -162,7 +170,8 @@ export function isFilterActive(f: PoFilterState): boolean {
     f.late ||
     f.noEta ||
     f.ownerId !== 'all' ||
-    f.template !== 'all'
+    f.template !== 'all' ||
+    f.lsxDone
   )
 }
 
@@ -189,6 +198,7 @@ export function poMatches(
   )
     return false
   if (f.template !== 'all' && (p.template ?? '') !== f.template) return false
+  if (f.lsxDone && !isPoOfDoneLsx(p)) return false
   if (f.supplierId !== 'all' && p.supplier_id !== f.supplierId) return false
   /*
     Đơn GỘP nhiều lệnh (0125) phải lọt khi lọc đúng một lệnh PHỤ của nó — chỉ
@@ -236,6 +246,8 @@ export type PoCounts = Record<Exclude<PoBucket, 'all' | 'open'>, number> & {
   late: number
   lateUnsent: number
   noEta: number
+  /** Đơn còn mở của lệnh đã hoàn thành. */
+  lsxDone: number
 }
 
 /**
@@ -262,6 +274,7 @@ export function countPos(pos: Po[], meId: string | null, today: string): PoCount
      */
     lateUnsent: 0,
     noEta: 0,
+    lsxDone: 0,
   }
   for (const p of pos) {
     const b = bucketOf(p.status)
@@ -273,6 +286,7 @@ export function countPos(pos: Po[], meId: string | null, today: string): PoCount
       else c.late++
     }
     if (isMissingEta(p)) c.noEta++
+    if (isPoOfDoneLsx(p)) c.lsxDone++
   }
   return c
 }

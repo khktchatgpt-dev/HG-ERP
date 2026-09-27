@@ -7,6 +7,8 @@ import {
   FastTab,
   Ico,
   NoticeBar,
+  Num,
+  ToneText,
   Row,
   ScreenFrame,
   ScreenHeader,
@@ -35,22 +37,10 @@ const moneyLines = (m: MoneyByCurrency) =>
   m.length === 0 ? <span className="text-[var(--ink-empty)]">—</span> : m.map((x) => <div key={x.currency}>{money(x.value, x.currency)}</div>) // prettier-ignore
 const moneyText = (m: MoneyByCurrency) => m.map((x) => money(x.value, x.currency)).join(' · ') || '—' // prettier-ignore
 
-/** Số trong bảng: 0 nhạt (không phải tin xấu), có việc thì tô theo mức. */
+/** Số trong bảng: 0 nhạt (không phải tin xấu), có việc thì nhấn theo mức. */
 function N({ v, tone }: { v: number; tone?: 'warn' | 'stop' }) {
-  if (v === 0) return <span className="text-[var(--ink-empty)]">0</span>
-  return (
-    <span
-      className={
-        tone === 'stop'
-          ? 'font-semibold text-[var(--stop)]'
-          : tone === 'warn'
-            ? 'font-semibold text-[var(--warn)]'
-            : undefined
-      }
-    >
-      {v}
-    </span>
-  )
+  if (v === 0) return <Num value="" zero="zero" />
+  return tone ? <ToneText tone={tone}>{v}</ToneText> : <>{v}</>
 }
 
 export function GiamSatMuaHangScreen({
@@ -136,6 +126,14 @@ export function GiamSatMuaHangScreen({
             {/* prettier-ignore */}
             <WorkTile label="Quá hẹn giao" count={T.overdue} hint="Giục nhà cung cấp" tone="stop" href={hop('overdue')} />{' '}
             {/* prettier-ignore */}
+            {/* Đơn còn mở mà lệnh đã hoàn thành — chưa ai cập nhật (28/09/2026). */}
+            <WorkTile
+              label="Lệnh đã xong, đơn còn mở"
+              count={w.lsx_done}
+              hint="Cập nhật đã về đủ / huỷ"
+              tone="warn"
+              href="/mua-hang/don?lenh_xong=1&trang_thai=open&pham_vi=phong"
+            />
           </WorkTiles>
 
           <FastTab
@@ -225,10 +223,7 @@ export function GiamSatMuaHangScreen({
         </div>
 
         {/* Cột phải: bảng hẹp — bỏ sàn 680px mặc định của Table, không thì cuộn ngang. */}
-        <div
-          className="min-w-0 border-l border-[var(--line)] bg-[var(--surface-card)]"
-          style={{ ['--table-min' as string]: '0px' }}
-        >
+        <div className="min-w-0 border-l border-[var(--line)] bg-[var(--surface-card)]">
           <FastTab
             title="Đã cam kết theo nhà cung cấp"
             id="ncc"
@@ -236,7 +231,7 @@ export function GiamSatMuaHangScreen({
             flush
             summary={[['NCC', String(w.suppliers.length)]]}
           >
-            <Table>
+            <Table minWidth={0}>
               <THead>
                 <th>Nhà cung cấp</th>
                 <th style={{ textAlign: 'right', width: 48 }}>Đơn</th>

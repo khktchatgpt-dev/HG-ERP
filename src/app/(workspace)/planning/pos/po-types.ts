@@ -43,6 +43,8 @@ export type Po = {
   supplier_name: string
   /** null = PO ngoài LSX (0076). */
   lsx_code: string | null
+  /** Trạng thái lệnh chính — "đơn còn mở của lệnh đã hoàn thành" (lib/po-lsx-done). */
+  lsx_status?: string | null
   order_code: string | null
   // Tổng tiền (Σ dòng) — bơm từ page cho cột Giá trị ở danh sách.
   total?: number
@@ -55,7 +57,7 @@ export type Po = {
    * Bơm từ page. Thiếu nó thì đơn gộp chỉ hiện ở lệnh CHÍNH, còn các lệnh kia
    * bị màn danh sách kết luận là "chưa có đơn đặt nào".
    */
-  extra_lsx?: { id: string; code: string }[]
+  extra_lsx?: { id: string; code: string; status?: string | null }[]
   /** Mẫu đơn (loại đơn: accessory, wood…) — chip "Loại đơn" + cột Loại · vật tư. */
   template?: string | null
   /** Tên vật tư theo thứ tự dòng — bơm từ page (`enrichPoList`), cho cột + ô tìm. */

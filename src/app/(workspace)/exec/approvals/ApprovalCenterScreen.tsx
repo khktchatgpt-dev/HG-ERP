@@ -3,8 +3,13 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  BarLabel,
+  BarSep,
   Btn,
+  FilterBar,
+  Hint,
   Ico,
+  ToneText,
   type IcoName,
   Cell,
   Chip,
@@ -231,7 +236,7 @@ export function ApprovalCenterScreen({
       />
 
       {box.stats.total > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+        <FilterBar dense label="Lọc phiếu chờ ký">
           {(['all', 'lsx', 'po', 'quote'] as const).map((k) => (
             <Chip
               key={k}
@@ -249,10 +254,8 @@ export function ApprovalCenterScreen({
           ))}
           {owners.length > 1 && (
             <>
-              <span className="mx-1 h-4 border-l border-[var(--line)]" aria-hidden />
-              <span className="text-k-label font-semibold tracking-[.04em] text-[var(--ink-3)] uppercase">
-                {onlyPo ? 'Người mua' : 'Người trình'}
-              </span>
+              <BarSep />
+              <BarLabel>{onlyPo ? 'Người mua' : 'Người trình'}</BarLabel>
               {owners.map(([k, o]) => (
                 <Chip
                   key={k}
@@ -278,7 +281,7 @@ export function ApprovalCenterScreen({
               Chọn {bulkable.length} phiếu ký nhanh được
             </label>
           )}
-        </div>
+        </FilterBar>
       )}
 
       {noRule.length > 0 && (
@@ -304,13 +307,7 @@ export function ApprovalCenterScreen({
         />
       ) : (
         <>
-          <div
-            className={
-              nhieu
-                ? 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-1'
-                : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1'
-            }
-          >
+          <FilterBar dense tone={nhieu ? 'selected' : 'raised'} label="Ký phiếu">
             <span
               className={
                 nhieu
@@ -352,12 +349,14 @@ export function ApprovalCenterScreen({
               Xem kỹ
             </Btn>
             {bigCount > 0 && (
-              <span className="text-k-label ml-auto text-[var(--ink-3)]">
-                <b>{bigCount} phiếu Giá trị lớn</b> phải mở ra đọc, không ký hàng loạt
-                được
+              <span className="ml-auto">
+                <Hint>
+                  <b>{bigCount} phiếu Giá trị lớn</b> phải mở ra đọc, không ký hàng loạt
+                  được
+                </Hint>
               </span>
             )}
-          </div>
+          </FilterBar>
 
           <Table>
             <THead pinFirst>
@@ -400,9 +399,9 @@ export function ApprovalCenterScreen({
             <TFoot
               label={
                 <td colSpan={6}>
-                  Cộng {items.length} phiếu đang chờ
-                  <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
-                    · cộng riêng từng loại tiền, KHÔNG quy đổi
+                  Cộng {items.length} phiếu đang chờ{' '}
+                  <span className="font-normal">
+                    <Hint size="sm">· cộng riêng từng loại tiền, KHÔNG quy đổi</Hint>
                   </span>
                 </td>
               }
@@ -489,7 +488,10 @@ function SignRow({
           {i.po.loai && m.head && ' · '}
           {m.head}
           {m.more > 0 && (
-            <span className="text-k-label ml-1 text-[var(--ink-3)]">+{m.more} mã</span>
+            <>
+              {' '}
+              <Hint>+{m.more} mã</Hint>
+            </>
           )}
         </Cell>
       ) : (
@@ -497,20 +499,29 @@ function SignRow({
           {i.facts.join(' · ')}
         </Cell>
       )}
-      <Cell muted>{i.po?.lsx_code ?? (i.kind === 'po' ? 'Ngoài lệnh' : '—')}</Cell>
+      <Cell muted>
+        <span className="flex items-center gap-1.5">
+          {i.po?.lsx_code ?? (i.kind === 'po' ? 'Ngoài lệnh' : '—')}
+          {i.po?.lsx_done && (
+            <span title="Mọi lệnh của đơn đã hoàn thành — sản xuất xong, đơn chưa được cập nhật">
+              <Tag tone="warn">đã xong</Tag>
+            </span>
+          )}
+        </span>
+      </Cell>
       <Cell num>
         {!i.po ? (
           <span className="text-[var(--ink-empty)]">—</span>
         ) : !i.po.expected_at ? (
           <Tag tone="warn">chưa hẹn</Tag>
         ) : i.po.eta_late_days > 0 ? (
-          <span
-            className="font-semibold text-[var(--stop)]"
+          <ToneText
+            tone="stop"
             title={`Hẹn giao ${dm(i.po.expected_at, today)} đã qua ${i.po.eta_late_days} ngày`}
           >
-            {dm(i.po.expected_at, today)}
-            <span className="text-k-label ml-1">qua {i.po.eta_late_days} ng</span>
-          </span>
+            {dm(i.po.expected_at, today)}{' '}
+            <span className="text-k-label">qua {i.po.eta_late_days} ng</span>
+          </ToneText>
         ) : (
           dm(i.po.expected_at, today)
         )}

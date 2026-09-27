@@ -49,6 +49,8 @@ export type PoWithRefs = Po & {
   supplier_name: string
   /** null = PO ngoài LSX. */
   lsx_code: string | null
+  /** Trạng thái lệnh chính — "đơn còn mở của lệnh đã hoàn thành" (lib/po-lsx-done). */
+  lsx_status: string | null
   order_code: string | null
   /** Tên người phụ trách (0128) — cột "Phụ trách" trên danh sách. */
   assignee_name: string | null
@@ -208,8 +210,8 @@ function numericLineFields(row: Record<string, unknown>): Record<string, number 
 type Raw = Po & {
   supplier: { name: string } | { name: string }[] | null
   lsx:
-    | { code: string; order: { code: string } | { code: string }[] | null }
-    | { code: string; order: { code: string } | { code: string }[] | null }[]
+    | { code: string; status?: string; order: { code: string } | { code: string }[] | null }
+    | { code: string; status?: string; order: { code: string } | { code: string }[] | null }[]
     | null
   assignee:
     | { name: string | null; email: string }
@@ -234,6 +236,7 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
       supplier_name: sp?.name ?? '?',
       // production_order_id null (PO ngoài LSX) → join rỗng → lsx_code null.
       lsx_code: lx?.code ?? null,
+      lsx_status: lx?.status ?? null,
       order_code: ord?.code ?? null,
       assignee_name: asg ? (asg.name ?? asg.email) : null,
     }
@@ -250,7 +253,7 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
  * Embed `users` cũng phải CHỈ ĐÍCH DANH FK: bảng có 3 FK sang users
  * (created_by / approved_by / assigned_to) — để PostgREST tự đoán là mơ hồ.
  */
-const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email), approver:users!supply_purchase_orders_approved_by_fkey(name, email)`
+const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, status, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email), approver:users!supply_purchase_orders_approved_by_fkey(name, email)`
 
 /** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
 export type PurchasedMaterial = {
@@ -522,15 +525,21 @@ export const posRepo = {
     }))
   },
 
-  async listAllExtraLsx(): Promise<Map<string, { id: string }[]>> {
-    const out = new Map<string, { id: string }[]>()
+  async listAllExtraLsx(): Promise<Map<string, { id: string; status: string | null }[]>> {
+    const out = new Map<string, { id: string; status: string | null }[]>()
     const { data } = await db()
       .from('supply_po_extra_lsx')
-      .select('po_id, production_order_id')
+      .select('po_id, production_order_id, lsx:production_orders(status)')
       .limit(5000)
-    for (const r of (data ?? []) as { po_id: string; production_order_id: string }[]) {
+    type Row = {
+      po_id: string
+      production_order_id: string
+      lsx: { status: string } | { status: string }[] | null
+    }
+    for (const r of (data ?? []) as Row[]) {
+      const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
       const list = out.get(r.po_id) ?? []
-      list.push({ id: r.production_order_id })
+      list.push({ id: r.production_order_id, status: lx?.status ?? null })
       out.set(r.po_id, list)
     }
     return out
@@ -572,22 +581,22 @@ export const posRepo = {
 
   async extraLsxByPoIds(
     ids: string[],
-  ): Promise<Map<string, { id: string; code: string }[]>> {
-    const out = new Map<string, { id: string; code: string }[]>()
+  ): Promise<Map<string, { id: string; code: string; status: string | null }[]>> {
+    const out = new Map<string, { id: string; code: string; status: string | null }[]>()
     if (ids.length === 0) return out
     const { data } = await db()
       .from('supply_po_extra_lsx')
-      .select('po_id, production_order_id, lsx:production_orders(code)')
+      .select('po_id, production_order_id, lsx:production_orders(code, status)')
       .in('po_id', ids)
     type Row = {
       po_id: string
       production_order_id: string
-      lsx: { code: string } | { code: string }[] | null
+      lsx: { code: string; status?: string } | { code: string; status?: string }[] | null
     }
     for (const r of (data ?? []) as Row[]) {
       const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
       const list = out.get(r.po_id) ?? []
-      list.push({ id: r.production_order_id, code: lx?.code ?? '?' })
+      list.push({ id: r.production_order_id, code: lx?.code ?? '?', status: lx?.status ?? null })
       out.set(r.po_id, list)
     }
     return out

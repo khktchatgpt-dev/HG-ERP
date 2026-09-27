@@ -131,6 +131,7 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
     noEta: sp.chua_hen === '1',
     ownerId: sp.nguoi || 'all',
     template: sp.loai_don || 'all',
+    lsxDone: sp.lenh_xong === '1',
   }
   return {
     filter: f,
@@ -155,6 +156,7 @@ export function encodeView(s: ViewState): string {
   if (f.noEta) p.set('chua_hen', '1')
   if (f.ownerId !== 'all') p.set('nguoi', f.ownerId)
   if (f.template !== 'all') p.set('loai_don', f.template)
+  if (f.lsxDone) p.set('lenh_xong', '1')
   if (s.groupBy !== 'none') p.set('gom', s.groupBy)
   if (s.sortBy !== 'moi_nhat') p.set('sap', s.sortBy)
   return p.toString()
@@ -315,6 +317,7 @@ export const PARAM_KEYS: ReadonlySet<string> = new Set(
         noEta: true,
         ownerId: 'x',
         template: 'x',
+        lsxDone: true,
       },
       groupBy: 'ncc',
       sortBy: 'ma',

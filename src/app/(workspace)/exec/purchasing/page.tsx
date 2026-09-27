@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { loadWatchPos, todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { buildPurchasingWatch } from '@/lib/purchasing-watch'
@@ -20,11 +21,16 @@ export const metadata = { title: 'Ban Giám đốc · Mua hàng' }
 export default async function ExecPurchasingPage() {
   const user = await authService.requirePageUser()
   const today = todayIso()
-  const [{ rows, truncatedAt }, users] = await Promise.all([
+  const [{ rows, truncatedAt }, users, extraLsx] = await Promise.all([
     loadWatchPos(user),
     usersRepo.list(),
+    posRepo.listAllExtraLsx(),
   ])
-  const w = buildPurchasingWatch(rows, today)
+  // Lệnh GỘP mang trạng thái — "lệnh đã hoàn thành" phải xét MỌI lệnh của đơn.
+  const w = buildPurchasingWatch(
+    rows.map((p) => ({ ...p, extra_lsx: extraLsx.get(p.id) ?? [] })),
+    today,
+  )
 
   const ownerIds = new Set(w.buyers.map((b) => b.id).filter((x): x is string => !!x))
   const people = users

@@ -46,6 +46,39 @@ describe('buildPurchasingWatch — số của Giám đốc = số của trang đ
     expect(w.tiles.pending).toBe(1)
   })
 
+  it('đơn còn mở của lệnh đã hoàn thành — kể cả nháp, không gồm đã về đủ', () => {
+    const r = buildPurchasingWatch(
+      [
+        po({
+          id: 'x',
+          status: 'draft',
+          production_order_id: 'l',
+          lsx_status: 'completed',
+        }),
+        po({
+          id: 'y',
+          status: 'pending_approval',
+          production_order_id: 'l',
+          lsx_status: 'completed',
+        }),
+        po({
+          id: 'z',
+          status: 'received',
+          production_order_id: 'l',
+          lsx_status: 'completed',
+        }),
+        po({
+          id: 'q',
+          status: 'ordered',
+          production_order_id: 'm',
+          lsx_status: 'approved',
+        }),
+      ],
+      T,
+    )
+    expect(r.lsx_done).toBe(2)
+  })
+
   it('đơn đang mở không gồm nháp / về đủ / huỷ', () => {
     expect(w.open).toBe(5)
   })

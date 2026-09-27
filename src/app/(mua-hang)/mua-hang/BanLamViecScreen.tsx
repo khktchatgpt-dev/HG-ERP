@@ -70,6 +70,8 @@ export type Desk = {
   riskCounts: Record<MeetingRiskLevel, number>
   issues: Issue[]
   lsxCount: number
+  /** Đơn còn mở của lệnh đã hoàn thành (lib/po-lsx-done) — kể cả nháp. */
+  lsxDone: number
 }
 export type PendingRow = {
   id: string
@@ -222,7 +224,10 @@ export function BanLamViecScreen({
           <NoticeBar
             tone="neutral"
             tag="Chỉ xem"
-            action={{ label: 'Về bàn của tôi', onClick: () => window.location.assign('/mua-hang') }}
+            action={{
+              label: 'Về bàn của tôi',
+              onClick: () => window.location.assign('/mua-hang'),
+            }}
           >
             Đang xem bàn làm việc của <b>{viewAs.name}</b> đúng như người đó thấy — muốn
             làm gì thì mở từng đơn; quyền sửa vẫn theo người phụ trách.
@@ -300,6 +305,20 @@ export function BanLamViecScreen({
               }
               href={`/mua-hang/nhan-hang?nhom=tuan&${q}`}
             />
+            {/*
+              LỆNH ĐÃ XONG, ĐƠN CÒN MỞ (28/09/2026) — chỉ hiện khi CÓ: sản xuất
+              xong tức hàng đã về, đơn chỉ chưa được cập nhật. Đếm bằng cùng hàm
+              với bộ lọc `lenh_xong` của sổ Đơn mua (rổ "Còn mở", gồm nháp).
+            */}
+            {d.lsxDone > 0 && (
+              <WorkTile
+                label="Lệnh đã xong, đơn còn mở"
+                count={d.lsxDone}
+                hint="Cập nhật đã về đủ / huỷ"
+                tone="warn"
+                href={`/mua-hang/don?lenh_xong=1&trang_thai=open&${q}`}
+              />
+            )}
           </WorkTiles>
 
           {truncatedAt != null && (

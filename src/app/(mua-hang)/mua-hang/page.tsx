@@ -19,6 +19,7 @@ import {
   type SupplyTodoKind,
 } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds, parseScope, poOwner } from '@/lib/supply-scope'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import {
   BanLamViecScreen,
   type Agenda,
@@ -132,6 +133,9 @@ export default async function Page({
       riskCounts,
       issues,
       lsxCount: lsxFilter ? lsxFilter.size : meeting.rows.length,
+      lsxDone: set.filter((p) =>
+        isPoOfDoneLsx({ ...p, extra_lsx: extraLsx.get(p.id) ?? [] }),
+      ).length,
     }
   }
 

@@ -599,6 +599,7 @@ export function ScreenFrame({
   children,
   dense = false,
   tableMin,
+  fill = false,
 }: {
   /**
    * Cả màn, xếp dọc: đầu trang, hàng lọc, bảng, thanh đáy. Bảng chính phải là
@@ -632,13 +633,20 @@ export function ScreenFrame({
    * thẻ bọc cả màn, chứ đừng rắc `.kit-dense` vào vài khối con.
    */
   dense?: boolean
+  /**
+   * LẤP ĐẦY KHUNG CHA (`height: 100%`) thay vì tự đo "100dvh − vị trí". Dùng khi
+   * màn được NHÚNG vào một khung đã có chiều cao (trang mẫu, xem trước, hộp
+   * thoại lớn). Không bật thì khung cao theo cửa sổ: nhúng trong cửa sổ thấp là
+   * bảng bị bóp còn vài chục px (đo 27/09/2026 khi soi hộp ký trong design-lab).
+   */
+  fill?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState<{ h: string; m: string } | null>(null)
 
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el) return
+    if (!el || fill) return
     const measure = () => {
       const host = el.parentElement
       const cs = host ? getComputedStyle(host) : null
@@ -656,15 +664,15 @@ export function ScreenFrame({
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [])
+  }, [fill])
 
   return (
     <div
       ref={ref}
       style={
         {
-          height: box?.h ?? 'calc(100dvh - 60px)',
-          margin: box?.m,
+          height: fill ? '100%' : (box?.h ?? 'calc(100dvh - 60px)'),
+          margin: fill ? undefined : box?.m,
           ...(tableMin ? { '--table-min': `${tableMin}px` } : null),
         } as CSSProperties
       }
@@ -794,10 +802,21 @@ export function WorkTile({
 export function WorkTiles({
   children,
 }: {
-  /** Các `WorkTile`. Lưới 2 cột, lên 3 từ 640px, lên 6 từ 1024px; hơn sáu ô thì xuống hàng. */
+  /**
+   * Các `WorkTile`. Lưới 2 cột, lên 3 khi KHUNG CHỨA rộng từ 448px, lên 6 từ
+   * 768px; hơn sáu ô thì xuống hàng.
+   */
   children: ReactNode
 }) {
+  /*
+    CHIA CỘT THEO KHUNG CHỨA, KHÔNG THEO CỬA SỔ (28/09/2026). Bản cũ dùng
+    `sm:`/`lg:` — bề rộng TRÌNH DUYỆT — nên ô việc đặt trong một cột hẹp (cột
+    chính cạnh khay phải, khung xem nhúng) vẫn đòi 6 cột, hoặc ngược lại cột
+    rộng trong cửa sổ hẹp chỉ được 2. Đo được khi soi màn Giám sát mua hàng.
+  */
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">{children}</div>
+    <div className="@container">
+      <div className="grid grid-cols-2 gap-2 @md:grid-cols-3 @3xl:grid-cols-6">{children}</div>
+    </div>
   )
 }

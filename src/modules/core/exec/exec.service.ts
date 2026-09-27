@@ -11,6 +11,7 @@ import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Forbidden } from '@/server/http'
 import { poTemplateShort } from '@/lib/po-template'
 import { supplierShortName } from '@/lib/po-list-labels'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 
@@ -199,6 +200,11 @@ export type SignItem = {
     expected_at: string | null
     /** Hẹn giao đã qua bao nhiêu ngày (0 = chưa qua / chưa hẹn). */
     eta_late_days: number
+    /**
+     * Mọi lệnh của đơn đã HOÀN THÀNH (28/09/2026) — sản xuất xong tức hàng đã
+     * về, đơn chỉ chưa được cập nhật. Người ký cần biết trước khi ký.
+     */
+    lsx_done: boolean
   }
 }
 
@@ -272,25 +278,37 @@ export const execService = {
     // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
     const poOwnerOf = (p: { assigned_to?: string | null; created_by?: string | null }) =>
       p.assigned_to ?? p.created_by ?? null
-    const [poTotals, orderLines, orderList, creatorNames, quoteLineCounts, poSubmitted, poMaterials] =
-      await Promise.all([
-        posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
-        ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
-        pendingLsx.rows.length
-          ? ordersRepo.list({ page: 1, page_size: 1000 })
-          : Promise.resolve({ rows: [], total: 0 }),
-        usersRepo.displayNamesByIds(
-          [
-            ...pendingPos.rows.map((p) => p.created_by),
-            ...pendingPos.rows.map((p) => poOwnerOf(p)),
-            ...pendingLsx.rows.map((l) => l.issued_by),
-            ...pendingQuotes.rows.map((q) => q.submitted_by),
-          ].filter((x): x is string => !!x),
-        ),
-        quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
-        approvalEventsRepo.lastSubmittedAt('po', pendingPos.rows.map((p) => p.id)),
-        posRepo.materialNamesByPoIds(pendingPos.rows.map((p) => p.id)),
-      ])
+    const [
+      poTotals,
+      orderLines,
+      orderList,
+      creatorNames,
+      quoteLineCounts,
+      poSubmitted,
+      poMaterials,
+      poExtraLsx,
+    ] = await Promise.all([
+      posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
+      ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
+      pendingLsx.rows.length
+        ? ordersRepo.list({ page: 1, page_size: 1000 })
+        : Promise.resolve({ rows: [], total: 0 }),
+      usersRepo.displayNamesByIds(
+        [
+          ...pendingPos.rows.map((p) => p.created_by),
+          ...pendingPos.rows.map((p) => poOwnerOf(p)),
+          ...pendingLsx.rows.map((l) => l.issued_by),
+          ...pendingQuotes.rows.map((q) => q.submitted_by),
+        ].filter((x): x is string => !!x),
+      ),
+      quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
+      approvalEventsRepo.lastSubmittedAt(
+        'po',
+        pendingPos.rows.map((p) => p.id),
+      ),
+      posRepo.materialNamesByPoIds(pendingPos.rows.map((p) => p.id)),
+      posRepo.extraLsxByPoIds(pendingPos.rows.map((p) => p.id)),
+    ])
 
     const items: SignItem[] = []
 
@@ -329,6 +347,7 @@ export const execService = {
           lsx_code: p.lsx_code ?? null,
           expected_at: p.expected_at ?? null,
           eta_late_days: lateDays != null && lateDays > 0 ? lateDays : 0,
+          lsx_done: isPoOfDoneLsx({ ...p, extra_lsx: poExtraLsx.get(p.id) ?? [] }),
         },
       })
     }
@@ -449,7 +468,10 @@ export const execService = {
     const poIds = [...new Set([...pendingPos.rows, ...allPos.rows].map((p) => p.id))]
     const [poTotals, poSubmitted] = await Promise.all([
       posRepo.totalsByPoIds(poIds),
-      approvalEventsRepo.lastSubmittedAt('po', pendingPos.rows.map((p) => p.id)),
+      approvalEventsRepo.lastSubmittedAt(
+        'po',
+        pendingPos.rows.map((p) => p.id),
+      ),
     ])
 
     // ── Cần Giám đốc quyết ──────────────────────────────────────────────────

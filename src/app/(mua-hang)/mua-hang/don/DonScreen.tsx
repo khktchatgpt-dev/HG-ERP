@@ -3,12 +3,16 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  BarLabel,
+  BarSep,
   Btn,
   Cell,
   Chip,
   Code,
   Empty,
+  FilterBar,
   GroupRow,
+  Hint,
   NoticeBar,
   Num,
   Pick,
@@ -27,6 +31,7 @@ import {
 import { isMyPo, poOwner, type SupplyScope } from '@/lib/supply-scope'
 import { givenNames, materialSummary, supplierShortName } from '@/lib/po-list-labels'
 import { poTemplateShort } from '@/lib/po-template'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { assessPoFit } from '@/lib/po-fit'
@@ -599,7 +604,7 @@ export function DonScreen({
       />
 
       {/* Hàng 1: tìm + rổ trạng thái + hai ô gõ-tìm */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+      <FilterBar dense label="Tìm và lọc đơn mua">
         <SearchInput
           value={view.filter.q}
           onChange={(q) => patchFilter({ q })}
@@ -697,17 +702,17 @@ export function DonScreen({
             options={(Object.keys(GROUP_LABEL) as GroupBy[]).map((k) => ({ value: k, label: `Gom: ${GROUP_LABEL[k]}` }))} // prettier-ignore
           />
         </span>
-      </div>
+      </FilterBar>
 
       {/* Hàng 2: người phụ trách — đơn của AI. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+      <FilterBar dense label="Người phụ trách">
         <ScopeSwitch
           label="Người phụ trách"
           value={personValue}
           onChange={pickPerson}
           options={personOptions}
         />
-      </div>
+      </FilterBar>
 
       {/*
         Hàng 3: loại đơn + chưa hẹn giao + bỏ lọc.
@@ -717,10 +722,8 @@ export function DonScreen({
         niệm, hai chỗ, hai số. Nay hai thẻ ở trên bấm được và lọc đúng phía của
         mình, nên chip này chỉ còn là đường thứ hai làm cùng một việc.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
-        <span className="text-k-label font-semibold tracking-[.04em] text-[var(--ink-3)] uppercase">
-          Loại đơn
-        </span>
+      <FilterBar dense label="Loại đơn và việc cần làm">
+        <BarLabel>Loại đơn</BarLabel>
         {templateCounts.map(([t, n]) => (
           <Chip
             key={t}
@@ -733,7 +736,7 @@ export function DonScreen({
             {poTemplateShort(t) ?? t}
           </Chip>
         ))}
-        <span className="mx-1 h-4 border-l border-[var(--line)]" aria-hidden />
+        <BarSep />
         <Chip
           on={view.filter.noEta}
           count={inBucket.noEta}
@@ -742,6 +745,21 @@ export function DonScreen({
         >
           Chưa hẹn giao
         </Chip>
+        {/*
+          LỆNH ĐÃ HOÀN THÀNH (28/09/2026): đơn còn mở mà mọi lệnh của nó đã xong
+          — sản xuất xong tức hàng đã về, chỉ là chưa ai cập nhật đơn. Chỉ hiện
+          khi CÓ đơn như vậy (hoặc đang bật lọc): chip số 0 là nhiễu.
+        */}
+        {(inBucket.lsxDone > 0 || view.filter.lsxDone) && (
+          <Chip
+            on={view.filter.lsxDone}
+            count={inBucket.lsxDone}
+            icon="canhBao"
+            onClick={() => patchFilter({ lsxDone: !view.filter.lsxDone })}
+          >
+            Lệnh đã hoàn thành
+          </Chip>
+        )}
         {/* Lọc đến từ link mà không có ô nào bày ra — xem ghi chú ở `moreCount`. */}
         {moreCount > 0 && (
           <Chip
@@ -788,6 +806,7 @@ export function DonScreen({
                   noEta: false,
                   ownerId: 'all',
                   template: 'all',
+                  lsxDone: false,
                 },
               })
             }
@@ -795,7 +814,7 @@ export function DonScreen({
             Bỏ lọc
           </Btn>
         </span>
-      </div>
+      </FilterBar>
 
       {truncatedAt != null && (
         <NoticeBar tone="warn" tag="Cắt đuôi">
@@ -919,15 +938,22 @@ export function DonScreen({
                               "gộp với 09/26-27 - MX" từng nở cột Đơn lên 267px.
                             */}
                             {!has('chuoi') && (p.extra_lsx?.length ?? 0) > 0 && (
-                              <span
-                                className="text-k-label ml-1 text-[var(--ink-3)]"
-                                title={`Một đơn mua cho ${[p.lsx_code, ...(p.extra_lsx ?? []).map((x) => x.code)].filter(Boolean).join(' + ')}`}
-                              >
-                                +{p.extra_lsx?.length} lệnh
-                              </span>
+                              <>
+                                {' '}
+                                <Hint
+                                  title={`Một đơn mua cho ${[p.lsx_code, ...(p.extra_lsx ?? []).map((x) => x.code)].filter(Boolean).join(' + ')}`}
+                                >
+                                  +{p.extra_lsx?.length} lệnh
+                                </Hint>
+                              </>
                             )}
                             {borrowed && (p.extra_lsx?.length ?? 0) === 0 && (
                               <Tag tone="neutral">mua chung</Tag>
+                            )}
+                            {isPoOfDoneLsx(p) && (
+                              <span title="Mọi lệnh của đơn đã hoàn thành mà đơn vẫn còn mở — cập nhật đơn (đã về đủ / huỷ)">
+                                <Tag tone="warn">Lệnh đã xong</Tag>
+                              </span>
                             )}
                           </Cell>
                           {/*
@@ -957,9 +983,10 @@ export function DonScreen({
                                   {loai && m.head && ' · '}
                                   {m.head}
                                   {m.more > 0 && (
-                                    <span className="text-k-label ml-1 text-[var(--ink-3)]">
-                                      +{m.more} mã
-                                    </span>
+                                    <>
+                                      {' '}
+                                      <Hint>+{m.more} mã</Hint>
+                                    </>
                                   )}
                                   {!loai && !m.head && <Num value="" />}
                                 </Cell>
@@ -995,16 +1022,16 @@ export function DonScreen({
                                 </Code>
                               ) : null}
                               {p.lsx_code && (p.extra_lsx?.length ?? 0) > 0 && (
-                                <span
-                                  className="text-k-label ml-1 text-[var(--ink-3)]"
-                                  title={`Gộp thêm: ${(p.extra_lsx ?? []).map((x) => x.code).join(', ')}`}
-                                >
-                                  +{p.extra_lsx?.length}
-                                </span>
+                                <>
+                                  {' '}
+                                  <Hint
+                                    title={`Gộp thêm: ${(p.extra_lsx ?? []).map((x) => x.code).join(', ')}`}
+                                  >
+                                    +{p.extra_lsx?.length}
+                                  </Hint>
+                                </>
                               )}
-                              {p.lsx_code ? null : (
-                                <span className="text-[var(--ink-3)]">Ngoài LSX</span>
-                              )}
+                              {p.lsx_code ? null : <Hint size="sm">Ngoài LSX</Hint>}
                             </Cell>
                           )}
                           {/*
@@ -1026,9 +1053,10 @@ export function DonScreen({
                                 {PO_STATUS_LABEL[p.status as PoStatus]}
                               </Tag>
                               {PO_NEXT_HINT[p.status as PoStatus] && (
-                                <span className="text-k-label ml-1 text-[var(--ink-3)]">
-                                  → {PO_NEXT_HINT[p.status as PoStatus]}
-                                </span>
+                                <>
+                                  {' '}
+                                  <Hint>→ {PO_NEXT_HINT[p.status as PoStatus]}</Hint>
+                                </>
                               )}
                             </Cell>
                           )}

@@ -12,8 +12,11 @@ import {
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
+  BarLabel,
+  BarSep,
   Cell,
   Chip,
+  FilterBar,
   GroupRow,
   Row,
   SearchInput,
@@ -265,5 +268,49 @@ describe('Table kiểu máy', () => {
     expect(onRow).toHaveBeenCalledWith(nhieu[1])
     expect(dong[1].getAttribute('aria-rowindex')).toBe('3')
     expect(within(dong[1]).getByRole('rowheader').textContent).toBe('NCC 1')
+  })
+})
+
+describe('FilterBar dense / tone + BarLabel + BarSep + Table minWidth (28/09/2026)', () => {
+  it('có label → role toolbar có tên; vạch ngăn ẩn khỏi trình đọc; qua axe', async () => {
+    const { container } = render(
+      <FilterBar dense tone="selected" label="Lọc đơn mua">
+        <BarLabel>Loại đơn</BarLabel>
+        <Chip count={3}>Carton</Chip>
+        <BarSep />
+        <Chip count={4}>Chưa hẹn giao</Chip>
+      </FilterBar>,
+    )
+    const bar = screen.getByRole('toolbar', { name: 'Lọc đơn mua' })
+    expect(bar.className).toContain('py-1')
+    expect(bar.className).toContain('bg-[var(--act-wash)]')
+    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull()
+    await expectNoViolations(container)
+  })
+
+  it('không label → không gán role (giữ hành vi cũ); mặc định đệm 8px nền thẻ', () => {
+    const { container } = render(
+      <FilterBar>
+        <Chip count={1}>A</Chip>
+      </FilterBar>,
+    )
+    expect(screen.queryByRole('toolbar')).toBeNull()
+    const bar = container.firstElementChild as HTMLElement
+    expect(bar.className).toContain('py-2')
+    expect(bar.className).toContain('bg-[var(--surface-card)]')
+  })
+
+  it('Table minWidth ghi đè --table-min cho ĐÚNG bảng đó', () => {
+    const { container } = render(
+      <Table minWidth={0}>
+        <tbody>
+          <Row>
+            <Cell>a</Cell>
+          </Row>
+        </tbody>
+      </Table>,
+    )
+    const wrap = container.querySelector('.k-tscroll') as HTMLElement
+    expect(wrap.style.getPropertyValue('--table-min')).toBe('0px')
   })
 })

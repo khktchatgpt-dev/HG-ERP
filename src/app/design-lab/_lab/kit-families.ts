@@ -41,6 +41,7 @@ export const KIT_FAMILIES: KitFamily[] = [
   // ── Nền ────────────────────────────────────────────────────────────────
   { slug: 'btn', title: 'Btn', group: 'Nền', members: ['Btn', 'PermHint'], blurb: 'Nút hành động; khoá mềm nói lý do tại chỗ.' }, // prettier-ignore
   { slug: 'tag', title: 'Tag', group: 'Nền', members: ['Tag'], blurb: 'Nhãn trạng thái theo tone vòng đời.' }, // prettier-ignore
+  { slug: 'hint', title: 'Hint', group: 'Nền', members: ['Hint', 'ToneText'], blurb: 'Chữ phụ nhạt + chữ nhấn theo màu vòng đời — thay cho tự tô màu.' }, // prettier-ignore
   { slug: 'code', title: 'Code', group: 'Nền', members: ['Code'], blurb: 'Mã chứng từ / vật tư, chữ đơn cách.' }, // prettier-ignore
   { slug: 'num', title: 'Num', group: 'Nền', members: ['Num'], blurb: 'Số và tiền: định dạng VN, số 0 không tô đỏ.' }, // prettier-ignore
   { slug: 'coverage-bar', title: 'CoverageBar', group: 'Nền', members: ['CoverageBar'], blurb: 'Thanh tỉ lệ phủ có nhãn.' }, // prettier-ignore
@@ -59,7 +60,7 @@ export const KIT_FAMILIES: KitFamily[] = [
 
   // ── Bảng ───────────────────────────────────────────────────────────────
   { slug: 'table', title: 'Table', group: 'Bảng', members: ['Table', 'THead', 'Row', 'Cell', 'GroupRow', 'TFoot'], blurb: 'Bảng danh sách: tiêu đề + chân dính, ảo hoá từ 200 dòng.' }, // prettier-ignore
-  { slug: 'filter-bar', title: 'FilterBar', group: 'Bảng', members: ['FilterBar', 'Chip', 'SearchInput'], blurb: 'Hàng lọc trên bảng: chip đếm + ô tìm.' }, // prettier-ignore
+  { slug: 'filter-bar', title: 'FilterBar', group: 'Bảng', members: ['FilterBar', 'Chip', 'SearchInput', 'BarLabel', 'BarSep'], blurb: 'Hàng lọc / hàng hành động trên bảng: chip đếm, ô tìm, nhãn nhóm.' }, // prettier-ignore
   { slug: 'scope-switch', title: 'ScopeSwitch', group: 'Bảng', members: ['ScopeSwitch'], blurb: 'Phạm vi Của tôi | Cả phòng — nhớ theo tài khoản, mặc định theo vai.' }, // prettier-ignore
   { slug: 'table-engine', title: 'useKitTable', group: 'Bảng', members: ['SortHead', 'TableSettings'], blurb: 'Máy bảng: sắp xếp, ẩn cột, mật độ, nhớ theo người.' }, // prettier-ignore
   { slug: 'grid', title: 'Grid', group: 'Bảng', members: ['Grid', 'GridHead', 'GridBody', 'GridFoot', 'GridRow', 'Th', 'Td', 'CellHint', 'GridCheck', 'GridToolbar', 'GridBtn', 'GridSep'], blurb: 'Lưới dòng của chứng từ, có thanh công cụ.' }, // prettier-ignore

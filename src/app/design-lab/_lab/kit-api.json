@@ -127,6 +127,24 @@
     ],
     "extends": []
   },
+  "BarLabel": {
+    "file": "src/components/kit/Table.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Tên nhóm, chữ thường — thành phần tự in hoa."
+      }
+    ],
+    "extends": []
+  },
+  "BarSep": {
+    "file": "src/components/kit/Table.tsx",
+    "props": [],
+    "extends": []
+  },
   "Btn": {
     "file": "src/components/kit/Primitives.tsx",
     "props": [
@@ -1205,6 +1223,27 @@
         "optional": false,
         "def": null,
         "doc": "Ô tìm, các chip lọc, và nút `TableSettings` (đẩy sang phải bằng một khối `ml-auto`). Hết chỗ thì tự xuống dòng."
+      },
+      {
+        "name": "dense",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Đệm dọc 4px thay 8px — cho màn xếp HAI–BA hàng lọc chồng nhau (Đơn mua, Hộp ký). Trước 28/09/2026 các màn đó tự dựng hàng bằng cả chuỗi lớp vì `FilterBar` không có biến thể này."
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Tên cho trình đọc màn hình — có thì hàng mang `role=\"toolbar\"`."
+      },
+      {
+        "name": "tone",
+        "type": "'card' | 'raised' | 'selected'",
+        "optional": true,
+        "def": "'card'",
+        "doc": "Nền: `card` hàng lọc thường · `raised` thanh hành động chưa chọn gì · `selected` thanh hành động ĐANG CHỌN phiếu (nền nhạt màu hành động)."
       }
     ],
     "extends": []
@@ -1561,6 +1600,33 @@
         "optional": true,
         "def": null,
         "doc": "Bề rộng (px) của phần chứa ô nhập. Bỏ trống thì ô tự co theo nội dung."
+      }
+    ],
+    "extends": []
+  },
+  "Hint": {
+    "file": "src/components/kit/Primitives.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Nội dung ghi chú — một cụm ngắn, không phải đoạn văn."
+      },
+      {
+        "name": "size",
+        "type": "'label' | 'sm'",
+        "optional": true,
+        "def": "'label'",
+        "doc": "\\`label\\` 11px (mặc định, cạnh số/mã) · \\`sm\\` 12px (dòng giải thích dưới tiêu đề)."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Chữ đầy đủ khi rê chuột — khi ghi chú là bản rút gọn."
       }
     ],
     "extends": []
@@ -2492,6 +2558,13 @@
         "doc": "Bật mật độ DÀY (`.kit-dense`: hàng 25px thay 30px, đệm dọc 2px thay 5px) cho riêng màn này."
       },
       {
+        "name": "fill",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "LẤP ĐẦY KHUNG CHA (`height: 100%`) thay vì tự đo \"100dvh − vị trí\". Dùng khi màn được NHÚNG vào một khung đã có chiều cao (trang mẫu, xem trước, hộp thoại lớn). Không bật thì khung cao theo cửa sổ: nhúng trong cửa sổ thấp là bảng bị bóp còn vài chục px (đo 27/09/2026 khi soi h…"
+      },
+      {
         "name": "tableMin",
         "type": "number",
         "optional": true,
@@ -2889,6 +2962,13 @@
         "doc": "TÊN BẢNG cho trình đọc màn hình (`aria-label` của `<table>`), vd. \"Danh sách nhà cung cấp\". Người đi bằng phím nhảy giữa các bảng theo tên; bảng không tên chỉ được đọc là \"bảng\", và màn có hai bảng thì không phân biệt được. Không hiện ra mắt — tiêu đề khối trên bảng đã nói điề…"
       },
       {
+        "name": "minWidth",
+        "type": "number",
+        "optional": true,
+        "def": null,
+        "doc": "BỀ RỘNG TỐI THIỂU của bảng này, px — ghi đè `--table-min` (mặc định 680px, hoặc `ScreenFrame tableMin`). Đặt nhỏ (vd. 0) cho bảng nằm trong CỘT HẸP (khay phải 372px): giữ sàn 680px thì bảng 3 cột cũng cuộn ngang."
+      },
+      {
         "name": "onRowClick",
         "type": "(row: T) => void",
         "optional": true,
@@ -3247,6 +3327,40 @@
     ],
     "extends": []
   },
+  "ToneText": {
+    "file": "src/components/kit/Primitives.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Nội dung được nhấn."
+      },
+      {
+        "name": "tone",
+        "type": "'stop' | 'warn' | 'done'",
+        "optional": false,
+        "def": null,
+        "doc": "\\`stop\\` trễ/chặn · \\`warn\\` cần để ý · \\`done\\` đã xong."
+      },
+      {
+        "name": "strong",
+        "type": "boolean",
+        "optional": true,
+        "def": "true",
+        "doc": "Đậm (mặc định) — tắt khi đã nằm trong ô chữ đậm."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Giải thích khi rê chuột: nhấn vì sao."
+      }
+    ],
+    "extends": []
+  },
   "TopBar": {
     "file": "src/components/kit/Nav.tsx",
     "props": [
@@ -3439,7 +3553,7 @@
         "type": "ReactNode",
         "optional": false,
         "def": null,
-        "doc": "Các `WorkTile`. Lưới 2 cột, lên 3 từ 640px, lên 6 từ 1024px; hơn sáu ô thì xuống hàng."
+        "doc": "Các `WorkTile`. Lưới 2 cột, lên 3 khi KHUNG CHỨA rộng từ 448px, lên 6 từ 768px; hơn sáu ô thì xuống hàng."
       }
     ],
     "extends": []
