@@ -3389,6 +3389,67 @@ export type Database = {
           },
         ]
       }
+      supply_po_commit_log: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date_after: string | null
+          date_before: string | null
+          id: string
+          kind: string
+          lines: Json
+          po_id: string
+          reason: string | null
+          shipment_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date_after?: string | null
+          date_before?: string | null
+          id?: string
+          kind: string
+          lines?: Json
+          po_id: string
+          reason?: string | null
+          shipment_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date_after?: string | null
+          date_before?: string | null
+          id?: string
+          kind?: string
+          lines?: Json
+          po_id?: string
+          reason?: string | null
+          shipment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_commit_log_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_commit_log_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_commit_log_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_po_cost_allocations: {
         Row: {
           amount: number
@@ -3551,6 +3612,87 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
+          },
+        ]
+      }
+      supply_po_issues: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          kind: string
+          po_id: string
+          po_line_id: string | null
+          qty: number | null
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          kind: string
+          po_id: string
+          po_line_id?: string | null
+          qty?: number | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          kind?: string
+          po_id?: string
+          po_line_id?: string | null
+          qty?: number | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_issues_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3933,6 +4075,7 @@ export type Database = {
           price_includes_vat: boolean
           production_order_id: string | null
           signer_role: string | null
+          source_po_id: string | null
           status: string
           supplier_doc_no: string | null
           supplier_id: string
@@ -3967,6 +4110,7 @@ export type Database = {
           price_includes_vat?: boolean
           production_order_id?: string | null
           signer_role?: string | null
+          source_po_id?: string | null
           status?: string
           supplier_doc_no?: string | null
           supplier_id: string
@@ -4001,6 +4145,7 @@ export type Database = {
           price_includes_vat?: boolean
           production_order_id?: string | null
           signer_role?: string | null
+          source_po_id?: string | null
           status?: string
           supplier_doc_no?: string | null
           supplier_id?: string
@@ -4057,6 +4202,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_orders_source_po_id_fkey"
+            columns: ["source_po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "supply_purchase_orders_supplier_id_fkey"

@@ -13,6 +13,7 @@ import {
   GridHead,
   GridRow,
   LineStatus,
+  Menu,
   NumInput,
   Sheet,
   SheetActions,
@@ -74,6 +75,8 @@ export function DotGiaoGrid({
   onArrived,
   onReschedule,
   onCancel,
+  onEdit,
+  onSplit,
 }: {
   shipments: ShipmentLite[]
   linesById: Map<string, ShipmentLineRef>
@@ -91,6 +94,10 @@ export function DotGiaoGrid({
   onArrived: (id: string) => void
   onReschedule: (s: ShipmentLite) => void
   onCancel: (s: ShipmentLite) => void
+  /** Sửa SL từng dòng + ngày của đợt đang hẹn (27/09/2026). */
+  onEdit: (s: ShipmentLite) => void
+  /** Lấy trước một phần đợt (hàng gấp) → đợt mới ngày sớm hơn. */
+  onSplit: (s: ShipmentLite) => void
 }) {
   const moneyByLine = useMemo(
     () =>
@@ -132,7 +139,7 @@ export function DotGiaoGrid({
           <Th>Hàng trong đợt</Th>
           <Th num>Tiền kế hoạch</Th>
           <Th>Ghi chú</Th>
-          {canAct && <Th width={190} />}
+          {canAct && <Th width={210} />}
         </GridHead>
         <GridBody>
           {shipments.map((s) => {
@@ -195,13 +202,30 @@ export function DotGiaoGrid({
                 <Td>{s.note ?? ''}</Td>
                 {canAct && (
                   <Td>
-                    {live && (
+                    {/* Đợt ĐANG HẸN: hai việc hay làm nằm ngoài (xe tới, lấy hàng
+                        gấp), việc sửa lịch gom vào ⋯. Đợt xe đã tới (đang nhận
+                        dở) chỉ còn dời / huỷ — số lượng đã có phiếu bám vào. */}
+                    {s.status === 'planned' && (
+                      <span className="flex items-center gap-1">
+                        <GridBtn disabled={busy} onClick={() => onArrived(s.id)}>
+                          Xe tới
+                        </GridBtn>
+                        <GridBtn disabled={busy} onClick={() => onSplit(s)}>
+                          Lấy trước
+                        </GridBtn>
+                        <Menu
+                          label="⋯"
+                          ariaLabel={`Việc khác của ${s.code ?? `đợt ${s.seq}`}`}
+                          items={[
+                            { label: 'Sửa số lượng / ngày', onClick: () => onEdit(s), disabled: busy }, // prettier-ignore
+                            { label: 'Dời ngày', onClick: () => onReschedule(s), disabled: busy }, // prettier-ignore
+                            { label: 'Huỷ đợt', onClick: () => onCancel(s), danger: true, disabled: busy }, // prettier-ignore
+                          ]}
+                        />
+                      </span>
+                    )}
+                    {s.status === 'arrived' && (
                       <span className="flex gap-1">
-                        {s.status === 'planned' && (
-                          <GridBtn disabled={busy} onClick={() => onArrived(s.id)}>
-                            Xe tới
-                          </GridBtn>
-                        )}
                         <GridBtn disabled={busy} onClick={() => onReschedule(s)}>
                           Dời ngày
                         </GridBtn>
@@ -660,6 +684,171 @@ export function DotSheet({
           placeholder={kind === 'cancel' ? 'NCC báo huỷ chuyến · gộp vào đợt sau…' : 'NCC báo trễ xe · xưởng giục sớm…'} // prettier-ignore
         />
       </label>
+    </Sheet>
+  )
+}
+
+/* ══ 6. SỬA ĐỢT / LẤY TRƯỚC (27/09/2026) ═════════════════════════════════
+ *
+ * Hai việc thực tế mà trước đây chỉ làm được bằng "huỷ đợt rồi khai lại":
+ *   · SỬA — NCC báo giao ít/nhiều hơn trong đợt, hoặc gộp thêm một mã vào chuyến;
+ *   · LẤY TRƯỚC — hàng gấp, gọi NCC chở trước một phần (hoặc tự đi lấy). Đợt gốc
+ *     giữ mã GH + ngày, bớt đúng phần kéo lên; phần kéo lên thành đợt mới.
+ * Số chặn cuối cùng vẫn ở server (tổng đợt ≤ SL đặt, lấy trước ≤ số của đợt).
+ */
+export function DotSuaSheet({
+  kind,
+  shipment,
+  lines,
+  others,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  kind: 'edit' | 'split'
+  shipment: ShipmentLite
+  /** Dòng vật tư kho của đơn — sửa đợt được thêm mã chưa có trong đợt. */
+  lines: ShipmentLineRef[]
+  /**
+   * SL đã nằm trong các đợt SỐNG KHÁC (theo dòng) — để báo "vượt SL đặt" ngay
+   * trong hộp thay vì bấm Lưu rồi mới ăn lỗi server.
+   */
+  others: Map<string, number>
+  busy: boolean
+  onClose: () => void
+  onSubmit: (
+    date: string,
+    reason: string,
+    lines: { po_line_id: string; qty: number }[],
+  ) => Promise<boolean>
+}) {
+  const inShip = new Map(shipment.lines.map((l) => [l.po_line_id, l.qty]))
+  const rows = kind === 'split' ? lines.filter((l) => inShip.has(l.id)) : lines
+  const [qty, setQty] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      rows.map((l) => [
+        l.id,
+        kind === 'edit' && inShip.has(l.id) ? String(inShip.get(l.id)) : '',
+      ]),
+    ),
+  )
+  const [date, setDate] = useState(kind === 'edit' ? shipment.expected_date : '')
+  const [reason, setReason] = useState('')
+  const picked = rows
+    .map((l) => ({
+      po_line_id: l.id,
+      qty: Number((qty[l.id] ?? '').replace(',', '.')) || 0,
+    }))
+    .filter((l) => l.qty > 0)
+  const over =
+    kind === 'split'
+      ? rows.find((l) => (Number((qty[l.id] ?? '').replace(',', '.')) || 0) > (inShip.get(l.id) ?? 0) + 1e-4) // prettier-ignore
+      : undefined
+  const overOrder =
+    kind === 'edit'
+      ? rows.find(
+          (l) =>
+            (others.get(l.id) ?? 0) +
+              (picked.find((p) => p.po_line_id === l.id)?.qty ?? 0) >
+            l.qty_ordered + 1e-4,
+        )
+      : undefined
+  const takesAll =
+    kind === 'split' &&
+    shipment.lines.every(
+      (sl) =>
+        (picked.find((p) => p.po_line_id === sl.po_line_id)?.qty ?? 0) >= sl.qty - 1e-4,
+    )
+  const why = !date
+    ? 'Chọn ngày giao'
+    : picked.length === 0
+      ? kind === 'split'
+        ? 'Nhập số lấy trước cho ít nhất một dòng'
+        : 'Đợt phải còn ít nhất một dòng'
+      : over
+        ? `"${over.name}" lấy trước vượt số của đợt`
+        : overOrder
+          ? `"${overOrder.name}": các đợt khác đã hẹn ${num(others.get(overOrder.id) ?? 0)}, đợt này tối đa ${num(Math.max(overOrder.qty_ordered - (others.get(overOrder.id) ?? 0), 0))} (SL đặt ${num(overOrder.qty_ordered)})`
+          : takesAll
+            ? 'Lấy trước toàn bộ đợt = dời ngày cả đợt — dùng "Dời ngày"'
+            : !reason.trim()
+              ? 'Ghi lý do'
+              : null
+  const label = shipment.code ?? `đợt ${shipment.seq}`
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      stakes="vua"
+      title={kind === 'split' ? `Lấy trước từ ${label}` : `Sửa ${label}`}
+      subtitle={`Đang hẹn ${dmy(shipment.expected_date)}`}
+      footer={
+        <SheetActions
+          stakes="vua"
+          busy={busy}
+          disabled={!!why}
+          onCancel={onClose}
+          onConfirm={() => {
+            if (why) return
+            void onSubmit(date, reason.trim(), picked).then((ok) => ok && onClose())
+          }}
+          confirmLabel={kind === 'split' ? 'Tách đợt lấy trước' : 'Lưu đợt'}
+        />
+      }
+    >
+      <Consequence>
+        {kind === 'split'
+          ? `Phần nhập dưới đây thành một ĐỢT MỚI vào ngày chọn; ${label} giữ nguyên ngày hẹn và bớt đúng số đó.`
+          : `Ghi lại số lượng từng dòng và ngày của ${label}. Tổng mọi đợt không được vượt số lượng đặt.`}
+      </Consequence>
+      <Grid minWidth={420}>
+        <GridHead>
+          <Th>Vật tư</Th>
+          <Th num width={110}>
+            {kind === 'split' ? 'Trong đợt' : 'SL đặt'}
+          </Th>
+          <Th num width={120}>
+            {kind === 'split' ? 'Lấy trước' : 'SL đợt này'}
+          </Th>
+        </GridHead>
+        <GridBody>
+          {rows.map((l) => (
+            <GridRow key={l.id}>
+              <Td>
+                {l.name} <span className="text-[var(--ink-3)]">{l.unit}</span>
+              </Td>
+              <Td num>
+                {num(kind === 'split' ? (inShip.get(l.id) ?? 0) : l.qty_ordered)}
+              </Td>
+              <Td num>
+                <NumInput
+                  value={qty[l.id] ?? ''}
+                  aria-label={`${kind === 'split' ? 'SL lấy trước' : 'SL đợt'} ${l.name}`}
+                  onCommit={(raw) => setQty((q) => ({ ...q, [l.id]: raw.trim() }))}
+                />
+              </Td>
+            </GridRow>
+          ))}
+        </GridBody>
+      </Grid>
+      <label className="mt-3 mb-3 block">
+        <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
+          {kind === 'split' ? 'Ngày lấy / giao gấp' : 'Ngày giao'}
+        </span>
+        <DateInput value={date} onChange={setDate} label="Ngày giao" />
+      </label>
+      <label className="block">
+        <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
+          Lý do
+        </span>
+        <TextArea
+          value={reason}
+          onChange={setReason}
+          rows={2}
+          placeholder={kind === 'split' ? 'Xưởng cần gấp cho lệnh 09 · NV tự đi lấy…' : 'NCC báo chuyến này chở được 800…'} // prettier-ignore
+        />
+      </label>
+      {why && <p className="text-k-sm mt-2 text-[var(--ink-2)]">Chưa lưu được: {why}.</p>}
     </Sheet>
   )
 }

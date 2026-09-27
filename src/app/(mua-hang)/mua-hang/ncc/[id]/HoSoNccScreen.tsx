@@ -57,6 +57,11 @@ type Ncc = {
   contact_name: string | null
   contact_phone: string | null
   note: string | null
+  /** Người phụ trách gán tay (null = chưa gán). */
+  buyer_id: string | null
+  /** Tên người phụ trách đang áp dụng — gán tay, hoặc suy từ đơn. */
+  buyer_name: string | null
+  buyer_src: 'gan' | 'suy' | null
 }
 
 type Po = {
@@ -108,10 +113,12 @@ const MO = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
  */
 function SuaHoSo({
   ncc,
+  buyers,
   onClose,
   onSaved,
 }: {
   ncc: Ncc
+  buyers: { id: string; name: string }[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -132,6 +139,7 @@ function SuaHoSo({
     payment_net_days: ncc.payment_net_days == null ? '' : String(ncc.payment_net_days),
     lead_time_days: ncc.lead_time_days == null ? '' : String(ncc.lead_time_days),
     note: ncc.note ?? '',
+    buyer_id: ncc.buyer_id ?? '',
   })
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }))
 
@@ -158,6 +166,7 @@ function SuaHoSo({
           payment_net_days: f.payment_net_days.trim() === '' ? null : Number(f.payment_net_days), // prettier-ignore
           lead_time_days: f.lead_time_days.trim() === '' ? null : Number(f.lead_time_days), // prettier-ignore
           note: s(f.note),
+          buyer_id: f.buyer_id || null,
         },
       })
       toast.success('Đã lưu hồ sơ', ncc.name)
@@ -207,6 +216,17 @@ function SuaHoSo({
             onCommit={set('type')}
             label="Mặt hàng"
             placeholder="Bao bì, Sơn, Gia công…"
+          />
+        </Field>
+        <Field label="Người phụ trách">
+          <Pick
+            label="Người phụ trách"
+            value={f.buyer_id}
+            onChange={set('buyer_id')}
+            options={[
+              { value: '', label: ncc.buyer_src === 'suy' && ncc.buyer_name ? `— chưa gán (đang suy: ${ncc.buyer_name})` : '— chưa gán' },
+              ...buyers.map((b) => ({ value: b.id, label: b.name })),
+            ]}
           />
         </Field>
         <Field label="Trạng thái">
@@ -314,11 +334,14 @@ export function HoSoNccScreen({
   pos,
   gia,
   canEdit,
+  buyers,
 }: {
   ncc: Ncc
   pos: Po[]
   gia: Gia[]
   canEdit: boolean
+  /** Người mua (thành viên Cung ứng) — lựa chọn cho ô Người phụ trách. */
+  buyers: { id: string; name: string }[]
 }) {
   const [tab, setTab] = useState<'don' | 'gia'>('don')
   const [sua, setSua] = useState(false)
@@ -356,7 +379,10 @@ export function HoSoNccScreen({
       />
       <ScreenHeader
         compact
-        eyebrow={ncc.type ?? 'Nhà cung cấp'}
+        eyebrow={[
+          ncc.type ?? 'Nhà cung cấp',
+          ncc.buyer_name ? `phụ trách: ${ncc.buyer_name}${ncc.buyer_src === 'suy' ? ' (suy từ đơn)' : ''}` : 'chưa có người phụ trách',
+        ].join(' · ')}
         title={
           <span className="flex items-center gap-2">
             {ncc.name}
@@ -627,6 +653,7 @@ export function HoSoNccScreen({
       {sua && (
         <SuaHoSo
           ncc={ncc}
+          buyers={buyers}
           onClose={() => setSua(false)}
           onSaved={() => router.refresh()}
         />

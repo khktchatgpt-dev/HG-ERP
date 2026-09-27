@@ -362,6 +362,15 @@ export function HangVeScreen({
                             >
                               Đơn ›
                             </a>
+                            {canEdit && r.shipment_id && (
+                              <a
+                                href={`/warehouse/nhap/${r.po_id}`}
+                                className="text-k-sm text-[var(--act-text)]"
+                                title="Hàng gấp / NCC chở không theo đợt — nhận theo phần còn mở của cả đơn, số tự trừ vào các đợt"
+                              >
+                                Ngoài đợt ›
+                              </a>
+                            )}
                             {canEdit && (
                               <Btn
                                 icon="nhanHang"

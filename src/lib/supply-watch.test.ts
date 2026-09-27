@@ -7,6 +7,7 @@ import {
   groupTodos,
   incomingBucket,
   type SupplyWatchInput,
+  isUnconfirmed,
 } from './supply-watch'
 
 const TODAY = '2026-08-15'
@@ -171,5 +172,41 @@ describe('số đếm cho badge', () => {
       po({ expected_at: '2026-09-30' }), // sau đó
     ]
     expect(countIncomingSoon(rows, TODAY)).toBe(2)
+  })
+})
+
+describe('isUnconfirmed — NCC chậm xác nhận (27/09/2026)', () => {
+  const base = {
+    status: 'ordered',
+    expected_at: '2026-10-30',
+    assigned_to: 'u',
+    confirmed_at: null,
+  }
+  it('gửi 25/09, hôm nay 27/09, chưa xác nhận → lên hộp thư', () => {
+    expect(
+      classifyTodo({ ...base, ordered_at: '2026-09-25T08:00:00Z' }, '2026-09-27'),
+    ).toBe('unconfirmed')
+  })
+  it('mới gửi hôm qua → chưa', () => {
+    expect(
+      isUnconfirmed({ ...base, ordered_at: '2026-09-26T08:00:00Z' }, '2026-09-27'),
+    ).toBe(false)
+  })
+  it('đã xác nhận / không có mốc gửi → không kết luận', () => {
+    expect(
+      isUnconfirmed(
+        { ...base, ordered_at: '2026-09-01', confirmed_at: '2026-09-02' },
+        '2026-09-27',
+      ),
+    ).toBe(false)
+    expect(isUnconfirmed({ ...base, ordered_at: null }, '2026-09-27')).toBe(false)
+  })
+  it('quá hẹn giao vẫn đứng trước: việc là giục giao', () => {
+    expect(
+      classifyTodo(
+        { ...base, expected_at: '2026-09-20', ordered_at: '2026-09-01' },
+        '2026-09-27',
+      ),
+    ).toBe('overdue')
   })
 })

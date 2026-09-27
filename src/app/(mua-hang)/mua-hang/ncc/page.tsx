@@ -1,3 +1,6 @@
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { usersRepo } from '@/modules/core/users/users.repo'
+import { defaultScope, inferSupplierBuyer, mySupplierIds, parseScope } from '@/lib/supply-scope'
 import { authService } from '@/modules/core/auth/auth.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
@@ -25,8 +28,14 @@ export const metadata = { title: 'Mua hàng · Nhà cung cấp' }
  *     `suppliers.type` (128/164 = 78%), và đó mới đúng là thứ người mua cần:
  *     "Gia công đan mây", "Bao bì", "Sắt các loại"…
  */
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ pham_vi?: string }>
+}) {
+  const sp = await searchParams
   const user = await authService.requirePageUser()
+  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
 
   /*
@@ -42,7 +51,18 @@ export default async function Page() {
     suppliersService.list(user, { page: 1, page_size: CAP }),
     posRepo.list({ page: 1, page_size: CAP }),
   ])
-  const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
+  const [totals, users] = await Promise.all([
+    posRepo.totalsByPoIds(pos.map((p) => p.id)),
+    usersRepo.list(),
+  ])
+  const nameOf = (id: string | null) => {
+    const u = id ? users.find((x) => x.id === id) : null
+    return u ? (u.name ?? u.email) : null
+  }
+  // NCC CỦA TÔI + NGƯỜI PHỤ TRÁCH (27/09/2026, lib/supply-scope): gán tay
+  // (buyer_id) thắng; chưa gán thì suy từ lịch sử đơn — người đặt nhiều nhất.
+  const inferred = inferSupplierBuyer(pos)
+  const mine = mySupplierIds(suppliers, pos, user.id)
 
   /*
     TỔNG CHI TÁCH THEO LOẠI TIỀN — không cộng chung, không quy đổi.
@@ -106,6 +126,9 @@ export default async function Page() {
       last_po: st?.last_code ?? null,
       last_po_at: st?.last_at ?? null,
       spend: st?.spend ?? {},
+      buyer_name: nameOf(s.buyer_id ?? inferred.get(s.id) ?? null),
+      buyer_src: s.buyer_id ? ('gan' as const) : inferred.has(s.id) ? ('suy' as const) : null,
+      mine: mine.has(s.id),
     }
   })
 
@@ -113,6 +136,9 @@ export default async function Page() {
     <NccScreen
       rows={rows}
       canEdit={!!canEdit}
+      meId={user.id}
+      defaultScope={defaultScope({ canApprove })}
+      urlScope={parseScope(sp.pham_vi)}
       chamTran={
         suppliers.length >= CAP ? 'ncc' : pos.length >= CAP ? 'don' : null
       }

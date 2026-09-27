@@ -17,6 +17,7 @@ import {
   NoticeBar,
   Num,
   Row,
+  ScopeSwitch,
   ScreenFrame,
   ScreenHeader,
   Sheet,
@@ -33,6 +34,8 @@ import {
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { SUPPLY_TODO, type SupplyTodoKind } from '@/lib/supply-watch'
+import { isMyPo, type SupplyScope } from '@/lib/supply-scope'
+import { useScopePref } from '@/lib/use-scope-pref'
 import { KIND_ACTION, type ActionSpec } from './actions'
 
 export type Viec = {
@@ -95,7 +98,7 @@ function firstLane(
 ): SupplyTodoKind {
   if (asked && KIND_ORDER.includes(asked as SupplyTodoKind))
     return asked as SupplyTodoKind
-  const seen = scope === 'toi' ? viec.filter((v) => v.assigned_to === meId) : viec
+  const seen = scope === 'toi' ? viec.filter((v) => isMyPo(v, meId)) : viec
   return KIND_ORDER.find((k) => seen.some((v) => v.kind === k)) ?? KIND_ORDER[0]
 }
 
@@ -104,22 +107,27 @@ export function ViecScreen({
   meId,
   viec,
   initialKind,
-  initialScope,
+  defaultScope,
+  urlScope,
   truncatedAt,
 }: {
   today: string
   meId: string
   viec: Viec[]
   initialKind: string | null
-  initialScope: 'toi' | 'phong'
+  /** Phạm vi mặc định theo vai (người duyệt → cả phòng) — xem `defaultScope`. */
+  defaultScope: SupplyScope
+  /** `?pham_vi=` trên địa chỉ — thắng lựa chọn đã nhớ cho lần mở này. */
+  urlScope: SupplyScope | null
   truncatedAt: number | null
 }) {
   const router = useRouter()
   const toast = useToast()
 
-  const [scope, setScope] = useState<'toi' | 'phong'>(initialScope)
+  // Nhớ theo tài khoản (27/09/2026) — trước đây useState, tắt trang là mất.
+  const [scope, setScope] = useScopePref('hop-thu', meId, defaultScope, urlScope)
   const [kind, setKind] = useState<SupplyTodoKind>(() =>
-    firstLane(viec, initialScope, meId, initialKind),
+    firstLane(viec, urlScope ?? defaultScope, meId, initialKind),
   )
   const [pick, setPick] = useState<string | null>(null)
   const [ticked, setTicked] = useState<string[]>([])
@@ -129,7 +137,7 @@ export function ViecScreen({
   const [busy, setBusy] = useState(false)
 
   const inScope = useMemo(
-    () => (scope === 'toi' ? viec.filter((v) => v.assigned_to === meId) : viec),
+    () => (scope === 'toi' ? viec.filter((v) => isMyPo(v, meId)) : viec),
     [viec, scope, meId],
   )
 
@@ -247,22 +255,25 @@ export function ViecScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng · Hộp thư việc"
-        title="Chờ tôi xử lý"
+        title={scope === 'toi' ? 'Chờ tôi xử lý' : 'Việc cả phòng'}
         facts={[
           { label: 'Việc đang xem', value: String(inScope.length) },
           { label: 'Quá hẹn', value: String(lanes[0].rows.length), tone: lanes[0].rows.length > 0 ? 'stop' : undefined }, // prettier-ignore
-          { label: 'Phạm vi', value: scope === 'toi' ? 'Đơn tôi phụ trách' : 'Cả phòng' },
         ]}
         actions={
           <>
-            <Btn
-              onClick={() => {
-                setScope(scope === 'toi' ? 'phong' : 'toi')
+            <ScopeSwitch
+              label="Phạm vi"
+              value={scope}
+              onChange={(v) => {
+                setScope(v)
                 reset()
               }}
-            >
-              {scope === 'toi' ? 'Xem cả phòng' : 'Chỉ đơn của tôi'}
-            </Btn>
+              options={[
+                { value: 'toi', label: 'Của tôi', count: viec.filter((v) => isMyPo(v, meId)).length, hint: 'Việc trên đơn tôi phụ trách' }, // prettier-ignore
+                { value: 'phong', label: 'Cả phòng', count: viec.length, hint: 'Việc trên mọi đơn của phòng' }, // prettier-ignore
+              ]}
+            />
             <Btn primary icon="them" href="/mua-hang/don/moi">
               Soạn đơn mua
             </Btn>

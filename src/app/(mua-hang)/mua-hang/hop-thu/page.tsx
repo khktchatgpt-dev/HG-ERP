@@ -3,6 +3,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { loadWatchPos, todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { classifyTodo, type SupplyTodoKind } from '@/lib/supply-watch'
+import { defaultScope, parseScope } from '@/lib/supply-scope'
 import { ViecScreen, type Viec } from './ViecScreen'
 
 export const dynamic = 'force-dynamic'
@@ -61,9 +62,10 @@ export default async function Page({
   const today = todayIso()
   const { rows, truncatedAt } = await loadWatchPos(user)
 
-  const isSupply = user.role === 'admin' || isSupplyStaff(user)
+  const isSupply = user.role === 'admin' || (await isSupplyStaff(user))
   const manageAny =
     user.role === 'admin' || (await canAction(user, 'supply.po.manage_any'))
+  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
 
   const viec: Viec[] = rows
     .map((p) => ({ p, kind: classifyTodo(p, today) }))
@@ -101,7 +103,8 @@ export default async function Page({
       meId={user.id}
       viec={viec}
       initialKind={sp.nhom ?? null}
-      initialScope={sp.pham_vi === 'phong' ? 'phong' : 'toi'}
+      defaultScope={defaultScope({ canApprove })}
+      urlScope={parseScope(sp.pham_vi)}
       truncatedAt={truncatedAt}
     />
   )

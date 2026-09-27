@@ -1,4 +1,5 @@
 import { canReschedule } from '@/lib/po-reschedule'
+import { cancelBlock } from '@/lib/po-guards'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 
 /**
@@ -271,6 +272,10 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
       ? 'Đơn đã có phiếu nhập kho — sửa dòng sẽ làm phiếu nhập mồ côi'
       : notOwn
 
+  // Đơn đã có hàng về kho: huỷ cả đơn là bỏ lại phiếu nhập treo — chỉ đường chốt thiếu.
+  // Cùng câu với server (`cancelBlock`, lib/po-guards).
+  const notCancel = (perm.hasReceipts ? cancelBlock(status, 1) : null) ?? notOwn
+
   switch (status) {
     case 'draft':
       return [
@@ -360,7 +365,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         REOPEN(notReopen),
         DELETE('Đơn đã gửi duyệt — bấm "Rút về nháp" trước, rồi mới xoá được'),
         REASSIGN(canReassign),
-        CANCEL(notOwn),
+        CANCEL(notCancel),
         OPEN,
       ]
 
@@ -391,7 +396,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         DUP,
         DELETE('Đơn đã ra khỏi cửa — sổ phải giữ lại vết, dùng "Huỷ đơn" thay vì xoá'),
         REASSIGN(canReassign),
-        CANCEL(notOwn),
+        CANCEL(notCancel),
         OPEN,
       ]
 
@@ -430,13 +435,15 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         DUP,
         DELETE('Đơn đã ra khỏi cửa — sổ phải giữ lại vết, dùng "Huỷ đơn" thay vì xoá'),
         REASSIGN(canReassign),
-        CANCEL(notOwn),
+        CANCEL(notCancel),
       ]
 
     case 'received':
       return [
         { ...OPEN, primary: true },
-        ADJUST('Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn'),
+        ADJUST(
+          'Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn',
+        ),
         EDIT_TERMS(notOwn),
         DUP,
         DELETE('Đơn đã đóng sổ — không xoá được nữa'),

@@ -796,6 +796,67 @@
     ],
     "extends": []
   },
+  "DocMenu": {
+    "file": "src/components/kit/Nav.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Các `DocMenuPanel` — MỘT cho mỗi mục. Chỉ panel đang mở được dựng."
+      },
+      {
+        "name": "items",
+        "type": "DocMenuItem[]",
+        "optional": false,
+        "def": null,
+        "doc": "Các mục theo thứ tự hiện. Mục đầu thường là \"Tổng quan\" — màn mở sẵn mục đó."
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Tên của menu cho trình đọc màn hình (\"Nội dung đơn\")."
+      },
+      {
+        "name": "onValueChange",
+        "type": "(id: string) => void",
+        "optional": false,
+        "def": null,
+        "doc": "Gọi với `id` của mục vừa chọn (bấm hoặc mũi tên). Màn đổi `value` và ghi đường dẫn."
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "`id` của mục đang mở. Có kiểm soát: kit không giữ trạng thái."
+      }
+    ],
+    "extends": []
+  },
+  "DocMenuPanel": {
+    "file": "src/components/kit/Nav.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Nội dung CHỈ của mục này — không lặp khối của mục khác."
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "`id` của mục trong `DocMenu` mà panel này thuộc về."
+      }
+    ],
+    "extends": []
+  },
   "DocScreen": {
     "file": "src/components/kit/Erp.tsx",
     "props": [
@@ -812,6 +873,68 @@
         "optional": true,
         "def": null,
         "doc": "Mật độ DÀY (`kit-dense`): hàng 25px thay vì 30px, đệm ô dọc 2px. Cho chứng từ nhiều dòng."
+      }
+    ],
+    "extends": []
+  },
+  "DocStatus": {
+    "file": "src/components/kit/Flow.tsx",
+    "props": [
+      {
+        "name": "icon",
+        "type": "IcoName",
+        "optional": false,
+        "def": null,
+        "doc": "Icon theo khái niệm của bước (`gui`, `cho`, `duyet`, `nhapKho`…)."
+      },
+      {
+        "name": "status",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Tên trạng thái hiện tại, chữ người đọc (\"Đã gửi NCC\", \"Chờ duyệt\")."
+      },
+      {
+        "name": "holder",
+        "type": "{ who: string; what: string; days?: number | null; mine?: boolean }",
+        "optional": true,
+        "def": null,
+        "doc": "Ai đang giữ chứng từ ở bước này. `days` = số ngày đã nằm ở bước (tính sẵn bằng `daysHeld`), tô màu theo `HOLD_AGE_DAYS`: dưới 3 không tô, 3–6 `warn`, từ 7 `stop`. Chứng từ đã khép thì bỏ trống — đừng bịa người giữ."
+      },
+      {
+        "name": "marks",
+        "type": "Mark[]",
+        "optional": true,
+        "def": null,
+        "doc": "Vòng đời đầy đủ cho khung nổi mở khi bấm chữ trạng thái — cùng kiểu mốc với `Timeline` (mốc `at: null` = chưa tới). Không có mốc nào thì chữ trạng thái không bấm được."
+      },
+      {
+        "name": "moves",
+        "type": "ComponentProps<typeof Menu>['items']",
+        "optional": true,
+        "def": null,
+        "doc": "Các chuyển trạng thái khác, cùng kiểu mục với `Menu` — gom nhóm \"Đi tiếp\" / \"Quay lại\" / \"Dừng\" bằng `group`, mục không làm được giữ lại kèm `why`. Rỗng thì không vẽ nút menu."
+      },
+      {
+        "name": "movesLabel",
+        "type": "string",
+        "optional": true,
+        "def": "'Chuyển trạng thái'",
+        "doc": "Chữ trên nút mở menu chuyển trạng thái."
+      },
+      {
+        "name": "next",
+        "type": "ReactNode",
+        "optional": true,
+        "def": null,
+        "doc": "Nút chuyển sang bước KẾ TIẾP — thường là `Btn primary`, có thể khoá mềm (`blockedBy`)."
+      },
+      {
+        "name": "tone",
+        "type": "'done' | 'warn' | 'stop'",
+        "optional": true,
+        "def": null,
+        "doc": "Màu icon theo vòng đời: `done` đã xong trọn, `warn` đang chờ ai đó, `stop` đã huỷ / dừng. Bỏ trống = màu hành động (đang chạy bình thường)."
       }
     ],
     "extends": []
@@ -960,6 +1083,13 @@
         "optional": true,
         "def": null,
         "doc": "Mở sẵn lúc vào màn. Chỉ đọc MỘT LẦN lúc dựng — đổi về sau không gấp/mở lại khối."
+      },
+      {
+        "name": "fixed",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "KHỐI CỐ ĐỊNH — luôn mở, không mũi tên gập, tiêu đề là `h3` chứ không phải nút. Dùng khi khối đã nằm trong một mục `DocMenuPanel` (27/09/2026): mục đã tách thông tin rồi, gập thêm một tầng nữa chỉ là một cú bấm thừa và một dòng \"▸ …\" trông như danh sách lồng danh sách. `default…"
       },
       {
         "name": "flush",
@@ -2309,6 +2439,40 @@
     "extends": [
       "HTMLAttributes"
     ]
+  },
+  "ScopeSwitch": {
+    "file": "src/components/kit/Nav.tsx",
+    "props": [
+      {
+        "name": "label",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Tên nhóm cho trình đọc màn hình và nhãn nhỏ đứng trước (\"Phạm vi\")."
+      },
+      {
+        "name": "onChange",
+        "type": "(v: V) => void",
+        "optional": false,
+        "def": null,
+        "doc": "Người dùng chọn phạm vi khác. Không gọi khi bấm lại lựa chọn đang bật."
+      },
+      {
+        "name": "options",
+        "type": "ScopeOption<V>[]",
+        "optional": false,
+        "def": null,
+        "doc": "Các phạm vi, theo thứ tự hiện — thường 2: của tôi trước, cả phòng sau."
+      },
+      {
+        "name": "value",
+        "type": "V",
+        "optional": false,
+        "def": null,
+        "doc": "Lựa chọn đang bật."
+      }
+    ],
+    "extends": []
   },
   "ScreenFrame": {
     "file": "src/components/kit/Shell.tsx",

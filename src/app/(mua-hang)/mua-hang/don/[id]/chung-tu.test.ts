@@ -4,7 +4,9 @@ import {
   newHeader,
   poChecks,
   retemplate,
-  type PoForHeader, templateForSupplier } from './chung-tu'
+  type PoForHeader,
+  templateForSupplier,
+} from './chung-tu'
 
 const po: PoForHeader = {
   template: 'accessory',

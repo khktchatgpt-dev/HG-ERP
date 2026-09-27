@@ -121,3 +121,59 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
 
   return { primary, quick, more }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   CHIA THANH NÚT CHO ĐẦU TRANG MỚI (27/09/2026, canvas "Đơn mua", trang "Đầu
+   trang sắp xếp lại" — chủ dự án duyệt theo khuyến nghị).
+
+   Việc CHUYỂN TRẠNG THÁI rời thanh nút, về thanh trạng thái (`DocStatus`):
+   bước kế tiếp là nút chính của thanh đó, các chuyển khác vào menu "Chuyển
+   trạng thái" theo nhóm Đi tiếp / Quay lại / Dừng. Việc KHÔNG đổi trạng thái
+   (sửa, ghi phí, in, nhân bản…) ở lại cạnh mã đơn + "⋯".
+   ══════════════════════════════════════════════════════════════════════ */
+export type MoveGroup = 'Đi tiếp' | 'Quay lại' | 'Dừng'
+
+const MOVES: Partial<Record<BarKey, MoveGroup>> = {
+  'doc:submit': 'Đi tiếp',
+  'doc:approve': 'Đi tiếp',
+  'doc:send': 'Đi tiếp',
+  confirm: 'Đi tiếp',
+  transit: 'Đi tiếp',
+  receive: 'Đi tiếp',
+  closeShort: 'Đi tiếp',
+  acceptByHand: 'Đi tiếp',
+  'doc:withdraw': 'Quay lại',
+  'doc:reject': 'Quay lại',
+  'doc:reopen': 'Quay lại',
+  'doc:cancel': 'Dừng',
+  'doc:delete': 'Dừng',
+}
+const MOVE_ORDER: MoveGroup[] = ['Đi tiếp', 'Quay lại', 'Dừng']
+
+export type StatusBarSplit = {
+  /** Bước kế tiếp — nút chính của thanh trạng thái. */
+  next: BarKey | null
+  /** Các chuyển trạng thái còn lại, đã xếp Đi tiếp → Quay lại → Dừng. */
+  moves: { key: BarKey; group: MoveGroup }[]
+  /** Việc hay làm đứng cạnh mã đơn (không đổi trạng thái). */
+  actions: BarKey[]
+  /** Phần còn lại cho menu "⋯", giữ nhóm cũ. */
+  menu: { key: BarKey; group: BarGroup }[]
+}
+
+export function splitForStatusBar(l: BarLayout): StatusBarSplit {
+  const isMove = (k: BarKey) => MOVES[k] != null
+  const moves = [...l.quick, ...l.more.map((m) => m.key)]
+    .filter((k) => isMove(k) && k !== l.primary)
+    .map((key) => ({ key, group: MOVES[key]! }))
+    .sort((a, b) => MOVE_ORDER.indexOf(a.group) - MOVE_ORDER.indexOf(b.group))
+  return {
+    next: l.primary && isMove(l.primary) ? l.primary : null,
+    moves,
+    actions: [
+      ...(l.primary && !isMove(l.primary) ? [l.primary] : []),
+      ...l.quick.filter((k) => !isMove(k)),
+    ],
+    menu: l.more.filter((m) => !isMove(m.key)),
+  }
+}

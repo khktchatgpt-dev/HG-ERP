@@ -286,8 +286,7 @@ export async function loadLsxBangKe(
     })
     // Tỉ lệ dùng chung cho SL đã nhận: hàng về của một dòng chia cho các lệnh
     // theo đúng tỉ lệ đã chia, không thể chia kiểu khác mà vẫn cộng đủ.
-    const tyLe =
-      Number(l.qty_ordered) > 0 ? qtyOrdered / (Number(l.qty_ordered) || 1) : 0
+    const tyLe = Number(l.qty_ordered) > 0 ? qtyOrdered / (Number(l.qty_ordered) || 1) : 0
     const qtyReceived = (Number(l.qty_received) || 0) * tyLe
     if (
       phan.length === 0 &&

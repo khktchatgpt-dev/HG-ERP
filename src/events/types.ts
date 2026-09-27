@@ -321,7 +321,9 @@ export type DomainEvent =
       lsx_code: string | null
       lsx_cancelled: boolean
       pos_cancelled: string[] // mã PO chưa gửi NCC — đã tự huỷ theo
-      pos_manual: string[] // mã PO đã gửi NCC — Cung ứng phải xử lý tay
+      // PO Cung ứng phải xử lý tay, dạng "PO-… (việc cần làm)": đã gửi NCC, đơn
+      // GỘP nhiều lệnh (còn phục vụ lệnh khác), hoặc đơn nháp (lib/po-cancel-cascade).
+      pos_manual: string[]
       cancelled_by: string
       notify_ids: string[]
     }

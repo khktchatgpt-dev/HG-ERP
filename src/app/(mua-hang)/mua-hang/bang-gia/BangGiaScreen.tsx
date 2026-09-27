@@ -12,6 +12,7 @@ import {
   FilterBar,
   Num,
   Row,
+  ScopeSwitch,
   ScreenFrame,
   ScreenHeader,
   SearchInput,
@@ -22,6 +23,8 @@ import {
   Tag,
   showMoney,
 } from '@/components/kit'
+import type { SupplyScope } from '@/lib/supply-scope'
+import { useScopePref } from '@/lib/use-scope-pref'
 
 const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 
@@ -34,15 +37,31 @@ function tuoi(at: string, today: string): number {
 }
 
 export function BangGiaScreen({
-  rows,
+  rows: allRows,
+  mineSupplierIds,
   canEdit,
+  meId,
+  defaultScope,
+  urlScope,
 }: {
   rows: PriceBookRow[]
+  /** NCC của người đang xem (lib/supply-scope). */
+  mineSupplierIds: string[]
   canEdit: boolean
+  meId: string
+  defaultScope: SupplyScope
+  urlScope: SupplyScope | null
 }) {
   const [q, setQ] = useState('')
   const [chip, setChip] = useState('all')
   const [today] = useState(() => todayVn())
+  const [scope, setScope] = useScopePref('bang-gia', meId, defaultScope, urlScope)
+  const mineSet = useMemo(() => new Set(mineSupplierIds), [mineSupplierIds])
+  const mineCount = allRows.filter((r) => mineSet.has(r.supplier_id)).length
+  const rows = useMemo(
+    () => (scope === 'toi' ? allRows.filter((r) => mineSet.has(r.supplier_id)) : allRows),
+    [allRows, scope, mineSet],
+  )
 
   /*
     MÃ MUA CỦA NHIỀU NCC là thứ đáng xem nhất trên màn này: chỉ khi đó mới có
@@ -50,9 +69,11 @@ export function BangGiaScreen({
   */
   const nhieuNcc = useMemo(() => {
     const c = new Map<string, number>()
-    for (const r of rows) c.set(r.material_id, (c.get(r.material_id) ?? 0) + 1)
+    // So giá trên CẢ CÔNG TY dù đang xem 'của tôi' — mã tôi mua mà NCC khác
+    // cũng bán là đúng thứ đáng biết nhất.
+    for (const r of allRows) c.set(r.material_id, (c.get(r.material_id) ?? 0) + 1)
     return new Set([...c.entries()].filter(([, n]) => n > 1).map(([id]) => id))
-  }, [rows])
+  }, [allRows])
 
   const CHIPS: { id: string; label: string; test: (r: PriceBookRow) => boolean }[] = [
     { id: 'all', label: 'Tất cả', test: () => true },
@@ -105,11 +126,22 @@ export function BangGiaScreen({
           },
         ]}
         actions={
-          canEdit ? (
-            <Btn primary icon="them" href="/mua-hang/don/moi">
-              Soạn đơn mua
-            </Btn>
-          ) : undefined
+          <>
+            <ScopeSwitch
+              label="Phạm vi"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: 'toi', label: 'NCC của tôi', count: mineCount, hint: 'Giá của NCC tôi phụ trách' },
+                { value: 'phong', label: 'Cả công ty', count: allRows.length, hint: 'Mọi cặp mã × NCC' },
+              ]}
+            />
+            {canEdit ? (
+              <Btn primary icon="them" href="/mua-hang/don/moi">
+                Soạn đơn mua
+              </Btn>
+            ) : null}
+          </>
         }
       />
 

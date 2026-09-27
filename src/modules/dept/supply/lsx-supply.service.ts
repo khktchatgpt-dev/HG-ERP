@@ -528,7 +528,11 @@ export async function buildLsxSupplyRows(
  * sản phẩm — badge chạy trên mọi lần mở trang của khu Cung ứng. Không nhận
  * `user` vì sidebar chỉ hiện trong khu này và số đếm không tuỳ người xem.
  */
-export async function countMeetingIssues(today: string): Promise<number> {
+export async function countMeetingIssues(
+  today: string,
+  /** Chỉ đếm các lệnh này (lệnh của tôi — lib/supply-scope). Bỏ trống = cả phòng. */
+  onlyLsx?: Set<string>,
+): Promise<number> {
   // Ba truy vấn SONG SONG (không đợi id đơn rồi mới hỏi lệnh phụ) — badge
   // trả về trong một vòng mạng thay vì hai.
   const [lsxs, pos, extraLsx] = await Promise.all([
@@ -537,7 +541,8 @@ export async function countMeetingIssues(today: string): Promise<number> {
     posRepo.listAllExtraLsx(),
   ])
   const grouped = groupPosByLsx(pos, extraLsx, today)
-  const inputs = lsxs.map((l) => {
+  // Mỗi lệnh chấm rủi ro độc lập, nên lọc TRƯỚC khi chấm cho ra đúng số lọc sau.
+  const inputs = lsxs.filter((l) => !onlyLsx || onlyLsx.has(l.id)).map((l) => {
     const list = grouped.get(l.id) ?? []
     return {
       code: l.code,

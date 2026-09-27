@@ -60,6 +60,7 @@ export const KIT_FAMILIES: KitFamily[] = [
   // ── Bảng ───────────────────────────────────────────────────────────────
   { slug: 'table', title: 'Table', group: 'Bảng', members: ['Table', 'THead', 'Row', 'Cell', 'GroupRow', 'TFoot'], blurb: 'Bảng danh sách: tiêu đề + chân dính, ảo hoá từ 200 dòng.' }, // prettier-ignore
   { slug: 'filter-bar', title: 'FilterBar', group: 'Bảng', members: ['FilterBar', 'Chip', 'SearchInput'], blurb: 'Hàng lọc trên bảng: chip đếm + ô tìm.' }, // prettier-ignore
+  { slug: 'scope-switch', title: 'ScopeSwitch', group: 'Bảng', members: ['ScopeSwitch'], blurb: 'Phạm vi Của tôi | Cả phòng — nhớ theo tài khoản, mặc định theo vai.' }, // prettier-ignore
   { slug: 'table-engine', title: 'useKitTable', group: 'Bảng', members: ['SortHead', 'TableSettings'], blurb: 'Máy bảng: sắp xếp, ẩn cột, mật độ, nhớ theo người.' }, // prettier-ignore
   { slug: 'grid', title: 'Grid', group: 'Bảng', members: ['Grid', 'GridHead', 'GridBody', 'GridFoot', 'GridRow', 'Th', 'Td', 'CellHint', 'GridCheck', 'GridToolbar', 'GridBtn', 'GridSep'], blurb: 'Lưới dòng của chứng từ, có thanh công cụ.' }, // prettier-ignore
   { slug: 'matrix-table', title: 'MatrixTable', group: 'Bảng', members: ['MatrixTable'], blurb: 'Ma trận hai tầng tiêu đề, ô bấm được.' }, // prettier-ignore
@@ -69,6 +70,8 @@ export const KIT_FAMILIES: KitFamily[] = [
   { slug: 'crumb', title: 'Crumb', group: 'Chứng từ', members: ['Crumb'], blurb: 'Đường dẫn + lật tờ trước/sau.' }, // prettier-ignore
   { slug: 'action-pane', title: 'ActionPane', group: 'Chứng từ', members: ['ActionPane', 'ActionGroup', 'Action'], blurb: 'Dải lệnh theo nhóm của chứng từ.' }, // prettier-ignore
   { slug: 'doc-head', title: 'DocHead', group: 'Chứng từ', members: ['DocHead', 'StatusTrack'], blurb: 'Đầu chứng từ: mã, loại, dải bước vòng đời.' }, // prettier-ignore
+  { slug: 'doc-status', title: 'DocStatus', group: 'Chứng từ', members: ['DocStatus'], blurb: 'Một dòng: trạng thái (bấm xem vòng đời), ai giữ, chuyển bước.' }, // prettier-ignore
+  { slug: 'doc-menu', title: 'DocMenu', group: 'Chứng từ', members: ['DocMenu', 'DocMenuPanel'], blurb: 'Menu ngang: bấm mục nào, thân trang chỉ hiện mục đó.' }, // prettier-ignore
   { slug: 'holder-bar', title: 'HolderBar', group: 'Chứng từ', members: ['HolderBar'], blurb: 'Ai đang giữ tờ này, bao lâu rồi.' }, // prettier-ignore
   { slug: 'checks', title: 'Checks', group: 'Chứng từ', members: ['Checks'], blurb: 'Danh sách điều kiện đủ/thiếu trước khi đi tiếp.' }, // prettier-ignore
   { slug: 'fast-tab', title: 'FastTab', group: 'Chứng từ', members: ['FastTab'], blurb: 'Khối gập được có tóm tắt khi đóng.' }, // prettier-ignore

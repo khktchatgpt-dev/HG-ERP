@@ -229,15 +229,28 @@ export const supplyRepo = {
    * với logic tự chuyển đợt sang 'received' ở stock.service.
    */
   async receiptsByShipment(poId: string): Promise<Map<string, Map<string, number>>> {
-    const { data } = await db()
+    /*
+      Lọc theo ĐỢT CỦA ĐƠN NÀY ngay trong truy vấn (27/09/2026). Bản cũ lấy mọi
+      phiếu nhập nối đợt của CẢ HỆ THỐNG với `.limit(2000)` rồi mới lọc theo đơn
+      — khi tổng số dòng vượt 2000, đợt của đơn mới hơn rơi khỏi cửa sổ IM LẶNG
+      và "đợt này về mấy" ra 0.
+    */
+    const { data: ships } = await db()
+      .from('supply_po_shipments')
+      .select('id')
+      .eq('po_id', poId)
+    const shipIds = new Set(((ships ?? []) as { id: string }[]).map((r) => r.id))
+    const out = new Map<string, Map<string, number>>()
+    if (shipIds.size === 0) return out
+    const { data, error } = await db()
       .from('warehouse_movements')
       .select(
         'po_line_id, qty, qty_rejected, direction, doc:warehouse_docs!inner(shipment_id, kind)',
       )
       .eq('doc.kind', 'receipt')
-      .not('doc.shipment_id', 'is', null)
+      .in('doc.shipment_id', [...shipIds])
       .not('po_line_id', 'is', null)
-      .limit(2000)
+    if (error) throw new Error(error.message)
     type R = {
       po_line_id: string
       qty: number
@@ -245,13 +258,6 @@ export const supplyRepo = {
       direction: 'in' | 'out'
       doc: { shipment_id: string | null } | { shipment_id: string | null }[] | null
     }
-    // Lọc theo PO qua bảng đợt — movement không mang po_id, còn shipment thì có.
-    const { data: ships } = await db()
-      .from('supply_po_shipments')
-      .select('id')
-      .eq('po_id', poId)
-    const shipIds = new Set(((ships ?? []) as { id: string }[]).map((r) => r.id))
-    const out = new Map<string, Map<string, number>>()
     for (const r of (data ?? []) as R[]) {
       if (r.direction !== 'in') continue
       const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc

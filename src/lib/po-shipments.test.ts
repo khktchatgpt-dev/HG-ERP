@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  splitShipmentLines,
+  shipmentStatusesFromReceipts,
+  confirmReplacePlan,
   allocateReceiptsToShipments,
   earliestExpectedDate,
   mapDraftShipments,
@@ -261,7 +264,11 @@ describe('mapDraftShipments — đợt khai trong form (dòng chưa có id)', ()
       ids,
     )
     expect(r).toEqual([
-      { expected_date: '2026-09-01', note: null, lines: [{ po_line_id: 'line-b', qty: 300 }] },
+      {
+        expected_date: '2026-09-01',
+        note: null,
+        lines: [{ po_line_id: 'line-b', qty: 300 }],
+      },
     ])
   })
 
@@ -343,5 +350,88 @@ describe('shipmentWaitingReceipt — đợt còn chờ Kho nhận', () => {
   it('đợt đã nhận xong / đã huỷ thì không chờ, dù đơn còn chạy', () => {
     expect(shipmentWaitingReceipt('partial', 'received')).toBe(false)
     expect(shipmentWaitingReceipt('partial', 'cancelled')).toBe(false)
+  })
+})
+
+describe('confirmReplacePlan — NCC xác nhận không xoá lịch cũ', () => {
+  const cur = [
+    { id: 'a', seq: 1, status: 'planned', lines: [{ po_line_id: 'L1', qty: 300 }] },
+    { id: 'b', seq: 2, status: 'received', lines: [{ po_line_id: 'L1', qty: 200 }] },
+    { id: 'c', seq: 3, status: 'cancelled', lines: [{ po_line_id: 'L1', qty: 999 }] },
+  ]
+  it('đợt đề nghị chưa có hàng → đánh dấu thay, KHÔNG xoá', () => {
+    expect(confirmReplacePlan(cur).cancelIds).toEqual(['a'])
+  })
+  it('đợt đã có hàng giữ nguyên và tính vào SL đã hẹn; đợt đã huỷ không tính', () => {
+    expect(confirmReplacePlan(cur).keptQty.get('L1')).toBe(200)
+  })
+  it('cam kết mới đánh số nối tiếp, kể cả sau đợt đã huỷ', () => {
+    expect(confirmReplacePlan(cur).startSeq).toBe(4)
+    expect(confirmReplacePlan([]).startSeq).toBe(1)
+  })
+})
+
+describe('shipmentStatusesFromReceipts — trạng thái đợt theo số nhận cộng dồn', () => {
+  const S = (id: string, seq: number, date: string, qty: number, status = 'planned') => ({
+    id, seq, status, expected_date: date, lines: [{ po_line_id: 'L', qty }],
+  }) // prettier-ignore
+  const rec = (n: number) => new Map([['L', n]])
+
+  it('đợt nhận bằng HAI phiếu → đủ thì received (bản cũ kẹt arrived)', () => {
+    const d1 = S('d1', 1, '2026-10-01', 100, 'arrived')
+    const linked = new Map([['d1', new Map([['L', 100]])]]) // 60 + 40, hai phiếu cùng nối đợt
+    expect(shipmentStatusesFromReceipts([d1], rec(100), linked)).toEqual(new Map([['d1', 'received']]))
+  })
+
+  it('nhận DƯ đợt 1 → phần dư lấp đợt 2 (hàng gấp chở luôn)', () => {
+    const d1 = S('d1', 1, '2026-10-01', 100)
+    const d2 = S('d2', 2, '2026-10-10', 100)
+    const linked = new Map([['d1', new Map([['L', 150]])]])
+    const out = shipmentStatusesFromReceipts([d1, d2], rec(150), linked)
+    expect(out.get('d1')).toBe('received')
+    expect(out.get('d2')).toBe('arrived') // đã có 50/100
+  })
+
+  it('nhận ngoài đợt đủ cả hai đợt → cả hai received', () => {
+    const out = shipmentStatusesFromReceipts([S('d1', 1, '2026-10-01', 100), S('d2', 2, '2026-10-10', 50)], rec(150)) // prettier-ignore
+    expect([...out.values()]).toEqual(['received', 'received'])
+  })
+
+  it('đảo phiếu làm thiếu → received lùi về arrived; không còn gì vẫn arrived (xe đã tới)', () => {
+    const out = shipmentStatusesFromReceipts([S('d1', 1, '2026-10-01', 100, 'received')], rec(0))
+    expect(out.get('d1')).toBe('arrived')
+  })
+
+  it('chứng từ nối đợt nhiều hơn số NET (đã trả NCC) → chỉ tính số net', () => {
+    const d1 = S('d1', 1, '2026-10-01', 100, 'received')
+    const linked = new Map([['d1', new Map([['L', 100]])]])
+    expect(shipmentStatusesFromReceipts([d1], rec(70), linked).get('d1')).toBe('arrived')
+  })
+
+  it('không đổi thì không trả; đợt huỷ không đụng', () => {
+    const out = shipmentStatusesFromReceipts([S('d1', 1, '2026-10-01', 100), S('dx', 2, '2026-10-01', 100, 'cancelled')], rec(0)) // prettier-ignore
+    expect(out.size).toBe(0)
+  })
+})
+
+describe('splitShipmentLines — lấy trước một phần đợt', () => {
+  const cur = [{ po_line_id: 'A', qty: 100 }, { po_line_id: 'B', qty: 40 }]
+  it('kéo 30 A lên đợt mới, đợt gốc còn 70 A + 40 B', () => {
+    expect(splitShipmentLines(cur, [{ po_line_id: 'A', qty: 30 }])).toEqual({
+      remain: [{ po_line_id: 'A', qty: 70 }, { po_line_id: 'B', qty: 40 }],
+      pulled: [{ po_line_id: 'A', qty: 30 }],
+      errors: [],
+    })
+  })
+  it('lấy hết một dòng thì dòng đó rời đợt gốc', () => {
+    expect(splitShipmentLines(cur, [{ po_line_id: 'B', qty: 40 }]).remain).toEqual([{ po_line_id: 'A', qty: 100 }])
+  })
+  it('vượt số của đợt / dòng lạ / không nhập gì → lỗi', () => {
+    expect(splitShipmentLines(cur, [{ po_line_id: 'A', qty: 120 }]).errors[0]).toMatch(/vượt/)
+    expect(splitShipmentLines(cur, [{ po_line_id: 'Z', qty: 1 }]).errors[0]).toMatch(/không nằm/)
+    expect(splitShipmentLines(cur, []).errors[0]).toMatch(/Chưa nhập/)
+  })
+  it('lấy trước TOÀN BỘ đợt → chỉ sang "Dời đợt"', () => {
+    expect(splitShipmentLines(cur, [{ po_line_id: 'A', qty: 100 }, { po_line_id: 'B', qty: 40 }]).errors[0]).toMatch(/Dời đợt/)
   })
 })

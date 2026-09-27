@@ -321,6 +321,19 @@ export function PhieuNhapScreen({
                       </Code>
                     )
                   })}
+                  {/* HÀNG GẤP / NCC chở không theo đợt (27/09/2026): nhận theo
+                      phần còn mở của CẢ ĐƠN, không gắn đợt — số tự rót vào các
+                      đợt theo thứ tự hẹn (po-shipments.sync). Trước đây đơn đã
+                      chia đợt thì không còn lối nào vào phiếu kiểu này. */}
+                  {dot ? (
+                    <Code as="a" href={`/warehouse/nhap/${po.id}`}>
+                      Ngoài đợt (hàng gấp)
+                    </Code>
+                  ) : (
+                    <span className="font-semibold">
+                      <Tag tone="neutral">Ngoài đợt — đang mở</Tag>
+                    </span>
+                  )}
                 </span>
               ) : (
                 'Đơn chưa khai đợt giao — nhận theo phần còn mở của cả đơn; Cung ứng khai đợt ở trang đơn mua.'

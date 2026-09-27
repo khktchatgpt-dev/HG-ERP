@@ -7,10 +7,14 @@ import {
   Btn,
   Combobox,
   DateInput,
+  DocMenu,
+  DocMenuPanel,
+  DocStatus,
   Empty,
   Ico,
   Menu,
   Popover,
+  ScopeSwitch,
   Sheet,
   SheetActions,
   Tip,
@@ -709,5 +713,167 @@ describe('Toast — thông báo bay (B2)', () => {
     const tat = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(() => render(<Le />)).toThrow(/ToastProvider/)
     tat.mockRestore()
+  })
+})
+
+describe('DocMenu — menu ngang của chứng từ (27/09/2026)', () => {
+  const ITEMS = [
+    { id: 'tong', label: 'Tổng quan' },
+    { id: 'giao', label: 'Giao & nhận', signal: { text: 'đủ', tone: 'done' as const } },
+    { id: 'tien', label: 'Tài chính', signal: { text: 'chờ HĐ', tone: 'warn' as const } },
+  ]
+  function Dung() {
+    const [muc, setMuc] = useState('tong')
+    return (
+      <DocMenu items={ITEMS} value={muc} onValueChange={setMuc} label="Nội dung đơn">
+        <DocMenuPanel value="tong">Thân Tổng quan</DocMenuPanel>
+        <DocMenuPanel value="giao">Thân Giao nhận</DocMenuPanel>
+        <DocMenuPanel value="tien">Thân Tài chính</DocMenuPanel>
+      </DocMenu>
+    )
+  }
+
+  it('vai tablist có tên; CHỈ dựng thân của mục đang mở; không vi phạm luật truy cập', async () => {
+    const { container } = render(<Dung />)
+    expect(screen.getByRole('tablist', { name: 'Nội dung đơn' })).toBeTruthy()
+    expect(
+      screen.getByRole('tab', { name: 'Tổng quan' }).getAttribute('aria-selected'),
+    ).toBe('true')
+    expect(screen.getByText('Thân Tổng quan')).toBeTruthy()
+    expect(screen.queryByText('Thân Tài chính')).toBeNull()
+    await expectNoViolations(container)
+  })
+
+  it('bấm mục khác thì thân trang ĐỔI HẲN sang mục đó; tín hiệu nằm trong tên tab', async () => {
+    render(<Dung />)
+    await userEvent.click(screen.getByRole('tab', { name: /Tài chính/ }))
+    expect(screen.getByText('Thân Tài chính')).toBeTruthy()
+    expect(screen.queryByText('Thân Tổng quan')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Tài chính chờ HĐ' })).toBeTruthy()
+  })
+
+  it('mũi tên đi giữa các mục, Enter mới mở (activationMode manual)', async () => {
+    render(<Dung />)
+    await userEvent.tab()
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Tổng quan' }))
+    await userEvent.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: /Giao/ }))
+    expect(screen.getByText('Thân Tổng quan')).toBeTruthy()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByText('Thân Giao nhận')).toBeTruthy()
+  })
+})
+
+describe('DocStatus — thanh trạng thái một dòng (27/09/2026)', () => {
+  const MARKS = [
+    {
+      key: 'duyet',
+      at: '2026-09-23T08:00:00+07:00',
+      label: 'Giám đốc duyệt',
+      actor: 'Vũ Phương Thảo',
+    },
+    { key: 'gui', at: '2026-09-23T08:05:00+07:00', label: 'Gửi NCC' },
+    { key: 'xn', at: null, label: 'NCC xác nhận' },
+  ]
+
+  it('chữ trạng thái là nút mở VÒNG ĐỜI; ai giữ là vùng status; không vi phạm luật truy cập', async () => {
+    const { container } = render(
+      <DocStatus
+        status="Đã gửi NCC"
+        icon="gui"
+        marks={MARKS}
+        holder={{ who: 'Nhà cung cấp', what: 'xác nhận đã nhận đơn', days: 4 }}
+        next={
+          <Btn primary icon="xong">
+            NCC xác nhận
+          </Btn>
+        }
+        moves={[
+          { label: 'Hàng đang trên đường', group: 'Đi tiếp' },
+          { label: 'Đã nhận hàng', group: 'Đi tiếp', why: 'Kho ghi phiếu nhập.' },
+        ]}
+      />,
+    )
+    await expectNoViolations(container)
+    expect(screen.getByRole('status').textContent).toContain('Nhà cung cấp')
+    expect(screen.getByRole('status').textContent).toContain('4 ngày')
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Trạng thái: Đã gửi NCC — xem vòng đời' }),
+    )
+    const khung = await screen.findByRole('dialog', { name: 'Vòng đời: Đã gửi NCC' })
+    expect(khung.textContent).toContain('Giám đốc duyệt')
+    expect(khung.textContent).toContain('NCC xác nhận')
+  })
+
+  it('không có mốc thì chữ trạng thái KHÔNG giả làm nút mở được; không có chuyển thì không vẽ menu', () => {
+    render(<DocStatus status="Chờ duyệt" icon="cho" />)
+    const pill = screen.getByRole('button', { name: 'Trạng thái: Chờ duyệt' })
+    expect((pill as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: /Chuyển trạng thái/ })).toBeNull()
+  })
+
+  it('menu chuyển trạng thái nói LÝ DO ở mục không làm được', async () => {
+    render(
+      <DocStatus
+        status="Đã gửi NCC"
+        icon="gui"
+        moves={[{ label: 'Đã nhận hàng', group: 'Đi tiếp', why: 'Kho ghi phiếu nhập.' }]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /Chuyển trạng thái/ }))
+    const muc = screen.getByRole('menuitem', {
+      name: 'Đã nhận hàng',
+      description: 'Kho ghi phiếu nhập.',
+    })
+    expect(muc.getAttribute('aria-disabled')).toBe('true')
+  })
+})
+
+describe('ScopeSwitch — công tắc phạm vi Của tôi | Cả phòng (27/09/2026)', () => {
+  function Dung({ onChange }: { onChange?: (v: string) => void }) {
+    const [v, setV] = useState<'toi' | 'phong'>('toi')
+    return (
+      <ScopeSwitch
+        label="Phạm vi"
+        value={v}
+        onChange={(x) => {
+          setV(x)
+          onChange?.(x)
+        }}
+        options={[
+          { value: 'toi', label: 'Của tôi', count: 18, hint: 'Đơn tôi phụ trách' },
+          { value: 'phong', label: 'Cả phòng', count: 1234 },
+        ]}
+      />
+    )
+  }
+
+  it('nhóm radio có tên; đúng MỘT lựa chọn bật; số in nhóm nghìn; không vi phạm luật truy cập', async () => {
+    const { container } = render(<Dung />)
+    expect(screen.getByRole('radiogroup', { name: 'Phạm vi' })).toBeTruthy()
+    const toi = screen.getByRole('radio', { name: /Của tôi/ })
+    const phong = screen.getByRole('radio', { name: /Cả phòng/ })
+    expect(toi.getAttribute('aria-checked')).toBe('true')
+    expect(phong.getAttribute('aria-checked')).toBe('false')
+    expect(phong.textContent).toContain('1.234')
+    await expectNoViolations(container)
+  })
+
+  it('bấm lựa chọn khác thì đổi; bấm lại lựa chọn đang bật KHÔNG bỏ chọn, không gọi onChange', async () => {
+    const seen: string[] = []
+    render(<Dung onChange={(v) => seen.push(v)} />)
+    await userEvent.click(screen.getByRole('radio', { name: /Cả phòng/ }))
+    expect(screen.getByRole('radio', { name: /Cả phòng/ }).getAttribute('aria-checked')).toBe('true')
+    await userEvent.click(screen.getByRole('radio', { name: /Cả phòng/ }))
+    expect(screen.getByRole('radio', { name: /Cả phòng/ }).getAttribute('aria-checked')).toBe('true')
+    expect(seen).toEqual(['phong'])
+  })
+
+  it('mũi tên đi giữa các lựa chọn (Radix roving focus)', async () => {
+    render(<Dung />)
+    await userEvent.tab()
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: /Của tôi/ }))
+    await userEvent.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: /Cả phòng/ }))
   })
 })

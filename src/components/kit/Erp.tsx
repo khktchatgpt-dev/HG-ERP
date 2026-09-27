@@ -757,6 +757,7 @@ export function FastTab({
   defaultOpen,
   flush,
   actions,
+  fixed = false,
   children,
 }: {
   /** Neo cuộn tới — nút thông minh "trao đổi" nhảy xuống đúng khối. */
@@ -775,10 +776,18 @@ export function FastTab({
    * một hàng ăn 32px trên lưới chỉ để chứa hai nút.
    */
   actions?: ReactNode
+  /**
+   * KHỐI CỐ ĐỊNH — luôn mở, không mũi tên gập, tiêu đề là `h3` chứ không phải
+   * nút. Dùng khi khối đã nằm trong một mục `DocMenuPanel` (27/09/2026): mục
+   * đã tách thông tin rồi, gập thêm một tầng nữa chỉ là một cú bấm thừa và một
+   * dòng "▸ …" trông như danh sách lồng danh sách. `defaultOpen` bị bỏ qua.
+   */
+  fixed?: boolean
   /** Thân khối. KHÔNG dựng khi đang gấp — trạng thái bên trong (ô đang gõ) mất khi gấp lại. */
   children: ReactNode
 }) {
-  const [open, setOpen] = useState(!!defaultOpen)
+  const [openState, setOpen] = useState(!!defaultOpen)
+  const open = fixed || openState
   const id = useId()
   const sum = summary && summary.length > 0 ? summary : null
   /*
@@ -790,7 +799,22 @@ export function FastTab({
     `aria-controls` chỉ gắn khi thân ĐANG DỰNG: gấp lại là thân bị tháo khỏi
     DOM (cố ý — xem `children`), và một id trỏ vào khoảng không là ARIA sai.
   */
-  const head = (
+  const head = fixed ? (
+    <h3 className="k-ft-h k-ft-h-fixed" aria-describedby={sum ? `${id}-s` : undefined}>
+      <span className="k-ft-t" id={`${id}-t`}>
+        {title}
+      </span>
+      {sum && (
+        <span className="k-ft-sum" id={`${id}-s`}>
+          {sum.map(([k, v]) => (
+            <span key={k}>
+              {k} <b>{v}</b>
+            </span>
+          ))}
+        </span>
+      )}
+    </h3>
+  ) : (
     <button
       type="button"
       className="k-ft-h"

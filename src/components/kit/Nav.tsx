@@ -7,10 +7,12 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { DropdownMenu, Tooltip } from 'radix-ui'
+import { DropdownMenu, Tabs, ToggleGroup, Tooltip } from 'radix-ui'
 import Link, { useLinkStatus } from 'next/link'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
+import { Tag } from './Primitives'
+import { Ico, type IcoName } from './Icon'
 
 /**
  * ĐIỀU HƯỚNG PHẢI LÀ `next/link`, KHÔNG PHẢI `<a>` TRẦN.
@@ -786,6 +788,195 @@ export function UserCard({
           </button>
         </Tip>
       )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MENU NGANG CỦA CHỨNG TỪ — bấm mục nào, thân trang CHỈ hiện mục đó.
+
+   Thêm 27/09/2026 cho màn đơn mua (canvas "Đơn mua", trang "Menu tách thông
+   tin", chủ dự án chốt menu NGANG). Màn chi tiết là trang đa nhiệm: Cung ứng
+   xem dòng hàng, Kho xem giao nhận, Kế toán xem tiền — bày tất cả cùng lúc
+   (khối gập + cột phải) là 2,6 màn cuộn và người dùng chê "rối". Chép Odoo
+   notebook / SAP Object Page anchor bar, nhưng mỗi mục THAY thân trang chứ
+   không cuộn tới.
+
+   ĐỨNG TRÊN RADIX TABS: đúng vai `tablist/tab/tabpanel`, mũi tên trái/phải
+   đi giữa các mục, Home/End, `aria-controls` — thứ bản tự viết `DocTabs`
+   (gỡ 26/09/2026) phải tự làm. Có kiểm soát (`value` + `onValueChange`)
+   để màn ghi mục đang mở vào đường dẫn (?muc=…) — gửi link là mở đúng mục.
+   ══════════════════════════════════════════════════════════════════════ */
+export type DocMenuItem = {
+  /** Khoá của mục — trùng `value` của `DocMenuPanel` tương ứng, và là chữ trên đường dẫn (`?muc=tai-chinh`). */
+  id: string
+  /** Tên mục — danh từ ngắn nói câu hỏi mục đó trả lời ("Tài chính", "Giao & nhận"). */
+  label: string
+  /** Icon theo khái niệm nghiệp vụ, đứng trước chữ. */
+  icon?: IcoName
+  /**
+   * TÍN HIỆU cạnh tên — cho biết mục có chuyện mà không phải mở ("chờ HĐ",
+   * "hạn 29/09", "3"). Phải đếm/suy bằng ĐÚNG hàm mà mục đó dùng (nguyên tắc
+   * 3). Không có gì đáng nói thì bỏ trống — đừng in "0" cho đủ bộ.
+   */
+  signal?: { text: string; tone?: Tone }
+}
+
+export function DocMenu({
+  items,
+  value,
+  onValueChange,
+  label,
+  children,
+}: {
+  /** Các mục theo thứ tự hiện. Mục đầu thường là "Tổng quan" — màn mở sẵn mục đó. */
+  items: DocMenuItem[]
+  /** `id` của mục đang mở. Có kiểm soát: kit không giữ trạng thái. */
+  value: string
+  /** Gọi với `id` của mục vừa chọn (bấm hoặc mũi tên). Màn đổi `value` và ghi đường dẫn. */
+  onValueChange: (id: string) => void
+  /** Tên của menu cho trình đọc màn hình ("Nội dung đơn"). */
+  label: string
+  /** Các `DocMenuPanel` — MỘT cho mỗi mục. Chỉ panel đang mở được dựng. */
+  children: ReactNode
+}) {
+  return (
+    <Tabs.Root
+      value={value}
+      onValueChange={onValueChange}
+      activationMode="manual"
+      className="flex min-h-0 flex-col"
+    >
+      <Tabs.List
+        aria-label={label}
+        className="flex shrink-0 gap-0.5 overflow-x-auto overflow-y-hidden border-b border-[var(--line)] bg-[var(--surface-card)] px-3"
+      >
+        {items.map((it) => (
+          <Tabs.Trigger
+            key={it.id}
+            value={it.id}
+            className={cn(
+              'text-k-body -mb-px flex shrink-0 items-center gap-1.5 border-b-2 border-transparent px-3.5 py-2.5 whitespace-nowrap',
+              'text-[var(--ink-2)] outline-none hover:text-[var(--act)]',
+              'focus-visible:shadow-[inset_0_0_0_2px_var(--act)]',
+              'data-[state=active]:border-[var(--act)] data-[state=active]:font-semibold data-[state=active]:text-[var(--act)]',
+            )}
+          >
+            {it.icon && <Ico name={it.icon} size={16} />}
+            {it.label}
+            {it.signal && <Tag tone={it.signal.tone}>{it.signal.text}</Tag>}
+          </Tabs.Trigger>
+        ))}
+      </Tabs.List>
+      {children}
+    </Tabs.Root>
+  )
+}
+
+export function DocMenuPanel({
+  value,
+  children,
+}: {
+  /** `id` của mục trong `DocMenu` mà panel này thuộc về. */
+  value: string
+  /** Nội dung CHỈ của mục này — không lặp khối của mục khác. */
+  children: ReactNode
+}) {
+  return (
+    <Tabs.Content
+      value={value}
+      className="min-h-0 bg-[var(--surface-card)] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--act)]"
+    >
+      {children}
+    </Tabs.Content>
+  )
+}
+
+/** Một lựa chọn của `ScopeSwitch`. */
+export type ScopeOption<V extends string = string> = {
+  /** Giá trị gửi về `onChange` và ghi lên địa chỉ trang (`?pham_vi=toi`). */
+  value: V
+  /** Nhãn ngắn — "Của tôi", "Cả phòng". Không nhồi số vào đây, số đi `count`. */
+  label: string
+  /**
+   * Số dòng màn sẽ bày khi chọn phạm vi này — đếm bằng ĐÚNG hàm lọc của màn
+   * (nguyên tắc 3: con số là lời hứa). Bỏ trống thì không in số.
+   */
+  count?: number
+  /** Nói rõ phạm vi này gồm gì ("đơn tôi phụ trách") — thành `title` + mô tả cho trình đọc màn hình. */
+  hint?: string
+}
+
+/**
+ * CÔNG TẮC PHẠM VI — "Của tôi | Cả phòng" (27/09/2026).
+ *
+ * Mọi màn danh sách của một phòng trả lời cùng một câu hỏi ở HAI cỡ: việc của
+ * tôi, hay của cả phòng. Trước đây mỗi màn tự chế một kiểu (chip "Của tôi" ở
+ * Đơn mua, nút "Xem cả phòng" ở Hộp thư, không có gì ở Nhận hàng) — người dùng
+ * không học được một chỗ bấm. Đây là MỘT thành phần cho mọi màn.
+ *
+ * Khác `Chip`: chip là bộ lọc BẬT/TẮT độc lập; phạm vi là chọn ĐÚNG MỘT trong
+ * vài lựa chọn loại trừ nhau, nên dựng trên Radix `ToggleGroup` kiểu `single`:
+ * Radix dựng `radiogroup`/`radio` + `aria-checked`, phím mũi tên đi giữa các
+ * lựa chọn; không cho bỏ chọn — bấm lại lựa chọn đang bật thì giữ nguyên.
+ *
+ * Thành phần KHÔNG tự nhớ lựa chọn: màn giữ `value` (thường qua
+ * `useScopePref`, nhớ theo tài khoản trên máy).
+ */
+export function ScopeSwitch<V extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  /** Tên nhóm cho trình đọc màn hình và nhãn nhỏ đứng trước ("Phạm vi"). */
+  label: string
+  /** Lựa chọn đang bật. */
+  value: V
+  /** Các phạm vi, theo thứ tự hiện — thường 2: của tôi trước, cả phòng sau. */
+  options: ScopeOption<V>[]
+  /** Người dùng chọn phạm vi khác. Không gọi khi bấm lại lựa chọn đang bật. */
+  onChange: (v: V) => void
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <span className="text-k-label font-semibold tracking-[.04em] text-[var(--ink-3)] uppercase">
+        {label}
+      </span>
+      <ToggleGroup.Root
+        type="single"
+        value={value}
+        aria-label={label}
+        onValueChange={(v) => {
+          if (v && v !== value) onChange(v as V)
+        }}
+        className="inline-flex h-[26px] overflow-hidden rounded-[13px] border border-[var(--line)] bg-[var(--surface-card)]"
+      >
+        {options.map((o) => {
+          const on = o.value === value
+          return (
+            <ToggleGroup.Item
+              key={o.value}
+              value={o.value}
+              title={o.hint}
+              className={cn(
+                'text-k-sm inline-flex items-center gap-1.5 px-2.5 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--act)] focus-visible:ring-inset',
+                'not-first:border-l not-first:border-[var(--line)]',
+                on
+                  ? 'bg-[var(--act-wash)] font-semibold text-[var(--act)]'
+                  : 'text-[var(--ink-2)] hover:text-[var(--ink)]',
+              )}
+            >
+              {o.label}
+              {o.count != null && (
+                <span className="num text-k-label opacity-80">
+                  {o.count.toLocaleString('vi-VN')}
+                </span>
+              )}
+            </ToggleGroup.Item>
+          )
+        })}
+      </ToggleGroup.Root>
     </div>
   )
 }

@@ -14,6 +14,8 @@ import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.
 import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { HttpError } from '@/server/http'
+import { poFinanceForPo } from '@/modules/dept/accounting/supplier-invoices.service'
+import { poTrackingService } from '@/modules/dept/supply/po-tracking.service'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { DonChungTuScreen } from './DonChungTuScreen'
 
@@ -46,16 +48,18 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ sua?: string }>
+  searchParams: Promise<{ sua?: string; muc?: string }>
 }) {
   const [{ id }, sp] = await Promise.all([params, searchParams])
   const user = await authService.requirePageUser()
-  const [supplyStaff, canManageAny, canApprove, canRecordCost] = await Promise.all([
-    isSupplyStaff(user),
-    canAction(user, 'supply.po.manage_any'),
-    canAction(user, 'supply.po.approve'),
-    canAction(user, 'supply.po_cost.manage'),
-  ])
+  const [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice] =
+    await Promise.all([
+      isSupplyStaff(user),
+      canAction(user, 'supply.po.manage_any'),
+      canAction(user, 'supply.po.approve'),
+      canAction(user, 'supply.po_cost.manage'),
+      canAction(user, 'accounting.supplier_invoice.manage'),
+    ])
 
   let detail
   try {
@@ -66,7 +70,7 @@ export default async function Page({
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches, company, tpl, adjustments, costs] = // prettier-ignore
+  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches, company, tpl, adjustments, costs, finance, tracking, links, canIssue] = // prettier-ignore
     await Promise.all([
       poPosition(po.id),
       po.supplier_id ? suppliersRepo.findById(po.supplier_id) : Promise.resolve(null),
@@ -89,6 +93,14 @@ export default async function Page({
       posService.listAdjustments(user, po.id),
       // Phiếu chi phí mua hàng (0211): phí vận chuyển / bốc xếp gắn đơn này.
       poCostsService.listByPo(user, po.id),
+      // Mục Tài chính (27/09/2026): đối chiếu + hoá đơn + phiếu chi — cùng hàm
+      // màn Kế toán. Hỏng thì mục báo "chưa tải được", không làm chết cả đơn.
+      poFinanceForPo(po.id).catch(() => null),
+      // Sổ hẹn giao + sổ sự cố (0213).
+      poTrackingService.forPo(user, po.id),
+      // Đơn bổ sung ↔ đơn gốc (0213).
+      posRepo.supplementLinks(po),
+      canAction(user, 'supply.po_issue.manage'),
     ])
   const stock: Record<string, number> = {}
   for (const r of stockRows) stock[r.material_id] = r.on_hand
@@ -99,6 +111,12 @@ export default async function Page({
 
   return (
     <DonChungTuScreen
+      initialMuc={sp.muc}
+      finance={finance}
+      tracking={tracking}
+      links={links}
+      canIssue={canIssue}
+      canInvoice={canInvoice}
       // Dựng lại màn khi đơn vừa được điều chỉnh: dòng thêm mới phải nhận mã
       // dòng DB, không thì lần điều chỉnh sau coi chúng là dòng mới lần nữa.
       key={`${po.id}:${adjustments.length}`}
@@ -121,7 +139,7 @@ export default async function Page({
       company={company}
       tpl={tpl}
       lastTemplates={await posRepo.lastTemplateBySupplier()}
-      suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null }))} // prettier-ignore
+      suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null }))} // prettier-ignore
       lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
       perms={{
         canEdit,

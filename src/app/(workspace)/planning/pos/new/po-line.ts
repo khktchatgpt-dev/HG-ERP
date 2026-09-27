@@ -45,6 +45,11 @@ export type Line = {
   /** SL đặt cuối cùng — luôn theo ĐVT mua. Cột duy nhất mọi mẫu đều có. */
   qty: Num
   price: Num
+  /**
+   * Giá mua LẦN TRƯỚC của vật tư, chụp lúc thêm dòng (P3, 27/09/2026) — để nhắc
+   * "lệch ≥ 5%" khi NCC báo giá khác. Chỉ dùng ở màn soạn, không gửi server.
+   */
+  last_price?: number | null
   // accessory / chung
   material_grade: string
   dm_per_sp: Num
@@ -306,6 +311,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     qty: '',
     // Giá mua lần trước là GỢI Ý, điền sẵn để đơn lặp lại hàng tháng khỏi gõ lại.
     price: m.last_purchase_price ?? '',
+    last_price: m.last_purchase_price ?? null,
     material_grade: grade,
     dm_per_sp: last?.dm_per_sp ?? '',
     qty_demand: '',

@@ -2,7 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Btn, Cell, Chip, Code, Empty, GroupRow, NoticeBar, Num, Pick, Row, ScreenFrame, ScreenHeader, SearchInput, StatusBar, TFoot, THead, Table, Tag, Combobox } from '@/components/kit'
+import { Btn, Cell, Chip, Code, Empty, GroupRow, NoticeBar, Num, Pick, Row, ScopeSwitch, ScreenFrame, ScreenHeader, SearchInput, StatusBar, TFoot, THead, Table, Tag, Combobox } from '@/components/kit'
+import type { SupplyScope } from '@/lib/supply-scope'
+import { useScopePref } from '@/lib/use-scope-pref'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { assessPoFit } from '@/lib/po-fit'
 import {
@@ -167,6 +169,8 @@ export function DonScreen({
   truncatedAt,
   initial,
   openId,
+  defaultScope,
+  urlScope,
 }: {
   today: string
   pos: Po[]
@@ -177,10 +181,21 @@ export function DonScreen({
   truncatedAt: number | null
   initial: ViewState
   openId: string | null
+  /** Phạm vi mặc định theo vai (người mua → của tôi, người duyệt → cả phòng). */
+  defaultScope: SupplyScope
+  /** Phạm vi do địa chỉ trang quyết (link mang ?pham_vi=, ?mo=, bộ lọc…). */
+  urlScope: SupplyScope | null
 }) {
   const router = useRouter()
 
   const [view, setViewState] = useState<ViewState>(initial)
+  /*
+    PHẠM VI thay cho chip 'Của tôi' (27/09/2026): nhớ theo tài khoản, mặc định
+    theo vai. Bộ lọc `mine` của khung nhìn giờ CHỈ đi từ đây — một nguồn, để
+    công tắc, số đếm và danh sách không nói ba ý.
+  */
+  const [scope, setScopePref] = useScopePref('don', meId, defaultScope, urlScope)
+  const eff = { ...view.filter, mine: scope === 'toi' }
 
   const [colsRaw] = useLocalPref('hg.mua-hang.don.cols', '')
   const cols = useMemo<ColKey[]>(() => {
@@ -198,8 +213,9 @@ export function DonScreen({
    */
   function setView(next: ViewState) {
     setViewState(next)
-    const qs = encodeView(next)
-    window.history.replaceState(null, '', qs ? `?${qs}` : location.pathname)
+    const qs = new URLSearchParams(encodeView({ ...next, filter: { ...next.filter, mine: false } }))
+    qs.set('pham_vi', scope)
+    window.history.replaceState(null, '', `?${qs}`)
   }
   const patchFilter = (f: Partial<PoFilterState>) =>
     setView({ ...view, filter: { ...view.filter, ...f } })
@@ -209,11 +225,11 @@ export function DonScreen({
   const shown = useMemo(
     () =>
       sortPos(
-        pos.filter((p) => poMatches(p, view.filter, ctx)),
+        pos.filter((p) => poMatches(p, eff, ctx)),
         view.sortBy,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pos, view, meId, today],
+    [pos, view, meId, today, scope],
   )
   /*
     TỔNG CỦA DANH SÁCH ĐANG HIỆN — tính trên `shown` (sau lọc), không trên cả
@@ -369,12 +385,6 @@ export function DonScreen({
         */
         facts={[
           { label: 'Đang hiện', value: `${shown.length} / ${pos.length}` },
-          {
-            label: 'Của tôi',
-            value: String(counts.mine),
-            on: view.filter.mine,
-            onClick: () => patchFilter({ mine: !view.filter.mine }),
-          },
           { label: 'NCC trễ hẹn', value: String(counts.late), tone: counts.late > 0 ? 'stop' : undefined, on: lateOn('sent'), onClick: () => toggleLate('sent') }, // prettier-ignore
           { label: 'Quá hẹn mà chưa gửi', value: String(counts.lateUnsent), tone: counts.lateUnsent > 0 ? 'warn' : undefined, on: lateOn('unsent'), onClick: () => toggleLate('unsent') }, // prettier-ignore
         ]}
@@ -490,14 +500,15 @@ export function DonScreen({
         mình, nên chip này chỉ còn là đường thứ hai làm cùng một việc.
       */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
-        <Chip
-          on={view.filter.mine}
-          count={counts.mine}
-          icon="toi"
-          onClick={() => patchFilter({ mine: !view.filter.mine })}
-        >
-          Của tôi
-        </Chip>
+        <ScopeSwitch
+          label="Phạm vi"
+          value={scope}
+          onChange={setScopePref}
+          options={[
+            { value: 'toi', label: 'Của tôi', count: counts.mine, hint: 'Đơn tôi phụ trách' },
+            { value: 'phong', label: 'Cả phòng', count: pos.length, hint: 'Mọi đơn trong sổ' },
+          ]}
+        />
         <Chip
           on={view.filter.noEta}
           count={counts.noEta}
@@ -594,7 +605,13 @@ export function DonScreen({
               reason={`Bộ lọc đang bật không còn dòng nào trong ${pos.length} đơn của sổ.`}
               next={
                 <>
-                  <Btn icon="boLoc" onClick={() => setView(ALL_VIEW)}>
+                  <Btn
+                    icon="boLoc"
+                    onClick={() => {
+                      setScopePref('phong')
+                      setView(ALL_VIEW)
+                    }}
+                  >
                     Xem tất cả {pos.length} đơn
                   </Btn>
                   {canEdit && (

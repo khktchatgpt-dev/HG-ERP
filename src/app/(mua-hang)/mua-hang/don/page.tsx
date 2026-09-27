@@ -7,6 +7,8 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { DonScreen } from './DonScreen'
 import { ALL_VIEW, DEFAULT_VIEW, PARAM_KEYS, decodeView } from './views'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { defaultScope, parseScope } from '@/lib/supply-scope'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Mua hàng · Đơn mua' }
@@ -35,6 +37,7 @@ export default async function Page({
   const user = await authService.requirePageUser()
   const supplyStaff = await isSupplyStaff(user)
   const canEdit = user.role === 'admin' || supplyStaff
+  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
 
   const PAGE_CAP = 1000
   const [{ rows: pos }, { rows: suppliers }, lsxs] = await Promise.all([
@@ -74,6 +77,15 @@ export default async function Page({
   */
   const hasCustom = Object.keys(sp).some((k) => PARAM_KEYS.has(k))
   const initial = hasCustom ? decodeView(sp) : openId ? ALL_VIEW : DEFAULT_VIEW
+  /*
+    PHẠM VI TỪ ĐỊA CHỈ (27/09/2026). Link ghi rõ ?pham_vi= thì theo; ?toi=1 cũ
+    = của tôi. Link mở THẲNG một đơn (?mo=) hoặc mang bộ lọc từ màn khác (NCC,
+    lệnh…) thì mở CẢ PHÒNG: người gửi link muốn người nhận thấy đủ — lọc 'của
+    tôi' lên trên là giấu đúng đơn họ được chỉ tới.
+  */
+  const urlScope =
+    parseScope(sp.pham_vi) ??
+    (sp.toi === '1' ? 'toi' : openId || hasCustom ? 'phong' : null)
 
   return (
     <DonScreen
@@ -98,6 +110,8 @@ export default async function Page({
       truncatedAt={pos.length >= PAGE_CAP ? PAGE_CAP : null}
       initial={initial}
       openId={openId}
+      defaultScope={defaultScope({ canApprove })}
+      urlScope={urlScope}
     />
   )
 }

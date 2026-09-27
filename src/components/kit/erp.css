@@ -611,6 +611,18 @@
 .k-ft-h:hover {
   background: var(--surface-raised);
 }
+/* Khối cố định (nằm trong một mục menu): tiêu đề là chữ, không phải nút —
+   không trỏ tay, không nền khi rê, bỏ lề trên/dưới mặc định của h3. */
+.k-ft-h.k-ft-h-fixed {
+  margin: 0;
+  padding-top: 8px;
+  padding-bottom: 6px;
+  cursor: default;
+  font-weight: inherit;
+}
+.k-ft-h.k-ft-h-fixed:hover {
+  background: transparent;
+}
 /* Tiêu đề FastTab kèm HÀNG HÀNH ĐỘNG bên phải (nút của lưới ở chế độ xem).
    Nút không được nằm trong nút gấp/mở, nên bọc hai thứ trong một hàng flex. */
 .k-ft-hd {

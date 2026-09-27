@@ -106,8 +106,7 @@ export function NhuCauGrid({
                 ) : (
                   <Tag tone="warn">còn thiếu</Tag>
                 )}
-              </Td>{' '}
-              {/* prettier-ignore */}
+              </Td>
               <Td>{!on && <GridBtn onClick={() => onAdd([n])}>+ Thêm</GridBtn>}</Td>
             </GridRow>
           )

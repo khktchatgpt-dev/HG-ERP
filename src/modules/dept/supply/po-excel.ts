@@ -324,6 +324,7 @@ export async function buildPoExcel(input: {
   // Khung Số ĐH / LSX bên phải — mỗi dòng một ngăn, kẻ viền như mẫu.
   const refs: string[] = [
     `Số ĐH : ${po.code}`,
+    ...(po.revision_label ? [`Điều chỉnh: ${po.revision_label}`] : []),
     ...(po.contract_no ? [`Theo HD số: ${po.contract_no}`] : []),
     ...(po.lsx_code ? [`LSX ${po.lsx_code}`] : []),
     ...(po.order_code ? [`Đơn hàng: ${po.order_code}`] : []),

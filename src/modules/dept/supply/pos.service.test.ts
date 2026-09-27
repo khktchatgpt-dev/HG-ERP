@@ -29,6 +29,9 @@ vi.mock('./supply.repo', () => ({
   },
 }))
 // Chốt thiếu (0154) đụng đợt giao + danh bạ phòng (notify Kho).
+vi.mock('./po-tracking.repo', () => ({
+  poTrackingRepo: { logCommits: vi.fn(async () => undefined) },
+}))
 vi.mock('./po-shipments.repo', () => ({
   poShipmentsRepo: { listByPo: vi.fn(async () => []), patch: vi.fn() },
 }))
@@ -62,6 +65,11 @@ vi.mock('@/modules/core/users/users.repo', () => ({
 }))
 // on: pos.service nay import '@/events/register' → registerEventHandlers gọi on().
 vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
+// Vết lý do (trả lại / dời hẹn / mở lại / huỷ) → Trao đổi nội bộ, KHÔNG vào `note`
+// — ô `note` in lên phiếu gửi NCC (27/09/2026).
+vi.mock('@/modules/core/doc-notes/doc-notes.repo', () => ({
+  docNotesRepo: { create: vi.fn().mockResolvedValue({}) },
+}))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   canAction: vi.fn(),
@@ -72,16 +80,21 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
+import { poShipmentsRepo } from './po-shipments.repo'
 import { poAdjustmentsRepo } from './po-adjustments.repo'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { makeFakeAssertAction, makeFakeCanAction, type DeptInfo } from '@/test-utils/rbac'
 import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
+
+/** Ghi chú Trao đổi vừa ghi (vết lý do). */
+const lastTrace = () => vi.mocked(docNotesRepo.create).mock.calls.at(-1)![0]
 
 const staff = { id: 'u-sup', role: 'employee', department_id: 'd-sup' } as unknown as User
 /** NV Cung ứng KHÁC (0128) — cùng phòng nhưng không phụ trách PO fixture. */
@@ -114,6 +127,8 @@ const PO = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Gửi duyệt / gửi NCC nay kiểm NCC còn đặt được (P1, 27/09/2026) — mặc định NCC thường.
+  vi.mocked(suppliersRepo.findById).mockReset().mockResolvedValue({ id: 's1', is_active: true, can_order: true } as never) // prettier-ignore
   vi.mocked(usersRepo.list).mockResolvedValue([])
   vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue([])
   vi.mocked(assertAction).mockImplementation(
@@ -245,6 +260,7 @@ describe('posService.submit — 0116: gửi GĐ duyệt mới notify', () => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue({
       id: 's1',
       name: 'Nhôm Tiến Đạt',
+      is_active: true,
     } as never)
     vi.mocked(productionRepo.findById).mockResolvedValue({
       id: 'lsx1',
@@ -340,7 +356,7 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
     expect(evt.name).toBe('po.decided')
   })
 
-  it('reject → VỀ NHÁP kèm lý do trong note (0128 — 6.3b, trước là cancelled)', async () => {
+  it('reject → VỀ NHÁP, lý do vào Trao đổi nội bộ — KHÔNG vào note in phiếu', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
     vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'draft' } as never)
 
@@ -348,7 +364,8 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
 
     const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
     expect(patch.status).toBe('draft')
-    expect(String(patch.note)).toContain('Giá cao hơn NCC khác')
+    expect('note' in patch).toBe(false)
+    expect(lastTrace()).toMatchObject({ doc_type: 'po', doc_id: 'po1', audience: 'internal', body: '[Trả lại để sửa] Giá cao hơn NCC khác' }) // prettier-ignore
   })
 
   it('chỉ duyệt được đơn pending_approval', async () => {
@@ -380,8 +397,8 @@ describe('posService.reopenForEdit — hạ đơn đã duyệt về nháp để 
     expect(patch.approved_at).toBeNull()
     expect(patch.ordered_at).toBeNull()
     expect(patch.confirmed_at).toBeNull()
-    expect(String(patch.note)).toContain('Sai đơn giá dòng thép hộp')
-    expect(String(patch.note)).toContain('Hạ về nháp từ "approved"')
+    expect('note' in patch).toBe(false)
+    expect(lastTrace().body).toBe('[Hạ về nháp từ "approved"] Sai đơn giá dòng thép hộp')
 
     const evt = vi.mocked(emit).mock.calls[0][0] as { name: string; from_status: string }
     expect(evt.name).toBe('po.reopened')
@@ -417,7 +434,9 @@ describe('posService.reopenForEdit — hạ đơn đã duyệt về nháp để 
   */
   it('đơn nháp thì chặn — sửa thẳng được rồi', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft' } as never)
-    await expect(posService.reopenForEdit(lead, 'po1', 'gõ nhầm giá')).rejects.toMatchObject({
+    await expect(
+      posService.reopenForEdit(lead, 'po1', 'gõ nhầm giá'),
+    ).rejects.toMatchObject({
       status: 400,
     })
     expect(posRepo.patch).not.toHaveBeenCalled()
@@ -438,7 +457,9 @@ describe('posService.reopenForEdit — hạ đơn đã duyệt về nháp để 
       { id: 'l2', material_id: 'm2', qty_ordered: 5, qty_received: 0, qty_open: 5 },
     ] as never)
 
-    await expect(posService.reopenForEdit(lead, 'po1', 'sai quy cách')).rejects.toMatchObject({
+    await expect(
+      posService.reopenForEdit(lead, 'po1', 'sai quy cách'),
+    ).rejects.toMatchObject({
       status: 400,
     })
     expect(posRepo.patch).not.toHaveBeenCalled()
@@ -453,9 +474,11 @@ describe('posService.reopenForEdit — hạ đơn đã duyệt về nháp để 
   it('nhân viên thường không hạ được, dù đang phụ trách chính đơn đó', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
     vi.mocked(supplyRepo.lineStatus).mockResolvedValue([] as never)
-    await expect(posService.reopenForEdit(staff, 'po1', 'sai giá')).rejects.toMatchObject({
-      status: 400,
-    })
+    await expect(posService.reopenForEdit(staff, 'po1', 'sai giá')).rejects.toMatchObject(
+      {
+        status: 400,
+      },
+    )
     expect(posRepo.patch).not.toHaveBeenCalled()
   })
 })
@@ -899,7 +922,9 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
   beforeEach(() => {
     vi.mocked(posRepo.findById).mockResolvedValue(SENT as never)
     vi.mocked(posRepo.listLines).mockResolvedValue([LINE] as never)
-    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([{ id: 'l1', qty_received: 0 }] as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'l1', qty_received: 0 },
+    ] as never)
   })
   const input = (over = {}) => ({
     base_seq: 0,
@@ -912,20 +937,34 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
     const r = await posService.adjust(staff, 'po1', input())
     expect(r).toMatchObject({ seq: 1, delta_total: 1_080 })
     const call = vi.mocked(poAdjustmentsRepo.apply).mock.calls[0][0]
-    expect(call.updates).toEqual([expect.objectContaining({ id: 'l1', unit_price: 120, sort_order: 0 })])
+    expect(call.updates).toEqual([
+      expect.objectContaining({ id: 'l1', unit_price: 120, sort_order: 0 }),
+    ])
     expect(call.inserts).toEqual([])
-    expect(call.record).toMatchObject({ delta_by_price: 1_000, delta_by_qty: 0, total_before: 11_880, total_after: 12_960 })
-    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'po.adjusted', notify_ids: ['u-boss'] }))
+    expect(call.record).toMatchObject({
+      delta_by_price: 1_000,
+      delta_by_qty: 0,
+      total_before: 11_880,
+      total_after: 12_960,
+    })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'po.adjusted', notify_ids: ['u-boss'] }),
+    )
   })
 
   it('bản client đang cầm đã cũ → 409 TRƯỚC mọi lỗi theo dòng', async () => {
     vi.mocked(poAdjustmentsRepo.lastSeq).mockResolvedValueOnce(2)
-    await expect(posService.adjust(staff, 'po1', input({ lines: [] }))).rejects.toMatchObject({ status: 409 })
+    await expect(
+      posService.adjust(staff, 'po1', input({ lines: [] })),
+    ).rejects.toMatchObject({ status: 409 })
     expect(poAdjustmentsRepo.apply).not.toHaveBeenCalled()
   })
 
   it('đơn đã về đủ → khoá, nói đường đi tiếp', async () => {
-    vi.mocked(posRepo.findById).mockResolvedValue({ ...SENT, status: 'received' } as never)
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...SENT,
+      status: 'received',
+    } as never)
     await expect(posService.adjust(staff, 'po1', input())).rejects.toMatchObject({
       status: 400,
       message: expect.stringMatching(/đối chiếu hoá đơn/),
@@ -933,11 +972,15 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
   })
 
   it('NV khác không phụ trách đơn → 403', async () => {
-    await expect(posService.adjust(staff2, 'po1', input())).rejects.toMatchObject({ status: 403 })
+    await expect(posService.adjust(staff2, 'po1', input())).rejects.toMatchObject({
+      status: 403,
+    })
   })
 
   it('đặt thấp hơn số đã nhận → 400, không gọi hàm DB', async () => {
-    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([{ id: 'l1', qty_received: 150 }] as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'l1', qty_received: 150 },
+    ] as never)
     await expect(posService.adjust(staff, 'po1', input())).rejects.toMatchObject({
       status: 400,
       message: expect.stringMatching(/đã nhận 150/),
@@ -949,5 +992,69 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
     vi.mocked(posRepo.findById).mockResolvedValue({ ...SENT, status: 'partial' } as never)
     await posService.adjust(staff, 'po1', input())
     expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
+  })
+})
+
+describe('P1 (27/09/2026) — hàng rào thật cho NCC khoá đặt và huỷ đơn đã có hàng', () => {
+  it('tạo đơn với NCC đang khoá đặt hàng → chặn, nói lý do khoá', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1', is_active: true, can_order: false, lock_reason: 'Giao sai 3 lần' } as never) // prettier-ignore
+    await expect(
+      posService.create(staff, {
+        production_order_id: null,
+        supplier_id: 's1',
+        lines: [],
+      } as never),
+    ).rejects.toThrow(/khoá đặt hàng — Giao sai 3 lần/)
+    expect(posRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('NCC bị khoá SAU khi soạn: gửi duyệt bị chặn', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft' } as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([{ id: 'l1' }] as never)
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1', is_active: true, can_order: false } as never) // prettier-ignore
+    await expect(posService.submit(staff, 'po1')).rejects.toThrow(/khoá đặt hàng/)
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('huỷ đơn đã có hàng về (về một phần) → chặn, chỉ đường chốt thiếu', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'partial' } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValueOnce([{ id: 'l1', qty_received: 800 }] as never) // prettier-ignore
+    await expect(posService.cancel(staff, 'po1', 'NCC không giao nữa')).rejects.toThrow(/Chốt thiếu/) // prettier-ignore
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('huỷ đơn đã gửi chưa về gì → vẫn huỷ được', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'ordered' } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'cancelled' } as never)
+    await posService.cancel(staff, 'po1', 'Sản xuất huỷ nhu cầu')
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch).toMatchObject({ status: 'cancelled' })
+    // Lý do huỷ CHỈ nằm ở Trao đổi — ô note in lên phiếu gửi NCC.
+    expect('note' in patch).toBe(false)
+    expect(lastTrace()).toMatchObject({ audience: 'internal', author_id: 'u-sup', body: '[Huỷ] Sản xuất huỷ nhu cầu' }) // prettier-ignore
+  })
+
+  it('dời hẹn giao → lý do + ngày cũ→mới vào Trao đổi, note không đổi', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'ordered', expected_at: '2026-10-03', note: 'Giao cổng B' } as never) // prettier-ignore
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'ordered' } as never)
+    vi.mocked(poShipmentsRepo.listByPo).mockResolvedValue([
+      { id: 'd1', status: 'planned', expected_date: '2026-10-03', lines: [] },
+      { id: 'd2', status: 'planned', expected_date: '2026-10-13', lines: [] },
+      { id: 'd0', status: 'received', expected_date: '2026-09-20', lines: [] },
+    ] as never)
+    await posService.reschedule(staff, 'po1', {
+      expected_at: '2026-10-07',
+      reason: 'NCC báo thiếu phôi',
+    })
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch).toEqual({ expected_at: '2026-10-07' })
+    expect(lastTrace().body).toBe(
+      '[Dời hẹn giao] 03/10/2026 → 07/10/2026 · NCC báo thiếu phôi',
+    )
+    // Đợt chưa giao trượt cùng 4 ngày; đợt đã nhận đứng yên.
+    expect(vi.mocked(poShipmentsRepo.patch).mock.calls).toEqual([
+      ['d1', { expected_date: '2026-10-07' }],
+      ['d2', { expected_date: '2026-10-17' }],
+    ])
   })
 })

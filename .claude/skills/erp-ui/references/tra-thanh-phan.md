@@ -30,24 +30,27 @@ Mọi thứ import từ `@/components/kit`.
 
 ## Chứng từ (vòng đời)
 
-| Cần                                               | Dùng                                      | Trang                        |
-| ------------------------------------------------- | ----------------------------------------- | ---------------------------- |
-| Mã, loại chứng từ + đang ở bước nào               | `DocHead`, `StatusTrack`                  | `doc-head`                   |
-| Ai đang giữ tờ này, bao lâu rồi                   | `HolderBar`                               | `holder-bar`                 |
-| Việc tiếp theo + người giữ                        | `NextAction`                              | `next-action`                |
-| Bước chính duy nhất, và lý do chưa bấm được       | `PrimaryStep` (`why`)                     | `primary-step`               |
-| Điều kiện đủ/thiếu trước khi đi tiếp              | `Checks`                                  | `checks`                     |
-| Dải lệnh theo nhóm (góc trên phải)                | `ActionPane`, `ActionGroup`, `Action`     | `action-pane`                |
-| Đường dẫn + lật tờ trước/sau                      | `Crumb`                                   | `crumb`                      |
-| Chuỗi chứng từ cha → con                          | `DocChain`                                | `doc-chain`                  |
-| Nút đếm chứng từ liên quan                        | `SmartLinks`                              | `smart-links`                |
-| Lưới nhãn–giá trị của đầu chứng từ                | `FieldGrid`, `Field`, `FieldGroup`        | `field-grid`                 |
-| Khối gập được, tóm tắt khi đóng                   | `FastTab`                                 | `fast-tab`                   |
-| Cột dữ kiện bên phải                              | `FactBox`, `FactSection`, `FactKv`        | `fact-box`                   |
-| Trạng thái một dòng kèm lý do / chi tiết một dòng | `LineStatus` / `LineDetail`               | `line-status`, `line-detail` |
-| Đời chứng từ theo mốc                             | `Timeline`                                | `timeline`                   |
-| Trao đổi ngay trên chứng từ                       | `NoteStream`, `NoteComposer`, `Followers` | `notes`                      |
-| Vết thay đổi trường: ai, lúc nào, từ gì thành gì  | `AuditTable`                              | `audit-table`                |
+| Cần                                                        | Dùng                                                 | Trang                        |
+| ---------------------------------------------------------- | ---------------------------------------------------- | ---------------------------- |
+| Mã, loại chứng từ + đang ở bước nào                        | `DocHead`, `StatusTrack`                             | `doc-head`                   |
+| Ai đang giữ tờ này, bao lâu rồi                            | `HolderBar`                                          | `holder-bar`                 |
+| Một dòng: trạng thái + ai giữ + chuyển bước                | `DocStatus`                                          | `doc-status`                 |
+| Trang đa nhiệm: bấm mục nào chỉ hiện mục đó                | `DocMenu`, `DocMenuPanel`                            | `doc-menu`                   |
+| Phạm vi Của tôi / Cả phòng cho cả màn (nhớ theo tài khoản) | `ScopeSwitch` (+ `useScopePref`, `lib/supply-scope`) | `scope-switch`               |
+| Việc tiếp theo + người giữ                                 | `NextAction`                                         | `next-action`                |
+| Bước chính duy nhất, và lý do chưa bấm được                | `PrimaryStep` (`why`)                                | `primary-step`               |
+| Điều kiện đủ/thiếu trước khi đi tiếp                       | `Checks`                                             | `checks`                     |
+| Dải lệnh theo nhóm (góc trên phải)                         | `ActionPane`, `ActionGroup`, `Action`                | `action-pane`                |
+| Đường dẫn + lật tờ trước/sau                               | `Crumb`                                              | `crumb`                      |
+| Chuỗi chứng từ cha → con                                   | `DocChain`                                           | `doc-chain`                  |
+| Nút đếm chứng từ liên quan                                 | `SmartLinks`                                         | `smart-links`                |
+| Lưới nhãn–giá trị của đầu chứng từ                         | `FieldGrid`, `Field`, `FieldGroup`                   | `field-grid`                 |
+| Khối gập được, tóm tắt khi đóng                            | `FastTab`                                            | `fast-tab`                   |
+| Cột dữ kiện bên phải                                       | `FactBox`, `FactSection`, `FactKv`                   | `fact-box`                   |
+| Trạng thái một dòng kèm lý do / chi tiết một dòng          | `LineStatus` / `LineDetail`                          | `line-status`, `line-detail` |
+| Đời chứng từ theo mốc                                      | `Timeline`                                           | `timeline`                   |
+| Trao đổi ngay trên chứng từ                                | `NoteStream`, `NoteComposer`, `Followers`            | `notes`                      |
+| Vết thay đổi trường: ai, lúc nào, từ gì thành gì           | `AuditTable`                                         | `audit-table`                |
 
 ## Hồ sơ danh mục (E) và bảng nhập (F)
 

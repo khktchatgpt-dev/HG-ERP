@@ -34,7 +34,10 @@ vi.mock('@/modules/dept/production/jobs.repo', () => ({
   jobsRepo: { replaceForLine: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/pos.repo', () => ({
-  posRepo: { list: vi.fn(), patch: vi.fn() },
+  posRepo: { list: vi.fn(), patch: vi.fn(), listTouchingLsx: vi.fn() },
+}))
+vi.mock('@/modules/core/doc-notes/doc-notes.repo', () => ({
+  docNotesRepo: { create: vi.fn().mockResolvedValue({}) },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({
   SUPPLY_DEPT_NAMES: new Set(['Kế Hoạch Sản Xuất-cung ứng']),
@@ -52,6 +55,7 @@ import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
@@ -96,6 +100,7 @@ beforeEach(() => {
   vi.mocked(ordersRepo.existsByCode).mockResolvedValue(false)
   vi.mocked(productionRepo.findByOrder).mockResolvedValue(null)
   vi.mocked(posRepo.list).mockResolvedValue({ rows: [], total: 0 } as never)
+  vi.mocked(posRepo.listTouchingLsx).mockResolvedValue({ pos: [], lsxCodes: new Map() })
   vi.mocked(departmentsRepo.list).mockResolvedValue([] as never)
   vi.mocked(usersRepo.list).mockResolvedValue([] as never)
 })
@@ -360,13 +365,25 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
       current_stage: 'han',
       order_ids: ['o1'],
     } as never)
-    vi.mocked(posRepo.list).mockResolvedValue({
-      rows: [
-        { id: 'po1', code: 'PO-1', status: 'pending_approval', note: null },
-        { id: 'po2', code: 'PO-2', status: 'ordered', note: null },
+    vi.mocked(posRepo.listTouchingLsx).mockResolvedValue({
+      pos: [
+        {
+          id: 'po1',
+          code: 'PO-1',
+          status: 'pending_approval',
+          production_order_id: 'lsx1',
+          extra_lsx_ids: [],
+        },
+        {
+          id: 'po2',
+          code: 'PO-2',
+          status: 'ordered',
+          production_order_id: 'lsx1',
+          extra_lsx_ids: [],
+        },
       ],
-      total: 2,
-    } as never)
+      lsxCodes: new Map([['lsx1', 'LSX-01']]),
+    })
 
     await ordersService.cancel(sales, 'o1', 'Khách huỷ')
 
@@ -379,18 +396,55 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
       }),
     )
     expect(posRepo.patch).toHaveBeenCalledTimes(1)
-    expect(posRepo.patch).toHaveBeenCalledWith(
-      'po1',
-      expect.objectContaining({ status: 'cancelled' }),
-    )
+    // Chỉ đổi trạng thái — KHÔNG đụng note (in lên phiếu gửi NCC); lý do vào Trao đổi.
+    expect(posRepo.patch).toHaveBeenCalledWith('po1', { status: 'cancelled' })
+    expect(vi.mocked(docNotesRepo.create).mock.calls[0][0]).toMatchObject({ doc_id: 'po1', audience: 'internal', body: '[Huỷ theo đơn DH-2026-0001] Khách huỷ' }) // prettier-ignore
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'order.cancelled',
         lsx_cancelled: true,
         pos_cancelled: ['PO-1'],
-        pos_manual: ['PO-2'],
+        pos_manual: ['PO-2 (đã gửi NCC — báo NCC huỷ hoặc giảm)'],
       }),
     )
+  })
+
+  it('đơn mua GỘP lệnh khác → KHÔNG tự huỷ (còn phục vụ lệnh kia), báo xử lý tay — cả khi lệnh huỷ là lệnh gộp', async () => {
+    vi.mocked(productionRepo.findByOrder).mockResolvedValue({ id: 'lsx10', code: 'LSX-10', status: 'approved', order_ids: ['o1'] } as never) // prettier-ignore
+    vi.mocked(posRepo.listTouchingLsx).mockResolvedValue({
+      pos: [
+        {
+          id: 'po97',
+          code: 'PO-97',
+          status: 'approved',
+          production_order_id: 'lsx9',
+          extra_lsx_ids: ['lsx10'],
+        },
+        {
+          id: 'po98',
+          code: 'PO-98',
+          status: 'draft',
+          production_order_id: 'lsx10',
+          extra_lsx_ids: [],
+        },
+      ],
+      lsxCodes: new Map([
+        ['lsx9', 'LSX-09'],
+        ['lsx10', 'LSX-10'],
+      ]),
+    })
+
+    await ordersService.cancel(sales, 'o1', 'Khách huỷ')
+
+    expect(posRepo.listTouchingLsx).toHaveBeenCalledWith('lsx10')
+    expect(posRepo.patch).not.toHaveBeenCalled()
+    const evt = vi.mocked(emit).mock.calls.at(-1)![0] as {
+      pos_cancelled: string[]
+      pos_manual: string[]
+    }
+    expect(evt.pos_cancelled).toEqual([])
+    expect(evt.pos_manual[0]).toMatch(/^PO-97 \(gộp cả lệnh LSX-09/)
+    expect(evt.pos_manual[1]).toMatch(/^PO-98 \(đơn nháp/)
   })
 
   it('lệnh gộp còn đơn khác → chỉ gỡ đơn khỏi lệnh, lệnh KHÔNG dừng, PO giữ nguyên (0113)', async () => {

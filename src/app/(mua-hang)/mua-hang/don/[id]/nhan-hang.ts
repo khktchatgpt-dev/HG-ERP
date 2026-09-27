@@ -130,9 +130,9 @@ export function shipmentEmptyHint(status: string, hasStockLines: boolean): strin
     case 'pending_approval':
       return 'Đơn đang chờ duyệt nên khoá sửa — rút về nháp rồi chia đợt.'
     case 'approved':
-      return 'Lịch giao sẽ ghi ở bước "NCC xác nhận" sau khi gửi đơn.'
+      return 'Chốt lịch với NCC xong thì bấm "+ Thêm đợt giao" — không cần đợi bước NCC xác nhận.'
     case 'ordered':
-      return 'Bấm "NCC xác nhận" trên thanh hành động để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
+      return 'Bấm "NCC xác nhận" để ghi lịch NCC hẹn (mỗi dòng tách được nhiều đợt), hoặc "+ Thêm đợt giao" nếu đã chốt lịch qua điện thoại.'
     default:
       return hasStockLines
         ? 'Chưa ghi đợt nào — hiểu là giao một lần vào hạn giao của đơn.'
@@ -191,7 +191,8 @@ export function receiveActions(i: {
     notOwn ? { ok: false, why: notOwn } : ok ? { ok: true } : { ok: false, why }
   return {
     confirm: gate(i.status === 'ordered', i.status === 'confirmed' || i.status === 'in_transit' || i.status === 'partial' ? 'NCC đã xác nhận rồi — thêm đợt nếu NCC hẹn giao bù' : 'Chỉ ghi được sau khi đã gửi đơn cho NCC'), // prettier-ignore
-    addShipment: gate(['confirmed', 'in_transit', 'partial'].includes(i.status) && i.hasStockLines, !i.hasStockLines ? 'Đơn không có dòng vật tư kho để chia đợt' : 'Chỉ thêm đợt sau khi NCC đã xác nhận'), // prettier-ignore
+    // Từ 27/09/2026 mở từ lúc đã duyệt — không phải chờ NCC xác nhận (khớp service).
+    addShipment: gate(['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(i.status) && i.hasStockLines, !i.hasStockLines ? 'Đơn không có dòng vật tư kho để chia đợt' : 'Chỉ thêm đợt cho đơn đã duyệt và chưa về đủ'), // prettier-ignore
     transit: gate(i.status === 'confirmed', 'Chỉ dùng khi đơn ở bước "NCC xác nhận"'),
     receive: { ok: sent, why: sent ? undefined : 'Chỉ nhận hàng được sau khi đơn đã gửi nhà cung cấp' }, // prettier-ignore
     closeShort: gate(sent && i.openStockLines > 0, i.openStockLines === 0 ? 'Không còn dòng nào đang chờ về' : 'Chỉ chốt thiếu trên đơn đã gửi NCC'), // prettier-ignore

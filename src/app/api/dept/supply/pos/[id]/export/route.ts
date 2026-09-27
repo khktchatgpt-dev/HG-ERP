@@ -3,6 +3,8 @@ import { handle, NotFound } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { poAdjustmentsRepo } from '@/modules/dept/supply/po-adjustments.repo'
+import { poRevisionLabel } from '@/lib/po-lsx-refs'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { buildPoExcel, poExcelFilename } from '@/modules/dept/supply/po-excel'
 
@@ -19,15 +21,18 @@ export const GET = handle(
     const po = await posRepo.findById(id)
     if (!po) throw NotFound('Đơn đặt hàng không tồn tại')
 
-    const [lines, supplier, company] = await Promise.all([
+    const [lines, supplier, company, refs, adjs] = await Promise.all([
       posRepo.listLines(id),
       suppliersRepo.findById(po.supplier_id),
       settingsService.getAll(),
+      posRepo.printRefs(po),
+      poAdjustmentsRepo.listByPo(id),
     ])
 
     const buf = await buildPoExcel({
       company,
-      po: { ...po, template: po.template ?? 'simple' },
+      // Cùng dòng LSX + Đơn hàng với phiếu in — file từng chỉ ghi lệnh chính.
+      po: { ...po, ...refs, revision_label: poRevisionLabel(adjs), template: po.template ?? 'simple' },
       supplier,
       lines,
     })

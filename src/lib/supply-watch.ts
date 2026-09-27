@@ -24,11 +24,18 @@ export type SupplyWatchInput = {
   /** Tiến độ về kho theo DÒNG (0126) — thiếu thì coi như chưa biết. */
   lines_done?: number
   lines_total?: number
+  /** Mốc gửi NCC / NCC xác nhận — để bắt đơn NCC chậm xác nhận (0213). */
+  ordered_at?: string | null
+  confirmed_at?: string | null
 }
+
+/** Gửi NCC quá bấy nhiêu ngày mà chưa xác nhận thì lên hộp thư (27/09/2026). */
+export const CONFIRM_DUE_DAYS = 2
 
 // ── 1. Việc cần xử lý ─────────────────────────────────────────────────
 
-export type SupplyTodoKind = 'overdue' | 'unsent' | 'no_eta' | 'partial' | 'draft'
+export type SupplyTodoKind =
+  'overdue' | 'unconfirmed' | 'unsent' | 'no_eta' | 'partial' | 'draft'
 
 export const SUPPLY_TODO: Record<
   SupplyTodoKind,
@@ -56,6 +63,14 @@ export const SUPPLY_TODO: Record<
     why: 'NCC đã nhận đơn nhưng qua ngày hẹn vẫn chưa giao đủ.',
     tone: 'stop',
     order: 1,
+  },
+  unconfirmed: {
+    icon: 'cho',
+    label: 'NCC chưa xác nhận',
+    action: 'Gọi NCC chốt đơn + ngày giao',
+    why: `Đơn đã gửi quá ${CONFIRM_DUE_DAYS} ngày mà NCC chưa xác nhận — chưa biết NCC có nhận đơn, giao ngày nào.`,
+    tone: 'warn',
+    order: 1.5,
   },
   unsent: {
     icon: 'gui',
@@ -116,6 +131,7 @@ export function classifyTodo(
   if (po.status === 'approved') return 'unsent'
   // Còn lại là đơn ĐÃ ra khỏi cửa: ordered / confirmed / in_transit / partial.
   if (assessPoLate(po, todayIso) === 'overdue') return 'overdue'
+  if (isUnconfirmed(po, todayIso)) return 'unconfirmed'
   if (isMissingEta(po)) return 'no_eta'
   if (po.status === 'partial') return 'partial'
   return null
@@ -255,4 +271,15 @@ function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
+}
+
+/**
+ * NCC CHẬM XÁC NHẬN (P2, 27/09/2026): đơn "Đã gửi NCC" quá `CONFIRM_DUE_DAYS`
+ * ngày mà chưa có mốc xác nhận. Không có `ordered_at` (đơn nạp tay) thì không
+ * kết luận — thiếu số liệu không phải là trễ.
+ */
+export function isUnconfirmed(po: SupplyWatchInput, todayIso: string): boolean {
+  if (po.status !== 'ordered' || po.confirmed_at || !po.ordered_at) return false
+  const days = Math.floor((Date.parse(`${todayIso}T00:00:00Z`) - Date.parse(`${po.ordered_at.slice(0, 10)}T00:00:00Z`)) / 86_400_000) // prettier-ignore
+  return days >= CONFIRM_DUE_DAYS
 }

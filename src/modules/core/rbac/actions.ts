@@ -326,6 +326,15 @@ export const ACTIONS: Action[] = [
     rule: anyOf(perm('supply.member'), perm('accounting.member')),
   },
 
+  {
+    // 0213 — sổ sự cố giao hàng của đơn mua. Kho thấy hàng sai trước, Cung
+    // ứng là người đi nói với NCC — cả hai ghi / đóng được.
+    key: 'supply.po_issue.manage',
+    label: 'Ghi / đóng sự cố giao hàng của đơn mua',
+    domain: 'supply',
+    rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
+  },
+
   // ── Kho (vật tư, tồn, nhập/xuất) ─────────────────────────────────────────
   {
     key: 'warehouse.material.view',

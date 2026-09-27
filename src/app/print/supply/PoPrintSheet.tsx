@@ -105,6 +105,8 @@ export type PoPrintHeader = {
   signer_role: string | null
   lsx_code: string | null
   order_code: string | null
+  /** "lần 2 · 26/09/2026" — đơn đã điều chỉnh sau khi gửi (0210); null = bản gốc. */
+  revision_label?: string | null
   supplier_name: string
   created_at: string
   /** Tên người soạn đơn — in dưới nét ký cột "Người lập". */
@@ -372,7 +374,11 @@ export function PoPrintSheet({
   const hasTerms = terms.some(([, v]) => v)
   return (
     <PrintPage exportHref={exportHref}>
-      <PrintLetterhead company={company} date={d} nationalHeading={tpl.national_heading} />
+      <PrintLetterhead
+        company={company}
+        date={d}
+        nationalHeading={tpl.national_heading}
+      />
       <PrintTitle vi={tpl.title_vi} en={tpl.title_en ?? undefined} />
 
       <PrintMeta
@@ -385,6 +391,10 @@ export function PoPrintSheet({
         refsBoxed
         refs={[
           ['Số ĐH :', <b key="c">{po.code}</b>],
+          // Bản điều chỉnh sau khi gửi NCC — NCC phân biệt được tờ nào hiệu lực.
+          ...(po.revision_label
+            ? ([['Điều chỉnh:', <b key="rv">{po.revision_label}</b>]] as [string, React.ReactNode][]) // prettier-ignore
+            : []),
           // Trong KHUNG chỉ giữ dòng có giá trị — ô "Theo HD số:" trống mà vẫn
           // đóng khung thì thành một ngăn rỗng vô nghĩa trên phiếu.
           ...(po.contract_no
@@ -593,7 +603,9 @@ export function PoPrintSheet({
                         {fmt(l.qty)}
                       </td>
                       <td className="border border-black px-1.5 py-0.5 text-right">
-                        {l.amount != null && l.amount > 0 ? fmt(Math.round(l.amount)) : ''}
+                        {l.amount != null && l.amount > 0
+                          ? fmt(Math.round(l.amount))
+                          : ''}
                       </td>
                     </tr>
                   )),

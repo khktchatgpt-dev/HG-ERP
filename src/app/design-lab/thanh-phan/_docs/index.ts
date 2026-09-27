@@ -25,6 +25,9 @@ import D_crumb from './crumb'
 import D_action_pane from './action-pane'
 import D_doc_head from './doc-head'
 import D_holder_bar from './holder-bar'
+import D_doc_status from './doc-status'
+import D_doc_menu from './doc-menu'
+import D_scope_switch from './scope-switch'
 import D_checks from './checks'
 import D_fast_tab from './fast-tab'
 import D_field_grid from './field-grid'
@@ -85,6 +88,9 @@ export const DOCS: Record<string, ComponentType> = {
   'action-pane': D_action_pane,
   'doc-head': D_doc_head,
   'holder-bar': D_holder_bar,
+  'doc-status': D_doc_status,
+  'doc-menu': D_doc_menu,
+  'scope-switch': D_scope_switch,
   'checks': D_checks,
   'fast-tab': D_fast_tab,
   'field-grid': D_field_grid,
