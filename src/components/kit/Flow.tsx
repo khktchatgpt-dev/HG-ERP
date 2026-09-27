@@ -472,7 +472,9 @@ export function DocStatus({
                   ? 'bg-[var(--stop-wash)] text-[var(--stop)]'
                   : ageTone === 'warn'
                     ? 'bg-[var(--warn-wash)] text-[var(--warn)]'
-                    : 'bg-[var(--fill)] text-[var(--ink-3)]',
+                    : // --fill là màu ĐẶC của thanh tiến độ (#5a6577), không phải nền nhạt —
+                      // từng làm viên "N ngày" thành viên xám đậm chữ chìm mất (28/09/2026).
+                      'bg-[var(--surface)] text-[var(--ink-3)]',
               )}
             >
               {days === 0 ? 'hôm nay' : `${days} ngày`}

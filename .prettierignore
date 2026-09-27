@@ -14,3 +14,6 @@ next-env.d.ts
 # Docs/data giữ nguyên format
 docs/
 scripts/seed_users.json
+
+# Dữ liệu đóng băng cho ảnh chụp màn (sinh bằng script, không sửa tay)
+src/app/design-lab/chup/_du-lieu/

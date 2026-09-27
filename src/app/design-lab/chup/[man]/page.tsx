@@ -8,6 +8,8 @@ import { DEFAULT_VIEW } from '@/app/(mua-hang)/mua-hang/don/views'
 import hopKy from '../_du-lieu/hop-ky.json'
 import giamSat from '../_du-lieu/giam-sat.json'
 import donMua from '../_du-lieu/don-mua.json'
+import donChiTiet from '../_du-lieu/don-chi-tiet.json'
+import { DonChungTuScreen } from '@/app/(mua-hang)/mua-hang/don/[id]/DonChungTuScreen'
 
 /**
  * TRANG CHỤP MÀN — màn THẬT dựng bằng dữ liệu ĐÓNG BĂNG (28/09/2026).
@@ -52,13 +54,30 @@ const MAN: Record<string, () => React.ReactNode> = {
   ),
 }
 
+/*
+  TRANG CHI TIẾT ĐƠN — `don-ct-<đơn>-<mục>`: props ĐÓNG BĂNG của chính page.tsx
+  (script gọi page với người xem = chị Nga), ba đơn ở ba bước vòng đời. Lưới an
+  toàn cho việc tách file 4.384 dòng (bước 3): tách xong ảnh phải y hệt.
+*/
+const DON_CT: Record<string, unknown> = donChiTiet
+function donCt(man: string): React.ReactNode | null {
+  const m =
+    /^don-ct-(da-gui|cho-duyet|ve-du)-(tong-quan|dong-hang|giao-nhan|tai-chinh|trao-doi|lich-su)$/.exec(
+      man,
+    )
+  if (!m) return null
+  return <DonChungTuScreen {...(DON_CT[m[1]] as any)} initialMuc={m[2]} />
+}
+
 export default function Page({ params }: { params: Promise<{ man: string }> }) {
   const { man } = use(params)
-  const ve = MAN[man]
+  const ve = MAN[man] ?? (donCt(man) ? () => donCt(man) : undefined)
   return (
     <>
       <style>
-        {'.chup-khung > div { height: 800px !important; margin: 0 !important; } .lab-bar { display: none !important; }'}
+        {
+          '.chup-khung > div { height: 800px !important; margin: 0 !important; } .lab-bar { display: none !important; }'
+        }
       </style>
       <div
         className="kit chup-khung"
