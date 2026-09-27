@@ -194,19 +194,12 @@ export function PosManager({
           })
           .then(() => setPicked(new Set()))
     : null
-  const bulkApprove = every((p) => p.status === 'pending_approval')
-    ? () =>
-        void act
-          .bulk(selected, {
-            path: 'decide',
-            body: { decision: 'approve' },
-            title: 'Duyệt',
-            confirmLabel: 'Duyệt',
-            consequence:
-              'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05). Đơn đã duyệt không sửa được giá hay số lượng.',
-          })
-          .then(() => setPicked(new Set()))
-    : null
+  /*
+    DUYỆT HÀNG LOẠT ĐÃ BỎ (27/09/2026, chủ dự án chốt "một nơi ký, một luật"):
+    ký nhiều đơn chỉ ở hộp ký (/mua-hang/cho-ky, /exec/approvals), nơi đơn GIÁ
+    TRỊ LỚN không ký hàng loạt được. Màn cũ này lách luật đó.
+  */
+  const bulkApprove = null
   const bulkOrder = every((p) => p.status === 'approved' && rowCanEdit(p))
     ? () =>
         void act

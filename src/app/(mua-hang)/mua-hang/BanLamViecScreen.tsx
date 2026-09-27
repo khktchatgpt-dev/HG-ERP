@@ -243,7 +243,7 @@ export function BanLamViecScreen({
                 label="Chờ tôi duyệt"
                 count={approver.pending.length}
                 hint={pendingWarn > 0 ? `${pendingWarn} đơn chờ quá ${PENDING_WARN_DAYS} ngày` : 'Đơn mua đang đợi chữ ký'} // prettier-ignore
-                href="/mua-hang/don?trang_thai=pending&pham_vi=phong"
+                href="/mua-hang/cho-ky"
                 tone="warn"
               />
             )}

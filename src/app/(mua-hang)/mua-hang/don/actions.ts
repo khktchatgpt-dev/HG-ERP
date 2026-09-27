@@ -312,7 +312,13 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           stakes: 'vua',
           blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
           done: 'Đã duyệt',
-          bulk: true,
+          /*
+            KHÔNG KÝ HÀNG LOẠT Ở ĐÂY (27/09/2026, chủ dự án chốt "một nơi ký,
+            một luật"). Ký nhiều đơn một lúc chỉ ở hộp ký (Chờ tôi ký /
+            /exec/approvals), nơi phiếu GIÁ TRỊ LỚN không có ô tích. Đơn lẻ vẫn
+            duyệt được ngay trên trang đơn.
+          */
+          bulk: false,
           build: ({ id }) => [
             { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST', body: { decision: 'approve' } }, // prettier-ignore
           ],

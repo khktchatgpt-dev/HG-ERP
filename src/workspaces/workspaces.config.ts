@@ -27,6 +27,8 @@ export type NavCapability =
   | 'production.record'
   /** Thành viên tổ xưởng — thấy màn "Việc của tổ" (tổ trưởng, mobile). */
   | 'production.team'
+  /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
+  | 'supply.approve'
 
 export type NavItem = {
   href: string
@@ -410,6 +412,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Nghiệp vụ',
         items: [
           { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home' },
+          /*
+            CHỜ TÔI KÝ (27/09/2026) — MỘT hộp ký chung với Ban Giám đốc
+            (execService.signBox), chỉ hiện cho người có quyền duyệt đơn mua
+            (chị Thảo). Trước đó chị ký ở màn Đơn mua bằng nút duyệt hàng loạt
+            — lách luật "giá trị lớn phải mở ra đọc" của hộp ký Giám đốc.
+          */
+          { href: '/mua-hang/cho-ky', label: 'Chờ tôi ký', icon: 'stamp', capability: 'supply.approve' },
           // Hộp thư việc: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
           // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
           { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },

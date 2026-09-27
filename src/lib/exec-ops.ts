@@ -34,8 +34,15 @@ export function isBigApproval(total: number): boolean {
  */
 export type ApprovalThresholds = Record<string, number>
 
+/**
+ * USD MẶC ĐỊNH 2.000 (27/09/2026, chủ dự án chốt "theo khuyến nghị") ≈ 50 triệu ₫
+ * — cùng mức với VND. Trước đó chỉ có VND: tiền tệ chưa có ngưỡng thì LUÔN là
+ * "giá trị lớn" (xem dưới), nên cả 14 đơn gia công USD không ký hàng loạt được
+ * và hộp ký chỉ còn 1/16 phiếu ký nhanh. Giám đốc đổi được ở "Luật ký".
+ */
 export const DEFAULT_APPROVAL_THRESHOLDS: ApprovalThresholds = {
   VND: BIG_APPROVAL_VND,
+  USD: 2_000,
 }
 
 /**

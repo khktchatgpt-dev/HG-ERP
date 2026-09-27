@@ -276,10 +276,11 @@ describe('bulkActionsFor — bày đủ việc, khoá kèm lý do đếm đượ
     expect(re.blocked).toMatch(/trưởng phòng Cung ứng/)
   })
 
-  it('chờ duyệt mà không có quyền duyệt → Duyệt bị khoá vì quyền', () => {
-    const r = bulkActionsFor([{ status: 'pending_approval', own: true }], { approve: false }) // prettier-ignore
-    const ap = r.find((x) => x.action.id === 'approve')
-    if (ap) expect(ap.blocked).toMatch(/quyền duyệt/)
+  it('DUYỆT không bao giờ chạy hàng loạt ở màn Đơn mua — chỉ ở hộp ký (27/09/2026)', () => {
+    const r = bulkActionsFor([{ status: 'pending_approval', own: true }], { approve: true }) // prettier-ignore
+    expect(r.find((x) => x.action.id === 'approve')).toBeUndefined()
+    // Đơn lẻ vẫn duyệt được trên trang đơn.
+    expect(actionsFor('pending_approval', boss).some((a) => a.id === 'approve')).toBe(true)
   })
 })
 

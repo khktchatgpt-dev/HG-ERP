@@ -123,6 +123,8 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   // Toàn cảnh xưởng — màn ĐIỀU PHỐI: quản đốc/GĐ, Kế hoạch, Cung ứng, người
   // ngoài xưởng xem chéo. Thành viên xưởng KHÔNG thấy mục này trong menu
   // (vào bằng URL vẫn xem được — chỉ tách giao diện, không chặn quyền).
+  // Duyệt đơn mua — mục "Chờ tôi ký" bên Mua hàng (27/09/2026).
+  if (await hasPermission(user, 'supply.po.approve')) caps.add('supply.approve')
   if (
     user.role === 'admin' ||
     user.role === 'manager' ||
