@@ -37,6 +37,8 @@ export type Po = {
   updated_at?: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền thao tác xét theo đây, không phải cả phòng. */
   assigned_to?: string | null
+  /** Người lập — đơn chưa giao ai thì người lập là người cầm (lib/supply-scope). */
+  created_by?: string | null
   assignee_name?: string | null
   supplier_name: string
   /** null = PO ngoài LSX (0076). */
@@ -54,6 +56,10 @@ export type Po = {
    * bị màn danh sách kết luận là "chưa có đơn đặt nào".
    */
   extra_lsx?: { id: string; code: string }[]
+  /** Mẫu đơn (loại đơn: accessory, wood…) — chip "Loại đơn" + cột Loại · vật tư. */
+  template?: string | null
+  /** Tên vật tư theo thứ tự dòng — bơm từ page (`enrichPoList`), cho cột + ô tìm. */
+  material_names?: string[]
 }
 
 export type PoLine = {

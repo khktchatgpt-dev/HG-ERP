@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EMPTY_FILTER } from '@/app/(workspace)/planning/pos/po-filter'
-import { PARAM_KEYS, decodeView, encodeView } from './views'
+import { ALL_VIEW, DEFAULT_VIEW, PARAM_KEYS, decodeView, encodeView } from './views'
 
 /**
  * KHUNG NHÌN TRÊN URL phải đi TRỌN VÒNG: mã hoá ra rồi giải mã lại phải bằng
@@ -58,5 +58,20 @@ describe('khung nhìn trên URL — trọn vòng', () => {
     expect(decodeView({ tu: '01/09/2026' }).filter.fromDate).toBe('')
     expect(decodeView({ den: 'hôm-qua' }).filter.toDate).toBe('')
     expect(decodeView({ tu: '2026-09-01' }).filter.fromDate).toBe('2026-09-01')
+  })
+})
+
+describe('rổ mặc định "còn mở" (27/09/2026)', () => {
+  it('vào trang mở ở rổ còn mở; "xem tất cả" và link ?mo= mở cả sổ', () => {
+    expect(DEFAULT_VIEW.filter.bucket).toBe('open')
+    expect(ALL_VIEW.filter.bucket).toBe('all')
+    expect(ALL_VIEW.groupBy).toBe(DEFAULT_VIEW.groupBy)
+  })
+
+  it('rổ còn mở đi trọn vòng qua URL; trang_thai=all đọc lại được là cả sổ', () => {
+    const sp = Object.fromEntries(new URLSearchParams(encodeView(DEFAULT_VIEW)))
+    expect(sp.trang_thai).toBe('open')
+    expect(decodeView(sp).filter.bucket).toBe('open')
+    expect(decodeView({ trang_thai: 'all' }).filter.bucket).toBe('all')
   })
 })

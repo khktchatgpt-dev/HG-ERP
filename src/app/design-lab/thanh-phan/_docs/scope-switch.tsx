@@ -31,6 +31,23 @@ function Demo({
   )
 }
 
+function PeopleDemo() {
+  const [v, setV] = useState('toi')
+  return (
+    <ScopeSwitch
+      label="Người phụ trách"
+      value={v}
+      onChange={setV}
+      options={[
+        { value: 'toi', label: 'Của tôi', count: 45 },
+        { value: 'huy', label: 'Huy', count: 31 },
+        { value: 'truyen', label: 'Truyền', count: 11 },
+        { value: 'phong', label: 'Cả phòng', count: 87 },
+      ]}
+    />
+  )
+}
+
 export default function DocScopeSwitch() {
   return (
     <CompDoc
@@ -47,8 +64,8 @@ export default function DocScopeSwitch() {
       avoidWhen={
         <>
           bộ lọc bật/tắt ĐỘC LẬP (quá hẹn, chưa hẹn giao) — đó là <code>Chip</code>; và
-          chia nội dung một chứng từ thành mục — đó là <code>DocMenu</code>. Đừng dùng cho
-          hơn 3 lựa chọn: phạm vi mà nhiều hơn thế là bộ lọc, không còn là phạm vi.
+          chia nội dung một chứng từ thành mục — đó là <code>DocMenu</code>. Đừng dùng khi
+          quá ~5 lựa chọn (phòng đông người): khi đó là ô chọn, không còn là công tắc.
         </>
       }
       variants={[
@@ -61,6 +78,11 @@ export default function DocScopeSwitch() {
           name: 'Người duyệt — mặc định Cả phòng',
           when: 'người có quyền duyệt đơn mua: việc của họ là thấy ai đang kẹt.',
           demo: <Demo start="phong" />,
+        },
+        {
+          name: 'Theo người phụ trách',
+          when: 'phòng ít người (Cung ứng: 3 người mua) — "Của tôi · Huy · Truyền · Cả phòng". Xem một đồng nghiệp là liếc qua: màn KHÔNG nhớ lựa chọn đó (useScopePref remember:false).',
+          demo: <PeopleDemo />,
         },
         {
           name: 'Nhãn theo đối tượng',

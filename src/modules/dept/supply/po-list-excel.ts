@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import { roundMoney } from '@/lib/po-line'
+import { poTemplateShort } from '@/lib/po-template'
 import {
   MONEY_FMT,
   applyWidths,
@@ -141,14 +142,30 @@ export async function buildPoListExcel(report: PoListReport): Promise<Buffer> {
 }
 
 /** Dòng chú thích mô tả bộ lọc — viết cho người mở file ba tháng sau. */
+/** Nhãn rổ trạng thái trên URL (`trang_thai=`) — file in chữ, không in mã. */
+const BUCKET_TEXT: Record<string, string> = {
+  open: 'còn mở (chưa về đủ)',
+  draft: 'nháp',
+  pending: 'chờ duyệt',
+  ready: 'đã duyệt · chưa gửi',
+  inflight: 'đang về',
+  received: 'về đủ',
+  cancelled: 'đã huỷ',
+}
+
 export function describeFilter(
   sp: Record<string, string | undefined>,
   n: number,
+  /** Họ tên người đang lọc (`nguoi=` là id — file phải in tên). */
+  ownerName?: string | null,
 ): string {
   const p: string[] = []
   if (sp.nhin) p.push(`khung nhìn "${sp.nhin}"`)
   if (sp.q) p.push(`từ khoá "${sp.q}"`)
-  if (sp.trang_thai) p.push(`trạng thái ${sp.trang_thai}`)
+  if (sp.trang_thai && sp.trang_thai !== 'all')
+    p.push(`trạng thái ${BUCKET_TEXT[sp.trang_thai] ?? sp.trang_thai}`)
+  if (sp.nguoi) p.push(`đơn của ${ownerName ?? 'một người phụ trách'}`)
+  if (sp.loai_don) p.push(`loại đơn ${poTemplateShort(sp.loai_don) ?? sp.loai_don}`)
   if (sp.ncc) p.push('lọc theo nhà cung cấp')
   if (sp.lsx) p.push('lọc theo lệnh sản xuất')
   if (sp.loai === 'lsx') p.push('chỉ đơn theo lệnh')

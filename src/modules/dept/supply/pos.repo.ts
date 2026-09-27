@@ -536,6 +536,40 @@ export const posRepo = {
     return out
   },
 
+  /**
+   * TÊN VẬT TƯ theo đơn, theo thứ tự dòng — cho cột "Loại · vật tư" của danh
+   * sách Đơn mua (27/09/2026): màn phải nói đơn mua CÁI GÌ mà không phải mở
+   * từng đơn. Dòng có mã lấy tên danh mục; dòng tự do (gỗ, dòng gõ tay) lấy
+   * `line_name`.
+   *
+   * Chia lô 150 đơn: danh sách id đi trên URL của PostgREST, 1.000 uuid là
+   * ~37 KB — quá trần độ dài URL của máy chủ.
+   */
+  async materialNamesByPoIds(ids: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await db()
+        .from('supply_purchase_order_lines')
+        .select('po_id, sort_order, line_name, mat:warehouse_materials(name)')
+        .in('po_id', ids.slice(i, i + 150))
+        .order('sort_order', { ascending: true })
+        .limit(10000)
+      if (error) throw error
+      type Row = {
+        po_id: string
+        line_name: string | null
+        mat: { name: string } | { name: string }[] | null
+      }
+      for (const r of (data ?? []) as Row[]) {
+        const m = Array.isArray(r.mat) ? r.mat[0] : r.mat
+        const name = m?.name ?? r.line_name
+        if (!name) continue
+        out.set(r.po_id, [...(out.get(r.po_id) ?? []), name])
+      }
+    }
+    return out
+  },
+
   async extraLsxByPoIds(
     ids: string[],
   ): Promise<Map<string, { id: string; code: string }[]>> {

@@ -1,7 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
-import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { enrichPoList } from '@/modules/dept/supply/po-list.enrich'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
@@ -40,17 +40,21 @@ export default async function Page({
   const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
 
   const PAGE_CAP = 1000
-  const [{ rows: pos }, { rows: suppliers }, lsxs] = await Promise.all([
+  const [{ rows: pos }, { rows: suppliers }, lsxs, users] = await Promise.all([
     posService.list(user, { page: 1, page_size: PAGE_CAP }),
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     productionRepo.listActive(),
+    usersRepo.list(),
   ])
-  const poIds = pos.map((p) => p.id)
-  const [totals, lineDone, extraLsx] = await Promise.all([
-    posRepo.totalsByPoIds(poIds),
-    supplyRepo.lineDoneByPoIds(poIds),
-    posRepo.extraLsxByPoIds(poIds),
-  ])
+  const rows = await enrichPoList(pos)
+  // Người CẦM đơn (phụ trách, chưa giao ai thì người lập) — cho hàng chip
+  // "Người phụ trách". Chỉ người đang cầm ít nhất một đơn trong sổ.
+  const ownerIds = new Set(
+    pos.map((p) => p.assigned_to ?? p.created_by).filter((x): x is string => !!x),
+  )
+  const people = users
+    .filter((u) => ownerIds.has(u.id))
+    .map((u) => ({ id: u.id, name: u.name ?? u.email }))
 
   /**
    * `?mo=<id>` (và `?view=<id>` cho tương thích với form soạn đơn cũ, vốn
@@ -90,13 +94,8 @@ export default async function Page({
   return (
     <DonScreen
       today={todayIso()}
-      pos={pos.map((p) => ({
-        ...p,
-        total: totals[p.id] ?? 0,
-        lines_done: lineDone.get(p.id)?.done ?? 0,
-        lines_total: lineDone.get(p.id)?.total ?? 0,
-        extra_lsx: extraLsx.get(p.id) ?? [],
-      }))}
+      pos={rows}
+      people={people}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
       lsxs={lsxs.map((l) => ({
         id: l.id,

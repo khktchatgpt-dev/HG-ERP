@@ -25,16 +25,25 @@ export function useScopePref(
   userId: string,
   fallback: SupplyScope,
   fromUrl: SupplyScope | null,
-): [SupplyScope, (s: SupplyScope) => void] {
+): [SupplyScope, (s: SupplyScope, opts?: { remember?: boolean }) => void] {
   const [stored, setStored] = useLocalPref(`hg.pham-vi.${screen}.${userId}`, fallback)
   // Địa chỉ trang thắng lựa chọn đã nhớ — nhưng chỉ cho LẦN MỞ này: người dùng
   // bấm đổi thì bỏ ghi đè, từ đó theo lựa chọn mới.
   const [override, setOverride] = useState<SupplyScope | null>(fromUrl)
   const value: SupplyScope =
     override ?? (stored === 'phong' || stored === 'toi' ? stored : fallback)
-  const set = (s: SupplyScope) => {
-    setStored(s)
-    setOverride(null)
+  /**
+   * `remember: false` — đổi cho LẦN MỞ NÀY, không nhớ. Màn Đơn mua dùng khi
+   * người mua bấm xem đơn của MỘT đồng nghiệp: đó là liếc qua, không phải đổi
+   * thói quen — lần sau vào lại vẫn phải thấy việc của mình trước.
+   */
+  const set = (s: SupplyScope, opts?: { remember?: boolean }) => {
+    if (opts?.remember === false) {
+      setOverride(s)
+    } else {
+      setStored(s)
+      setOverride(null)
+    }
     try {
       const url = new URL(window.location.href)
       url.searchParams.set('pham_vi', s)

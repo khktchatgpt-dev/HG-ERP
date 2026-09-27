@@ -2,8 +2,31 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Btn, Cell, Chip, Code, Empty, GroupRow, NoticeBar, Num, Pick, Row, ScopeSwitch, ScreenFrame, ScreenHeader, SearchInput, StatusBar, TFoot, THead, Table, Tag, Combobox } from '@/components/kit'
-import type { SupplyScope } from '@/lib/supply-scope'
+import {
+  Btn,
+  Cell,
+  Chip,
+  Code,
+  Empty,
+  GroupRow,
+  NoticeBar,
+  Num,
+  Pick,
+  Row,
+  ScopeSwitch,
+  ScreenFrame,
+  ScreenHeader,
+  SearchInput,
+  StatusBar,
+  TFoot,
+  THead,
+  Table,
+  Tag,
+  Combobox,
+} from '@/components/kit'
+import { isMyPo, poOwner, type SupplyScope } from '@/lib/supply-scope'
+import { givenNames, materialSummary, supplierShortName } from '@/lib/po-list-labels'
+import { poTemplateShort } from '@/lib/po-template'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { assessPoFit } from '@/lib/po-fit'
@@ -14,6 +37,7 @@ import {
   type PoStatus,
 } from '@/lib/po-status'
 import {
+  EMPTY_FILTER,
   PO_BUCKETS,
   countPos,
   isFilterActive,
@@ -69,6 +93,7 @@ function daysBetween(a: string, b: string): number {
    danh mà tắt thì bảng còn toàn số không biết của ai. */
 type ColKey =
   | 'ncc'
+  | 'vat_tu'
   | 'chuoi'
   | 'trang_thai'
   | 've_kho'
@@ -80,6 +105,7 @@ type ColKey =
 
 const COLS: { key: ColKey; label: string; num?: boolean }[] = [
   { key: 'ncc', label: 'Nhà cung cấp' },
+  { key: 'vat_tu', label: 'Loại · vật tư' },
   { key: 'chuoi', label: 'Lệnh SX' },
   { key: 'trang_thai', label: 'Trạng thái đơn' },
   { key: 've_kho', label: 'Về kho' },
@@ -101,7 +127,12 @@ const COLS: { key: ColKey; label: string; num?: boolean }[] = [
   Đổi được thì đừng đổi ngầm: người đã lưu bộ cột riêng vẫn giữ nguyên bộ của
   họ, `colsRaw` có giá trị thì `DEFAULT_COLS` không đụng tới.
 */
-const DEFAULT_COLS: ColKey[] = ['ncc', 'chuoi', 'trang_thai', 'hen', 'phu_trach', 'gia_tri'] // prettier-ignore
+/*
+  "LOẠI · VẬT TƯ" VÀO BỘ MẶC ĐỊNH (27/09/2026, artboard 4 "Đơn mua cá nhân
+  hoá"): màn từng không nói đơn mua CÁI GÌ — phải mở từng đơn. Khoá lưu bộ cột
+  đổi sang `.v2` để bộ cũ còn nằm trong trình duyệt không giấu mất cột mới.
+*/
+const DEFAULT_COLS: ColKey[] = ['ncc', 'vat_tu', 'chuoi', 'trang_thai', 'hen', 'phu_trach', 'gia_tri'] // prettier-ignore
 
 /**
  * Ô LỌC GÕ-TÌM cho danh mục dài (NCC, lệnh SX).
@@ -171,9 +202,12 @@ export function DonScreen({
   openId,
   defaultScope,
   urlScope,
+  people,
 }: {
   today: string
   pos: Po[]
+  /** Người đang cầm ít nhất một đơn — hàng chip "Người phụ trách". */
+  people: { id: string; name: string }[]
   suppliers: { id: string; name: string }[]
   lsxs: LsxRef[]
   meId: string
@@ -195,9 +229,13 @@ export function DonScreen({
     công tắc, số đếm và danh sách không nói ba ý.
   */
   const [scope, setScopePref] = useScopePref('don', meId, defaultScope, urlScope)
-  const eff = { ...view.filter, mine: scope === 'toi' }
+  const eff = {
+    ...view.filter,
+    mine: scope === 'toi',
+    ownerId: scope === 'toi' ? 'all' : view.filter.ownerId,
+  }
 
-  const [colsRaw] = useLocalPref('hg.mua-hang.don.cols', '')
+  const [colsRaw] = useLocalPref('hg.mua-hang.don.cols.v2', '')
   const cols = useMemo<ColKey[]>(() => {
     const keep = new Set(COLS.map((c) => c.key))
     const list = colsRaw ? colsRaw.split(',').filter((k): k is ColKey => keep.has(k as ColKey)) : DEFAULT_COLS // prettier-ignore
@@ -211,17 +249,148 @@ export function DonScreen({
    * tải lại server — bộ lọc chạy ở client trên tập đã nạp, y như màn cũ.
    * F5 hay dán link thì `page.tsx` giải mã lại từ URL.
    */
-  function setView(next: ViewState) {
+  function setView(next: ViewState, nextScope: SupplyScope = scope) {
     setViewState(next)
-    const qs = new URLSearchParams(encodeView({ ...next, filter: { ...next.filter, mine: false } }))
-    qs.set('pham_vi', scope)
+    const qs = new URLSearchParams(
+      encodeView({ ...next, filter: { ...next.filter, mine: false } }),
+    )
+    // "Mọi trạng thái" phải GHI RA: bỏ trống thì F5 đọc thành "không có gì lạ"
+    // và rơi về rổ mặc định "còn mở" — người dùng vừa chọn xem hết lại bị lọc.
+    if (next.filter.bucket === 'all') qs.set('trang_thai', 'all')
+    qs.set('pham_vi', nextScope)
     window.history.replaceState(null, '', `?${qs}`)
   }
   const patchFilter = (f: Partial<PoFilterState>) =>
     setView({ ...view, filter: { ...view.filter, ...f } })
 
   const ctx = { meId, today }
-  const counts = useMemo(() => countPos(pos, meId, today), [pos, meId, today])
+  const mineOf = (p: Po) =>
+    isMyPo({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }, meId)
+  /*
+    MỌI SỐ TRÊN MÀN ĐẾM TRONG PHẠM VI ĐANG CHỌN (27/09/2026). Trước đó công tắc
+    nói "Của tôi 45" mà ngay bên cạnh "Quá hẹn mà chưa gửi 15", "Chưa hẹn giao
+    14" và các số trong ô Rổ trạng thái vẫn đếm trên cả 87 đơn của phòng — bấm
+    vào ra số khác. Chip là lối đi; lối đi phải nói có bao nhiêu thứ ở đầu kia
+    TRONG phạm vi người dùng đang đứng.
+  */
+  const ownerOf = (p: Po) =>
+    poOwner({ assigned_to: p.assigned_to ?? null, created_by: p.created_by })
+  const ownerId = scope === 'toi' ? 'all' : view.filter.ownerId
+  /*
+    TẬP NỀN = đơn của NGƯỜI đang xem (của tôi / một người mua / cả phòng).
+    Số trên ô trạng thái, chip loại đơn, danh sách lệnh đều đếm trên tập này.
+  */
+  const scopePos = useMemo(
+    () =>
+      scope === 'toi'
+        ? pos.filter(mineOf)
+        : ownerId !== 'all'
+          ? pos.filter((p) => ownerOf(p) === ownerId)
+          : pos,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pos, scope, meId, ownerId],
+  )
+  const mineTotal = useMemo(() => pos.filter(mineOf).length, [pos, meId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /*
+    NGƯỜI PHỤ TRÁCH (27/09/2026, artboard 4): "Của tôi · Huy · Truyền · Cả
+    phòng" thay công tắc hai nấc — trưởng phòng hỏi "Huy đang cầm gì" mà trước
+    chỉ có của tôi / cả phòng. "Của tôi" vẫn là phạm vi nhớ theo tài khoản; chọn
+    một người khác là xem cả phòng lọc theo người đó (không nhớ — lần sau vào
+    lại thấy việc của mình). Người không cầm đơn nào thì không có chip.
+  */
+  const nick = useMemo(() => givenNames(people), [people])
+  const personCount = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of pos) {
+      const o = ownerOf(p)
+      if (o) m.set(o, (m.get(o) ?? 0) + 1)
+    }
+    return m
+  }, [pos])
+  const personOptions = [
+    ...(mineTotal > 0 || defaultScope === 'toi' || scope === 'toi'
+      ? [{ value: 'toi', label: 'Của tôi', count: mineTotal, hint: 'Đơn tôi phụ trách' }]
+      : []),
+    ...people
+      .filter((u) => u.id !== meId && (personCount.get(u.id) ?? 0) > 0)
+      .sort((a, b) => (personCount.get(b.id) ?? 0) - (personCount.get(a.id) ?? 0))
+      .map((u) => ({
+        value: u.id,
+        label: nick.get(u.id) ?? u.name,
+        count: personCount.get(u.id) ?? 0,
+        hint: `Đơn ${u.name} phụ trách`,
+      })),
+    { value: 'phong', label: 'Cả phòng', count: pos.length, hint: 'Mọi đơn trong sổ' },
+  ]
+  const personValue = scope === 'toi' ? 'toi' : ownerId !== 'all' ? ownerId : 'phong'
+  function pickPerson(v: string) {
+    if (v === 'toi') {
+      setScopePref('toi')
+      setView({ ...view, filter: { ...view.filter, ownerId: 'all' } }, 'toi')
+    } else {
+      // Xem MỘT đồng nghiệp: không nhớ (liếc qua). "Cả phòng" thì nhớ như cũ.
+      setScopePref('phong', { remember: v === 'phong' })
+      setView({ ...view, filter: { ...view.filter, ownerId: v === 'phong' ? 'all' : v } }, 'phong') // prettier-ignore
+    }
+  }
+  /** Đang xem đơn của MỘT người — cột Phụ trách toàn một tên, ẩn đi. */
+  const onePerson = scope === 'toi' || ownerId !== 'all'
+
+  /*
+    LỆNH SX: Ô CHỌN CÓ SẴN DANH SÁCH (27/09/2026) thay ô gõ-tìm — ô gõ trông như
+    ô nhập, không cho thấy lệnh nào đang có đơn và bao nhiêu. Chỉ lệnh có đơn
+    trong tập nền (kể cả lệnh GỘP), mới nhất trên, kèm số đơn.
+  */
+  /*
+    Chip LOẠI ĐƠN và danh sách LỆNH đếm TRONG RỔ TRẠNG THÁI đang chọn: đang
+    xem "Còn mở (18)" mà chip ghi "Phụ kiện 36" thì bấm vào ra 13 — số trên lối
+    đi phải bằng số ở đầu kia. (Rổ trạng thái thì vẫn đếm trên cả tập nền: nó
+    chính là trục đang chọn.)
+  */
+  const bucketPos = useMemo(
+    () =>
+      scopePos.filter((p) =>
+        poMatches(p, { ...EMPTY_FILTER, bucket: view.filter.bucket }, ctx),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scopePos, view.filter.bucket],
+  )
+  /** Số của chip "Chưa hẹn giao" + hai ô quá hẹn — cùng tập với chip loại đơn. */
+  const inBucket = useMemo(
+    () => countPos(bucketPos, meId, today),
+    [bucketPos, meId, today],
+  )
+  const lsxOptions = useMemo(() => {
+    const m = new Map<string, { code: string; n: number }>()
+    let ngoai = 0
+    for (const p of bucketPos) {
+      if (!p.production_order_id) ngoai++
+      const ids = [
+        ...(p.production_order_id
+          ? [{ id: p.production_order_id, code: p.lsx_code ?? '?' }]
+          : []),
+        ...(p.extra_lsx ?? []),
+      ]
+      for (const x of ids) {
+        const cur = m.get(x.id) ?? { code: x.code, n: 0 }
+        cur.n++
+        m.set(x.id, cur)
+      }
+    }
+    return { list: [...m.entries()].sort((a, b) => b[1].code.localeCompare(a[1].code, 'vi', { numeric: true })), ngoai } // prettier-ignore
+  }, [bucketPos])
+  const lsxValue =
+    view.filter.lsxId !== 'all' ? view.filter.lsxId : view.filter.type === 'standalone' ? '@ngoai' : 'all' // prettier-ignore
+
+  /* LOẠI ĐƠN — chỉ loại đang có trong tập nền, nhiều trước. */
+  const templateCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of bucketPos)
+      if (p.template) m.set(p.template, (m.get(p.template) ?? 0) + 1)
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [bucketPos])
+  const counts = useMemo(() => countPos(scopePos, meId, today), [scopePos, meId, today])
   const shown = useMemo(
     () =>
       sortPos(
@@ -273,7 +442,7 @@ export function DonScreen({
   const moreCount =
     (view.filter.fromDate ? 1 : 0) +
     (view.filter.toDate ? 1 : 0) +
-    (view.filter.type !== 'all' ? 1 : 0)
+    (view.filter.type === 'lsx' ? 1 : 0)
 
   /* Hai thẻ "quá hẹn" là hai nửa của cùng một công tắc — bật nửa này thì nửa
      kia tắt, bấm lại nửa đang bật thì tắt hẳn. */
@@ -359,8 +528,15 @@ export function DonScreen({
         ?.scrollIntoView({ block: 'center' })
   }, [openId])
 
-  const colCount = cols.length + 1
-  const has = (k: ColKey) => cols.includes(k)
+  // Đang xem đơn của MỘT người thì cột Phụ trách toàn một tên — ẩn đi.
+  // Gom theo lệnh thì cột Lệnh SX lặp đúng tên nhóm ở mọi dòng (147px) — ẩn;
+  // đơn gộp lệnh khi đó ghi "+N lệnh" cạnh mã đơn.
+  const shownCols = cols.filter(
+    (k) =>
+      !(onePerson && k === 'phu_trach') && !(view.groupBy === 'lsx' && k === 'chuoi'),
+  )
+  const colCount = shownCols.length + 1
+  const has = (k: ColKey) => shownCols.includes(k)
 
   /* ── vẽ ─────────────────────────────────────────────────────────────── */
   return (
@@ -384,9 +560,9 @@ export function DonScreen({
           đơn đi — gộp lại thì không biết phải làm gì.
         */
         facts={[
-          { label: 'Đang hiện', value: `${shown.length} / ${pos.length}` },
-          { label: 'NCC trễ hẹn', value: String(counts.late), tone: counts.late > 0 ? 'stop' : undefined, on: lateOn('sent'), onClick: () => toggleLate('sent') }, // prettier-ignore
-          { label: 'Quá hẹn mà chưa gửi', value: String(counts.lateUnsent), tone: counts.lateUnsent > 0 ? 'warn' : undefined, on: lateOn('unsent'), onClick: () => toggleLate('unsent') }, // prettier-ignore
+          { label: 'Đang hiện', value: `${shown.length} / ${scopePos.length}` },
+          { label: 'NCC trễ hẹn', value: String(inBucket.late), tone: inBucket.late > 0 ? 'stop' : undefined, on: lateOn('sent'), onClick: () => toggleLate('sent') }, // prettier-ignore
+          { label: 'Quá hẹn mà chưa gửi', value: String(inBucket.lateUnsent), tone: inBucket.lateUnsent > 0 ? 'warn' : undefined, on: lateOn('unsent'), onClick: () => toggleLate('unsent') }, // prettier-ignore
         ]}
         actions={
           <>
@@ -403,7 +579,9 @@ export function DonScreen({
             */}
             <Btn
               onClick={() => {
-                const qs = encodeView(view)
+                // `eff`, không phải `view`: phạm vi nằm ngoài khung nhìn, quên
+                // nó là file ra 87 đơn trong khi màn đang hiện 45.
+                const qs = encodeView({ ...view, filter: eff })
                 window.open(`/api/dept/supply/pos/export-list${qs ? `?${qs}` : ''}`, '_blank') // prettier-ignore
               }}
               icon="excel"
@@ -425,7 +603,7 @@ export function DonScreen({
         <SearchInput
           value={view.filter.q}
           onChange={(q) => patchFilter({ q })}
-          placeholder="Số PO, NCC, LSX, mã đơn hàng…"
+          placeholder="Số PO, NCC, vật tư, LSX, mã đơn hàng…"
           width={260}
         />
         <Pick
@@ -434,6 +612,7 @@ export function DonScreen({
           onChange={(b) => patchFilter({ bucket: b as PoBucket })}
           options={[
             { value: 'all', label: `Mọi trạng thái (${counts.all})` },
+            { value: 'open', label: `Còn mở — chưa về đủ (${counts.open})` },
             ...PO_BUCKETS.map((b) => ({
               value: b.key,
               label: `${b.label} (${counts[b.key]})`,
@@ -469,96 +648,41 @@ export function DonScreen({
           keyOf={(s) => s.id}
           onPick={(s) => patchFilter({ supplierId: s.id })}
         />
-        <LocLookup
+        <Pick
           label="Lệnh sản xuất"
-          placeholder="Gõ mã lệnh hoặc khách…"
-          selected={
-            view.filter.lsxId === 'all'
-              ? null
-              : (lsxs.find((l) => l.id === view.filter.lsxId)?.code ?? 'Lệnh không còn')
+          value={lsxValue}
+          onChange={(v) =>
+            patchFilter(
+              v === '@ngoai'
+                ? { lsxId: 'all', type: 'standalone' }
+                : {
+                    lsxId: v,
+                    type: view.filter.type === 'standalone' ? 'all' : view.filter.type,
+                  },
+            )
           }
-          onClear={() => patchFilter({ lsxId: 'all' })}
-          items={lsxs}
-          textOf={(l) => `${l.code} ${l.customer_name ?? ''}`}
-          keyOf={(l) => l.id}
-          onPick={(l) => patchFilter({ lsxId: l.id })}
-          render={(l) => (
-            <span className="flex items-baseline gap-2">
-              <span className="num">{l.code}</span>
-              <span className="text-[var(--ink-3)]">{l.customer_name ?? ''}</span>
-            </span>
-          )}
-        />
-      </div>
-
-      {/*
-        Hàng 2: hai công tắc + bỏ lọc + gom theo.
-
-        CHIP "QUÁ HẸN" ĐÃ BỎ (16/09/2026). Nó đếm `late + lateUnsent` gộp lại,
-        trong khi dải dữ kiện ngay trên tách làm hai con số — cùng một khái
-        niệm, hai chỗ, hai số. Nay hai thẻ ở trên bấm được và lọc đúng phía của
-        mình, nên chip này chỉ còn là đường thứ hai làm cùng một việc.
-      */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
-        <ScopeSwitch
-          label="Phạm vi"
-          value={scope}
-          onChange={setScopePref}
           options={[
-            { value: 'toi', label: 'Của tôi', count: counts.mine, hint: 'Đơn tôi phụ trách' },
-            { value: 'phong', label: 'Cả phòng', count: pos.length, hint: 'Mọi đơn trong sổ' },
+            { value: 'all', label: `Mọi lệnh (${bucketPos.length} đơn)` },
+            ...lsxOptions.list.map(([id, x]) => ({
+              value: id,
+              label: `${x.code} · ${x.n} đơn`,
+            })),
+            ...(lsxOptions.ngoai > 0
+              ? [{ value: '@ngoai', label: `Ngoài lệnh SX · ${lsxOptions.ngoai} đơn` }]
+              : []),
+            // Lệnh đến từ link mà không còn đơn nào trong tập nền: vẫn phải hiện
+            // đúng cái đang lọc, không thì ô chọn nói "Mọi lệnh" mà bảng trống.
+            ...(view.filter.lsxId !== 'all' &&
+            !lsxOptions.list.some(([id]) => id === view.filter.lsxId)
+              ? [
+                  {
+                    value: view.filter.lsxId,
+                    label: `${lsxs.find((l) => l.id === view.filter.lsxId)?.code ?? 'Lệnh đang lọc'} · 0 đơn`,
+                  },
+                ]
+              : []),
           ]}
         />
-        <Chip
-          on={view.filter.noEta}
-          count={counts.noEta}
-          icon="hen"
-          onClick={() => patchFilter({ noEta: !view.filter.noEta })}
-        >
-          Chưa hẹn giao
-        </Chip>
-        {/*
-          BỎ LỌC LUÔN CÓ MẶT, khoá lại khi không có gì để bỏ. Trước đây nó chỉ
-          hiện khi đang lọc, nên mỗi lần bật/tắt một chip là cả hàng bên phải
-          nhảy ngang một đoạn bằng bề rộng cái nút — và "Gom theo" chạy khỏi
-          chỗ người dùng vừa nhắm chuột vào.
-        */}
-        <Btn
-          icon="boLoc"
-          disabled={!isFilterActive(view.filter)}
-          title={isFilterActive(view.filter) ? undefined : 'Chưa có bộ lọc nào đang bật'}
-          onClick={() =>
-            setView({
-              ...view,
-              filter: {
-                ...view.filter,
-                q: '',
-                bucket: 'all',
-                supplierId: 'all',
-                lsxId: 'all',
-                fromDate: '',
-                toDate: '',
-                type: 'all',
-                mine: false,
-                late: false,
-                lateSide: 'any',
-                noEta: false,
-              },
-            })
-          }
-        >
-          Bỏ lọc
-        </Btn>
-        {/* Lọc đến từ link mà không có ô nào bày ra — xem ghi chú ở `moreCount`. */}
-        {moreCount > 0 && (
-          <Chip
-            on
-            count={moreCount}
-            onClick={() => patchFilter({ fromDate: '', toDate: '', type: 'all' })}
-          >
-            Lọc theo ngày lập / loại đơn
-          </Chip>
-        )}
         <span className="ml-auto flex items-center gap-2">
           {/*
             GOM THEO ở lại ngoài, SẮP XẾP thì không. Gom là câu hỏi nghiệp vụ —
@@ -572,6 +696,104 @@ export function DonScreen({
             onChange={(g) => setView({ ...view, groupBy: g as GroupBy })}
             options={(Object.keys(GROUP_LABEL) as GroupBy[]).map((k) => ({ value: k, label: `Gom: ${GROUP_LABEL[k]}` }))} // prettier-ignore
           />
+        </span>
+      </div>
+
+      {/* Hàng 2: người phụ trách — đơn của AI. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+        <ScopeSwitch
+          label="Người phụ trách"
+          value={personValue}
+          onChange={pickPerson}
+          options={personOptions}
+        />
+      </div>
+
+      {/*
+        Hàng 3: loại đơn + chưa hẹn giao + bỏ lọc.
+
+        CHIP "QUÁ HẸN" ĐÃ BỎ (16/09/2026). Nó đếm `late + lateUnsent` gộp lại,
+        trong khi dải dữ kiện ngay trên tách làm hai con số — cùng một khái
+        niệm, hai chỗ, hai số. Nay hai thẻ ở trên bấm được và lọc đúng phía của
+        mình, nên chip này chỉ còn là đường thứ hai làm cùng một việc.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+        <span className="text-k-label font-semibold tracking-[.04em] text-[var(--ink-3)] uppercase">
+          Loại đơn
+        </span>
+        {templateCounts.map(([t, n]) => (
+          <Chip
+            key={t}
+            on={view.filter.template === t}
+            count={n}
+            onClick={() =>
+              patchFilter({ template: view.filter.template === t ? 'all' : t })
+            }
+          >
+            {poTemplateShort(t) ?? t}
+          </Chip>
+        ))}
+        <span className="mx-1 h-4 border-l border-[var(--line)]" aria-hidden />
+        <Chip
+          on={view.filter.noEta}
+          count={inBucket.noEta}
+          icon="hen"
+          onClick={() => patchFilter({ noEta: !view.filter.noEta })}
+        >
+          Chưa hẹn giao
+        </Chip>
+        {/* Lọc đến từ link mà không có ô nào bày ra — xem ghi chú ở `moreCount`. */}
+        {moreCount > 0 && (
+          <Chip
+            on
+            count={moreCount}
+            onClick={() =>
+              patchFilter({
+                fromDate: '',
+                toDate: '',
+                type: view.filter.type === 'lsx' ? 'all' : view.filter.type,
+              })
+            }
+          >
+            Lọc theo ngày lập / loại đơn
+          </Chip>
+        )}
+        {/*
+          BỎ LỌC LUÔN CÓ MẶT, khoá lại khi không có gì để bỏ. Trước đây nó chỉ
+          hiện khi đang lọc, nên mỗi lần bật/tắt một chip là cả hàng bên phải
+          nhảy ngang một đoạn bằng bề rộng cái nút.
+        */}
+        <span className="ml-auto">
+          <Btn
+            icon="boLoc"
+            disabled={!isFilterActive(view.filter)}
+            title={
+              isFilterActive(view.filter) ? undefined : 'Chưa có bộ lọc nào đang bật'
+            }
+            onClick={() =>
+              setView({
+                ...view,
+                filter: {
+                  ...view.filter,
+                  q: '',
+                  bucket: 'all',
+                  supplierId: 'all',
+                  lsxId: 'all',
+                  fromDate: '',
+                  toDate: '',
+                  type: 'all',
+                  mine: false,
+                  late: false,
+                  lateSide: 'any',
+                  noEta: false,
+                  ownerId: 'all',
+                  template: 'all',
+                },
+              })
+            }
+          >
+            Bỏ lọc
+          </Btn>
         </span>
       </div>
 
@@ -602,7 +824,7 @@ export function DonScreen({
           <div className="min-w-0 flex-1 bg-[var(--surface-card)]">
             <Empty
               headline="Không có đơn nào khớp"
-              reason={`Bộ lọc đang bật không còn dòng nào trong ${pos.length} đơn của sổ.`}
+              reason={`Bộ lọc đang bật không còn dòng nào trong ${scopePos.length} đơn ${scope === 'toi' ? 'của tôi' : 'của phòng'}.`}
               next={
                 <>
                   <Btn
@@ -691,14 +913,58 @@ export function DonScreen({
                             >
                               {p.code}
                             </Code>
-                            {borrowed && <Tag tone="neutral">mua chung</Tag>}
-                            {!borrowed && (p.extra_lsx?.length ?? 0) > 0 && (
-                              <Tag tone="neutral">
-                                gộp {(p.extra_lsx?.length ?? 0) + 1} lệnh
-                              </Tag>
+                            {/*
+                              ĐƠN GỘP LỆNH: cột Lệnh SX ghi "09/26-27 - MX +1". Cột đó
+                              ẩn (đang gom theo lệnh) thì nói ở đây, NGẮN — nhãn dài
+                              "gộp với 09/26-27 - MX" từng nở cột Đơn lên 267px.
+                            */}
+                            {!has('chuoi') && (p.extra_lsx?.length ?? 0) > 0 && (
+                              <span
+                                className="text-k-label ml-1 text-[var(--ink-3)]"
+                                title={`Một đơn mua cho ${[p.lsx_code, ...(p.extra_lsx ?? []).map((x) => x.code)].filter(Boolean).join(' + ')}`}
+                              >
+                                +{p.extra_lsx?.length} lệnh
+                              </span>
+                            )}
+                            {borrowed && (p.extra_lsx?.length ?? 0) === 0 && (
+                              <Tag tone="neutral">mua chung</Tag>
                             )}
                           </Cell>
-                          {has('ncc') && <Cell grow>{p.supplier_name}</Cell>}
+                          {/*
+                            TÊN NCC ĐỂ ĐỌC: bỏ phần loại hình công ty — cột từng
+                            cắt mất đúng phần phân biệt (26/46 tên > 30 ký tự).
+                            Tên đầy đủ khi rê chuột; ô tìm vẫn tìm theo tên đủ.
+                          */}
+                          {has('ncc') && (
+                            <Cell title={p.supplier_name} className="max-w-44">
+                              <span className="font-semibold">
+                                {supplierShortName(p.supplier_name)}
+                              </span>
+                            </Cell>
+                          )}
+                          {has('vat_tu') &&
+                            (() => {
+                              const m = materialSummary(p.material_names ?? [])
+                              const loai = poTemplateShort(p.template)
+                              return (
+                                <Cell
+                                  grow
+                                  title={[loai, ...(p.material_names ?? [])]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                >
+                                  {loai && <span className="font-semibold">{loai}</span>}
+                                  {loai && m.head && ' · '}
+                                  {m.head}
+                                  {m.more > 0 && (
+                                    <span className="text-k-label ml-1 text-[var(--ink-3)]">
+                                      +{m.more} mã
+                                    </span>
+                                  )}
+                                  {!loai && !m.head && <Num value="" />}
+                                </Cell>
+                              )
+                            })()}
                           {/*
                             LỆNH SX — mã lệnh, BẤM ĐƯỢC để lọc cả màn về đúng
                             lệnh đó.
@@ -727,13 +993,35 @@ export function DonScreen({
                                 >
                                   {p.lsx_code}
                                 </Code>
-                              ) : (
+                              ) : null}
+                              {p.lsx_code && (p.extra_lsx?.length ?? 0) > 0 && (
+                                <span
+                                  className="text-k-label ml-1 text-[var(--ink-3)]"
+                                  title={`Gộp thêm: ${(p.extra_lsx ?? []).map((x) => x.code).join(', ')}`}
+                                >
+                                  +{p.extra_lsx?.length}
+                                </span>
+                              )}
+                              {p.lsx_code ? null : (
                                 <span className="text-[var(--ink-3)]">Ngoài LSX</span>
                               )}
                             </Cell>
                           )}
+                          {/*
+                            Bề rộng CHẶN ở 160px: câu gợi ý của đơn nháp ("kiểm tra
+                            rồi gửi GĐ duyệt") từng nở cột lên 223px và đẩy bảng
+                            quá khung. Bị cắt thì rê chuột đọc đủ.
+                          */}
                           {has('trang_thai') && (
-                            <Cell>
+                            <Cell
+                              className="max-w-40"
+                              title={[
+                                PO_STATUS_LABEL[p.status as PoStatus],
+                                PO_NEXT_HINT[p.status as PoStatus],
+                              ]
+                                .filter(Boolean)
+                                .join(' → ')}
+                            >
                               <Tag tone={TONE[PO_STATUS_TONE[p.status as PoStatus]]}>
                                 {PO_STATUS_LABEL[p.status as PoStatus]}
                               </Tag>
@@ -765,7 +1053,10 @@ export function DonScreen({
                             >
                               {p.expected_at ? (
                                 <>
-                                  {dmy(p.expected_at)}
+                                  {/* Năm nay thì bỏ năm — cột hẹp lại ~35px để bảng vừa 1280. */}
+                                  {p.expected_at.slice(0, 4) === today.slice(0, 4)
+                                    ? dmy(p.expected_at).slice(0, 5)
+                                    : dmy(p.expected_at)}
                                   {late === 'overdue' && (
                                     <span className="text-k-label ml-1">
                                       quá {daysBetween(p.expected_at, today)} ng
@@ -798,9 +1089,21 @@ export function DonScreen({
                             </Cell>
                           )}
                           {has('phu_trach') && (
-                            <Cell muted>
-                              {p.assigned_to === meId ? '★ ' : ''}
-                              {p.assignee_name ?? 'chưa giao ai'}
+                            /* Tên GỌI (Nga, Huy) — cùng chữ trên hàng chip Người phụ
+                               trách; họ tên đầy đủ khi rê chuột. Chưa giao ai thì
+                               người lập đang cầm (lib/supply-scope). */
+                            <Cell
+                              muted
+                              title={
+                                people.find((u) => u.id === ownerOf(p))?.name ??
+                                p.assignee_name ??
+                                'chưa giao ai'
+                              }
+                            >
+                              {mineOf(p) ? '★ ' : ''}
+                              {(ownerOf(p) && nick.get(ownerOf(p)!)) ??
+                                p.assignee_name ??
+                                'chưa giao ai'}
                             </Cell>
                           )}
                           {has('gia_tri') && (
@@ -808,7 +1111,8 @@ export function DonScreen({
                               <Num
                                 value={
                                   p.total
-                                    ? `${p.total.toLocaleString('vi-VN')} ${p.currency}`
+                                    ? // VND ngầm hiểu (chân bảng ghi ₫); ngoại tệ thì ghi rõ.
+                                      `${p.total.toLocaleString('vi-VN')}${p.currency === 'VND' ? '' : ` ${p.currency}`}`
                                     : ''
                                 }
                                 strong
@@ -838,7 +1142,7 @@ export function DonScreen({
                 màn kia của khu. Chân bảng nói luôn phần KHÔNG gồm: đơn đã huỷ.
               */}
               <TFoot
-                label={<td colSpan={Math.max(1, cols.length - 2)}>Cộng {shown.length} đơn đang hiện</td>} // prettier-ignore
+                label={<td colSpan={Math.max(1, shownCols.length - 2)}>Cộng {shown.length} đơn đang hiện</td>} // prettier-ignore
                 cells={<td className="num">{tongHien.tien.join(' · ') || ''}</td>}
                 caveat={
                   tongHien.huy > 0
@@ -853,11 +1157,17 @@ export function DonScreen({
 
       <StatusBar
         left={[
-          isFilterActive(view.filter) ? 'Đang lọc' : 'Cả sổ',
+          scope === 'toi' ? 'Phạm vi: của tôi' : 'Phạm vi: cả phòng',
+          isFilterActive(view.filter)
+            ? view.filter.bucket === 'open' &&
+              !isFilterActive({ ...view.filter, bucket: 'all' })
+              ? `Còn mở · ẩn ${counts.received + counts.cancelled} đơn đã đóng sổ`
+              : 'Đang lọc'
+            : 'Mọi trạng thái',
           'Gom: ' + GROUP_LABEL[view.groupBy],
           'Sắp: ' + SORT_LABEL[view.sortBy],
         ]}
-        right={`${shown.length} / ${pos.length} đơn`}
+        right={`${shown.length} / ${scopePos.length} đơn`}
       />
     </ScreenFrame>
   )

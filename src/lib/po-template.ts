@@ -549,3 +549,27 @@ export function suggestOrderQty(
   if (short <= 0) return 0
   return Math.ceil(short)
 }
+
+/**
+ * NHÃN NGẮN của loại đơn — cho chip lọc và cột "Loại · vật tư" của danh sách
+ * Đơn mua (27/09/2026). `label` ở `PO_TEMPLATE_META` là nhãn của FORM soạn đơn
+ * ("Inox / sắt / tấm theo kg"), quá dài cho một chip.
+ */
+export const PO_TEMPLATE_SHORT: Record<PoTemplate, string> = {
+  accessory: 'Phụ kiện',
+  aluminium: 'Nhôm',
+  metal_kg: 'Sắt / inox',
+  carton: 'Carton',
+  rattan: 'Dây mây',
+  paint: 'Sơn',
+  chemical: 'Hoá chất',
+  foam: 'Mút xốp',
+  glass: 'Kính',
+  wood: 'Gỗ',
+  mro: 'Phụ tùng',
+  simple: 'Đơn giản',
+}
+
+export function poTemplateShort(t: string | null | undefined): string | null {
+  return t && isPoTemplate(t) ? PO_TEMPLATE_SHORT[t] : null
+}
