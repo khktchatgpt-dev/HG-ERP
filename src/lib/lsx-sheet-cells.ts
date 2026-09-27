@@ -1,5 +1,5 @@
-import type { LsxSheetColumn } from '@/modules/dept/sales/lsx-template'
-import type { LsxGroup, LsxLine } from './lsx-lines.repo'
+import type { LsxSheetColumn } from '@/lib/lsx-template'
+import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
 
 /**
  * GIÁ TRỊ + TÍN HIỆU MÀU của từng ô phiếu LỆNH SẢN XUẤT — logic thuần, dùng

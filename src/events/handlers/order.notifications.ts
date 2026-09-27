@@ -4,7 +4,7 @@ import { notificationsService } from '@/modules/core/notifications/notifications
 /**
  * Notify vòng đời đơn hàng sau khi phát LSX (plan-order-lsx-lifecycle P2/P3):
  *  - order.changed_after_lsx → Cung ứng + GĐ/QL (vật tư có thể đã đặt theo số cũ).
- *  - order.cancelled → Cung ứng + GĐ/QL (LSX/PO dừng theo; PO đã gửi NCC xử lý tay).
+ *  - order.cancelled → Cung ứng + GĐ/QL (LSX/PO dừng theo; PO đã gửi NCC, gộp lệnh, nháp → xử lý tay).
  */
 export function registerOrderNotificationHandlers(): void {
   on('order.changed_after_lsx', async (e) => {
@@ -35,7 +35,7 @@ export function registerOrderNotificationHandlers(): void {
       e.lsx_cancelled && e.lsx_code ? `LSX ${e.lsx_code} dừng` : null,
       e.pos_cancelled.length ? `tự huỷ PO: ${e.pos_cancelled.join(', ')}` : null,
       e.pos_manual.length
-        ? `PO đã gửi NCC cần xử lý tay: ${e.pos_manual.join(', ')}`
+        ? `PO cần Cung ứng xử lý tay: ${e.pos_manual.join('; ')}`
         : null,
     ].filter(Boolean)
     await Promise.all(

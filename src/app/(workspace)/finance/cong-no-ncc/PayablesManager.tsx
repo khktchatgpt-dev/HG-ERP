@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast'
 import type {
   CurrencyTotal,
   PayablePoRow,
+  PayableFeeRow,
   PayableSupplierRow,
 } from '@/modules/dept/accounting/payables.service'
 import type { SupplierPayment } from '@/modules/dept/accounting/payables.repo'
@@ -70,6 +71,7 @@ export function PayablesManager({
   const [selected, setSelected] = useState<PayableSupplierRow | null>(null)
   const [detail, setDetail] = useState<{
     pos: PayablePoRow[]
+    fees?: PayableFeeRow[]
     payments: SupplierPayment[]
   } | null>(null)
   const [payOpen, setPayOpen] = useState(false)
@@ -94,9 +96,11 @@ export function PayablesManager({
     setSelected(row)
     setDetail(null)
     try {
-      const d = await api<{ pos: PayablePoRow[]; payments: SupplierPayment[] }>(
-        `/api/dept/accounting/payables/${row.supplier_id}`,
-      )
+      const d = await api<{
+        pos: PayablePoRow[]
+        payments: SupplierPayment[]
+        fees: PayableFeeRow[]
+      }>(`/api/dept/accounting/payables/${row.supplier_id}`)
       setDetail(d)
     } catch (e) {
       toast.error('Không tải được chi tiết', e instanceof ApiError ? e.message : 'Lỗi')
@@ -377,7 +381,9 @@ export function PayablesManager({
                 </h3>
                 {detail.pos.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
-                    Chưa có phiếu nhập có giá.
+                    {(detail.fees?.length ?? 0) > 0
+                      ? 'Không có phiếu nhập — nợ của bên này là phí mua hàng bên dưới.'
+                      : 'Chưa có phiếu nhập có giá.'}
                   </p>
                 ) : (
                   <ul className="flex flex-col gap-2 text-sm">
@@ -410,6 +416,34 @@ export function PayablesManager({
                   </ul>
                 )}
               </div>
+              {(detail.fees?.length ?? 0) > 0 && (
+                <div className="lg:col-span-2">
+                  <h3 className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
+                    Phí mua hàng · {detail.fees!.length} phiếu
+                  </h3>
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {detail.fees!.map((f) => (
+                      <li key={f.id} className="rounded-md border px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="t-data text-xs font-semibold">{f.label}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {fmtD(f.cost_date)}
+                          </span>
+                          <span className="t-data ml-auto tabular-nums">
+                            {fmtM(f.amount)} {f.currency}
+                          </span>
+                        </div>
+                        <div className="text-muted-foreground mt-1 text-xs">
+                          Đơn: {f.po_codes.join(' · ')} ·{' '}
+                          {f.role === 'carrier'
+                            ? 'trả nhà xe — tổng gồm VAT, đã vào sổ 331'
+                            : 'NCC tính trên hoá đơn — chưa VAT, vào sổ 331 khi hoá đơn NCC vào sổ'}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div>
                 <h3 className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
                   Lịch sử thanh toán

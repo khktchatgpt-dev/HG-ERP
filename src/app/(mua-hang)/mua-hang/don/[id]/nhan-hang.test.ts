@@ -73,10 +73,10 @@ describe('shipmentBadge', () => {
 })
 
 describe('receiveActions', () => {
-  it('đơn đã gửi NCC: xác nhận được, chưa thêm đợt được', () => {
+  it('đơn đã gửi NCC: xác nhận được, VÀ thêm đợt được luôn (lịch chốt qua điện thoại — 27/09)', () => {
     const a = receiveActions({ status: 'ordered', canEdit: true, hasStockLines: true, openStockLines: 3 }) // prettier-ignore
     expect(a.confirm.ok).toBe(true)
-    expect(a.addShipment.ok).toBe(false)
+    expect(a.addShipment.ok).toBe(true)
     expect(a.receive.ok).toBe(true)
     expect(a.closeShort.ok).toBe(true)
     expect(a.acceptByHand.ok).toBe(false)
@@ -93,6 +93,10 @@ describe('receiveActions', () => {
     const a = receiveActions({ status: 'in_transit', canEdit: true, hasStockLines: false, openStockLines: 0 }) // prettier-ignore
     expect(a.acceptByHand.ok).toBe(true)
     expect(a.addShipment.why).toMatch(/không có dòng vật tư kho/)
+  })
+  it('chờ duyệt thì chưa thêm đợt (sửa trong nháp), đã duyệt thì được', () => {
+    expect(receiveActions({ status: 'pending_approval', canEdit: true, hasStockLines: true, openStockLines: 1 }).addShipment.ok).toBe(false) // prettier-ignore
+    expect(receiveActions({ status: 'approved', canEdit: true, hasStockLines: true, openStockLines: 1 }).addShipment.ok).toBe(true) // prettier-ignore
   })
   it('gợi ý trống đổi theo bước', () => {
     expect(shipmentEmptyHint('ordered', true)).toMatch(/NCC xác nhận/)
@@ -116,9 +120,13 @@ describe('lineShortAction — việc chốt thiếu của TỪNG dòng', () => {
   })
 
   it('dòng về đủ thì không bày nút nào — nút chết còn tệ hơn không có nút', () => {
-    expect(lineShortAction({ qty_open: 0, closed_short_at: null }, sent).kind).toBe('none')
+    expect(lineShortAction({ qty_open: 0, closed_short_at: null }, sent).kind).toBe(
+      'none',
+    )
     // Dòng dư (qty_open âm) cũng vậy.
-    expect(lineShortAction({ qty_open: -2, closed_short_at: null }, sent).kind).toBe('none')
+    expect(lineShortAction({ qty_open: -2, closed_short_at: null }, sent).kind).toBe(
+      'none',
+    )
   })
 
   it('đơn chưa gửi NCC: nút CÓ mặt nhưng khoá kèm lý do', () => {

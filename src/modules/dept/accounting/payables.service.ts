@@ -1,4 +1,6 @@
 import { payablesRepo, type ReceiptValueRow, type SupplierPayment } from './payables.repo'
+import { poCostsRepo, type AccountingCost } from '@/modules/dept/supply/po-costs.repo'
+import { PO_COST_KIND_LABEL } from '@/lib/po-cost'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
@@ -48,6 +50,12 @@ export function summarizePayables(
   receipts: ReceiptValueRow[],
   payments: Pick<SupplierPayment, 'supplier_id' | 'amount' | 'currency'>[],
   missingPrice: { supplier_id: string; supplier_name: string; count: number }[] = [],
+  /**
+   * PHÍ MUA HÀNG (0211) — phiếu phí còn hiệu lực, gộp theo NGƯỜI NHẬN TIỀN.
+   * Không có dòng này thì nhà xe (không bao giờ có phiếu nhập) không hiện ở màn
+   * công nợ, tức là không có chỗ ghi tiền trả cho họ.
+   */
+  fees: { supplier_id: string; supplier_name: string; currency: string; amount: number }[] = [],
 ): PayableSupplierRow[] {
   type Acc = PayableSupplierRow & { byCurrency: Map<string, CurrencyTotal> }
   const bySupplier = new Map<string, Acc>()
@@ -83,6 +91,10 @@ export function summarizePayables(
     bucket(acc, m.currency).incurred += sign * m.qty * m.unit_cost
     const at = m.doc_date ?? m.created_at.slice(0, 10)
     if (!acc.last_receipt_at || at > acc.last_receipt_at) acc.last_receipt_at = at
+  }
+  for (const f of fees) {
+    const acc = ensure(f.supplier_id, f.supplier_name, null)
+    bucket(acc, f.currency).incurred += f.amount
   }
   for (const p of payments) {
     const acc = bySupplier.get(p.supplier_id)
@@ -129,6 +141,34 @@ export function summarizePayables(
  */
 export type PayableBasis = 'receipt' | 'confirmed_po'
 
+/**
+ * Phí mua hàng tính vào nợ của NGƯỜI NHẬN TIỀN trên màn này.
+ *
+ * - Nhà xe: TỔNG GỒM VAT — phiếu phí chính là chứng từ đòi tiền của họ (cùng số
+ *   với sổ 331), trả đủ thì dòng nhà xe về 0.
+ * - NCC tính phí trên hoá đơn: phần CHƯA VAT, cùng cơ sở với tiền hàng theo
+ *   phiếu nhập của màn này.
+ */
+export function feeIncurred(costs: AccountingCost[]) {
+  return costs.map((c) => ({
+    supplier_id: c.payee_supplier_id,
+    supplier_name: c.payee_name,
+    currency: c.currency,
+    amount: c.role === 'carrier' ? c.total : c.amount,
+  }))
+}
+
+/** Phiếu phí của một người nhận tiền — cho khung chi tiết màn công nợ. */
+export type PayableFeeRow = {
+  id: string
+  cost_date: string
+  label: string
+  role: 'carrier' | 'po_supplier'
+  currency: string
+  amount: number
+  po_codes: string[]
+}
+
 export const payablesService = {
   /** Sổ công nợ per NCC. */
   async list(
@@ -141,7 +181,7 @@ export const payablesService = {
   }> {
     await assertAction(user, 'accounting.payable.view')
     const basis: PayableBasis = opts.basis ?? 'receipt'
-    const [receipts, payments, missing] = await Promise.all([
+    const [receipts, payments, missing, costs] = await Promise.all([
       basis === 'confirmed_po'
         ? payablesRepo.confirmedPoValues()
         : payablesRepo.receiptValues(),
@@ -150,8 +190,9 @@ export const payablesService = {
       basis === 'confirmed_po'
         ? Promise.resolve([])
         : payablesRepo.receiptsMissingPrice(),
+      poCostsRepo.forAccounting(),
     ])
-    const rows = summarizePayables(receipts, payments, missing)
+    const rows = summarizePayables(receipts, payments, missing, feeIncurred(costs))
     const grand = new Map<string, CurrencyTotal>()
     for (const r of rows) {
       for (const t of r.totals) {
@@ -174,12 +215,25 @@ export const payablesService = {
   async supplierDetail(
     user: User,
     supplierId: string,
-  ): Promise<{ pos: PayablePoRow[]; payments: SupplierPayment[] }> {
+  ): Promise<{ pos: PayablePoRow[]; payments: SupplierPayment[]; fees: PayableFeeRow[] }> {
     await assertAction(user, 'accounting.payable.view')
-    const [receipts, payments] = await Promise.all([
+    const [receipts, payments, costs] = await Promise.all([
       payablesRepo.receiptValues(),
       payablesRepo.listPayments(supplierId),
+      poCostsRepo.forAccounting(),
     ])
+    const fees: PayableFeeRow[] = costs
+      .filter((c) => c.payee_supplier_id === supplierId)
+      .sort((a, b) => b.cost_date.localeCompare(a.cost_date))
+      .map((c) => ({
+        id: c.id,
+        cost_date: c.cost_date,
+        label: `${PO_COST_KIND_LABEL[c.kind]}${c.doc_no ? ` ${c.doc_no}` : ''}`,
+        role: c.role,
+        currency: c.currency,
+        amount: c.role === 'carrier' ? c.total : c.amount,
+        po_codes: c.allocations.map((a) => a.po_code),
+      }))
     const mine = receipts.filter((m) => m.supplier_id === supplierId)
     const byPo = new Map<string, PayablePoRow>()
     for (const m of mine) {
@@ -215,6 +269,7 @@ export const payablesService = {
     return {
       pos: [...byPo.values()].sort((a, b) => b.incurred - a.incurred),
       payments,
+      fees,
     }
   },
 

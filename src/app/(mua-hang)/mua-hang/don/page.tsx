@@ -1,12 +1,14 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
-import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { enrichPoList } from '@/modules/dept/supply/po-list.enrich'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { DonScreen } from './DonScreen'
 import { ALL_VIEW, DEFAULT_VIEW, PARAM_KEYS, decodeView } from './views'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { defaultScope, parseScope } from '@/lib/supply-scope'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Mua hàng · Đơn mua' }
@@ -35,19 +37,24 @@ export default async function Page({
   const user = await authService.requirePageUser()
   const supplyStaff = await isSupplyStaff(user)
   const canEdit = user.role === 'admin' || supplyStaff
+  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
 
   const PAGE_CAP = 1000
-  const [{ rows: pos }, { rows: suppliers }, lsxs] = await Promise.all([
+  const [{ rows: pos }, { rows: suppliers }, lsxs, users] = await Promise.all([
     posService.list(user, { page: 1, page_size: PAGE_CAP }),
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     productionRepo.listActive(),
+    usersRepo.list(),
   ])
-  const poIds = pos.map((p) => p.id)
-  const [totals, lineDone, extraLsx] = await Promise.all([
-    posRepo.totalsByPoIds(poIds),
-    supplyRepo.lineDoneByPoIds(poIds),
-    posRepo.extraLsxByPoIds(poIds),
-  ])
+  const rows = await enrichPoList(pos)
+  // Người CẦM đơn (phụ trách, chưa giao ai thì người lập) — cho hàng chip
+  // "Người phụ trách". Chỉ người đang cầm ít nhất một đơn trong sổ.
+  const ownerIds = new Set(
+    pos.map((p) => p.assigned_to ?? p.created_by).filter((x): x is string => !!x),
+  )
+  const people = users
+    .filter((u) => ownerIds.has(u.id))
+    .map((u) => ({ id: u.id, name: u.name ?? u.email }))
 
   /**
    * `?mo=<id>` (và `?view=<id>` cho tương thích với form soạn đơn cũ, vốn
@@ -74,17 +81,21 @@ export default async function Page({
   */
   const hasCustom = Object.keys(sp).some((k) => PARAM_KEYS.has(k))
   const initial = hasCustom ? decodeView(sp) : openId ? ALL_VIEW : DEFAULT_VIEW
+  /*
+    PHẠM VI TỪ ĐỊA CHỈ (27/09/2026). Link ghi rõ ?pham_vi= thì theo; ?toi=1 cũ
+    = của tôi. Link mở THẲNG một đơn (?mo=) hoặc mang bộ lọc từ màn khác (NCC,
+    lệnh…) thì mở CẢ PHÒNG: người gửi link muốn người nhận thấy đủ — lọc 'của
+    tôi' lên trên là giấu đúng đơn họ được chỉ tới.
+  */
+  const urlScope =
+    parseScope(sp.pham_vi) ??
+    (sp.toi === '1' ? 'toi' : openId || hasCustom ? 'phong' : null)
 
   return (
     <DonScreen
       today={todayIso()}
-      pos={pos.map((p) => ({
-        ...p,
-        total: totals[p.id] ?? 0,
-        lines_done: lineDone.get(p.id)?.done ?? 0,
-        lines_total: lineDone.get(p.id)?.total ?? 0,
-        extra_lsx: extraLsx.get(p.id) ?? [],
-      }))}
+      pos={rows}
+      people={people}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
       lsxs={lsxs.map((l) => ({
         id: l.id,
@@ -98,6 +109,8 @@ export default async function Page({
       truncatedAt={pos.length >= PAGE_CAP ? PAGE_CAP : null}
       initial={initial}
       openId={openId}
+      defaultScope={defaultScope({ canApprove })}
+      urlScope={urlScope}
     />
   )
 }

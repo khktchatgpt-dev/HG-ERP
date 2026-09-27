@@ -3,6 +3,8 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { poAdjustmentsRepo } from '@/modules/dept/supply/po-adjustments.repo'
+import { poRevisionLabel } from '@/lib/po-lsx-refs'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { PoPrintSheet } from '../PoPrintSheet'
@@ -28,13 +30,14 @@ export default async function PoPrintPage({
 
   const po = await posRepo.findById(id)
   if (!po) redirect('/planning/pos')
-  const [lines, supplier, company, extraLsx, tpl, rawShipments] = await Promise.all([
+  const [lines, supplier, company, refs, tpl, rawShipments, adjs] = await Promise.all([
     posRepo.listLines(id),
     suppliersRepo.findById(po.supplier_id),
     settingsService.getAll(),
-    posRepo.listExtraLsx(id),
+    posRepo.printRefs(po),
     docTemplatesService.get('PO'),
     poShipmentsRepo.listByPo(id),
+    poAdjustmentsRepo.listByPo(id),
   ])
 
   /*
@@ -77,9 +80,8 @@ export default async function PoPrintPage({
   const creator = po.created_by ? await usersRepo.findById(po.created_by) : null
   const creatorName = creator ? (creator.name ?? creator.email) : po.assignee_name
 
-  // Đơn gộp nhiều LSX (0125): phiếu ghi "LSX 04.26.27 + 02.26.27" như sổ thật.
-  const lsxCode =
-    [po.lsx_code, ...extraLsx.map((e) => e.code)].filter(Boolean).join(' + ') || null
+  // Đơn gộp nhiều LSX (0125): phiếu ghi "LSX 04.26.27 + 02.26.27" như sổ thật,
+  // và "Đơn hàng" gồm đơn khách của MỌI lệnh gộp (lib/po-lsx-refs).
 
   return (
     <PoPrintSheet
@@ -89,7 +91,9 @@ export default async function PoPrintPage({
       po={{
         ...po,
         template: po.template ?? 'simple',
-        lsx_code: lsxCode,
+        lsx_code: refs.lsx_code,
+        order_code: refs.order_code,
+        revision_label: poRevisionLabel(adjs),
         creator_name: creatorName,
       }}
       supplier={supplier}

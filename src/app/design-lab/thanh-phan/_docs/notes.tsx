@@ -161,9 +161,9 @@ export default function DocNotes() {
           behaves: 'Mặc định mỗi lần dựng. Enter xuống dòng, Ctrl/⌘+Enter gửi.',
         },
         {
-          state: 'Ô viết — gửi ra ngoài',
+          state: 'Ô viết — ghi lại điều đã báo ra ngoài',
           looks:
-            'Cả ô viền + nền màu cảnh báo; nút người đọc nền cảnh báo; chỗ gợi ý đổi; dòng dưới “⚠ Nội dung này gửi ra ngoài công ty”.',
+            'Cả ô viền + nền màu cảnh báo; nút người đọc nền cảnh báo; chỗ gợi ý đổi; dòng dưới “⚠ Chỉ GHI LẠI — hệ thống không gửi gì ra ngoài” (hệ thống chưa có kênh gửi; câu cũ nói sai).',
           behaves:
             'Như trên. Kit chỉ truyền audience = partner — gửi thật hay không là việc của màn gọi.',
         },
@@ -181,7 +181,7 @@ export default function DocNotes() {
         {
           state: 'Dòng — ghi chú',
           looks:
-            'Khung viền tóc, tên đậm, thời gian; ghi chú gửi ra ngoài thì khung màu cảnh báo + nhãn “đã gửi ra ngoài”. Xuống dòng trong nội dung được giữ.',
+            'Khung viền tóc, tên đậm, thời gian; ghi chú đã báo ra ngoài thì khung màu cảnh báo + nhãn “đã báo ra ngoài”. Xuống dòng trong nội dung được giữ.',
           behaves:
             'Có nút “gỡ” khi mine và có onDelete — bấm là gọi ngay, không hỏi lại.',
         },
@@ -212,7 +212,7 @@ export default function DocNotes() {
         ],
         reader: (
           <>
-            Dòng trao đổi đọc thành danh sách; mỗi ghi chú: tên, “đã gửi ra ngoài” nếu có,
+            Dòng trao đổi đọc thành danh sách; mỗi ghi chú: tên, “đã báo ra ngoài” nếu có,
             thời gian, nội dung. Hai nút chọn người đọc mang <code>aria-pressed</code> —
             nghe “Ghi chú nội bộ, nút bật/tắt, đã nhấn”, không chỉ thấy bằng màu (vá
             24/09/2026, B7½). <b>Bốn chỗ chưa tốt, ghi thật:</b> ô viết không có nhãn, chỉ
@@ -229,7 +229,7 @@ export default function DocNotes() {
           source: 'kit/Notes.tsx — chú thích đầu file, quyết định 1',
         },
         {
-          do: 'Chọn người đọc trước khi gõ; ô đổi màu khi đang ở chế độ gửi ra ngoài.',
+          do: 'Chọn người đọc trước khi gõ; ô đổi màu khi đang ở chế độ ghi lại điều đã báo ra ngoài.',
           dont: 'Một ô chung cho nội bộ và đối tác — sớm muộn có lời nói nội bộ gửi thẳng cho NCC.',
           source: 'kit/Notes.tsx — quyết định 2',
         },

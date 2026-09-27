@@ -1,3 +1,5 @@
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { defaultScope, isMyPo, parseScope } from '@/lib/supply-scope'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { incomingBucket, isIncoming } from '@/lib/supply-watch'
@@ -22,8 +24,14 @@ export const dynamic = 'force-dynamic'
  * `/planning/hang-sap-ve` và badge sidebar đang dùng, nên ba chỗ không thể
  * đếm khác nhau.
  */
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ pham_vi?: string; nhom?: string }>
+}) {
+  const sp = await searchParams
   const user = await authService.requirePageUser()
+  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
   const today = todayIso()
   const [{ rows, truncatedAt }, supplyStaff] = await Promise.all([
     loadWatchPos(user),
@@ -49,7 +57,12 @@ export default async function Page() {
         lines_done: p.lines_done ?? 0,
         lines_total: p.lines_total ?? 0,
         bucket: incomingBucket(p, today) ?? 'no_eta',
+        mine: isMyPo(p, user.id),
       }))}
+      meId={user.id}
+      defaultScope={defaultScope({ canApprove })}
+      urlScope={parseScope(sp.pham_vi)}
+      initialNhom={sp.nhom ?? null}
     />
   )
 }

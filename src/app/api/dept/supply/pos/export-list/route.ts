@@ -2,8 +2,8 @@ import { handle } from '@/server/http'
 import { xlsxResponse } from '@/server/xlsx'
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
-import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { enrichPoList } from '@/modules/dept/supply/po-list.enrich'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { poMatches } from '@/app/(workspace)/planning/pos/po-filter'
 import { decodeView } from '@/app/(mua-hang)/mua-hang/don/views'
 import { buildPoListExcel, describeFilter } from '@/modules/dept/supply/po-list-excel'
@@ -30,23 +30,22 @@ export const GET = handle(async (req: Request) => {
   const today = todayVn()
   const PAGE_CAP = 1000
   const { rows: pos } = await posService.list(user, { page: 1, page_size: PAGE_CAP })
-  const ids = pos.map((p) => p.id)
-  const [totals, lineDone] = await Promise.all([
-    posRepo.totalsByPoIds(ids),
-    supplyRepo.lineDoneByPoIds(ids),
-  ])
-
-  const shown = pos
-    .map((p) => ({
-      ...p,
-      total: totals[p.id] ?? 0,
-      lines_done: lineDone.get(p.id)?.done ?? 0,
-      lines_total: lineDone.get(p.id)?.total ?? 0,
-    }))
-    .filter((p) => poMatches(p, view.filter, { meId: user.id, today }))
+  const shown = (await enrichPoList(pos)).filter((p) =>
+    poMatches(p, view.filter, { meId: user.id, today }),
+  )
 
   const buf = await buildPoListExcel({
-    filterText: describeFilter(sp, shown.length),
+    filterText: describeFilter(
+      sp,
+      shown.length,
+      // `nguoi` đến từ URL: id rác thì in "một người phụ trách", đừng làm hỏng lượt xuất.
+      sp.nguoi
+        ? await usersRepo.findById(sp.nguoi).then(
+            (u) => u?.name ?? null,
+            () => null,
+          )
+        : null,
+    ),
     rows: shown.map((p) => ({
       code: p.code,
       supplier_name: p.supplier_name,

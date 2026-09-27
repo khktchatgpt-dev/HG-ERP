@@ -2,7 +2,9 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
-import { countIncomingSoon, countMyTodos } from '@/lib/supply-watch'
+import { classifyTodo, countMyTodos, isIncoming } from '@/lib/supply-watch'
+import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
+import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
 import type { User } from '@/modules/core/users/users.repo'
 import type { WorkspaceId } from './workspaces.config'
@@ -52,15 +54,27 @@ async function execBadges(user: User): Promise<Record<string, number>> {
  * trách): badge chạy trên MỌI lần mở trang của khu này, không đáng ba cú join.
  */
 async function supplyBadges(user: User): Promise<Record<string, number>> {
-  const today = new Date().toISOString().slice(0, 10)
+  // Ngày theo giờ VN, cùng `todayVn()` các trang dùng — UTC làm badge và trang
+  // lệch nhau từ 0h đến 7h sáng (đơn 'quá hẹn' ở trang mà badge chưa đếm).
+  const today = todayVn()
   // "Vấn đề cần xử lý" đếm bằng đúng phép tính của trang (countMeetingIssues →
   // buildMeeting.issues), đường nhẹ không join — thêm 13/09/2026.
-  const [rows, issues] = await Promise.all([
-    posRepo.listWatchFields(),
-    countMeetingIssues(today),
-  ])
-  const todo = countMyTodos(rows, user.id, today)
-  const soon = countIncomingSoon(rows, today)
+  /*
+    PHẠM VI MẶC ĐỊNH THEO VAI (27/09/2026, lib/supply-scope): badge đếm ĐÚNG
+    thứ trang đích hiện ra khi bấm vào mục menu — mục menu không mang tham số,
+    nên trang mở theo phạm vi mặc định: người mua 'của tôi', người duyệt 'cả
+    phòng'. (Ai đã tự đổi phạm vi trên máy thì trang theo lựa chọn đó — badge
+    không đọc được máy người dùng, chấp nhận lệch trong trường hợp này.)
+  */
+  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
+  const scope = defaultScope({ canApprove })
+  const [rows, owned] = await Promise.all([posRepo.listWatchFields(), scope === 'toi' ? posRepo.listOwnership() : Promise.resolve(null)]) // prettier-ignore
+  const inScope = scope === 'toi' ? rows.filter((p) => isMyPo(p, user.id)) : rows
+  const issues = await countMeetingIssues(today, owned ? myLsxIds(owned, user.id) : undefined)
+  // Hộp thư: mọi việc trong phạm vi (trang cộng đủ các làn).
+  const todo = scope === 'toi' ? countMyTodos(rows, user.id, today) : inScope.filter((p) => classifyTodo(p, today)).length // prettier-ignore
+  // Nhận hàng: mọi đơn đang về trong phạm vi — đúng tập trang mở ra.
+  const soon = inScope.filter((p) => isIncoming(p)).length
   /*
     HREF BÁM VÀO MÀN MỚI (16/09/2026) — ba con số không đổi, chỉ đổi chỗ đậu:
 

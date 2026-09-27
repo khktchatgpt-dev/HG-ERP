@@ -32,6 +32,15 @@ export default function DocFastTab() {
       }
       variants={[
         {
+          name: 'Cố định trong một mục menu (fixed)',
+          when: 'khối đã nằm trong DocMenuPanel (27/09/2026) — luôn mở, tiêu đề là h3 chứ không phải nút gập, không mũi tên ▸. Mục menu đã tách thông tin rồi; gập thêm một tầng là cú bấm thừa.',
+          demo: (
+            <FastTab fixed title="Chi phí mua hàng" summary={[['Phiếu', 0]]}>
+              <p className="text-k-body m-0">Chưa ghi phí nào cho đơn này.</p>
+            </FastTab>
+          ),
+        },
+        {
           name: 'Gấp mà vẫn đọc được số',
           when: 'khối phụ, mặc định gấp. summary là cặp [nhãn, giá trị] ngắn — giá trị bị cắt ở 30 ký tự.',
           demo: (

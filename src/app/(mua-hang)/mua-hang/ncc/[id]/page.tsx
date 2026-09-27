@@ -1,6 +1,7 @@
+import { inferSupplierBuyer } from '@/lib/supply-scope'
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { isSupplyStaff, listSupplyBuyers } from '@/modules/dept/supply/suppliers.service'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { loadPriceBook, posRepo } from '@/modules/dept/supply/pos.repo'
 import { HoSoNccScreen } from './HoSoNccScreen'
@@ -33,16 +34,21 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const user = await authService.requirePageUser()
-  const [ncc, supplyStaff, { rows: pos }, giaAll] = await Promise.all([
+  const [ncc, supplyStaff, { rows: pos }, giaAll, buyers] = await Promise.all([
     suppliersRepo.findById(id),
     isSupplyStaff(user),
     posRepo.list({ supplier_id: id, page: 1, page_size: 500 }),
     loadPriceBook(),
+    listSupplyBuyers(),
   ])
   if (!ncc) notFound()
 
   const poIds = pos.map((p) => p.id)
   const totals = await posRepo.totalsByPoIds(poIds)
+  // Người phụ trách: gán tay thắng; chưa gán thì suy từ đơn (lib/supply-scope).
+  const guess = inferSupplierBuyer(pos).get(ncc.id) ?? null
+  const buyerId = ncc.buyer_id ?? guess
+  const buyerName = buyerId ? (buyers.find((b) => b.id === buyerId)?.name ?? pos.find((p) => p.assigned_to === buyerId)?.assignee_name ?? null) : null // prettier-ignore
 
   return (
     <HoSoNccScreen
@@ -70,7 +76,11 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         contact_name: ncc.contact_name,
         contact_phone: ncc.contact_phone,
         note: ncc.note,
+        buyer_id: ncc.buyer_id,
+        buyer_name: buyerName,
+        buyer_src: ncc.buyer_id ? 'gan' : guess ? 'suy' : null,
       }}
+      buyers={buyers}
       pos={pos.map((p) => ({
         id: p.id,
         code: p.code,

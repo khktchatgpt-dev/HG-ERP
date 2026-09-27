@@ -187,6 +187,29 @@ export const poShipmentsRepo = {
     if (error) throw new Error(error.message)
   },
 
+  /** Ghi lại SL từng dòng của MỘT đợt (sửa đợt / lấy trước) — xoá rồi chèn. */
+  async replaceLines(
+    shipmentId: string,
+    lines: { po_line_id: string; qty: number }[],
+  ): Promise<void> {
+    const { error } = await db()
+      .from('supply_po_shipment_lines')
+      .delete()
+      .eq('shipment_id', shipmentId)
+    if (error) throw new Error(error.message)
+    if (lines.length === 0) return
+    const { error: e2 } = await db()
+      .from('supply_po_shipment_lines')
+      .insert(
+        lines.map((l) => ({
+          shipment_id: shipmentId,
+          po_line_id: l.po_line_id,
+          qty: l.qty,
+        })),
+      )
+    if (e2) throw new Error(e2.message)
+  },
+
   async patch(
     id: string,
     patch: Partial<Pick<PoShipment, 'expected_date' | 'status' | 'note'>>,

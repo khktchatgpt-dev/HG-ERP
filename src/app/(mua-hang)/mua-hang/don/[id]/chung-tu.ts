@@ -63,6 +63,25 @@ export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
 }
 
 /** Đầu đơn cho ĐƠN MỚI — mẫu 'simple', mọi thứ lấy mặc định của mẫu. */
+/**
+ * Chọn NCC trên đơn MỚI → mẫu theo đơn gần nhất của NCC đó (26/09/2026).
+ *
+ * Đo: 17/19 NCC có từ 2 đơn trở lên luôn dùng MỘT mẫu. Trả null = không đổi:
+ * người soạn đã tự chọn mẫu, đơn đã lưu (đổi mẫu là đổi cột đang có số), NCC
+ * chưa có đơn nào, hoặc đang đúng mẫu rồi.
+ */
+export function templateForSupplier(i: {
+  supplierId: string
+  current: PoTemplate
+  touched: boolean
+  isNew: boolean
+  last: Readonly<Record<string, PoTemplate>>
+}): PoTemplate | null {
+  if (i.touched || !i.isNew) return null
+  const t = i.last[i.supplierId]
+  return t && t !== i.current ? t : null
+}
+
 export function newHeader(opts: {
   supplierId?: string
   lsxId?: string
@@ -77,7 +96,10 @@ export function newHeader(opts: {
    */
   fromStock?: boolean
 }): PoHeader {
-  const template = opts.template ?? 'simple'
+  // Mặc định PHỤ KIỆN (26/09/2026): 0/82 đơn thật dùng "Đơn giản", phụ kiện nhiều
+  // nhất (33). "Đơn giản" kéo theo VAT 10% + "giá đã gồm VAT" — soạn đơn phụ kiện
+  // mà quên đổi mẫu là tổng tiền sai lặng lẽ (PO-2026-0091).
+  const template = opts.template ?? 'accessory'
   const d = templateDefaults(template)
   return {
     template,

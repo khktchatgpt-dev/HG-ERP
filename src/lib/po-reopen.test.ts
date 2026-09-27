@@ -66,10 +66,13 @@ describe('canReopenForEdit', () => {
 })
 
 describe('reopenNote', () => {
-  it('đóng dấu trạng thái cũ và lý do, giữ nguyên ghi chú trước đó', () => {
-    const n = reopenNote('ordered', 'Gõ nhầm số lượng chân côn', 'Ghi chú cũ')
-    expect(n).toMatch(/ordered/)
-    expect(n).toMatch(/Gõ nhầm số lượng chân côn/)
-    expect(n).toMatch(/Ghi chú cũ/)
+  it('một dòng vết: trạng thái cũ + lý do', () => {
+    expect(reopenNote('ordered', ' Gõ nhầm số lượng chân côn ')).toBe(
+      '[Hạ về nháp từ "ordered"] Gõ nhầm số lượng chân côn',
+    )
+  })
+
+  it('lý do rỗng → null, không ghi vết rỗng nghĩa', () => {
+    expect(reopenNote('ordered', '  ')).toBeNull()
   })
 })

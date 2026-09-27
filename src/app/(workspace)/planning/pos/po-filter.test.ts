@@ -74,10 +74,21 @@ describe('poMatches — công tắc cộng dồn với nhóm', () => {
     expect(poMatches(onTime, filter, ctx)).toBe(false)
   })
 
-  it('"của tôi" xét theo người phụ trách, không phải người tạo', () => {
+  it('"của tôi" xét theo người phụ trách; chưa giao ai thì người lập (lib/supply-scope)', () => {
     expect(poMatches(po({ assigned_to: 'u1' }), f({ mine: true }), ctx)).toBe(true)
     expect(poMatches(po({ assigned_to: 'u2' }), f({ mine: true }), ctx)).toBe(false)
     expect(poMatches(po({ assigned_to: null }), f({ mine: true }), ctx)).toBe(false)
+    // Đã giao cho người khác thì người lập KHÔNG còn là chủ.
+    expect(poMatches(po({ assigned_to: 'u2', created_by: 'u1' }), f({ mine: true }), ctx)).toBe(false) // prettier-ignore
+    expect(poMatches(po({ assigned_to: null, created_by: 'u1' }), f({ mine: true }), ctx)).toBe(true) // prettier-ignore
+  })
+
+  it('rổ "còn mở" = mọi đơn chưa đóng sổ (không Về đủ, không Đã huỷ)', () => {
+    const open = f({ bucket: 'open' })
+    expect(poMatches(po({ status: 'draft' }), open, ctx)).toBe(true)
+    expect(poMatches(po({ status: 'partial' }), open, ctx)).toBe(true)
+    expect(poMatches(po({ status: 'received' }), open, ctx)).toBe(false)
+    expect(poMatches(po({ status: 'cancelled' }), open, ctx)).toBe(false)
   })
 
   it('chưa hẹn giao: chỉ tính đơn còn sống (đơn đã huỷ không kêu)', () => {
@@ -188,6 +199,7 @@ describe('countPos — số trên chip', () => {
     expect(c.inflight).toBe(1)
     expect(c.received).toBe(1)
     expect(c.cancelled).toBe(1)
+    expect(c.open).toBe(4)
     expect(c.mine).toBe(1)
     // Đơn CHỜ DUYỆT quá hẹn là lỗi của mình, không phải NCC trễ (tách 05/09/2026).
     expect(c.late).toBe(0)

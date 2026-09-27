@@ -51,6 +51,7 @@ import {
   poLineUnitCosts,
 } from '@/modules/dept/supply/supply.repo'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
+import { syncShipmentsFromReceipts } from '@/modules/dept/supply/po-shipments.sync'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
@@ -909,30 +910,14 @@ export const stockService = {
     }
 
     /*
-     * CHỐT ĐỢT (0153): so THỰC NHẬN của phiếu này với SL đợt theo TỪNG DÒNG —
-     * mọi dòng nhận đủ → 'received'; thiếu dòng nào → 'arrived' (xe đã tới, Kho
-     * đang nhận, phần thiếu chờ NCC giao bù và Cung ứng thấy ngay trên Kế hoạch
-     * giao). "Thực nhận" tính cả hàng QC loại — NCC ĐÃ giao số đó, đạt hay loại
-     * là chuyện giữa mình với chất lượng, không phải NCC chưa giao (cùng cách
-     * đếm với qty_received của supply_po_line_status). Trạng thái PO thì vẫn
+     * CHỐT ĐỢT: tính lại MỌI đợt của đơn từ số nhận CỘNG DỒN (27/09/2026 —
+     * po-shipments.sync). Bản 0153 chỉ so riêng phiếu này với đợt nó nối: đợt
+     * nhận bằng hai phiếu kẹt 'arrived' mãi, nhận dư đợt 1 không lấp đợt 2, và
+     * phiếu KHÔNG nối đợt (hàng gấp) chẳng đóng đợt nào. "Thực nhận" vẫn tính
+     * cả QC loại (qty_received của supply_po_line_status). Trạng thái PO vẫn
      * 100% do refreshStatusFromReceipts ở trên — BR-08 không đổi một ly.
      */
-    if (shipment) {
-      const receivedByLine = new Map<string, number>()
-      for (const l of input.lines) {
-        if (!l.po_line_id) continue
-        receivedByLine.set(
-          l.po_line_id,
-          (receivedByLine.get(l.po_line_id) ?? 0) + l.qty + (l.qty_rejected ?? 0),
-        )
-      }
-      const covered = shipment.lines.every(
-        (sl) => (receivedByLine.get(sl.po_line_id) ?? 0) >= sl.qty - 1e-4,
-      )
-      await poShipmentsRepo.patch(shipment.id, {
-        status: covered ? 'received' : 'arrived',
-      })
-    }
+    if (input.po_id) await syncShipmentsFromReceipts(input.po_id)
 
     // Người NHẬN tin hàng về: admin/quản lý + NGƯỜI PHỤ TRÁCH đơn (0128). Trước
     // đây chỉ bắn cho admin/manager — người đang ngồi đợi đúng lô hàng này lại
@@ -1369,6 +1354,8 @@ export const stockService = {
       })),
     )
     const poStatus = await supplyRepo.refreshStatusFromReceipts(input.po_id)
+    // Trả NCC làm giảm số đã nhận → đợt đã 'received' có thể lùi, hẹn giao đổi.
+    await syncShipmentsFromReceipts(input.po_id)
 
     const managers = (await usersRepo.list()).filter(
       (u) => (u.role === 'admin' || u.role === 'manager') && u.id !== user.id,
@@ -1503,17 +1490,11 @@ export const stockService = {
       const poIds = await supplyRepo.poIdsByLineIds(poLineIds)
       for (const poId of poIds) {
         await supplyRepo.refreshStatusFromReceipts(poId)
+        // Đợt giao tính lại từ số nhận cộng dồn sau khi đảo (thay cho bản cũ chỉ
+        // lùi đúng đợt của phiếu gốc từ 'received' về 'arrived').
+        await syncShipmentsFromReceipts(poId)
         const po = await supplyRepo.poStatus(poId)
         poOwnerId = po?.assigned_to ?? po?.created_by ?? poOwnerId
-      }
-    }
-    if (doc.kind === 'receipt') {
-      const shipment = await docsRepo.findShipmentId(docId)
-      if (shipment) {
-        const s = await poShipmentsRepo.findById(shipment)
-        if (s?.status === 'received') {
-          await poShipmentsRepo.patch(s.id, { status: 'arrived' })
-        }
       }
     }
 

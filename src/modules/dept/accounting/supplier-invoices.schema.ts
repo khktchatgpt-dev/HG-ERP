@@ -19,6 +19,8 @@ export const supplierInvoiceLineSchema = z.object({
    * Có thật trên hoá đơn nên phải nhận được, nhưng không vào đối chiếu ba chiều.
    */
   po_line_id: z.string().uuid().optional().nullable(),
+  /** Dòng PHÍ mua hàng (0212): phần phí vận chuyển của một đơn mà NCC đòi trên tờ này. */
+  po_cost_allocation_id: z.string().uuid().optional().nullable(),
   description: z.string().trim().min(1, 'Dòng hoá đơn phải có tên hàng').max(300),
   qty: z.coerce.number().positive('Số lượng phải > 0'),
   unit: z.string().trim().max(30).optional().nullable(),

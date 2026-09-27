@@ -6,6 +6,7 @@ import {
 } from '@/app/(workspace)/planning/pos/po-filter'
 import type { Po } from '@/app/(workspace)/planning/pos/po-types'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { fmtMoney } from '@/lib/po-line'
 
 /**
  * TRẠNG THÁI XEM của màn Phiếu mua — bộ lọc + gom + sắp, mã hoá lên URL.
@@ -62,8 +63,14 @@ const base = (over: Partial<PoFilterState>): PoFilterState => ({
 })
 
 /**
- * CẢ SỔ, gom theo lệnh sản xuất. Vừa là trạng thái vào trang, vừa là chỗ nút
- * "Xem tất cả" ở trạng thái rỗng nhảy về.
+ * TRẠNG THÁI VÀO TRANG: đơn CÒN MỞ, gom theo lệnh sản xuất.
+ *
+ * RỔ "CÒN MỞ" LÀ MẶC ĐỊNH (27/09/2026, cá nhân hoá Cung ứng — chủ dự án chọn
+ * "gọn hơn cho từng người"). Đo trên sổ thật: 43/87 đơn đã về đủ; ở phạm vi
+ * "của tôi" của chị Nga là 25/45. Một nửa danh sách mở ra là đơn chỉ để tra
+ * cứu, đẩy việc đang chạy xuống dưới. Khác lần tự lọc `mine` đã gỡ 16/09
+ * (bên dưới): rổ đang chọn hiện ngay trên ô "Rổ trạng thái" — "Còn mở (20)" —
+ * nên người dùng BIẾT mình đang lọc, và ô đó có sẵn "Mọi trạng thái (45)".
  *
  * KHÔNG TỰ LỌC `mine` NỮA (16/09/2026). Trước đó vào trang là đã lọc sẵn "đơn
  * tôi phụ trách" — chủ dự án chốt bỏ, và có lý do đo được: sổ 67 đơn mà màn mở
@@ -75,20 +82,24 @@ const base = (over: Partial<PoFilterState>): PoFilterState => ({
  * nào của lệnh nào".
  */
 export const DEFAULT_VIEW: ViewState = {
-  filter: base({}),
+  filter: base({ bucket: 'open' }),
   groupBy: 'lsx',
   sortBy: 'moi_nhat',
 }
 
-/** Cùng một thứ, tên riêng cho chỗ gọi nói rõ ý "về cả sổ". */
-export const ALL_VIEW = DEFAULT_VIEW
+/**
+ * CẢ SỔ — mọi trạng thái. Chỗ nút "Xem tất cả" ở trạng thái rỗng nhảy về, và
+ * trạng thái khi mở bằng link `?mo=<id>`: đơn được chỉ tới có thể đã về đủ,
+ * giấu nó sau rổ "còn mở" là người nhận link tưởng đơn mất.
+ */
+export const ALL_VIEW: ViewState = { ...DEFAULT_VIEW, filter: base({}) }
 
 /* ── URL ────────────────────────────────────────────────────────────────
    Mọi trạng thái xem đều mã hoá thành tham số đầy đủ (`?toi=1&gom=lsx`). Tên
    tham số tiếng Việt không dấu, ngắn, đọc được trên thanh địa chỉ — người
    dùng ERP dán link vào Zalo suốt. */
 
-const BUCKETS = new Set<string>(['all', ...PO_BUCKETS.map((b) => b.key)])
+const BUCKETS = new Set<string>(['all', 'open', ...PO_BUCKETS.map((b) => b.key)])
 const GROUPS = new Set<string>(Object.keys(GROUP_LABEL))
 const SORTS = new Set<string>(Object.keys(SORT_LABEL))
 
@@ -119,6 +130,9 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
     lateSide:
       sp.tre_ben === 'sent' || sp.tre_ben === 'unsent' ? sp.tre_ben : ('any' as const),
     noEta: sp.chua_hen === '1',
+    ownerId: sp.nguoi || 'all',
+    template: sp.loai_don || 'all',
+    lsxDone: sp.lenh_xong === '1',
   }
   return {
     filter: f,
@@ -141,6 +155,9 @@ export function encodeView(s: ViewState): string {
   if (f.late) p.set('tre', '1')
   if (f.late && f.lateSide !== 'any') p.set('tre_ben', f.lateSide)
   if (f.noEta) p.set('chua_hen', '1')
+  if (f.ownerId !== 'all') p.set('nguoi', f.ownerId)
+  if (f.template !== 'all') p.set('loai_don', f.template)
+  if (f.lsxDone) p.set('lenh_xong', '1')
   if (s.groupBy !== 'none') p.set('gom', s.groupBy)
   if (s.sortBy !== 'moi_nhat') p.set('sap', s.sortBy)
   return p.toString()
@@ -205,7 +222,7 @@ function money(pos: Po[]): string {
   }
   return [...by.entries()]
     .filter(([, v]) => v > 0)
-    .map(([c, v]) => `${v.toLocaleString('vi-VN')} ${c}`)
+    .map(([c, v]) => `${fmtMoney(v, c)} ${c}`)
     .join(' · ')
 }
 
@@ -299,6 +316,9 @@ export const PARAM_KEYS: ReadonlySet<string> = new Set(
         late: true,
         lateSide: 'sent',
         noEta: true,
+        ownerId: 'x',
+        template: 'x',
+        lsxDone: true,
       },
       groupBy: 'ncc',
       sortBy: 'ma',

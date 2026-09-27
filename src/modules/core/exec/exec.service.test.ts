@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/modules/dept/supply/pos.service', () => ({ posService: { list: vi.fn() } }))
 vi.mock('@/modules/dept/supply/pos.repo', () => ({
-  posRepo: { totalsByPoIds: vi.fn() },
+  posRepo: {
+    totalsByPoIds: vi.fn(),
+    materialNamesByPoIds: vi.fn(),
+    extraLsxByPoIds: vi.fn(),
+  },
 }))
 vi.mock('@/modules/dept/production/lsx.service', () => ({
   lsxService: { list: vi.fn() },
@@ -20,12 +24,15 @@ vi.mock('@/modules/dept/sales/quotes.repo', () => ({
 }))
 vi.mock('@/modules/dept/warehouse/stock.repo', () => ({ stockRepo: { list: vi.fn() } }))
 vi.mock('@/modules/core/approvals/approvals.repo', () => ({
-  approvalEventsRepo: { listRecent: vi.fn() },
+  approvalEventsRepo: { listRecent: vi.fn(), lastSubmittedAt: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({
   usersRepo: { displayNamesByIds: vi.fn() },
 }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({
+  assertAction: vi.fn(),
+  canAction: vi.fn(),
+}))
 vi.mock('@/modules/core/settings/settings.service', () => ({
   settingsService: { approvalThresholds: vi.fn() },
 }))
@@ -37,6 +44,7 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import type { User } from '@/modules/core/users/users.repo'
@@ -96,6 +104,11 @@ beforeEach(() => {
     total: 1,
   } as never)
   vi.mocked(approvalEventsRepo.listRecent).mockResolvedValue([] as never)
+  vi.mocked(approvalEventsRepo.lastSubmittedAt).mockResolvedValue(new Map())
+  vi.mocked(posRepo.materialNamesByPoIds).mockResolvedValue(new Map())
+  vi.mocked(posRepo.extraLsxByPoIds).mockResolvedValue(new Map())
+  // Mặc định: người xem là Giám đốc — có exec.approvals.view.
+  vi.mocked(canAction).mockResolvedValue(true)
   vi.mocked(settingsService.approvalThresholds).mockResolvedValue({
     VND: 50_000_000,
   })
@@ -145,6 +158,28 @@ describe('execService.signBox — xếp phiếu', () => {
 
     expect(box.items.map((i) => i.code)).toEqual(['PO-CU', 'PO-TO'])
     expect(box.stats.oldest_days).toBe(5)
+  })
+
+  it('đơn mua: ĐÃ CHỜ tính từ lần GỬI DUYỆT cuối, không từ ngày lập (27/09/2026)', async () => {
+    mockLists({
+      pos: [
+        // Lập 20 ngày trước, gửi duyệt 3 ngày trước.
+        PO({ id: 'lap-som', code: 'PO-LAP-SOM', created_at: daysAgo(20) }),
+        // Chưa từng có mốc gửi (đơn trước 0128) → lùi về ngày lập.
+        PO({ id: 'cu', code: 'PO-CU', created_at: daysAgo(6) }),
+      ],
+    })
+    vi.mocked(approvalEventsRepo.lastSubmittedAt).mockResolvedValue(
+      new Map([['lap-som', daysAgo(3)]]),
+    )
+
+    const box = await execService.signBox(gd)
+
+    const by = new Map(box.items.map((i) => [i.code, i]))
+    expect(by.get('PO-LAP-SOM')?.waiting_days).toBe(3)
+    expect(by.get('PO-CU')?.waiting_days).toBe(6)
+    // Xếp theo chờ THẬT: đơn gửi 6 ngày trước đứng trước đơn lập 20 ngày trước.
+    expect(box.items.map((i) => i.code)).toEqual(['PO-CU', 'PO-LAP-SOM'])
   })
 
   it('cùng số ngày chờ thì phiếu to đứng trước', async () => {
@@ -275,5 +310,67 @@ describe('execService.signBox — đã quyết hôm nay', () => {
 
     const box = await execService.signBox(gd)
     expect(box.decided_today).toEqual({ approved: 1, rejected: 1 })
+  })
+})
+
+describe('execService.signBox — một hộp ký cho mọi người ký (27/09/2026)', () => {
+  it('chỉ có quyền duyệt ĐƠN MUA → chỉ thấy đơn mua, Xem kỹ dẫn về trang đơn Mua hàng', async () => {
+    vi.mocked(canAction).mockImplementation(
+      async (_u, key) => key === 'supply.po.approve',
+    )
+    mockLists({ pos: [PO({ id: 'p1', code: 'PO-1', created_at: daysAgo(1) })] })
+    const box = await execService.signBox({
+      id: 'u-thao',
+      role: 'manager',
+    } as unknown as User)
+    expect(box.items.map((i) => i.kind)).toEqual(['po'])
+    expect(box.items[0].href).toBe('/mua-hang/don/p1')
+    // Không đọc danh sách lệnh / báo giá của người không ký được chúng.
+    expect(vi.mocked(quotesRepo.list)).not.toHaveBeenCalled()
+  })
+
+  it('không có quyền ký gì → bị chặn', async () => {
+    vi.mocked(canAction).mockResolvedValue(false)
+    await expect(
+      execService.signBox({ id: 'x', role: 'employee' } as unknown as User),
+    ).rejects.toThrow()
+  })
+
+  it('đơn mua mang người cầm đơn, vật tư, hẹn giao đã qua', async () => {
+    mockLists({
+      pos: [
+        PO({
+          id: 'p1',
+          code: 'PO-1',
+          created_at: daysAgo(1),
+          assigned_to: 'u-huy',
+          expected_at: daysAgo(3).slice(0, 10),
+        }),
+      ],
+    })
+    vi.mocked(posRepo.materialNamesByPoIds).mockResolvedValue(
+      new Map([['p1', ['Vít 4x20', 'Vít 4x20', 'Tán M6']]]),
+    )
+    const box = await execService.signBox(gd)
+    const it0 = box.items[0]
+    expect(it0.owner_id).toBe('u-huy')
+    expect(it0.po?.materials).toEqual(['Vít 4x20', 'Tán M6'])
+    expect(it0.po?.eta_late_days).toBe(3)
+    expect(it0.po?.lsx_done).toBe(false)
+  })
+
+  it('đơn của lệnh đã HOÀN THÀNH → cờ lsx_done (28/09/2026)', async () => {
+    mockLists({
+      pos: [
+        PO({
+          id: 'p1',
+          code: 'PO-1',
+          production_order_id: 'l1',
+          lsx_status: 'completed',
+        }),
+      ],
+    })
+    const box = await execService.signBox(gd)
+    expect(box.items[0].po?.lsx_done).toBe(true)
   })
 })

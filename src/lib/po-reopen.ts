@@ -27,7 +27,7 @@
  * Hàm này THUẦN để test được cả bốn nhánh mà không cần dựng cơ sở dữ liệu.
  */
 
-import { stampNote } from './po-note'
+import { reasonLine } from './po-note'
 
 /** Trạng thái hạ về nháp được — đơn đã rời bàn soạn nhưng chưa có hàng về. */
 const REOPENABLE = ['pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit'] // prettier-ignore
@@ -65,13 +65,10 @@ export function canReopenForEdit(i: {
 }
 
 /**
- * Dấu vết ghi vào `note` của đơn — cùng quy ước xếp lớp với `[Huỷ]`,
- * `[Từ chối]`, `[Dời hẹn giao]`: vết mới lên đầu, ghi chú cũ xuống dưới.
+ * Dòng vết hạ về nháp — ghi thành ghi chú Trao đổi NỘI BỘ, không vào `note`
+ * (ô đó in lên phiếu gửi NCC, xem lib/po-note). Cùng lối `[nhãn] nội dung` với
+ * `[Huỷ]`, `[Trả lại để sửa]`, `[Dời hẹn giao]`.
  */
-export function reopenNote(
-  fromStatus: string,
-  reason: string,
-  prev: string | null,
-): string | null {
-  return stampNote(`Hạ về nháp từ "${fromStatus}"`, reason, prev)
+export function reopenNote(fromStatus: string, reason: string): string | null {
+  return reasonLine(`Hạ về nháp từ "${fromStatus}"`, reason)
 }

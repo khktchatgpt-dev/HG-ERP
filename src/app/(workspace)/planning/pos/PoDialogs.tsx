@@ -239,8 +239,8 @@ export function PoDialogs({
           <div className="flex flex-col gap-3 text-sm">
             <p className={hint}>
               Chỉ đổi <b>ngày giao</b>. Nhà cung cấp, dòng hàng và tiền giữ nguyên — đơn
-              đã duyệt nên chữ ký của Giám đốc vẫn còn giá trị. Lý do được ghi vào ghi chú
-              của đơn.
+              đã duyệt nên chữ ký của Giám đốc vẫn còn giá trị. Lý do được ghi vào mục
+              Trao đổi của đơn (nội bộ, không in lên phiếu gửi NCC).
             </p>
             <label className="flex flex-col gap-1">
               <span className={label}>Hẹn giao hiện tại</span>

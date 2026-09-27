@@ -43,6 +43,11 @@ export type PoLike = {
   confirmed_at?: string | null
   updated_at?: string | null
   expected_at?: string | null
+  /**
+   * Lần GỬI DUYỆT cuối (approval_events 'submitted') — mốc thật của bước chờ
+   * duyệt. Thiếu thì lùi về `updated_at`, vốn bị MỌI lượt sửa đặt lại đồng hồ.
+   */
+  submitted_at?: string | null
 }
 
 /**
@@ -64,7 +69,7 @@ export function poHolder(po: PoLike, meId: string | null): Holder {
       return {
         who: 'Giám đốc',
         what: 'Chờ Giám đốc duyệt hoặc từ chối',
-        since: po.updated_at ?? null,
+        since: po.submitted_at ?? po.updated_at ?? null,
         // Người soạn KHÔNG phải người giữ bóng ở bước này — nói "đến lượt
         // bạn" với họ là đẩy họ đi giục nhầm chỗ.
         mine: false,

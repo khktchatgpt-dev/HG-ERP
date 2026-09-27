@@ -99,6 +99,9 @@ export function NoteComposer({
     <div
       className={cn(
         'rounded-[var(--radius)] border',
+        // SỬA CÂU CHỮ 26/09/2026: hệ thống CHƯA từng gửi ghi chú nào ra ngoài (không có
+        // email / Zalo) — "gửi ra ngoài công ty" là nói sai, người đọc tưởng NCC đã
+        // nhận. Chế độ này là GHI LẠI điều mình đã báo họ.
         // Ô nhập ĐỔI MÀU khi đang ở chế độ gửi ra ngoài — hàng rào cuối cùng
         // trước khi tay bấm. Chỉ đổi chữ nhãn thì mắt lướt qua không thấy.
         ngoai
@@ -139,7 +142,7 @@ export function NoteComposer({
         rows={2}
         placeholder={
           ngoai
-            ? 'Nội dung gửi ra ngoài — viết như đang nói với họ…'
+            ? 'Ghi lại điều đã báo cho bên ngoài (Zalo, điện thoại…)'
             : 'Chuyện gì đang xảy ra với chứng từ này…'
         }
         className="text-k-sm w-full resize-none bg-transparent px-3 py-2 leading-relaxed outline-none placeholder:text-[var(--ink-3)]"
@@ -147,7 +150,7 @@ export function NoteComposer({
       <div className="flex items-center justify-between gap-2 px-3 pb-2">
         <span className="text-k-label text-[var(--ink-3)]">
           {ngoai
-            ? '⚠ Nội dung này gửi ra ngoài công ty'
+            ? '⚠ Chỉ GHI LẠI — hệ thống không gửi gì ra ngoài'
             : 'Chỉ người trong công ty đọc được · ⌘+Enter để gửi'}
         </span>
         <Btn primary onClick={gui} disabled={!body.trim() || busy}>
@@ -224,7 +227,7 @@ export function NoteStream({
               <span className="text-k-sm font-semibold">
                 {r.note.author_name ?? 'Không rõ'}
               </span>
-              {r.note.audience === 'partner' && <Tag tone="warn">đã gửi ra ngoài</Tag>}
+              {r.note.audience === 'partner' && <Tag tone="warn">đã báo ra ngoài</Tag>}
               <span className="num text-k-label text-[var(--ink-3)]">
                 {khiNao(r.note.created_at, now)}
               </span>

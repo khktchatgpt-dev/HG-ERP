@@ -9,6 +9,7 @@ import {
   FilterBar,
   NoticeBar,
   Num,
+  ScopeSwitch,
   ScreenFrame,
   ScreenHeader,
   SearchInput,
@@ -20,6 +21,8 @@ import {
   useKitTable,
   type KitCol,
 } from '@/components/kit'
+import type { SupplyScope } from '@/lib/supply-scope'
+import { useScopePref } from '@/lib/use-scope-pref'
 
 export type NccRow = {
   id: string
@@ -37,6 +40,11 @@ export type NccRow = {
   last_po_at: string | null
   /** Tổng chi THEO TỪNG loại tiền — xem lý do không cộng chung ở `page.tsx`. */
   spend: Record<string, number>
+  /** Người phụ trách: gán tay, hoặc suy từ lịch sử đơn (lib/supply-scope). */
+  buyer_name: string | null
+  buyer_src: 'gan' | 'suy' | null
+  /** NCC của người đang xem. */
+  mine: boolean
 }
 
 /** Hồ sơ NCC — Khuôn E, dựng 15/09/2026. Ở lại trong khu mới. */
@@ -111,6 +119,22 @@ function cotNcc({
           {!r.can_order && <Tag tone="stop">Khoá đặt</Tag>}
         </span>
       ),
+    },
+    {
+      id: 'phuTrach',
+      header: 'Người phụ trách',
+      sort: (r) => r.buyer_name,
+      /* Suy từ đơn thì chữ nhạt + ghi rõ — để người đọc biết đó là đoán, gán
+         chính thức ở hồ sơ NCC (27/09/2026). */
+      cell: (r) =>
+        r.buyer_name ? (
+          <span className={r.buyer_src === 'suy' ? 'text-[var(--ink-3)]' : undefined}>
+            {r.buyer_name}
+            {r.buyer_src === 'suy' && <span className="text-k-label"> · suy từ đơn</span>}
+          </span>
+        ) : (
+          ''
+        ),
     },
     {
       id: 'loai',
@@ -195,17 +219,30 @@ function cotNcc({
 }
 
 export function NccScreen({
-  rows,
+  rows: allRows,
   canEdit,
   chamTran,
+  meId,
+  defaultScope,
+  urlScope,
 }: {
   rows: NccRow[]
   canEdit: boolean
+  meId: string
+  defaultScope: SupplyScope
+  urlScope: SupplyScope | null
   /** Nguồn nào chạm trần nạp — xem lý do phải nói ra ở `page.tsx`. */
   chamTran: 'ncc' | 'don' | null
 }) {
   const [q, setQ] = useState('')
   const [chip, setChip] = useState('all')
+  // NCC CỦA TÔI (27/09/2026): gán cho tôi, hoặc chưa gán mà tôi từng đặt.
+  const [scope, setScope] = useScopePref('ncc', meId, defaultScope, urlScope)
+  const mineCount = allRows.filter((r) => r.mine).length
+  const rows = useMemo(
+    () => (scope === 'toi' ? allRows.filter((r) => r.mine) : allRows),
+    [allRows, scope],
+  )
 
   const kept = useMemo(() => {
     const test = CHIPS.find((c) => c.id === chip)?.test ?? (() => true)
@@ -254,7 +291,10 @@ export function NccScreen({
         eyebrow="Mua hàng"
         title="Nhà cung cấp"
         facts={[
-          { label: 'Tổng NCC', value: String(rows.length) },
+          {
+            label: scope === 'toi' ? 'NCC của tôi' : 'Tổng NCC',
+            value: String(rows.length),
+          },
           { label: 'Đang giao dịch', value: String(dangGiaoDich) },
           {
             label: 'Ngừng giao dịch',
@@ -269,8 +309,28 @@ export function NccScreen({
           { label: 'Chưa từng đặt', value: String(chuaDat) },
         ]}
         actions={
-          canEdit ? (
-            /*
+          <>
+            <ScopeSwitch
+              label="Phạm vi"
+              value={scope}
+              onChange={setScope}
+              options={[
+                {
+                  value: 'toi',
+                  label: 'NCC của tôi',
+                  count: mineCount,
+                  hint: 'Gán cho tôi, hoặc chưa gán mà tôi từng đặt',
+                },
+                {
+                  value: 'phong',
+                  label: 'Cả công ty',
+                  count: allRows.length,
+                  hint: 'Mọi nhà cung cấp',
+                },
+              ]}
+            />
+            {canEdit ? (
+              /*
               THÊM MỚI vẫn ở khu cũ — có chủ ý (17/09/2026).
 
               SỬA hồ sơ nay làm ngay trong khu mới (xem `SuaHoSo` ở màn hồ sơ
@@ -280,10 +340,11 @@ export function NccScreen({
               bản lệch nhau ở lần sửa đầu tiên. Nhãn nói thẳng nó dẫn đi đâu,
               không giả vờ ở lại.
             */
-            <Btn icon="them" href="/planning/suppliers">
-              Thêm NCC mới (hồ sơ đầy đủ)
-            </Btn>
-          ) : undefined
+              <Btn icon="them" href="/planning/suppliers">
+                Thêm NCC mới (hồ sơ đầy đủ)
+              </Btn>
+            ) : null}
+          </>
         }
       />
 
@@ -320,12 +381,21 @@ export function NccScreen({
 
       {kept.length === 0 ? (
         <Empty
-          headline="Không có nhà cung cấp nào khớp"
-          reason={`Bộ lọc “${CHIPS.find((c) => c.id === chip)?.label}”${q.trim() ? ` cộng với từ khoá “${q.trim()}”` : ''} không còn dòng nào.`}
+          headline={
+            rows.length === 0 && scope === 'toi'
+              ? 'Bạn chưa phụ trách nhà cung cấp nào'
+              : 'Không có nhà cung cấp nào khớp'
+          }
+          reason={
+            rows.length === 0 && scope === 'toi'
+              ? 'NCC của tôi = NCC gán cho tôi ở hồ sơ NCC, hoặc chưa gán mà tôi từng đặt đơn.'
+              : `Bộ lọc “${CHIPS.find((c) => c.id === chip)?.label}”${q.trim() ? ` cộng với từ khoá “${q.trim()}”` : ''} không còn dòng nào.`
+          }
           next={
             <Btn
               icon="boLoc"
               onClick={() => {
+                if (rows.length === 0) setScope('phong')
                 setQ('')
                 setChip('all')
               }}

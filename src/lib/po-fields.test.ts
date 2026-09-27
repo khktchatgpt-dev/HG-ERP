@@ -43,6 +43,9 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Vật liệu',
     'Quy cách',
     'SL đơn hàng',
+    // "Đm/sp" thêm 26/09/2026 — đúng cột trên đơn giấy PO An Thành Phát (3/2026-HG/ATP):
+    // SL đơn hàng là số SP, Đm/sp nói mỗi SP mấy cái, NCC tự đối chiếu ra SL đặt.
+    'Đm/sp',
     // "Tồn kho" bỏ 12/08/2026 (duyệt cột từng mẫu) — số nội bộ, không in cho NCC.
     'ĐVT',
     'SL đặt',

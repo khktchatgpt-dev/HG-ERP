@@ -6,6 +6,7 @@ vi.mock('./supply.repo', () => ({
     insert: vi.fn(),
     findById: vi.fn(),
     update: vi.fn(),
+    patch: vi.fn(async (_id: string, row: unknown) => row),
   },
   materialGroupsRepo: { listBySupplier: vi.fn(), replaceForSupplier: vi.fn() },
 }))
@@ -68,5 +69,23 @@ describe('suppliersService.create — mã NCC', () => {
     expect(suppliersRepo.insert).toHaveBeenCalledWith(
       expect.objectContaining({ code: null }),
     )
+  })
+})
+
+describe('suppliersService.update — khoá đặt hàng phải LƯU được (27/09/2026)', () => {
+  it('bật khoá: can_order=false đi xuống repo cùng lý do', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1' } as never)
+    await suppliersService.update(user, 's1', {
+      can_order: false,
+      lock_reason: 'Giao sai quy cách',
+    })
+    expect(vi.mocked(suppliersRepo.patch).mock.calls[0][1]).toMatchObject({ can_order: false, lock_reason: 'Giao sai quy cách' }) // prettier-ignore
+  })
+  it('mở khoá: can_order=true cũng đi xuống — không bị lọc như chữ', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1' } as never)
+    await suppliersService.update(user, 's1', { can_order: true })
+    expect(vi.mocked(suppliersRepo.patch).mock.calls[0][1]).toMatchObject({
+      can_order: true,
+    })
   })
 })

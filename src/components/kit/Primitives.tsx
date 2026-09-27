@@ -980,3 +980,109 @@ export function TextInput({
     />
   )
 }
+
+/**
+ * CHỮ PHỤ — ghi chú nhỏ, nhạt, đứng cạnh nội dung chính: "+5 mã", "· cộng riêng
+ * từng loại tiền", "Gửi quá 2 ngày".
+ *
+ * Thêm 28/09/2026: đo 252 chỗ màn tự gõ \`text-[var(--ink-3)]\` (cộng cỡ chữ mỗi
+ * nơi một kiểu) — cùng một vai "chữ phụ" mà cỡ lệch nhau 11/12/13px.
+ */
+export function Hint({
+  children,
+  size = 'label',
+  title,
+}: {
+  /** Nội dung ghi chú — một cụm ngắn, không phải đoạn văn. */
+  children: ReactNode
+  /** \`label\` 11px (mặc định, cạnh số/mã) · \`sm\` 12px (dòng giải thích dưới tiêu đề). */
+  size?: 'label' | 'sm'
+  /** Chữ đầy đủ khi rê chuột — khi ghi chú là bản rút gọn. */
+  title?: string
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(size === 'sm' ? 'text-k-sm' : 'text-k-label', 'text-[var(--ink-3)]')}
+    >
+      {children}
+    </span>
+  )
+}
+
+/**
+ * CHỮ NHẤN THEO VÒNG ĐỜI — một con số / một cụm cần mắt dừng lại: "qua 28 ng",
+ * "12 ngày", số đơn quá hẹn. Chỉ ba màu vòng đời (luật 5): KHÔNG dùng cho thứ
+ * bấm được. Số 0 thì đừng bọc — số 0 không phải tin xấu.
+ *
+ * Thêm 28/09/2026: ~200 chỗ màn tự gõ \`font-semibold text-[var(--stop)]\` /
+ * \`--warn\` / \`--done\`, đậm nhạt lệch nhau.
+ */
+export function ToneText({
+  tone,
+  children,
+  strong = true,
+  title,
+}: {
+  /** \`stop\` trễ/chặn · \`warn\` cần để ý · \`done\` đã xong. */
+  tone: 'stop' | 'warn' | 'done'
+  /** Nội dung được nhấn. */
+  children: ReactNode
+  /** Đậm (mặc định) — tắt khi đã nằm trong ô chữ đậm. */
+  strong?: boolean
+  /** Giải thích khi rê chuột: nhấn vì sao. */
+  title?: string
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        strong && 'font-semibold',
+        tone === 'stop'
+          ? 'text-[var(--stop)]'
+          : tone === 'warn'
+            ? 'text-[var(--warn)]'
+            : 'text-[var(--done)]',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+/**
+ * ĐƯỜNG LINK CHO TÊN — nhà cung cấp, người mua, khách hàng (28/09/2026).
+ *
+ * `Code` là MÃ chứng từ: chữ đơn cách, đậm, số đều bề ngang. Dùng nó làm link
+ * cho TÊN ("Nhôm Tiến Đạt", "Nga") thì tên in bằng chữ máy chữ — thấy ngay khi
+ * soi ảnh chụp màn Giám sát mua hàng ở 1280×800. Tên đi bằng chữ thường, màu
+ * hành động; gạch chân khi rê chuột / focus để biết là bấm được.
+ */
+export function TextLink({
+  href,
+  children,
+  title,
+  strong = false,
+}: {
+  /** Đường nội bộ (`/mua-hang/ncc/…`) — đi bằng `next/link`, không tải lại trang. */
+  href: string
+  /** Tên hiển thị. */
+  children: ReactNode
+  /** Chữ đầy đủ khi rê chuột — khi tên đang là bản rút gọn. */
+  title?: string
+  /** Đậm — khi tên là thứ chính của dòng (cột đầu). */
+  strong?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className={cn(
+        'text-[var(--act-text)] underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none',
+        strong && 'font-semibold',
+      )}
+    >
+      {children}
+    </Link>
+  )
+}

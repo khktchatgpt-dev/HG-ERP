@@ -88,8 +88,18 @@ describe('describeFilter — file phải tự nói nó là tập nào', () => {
   it('ghép mọi điều kiện đang áp, kể cả khoảng ngày khai một đầu', () => {
     const s = describeFilter({ trang_thai: 'draft', tu: '2026-09-01', toi: '1' }, 23)
     expect(s).toContain('23 đơn')
-    expect(s).toContain('trạng thái draft')
+    expect(s).toContain('trạng thái nháp')
     expect(s).toContain('lập từ 2026-09-01 đến …')
     expect(s).toContain('đơn tôi phụ trách')
+  })
+
+  it('bộ lọc mới 27/09: rổ còn mở, người phụ trách (in TÊN), loại đơn', () => {
+    const s = describeFilter({ trang_thai: 'open', nguoi: 'uuid-huy', loai_don: 'wood' }, 16, 'nguyễn đình huy') // prettier-ignore
+    expect(s).toContain('trạng thái còn mở (chưa về đủ)')
+    expect(s).toContain('đơn của nguyễn đình huy')
+    expect(s).toContain('loại đơn Gỗ')
+    expect(s).not.toContain('uuid-huy')
+    // "Mọi trạng thái" ghi ra URL (trang_thai=all) nhưng không phải một bộ lọc.
+    expect(describeFilter({ trang_thai: 'all' }, 87)).toContain('không lọc — toàn bộ sổ')
   })
 })

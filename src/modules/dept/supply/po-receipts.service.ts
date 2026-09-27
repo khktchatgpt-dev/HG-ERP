@@ -91,7 +91,10 @@ export async function loadReceiptBatches(
     }
     const cur = b.by_line[m.po_line_id] ?? { qty: 0, rejected: 0 }
     const rej = num(m.qty_rejected)
-    b.by_line[m.po_line_id] = { qty: cur.qty + num(m.qty) + rej, rejected: cur.rejected + rej }
+    b.by_line[m.po_line_id] = {
+      qty: cur.qty + num(m.qty) + rej,
+      rejected: cur.rejected + rej,
+    }
     perPo.set(key, b)
     batchMap.set(poId, perPo)
   }

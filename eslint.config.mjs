@@ -18,6 +18,13 @@ const baseline = JSON.parse(
   readFileSync(new URL('./ui-baseline.json', import.meta.url), 'utf8'),
 )
 
+/* BÁNH CÓC CỠ FILE (28/09/2026): .tsx tối đa `max` dòng; file CŨ đã dài hơn giữ
+ * trần riêng = số dòng lúc chốt — không được dài thêm, ngắn đi thì
+ * `npm run size:baseline` hạ trần. Xem scripts/size-baseline.mjs. */
+const sizeBaseline = JSON.parse(
+  readFileSync(new URL('./size-baseline.json', import.meta.url), 'utf8'),
+)
+
 /* BẪY: route group của App Router có dấu ngoặc — `src/app/(workspace)/...`. Với
  * minimatch, `(` `)` là ký tự NHÓM, nên để nguyên thì baseline không khớp file
  * nào trong route group và ~200 lỗi cũ vẫn nổ. Phải escape trước khi đưa vào
@@ -94,6 +101,28 @@ export default defineConfig([
       'hg/no-dark-variant': 'error',
     },
   },
+  /* Ranh giới client/server (28/09/2026): file 'use client' chỉ `import type` từ
+   * @/modules, @/server. Đo lúc bật: 0 vi phạm (sau khi trừ module thuần) nên
+   * không cần baseline. Hàng rào thứ hai: `import 'server-only'` ở server/db.ts. */
+  {
+    name: 'hg/client-server-boundary',
+    files: ['src/**/*.tsx', 'src/**/*.ts'],
+    plugins: { hg: hgUi },
+    rules: {
+      'hg/client-server-boundary': 'error',
+    },
+  },
+  {
+    name: 'hg/file-size',
+    files: ['src/**/*.tsx'],
+    rules: { 'max-lines': ['error', { max: sizeBaseline.max }] },
+  },
+  // Trần riêng từng file nợ cũ — đặt SAU khối trên để đè `max`.
+  ...Object.entries(sizeBaseline.files).map(([file, cap]) => ({
+    name: `hg/file-size-legacy:${file}`,
+    files: [escapeGlob(file)],
+    rules: { 'max-lines': ['error', { max: cap }] },
+  })),
   {
     name: 'hg/ui-consistency-legacy',
     files: baseline.files.map(escapeGlob),

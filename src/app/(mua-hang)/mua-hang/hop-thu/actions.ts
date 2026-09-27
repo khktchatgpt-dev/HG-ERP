@@ -95,6 +95,27 @@ export const KIND_ACTION: Record<SupplyTodoKind, ActionSpec> = {
   },
 
   /**
+   * NCC CHƯA XÁC NHẬN (27/09/2026) — cùng nhịp "ghi việc đã giục": gọi NCC,
+   * để lại vết. Xác nhận thật (từng dòng, từng đợt) vẫn làm ở màn đơn — hộp
+   * thư không đoán hộ số lượng NCC hứa.
+   */
+  unconfirmed: {
+    label: 'Ghi việc đã giục',
+    done: 'Đã ghi việc giục',
+    kindOfUi: 'sheet',
+    stakes: 'vua',
+    sheetHint:
+      'Gọi NCC hỏi đã nhận đơn chưa, giao ngày nào — ghi lại để người sau khỏi gọi lại. NCC chốt rồi thì vào đơn bấm “NCC xác nhận”.',
+    needNote: true,
+    needDate: false,
+    dateDefault: 'empty',
+    noteLabel: 'Nhà cung cấp nói gì',
+    notePlaceholder: 'VD: Gọi chị Hoa, đã nhận đơn, hẹn chốt ngày giao sáng mai.',
+    noteWhy: 'Lưu thành ghi chú nội bộ trên chính đơn này.',
+    build: ({ note, po }) => [noteCall(po.id, `[Đã giục NCC xác nhận] ${note}`)],
+  },
+
+  /**
    * ĐÃ DUYỆT · CHƯA GỬI NCC — một cú bấm, không hỏi gì thêm.
    *
    * Giám đốc đã ký, việc còn lại chỉ là bấm cho đơn ra khỏi cửa. Đây cũng là

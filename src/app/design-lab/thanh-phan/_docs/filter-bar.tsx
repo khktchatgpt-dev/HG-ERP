@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Chip, FilterBar, SearchInput } from '@/components/kit'
+import { BarLabel, BarSep, Btn, Chip, FilterBar, SearchInput } from '@/components/kit'
 import { CompDoc } from '../../_lab/CompDoc'
 
 /**
@@ -118,6 +118,45 @@ export default function DocFilterBar() {
           ),
         },
         {
+          name: 'Nhiều hàng lọc — dense + BarLabel + BarSep',
+          when: 'màn xếp hai–ba hàng lọc chồng nhau (Đơn mua: người phụ trách · loại đơn). Nhãn nhóm và vạch ngăn là thành phần, không tự gõ chuỗi lớp.',
+          demo: (
+            <FilterBar dense label="Lọc đơn mua">
+              <BarLabel>Loại đơn</BarLabel>
+              <Chip on count={13}>
+                Phụ kiện
+              </Chip>
+              <Chip count={3}>Carton</Chip>
+              <BarSep />
+              <Chip icon="hen" count={4}>
+                Chưa hẹn giao
+              </Chip>
+            </FilterBar>
+          ),
+        },
+        {
+          name: 'Thanh hành động — tone raised / selected',
+          when: 'hàng nút trên bảng chọn nhiều (Hộp ký): nền nổi khi chưa chọn gì, nền nhạt màu hành động khi ĐANG chọn phiếu.',
+          demo: (
+            <div className="grid gap-2">
+              <FilterBar dense tone="raised">
+                <span className="text-k-sm text-[var(--ink-3)]">Chưa chọn phiếu nào</span>
+                <Btn icon="duyet" disabled>
+                  Ký duyệt
+                </Btn>
+              </FilterBar>
+              <FilterBar dense tone="selected">
+                <span className="num text-k-sm font-semibold text-[var(--act-text)]">
+                  3 phiếu đã chọn
+                </span>
+                <Btn primary icon="duyet">
+                  Ký 3 phiếu
+                </Btn>
+              </FilterBar>
+            </div>
+          ),
+        },
+        {
           name: 'Ô tìm có chữ — không truyền label',
           when: 'nút ✕ hiện ngay trong ô khi có từ khoá — xoá từ khoá là thao tác lặp nhiều nhất sau khi gõ. Không có label thì tên ô là chính placeholder (ví dụ trên truyền label="Tìm đơn mua").',
           demo: <OTim />,
@@ -159,7 +198,7 @@ export default function DocFilterBar() {
         },
       ]}
       a11y={{
-        role: 'FilterBar: không có (div) · Chip: button + aria-pressed · SearchInput: textbox',
+        role: 'FilterBar: toolbar khi có label (không có thì div) · Chip: button + aria-pressed · SearchInput: textbox · BarSep: ẩn khỏi trình đọc',
         keys: [
           { key: 'Tab', does: 'Ô tìm → nút ✕ (khi có chữ) → từng chip, theo thứ tự.' },
           { key: 'Space / Enter', does: 'Bật/tắt chip; bấm ✕ để xoá từ khoá.' },
@@ -185,6 +224,11 @@ export default function DocFilterBar() {
         ),
       }}
       doDont={[
+        {
+          do: 'Dùng FilterBar dense / tone cho mọi hàng lọc, hàng hành động; BarLabel cho nhãn nhóm.',
+          dont: 'Tự gõ chuỗi "flex shrink-0 flex-wrap … border-b … py-1" và nhãn "text-k-label tracking-[.04em] uppercase" trong màn — mỗi màn lệch một chút.',
+          source: 'đo 28/09/2026: 6 hàng + 13 nhãn tự chế ở Mua hàng / Giám đốc',
+        },
         {
           do: 'Đặt FilterBar NGOÀI vùng cuộn của bảng — nó không cần cuộn.',
           dont: 'Để thanh lọc và bảng chung một vùng cuộn: hai lớp sticky tính cùng một gốc, tiêu đề cột phủ mất dòng khối đầu tiên.',

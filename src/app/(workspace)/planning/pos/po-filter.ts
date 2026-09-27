@@ -1,5 +1,7 @@
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import type { PoStatus } from '@/lib/po-status'
+import { isMyPo, poOwner } from '@/lib/supply-scope'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import type { Po } from './po-types'
 
 /**
@@ -25,11 +27,16 @@ import type { Po } from './po-types'
  * đang quá hẹn" — không hỏi được.
  */
 
+/**
+ * `open` (27/09/2026) là rổ GỘP, không phải một ngăn của PO_BUCKETS: mọi đơn
+ * chưa đóng sổ (không phải Về đủ / Đã huỷ). Màn Đơn mua mở ở rổ này — sổ của
+ * một người mua có ~một nửa là đơn đã về đủ, chỉ để tra cứu.
+ */
 export type PoBucket =
-  'all' | 'draft' | 'pending' | 'ready' | 'inflight' | 'received' | 'cancelled'
+  'all' | 'open' | 'draft' | 'pending' | 'ready' | 'inflight' | 'received' | 'cancelled'
 
 export const PO_BUCKETS: {
-  key: Exclude<PoBucket, 'all'>
+  key: Exclude<PoBucket, 'all' | 'open'>
   label: string
   statuses: readonly PoStatus[]
   /** Nhóm cần người dùng động tay — tô màu nhắc, không để lẫn với nhóm đã xong. */
@@ -57,7 +64,7 @@ export const PO_BUCKETS: {
   { key: 'cancelled', label: 'Đã huỷ', statuses: ['cancelled'] },
 ]
 
-const BUCKET_OF = new Map<PoStatus, Exclude<PoBucket, 'all'>>(
+const BUCKET_OF = new Map<PoStatus, Exclude<PoBucket, 'all' | 'open'>>(
   PO_BUCKETS.flatMap((b) => b.statuses.map((s) => [s, b.key] as const)),
 )
 
@@ -110,7 +117,25 @@ export type PoFilterState = {
    */
   lateSide: 'any' | 'sent' | 'unsent'
   noEta: boolean
+  /**
+   * NGƯỜI CẦM ĐƠN (id; 'all' = không lọc) — cùng nghĩa "chủ đơn" của
+   * lib/supply-scope (phụ trách, chưa giao ai thì người lập). Thêm 27/09/2026
+   * cho hàng chip "Người phụ trách" ở màn Đơn mua: 3 người mua, trưởng phòng
+   * hỏi "Huy đang cầm gì" mà trước chỉ có Của tôi | Cả phòng.
+   */
+  ownerId: string
+  /** LOẠI ĐƠN (mẫu đơn: accessory, wood…; 'all' = không lọc). 87/87 đơn có. */
+  template: string
+  /**
+   * CHỈ ĐƠN CÒN MỞ CỦA LỆNH ĐÃ HOÀN THÀNH (28/09/2026) — đơn không ai cập nhật
+   * sau khi sản xuất xong (lib/po-lsx-done). Ô việc ở Bàn làm việc / Giám sát
+   * mua hàng dẫn về đây.
+   */
+  lsxDone: boolean
 }
+
+const mine = (p: Po, meId: string | null) =>
+  isMyPo({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }, meId)
 
 /** Trạng thái mà đơn còn nằm ở phía mình — chưa gửi nhà cung cấp. */
 const UNSENT = new Set<string>(['draft', 'pending_approval', 'approved'])
@@ -127,6 +152,9 @@ export const EMPTY_FILTER: PoFilterState = {
   late: false,
   lateSide: 'any',
   noEta: false,
+  ownerId: 'all',
+  template: 'all',
+  lsxDone: false,
 }
 
 export function isFilterActive(f: PoFilterState): boolean {
@@ -140,7 +168,10 @@ export function isFilterActive(f: PoFilterState): boolean {
     f.toDate !== '' ||
     f.mine ||
     f.late ||
-    f.noEta
+    f.noEta ||
+    f.ownerId !== 'all' ||
+    f.template !== 'all' ||
+    f.lsxDone
   )
 }
 
@@ -149,14 +180,25 @@ export function poMatches(
   f: PoFilterState,
   ctx: { meId: string | null; today: string },
 ): boolean {
-  if (f.bucket !== 'all' && bucketOf(p.status) !== f.bucket) return false
-  if (f.mine && p.assigned_to !== ctx.meId) return false
+  if (f.bucket === 'open') {
+    if (p.status === 'received' || p.status === 'cancelled') return false
+  } else if (f.bucket !== 'all' && bucketOf(p.status) !== f.bucket) return false
+  // "Của tôi" theo nghĩa CHUNG của phòng (lib/supply-scope): người phụ trách,
+  // chưa giao ai thì người lập — cùng luật với quyền sửa đơn ở server.
+  if (f.mine && !mine(p, ctx.meId)) return false
   if (f.late) {
     if (assessPoLate(p, ctx.today) !== 'overdue') return false
     if (f.lateSide === 'unsent' && !UNSENT.has(p.status)) return false
     if (f.lateSide === 'sent' && UNSENT.has(p.status)) return false
   }
   if (f.noEta && !isMissingEta(p)) return false
+  if (
+    f.ownerId !== 'all' &&
+    poOwner({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }) !== f.ownerId
+  )
+    return false
+  if (f.template !== 'all' && (p.template ?? '') !== f.template) return false
+  if (f.lsxDone && !isPoOfDoneLsx(p)) return false
   if (f.supplierId !== 'all' && p.supplier_id !== f.supplierId) return false
   /*
     Đơn GỘP nhiều lệnh (0125) phải lọt khi lọc đúng một lệnh PHỤ của nó — chỉ
@@ -188,7 +230,7 @@ export function poMatches(
   // ("đơn 17984 đã đặt nhôm chưa"), mà bản cũ tìm mã đó không ra gì.
   if (
     ql &&
-    !`${p.code} ${p.supplier_name} ${p.lsx_code ?? ''} ${p.order_code ?? ''} ${p.assignee_name ?? ''}`
+    !`${p.code} ${p.supplier_name} ${p.lsx_code ?? ''} ${p.order_code ?? ''} ${p.assignee_name ?? ''} ${(p.material_names ?? []).join(' ')}`
       .toLowerCase()
       .includes(ql)
   )
@@ -196,12 +238,16 @@ export function poMatches(
   return true
 }
 
-export type PoCounts = Record<Exclude<PoBucket, 'all'>, number> & {
+export type PoCounts = Record<Exclude<PoBucket, 'all' | 'open'>, number> & {
+  /** Chưa đóng sổ = all − Về đủ − Đã huỷ. */
+  open: number
   all: number
   mine: number
   late: number
   lateUnsent: number
   noEta: number
+  /** Đơn còn mở của lệnh đã hoàn thành. */
+  lsxDone: number
 }
 
 /**
@@ -212,6 +258,7 @@ export type PoCounts = Record<Exclude<PoBucket, 'all'>, number> & {
 export function countPos(pos: Po[], meId: string | null, today: string): PoCounts {
   const c: PoCounts = {
     all: pos.length,
+    open: 0,
     draft: 0,
     pending: 0,
     ready: 0,
@@ -227,16 +274,19 @@ export function countPos(pos: Po[], meId: string | null, today: string): PoCount
      */
     lateUnsent: 0,
     noEta: 0,
+    lsxDone: 0,
   }
   for (const p of pos) {
     const b = bucketOf(p.status)
     if (b) c[b]++
-    if (meId && p.assigned_to === meId) c.mine++
+    if (p.status !== 'received' && p.status !== 'cancelled') c.open++
+    if (mine(p, meId)) c.mine++
     if (assessPoLate(p, today) === 'overdue') {
       if (UNSENT.has(p.status)) c.lateUnsent++
       else c.late++
     }
     if (isMissingEta(p)) c.noEta++
+    if (isPoOfDoneLsx(p)) c.lsxDone++
   }
   return c
 }

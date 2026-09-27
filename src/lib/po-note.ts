@@ -22,6 +22,22 @@
  *    dùng ` · ` thì vết thứ ba trở đi thành một dòng dài không ai đọc nổi.
  */
 
+/*
+ * ĐỔI CHỖ GHI (27/09/2026): vết lý do KHÔNG còn đóng lên `note` nữa. Ô `note` in
+ * NGUYÊN VĂN lên phiếu gửi NCC (print/supply/PoPrintSheet), nên "[Trả lại để
+ * sửa] Giá cao hơn NCC khác" đi thẳng tới tay chính NCC đó. Vết giờ là một ghi
+ * chú Trao đổi NỘI BỘ (doc_notes, audience 'internal') do `posService` ghi —
+ * `reasonLine` dựng câu, cùng một lối `[nhãn] nội dung` cho cả bốn thao tác.
+ * Hai bảo đảm cũ vẫn giữ: không ghi đè gì (ô note người soạn không bị đụng tới
+ * nữa), và lý do không mất (huỷ đơn thì Trao đổi là nơi DUY NHẤT giữ lý do).
+ */
+
+/** Một dòng vết `[nhãn] nội dung`; lý do rỗng thì `null` (không ghi gì). */
+export function reasonLine(tag: string, text: string | null | undefined): string | null {
+  const body = text?.trim()
+  return body ? `[${tag}] ${body}` : null
+}
+
 /**
  * Đóng một vết `[nhãn] nội dung` lên đầu ghi chú, giữ nguyên phần cũ ở dưới.
  *
@@ -35,8 +51,7 @@ export function stampNote(
   prevNote: string | null | undefined,
 ): string | null {
   const prev = prevNote?.trim() || null
-  const body = text?.trim()
-  if (!body) return prev
-  const line = `[${tag}] ${body}`
+  const line = reasonLine(tag, text)
+  if (!line) return prev
   return prev ? `${line}\n${prev}` : line
 }

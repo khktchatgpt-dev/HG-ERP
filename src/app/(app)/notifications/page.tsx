@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<string, string> = {
   po_rejected: 'đã từ chối đơn đặt vật tư — đơn về nháp',
   po_withdrawn: 'đã rút đơn đặt vật tư về nháp (bỏ khỏi bàn duyệt)',
   po_reopened: 'đã mở lại đơn đặt vật tư ĐÃ DUYỆT để sửa — đơn sẽ quay lại bàn duyệt',
+  po_adjusted: 'đã điều chỉnh đơn đặt vật tư đã gửi NCC — xem phần phát sinh và lý do trên đơn',
   po_reassigned: 'đã bàn giao đơn đặt vật tư cho bạn phụ trách',
   lsx_submitted: 'gửi LSX chờ bạn duyệt',
   lsx_approved: 'đã duyệt LSX',

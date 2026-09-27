@@ -406,7 +406,7 @@ export function PoLineTable({
               const suggest = suggestions.get(l.material_id) ?? null
               const shortSuggest =
                 l.qty_demand !== ''
-                  ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0)
+                  ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, l.dm_per_sp === '' ? null : Number(l.dm_per_sp)) // prettier-ignore
                   : null
               const rawSuggest = shortSuggest ?? suggest
               const useSuggest =

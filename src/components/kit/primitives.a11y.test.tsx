@@ -14,6 +14,9 @@ import {
   TextArea,
   TextInput,
   Tick,
+  Hint,
+  ToneText,
+  TextLink,
 } from './Primitives'
 import { Combobox } from './Combobox'
 import { a11yViolations, formatViolations } from '@/test/a11y'
@@ -470,5 +473,54 @@ describe('Btn aria-disabled từ chỗ gọi', () => {
     )
     expect(screen.queryByRole('link')).toBeNull()
     expect(screen.getByRole('button', { name: 'Mở đơn' })).toBeTruthy()
+  })
+})
+
+describe('Hint + ToneText — chữ phụ và chữ nhấn (28/09/2026)', () => {
+  it('Hint: 11px mặc định, sm 12px, màu mực nhạt; title giữ nguyên', () => {
+    render(
+      <>
+        <Hint title="đầy đủ">+5 mã</Hint>
+        <Hint size="sm">cộng riêng từng loại tiền</Hint>
+      </>,
+    )
+    const a = screen.getByText('+5 mã')
+    expect(a.className).toContain('text-k-label')
+    expect(a.className).toContain('text-[var(--ink-3)]')
+    expect(a.getAttribute('title')).toBe('đầy đủ')
+    expect(screen.getByText('cộng riêng từng loại tiền').className).toContain('text-k-sm')
+  })
+
+  it('ToneText: đúng màu theo tone, đậm mặc định, bỏ đậm được; qua axe', async () => {
+    const { container } = render(
+      <p>
+        <ToneText tone="stop">qua 28 ng</ToneText> <ToneText tone="warn">còn 1 ng</ToneText>{' '}
+        <ToneText tone="done" strong={false}>
+          về đủ
+        </ToneText>
+      </p>,
+    )
+    expect(screen.getByText('qua 28 ng').className).toContain('text-[var(--stop)]')
+    expect(screen.getByText('qua 28 ng').className).toContain('font-semibold')
+    expect(screen.getByText('còn 1 ng').className).toContain('text-[var(--warn)]')
+    expect(screen.getByText('về đủ').className).not.toContain('font-semibold')
+    const v = await a11yViolations(container)
+    expect(v, formatViolations(v)).toEqual([])
+  })
+})
+
+describe('TextLink — tên bấm được, không phải mã (28/09/2026)', () => {
+  it('là link có tên, chữ thường (không đơn cách), title giữ nguyên; qua axe', async () => {
+    const { container } = render(
+      <TextLink href="/mua-hang/ncc/1" title="CÔNG TY TNHH NHÔM TIẾN ĐẠT">
+        Nhôm Tiến Đạt
+      </TextLink>,
+    )
+    const a = screen.getByRole('link', { name: 'Nhôm Tiến Đạt' })
+    expect(a.getAttribute('href')).toBe('/mua-hang/ncc/1')
+    expect(a.getAttribute('title')).toBe('CÔNG TY TNHH NHÔM TIẾN ĐẠT')
+    expect(a.className).not.toContain('font-mono')
+    const v = await a11yViolations(container)
+    expect(v, formatViolations(v)).toEqual([])
   })
 })

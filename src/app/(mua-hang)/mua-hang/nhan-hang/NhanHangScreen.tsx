@@ -19,6 +19,7 @@ import {
   NoticeBar,
   Num,
   Row,
+  ScopeSwitch,
   ScreenFrame,
   ScreenHeader,
   SearchInput,
@@ -28,6 +29,8 @@ import {
   Table,
   showMoney,
 } from '@/components/kit'
+import type { SupplyScope } from '@/lib/supply-scope'
+import { useScopePref } from '@/lib/use-scope-pref'
 
 export type NhanHangRow = {
   id: string
@@ -42,6 +45,8 @@ export type NhanHangRow = {
   lines_done: number
   lines_total: number
   bucket: IncomingBucket
+  /** Đơn của người đang xem (lib/supply-scope). */
+  mine: boolean
 }
 
 const ngay = (iso: string | null) =>
@@ -54,18 +59,40 @@ const soNgay = (iso: string | null, today: string): number | null => {
 }
 
 export function NhanHangScreen({
-  rows,
+  rows: allRows,
   today,
   truncatedAt,
   canEdit,
+  meId,
+  defaultScope,
+  urlScope,
+  initialNhom,
 }: {
   rows: NhanHangRow[]
   today: string
   truncatedAt: number | null
   canEdit: boolean
+  meId: string
+  defaultScope: SupplyScope
+  urlScope: SupplyScope | null
+  /** `?nhom=` — một mốc, hoặc 'tuan' = hôm nay + 7 ngày tới (đúng tập badge đếm). */
+  initialNhom: string | null
 }) {
   const [q, setQ] = useState('')
-  const [moc, setMoc] = useState<IncomingBucket | 'all'>('all')
+  const [moc, setMoc] = useState<IncomingBucket | 'all' | 'tuan'>(() =>
+    initialNhom === 'tuan'
+      ? 'tuan'
+      : INCOMING_BUCKETS.includes(initialNhom as IncomingBucket)
+        ? (initialNhom as IncomingBucket)
+        : 'all',
+  )
+  // HÀNG VỀ CỦA TÔI (27/09/2026) = hàng của đơn tôi phụ trách.
+  const [scope, setScope] = useScopePref('nhan-hang', meId, defaultScope, urlScope)
+  const mineCount = allRows.filter((r) => r.mine).length
+  const rows = useMemo(
+    () => (scope === 'toi' ? allRows.filter((r) => r.mine) : allRows),
+    [allRows, scope],
+  )
 
   const dem = useMemo(() => {
     const c: Record<string, number> = { all: rows.length }
@@ -76,7 +103,8 @@ export function NhanHangScreen({
   const kept = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return rows.filter((r) => {
-      if (moc !== 'all' && r.bucket !== moc) return false
+      if (moc === 'tuan' && r.bucket !== 'today' && r.bucket !== 'week') return false
+      if (moc !== 'all' && moc !== 'tuan' && r.bucket !== moc) return false
       if (!needle) return true
       return [r.code, r.supplier_name, r.lsx_code]
         .filter(Boolean)
@@ -120,7 +148,7 @@ export function NhanHangScreen({
         eyebrow="Mua hàng"
         title="Nhận hàng"
         facts={[
-          { label: 'Đơn đang về', value: String(rows.length) },
+          { label: scope === 'toi' ? 'Đơn của tôi đang về' : 'Đơn đang về', value: String(rows.length) },
           {
             label: 'Quá hẹn',
             value: String(dem.overdue ?? 0),
@@ -132,6 +160,17 @@ export function NhanHangScreen({
             tone: (dem.no_eta ?? 0) > 0 ? 'warn' : 'neutral',
           },
         ]}
+        actions={
+          <ScopeSwitch
+            label="Phạm vi"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: 'toi', label: 'Hàng của tôi', count: mineCount, hint: 'Hàng của đơn tôi phụ trách' },
+              { value: 'phong', label: 'Cả phòng', count: allRows.length, hint: 'Mọi đơn đang về' },
+            ]}
+          />
+        }
         /* Nút "Lập phiếu nhập" gỡ 16/09/2026 cùng khu Kho. Màn này vẫn
            dùng được để THEO DÕI hàng về; việc ghi phiếu quay lại khi Kho
            dựng xong. */
@@ -150,6 +189,16 @@ export function NhanHangScreen({
           placeholder="Tìm số PO, nhà cung cấp hoặc lệnh…"
           width={300}
         />
+        {/* 'Về trong 7 ngày' = hôm nay + 7 ngày tới — ĐÚNG tập badge sidebar đếm
+            (countIncomingSoon), để bấm badge vào thấy đúng ngần ấy dòng. */}
+        <Chip
+          on={moc === 'tuan'}
+          count={(dem.today ?? 0) + (dem.week ?? 0)}
+          icon="lich"
+          onClick={() => setMoc(moc === 'tuan' ? 'all' : 'tuan')}
+        >
+          Về trong 7 ngày
+        </Chip>
         {INCOMING_BUCKETS.map((b) => (
           <Chip
             key={b}
@@ -166,15 +215,25 @@ export function NhanHangScreen({
       {kept.length === 0 ? (
         <Empty
           headline={
-            rows.length === 0 ? 'Không có đơn nào đang về' : 'Không có đơn nào khớp'
+            rows.length === 0
+              ? scope === 'toi' && allRows.length > 0
+                ? 'Đơn của bạn chưa có hàng nào đang về'
+                : 'Không có đơn nào đang về'
+              : 'Không có đơn nào khớp'
           }
           reason={
-            rows.length === 0
+            rows.length === 0 && scope === 'toi' && allRows.length > 0
+              ? `Cả phòng có ${allRows.length} đơn đang về, nhưng không đơn nào do bạn phụ trách.`
+              : rows.length === 0
               ? 'Chỉ đơn ĐÃ GỬI nhà cung cấp mới nằm ở đây. Đơn còn nháp hoặc mới duyệt mà chưa gửi thì chưa ai chuẩn bị hàng — chúng nằm ở Bàn làm việc để bị thúc.'
               : `Trong ${rows.length} đơn đang về, không đơn nào khớp bộ lọc hiện tại${q.trim() ? ` và từ khoá “${q.trim()}”` : ''}.`
           }
           next={
-            rows.length === 0 ? (
+            rows.length === 0 && scope === 'toi' && allRows.length > 0 ? (
+              <Btn primary icon="boLoc" onClick={() => setScope('phong')}>
+                Xem hàng về của cả phòng
+              </Btn>
+            ) : rows.length === 0 ? (
               <Btn primary icon="don" href="/mua-hang/don">
                 Mở danh sách đơn mua
               </Btn>

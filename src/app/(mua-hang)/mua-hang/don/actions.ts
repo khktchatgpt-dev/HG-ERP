@@ -1,4 +1,5 @@
 import { canReschedule } from '@/lib/po-reschedule'
+import { cancelBlock } from '@/lib/po-guards'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 
 /**
@@ -58,6 +59,7 @@ export type ActionId =
   | 'delete'
   | 'cancel'
   | 'edit_terms'
+  | 'adjust'
   | 'reassign'
   | 'open'
   /** Tab Nhận hàng của màn chứng từ — định nghĩa tại màn, không qua actionsFor. */
@@ -166,6 +168,24 @@ const EDIT_TERMS = (blocked?: string): Action => ({
 })
 
 /**
+ * ĐIỀU CHỈNH ĐƠN — sửa đơn ĐÃ DUYỆT / ĐÃ GỬI ngay tại chỗ (0210, chốt
+ * 25/09/2026): SL, giá, thêm/bỏ dòng. Không hạ về nháp, không duyệt lại —
+ * phần chênh ghi thành phát sinh riêng cho kế toán, người duyệt nhận thông
+ * báo. Đây là đường sửa HẰNG NGÀY của người mua; "Hạ về nháp" chỉ còn cho
+ * Ban quản lý khi phải làm lại cả đơn.
+ *
+ * `ui: 'link'` chỉ để `start()` bắt lấy — nó bật chế độ điều chỉnh trên chính
+ * màn chứng từ, không gọi route nào ngay.
+ */
+const ADJUST = (blocked?: string): Action => ({
+  id: 'adjust',
+  label: 'Điều chỉnh đơn',
+  ui: 'link',
+  stakes: 'vua',
+  blocked,
+})
+
+/**
  * HẠ VỀ NHÁP ĐỂ SỬA — đường sửa sai DỮ LIỆU của đơn đã gửi.
  *
  * Khác `withdraw` ở chỗ dùng cho ai và khi nào: `withdraw` là người soạn tự rút
@@ -252,6 +272,10 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
       ? 'Đơn đã có phiếu nhập kho — sửa dòng sẽ làm phiếu nhập mồ côi'
       : notOwn
 
+  // Đơn đã có hàng về kho: huỷ cả đơn là bỏ lại phiếu nhập treo — chỉ đường chốt thiếu.
+  // Cùng câu với server (`cancelBlock`, lib/po-guards).
+  const notCancel = (perm.hasReceipts ? cancelBlock(status, 1) : null) ?? notOwn
+
   switch (status) {
     case 'draft':
       return [
@@ -288,7 +312,13 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           stakes: 'vua',
           blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
           done: 'Đã duyệt',
-          bulk: true,
+          /*
+            KHÔNG KÝ HÀNG LOẠT Ở ĐÂY (27/09/2026, chủ dự án chốt "một nơi ký,
+            một luật"). Ký nhiều đơn một lúc chỉ ở hộp ký (Chờ tôi ký /
+            /exec/approvals), nơi phiếu GIÁ TRỊ LỚN không có ô tích. Đơn lẻ vẫn
+            duyệt được ngay trên trang đơn.
+          */
+          bulk: false,
           build: ({ id }) => [
             { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST', body: { decision: 'approve' } }, // prettier-ignore
           ],
@@ -341,7 +371,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         REOPEN(notReopen),
         DELETE('Đơn đã gửi duyệt — bấm "Rút về nháp" trước, rồi mới xoá được'),
         REASSIGN(canReassign),
-        CANCEL(notOwn),
+        CANCEL(notCancel),
         OPEN,
       ]
 
@@ -365,13 +395,14 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
             { path: `/api/dept/supply/pos/${id}/advance`, method: 'POST', body: { to: 'ordered' } }, // prettier-ignore
           ],
         },
+        ADJUST(notOwn),
         reschedule(status, notOwn),
         EDIT_TERMS(notOwn),
         REOPEN(notReopen),
         DUP,
         DELETE('Đơn đã ra khỏi cửa — sổ phải giữ lại vết, dùng "Huỷ đơn" thay vì xoá'),
         REASSIGN(canReassign),
-        CANCEL(notOwn),
+        CANCEL(notCancel),
         OPEN,
       ]
 
@@ -381,6 +412,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
     case 'partial':
       return [
         { ...OPEN, primary: true, label: 'Mở đơn · ghi nhận nhận hàng ở Kho' },
+        ADJUST(notOwn),
         /**
          * GHI VIỆC ĐÃ GIỤC — cùng nhịp với hộp thư việc: gọi NCC xong thì để lại
          * vết trên đơn, kèm hẹn mới nếu NCC hứa. Không có vết thì mai người thứ
@@ -409,12 +441,15 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         DUP,
         DELETE('Đơn đã ra khỏi cửa — sổ phải giữ lại vết, dùng "Huỷ đơn" thay vì xoá'),
         REASSIGN(canReassign),
-        CANCEL(notOwn),
+        CANCEL(notCancel),
       ]
 
     case 'received':
       return [
         { ...OPEN, primary: true },
+        ADJUST(
+          'Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn',
+        ),
         EDIT_TERMS(notOwn),
         DUP,
         DELETE('Đơn đã đóng sổ — không xoá được nữa'),

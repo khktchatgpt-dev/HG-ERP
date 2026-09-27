@@ -31,7 +31,16 @@ export type LedgerEntry = {
   /** Dương. Chiều do `kind` quyết định — không dùng số âm để biểu diễn chiều. */
   amount: number
   note?: string | null
+  /**
+   * Nhãn loại chứng từ khi KHÁC mặc định ("Hoá đơn NCC" / "Thanh toán") — phiếu
+   * phí nhà xe, bút toán huỷ phiếu. Chiều tiền vẫn do `kind` quyết định.
+   */
+  label?: string
 }
+
+/** Nhãn cột "Loại" của sổ chi tiết — một chỗ cho cả màn hình lẫn Excel. */
+export const entryLabel = (e: Pick<LedgerEntry, 'kind' | 'label'>): string =>
+  e.label ?? (e.kind === 'invoice' ? 'Hoá đơn NCC' : 'Thanh toán')
 
 export type LedgerRow = {
   supplier_id: string

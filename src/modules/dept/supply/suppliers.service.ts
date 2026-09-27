@@ -1,6 +1,7 @@
 import { suppliersRepo, materialGroupsRepo, type Supplier } from './supply.repo'
 import type { supplierCreateSchema } from './suppliers.schema'
-import type { User } from '@/modules/core/users/users.repo'
+import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import type { z } from 'zod'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { NotFound } from '@/server/http'
@@ -123,7 +124,28 @@ function toRow(
     out[k] = nn(v as string)
   }
   if (input.lead_time_days !== undefined) out.lead_time_days = input.lead_time_days
+  // Khoá đặt hàng là BOOLEAN — vòng lặp trên bỏ qua nó (nn() chỉ cho chữ) mà trước
+  // 27/09/2026 không ghi lại ở đây, nên bật/tắt "khoá đặt hàng" ở hồ sơ NCC chưa
+  // bao giờ lưu được: can_order luôn true, chỉ lock_reason đổi.
+  if (input.can_order !== undefined) out.can_order = input.can_order
   return out as Partial<Supplier>
 }
 
 export { isSupplyStaff, SUPPLY_DEPT_NAMES }
+
+/**
+ * NGƯỜI MUA — thành viên phòng Cung ứng còn làm việc (quyền `supply.member`,
+ * tài khoản đang bật, chưa xoá). Nguồn cho ô "Người phụ trách" của hồ sơ NCC
+ * (27/09/2026). Admin cũng mang quyền này nhưng không phải người mua — bỏ.
+ */
+export async function listSupplyBuyers(): Promise<{ id: string; name: string }[]> {
+  const [ids, users] = await Promise.all([
+    rbacRepo.userIdsWithPermission('supply.member'),
+    usersRepo.list(),
+  ])
+  const set = new Set(ids)
+  return users
+    .filter((u) => set.has(u.id) && u.is_active && !u.deleted_at && u.role !== 'admin')
+    .map((u) => ({ id: u.id, name: u.name ?? u.email }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+}

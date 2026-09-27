@@ -12,6 +12,9 @@ import {
 } from '@/lib/ap-ledger'
 import { rateFor, type FxRate } from '@/lib/fx'
 import { awaitingInvoiceSummary } from './supplier-invoices.service'
+import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
+import { carrierLedgerEntries } from '@/lib/po-cost'
+import { todayVn } from '@/lib/date-vn'
 
 /**
  * SỔ CHI TIẾT CÔNG NỢ PHẢI TRẢ NGƯỜI BÁN (TK 331) — theo KỲ.
@@ -195,7 +198,7 @@ function detailOf(
  * toán không có chỗ cho "tạm tính".
  */
 async function loadEntries(): Promise<LedgerEntry[]> {
-  const [{ data: invRaw }, { data: payRaw }] = await Promise.all([
+  const [{ data: invRaw }, { data: payRaw }, costs] = await Promise.all([
     db()
       .from('accounting_supplier_invoices')
       .select('id, invoice_no, supplier_id, currency, total, invoice_date, note')
@@ -205,7 +208,11 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       .from('accounting_supplier_payments')
       .select('id, supplier_id, currency, amount, paid_on, ref_no, method, note')
       .limit(10000),
+    // Phiếu phí trả NHÀ XE (0211) — chính là chứng từ đòi tiền của nhà xe.
+    // Lấy CẢ phiếu đã huỷ: phiếu gốc giữ ở kỳ của nó, dòng đảo vào kỳ huỷ.
+    poCostsRepo.forAccounting({ includeVoided: true }),
   ])
+  const carrierCosts = costs.filter((c) => c.role === 'carrier')
 
   type Inv = { id: string; invoice_no: string; supplier_id: string; currency: string; total: unknown; invoice_date: string; note: string | null } // prettier-ignore
   type Pay = { id: string; supplier_id: string; currency: string; amount: unknown; paid_on: string; ref_no: string | null; method: string | null; note: string | null } // prettier-ignore
@@ -215,6 +222,7 @@ async function loadEntries(): Promise<LedgerEntry[]> {
   const names = await supplierNames([
     ...invs.map((i) => i.supplier_id),
     ...pays.map((p) => p.supplier_id),
+    ...carrierCosts.map((c) => c.payee_supplier_id),
   ])
   const nameOf = (id: string) => names.get(id) ?? '—'
 
@@ -229,6 +237,21 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       amount: Number(i.total ?? 0),
       note: i.note,
     })),
+    /*
+      PHIẾU PHÍ TRẢ NHÀ XE = PHÁT SINH TĂNG (chốt 26/09/2026). Tổng GỒM VAT, như
+      hoá đơn. Phiếu mà người nhận là NCC của đơn thì KHÔNG vào đây — nó chờ hoá
+      đơn NCC (dải "Ngoài sổ"), vào thẳng là ghi nợ hai lần.
+    */
+    ...carrierCosts.flatMap((c) =>
+      carrierLedgerEntries(
+        {
+          ...c,
+          po_codes: c.allocations.map((a) => a.po_code),
+          voided_on: c.voided_at ? todayVn(new Date(c.voided_at)) : null,
+        },
+        nameOf(c.payee_supplier_id),
+      ),
+    ),
     ...pays.map((p): LedgerEntry => ({
       supplier_id: p.supplier_id,
       supplier_name: nameOf(p.supplier_id),

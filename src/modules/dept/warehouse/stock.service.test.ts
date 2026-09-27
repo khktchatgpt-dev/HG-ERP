@@ -47,6 +47,8 @@ vi.mock('@/modules/dept/production/components.repo', () => ({
 }))
 vi.mock('./warehouse.repo', () => ({ materialsRepo: { findById: vi.fn() } }))
 vi.mock('./warehouse.service', () => ({ isWarehouseUser: vi.fn() }))
+// Đồng bộ đợt giao theo số nhận cộng dồn — có test riêng (lib/po-shipments); ở đây chỉ canh ĐƯỢC GỌI.
+vi.mock('@/modules/dept/supply/po-shipments.sync', () => ({ syncShipmentsFromReceipts: vi.fn() }))
 vi.mock('@/modules/dept/supply/supply.repo', () => ({
   RECEIVABLE: ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'],
   // Giá vốn dòng nhập lấy từ dòng đơn mua — mặc định rỗng để các ca cũ giữ
@@ -102,6 +104,7 @@ import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser } from './warehouse.service'
 import { supplyRepo, poLineUnitCosts } from '@/modules/dept/supply/supply.repo'
+import { syncShipmentsFromReceipts } from '@/modules/dept/supply/po-shipments.sync'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -243,6 +246,8 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
     })
 
     expect(r.po_status).toBe('received')
+    // Đợt giao + hẹn giao của đơn tính lại từ số nhận cộng dồn sau mỗi phiếu.
+    expect(syncShipmentsFromReceipts).toHaveBeenCalledWith('po1')
     const rows = vi.mocked(insertMovements).mock.calls[0][0]
     expect(rows[0]).toMatchObject({
       direction: 'in',

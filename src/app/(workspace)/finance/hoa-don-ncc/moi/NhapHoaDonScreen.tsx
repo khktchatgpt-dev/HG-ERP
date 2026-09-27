@@ -31,6 +31,7 @@ import {
   type DraftBasis,
   type DraftLine,
 } from '@/lib/invoice-draft'
+import type { FeeDraftLine } from '@/modules/dept/accounting/supplier-invoices.service'
 
 type Draft = {
   po: {
@@ -41,6 +42,8 @@ type Draft = {
     supplier_name: string
   }
   lines: DraftLine[]
+  /** Phí vận chuyển NCC tính trên hoá đơn (0212) — mồi từ phiếu phí của đơn. */
+  fees?: FeeDraftLine[]
   suggested_due_date: string | null
   net_days: number | null
   today: string
@@ -112,12 +115,39 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
     [draft.lines, edit],
   )
 
+  /*
+    DÒNG PHÍ (0212) — phí vận chuyển mà CHÍNH NCC này tính trên hoá đơn, mồi từ
+    phiếu phí của đơn. Tích sẵn: phiếu phí ghi là NCC đòi. Đơn giá sửa được như
+    dòng hàng — số phải trả là số trên tờ giấy. Dòng phí nối về phần phí nên dải
+    "Ngoài sổ" tự hết khi tờ này vào sổ, và lần lập sau không mồi lại.
+  */
+  const [feeEdit, setFeeEdit] = useState<Record<string, { selected?: boolean; price?: string }>>({}) // prettier-ignore
+  const feeRows = useMemo(
+    () =>
+      (draft.fees ?? []).map((f) => {
+        const e = feeEdit[f.allocation_id] ?? {}
+        const price = e.price != null ? Number(e.price.replace(',', '.')) || 0 : f.amount
+        return {
+          ...f,
+          selected: e.selected ?? true,
+          priceText: e.price ?? String(f.amount),
+          qty: 1,
+          unit_price: price,
+          amount: Math.round(price * 100) / 100,
+        }
+      }),
+    [draft.fees, feeEdit],
+  )
+  const setFee = (id: string, patch: { selected?: boolean; price?: string }) =>
+    setFeeEdit((p) => ({ ...p, [id]: { ...p[id], ...patch } }))
+  const chosenFees = feeRows.filter((f) => f.selected)
+
   const chosen = rows.filter((r) => r.selected)
-  const totals = invoiceTotals(chosen, Number(vatRate.replace(',', '.')) || 0)
+  const totals = invoiceTotals([...chosen, ...chosenFees], Number(vatRate.replace(',', '.')) || 0) // prettier-ignore
   const blockers = draftBlockers({
     invoice_no: invoiceNo,
     invoice_date: invoiceDate,
-    lines: chosen,
+    lines: [...chosen, ...chosenFees],
     total_typed: totals.total,
     total_computed: totals.total,
   })
@@ -174,14 +204,24 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
             vat_amount: totals.vat,
             total: totals.total,
             note: note.trim() || null,
-            lines: chosen.map((r) => ({
-              po_line_id: r.po_line_id,
-              description: r.description,
-              qty: r.qty,
-              unit: r.unit,
-              unit_price: r.unit_price,
-              vat_rate: Number(vatRate.replace(',', '.')) || 0,
-            })),
+            lines: [
+              ...chosen.map((r) => ({
+                po_line_id: r.po_line_id,
+                description: r.description,
+                qty: r.qty,
+                unit: r.unit,
+                unit_price: r.unit_price,
+                vat_rate: Number(vatRate.replace(',', '.')) || 0,
+              })),
+              ...chosenFees.map((f) => ({
+                po_cost_allocation_id: f.allocation_id,
+                description: f.description,
+                qty: 1,
+                unit: null,
+                unit_price: f.unit_price,
+                vat_rate: Number(vatRate.replace(',', '.')) || 0,
+              })),
+            ],
           },
         },
       )
@@ -379,6 +419,46 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
                     <Td num>{r.selected ? money(r.amount, cur) : '—'}</Td>
                   </GridRow>
                 ))}
+                {feeRows.length > 0 && (
+                  <GridRow>
+                    <Td colSpan={8}>
+                      <span className="text-k-label text-[var(--ink-3)]">
+                        Phí mua hàng NCC tính trên hoá đơn — mồi từ phiếu phí của đơn (phí
+                        trả nhà xe không có ở đây: đã vào sổ 331 riêng)
+                      </span>
+                    </Td>
+                  </GridRow>
+                )}
+                {feeRows.map((f) => (
+                  <GridRow key={`phi-${f.allocation_id}`} selected={f.selected}>
+                    <GridCheck
+                      checked={f.selected}
+                      onChange={() => setFee(f.allocation_id, { selected: !f.selected })}
+                      label={`Đưa ${f.description} vào hoá đơn`}
+                    />
+                    <Td>
+                      <div>{f.description}</div>
+                      <div className="text-k-label text-[var(--ink-3)]">
+                        dòng phí · theo phiếu phí
+                        {f.vat_rate != null ? ` (VAT phiếu ${f.vat_rate}%)` : ''}
+                      </div>
+                    </Td>
+                    <Td num>—</Td>
+                    <Td num>—</Td>
+                    <Td num>—</Td>
+                    <Td num>1</Td>
+                    <Td num>
+                      <NumInput
+                        value={f.priceText}
+                        onCommit={(v) =>
+                          setFee(f.allocation_id, { price: v, selected: true })
+                        }
+                        aria-label={`Đơn giá hoá đơn của ${f.description}`}
+                      />
+                    </Td>
+                    <Td num>{f.selected ? money(f.amount, cur) : '—'}</Td>
+                  </GridRow>
+                ))}
               </GridBody>
             </Grid>
           )}
@@ -398,7 +478,7 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
 
         <CommitBar
           totals={[
-            { label: 'Dòng chọn', value: `${chosen.length}/${rows.length}` },
+            { label: 'Dòng chọn', value: `${chosen.length + chosenFees.length}/${rows.length + feeRows.length}` }, // prettier-ignore
             { label: 'Tiền hàng', value: `${money(totals.subtotal, cur)} ${cur}` },
             { label: `VAT ${vatRate}%`, value: money(totals.vat, cur) },
           ]}

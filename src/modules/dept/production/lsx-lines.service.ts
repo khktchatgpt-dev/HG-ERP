@@ -16,7 +16,7 @@ import {
   resolveLsxTemplate,
   specColumnsOf,
   type LsxTemplate,
-} from '@/modules/dept/sales/lsx-template'
+} from '@/lib/lsx-template'
 import {
   productsRepo,
   type Product,
@@ -24,7 +24,7 @@ import {
   type ProductTechSpec,
 } from '@/modules/dept/technical/technical.repo'
 import { productsService } from '@/modules/dept/technical/technical.service'
-import { valueState } from './lsx-sheet-cells'
+import { valueState } from '@/lib/lsx-sheet-cells'
 import {
   GAP_TAB,
   packingText,
@@ -34,7 +34,7 @@ import {
   type ProfileGapKey,
   type ProfileMap,
   type ProfileSnapshot,
-} from './lsx-line-fill'
+} from '@/lib/lsx-line-fill'
 import { lsxAudienceIds } from './notify-targets'
 import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'

@@ -1,16 +1,22 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import Link from 'next/link'
+import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  BarLabel,
+  BarSep,
   Btn,
+  FilterBar,
+  Hint,
   Ico,
+  ToneText,
   type IcoName,
   Cell,
   Chip,
   Code,
   Empty,
+  GroupRow,
+  NoticeBar,
   Row,
   ScreenFrame,
   ScreenHeader,
@@ -25,33 +31,37 @@ import {
 import { money } from '../approval-helpers'
 import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
 import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
+import { materialSummary } from '@/lib/po-list-labels'
 
 /**
- * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — MỌI loại phiếu chờ Giám đốc gom một
- * chỗ, KHÔNG chia theo phòng ban; chip lọc mới phân loại. Ký / trả lại ngay
- * tại dòng; "Xem kỹ" mở màn thẩm định đầy đủ của từng phiếu.
+ * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — MỌI loại phiếu chờ ký gom một chỗ,
+ * KHÔNG chia theo phòng ban; chip lọc mới phân loại. Ký / trả lại ngay tại
+ * dòng; "Xem kỹ" mở màn thẩm định đầy đủ của từng phiếu.
  *
- * CHUYỂN SANG KIT 17/09/2026 — và đây là màn đáng chuyển nhất của khu.
+ * CHUYỂN SANG KIT 17/09/2026: bản cũ bày mỗi phiếu thành một THẺ cao ~110px
+ * cộng một bản bảng riêng từ 1280px — hai bố cục cho cùng một danh sách. Nay
+ * MỘT lưới 30px, 15 phiếu vừa một màn, chân bảng cộng tiền theo từng loại tệ.
  *
- * Bản cũ bày mỗi phiếu thành một THẺ bo tròn cao ~110px, cộng một bản bảng
- * riêng chỉ hiện từ 1280px: hai bố cục cho cùng một danh sách, ~250 dòng mã để
- * giữ chúng khớp nhau. Với 15 phiếu đang chờ, Giám đốc phải cuộn qua ba màn
- * hình mới thấy hết việc của mình.
+ * MỘT HỘP KÝ CHO CẢ BA NGƯỜI KÝ (27/09/2026, artboard 5 — chủ dự án chốt):
+ * anh Điền, Alex (khu Giám đốc) và chị Thảo (khu Cung ứng, chỉ có quyền duyệt
+ * đơn mua — mở màn này ở /mua-hang/cho-ky). Người ký cần biết thêm ba điều mà
+ * bản trước không nói:
+ *  · AI TRÌNH — gom nhóm theo người mua / người gửi, lọc được theo người;
+ *  · MUA GÌ — cột "loại · vật tư" (2 tên đầu + số mã còn lại);
+ *  · HẸN GIAO ĐÃ QUA CHƯA — đo 27/09: 14/16 phiếu chờ có hẹn giao đã qua,
+ *    lâu nhất 85 ngày; ký mà không biết là ký một đơn đã trễ.
+ * Phiếu giá trị lớn mang BIỂU TƯỢNG KHOÁ ở ô tích thay vì nhãn lặp ở mọi dòng
+ * (soi 1:1: 14 nhãn "Giá trị lớn" y hệt nhau chỉ là nhiễu).
  *
- * Nay MỘT lưới 30px cho mọi bề rộng: 15 phiếu vừa một màn, cộng chân bảng cộng
- * tiền theo từng loại tệ — con số mà bản cũ chỉ có ở dải chọn nhiều.
- *
- * BA LUẬT GIỮ NGUYÊN, không đụng tới:
+ * BA LUẬT GIỮ NGUYÊN:
  *  · phiếu GIÁ TRỊ LỚN không có ô tích — phải mở ra đọc, ký riêng;
  *  · ký nhiều phiếu gọi tuần tự, phiếu lỗi nằm lại trong hộp;
  *  · màn rỗng phải nói THẬT vì sao rỗng (đã ký hết ↔ chưa ai lập phiếu).
- *
- * THÊM thanh hành động luôn hiện, cùng luật với màn Đơn mua của Cung ứng:
- * chưa chọn dòng thì nút xám kèm lý do, không biến mất.
  */
 
 const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá' } as const
 const KIND_ICON: Record<'lsx' | 'po' | 'quote', IcoName> = { lsx: 'lenh', po: 'don', quote: 'baoGia' } // prettier-ignore
+const COLS = 8
 
 export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote'
 
@@ -61,16 +71,37 @@ function sumByCurrency(items: SignItem[]): [string, number][] {
   for (const i of items) m.set(i.currency, (m.get(i.currency) ?? 0) + i.value)
   return [...m.entries()]
 }
+const moneyText = (items: SignItem[]) =>
+  sumByCurrency(items)
+    .map(([cur, v]) => money(v, cur))
+    .join(' · ')
+
+/** "30/08" năm nay, "30/08/2025" năm khác. */
+function dm(iso: string, today: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return y === today.slice(0, 4) ? `${d}/${m}` : `${d}/${m}/${y}`
+}
 
 export function ApprovalCenterScreen({
   box,
   initialKind,
+  eyebrow = 'Ban Giám đốc',
+  historyHref = '/exec/approvals/history',
+  ruleHref = '/exec/luat-ky',
 }: {
   box: SignBox
   initialKind: ApprovalKind
+  /** Dòng nhỏ trên tiêu đề — "Mua hàng" khi mở ở khu Cung ứng. */
+  eyebrow?: string
+  /** Lịch sử ký — null khi người xem không vào được khu Giám đốc. */
+  historyHref?: string | null
+  /** Luật ký (ngưỡng giá trị lớn) — null khi người xem không chỉnh được. */
+  ruleHref?: string | null
 }) {
   const router = useRouter()
+  const today = new Date().toISOString().slice(0, 10)
   const [kind, setKind] = useState<ApprovalKind>(initialKind)
+  const [who, setWho] = useState<string>('all')
   const [picked, setPicked] = useState<SignItem[]>([])
   const [pick, setPick] = useState<string | null>(null)
   const { busy, askApprove, askReject, askApproveMany, dialogs } = useApprovalDecision(
@@ -90,7 +121,28 @@ export function ApprovalCenterScreen({
     }),
     [box.items],
   )
-  const items = kind === 'all' ? box.items : box.items.filter((i) => i.kind === kind)
+  const ofKind = kind === 'all' ? box.items : box.items.filter((i) => i.kind === kind)
+  const ownerKey = (i: SignItem) => i.owner_id ?? '@none'
+  /* Người trình trong loại đang xem, đông phiếu trước — chip lọc + nhóm bảng. */
+  const owners = useMemo(() => {
+    const m = new Map<string, { name: string; n: number }>()
+    for (const i of ofKind) {
+      const k = ownerKey(i)
+      const cur = m.get(k) ?? { name: i.owner_name ?? 'Chưa rõ người trình', n: 0 }
+      cur.n++
+      m.set(k, cur)
+    }
+    return [...m.entries()].sort((a, b) => b[1].n - a[1].n)
+  }, [ofKind])
+  const items = who === 'all' ? ofKind : ofKind.filter((i) => ownerKey(i) === who)
+  const groups = owners
+    .map(([k, o]) => ({
+      key: k,
+      name: o.name,
+      rows: items.filter((i) => ownerKey(i) === k),
+    }))
+    .filter((g) => g.rows.length > 0)
+  const onlyPo = ofKind.length > 0 && ofKind.every((i) => i.kind === 'po')
 
   const target = (i: SignItem): DecideTarget => ({
     kind: i.kind,
@@ -105,6 +157,15 @@ export function ApprovalCenterScreen({
   const pickedKeys = new Set(picked.map(key))
   const sel = items.find((i) => key(i) === pick) ?? null
   const bigCount = items.filter((i) => i.big).length
+  /* Tiền tệ chưa có ngưỡng → mọi phiếu tệ đó đều "giá trị lớn". Nói ra, đừng
+     để người ký tự đoán vì sao cả nhóm không có ô tích. */
+  const noRule = [
+    ...new Set(
+      box.items
+        .filter((i) => i.kind === 'po' && !Object.hasOwn(box.thresholds, i.currency))
+        .map((i) => i.currency),
+    ),
+  ]
 
   function toggle(i: SignItem) {
     setPicked((s) =>
@@ -114,10 +175,8 @@ export function ApprovalCenterScreen({
 
   /*
     THANH HÀNH ĐỘNG — nút LUÔN nhìn thấy, chỉ bật/tắt theo lựa chọn hiện tại.
-
-    Ba trạng thái: tích NHIỀU phiếu → ký hàng loạt; chọn MỘT dòng → ký / trả
-    lại / xem kỹ phiếu đó; chưa chọn gì → cả ba nút xám kèm lý do. Người dùng
-    mở màn ra là biết màn này làm được gì, không phải bấm thử mới biết.
+    Tích NHIỀU phiếu → ký hàng loạt; chọn MỘT dòng → ký / trả lại / xem kỹ;
+    chưa chọn gì → cả ba nút xám kèm lý do.
   */
   const nhieu = picked.length > 0
   const chuaChon = !nhieu && !sel
@@ -127,7 +186,7 @@ export function ApprovalCenterScreen({
     <ScreenFrame>
       <ScreenHeader
         compact
-        eyebrow="Ban Giám đốc"
+        eyebrow={eyebrow}
         title="Chờ tôi phê duyệt"
         facts={[
           { label: 'Phiếu chờ', value: String(box.stats.total) },
@@ -161,24 +220,57 @@ export function ApprovalCenterScreen({
             : []),
         ]}
         actions={
-          <Btn href="/exec/approvals/history">
-            <Ico name="lichSu" />
-            Lịch sử ký
-          </Btn>
+          <>
+            {historyHref && (
+              <Btn icon="lichSu" href={historyHref}>
+                Lịch sử ký
+              </Btn>
+            )}
+            {ruleHref && (
+              <Btn icon="thongTin" href={ruleHref}>
+                Luật ký
+              </Btn>
+            )}
+          </>
         }
       />
 
       {box.stats.total > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
-          {(['all', 'lsx', 'po', 'quote'] as const).map((k) => {
-            const icon = k === 'all' ? null : KIND_ICON[k]
-            return (
-              <Chip key={k} on={kind === k} count={counts[k]} onClick={() => setKind(k)}>
-                {icon && <Ico name={icon} size={14} />}
-                {k === 'all' ? 'Tất cả' : KIND_LABEL[k]}
-              </Chip>
-            )
-          })}
+        <FilterBar dense label="Lọc phiếu chờ ký">
+          {(['all', 'lsx', 'po', 'quote'] as const).map((k) => (
+            <Chip
+              key={k}
+              on={kind === k}
+              count={counts[k]}
+              icon={k === 'all' ? undefined : KIND_ICON[k]}
+              onClick={() => {
+                setKind(k)
+                setWho('all')
+                setPicked([])
+              }}
+            >
+              {k === 'all' ? 'Tất cả' : KIND_LABEL[k]}
+            </Chip>
+          ))}
+          {owners.length > 1 && (
+            <>
+              <BarSep />
+              <BarLabel>{onlyPo ? 'Người mua' : 'Người trình'}</BarLabel>
+              {owners.map(([k, o]) => (
+                <Chip
+                  key={k}
+                  on={who === k}
+                  count={o.n}
+                  onClick={() => {
+                    setWho(who === k ? 'all' : k)
+                    setPicked([])
+                  }}
+                >
+                  {o.name}
+                </Chip>
+              ))}
+            </>
+          )}
           {bulkable.length > 1 && (
             <label className="text-k-sm ml-auto flex cursor-pointer items-center gap-2 text-[var(--ink-2)]">
               <Tick
@@ -189,21 +281,33 @@ export function ApprovalCenterScreen({
               Chọn {bulkable.length} phiếu ký nhanh được
             </label>
           )}
-        </div>
+        </FilterBar>
+      )}
+
+      {noRule.length > 0 && (
+        <NoticeBar
+          tone="warn"
+          tag="Luật ký"
+          action={
+            ruleHref
+              ? { label: 'Đặt ngưỡng', onClick: () => router.push(ruleHref) }
+              : undefined
+          }
+        >
+          Chưa đặt ngưỡng cho <b>{noRule.join(', ')}</b> — mọi đơn tính bằng tiền đó bị
+          coi là giá trị lớn, phải mở ra ký từng phiếu.
+        </NoticeBar>
       )}
 
       {items.length === 0 ? (
-        <EmptyCenter box={box} filtered={kind !== 'all' && box.stats.total > 0} />
+        <EmptyCenter
+          box={box}
+          filtered={kind !== 'all' && box.stats.total > 0}
+          historyHref={historyHref}
+        />
       ) : (
         <>
-          {/* THANH HÀNH ĐỘNG — xem ghi chú ở `nhieu` / `chuaChon`. */}
-          <div
-            className={
-              nhieu
-                ? 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-1'
-                : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1'
-            }
-          >
+          <FilterBar dense tone={nhieu ? 'selected' : 'raised'} label="Ký phiếu">
             <span
               className={
                 nhieu
@@ -212,11 +316,9 @@ export function ApprovalCenterScreen({
               }
             >
               {nhieu
-                ? `${picked.length} phiếu đã chọn · ${sumByCurrency(picked)
-                    .map(([cur, v]) => money(v, cur))
-                    .join(' · ')}`
+                ? `${picked.length} phiếu đã chọn · ${moneyText(picked)}`
                 : sel
-                  ? sel.code
+                  ? `${sel.code} · ${sel.po?.supplier_short ?? sel.party} · ${money(sel.value, sel.currency)}`
                   : 'Chưa chọn phiếu nào'}
             </span>
             {nhieu && <Btn onClick={() => setPicked([])}>Bỏ chọn</Btn>}
@@ -224,138 +326,91 @@ export function ApprovalCenterScreen({
               primary={!chuaChon}
               disabled={busy || chuaChon}
               title={lyDo}
+              icon="duyet"
               onClick={() =>
                 nhieu
                   ? askApproveMany(picked.map(target))
                   : sel && askApprove(target(sel))
               }
             >
-              <Ico name="duyet" />
               {nhieu ? `Ký ${picked.length} phiếu` : 'Ký duyệt'}
             </Btn>
             <Btn
               disabled={busy || !sel}
+              icon="traLai"
               title={
                 nhieu ? 'Trả lại phải ghi lý do cho từng phiếu — chọn một phiếu' : lyDo
               }
               onClick={() => sel && askReject(target(sel))}
             >
-              <Ico name="traLai" />
               Trả lại để sửa
             </Btn>
-            <Btn disabled={!sel} title={lyDo} href={sel ? hrefOf(sel) : undefined}>
-              <Ico name="mo" />
+            <Btn disabled={!sel} icon="mo" title={lyDo} href={sel ? sel.href : undefined}>
               Xem kỹ
             </Btn>
             {bigCount > 0 && (
-              <span className="text-k-label ml-auto text-[var(--ink-3)]">
-                {bigCount} phiếu <b>Giá trị lớn</b> phải mở ra đọc, không ký hàng loạt
-                được
+              <span className="ml-auto">
+                <Hint>
+                  <b>{bigCount} phiếu Giá trị lớn</b> phải mở ra đọc, không ký hàng loạt
+                  được
+                </Hint>
               </span>
             )}
-          </div>
+          </FilterBar>
 
           <Table>
             <THead pinFirst>
               <th style={{ width: 30 }} />
-              <th style={{ width: 104 }}>Loại</th>
-              <th style={{ width: 150 }}>Mã phiếu</th>
+              <th style={{ width: 170 }}>Mã phiếu</th>
+              <th style={{ width: 170 }}>Nhà cung cấp / khách</th>
               <th>Nội dung</th>
-              <th style={{ width: 128, textAlign: 'right' }}>Giá trị</th>
-              <th style={{ width: 104 }}>Chờ</th>
+              <th style={{ width: 150 }}>Lệnh SX</th>
+              <th style={{ width: 120, textAlign: 'right' }}>Hẹn giao</th>
+              <th style={{ width: 130, textAlign: 'right' }}>Giá trị</th>
+              <th style={{ width: 92 }}>Chờ</th>
             </THead>
             <tbody>
-              {items.map((i) => {
-                const icon = KIND_ICON[i.kind]
-                const gap = i.waiting_days >= 7
-                return (
-                  <Row
-                    key={key(i)}
-                    selected={key(i) === pick}
-                    onClick={() => setPick(key(i))}
-                  >
-                    <Cell>
-                      {/* Giá trị lớn KHÔNG có ô tích — luật cũ, giữ nguyên. */}
-                      {i.big ? null : (
-                        <Tick
-                          checked={pickedKeys.has(key(i))}
-                          label={`Chọn phiếu ${i.code} để ký nhanh`}
-                          onChange={() => toggle(i)}
-                        />
-                      )}
-                    </Cell>
-                    <Cell muted>
-                      <span className="text-k-label flex items-center gap-1 font-semibold tracking-[.04em] uppercase">
-                        <Ico name={icon} size={13} />
-                        {KIND_LABEL[i.kind]}
-                      </span>
-                    </Cell>
-                    <Cell>
-                      <span className="flex items-center gap-1.5">
-                        <Code as="a" href={hrefOf(i)}>
-                          {i.code}
-                        </Code>
-                        {i.big && <Tag tone="neutral">Giá trị lớn</Tag>}
-                      </span>
-                    </Cell>
-                    <Cell>
-                      {i.party}
-                      {i.facts.length > 0 && (
-                        <span className="text-k-label ml-1 text-[var(--ink-3)]">
-                          · {i.facts.join(' · ')}
-                        </span>
-                      )}
-                    </Cell>
-                    <Cell num>{i.value > 0 ? money(i.value, i.currency) : '—'}</Cell>
-                    <Cell>
-                      <span
-                        className={
-                          gap
-                            ? 'text-k-sm flex items-center gap-1 font-semibold text-[var(--stop)]'
-                            : 'text-k-sm flex items-center gap-1 text-[var(--ink-2)]'
-                        }
-                      >
-                        {gap ? (
-                          <Ico name="canhBao" size={13} />
-                        ) : (
-                          <Ico name="cho" size={13} />
-                        )}
-                        {i.waiting_days <= 0 ? 'hôm nay' : `${i.waiting_days} ngày`}
-                      </span>
-                    </Cell>
-                  </Row>
-                )
-              })}
+              {groups.map((g) => (
+                <Fragment key={g.key}>
+                  <GroupRow
+                    name={g.name}
+                    cols={COLS}
+                    meta={`${g.rows.length} phiếu · ${moneyText(g.rows)} · lâu nhất ${Math.max(...g.rows.map((r) => r.waiting_days))} ngày`}
+                  />
+                  {g.rows.map((i) => (
+                    <SignRow
+                      key={key(i)}
+                      i={i}
+                      today={today}
+                      selected={key(i) === pick}
+                      checked={pickedKeys.has(key(i))}
+                      onPick={() => setPick(key(i))}
+                      onToggle={() => toggle(i)}
+                    />
+                  ))}
+                </Fragment>
+              ))}
             </tbody>
             {/*
-              CHÂN BẢNG CỘNG TIỀN — bản cũ chỉ cộng khi đã tích chọn, nên câu
-              hỏi đầu tiên của người ký ("tổng bao nhiêu tiền đang chờ tôi")
-              phải tự cộng bằng mắt.
-            */}
-            {/*
-              CỘT CHÂN BẢNG = 6, BẰNG `THead`. Bản cũ cộng ra 7 (4 + 1 +
-              caveat 2): ô caveat tràn ra ngoài bảng, và vì nó `sticky
-              bottom-0` nên đè lên thân. Chú thích gộp vào ô nhãn — cột cuối
-              ("Chờ") chỉ rộng 104px, nhét câu dài vào đó là chữ xếp dọc.
+              CHÂN BẢNG: 6 + 2 = 8 cột, bằng THead. Tiền mỗi loại một dòng —
+              "118.452 USD · 1.720.560.560 ₫" nhét một ô 130px thì vỡ dòng giữa
+              chừng (soi 1:1, 27/09/2026).
             */}
             <TFoot
               label={
-                <td colSpan={4}>
-                  Cộng {items.length} phiếu đang chờ
-                  <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
-                    · cộng riêng từng loại tiền, KHÔNG quy đổi
+                <td colSpan={6}>
+                  Cộng {items.length} phiếu đang chờ{' '}
+                  <span className="font-normal">
+                    <Hint size="sm">· cộng riêng từng loại tiền, KHÔNG quy đổi</Hint>
                   </span>
                 </td>
               }
               cells={
-                <>
-                  <td className="num">
-                    {sumByCurrency(items)
-                      .map(([cur, v]) => money(v, cur))
-                      .join(' · ') || '—'}
-                  </td>
-                  <td />
-                </>
+                <td className="num" colSpan={2}>
+                  {sumByCurrency(items).map(([cur, v]) => (
+                    <div key={cur}>{money(v, cur)}</div>
+                  ))}
+                </td>
               }
             />
           </Table>
@@ -365,6 +420,7 @@ export function ApprovalCenterScreen({
       <StatusBar
         left={[
           kind === 'all' ? 'Mọi loại phiếu' : `Lọc: ${KIND_LABEL[kind]}`,
+          who === 'all' ? 'Mọi người trình' : `Người trình: ${owners.find(([k]) => k === who)?.[1].name ?? ''}`, // prettier-ignore
           bigCount > 0 ? `${bigCount} phiếu Giá trị lớn` : 'Không có phiếu Giá trị lớn',
         ]}
         right={`${items.length} / ${box.stats.total} phiếu`}
@@ -375,16 +431,135 @@ export function ApprovalCenterScreen({
   )
 }
 
-/** Đường tới màn thẩm định đầy đủ của từng loại phiếu. */
-function hrefOf(i: SignItem): string {
-  return `/exec/approvals/${i.kind}/${i.id}`
+/** Một phiếu trong hộp ký. */
+function SignRow({
+  i,
+  today,
+  selected,
+  checked,
+  onPick,
+  onToggle,
+}: {
+  i: SignItem
+  today: string
+  selected: boolean
+  checked: boolean
+  onPick: () => void
+  onToggle: () => void
+}) {
+  const late = i.waiting_days >= 7
+  const m = materialSummary(i.po?.materials ?? [])
+  return (
+    <Row selected={selected} onClick={onPick}>
+      <Cell>
+        {i.big ? (
+          <span
+            className="flex text-[var(--ink-3)]"
+            title="Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt"
+          >
+            <Ico name="khoa" size={13} label="Giá trị lớn — không ký hàng loạt" />
+          </span>
+        ) : (
+          <Tick
+            checked={checked}
+            label={`Chọn phiếu ${i.code} để ký nhanh`}
+            onChange={onToggle}
+          />
+        )}
+      </Cell>
+      <Cell>
+        <span className="flex items-center gap-1.5">
+          <Ico name={KIND_ICON[i.kind]} size={13} label={KIND_LABEL[i.kind]} />
+          <Code
+            as="a"
+            href={i.href}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            {i.code}
+          </Code>
+        </span>
+      </Cell>
+      <Cell title={i.party}>
+        <span className="font-semibold">{i.po?.supplier_short ?? i.party}</span>
+      </Cell>
+      {i.po ? (
+        <Cell grow title={[i.po.loai, ...i.po.materials].filter(Boolean).join(' · ')}>
+          {i.po.loai && <span className="font-semibold">{i.po.loai}</span>}
+          {i.po.loai && m.head && ' · '}
+          {m.head}
+          {m.more > 0 && (
+            <>
+              {' '}
+              <Hint>+{m.more} mã</Hint>
+            </>
+          )}
+        </Cell>
+      ) : (
+        <Cell grow muted title={i.facts.join(' · ')}>
+          {i.facts.join(' · ')}
+        </Cell>
+      )}
+      <Cell muted>
+        <span className="flex items-center gap-1.5">
+          {i.po?.lsx_code ?? (i.kind === 'po' ? 'Ngoài lệnh' : '—')}
+          {i.po?.lsx_done && (
+            <span title="Mọi lệnh của đơn đã hoàn thành — sản xuất xong, đơn chưa được cập nhật">
+              <Tag tone="warn">đã xong</Tag>
+            </span>
+          )}
+        </span>
+      </Cell>
+      <Cell num>
+        {!i.po ? (
+          <span className="text-[var(--ink-empty)]">—</span>
+        ) : !i.po.expected_at ? (
+          <Tag tone="warn">chưa hẹn</Tag>
+        ) : i.po.eta_late_days > 0 ? (
+          <ToneText
+            tone="stop"
+            title={`Hẹn giao ${dm(i.po.expected_at, today)} đã qua ${i.po.eta_late_days} ngày`}
+          >
+            {dm(i.po.expected_at, today)}{' '}
+            <span className="text-k-label">qua {i.po.eta_late_days} ng</span>
+          </ToneText>
+        ) : (
+          dm(i.po.expected_at, today)
+        )}
+      </Cell>
+      <Cell num>
+        <span className="font-semibold">
+          {i.value > 0 ? money(i.value, i.currency) : '—'}
+        </span>
+      </Cell>
+      <Cell>
+        <span
+          className={
+            late
+              ? 'text-k-sm flex items-center gap-1 font-semibold text-[var(--stop)]'
+              : 'text-k-sm flex items-center gap-1 text-[var(--ink-2)]'
+          }
+        >
+          <Ico name={late ? 'canhBao' : 'cho'} size={13} />
+          {i.waiting_days <= 0 ? 'hôm nay' : `${i.waiting_days} ngày`}
+        </span>
+      </Cell>
+    </Row>
+  )
 }
 
 /**
  * Màn rỗng phải NÓI THẬT vì sao rỗng. "0 phiếu chờ" có hai nghĩa trái ngược:
  * đã ký hết (tốt) hoặc chưa ai từng lập phiếu trên hệ thống (dữ liệu chưa lên).
  */
-function EmptyCenter({ box, filtered }: { box: SignBox; filtered: boolean }) {
+function EmptyCenter({
+  box,
+  filtered,
+  historyHref,
+}: {
+  box: SignBox
+  filtered: boolean
+  historyHref: string | null
+}) {
   const neverUsed = box.emptiness.pos_total === 0 && box.emptiness.lsx_total === 0
   const noPo = box.emptiness.pos_total === 0
 
@@ -403,10 +578,11 @@ function EmptyCenter({ box, filtered }: { box: SignBox; filtered: boolean }) {
         }
         next={
           <>
-            <Btn href="/exec/approvals/history">
-              <Ico name="lichSu" />
-              Xem lịch sử ký
-            </Btn>
+            {historyHref && (
+              <Btn icon="lichSu" href={historyHref}>
+                Xem lịch sử ký
+              </Btn>
+            )}
             {neverUsed && (
               <span className="text-k-sm self-center text-[var(--ink-3)]">
                 Cần Kinh doanh phát lệnh sản xuất và Cung ứng lập đơn mua trên hệ thống

@@ -29,6 +29,12 @@ export const DOC_TYPES = [
   'video',
   'image',
   'other',
+  // 0213 — chứng từ NCC đính vào đơn mua (CO/CQ đi `cert`).
+  'quote',
+  'po_confirm',
+  'contract',
+  'delivery_note',
+  'invoice',
 ] as const
 export type DocType = (typeof DOC_TYPES)[number]
 
@@ -53,7 +59,18 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   video: 'Video',
   image: 'Ảnh sản phẩm',
   other: 'Khác',
+  quote: 'Báo giá NCC',
+  po_confirm: 'Xác nhận đơn của NCC',
+  contract: 'Hợp đồng mua bán',
+  delivery_note: 'Phiếu giao hàng NCC',
+  invoice: 'Hoá đơn NCC',
 }
+
+/**
+ * Loại chứng từ chọn được khi đính file vào ĐƠN MUA (0213) — theo thứ tự đời
+ * đơn: báo giá → xác nhận → hợp đồng → phiếu giao → hoá đơn → CO/CQ.
+ */
+export const PO_DOC_TYPES = ['quote', 'po_confirm', 'contract', 'delivery_note', 'invoice', 'cert', 'other'] as const satisfies readonly DocType[] // prettier-ignore
 
 /**
  * Cố ý KHÔNG nén ảnh khi upload — bản vẽ và ảnh SP là dữ liệu gốc, nén là mất
@@ -90,6 +107,11 @@ export const DOC_TYPE_MAX_BYTES: Record<DocType, number> = {
   // hoặc để link Drive vào ghi chú.
   video: HARD_MAX,
   other: HARD_MAX,
+  quote: HARD_MAX,
+  po_confirm: HARD_MAX,
+  contract: HARD_MAX,
+  delivery_note: HARD_MAX,
+  invoice: HARD_MAX,
 }
 
 /** Chưa phân loại (doc_type null) → mức mặc định. */

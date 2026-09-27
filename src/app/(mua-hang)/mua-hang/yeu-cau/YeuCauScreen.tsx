@@ -17,6 +17,7 @@ import {
   FilterBar,
   Num,
   Row,
+  ScopeSwitch,
   ScreenFrame,
   ScreenHeader,
   SearchInput,
@@ -26,6 +27,8 @@ import {
   Table,
   Tag,
 } from '@/components/kit'
+import type { SupplyScope } from '@/lib/supply-scope'
+import { useScopePref } from '@/lib/use-scope-pref'
 
 export type YeuCauRow = {
   id: string
@@ -43,6 +46,10 @@ export type YeuCauRow = {
   reason: string
   owner: MeetingOwner
   action: string
+  /** Lệnh có đơn của người đang xem (lib/supply-scope). */
+  mine: boolean
+  /** Người phụ trách các đơn trên lệnh — "người đảm nhận". */
+  buyers: string[]
 }
 
 /** `MEETING_LEVEL.tone` có 'muted'/'primary'; `Tag` của kit chỉ nhận 4 tone. */
@@ -64,16 +71,39 @@ function conLai(iso: string | null, today: string): number | null {
 }
 
 export function YeuCauScreen({
-  rows,
+  rows: allRows,
   today,
   canEdit,
+  meId,
+  defaultScope,
+  urlScope,
+  initialMuc,
 }: {
   rows: YeuCauRow[]
   today: string
   canEdit: boolean
+  meId: string
+  defaultScope: SupplyScope
+  urlScope: SupplyScope | null
+  /** `?muc=` — mức rủi ro hoặc 'cung-ung' (từ ô số của Bàn làm việc). */
+  initialMuc: string | null
 }) {
   const [q, setQ] = useState('')
-  const [muc, setMuc] = useState<MeetingRiskLevel | 'toi' | 'all'>('all')
+  const [muc, setMuc] = useState<MeetingRiskLevel | 'toi' | 'all'>(() =>
+    initialMuc === 'cung-ung'
+      ? 'toi'
+      : MEETING_LEVELS.includes(initialMuc as MeetingRiskLevel)
+        ? (initialMuc as MeetingRiskLevel)
+        : 'all',
+  )
+  // PHẠM VI (27/09/2026): lệnh của tôi = lệnh có đơn của tôi. Mọi số đếm bên
+  // dưới đếm trên tập ĐANG XEM — chip và danh sách không lệch nhau.
+  const [scope, setScope] = useScopePref('yeu-cau', meId, defaultScope, urlScope)
+  const mineCount = allRows.filter((r) => r.mine).length
+  const rows = useMemo(
+    () => (scope === 'toi' ? allRows.filter((r) => r.mine) : allRows),
+    [allRows, scope],
+  )
 
   const dem = useMemo(() => {
     const c: Record<string, number> = { all: rows.length, toi: 0 }
@@ -115,7 +145,7 @@ export function YeuCauScreen({
     muc === 'all'
       ? 'tất cả'
       : muc === 'toi'
-        ? 'chờ Cung ứng'
+        ? 'Cung ứng đang giữ'
         : MEETING_LEVEL[muc].label.toLowerCase()
 
   return (
@@ -125,9 +155,9 @@ export function YeuCauScreen({
         eyebrow="Mua hàng"
         title="Vật tư theo lệnh"
         facts={[
-          { label: 'Lệnh đang chạy', value: String(rows.length) },
+          { label: scope === 'toi' ? 'Lệnh của tôi' : 'Lệnh đang chạy', value: String(rows.length) },
           {
-            label: 'Chờ Cung ứng',
+            label: 'Cung ứng đang giữ',
             value: String(dem.toi ?? 0),
             tone: (dem.toi ?? 0) > 0 ? 'warn' : 'neutral',
           },
@@ -139,6 +169,15 @@ export function YeuCauScreen({
         ]}
         actions={
           <>
+            <ScopeSwitch
+              label="Phạm vi"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: 'toi', label: 'Lệnh của tôi', count: mineCount, hint: 'Lệnh có đơn tôi phụ trách' },
+                { value: 'phong', label: 'Cả phòng', count: allRows.length, hint: 'Mọi lệnh đang chạy' },
+              ]}
+            />
             {/*
               HAI BÁO CÁO ĐÃ CÓ SẴN, khu mới chỉ thiếu nút. `hop-report` (Tổng
               hợp · Tình trạng lệnh · Việc cần quyết định) là file phòng cầm đi
@@ -170,7 +209,7 @@ export function YeuCauScreen({
           count={dem.toi ?? 0}
           onClick={() => setMuc(muc === 'toi' ? 'all' : 'toi')}
         >
-          Chờ tôi xử lý
+          Cung ứng đang giữ
         </Chip>
         {MEETING_LEVELS.map((k) => (
           <Chip
@@ -188,8 +227,10 @@ export function YeuCauScreen({
         <Empty
           headline={`Không có lệnh nào ở khung nhìn “${nhanMuc}”`}
           reason={
-            rows.length === 0
+            allRows.length === 0
               ? 'Chưa có lệnh sản xuất nào đang chạy. Kế hoạch SX phát lệnh thì nó hiện ở đây.'
+              : rows.length === 0
+                ? `Bạn chưa có đơn mua nào trên ${allRows.length} lệnh đang chạy — lệnh của tôi tính theo đơn tôi phụ trách.`
               : `Trong ${rows.length} lệnh đang chạy, không lệnh nào khớp bộ lọc hiện tại${q.trim() ? ` và từ khoá “${q.trim()}”` : ''}.`
           }
           next={
@@ -199,9 +240,10 @@ export function YeuCauScreen({
               onClick={() => {
                 setQ('')
                 setMuc('all')
+                if (rows.length === 0) setScope('phong')
               }}
             >
-              Xem cả {rows.length} lệnh
+              Xem cả {rows.length === 0 ? allRows.length : rows.length} lệnh
             </Btn>
           }
         />
@@ -213,6 +255,7 @@ export function YeuCauScreen({
             <th>Mốc vật tư</th>
             <th>Vướng gì</th>
             <th>Ai cầm bóng</th>
+            <th>Người đảm nhận</th>
             <th style={{ textAlign: 'right' }}>Đơn mua</th>
           </THead>
           <tbody>
@@ -284,6 +327,13 @@ export function YeuCauScreen({
                     </span>
                   </Cell>
                   <Cell muted>{r.owner}</Cell>
+                  <Cell muted>
+                    {r.buyers.length > 0 ? (
+                      r.buyers.join(', ')
+                    ) : (
+                      <span className="text-[var(--warn)]">chưa ai có đơn</span>
+                    )}
+                  </Cell>
                   <Cell num>
                     <span className="flex items-baseline justify-end gap-2">
                       <Num value={String(r.posTotal || '')} strong />
@@ -315,7 +365,7 @@ export function YeuCauScreen({
           */}
           <TFoot
             label={
-              <td colSpan={5}>
+              <td colSpan={6}>
                 Cộng {kept.length} lệnh đang hiện
                 <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
                   · mức rủi ro tính bằng ĐÚNG hàm của bảng họp và file Excel họp — ba chỗ

@@ -16,7 +16,10 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "ui:baseline": "node scripts/ui-baseline.mjs",
     "kit:api": "node scripts/kit-api.mjs",
-    "lint:all": "eslint"
+    "lint:all": "eslint",
+    "ui:shots": "playwright test",
+    "ui:shots:update": "playwright test --update-snapshots",
+    "size:baseline": "node scripts/size-baseline.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
@@ -42,12 +45,14 @@
     "react": "19.2.4",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

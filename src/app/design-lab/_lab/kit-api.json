@@ -127,6 +127,24 @@
     ],
     "extends": []
   },
+  "BarLabel": {
+    "file": "src/components/kit/Table.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Tên nhóm, chữ thường — thành phần tự in hoa."
+      }
+    ],
+    "extends": []
+  },
+  "BarSep": {
+    "file": "src/components/kit/Table.tsx",
+    "props": [],
+    "extends": []
+  },
   "Btn": {
     "file": "src/components/kit/Primitives.tsx",
     "props": [
@@ -731,6 +749,13 @@
         "optional": true,
         "def": null,
         "doc": "Cột phải 268px (thường là `<FactBox>`), chỉ đứng cạnh từ 1100px trở lên; hẹp hơn thì rơi xuống dưới. Bỏ trống thì cột chính chiếm trọn bề ngang."
+      },
+      {
+        "name": "wideAside",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Cột phải rộng 340px thay vì 268px — khi cột phải chứa ô VIẾT (khối Trao đổi của chứng từ): 268px thì ô gõ chỉ còn ~230px, mỗi dòng 4–5 chữ. Chỉ bật khi cột phải có chỗ nhập; FactBox chỉ-đọc giữ 268px để bảng chính rộng."
       }
     ],
     "extends": []
@@ -789,6 +814,67 @@
     ],
     "extends": []
   },
+  "DocMenu": {
+    "file": "src/components/kit/Nav.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Các `DocMenuPanel` — MỘT cho mỗi mục. Chỉ panel đang mở được dựng."
+      },
+      {
+        "name": "items",
+        "type": "DocMenuItem[]",
+        "optional": false,
+        "def": null,
+        "doc": "Các mục theo thứ tự hiện. Mục đầu thường là \"Tổng quan\" — màn mở sẵn mục đó."
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Tên của menu cho trình đọc màn hình (\"Nội dung đơn\")."
+      },
+      {
+        "name": "onValueChange",
+        "type": "(id: string) => void",
+        "optional": false,
+        "def": null,
+        "doc": "Gọi với `id` của mục vừa chọn (bấm hoặc mũi tên). Màn đổi `value` và ghi đường dẫn."
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "`id` của mục đang mở. Có kiểm soát: kit không giữ trạng thái."
+      }
+    ],
+    "extends": []
+  },
+  "DocMenuPanel": {
+    "file": "src/components/kit/Nav.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Nội dung CHỈ của mục này — không lặp khối của mục khác."
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "`id` của mục trong `DocMenu` mà panel này thuộc về."
+      }
+    ],
+    "extends": []
+  },
   "DocScreen": {
     "file": "src/components/kit/Erp.tsx",
     "props": [
@@ -805,6 +891,68 @@
         "optional": true,
         "def": null,
         "doc": "Mật độ DÀY (`kit-dense`): hàng 25px thay vì 30px, đệm ô dọc 2px. Cho chứng từ nhiều dòng."
+      }
+    ],
+    "extends": []
+  },
+  "DocStatus": {
+    "file": "src/components/kit/Flow.tsx",
+    "props": [
+      {
+        "name": "icon",
+        "type": "IcoName",
+        "optional": false,
+        "def": null,
+        "doc": "Icon theo khái niệm của bước (`gui`, `cho`, `duyet`, `nhapKho`…)."
+      },
+      {
+        "name": "status",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Tên trạng thái hiện tại, chữ người đọc (\"Đã gửi NCC\", \"Chờ duyệt\")."
+      },
+      {
+        "name": "holder",
+        "type": "{ who: string; what: string; days?: number | null; mine?: boolean }",
+        "optional": true,
+        "def": null,
+        "doc": "Ai đang giữ chứng từ ở bước này. `days` = số ngày đã nằm ở bước (tính sẵn bằng `daysHeld`), tô màu theo `HOLD_AGE_DAYS`: dưới 3 không tô, 3–6 `warn`, từ 7 `stop`. Chứng từ đã khép thì bỏ trống — đừng bịa người giữ."
+      },
+      {
+        "name": "marks",
+        "type": "Mark[]",
+        "optional": true,
+        "def": null,
+        "doc": "Vòng đời đầy đủ cho khung nổi mở khi bấm chữ trạng thái — cùng kiểu mốc với `Timeline` (mốc `at: null` = chưa tới). Không có mốc nào thì chữ trạng thái không bấm được."
+      },
+      {
+        "name": "moves",
+        "type": "ComponentProps<typeof Menu>['items']",
+        "optional": true,
+        "def": null,
+        "doc": "Các chuyển trạng thái khác, cùng kiểu mục với `Menu` — gom nhóm \"Đi tiếp\" / \"Quay lại\" / \"Dừng\" bằng `group`, mục không làm được giữ lại kèm `why`. Rỗng thì không vẽ nút menu."
+      },
+      {
+        "name": "movesLabel",
+        "type": "string",
+        "optional": true,
+        "def": "'Chuyển trạng thái'",
+        "doc": "Chữ trên nút mở menu chuyển trạng thái."
+      },
+      {
+        "name": "next",
+        "type": "ReactNode",
+        "optional": true,
+        "def": null,
+        "doc": "Nút chuyển sang bước KẾ TIẾP — thường là `Btn primary`, có thể khoá mềm (`blockedBy`)."
+      },
+      {
+        "name": "tone",
+        "type": "'done' | 'warn' | 'stop'",
+        "optional": true,
+        "def": null,
+        "doc": "Màu icon theo vòng đời: `done` đã xong trọn, `warn` đang chờ ai đó, `stop` đã huỷ / dừng. Bỏ trống = màu hành động (đang chạy bình thường)."
       }
     ],
     "extends": []
@@ -955,6 +1103,13 @@
         "doc": "Mở sẵn lúc vào màn. Chỉ đọc MỘT LẦN lúc dựng — đổi về sau không gấp/mở lại khối."
       },
       {
+        "name": "fixed",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "KHỐI CỐ ĐỊNH — luôn mở, không mũi tên gập, tiêu đề là `h3` chứ không phải nút. Dùng khi khối đã nằm trong một mục `DocMenuPanel` (27/09/2026): mục đã tách thông tin rồi, gập thêm một tầng nữa chỉ là một cú bấm thừa và một dòng \"▸ …\" trông như danh sách lồng danh sách. `default…"
+      },
+      {
         "name": "flush",
         "type": "boolean",
         "optional": true,
@@ -1068,6 +1223,27 @@
         "optional": false,
         "def": null,
         "doc": "Ô tìm, các chip lọc, và nút `TableSettings` (đẩy sang phải bằng một khối `ml-auto`). Hết chỗ thì tự xuống dòng."
+      },
+      {
+        "name": "dense",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Đệm dọc 4px thay 8px — cho màn xếp HAI–BA hàng lọc chồng nhau (Đơn mua, Hộp ký). Trước 28/09/2026 các màn đó tự dựng hàng bằng cả chuỗi lớp vì `FilterBar` không có biến thể này."
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Tên cho trình đọc màn hình — có thì hàng mang `role=\"toolbar\"`."
+      },
+      {
+        "name": "tone",
+        "type": "'card' | 'raised' | 'selected'",
+        "optional": true,
+        "def": "'card'",
+        "doc": "Nền: `card` hàng lọc thường · `raised` thanh hành động chưa chọn gì · `selected` thanh hành động ĐANG CHỌN phiếu (nền nhạt màu hành động)."
       }
     ],
     "extends": []
@@ -1424,6 +1600,33 @@
         "optional": true,
         "def": null,
         "doc": "Bề rộng (px) của phần chứa ô nhập. Bỏ trống thì ô tự co theo nội dung."
+      }
+    ],
+    "extends": []
+  },
+  "Hint": {
+    "file": "src/components/kit/Primitives.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Nội dung ghi chú — một cụm ngắn, không phải đoạn văn."
+      },
+      {
+        "name": "size",
+        "type": "'label' | 'sm'",
+        "optional": true,
+        "def": "'label'",
+        "doc": "\\`label\\` 11px (mặc định, cạnh số/mã) · \\`sm\\` 12px (dòng giải thích dưới tiêu đề)."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Chữ đầy đủ khi rê chuột — khi ghi chú là bản rút gọn."
       }
     ],
     "extends": []
@@ -2303,6 +2506,40 @@
       "HTMLAttributes"
     ]
   },
+  "ScopeSwitch": {
+    "file": "src/components/kit/Nav.tsx",
+    "props": [
+      {
+        "name": "label",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Tên nhóm cho trình đọc màn hình và nhãn nhỏ đứng trước (\"Phạm vi\")."
+      },
+      {
+        "name": "onChange",
+        "type": "(v: V) => void",
+        "optional": false,
+        "def": null,
+        "doc": "Người dùng chọn phạm vi khác. Không gọi khi bấm lại lựa chọn đang bật."
+      },
+      {
+        "name": "options",
+        "type": "ScopeOption<V>[]",
+        "optional": false,
+        "def": null,
+        "doc": "Các phạm vi, theo thứ tự hiện — thường 2: của tôi trước, cả phòng sau."
+      },
+      {
+        "name": "value",
+        "type": "V",
+        "optional": false,
+        "def": null,
+        "doc": "Lựa chọn đang bật."
+      }
+    ],
+    "extends": []
+  },
   "ScreenFrame": {
     "file": "src/components/kit/Shell.tsx",
     "props": [
@@ -2319,6 +2556,13 @@
         "optional": true,
         "def": "false",
         "doc": "Bật mật độ DÀY (`.kit-dense`: hàng 25px thay 30px, đệm dọc 2px thay 5px) cho riêng màn này."
+      },
+      {
+        "name": "fill",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "LẤP ĐẦY KHUNG CHA (`height: 100%`) thay vì tự đo \"100dvh − vị trí\". Dùng khi màn được NHÚNG vào một khung đã có chiều cao (trang mẫu, xem trước, hộp thoại lớn). Không bật thì khung cao theo cửa sổ: nhúng trong cửa sổ thấp là bảng bị bóp còn vài chục px (đo 27/09/2026 khi soi h…"
       },
       {
         "name": "tableMin",
@@ -2718,6 +2962,13 @@
         "doc": "TÊN BẢNG cho trình đọc màn hình (`aria-label` của `<table>`), vd. \"Danh sách nhà cung cấp\". Người đi bằng phím nhảy giữa các bảng theo tên; bảng không tên chỉ được đọc là \"bảng\", và màn có hai bảng thì không phân biệt được. Không hiện ra mắt — tiêu đề khối trên bảng đã nói điề…"
       },
       {
+        "name": "minWidth",
+        "type": "number",
+        "optional": true,
+        "def": null,
+        "doc": "BỀ RỘNG TỐI THIỂU của bảng này, px — ghi đè `--table-min` (mặc định 680px, hoặc `ScreenFrame tableMin`). Đặt nhỏ (vd. 0) cho bảng nằm trong CỘT HẸP (khay phải 372px): giữ sàn 680px thì bảng 3 cột cũng cuộn ngang."
+      },
+      {
         "name": "onRowClick",
         "type": "(row: T) => void",
         "optional": true,
@@ -2908,6 +3159,40 @@
       "InputHTMLAttributes"
     ]
   },
+  "TextLink": {
+    "file": "src/components/kit/Primitives.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Tên hiển thị."
+      },
+      {
+        "name": "href",
+        "type": "string",
+        "optional": false,
+        "def": null,
+        "doc": "Đường nội bộ (`/mua-hang/ncc/…`) — đi bằng `next/link`, không tải lại trang."
+      },
+      {
+        "name": "strong",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Đậm — khi tên là thứ chính của dòng (cột đầu)."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Chữ đầy đủ khi rê chuột — khi tên đang là bản rút gọn."
+      }
+    ],
+    "extends": []
+  },
   "TFoot": {
     "file": "src/components/kit/Table.tsx",
     "props": [
@@ -3072,6 +3357,40 @@
         "optional": false,
         "def": null,
         "doc": "Cây được dùng `useToast()`. App đã gắn MỘT lần ở `Providers.tsx` — màn nghiệp vụ chỉ gọi `useToast()`, không bọc thêm. Khay hiện góc dưới phải, nổi trên cả hộp thoại."
+      }
+    ],
+    "extends": []
+  },
+  "ToneText": {
+    "file": "src/components/kit/Primitives.tsx",
+    "props": [
+      {
+        "name": "children",
+        "type": "ReactNode",
+        "optional": false,
+        "def": null,
+        "doc": "Nội dung được nhấn."
+      },
+      {
+        "name": "tone",
+        "type": "'stop' | 'warn' | 'done'",
+        "optional": false,
+        "def": null,
+        "doc": "\\`stop\\` trễ/chặn · \\`warn\\` cần để ý · \\`done\\` đã xong."
+      },
+      {
+        "name": "strong",
+        "type": "boolean",
+        "optional": true,
+        "def": "true",
+        "doc": "Đậm (mặc định) — tắt khi đã nằm trong ô chữ đậm."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "optional": true,
+        "def": null,
+        "doc": "Giải thích khi rê chuột: nhấn vì sao."
       }
     ],
     "extends": []
@@ -3268,7 +3587,7 @@
         "type": "ReactNode",
         "optional": false,
         "def": null,
-        "doc": "Các `WorkTile`. Lưới 2 cột, lên 3 từ 640px, lên 6 từ 1024px; hơn sáu ô thì xuống hàng."
+        "doc": "Các `WorkTile`. Lưới 2 cột, lên 3 khi KHUNG CHỨA rộng từ 448px, lên 6 từ 768px; hơn sáu ô thì xuống hàng."
       }
     ],
     "extends": []

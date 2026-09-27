@@ -50,6 +50,12 @@ export type PoField = {
    * `on_hand`) nên gợi ý "SL đặt = nhu cầu − tồn" và cột in không đổi.
    */
   editHidden?: boolean
+  /**
+   * Ô số HẸP (≤ 64px) — không tính vào trần 3 ô của lưới soạn đơn; đứng ngay sau
+   * ô trước nó trên lưới (`splitLineFields`). Dùng cho ô đi đôi với ô bên cạnh
+   * như Đm/sp cạnh SL đơn hàng.
+   */
+  compact?: boolean
 }
 
 const t = (
@@ -105,6 +111,10 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('grade', 'Vật liệu', 'w-[110px]', 'material_grade', 'Sắt xi trắng…'),
     t('spec', 'Quy cách', 'w-[110px]', 'spec', '25×50×1li…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    // ĐỊNH MỨC / SP (26/09/2026) — cột có sẵn trên đơn giấy ("Đm /sp") và trong DB
+    // (`dm_per_sp`), nhưng form không có ô gõ: chỉ chép từ lần đặt trước. Có Đm
+    // thì SL đơn hàng là số SẢN PHẨM, gợi ý SL đặt = SL đơn hàng × Đm − tồn.
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
     // "Tồn kho" bỏ hẳn khỏi phiếu phụ kiện (user chốt 12/08/2026 khi duyệt cột
     // từng mẫu): tồn là số nội bộ, NCC chỉ cần SL đơn hàng để hiểu con số đặt.
     // `qty_on_hand` vẫn được chụp lúc chọn vật tư nên gợi ý "đặt = nhu cầu − tồn"
@@ -324,6 +334,7 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'grade',
     'spec',
     'demand',
+    'dm',
     // ĐVT đứng TRƯỚC cột số lượng như tám mẫu còn lại (10/08/2026). Trước đây
     // riêng mẫu này in sau, nên NCC nhận hai kiểu bố cục từ cùng một công ty.
     '@unit',

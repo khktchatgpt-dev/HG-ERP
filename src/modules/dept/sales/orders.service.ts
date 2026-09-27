@@ -11,6 +11,8 @@ import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { planPoCascade } from '@/lib/po-cancel-cascade'
+import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -532,27 +534,21 @@ export const ordersService = {
           })
           lsxCancelled = true
         }
-        const { rows: pos } = await posRepo.list({
-          production_order_id: lsx.id,
-          page: 1,
-          page_size: 200,
-        })
-        for (const po of pos) {
-          if (po.status === 'pending_approval' || po.status === 'approved') {
-            await posRepo.patch(po.id, {
-              status: 'cancelled',
-              note: [`[Huỷ theo đơn ${before.code}] ${reason}`, po.note]
-                .filter(Boolean)
-                .join(' · '),
-            })
-            posCancelled.push(po.code)
-          } else if (
-            po.status === 'ordered' ||
-            po.status === 'confirmed' ||
-            po.status === 'in_transit' ||
-            po.status === 'partial'
-          ) {
-            posManual.push(po.code)
+        // Đơn mua dính lệnh — CẢ lệnh chính lẫn lệnh gộp (0125). Đơn gộp không
+        // tự huỷ: còn phục vụ lệnh khác (lib/po-cancel-cascade, 27/09/2026).
+        const { pos, lsxCodes } = await posRepo.listTouchingLsx(lsx.id)
+        const plan = planPoCascade(pos, lsx.id, (x) => lsxCodes.get(x) ?? x)
+        for (const a of plan) {
+          if (a.action === 'cancel') {
+            // KHÔNG đụng `note` — ô đó in lên phiếu gửi NCC. Lý do vào Trao đổi.
+            await posRepo.patch(a.id, { status: 'cancelled' })
+            await docNotesRepo.create(
+              { doc_type: 'po', doc_id: a.id, author_id: user.id, audience: 'internal', body: `[Huỷ theo đơn ${before.code}] ${reason}` }, // prettier-ignore
+              user.name ?? null,
+            )
+            posCancelled.push(a.code)
+          } else {
+            posManual.push(`${a.code} (${a.why})`)
           }
         }
       }

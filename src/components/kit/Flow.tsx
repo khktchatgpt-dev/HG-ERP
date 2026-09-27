@@ -1,8 +1,12 @@
 'use client'
 
-import { useId, type ReactNode } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Btn, Tag } from './Primitives'
+import { Popover } from './Popover'
+import { Menu } from './Nav'
+import { Ico, type IcoName } from './Icon'
+import { HOLD_AGE_DAYS } from './Erp'
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -326,6 +330,164 @@ export function PrimaryStep({
         >
           {why}
         </span>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   THANH TRẠNG THÁI MỘT DÒNG + CHUYỂN TRẠNG THÁI NGAY TRÊN THANH.
+
+   Thêm 27/09/2026 (canvas "Đơn mua", trang "Thanh trạng thái gọn"). Trước đó
+   câu hỏi "đơn đang ở đâu, đi tiếp thế nào" nằm ở BA chỗ: hai dải bước
+   (`StatusTrack` trạng thái 7 ô + nhận hàng 3 ô), dải `HolderBar` riêng, và
+   nút chuyển bước ở tận thanh hành động. Chủ dự án chốt: CHỈ MỘT trạng thái —
+   bỏ dải bước. Vòng đời đầy đủ vẫn còn, gấp vào khung nổi khi bấm chữ trạng
+   thái (Salesforce Path / Odoo statusbar gộp lại thành một viên).
+
+   Nút chính (`next`) là việc KẾ TIẾP của bước; mọi chuyển khác (đi tiếp khác,
+   quay lại, dừng) gom vào menu "Chuyển trạng thái", mục không làm được vẫn
+   hiện kèm LÝ DO (`why` / `blockedBy` của `Menu`).
+   ══════════════════════════════════════════════════════════════════════ */
+export function DocStatus({
+  status,
+  icon,
+  tone,
+  marks,
+  holder,
+  next,
+  moves,
+  movesLabel = 'Chuyển trạng thái',
+}: {
+  /** Tên trạng thái hiện tại, chữ người đọc ("Đã gửi NCC", "Chờ duyệt"). */
+  status: string
+  /** Icon theo khái niệm của bước (`gui`, `cho`, `duyet`, `nhapKho`…). */
+  icon: IcoName
+  /**
+   * Màu icon theo vòng đời: `done` đã xong trọn, `warn` đang chờ ai đó, `stop`
+   * đã huỷ / dừng. Bỏ trống = màu hành động (đang chạy bình thường).
+   */
+  tone?: 'done' | 'warn' | 'stop'
+  /**
+   * Vòng đời đầy đủ cho khung nổi mở khi bấm chữ trạng thái — cùng kiểu mốc với
+   * `Timeline` (mốc `at: null` = chưa tới). Không có mốc nào thì chữ trạng thái
+   * không bấm được.
+   */
+  marks?: Mark[]
+  /**
+   * Ai đang giữ chứng từ ở bước này. `days` = số ngày đã nằm ở bước (tính sẵn
+   * bằng `daysHeld`), tô màu theo `HOLD_AGE_DAYS`: dưới 3 không tô, 3–6 `warn`,
+   * từ 7 `stop`. Chứng từ đã khép thì bỏ trống — đừng bịa người giữ.
+   */
+  holder?: { who: string; what: string; days?: number | null; mine?: boolean }
+  /** Nút chuyển sang bước KẾ TIẾP — thường là `Btn primary`, có thể khoá mềm (`blockedBy`). */
+  next?: ReactNode
+  /**
+   * Các chuyển trạng thái khác, cùng kiểu mục với `Menu` — gom nhóm "Đi tiếp" /
+   * "Quay lại" / "Dừng" bằng `group`, mục không làm được giữ lại kèm `why`.
+   * Rỗng thì không vẽ nút menu.
+   */
+  moves?: ComponentProps<typeof Menu>['items']
+  /** Chữ trên nút mở menu chuyển trạng thái. */
+  movesLabel?: string
+}) {
+  const days = holder?.days ?? null
+  const ageTone =
+    days == null
+      ? null
+      : days >= HOLD_AGE_DAYS.stop
+        ? 'stop'
+        : days >= HOLD_AGE_DAYS.warn
+          ? 'warn'
+          : null
+  const pill = (
+    <button
+      type="button"
+      disabled={!marks?.length}
+      aria-label={`Trạng thái: ${status}${marks?.length ? ' — xem vòng đời' : ''}`}
+      className={cn(
+        'text-k-body inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--line)] bg-[var(--surface-card)] pr-2.5 pl-2 font-semibold text-[var(--ink)]',
+        'outline-none focus-visible:shadow-[0_0_0_2px_var(--act)] enabled:hover:border-[var(--act)] disabled:cursor-default',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-flex',
+          tone === 'done'
+            ? 'text-[var(--done)]'
+            : tone === 'warn'
+              ? 'text-[var(--warn)]'
+              : tone === 'stop'
+                ? 'text-[var(--stop)]'
+                : 'text-[var(--act)]',
+        )}
+      >
+        <Ico name={icon} size={16} />
+      </span>
+      {status}
+      {!!marks?.length && (
+        <span aria-hidden="true" className="text-k-label text-[var(--ink-3)]">
+          ▾
+        </span>
+      )}
+    </button>
+  )
+  return (
+    <div
+      role="group"
+      aria-label="Trạng thái và chuyển bước"
+      className="flex min-h-11 flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-4 py-2"
+    >
+      {marks?.length ? (
+        <Popover label={`Vòng đời: ${status}`} trigger={pill} width={420}>
+          <Timeline marks={marks} />
+        </Popover>
+      ) : (
+        pill
+      )}
+      {holder && (
+        <div
+          role="status"
+          className="text-k-body flex min-w-0 items-center gap-1.5 text-[var(--ink-2)]"
+        >
+          <span className="h-5 w-px shrink-0 bg-[var(--line)]" aria-hidden="true" />
+          <Ico name="cho" size={14} />
+          <span className="min-w-0">
+            {/* "Đang giữ: X — việc". Câu việc của chỗ gọi thường tự mở bằng "Chờ …";
+                ghép sau "Đang chờ" thì thành "Đang chờ NCC — Chờ NCC xác nhận". */}
+            {holder.mine ? (
+              <b className="font-semibold text-[var(--act)]">Đến lượt bạn</b>
+            ) : (
+              <>
+                Đang giữ: <b className="font-semibold text-[var(--ink)]">{holder.who}</b>
+              </>
+            )}{' '}
+            — {holder.what}
+          </span>
+          {days != null && (
+            <span
+              className={cn(
+                'text-k-sm num shrink-0 rounded-[var(--radius-pill)] px-1.5 font-semibold',
+                ageTone === 'stop'
+                  ? 'bg-[var(--stop-wash)] text-[var(--stop)]'
+                  : ageTone === 'warn'
+                    ? 'bg-[var(--warn-wash)] text-[var(--warn)]'
+                    : // --fill là màu ĐẶC của thanh tiến độ (#5a6577), không phải nền nhạt —
+                      // từng làm viên "N ngày" thành viên xám đậm chữ chìm mất (28/09/2026).
+                      'bg-[var(--surface)] text-[var(--ink-3)]',
+              )}
+            >
+              {days === 0 ? 'hôm nay' : `${days} ngày`}
+            </span>
+          )}
+        </div>
+      )}
+      <span className="grow" />
+      {(next || !!moves?.length) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {next}
+          {!!moves?.length && <Menu label={`${movesLabel} ▾`} items={moves} />}
+        </div>
       )}
     </div>
   )

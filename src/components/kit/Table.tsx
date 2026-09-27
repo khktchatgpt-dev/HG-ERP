@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from 'react'
@@ -93,9 +94,16 @@ export function Table<T = unknown>({
   isSelected,
   rowAnchor,
   label,
+  minWidth,
 }: {
   /** Kiểu GHÉP JSX (`THead` + `<tbody>` + `Row`/`Cell` + `TFoot`). Bỏ trống khi dùng `engine`. */
   children?: ReactNode
+  /**
+   * BỀ RỘNG TỐI THIỂU của bảng này, px — ghi đè `--table-min` (mặc định 680px,
+   * hoặc `ScreenFrame tableMin`). Đặt nhỏ (vd. 0) cho bảng nằm trong CỘT HẸP
+   * (khay phải 372px): giữ sàn 680px thì bảng 3 cột cũng cuộn ngang.
+   */
+  minWidth?: number
   /**
    * TÊN BẢNG cho trình đọc màn hình (`aria-label` của `<table>`), vd. "Danh sách
    * nhà cung cấp". Người đi bằng phím nhảy giữa các bảng theo tên; bảng không tên
@@ -166,6 +174,7 @@ export function Table<T = unknown>({
     <div
       ref={ganRef}
       onScroll={onScroll}
+      style={minWidth != null ? ({ '--table-min': `${minWidth}px` } as CSSProperties) : undefined}
       className={cn(
         // `k-tscroll`: đệm cuộn cho tiêu đề/chân/cột ghim — xem erp.css (T6).
         'k-tscroll min-w-0 overflow-auto bg-[var(--surface-card)]',
@@ -748,9 +757,25 @@ export function TFoot({
  */
 export function FilterBar({
   children,
+  dense = false,
+  tone = 'card',
+  label,
 }: {
   /** Ô tìm, các chip lọc, và nút `TableSettings` (đẩy sang phải bằng một khối `ml-auto`). Hết chỗ thì tự xuống dòng. */
   children: ReactNode
+  /**
+   * Đệm dọc 4px thay 8px — cho màn xếp HAI–BA hàng lọc chồng nhau (Đơn mua,
+   * Hộp ký). Trước 28/09/2026 các màn đó tự dựng hàng bằng cả chuỗi lớp vì
+   * `FilterBar` không có biến thể này.
+   */
+  dense?: boolean
+  /**
+   * Nền: `card` hàng lọc thường · `raised` thanh hành động chưa chọn gì ·
+   * `selected` thanh hành động ĐANG CHỌN phiếu (nền nhạt màu hành động).
+   */
+  tone?: 'card' | 'raised' | 'selected'
+  /** Tên cho trình đọc màn hình — có thì hàng mang `role="toolbar"`. */
+  label?: string
 }) {
   return (
     /*
@@ -759,10 +784,45 @@ export function FilterBar({
       hẳn phương án cuộn ngang, vì chip bị đẩy ra ngoài tầm nhìn là chip không ai
       bấm, mà mỗi chip là một câu hỏi nghiệp vụ.
     */
-    <div className="z-[var(--z-bar)] flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
+    <div
+      role={label ? 'toolbar' : undefined}
+      aria-label={label}
+      className={cn(
+        'z-[var(--z-bar)] flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] px-[var(--gutter)]',
+        dense ? 'py-1' : 'py-2',
+        tone === 'selected'
+          ? 'bg-[var(--act-wash)]'
+          : tone === 'raised'
+            ? 'bg-[var(--surface-raised)]'
+            : 'bg-[var(--surface-card)]',
+      )}
+    >
       {children}
     </div>
   )
+}
+
+/**
+ * NHÃN NHÓM trên hàng lọc — "PHẠM VI", "NGƯỜI MUA", "LOẠI ĐƠN". Chữ in hoa nhỏ,
+ * nhạt: đọc được mà không tranh với chip. Trước 28/09/2026 mỗi màn tự gõ chuỗi
+ * lớp (cỡ, giãn chữ, màu) và lệch nhau từng chút.
+ */
+export function BarLabel({
+  children,
+}: {
+  /** Tên nhóm, chữ thường — thành phần tự in hoa. */
+  children: ReactNode
+}) {
+  return (
+    <span className="text-k-label font-semibold tracking-[.04em] text-[var(--ink-3)] uppercase">
+      {children}
+    </span>
+  )
+}
+
+/** VẠCH NGĂN giữa hai nhóm trên hàng lọc — thuần trang trí, trình đọc màn hình bỏ qua. */
+export function BarSep() {
+  return <span className="mx-1 h-4 border-l border-[var(--line)]" aria-hidden />
 }
 
 /** Chip lọc bật/tắt. Số đếm luôn đi kèm — lọc mà không biết còn bao nhiêu là lọc mù. */

@@ -4,6 +4,9 @@ import { buildLsxSupplyRows } from '@/modules/dept/supply/lsx-supply.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { assessMeetingRisk } from '@/lib/supply-meeting'
 import { YeuCauScreen } from './YeuCauScreen'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { defaultScope, myLsxIds, parseScope } from '@/lib/supply-scope'
 
 export const metadata = { title: 'Mua hàng · Vật tư theo lệnh' }
 export const dynamic = 'force-dynamic'
@@ -23,13 +26,22 @@ export const dynamic = 'force-dynamic'
  * hai thứ `/planning/lsx`, ba trang Họp và file Excel họp đang dùng — một
  * nguồn số cho tất cả, nên màn này không thể nói khác bảng họp.
  */
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ pham_vi?: string; muc?: string }>
+}) {
+  const sp = await searchParams
   const user = await authService.requirePageUser()
   const today = todayVn()
-  const [rows, supplyStaff] = await Promise.all([
+  const [rows, supplyStaff, owned, canApprove] = await Promise.all([
     buildLsxSupplyRows(user, today),
     isSupplyStaff(user),
+    posRepo.listOwnership(),
+    user.role === 'admin' ? Promise.resolve(true) : canAction(user, 'supply.po.approve'),
   ])
+  // Lệnh của tôi = lệnh có đơn của tôi (lib/supply-scope) — gồm lệnh gộp.
+  const mine = myLsxIds(owned, user.id)
 
   return (
     <YeuCauScreen
@@ -52,9 +64,17 @@ export default async function Page() {
           reason: risk.reason,
           owner: risk.owner,
           action: risk.action,
+          mine: mine.has(r.id),
+          // Người đảm nhận = người phụ trách các đơn trên lệnh (0128) — màn
+          // /planning/lsx đã bày, màn mới làm rơi (đo 27/09/2026).
+          buyers: [...new Set(r.pos.map((p) => p.assignee_name).filter((x): x is string => !!x))],
         }
       })}
       canEdit={user.role === 'admin' || supplyStaff}
+      meId={user.id}
+      defaultScope={defaultScope({ canApprove })}
+      urlScope={parseScope(sp.pham_vi)}
+      initialMuc={sp.muc ?? null}
     />
   )
 }

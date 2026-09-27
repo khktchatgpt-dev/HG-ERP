@@ -5,6 +5,7 @@ import {
   poChecks,
   retemplate,
   type PoForHeader,
+  templateForSupplier,
 } from './chung-tu'
 
 const po: PoForHeader = {
@@ -49,9 +50,13 @@ describe('headerFromPo', () => {
 })
 
 describe('newHeader / retemplate', () => {
-  it('mặc định mẫu simple, có lệnh thì poType lsx', () => {
+  it('mặc định mẫu PHỤ KIỆN (VAT 8%, giá chưa gồm VAT), có lệnh thì poType lsx', () => {
+    // 26/09/2026: 0/82 đơn thật dùng mẫu "Đơn giản", phụ kiện nhiều nhất (33). Mặc
+    // định "Đơn giản" kéo theo VAT 10% + "giá đã gồm VAT" — sai với đơn giấy ATP.
     const h = newHeader({ lsxId: 'x' })
-    expect(h.template).toBe('simple')
+    expect(h.template).toBe('accessory')
+    expect(h.vat).toBe(8)
+    expect(h.inclVat).toBe(false)
     expect(h.poType).toBe('lsx')
     expect(h.supplierId).toBe('')
   })
@@ -60,6 +65,19 @@ describe('newHeader / retemplate', () => {
     expect(h.template).toBe('carton')
     expect(h.supplierId).toBe('s')
     expect(h.lsxId).toBe('l')
+  })
+})
+
+describe('templateForSupplier — chọn NCC thì mẫu theo đơn gần nhất của NCC đó', () => {
+  const last = { atp: 'accessory', vipora: 'accessory', doan_gia: 'aluminium' } as const
+  it('đơn MỚI, người soạn CHƯA tự chọn mẫu → mẫu của đơn gần nhất cùng NCC', () => {
+    expect(templateForSupplier({ supplierId: 'doan_gia', current: 'accessory', touched: false, isNew: true, last })).toBe('aluminium') // prettier-ignore
+  })
+  it('đã tự chọn mẫu / đơn đã lưu / NCC chưa có đơn / đang đúng mẫu → không đổi (null)', () => {
+    expect(templateForSupplier({ supplierId: 'doan_gia', current: 'accessory', touched: true, isNew: true, last })).toBeNull() // prettier-ignore
+    expect(templateForSupplier({ supplierId: 'doan_gia', current: 'accessory', touched: false, isNew: false, last })).toBeNull() // prettier-ignore
+    expect(templateForSupplier({ supplierId: 'moi', current: 'accessory', touched: false, isNew: true, last })).toBeNull() // prettier-ignore
+    expect(templateForSupplier({ supplierId: 'atp', current: 'accessory', touched: false, isNew: true, last })).toBeNull() // prettier-ignore
   })
 })
 
