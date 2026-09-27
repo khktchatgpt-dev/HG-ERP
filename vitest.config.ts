@@ -20,6 +20,11 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      // Test chạy ngoài Next (không có điều kiện react-server) — dùng bản RỖNG của
+      // 'server-only', không thì mọi test chạm server/db.ts ném lỗi ngay khi nạp.
+      'server-only': path.resolve(__dirname, 'node_modules/server-only/empty.js'),
+    },
   },
 })

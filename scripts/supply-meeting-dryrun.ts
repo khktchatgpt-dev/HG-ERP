@@ -3,7 +3,8 @@
  * (05/09/2026), trước khi dựng giao diện. Chỉ ĐỌC, không ghi gì.
  *
  * Chạy từ gốc repo (cần .env.local có SUPABASE_SECRET_KEY):
- *   npx tsx --env-file=.env.local scripts/supply-meeting-dryrun.ts
+ *   npx tsx --conditions=react-server --env-file=.env.local scripts/supply-meeting-dryrun.ts
+ *   (--conditions=react-server: server/db.ts gắn `server-only`, thiếu cờ này là ném lỗi)
  *
  * Dùng đúng `buildLsxSupplyRows` mà màn /planning/lsx và file Excel họp đang
  * dùng — đo bằng đúng đường mà tính năng sẽ đi, không đếm bảng nguồn rồi suy.

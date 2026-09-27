@@ -231,3 +231,53 @@ ruleTester.run('no-dark-variant', hgUi.rules['no-dark-variant'], {
     { code: `cn('p-2 dark:hover:bg-[#111]')`, errors: [{ messageId: 'dark' }] },
   ],
 })
+
+const client = (body: string) => `'use client'\n${body}`
+
+ruleTester.run('client-server-boundary', hgUi.rules['client-server-boundary'], {
+  valid: [
+    // Chỉ lấy KIỂU — bị xoá sạch lúc biên dịch.
+    client(`import type { Po } from '@/modules/dept/supply/pos.repo'`),
+    client(`import { type Po, type PoLine } from '@/modules/dept/supply/pos.repo'`),
+    client(`export type { Po } from '@/modules/dept/supply/pos.repo'`),
+    // Module thuần được phép: zod schema, danh mục quyền.
+    client(`import { CERT_TYPES } from '@/modules/dept/supply/certs.schema'`),
+    client(`import { ACTIONS } from '@/modules/core/rbac/actions'`),
+    // Vùng client bình thường.
+    client(`import { api } from '@/lib/api'`),
+    client(`import { Btn } from '@/components/kit'`),
+    // File SERVER (không có 'use client') thì lấy gì cũng được.
+    `import { posService } from '@/modules/dept/supply/pos.service'`,
+    `import { db } from '@/server/db'`,
+    // Chuỗi 'use client' không đứng thành directive thì không tính.
+    `const s = 'use client'\nimport { db } from '@/server/db'`,
+  ],
+  invalid: [
+    {
+      code: client(`import { posService } from '@/modules/dept/supply/pos.service'`),
+      errors: [{ messageId: 'value' }],
+    },
+    {
+      code: client(`import { db } from '@/server/db'`),
+      errors: [{ messageId: 'value' }],
+    },
+    // Trộn: một specifier giá trị là đủ kéo cả module vào bundle.
+    {
+      code: client(`import { type Po, posRepo } from '@/modules/dept/supply/pos.repo'`),
+      errors: [{ messageId: 'value' }],
+    },
+    // Import chỉ để chạy tác dụng phụ cũng kéo module vào.
+    { code: client(`import '@/server/db'`), errors: [{ messageId: 'value' }] },
+    // Re-export giá trị.
+    {
+      code: client(`export { posRepo } from '@/modules/dept/supply/pos.repo'`),
+      errors: [{ messageId: 'value' }],
+    },
+    { code: client(`export * from '@/server/http'`), errors: [{ messageId: 'value' }] },
+    // Directive "use client" bằng nháy kép.
+    {
+      code: `"use client"\nimport { handle } from '@/server/http'`,
+      errors: [{ messageId: 'value' }],
+    },
+  ],
+})

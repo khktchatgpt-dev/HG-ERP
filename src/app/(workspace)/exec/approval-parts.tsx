@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Package, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { poLineAmount } from '@/lib/po-line'
-import { colKey, LSX_FORM, specColumnsOf } from '@/modules/dept/sales/lsx-template'
+import { colKey, LSX_FORM, specColumnsOf } from '@/lib/lsx-template'
 import { money } from './approval-helpers'
 import { type PoLine } from '@/app/(workspace)/planning/pos/PosManager'
 import type { ApprovalLsxLine, ApprovalOrderInfo } from './approval-types'

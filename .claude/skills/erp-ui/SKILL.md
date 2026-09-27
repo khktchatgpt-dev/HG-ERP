@@ -93,7 +93,9 @@ Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. U
 - Tra thành phần ở sách tra `/design-lab/thanh-phan/<slug>`. Mỗi họ có đủ sáu mục: khi nào dùng · biến thể · thuộc tính (sinh từ mã) · trạng thái · truy cập · nên/đừng.
   - Danh sách họ nằm ở `src/app/design-lab/_lab/kit-families.ts`.
   - Bảng "cần gì → dùng gì" nằm ở [references/tra-thanh-phan.md](references/tra-thanh-phan.md).
-- Server component tải dữ liệu, rồi truyền xuống một Screen `'use client'`.
+- Server component tải dữ liệu **song song** (`Promise.all`), rồi truyền xuống một Screen `'use client'` — chỉ thứ client cần.
+- Chia file theo khuôn ở mục "Cấu trúc code React" của CLAUDE.md (`page` → `XxxScreen` → `useXxx` → khối). File `.tsx` quá 800 dòng là lint đỏ.
+- File `'use client'` chỉ `import type` từ `@/modules` / `@/server` (`hg/client-server-boundary`).
 - Gọi API từ client qua `api()`/`ApiError` (`@/lib/api`), không `fetch` tay. Mutation đi theo chuỗi try/catch → `router.refresh()` → toast (`useToast` của kit).
 - Shell nằm ở layout `(<ws>)/layout.tsx`, không bọc trong page.
 - **Phải chế CSS tại chỗ nghĩa là kit đang thiếu.** Đừng vá trong màn; bổ sung vào kit theo mục "Khi kit thiếu" dưới đây.
@@ -106,7 +108,10 @@ Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. U
    - Tab hết màn: vòng focus phải luôn nhìn thấy, không bị đầu/chân dính che.
    - Thử trạng thái rỗng và bị chặn bằng dữ liệu thật, hoặc bằng một bộ lọc.
 3. Chạy `npm run check` (typecheck + lint + test) và phải sạch. Đỏ thì chưa xong.
-4. Màn có ảnh chuẩn (hoặc sửa kit): `npm run ui:shots`, rồi MỞ ảnh ở `e2e/__anh-chuan__/` ra nhìn ở 1:1 —
+4. Rà mã bằng skill ngoài: `vercel-react-best-practices` (waterfall, re-render, gửi thừa dữ
+   liệu xuống client) và `web-design-guidelines` (a11y/UX). Chỗ vênh với luật dự án thì luật
+   dự án thắng — bảng vênh ở mục Skills của CLAUDE.md.
+5. Màn có ảnh chuẩn (hoặc sửa kit): `npm run ui:shots`, rồi MỞ ảnh ở `e2e/__anh-chuan__/` ra nhìn ở 1:1 —
    soi bằng số (độ rộng cột, số dòng) không thay được việc nhìn. Màn mới quan trọng thì thêm vào
    `/design-lab/chup/[man]` + `e2e/ui-shots.spec.ts`.
 

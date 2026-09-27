@@ -1,12 +1,12 @@
 import ExcelJS from 'exceljs'
-import type { LsxSheetColumn, LsxTemplate } from '@/modules/dept/sales/lsx-template'
+import type { LsxSheetColumn, LsxTemplate } from '@/lib/lsx-template'
 import {
   groupCell,
   isReady,
   lineCell,
   valueState,
   type LsxSheetGroupData,
-} from './lsx-sheet-cells'
+} from '@/lib/lsx-sheet-cells'
 
 /**
  * XUẤT EXCEL phiếu LỆNH SẢN XUẤT — file .xlsx bày GIỐNG HỆT phiếu in

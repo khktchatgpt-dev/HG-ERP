@@ -2,7 +2,7 @@
 
 import { Clock3, CircleAlert, TriangleAlert } from 'lucide-react'
 import { Checkbox } from '@/components/shadcn/checkbox'
-import type { SheetReadiness } from '@/modules/dept/production/lsx-line-fill'
+import type { SheetReadiness } from '@/lib/lsx-line-fill'
 
 /**
  * Tổng quan độ đầy đủ của cả phiếu + lối tắt "chỉ hiện dòng còn thiếu".

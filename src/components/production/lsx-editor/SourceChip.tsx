@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Clock3, Database, ExternalLink, PencilLine, Undo2 } from 'lucide-react'
-import type { FieldOrigin, ProfileTab } from '@/modules/dept/production/lsx-line-fill'
+import type { FieldOrigin, ProfileTab } from '@/lib/lsx-line-fill'
 
 /**
  * Chú thích NGUỒN dưới mỗi ô nhập: giá trị này máy lấy từ hồ sơ SP, Sales tự

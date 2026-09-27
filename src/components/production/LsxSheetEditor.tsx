@@ -19,12 +19,7 @@ import { Textarea } from '@/components/shadcn/textarea'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
-import {
-  colKey,
-  hasCbm,
-  specColumnsOf,
-  type LsxTemplate,
-} from '@/modules/dept/sales/lsx-template'
+import { colKey, hasCbm, specColumnsOf, type LsxTemplate } from '@/lib/lsx-template'
 import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
 import {
   lineOrigins,
@@ -35,8 +30,8 @@ import {
   type LineReadiness,
   type ProfileMap,
   type ProfileTab,
-} from '@/modules/dept/production/lsx-line-fill'
-import { valueState } from '@/modules/dept/production/lsx-sheet-cells'
+} from '@/lib/lsx-line-fill'
+import { valueState } from '@/lib/lsx-sheet-cells'
 import { LineMeter } from './lsx-editor/LineMeter'
 import { SourceChip } from './lsx-editor/SourceChip'
 import { SheetReadinessBar } from './lsx-editor/SheetReadinessBar'
