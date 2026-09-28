@@ -1352,6 +1352,21 @@
   color: var(--ink-3);
   font-weight: 500;
 }
+/* KHÔNG KHUNG — bỏ hộp, chỉ còn label:value trên một dòng chữ (xem JSDoc
+   `plain` của HeadChip). Vẫn giữ khoảng đệm ngang qua `gap` của `.k-headchips`
+   cha; chỉ bỏ khung + nền + chiều cao cố định của riêng chip này. */
+.k-headchip-plain {
+  height: auto;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.k-headchip-plain:hover {
+  border-color: transparent;
+}
+button.k-headchip-plain:hover > span + span {
+  color: var(--act);
+}
 
 /* THANH CHỐT — dính đáy, khác `k-sbar` (thanh hệ thống, tầng chrome).
    Thanh này là DỮ LIỆU của chứng từ cộng hành động chính, nên nó ở tầng

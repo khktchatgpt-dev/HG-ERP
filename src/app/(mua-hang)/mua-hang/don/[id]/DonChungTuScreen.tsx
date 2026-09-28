@@ -421,15 +421,25 @@ export function DonChungTuScreen(p: Props) {
             onClick={() => router.push(`/mua-hang/don/${p.links!.source!.id}`)}
           />
         )}
+      </HeadChips>
+      {/* Hàng chip PHỤ, không khung (28/09/2026) — Thanh toán/Nơi giao đứng
+          lẻ sau 4 chip chính khung đầy một hàng; chip khung thêm ở đây vỡ
+          dòng còn 1-2 ô trống nửa hàng, đo trên PO-2026-0087. */}
+      <HeadChips>
         <HeadChip
           label="Thanh toán"
           value={po.terms_payment}
           muted
+          plain
           onClick={chipEdit ? () => startEdit('Thanh toán') : undefined}
-        />{' '}
-        {/* prettier-ignore */}
-        <HeadChip label="Nơi giao" value={po.terms_delivery_place} muted onClick={chipEdit ? () => startEdit('Nơi giao') : undefined} />{' '}
-        {/* prettier-ignore */}
+        />
+        <HeadChip
+          label="Nơi giao"
+          value={po.terms_delivery_place}
+          muted
+          plain
+          onClick={chipEdit ? () => startEdit('Nơi giao') : undefined}
+        />
       </HeadChips>
       <DocStatus
         status={PO_STATUS_LABEL[po.status as PoStatus] ?? po.status}

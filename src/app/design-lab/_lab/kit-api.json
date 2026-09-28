@@ -1503,7 +1503,7 @@
     "extends": []
   },
   "HeadChip": {
-    "file": "src/components/kit/Erp.tsx",
+    "file": "src/components/kit/HeadChips.tsx",
     "props": [
       {
         "name": "label",
@@ -1546,12 +1546,19 @@
         "optional": true,
         "def": null,
         "doc": "Bấm chip — mở chỗ sửa hoặc đi tới chứng từ cha. Bỏ trống thì chip là phần tử TĨNH (không nhận Tab, không phải nút) — chỉ bày giá trị."
+      },
+      {
+        "name": "plain",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "KHÔNG KHUNG — một dòng chữ label:value, không chiếm riêng một \"ô\". Dùng cho vài chip phụ đứng cuối dải để khỏi vỡ dòng còn 1-2 ô trống nửa hàng."
       }
     ],
     "extends": []
   },
   "HeadChips": {
-    "file": "src/components/kit/Erp.tsx",
+    "file": "src/components/kit/HeadChips.tsx",
     "props": [
       {
         "name": "children",
@@ -1564,7 +1571,7 @@
     "extends": []
   },
   "HeadField": {
-    "file": "src/components/kit/Erp.tsx",
+    "file": "src/components/kit/HeadChips.tsx",
     "props": [
       {
         "name": "children",

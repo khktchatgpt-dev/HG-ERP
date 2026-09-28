@@ -400,28 +400,35 @@ export function DocStatus({
         : days >= HOLD_AGE_DAYS.warn
           ? 'warn'
           : null
+  const toneCls =
+    tone === 'done'
+      ? 'text-[var(--done)]'
+      : tone === 'warn'
+        ? 'text-[var(--warn)]'
+        : tone === 'stop'
+          ? 'text-[var(--stop)]'
+          : 'text-[var(--act)]'
+  const toneWash =
+    tone === 'done'
+      ? 'bg-[var(--done-wash)] border-[var(--done-line)]'
+      : tone === 'warn'
+        ? 'bg-[var(--warn-wash)] border-[var(--warn-line)]'
+        : tone === 'stop'
+          ? 'bg-[var(--stop-wash)] border-[var(--stop-line)]'
+          : 'bg-[var(--act-wash)] border-[var(--act-line)]'
   const pill = (
     <button
       type="button"
       disabled={!marks?.length}
       aria-label={`Trạng thái: ${status}${marks?.length ? ' — xem vòng đời' : ''}`}
       className={cn(
-        'text-k-body inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--line)] bg-[var(--surface-card)] pr-2.5 pl-2 font-semibold text-[var(--ink)]',
-        'outline-none focus-visible:shadow-[0_0_0_2px_var(--act)] enabled:hover:border-[var(--act)] disabled:cursor-default',
+        'text-k-body inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border pr-2.5 pl-2 font-semibold',
+        toneWash,
+        toneCls,
+        'outline-none focus-visible:shadow-[0_0_0_2px_var(--act)] enabled:hover:brightness-95 disabled:cursor-default',
       )}
     >
-      <span
-        className={cn(
-          'inline-flex',
-          tone === 'done'
-            ? 'text-[var(--done)]'
-            : tone === 'warn'
-              ? 'text-[var(--warn)]'
-              : tone === 'stop'
-                ? 'text-[var(--stop)]'
-                : 'text-[var(--act)]',
-        )}
-      >
+      <span className="inline-flex">
         <Ico name={icon} size={16} />
       </span>
       {status}
