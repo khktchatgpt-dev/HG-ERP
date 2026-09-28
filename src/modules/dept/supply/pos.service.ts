@@ -1172,15 +1172,16 @@ export const posService = {
     const guard = canReschedule(before.status)
     if (!guard.ok) throw BadRequest(guard.reason)
 
-    await poTrackingRepo.logCommits([{ po_id: id, kind: 'doi_hen_don', date_before: before.expected_at?.slice(0, 10) ?? null, date_after: input.expected_at.slice(0, 10), reason: input.reason, created_by: user.id }]) // prettier-ignore
+    const reason = input.reason.trim()
+    await poTrackingRepo.logCommits([{ po_id: id, kind: 'doi_hen_don', date_before: before.expected_at?.slice(0, 10) ?? null, date_after: input.expected_at.slice(0, 10), reason: reason || null, created_by: user.id }]) // prettier-ignore
     const po = await posRepo.patch(id, { expected_at: input.expected_at })
     // Đợt chưa giao trượt theo cùng số ngày — không thì thao tác đợt kế tiếp
     // (syncExpectedAt) kéo mốc về ngày cũ, lần dời mất im lặng.
     const moves = shiftPlannedShipments(await poShipmentsRepo.listByPo(id), before.expected_at?.slice(0, 10) ?? null, input.expected_at.slice(0, 10)) // prettier-ignore
     for (const m of moves) await poShipmentsRepo.patch(m.id, { expected_date: m.to })
     if (moves.length)
-      await poTrackingRepo.logCommits(moves.map((m) => ({ po_id: id, shipment_id: m.id, kind: 'doi_hen' as const, date_before: m.from, date_after: m.to, reason: `Dời theo cả đơn: ${input.reason}`, created_by: user.id }))) // prettier-ignore
-    await traceReason(user, id, rescheduleNote(before.expected_at, input.expected_at, input.reason)) // prettier-ignore
+      await poTrackingRepo.logCommits(moves.map((m) => ({ po_id: id, shipment_id: m.id, kind: 'doi_hen' as const, date_before: m.from, date_after: m.to, reason: reason ? `Dời theo cả đơn: ${reason}` : 'Dời theo cả đơn', created_by: user.id }))) // prettier-ignore
+    await traceReason(user, id, rescheduleNote(before.expected_at, input.expected_at, reason)) // prettier-ignore
     return po
   },
 

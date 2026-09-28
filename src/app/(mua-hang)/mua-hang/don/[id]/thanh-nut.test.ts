@@ -48,9 +48,12 @@ describe('barLayout — thanh hành động MỘT HÀNG theo bước của đơn
       expect(b.quick.length).toBeLessThanOrEqual(3)
       expect(b.quick).not.toContain(b.primary)
     }
-    expect(at('ordered').quick).toEqual(['edit', 'doc:nudge', 'print'])
-    expect(at('partial').quick).toEqual(['edit', 'cost', 'print'])
+    // "Sửa" đứng đầu trên mọi đơn đã ra khỏi nháp (28/09/2026); print về "⋯" khi hết chỗ.
+    expect(at('ordered').quick).toEqual(['doc:edit_terms', 'edit', 'doc:nudge'])
+    expect(at('partial').quick).toEqual(['doc:edit_terms', 'edit', 'cost'])
+    expect(at('approved').quick).toEqual(['doc:edit_terms', 'edit', 'print'])
     expect(at('pending_approval').quick).toEqual(['doc:withdraw', 'doc:reject', 'print'])
+    expect(keys(at('ordered'))).toContain('print')
   })
 
   it('"⋯ Thêm" chứa MỌI việc còn lại, mỗi việc đúng một lần, không trùng thanh', () => {
@@ -61,11 +64,14 @@ describe('barLayout — thanh hành động MỘT HÀNG theo bước của đơn
       expect(new Set(more).size).toBe(more.length)
       for (const k of shown) expect(more).not.toContain(k)
       // Mọi việc của actionsFor đều có chỗ (thanh hoặc menu) — không việc nào bị rơi.
+      // Trừ `reschedule`: trên màn đơn nó đã GỘP vào "Sửa" (28/09/2026), chỉ còn là
+      // hành động hàng loạt ở sổ đơn.
       for (const id of DOC[s].filter(
-        (x) => x !== 'edit' && x !== 'adjust' && x !== 'open',
+        (x) => x !== 'edit' && x !== 'adjust' && x !== 'open' && x !== 'reschedule',
       )) {
         expect([...shown, ...more]).toContain(`doc:${id}`)
       }
+      expect(more).not.toContain('doc:reschedule')
     }
   })
 
@@ -110,7 +116,7 @@ describe('splitForStatusBar — chuyển trạng thái về thanh trạng thái 
     expect(s.moves.map((m) => m.key)).toEqual(['transit', 'receive', 'closeShort', 'acceptByHand', 'doc:reopen', 'doc:cancel']) // prettier-ignore
     expect(s.moves.map((m) => m.group)).toEqual(['Đi tiếp', 'Đi tiếp', 'Đi tiếp', 'Đi tiếp', 'Quay lại', 'Dừng']) // prettier-ignore
     // Việc không đổi trạng thái vẫn cạnh mã đơn / trong ⋯ — không mục nào rơi mất.
-    expect(s.actions).toEqual(['edit', 'doc:nudge', 'print'])
+    expect(s.actions).toEqual(['doc:edit_terms', 'edit', 'doc:nudge'])
     expect(s.menu.map((m) => m.key)).not.toContain('doc:cancel')
     expect(s.menu.map((m) => m.key)).toContain('cost')
   })

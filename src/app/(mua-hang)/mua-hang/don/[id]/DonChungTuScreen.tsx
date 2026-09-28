@@ -82,6 +82,7 @@ import {
 } from './don-chung-tu.shared'
 import { DongHang, NhuCau } from './dong-hang'
 import { GiaoNhan } from './giao-nhan'
+import { SuaTaiChoNut } from './sua-tai-cho-nut'
 import { DongThoiGian, TaiLieu } from './lich-su'
 import { clearDraft } from './soan-don'
 import { ChiPhi, PhatSinh } from './tai-chinh-khoi'
@@ -132,6 +133,9 @@ export function DonChungTuScreen(p: Props) {
     suCoClose,
     setSuCoClose,
     termsEdit,
+    startEdit,
+    dateEdit,
+    perms,
     header,
     setHeader,
     lines,
@@ -240,6 +244,10 @@ export function DonChungTuScreen(p: Props) {
   const blkTimeline = <DongThoiGian d={d} />
   const blkTaiLieu = <TaiLieu d={d} />
 
+  // Chip đầu trang bấm được khi người này sửa được đơn và không đang ở chế độ sửa nào.
+  const chipEdit =
+    !!po && perms.canEdit && !editing && !termsEdit && po.status !== 'cancelled'
+
   const viewHead = po ? (
     <>
       <DocHead
@@ -254,20 +262,7 @@ export function DonChungTuScreen(p: Props) {
       >
         <div className="flex flex-wrap items-center gap-2">
           {termsEdit ? (
-            <>
-              <Btn
-                primary
-                icon="luuNhap"
-                disabled={busy || noteOver > 0}
-                title={noteOver > 0 ? `Ghi chú dài hơn mức cho phép ${noteOver} ký tự` : undefined} // prettier-ignore
-                onClick={() => void saveTerms()}
-              >
-                Lưu điều khoản
-              </Btn>
-              <Btn icon="huy" disabled={busy} onClick={cancelTermsEdit}>
-                Huỷ
-              </Btn>
-            </>
+            <SuaTaiChoNut d={d} />
           ) : (
             <>
               {headActions.map(({ key, it }) => (
@@ -300,7 +295,13 @@ export function DonChungTuScreen(p: Props) {
             }
           />
         ) : (
-          <HeadChip label="Hạn giao" value={hanText} />
+          /* BẤM VÀO CHỖ MUỐN SỬA (B1, 28/09/2026): chip mở chế độ Sửa và đưa con
+             trỏ vào đúng ô — thay cho ⋯ → Đổi hẹn giao ở tầng 3. */
+          <HeadChip
+            label="Hạn giao"
+            value={hanText}
+            onClick={chipEdit && dateEdit.ok ? () => startEdit('Hạn giao') : undefined}
+          />
         )}
         <HeadChip
           label="Tổng thanh toán"
@@ -318,8 +319,15 @@ export function DonChungTuScreen(p: Props) {
             onClick={() => router.push(`/mua-hang/don/${p.links!.source!.id}`)}
           />
         )}
-        <HeadChip label="Thanh toán" value={po.terms_payment} muted />
-        <HeadChip label="Nơi giao" value={po.terms_delivery_place} muted />
+        <HeadChip
+          label="Thanh toán"
+          value={po.terms_payment}
+          muted
+          onClick={chipEdit ? () => startEdit('Thanh toán') : undefined}
+        />{' '}
+        {/* prettier-ignore */}
+        <HeadChip label="Nơi giao" value={po.terms_delivery_place} muted onClick={chipEdit ? () => startEdit('Nơi giao') : undefined} />{' '}
+        {/* prettier-ignore */}
       </HeadChips>
       <DocStatus
         status={PO_STATUS_LABEL[po.status as PoStatus] ?? po.status}
@@ -470,19 +478,7 @@ export function DonChungTuScreen(p: Props) {
             {termsEdit && !editing ? (
               /* Sửa hẹp: thanh hành động thu về đúng hai nút, để không ai tưởng
              mình đang sửa được cả dòng hàng. */
-              <ActionGroup label="Đang sửa điều khoản">
-                <Action
-                  primary
-                  disabled={busy || noteOver > 0}
-                  title={noteOver > 0 ? `Ghi chú dài hơn mức cho phép ${noteOver} ký tự` : undefined} // prettier-ignore
-                  onClick={() => void saveTerms()}
-                >
-                  Lưu điều khoản
-                </Action>
-                <Action icon="huy" disabled={busy} onClick={cancelTermsEdit}>
-                  Huỷ
-                </Action>
-              </ActionGroup>
+              <SuaTaiChoNut d={d} as="action" />
             ) : editing ? (
               <>
                 <ActionGroup label={adjusting ? 'Đang điều chỉnh' : 'Đang sửa'}>
@@ -902,8 +898,8 @@ export function DonChungTuScreen(p: Props) {
                   )}
                 </FieldGroup>
                 <div className="text-k-label px-[var(--gutter)] pb-2 text-[var(--ink-3)]">
-                  Đổi nhà cung cấp thì Huỷ đơn rồi Nhân bản sang NCC mới. Điều khoản in
-                  lên phiếu sửa bằng “Sửa điều khoản”.
+                  Đổi nhà cung cấp thì Huỷ đơn rồi Nhân bản sang NCC mới. Hẹn giao và điều
+                  khoản in lên phiếu sửa bằng nút “Sửa”.
                 </div>
               </div>
             </div>

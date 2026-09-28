@@ -42,6 +42,15 @@ describe('rescheduleNote — vết dời hẹn', () => {
     )
   })
 
+  it('lý do để trống được — vết chỉ còn ngày cũ → ngày mới, không có dấu chấm giữa treo', () => {
+    expect(rescheduleNote('2026-09-29', '2026-10-05', '')).toBe(
+      '[Dời hẹn giao] 29/09/2026 → 05/10/2026',
+    )
+    expect(rescheduleNote('2026-09-29', '2026-10-05', '   ')).toBe(
+      '[Dời hẹn giao] 29/09/2026 → 05/10/2026',
+    )
+  })
+
   it('cắt khoảng trắng thừa của lý do', () => {
     expect(rescheduleNote('2026-07-12', '2026-07-20', '  NCC hết hàng  ')).toBe(
       '[Dời hẹn giao] 12/07/2026 → 20/07/2026 · NCC hết hàng',

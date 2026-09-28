@@ -4,6 +4,7 @@ import { templateDefaults } from '@/app/(workspace)/planning/pos/new/po-draft'
 import {
   Checks,
   Combobox,
+  DateInput,
   FactKv,
   FastTab,
   Field,
@@ -126,6 +127,9 @@ export function DauDon({ d }: { d: DonCtx }) {
     tplSigner,
     template,
     noteOver,
+    dateEdit,
+    editReason,
+    setEditReason,
   } = d
   return (
     <>
@@ -234,7 +238,42 @@ export function DauDon({ d }: { d: DonCtx }) {
               )}
             </FieldGroup>
             <FieldGroup title="Giao hàng">
-              {drafting /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */ ? null : (
+              {drafting /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */ ? null : termsEditing &&
+                dateEdit.ok ? (
+                /*
+                  HẸN GIAO SỬA TẠI CHỖ (B1, 28/09/2026) — trước đó là mục "Đổi hẹn giao"
+                  ở tầng 3 của "⋯" kèm hộp bắt lý do, và 0/85 đơn có vết đổi hẹn.
+                  Lý do để trống được; máy tự ghi "cũ → mới · ai".
+                */
+                <>
+                  <Field label="Hạn giao">
+                    <span className="flex flex-col gap-1">
+                      <DateInput
+                        label="Hạn giao"
+                        value={header.expectedAt}
+                        onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
+                      />
+                      {dateEdit.changed && (
+                        <span className="text-k-sm text-[var(--ink-2)]">
+                          đang là <s>{dmy(dateEdit.current) || 'chưa hẹn'}</s> → máy ghi
+                          vết “Dời hẹn {dmy(dateEdit.current) || 'chưa hẹn'} →{' '}
+                          {dmy(header.expectedAt)}”, đợt chưa giao trượt theo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+                  {dateEdit.changed && (
+                    <Field label="Lý do dời">
+                      <TextInput
+                        label="Lý do dời hẹn"
+                        value={editReason}
+                        onCommit={setEditReason}
+                        placeholder="để trống được — ghi nếu NCC có nói vì sao"
+                      />
+                    </Field>
+                  )}
+                </>
+              ) : (
                 <Field
                   label="Hạn giao"
                   tone={
@@ -244,6 +283,11 @@ export function DauDon({ d }: { d: DonCtx }) {
                   }
                 >
                   <span className="num">{dmy(po?.expected_at) || '—'}</span>
+                  {termsEditing && !dateEdit.ok && (
+                    <span className="text-k-sm ml-2 text-[var(--ink-3)]">
+                      · {dateEdit.why}
+                    </span>
+                  )}
                 </Field>
               )}
               <Field label="Thời gian giao của NCC" inherited>

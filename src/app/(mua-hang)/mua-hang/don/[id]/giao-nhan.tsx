@@ -44,7 +44,16 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
     setSuCoClose,
     openShortLines,
     missingTotal,
+    termsEdit,
+    editCols,
+    setEditCols,
+    shipErrors,
+    shipChanges,
   } = d
+  // Chế độ SỬA TẠI CHỖ (B2, 28/09/2026): đợt đang hẹn sửa thẳng trong lưới chia
+  // đợt của lúc soạn; đợt xe đã tới / đã nhận nằm ngoài, khoá — Kho giữ chúng.
+  const suaDot = termsEdit && !drafting && !!po
+  const lockedShipments = p.shipments.filter((s) => s.status !== 'planned' && s.status !== 'cancelled') // prettier-ignore
   return (
     <>
       {/* ══ 1b. GIAO & NHẬN HÀNG — hai sổ: NCC hẹn gì, Kho thực nhận gì ═══
@@ -122,25 +131,59 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                 </>
               )}
               <div className="px-[var(--gutter)] pt-3">
-                <h3 className="k-fgrp-h">Kế hoạch giao · NCC hẹn</h3>
+                <h3 className="k-fgrp-h">
+                  {suaDot
+                    ? 'Đợt giao · đang sửa — mỗi cột một đợt, ô trống = không đi đợt đó'
+                    : 'Kế hoạch giao · NCC hẹn'}
+                </h3>
               </div>
-              <DotGiaoGrid
-                shipments={p.shipments}
-                linesById={shipLinesById}
-                currency={po.currency}
-                receivedByLine={new Map(p.statusLines.map((s) => [s.id, s.qty_received ?? 0]))} // prettier-ignore
-                linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
-                confirmedNote={po.confirmed_note}
-                emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0)}
-                canAct={perms.canEdit && !drafting}
-                busy={busy}
-                today={today}
-                onArrived={(id) => void shipmentAct(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')} // prettier-ignore
-                onReschedule={(s) => setDot({ kind: 'reschedule', s })}
-                onCancel={(s) => setDot({ kind: 'cancel', s })}
-                onEdit={(s) => setDot({ kind: 'edit', s })}
-                onSplit={(s) => setDot({ kind: 'split', s })}
-              />
+              {suaDot && (
+                <>
+                  <ChiaDotSoanGrid
+                    lines={lines}
+                    columns={editCols}
+                    onChange={setEditCols}
+                  />
+                  <div className="text-k-sm px-[var(--gutter)] py-2 text-[var(--ink-2)]">
+                    {shipErrors.length > 0 ? (
+                      <span className="k-t-stop">
+                        Chưa lưu được: {shipErrors.join(' · ')}
+                      </span>
+                    ) : shipChanges > 0 ? (
+                      <span>
+                        <b className="num">{shipChanges}</b> đợt đổi — bấm <b>Lưu</b> ở
+                        đầu trang để ghi; bỏ cột = huỷ đợt (máy ghi lý do).
+                      </span>
+                    ) : (
+                      'Chưa đổi đợt nào. Đợt xe đã tới / đã nhận không sửa ở đây — Kho giữ.'
+                    )}
+                  </div>
+                  {lockedShipments.length > 0 && (
+                    <div className="px-[var(--gutter)] pt-2">
+                      <h3 className="k-fgrp-h">Đợt đã tới / đã nhận · khoá</h3>
+                    </div>
+                  )}
+                </>
+              )}
+              {(!suaDot || lockedShipments.length > 0) && (
+                <DotGiaoGrid
+                  shipments={suaDot ? lockedShipments : p.shipments}
+                  linesById={shipLinesById}
+                  currency={po.currency}
+                  receivedByLine={new Map(p.statusLines.map((s) => [s.id, s.qty_received ?? 0]))} // prettier-ignore
+                  linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
+                  confirmedNote={po.confirmed_note}
+                  emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0)}
+                  canAct={perms.canEdit && !drafting && !suaDot}
+                  busy={busy}
+                  today={today}
+                  onArrived={(id) => void shipmentAct(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')} // prettier-ignore
+                  onReschedule={(s) => setDot({ kind: 'reschedule', s })}
+                  onCancel={(s) => setDot({ kind: 'cancel', s })}
+                  onEdit={(s) => setDot({ kind: 'edit', s })}
+                  onSplit={(s) => setDot({ kind: 'split', s })}
+                />
+              )}
               {/* Bày sổ theo DÒNG từ lúc đơn rời tay mình, không đợi Kho lập
                     phiếu đầu tiên. Bản trước gác bằng `receiptBatches.length > 0`
                     nên đúng lúc cần nhất — NCC báo hết một mã mà chưa về gì —

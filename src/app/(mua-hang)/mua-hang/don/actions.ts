@@ -161,7 +161,13 @@ const CANCEL = (blocked?: string): Action => ({
  */
 const EDIT_TERMS = (blocked?: string): Action => ({
   id: 'edit_terms',
-  label: 'Sửa điều khoản',
+  /*
+    MỘT NÚT "SỬA" (28/09/2026, artboard 14): trên đơn đã gửi nó mở chế độ sửa
+    tại chỗ gồm hẹn giao + số HĐ + điều khoản + người ký + ghi chú. "Đổi hẹn
+    giao" không còn là mục riêng trên màn đơn (vẫn là hành động hàng loạt ở sổ).
+    Id giữ `edit_terms` vì sổ, test và màn cũ đang trỏ vào nó.
+  */
+  label: 'Sửa',
   ui: 'link',
   stakes: 'nhe',
   blocked,
@@ -296,7 +302,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         EDIT(notOwn),
         DUP,
         DELETE(notOwn),
-        EDIT_TERMS('Đơn nháp thì bấm "Sửa đơn" — sửa được cả dòng hàng lẫn điều khoản'),
+        // Nháp: "Sửa đơn" sửa được hết — không bày thêm một nút "Sửa" thứ hai bị khoá.
         REASSIGN(canReassign),
         CANCEL('Đơn nháp thì xoá hẳn, không cần huỷ'),
         OPEN,

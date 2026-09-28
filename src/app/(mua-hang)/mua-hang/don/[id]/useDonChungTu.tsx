@@ -18,6 +18,7 @@ import {
   type Line,
 } from '@/app/(workspace)/planning/pos/new/po-line'
 import { poHolder, useToast, type IcoName, type Mark } from '@/components/kit'
+import { useSuaTaiCho } from './useSuaTaiCho'
 import {
   fetchMaterialByCode,
   fetchMaterialsByIds,
@@ -162,6 +163,19 @@ export function useDonChungTu(p: Props) {
     () =>
     po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId, fromStock: !!p.seedCodes })), // prettier-ignore
   )
+
+  /*
+    ĐỒNG BỘ header khi `po` đổi sau `router.refresh()` (vá 28/09/2026). Header khởi
+    tạo MỘT LẦN từ po; server có thể tự đổi hạn giao (kéo theo đợt sớm nhất) sau
+    một lượt Lưu, và header cũ làm chip bày ngày sai, lượt Sửa kế tiếp tưởng
+    "đã đổi ngày" rồi gọi /reschedule lùi cả đợt về ngày cũ (đo trên đơn test).
+    Mẫu React "chỉnh state khi prop đổi" — không dùng useEffect để khỏi vẽ hai nhịp.
+  */
+  const [syncedAt, setSyncedAt] = useState(po?.updated_at ?? null)
+  if (po && (po.updated_at ?? null) !== syncedAt) {
+    setSyncedAt(po.updated_at ?? null)
+    if (!editing && !termsEdit) setHeader(headerFromPo(po, p.extraLsx.map((x) => x.id))) // prettier-ignore
+  }
 
   const [lines, setLines] = useState<Line[]>(() =>
     p.lines.map((l) =>
@@ -516,42 +530,31 @@ export function useDonChungTu(p: Props) {
     }
   }
 
-  /**
-   * Lưu CHỈ phần chữ trên phiếu — `PATCH …/terms`, service mở cho mọi trạng
-   * thái trừ đã huỷ. Không gửi dòng hàng, không gửi giá: chữ ký duyệt còn
-   * nguyên giá trị.
-   */
-  async function saveTerms() {
-    if (!po) return
-    if (noteOver > 0) {
-      toast.warning('Chưa lưu được', `Ghi chú dài hơn mức cho phép ${noteOver} ký tự`)
-      return
-    }
-    setBusy(true)
-    try {
-      const t = (v: string) => v.trim() || null
-      await api(`/api/dept/supply/pos/${po.id}/terms`, {
-        method: 'PATCH',
-        body: {
-          contract_no: t(header.contractNo),
-          terms_quality: t(header.terms.quality),
-          terms_delivery_place: t(header.terms.delivery_place),
-          terms_payment: t(header.terms.payment),
-          terms_invoice: t(header.terms.invoice),
-          terms_lead_time: t(header.terms.lead_time),
-          signer_role: t(header.signerRole),
-          note: t(header.note),
-        },
-      })
-      toast.success('Đã lưu điều khoản', 'Phiếu in và hồ sơ dùng bản vừa sửa')
-      setTermsEdit(false)
-      router.refresh()
-    } catch (e) {
-      toast.error('Không lưu được điều khoản', apiErrorText(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  // SỬA TẠI CHỖ (B1 + B2, 28/09/2026) — hẹn giao · điều khoản · đợt giao; luật ở `sua-tai-cho.ts`.
+  const sua = useSuaTaiCho({
+    po,
+    header,
+    shipments: p.shipments,
+    poLines: p.lines,
+    noteOver,
+    termsEdit,
+    setTermsEdit,
+    setHeadOpen, // prettier-ignore
+    // `goTo` khai bên dưới — bọc lại để không đụng TDZ; chỉ gọi lúc bấm.
+    goTo: (id) => goTo(id),
+    resetHeader: () =>
+      po &&
+      setHeader(
+        headerFromPo(
+          po,
+          p.extraLsx.map((x) => x.id),
+        ),
+      ),
+    setBusy,
+    toast,
+    router, // prettier-ignore
+  })
+  const { startEdit, saveTerms, cancelTermsEdit } = sua
 
   /** Vào chế độ điều chỉnh đơn đang chạy — cùng lưới, lưu đi đường khác. */
   function startAdjust() {
@@ -607,12 +610,6 @@ export function useDonChungTu(p: Props) {
       `Đã ghi gửi NCC bản điều chỉnh lần ${sentSheet}`,
     )
     if (ok) setSentSheet(null)
-  }
-
-  /** Bỏ sửa điều khoản: trả mọi ô về đúng bản đang lưu. */
-  function cancelTermsEdit() {
-    setTermsEdit(false)
-    if (po) setHeader(headerFromPo(po, p.extraLsx.map((x) => x.id))) // prettier-ignore
   }
 
   /** Đã khác bản gốc chưa — để Huỷ hỏi lại, và để chặn rời trang mất dữ liệu. */
@@ -693,15 +690,8 @@ export function useDonChungTu(p: Props) {
     if (a.blocked || !po) return
     if (a.id === 'edit') return setEditing(true)
     if (a.id === 'adjust') return startAdjust()
-    // Bật chế độ sửa hẹp tại chỗ — không rời trang, không gọi route nào ngay.
-    if (a.id === 'edit_terms') {
-      // Bố cục đọc: khối Đầu đơn nằm GẤP ở mục Tổng quan — mở mục, mở khối, cuộn tới;
-      // không thì nút Lưu / Huỷ hiện mà không thấy ô nào để sửa.
-      setTermsEdit(true)
-      setHeadOpen(true)
-      goTo('dau-don')
-      return
-    }
+    // Bật chế độ Sửa tại chỗ — không rời trang, không gọi route nào ngay.
+    if (a.id === 'edit_terms') return startEdit()
     if (a.id === 'open') return
     if (a.ui === 'link' && a.href) return router.push(a.href(po.id))
     if (a.ui === 'direct') return void runAction(a)
@@ -1505,6 +1495,7 @@ export function useDonChungTu(p: Props) {
     setSuCoClose,
     termsEdit,
     setTermsEdit,
+    ...sua,
     header,
     setHeader,
     lines,
@@ -1595,11 +1586,9 @@ export function useDonChungTu(p: Props) {
     removeSel,
     changeTemplate,
     save,
-    saveTerms,
     startAdjust,
     applyAdjust,
     markSent,
-    cancelTermsEdit,
     isDirty,
     askCancelEdit,
     cancelEdit,

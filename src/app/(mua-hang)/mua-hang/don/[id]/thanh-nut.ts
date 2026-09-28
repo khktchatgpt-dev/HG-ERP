@@ -66,19 +66,26 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
               ? 'receive'
               : null
 
+  /*
+    "SỬA" (doc:edit_terms) đứng ĐẦU thanh trên mọi đơn đã ra khỏi nháp (28/09/2026,
+    artboard 14): chỗ sửa hẹn giao, điều khoản, số HĐ, ghi chú — thứ người mua
+    sửa hằng ngày mà trước đó nằm ở mục thứ 3 của "⋯". "Điều chỉnh" (edit) còn
+    đứng cạnh tới khi gộp vào Sửa (B3); vì trần 3 nút, "Phiếu đặt hàng" của đơn
+    đã gửi tạm về "⋯ › In & hiển thị".
+  */
   const quickWanted: (BarKey | null)[] =
     status === 'draft'
       ? [canEdit ? 'edit' : null, 'print']
       : status === 'pending_approval'
         ? [doc('withdraw'), doc('reject'), 'print']
         : status === 'approved'
-          ? [canEdit ? 'edit' : null, 'print']
+          ? [doc('edit_terms'), canEdit ? 'edit' : null, 'print']
           : status === 'ordered'
-            ? [canEdit ? 'edit' : null, doc('nudge'), 'print']
+            ? [doc('edit_terms'), canEdit ? 'edit' : null, doc('nudge')]
             : SENT.includes(status)
-              ? [canEdit ? 'edit' : null, 'cost', 'print']
+              ? [doc('edit_terms'), canEdit ? 'edit' : null, 'cost']
               : status === 'received'
-                ? ['cost', 'print']
+                ? [doc('edit_terms'), 'cost', 'print']
                 : ['print']
   const quick = quickWanted.filter((k): k is BarKey => !!k && k !== primary).slice(0, 3)
 
@@ -101,7 +108,7 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
     ] as const)
       // prettier-ignore
       add(k, 'Giao & nhận')
-    add(doc('reschedule'), 'Giao & nhận')
+    // "Đổi hẹn giao" KHÔNG còn là mục riêng: hẹn giao sửa trong "Sửa" (28/09/2026).
   }
   if (canEdit) add('edit', 'Đơn')
   for (const id of docIds) {
