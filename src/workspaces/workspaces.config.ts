@@ -418,7 +418,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             (chị Thảo). Trước đó chị ký ở màn Đơn mua bằng nút duyệt hàng loạt
             — lách luật "giá trị lớn phải mở ra đọc" của hộp ký Giám đốc.
           */
-          { href: '/mua-hang/cho-ky', label: 'Chờ tôi ký', icon: 'stamp', capability: 'supply.approve' },
+          {
+            href: '/mua-hang/cho-ky',
+            label: 'Chờ tôi ký',
+            icon: 'stamp',
+            capability: 'supply.approve',
+          },
           // Hộp thư việc: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
           // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
           { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
@@ -427,6 +432,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // truck dành cho GIAO NHẬN (từ vựng icon — /design-lab mục 05):
           // đây là màn thay "Hàng sắp về".
           { href: '/mua-hang/nhan-hang', label: 'Nhận hàng', icon: 'truck' },
+          // Đơn vị vận chuyển + phiếu phí theo chuyến — TÁCH khỏi Nhà cung cấp
+          // (chủ dự án chốt 28/09/2026: "nhà xe không chung với nhà cung cấp").
+          { href: '/mua-hang/van-chuyen', label: 'Vận chuyển', icon: 'route' },
           /*
             HOÁ ĐƠN NCC ĐÃ RỜI KHU CUNG ỨNG (17/09/2026, chủ dự án: "cung ứng
             không quản lí về hoá đơn").

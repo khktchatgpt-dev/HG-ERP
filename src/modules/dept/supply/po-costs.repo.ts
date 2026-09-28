@@ -1,15 +1,30 @@
 import { db } from '@/server/db'
-import { CARRIER_TYPE, costPayeeRole, type PoCostKind } from '@/lib/po-cost'
+import {
+  CARRIER_TYPE,
+  costPayeeRole,
+  type CarrierKind,
+  type CostPayeeRole,
+  type PaidMethod,
+  type PoCostKind,
+  type TransportMode,
+} from '@/lib/po-cost'
 import type { PoLineAmountInput } from '@/lib/po-line'
 
 /**
- * PHIẾU CHI PHÍ MUA HÀNG (0211). Ghi đi qua hàm DB `supply_po_cost_create`
- * (phiếu + phân bổ trong một giao dịch); repo đọc sổ và đóng dấu huỷ.
+ * PHIẾU CHI PHÍ VẬN CHUYỂN (0211 + 0215). Ghi đi qua hàm DB
+ * `supply_po_cost_create` (phiếu + phân bổ trong một giao dịch); repo đọc sổ,
+ * đóng dấu huỷ, và giữ DANH MỤC ĐƠN VỊ VẬN CHUYỂN — cùng bảng NCC dưới CSDL
+ * (cờ `is_carrier`) nhưng tách hẳn ở tầng đọc: sổ NCC không thấy, ô chọn NCC
+ * lúc soạn đơn không thấy (chủ dự án chốt 28/09/2026).
  */
 export type PoCost = {
   id: string
-  payee_supplier_id: string
+  transport_mode: TransportMode
+  /** Đơn vị trong danh mục — null khi ship lẻ gõ tay. */
+  payee_supplier_id: string | null
+  /** Tên người thu: tên đơn vị trong danh mục, hoặc tên gõ tay. */
   payee_name: string | null
+  payee_phone: string | null
   kind: PoCostKind
   cost_date: string
   doc_no: string | null
@@ -19,6 +34,12 @@ export type PoCost = {
   vat_amount: number
   total: number
   note: string | null
+  /** Đã trả tại chỗ bởi người trong công ty (chi hộ) — null = chưa trả, Kế toán trả. */
+  paid_by: string | null
+  paid_by_name: string | null
+  paid_on: string | null
+  paid_method: PaidMethod | null
+  reimbursed_at: string | null
   created_by: string | null
   created_by_name: string | null
   created_at: string
@@ -27,7 +48,13 @@ export type PoCost = {
   voided_by_name: string | null
   void_reason: string | null
   /** Mọi đơn của phiếu — kể cả đơn khác đơn đang xem (một chuyến xe nhiều đơn). */
-  allocations: { po_id: string; po_code: string | null; base: number; amount: number }[]
+  allocations: {
+    po_id: string
+    po_code: string | null
+    po_supplier_name: string | null
+    base: number
+    amount: number
+  }[]
 }
 
 /** Lỗi nghiệp vụ hàm DB ném ra (tiền phân bổ lệch, đơn không nhận phí) — service dịch sang 400. */
@@ -37,35 +64,45 @@ const SELECT =
   '*, payee:supply_suppliers!supply_po_costs_payee_supplier_id_fkey(name, short_name), ' +
   'creator:users!supply_po_costs_created_by_fkey(name, email), ' +
   'voider:users!supply_po_costs_voided_by_fkey(name, email), ' +
-  'allocations:supply_po_cost_allocations(po_id, base, amount, po:supply_purchase_orders(code))'
+  'payer:users!supply_po_costs_paid_by_fkey(name, email), ' +
+  'allocations:supply_po_cost_allocations(po_id, base, amount, po:supply_purchase_orders(code, supplier:supply_suppliers!supply_purchase_orders_supplier_id_fkey(name, short_name)))'
 
 type U = { name: string | null; email: string } | null
 type Raw = Record<string, unknown> & {
   payee: { name: string; short_name: string | null } | null
   creator: U
   voider: U
+  payer: U
   allocations: {
     po_id: string
     base: unknown
     amount: unknown
-    po: { code: string } | null
+    po: {
+      code: string
+      supplier: { name: string; short_name: string | null } | null
+    } | null
   }[]
 }
 
-function toCost({ payee, creator, voider, allocations, ...r }: Raw): PoCost {
+const who = (u: U) => u?.name ?? u?.email ?? null
+
+function toCost({ payee, creator, voider, payer, allocations, ...r }: Raw): PoCost {
   return {
     ...(r as unknown as PoCost),
-    payee_name: payee?.short_name || payee?.name || null,
+    payee_name:
+      payee?.short_name || payee?.name || (r.payee_name as string | null) || null,
     amount: Number(r.amount ?? 0),
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
     vat_amount: Number(r.vat_amount ?? 0),
     total: Number(r.total ?? 0),
-    created_by_name: creator?.name ?? creator?.email ?? null,
-    voided_by_name: voider?.name ?? voider?.email ?? null,
+    created_by_name: who(creator),
+    voided_by_name: who(voider),
+    paid_by_name: who(payer),
     allocations: (allocations ?? [])
       .map((a) => ({
         po_id: a.po_id,
         po_code: a.po?.code ?? null,
+        po_supplier_name: a.po?.supplier?.short_name || a.po?.supplier?.name || null,
         base: Number(a.base ?? 0),
         amount: Number(a.amount ?? 0),
       }))
@@ -150,14 +187,15 @@ async function withLines(rows: RawPo[]): Promise<PoForCost[]> {
 
 /**
  * Phiếu phí nhìn từ phía KẾ TOÁN (bước 3, 26/09/2026): mỗi phiếu còn hiệu lực
- * kèm vai người nhận tiền (`carrier` vào sổ 331 thẳng / `po_supplier` chờ hoá
- * đơn NCC) và từng phần chia kèm NCC của đơn đó.
+ * kèm vai (`carrier` vào sổ 331 thẳng / `po_supplier` chờ hoá đơn NCC /
+ * `chi_ho` nợ nhân viên, không vào 331) và từng phần chia kèm NCC của đơn đó.
  */
 export type AccountingCost = {
   id: string
-  payee_supplier_id: string
+  transport_mode: TransportMode
+  payee_supplier_id: string | null
   payee_name: string
-  role: 'carrier' | 'po_supplier'
+  role: CostPayeeRole
   kind: PoCostKind
   cost_date: string
   doc_no: string | null
@@ -167,6 +205,10 @@ export type AccountingCost = {
   vat_amount: number
   total: number
   note: string | null
+  paid_by: string | null
+  paid_on: string | null
+  paid_method: PaidMethod | null
+  reimbursed_at: string | null
   /** Chỉ khác `null` khi gọi `forAccounting({ includeVoided: true })`. */
   voided_at: string | null
   void_reason: string | null
@@ -179,6 +221,46 @@ export type AccountingCost = {
   }[]
 }
 
+/** Đơn vị vận chuyển trong danh mục — đủ ô của hồ sơ ngắn (13b). */
+export type Carrier = {
+  id: string
+  code: string | null
+  name: string
+  phone: string | null
+  contact_name: string | null
+  carrier_kind: CarrierKind
+  address: string | null
+  pay_method: 'ck' | 'tien_mat' | null
+  payment_terms: string | null
+  note: string | null
+  is_active: boolean
+  created_at: string
+}
+
+const CARRIER_COLS =
+  'id, code, name, short_name, phone, contact_name, carrier_kind, address, pay_method, payment_terms, note, is_active, created_at'
+
+type RawCarrier = Omit<Carrier, 'name' | 'carrier_kind'> & {
+  name: string
+  short_name: string | null
+  carrier_kind: string | null
+}
+
+const toCarrier = (r: RawCarrier): Carrier => ({
+  id: r.id,
+  code: r.code,
+  name: r.short_name || r.name,
+  phone: r.phone,
+  contact_name: r.contact_name,
+  carrier_kind: r.carrier_kind === 'tai_xe_le' ? 'tai_xe_le' : 'nha_xe',
+  address: r.address,
+  pay_method: r.pay_method,
+  payment_terms: r.payment_terms,
+  note: r.note,
+  is_active: r.is_active,
+  created_at: r.created_at,
+})
+
 export const poCostsRepo = {
   /**
    * Phiếu CÒN HIỆU LỰC — nguồn phí cho dải Ngoài sổ, màn công nợ (ảnh chụp hiện
@@ -189,7 +271,7 @@ export const poCostsRepo = {
     let q = db()
       .from('supply_po_costs')
       .select(
-        'id, payee_supplier_id, kind, cost_date, doc_no, currency, amount, vat_rate, vat_amount, total, note, voided_at, void_reason, ' +
+        'id, transport_mode, payee_supplier_id, payee_name, kind, cost_date, doc_no, currency, amount, vat_rate, vat_amount, total, note, paid_by, paid_on, paid_method, reimbursed_at, voided_at, void_reason, ' +
           'payee:supply_suppliers!supply_po_costs_payee_supplier_id_fkey(name, short_name), ' +
           'allocations:supply_po_cost_allocations(id, po_id, amount, po:supply_purchase_orders(code, supplier_id))',
       )
@@ -199,7 +281,9 @@ export const poCostsRepo = {
     if (error) throw new Error(error.message)
     type Raw = {
       id: string
-      payee_supplier_id: string
+      transport_mode: string
+      payee_supplier_id: string | null
+      payee_name: string | null
       kind: PoCostKind
       cost_date: string
       doc_no: string | null
@@ -209,6 +293,10 @@ export const poCostsRepo = {
       vat_amount: unknown
       total: unknown
       note: string | null
+      paid_by: string | null
+      paid_on: string | null
+      paid_method: string | null
+      reimbursed_at: string | null
       voided_at: string | null
       void_reason: string | null
       payee: { name: string; short_name: string | null } | null
@@ -224,11 +312,13 @@ export const poCostsRepo = {
       }))
       return {
         id: r.id,
+        transport_mode: (r.transport_mode as TransportMode) ?? 'nha_xe',
         payee_supplier_id: r.payee_supplier_id,
-        payee_name: r.payee?.short_name || r.payee?.name || '—',
+        payee_name: r.payee?.short_name || r.payee?.name || r.payee_name || '—',
         role: costPayeeRole(
           r.payee_supplier_id,
           allocations.map((a) => a.po_supplier_id),
+          r.paid_by,
         ),
         kind: r.kind,
         cost_date: r.cost_date,
@@ -239,6 +329,10 @@ export const poCostsRepo = {
         vat_amount: Number(r.vat_amount ?? 0),
         total: Number(r.total ?? 0),
         note: r.note,
+        paid_by: r.paid_by,
+        paid_on: r.paid_on,
+        paid_method: (r.paid_method as PaidMethod | null) ?? null,
+        reimbursed_at: r.reimbursed_at,
         voided_at: r.voided_at,
         void_reason: r.void_reason,
         allocations,
@@ -321,26 +415,29 @@ export const poCostsRepo = {
     return out
   },
 
-  /** Nhà xe / đơn vị vận chuyển trong danh mục NCC (loại "Vận chuyển"). */
-  async carriers(): Promise<{ id: string; name: string; phone: string | null }[]> {
-    const { data, error } = await db()
-      .from('supply_suppliers')
-      .select('id, name, short_name, phone')
-      .eq('type', CARRIER_TYPE)
-      .eq('is_active', true)
-      .order('name')
+  /* ── Danh mục đơn vị vận chuyển ─────────────────────────────────────── */
+
+  /** Đơn vị vận chuyển — `all`: cả đơn vị đã ngừng dùng (danh mục); bỏ trống: chỉ đang dùng (ô chọn). */
+  async carriers(opts: { all?: boolean } = {}): Promise<Carrier[]> {
+    let q = db().from('supply_suppliers').select(CARRIER_COLS).eq('is_carrier', true)
+    if (!opts.all) q = q.eq('is_active', true)
+    const { data, error } = await q.order('name')
     if (error) throw new Error(error.message)
-    return (
-      (data ?? []) as {
-        id: string
-        name: string
-        short_name: string | null
-        phone: string | null
-      }[]
-    ).map((r) => ({ id: r.id, name: r.short_name || r.name, phone: r.phone }))
+    return ((data ?? []) as unknown as RawCarrier[]).map(toCarrier)
   },
 
-  /** Mã NCC đang dùng — để cấp mã cho nhà xe mới theo đúng nếp của danh mục. */
+  async carrierById(id: string): Promise<Carrier | null> {
+    const { data, error } = await db()
+      .from('supply_suppliers')
+      .select(CARRIER_COLS)
+      .eq('id', id)
+      .eq('is_carrier', true)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? toCarrier(data as unknown as RawCarrier) : null
+  },
+
+  /** Mã NCC đang dùng — để cấp mã cho đơn vị mới theo đúng nếp của danh mục. */
   async supplierCodes(): Promise<string[]> {
     const { data, error } = await db()
       .from('supply_suppliers')
@@ -353,28 +450,59 @@ export const poCostsRepo = {
   async insertCarrier(row: {
     name: string
     phone: string | null
+    contact_name?: string | null
+    carrier_kind: CarrierKind
+    address?: string | null
+    pay_method?: 'ck' | 'tien_mat' | null
+    payment_terms?: string | null
+    note?: string | null
     code: string | null
     userId: string
-  }): Promise<{ id: string; name: string; phone: string | null }> {
+  }): Promise<Carrier> {
     const { data, error } = await db()
       .from('supply_suppliers')
       .insert({
         name: row.name,
         phone: row.phone,
+        contact_name: row.contact_name ?? null,
+        address: row.address ?? null,
+        pay_method: row.pay_method ?? null,
+        payment_terms: row.payment_terms ?? null,
+        note: row.note ?? null,
         code: row.code,
         type: CARRIER_TYPE,
+        is_carrier: true,
+        carrier_kind: row.carrier_kind,
         status: 'active',
         is_active: true,
-        // Nhà xe KHÔNG phải nơi đặt hàng — không hiện ở ô chọn NCC khi soạn đơn.
+        // Đơn vị vận chuyển KHÔNG phải nơi đặt hàng — không hiện ở ô chọn NCC.
         can_order: false,
         created_by: row.userId,
         updated_by: row.userId,
       })
-      .select('id, name, phone')
+      .select(CARRIER_COLS)
       .single()
     if (error) throw new Error(error.message)
-    return data as { id: string; name: string; phone: string | null }
+    return toCarrier(data as unknown as RawCarrier)
   },
+
+  async patchCarrier(
+    id: string,
+    patch: Record<string, unknown>,
+    userId: string,
+  ): Promise<Carrier | null> {
+    const { data, error } = await db()
+      .from('supply_suppliers')
+      .update({ ...patch, updated_by: userId })
+      .eq('id', id)
+      .eq('is_carrier', true)
+      .select(CARRIER_COLS)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? toCarrier(data as unknown as RawCarrier) : null
+  },
+
+  /* ── Phiếu ──────────────────────────────────────────────────────────── */
 
   async findById(id: string): Promise<PoCost | null> {
     const { data, error } = await db()
@@ -384,6 +512,31 @@ export const poCostsRepo = {
       .maybeSingle()
     if (error) throw new Error(error.message)
     return data ? toCost(data as unknown as Raw) : null
+  },
+
+  /** Sổ chuyến: mọi phiếu (kể cả đã huỷ), mới trước. Vài trăm dòng/năm — chưa cần phân trang. */
+  async listAll(): Promise<PoCost[]> {
+    const { data, error } = await db()
+      .from('supply_po_costs')
+      .select(SELECT)
+      .order('cost_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(2000)
+    if (error) throw new Error(error.message)
+    return ((data ?? []) as unknown as Raw[]).map(toCost)
+  },
+
+  /** Phiếu của một đơn vị vận chuyển — hồ sơ đơn vị. */
+  async listByPayee(supplierId: string): Promise<PoCost[]> {
+    const { data, error } = await db()
+      .from('supply_po_costs')
+      .select(SELECT)
+      .eq('payee_supplier_id', supplierId)
+      .order('cost_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(2000)
+    if (error) throw new Error(error.message)
+    return ((data ?? []) as unknown as Raw[]).map(toCost)
   },
 
   /** Phiếu có gắn đơn này — mới trước, gồm cả phiếu đã huỷ (để thấy vết). */
@@ -426,7 +579,6 @@ export const poCostsRepo = {
     return String(data)
   },
 
-  /** Đóng dấu huỷ — chỉ phiếu chưa huỷ; false nếu không có gì để huỷ. */
   /**
    * Hoá đơn NCC (chưa huỷ) đang mang phí của phiếu này — số hoá đơn. Có thì
    * không huỷ phiếu được: huỷ xong, dòng phí trên hoá đơn trỏ vào một phiếu đã
@@ -455,6 +607,7 @@ export const poCostsRepo = {
     ]
   },
 
+  /** Đóng dấu huỷ — chỉ phiếu chưa huỷ; false nếu không có gì để huỷ. */
   async void(id: string, userId: string, reason: string): Promise<boolean> {
     const { data, error } = await db()
       .from('supply_po_costs')

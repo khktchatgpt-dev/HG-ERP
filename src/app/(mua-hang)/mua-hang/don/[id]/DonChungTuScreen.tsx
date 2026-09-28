@@ -1325,10 +1325,9 @@ export function DonChungTuScreen(p: Props) {
       )}
       {phiOpen && po && (
         <GhiPhiSheet
-          poId={po.id}
-          poCode={po.code}
-          supplierId={po.supplier_id}
-          supplierName={po.supplier_name}
+          po={{ id: po.id, code: po.code, supplierId: po.supplier_id, supplierName: po.supplier_name }} // prettier-ignore
+          me={p.me}
+          payers={p.payers ?? []}
           busy={busy}
           onClose={() => setPhiOpen(false)}
           onSubmit={(body) =>

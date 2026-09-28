@@ -1,5 +1,5 @@
 import { inferSupplierBuyer } from '@/lib/supply-scope'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff, listSupplyBuyers } from '@/modules/dept/supply/suppliers.service'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
@@ -42,6 +42,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     listSupplyBuyers(),
   ])
   if (!ncc) notFound()
+  // Đơn vị vận chuyển có hồ sơ riêng — không bày bằng khuôn NCC (0215).
+  if (ncc.is_carrier) redirect(`/mua-hang/van-chuyen/don-vi/${ncc.id}`)
 
   const poIds = pos.map((p) => p.id)
   const totals = await posRepo.totalsByPoIds(poIds)

@@ -222,7 +222,7 @@ async function loadEntries(): Promise<LedgerEntry[]> {
   const names = await supplierNames([
     ...invs.map((i) => i.supplier_id),
     ...pays.map((p) => p.supplier_id),
-    ...carrierCosts.map((c) => c.payee_supplier_id),
+    ...carrierCosts.flatMap((c) => (c.payee_supplier_id ? [c.payee_supplier_id] : [])),
   ])
   const nameOf = (id: string) => names.get(id) ?? '—'
 
@@ -246,10 +246,12 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       carrierLedgerEntries(
         {
           ...c,
+          // Vai `carrier` = chưa trả + người thu trong danh mục (ràng buộc DB 0215).
+          payee_supplier_id: c.payee_supplier_id ?? '',
           po_codes: c.allocations.map((a) => a.po_code),
           voided_on: c.voided_at ? todayVn(new Date(c.voided_at)) : null,
         },
-        nameOf(c.payee_supplier_id),
+        nameOf(c.payee_supplier_id ?? ''),
       ),
     ),
     ...pays.map((p): LedgerEntry => ({
