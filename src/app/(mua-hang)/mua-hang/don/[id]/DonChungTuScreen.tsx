@@ -182,9 +182,7 @@ export function DonChungTuScreen(p: Props) {
     changeTemplate,
     save,
     saveTerms,
-    applyAdjust,
     markSent,
-    cancelTermsEdit,
     askCancelEdit,
     cancelEdit,
     runAction,
@@ -248,6 +246,100 @@ export function DonChungTuScreen(p: Props) {
   const chipEdit =
     !!po && perms.canEdit && !editing && !termsEdit && po.status !== 'cancelled'
 
+  /* DÒNG HÀNG TRONG CHẾ ĐỘ SỬA (B3): chênh lệch tính bằng đúng hàm server dùng
+     (`planAdjustment`) bày ngay trên lưới ở mục Dòng hàng; thanh nhắc ở đầu trang
+     nói phát sinh bao nhiêu hoặc vướng gì — "Lưu" chung với hẹn giao / điều khoản
+     / đợt, hộp lý do chỉ mở khi có đổi dòng. */
+  const blkChenhBar =
+    adjusting &&
+    adjPlan &&
+    (adjPlan.changes.length > 0 || adjPlan.headerChanges) && // prettier-ignore
+    (adjBlocked ? (
+      <NoticeBar
+        tone="warn"
+        tag="Chưa lưu được"
+        action={{ label: 'Xem dòng hàng', onClick: () => goTo('dong-hang') }}
+      >
+        {adjBlocked}
+        {adjErrors.length > 1 ? ` · và ${adjErrors.length - 1} vướng nữa` : ''}
+      </NoticeBar>
+    ) : (
+      <NoticeBar
+        tone="warn"
+        tag={`Điều chỉnh lần ${nextSeq}`}
+        action={{ label: 'Lưu', onClick: () => void saveTerms() }}
+      >
+        Phát sinh <b className="num">{signed(adjPlan.delta.total, header.currency)}</b> so
+        với bản đang chạy — lưu là áp dụng ngay, không duyệt lại;{' '}
+        {notifyWho
+          ? `${notifyWho} nhận thông báo`
+          : 'bạn là người đã duyệt đơn này nên không báo ai'}
+        . Tới lúc bấm Lưu, Kho vẫn nhận theo bản cũ.
+      </NoticeBar>
+    ))
+  const blkChenh = adjusting && adjPlan && po && (
+    <div className="grid grid-cols-1 gap-x-4 border-b border-[var(--line)] bg-[var(--surface-card)] md:grid-cols-2">
+      <div>
+        <FieldGroup title="Chênh lệch so với bản đang chạy">
+          <Field label="Tổng đang chạy">
+            <span className="num">
+              {money(adjPlan.money.before.grandTotal, header.currency)}
+            </span>
+          </Field>
+          <Field label="Tổng sau điều chỉnh">
+            <span className="num">
+              {money(adjPlan.money.after.grandTotal, header.currency)}
+            </span>
+          </Field>
+          <Field label={`Phát sinh lần ${nextSeq}`}>
+            <b className="num">{signed(adjPlan.delta.total, header.currency)}</b>
+          </Field>
+          <Field label="Tiền hàng: vì giá · vì lượng">
+            <span
+              className="num"
+              title="vì giá = SL mới × (giá mới − giá cũ) · vì lượng = (SL mới − SL cũ) × giá cũ"
+            >
+              {signed(adjPlan.delta.byPrice, header.currency)} ·{' '}
+              {signed(adjPlan.delta.byQty, header.currency)}
+            </span>
+          </Field>
+        </FieldGroup>
+      </div>
+      <div>
+        <FieldGroup title="Giữ nguyên khi điều chỉnh">
+          <Field label="Nhà cung cấp" inherited>
+            {po.supplier_name}
+          </Field>
+          <Field label="Lệnh · mẫu · tiền tệ" inherited>
+            <span className="num">{po.lsx_code ?? 'ngoài LSX'}</span> · {meta.label} ·{' '}
+            {po.currency}
+          </Field>
+          <Field label="Thuế suất %">
+            <NumInput
+              aria-label="Thuế suất"
+              value={numStr(header.vat)}
+              onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
+            />
+          </Field>
+          {meta.hasDiscount && (
+            <Field label="Chiết khấu">
+              <NumInput
+                aria-label="Chiết khấu"
+                value={numStr(header.discount)}
+                onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
+              />
+            </Field>
+          )}
+        </FieldGroup>
+        <div className="text-k-label px-[var(--gutter)] pb-2 text-[var(--ink-3)]">
+          Đổi nhà cung cấp thì Huỷ đơn rồi Nhân bản sang NCC mới. Hẹn giao, điều khoản
+          (mục Tổng quan) và đợt giao (mục Giao &amp; nhận) lưu cùng một lượt với dòng
+          hàng.
+        </div>
+      </div>
+    </div>
+  )
+
   const viewHead = po ? (
     <>
       <DocHead
@@ -256,6 +348,15 @@ export function DonChungTuScreen(p: Props) {
         code={code}
         sub={
           <>
+            {termsEdit && (
+              <>
+                <Tag tone="warn">
+                  {adjusting
+                    ? `Đang sửa · điều chỉnh lần ${nextSeq} · chưa lưu`
+                    : 'Đang sửa · chưa lưu'}
+                </Tag>{' '}
+              </>
+            )}
             soạn {dmy(po.created_at)} · {po.assignee_name ?? '—'}
           </>
         }
@@ -299,7 +400,8 @@ export function DonChungTuScreen(p: Props) {
              trỏ vào đúng ô — thay cho ⋯ → Đổi hẹn giao ở tầng 3. */
           <HeadChip
             label="Hạn giao"
-            value={hanText}
+            /* Đang sửa: chip là chính ô nhập (artboard 14) — cùng state với ô ở khối Đầu đơn. */
+            value={termsEdit && dateEdit.ok ? <DateInput label="Hạn giao — chip" value={header.expectedAt} onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))} /> : hanText} // prettier-ignore
             onClick={chipEdit && dateEdit.ok ? () => startEdit('Hạn giao') : undefined}
           />
         )}
@@ -345,6 +447,7 @@ export function DonChungTuScreen(p: Props) {
         moves={statusMoves}
       />
       {blkChecks}
+      {blkChenhBar}
       {blkUnsent}
       <DocBody>
         <DocMenu
@@ -418,7 +521,10 @@ export function DonChungTuScreen(p: Props) {
             </div>
             {blkDauDon}
           </DocMenuPanel>
-          <DocMenuPanel value="dong-hang">{blkLines}</DocMenuPanel>
+          <DocMenuPanel value="dong-hang">
+            {blkChenh}
+            {blkLines}
+          </DocMenuPanel>
           <DocMenuPanel value="giao-nhan">{blkGiao}</DocMenuPanel>
           <DocMenuPanel value="tai-chinh">
             <TaiChinhPanel
@@ -481,29 +587,15 @@ export function DonChungTuScreen(p: Props) {
               <SuaTaiChoNut d={d} as="action" />
             ) : editing ? (
               <>
-                <ActionGroup label={adjusting ? 'Đang điều chỉnh' : 'Đang sửa'}>
-                  {adjusting ? (
-                    <Action
-                      primary
-                      disabled={busy || adjBlocked != null}
-                      title={
-                        adjBlocked ??
-                        'Áp dụng ngay — không duyệt lại; phần chênh ghi thành phát sinh'
-                      }
-                      onClick={() => setAdjSheet(true)}
-                    >
-                      Áp dụng điều chỉnh
-                    </Action>
-                  ) : (
-                    <Action
-                      primary
-                      disabled={busy || !!problem}
-                      title={problem ?? undefined}
-                      onClick={() => void save()}
-                    >
-                      {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
-                    </Action>
-                  )}
+                <ActionGroup label="Đang sửa">
+                  <Action
+                    primary
+                    disabled={busy || !!problem}
+                    title={problem ?? undefined}
+                    onClick={() => void save()}
+                  >
+                    {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
+                  </Action>
                   <Action icon="huy" disabled={busy} onClick={askCancelEdit}>
                     Huỷ
                   </Action>
@@ -604,11 +696,7 @@ export function DonChungTuScreen(p: Props) {
               editing ? (
                 <>
                   <Tag tone="warn">
-                    {adjusting
-                      ? `Đang điều chỉnh lần ${nextSeq} · chưa áp dụng`
-                      : p.mode === 'create'
-                        ? 'Đang tạo · chưa lưu'
-                        : 'Đang sửa · chưa lưu'}
+                    {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa · chưa lưu'}
                   </Tag>{' '}
                   {po?.supplier_name ?? supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
                 </>
@@ -740,36 +828,6 @@ export function DonChungTuScreen(p: Props) {
           hết vướng thì nói "còn thay đổi chưa lưu" và cho Lưu ngay tại chỗ. Nút
           Lưu trên thanh hành động vẫn còn — người dùng cuộn xuống giữa lưới 40
           dòng thì thanh này là chỗ gần tay nhất. */}
-          {adjusting &&
-            adjPlan &&
-            (adjBlocked ? (
-              <NoticeBar
-                tone="warn"
-                tag={
-                  adjPlan.changes.length === 0 && !adjPlan.headerChanges
-                    ? 'Chưa có thay đổi'
-                    : 'Chưa áp dụng được'
-                }
-                action={{ label: 'Xem dòng hàng', onClick: () => goTo('dong-hang') }}
-              >
-                {adjBlocked}
-                {adjErrors.length > 1 ? ` · và ${adjErrors.length - 1} vướng nữa` : ''}
-              </NoticeBar>
-            ) : (
-              <NoticeBar
-                tone="warn"
-                tag={`Đang điều chỉnh · lần ${nextSeq}`}
-                action={{ label: 'Áp dụng', onClick: () => setAdjSheet(true) }}
-              >
-                Phát sinh{' '}
-                <b className="num">{signed(adjPlan.delta.total, header.currency)}</b> so
-                với bản đang chạy — áp dụng ngay, không duyệt lại;{' '}
-                {notifyWho
-                  ? `${notifyWho} nhận thông báo`
-                  : 'bạn là người đã duyệt đơn này nên không báo ai'}
-                . Tới lúc bấm Áp dụng, Kho vẫn nhận theo bản cũ.
-              </NoticeBar>
-            ))}
           {blkUnsent}
           {drafting &&
             (problem ? (
@@ -843,67 +901,6 @@ export function DonChungTuScreen(p: Props) {
             `div` riêng để luật `.k-fgrp + .k-fgrp` không kẻ vạch ngang giữa các
             cột. Nền TRẮNG — xem ghi chú ở `.k-gbar`: dưới nó là thanh công cụ rồi
             tới hàng tiêu đề cột, ba dải cùng tô là một mảng xám câm. */}
-          {adjusting && adjPlan && po && (
-            <div className="grid grid-cols-1 gap-x-4 border-b border-[var(--line)] bg-[var(--surface-card)] md:grid-cols-2">
-              <div>
-                <FieldGroup title="Chênh lệch so với bản đang chạy">
-                  <Field label="Tổng đang chạy">
-                    <span className="num">
-                      {money(adjPlan.money.before.grandTotal, header.currency)}
-                    </span>
-                  </Field>
-                  <Field label="Tổng sau điều chỉnh">
-                    <span className="num">
-                      {money(adjPlan.money.after.grandTotal, header.currency)}
-                    </span>
-                  </Field>
-                  <Field label={`Phát sinh lần ${nextSeq}`}>
-                    <b className="num">{signed(adjPlan.delta.total, header.currency)}</b>
-                  </Field>
-                  <Field label="Tiền hàng: vì giá · vì lượng">
-                    <span
-                      className="num"
-                      title="vì giá = SL mới × (giá mới − giá cũ) · vì lượng = (SL mới − SL cũ) × giá cũ"
-                    >
-                      {signed(adjPlan.delta.byPrice, header.currency)} ·{' '}
-                      {signed(adjPlan.delta.byQty, header.currency)}
-                    </span>
-                  </Field>
-                </FieldGroup>
-              </div>
-              <div>
-                <FieldGroup title="Giữ nguyên khi điều chỉnh">
-                  <Field label="Nhà cung cấp" inherited>
-                    {po.supplier_name}
-                  </Field>
-                  <Field label="Lệnh · mẫu · tiền tệ" inherited>
-                    <span className="num">{po.lsx_code ?? 'ngoài LSX'}</span> ·{' '}
-                    {meta.label} · {po.currency}
-                  </Field>
-                  <Field label="Thuế suất %">
-                    <NumInput
-                      aria-label="Thuế suất"
-                      value={numStr(header.vat)}
-                      onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
-                    />
-                  </Field>
-                  {meta.hasDiscount && (
-                    <Field label="Chiết khấu">
-                      <NumInput
-                        aria-label="Chiết khấu"
-                        value={numStr(header.discount)}
-                        onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
-                      />
-                    </Field>
-                  )}
-                </FieldGroup>
-                <div className="text-k-label px-[var(--gutter)] pb-2 text-[var(--ink-3)]">
-                  Đổi nhà cung cấp thì Huỷ đơn rồi Nhân bản sang NCC mới. Hẹn giao và điều
-                  khoản in lên phiếu sửa bằng nút “Sửa”.
-                </div>
-              </div>
-            </div>
-          )}
           {drafting && (
             <div className="grid grid-cols-1 gap-x-4 border-b border-[var(--line)] bg-[var(--surface-card)] md:grid-cols-2 xl:grid-cols-3">
               <div>
@@ -1129,11 +1126,9 @@ export function DonChungTuScreen(p: Props) {
           <>
             <b>{me.name}</b> · Mua hàng
           </>,
-          adjusting
-            ? 'Đang điều chỉnh — chưa áp dụng'
-            : editing
-              ? 'Đang sửa — chưa lưu'
-              : (PO_NEXT_HINT[(po?.status ?? 'draft') as PoStatus] ?? ''),
+          editing || termsEdit
+            ? 'Đang sửa — chưa lưu'
+            : (PO_NEXT_HINT[(po?.status ?? 'draft') as PoStatus] ?? ''),
         ]}
         right={
           po
@@ -1155,8 +1150,8 @@ export function DonChungTuScreen(p: Props) {
                 : 'Bỏ các thay đổi?'
           }
           subtitle={
-            adjusting
-              ? 'Các thay đổi chưa áp dụng sẽ mất — đơn giữ nguyên bản đang chạy.'
+            adjusting || termsEdit
+              ? 'Các thay đổi chưa lưu sẽ mất — đơn giữ nguyên bản đang chạy.'
               : `${lines.length} dòng đang gõ sẽ mất. Bản nháp tự lưu cũng bị xoá.`
           }
           footer={
@@ -1195,7 +1190,7 @@ export function DonChungTuScreen(p: Props) {
               stakes="vua"
               busy={busy}
               onCancel={() => setAdjSheet(false)}
-              onConfirm={() => void applyAdjust()}
+              onConfirm={() => void saveTerms(true)}
               cancelLabel="Quay lại sửa"
               confirmLabel="Áp dụng"
               disabled={adjReason.trim().length < 5 || adjBlocked != null}

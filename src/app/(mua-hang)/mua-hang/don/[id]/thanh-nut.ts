@@ -51,7 +51,9 @@ const DANGER = ['cancel', 'delete']
 export function barLayout(status: string, docIds: readonly string[]): BarLayout {
   const has = (id: string) => docIds.includes(id)
   const doc = (id: string): BarKey | null => (has(id) ? `doc:${id}` : null)
-  const canEdit = has('edit') || has('adjust')
+  // 'edit' = sửa nháp. 'adjust' (dòng hàng của đơn đã gửi) KHÔNG còn là nút riêng:
+  // từ B3 (28/09/2026) nó nằm trong "Sửa" (doc:edit_terms).
+  const canEdit = has('edit')
 
   const primary: BarKey | null =
     status === 'draft'
@@ -68,10 +70,8 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
 
   /*
     "SỬA" (doc:edit_terms) đứng ĐẦU thanh trên mọi đơn đã ra khỏi nháp (28/09/2026,
-    artboard 14): chỗ sửa hẹn giao, điều khoản, số HĐ, ghi chú — thứ người mua
-    sửa hằng ngày mà trước đó nằm ở mục thứ 3 của "⋯". "Điều chỉnh" (edit) còn
-    đứng cạnh tới khi gộp vào Sửa (B3); vì trần 3 nút, "Phiếu đặt hàng" của đơn
-    đã gửi tạm về "⋯ › In & hiển thị".
+    artboard 14): một nút cho hẹn giao, điều khoản, số HĐ, ghi chú, đợt giao và —
+    từ B3 — cả dòng hàng theo luật điều chỉnh. Trước đó bốn cửa sửa rải trong "⋯".
   */
   const quickWanted: (BarKey | null)[] =
     status === 'draft'
@@ -79,11 +79,11 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
       : status === 'pending_approval'
         ? [doc('withdraw'), doc('reject'), 'print']
         : status === 'approved'
-          ? [doc('edit_terms'), canEdit ? 'edit' : null, 'print']
+          ? [doc('edit_terms'), 'print']
           : status === 'ordered'
-            ? [doc('edit_terms'), canEdit ? 'edit' : null, doc('nudge')]
+            ? [doc('edit_terms'), doc('nudge'), 'print']
             : SENT.includes(status)
-              ? [doc('edit_terms'), canEdit ? 'edit' : null, 'cost']
+              ? [doc('edit_terms'), 'cost', 'print']
               : status === 'received'
                 ? [doc('edit_terms'), 'cost', 'print']
                 : ['print']

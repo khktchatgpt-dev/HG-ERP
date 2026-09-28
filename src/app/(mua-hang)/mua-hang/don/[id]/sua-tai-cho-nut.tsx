@@ -8,7 +8,8 @@ import type { DonCtx } from './useDonChungTu'
  * ActionPane bố cục cũ), cùng một luật khoá. Một nguồn cho cả hai.
  */
 export function SuaTaiChoNut({ d, as = 'btn' }: { d: DonCtx; as?: 'btn' | 'action' }) {
-  const { busy, noteOver, saveTerms, cancelTermsEdit } = d
+  // "Thôi" đi qua `askCancelEdit`: có thay đổi (dòng, đợt, điều khoản) thì hỏi trước.
+  const { busy, noteOver, saveTerms, askCancelEdit: cancelTermsEdit } = d
   const title =
     noteOver > 0 ? `Ghi chú dài hơn mức cho phép ${noteOver} ký tự` : undefined
   if (as === 'action') {

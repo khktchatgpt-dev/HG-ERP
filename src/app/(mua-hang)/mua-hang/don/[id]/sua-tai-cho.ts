@@ -175,15 +175,44 @@ export function diffShipments(
 export const shipDiffCount = (d: ShipmentDiff) =>
   d.edits.length + d.adds.length + d.cancels.length
 
+/**
+ * Cột đợt khoá theo CHỈ SỐ dòng (lưới chia đợt của lúc soạn). Ở chế độ Sửa gộp
+ * điều chỉnh (B3), người dùng bỏ / thêm dòng hàng làm chỉ số trượt — cột phải
+ * đi theo DÒNG (khoá `key`), không theo vị trí. Dòng biến mất thì mảnh đợt của
+ * nó rơi (server cũng chặn bỏ dòng đang nằm trong đợt).
+ */
+export function remapShipCols(
+  cols: ShipCol[],
+  oldKeys: string[],
+  newKeys: string[],
+): ShipCol[] {
+  const at = new Map(newKeys.map((k, i) => [k, i]))
+  return cols.map((c) => {
+    const qty: Record<number, number | ''> = {}
+    for (const [i, q] of Object.entries(c.qty)) {
+      const ni = at.get(oldKeys[Number(i)] ?? '')
+      if (ni != null) qty[ni] = q
+    }
+    return { ...c, qty }
+  })
+}
+
+/** Kết quả một lần áp dụng điều chỉnh — phần server trả về sau `POST …/adjustments`. */
+export type AdjustResult = { seq: number; delta_total: number }
+
 export type SaveOutcome =
   | { ok: true; detail: string }
   | { ok: false; title: string; detail: string; dateSaved: boolean }
 
 /**
  * Lưu theo PHẦN, mỗi phần một route sẵn có: dời hẹn (kéo đợt chưa giao theo, ghi
- * vết) TRƯỚC, điều khoản, rồi đợt giao (bỏ → sửa → thêm). Không có giao dịch
+ * vết) TRƯỚC, điều khoản, điều chỉnh dòng hàng (B3 — đổi SL đặt trước để đợt
+ * giao kiểm theo số mới), rồi đợt giao (bỏ → sửa → thêm). Không có giao dịch
  * gộp, nên hỏng giữa chừng phải nói rõ phần nào đã vào — người dùng biết mình
  * còn phải làm gì.
+ *
+ * `adjust` = hàm gọi `POST …/adjustments` (đã gói lý do + dòng) — chỉ truyền khi
+ * có thay đổi dòng hàng; không có thì bỏ qua, không hỏi lý do.
  */
 export async function saveSuaTaiCho(
   poId: string,
@@ -191,9 +220,12 @@ export async function saveSuaTaiCho(
   date: DateEdit,
   reason: string,
   ships: ShipmentDiff = { edits: [], adds: [], cancels: [] },
+  adjust?: (() => Promise<AdjustResult>) | null,
 ): Promise<SaveOutcome> {
   let dateSaved = false
   let termsSaved = false
+   
+  let adjDone: AdjustResult | null = null
   let shipDone = 0
   const shipAll = shipDiffCount(ships)
   try {
@@ -219,6 +251,7 @@ export async function saveSuaTaiCho(
       },
     })
     termsSaved = true
+    if (adjust) adjDone = await adjust()
     // Đợt giao: bỏ trước (nhả số lượng), rồi sửa, rồi thêm — server kiểm tổng
     // các đợt sống không vượt SL đặt ở từng bước. Lý do máy ghi: sửa tại chỗ.
     for (const id of ships.cancels) {
@@ -238,21 +271,25 @@ export async function saveSuaTaiCho(
         ? `hẹn giao ${dmy(date.current) || 'chưa hẹn'} → ${dmy(h.expectedAt)}`
         : null,
       'điều khoản · ghi chú',
+      adjDone ? `điều chỉnh lần ${adjDone.seq} (phát sinh ${fmtSigned(adjDone.delta_total)})` : null, // prettier-ignore
       shipAll ? `${shipAll} đợt giao (${[ships.edits.length && `${ships.edits.length} sửa`, ships.adds.length && `${ships.adds.length} thêm`, ships.cancels.length && `${ships.cancels.length} bỏ`].filter(Boolean).join(' · ')})` : null, // prettier-ignore
     ].filter(Boolean)
     return { ok: true, detail: `Đã ghi: ${parts.join(' · ')}` }
   } catch (e) {
-    const done = [dateSaved && 'hẹn giao', termsSaved && 'điều khoản', shipDone > 0 && `${shipDone}/${shipAll} đợt`].filter(Boolean) // prettier-ignore
+    const done = [dateSaved && 'hẹn giao', termsSaved && 'điều khoản', adjDone && `điều chỉnh lần ${adjDone.seq}`, shipDone > 0 && `${shipDone}/${shipAll} đợt`].filter(Boolean) // prettier-ignore
     return {
       ok: false,
       title: done.length
         ? `Đã ghi ${done.join(', ')} — phần còn lại CHƯA lưu`
         : 'Không lưu được',
       detail: apiErrorText(e),
-      dateSaved: dateSaved || termsSaved || shipDone > 0,
+      dateSaved: dateSaved || termsSaved || !!adjDone || shipDone > 0,
     }
   }
 }
+
+const fmtSigned = (n: number) =>
+  `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('vi-VN', { maximumFractionDigits: 0 })}`
 
 /**
  * Đưa con trỏ vào một ô của khối Đầu đơn theo `aria-label` — chip đầu trang bấm

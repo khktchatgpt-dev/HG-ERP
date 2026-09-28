@@ -10,10 +10,24 @@ import {
   dateEditState,
   diffShipments,
   plannedColumns,
+  remapShipCols,
   saveSuaTaiCho,
   shipmentsPreflight,
   suaTaiChoPreflight,
 } from './sua-tai-cho'
+
+describe('remapShipCols — cột đợt đi theo DÒNG khi bỏ/thêm dòng hàng (B3)', () => {
+  it('bỏ dòng đứng trước → số của dòng sau vẫn về đúng dòng; mảnh của dòng đã bỏ rơi', () => {
+    const cols = [{ id: 'd1', date: '2026-10-05', qty: { 0: 5, 2: 7 } }]
+    expect(remapShipCols(cols, ['A', 'B', 'C'], ['B', 'C'])).toEqual([
+      { id: 'd1', date: '2026-10-05', qty: { 1: 7 } },
+    ])
+    // Thêm dòng mới ở đầu → chỉ số trượt xuống 1.
+    expect(remapShipCols(cols, ['A', 'B', 'C'], ['N', 'A', 'B', 'C'])[0].qty).toEqual({ 1: 5, 3: 7 }) // prettier-ignore
+    // Không đổi → y nguyên.
+    expect(remapShipCols(cols, ['A', 'B', 'C'], ['A', 'B', 'C'])[0].qty).toEqual({ 0: 5, 2: 7 }) // prettier-ignore
+  })
+})
 
 const LINES = [
   { id: 'L1', name: 'Bulon 6x10', qty_ordered: 19_890 },
@@ -216,5 +230,34 @@ describe('saveSuaTaiCho — lưu theo phần, hỏng giữa chừng nói phần 
     const r2 = await saveSuaTaiCho('p1', header, noDate, '', ships)
     expect(r2).toMatchObject({ ok: false, dateSaved: true, detail: 'vượt SL đặt' })
     if (!r2.ok) expect(r2.title).toMatch(/điều khoản, 1\/3 đợt/)
+  })
+
+  it('điều chỉnh dòng hàng (B3) chạy SAU điều khoản và TRƯỚC đợt giao; hỏng ở đợt thì nói đã ghi lần N', async () => {
+    vi.mocked(api).mockClear().mockResolvedValue({})
+    const order: string[] = []
+    const adjust = vi.fn(async () => {
+      order.push('adjust')
+      return { seq: 2, delta_total: -1_500_000 }
+    })
+    vi.mocked(api).mockImplementation(async (u) => {
+      order.push(String(u).replace(/.*\//, ''))
+      return {}
+    })
+    const ships = { cancels: [], edits: [], adds: [{ expected_date: '2026-10-20', lines: [{ po_line_id: 'L2', qty: 2 }] }] } // prettier-ignore
+    const noDate = { ok: true, current: '', changed: false }
+    const r = await saveSuaTaiCho('p1', header, noDate, '', ships, adjust)
+    expect(order).toEqual(['terms', 'adjust', 'shipments'])
+    if (r.ok) expect(r.detail).toMatch(/điều chỉnh lần 2 \(phát sinh −1\.500\.000\)/)
+
+    vi.mocked(api).mockReset().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('vượt SL đặt')) // prettier-ignore
+    const r2 = await saveSuaTaiCho('p1', header, noDate, '', ships, adjust)
+    expect(r2).toMatchObject({ ok: false, dateSaved: true })
+    if (!r2.ok)
+      expect(r2.title).toMatch(/điều khoản, điều chỉnh lần 2 — phần còn lại CHƯA lưu/)
+    // Không có thay đổi dòng → không truyền adjust → không gọi.
+    vi.mocked(api).mockReset().mockResolvedValue({})
+    adjust.mockClear()
+    await saveSuaTaiCho('p1', header, noDate, '', ships, null)
+    expect(adjust).not.toHaveBeenCalled()
   })
 })

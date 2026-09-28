@@ -48,12 +48,17 @@ describe('barLayout — thanh hành động MỘT HÀNG theo bước của đơn
       expect(b.quick.length).toBeLessThanOrEqual(3)
       expect(b.quick).not.toContain(b.primary)
     }
-    // "Sửa" đứng đầu trên mọi đơn đã ra khỏi nháp (28/09/2026); print về "⋯" khi hết chỗ.
-    expect(at('ordered').quick).toEqual(['doc:edit_terms', 'edit', 'doc:nudge'])
-    expect(at('partial').quick).toEqual(['doc:edit_terms', 'edit', 'cost'])
-    expect(at('approved').quick).toEqual(['doc:edit_terms', 'edit', 'print'])
+    // "Sửa" đứng đầu trên mọi đơn đã ra khỏi nháp (28/09/2026). "Điều chỉnh"
+    // KHÔNG còn là nút riêng (B3) — dòng hàng sửa trong cùng nút Sửa.
+    expect(at('ordered').quick).toEqual(['doc:edit_terms', 'doc:nudge', 'print'])
+    expect(at('partial').quick).toEqual(['doc:edit_terms', 'cost', 'print'])
+    expect(at('approved').quick).toEqual(['doc:edit_terms', 'print'])
     expect(at('pending_approval').quick).toEqual(['doc:withdraw', 'doc:reject', 'print'])
-    expect(keys(at('ordered'))).toContain('print')
+    for (const s of ['approved', 'ordered', 'partial']) {
+      expect(at(s).quick).not.toContain('edit')
+      expect(keys(at(s))).not.toContain('edit')
+    }
+    expect(at('draft').quick).toContain('edit')
   })
 
   it('"⋯ Thêm" chứa MỌI việc còn lại, mỗi việc đúng một lần, không trùng thanh', () => {
@@ -116,7 +121,7 @@ describe('splitForStatusBar — chuyển trạng thái về thanh trạng thái 
     expect(s.moves.map((m) => m.key)).toEqual(['transit', 'receive', 'closeShort', 'acceptByHand', 'doc:reopen', 'doc:cancel']) // prettier-ignore
     expect(s.moves.map((m) => m.group)).toEqual(['Đi tiếp', 'Đi tiếp', 'Đi tiếp', 'Đi tiếp', 'Quay lại', 'Dừng']) // prettier-ignore
     // Việc không đổi trạng thái vẫn cạnh mã đơn / trong ⋯ — không mục nào rơi mất.
-    expect(s.actions).toEqual(['doc:edit_terms', 'edit', 'doc:nudge'])
+    expect(s.actions).toEqual(['doc:edit_terms', 'doc:nudge', 'print'])
     expect(s.menu.map((m) => m.key)).not.toContain('doc:cancel')
     expect(s.menu.map((m) => m.key)).toContain('cost')
   })
