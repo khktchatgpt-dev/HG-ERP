@@ -171,65 +171,82 @@ export function TaiChinhPanel({
         title="Đối chiếu đặt · nhận · hoá đơn"
         summary={[['Dòng', rows.length]]}
       >
-        <Grid minWidth={820}>
-          <GridHead>
-            <Th width={30}>#</Th>
-            <Th>Mã · tên vật tư</Th>
-            <Th num width={130}>
-              Tiền đặt
-            </Th>
-            <Th num width={130}>
-              Tiền nhận
-            </Th>
-            <Th num width={130}>
-              Tiền hoá đơn
-            </Th>
-            <Th num width={120}>
-              Nhận − hoá đơn
-            </Th>
-            <Th width={120}>Tình trạng</Th>
-          </GridHead>
-          <GridBody>
-            {rows.map((r, i) => (
-              <GridRow key={r.po_line_id}>
-                <Td num>{i + 1}</Td>
-                <Td>
-                  {r.material_code && (
-                    <span className="num k-strong">{r.material_code}</span>
-                  )}
-                  {r.material_code ? ' · ' : ''}
-                  {r.material_name}
-                </Td>
-                <Td num>{m(r.amount_ordered)}</Td>
-                <Td num>{r.amount_received ? m(r.amount_received) : '—'}</Td>
-                <Td num>{r.amount_invoiced ? m(r.amount_invoiced) : '—'}</Td>
-                <Td
-                  num
-                  tone={
-                    Math.abs(r.amount_gap) > 0.005
-                      ? VERDICT_TONE[r.verdict] === 'stop'
-                        ? 'stop'
-                        : 'warn'
-                      : undefined
-                  }
-                >
-                  {Math.abs(r.amount_gap) > 0.005 ? m(r.amount_gap) : '—'}
-                </Td>
-                <Td>
-                  <Tag tone={VERDICT_TONE[r.verdict]}>{VERDICT_LABEL[r.verdict]}</Tag>
-                </Td>
-              </GridRow>
-            ))}
-          </GridBody>
-          <GridFoot>
-            <Td colSpan={2}>Cộng · theo đơn giá trên đơn, chưa gồm phí mua</Td>
-            <Td num>{m(rows.reduce((t, r) => t + r.amount_ordered, 0))}</Td>
-            <Td num>{m(v.received_net)}</Td>
-            <Td num>{m(v.invoiced_net)}</Td>
-            <Td num>{m(v.received_net - v.invoiced_net)}</Td>
-            <Td />
-          </GridFoot>
-        </Grid>
+        {/* CHƯA CÓ GÌ ĐỂ ĐỐI CHIẾU (29/09/2026) — đơn chưa về, chưa hoá đơn thì
+            bảng này lặp NGUYÊN VẸN cột "Tiền đặt" của tab Dòng hàng (đổi mỗi
+            tên cột), 3 cột còn lại toàn "—", nhãn "Chưa phát sinh" lặp mọi
+            dòng — đo trên PO-2026-0087/0097. Đối chiếu chỉ có việc từ khi có
+            gì để so; trước đó bày sẵn 8 dòng trùng là nội dung thừa. */}
+        {v.stage === 'chua_phat_sinh' ? (
+          <Empty
+            headline="Chưa có gì để đối chiếu"
+            reason="Chưa nhận, chưa có hoá đơn nào gắn đơn — số Đặt xem đủ ở tab Dòng hàng."
+            next={
+              <span className="text-k-sm text-[var(--ink-3)]">
+                Bảng này tự hiện khi có hàng về hoặc hoá đơn đầu tiên.
+              </span>
+            }
+          />
+        ) : (
+          <Grid minWidth={820}>
+            <GridHead>
+              <Th width={30}>#</Th>
+              <Th>Mã · tên vật tư</Th>
+              <Th num width={130}>
+                Tiền đặt
+              </Th>
+              <Th num width={130}>
+                Tiền nhận
+              </Th>
+              <Th num width={130}>
+                Tiền hoá đơn
+              </Th>
+              <Th num width={120}>
+                Nhận − hoá đơn
+              </Th>
+              <Th width={120}>Tình trạng</Th>
+            </GridHead>
+            <GridBody>
+              {rows.map((r, i) => (
+                <GridRow key={r.po_line_id}>
+                  <Td num>{i + 1}</Td>
+                  <Td>
+                    {r.material_code && (
+                      <span className="num k-strong">{r.material_code}</span>
+                    )}
+                    {r.material_code ? ' · ' : ''}
+                    {r.material_name}
+                  </Td>
+                  <Td num>{m(r.amount_ordered)}</Td>
+                  <Td num>{r.amount_received ? m(r.amount_received) : '—'}</Td>
+                  <Td num>{r.amount_invoiced ? m(r.amount_invoiced) : '—'}</Td>
+                  <Td
+                    num
+                    tone={
+                      Math.abs(r.amount_gap) > 0.005
+                        ? VERDICT_TONE[r.verdict] === 'stop'
+                          ? 'stop'
+                          : 'warn'
+                        : undefined
+                    }
+                  >
+                    {Math.abs(r.amount_gap) > 0.005 ? m(r.amount_gap) : '—'}
+                  </Td>
+                  <Td>
+                    <Tag tone={VERDICT_TONE[r.verdict]}>{VERDICT_LABEL[r.verdict]}</Tag>
+                  </Td>
+                </GridRow>
+              ))}
+            </GridBody>
+            <GridFoot>
+              <Td colSpan={2}>Cộng · theo đơn giá trên đơn, chưa gồm phí mua</Td>
+              <Td num>{m(rows.reduce((t, r) => t + r.amount_ordered, 0))}</Td>
+              <Td num>{m(v.received_net)}</Td>
+              <Td num>{m(v.invoiced_net)}</Td>
+              <Td num>{m(v.received_net - v.invoiced_net)}</Td>
+              <Td />
+            </GridFoot>
+          </Grid>
+        )}
       </FastTab>
 
       <div className="grid grid-cols-1 border-b border-[var(--line)] md:grid-cols-2">
