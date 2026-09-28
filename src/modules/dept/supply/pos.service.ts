@@ -697,13 +697,14 @@ export const posService = {
       gọi API khác đều đi qua hàm này. Đo được 44/63 đơn trống `expected_at` —
       số đó tích lại vì không tầng nào hỏi.
 
-      Chỉ chặn ở bước GỬI: nháp chưa cần ngày. Sửa bằng "Đổi hẹn giao"
-      (`/reschedule`) rồi gửi lại — một bước, không phải làm lại đơn.
+      Chỉ chặn ở bước GỬI: nháp chưa cần ngày. Sửa bằng nút "Sửa" (mở hẹn
+      giao tại chỗ, gọi `/reschedule`) rồi gửi lại — một bước, không phải
+      làm lại đơn.
     */
     if (to === 'ordered') await assertSupplierCanOrder(before.supplier_id)
     if (to === 'ordered' && !before.expected_at) {
       throw BadRequest(
-        'Đơn chưa có hẹn giao — khai ngày dự kiến ("Đổi hẹn giao") trước khi gửi NCC. Không có ngày thì không đo được trễ, và đơn không lên được lịch hàng về.',
+        'Đơn chưa có hẹn giao — bấm "Sửa" khai ngày dự kiến trước khi gửi NCC. Không có ngày thì không đo được trễ, và đơn không lên được lịch hàng về.',
       )
     }
     /**

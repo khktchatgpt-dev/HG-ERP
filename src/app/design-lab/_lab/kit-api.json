@@ -2454,6 +2454,13 @@
         "doc": "Bộ phận giữ quyền — có giá trị là nút khoá MỀM: vẫn Tab tới được, trình đọc nghe \"Việc này do … quản lý\"."
       },
       {
+        "name": "busy",
+        "type": "boolean",
+        "optional": true,
+        "def": "false",
+        "doc": "Việc đang chạy (đang lưu, đang gửi) — khoá mềm, vòng quay thay icon."
+      },
+      {
         "name": "href",
         "type": "string",
         "optional": true,
@@ -2461,11 +2468,18 @@
         "doc": "Có thì nút là liên kết thật. Bị khoá thì vẫn là nút, không điều hướng."
       },
       {
+        "name": "icon",
+        "type": "IcoName",
+        "optional": true,
+        "def": null,
+        "doc": "Icon đứng trước chữ — cùng luật `Btn`."
+      },
+      {
         "name": "onClick",
         "type": "() => void",
         "optional": true,
         "def": null,
-        "doc": "Việc khi bấm. Bị nuốt khi nút khoá (`blockedBy` hoặc `why`)."
+        "doc": "Việc khi bấm. Bị nuốt khi nút khoá (`blockedBy`, `why` hoặc `busy`)."
       },
       {
         "name": "why",

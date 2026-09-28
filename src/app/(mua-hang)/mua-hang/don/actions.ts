@@ -389,11 +389,11 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           primary: true,
           ui: 'direct',
           stakes: 'vua',
-          // Lý do NÓI LUÔN CÁCH GỠ, và nút gỡ ("Đổi hẹn giao") đứng ngay dưới.
+          // Lý do NÓI LUÔN CÁCH GỠ — nút gỡ ("Sửa") đứng ngay đầu thanh (28/09/2026).
           blocked:
             notOwn ??
             (perm.noEta
-              ? 'Chưa có hẹn giao — bấm "Đổi hẹn giao" khai ngày dự kiến trước, không thì không ai đo được NCC trễ hay đúng'
+              ? 'Chưa có hẹn giao — bấm "Sửa" khai ngày dự kiến trước, không thì không ai đo được NCC trễ hay đúng'
               : undefined),
           done: 'Đã gửi NCC',
           bulk: true,

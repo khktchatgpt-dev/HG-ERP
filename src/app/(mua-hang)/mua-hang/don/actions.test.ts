@@ -387,12 +387,12 @@ describe('gửi NCC đòi hẹn giao (17/09/2026)', () => {
       (a) => a.id === 'send',
     )!
     expect(send.blocked).toMatch(/Chưa có hẹn giao/)
-    expect(send.blocked).toMatch(/Đổi hẹn giao/)
-    // Nút gỡ phải có mặt ngay trong cùng bảng hành động, không thì lời khuyên
-    // kia là lời khuyên suông.
+    expect(send.blocked).toMatch(/"Sửa"/)
+    // Nút gỡ ("Sửa", id edit_terms) phải có mặt ngay trong cùng bảng hành
+    // động, không thì lời khuyên kia là lời khuyên suông.
     expect(
       actionsFor('approved', { ...approved, noEta: true }).some(
-        (a) => a.id === 'reschedule',
+        (a) => a.id === 'edit_terms',
       ),
     ).toBe(true)
   })

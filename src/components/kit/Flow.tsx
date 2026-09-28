@@ -280,6 +280,8 @@ export function DocChain({
  */
 export function PrimaryStep({
   label,
+  icon,
+  busy = false,
   onClick,
   href,
   blockedBy,
@@ -287,7 +289,11 @@ export function PrimaryStep({
 }: {
   /** Tên bước, bằng động từ nghiệp vụ ("Gửi Giám đốc duyệt"). Luôn là nút chính (nền đặc). */
   label: string
-  /** Việc khi bấm. Bị nuốt khi nút khoá (`blockedBy` hoặc `why`). */
+  /** Icon đứng trước chữ — cùng luật `Btn`. */
+  icon?: IcoName
+  /** Việc đang chạy (đang lưu, đang gửi) — khoá mềm, vòng quay thay icon. */
+  busy?: boolean
+  /** Việc khi bấm. Bị nuốt khi nút khoá (`blockedBy`, `why` hoặc `busy`). */
   onClick?: () => void
   /** Có thì nút là liên kết thật. Bị khoá thì vẫn là nút, không điều hướng. */
   href?: string
@@ -310,11 +316,17 @@ export function PrimaryStep({
     nút rơi khỏi thứ tự Tab, nên người dùng bàn phím không bao giờ tới được
     nút để nghe VÌ SAO — mà câu lý do cũng không gắn vào nút. Đúng lỗi luật
     kiểm của sổ cấm: "hành động bị chặn phải nói vướng gì, ngay tại chỗ".
+
+    ẨN HẲN NÚT KHI KHOÁ LÀ CÙNG LỖI (29/09/2026) — chỗ gọi cũ tự ẩn nút này
+    khi `why` có giá trị, đúng thứ luật trên cấm. `PrimaryStep` giờ LUÔN vẽ
+    nút; chỗ gọi chỉ truyền `why`, không tự quyết có vẽ hay không.
   */
   return (
     <div className="flex flex-col items-end gap-1">
       <Btn
         primary
+        icon={icon}
+        busy={busy}
         onClick={onClick}
         href={href}
         blockedBy={blockedBy}

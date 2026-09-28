@@ -121,6 +121,11 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                     <h3 className="k-fgrp-h">
                       Xác nhận theo dòng · đặt / NCC hẹn / đã về
                     </h3>
+                    {/* Phân biệt với bảng "Theo dòng · Kho" phía dưới (29/09/2026):
+                        đây là PHÍA NCC — họ nói gì, không phải Kho đã nhận gì. */}
+                    <p className="text-k-sm mb-1 text-[var(--ink-3)]">
+                      Phía NCC nói gì — đã nhận đơn chưa, hẹn ngày nào.
+                    </p>
                   </div>
                   <XacNhanTheoDongGrid
                     lines={trackLines}
@@ -196,6 +201,12 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                         ? 'Nhận theo đợt · sổ thực nhận của Kho'
                         : 'Theo dòng · Kho chưa lập phiếu nhập nào'}
                     </h3>
+                    {/* Phân biệt với bảng "Xác nhận theo dòng" phía trên: đây
+                        là PHÍA KHO — đã lập phiếu gì, còn thiếu bao nhiêu, và
+                        là nơi bấm "Chốt thiếu" khi NCC không giao nữa. */}
+                    <p className="text-k-sm mb-1 text-[var(--ink-3)]">
+                      Phía Kho đã nhận gì — số thật trên phiếu nhập, chốt thiếu ở đây.
+                    </p>
                   </div>
                   <NhanTheoDotGrid
                     batches={p.receiptBatches}

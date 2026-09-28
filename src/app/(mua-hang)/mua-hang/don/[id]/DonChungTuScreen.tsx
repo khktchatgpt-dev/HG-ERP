@@ -42,6 +42,7 @@ import {
   NoticeBar,
   NumInput,
   Pick,
+  PrimaryStep,
   Sheet,
   SheetActions,
   SmartLinks,
@@ -447,13 +448,7 @@ export function DonChungTuScreen(p: Props) {
         tone={statusTone}
         marks={marks}
         holder={holder && holder.who !== '—' ? { who: holder.who, what: holder.what, mine: holder.mine, days: holder.since ? daysBetween(holder.since, today) : null } : undefined} // prettier-ignore
-        next={
-          nextItem && !nextItem.blocked ? (
-            <Btn primary icon={nextItem.icon} disabled={busy} onClick={nextItem.run}>
-              {nextItem.label}
-            </Btn>
-          ) : undefined
-        }
+        next={nextItem ? <PrimaryStep label={nextItem.label} icon={nextItem.icon} busy={busy} onClick={nextItem.run} why={nextItem.blocked} /> : undefined} // prettier-ignore
         moves={statusMoves}
       />
       {blkChecks}
