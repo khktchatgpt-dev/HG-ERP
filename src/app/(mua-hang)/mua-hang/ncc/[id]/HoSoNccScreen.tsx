@@ -35,6 +35,12 @@ import {
   showMoney,
   useToast,
 } from '@/components/kit'
+import {
+  PhapLyNganHang,
+  emptyPhapLy,
+  phapLyBody,
+  type PhapLy,
+} from '../phap-ly-ngan-hang'
 
 type Ncc = {
   id: string
@@ -51,6 +57,11 @@ type Ncc = {
   email: string | null
   address: string | null
   legal_rep: string | null
+  company_name: string | null
+  registered_address: string | null
+  bank_name: string | null
+  bank_account: string | null
+  swift_code: string | null
   payment_terms: string | null
   payment_net_days: number | null
   lead_time_days: number | null
@@ -104,8 +115,8 @@ const MO = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
  * (pháp lý, ngân hàng, đánh giá, incoterms…). Người MUA không khai mấy thứ đó
  * — kế toán và trưởng phòng mới khai, và họ khai một lần lúc lập hồ sơ. Ở đây
  * giữ đúng những ô người mua sửa trong ngày: gọi ai, số nào, địa chỉ nào, trả
- * tiền kiểu gì. Ô nào không có ở đây thì khu cũ vẫn còn, và nút dưới cùng nói
- * thẳng điều đó thay vì giấu.
+ * tiền kiểu gì. Khu cũ đã xoá 29/09/2026, nên pháp lý + ngân hàng nay nằm ở
+ * khối GẬP cuối phiếu (`PhapLyNganHang`, dùng chung với panel Thêm NCC).
  *
  * `TextInput` của kit chốt giá trị khi RỜI Ô (`onCommit`), nên state ở đây là
  * bản nháp của cả phiếu; bấm Lưu mới gọi API — không có chuyện gõ nửa chừng đã
@@ -142,6 +153,7 @@ function SuaHoSo({
     buyer_id: ncc.buyer_id ?? '',
   })
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }))
+  const [legal, setLegal] = useState<PhapLy>(() => emptyPhapLy(ncc))
 
   async function save() {
     if (!f.name.trim()) return
@@ -167,6 +179,7 @@ function SuaHoSo({
           lead_time_days: f.lead_time_days.trim() === '' ? null : Number(f.lead_time_days), // prettier-ignore
           note: s(f.note),
           buyer_id: f.buyer_id || null,
+          ...phapLyBody(legal),
         },
       })
       toast.success('Đã lưu hồ sơ', ncc.name)
@@ -306,6 +319,13 @@ function SuaHoSo({
           />
         </Field>
       </FieldGrid>
+
+      <div className="mt-3">
+        <PhapLyNganHang
+          value={legal}
+          onChange={(k, v) => setLegal((s) => ({ ...s, [k]: v }))}
+        />
+      </div>
 
       <div className="k-sec">Ghi chú</div>
       <TextArea

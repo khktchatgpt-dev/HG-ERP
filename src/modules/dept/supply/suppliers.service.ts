@@ -4,8 +4,9 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import type { z } from 'zod'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
-import { NotFound } from '@/server/http'
+import { Conflict, NotFound } from '@/server/http'
 import { nextSupplierCode } from '@/lib/supplier-code'
+import { findSupplierDupes, normTaxNo } from '@/lib/supplier-dup'
 
 /**
  * Tên phòng CUNG ỨNG như trong public.departments. KHÔNG dùng cho authz nữa
@@ -60,9 +61,11 @@ export const suppliersService = {
      */
     const code =
       input.code?.trim() || nextSupplierCode(input.name, await suppliersRepo.allCodes())
+    const tax_no = await assertTaxNoFree(input.tax_no)
 
     return suppliersRepo.insert({
       ...toRow(rest),
+      tax_no,
       code: code || null,
       name: input.name,
       status,
@@ -83,6 +86,11 @@ export const suppliersService = {
     if (!before) throw NotFound('NCC không tồn tại')
 
     const row: Partial<Supplier> = { ...toRow(patch), updated_by: user.id }
+    // Chỉ soát MST khi nó ĐỔI: 3 cặp trùng cũ (29/09) vẫn phải sửa được ô khác.
+    if (patch.tax_no !== undefined) {
+      const next = normTaxNo(patch.tax_no)
+      row.tax_no = next === normTaxNo(before.tax_no) ? before.tax_no : await assertTaxNoFree(patch.tax_no, id) // prettier-ignore
+    }
     // Đồng bộ status ↔ is_active 2 chiều.
     if (patch.status !== undefined) row.is_active = patch.status === 'active'
     else if (patch.is_active !== undefined) {
@@ -115,6 +123,22 @@ export const suppliersService = {
 }
 
 /** Chuẩn hoá payload text → null; loại field không thuộc bảng. */
+/**
+ * MST ĐÃ CÓ CHỦ THÌ CHẶN (29/09/2026, chủ dự án duyệt). Trả MST đã chuẩn hoá
+ * (null nếu trống) để ghi xuống — hai cách gõ một MST không thành hai giá trị.
+ */
+async function assertTaxNoFree(taxNo: string | null | undefined, exceptId?: string) {
+  const tax = normTaxNo(taxNo)
+  if (!tax) return null
+  const { taxOwner: o } = findSupplierDupes(await suppliersRepo.withTaxNo(), { name: '', tax_no: tax }, exceptId) // prettier-ignore
+  if (o)
+    throw Conflict(
+      `MST ${tax} đã gắn cho ${o.code ? `${o.code} · ` : ''}${o.name} — một trong hai đang gõ sai. Sửa MST ở hồ sơ kia, hoặc bỏ trống ô MST để lưu trước.`,
+      'TAX_NO_TAKEN',
+    )
+  return tax
+}
+
 function toRow(
   input: Partial<SupplierInput> & { is_active?: boolean },
 ): Partial<Supplier> {

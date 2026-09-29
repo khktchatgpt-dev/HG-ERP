@@ -23,6 +23,7 @@ import {
 } from '@/components/kit'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
+import { ThemNccSheet } from './them-ncc'
 
 export type NccRow = {
   id: string
@@ -224,9 +225,15 @@ export function NccScreen({
   meId,
   defaultScope,
   urlScope,
+  canManage,
+  buyers,
 }: {
   rows: NccRow[]
   meId: string
+  /** Quyền `supply.supplier.manage` — đúng quyền service kiểm khi thêm. */
+  canManage: boolean
+  /** Người mua (ô Người phụ trách). */
+  buyers: { id: string; name: string }[]
   defaultScope: SupplyScope
   urlScope: SupplyScope | null
   /** Nguồn nào chạm trần nạp — xem lý do phải nói ra ở `page.tsx`. */
@@ -234,6 +241,16 @@ export function NccScreen({
 }) {
   const [q, setQ] = useState('')
   const [chip, setChip] = useState('all')
+  const [them, setThem] = useState(false)
+  // Loại đang dùng, nhiều trước — gợi ý bấm nhanh trong panel Thêm.
+  const types = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const r of allRows) {
+      const t = r.type?.trim()
+      if (t) n.set(t, (n.get(t) ?? 0) + 1)
+    }
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t)
+  }, [allRows])
   // NCC CỦA TÔI (27/09/2026): gán cho tôi, hoặc chưa gán mà tôi từng đặt.
   const [scope, setScope] = useScopePref('ncc', meId, defaultScope, urlScope)
   const mineCount = allRows.filter((r) => r.mine).length
@@ -327,6 +344,14 @@ export function NccScreen({
                 },
               ]}
             />
+            <Btn
+              icon="them"
+              primary
+              blockedBy={canManage ? undefined : 'phòng Cung ứng'}
+              onClick={() => setThem(true)}
+            >
+              Thêm nhà cung cấp
+            </Btn>
           </>
         }
       />
@@ -403,6 +428,15 @@ export function NccScreen({
         ]}
         right={`${kept.length} / ${rows.length} NCC`}
       />
+      {them && (
+        <ThemNccSheet
+          rows={allRows}
+          types={types}
+          buyers={buyers}
+          meId={meId}
+          onClose={() => setThem(false)}
+        />
+      )}
     </ScreenFrame>
   )
 }
