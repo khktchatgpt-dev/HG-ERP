@@ -220,14 +220,12 @@ function cotNcc({
 
 export function NccScreen({
   rows: allRows,
-  canEdit,
   chamTran,
   meId,
   defaultScope,
   urlScope,
 }: {
   rows: NccRow[]
-  canEdit: boolean
   meId: string
   defaultScope: SupplyScope
   urlScope: SupplyScope | null
@@ -329,21 +327,6 @@ export function NccScreen({
                 },
               ]}
             />
-            {canEdit ? (
-              /*
-              THÊM MỚI vẫn ở khu cũ — có chủ ý (17/09/2026).
-
-              SỬA hồ sơ nay làm ngay trong khu mới (xem `SuaHoSo` ở màn hồ sơ
-              NCC): đó là việc người mua chạm tới trong ngày. Còn LẬP hồ sơ mới
-              là việc vài tuần một lần và cần khai cả pháp lý lẫn ngân hàng —
-              dựng lại nguyên form 40 ô ở đây là chép một thứ ít dùng, rồi hai
-              bản lệch nhau ở lần sửa đầu tiên. Nhãn nói thẳng nó dẫn đi đâu,
-              không giả vờ ở lại.
-            */
-              <Btn icon="them" href="/planning/suppliers">
-                Thêm NCC mới (hồ sơ đầy đủ)
-              </Btn>
-            ) : null}
           </>
         }
       />

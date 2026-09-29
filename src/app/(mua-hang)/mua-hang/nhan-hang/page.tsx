@@ -3,7 +3,7 @@ import { defaultScope, isMyPo, parseScope } from '@/lib/supply-scope'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { incomingBucket, isIncoming } from '@/lib/supply-watch'
-import { loadWatchPos, todayIso } from '@/app/(workspace)/planning/_data/watch'
+import { loadWatchPos, todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
 import { NhanHangScreen } from './NhanHangScreen'
 
 export const metadata = { title: 'Mua hàng · Nhận hàng' }

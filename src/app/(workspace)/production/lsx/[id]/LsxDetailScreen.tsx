@@ -22,9 +22,6 @@ import {
  * Màn HỒ SƠ LỆNH dùng chung 3 shell — "mỗi bộ phận một màn riêng":
  *   production  /production/lsx/[id]  — xưởng theo dõi (kế hoạch/jobs + số liệu)
  *   exec        /exec/lsx/[id]        — GĐ thẩm định + DUYỆT ngay trong shell GĐ
- *   planning    /planning/lsx/[id]/ho-so — Kế hoạch/Cung ứng tra cứu (+ panel PO).
- *               Route `/planning/lsx/[id]` trần nay là DANH SÁCH ĐƠN MUA của
- *               lệnh (màn riêng của người mua, 03/09/2026).
  * Bản của Sales (/sales/lsx) vẫn riêng vì có sửa spec + gửi duyệt lại.
  */
 export async function LsxDetailScreen({
@@ -32,7 +29,7 @@ export async function LsxDetailScreen({
   variant,
 }: {
   id: string
-  variant: 'production' | 'exec' | 'planning' | 'team' | 'prodplan'
+  variant: 'production' | 'exec' | 'team' | 'prodplan'
 }) {
   const user = await authService.requirePageUser()
 
@@ -58,7 +55,7 @@ export async function LsxDetailScreen({
   // shell XƯỞNG (GĐ1 plan-sx): quản đốc thấy PO + trạng thái + ngày về nhưng
   // KHÔNG thấy tiền, KHÔNG có nút chốt lại định mức.
   let supply: SupplyPanelData | null = null
-  if (variant === 'exec' || variant === 'planning' || variant === 'production') {
+  if (variant === 'exec' || variant === 'production') {
     const showMoney = variant !== 'production'
     const { rows: poRows } = await posService.list(user, {
       production_order_id: id,
@@ -144,16 +141,6 @@ export async function LsxDetailScreen({
       shapingHref: null,
       breadcrumbs: [
         { label: 'Ban Giám đốc', href: '/exec' },
-        { label: `LSX ${lsx.code}` },
-      ],
-    },
-    planning: {
-      canApprove: false,
-      canManage: user.role === 'admin',
-      planHref: canPlan ? `/kehoach-sx/${id}` : null,
-      shapingHref: null,
-      breadcrumbs: [
-        { label: 'Cung ứng', href: '/planning' },
         { label: `LSX ${lsx.code}` },
       ],
     },

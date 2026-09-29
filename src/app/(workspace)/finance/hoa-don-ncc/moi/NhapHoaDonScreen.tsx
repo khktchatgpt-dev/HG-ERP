@@ -312,7 +312,7 @@ export function NhapHoaDonScreen({ draft }: { draft: Draft }) {
             tag="Thiếu điều khoản"
             action={{
               label: 'Mở hồ sơ NCC',
-              onClick: () => router.push(`/planning/suppliers/${draft.po.supplier_id}`),
+              onClick: () => router.push(`/mua-hang/ncc/${draft.po.supplier_id}`),
             }}
           >
             NCC này chưa khai số ngày thanh toán, nên không suy được hạn. Gõ tay hạn ở

@@ -1,6 +1,6 @@
 'use client'
 
-import { PoNotesPanel } from '@/app/(workspace)/planning/pos/[id]/PoNotesPanel'
+import { PoNotesPanel } from '@/app/(mua-hang)/mua-hang/don/_lib/PoNotesPanel'
 import type { DonCtx } from './useDonChungTu'
 
 /** Khối `notesPanel` của màn chứng từ đơn mua. */

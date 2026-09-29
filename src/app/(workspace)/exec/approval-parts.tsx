@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { poLineAmount } from '@/lib/po-line'
 import { colKey, LSX_FORM, specColumnsOf } from '@/lib/lsx-template'
 import { money } from './approval-helpers'
-import { type PoLine } from '@/app/(workspace)/planning/pos/PosManager'
+import { type PoLine } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
 import type { ApprovalLsxLine, ApprovalOrderInfo } from './approval-types'
 
 /**

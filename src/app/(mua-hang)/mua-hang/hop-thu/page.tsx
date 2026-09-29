@@ -1,7 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { loadWatchPos, todayIso } from '@/app/(workspace)/planning/_data/watch'
+import { loadWatchPos, todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
 import { classifyTodo, type SupplyTodoKind } from '@/lib/supply-watch'
 import { defaultScope, parseScope } from '@/lib/supply-scope'
 import { ViecScreen, type Viec } from './ViecScreen'

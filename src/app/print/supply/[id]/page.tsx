@@ -29,7 +29,7 @@ export default async function PoPrintPage({
   const { id } = await params
 
   const po = await posRepo.findById(id)
-  if (!po) redirect('/planning/pos')
+  if (!po) redirect('/mua-hang/don')
   const [lines, supplier, company, refs, tpl, rawShipments, adjs] = await Promise.all([
     posRepo.listLines(id),
     suppliersRepo.findById(po.supplier_id),

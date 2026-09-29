@@ -26,7 +26,7 @@ import { parsePoPaste, type PastedPoLine } from '@/lib/po-paste'
 import type { PoMaterial } from '@/lib/po-material.types'
 import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { validateShipments } from '@/lib/po-shipments'
-import type { Line } from '@/app/(workspace)/planning/pos/new/po-line'
+import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { columnsToShipments, planLeft, type Need, type PlanColumn } from './soan-don'
 
 /**

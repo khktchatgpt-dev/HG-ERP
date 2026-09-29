@@ -19,7 +19,7 @@ export function MobileDrawer({
   accentSoftBg,
   accentText,
 }: {
-  workspace: { route: string; short: string; logoText: string }
+  workspace: { route: string; home: string; short: string; logoText: string }
   sections: NavSection[]
   accentBg: string
   accentShadow: string
@@ -82,7 +82,7 @@ export function MobileDrawer({
             />
             <aside className="bg-card text-foreground absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col gap-1 overflow-y-auto border-r px-3 py-4 shadow-xl">
               <div className="mb-3 flex items-center justify-between px-2">
-                <Link href={`${workspace.route}/`} className="flex items-center gap-2">
+                <Link href={`${workspace.home}/`} className="flex items-center gap-2">
                   <span
                     className={`grid h-9 w-9 place-items-center rounded-md font-bold text-white ${accentBg}`}
                   >

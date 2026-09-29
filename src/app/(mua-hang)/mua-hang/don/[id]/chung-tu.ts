@@ -3,8 +3,8 @@ import { poTemplateMeta } from '@/lib/po-template'
 import {
   templateDefaults,
   type PoHeader,
-} from '@/app/(workspace)/planning/pos/new/po-draft'
-import type { Line } from '@/app/(workspace)/planning/pos/new/po-line'
+} from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import type { Check } from '@/components/kit'
 
 /**

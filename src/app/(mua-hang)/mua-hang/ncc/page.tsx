@@ -1,8 +1,13 @@
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
-import { defaultScope, inferSupplierBuyer, mySupplierIds, parseScope } from '@/lib/supply-scope'
+import {
+  defaultScope,
+  inferSupplierBuyer,
+  mySupplierIds,
+  parseScope,
+} from '@/lib/supply-scope'
 import { authService } from '@/modules/core/auth/auth.service'
-import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { suppliersService } from '@/modules/dept/supply/suppliers.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { NccScreen } from './NccScreen'
 
@@ -36,7 +41,6 @@ export default async function Page({
   const sp = await searchParams
   const user = await authService.requirePageUser()
   const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
-  const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
 
   /*
     TRẦN NẠP — và NÓI RA khi chạm.
@@ -127,7 +131,11 @@ export default async function Page({
       last_po_at: st?.last_at ?? null,
       spend: st?.spend ?? {},
       buyer_name: nameOf(s.buyer_id ?? inferred.get(s.id) ?? null),
-      buyer_src: s.buyer_id ? ('gan' as const) : inferred.has(s.id) ? ('suy' as const) : null,
+      buyer_src: s.buyer_id
+        ? ('gan' as const)
+        : inferred.has(s.id)
+          ? ('suy' as const)
+          : null,
       mine: mine.has(s.id),
     }
   })
@@ -135,13 +143,10 @@ export default async function Page({
   return (
     <NccScreen
       rows={rows}
-      canEdit={!!canEdit}
       meId={user.id}
       defaultScope={defaultScope({ canApprove })}
       urlScope={parseScope(sp.pham_vi)}
-      chamTran={
-        suppliers.length >= CAP ? 'ncc' : pos.length >= CAP ? 'don' : null
-      }
+      chamTran={suppliers.length >= CAP ? 'ncc' : pos.length >= CAP ? 'don' : null}
     />
   )
 }

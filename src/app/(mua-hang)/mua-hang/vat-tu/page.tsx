@@ -1,7 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
-import { canAction } from '@/modules/core/rbac/rbac.service'
 // Hằng nằm ở module KHÔNG 'use client' — để trong `VatTuScreen` thì Next biến
 // mọi export của file đó thành client-reference và server đọc ra `undefined`
 // → `range(0, NaN)` → danh sách rỗng mà không báo lỗi (bẫy đã ghi trong
@@ -43,7 +42,6 @@ export default async function Page({
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
-  const canEdit = await canAction(user, 'warehouse.material.update_purchasing')
 
   const q = sp.q?.trim() || undefined
   const group = sp.nhom?.trim() || undefined
@@ -61,7 +59,11 @@ export default async function Page({
     }),
     // Đếm ở DB theo ĐÚNG bộ lọc đang áp, không cộng từ trang đang xem: 50 dòng
     // trên màn không nói được gì về 13.226 dòng phía sau.
-    materialsService.counts(user, { q, group_name: group, needs_review: review ? true : undefined }),
+    materialsService.counts(user, {
+      q,
+      group_name: group,
+      needs_review: review ? true : undefined,
+    }),
     materialTaxonomy(),
   ])
 
@@ -83,7 +85,6 @@ export default async function Page({
       groups={tax.groups.map((g) => g.name)}
       page={page}
       filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', ra: review }}
-      canEdit={canEdit}
     />
   )
 }

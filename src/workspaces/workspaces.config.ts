@@ -383,8 +383,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       không phải trang trắng. Chủ dự án chốt tạm bỏ qua, dựng sau.
 
       `route` GIỮ NGUYÊN `/planning`: nó là dấu nhận dạng, không phải cửa vào.
-      Khu cũ vẫn phục vụ (menu khu mới có mục "Khu Cung ứng cũ" dẫn về), và đổi
-      `route` là làm mọi đường `/planning/*` mất danh tính phòng.
+      Khu cũ đã xoá hẳn 29/09/2026; `route` giữ lại chỉ làm dấu nhận dạng phòng.
     */
     home: '/mua-hang',
     accent: 'violet',
@@ -403,8 +402,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         màn mới. Rail 52px xoá hẳn — đường lùi là `git revert`, không phải nuôi
         song song thêm một tháng nữa.
 
-        Trang cũ `/planning/*` VẪN SỐNG (bookmark, link trong màn khác, và mục
-        "Khu Cung ứng cũ" cuối menu) — chỉ rút khỏi luồng chính. Bản đồ mục cũ →
+        Trang cũ `/planning/*` ĐÃ XOÁ HẲN 29/09/2026 — link cũ chuyển hướng ở
+        proxy.ts (`MOVED_PREFIXES`). Bản đồ mục cũ →
         màn mới có test canh ở `workspaces.config.test.ts`: gỡ một màn mới mà
         quên đường thay thế thì test đỏ, chứ không phải người dùng phát hiện.
       */
@@ -456,22 +455,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         ],
       },
       /*
-        CẦU TẠM — một mục, không phải năm.
-
-        Mười màn cũ đều đã có màn mới thay (bảng trong test), nên bày lại cả
-        mười là dựng lại đúng cái menu vừa gỡ. Nhưng cắt sạch đường về ngay
-        ngày đầu thì ai phát hiện màn mới thiếu một việc sẽ không có chỗ nào
-        đi tiếp. Một mục dẫn về trang tổng quan cũ là đủ: từ đó vào được mọi
-        trang `/planning/*` như trước.
-
-        XOÁ MỤC NÀY khi phòng đã chạy vài tuần trên bản mới mà không phải lùi.
+        Mục "Khu Cung ứng cũ" (cầu tạm về `/planning`) đã gỡ 29/09/2026 cùng
+        lúc XOÁ HẲN khu cũ — chủ dự án chốt "xoá hết". Link cũ do `MOVED_PREFIXES`
+        ở proxy.ts chuyển sang màn mới.
       */
-      {
-        heading: 'Bản cũ',
-        items: [
-          { href: '/planning', label: 'Khu Cung ứng cũ', icon: 'arrow-left-right' },
-        ],
-      },
     ],
   },
 

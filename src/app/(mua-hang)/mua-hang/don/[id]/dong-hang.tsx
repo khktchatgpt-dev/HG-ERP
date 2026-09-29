@@ -6,7 +6,7 @@ import {
   lineQty2,
   type Line,
   type Num,
-} from '@/app/(workspace)/planning/pos/new/po-line'
+} from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import {
   CellHint,
   Combobox,
