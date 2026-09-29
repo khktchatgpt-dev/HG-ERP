@@ -44,14 +44,12 @@ export function VatTuScreen({
   groups,
   page,
   filters,
-  canEdit,
 }: {
   rows: VatTuRow[]
   counts: { total: number; active: number; noShelf: number; needsReview: number }
   groups: string[]
   page: number
   filters: { q: string; nhom: string; ra: boolean }
-  canEdit: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -120,19 +118,6 @@ export function VatTuScreen({
           },
           { label: 'Đang hiện', value: `${tu}–${den}` },
         ]}
-        /*
-          NHÃN NÓI THẲNG NÓ DẪN ĐI ĐÂU (18/09/2026) — cùng luật với nút thêm
-          NCC. Khu mới chưa có hồ sơ vật tư, nên đây vẫn là đường sang danh
-          mục cũ; giả vờ "Sửa" rồi đổi cả vỏ giữa chừng là thứ làm người dùng
-          tưởng mình bấm nhầm.
-        */
-        actions={
-          canEdit ? (
-            <Btn icon="mo" href="/planning/materials">
-              Sửa ở danh mục cũ
-            </Btn>
-          ) : undefined
-        }
       />
 
       <FilterBar>
@@ -201,20 +186,7 @@ export function VatTuScreen({
             {rows.map((r) => (
               <Row key={r.id}>
                 <Cell pin>
-                  {/*
-                    `Code` là mono + màu hành động nên MẮT ĐỌC RA LÀ BẤM ĐƯỢC.
-                    Để trần thì nó là lời hứa suông — đúng lỗi mã đơn ở màn
-                    Phiếu mua mà chủ dự án báo 14/09/2026. Hồ sơ vật tư bản mới
-                    chưa có, nên dẫn sang danh mục cũ ĐÃ LỌC SẴN đúng mã này:
-                    tới nơi là thấy một dòng, sửa được ngay.
-                  */}
-                  <Code
-                    as="a"
-                    href={`/planning/materials?q=${encodeURIComponent(r.code)}`}
-                    title={`Mở ${r.code} ở danh mục vật tư`}
-                  >
-                    {r.code}
-                  </Code>
+                  <Code>{r.code}</Code>
                 </Cell>
                 {/*
                   TÊN VẬT TƯ LÀ CỘT NGƯỜI TA TÌM, nên nó ăn phần dư và có sàn

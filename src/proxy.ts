@@ -41,6 +41,27 @@ const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   // Hoá đơn NCC không phải việc của Cung ứng — trang bên khu Mua hàng đã bỏ
   // 17/09/2026, ai còn giữ link cũ thì đẩy thẳng sang sổ của Kế toán.
   ['/mua-hang/hoa-don', '/finance/hoa-don-ncc'],
+  /*
+    KHU CUNG ỨNG CŨ `/planning/*` ĐÃ XOÁ HẲN (29/09/2026, chủ dự án chốt "xoá
+    hết"). Link/bookmark cũ đẩy sang màn mới tương ứng. Khớp theo TIỀN TỐ và
+    lấy dòng ĐẦU khớp được — nên đường cụ thể phải đứng trước đường chung.
+    Id giữ nguyên (cùng bảng): /planning/pos/<id> → /mua-hang/don/<id>.
+  */
+  ['/planning/pos/new', '/mua-hang/don/moi'],
+  ['/planning/pos', '/mua-hang/don'],
+  ['/planning/suppliers', '/mua-hang/ncc'],
+  ['/planning/materials/nhom', '/mua-hang/vat-tu'],
+  ['/planning/materials', '/mua-hang/vat-tu'],
+  ['/planning/stock', '/mua-hang/ton'],
+  ['/planning/lsx', '/mua-hang/yeu-cau'],
+  ['/planning/viec-cua-toi', '/mua-hang/hop-thu'],
+  ['/planning/hang-sap-ve', '/mua-hang/nhan-hang'],
+  ['/planning/docs', '/warehouse/phieu'],
+  ['/planning/board', '/production'],
+  ['/planning/tracking', '/mua-hang'],
+  ['/planning/van-de', '/mua-hang'],
+  ['/planning/hop', '/mua-hang'],
+  ['/planning', '/mua-hang'],
 ]
 
 /**

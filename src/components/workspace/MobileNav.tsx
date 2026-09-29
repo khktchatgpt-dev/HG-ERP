@@ -31,6 +31,8 @@ export async function MobileNav({ workspace }: { workspace: WorkspaceConfig }) {
     <MobileDrawer
       workspace={{
         route: workspace.route,
+        // Cửa vào (home) — Cung ứng đã rời `/planning` sang `/mua-hang`.
+        home: workspace.home ?? workspace.route,
         short: workspace.short,
         logoText: workspace.logoText,
       }}

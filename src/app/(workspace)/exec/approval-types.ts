@@ -1,4 +1,4 @@
-import { type PoLine } from '@/app/(workspace)/planning/pos/PosManager'
+import { type PoLine } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
 
 /**
  * Kiểu dữ liệu phiếu chờ duyệt (LSX + đơn vật tư) cho khu Phê duyệt Ban GĐ —

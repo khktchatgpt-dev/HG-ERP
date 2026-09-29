@@ -36,8 +36,9 @@ describe('sidebar Cung ứng giữ đủ tính năng sau khi gộp hai thanh đi
     })
   }
 
-  it('còn lối về khu cũ trong lúc chuyển', () => {
-    expect(supplyHrefs).toContain('/planning')
+  // Khu cũ `/planning/*` đã xoá hẳn 29/09/2026 — link cũ do proxy.ts chuyển hướng.
+  it('không mục nào còn trỏ về khu cũ đã xoá', () => {
+    expect(supplyHrefs.filter((h) => h.startsWith('/planning'))).toEqual([])
   })
 
   it('không mục nào trùng href', () => {

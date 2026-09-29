@@ -224,7 +224,13 @@ function SuaHoSo({
             value={f.buyer_id}
             onChange={set('buyer_id')}
             options={[
-              { value: '', label: ncc.buyer_src === 'suy' && ncc.buyer_name ? `— chưa gán (đang suy: ${ncc.buyer_name})` : '— chưa gán' },
+              {
+                value: '',
+                label:
+                  ncc.buyer_src === 'suy' && ncc.buyer_name
+                    ? `— chưa gán (đang suy: ${ncc.buyer_name})`
+                    : '— chưa gán',
+              },
               ...buyers.map((b) => ({ value: b.id, label: b.name })),
             ]}
           />
@@ -308,23 +314,6 @@ function SuaHoSo({
         rows={3}
         placeholder="Điều cần nhớ khi làm việc với NCC này"
       />
-
-      {/*
-        NÓI THẲNG CHỖ CÒN THIẾU. Mười ba ô trên là phần người mua sửa hằng
-        ngày; pháp lý, ngân hàng, chứng chỉ, chấm điểm vẫn nằm ở hồ sơ đầy đủ.
-        Giấu đường đó đi thì người cần khai số tài khoản sẽ đi tìm trong vô
-        vọng — tệ hơn là cứ để một dòng nhỏ ở đáy phiếu.
-      */}
-      <div className="text-k-sm mt-4 text-[var(--ink-3)]">
-        Pháp lý, ngân hàng, chứng chỉ và chấm điểm nằm ở{' '}
-        <a
-          className="font-semibold text-[var(--act)] hover:underline"
-          href={`/planning/suppliers/${ncc.id}`}
-        >
-          hồ sơ đầy đủ
-        </a>{' '}
-        — ít sửa nên không đưa vào đây.
-      </div>
     </Sheet>
   )
 }
@@ -381,7 +370,9 @@ export function HoSoNccScreen({
         compact
         eyebrow={[
           ncc.type ?? 'Nhà cung cấp',
-          ncc.buyer_name ? `phụ trách: ${ncc.buyer_name}${ncc.buyer_src === 'suy' ? ' (suy từ đơn)' : ''}` : 'chưa có người phụ trách',
+          ncc.buyer_name
+            ? `phụ trách: ${ncc.buyer_name}${ncc.buyer_src === 'suy' ? ' (suy từ đơn)' : ''}`
+            : 'chưa có người phụ trách',
         ].join(' · ')}
         title={
           <span className="flex items-center gap-2">

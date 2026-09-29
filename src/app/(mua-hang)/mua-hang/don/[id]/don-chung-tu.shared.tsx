@@ -1,12 +1,12 @@
 'use client'
 
-import { type PoHeader } from '@/app/(workspace)/planning/pos/new/po-draft'
+import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import {
   lineQty2,
   type Line,
   type Num,
   type PoLineDto,
-} from '@/app/(workspace)/planning/pos/new/po-line'
+} from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { NumInput, Pick, TextInput, type IcoName } from '@/components/kit'
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import type { DocTemplate } from '@/lib/doc-templates'

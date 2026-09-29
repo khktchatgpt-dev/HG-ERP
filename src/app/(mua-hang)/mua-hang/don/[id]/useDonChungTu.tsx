@@ -1,13 +1,13 @@
 'use client'
 
-import { type CreatedMaterial } from '@/app/(workspace)/planning/pos/new/QuickAddMaterial'
+import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import {
   buildPoPayload,
   draftProblem,
   poTotals,
   templateDefaults,
   type PoHeader,
-} from '@/app/(workspace)/planning/pos/new/po-draft'
+} from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import {
   lineFromPo,
   lineProblem,
@@ -16,7 +16,7 @@ import {
   newLine,
   remapLinesForTemplate,
   type Line,
-} from '@/app/(workspace)/planning/pos/new/po-line'
+} from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { poHolder, useToast, type IcoName, type Mark } from '@/components/kit'
 import { useSuaTaiCho } from './useSuaTaiCho'
 import {

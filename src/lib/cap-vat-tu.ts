@@ -160,7 +160,7 @@ export function viecTiepTheo(v: VuongMac): { label: string; href: string } {
     case 'dang-khoa':
       return { label: 'Sang Hàng mắc', href: '/warehouse/hang-mac' }
     case 'giu-cho-lenh-khac':
-      return { label: 'Xem lệnh đang giữ', href: '/planning/lsx' }
+      return { label: 'Xem lệnh đang giữ', href: '/mua-hang/yeu-cau' }
     case 'chua-co-hang':
       return { label: 'Đề xuất mua', href: '/warehouse/don-ncc' }
   }

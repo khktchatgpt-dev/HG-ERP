@@ -243,7 +243,7 @@ export function ExecHomeScreen({
           <WorkTile
             /* Khu Kho tạm gỡ 16/09/2026 — trỏ sang màn tồn của Cung ứng, vẫn
                sống và đọc cùng một nguồn số. */
-            href="/planning/stock"
+            href="/mua-hang/ton"
             label="Vật tư dưới tồn tối thiểu"
             count={issues.low_stock.length}
             hint="so với mức tối thiểu khai ở danh mục"
@@ -305,7 +305,7 @@ export function ExecHomeScreen({
                 count={issues.low_stock.length}
                 label="vật tư dưới mức tồn tối thiểu"
                 samples={issues.low_stock.slice(0, 3).map((m) => m.code)}
-                href="/planning/stock"
+                href="/mua-hang/ton"
               />
             )}
           </tbody>

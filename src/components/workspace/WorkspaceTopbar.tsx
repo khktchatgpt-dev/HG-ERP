@@ -53,7 +53,7 @@ export async function WorkspaceTopbar({
           <MobileNav workspace={workspace} />
           <nav className="flex min-w-0 items-center gap-1.5 text-[12.5px]">
             <Link
-              href={`${workspace.route}/`}
+              href={`${workspace.home ?? workspace.route}/`}
               className={`text-muted-foreground hover:text-foreground hidden transition-colors sm:inline ${
                 title ? '' : 'text-foreground font-medium'
               }`}

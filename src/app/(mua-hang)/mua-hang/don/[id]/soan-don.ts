@@ -1,5 +1,5 @@
-import type { PoHeader } from '@/app/(workspace)/planning/pos/new/po-draft'
-import type { Line } from '@/app/(workspace)/planning/pos/new/po-line'
+import type { PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 
 /**
  * LOGIC THUẦN CỦA PHẦN SOẠN ĐƠN trên màn chứng từ hợp nhất — không React, có

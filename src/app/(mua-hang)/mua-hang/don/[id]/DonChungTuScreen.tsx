@@ -1,13 +1,13 @@
 'use client'
 
-import { EditMaterialDialog } from '@/app/(workspace)/planning/pos/new/EditMaterialDialog'
-import { QuickAddMaterial } from '@/app/(workspace)/planning/pos/new/QuickAddMaterial'
-import { type PoHeader } from '@/app/(workspace)/planning/pos/new/po-draft'
-import { refreshLineFromMaterial } from '@/app/(workspace)/planning/pos/new/po-line'
+import { EditMaterialDialog } from '@/app/(mua-hang)/mua-hang/don/_lib/EditMaterialDialog'
+import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
+import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import { refreshLineFromMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import {
   previewHeaderFromDraft,
   previewLinesFromDraft,
-} from '@/app/(workspace)/planning/pos/new/po-preview'
+} from '@/app/(mua-hang)/mua-hang/don/_lib/po-preview'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import {
   Action,
