@@ -32,6 +32,7 @@ import type {
 } from '@/modules/dept/technical/dies.repo'
 import { DIE_EVENT_LABEL, DIE_STATUS_LABEL, kgPerM, money, viDate } from '../_lib/labels'
 import { KhuonActions } from './KhuonActions'
+import type { DieRef } from '../_components/KhuonFormDialog'
 import { KhuonImageActions } from './KhuonImageActions'
 
 /**
@@ -73,6 +74,10 @@ type Props = {
   productTotal: number
   /** Cờ SỬA từ service — UI không tự tính lại luật quyền. */
   canEdit: boolean
+  /** Cung ứng sửa được nhưng không xoá — cờ riêng để nút Xoá không hiện oan. */
+  canRemove: boolean
+  /** Danh mục rút gọn — form sửa chặn trùng mã ngay khi gõ. */
+  existing: DieRef[]
   holderOptions: string[]
   groupOptions: string[]
 }
@@ -84,6 +89,8 @@ export function KhuonDetailScreen({
   imageUrl,
   productTotal,
   canEdit,
+  canRemove,
+  existing,
   holderOptions,
   groupOptions,
 }: Props) {
@@ -152,6 +159,9 @@ export function KhuonDetailScreen({
         <div className="flex justify-end px-[var(--gutter)] pt-2">
           <KhuonActions
             die={die}
+            canRemove={canRemove}
+            imageUrl={imageUrl}
+            existing={existing}
             holderOptions={holderOptions}
             groupOptions={groupOptions}
           />

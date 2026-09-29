@@ -226,6 +226,7 @@ export function KhuonListScreen({ rows, imageUrls, canEdit }: Props) {
         <KhuonFormDialog
           open
           onOpenChange={setAdding}
+          existing={rows}
           holderOptions={holders.map(([name]) => name)}
           groupOptions={groupOptions}
         />

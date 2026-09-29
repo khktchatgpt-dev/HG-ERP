@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { dieCatalogRepo } from '@/modules/dept/technical/dies.repo'
-import { canEditDies } from '@/modules/dept/technical/dies.service'
+import { canEditDies, canRemoveDies } from '@/modules/dept/technical/dies.service'
 import { fileImageSrc } from '@/server/file-image'
 import { KhuonDetailScreen } from './KhuonDetailScreen'
 
@@ -29,11 +29,12 @@ export default async function Page({ params }: Params) {
   const die = await dieCatalogRepo.getById(id)
   if (!die) notFound()
 
-  const [events, usage, productTotal, canEdit, all] = await Promise.all([
+  const [events, usage, productTotal, canEdit, canRemove, all] = await Promise.all([
     dieCatalogRepo.listEvents(die.id),
     dieCatalogRepo.usage(die.code, die.legacy_codes),
     dieCatalogRepo.productTotal(),
     canEditDies(user),
+    canRemoveDies(user),
     // Gợi ý cho form sửa: nơi giữ và nhóm chi tiết ĐÃ CÓ trong danh mục — để
     // người sửa không gõ ra "Diềm Bàn" bên cạnh "Diềm bàn".
     dieCatalogRepo.listAll(),
@@ -47,8 +48,21 @@ export default async function Page({ params }: Params) {
       imageUrl={die.image_file_id ? fileImageSrc(die.image_file_id) : null}
       productTotal={productTotal}
       canEdit={canEdit}
-      holderOptions={[...new Set(all.map((d) => d.holder_name).filter((v): v is string => !!v))].sort()}
-      groupOptions={[...new Set(all.map((d) => d.part_group).filter((v): v is string => !!v))].sort()}
+      canRemove={canRemove}
+      // Chặn trùng mã ngay khi gõ trong form sửa — chỉ gửi đúng năm trường cần.
+      existing={all.map(({ id, code, name, holder_name, weight_per_m }) => ({
+        id,
+        code,
+        name,
+        holder_name,
+        weight_per_m,
+      }))}
+      holderOptions={[
+        ...new Set(all.map((d) => d.holder_name).filter((v): v is string => !!v)),
+      ].sort()}
+      groupOptions={[
+        ...new Set(all.map((d) => d.part_group).filter((v): v is string => !!v)),
+      ].sort()}
     />
   )
 }

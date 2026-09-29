@@ -129,7 +129,14 @@ export const ACTIONS: Action[] = [
    * phòng Kỹ thuật là hai phòng kia quay lại hỏi qua Zalo — đúng thứ danh mục
    * này sinh ra để thay.
    *
-   * SỬA thì chỉ Kỹ thuật (+ Giám đốc qua `technical.edit`), vì họ là chủ số liệu.
+   * THÊM / SỬA (kể cả ảnh mặt cắt, nhật ký): Kỹ thuật + Giám đốc (qua
+   * `technical.edit`) VÀ Cung ứng (`supply.member`, user chốt 29/09/2026).
+   * Khuôn nằm ở xưởng đùn của NCC — Cung ứng là người mở khuôn mới, trả tiền
+   * khuôn, biết khuôn đang ở nhà nào và hư lúc nào; bắt họ nhắn Kỹ thuật sửa hộ
+   * là danh mục chậm hơn thực tế đúng một vòng Zalo.
+   *
+   * XOÁ vẫn chỉ Kỹ thuật: xoá mất cả nhật ký đời khuôn, còn Cung ứng cần gỡ một
+   * khuôn thì đổi tình trạng sang "Đã bỏ" là đủ.
    */
   {
     key: 'technical.die.view',
@@ -141,13 +148,13 @@ export const ACTIONS: Action[] = [
     key: 'technical.die.create',
     label: 'Thêm khuôn nhôm',
     domain: 'technical',
-    rule: perm('technical.edit'),
+    rule: anyOf(perm('technical.edit'), perm('supply.member')),
   },
   {
     key: 'technical.die.update',
-    label: 'Sửa hồ sơ khuôn nhôm',
+    label: 'Sửa hồ sơ khuôn nhôm (thông số, ảnh mặt cắt, nhật ký)',
     domain: 'technical',
-    rule: perm('technical.edit'),
+    rule: anyOf(perm('technical.edit'), perm('supply.member')),
   },
   {
     key: 'technical.die.remove',
