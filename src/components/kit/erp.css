@@ -1388,6 +1388,11 @@ button.k-headchip-plain:hover > span + span {
   z-index: 5;
   box-shadow: 0 -4px 12px rgb(0 0 0 / 0.06);
 }
+/* Khay thông báo (Toast.tsx) đứng TRÊN thanh chốt đáy — CommitBar khai
+   `--k-commit-h`; màn không có thanh thì biến trống, về 1rem như cũ. */
+.k-toasts {
+  bottom: calc(var(--k-commit-h, 0px) + 1rem);
+}
 .k-commit-t {
   display: flex;
   align-items: baseline;

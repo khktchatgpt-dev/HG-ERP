@@ -197,7 +197,7 @@ export function ToastProvider({
           */}
           <T.Viewport
             label="Thông báo ({hotkey})"
-            className="fixed right-4 bottom-4 z-[var(--z-toast)] m-0 flex w-80 max-w-[calc(100vw-2rem)] list-none flex-col gap-2 p-0 outline-none"
+            className="k-toasts fixed right-4 z-[var(--z-toast)] m-0 flex w-80 max-w-[calc(100vw-2rem)] list-none flex-col gap-2 p-0 outline-none"
           />
         </div>
       </T.Provider>
