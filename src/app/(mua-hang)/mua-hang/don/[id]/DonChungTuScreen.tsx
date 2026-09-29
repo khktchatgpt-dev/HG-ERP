@@ -10,11 +10,9 @@ import {
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-preview'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import {
-  Action,
-  ActionGroup,
-  ActionPane,
   Affected,
   Btn,
+  CommitBar,
   Combobox,
   Consequence,
   CoverageBar,
@@ -174,7 +172,6 @@ export function DonChungTuScreen(p: Props) {
     meta,
     totals,
     problem,
-    noteOver,
     adjPlan,
     adjErrors,
     adjBlocked,
@@ -198,8 +195,6 @@ export function DonChungTuScreen(p: Props) {
     lsxOptions,
     supplierOptions,
     marks,
-    bar,
-    barItem,
     code,
     shipLines,
     shippedByLine,
@@ -575,114 +570,8 @@ export function DonChungTuScreen(p: Props) {
 
       {!viewMode && (
         <>
-          {/*
-        THANH HÀNH ĐỘNG MỘT HÀNG (duyệt 26/09/2026, canvas "Đơn mua — gọn thanh
-        nút & Trao đổi"). Bỏ 3 tab Đơn hàng / Nhận hàng / Tài chính (16 + 11 nút,
-        tab Tài chính khoá vĩnh viễn, cao 150px): việc kế tiếp của đơn từng nằm ở
-        TAB KHÁC với trục trạng thái. Nay nút chính = việc kế tiếp của BƯỚC, ≤ 3
-        việc hay làm, còn lại vào "⋯ Thêm" theo nhóm — chỗ đặt do `barLayout`
-        (thanh-nut.ts, có test) quyết.
-      */}
-          <ActionPane>
-            {' '}
-            {/* prettier-ignore */}
-            {termsEdit && !editing ? (
-              /* Sửa hẹp: thanh hành động thu về đúng hai nút, để không ai tưởng
-             mình đang sửa được cả dòng hàng. */
-              <SuaTaiChoNut d={d} as="action" />
-            ) : editing ? (
-              <>
-                <ActionGroup label="Đang sửa">
-                  <Action
-                    primary
-                    disabled={busy || !!problem}
-                    title={problem ?? undefined}
-                    onClick={() => void save()}
-                  >
-                    {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
-                  </Action>
-                  <Action icon="huy" disabled={busy} onClick={askCancelEdit}>
-                    Huỷ
-                  </Action>
-                </ActionGroup>
-                {/*
-              NHÓM "NHẬP NHANH" ĐÃ BỎ KHỎI ĐÂY (14/09/2026).
-
-              Ba nút của nó là thao tác trên DÒNG, không phải trên chứng từ —
-              và hai trong ba ("Dán từ Excel", "Khai vật tư mới") đã nằm sẵn ở
-              thanh lưới, ngay trên bảng. Tức thanh hành động đang in lại cùng
-              một nút ở chỗ xa bảng hơn.
-
-              Đo trên đơn 17 dòng, khung 694px: thanh hành động cao 201px =
-              37% của toàn bộ 542px nằm trên dòng đầu tiên, và chỉ 3/17 dòng
-              nhìn thấy được. Bỏ nhóm này trả lại ~108px cho bảng — thứ duy
-              nhất người dùng thật sự nhìn.
-
-              Nút thứ ba ("Thêm … còn thiếu của lệnh") chuyển xuống thanh lưới
-              cùng hai nút kia: cả ba đều đẻ ra dòng, nên phải đứng cạnh nhau.
-            */}
-                <ActionGroup label="Kiểm">
-                  <Action
-                    icon="in"
-                    disabled={!p.company}
-                    title={
-                      p.company
-                        ? 'Dựng đúng tờ phiếu sẽ gửi NCC từ bản đang gõ'
-                        : 'Trang này chưa nạp đầu phiếu'
-                    }
-                    onClick={() => setPreview(true)}
-                  >
-                    {' '}
-                    {/* prettier-ignore */}
-                    Xem trước phiếu
-                  </Action>
-                </ActionGroup>
-              </>
-            ) : bar ? (
-              <>
-                <ActionGroup label="Bước này">
-                  {[bar.primary, ...bar.quick].map((k, i) => {
-                    const it = k ? barItem(k) : null
-                    return (
-                      it && (
-                        <Action
-                          key={k}
-                          primary={i === 0 && k === bar.primary}
-                          icon={it.icon}
-                          disabled={busy || !!it.blocked}
-                          title={it.blocked}
-                          onClick={it.run}
-                        >
-                          {it.label}
-                        </Action>
-                      )
-                    )
-                  })}
-                </ActionGroup>
-                <ActionGroup label="Khác">
-                  <Menu
-                    label="⋯ Thêm"
-                    ariaLabel="Các việc khác của đơn"
-                    items={bar.more.flatMap(({ key, group }) => {
-                      const it = barItem(key)
-                      return it
-                        ? [
-                            {
-                              label: it.label,
-                              group,
-                              danger: it.danger,
-                              why: busy ? 'Đang xử lý việc trước…' : it.blocked,
-                              onClick: it.run,
-                            },
-                          ]
-                        : []
-                    })}
-                  />
-                </ActionGroup>
-              </>
-            ) : null}
-          </ActionPane>
-
+          {/* Chế độ soạn/sửa KHÔNG còn thanh nút trên đầu (29/09/2026): Huỷ · Xem trước
+              · Tạo đơn/Lưu nằm ở thanh chốt dính đáy, cạnh tổng tiền và câu chặn. */}
           <DocHead
             compact
             kind="Đơn đặt vật tư"
@@ -822,68 +711,35 @@ export function DonChungTuScreen(p: Props) {
               </GridBtn>
             </NoticeBar>
           )}
-          {/* THANH ĐANG SỬA — CÓ MẶT SUỐT chế độ sửa, không chỉ khi có lỗi.
-
-          Bản cũ chỉ bày thanh này khi đơn còn thiếu thông tin. Nghĩa là đơn khai
-          ĐÚNG và ĐỦ thì tuyệt nhiên không có dòng nào nói người dùng đang sửa dở
-          — đúng lúc nguy hiểm nhất, vì lúc đó nút Lưu mở và mọi thứ trông như
-          màn đọc bình thường.
-
-          Nay một thanh, hai trạng thái: còn vướng thì nói vướng gì và chỉ tới ô;
-          hết vướng thì nói "còn thay đổi chưa lưu" và cho Lưu ngay tại chỗ. Nút
-          Lưu trên thanh hành động vẫn còn — người dùng cuộn xuống giữa lưới 40
-          dòng thì thanh này là chỗ gần tay nhất. */}
           {blkUnsent}
-          {drafting &&
-            (problem ? (
-              <NoticeBar
-                tone="warn"
-                tag="Chưa lưu được"
-                action={{
-                  label: /nhà cung cấp|lệnh|LSX|mẫu/i.test(problem)
-                    ? 'Tới ô cần điền'
-                    : 'Xem dòng hàng',
-                  onClick: () => goToProblem(problem),
-                }}
-              >
-                {problem}. Sửa xong thì nút Lưu tự mở.
-              </NoticeBar>
-            ) : (
-              <NoticeBar
-                tone="warn"
-                tag="Đang sửa"
-                action={{ label: busy ? 'Đang lưu…' : 'Lưu', onClick: () => void save() }}
-              >
-                {p.mode === 'create'
-                  ? 'Đơn chưa được tạo — rời trang là mất.'
-                  : 'Thay đổi chưa lưu. Rời trang khi chưa lưu thì đơn giữ nguyên bản cũ.'}
-              </NoticeBar>
-            ))}
         </>
       )}
 
       {!viewMode && (
         <DocBody
           wideAside={!!po}
+          // Lúc soạn: bỏ cột phải 268px (tiền đã ở thanh chốt đáy) — lưới chiếm trọn bề ngang.
           aside={
-            <FactBox>
-              <FactSection title="Tiền">
-                <FactKv rows={moneyRows} />
-              </FactSection>
-              <FactSection title="Nhà cung cấp">{nccBody}</FactSection>
-              {/*
+            drafting ? undefined : (
+              <FactBox>
+                <FactSection title="Tiền">
+                  <FactKv rows={moneyRows} />
+                </FactSection>
+                <FactSection title="Nhà cung cấp">{nccBody}</FactSection>
+                {/*
               TRAO ĐỔI Ở CỘT PHẢI (duyệt 26/09/2026 — chép chatter Odoo 17). Trước
               đó là khối gập thứ 6 ở thân, đỉnh y≈981: mở đơn ra không thấy ai đã
               nói gì, và cả hệ thống mới có 1 ghi chú. Mở sẵn lọc "Ghi chú" — mốc
               máy đã có khối "Dòng thời gian" riêng. "Gửi nhà cung cấp" đổi thành
               "Đã báo NCC · ghi lại": hệ thống KHÔNG gửi gì cho NCC, nhãn cũ nói sai.
             */}
-              {po && (
-                <div id="trao-doi">
-                  <FactSection title="Trao đổi">{notesPanel}</FactSection>
-                </div>
-              )}
-            </FactBox>
+                {po && (
+                  <div id="trao-doi">
+                    <FactSection title="Trao đổi">{notesPanel}</FactSection>
+                  </div>
+                )}
+              </FactBox>
+            )
           }
         >
           {/* ══ 0. ĐẦU ĐƠN — ba nhóm, xếp CỘT, dùng lưới nhãn–giá trị của kit ══
@@ -1097,21 +953,6 @@ export function DonChungTuScreen(p: Props) {
                   </Field>
                 </FieldGroup>
               </div>
-
-              {/* Nút của chính bộ kit, không phải <button> tự vẽ: cổng
-                `hg/no-raw-control` chặn thẻ thô, mà gợi ý của nó
-                (shadcn/button) sẽ TRỘN hai hệ token trong cùng một file. */}
-              <div className="col-span-full flex justify-end border-t border-[var(--hair)] px-[var(--gutter)] py-1">
-                <GridBtn
-                  title="Năm điều khoản in nguyên văn lên phiếu gửi nhà cung cấp"
-                  onClick={() => {
-                    setHeadOpen(true)
-                    goTo('dau-don')
-                  }}
-                >
-                  Điều khoản in lên phiếu →
-                </GridBtn>
-              </div>
             </div>
           )}
 
@@ -1124,6 +965,51 @@ export function DonChungTuScreen(p: Props) {
           {blkTimeline}
           {blkTaiLieu}
         </DocBody>
+      )}
+
+      {drafting && (
+        <CommitBar
+          totals={[
+            { label: 'Tiền hàng', value: money(totals.subtotal, header.currency) },
+            {
+              label: `VAT ${header.vat === '' ? 0 : header.vat}%`,
+              value: money(totals.vatAmount, header.currency),
+            },
+          ]}
+          grand={{
+            label: 'Tổng thanh toán',
+            value: money(totals.grandTotal, header.currency),
+          }}
+          blocked={problem ?? undefined}
+          onGoBlocked={problem ? () => goToProblem(problem) : undefined}
+          actions={
+            <span className="flex shrink-0 items-center gap-2">
+              <Btn icon="huy" disabled={busy} onClick={askCancelEdit}>
+                Huỷ
+              </Btn>
+              <Btn icon="in" disabled={!p.company} onClick={() => setPreview(true)}>
+                Xem trước
+              </Btn>
+              <Btn
+                onClick={() => {
+                  setHeadOpen(true)
+                  goTo('dau-don')
+                }}
+              >
+                Điều khoản
+              </Btn>
+              <Btn
+                primary
+                icon="luuNhap"
+                busy={busy}
+                disabled={!!problem}
+                onClick={() => void save()}
+              >
+                {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
+              </Btn>
+            </span>
+          }
+        />
       )}
 
       <StatusBar

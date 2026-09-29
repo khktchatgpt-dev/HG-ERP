@@ -2,8 +2,7 @@
   "_": "SINH TỰ ĐỘNG bởi scripts/size-baseline.mjs — đừng sửa tay. Trần chỉ được HẠ.",
   "max": 800,
   "files": {
-    "src/app/(mua-hang)/mua-hang/don/[id]/DonChungTuScreen.tsx": 1486,
-    "src/app/(mua-hang)/mua-hang/don/[id]/dong-hang.tsx": 802,
+    "src/app/(mua-hang)/mua-hang/don/[id]/DonChungTuScreen.tsx": 1372,
     "src/app/(mua-hang)/mua-hang/don/[id]/NhanHangPanel.tsx": 854,
     "src/app/(mua-hang)/mua-hang/don/[id]/useDonChungTu.tsx": 1692,
     "src/app/(mua-hang)/mua-hang/don/DonScreen.tsx": 1221,

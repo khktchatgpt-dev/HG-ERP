@@ -294,14 +294,9 @@ export function DongHang({ d }: { d: DonCtx }) {
                           placeholder="Tên hàng (dòng tự do)"
                         />
                       ) : (
-                        <>
-                          <span className="num k-strong">{l.code}</span>
-                          {l.code ? ' · ' : ''}
-                          {l.name}
-                          {l.is_free && (
-                            <span className="text-[var(--ink-3)]"> · tự do</span>
-                          )}
-                        </>
+                        // Ô tên có trần 340px (29/09): tên dài từng đẩy SL/giá khỏi màn.
+                        // prettier-ignore
+                        <span className="block max-w-[340px] truncate" title={`${l.code ? `${l.code} · ` : ''}${l.name}`}><span className="num k-strong">{l.code}</span>{l.code ? ' · ' : ''}{l.name}{l.is_free && <span className="text-[var(--ink-3)]"> · tự do</span>}</span>
                       )}
                     </Td>
                     {gridFields.map((f) => (
