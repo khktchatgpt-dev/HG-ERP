@@ -155,7 +155,7 @@ export function poChecks(
   if (noPrice > 0) out.push({ level: 'stop', what: `${noPrice} dòng chưa có đơn giá`, fix: 'Nhập giá hoặc ghi “chờ báo giá”' }) // prettier-ignore
   if (!po.production_order_id) out.push({ level: 'warn', what: 'Chưa gắn lệnh sản xuất', fix: 'Gắn lệnh, hoặc bỏ qua nếu mua bù tồn' }) // prettier-ignore
   if (!po.expected_at) out.push(sapGui
-    ? { level: 'stop', what: 'Chưa có hẹn giao', fix: 'Bấm "Đổi hẹn giao" khai ngày dự kiến — chưa có ngày thì gửi NCC xong không ai đo được trễ' }
+    ? { level: 'stop', what: 'Chưa có hẹn giao', fix: 'Bấm "Sửa" khai ngày dự kiến — chưa có ngày thì gửi NCC xong không ai đo được trễ' }
     : { level: 'warn', what: 'Chưa có hẹn giao', fix: 'Điền hạn giao — tới bước gửi NCC là bắt buộc' }) // prettier-ignore
   else if (po.expected_at.slice(0, 10) < today) out.push({ level: 'warn', what: `Hạn giao ${dmy(po.expected_at)} đã qua`, fix: 'Cập nhật hạn hoặc ghi lý do' }) // prettier-ignore
   return out

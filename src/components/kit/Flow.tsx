@@ -280,6 +280,8 @@ export function DocChain({
  */
 export function PrimaryStep({
   label,
+  icon,
+  busy = false,
   onClick,
   href,
   blockedBy,
@@ -287,7 +289,11 @@ export function PrimaryStep({
 }: {
   /** Tên bước, bằng động từ nghiệp vụ ("Gửi Giám đốc duyệt"). Luôn là nút chính (nền đặc). */
   label: string
-  /** Việc khi bấm. Bị nuốt khi nút khoá (`blockedBy` hoặc `why`). */
+  /** Icon đứng trước chữ — cùng luật `Btn`. */
+  icon?: IcoName
+  /** Việc đang chạy (đang lưu, đang gửi) — khoá mềm, vòng quay thay icon. */
+  busy?: boolean
+  /** Việc khi bấm. Bị nuốt khi nút khoá (`blockedBy`, `why` hoặc `busy`). */
   onClick?: () => void
   /** Có thì nút là liên kết thật. Bị khoá thì vẫn là nút, không điều hướng. */
   href?: string
@@ -310,11 +316,17 @@ export function PrimaryStep({
     nút rơi khỏi thứ tự Tab, nên người dùng bàn phím không bao giờ tới được
     nút để nghe VÌ SAO — mà câu lý do cũng không gắn vào nút. Đúng lỗi luật
     kiểm của sổ cấm: "hành động bị chặn phải nói vướng gì, ngay tại chỗ".
+
+    ẨN HẲN NÚT KHI KHOÁ LÀ CÙNG LỖI (29/09/2026) — chỗ gọi cũ tự ẩn nút này
+    khi `why` có giá trị, đúng thứ luật trên cấm. `PrimaryStep` giờ LUÔN vẽ
+    nút; chỗ gọi chỉ truyền `why`, không tự quyết có vẽ hay không.
   */
   return (
     <div className="flex flex-col items-end gap-1">
       <Btn
         primary
+        icon={icon}
+        busy={busy}
         onClick={onClick}
         href={href}
         blockedBy={blockedBy}
@@ -400,28 +412,35 @@ export function DocStatus({
         : days >= HOLD_AGE_DAYS.warn
           ? 'warn'
           : null
+  const toneCls =
+    tone === 'done'
+      ? 'text-[var(--done)]'
+      : tone === 'warn'
+        ? 'text-[var(--warn)]'
+        : tone === 'stop'
+          ? 'text-[var(--stop)]'
+          : 'text-[var(--act)]'
+  const toneWash =
+    tone === 'done'
+      ? 'bg-[var(--done-wash)] border-[var(--done-line)]'
+      : tone === 'warn'
+        ? 'bg-[var(--warn-wash)] border-[var(--warn-line)]'
+        : tone === 'stop'
+          ? 'bg-[var(--stop-wash)] border-[var(--stop-line)]'
+          : 'bg-[var(--act-wash)] border-[var(--act-line)]'
   const pill = (
     <button
       type="button"
       disabled={!marks?.length}
       aria-label={`Trạng thái: ${status}${marks?.length ? ' — xem vòng đời' : ''}`}
       className={cn(
-        'text-k-body inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--line)] bg-[var(--surface-card)] pr-2.5 pl-2 font-semibold text-[var(--ink)]',
-        'outline-none focus-visible:shadow-[0_0_0_2px_var(--act)] enabled:hover:border-[var(--act)] disabled:cursor-default',
+        'text-k-body inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border pr-2.5 pl-2 font-semibold',
+        toneWash,
+        toneCls,
+        'outline-none focus-visible:shadow-[0_0_0_2px_var(--act)] enabled:hover:brightness-95 disabled:cursor-default',
       )}
     >
-      <span
-        className={cn(
-          'inline-flex',
-          tone === 'done'
-            ? 'text-[var(--done)]'
-            : tone === 'warn'
-              ? 'text-[var(--warn)]'
-              : tone === 'stop'
-                ? 'text-[var(--stop)]'
-                : 'text-[var(--act)]',
-        )}
-      >
+      <span className="inline-flex">
         <Ico name={icon} size={16} />
       </span>
       {status}

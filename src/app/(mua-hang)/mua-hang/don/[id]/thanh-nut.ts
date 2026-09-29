@@ -51,7 +51,9 @@ const DANGER = ['cancel', 'delete']
 export function barLayout(status: string, docIds: readonly string[]): BarLayout {
   const has = (id: string) => docIds.includes(id)
   const doc = (id: string): BarKey | null => (has(id) ? `doc:${id}` : null)
-  const canEdit = has('edit') || has('adjust')
+  // 'edit' = sửa nháp. 'adjust' (dòng hàng của đơn đã gửi) KHÔNG còn là nút riêng:
+  // từ B3 (28/09/2026) nó nằm trong "Sửa" (doc:edit_terms).
+  const canEdit = has('edit')
 
   const primary: BarKey | null =
     status === 'draft'
@@ -66,19 +68,24 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
               ? 'receive'
               : null
 
+  /*
+    "SỬA" (doc:edit_terms) đứng ĐẦU thanh trên mọi đơn đã ra khỏi nháp (28/09/2026,
+    artboard 14): một nút cho hẹn giao, điều khoản, số HĐ, ghi chú, đợt giao và —
+    từ B3 — cả dòng hàng theo luật điều chỉnh. Trước đó bốn cửa sửa rải trong "⋯".
+  */
   const quickWanted: (BarKey | null)[] =
     status === 'draft'
       ? [canEdit ? 'edit' : null, 'print']
       : status === 'pending_approval'
         ? [doc('withdraw'), doc('reject'), 'print']
         : status === 'approved'
-          ? [canEdit ? 'edit' : null, 'print']
+          ? [doc('edit_terms'), 'print']
           : status === 'ordered'
-            ? [canEdit ? 'edit' : null, doc('nudge'), 'print']
+            ? [doc('edit_terms'), doc('nudge'), 'print']
             : SENT.includes(status)
-              ? [canEdit ? 'edit' : null, 'cost', 'print']
+              ? [doc('edit_terms'), 'cost', 'print']
               : status === 'received'
-                ? ['cost', 'print']
+                ? [doc('edit_terms'), 'cost', 'print']
                 : ['print']
   const quick = quickWanted.filter((k): k is BarKey => !!k && k !== primary).slice(0, 3)
 
@@ -101,7 +108,7 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
     ] as const)
       // prettier-ignore
       add(k, 'Giao & nhận')
-    add(doc('reschedule'), 'Giao & nhận')
+    // "Đổi hẹn giao" KHÔNG còn là mục riêng: hẹn giao sửa trong "Sửa" (28/09/2026).
   }
   if (canEdit) add('edit', 'Đơn')
   for (const id of docIds) {

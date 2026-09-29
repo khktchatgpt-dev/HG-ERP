@@ -3500,8 +3500,17 @@ export type Database = {
           id: string
           kind: string
           note: string | null
-          payee_supplier_id: string
+          paid_by: string | null
+          paid_method: string | null
+          paid_on: string | null
+          payee_name: string | null
+          payee_phone: string | null
+          payee_supplier_id: string | null
+          reimburse_note: string | null
+          reimbursed_at: string | null
+          reimbursed_by: string | null
           total: number
+          transport_mode: string
           updated_at: string
           vat_amount: number
           vat_rate: number | null
@@ -3519,8 +3528,17 @@ export type Database = {
           id?: string
           kind?: string
           note?: string | null
-          payee_supplier_id: string
+          paid_by?: string | null
+          paid_method?: string | null
+          paid_on?: string | null
+          payee_name?: string | null
+          payee_phone?: string | null
+          payee_supplier_id?: string | null
+          reimburse_note?: string | null
+          reimbursed_at?: string | null
+          reimbursed_by?: string | null
           total: number
+          transport_mode?: string
           updated_at?: string
           vat_amount?: number
           vat_rate?: number | null
@@ -3538,8 +3556,17 @@ export type Database = {
           id?: string
           kind?: string
           note?: string | null
-          payee_supplier_id?: string
+          paid_by?: string | null
+          paid_method?: string | null
+          paid_on?: string | null
+          payee_name?: string | null
+          payee_phone?: string | null
+          payee_supplier_id?: string | null
+          reimburse_note?: string | null
+          reimbursed_at?: string | null
+          reimbursed_by?: string | null
           total?: number
+          transport_mode?: string
           updated_at?: string
           vat_amount?: number
           vat_rate?: number | null
@@ -4302,6 +4329,9 @@ export type Database = {
           business_license: string | null
           buyer_id: string | null
           can_order: boolean
+          carrier_kind: string | null
+          is_carrier: boolean
+          pay_method: string | null
           code: string | null
           company_name: string | null
           complaint_count: number
@@ -4358,6 +4388,9 @@ export type Database = {
           business_license?: string | null
           buyer_id?: string | null
           can_order?: boolean
+          carrier_kind?: string | null
+          is_carrier?: boolean
+          pay_method?: string | null
           code?: string | null
           company_name?: string | null
           complaint_count?: number
@@ -4414,6 +4447,9 @@ export type Database = {
           business_license?: string | null
           buyer_id?: string | null
           can_order?: boolean
+          carrier_kind?: string | null
+          is_carrier?: boolean
+          pay_method?: string | null
           code?: string | null
           company_name?: string | null
           complaint_count?: number

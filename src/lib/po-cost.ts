@@ -31,6 +31,35 @@ export const PO_COST_STATUSES = [
   'received',
 ] as const
 
+/**
+ * HÌNH THỨC VẬN CHUYỂN (0215, chốt 28/09/2026): nhà xe / chành trong danh mục;
+ * ship lẻ (Grab, Ahamove, shipper…) gõ tự do trên phiếu; NCC tự giao và tính
+ * phí trên hoá đơn của họ. Xe công ty KHÔNG ghi phiếu phí (xăng dầu là chi phí
+ * xưởng) — chủ dự án chốt theo khuyến nghị.
+ */
+export const TRANSPORT_MODES = ['nha_xe', 'ship_le', 'ncc'] as const
+export type TransportMode = (typeof TRANSPORT_MODES)[number]
+export const TRANSPORT_MODE_LABEL: Record<TransportMode, string> = {
+  nha_xe: 'Nhà xe · chành',
+  ship_le: 'Ship lẻ',
+  ncc: 'NCC tự giao',
+}
+
+/** Người trong công ty trả tại chỗ bằng gì — Kế toán hoàn lại theo đó. */
+export const PAID_METHODS = ['tien_mat', 'ck_ca_nhan'] as const
+export type PaidMethod = (typeof PAID_METHODS)[number]
+export const PAID_METHOD_LABEL: Record<PaidMethod, string> = {
+  tien_mat: 'Tiền mặt',
+  ck_ca_nhan: 'CK cá nhân',
+}
+
+export const CARRIER_KINDS = ['nha_xe', 'tai_xe_le'] as const
+export type CarrierKind = (typeof CARRIER_KINDS)[number]
+export const CARRIER_KIND_LABEL: Record<CarrierKind, string> = {
+  nha_xe: 'Nhà xe · chành',
+  tai_xe_le: 'Tài xế lẻ đã lưu',
+}
+
 export type CostAllocation = { po_id: string; base: number; amount: number }
 
 /**
@@ -155,21 +184,28 @@ export function samePlace(
   return n >= 2
 }
 
+export type CostPayeeRole = 'carrier' | 'po_supplier' | 'chi_ho'
+
 /**
- * Phiếu này vào sổ công nợ 331 THẲNG hay CHỜ hoá đơn NCC (chốt 26/09/2026).
+ * Phiếu này đi vào sổ nào (chốt 26/09 + 28/09/2026).
  *
- * - `carrier` — người nhận tiền không phải NCC của đơn nào trong phiếu (nhà
- *   xe). Phiếu chính là chứng từ đòi tiền của họ, không ai nhập hoá đơn thứ
- *   hai → phát sinh tăng TK 331 ngay, theo tổng gồm VAT.
+ * - `chi_ho` — người trong công ty ĐÃ TRẢ TẠI CHỖ (`paid_by`). Nợ là nợ NHÂN
+ *   VIÊN, không phải nợ nhà xe: KHÔNG vào sổ 331, nằm ở dải "Chi hộ chờ hoàn"
+ *   cho Kế toán hoàn lại. Vào cả hai sổ là Kế toán trả hai lần.
+ * - `carrier` — chưa trả, người nhận tiền không phải NCC của đơn nào trong
+ *   phiếu (nhà xe). Phiếu chính là chứng từ đòi tiền của họ, không ai nhập hoá
+ *   đơn thứ hai → phát sinh tăng TK 331 ngay, theo tổng gồm VAT.
  * - `po_supplier` — NCC của đơn tính phí trên hoá đơn của họ. Ghi thẳng vào sổ
  *   thì khi kế toán nhập hoá đơn NCC (có dòng phí) là nợ tăng GẤP ĐÔI. Nên nó
  *   nằm ở dải "Ngoài sổ" và được mồi thành một dòng của hoá đơn NCC.
  */
 export function costPayeeRole(
-  payeeId: string,
+  payeeId: string | null,
   poSupplierIds: readonly string[],
-): 'carrier' | 'po_supplier' {
-  return poSupplierIds.includes(payeeId) ? 'po_supplier' : 'carrier'
+  paidBy?: string | null,
+): CostPayeeRole {
+  if (paidBy) return 'chi_ho'
+  return payeeId && poSupplierIds.includes(payeeId) ? 'po_supplier' : 'carrier'
 }
 
 /**

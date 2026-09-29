@@ -112,10 +112,15 @@ describe('lỗ hổng màn cũ được lấp', () => {
     }
   })
 
-  it('nháp thì Sửa điều khoản KHOÁ và chỉ sang "Sửa đơn"', () => {
-    const a = actionsFor('draft', own).find((x) => x.id === 'edit_terms')!
-    expect(a.blocked).toMatch(/Sửa đơn/)
+  it('nháp thì KHÔNG có nút "Sửa" hẹp — "Sửa đơn" sửa được hết, hai nút Sửa là hai cửa', () => {
+    expect(actionsFor('draft', own).some((x) => x.id === 'edit_terms')).toBe(false)
     expect(actionsFor('draft', own).find((x) => x.id === 'edit')!.blocked).toBeUndefined()
+  })
+
+  it('trên đơn đã gửi, nút hẹp mang nhãn "Sửa" (một nút, một cửa — 28/09/2026)', () => {
+    expect(actionsFor('ordered', own).find((x) => x.id === 'edit_terms')!.label).toBe(
+      'Sửa',
+    )
   })
 
   it('đơn đã huỷ thì không sửa điều khoản — service cũng chặn', () => {
@@ -382,12 +387,12 @@ describe('gửi NCC đòi hẹn giao (17/09/2026)', () => {
       (a) => a.id === 'send',
     )!
     expect(send.blocked).toMatch(/Chưa có hẹn giao/)
-    expect(send.blocked).toMatch(/Đổi hẹn giao/)
-    // Nút gỡ phải có mặt ngay trong cùng bảng hành động, không thì lời khuyên
-    // kia là lời khuyên suông.
+    expect(send.blocked).toMatch(/"Sửa"/)
+    // Nút gỡ ("Sửa", id edit_terms) phải có mặt ngay trong cùng bảng hành
+    // động, không thì lời khuyên kia là lời khuyên suông.
     expect(
       actionsFor('approved', { ...approved, noEta: true }).some(
-        (a) => a.id === 'reschedule',
+        (a) => a.id === 'edit_terms',
       ),
     ).toBe(true)
   })

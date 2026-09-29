@@ -349,9 +349,14 @@ export const poCloseShortSchema = z
  * Bắt buộc lý do: đây là thay đổi trên đơn đã có chữ ký duyệt, phải trả lời được
  * "vì sao" khi đối chiếu về sau.
  */
+/**
+ * Lý do dời hẹn KHÔNG bắt buộc (chốt 28/09/2026): máy tự ghi vết "cũ → mới · ai ·
+ * lúc nào". Bắt lý do là thứ khiến 0/85 đơn có vết đổi hẹn dù 53/85 đơn đã gửi
+ * trống hạn giao.
+ */
 export const poRescheduleSchema = z.object({
   expected_at: z.string().trim().min(1, 'Chọn ngày giao mới').max(30),
-  reason: z.string().trim().min(1, 'Dời hẹn giao phải kèm lý do').max(1000),
+  reason: z.string().trim().max(1000).optional().default(''),
 })
 
 /**

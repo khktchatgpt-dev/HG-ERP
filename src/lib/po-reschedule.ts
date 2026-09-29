@@ -48,7 +48,11 @@ export function rescheduleNote(
   newDate: string | null,
   reason: string,
 ): string {
-  const what = `${dmy(oldDate)} → ${dmy(newDate)} · ${reason.trim()}`
+  // Lý do để trống được (28/09/2026) — vết vẫn đủ: ngày cũ → ngày mới, người ghi và giờ do Trao đổi giữ.
+  const r = reason.trim()
+  const what = r
+    ? `${dmy(oldDate)} → ${dmy(newDate)} · ${r}`
+    : `${dmy(oldDate)} → ${dmy(newDate)}`
   // `what` không bao giờ rỗng — `dmy` luôn trả ít nhất 'chưa hẹn'.
   return reasonLine('Dời hẹn giao', what) as string
 }
@@ -69,13 +73,18 @@ export function shiftPlannedShipments(
   newDate: string,
 ): { id: string; from: string; to: string }[] {
   if (!oldDate) return []
-  const day = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))
+  const day = (iso: string) =>
+    Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))
   const delta = Math.round((day(newDate) - day(oldDate)) / 86_400_000)
   if (delta === 0) return []
   return shipments
     .filter((s) => s.status === 'planned')
     .map((s) => {
       const d = new Date(day(s.expected_date) + delta * 86_400_000)
-      return { id: s.id, from: s.expected_date.slice(0, 10), to: d.toISOString().slice(0, 10) }
+      return {
+        id: s.id,
+        from: s.expected_date.slice(0, 10),
+        to: d.toISOString().slice(0, 10),
+      }
     })
 }

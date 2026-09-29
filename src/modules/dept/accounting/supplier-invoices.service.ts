@@ -413,14 +413,14 @@ async function ncFeesAwaitingInvoice(): Promise<
     poCostsRepo.invoicedAllocations(true),
   ])
   return costs
-    .filter((c) => c.role === 'po_supplier')
+    .filter((c) => c.role === 'po_supplier' && c.payee_supplier_id)
     .flatMap((c) =>
       c.allocations
         // MỌI phần chia của phiếu — kể cả phần rơi vào đơn của NCC khác đi
         // chung chuyến: người đòi vẫn là NCC nhận tiền, trên hoá đơn của họ.
         .filter((a) => !invoiced.has(a.id) && a.amount > 0)
         .map((a) => ({
-          supplier_id: c.payee_supplier_id,
+          supplier_id: c.payee_supplier_id!,
           currency: c.currency,
           amount: a.amount,
         })),

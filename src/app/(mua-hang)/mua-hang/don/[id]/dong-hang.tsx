@@ -118,7 +118,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                 title={editAct?.blocked}
                 onClick={() => editAct && start(editAct)}
               >
-                {editAct?.id === 'adjust' ? 'Điều chỉnh đơn' : 'Chỉnh sửa vật tư'}
+                {editAct?.id === 'adjust' ? 'Sửa dòng hàng' : 'Chỉnh sửa vật tư'}
               </GridBtn>
               <GridSep />
               <GridBtn

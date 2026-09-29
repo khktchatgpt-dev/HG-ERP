@@ -18,6 +18,7 @@ import {
   type Line,
 } from '@/app/(workspace)/planning/pos/new/po-line'
 import { poHolder, useToast, type IcoName, type Mark } from '@/components/kit'
+import { useSuaTaiCho } from './useSuaTaiCho'
 import {
   fetchMaterialByCode,
   fetchMaterialsByIds,
@@ -124,8 +125,12 @@ export function useDonChungTu(p: Props) {
   /** Đang SOẠN đơn nháp / đơn mới — đầu đơn, nhu cầu lệnh, chia đợt, nháp tự lưu chỉ dành cho việc này. */
   const drafting = editing && !adjusting
 
-  /** Bố cục ĐỌC mới (menu) — mọi lúc không sửa dòng. Sửa điều khoản vẫn ở đây (mục Tổng quan). */
-  const viewMode = !!po && !editing
+  /**
+   * Bố cục ĐỌC mới (menu) — mọi lúc không SOẠN nháp. Sửa tại chỗ (điều khoản,
+   * đợt, và từ B3 cả dòng hàng theo luật điều chỉnh) đều ở trong bố cục này:
+   * lưới dòng sửa được ngay trong mục "Dòng hàng", không nhảy sang bố cục soạn.
+   */
+  const viewMode = !!po && (!editing || adjusting)
 
   const [adjSheet, setAdjSheet] = useState(false)
 
@@ -163,11 +168,31 @@ export function useDonChungTu(p: Props) {
     po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId, fromStock: !!p.seedCodes })), // prettier-ignore
   )
 
-  const [lines, setLines] = useState<Line[]>(() =>
+  /*
+    ĐỒNG BỘ header khi `po` đổi sau `router.refresh()` (vá 28/09/2026). Header khởi
+    tạo MỘT LẦN từ po; server có thể tự đổi hạn giao (kéo theo đợt sớm nhất) sau
+    một lượt Lưu, và header cũ làm chip bày ngày sai, lượt Sửa kế tiếp tưởng
+    "đã đổi ngày" rồi gọi /reschedule lùi cả đợt về ngày cũ (đo trên đơn test).
+    Mẫu React "chỉnh state khi prop đổi" — không dùng useEffect để khỏi vẽ hai nhịp.
+  */
+  const [syncedAt, setSyncedAt] = useState(po?.updated_at ?? null)
+  if (po && (po.updated_at ?? null) !== syncedAt) {
+    setSyncedAt(po.updated_at ?? null)
+    if (!editing && !termsEdit) setHeader(headerFromPo(po, p.extraLsx.map((x) => x.id))) // prettier-ignore
+  }
+
+  const linesFromProps = () =>
     p.lines.map((l) =>
       lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null),
-    ),
-  )
+    )
+  const [lines, setLines] = useState<Line[]>(linesFromProps)
+  // Cùng lý do với header ở trên: dòng đổi trên server (điều chỉnh, nhận hàng)
+  // thì lưới đọc phải theo — chỉ khi không đang sửa.
+  const [syncedLines, setSyncedLines] = useState(p.lines)
+  if (p.lines !== syncedLines) {
+    setSyncedLines(p.lines)
+    if (!editing && !termsEdit) setLines(linesFromProps())
+  }
 
   const [sel, setSel] = useState<string[]>([])
 
@@ -516,85 +541,66 @@ export function useDonChungTu(p: Props) {
     }
   }
 
-  /**
-   * Lưu CHỈ phần chữ trên phiếu — `PATCH …/terms`, service mở cho mọi trạng
-   * thái trừ đã huỷ. Không gửi dòng hàng, không gửi giá: chữ ký duyệt còn
-   * nguyên giá trị.
-   */
-  async function saveTerms() {
-    if (!po) return
-    if (noteOver > 0) {
-      toast.warning('Chưa lưu được', `Ghi chú dài hơn mức cho phép ${noteOver} ký tự`)
-      return
-    }
-    setBusy(true)
-    try {
-      const t = (v: string) => v.trim() || null
-      await api(`/api/dept/supply/pos/${po.id}/terms`, {
-        method: 'PATCH',
-        body: {
-          contract_no: t(header.contractNo),
-          terms_quality: t(header.terms.quality),
-          terms_delivery_place: t(header.terms.delivery_place),
-          terms_payment: t(header.terms.payment),
-          terms_invoice: t(header.terms.invoice),
-          terms_lead_time: t(header.terms.lead_time),
-          signer_role: t(header.signerRole),
-          note: t(header.note),
-        },
-      })
-      toast.success('Đã lưu điều khoản', 'Phiếu in và hồ sơ dùng bản vừa sửa')
-      setTermsEdit(false)
-      router.refresh()
-    } catch (e) {
-      toast.error('Không lưu được điều khoản', apiErrorText(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  // SỬA TẠI CHỖ (B1 + B2, 28/09/2026) — hẹn giao · điều khoản · đợt giao; luật ở `sua-tai-cho.ts`.
+  const sua = useSuaTaiCho({
+    po,
+    header,
+    shipments: p.shipments,
+    // Dòng ĐANG BÀY (đã sửa nếu đang điều chỉnh) — đợt giao kiểm theo SL mới.
+    poLines: lines.map((l, i) => ({ id: l.po_line_id, key: rowKey(l) ?? `tu-do-${i}`, material_name: l.name, qty_ordered: typeof l.qty === 'number' ? l.qty : 0 })), // prettier-ignore
+    noteOver,
+    termsEdit,
+    setTermsEdit,
+    setHeadOpen, // prettier-ignore
+    // `goTo` khai bên dưới — bọc lại để không đụng TDZ; chỉ gọi lúc bấm.
+    goTo: (id) => goTo(id),
+    resetHeader: () =>
+      po &&
+      setHeader(
+        headerFromPo(
+          po,
+          p.extraLsx.map((x) => x.id),
+        ),
+      ),
+    setBusy,
+    toast,
+    router, // prettier-ignore
+    /*
+      DÒNG HÀNG TRONG CÙNG NÚT SỬA (B3): bước còn điều chỉnh được (đã duyệt →
+      đang giao) thì Sửa mở luôn lưới dòng theo luật điều chỉnh (0210) — cùng
+      `adjPlan`, cùng hộp lý do, cùng route. Đơn về đủ chỉ còn điều khoản.
+    */
+    adjust: {
+      can: !!po && perms.canEdit && ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status), // prettier-ignore
+      start: () => startAdjust(),
+      finish: () => { setAdjSheet(false); setAdjusting(false); setEditing(false); setAdjReason('') }, // prettier-ignore
+      pending: !!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges),
+      blocked: adjBlocked,
+      askReason: () => setAdjSheet(true),
+      post: () => postAdjust(),
+    },
+  })
+  const { startEdit, saveTerms } = sua
 
   /** Vào chế độ điều chỉnh đơn đang chạy — cùng lưới, lưu đi đường khác. */
   function startAdjust() {
     setAdjReason('')
+    setLines(linesFromProps())
+    setSel([])
     setAdjusting(true)
     setEditing(true)
   }
 
-  async function applyAdjust() {
-    if (!po || !adjPlan) return
-    setBusy(true)
+  /** Chỉ gọi route điều chỉnh; toast / đóng chế độ do `saveTerms` lo (một nút Lưu chung). */
+  async function postAdjust() {
+    if (!po) throw new Error('Chưa có đơn')
+    const body = buildPoPayload(header, lines)
     try {
-      const body = buildPoPayload(header, lines)
-      const r = await api<{ seq: number; delta_total: number }>(
-        `/api/dept/supply/pos/${po.id}/adjustments`,
-        {
-          method: 'POST',
-          body: {
-            base_seq: adjustments.at(-1)?.seq ?? 0,
-            reason: adjReason.trim(),
-            vat_rate: body.vat_rate,
-            discount_amount: body.discount_amount,
-            lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })),
-          },
-        },
-      )
-      toast.success(
-        `Đã áp dụng điều chỉnh lần ${r.seq} · ${po.code}`,
-        `Phát sinh ${signed(r.delta_total, po.currency)} — in phiếu gửi lại NCC rồi ghi đã gửi`,
-      )
-      setAdjSheet(false)
-      setAdjusting(false)
-      setEditing(false)
-      router.refresh()
+      return await api<{ seq: number; delta_total: number }>(`/api/dept/supply/pos/${po.id}/adjustments`, { method: 'POST', body: { base_seq: adjustments.at(-1)?.seq ?? 0, reason: adjReason.trim(), vat_rate: body.vat_rate, discount_amount: body.discount_amount, lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })) } }) // prettier-ignore
     } catch (e) {
-      const stale = e instanceof ApiError && e.status === 409
-      toast.error(
-        stale ? 'Đơn vừa được điều chỉnh' : 'Chưa áp dụng được',
-        apiErrorText(e),
-      )
-      if (stale) router.refresh()
-    } finally {
-      setBusy(false)
+      // 409 = có người vừa điều chỉnh trước — bản đang sửa đã cũ, nói thẳng.
+      if (e instanceof ApiError && e.status === 409) throw new Error(`Đơn vừa được điều chỉnh bởi người khác — ${apiErrorText(e)}`) // prettier-ignore
+      throw e
     }
   }
 
@@ -609,16 +615,12 @@ export function useDonChungTu(p: Props) {
     if (ok) setSentSheet(null)
   }
 
-  /** Bỏ sửa điều khoản: trả mọi ô về đúng bản đang lưu. */
-  function cancelTermsEdit() {
-    setTermsEdit(false)
-    if (po) setHeader(headerFromPo(po, p.extraLsx.map((x) => x.id))) // prettier-ignore
-  }
-
   /** Đã khác bản gốc chưa — để Huỷ hỏi lại, và để chặn rời trang mất dữ liệu. */
   const isDirty = () =>
-    adjusting
-      ? !!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges)
+    termsEdit
+      ? (!!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges)) ||
+        sua.shipChanges > 0 ||
+        (!!po && JSON.stringify(header) !== JSON.stringify(headerFromPo(po, p.extraLsx.map((x) => x.id)))) // prettier-ignore
       : baseline.current != null &&
         draftSignature({ header, lines, shipCols }) !== baseline.current
   // prettier-ignore
@@ -648,6 +650,8 @@ export function useDonChungTu(p: Props) {
     setSel([])
     setEditing(false)
     setAdjusting(false)
+    setAdjReason('')
+    sua.cancelTermsEdit()
   }
 
   /* ── hành động theo bước (chế độ xem) ──────────────────────────────── */
@@ -692,16 +696,9 @@ export function useDonChungTu(p: Props) {
   function start(a: DocAction) {
     if (a.blocked || !po) return
     if (a.id === 'edit') return setEditing(true)
-    if (a.id === 'adjust') return startAdjust()
-    // Bật chế độ sửa hẹp tại chỗ — không rời trang, không gọi route nào ngay.
-    if (a.id === 'edit_terms') {
-      // Bố cục đọc: khối Đầu đơn nằm GẤP ở mục Tổng quan — mở mục, mở khối, cuộn tới;
-      // không thì nút Lưu / Huỷ hiện mà không thấy ô nào để sửa.
-      setTermsEdit(true)
-      setHeadOpen(true)
-      goTo('dau-don')
-      return
-    }
+    // Bật chế độ Sửa tại chỗ — không rời trang, không gọi route nào ngay.
+    // 'adjust' (dòng hàng) gộp vào cùng nút từ B3.
+    if (a.id === 'adjust' || a.id === 'edit_terms') return startEdit()
     if (a.id === 'open') return
     if (a.ui === 'link' && a.href) return router.push(a.href(po.id))
     if (a.ui === 'direct') return void runAction(a)
@@ -1214,16 +1211,16 @@ export function useDonChungTu(p: Props) {
   const onSaveKey = useEffectEvent((e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault()
-      if (adjusting) {
-        if (!adjBlocked && !busy) setAdjSheet(true)
-      } else if (!problem && !busy) void save()
+      if (busy) return
+      if (termsEdit) void saveTerms()
+      else if (!problem) void save()
     }
   })
   const onLeavePage = useEffectEvent((e: BeforeUnloadEvent) => {
     if (isDirty()) e.preventDefault()
   })
   useEffect(() => {
-    if (!editing) return
+    if (!editing && !termsEdit) return
     const onKey = (e: KeyboardEvent) => onSaveKey(e)
     const onLeave = (e: BeforeUnloadEvent) => onLeavePage(e)
     window.addEventListener('keydown', onKey)
@@ -1232,7 +1229,7 @@ export function useDonChungTu(p: Props) {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('beforeunload', onLeave)
     }
-  }, [editing])
+  }, [editing, termsEdit])
 
   function restoreDraft(d: SavedDraft) {
     setHeader(d.header)
@@ -1505,6 +1502,7 @@ export function useDonChungTu(p: Props) {
     setSuCoClose,
     termsEdit,
     setTermsEdit,
+    ...sua,
     header,
     setHeader,
     lines,
@@ -1595,11 +1593,8 @@ export function useDonChungTu(p: Props) {
     removeSel,
     changeTemplate,
     save,
-    saveTerms,
     startAdjust,
-    applyAdjust,
     markSent,
-    cancelTermsEdit,
     isDirty,
     askCancelEdit,
     cancelEdit,

@@ -180,6 +180,8 @@ export type Props = {
   lastTemplates?: Record<string, PoTemplate>
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */
   costs?: CostRow[]
+  /** Người có thể đã trả phí tại chỗ (chi hộ, 0215) — ô "Người trả" của hộp ghi phí. */
+  payers?: { id: string; name: string }[]
 }
 
 export const dmy = (iso: string | null | undefined) =>

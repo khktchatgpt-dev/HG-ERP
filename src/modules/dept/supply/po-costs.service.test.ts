@@ -17,6 +17,10 @@ vi.mock('./po-costs.repo', async () => {
       carriers: vi.fn(),
       supplierCodes: vi.fn(),
       insertCarrier: vi.fn(),
+      carrierById: vi.fn(),
+      patchCarrier: vi.fn(),
+      listAll: vi.fn(),
+      listByPayee: vi.fn(),
     },
   }
 })
@@ -46,6 +50,7 @@ const po = (id: string, amount: number, over: Partial<PoForCost> = {}): PoForCos
 })
 
 const input = {
+  transport_mode: 'nha_xe' as const,
   payee_supplier_id: '00000000-0000-0000-0000-00000000000a',
   kind: 'van_chuyen' as const,
   cost_date: '2026-09-26',
@@ -111,6 +116,78 @@ describe('poCostsService.create', () => {
     await expect(poCostsService.create(user, input)).rejects.toThrow(/không tồn tại/)
   })
 
+  it('nhà xe mà không chọn đơn vị trong danh mục → chặn', async () => {
+    vi.mocked(poCostsRepo.posForCost).mockResolvedValue([po('a', 1), po('b', 1)])
+    await expect(
+      poCostsService.create(user, { ...input, payee_supplier_id: null }),
+    ).rejects.toThrow(/Chọn nhà xe/)
+  })
+
+  it('ship lẻ gõ tay, CHƯA trả, không lưu danh mục → chặn: Kế toán không biết trả ai', async () => {
+    vi.mocked(poCostsRepo.posForCost).mockResolvedValue([po('a', 1), po('b', 1)])
+    await expect(
+      poCostsService.create(user, {
+        ...input,
+        transport_mode: 'ship_le',
+        payee_supplier_id: null,
+        payee_name: 'Grab — anh Tuấn',
+      }),
+    ).rejects.toThrow(/Chưa trả thì Kế toán phải biết trả cho ai/)
+    expect(poCostsRepo.create).not.toHaveBeenCalled()
+  })
+
+  it('ship lẻ ĐÃ trả tại chỗ → ghi tên gõ tay + người trả, không cần danh mục', async () => {
+    vi.mocked(poCostsRepo.posForCost).mockResolvedValue([po('a', 1)])
+    await poCostsService.create(user, {
+      ...input,
+      po_ids: ['a'],
+      transport_mode: 'ship_le',
+      payee_supplier_id: null,
+      payee_name: ' Grab — anh Tuấn ',
+      payee_phone: '0903',
+      paid: { by: 'u-1', on: '2026-09-18', method: 'tien_mat' },
+    })
+    expect(vi.mocked(poCostsRepo.create).mock.calls[0][0].cost).toMatchObject({
+      transport_mode: 'ship_le',
+      payee_supplier_id: null,
+      payee_name: 'Grab — anh Tuấn',
+      payee_phone: '0903',
+      paid_by: 'u-1',
+      paid_on: '2026-09-18',
+      paid_method: 'tien_mat',
+    })
+  })
+
+  it('ship lẻ + "lưu vào danh mục" → thành đơn vị (tài xế lẻ), phiếu trỏ vào id đó', async () => {
+    vi.mocked(poCostsRepo.posForCost).mockResolvedValue([po('a', 1)])
+    vi.mocked(poCostsRepo.carriers).mockResolvedValue([])
+    vi.mocked(poCostsRepo.supplierCodes).mockResolvedValue([])
+    vi.mocked(poCostsRepo.insertCarrier).mockResolvedValue({ id: 'c-new', name: 'Xe tải Anh Bảy' } as never) // prettier-ignore
+    await poCostsService.create(user, {
+      ...input,
+      po_ids: ['a'],
+      transport_mode: 'ship_le',
+      payee_supplier_id: null,
+      payee_name: 'Xe tải Anh Bảy',
+      save_to_catalog: true,
+    })
+    expect(poCostsRepo.insertCarrier).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Xe tải Anh Bảy', carrier_kind: 'tai_xe_le' }),
+    )
+    expect(vi.mocked(poCostsRepo.create).mock.calls[0][0].cost).toMatchObject({
+      payee_supplier_id: 'c-new',
+      payee_name: null,
+      paid_by: null,
+    })
+  })
+
+  it('NCC tự giao mà người thu không phải NCC của đơn nào trong phiếu → chặn', async () => {
+    vi.mocked(poCostsRepo.posForCost).mockResolvedValue([po('a', 1)])
+    await expect(
+      poCostsService.create(user, { ...input, po_ids: ['a'], transport_mode: 'ncc' }),
+    ).rejects.toThrow(/NCC của một đơn trong phiếu/)
+  })
+
   it('lỗi nghiệp vụ từ hàm DB → 400 với câu của hàm', async () => {
     vi.mocked(poCostsRepo.posForCost).mockResolvedValue([po('a', 1), po('b', 1)])
     vi.mocked(poCostsRepo.create).mockRejectedValue(
@@ -161,8 +238,8 @@ describe('poCostsService.candidates — gợi ý đơn cùng chuyến', () => {
 
 describe('poCostsService.addCarrier', () => {
   it('trùng tên (không phân biệt dấu / hoa thường) → trả nhà xe có sẵn, không thêm', async () => {
-    vi.mocked(poCostsRepo.carriers).mockResolvedValue([{ id: 'c1', name: 'Nhà xe Hùng Vịnh', phone: null }]) // prettier-ignore
-    const r = await poCostsService.addCarrier(user, { name: 'nha xe hung vinh' })
+    vi.mocked(poCostsRepo.carriers).mockResolvedValue([{ id: 'c1', name: 'Nhà xe Hùng Vịnh', phone: null } as never]) // prettier-ignore
+    const r = await poCostsService.addCarrier(user, { name: 'nha xe hung vinh', carrier_kind: 'nha_xe' }) // prettier-ignore
     expect(r.id).toBe('c1')
     expect(poCostsRepo.insertCarrier).not.toHaveBeenCalled()
   })
@@ -170,11 +247,11 @@ describe('poCostsService.addCarrier', () => {
   it('tên mới → thêm vào danh mục, gác bằng quyền ghi phí', async () => {
     vi.mocked(poCostsRepo.carriers).mockResolvedValue([])
     vi.mocked(poCostsRepo.supplierCodes).mockResolvedValue([])
-    vi.mocked(poCostsRepo.insertCarrier).mockResolvedValue({ id: 'c2', name: 'Nhà xe Hùng Vịnh', phone: '0909' }) // prettier-ignore
-    await poCostsService.addCarrier(user, { name: ' Nhà xe Hùng Vịnh ', phone: ' 0909 ' })
+    vi.mocked(poCostsRepo.insertCarrier).mockResolvedValue({ id: 'c2', name: 'Nhà xe Hùng Vịnh', phone: '0909' } as never) // prettier-ignore
+    await poCostsService.addCarrier(user, { name: ' Nhà xe Hùng Vịnh ', phone: ' 0909 ', carrier_kind: 'nha_xe' }) // prettier-ignore
     expect(assertAction).toHaveBeenCalledWith(user, 'supply.po_cost.manage')
     expect(poCostsRepo.insertCarrier).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Nhà xe Hùng Vịnh', phone: '0909', userId: 'u-1' }),
+      expect.objectContaining({ name: 'Nhà xe Hùng Vịnh', phone: '0909', carrier_kind: 'nha_xe', userId: 'u-1' }), // prettier-ignore
     )
   })
 })
@@ -202,5 +279,13 @@ describe('poCostsService.void', () => {
     await expect(poCostsService.void(user, 'y', 'ghi nhầm số tiền')).rejects.toThrow(
       /không tồn tại/,
     )
+  })
+
+  it('Kế toán đã hoàn chi hộ → không huỷ được, bảo đảo phiếu hoàn trước', async () => {
+    vi.mocked(poCostsRepo.findById).mockResolvedValueOnce({ id: 'z', reimbursed_at: '2026-09-20T00:00:00Z' } as never) // prettier-ignore
+    await expect(poCostsService.void(user, 'z', 'ghi nhầm số tiền')).rejects.toThrow(
+      /đã hoàn/,
+    )
+    expect(poCostsRepo.void).not.toHaveBeenCalled()
   })
 })

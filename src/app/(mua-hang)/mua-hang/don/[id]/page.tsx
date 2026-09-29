@@ -18,6 +18,8 @@ import { poFinanceForPo } from '@/modules/dept/accounting/supplier-invoices.serv
 import { poTrackingService } from '@/modules/dept/supply/po-tracking.service'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
+import { toCostRow } from '../../van-chuyen/van-chuyen.shared'
 import { DonChungTuScreen } from './DonChungTuScreen'
 
 export const dynamic = 'force-dynamic'
@@ -74,6 +76,8 @@ export default async function Page({
     settingsService.getAll(),
     docTemplatesService.get('PO'),
     posRepo.lastTemplateBySupplier(),
+    // Người có thể đã trả phí tại chỗ (chi hộ) — ô "Người trả" của hộp ghi phí.
+    usersRepo.list({ active_only: true }),
   ])
 
   let detail
@@ -89,7 +93,7 @@ export default async function Page({
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
   const [
-    [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates], // prettier-ignore
+    [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates, users], // prettier-ignore
     [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt], // prettier-ignore
   ] = await Promise.all([
     indep,
@@ -148,7 +152,8 @@ export default async function Page({
       // dòng DB, không thì lần điều chỉnh sau coi chúng là dòng mới lần nữa.
       key={`${po.id}:${adjustments.length}`}
       adjustments={adjustments.map((a) => ({ seq: a.seq, reason: a.reason, created_at: a.created_at, created_by_name: a.created_by_name, currency: a.currency, subtotal_before: a.subtotal_before, subtotal_after: a.subtotal_after, vat_before: a.vat_before, vat_after: a.vat_after, total_before: a.total_before, total_after: a.total_after, delta_by_price: a.delta_by_price, delta_by_qty: a.delta_by_qty, lines: a.lines, sent_at: a.sent_at, sent_by_name: a.sent_by_name, sent_note: a.sent_note }))} // prettier-ignore
-      costs={costs.map((c) => ({ id: c.id, kind: c.kind, cost_date: c.cost_date, payee_name: c.payee_name, doc_no: c.doc_no, currency: c.currency, amount: c.amount, vat_rate: c.vat_rate, vat_amount: c.vat_amount, note: c.note, created_by_name: c.created_by_name, voided_at: c.voided_at, voided_by_name: c.voided_by_name, void_reason: c.void_reason, allocations: c.allocations }))} // prettier-ignore
+      costs={costs.map(toCostRow)}
+      payers={users.map((u) => ({ id: u.id, name: u.name ?? u.email }))}
       mode={sp.sua === '1' && canEdit && po.status === 'draft' ? 'edit' : 'view'}
       today={todayIso()}
       po={{ ...po, submitted_at: submittedAt }}

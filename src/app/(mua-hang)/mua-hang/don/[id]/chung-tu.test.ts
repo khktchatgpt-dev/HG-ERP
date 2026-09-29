@@ -122,7 +122,7 @@ describe('hẹn giao — nhắc ở bước soạn, CHẶN ở bước gửi NCC
     )
     const eta = c.find((x) => /hẹn giao/.test(x.what))!
     expect(eta.level).toBe('stop')
-    expect(eta.fix).toMatch(/Đổi hẹn giao/)
+    expect(eta.fix).toMatch(/"Sửa"/)
   })
   it('đơn đã duyệt mà CÓ hẹn giao thì không còn lỗi chặn nào', () => {
     const c = poChecks(

@@ -125,6 +125,14 @@ describe('costPayeeRole — phiếu vào sổ 331 thẳng hay chờ hoá đơn N
   it('người nhận tiền là NCC của một đơn trong phiếu → chờ hoá đơn NCC (tránh ghi nợ hai lần)', () => {
     expect(costPayeeRole('vipora', ['vipora', 'cao-dat'])).toBe('po_supplier')
   })
+  it('người trong công ty đã trả tại chỗ → chi hộ: nợ nhân viên, KHÔNG vào 331 dù người thu là ai', () => {
+    expect(costPayeeRole('nha-xe', ['vipora'], 'u-nga')).toBe('chi_ho')
+    expect(costPayeeRole(null, ['vipora'], 'u-nga')).toBe('chi_ho')
+    expect(costPayeeRole('vipora', ['vipora'], 'u-nga')).toBe('chi_ho')
+  })
+  it('ship lẻ chưa lưu danh mục (không id) mà chưa trả → về vai nhà xe — DB sẽ chặn, service chặn trước', () => {
+    expect(costPayeeRole(null, ['vipora'], null)).toBe('carrier')
+  })
 })
 
 describe('carrierLedgerEntries — huỷ phiếu nhà xe không được sửa ngược kỳ cũ', () => {
