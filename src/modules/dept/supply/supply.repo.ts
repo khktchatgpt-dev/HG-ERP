@@ -835,6 +835,19 @@ export const suppliersRepo = {
    * Mọi mã NCC đang dùng — để tự cấp mã không đụng mã sẵn có. Danh mục 157 dòng
    * nên lấy hết một lượt là đủ; cột `code` unique nên đây là nguồn duy nhất.
    */
+  /** NCC đã khai MST — nguồn so trùng MST khi thêm/sửa (lib/supplier-dup). */
+  async withTaxNo(): Promise<
+    { id: string; code: string | null; name: string; tax_no: string | null }[]
+  > {
+    const { data, error } = await db()
+      .from('supply_suppliers')
+      .select('id, code, name, tax_no')
+      .not('tax_no', 'is', null)
+      .limit(5000)
+    if (error) throw error
+    return data ?? []
+  },
+
   async allCodes(): Promise<string[]> {
     const { data } = await db()
       .from('supply_suppliers')

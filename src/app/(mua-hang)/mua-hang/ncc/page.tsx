@@ -7,7 +7,7 @@ import {
   parseScope,
 } from '@/lib/supply-scope'
 import { authService } from '@/modules/core/auth/auth.service'
-import { suppliersService } from '@/modules/dept/supply/suppliers.service'
+import { listSupplyBuyers, suppliersService } from '@/modules/dept/supply/suppliers.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { NccScreen } from './NccScreen'
 
@@ -40,7 +40,12 @@ export default async function Page({
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
-  const canApprove = user.role === 'admin' || (await canAction(user, 'supply.po.approve'))
+  const [canApprove, canManage, buyers] = await Promise.all([
+    user.role === 'admin' || canAction(user, 'supply.po.approve'),
+    // Đúng quyền service kiểm khi thêm NCC — nút không hứa điều service từ chối.
+    canAction(user, 'supply.supplier.manage'),
+    listSupplyBuyers(),
+  ])
 
   /*
     TRẦN NẠP — và NÓI RA khi chạm.
@@ -146,6 +151,8 @@ export default async function Page({
       meId={user.id}
       defaultScope={defaultScope({ canApprove })}
       urlScope={parseScope(sp.pham_vi)}
+      canManage={canManage}
+      buyers={buyers}
       chamTran={suppliers.length >= CAP ? 'ncc' : pos.length >= CAP ? 'don' : null}
     />
   )

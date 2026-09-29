@@ -70,6 +70,11 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         email: ncc.email,
         address: ncc.address,
         legal_rep: ncc.legal_rep,
+        company_name: ncc.company_name,
+        registered_address: ncc.registered_address,
+        bank_name: ncc.bank_name,
+        bank_account: ncc.bank_account,
+        swift_code: ncc.swift_code,
         payment_terms: ncc.payment_terms,
         // Bốn trường phiếu sửa cần — hai ô liên hệ (nối 17/09) và hai ô MỒI
         // xuống đơn mới (số ngày nợ, lead time).
