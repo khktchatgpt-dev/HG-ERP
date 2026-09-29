@@ -44,6 +44,10 @@ type Nap = { m: Material; gia: GiaMua[] | null; doi: ThayDoi[] | null }
  * Chỉ các ô NGƯỜI MUA được sửa (`PURCHASING_EDITABLE_FIELDS` ở service): kệ,
  * ngưỡng tồn, cờ "Chờ Kho rà", ngừng dùng là của Kho — nói ra, không bày ô.
  * VAT không bày: 0/13.316 mã có khai (đo 29/09).
+ *
+ * DÙNG CHUNG HAI NƠI: danh mục `/mua-hang/vat-tu` (truyền sẵn `tax`, `suppliers`
+ * từ server) và màn soạn/sửa đơn (thay modal hệ cũ EditMaterialDialog, 29/09) —
+ * ở đó panel tự nạp hai thứ này. `onSaved` trả bản đã lưu để đơn hút lại số mới.
  */
 export function SuaVatTuSheet({
   id,
@@ -53,15 +57,48 @@ export function SuaVatTuSheet({
   onSaved,
 }: {
   id: string
-  tax: MaterialTaxonomy
-  suppliers: { value: string; label: string }[]
+  /** Danh mục ĐVT/nhóm — bỏ trống thì panel tự nạp. */
+  tax?: MaterialTaxonomy
+  /** NCC cho ô "NCC mặc định" — bỏ trống thì panel tự nạp. */
+  suppliers?: { value: string; label: string }[]
   onClose: () => void
-  onSaved: () => void
+  /** Bản vật tư SAU khi lưu (từ PATCH). */
+  onSaved: (m: Material) => void
 }) {
   const toast = useToast()
   const [nap, setNap] = useState<Nap | null>(null)
+  const [nen, setNen] = useState<{
+    tax: MaterialTaxonomy
+    suppliers: { value: string; label: string }[]
+  } | null>(tax && suppliers ? { tax, suppliers } : null)
   useEffect(() => {
     let live = true
+    if (!(tax && suppliers))
+      Promise.all([
+        tax ?? api<MaterialTaxonomy>('/api/dept/warehouse/material-taxonomy'),
+        suppliers ??
+          api<{
+            rows: {
+              id: string
+              code: string | null
+              name: string
+              short_name: string | null
+              is_carrier?: boolean
+            }[]
+          }>('/api/dept/supply/suppliers?page=1&page_size=500').then((r) =>
+            r.rows
+              .filter((x) => !x.is_carrier)
+              .map((x) => ({
+                value: x.id,
+                label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name,
+              })),
+          ),
+      ])
+        .then(([t, sp]) => live && setNen({ tax: t, suppliers: sp }))
+        .catch((e) => {
+          toast.error('Không nạp được danh mục', apiErrorText(e))
+          onClose()
+        })
     api<{ material: Material }>(`/api/dept/warehouse/materials/${id}`)
       .then(async ({ material: m }) => {
         if (!live) return
@@ -84,7 +121,7 @@ export function SuaVatTuSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  if (!nap)
+  if (!nap || !nen)
     return (
       <Sheet open onClose={onClose} title="Sửa vật tư" stakes="nhe" width={720}>
         <Loading rows={8} />
@@ -94,8 +131,8 @@ export function SuaVatTuSheet({
     <Form
       key={nap.m.id}
       nap={nap}
-      tax={tax}
-      suppliers={suppliers}
+      tax={nen.tax}
+      suppliers={nen.suppliers}
       onClose={onClose}
       onSaved={onSaved}
     />
@@ -113,7 +150,7 @@ function Form({
   tax: MaterialTaxonomy
   suppliers: { value: string; label: string }[]
   onClose: () => void
-  onSaved: () => void
+  onSaved: (m: Material) => void
 }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
@@ -153,21 +190,24 @@ function Form({
     if (why) return
     setBusy(true)
     try {
-      await api(`/api/dept/warehouse/materials/${m.id}`, {
-        method: 'PATCH',
-        body: {
-          ...payload,
-          note: mua.note.trim() || null,
-          last_purchase_price: mua.price.trim() === '' ? null : Number(mua.price.replace(/\./g, '').replace(',', '.')), // prettier-ignore
-          default_supplier_id: mua.supplier || null,
-          over_tolerance_pct: Number(mua.tol) || 0,
+      const r = await api<{ material: Material }>(
+        `/api/dept/warehouse/materials/${m.id}`,
+        {
+          method: 'PATCH',
+          body: {
+            ...payload,
+            note: mua.note.trim() || null,
+            last_purchase_price: mua.price.trim() === '' ? null : Number(mua.price.replace(/\./g, '').replace(',', '.')), // prettier-ignore
+            default_supplier_id: mua.supplier || null,
+            over_tolerance_pct: Number(mua.tol) || 0,
+          },
         },
-      })
+      )
       toast.success(
         `Đã lưu ${m.code}`,
         'Đơn mua soạn từ giờ dùng thông tin mới; đơn đã gửi không đổi.',
       )
-      onSaved()
+      onSaved(r.material)
     } catch (e) {
       toast.error('Lưu không được', apiErrorText(e))
       setBusy(false)
