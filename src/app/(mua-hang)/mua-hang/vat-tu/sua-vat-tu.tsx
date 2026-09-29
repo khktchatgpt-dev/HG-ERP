@@ -384,7 +384,8 @@ function Form({
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {s.derived?.kg != null && (
               <Hint size="sm">
-                Máy đọc từ tên: {s.derived.kg.toLocaleString('vi-VN', { maximumFractionDigits: 4 })} kg/m
+                Máy đọc từ tên:{' '}
+                {s.derived.kg.toLocaleString('vi-VN', { maximumFractionDigits: 4 })} kg/m
                 {f.kg_per_m.trim()
                   ? s.kgMismatch
                     ? ` — lệch ${Math.round(s.kgOff * 100)}%`
@@ -393,7 +394,8 @@ function Form({
                 {/* prettier-ignore */}
               </Hint>
             )}
-            {s.needsBarWeight && !f.default_bar_length_m.trim() && barHint != null &&
+            {
+              s.needsBarWeight && !f.default_bar_length_m.trim() && barHint != null &&
               <Btn icon="them" onClick={() => set('default_bar_length_m')(String(barHint))}>Điền dài cây {barHint} m (đọc từ tên)</Btn> // prettier-ignore
             }
           </div>

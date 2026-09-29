@@ -91,6 +91,8 @@ export type ListFilter = {
    */
   no_min_stock?: boolean
   no_shelf?: boolean
+  /** Chưa có nhóm con — rổ việc "chia nhóm" của khu Mua hàng (29/09/2026: 1.288 mã). */
+  no_sub?: boolean
   page: number
   page_size: number
 }
@@ -136,6 +138,7 @@ export const materialsRepo = {
     if (filter.needs_review) q = q.eq('needs_review', true)
     if (filter.no_min_stock) q = q.eq('min_stock', 0)
     if (filter.no_shelf) q = q.is('shelf_location', null)
+    if (filter.no_sub) q = q.is('sub_group', null)
     // `in` chịu được vài nghìn id qua POST-style filter của PostgREST; tập gọi
     // thực tế là số mã đang có đơn mở nên nhỏ hơn thế nhiều.
     if (filter.ids) q = q.in('id', filter.ids)
@@ -174,22 +177,26 @@ export const materialsRepo = {
      * phải đếm bằng ĐÚNG bộ lọc mà trang đang áp.
      */
     needs_review?: boolean
+    no_sub?: boolean
   }): Promise<{
     total: number
     active: number
     noShelf: number
     needsReview: number
     noMinStock: number
+    /** Chưa có nhóm con, trong đúng bộ lọc đang áp. */
+    noSub: number
   }> {
     const base = () => {
       let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
       if (filter.needs_review) q = q.eq('needs_review', true)
+      if (filter.no_sub) q = q.is('sub_group', null)
       // Cùng luật tìm không dấu với list — hai nơi lệch nhau là StatsBar nói dối.
       for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
     }
-    const [all, act, shelf, review, noMin] = await Promise.all([
+    const [all, act, shelf, review, noMin, noSub] = await Promise.all([
       base(),
       base().eq('is_active', true),
       base().is('shelf_location', null),
@@ -197,6 +204,7 @@ export const materialsRepo = {
       base().eq('needs_review', true),
       // Chưa khai ngưỡng tồn tối thiểu — rổ việc của màn danh mục bản Kho.
       base().eq('min_stock', 0),
+      base().is('sub_group', null),
     ])
     return {
       total: all.count ?? 0,
@@ -204,6 +212,7 @@ export const materialsRepo = {
       noShelf: shelf.count ?? 0,
       needsReview: review.count ?? 0,
       noMinStock: noMin.count ?? 0,
+      noSub: noSub.count ?? 0,
     }
   },
 
