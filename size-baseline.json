@@ -24,7 +24,6 @@
     "src/components/sales/OrderDetailView.tsx": 1454,
     "src/components/sales/OrderForm.tsx": 1510,
     "src/components/supply/MaterialPicker.tsx": 888,
-    "src/components/technical/ProductPartsCard.tsx": 1587,
-    "src/components/warehouse/MaterialCoreFields.tsx": 1162
+    "src/components/technical/ProductPartsCard.tsx": 1587
   }
 }
