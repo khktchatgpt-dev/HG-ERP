@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { regroupPreview, similarSubs, subKey } from './material-subgroup'
+import { regroupPreview, similarSubs, subKey, suspectSubs } from './material-subgroup'
 
 const DIEN = [
   'Dây cáp & phụ kiện điện',
@@ -58,5 +58,30 @@ describe('regroupPreview', () => {
   })
   it('mã đã đúng chỗ thì không tính', () => {
     expect(regroupPreview([{ group: G, sub: 'X' }], { sub: 'X' }, count)).toEqual([])
+  })
+})
+
+describe('suspectSubs — nhóm Điện thật 29/09', () => {
+  const dien = [
+    { name: 'Dây cáp & phụ kiện điện', count: 363 },
+    { name: 'Đèn chiếu sáng', count: 112 },
+    { name: 'Ắc quy - pin', count: 30 },
+    { name: 'Ắc quy', count: 7 },
+    { name: 'Đèn - chiếu sáng', count: 4 },
+    { name: 'Thiết bị điện - điều khiển', count: 1 },
+  ]
+  it('đúng 2 nhãn nhỏ trỏ sang nhãn lớn gần giống', () => {
+    expect([...suspectSubs(dien)]).toEqual([
+      ['Ắc quy', 'Ắc quy - pin'],
+      ['Đèn - chiếu sáng', 'Đèn chiếu sáng'],
+    ])
+  })
+  it('bằng số mã thì chỉ một chiều, không trỏ vòng', () => {
+    expect(
+      suspectSubs([
+        { name: 'A b c', count: 2 },
+        { name: 'Abc', count: 2 },
+      ]).size,
+    ).toBe(1)
   })
 })

@@ -183,11 +183,14 @@ export function VatTuScreen({
           { label: 'Đang hiện', value: `${tu}–${den}` },
         ]}
         actions={
-          canEdit && chon.size > 0 ? (
-            <Btn icon="sau" primary onClick={() => setChuyen(true)}>
-              Chuyển {chon.size} mã đã chọn…
-            </Btn>
-          ) : undefined
+          <>
+            <Btn href="/mua-hang/vat-tu/nhom">Nhóm vật tư</Btn>
+            {canEdit && chon.size > 0 && (
+              <Btn icon="sau" primary onClick={() => setChuyen(true)}>
+                Chuyển {chon.size} mã đã chọn…
+              </Btn>
+            )}
+          </>
         }
       />
 

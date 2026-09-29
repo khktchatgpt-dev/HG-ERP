@@ -66,7 +66,8 @@ export default async function Page({
       no_sub: noSub || undefined,
       page,
       page_size: PAGE_SIZE,
-      active_only: false,
+      // Rổ chia nhóm chỉ lấy mã đang dùng (chia nhóm cho mã đã ngừng là vô ích).
+      active_only: noSub,
     }),
     // Đếm ở DB theo ĐÚNG bộ lọc đang áp, không cộng từ trang đang xem: 50 dòng
     // trên màn không nói được gì về 13.226 dòng phía sau.
@@ -75,6 +76,7 @@ export default async function Page({
       group_name: group,
       needs_review: review ? true : undefined,
       no_sub: noSub || undefined,
+      active_only: noSub || undefined,
     }),
     materialTaxonomy(),
     // Đúng quyền service kiểm khi lưu — nút không hứa điều service từ chối.
