@@ -5,6 +5,7 @@ import {
   poChecks,
   retemplate,
   type PoForHeader,
+  templateForGroup,
   templateForSupplier,
 } from './chung-tu'
 
@@ -153,5 +154,20 @@ describe('newHeader — loại đơn mặc định', () => {
   })
   it('mở từ dòng tồn kho NHƯNG có lệnh trên URL thì vẫn theo lệnh', () => {
     expect(newHeader({ fromStock: true, lsxId: 'l1' }).poType).toBe('lsx')
+  })
+})
+
+describe('templateForGroup — đơn mới lấy mẫu theo nhóm của vật tư đầu tiên', () => {
+  const groups = { 'Bao bì': 'carton', 'Sắt thép': 'metal_kg' } as const
+  const base = { current: 'accessory', touched: false, isNew: true, groups } as const
+  it('nhóm có mẫu → đổi sang mẫu đó', () => {
+    expect(templateForGroup({ ...base, group: 'Bao bì' })).toBe('carton')
+  })
+  it('không đổi khi đã tự chọn mẫu, đơn đã có dòng, nhóm chưa đặt mẫu, hoặc đã đúng', () => {
+    expect(templateForGroup({ ...base, group: 'Bao bì', touched: true })).toBeNull()
+    expect(templateForGroup({ ...base, group: 'Bao bì', isNew: false })).toBeNull()
+    expect(templateForGroup({ ...base, group: 'Ngũ kim' })).toBeNull()
+    expect(templateForGroup({ ...base, group: null })).toBeNull()
+    expect(templateForGroup({ ...base, group: 'Bao bì', current: 'carton' })).toBeNull()
   })
 })

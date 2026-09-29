@@ -78,8 +78,13 @@ export type SavedDraft = {
   shipCols: PlanColumn[]
 }
 
-export const draftKeyFor = (poId: string | null) =>
-  `hg.mua-hang.don.nhap:${poId ?? 'moi'}`
+/**
+ * Đơn đang sửa: khoá theo id. Đơn MỚI: khoá theo ngữ cảnh mở (lệnh, NCC, mã
+ * mồi từ URL) — tới 29/09/2026 mọi đơn mới chung một khoá `moi`, nên mở đơn
+ * mới cho lệnh B vẫn bị mời khôi phục bản gõ dở của lệnh A.
+ */
+export const draftKeyFor = (poId: string | null, ctx: (string | undefined)[] = []) =>
+  `hg.mua-hang.don.nhap:${poId ?? ['moi', ...ctx.map((c) => c || '-')].join(':')}`
 
 export function readDraft(key: string): SavedDraft | null {
   try {

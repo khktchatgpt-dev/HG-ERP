@@ -178,6 +178,8 @@ export type Props = {
   adjustments?: AdjustmentLite[]
   /** Mẫu của đơn gần nhất theo NCC — đơn mới chọn NCC thì mẫu tự theo (`templateForSupplier`). */
   lastTemplates?: Record<string, PoTemplate>
+  /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */
+  groupTemplates?: Record<string, PoTemplate>
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */
   costs?: CostRow[]
   /** Người có thể đã trả phí tại chỗ (chi hộ, 0215) — ô "Người trả" của hộp ghi phí. */
