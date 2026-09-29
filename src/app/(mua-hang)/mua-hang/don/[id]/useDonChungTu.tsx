@@ -46,7 +46,8 @@ import { actionsFor, type Action as DocAction } from '../actions'
 import { costShareOf, type CostRow } from './ChiPhiPanel'
 import { type PasteConfirm } from './SoanDonPanels'
 import { type TrackLine } from './TheoDoiPanel'
-import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'
+// prettier-ignore
+import { headerFromPo, lineIssues, newHeader, poChecks, retemplate, templateForGroup } from './chung-tu'
 import {
   MUC_IDS,
   MUC_OF,
@@ -446,9 +447,18 @@ export function useDonChungTu(p: Props) {
       toast.info(`${m.code} đã có ở dòng ${cu + 1}`, 'Sửa số lượng ngay trên dòng đó.')
       return
     }
-    setLines((ls) => [...ls, newLine(template, m)])
+    const t = tplForFirst(m)
+    setLines((ls) => [...ls, newLine(t, m)])
     setPick(lines.length)
     focusQty(lines.length)
+  }
+
+  // Đơn mới: mẫu theo nhóm của vật tư đầu tiên (`templateForGroup`); trả mẫu để dòng dựng đúng ngay.
+  function tplForFirst(m?: PoMaterial): PoTemplate {
+    const t = templateForGroup({ group: m?.group_name, current: template, touched: dirty.current.template, isNew: !po && lines.length === 0, groups: p.groupTemplates ?? {} }) // prettier-ignore
+    if (t) changeTemplate(t)
+    if (t) toast.info(`Mẫu đơn: ${poTemplateMeta(t).label}`, `Theo nhóm "${m?.group_name}" — đổi được ở ô "Mẫu đơn".`) // prettier-ignore
+    return t ?? template
   }
 
   /**
@@ -476,16 +486,8 @@ export function useDonChungTu(p: Props) {
   }
 
   const removeSel = () => {
-    const stuck = adjusting
-      ? lines.filter((l) => sel.includes(rowKey(l)) && lockedLine(l))
-      : []
-    if (stuck.length > 0) {
-      toast.warning(
-        `Không bỏ được ${stuck.length} dòng`,
-        `${stuck[0].code || stuck[0].name}: ${lockedLine(stuck[0])}`,
-      )
-      return
-    }
+    const stuck = adjusting ? lines.filter((l) => sel.includes(rowKey(l)) && lockedLine(l)) : [] // prettier-ignore
+    if (stuck.length > 0) return void toast.warning(`Không bỏ được ${stuck.length} dòng`, `${stuck[0].code || stuck[0].name}: ${lockedLine(stuck[0])}`) // prettier-ignore
     setLines((ls) => ls.filter((l) => !sel.includes(rowKey(l))))
     setSel([])
     setPick(0)
@@ -1063,24 +1065,17 @@ export function useDonChungTu(p: Props) {
   }, [drafting, header.poType, header.lsxId, header.extraLsxIds])
 
   /** Thêm nhiều vật tư một lượt, kèm SL/giá/ghi chú (dán Excel, mồi từ URL). */
-  function addMaterials(
-    list: PoMaterial[],
-    extras?: Map<
-      string,
-      { qty?: number | null; price?: number | null; note?: string | null }
-    >,
-  ) {
-    // prettier-ignore
+  // prettier-ignore
+  function addMaterials(list: PoMaterial[], extras?: Map<string, { qty?: number | null; price?: number | null; note?: string | null }>) {
     const seen = new Set<string>()
-    const add = list.filter(
-      (m) => !usedIds.has(m.id) && !seen.has(m.id) && (seen.add(m.id), true),
-    )
+    const add = list.filter((m) => !usedIds.has(m.id) && !seen.has(m.id) && (seen.add(m.id), true))
     if (add.length === 0) return
+    const t = tplForFirst(add[0])
     setPick(lines.length)
     setLines((ls) => [
       ...ls,
       ...add.map((m) => {
-        const l = newLine(template, m)
+        const l = newLine(t, m)
         const e = extras?.get(m.id)
         return e ? { ...l, qty: (e.qty ?? l.qty) as Line['qty'], price: (e.price ?? l.price) as Line['price'], note: e.note ?? l.note } : l // prettier-ignore
       }),
@@ -1094,13 +1089,8 @@ export function useDonChungTu(p: Props) {
     }
     const dup = picked.matched.filter((x) => usedIds.has(x.material.id)).length
     const n = picked.matched.length - dup + picked.free.length
-    if (n > 0)
-      toast.success(
-        `Đã thêm ${n} dòng từ vùng dán`,
-        dup > 0 ? `${dup} mã đã có trên đơn, không thêm lại` : undefined,
-      )
-    else if (dup > 0)
-      toast.warning('Không thêm dòng nào', `${dup} mã trong vùng dán đã có trên đơn`)
+    if (n > 0) toast.success(`Đã thêm ${n} dòng từ vùng dán`, dup > 0 ? `${dup} mã đã có trên đơn, không thêm lại` : undefined) // prettier-ignore
+    else if (dup > 0) toast.warning('Không thêm dòng nào', `${dup} mã trong vùng dán đã có trên đơn`) // prettier-ignore
   }
 
   /** Từ nhu cầu lệnh: nạp hồ sơ vật tư (kg/m, dài cây…) rồi mới thành dòng — thiếu thì dòng nhôm không tính được tiền. */
@@ -1110,6 +1100,7 @@ export function useDonChungTu(p: Props) {
     try {
       const mats = await fetchMaterialsByIds(ids)
       const byId = new Map(mats.map((m) => [m.id, m]))
+      const t = tplForFirst(byId.get(ids[0]))
       setLines((ls) => {
         const have = new Set(ls.map((l) => l.material_id))
         const add: Line[] = []
@@ -1117,7 +1108,7 @@ export function useDonChungTu(p: Props) {
           const m = byId.get(n.material_id)
           if (!m || have.has(n.material_id)) continue
           // SL đặt để trống cho người mua quyết; nhu cầu và phân bổ theo SP đổ sẵn.
-          add.push({ ...newLine(template, m), qty_demand: n.qty_needed, note: allocationNote(n.breakdown ?? []).slice(0, 500) }) // prettier-ignore
+          add.push({ ...newLine(t, m), qty_demand: n.qty_needed, note: allocationNote(n.breakdown ?? []).slice(0, 500) }) // prettier-ignore
         }
         return [...ls, ...add]
       })
@@ -1178,7 +1169,7 @@ export function useDonChungTu(p: Props) {
   }, [])
 
   // TỰ LƯU NHÁP: ghi sau mỗi nhịp gõ khi khác bản gốc; mở lại thì đề nghị khôi phục.
-  const draftKey = draftKeyFor(po?.id ?? null)
+  const draftKey = draftKeyFor(po?.id ?? null, [p.seed?.lsxId, p.seed?.supplierId, p.seedCodes?.codes.join(',')]) // prettier-ignore
 
   const baseline = useRef<string | null>(null)
 

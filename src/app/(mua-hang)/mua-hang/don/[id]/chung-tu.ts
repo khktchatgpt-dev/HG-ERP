@@ -82,6 +82,24 @@ export function templateForSupplier(i: {
   return t && t !== i.current ? t : null
 }
 
+/**
+ * Thêm vật tư ĐẦU TIÊN vào đơn MỚI → mẫu theo nhóm của nó (`po_template` của
+ * nhóm, 0183) — 29/09/2026. Tới đó mẫu mặc định "Phụ kiện" nên đơn bao bì / sắt
+ * mở ra sai bộ cột (đo: 4/71 đơn thật mang mẫu lệch hàng). Trả null = không
+ * đổi: đã tự chọn mẫu, đơn đã có dòng / đã lưu, nhóm chưa đặt mẫu, hoặc đúng rồi.
+ */
+export function templateForGroup(i: {
+  group: string | null | undefined
+  current: PoTemplate
+  touched: boolean
+  isNew: boolean
+  groups: Readonly<Record<string, PoTemplate>>
+}): PoTemplate | null {
+  if (i.touched || !i.isNew || !i.group) return null
+  const t = i.groups[i.group]
+  return t && t !== i.current ? t : null
+}
+
 export function newHeader(opts: {
   supplierId?: string
   lsxId?: string
