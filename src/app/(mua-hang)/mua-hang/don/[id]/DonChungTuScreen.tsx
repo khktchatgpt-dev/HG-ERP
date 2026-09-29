@@ -1,6 +1,6 @@
 'use client'
 
-import { EditMaterialDialog } from '@/app/(mua-hang)/mua-hang/don/_lib/EditMaterialDialog'
+import { SuaVatTuSheet } from '@/app/(mua-hang)/mua-hang/vat-tu/sua-vat-tu'
 import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import { refreshLineFromMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
@@ -1276,17 +1276,14 @@ export function DonChungTuScreen(p: Props) {
         editing &&
         <QuickAddMaterial open={quickAdd} onOpenChange={setQuickAdd} template={template} onCreated={onCreatedMaterial} /> // prettier-ignore
       }
-      {editing && (
-        <EditMaterialDialog
-          materialId={editMaterial}
+      {editing && editMaterial && (
+        // Panel kit dùng chung với danh mục (29/09/2026); dòng cùng vật tư hút lại số mới.
+        <SuaVatTuSheet
+          key={editMaterial}
+          id={editMaterial}
           onClose={() => setEditMaterial(null)}
-          onSaved={(id, m) => {
-            // Hút số mới vào các dòng đang mở cùng vật tư — đúng như bản cũ.
-            setLines((ls) =>
-              ls.map((l) =>
-                l.material_id === id ? refreshLineFromMaterial(template, l, m) : l,
-              ),
-            )
+          onSaved={(m) => {
+            setLines((ls) => ls.map((l) => (l.material_id === m.id ? refreshLineFromMaterial(template, l, m) : l))) // prettier-ignore
             invalidateMaterialPickCache()
             setEditMaterial(null)
           }}
