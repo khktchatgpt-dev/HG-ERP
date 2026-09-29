@@ -178,6 +178,8 @@ export const materialsRepo = {
      */
     needs_review?: boolean
     no_sub?: boolean
+    /** Chỉ mã đang dùng — rổ chia nhóm đếm cùng nguồn với trang Nhóm vật tư. */
+    active_only?: boolean
   }): Promise<{
     total: number
     active: number
@@ -192,6 +194,7 @@ export const materialsRepo = {
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
       if (filter.needs_review) q = q.eq('needs_review', true)
       if (filter.no_sub) q = q.is('sub_group', null)
+      if (filter.active_only) q = q.eq('is_active', true)
       // Cùng luật tìm không dấu với list — hai nơi lệch nhau là StatsBar nói dối.
       for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
@@ -204,7 +207,9 @@ export const materialsRepo = {
       base().eq('needs_review', true),
       // Chưa khai ngưỡng tồn tối thiểu — rổ việc của màn danh mục bản Kho.
       base().eq('min_stock', 0),
-      base().is('sub_group', null),
+      // Chỉ mã ĐANG DÙNG: cùng số với `material-groups.overview` (trang Nhóm vật
+      // tư) — bấm số ở đó sang rổ này phải ra đúng số đó (đo 29/09: 1.286 vs 1.288).
+      base().is('sub_group', null).eq('is_active', true),
     ])
     return {
       total: all.count ?? 0,

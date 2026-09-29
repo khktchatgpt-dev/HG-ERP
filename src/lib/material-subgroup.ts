@@ -66,3 +66,26 @@ export function regroupPreview(
     .map(({ pos, d }) => ({ ...pos, before: count(pos), after: count(pos) + d }))
     .sort((a, b) => b.after - b.before - (a.after - a.before))
 }
+
+/**
+ * NHÃN NGHI TRÙNG TRONG MỘT NHÓM — nhãn ÍT mã hơn trỏ sang nhãn gần giống NHIỀU
+ * mã hơn (gộp thì gộp nhỏ vào lớn). Nguồn cho chip tô vàng ở trang Nhóm vật tư.
+ * Đo 29/09: đúng 2 cặp — Đèn - chiếu sáng (4) → Đèn chiếu sáng (112),
+ * Ắc quy (7) → Ắc quy - pin (30).
+ */
+export function suspectSubs(
+  subs: readonly { name: string; count: number }[],
+): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const s of subs) {
+    const bigger = similarSubs(
+      s.name,
+      subs.map((x) => x.name),
+    )
+      .map((n) => subs.find((x) => x.name === n)!)
+      .filter((x) => x.count > s.count || (x.count === s.count && x.name < s.name))
+      .sort((a, b) => b.count - a.count)[0]
+    if (bigger) out.set(s.name, bigger.name)
+  }
+  return out
+}
