@@ -1380,6 +1380,13 @@ button.k-headchip-plain:hover > span + span {
   padding: 8px var(--gutter);
   background: var(--surface-card);
   border-top: 1px solid var(--line);
+  /* DÍNH ĐÁY THẬT (29/09/2026): chú thích trên nói "dính đáy" nhưng lớp này
+     từng không có `sticky` — màn soạn đơn dài hơn một màn thì tổng tiền và nút
+     Tạo đơn trôi mất. Bóng mờ phía trên để thanh tách khỏi dòng lưới cuộn dưới. */
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  box-shadow: 0 -4px 12px rgb(0 0 0 / 0.06);
 }
 .k-commit-t {
   display: flex;
