@@ -22,10 +22,12 @@ import {
   THead,
   Table,
   Tag,
+  Tick,
   showMoney,
 } from '@/components/kit'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { SuaVatTuSheet } from './sua-vat-tu'
+import { ChuyenNhomSheet } from './chuyen-nhom'
 
 export type VatTuRow = {
   id: string
@@ -51,10 +53,16 @@ export function VatTuScreen({
   suppliers,
 }: {
   rows: VatTuRow[]
-  counts: { total: number; active: number; noShelf: number; needsReview: number }
+  counts: {
+    total: number
+    active: number
+    noShelf: number
+    needsReview: number
+    noSub: number
+  }
   groups: string[]
   page: number
-  filters: { q: string; nhom: string; ra: boolean }
+  filters: { q: string; nhom: string; ra: boolean; kn: boolean }
   /** Quyền `warehouse.material.update_purchasing` — đúng quyền service kiểm khi lưu. */
   canEdit: boolean
   tax: MaterialTaxonomy
@@ -123,7 +131,27 @@ export function VatTuScreen({
     return `${pathname}?${p.toString()}`
   }
 
-  const dangLoc = !!filters.q || !!filters.nhom || filters.ra
+  /*
+    CHỌN NHIỀU MÃ ĐỂ CHUYỂN NHÓM (29/09/2026) — chỉ trong trang đang xem: đổi
+    trang / đổi lọc là bỏ chọn, để không chuyển nhầm mã mình không còn thấy.
+  */
+  const [chon, setChon] = useState<Set<string>>(new Set())
+  const [rowsTruoc, setRowsTruoc] = useState(rows)
+  if (rows !== rowsTruoc) {
+    setRowsTruoc(rows)
+    setChon(new Set())
+  }
+  const [chuyen, setChuyen] = useState(false)
+  const lat = (id: string, on: boolean) =>
+    setChon((s) => {
+      const n = new Set(s)
+      if (on) n.add(id)
+      else n.delete(id)
+      return n
+    })
+  const tatCa = rows.length > 0 && rows.every((r) => chon.has(r.id))
+
+  const dangLoc = !!filters.q || !!filters.nhom || filters.ra || filters.kn
   const soTrang = Math.max(1, Math.ceil(counts.total / PAGE_SIZE))
   const tu = counts.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const den = Math.min(page * PAGE_SIZE, counts.total)
@@ -147,8 +175,20 @@ export function VatTuScreen({
             value: String(counts.needsReview),
             tone: counts.needsReview > 0 ? 'warn' : 'neutral',
           },
+          {
+            label: 'Chưa có nhóm con',
+            value: counts.noSub.toLocaleString('vi-VN'),
+            tone: counts.noSub > 0 ? 'warn' : 'neutral',
+          },
           { label: 'Đang hiện', value: `${tu}–${den}` },
         ]}
+        actions={
+          canEdit && chon.size > 0 ? (
+            <Btn icon="sau" primary onClick={() => setChuyen(true)}>
+              Chuyển {chon.size} mã đã chọn…
+            </Btn>
+          ) : undefined
+        }
       />
 
       <FilterBar>
@@ -175,10 +215,17 @@ export function VatTuScreen({
         >
           Chờ Kho rà
         </Chip>
+        <Chip
+          on={filters.kn}
+          count={counts.noSub}
+          onClick={() => doiLoc({ kn: filters.kn ? '' : '1', trang: '1' })}
+        >
+          Chưa có nhóm con
+        </Chip>
         {dangLoc && (
           <Btn
             icon="boLoc"
-            onClick={() => doiLoc({ q: '', nhom: '', ra: '', trang: '1' })}
+            onClick={() => doiLoc({ q: '', nhom: '', ra: '', kn: '', trang: '1' })}
           >
             Bỏ lọc
           </Btn>
@@ -197,7 +244,7 @@ export function VatTuScreen({
             <Btn
               icon="boLoc"
               primary
-              onClick={() => doiLoc({ q: '', nhom: '', ra: '', trang: '1' })}
+              onClick={() => doiLoc({ q: '', nhom: '', ra: '', kn: '', trang: '1' })}
             >
               Bỏ lọc, về trang 1
             </Btn>
@@ -206,6 +253,17 @@ export function VatTuScreen({
       ) : (
         <Table>
           <THead pinFirst>
+            {canEdit && (
+              <th style={{ width: 36 }}>
+                <Tick
+                  checked={tatCa}
+                  label={`Chọn cả ${rows.length} mã trên trang`}
+                  onChange={(on) =>
+                    setChon(on ? new Set(rows.map((r) => r.id)) : new Set())
+                  }
+                />
+              </th>
+            )}
             <th>Mã</th>
             <th>Tên vật tư</th>
             <th>Nhóm con</th>
@@ -215,7 +273,16 @@ export function VatTuScreen({
           </THead>
           <tbody>
             {rows.map((r) => (
-              <Row key={r.id}>
+              <Row key={r.id} selected={chon.has(r.id)}>
+                {canEdit && (
+                  <Cell>
+                    <Tick
+                      checked={chon.has(r.id)}
+                      label={`Chọn ${r.code}`}
+                      onChange={(on) => lat(r.id, on)}
+                    />
+                  </Cell>
+                )}
                 <Cell pin>
                   {canEdit ? (
                     <Code
@@ -280,7 +347,7 @@ export function VatTuScreen({
           </tbody>
           <TFoot
             label={
-              <td colSpan={4}>
+              <td colSpan={canEdit ? 5 : 4}>
                 Trang {page}/{soTrang} · {tu}–{den} trong{' '}
                 {counts.total.toLocaleString('vi-VN')} mã
               </td>
@@ -316,10 +383,24 @@ export function VatTuScreen({
             : dangLoc
               ? 'Khung nhìn: đang lọc'
               : 'Khung nhìn: tất cả',
-          canEdit ? 'Bấm mã để sửa vật tư' : 'Chỉ xem — sửa vật tư do phòng Cung ứng / Kho',
+          canEdit
+            ? 'Bấm mã để sửa vật tư'
+            : 'Chỉ xem — sửa vật tư do phòng Cung ứng / Kho',
         ]}
         right={`${tu}–${den} / ${counts.total.toLocaleString('vi-VN')}`}
       />
+      {chuyen && (
+        <ChuyenNhomSheet
+          items={rows.filter((r) => chon.has(r.id))}
+          groups={tax.groups.map((g) => g.name)}
+          onClose={() => setChuyen(false)}
+          onDone={() => {
+            setChuyen(false)
+            setChon(new Set())
+            router.refresh()
+          }}
+        />
+      )}
       {sua && (
         <SuaVatTuSheet
           key={sua}

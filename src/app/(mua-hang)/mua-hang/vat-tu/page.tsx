@@ -40,7 +40,13 @@ export const metadata = { title: 'Mua hàng · Vật tư' }
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; nhom?: string; ra?: string; trang?: string }>
+  searchParams: Promise<{
+    q?: string
+    nhom?: string
+    ra?: string
+    kn?: string
+    trang?: string
+  }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
@@ -48,6 +54,8 @@ export default async function Page({
   const q = sp.q?.trim() || undefined
   const group = sp.nhom?.trim() || undefined
   const review = sp.ra === '1'
+  // Chưa có nhóm con — rổ việc chia nhóm (29/09/2026).
+  const noSub = sp.kn === '1'
   const page = Math.max(1, Number(sp.trang) || 1)
 
   const [{ rows }, counts, tax, canEdit, { rows: sups }] = await Promise.all([
@@ -55,6 +63,7 @@ export default async function Page({
       q,
       group_name: group,
       needs_review: review ? true : undefined,
+      no_sub: noSub || undefined,
       page,
       page_size: PAGE_SIZE,
       active_only: false,
@@ -65,6 +74,7 @@ export default async function Page({
       q,
       group_name: group,
       needs_review: review ? true : undefined,
+      no_sub: noSub || undefined,
     }),
     materialTaxonomy(),
     // Đúng quyền service kiểm khi lưu — nút không hứa điều service từ chối.
@@ -92,9 +102,12 @@ export default async function Page({
       tax={tax}
       suppliers={sups
         .filter((x) => !x.is_carrier)
-        .map((x) => ({ value: x.id, label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name }))}
+        .map((x) => ({
+          value: x.id,
+          label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name,
+        }))}
       page={page}
-      filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', ra: review }}
+      filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', ra: review, kn: noSub }}
     />
   )
 }

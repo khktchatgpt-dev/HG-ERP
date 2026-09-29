@@ -169,6 +169,7 @@ export const materialsService = {
       /** Hai rổ việc của màn danh mục bản Kho (Bước 4). */
       no_min_stock?: boolean
       no_shelf?: boolean
+      no_sub?: boolean
       page: number
       page_size: number
     },
@@ -181,6 +182,7 @@ export const materialsService = {
       needs_review: opts.needs_review,
       no_min_stock: opts.no_min_stock,
       no_shelf: opts.no_shelf,
+      no_sub: opts.no_sub,
       page: opts.page,
       page_size: opts.page_size,
     })
@@ -189,7 +191,7 @@ export const materialsService = {
   /** Số liệu StatsBar — đếm ở DB theo bộ lọc, không cộng từ trang đang xem. */
   async counts(
     user: User,
-    opts: { q?: string; group_name?: string; needs_review?: boolean },
+    opts: { q?: string; group_name?: string; needs_review?: boolean; no_sub?: boolean },
   ) {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
     return materialsRepo.counts(opts)
