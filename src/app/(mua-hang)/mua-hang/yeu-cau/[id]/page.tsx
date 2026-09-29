@@ -3,6 +3,7 @@ import { fileImageSrcMap } from '@/server/file-image'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { buildLsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
+import { loadLsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import { todayVn } from '@/lib/date-vn'
 import { LenhScreen } from './LenhScreen'
 
@@ -33,13 +34,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
  *   1. còn thiếu mấy mã, là những mã nào   → dải độ phủ + danh sách hụt
  *   2. đã đặt những đơn nào, đơn nào vướng → bảng đơn của lệnh
  */
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ xem?: string; nhap?: string }>
+}) {
+  const [{ id }, sp] = await Promise.all([params, searchParams])
+  const xem = sp.xem === 'vat-tu' ? 'vat-tu' : 'don'
   const user = await authService.requirePageUser()
   const today = todayVn()
-  const [detail, supplyStaff] = await Promise.all([
+  const [detail, supplyStaff, bangKe] = await Promise.all([
     buildLsxSupplyDetail(user, id, today),
     isSupplyStaff(user),
+    // Bảng kê (29/09/2026) chỉ nạp khi xem theo vật tư; `?nhap=1` cộng định mức nháp.
+    xem === 'vat-tu'
+      ? loadLsxBangKe(user, id, today, sp.nhap === '1').catch(() => null)
+      : null,
   ])
   if (!detail) notFound()
   /*
@@ -56,6 +68,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       today={today}
       imageUrls={imageUrls}
       canEdit={user.role === 'admin' || supplyStaff}
+      xem={xem}
+      bangKe={bangKe}
     />
   )
 }

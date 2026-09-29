@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
 import type { LsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 import { useLocalPref } from '@/lib/use-local-pref'
@@ -26,7 +27,10 @@ import {
   Tag,
   showMoney,
   showNum,
+  ScopeSwitch,
 } from '@/components/kit'
+import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
+import { BangKe } from './bang-ke'
 
 const ngay = (iso: string | null) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
@@ -283,12 +287,19 @@ export function LenhScreen({
   today,
   imageUrls,
   canEdit,
+  xem,
+  bangKe,
 }: {
   lsx: LsxSupplyDetail
   today: string
   imageUrls: Record<string, string>
   canEdit: boolean
+  /** Chế độ bảng dưới: đơn mua của lệnh, hay bảng kê gộp theo mã (29/09/2026). */
+  xem: 'don' | 'vat-tu'
+  /** Chỉ nạp khi `xem = vat-tu` — bảng kê nặng, không bắt màn lệnh thường chờ nó. */
+  bangKe: LsxBangKe | null
 }) {
+  const router = useRouter()
   const { coverage: cv } = lsx
   const moc = lsx.materials_due_at ?? lsx.ship_date
   const con = conLai(moc, today)
@@ -427,13 +438,17 @@ export function LenhScreen({
         />
       </MetricStrip>
 
-      <SanPham
-        products={lsx.products}
-        imageUrls={imageUrls}
-        coDonKhach={lsx.order_codes.length > 0}
-      />
+      {/* Xem theo vật tư: khối SP + dòng "còn phải đặt" nhường chỗ cho bảng kê (đo
+          1280×800: còn 1–2 dòng) — SP đã có trong hộp "Xem N SP" của bảng kê. */}
+      {xem !== 'vat-tu' && (
+        <SanPham
+          products={lsx.products}
+          imageUrls={imageUrls}
+          coDonKhach={lsx.order_codes.length > 0}
+        />
+      )}
 
-      {cv.missing > 0 && cv.missing_top.length > 0 && (
+      {xem !== 'vat-tu' && cv.missing > 0 && cv.missing_top.length > 0 && (
         <div className="text-k-sm shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
           <b className="text-[var(--ink)]">Còn phải đặt:</b>{' '}
           {cv.missing_top.map((m, i) => (
@@ -455,7 +470,36 @@ export function LenhScreen({
         </div>
       )}
 
-      {lsx.pos.length === 0 ? (
+      <div className="flex shrink-0 items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
+        <ScopeSwitch
+          label="Xem theo"
+          value={xem}
+          onChange={(v) =>
+            router.push(
+              `/mua-hang/yeu-cau/${lsx.id}${v === 'vat-tu' ? '?xem=vat-tu' : ''}`,
+              { scroll: false },
+            )
+          }
+          options={[
+            {
+              value: 'don',
+              label: 'Đơn mua',
+              count: lsx.pos.length,
+              hint: 'Các đơn mua của lệnh',
+            },
+            {
+              value: 'vat-tu',
+              label: 'Theo vật tư',
+              count: bangKe?.rows.length,
+              hint: 'Bảng kê: gộp dòng các đơn theo mã vật tư',
+            },
+          ]}
+        />
+      </div>
+
+      {xem === 'vat-tu' && bangKe ? (
+        <BangKe bk={bangKe} canEdit={canEdit} />
+      ) : lsx.pos.length === 0 ? (
         <Empty
           headline="Lệnh này chưa có đơn mua nào"
           reason={
@@ -590,6 +634,8 @@ export function LenhScreen({
           <TFoot
             label={<td colSpan={5}>Cộng {lsx.pos.length} đơn của lệnh</td>}
             cells={<td className="num">{tienText.join(' · ')}</td>}
+            // 5 + 1 + 1 = 7 cột như THead (mặc định caveat chiếm 2 → lệch, kit báo 29/09).
+            caveatSpan={1}
             caveat={
               lsx.pos.some((p) => p.unpriced_lines > 0)
                 ? 'Chưa gồm dòng chưa có giá và đơn đã huỷ — con số trên là TẠM TÍNH, đừng dùng để duyệt chi.'
