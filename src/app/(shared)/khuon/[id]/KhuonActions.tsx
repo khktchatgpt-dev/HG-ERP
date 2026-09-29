@@ -17,7 +17,7 @@ import { Button } from '@/components/shadcn/button'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import type { DieRow, DieSpec } from '@/modules/dept/technical/dies.repo'
-import { KhuonFormDialog } from '../_components/KhuonFormDialog'
+import { KhuonFormDialog, type DieRef } from '../_components/KhuonFormDialog'
 
 /**
  * Hàng nút SỬA / XOÁ trên hồ sơ khuôn.
@@ -34,10 +34,18 @@ import { KhuonFormDialog } from '../_components/KhuonFormDialog'
  */
 export function KhuonActions({
   die,
+  canRemove,
+  imageUrl,
+  existing,
   holderOptions,
   groupOptions,
 }: {
   die: DieRow & DieSpec
+  /** Cung ứng sửa được nhưng không xoá (`technical.die.remove` chỉ Kỹ thuật). */
+  canRemove: boolean
+  /** Ảnh mặt cắt đang dùng — form sửa bày ra để đổi / bỏ ngay trong hộp. */
+  imageUrl: string | null
+  existing: DieRef[]
   holderOptions: string[]
   groupOptions: string[]
 }) {
@@ -67,15 +75,19 @@ export function KhuonActions({
       <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
         <Pencil /> Sửa hồ sơ
       </Button>
-      <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-        <Trash2 /> Xoá
-      </Button>
+      {canRemove && (
+        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+          <Trash2 /> Xoá
+        </Button>
+      )}
 
       {editing && (
         <KhuonFormDialog
           open
           onOpenChange={setEditing}
           die={die}
+          imageUrl={imageUrl}
+          existing={existing}
           holderOptions={holderOptions}
           groupOptions={groupOptions}
         />

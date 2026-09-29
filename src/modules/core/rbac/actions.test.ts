@@ -179,3 +179,40 @@ describe('canDo — quản lý nhóm vật tư: Cung ứng + Kho, không cần a
     expect(canDo(byKey(KEY), sales)).toBe(false)
   })
 })
+
+/**
+ * Khuôn nhôm (29/09/2026): user chốt Cung ứng được THÊM / SỬA khuôn (kể cả ảnh
+ * mặt cắt + nhật ký) cạnh Kỹ thuật và Giám đốc. XOÁ vẫn chỉ Kỹ thuật — Cung ứng
+ * gỡ khuôn bằng tình trạng "Đã bỏ", không xoá mất nhật ký.
+ */
+describe('canDo — khuôn nhôm: Kỹ thuật + GĐ + Cung ứng sửa, chỉ Kỹ thuật xoá', () => {
+  const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
+  const technical = ctxOf(['technical.member', 'technical.edit', 'technical.bom.edit'])
+  const director = ctxOf(['technical.edit', 'technical.bom.edit'])
+  const supply = ctxOf(['supply.member', 'warehouse.material.create'])
+  const supplyLead = ctxOf(['supply.member', 'supply.lead'])
+  const production = ctxOf(['production.member', 'production.progress.track'])
+  const warehouse = ctxOf(['warehouse.member', 'warehouse.edit'])
+  const WRITE = ['technical.die.create', 'technical.die.update']
+
+  it('Kỹ thuật, Giám đốc, NV + trưởng phòng Cung ứng thêm/sửa được khuôn', () => {
+    for (const c of [technical, director, supply, supplyLead]) {
+      expect(WRITE.filter((k) => !canDo(byKey(k), c))).toEqual([])
+    }
+  })
+
+  it('Sản xuất, Kho chỉ xem', () => {
+    for (const c of [production, warehouse]) {
+      expect(canDo(byKey('technical.die.view'), c)).toBe(true)
+      expect(WRITE.filter((k) => canDo(byKey(k), c))).toEqual([])
+    }
+  })
+
+  it('XOÁ chỉ Kỹ thuật (+ GĐ) — Cung ứng không xoá', () => {
+    expect(canDo(byKey('technical.die.remove'), technical)).toBe(true)
+    expect(canDo(byKey('technical.die.remove'), director)).toBe(true)
+    expect(canDo(byKey('technical.die.remove'), supply)).toBe(false)
+    expect(canDo(byKey('technical.die.remove'), supplyLead)).toBe(false)
+  })
+})

@@ -34,6 +34,15 @@ export async function canEditDies(user: User): Promise<boolean> {
   return canAction(user, 'technical.die.update')
 }
 
+/**
+ * Cờ XOÁ tách khỏi cờ sửa: Cung ứng sửa được nhưng không xoá (xem
+ * `technical.die.remove`). Không tách thì nút Xoá hiện cho họ rồi bấm vào mới
+ * ăn lỗi "Không có quyền".
+ */
+export async function canRemoveDies(user: User): Promise<boolean> {
+  return canAction(user, 'technical.die.remove')
+}
+
 /** Trạng thái mới → loại sự kiện tương ứng. `null` = không đáng ghi riêng. */
 const STATUS_EVENT: Record<DieRow['status'], DieEventType | null> = {
   broken: 'broken',
