@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useColSpanGuard } from './Table'
 import { footRuns, SortHead, sortAria, type KitEngine } from './TableEngine'
 import { Ico, type IcoName } from './Icon'
+import { useCommitHeight } from './use-commit-height'
 
 /**
  * Ghép class. Dùng HÀM chứ không phải chuỗi mẫu `${cond ? ' x' : ''}`.
@@ -1645,17 +1646,16 @@ export function CommitBar({
     CÂU CHẶN LƯU (B7½, 24/09/2026) — hai lỗi B7 ghi ở trang `commit-bar`:
 
     1. Không `onGoBlocked` mà vẫn dựng `<button>`: nút bấm không làm gì, dính
-       thật ở 3 màn (nhập hoá đơn NCC, hai màn mẫu Khuôn F). Nay thiếu hàm thì
-       chỉ là chữ.
+       thật ở 3 màn (nhập hoá đơn NCC, hai màn mẫu Khuôn F). Nay thiếu hàm thì chỉ là chữ.
     2. Câu đổi mà trình đọc không báo: sửa xong ô NCC, câu chuyển sang "dòng 3
        thiếu đơn giá" trong im lặng. Nay câu nằm trong vùng `status`. Vùng đó
        LUÔN có mặt, kể cả khi lưu được — vùng live sinh ra cùng lúc với nội dung
        thì phần lớn trình đọc không đọc.
-
     Mũi tên → là trang trí, `aria-hidden` để tên nút là đúng câu chặn.
   */
+  const ref = useCommitHeight<HTMLDivElement>() // toast đứng TRÊN thanh (29/09/2026)
   return (
-    <div className="k-commit">
+    <div ref={ref} className="k-commit">
       {totals.map((t) => (
         <span key={t.label} className="k-commit-t">
           {t.label} <b>{t.value}</b>
