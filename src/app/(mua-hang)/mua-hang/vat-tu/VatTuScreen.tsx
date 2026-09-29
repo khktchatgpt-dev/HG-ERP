@@ -24,6 +24,8 @@ import {
   Tag,
   showMoney,
 } from '@/components/kit'
+import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
+import { SuaVatTuSheet } from './sua-vat-tu'
 
 export type VatTuRow = {
   id: string
@@ -44,12 +46,20 @@ export function VatTuScreen({
   groups,
   page,
   filters,
+  canEdit,
+  tax,
+  suppliers,
 }: {
   rows: VatTuRow[]
   counts: { total: number; active: number; noShelf: number; needsReview: number }
   groups: string[]
   page: number
   filters: { q: string; nhom: string; ra: boolean }
+  /** Quyền `warehouse.material.update_purchasing` — đúng quyền service kiểm khi lưu. */
+  canEdit: boolean
+  tax: MaterialTaxonomy
+  /** NCC cho ô "NCC mặc định". */
+  suppliers: { value: string; label: string }[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -90,6 +100,27 @@ export function VatTuScreen({
       else p.set(k, v)
     }
     batDau(() => router.push(`${pathname}?${p.toString()}`, { scroll: false }))
+  }
+
+  /*
+    PANEL SỬA nằm trên URL (`?sua=<id>`) — màn khác (soạn đơn, hồ sơ NCC) dẫn
+    thẳng tới được, và Back của trình duyệt đóng panel như người dùng chờ đợi.
+  */
+  // Đóng NGAY ở client: đợi router.push chạy lại trang 13k mã mới đóng thì
+  // panel treo cả giây sau khi bấm Thôi (đo 29/09).
+  const [dong, setDong] = useState<string | null>(null)
+  const suaUrl = canEdit ? params.get('sua') : null
+  const sua = suaUrl && suaUrl !== dong ? suaUrl : null
+  // URL đã bỏ `sua` → quên mốc đóng, để bấm lại đúng mã đó vẫn mở được.
+  if (!suaUrl && dong) setDong(null)
+  const dongPanel = () => {
+    setDong(suaUrl)
+    doiLoc({ sua: '' })
+  }
+  const suaHref = (id: string) => {
+    const p = new URLSearchParams(params.toString())
+    p.set('sua', id)
+    return `${pathname}?${p.toString()}`
   }
 
   const dangLoc = !!filters.q || !!filters.nhom || filters.ra
@@ -186,7 +217,20 @@ export function VatTuScreen({
             {rows.map((r) => (
               <Row key={r.id}>
                 <Cell pin>
-                  <Code>{r.code}</Code>
+                  {canEdit ? (
+                    <Code
+                      as="a"
+                      href={suaHref(r.id)}
+                      title={`Sửa ${r.code}`}
+                      // Bấm lại ngay mã vừa đóng: URL chưa kịp bỏ `sua` nên mốc
+                      // "đã đóng" phải xoá ở đây, không chờ URL.
+                      onClick={() => setDong(null)}
+                    >
+                      {r.code}
+                    </Code>
+                  ) : (
+                    <Code>{r.code}</Code>
+                  )}
                 </Cell>
                 {/*
                   TÊN VẬT TƯ LÀ CỘT NGƯỜI TA TÌM, nên nó ăn phần dư và có sàn
@@ -272,9 +316,23 @@ export function VatTuScreen({
             : dangLoc
               ? 'Khung nhìn: đang lọc'
               : 'Khung nhìn: tất cả',
+          canEdit ? 'Bấm mã để sửa vật tư' : 'Chỉ xem — sửa vật tư do phòng Cung ứng / Kho',
         ]}
         right={`${tu}–${den} / ${counts.total.toLocaleString('vi-VN')}`}
       />
+      {sua && (
+        <SuaVatTuSheet
+          key={sua}
+          id={sua}
+          tax={tax}
+          suppliers={suppliers}
+          onClose={dongPanel}
+          onSaved={() => {
+            dongPanel()
+            router.refresh()
+          }}
+        />
+      )}
     </ScreenFrame>
   )
 }

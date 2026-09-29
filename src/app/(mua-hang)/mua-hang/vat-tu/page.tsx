@@ -1,4 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { suppliersService } from '@/modules/dept/supply/suppliers.service'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 // Hằng nằm ở module KHÔNG 'use client' — để trong `VatTuScreen` thì Next biến
@@ -48,7 +50,7 @@ export default async function Page({
   const review = sp.ra === '1'
   const page = Math.max(1, Number(sp.trang) || 1)
 
-  const [{ rows }, counts, tax] = await Promise.all([
+  const [{ rows }, counts, tax, canEdit, { rows: sups }] = await Promise.all([
     materialsService.list(user, {
       q,
       group_name: group,
@@ -65,6 +67,9 @@ export default async function Page({
       needs_review: review ? true : undefined,
     }),
     materialTaxonomy(),
+    // Đúng quyền service kiểm khi lưu — nút không hứa điều service từ chối.
+    canAction(user, 'warehouse.material.update_purchasing'),
+    suppliersService.list(user, { page: 1, page_size: 500 }),
   ])
 
   return (
@@ -83,6 +88,11 @@ export default async function Page({
       }))}
       counts={counts}
       groups={tax.groups.map((g) => g.name)}
+      canEdit={canEdit}
+      tax={tax}
+      suppliers={sups
+        .filter((x) => !x.is_carrier)
+        .map((x) => ({ value: x.id, label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name }))}
       page={page}
       filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', ra: review }}
     />
