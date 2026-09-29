@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { SuaVatTuSheet } from '@/app/(mua-hang)/mua-hang/vat-tu/sua-vat-tu'
 import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
@@ -33,6 +34,7 @@ import {
   GridBtn,
   HeadChip,
   HeadChips,
+  HeadField,
   HolderBar,
   Menu,
   Metric,
@@ -102,6 +104,8 @@ export type { AdjustmentLite, PoDoc, StatusLineLite } from './don-chung-tu.share
  */
 export function DonChungTuScreen(p: Props) {
   const d = useDonChungTu(p)
+  // Hàng phụ của đầu đơn — tự mở khi đơn đã có giá trị ở đó.
+  const [headMore, setHeadMore] = useState<boolean | null>(null)
   const {
     router,
     muc,
@@ -225,6 +229,7 @@ export function DonChungTuScreen(p: Props) {
     vuong,
     markDirty,
   } = d
+  const moreOpen = headMore ?? (header.poType === 'standalone' || header.extraLsxIds.length > 0 || !!header.contractNo || header.currency !== 'VND') // prettier-ignore
   const nccBody = <NhaCungCapTomTat d={d} />
   const notesPanel = <TraoDoiKhung d={d} />
   const blkChecks = <BangKiem d={d} />
@@ -742,81 +747,127 @@ export function DonChungTuScreen(p: Props) {
             )
           }
         >
-          {/* ══ 0. ĐẦU ĐƠN — ba nhóm, xếp CỘT, dùng lưới nhãn–giá trị của kit ══
-            Vì sao nó ở TRÊN lưới: gần như ô nào ở đây cũng là ĐIỀU KIỆN của lưới
-            — mẫu đơn quyết định lưới có cột nào, lệnh quyết định "Thêm còn
-            thiếu" lấy nhu cầu ở đâu, NCC quyết định tiền tệ và giá gợi ý, thuế
-            quyết định số ở chân lưới. Để dưới lưới thì gõ xong 20 dòng mới biết
-            chọn nhầm mẫu.
-
-            Vì sao KHÔNG còn là dải ngang tự chế (bản 15/09 đầu): mười ô nhãn-trên
-            điều-khiển-dưới, mỗi ô một bề rộng, thả vào `flex-wrap` thì không cột
-            nào thẳng cột nào và nhóm bị thụt bậc khi bẻ dòng — chủ dự án nói đúng
-            là "rất rối, không ngăn nắp gì cả". Kit đã có sẵn thứ cần: `.k-fields`
-            là lưới NHÃN–GIÁ TRỊ căn cột nghiêm ngặt, chính là "dày nhưng có kỷ
-            luật căn chỉnh" mà sổ thiết kế đòi. Dựng tay một cái thứ hai kém hơn
-            là tự chuốc.
-
-            Ba nhóm xếp thành BA CỘT (không xếp chồng như khối "Đầu đơn" cũ) nên
-            cao đúng 4 hàng, vẫn còn nguyên chỗ cho lưới. Mỗi nhóm bọc một lớp
-            `div` riêng để luật `.k-fgrp + .k-fgrp` không kẻ vạch ngang giữa các
-            cột. Nền TRẮNG — xem ghi chú ở `.k-gbar`: dưới nó là thanh công cụ rồi
-            tới hàng tiêu đề cột, ba dải cùng tô là một mảng xám câm. */}
+          {/* ══ 0. ĐẦU ĐƠN — HÀNG CHIP (29/09/2026, artboard 19 · khuôn F) ══
+            Ô nào ở đây cũng là ĐIỀU KIỆN của lưới (mẫu → cột, lệnh → nhu cầu,
+            NCC → tiền tệ + giá gợi ý, thuế → chân lưới) nên vẫn đứng TRÊN lưới.
+            Nhưng lưới 3 cột 13 ô cũ cao ~200px, 3 ô chỉ đọc, đẩy dòng hàng đầu
+            xuống y≈435 — nay co thành một hàng `HeadField` (ô gõ thật trong chip,
+            KHÔNG để ô nhập trong `HeadChip` vì đó là nút). Ô ít đổi (tiền tệ, VAT —
+            thanh chốt đáy đã bày cả hai) vào hàng phụ, tự mở khi đơn có giá trị ở đó. */}
           {drafting && (
-            <div className="grid grid-cols-1 gap-x-4 border-b border-[var(--line)] bg-[var(--surface-card)] md:grid-cols-2 xl:grid-cols-3">
-              <div>
-                <FieldGroup title="Đặt cho lệnh nào">
-                  <Field label="Mẫu đơn">
+            <div className="flex flex-col gap-1 border-b border-[var(--line)] bg-[var(--surface-card)]">
+              <HeadChips>
+                <HeadField
+                  label="Lệnh"
+                  need={header.poType === 'lsx'}
+                  empty={!header.lsxId}
+                  width={170}
+                >
+                  <Combobox
+                    label="Lệnh sản xuất"
+                    disabled={header.poType !== 'lsx'}
+                    value={header.lsxId}
+                    onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
+                    emptyLabel={header.poType === 'lsx' ? '— chọn lệnh —' : 'ngoài lệnh'}
+                    placeholder="Gõ số lệnh hoặc tên khách…"
+                    options={lsxOptions}
+                  />
+                </HeadField>
+                <HeadField label="NCC" need empty={!header.supplierId} width={190}>
+                  <Combobox
+                    label="Nhà cung cấp"
+                    value={header.supplierId}
+                    onChange={(v) => {
+                      const s = p.suppliers.find((x) => x.id === v)
+                      setHeader((h) => ({
+                        ...h,
+                        supplierId: v,
+                        // Tiền tệ theo NCC (gỗ báo USD) — trừ khi đã tự chọn.
+                        currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
+                      }))
+                      // Mẫu theo đơn gần nhất của NCC (kéo theo VAT / "giá gồm VAT"
+                      // của mẫu đó) — chỉ khi đơn mới và người soạn chưa tự chọn mẫu.
+                      const t = templateForSupplier({ supplierId: v, current: template, touched: dirty.current.template, isNew: !po, last: p.lastTemplates ?? {} }) // prettier-ignore
+                      if (t) {
+                        changeTemplate(t)
+                        toast.info(`Mẫu đơn: ${PO_TEMPLATE_META[t].label}`, 'Theo đơn gần nhất của NCC này — đổi được ở ô "Mẫu đơn".') // prettier-ignore
+                      }
+                    }}
+                    emptyLabel="— chọn NCC —"
+                    placeholder="Gõ tên nhà cung cấp…"
+                    options={supplierOptions}
+                  />
+                </HeadField>
+                <HeadField label="Mẫu" width={160}>
+                  <Pick
+                    label="Mẫu đơn"
+                    width={160}
+                    value={template}
+                    onChange={(t) => {
+                      markDirty('template')
+                      changeTemplate(t as PoTemplate)
+                    }}
+                    options={Object.values(PO_TEMPLATE_META).map((m) => ({ value: m.key, label: m.label }))} // prettier-ignore
+                  />
+                </HeadField>
+                <HeadField label="Hạn giao" width={110}>
+                  <DateInput
+                    label="Hạn giao"
+                    value={header.expectedAt}
+                    onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
+                  />
+                </HeadField>
+                <GridBtn
+                  onClick={() => setHeadMore(!moreOpen)}
+                  title="Tiền tệ · VAT · Giá gồm VAT · Loại đơn · Gộp lệnh · Số HĐ"
+                >
+                  {moreOpen
+                    ? 'Ẩn bớt'
+                    : `+ ${header.currency} · VAT ${header.vat === '' ? 0 : header.vat}% …`}
+                </GridBtn>
+              </HeadChips>
+              {supplierOpt?.can_order === false && (
+                <span
+                  className="k-t-stop text-k-label px-[var(--gutter)]"
+                  title={supplierOpt.lock_reason ?? undefined}
+                >
+                  NCC này đang khoá đặt hàng
+                  {supplierOpt.lock_reason ? ` — ${supplierOpt.lock_reason}` : ''}
+                </span>
+              )}
+              {moreOpen && (
+                <HeadChips>
+                  <HeadField label="Tiền" width={70}>
                     <Pick
-                      label="Mẫu đơn"
-                      value={template}
-                      onChange={(t) => {
-                        markDirty('template')
-                        changeTemplate(t as PoTemplate)
+                      label="Tiền tệ"
+                      value={header.currency}
+                      onChange={(v) => {
+                        markDirty('currency')
+                        setHeader((h) => ({ ...h, currency: v }))
                       }}
-                      options={Object.values(PO_TEMPLATE_META).map((m) => ({ value: m.key, label: m.label }))} // prettier-ignore
+                      options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
                     />
-                  </Field>
-                  <Field label="Loại đơn">
+                  </HeadField>
+                  <HeadField label="VAT %" width={48}>
+                    <NumInput
+                      aria-label="Thuế suất"
+                      value={numStr(header.vat)}
+                      onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
+                    />
+                  </HeadField>
+                  <HeadField label="Loại đơn" width={190}>
                     <Pick
                       label="Loại đơn"
                       value={header.poType}
-                      onChange={(v) =>
-                        setHeader((h) => ({
-                          ...h,
-                          poType: v as PoHeader['poType'],
-                          lsxId: v === 'standalone' ? '' : h.lsxId,
-                        }))
-                      }
+                      onChange={(v) => setHeader((h) => ({ ...h, poType: v as PoHeader['poType'], lsxId: v === 'standalone' ? '' : h.lsxId }))} // prettier-ignore
                       options={[
                         { value: 'lsx', label: 'Theo lệnh sản xuất' },
                         { value: 'standalone', label: 'Ngoài lệnh (mua bù tồn)' },
                       ]}
                     />
-                  </Field>
-                  <Field label="Lệnh sản xuất">
-                    {/* Ô bắt buộc mà còn trống thì NÓI NGAY TẠI Ô, không bắt người
-                      dùng đọc dải vàng đầu trang rồi tự đoán ô nào. Chữ nằm cùng
-                      hàng với ô chọn nên không tốn thêm chiều cao. */}
-                    <span className="flex items-center gap-2">
-                      <Combobox
-                        label="Lệnh sản xuất"
-                        disabled={header.poType !== 'lsx'}
-                        value={header.lsxId}
-                        onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
-                        emptyLabel="— chọn lệnh —"
-                        placeholder="Gõ số lệnh hoặc tên khách…"
-                        options={lsxOptions}
-                      />
-                      {header.poType === 'lsx' && !header.lsxId && (
-                        <span className="k-t-warn text-k-label shrink-0 whitespace-nowrap">
-                          bắt buộc
-                        </span>
-                      )}
-                    </span>
-                  </Field>
+                  </HeadField>
                   {header.poType === 'lsx' && (
-                    <Field label="Gộp thêm lệnh">
+                    <HeadField label="Gộp lệnh">
                       <span className="flex flex-wrap items-center gap-1">
                         {header.extraLsxIds.map((id) => (
                           <GridBtn
@@ -836,99 +887,17 @@ export function DonChungTuScreen(p: Props) {
                           options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
                         />
                       </span>
-                    </Field>
+                    </HeadField>
                   )}
-                </FieldGroup>
-              </div>
-
-              <div>
-                <FieldGroup title="Đặt của ai">
-                  <Field label="Nhà cung cấp">
-                    <span className="flex items-center gap-2">
-                      <Combobox
-                        label="Nhà cung cấp"
-                        value={header.supplierId}
-                        onChange={(v) => {
-                          const s = p.suppliers.find((x) => x.id === v)
-                          setHeader((h) => ({
-                            ...h,
-                            supplierId: v,
-                            // Tiền tệ theo NCC (gỗ báo USD) — trừ khi đã tự chọn.
-                            currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
-                          }))
-                          // Mẫu theo đơn gần nhất của NCC (kéo theo VAT / "giá gồm VAT"
-                          // của mẫu đó) — chỉ khi đơn mới và người soạn chưa tự chọn mẫu.
-                          const t = templateForSupplier({ supplierId: v, current: template, touched: dirty.current.template, isNew: !po, last: p.lastTemplates ?? {} }) // prettier-ignore
-                          if (t) {
-                            changeTemplate(t)
-                            toast.info(`Mẫu đơn: ${PO_TEMPLATE_META[t].label}`, 'Theo đơn gần nhất của NCC này — đổi được ở ô "Mẫu đơn".') // prettier-ignore
-                          }
-                        }}
-                        emptyLabel="— chọn NCC —"
-                        placeholder="Gõ tên nhà cung cấp…"
-                        options={supplierOptions}
-                      />
-                      {!header.supplierId && (
-                        <span className="k-t-warn text-k-label shrink-0 whitespace-nowrap">
-                          bắt buộc
-                        </span>
-                      )}
-                      {supplierOpt?.can_order === false && (
-                        <span
-                          className="k-t-stop text-k-label shrink-0 whitespace-nowrap"
-                          title={supplierOpt.lock_reason ?? undefined}
-                        >
-                          đang khoá đặt hàng
-                        </span>
-                      )}
-                    </span>
-                  </Field>
-                  <Field label="Số hợp đồng">
+                  <HeadField label="Số HĐ" width={120}>
                     <TextInput
                       label="Số hợp đồng"
                       value={header.contractNo}
                       onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
                       mono
                     />
-                  </Field>
-                  <Field label="Hạn giao">
-                    <DateInput
-                      label="Hạn giao"
-                      value={header.expectedAt}
-                      onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
-                    />
-                  </Field>
-                  <Field label="Thời gian giao của NCC" inherited>
-                    <span className="num">
-                      {supplierOpt?.lead_time_days != null
-                        ? `${supplierOpt.lead_time_days} ngày`
-                        : '—'}
-                    </span>
-                  </Field>
-                </FieldGroup>
-              </div>
-
-              <div>
-                <FieldGroup title="Tính tiền thế nào">
-                  <Field label="Tiền tệ">
-                    <Pick
-                      label="Tiền tệ"
-                      value={header.currency}
-                      onChange={(v) => {
-                        markDirty('currency')
-                        setHeader((h) => ({ ...h, currency: v }))
-                      }}
-                      options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
-                    />
-                  </Field>
-                  <Field label="Thuế suất %">
-                    <NumInput
-                      aria-label="Thuế suất"
-                      value={numStr(header.vat)}
-                      onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
-                    />
-                  </Field>
-                  <Field label="Giá đã gồm VAT">
+                  </HeadField>
+                  <HeadField label="Giá gồm VAT">
                     <Tick
                       label="Đơn giá đã gồm VAT"
                       checked={header.inclVat}
@@ -938,21 +907,27 @@ export function DonChungTuScreen(p: Props) {
                         setHeader((h) => ({ ...h, inclVat: v }))
                       }}
                     />
-                  </Field>
+                  </HeadField>
                   {meta.hasDiscount && (
-                    <Field label="Chiết khấu">
+                    <HeadField label="Chiết khấu" width={100}>
                       <NumInput
                         aria-label="Chiết khấu"
                         value={numStr(header.discount)}
                         onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
                       />
-                    </Field>
+                    </HeadField>
                   )}
-                  <Field label="Điều khoản TT của NCC" inherited>
-                    {supplierOpt?.payment_terms ?? '—'}
-                  </Field>
-                </FieldGroup>
-              </div>
+                  {supplierOpt && (
+                    <span className="text-k-label text-[var(--ink-3)]">
+                      NCC giao{' '}
+                      {supplierOpt.lead_time_days != null
+                        ? `${supplierOpt.lead_time_days} ngày`
+                        : '—'}{' '}
+                      · thanh toán {supplierOpt.payment_terms ?? '—'}
+                    </span>
+                  )}
+                </HeadChips>
+              )}
             </div>
           )}
 

@@ -7,6 +7,7 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
+import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
 import type { PoLineDto } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { DonChungTuScreen } from '../[id]/DonChungTuScreen'
@@ -47,16 +48,18 @@ export default async function Page({
   const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
   if (!canEdit) redirect('/mua-hang/don')
-  const [{ rows: suppliers }, lsxs, canApprove, company, tpl, src] = await Promise.all([
-    suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
-    productionRepo.listActive(),
-    canAction(user, 'supply.po.approve'),
-    settingsService.getAll(),
-    docTemplatesService.get('PO'),
-    sp.tu || sp['bo-sung']
-      ? posService.detail(user, (sp.tu ?? sp['bo-sung'])!).catch(() => null)
-      : Promise.resolve(null),
-  ])
+  const [{ rows: suppliers }, lsxs, canApprove, company, tpl, src, tax] =
+    await Promise.all([
+      suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
+      productionRepo.listActive(),
+      canAction(user, 'supply.po.approve'),
+      settingsService.getAll(),
+      docTemplatesService.get('PO'),
+      sp.tu || sp['bo-sung']
+        ? posService.detail(user, (sp.tu ?? sp['bo-sung'])!).catch(() => null)
+        : Promise.resolve(null),
+      materialTaxonomy(),
+    ])
   /*
     ĐƠN BỔ SUNG (0213): cùng NCC, cùng lệnh, cùng mẫu với đơn gốc — dòng chỉ còn
     phần ĐÃ CHỐT THIẾU (đặt − đã nhận của dòng đã chốt, sổ `supply_po_line_status`). Người mua đổi
@@ -110,6 +113,7 @@ export default async function Page({
       shipmentReceipts={{}}
       receiptBatches={[]}
       lastTemplates={await posRepo.lastTemplateBySupplier()}
+      groupTemplates={Object.fromEntries(tax.groups.flatMap((g) => (g.po_template ? [[g.name, g.po_template]] : [])))} // prettier-ignore
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null }))} // prettier-ignore
       lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
       perms={{ canEdit: true, canApprove, isSupply: true }}
