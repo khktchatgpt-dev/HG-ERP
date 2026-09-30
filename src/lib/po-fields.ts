@@ -517,6 +517,33 @@ export const PO_PRICE_SUFFIX_TEMPLATES: readonly PoTemplate[] = [
   'foam',
 ]
 
+/**
+ * ĐƠN VỊ CỦA ĐƠN GIÁ xuống TỪNG Ô — cho mẫu tính tiền theo khối lượng (nhôm,
+ * inox/sắt: `priceUnit` 'kg').
+ *
+ * Nhãn cột "Đơn giá (VND/kg)" chỉ đúng khi MỌI dòng tính theo kg. Dòng chọn giá
+ * theo ĐVT (price_basis 'unit' — Thép Visa báo 106.500 đ/CÂY, PO-2026-0073/0116)
+ * mà vẫn đứng dưới nhãn đó thì NCC đọc thành 106.500 đ/kg. Có ít nhất một dòng
+ * như vậy thì trả hàm hậu tố ("/kg", "/cây") để phiếu in/Excel đưa đơn vị vào
+ * từng ô; không thì null — nhãn cột giữ nguyên, phiếu các đơn cũ không đổi chữ nào.
+ */
+export function poPriceUnitPerLine(
+  priceUnit: string | null,
+  lines: readonly { price_basis: string | null | undefined }[],
+):
+  | ((l: {
+      price_basis: string | null | undefined
+      material_unit: string | null | undefined
+    }) => string)
+  | null {
+  if (!priceUnit || lines.every((l) => l.price_basis === 'unit2')) return null
+  return (l) => {
+    if (l.price_basis === 'unit2') return `/${priceUnit}`
+    const u = (l.material_unit ?? '').trim().toLowerCase()
+    return u ? `/${u}` : ''
+  }
+}
+
 /** Tra khai báo một cột theo key, trong phạm vi mẫu đơn. */
 export function poField(template: PoTemplate, key: string): PoField | undefined {
   return PO_FIELDS[template].find((f) => f.key === key)

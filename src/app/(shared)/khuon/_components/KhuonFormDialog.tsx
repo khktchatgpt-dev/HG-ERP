@@ -32,9 +32,10 @@ import {
 import { Textarea } from '@/components/shadcn/textarea'
 import { Spinner } from '@/components/erp/Spinner'
 import { useToast } from '@/components/ui/Toast'
-import { api, apiErrorText, ApiError } from '@/lib/api'
+import { api, apiErrorText } from '@/lib/api'
 import { uploadFileTracked } from '@/lib/upload'
 import type { DieRow, DieSpec, DieStatus } from '@/modules/dept/technical/dies.repo'
+import { errText } from '../_lib/err-text'
 import { DIE_STATUS_LABEL, kgPerM } from '../_lib/labels'
 import {
   DIE_IMAGE_TYPES,
@@ -121,15 +122,6 @@ function rejectReason(file: File): string | null {
   return file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
     ? `“${file.name}” là PDF, không phải ảnh. Mở bản vẽ, ${how}`
     : `“${file.name}” không phải ảnh PNG / JPG / WebP. Mở file ra, ${how}`
-}
-
-/**
- * `apiErrorText` chỉ đọc được lỗi API. Lỗi tải file (quá cỡ, sai kiểu, mất
- * mạng) là `Error` thường — lấy nguyên câu của nó, đừng thay bằng câu chung.
- */
-function errText(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) return apiErrorText(e, fallback)
-  return e instanceof Error && e.message ? e.message : fallback
 }
 
 export function KhuonFormDialog({

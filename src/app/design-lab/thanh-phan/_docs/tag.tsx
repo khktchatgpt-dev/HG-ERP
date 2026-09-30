@@ -9,9 +9,11 @@ export default function DocTag() {
       family="tag"
       summary={
         <>
-          Nhãn một từ về tình trạng của dòng, tô theo <b>vòng đời dữ liệu</b>: đỏ hỏng/quá
-          hạn, hổ phách đang chờ, lục xong, xám chưa có gì. Cố ý <b>không có</b> tone màu
-          hành động — thứ chỉ để đọc không được trông giống thứ bấm được.
+          Nhãn một từ về tình trạng của dòng, tô theo <b>vòng đời dữ liệu</b>: xám chưa đi
+          đâu, hổ phách đang chờ ai đó, xanh nhạt đã chốt đang chạy (<code>run</code>,
+          thêm 30/09/2026), lục xong, đỏ hỏng/huỷ — cùng năm nghĩa với{' '}
+          <code>StatusTrack</code>.<b>Không có</b> nền đặc màu hành động — thứ chỉ để đọc
+          không được trông giống thứ bấm được.
         </>
       }
       useWhen="một ô bảng hay đầu khối cần nói TÌNH TRẠNG bằng một hai từ: Quá hạn, Chờ duyệt, Đã nhập kho."
@@ -24,14 +26,15 @@ export default function DocTag() {
       }
       variants={[
         {
-          name: 'Bốn tone',
+          name: 'Năm tone',
           when: 'chọn theo vòng đời của dữ liệu, không theo độ “quan trọng” của màn.',
           demo: (
             <div className="flex flex-wrap items-center gap-2">
               <Tag>Nháp</Tag>
               <Tag tone="warn">Chờ duyệt</Tag>
-              <Tag tone="stop">Quá hạn 3 ngày</Tag>
+              <Tag tone="run">Đã gửi NCC</Tag>
               <Tag tone="done">Đã nhập kho</Tag>
+              <Tag tone="stop">Đã huỷ</Tag>
             </div>
           ),
         },
@@ -88,8 +91,8 @@ export default function DocTag() {
       }}
       doDont={[
         {
-          do: 'Tone theo vòng đời của DỮ LIỆU: quá hạn → stop, chờ → warn, xong → done.',
-          dont: 'Xin thêm tone màu hành động cho nhãn "nổi bật" — nhãn đọc sẽ trông như nút.',
+          do: 'Tone theo vòng đời của DỮ LIỆU: chờ ai đó → warn, đã chốt đang chạy → run, xong → done, hỏng/huỷ → stop.',
+          dont: 'Dùng run để làm nhãn "nổi bật" — nó là một chặng vòng đời, không phải độ quan trọng.',
           source: 'JSDoc của Tag (kit/Primitives.tsx); CLAUDE.md nguyên tắc 5',
         },
         {

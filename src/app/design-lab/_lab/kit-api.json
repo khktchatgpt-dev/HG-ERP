@@ -3038,10 +3038,10 @@
       },
       {
         "name": "tone",
-        "type": "Tone",
+        "type": "TagTone",
         "optional": true,
         "def": "'neutral'",
-        "doc": "Vòng đời của dòng: `stop` hỏng/quá hạn, `warn` đang chờ/sắp trễ, `done` xong, `neutral` chưa có gì đáng nói. Không có tone màu hành động — nhãn chỉ để đọc."
+        "doc": "`stop` hỏng/quá hạn · `warn` đang chờ ai đó · `run` đã chốt đang chạy · `done` xong · `neutral` chưa đi đâu. Chỉ để đọc."
       }
     ],
     "extends": []

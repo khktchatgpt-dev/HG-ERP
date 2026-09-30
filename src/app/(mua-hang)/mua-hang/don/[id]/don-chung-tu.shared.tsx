@@ -123,7 +123,10 @@ export type Props = {
     code: string
     kind: string
     qty_total: number
+    /** Ngày hàng về (ngày chứng từ) — xem `supplyRepo.docsByPo`. */
     at: string
+    /** Lúc Kho ghi phiếu vào máy. */
+    entered_at: string
   }[]
   stock: Record<string, number>
   position: { index: number; total: number } | null

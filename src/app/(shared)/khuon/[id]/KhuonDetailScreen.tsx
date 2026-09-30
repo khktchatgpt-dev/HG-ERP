@@ -16,6 +16,7 @@ import {
   GridBody,
   GridHead,
   GridRow,
+  Hint,
   MasterWarn,
   Metric,
   MetricStrip,
@@ -332,12 +333,14 @@ export function KhuonDetailScreen({
         >
           {events.length === 0 ? (
             <div className="px-[var(--gutter)] py-4 text-[var(--ink-2)]">
-              Chưa có sự kiện nào. Nhật ký mới chỉ nạp được 43 dòng sửa khuôn có sẵn trong
+              Chưa có sự kiện nào. Nhật ký mới chỉ nạp được 40 dòng sửa khuôn có sẵn trong
               file của Kỹ thuật; mọi lần mở / chuyển / báo hư trước đây đều nằm trong ô
               ghi chú nên không tách ra được.
+              {canEdit &&
+                ' NCC báo hư, gửi sửa hay chuyển khuôn thì bấm “Ghi nhật ký” ở hàng nút phía trên.'}
             </div>
           ) : (
-            <Grid minWidth={680}>
+            <Grid minWidth={840}>
               <GridHead>
                 <Th width={92}>Ngày</Th>
                 <Th width={130}>Việc</Th>
@@ -351,18 +354,28 @@ export function KhuonDetailScreen({
                   Chi phí
                 </Th>
                 <Th>Nội dung</Th>
+                {/* Cung ứng và Kỹ thuật cùng sửa khuôn (29/09/2026) — phải biết ai ghi. */}
+                <Th width={160}>Người ghi</Th>
               </GridHead>
               <GridBody>
                 {events.map((e) => (
                   <GridRow key={e.id}>
                     <Td>{viDate(e.event_date) || '—'}</Td>
-                    <Td>{DIE_EVENT_LABEL[e.event_type]}</Td>
+                    <Td>
+                      <Tag tone={e.event_type === 'broken' ? 'stop' : 'neutral'}>
+                        {DIE_EVENT_LABEL[e.event_type]}
+                      </Tag>
+                    </Td>
                     <Td num>{e.weight_before == null ? '' : kgPerM(e.weight_before)}</Td>
                     <Td num>{e.weight_after == null ? '' : kgPerM(e.weight_after)}</Td>
                     <Td num>{e.cost == null ? '' : money(e.cost)}</Td>
+                    <Td>{e.content ?? ''}</Td>
                     <Td>
-                      {e.content ?? ''}
-                      {e.source ? ` · nguồn: ${e.source}` : ''}
+                      {e.created_by_name ?? (
+                        // 40 dòng nạp từ file Kỹ thuật (13/09) không có người ghi —
+                        // nói nguồn thay vì để trống, trống thì tưởng ai đó giấu tên.
+                        <Hint>{e.source ? `nạp từ file · ${e.source}` : '—'}</Hint>
+                      )}
                     </Td>
                   </GridRow>
                 ))}

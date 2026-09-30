@@ -8,6 +8,7 @@ import { Input } from '@/components/shadcn/input'
 import { Spinner } from '@/components/erp/Spinner'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
+import { errText } from '../_lib/err-text'
 import { uploadFile } from '@/lib/upload'
 
 /**
@@ -55,7 +56,8 @@ export function KhuonImageActions({
       toast.success(`Đã cập nhật mặt cắt khuôn ${dieCode}`)
       router.refresh()
     } catch (e) {
-      toast.error(apiErrorText(e, 'Không tải được ảnh'))
+      // Lỗi tải file (quá cỡ, mất kết nối) là `Error` thường — `apiErrorText` nuốt mất.
+      toast.error(errText(e, 'Không tải được ảnh'))
     } finally {
       setBusy(false)
       if (inputRef.current) inputRef.current.value = ''

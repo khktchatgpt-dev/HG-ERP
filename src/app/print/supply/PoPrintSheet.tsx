@@ -13,6 +13,7 @@ import {
   PO_PRINT_QTY_LABEL,
   poField,
   poPriceSuffix,
+  poPriceUnitPerLine,
   type PoField,
 } from '@/lib/po-fields'
 import {
@@ -213,7 +214,12 @@ function columnsFor(
   t: PoTemplate,
   currency: string,
   /** Giá trị đầu đơn lặp xuống từng dòng (khung chuẩn 08/2026). */
-  ctx: { orderDate: Date; expectedAt: string | null },
+  ctx: {
+    orderDate: Date
+    expectedAt: string | null
+    /** Mẫu tính theo kg mà có dòng giá theo ĐVT — xem `poPriceUnitPerLine`. */
+    priceUnitOf?: ReturnType<typeof poPriceUnitPerLine>
+  },
 ): Col[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
@@ -263,7 +269,17 @@ function columnsFor(
               ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis)}`
               : '',
         }
-      : priceCol(currency, meta.priceUnit),
+      : ctx.priceUnitOf
+        ? {
+            // Đơn trộn giá/kg với giá/cây: đơn vị rời nhãn cột, xuống từng ô.
+            label: `Đơn giá (${currency})`,
+            align: 'right',
+            cell: (l) =>
+              l.unit_price != null
+                ? `${fmtMoney(l.unit_price, currency)}${ctx.priceUnitOf!(l)}`
+                : '',
+          }
+        : priceCol(currency, meta.priceUnit),
     '@amount': amountCol(currency),
     '@note': colNote,
   }
@@ -332,6 +348,7 @@ export function PoPrintSheet({
   const cols = columnsFor(template, po.currency, {
     orderDate: d,
     expectedAt: po.expected_at,
+    priceUnitOf: poPriceUnitPerLine(meta.priceUnit, lines),
   })
   const amountIdx = cols.findIndex((c) => c.isAmount)
 
@@ -531,12 +548,17 @@ export function PoPrintSheet({
       <PrintTerms items={terms} />
 
       <div className="mt-1 flex flex-col gap-0.5 text-[12px]">
-        <div>
-          <b>
-            Đơn giá trên {po.price_includes_vat ? 'ĐÃ bao gồm' : 'CHƯA bao gồm'} thuế VAT
-            {po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.
-          </b>
-        </div>
+        {/* Đơn không tính thuế (VAT 0) thì bỏ hẳn câu này — "CHƯA bao gồm thuế
+            VAT 0%" đọc như lỗi; dòng "Thuế GTGT: 0" trong khối tổng đã đủ nói. */}
+        {(po.vat_rate == null || Number(po.vat_rate) !== 0) && (
+          <div>
+            <b>
+              Đơn giá trên {po.price_includes_vat ? 'ĐÃ bao gồm' : 'CHƯA bao gồm'} thuế
+              VAT
+              {po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.
+            </b>
+          </div>
+        )}
         {/* Có lịch đợt thì lịch là cam kết — dòng "Hẹn giao" đơn lẻ chỉ in khi
             KHÔNG có đợt, in cả hai là hai nguồn ngày trên một tờ giấy. */}
         {(!shipments || shipments.length === 0) && po.expected_at && (

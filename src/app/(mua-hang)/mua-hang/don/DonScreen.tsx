@@ -3,8 +3,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  BarLabel,
-  BarSep,
   Btn,
   Cell,
   Chip,
@@ -17,7 +15,6 @@ import {
   Num,
   Pick,
   Row,
-  ScopeSwitch,
   ScreenFrame,
   ScreenHeader,
   SearchInput,
@@ -77,10 +74,12 @@ import {
  *  · Chọn cột + mật độ nhớ theo máy           — SAP personalization
  */
 
-const TONE: Record<string, 'stop' | 'warn' | 'done' | 'neutral'> = {
+// NĂM MÀU (30/09/2026, chủ dự án: "nên có màu sắc để phân loại trạng thái đơn"): `blue`
+// từng rơi vào xám vì Tag chỉ có bốn sắc — Nháp và Đã gửi NCC cùng màu. Nay → `run`.
+const TONE: Record<string, 'stop' | 'warn' | 'done' | 'neutral' | 'run'> = {
   gray: 'neutral',
   amber: 'warn',
-  blue: 'neutral',
+  blue: 'run',
   green: 'done',
   red: 'stop',
 }
@@ -604,55 +603,45 @@ export function DonScreen({
         }
       />
 
-      {/* Hàng 1: tìm + rổ trạng thái + hai ô gõ-tìm */}
+      {/*
+        HAI HÀNG LỌC (30/09/2026, chủ dự án: "sắp xếp hiển thị rất rối").
+
+        Trước đó BA hàng, mỗi trục một kiểu điều khiển: rổ trạng thái là ô
+        chọn, người phụ trách là dải công tắc, loại đơn là dải chip — cùng là
+        "lọc theo một trục" mà ba bộ mặt. Nay MỌI TRỤC LỌC là ô chọn trên MỘT
+        hàng, đọc từ trái sang là biết đang lọc gì: trạng thái · người · lệnh ·
+        nhà cung cấp · loại đơn. Hàng hai là hai chip "việc cần làm", gom, bỏ lọc.
+        Số trong ngoặc của mỗi ô đếm đúng tập ở đầu kia (xem `counts`,
+        `bucketPos`).
+      */}
       <FilterBar dense label="Tìm và lọc đơn mua">
         <SearchInput
           value={view.filter.q}
           onChange={(q) => patchFilter({ q })}
           placeholder="Số PO, NCC, vật tư, LSX, mã đơn hàng…"
-          width={260}
+          width={220}
         />
         <Pick
-          label="Rổ trạng thái"
+          label="Trạng thái"
           value={view.filter.bucket}
           onChange={(b) => patchFilter({ bucket: b as PoBucket })}
           options={[
+            { value: 'open', label: `Còn mở (${counts.open})` },
             { value: 'all', label: `Mọi trạng thái (${counts.all})` },
-            { value: 'open', label: `Còn mở — chưa về đủ (${counts.open})` },
             ...PO_BUCKETS.map((b) => ({
               value: b.key,
               label: `${b.label} (${counts[b.key]})`,
             })),
           ]}
         />
-        {/*
-          NCC VÀ LỆNH SX: GÕ TÌM, KHÔNG PHẢI CUỘN CHỌN.
-
-          Trước 14/09/2026 ô NCC là `<select>` trần với 164 lựa chọn (và còn
-          tăng) — không gõ tìm được, phải cuộn một danh sách dài để chọn một
-          cái tên mình đã biết sẵn. Lệnh SX thì trước đây chỉ GOM được chứ
-          không lọc được. Chủ dự án báo đúng chỗ này: "số lượng LSX và đơn đặt
-          NCC nhiều thì các phần lọc không đáp ứng được".
-
-          Chọn xong thì ô tìm nhường chỗ cho một chip mang đúng cái tên đang
-          lọc — nhìn là biết đang lọc gì, bấm là bỏ. Ô `<select>` không làm
-          được điều đó khi danh sách dài: nhãn bị cắt và không ai chắc mình
-          đang đứng ở đâu trong danh sách.
-        */}
-        <LocLookup
-          label="Nhà cung cấp"
-          placeholder="Gõ tên nhà cung cấp…"
-          selected={
-            view.filter.supplierId === 'all'
-              ? null
-              : (suppliers.find((s) => s.id === view.filter.supplierId)?.name ??
-                'NCC không còn trong danh mục')
-          }
-          onClear={() => patchFilter({ supplierId: 'all' })}
-          items={suppliers}
-          textOf={(s) => s.name}
-          keyOf={(s) => s.id}
-          onPick={(s) => patchFilter({ supplierId: s.id })}
+        <Pick
+          label="Người phụ trách"
+          value={personValue}
+          onChange={pickPerson}
+          options={personOptions.map((o) => ({
+            value: o.value,
+            label: `${o.label} (${o.count})`,
+          }))}
         />
         <Pick
           label="Lệnh sản xuất"
@@ -689,55 +678,49 @@ export function DonScreen({
               : []),
           ]}
         />
-        <span className="ml-auto flex items-center gap-2">
-          {/*
-            GOM THEO ở lại ngoài, SẮP XẾP thì không. Gom là câu hỏi nghiệp vụ —
-            "xem theo lệnh hay theo nhà cung cấp" đổi hẳn cách đọc bảng và
-            người mua đổi nó trong ngày; sắp xếp, chọn cột, mật độ là ba tuỳ
-            chỉnh HIỂN THỊ, đặt một lần rồi thôi. Ba thứ đó vào chung một hộp.
-          */}
-          <Pick
-            label="Gom theo"
-            value={view.groupBy}
-            onChange={(g) => setView({ ...view, groupBy: g as GroupBy })}
-            options={(Object.keys(GROUP_LABEL) as GroupBy[]).map((k) => ({ value: k, label: `Gom: ${GROUP_LABEL[k]}` }))} // prettier-ignore
-          />
-        </span>
-      </FilterBar>
-
-      {/* Hàng 2: người phụ trách — đơn của AI. */}
-      <FilterBar dense label="Người phụ trách">
-        <ScopeSwitch
-          label="Người phụ trách"
-          value={personValue}
-          onChange={pickPerson}
-          options={personOptions}
+        {/*
+          NCC: GÕ TÌM, KHÔNG PHẢI CUỘN CHỌN — 164 nhà cung cấp và còn tăng. Chọn
+          xong thì ô tìm nhường chỗ cho một chip mang đúng cái tên đang lọc.
+        */}
+        <LocLookup
+          label="Nhà cung cấp"
+          placeholder="Gõ tên nhà cung cấp…"
+          selected={
+            view.filter.supplierId === 'all'
+              ? null
+              : (suppliers.find((s) => s.id === view.filter.supplierId)?.name ??
+                'NCC không còn trong danh mục')
+          }
+          onClear={() => patchFilter({ supplierId: 'all' })}
+          items={suppliers}
+          textOf={(s) => s.name}
+          keyOf={(s) => s.id}
+          onPick={(s) => patchFilter({ supplierId: s.id })}
+        />
+        <Pick
+          label="Loại đơn"
+          value={view.filter.template}
+          onChange={(t) => patchFilter({ template: t })}
+          options={[
+            { value: 'all', label: `Mọi loại đơn (${bucketPos.length})` },
+            ...templateCounts.map(([t, n]) => ({
+              value: t,
+              label: `${poTemplateShort(t) ?? t} (${n})`,
+            })),
+            ...(view.filter.template !== 'all' &&
+            !templateCounts.some(([t]) => t === view.filter.template)
+              ? [
+                  {
+                    value: view.filter.template,
+                    label: `${poTemplateShort(view.filter.template) ?? view.filter.template} (0)`,
+                  },
+                ]
+              : []),
+          ]}
         />
       </FilterBar>
 
-      {/*
-        Hàng 3: loại đơn + chưa hẹn giao + bỏ lọc.
-
-        CHIP "QUÁ HẸN" ĐÃ BỎ (16/09/2026). Nó đếm `late + lateUnsent` gộp lại,
-        trong khi dải dữ kiện ngay trên tách làm hai con số — cùng một khái
-        niệm, hai chỗ, hai số. Nay hai thẻ ở trên bấm được và lọc đúng phía của
-        mình, nên chip này chỉ còn là đường thứ hai làm cùng một việc.
-      */}
-      <FilterBar dense label="Loại đơn và việc cần làm">
-        <BarLabel>Loại đơn</BarLabel>
-        {templateCounts.map(([t, n]) => (
-          <Chip
-            key={t}
-            on={view.filter.template === t}
-            count={n}
-            onClick={() =>
-              patchFilter({ template: view.filter.template === t ? 'all' : t })
-            }
-          >
-            {poTemplateShort(t) ?? t}
-          </Chip>
-        ))}
-        <BarSep />
+      <FilterBar dense label="Việc cần làm và cách xem">
         <Chip
           on={view.filter.noEta}
           count={inBucket.noEta}
@@ -777,12 +760,21 @@ export function DonScreen({
             Lọc theo ngày lập / loại đơn
           </Chip>
         )}
-        {/*
-          BỎ LỌC LUÔN CÓ MẶT, khoá lại khi không có gì để bỏ. Trước đây nó chỉ
-          hiện khi đang lọc, nên mỗi lần bật/tắt một chip là cả hàng bên phải
-          nhảy ngang một đoạn bằng bề rộng cái nút.
-        */}
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-2">
+          {/*
+            GOM THEO là cách xem, không phải bộ lọc: nó không giấu dòng nào. Mặc
+            định KHÔNG gom từ 30/09/2026 — lệnh SX là một cột (xem views.ts).
+          */}
+          <Pick
+            label="Gom theo"
+            value={view.groupBy}
+            onChange={(g) => setView({ ...view, groupBy: g as GroupBy })}
+            options={(Object.keys(GROUP_LABEL) as GroupBy[]).map((k) => ({ value: k, label: `Gom: ${GROUP_LABEL[k]}` }))} // prettier-ignore
+          />
+          {/*
+            BỎ LỌC LUÔN CÓ MẶT, khoá lại khi không có gì để bỏ — hiện/ẩn theo
+            trạng thái thì cả hàng bên phải nhảy ngang mỗi lần bật một chip.
+          */}
           <Btn
             icon="boLoc"
             disabled={!isFilterActive(view.filter)}
@@ -1008,41 +1000,43 @@ export function DonScreen({
                           {has('chuoi') && (
                             <Cell>
                               {p.lsx_code ? (
-                                <Code
-                                  as="button"
-                                  type="button"
-                                  title={`Chỉ xem đơn của lệnh ${p.lsx_code}`}
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation()
-                                    patchFilter({
-                                      lsxId: p.production_order_id ?? 'all',
-                                    })
-                                  }}
-                                >
-                                  {p.lsx_code}
-                                </Code>
-                              ) : null}
-                              {p.lsx_code && (p.extra_lsx?.length ?? 0) > 0 && (
-                                <>
-                                  {' '}
-                                  <Hint
-                                    title={`Gộp thêm: ${(p.extra_lsx ?? []).map((x) => x.code).join(', ')}`}
-                                  >
-                                    +{p.extra_lsx?.length}
-                                  </Hint>
-                                </>
+                                /*
+                                  MỖI LỆNH MỘT DÒNG (30/09/2026). Đơn gộp lệnh từng
+                                  ghi "+1" phải rê chuột mới biết lệnh nào; nay bày
+                                  hết, xếp dọc, lệnh nào cũng bấm được để lọc.
+                                */
+                                <span className="flex flex-col items-start gap-0.5">
+                                  {[
+                                    { id: p.production_order_id, code: p.lsx_code },
+                                    ...(p.extra_lsx ?? []),
+                                  ].map((x) => (
+                                    <Code
+                                      key={`${x.id}:${x.code}`}
+                                      as="button"
+                                      type="button"
+                                      title={`Chỉ xem đơn của lệnh ${x.code}`}
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation()
+                                        patchFilter({ lsxId: x.id ?? 'all' })
+                                      }}
+                                    >
+                                      {x.code}
+                                    </Code>
+                                  ))}
+                                </span>
+                              ) : (
+                                <Hint size="sm">Ngoài LSX</Hint>
                               )}
-                              {p.lsx_code ? null : <Hint size="sm">Ngoài LSX</Hint>}
                             </Cell>
                           )}
                           {/*
-                            Bề rộng CHẶN ở 160px: câu gợi ý của đơn nháp ("kiểm tra
-                            rồi gửi GĐ duyệt") từng nở cột lên 223px và đẩy bảng
-                            quá khung. Bị cắt thì rê chuột đọc đủ.
+                            CHỈ NHÃN TRẠNG THÁI (30/09/2026, chủ dự án: "cột trạng
+                            thái chỉ thể hiện trạng thái"). Câu "→ gửi NCC" từng
+                            đứng cạnh nhãn làm cột thành hai màu chữ trên mọi dòng;
+                            bước tiếp theo vẫn đọc được khi rê chuột.
                           */}
                           {has('trang_thai') && (
                             <Cell
-                              className="max-w-40"
                               title={[
                                 PO_STATUS_LABEL[p.status as PoStatus],
                                 PO_NEXT_HINT[p.status as PoStatus],
@@ -1053,12 +1047,6 @@ export function DonScreen({
                               <Tag tone={TONE[PO_STATUS_TONE[p.status as PoStatus]]}>
                                 {PO_STATUS_LABEL[p.status as PoStatus]}
                               </Tag>
-                              {PO_NEXT_HINT[p.status as PoStatus] && (
-                                <>
-                                  {' '}
-                                  <Hint>→ {PO_NEXT_HINT[p.status as PoStatus]}</Hint>
-                                </>
-                              )}
                             </Cell>
                           )}
                           {has('ve_kho') && (

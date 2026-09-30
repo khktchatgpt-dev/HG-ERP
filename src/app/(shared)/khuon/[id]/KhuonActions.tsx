@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, Trash2 } from 'lucide-react'
+import { NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,9 +18,10 @@ import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import type { DieRow, DieSpec } from '@/modules/dept/technical/dies.repo'
 import { KhuonFormDialog, type DieRef } from '../_components/KhuonFormDialog'
+import { KhuonEventDialog } from './KhuonEventDialog'
 
 /**
- * Hàng nút SỬA / XOÁ trên hồ sơ khuôn.
+ * Hàng nút GHI NHẬT KÝ / SỬA / XOÁ trên hồ sơ khuôn.
  *
  * Tách khỏi `KhuonDetailScreen` vì màn đó còn dựng bằng bộ kit còn form và hộp
  * xác nhận dùng theme v3 — nhốt phần v3 vào một tệp riêng thì mỗi tệp vẫn chỉ
@@ -52,6 +53,7 @@ export function KhuonActions({
   const router = useRouter()
   const toast = useToast()
   const [editing, setEditing] = useState(false)
+  const [logging, setLogging] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -72,6 +74,10 @@ export function KhuonActions({
 
   return (
     <div className="flex items-center gap-2">
+      {/* Ghi việc NCC báo (hư, sửa, chuyển khuôn) — cùng quyền với sửa hồ sơ. */}
+      <Button variant="outline" size="sm" onClick={() => setLogging(true)}>
+        <NotebookPen /> Ghi nhật ký
+      </Button>
       <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
         <Pencil /> Sửa hồ sơ
       </Button>
@@ -79,6 +85,16 @@ export function KhuonActions({
         <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
           <Trash2 /> Xoá
         </Button>
+      )}
+
+      {logging && (
+        <KhuonEventDialog
+          open
+          onOpenChange={setLogging}
+          die={die}
+          existing={existing}
+          holderOptions={holderOptions}
+        />
       )}
 
       {editing && (

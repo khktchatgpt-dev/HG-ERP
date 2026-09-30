@@ -10,6 +10,8 @@ import {
   type DieWriteFields,
 } from './dies.repo'
 import type { DieCreateInput, DieEventInput, DieUpdateInput } from './dies.schema'
+import { dieChangesPatch, dieEventChanges } from '@/lib/die-event-effect'
+import { vnTodayIso } from '@/lib/local-date'
 
 /**
  * Nghiệp vụ danh mục KHUÔN NHÔM (0190) — thêm / sửa / xoá + nhật ký đời khuôn.
@@ -107,6 +109,7 @@ export const diesService = {
     if (input.die_price != null) {
       await dieWriteRepo.insertEvent({
         die_id: id,
+        event_date: vnTodayIso(),
         event_type: 'opened',
         cost: input.die_price,
         to_holder: input.holder_name ?? null,
@@ -132,11 +135,16 @@ export const diesService = {
     if (Object.keys(patch).length === 0) return
     await dieWriteRepo.update(id, patch)
 
+    // Dòng tự đẻ mang NGÀY HÔM ĐÓ: để trống thì bảng hiện "—" và xếp nó xuống
+    // dưới cả những dòng năm 2024 (sắp theo ngày, trống xuống cuối).
+    const today = vnTodayIso()
+
     // ── Tự đẻ nhật ký cho ba thứ đáng ghi ────────────────────────────────
     if (input.status != null && input.status !== before.status) {
       const type = STATUS_EVENT[input.status] ?? 'note'
       await dieWriteRepo.insertEvent({
         die_id: id,
+        event_date: today,
         event_type: type,
         content: `Tình trạng: ${STATUS_LABEL[before.status]} → ${STATUS_LABEL[input.status]}`,
         created_by: user.id,
@@ -146,6 +154,7 @@ export const diesService = {
     if (input.holder_name !== undefined && input.holder_name !== before.holder_name) {
       await dieWriteRepo.insertEvent({
         die_id: id,
+        event_date: today,
         event_type: 'transferred',
         from_holder: before.holder_name,
         to_holder: input.holder_name ?? null,
@@ -157,6 +166,7 @@ export const diesService = {
     if (input.weight_per_m !== undefined && input.weight_per_m !== before.weight_per_m) {
       await dieWriteRepo.insertEvent({
         die_id: id,
+        event_date: today,
         event_type: 'modified',
         weight_before: before.weight_per_m,
         weight_after: input.weight_per_m ?? null,
@@ -222,17 +232,59 @@ export const diesService = {
     await dieWriteRepo.update(id, { image_file_id: fileId })
   },
 
-  /** Ghi một dòng nhật ký bằng tay — cho những việc hệ thống không tự thấy. */
+  /**
+   * Ghi một dòng nhật ký bằng tay — cho việc hệ thống không tự thấy (NCC báo
+   * hư, gửi đi sửa, chuyển khuôn sang nhà khác…). Ghi lùi ngày được.
+   *
+   * `apply` (mặc định bật, user chốt 29/09/2026) cập nhật luôn hồ sơ theo việc
+   * đó qua `dieEventChanges` — CÙNG hàm hộp thoại dùng để bày trước, nên thứ
+   * người dùng thấy trước khi bấm là đúng thứ được ghi.
+   *
+   * Chỉ ra MỘT dòng: ghi thẳng repo chứ không qua `update()`, vì `update()` tự
+   * đẻ dòng "Tình trạng: A → B" riêng — thêm dòng đó là nhật ký trùng. Đổi tình
+   * trạng thì câu đó nối vào nội dung của chính dòng này.
+   *
+   * Không sửa, không xoá (user chốt): ghi sai thì ghi thêm một dòng đính chính.
+   */
   async addEvent(user: User, id: string, input: DieEventInput): Promise<void> {
     await assertAction(user, 'technical.die.update')
     const die = await dieCatalogRepo.getById(id)
     if (!die) throw NotFound('Không thấy khuôn này')
+    if (input.related_die_id === id) {
+      throw BadRequest('Khuôn không thay được bằng chính nó')
+    }
+    // Mã thay thế đi vào NỘI DUNG — bảng nhật ký đọc được ngay, không phải tra id.
+    let replaceNote = ''
+    if (input.related_die_id) {
+      const other = await dieCatalogRepo.getById(input.related_die_id)
+      if (!other) throw BadRequest('Không thấy khuôn thay thế trong danh mục')
+      replaceNote = `Thay bằng ${other.code}`
+    }
+
+    const { apply, ...ev } = input
+    const changes = apply ? dieEventChanges(die, ev) : []
+    if (changes.length > 0) await dieWriteRepo.update(id, dieChangesPatch(changes))
+
+    const status = changes.find((c) => c.field === 'status')
+    const statusNote = status
+      ? `Tình trạng: ${STATUS_LABEL[status.from]} → ${STATUS_LABEL[status.to]}`
+      : ''
+
     await dieWriteRepo.insertEvent({
-      ...defined(input),
+      ...defined(ev),
       die_id: id,
-      // `event_type` là bắt buộc ở zod nên luôn có; nhắc lại tường minh để TS
-      // không phải suy từ `Partial<>` của `defined()`.
-      event_type: input.event_type,
+      event_type: ev.event_type,
+      // "Trước" để trống thì lấy số hồ sơ đang giữ ngay lúc ghi — người báo
+      // chuyển khuôn không phải gõ lại nơi giữ cũ.
+      from_holder:
+        ev.event_type === 'transferred'
+          ? (ev.from_holder ?? die.holder_name)
+          : ev.from_holder,
+      weight_before:
+        ev.event_type === 'modified'
+          ? (ev.weight_before ?? die.weight_per_m)
+          : ev.weight_before,
+      content: [ev.content, replaceNote, statusNote].filter(Boolean).join(' · ') || null,
       created_by: user.id,
     })
   },

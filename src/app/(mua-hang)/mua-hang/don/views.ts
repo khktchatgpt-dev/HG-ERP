@@ -29,7 +29,7 @@ import { fmtMoney } from '@/lib/po-line'
  */
 
 export type GroupBy = 'none' | 'lsx' | 'ncc' | 'trang_thai' | 'phu_trach' | 'tuan_hen'
-export type SortBy = 'moi_nhat' | 'hen_gan' | 'tien' | 'ma'
+export type SortBy = 'viec' | 'moi_nhat' | 'hen_gan' | 'tien' | 'ma'
 
 export const GROUP_LABEL: Record<GroupBy, string> = {
   none: 'Không gom',
@@ -41,6 +41,7 @@ export const GROUP_LABEL: Record<GroupBy, string> = {
 }
 
 export const SORT_LABEL: Record<SortBy, string> = {
+  viec: 'Việc cần làm trước',
   moi_nhat: 'Mới tạo trước',
   hen_gan: 'Hẹn giao gần trước',
   tien: 'Giá trị lớn trước',
@@ -63,7 +64,20 @@ const base = (over: Partial<PoFilterState>): PoFilterState => ({
 })
 
 /**
- * TRẠNG THÁI VÀO TRANG: đơn CÒN MỞ, gom theo lệnh sản xuất.
+ * TRẠNG THÁI VÀO TRANG: đơn CÒN MỞ, bảng PHẲNG (lệnh SX là một cột), NHÁP LÊN
+ * ĐẦU.
+ *
+ * KHÔNG GOM THEO LỆNH NỮA (30/09/2026, chủ dự án: "thay vì LSX nằm ngang cho
+ * thành 1 cột luôn"). Gom theo lệnh bày mỗi lệnh thành một hàng tiêu đề vắt
+ * ngang bảng, và đơn GỘP nhiều lệnh xuất hiện dưới MỌI lệnh nó mua hộ — cùng
+ * một mã đơn hai ba lần trên một màn, người đọc không biết mình có bao nhiêu
+ * đơn. Cột "Lệnh SX" nói cùng điều đó mà mỗi đơn đúng một dòng. Gom vẫn còn ở
+ * ô "Gom theo" cho ai cần.
+ *
+ * SẮP "VIỆC CẦN LÀM TRƯỚC" (30/09/2026, chủ dự án: "đơn nháp ưu tiên lên đầu"):
+ * nháp → chờ duyệt → đã duyệt chưa gửi → đang về → về đủ → đã huỷ, trong mỗi
+ * bậc mới tạo trước. Bảng phẳng mà sắp theo ngày tạo thì việc của mình lẫn
+ * giữa đơn đang chờ nhà cung cấp.
  *
  * RỔ "CÒN MỞ" LÀ MẶC ĐỊNH (27/09/2026, cá nhân hoá Cung ứng — chủ dự án chọn
  * "gọn hơn cho từng người"). Đo trên sổ thật: 43/87 đơn đã về đủ; ở phạm vi
@@ -83,8 +97,8 @@ const base = (over: Partial<PoFilterState>): PoFilterState => ({
  */
 export const DEFAULT_VIEW: ViewState = {
   filter: base({ bucket: 'open' }),
-  groupBy: 'lsx',
-  sortBy: 'moi_nhat',
+  groupBy: 'none',
+  sortBy: 'viec',
 }
 
 /**
@@ -137,7 +151,7 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
   return {
     filter: f,
     groupBy: (GROUPS.has(sp.gom ?? '') ? sp.gom : 'none') as GroupBy,
-    sortBy: (SORTS.has(sp.sap ?? '') ? sp.sap : 'moi_nhat') as SortBy,
+    sortBy: (SORTS.has(sp.sap ?? '') ? sp.sap : 'viec') as SortBy,
   }
 }
 
@@ -159,15 +173,38 @@ export function encodeView(s: ViewState): string {
   if (f.template !== 'all') p.set('loai_don', f.template)
   if (f.lsxDone) p.set('lenh_xong', '1')
   if (s.groupBy !== 'none') p.set('gom', s.groupBy)
-  if (s.sortBy !== 'moi_nhat') p.set('sap', s.sortBy)
+  if (s.sortBy !== 'viec') p.set('sap', s.sortBy)
   return p.toString()
 }
 
 /* ── SẮP XẾP ─────────────────────────────────────────────────────────── */
 
+/** Thứ tự vòng đời — dùng cho sắp "việc cần làm trước" và gom theo trạng thái. */
+const STATUS_ORDER: string[] = [
+  'draft',
+  'pending_approval',
+  'approved',
+  'ordered',
+  'confirmed',
+  'in_transit',
+  'partial',
+  'received',
+  'cancelled',
+]
+
 export function sortPos(pos: Po[], by: SortBy): Po[] {
   const arr = [...pos]
   switch (by) {
+    case 'viec':
+      // Bậc vòng đời trước (nháp lên đầu, đã đóng sổ xuống cuối), trong bậc thì
+      // mới tạo trước. Trạng thái lạ xếp sau cùng chứ không lên đầu.
+      return arr.sort((a, b) => {
+        const ra = STATUS_ORDER.indexOf(a.status)
+        const rb = STATUS_ORDER.indexOf(b.status)
+        const da = ra < 0 ? STATUS_ORDER.length : ra
+        const db = rb < 0 ? STATUS_ORDER.length : rb
+        return da - db || b.created_at.localeCompare(a.created_at)
+      })
     case 'hen_gan':
       // Chưa hẹn dồn xuống cuối — chúng không có chỗ trên trục thời gian.
       return arr.sort((a, b) =>
@@ -276,18 +313,6 @@ export function groupSimple(
       pos: g.pos,
     }))
 }
-
-const STATUS_ORDER: string[] = [
-  'draft',
-  'pending_approval',
-  'approved',
-  'ordered',
-  'confirmed',
-  'in_transit',
-  'partial',
-  'received',
-  'cancelled',
-]
 
 /**
  * MỌI TÊN THAM SỐ mà `encodeView` có thể sinh ra — suy từ chính nó.

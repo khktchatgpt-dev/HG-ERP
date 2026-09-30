@@ -28,28 +28,26 @@ const TONE_TEXT: Record<Tone, string> = {
   warn: 'text-[var(--warn)]',
   done: 'text-[var(--done)]',
 }
-const TONE_WASH: Record<Tone, string> = {
+/** Nhãn có thêm `run` = đã chốt, đang chạy (30/09/2026) — cùng nghĩa `TrackTone.run` của dải bước; nền `--act-wash` NHẠT nên vẫn không lẫn với nút. Thiếu nó thì Đã duyệt / Đã gửi NCC rơi vào xám chung với Nháp. */
+export type TagTone = Tone | 'run'
+const TONE_WASH: Record<TagTone, string> = {
   neutral: 'bg-[var(--surface-raised)] text-[var(--ink-2)]',
   stop: 'bg-[var(--stop-wash)] text-[var(--stop)]',
   warn: 'bg-[var(--warn-wash)] text-[var(--warn)]',
+  run: 'bg-[var(--act-wash)] text-[var(--act-text)]',
   done: 'bg-[var(--done-wash)] text-[var(--done)]',
 }
 
 /**
- * NHÃN — một từ về tình trạng của dòng.
- *
- * Không có tone 'primary': màu hành động không được dùng cho nhãn đọc, nếu
- * không thì cái bấm được và cái chỉ để đọc trông giống hệt nhau.
+ * NHÃN — một từ về tình trạng của dòng. Không có nền ĐẶC màu hành động: màu
+ * đặc chỉ dành cho thứ bấm được; `run` là nền nhạt, mang nghĩa vòng đời.
  */
 export function Tag({
   tone = 'neutral',
   children,
 }: {
-  /**
-   * Vòng đời của dòng: `stop` hỏng/quá hạn, `warn` đang chờ/sắp trễ, `done` xong,
-   * `neutral` chưa có gì đáng nói. Không có tone màu hành động — nhãn chỉ để đọc.
-   */
-  tone?: Tone
+  /** `stop` hỏng/quá hạn · `warn` đang chờ ai đó · `run` đã chốt đang chạy · `done` xong · `neutral` chưa đi đâu. Chỉ để đọc. */
+  tone?: TagTone
   /** Một từ hoặc cụm ngắn nói tình trạng ("Quá hạn", "Chờ duyệt"). Chữ phải tự đủ nghĩa — màu chỉ là phần phụ. */
   children: ReactNode
 }) {

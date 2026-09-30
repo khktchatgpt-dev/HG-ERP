@@ -8,6 +8,7 @@ import {
   PO_SHARED_FIELD_PREFILL,
   prefillsFromCatalog,
   poField,
+  poPriceUnitPerLine,
 } from './po-fields'
 
 /**
@@ -393,5 +394,23 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
           `${t}.${k} đã in — bỏ khỏi NOT_PRINTED`,
         ).toBe(false)
     }
+  })
+})
+
+describe('poPriceUnitPerLine — đơn vị đơn giá của mẫu tính theo kg', () => {
+  it('mọi dòng tính theo kg → null (nhãn cột "/kg" giữ nguyên, phiếu cũ không đổi)', () => {
+    expect(poPriceUnitPerLine('kg', [{ price_basis: 'unit2' }, { price_basis: 'unit2' }])).toBeNull()
+  })
+
+  it('mẫu không có đơn vị giá riêng → null', () => {
+    expect(poPriceUnitPerLine(null, [{ price_basis: 'unit' }])).toBeNull()
+  })
+
+  it('có dòng giá theo CÂY (Thép Visa PO-2026-0116) → hậu tố từng ô', () => {
+    const suffix = poPriceUnitPerLine('kg', [{ price_basis: 'unit' }, { price_basis: 'unit2' }])
+    expect(suffix).not.toBeNull()
+    expect(suffix!({ price_basis: 'unit', material_unit: 'Cây' })).toBe('/cây')
+    expect(suffix!({ price_basis: 'unit2', material_unit: 'Cây' })).toBe('/kg')
+    expect(suffix!({ price_basis: 'unit', material_unit: null })).toBe('')
   })
 })
