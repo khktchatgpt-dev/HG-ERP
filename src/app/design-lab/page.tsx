@@ -571,18 +571,15 @@ export default function DesignLabHome() {
             <li>
               <div>
                 <b>Không có mã màu Tailwind dựng sẵn và không có hex trong class.</b>
-                <em>
-                  Cổng ESLint <code>hg/no-hardcoded-color</code> chặn, nhưng 193 file nợ
-                  cũ đang ở mức cảnh báo — file mới thì là lỗi.
-                </em>
+                <em>Không còn cổng lint (gỡ 30/09/2026) — kiểm bằng mắt khi rà màn.</em>
               </div>
             </li>
             <li>
               <div>
                 <b>Không có thẻ thô: table, button, input, select, textarea.</b>
                 <em>
-                  Cổng <code>hg/no-raw-control</code>. Lưới nằm trong khối thì dùng{' '}
-                  <code>Grid</code>; màn toàn trang thì dùng <code>Table</code>.
+                  Lưới nằm trong khối thì dùng <code>Grid</code>; màn toàn trang thì dùng{' '}
+                  <code>Table</code>. Không còn cổng lint (gỡ 30/09/2026).
                 </em>
               </div>
             </li>
@@ -681,7 +678,7 @@ export default function DesignLabHome() {
                 <td>File nợ luật màu / thẻ thô</td>
                 <td className="num">193</td>
                 <td>
-                  Bánh cóc <code>ui-baseline.json</code>: danh sách chỉ được ngắn đi
+                  Bánh cóc <code>ui-baseline.json</code> đã gỡ 30/09/2026 — số đo lịch sử
                 </td>
               </tr>
             </tbody>

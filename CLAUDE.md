@@ -137,6 +137,10 @@ helper) `kebab-case`. Không đổi tên file cũ cho đều — rủi ro, khôn
 
 ## Frontend & UI conventions (admin/workspace)
 
+> **30/09/2026 — bộ luật lint canh giao diện đã GỠ** (xem mục "Luật lint riêng" bên
+> dưới). Mọi quy ước màu / cỡ chữ / thẻ thô / icon dưới đây là **hướng dẫn ưu tiên**, không
+> còn máy chặn. Màn mới cứ viết Tailwind / CSS trực tiếp khi kit không có thứ cần.
+
 ### HAI HỆ GIAO DIỆN ĐANG SỐNG SONG SONG — đọc trước khi sửa file `.tsx` nào
 
 |           | Bộ kit ERP (MỚI)                         | Theme v3 + ERP kit cũ                         |
@@ -280,68 +284,40 @@ ai biết đơn đang kẹt).
   `/design-lab/chup/<màn>` (màn thật + dữ liệu đóng băng `_du-lieu/*.json`) và sáu trang `/design-lab/mau-*`
   ở 1280×800, so với `e2e/__anh-chuan__/` — trần 20 điểm ảnh (1% từng để lọt cả một con số đổi). Sửa kit /
   màn có ảnh chuẩn thì chạy lệnh này; đổi hình CỐ Ý thì `npm run ui:shots:update` SAU KHI đã mở ảnh ra nhìn.
-- **Bánh cóc nợ UI** `src/test/ui-ratchet.test.ts`: tự tô màu token / style inline / màu cứng — chỉ được HẠ.
 - **BẪY `cn`**: tailwind-merge từng coi `text-k-*` là MÀU và xoá cỡ chữ khi đi cùng một lớp màu dạng biến token. Đã khai
   nhóm font-size ở `src/lib/utils.ts` — thêm bậc chữ kit mới thì khai vào đó (test `cn-kit-font.test.ts`).
 
-### Cổng đồng bộ giao diện (`eslint-rules/hg-ui.mjs`)
+### Luật lint riêng (`eslint-rules/hg-ui.mjs`) — CÒN MỘT, GỠ SÁU (30/09/2026)
 
-Hai luật ESLint riêng, chạy trên `src/app/**/*.tsx` + `src/components/**/*.tsx`:
+**Bộ luật canh GIAO DIỆN đã gỡ theo quyết định của chủ dự án**: `no-hardcoded-color`,
+`no-raw-control`, `no-arbitrary-size`, `no-arbitrary-space`, `kit-icon`,
+`no-dark-variant`, cùng bánh cóc `ui-baseline.json` + `npm run ui:baseline` và test
+`src/test/ui-ratchet.test.ts`. Lý do: chúng làm việc thiết kế và chỉnh sửa màn MỚI khó
+hơn cái lợi đồng bộ mang lại — mỗi ý tưởng giao diện phải đi qua kit → lint → bánh cóc
+→ ảnh chuẩn. **Token và kit vẫn là cách ưu tiên** (một màu hành động, ba màu vòng đời,
+thang chữ 13px…), nhưng nay là hướng dẫn, không phải hàng rào máy chặn: màn mới được
+viết Tailwind / CSS trực tiếp khi kit không có thứ mình cần, không phải sửa kit trước.
+Muốn bật lại thì lấy ở lịch sử git trước commit gỡ (file luật 501 dòng, test 20 ca).
 
-- `hg/no-hardcoded-color` — cấm palette Tailwind dựng sẵn (`bg-zinc-50`,
-  `text-emerald-600`, `dark:bg-zinc-950`…) và hex trong class (`text-[#2743c4]`).
-  Thông báo lỗi tự gợi ý token đúng theo NGỮ NGHĨA: đỏ→`--stop`, hổ
-  phách→`--warn`, lục→`--done`, lam→`--primary`, xám→`bg-muted`/`text-muted-foreground`.
-- `hg/no-raw-control` — cấm `<table> <button> <input> <select> <textarea>` thô,
-  chỉ ra đúng thành phần kit thay thế.
+Còn lại hai luật, đều thuộc KIẾN TRÚC MÃ chứ không phải thiết kế:
 
-Ba luật nữa (24/09/2026) chỉ canh file THUỘC hệ kit (import `@/components/kit`,
-tự dò — không đụng màn theme v3, không làm baseline dài ra); `components/kit/**`
-KHÔNG được miễn ở ba luật này:
-
-- `hg/no-arbitrary-size` / `hg/no-arbitrary-space` — cỡ chữ qua `text-k-*`
-  (thang 11·12·13·15·18·24), khoảng theo bậc Tailwind. Lớp `text-` bọc biến
-  `--fs-*` trong ngoặc vuông bị chặn ở MỌI file: Tailwind v4 hiểu nó là MÀU.
-- `hg/kit-icon` — icon chỉ đi qua `<Ico name>` / prop `icon` của `Btn`·`Chip`·
-  `Action` (bản đồ khái niệm `kit/Icon.tsx`, tra ở `/design-lab/thanh-phan/icon`);
-  nút có động từ quen thuộc phải có icon; nút chỉ có icon phải có `aria-label`.
-
-`hg/no-dark-variant` (24/09/2026) chạy trên MỌI file `src/**/*.{ts,tsx}`, KHÔNG
-miễn chỗ nào: cấm lớp `dark:`. Chế độ tối tắt từ 06/08/2026; đã gỡ sạch 1.207
-lớp `dark:` / 121 file (253 luật CSS ~33 KB không bao giờ chạy). Bật lại chế độ
-tối thì đổi TOKEN ở `kit/tokens.css`, không rải `dark:` lên từng thẻ.
+- `hg/client-server-boundary` (mọi `src/**/*.{ts,tsx}`): file `'use client'` chỉ được
+  `import type` từ `@/modules/*` và `@/server/*` — vùng chạy bằng khoá bí mật Supabase.
+  Có test trong `eslint-rules/hg-ui.test.ts`.
+- `max-lines` 800 cho `.tsx`, file cũ giữ trần riêng trong `size-baseline.json` (xem mục
+  Cấu trúc code React).
 
 **Tailwind chỉ quét `src/`** (`@import 'tailwindcss' source('../')` ở
 globals.css, 24/09/2026). Trước đó nó quét cả CLAUDE.md, `docs/`, skill và test
-lint — chuỗi ví dụ trong `.md` từng làm vỡ CSS toàn app, và lớp sai cố ý trong
-test lint thành CSS thật. Viết ví dụ lớp trong tài liệu nay vô hại; trong
-`src/` (kể cả chú thích) thì vẫn bị quét — `src/test/tailwind-trap.test.ts` canh.
+lint — chuỗi ví dụ trong `.md` từng làm vỡ CSS toàn app. Viết ví dụ lớp trong tài
+liệu nay vô hại; trong `src/` (kể cả chú thích) thì vẫn bị quét —
+`src/test/tailwind-trap.test.ts` canh.
 
-**Được miễn**: `components/erp/*`, `components/shadcn/*`, `components/ui/*`,
-`app/design-lab/*` — đó là nơi ĐỊNH NGHĨA chuẩn, không phải nơi tiêu thụ chuẩn.
-
-**Bánh cóc (ratchet)**: `ui-baseline.json` giữ 193 file nợ cũ ở mức `warn` để
-`check` không đỏ ngày đầu. **Mọi file khác — gồm mọi file mới — là `error`.**
-Dọn xong một file thì `npm run ui:baseline` để nó rớt khỏi danh sách và từ đó bị
-canh ở mức `error` vĩnh viễn. Script thoát mã 1 nếu có file MỚI lọt vào baseline
-— baseline chỉ được ngắn đi, không được dài ra.
-
-**Đừng nhét file mới vào baseline để qua cổng.** Cần ngoại lệ thật thì
-`// eslint-disable-next-line hg/<luật>` kèm một dòng lý do.
-
-**Luật lint có test** (`eslint-rules/hg-ui.test.ts`, 20 ca, chạy trong `npm test`
-qua `include` của `vitest.config.ts`). Bắt buộc, vì lint hỏng **im lặng**: regex
-sai thì lint vẫn báo "0 lỗi" và cả hàng rào thành đồ giả. Sửa luật thì chạy test.
-
-`npm run lint` (`--quiet`) chỉ in LỖI cho gọn; nợ cũ vẫn hiện inline trong IDE —
-đúng lúc đang mở file đó. Muốn xem hết: `npm run lint:all`.
-
-**BẪY khi sửa luật**: regex trong `hg-ui.mjs` phải viết bằng `` String.raw`…` ``.
-Template literal thường nuốt `\b`/`\d` thành ký tự điều khiển và regex hỏng IM
-LẶNG — luật vẫn chạy, chỉ là không khớp gì. Route group App Router có dấu ngoặc
+**Luật lint phải có test**, vì lint hỏng **im lặng**: regex sai thì lint vẫn báo "0
+lỗi" và cả hàng rào thành đồ giả. **BẪY khi viết luật**: regex trong `hg-ui.mjs` phải
+viết bằng `` String.raw`…` ``. Route group App Router có dấu ngoặc
 (`src/app/(workspace)/…`) nên đường dẫn baseline phải escape trước khi đưa vào
-`files` của flat config, nếu không minimatch hiểu `(` là nhóm glob và cả khu
-workspace trượt khỏi baseline.
+`files` của flat config.
 
 ## Skills (`.claude/skills/`)
 

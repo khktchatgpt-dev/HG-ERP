@@ -2,21 +2,20 @@ import { readFileSync } from 'node:fs'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
 import nextTs from 'eslint-config-next/typescript'
-import hgUi from './eslint-rules/hg-ui.mjs'
+import hg from './eslint-rules/hg-ui.mjs'
 
 /*
- * BÁNH CÓC (ratchet) cho giao diện.
+ * 30/09/2026 — GỠ bộ luật canh GIAO DIỆN (no-hardcoded-color, no-raw-control,
+ * no-arbitrary-size/space, kit-icon, no-dark-variant) cùng bánh cóc
+ * `ui-baseline.json` và test `ui-ratchet`. Chủ dự án chốt: chúng làm việc thiết
+ * kế và chỉnh sửa màn mới khó hơn cái lợi đồng bộ mang lại. Token và kit vẫn là
+ * cách ƯU TIÊN, nhưng là lựa chọn, không phải hàng rào máy chặn.
  *
- * `ui-baseline.json` liệt kê những file ĐANG bẩn tính đến lúc bật luật. Chúng
- * bị hạ xuống `warn` để `npm run check` không đỏ ngay ngày đầu; mọi file khác —
- * gồm TẤT CẢ file mới — là `error`, tức không lọt qua được.
- *
- * Dọn xong một file thì chạy `npm run ui:baseline` để nó rớt khỏi danh sách và
- * từ đó được canh ở mức `error` vĩnh viễn. Danh sách chỉ được phép NGẮN ĐI.
+ * Còn lại hai luật thuộc KIẾN TRÚC MÃ, không phải thiết kế:
+ *   · hg/client-server-boundary — file 'use client' không được kéo vùng chạy
+ *     bằng khoá bí mật Supabase vào trình duyệt;
+ *   · max-lines — trần 800 dòng cho .tsx, file cũ giữ trần riêng (size-baseline).
  */
-const baseline = JSON.parse(
-  readFileSync(new URL('./ui-baseline.json', import.meta.url), 'utf8'),
-)
 
 /* BÁNH CÓC CỠ FILE (28/09/2026): .tsx tối đa `max` dòng; file CŨ đã dài hơn giữ
  * trần riêng = số dòng lúc chốt — không được dài thêm, ngắn đi thì
@@ -27,31 +26,8 @@ const sizeBaseline = JSON.parse(
 
 /* BẪY: route group của App Router có dấu ngoặc — `src/app/(workspace)/...`. Với
  * minimatch, `(` `)` là ký tự NHÓM, nên để nguyên thì baseline không khớp file
- * nào trong route group và ~200 lỗi cũ vẫn nổ. Phải escape trước khi đưa vào
- * `files`. Giữ danh sách trong JSON ở dạng thô cho người đọc/diff. */
+ * nào trong route group. Phải escape trước khi đưa vào `files`. */
 const escapeGlob = (p) => p.replace(/[()[\]{}]/g, (ch) => `\\${ch}`)
-
-/* Kit và trang mẫu ĐƯỢC PHÉP dùng thẻ thô + màu thật: chúng là nơi định nghĩa
- * ra chuẩn, không phải nơi tiêu thụ chuẩn.
- *
- * `src/app/print/**` miễn trừ vì lý do KHÁC (chốt 18/09/2026): nó không phải
- * giao diện, nó là GIẤY A4. Bảng của kit dựng cho màn hình — tiêu đề dính, tự
- * cuộn, vòng focus, chế độ tối — bốn thứ vô nghĩa hoặc có hại khi in. Phiếu in
- * cần đúng `<table>` viền đen của `PrintSheet`, và màu thì luôn là đen trên
- * trắng chứ không theo token. Bảy trang in cũ từng nằm trong danh sách nợ và
- * bị canh nhầm bằng thước của màn hình.
- *
- * DANH SÁCH NÀY PHẢI KHỚP `ignores` trong `scripts/ui-baseline.mjs` — hai bên
- * đã trôi khỏi nhau một lần và hậu quả là baseline tự dài ra.
- */
-const KIT = [
-  'src/components/erp/**',
-  'src/components/shadcn/**',
-  'src/components/ui/**',
-  'src/components/kit/**',
-  'src/app/design-lab/**',
-  'src/app/print/**',
-]
 
 export default defineConfig([
   ...nextVitals,
@@ -65,49 +41,12 @@ export default defineConfig([
     // Worktree phiên Claude (chứa .next/build artifact riêng) — không lint.
     '.claude/**',
   ]),
-  {
-    name: 'hg/ui-consistency',
-    files: ['src/app/**/*.tsx', 'src/components/**/*.tsx'],
-    ignores: KIT,
-    plugins: { hg: hgUi },
-    rules: {
-      'hg/no-hardcoded-color': 'error',
-      'hg/no-raw-control': 'error',
-    },
-  },
-  /* Thang chữ + khoảng của kit (B3, 24/09/2026). Luật TỰ DÒ file thuộc hệ kit
-   * (import `@/components/kit`), nên màn hệ cũ không bị đụng và baseline không
-   * phải dài ra. Khác khối trên ở chỗ `components/kit/**` KHÔNG được miễn: kit
-   * định nghĩa màu thật được, nhưng cỡ và khoảng của nó phải đi qua thang như
-   * mọi màn khác. `design-lab` vẫn miễn — nó trưng cả giá trị thô để so sánh. */
-  {
-    name: 'hg/kit-scale',
-    files: ['src/app/**/*.tsx', 'src/components/**/*.tsx'],
-    ignores: KIT.filter((p) => p !== 'src/components/kit/**'),
-    plugins: { hg: hgUi },
-    rules: {
-      'hg/no-arbitrary-size': 'error',
-      'hg/no-arbitrary-space': 'error',
-      'hg/kit-icon': 'error',
-    },
-  },
-  /* Cấm lớp `dark:` ở MỌI file src (24/09/2026) — kể cả kit, shadcn, ui: chế độ
-   * tối tắt cho cả app, và sau lượt gỡ con số là 0 nên không cần baseline. */
-  {
-    name: 'hg/no-dark',
-    files: ['src/**/*.tsx', 'src/**/*.ts'],
-    plugins: { hg: hgUi },
-    rules: {
-      'hg/no-dark-variant': 'error',
-    },
-  },
   /* Ranh giới client/server (28/09/2026): file 'use client' chỉ `import type` từ
-   * @/modules, @/server. Đo lúc bật: 0 vi phạm (sau khi trừ module thuần) nên
-   * không cần baseline. Hàng rào thứ hai: `import 'server-only'` ở server/db.ts. */
+   * @/modules, @/server. Hàng rào thứ hai: `import 'server-only'` ở server/db.ts. */
   {
     name: 'hg/client-server-boundary',
     files: ['src/**/*.tsx', 'src/**/*.ts'],
-    plugins: { hg: hgUi },
+    plugins: { hg },
     rules: {
       'hg/client-server-boundary': 'error',
     },
@@ -123,12 +62,4 @@ export default defineConfig([
     files: [escapeGlob(file)],
     rules: { 'max-lines': ['error', { max: cap }] },
   })),
-  {
-    name: 'hg/ui-consistency-legacy',
-    files: baseline.files.map(escapeGlob),
-    rules: {
-      'hg/no-hardcoded-color': 'warn',
-      'hg/no-raw-control': 'warn',
-    },
-  },
 ])

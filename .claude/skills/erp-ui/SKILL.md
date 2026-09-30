@@ -146,8 +146,7 @@ Báo số đo trước/sau, ảnh chụp, và các điểm còn treo, rồi dừ
 9. **Icon theo khái niệm**, chỉ qua `<Ico name>` hoặc prop `icon`.
    - Nút có động từ quen thuộc (Lưu, Duyệt, In…) phải có icon.
    - Nút chỉ có icon phải có `aria-label`.
-   - Lint `hg/kit-icon` canh luật này.
-10. **Không thẻ thô**: không `table`, `button`, `input`, `select`, `textarea`. Lint `hg/no-raw-control` canh luật này.
+10. **Ưu tiên thành phần kit** thay cho `table`, `button`, `input`, `select`, `textarea` thô — kit không có thứ cần thì viết thẳng (lint chặn thẻ thô đã gỡ 30/09/2026).
 11. **Không skeuomorphism**: không "tờ giấy in", con dấu xoay, lề giấy.
 12. **Nút hành động ở góc trên phải header** (`ActionPane` / `ScreenHeader actions`). Ngoại lệ duy nhất là thanh chốt đáy `CommitBar` của khuôn F.
 

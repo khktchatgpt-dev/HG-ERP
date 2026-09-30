@@ -26,9 +26,9 @@ Mỗi dòng bắt một lỗi **đã thật sự xảy ra** trong dự án. Báo
 
 10. **Không có màu vòng đời nào nằm trên nút hoặc dòng đang chọn.** Nền đặc = bấm được.
 11. **Không có thẻ nổi quanh lưới hay khung dữ kiện.** Thấy viền bốn phía + bo góc + lề quanh một lưới là đang chép web.
-12. **Không có màu Tailwind dựng sẵn, không hex trong class, không cỡ chữ/khoảng tuỳ tiện.** Lint `hg/no-hardcoded-color`, `hg/no-arbitrary-size`, `hg/no-arbitrary-space` canh luật này.
-13. **Không có thẻ thô** `table`, `button`, `input`, `select`, `textarea` (lint `hg/no-raw-control`). Lưới trong khối thì dùng `Grid`; bảng toàn trang thì dùng `Table`.
-14. **Icon theo khái niệm** (lint `hg/kit-icon`).
+12. **Ưu tiên token cho màu, thang `text-k-*` cho cỡ chữ.** (Lint canh việc này đã gỡ 30/09/2026 — kiểm bằng mắt, không có máy.)
+13. **Ưu tiên kit cho bảng và ô nhập**: lưới trong khối thì `Grid`; bảng toàn trang thì `Table`. Kit không có thì viết thẳng.
+14. **Icon theo khái niệm** (`<Ico name>`, bản đồ ở `kit/Icon.tsx`).
 
 ## Truy cập
 

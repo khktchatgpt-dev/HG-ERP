@@ -14,7 +14,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "ui:baseline": "node scripts/ui-baseline.mjs",
     "kit:api": "node scripts/kit-api.mjs",
     "lint:all": "eslint",
     "ui:shots": "playwright test",

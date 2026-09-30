@@ -9,7 +9,7 @@ Mỗi bẫy dưới đây đã làm hỏng một màn thật trong dự án, và
    - Chữa: diễn đạt bằng chữ, đừng viết ví dụ lớp có ký tự đại diện. (Ghi chú BẪY trong `eslint-rules/hg-ui.mjs`, 24/09/2026.)
 2. **Lớp `text-` bọc `var(...)` trong ngoặc vuông, Tailwind hiểu là MÀU chứ không phải cỡ chữ.**
    - Cỡ chữ đi qua `text-k-label/sm/body/lg/title/doc`.
-   - Lint `hg/no-arbitrary-size` chặn ở mọi file.
+   - (Lint từng chặn cách viết này đã gỡ 30/09/2026 — tự nhớ.)
 3. **Token chỉ sống trong `.kit`.**
    - Portal (Radix render ra `<body>`) phải bọc nội dung trong một thẻ div mang lớp `kit contents`, không thì mất toàn bộ màu.
    - Lớp phủ của kit đã tự làm việc này. **Đừng tự dựng lớp phủ.**

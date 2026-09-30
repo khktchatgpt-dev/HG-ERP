@@ -638,7 +638,6 @@ export function EntrySheetForm({
                   · {v}
                 </span>
               ))}
-            {/* eslint-disable-next-line hg/no-raw-control -- `Btn` cao 28px, kéo cả dòng tóm tắt lên 43px và xoá sạch phần chỗ mà việc thu đầu phiếu vừa lấy về; đây là một liên kết chữ, không phải nút hành động */}
             <button
               type="button"
               onClick={() => setHeadUp(false)}

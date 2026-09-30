@@ -19,8 +19,8 @@ Dự án này là hệ thống **Phần mềm Quản trị Doanh nghiệp Sản 
 - ❌ **CẤM giả lập vật thể thực (Skeuomorphism)**: Tuyệt đối không dựng màn hình thành "tờ phiếu in", "tờ giấy A4", "con dấu mộc xoay nghiêng `-rotate-3`", hay chia lề giấy kỳ dị. Đây là giao diện ứng dụng web SaaS ERP trên màn hình máy tính.
 - ❌ **CẤM chia layout bất đối xứng hẹp**: Không tạo sidebar ghim dính 200px chèn ép bảng dữ liệu. Bảng dữ liệu lớn phải được ưu tiên không gian hiển thị rộng rãi, rõ ràng.
 - ❌ **CẤM đặt thanh hành động nổi dính đáy màn hình (Sticky floating bottom bar)** một cách đơn độc. Action Toolbar phải luôn đặt ở **Góc trên bên phải của Header** theo chuẩn ERP (nút chính nổi bật + dropdown menu ⋯ cho tác vụ phụ).
-- ❌ **CẤM tự viết CSS/HTML thô**: Bắt buộc tái sử dụng các component có sẵn trong thư viện UI của dự án.
-- ❌ **CẤM hardcode màu Tailwind / Hex**: Không dùng `bg-zinc-100`, `text-blue-600`, `text-[#...]`. Luôn dùng CSS variables hệ thống: `var(--primary)`, `var(--warn)`, `var(--done)`, `var(--stop)`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`.
+- ⚠️ **Ưu tiên component có sẵn** trong thư viện UI của dự án; kit không có thứ cần thì viết Tailwind / CSS trực tiếp (bộ luật lint chặn thẻ thô đã gỡ 30/09/2026).
+- ⚠️ **Ưu tiên token hệ thống** cho màu: `var(--primary)`, `var(--warn)`, `var(--done)`, `var(--stop)`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground` — để một màu hành động, ba màu vòng đời còn có nghĩa. Không còn lint chặn màu cứng (gỡ 30/09/2026), nên đây là kỷ luật, không phải hàng rào.
 
 ---
 
