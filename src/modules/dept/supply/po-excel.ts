@@ -14,6 +14,7 @@ import {
   PO_PRINT_QTY_LABEL,
   poField,
   poPriceSuffix,
+  poPriceUnitPerLine,
 } from '@/lib/po-fields'
 import type {
   PoPrintHeader,
@@ -84,7 +85,12 @@ function packSuffixFormat(l: PoPrintLine): string | undefined {
 function excelColumns(
   t: PoTemplate,
   currency: string,
-  ctx: { orderDate: Date; expectedAt: string | null },
+  ctx: {
+    orderDate: Date
+    expectedAt: string | null
+    /** Mẫu tính theo kg mà có dòng giá theo ĐVT — xem `poPriceUnitPerLine`. */
+    priceUnitOf?: ReturnType<typeof poPriceUnitPerLine>
+  },
 ): XCol[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
@@ -134,14 +140,20 @@ function excelColumns(
               : '',
         }
       : {
-          label: meta.priceUnit
-            ? `Đơn giá (${currency}/${meta.priceUnit})`
-            : `Đơn giá (${currency})`,
+          // Đơn trộn giá/kg với giá/cây: đơn vị rời nhãn cột, vào đuôi numFmt
+          // từng ô — ô vẫn là SỐ thật như cũ.
+          label:
+            meta.priceUnit && !ctx.priceUnitOf
+              ? `Đơn giá (${currency}/${meta.priceUnit})`
+              : `Đơn giá (${currency})`,
           width: 12,
           red: true,
           align: 'right',
           num: true,
-          numFmtFor: () => moneyFmt,
+          numFmtFor: (l) => {
+            const u = ctx.priceUnitOf?.(l).replace(/"/g, '')
+            return u ? `${moneyFmt}"${u}"` : moneyFmt
+          },
           value: (l) => nOrNull(l.unit_price),
         },
     '@amount': {
@@ -208,6 +220,7 @@ export async function buildPoExcel(input: {
   const cols = excelColumns(template, po.currency, {
     orderDate: d,
     expectedAt: po.expected_at,
+    priceUnitOf: poPriceUnitPerLine(poTemplateMeta(template).priceUnit, lines),
   })
   const n = cols.length
   const amountIdx = cols.findIndex((c) => c.isAmount) // 0-based
@@ -456,31 +469,44 @@ export async function buildPoExcel(input: {
   }
 
   /* ── Điều khoản + ghi chú + câu đề nghị fax ─────────────────────────────── */
-  const terms: [string, string | null][] = [
-    ['Tiêu chuẩn chất lượng', po.terms_quality],
-    ['Địa điểm giao hàng', po.terms_delivery_place],
-    ['Hình thức thanh toán', po.terms_payment],
-    ['Chứng từ thanh toán', po.terms_invoice],
-    ['Thời gian giao hàng', po.terms_lead_time],
-  ].filter(([, v]) => v && v.trim()) as [string, string][]
+  const terms = (
+    [
+      ['Tiêu chuẩn chất lượng', po.terms_quality],
+      ['Địa điểm giao hàng', po.terms_delivery_place],
+      ['Hình thức thanh toán', po.terms_payment],
+      ['Chứng từ thanh toán', po.terms_invoice],
+      ['Thời gian giao hàng', po.terms_lead_time],
+    ] as [string, string | null][]
+  ).filter(([, v]) => v && v.trim()) as [string, string][]
   if (terms.length > 0) {
     r += 2
     ws.mergeCells(r, 1, r, n)
     set(r, 1, 'ĐIỀU KHOẢN & YÊU CẦU', { font: { bold: true, size: 10 } })
     for (const [label, value] of terms) {
-      r++
-      ws.mergeCells(r, 1, r, n)
-      set(r, 1, `${label}: ${value}`, { font: { size: 10 } })
+      // Điều khoản nhiều ý (mỗi ý một dòng) → mỗi ý một HÀNG Excel: một ô gộp
+      // chứa "\n" không tự giãn cao, in ra chỉ thấy dòng đầu.
+      value
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((part, i) => {
+          r++
+          ws.mergeCells(r, 1, r, n)
+          set(r, 1, i === 0 ? `${label}: ${part}` : `    ${part}`, { font: { size: 10 } })
+        })
     }
   }
-  r++
-  ws.mergeCells(r, 1, r, n)
-  set(
-    r,
-    1,
-    `Đơn giá trên ${po.price_includes_vat ? 'ĐÃ bao gồm' : 'CHƯA bao gồm'} thuế VAT${po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.`,
-    { font: { bold: true, size: 10 } },
-  )
+  // VAT 0 thì bỏ câu — "CHƯA bao gồm thuế VAT 0%" đọc như lỗi (cùng luật phiếu in).
+  if (po.vat_rate == null || Number(po.vat_rate) !== 0) {
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(
+      r,
+      1,
+      `Đơn giá trên ${po.price_includes_vat ? 'ĐÃ bao gồm' : 'CHƯA bao gồm'} thuế VAT${po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.`,
+      { font: { bold: true, size: 10 } },
+    )
+  }
   if (po.note) {
     r++
     ws.mergeCells(r, 1, r, n)

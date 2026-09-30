@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { poLineAmount, type PriceBasis } from '@/lib/po-line'
+import { docEventAt } from '@/lib/date-vn'
 
 /**
  * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
@@ -273,6 +274,12 @@ export const supplyRepo = {
     return out
   },
 
+  /**
+   * Phiếu kho của một đơn. `at` = NGÀY CHỨNG TỪ (`doc_date` — ngày hàng về thật),
+   * `entered_at` = lúc ghi vào máy. Kho hay nhập máy trễ ("hàng về chiều tối,
+   * sáng sau mới nhập"; đơn Visa/Kim Phát về 27/09 nhập 30/09) — trước đây chip
+   * "Về đủ" và dòng thời gian lấy giờ ghi sổ nên báo sai ngày hàng về.
+   */
   async docsByPo(poId: string): Promise<
     {
       doc_id: string
@@ -280,6 +287,7 @@ export const supplyRepo = {
       kind: 'receipt' | 'return'
       qty_total: number
       at: string
+      entered_at: string
     }[]
   > {
     const { data: lineRows } = await db()
@@ -291,18 +299,19 @@ export const supplyRepo = {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code)',
+        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code, doc_date)',
       )
       .in('po_line_id', lineIds)
       .not('doc_id', 'is', null)
       .limit(2000)
+    type Doc = { code: string; doc_date: string | null }
     type R = {
       doc_id: string
       direction: 'in' | 'out'
       qty: unknown
       qty_rejected: unknown
       created_at: string
-      doc: { code: string } | { code: string }[] | null
+      doc: Doc | Doc[] | null
     }
     const byDoc = new Map<
       string,
@@ -311,7 +320,8 @@ export const supplyRepo = {
         code: string
         kind: 'receipt' | 'return'
         qty_total: number
-        at: string
+        doc_date: string | null
+        entered_at: string
       }
     >()
     for (const r of (data ?? []) as unknown as R[]) {
@@ -321,17 +331,22 @@ export const supplyRepo = {
         code: d?.code ?? '?',
         kind: r.direction === 'in' ? ('receipt' as const) : ('return' as const),
         qty_total: 0,
-        at: r.created_at,
+        doc_date: d?.doc_date ?? null,
+        entered_at: r.created_at,
       }
       // "Đã nhận" cùng công thức BR-08: đạt + QC loại (NCC đã giao số đó).
       cur.qty_total +=
         r.direction === 'in'
           ? Number(r.qty ?? 0) + Number(r.qty_rejected ?? 0)
           : Number(r.qty ?? 0)
-      if (r.created_at < cur.at) cur.at = r.created_at
+      if (r.created_at < cur.entered_at) cur.entered_at = r.created_at
       byDoc.set(r.doc_id, cur)
     }
-    return [...byDoc.values()].sort((a, b) => a.at.localeCompare(b.at))
+    return [...byDoc.values()]
+      .map(({ doc_date, ...x }) => ({ ...x, at: docEventAt(doc_date, x.entered_at) }))
+      .sort(
+        (a, b) => a.at.localeCompare(b.at) || a.entered_at.localeCompare(b.entered_at),
+      )
   },
 
   /**

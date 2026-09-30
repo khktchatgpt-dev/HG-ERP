@@ -133,7 +133,8 @@ export function SoHenGiaoGrid({
 }: {
   commits: CommitLogRow[]
   /** Phiếu nhập thật — vế "thực tế" của sổ. */
-  receipts: { code: string; at: string; qty_total: number }[]
+  /** `at` = ngày hàng về, `entered_at` = lúc ghi máy (cột "Ghi lúc"). */
+  receipts: { code: string; at: string; entered_at: string; qty_total: number }[]
   linesById: Map<string, TrackLine>
   /** Ngày đợt còn sống sớm nhất hiện tại — để tính NCC đã dời bao nhiêu ngày. */
   currentEarliest: string | null
@@ -155,7 +156,9 @@ export function SoHenGiaoGrid({
     })),
     ...receipts.map((r) => ({
       key: `pn-${r.code}`,
-      at: r.at,
+      // Bảng này là NHẬT KÝ theo lúc ghi — sắp + cột "Ghi lúc" dùng giờ ghi máy;
+      // cột ngày bên cạnh mới là ngày hàng về.
+      at: r.entered_at,
       what: 'Nhập kho thực tế',
       tone: 'done' as const,
       dates: dmy(r.at.slice(0, 10)),

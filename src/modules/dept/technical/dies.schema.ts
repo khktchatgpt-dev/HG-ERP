@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { vnTodayIso } from '@/lib/local-date'
 
 /**
  * Zod cho danh mục KHUÔN NHÔM (0190). Kiểm ở BIÊN API; tầng service tin gọi nội bộ.
@@ -64,27 +65,60 @@ export const dieUpdateSchema = dieCreateSchema.partial()
 export type DieUpdateInput = z.infer<typeof dieUpdateSchema>
 
 /**
- * Ghi một dòng nhật ký bằng tay. Các sự kiện do ĐỔI HỒ SƠ sinh ra thì service tự
- * ghi (xem `dies.service`), không đi qua đường này.
+ * Ghi một dòng nhật ký bằng tay (hộp "Ghi nhật ký" trên hồ sơ khuôn, 29/09/2026).
+ * Các sự kiện do ĐỔI HỒ SƠ sinh ra thì service tự ghi, không đi qua đường này.
+ *
+ * Nhật ký ghi chuyện ĐÃ xảy ra: ngày bắt buộc (ghi lùi được) và không được sau
+ * hôm nay theo giờ VN. Báo hư / ghi chú mà không có nội dung là một dòng không
+ * nói gì; chuyển khuôn mà không nói sang đâu thì nơi giữ không đổi được.
  */
-export const dieEventSchema = z.object({
-  event_type: z.enum([
-    'opened',
-    'modified',
-    'transferred',
-    'broken',
-    'replaced',
-    'retired',
-    'reopened',
-    'note',
-  ]),
-  event_date: blank(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD')),
-  weight_before: num(1000),
-  weight_after: num(1000),
-  cost: num(10_000_000_000),
-  from_holder: text(120),
-  to_holder: text(120),
-  content: text(2000),
-})
+export const DIE_EVENT_TYPES = [
+  'broken',
+  'modified',
+  'transferred',
+  'opened',
+  'reopened',
+  'replaced',
+  'retired',
+  'note',
+] as const
+
+export const dieEventSchema = z
+  .object({
+    event_type: z.enum(DIE_EVENT_TYPES),
+    event_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Chưa nhập ngày xảy ra')
+      .refine((d) => d <= vnTodayIso(), 'Ngày chưa tới — nhật ký ghi chuyện đã xảy ra'),
+    weight_before: num(1000),
+    weight_after: num(1000),
+    cost: num(10_000_000_000),
+    from_holder: text(120),
+    to_holder: text(120),
+    /** Khuôn thay thế (việc "Thay bằng mã khác"). */
+    related_die_id: blank(z.uuid()),
+    content: text(2000),
+    /**
+     * Cập nhật luôn hồ sơ theo việc này (tình trạng / nơi giữ / kg/m — xem
+     * `lib/die-event-effect`). Bỏ tick khi chỉ ghi lại chuyện cũ đã qua.
+     */
+    apply: z.boolean().default(true),
+  })
+  .superRefine((v, ctx) => {
+    if ((v.event_type === 'broken' || v.event_type === 'note') && !v.content) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'Ghi nội dung: chuyện gì, ai báo',
+      })
+    }
+    if (v.event_type === 'transferred' && !v.to_holder) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['to_holder'],
+        message: 'Chưa ghi chuyển sang đâu',
+      })
+    }
+  })
 
 export type DieEventInput = z.infer<typeof dieEventSchema>

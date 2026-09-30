@@ -47,6 +47,10 @@ export type Mark = {
 }
 
 function fmt(at: string) {
+  // Mốc chỉ có NGÀY (`yyyy-mm-dd`: hẹn đợt giao, ngày ghi phí, ngày phiếu nhập
+  // khai trễ) — in ngày thôi. `new Date` đọc nó là 00:00 UTC nên từng in giờ
+  // giả "07:00" như thể có ai làm gì lúc đó.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(at)) return `${at.slice(8, 10)}/${at.slice(5, 7)}`
   const d = new Date(at)
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }

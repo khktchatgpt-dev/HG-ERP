@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { EMPTY_FILTER } from '@/app/(mua-hang)/mua-hang/don/_lib/po-filter'
-import { ALL_VIEW, DEFAULT_VIEW, PARAM_KEYS, decodeView, encodeView } from './views'
+import {
+  ALL_VIEW,
+  DEFAULT_VIEW,
+  PARAM_KEYS,
+  decodeView,
+  encodeView,
+  sortPos,
+} from './views'
+import type { Po } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
 
 /**
  * KHUNG NHÌN TRÊN URL phải đi TRỌN VÒNG: mã hoá ra rồi giải mã lại phải bằng
@@ -73,5 +81,42 @@ describe('rổ mặc định "còn mở" (27/09/2026)', () => {
     expect(sp.trang_thai).toBe('open')
     expect(decodeView(sp).filter.bucket).toBe('open')
     expect(decodeView({ trang_thai: 'all' }).filter.bucket).toBe('all')
+  })
+})
+
+describe('bảng phẳng, nháp lên đầu (30/09/2026)', () => {
+  const po = (id: string, status: string, created_at: string) =>
+    ({ id, code: id, status, created_at }) as unknown as Po
+
+  it('vào trang: không gom, sắp việc cần làm trước; URL mặc định không mang sap', () => {
+    expect(DEFAULT_VIEW.groupBy).toBe('none')
+    expect(DEFAULT_VIEW.sortBy).toBe('viec')
+    const sp = Object.fromEntries(new URLSearchParams(encodeView(DEFAULT_VIEW)))
+    expect(sp.sap).toBeUndefined()
+    expect(decodeView(sp).sortBy).toBe('viec')
+  })
+
+  it('nháp → chờ duyệt → đã duyệt → đang về → về đủ → huỷ; trong bậc mới tạo trước', () => {
+    const out = sortPos(
+      [
+        po('a', 'received', '2026-09-20'),
+        po('b', 'ordered', '2026-09-21'),
+        po('c', 'draft', '2026-09-01'),
+        po('d', 'cancelled', '2026-09-29'),
+        po('e', 'draft', '2026-09-15'),
+        po('f', 'pending_approval', '2026-09-10'),
+        po('g', 'approved', '2026-09-10'),
+      ],
+      'viec',
+    )
+    expect(out.map((p) => p.id)).toEqual(['e', 'c', 'f', 'g', 'b', 'a', 'd'])
+  })
+
+  it('trạng thái lạ xếp cuối, không chui lên đầu', () => {
+    const out = sortPos(
+      [po('x', 'weird', '2026-09-30'), po('y', 'received', '2026-01-01')],
+      'viec',
+    )
+    expect(out.map((p) => p.id)).toEqual(['y', 'x'])
   })
 })

@@ -138,6 +138,8 @@ export type DieEvent = {
   to_holder: string | null
   content: string | null
   source: string | null
+  /** Người ghi — trống với 40 dòng nạp từ file Kỹ thuật (13/09/2026). */
+  created_by_name: string | null
   created_at: string
 }
 
@@ -249,7 +251,8 @@ export const dieCatalogRepo = {
     const { data } = await db()
       .from('technical_die_events')
       .select(
-        'id, event_type, event_date, weight_before, weight_after, cost, from_holder, to_holder, content, source, created_at',
+        'id, event_type, event_date, weight_before, weight_after, cost, from_holder, to_holder, content, source, created_at, ' +
+          'creator:users!technical_die_events_created_by_fkey(name)',
       )
       .eq('die_id', dieId)
       .order('event_date', { ascending: false, nullsFirst: false })
@@ -265,6 +268,7 @@ export const dieCatalogRepo = {
       to_holder: (r.to_holder as string | null) ?? null,
       content: (r.content as string | null) ?? null,
       source: (r.source as string | null) ?? null,
+      created_by_name: (r.creator as { name: string | null } | null)?.name ?? null,
       created_at: r.created_at as string,
     }))
   },
@@ -339,6 +343,7 @@ export type DieEventWrite = {
   from_holder?: string | null
   to_holder?: string | null
   content?: string | null
+  related_die_id?: string | null
   created_by?: string | null
 }
 

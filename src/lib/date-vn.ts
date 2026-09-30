@@ -99,3 +99,14 @@ export function todayVn(now: Date = new Date()): string {
     day: '2-digit',
   }).format(now)
 }
+
+/**
+ * MỐC SỰ VIỆC của một chứng từ có cả NGÀY CHỨNG TỪ (người dùng khai) và GIỜ GHI
+ * MÁY (`created_at`). Cùng một ngày (giờ VN) thì giữ giờ ghi máy — chính xác
+ * hơn và y như trước; KHÁC ngày (nhập máy trễ: hàng về 27/09, Kho ghi 30/09)
+ * thì ngày chứng từ mới là lúc việc xảy ra — trả chuỗi ngày thuần `yyyy-mm-dd`.
+ */
+export function docEventAt(docDate: string | null | undefined, enteredAt: string): string {
+  if (!docDate) return enteredAt
+  return docDate.slice(0, 10) === todayVn(new Date(enteredAt)) ? enteredAt : docDate.slice(0, 10)
+}

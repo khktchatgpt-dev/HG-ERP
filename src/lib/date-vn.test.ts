@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isoToVn, maskVnDate, todayVn, vnToIso } from './date-vn'
+import { docEventAt, isoToVn, maskVnDate, todayVn, vnToIso } from './date-vn'
 
 describe('isoToVn', () => {
   it('đổi ISO sang kiểu VN', () => {
@@ -92,5 +92,21 @@ describe('todayVn — hôm nay theo giờ Việt Nam', () => {
 
   it('luôn ra dạng yyyy-mm-dd để so chuỗi được', () => {
     expect(todayVn(new Date('2026-01-02T00:00:00Z'))).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe('docEventAt — mốc sự việc của phiếu kho', () => {
+  it('nhập máy cùng ngày chứng từ (giờ VN) → giữ giờ ghi máy', () => {
+    // 01:30Z = 08:30 giờ VN ngày 27/09
+    expect(docEventAt('2026-09-27', '2026-09-27T01:30:00Z')).toBe('2026-09-27T01:30:00Z')
+  })
+  it('nhập máy lúc 00:30 giờ VN vẫn là CÙNG ngày dù UTC còn hôm trước', () => {
+    expect(docEventAt('2026-09-27', '2026-09-26T17:30:00Z')).toBe('2026-09-26T17:30:00Z')
+  })
+  it('nhập máy trễ (hàng về 27/09, ghi 30/09) → ngày chứng từ', () => {
+    expect(docEventAt('2026-09-27', '2026-09-30T08:00:00Z')).toBe('2026-09-27')
+  })
+  it('không có ngày chứng từ → giờ ghi máy', () => {
+    expect(docEventAt(null, '2026-09-30T08:00:00Z')).toBe('2026-09-30T08:00:00Z')
   })
 })

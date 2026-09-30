@@ -227,7 +227,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
               </div>
               <SoHenGiaoGrid
                 commits={p.tracking?.commits ?? []}
-                receipts={p.warehouseDocs.filter((d) => d.kind === 'receipt').map((d) => ({ code: d.code, at: d.at, qty_total: d.qty_total }))} // prettier-ignore
+                receipts={p.warehouseDocs.filter((d) => d.kind === 'receipt').map((d) => ({ code: d.code, at: d.at, entered_at: d.entered_at, qty_total: d.qty_total }))} // prettier-ignore
                 linesById={trackById}
                 currentEarliest={earliestExpectedDate(p.shipments)}
               />

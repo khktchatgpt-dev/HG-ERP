@@ -226,10 +226,10 @@ export function PrintTerms({
               {/* Nhãn ĐẬM (28/08): nhãn và nội dung cùng một sắc chữ thì mắt
                   không tách được đâu là mục, đâu là điều khoản — nhất là khi
                   in đen trắng, thứ duy nhất phân biệt được là nét chữ. */}
-              <td className="pr-3 align-top font-semibold whitespace-nowrap">
-                {label}:
-              </td>
-              <td>{v}</td>
+              <td className="pr-3 align-top font-semibold whitespace-nowrap">{label}:</td>
+              {/* Giữ XUỐNG DÒNG của điều khoản nhiều ý (Quy cách / Bề mặt / Đóng
+                  gói… mỗi ý một dòng) — không thì in dồn thành một đoạn dài. */}
+              <td className="whitespace-pre-line">{v}</td>
             </tr>
           ))}
         </tbody>
