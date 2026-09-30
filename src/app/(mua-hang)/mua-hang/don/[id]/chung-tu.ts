@@ -6,6 +6,7 @@ import {
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import type { Check } from '@/components/kit'
+import { duplicateLinePairs, duplicateLinesMessage, type DupLine } from '@/lib/po-line-dup'
 
 /**
  * LOGIC THUẦN CỦA MÀN CHỨNG TỪ HỢP NHẤT — không React, có test.
@@ -152,7 +153,7 @@ export function retemplate(h: PoHeader, t: PoTemplate): PoHeader {
  */
 export function poChecks(
   po: { status: string; production_order_id: string | null; expected_at: string | null },
-  lines: { unit_price: number | null }[],
+  lines: ({ unit_price: number | null } & DupLine)[],
   today: string,
 ): Check[] {
   /*
@@ -176,6 +177,9 @@ export function poChecks(
     ? { level: 'stop', what: 'Chưa có hẹn giao', fix: 'Bấm "Sửa" khai ngày dự kiến — chưa có ngày thì gửi NCC xong không ai đo được trễ' }
     : { level: 'warn', what: 'Chưa có hẹn giao', fix: 'Điền hạn giao — tới bước gửi NCC là bắt buộc' }) // prettier-ignore
   else if (po.expected_at.slice(0, 10) < today) out.push({ level: 'warn', what: `Hạn giao ${dmy(po.expected_at)} đã qua`, fix: 'Cập nhật hạn hoặc ghi lý do' }) // prettier-ignore
+  // Trùng THẬT (cùng mã + quy cách + chiều dài) chỉ nhắc, không chặn — lib/po-line-dup.
+  const trung = duplicateLinesMessage(duplicateLinePairs(lines))
+  if (trung) out.push({ level: 'warn', what: trung, fix: 'Bấm "Sửa" → "Gộp" nếu gõ trùng; cố ý tách thì bỏ qua' }) // prettier-ignore
   return out
 }
 

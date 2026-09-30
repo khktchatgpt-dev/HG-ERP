@@ -173,12 +173,11 @@ export const poCreateSchema = z.object({
     .array(poLineInputSchema)
     .min(1, 'Đơn đặt phải có ít nhất 1 dòng vật tư')
     .max(200)
-    // Trùng dòng chỉ xét dòng có VẬT TƯ — dòng tự do (material_id null) được
-    // nhiều dòng trong một đơn (mỗi dòng một SP gia công khác nhau).
-    .refine((lines) => {
-      const ids = lines.map((l) => l.material_id).filter((id): id is string => !!id)
-      return new Set(ids).size === ids.length
-    }, 'Vật tư bị trùng dòng')
+    // KHÔNG chặn cùng vật tư nhiều dòng (30/09/2026). Trước đây chặn mọi cặp
+    // cùng material_id → đơn nhôm cắt nhiều chiều dài (GIGA anh Truyền) và đơn
+    // chia một tem cho nhiều SP không lưu được. Theo thông lệ ERP, dòng định
+    // danh bằng số dòng; trùng THẬT (`lib/po-line-dup`) chỉ cảnh báo ở màn soạn
+    // + bảng kiểm trước khi gửi duyệt.
     .refine(
       (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
       'Dòng không gắn vật tư phải có tên hàng',

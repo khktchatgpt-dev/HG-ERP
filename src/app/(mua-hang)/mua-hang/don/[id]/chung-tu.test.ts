@@ -101,6 +101,12 @@ describe('poChecks — năm luật của màn chi tiết cũ', () => {
       'Hạn giao 01/09/2026 đã qua',
     ])
   })
+  it('trùng dòng THẬT chỉ nhắc; cùng cây khác chiều dài thì im (PO-2026-0114)', () => {
+    const l = (len: number) => ({ unit_price: 108000, material_id: 'm', spec: 'Hộp 25x50 mềm', bar_length_m: len }) // prettier-ignore
+    expect(poChecks(base, [l(5.1), l(5.3), l(6)], '2026-09-10')).toEqual([])
+    const c = poChecks(base, [l(5.1), l(6), l(6)], '2026-09-10')
+    expect(c).toEqual([expect.objectContaining({ level: 'warn', what: expect.stringMatching(/^Dòng 3 trùng dòng 2/) })]) // prettier-ignore
+  })
 })
 
 describe('hẹn giao — nhắc ở bước soạn, CHẶN ở bước gửi NCC (17/09/2026)', () => {

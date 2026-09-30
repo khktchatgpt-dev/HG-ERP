@@ -9,6 +9,7 @@ import {
   lineFromPo,
   lineProblem,
   lineReady,
+  mergeLineInto,
   newFreeLine,
   newLine,
   remapLinesForTemplate,
@@ -952,5 +953,25 @@ describe('remapLinesForTemplate — đổi mẫu thì dọn cột mượn đã �
   it('cùng mẫu → không đụng gì', () => {
     const src = [newLine('wood', inox)]
     expect(remapLinesForTemplate('wood', 'wood', src)).toBe(src)
+  })
+})
+
+describe('mergeLineInto — gộp dòng trùng', () => {
+  const base = { ...newFreeLine(), qty: 10 as const, price: 108000 as const, note: 'Ghế 1', qty_demand: '' as const, lsx_split: { L1: 4 } }
+  it('cộng SL, SL đơn hàng, phần chia lệnh; nối ghi chú khác nhau', () => {
+    const m = mergeLineInto(base, { ...base, qty: 5, qty_demand: 3, note: 'Ghế 3', lsx_split: { L1: 1, L2: 2 } })
+    expect(m).not.toBeNull()
+    expect(m!.qty).toBe(15)
+    expect(m!.qty_demand).toBe(3)
+    expect(m!.lsx_split).toEqual({ L1: 5, L2: 2 })
+    expect(m!.note).toBe('Ghế 1 · Ghế 3')
+    expect(m!.price).toBe(108000)
+  })
+  it('ghi chú giống nhau thì không lặp', () => {
+    expect(mergeLineInto(base, { ...base })!.note).toBe('Ghế 1')
+  })
+  it('KHÁC GIÁ → không gộp (người mua chọn giá, không phải máy)', () => {
+    expect(mergeLineInto(base, { ...base, price: 113000 })).toBeNull()
+    expect(mergeLineInto(base, { ...base, price_per: 'unit' })).toBeNull()
   })
 })

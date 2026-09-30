@@ -174,13 +174,10 @@ export function planAdjustment(input: {
     errors.push('Đơn phải còn ít nhất một dòng — muốn bỏ cả đơn thì dùng "Huỷ đơn"')
   }
 
-  // Vật tư đã có trong đơn (dòng giữ lại) — dòng MỚI không được trùng. Dòng cũ
-  // trùng nhau thì để yên: đơn nạp từ file có sẵn hai dòng cùng mã (chia hai lệnh).
-  const materialsKept = new Set<string>()
-  for (const l of input.after.lines) {
-    if (l.id && beforeById.has(l.id) && l.material_id) materialsKept.add(l.material_id)
-  }
-  const materialsNew = new Set<string>()
+  // Dòng MỚI cùng vật tư với dòng đã có KHÔNG chặn (30/09/2026 — thông lệ ERP:
+  // dòng định danh bằng số dòng; nhôm cùng cây khác chiều dài cắt là hàng khác).
+  // Trùng thật (cùng mã + quy cách + chiều dài) chỉ cảnh báo trên lưới — xem
+  // lib/po-line-dup + trung-dong.tsx.
 
   input.after.lines.forEach((a, i) => {
     const no = i + 1
@@ -246,14 +243,6 @@ export function planAdjustment(input: {
       return
     }
     // Dòng thêm.
-    if (a.material_id) {
-      if (materialsKept.has(a.material_id) || materialsNew.has(a.material_id)) {
-        errors.push(
-          `Dòng ${no} (${label(a)}): vật tư đã có trong đơn — sửa số lượng ở dòng đó`,
-        )
-      }
-      materialsNew.add(a.material_id)
-    }
     inserts.push({ ...a, sort_order: i })
     const amt = amountOf(a)
     changes.push({

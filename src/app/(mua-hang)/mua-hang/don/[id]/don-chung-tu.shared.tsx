@@ -215,11 +215,12 @@ export const signed = (v: number, cur: string) =>
   `${v > 0 ? '+' : v < 0 ? '−' : ''}${money(Math.abs(v), cur)}`
 
 /**
- * ĐỊNH DANH DÒNG trên lưới: mã dòng DB nếu có, không thì mã vật tư. Một đơn có
- * thể có HAI dòng cùng vật tư (đơn nạp từ file chia hai lệnh) — định danh
- * theo material_id thì chọn một dòng là chọn cả hai, bấm xoá là mất cả hai.
+ * ĐỊNH DANH DÒNG trên lưới: mã dòng DB nếu có, không thì khoá cục bộ `uid`.
+ * Một đơn có thể có NHIỀU dòng cùng vật tư (chia hai lệnh; nhôm cùng cây khác
+ * chiều dài cắt) — định danh theo material_id thì chọn một dòng là chọn cả hai,
+ * bấm xoá là mất cả hai. material_id chỉ còn là đường lùi cho bản nháp cũ.
  */
-export const rowKey = (l: Line) => l.po_line_id ?? l.material_id
+export const rowKey = (l: Line) => l.po_line_id ?? l.uid ?? l.material_id
 
 export const numStr = (v: Num) => (v === '' ? '' : String(v))
 

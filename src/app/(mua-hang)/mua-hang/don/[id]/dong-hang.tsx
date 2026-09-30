@@ -48,6 +48,7 @@ import {
   toNum,
 } from './don-chung-tu.shared'
 import { lineDetailSummary } from './soan-don'
+import { TrungDong } from './trung-dong'
 import type { DonCtx } from './useDonChungTu'
 
 /** Khối `blkLines` của màn chứng từ đơn mua. */
@@ -132,6 +133,7 @@ export function DongHang({ d }: { d: DonCtx }) {
           ) : undefined
         }
       >
+        <TrungDong d={d} />
         {editing && (
           <GridToolbar
             count={sel.length > 0 ? `${sel.length} dòng đã chọn` : `${lines.length} dòng`}

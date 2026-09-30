@@ -29,6 +29,13 @@ export type Line = {
    */
   po_line_id?: string
   /**
+   * KHOÁ CỤC BỘ của dòng trên lưới (React key, tick chọn, xoá) — sống trong
+   * phiên màn, không gửi server. Dòng chưa lưu không có `po_line_id`; trước đây
+   * rơi về material_id nên hai dòng CÙNG mã (nhôm đặt cùng cây, khác chiều dài
+   * cắt — đơn GIGA anh Truyền 30/09) tick một thành tick cả hai, xoá một mất cả hai.
+   */
+  uid?: string
+  /**
    * DÒNG TỰ DO (0134): `is_free` = true thì material_id chỉ là KHÓA CỤC BỘ của
    * form (`free-…`), payload gửi material_id null + line_name/line_unit. Đơn
    * gỗ/gia công đặt theo MÃ SP — tên và ĐVT gõ thẳng trên dòng.
@@ -299,6 +306,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     // chốt ở lần đặt trước, chỉ với mẫu dùng ô này.
     (t === 'glass' || t === 'carton' ? (last?.area_m2 ?? null) : null)
   return {
+    uid: crypto.randomUUID(),
     price_per: '',
     lsx_split: {},
     material_id: m.id,
@@ -557,6 +565,7 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
       (l.lsx_split ?? []).map((sp) => [sp.production_order_id, sp.qty as Num]),
     ),
     po_line_id: l.id,
+    uid: l.id ?? crypto.randomUUID(),
     is_free: isFree,
     material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,
@@ -735,4 +744,28 @@ export function splitPayload(
     .map(([id, v]) => ({ production_order_id: id, qty: v === '' ? 0 : Number(v) }))
     .filter((x) => x.qty > 0)
   return out.length > 1 ? out : null
+}
+
+/**
+ * GỘP dòng `from` vào dòng `into` — nút "Gộp vào dòng X" của cảnh báo trùng dòng
+ * (`trung-dong.tsx`). Cộng SL đặt, SL đơn hàng và phần chia theo lệnh; nối ghi
+ * chú khác nhau. Giữ mọi ô khác của `into` (giá, kg/m, chiều dài — hai dòng đã
+ * trùng các ô đó mới bị báo).
+ *
+ * KHÁC GIÁ hoặc khác cách tính giá thì trả null: gộp là phải bỏ một giá, mà chọn
+ * giá nào là việc của người mua, không phải của máy.
+ */
+export function mergeLineInto(into: Line, from: Line): Line | null {
+  if (into.price !== from.price || (into.price_per || '') !== (from.price_per || '')) return null
+  const add = (a: Num, b: Num): Num => (a === '' && b === '' ? '' : Number(a || 0) + Number(b || 0))
+  const split: Record<string, Num> = { ...into.lsx_split }
+  for (const [k, v] of Object.entries(from.lsx_split ?? {})) split[k] = add(split[k] ?? '', v)
+  const notes = [into.note, from.note].map((s) => s.trim()).filter(Boolean)
+  return {
+    ...into,
+    qty: add(into.qty, from.qty),
+    qty_demand: add(into.qty_demand, from.qty_demand),
+    lsx_split: split,
+    note: [...new Set(notes)].join(' · '),
+  }
 }
