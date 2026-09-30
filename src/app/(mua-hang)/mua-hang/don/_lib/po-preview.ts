@@ -22,7 +22,8 @@ export function previewLinesFromDraft(
     const draft = draftOf(l)
     const d = deriveLine(template, draft)
     return {
-      id: l.material_id,
+      // Khoá dòng (key React của phiếu in) — cùng luật `rowKey`: hai dòng cùng mã.
+      id: l.po_line_id ?? l.uid ?? l.material_id,
       material_code: l.code,
       material_name: l.name,
       material_unit: l.unit,

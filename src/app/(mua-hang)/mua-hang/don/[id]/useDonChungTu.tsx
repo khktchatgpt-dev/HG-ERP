@@ -1,6 +1,7 @@
 'use client'
 
 import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
+import { sameMaterialManyLines } from '@/lib/po-line-dup'
 import {
   buildPoPayload,
   draftProblem,
@@ -428,29 +429,24 @@ export function useDonChungTu(p: Props) {
     })
 
   /**
-   * THÊM MỘT VẬT TƯ từ ô tìm — đường thêm dòng dùng nhiều nhất.
-   *
-   * MÃ ĐÃ CÓ TRÊN ĐƠN THÌ NHẢY TỚI DÒNG ĐÓ, không thêm dòng thứ hai. Tới
-   * 14/09/2026 hàm này không kiểm gì (bản gộp `addMaterials` thì có), nên gõ
-   * lại một mã là đơn có hai dòng cùng mã: React kêu trùng key, và tới lúc bấm
-   * Lưu mới ăn 400 "Vật tư bị trùng dòng" từ zod — sau khi đã gõ xong cả đơn.
-   * Màn cũ chặn ngay lúc thêm; đây là bước lùi, không phải thiết kế.
-   *
-   * Nhảy tới dòng cũ chứ không im lặng bỏ qua: bấm mà không thấy gì xảy ra thì
-   * người dùng bấm lại lần nữa, rồi đi tìm xem mình gõ sai ở đâu.
+   * THÊM MỘT VẬT TƯ từ ô tìm. MÃ ĐÃ CÓ TRÊN ĐƠN THÌ NHẢY TỚI DÒNG ĐÓ (14/09/2026:
+   * trước đó gõ lại một mã là ra hai dòng, tới lúc Lưu mới ăn 400 trùng dòng) —
+   * nhảy chứ không im lặng bỏ qua, kẻo người dùng bấm lại rồi đi tìm lỗi. TRỪ mẫu
+   * cắt theo chiều dài (`sameMaterialManyLines`): thêm dòng để khai chiều dài khác.
    */
   const addMaterial = (m: PoMaterial) => {
     const cu = lines.findIndex((l) => l.material_id === m.id)
-    if (cu >= 0) {
+    if (cu >= 0 && !sameMaterialManyLines(template)) {
       setPick(cu)
       focusQty(cu)
       toast.info(`${m.code} đã có ở dòng ${cu + 1}`, 'Sửa số lượng ngay trên dòng đó.')
       return
     }
-    const t = tplForFirst(m)
+    const t = cu >= 0 ? template : tplForFirst(m)
     setLines((ls) => [...ls, newLine(t, m)])
     setPick(lines.length)
     focusQty(lines.length)
+    if (cu >= 0) toast.info(`${m.code} đã có ở dòng ${cu + 1} — thêm dòng mới`, 'Khai chiều dài cây / quy cách khác cho dòng này; trùng cả chiều dài thì gộp vào dòng cũ.') // prettier-ignore
   }
 
   // Đơn mới: mẫu theo nhóm của vật tư đầu tiên (`templateForGroup`); trả mẫu để dòng dựng đúng ngay.

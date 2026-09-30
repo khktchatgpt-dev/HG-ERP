@@ -199,7 +199,7 @@ describe('planAdjustment — chặn tại dòng (artboard 9e)', () => {
     expect(p.errors[0]).toMatch(/không đổi vật tư/)
   })
 
-  it('dòng mới trùng vật tư đã có — nhưng hai dòng CŨ cùng mã thì để yên', () => {
+  it('dòng mới CÙNG hẳn vật tư đã có → không chặn (chỉ cảnh báo trên lưới, thông lệ ERP)', () => {
     const p = plan([
       ...BEFORE.map((l) => keep(l)),
       {
@@ -213,7 +213,26 @@ describe('planAdjustment — chặn tại dòng (artboard 9e)', () => {
         qty2: null,
       },
     ])
-    expect(p.errors).toEqual([expect.stringMatching(/Dòng 4.*đã có trong đơn/)])
+    expect(p.errors).toEqual([])
+    expect(p.inserts).toHaveLength(1)
+  })
+
+  it('dòng mới CÙNG mã nhưng KHÁC chiều dài cây → hàng khác, cho thêm (nhôm cắt theo chiều dài)', () => {
+    const p = plan([
+      ...BEFORE.map((l) => keep(l)),
+      {
+        material_id: 'NK-0049',
+        code: 'NK-0049',
+        name: 'x',
+        unit: 'Cây',
+        qty_ordered: 1,
+        unit_price: 1,
+        price_basis: 'unit',
+        qty2: null,
+        bar_length_m: 5.8,
+      },
+    ])
+    expect(p.errors).toEqual([])
   })
 
   it('không có thay đổi nào', () => {
