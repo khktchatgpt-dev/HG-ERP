@@ -16,8 +16,6 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "kit:api": "node scripts/kit-api.mjs",
     "lint:all": "eslint",
-    "ui:shots": "playwright test",
-    "ui:shots:update": "playwright test --update-snapshots",
     "size:baseline": "node scripts/size-baseline.mjs"
   },
   "dependencies": {
@@ -51,7 +49,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

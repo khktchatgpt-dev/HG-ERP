@@ -14,14 +14,14 @@ import { DonChungTuScreen } from '@/app/(mua-hang)/mua-hang/don/[id]/DonChungTuS
 /**
  * TRANG CHỤP MÀN — màn THẬT dựng bằng dữ liệu ĐÓNG BĂNG (28/09/2026).
  *
- * Để `npm run ui:shots` (Playwright, `e2e/ui-shots.spec.ts`) chụp ở 1280×800 và
- * so với ảnh chuẩn: màn thật cần đăng nhập + dữ liệu sống đổi hằng ngày, không
- * chụp so sánh được. Dữ liệu ở `_du-lieu/*.json` là ảnh chụp DB thật ngày
- * 28/09/2026 (script đóng băng ghi ở docs của bước 2); đồng hồ trình duyệt do
- * test cố định cùng ngày đó.
+ * Để soi màn thật ở 1280×800 mà không cần đăng nhập: dữ liệu sống đổi hằng
+ * ngày, dữ liệu ở `_du-lieu/*.json` là ảnh chụp DB thật ngày 28/09/2026 (script
+ * đóng băng ghi ở docs của bước 2). Từng phục vụ bộ so ảnh Playwright — bộ đó
+ * đã gỡ 30/09/2026, trang này giữ lại vì vẫn là cách nhanh nhất để nhìn màn và
+ * vì `don-chi-tiet.json` là fixture của test phím tắt.
  *
- * Khung 1280×800 ghim cứng: `ScreenFrame` tự đặt cao theo cửa sổ, ở đây phải
- * bằng đúng khung chụp.
+ * Khung 1280×800 ghim cứng: `ScreenFrame` tự đặt cao theo cửa sổ, ở đây ghim
+ * theo khung soi.
  */
 const TODAY = '2026-09-28'
 

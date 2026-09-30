@@ -100,7 +100,7 @@ export type { AdjustmentLite, PoDoc, StatusLineLite } from './don-chung-tu.share
  *  · `useDonChungTu.tsx`       — toàn bộ trạng thái + xử lý;
  *  · `dau-don.tsx`, `dong-hang.tsx`, `giao-nhan.tsx`, `tai-chinh-khoi.tsx`,
  *    `lich-su.tsx`, `trao-doi.tsx` — khối giao diện theo mục menu.
- * Lưới an toàn: `npm run ui:shots` chụp 9 cảnh của màn này (don-ct-*).
+ * Soi bằng mắt: `/design-lab/chup/don-ct-*` dựng 9 cảnh của màn này với dữ liệu đóng băng.
  */
 export function DonChungTuScreen(p: Props) {
   const d = useDonChungTu(p)

@@ -280,10 +280,10 @@ ai biết đơn đang kẹt).
 - **Vitest** (`npm test`). Test file co-located `*.test.ts`. Bắt buộc test cho: logic thuần rủi ro cao (tính tiền/tồn/công nợ), `permissions.can()`, zod schema quan trọng, event bus. UI để verify tay.
 - **Trước khi coi là xong**: `npm run check` (typecheck + lint + test) phải sạch. Format: `npm run format` (Prettier + tự sắp class Tailwind). Hook tự chạy prettier+eslint `--fix` trên file vừa sửa.
 - **Đừng** mark hoàn thành khi typecheck/test còn đỏ.
-- **Chụp màn so ảnh chuẩn** (28/09/2026): `npm run ui:shots` (Playwright, cần dev server :3000) chụp
-  `/design-lab/chup/<màn>` (màn thật + dữ liệu đóng băng `_du-lieu/*.json`) và sáu trang `/design-lab/mau-*`
-  ở 1280×800, so với `e2e/__anh-chuan__/` — trần 20 điểm ảnh (1% từng để lọt cả một con số đổi). Sửa kit /
-  màn có ảnh chuẩn thì chạy lệnh này; đổi hình CỐ Ý thì `npm run ui:shots:update` SAU KHI đã mở ảnh ra nhìn.
+- **Playwright + ảnh chuẩn ĐÃ GỠ 30/09/2026** (cùng đợt gỡ luật lint UI): không còn `ui:shots`,
+  `e2e/`, `playwright.config.ts`. Trang `/design-lab/chup/<màn>` (màn thật + dữ liệu đóng băng
+  `_du-lieu/*.json`) VẪN GIỮ — dùng để soi màn ở 1280×800 không cần đăng nhập, và
+  `don-chi-tiet.json` là fixture của test phím tắt. Kiểm giao diện bằng mắt trong trình duyệt.
 - **BẪY `cn`**: tailwind-merge từng coi `text-k-*` là MÀU và xoá cỡ chữ khi đi cùng một lớp màu dạng biến token. Đã khai
   nhóm font-size ở `src/lib/utils.ts` — thêm bậc chữ kit mới thì khai vào đó (test `cn-kit-font.test.ts`).
 
