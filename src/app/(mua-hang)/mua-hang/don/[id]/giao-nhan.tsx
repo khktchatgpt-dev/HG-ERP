@@ -92,16 +92,20 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                   onClick={() => setXacNhan('add')}
                 >
                   {' '}
-                  {/* prettier-ignore */}+ Thêm đợt giao
+                  {/* prettier-ignore */}
+                  {po?.status === 'partial'
+                    ? '+ Hẹn giao bù (đợt mới)'
+                    : '+ Thêm đợt giao'}
                 </GridBtn>
+                {/* Cung ứng nhận hàng thay Kho (01/10/2026) — cửa phiếu nhập của Cung ứng. */}
                 <GridBtn
                   disabled={!recv.receive.ok}
                   title={recv.receive.why}
-                  onClick={() => po && router.push(`/warehouse/nhap/${po.id}`)}
+                  onClick={() => po && router.push(`/mua-hang/don/${po.id}/nhan`)}
                 >
                   {' '}
                   {/* prettier-ignore */}
-                  Ghi nhận nhận hàng · Kho
+                  {po?.status === 'partial' ? 'Nhận tiếp' : 'Nhận hàng'}
                 </GridBtn>
               </>
             ) : undefined

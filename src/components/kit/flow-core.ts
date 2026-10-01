@@ -98,18 +98,22 @@ export function poHolder(po: PoLike, meId: string | null): Holder {
     case 'in_transit':
       return {
         who: 'Nhà cung cấp',
-        what: 'Hàng đang trên đường — Kho nhận khi xe tới',
+        what: 'Hàng đang trên đường — nhận hàng khi xe tới',
         since: po.updated_at ?? null,
         mine: false,
       }
     // Tên đúng trong `PO_STATUSES` là 'partial', KHÔNG phải
     // 'partially_received' — viết theo trí nhớ là rơi vào default.
+    //
+    // Về một phần: bóng ở NGƯỜI MUA (01/10/2026, bản vẽ F3). Từ khi Cung ứng
+    // nhận hàng thay Kho, việc còn lại là của người phụ trách đơn: giục NCC giao
+    // bù (đợt mới) hoặc chốt thiếu khi NCC không giao nữa — không phải "chờ Kho".
     case 'partial':
       return {
-        who: 'Kho',
-        what: 'Còn dòng chưa về — Kho nhận tiếp khi hàng tới',
+        who: 'Cung ứng',
+        what: 'Còn dòng chưa về — hẹn NCC giao bù, hoặc chốt thiếu nếu NCC không giao nữa',
         since: po.updated_at ?? null,
-        mine: false,
+        mine: !!meId && (po.assigned_to === meId || po.created_by === meId),
       }
     case 'received':
       return { who: '—', what: 'Đơn đã xong', since: po.updated_at ?? null, mine: false }

@@ -55,11 +55,16 @@ describe('poHolder — ai đang giữ bóng', () => {
     expect(h.since).toBe('x')
   })
 
-  it('về một phần thì bóng ở Kho', () => {
+  it('về một phần thì bóng ở người mua (Cung ứng nhận thay Kho, 01/10/2026)', () => {
     // Tên đúng là 'partial'. Bản đầu viết 'partially_received' theo trí nhớ,
     // rơi vào default và hiện "—" rỗng — TypeScript không kêu vì lúc đó
     // `status` khai là `string`.
-    expect(poHolder({ ...NHAP, status: 'partial' }, 'u-nga').who).toBe('Kho')
+    const h = poHolder({ ...NHAP, status: 'partial' }, 'u-nga')
+    expect(h.who).toBe('Cung ứng')
+    expect(h.what).toMatch(/giao bù.*chốt thiếu/)
+    // Người phụ trách thấy "đến lượt bạn"; người khác thì không.
+    expect(h.mine).toBe(poHolder({ ...NHAP, status: 'draft' }, 'u-nga').mine)
+    expect(poHolder({ ...NHAP, status: 'partial' }, 'u-khac').mine).toBe(false)
   })
 
   it('MỌI trạng thái trong PO_STATUSES đều trả lời được ai giữ', () => {
@@ -175,12 +180,19 @@ describe('buildPoMarks — dòng thời gian', () => {
 describe('poHolder — chờ duyệt đếm từ lần gửi duyệt (27/09/2026)', () => {
   it('có submitted_at thì dùng nó, không dùng updated_at (bị mọi lượt sửa đặt lại)', () => {
     const h = poHolder(
-      { status: 'pending_approval', submitted_at: '2026-09-15T02:00:00Z', updated_at: '2026-09-27T09:00:00Z' },
+      {
+        status: 'pending_approval',
+        submitted_at: '2026-09-15T02:00:00Z',
+        updated_at: '2026-09-27T09:00:00Z',
+      },
       null,
     )
     expect(h.since).toBe('2026-09-15T02:00:00Z')
   })
   it('thiếu mốc gửi thì lùi về updated_at như cũ', () => {
-    expect(poHolder({ status: 'pending_approval', updated_at: '2026-09-20T00:00:00Z' }, null).since).toBe('2026-09-20T00:00:00Z')
+    expect(
+      poHolder({ status: 'pending_approval', updated_at: '2026-09-20T00:00:00Z' }, null)
+        .since,
+    ).toBe('2026-09-20T00:00:00Z')
   })
 })

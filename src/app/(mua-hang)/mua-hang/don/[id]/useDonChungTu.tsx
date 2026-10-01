@@ -846,11 +846,11 @@ export function useDonChungTu(p: Props) {
       case 'confirm':
         return { label: 'NCC xác nhận', icon: 'xong', run: () => (shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN)), blocked: lyDo(recv.confirm) } // prettier-ignore
       case 'addShipment':
-        return { label: 'Thêm đợt giao', icon: 'them', run: () => setXacNhan('add'), blocked: lyDo(recv.addShipment) } // prettier-ignore
+        return { label: po?.status === 'partial' ? 'Hẹn giao bù (đợt mới)' : 'Thêm đợt giao', icon: 'them', run: () => setXacNhan('add'), blocked: lyDo(recv.addShipment) } // prettier-ignore
       case 'transit':
         return { label: 'Hàng đang trên đường', icon: 'nhanHang', run: () => start(TRANSIT), blocked: lyDo(recv.transit) } // prettier-ignore
       case 'receive':
-        return { label: 'Ghi nhận nhận hàng · Kho', icon: 'ghiSo', run: () => router.push(`/warehouse/nhap/${poId}`), blocked: lyDo(recv.receive) } // prettier-ignore
+        return { label: po?.status === 'partial' ? 'Nhận tiếp' : 'Nhận hàng', icon: 'ghiSo', run: () => router.push(`/mua-hang/don/${poId}/nhan`), blocked: lyDo(recv.receive) } // prettier-ignore
       case 'closeShort':
         return { label: 'Chốt phần thiếu', run: () => start(CLOSE_SHORT), blocked: lyDo(recv.closeShort) } // prettier-ignore
       case 'acceptByHand':
