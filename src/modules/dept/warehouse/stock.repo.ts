@@ -1149,6 +1149,36 @@ export async function insertMovements(
   if (error) throw new Error(error.message)
 }
 
+/** Kg cân thực hiện có của các dòng sổ — số TRƯỚC khi ghi bổ sung (để ghi vết). */
+export async function qty2ActualByIds(ids: string[]): Promise<Map<string, number | null>> {
+  if (ids.length === 0) return new Map()
+  const { data, error } = await db()
+    .from('warehouse_movements')
+    .select('id, qty2_actual')
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  return new Map(
+    ((data ?? []) as { id: string; qty2_actual: unknown }[]).map((r) => [
+      r.id,
+      r.qty2_actual == null ? null : Number(r.qty2_actual),
+    ]),
+  )
+}
+
+/**
+ * Ghi kg cân thực vào dòng sổ ĐÃ CÓ. Ngoại lệ DUY NHẤT của luật "sổ chỉ cộng
+ * thêm": `qty2_actual` là số đo, không tham gia tồn / giá vốn (01/10/2026).
+ */
+export async function setQty2Actual(rows: { id: string; qty2_actual: number }[]): Promise<void> {
+  for (const r of rows) {
+    const { error } = await db()
+      .from('warehouse_movements')
+      .update({ qty2_actual: r.qty2_actual })
+      .eq('id', r.id)
+    if (error) throw new Error(error.message)
+  }
+}
+
 /** Tồn hiện tại của nhiều vật tư (guard xuất nhiều dòng). */
 export async function onHandMany(materialIds: string[]): Promise<Map<string, number>> {
   if (materialIds.length === 0) return new Map()

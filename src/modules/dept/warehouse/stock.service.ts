@@ -26,6 +26,8 @@ import {
   materialLabels,
   type DocKind,
   type StocktakeLine,
+  qty2ActualByIds,
+  setQty2Actual,
 } from './stock.repo'
 import {
   componentAllocationByCode,
@@ -1410,6 +1412,67 @@ export const stockService = {
    *  - PNK theo PO: refresh trạng thái đơn (received quay partial), đợt 0153
    *    đã 'received' quay 'arrived'. Notify quản lý Kho + owner đơn.
    */
+  /**
+   * GHI KG CÂN BỔ SUNG vào phiếu nhập đã ghi sổ (01/10/2026, chủ dự án duyệt).
+   *
+   * Nhôm / thép trả tiền theo kg cân mà lúc nhận quên cân (đo 01/10: PNK-2026-
+   * 0054/0057/0058 đều trống kg). Kg là SỐ ĐO, không tham gia tồn hay giá vốn,
+   * nên đây là ngoại lệ hẹp của luật "sổ chỉ cộng thêm" — thay vì bắt đảo phiếu
+   * rồi nhập lại. Bắt lý do; vết (trước → sau, ai, lý do) vào Trao đổi của đơn
+   * qua event `warehouse.kg.recorded`.
+   *
+   * Chặn: phiếu phải là phiếu NHẬP đã ghi sổ, chưa bị đảo; dòng phải thuộc
+   * phiếu và theo đơn mua (nhập ngoài đơn không có kg thanh toán để đối chiếu).
+   */
+  async ghiKgCanBoSung(
+    user: User,
+    docId: string,
+    input: { lines: { movement_id: string; qty2_actual: number }[]; reason: string },
+  ): Promise<{ updated: number }> {
+    await assertAction(user, 'warehouse.stock.write')
+    const doc = await docsRepo.findById(docId)
+    if (!doc) throw NotFound('Phiếu kho không tồn tại')
+    if (doc.kind !== 'receipt' || doc.status !== 'posted')
+      throw BadRequest('Chỉ ghi kg cân cho phiếu NHẬP đã ghi sổ')
+    if (await docsRepo.findReversalOf(docId))
+      throw BadRequest(`Phiếu ${doc.code} đã bị đảo — không ghi kg nữa`)
+    const lines = new Map((await docsRepo.listLines(docId)).map((l) => [l.id, l]))
+    const sai = input.lines.filter((l) => !lines.get(l.movement_id)?.po_line_id)
+    if (sai.length > 0)
+      throw BadRequest(
+        `${sai.length} dòng không thuộc phiếu ${doc.code} hoặc không theo đơn mua`,
+      )
+    const lineIds = input.lines.map((l) => lines.get(l.movement_id)!.po_line_id!)
+    const [poIds, truoc] = await Promise.all([
+      supplyRepo.poIdsByLineIds(lineIds),
+      qty2ActualByIds(input.lines.map((l) => l.movement_id)),
+    ])
+    if (poIds.length !== 1) throw BadRequest('Phiếu nhập phải thuộc đúng một đơn mua')
+    await setQty2Actual(
+      input.lines.map((l) => ({ id: l.movement_id, qty2_actual: l.qty2_actual })),
+    )
+    await emit({
+      name: 'warehouse.kg.recorded',
+      doc_id: docId,
+      doc_code: doc.code,
+      po_id: poIds[0],
+      actor_id: user.id,
+      actor_name: user.name ?? user.email,
+      reason: input.reason.trim(),
+      lines: input.lines.map((l) => {
+        const d = lines.get(l.movement_id)!
+        return {
+          code: d.material_code ?? '—',
+          unit: d.material_unit ?? '',
+          qty: d.qty,
+          before: truoc.get(l.movement_id) ?? null,
+          after: l.qty2_actual,
+        }
+      }),
+    })
+    return { updated: input.lines.length }
+  },
+
   async reverseDoc(
     user: User,
     docId: string,

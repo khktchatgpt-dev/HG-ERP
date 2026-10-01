@@ -282,6 +282,23 @@ export const receiptDocLineSchema = z
     path: ['stock_status'],
   })
 
+/**
+ * GHI KG CÂN BỔ SUNG vào phiếu nhập đã ghi sổ (01/10/2026). Kg chỉ là số đo —
+ * không đổi tồn — nên cho ghi sau, nhưng BẮT lý do (vết vào Trao đổi của đơn).
+ */
+export const kgCanBoSungSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        movement_id: z.string().uuid(),
+        qty2_actual: z.coerce.number().positive().max(10_000_000),
+      }),
+    )
+    .min(1, 'Chưa ghi kg cho dòng nào')
+    .max(200),
+  reason: z.string().trim().min(3, 'Ghi lý do (ít nhất 3 ký tự)').max(300),
+})
+
 /** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
 export const receiptDocSchema = z
   .object({

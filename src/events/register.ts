@@ -9,6 +9,7 @@ import { registerProductionNotificationHandlers } from './handlers/production.no
 import { registerApprovalAuditHandlers } from './handlers/approval.audit'
 import { registerRbacAuditHandlers } from './handlers/rbac.audit'
 import { registerMaterialAuditHandlers } from './handlers/material.audit'
+import { registerWarehouseAuditHandlers } from './handlers/warehouse.audit'
 
 let registered = false
 
@@ -30,6 +31,7 @@ export function registerEventHandlers(): void {
   registerApprovalAuditHandlers()
   registerRbacAuditHandlers()
   registerMaterialAuditHandlers()
+  registerWarehouseAuditHandlers()
 }
 
 // Auto-register khi module import lần đầu — Next.js server sẽ chạy dòng này

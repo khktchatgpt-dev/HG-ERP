@@ -108,6 +108,28 @@ export type DomainEvent =
       reversed_by: string
       notify_ids: string[]
     }
+  /**
+   * GHI KG CÂN BỔ SUNG vào phiếu nhập ĐÃ GHI SỔ (01/10/2026, chủ dự án duyệt):
+   * nhôm/thép trả tiền theo kg cân mà lúc nhận quên cân. Kg chỉ là số đo, không
+   * đổi tồn — nên cho ghi sau, bắt lý do; vết đi vào Trao đổi của ĐƠN MUA để
+   * người mua và Kế toán cùng thấy (handler `warehouse.audit`).
+   */
+  | {
+      name: 'warehouse.kg.recorded'
+      doc_id: string
+      doc_code: string
+      po_id: string
+      actor_id: string
+      actor_name: string | null
+      reason: string
+      lines: {
+        code: string
+        unit: string
+        qty: number
+        before: number | null
+        after: number
+      }[]
+    }
 
   // ── Kho — vòng duyệt kiểm kê (0157) ──────────────────────────────────
   | {

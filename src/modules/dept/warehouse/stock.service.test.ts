@@ -28,6 +28,8 @@ vi.mock('./stock.repo', () => ({
   stockByBin: vi.fn(async () => []),
   stocktakeRepo: { insertLines: vi.fn(), listByDoc: vi.fn() },
   insertMovements: vi.fn(),
+  qty2ActualByIds: vi.fn(async () => new Map()),
+  setQty2Actual: vi.fn(),
   onHandMany: vi.fn(),
   stockInfoMany: vi.fn(),
   inspectionGroups: vi.fn(async () => new Set()),
@@ -87,6 +89,8 @@ import {
   binsRepo,
   docsRepo,
   insertMovements,
+  qty2ActualByIds,
+  setQty2Actual,
   issuedByLsx,
   issuedByLsxIds,
   lsxRemainingByIds,
@@ -1811,5 +1815,55 @@ describe('createReceiptDoc — kg cân thực nhôm / thép (01/10/2026)', () =>
     })
     const rows = vi.mocked(insertMovements).mock.calls[0][0]
     expect(rows[0].qty2_actual).toBe(108.4)
+  })
+})
+
+describe('ghiKgCanBoSung — kg cân ghi sau cho phiếu nhập đã ghi sổ (01/10/2026)', () => {
+  const DOC = { id: 'doc-57', code: 'PNK-2026-0057', kind: 'receipt', status: 'posted' }
+  const LINE = { id: 'mv1', po_line_id: 'pl1', material_code: 'ST-0206', material_unit: 'Cây', qty: 151 }
+  beforeEach(() => {
+    vi.mocked(docsRepo.findById).mockResolvedValue(DOC as never)
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue(null)
+    vi.mocked(docsRepo.listLines).mockResolvedValue([LINE] as never)
+    vi.mocked(supplyRepo.poIdsByLineIds).mockResolvedValue(['po-116'])
+    vi.mocked(qty2ActualByIds).mockResolvedValue(new Map([['mv1', null]]))
+  })
+  const input = { lines: [{ movement_id: 'mv1', qty2_actual: 549 }], reason: 'Cân lại tại xưởng' }
+
+  it('ghi kg và phát vết (trước → sau, ai, lý do) cho Trao đổi của đơn', async () => {
+    const r = await stockService.ghiKgCanBoSung(admin, 'doc-57', input)
+    expect(r.updated).toBe(1)
+    expect(setQty2Actual).toHaveBeenCalledWith([{ id: 'mv1', qty2_actual: 549 }])
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'warehouse.kg.recorded',
+        doc_code: 'PNK-2026-0057',
+        po_id: 'po-116',
+        reason: 'Cân lại tại xưởng',
+        lines: [{ code: 'ST-0206', unit: 'Cây', qty: 151, before: null, after: 549 }],
+      }),
+    )
+  })
+
+  it('phiếu XUẤT hoặc chưa ghi sổ → chặn, không ghi gì', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({ ...DOC, kind: 'issue' } as never)
+    await expect(stockService.ghiKgCanBoSung(admin, 'doc-57', input)).rejects.toThrow(/phiếu NHẬP/)
+    expect(setQty2Actual).not.toHaveBeenCalled()
+  })
+
+  it('phiếu đã bị đảo → chặn', async () => {
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue({ id: 'r', code: 'PXK-2026-0009' })
+    await expect(stockService.ghiKgCanBoSung(admin, 'doc-57', input)).rejects.toThrow(/đã bị đảo/)
+    expect(setQty2Actual).not.toHaveBeenCalled()
+  })
+
+  it('dòng không thuộc phiếu → chặn (không cho ghi kg lên dòng sổ của phiếu khác)', async () => {
+    await expect(
+      stockService.ghiKgCanBoSung(admin, 'doc-57', {
+        ...input,
+        lines: [{ movement_id: 'mv-khac', qty2_actual: 10 }],
+      }),
+    ).rejects.toThrow(/không thuộc phiếu/)
+    expect(setQty2Actual).not.toHaveBeenCalled()
   })
 })

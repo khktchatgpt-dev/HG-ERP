@@ -36,6 +36,7 @@ import {
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { HenGiaoNut, XacNhanNut } from './hanh-dong'
+import { XemTheoDoi } from './xem'
 import { ChuyenSheet, type CarrierOption, type TripEdit } from './chuyen-sheet'
 import { ChuyenDangDi, type TripCard } from './chuyen-dang-di'
 
@@ -191,11 +192,7 @@ export function DangVeScreen({
         compact
         eyebrow="Mua hàng"
         title="Theo dõi đơn hàng"
-        chain={
-          <span className="text-k-sm text-[var(--ink-3)]">
-            đơn đã gửi nhà cung cấp → tới khi hàng về kho
-          </span>
-        }
+        chain={<XemTheoDoi at="dang-ve" />}
         facts={[
           {
             label: scope === 'toi' ? 'Đơn của tôi đang về' : 'Đang về',
