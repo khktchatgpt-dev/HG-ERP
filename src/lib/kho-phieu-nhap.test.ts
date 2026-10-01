@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chiTietDong,
   danhGiaVuot,
   dungLuoi,
   kiemTruocGhiSo,
@@ -184,7 +185,10 @@ describe('kg cân — nhôm / thép trả tiền theo kg (chốt 01/10/2026)', (
 
 describe('sauPhieu — nói trước dòng sẽ ra sao', () => {
   it('đủ · thiếu · vượt · chưa nhận · dòng đã đủ thì null', () => {
-    expect(sauPhieu({ qty: 100, qty_open: 100, editable: true })).toEqual({ kind: 'du', n: 0 })
+    expect(sauPhieu({ qty: 100, qty_open: 100, editable: true })).toEqual({
+      kind: 'du',
+      n: 0,
+    })
     expect(sauPhieu({ qty: 34000, qty_open: 34443, editable: true })).toEqual({
       kind: 'thieu',
       n: 443,
@@ -198,5 +202,38 @@ describe('sauPhieu — nói trước dòng sẽ ra sao', () => {
       n: 7,
     })
     expect(sauPhieu({ qty: 0, qty_open: 0, editable: false })).toBeNull()
+  })
+})
+
+describe('chiTietDong — phân biệt các dòng cùng mã vật tư (tem PQ 45 dòng)', () => {
+  it('ghép mã SP · quy cách · ghi chú, bỏ phần trống', () => {
+    expect(
+      chiTietDong({
+        product_code: '21610-217',
+        spec: '19.5x7.5cm',
+        line_note: 'SL ĐH 150',
+      }),
+    ).toBe('21610-217 · 19.5x7.5cm · SL ĐH 150')
+    expect(chiTietDong({ spec: ' ', line_note: null })).toBeNull()
+    expect(chiTietDong({ line_note: 'Lót tấm 2 đầu — bàn Delos' })).toBe(
+      'Lót tấm 2 đầu — bàn Delos',
+    )
+  })
+
+  it('ghi chú đã mở đầu bằng mã SP thì không lặp lại mã', () => {
+    expect(
+      chiTietDong({
+        product_code: '21610-217',
+        spec: '7x6cm',
+        line_note: '21610-217 · SL ĐH 150',
+      }),
+    ).toBe('21610-217 · 7x6cm · SL ĐH 150')
+  })
+
+  it('dungLuoi mang dòng phụ lên lưới', () => {
+    const { rows } = dungLuoi([
+      dong({ id: '1', product_code: '26904-910', line_note: 'SL ĐH 100' }),
+    ])
+    expect(rows[0].chi_tiet).toBe('26904-910 · SL ĐH 100')
   })
 })

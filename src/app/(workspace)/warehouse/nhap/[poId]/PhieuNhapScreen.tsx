@@ -517,8 +517,16 @@ export function PhieuNhapScreen({
                         )
                       })()}
                     </td>
-                    <td className="max-w-0 truncate" title={r.name}>
-                      {r.name}
+                    <td
+                      className="max-w-0"
+                      title={r.chi_tiet ? `${r.name}\n${r.chi_tiet}` : r.name}
+                    >
+                      <div className="truncate">{r.name}</div>
+                      {r.chi_tiet && (
+                        <div className="text-k-label truncate text-[var(--ink-3)]">
+                          {r.chi_tiet}
+                        </div>
+                      )}
                     </td>
                     <td className="text-[var(--ink-3)]">{r.unit}</td>
                     <td className="k-r num">{fmt(r.qty_ordered)}</td>

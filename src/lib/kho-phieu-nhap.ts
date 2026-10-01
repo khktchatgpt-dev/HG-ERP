@@ -29,6 +29,31 @@ export type DongDon = {
   unit2?: string | null
   /** Tổng kg (đơn vị 2) của dòng đơn — gợi ý kg dự kiến, không thay số cân. */
   qty2?: number | null
+  /** Mã SP khách / quy cách / ghi chú của DÒNG ĐƠN — để phân biệt các dòng cùng mã vật tư. */
+  product_code?: string | null
+  spec?: string | null
+  line_note?: string | null
+}
+
+/**
+ * Dòng phụ dưới tên vật tư trên phiếu nhập: "mã SP · quy cách · ghi chú dòng đơn".
+ *
+ * Vì sao (01/10/2026): đơn tem PQ có 45 dòng chỉ hai mã vật tư (nhãn hình / thẻ
+ * treo) chia theo từng mã SP — lưới chỉ có tên vật tư thì 45 dòng giống hệt
+ * nhau, NCC giao lẻ từng mã SP là người nhận không biết gõ vào dòng nào.
+ * Ghi chú dòng đã mở đầu bằng mã SP (cách nạp đơn hay ghi) thì không lặp lại.
+ */
+export function chiTietDong(l: {
+  product_code?: string | null
+  spec?: string | null
+  line_note?: string | null
+}): string | null {
+  const ma = l.product_code?.trim() || null
+  let note = l.line_note?.trim() || null
+  if (ma && note?.startsWith(ma))
+    note = note.slice(ma.length).replace(/^[\s·:,\-–—]+/, '') || null
+  const parts = [ma, l.spec?.trim() || null, note].filter((x): x is string => !!x)
+  return parts.length ? parts.join(' · ') : null
 }
 
 export type TinhTrang = 'ok' | 'blocked'
@@ -56,6 +81,8 @@ export type DongNhan = {
   kg_don: number | null
   /** Kg cân thực của lần nhận này. null = chưa cân. */
   kg_can: number | null
+  /** Mã SP · quy cách · ghi chú dòng đơn (`chiTietDong`) — null = không có gì để nói. */
+  chi_tiet?: string | null
 }
 
 /** Dựng lưới từ dòng đơn (+ dòng của đợt giao nếu đi từ một đợt). */
@@ -102,6 +129,7 @@ export function dungLuoi(
       can_kg: canCanKg(template, l),
       kg_don: l.qty2 ?? null,
       kg_can: null,
+      chi_tiet: chiTietDong(l),
     })
   }
   return { rows, bo_qua_tu_do }
@@ -152,11 +180,7 @@ export type KiemKetQua =
   | {
       ok: false
       reason:
-        | 'khong_dong'
-        | 'so_khong_hop_le'
-        | 'thieu_ghi_chu'
-        | 'thieu_kg'
-        | 'vuot_dung_sai'
+        'khong_dong' | 'so_khong_hop_le' | 'thieu_ghi_chu' | 'thieu_kg' | 'vuot_dung_sai'
       message: string
       /** Chỉ số dòng để thanh chốt nhảy tới. */
       line?: number

@@ -68,6 +68,9 @@ export async function taiPhieuNhap(
       price_basis: l?.price_basis ?? null,
       unit2: l?.unit2 ?? null,
       qty2: l?.qty2 ?? null,
+      product_code: l?.product_code ?? null,
+      spec: l?.spec ?? null,
+      line_note: l?.note ?? null,
     }
   })
   const dot = dotId ? (shipments.find((s) => s.id === dotId) ?? null) : null
