@@ -76,6 +76,9 @@ export type PoDoc = {
   ordered_at: string | null
   confirmed_at: string | null
   confirmed_note: string | null
+  /** Tỷ giá chốt lúc duyệt (0219) — null = đơn VND hoặc chưa có tỷ giá. */
+  fx_rate?: number | null
+  fx_date?: string | null
   created_at: string
   updated_at?: string | null
 }

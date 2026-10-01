@@ -37,6 +37,14 @@ export type Po = {
   confirmed_at: string | null
   /** "Chị Hoa bên Nam Kim xác nhận qua Zalo 15/08" — ai hứa, kênh nào. */
   confirmed_note: string | null
+  /**
+   * Tỷ giá CHỐT lúc GĐ duyệt (0219): 1 ngoại tệ = ? VND. null = đơn VND, hoặc
+   * đơn ngoại tệ duyệt lúc bảng tỷ giá chưa có dòng nào ≤ ngày duyệt. Không
+   * đổi theo bảng `fx_rates` sau đó; hạ về nháp thì xoá cùng `approved_at`.
+   */
+  fx_rate: number | null
+  /** Ngày đã tra bảng tỷ giá (= ngày duyệt). */
+  fx_date: string | null
   note: string | null
   created_by: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền ghi xét theo cột này, bàn giao được. */
@@ -176,7 +184,7 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, note, created_by, assigned_to, created_at, updated_at, source_po_id'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id'
 
 /** Cột `numeric` của dòng — PostgREST trả về CHUỖI ("0.2480"), ép lại về number. */
 const NUMERIC_LINE_COLS = [
@@ -210,8 +218,16 @@ function numericLineFields(row: Record<string, unknown>): Record<string, number 
 type Raw = Po & {
   supplier: { name: string } | { name: string }[] | null
   lsx:
-    | { code: string; status?: string; order: { code: string } | { code: string }[] | null }
-    | { code: string; status?: string; order: { code: string } | { code: string }[] | null }[]
+    | {
+        code: string
+        status?: string
+        order: { code: string } | { code: string }[] | null
+      }
+    | {
+        code: string
+        status?: string
+        order: { code: string } | { code: string }[] | null
+      }[]
     | null
   assignee:
     | { name: string | null; email: string }
@@ -596,7 +612,11 @@ export const posRepo = {
     for (const r of (data ?? []) as Row[]) {
       const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
       const list = out.get(r.po_id) ?? []
-      list.push({ id: r.production_order_id, code: lx?.code ?? '?', status: lx?.status ?? null })
+      list.push({
+        id: r.production_order_id,
+        code: lx?.code ?? '?',
+        status: lx?.status ?? null,
+      })
       out.set(r.po_id, list)
     }
     return out

@@ -25,6 +25,13 @@ export type Order = {
   required_docs: string | null
   /** Lệnh sản xuất đang chạy đơn này — NULL = chưa phát lệnh (0113). */
   production_order_id: string | null
+  /**
+   * Tỷ giá CHỐT lúc xác nhận đơn (0219): 1 ngoại tệ = ? VND. null = chưa có
+   * dòng tỷ giá nào ≤ ngày đơn. Không đổi theo bảng `fx_rates` sau đó.
+   */
+  fx_rate: number | null
+  /** Ngày đã tra bảng tỷ giá (= ngày xác nhận đơn). */
+  fx_date: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -91,7 +98,7 @@ export type OrderChange = {
 }
 
 const COLS =
-  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, production_order_id, created_by, created_at, updated_at'
+  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, production_order_id, fx_rate, fx_date, created_by, created_at, updated_at'
 
 type RawOrder = Order & {
   customer: { name: string } | { name: string }[] | null
@@ -323,6 +330,8 @@ export const ordersRepo = {
       port_of_discharge?: string | null
       payment_method?: string | null
       required_docs?: string | null
+      fx_rate?: number | null
+      fx_date?: string | null
       created_by: string
     },
     lines: OrderLineInput[],

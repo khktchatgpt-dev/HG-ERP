@@ -255,6 +255,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'calendar-check',
           },
           /*
+           * Tỷ giá (0219) cũng là DANH MỤC — đứng riêng vì Kế toán là người
+           * nhập và vì mọi màn cộng tiền đa tiền tệ (Tiền theo lệnh, Công nợ)
+           * đều tựa vào bảng này.
+           */
+          { href: '/finance/ty-gia', label: 'Tỷ giá', icon: 'arrow-left-right' },
+          /*
            * Đối chiếu hoá đơn ↔ đơn mua KHÔNG đứng riêng ở nav: nó là bước soi
            * chi tiết, vào từ một lệnh hoặc một đơn cụ thể. Cho nó một mục ngang
            * hàng "Hoá đơn" là dựng hai chỗ cùng nói về hoá đơn trong một phòng.

@@ -35,7 +35,12 @@ const nextConfig: NextConfig = {
   // đoán nhầm root là repo cha → mọi route 404. Repo chính không ảnh hưởng.
   // Dùng process.cwd() thay __dirname: config TS được transpile ra file tạm,
   // __dirname trỏ sai chỗ.
-  turbopack: { root: process.cwd() },
+  // HG_TURBOPACK_ROOT (02/10/2026): worktree KHÔNG có node_modules riêng, mà
+  // junction sang repo cha thì Turbopack từ chối ("points out of the filesystem
+  // root"). Chạy `HG_TURBOPACK_ROOT=D:\HG-ERP next dev -p 3100` trong worktree
+  // thì root là repo cha (chứa cả worktree lẫn node_modules), route vẫn đúng vì
+  // project dir vẫn là cwd. Không đặt biến thì y như cũ.
+  turbopack: { root: process.env.HG_TURBOPACK_ROOT || process.cwd() },
   images: {
     remotePatterns: supabaseImagePatterns(),
     /*

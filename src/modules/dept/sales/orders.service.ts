@@ -19,6 +19,8 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canMutateOwned } from '@/lib/record-ownership'
+import { todayVn } from '@/lib/date-vn'
+import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
 const EDITABLE_FIELDS = [
@@ -221,6 +223,14 @@ export const ordersService = {
       }
     }
 
+    /*
+     * TỶ GIÁ CHỐT LÚC XÁC NHẬN ĐƠN (0219): đơn bán sinh ra đã là `confirmed`,
+     * nên chốt ngay lúc tạo. Bảng chưa có dòng ≤ hôm nay thì để null — màn Tỷ
+     * giá của Kế toán bày đơn này ở "thiếu tỷ giá" và gán lại sau.
+     */
+    const fxDate = todayVn()
+    const fxRate = await fxRatesRepo.rateAt(source.currency, fxDate)
+
     return ordersRepo.insert(
       {
         code: input.code,
@@ -228,6 +238,8 @@ export const ordersService = {
         customer_id: source.customer_id,
         customer_po_no: input.customer_po_no ?? null,
         currency: source.currency,
+        fx_rate: fxRate,
+        fx_date: fxRate == null ? null : fxDate,
         due_date: input.due_date ?? null,
         deposit_percent: input.deposit_percent ?? null,
         price_term: source.price_term,

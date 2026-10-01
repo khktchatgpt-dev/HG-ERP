@@ -130,6 +130,7 @@ export function DauDon({ d }: { d: DonCtx }) {
     dateEdit,
     editReason,
     setEditReason,
+    totals,
   } = d
   return (
     <>
@@ -355,6 +356,50 @@ export function DauDon({ d }: { d: DonCtx }) {
                       {po?.discount_amount ? money(po.discount_amount, po.currency) : '—'}
                     </span>
                   </Field>
+                  {/*
+                    TỶ GIÁ CHỐT (0219) — chỉ đơn ngoại tệ. Quy VND tính lúc đọc
+                    từ tổng hiện tại × tỷ giá: dòng hàng đổi thì số đổi, tỷ giá
+                    thì không. Chưa có tỷ giá: nói rõ ai gỡ (Kế toán), không
+                    bày "0 đ".
+                  */}
+                  {po && po.currency !== 'VND' && (
+                    <>
+                      <Field label="Tỷ giá chốt">
+                        {po.fx_rate ? (
+                          <span className="num">
+                            {Number(po.fx_rate).toLocaleString('vi-VN')}
+                            <span className="text-[var(--ink-3)]">
+                              {' '}
+                              · ngày duyệt {po.fx_date ? dmy(po.fx_date) : '—'}
+                            </span>
+                          </span>
+                        ) : po.approved_at ? (
+                          <span className="k-t-warn">
+                            chưa có — Kế toán thêm tỷ giá ≤{' '}
+                            {dmy(po.approved_at.slice(0, 10))} ở{' '}
+                            <a className="underline" href="/finance/ty-gia">
+                              Tỷ giá
+                            </a>{' '}
+                            rồi gán
+                          </span>
+                        ) : (
+                          <span className="text-[var(--ink-3)]">
+                            chốt lúc Giám đốc duyệt
+                          </span>
+                        )}
+                      </Field>
+                      <Field label="Quy VND">
+                        <span className="num">
+                          {po.fx_rate
+                            ? money(
+                                Math.round(totals.grandTotal * Number(po.fx_rate)),
+                                'VND',
+                              )
+                            : '—'}
+                        </span>
+                      </Field>
+                    </>
+                  )}
                 </>
               )}
               <Field label="Điều khoản TT của NCC" inherited>

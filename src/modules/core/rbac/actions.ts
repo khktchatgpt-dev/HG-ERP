@@ -578,6 +578,23 @@ export const ACTIONS: Action[] = [
     rule: perm('accounting.member'),
     rowLevel: 'Xoá: người ghi hoặc Ban quản lý.',
   },
+  /*
+   * TỶ GIÁ (0219): bảng của Kế toán. Cung ứng xem được (đơn USD của họ quy VND
+   * theo bảng này), nhưng chỉ Kế toán nhập — một nguồn tỷ giá, một người chịu.
+   */
+  {
+    key: 'accounting.fx.view',
+    label: 'Xem bảng tỷ giá',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+  },
+  {
+    key: 'accounting.fx.manage',
+    label: 'Nhập / sửa tỷ giá, gán tỷ giá cho chứng từ',
+    domain: 'accounting',
+    rule: perm('accounting.member'),
+    rowLevel: 'Dòng đã có chứng từ dùng thì khoá sửa — thêm ngày mới.',
+  },
 
   // ── Ban Giám Đốc ─────────────────────────────────────────────────────────
   {
