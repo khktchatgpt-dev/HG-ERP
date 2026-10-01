@@ -1,0 +1,4562 @@
+{
+ "today": "2026-10-01",
+ "rows": [
+  {
+   "doc_id": "2bc4a11b-2f07-447c-8e42-2731550f23c4",
+   "code": "PNK-2026-0058",
+   "doc_date": "2026-09-27",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "efb83bed-e3f3-424c-af81-d735556d02f1",
+   "po_code": "PO-2026-0117",
+   "lsx_code": "07/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH THÉP KIM PHÁT",
+   "owner_id": "e99f2f40-7965-46de-9d38-2989f73cb81f",
+   "owner_name": "Trương Thanh Truyền",
+   "lines": [
+    {
+     "movement_id": "8dca4567-f87e-479b-8da6-64e90e6b5f0e",
+     "material_code": "ST-0070",
+     "material_name": "Sắt hộp 15x35x8dem",
+     "unit": "Cây",
+     "qty": 151,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 151,
+     "kg_don": 549.0058
+    },
+    {
+     "movement_id": "24475e70-269c-4794-989d-0c4509a28a98",
+     "material_code": "ST-0210",
+     "material_name": "Thép oval 17x26x0.85",
+     "unit": "Cây",
+     "qty": 85,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 85,
+     "kg_don": 319.9995
+    }
+   ],
+   "phieu": {
+    "doc_id": "2bc4a11b-2f07-447c-8e42-2731550f23c4",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "8dca4567-f87e-479b-8da6-64e90e6b5f0e",
+      "material_code": "ST-0070",
+      "material_name": "Sắt hộp 15x35x8dem",
+      "unit": "Cây",
+      "qty": 151,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 151,
+      "kg_don": 549.0058
+     },
+     {
+      "movement_id": "24475e70-269c-4794-989d-0c4509a28a98",
+      "material_code": "ST-0210",
+      "material_name": "Thép oval 17x26x0.85",
+      "unit": "Cây",
+      "qty": 85,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 85,
+      "kg_don": 319.9995
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "0acda362-837e-48f4-ab86-95022cccc625",
+   "code": "PNK-2026-0057",
+   "doc_date": "2026-09-27",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "54602d14-e6a3-49e9-80c0-3179557cc705",
+   "po_code": "PO-2026-0116",
+   "lsx_code": "07/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH SX TM XNK THÉP VISA",
+   "owner_id": "e99f2f40-7965-46de-9d38-2989f73cb81f",
+   "owner_name": "Trương Thanh Truyền",
+   "lines": [
+    {
+     "movement_id": "2c18d240-41cf-42f3-896f-0211ae90525d",
+     "material_code": "ST-0206",
+     "material_name": "Thép hộp vuông 20x40x1.0",
+     "unit": "Cây",
+     "qty": 210,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 210,
+     "kg_don": 1146.6
+    },
+    {
+     "movement_id": "e74fd245-e9be-4bbf-9ceb-bc948d8681a2",
+     "material_code": "ST-0209",
+     "material_name": "Thép vuông 25x25x1.0",
+     "unit": "Cây",
+     "qty": 300,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 300,
+     "kg_don": 1374
+    }
+   ],
+   "phieu": {
+    "doc_id": "0acda362-837e-48f4-ab86-95022cccc625",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "2c18d240-41cf-42f3-896f-0211ae90525d",
+      "material_code": "ST-0206",
+      "material_name": "Thép hộp vuông 20x40x1.0",
+      "unit": "Cây",
+      "qty": 210,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 210,
+      "kg_don": 1146.6
+     },
+     {
+      "movement_id": "e74fd245-e9be-4bbf-9ceb-bc948d8681a2",
+      "material_code": "ST-0209",
+      "material_name": "Thép vuông 25x25x1.0",
+      "unit": "Cây",
+      "qty": 300,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 300,
+      "kg_don": 1374
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "f099081f-44cc-43a8-a367-bbc851f5ad5e",
+   "code": "PNK-2026-0056",
+   "doc_date": "2026-09-20",
+   "supplier_doc_no": "1/2026- HG/HB",
+   "nguoi_nhan": "Lê Khắc Hào",
+   "po_id": "366ddd65-d46b-4a8d-8570-f3eb2174bd81",
+   "po_code": "PO-2026-0110",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CƠ SỞ HÀ BÍCH",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "68c1db50-a27f-4443-8e8f-6b0bee66e0f9",
+     "material_code": "BAO0522",
+     "material_name": "Bì nhựa 50x60",
+     "unit": "Kg",
+     "qty": 6,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 6,
+     "kg_don": null
+    },
+    {
+     "movement_id": "eae0ee21-58f2-4893-a783-66324ed6149d",
+     "material_code": "BAO0557",
+     "material_name": "Bì nhựa 58x135",
+     "unit": "Kg",
+     "qty": 75,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 75,
+     "kg_don": null
+    },
+    {
+     "movement_id": "e2658830-3bac-4f1e-8002-d9e27877c800",
+     "material_code": "BAO0550",
+     "material_name": "Bì nhựa 56x82",
+     "unit": "Kg",
+     "qty": 27,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 27,
+     "kg_don": null
+    },
+    {
+     "movement_id": "e734bdd8-23d1-489d-939b-fda64945b3b0",
+     "material_code": "BAO0759",
+     "material_name": "Bì nhựa 73x85",
+     "unit": "Kg",
+     "qty": 23,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 23,
+     "kg_don": null
+    },
+    {
+     "movement_id": "8b3eac45-eb72-4cd9-840b-a58a02fb6cc7",
+     "material_code": "BAO0591",
+     "material_name": "Bì nhựa 76x224",
+     "unit": "Kg",
+     "qty": 17,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 17,
+     "kg_don": null
+    },
+    {
+     "movement_id": "fe9b5e8f-fbea-4c83-a6f0-63496d2290e1",
+     "material_code": "BAO0760",
+     "material_name": "Bì nhựa 69x73",
+     "unit": "Kg",
+     "qty": 16,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 16,
+     "kg_don": null
+    },
+    {
+     "movement_id": "e5d98ccc-a380-47d9-8149-d29293198b76",
+     "material_code": "BAO0761",
+     "material_name": "Bì nhựa 57x76",
+     "unit": "Kg",
+     "qty": 16,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 16,
+     "kg_don": null
+    },
+    {
+     "movement_id": "e39fe580-6466-4d8c-8f61-ffd267709948",
+     "material_code": "BAO0762",
+     "material_name": "Bì nhựa 67x77",
+     "unit": "Kg",
+     "qty": 16,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 16,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "f099081f-44cc-43a8-a367-bbc851f5ad5e",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "68c1db50-a27f-4443-8e8f-6b0bee66e0f9",
+      "material_code": "BAO0522",
+      "material_name": "Bì nhựa 50x60",
+      "unit": "Kg",
+      "qty": 6,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 6,
+      "kg_don": null
+     },
+     {
+      "movement_id": "eae0ee21-58f2-4893-a783-66324ed6149d",
+      "material_code": "BAO0557",
+      "material_name": "Bì nhựa 58x135",
+      "unit": "Kg",
+      "qty": 75,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 75,
+      "kg_don": null
+     },
+     {
+      "movement_id": "e2658830-3bac-4f1e-8002-d9e27877c800",
+      "material_code": "BAO0550",
+      "material_name": "Bì nhựa 56x82",
+      "unit": "Kg",
+      "qty": 27,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 27,
+      "kg_don": null
+     },
+     {
+      "movement_id": "e734bdd8-23d1-489d-939b-fda64945b3b0",
+      "material_code": "BAO0759",
+      "material_name": "Bì nhựa 73x85",
+      "unit": "Kg",
+      "qty": 23,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 23,
+      "kg_don": null
+     },
+     {
+      "movement_id": "8b3eac45-eb72-4cd9-840b-a58a02fb6cc7",
+      "material_code": "BAO0591",
+      "material_name": "Bì nhựa 76x224",
+      "unit": "Kg",
+      "qty": 17,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 17,
+      "kg_don": null
+     },
+     {
+      "movement_id": "fe9b5e8f-fbea-4c83-a6f0-63496d2290e1",
+      "material_code": "BAO0760",
+      "material_name": "Bì nhựa 69x73",
+      "unit": "Kg",
+      "qty": 16,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 16,
+      "kg_don": null
+     },
+     {
+      "movement_id": "e5d98ccc-a380-47d9-8149-d29293198b76",
+      "material_code": "BAO0761",
+      "material_name": "Bì nhựa 57x76",
+      "unit": "Kg",
+      "qty": 16,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 16,
+      "kg_don": null
+     },
+     {
+      "movement_id": "e39fe580-6466-4d8c-8f61-ffd267709948",
+      "material_code": "BAO0762",
+      "material_name": "Bì nhựa 67x77",
+      "unit": "Kg",
+      "qty": 16,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 16,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "d647e3a5-6499-4262-add7-82a7e6f15fb4",
+   "code": "PNK-2026-0054",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "fc8c83be-d4ed-42fe-9614-1604d3371c43",
+   "po_code": "PO-2026-0068",
+   "lsx_code": null,
+   "supplier_name": "CÔNG TY CỔ PHẦN THÉP ASIA",
+   "owner_id": "e99f2f40-7965-46de-9d38-2989f73cb81f",
+   "owner_name": "Trương Thanh Truyền",
+   "lines": [
+    {
+     "movement_id": "aa588052-1461-4649-9fff-f5407eb602c1",
+     "material_code": "ST-0203",
+     "material_name": "Thép vuông kẽm 16x16x0.8",
+     "unit": "Cây",
+     "qty": 18,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 18,
+     "kg_don": 37.8
+    },
+    {
+     "movement_id": "8480f470-811e-4810-8cd3-3c58abf4e695",
+     "material_code": "ST-0204",
+     "material_name": "Thép vuông kẽm 20x20x0.8",
+     "unit": "Cây",
+     "qty": 491,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 491,
+     "kg_don": 1266.78
+    },
+    {
+     "movement_id": "37708db0-d1a1-4db1-aa91-d08a231a3109",
+     "material_code": "ST-0205",
+     "material_name": "Thép vuông kẽm 20x20x1.0",
+     "unit": "Cây",
+     "qty": 464,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 464,
+     "kg_don": 1526.56
+    },
+    {
+     "movement_id": "5a87aef4-e289-47e3-8a93-fb37ec92f37e",
+     "material_code": "ST-0206",
+     "material_name": "Thép hộp vuông 20x40x1.0",
+     "unit": "Cây",
+     "qty": 393,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 393,
+     "kg_don": 1976.79
+    },
+    {
+     "movement_id": "3301a6cc-f2e7-4e98-8cb1-10d15ad2f386",
+     "material_code": "ST-0207",
+     "material_name": "Thép vuông kẽm 75x75x1.1",
+     "unit": "Cây",
+     "qty": 426,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 426,
+     "kg_don": 6057.72
+    },
+    {
+     "movement_id": "562a9545-1f4d-4fe1-be03-479bf0eae58b",
+     "material_code": "ST-0208",
+     "material_name": "Thép vuông kẽm 60x60x1.2",
+     "unit": "Cây",
+     "qty": 160,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": true,
+     "qty_ordered": 160,
+     "kg_don": 2009.6
+    }
+   ],
+   "phieu": {
+    "doc_id": "d647e3a5-6499-4262-add7-82a7e6f15fb4",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "aa588052-1461-4649-9fff-f5407eb602c1",
+      "material_code": "ST-0203",
+      "material_name": "Thép vuông kẽm 16x16x0.8",
+      "unit": "Cây",
+      "qty": 18,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 18,
+      "kg_don": 37.8
+     },
+     {
+      "movement_id": "8480f470-811e-4810-8cd3-3c58abf4e695",
+      "material_code": "ST-0204",
+      "material_name": "Thép vuông kẽm 20x20x0.8",
+      "unit": "Cây",
+      "qty": 491,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 491,
+      "kg_don": 1266.78
+     },
+     {
+      "movement_id": "37708db0-d1a1-4db1-aa91-d08a231a3109",
+      "material_code": "ST-0205",
+      "material_name": "Thép vuông kẽm 20x20x1.0",
+      "unit": "Cây",
+      "qty": 464,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 464,
+      "kg_don": 1526.56
+     },
+     {
+      "movement_id": "5a87aef4-e289-47e3-8a93-fb37ec92f37e",
+      "material_code": "ST-0206",
+      "material_name": "Thép hộp vuông 20x40x1.0",
+      "unit": "Cây",
+      "qty": 393,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 393,
+      "kg_don": 1976.79
+     },
+     {
+      "movement_id": "3301a6cc-f2e7-4e98-8cb1-10d15ad2f386",
+      "material_code": "ST-0207",
+      "material_name": "Thép vuông kẽm 75x75x1.1",
+      "unit": "Cây",
+      "qty": 426,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 426,
+      "kg_don": 6057.72
+     },
+     {
+      "movement_id": "562a9545-1f4d-4fe1-be03-479bf0eae58b",
+      "material_code": "ST-0208",
+      "material_name": "Thép vuông kẽm 60x60x1.2",
+      "unit": "Cây",
+      "qty": 160,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": true,
+      "qty_ordered": 160,
+      "kg_don": 2009.6
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "e79dadd3-d65f-48d8-ad74-bb172092d6d4",
+   "code": "PNK-2026-0053",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "c658703c-1f39-4c28-9223-5dfd6062345b",
+   "po_code": "PO-2026-0065",
+   "lsx_code": "08/26-27 - MX",
+   "supplier_name": "TAIZHOU XU-DAN HOME TECHNOLOGY CO., LTD.",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "e04248a7-332c-4164-8756-3fdf76f57bdb",
+     "material_code": "KIM0161",
+     "material_name": "Kính sơn màu 625x399x5mm — Dark grey",
+     "unit": "Tấm",
+     "qty": 1350,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1350,
+     "kg_don": null
+    },
+    {
+     "movement_id": "161298fa-b83d-4b23-be41-01010a83b7d3",
+     "material_code": "KIM0162",
+     "material_name": "Kính sơn màu 625x399x5mm — Dolphin grey",
+     "unit": "Tấm",
+     "qty": 600,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 600,
+     "kg_don": null
+    },
+    {
+     "movement_id": "00b88324-fd63-4644-bb93-33b097974cf3",
+     "material_code": "KIM0163",
+     "material_name": "Kính sơn màu 748x833x5mm — Dark grey",
+     "unit": "Tấm",
+     "qty": 100,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 100,
+     "kg_don": null
+    },
+    {
+     "movement_id": "f4c24f05-8791-4b58-994f-22a17a63c6c3",
+     "material_code": "KIM0164",
+     "material_name": "Kính sơn màu 698x833x5mm — Dark grey",
+     "unit": "Tấm",
+     "qty": 50,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 50,
+     "kg_don": null
+    },
+    {
+     "movement_id": "82f9d5ff-0091-4001-8c76-9aac6342a2f4",
+     "material_code": "KIM0165",
+     "material_name": "Kính sơn màu 748x833x5mm — Dolphin grey",
+     "unit": "Tấm",
+     "qty": 200,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 200,
+     "kg_don": null
+    },
+    {
+     "movement_id": "5480f1eb-3dce-4d4b-850b-525e3258bce9",
+     "material_code": "KIM0166",
+     "material_name": "Kính sơn màu 698x833x5mm — Dolphin grey",
+     "unit": "Tấm",
+     "qty": 100,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 100,
+     "kg_don": null
+    },
+    {
+     "movement_id": "a168599f-e174-4eb1-91b5-d209de84c38b",
+     "material_code": "KIM0167",
+     "material_name": "Kính sơn màu 1034x998x5mm — Dark grey",
+     "unit": "Tấm",
+     "qty": 510,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 510,
+     "kg_don": null
+    },
+    {
+     "movement_id": "bc3d9af0-29ef-4a1f-921a-41a222541b94",
+     "material_code": "KIM0168",
+     "material_name": "Kính sơn màu 1034x998x5mm — Dolphin grey",
+     "unit": "Tấm",
+     "qty": 240,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 240,
+     "kg_don": null
+    },
+    {
+     "movement_id": "7c9cb4df-4a45-4d69-965c-9b4e80725e1a",
+     "material_code": "KIM0169",
+     "material_name": "Kính sơn màu 1034x1098x5mm — Dolphin grey",
+     "unit": "Tấm",
+     "qty": 240,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 240,
+     "kg_don": null
+    },
+    {
+     "movement_id": "7a82fd78-7a96-420b-8fcf-6d2d6d00251a",
+     "material_code": "KIM0170",
+     "material_name": "Kính sơn màu 1034x1198x5mm — Dolphin grey",
+     "unit": "Tấm",
+     "qty": 120,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 120,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "e79dadd3-d65f-48d8-ad74-bb172092d6d4",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "e04248a7-332c-4164-8756-3fdf76f57bdb",
+      "material_code": "KIM0161",
+      "material_name": "Kính sơn màu 625x399x5mm — Dark grey",
+      "unit": "Tấm",
+      "qty": 1350,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1350,
+      "kg_don": null
+     },
+     {
+      "movement_id": "161298fa-b83d-4b23-be41-01010a83b7d3",
+      "material_code": "KIM0162",
+      "material_name": "Kính sơn màu 625x399x5mm — Dolphin grey",
+      "unit": "Tấm",
+      "qty": 600,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 600,
+      "kg_don": null
+     },
+     {
+      "movement_id": "00b88324-fd63-4644-bb93-33b097974cf3",
+      "material_code": "KIM0163",
+      "material_name": "Kính sơn màu 748x833x5mm — Dark grey",
+      "unit": "Tấm",
+      "qty": 100,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 100,
+      "kg_don": null
+     },
+     {
+      "movement_id": "f4c24f05-8791-4b58-994f-22a17a63c6c3",
+      "material_code": "KIM0164",
+      "material_name": "Kính sơn màu 698x833x5mm — Dark grey",
+      "unit": "Tấm",
+      "qty": 50,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 50,
+      "kg_don": null
+     },
+     {
+      "movement_id": "82f9d5ff-0091-4001-8c76-9aac6342a2f4",
+      "material_code": "KIM0165",
+      "material_name": "Kính sơn màu 748x833x5mm — Dolphin grey",
+      "unit": "Tấm",
+      "qty": 200,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 200,
+      "kg_don": null
+     },
+     {
+      "movement_id": "5480f1eb-3dce-4d4b-850b-525e3258bce9",
+      "material_code": "KIM0166",
+      "material_name": "Kính sơn màu 698x833x5mm — Dolphin grey",
+      "unit": "Tấm",
+      "qty": 100,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 100,
+      "kg_don": null
+     },
+     {
+      "movement_id": "a168599f-e174-4eb1-91b5-d209de84c38b",
+      "material_code": "KIM0167",
+      "material_name": "Kính sơn màu 1034x998x5mm — Dark grey",
+      "unit": "Tấm",
+      "qty": 510,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 510,
+      "kg_don": null
+     },
+     {
+      "movement_id": "bc3d9af0-29ef-4a1f-921a-41a222541b94",
+      "material_code": "KIM0168",
+      "material_name": "Kính sơn màu 1034x998x5mm — Dolphin grey",
+      "unit": "Tấm",
+      "qty": 240,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 240,
+      "kg_don": null
+     },
+     {
+      "movement_id": "7c9cb4df-4a45-4d69-965c-9b4e80725e1a",
+      "material_code": "KIM0169",
+      "material_name": "Kính sơn màu 1034x1098x5mm — Dolphin grey",
+      "unit": "Tấm",
+      "qty": 240,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 240,
+      "kg_don": null
+     },
+     {
+      "movement_id": "7a82fd78-7a96-420b-8fcf-6d2d6d00251a",
+      "material_code": "KIM0170",
+      "material_name": "Kính sơn màu 1034x1198x5mm — Dolphin grey",
+      "unit": "Tấm",
+      "qty": 120,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 120,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "a647ef9d-c0dd-43ee-b178-28a2f7cd6dec",
+   "code": "PNK-2026-0052",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "25ca01b3-53ec-4701-aa25-12947a7c019e",
+   "po_code": "PO-2026-0066",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY TNHH SẢN XUẤT TM THÀNH ĐẠT",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "c8afab06-f8c2-4f2f-974e-f4023536be45",
+     "material_code": "BAO0693",
+     "material_name": "Nẹp V5 giấy cứng theo mẫu",
+     "unit": "Cái",
+     "qty": 720,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 720,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "a647ef9d-c0dd-43ee-b178-28a2f7cd6dec",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "c8afab06-f8c2-4f2f-974e-f4023536be45",
+      "material_code": "BAO0693",
+      "material_name": "Nẹp V5 giấy cứng theo mẫu",
+      "unit": "Cái",
+      "qty": 720,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 720,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "f4afb58c-45a3-4382-b1d1-c6bbb5d54090",
+   "code": "PNK-2026-0051",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "e72c0a31-3c47-44e3-892e-0f746b5277fe",
+   "po_code": "PO-2026-0064",
+   "lsx_code": "02/26-27 - ROSCO",
+   "supplier_name": "TAIZHOU XU-DAN HOME TECHNOLOGY CO., LTD.",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "0bb2bb38-8abe-4ee6-b612-344253d9fa5e",
+     "material_code": "CKH0001",
+     "material_name": "Mâm xoay 2 vòng bi 360 độ 160x160x2mm (swivel base)",
+     "unit": "Cái",
+     "qty": 8600,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 8600,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "f4afb58c-45a3-4382-b1d1-c6bbb5d54090",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "0bb2bb38-8abe-4ee6-b612-344253d9fa5e",
+      "material_code": "CKH0001",
+      "material_name": "Mâm xoay 2 vòng bi 360 độ 160x160x2mm (swivel base)",
+      "unit": "Cái",
+      "qty": 8600,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 8600,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "de342870-b887-42f1-881c-14f5f5a7e9bf",
+   "code": "PNK-2026-0050",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "49e578e5-36e7-4334-9f09-d458c88c43cc",
+   "po_code": "PO-2026-0062",
+   "lsx_code": "02/26-27 - MX",
+   "supplier_name": "KIMPACK PACKAGING JOINT STOCK COMPANY",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "9058a4a1-b4d4-44c1-9d9d-0d61e915483b",
+     "material_code": "LKT0021",
+     "material_name": "Tấm lót mặt bàn bộ sofa love seat",
+     "unit": "Tấm",
+     "qty": 180,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 180,
+     "kg_don": null
+    },
+    {
+     "movement_id": "72b5785d-30eb-4585-87ca-4858669fe26e",
+     "material_code": "BAO0692",
+     "material_name": "Tấm lớp 3L 2 đầu",
+     "unit": "Cái",
+     "qty": 800,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 800,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "de342870-b887-42f1-881c-14f5f5a7e9bf",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "9058a4a1-b4d4-44c1-9d9d-0d61e915483b",
+      "material_code": "LKT0021",
+      "material_name": "Tấm lót mặt bàn bộ sofa love seat",
+      "unit": "Tấm",
+      "qty": 180,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 180,
+      "kg_don": null
+     },
+     {
+      "movement_id": "72b5785d-30eb-4585-87ca-4858669fe26e",
+      "material_code": "BAO0692",
+      "material_name": "Tấm lớp 3L 2 đầu",
+      "unit": "Cái",
+      "qty": 800,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 800,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "c3aba7e7-91fa-4173-92fd-a4c0a6c01f52",
+   "code": "PNK-2026-0049",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "339bfda1-1d49-4bdf-a1d7-94421e7804fb",
+   "po_code": "PO-2026-0061",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY TNHH SX & TM DV TÂN THÀNH LONG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "6d048b31-680c-4667-942f-d14b76e086ab",
+     "material_code": "NK-0069",
+     "material_name": "LĐN 10x20x2",
+     "unit": "Con",
+     "qty": 1.03,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1.03,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "c3aba7e7-91fa-4173-92fd-a4c0a6c01f52",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "6d048b31-680c-4667-942f-d14b76e086ab",
+      "material_code": "NK-0069",
+      "material_name": "LĐN 10x20x2",
+      "unit": "Con",
+      "qty": 1.03,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1.03,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "cf7f3085-1de5-4c84-b4c1-103bf6cf66bd",
+   "code": "PNK-2026-0048",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "c935295e-ee37-4aee-a8fc-2385419c0f7a",
+   "po_code": "PO-2026-0059",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY TNHH SX-TM PHÚ PHƯƠNG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "0e50a4bd-31f3-4b50-9602-67ae5e0b4bfd",
+     "material_code": "VIT0069",
+     "material_name": "Vít 6x25x13",
+     "unit": "Con",
+     "qty": 840,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 840,
+     "kg_don": null
+    },
+    {
+     "movement_id": "ad0934b0-8846-4b8f-9147-a1aa6dd4605c",
+     "material_code": "VIT0069",
+     "material_name": "Vít 6x25x13",
+     "unit": "Con",
+     "qty": 840,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 840,
+     "kg_don": null
+    },
+    {
+     "movement_id": "35234e53-5763-4f53-b1a3-b269fb6f54fb",
+     "material_code": "BUL0041",
+     "material_name": "Bulon 6x20x13",
+     "unit": "Con",
+     "qty": 840,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 840,
+     "kg_don": null
+    },
+    {
+     "movement_id": "86eb0ef5-333d-474c-b761-06122093447f",
+     "material_code": "BUL0092",
+     "material_name": "Bulon 8x30x15 màu",
+     "unit": "Con",
+     "qty": 840,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 840,
+     "kg_don": null
+    },
+    {
+     "movement_id": "8b4fb511-d80e-4b18-b1da-6e6bce5fc6df",
+     "material_code": "LON0019",
+     "material_name": "LĐS 8X20X1 Ly trắng",
+     "unit": "Con",
+     "qty": 840,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 840,
+     "kg_don": null
+    },
+    {
+     "movement_id": "483c3be5-ec49-40ce-beb1-47487b16b568",
+     "material_code": "BUL0606",
+     "material_name": "LĐS 8x20x2",
+     "unit": "cái",
+     "qty": 1512,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1512,
+     "kg_don": null
+    },
+    {
+     "movement_id": "79f013db-3f13-4c99-9b0c-ddb3c2272440",
+     "material_code": "BUL0338",
+     "material_name": "LDS6x16x1",
+     "unit": "Con",
+     "qty": 2646,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2646,
+     "kg_don": null
+    },
+    {
+     "movement_id": "84f9d638-79f8-49bc-baca-6e8a11015b03",
+     "material_code": "DCC0078",
+     "material_name": "Lục giác 4x80 màu",
+     "unit": "Cái",
+     "qty": 189,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 189,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "cf7f3085-1de5-4c84-b4c1-103bf6cf66bd",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "0e50a4bd-31f3-4b50-9602-67ae5e0b4bfd",
+      "material_code": "VIT0069",
+      "material_name": "Vít 6x25x13",
+      "unit": "Con",
+      "qty": 840,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 840,
+      "kg_don": null
+     },
+     {
+      "movement_id": "ad0934b0-8846-4b8f-9147-a1aa6dd4605c",
+      "material_code": "VIT0069",
+      "material_name": "Vít 6x25x13",
+      "unit": "Con",
+      "qty": 840,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 840,
+      "kg_don": null
+     },
+     {
+      "movement_id": "35234e53-5763-4f53-b1a3-b269fb6f54fb",
+      "material_code": "BUL0041",
+      "material_name": "Bulon 6x20x13",
+      "unit": "Con",
+      "qty": 840,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 840,
+      "kg_don": null
+     },
+     {
+      "movement_id": "86eb0ef5-333d-474c-b761-06122093447f",
+      "material_code": "BUL0092",
+      "material_name": "Bulon 8x30x15 màu",
+      "unit": "Con",
+      "qty": 840,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 840,
+      "kg_don": null
+     },
+     {
+      "movement_id": "8b4fb511-d80e-4b18-b1da-6e6bce5fc6df",
+      "material_code": "LON0019",
+      "material_name": "LĐS 8X20X1 Ly trắng",
+      "unit": "Con",
+      "qty": 840,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 840,
+      "kg_don": null
+     },
+     {
+      "movement_id": "483c3be5-ec49-40ce-beb1-47487b16b568",
+      "material_code": "BUL0606",
+      "material_name": "LĐS 8x20x2",
+      "unit": "cái",
+      "qty": 1512,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1512,
+      "kg_don": null
+     },
+     {
+      "movement_id": "79f013db-3f13-4c99-9b0c-ddb3c2272440",
+      "material_code": "BUL0338",
+      "material_name": "LDS6x16x1",
+      "unit": "Con",
+      "qty": 2646,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2646,
+      "kg_don": null
+     },
+     {
+      "movement_id": "84f9d638-79f8-49bc-baca-6e8a11015b03",
+      "material_code": "DCC0078",
+      "material_name": "Lục giác 4x80 màu",
+      "unit": "Cái",
+      "qty": 189,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 189,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "ffe80b48-c60d-4c34-abab-0aa383c3a486",
+   "code": "PNK-2026-0047",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "7faf4a1b-4a9d-429b-ab21-84ca0e225788",
+   "po_code": "PO-2026-0058",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY TNHH TM -DV -TH MINH THẮNG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "d0bcc29d-1d1f-4a8a-843f-b26daecb34a3",
+     "material_code": "BUL0214",
+     "material_name": "Tán dù 6x30x15",
+     "unit": "Con",
+     "qty": 824,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 824,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "ffe80b48-c60d-4c34-abab-0aa383c3a486",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "d0bcc29d-1d1f-4a8a-843f-b26daecb34a3",
+      "material_code": "BUL0214",
+      "material_name": "Tán dù 6x30x15",
+      "unit": "Con",
+      "qty": 824,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 824,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "63e6747e-16c2-49dd-9a37-b5200a7abb84",
+   "code": "PNK-2026-0046",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "2f13910a-bf6a-438c-925f-2fdb12ca6c20",
+   "po_code": "PO-2026-0057",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY TNHH SX & TM TƯỜNG NGUYÊN",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "2a97cbd1-914f-4e7f-be9c-5dace38ce64f",
+     "material_code": "NK-0044",
+     "material_name": "Pát thỏ Athos",
+     "unit": "Cái",
+     "qty": 840,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 840,
+     "kg_don": null
+    },
+    {
+     "movement_id": "93d3abdf-a1c4-4186-a710-f63b4fe1b22e",
+     "material_code": "PKN0401",
+     "material_name": "Ắc Phi 9.5, Ren trong 8 x11mm",
+     "unit": "con",
+     "qty": 1000,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1000,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "63e6747e-16c2-49dd-9a37-b5200a7abb84",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "2a97cbd1-914f-4e7f-be9c-5dace38ce64f",
+      "material_code": "NK-0044",
+      "material_name": "Pát thỏ Athos",
+      "unit": "Cái",
+      "qty": 840,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 840,
+      "kg_don": null
+     },
+     {
+      "movement_id": "93d3abdf-a1c4-4186-a710-f63b4fe1b22e",
+      "material_code": "PKN0401",
+      "material_name": "Ắc Phi 9.5, Ren trong 8 x11mm",
+      "unit": "con",
+      "qty": 1000,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1000,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "51df1356-97ff-48c6-9509-594213d79694",
+   "code": "PNK-2026-0045",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "01b4cb76-f3ac-472d-bb4b-c4713f0ef779",
+   "po_code": "PO-2026-0056",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY TNHH SX TM & TH Hồng Phát",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "23f75a98-05c4-4f1b-afd5-23c086a59746",
+     "material_code": "PKN0400",
+     "material_name": "Nút chân Siena (B477)",
+     "unit": "cái",
+     "qty": 1648,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1648,
+     "kg_don": null
+    },
+    {
+     "movement_id": "74c20ab9-a40b-4749-8f75-d4a8281e0310",
+     "material_code": "NUT0009",
+     "material_name": "Nút 22x40",
+     "unit": "Cái",
+     "qty": 1648,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1648,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "51df1356-97ff-48c6-9509-594213d79694",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "23f75a98-05c4-4f1b-afd5-23c086a59746",
+      "material_code": "PKN0400",
+      "material_name": "Nút chân Siena (B477)",
+      "unit": "cái",
+      "qty": 1648,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1648,
+      "kg_don": null
+     },
+     {
+      "movement_id": "74c20ab9-a40b-4749-8f75-d4a8281e0310",
+      "material_code": "NUT0009",
+      "material_name": "Nút 22x40",
+      "unit": "Cái",
+      "qty": 1648,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1648,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "8d49cc2b-a55c-4897-b678-c5e1ab3aaddc",
+   "code": "PNK-2026-0044",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "02aae4f2-1ee5-4979-9ba7-016056625951",
+   "po_code": "PO-2026-0055",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "CÔNG TY NHỰA SƠN TÍN PHÁT",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "87037f62-76b9-4d6c-a36e-20941948fac9",
+     "material_code": "PKN0289",
+     "material_name": "Tăng đơ răn phuy 35x8 ly bulong (8x25) STP10ĐH",
+     "unit": "Đôi",
+     "qty": 741.6,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 741.6,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "8d49cc2b-a55c-4897-b678-c5e1ab3aaddc",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "87037f62-76b9-4d6c-a36e-20941948fac9",
+      "material_code": "PKN0289",
+      "material_name": "Tăng đơ răn phuy 35x8 ly bulong (8x25) STP10ĐH",
+      "unit": "Đôi",
+      "qty": 741.6,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 741.6,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "722c9ceb-6720-43fd-93c3-ed2102453b61",
+   "code": "PNK-2026-0043",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "0b11762b-cd9e-498f-9c8e-180a09c32e0b",
+   "po_code": "PO-2026-0050",
+   "lsx_code": "01/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY CỔ PHẦN SẢN XUẤT NHỰA VIPORA LONG AN",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "250b4072-65c1-4774-a76c-746ad6622b8d",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 3590.4,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3590.4,
+     "kg_don": null
+    },
+    {
+     "movement_id": "358a7b9d-2047-4fcc-87da-930ff98e5578",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 1108.8,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1108.8,
+     "kg_don": null
+    },
+    {
+     "movement_id": "538c6335-309a-416c-bb79-52b0da45d392",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 2784,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2784,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "722c9ceb-6720-43fd-93c3-ed2102453b61",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "250b4072-65c1-4774-a76c-746ad6622b8d",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 3590.4,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3590.4,
+      "kg_don": null
+     },
+     {
+      "movement_id": "358a7b9d-2047-4fcc-87da-930ff98e5578",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 1108.8,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1108.8,
+      "kg_don": null
+     },
+     {
+      "movement_id": "538c6335-309a-416c-bb79-52b0da45d392",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 2784,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2784,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "ce09af04-16f7-4b75-a7b8-16357030012e",
+   "code": "PNK-2026-0042",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "c67364b2-1036-47a5-bf1c-2a41a42b96af",
+   "po_code": "PO-2026-0049",
+   "lsx_code": "02/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY CỔ PHẦN SẢN XUẤT NHỰA VIPORA LONG AN",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "cac92437-70dd-476d-a089-a30ffe61b0f4",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 3828,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3828,
+     "kg_don": null
+    },
+    {
+     "movement_id": "7eff3f0d-1fd7-4f3c-b466-3d628d5956ee",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 5742,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 5742,
+     "kg_don": null
+    },
+    {
+     "movement_id": "77d4f00f-171f-47c9-8d65-2820d031d83d",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 4732.8,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 4732.8,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "ce09af04-16f7-4b75-a7b8-16357030012e",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "cac92437-70dd-476d-a089-a30ffe61b0f4",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 3828,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3828,
+      "kg_don": null
+     },
+     {
+      "movement_id": "7eff3f0d-1fd7-4f3c-b466-3d628d5956ee",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 5742,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 5742,
+      "kg_don": null
+     },
+     {
+      "movement_id": "77d4f00f-171f-47c9-8d65-2820d031d83d",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 4732.8,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 4732.8,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "038c6755-4617-4897-838e-6d51d73ef979",
+   "code": "PNK-2026-0041",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "fdf4934a-9624-441a-9ff2-1d30704be2af",
+   "po_code": "PO-2026-0053",
+   "lsx_code": "02/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY TNHH TM-SX GIA HUY PHÁT",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "e16ce074-845b-4c03-b7c4-a7503fcb6633",
+     "material_code": "PKN0394",
+     "material_name": "Chân côn phi 40 -->25 dài 342/357mm - (Như mẫu đã gỡi hoàn thiện )",
+     "unit": "cái",
+     "qty": 8600,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 8600,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "038c6755-4617-4897-838e-6d51d73ef979",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "e16ce074-845b-4c03-b7c4-a7503fcb6633",
+      "material_code": "PKN0394",
+      "material_name": "Chân côn phi 40 -->25 dài 342/357mm - (Như mẫu đã gỡi hoàn thiện )",
+      "unit": "cái",
+      "qty": 8600,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 8600,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "35ec31a9-d73a-4034-8c0b-74d6ad0b4ac6",
+   "code": "PNK-2026-0040",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "60d3479a-782b-4326-a0ca-3b805f6dba21",
+   "po_code": "PO-2026-0052",
+   "lsx_code": "02/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY TNHH MTV DV TM XNK CAO ĐẠT",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "501a7509-0ab8-4a81-875e-5dee7ccf2327",
+     "material_code": "PKN0393",
+     "material_name": "Mâm xoay 2 vòng bi BM 16V08 - Xoay 360 độ",
+     "unit": "cái",
+     "qty": 9079.45,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 9079.45,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "35ec31a9-d73a-4034-8c0b-74d6ad0b4ac6",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "501a7509-0ab8-4a81-875e-5dee7ccf2327",
+      "material_code": "PKN0393",
+      "material_name": "Mâm xoay 2 vòng bi BM 16V08 - Xoay 360 độ",
+      "unit": "cái",
+      "qty": 9079.45,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 9079.45,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "d40b464a-f117-4a97-ba2b-427794620a9c",
+   "code": "PNK-2026-0039",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "24252421-7f5a-483e-af80-6c8a94449320",
+   "po_code": "PO-2026-0051",
+   "lsx_code": "05/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH TM -DV -TH MINH THẮNG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "cd33e881-ccf5-45bb-9e45-efea90212ad4",
+     "material_code": "PKN0390",
+     "material_name": "Nắp tăng đơ phi 25 tán M8",
+     "unit": "Cái",
+     "qty": 35264,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 35264,
+     "kg_don": null
+    },
+    {
+     "movement_id": "a68b8e2b-992e-43ec-8582-c87648f3168c",
+     "material_code": "PKN0392",
+     "material_name": "Chân đế phi 37.5mm",
+     "unit": "Cái",
+     "qty": 16272,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 16272,
+     "kg_don": null
+    },
+    {
+     "movement_id": "572beecf-d576-4f2a-b4fd-5bbac400b3c5",
+     "material_code": "PKN0391",
+     "material_name": "Chân đế phi 25 ( M8x20)",
+     "unit": "Cái",
+     "qty": 35264,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 35264,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "d40b464a-f117-4a97-ba2b-427794620a9c",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "cd33e881-ccf5-45bb-9e45-efea90212ad4",
+      "material_code": "PKN0390",
+      "material_name": "Nắp tăng đơ phi 25 tán M8",
+      "unit": "Cái",
+      "qty": 35264,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 35264,
+      "kg_don": null
+     },
+     {
+      "movement_id": "a68b8e2b-992e-43ec-8582-c87648f3168c",
+      "material_code": "PKN0392",
+      "material_name": "Chân đế phi 37.5mm",
+      "unit": "Cái",
+      "qty": 16272,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 16272,
+      "kg_don": null
+     },
+     {
+      "movement_id": "572beecf-d576-4f2a-b4fd-5bbac400b3c5",
+      "material_code": "PKN0391",
+      "material_name": "Chân đế phi 25 ( M8x20)",
+      "unit": "Cái",
+      "qty": 35264,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 35264,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "66e0cf29-20ff-473f-9c44-15336dfbd744",
+   "code": "PNK-2026-0038",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "d873facf-2ad0-4270-8d3d-33878eede240",
+   "po_code": "PO-2026-0045",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "KIMPACK PACKAGING JOINT STOCK COMPANY",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "7a199558-0b93-430a-896a-2185091b208e",
+     "material_code": "BAO0688",
+     "material_name": "BB ghế Thasos",
+     "unit": "Cái",
+     "qty": 400,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 400,
+     "kg_don": null
+    },
+    {
+     "movement_id": "a8450b3b-176c-4799-8d33-cfc41e50f401",
+     "material_code": "BAO0081",
+     "material_name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+     "unit": "Thùng",
+     "qty": 50,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 50,
+     "kg_don": null
+    },
+    {
+     "movement_id": "2baa1157-bef0-4cd0-be53-64b001ac6cf3",
+     "material_code": "BAO0689",
+     "material_name": "BB bàn NK 65",
+     "unit": "Cái",
+     "qty": 380,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 380,
+     "kg_don": null
+    },
+    {
+     "movement_id": "e18a3957-5440-485b-abac-96168446d2e0",
+     "material_code": "BAO0081",
+     "material_name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+     "unit": "Thùng",
+     "qty": 380,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 380,
+     "kg_don": null
+    },
+    {
+     "movement_id": "b22cb118-27d9-4682-94c6-f6904d007f3f",
+     "material_code": "BAO0081",
+     "material_name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+     "unit": "Thùng",
+     "qty": 130,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 130,
+     "kg_don": null
+    },
+    {
+     "movement_id": "9d3697e1-ff80-4b42-b7d0-97ad7faa9717",
+     "material_code": "BAO0691",
+     "material_name": "BB Võng sắt",
+     "unit": "Cái",
+     "qty": 100,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 100,
+     "kg_don": null
+    },
+    {
+     "movement_id": "dc6d0842-cab2-47b4-af56-071684815b88",
+     "material_code": "BAO0687",
+     "material_name": "BB Ghế XC deLos",
+     "unit": "Cái",
+     "qty": 150,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 150,
+     "kg_don": null
+    },
+    {
+     "movement_id": "f50fc8a8-ef36-425c-a187-7f58dc9c4b0a",
+     "material_code": "BAO0690",
+     "material_name": "BB GTN navarra",
+     "unit": "Cái",
+     "qty": 130,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 130,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "66e0cf29-20ff-473f-9c44-15336dfbd744",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "7a199558-0b93-430a-896a-2185091b208e",
+      "material_code": "BAO0688",
+      "material_name": "BB ghế Thasos",
+      "unit": "Cái",
+      "qty": 400,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 400,
+      "kg_don": null
+     },
+     {
+      "movement_id": "a8450b3b-176c-4799-8d33-cfc41e50f401",
+      "material_code": "BAO0081",
+      "material_name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+      "unit": "Thùng",
+      "qty": 50,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 50,
+      "kg_don": null
+     },
+     {
+      "movement_id": "2baa1157-bef0-4cd0-be53-64b001ac6cf3",
+      "material_code": "BAO0689",
+      "material_name": "BB bàn NK 65",
+      "unit": "Cái",
+      "qty": 380,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 380,
+      "kg_don": null
+     },
+     {
+      "movement_id": "e18a3957-5440-485b-abac-96168446d2e0",
+      "material_code": "BAO0081",
+      "material_name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+      "unit": "Thùng",
+      "qty": 380,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 380,
+      "kg_don": null
+     },
+     {
+      "movement_id": "b22cb118-27d9-4682-94c6-f6904d007f3f",
+      "material_code": "BAO0081",
+      "material_name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+      "unit": "Thùng",
+      "qty": 130,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 130,
+      "kg_don": null
+     },
+     {
+      "movement_id": "9d3697e1-ff80-4b42-b7d0-97ad7faa9717",
+      "material_code": "BAO0691",
+      "material_name": "BB Võng sắt",
+      "unit": "Cái",
+      "qty": 100,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 100,
+      "kg_don": null
+     },
+     {
+      "movement_id": "dc6d0842-cab2-47b4-af56-071684815b88",
+      "material_code": "BAO0687",
+      "material_name": "BB Ghế XC deLos",
+      "unit": "Cái",
+      "qty": 150,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 150,
+      "kg_don": null
+     },
+     {
+      "movement_id": "f50fc8a8-ef36-425c-a187-7f58dc9c4b0a",
+      "material_code": "BAO0690",
+      "material_name": "BB GTN navarra",
+      "unit": "Cái",
+      "qty": 130,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 130,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "8c5b668b-be87-4ced-b34e-38d53f876732",
+   "code": "PNK-2026-0037",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "c503e0ce-530d-4677-95ae-206086a5dfcf",
+   "po_code": "PO-2026-0047",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH TIÊU ĐIỂM SÁNG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "3e827847-8415-4e51-b258-4da929b70a54",
+     "material_code": "VAI0084",
+     "material_name": "Vải Spun điểm trắng M1278 (96hr)",
+     "unit": "Mét",
+     "qty": 1320,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1320,
+     "kg_don": null
+    },
+    {
+     "movement_id": "c74813ab-315d-4c7c-9f5a-b9336484162c",
+     "material_code": "VAI0084",
+     "material_name": "Vải Spun điểm trắng M1278 (96hr)",
+     "unit": "Mét",
+     "qty": 1300,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1300,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "8c5b668b-be87-4ced-b34e-38d53f876732",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "3e827847-8415-4e51-b258-4da929b70a54",
+      "material_code": "VAI0084",
+      "material_name": "Vải Spun điểm trắng M1278 (96hr)",
+      "unit": "Mét",
+      "qty": 1320,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1320,
+      "kg_don": null
+     },
+     {
+      "movement_id": "c74813ab-315d-4c7c-9f5a-b9336484162c",
+      "material_code": "VAI0084",
+      "material_name": "Vải Spun điểm trắng M1278 (96hr)",
+      "unit": "Mét",
+      "qty": 1300,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1300,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "01851c03-b34c-4630-9348-a808c6aa9cea",
+   "code": "PNK-2026-0036",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "0f2c2a74-cc7f-4193-86a0-973843e7a4ba",
+   "po_code": "PO-2026-0046",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH DỆT MAY XUẤT KHẨU PHỤNG HƯNG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "c231f071-a457-4d07-8802-b7a65ae6abe6",
+     "material_code": "VAI0261",
+     "material_name": "Vải W031 -K152 UV1000h",
+     "unit": "Mét",
+     "qty": 1000,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1000,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "01851c03-b34c-4630-9348-a808c6aa9cea",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "c231f071-a457-4d07-8802-b7a65ae6abe6",
+      "material_code": "VAI0261",
+      "material_name": "Vải W031 -K152 UV1000h",
+      "unit": "Mét",
+      "qty": 1000,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1000,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "9319af9e-0795-418c-9746-62d43edd7a33",
+   "code": "PNK-2026-0035",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "c6ba4396-7295-48e7-b6e0-668c788019b3",
+   "po_code": "PO-2026-0044",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH SX & TM TƯỜNG NGUYÊN",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "6a50fd07-4e63-4f02-be48-8446a417413e",
+     "material_code": "BUL0032",
+     "material_name": "Bulon 6x15x13",
+     "unit": "Con",
+     "qty": 1030,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1030,
+     "kg_don": null
+    },
+    {
+     "movement_id": "8e7fe3df-f301-41f7-99b7-a63d4fdcc37d",
+     "material_code": "BUL0041",
+     "material_name": "Bulon 6x20x13",
+     "unit": "Con",
+     "qty": 3399,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3399,
+     "kg_don": null
+    },
+    {
+     "movement_id": "aeaaf825-60f6-4bd9-9e91-7f3df94e33b4",
+     "material_code": "BUL0049",
+     "material_name": "Bulon 6x25x13 màu",
+     "unit": "Con",
+     "qty": 5726.8,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 5726.8,
+     "kg_don": null
+    },
+    {
+     "movement_id": "8b999d55-c11d-43a8-8e68-c7c8f3aecb74",
+     "material_code": "BUL0023",
+     "material_name": "Bulon 6X35X13 Màu",
+     "unit": "Con",
+     "qty": 1895.2,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1895.2,
+     "kg_don": null
+    },
+    {
+     "movement_id": "96202797-62c1-4cc3-ae42-16e0923d9449",
+     "material_code": "BUL0049",
+     "material_name": "Bulon 6x25x13 màu",
+     "unit": "Con",
+     "qty": 1606.8,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1606.8,
+     "kg_don": null
+    },
+    {
+     "movement_id": "ee914fab-68db-41de-aea2-8aeaf98d46e3",
+     "material_code": "BUL0023",
+     "material_name": "Bulon 6X35X13 Màu",
+     "unit": "Con",
+     "qty": 803.4,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 803.4,
+     "kg_don": null
+    },
+    {
+     "movement_id": "07ef8b16-8a9d-4917-9648-1a10948bbe84",
+     "material_code": "BUL0055",
+     "material_name": "Bulon 6x30x13",
+     "unit": "Con",
+     "qty": 1339,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1339,
+     "kg_don": null
+    },
+    {
+     "movement_id": "cbcd270a-718e-474c-90de-8aecf331ac21",
+     "material_code": "VIT0082",
+     "material_name": "Vít 6x40x13",
+     "unit": "Con",
+     "qty": 1854,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1854,
+     "kg_don": null
+    },
+    {
+     "movement_id": "381258ae-d108-4723-90b2-61e0351f427d",
+     "material_code": "VIT0094",
+     "material_name": "Vít 6x70x13 màu",
+     "unit": "Con",
+     "qty": 824,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 824,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "9319af9e-0795-418c-9746-62d43edd7a33",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "6a50fd07-4e63-4f02-be48-8446a417413e",
+      "material_code": "BUL0032",
+      "material_name": "Bulon 6x15x13",
+      "unit": "Con",
+      "qty": 1030,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1030,
+      "kg_don": null
+     },
+     {
+      "movement_id": "8e7fe3df-f301-41f7-99b7-a63d4fdcc37d",
+      "material_code": "BUL0041",
+      "material_name": "Bulon 6x20x13",
+      "unit": "Con",
+      "qty": 3399,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3399,
+      "kg_don": null
+     },
+     {
+      "movement_id": "aeaaf825-60f6-4bd9-9e91-7f3df94e33b4",
+      "material_code": "BUL0049",
+      "material_name": "Bulon 6x25x13 màu",
+      "unit": "Con",
+      "qty": 5726.8,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 5726.8,
+      "kg_don": null
+     },
+     {
+      "movement_id": "8b999d55-c11d-43a8-8e68-c7c8f3aecb74",
+      "material_code": "BUL0023",
+      "material_name": "Bulon 6X35X13 Màu",
+      "unit": "Con",
+      "qty": 1895.2,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1895.2,
+      "kg_don": null
+     },
+     {
+      "movement_id": "96202797-62c1-4cc3-ae42-16e0923d9449",
+      "material_code": "BUL0049",
+      "material_name": "Bulon 6x25x13 màu",
+      "unit": "Con",
+      "qty": 1606.8,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1606.8,
+      "kg_don": null
+     },
+     {
+      "movement_id": "ee914fab-68db-41de-aea2-8aeaf98d46e3",
+      "material_code": "BUL0023",
+      "material_name": "Bulon 6X35X13 Màu",
+      "unit": "Con",
+      "qty": 803.4,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 803.4,
+      "kg_don": null
+     },
+     {
+      "movement_id": "07ef8b16-8a9d-4917-9648-1a10948bbe84",
+      "material_code": "BUL0055",
+      "material_name": "Bulon 6x30x13",
+      "unit": "Con",
+      "qty": 1339,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1339,
+      "kg_don": null
+     },
+     {
+      "movement_id": "cbcd270a-718e-474c-90de-8aecf331ac21",
+      "material_code": "VIT0082",
+      "material_name": "Vít 6x40x13",
+      "unit": "Con",
+      "qty": 1854,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1854,
+      "kg_don": null
+     },
+     {
+      "movement_id": "381258ae-d108-4723-90b2-61e0351f427d",
+      "material_code": "VIT0094",
+      "material_name": "Vít 6x70x13 màu",
+      "unit": "Con",
+      "qty": 824,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 824,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "c95bee4e-987b-4459-a149-7c50d7a78fdf",
+   "code": "PNK-2026-0034",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "6c1079d4-bd32-4b8a-a125-a6fe6e380616",
+   "po_code": "PO-2026-0043",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH SX & TM TƯỜNG NGUYÊN",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "b0aeba58-eb1f-4801-9d39-3525de0a6e41",
+     "material_code": "PKN0387",
+     "material_name": "Móc phi 8 inox 304 gai 15",
+     "unit": "Cái",
+     "qty": 206,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 206,
+     "kg_don": null
+    },
+    {
+     "movement_id": "7f863d01-5b17-4c7e-a5f0-9c32e71e2c50",
+     "material_code": "PKN0388",
+     "material_name": "Ắc 10x143, taro 2 đầu, ren trong",
+     "unit": "Cái",
+     "qty": 412,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 412,
+     "kg_don": null
+    },
+    {
+     "movement_id": "595bd5c8-a152-4210-bb56-b9bd385ef7dc",
+     "material_code": "NK-0044",
+     "material_name": "Pát thỏ Athos",
+     "unit": "Cái",
+     "qty": 824,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 824,
+     "kg_don": null
+    },
+    {
+     "movement_id": "69a0db57-db75-4c32-960f-a185277259c1",
+     "material_code": "SAT0773",
+     "material_name": "Ắc sắt đặc phi 10x32",
+     "unit": "Cái",
+     "qty": 412,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 412,
+     "kg_don": null
+    },
+    {
+     "movement_id": "3dfb8c89-a2fb-4891-a442-8084600f5387",
+     "material_code": "PKN0389",
+     "material_name": "Ắc 10x35, ren trong 6",
+     "unit": "Cái",
+     "qty": 412,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 412,
+     "kg_don": null
+    },
+    {
+     "movement_id": "54ee1c1a-9152-486a-9d92-3f6f3e5ca8a1",
+     "material_code": "PKN0386",
+     "material_name": "Ắc 8x31, Ren 6 cần gấp",
+     "unit": "Cái",
+     "qty": 1318.4,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1318.4,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "c95bee4e-987b-4459-a149-7c50d7a78fdf",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "b0aeba58-eb1f-4801-9d39-3525de0a6e41",
+      "material_code": "PKN0387",
+      "material_name": "Móc phi 8 inox 304 gai 15",
+      "unit": "Cái",
+      "qty": 206,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 206,
+      "kg_don": null
+     },
+     {
+      "movement_id": "7f863d01-5b17-4c7e-a5f0-9c32e71e2c50",
+      "material_code": "PKN0388",
+      "material_name": "Ắc 10x143, taro 2 đầu, ren trong",
+      "unit": "Cái",
+      "qty": 412,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 412,
+      "kg_don": null
+     },
+     {
+      "movement_id": "595bd5c8-a152-4210-bb56-b9bd385ef7dc",
+      "material_code": "NK-0044",
+      "material_name": "Pát thỏ Athos",
+      "unit": "Cái",
+      "qty": 824,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 824,
+      "kg_don": null
+     },
+     {
+      "movement_id": "69a0db57-db75-4c32-960f-a185277259c1",
+      "material_code": "SAT0773",
+      "material_name": "Ắc sắt đặc phi 10x32",
+      "unit": "Cái",
+      "qty": 412,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 412,
+      "kg_don": null
+     },
+     {
+      "movement_id": "3dfb8c89-a2fb-4891-a442-8084600f5387",
+      "material_code": "PKN0389",
+      "material_name": "Ắc 10x35, ren trong 6",
+      "unit": "Cái",
+      "qty": 412,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 412,
+      "kg_don": null
+     },
+     {
+      "movement_id": "54ee1c1a-9152-486a-9d92-3f6f3e5ca8a1",
+      "material_code": "PKN0386",
+      "material_name": "Ắc 8x31, Ren 6 cần gấp",
+      "unit": "Cái",
+      "qty": 1318.4,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1318.4,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "f177d53c-3656-4474-b777-5fc3d6933ec8",
+   "code": "PNK-2026-0032",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "e71cf183-a19c-414a-848f-0117e95a46f7",
+   "po_code": "PO-2026-0040",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH DV & TM TÂN PHÁT",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "c598acdd-8cf6-4508-8c30-1038a4cb84a8",
+     "material_code": "BUL0212",
+     "material_name": "Tán dù 6x20x15",
+     "unit": "Con",
+     "qty": 2060,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2060,
+     "kg_don": null
+    },
+    {
+     "movement_id": "1b4d4dad-e10c-4a1e-a1ee-d9bd5f8a95dd",
+     "material_code": "BUL0230",
+     "material_name": "Tán dù 6x55x15 màu",
+     "unit": "Con",
+     "qty": 824,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 824,
+     "kg_don": null
+    },
+    {
+     "movement_id": "16821bbe-868e-44f6-8967-def8320c1dce",
+     "material_code": "BUL0214",
+     "material_name": "Tán dù 6x30x15",
+     "unit": "Con",
+     "qty": 824,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 824,
+     "kg_don": null
+    },
+    {
+     "movement_id": "86c0773e-5761-4908-ab18-48b7ebd50d7c",
+     "material_code": "BUL0237",
+     "material_name": "Tán dù 6x65x15 xi trắng",
+     "unit": "Con",
+     "qty": 267.8,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 267.8,
+     "kg_don": null
+    },
+    {
+     "movement_id": "90c49957-7cbd-4898-bc92-70019e967962",
+     "material_code": "VIT0114",
+     "material_name": "Vít dù 4x20",
+     "unit": "Con",
+     "qty": 32239,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 32239,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "f177d53c-3656-4474-b777-5fc3d6933ec8",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "c598acdd-8cf6-4508-8c30-1038a4cb84a8",
+      "material_code": "BUL0212",
+      "material_name": "Tán dù 6x20x15",
+      "unit": "Con",
+      "qty": 2060,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2060,
+      "kg_don": null
+     },
+     {
+      "movement_id": "1b4d4dad-e10c-4a1e-a1ee-d9bd5f8a95dd",
+      "material_code": "BUL0230",
+      "material_name": "Tán dù 6x55x15 màu",
+      "unit": "Con",
+      "qty": 824,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 824,
+      "kg_don": null
+     },
+     {
+      "movement_id": "16821bbe-868e-44f6-8967-def8320c1dce",
+      "material_code": "BUL0214",
+      "material_name": "Tán dù 6x30x15",
+      "unit": "Con",
+      "qty": 824,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 824,
+      "kg_don": null
+     },
+     {
+      "movement_id": "86c0773e-5761-4908-ab18-48b7ebd50d7c",
+      "material_code": "BUL0237",
+      "material_name": "Tán dù 6x65x15 xi trắng",
+      "unit": "Con",
+      "qty": 267.8,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 267.8,
+      "kg_don": null
+     },
+     {
+      "movement_id": "90c49957-7cbd-4898-bc92-70019e967962",
+      "material_code": "VIT0114",
+      "material_name": "Vít dù 4x20",
+      "unit": "Con",
+      "qty": 32239,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 32239,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "6d5d51a0-99ea-4077-adae-412db80d7f62",
+   "code": "PNK-2026-0031",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "cd0de2e0-91ba-405b-84a9-ff4faa0f7eac",
+   "po_code": "PO-2026-0039",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH SX & TM DV TÂN THÀNH LONG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "f2c7f82e-a354-40ff-af23-08c5f8c2bcaf",
+     "material_code": "NK-0042",
+     "material_name": "LĐN 6x16x5, đen",
+     "unit": "Con",
+     "qty": 5,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 5,
+     "kg_don": null
+    },
+    {
+     "movement_id": "acc62db6-fe74-4166-97e7-8e8968147de0",
+     "material_code": "NK-0053",
+     "material_name": "LĐN 12x20x10, màu đen",
+     "unit": "Con",
+     "qty": 10,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 10,
+     "kg_don": null
+    },
+    {
+     "movement_id": "6ce535ca-5644-4eb8-a84c-8e895a82aea6",
+     "material_code": "PKN0382",
+     "material_name": "Nút chân 30x60, đen",
+     "unit": "Cái",
+     "qty": 2266,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2266,
+     "kg_don": null
+    },
+    {
+     "movement_id": "6023a72d-3413-4716-88c8-e1ccd7c520d2",
+     "material_code": "PKN0383",
+     "material_name": "Nút chân 30x60, xám",
+     "unit": "Cái",
+     "qty": 412,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 412,
+     "kg_don": null
+    },
+    {
+     "movement_id": "ad939a5e-efec-4c41-aba9-8efe0d61998d",
+     "material_code": "PKN0385",
+     "material_name": "Nút 15x35x5, (hàng trần)",
+     "unit": "Cái",
+     "qty": 824,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 824,
+     "kg_don": null
+    },
+    {
+     "movement_id": "e41c393e-c319-442d-9899-542429e4e9ee",
+     "material_code": "NK-0018",
+     "material_name": "Mạc đồng dán",
+     "unit": "Cái",
+     "qty": 3450.5,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3450.5,
+     "kg_don": null
+    },
+    {
+     "movement_id": "4adebdd7-657f-47df-8bb3-433cb7e39a8a",
+     "material_code": "CN1556",
+     "material_name": "Vuông 60x10 đen",
+     "unit": "Cái",
+     "qty": 1977.6,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1977.6,
+     "kg_don": null
+    },
+    {
+     "movement_id": "eb5326c4-c4ef-4b5c-86ed-4a5164fb0719",
+     "material_code": "BUL0335",
+     "material_name": "LDN 10x20x13 ly, đen",
+     "unit": "Kg",
+     "qty": 3,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3,
+     "kg_don": null
+    },
+    {
+     "movement_id": "87b887d1-1d1b-4282-abdc-63dbcd96a6bb",
+     "material_code": "PKN0384",
+     "material_name": "Nút 20x40x5 ( hàng trần)",
+     "unit": "Cái",
+     "qty": 3708,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3708,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "6d5d51a0-99ea-4077-adae-412db80d7f62",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "f2c7f82e-a354-40ff-af23-08c5f8c2bcaf",
+      "material_code": "NK-0042",
+      "material_name": "LĐN 6x16x5, đen",
+      "unit": "Con",
+      "qty": 5,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 5,
+      "kg_don": null
+     },
+     {
+      "movement_id": "acc62db6-fe74-4166-97e7-8e8968147de0",
+      "material_code": "NK-0053",
+      "material_name": "LĐN 12x20x10, màu đen",
+      "unit": "Con",
+      "qty": 10,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 10,
+      "kg_don": null
+     },
+     {
+      "movement_id": "6ce535ca-5644-4eb8-a84c-8e895a82aea6",
+      "material_code": "PKN0382",
+      "material_name": "Nút chân 30x60, đen",
+      "unit": "Cái",
+      "qty": 2266,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2266,
+      "kg_don": null
+     },
+     {
+      "movement_id": "6023a72d-3413-4716-88c8-e1ccd7c520d2",
+      "material_code": "PKN0383",
+      "material_name": "Nút chân 30x60, xám",
+      "unit": "Cái",
+      "qty": 412,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 412,
+      "kg_don": null
+     },
+     {
+      "movement_id": "ad939a5e-efec-4c41-aba9-8efe0d61998d",
+      "material_code": "PKN0385",
+      "material_name": "Nút 15x35x5, (hàng trần)",
+      "unit": "Cái",
+      "qty": 824,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 824,
+      "kg_don": null
+     },
+     {
+      "movement_id": "e41c393e-c319-442d-9899-542429e4e9ee",
+      "material_code": "NK-0018",
+      "material_name": "Mạc đồng dán",
+      "unit": "Cái",
+      "qty": 3450.5,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3450.5,
+      "kg_don": null
+     },
+     {
+      "movement_id": "4adebdd7-657f-47df-8bb3-433cb7e39a8a",
+      "material_code": "CN1556",
+      "material_name": "Vuông 60x10 đen",
+      "unit": "Cái",
+      "qty": 1977.6,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1977.6,
+      "kg_don": null
+     },
+     {
+      "movement_id": "eb5326c4-c4ef-4b5c-86ed-4a5164fb0719",
+      "material_code": "BUL0335",
+      "material_name": "LDN 10x20x13 ly, đen",
+      "unit": "Kg",
+      "qty": 3,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3,
+      "kg_don": null
+     },
+     {
+      "movement_id": "87b887d1-1d1b-4282-abdc-63dbcd96a6bb",
+      "material_code": "PKN0384",
+      "material_name": "Nút 20x40x5 ( hàng trần)",
+      "unit": "Cái",
+      "qty": 3708,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3708,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "5bf14abe-688c-4ab8-81f4-6b594713a1f4",
+   "code": "PNK-2026-0030",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "0e864053-4185-49b4-a0ff-9a6ff3c82146",
+   "po_code": "PO-2026-0037",
+   "lsx_code": "01/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY NHỰA TTLONG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "249ba23e-dc72-432b-b161-bb7f53e30047",
+     "material_code": "PKN0011",
+     "material_name": "Bộ phi 27 có eru + tăng đơ phi 25",
+     "unit": "Bộ",
+     "qty": 2232,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2232,
+     "kg_don": null
+    },
+    {
+     "movement_id": "a32b5ad6-d40d-4cfb-9c33-7cfa620f0001",
+     "material_code": "NK-0193",
+     "material_name": "Nút nhựa phi 25 đầu trứng",
+     "unit": "Cái",
+     "qty": 399,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 399,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "5bf14abe-688c-4ab8-81f4-6b594713a1f4",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "249ba23e-dc72-432b-b161-bb7f53e30047",
+      "material_code": "PKN0011",
+      "material_name": "Bộ phi 27 có eru + tăng đơ phi 25",
+      "unit": "Bộ",
+      "qty": 2232,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2232,
+      "kg_don": null
+     },
+     {
+      "movement_id": "a32b5ad6-d40d-4cfb-9c33-7cfa620f0001",
+      "material_code": "NK-0193",
+      "material_name": "Nút nhựa phi 25 đầu trứng",
+      "unit": "Cái",
+      "qty": 399,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 399,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "9a32d6d8-d085-481e-9b9f-aceac80948bd",
+   "code": "PNK-2026-0029",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "d54ab8e3-545f-48f9-8249-65d36b9f99e7",
+   "po_code": "02/26HG/BT",
+   "lsx_code": "02/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY CỔ PHẦN CÔNG NGHỆ SƠN BÌNH TÂY",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "413fb3f9-8aca-4943-ab0f-3d05ea0fb69b",
+     "material_code": "SON0341",
+     "material_name": "Bột sơn tĩnh điện SALO 7317 màu xám cát ngoài trời",
+     "unit": "Kg",
+     "qty": 2000,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2000,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "9a32d6d8-d085-481e-9b9f-aceac80948bd",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "413fb3f9-8aca-4943-ab0f-3d05ea0fb69b",
+      "material_code": "SON0341",
+      "material_name": "Bột sơn tĩnh điện SALO 7317 màu xám cát ngoài trời",
+      "unit": "Kg",
+      "qty": 2000,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2000,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "4fce463c-e2ac-474a-a889-5bf06952bd40",
+   "code": "PNK-2026-0028",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "4e62b8da-8ddc-47c9-88fc-c6dc17ac32b4",
+   "po_code": "01-26HG/HK",
+   "lsx_code": "01/26-27 - LAURA",
+   "supplier_name": "Cty TNHH TM-SX-DV Huy Khánh",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "9819515f-0e98-4f80-ae0b-f3053d9df60d",
+     "material_code": "MA-0019",
+     "material_name": "Dây dù tròn 6mm, màu xanh",
+     "unit": "Kg",
+     "qty": 2800,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2800,
+     "kg_don": null
+    },
+    {
+     "movement_id": "8db4eb77-a744-4c8d-8288-9295bf06c2b9",
+     "material_code": "MA-0020",
+     "material_name": "Dây dù tròn 6mm, màu hồng",
+     "unit": "Kg",
+     "qty": 630,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 630,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "4fce463c-e2ac-474a-a889-5bf06952bd40",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "9819515f-0e98-4f80-ae0b-f3053d9df60d",
+      "material_code": "MA-0019",
+      "material_name": "Dây dù tròn 6mm, màu xanh",
+      "unit": "Kg",
+      "qty": 2800,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2800,
+      "kg_don": null
+     },
+     {
+      "movement_id": "8db4eb77-a744-4c8d-8288-9295bf06c2b9",
+      "material_code": "MA-0020",
+      "material_name": "Dây dù tròn 6mm, màu hồng",
+      "unit": "Kg",
+      "qty": 630,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 630,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "32ed984e-c7b4-4b0b-9351-7644f890ca4c",
+   "code": "PNK-2026-0027",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "77758bd0-f6ec-494f-bc22-147edf750ed5",
+   "po_code": "ĐH01/2025HG/MYNH",
+   "lsx_code": null,
+   "supplier_name": "Công ty TNHH MYNH",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "6c6ce4b8-a8d1-4e9d-99ce-f470d68ea47b",
+     "material_code": "MUT0550",
+     "material_name": "Mút cao su xốp EVA 1 mặt có keo dán (cuộn)",
+     "unit": "Cuộn",
+     "qty": 43,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 43,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "32ed984e-c7b4-4b0b-9351-7644f890ca4c",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "6c6ce4b8-a8d1-4e9d-99ce-f470d68ea47b",
+      "material_code": "MUT0550",
+      "material_name": "Mút cao su xốp EVA 1 mặt có keo dán (cuộn)",
+      "unit": "Cuộn",
+      "qty": 43,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 43,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "7af75515-57be-4628-a6da-8f206f749ed2",
+   "code": "PNK-2026-0026",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "749eaf2e-12df-418f-b798-8c5b104d180d",
+   "po_code": "PO-2026-0041",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH TM -DV -TH MINH THẮNG",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "f6b2343a-6648-46f6-bb6c-d9029077cd24",
+     "material_code": "BUL0019",
+     "material_name": "Bulon 6X20X15 màu",
+     "unit": "Con",
+     "qty": 2142.4,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2142.4,
+     "kg_don": null
+    },
+    {
+     "movement_id": "1ffc9104-8cbc-49cb-9ac1-b336d7d00cf4",
+     "material_code": "NK-0093",
+     "material_name": "Bulon 6x20x13, xi trắng",
+     "unit": "Con",
+     "qty": 2142.4,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2142.4,
+     "kg_don": null
+    },
+    {
+     "movement_id": "dbf45d1f-4d3a-4b5c-b101-4393e63af7a4",
+     "material_code": "NK-0125",
+     "material_name": "Eru 10,XT",
+     "unit": "Con",
+     "qty": 7457.2,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 7457.2,
+     "kg_don": null
+    },
+    {
+     "movement_id": "2f55c405-8f9d-4ac8-920b-22949b2976c6",
+     "material_code": "CN1526",
+     "material_name": "Vít ĐC ĐB 4x15, XT",
+     "unit": "Con",
+     "qty": 19364,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 19364,
+     "kg_don": null
+    },
+    {
+     "movement_id": "7fd4cca3-59eb-465e-9edd-f66dacdd279a",
+     "material_code": "BUL0604",
+     "material_name": "Vít 4x20 ĐB ĐC",
+     "unit": "con",
+     "qty": 14111,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 14111,
+     "kg_don": null
+    },
+    {
+     "movement_id": "a5a53c54-aaee-442c-8956-bee33a621b2f",
+     "material_code": "BUL0605",
+     "material_name": "Vít 4x15 đầu lum inox 201",
+     "unit": "con",
+     "qty": 4944,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 4944,
+     "kg_don": null
+    },
+    {
+     "movement_id": "395af8ac-51cc-44e1-b1e7-dad7f18769de",
+     "material_code": "CN1521",
+     "material_name": "Bulon 8x70 tai lục giác 5",
+     "unit": "Con",
+     "qty": 412,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 412,
+     "kg_don": null
+    },
+    {
+     "movement_id": "ea187bb9-751c-4406-abab-00cc643b5697",
+     "material_code": "DCC0080",
+     "material_name": "Lục giác 5",
+     "unit": "Cái",
+     "qty": 103,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 103,
+     "kg_don": null
+    },
+    {
+     "movement_id": "54a66841-a2b0-4084-9f83-acd02cd2aa9f",
+     "material_code": "NK-0030",
+     "material_name": "Bulon 4",
+     "unit": "Con",
+     "qty": 1648,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1648,
+     "kg_don": null
+    },
+    {
+     "movement_id": "d5ba7241-8f4b-4fa7-9c34-cbbb1d6a928b",
+     "material_code": "NK-0029",
+     "material_name": "tán rút 4",
+     "unit": "Con",
+     "qty": 1648,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1648,
+     "kg_don": null
+    },
+    {
+     "movement_id": "ccef8823-44f0-473e-b854-42f435873d71",
+     "material_code": "SAT0112",
+     "material_name": "Eru vành inox 201",
+     "unit": "Con",
+     "qty": 206,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 206,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "7af75515-57be-4628-a6da-8f206f749ed2",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "f6b2343a-6648-46f6-bb6c-d9029077cd24",
+      "material_code": "BUL0019",
+      "material_name": "Bulon 6X20X15 màu",
+      "unit": "Con",
+      "qty": 2142.4,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2142.4,
+      "kg_don": null
+     },
+     {
+      "movement_id": "1ffc9104-8cbc-49cb-9ac1-b336d7d00cf4",
+      "material_code": "NK-0093",
+      "material_name": "Bulon 6x20x13, xi trắng",
+      "unit": "Con",
+      "qty": 2142.4,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2142.4,
+      "kg_don": null
+     },
+     {
+      "movement_id": "dbf45d1f-4d3a-4b5c-b101-4393e63af7a4",
+      "material_code": "NK-0125",
+      "material_name": "Eru 10,XT",
+      "unit": "Con",
+      "qty": 7457.2,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 7457.2,
+      "kg_don": null
+     },
+     {
+      "movement_id": "2f55c405-8f9d-4ac8-920b-22949b2976c6",
+      "material_code": "CN1526",
+      "material_name": "Vít ĐC ĐB 4x15, XT",
+      "unit": "Con",
+      "qty": 19364,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 19364,
+      "kg_don": null
+     },
+     {
+      "movement_id": "7fd4cca3-59eb-465e-9edd-f66dacdd279a",
+      "material_code": "BUL0604",
+      "material_name": "Vít 4x20 ĐB ĐC",
+      "unit": "con",
+      "qty": 14111,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 14111,
+      "kg_don": null
+     },
+     {
+      "movement_id": "a5a53c54-aaee-442c-8956-bee33a621b2f",
+      "material_code": "BUL0605",
+      "material_name": "Vít 4x15 đầu lum inox 201",
+      "unit": "con",
+      "qty": 4944,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 4944,
+      "kg_don": null
+     },
+     {
+      "movement_id": "395af8ac-51cc-44e1-b1e7-dad7f18769de",
+      "material_code": "CN1521",
+      "material_name": "Bulon 8x70 tai lục giác 5",
+      "unit": "Con",
+      "qty": 412,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 412,
+      "kg_don": null
+     },
+     {
+      "movement_id": "ea187bb9-751c-4406-abab-00cc643b5697",
+      "material_code": "DCC0080",
+      "material_name": "Lục giác 5",
+      "unit": "Cái",
+      "qty": 103,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 103,
+      "kg_don": null
+     },
+     {
+      "movement_id": "54a66841-a2b0-4084-9f83-acd02cd2aa9f",
+      "material_code": "NK-0030",
+      "material_name": "Bulon 4",
+      "unit": "Con",
+      "qty": 1648,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1648,
+      "kg_don": null
+     },
+     {
+      "movement_id": "d5ba7241-8f4b-4fa7-9c34-cbbb1d6a928b",
+      "material_code": "NK-0029",
+      "material_name": "tán rút 4",
+      "unit": "Con",
+      "qty": 1648,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1648,
+      "kg_don": null
+     },
+     {
+      "movement_id": "ccef8823-44f0-473e-b854-42f435873d71",
+      "material_code": "SAT0112",
+      "material_name": "Eru vành inox 201",
+      "unit": "Con",
+      "qty": 206,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 206,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "58eea468-8d62-4f00-852f-7051704fd1e4",
+   "code": "PNK-2026-0024",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "34c3b86d-097b-4b09-b2a1-88602898d1e8",
+   "po_code": "PO-2026-0048",
+   "lsx_code": "01/26-27 - ROSCO",
+   "supplier_name": "CÔNG TY CỔ PHẦN SẢN XUẤT NHỰA VIPORA LONG AN",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "9f8ac227-277c-4a79-aa50-0afeeb35b9be",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 1617,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1617,
+     "kg_don": null
+    },
+    {
+     "movement_id": "2c614b6b-43d2-40b7-aa52-ea2e11da1cc9",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 2376,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2376,
+     "kg_don": null
+    },
+    {
+     "movement_id": "23bd5afb-682b-4c6a-b702-dfda6b273c39",
+     "material_code": "VAI0262",
+     "material_name": "Vải VPR-F258",
+     "unit": "Mét",
+     "qty": 3062.4,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 3062.4,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "58eea468-8d62-4f00-852f-7051704fd1e4",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "9f8ac227-277c-4a79-aa50-0afeeb35b9be",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 1617,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1617,
+      "kg_don": null
+     },
+     {
+      "movement_id": "2c614b6b-43d2-40b7-aa52-ea2e11da1cc9",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 2376,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2376,
+      "kg_don": null
+     },
+     {
+      "movement_id": "23bd5afb-682b-4c6a-b702-dfda6b273c39",
+      "material_code": "VAI0262",
+      "material_name": "Vải VPR-F258",
+      "unit": "Mét",
+      "qty": 3062.4,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 3062.4,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "8d4c3a44-efe4-4a99-bc6a-5dc2c30d7e2d",
+   "code": "PNK-2026-0023",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "763454a4-caec-45d9-9bb0-c10cfb48646e",
+   "po_code": "PO-2026-0038",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "CÔNG TY TNHH SX TM & TH Hồng Phát",
+   "owner_id": "4fb1087b-8ba5-472a-ab25-dbcab0077c93",
+   "owner_name": "Đặng Thị Thanh Nga",
+   "lines": [
+    {
+     "movement_id": "db156fda-bc8a-49e9-94fb-072b32f50c57",
+     "material_code": "CN1552",
+     "material_name": "Pát góc đóng thùng",
+     "unit": "Cái",
+     "qty": 7340,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 7340,
+     "kg_don": null
+    },
+    {
+     "movement_id": "772438b5-7431-4141-b309-149042677f41",
+     "material_code": "CN1647",
+     "material_name": "Pát trượt mỏng màu đen",
+     "unit": "Cái",
+     "qty": 2000,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2000,
+     "kg_don": null
+    },
+    {
+     "movement_id": "49b2dd23-6ede-4108-adca-9846575299ce",
+     "material_code": "PKN0379",
+     "material_name": "Nút Phi 49 đầu bằng nâu",
+     "unit": "Cái",
+     "qty": 600,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 600,
+     "kg_don": null
+    },
+    {
+     "movement_id": "87d17c08-5c9a-4c7b-9050-42b44152e1fb",
+     "material_code": "PKN0380",
+     "material_name": "Nút Phi 49 đầu lồi nâu",
+     "unit": "Cái",
+     "qty": 600,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 600,
+     "kg_don": null
+    },
+    {
+     "movement_id": "f909c29d-d6bd-4fb8-8713-509cde669b36",
+     "material_code": "PKN0381",
+     "material_name": "Pát trượt 25x65",
+     "unit": "Cái",
+     "qty": 400,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 400,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "8d4c3a44-efe4-4a99-bc6a-5dc2c30d7e2d",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "db156fda-bc8a-49e9-94fb-072b32f50c57",
+      "material_code": "CN1552",
+      "material_name": "Pát góc đóng thùng",
+      "unit": "Cái",
+      "qty": 7340,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 7340,
+      "kg_don": null
+     },
+     {
+      "movement_id": "772438b5-7431-4141-b309-149042677f41",
+      "material_code": "CN1647",
+      "material_name": "Pát trượt mỏng màu đen",
+      "unit": "Cái",
+      "qty": 2000,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2000,
+      "kg_don": null
+     },
+     {
+      "movement_id": "49b2dd23-6ede-4108-adca-9846575299ce",
+      "material_code": "PKN0379",
+      "material_name": "Nút Phi 49 đầu bằng nâu",
+      "unit": "Cái",
+      "qty": 600,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 600,
+      "kg_don": null
+     },
+     {
+      "movement_id": "87d17c08-5c9a-4c7b-9050-42b44152e1fb",
+      "material_code": "PKN0380",
+      "material_name": "Nút Phi 49 đầu lồi nâu",
+      "unit": "Cái",
+      "qty": 600,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 600,
+      "kg_don": null
+     },
+     {
+      "movement_id": "f909c29d-d6bd-4fb8-8713-509cde669b36",
+      "material_code": "PKN0381",
+      "material_name": "Pát trượt 25x65",
+      "unit": "Cái",
+      "qty": 400,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 400,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "9761b3b5-cff0-4ac4-ba3c-47863c133efd",
+   "code": "PNK-2026-0022",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "d05b0b53-c4e5-4f3b-8834-b2610a36bb37",
+   "po_code": "01/26HG/MĐ",
+   "lsx_code": "01/26-27 - YOTRIO",
+   "supplier_name": "Công ty TNHH Green Coatings Việt Nam",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "128bcb80-3488-43ed-8496-6dd53e82589a",
+     "material_code": "SON0330",
+     "material_name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+     "unit": "Kg",
+     "qty": 60,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 60,
+     "kg_don": null
+    },
+    {
+     "movement_id": "9689d12e-cb62-4e1e-b9a4-ea56e02c22f6",
+     "material_code": "SON0330",
+     "material_name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+     "unit": "Kg",
+     "qty": 60,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 60,
+     "kg_don": null
+    },
+    {
+     "movement_id": "24fdc794-d7e2-4e94-b2de-a41a28d8ff86",
+     "material_code": "SON0330",
+     "material_name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+     "unit": "Kg",
+     "qty": 59.91,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 59.91,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "9761b3b5-cff0-4ac4-ba3c-47863c133efd",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "128bcb80-3488-43ed-8496-6dd53e82589a",
+      "material_code": "SON0330",
+      "material_name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+      "unit": "Kg",
+      "qty": 60,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 60,
+      "kg_don": null
+     },
+     {
+      "movement_id": "9689d12e-cb62-4e1e-b9a4-ea56e02c22f6",
+      "material_code": "SON0330",
+      "material_name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+      "unit": "Kg",
+      "qty": 60,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 60,
+      "kg_don": null
+     },
+     {
+      "movement_id": "24fdc794-d7e2-4e94-b2de-a41a28d8ff86",
+      "material_code": "SON0330",
+      "material_name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+      "unit": "Kg",
+      "qty": 59.91,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 59.91,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "563a554e-bd14-4212-aa68-174226879f42",
+   "code": "PNK-2026-0021",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "1c23869a-9c25-482f-ba2e-595384b9ea79",
+   "po_code": "ĐH21/2025HG/VSP",
+   "lsx_code": null,
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "44b301fa-9d7f-4bf5-bd9e-487574310a05",
+     "material_code": "SON0031",
+     "material_name": "Bột sơn tĩnh điện P-SM 9760",
+     "unit": "Kg",
+     "qty": 450,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 450,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "563a554e-bd14-4212-aa68-174226879f42",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "44b301fa-9d7f-4bf5-bd9e-487574310a05",
+      "material_code": "SON0031",
+      "material_name": "Bột sơn tĩnh điện P-SM 9760",
+      "unit": "Kg",
+      "qty": 450,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 450,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "52b85920-2e43-4e5f-98c0-94191a5eac12",
+   "code": "PNK-2026-0020",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "c945370b-34ac-4488-8d0b-2b110f832b1b",
+   "po_code": "02HG/VK",
+   "lsx_code": "07/26-27 - MX",
+   "supplier_name": "Cty TNHH SXTM VĨNH KHANG",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "cc86ac93-69b4-4d50-8cd3-7c31aee9b7b0",
+     "material_code": "KIM0160",
+     "material_name": "Kính mờ cường lực 605x539x5 mài cạnh bo góc R5",
+     "unit": "Tấm",
+     "qty": 160,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 160,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "52b85920-2e43-4e5f-98c0-94191a5eac12",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "cc86ac93-69b4-4d50-8cd3-7c31aee9b7b0",
+      "material_code": "KIM0160",
+      "material_name": "Kính mờ cường lực 605x539x5 mài cạnh bo góc R5",
+      "unit": "Tấm",
+      "qty": 160,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 160,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "beb2d9b3-c2b4-4403-a6b6-6a8ca0664014",
+   "code": "PNK-2026-0019",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "fa8b4252-bd63-439b-a3f2-6692f9eecf6c",
+   "po_code": "01HG/MT",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "Cty TNHH SXTM SẢN XUẤT THƯƠNG MẠI TỔNG HỢP MAI TRANG",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "b76a5be8-251f-4996-8172-a802b0c01c3d",
+     "material_code": "KIM0160",
+     "material_name": "Kính mờ cường lực 605x539x5 mài cạnh bo góc R5",
+     "unit": "Tấm",
+     "qty": 600,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 600,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "beb2d9b3-c2b4-4403-a6b6-6a8ca0664014",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "b76a5be8-251f-4996-8172-a802b0c01c3d",
+      "material_code": "KIM0160",
+      "material_name": "Kính mờ cường lực 605x539x5 mài cạnh bo góc R5",
+      "unit": "Tấm",
+      "qty": 600,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 600,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "1cdbc505-a06e-4d20-a2d6-6fe0be061f46",
+   "code": "PNK-2026-0018",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "20d0f49a-df64-46fd-8b5b-a8a44709036f",
+   "po_code": "02/26HG/GRC",
+   "lsx_code": "01/26-27 - LAURA",
+   "supplier_name": "Công ty TNHH Green Coatings Việt Nam",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "88c2ae4e-e9f5-439d-957d-94194a764ef8",
+     "material_code": "SON0340",
+     "material_name": "Bột sơn tĩnh điện C679-DJX1 màu mix đen cát điểm vàng",
+     "unit": "Kg",
+     "qty": 100,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 100,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "1cdbc505-a06e-4d20-a2d6-6fe0be061f46",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "88c2ae4e-e9f5-439d-957d-94194a764ef8",
+      "material_code": "SON0340",
+      "material_name": "Bột sơn tĩnh điện C679-DJX1 màu mix đen cát điểm vàng",
+      "unit": "Kg",
+      "qty": 100,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 100,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "856fdb18-8162-4947-a73c-4e57a1b3d190",
+   "code": "PNK-2026-0017",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "116f2591-7bc3-4ca6-bcdb-c8ffd5e666ab",
+   "po_code": "05/26HG/VSP",
+   "lsx_code": "08/26-27 - MX",
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "45acfd8a-7436-410e-94b9-7f1c33679e8b",
+     "material_code": "SON0336",
+     "material_name": "Bột sơn màu grafit H-SM 9608",
+     "unit": "Kg",
+     "qty": 275,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 275,
+     "kg_don": null
+    },
+    {
+     "movement_id": "94ccd9bb-d7fa-4041-b894-7b62279b10df",
+     "material_code": "SON0028",
+     "material_name": "Bột sơn tĩnh điện P-SG 9643",
+     "unit": "Kg",
+     "qty": 125,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 125,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "856fdb18-8162-4947-a73c-4e57a1b3d190",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "45acfd8a-7436-410e-94b9-7f1c33679e8b",
+      "material_code": "SON0336",
+      "material_name": "Bột sơn màu grafit H-SM 9608",
+      "unit": "Kg",
+      "qty": 275,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 275,
+      "kg_don": null
+     },
+     {
+      "movement_id": "94ccd9bb-d7fa-4041-b894-7b62279b10df",
+      "material_code": "SON0028",
+      "material_name": "Bột sơn tĩnh điện P-SG 9643",
+      "unit": "Kg",
+      "qty": 125,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 125,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "33c86027-564c-4f87-8b02-9984ad910554",
+   "code": "PNK-2026-0016",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "aa367ed5-54ff-440e-a844-9f9b045ea6d4",
+   "po_code": "01/26HG/VSP",
+   "lsx_code": "01/26-27 - LAURA",
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "922a68d8-3a3f-4c93-b67f-f71149c8e07f",
+     "material_code": "SON0337",
+     "material_name": "Bột sơn PT-7476 màu xám cát",
+     "unit": "Kg",
+     "qty": 99,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 99,
+     "kg_don": null
+    },
+    {
+     "movement_id": "7e7a1209-e94e-4829-849c-64c2befbc0ee",
+     "material_code": "SON0339",
+     "material_name": "Bột sơn tĩnh điện PT-3373 màu đỏ",
+     "unit": "Kg",
+     "qty": 52,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 52,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "33c86027-564c-4f87-8b02-9984ad910554",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "922a68d8-3a3f-4c93-b67f-f71149c8e07f",
+      "material_code": "SON0337",
+      "material_name": "Bột sơn PT-7476 màu xám cát",
+      "unit": "Kg",
+      "qty": 99,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 99,
+      "kg_don": null
+     },
+     {
+      "movement_id": "7e7a1209-e94e-4829-849c-64c2befbc0ee",
+      "material_code": "SON0339",
+      "material_name": "Bột sơn tĩnh điện PT-3373 màu đỏ",
+      "unit": "Kg",
+      "qty": 52,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 52,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "32631deb-34ed-4ecd-bd4f-19267001a374",
+   "code": "PNK-2026-0015",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "9c5a9d57-8805-448a-91db-3678f520d62b",
+   "po_code": "ĐH02/2026HG/VSP",
+   "lsx_code": "02/26-27 - MX",
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "a4d4eb50-18fa-4bca-a7e2-7af007d2b21e",
+     "material_code": "SON0336",
+     "material_name": "Bột sơn màu grafit H-SM 9608",
+     "unit": "Kg",
+     "qty": 1000,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1000,
+     "kg_don": null
+    },
+    {
+     "movement_id": "d9bea72d-3c34-4d08-b9b0-5bd55f7f3fb0",
+     "material_code": "SON0028",
+     "material_name": "Bột sơn tĩnh điện P-SG 9643",
+     "unit": "Kg",
+     "qty": 250,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 250,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "32631deb-34ed-4ecd-bd4f-19267001a374",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "a4d4eb50-18fa-4bca-a7e2-7af007d2b21e",
+      "material_code": "SON0336",
+      "material_name": "Bột sơn màu grafit H-SM 9608",
+      "unit": "Kg",
+      "qty": 1000,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1000,
+      "kg_don": null
+     },
+     {
+      "movement_id": "d9bea72d-3c34-4d08-b9b0-5bd55f7f3fb0",
+      "material_code": "SON0028",
+      "material_name": "Bột sơn tĩnh điện P-SG 9643",
+      "unit": "Kg",
+      "qty": 250,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 250,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "9d946b1f-c162-4899-ac87-cac09c96f1b3",
+   "code": "PNK-2026-0014",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "e3df6a83-eaff-41b4-a49f-64f8d1533584",
+   "po_code": "ĐH01/2026HG/VSP",
+   "lsx_code": "01/26-27 - MX",
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "8c441021-1dc9-48d8-bb4b-2133d40a6a31",
+     "material_code": "SON0336",
+     "material_name": "Bột sơn màu grafit H-SM 9608",
+     "unit": "Kg",
+     "qty": 2500,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 2500,
+     "kg_don": null
+    },
+    {
+     "movement_id": "822c82ba-c750-48f8-8746-a99b9f4e1927",
+     "material_code": "SON0028",
+     "material_name": "Bột sơn tĩnh điện P-SG 9643",
+     "unit": "Kg",
+     "qty": 250,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 250,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "9d946b1f-c162-4899-ac87-cac09c96f1b3",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "8c441021-1dc9-48d8-bb4b-2133d40a6a31",
+      "material_code": "SON0336",
+      "material_name": "Bột sơn màu grafit H-SM 9608",
+      "unit": "Kg",
+      "qty": 2500,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 2500,
+      "kg_don": null
+     },
+     {
+      "movement_id": "822c82ba-c750-48f8-8746-a99b9f4e1927",
+      "material_code": "SON0028",
+      "material_name": "Bột sơn tĩnh điện P-SG 9643",
+      "unit": "Kg",
+      "qty": 250,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 250,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "b7ead36a-d82e-49a7-becc-b175eb7c7cda",
+   "code": "PNK-2026-0013",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "a2646ade-cb92-4807-8a44-0ec6dd5f9847",
+   "po_code": "04/26HG/VSP",
+   "lsx_code": "07/26-27 - MX",
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "64793505-030b-4003-929b-7079e42f027e",
+     "material_code": "SON0336",
+     "material_name": "Bột sơn màu grafit H-SM 9608",
+     "unit": "Kg",
+     "qty": 125,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 125,
+     "kg_don": null
+    },
+    {
+     "movement_id": "cdaa1883-3cb4-40e2-a7ec-754a9e62d72a",
+     "material_code": "SON0020",
+     "material_name": "Bột sơn tĩnh điện HT-7238",
+     "unit": "Kg",
+     "qty": 100,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 100,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "b7ead36a-d82e-49a7-becc-b175eb7c7cda",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "64793505-030b-4003-929b-7079e42f027e",
+      "material_code": "SON0336",
+      "material_name": "Bột sơn màu grafit H-SM 9608",
+      "unit": "Kg",
+      "qty": 125,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 125,
+      "kg_don": null
+     },
+     {
+      "movement_id": "cdaa1883-3cb4-40e2-a7ec-754a9e62d72a",
+      "material_code": "SON0020",
+      "material_name": "Bột sơn tĩnh điện HT-7238",
+      "unit": "Kg",
+      "qty": 100,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 100,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "1816232f-c821-4255-b2d8-3af5c4fcb049",
+   "code": "PNK-2026-0012",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "1a1339e6-dcd9-4d0c-a3b2-61af88f17937",
+   "po_code": "03/26HG/VSP",
+   "lsx_code": "06/26-27 - MX",
+   "supplier_name": "Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "a7cc3b9f-d764-4639-be4d-33826a5126a0",
+     "material_code": "SON0336",
+     "material_name": "Bột sơn màu grafit H-SM 9608",
+     "unit": "Kg",
+     "qty": 925,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 925,
+     "kg_don": null
+    },
+    {
+     "movement_id": "bc2b74c1-511e-495b-8b0f-bbfcadbcb61e",
+     "material_code": "SON0028",
+     "material_name": "Bột sơn tĩnh điện P-SG 9643",
+     "unit": "Kg",
+     "qty": 60,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 60,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "1816232f-c821-4255-b2d8-3af5c4fcb049",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "a7cc3b9f-d764-4639-be4d-33826a5126a0",
+      "material_code": "SON0336",
+      "material_name": "Bột sơn màu grafit H-SM 9608",
+      "unit": "Kg",
+      "qty": 925,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 925,
+      "kg_don": null
+     },
+     {
+      "movement_id": "bc2b74c1-511e-495b-8b0f-bbfcadbcb61e",
+      "material_code": "SON0028",
+      "material_name": "Bột sơn tĩnh điện P-SG 9643",
+      "unit": "Kg",
+      "qty": 60,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 60,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  },
+  {
+   "doc_id": "05107b44-d0b2-4842-af18-a282681b8192",
+   "code": "PNK-2026-0011",
+   "doc_date": "2026-09-11",
+   "supplier_doc_no": null,
+   "nguoi_nhan": "Quản trị viên",
+   "po_id": "91dba1d4-e9b7-46a9-9edd-a7d49746c0ee",
+   "po_code": "01/26HG/ĐV",
+   "lsx_code": "01/26-27 - LAURA",
+   "supplier_name": "Công ty TNHH thương mại tổng hợp Đắc Vinh",
+   "owner_id": "9a5149bd-a19a-476e-a173-e1e631a20052",
+   "owner_name": "nguyễn đình huy",
+   "lines": [
+    {
+     "movement_id": "166c99df-d1ab-489a-9bc3-2b9e182ef23c",
+     "material_code": "SON0329",
+     "material_name": "Bột sơn ATD2164 màu đen cát",
+     "unit": "Kg",
+     "qty": 1050,
+     "stock_status": "ok",
+     "qty2_actual": null,
+     "can_kg": false,
+     "qty_ordered": 1050,
+     "kg_don": null
+    }
+   ],
+   "phieu": {
+    "doc_id": "05107b44-d0b2-4842-af18-a282681b8192",
+    "reversed": false,
+    "lines": [
+     {
+      "movement_id": "166c99df-d1ab-489a-9bc3-2b9e182ef23c",
+      "material_code": "SON0329",
+      "material_name": "Bột sơn ATD2164 màu đen cát",
+      "unit": "Kg",
+      "qty": 1050,
+      "stock_status": "ok",
+      "qty2_actual": null,
+      "can_kg": false,
+      "qty_ordered": 1050,
+      "kg_don": null
+     }
+    ],
+    "po_status": "received",
+    "latest_for_po": true,
+    "po_open_lines": 0,
+    "over_lines": 0
+   }
+  }
+ ]
+}
