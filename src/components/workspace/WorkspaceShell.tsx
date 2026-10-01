@@ -17,6 +17,7 @@ export async function WorkspaceShell({
   subtitle,
   actions,
   bare,
+  compactTop,
   children,
 }: {
   workspace: WorkspaceConfig
@@ -36,6 +37,12 @@ export async function WorkspaceShell({
    * cả một KHU thì khai ở đây, đừng bắt mỗi trang tự huỷ đệm của vỏ.
    */
   bare?: boolean
+  /**
+   * Thanh trên 40px thay 56px. Chủ dự án chấm Cung ứng "giao diện khá lớn" (01/10/2026):
+   * ở laptop Full HD phóng 125% (vùng nhìn ~1536×730) phần trên dòng dữ liệu đầu ăn
+   * ~200px. Khu mật độ dày bật cái này cùng lúc với `kit-dense`.
+   */
+  compactTop?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -57,6 +64,7 @@ export async function WorkspaceShell({
           title={title}
           subtitle={subtitle}
           actions={actions}
+          compact={compactTop}
         />
         {/* Vùng cuộn DUY NHẤT của app. Trang v3 cuộn trong đây y như trước;
             trang v4 dùng ScreenFrame thì tự chốt chiều cao và cuộn trong bảng.

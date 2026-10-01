@@ -950,7 +950,7 @@ export function ScopeSwitch<V extends string>({
         onValueChange={(v) => {
           if (v && v !== value) onChange(v as V)
         }}
-        className="inline-flex h-[26px] overflow-hidden rounded-[13px] border border-[var(--line)] bg-[var(--surface-card)]"
+        className="inline-flex h-[var(--chip-h)] overflow-hidden rounded-[13px] border border-[var(--line)] bg-[var(--surface-card)]"
       >
         {options.map((o) => {
           const on = o.value === value

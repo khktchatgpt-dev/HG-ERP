@@ -15,11 +15,14 @@ export async function WorkspaceTopbar({
   title,
   subtitle,
   actions,
+  compact = false,
 }: {
   workspace: WorkspaceConfig
   title?: string
   subtitle?: string
   actions?: React.ReactNode
+  /** Thanh 40px thay 56px — khu dựng bằng kit ở mật độ dày (Cung ứng, 01/10/2026). */
+  compact?: boolean
 }) {
   const user = await authService.currentUser()
   if (!user) return null
@@ -48,7 +51,9 @@ export async function WorkspaceTopbar({
     // nên đây là dấu hiệu "đang ở khu nào" duy nhất luôn trong tầm mắt.
     <header className="bg-card/85 sticky top-0 z-10 border-b backdrop-blur">
       <div className={`h-0.5 ${accent.bg}`} />
-      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+      <div
+        className={`flex ${compact ? 'h-10' : 'h-14'} items-center justify-between gap-3 px-4 sm:px-6`}
+      >
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <MobileNav workspace={workspace} />
           <nav className="flex min-w-0 items-center gap-1.5 text-[12.5px]">

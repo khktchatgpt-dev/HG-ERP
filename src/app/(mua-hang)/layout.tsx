@@ -35,7 +35,7 @@ export default async function MuaHangLayout({ children }: { children: React.Reac
   if (!(await canEnterWorkspace(user, 'planning'))) redirect('/')
 
   return (
-    <WorkspaceShell workspace={WORKSPACES.planning} bare>
+    <WorkspaceShell workspace={WORKSPACES.planning} bare compactTop>
       <KitFrame>{children}</KitFrame>
     </WorkspaceShell>
   )

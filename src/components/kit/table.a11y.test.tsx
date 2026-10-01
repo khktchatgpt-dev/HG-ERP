@@ -282,7 +282,7 @@ describe('FilterBar dense / tone + BarLabel + BarSep + Table minWidth (28/09/202
       </FilterBar>,
     )
     const bar = screen.getByRole('toolbar', { name: 'Lọc đơn mua' })
-    expect(bar.className).toContain('py-1')
+    expect(bar.className).toContain('py-[var(--bar-py-tight)]')
     expect(bar.className).toContain('bg-[var(--act-wash)]')
     expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull()
     await expectNoViolations(container)
@@ -296,7 +296,7 @@ describe('FilterBar dense / tone + BarLabel + BarSep + Table minWidth (28/09/202
     )
     expect(screen.queryByRole('toolbar')).toBeNull()
     const bar = container.firstElementChild as HTMLElement
-    expect(bar.className).toContain('py-2')
+    expect(bar.className).toContain('py-[var(--bar-py)]')
     expect(bar.className).toContain('bg-[var(--surface-card)]')
   })
 

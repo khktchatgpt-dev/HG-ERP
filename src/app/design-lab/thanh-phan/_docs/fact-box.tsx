@@ -67,6 +67,22 @@ export default function DocFactBox() {
           ),
         },
         {
+          name: 'FactKv prose — giá trị là câu chữ dài',
+          when: 'giá trị là điều khoản / nơi giao / câu mô tả: nhãn thành cột trái cố định, giá trị canh trái xuống dòng. Dùng ở dải thông tin màn ký đơn mua của Giám đốc (01/10/2026) — kiểu đẩy phải biến câu dài thành khối chữ lởm chởm.',
+          demo: (
+            <div className="max-w-[260px]">
+              <FactKv
+                prose
+                rows={[
+                  ['Thanh toán', 'Thanh toán công nợ cuối tháng'],
+                  ['Thời hạn giao', 'Từ 7 đến 10 ngày kể từ ngày xác nhận đơn'],
+                  ['Nơi giao', 'Xưởng SX Cty TNHH Hoàng Gia - Cụm CN Cát Nhơn, Gia Lai'],
+                ]}
+              />
+            </div>
+          ),
+        },
+        {
           name: 'FactKv nhãn mono — Chứng từ liên quan, vỏ có tên riêng',
           when: 'nhãn là MÃ chứng từ, nên truyền ReactNode bọc num thay cho chuỗi. Trang đã có một FactBox tên mặc định, nên cái thứ hai truyền label khác.',
           demo: (

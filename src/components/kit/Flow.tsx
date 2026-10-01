@@ -438,7 +438,7 @@ export function DocStatus({
       disabled={!marks?.length}
       aria-label={`Trạng thái: ${status}${marks?.length ? ' — xem vòng đời' : ''}`}
       className={cn(
-        'text-k-body inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border pr-2.5 pl-2 font-semibold',
+        'text-k-body inline-flex h-[var(--ctl-h)] shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border pr-2.5 pl-2 font-semibold',
         toneWash,
         toneCls,
         'outline-none focus-visible:shadow-[0_0_0_2px_var(--act)] enabled:hover:brightness-95 disabled:cursor-default',

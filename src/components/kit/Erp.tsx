@@ -1020,19 +1020,18 @@ export function FactSection({
   )
 }
 
-/**
- * Nhãn cũng nhận `ReactNode` chứ không chỉ `string`: khối "Chứng từ liên quan"
- * cần mã chứng từ ở vế trái phải là mono (`<span className="num">`), không
- * phải chữ thường. Khoá dùng chỉ số vì nhãn có thể không phải chuỗi.
- */
+/** Nhãn nhận `ReactNode` (mã chứng từ ở vế trái phải mono — "Chứng từ liên quan"); khoá theo chỉ số vì nhãn có thể không phải chuỗi. */
 export function FactKv({
   rows,
+  prose,
 }: {
   /** Các cặp `[nhãn, giá trị]`, mỗi cặp một hàng: nhãn trái chữ phụ, giá trị phải chữ đậm. Khoá theo chỉ số, nên đừng đổi thứ tự hàng giữa hai lần vẽ. */
   rows: [ReactNode, ReactNode][]
+  /** Giá trị là CÂU CHỮ dài (điều khoản thanh toán, nơi giao): nhãn thành cột trái cố định, giá trị canh trái và xuống dòng. Bỏ trống cho giá trị ngắn — giá trị đẩy sát phải như FactBox của Dynamics. */
+  prose?: boolean
 }) {
   return (
-    <dl className="k-fact-kv">
+    <dl className={prose ? 'k-fact-kv k-fact-kv-prose' : 'k-fact-kv'}>
       {rows.map(([k, v], i) => (
         <div key={i}>
           <dt>{k}</dt>

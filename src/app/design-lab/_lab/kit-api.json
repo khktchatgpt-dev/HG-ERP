@@ -1047,6 +1047,13 @@
         "optional": false,
         "def": null,
         "doc": "Các cặp `[nhãn, giá trị]`, mỗi cặp một hàng: nhãn trái chữ phụ, giá trị phải chữ đậm. Khoá theo chỉ số, nên đừng đổi thứ tự hàng giữa hai lần vẽ."
+      },
+      {
+        "name": "prose",
+        "type": "boolean",
+        "optional": true,
+        "def": null,
+        "doc": "Giá trị là CÂU CHỮ dài (điều khoản thanh toán, nơi giao): nhãn thành cột trái cố định, giá trị canh trái và xuống dòng. Bỏ trống cho giá trị ngắn — giá trị đẩy sát phải như FactBox của Dynamics."
       }
     ],
     "extends": []

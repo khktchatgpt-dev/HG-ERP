@@ -465,7 +465,7 @@ export function GroupRow({
       <th
         scope="rowgroup"
         colSpan={cols}
-        className="text-k-label h-[29px] border-y border-[var(--line)] bg-[var(--surface-raised)] px-[var(--pad-x)] text-left font-bold tracking-[.07em] text-[var(--ink-2)] uppercase in-[.kit]:border-b-[var(--hair)] in-[.kit]:py-[var(--pad-y)] in-[.kit]:align-top"
+        className="text-k-label h-[calc(var(--row-h)-1px)] border-y border-[var(--line)] bg-[var(--surface-raised)] px-[var(--pad-x)] text-left font-bold tracking-[.07em] text-[var(--ink-2)] uppercase in-[.kit]:border-b-[var(--hair)] in-[.kit]:py-[var(--pad-y)] in-[.kit]:align-top"
       >
         {/*
           TÊN NHÓM BÁM MÉP TRÁI khi kéo ngang (17/09/2026).
@@ -692,7 +692,7 @@ export function Cell({
  * người ký tưởng đó là toàn bộ tiền phải chi.
  */
 const TFOOT_CLS =
-  '[&_td]:sticky [&_td]:bottom-0 [&_td]:z-[calc(var(--z-sticky)_+_2)] [&_td]:h-9 [&_td]:border-t [&_td]:border-[var(--line)] [&_td]:bg-[var(--surface-raised)] [&_td]:px-[var(--pad-x)] [&_td]:font-semibold'
+  '[&_td]:sticky [&_td]:bottom-0 [&_td]:z-[calc(var(--z-sticky)_+_2)] [&_td]:h-[var(--foot-h)] [&_td]:border-t [&_td]:border-[var(--line)] [&_td]:bg-[var(--surface-raised)] [&_td]:px-[var(--pad-x)] [&_td]:font-semibold'
 
 export function TFoot({
   label,
@@ -789,7 +789,7 @@ export function FilterBar({
       aria-label={label}
       className={cn(
         'z-[var(--z-bar)] flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] px-[var(--gutter)]',
-        dense ? 'py-1' : 'py-2',
+        dense ? 'py-[var(--bar-py-tight)]' : 'py-[var(--bar-py)]',
         tone === 'selected'
           ? 'bg-[var(--act-wash)]'
           : tone === 'raised'
@@ -861,7 +861,7 @@ export function Chip({
         // đã đóng cứng 26px nên không có chỗ cho dòng thứ hai (đo 13/09/2026 ở
         // pane 705px: cả năm chip đều vỡ). Không co thì hàng tự xuống dòng, xem
         // `flex-wrap` ở FilterBar.
-        'text-k-sm inline-flex h-[26px] shrink-0 items-center gap-1.5 rounded-[13px] border px-2.5 whitespace-nowrap',
+        'text-k-sm inline-flex h-[var(--chip-h)] shrink-0 items-center gap-1.5 rounded-[13px] border px-2.5 whitespace-nowrap',
         on
           ? 'border-[var(--act-line)] bg-[var(--act-wash)] font-semibold text-[var(--act)]'
           : 'border-[var(--line)] bg-[var(--surface-card)] text-[var(--ink-2)] hover:border-[var(--ink-3)] hover:text-[var(--ink)]',
@@ -929,7 +929,7 @@ export function SearchInput({
   const ten = label || placeholder || 'Tìm'
   return (
     <div
-      className="flex h-7 items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 focus-within:border-[var(--act)]"
+      className="flex h-[var(--ctl-h)] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 focus-within:border-[var(--act)]"
       style={{ width }}
     >
       {/* Ký hiệu trang trí — không ẩn thì trình đọc có thể đọc tên ký tự Unicode. */}

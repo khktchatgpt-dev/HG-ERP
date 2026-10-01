@@ -1150,6 +1150,17 @@
   margin: 0;
   font-weight: 600;
 }
+/* Giá trị là câu chữ (điều khoản, nơi giao): nhãn cột cố định, giá trị canh
+   trái xuống dòng — kiểu space-between đẩy câu dài thành khối chữ lởm chởm. */
+.k-fact-kv-prose > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  justify-content: start;
+}
+.k-fact-kv-prose dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 /* ── 11. Bố cục thân + thanh trạng thái đáy ──────────────────────────── */
 .k-body {

@@ -164,7 +164,7 @@ function SanPham({
                     */
                     <Row key={p.code} onClick={() => setXem(p)}>
                       <Cell>
-                        <span className="flex h-[26px] w-[30px] items-center justify-center overflow-hidden rounded-[2px] border border-[var(--line)] bg-[var(--surface-hover)]">
+                        <span className="flex h-5 w-6 items-center justify-center overflow-hidden rounded-[2px] border border-[var(--line)] bg-[var(--surface-hover)]">
                           {src ? (
                             // eslint-disable-next-line @next/next/no-img-element -- ảnh ngoài, kích thước theo hồ sơ SP; next/image không thêm được gì ở ô 30px
                             <img

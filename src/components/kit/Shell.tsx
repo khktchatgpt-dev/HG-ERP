@@ -182,7 +182,7 @@ export function WorkLanes<T>({
     <div
       role="tablist"
       onKeyDown={onKeyDown}
-      className="-mb-px flex items-end gap-0.5 overflow-x-auto px-[var(--gutter)] pt-3"
+      className="-mb-px flex items-end gap-0.5 overflow-x-auto px-[var(--gutter)] pt-[var(--tab-top)]"
     >
       {lanes.map((l) => {
         const on = l.id === activeId
@@ -197,7 +197,7 @@ export function WorkLanes<T>({
             tabIndex={on ? 0 : -1}
             onClick={() => onPick(l.id)}
             className={cn(
-              'text-k-body relative flex h-[37px] shrink-0 items-center gap-2 rounded-t-[var(--radius)] border border-b-0 px-4 whitespace-nowrap',
+              'text-k-body relative flex h-[var(--tab-h)] shrink-0 items-center gap-2 rounded-t-[var(--radius)] border border-b-0 px-4 whitespace-nowrap',
               on
                 ? 'border-[var(--line)] bg-[var(--surface)] font-semibold text-[var(--ink)] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-[var(--surface)] after:content-[""]'
                 : 'border-transparent font-medium text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]',
@@ -519,7 +519,7 @@ export function ScreenHeader({
   if (compact) {
     return (
       <header className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)]">
-        <div className="flex min-h-[38px] flex-wrap items-center gap-x-3.5 gap-y-1 py-1">
+        <div className="flex min-h-[var(--head-h)] flex-wrap items-center gap-x-3.5 gap-y-1 py-0.5">
           <span className="text-k-label font-semibold tracking-[.09em] text-[var(--ink-3)] uppercase">
             {eyebrow}
           </span>

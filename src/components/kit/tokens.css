@@ -147,6 +147,17 @@
      `height`. */
   --pad-y: 5px;
   --gutter: 14px;
+  /* Đầu trang một hàng + đệm dọc hàng lọc — cũng theo mật độ (01/10/2026): chế độ dày
+     trước đó chỉ thu dòng bảng, đầu trang + hai hàng lọc vẫn ăn ~200px ở 1536×730. */
+  --head-h: 38px;
+  --bar-py: 8px;
+  --bar-py-tight: 4px;
+  /* Chip lọc / công tắc phân đoạn, thẻ làn việc, chân tổng bảng — trước ghi cứng
+     26/37/36px nên chế độ dày để lại nút cao thấp bốn cỡ trên cùng màn. */
+  --chip-h: 26px;
+  --tab-h: 37px;
+  --tab-top: 12px;
+  --foot-h: 36px;
 
   /* ── THANG KHOẢNG CÁCH ────────────────────────────────────────────────
      Bậc CÓ TÊN, chép cách làm của Fluent 2 (Dynamics 365): có bậc "nửa"
@@ -294,6 +305,13 @@
   --ctl-h: 24px;
   --pad-x: 6px;
   --pad-y: 2px;
+  --head-h: 32px;
+  --bar-py: 4px;
+  --bar-py-tight: 3px;
+  --chip-h: 24px;
+  --tab-h: 30px;
+  --tab-top: 6px;
+  --foot-h: 28px;
 }
 
 /* ── SỐ ────────────────────────────────────────────────────────────────
