@@ -35,15 +35,22 @@ export type PoForHeader = {
   terms_lead_time: string | null
 }
 
-/** Đơn đã lưu → đầu đơn để sửa. Điều khoản trống thì lấy mặc định của mẫu. */
+/**
+ * Đơn đã lưu → đầu đơn để sửa. ĐIỀU KHOẢN TRỐNG THÌ GIỮ TRỐNG (sửa 30/09/2026).
+ *
+ * Bản trước điền câu mẫu vào ô trống: mở đơn ra sửa một ghi chú rồi Lưu là đơn
+ * mang luôn "Tạm ứng 50%…" mà người soạn không hề gõ — PO-2026-0111/0112 của anh
+ * Truyền dính đúng vậy (đã trả về trống). Ô trống chỉ hiện gợi ý cách ghi (placeholder)
+ * — muốn câu nào thì gõ câu đó, không tự chèn.
+ */
 export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
   const meta = poTemplateMeta(po.template)
   const terms: PoTerms = {
-    quality: po.terms_quality ?? meta.terms.quality,
-    delivery_place: po.terms_delivery_place ?? meta.terms.delivery_place,
-    payment: po.terms_payment ?? meta.terms.payment,
-    invoice: po.terms_invoice ?? meta.terms.invoice,
-    lead_time: po.terms_lead_time ?? meta.terms.lead_time,
+    quality: po.terms_quality ?? '',
+    delivery_place: po.terms_delivery_place ?? '',
+    payment: po.terms_payment ?? '',
+    invoice: po.terms_invoice ?? '',
+    lead_time: po.terms_lead_time ?? '',
   }
   return {
     template: po.template,

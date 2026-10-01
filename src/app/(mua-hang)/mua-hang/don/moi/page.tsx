@@ -96,6 +96,19 @@ export default async function Page({
       }
     : undefined
 
+  // Nhân bản / bổ sung từ đơn gắn lệnh NGOÀI danh sách đang chạy (nháp, chờ duyệt…) — thêm lệnh
+  // đó vào ô chọn, không thì ô Lệnh hiện trống dù đơn mới vẫn mang lệnh (xem [id]/page.tsx).
+  const activeIds = new Set(lsxs.map((l) => l.id))
+  const offList = src
+    ? (
+        await Promise.all(
+          [src.po.production_order_id, ...src.extra_lsx.map((x) => x.id)]
+            .filter((id): id is string => !!id && !activeIds.has(id))
+            .map((id) => productionRepo.findById(id)),
+        )
+      ).filter((l) => l != null)
+    : []
+
   return (
     <DonChungTuScreen
       mode="create"
@@ -115,7 +128,7 @@ export default async function Page({
       lastTemplates={await posRepo.lastTemplateBySupplier()}
       groupTemplates={Object.fromEntries(tax.groups.flatMap((g) => (g.po_template ? [[g.name, g.po_template]] : [])))} // prettier-ignore
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null }))} // prettier-ignore
-      lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
+      lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore
       perms={{ canEdit: true, canApprove, isSupply: true }}
       me={{ id: user.id, name: user.name ?? user.email }}
       seed={{ supplierId: sp.ncc, lsxId: sp.lsx }}

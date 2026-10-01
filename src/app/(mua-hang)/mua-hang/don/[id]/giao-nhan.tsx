@@ -64,7 +64,9 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
           id="dot-giao"
           title={drafting ? 'Chia đợt giao' : 'Giao & nhận hàng'}
           flush
-          defaultOpen={drafting ? shipCols.length > 0 : viewMode || sentToSupplier}
+          defaultOpen={
+            drafting ? shipCols.length > 0 || d.dotMo : viewMode || sentToSupplier
+          }
           summary={
             drafting
               ? [

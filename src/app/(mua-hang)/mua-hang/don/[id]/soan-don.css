@@ -1,0 +1,145 @@
+/*
+  MÀN SOẠN ĐƠN (TẠO / SỬA) — PHÂN VÙNG BẰNG MÀU (30/09/2026).
+
+  Chủ dự án chấm màn soạn: "rất rối … các thành phần phải có gì đó để phân biệt,
+  hiện tại tất cả đều xám trắng". Đo trên ảnh: đầu đơn, lưới, chi tiết dòng,
+  điều khoản cùng một nền trắng viền xám; mỗi ô đầu đơn là một hộp chứa một hộp
+  nhập nữa (khung đôi); mỗi ô trong lưới cũng đóng khung — mắt không tìm ra đâu
+  là vùng nào, đâu là chỗ gõ.
+
+  Chỉ áp khi ĐANG SOẠN: màn chứng từ có thanh chốt đáy (k-commit) là con trực
+  tiếp của k-screen đúng lúc tạo/sửa đơn. Màn xem đơn và mọi màn kit khác không
+  đổi một điểm ảnh — không sửa kit, không thêm prop.
+
+  Luật màu giữ nguyên: nhấn bằng màu hành động (act), không dùng ba màu vòng đời;
+  tách vùng bằng nền + khe, không bóng đổ, không bo góc thẻ nổi.
+*/
+
+/* Thân màn: nền xám xanh để các vùng trắng tách nhau bằng khe. */
+.k-screen:has(> .k-commit) .k-main {
+  background: var(--surface);
+}
+
+/* ① ĐẦU ĐƠN — dải nền xanh nhạt, có nhãn vùng; ô không còn khung đôi. */
+.k-screen:has(> .k-commit) .k-headchips {
+  background: var(--act-wash);
+  border-bottom: 1px solid var(--act-line);
+  gap: 4px 10px;
+}
+.k-screen:has(> .k-commit) .k-headfield {
+  border-color: transparent;
+  background: transparent;
+  padding-left: 0;
+}
+.k-screen:has(> .k-commit) .k-headfield > span:first-child {
+  color: var(--act-text);
+}
+/* Ô bắt buộc còn trống vẫn phải đỏ ngay — viết lại sau luật bỏ khung ở trên. */
+.k-screen:has(> .k-commit) .k-headfield.k-headchip-need {
+  border-color: var(--stop);
+  background: var(--stop-wash);
+  padding-left: 8px;
+}
+.k-screen:has(> .k-commit) .k-headfield.k-headchip-need > span:first-child {
+  color: var(--stop);
+}
+
+/* ②③ KHỐI (Dòng hàng, Chia đợt, Điều khoản…) — tách nhau bằng khe 8px, tiêu
+   đề có vạch nhấn bên trái + nền xám xanh nên nhìn là biết một vùng mới bắt đầu. */
+.k-screen:has(> .k-commit) .k-ft {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.k-screen:has(> .k-commit) .k-ft > .k-ft-h,
+.k-screen:has(> .k-commit) .k-ft > .k-ft-hd {
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--act);
+}
+.k-screen:has(> .k-commit) .k-ft-t {
+  color: var(--act-text);
+}
+
+/* LƯỚI — ô gõ không đóng khung bốn phía: chỉ một gạch chân (biết là gõ được),
+   rê chuột hiện khung, đang gõ thì khung màu hành động + nền trắng. Hết cảnh
+   mỗi dòng 6–8 hộp chồng lên kẻ ô của bảng. */
+.k-screen:has(> .k-commit) .k-grid td input:not([type='checkbox']),
+.k-screen:has(> .k-commit) .k-grid td textarea:not(:focus),
+.k-screen:has(> .k-commit) .k-grid td select {
+  border-color: transparent;
+  border-bottom-color: var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.k-screen:has(> .k-commit) .k-grid td input:not([type='checkbox']):hover,
+.k-screen:has(> .k-commit) .k-grid td textarea:not(:focus):hover,
+.k-screen:has(> .k-commit) .k-grid td select:hover {
+  border-color: var(--line);
+  background: var(--surface-card);
+}
+.k-screen:has(> .k-commit) .k-grid td input:not([type='checkbox']):focus,
+.k-screen:has(> .k-commit) .k-grid td select:focus {
+  border-color: var(--act);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+}
+
+/* CHI TIẾT DÒNG — ngăn phụ gắn với dòng đang chọn: vạch trên màu hành động,
+   nền nhạt hơn lưới, tiêu đề cùng màu với dòng đang chọn. */
+.k-screen:has(> .k-commit) .k-linedet {
+  border-top: 2px solid var(--act-line);
+  background: var(--surface-hover);
+}
+.k-screen:has(> .k-commit) .k-linedet-h {
+  color: var(--act-text);
+}
+/* "Quá nhiều chỗ trống" (chủ dự án 30/09/2026): lưới nhãn–giá trị 3 cột của
+   kit để mỗi nhóm 2–4 ô nằm rải trên 1.200px, khung cao 351px cho một dòng
+   hàng. Lúc soạn, mỗi NHÓM thành MỘT HÀNG: tên nhóm bên trái, các ô chảy liền
+   nhau sang phải, hết chỗ mới xuống dòng. */
+.k-screen:has(> .k-commit) .k-linedet .k-fgrp {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px var(--gutter);
+}
+.k-screen:has(> .k-commit) .k-linedet .k-fgrp-h {
+  flex: 0 0 132px;
+  margin: 0;
+}
+.k-screen:has(> .k-commit) .k-linedet .k-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 22px;
+  min-width: 0;
+}
+.k-screen:has(> .k-commit) .k-linedet .k-f {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+}
+.k-screen:has(> .k-commit) .k-linedet .k-f dt {
+  white-space: nowrap;
+}
+.k-screen:has(> .k-commit) .k-linedet .k-f dd input:not([type='checkbox']) {
+  width: 140px;
+}
+
+/* Dải đầu đơn + khe giữa các khối — bớt đệm, vẫn đủ tách vùng. */
+.k-screen:has(> .k-commit) .k-headchips {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.k-screen:has(> .k-commit) .k-ft {
+  margin-top: 6px;
+}
+/* Thanh công cụ đứng trong hàng tiêu đề khối: không đệm dưới thừa. */
+.k-screen:has(> .k-commit) .k-ft-act {
+  padding-bottom: 0;
+}
+
+/* THANH CHỐT — vạch trên màu hành động: đây là chỗ chốt cả đơn. */
+.k-screen:has(> .k-commit) > .k-commit {
+  border-top: 2px solid var(--act);
+}

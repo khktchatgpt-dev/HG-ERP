@@ -38,10 +38,10 @@ describe('headerFromPo', () => {
     expect(h.discount).toBe('')
     expect(h.vat).toBe(8)
   })
-  it('điều khoản trống lấy mặc định của mẫu, điều khoản có thì giữ', () => {
+  it('điều khoản trống GIỮ trống (không tự chèn câu mẫu), điều khoản có thì giữ', () => {
     const h = headerFromPo(po, [])
     expect(h.terms.quality).toBe('theo mẫu')
-    expect(h.terms.payment.length).toBeGreaterThan(0)
+    expect(h.terms.payment).toBe('')
   })
   it('không có lệnh → standalone', () => {
     expect(headerFromPo({ ...po, production_order_id: null }, []).poType).toBe(

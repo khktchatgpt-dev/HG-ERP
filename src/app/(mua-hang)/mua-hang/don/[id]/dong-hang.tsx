@@ -9,7 +9,6 @@ import {
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import {
   CellHint,
-  Combobox,
   FastTab,
   Field,
   FieldGroup,
@@ -21,7 +20,6 @@ import {
   GridHead,
   GridRow,
   GridSep,
-  GridToolbar,
   LineDetail,
   LineStatus,
   NumInput,
@@ -30,10 +28,8 @@ import {
   TextInput,
   Th,
 } from '@/components/kit'
-import { api } from '@/lib/api'
 import { underDemand } from '@/lib/po-guards'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
-import type { PoMaterial } from '@/lib/po-material.types'
 import { suggestOrderQty } from '@/lib/po-template'
 import { priceDrift } from '@/lib/po-tracking'
 import { NhuCauGrid } from './SoanDonPanels'
@@ -49,6 +45,9 @@ import {
 } from './don-chung-tu.shared'
 import { lineDetailSummary } from './soan-don'
 import { TrungDong } from './trung-dong'
+import { ThanhLuoi } from './thanh-luoi'
+import { GhiChuTd, GhiChuTh, gridMinWidth } from './ghi-chu-dong'
+import { OChuNo } from './o-chu-no'
 import type { DonCtx } from './useDonChungTu'
 
 /** Khối `blkLines` của màn chứng từ đơn mua. */
@@ -65,14 +64,6 @@ export function DongHang({ d }: { d: DonCtx }) {
     goTo,
     po,
     sel,
-    addMaterial,
-    addFree,
-    removeSel,
-    setPaste,
-    setQuickAdd,
-    drafting,
-    pending,
-    addFromNeeds,
     gridKeys,
     gridFields,
     adjusting,
@@ -106,7 +97,7 @@ export function DongHang({ d }: { d: DonCtx }) {
         title="Dòng đơn hàng"
         defaultOpen
         flush
-        summary={[
+        summary={editing ? [] : [
           ['Số dòng', <span key="a" className="num">{lines.length}</span>], // prettier-ignore
           ['Thiếu số', <span key="b" className={issues.length ? 'num k-t-warn' : 'num'}>{issues.length}</span>], // prettier-ignore
           ['Tổng', <span key="c" className="num">{money(totals.grandTotal, header.currency)}</span>], // prettier-ignore
@@ -130,109 +121,18 @@ export function DongHang({ d }: { d: DonCtx }) {
                 Giao &amp; nhận hàng
               </GridBtn>
             </>
-          ) : undefined
+          ) : (
+            // Lúc soạn: thanh công cụ đứng CÙNG HÀNG tiêu đề khối — bớt một hàng (30/09/2026).
+            <ThanhLuoi d={d} />
+          )
         }
       >
         <TrungDong d={d} />
-        {editing && (
-          <GridToolbar
-            count={sel.length > 0 ? `${sel.length} dòng đã chọn` : `${lines.length} dòng`}
-          >
-            <>
-              <Combobox<PoMaterial>
-                label="Thêm vật tư"
-                placeholder="Gõ mã, tên hoặc quy cách (50x50, 8x15…) rồi Enter"
-                width={400}
-                search={async (q) =>
-                  (
-                    await api<{ materials: PoMaterial[] }>(
-                      `/api/dept/supply/po-materials?q=${encodeURIComponent(q)}&limit=12`,
-                    )
-                  ).materials
-                }
-                keyOf={(m) => m.id}
-                /*
-                    HAI DÒNG, QUY CÁCH ĐỨNG RIÊNG. Trước đây một dòng "mã · tên ·
-                    ĐVT · nhóm" và KHÔNG có quy cách — trong khi quy cách chính là
-                    thứ người mua dùng để phân biệt: danh mục có 8 mã "Inox hộp
-                    50x50" khác nhau ở độ dày, và 131 mã "Nút chân" khác nhau ở
-                    kích thước. Chọn nhầm là cả đơn sai hàng.
-
-                    Tồn kho đi kèm luôn: biết còn 2.000 cái trong kho thì người
-                    mua đặt 500 chứ không đặt 2.500.
-                  */
-                render={(m) => (
-                  <>
-                    <span className="flex items-baseline gap-2">
-                      <span className="num shrink-0 font-semibold text-[var(--act)]">
-                        {m.code}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                    </span>
-                    <span className="text-k-label flex flex-wrap items-baseline gap-x-2.5">
-                      {m.spec ? (
-                        <span className="num font-semibold text-[var(--ink-2)]">
-                          {m.spec}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--ink-empty)]">chưa có quy cách</span>
-                      )}
-                      <span className="text-[var(--ink-3)]">{m.unit}</span>
-                      {m.on_hand != null && m.on_hand !== 0 && (
-                        <span className="num text-[var(--ink-3)]">tồn {m.on_hand}</span>
-                      )}
-                      {m.last_purchase_price != null && (
-                        <span className="num text-[var(--ink-3)]">
-                          giá gần nhất {m.last_purchase_price.toLocaleString('vi-VN')}
-                        </span>
-                      )}
-                      {m.group_name && (
-                        <span className="truncate text-[var(--ink-3)]">
-                          {m.group_name}
-                        </span>
-                      )}
-                    </span>
-                  </>
-                )}
-                onPick={addMaterial}
-              />
-              <GridBtn onClick={addFree}>+ Dòng tự do</GridBtn>
-              <GridBtn
-                disabled={sel.length === 0}
-                title="Chọn dòng trước"
-                onClick={removeSel}
-              >
-                Xoá dòng
-              </GridBtn>
-              <GridSep />
-              <GridBtn onClick={() => setPaste(true)} title="Dán vùng bảng từ sổ Excel">
-                Dán từ Excel
-              </GridBtn>
-              <GridBtn
-                onClick={() => setQuickAdd(true)}
-                title="Khai vật tư chưa có trong danh mục"
-              >
-                Khai vật tư mới
-              </GridBtn>
-              {/* Chuyển xuống từ thanh hành động: nó đẻ ra dòng, nên đứng
-                    cạnh hai nút kia chứ không nằm trên đầu chứng từ. */}
-              {drafting && (
-                <GridBtn
-                  disabled={pending.length === 0}
-                  title={pending.length === 0 ? (header.poType === 'lsx' && header.lsxId ? 'Lệnh không còn nhu cầu nào chưa lên đơn' : 'Chọn lệnh sản xuất trước') : 'Thêm mọi mã lệnh còn thiếu vào đơn'} // prettier-ignore
-                  onClick={() => void addFromNeeds(pending)}
-                >
-                  Thêm {pending.length > 0 ? `${pending.length} mã ` : ''}còn thiếu
-                </GridBtn>
-              )}
-            </>
-          </GridToolbar>
-        )}
 
         <div onKeyDown={editing ? gridKeys : undefined}>
           {/* Ô GỌN (Đm/sp) không cộng bề rộng tối thiểu: nó lấy chỗ của cột tên vật tư
                 (co giãn) để cột tiền vẫn trong màn ở 1280 — đo 26/09/2026. */}
-          <Grid minWidth={640 + gridFields.filter((f) => !f.compact).length * 100}>
+          <Grid minWidth={gridMinWidth(gridFields.filter((f) => !f.compact).length)}>
             <GridHead>
               <Th width={30} />
               <Th width={36}>#</Th>
@@ -246,6 +146,7 @@ export function DongHang({ d }: { d: DonCtx }) {
               <Th num>SL đặt</Th>
               <Th num>Đơn giá</Th>
               <Th num>Thành tiền</Th>
+              <GhiChuTh />
               {adjusting && <Th num>Đã nhận</Th>}
               {adjusting && <Th num>Phát sinh</Th>}
               {!editing && <Th>Trạng thái</Th>}
@@ -289,7 +190,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                     </Td>
                     <Td>
                       {l.is_free && editing ? (
-                        <TextInput
+                        <OChuNo
                           label="Tên hàng"
                           value={l.name}
                           onCommit={(v) => patch(i, { name: v })}
@@ -484,6 +385,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                         )
                       )}
                     </Td>
+                    <GhiChuTd d={d} l={l} i={i} />
                     {adjusting && (
                       <Td num>
                         {l.po_line_id ? (
@@ -545,6 +447,7 @@ export function DongHang({ d }: { d: DonCtx }) {
               <Td num>
                 {fmtMoney(roundMoney(totals.subtotal, header.currency), header.currency)}
               </Td>
+              <Td />
               {adjusting && <Td />}
               {adjusting && (
                 <Td num>
@@ -630,6 +533,9 @@ export function DongHang({ d }: { d: DonCtx }) {
                 {editing && lineQty2(template, cur) != null ? (
                   <Pick
                     label="Giá theo đơn vị"
+                    width={
+                      180
+                    } /* nhãn "Mặc định của mẫu …" dài — không ghim thì ô đè sang cột "Tương đương" */
                     value={cur.price_per || 'mac-dinh'}
                     onChange={
                       (v) =>
@@ -724,20 +630,12 @@ export function DongHang({ d }: { d: DonCtx }) {
                 </Field>
               </FieldGroup>
             )}
-            <FieldGroup title="Ghi chú dòng">
-              <Field label="Ghi chú">
-                {editing ? (
-                  <TextInput
-                    label="Ghi chú dòng"
-                    value={cur.note}
-                    onCommit={(v) => patch(curIdx, { note: v })}
-                  />
-                ) : (
-                  cur.note || '—'
-                )}
-              </Field>
-              {cur.is_free && <Field label="Loại dòng">Dòng tự do — không trừ kho</Field>}
-            </FieldGroup>
+            {/* Ghi chú dòng: cột "Ghi chú" trên lưới (ghi-chu-dong.tsx, 30/09/2026). */}
+            {cur.is_free && (
+              <FieldGroup title="Loại dòng">
+                <Field label="Loại dòng">Dòng tự do — không trừ kho</Field>
+              </FieldGroup>
+            )}
           </LineDetail>
         ) : (
           <div className="k-ft-note">
@@ -767,7 +665,7 @@ export function NhuCau({ d }: { d: DonCtx }) {
   return (
     <>
       {/* ══ 1a. NHU CẦU CỦA LỆNH — chỉ khi đang soạn đơn theo lệnh ═══════ */}
-      {drafting && header.poType === 'lsx' && header.lsxId && (
+      {drafting && header.poType === 'lsx' && header.lsxId && pending.length > 0 && (
         <FastTab
           id="nhu-cau"
           title="Nhu cầu của lệnh"

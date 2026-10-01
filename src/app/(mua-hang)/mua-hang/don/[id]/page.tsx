@@ -132,6 +132,21 @@ export default async function Page({
   const stock: Record<string, number> = {}
   for (const r of stockRows) stock[r.material_id] = r.on_hand
 
+  /*
+    LỆNH ĐANG GẮN ĐƠN mà không còn trong danh sách đang chạy ( chỉ
+    lấy approved | in_progress) — lệnh nháp, chờ duyệt, đã xong. Thiếu ở đây thì ô
+    Lệnh lúc sửa hiện TRỐNG dù đơn vẫn giữ lệnh (đơn GIGA / BLACKIN của anh Truyền,
+    30/09/2026). Chỉ tốn thêm một lượt khi thật sự có lệnh như vậy.
+  */
+  const activeIds = new Set(lsxs.map((l) => l.id))
+  const offList = (
+    await Promise.all(
+      [po.production_order_id, ...extra_lsx.map((x) => x.id)]
+        .filter((id): id is string => !!id && !activeIds.has(id))
+        .map((id) => productionRepo.findById(id)),
+    )
+  ).filter((l) => l != null)
+
   const isSupply = user.role === 'admin' || supplyStaff
   const manageAny = user.role === 'admin' || canManageAny
   const canEdit = isSupply && (manageAny || (po.assigned_to != null && po.assigned_to === user.id)) // prettier-ignore
@@ -172,12 +187,13 @@ export default async function Page({
       tpl={tpl}
       lastTemplates={canEdit ? lastTemplates : undefined}
       suppliers={pickable.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null }))} // prettier-ignore
-      lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
+      lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore
       perms={{
         canEdit,
         canApprove,
         isSupply,
         privileged: manageAny || canApprove,
+        lead: user.role === 'admin' || manageAny,
         canRecordCost: user.role === 'admin' || canRecordCost,
       }}
       me={{ id: user.id, name: user.name ?? user.email }}

@@ -20,6 +20,7 @@ import type { CommitLogRow, PoIssue } from '@/modules/dept/supply/po-tracking.re
 import { type CostRow } from './ChiPhiPanel'
 import { type PoFinance } from './TaiChinhPanel'
 import { type ShipmentLite } from './nhan-hang'
+import { OChuNo } from './o-chu-no'
 
 /**
  * MÀN CHỨNG TỪ ĐƠN MUA HỢP NHẤT — xem / sửa / tạo cùng một bố cục.
@@ -165,6 +166,8 @@ export type Props = {
     isSupply: boolean
     /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp để sửa. */
     privileged?: boolean
+    /** Trưởng phòng Cung ứng / admin — gửi gấp trước khi ký được (0218). */
+    lead?: boolean
     /** Ghi / huỷ phiếu chi phí mua hàng (0211) — Cung ứng + Kế toán. */
     canRecordCost?: boolean
   }
@@ -424,7 +427,7 @@ export function EditCell({
     case 'text':
     default:
       return (
-        <TextInput
+        <OChuNo
           label={f.label}
           mono={f.kind === 'die'}
           value={String(

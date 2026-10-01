@@ -43,18 +43,10 @@ import {
 } from './nhan-hang'
 
 /**
- * GIAO & NHẬN HÀNG trên màn chứng từ đơn mua — dựng lại bằng kit từ
- * `PoShipmentsPanel.tsx` + `PoReceiptMatrix.tsx` của bản cũ (hai file đó trộn
- * Modal/Badge/Card của hệ cũ nên không nhập thẳng được). Logic thuần dùng
- * chung: `lib/po-shipments` (validate, tiền đợt, suy "đợt này về mấy") và
- * `nhan-hang.ts` (kết luận dòng, gộp mảnh thành đợt).
- *
- * Ba khối, ba câu hỏi:
- *   · Kế hoạch giao — NCC HẸN gì (đợt giao 0152)
- *   · Nhận theo đợt — Kho THỰC NHẬN gì (ma trận dòng × phiếu nhập, B3)
- *   · Chứng từ kho — phiếu nào đã ghi vào đơn
- * Cùng một đơn nhưng là hai sổ: lịch hẹn và sổ thực nhận. Trộn làm một là
- * người mua không còn biết NCC trễ hay Kho chưa ghi.
+ * GIAO & NHẬN HÀNG trên màn chứng từ đơn mua (kit; logic thuần ở `lib/po-shipments`
+ * + `nhan-hang.ts`). Ba khối: Kế hoạch giao = NCC HẸN gì (đợt 0152) · Nhận theo đợt
+ * = Kho THỰC NHẬN gì (ma trận dòng × phiếu, B3) · Chứng từ kho. Hai sổ khác nhau —
+ * trộn làm một là người mua không còn biết NCC trễ hay Kho chưa ghi.
  */
 
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`

@@ -20,6 +20,7 @@ import {
 import { PO_CURRENCIES } from '@/lib/po-line'
 import { TERM_FIELDS, dmy, dmyAt, money, numStr, toNum } from './don-chung-tu.shared'
 import type { DonCtx } from './useDonChungTu'
+import { CauHoiGd } from './cau-hoi-gd'
 
 /** Khối `nccBody` của màn chứng từ đơn mua. */
 export function NhaCungCapTomTat({ d }: { d: DonCtx }) {
@@ -131,8 +132,11 @@ export function DauDon({ d }: { d: DonCtx }) {
     editReason,
     setEditReason,
   } = d
+  const termsDiff = TERM_FIELDS.filter(([k]) => header.terms[k] !== tplTerms[k]).length
   return (
     <>
+      {/* Câu hỏi của Giám đốc còn mở + ô trả lời (0218) — rỗng thì không vẽ gì. */}
+      {po && <CauHoiGd poId={po.id} status={po.status} canAnswer={d.perms.canEdit} />}
       {/* ══ 2. ĐẦU ĐƠN — gấp, nhóm có tên, 3 cột ═══════════════════════ */}
       <FastTab
         key={headOpen ? 'dau-don-mo' : drafting ? 'dau-don-sua' : 'dau-don-xem'}
@@ -144,11 +148,17 @@ export function DauDon({ d }: { d: DonCtx }) {
             này đúng là cả đầu đơn, giữ nguyên tên và tóm tắt.
           */
         title={drafting ? 'Điều khoản & ghi chú' : 'Đầu đơn'}
-        defaultOpen={drafting || headOpen}
+        /* Lúc soạn GẬP SẴN (duyệt 30/09/2026) — 5 điều khoản đã theo mẫu, mở sẵn là
+           351px chắn giữa lưới và đáy trang; tóm tắt nói đủ để biết có cần mở không.
+           Nút "Điều khoản" ở thanh chốt đáy mở đúng khối này (headOpen). */
+        defaultOpen={headOpen}
         flush
         summary={
           drafting
-            ? []
+            ? [
+                ['Điều khoản', termsDiff > 0 ? `${termsDiff} ô khác mẫu` : `theo mẫu ${meta.label}`], // prettier-ignore
+                ['Ghi chú đơn', header.note.trim() ? <span key="g" className="block max-w-[320px] truncate">{header.note.trim()}</span> : 'chưa có'], // prettier-ignore
+              ]
             : [
                 ['NCC', po?.supplier_name ?? supplierOpt?.name ?? '—'],
                 ['Lệnh', <span key="l" className="num">{po?.lsx_code ?? lsx?.code ?? 'ngoài LSX'}</span>], // prettier-ignore
@@ -383,12 +393,13 @@ export function DauDon({ d }: { d: DonCtx }) {
                 <TextArea
                   aria-label={label}
                   rows={2}
+                  maxRows={12}
                   placeholder={hint}
                   value={header.terms[k]}
                   onChange={(v) => setHeader((h) => ({ ...h, terms: { ...h.terms, [k]: v } }))} // prettier-ignore
                 />
               ) : (
-                header.terms[k] || '—'
+                <span className="whitespace-pre-line">{header.terms[k] || '—'}</span>
               )}
             </Field>
           ))}
@@ -428,14 +439,19 @@ export function DauDon({ d }: { d: DonCtx }) {
           )}
         </FieldGroup>
 
-        <FieldGroup title="Ghi chú đơn">
+        {/* Ô này IN CUỐI PHIẾU GỬI NCC (PoPrintSheet + Excel). Chữ gợi ý cũ nói
+            "nội bộ — NCC không thấy" là ngược thực tế (sửa 30/09/2026); ghi chú
+            nội bộ nằm ở mục Trao đổi (doc_notes). */}
+        <FieldGroup title="Ghi chú đơn — in lên phiếu gửi NCC">
           {termsEditing ? (
             <div style={{ gridColumn: '1 / -1' }}>
               <TextArea
+                aria-label="Ghi chú đơn"
                 value={header.note}
                 onChange={(v) => setHeader((h) => ({ ...h, note: v }))}
                 rows={3}
-                placeholder="Ghi chú nội bộ — nhà cung cấp không thấy"
+                maxRows={12}
+                placeholder="In cuối phiếu gửi NCC. Ghi chú nội bộ (NCC không thấy) ghi ở mục Trao đổi."
               />
               {noteOver > 0 && (
                 <p className="text-k-sm mt-1 font-semibold text-[var(--stop)]">

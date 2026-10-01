@@ -89,6 +89,7 @@ import { clearDraft } from './soan-don'
 import { ChiPhi, PhatSinh } from './tai-chinh-khoi'
 import { TraoDoiKhung } from './trao-doi'
 import { useDonChungTu } from './useDonChungTu'
+import './soan-don.css'
 
 export type { AdjustmentLite, PoDoc, StatusLineLite } from './don-chung-tu.shared'
 
@@ -566,10 +567,12 @@ export function DonChungTuScreen(p: Props) {
 
   return (
     <DocScreen dense={dense}>
-      <Crumb
-        path={[{ label: 'Đơn mua', href: '/mua-hang/don' }, code]}
-        position={p.position ? [p.position.index, p.position.total] : undefined}
-      />
+      {viewMode && (
+        <Crumb
+          path={[{ label: 'Đơn mua', href: '/mua-hang/don' }, code]}
+          position={p.position ? [p.position.index, p.position.total] : undefined}
+        />
+      )}
 
       {viewMode && po && viewHead}
 
@@ -607,7 +610,7 @@ export function DonChungTuScreen(p: Props) {
               )
             }
           >
-            {po && (
+            {po && !editing && (
               <>
                 {/*
               MỐC THẬT CHO TỪNG BƯỚC — xem `marks` ở `StatusTrack`.
@@ -664,7 +667,7 @@ export function DonChungTuScreen(p: Props) {
           </DocHead>
 
           {/* Nút thông minh — chép Odoo. Số đếm là lời hứa: bấm ra đúng chừng ấy. */}
-          {po && (
+          {po && !editing && (
             <SmartLinks
               items={[
                 { label: 'đợt giao', count: liveShipments.length, onClick: () => goTo('dot-giao'), title: 'Kế hoạch giao NCC hẹn' }, // prettier-ignore
@@ -761,7 +764,7 @@ export function DonChungTuScreen(p: Props) {
                   label="Lệnh"
                   need={header.poType === 'lsx'}
                   empty={!header.lsxId}
-                  width={170}
+                  width={150}
                 >
                   <Combobox
                     label="Lệnh sản xuất"
@@ -773,7 +776,7 @@ export function DonChungTuScreen(p: Props) {
                     options={lsxOptions}
                   />
                 </HeadField>
-                <HeadField label="NCC" need empty={!header.supplierId} width={190}>
+                <HeadField label="NCC" need empty={!header.supplierId} width={180}>
                   <Combobox
                     label="Nhà cung cấp"
                     value={header.supplierId}
@@ -798,10 +801,10 @@ export function DonChungTuScreen(p: Props) {
                     options={supplierOptions}
                   />
                 </HeadField>
-                <HeadField label="Mẫu" width={160}>
+                <HeadField label="Mẫu" width={130}>
                   <Pick
                     label="Mẫu đơn"
-                    width={160}
+                    width={130}
                     value={template}
                     onChange={(t) => {
                       markDirty('template')
@@ -810,7 +813,7 @@ export function DonChungTuScreen(p: Props) {
                     options={Object.values(PO_TEMPLATE_META).map((m) => ({ value: m.key, label: m.label }))} // prettier-ignore
                   />
                 </HeadField>
-                <HeadField label="Hạn giao" width={110}>
+                <HeadField label="Hạn giao" width={116}>
                   <DateInput
                     label="Hạn giao"
                     value={header.expectedAt}
@@ -823,7 +826,7 @@ export function DonChungTuScreen(p: Props) {
                 >
                   {moreOpen
                     ? 'Ẩn bớt'
-                    : `+ ${header.currency} · VAT ${header.vat === '' ? 0 : header.vat}% …`}
+                    : `${header.currency} · VAT ${header.vat === '' ? 0 : header.vat}% ▾`}
                 </GridBtn>
               </HeadChips>
               {supplierOpt?.can_order === false && (
@@ -855,7 +858,7 @@ export function DonChungTuScreen(p: Props) {
                       onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
                     />
                   </HeadField>
-                  <HeadField label="Loại đơn" width={190}>
+                  <HeadField label="Loại đơn" width={150}>
                     <Pick
                       label="Loại đơn"
                       value={header.poType}
@@ -917,7 +920,7 @@ export function DonChungTuScreen(p: Props) {
                       />
                     </HeadField>
                   )}
-                  {supplierOpt && (
+                  {supplierOpt && (supplierOpt.lead_time_days != null || supplierOpt.payment_terms) && (
                     <span className="text-k-label text-[var(--ink-3)]">
                       NCC giao{' '}
                       {supplierOpt.lead_time_days != null
@@ -931,14 +934,12 @@ export function DonChungTuScreen(p: Props) {
             </div>
           )}
 
+          {/* Lúc SOẠN chỉ còn việc soạn (duyệt 30/09/2026): dòng hàng → nhu cầu lệnh (khi còn
+              thiếu) → chia đợt (khi bấm) → điều khoản & ghi chú. Khối chỉ để XEM thì ẩn. */}
           {blkLines}
-          {blkPhatSinh}
           {blkNhuCau}
-          {blkGiao}
-          {blkChiPhi}
+          {(d.shipCols.length > 0 || d.dotMo) && blkGiao}
           {blkDauDon}
-          {blkTimeline}
-          {blkTaiLieu}
         </DocBody>
       )}
 
@@ -987,21 +988,19 @@ export function DonChungTuScreen(p: Props) {
         />
       )}
 
-      <StatusBar
-        left={[
-          <>
-            <b>{me.name}</b> · Mua hàng
-          </>,
-          editing || termsEdit
-            ? 'Đang sửa — chưa lưu'
-            : (PO_NEXT_HINT[(po?.status ?? 'draft') as PoStatus] ?? ''),
-        ]}
-        right={
-          po
-            ? `${po.code} · ${PO_STATUS_LABEL[po.status as PoStatus] ?? po.status}`
-            : 'Đơn mới'
-        }
-      />
+      {viewMode && (
+        <StatusBar
+          left={[
+            <>
+              <b>{me.name}</b> · Mua hàng
+            </>,
+            editing || termsEdit
+              ? 'Đang sửa — chưa lưu'
+              : (PO_NEXT_HINT[(po?.status ?? 'draft') as PoStatus] ?? ''),
+          ]}
+          right={`${po?.code} · ${PO_STATUS_LABEL[po?.status as PoStatus] ?? po?.status}`}
+        />
+      )}
 
       {askCancel && (
         <Sheet

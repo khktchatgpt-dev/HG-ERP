@@ -42,7 +42,7 @@ import { useLocalPref } from '@/lib/use-local-pref'
 import type { PoIssue } from '@/modules/dept/supply/po-tracking.repo'
 import { useRouter } from 'next/navigation'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { DENSE_KEY } from '../../../_shell/KitFrame'
+import { DENSE_DEFAULT, DENSE_KEY } from '../../../_shell/KitFrame'
 import { actionsFor, type Action as DocAction } from '../actions'
 import { costShareOf, type CostRow } from './ChiPhiPanel'
 import { type PasteConfirm } from './SoanDonPanels'
@@ -253,12 +253,13 @@ export function useDonChungTu(p: Props) {
   const [askCancel, setAskCancel] = useState(false)
 
   const [headOpen, setHeadOpen] = useState(false)
+  const [dotMo, setDotMo] = useState(false) // Lúc soạn, khối Chia đợt chỉ hiện khi bấm nút (30/09/2026).
 
   const [reason, setReason] = useState('')
 
   const [date, setDate] = useState('')
 
-  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '0')
+  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, DENSE_DEFAULT)
 
   const dense = denseRaw !== '0'
 
@@ -465,10 +466,10 @@ export function useDonChungTu(p: Props) {
   function gridKeys(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== 'Enter' || e.shiftKey) return
     const t = e.target as HTMLElement
-    if (!(t instanceof HTMLInputElement) || t.closest('.k-gbar')) return
+    if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) || t.closest('.k-gbar')) return // prettier-ignore
     e.preventDefault()
     t.blur()
-    const all = [...document.querySelectorAll<HTMLInputElement>('#dong-hang tbody input:not([type=checkbox]):not([disabled])')] // prettier-ignore
+    const all = [...document.querySelectorAll<HTMLElement>('#dong-hang tbody :is(input:not([type=checkbox]), textarea):not([disabled])')] // prettier-ignore
     const next = all[all.indexOf(t) + 1]
     if (next) return void requestAnimationFrame(() => next.focus())
     requestAnimationFrame(() =>
@@ -653,11 +654,8 @@ export function useDonChungTu(p: Props) {
   }
 
   /* ── hành động theo bước (chế độ xem) ──────────────────────────────── */
-  /*
-    `hasReceipts` chặn đường hạ-về-nháp NGAY TRÊN NÚT thay vì để người dùng bấm
-    rồi ăn lỗi từ server: có phiếu kho, hoặc đã nhận dù chỉ một phần, là sửa
-    dòng sẽ làm phiếu nhập mồ côi. Server vẫn kiểm lại — đây chỉ là nói trước.
-  */
+  // `hasReceipts` chặn hạ-về-nháp NGAY TRÊN NÚT (có phiếu kho / đã nhận một phần
+  // thì sửa dòng làm phiếu nhập mồ côi). Server vẫn kiểm lại — đây chỉ nói trước.
   const hasReceipts =
     p.warehouseDocs.length > 0 ||
     p.statusLines.some((l) => Number(l.qty_received ?? 0) > 1e-6)
@@ -669,6 +667,7 @@ export function useDonChungTu(p: Props) {
         privileged: perms.privileged,
         hasReceipts,
         noEta: !po.expected_at,
+        lead: perms.lead,
       })
     : []
   // prettier-ignore
@@ -816,6 +815,7 @@ export function useDonChungTu(p: Props) {
     reschedule: 'lich',
     edit_terms: 'sua',
     reopen: 'mo',
+    urgent_send: 'gui',
     reassign: 'gui',
     duplicate: 'saoChep',
     cancel: 'huy',
@@ -1673,6 +1673,8 @@ export function useDonChungTu(p: Props) {
     finView,
     holderDays,
     vuong,
+    dotMo,
+    setDotMo,
   } as const
 }
 
