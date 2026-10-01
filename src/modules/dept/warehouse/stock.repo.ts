@@ -1141,6 +1141,8 @@ export async function insertMovements(
      * dòng sổ, không phải một UPDATE tại chỗ. Sổ chỉ cộng thêm, không sửa lùi.
      */
     transfer_group?: string | null
+    /** Kg cân thực của dòng nhập (nhôm / thép trả tiền theo kg). */
+    qty2_actual?: number | null
   }[],
 ): Promise<void> {
   const { error } = await db().from('warehouse_movements').insert(rows)

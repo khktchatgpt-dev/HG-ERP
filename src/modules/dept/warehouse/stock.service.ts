@@ -58,6 +58,7 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { emit } from '@/events/bus'
+import { canCanKg } from '@/lib/can-kg'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 type ReceiveInput = {
@@ -665,6 +666,8 @@ export const stockService = {
          * Khai thẳng kệ thật = nhận một bước, bỏ qua bước cất.
          */
         bin_id?: string | null
+        /** Kg cân thực — bắt buộc với dòng nhôm / thép trả tiền theo kg. */
+        qty2_actual?: number | null
       }[]
     },
   ): Promise<{
@@ -775,6 +778,22 @@ export const stockService = {
         input.lines,
         input.allow_over ?? false,
       )
+      /*
+       * KG CÂN THỰC (01/10/2026): nhôm / thép trả tiền theo kg cân, không theo
+       * kg trên đơn. Thiếu kg thì Cung ứng không chốt được kg thanh toán, Kế
+       * toán không đối chiếu được hoá đơn — chặn ở đây, form chỉ nói trước.
+       */
+      const rule = await supplyRepo.kgRuleInputs(input.po_id)
+      const lineById = new Map(rule.lines.map((l) => [l.id, l]))
+      const thieuKg = input.lines.filter((l) => {
+        const pl = l.po_line_id ? lineById.get(l.po_line_id) : undefined
+        return pl && canCanKg(rule.template, pl) && !(Number(l.qty2_actual) > 0)
+      })
+      if (thieuKg.length > 0) {
+        throw BadRequest(
+          `${thieuKg.length} dòng nhôm/thép chưa ghi kg cân thực — cân rồi ghi kg trước khi ghi sổ`,
+        )
+      }
     }
 
     /*
@@ -900,6 +919,7 @@ export const stockService = {
           bin_id: binFor(l),
           po_line_id: l.po_line_id ?? null,
           production_order_id: input.production_order_id ?? null,
+          qty2_actual: l.qty2_actual ?? null,
         }
       }),
     )

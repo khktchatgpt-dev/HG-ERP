@@ -3,6 +3,7 @@ import {
   danhGiaVuot,
   dungLuoi,
   kiemTruocGhiSo,
+  sauPhieu,
   tinhTong,
   type DongDon,
   type DongNhan,
@@ -74,6 +75,9 @@ const row = (p: Partial<DongNhan> & { code: string }): DongNhan => ({
   qty: 0,
   status: 'ok',
   note: '',
+  can_kg: false,
+  kg_don: null,
+  kg_can: null,
   ...p,
 })
 
@@ -142,5 +146,57 @@ describe('kiemTruocGhiSo — câu chặn phải chỉ được tới dòng', () 
   })
   it('vượt trong dung sai không chặn', () => {
     expect(kiemTruocGhiSo([row({ code: 'A', qty: 103 })])).toEqual({ ok: true })
+  })
+})
+
+describe('kg cân — nhôm / thép trả tiền theo kg (chốt 01/10/2026)', () => {
+  it('đơn mẫu nhôm: mọi dòng bật can_kg, mang tổng kg của dòng đơn', () => {
+    const { rows } = dungLuoi([dong({ id: '1', qty2: 110.16 })], null, 'aluminium')
+    expect(rows[0]).toMatchObject({ can_kg: true, kg_don: 110.16, kg_can: null })
+  })
+  it('đơn thường nhưng dòng tính giá theo kg cũng phải cân', () => {
+    const { rows } = dungLuoi(
+      [
+        dong({ id: '1', price_basis: 'unit2', unit2: 'Kg' }),
+        dong({ id: '2', price_basis: 'unit', unit2: 'kg' }),
+      ],
+      null,
+      'accessory',
+    )
+    expect(rows.map((r) => r.can_kg)).toEqual([true, false])
+  })
+  it('dòng phải cân mà chưa có kg → thieu_kg, trỏ đúng dòng', () => {
+    const k = kiemTruocGhiSo([
+      row({ code: 'A', qty: 90, can_kg: true, kg_can: 108.4 }),
+      row({ code: 'B', qty: 260, can_kg: true, kg_can: null }),
+    ])
+    expect(k).toMatchObject({ ok: false, reason: 'thieu_kg', line: 1 })
+  })
+  it('dòng phải cân nhưng lần này không nhận (0) thì không đòi kg', () => {
+    expect(
+      kiemTruocGhiSo([
+        row({ code: 'A', qty: 5 }),
+        row({ code: 'B', qty: 0, can_kg: true }),
+      ]),
+    ).toEqual({ ok: true })
+  })
+})
+
+describe('sauPhieu — nói trước dòng sẽ ra sao', () => {
+  it('đủ · thiếu · vượt · chưa nhận · dòng đã đủ thì null', () => {
+    expect(sauPhieu({ qty: 100, qty_open: 100, editable: true })).toEqual({ kind: 'du', n: 0 })
+    expect(sauPhieu({ qty: 34000, qty_open: 34443, editable: true })).toEqual({
+      kind: 'thieu',
+      n: 443,
+    })
+    expect(sauPhieu({ qty: 74000, qty_open: 73114, editable: true })).toEqual({
+      kind: 'vuot',
+      n: 886,
+    })
+    expect(sauPhieu({ qty: 0, qty_open: 7, editable: true })).toEqual({
+      kind: 'chua_nhan',
+      n: 7,
+    })
+    expect(sauPhieu({ qty: 0, qty_open: 0, editable: false })).toBeNull()
   })
 })

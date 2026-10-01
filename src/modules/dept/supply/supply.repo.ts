@@ -748,6 +748,29 @@ export const supplyRepo = {
    * RECEIVABLE) và để báo hàng về cho đúng người (0128: chủ đơn là
    * `assigned_to`, đơn cũ chưa backfill thì rơi về `created_by`).
    */
+  /**
+   * Đầu vào của luật "dòng nào phải ghi kg cân" (`lib/can-kg`): mẫu đơn + cách
+   * tính giá / đơn vị 2 của từng dòng. Server dùng để CHẶN thật — form chỉ nói trước.
+   */
+  async kgRuleInputs(poId: string): Promise<{
+    template: string | null
+    lines: { id: string; price_basis: string | null; unit2: string | null }[]
+  }> {
+    const [{ data: po }, { data: lines }] = await Promise.all([
+      db().from('supply_purchase_orders').select('template').eq('id', poId).maybeSingle(),
+      db()
+        .from('supply_purchase_order_lines')
+        .select('id, price_basis, unit2')
+        .eq('po_id', poId),
+    ])
+    return {
+      template: (po as { template: string | null } | null)?.template ?? null,
+      lines:
+        (lines as { id: string; price_basis: string | null; unit2: string | null }[] | null) ??
+        [],
+    }
+  },
+
   async poStatus(poId: string): Promise<{
     code: string
     status: string

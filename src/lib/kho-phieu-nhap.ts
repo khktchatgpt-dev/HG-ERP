@@ -10,6 +10,8 @@
  * của ĐỢT nếu đi từ một đợt giao; người nhận không phải nhớ đã về bao nhiêu.
  */
 
+import { canCanKg } from './can-kg'
+
 export type DongDon = {
   id: string
   /** null = dòng tự do (0134): nghiệm thu ngoài sổ kho, KHÔNG lên phiếu nhập. */
@@ -22,6 +24,11 @@ export type DongDon = {
   qty_open: number
   closed_short_at: string | null
   over_tolerance_pct: number
+  /** Cách tính giá + đơn vị 2 của dòng đơn — để biết dòng nào phải ghi kg cân. */
+  price_basis?: string | null
+  unit2?: string | null
+  /** Tổng kg (đơn vị 2) của dòng đơn — gợi ý kg dự kiến, không thay số cân. */
+  qty2?: number | null
 }
 
 export type TinhTrang = 'ok' | 'blocked'
@@ -43,12 +50,20 @@ export type DongNhan = {
   qty: number
   status: TinhTrang
   note: string
+  /** Nhôm / thép tính tiền theo kg: BẮT BUỘC ghi kg cân thực (lib/can-kg). */
+  can_kg: boolean
+  /** Tổng kg của dòng đơn (đơn vị 2) — để suy kg dự kiến của lần này. */
+  kg_don: number | null
+  /** Kg cân thực của lần nhận này. null = chưa cân. */
+  kg_can: number | null
 }
 
 /** Dựng lưới từ dòng đơn (+ dòng của đợt giao nếu đi từ một đợt). */
 export function dungLuoi(
   lines: DongDon[],
   shipmentLines?: { po_line_id: string; qty: number }[] | null,
+  /** Mẫu đơn (`supply_purchase_orders.template`) — nhôm/thép thì bắt cân. */
+  template?: string | null,
 ): { rows: DongNhan[]; bo_qua_tu_do: number } {
   const theoDot = shipmentLines
     ? new Map(shipmentLines.map((l) => [l.po_line_id, l.qty]))
@@ -84,6 +99,9 @@ export function dungLuoi(
       qty,
       status: 'ok',
       note: '',
+      can_kg: canCanKg(template, l),
+      kg_don: l.qty2 ?? null,
+      kg_can: null,
     })
   }
   return { rows, bo_qua_tu_do }
@@ -133,7 +151,12 @@ export type KiemKetQua =
   | { ok: true }
   | {
       ok: false
-      reason: 'khong_dong' | 'so_khong_hop_le' | 'thieu_ghi_chu' | 'vuot_dung_sai'
+      reason:
+        | 'khong_dong'
+        | 'so_khong_hop_le'
+        | 'thieu_ghi_chu'
+        | 'thieu_kg'
+        | 'vuot_dung_sai'
       message: string
       /** Chỉ số dòng để thanh chốt nhảy tới. */
       line?: number
@@ -173,6 +196,15 @@ export function kiemTruocGhiSo(rows: DongNhan[], coLyDoVuot = false): KiemKetQua
       line: iKhoa,
     }
   }
+  const iKg = rows.findIndex((r) => r.qty > 0 && r.can_kg && !(r.kg_can! > 0))
+  if (iKg >= 0) {
+    return {
+      ok: false,
+      reason: 'thieu_kg',
+      message: `Dòng ${iKg + 1} ${rows[iKg].code} chưa ghi kg cân — nhôm/thép trả tiền theo kg cân thực`,
+      line: iKg,
+    }
+  }
   if (!coLyDoVuot) {
     const iVuot = rows.findIndex((r) => {
       const v = danhGiaVuot(r)
@@ -189,4 +221,21 @@ export function kiemTruocGhiSo(rows: DongNhan[], coLyDoVuot = false): KiemKetQua
     }
   }
   return { ok: true }
+}
+
+/**
+ * Dòng này SAU phiếu đang lập sẽ ra sao — nói trước khi bấm (bản thiết kế F2,
+ * 01/10/2026): đủ · còn thiếu N · vượt N. Thiếu KHÔNG chặn ghi sổ: đơn thành
+ * "Về một phần", người mua quyết giao bù hay chốt thiếu ở trang đơn.
+ */
+export function sauPhieu(
+  r: Pick<DongNhan, 'qty' | 'qty_open' | 'editable'>,
+): { kind: 'du' | 'thieu' | 'vuot' | 'chua_nhan'; n: number } | null {
+  if (!r.editable) return null
+  if (r.qty <= 0) return { kind: 'chua_nhan', n: r.qty_open }
+  const eps = 1e-9
+  if (Math.abs(r.qty - r.qty_open) < eps) return { kind: 'du', n: 0 }
+  return r.qty < r.qty_open
+    ? { kind: 'thieu', n: r.qty_open - r.qty }
+    : { kind: 'vuot', n: r.qty - r.qty_open }
 }

@@ -251,6 +251,12 @@ export const receiptDocLineSchema = z
     stock_status: z.enum(['ok', 'qc', 'blocked']).optional(),
     /** Khu/kệ hàng vào (0193). Bỏ trống → service chọn theo trạng thái. */
     bin_id: z.string().uuid().optional().nullable(),
+    /**
+     * KG CÂN THỰC của lần nhận (01/10/2026). Nhôm / thép mua theo cây nhưng trả
+     * tiền theo kg cân — dòng thuộc loại đó thì service BẮT có (`lib/can-kg`).
+     * Ghi vào `warehouse_movements.qty2_actual` (cột có từ trước, nay mới ghi).
+     */
+    qty2_actual: z.coerce.number().positive().max(10_000_000).optional().nullable(),
   })
   // Lý do đi theo lô suốt đời nó — Cung ứng đọc đúng câu này để quyết trả NCC
   // hay nhận giá giảm. Chặn ở schema LẪN service: form có thể bỏ qua, API thì không.

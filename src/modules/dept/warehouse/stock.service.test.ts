@@ -61,6 +61,7 @@ vi.mock('@/modules/dept/supply/supply.repo', () => ({
     refreshStatusFromReceipts: vi.fn(),
     findPoCode: vi.fn(),
     poStatus: vi.fn(),
+    kgRuleInputs: vi.fn(),
   },
 }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
@@ -117,6 +118,8 @@ const MAT = { id: 'm1', name: 'Nhôm 25x50', is_active: true, shelf_location: 'A
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Mặc định: đơn không phải nhôm/thép — luật kg cân không chạm các ca cũ.
+  vi.mocked(supplyRepo.kgRuleInputs).mockResolvedValue({ template: null, lines: [] })
   vi.mocked(isWarehouseUser).mockResolvedValue(true)
   vi.mocked(materialsRepo.findById).mockResolvedValue(MAT as never)
   vi.mocked(warehousesRepo.mainId).mockResolvedValue('wh-main')
@@ -1767,5 +1770,46 @@ describe('cảnh báo dưới mức tính trên qty_ok (§5.3)', () => {
       .mock.calls.map((c) => c[0])
       .filter((e) => e.name === 'warehouse.stock.low')
     expect(lowEvents).toHaveLength(0)
+  })
+})
+
+describe('createReceiptDoc — kg cân thực nhôm / thép (01/10/2026)', () => {
+  beforeEach(() => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0200')
+    vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+      code: 'PO-2026-0077',
+      status: 'ordered',
+      assigned_to: null,
+      created_by: null,
+    })
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'pl1', po_id: 'po1', material_id: 'm1', qty_ordered: 90, qty_received: 0, qty_rejected: 0, qty_missing: 90, qty_open: 90, closed_short_at: null, over_tolerance_pct: 0, material_code: 'NH-0513', material_name: 'Nhôm vuông 20 x 20 T1.0', material_unit: 'Cây' }, // prettier-ignore
+    ] as never)
+    vi.mocked(supplyRepo.kgRuleInputs).mockResolvedValue({
+      template: 'aluminium',
+      lines: [{ id: 'pl1', price_basis: 'unit2', unit2: 'kg' }],
+    })
+    vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('received')
+    vi.mocked(stockInfoMany).mockResolvedValue([])
+  })
+
+  it('đơn mẫu nhôm thiếu kg cân → chặn, KHÔNG ghi phiếu', async () => {
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [{ material_id: 'm1', qty: 90, po_line_id: 'pl1' }],
+      }),
+    ).rejects.toThrow(/kg cân/)
+    expect(docsRepo.insert).not.toHaveBeenCalled()
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('có kg cân → ghi vào qty2_actual của dòng sổ', async () => {
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 90, po_line_id: 'pl1', qty2_actual: 108.4 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].qty2_actual).toBe(108.4)
   })
 })
