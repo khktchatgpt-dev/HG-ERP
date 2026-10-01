@@ -26,7 +26,13 @@
 import { createRequire } from 'node:module'
 const XLSX = createRequire(import.meta.url)('xlsx')
 
-const RT = { CONTINUE: 0x003c, MSODRAWINGGROUP: 0x00eb, MSODRAWING: 0x00ec, BOF: 0x0809 }
+const RT = {
+  CONTINUE: 0x003c,
+  OBJ: 0x005d,
+  MSODRAWINGGROUP: 0x00eb,
+  MSODRAWING: 0x00ec,
+  BOF: 0x0809,
+}
 
 /** Duyệt record BIFF: [type u16][len u16][data]. */
 function* biffRecords(buf) {
@@ -53,15 +59,32 @@ function* biffRecords(buf) {
 function collect(buf, want) {
   const parts = []
   let inChain = false
+  let seen = false
+  let prev = null
   for (const r of biffRecords(buf)) {
     if (r.type === want) {
       parts.push(r.data)
       inChain = true
+      seen = true
     } else if (r.type === RT.CONTINUE && inChain) {
       parts.push(r.data)
+    } else if (
+      r.type === RT.CONTINUE &&
+      want === RT.MSODRAWING &&
+      seen &&
+      prev === RT.OBJ
+    ) {
+      // BẪY 2 (01/10/2026, file LSX 02.26-27 HG-LAURA): khi bản vẽ của sheet đã
+      // vượt ~8KB, Excel KHÔNG ghi MSODRAWING cho hình kế tiếp nữa mà ghi phần
+      // Escher vào một CONTINUE đứng ngay sau OBJ của hình trước. Bỏ qua chúng
+      // là mất mọi ảnh từ hình ~27 trở đi (đo: 28 neo thay vì cả trăm). CONTINUE
+      // sau TXO thì là CHỮ của ô ghi chú — không nhận.
+      parts.push(r.data)
+      inChain = true
     } else {
       inChain = false
     }
+    prev = r.type
   }
   return parts.length ? [Buffer.concat(parts)] : []
 }
@@ -113,7 +136,12 @@ function anchorsOf(sheetStream) {
     let index = null
     let row = null
     for (const rec of escher(block)) {
-      if (rec.type === 0xf00b) {
+      if (rec.type === 0xf004) {
+        // SpContainer mới: hình trước không phải ảnh (ô chữ, ghi chú…) thì
+        // neo của nó không được dính sang ảnh kế tiếp.
+        index = null
+        row = null
+      } else if (rec.type === 0xf00b) {
         // FOPT — bảng thuộc tính, mỗi mục 6 byte: id u16 | value u32
         const n = rec.data.length >= 2 ? (rec.data.length / 6) | 0 : 0
         for (let i = 0; i < n; i++) {
