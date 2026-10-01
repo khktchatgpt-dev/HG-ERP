@@ -4530,6 +4530,125 @@ export type Database = {
           },
         ]
       }
+      supply_trip_pos: {
+        Row: {
+          created_at: string
+          po_id: string
+          trip_id: string
+        }
+        Insert: {
+          created_at?: string
+          po_id: string
+          trip_id: string
+        }
+        Update: {
+          created_at?: string
+          po_id?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_trip_pos_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trip_pos_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "supply_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_trips: {
+        Row: {
+          id: string
+          code: string
+          mode: string
+          carrier_name: string
+          carrier_id: string | null
+          receipt_no: string | null
+          sent_on: string
+          eta: string | null
+          packages: number | null
+          package_unit: string | null
+          weight_kg: number | null
+          note: string | null
+          arrived_at: string | null
+          arrived_by: string | null
+          arrived_check: string | null
+          arrived_note: string | null
+          arrived_packages: number | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          cancel_reason: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          mode: string
+          carrier_name: string
+          carrier_id?: string | null
+          receipt_no?: string | null
+          sent_on: string
+          eta?: string | null
+          packages?: number | null
+          package_unit?: string | null
+          weight_kg?: number | null
+          note?: string | null
+          arrived_at?: string | null
+          arrived_by?: string | null
+          arrived_check?: string | null
+          arrived_note?: string | null
+          arrived_packages?: number | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancel_reason?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          mode?: string
+          carrier_name?: string
+          carrier_id?: string | null
+          receipt_no?: string | null
+          sent_on?: string
+          eta?: string | null
+          packages?: number | null
+          package_unit?: string | null
+          weight_kg?: number | null
+          note?: string | null
+          arrived_at?: string | null
+          arrived_by?: string | null
+          arrived_check?: string | null
+          arrived_note?: string | null
+          arrived_packages?: number | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancel_reason?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_trips_carrier_id_fkey"
+            columns: ["carrier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_comments: {
         Row: {
           body: string
@@ -6286,6 +6405,7 @@ export type Database = {
           status: string
           supplier_doc_no: string | null
           team_department_id: string | null
+          trip_id: string | null
           updated_at: string
         }
         Insert: {
@@ -6307,6 +6427,7 @@ export type Database = {
           status?: string
           supplier_doc_no?: string | null
           team_department_id?: string | null
+          trip_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -6328,6 +6449,7 @@ export type Database = {
           status?: string
           supplier_doc_no?: string | null
           team_department_id?: string | null
+          trip_id?: string | null
           updated_at?: string
         }
         Relationships: [

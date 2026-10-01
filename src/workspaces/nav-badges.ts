@@ -2,7 +2,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
-import { classifyTodo, countMyTodos, isIncoming } from '@/lib/supply-watch'
+import { classifyTodo, countMyTodos } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
@@ -73,13 +73,13 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   const issues = await countMeetingIssues(today, owned ? myLsxIds(owned, user.id) : undefined)
   // Hộp thư: mọi việc trong phạm vi (trang cộng đủ các làn).
   const todo = scope === 'toi' ? countMyTodos(rows, user.id, today) : inScope.filter((p) => classifyTodo(p, today)).length // prettier-ignore
-  // Nhận hàng: mọi đơn đang về trong phạm vi — đúng tập trang mở ra.
-  const soon = inScope.filter((p) => isIncoming(p)).length
   /*
     HREF BÁM VÀO MÀN MỚI (16/09/2026) — ba con số không đổi, chỉ đổi chỗ đậu:
 
       Chờ tôi xử lý     → Hộp thư việc  (/mua-hang/hop-thu)
-      Hàng sắp về       → Nhận hàng     (/mua-hang/nhan-hang)
+      Hàng sắp về       → BỎ (01/10/2026): mục Nhận hàng gộp vào Đơn mua; bấm
+                          "Đơn mua" mở cách xem Tất cả, nên đếm đơn đang về lên
+                          mục đó là con số hứa sai. Hộp thư vẫn đếm đơn quá hẹn.
       Vấn đề cần xử lý  → Bàn làm việc  (/mua-hang), nơi nó thành một khối
 
     Badge là { href → số }, mà ba href cũ vừa rời khỏi sidebar — để nguyên là
@@ -88,7 +88,6 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   */
   const out: Record<string, number> = {}
   if (todo > 0) out['/mua-hang/hop-thu'] = todo
-  if (soon > 0) out['/mua-hang/nhan-hang'] = soon
   if (issues > 0) out['/mua-hang'] = issues
   return out
 }

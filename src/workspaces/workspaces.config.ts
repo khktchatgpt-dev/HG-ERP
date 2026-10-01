@@ -428,9 +428,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
           { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
-          // truck dành cho GIAO NHẬN (từ vựng icon — /design-lab mục 05):
-          // đây là màn thay "Hàng sắp về".
-          { href: '/mua-hang/nhan-hang', label: 'Nhận hàng', icon: 'truck' },
+          // 'Nhận hàng' (thay 'Hàng sắp về') đã GỘP vào Đơn mua thành cách xem
+          // 'Đang về' — /mua-hang/don/dang-ve (01/10/2026). Link cũ do proxy chuyển.
           // Đơn vị vận chuyển + phiếu phí theo chuyến — TÁCH khỏi Nhà cung cấp
           // (chủ dự án chốt 28/09/2026: "nhà xe không chung với nhà cung cấp").
           { href: '/mua-hang/van-chuyen', label: 'Vận chuyển', icon: 'route' },

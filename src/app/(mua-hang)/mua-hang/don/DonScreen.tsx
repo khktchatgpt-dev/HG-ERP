@@ -61,6 +61,7 @@ import {
   type GroupBy,
   type ViewState,
 } from './views'
+import { XemDonSwitch } from './xem-don'
 
 /**
  * Phần nhìn của Khuôn C — Phiếu mua. Tầng server ở `page.tsx`, phân tích ở
@@ -550,6 +551,7 @@ export function DonScreen({
         compact
         eyebrow="Mua hàng"
         title="Đơn mua"
+        chain={<XemDonSwitch at="tat-ca" />}
         /*
           BỐN CON SỐ NÀY LÀ BỘ LỌC, không phải bảng thành tích.
 
@@ -610,11 +612,12 @@ export function DonScreen({
         chọn, người phụ trách là dải công tắc, loại đơn là dải chip — cùng là
         "lọc theo một trục" mà ba bộ mặt. Nay MỌI TRỤC LỌC là ô chọn trên MỘT
         hàng, đọc từ trái sang là biết đang lọc gì: trạng thái · người · lệnh ·
-        nhà cung cấp · loại đơn. Hàng hai là hai chip "việc cần làm", gom, bỏ lọc.
+        nhà cung cấp · loại đơn, rồi chip "việc cần làm", gom, bỏ lọc — CÙNG MỘT
+        hàng từ 01/10/2026 (hai hàng lọc ăn 72px ở 1536×730; màn hẹp tự xuống dòng).
         Số trong ngoặc của mỗi ô đếm đúng tập ở đầu kia (xem `counts`,
         `bucketPos`).
       */}
-      <FilterBar dense label="Tìm và lọc đơn mua">
+      <FilterBar dense label="Tìm, lọc và cách xem đơn mua">
         <SearchInput
           value={view.filter.q}
           onChange={(q) => patchFilter({ q })}
@@ -718,9 +721,6 @@ export function DonScreen({
               : []),
           ]}
         />
-      </FilterBar>
-
-      <FilterBar dense label="Việc cần làm và cách xem">
         <Chip
           on={view.filter.noEta}
           count={inBucket.noEta}

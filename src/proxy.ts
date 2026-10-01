@@ -55,7 +55,9 @@ const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   ['/planning/stock', '/mua-hang/ton'],
   ['/planning/lsx', '/mua-hang/yeu-cau'],
   ['/planning/viec-cua-toi', '/mua-hang/hop-thu'],
-  ['/planning/hang-sap-ve', '/mua-hang/nhan-hang'],
+  ['/planning/hang-sap-ve', '/mua-hang/don/dang-ve'],
+  // Mục 'Nhận hàng' gộp vào Đơn mua thành cách xem 'Đang về' (01/10/2026).
+  ['/mua-hang/nhan-hang', '/mua-hang/don/dang-ve'],
   ['/planning/docs', '/warehouse/phieu'],
   ['/planning/board', '/production'],
   ['/planning/tracking', '/mua-hang'],
