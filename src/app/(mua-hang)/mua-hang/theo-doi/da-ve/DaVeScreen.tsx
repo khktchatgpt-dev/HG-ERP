@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { canXuLy, ketQuaPhieu } from '@/lib/da-ve'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
@@ -27,6 +28,8 @@ import {
 import type { DaVeRow } from '@/modules/dept/supply/da-ve.repo'
 import { XemTheoDoi } from '../xem'
 import { KgCanSheet } from './kg-can-sheet'
+import { GiaoNhanSheet } from '../giao-nhan/GiaoNhanSheet'
+import type { GiaoNhanData } from '../giao-nhan/tai-giao-nhan'
 
 const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 const KHOANG = [7, 14, 30] as const
@@ -45,7 +48,10 @@ export function DaVeScreen({
   meId,
   defaultScope,
   urlScope,
+  giaoNhan,
 }: {
+  /** Hộp Giao nhận đang mở (`?don=`). */
+  giaoNhan: GiaoNhanData | null
   rows: DaVeRow[]
   today: string
   truncatedAt: number | null
@@ -55,6 +61,16 @@ export function DaVeScreen({
   defaultScope: SupplyScope
   urlScope: SupplyScope | null
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const dongHop = () => {
+    const p = new URLSearchParams(params.toString())
+    p.delete('don')
+    const qs = p.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
+  const hop = (poId: string) => `/mua-hang/theo-doi/da-ve?don=${poId}`
   const [q, setQ] = useState('')
   const [khoang, setKhoang] = useState<(typeof KHOANG)[number]>(14)
   const [kgRow, setKgRow] = useState<DaVeRow | null>(null)
@@ -111,7 +127,7 @@ export function DaVeScreen({
         </Cell>
         <Cell>
           <span className="flex items-center gap-2 whitespace-nowrap">
-            <Code as="a" href={`/mua-hang/don/${r.po_id}?muc=giao-nhan`}>
+            <Code as="a" href={hop(r.po_id)}>
               {r.po_code}
             </Code>
             {r.lsx_code && (
@@ -162,10 +178,10 @@ export function DaVeScreen({
             )}
             {motDon && (
               <Link
-                href={`/mua-hang/don/${r.po_id}?muc=giao-nhan`}
+                href={hop(r.po_id)}
                 className="text-k-sm font-semibold text-[var(--act)] hover:underline"
               >
-                Mở đơn để xử lý
+                Xử lý giao nhận
               </Link>
             )}
           </span>
@@ -311,6 +327,7 @@ export function DaVeScreen({
         right={`${kept.length} / ${inRange.length} phiếu`}
       />
       {kgRow && <KgCanSheet row={kgRow} onClose={() => setKgRow(null)} />}
+      {giaoNhan && <GiaoNhanSheet data={giaoNhan} today={today} onClose={dongHop} />}
     </ScreenFrame>
   )
 }

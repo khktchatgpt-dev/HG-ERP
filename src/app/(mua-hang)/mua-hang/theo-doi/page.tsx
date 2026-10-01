@@ -8,6 +8,7 @@ import { loadWatchPos, todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
 import { tripsService } from '@/modules/dept/supply/trips.service'
 import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
 import { DangVeScreen } from './DangVeScreen'
+import { taiGiaoNhan } from './giao-nhan/tai-giao-nhan'
 
 export const metadata = { title: 'Mua hàng · Theo dõi đơn hàng' }
 export const dynamic = 'force-dynamic'
@@ -30,6 +31,8 @@ export default async function Page({
   searchParams,
 }: {
   searchParams: Promise<{
+    /** Mở hộp Giao nhận của một đơn (bản vẽ H1). */
+    don?: string
     pham_vi?: string
     nhom?: string
     /** Vừa ghi sổ phiếu nhập ở cửa Cung ứng (`/mua-hang/don/[id]/nhan`). */
@@ -48,6 +51,7 @@ export default async function Page({
     trips,
     carriers,
     canReceive,
+    giaoNhan,
   ] = await Promise.all([
       loadWatchPos(user),
       isSupplyStaff(user),
@@ -65,6 +69,7 @@ export default async function Page({
       user.role === 'admin'
         ? Promise.resolve(true)
         : canAction(user, 'warehouse.stock.write'),
+      sp.don ? taiGiaoNhan(user, sp.don) : Promise.resolve(null),
     ])
   const today = todayIso()
   const staff = user.role === 'admin' || supplyStaff
@@ -137,6 +142,7 @@ export default async function Page({
       defaultScope={defaultScope({ canApprove })}
       urlScope={parseScope(sp.pham_vi)}
       initialNhom={sp.nhom ?? null}
+      giaoNhan={giaoNhan}
     />
   )
 }

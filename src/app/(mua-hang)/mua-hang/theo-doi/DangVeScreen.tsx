@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { DaGhiSoBar } from '@/components/warehouse/DaGhiSoBar'
 import {
   INCOMING_BUCKET,
@@ -37,6 +37,8 @@ import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { HenGiaoNut, XacNhanNut } from './hanh-dong'
 import { XemTheoDoi } from './xem'
+import { GiaoNhanSheet } from './giao-nhan/GiaoNhanSheet'
+import type { GiaoNhanData } from './giao-nhan/tai-giao-nhan'
 import { ChuyenSheet, type CarrierOption, type TripEdit } from './chuyen-sheet'
 import { ChuyenDangDi, type TripCard } from './chuyen-dang-di'
 
@@ -85,7 +87,10 @@ export function DangVeScreen({
   canTrip,
   canReceive,
   vuaGhi,
+  giaoNhan,
 }: {
+  /** Hộp Giao nhận đang mở (`?don=`) — mọi việc ghi giao nhận làm ở đây. */
+  giaoNhan: GiaoNhanData | null
   /** Ghi phiếu nhập được (`warehouse.stock.write`) — Cung ứng nhận thay Kho. */
   canReceive: boolean
   /** Phiếu nhập vừa ghi sổ — hiện dải "Đã ghi sổ" có nút In. */
@@ -106,6 +111,14 @@ export function DangVeScreen({
   initialNhom: string | null
 }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const dongHop = () => {
+    const p = new URLSearchParams(params.toString())
+    p.delete('don')
+    const qs = p.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
   const [q, setQ] = useState('')
   const [trenXe, setTrenXe] = useState(false)
   const [sheet, setSheet] = useState<{
@@ -358,7 +371,8 @@ export function DangVeScreen({
                     <Row key={r.id}>
                       <Cell pin>
                         <span className="flex items-center gap-2">
-                          <Code as="a" href={`/mua-hang/don/${r.id}`}>
+                          {/* Mã đơn mở HỘP GIAO NHẬN tại chỗ (bản vẽ H1) — trang đơn chỉ còn xem. */}
+                          <Code as="a" href={`/mua-hang/theo-doi?don=${r.id}`}>
                             {r.code}
                           </Code>
                           {r.lsx_code && (
@@ -530,6 +544,7 @@ export function DangVeScreen({
           }))}
         />
       )}
+      {giaoNhan && <GiaoNhanSheet data={giaoNhan} today={today} onClose={dongHop} />}
     </ScreenFrame>
   )
 }

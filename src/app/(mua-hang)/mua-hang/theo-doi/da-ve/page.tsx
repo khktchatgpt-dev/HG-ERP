@@ -4,6 +4,7 @@ import { loadDaVe } from '@/modules/dept/supply/da-ve.repo'
 import { defaultScope, parseScope } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { DaVeScreen } from './DaVeScreen'
+import { taiGiaoNhan } from '../giao-nhan/tai-giao-nhan'
 
 export const metadata = { title: 'Mua hàng · Theo dõi đơn hàng · Đã về' }
 export const dynamic = 'force-dynamic'
@@ -17,13 +18,13 @@ const NGAY_TOI_DA = 30
  *
  * Câu màn trả lời: "hàng vừa về — ổn không, còn gì phải làm?". Một dòng = một
  * phiếu nhập theo đơn mua; kết quả đọc bằng `lib/da-ve` (một chỗ luật, có
- * test). Việc xử lý (giao bù, chốt thiếu, trao đổi NCC) làm ở TRANG ĐƠN — màn
- * này chỉ chỉ đường; riêng kg cân thiếu thì ghi bổ sung ngay tại đây.
+ * test). Việc xử lý (giao bù, chốt thiếu, sự cố) làm ở HỘP GIAO NHẬN mở ngay
+ * trên màn này (`?don=`, bản vẽ H1); kg cân thiếu ghi bổ sung tại dòng.
  */
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ pham_vi?: string }>
+  searchParams: Promise<{ pham_vi?: string; don?: string }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
@@ -31,12 +32,14 @@ export default async function Page({
   const since = new Date(Date.parse(today + 'T00:00:00Z') - NGAY_TOI_DA * 86_400_000)
     .toISOString()
     .slice(0, 10)
-  const [{ rows, truncatedAt }, canWrite, canApprove] = await Promise.all([
+  const [{ rows, truncatedAt }, canWrite, canApprove, giaoNhan] = await Promise.all([
     loadDaVe(since),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
     user.role === 'admin' ? Promise.resolve(true) : canAction(user, 'supply.po.approve'),
+    // Hộp Giao nhận (bản vẽ H1) — "Mở để xử lý" mở ngay trên màn này.
+    sp.don ? taiGiaoNhan(user, sp.don) : Promise.resolve(null),
   ])
   return (
     <DaVeScreen
@@ -47,6 +50,7 @@ export default async function Page({
       meId={user.id}
       defaultScope={defaultScope({ canApprove })}
       urlScope={parseScope(sp.pham_vi)}
+      giaoNhan={giaoNhan}
     />
   )
 }
