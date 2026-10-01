@@ -283,7 +283,14 @@ export function NhanTheoDotGrid({
   busy,
   onCloseShort,
   onReopen,
+  readOnly = false,
 }: {
+  /**
+   * Chỉ XEM — không vẽ nút Chốt thiếu / Mở lại (trang đơn từ 01/10/2026: việc
+   * đó làm ở hộp Giao nhận trên Theo dõi đơn hàng). Khác `canEdit`: khoá theo
+   * quyền sẽ nói "chỉ người phụ trách…" — sai lý do với người đang xem.
+   */
+  readOnly?: boolean
   batches: ReceiptBatch[]
   lines: { id: string; code: string; name: string; unit: string; qty_ordered: number }[]
   status: { id: string; qty_received: number; qty_missing: number; qty_open: number; closed_short_at: string | null }[] // prettier-ignore
@@ -355,7 +362,7 @@ export function NhanTheoDotGrid({
                     cả đơn là nói dối sổ — 11 mã kia vẫn đang chờ về thật. */}
                 {(() => {
                   const act = lineShortAction(statusById.get(l.id), { poStatus, canEdit }) // prettier-ignore
-                  if (act.kind === 'none') return null
+                  if (readOnly || act.kind === 'none') return null
                   const label = `${l.code} · ${l.name}`
                   return (
                     <GridBtn

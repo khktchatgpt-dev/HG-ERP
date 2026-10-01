@@ -62,11 +62,11 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
         ? doc('approve')
         : status === 'approved'
           ? doc('send')
-          : status === 'ordered'
-            ? 'confirm'
-            : SENT.includes(status)
-              ? 'receive'
-              : null
+          : // Đơn đã gửi NCC: bước kế là "Xử lý giao nhận" — mở hộp Giao nhận
+            // trên Theo dõi đơn hàng (01/10/2026: trang đơn chỉ còn XEM giao nhận).
+            SENT.includes(status)
+            ? 'receive'
+            : null
 
   /*
     "SỬA" (doc:edit_terms) đứng ĐẦU thanh trên mọi đơn đã ra khỏi nháp (28/09/2026,
@@ -97,17 +97,13 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
   }
 
   if (RECEIVING.includes(status)) {
-    for (const k of [
-      'confirm',
-      'addShipment',
-      'transit',
-      'receive',
-      'closeShort',
-      'acceptByHand',
-      'cost',
-    ] as const)
-      // prettier-ignore
-      add(k, 'Giao & nhận')
+    /*
+      GHI GIAO NHẬN RỜI TRANG ĐƠN (01/10/2026, chủ dự án duyệt bản vẽ H2): NCC
+      xác nhận, thêm đợt, đang giao, nhận hàng, chốt thiếu, nghiệm thu… làm ở
+      hộp Giao nhận trên Theo dõi đơn hàng — nút chính "Xử lý giao nhận" dẫn
+      sang đó. Ở đây còn đúng việc ghi PHÍ (không phải số liệu giao nhận).
+    */
+    add('cost', 'Giao & nhận')
     // "Đổi hẹn giao" KHÔNG còn là mục riêng: hẹn giao sửa trong "Sửa" (28/09/2026).
   }
   if (canEdit) add('edit', 'Đơn')

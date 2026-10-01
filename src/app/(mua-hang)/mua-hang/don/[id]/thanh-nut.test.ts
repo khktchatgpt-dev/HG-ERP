@@ -37,7 +37,9 @@ describe('barLayout — thanh hành động MỘT HÀNG theo bước của đơn
     expect(at('draft').primary).toBe('doc:submit')
     expect(at('pending_approval').primary).toBe('doc:approve')
     expect(at('approved').primary).toBe('doc:send')
-    expect(at('ordered').primary).toBe('confirm')
+    // Đơn đã gửi (kể cả chờ NCC xác nhận): "Xử lý giao nhận" → hộp trên Theo dõi
+    // đơn hàng (01/10/2026). Khoá 'receive' giữ tên, đổi nghĩa.
+    expect(at('ordered').primary).toBe('receive')
     expect(at('partial').primary).toBe('receive')
     expect(at('received').primary).toBeNull()
   })
@@ -115,11 +117,14 @@ describe('barLayout — thanh hành động MỘT HÀNG theo bước của đơn
 })
 
 describe('splitForStatusBar — chuyển trạng thái về thanh trạng thái (27/09/2026)', () => {
-  it('đơn đã gửi: bước kế là NCC xác nhận; nhận hàng/huỷ vào "Chuyển trạng thái", xếp Đi tiếp → Quay lại → Dừng', () => {
+  it('đơn đã gửi: bước kế là Xử lý giao nhận; trang đơn KHÔNG còn việc ghi giao nhận nào (01/10/2026)', () => {
     const s = splitForStatusBar(barLayout('ordered', ['nudge', 'reschedule', 'edit_terms', 'reopen', 'duplicate', 'cancel', 'adjust'])) // prettier-ignore
-    expect(s.next).toBe('confirm')
-    expect(s.moves.map((m) => m.key)).toEqual(['transit', 'receive', 'closeShort', 'acceptByHand', 'doc:reopen', 'doc:cancel']) // prettier-ignore
-    expect(s.moves.map((m) => m.group)).toEqual(['Đi tiếp', 'Đi tiếp', 'Đi tiếp', 'Đi tiếp', 'Quay lại', 'Dừng']) // prettier-ignore
+    expect(s.next).toBe('receive')
+    expect(s.moves.map((m) => m.key)).toEqual(['doc:reopen', 'doc:cancel'])
+    expect(s.moves.map((m) => m.group)).toEqual(['Quay lại', 'Dừng'])
+    // NCC xác nhận / đang giao / chốt thiếu / nghiệm thu / thêm đợt đã rời trang đơn.
+    for (const k of ['confirm', 'transit', 'closeShort', 'acceptByHand', 'addShipment'])
+      expect(keys(barLayout('partial', DOC.partial ?? []))).not.toContain(k)
     // Việc không đổi trạng thái vẫn cạnh mã đơn / trong ⋯ — không mục nào rơi mất.
     expect(s.actions).toEqual(['doc:edit_terms', 'doc:nudge', 'print'])
     expect(s.menu.map((m) => m.key)).not.toContain('doc:cancel')

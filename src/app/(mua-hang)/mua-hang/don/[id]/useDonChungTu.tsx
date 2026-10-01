@@ -850,7 +850,7 @@ export function useDonChungTu(p: Props) {
       case 'transit':
         return { label: 'Hàng đang trên đường', icon: 'nhanHang', run: () => start(TRANSIT), blocked: lyDo(recv.transit) } // prettier-ignore
       case 'receive':
-        return { label: po?.status === 'partial' ? 'Nhận tiếp' : 'Nhận hàng', icon: 'ghiSo', run: () => router.push(`/mua-hang/don/${poId}/nhan`), blocked: lyDo(recv.receive) } // prettier-ignore
+        return { label: 'Xử lý giao nhận', icon: 'nhanHang', run: () => router.push(`/mua-hang/theo-doi?don=${poId}`), blocked: lyDo(recv.receive) } // prettier-ignore
       case 'closeShort':
         return { label: 'Chốt phần thiếu', run: () => start(CLOSE_SHORT), blocked: lyDo(recv.closeShort) } // prettier-ignore
       case 'acceptByHand':

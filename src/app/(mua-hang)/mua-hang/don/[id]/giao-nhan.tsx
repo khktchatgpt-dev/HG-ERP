@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { FastTab, GridBtn } from '@/components/kit'
 import { earliestExpectedDate } from '@/lib/po-shipments'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
@@ -24,7 +25,6 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
     p,
     busy,
     recv,
-    setXacNhan,
     router,
     lines,
     setShipCols,
@@ -40,7 +40,6 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
     reopenAct,
     trackById,
     openIssues,
-    setSuCoOpen,
     setSuCoClose,
     openShortLines,
     missingTotal,
@@ -84,30 +83,19 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                 ]
           }
           actions={
+            /*
+              TRANG ĐƠN CHỈ CÒN XEM GIAO NHẬN (01/10/2026, chủ dự án duyệt bản vẽ
+              H2): nhận hàng, đợt giao, giao bù, chốt thiếu, sự cố ghi ở hộp
+              Giao nhận trên Theo dõi đơn hàng — một nút dẫn sang đó.
+            */
             !drafting ? (
-              <>
-                <GridBtn
-                  disabled={busy || !recv.addShipment.ok}
-                  title={recv.addShipment.why}
-                  onClick={() => setXacNhan('add')}
-                >
-                  {' '}
-                  {/* prettier-ignore */}
-                  {po?.status === 'partial'
-                    ? '+ Hẹn giao bù (đợt mới)'
-                    : '+ Thêm đợt giao'}
-                </GridBtn>
-                {/* Cung ứng nhận hàng thay Kho (01/10/2026) — cửa phiếu nhập của Cung ứng. */}
-                <GridBtn
-                  disabled={!recv.receive.ok}
-                  title={recv.receive.why}
-                  onClick={() => po && router.push(`/mua-hang/don/${po.id}/nhan`)}
-                >
-                  {' '}
-                  {/* prettier-ignore */}
-                  {po?.status === 'partial' ? 'Nhận tiếp' : 'Nhận hàng'}
-                </GridBtn>
-              </>
+              <GridBtn
+                disabled={!recv.receive.ok}
+                title={recv.receive.why}
+                onClick={() => po && router.push(`/mua-hang/theo-doi?don=${po.id}`)}
+              >
+                Xử lý giao nhận →
+              </GridBtn>
             ) : undefined
           }
         >
@@ -119,6 +107,20 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
             </div>
           ) : (
             <>
+              {sentToSupplier && !suaDot && (
+                <div className="text-k-sm mx-[var(--gutter)] mt-2 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[var(--act-line)] bg-[var(--act-wash)] px-3 py-2 text-[var(--act-text)]">
+                  <span>
+                    Mục này chỉ để <b>xem</b>. Nhận hàng, đợt giao, giao bù, chốt thiếu,
+                    sự cố — ghi ở <b>Theo dõi đơn hàng</b>.
+                  </span>
+                  <Link
+                    href={`/mua-hang/theo-doi?don=${po.id}`}
+                    className="ml-auto font-semibold text-[var(--act)] hover:underline"
+                  >
+                    Mở giao nhận của đơn này →
+                  </Link>
+                </div>
+              )}
               {sentToSupplier && (
                 <>
                   <div className="px-[var(--gutter)] pt-2">
@@ -183,7 +185,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                   linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
                   confirmedNote={po.confirmed_note}
                   emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0)}
-                  canAct={perms.canEdit && !drafting && !suaDot}
+                  canAct={false}
                   busy={busy}
                   today={today}
                   onArrived={(id) => void shipmentAct(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')} // prettier-ignore
@@ -209,7 +211,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                         là PHÍA KHO — đã lập phiếu gì, còn thiếu bao nhiêu, và
                         là nơi bấm "Chốt thiếu" khi NCC không giao nữa. */}
                     <p className="text-k-sm mb-1 text-[var(--ink-3)]">
-                      Phía Kho đã nhận gì — số thật trên phiếu nhập, chốt thiếu ở đây.
+                      Phía Kho đã nhận gì — số thật trên phiếu nhập. Chốt thiếu ở Theo dõi đơn hàng.
                     </p>
                   </div>
                   <NhanTheoDotGrid
@@ -217,7 +219,8 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                     lines={p.lines.flatMap((l) => (l.id ? [{ id: l.id, code: l.material_code, name: l.material_name, unit: l.material_unit, qty_ordered: l.qty_ordered }] : []))} // prettier-ignore
                     status={p.statusLines}
                     poStatus={po?.status ?? 'draft'}
-                    canEdit={perms.canEdit}
+                    canEdit={false}
+                    readOnly
                     busy={busy}
                     onCloseShort={(l) => start(closeShortAct(l))}
                     onReopen={(l) => start(reopenAct(l))}
@@ -240,25 +243,18 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                   Sự cố giao hàng · {openIssues} đang mở /{' '}
                   {(p.tracking?.issues ?? []).length}
                 </h3>
-                <GridBtn
-                  disabled={busy || !p.canIssue || !sentToSupplier}
-                  title={!p.canIssue ? 'Chỉ Cung ứng hoặc Kho ghi sự cố được' : !sentToSupplier ? 'Đơn chưa gửi NCC — chưa có gì giao' : 'Hàng sai quy cách, thiếu, dư, hỏng, giao trễ'} // prettier-ignore
-                  onClick={() => setSuCoOpen(true)}
-                >
-                  + Ghi sự cố
-                </GridBtn>
               </div>
               <SuCoGrid
                 issues={p.tracking?.issues ?? []}
                 linesById={trackById}
-                canEdit={!!p.canIssue}
+                canEdit={false}
                 onResolve={(i) => setSuCoClose(i)}
               />
               {openShortLines > 0 && missingTotal <= 1e-6 && (
                 <div className="text-k-sm px-[var(--gutter)] pt-2 text-[var(--ink-2)]">
-                  {openShortLines} dòng đã về thiếu. NCC không giao nữa thì bấm “Chốt
-                  thiếu” ở bảng theo dòng phía trên, rồi tạo đơn bổ sung (cùng hoặc khác
-                  NCC) cho phần đã chốt.
+                  {openShortLines} dòng đã về thiếu. NCC không giao nữa thì chốt thiếu ở
+                  Theo dõi đơn hàng, rồi tạo đơn bổ sung (cùng hoặc khác NCC) cho phần đã
+                  chốt.
                 </div>
               )}
               {(missingTotal > 1e-6 || (p.links?.supplements.length ?? 0) > 0) && (
