@@ -303,7 +303,7 @@ export function BanLamViecScreen({
                   ? 'Hàng của đơn tôi · không tính quá hẹn'
                   : 'Cả phòng · không tính quá hẹn'
               }
-              href={`/mua-hang/don/dang-ve?nhom=tuan&${q}`}
+              href={`/mua-hang/theo-doi?nhom=tuan&${q}`}
             />
             {/*
               LỆNH ĐÃ XONG, ĐƠN CÒN MỞ (28/09/2026) — chỉ hiện khi CÓ: sản xuất
@@ -596,7 +596,7 @@ export function BanLamViecScreen({
             <LinkRow href="/mua-hang/don?pham_vi=toi">Đơn của tôi</LinkRow>
             <LinkRow href="/mua-hang/hop-thu?pham_vi=toi">Việc chờ tôi</LinkRow>
             <LinkRow href="/mua-hang/yeu-cau?pham_vi=toi">Lệnh của tôi</LinkRow>
-            <LinkRow href="/mua-hang/don/dang-ve?pham_vi=toi">Hàng về của tôi</LinkRow>
+            <LinkRow href="/mua-hang/theo-doi?pham_vi=toi">Hàng về của tôi</LinkRow>
             <LinkRow href="/mua-hang/ncc?pham_vi=toi">NCC của tôi</LinkRow>
           </LinkGroup>
           <LinkGroup title="Đơn mua · cả phòng">

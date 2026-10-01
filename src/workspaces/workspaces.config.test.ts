@@ -20,7 +20,7 @@ const CUA_CU: { cu: string; nhan: string; moi: string; vi_sao: string }[] = [
   { cu: '/planning/stock', nhan: 'Kho & tồn', moi: '/mua-hang/ton', vi_sao: 'Tồn & cân đối — trục là vị thế, không phải tồn kho' }, // prettier-ignore
   { cu: '/planning/lsx', nhan: 'Vật tư theo lệnh', moi: '/mua-hang/yeu-cau', vi_sao: 'Yêu cầu mua — lệnh nào còn thiếu đồ' }, // prettier-ignore
   { cu: '/planning/viec-cua-toi', nhan: 'Chờ tôi xử lý', moi: '/mua-hang/hop-thu', vi_sao: 'Hộp thư việc' }, // prettier-ignore
-  { cu: '/planning/hang-sap-ve', nhan: 'Hàng sắp về', moi: '/mua-hang/don', vi_sao: 'Đơn mua › cách xem Đang về (gộp 01/10/2026) — trục là thời gian' }, // prettier-ignore
+  { cu: '/planning/hang-sap-ve', nhan: 'Hàng sắp về', moi: '/mua-hang/theo-doi', vi_sao: 'Theo dõi đơn hàng (01/10/2026) — trục là thời gian' }, // prettier-ignore
   { cu: '/planning/van-de', nhan: 'Vấn đề cần xử lý', moi: '/mua-hang', vi_sao: 'một khối của Bàn làm việc' }, // prettier-ignore
   { cu: '/planning/hop', nhan: 'Việc cần quyết định', moi: '/mua-hang', vi_sao: 'một khối của Bàn làm việc' }, // prettier-ignore
 ]

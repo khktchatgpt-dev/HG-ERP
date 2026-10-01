@@ -9,7 +9,7 @@ import { tripsService } from '@/modules/dept/supply/trips.service'
 import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
 import { DangVeScreen } from './DangVeScreen'
 
-export const metadata = { title: 'Mua hàng · Đơn mua · Đang về' }
+export const metadata = { title: 'Mua hàng · Theo dõi đơn hàng' }
 export const dynamic = 'force-dynamic'
 
 /**

@@ -428,8 +428,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
           { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
-          // 'Nhận hàng' (thay 'Hàng sắp về') đã GỘP vào Đơn mua thành cách xem
-          // 'Đang về' — /mua-hang/don/dang-ve (01/10/2026). Link cũ do proxy chuyển.
+          // THEO DÕI ĐƠN HÀNG (01/10/2026, chủ dự án): đơn đã gửi NCC → tới khi
+          // hàng về kho, gồm cả chuyến hàng. Thay mục 'Nhận hàng' / cách xem
+          // 'Đang về' trong Đơn mua — link cũ do proxy chuyển. Đơn chưa gửi ở Đơn mua.
+          { href: '/mua-hang/theo-doi', label: 'Theo dõi đơn hàng', icon: 'truck' },
           // Đơn vị vận chuyển + phiếu phí theo chuyến — TÁCH khỏi Nhà cung cấp
           // (chủ dự án chốt 28/09/2026: "nhà xe không chung với nhà cung cấp").
           { href: '/mua-hang/van-chuyen', label: 'Vận chuyển', icon: 'route' },

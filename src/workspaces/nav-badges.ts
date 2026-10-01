@@ -2,7 +2,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
-import { classifyTodo, countMyTodos } from '@/lib/supply-watch'
+import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
@@ -77,17 +77,24 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
     HREF BÁM VÀO MÀN MỚI (16/09/2026) — ba con số không đổi, chỉ đổi chỗ đậu:
 
       Chờ tôi xử lý     → Hộp thư việc  (/mua-hang/hop-thu)
-      Hàng sắp về       → BỎ (01/10/2026): mục Nhận hàng gộp vào Đơn mua; bấm
-                          "Đơn mua" mở cách xem Tất cả, nên đếm đơn đang về lên
-                          mục đó là con số hứa sai. Hộp thư vẫn đếm đơn quá hẹn.
+      Hàng sắp về       → Theo dõi đơn hàng (/mua-hang/theo-doi, 01/10/2026):
+                          đếm QUÁ HẸN + HÔM NAY trong phạm vi mặc định — đúng
+                          hai làn đầu trang đích bày ra, bằng `incomingBucket`.
+                          (Sáng 01/10 từng bỏ vì mục gộp vào Đơn mua mở cách xem
+                          Tất cả; tách lại thành mục riêng thì số hứa đúng.)
       Vấn đề cần xử lý  → Bàn làm việc  (/mua-hang), nơi nó thành một khối
 
     Badge là { href → số }, mà ba href cũ vừa rời khỏi sidebar — để nguyên là
     ba phép đếm chạy mỗi lần mở trang rồi rơi vào hư không, và người mua mất
     đúng thứ khiến họ mở phần mềm lên: con số nói "có việc".
   */
+  const ganVe = inScope.filter((p) => {
+    const b = incomingBucket(p, today)
+    return b === 'overdue' || b === 'today'
+  }).length
   const out: Record<string, number> = {}
   if (todo > 0) out['/mua-hang/hop-thu'] = todo
+  if (ganVe > 0) out['/mua-hang/theo-doi'] = ganVe
   if (issues > 0) out['/mua-hang'] = issues
   return out
 }

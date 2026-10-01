@@ -61,7 +61,6 @@ import {
   type GroupBy,
   type ViewState,
 } from './views'
-import { XemDonSwitch } from './xem-don'
 
 /**
  * Phần nhìn của Khuôn C — Phiếu mua. Tầng server ở `page.tsx`, phân tích ở
@@ -551,7 +550,6 @@ export function DonScreen({
         compact
         eyebrow="Mua hàng"
         title="Đơn mua"
-        chain={<XemDonSwitch at="tat-ca" />}
         /*
           BỐN CON SỐ NÀY LÀ BỘ LỌC, không phải bảng thành tích.
 

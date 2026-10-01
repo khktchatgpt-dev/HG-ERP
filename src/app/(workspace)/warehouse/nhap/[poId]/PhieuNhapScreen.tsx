@@ -93,11 +93,8 @@ const DUONG: Record<
     wrap: 'theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col',
   },
   'cung-ung': {
-    home: '/mua-hang/don/dang-ve',
-    crumbs: [
-      { label: 'Đơn mua', href: '/mua-hang/don' },
-      { label: 'Đang về', href: '/mua-hang/don/dang-ve' },
-    ],
+    home: '/mua-hang/theo-doi',
+    crumbs: [{ label: 'Theo dõi đơn hàng', href: '/mua-hang/theo-doi' }],
     phieu: (id) => `/mua-hang/don/${id}/nhan`,
     wrap: 'contents',
   },

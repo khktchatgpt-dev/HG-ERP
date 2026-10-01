@@ -35,7 +35,6 @@ import {
 } from '@/components/kit'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
-import { XemDonSwitch } from '../xem-don'
 import { HenGiaoNut, XacNhanNut } from './hanh-dong'
 import { ChuyenSheet, type CarrierOption, type TripEdit } from './chuyen-sheet'
 import { ChuyenDangDi, type TripCard } from './chuyen-dang-di'
@@ -191,8 +190,12 @@ export function DangVeScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng"
-        title="Đơn mua"
-        chain={<XemDonSwitch at="dang-ve" />}
+        title="Theo dõi đơn hàng"
+        chain={
+          <span className="text-k-sm text-[var(--ink-3)]">
+            đơn đã gửi nhà cung cấp → tới khi hàng về kho
+          </span>
+        }
         facts={[
           {
             label: scope === 'toi' ? 'Đơn của tôi đang về' : 'Đang về',
@@ -244,7 +247,7 @@ export function DangVeScreen({
           docId={vuaGhi.id}
           detail={`${vuaGhi.detail} — tồn đã cộng, đơn đã tính lại phần còn chờ.`}
           soPhieuHref="/warehouse/phieu?ro=receipt"
-          onClose={() => router.replace('/mua-hang/don/dang-ve', { scroll: false })}
+          onClose={() => router.replace('/mua-hang/theo-doi', { scroll: false })}
         />
       )}
 

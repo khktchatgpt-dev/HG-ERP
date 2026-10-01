@@ -37,8 +37,8 @@ export default async function Page({
           reason={r.reason}
           next={
             <>
-              <Btn icon="quayLai" href="/mua-hang/don/dang-ve">
-                Về Đang về
+              <Btn icon="quayLai" href="/mua-hang/theo-doi">
+                Về Theo dõi đơn hàng
               </Btn>
               <Btn icon="don" primary href={`/mua-hang/don/${r.po.id}`}>
                 {r.chuaGui ? `Mở đơn ${r.po.code} để gửi NCC` : `Mở đơn ${r.po.code}`}
