@@ -4,7 +4,7 @@ import { poLineAmount } from '@/lib/po-line'
 import { colKey, LSX_FORM, specColumnsOf } from '@/lib/lsx-template'
 import { money } from './approval-helpers'
 import { type PoLine } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
-import type { ApprovalLsxLine, ApprovalOrderInfo } from './approval-types'
+import type { ApprovalLsxLine, ApprovalOrderInfo, PendingPo } from './approval-types'
 
 /**
  * Mảnh trình bày DÙNG CHUNG cho khu Phê duyệt: buồng lái master-detail
@@ -425,11 +425,17 @@ export function PoLineTable({
   total,
   currency,
   lastPrices,
+  money: m,
 }: {
   lines: PoLine[]
   total: number
   currency: string
   lastPrices?: LastPriceOf
+  /**
+   * Tiền của đơn (`poMoneyOf`). Có thì chân bảng bày đủ tiền hàng → chiết khấu
+   * → VAT → TỔNG THANH TOÁN như phiếu in; không có thì chỉ một dòng tổng.
+   */
+  money?: PendingPo['money']
 }) {
   if (!lines.length) return null
   const hasQty2 = lines.some((ln) => ln.qty2 != null)
@@ -567,12 +573,52 @@ export function PoLineTable({
               colSpan={hasQty2 ? 7 : 6}
               className="h-[30px] border-t border-[var(--line)] px-2 text-right font-semibold"
             >
-              Tổng cộng {lines.length} dòng
+              {m ? `Tiền hàng · ${lines.length} dòng` : `Tổng cộng ${lines.length} dòng`}
             </td>
-            <td className="num border-t border-[var(--line)] px-2 text-right font-bold whitespace-nowrap">
-              {money(total, currency)}
+            <td
+              className={cn(
+                'num border-t border-[var(--line)] px-2 text-right whitespace-nowrap',
+                m ? 'font-semibold' : 'font-bold',
+              )}
+            >
+              {money(m ? m.subtotal : total, currency)}
             </td>
           </tr>
+          {m &&
+            [
+              ...(m.discount > 0 ? [['Chiết khấu', -m.discount] as const] : []),
+              [
+                m.includes_vat
+                  ? `VAT ${m.vat_rate}% (đã gồm trong giá)`
+                  : `VAT ${m.vat_rate}%`,
+                m.vat_amount,
+              ] as const,
+            ].map(([label, v]) => (
+              <tr key={label} className="bg-[var(--surface-raised)]">
+                <td
+                  colSpan={hasQty2 ? 7 : 6}
+                  className="h-[26px] border-t border-[var(--hair)] px-2 text-right"
+                >
+                  {label}
+                </td>
+                <td className="num border-t border-[var(--hair)] px-2 text-right whitespace-nowrap">
+                  {money(v, currency)}
+                </td>
+              </tr>
+            ))}
+          {m && (
+            <tr className="bg-[var(--surface-raised)]">
+              <td
+                colSpan={hasQty2 ? 7 : 6}
+                className="h-[30px] border-t border-[var(--line)] px-2 text-right font-bold"
+              >
+                Tổng thanh toán
+              </td>
+              <td className="num border-t border-[var(--line)] px-2 text-right font-bold whitespace-nowrap">
+                {money(m.grand, currency)}
+              </td>
+            </tr>
+          )}
           {/*
             CHÂN BẢNG NÓI PHẦN KHÔNG BAO GỒM — luật "số nào không kiểm được thì
             không ai tin". Dòng thiếu giá không vào tổng, mà người ký nhìn tổng

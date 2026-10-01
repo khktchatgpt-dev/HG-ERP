@@ -4,6 +4,7 @@ import {
   fmtMoney,
   poLineAmount,
   poMoney,
+  poMoneyOf,
   priceUnitLabel,
   qtyTotals,
   roundMoney,
@@ -198,5 +199,34 @@ describe('currencyDecimals / roundMoney / fmtMoney', () => {
   it('fmtMoney: USD đủ 2 số lẻ để cột tiền thẳng hàng, VND như cũ', () => {
     expect(fmtMoney(1234.5, 'USD')).toBe('1.234,50')
     expect(fmtMoney(1_234_567, 'VND')).toBe('1.234.567')
+  })
+})
+
+describe('poMoneyOf — tiền của đơn đọc từ đầu đơn (màn duyệt GĐ)', () => {
+  it('cộng VAT vào tổng thanh toán — số thật PO-2026-0054', () => {
+    const m = poMoneyOf(
+      { currency: 'VND', vat_rate: 10, price_includes_vat: false, discount_amount: null },
+      3_541_826_000,
+    )
+    expect(m.vatAmount).toBe(354_182_600)
+    expect(m.grandTotal).toBe(3_896_008_600)
+  })
+
+  it('USD làm tròn về cent — số thật ĐH02HGTĐ', () => {
+    const m = poMoneyOf(
+      { currency: 'USD', vat_rate: 8, price_includes_vat: false, discount_amount: null },
+      8864,
+    )
+    expect(m.vatAmount).toBe(709.12)
+    expect(m.grandTotal).toBe(9573.12)
+  })
+
+  it('giá đã gồm VAT: không cộng thêm lần nữa', () => {
+    const m = poMoneyOf(
+      { currency: 'VND', vat_rate: 10, price_includes_vat: true, discount_amount: 0 },
+      11_000_000,
+    )
+    expect(m.grandTotal).toBe(11_000_000)
+    expect(m.vatAmount).toBe(1_000_000)
   })
 })

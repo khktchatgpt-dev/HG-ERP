@@ -12,7 +12,17 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
 
 type EvAction =
-  'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned' | 'reopened'
+  | 'approved'
+  | 'rejected'
+  | 'submitted'
+  | 'withdrawn'
+  | 'reassigned'
+  | 'reopened'
+  | 'unapproved'
+  | 'urgent_sent'
+
+/** Đơn mua hiện đang ở đâu (0218) — nhãn đã dịch sẵn ở server. */
+export type PoNow = Record<string, string>
 
 type Ev = {
   id: string
@@ -60,6 +70,9 @@ const ACTION_META: Record<
   withdrawn: { label: 'Rút về nháp', tone: 'amber' },
   reassigned: { label: 'Bàn giao', tone: 'gray' },
   reopened: { label: 'Mở lại để sửa', tone: 'amber' },
+  // 0218 — gỡ chữ ký (đơn chưa gửi NCC) và đi tắt qua chữ ký (gửi gấp).
+  unapproved: { label: 'Thu hồi chữ ký', tone: 'amber' },
+  urgent_sent: { label: 'Gửi gấp chưa ký', tone: 'red' },
 }
 
 const fmtDateTime = (d: string) =>
@@ -78,7 +91,7 @@ const TYPE_TONE = {
   quote: 'green',
 } as const satisfies Record<Ev['entity_type'], string>
 
-export function HistoryManager({ events }: { events: Ev[] }) {
+export function HistoryManager({ events, poNow = {} }: { events: Ev[]; poNow?: PoNow }) {
   const [type, setType] = useState<'all' | 'lsx' | 'po' | 'quote'>('all')
   const [action, setAction] = useState<'all' | EvAction>('all')
 
@@ -129,9 +142,27 @@ export function HistoryManager({ events }: { events: Ev[] }) {
           >
             {e.entity_code}
           </Link>
+        ) : e.entity_type === 'po' ? (
+          // 0218 — mở lại màn ký ở chế độ chỉ đọc: chữ ký, đơn đang ở đâu, thu hồi / yêu cầu xem lại.
+          <Link
+            href={`/exec/approvals/po/${e.entity_id}`}
+            className="font-mono text-xs text-[var(--primary)] hover:underline"
+          >
+            {e.entity_code}
+          </Link>
         ) : (
           <span className="font-mono text-xs">{e.entity_code}</span>
         ),
+    },
+    {
+      key: 'now',
+      header: 'Hiện ở đâu',
+      width: '190px',
+      cell: (e) => (
+        <span className="text-muted-foreground text-xs">
+          {e.entity_type === 'po' ? (poNow[e.entity_id] ?? '—') : '—'}
+        </span>
+      ),
     },
     {
       key: 'action',

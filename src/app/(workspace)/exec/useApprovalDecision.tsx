@@ -97,10 +97,50 @@ async function callDecide(
   }
 }
 
+/**
+ * VIỆC SAU CHỮ KÝ (0218) — thu hồi chữ ký, hỏi lại / yêu cầu xem lại, ký bù.
+ * Một hộp thoại chung: tiêu đề + hệ quả + (tuỳ) ô chữ bắt buộc + một nút. Mỗi
+ * chỗ gọi tự nói gửi gì đi đâu, hook chỉ lo bận / toast / làm mới.
+ */
+export type FollowUpAsk = {
+  title: string
+  /** Chuyện gì xảy ra sau khi bấm — nói trước, không để người ký đoán. */
+  consequence: string
+  /** Có = bắt nhập chữ; giá trị đi vào `body[field]`. */
+  text?: { label: string; placeholder: string; field: 'reason' | 'body'; min: number }
+  confirm: string
+  path: string
+  done: string
+}
+
 export function useApprovalDecision(onSettled?: () => void) {
   const toast = useToast()
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const [follow, setFollow] = useState<FollowUpAsk | null>(null)
+  const [followText, setFollowText] = useState('')
+
+  async function submitFollow() {
+    if (!follow) return
+    const text = followText.trim()
+    if (follow.text && text.length < follow.text.min) return
+    setBusy(true)
+    try {
+      await api(follow.path, {
+        method: 'POST',
+        body: follow.text ? { [follow.text.field]: text } : {},
+      })
+      toast.success(follow.done)
+      setFollow(null)
+      setFollowText('')
+      // Đơn vẫn ở màn này (chỉ đổi dải đầu) — làm mới tại chỗ, không đá về hộp.
+      router.refresh()
+    } catch (e) {
+      toast.error('Thao tác thất bại', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
   const [approveTarget, setApproveTarget] = useState<DecideTarget | null>(null)
   /*
     ĐÍCH ĐẾN SAU KHI KÝ — chỉ màn thẩm định dùng, cho nút "Ký & sang phiếu sau".
@@ -284,11 +324,70 @@ export function useApprovalDecision(onSettled?: () => void) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!follow}
+        onOpenChange={(o) => {
+          if (!o) {
+            setFollow(null)
+            setFollowText('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{follow?.title}</DialogTitle>
+            <DialogDescription>{follow?.consequence}</DialogDescription>
+          </DialogHeader>
+          {follow?.text && (
+            <label className="grid gap-1.5 text-sm">
+              <span className="font-medium">{follow.text.label}</span>
+              <Textarea
+                autoFocus
+                rows={3}
+                placeholder={follow.text.placeholder}
+                value={followText}
+                onChange={(e) => setFollowText(e.target.value)}
+              />
+              {followText.trim().length > 0 &&
+                followText.trim().length < follow.text.min && (
+                  <span className="text-xs text-[var(--warn)]">
+                    Ghi rõ hơn — ít nhất {follow.text.min} ký tự.
+                  </span>
+                )}
+            </label>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setFollow(null)
+                setFollowText('')
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              disabled={
+                busy || (!!follow?.text && followText.trim().length < follow.text.min)
+              }
+              onClick={() => void submitFollow()}
+            >
+              {busy && <Loader2 className="animate-spin" />} {follow?.confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 
   return {
     busy,
+    askFollowUp: (a: FollowUpAsk) => {
+      setFollowText('')
+      setFollow(a)
+    },
     askApprove: (t: DecideTarget, next?: string) => {
       setThenHref(next ?? null)
       setApproveTarget(t)

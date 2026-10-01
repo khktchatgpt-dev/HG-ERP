@@ -52,6 +52,16 @@ export type DocNote = {
   reply_to: string | null
   created_at: string
   deleted_at: string | null
+  /**
+   * 0218 — 'question' = CÂU HỎI của Giám đốc trên đơn ("Hỏi lại" / "Yêu cầu
+   * xem lại"), mở cho tới khi có `resolved_at`. Ghi chú thường là 'note'.
+   * Tuỳ chọn vì bản ghi tạo trước 0218 chưa có cột (mặc định DB là 'note').
+   */
+  kind?: 'note' | 'question'
+  resolved_at?: string | null
+  resolved_by?: string | null
+  /** answered = người phụ trách trả lời · decided = đơn được ký/trả lại · closed = thu hồi/huỷ. */
+  resolved_how?: 'answered' | 'decided' | 'closed' | null
 }
 
 /**

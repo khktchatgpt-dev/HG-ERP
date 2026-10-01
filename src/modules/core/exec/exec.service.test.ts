@@ -6,7 +6,13 @@ vi.mock('@/modules/dept/supply/pos.repo', () => ({
     totalsByPoIds: vi.fn(),
     materialNamesByPoIds: vi.fn(),
     extraLsxByPoIds: vi.fn(),
+    // 0218 — đơn gửi gấp chờ ký bù; mặc định không có.
+    listAwaitingLateSign: vi.fn().mockResolvedValue([]),
   },
+}))
+// 0218 — câu hỏi của Giám đốc còn mở; mặc định không có.
+vi.mock('@/modules/core/doc-notes/doc-notes.repo', () => ({
+  docNotesRepo: { openQuestionsByDocs: vi.fn().mockResolvedValue(new Map()) },
 }))
 vi.mock('@/modules/dept/production/lsx.service', () => ({
   lsxService: { list: vi.fn() },

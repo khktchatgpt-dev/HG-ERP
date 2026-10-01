@@ -151,6 +151,9 @@ describe('route — không mở đường ghi mới', () => {
       // Bàn giao (0128) — route màn chi tiết đã gọi từ lâu; 16/09/2026 đưa
       // lên danh sách để chuyển nhiều đơn một lượt thay vì mở từng trang.
       '/api/dept/supply/pos/p/reassign',
+      // Đường MỚI 01/10/2026 (0218, chủ dự án chốt): trưởng phòng gửi NCC
+      // trước khi ký, Giám đốc ký bù sau — luật ở lib/po-signature.
+      '/api/dept/supply/pos/p/urgent-send',
     ])
     for (const s of PO_STATUSES) {
       for (const a of actionsFor(s, boss)) {
@@ -405,5 +408,33 @@ describe('gửi NCC đòi hẹn giao (17/09/2026)', () => {
       (a) => a.id === 'send',
     )!
     expect(send.blocked).toMatch(/người khác phụ trách/)
+  })
+})
+
+describe('gửi gấp, ký bù sau (0218)', () => {
+  const urgent = (
+    s: Parameters<typeof actionsFor>[0],
+    perm: Parameters<typeof actionsFor>[1],
+  ) => actionsFor(s, perm).find((a) => a.id === 'urgent_send')
+  it('chỉ có ở nháp và chờ duyệt — đơn đã ký thì gửi theo đường thường', () => {
+    expect(urgent('draft', boss)).toBeTruthy()
+    expect(urgent('pending_approval', boss)).toBeTruthy()
+    expect(urgent('approved', boss)).toBeUndefined()
+    expect(urgent('ordered', boss)).toBeUndefined()
+  })
+  it('không phải trưởng phòng → nút khoá, lý do chỉ cách đi tiếp', () => {
+    expect(urgent('draft', boss)!.blocked).toMatch(/trưởng phòng/)
+    expect(urgent('draft', { ...boss, lead: true })!.blocked).toBeUndefined()
+  })
+  it('thiếu hẹn giao → khoá dù là trưởng phòng; lý do bắt buộc ≥ 5 ký tự', () => {
+    const a = urgent('pending_approval', { ...boss, lead: true, noEta: true })!
+    expect(a.blocked).toMatch(/hẹn giao/)
+    expect(a.needReason).toBe(true)
+    expect(a.minReason).toBe(5)
+    expect(a.build!({ id: 'p', reason: 'gấp', date: '' })[0]).toEqual({
+      path: '/api/dept/supply/pos/p/urgent-send',
+      method: 'POST',
+      body: { reason: 'gấp' },
+    })
   })
 })

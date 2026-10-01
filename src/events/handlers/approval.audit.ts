@@ -66,6 +66,29 @@ export function registerApprovalAuditHandlers(): void {
     })
   })
 
+  // 0218 — hai mốc mới của vòng duyệt: gỡ chữ ký và đi tắt qua chữ ký.
+  on('po.unapproved', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'po',
+      entity_id: e.po_id,
+      entity_code: e.code,
+      action: 'unapproved',
+      actor_id: e.unapproved_by,
+      reason: e.reason,
+    })
+  })
+
+  on('po.urgent_sent', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'po',
+      entity_id: e.po_id,
+      entity_code: e.code,
+      action: 'urgent_sent',
+      actor_id: e.sent_by,
+      reason: e.reason,
+    })
+  })
+
   // 0149 — báo giá trình GĐ (tuỳ chọn) cũng để lại vết như PO/LSX.
   on('quote.submitted', async (e) => {
     await approvalEventsRepo.log({

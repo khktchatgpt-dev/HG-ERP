@@ -27,6 +27,8 @@ export type Po = {
   terms_payment: string | null
   terms_invoice: string | null
   terms_lead_time: string | null
+  /** Số đơn trên giấy / số chứng từ phía NCC (đơn nạp từ file mang số cũ). */
+  supplier_doc_no?: string | null
   signer_role: string | null
   approved_by: string | null
   approved_at: string | null
@@ -43,6 +45,14 @@ export type Po = {
   assigned_to: string | null
   created_at: string
   updated_at: string
+  /**
+   * GỬI GẤP, KÝ BÙ SAU (0218): đơn đi NCC trước khi có chữ ký — trưởng phòng
+   * Cung ứng bấm, lý do bắt buộc. Chờ ký bù = có `urgent_sent_at`, chưa có
+   * `approved_at` (lib/po-signature `isAwaitingLateSign`).
+   */
+  urgent_sent_at?: string | null
+  urgent_sent_by?: string | null
+  urgent_reason?: string | null
 }
 
 export type PoWithRefs = Po & {
@@ -115,6 +125,11 @@ export type PoLine = PoLineTemplateFields & {
   qty2: number | null
   unit2: string | null
   note: string | null
+  /**
+   * Mã SP khách của dòng (đơn chia theo SP: tem, bao bì). CHỈ ĐỌC — form sửa đơn
+   * không gửi lại cột này; phiếu nhập dùng để phân biệt dòng cùng mã vật tư.
+   */
+  product_code?: string | null
   sort_order: number
   /** Tên/ĐVT tự gõ của dòng tự do — material_* bên dưới fallback về cặp này. */
   line_name: string | null
@@ -176,7 +191,15 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, note, created_by, assigned_to, created_at, updated_at, source_po_id'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, note, created_by, assigned_to, created_at, updated_at, source_po_id'
+
+/** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
+const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
+
+/** Lỗi 'cột chưa có' (42703) — DB chưa áp migration mới hơn code. */
+function isMissingColumn(e: { code?: string; message?: string }): boolean {
+  return e.code === '42703' || /does not exist/.test(e.message ?? '')
+}
 
 /** Cột `numeric` của dòng — PostgREST trả về CHUỖI ("0.2480"), ép lại về number. */
 const NUMERIC_LINE_COLS = [
@@ -210,8 +233,16 @@ function numericLineFields(row: Record<string, unknown>): Record<string, number 
 type Raw = Po & {
   supplier: { name: string } | { name: string }[] | null
   lsx:
-    | { code: string; status?: string; order: { code: string } | { code: string }[] | null }
-    | { code: string; status?: string; order: { code: string } | { code: string }[] | null }[]
+    | {
+        code: string
+        status?: string
+        order: { code: string } | { code: string }[] | null
+      }
+    | {
+        code: string
+        status?: string
+        order: { code: string } | { code: string }[] | null
+      }[]
     | null
   assignee:
     | { name: string | null; email: string }
@@ -596,7 +627,11 @@ export const posRepo = {
     for (const r of (data ?? []) as Row[]) {
       const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
       const list = out.get(r.po_id) ?? []
-      list.push({ id: r.production_order_id, code: lx?.code ?? '?', status: lx?.status ?? null })
+      list.push({
+        id: r.production_order_id,
+        code: lx?.code ?? '?',
+        status: lx?.status ?? null,
+      })
       out.set(r.po_id, list)
     }
     return out
@@ -722,6 +757,78 @@ export const posRepo = {
       .maybeSingle()
     if (!data) return null
     return unwrap([data as Raw])[0]
+  },
+
+  /**
+   * Đơn GỬI GẤP còn chờ chữ ký bù (0218) — cho hộp ký của Giám đốc. Cùng định
+   * nghĩa với `isAwaitingLateSign` (lib/po-signature); index một phần ở DB.
+   */
+  async listAwaitingLateSign(): Promise<PoWithRefs[]> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select(`${SELECT}, ${URGENT_COLS}`)
+      .not('urgent_sent_at', 'is', null)
+      .is('approved_at', null)
+      .neq('status', 'cancelled')
+      .order('urgent_sent_at', { ascending: true })
+    // DB chưa áp 0218 → chưa có đơn gửi gấp nào, không phải lỗi của hộp ký.
+    if (error) {
+      if (isMissingColumn(error)) return []
+      throw new Error(error.message)
+    }
+    return unwrap((data ?? []) as unknown as Raw[])
+  },
+
+  /**
+   * Ba cột GỬI GẤP (0218) của một nhóm đơn — đọc RIÊNG, không nằm trong `COLS`
+   * chung: thêm cột vào câu SELECT dùng chung khi migration chưa áp là làm gãy
+   * MỌI màn đơn mua (đã xảy ra 01/10/2026 — sổ Đơn mua ra rỗng). Chưa có cột
+   * thì trả map rỗng = "không đơn nào gửi gấp", đúng sự thật trước 0218.
+   */
+  async urgentByIds(
+    ids: string[],
+  ): Promise<
+    Map<string, Pick<Po, 'urgent_sent_at' | 'urgent_sent_by' | 'urgent_reason'>>
+  > {
+    const out = new Map<string, Pick<Po, 'urgent_sent_at' | 'urgent_sent_by' | 'urgent_reason'>>() // prettier-ignore
+    if (ids.length === 0) return out
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select(`id, ${URGENT_COLS}`)
+      .in('id', ids)
+    if (error) {
+      if (isMissingColumn(error)) return out
+      throw new Error(error.message)
+    }
+    for (const r of (data ?? []) as unknown as ({ id: string } & Pick<
+      Po,
+      'urgent_sent_at' | 'urgent_sent_by' | 'urgent_reason'
+    >)[]) {
+      // prettier-ignore
+      if (r.urgent_sent_at) out.set(r.id, r)
+    }
+    return out
+  },
+
+  /** Trạng thái + dấu ký của nhiều đơn một lượt — cột "Hiện ở đâu" ở Lịch sử ký. */
+  async briefByIds(
+    ids: string[],
+  ): Promise<
+    Map<
+      string,
+      { status: string; approved_at: string | null; urgent_sent_at: string | null }
+    >
+  > {
+    const out = new Map<string, { status: string; approved_at: string | null; urgent_sent_at: string | null }>() // prettier-ignore
+    if (ids.length === 0) return out
+    const [{ data, error }, urgent] = await Promise.all([
+      db().from('supply_purchase_orders').select('id, status, approved_at').in('id', ids),
+      this.urgentByIds(ids),
+    ])
+    if (error) throw new Error(error.message)
+    for (const r of data ?? [])
+      out.set(r.id, { ...r, urgent_sent_at: urgent.get(r.id)?.urgent_sent_at ?? null })
+    return out
   },
 
   /** LSX PHỤ gộp vào đơn (0125) — kèm mã để hiện lên chi tiết + phiếu in. */
@@ -892,7 +999,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, product_code, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')

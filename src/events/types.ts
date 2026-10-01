@@ -212,6 +212,57 @@ export type DomainEvent =
       total_after: number
       notify_ids: string[]
     }
+  /**
+   * THU HỒI CHỮ KÝ (0218, 01/10/2026): Giám đốc gỡ chữ ký trên đơn ĐÃ DUYỆT,
+   * CHƯA GỬI NCC — đơn quay về chờ duyệt. Báo người phụ trách (nút "Gửi NCC"
+   * của họ vừa khoá) kèm lý do.
+   */
+  | {
+      name: 'po.unapproved'
+      po_id: string
+      code: string
+      unapproved_by: string
+      /** Người đã ký trước đó — có thể khác người thu hồi (ba người chung hộp ký). */
+      signed_by: string | null
+      reason: string
+      owner_id: string | null
+    }
+  /**
+   * GỬI GẤP, KÝ BÙ SAU (0218): trưởng phòng Cung ứng gửi NCC trước khi có chữ
+   * ký. Báo MỌI người có quyền duyệt — đơn vào mục "Chờ ký bù" của hộp ký.
+   */
+  | {
+      name: 'po.urgent_sent'
+      po_id: string
+      code: string
+      sent_by: string
+      reason: string
+      approver_ids: string[]
+    }
+  /**
+   * CÂU HỎI CỦA GIÁM ĐỐC (0218) — "Hỏi lại" (chưa quyết) hoặc "Yêu cầu xem
+   * lại" (đã ký / đã gửi). Không đổi trạng thái đơn; báo người phụ trách.
+   */
+  | {
+      name: 'po.question'
+      po_id: string
+      code: string
+      question_id: string
+      asked_by: string
+      kind: 'ask' | 'review'
+      body: string
+      owner_id: string | null
+    }
+  /** Người phụ trách trả lời câu hỏi (0218) — báo người đã hỏi. */
+  | {
+      name: 'po.answered'
+      po_id: string
+      code: string
+      question_id: string
+      answered_by: string
+      asker_id: string
+      body: string
+    }
   // Bàn giao đơn giữa nhân viên cung ứng (0128): đổi người phụ trách.
   | {
       name: 'po.reassigned'

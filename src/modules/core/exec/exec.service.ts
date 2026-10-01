@@ -10,6 +10,9 @@ import { settingsService } from '@/modules/core/settings/settings.service'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Forbidden } from '@/server/http'
 import { poTemplateShort } from '@/lib/po-template'
+import { poMoneyOf } from '@/lib/po-line'
+import { isAwaitingLateSign } from '@/lib/po-signature'
+import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { properName, supplierShortName } from '@/lib/po-list-labels'
 import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
@@ -185,6 +188,13 @@ export type SignItem = {
   /** Trang thẩm định đầy đủ. */
   href: string
   /**
+   * 0218 — đơn GỬI GẤP trước khi ký, đang chờ ký bù. Không ký hàng loạt được:
+   * phải mở ra đọc lý do gấp rồi ký bù (hoặc không đồng ý).
+   */
+  late_sign?: { at: string; by_name: string | null; reason: string | null } | null
+  /** 0218 — câu hỏi của Giám đốc còn mở từ lúc này (bóng đang ở Cung ứng). */
+  question_since?: string | null
+  /**
    * NGƯỜI TRÌNH — hộp ký gom nhóm theo đây (27/09/2026). Đơn mua: người CẦM
    * đơn (phụ trách, chưa giao thì người lập — lib/supply-scope); lệnh/báo giá:
    * người gửi duyệt.
@@ -264,6 +274,7 @@ export const execService = {
       allLsx,
       recentEvents,
       thresholds,
+      lateRows,
     ] = await Promise.all([
       posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
       poOnly ? none : lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }), // prettier-ignore
@@ -272,7 +283,12 @@ export const execService = {
       poOnly ? none : lsxService.list(user, { page: 1, page_size: 1 }),
       approvalEventsRepo.listRecent({ limit: 100 }),
       settingsService.approvalThresholds(),
+      // 0218 — đơn GỬI GẤP còn chờ chữ ký bù: cũng là việc chờ chữ ký.
+      posRepo.listAwaitingLateSign(),
     ])
+    // Đơn chờ duyệt + đơn chờ ký bù — cùng một cách làm giàu, cùng một bảng.
+    const poRows = [...pendingPos.rows, ...lateRows]
+    const poIds = poRows.map((p) => p.id)
 
     // Tiền tệ nằm ở ĐƠN HÀNG, không ở dòng đơn và cũng không ở lệnh — nên phải
     // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
@@ -287,39 +303,49 @@ export const execService = {
       poSubmitted,
       poMaterials,
       poExtraLsx,
+      openQuestions,
     ] = await Promise.all([
-      posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
+      posRepo.totalsByPoIds(poIds),
       ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
       pendingLsx.rows.length
         ? ordersRepo.list({ page: 1, page_size: 1000 })
         : Promise.resolve({ rows: [], total: 0 }),
       usersRepo.displayNamesByIds(
         [
-          ...pendingPos.rows.map((p) => p.created_by),
-          ...pendingPos.rows.map((p) => poOwnerOf(p)),
+          ...poRows.map((p) => p.created_by),
+          ...poRows.map((p) => poOwnerOf(p)),
+          ...lateRows.map((p) => p.urgent_sent_by),
           ...pendingLsx.rows.map((l) => l.issued_by),
           ...pendingQuotes.rows.map((q) => q.submitted_by),
         ].filter((x): x is string => !!x),
       ),
       quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
-      approvalEventsRepo.lastSubmittedAt(
-        'po',
-        pendingPos.rows.map((p) => p.id),
-      ),
-      posRepo.materialNamesByPoIds(pendingPos.rows.map((p) => p.id)),
-      posRepo.extraLsxByPoIds(pendingPos.rows.map((p) => p.id)),
+      approvalEventsRepo.lastSubmittedAt('po', poIds),
+      posRepo.materialNamesByPoIds(poIds),
+      posRepo.extraLsxByPoIds(poIds),
+      docNotesRepo.openQuestionsByDocs('po', poIds),
     ])
 
     const items: SignItem[] = []
 
-    for (const p of pendingPos.rows) {
-      const value = poTotals[p.id] ?? 0
+    for (const p of poRows) {
+      const lateSign = isAwaitingLateSign(p)
+      /*
+        GIÁ TRỊ = TỔNG THANH TOÁN ĐÃ GỒM VAT (01/10/2026, chủ dự án chốt). Trước
+        đó là Σ tiền dòng — số TRƯỚC thuế, trong khi 83/97 đơn có VAT 8–10%:
+        đơn 3,54 tỷ tiền hàng thật ra là 3,90 tỷ phải chi. Ngưỡng "giá trị lớn"
+        cũng so trên số này, cho khớp với con số to người ký đang nhìn.
+      */
+      const value = poMoneyOf(p, poTotals[p.id] ?? 0).grandTotal
       const warnings: string[] = []
       if (value <= 0) warnings.push('Đơn chưa có tiền — dòng vật tư thiếu đơn giá')
+      // Chỉ cảnh báo, không chặn ký: 48/97 đơn chưa ghi, chặn cứng là kẹt cả hộp.
+      if (!p.terms_payment?.trim()) warnings.push('Chưa ghi điều khoản thanh toán')
       const lateDays = daysSince(p.expected_at, today)
-      if (lateDays != null && lateDays > 0) {
+      if (lateDays != null && lateDays > 0 && !lateSign) {
         warnings.push(`Ngày hàng về đã qua ${lateDays} ngày`)
       }
+      if (lateSign) warnings.unshift('Đã gửi NCC trước khi ký — cần ký bù')
       items.push({
         kind: 'po',
         id: p.id,
@@ -332,8 +358,24 @@ export const execService = {
         currency: p.currency,
         value,
         // Đã chờ tính từ lần GỬI DUYỆT cuối, không từ ngày lập (27/09/2026).
-        waiting_days: daysSince(poSubmitted.get(p.id) ?? p.created_at, today) ?? 0,
-        submitted_at: poSubmitted.get(p.id) ?? p.created_at,
+        // Chờ ký bù thì tính từ lúc gửi gấp — chữ ký bị nợ từ đó.
+        waiting_days:
+          daysSince(
+            (lateSign ? p.urgent_sent_at : null) ?? poSubmitted.get(p.id) ?? p.created_at,
+            today,
+          ) ?? 0,
+        submitted_at:
+          (lateSign ? p.urgent_sent_at : null) ?? poSubmitted.get(p.id) ?? p.created_at,
+        late_sign: lateSign
+          ? {
+              at: p.urgent_sent_at!,
+              by_name: p.urgent_sent_by
+                ? properName(creatorNames.get(p.urgent_sent_by)) || null
+                : null,
+              reason: p.urgent_reason ?? null,
+            }
+          : null,
+        question_since: openQuestions.get(p.id)?.created_at ?? null,
         submitted_by: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
         warnings,
         big: isBigApprovalWith(value, p.currency, thresholds),
@@ -431,7 +473,13 @@ export const execService = {
       })
     }
 
-    items.sort((a, b) => b.waiting_days - a.waiting_days || b.value - a.value)
+    // Đơn CHỜ KÝ BÙ lên đầu: hàng đã đi, chữ ký đang nợ — việc đó không chờ được.
+    items.sort(
+      (a, b) =>
+        Number(!!b.late_sign) - Number(!!a.late_sign) ||
+        b.waiting_days - a.waiting_days ||
+        b.value - a.value,
+    )
 
     const mineToday = recentEvents.filter(
       (e) => e.actor_id === user.id && e.created_at.slice(0, 10) === today,
@@ -498,9 +546,10 @@ export const execService = {
       po_pending: pendingPos.rows.length,
       po_oldest_days: poWaitDays.length ? Math.max(...poWaitDays) : null,
       po_pending_value: sumByCurrency(
+        // Cùng số với hộp ký (signBox): tổng thanh toán đã gồm VAT.
         pendingPos.rows.map((p) => ({
           currency: p.currency,
-          value: poTotals[p.id] ?? 0,
+          value: poMoneyOf(p, poTotals[p.id] ?? 0).grandTotal,
         })),
       ),
       quote_pending: pendingQuotes.rows.length,

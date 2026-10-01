@@ -152,8 +152,11 @@ export function ApprovalCenterScreen({
   })
 
   const key = (i: SignItem) => `${i.kind}-${i.id}`
-  /** Phiếu giá trị lớn KHÔNG được ký hàng loạt — phải mở ra đọc rồi ký riêng. */
-  const bulkable = items.filter((i) => !i.big)
+  /**
+   * Phiếu giá trị lớn KHÔNG được ký hàng loạt — phải mở ra đọc rồi ký riêng.
+   * Đơn chờ KÝ BÙ (0218) cũng vậy: phải đọc lý do gửi gấp trước.
+   */
+  const bulkable = items.filter((i) => !i.big && !i.late_sign)
   const pickedKeys = new Set(picked.map(key))
   const sel = items.find((i) => key(i) === pick) ?? null
   const bigCount = items.filter((i) => i.big).length
@@ -181,6 +184,11 @@ export function ApprovalCenterScreen({
   const nhieu = picked.length > 0
   const chuaChon = !nhieu && !sel
   const lyDo = chuaChon ? 'Chọn một phiếu trong bảng trước' : undefined
+  /* Đơn chờ ký bù đã rời bàn chờ duyệt — ký bù / không đồng ý ở màn Xem kỹ. */
+  const lateSel =
+    !nhieu && sel?.late_sign
+      ? 'Đơn đã gửi gấp — bấm "Xem kỹ" đọc lý do rồi ký bù'
+      : undefined
 
   return (
     <ScreenFrame>
@@ -199,7 +207,7 @@ export function ApprovalCenterScreen({
                     box.stats.oldest_days >= 7 ? ('stop' as const) : ('warn' as const),
                 },
                 {
-                  label: 'Giá trị',
+                  label: 'Giá trị (đơn mua gồm VAT)',
                   value: box.stats.value
                     .map((v) => money(v.value, v.currency))
                     .join(' · '),
@@ -323,9 +331,9 @@ export function ApprovalCenterScreen({
             </span>
             {nhieu && <Btn onClick={() => setPicked([])}>Bỏ chọn</Btn>}
             <Btn
-              primary={!chuaChon}
-              disabled={busy || chuaChon}
-              title={lyDo}
+              primary={!chuaChon && !lateSel}
+              disabled={busy || chuaChon || !!lateSel}
+              title={lyDo ?? lateSel}
               icon="duyet"
               onClick={() =>
                 nhieu
@@ -336,10 +344,12 @@ export function ApprovalCenterScreen({
               {nhieu ? `Ký ${picked.length} phiếu` : 'Ký duyệt'}
             </Btn>
             <Btn
-              disabled={busy || !sel}
+              disabled={busy || !sel || !!lateSel}
               icon="traLai"
               title={
-                nhieu ? 'Trả lại phải ghi lý do cho từng phiếu — chọn một phiếu' : lyDo
+                nhieu
+                  ? 'Trả lại phải ghi lý do cho từng phiếu — chọn một phiếu'
+                  : (lyDo ?? lateSel)
               }
               onClick={() => sel && askReject(target(sel))}
             >
@@ -366,7 +376,12 @@ export function ApprovalCenterScreen({
               <th>Nội dung</th>
               <th style={{ width: 150 }}>Lệnh SX</th>
               <th style={{ width: 120, textAlign: 'right' }}>Hẹn giao</th>
-              <th style={{ width: 130, textAlign: 'right' }}>Giá trị</th>
+              <th
+                style={{ width: 130, textAlign: 'right' }}
+                title="Đơn mua: tổng thanh toán đã gồm VAT"
+              >
+                Giá trị
+              </th>
               <th style={{ width: 92 }}>Chờ</th>
             </THead>
             <tbody>
@@ -452,12 +467,24 @@ function SignRow({
   return (
     <Row selected={selected} onClick={onPick}>
       <Cell>
-        {i.big ? (
+        {i.big || i.late_sign ? (
           <span
             className="flex text-[var(--ink-3)]"
-            title="Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt"
+            title={
+              i.late_sign
+                ? 'Đơn gửi gấp — mở ra đọc lý do rồi ký bù'
+                : 'Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt'
+            }
           >
-            <Ico name="khoa" size={13} label="Giá trị lớn — không ký hàng loạt" />
+            <Ico
+              name="khoa"
+              size={13}
+              label={
+                i.late_sign
+                  ? 'Chờ ký bù — không ký hàng loạt'
+                  : 'Giá trị lớn — không ký hàng loạt'
+              }
+            />
           </span>
         ) : (
           <Tick
@@ -477,6 +504,21 @@ function SignRow({
           >
             {i.code}
           </Code>
+          {/* 0218 — hàng đã đi trước chữ ký; câu hỏi đang chờ Cung ứng trả lời. */}
+          {i.late_sign && (
+            <span
+              title={
+                i.late_sign.reason ? `Lý do gửi gấp: ${i.late_sign.reason}` : undefined
+              }
+            >
+              <Tag tone="stop">chờ ký bù</Tag>
+            </span>
+          )}
+          {i.question_since && (
+            <span title="Bạn đã hỏi Cung ứng — đang chờ trả lời">
+              <Tag tone="run">đang hỏi</Tag>
+            </span>
+          )}
         </span>
       </Cell>
       <Cell title={i.party}>

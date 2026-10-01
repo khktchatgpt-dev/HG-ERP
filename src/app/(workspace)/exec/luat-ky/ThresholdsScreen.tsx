@@ -183,6 +183,10 @@ export function ThresholdsScreen({
           xuất không bao giờ bị chặn ký nhanh: tiền của lệnh là doanh thu sắp thu về, ký
           lệnh không tiêu đồng nào.
         </p>
+        <p>
+          Ngưỡng so với <b>tổng thanh toán đã gồm VAT</b> của đơn — đúng con số to trên
+          màn ký và trên phiếu in (từ 01/10/2026; trước đó so với tiền hàng chưa VAT).
+        </p>
       </div>
     </div>
   )

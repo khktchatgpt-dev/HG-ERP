@@ -15,6 +15,9 @@ export type ApprovalAction =
   | 'reassigned'
   // 16/09/2026 — mở lại đơn ĐÃ DUYỆT để sửa (posService.reopen): mốc gỡ chữ ký.
   | 'reopened'
+  // 0218 — thu hồi chữ ký (đơn đã duyệt, chưa gửi) và gửi NCC trước khi ký.
+  | 'unapproved'
+  | 'urgent_sent'
 // 'quote' từ 0149 — báo giá trình GĐ (tuỳ chọn) cũng để lại vết ký.
 export type ApprovalEntityType = 'po' | 'lsx' | 'quote'
 

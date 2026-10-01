@@ -1,4 +1,5 @@
 import { type PoLine } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
+import type { PoQuestionThread } from '@/lib/po-signature'
 
 /**
  * Kiểu dữ liệu phiếu chờ duyệt (LSX + đơn vật tư) cho khu Phê duyệt Ban GĐ —
@@ -48,6 +49,85 @@ export type PendingPo = {
     string,
     { unit_price: number; currency: string; po_code: string; at: string }
   >
+  /*
+    ── Bổ sung 01/10/2026: Giám đốc "chưa xem được đầy đủ thông tin đơn, không
+    biết ai lập đơn". Đo: số to là tiền TRƯỚC VAT (83/97 đơn có VAT), người lập
+    trống ở 31/97 đơn (nạp từ file) trong khi người phụ trách có ở 97/97, và
+    điều khoản / ghi chú nội bộ không lên màn. Mọi trường dưới chỉ có ở màn
+    duyệt đầy đủ (approvals/data.ts).
+  */
+  /**
+   * Tiền của đơn theo `poMoneyOf` — CÙNG phép tính với phiếu in, để số người ký
+   * thấy khớp với số trên giấy. `total` ở trên vẫn là Σ tiền dòng (tiền hàng).
+   */
+  money?: {
+    subtotal: number
+    discount: number
+    vat_rate: number
+    vat_amount: number
+    grand: number
+    includes_vat: boolean
+  }
+  /** Người PHỤ TRÁCH đơn (assigned_to) — luôn có, kể cả đơn nạp từ file. */
+  owner_name?: string | null
+  /** Lần gửi duyệt CUỐI (approval_events) — "chờ n ngày" tính từ đây. */
+  submitted_at?: string | null
+  terms?: {
+    payment: string | null
+    lead_time: string | null
+    delivery_place: string | null
+    invoice: string | null
+    quality: string | null
+    contract_no: string | null
+    /** Số đơn trên giấy / số chứng từ phía NCC. */
+    doc_no: string | null
+  }
+  /** Ghi chú NỘI BỘ của Cung ứng (doc_notes audience internal), mới nhất trước. */
+  internal_notes?: { author_name: string | null; created_at: string; body: string }[]
+  /** Vết duyệt của đơn, cũ nhất trước — lập, gửi duyệt, trả lại, rút về… */
+  events?: {
+    action: string
+    actor_name: string | null
+    created_at: string
+    reason: string | null
+  }[]
+  /** Bối cảnh lệnh SX — lệnh này đã duyệt mua bao nhiêu, còn bao nhiêu đơn. */
+  lsx?: {
+    code: string
+    status: string | null
+    ship_date: string | null
+    pos_total: number
+    pos_approved: number
+    pos_draft: number
+    /** Tổng thanh toán (gồm VAT) các đơn ĐÃ duyệt của lệnh, theo tiền tệ. */
+    approved_value: { currency: string; value: number }[]
+  } | null
+  /*
+    ── 0218 (01/10/2026): màn ký mở được đơn ở MỌI trạng thái — chỉ đọc khi
+    không còn chờ duyệt, kèm chữ ký, đơn đang ở đâu, và các việc sau chữ ký
+    (thu hồi · ký bù · hỏi lại · yêu cầu xem lại).
+  */
+  /** Trạng thái đơn (PoStatus) — quyết định dải nào hiện ở đầu màn. */
+  status?: string
+  approved_by_name?: string | null
+  approved_at?: string | null
+  ordered_at?: string | null
+  /** Đơn GỬI GẤP trước khi ký — null nếu đi đường thường. */
+  urgent?: { at: string; by_name: string | null; reason: string | null } | null
+  /** Số phiếu kho đã ghi vào đơn — > 0 thì không thu hồi chữ ký được. */
+  receipt_docs?: number
+  /** Điều chỉnh xảy ra SAU khi ký (0210) — đơn đổi tiền sau chữ ký. */
+  adjusted_after_sign?: { count: number; delta: number } | null
+  /** Câu hỏi của Giám đốc + câu trả lời, mới nhất trước. */
+  questions?: PoQuestionThread[]
+  /** Lịch sử với NCC — nhà này đã giao bao nhiêu đơn, đang mở những đơn nào. */
+  supplier?: {
+    received: number
+    /** Số đơn khác (không tính đơn này), mọi trạng thái trừ huỷ. */
+    others: number
+    open_others: string[]
+    contact: string | null
+  } | null
 }
 
 /**

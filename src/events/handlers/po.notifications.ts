@@ -74,10 +74,60 @@ export function registerPoNotificationHandlers(): void {
           recipientId: rid,
           actorId: e.adjusted_by,
           type: 'po_adjusted',
-          payload: { title: `${e.code} · điều chỉnh lần ${e.seq} · phát sinh ${money}`, reason: e.reason },
+          payload: {
+            title: `${e.code} · điều chỉnh lần ${e.seq} · phát sinh ${money}`,
+            reason: e.reason,
+          },
         }),
       ),
     )
+  })
+
+  // ── 0218 · đơn mua sau chữ ký ────────────────────────────────────────────
+  // Thu hồi chữ ký: người phụ trách phải biết nút "Gửi NCC" vừa khoá, và vì sao.
+  on('po.unapproved', async (e) => {
+    if (!e.owner_id || e.owner_id === e.unapproved_by) return
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.unapproved_by,
+      type: 'po_unapproved',
+      payload: { title: e.code, reason: e.reason },
+    })
+  })
+
+  // Gửi gấp chưa ký: mọi người có quyền duyệt — một trong ba người sẽ ký bù.
+  on('po.urgent_sent', async (e) => {
+    await Promise.all(
+      e.approver_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.sent_by,
+          type: 'po_urgent_sent',
+          payload: { title: e.code, reason: e.reason },
+        }),
+      ),
+    )
+  })
+
+  // Câu hỏi của Giám đốc → người phụ trách; câu trả lời → người đã hỏi.
+  on('po.question', async (e) => {
+    if (!e.owner_id || e.owner_id === e.asked_by) return
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.asked_by,
+      type: 'po_question',
+      payload: { title: e.code, reason: e.body },
+    })
+  })
+
+  on('po.answered', async (e) => {
+    if (e.asker_id === e.answered_by) return
+    await notificationsService.notify({
+      recipientId: e.asker_id,
+      actorId: e.answered_by,
+      type: 'po_answered',
+      payload: { title: e.code, reason: e.body },
+    })
   })
 
   // Bàn giao đơn (0128): báo người NHẬN phụ trách.

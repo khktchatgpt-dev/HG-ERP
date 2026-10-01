@@ -11,6 +11,11 @@ import type { Audience, DocNote, DocType } from '@/lib/doc-notes'
 
 export type FollowerRow = { user_id: string; muted_at: string | null; source: string }
 
+/** Lỗi 'cột chưa có' (42703) — DB chưa áp migration mới hơn code (0218). */
+function isMissingColumn(e: { code?: string; message?: string }): boolean {
+  return e.code === '42703' || /does not exist/.test(e.message ?? '')
+}
+
 export const docNotesRepo = {
   /**
    * Mọi ghi chú của một chứng từ, MỚI NHẤT TRƯỚC.
@@ -47,6 +52,8 @@ export const docNotesRepo = {
       audience: Audience
       body: string
       reply_to?: string | null
+      /** 0218 — 'question' cho câu hỏi của Giám đốc; bỏ trống = ghi chú thường. */
+      kind?: 'note' | 'question'
     },
     authorName: string | null,
   ): Promise<DocNote> {
@@ -57,6 +64,78 @@ export const docNotesRepo = {
       .single()
     if (error) throw error
     return { ...data, author_name: authorName } as DocNote
+  },
+
+  /**
+   * ĐÓNG CÂU HỎI (0218). `onlyId` đóng đúng một câu (người phụ trách trả lời);
+   * bỏ trống thì đóng MỌI câu còn mở của chứng từ (đơn được ký / trả lại / thu
+   * hồi / huỷ — câu hỏi hết đối tượng). Trả về id + tác giả các câu vừa đóng để
+   * báo người hỏi.
+   */
+  async resolveQuestions(
+    docType: DocType,
+    docId: string,
+    by: string,
+    how: 'answered' | 'decided' | 'closed',
+    onlyId?: string,
+  ): Promise<{ id: string; author_id: string }[]> {
+    let q = db()
+      .from('doc_notes')
+      .update({
+        resolved_at: new Date().toISOString(),
+        resolved_by: by,
+        resolved_how: how,
+      })
+      .eq('doc_type', docType)
+      .eq('doc_id', docId)
+      .eq('kind', 'question')
+      .is('resolved_at', null)
+      .is('deleted_at', null)
+    if (onlyId) q = q.eq('id', onlyId)
+    const { data, error } = await q.select('id, author_id')
+    // DB chưa áp 0218 → chưa có câu hỏi nào để đóng. KHÔNG được ném: hàm này
+    // nằm trên đường Duyệt / Huỷ đơn, ném ra là chặn luôn việc ký.
+    if (error) {
+      if (isMissingColumn(error)) return []
+      throw error
+    }
+    return (data ?? []) as { id: string; author_id: string }[]
+  },
+
+  /**
+   * Câu hỏi CÒN MỞ của nhiều chứng từ một lượt — cho hộp ký (nhãn "Đang hỏi")
+   * và sổ Đơn mua. Một truy vấn cho cả trang, có index một phần ở DB.
+   */
+  async openQuestionsByDocs(
+    docType: DocType,
+    docIds: string[],
+  ): Promise<Map<string, { id: string; created_at: string; author_id: string }>> {
+    const out = new Map<string, { id: string; created_at: string; author_id: string }>()
+    if (docIds.length === 0) return out
+    const { data, error } = await db()
+      .from('doc_notes')
+      .select('id, doc_id, created_at, author_id')
+      .eq('doc_type', docType)
+      .in('doc_id', docIds)
+      .eq('kind', 'question')
+      .is('resolved_at', null)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+    if (error) {
+      if (isMissingColumn(error)) return out // chưa áp 0218 → chưa có câu hỏi
+      throw error
+    }
+    // Giữ câu hỏi CŨ NHẤT còn mở: thời gian chờ tính từ lúc bóng sang tay người trả lời.
+    for (const r of (data ?? []) as {
+      id: string
+      doc_id: string
+      created_at: string
+      author_id: string
+    }[]) {
+      // prettier-ignore
+      if (!out.has(r.doc_id)) out.set(r.doc_id, { id: r.id, created_at: r.created_at, author_id: r.author_id }) // prettier-ignore
+    }
+    return out
   },
 
   /**
@@ -91,11 +170,7 @@ export const docNotesRepo = {
    * dõi (`muted_at`) không được gắn lại chỉ vì họ vừa đụng vào chứng từ. Ghi đè
    * ở đây biến nút "bỏ theo dõi" thành lời nói dối.
    */
-  async addFollowers(
-    docType: DocType,
-    docId: string,
-    userIds: string[],
-  ): Promise<void> {
+  async addFollowers(docType: DocType, docId: string, userIds: string[]): Promise<void> {
     if (userIds.length === 0) return
     const { error } = await db()
       .from('doc_followers')
@@ -134,10 +209,7 @@ export const docNotesRepo = {
   },
 
   /** Đếm ghi chú của nhiều chứng từ một lượt — cho badge trên bảng danh sách. */
-  async countByDocs(
-    docType: DocType,
-    docIds: string[],
-  ): Promise<Map<string, number>> {
+  async countByDocs(docType: DocType, docIds: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>()
     if (docIds.length === 0) return out
     const { data, error } = await db()

@@ -534,6 +534,10 @@ export type Database = {
           deleted_by: string | null
           doc_id: string
           doc_type: string
+          kind: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_how: string | null
           id: string
           reply_to: string | null
         }
@@ -546,6 +550,10 @@ export type Database = {
           deleted_by?: string | null
           doc_id: string
           doc_type: string
+          kind?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_how?: string | null
           id?: string
           reply_to?: string | null
         }
@@ -558,6 +566,10 @@ export type Database = {
           deleted_by?: string | null
           doc_id?: string
           doc_type?: string
+          kind?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_how?: string | null
           id?: string
           reply_to?: string | null
         }
@@ -4114,6 +4126,9 @@ export type Database = {
           terms_payment: string | null
           terms_quality: string | null
           updated_at: string
+          urgent_reason: string | null
+          urgent_sent_at: string | null
+          urgent_sent_by: string | null
           vat_rate: number | null
           weigh_on_receipt: boolean
         }
@@ -4149,6 +4164,9 @@ export type Database = {
           terms_payment?: string | null
           terms_quality?: string | null
           updated_at?: string
+          urgent_reason?: string | null
+          urgent_sent_at?: string | null
+          urgent_sent_by?: string | null
           vat_rate?: number | null
           weigh_on_receipt?: boolean
         }
@@ -4184,6 +4202,9 @@ export type Database = {
           terms_payment?: string | null
           terms_quality?: string | null
           updated_at?: string
+          urgent_reason?: string | null
+          urgent_sent_at?: string | null
+          urgent_sent_by?: string | null
           vat_rate?: number | null
           weigh_on_receipt?: boolean
         }

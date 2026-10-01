@@ -68,7 +68,11 @@ vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
 // Vết lý do (trả lại / dời hẹn / mở lại / huỷ) → Trao đổi nội bộ, KHÔNG vào `note`
 // — ô `note` in lên phiếu gửi NCC (27/09/2026).
 vi.mock('@/modules/core/doc-notes/doc-notes.repo', () => ({
-  docNotesRepo: { create: vi.fn().mockResolvedValue({}) },
+  docNotesRepo: {
+    create: vi.fn().mockResolvedValue({}),
+    // 0218 — duyệt / trả lại / huỷ tự đóng câu hỏi của Giám đốc.
+    resolveQuestions: vi.fn().mockResolvedValue([]),
+  },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),

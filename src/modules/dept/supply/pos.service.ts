@@ -187,7 +187,7 @@ async function checkedExtraLsxIds(
  * Gọi SAU `assertAction('supply.po.manage')` — cổng "là nhân sự cung ứng" vẫn
  * đứng trước, đây là lớp "đúng người" bên trong phòng.
  */
-async function assertPoOwner(
+export async function assertPoOwner(
   user: User,
   po: { assigned_to: string | null; created_by: string | null },
 ): Promise<void> {
@@ -207,7 +207,7 @@ async function assertPoOwner(
  * director/…) ∪ admin (bypass không nằm trong role_permissions) — thay cho lọc
  * `role ∈ {admin, manager}` cũ vốn bắn cho mọi manager toàn công ty (G3).
  */
-async function approverIds(excludeUserId: string): Promise<string[]> {
+export async function approverIds(excludeUserId: string): Promise<string[]> {
   const [withPerm, users] = await Promise.all([
     rbacRepo.userIdsWithPermission('supply.po.approve'),
     usersRepo.list(),
@@ -650,6 +650,8 @@ export const posService = {
     )
     if (decision === 'reject')
       await traceReason(user, id, reasonLine('Trả lại để sửa', reason))
+    // 0218 — đơn đã được quyết: câu hỏi của Giám đốc trên nó hết đối tượng.
+    await docNotesRepo.resolveQuestions('po', id, user.id, 'decided')
     await emit({
       name: 'po.decided',
       po_id: id,
@@ -1489,6 +1491,7 @@ export const posService = {
     const po = await posRepo.patch(id, { status: 'cancelled' })
     // Trao đổi là nơi DUY NHẤT giữ lý do huỷ (không có sự kiện dòng thời gian).
     await traceReason(user, id, reasonLine('Huỷ', reason))
+    await docNotesRepo.resolveQuestions('po', id, user.id, 'closed') // 0218
     return po
   },
 
@@ -1550,7 +1553,7 @@ export const posService = {
  * chặn. Gọi ở tạo / sửa (đổi NCC) / gửi duyệt / gửi NCC: NCC có thể bị khoá
  * giữa chừng, sau khi đơn đã soạn xong (P1, 27/09/2026).
  */
-async function assertSupplierCanOrder(supplierId: string): Promise<void> {
+export async function assertSupplierCanOrder(supplierId: string): Promise<void> {
   const supplier = await suppliersRepo.findById(supplierId)
   if (!supplier) throw NotFound('NCC không tồn tại')
   const block = supplierOrderBlock(supplier)

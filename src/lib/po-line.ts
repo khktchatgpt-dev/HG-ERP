@@ -157,3 +157,27 @@ export function poMoney(input: {
     grandTotal: input.priceIncludesVat ? base : r(base + vatAmount),
   }
 }
+
+/**
+ * `poMoney` đọc thẳng từ ĐẦU ĐƠN — cho nơi đã cầm hàng `supply_purchase_orders`
+ * (hộp ký, màn duyệt của Giám đốc). Không có lối tắt này thì mỗi nơi tự ghép
+ * bốn cột, và nơi nào quên VAT là nơi đó hiện số TRƯỚC thuế như tổng chi —
+ * đúng lỗi của màn duyệt trước 01/10/2026.
+ */
+export function poMoneyOf(
+  po: {
+    currency: string
+    vat_rate: number | null
+    price_includes_vat: boolean | null
+    discount_amount: number | null
+  },
+  subtotalRaw: number,
+) {
+  return poMoney({
+    subtotalRaw,
+    discount: po.discount_amount,
+    vatRate: po.vat_rate,
+    priceIncludesVat: po.price_includes_vat,
+    currency: po.currency,
+  })
+}

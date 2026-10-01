@@ -43,6 +43,8 @@ export type Perm = {
    * chuyền phía sau mù.
    */
   noEta?: boolean
+  /** Trưởng phòng Cung ứng / admin — được gửi gấp trước khi ký (0218). */
+  lead?: boolean
 }
 
 export type ActionId =
@@ -62,6 +64,7 @@ export type ActionId =
   | 'adjust'
   | 'reassign'
   | 'open'
+  | 'urgent_send'
   /** Tab Nhận hàng của màn chứng từ — định nghĩa tại màn, không qua actionsFor. */
   | 'confirm'
   | 'transit'
@@ -249,6 +252,37 @@ const DELETE = (blocked?: string): Action => ({
   build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}`, method: 'DELETE' }],
 })
 
+/**
+ * GỬI GẤP, KÝ BÙ SAU (0218, chủ dự án chốt 01/10/2026) — đơn đi NCC trước khi
+ * có chữ ký. Đo: 56/78 đơn đã gửi không có chữ ký trên hệ thống — ngoài đời gửi
+ * trước rồi ký là chuyện thường. Mở một lối có tên, có lý do, có MỘT người đứng
+ * tên (trưởng phòng Cung ứng), thay vì để nó tiếp tục xảy ra ngoài sổ.
+ *
+ * Luật ở `lib/po-signature.canUrgentSend` — server gọi đúng hàm đó.
+ */
+const URGENT_SEND = (perm: Perm): Action => ({
+  id: 'urgent_send',
+  label: 'Gửi NCC gấp, ký bù sau',
+  ui: 'sheet',
+  stakes: 'nang',
+  // Cùng câu với server (`canUrgentSend`). Trưởng phòng thao tác được mọi đơn,
+  // nên không cần thêm hàng rào "đúng người phụ trách".
+  blocked: !perm.lead
+    ? 'Chỉ trưởng phòng Cung ứng gửi gấp được — nhờ trưởng phòng bấm, hoặc gửi Giám đốc duyệt như thường'
+    : perm.noEta
+      ? 'Chưa có hẹn giao — khai ngày dự kiến trước, không thì không ai đo được NCC trễ hay đúng'
+      : undefined,
+  needReason: true,
+  minReason: 5,
+  reasonLabel: 'Vì sao không chờ Giám đốc ký được',
+  reasonHint: 'Giám đốc đọc câu này trước khi ký bù — nói rõ việc gấp và ai đã đồng ý miệng (nếu có).', // prettier-ignore
+  consequence: 'Đơn sang ĐÃ GỬI NCC ngay mà CHƯA có chữ ký. Giám đốc thấy nó ở mục "chờ ký bù" (nhãn đỏ) và có thể không đồng ý — khi đó bạn phải điều chỉnh hoặc huỷ đơn.', // prettier-ignore
+  done: 'Đã gửi gấp — chờ Giám đốc ký bù',
+  build: ({ id, reason }) => [
+    { path: `/api/dept/supply/pos/${id}/urgent-send`, method: 'POST', body: { reason } },
+  ],
+})
+
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
   method: 'POST',
@@ -300,6 +334,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         EDIT(notOwn),
+        URGENT_SEND(perm),
         DUP,
         DELETE(notOwn),
         // Nháp: "Sửa đơn" sửa được hết — không bày thêm một nút "Sửa" thứ hai bị khoá.
@@ -374,6 +409,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         EDIT_TERMS(notOwn),
+        URGENT_SEND(perm),
         REOPEN(notReopen),
         DELETE('Đơn đã gửi duyệt — bấm "Rút về nháp" trước, rồi mới xoá được'),
         REASSIGN(canReassign),
