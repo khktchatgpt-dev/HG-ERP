@@ -122,7 +122,7 @@ export function QuickAddMaterial({
           // TRƯỜNG đang bỏ trống (0138) để Kho rà đúng chỗ thay vì cả bản ghi.
           body: {
             ...core.corePayload(),
-            min_stock: 0,
+            // KHÔNG gửi min_stock: trường của Kho — server chặn Cung ứng đặt nó, DB tự lấy 0.
             needs_review: true,
             needs_review_fields: quickReviewFields(core.f, {
               groupCfg: core.groupCfg,

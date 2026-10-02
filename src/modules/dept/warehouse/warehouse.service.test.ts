@@ -138,6 +138,56 @@ describe('materialsService.update — chia chủ quyền theo nhóm trường (v
  * CreateInput không khai nên chúng rơi ở service và DB nhận null — vật tư vừa
  * khai xong đã mang nhãn "chưa khai mẫu", chỉ lộ ra ở lần đặt sau.
  */
+/*
+ * CHIA CHỦ QUYỀN PHẢI ÁP CHO CẢ ĐƯỜNG TẠO (10/08/2026).
+ *
+ * `update` chặn từ lâu, `create` thì không — khai một mã mới rồi gán luôn tồn
+ * tối thiểu / vị trí kệ là đi vòng qua đúng cái luật đó. UI không làm vậy,
+ * nhưng endpoint thì mở.
+ */
+describe('materialsService.create — chủ quyền trường, không chỉ lúc sửa', () => {
+  beforeEach(() => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.insert).mockResolvedValue(MAT as never)
+  })
+
+  it.each([
+    ['min_stock', { min_stock: 5 }],
+    ['shelf_location', { shelf_location: 'A-02' }],
+    ['barcode', { barcode: '893456' }],
+    ['reorder_point', { reorder_point: 10 }],
+  ])('Cung ứng TẠO kèm %s → 403, không insert', async (_ten, extra) => {
+    vi.mocked(canAction).mockResolvedValue(false)
+
+    await expect(
+      materialsService.create(cungUng, { name: 'Vít 4x15', unit: 'con', ...extra }),
+    ).rejects.toBeInstanceOf(Forbidden('x').constructor)
+    expect(materialsRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('Kho TẠO kèm trường tồn trữ → vẫn được', async () => {
+    vi.mocked(canAction).mockResolvedValue(true)
+
+    await materialsService.create(kho, {
+      name: 'Vít 4x15',
+      unit: 'con',
+      min_stock: 5,
+      shelf_location: 'A-02',
+    })
+    expect(materialsRepo.insert).toHaveBeenCalled()
+  })
+
+  it('Cung ứng KHÔNG gửi trường của Kho → tạo bình thường, min_stock về 0', async () => {
+    // Form khai nhanh trong đơn đặt bỏ hẳn `min_stock: 0` — DB tự lấy default.
+    vi.mocked(canAction).mockResolvedValue(false)
+
+    await materialsService.create(cungUng, { name: 'Vít 4x15', unit: 'con' })
+    expect(vi.mocked(materialsRepo.insert).mock.calls[0][0]).toMatchObject({
+      min_stock: 0,
+    })
+  })
+})
+
 describe('materialsService.create — không được rơi trường nào xuống repo', () => {
   beforeEach(() => {
     vi.mocked(assertAction).mockResolvedValue(undefined)
@@ -149,7 +199,6 @@ describe('materialsService.create — không được rơi trường nào xuốn
       code: 'NH-999',
       name: 'La nhôm 22x2',
       unit: 'cây',
-      min_stock: 0,
       po_template: 'aluminium',
       kg_per_m: 0.119,
       default_bar_length_m: 6,
@@ -169,7 +218,6 @@ describe('materialsService.create — không được rơi trường nào xuốn
       code: 'NK-01',
       name: 'Vít 4x15',
       unit: 'con',
-      min_stock: 0,
     })
 
     const row = vi.mocked(materialsRepo.insert).mock.calls[0][0]
@@ -189,7 +237,6 @@ describe('materialsService.create — không được rơi trường nào xuốn
     await materialsService.create(cungUng, {
       name: 'Kính trắng 605x539x5mm',
       unit: 'Tấm',
-      min_stock: 0,
       needs_review: true,
     })
     expect(materialsRepo.insert).toHaveBeenCalledWith(
@@ -201,7 +248,6 @@ describe('materialsService.create — không được rơi trường nào xuốn
     await materialsService.create(cungUng, {
       name: 'Vít 5x30',
       unit: 'con',
-      min_stock: 0,
     })
     expect(materialsRepo.insert).toHaveBeenCalledWith(
       expect.objectContaining({ needs_review: false }),
@@ -216,7 +262,6 @@ describe('materialsService.create — không được rơi trường nào xuốn
         code: 'VT-01',
         name: 'Ống sắt',
         unit: 'cây',
-        min_stock: 0,
       }),
     ).rejects.toMatchObject({ status: 409 })
     expect(materialsRepo.insert).not.toHaveBeenCalled()
@@ -236,7 +281,7 @@ describe('materialsService.create — tự cấp mã theo nếp của nhóm', ()
     vi.mocked(materialsRepo.insert).mockResolvedValue(MAT as never)
   })
 
-  const NEW = { name: 'Vít 4x15 bảy màu', unit: 'con', min_stock: 0 }
+  const NEW = { name: 'Vít 4x15 bảy màu', unit: 'con' }
 
   it('bỏ trống mã → suy tiền tố từ mã ĐANG DÙNG trong nhóm, số nối tiếp', async () => {
     vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
@@ -329,7 +374,6 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
         materialsService.create(cungUng, {
           name,
           unit: 'con',
-          min_stock: 0,
           group_name: 'Ngũ kim - phụ kiện',
         }),
       ).rejects.toMatchObject({
@@ -344,7 +388,6 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
     await materialsService.create(cungUng, {
       name: 'LĐN 6x16x2 xám',
       unit: 'con',
-      min_stock: 0,
       group_name: 'Ngũ kim - phụ kiện',
     })
     expect(materialsRepo.insert).toHaveBeenCalled()
@@ -356,7 +399,6 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
     await materialsService.create(cungUng, {
       name: 'LĐN 6x16x2 đen',
       unit: 'con',
-      min_stock: 0,
       group_name: 'Nhôm',
     })
     expect(materialsRepo.namesInGroup).toHaveBeenCalledWith('Nhôm')
@@ -370,7 +412,6 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
     await materialsService.create(cungUng, {
       name: 'Ốc',
       unit: 'con',
-      min_stock: 0,
       group_name: 'Ngũ kim - phụ kiện',
     })
     expect(materialsRepo.insert).toHaveBeenCalled()
