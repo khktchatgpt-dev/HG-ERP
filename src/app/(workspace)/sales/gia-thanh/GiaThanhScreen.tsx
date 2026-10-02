@@ -440,26 +440,26 @@ export function GiaThanhScreen({
                 <Th width={112}>Mã khách</Th>
                 <Th>Tên SP</Th>
                 <Th width={76}>Khách</Th>
-                <Th num width={88}>
+                <Th num width={80}>
                   Trực tiếp
                 </Th>
-                <Th num width={88}>
+                <Th num width={80}>
                   Chi phí chung
                 </Th>
                 <Th num width={52}>
                   a%
                 </Th>
-                <Th num width={88}>
+                <Th num width={80}>
                   Lợi nhuận
                 </Th>
                 <Th num width={52}>
                   b%
                 </Th>
-                <Th num width={88}>
+                <Th num width={80}>
                   Giá FOB
                 </Th>
                 <Th width={40}>TT</Th>
-                <Th width={160}>Nguồn · ngày</Th>
+                <Th width={140}>Nguồn · ngày</Th>
                 <Th width={140}>Trạng thái</Th>
               </GridHead>
               <GridBody>
@@ -484,7 +484,7 @@ export function GiaThanhScreen({
                       // đọc dấu chấm thì người gõ lại đúng chữ đó sẽ ra 288.
                       placeholder={saved == null ? '' : fmtIn(saved, sep)}
                       disabled={!canManage || busy}
-                      style={{ width: 88 }}
+                      style={{ width: 76 }}
                       onCommit={(v) => setCell(r.product_id, k, v)}
                     />
                   )
@@ -493,18 +493,38 @@ export function GiaThanhScreen({
                       <Td>
                         <span className="num">{r.code}</span>
                       </Td>
+                      {/*
+                        Ô chữ dài CẮT tại chỗ (bẫy 7 của sổ: một dòng cá biệt
+                        định đoạt bề rộng cả bảng — đo 02/10: tên SP 592px, mã
+                        khách 204px đẩy bảng lên 1796px ở màn 1280). Chữ đầy đủ
+                        nằm ở `title`.
+                      */}
                       <Td>
-                        <span className="num">{r.customer_item_code ?? '—'}</span>
-                      </Td>
-                      <Td>
-                        <span title={r.name}>{r.name}</span>{' '}
-                        <span className="text-k-label ml-1 text-[var(--ink-3)]">
-                          {r.lsx_count > 0 ? `${r.lsx_count} lệnh` : ''}
-                          {r.lsx_count > 0 && r.order_count > 0 ? ' · ' : ''}
-                          {r.order_count > 0 ? `${r.order_count} đơn` : ''}
+                        <span
+                          className="num block max-w-[96px] truncate"
+                          title={r.customer_item_code ?? undefined}
+                        >
+                          {r.customer_item_code ?? '—'}
                         </span>
                       </Td>
-                      <Td>{r.customer_name ?? '—'}</Td>
+                      <Td>
+                        <span className="block max-w-[220px] truncate" title={r.name}>
+                          {r.name}
+                          <span className="text-k-label ml-1 text-[var(--ink-3)]">
+                            {r.lsx_count > 0 ? `${r.lsx_count} lệnh` : ''}
+                            {r.lsx_count > 0 && r.order_count > 0 ? ' · ' : ''}
+                            {r.order_count > 0 ? `${r.order_count} đơn` : ''}
+                          </span>
+                        </span>
+                      </Td>
+                      <Td>
+                        <span
+                          className="block max-w-[76px] truncate"
+                          title={r.customer_name ?? undefined}
+                        >
+                          {r.customer_name ?? '—'}
+                        </span>
+                      </Td>
                       <Td num>{cell('direct', r.direct)}</Td>
                       <Td num>{cell('overhead', r.overhead)}</Td>
                       <Td num>
