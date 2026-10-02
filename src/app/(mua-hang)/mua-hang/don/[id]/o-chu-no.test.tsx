@@ -9,7 +9,9 @@ afterEach(cleanup)
 const setup = (value = 'Ghế 3 · Giằng chân sau') => {
   const onCommit = vi.fn()
   render(<OChuNo label="Ghi chú dòng 1" value={value} onCommit={onCommit} />)
-  const box = screen.getByRole('textbox', { name: 'Ghi chú dòng 1' }) as HTMLTextAreaElement
+  const box = screen.getByRole('textbox', {
+    name: 'Ghi chú dòng 1',
+  }) as HTMLTextAreaElement
   return { onCommit, box }
 }
 
@@ -54,5 +56,38 @@ describe('OChuNo', () => {
     expect(box.value).toBe('cũ')
     fireEvent.blur(box)
     expect(onCommit).not.toHaveBeenCalledWith('nháp bỏ')
+  })
+})
+
+describe('OChuNo — ô trống chỉ vẽ chữ gợi ý MỘT lần (vá 02/10/2026)', () => {
+  it('nằm yên: textarea không mang chữ gợi ý, chỉ lớp trên hiện', () => {
+    render(
+      <OChuNo
+        label="Loại gỗ"
+        value=""
+        placeholder="Acacia FSC 100%"
+        onCommit={vi.fn()}
+      />,
+    )
+    const box = screen.getByRole('textbox', { name: 'Loại gỗ' })
+    // Không chữa bằng lớp màu được: `.theme-v3 ::placeholder` ngoài layer thắng lớp tiện ích.
+    expect(box.getAttribute('placeholder')).toBeNull()
+    // Lớp trên là nơi DUY NHẤT hiện chữ gợi ý.
+    expect(screen.getAllByText('Acacia FSC 100%')).toHaveLength(1)
+  })
+
+  it('vào ô: lớp trên biến mất, chữ gợi ý của textarea hiện lại', () => {
+    render(
+      <OChuNo
+        label="Loại gỗ"
+        value=""
+        placeholder="Acacia FSC 100%"
+        onCommit={vi.fn()}
+      />,
+    )
+    const box = screen.getByRole('textbox', { name: 'Loại gỗ' })
+    fireEvent.focus(box)
+    expect(box.getAttribute('placeholder')).toBe('Acacia FSC 100%')
+    expect(screen.queryByText('Acacia FSC 100%')).toBeNull()
   })
 })

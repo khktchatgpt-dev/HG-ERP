@@ -380,6 +380,29 @@ export type PoLineDraft = {
    * 'unit' như cũ.
    */
   price_per?: 'unit' | 'unit2' | null
+  /**
+   * TỔNG GÕ TAY (02/10/2026 — user chốt "cho ghi đè tổng thật"). Có số thì
+   * thay cho tổng kg / m³ / m² dẫn xuất từ thông số: NCC ghi tổng LÀM TRÒN trên
+   * tờ (300 kg, không phải 300,16 = 0,385 × 5,53 × 141) và tiền phải theo đúng
+   * số trên tờ. Chỉ có tác dụng ở mẫu có cột tổng (`QTY2_OVERRIDE_UNIT`);
+   * trống / 0 = tự tính như cũ. Cơ sở tính tiền (theo cây hay theo kg, theo
+   * tấm hay theo m²) vẫn theo luật của mẫu — ghi đè chỉ thay CON SỐ tổng.
+   */
+  qty2_override?: number | null
+}
+
+/** Mẫu có cột tổng gõ đè được → đơn vị của tổng đó. */
+export const QTY2_OVERRIDE_UNIT: Partial<Record<PoTemplate, string>> = {
+  aluminium: 'kg',
+  metal_kg: 'kg',
+  wood: 'm³',
+  foam: 'm³',
+  glass: 'm²',
+}
+
+/** Dòng này có đang dùng tổng gõ tay không (đúng mẫu + số dương). */
+export function hasQty2Override(t: PoTemplate, l: PoLineDraft): boolean {
+  return QTY2_OVERRIDE_UNIT[t] != null && Number(l.qty2_override) > 0
 }
 
 export type PoLineDerived = {
@@ -412,12 +435,29 @@ function round6(n: number): number {
  * ngay, hơn là im lặng ra thành tiền 0 rồi lọt qua duyệt.
  */
 export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
-  const d = deriveByTemplate(t, l)
+  const d = withOverride(t, l, deriveByTemplate(t, l))
   // Người dùng chọn đơn vị tính giá thì theo họ — nhưng chỉ cho chọn 'unit2'
   // khi dòng thật sự có số quy đổi, không thì tiền thành 0 mà không ai hiểu vì sao.
   if (l.price_per === 'unit') return { ...d, price_basis: 'unit' }
   if (l.price_per === 'unit2' && d.qty2 != null) return { ...d, price_basis: 'unit2' }
   return d
+}
+
+/**
+ * Áp tổng gõ tay lên kết quả dẫn xuất. Cơ sở tính tiền theo đúng luật của mẫu:
+ * nhôm / inox / gỗ luôn theo tổng; kính, xốp chỉ theo tổng khi dòng chọn giá
+ * theo m² / m³ (chọn theo tấm thì tổng chỉ để in, tiền vẫn SL × giá).
+ */
+function withOverride(t: PoTemplate, l: PoLineDraft, d: PoLineDerived): PoLineDerived {
+  if (!hasQty2Override(t, l)) return d
+  const v = Number(l.qty2_override)
+  const byTotal =
+    t === 'glass' ? l.carton_basis === 'm2' : t === 'foam' ? l.carton_basis === 'm3' : true
+  return {
+    qty2: t === 'wood' || t === 'foam' ? round6(v) : round4(v),
+    unit2: QTY2_OVERRIDE_UNIT[t]!,
+    price_basis: byTotal ? 'unit2' : 'unit',
+  }
 }
 
 function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {

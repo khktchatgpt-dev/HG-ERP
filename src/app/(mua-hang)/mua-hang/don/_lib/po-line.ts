@@ -1,5 +1,11 @@
 import { poLineAmount } from '@/lib/po-line'
-import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
+import {
+  cartonAreaM2,
+  deriveLine,
+  hasQty2Override,
+  QTY2_OVERRIDE_UNIT,
+  type PoTemplate,
+} from '@/lib/po-template'
 import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
 import { parseInnerDims } from '@/lib/dims'
 import {
@@ -118,6 +124,13 @@ export type Line = {
    */
   qty2_saved?: number | null
   /**
+   * TỔNG GÕ TAY (02/10/2026) — kg / m³ / m² người dùng gõ đè lên cột tổng, theo
+   * số NCC ghi trên tờ. '' (hoặc thiếu key, nháp cũ) = tự tính. Gửi lên server
+   * dưới tên `qty2_override`; `deriveLine` áp ở cả hai đầu. Khác `qty2_saved`:
+   * số này là Ý NGƯỜI DÙNG, sửa ô khác của dòng KHÔNG xoá nó.
+   */
+  qty2_manual?: Num
+  /**
    * CHIA SL CỦA DÒNG cho các lệnh của đơn (0185) — lệnh id → SL, để dạng chuỗi
    * cho ô nhập gõ dở được. Rỗng hoặc dồn vào một lệnh = 100% thuộc lệnh chính,
    * không gửi gì lên server.
@@ -154,8 +167,14 @@ export function draftOf(l: Line) {
     unit2_per_unit: n(l.unit2_per_unit),
     unit2_label: l.unit2_label || null,
     price_per: l.price_per || null,
+    qty2_override: n(l.qty2_manual ?? ''),
     lsx_split: splitPayload(l),
   }
+}
+
+/** Tổng TỰ TÍNH của dòng, bỏ qua tổng gõ tay — để bày "tự tính: …" cạnh số gõ đè. */
+export function lineQty2Auto(t: PoTemplate, l: Line): number | null {
+  return deriveLine(t, { ...draftOf(l), qty2_override: null }).qty2
 }
 
 /** Tổng kg / tổng m² của dòng — cột tính sẵn, hiện read-only trên bảng. */
@@ -190,6 +209,8 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
   if (l.is_free && !l.name.trim()) return 'thiếu tên hàng'
   if (l.qty === '' || Number(l.qty) <= 0) return 'thiếu SL đặt'
   if (l.price === '') return 'thiếu đơn giá'
+  // Tổng gõ tay (02/10/2026) đã là số tính tiền — không đòi thông số để dẫn xuất nó nữa.
+  if (hasQty2Override(t, draftOf(l))) return null
   if (t === 'aluminium' && !(Number(l.weight_per_m) > 0)) return 'thiếu kg/m'
   if (t === 'aluminium' && !(Number(l.bar_length_m) > 0)) return 'thiếu dài cây'
   if (t === 'metal_kg' && !(Number(l.weight_per_unit) > 0)) return 'thiếu kg/đơn vị'
@@ -576,7 +597,27 @@ export function lineFromPo(
   onHand: number | null = null,
   /** Đơn đã phát hành: giữ tổng kg/m² đã chốt (`qty2_saved`), không dẫn xuất lại. */
   keepQty2 = false,
+  /** Mẫu của đơn — có thì nhận ra dòng đã lưu bằng TỔNG GÕ TAY (`qty2_manual`). */
+  template?: PoTemplate,
 ): Line {
+  const line = lineFromPoRaw(l, onHand, keepQty2)
+  return template ? { ...line, qty2_manual: manualQty2Of(template, l, line) } : line
+}
+
+/**
+ * DB không có cờ "tổng gõ tay": server luôn ghi `qty2` = kết quả `deriveLine`,
+ * nên tổng đã lưu LỆCH tổng tự tính từ chính thông số của dòng nghĩa là người
+ * dùng đã gõ đè. Ngưỡng 1e-4: tổng m³ đời trước làm tròn 4 lẻ (nay 6 lẻ) lệch
+ * dưới mức đó — không được coi là gõ tay.
+ */
+function manualQty2Of(t: PoTemplate, dto: PoLineDto, l: Line): Num {
+  if (!QTY2_OVERRIDE_UNIT[t] || dto.qty2 == null) return ''
+  const auto = lineQty2Auto(t, l)
+  if (auto != null && Math.abs(Number(dto.qty2) - auto) <= 1e-4) return ''
+  return Number(dto.qty2)
+}
+
+function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): Line {
   // Dòng tự do (0134): material_id null trong DB — khóa cục bộ dựng từ id dòng
   // (mở SỬA/NHÂN BẢN không đổi khóa giữa hai lần render).
   const isFree = l.material_id == null
@@ -657,7 +698,7 @@ export function remapLinesForTemplate(
   const fields = Object.keys(PO_SHARED_FIELD_MEANING) as (keyof Line & string)[]
   return lines.map((l) => {
     // Đổi mẫu là đổi cách tính — tổng kg đã chốt không còn đúng nghĩa.
-    const next = { ...l, qty2_saved: null }
+    const next = { ...l, qty2_saved: null, qty2_manual: '' as Num }
     for (const f of fields) {
       const before = PO_SHARED_FIELD_MEANING[f]?.[from]
       const after = PO_SHARED_FIELD_MEANING[f]?.[to]

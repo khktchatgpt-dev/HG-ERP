@@ -100,6 +100,12 @@ export const poLineInputSchema = z.object({
    */
   price_per: z.enum(['unit', 'unit2']).nullish(),
   /*
+   * TỔNG GÕ TAY (02/10/2026): thay tổng kg / m³ / m² dẫn xuất bằng số trên tờ
+   * NCC. Service vẫn chạy `deriveLine` — hàm đó áp số này, chỉ cho mẫu có cột
+   * tổng; mẫu khác bỏ qua. Không phải cột DB: kết quả nằm ở `qty2`.
+   */
+  qty2_override: optNum(1e9),
+  /*
    * CHIA SL CỦA DÒNG cho nhiều lệnh (0185). Rỗng = 100% thuộc LSX chính của
    * đơn — mọi đơn một-lệnh không gửi gì thêm. Service kiểm tổng phần chia phải
    * bằng qty_ordered (xem lib/po-lsx-split), DB không ràng buộc vì người soạn

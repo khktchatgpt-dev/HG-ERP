@@ -3,11 +3,12 @@
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import {
   lineQty2,
+  lineQty2Auto,
   type Line,
   type Num,
   type PoLineDto,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
-import { NumInput, Pick, TextInput, type IcoName } from '@/components/kit'
+import { CellHint, NumInput, Pick, TextInput, type IcoName } from '@/components/kit'
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import type { DocTemplate } from '@/lib/doc-templates'
 import { type AdjChange } from '@/lib/po-adjust'
@@ -378,11 +379,28 @@ export function EditCell({
 }) {
   switch (f.kind) {
     case 'calc': {
-      const v = lineQty2(template, l)
+      /*
+        TỔNG GÕ ĐÈ ĐƯỢC (02/10/2026 — user chốt "cho ghi đè tổng thật"). Ô trống =
+        tự tính (số tự tính hiện làm placeholder); gõ số = theo đúng số trên tờ
+        NCC, tiền tính theo số này. Xoá trắng ô là về tự tính.
+      */
+      const manual = l.qty2_manual ?? ''
+      const auto = lineQty2Auto(template, l)
+      const shown = manual === '' ? lineQty2(template, l) : null
       return (
-        <span className="num text-[var(--ink-3)]">
-          {v == null ? '—' : v.toLocaleString('vi-VN')}
-        </span>
+        <>
+          <NumInput
+            aria-label={f.label}
+            value={numStr(manual)}
+            onCommit={(v) => onPatch({ qty2_manual: toNum(v) })}
+            placeholder={shown == null ? '—' : shown.toLocaleString('vi-VN')}
+          />
+          {manual !== '' && (
+            <CellHint title="Tổng gõ tay — bấm để về số tự tính" onClick={() => onPatch({ qty2_manual: '' })}>
+              tự tính {auto == null ? '—' : auto.toLocaleString('vi-VN')} ↩
+            </CellHint>
+          )}
+        </>
       )
     }
     case 'number':

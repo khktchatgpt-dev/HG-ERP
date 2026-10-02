@@ -89,7 +89,11 @@ export function OChuNo({
         rows={1}
         aria-label={label}
         value={shown}
-        placeholder={placeholder}
+        // Chữ gợi ý CHỈ gắn lúc đang gõ (vá 02/10/2026). Nằm yên thì lớp trên đã vẽ nó;
+        // để cả hai thì ô trống hiện hai lớp "Acacia FSC 100%" lệch nhau. Không chữa bằng
+        // lớp `placeholder:text-transparent` được: `.theme-v3 ::placeholder` ở globals.css
+        // nằm NGOÀI layer nên thắng mọi lớp tiện ích Tailwind.
+        placeholder={open ? placeholder : undefined}
         maxLength={maxLength}
         spellCheck={false}
         onFocus={place}
@@ -109,11 +113,11 @@ export function OChuNo({
         style={open ? { left: box.left, top: box.top, width: box.width } : undefined}
         className={cn(
           'text-k-sm block resize-none rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface-card)] px-2 py-[5px] leading-4',
-          'placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)]',
+          'hover:border-[var(--ink-3)] focus:border-[var(--act)]',
           mono && 'font-[family-name:var(--font-mono)]',
           open
             ? // Nổi: xuống dòng, cao theo chữ (tối đa 8 dòng rồi cuộn), đổ bóng tách khỏi lưới.
-              'fixed z-50 max-h-[calc(8lh+12px)] min-h-[var(--ctl-h)] overflow-y-auto whitespace-pre-wrap shadow-[0_8px_24px_rgb(15_23_42/0.18)] [field-sizing:content]'
+              'fixed z-50 [field-sizing:content] max-h-[calc(8lh+12px)] min-h-[var(--ctl-h)] overflow-y-auto whitespace-pre-wrap shadow-[0_8px_24px_rgb(15_23_42/0.18)] placeholder:text-[var(--ink-3)]'
             : // Nằm yên: chữ thật trong suốt, lớp trên cắt "…" (textarea không tự có ellipsis).
               'h-full w-full overflow-hidden whitespace-nowrap text-transparent',
         )}
