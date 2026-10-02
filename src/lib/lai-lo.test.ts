@@ -231,6 +231,21 @@ describe('laiLoBoard — SP chỉ có giá FOB (khách đưa bảng giá chốt,
     // Cả hai đều có FOB → câu nói đúng là 'chỉ có FOB', không phải 'chưa có gì'.
     expect(r.missing.find((m) => m.kind === 'plan')?.short).toBe('1/2 SP chỉ có FOB')
   })
+
+  it('một SP chưa có gì + một SP chỉ FOB → nói cả hai, không giấu tiến độ (ca IBIZA)', () => {
+    const r = laiLoBoard({
+      lsx: [LSX],
+      lsxLines: lines,
+      plans: [priceOnly('a', 80)],
+      orders: [],
+      orderLines: [],
+      pos: [],
+    }).rows[0]
+    expect(r.planned_products).toBe(1)
+    expect(r.missing.find((m) => m.kind === 'plan')?.short).toBe(
+      '1/2 SP chưa giá · 1 chỉ FOB',
+    )
+  })
 })
 
 describe('laiLoBoard — sắp xếp và tổng', () => {

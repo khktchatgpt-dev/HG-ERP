@@ -340,14 +340,20 @@ function rowOf(
     const none = product_count - planned_products
     missing.push({
       kind: 'plan',
+      // Ba tình huống, nói đúng tình huống: tất cả chỉ FOB · chưa có gì · lẫn lộn
+      // (IBIZA 02/10/2026: 5/6 SP có FOB, 1 chưa — "6/6 chưa giá thành" đúng mà giấu mất tiến độ).
       text:
         none === 0
           ? `${priceOnly}/${product_count} SP chỉ có giá FOB, chưa có bảng tính giá thành`
-          : `${product_count - costed_products}/${product_count} SP chưa có giá thành kế hoạch`,
+          : priceOnly === 0
+            ? `${none}/${product_count} SP chưa có giá thành kế hoạch`
+            : `${none}/${product_count} SP chưa có giá FOB, ${priceOnly} SP chỉ có FOB — chưa SP nào có bảng tính giá thành`,
       short:
         none === 0
           ? `${priceOnly}/${product_count} SP chỉ có FOB`
-          : `${product_count - costed_products}/${product_count} SP chưa giá thành`,
+          : priceOnly === 0
+            ? `${none}/${product_count} SP chưa giá thành`
+            : `${none}/${product_count} SP chưa giá · ${priceOnly} chỉ FOB`,
       who: 'Bán hàng dán từ bản báo giá',
       href: HREF.plan,
     })
