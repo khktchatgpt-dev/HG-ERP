@@ -76,6 +76,31 @@ type ProductRaw = {
 const num = (v: unknown) => (v == null ? null : Number(v))
 
 export const planCostService = {
+  /**
+   * Giá FOB kế hoạch của một lô SP — cho Bảng giá đơn hàng mồi đơn giá (bước 3).
+   * KHÔNG gác quyền ở đây: chỗ gọi (orders.service) đã kiểm
+   * `technical.plan_cost.view` trước khi hỏi, vì đây là số riêng của Bán hàng.
+   */
+  async pricesFor(
+    productIds: string[],
+  ): Promise<Map<string, { price: number; currency: string }>> {
+    const ids = [...new Set(productIds)]
+    if (ids.length === 0) return new Map()
+    const { data, error } = await db()
+      .from('technical_products')
+      .select('id, plan_price, plan_currency')
+      .in('id', ids)
+      .not('plan_price', 'is', null)
+    if (error) throw new Error(error.message)
+    type R = { id: string; plan_price: unknown; plan_currency: string | null }
+    return new Map(
+      ((data ?? []) as R[]).map((r) => [
+        r.id,
+        { price: Number(r.plan_price), currency: r.plan_currency ?? 'USD' },
+      ]),
+    )
+  },
+
   async board(user: User): Promise<PlanCostBoard> {
     // Số riêng của Bán hàng — KHÔNG phải quyền xem SP (02/10/2026).
     await assertAction(user, 'technical.plan_cost.view')
