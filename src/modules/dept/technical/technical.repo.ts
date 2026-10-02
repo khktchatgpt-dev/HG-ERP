@@ -63,6 +63,12 @@ export type Product = {
   barcode: string | null
   showroom_sample: boolean
   reference_price: number | null
+  /*
+   * CỐ Ý KHÔNG có plan_* (giá thành kế hoạch, 0220) ở đây: đó là số riêng của
+   * Bán hàng, hồ sơ SP dùng chung cho mọi phòng không được mang nó ra (chủ dự án
+   * 02/10/2026). Chỉ `plan-cost.service` đọc các cột đó, sau quyền
+   * `technical.plan_cost.view`.
+   */
   tech_spec: ProductTechSpec
   // Thông tin XK + đặc tính nội thất (0037).
   hs_code: string | null

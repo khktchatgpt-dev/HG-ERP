@@ -12,6 +12,7 @@ import { suppliersRepo, supplyRepo } from './supply.repo'
 import { cancelBlock, supplierOrderBlock } from '@/lib/po-guards'
 import { poTrackingRepo } from './po-tracking.repo'
 import { todayVn } from '@/lib/date-vn'
+import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -636,6 +637,15 @@ export const posService = {
     if (before.status !== 'pending_approval') {
       throw BadRequest('Chỉ duyệt được đơn đang chờ duyệt')
     }
+    /*
+     * TỶ GIÁ CHỐT LÚC DUYỆT (0219): đơn ngoại tệ lấy dòng tỷ giá mới nhất ≤ hôm
+     * nay và ghi cứng lên đơn. Bảng chưa có dòng nào thì vẫn duyệt — cột để
+     * null, màn Tỷ giá của Kế toán bày đơn này ở "thiếu tỷ giá" + nút gán lại.
+     * Chặn duyệt vì Kế toán chưa nhập tỷ giá là bắt Cung ứng chờ một việc
+     * không phải của họ.
+     */
+    const fxDate = todayVn()
+    const fxRate = decision === 'approve' ? await fxRatesRepo.rateAt(before.currency, fxDate) : null // prettier-ignore
     const po = await posRepo.patch(
       id,
       decision === 'approve'
@@ -643,6 +653,8 @@ export const posService = {
             status: 'approved',
             approved_by: user.id,
             approved_at: new Date().toISOString(),
+            fx_rate: fxRate,
+            fx_date: fxRate == null ? null : fxDate,
           }
         : // KHÔNG đụng `note`: ô đó in lên phiếu gửi NCC. Lý do trả lại vào
           // Trao đổi nội bộ (traceReason) — ghi chú người soạn giữ nguyên.
@@ -1228,6 +1240,9 @@ export const posService = {
       status: 'draft',
       approved_by: null,
       approved_at: null,
+      // Tỷ giá đi cùng lượt duyệt (0219): duyệt lại là chốt lại theo ngày mới.
+      fx_rate: null,
+      fx_date: null,
       ordered_at: null,
       confirmed_at: null,
       /*

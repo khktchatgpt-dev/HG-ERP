@@ -94,4 +94,76 @@ export function realizedFxDiff(
   return round2(amount * (paidRate - bookedRate))
 }
 
+/**
+ * NGƯỠNG CẢNH BÁO khi nhập tỷ giá: lệch quá chừng này so với dòng gần nhất cùng
+ * ngoại tệ thì màn hỏi lại ("thường là thiếu một số 0"), nhưng KHÔNG chặn —
+ * Kế toán có thể đúng mà hệ thống sai (đổi loại tỷ giá). Chốt 02/10/2026.
+ */
+export const FX_WARN_PCT = 3
+
+/**
+ * Độ lệch % của tỷ giá mới so với tỷ giá trước: dương = cao hơn. `null` khi
+ * chưa có dòng trước (dòng đầu tiên của ngoại tệ không có gì để so).
+ */
+export function fxDeviationPct(rate: number, prev: number | null): number | null {
+  if (prev == null || !(prev > 0) || !(rate > 0)) return null
+  return Math.round(((rate - prev) / prev) * 1000) / 10
+}
+
+/** Một chứng từ ngoại tệ đang THIẾU tỷ giá — đầu vào của phép gán. */
+export type FxAssignDoc = {
+  id: string
+  kind: 'po' | 'so'
+  code: string
+  currency: string
+  /** Ngày chốt của chứng từ: đơn mua = ngày duyệt, đơn bán = ngày xác nhận. */
+  fx_date: string
+  /** Tiền gốc theo ngoại tệ — để màn bày "quy VND sẽ ra bao nhiêu". */
+  amount: number
+}
+
+export type FxAssignPlan = FxAssignDoc & {
+  /** Tỷ giá sẽ gán. `null` = KHÔNG có dòng tỷ giá nào ≤ ngày chốt → không gán. */
+  rate: number | null
+  /** Ngày của dòng tỷ giá được chọn — để người đọc kiểm "lấy dòng nào". */
+  rate_date: string | null
+  base: number | null
+}
+
+/**
+ * GÁN TỶ GIÁ CHO CHỨNG TỪ THIẾU — thuần, không ghi gì.
+ *
+ * Mỗi chứng từ lấy dòng tỷ giá MỚI NHẤT có `rate_date <= fx_date` (cùng luật
+ * `rateFor`, không lấy tỷ giá tương lai). Không có dòng nào thì `rate: null` và
+ * chứng từ đứng yên: màn phải nói "thêm dòng ≤ ngày đó rồi gán lại", không được
+ * lấy dòng gần nhất SAU ngày cho xong — đó là ghi sổ bằng thông tin tương lai.
+ */
+export function planFxAssign(docs: FxAssignDoc[], rates: FxRate[]): FxAssignPlan[] {
+  return docs.map((d) => {
+    const row = rateRowFor(rates, d.currency, d.fx_date)
+    return {
+      ...d,
+      rate: row?.rate ?? null,
+      rate_date: row?.rate_date ?? null,
+      base: row ? toBase(d.amount, d.currency, row.rate) : null,
+    }
+  })
+}
+
+/** Như `rateFor` nhưng trả cả DÒNG, để biết đã dùng tỷ giá ngày nào. */
+export function rateRowFor(
+  rates: FxRate[],
+  currency: string,
+  date: string,
+): FxRate | null {
+  if (currency === BASE_CURRENCY) return null
+  let best: FxRate | null = null
+  for (const r of rates) {
+    if (r.currency !== currency) continue
+    if (r.rate_date > date) continue
+    if (!best || r.rate_date > best.rate_date) best = r
+  }
+  return best
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100

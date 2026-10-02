@@ -229,6 +229,11 @@ export const SECTIONS: Record<string, SectionSpec> = {
       { name: 'unit', label: 'ĐVT bán', kind: 'select', required: true },
       { name: 'barcode', label: 'Barcode', mono: true, maxLength: 50 },
       { name: 'reference_price', label: 'Giá tham khảo', kind: 'number', step: '0.01' },
+      /*
+       * KHÔNG có giá thành kế hoạch (plan_*, 0220) ở hồ sơ dùng chung — số riêng
+       * của Bán hàng, lộ ra là lộ bí mật công ty (chủ dự án 02/10/2026). Nạp và
+       * xem ở /sales/gia-thanh, sau quyền `technical.plan_cost.view`.
+       */
       {
         name: 'bom_status',
         label: 'Trạng thái BOM',

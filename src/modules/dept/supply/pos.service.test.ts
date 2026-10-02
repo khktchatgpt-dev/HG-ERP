@@ -65,6 +65,10 @@ vi.mock('@/modules/core/users/users.repo', () => ({
 }))
 // on: pos.service nay import '@/events/register' → registerEventHandlers gọi on().
 vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
+// Tỷ giá chốt lúc duyệt (0219): mặc định bảng CHƯA có dòng → null, duyệt vẫn đi.
+vi.mock('@/modules/dept/accounting/fx-rates.repo', () => ({
+  fxRatesRepo: { rateAt: vi.fn(async () => null) },
+}))
 // Vết lý do (trả lại / dời hẹn / mở lại / huỷ) → Trao đổi nội bộ, KHÔNG vào `note`
 // — ô `note` in lên phiếu gửi NCC (27/09/2026).
 vi.mock('@/modules/core/doc-notes/doc-notes.repo', () => ({
@@ -86,6 +90,7 @@ import { suppliersRepo, supplyRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
@@ -352,8 +357,24 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
     const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
     expect(patch.status).toBe('approved')
     expect(patch.approved_by).toBe('u-boss')
+    // Bảng tỷ giá chưa có dòng → KHÔNG chặn duyệt, cột để null (0219).
+    expect(patch.fx_rate).toBeNull()
+    expect(patch.fx_date).toBeNull()
     const evt = vi.mocked(emit).mock.calls[0][0] as { name: string }
     expect(evt.name).toBe('po.decided')
+  })
+
+  it('approve: có tỷ giá ≤ hôm nay → ghi cứng fx_rate + fx_date lên đơn (0219)', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, currency: 'USD' } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'approved' } as never)
+    vi.mocked(fxRatesRepo.rateAt).mockResolvedValueOnce(25_600)
+
+    await posService.decide(boss, 'po1', 'approve')
+
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.fx_rate).toBe(25_600)
+    expect(patch.fx_date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(vi.mocked(fxRatesRepo.rateAt).mock.calls[0][0]).toBe('USD')
   })
 
   it('reject → VỀ NHÁP, lý do vào Trao đổi nội bộ — KHÔNG vào note in phiếu', async () => {

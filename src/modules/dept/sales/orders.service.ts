@@ -6,7 +6,8 @@ import {
 } from './orders.repo'
 import { quotesService } from './quotes.service'
 import type { OrderBulkPriceInput } from './orders.schema'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { planCostService } from '@/modules/dept/technical/plan-cost.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
@@ -19,6 +20,8 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canMutateOwned } from '@/lib/record-ownership'
+import { todayVn } from '@/lib/date-vn'
+import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
 const EDITABLE_FIELDS = [
@@ -65,6 +68,14 @@ export type PricingLine = {
   product_unit: string
   qty: number
   unit_price: number
+  /**
+   * Giá FOB KẾ HOẠCH của SP (0220) để mồi vào ô đơn giá khi Sale chưa điền —
+   * null khi SP chưa có số, hoặc người xem không có `technical.plan_cost.view`
+   * (số riêng của Bán hàng). Kèm tiền tệ của bản báo giá: khác tiền tệ đơn thì
+   * KHÔNG mồi, bày để người xem tự quy.
+   */
+  plan_price: number | null
+  plan_currency: string | null
   /** false = đơn của người khác → UI khoá dòng (xem canMutateOwned). */
   editable: boolean
 }
@@ -78,6 +89,8 @@ export type PricingBoard = {
     unpriced_mine: number
     orders_total: number
     orders_unpriced: number
+    /** Dòng thiếu giá mà SP đã có FOB kế hoạch cùng tiền tệ và người này sửa được — mồi được. */
+    plan_fillable: number
   }
 }
 
@@ -221,6 +234,14 @@ export const ordersService = {
       }
     }
 
+    /*
+     * TỶ GIÁ CHỐT LÚC XÁC NHẬN ĐƠN (0219): đơn bán sinh ra đã là `confirmed`,
+     * nên chốt ngay lúc tạo. Bảng chưa có dòng ≤ hôm nay thì để null — màn Tỷ
+     * giá của Kế toán bày đơn này ở "thiếu tỷ giá" và gán lại sau.
+     */
+    const fxDate = todayVn()
+    const fxRate = await fxRatesRepo.rateAt(source.currency, fxDate)
+
     return ordersRepo.insert(
       {
         code: input.code,
@@ -228,6 +249,8 @@ export const ordersService = {
         customer_id: source.customer_id,
         customer_po_no: input.customer_po_no ?? null,
         currency: source.currency,
+        fx_rate: fxRate,
+        fx_date: fxRate == null ? null : fxDate,
         due_date: input.due_date ?? null,
         deposit_percent: input.deposit_percent ?? null,
         price_term: source.price_term,
@@ -364,12 +387,22 @@ export const ordersService = {
     )
     const lines = await ordersRepo.listLinesByOrders(editableOrders.map((o) => o.id))
     const byOrder = new Map(editableOrders.map((o) => [o.id, o]))
+    /*
+     * Giá FOB kế hoạch (0220) — số riêng của Bán hàng, chỉ lấy khi người xem có
+     * quyền; không có thì mọi dòng `plan_price = null`, màn không bày cột.
+     */
+    const plans = (await canAction(user, 'technical.plan_cost.view'))
+      ? await planCostService.pricesFor(lines.map((l) => l.product_id))
+      : new Map<string, { price: number; currency: string }>()
 
     const rows: PricingLine[] = []
     for (const l of lines) {
       const o = byOrder.get(l.order_id)
       if (!o) continue
+      const plan = plans.get(l.product_id)
       rows.push({
+        plan_price: plan?.price ?? null,
+        plan_currency: plan?.currency ?? null,
         line_id: l.id,
         order_id: o.id,
         order_code: o.code,
@@ -401,6 +434,9 @@ export const ordersService = {
         unpriced_mine: unpriced.filter((r) => r.editable).length,
         orders_total: editableOrders.length,
         orders_unpriced: new Set(unpriced.map((r) => r.order_id)).size,
+        plan_fillable: unpriced.filter(
+          (r) => r.editable && r.plan_price != null && r.plan_currency === r.currency,
+        ).length,
       },
     }
   },
