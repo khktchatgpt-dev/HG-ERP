@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { canCanKg, kgDuKien, lechKg } from './can-kg'
 
 describe('canCanKg', () => {
-  it('mẫu nhôm và thép theo kg luôn phải cân', () => {
-    expect(canCanKg('aluminium', {})).toBe(true)
-    expect(canCanKg('metal_kg', { price_basis: 'unit' })).toBe(true)
+  it('mẫu nhôm / thép KHÔNG tự bật ô kg — đơn trả tiền theo cây nhận đủ cây là xong (02/10)', () => {
+    expect(canCanKg('aluminium', {})).toBe(false)
+    expect(canCanKg('metal_kg', { price_basis: 'unit' })).toBe(false)
+    expect(canCanKg('metal_kg', { price_basis: 'unit2', unit2: 'kg' })).toBe(true)
   })
 
   it('mẫu khác: chỉ khi dòng tính giá theo kg', () => {

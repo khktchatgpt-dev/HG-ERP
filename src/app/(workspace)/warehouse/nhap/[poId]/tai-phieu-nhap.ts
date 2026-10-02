@@ -4,6 +4,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
 import { RECEIVABLE } from '@/modules/dept/supply/supply.repo'
+import { docsRepo } from '@/modules/dept/warehouse/stock.repo'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
@@ -31,11 +32,13 @@ export async function taiPhieuNhap(
   poId: string,
   dotId: string | undefined,
   noi: NoiNhan,
+  /** "Sửa phiếu nhập" (02/10/2026): id phiếu cũ ĐÃ ĐẢO — điền sẵn phiếu mới bằng số của nó. */
+  suaId?: string,
 ): Promise<
   | { kind: 'chan'; po: { id: string; code: string }; reason: string; chuaGui: boolean }
   | { kind: 'ok'; props: Props }
 > {
-  const [{ po, lines, status_lines }, shipments, company, tpl, canEdit] =
+  const [{ po, lines, status_lines }, shipments, company, tpl, canEdit, cu, cuDong, cuDao] =
     await Promise.all([
       posService.detail(user, poId),
       poShipmentsRepo.listByPo(poId),
@@ -45,6 +48,9 @@ export async function taiPhieuNhap(
       user.role === 'admin'
         ? Promise.resolve(true)
         : canAction(user, 'warehouse.stock.write'),
+      suaId ? docsRepo.findById(suaId) : Promise.resolve(null),
+      suaId ? docsRepo.redoLines(suaId) : Promise.resolve(null),
+      suaId ? docsRepo.findReversalOf(suaId) : Promise.resolve(null),
     ])
 
   const chuaGui = noi === 'cung-ung' && po.status === 'approved'
@@ -74,12 +80,30 @@ export async function taiPhieuNhap(
     }
   })
   const dot = dotId ? (shipments.find((s) => s.id === dotId) ?? null) : null
-  const { rows, bo_qua_tu_do } = dungLuoi(dongDon, dot?.lines ?? null, po.template)
+  const luoi = dungLuoi(dongDon, dot?.lines ?? null, po.template)
+  const { bo_qua_tu_do } = luoi
+  /*
+    SỬA PHIẾU NHẬP: chỉ nhận phiếu NHẬP của CHÍNH đơn này và ĐÃ ĐẢO (đảo trước,
+    lập lại sau — ở hộp Sửa phiếu). Không khớp thì mở phiếu trống như thường, không
+    điền số lạ. Dòng không có trong phiếu cũ để 0: chỉ ghi lại đúng thứ đã ghi.
+  */
+  const suaHop =
+    cu && cuDong && cuDao && cu.kind === 'receipt' && [...cuDong.keys()].some((k) => lineById.has(k))
+  const rows = suaHop
+    ? luoi.rows.map((r) => {
+        const o = cuDong.get(r.po_line_id)
+        if (!o || !r.editable) return { ...r, qty: 0 }
+        return { ...r, qty: o.qty, status: o.stock_status === 'blocked' ? ('blocked' as const) : ('ok' as const), note: o.note ?? '', kg_can: o.qty2_actual } // prettier-ignore
+      })
+    : luoi.rows
 
   return {
     kind: 'ok',
     props: {
       noi,
+      suaLai: suaHop
+        ? { code: cu.code, daoBoi: cuDao.code, docDate: cu.doc_date.slice(0, 10), supplierDocNo: cu.supplier_doc_no ?? '', counterparty: cu.counterparty ?? '' } // prettier-ignore
+        : null,
       po: {
         id: po.id,
         code: po.code,

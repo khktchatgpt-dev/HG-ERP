@@ -109,6 +109,21 @@ export type DomainEvent =
       notify_ids: string[]
     }
   /**
+   * SỬA THÔNG TIN PHIẾU NHẬP ĐÃ GHI SỔ (02/10/2026, phương án B): số phiếu giao
+   * NCC, người giao, ghi chú — không đổi tồn. Vết (trước → sau, lý do) vào Trao
+   * đổi của đơn mua (handler `warehouse.audit`).
+   */
+  | {
+      name: 'warehouse.doc.info_edited'
+      doc_id: string
+      doc_code: string
+      po_id: string
+      actor_id: string
+      actor_name: string | null
+      reason: string
+      changes: { label: string; before: string | null; after: string | null }[]
+    }
+  /**
    * GHI KG CÂN BỔ SUNG vào phiếu nhập ĐÃ GHI SỔ (01/10/2026, chủ dự án duyệt):
    * nhôm/thép trả tiền theo kg cân mà lúc nhận quên cân. Kg chỉ là số đo, không
    * đổi tồn — nên cho ghi sau, bắt lý do; vết đi vào Trao đổi của ĐƠN MUA để

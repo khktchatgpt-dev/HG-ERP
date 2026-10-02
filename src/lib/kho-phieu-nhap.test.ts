@@ -150,12 +150,12 @@ describe('kiemTruocGhiSo — câu chặn phải chỉ được tới dòng', () 
   })
 })
 
-describe('kg cân — nhôm / thép trả tiền theo kg (chốt 01/10/2026)', () => {
-  it('đơn mẫu nhôm: mọi dòng bật can_kg, mang tổng kg của dòng đơn', () => {
+describe('kg cân — KHÔNG bắt buộc (02/10/2026: đơn theo cây nhận đủ cây là xong)', () => {
+  it('đơn mẫu nhôm trả tiền theo cây: không có ô kg', () => {
     const { rows } = dungLuoi([dong({ id: '1', qty2: 110.16 })], null, 'aluminium')
-    expect(rows[0]).toMatchObject({ can_kg: true, kg_don: 110.16, kg_can: null })
+    expect(rows[0]).toMatchObject({ can_kg: false, kg_don: 110.16, kg_can: null })
   })
-  it('đơn thường nhưng dòng tính giá theo kg cũng phải cân', () => {
+  it('dòng tính giá theo kg có ô kg (ghi nếu có cân)', () => {
     const { rows } = dungLuoi(
       [
         dong({ id: '1', price_basis: 'unit2', unit2: 'Kg' }),
@@ -166,12 +166,12 @@ describe('kg cân — nhôm / thép trả tiền theo kg (chốt 01/10/2026)', (
     )
     expect(rows.map((r) => r.can_kg)).toEqual([true, false])
   })
-  it('dòng phải cân mà chưa có kg → thieu_kg, trỏ đúng dòng', () => {
+  it('dòng có ô kg mà chưa ghi kg vẫn ghi sổ được', () => {
     const k = kiemTruocGhiSo([
       row({ code: 'A', qty: 90, can_kg: true, kg_can: 108.4 }),
-      row({ code: 'B', qty: 260, can_kg: true, kg_can: null }),
+      row({ code: 'B', qty: 90, can_kg: true, kg_can: null }),
     ])
-    expect(k).toMatchObject({ ok: false, reason: 'thieu_kg', line: 1 })
+    expect(k).toEqual({ ok: true })
   })
   it('dòng phải cân nhưng lần này không nhận (0) thì không đòi kg', () => {
     expect(

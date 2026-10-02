@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { canCanKg } from '@/lib/can-kg'
+import { DAU_SUA_PHIEU, suaLaiTu } from '@/lib/da-ve'
 import type { DongNhanVe, PhieuNhanVe } from '@/lib/da-ve'
 
 /** Một lần nhận hàng theo đơn mua — một dòng của màn Theo dõi đơn hàng › Đã về. */
@@ -16,6 +17,13 @@ export type DaVeRow = {
   /** Người phụ trách đơn (chưa giao ai thì người lập) — cho phạm vi "của tôi". */
   owner_id: string | null
   owner_name: string | null
+  /** SỬA PHIẾU NHẬP (02/10/2026): phiếu này lập lại phiếu nào (đọc từ ghi chú "Sửa lại PNK-…"). */
+  sua_lai_tu: string | null
+  /** Người giao + ghi chú phiếu — cho hộp Sửa thông tin (B). */
+  counterparty: string | null
+  ghi_chu: string | null
+  /** Phiếu này đã được lập lại bằng phiếu nào. */
+  thay_boi: string | null
   /** Dòng của phiếu kèm mã vật tư — để hộp ghi kg cân bày ra. */
   lines: (DongNhanVe & { material_name: string })[]
   phieu: PhieuNhanVe
@@ -43,7 +51,7 @@ export async function loadDaVe(since: string): Promise<{
   const { data: docs, error } = await db()
     .from('warehouse_docs')
     .select(
-      'id, code, doc_date, supplier_doc_no, actor:users!warehouse_docs_created_by_fkey(name)',
+      'id, code, doc_date, supplier_doc_no, counterparty, note, actor:users!warehouse_docs_created_by_fkey(name)',
     )
     .eq('kind', 'receipt')
     .eq('status', 'posted')
@@ -57,6 +65,8 @@ export async function loadDaVe(since: string): Promise<{
     code: string
     doc_date: string
     supplier_doc_no: string | null
+    note: string | null
+    counterparty: string | null
     actor: { name: string | null } | { name: string | null }[] | null
   }[]
   if (docRows.length === 0) return { rows: [], truncatedAt: null }
@@ -78,7 +88,7 @@ export async function loadDaVe(since: string): Promise<{
         .not('po_line_id', 'is', null),
       db()
         .from('warehouse_docs')
-        .select('reversal_of_doc_id')
+        .select('reversal_of_doc_id, reason')
         .in('reversal_of_doc_id', docIds),
     ])
   ).map(ok)
@@ -94,11 +104,20 @@ export async function loadDaVe(since: string): Promise<{
       | { code: string; name: string; unit: string }[]
       | null
   }[]
+  const revRows = (rev ?? []) as {
+    reversal_of_doc_id: string | null
+    reason: string | null
+  }[]
   const reversed = new Set(
-    ((rev ?? []) as { reversal_of_doc_id: string | null }[])
-      .map((r) => r.reversal_of_doc_id)
-      .filter((v): v is string => !!v),
+    revRows.map((r) => r.reversal_of_doc_id).filter((v): v is string => !!v),
   )
+  // Đảo trong hộp "Sửa phiếu" (lý do mang dấu) — chờ lập lại cho tới khi có phiếu mới.
+  const daoDeSua = new Set(revRows.filter((r) => r.reason?.includes(DAU_SUA_PHIEU)).map((r) => r.reversal_of_doc_id)) // prettier-ignore
+  const thayBoi = new Map<string, string>()
+  for (const d of docRows) {
+    const goc = suaLaiTu(d.note)
+    if (goc) thayBoi.set(goc, d.code)
+  }
   const lineIds = [...new Set(movements.map((m) => m.po_line_id))]
   if (lineIds.length === 0) return { rows: [], truncatedAt: null }
 
@@ -223,10 +242,15 @@ export async function loadDaVe(since: string): Promise<{
       supplier_name: one(po.supplier)?.name ?? '',
       owner_id: ownerId,
       owner_name: ownerId ? (userName.get(ownerId) ?? null) : null,
+      sua_lai_tu: suaLaiTu(d.note),
+      counterparty: d.counterparty,
+      ghi_chu: d.note,
+      thay_boi: thayBoi.get(d.code) ?? null,
       lines,
       phieu: {
         doc_id: d.id,
         reversed: reversed.has(d.id),
+        cho_lap_lai: daoDeSua.has(d.id) && !thayBoi.has(d.code),
         lines,
         po_status: po.status,
         latest_for_po: latestOfPo.get(po.id) === d.id,

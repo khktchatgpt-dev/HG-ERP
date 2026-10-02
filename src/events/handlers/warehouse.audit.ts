@@ -14,6 +14,21 @@ const so = (n: number) => n.toLocaleString('vi-VN')
  * (cùng nếp material.audit / rbac.audit).
  */
 export function registerWarehouseAuditHandlers(): void {
+  on('warehouse.doc.info_edited', async (e) => {
+    const doi = e.changes
+      .map((c) => `${c.label}: ${c.before?.trim() ? `“${c.before}”` : '(trống)'} → ${c.after?.trim() ? `“${c.after}”` : '(trống)'}`)
+      .join('; ')
+    await docNotesRepo.create(
+      {
+        doc_type: 'po',
+        doc_id: e.po_id,
+        author_id: e.actor_id,
+        audience: 'internal',
+        body: `Sửa thông tin ${e.doc_code} — ${doi}. Lý do: ${e.reason}`,
+      },
+      e.actor_name,
+    )
+  })
   on('warehouse.kg.recorded', async (e) => {
     const dong = e.lines
       .map(

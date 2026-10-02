@@ -56,6 +56,9 @@ import {
   Th,
   useToast,
 } from '@/components/kit'
+import { DUONG, type NoiNhan } from './duong'
+
+export type { NoiNhan }
 
 const TINH_TRANG: { value: TinhTrang; label: string }[] = [
   { value: 'ok', label: 'Đạt' },
@@ -66,39 +69,6 @@ const fmt = (n: number) => n.toLocaleString('vi-VN')
 /** Số kiểu VN: "1.390" = 1390 · "108,40" = 108,4. */
 const docSo = (v: string) => Number(v.replace(/\./g, '').replace(',', '.')) || 0
 
-/**
- * Form này có HAI cửa vào (01/10/2026): Kho › Hàng về, và Cung ứng › Đang về
- * khi Cung ứng tạm nhận hàng thay Kho. Cùng một form, cùng đường ghi sổ — chỉ
- * khác đường dẫn quay về, breadcrumb và khung bọc của khu.
- */
-export type NoiNhan = 'kho' | 'cung-ung'
-
-const DUONG: Record<
-  NoiNhan,
-  {
-    home: string
-    crumbs: { label: string; href: string }[]
-    phieu: (poId: string) => string
-    /** Khu Kho nằm trong WorkspaceShell (không gắn .kit) nên phải tự bọc; khu Cung ứng có sẵn. */
-    wrap: string
-  }
-> = {
-  kho: {
-    home: '/warehouse/nhap',
-    crumbs: [
-      { label: 'Kho', href: '/warehouse/nhap' },
-      { label: 'Hàng về', href: '/warehouse/nhap' },
-    ],
-    phieu: (id) => `/warehouse/nhap/${id}`,
-    wrap: 'theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col',
-  },
-  'cung-ung': {
-    home: '/mua-hang/theo-doi',
-    crumbs: [{ label: 'Theo dõi đơn hàng', href: '/mua-hang/theo-doi' }],
-    phieu: (id) => `/mua-hang/don/${id}/nhan`,
-    wrap: 'contents',
-  },
-}
 
 /**
  * PHIẾU NHẬP THEO ĐƠN — màn chứng từ + lưới (Bước 1 Kho). Bản thiết kế:
@@ -118,6 +88,7 @@ const DUONG: Record<
  */
 export function PhieuNhapScreen({
   noi,
+  suaLai = null,
   po,
   dot,
   dots,
@@ -148,14 +119,16 @@ export function PhieuNhapScreen({
   tpl: DocTemplate
   /** Cửa vào: khu Kho hay khu Cung ứng (nhận thay Kho). */
   noi: NoiNhan
+  /** SỬA PHIẾU NHẬP (02/10/2026): phiếu cũ đã đảo — form điền sẵn số của nó. */
+  suaLai?: { code: string; daoBoi: string; docDate: string; supplierDocNo: string; counterparty: string } | null // prettier-ignore
 }) {
   const duong = DUONG[noi]
   const router = useRouter()
   const toast = useToast()
   const [rows, setRows] = useState(initialRows)
-  const [docDate, setDocDate] = useState(today)
-  const [supplierDocNo, setSupplierDocNo] = useState('')
-  const [counterparty, setCounterparty] = useState('')
+  const [docDate, setDocDate] = useState(suaLai?.docDate ?? today)
+  const [supplierDocNo, setSupplierDocNo] = useState(suaLai?.supplierDocNo ?? '')
+  const [counterparty, setCounterparty] = useState(suaLai?.counterparty ?? '')
   const [overReason, setOverReason] = useState('')
   const [overDraft, setOverDraft] = useState('')
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -198,12 +171,7 @@ export function PhieuNhapScreen({
     if (kiem.ok) return
     if (kiem.reason === 'vuot_dung_sai') return moHopLyDo()
     if (kiem.line == null || kiem.line < 0) return
-    const o =
-      kiem.reason === 'thieu_ghi_chu'
-        ? 'ghi-chu'
-        : kiem.reason === 'thieu_kg'
-          ? 'kg-can'
-          : 'lan-nay'
+    const o = kiem.reason === 'thieu_ghi_chu' ? 'ghi-chu' : 'lan-nay'
     const el = document.getElementById(`${o}-${kiem.line}`) as HTMLInputElement | null
     el?.focus()
     el?.select()
@@ -232,6 +200,7 @@ export function PhieuNhapScreen({
             counterparty: counterparty.trim() || null,
             supplier_doc_no: supplierDocNo.trim() || null,
             doc_date: docDate || null,
+            note: suaLai ? `Sửa lại ${suaLai.code} (đã đảo bởi ${suaLai.daoBoi})` : null,
             allow_over: dongVuot.length > 0 && coLyDoVuot,
             over_reason: dongVuot.length > 0 && coLyDoVuot ? overReason.trim() : null,
             lines: rows
@@ -257,6 +226,8 @@ export function PhieuNhapScreen({
         ma: res.code,
         chi_tiet: `${tong.so_dong_nhan} dòng · ${fmt(tong.lan_nay)} đơn vị${tong.vao_khoa > 0 ? ` · ${fmt(tong.vao_khoa)} vào khoá` : ''}`,
       })
+      const tiep = new URLSearchParams(window.location.search).get('tiep') // nhận LẦN LƯỢT nhiều đơn
+      if (tiep) q.set('tiep', tiep)
       router.push(`${duong.home}?${q}`)
       router.refresh()
     } catch (e) {
@@ -427,6 +398,12 @@ export function PhieuNhapScreen({
           </FieldGrid>
         </FastTab>
 
+        {suaLai && (
+          <NoticeBar tone="neutral" tag="Sửa phiếu">
+            Lập lại <b>{suaLai.code}</b> (đã đảo bởi {suaLai.daoBoi}) — số đã điền sẵn theo phiếu cũ, sửa chỗ sai rồi Ghi sổ.
+          </NoticeBar>
+        )}
+
         {boQuaTuDo > 0 && (
           <NoticeBar tone="warn" tag="Dòng tự do" action={{ label: 'Xem ở đơn mua' }}>
             Đơn có <b>{boQuaTuDo}</b> dòng tự do (gỗ / gia công không mã vật tư) — nghiệm
@@ -477,7 +454,7 @@ export function PhieuNhapScreen({
               </Th>
               {coKg && (
                 <Th num width={140}>
-                  Kg cân thực
+                  Kg cân (nếu có)
                 </Th>
               )}
               <Th width={146}>Tình trạng</Th>

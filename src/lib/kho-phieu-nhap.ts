@@ -75,7 +75,7 @@ export type DongNhan = {
   qty: number
   status: TinhTrang
   note: string
-  /** Nhôm / thép tính tiền theo kg: BẮT BUỘC ghi kg cân thực (lib/can-kg). */
+  /** Dòng tính tiền theo kg: có ô kg cân — KHÔNG bắt buộc (lib/can-kg, 02/10/2026). */
   can_kg: boolean
   /** Tổng kg của dòng đơn (đơn vị 2) — để suy kg dự kiến của lần này. */
   kg_don: number | null
@@ -180,7 +180,7 @@ export type KiemKetQua =
   | {
       ok: false
       reason:
-        'khong_dong' | 'so_khong_hop_le' | 'thieu_ghi_chu' | 'thieu_kg' | 'vuot_dung_sai'
+        'khong_dong' | 'so_khong_hop_le' | 'thieu_ghi_chu' | 'vuot_dung_sai'
       message: string
       /** Chỉ số dòng để thanh chốt nhảy tới. */
       line?: number
@@ -218,15 +218,6 @@ export function kiemTruocGhiSo(rows: DongNhan[], coLyDoVuot = false): KiemKetQua
       reason: 'thieu_ghi_chu',
       message: `Dòng ${iKhoa + 1} ${rows[iKhoa].code} Sai quy cách chưa có ghi chú — lý do đi theo lô`,
       line: iKhoa,
-    }
-  }
-  const iKg = rows.findIndex((r) => r.qty > 0 && r.can_kg && !(r.kg_can! > 0))
-  if (iKg >= 0) {
-    return {
-      ok: false,
-      reason: 'thieu_kg',
-      message: `Dòng ${iKg + 1} ${rows[iKg].code} chưa ghi kg cân — nhôm/thép trả tiền theo kg cân thực`,
-      line: iKg,
     }
   }
   if (!coLyDoVuot) {

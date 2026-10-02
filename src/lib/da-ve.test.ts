@@ -37,12 +37,11 @@ describe('ketQuaPhieu — đọc kết quả một lần nhận', () => {
     expect(canXuLy(phieu())).toBe(false)
   })
 
-  it('ca thật 27/09: đơn thép theo kg, 2 dòng không có kg cân → thieu_kg, Cần xử lý', () => {
+  it('ca thật 27/09: phiếu thép chưa ghi kg cân KHÔNG còn là việc phải làm (02/10)', () => {
     const p = phieu({ lines: [dong({ can_kg: true }), dong({ can_kg: true })] })
-    expect(kinds(p)).toEqual(['thieu_kg'])
-    expect(ketQuaPhieu(p)[0].text).toContain('2/2')
-    expect(canXuLy(p)).toBe(true)
-    expect(dongThieuKg(p)).toHaveLength(2)
+    expect(kinds(p)).toEqual(['du'])
+    expect(canXuLy(p)).toBe(false)
+    expect(dongThieuKg(p)).toHaveLength(2) // vẫn đếm được nếu cần ghi bổ sung
   })
 
   it('đã ghi kg cân thì hết thiếu kg', () => {
@@ -91,6 +90,12 @@ describe('ketQuaPhieu — đọc kết quả một lần nhận', () => {
       po_open_lines: 2,
       lines: [dong({ can_kg: true }), dong({ stock_status: 'blocked' })],
     })
-    expect(kinds(p)).toEqual(['thieu_kg', 'thieu', 'sai_quy_cach'])
+    expect(kinds(p)).toEqual(['thieu', 'sai_quy_cach'])
+  })
+
+  it('đảo để SỬA mà chưa lập lại → Cần xử lý; đảo hẳn thì không', () => {
+    expect(canXuLy(phieu({ reversed: true, cho_lap_lai: true }))).toBe(true)
+    expect(ketQuaPhieu(phieu({ reversed: true, cho_lap_lai: true }))[0].text).toContain('chưa lập lại')
+    expect(canXuLy(phieu({ reversed: true }))).toBe(false)
   })
 })

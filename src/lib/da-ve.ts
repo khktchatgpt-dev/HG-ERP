@@ -11,6 +11,17 @@
  */
 import { kgDuKien, lechKg } from './can-kg'
 
+/**
+ * Dấu trong LÝ DO của phiếu đảo khi đảo để SỬA (hộp "Sửa phiếu nhập", 02/10/2026):
+ * phân biệt với đảo hẳn (hàng trả về, ghi nhầm đơn) — chỉ đảo-để-sửa mới chờ lập lại.
+ */
+export const DAU_SUA_PHIEU = 'Sửa phiếu nhập'
+
+/** Phiếu nhập LẬP LẠI để sửa phiếu nào — đọc từ ghi chú "Sửa lại PNK-… (đã đảo bởi …)". */
+export function suaLaiTu(note: string | null | undefined): string | null {
+  return note?.match(/Sửa lại (PNK-[0-9-]+)/)?.[1] ?? null
+}
+
 /** Ngưỡng lệch kg đáng nói (%) — dưới mức này là sai số cân, không phải chuyện. */
 export const NGUONG_LECH_KG = 3
 
@@ -34,6 +45,8 @@ export type PhieuNhanVe = {
   doc_id: string
   /** Phiếu đã bị đảo — còn trong sổ nhưng hết hiệu lực. */
   reversed: boolean
+  /** Đảo để SỬA mà chưa có phiếu lập lại — việc phải làm. */
+  cho_lap_lai?: boolean
   lines: DongNhanVe[]
   /** Trạng thái đơn HIỆN TẠI ('partial' | 'received' | …). */
   po_status: string
@@ -70,6 +83,16 @@ export function dongThieuKg(p: Pick<PhieuNhanVe, 'lines'>): DongNhanVe[] {
 }
 
 export function ketQuaPhieu(p: PhieuNhanVe): KetQua[] {
+  if (p.reversed && p.cho_lap_lai)
+    return [
+      {
+        kind: 'da_dao',
+        text: 'Đã đảo để sửa — chưa lập lại',
+        viec: 'Lập lại phiếu nhập đúng số (số cũ đã điền sẵn)',
+        can_xu_ly: true,
+        tone: 'warn',
+      },
+    ]
   if (p.reversed)
     return [
       {
@@ -81,15 +104,7 @@ export function ketQuaPhieu(p: PhieuNhanVe): KetQua[] {
       },
     ]
   const out: KetQua[] = []
-  const thieuKg = dongThieuKg(p)
-  if (thieuKg.length > 0)
-    out.push({
-      kind: 'thieu_kg',
-      text: `Chưa có kg cân · ${thieuKg.length}/${p.lines.length} dòng`,
-      viec: 'Ghi kg cân thực của lần nhận — Kế toán trả tiền theo kg cân',
-      can_xu_ly: true,
-      tone: 'warn',
-    })
+  // Thiếu kg cân KHÔNG còn là việc phải làm (02/10/2026 — lib/can-kg).
   if (p.latest_for_po && p.po_status === 'partial' && p.po_open_lines > 0)
     out.push({
       kind: 'thieu',

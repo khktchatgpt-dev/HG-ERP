@@ -23,11 +23,12 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ dot?: string }>
+  /** `sua` = phiếu cũ đã đảo để LẬP LẠI (Sửa phiếu nhập, 02/10/2026). */
+  searchParams: Promise<{ dot?: string; sua?: string }>
 }) {
   const user = await authService.requirePageUser()
   const [{ id }, sp] = await Promise.all([params, searchParams])
-  const r = await taiPhieuNhap(user, id, sp.dot, 'cung-ung')
+  const r = await taiPhieuNhap(user, id, sp.dot, 'cung-ung', sp.sua)
 
   if (r.kind === 'chan') {
     return (

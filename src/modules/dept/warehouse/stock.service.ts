@@ -60,7 +60,6 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { emit } from '@/events/bus'
-import { canCanKg } from '@/lib/can-kg'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 type ReceiveInput = {
@@ -780,22 +779,7 @@ export const stockService = {
         input.lines,
         input.allow_over ?? false,
       )
-      /*
-       * KG CÂN THỰC (01/10/2026): nhôm / thép trả tiền theo kg cân, không theo
-       * kg trên đơn. Thiếu kg thì Cung ứng không chốt được kg thanh toán, Kế
-       * toán không đối chiếu được hoá đơn — chặn ở đây, form chỉ nói trước.
-       */
-      const rule = await supplyRepo.kgRuleInputs(input.po_id)
-      const lineById = new Map(rule.lines.map((l) => [l.id, l]))
-      const thieuKg = input.lines.filter((l) => {
-        const pl = l.po_line_id ? lineById.get(l.po_line_id) : undefined
-        return pl && canCanKg(rule.template, pl) && !(Number(l.qty2_actual) > 0)
-      })
-      if (thieuKg.length > 0) {
-        throw BadRequest(
-          `${thieuKg.length} dòng nhôm/thép chưa ghi kg cân thực — cân rồi ghi kg trước khi ghi sổ`,
-        )
-      }
+      // Kg cân thực KHÔNG bắt buộc (02/10/2026 — xem lib/can-kg): có thì ghi qty2_actual.
     }
 
     /*
@@ -1471,6 +1455,70 @@ export const stockService = {
       }),
     })
     return { updated: input.lines.length }
+  },
+
+  /**
+   * SỬA THÔNG TIN PHIẾU NHẬP ĐÃ GHI SỔ (02/10/2026, phương án B): số phiếu giao
+   * NCC, người giao, ghi chú — những ô KHÔNG đổi tồn, không đổi công nợ. Sửa tại
+   * chỗ (không cần đảo), bắt lý do; vết trước → sau vào Trao đổi của đơn.
+   *
+   * KHÔNG cho sửa ngày chứng từ ở đây: ngày quyết định phiếu thuộc kỳ nào — sai
+   * ngày thì Sửa phiếu (đảo + lập lại). Dấu "Sửa lại PNK-…" trong ghi chú (nối
+   * phiếu lập lại với phiếu cũ) được giữ dù người dùng xoá khỏi ô.
+   */
+  async suaThongTinPhieu(
+    user: User,
+    docId: string,
+    input: {
+      supplier_doc_no?: string | null
+      counterparty?: string | null
+      note?: string | null
+      reason: string
+    },
+  ): Promise<{ changed: number }> {
+    await assertAction(user, 'warehouse.stock.write')
+    const doc = await docsRepo.findById(docId)
+    if (!doc) throw NotFound('Phiếu kho không tồn tại')
+    if (doc.kind !== 'receipt' || doc.status !== 'posted' || doc.reversal_of_doc_id)
+      throw BadRequest('Chỉ sửa thông tin phiếu NHẬP đã ghi sổ')
+    if (await docsRepo.findReversalOf(docId))
+      throw BadRequest(`Phiếu ${doc.code} đã bị đảo — hết hiệu lực, không sửa nữa`)
+    const sach = (v: string | null | undefined) => (v ?? '').trim() || null
+    const dau = doc.note?.match(/Sửa lại PNK-[0-9-]+ \(đã đảo bởi [^)]+\)/)?.[0] ?? null
+    let note = input.note === undefined ? undefined : sach(input.note)
+    if (note !== undefined && dau && !note?.includes(dau))
+      note = note ? `${dau} · ${note}` : dau
+    const truong = [
+      { key: 'supplier_doc_no' as const, label: 'Số phiếu giao NCC', before: doc.supplier_doc_no, after: input.supplier_doc_no === undefined ? undefined : sach(input.supplier_doc_no) }, // prettier-ignore
+      { key: 'counterparty' as const, label: 'Người giao', before: doc.counterparty, after: input.counterparty === undefined ? undefined : sach(input.counterparty) }, // prettier-ignore
+      { key: 'note' as const, label: 'Ghi chú', before: doc.note, after: note },
+    ].filter((t) => t.after !== undefined && sach(t.before) !== t.after)
+    if (truong.length === 0) throw BadRequest('Không có thông tin nào thay đổi')
+    const poIds = await supplyRepo.poIdsByLineIds(
+      (await docsRepo.listLines(docId))
+        .map((l) => l.po_line_id)
+        .filter((x): x is string => !!x),
+    )
+    if (poIds.length !== 1) throw BadRequest('Phiếu nhập phải thuộc đúng một đơn mua')
+    await docsRepo.patchInfo(
+      docId,
+      Object.fromEntries(truong.map((t) => [t.key, t.after])),
+    )
+    await emit({
+      name: 'warehouse.doc.info_edited',
+      doc_id: docId,
+      doc_code: doc.code,
+      po_id: poIds[0],
+      actor_id: user.id,
+      actor_name: user.name ?? user.email,
+      reason: input.reason.trim(),
+      changes: truong.map((t) => ({
+        label: t.label,
+        before: t.before,
+        after: t.after ?? null,
+      })),
+    })
+    return { changed: truong.length }
   },
 
   async reverseDoc(

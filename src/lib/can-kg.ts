@@ -1,24 +1,19 @@
 /**
- * DÒNG NÀO PHẢI GHI KG CÂN THỰC khi nhập kho (chủ dự án chốt 01/10/2026).
+ * DÒNG NÀO CÓ Ô KG CÂN khi nhập kho — KHÔNG BẮT BUỘC (chủ dự án 02/10/2026:
+ * "đơn hàng là cây thì nhận đủ số lượng là được").
  *
- * Nhôm, thép mua theo cây nhưng TÍNH TIỀN THEO KG, và điều khoản mẫu nhôm ghi
- * rõ "khối lượng thanh toán = khối lượng thực nhận sau khi hai bên cân". Không
- * có kg cân thì Cung ứng không chốt được kg thanh toán, Kế toán không đối chiếu
- * được hoá đơn. Cột `warehouse_movements.qty2_actual` có từ trước nhưng chưa màn
- * nào ghi — hai phiếu thép ngày 27/09 đều để trống.
- *
- * Luật: đơn mẫu Nhôm định hình / Sắt-thép-tấm theo kg, HOẶC dòng tính giá theo
- * đơn vị 2 mà đơn vị 2 là kg. Dùng chung cho form (nói trước khi bấm) và server
- * (chặn thật).
+ * Bản 01/10 bắt ghi kg cho MỌI dòng đơn mẫu nhôm/thép và chặn ghi sổ khi thiếu —
+ * kể cả đơn trả tiền theo CÂY (PO-2026-0116 Visa), nên phiếu nhận đủ cây vẫn bị
+ * xếp "Cần xử lý". Nay: ô kg chỉ hiện ở dòng TÍNH TIỀN THEO KG (giá theo đơn vị 2
+ * = kg), để ai có cân thì ghi; không cân thì kg của đơn (barem) vẫn là số tính tiền.
+ * Không chặn ghi sổ, không thành việc phải làm.
  */
-
-const KG_TEMPLATES = new Set(['aluminium', 'metal_kg'])
 
 export function canCanKg(
   template: string | null | undefined,
   line: { price_basis?: string | null; unit2?: string | null },
 ): boolean {
-  if (template && KG_TEMPLATES.has(template)) return true
+  void template // giữ tham số: chỗ gọi cũ truyền mẫu đơn — luật nay chỉ xét dòng
   return line.price_basis === 'unit2' && /^\s*kg\s*$/i.test(line.unit2 ?? '')
 }
 

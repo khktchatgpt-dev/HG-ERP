@@ -836,6 +836,46 @@ export const docsRepo = {
   },
 
   /** Dòng của 1 phiếu + SL đặt trên dòng PO (in "theo chứng từ" của mẫu 01-VT). */
+  /** Sửa thông tin KHÔNG ảnh hưởng tồn của phiếu (B, 02/10/2026). */
+  async patchInfo(
+    id: string,
+    p: { supplier_doc_no?: string | null; counterparty?: string | null; note?: string | null },
+  ): Promise<void> {
+    const { error } = await db().from('warehouse_docs').update(p).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Dòng NHẬP của một phiếu, gom theo dòng đơn — để "Sửa phiếu nhập" (02/10/2026)
+   * điền sẵn phiếu mới bằng đúng số của phiếu cũ (đã đảo).
+   */
+  async redoLines(docId: string): Promise<
+    Map<string, { qty: number; stock_status: string; note: string | null; qty2_actual: number | null }> // prettier-ignore
+  > {
+    const { data, error } = await db()
+      .from('warehouse_movements')
+      .select('po_line_id, qty, stock_status, note, qty2_actual')
+      .eq('doc_id', docId)
+      .eq('direction', 'in')
+      .not('po_line_id', 'is', null)
+    if (error) throw new Error(error.message)
+    const out = new Map<string, { qty: number; stock_status: string; note: string | null; qty2_actual: number | null }>() // prettier-ignore
+    for (const r of (data ?? []) as Record<string, unknown>[]) {
+      const k = r.po_line_id as string
+      const cur = out.get(k)
+      const kg = r.qty2_actual == null ? null : Number(r.qty2_actual)
+      out.set(k, {
+        qty: (cur?.qty ?? 0) + Number(r.qty),
+        stock_status:
+          cur?.stock_status === 'blocked' ? 'blocked' : String(r.stock_status ?? 'ok'),
+        note: cur?.note ?? (r.note as string | null),
+        qty2_actual:
+          kg == null ? (cur?.qty2_actual ?? null) : (cur?.qty2_actual ?? 0) + kg,
+      })
+    }
+    return out
+  },
+
   async listLines(docId: string): Promise<DocLine[]> {
     const { data } = await db()
       .from('warehouse_movements')
@@ -1150,7 +1190,9 @@ export async function insertMovements(
 }
 
 /** Kg cân thực hiện có của các dòng sổ — số TRƯỚC khi ghi bổ sung (để ghi vết). */
-export async function qty2ActualByIds(ids: string[]): Promise<Map<string, number | null>> {
+export async function qty2ActualByIds(
+  ids: string[],
+): Promise<Map<string, number | null>> {
   if (ids.length === 0) return new Map()
   const { data, error } = await db()
     .from('warehouse_movements')
@@ -1169,7 +1211,9 @@ export async function qty2ActualByIds(ids: string[]): Promise<Map<string, number
  * Ghi kg cân thực vào dòng sổ ĐÃ CÓ. Ngoại lệ DUY NHẤT của luật "sổ chỉ cộng
  * thêm": `qty2_actual` là số đo, không tham gia tồn / giá vốn (01/10/2026).
  */
-export async function setQty2Actual(rows: { id: string; qty2_actual: number }[]): Promise<void> {
+export async function setQty2Actual(
+  rows: { id: string; qty2_actual: number }[],
+): Promise<void> {
   for (const r of rows) {
     const { error } = await db()
       .from('warehouse_movements')

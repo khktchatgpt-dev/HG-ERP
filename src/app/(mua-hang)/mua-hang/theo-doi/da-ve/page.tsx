@@ -24,7 +24,7 @@ const NGAY_TOI_DA = 30
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ pham_vi?: string; don?: string }>
+  searchParams: Promise<{ pham_vi?: string; don?: string; sua?: string }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
@@ -51,6 +51,7 @@ export default async function Page({
       defaultScope={defaultScope({ canApprove })}
       urlScope={parseScope(sp.pham_vi)}
       giaoNhan={giaoNhan}
+      initialSua={sp.sua ?? null}
     />
   )
 }

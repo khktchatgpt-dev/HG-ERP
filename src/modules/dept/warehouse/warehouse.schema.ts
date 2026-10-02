@@ -120,6 +120,15 @@ export const materialEnrichSchema = z.object({
 
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */
 /** Phiếu ĐẢO (0161/K1) — lý do bắt buộc, ghi thẳng vào reason phiếu đảo. */
+/** Sửa thông tin phiếu nhập đã ghi sổ (B, 02/10/2026) — trường không ảnh hưởng tồn. */
+export const docInfoSchema = z.object({
+  supplier_doc_no: z.string().trim().max(60).nullable().optional(),
+  counterparty: z.string().trim().max(200).nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+  reason: z.string().trim().min(3, 'Ghi lý do sửa').max(500),
+})
+export type DocInfoInput = z.infer<typeof docInfoSchema>
+
 export const docReverseSchema = z.object({
   reason: z.string().trim().min(1, 'Đảo phiếu phải kèm lý do').max(500),
 })
