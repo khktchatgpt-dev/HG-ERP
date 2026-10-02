@@ -636,6 +636,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/exec', label: 'Tổng quan', icon: 'home' },
           // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
           { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
+          // Kế hoạch của Bán hàng đặt cạnh tiền mua đã cam kết, theo lệnh (bước 4, 02/10/2026).
+          { href: '/exec/lai-lo', label: 'Lãi / lỗ theo lệnh', icon: 'circle-dollar-sign' },
         ],
       },
       {
