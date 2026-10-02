@@ -192,6 +192,14 @@ export function DaVeScreen({
               {r.sua_lai_tu ? `sửa của ${r.sua_lai_tu}` : `→ ${r.thay_boi}`}
             </span>
           )}
+          {(r.dieu_chinh?.length ?? 0) > 0 && (
+            <span
+              className="text-k-label ml-1 text-[var(--ink-3)]"
+              title="Số trên phiếu đã được điều chỉnh chênh lệch bằng các phiếu này"
+            >
+              đ/c {r.dieu_chinh.join(', ')}
+            </span>
+          )}
         </Cell>
         <Cell>
           <Code as="a" href={hop(r.po_id)}>

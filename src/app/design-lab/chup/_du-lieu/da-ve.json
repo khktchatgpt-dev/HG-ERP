@@ -24,7 +24,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 151,
-     "kg_don": 549.0058
+     "kg_don": 549.0058,
+     "po_line_id": "pl-8dca4567-f87e-479b-8da6-64e90e6b5f0e"
     },
     {
      "movement_id": "24475e70-269c-4794-989d-0c4509a28a98",
@@ -36,7 +37,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 85,
-     "kg_don": 319.9995
+     "kg_don": 319.9995,
+     "po_line_id": "pl-24475e70-269c-4794-989d-0c4509a28a98"
     }
    ],
    "phieu": {
@@ -72,7 +74,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "0acda362-837e-48f4-ab86-95022cccc625",
@@ -97,7 +101,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 210,
-     "kg_don": 1146.6
+     "kg_don": 1146.6,
+     "po_line_id": "pl-2c18d240-41cf-42f3-896f-0211ae90525d"
     },
     {
      "movement_id": "e74fd245-e9be-4bbf-9ceb-bc948d8681a2",
@@ -109,7 +114,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 300,
-     "kg_don": 1374
+     "kg_don": 1374,
+     "po_line_id": "pl-e74fd245-e9be-4bbf-9ceb-bc948d8681a2"
     }
    ],
    "phieu": {
@@ -145,7 +151,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "f099081f-44cc-43a8-a367-bbc851f5ad5e",
@@ -170,7 +178,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 6,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-68c1db50-a27f-4443-8e8f-6b0bee66e0f9"
     },
     {
      "movement_id": "eae0ee21-58f2-4893-a783-66324ed6149d",
@@ -182,7 +191,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 75,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-eae0ee21-58f2-4893-a783-66324ed6149d"
     },
     {
      "movement_id": "e2658830-3bac-4f1e-8002-d9e27877c800",
@@ -194,7 +204,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 27,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e2658830-3bac-4f1e-8002-d9e27877c800"
     },
     {
      "movement_id": "e734bdd8-23d1-489d-939b-fda64945b3b0",
@@ -206,7 +217,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 23,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e734bdd8-23d1-489d-939b-fda64945b3b0"
     },
     {
      "movement_id": "8b3eac45-eb72-4cd9-840b-a58a02fb6cc7",
@@ -218,7 +230,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 17,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-8b3eac45-eb72-4cd9-840b-a58a02fb6cc7"
     },
     {
      "movement_id": "fe9b5e8f-fbea-4c83-a6f0-63496d2290e1",
@@ -230,7 +243,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 16,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-fe9b5e8f-fbea-4c83-a6f0-63496d2290e1"
     },
     {
      "movement_id": "e5d98ccc-a380-47d9-8149-d29293198b76",
@@ -242,7 +256,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 16,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e5d98ccc-a380-47d9-8149-d29293198b76"
     },
     {
      "movement_id": "e39fe580-6466-4d8c-8f61-ffd267709948",
@@ -254,7 +269,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 16,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e39fe580-6466-4d8c-8f61-ffd267709948"
     }
    ],
    "phieu": {
@@ -362,7 +378,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "d647e3a5-6499-4262-add7-82a7e6f15fb4",
@@ -387,7 +405,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 18,
-     "kg_don": 37.8
+     "kg_don": 37.8,
+     "po_line_id": "pl-aa588052-1461-4649-9fff-f5407eb602c1"
     },
     {
      "movement_id": "8480f470-811e-4810-8cd3-3c58abf4e695",
@@ -399,7 +418,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 491,
-     "kg_don": 1266.78
+     "kg_don": 1266.78,
+     "po_line_id": "pl-8480f470-811e-4810-8cd3-3c58abf4e695"
     },
     {
      "movement_id": "37708db0-d1a1-4db1-aa91-d08a231a3109",
@@ -411,7 +431,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 464,
-     "kg_don": 1526.56
+     "kg_don": 1526.56,
+     "po_line_id": "pl-37708db0-d1a1-4db1-aa91-d08a231a3109"
     },
     {
      "movement_id": "5a87aef4-e289-47e3-8a93-fb37ec92f37e",
@@ -423,7 +444,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 393,
-     "kg_don": 1976.79
+     "kg_don": 1976.79,
+     "po_line_id": "pl-5a87aef4-e289-47e3-8a93-fb37ec92f37e"
     },
     {
      "movement_id": "3301a6cc-f2e7-4e98-8cb1-10d15ad2f386",
@@ -435,7 +457,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 426,
-     "kg_don": 6057.72
+     "kg_don": 6057.72,
+     "po_line_id": "pl-3301a6cc-f2e7-4e98-8cb1-10d15ad2f386"
     },
     {
      "movement_id": "562a9545-1f4d-4fe1-be03-479bf0eae58b",
@@ -447,7 +470,8 @@
      "qty2_actual": null,
      "can_kg": true,
      "qty_ordered": 160,
-     "kg_don": 2009.6
+     "kg_don": 2009.6,
+     "po_line_id": "pl-562a9545-1f4d-4fe1-be03-479bf0eae58b"
     }
    ],
    "phieu": {
@@ -531,7 +555,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "e79dadd3-d65f-48d8-ad74-bb172092d6d4",
@@ -556,7 +582,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1350,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e04248a7-332c-4164-8756-3fdf76f57bdb"
     },
     {
      "movement_id": "161298fa-b83d-4b23-be41-01010a83b7d3",
@@ -568,7 +595,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 600,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-161298fa-b83d-4b23-be41-01010a83b7d3"
     },
     {
      "movement_id": "00b88324-fd63-4644-bb93-33b097974cf3",
@@ -580,7 +608,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 100,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-00b88324-fd63-4644-bb93-33b097974cf3"
     },
     {
      "movement_id": "f4c24f05-8791-4b58-994f-22a17a63c6c3",
@@ -592,7 +621,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 50,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-f4c24f05-8791-4b58-994f-22a17a63c6c3"
     },
     {
      "movement_id": "82f9d5ff-0091-4001-8c76-9aac6342a2f4",
@@ -604,7 +634,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 200,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-82f9d5ff-0091-4001-8c76-9aac6342a2f4"
     },
     {
      "movement_id": "5480f1eb-3dce-4d4b-850b-525e3258bce9",
@@ -616,7 +647,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 100,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-5480f1eb-3dce-4d4b-850b-525e3258bce9"
     },
     {
      "movement_id": "a168599f-e174-4eb1-91b5-d209de84c38b",
@@ -628,7 +660,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 510,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a168599f-e174-4eb1-91b5-d209de84c38b"
     },
     {
      "movement_id": "bc3d9af0-29ef-4a1f-921a-41a222541b94",
@@ -640,7 +673,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 240,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-bc3d9af0-29ef-4a1f-921a-41a222541b94"
     },
     {
      "movement_id": "7c9cb4df-4a45-4d69-965c-9b4e80725e1a",
@@ -652,7 +686,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 240,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7c9cb4df-4a45-4d69-965c-9b4e80725e1a"
     },
     {
      "movement_id": "7a82fd78-7a96-420b-8fcf-6d2d6d00251a",
@@ -664,7 +699,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 120,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7a82fd78-7a96-420b-8fcf-6d2d6d00251a"
     }
    ],
    "phieu": {
@@ -796,7 +832,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "a647ef9d-c0dd-43ee-b178-28a2f7cd6dec",
@@ -821,7 +859,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 720,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-c8afab06-f8c2-4f2f-974e-f4023536be45"
     }
    ],
    "phieu": {
@@ -845,7 +884,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "f4afb58c-45a3-4382-b1d1-c6bbb5d54090",
@@ -870,7 +911,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 8600,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-0bb2bb38-8abe-4ee6-b612-344253d9fa5e"
     }
    ],
    "phieu": {
@@ -894,7 +936,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "de342870-b887-42f1-881c-14f5f5a7e9bf",
@@ -919,7 +963,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 180,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-9058a4a1-b4d4-44c1-9d9d-0d61e915483b"
     },
     {
      "movement_id": "72b5785d-30eb-4585-87ca-4858669fe26e",
@@ -931,7 +976,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 800,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-72b5785d-30eb-4585-87ca-4858669fe26e"
     }
    ],
    "phieu": {
@@ -967,7 +1013,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "c3aba7e7-91fa-4173-92fd-a4c0a6c01f52",
@@ -992,7 +1040,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1.03,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-6d048b31-680c-4667-942f-d14b76e086ab"
     }
    ],
    "phieu": {
@@ -1016,7 +1065,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "cf7f3085-1de5-4c84-b4c1-103bf6cf66bd",
@@ -1041,7 +1092,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 840,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-0e50a4bd-31f3-4b50-9602-67ae5e0b4bfd"
     },
     {
      "movement_id": "ad0934b0-8846-4b8f-9147-a1aa6dd4605c",
@@ -1053,7 +1105,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 840,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-ad0934b0-8846-4b8f-9147-a1aa6dd4605c"
     },
     {
      "movement_id": "35234e53-5763-4f53-b1a3-b269fb6f54fb",
@@ -1065,7 +1118,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 840,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-35234e53-5763-4f53-b1a3-b269fb6f54fb"
     },
     {
      "movement_id": "86eb0ef5-333d-474c-b761-06122093447f",
@@ -1077,7 +1131,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 840,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-86eb0ef5-333d-474c-b761-06122093447f"
     },
     {
      "movement_id": "8b4fb511-d80e-4b18-b1da-6e6bce5fc6df",
@@ -1089,7 +1144,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 840,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-8b4fb511-d80e-4b18-b1da-6e6bce5fc6df"
     },
     {
      "movement_id": "483c3be5-ec49-40ce-beb1-47487b16b568",
@@ -1101,7 +1157,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1512,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-483c3be5-ec49-40ce-beb1-47487b16b568"
     },
     {
      "movement_id": "79f013db-3f13-4c99-9b0c-ddb3c2272440",
@@ -1113,7 +1170,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2646,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-79f013db-3f13-4c99-9b0c-ddb3c2272440"
     },
     {
      "movement_id": "84f9d638-79f8-49bc-baca-6e8a11015b03",
@@ -1125,7 +1183,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 189,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-84f9d638-79f8-49bc-baca-6e8a11015b03"
     }
    ],
    "phieu": {
@@ -1233,7 +1292,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "ffe80b48-c60d-4c34-abab-0aa383c3a486",
@@ -1258,7 +1319,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 824,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-d0bcc29d-1d1f-4a8a-843f-b26daecb34a3"
     }
    ],
    "phieu": {
@@ -1282,7 +1344,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "63e6747e-16c2-49dd-9a37-b5200a7abb84",
@@ -1307,7 +1371,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 840,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-2a97cbd1-914f-4e7f-be9c-5dace38ce64f"
     },
     {
      "movement_id": "93d3abdf-a1c4-4186-a710-f63b4fe1b22e",
@@ -1319,7 +1384,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1000,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-93d3abdf-a1c4-4186-a710-f63b4fe1b22e"
     }
    ],
    "phieu": {
@@ -1355,7 +1421,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "51df1356-97ff-48c6-9509-594213d79694",
@@ -1380,7 +1448,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1648,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-23f75a98-05c4-4f1b-afd5-23c086a59746"
     },
     {
      "movement_id": "74c20ab9-a40b-4749-8f75-d4a8281e0310",
@@ -1392,7 +1461,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1648,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-74c20ab9-a40b-4749-8f75-d4a8281e0310"
     }
    ],
    "phieu": {
@@ -1428,7 +1498,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "8d49cc2b-a55c-4897-b678-c5e1ab3aaddc",
@@ -1453,7 +1525,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 741.6,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-87037f62-76b9-4d6c-a36e-20941948fac9"
     }
    ],
    "phieu": {
@@ -1477,7 +1550,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "722c9ceb-6720-43fd-93c3-ed2102453b61",
@@ -1502,7 +1577,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3590.4,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-250b4072-65c1-4774-a76c-746ad6622b8d"
     },
     {
      "movement_id": "358a7b9d-2047-4fcc-87da-930ff98e5578",
@@ -1514,7 +1590,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1108.8,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-358a7b9d-2047-4fcc-87da-930ff98e5578"
     },
     {
      "movement_id": "538c6335-309a-416c-bb79-52b0da45d392",
@@ -1526,7 +1603,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2784,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-538c6335-309a-416c-bb79-52b0da45d392"
     }
    ],
    "phieu": {
@@ -1574,7 +1652,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "ce09af04-16f7-4b75-a7b8-16357030012e",
@@ -1599,7 +1679,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3828,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-cac92437-70dd-476d-a089-a30ffe61b0f4"
     },
     {
      "movement_id": "7eff3f0d-1fd7-4f3c-b466-3d628d5956ee",
@@ -1611,7 +1692,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 5742,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7eff3f0d-1fd7-4f3c-b466-3d628d5956ee"
     },
     {
      "movement_id": "77d4f00f-171f-47c9-8d65-2820d031d83d",
@@ -1623,7 +1705,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 4732.8,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-77d4f00f-171f-47c9-8d65-2820d031d83d"
     }
    ],
    "phieu": {
@@ -1671,7 +1754,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "038c6755-4617-4897-838e-6d51d73ef979",
@@ -1696,7 +1781,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 8600,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e16ce074-845b-4c03-b7c4-a7503fcb6633"
     }
    ],
    "phieu": {
@@ -1720,7 +1806,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "35ec31a9-d73a-4034-8c0b-74d6ad0b4ac6",
@@ -1745,7 +1833,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 9079.45,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-501a7509-0ab8-4a81-875e-5dee7ccf2327"
     }
    ],
    "phieu": {
@@ -1769,7 +1858,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "d40b464a-f117-4a97-ba2b-427794620a9c",
@@ -1794,7 +1885,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 35264,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-cd33e881-ccf5-45bb-9e45-efea90212ad4"
     },
     {
      "movement_id": "a68b8e2b-992e-43ec-8582-c87648f3168c",
@@ -1806,7 +1898,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 16272,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a68b8e2b-992e-43ec-8582-c87648f3168c"
     },
     {
      "movement_id": "572beecf-d576-4f2a-b4fd-5bbac400b3c5",
@@ -1818,7 +1911,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 35264,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-572beecf-d576-4f2a-b4fd-5bbac400b3c5"
     }
    ],
    "phieu": {
@@ -1866,7 +1960,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "66e0cf29-20ff-473f-9c44-15336dfbd744",
@@ -1891,7 +1987,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 400,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7a199558-0b93-430a-896a-2185091b208e"
     },
     {
      "movement_id": "a8450b3b-176c-4799-8d33-cfc41e50f401",
@@ -1903,7 +2000,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 50,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a8450b3b-176c-4799-8d33-cfc41e50f401"
     },
     {
      "movement_id": "2baa1157-bef0-4cd0-be53-64b001ac6cf3",
@@ -1915,7 +2013,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 380,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-2baa1157-bef0-4cd0-be53-64b001ac6cf3"
     },
     {
      "movement_id": "e18a3957-5440-485b-abac-96168446d2e0",
@@ -1927,7 +2026,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 380,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e18a3957-5440-485b-abac-96168446d2e0"
     },
     {
      "movement_id": "b22cb118-27d9-4682-94c6-f6904d007f3f",
@@ -1939,7 +2039,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 130,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-b22cb118-27d9-4682-94c6-f6904d007f3f"
     },
     {
      "movement_id": "9d3697e1-ff80-4b42-b7d0-97ad7faa9717",
@@ -1951,7 +2052,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 100,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-9d3697e1-ff80-4b42-b7d0-97ad7faa9717"
     },
     {
      "movement_id": "dc6d0842-cab2-47b4-af56-071684815b88",
@@ -1963,7 +2065,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 150,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-dc6d0842-cab2-47b4-af56-071684815b88"
     },
     {
      "movement_id": "f50fc8a8-ef36-425c-a187-7f58dc9c4b0a",
@@ -1975,7 +2078,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 130,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-f50fc8a8-ef36-425c-a187-7f58dc9c4b0a"
     }
    ],
    "phieu": {
@@ -2083,7 +2187,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "8c5b668b-be87-4ced-b34e-38d53f876732",
@@ -2108,7 +2214,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1320,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-3e827847-8415-4e51-b258-4da929b70a54"
     },
     {
      "movement_id": "c74813ab-315d-4c7c-9f5a-b9336484162c",
@@ -2120,7 +2227,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1300,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-c74813ab-315d-4c7c-9f5a-b9336484162c"
     }
    ],
    "phieu": {
@@ -2156,7 +2264,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "01851c03-b34c-4630-9348-a808c6aa9cea",
@@ -2181,7 +2291,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1000,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-c231f071-a457-4d07-8802-b7a65ae6abe6"
     }
    ],
    "phieu": {
@@ -2205,7 +2316,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "9319af9e-0795-418c-9746-62d43edd7a33",
@@ -2230,7 +2343,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1030,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-6a50fd07-4e63-4f02-be48-8446a417413e"
     },
     {
      "movement_id": "8e7fe3df-f301-41f7-99b7-a63d4fdcc37d",
@@ -2242,7 +2356,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3399,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-8e7fe3df-f301-41f7-99b7-a63d4fdcc37d"
     },
     {
      "movement_id": "aeaaf825-60f6-4bd9-9e91-7f3df94e33b4",
@@ -2254,7 +2369,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 5726.8,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-aeaaf825-60f6-4bd9-9e91-7f3df94e33b4"
     },
     {
      "movement_id": "8b999d55-c11d-43a8-8e68-c7c8f3aecb74",
@@ -2266,7 +2382,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1895.2,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-8b999d55-c11d-43a8-8e68-c7c8f3aecb74"
     },
     {
      "movement_id": "96202797-62c1-4cc3-ae42-16e0923d9449",
@@ -2278,7 +2395,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1606.8,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-96202797-62c1-4cc3-ae42-16e0923d9449"
     },
     {
      "movement_id": "ee914fab-68db-41de-aea2-8aeaf98d46e3",
@@ -2290,7 +2408,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 803.4,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-ee914fab-68db-41de-aea2-8aeaf98d46e3"
     },
     {
      "movement_id": "07ef8b16-8a9d-4917-9648-1a10948bbe84",
@@ -2302,7 +2421,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1339,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-07ef8b16-8a9d-4917-9648-1a10948bbe84"
     },
     {
      "movement_id": "cbcd270a-718e-474c-90de-8aecf331ac21",
@@ -2314,7 +2434,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1854,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-cbcd270a-718e-474c-90de-8aecf331ac21"
     },
     {
      "movement_id": "381258ae-d108-4723-90b2-61e0351f427d",
@@ -2326,7 +2447,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 824,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-381258ae-d108-4723-90b2-61e0351f427d"
     }
    ],
    "phieu": {
@@ -2446,7 +2568,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "c95bee4e-987b-4459-a149-7c50d7a78fdf",
@@ -2471,7 +2595,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 206,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-b0aeba58-eb1f-4801-9d39-3525de0a6e41"
     },
     {
      "movement_id": "7f863d01-5b17-4c7e-a5f0-9c32e71e2c50",
@@ -2483,7 +2608,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 412,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7f863d01-5b17-4c7e-a5f0-9c32e71e2c50"
     },
     {
      "movement_id": "595bd5c8-a152-4210-bb56-b9bd385ef7dc",
@@ -2495,7 +2621,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 824,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-595bd5c8-a152-4210-bb56-b9bd385ef7dc"
     },
     {
      "movement_id": "69a0db57-db75-4c32-960f-a185277259c1",
@@ -2507,7 +2634,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 412,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-69a0db57-db75-4c32-960f-a185277259c1"
     },
     {
      "movement_id": "3dfb8c89-a2fb-4891-a442-8084600f5387",
@@ -2519,7 +2647,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 412,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-3dfb8c89-a2fb-4891-a442-8084600f5387"
     },
     {
      "movement_id": "54ee1c1a-9152-486a-9d92-3f6f3e5ca8a1",
@@ -2531,7 +2660,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1318.4,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-54ee1c1a-9152-486a-9d92-3f6f3e5ca8a1"
     }
    ],
    "phieu": {
@@ -2615,7 +2745,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "f177d53c-3656-4474-b777-5fc3d6933ec8",
@@ -2640,7 +2772,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2060,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-c598acdd-8cf6-4508-8c30-1038a4cb84a8"
     },
     {
      "movement_id": "1b4d4dad-e10c-4a1e-a1ee-d9bd5f8a95dd",
@@ -2652,7 +2785,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 824,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-1b4d4dad-e10c-4a1e-a1ee-d9bd5f8a95dd"
     },
     {
      "movement_id": "16821bbe-868e-44f6-8967-def8320c1dce",
@@ -2664,7 +2798,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 824,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-16821bbe-868e-44f6-8967-def8320c1dce"
     },
     {
      "movement_id": "86c0773e-5761-4908-ab18-48b7ebd50d7c",
@@ -2676,7 +2811,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 267.8,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-86c0773e-5761-4908-ab18-48b7ebd50d7c"
     },
     {
      "movement_id": "90c49957-7cbd-4898-bc92-70019e967962",
@@ -2688,7 +2824,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 32239,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-90c49957-7cbd-4898-bc92-70019e967962"
     }
    ],
    "phieu": {
@@ -2760,7 +2897,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "6d5d51a0-99ea-4077-adae-412db80d7f62",
@@ -2785,7 +2924,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 5,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-f2c7f82e-a354-40ff-af23-08c5f8c2bcaf"
     },
     {
      "movement_id": "acc62db6-fe74-4166-97e7-8e8968147de0",
@@ -2797,7 +2937,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 10,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-acc62db6-fe74-4166-97e7-8e8968147de0"
     },
     {
      "movement_id": "6ce535ca-5644-4eb8-a84c-8e895a82aea6",
@@ -2809,7 +2950,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2266,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-6ce535ca-5644-4eb8-a84c-8e895a82aea6"
     },
     {
      "movement_id": "6023a72d-3413-4716-88c8-e1ccd7c520d2",
@@ -2821,7 +2963,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 412,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-6023a72d-3413-4716-88c8-e1ccd7c520d2"
     },
     {
      "movement_id": "ad939a5e-efec-4c41-aba9-8efe0d61998d",
@@ -2833,7 +2976,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 824,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-ad939a5e-efec-4c41-aba9-8efe0d61998d"
     },
     {
      "movement_id": "e41c393e-c319-442d-9899-542429e4e9ee",
@@ -2845,7 +2989,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3450.5,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-e41c393e-c319-442d-9899-542429e4e9ee"
     },
     {
      "movement_id": "4adebdd7-657f-47df-8bb3-433cb7e39a8a",
@@ -2857,7 +3002,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1977.6,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-4adebdd7-657f-47df-8bb3-433cb7e39a8a"
     },
     {
      "movement_id": "eb5326c4-c4ef-4b5c-86ed-4a5164fb0719",
@@ -2869,7 +3015,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-eb5326c4-c4ef-4b5c-86ed-4a5164fb0719"
     },
     {
      "movement_id": "87b887d1-1d1b-4282-abdc-63dbcd96a6bb",
@@ -2881,7 +3028,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3708,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-87b887d1-1d1b-4282-abdc-63dbcd96a6bb"
     }
    ],
    "phieu": {
@@ -3001,7 +3149,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "5bf14abe-688c-4ab8-81f4-6b594713a1f4",
@@ -3026,7 +3176,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2232,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-249ba23e-dc72-432b-b161-bb7f53e30047"
     },
     {
      "movement_id": "a32b5ad6-d40d-4cfb-9c33-7cfa620f0001",
@@ -3038,7 +3189,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 399,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a32b5ad6-d40d-4cfb-9c33-7cfa620f0001"
     }
    ],
    "phieu": {
@@ -3074,7 +3226,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "9a32d6d8-d085-481e-9b9f-aceac80948bd",
@@ -3099,7 +3253,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2000,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-413fb3f9-8aca-4943-ab0f-3d05ea0fb69b"
     }
    ],
    "phieu": {
@@ -3123,7 +3278,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "4fce463c-e2ac-474a-a889-5bf06952bd40",
@@ -3148,7 +3305,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2800,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-9819515f-0e98-4f80-ae0b-f3053d9df60d"
     },
     {
      "movement_id": "8db4eb77-a744-4c8d-8288-9295bf06c2b9",
@@ -3160,7 +3318,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 630,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-8db4eb77-a744-4c8d-8288-9295bf06c2b9"
     }
    ],
    "phieu": {
@@ -3196,7 +3355,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "32ed984e-c7b4-4b0b-9351-7644f890ca4c",
@@ -3221,7 +3382,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 43,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-6c6ce4b8-a8d1-4e9d-99ce-f470d68ea47b"
     }
    ],
    "phieu": {
@@ -3245,7 +3407,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "7af75515-57be-4628-a6da-8f206f749ed2",
@@ -3270,7 +3434,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2142.4,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-f6b2343a-6648-46f6-bb6c-d9029077cd24"
     },
     {
      "movement_id": "1ffc9104-8cbc-49cb-9ac1-b336d7d00cf4",
@@ -3282,7 +3447,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2142.4,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-1ffc9104-8cbc-49cb-9ac1-b336d7d00cf4"
     },
     {
      "movement_id": "dbf45d1f-4d3a-4b5c-b101-4393e63af7a4",
@@ -3294,7 +3460,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 7457.2,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-dbf45d1f-4d3a-4b5c-b101-4393e63af7a4"
     },
     {
      "movement_id": "2f55c405-8f9d-4ac8-920b-22949b2976c6",
@@ -3306,7 +3473,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 19364,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-2f55c405-8f9d-4ac8-920b-22949b2976c6"
     },
     {
      "movement_id": "7fd4cca3-59eb-465e-9edd-f66dacdd279a",
@@ -3318,7 +3486,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 14111,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7fd4cca3-59eb-465e-9edd-f66dacdd279a"
     },
     {
      "movement_id": "a5a53c54-aaee-442c-8956-bee33a621b2f",
@@ -3330,7 +3499,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 4944,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a5a53c54-aaee-442c-8956-bee33a621b2f"
     },
     {
      "movement_id": "395af8ac-51cc-44e1-b1e7-dad7f18769de",
@@ -3342,7 +3512,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 412,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-395af8ac-51cc-44e1-b1e7-dad7f18769de"
     },
     {
      "movement_id": "ea187bb9-751c-4406-abab-00cc643b5697",
@@ -3354,7 +3525,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 103,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-ea187bb9-751c-4406-abab-00cc643b5697"
     },
     {
      "movement_id": "54a66841-a2b0-4084-9f83-acd02cd2aa9f",
@@ -3366,7 +3538,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1648,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-54a66841-a2b0-4084-9f83-acd02cd2aa9f"
     },
     {
      "movement_id": "d5ba7241-8f4b-4fa7-9c34-cbbb1d6a928b",
@@ -3378,7 +3551,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1648,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-d5ba7241-8f4b-4fa7-9c34-cbbb1d6a928b"
     },
     {
      "movement_id": "ccef8823-44f0-473e-b854-42f435873d71",
@@ -3390,7 +3564,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 206,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-ccef8823-44f0-473e-b854-42f435873d71"
     }
    ],
    "phieu": {
@@ -3534,7 +3709,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "58eea468-8d62-4f00-852f-7051704fd1e4",
@@ -3559,7 +3736,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1617,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-9f8ac227-277c-4a79-aa50-0afeeb35b9be"
     },
     {
      "movement_id": "2c614b6b-43d2-40b7-aa52-ea2e11da1cc9",
@@ -3571,7 +3749,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2376,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-2c614b6b-43d2-40b7-aa52-ea2e11da1cc9"
     },
     {
      "movement_id": "23bd5afb-682b-4c6a-b702-dfda6b273c39",
@@ -3583,7 +3762,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 3062.4,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-23bd5afb-682b-4c6a-b702-dfda6b273c39"
     }
    ],
    "phieu": {
@@ -3631,7 +3811,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "8d4c3a44-efe4-4a99-bc6a-5dc2c30d7e2d",
@@ -3656,7 +3838,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 7340,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-db156fda-bc8a-49e9-94fb-072b32f50c57"
     },
     {
      "movement_id": "772438b5-7431-4141-b309-149042677f41",
@@ -3668,7 +3851,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2000,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-772438b5-7431-4141-b309-149042677f41"
     },
     {
      "movement_id": "49b2dd23-6ede-4108-adca-9846575299ce",
@@ -3680,7 +3864,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 600,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-49b2dd23-6ede-4108-adca-9846575299ce"
     },
     {
      "movement_id": "87d17c08-5c9a-4c7b-9050-42b44152e1fb",
@@ -3692,7 +3877,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 600,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-87d17c08-5c9a-4c7b-9050-42b44152e1fb"
     },
     {
      "movement_id": "f909c29d-d6bd-4fb8-8713-509cde669b36",
@@ -3704,7 +3890,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 400,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-f909c29d-d6bd-4fb8-8713-509cde669b36"
     }
    ],
    "phieu": {
@@ -3776,7 +3963,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "9761b3b5-cff0-4ac4-ba3c-47863c133efd",
@@ -3801,7 +3990,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 60,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-128bcb80-3488-43ed-8496-6dd53e82589a"
     },
     {
      "movement_id": "9689d12e-cb62-4e1e-b9a4-ea56e02c22f6",
@@ -3813,7 +4003,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 60,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-9689d12e-cb62-4e1e-b9a4-ea56e02c22f6"
     },
     {
      "movement_id": "24fdc794-d7e2-4e94-b2de-a41a28d8ff86",
@@ -3825,7 +4016,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 59.91,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-24fdc794-d7e2-4e94-b2de-a41a28d8ff86"
     }
    ],
    "phieu": {
@@ -3873,7 +4065,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "563a554e-bd14-4212-aa68-174226879f42",
@@ -3898,7 +4092,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 450,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-44b301fa-9d7f-4bf5-bd9e-487574310a05"
     }
    ],
    "phieu": {
@@ -3922,7 +4117,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "52b85920-2e43-4e5f-98c0-94191a5eac12",
@@ -3947,7 +4144,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 160,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-cc86ac93-69b4-4d50-8cd3-7c31aee9b7b0"
     }
    ],
    "phieu": {
@@ -3971,7 +4169,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "beb2d9b3-c2b4-4403-a6b6-6a8ca0664014",
@@ -3996,7 +4196,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 600,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-b76a5be8-251f-4996-8172-a802b0c01c3d"
     }
    ],
    "phieu": {
@@ -4020,7 +4221,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "1cdbc505-a06e-4d20-a2d6-6fe0be061f46",
@@ -4045,7 +4248,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 100,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-88c2ae4e-e9f5-439d-957d-94194a764ef8"
     }
    ],
    "phieu": {
@@ -4069,7 +4273,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "856fdb18-8162-4947-a73c-4e57a1b3d190",
@@ -4094,7 +4300,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 275,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-45acfd8a-7436-410e-94b9-7f1c33679e8b"
     },
     {
      "movement_id": "94ccd9bb-d7fa-4041-b894-7b62279b10df",
@@ -4106,7 +4313,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 125,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-94ccd9bb-d7fa-4041-b894-7b62279b10df"
     }
    ],
    "phieu": {
@@ -4142,7 +4350,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "33c86027-564c-4f87-8b02-9984ad910554",
@@ -4167,7 +4377,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 99,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-922a68d8-3a3f-4c93-b67f-f71149c8e07f"
     },
     {
      "movement_id": "7e7a1209-e94e-4829-849c-64c2befbc0ee",
@@ -4179,7 +4390,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 52,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-7e7a1209-e94e-4829-849c-64c2befbc0ee"
     }
    ],
    "phieu": {
@@ -4215,7 +4427,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "32631deb-34ed-4ecd-bd4f-19267001a374",
@@ -4240,7 +4454,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1000,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a4d4eb50-18fa-4bca-a7e2-7af007d2b21e"
     },
     {
      "movement_id": "d9bea72d-3c34-4d08-b9b0-5bd55f7f3fb0",
@@ -4252,7 +4467,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 250,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-d9bea72d-3c34-4d08-b9b0-5bd55f7f3fb0"
     }
    ],
    "phieu": {
@@ -4288,7 +4504,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "9d946b1f-c162-4899-ac87-cac09c96f1b3",
@@ -4313,7 +4531,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 2500,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-8c441021-1dc9-48d8-bb4b-2133d40a6a31"
     },
     {
      "movement_id": "822c82ba-c750-48f8-8746-a99b9f4e1927",
@@ -4325,7 +4544,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 250,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-822c82ba-c750-48f8-8746-a99b9f4e1927"
     }
    ],
    "phieu": {
@@ -4361,7 +4581,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "b7ead36a-d82e-49a7-becc-b175eb7c7cda",
@@ -4386,7 +4608,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 125,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-64793505-030b-4003-929b-7079e42f027e"
     },
     {
      "movement_id": "cdaa1883-3cb4-40e2-a7ec-754a9e62d72a",
@@ -4398,7 +4621,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 100,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-cdaa1883-3cb4-40e2-a7ec-754a9e62d72a"
     }
    ],
    "phieu": {
@@ -4434,7 +4658,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "1816232f-c821-4255-b2d8-3af5c4fcb049",
@@ -4459,7 +4685,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 925,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-a7cc3b9f-d764-4639-be4d-33826a5126a0"
     },
     {
      "movement_id": "bc2b74c1-511e-495b-8b0f-bbfcadbcb61e",
@@ -4471,7 +4698,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 60,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-bc2b74c1-511e-495b-8b0f-bbfcadbcb61e"
     }
    ],
    "phieu": {
@@ -4507,7 +4735,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   },
   {
    "doc_id": "05107b44-d0b2-4842-af18-a282681b8192",
@@ -4532,7 +4762,8 @@
      "qty2_actual": null,
      "can_kg": false,
      "qty_ordered": 1050,
-     "kg_don": null
+     "kg_don": null,
+     "po_line_id": "pl-166c99df-d1ab-489a-9bc3-2b9e182ef23c"
     }
    ],
    "phieu": {
@@ -4556,7 +4787,9 @@
     "latest_for_po": true,
     "po_open_lines": 0,
     "over_lines": 0
-   }
+   },
+   "dieu_chinh": [],
+   "chenh_theo_dong": {}
   }
  ]
 }

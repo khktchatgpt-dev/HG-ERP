@@ -1,7 +1,7 @@
 import { db } from '@/server/db'
 import { poLineAmount, type PriceBasis } from '@/lib/po-line'
 import { docEventAt } from '@/lib/date-vn'
-import { suaLaiTu } from '@/lib/da-ve'
+import { dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
 
 /**
  * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
@@ -286,7 +286,7 @@ export const supplyRepo = {
       doc_id: string
       code: string
       /** `reversal` = phiếu ĐẢO một phiếu khác (xuất ngược) — KHÔNG phải trả NCC. */
-      kind: 'receipt' | 'return' | 'reversal'
+      kind: 'receipt' | 'return' | 'reversal' | 'adjustment'
       qty_total: number
       at: string
       entered_at: string
@@ -296,6 +296,8 @@ export const supplyRepo = {
       reversed_by: string | null
       /** Phiếu nhập lập lại để sửa phiếu nào ("Sửa lại PNK-…"). */
       fix_of: string | null
+      /** `adjustment`: điều chỉnh chênh lệch của phiếu nào (C). `qty_total` CÓ DẤU (− = trừ). */
+      adjust_of: string | null
     }[]
   > {
     const { data: lineRows } = await db()
@@ -331,35 +333,43 @@ export const supplyRepo = {
       {
         doc_id: string
         code: string
-        kind: 'receipt' | 'return' | 'reversal'
+        kind: 'receipt' | 'return' | 'reversal' | 'adjustment'
         qty_total: number
         doc_date: string | null
         entered_at: string
         reversal_of_id: string | null
         fix_of: string | null
+        adjust_of: string | null
       }
     >()
     for (const r of (data ?? []) as unknown as R[]) {
       const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      const adjustOf = dieuChinhCua(d?.note)
       const cur = byDoc.get(r.doc_id) ?? {
         doc_id: r.doc_id,
         code: d?.code ?? '?',
         kind: d?.reversal_of_doc_id
           ? ('reversal' as const)
-          : r.direction === 'in'
-            ? ('receipt' as const)
-            : ('return' as const),
+          : adjustOf
+            ? ('adjustment' as const)
+            : r.direction === 'in'
+              ? ('receipt' as const)
+              : ('return' as const),
         qty_total: 0,
         doc_date: d?.doc_date ?? null,
         entered_at: r.created_at,
         reversal_of_id: d?.reversal_of_doc_id ?? null,
         fix_of: suaLaiTu(d?.note),
+        adjust_of: adjustOf,
       }
       // "Đã nhận" cùng công thức BR-08: đạt + QC loại (NCC đã giao số đó).
+      // Phiếu điều chỉnh mang DẤU — "−270" mới nói đúng là trừ bớt số đã nhận.
       cur.qty_total +=
         r.direction === 'in'
           ? Number(r.qty ?? 0) + Number(r.qty_rejected ?? 0)
-          : Number(r.qty ?? 0)
+          : adjustOf
+            ? -Number(r.qty ?? 0)
+            : Number(r.qty ?? 0)
       if (r.created_at < cur.entered_at) cur.entered_at = r.created_at
       byDoc.set(r.doc_id, cur)
     }

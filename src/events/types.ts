@@ -124,6 +124,22 @@ export type DomainEvent =
       changes: { label: string; before: string | null; after: string | null }[]
     }
   /**
+   * ĐIỀU CHỈNH CHÊNH LỆCH phiếu nhập đã ghi sổ (C, 02/10/2026): hàng đã dùng nên
+   * không đảo được — ghi PNK bổ sung / PXK điều chỉnh đúng phần lệch. Vết vào
+   * Trao đổi của đơn mua (handler `warehouse.audit`).
+   */
+  | {
+      name: 'warehouse.doc.adjusted'
+      doc_id: string
+      doc_code: string
+      po_id: string
+      adjust_codes: string[]
+      actor_id: string
+      actor_name: string | null
+      reason: string
+      changes: { label: string; before: number; after: number }[]
+    }
+  /**
    * GHI KG CÂN BỔ SUNG vào phiếu nhập ĐÃ GHI SỔ (01/10/2026, chủ dự án duyệt):
    * nhôm/thép trả tiền theo kg cân mà lúc nhận quên cân. Kg chỉ là số đo, không
    * đổi tồn — nên cho ghi sau, bắt lý do; vết đi vào Trao đổi của ĐƠN MUA để

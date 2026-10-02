@@ -129,6 +129,21 @@ export const docInfoSchema = z.object({
 })
 export type DocInfoInput = z.infer<typeof docInfoSchema>
 
+/** Điều chỉnh chênh lệch phiếu nhập (C) — số ĐÚNG của từng dòng đơn muốn đổi. */
+export const docAdjustSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        po_line_id: z.uuid(),
+        qty: z.number().finite().nonnegative(),
+      }),
+    )
+    .min(1, 'Chưa đổi số dòng nào')
+    .max(500),
+  reason: z.string().trim().min(3, 'Ghi lý do điều chỉnh').max(500),
+})
+export type DocAdjustInput = z.infer<typeof docAdjustSchema>
+
 export const docReverseSchema = z.object({
   reason: z.string().trim().min(1, 'Đảo phiếu phải kèm lý do').max(500),
 })

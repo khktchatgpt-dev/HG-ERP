@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { api, apiErrorText } from '@/lib/api'
+import { ApiError, api, apiErrorText } from '@/lib/api'
 import { DAU_SUA_PHIEU } from '@/lib/da-ve'
 import {
   Chip,
@@ -14,6 +14,7 @@ import {
   useToast,
 } from '@/components/kit'
 import type { DaVeRow } from '@/modules/dept/supply/da-ve.repo'
+import { DieuChinhBang, dongDieuChinh, dongDoi } from './dieu-chinh-bang'
 
 const so = (n: number) => n.toLocaleString('vi-VN')
 /** Cùng lớp với kit `TextInput` — nhưng cập nhật theo TỪNG PHÍM: nút Lưu phải mở ngay khi gõ, không đợi rời ô. */
@@ -21,7 +22,7 @@ const O_NHAP =
   'h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] text-k-sm bg-[var(--surface-card)] px-2 placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)]'
 const NHAN = 'text-k-sm flex flex-col gap-1'
 const NHAN_CHU = 'font-semibold text-[var(--ink-2)]'
-type Kieu = 'thong-tin' | 'so-luong'
+type Kieu = 'thong-tin' | 'so-luong' | 'chenh-lech'
 
 /**
  * SỬA PHIẾU NHẬP ĐÃ GHI SỔ (02/10/2026, chủ dự án duyệt A + B). Hai cách, chọn ở
@@ -35,6 +36,9 @@ type Kieu = 'thong-tin' | 'so-luong'
  *    (`/nhan?sua=`). Vết: PNK cũ → PXK đảo → PNK mới ("Sửa lại PNK-…"). Bỏ ngang
  *    thì phiếu cũ nằm ở Cần xử lý với nút Lập lại phiếu. Cách của SAP (Cancel &
  *    re-post), Odoo (Return rồi nhận lại).
+ *  · Điều chỉnh chênh lệch (C) — hàng ĐÃ DÙNG nên không đảo nguyên phiếu được:
+ *    chỉ ghi phần lệch từng dòng (PNK bổ sung / PXK điều chỉnh), phiếu gốc giữ
+ *    nguyên (`dieuChinhPhieuNhap`). Đảo bị chặn vì thiếu tồn thì hộp mời sang đây.
  *
  * Server là người quyết (hàng đã dùng, hàng QC loại, phiếu đã đảo…) — câu lỗi
  * hiện ngay trong hộp.
@@ -49,6 +53,12 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
   const [lyDo, setLyDo] = useState('')
   const [busy, setBusy] = useState(false)
   const [loi, setLoi] = useState<string | null>(null)
+  // Đảo bị chặn vì hàng đã xuất đi → mời sang điều chỉnh chênh lệch.
+  const [moiChenh, setMoiChenh] = useState(false)
+  const dong = useMemo(() => dongDieuChinh(row), [row])
+  const [go, setGo] = useState<Record<string, string>>({})
+  const doi = dongDoi(dong, go)
+  const daDieuChinh = row.dieu_chinh ?? []
 
   const doiThongTin =
     soNcc.trim() !== (row.supplier_doc_no ?? '') ||
@@ -57,15 +67,35 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
   const why =
     kieu === 'thong-tin' && !doiThongTin
       ? 'Chưa đổi thông tin nào'
-      : lyDo.trim().length < 3
-        ? 'Ghi lý do sửa (sai gì)'
-        : null
+      : kieu === 'so-luong' && daDieuChinh.length > 0
+        ? `Phiếu đã có điều chỉnh ${daDieuChinh.join(', ')} — sửa số tiếp bằng Điều chỉnh chênh lệch`
+        : kieu === 'chenh-lech' && doi.length === 0
+          ? 'Chưa đổi số đúng dòng nào'
+          : kieu === 'chenh-lech' && doi.some((d) => Number.isNaN(d.qty))
+            ? 'Có ô số đúng đọc không được (số không âm, ví dụ 1.030)'
+            : lyDo.trim().length < 3
+              ? 'Ghi lý do sửa (sai gì)'
+              : null
 
   async function luu() {
     if (why) return
     setBusy(true)
     setLoi(null)
+    setMoiChenh(false)
     try {
+      if (kieu === 'chenh-lech') {
+        const r = await api<{ docs: { code: string }[] }>(
+          `/api/dept/warehouse/docs/${row.doc_id}/dieu-chinh`,
+          { method: 'POST', body: { lines: doi.map((d) => ({ po_line_id: d.po_line_id, qty: d.qty })), reason: lyDo.trim() } }, // prettier-ignore
+        )
+        toast.success(
+          `Đã điều chỉnh ${row.code}`,
+          `Ghi ${r.docs.map((d) => d.code).join(' + ')} — vết vào Trao đổi của ${row.po_code}`,
+        )
+        onClose()
+        router.refresh()
+        return
+      }
       if (kieu === 'thong-tin') {
         await api(`/api/dept/warehouse/docs/${row.doc_id}/thong-tin`, {
           method: 'PATCH',
@@ -95,6 +125,7 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
       router.push(`/mua-hang/don/${row.po_id}/nhan?sua=${row.doc_id}`)
     } catch (e) {
       setLoi(apiErrorText(e))
+      setMoiChenh(e instanceof ApiError && e.code === 'REVERSAL_STOCK_SHORT')
       setBusy(false)
     }
   }
@@ -113,12 +144,31 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
               className={`text-k-sm mb-2 ${loi ? 'text-[var(--stop)]' : 'text-[var(--warn)]'}`}
             >
               {loi ?? why}
+              {moiChenh && (
+                <button
+                  type="button"
+                  className="ml-2 font-semibold text-[var(--act)] hover:underline"
+                  onClick={() => {
+                    setKieu('chenh-lech')
+                    setLoi(null)
+                    setMoiChenh(false)
+                  }}
+                >
+                  Điều chỉnh chênh lệch thay vì đảo →
+                </button>
+              )}
             </div>
           )}
           <SheetActions
             onCancel={onClose}
             onConfirm={() => void luu()}
-            confirmLabel={kieu === 'thong-tin' ? 'Lưu thông tin' : 'Đảo phiếu và lập lại'}
+            confirmLabel={
+              kieu === 'thong-tin'
+                ? 'Lưu thông tin'
+                : kieu === 'so-luong'
+                  ? 'Đảo phiếu và lập lại'
+                  : 'Ghi phiếu điều chỉnh'
+            }
             busy={busy}
             disabled={!!why}
           />
@@ -131,6 +181,9 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
         </Chip>
         <Chip on={kieu === 'so-luong'} onClick={() => setKieu('so-luong')}>
           Sửa số lượng / dòng
+        </Chip>
+        <Chip on={kieu === 'chenh-lech'} onClick={() => setKieu('chenh-lech')}>
+          Điều chỉnh chênh lệch (hàng đã dùng)
         </Chip>
       </div>
 
@@ -164,6 +217,12 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
             />
           </label>
         </div>
+      ) : kieu === 'chenh-lech' ? (
+        <DieuChinhBang
+          dong={dong}
+          go={go}
+          onGo={(id, v) => setGo((g) => ({ ...g, [id]: v }))}
+        />
       ) : (
         <div className="flex flex-col">
           {row.lines.map((l) => (
@@ -195,15 +254,17 @@ export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => v
           placeholder={
             kieu === 'thong-tin'
               ? 'ví dụ: gõ nhầm số phiếu giao PG-12 thành PG-21'
-              : 'ví dụ: gõ nhầm 1.300 thành 1.030 ở dòng ST-0070'
+              : 'ví dụ: thực nhận 1.030 cây, gõ nhầm 1.300 ở dòng ST-0070'
           }
           aria-label="Lý do sửa phiếu nhập"
         />
       </div>
       <Consequence>
-        {kieu === 'thong-tin'
-          ? 'Chỉ đổi thông tin trên phiếu — tồn kho, số đã nhận và công nợ giữ nguyên. Ai sửa, lúc nào, trước → sau và lý do ghi vào Trao đổi của đơn. Sai ngày chứng từ thì dùng Sửa số lượng / dòng.'
-          : `Bước 1: đảo ${row.code} — ghi một phiếu xuất ngược đúng các dòng trên (tồn trừ lại, đơn quay về số đã nhận trước phiếu này). Bước 2: mở phiếu nhập mới, số đã điền sẵn theo phiếu cũ — sửa chỗ sai rồi Ghi sổ. Hàng đã lấy ra dùng thì không đảo được.`}
+        {kieu === 'chenh-lech'
+          ? `Phiếu ${row.code} giữ nguyên. Ghi thêm phiếu điều chỉnh đúng phần lệch: số đúng NHỎ hơn → phiếu xuất điều chỉnh (chỉ cần tồn còn đủ phần lệch, không cần cả phiếu); LỚN hơn → phiếu nhập bổ sung. Số đã nhận, trạng thái đơn và công nợ tính lại theo số đúng; ngày chứng từ là hôm nay.${daDieuChinh.length ? ` Đã điều chỉnh trước: ${daDieuChinh.join(', ')} — cột "Đang ghi" đã tính cả lần đó.` : ''}`
+          : kieu === 'thong-tin'
+            ? 'Chỉ đổi thông tin trên phiếu — tồn kho, số đã nhận và công nợ giữ nguyên. Ai sửa, lúc nào, trước → sau và lý do ghi vào Trao đổi của đơn. Sai ngày chứng từ thì dùng Sửa số lượng / dòng.'
+            : `Bước 1: đảo ${row.code} — ghi một phiếu xuất ngược đúng các dòng trên (tồn trừ lại, đơn quay về số đã nhận trước phiếu này). Bước 2: mở phiếu nhập mới, số đã điền sẵn theo phiếu cũ — sửa chỗ sai rồi Ghi sổ. Hàng đã lấy ra dùng thì không đảo được.`}
       </Consequence>
     </Sheet>
   )

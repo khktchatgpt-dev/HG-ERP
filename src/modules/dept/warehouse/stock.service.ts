@@ -61,6 +61,8 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { DAU_DIEU_CHINH, dieuChinhCua } from '@/lib/da-ve'
+import { tinhChenhLech } from '@/lib/dieu-chinh-nhap'
 
 type ReceiveInput = {
   material_id: string
@@ -1484,7 +1486,9 @@ export const stockService = {
     if (await docsRepo.findReversalOf(docId))
       throw BadRequest(`Phiếu ${doc.code} đã bị đảo — hết hiệu lực, không sửa nữa`)
     const sach = (v: string | null | undefined) => (v ?? '').trim() || null
-    const dau = doc.note?.match(/Sửa lại PNK-[0-9-]+ \(đã đảo bởi [^)]+\)/)?.[0] ?? null
+    // Dấu nối phiếu (A "Sửa lại …", C "Điều chỉnh phiếu …") không được mất khi sửa ghi chú.
+    const dau =
+      doc.note?.match(/Sửa lại PNK-[0-9-]+ \(đã đảo bởi [^)]+\)|Điều chỉnh phiếu PNK-[0-9-]+/)?.[0] ?? null // prettier-ignore
     let note = input.note === undefined ? undefined : sach(input.note)
     if (note !== undefined && dau && !note?.includes(dau))
       note = note ? `${dau} · ${note}` : dau
@@ -1521,6 +1525,129 @@ export const stockService = {
     return { changed: truong.length }
   },
 
+  /**
+   * ĐIỀU CHỈNH CHÊNH LỆCH PHIẾU NHẬP (C, 02/10/2026 — chủ dự án duyệt A·B·C).
+   *
+   * Khi hàng của phiếu đã xuất cho sản xuất thì `reverseDoc` chặn (đảo = xuất
+   * ngược TOÀN BỘ). Ở đây chỉ ghi PHẦN LỆCH từng dòng đơn: ghi thừa → PXK điều
+   * chỉnh (chỉ cần còn tồn đúng phần lệch), ghi thiếu → PNK bổ sung. Phiếu gốc
+   * giữ nguyên; phiếu điều chỉnh nối về nó bằng dấu `Điều chỉnh phiếu PNK-…` ở
+   * ghi chú (cùng lối dấu "Sửa lại PNK-…" của A).
+   *
+   * Dòng sổ giữ ĐÚNG mã lý do + giá vốn của dòng gốc và `ref_type 'adjust'` — y
+   * như dòng đảo: báo cáo nhập theo mã NET được, công nợ theo phiếu nhập trừ/cộng
+   * đúng phần lệch, "đã nhận" của đơn (view cộng mọi dòng sổ gắn dòng đơn) tự đúng.
+   * Ngày chứng từ = hôm nay: sửa sai là việc của hôm nay, không viết lại kỳ đã qua.
+   */
+  async dieuChinhPhieuNhap(
+    user: User,
+    docId: string,
+    input: { lines: { po_line_id: string; qty: number }[]; reason: string },
+  ): Promise<{ docs: { id: string; code: string }[]; po_status: string | null }> {
+    await assertAction(user, 'warehouse.stock.write')
+    const reason = input.reason.trim()
+    if (reason.length < 3) throw BadRequest('Ghi lý do điều chỉnh (sai gì)')
+    const doc = await docsRepo.findById(docId)
+    if (!doc) throw NotFound('Phiếu kho không tồn tại')
+    if (doc.kind !== 'receipt' || doc.status !== 'posted' || doc.reversal_of_doc_id)
+      throw BadRequest('Chỉ điều chỉnh được phiếu NHẬP đã ghi sổ')
+    const goc = dieuChinhCua(doc.note)
+    if (goc) throw BadRequest(`Đây là phiếu điều chỉnh — điều chỉnh tiếp trên phiếu gốc ${goc}`) // prettier-ignore
+    const rev = await docsRepo.findReversalOf(docId)
+    if (rev)
+      throw BadRequest(`Phiếu ${doc.code} đã bị đảo bởi ${rev.code} — hết hiệu lực`)
+
+    const [lines, truoc] = await Promise.all([
+      docsRepo.listLines(docId),
+      docsRepo.adjustmentsOf(doc.code),
+    ])
+    const dongGoc = lines.flatMap((l) =>
+      l.direction === 'in' && l.po_line_id
+        ? [{ po_line_id: l.po_line_id, material_id: l.material_id, qty: l.qty, unit_cost: l.unit_cost ?? null, reason_code: l.reason_code }] // prettier-ignore
+        : [],
+    )
+    if (dongGoc.length === 0) throw BadRequest('Phiếu không có dòng nhập theo đơn mua')
+    const { dong, loi } = tinhChenhLech(dongGoc, truoc.lines, input.lines)
+    if (loi.length > 0) throw BadRequest(loi.join(' · '))
+
+    const tenVt = new Map(lines.map((l) => [l.material_id, l]))
+    const nhan = (matId: string) => {
+      const m = tenVt.get(matId)
+      return m?.material_code
+        ? `${m.material_code} ${m.material_name ?? ''}`.trim()
+        : matId
+    }
+    // Ghi thừa → trừ lại: tồn phải còn ĐÚNG phần lệch (không phải cả phiếu như đảo).
+    const bot = dong.filter((d) => d.chenh < 0)
+    if (bot.length > 0) {
+      const need = new Map<string, number>()
+      for (const d of bot)
+        need.set(d.material_id, (need.get(d.material_id) ?? 0) - d.chenh)
+      const onHand = await onHandMany([...need.keys()])
+      const thieu = [...need].filter(([m, q]) => q > (onHand.get(m) ?? 0) + 1e-9)
+      if (thieu.length > 0)
+        throw Conflict(
+          `Tồn không đủ để trừ phần ghi thừa: ${thieu.map(([m, q]) => `"${nhan(m)}" cần trừ ${q}, tồn còn ${onHand.get(m) ?? 0}`).join('; ')}. Hàng đã xuất hết thì phải thu hồi hoặc điều chỉnh phiếu xuất trước.`, // prettier-ignore
+          'ADJUST_STOCK_SHORT',
+        )
+    }
+    const poIds = await supplyRepo.poIdsByLineIds(dong.map((d) => d.po_line_id))
+    if (poIds.length !== 1) throw BadRequest('Phiếu nhập phải thuộc đúng một đơn mua')
+
+    const warehouseId = await warehousesRepo.mainId()
+    const dau = `${DAU_DIEU_CHINH} ${doc.code}`
+    const tao: { id: string; code: string }[] = []
+    for (const [huong, nhom] of [
+      ['in', dong.filter((d) => d.chenh > 0)],
+      ['out', bot],
+    ] as const) {
+      if (nhom.length === 0) continue
+      const code = await docsRepo.nextCode(huong === 'in' ? 'PNK' : 'PXK')
+      const moi = await docsRepo.insert({
+        code,
+        kind: huong === 'in' ? 'receipt' : 'issue',
+        reason: `${dau}: ${reason}`,
+        note: dau,
+        created_by: user.id,
+      })
+      await insertMovements(
+        nhom.map((d) => ({
+          material_id: d.material_id,
+          direction: huong,
+          qty: Math.abs(d.chenh),
+          unit_cost: d.unit_cost,
+          ref_type: 'adjust',
+          reason_code: d.reason_code ?? 'N1',
+          note: `${dau}: ${d.hien} → ${d.moi}`,
+          created_by: user.id,
+          doc_id: moi.id,
+          warehouse_id: warehouseId,
+          po_line_id: d.po_line_id,
+        })),
+      )
+      tao.push({ id: moi.id, code: moi.code })
+    }
+
+    const poStatus = await supplyRepo.refreshStatusFromReceipts(poIds[0])
+    await syncShipmentsFromReceipts(poIds[0])
+    await emit({
+      name: 'warehouse.doc.adjusted',
+      doc_id: docId,
+      doc_code: doc.code,
+      po_id: poIds[0],
+      adjust_codes: tao.map((t) => t.code),
+      actor_id: user.id,
+      actor_name: user.name ?? user.email,
+      reason,
+      changes: dong.map((d) => ({
+        label: nhan(d.material_id),
+        before: d.hien,
+        after: d.moi,
+      })),
+    })
+    return { docs: tao, po_status: poStatus }
+  },
+
   async reverseDoc(
     user: User,
     docId: string,
@@ -1542,6 +1669,15 @@ export const stockService = {
     const existing = await docsRepo.findReversalOf(docId)
     if (existing) {
       throw BadRequest(`Phiếu đã được đảo bởi ${existing.code} — không đảo lần hai`)
+    }
+    // Đảo phiếu gốc khi còn phiếu điều chỉnh (C) sống là để lại phần lệch mồ côi
+    // trên sổ — số "đã nhận" của đơn sai ngay. Đảo phiếu điều chỉnh trước.
+    if (doc.kind === 'receipt') {
+      const adj = (await docsRepo.adjustmentsOf(doc.code)).docs.filter((d) => !d.reversed)
+      if (adj.length > 0)
+        throw BadRequest(
+          `Phiếu ${doc.code} đã có phiếu điều chỉnh ${adj.map((d) => d.code).join(', ')} — đảo phiếu điều chỉnh trước, hoặc điều chỉnh tiếp trên phiếu này`,
+        )
     }
     const lines = await docsRepo.listLines(docId)
     if (lines.length === 0) throw BadRequest('Phiếu không có dòng nào')
@@ -1590,6 +1726,12 @@ export const stockService = {
         material_id: l.material_id,
         direction: (l.direction === 'in' ? 'out' : 'in') as 'in' | 'out',
         qty: l.qty,
+        /*
+         * Giá vốn CHÉP từ dòng gốc (vá 02/10/2026). Thiếu nó thì công nợ theo phiếu
+         * nhập (`payablesRepo.receiptValues` chỉ lấy dòng CÓ giá) vẫn cộng phiếu
+         * đã đảo mà không trừ lại — đo được ở PXK-2026-0029: 0/15 dòng có giá.
+         */
+        unit_cost: l.unit_cost ?? null,
         // ref 'adjust': đây là bút toán sửa sổ, không phải nghiệp vụ nhận/cấp mới.
         ref_type: 'adjust',
         /*

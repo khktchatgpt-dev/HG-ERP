@@ -14,14 +14,19 @@ const LOAI: Record<string, { label: string; tone: 'done' | 'stop' | 'neutral' }>
   receipt: { label: 'Phiếu nhập kho', tone: 'done' },
   return: { label: 'Xuất trả NCC', tone: 'stop' },
   reversal: { label: 'Phiếu đảo', tone: 'neutral' },
+  adjustment: { label: 'Điều chỉnh', tone: 'neutral' },
 }
 
-/** Câu tình trạng của một phiếu — đảo / sửa lại / còn hiệu lực. */
-function tinhTrang(d: Doc): { text: string; dead: boolean } {
+/** Câu tình trạng của một phiếu — đảo / sửa lại / điều chỉnh / còn hiệu lực. */
+function tinhTrang(d: Doc, dieuChinh: string[]): { text: string; dead: boolean } {
   if (d.reversed_by) return { text: `Đã đảo bởi ${d.reversed_by} — số không còn tính`, dead: true } // prettier-ignore
   if (d.kind === 'reversal') return { text: d.reversal_of ? `Đảo ${d.reversal_of}` : 'Đảo phiếu khác', dead: false } // prettier-ignore
-  if (d.fix_of) return { text: `Còn hiệu lực · lập lại thay ${d.fix_of}`, dead: false }
-  return { text: 'Còn hiệu lực', dead: false }
+  if (d.kind === 'adjustment') return { text: `Chênh lệch của ${d.adjust_of ?? 'phiếu khác'}`, dead: false } // prettier-ignore
+  const them = [
+    d.fix_of ? `lập lại thay ${d.fix_of}` : null,
+    dieuChinh.length ? `đã điều chỉnh bởi ${dieuChinh.join(', ')}` : null,
+  ].filter(Boolean)
+  return { text: ['Còn hiệu lực', ...them].join(' · '), dead: false }
 }
 
 /**
@@ -50,7 +55,12 @@ export function ChungTuKhoGrid({ docs, coSua = true }: { docs: Doc[]; coSua?: bo
       <GridBody>
         {docs.map((d) => {
           const loai = LOAI[d.kind] ?? LOAI.return
-          const tt = tinhTrang(d)
+          const tt = tinhTrang(
+            d,
+            docs
+              .filter((x) => x.adjust_of === d.code && !x.reversed_by)
+              .map((x) => x.code),
+          )
           const suaDuoc = coSua && d.kind === 'receipt' && !d.reversed_by
           return (
             <GridRow key={d.doc_id}>
@@ -75,6 +85,7 @@ export function ChungTuKhoGrid({ docs, coSua = true }: { docs: Doc[]; coSua?: bo
                 <span
                   className={tt.dead ? 'text-[var(--ink-3)] line-through' : undefined}
                 >
+                  {d.kind === 'adjustment' && d.qty_total > 0 ? '+' : ''}
                   {num(d.qty_total)}
                 </span>
               </Td>

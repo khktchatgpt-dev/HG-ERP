@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { searchTokens } from '@/lib/search-text'
 import { summariseDoc, type DocSummary } from '@/lib/warehouse-doc-summary'
+import { dieuChinhCua } from '@/lib/da-ve'
 
 export type StockRow = {
   material_id: string
@@ -390,6 +391,8 @@ export type DocLine = Movement & {
   po_line_id: string | null
   production_order_id: string | null
   qty_ordered: number | null // SL theo chứng từ (dòng PO) — mẫu 01-VT
+  /** Giá vốn dòng — phiếu đảo / điều chỉnh chép lại để công nợ trừ đúng. */
+  unit_cost?: number | null
 }
 
 const DOC_COLS =
@@ -837,9 +840,62 @@ export const docsRepo = {
 
   /** Dòng của 1 phiếu + SL đặt trên dòng PO (in "theo chứng từ" của mẫu 01-VT). */
   /** Sửa thông tin KHÔNG ảnh hưởng tồn của phiếu (B, 02/10/2026). */
+  /**
+   * Các phiếu ĐIỀU CHỈNH CHÊNH LỆCH của một phiếu nhập (C, 02/10/2026) — nối
+   * bằng dấu trong ghi chú (`DAU_DIEU_CHINH`), cùng lối dấu "Sửa lại PNK-…" của A.
+   * Trả kèm dòng sổ của chúng VÀ của phiếu đảo chúng (đảo phiếu điều chỉnh là
+   * huỷ lần điều chỉnh đó) — cộng có dấu ra đúng số đang ghi.
+   */
+  async adjustmentsOf(code: string): Promise<{
+    docs: { id: string; code: string; reversed: boolean }[]
+    lines: { po_line_id: string; direction: Direction; qty: number }[]
+  }> {
+    const { data: adj, error } = await db()
+      .from('warehouse_docs')
+      .select('id, code, note')
+      .eq('status', 'posted')
+      .like('note', `Điều chỉnh phiếu ${code}%`)
+    if (error) throw new Error(error.message)
+    // `like` lọc thô ở DB; khớp ĐÚNG mã ở đây (PNK-2026-0053 không được bắt cả …00531).
+    const docs = ((adj ?? []) as { id: string; code: string; note: string | null }[])
+      .filter((d) => dieuChinhCua(d.note) === code)
+      .map(({ id, code }) => ({ id, code }))
+    if (docs.length === 0) return { docs: [], lines: [] }
+    const { data: rev, error: e2 } = await db()
+      .from('warehouse_docs')
+      .select('id, reversal_of_doc_id')
+      .in(
+        'reversal_of_doc_id',
+        docs.map((d) => d.id),
+      )
+    if (e2) throw new Error(e2.message)
+    const revRows = (rev ?? []) as { id: string; reversal_of_doc_id: string }[]
+    const reversed = new Set(revRows.map((r) => r.reversal_of_doc_id))
+    const { data: mv, error: e3 } = await db()
+      .from('warehouse_movements')
+      .select('po_line_id, direction, qty')
+      .in('doc_id', [...docs.map((d) => d.id), ...revRows.map((r) => r.id)])
+      .not('po_line_id', 'is', null)
+    if (e3) throw new Error(e3.message)
+    return {
+      docs: docs.map((d) => ({ ...d, reversed: reversed.has(d.id) })),
+      lines: (
+        (mv ?? []) as { po_line_id: string; direction: Direction; qty: unknown }[]
+      ).map((r) => ({
+        po_line_id: r.po_line_id,
+        direction: r.direction,
+        qty: num(r.qty),
+      })),
+    }
+  },
+
   async patchInfo(
     id: string,
-    p: { supplier_doc_no?: string | null; counterparty?: string | null; note?: string | null },
+    p: {
+      supplier_doc_no?: string | null
+      counterparty?: string | null
+      note?: string | null
+    },
   ): Promise<void> {
     const { error } = await db().from('warehouse_docs').update(p).eq('id', id)
     if (error) throw new Error(error.message)
@@ -880,7 +936,7 @@ export const docsRepo = {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        `${MV_COLS}, po_line_id, production_order_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
+        `${MV_COLS}, unit_cost, po_line_id, production_order_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
       )
       .eq('doc_id', docId)
       .order('created_at')
@@ -908,6 +964,7 @@ export const docsRepo = {
         po_line_id: (r.po_line_id as string | null) ?? null,
         production_order_id: (r.production_order_id as string | null) ?? null,
         qty_ordered: pl ? num((pl as { qty_ordered: unknown }).qty_ordered) : null,
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
       } satisfies DocLine
     })
   },

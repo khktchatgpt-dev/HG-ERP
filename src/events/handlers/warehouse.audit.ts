@@ -16,7 +16,10 @@ const so = (n: number) => n.toLocaleString('vi-VN')
 export function registerWarehouseAuditHandlers(): void {
   on('warehouse.doc.info_edited', async (e) => {
     const doi = e.changes
-      .map((c) => `${c.label}: ${c.before?.trim() ? `“${c.before}”` : '(trống)'} → ${c.after?.trim() ? `“${c.after}”` : '(trống)'}`)
+      .map(
+        (c) =>
+          `${c.label}: ${c.before?.trim() ? `“${c.before}”` : '(trống)'} → ${c.after?.trim() ? `“${c.after}”` : '(trống)'}`,
+      )
       .join('; ')
     await docNotesRepo.create(
       {
@@ -25,6 +28,21 @@ export function registerWarehouseAuditHandlers(): void {
         author_id: e.actor_id,
         audience: 'internal',
         body: `Sửa thông tin ${e.doc_code} — ${doi}. Lý do: ${e.reason}`,
+      },
+      e.actor_name,
+    )
+  })
+  on('warehouse.doc.adjusted', async (e) => {
+    const doi = e.changes
+      .map((c) => `${c.label}: ${so(c.before)} → ${so(c.after)}`)
+      .join('; ')
+    await docNotesRepo.create(
+      {
+        doc_type: 'po',
+        doc_id: e.po_id,
+        author_id: e.actor_id,
+        audience: 'internal',
+        body: `Điều chỉnh ${e.doc_code} bằng ${e.adjust_codes.join(' + ')} — ${doi}. Lý do: ${e.reason}`,
       },
       e.actor_name,
     )

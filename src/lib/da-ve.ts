@@ -17,6 +17,17 @@ import { kgDuKien, lechKg } from './can-kg'
  */
 export const DAU_SUA_PHIEU = 'Sửa phiếu nhập'
 
+/**
+ * Dấu trong GHI CHÚ của phiếu điều chỉnh chênh lệch (C, 02/10/2026) — nối phiếu
+ * điều chỉnh với phiếu nhập gốc: "Điều chỉnh phiếu PNK-2026-0053".
+ */
+export const DAU_DIEU_CHINH = 'Điều chỉnh phiếu'
+
+/** Phiếu này là phiếu ĐIỀU CHỈNH của phiếu nhập nào (null = không phải). */
+export function dieuChinhCua(note: string | null | undefined): string | null {
+  return note?.match(/Điều chỉnh phiếu (PNK-[0-9-]+)/)?.[1] ?? null
+}
+
 /** Phiếu nhập LẬP LẠI để sửa phiếu nào — đọc từ ghi chú "Sửa lại PNK-… (đã đảo bởi …)". */
 export function suaLaiTu(note: string | null | undefined): string | null {
   return note?.match(/Sửa lại (PNK-[0-9-]+)/)?.[1] ?? null

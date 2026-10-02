@@ -1,6 +1,6 @@
 import { db } from '@/server/db'
 import { canCanKg } from '@/lib/can-kg'
-import { DAU_SUA_PHIEU, suaLaiTu } from '@/lib/da-ve'
+import { DAU_DIEU_CHINH, DAU_SUA_PHIEU, dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
 import type { DongNhanVe, PhieuNhanVe } from '@/lib/da-ve'
 
 /** Một lần nhận hàng theo đơn mua — một dòng của màn Theo dõi đơn hàng › Đã về. */
@@ -25,7 +25,11 @@ export type DaVeRow = {
   /** Phiếu này đã được lập lại bằng phiếu nào. */
   thay_boi: string | null
   /** Dòng của phiếu kèm mã vật tư — để hộp ghi kg cân bày ra. */
-  lines: (DongNhanVe & { material_name: string })[]
+  lines: (DongNhanVe & { material_name: string; po_line_id: string })[]
+  /** Phiếu điều chỉnh chênh lệch (C) còn hiệu lực của phiếu này. */
+  dieu_chinh: string[]
+  /** Chênh lệch đã điều chỉnh, cộng có dấu, theo dòng đơn — số đang ghi = dòng gốc + số này. */
+  chenh_theo_dong: Record<string, number>
   phieu: PhieuNhanVe
 }
 
@@ -77,7 +81,7 @@ export async function loadDaVe(since: string): Promise<{
     if (r.error) throw new Error(r.error.message)
     return r
   }
-  const [{ data: mvs }, { data: rev }] = (
+  const [{ data: mvs }, { data: rev }, { data: adjDocs }] = (
     await Promise.all([
       db()
         .from('warehouse_movements')
@@ -90,8 +94,57 @@ export async function loadDaVe(since: string): Promise<{
         .from('warehouse_docs')
         .select('reversal_of_doc_id, reason')
         .in('reversal_of_doc_id', docIds),
+      // Phiếu ĐIỀU CHỈNH chênh lệch (C) — cả PNK lẫn PXK, nối phiếu gốc qua ghi chú.
+      db()
+        .from('warehouse_docs')
+        .select('id, code, note')
+        .eq('status', 'posted')
+        .like('note', `${DAU_DIEU_CHINH} PNK-%`)
+        .limit(1000),
     ])
   ).map(ok)
+  const adjRows = ((adjDocs ?? []) as { id: string; code: string; note: string | null }[])
+    .map((a) => ({ ...a, goc: dieuChinhCua(a.note) }))
+    .filter((a): a is typeof a & { goc: string } => !!a.goc)
+  const adjIds = new Set(adjRows.map((a) => a.id))
+  // Dòng sổ của phiếu điều chỉnh + phiếu đảo chúng (đảo một lần điều chỉnh = huỷ nó).
+  const chenhByGoc = new Map<string, Record<string, number>>()
+  const dcByGoc = new Map<string, string[]>()
+  if (adjRows.length > 0) {
+    const { data: adjRev } = ok(
+      await db()
+        .from('warehouse_docs')
+        .select('id, reversal_of_doc_id')
+        .in('reversal_of_doc_id', [...adjIds]),
+    )
+    const revOf = new Map(
+      ((adjRev ?? []) as { id: string; reversal_of_doc_id: string }[]).map((r) => [r.id, r.reversal_of_doc_id]), // prettier-ignore
+    )
+    const gocOf = new Map(adjRows.map((a) => [a.id, a.goc]))
+    const { data: adjMv } = ok(
+      await db()
+        .from('warehouse_movements')
+        .select('doc_id, po_line_id, direction, qty')
+        .in('doc_id', [...adjIds, ...revOf.keys()])
+        .not('po_line_id', 'is', null),
+    )
+    for (const m of (adjMv ?? []) as {
+      doc_id: string
+      po_line_id: string
+      direction: string
+      qty: unknown
+    }[]) {
+      // prettier-ignore
+      const goc = gocOf.get(revOf.get(m.doc_id) ?? m.doc_id)
+      if (!goc) continue
+      const per = chenhByGoc.get(goc) ?? {}
+      per[m.po_line_id] = (per[m.po_line_id] ?? 0) + (m.direction === 'in' ? num(m.qty) : -num(m.qty)) // prettier-ignore
+      chenhByGoc.set(goc, per)
+    }
+    const daDao = new Set(revOf.values())
+    for (const a of adjRows)
+      if (!daDao.has(a.id)) dcByGoc.set(a.goc, [...(dcByGoc.get(a.goc) ?? []), a.code])
+  }
   const movements = (mvs ?? []) as {
     id: string
     doc_id: string
@@ -203,13 +256,15 @@ export async function loadDaVe(since: string): Promise<{
   for (const d of docRows) {
     const first = mvByDoc.get(d.id)?.[0]
     const poId = first ? poLines.get(first.po_line_id)?.po_id : undefined
-    if (poId && !reversed.has(d.id) && !latestOfPo.has(poId)) latestOfPo.set(poId, d.id)
+    if (poId && !reversed.has(d.id) && !adjIds.has(d.id) && !latestOfPo.has(poId))
+      latestOfPo.set(poId, d.id)
   }
 
   const rows: DaVeRow[] = []
   for (const d of docRows) {
     const ms = mvByDoc.get(d.id) ?? []
     if (ms.length === 0) continue // nhập ngoài đơn / hoàn kho — không thuộc màn này
+    if (adjIds.has(d.id)) continue // phiếu điều chỉnh (C) — hiện trên dòng phiếu gốc, không phải một lần nhận
     const poId = poLines.get(ms[0].po_line_id)?.po_id
     const po = poId ? poById.get(poId) : undefined
     if (!po) continue
@@ -218,6 +273,7 @@ export async function loadDaVe(since: string): Promise<{
       const mat = one(m.material)
       return {
         movement_id: m.id,
+        po_line_id: m.po_line_id,
         material_code: mat?.code ?? '—',
         material_name: mat?.name ?? '',
         unit: mat?.unit ?? '',
@@ -246,6 +302,8 @@ export async function loadDaVe(since: string): Promise<{
       counterparty: d.counterparty,
       ghi_chu: d.note,
       thay_boi: thayBoi.get(d.code) ?? null,
+      dieu_chinh: dcByGoc.get(d.code) ?? [],
+      chenh_theo_dong: chenhByGoc.get(d.code) ?? {},
       lines,
       phieu: {
         doc_id: d.id,
