@@ -38,6 +38,8 @@ export default async function Page({
     /** Vừa ghi sổ phiếu nhập ở cửa Cung ứng (`/mua-hang/don/[id]/nhan`). */
     vua_ghi?: string
     ma?: string
+    /** Lượt NHẬN LẦN LƯỢT (thanh chọn nhiều): id các đơn còn chờ, cách nhau dấu phẩy. */
+    tiep?: string
     chi_tiet?: string
   }>
 }) {
@@ -53,24 +55,22 @@ export default async function Page({
     canReceive,
     giaoNhan,
   ] = await Promise.all([
-      loadWatchPos(user),
-      isSupplyStaff(user),
-      user.role === 'admin'
-        ? Promise.resolve(true)
-        : canAction(user, 'supply.po.approve'),
-      user.role === 'admin'
-        ? Promise.resolve(true)
-        : canAction(user, 'supply.po.manage_any'),
-      // Chuyến hàng còn theo dõi (0216) + danh mục nhà xe để gợi ý tên.
-      tripsService.list(user, { openOnly: true }),
-      poCostsRepo.carriers(),
-      // Cung ứng TẠM nhận hàng thay Kho (01/10/2026): nút Nhận hàng hiện theo
-      // ĐÚNG quyền ghi phiếu kho — gỡ vai Kho là nút tự ẩn, không sửa code.
-      user.role === 'admin'
-        ? Promise.resolve(true)
-        : canAction(user, 'warehouse.stock.write'),
-      sp.don ? taiGiaoNhan(user, sp.don) : Promise.resolve(null),
-    ])
+    loadWatchPos(user),
+    isSupplyStaff(user),
+    user.role === 'admin' ? Promise.resolve(true) : canAction(user, 'supply.po.approve'),
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'supply.po.manage_any'),
+    // Chuyến hàng còn theo dõi (0216) + danh mục nhà xe để gợi ý tên.
+    tripsService.list(user, { openOnly: true }),
+    poCostsRepo.carriers(),
+    // Cung ứng TẠM nhận hàng thay Kho (01/10/2026): nút Nhận hàng hiện theo
+    // ĐÚNG quyền ghi phiếu kho — gỡ vai Kho là nút tự ẩn, không sửa code.
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.stock.write'),
+    sp.don ? taiGiaoNhan(user, sp.don) : Promise.resolve(null),
+  ])
   const today = todayIso()
   const staff = user.role === 'admin' || supplyStaff
   const incoming = rows.filter(isIncoming)
@@ -99,7 +99,9 @@ export default async function Page({
         expected_at: p.expected_at,
         currency: p.currency,
         total: p.total,
+        owner_id: p.assigned_to ?? p.created_by ?? null,
         assignee_name: p.assignee_name,
+        template: p.template,
         lines_done: p.lines_done ?? 0,
         lines_total: p.lines_total ?? 0,
         bucket: incomingBucket(p, today) ?? 'no_eta',
@@ -143,6 +145,11 @@ export default async function Page({
       urlScope={parseScope(sp.pham_vi)}
       initialNhom={sp.nhom ?? null}
       giaoNhan={giaoNhan}
+      luot={(sp.tiep ?? '')
+        .split(',')
+        .map((id) => incoming.find((p) => p.id === id))
+        .filter((p): p is NonNullable<typeof p> => !!p)
+        .map((p) => ({ id: p.id, code: p.code }))}
     />
   )
 }

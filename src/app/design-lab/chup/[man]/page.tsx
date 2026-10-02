@@ -187,6 +187,7 @@ function dangVe(vuaGhi: { id: string; code: string; detail: string } | null) {
       canReceive
       vuaGhi={vuaGhi}
       giaoNhan={null}
+      luot={[]}
     />
   )
 }
