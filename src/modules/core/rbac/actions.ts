@@ -101,6 +101,24 @@ export const ACTIONS: Action[] = [
     // thiếu quy cách và phải chờ Kỹ thuật. KHÔNG bao gồm mã/tên/BOM.
     rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
+  /*
+   * GIÁ THÀNH KẾ HOẠCH (0220) là SỐ RIÊNG của Bán hàng — bí mật công ty (chủ dự
+   * án 02/10/2026). KHÔNG đi theo quyền xem SP: chỉ Bán hàng, Kỹ thuật (người
+   * lập bảng tính) và Ban Giám đốc (đọc ở Tiền theo lệnh) thấy; các cột plan_*
+   * không nằm trong `Product` của hồ sơ dùng chung nên API hồ sơ không trả ra.
+   */
+  {
+    key: 'technical.plan_cost.view',
+    label: 'Xem giá thành kế hoạch của SP',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit'), perm('exec.tower.view')),
+  },
+  {
+    key: 'technical.plan_cost.manage',
+    label: 'Nạp / sửa giá thành kế hoạch của SP',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
+  },
   {
     key: 'technical.product.update',
     label: 'Sửa sản phẩm',
@@ -577,6 +595,23 @@ export const ACTIONS: Action[] = [
     domain: 'accounting',
     rule: perm('accounting.member'),
     rowLevel: 'Xoá: người ghi hoặc Ban quản lý.',
+  },
+  /*
+   * TỶ GIÁ (0219): bảng của Kế toán. Cung ứng xem được (đơn USD của họ quy VND
+   * theo bảng này), nhưng chỉ Kế toán nhập — một nguồn tỷ giá, một người chịu.
+   */
+  {
+    key: 'accounting.fx.view',
+    label: 'Xem bảng tỷ giá',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+  },
+  {
+    key: 'accounting.fx.manage',
+    label: 'Nhập / sửa tỷ giá, gán tỷ giá cho chứng từ',
+    domain: 'accounting',
+    rule: perm('accounting.member'),
+    rowLevel: 'Dòng đã có chứng từ dùng thì khoá sửa — thêm ngày mới.',
   },
 
   // ── Ban Giám Đốc ─────────────────────────────────────────────────────────

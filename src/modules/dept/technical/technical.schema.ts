@@ -77,6 +77,8 @@ export const productCreateSchema = z.object({
   barcode: z.string().trim().max(50).optional().nullable(),
   showroom_sample: z.boolean().optional(), // mẫu tại showroom
   reference_price: z.coerce.number().min(0).optional().nullable(), // giá tham khảo nội bộ
+  // Giá thành kế hoạch (plan_*, 0220) CỐ Ý không nằm ở đây: hồ sơ SP dùng chung
+  // không được sửa/đọc số riêng của Bán hàng — chỉ qua `plan-cost.schema`.
   tech_spec: techSpecSchema.optional(),
   // Thông tin XK + đặc tính nội thất (0037).
   hs_code: z.string().trim().max(20).optional().nullable(), // mã HS khai hải quan

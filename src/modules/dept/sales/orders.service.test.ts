@@ -47,6 +47,10 @@ vi.mock('@/modules/core/departments/departments.repo', () => ({
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
+// Tỷ giá chốt lúc xác nhận đơn (0219): mặc định bảng chưa có dòng → null.
+vi.mock('@/modules/dept/accounting/fx-rates.repo', () => ({
+  fxRatesRepo: { rateAt: vi.fn(async () => null) },
+}))
 
 import { ordersService } from './orders.service'
 import { ordersRepo } from './orders.repo'
@@ -59,6 +63,7 @@ import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import { BadRequest } from '@/server/http'
@@ -142,9 +147,29 @@ describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () 
     expect(row.price_term).toBe('FOB Quy Nhon')
     expect(row.currency).toBe('USD')
     expect(row.customer_po_no).toBe('31032191120')
+    // Chưa có tỷ giá → đơn vẫn tạo, cột để null (0219).
+    expect(row.fx_rate).toBeNull()
+    expect(row.fx_date).toBeNull()
     expect(lines).toEqual([
       { product_id: 'p1', qty: 48, unit_price: 301.72, note: '1 set/ctn' },
     ])
+  })
+
+  it('có tỷ giá ≤ hôm nay → ghi cứng fx_rate + fx_date lúc xác nhận đơn (0219)', async () => {
+    vi.mocked(quotesService.assertSent).mockResolvedValue({ id: 'q1', customer_id: 'c1', currency: 'USD' } as never) // prettier-ignore
+    vi.mocked(ordersRepo.insert).mockResolvedValue(ORDER as never)
+    vi.mocked(fxRatesRepo.rateAt).mockResolvedValueOnce(25_600)
+
+    await ordersService.create(sales, {
+      code: 'DH-T3',
+      quote_id: 'q1',
+      lines: [{ product_id: 'p1', qty: 1, unit_price: 10 }],
+    })
+
+    const [row] = vi.mocked(ordersRepo.insert).mock.calls[0]
+    expect(row.fx_rate).toBe(25_600)
+    expect(row.fx_date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(vi.mocked(fxRatesRepo.rateAt).mock.calls[0][0]).toBe('USD')
   })
 
   it('báo giá đã chốt nhưng client không gửi dòng → chặn', async () => {

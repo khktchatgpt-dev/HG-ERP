@@ -534,12 +534,12 @@ export type Database = {
           deleted_by: string | null
           doc_id: string
           doc_type: string
+          id: string
           kind: string
+          reply_to: string | null
           resolved_at: string | null
           resolved_by: string | null
           resolved_how: string | null
-          id: string
-          reply_to: string | null
         }
         Insert: {
           audience?: string
@@ -550,12 +550,12 @@ export type Database = {
           deleted_by?: string | null
           doc_id: string
           doc_type: string
+          id?: string
           kind?: string
+          reply_to?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           resolved_how?: string | null
-          id?: string
-          reply_to?: string | null
         }
         Update: {
           audience?: string
@@ -566,12 +566,12 @@ export type Database = {
           deleted_by?: string | null
           doc_id?: string
           doc_type?: string
+          id?: string
           kind?: string
+          reply_to?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           resolved_how?: string | null
-          id?: string
-          reply_to?: string | null
         }
         Relationships: [
           {
@@ -593,6 +593,13 @@ export type Database = {
             columns: ["reply_to"]
             isOneToOne: false
             referencedRelation: "doc_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doc_notes_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -2687,6 +2694,8 @@ export type Database = {
           customer_po_no: string | null
           deposit_percent: number | null
           due_date: string | null
+          fx_date: string | null
+          fx_rate: number | null
           id: string
           note: string | null
           partial_shipment: boolean | null
@@ -2713,6 +2722,8 @@ export type Database = {
           customer_po_no?: string | null
           deposit_percent?: number | null
           due_date?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           partial_shipment?: boolean | null
@@ -2739,6 +2750,8 @@ export type Database = {
           customer_po_no?: string | null
           deposit_percent?: number | null
           due_date?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           partial_shipment?: boolean | null
@@ -3595,10 +3608,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "supply_po_costs_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "supply_po_costs_payee_supplier_id_fkey"
             columns: ["payee_supplier_id"]
             isOneToOne: false
             referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_reimbursed_by_fkey"
+            columns: ["reimbursed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -4108,6 +4135,8 @@ export type Database = {
           delivery_place: string | null
           discount_amount: number | null
           expected_at: string | null
+          fx_date: string | null
+          fx_rate: number | null
           id: string
           note: string | null
           ordered_at: string | null
@@ -4146,6 +4175,8 @@ export type Database = {
           delivery_place?: string | null
           discount_amount?: number | null
           expected_at?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           ordered_at?: string | null
@@ -4184,6 +4215,8 @@ export type Database = {
           delivery_place?: string | null
           discount_amount?: number | null
           expected_at?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           ordered_at?: string | null
@@ -4263,6 +4296,13 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_orders_urgent_sent_by_fkey"
+            columns: ["urgent_sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -4351,8 +4391,6 @@ export type Database = {
           buyer_id: string | null
           can_order: boolean
           carrier_kind: string | null
-          is_carrier: boolean
-          pay_method: string | null
           code: string | null
           company_name: string | null
           complaint_count: number
@@ -4372,12 +4410,14 @@ export type Database = {
           incoterms: string | null
           invoice_terms: string | null
           is_active: boolean
+          is_carrier: boolean
           lead_time_days: number | null
           legal_rep: string | null
           lock_reason: string | null
           moq: string | null
           name: string
           note: string | null
+          pay_method: string | null
           payment_net_days: number | null
           payment_terms: string | null
           phone: string | null
@@ -4410,8 +4450,6 @@ export type Database = {
           buyer_id?: string | null
           can_order?: boolean
           carrier_kind?: string | null
-          is_carrier?: boolean
-          pay_method?: string | null
           code?: string | null
           company_name?: string | null
           complaint_count?: number
@@ -4431,12 +4469,14 @@ export type Database = {
           incoterms?: string | null
           invoice_terms?: string | null
           is_active?: boolean
+          is_carrier?: boolean
           lead_time_days?: number | null
           legal_rep?: string | null
           lock_reason?: string | null
           moq?: string | null
           name: string
           note?: string | null
+          pay_method?: string | null
           payment_net_days?: number | null
           payment_terms?: string | null
           phone?: string | null
@@ -4469,8 +4509,6 @@ export type Database = {
           buyer_id?: string | null
           can_order?: boolean
           carrier_kind?: string | null
-          is_carrier?: boolean
-          pay_method?: string | null
           code?: string | null
           company_name?: string | null
           complaint_count?: number
@@ -4490,12 +4528,14 @@ export type Database = {
           incoterms?: string | null
           invoice_terms?: string | null
           is_active?: boolean
+          is_carrier?: boolean
           lead_time_days?: number | null
           legal_rep?: string | null
           lock_reason?: string | null
           moq?: string | null
           name?: string
           note?: string | null
+          pay_method?: string | null
           payment_net_days?: number | null
           payment_terms?: string | null
           phone?: string | null
@@ -4586,86 +4626,107 @@ export type Database = {
       }
       supply_trips: {
         Row: {
-          id: string
-          code: string
-          mode: string
-          carrier_name: string
-          carrier_id: string | null
-          receipt_no: string | null
-          sent_on: string
-          eta: string | null
-          packages: number | null
-          package_unit: string | null
-          weight_kg: number | null
-          note: string | null
           arrived_at: string | null
           arrived_by: string | null
           arrived_check: string | null
           arrived_note: string | null
           arrived_packages: number | null
+          cancel_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
-          cancel_reason: string | null
-          created_by: string | null
+          carrier_id: string | null
+          carrier_name: string
+          code: string
           created_at: string
+          created_by: string | null
+          eta: string | null
+          id: string
+          mode: string
+          note: string | null
+          package_unit: string | null
+          packages: number | null
+          receipt_no: string | null
+          sent_on: string
           updated_at: string
+          weight_kg: number | null
         }
         Insert: {
-          id?: string
-          code: string
-          mode: string
-          carrier_name: string
+          arrived_at?: string | null
+          arrived_by?: string | null
+          arrived_check?: string | null
+          arrived_note?: string | null
+          arrived_packages?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           carrier_id?: string | null
+          carrier_name: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          eta?: string | null
+          id?: string
+          mode: string
+          note?: string | null
+          package_unit?: string | null
+          packages?: number | null
           receipt_no?: string | null
           sent_on: string
-          eta?: string | null
-          packages?: number | null
-          package_unit?: string | null
-          weight_kg?: number | null
-          note?: string | null
-          arrived_at?: string | null
-          arrived_by?: string | null
-          arrived_check?: string | null
-          arrived_note?: string | null
-          arrived_packages?: number | null
-          cancelled_at?: string | null
-          cancelled_by?: string | null
-          cancel_reason?: string | null
-          created_by?: string | null
-          created_at?: string
           updated_at?: string
+          weight_kg?: number | null
         }
         Update: {
-          id?: string
-          code?: string
-          mode?: string
-          carrier_name?: string
-          carrier_id?: string | null
-          receipt_no?: string | null
-          sent_on?: string
-          eta?: string | null
-          packages?: number | null
-          package_unit?: string | null
-          weight_kg?: number | null
-          note?: string | null
           arrived_at?: string | null
           arrived_by?: string | null
           arrived_check?: string | null
           arrived_note?: string | null
           arrived_packages?: number | null
+          cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
-          cancel_reason?: string | null
-          created_by?: string | null
+          carrier_id?: string | null
+          carrier_name?: string
+          code?: string
           created_at?: string
+          created_by?: string | null
+          eta?: string | null
+          id?: string
+          mode?: string
+          note?: string | null
+          package_unit?: string | null
+          packages?: number | null
+          receipt_no?: string | null
+          sent_on?: string
           updated_at?: string
+          weight_kg?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_trips_arrived_by_fkey"
+            columns: ["arrived_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trips_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "supply_trips_carrier_id_fkey"
             columns: ["carrier_id"]
             isOneToOne: false
             referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trips_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -5739,6 +5800,16 @@ export type Database = {
           paint_area_m2: number | null
           paint_coverage_m2_per_kg: number | null
           part_count: number | null
+          plan_at: string | null
+          plan_breakdown: Json | null
+          plan_by: string | null
+          plan_currency: string | null
+          plan_direct_cost: number | null
+          plan_fx_rate: number | null
+          plan_overhead: number | null
+          plan_price: number | null
+          plan_profit: number | null
+          plan_source: string | null
           product_type: string | null
           reference_price: number | null
           sample_confirmed_at: string | null
@@ -5816,6 +5887,16 @@ export type Database = {
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
           part_count?: number | null
+          plan_at?: string | null
+          plan_breakdown?: Json | null
+          plan_by?: string | null
+          plan_currency?: string | null
+          plan_direct_cost?: number | null
+          plan_fx_rate?: number | null
+          plan_overhead?: number | null
+          plan_price?: number | null
+          plan_profit?: number | null
+          plan_source?: string | null
           product_type?: string | null
           reference_price?: number | null
           sample_confirmed_at?: string | null
@@ -5893,6 +5974,16 @@ export type Database = {
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
           part_count?: number | null
+          plan_at?: string | null
+          plan_breakdown?: Json | null
+          plan_by?: string | null
+          plan_currency?: string | null
+          plan_direct_cost?: number | null
+          plan_fx_rate?: number | null
+          plan_overhead?: number | null
+          plan_price?: number | null
+          plan_profit?: number | null
+          plan_source?: string | null
           product_type?: string | null
           reference_price?: number | null
           sample_confirmed_at?: string | null
@@ -5967,6 +6058,13 @@ export type Database = {
           {
             foreignKeyName: "technical_products_owner_id_fkey"
             columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_products_plan_by_fkey"
+            columns: ["plan_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -6507,6 +6605,13 @@ export type Database = {
             columns: ["team_department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_docs_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "supply_trips"
             referencedColumns: ["id"]
           },
         ]

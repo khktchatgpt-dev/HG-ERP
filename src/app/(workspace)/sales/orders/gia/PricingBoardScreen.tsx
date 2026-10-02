@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardPaste, Lock, Save, Search, X } from 'lucide-react'
+import { ClipboardPaste, Lock, Save, Search, Target, X } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -134,6 +134,29 @@ export function PricingBoardScreen({ board }: { board: PricingBoard }) {
     })
   }
 
+  /**
+   * MỒI GIÁ FOB KẾ HOẠCH (0220) vào dòng chưa có giá — bước 3 của giám sát
+   * tài chính. Chỉ dòng mình sửa được, chưa có giá, và SP có FOB kế hoạch CÙNG
+   * tiền tệ với đơn; cũng chỉ ĐIỀN vào ô để soát rồi Lưu, không ghi thẳng — giá
+   * đơn có thể đã thương lượng khác với bản báo giá.
+   */
+  const planFillable = useMemo(
+    () =>
+      board.lines.filter(
+        (l) =>
+          l.editable &&
+          l.unit_price <= 0 &&
+          l.plan_price != null &&
+          l.plan_currency === l.currency &&
+          (draft[l.line_id] === undefined || draft[l.line_id] === ''),
+      ),
+    [board.lines, draft],
+  )
+  function fillFromPlan() {
+    applyPaste(planFillable.map((l) => ({ line_id: l.line_id, price: l.plan_price! })))
+  }
+  const hasPlanColumn = board.lines.some((l) => l.plan_price != null)
+
   const totalByCurrency = useMemo(() => {
     const m = new Map<string, number>()
     for (const d of dirty) {
@@ -155,10 +178,27 @@ export function PricingBoardScreen({ board }: { board: PricingBoard }) {
         title="Điền đơn giá"
         description="Gõ đơn giá cho từng dòng rồi lưu một lần. Dòng chưa có giá làm doanh số, giá trị đơn và bảng tin Giám đốc ra 0."
         actions={
-          <Button variant="outline" onClick={() => setPasteOpen(true)}>
-            <ClipboardPaste className="size-4" aria-hidden />
-            Dán từ Excel
-          </Button>
+          <>
+            {hasPlanColumn && (
+              <Button
+                variant="outline"
+                onClick={fillFromPlan}
+                disabled={busy || planFillable.length === 0}
+                title={
+                  planFillable.length === 0
+                    ? 'Không còn dòng trống nào có FOB kế hoạch cùng tiền tệ'
+                    : 'Điền giá FOB kế hoạch của SP vào các dòng trống — soát rồi Lưu'
+                }
+              >
+                <Target className="size-4" aria-hidden />
+                Lấy FOB kế hoạch ({planFillable.length})
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setPasteOpen(true)}>
+              <ClipboardPaste className="size-4" aria-hidden />
+              Dán từ Excel
+            </Button>
+          </>
         }
       />
 
@@ -317,6 +357,50 @@ export function PricingBoardScreen({ board }: { board: PricingBoard }) {
                       {!l.editable && (
                         <div className="text-muted-foreground mt-0.5 text-end text-[11px]">
                           đơn của người khác
+                        </div>
+                      )}
+                      {/*
+                        FOB KẾ HOẠCH của SP ngay dưới ô giá: người điền thấy
+                        mình đang bán cao hay thấp hơn bản báo giá. Khác tiền tệ
+                        thì bày nhưng không mồi — không ai được tự quy đổi ở đây.
+                      */}
+                      {l.plan_price != null && (
+                        <div className="text-muted-foreground mt-0.5 flex items-center justify-end gap-1.5 text-[11px] tabular-nums">
+                          <span>
+                            FOB KH {money(l.plan_price, l.plan_currency ?? l.currency)}{' '}
+                            {l.plan_currency !== l.currency ? l.plan_currency : ''}
+                          </span>
+                          {Number.isFinite(price) &&
+                            price > 0 &&
+                            l.plan_currency === l.currency && (
+                              <span
+                                className={cn(
+                                  price < l.plan_price && 'text-[var(--warn)]',
+                                )}
+                              >
+                                ({price >= l.plan_price ? '+' : ''}
+                                {Math.round(
+                                  ((price - l.plan_price) / l.plan_price) * 1000,
+                                ) / 10}
+                                %)
+                              </span>
+                            )}
+                          {l.editable &&
+                            l.plan_currency === l.currency &&
+                            (raw === undefined || raw === '') &&
+                            l.unit_price <= 0 && (
+                              <button
+                                type="button"
+                                className="text-[var(--primary)] underline"
+                                onClick={() =>
+                                  applyPaste([
+                                    { line_id: l.line_id, price: l.plan_price! },
+                                  ])
+                                }
+                              >
+                                lấy
+                              </button>
+                            )}
                         </div>
                       )}
                     </td>

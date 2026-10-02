@@ -197,6 +197,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Điền đơn giá',
             icon: 'circle-dollar-sign',
           },
+          /*
+           * Giá thành kế hoạch (0220): bốn số từ bảng tính giá của Sale, theo
+           * SP. Giám đốc đọc nó ở Tiền theo lệnh; Sale nạp ở đây.
+           */
+          { href: '/sales/gia-thanh', label: 'Giá thành kế hoạch', icon: 'chart-column' },
           { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
         ],
       },
@@ -254,6 +259,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Hạn thanh toán',
             icon: 'calendar-check',
           },
+          /*
+           * Tỷ giá (0219) cũng là DANH MỤC — đứng riêng vì Kế toán là người
+           * nhập và vì mọi màn cộng tiền đa tiền tệ (Tiền theo lệnh, Công nợ)
+           * đều tựa vào bảng này.
+           */
+          { href: '/finance/ty-gia', label: 'Tỷ giá', icon: 'arrow-left-right' },
           /*
            * Đối chiếu hoá đơn ↔ đơn mua KHÔNG đứng riêng ở nav: nó là bước soi
            * chi tiết, vào từ một lệnh hoặc một đơn cụ thể. Cho nó một mục ngang
@@ -625,6 +636,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/exec', label: 'Tổng quan', icon: 'home' },
           // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
           { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
+          // Kế hoạch của Bán hàng đặt cạnh tiền mua đã cam kết, theo lệnh (bước 4, 02/10/2026).
+          { href: '/exec/lai-lo', label: 'Lãi / lỗ theo lệnh', icon: 'circle-dollar-sign' },
         ],
       },
       {

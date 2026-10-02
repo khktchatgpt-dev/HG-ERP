@@ -39,6 +39,14 @@ export type Po = {
   confirmed_at: string | null
   /** "Chị Hoa bên Nam Kim xác nhận qua Zalo 15/08" — ai hứa, kênh nào. */
   confirmed_note: string | null
+  /**
+   * Tỷ giá CHỐT lúc GĐ duyệt (0219): 1 ngoại tệ = ? VND. null = đơn VND, hoặc
+   * đơn ngoại tệ duyệt lúc bảng tỷ giá chưa có dòng nào ≤ ngày duyệt. Không
+   * đổi theo bảng `fx_rates` sau đó; hạ về nháp thì xoá cùng `approved_at`.
+   */
+  fx_rate: number | null
+  /** Ngày đã tra bảng tỷ giá (= ngày duyệt). */
+  fx_date: string | null
   note: string | null
   created_by: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền ghi xét theo cột này, bàn giao được. */
@@ -191,7 +199,7 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, note, created_by, assigned_to, created_at, updated_at, source_po_id'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id'
 
 /** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
 const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
