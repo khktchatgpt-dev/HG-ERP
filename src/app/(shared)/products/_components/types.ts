@@ -55,16 +55,6 @@ export type Product = {
   barcode: string | null
   showroom_sample: boolean
   reference_price: number | null
-  /** Giá thành kế hoạch (0220) — bốn số theo bảng tính giá của Sale. */
-  plan_direct_cost: number | null
-  plan_overhead: number | null
-  plan_profit: number | null
-  plan_price: number | null
-  plan_currency: string | null
-  plan_fx_rate: number | null
-  plan_breakdown: { label: string; amount: number }[] | null
-  plan_source: string | null
-  plan_at: string | null
   tech_spec: TechSpec
   // Thông tin XK + đặc tính nội thất (0037).
   hs_code: string | null

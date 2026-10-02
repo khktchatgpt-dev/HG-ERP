@@ -77,7 +77,8 @@ const num = (v: unknown) => (v == null ? null : Number(v))
 
 export const planCostService = {
   async board(user: User): Promise<PlanCostBoard> {
-    await assertAction(user, 'technical.product.view')
+    // Số riêng của Bán hàng — KHÔNG phải quyền xem SP (02/10/2026).
+    await assertAction(user, 'technical.plan_cost.view')
 
     // 1. SP trong lệnh đang chạy + khách của lệnh.
     const lsxRes = await db()

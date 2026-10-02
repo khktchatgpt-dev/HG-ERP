@@ -77,15 +77,8 @@ export const productCreateSchema = z.object({
   barcode: z.string().trim().max(50).optional().nullable(),
   showroom_sample: z.boolean().optional(), // mẫu tại showroom
   reference_price: z.coerce.number().min(0).optional().nullable(), // giá tham khảo nội bộ
-  // Giá thành kế hoạch (0220) — sửa lẻ từng SP ở hồ sơ; nạp hàng loạt đi
-  // `plan-cost.schema`. Lợi nhuận cho âm (bán dưới giá vẫn là một kế hoạch).
-  plan_direct_cost: z.coerce.number().min(0).optional().nullable(),
-  plan_overhead: z.coerce.number().min(0).optional().nullable(),
-  plan_profit: z.coerce.number().optional().nullable(),
-  plan_price: z.coerce.number().min(0).optional().nullable(),
-  plan_currency: z.enum(['USD', 'VND']).optional().nullable(),
-  plan_fx_rate: z.coerce.number().positive().optional().nullable(),
-  plan_source: z.string().trim().max(200).optional().nullable(),
+  // Giá thành kế hoạch (plan_*, 0220) CỐ Ý không nằm ở đây: hồ sơ SP dùng chung
+  // không được sửa/đọc số riêng của Bán hàng — chỉ qua `plan-cost.schema`.
   tech_spec: techSpecSchema.optional(),
   // Thông tin XK + đặc tính nội thất (0037).
   hs_code: z.string().trim().max(20).optional().nullable(), // mã HS khai hải quan

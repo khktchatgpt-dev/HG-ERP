@@ -10,22 +10,6 @@ import { Separator } from '@/components/shadcn/separator'
 import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
-import { planPct } from '@/lib/plan-cost'
-
-/** Số kế hoạch theo tiền tệ của bản báo giá; null → "—" (chưa nạp, không phải 0). */
-const planMoney = (n: number | null, cur: string | null) =>
-  n == null
-    ? '—'
-    : n.toLocaleString('vi-VN', { maximumFractionDigits: cur === 'VND' ? 0 : 2 })
-const pctNote = (
-  direct: number | null,
-  overhead: number | null,
-  profit: number | null,
-) => {
-  if (direct == null || overhead == null || profit == null) return { a: '', b: '' }
-  const p = planPct({ direct, overhead, profit })
-  return { a: p.a == null ? '' : ` (${p.a}%)`, b: p.b == null ? '' : ` (${p.b}%)` }
-}
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
@@ -286,22 +270,6 @@ export function ProductProfileTab({
                           ? product.reference_price.toLocaleString('en-US')
                           : null,
                         false,
-                      ],
-                      // Giá thành kế hoạch (0220): bốn số từ bảng tính giá của
-                      // Sale, a%/b% suy ra. Nạp hàng loạt ở /sales/gia-thanh.
-                      [
-                        'Giá thành KH (trực tiếp · chung · lợi nhuận)',
-                        product.plan_price != null
-                          ? `${planMoney(product.plan_direct_cost, product.plan_currency)} · ${planMoney(product.plan_overhead, product.plan_currency)}${pctNote(product.plan_direct_cost, product.plan_overhead, product.plan_profit).a} · ${planMoney(product.plan_profit, product.plan_currency)}${pctNote(product.plan_direct_cost, product.plan_overhead, product.plan_profit).b}`
-                          : null,
-                        true,
-                      ],
-                      [
-                        'Giá FOB kế hoạch',
-                        product.plan_price != null
-                          ? `${planMoney(product.plan_price, product.plan_currency)} ${product.plan_currency ?? ''}${product.plan_source ? ` · ${product.plan_source}` : ''}${product.plan_at ? ` · ${product.plan_at.split('-').reverse().join('/')}` : ''}`
-                          : null,
-                        true,
                       ],
                     ] as [string, string | null, boolean][]
                   ).map(([label, value, mono]) => (

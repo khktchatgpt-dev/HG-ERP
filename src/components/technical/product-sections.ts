@@ -63,16 +63,6 @@ export type ProductView = {
   barcode: string | null
   showroom_sample: boolean
   reference_price: number | null
-  /** Giá thành kế hoạch (0220) — sửa lẻ ở đây, nạp hàng loạt ở /sales/gia-thanh. */
-  plan_direct_cost: number | null
-  plan_overhead: number | null
-  plan_profit: number | null
-  plan_price: number | null
-  plan_currency: string | null
-  plan_fx_rate: number | null
-  plan_breakdown: { label: string; amount: number }[] | null
-  plan_source: string | null
-  plan_at: string | null
   tech_spec: TechSpec
   hs_code: string | null
   origin_country: string | null
@@ -132,15 +122,6 @@ export function toProductView(p: Product): ProductView {
     barcode: p.barcode,
     showroom_sample: p.showroom_sample,
     reference_price: p.reference_price,
-    plan_direct_cost: p.plan_direct_cost,
-    plan_overhead: p.plan_overhead,
-    plan_profit: p.plan_profit,
-    plan_price: p.plan_price,
-    plan_currency: p.plan_currency,
-    plan_fx_rate: p.plan_fx_rate,
-    plan_breakdown: p.plan_breakdown,
-    plan_source: p.plan_source,
-    plan_at: p.plan_at,
     tech_spec: p.tech_spec ?? {},
     hs_code: p.hs_code,
     origin_country: p.origin_country,
@@ -249,30 +230,10 @@ export const SECTIONS: Record<string, SectionSpec> = {
       { name: 'barcode', label: 'Barcode', mono: true, maxLength: 50 },
       { name: 'reference_price', label: 'Giá tham khảo', kind: 'number', step: '0.01' },
       /*
-       * GIÁ THÀNH KẾ HOẠCH (0220) — bốn số tuyệt đối theo bảng tính giá của
-       * Sale: trực tiếp + chi phí chung + lợi nhuận = giá FOB. Sửa lẻ ở đây;
-       * nạp hàng loạt (dán từ bảng tính, giữ cả chi tiết) ở /sales/gia-thanh.
+       * KHÔNG có giá thành kế hoạch (plan_*, 0220) ở hồ sơ dùng chung — số riêng
+       * của Bán hàng, lộ ra là lộ bí mật công ty (chủ dự án 02/10/2026). Nạp và
+       * xem ở /sales/gia-thanh, sau quyền `technical.plan_cost.view`.
        */
-      { name: 'plan_direct_cost', label: 'Giá thành trực tiếp (KH)', kind: 'number', step: '0.01' }, // prettier-ignore
-      {
-        name: 'plan_overhead',
-        label: 'Chi phí chung (KH)',
-        kind: 'number',
-        step: '0.01',
-      },
-      { name: 'plan_profit', label: 'Lợi nhuận (KH)', kind: 'number', step: '0.01' },
-      { name: 'plan_price', label: 'Giá FOB (KH)', kind: 'number', step: '0.01' },
-      {
-        name: 'plan_currency',
-        label: 'Tiền tệ giá thành KH',
-        kind: 'select',
-        options: [
-          { value: '', label: '— chưa có —' },
-          { value: 'USD', label: 'USD' },
-          { value: 'VND', label: 'VND' },
-        ],
-      },
-      { name: 'plan_source', label: 'Nguồn giá thành KH', maxLength: 200, wide: true },
       {
         name: 'bom_status',
         label: 'Trạng thái BOM',

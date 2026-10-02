@@ -102,10 +102,17 @@ export const ACTIONS: Action[] = [
     rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
   /*
-   * GIÁ THÀNH KẾ HOẠCH (0220): bốn số từ bảng tính giá của Sale. Sale là người
-   * phân tích nên nhập được; Kỹ thuật cũng (hồ sơ SP của họ). Xem thì ai cũng
-   * được như xem SP — Giám đốc cần nó ở Tiền theo lệnh.
+   * GIÁ THÀNH KẾ HOẠCH (0220) là SỐ RIÊNG của Bán hàng — bí mật công ty (chủ dự
+   * án 02/10/2026). KHÔNG đi theo quyền xem SP: chỉ Bán hàng, Kỹ thuật (người
+   * lập bảng tính) và Ban Giám đốc (đọc ở Tiền theo lệnh) thấy; các cột plan_*
+   * không nằm trong `Product` của hồ sơ dùng chung nên API hồ sơ không trả ra.
    */
+  {
+    key: 'technical.plan_cost.view',
+    label: 'Xem giá thành kế hoạch của SP',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit'), perm('exec.tower.view')),
+  },
   {
     key: 'technical.plan_cost.manage',
     label: 'Nạp / sửa giá thành kế hoạch của SP',

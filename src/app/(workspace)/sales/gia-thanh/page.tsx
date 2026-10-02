@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { planCostService } from '@/modules/dept/technical/plan-cost.service'
@@ -15,6 +16,8 @@ export const dynamic = 'force-dynamic'
  */
 export default async function Page() {
   const user = await authService.requirePageUser()
+  // Số riêng của Bán hàng: không có quyền xem thì về trang Bán hàng, không bày gì.
+  if (!(await canAction(user, 'technical.plan_cost.view'))) redirect('/sales')
   const [board, canManage] = await Promise.all([
     planCostService.board(user),
     canAction(user, 'technical.plan_cost.manage'),
