@@ -12,6 +12,7 @@ import {
   mergeLineInto,
   newFreeLine,
   newLine,
+  lineQty2,
   remapLinesForTemplate,
   overridesCatalog,
   recallBasis,
@@ -154,6 +155,41 @@ describe('mở đơn để sửa — thành tiền phải y nguyên', () => {
     // NCC cho hàng khuyến mãi / hàng bù — giá 0 là số thật, không phải chưa nhập.
     const l = lineFromPo({ ...base, unit_price: 0 })
     expect(l.price).toBe(0)
+  })
+})
+
+describe('đơn đã phát hành — giữ tổng kg đã chốt, không dẫn xuất lại', () => {
+  // Đơn anh Truyền 18/09/2026: NCC ghi 300 kg làm tròn, còn 0,385 × 5,53 × 141 = 300,16.
+  const dto: PoLineDto = {
+    ...base,
+    qty_ordered: 141,
+    unit_price: 50_000,
+    weight_per_m: 0.385,
+    bar_length_m: 5.53,
+    price_basis: 'unit2',
+    qty2: 300,
+  }
+
+  it('mở đơn đã phát hành: tổng kg và thành tiền đúng số trên tờ', () => {
+    const l = lineFromPo(dto, null, true)
+    expect(l.qty2_saved).toBe(300)
+    expect(lineQty2('aluminium', l)).toBe(300)
+    expect(lineAmount('aluminium', l)).toBe(300 * 50_000)
+  })
+
+  it('đơn nháp: vẫn dẫn xuất từ kg/m × dài × SL', () => {
+    const l = lineFromPo(dto)
+    expect(l.qty2_saved).toBeNull()
+    expect(lineQty2('aluminium', l)).toBeCloseTo(300.16, 1)
+  })
+
+  it('sửa ô (điều chỉnh) hay đổi mẫu thì số đã chốt hết hiệu lực', () => {
+    const l = { ...lineFromPo(dto, null, true), qty2_saved: null }
+    expect(lineQty2('aluminium', l)).toBeCloseTo(300.16, 1)
+    const [r] = remapLinesForTemplate('aluminium', 'metal_kg', [
+      lineFromPo(dto, null, true),
+    ])
+    expect(r.qty2_saved).toBeNull()
   })
 })
 
@@ -957,9 +993,22 @@ describe('remapLinesForTemplate — đổi mẫu thì dọn cột mượn đã �
 })
 
 describe('mergeLineInto — gộp dòng trùng', () => {
-  const base = { ...newFreeLine(), qty: 10 as const, price: 108000 as const, note: 'Ghế 1', qty_demand: '' as const, lsx_split: { L1: 4 } }
+  const base = {
+    ...newFreeLine(),
+    qty: 10 as const,
+    price: 108000 as const,
+    note: 'Ghế 1',
+    qty_demand: '' as const,
+    lsx_split: { L1: 4 },
+  }
   it('cộng SL, SL đơn hàng, phần chia lệnh; nối ghi chú khác nhau', () => {
-    const m = mergeLineInto(base, { ...base, qty: 5, qty_demand: 3, note: 'Ghế 3', lsx_split: { L1: 1, L2: 2 } })
+    const m = mergeLineInto(base, {
+      ...base,
+      qty: 5,
+      qty_demand: 3,
+      note: 'Ghế 3',
+      lsx_split: { L1: 1, L2: 2 },
+    })
     expect(m).not.toBeNull()
     expect(m!.qty).toBe(15)
     expect(m!.qty_demand).toBe(3)

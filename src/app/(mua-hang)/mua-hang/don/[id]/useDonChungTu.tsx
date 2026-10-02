@@ -184,9 +184,11 @@ export function useDonChungTu(p: Props) {
     if (!editing && !termsEdit) setHeader(headerFromPo(po, p.extraLsx.map((x) => x.id))) // prettier-ignore
   }
 
+  // Đơn đã phát hành giữ tổng kg/m² đã chốt (xem `Line.qty2_saved`), nháp chạy theo ô nhập.
+  const keepQty2 = !!po && po.status !== 'draft'
   const linesFromProps = () =>
     p.lines.map((l) =>
-      lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null),
+      lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null, keepQty2),
     )
   const [lines, setLines] = useState<Line[]>(linesFromProps)
   // Cùng lý do với header ở trên: dòng đổi trên server (điều chỉnh, nhận hàng)
@@ -415,8 +417,9 @@ export function useDonChungTu(p: Props) {
   const curIdx = cur ? lines.indexOf(cur) : -1
 
   /* ── sửa dòng ─────────────────────────────────────────────────────── */
+  // Sửa ô nào của dòng thì tổng kg đã chốt hết hiệu lực — số chạy theo ô nhập.
   const patch = (i: number, part: Partial<Line>) =>
-    setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...part } : l)))
+    setLines((ls) => ls.map((l, k) => (k === i ? { ...l, qty2_saved: null, ...part } : l))) // prettier-ignore
 
   const setField = (i: number, f: PoField, v: string) => {
     if (!f.field) return
@@ -642,11 +645,7 @@ export function useDonChungTu(p: Props) {
         p.extraLsx.map((x) => x.id),
       ),
     )
-    setLines(
-      p.lines.map((l) =>
-        lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null),
-      ),
-    )
+    setLines(linesFromProps())
     setSel([])
     setEditing(false)
     setAdjusting(false)

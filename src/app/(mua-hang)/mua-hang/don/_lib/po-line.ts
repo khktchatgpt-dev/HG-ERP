@@ -103,6 +103,21 @@ export type Line = {
    */
   price_per: '' | 'unit' | 'unit2'
   /**
+   * Tổng kg/m² ĐÃ CHỐT trong DB, chỉ đặt khi mở một đơn ĐÃ PHÁT HÀNH. Khi có,
+   * `lineQty2`/`lineAmount` lấy thẳng số này thay vì để `deriveLine` dẫn xuất
+   * lại từ kg/m × dài × SL.
+   *
+   * Vì sao cần (đơn anh Truyền 18/09/2026): NCC ghi tổng kg LÀM TRÒN trên tờ
+   * (300 kg, không phải 300,16 = 0,385 × 5,53 × 141). Tính lại thì màn chi tiết
+   * hiện số khác màn danh sách và khác cả phiếu in gửi NCC — cùng một đơn, ba
+   * con số. Đơn đã ký thì tiền đã chốt, không phải thứ để dẫn xuất lại.
+   *
+   * Đơn NHÁP không đặt trường này, và `patch` xoá nó ngay khi người dùng sửa
+   * bất kỳ ô nào của dòng (điều chỉnh đơn đã gửi): lúc đó số phải chạy theo ô
+   * nhập, và server tính lại qty2 khi lưu.
+   */
+  qty2_saved?: number | null
+  /**
    * CHIA SL CỦA DÒNG cho các lệnh của đơn (0185) — lệnh id → SL, để dạng chuỗi
    * cho ô nhập gõ dở được. Rỗng hoặc dồn vào một lệnh = 100% thuộc lệnh chính,
    * không gửi gì lên server.
@@ -145,6 +160,7 @@ export function draftOf(l: Line) {
 
 /** Tổng kg / tổng m² của dòng — cột tính sẵn, hiện read-only trên bảng. */
 export function lineQty2(t: PoTemplate, l: Line): number | null {
+  if (l.qty2_saved != null) return l.qty2_saved
   return deriveLine(t, draftOf(l)).qty2
 }
 
@@ -155,7 +171,7 @@ export function lineAmount(t: PoTemplate, l: Line): number {
     qty_ordered: Number(l.qty) || 0,
     unit_price: n(l.price),
     price_basis: d.price_basis,
-    qty2: d.qty2,
+    qty2: l.qty2_saved ?? d.qty2,
   })
 }
 
@@ -499,6 +515,8 @@ export function newFreeLine(): Line {
 /** Dòng đơn như repo trả về — chỉ những trường form cần. */
 export type PoLineDto = {
   id?: string
+  /** Tổng kg/m² ĐÃ CHỐT lúc lập đơn (0053). Chỉ dùng lại cho đơn đã phát hành — xem `keepQty2` của `lineFromPo`. */
+  qty2?: number | null
   /** null = dòng tự do (0134) — material_name/unit đã fallback từ line_name. */
   material_id: string | null
   material_code: string
@@ -553,7 +571,12 @@ const s2 = (v: string | null | undefined): string => v ?? ''
  * `on_hand` lấy tồn HIỆN TẠI (server page nạp kèm), không phải `qty_on_hand` đã
  * chốt lúc lập đơn — hai số khác nghĩa: một là tồn bây giờ, một là ảnh chụp để in.
  */
-export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
+export function lineFromPo(
+  l: PoLineDto,
+  onHand: number | null = null,
+  /** Đơn đã phát hành: giữ tổng kg/m² đã chốt (`qty2_saved`), không dẫn xuất lại. */
+  keepQty2 = false,
+): Line {
   // Dòng tự do (0134): material_id null trong DB — khóa cục bộ dựng từ id dòng
   // (mở SỬA/NHÂN BẢN không đổi khóa giữa hai lần render).
   const isFree = l.material_id == null
@@ -561,6 +584,7 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     // Mở lại đơn cũ: giữ nguyên đơn vị tính giá đã chốt lúc lập, không để
     // deriveLine đoán lại theo mẫu rồi đổi tiền của một đơn đã ký.
     price_per: l.price_basis ?? '',
+    qty2_saved: keepQty2 ? (l.qty2 ?? null) : null,
     lsx_split: Object.fromEntries(
       (l.lsx_split ?? []).map((sp) => [sp.production_order_id, sp.qty as Num]),
     ),
@@ -632,7 +656,8 @@ export function remapLinesForTemplate(
   if (from === to) return lines
   const fields = Object.keys(PO_SHARED_FIELD_MEANING) as (keyof Line & string)[]
   return lines.map((l) => {
-    const next = { ...l }
+    // Đổi mẫu là đổi cách tính — tổng kg đã chốt không còn đúng nghĩa.
+    const next = { ...l, qty2_saved: null }
     for (const f of fields) {
       const before = PO_SHARED_FIELD_MEANING[f]?.[from]
       const after = PO_SHARED_FIELD_MEANING[f]?.[to]
@@ -756,10 +781,13 @@ export function splitPayload(
  * giá nào là việc của người mua, không phải của máy.
  */
 export function mergeLineInto(into: Line, from: Line): Line | null {
-  if (into.price !== from.price || (into.price_per || '') !== (from.price_per || '')) return null
-  const add = (a: Num, b: Num): Num => (a === '' && b === '' ? '' : Number(a || 0) + Number(b || 0))
+  if (into.price !== from.price || (into.price_per || '') !== (from.price_per || ''))
+    return null
+  const add = (a: Num, b: Num): Num =>
+    a === '' && b === '' ? '' : Number(a || 0) + Number(b || 0)
   const split: Record<string, Num> = { ...into.lsx_split }
-  for (const [k, v] of Object.entries(from.lsx_split ?? {})) split[k] = add(split[k] ?? '', v)
+  for (const [k, v] of Object.entries(from.lsx_split ?? {}))
+    split[k] = add(split[k] ?? '', v)
   const notes = [into.note, from.note].map((s) => s.trim()).filter(Boolean)
   return {
     ...into,
