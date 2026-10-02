@@ -746,7 +746,7 @@ export function useDonChungTu(p: Props) {
       p.lsxs.map((l) => ({
         value: l.id,
         label: l.code,
-        hint: [l.customer_name, l.order_codes?.join(', ')].filter(Boolean).join(' · '),
+        hint: l.customer_name, // mã đơn bán bỏ 02/10/2026 — lệnh LAURA nối 11 mã, không ai cần
       })),
     [p.lsxs],
   )

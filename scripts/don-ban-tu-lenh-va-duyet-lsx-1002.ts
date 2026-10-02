@@ -62,13 +62,20 @@ async function main() {
       .eq('production_order_id', lsx.id)
       .order('sort_order')
     type L = { product_id: string | null; qty: unknown; ship_date: string | null; product: { code: string; plan_price: unknown } | { code: string; plan_price: unknown }[] | null } // prettier-ignore
-    const groups = new Map<string, Map<string, { qty: number; price: number; code: string }>>()
+    const groups = new Map<
+      string,
+      Map<string, { qty: number; price: number; code: string }>
+    >()
     for (const l of (lines ?? []) as unknown as L[]) {
       if (!l.product_id) continue
       const p = Array.isArray(l.product) ? l.product[0] : l.product
       const k = l.ship_date ?? ''
       const m = groups.get(k) ?? new Map()
-      const cur = m.get(l.product_id) ?? { qty: 0, price: Number(p?.plan_price ?? 0), code: p?.code ?? '?' }
+      const cur = m.get(l.product_id) ?? {
+        qty: 0,
+        price: Number(p?.plan_price ?? 0),
+        code: p?.code ?? '?',
+      }
       cur.qty += Number(l.qty)
       m.set(l.product_id, cur)
       groups.set(k, m)
@@ -90,11 +97,23 @@ async function main() {
         currency: 'USD',
         due_date: k || lsx.ship_date || null,
         note: `Đơn dựng lại từ lệnh ${lsx.code} ngày 02/10/2026 (lệnh có trước, chưa có đơn bán trong hệ). Đơn giá = FOB kế hoạch của Sale (0 = chưa có); mã PO khách chưa có — Bán hàng bổ sung.`,
-        lines: items.map(([product_id, v]) => ({ product_id, qty: v.qty, unit_price: v.price, ship_date: k || null })),
+        lines: items.map(([product_id, v]) => ({
+          product_id,
+          qty: v.qty,
+          unit_price: v.price,
+          ship_date: k || null,
+        })),
       })
-      const patch: Record<string, unknown> = { production_order_id: lsx.id }
-      if (lsx.status !== 'draft') patch.status = 'lsx_issued'
-      const { error: e2 } = await db().from('sales_orders').update(patch).eq('id', order.id)
+      // Kiểu cụ thể thay `Record<string, unknown>` — supabase-js typed client từ chối
+      // object mở, làm `next build` đỏ (vá 02/10/2026, không đổi hành vi).
+      const patch = {
+        production_order_id: lsx.id,
+        ...(lsx.status !== 'draft' ? { status: 'lsx_issued' as const } : {}),
+      }
+      const { error: e2 } = await db()
+        .from('sales_orders')
+        .update(patch)
+        .eq('id', order.id)
       if (e2) throw new Error(e2.message)
       created++
     }
@@ -109,12 +128,18 @@ async function main() {
   let approved = 0
   for (const d of drafts ?? []) {
     const owner = (d.created_by ? await usersRepo.findById(d.created_by) : null) ?? gd
-    console.log(`${APPLY ? '→' : '·'} duyệt ${d.code} (gửi duyệt bởi ${owner.email}, duyệt bởi ${gd.email})`)
+    console.log(
+      `${APPLY ? '→' : '·'} duyệt ${d.code} (gửi duyệt bởi ${owner.email}, duyệt bởi ${gd.email})`,
+    )
     if (!APPLY) continue
     await lsxService.submit(owner, d.id)
     await lsxService.approve(gd, d.id)
     approved++
   }
-  console.log(APPLY ? `XONG: tạo ${created} đơn, duyệt ${approved} lệnh.` : 'Dò khô xong. Thêm --apply để ghi.')
+  console.log(
+    APPLY
+      ? `XONG: tạo ${created} đơn, duyệt ${approved} lệnh.`
+      : 'Dò khô xong. Thêm --apply để ghi.',
+  )
 }
 void main()

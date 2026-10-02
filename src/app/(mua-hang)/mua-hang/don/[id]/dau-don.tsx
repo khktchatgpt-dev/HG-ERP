@@ -222,9 +222,6 @@ export function DauDon({ d }: { d: DonCtx }) {
                   <Field label="Lệnh sản xuất">
                     <span className="num">{po?.lsx_code ?? 'Ngoài LSX'}</span>
                   </Field>
-                  <Field label="Đơn khách">
-                    <span className="num">{po?.order_code ?? '—'}</span>
-                  </Field>
                   <Field label="Người phụ trách">
                     {po?.assignee_name ?? 'chưa giao ai'}
                   </Field>

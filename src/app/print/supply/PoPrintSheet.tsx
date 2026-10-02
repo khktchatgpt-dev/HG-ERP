@@ -417,10 +417,10 @@ export function PoPrintSheet({
           ...(po.contract_no
             ? ([['Theo HD số:', po.contract_no]] as [string, string][])
             : []),
-          ...(po.lsx_code ? ([['LSX', po.lsx_code]] as [string, string][]) : []),
-          ...(po.order_code
-            ? ([['Đơn hàng:', po.order_code]] as [string, string][])
-            : []),
+          // Mã lệnh IN ĐẬM như Số ĐH (02/10/2026, user chốt) — hai số NCC đối chiếu.
+          ...(po.lsx_code ? ([['LSX', <b key="l">{po.lsx_code}</b>]] as [string, React.ReactNode][]) : []), // prettier-ignore
+          // Dòng "Đơn hàng" BỎ 02/10/2026 (user chốt): đơn gộp cả lệnh nối 11 mã
+          // "LAURA 01/26-27 g.…" — NCC không dùng tới, LSX đã đủ để đối chiếu.
         ]}
       />
 

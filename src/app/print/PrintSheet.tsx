@@ -169,8 +169,15 @@ export function PrintMeta({
   refsBoxed?: boolean
 }) {
   return (
+    /*
+      HAI CỘT CÓ TRẦN (vá 02/10/2026). Khối số hiệu từng là `shrink-0` không bề rộng
+      tối đa: đơn gộp nhiều đơn hàng in "Đơn hàng: LAURA 01/26-27 g.30/12/26 +
+      LAURA … + …" thành MỘT dòng dài hơn cả tờ giấy — khung tràn mép phải, cột
+      "Kính gửi" bị bóp còn một chữ mỗi dòng, "Số ĐH"/"LSX" căn giữa trôi ra ngoài.
+      Nay khung tối đa 45% bề ngang và xuống dòng; cột NCC nhận phần còn lại.
+    */
     <div className="mt-2 flex items-start justify-between gap-4">
-      <table className="text-[12px]">
+      <table className="min-w-0 flex-1 text-[12px]">
         <tbody>
           {rows
             .filter(([, v]) => v !== null && v !== undefined && v !== '')
@@ -189,7 +196,7 @@ export function PrintMeta({
       </table>
       {refs && refs.length > 0 && (
         <div
-          className={`shrink-0 text-[12px] ${
+          className={`max-w-[45%] min-w-[180px] text-[12px] break-words ${
             refsBoxed
               ? 'divide-y divide-black border border-black text-center [&>div]:px-3 [&>div]:py-0.5'
               : ''

@@ -192,7 +192,6 @@ export function DonChungTuScreen(p: Props) {
     track,
     recvIdx,
     veKho,
-    lsx,
     supplierOpt,
     moqWarn,
     lsxOptions,
@@ -1115,7 +1114,7 @@ export function DonChungTuScreen(p: Props) {
           <PoPrintSheet
             company={p.company}
             tpl={p.tpl}
-            po={previewHeaderFromDraft(header, { code: po?.code ?? '(cấp khi lưu)', supplierName: supplierOpt?.name ?? '—', lsxCode: lsxLabel, orderCode: header.poType === 'lsx' ? (lsx?.order_codes.join(', ') || null) : null, createdAt: po?.created_at ?? new Date().toISOString() })} // prettier-ignore
+            po={previewHeaderFromDraft(header, { code: po?.code ?? '(cấp khi lưu)', supplierName: supplierOpt?.name ?? '—', lsxCode: lsxLabel, orderCode: null, createdAt: po?.created_at ?? new Date().toISOString() })} // prettier-ignore
             supplier={supplierOpt ? { name: supplierOpt.name } : null}
             lines={previewLinesFromDraft(template, lines)}
           />

@@ -340,13 +340,14 @@ export async function buildPoExcel(input: {
     ...(po.revision_label ? [`Điều chỉnh: ${po.revision_label}`] : []),
     ...(po.contract_no ? [`Theo HD số: ${po.contract_no}`] : []),
     ...(po.lsx_code ? [`LSX ${po.lsx_code}`] : []),
-    ...(po.order_code ? [`Đơn hàng: ${po.order_code}`] : []),
+    // Dòng "Đơn hàng" BỎ 02/10/2026 (user chốt) — cùng nhịp với phiếu in.
   ]
   let refRow = r + 1
   for (const text of refs) {
     ws.mergeCells(refRow, rightStart, refRow, n)
     set(refRow, rightStart, text, {
-      font: { bold: text.startsWith('Số ĐH'), size: 10 },
+      // Số ĐH + LSX in đậm — cùng nhịp với phiếu in (02/10/2026).
+      font: { bold: text.startsWith('Số ĐH') || text.startsWith('LSX'), size: 10 },
       alignment: { horizontal: 'center' },
       border: BORDER,
     })
