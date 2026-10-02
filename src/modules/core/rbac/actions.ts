@@ -101,6 +101,17 @@ export const ACTIONS: Action[] = [
     // thiếu quy cách và phải chờ Kỹ thuật. KHÔNG bao gồm mã/tên/BOM.
     rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
+  /*
+   * GIÁ THÀNH KẾ HOẠCH (0220): bốn số từ bảng tính giá của Sale. Sale là người
+   * phân tích nên nhập được; Kỹ thuật cũng (hồ sơ SP của họ). Xem thì ai cũng
+   * được như xem SP — Giám đốc cần nó ở Tiền theo lệnh.
+   */
+  {
+    key: 'technical.plan_cost.manage',
+    label: 'Nạp / sửa giá thành kế hoạch của SP',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
+  },
   {
     key: 'technical.product.update',
     label: 'Sửa sản phẩm',

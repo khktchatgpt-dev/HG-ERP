@@ -197,6 +197,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Điền đơn giá',
             icon: 'circle-dollar-sign',
           },
+          /*
+           * Giá thành kế hoạch (0220): bốn số từ bảng tính giá của Sale, theo
+           * SP. Giám đốc đọc nó ở Tiền theo lệnh; Sale nạp ở đây.
+           */
+          { href: '/sales/gia-thanh', label: 'Giá thành kế hoạch', icon: 'chart-column' },
           { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
         ],
       },

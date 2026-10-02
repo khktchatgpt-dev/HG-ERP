@@ -5800,6 +5800,16 @@ export type Database = {
           paint_area_m2: number | null
           paint_coverage_m2_per_kg: number | null
           part_count: number | null
+          plan_at: string | null
+          plan_breakdown: Json | null
+          plan_by: string | null
+          plan_currency: string | null
+          plan_direct_cost: number | null
+          plan_fx_rate: number | null
+          plan_overhead: number | null
+          plan_price: number | null
+          plan_profit: number | null
+          plan_source: string | null
           product_type: string | null
           reference_price: number | null
           sample_confirmed_at: string | null
@@ -5877,6 +5887,16 @@ export type Database = {
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
           part_count?: number | null
+          plan_at?: string | null
+          plan_breakdown?: Json | null
+          plan_by?: string | null
+          plan_currency?: string | null
+          plan_direct_cost?: number | null
+          plan_fx_rate?: number | null
+          plan_overhead?: number | null
+          plan_price?: number | null
+          plan_profit?: number | null
+          plan_source?: string | null
           product_type?: string | null
           reference_price?: number | null
           sample_confirmed_at?: string | null
@@ -5954,6 +5974,16 @@ export type Database = {
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
           part_count?: number | null
+          plan_at?: string | null
+          plan_breakdown?: Json | null
+          plan_by?: string | null
+          plan_currency?: string | null
+          plan_direct_cost?: number | null
+          plan_fx_rate?: number | null
+          plan_overhead?: number | null
+          plan_price?: number | null
+          plan_profit?: number | null
+          plan_source?: string | null
           product_type?: string | null
           reference_price?: number | null
           sample_confirmed_at?: string | null
@@ -6028,6 +6058,13 @@ export type Database = {
           {
             foreignKeyName: "technical_products_owner_id_fkey"
             columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_products_plan_by_fkey"
+            columns: ["plan_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
