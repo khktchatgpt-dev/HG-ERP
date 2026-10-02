@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { FastTab, GridBtn } from '@/components/kit'
 import { earliestExpectedDate } from '@/lib/po-shipments'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
-import { ChungTuKhoGrid, DotGiaoGrid, NhanTheoDotGrid } from './NhanHangPanel'
+import { ChungTuKhoGrid } from './chung-tu-kho'
+import { DotGiaoGrid, NhanTheoDotGrid } from './NhanHangPanel'
 import { ChiaDotSoanGrid } from './SoanDonPanels'
 import { SoHenGiaoGrid, SuCoGrid, XacNhanTheoDongGrid } from './TheoDoiPanel'
 import { fmtNum } from './don-chung-tu.shared'
@@ -186,7 +187,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                   receivedByLine={new Map(p.statusLines.map((s) => [s.id, s.qty_received ?? 0]))} // prettier-ignore
                   linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
                   confirmedNote={po.confirmed_note}
-                  emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0)}
+                  emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0, !suaDot)}
                   canAct={false}
                   busy={busy}
                   today={today}
@@ -213,7 +214,8 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                         là PHÍA KHO — đã lập phiếu gì, còn thiếu bao nhiêu, và
                         là nơi bấm "Chốt thiếu" khi NCC không giao nữa. */}
                     <p className="text-k-sm mb-1 text-[var(--ink-3)]">
-                      Phía Kho đã nhận gì — số thật trên phiếu nhập. Chốt thiếu ở Theo dõi đơn hàng.
+                      Phía Kho đã nhận gì — số thật trên phiếu nhập. Chốt thiếu ở Theo dõi
+                      đơn hàng.
                     </p>
                   </div>
                   <NhanTheoDotGrid
@@ -236,7 +238,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
               </div>
               <SoHenGiaoGrid
                 commits={p.tracking?.commits ?? []}
-                receipts={p.warehouseDocs.filter((d) => d.kind === 'receipt').map((d) => ({ code: d.code, at: d.at, entered_at: d.entered_at, qty_total: d.qty_total }))} // prettier-ignore
+                receipts={p.warehouseDocs.filter((d) => d.kind === 'receipt' && !d.reversed_by).map((d) => ({ code: d.code, at: d.at, entered_at: d.entered_at, qty_total: d.qty_total }))} // prettier-ignore
                 linesById={trackById}
                 currentEarliest={earliestExpectedDate(p.shipments)}
               />

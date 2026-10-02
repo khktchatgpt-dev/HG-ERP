@@ -102,6 +102,11 @@ describe('receiveActions', () => {
     expect(shipmentEmptyHint('ordered', true)).toMatch(/NCC xác nhận/)
     expect(shipmentEmptyHint('partial', false)).toMatch(/tự gõ/)
   })
+  it('trang đơn chỉ xem: không bảo bấm nút không có; không lặp câu "giao một lần"', () => {
+    expect(shipmentEmptyHint('ordered', true, true)).not.toMatch(/Bấm/)
+    expect(shipmentEmptyHint('ordered', true, true)).toMatch(/Theo dõi đơn hàng/)
+    expect(shipmentEmptyHint('received', true)).toBe('')
+  })
 })
 
 describe('lineShortAction — việc chốt thiếu của TỪNG dòng', () => {

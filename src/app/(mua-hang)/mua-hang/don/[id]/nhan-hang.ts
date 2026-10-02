@@ -122,8 +122,20 @@ export function batchesToShipments(
     .map(([date, lines]) => ({ expected_date: date, lines }))
 }
 
-/** Đơn chưa có đợt nào thì nói bước kế tiếp — theo đúng trạng thái đơn. */
-export function shipmentEmptyHint(status: string, hasStockLines: boolean): string {
+/**
+ * Đơn chưa có đợt nào thì nói bước kế tiếp — theo đúng trạng thái đơn. Câu đứng
+ * SAU "Chưa chia đợt — hiểu là giao một lần vào hạn giao của đơn." nên không nhắc lại.
+ *
+ * `xemThoi` = trang đơn (chỉ xem từ 01/10/2026): không có nút "NCC xác nhận" /
+ * "+ Thêm đợt giao" để bấm — chỉ sang hộp Giao nhận ở Theo dõi đơn hàng.
+ */
+export function shipmentEmptyHint(
+  status: string,
+  hasStockLines: boolean,
+  xemThoi = false,
+): string {
+  if (xemThoi && (status === 'approved' || status === 'ordered'))
+    return 'Lịch NCC hẹn ghi ở hộp Giao nhận trên Theo dõi đơn hàng.'
   switch (status) {
     case 'draft':
       return 'Chia đợt trong lúc sửa đơn; lịch đó in lên phiếu gửi nhà cung cấp.'
@@ -135,7 +147,7 @@ export function shipmentEmptyHint(status: string, hasStockLines: boolean): strin
       return 'Bấm "NCC xác nhận" để ghi lịch NCC hẹn (mỗi dòng tách được nhiều đợt), hoặc "+ Thêm đợt giao" nếu đã chốt lịch qua điện thoại.'
     default:
       return hasStockLines
-        ? 'Chưa ghi đợt nào — hiểu là giao một lần vào hạn giao của đơn.'
+        ? ''
         : 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt.'
   }
 }

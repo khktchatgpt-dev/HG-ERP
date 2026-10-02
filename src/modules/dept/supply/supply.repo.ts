@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { poLineAmount, type PriceBasis } from '@/lib/po-line'
 import { docEventAt } from '@/lib/date-vn'
+import { suaLaiTu } from '@/lib/da-ve'
 
 /**
  * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
@@ -284,10 +285,17 @@ export const supplyRepo = {
     {
       doc_id: string
       code: string
-      kind: 'receipt' | 'return'
+      /** `reversal` = phiếu ĐẢO một phiếu khác (xuất ngược) — KHÔNG phải trả NCC. */
+      kind: 'receipt' | 'return' | 'reversal'
       qty_total: number
       at: string
       entered_at: string
+      /** Phiếu đảo: mã phiếu bị nó đảo. */
+      reversal_of: string | null
+      /** Phiếu đã bị đảo: mã phiếu đảo nó — số trên phiếu này không còn hiệu lực. */
+      reversed_by: string | null
+      /** Phiếu nhập lập lại để sửa phiếu nào ("Sửa lại PNK-…"). */
+      fix_of: string | null
     }[]
   > {
     const { data: lineRows } = await db()
@@ -299,12 +307,17 @@ export const supplyRepo = {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code, doc_date)',
+        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code, doc_date, note, reversal_of_doc_id)',
       )
       .in('po_line_id', lineIds)
       .not('doc_id', 'is', null)
       .limit(2000)
-    type Doc = { code: string; doc_date: string | null }
+    type Doc = {
+      code: string
+      doc_date: string | null
+      note: string | null
+      reversal_of_doc_id: string | null
+    }
     type R = {
       doc_id: string
       direction: 'in' | 'out'
@@ -318,10 +331,12 @@ export const supplyRepo = {
       {
         doc_id: string
         code: string
-        kind: 'receipt' | 'return'
+        kind: 'receipt' | 'return' | 'reversal'
         qty_total: number
         doc_date: string | null
         entered_at: string
+        reversal_of_id: string | null
+        fix_of: string | null
       }
     >()
     for (const r of (data ?? []) as unknown as R[]) {
@@ -329,10 +344,16 @@ export const supplyRepo = {
       const cur = byDoc.get(r.doc_id) ?? {
         doc_id: r.doc_id,
         code: d?.code ?? '?',
-        kind: r.direction === 'in' ? ('receipt' as const) : ('return' as const),
+        kind: d?.reversal_of_doc_id
+          ? ('reversal' as const)
+          : r.direction === 'in'
+            ? ('receipt' as const)
+            : ('return' as const),
         qty_total: 0,
         doc_date: d?.doc_date ?? null,
         entered_at: r.created_at,
+        reversal_of_id: d?.reversal_of_doc_id ?? null,
+        fix_of: suaLaiTu(d?.note),
       }
       // "Đã nhận" cùng công thức BR-08: đạt + QC loại (NCC đã giao số đó).
       cur.qty_total +=
@@ -342,8 +363,17 @@ export const supplyRepo = {
       if (r.created_at < cur.entered_at) cur.entered_at = r.created_at
       byDoc.set(r.doc_id, cur)
     }
+    // Phiếu đảo nằm cùng dòng đơn với phiếu gốc nên có sẵn trong `byDoc` — nối hai chiều.
+    const reversedBy = new Map<string, string>()
+    for (const x of byDoc.values())
+      if (x.reversal_of_id) reversedBy.set(x.reversal_of_id, x.code)
     return [...byDoc.values()]
-      .map(({ doc_date, ...x }) => ({ ...x, at: docEventAt(doc_date, x.entered_at) }))
+      .map(({ doc_date, reversal_of_id, ...x }) => ({
+        ...x,
+        at: docEventAt(doc_date, x.entered_at),
+        reversal_of: reversal_of_id ? (byDoc.get(reversal_of_id)?.code ?? null) : null,
+        reversed_by: reversedBy.get(x.doc_id) ?? null,
+      }))
       .sort(
         (a, b) => a.at.localeCompare(b.at) || a.entered_at.localeCompare(b.entered_at),
       )
@@ -766,7 +796,8 @@ export const supplyRepo = {
     return {
       template: (po as { template: string | null } | null)?.template ?? null,
       lines:
-        (lines as { id: string; price_basis: string | null; unit2: string | null }[] | null) ??
+        (lines as
+          { id: string; price_basis: string | null; unit2: string | null }[] | null) ??
         [],
     }
   },

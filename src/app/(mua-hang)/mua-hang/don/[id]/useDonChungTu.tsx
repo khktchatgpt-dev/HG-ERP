@@ -777,7 +777,7 @@ export function useDonChungTu(p: Props) {
         { key: 'gui', at: po.ordered_at, label: 'Gửi nhà cung cấp' },
         { key: 'xn', at: po.confirmed_at, label: 'NCC nhận' },
         ...p.shipments.map((s, i) => ({ key: `dot${i}`, at: s.expected_date, label: `${s.code ?? `Đợt giao ${i + 1}`} · ${SHIP_STATUS_LABEL[s.status] ?? s.status}` })), // prettier-ignore
-        ...p.warehouseDocs.map((d) => ({ key: d.doc_id, at: d.at, label: `${d.kind === 'receipt' ? 'Phiếu nhập' : 'Trả NCC'} ${d.code}`, detail: `${d.qty_total.toLocaleString('vi-VN')} đơn vị`, tone: 'done' as const })), // prettier-ignore
+        ...p.warehouseDocs.map((d) => ({ key: d.doc_id, at: d.at, label: `${d.kind === 'receipt' ? 'Phiếu nhập' : d.kind === 'reversal' ? 'Phiếu đảo' : 'Trả NCC'} ${d.code}`, detail: `${d.qty_total.toLocaleString('vi-VN')} đơn vị${d.reversal_of ? ` · đảo ${d.reversal_of}` : ''}${d.reversed_by ? ` · đã đảo bởi ${d.reversed_by}` : ''}${d.fix_of ? ` · lập lại thay ${d.fix_of}` : ''}`, tone: 'done' as const })), // prettier-ignore
         ...adjustments.map((a) => ({ key: `dc${a.seq}`, at: a.created_at, label: `Điều chỉnh lần ${a.seq} · phát sinh ${signed(a.total_after - a.total_before, a.currency)}`, actor: a.created_by_name ?? undefined, detail: a.reason })), // prettier-ignore
         ...costs.map((c) => ({ key: `phi${c.id}`, at: c.cost_date, label: `Ghi phí ${c.kind === 'boc_xep' ? 'bốc xếp' : c.kind === 'khac' ? 'khác' : 'vận chuyển'}${c.doc_no ? ` ${c.doc_no}` : ''} · ${money(c.amount, c.currency)}${c.voided_at ? ' · đã huỷ' : ''}`, actor: c.created_by_name ?? undefined, detail: c.payee_name ?? undefined })), // prettier-ignore
         ...adjustments.flatMap((a) => (a.sent_at ? [{ key: `dcg${a.seq}`, at: a.sent_at, label: `Gửi NCC bản điều chỉnh lần ${a.seq}`, actor: a.sent_by_name ?? undefined, detail: a.sent_note ?? undefined }] : [])), // prettier-ignore
@@ -1391,7 +1391,7 @@ export function useDonChungTu(p: Props) {
   // prettier-ignore
   const daVeDu = po?.status === 'received'
 
-  const lastReceipt = p.warehouseDocs.filter((d) => d.kind === 'receipt').at(-1)
+  const lastReceipt = p.warehouseDocs.filter((d) => d.kind === 'receipt' && !d.reversed_by).at(-1)
 
   const hanGiao = po?.expected_at ? po.expected_at.slice(0, 10) : null
 

@@ -128,6 +128,12 @@ export type Props = {
     at: string
     /** Lúc Kho ghi phiếu vào máy. */
     entered_at: string
+    /** Phiếu đảo: mã phiếu bị nó đảo (`kind = 'reversal'`). */
+    reversal_of?: string | null
+    /** Phiếu đã bị đảo bởi phiếu nào — số trên phiếu không còn hiệu lực. */
+    reversed_by?: string | null
+    /** Phiếu nhập lập lại để sửa phiếu nào. */
+    fix_of?: string | null
   }[]
   stock: Record<string, number>
   position: { index: number; total: number } | null

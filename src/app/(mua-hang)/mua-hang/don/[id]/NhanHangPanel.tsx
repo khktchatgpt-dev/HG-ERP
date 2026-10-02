@@ -380,40 +380,6 @@ export function NhanTheoDotGrid({
   )
 }
 
-/* ══ 3. CHỨNG TỪ KHO ═══════════════════════════════════════════════════ */
-export function ChungTuKhoGrid({
-  docs,
-}: {
-  docs: { doc_id: string; code: string; kind: string; qty_total: number; at: string }[]
-}) {
-  return (
-    <Grid minWidth={480}>
-      <GridHead>
-        <Th>Phiếu</Th>
-        <Th>Loại</Th>
-        <Th num>Tổng số lượng</Th>
-        <Th num>Ghi nhận</Th>
-      </GridHead>
-      <GridBody>
-        {docs.map((d) => (
-          <GridRow key={d.doc_id}>
-            <Td>
-              <span className="num k-strong">{d.code}</span>
-            </Td>
-            <Td>
-              <Tag tone={d.kind === 'receipt' ? 'done' : 'stop'}>
-                {d.kind === 'receipt' ? 'Phiếu nhập kho' : 'Xuất trả NCC'}
-              </Tag>
-            </Td>
-            <Td num>{num(d.qty_total)}</Td>
-            <Td num>{dmy(d.at.slice(0, 10))}</Td>
-          </GridRow>
-        ))}
-      </GridBody>
-    </Grid>
-  )
-}
-
 /* ══ 4. HỘP "NCC XÁC NHẬN" / "THÊM ĐỢT" ═══════════════════════════════════
    NCC không đăng nhập: NV cung ứng ghi lại cam kết sau cuộc gọi/Zalo — từng
    dòng NCC hứa bao nhiêu, ngày nào. Một dòng tách được nhiều mảnh; các mảnh
