@@ -194,6 +194,45 @@ describe('laiLoBoard — thiếu số thì KHÔNG ra số', () => {
   })
 })
 
+describe('laiLoBoard — SP chỉ có giá FOB (khách đưa bảng giá chốt, không có bảng tính)', () => {
+  const lines = [
+    { lsx_id: 'L1', product_id: 'a', product_code: 'A', qty: 100 },
+    { lsx_id: 'L1', product_id: 'b', product_code: 'B', qty: 10 },
+  ]
+  const priceOnly = (id: string, price: number): LaiLoPlan => ({ product_id: id, direct: null, overhead: null, profit: null, price, currency: 'USD' }) // prettier-ignore
+
+  it('đủ FOB → doanh thu theo KH có số; giá thành KH vẫn null và nói "chỉ có FOB"', () => {
+    const r = laiLoBoard({
+      lsx: [LSX],
+      lsxLines: lines,
+      plans: [priceOnly('a', 80), priceOnly('b', 150)],
+      orders: [{ id: 'o1', code: 'SO1', lsx_id: 'L1', currency: 'USD', fx_rate: 25000 }],
+      orderLines: [{ order_id: 'o1', product_id: 'a', qty: 100, unit_price: 0 }],
+      pos: [PO({ id: 'p1', amount: 100_000_000 })],
+    }).rows[0]
+    expect(r.revenue).toEqual({ vnd: 237_500_000, missing: [] })
+    expect(r.revenue_source).toBe('plan')
+    expect(r.plan_cost).toBeNull()
+    expect(r.planned_products).toBe(2)
+    expect(r.missing.find((m) => m.kind === 'plan')?.short).toBe('2/2 SP chỉ có FOB')
+    expect(r.verdict).toBe('thieu')
+  })
+
+  it('lẫn SP đủ số và SP chỉ FOB → báo đúng số SP chỉ có FOB', () => {
+    const r = laiLoBoard({
+      lsx: [LSX],
+      lsxLines: lines,
+      plans: [P('a', 60, 10, 10), priceOnly('b', 150)],
+      orders: [],
+      orderLines: [],
+      pos: [],
+    }).rows[0]
+    expect(r.plan_cost).toBeNull()
+    // Cả hai đều có FOB → câu nói đúng là 'chỉ có FOB', không phải 'chưa có gì'.
+    expect(r.missing.find((m) => m.kind === 'plan')?.short).toBe('1/2 SP chỉ có FOB')
+  })
+})
+
 describe('laiLoBoard — sắp xếp và tổng', () => {
   it('lệnh nguy cơ lỗ lên đầu, rồi ăn lợi nhuận, rồi thiếu số, rồi trong kế hoạch', () => {
     const mk = (id: string, poAmount: number, price = 120, withPlan = true) => ({

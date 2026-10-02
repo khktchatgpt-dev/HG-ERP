@@ -5,7 +5,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { todayVn } from '@/lib/date-vn'
 import { planCheck, planPct, type BreakdownItem } from '@/lib/plan-cost'
-import type { PlanCostBulkInput } from './plan-cost.schema'
+import { hasFullPlan, type PlanCostBulkInput } from './plan-cost.schema'
 
 /**
  * GIÁ THÀNH KẾ HOẠCH THEO SẢN PHẨM (0220).
@@ -249,8 +249,21 @@ export const planCostService = {
    */
   async save(user: User, input: PlanCostBulkInput): Promise<{ updated: number }> {
     await assertAction(user, 'technical.plan_cost.manage')
+    // Dòng CHỈ FOB không có gì để kiểm tổng — chỉ dòng đủ ba số mới qua planCheck.
     const bad = input.items
-      .map((it) => ({ it, chk: planCheck(it, input.currency) }))
+      .filter(hasFullPlan)
+      .map((it) => ({
+        it,
+        chk: planCheck(
+          {
+            direct: it.direct,
+            overhead: it.overhead,
+            profit: it.profit,
+            price: it.price,
+          },
+          input.currency,
+        ),
+      }))
       .filter((x) => !x.chk.ok)
     if (bad.length > 0) {
       const ids = bad.map((b) => b.it.product_id)
@@ -275,9 +288,9 @@ export const planCostService = {
         db()
           .from('technical_products')
           .update({
-            plan_direct_cost: it.direct,
-            plan_overhead: it.overhead,
-            plan_profit: it.profit,
+            plan_direct_cost: it.direct ?? null,
+            plan_overhead: it.overhead ?? null,
+            plan_profit: it.profit ?? null,
             plan_price: it.price,
             plan_currency: input.currency,
             plan_fx_rate: input.fx_rate ?? null,

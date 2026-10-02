@@ -176,11 +176,19 @@ const DRAFT_PO = new Set(['draft', 'pending_approval'])
 const r0 = (n: number) => Math.round(n)
 const r2 = (n: number) => Math.round(n * 100) / 100
 
-const planComplete = (
+/**
+ * Hai mức "có kế hoạch" (02/10/2026): SP có FOB (đủ cho doanh thu theo KH) và
+ * SP có cả giá thành (trực tiếp · chung · lợi nhuận — đủ cho cột Giá thành KH).
+ * Khách chỉ đưa bảng giá chốt (MERXX, ROSCO) thì SP ở mức một; lệnh của họ có
+ * doanh thu theo KH nhưng vẫn báo "chưa có giá thành".
+ */
+const planPriced = (p: LaiLoPlan | undefined): p is LaiLoPlan & { price: number } =>
+  !!p && p.price != null
+const planCosted = (
   p: LaiLoPlan | undefined,
 ): p is LaiLoPlan & { direct: number; overhead: number; profit: number; price: number } =>
   // prettier-ignore
-  !!p && p.direct != null && p.overhead != null && p.profit != null && p.price != null
+  planPriced(p) && p.direct != null && p.overhead != null && p.profit != null
 
 const HREF = {
   plan: '/sales/gia-thanh',
@@ -286,16 +294,17 @@ function rowOf(
       continue
     }
     const p = l.product_id ? plan.get(l.product_id) : undefined
-    const ok = planComplete(p)
+    const priced = planPriced(p)
+    const costed = planCosted(p)
     byProduct.set(k, {
       product_id: l.product_id,
       code: l.product_code,
       qty: l.qty,
-      price: ok ? p.price : null,
-      direct: ok ? p.direct : null,
-      overhead: ok ? p.overhead : null,
-      profit: ok ? p.profit : null,
-      currency: ok ? (p.currency ?? 'USD') : null,
+      price: priced ? p.price : null,
+      direct: costed ? p.direct : null,
+      overhead: costed ? p.overhead : null,
+      profit: costed ? p.profit : null,
+      currency: priced ? (p.currency ?? 'USD') : null,
     })
   }
   const products = [...byProduct.values()].sort(
@@ -305,28 +314,40 @@ function rowOf(
   const qty_total = products.reduce((s, p) => s + p.qty, 0)
   const planned = products.filter((p) => p.price != null)
   const planned_products = planned.length
+  const costed_products = products.filter((p) => p.direct != null).length
 
   // ── Kế hoạch: Σ SL × (trực tiếp + chung), Σ SL × lợi nhuận, Σ SL × FOB ──
   let plan_cost: Quy | null = null
   let plan_profit: Quy | null = null
   let plan_revenue: Quy | null = null
+  const pick = (f: (p: LaiLoProduct) => number) =>
+    sumToBase(
+      products.map((p) => ({
+        amount: p.qty * f(p),
+        currency: p.currency ?? 'USD',
+        rate: fxOf(p.currency ?? 'USD'),
+      })),
+    )
   if (product_count > 0 && planned_products === product_count) {
-    const pick = (f: (p: LaiLoProduct) => number) =>
-      sumToBase(
-        planned.map((p) => ({
-          amount: p.qty * f(p),
-          currency: p.currency ?? 'USD',
-          rate: fxOf(p.currency ?? 'USD'),
-        })),
-      )
+    plan_revenue = quy(pick((p) => p.price ?? 0))
+  }
+  if (product_count > 0 && costed_products === product_count) {
     plan_cost = quy(pick((p) => (p.direct ?? 0) + (p.overhead ?? 0)))
     plan_profit = quy(pick((p) => p.profit ?? 0))
-    plan_revenue = quy(pick((p) => p.price ?? 0))
   } else if (product_count > 0) {
+    // Có FOB mà thiếu bảng tính thì nói đúng thế — khác với chưa có gì.
+    const priceOnly = planned_products - costed_products
+    const none = product_count - planned_products
     missing.push({
       kind: 'plan',
-      text: `${product_count - planned_products}/${product_count} SP chưa có giá thành kế hoạch`,
-      short: `${product_count - planned_products}/${product_count} SP chưa giá thành`,
+      text:
+        none === 0
+          ? `${priceOnly}/${product_count} SP chỉ có giá FOB, chưa có bảng tính giá thành`
+          : `${product_count - costed_products}/${product_count} SP chưa có giá thành kế hoạch`,
+      short:
+        none === 0
+          ? `${priceOnly}/${product_count} SP chỉ có FOB`
+          : `${product_count - costed_products}/${product_count} SP chưa giá thành`,
       who: 'Bán hàng dán từ bản báo giá',
       href: HREF.plan,
     })

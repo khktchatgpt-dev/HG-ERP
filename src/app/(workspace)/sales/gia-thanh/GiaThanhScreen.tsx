@@ -577,6 +577,10 @@ export function GiaThanhScreen({
                           </>
                         ) : r.price == null ? (
                           <Tag tone="warn">chưa có</Tag>
+                        ) : r.direct == null ? (
+                          // Khách chỉ có bảng giá chốt, không có bảng tính — FOB dùng được
+                          // cho doanh thu theo KH, giá thành KH vẫn chờ (02/10/2026).
+                          <Tag tone="run">chỉ FOB</Tag>
                         ) : !r.complete ? (
                           <Tag tone="warn">FOB ≠ tổng 3 số</Tag>
                         ) : (
