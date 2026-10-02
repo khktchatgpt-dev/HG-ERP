@@ -1,10 +1,8 @@
-import type { PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
-import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 
 /**
  * LOGIC THUẦN CỦA PHẦN SOẠN ĐƠN trên màn chứng từ hợp nhất — không React, có
  * test. Chuyển từ `PoCreateForm.tsx` (bản cũ, 1.562 dòng trộn UI và logic)
- * những gì màn mới cần: tự lưu nháp, cột đợt giao, nhu cầu còn thiếu.
+ * những gì màn mới cần: cột đợt giao, nhu cầu còn thiếu.
  */
 
 /* ── ĐỢT GIAO KHAI LÚC SOẠN — mỗi đợt một CỘT, khoá theo chỉ số dòng ───── */
@@ -68,52 +66,7 @@ export function planLeft(cols: PlanColumn[], lineIndex: number, ordered: number)
   )
 }
 
-/* ── TỰ LƯU NHÁP VÀO TRÌNH DUYỆT ──────────────────────────────────────────
-   Đơn 20 dòng gõ dở mà F5 / mất mạng / bấm nhầm link là mất sạch. Ghi sau
-   mỗi nhịp gõ, mở lại thì đề nghị khôi phục. Khoá riêng theo đơn khi sửa. */
-export type SavedDraft = {
-  at: string
-  header: PoHeader
-  lines: Line[]
-  shipCols: PlanColumn[]
-}
-
-/**
- * Đơn đang sửa: khoá theo id. Đơn MỚI: khoá theo ngữ cảnh mở (lệnh, NCC, mã
- * mồi từ URL) — tới 29/09/2026 mọi đơn mới chung một khoá `moi`, nên mở đơn
- * mới cho lệnh B vẫn bị mời khôi phục bản gõ dở của lệnh A.
- */
-export const draftKeyFor = (poId: string | null, ctx: (string | undefined)[] = []) =>
-  `hg.mua-hang.don.nhap:${poId ?? ['moi', ...ctx.map((c) => c || '-')].join(':')}`
-
-export function readDraft(key: string): SavedDraft | null {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return null
-    const d = JSON.parse(raw) as SavedDraft
-    // Nháp rỗng (chưa có dòng nào) không đáng một cái banner.
-    return d && Array.isArray(d.lines) && d.lines.length > 0 && d.header ? d : null
-  } catch {
-    return null
-  }
-}
-export function writeDraft(key: string, d: Omit<SavedDraft, 'at'>): void {
-  try {
-    localStorage.setItem(key, JSON.stringify({ ...d, at: new Date().toISOString() }))
-  } catch {
-    /* hết chỗ / chế độ riêng tư — bỏ qua, không chặn soạn */
-  }
-}
-export function clearDraft(key: string): void {
-  try {
-    localStorage.removeItem(key)
-  } catch {}
-}
-
-/** Chữ ký để so "đã khác bản gốc chưa" — chỉ ghi nháp khi khác. */
-export function draftSignature(d: Omit<SavedDraft, 'at'>): string {
-  return JSON.stringify([d.header, d.lines, d.shipCols])
-}
+/* Tự lưu nháp: xem `nhap-an-toan.ts` (bản 2, 02/10/2026). */
 
 /* ── NHU CẦU THEO LỆNH — payload của /api/dept/supply/needs ─────────────── */
 export type Need = {

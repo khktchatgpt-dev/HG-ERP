@@ -65,20 +65,16 @@ import {
 } from './don-chung-tu.shared'
 import { receiveActions, type ShipmentLineRef, type ShipmentLite } from './nhan-hang'
 import {
-  clearDraft,
   columnsToShipments,
-  draftKeyFor,
-  draftSignature,
   lsxJoinedLabel,
   pendingNeeds,
   planColumnsFromShipments,
-  readDraft,
   splitLineFields,
-  writeDraft,
   type Need,
   type PlanColumn,
-  type SavedDraft,
 } from './soan-don'
+import { draftKeyFor, type SavedDraft } from './nhap-an-toan'
+import { useNhapAnToan } from './useNhapAnToan'
 import { barLayout, splitForStatusBar, type BarKey } from './thanh-nut'
 import { phieuNhapCuoi, vuongPhieuKho } from './tong-quan'
 
@@ -187,8 +183,9 @@ export function useDonChungTu(p: Props) {
   // Đơn đã phát hành giữ tổng kg/m² đã chốt (xem `Line.qty2_saved`), nháp chạy theo ô nhập.
   const keepQty2 = !!po && po.status !== 'draft'
   const linesFromProps = () =>
-    p.lines.map((l) =>
-      lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null, keepQty2),
+    p.lines.map(
+      (l) =>
+      lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null, keepQty2, (po?.template ?? p.seedHeader?.template) as PoTemplate | undefined), // prettier-ignore
     )
   const [lines, setLines] = useState<Line[]>(linesFromProps)
   // Cùng lý do với header ở trên: dòng đổi trên server (điều chỉnh, nhận hàng)
@@ -239,8 +236,6 @@ export function useDonChungTu(p: Props) {
   } | null>(null)
   // prettier-ignore
   const [enrichBusy, setEnrichBusy] = useState(false)
-
-  const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
 
   /** Người dùng đã tự chỉnh VAT / tiền tệ — đổi mẫu / đổi NCC không áp đè lại. */
   const dirty = useRef({
@@ -526,7 +521,7 @@ export function useDonChungTu(p: Props) {
           method: isNew ? 'POST' : 'PATCH',
           body,
         })
-      clearDraft(draftKey)
+      nhap.forget()
       toast.success(isNew ? `Đã tạo ${r.po.code}` : `Đã lưu ${r.po.code}`, isNew ? 'Kiểm tra lại rồi bấm "Gửi Giám đốc duyệt"' : undefined) // prettier-ignore
       const dest = `/mua-hang/don/${r.po.id}`
       if (!isNew) setEditing(false)
@@ -624,8 +619,7 @@ export function useDonChungTu(p: Props) {
       ? (!!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges)) ||
         sua.shipChanges > 0 ||
         (!!po && JSON.stringify(header) !== JSON.stringify(headerFromPo(po, p.extraLsx.map((x) => x.id)))) // prettier-ignore
-      : baseline.current != null &&
-        draftSignature({ header, lines, shipCols }) !== baseline.current
+      : nhap.changed()
   // prettier-ignore
   function askCancelEdit() {
     if (isDirty()) setAskCancel(true)
@@ -634,7 +628,7 @@ export function useDonChungTu(p: Props) {
 
   function cancelEdit() {
     setAskCancel(false)
-    clearDraft(draftKey)
+    nhap.forget()
     if (p.mode === 'create' || !po) {
       router.push('/mua-hang/don')
       return
@@ -1164,32 +1158,10 @@ export function useDonChungTu(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mồi một lần lúc mở
   }, [])
 
-  // TỰ LƯU NHÁP: ghi sau mỗi nhịp gõ khi khác bản gốc; mở lại thì đề nghị khôi phục.
+  // TỰ LƯU NHÁP + chặn rời trang mất dữ liệu — xem `useNhapAnToan`.
   const draftKey = draftKeyFor(po?.id ?? null, [p.seed?.lsxId, p.seed?.supplierId, p.seedCodes?.codes.join(',')]) // prettier-ignore
-
-  const baseline = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!drafting) return
-    const t = setTimeout(() => setSavedDraft(readDraft(draftKey)), 0)
-    return () => clearTimeout(t)
-  }, [drafting, draftKey])
-
-  useEffect(() => {
-    if (!drafting || savedDraft) return
-    const snap = { header, lines, shipCols }
-    const sig = draftSignature(snap)
-    if (baseline.current == null) {
-      baseline.current = sig
-      return
-    }
-    if (sig === baseline.current) {
-      clearDraft(draftKey)
-      return
-    }
-    const t = setTimeout(() => writeDraft(draftKey, snap), 700)
-    return () => clearTimeout(t)
-  }, [drafting, savedDraft, header, lines, shipCols, draftKey])
+  const snap = useMemo(() => ({ header, lines, shipCols }), [header, lines, shipCols])
+  const nhap = useNhapAnToan({ drafting, draftKey, snap, isDirty: () => isDirty(), apply: restoreDraft }) // prettier-ignore
 
   // Ctrl+S = Lưu (phản xạ Excel); rời trang bằng trình duyệt khi đang sửa dở thì hỏi.
   // useEffectEvent: hàm luôn đọc state MỚI NHẤT mà không phải gỡ/gắn lại listener.
@@ -1223,7 +1195,6 @@ export function useDonChungTu(p: Props) {
     setLines(d.lines)
     setShipCols(d.shipCols ?? [])
     dirty.current = { vat: true, currency: true, template: true }
-    setSavedDraft(null)
   }
 
   async function confirmEnrich(picked: CatalogSuggestion[]) {
@@ -1523,8 +1494,7 @@ export function useDonChungTu(p: Props) {
     setEnrich,
     enrichBusy,
     setEnrichBusy,
-    savedDraft,
-    setSavedDraft,
+    nhap,
     dirty,
     markDirty,
     askCancel,
@@ -1640,9 +1610,6 @@ export function useDonChungTu(p: Props) {
     saveToCatalog,
     toggleExtraLsx,
     seeded,
-    draftKey,
-    baseline,
-    restoreDraft,
     confirmEnrich,
     goTo,
     goToProblem,

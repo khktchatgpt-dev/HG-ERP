@@ -83,7 +83,7 @@ import { DongHang, NhuCau } from './dong-hang'
 import { GiaoNhan } from './giao-nhan'
 import { SuaTaiChoNut } from './sua-tai-cho-nut'
 import { DongThoiGian, TaiLieu } from './lich-su'
-import { clearDraft } from './soan-don'
+import { BanNhap } from './ban-nhap'
 import { ChiPhi, PhatSinh } from './tai-chinh-khoi'
 import { TongQuanSo } from './tong-quan'
 import { TraoDoiKhung } from './trao-doi'
@@ -161,8 +161,7 @@ export function DonChungTuScreen(p: Props) {
     enrich,
     setEnrich,
     enrichBusy,
-    savedDraft,
-    setSavedDraft,
+    nhap,
     dirty,
     askCancel,
     setAskCancel,
@@ -210,8 +209,6 @@ export function DonChungTuScreen(p: Props) {
     addFromPaste,
     onCreatedMaterial,
     toggleExtraLsx,
-    draftKey,
-    restoreDraft,
     confirmEnrich,
     goTo,
     goToProblem,
@@ -665,25 +662,7 @@ export function DonChungTuScreen(p: Props) {
               {moqWarn}
             </NoticeBar>
           )}
-          {drafting && savedDraft && (
-            <NoticeBar
-              tone="warn"
-              tag="Bản nháp"
-              action={{ label: 'Khôi phục', onClick: () => restoreDraft(savedDraft) }}
-            >
-              Có bản gõ dở tự lưu lúc{' '}
-              <b className="num">{new Date(savedDraft.at).toLocaleString('vi-VN')}</b> (
-              {savedDraft.lines.length} dòng).{' '}
-              <GridBtn
-                onClick={() => {
-                  clearDraft(draftKey)
-                  setSavedDraft(null)
-                }}
-              >
-                Bỏ bản nháp
-              </GridBtn>
-            </NoticeBar>
-          )}
+          {drafting && <BanNhap nhap={nhap} />}
           {blkUnsent}
         </>
       )}

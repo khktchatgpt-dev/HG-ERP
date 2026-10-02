@@ -13,12 +13,13 @@ import {
   newFreeLine,
   newLine,
   lineQty2,
+  lineQty2Auto,
   remapLinesForTemplate,
   overridesCatalog,
   recallBasis,
   refreshLineFromMaterial,
 } from './po-line'
-import type { Line, MaterialRefresh, PoLineDto } from './po-line'
+import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
@@ -1022,5 +1023,53 @@ describe('mergeLineInto — gộp dòng trùng', () => {
   it('KHÁC GIÁ → không gộp (người mua chọn giá, không phải máy)', () => {
     expect(mergeLineInto(base, { ...base, price: 113000 })).toBeNull()
     expect(mergeLineInto(base, { ...base, price_per: 'unit' })).toBeNull()
+  })
+})
+
+describe('tổng gõ tay — mở lại đơn đã lưu (02/10/2026)', () => {
+  const dto: PoLineDto = {
+    ...base,
+    qty_ordered: 141,
+    unit_price: 50_000,
+    weight_per_m: 0.385,
+    bar_length_m: 5.53,
+    price_basis: 'unit2',
+  }
+
+  it('tổng đã lưu LỆCH tổng tự tính → nhận là số gõ tay, tiền theo số đó', () => {
+    const l = lineFromPo({ ...dto, qty2: 300 }, null, false, 'aluminium')
+    expect(l.qty2_manual).toBe(300)
+    expect(lineQty2('aluminium', l)).toBe(300)
+    expect(lineAmount('aluminium', l)).toBe(15_000_000)
+    expect(lineQty2Auto('aluminium', l)).toBeCloseTo(300.16, 1)
+  })
+
+  it('tổng đã lưu KHỚP tổng tự tính → không phải gõ tay', () => {
+    const auto = deriveLine('aluminium', {
+      qty_ordered: 141,
+      weight_per_m: 0.385,
+      bar_length_m: 5.53,
+    }).qty2
+    const l = lineFromPo({ ...dto, qty2: auto }, null, false, 'aluminium')
+    expect(l.qty2_manual).toBe('')
+  })
+
+  it('sửa SL thì tổng gõ tay vẫn giữ; đổi mẫu thì về tự tính', () => {
+    const l = lineFromPo({ ...dto, qty2: 300 }, null, true, 'aluminium')
+    const sua = { ...l, qty: 150 as Num, qty2_saved: null }
+    expect(lineQty2('aluminium', sua)).toBe(300)
+    const [r] = remapLinesForTemplate('aluminium', 'metal_kg', [l])
+    expect(r.qty2_manual).toBe('')
+  })
+
+  it('có tổng gõ tay thì không đòi kg/m, dài cây', () => {
+    const l = lineFromPo(
+      { ...dto, weight_per_m: null, bar_length_m: null, qty2: 300 },
+      null,
+      false,
+      'aluminium',
+    )
+    expect(lineProblem('aluminium', l)).toBeNull()
+    expect(lineProblem('aluminium', { ...l, qty2_manual: '' })).toBe('thiếu kg/m')
   })
 })

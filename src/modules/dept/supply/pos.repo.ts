@@ -167,6 +167,8 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   /** 0182 — NHÃN đơn-vị-giá client gửi kèm unit2_per_unit; deriveLine chuyển
    *  vào `unit2`, bản thân nó không phải cột DB. */
   unit2_label?: string | null
+  /** Tổng gõ tay — deriveLine áp vào `qty2`; bản thân nó không phải cột DB. */
+  qty2_override?: number | null
   note?: string | null
 }
 

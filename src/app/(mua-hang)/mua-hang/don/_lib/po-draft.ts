@@ -188,6 +188,8 @@ export function buildPoPayload(
         // Hai lựa chọn người dùng chốt trên dòng — thiếu thì server dẫn xuất
         // lại theo mẫu (đổi tiền dòng) và làm rơi phần chia lệnh (vá 26/09).
         price_per: d.price_per,
+        // Tổng gõ tay (02/10/2026) — server áp qua deriveLine, chỉ ở mẫu có cột tổng.
+        qty2_override: d.qty2_override,
         lsx_split: d.lsx_split,
       }
     }),

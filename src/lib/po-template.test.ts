@@ -375,3 +375,72 @@ describe('deriveLine · chọn đơn vị tính giá', () => {
     expect(d.price_basis).toBe('unit')
   })
 })
+
+describe('tổng gõ tay — ghi đè tổng kg / m³ / m² (02/10/2026)', () => {
+  // Đơn anh Truyền 18/09: NCC ghi 300 kg làm tròn, còn 0,385 × 5,53 × 141 = 300,16.
+  const nhom = { qty_ordered: 141, weight_per_m: 0.385, bar_length_m: 5.53 }
+
+  it('nhôm: tổng = số gõ tay, tiền theo kg', () => {
+    expect(deriveLine('aluminium', { ...nhom, qty2_override: 300 })).toEqual({
+      qty2: 300,
+      unit2: 'kg',
+      price_basis: 'unit2',
+    })
+  })
+
+  it('gõ tay mà chưa có kg/m, dài cây vẫn ra tổng', () => {
+    expect(deriveLine('aluminium', { qty_ordered: 10, qty2_override: 52.5 }).qty2).toBe(
+      52.5,
+    )
+    expect(deriveLine('metal_kg', { qty_ordered: 10, qty2_override: 80 }).unit2).toBe(
+      'kg',
+    )
+    expect(deriveLine('wood', { qty_ordered: 100, qty2_override: 0.63982 }).qty2).toBe(
+      0.63982,
+    )
+  })
+
+  it('trống / 0 = tự tính như cũ', () => {
+    expect(deriveLine('aluminium', { ...nhom, qty2_override: null }).qty2).toBeCloseTo(
+      300.16,
+      1,
+    )
+    expect(deriveLine('aluminium', { ...nhom, qty2_override: 0 }).qty2).toBeCloseTo(
+      300.16,
+      1,
+    )
+  })
+
+  it('vẫn theo luật cơ sở tính tiền: chọn giá theo cây / theo tấm thì tiền SL × giá', () => {
+    expect(
+      deriveLine('aluminium', { ...nhom, qty2_override: 300, price_per: 'unit' })
+        .price_basis,
+    ).toBe('unit')
+    const kinh = deriveLine('glass', {
+      qty_ordered: 10,
+      carton_basis: 'ctn',
+      qty2_override: 12,
+    })
+    expect([kinh.qty2, kinh.price_basis]).toEqual([12, 'unit'])
+    expect(
+      deriveLine('glass', { qty_ordered: 10, carton_basis: 'm2', qty2_override: 12 })
+        .price_basis,
+    ).toBe('unit2')
+    expect(
+      deriveLine('foam', { qty_ordered: 10, carton_basis: 'm3', qty2_override: 1.5 })
+        .price_basis,
+    ).toBe('unit2')
+  })
+
+  it('mẫu không có cột tổng thì bỏ qua số gõ đè', () => {
+    expect(
+      deriveLine('accessory', { qty_ordered: 10, qty2_override: 300 }).qty2,
+    ).toBeNull()
+    expect(deriveLine('carton', { qty_ordered: 10, qty2_override: 300 }).qty2).toBeNull()
+  })
+
+  it('tiền dòng theo đúng tổng gõ tay', () => {
+    const d = deriveLine('aluminium', { ...nhom, qty2_override: 300 })
+    expect(poLineAmount({ qty_ordered: 141, unit_price: 50_000, ...d })).toBe(15_000_000)
+  })
+})
