@@ -1,5 +1,4 @@
-import type { LaiLoVerdict, Quy } from '@/lib/lai-lo'
-import type { TagTone } from '@/components/kit'
+import type { GtdQuy } from '@/lib/gia-tri-don'
 
 /** Tiền VND đã quy, nhóm nghìn kiểu Việt, không lẻ. */
 export const vnd = (n: number) => Math.round(n).toLocaleString('vi-VN')
@@ -15,16 +14,12 @@ export function tyGon(n: number): string {
     return `${(n / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 0 })} tr`
   return vnd(n)
 }
-export const pct = (p: number) =>
-  `${p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
-
-/** Chuỗi "chưa quy" cho phần thiếu tỷ giá: "+138.000 USD chưa quy". */
-export const missingText = (q: Quy) =>
+/** "+1.500 USD chưa quy · 20 EUR chưa quy" cho phần thiếu tỷ giá. */
+export const missingText = (q: GtdQuy) =>
   q.missing.map((m) => `${ccy(m.amount, m.currency)} chưa quy`).join(' · ')
-
-export const VERDICT_TONE: Record<LaiLoVerdict, TagTone> = {
-  lo: 'stop',
-  an_lai: 'warn',
-  on: 'done',
-  thieu: 'neutral',
-}
+/** Giá trị gốc nhiều tiền tệ: "1.582.737 USD · 2.000.000 VND". */
+export const amountsText = (a: { currency: string; amount: number }[]) =>
+  a.map((x) => ccy(x.amount, x.currency)).join(' · ')
+/** 2026-12-30 → 30/12/26. */
+export const dmy = (d: string | null) =>
+  d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : '—'
