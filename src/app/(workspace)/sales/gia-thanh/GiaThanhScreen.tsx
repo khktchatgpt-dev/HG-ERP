@@ -235,7 +235,7 @@ export function GiaThanhScreen({
 
   return (
     <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-      <ScreenFrame tableMin={1240}>
+      <ScreenFrame tableMin={1120}>
         <ScreenHeader
           compact
           eyebrow="Bán hàng"
@@ -340,6 +340,55 @@ export function GiaThanhScreen({
           </span>
         </div>
 
+        {/*
+          THIẾT LẬP CỦA LẦN LƯU — một hàng riêng trên bảng, không nhét vào thanh
+          đáy (đo 02/10/2026 ở 1280px: bốn ô + nút Lưu làm thanh đáy gãy ba
+          dòng). Áp cho mọi dòng đang sửa: tiền tệ của bản báo giá, dấu thập phân
+          khi gõ, tỷ giá Sale dùng trong bảng tính, và tên bản báo giá.
+        */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5">
+          <span className="text-k-label text-[var(--ink-label)]">Lần lưu này</span>
+          <Pick
+            label="Tiền tệ của bản báo giá"
+            width={80}
+            value={currency}
+            disabled={!canManage || busy}
+            onChange={(v) => setCurrency(v as 'USD' | 'VND')}
+            options={[
+              { value: 'USD', label: 'USD' },
+              { value: 'VND', label: 'VND' },
+            ]}
+          />
+          <Pick
+            label="Dấu thập phân khi gõ"
+            width={130}
+            value={sep}
+            disabled={!canManage || busy}
+            onChange={(v) => setSep(v as DecimalSep)}
+            options={[
+              { value: '.', label: 'Chấm 144.00' },
+              { value: ',', label: 'Phẩy 144,00' },
+            ]}
+          />
+          <NumInput
+            aria-label="Tỷ giá Sale dùng trong bảng tính"
+            value={fxRate}
+            placeholder="tỷ giá bảng tính (26.000)"
+            disabled={!canManage || busy}
+            style={{ width: 170 }}
+            onCommit={setFxRate}
+          />
+          <div className="min-w-[260px] flex-1">
+            <TextInput
+              label="Nguồn — tên bản báo giá"
+              value={source}
+              placeholder="Nguồn: Quotation - Halston 10/07/2026"
+              disabled={!canManage || busy}
+              onCommit={setSource}
+            />
+          </div>
+        </div>
+
         {warn.length > 0 && (
           <NoticeBar tone="warn" tag="Lệch nhiều">
             {warn.length} dòng có giá FOB mới lệch quá {PLAN_WARN_PCT}% so với số đang có
@@ -385,33 +434,33 @@ export function GiaThanhScreen({
               }
             />
           ) : (
-            <Grid minWidth={1240}>
+            <Grid minWidth={1120}>
               <GridHead>
-                <Th width={118}>Mã HG</Th>
-                <Th width={130}>Mã khách</Th>
+                <Th width={104}>Mã HG</Th>
+                <Th width={112}>Mã khách</Th>
                 <Th>Tên SP</Th>
-                <Th width={90}>Khách</Th>
-                <Th num width={96}>
+                <Th width={76}>Khách</Th>
+                <Th num width={88}>
                   Trực tiếp
                 </Th>
-                <Th num width={96}>
+                <Th num width={88}>
                   Chi phí chung
                 </Th>
                 <Th num width={52}>
                   a%
                 </Th>
-                <Th num width={96}>
+                <Th num width={88}>
                   Lợi nhuận
                 </Th>
                 <Th num width={52}>
                   b%
                 </Th>
-                <Th num width={96}>
+                <Th num width={88}>
                   Giá FOB
                 </Th>
-                <Th width={44}>TT</Th>
-                <Th width={190}>Nguồn · ngày</Th>
-                <Th width={150}>Trạng thái</Th>
+                <Th width={40}>TT</Th>
+                <Th width={160}>Nguồn · ngày</Th>
+                <Th width={140}>Trạng thái</Th>
               </GridHead>
               <GridBody>
                 {rows.map((r) => {
@@ -548,48 +597,11 @@ export function GiaThanhScreen({
             { label: 'Dòng đổi', value: <span className="num">{dirty.length}</span> },
             { label: 'Lệch tổng', value: <span className="num">{bad.length}</span> },
           ]}
-          grand={{ label: 'Tiền tệ', value: currency }}
+          grand={{ label: 'Nguồn', value: source.trim() || '—' }}
           blocked={blocked}
           onGoBlocked={bad.length > 0 ? goBlocked : undefined}
           actions={
             <>
-              <Pick
-                label="Tiền tệ"
-                width={80}
-                value={currency}
-                disabled={!canManage || busy}
-                onChange={(v) => setCurrency(v as 'USD' | 'VND')}
-                options={[
-                  { value: 'USD', label: 'USD' },
-                  { value: 'VND', label: 'VND' },
-                ]}
-              />
-              <Pick
-                label="Dấu thập phân khi gõ"
-                width={120}
-                value={sep}
-                disabled={!canManage || busy}
-                onChange={(v) => setSep(v as DecimalSep)}
-                options={[
-                  { value: '.', label: 'Chấm 144.00' },
-                  { value: ',', label: 'Phẩy 144,00' },
-                ]}
-              />
-              <NumInput
-                aria-label="Tỷ giá Sale dùng trong bảng tính"
-                value={fxRate}
-                placeholder="tỷ giá bảng tính"
-                disabled={!canManage || busy}
-                style={{ width: 120 }}
-                onCommit={setFxRate}
-              />
-              <TextInput
-                label="Nguồn — tên bản báo giá"
-                value={source}
-                placeholder="Nguồn: Quotation - Halston 10/07/2026"
-                disabled={!canManage || busy}
-                onCommit={setSource}
-              />
               <Btn
                 icon="ghiSo"
                 primary
