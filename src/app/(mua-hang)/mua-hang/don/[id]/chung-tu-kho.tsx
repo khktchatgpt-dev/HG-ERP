@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Grid, GridBody, GridHead, GridRow, Tag, Td, Th } from '@/components/kit'
 import type { Props } from './don-chung-tu.shared'
+import { choLapLai } from './tong-quan'
 
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 const num = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
@@ -37,7 +38,17 @@ function tinhTrang(d: Doc, dieuChinh: string[]): { text: string; dead: boolean }
  * Mỗi phiếu có Xem · In (bản in) và — với phiếu nhập còn hiệu lực — Sửa: mở đúng
  * hộp Sửa phiếu ở Đã về (một hộp, một đường; server quyết ai sửa được).
  */
-export function ChungTuKhoGrid({ docs, coSua = true }: { docs: Doc[]; coSua?: boolean }) {
+export function ChungTuKhoGrid({
+  docs,
+  poId,
+  coSua = true,
+}: {
+  docs: Doc[]
+  /** Có thì phiếu đảo-để-sửa còn dở hiện nút "Lập lại phiếu" (mở phiếu nhập điền sẵn). */
+  poId?: string
+  coSua?: boolean
+}) {
+  const doDang = new Set(choLapLai(docs).map((x) => x.doc_id))
   return (
     <Grid minWidth={720}>
       <GridHead>
@@ -95,6 +106,14 @@ export function ChungTuKhoGrid({ docs, coSua = true }: { docs: Doc[]; coSua?: bo
                   <Link href={`/print/warehouse/${d.doc_id}`} className={LINK}>
                     Xem · In
                   </Link>
+                  {poId && doDang.has(d.doc_id) && (
+                    <Link
+                      href={`/mua-hang/don/${poId}/nhan?sua=${d.doc_id}`}
+                      className={LINK}
+                    >
+                      Lập lại phiếu
+                    </Link>
+                  )}
                   {suaDuoc && (
                     <Link
                       href={`/mua-hang/theo-doi/da-ve?sua=${d.doc_id}`}

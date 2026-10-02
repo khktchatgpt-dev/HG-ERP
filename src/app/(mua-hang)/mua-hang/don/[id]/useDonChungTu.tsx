@@ -80,6 +80,7 @@ import {
   type SavedDraft,
 } from './soan-don'
 import { barLayout, splitForStatusBar, type BarKey } from './thanh-nut'
+import { phieuNhapCuoi, vuongPhieuKho } from './tong-quan'
 
 /**
  * TRẠNG THÁI + XỬ LÝ của màn chứng từ đơn mua — tách khỏi DonChungTuScreen.tsx
@@ -1391,12 +1392,10 @@ export function useDonChungTu(p: Props) {
   // prettier-ignore
   const daVeDu = po?.status === 'received'
 
-  const lastReceipt = p.warehouseDocs.filter((d) => d.kind === 'receipt' && !d.reversed_by).at(-1)
+  const lastReceipt = phieuNhapCuoi(p.warehouseDocs)
 
   const hanGiao = po?.expected_at ? po.expected_at.slice(0, 10) : null
-
   const conNgay = hanGiao ? daysBetween(today, hanGiao) : null
-
   const giaoSignal = daVeDu
     ? { text: 'đủ', tone: 'done' as const }
     : veKho
@@ -1450,6 +1449,7 @@ export function useDonChungTu(p: Props) {
     ...(openIssues > 0 ? [{ tag: 'Sự cố', tone: 'stop' as const, text: `${openIssues} sự cố giao hàng đang mở — xử lý với NCC rồi đóng lại.`, muc: 'giao-nhan' as const, goLabel: 'Giao & nhận' }] : []), // prettier-ignore
     ...(notFullyConfirmed > 0 && !daVeDu ? [{ tag: 'Xác nhận thiếu', tone: 'warn' as const, text: `${notFullyConfirmed} dòng NCC chưa hẹn giao đủ số đã đặt.`, muc: 'giao-nhan' as const, goLabel: 'Giao & nhận' }] : []), // prettier-ignore
     ...(unsentAdj ? [{ tag: 'Điều chỉnh', tone: 'warn' as const, text: `Điều chỉnh lần ${unsentAdj.seq} chưa tới NCC — in phiếu gửi lại.`, muc: 'tai-chinh' as const, goLabel: 'Tài chính' }] : []), // prettier-ignore
+    ...vuongPhieuKho(p.warehouseDocs),
   ]
 
   return {

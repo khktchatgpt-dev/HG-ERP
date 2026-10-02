@@ -315,7 +315,7 @@ export function GiaoNhanSheet({
             Chứng từ kho · {data.warehouseDocs.length} phiếu
           </h3>
           {data.warehouseDocs.length > 0 ? (
-            <ChungTuKhoGrid docs={data.warehouseDocs} />
+            <ChungTuKhoGrid docs={data.warehouseDocs} poId={po.id} />
           ) : (
             <p className="text-k-sm px-4 text-[var(--ink-2)]">
               Chưa có phiếu nhập nào cho đơn này.

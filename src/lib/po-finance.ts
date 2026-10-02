@@ -74,3 +74,59 @@ export function poFinanceView(x: PoFinanceInput): PoFinanceView {
 export function invoiceLineGross(amount: number, vatRate: number | null): number {
   return r2(amount * (1 + (vatRate ?? 0) / 100))
 }
+
+/**
+ * ĐẶT · ĐÃ VỀ · CÒN THIẾU bằng TIỀN (chưa VAT) — dải số mục Tổng quan (02/10/2026).
+ *
+ * Ăn đúng các dòng đối chiếu (`threeWayMatch`) mà mục Tài chính dùng — "Đã về" ở
+ * hai nơi phải là MỘT con số. Còn thiếu tính theo SỐ LƯỢNG chưa về × đơn giá quy
+ * về ĐVT đặt (`tiền dòng ÷ SL đặt`, cùng luật giá vốn phiếu nhập), không theo
+ * `đặt − về` bằng tiền: dòng tính tiền theo kg về đủ cây mà nhẹ cân thì vẫn là đủ.
+ * Dòng ĐÃ CHỐT THIẾU không còn thiếu — NCC không giao nữa — và được đếm riêng.
+ */
+export function poVeThieu(
+  rows: {
+    qty_ordered: number
+    amount_ordered: number
+    qty_received: number
+    amount_received: number
+    closed_short: boolean
+  }[],
+): {
+  ordered_net: number
+  received_net: number
+  missing_net: number
+  /** Dòng chưa về đủ (không gồm dòng đã chốt thiếu). */
+  missing_lines: number
+  /** Dòng đã về đủ hoặc vượt. */
+  full_lines: number
+  closed_lines: number
+  total_lines: number
+} {
+  let ordered = 0
+  let received = 0
+  let missing = 0
+  let missingLines = 0
+  let fullLines = 0
+  let closedLines = 0
+  for (const r of rows) {
+    ordered += r.amount_ordered
+    received += r.amount_received
+    const con = r.qty_ordered - r.qty_received
+    if (con <= 1e-9) fullLines++
+    else if (r.closed_short) closedLines++
+    else {
+      missingLines++
+      if (r.qty_ordered > 0) missing += (con / r.qty_ordered) * r.amount_ordered
+    }
+  }
+  return {
+    ordered_net: r2(ordered),
+    received_net: r2(received),
+    missing_net: r2(missing),
+    missing_lines: missingLines,
+    full_lines: fullLines,
+    closed_lines: closedLines,
+    total_lines: rows.length,
+  }
+}

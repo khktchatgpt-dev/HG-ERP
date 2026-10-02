@@ -302,7 +302,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                 </h3>
               </div>
               {p.warehouseDocs.length > 0 ? (
-                <ChungTuKhoGrid docs={p.warehouseDocs} />
+                <ChungTuKhoGrid docs={p.warehouseDocs} poId={po.id} />
               ) : (
                 <div className="text-k-sm px-[var(--gutter)] pb-3 text-[var(--ink-2)]">
                   Chưa có phiếu nhập hay xuất trả nào ghi vào đơn này.

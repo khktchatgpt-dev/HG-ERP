@@ -37,8 +37,6 @@ import {
   HeadField,
   HolderBar,
   Menu,
-  Metric,
-  MetricStrip,
   NoticeBar,
   NumInput,
   Pick,
@@ -87,6 +85,7 @@ import { SuaTaiChoNut } from './sua-tai-cho-nut'
 import { DongThoiGian, TaiLieu } from './lich-su'
 import { clearDraft } from './soan-don'
 import { ChiPhi, PhatSinh } from './tai-chinh-khoi'
+import { TongQuanSo } from './tong-quan'
 import { TraoDoiKhung } from './trao-doi'
 import { useDonChungTu } from './useDonChungTu'
 import './soan-don.css'
@@ -463,41 +462,7 @@ export function DonChungTuScreen(p: Props) {
           onValueChange={pickMuc}
         >
           <DocMenuPanel value="tong-quan">
-            <MetricStrip>
-              <Metric
-                label="Giá trị đặt"
-                value={money(totals.grandTotal, header.currency)}
-                basis={`${lines.length} dòng · gồm VAT ${header.vat === '' ? 0 : header.vat}%`}
-              />
-              <Metric
-                label="Về kho"
-                value={veKho ? `${Math.round(veKho.ratio * 100)}%` : null}
-                tone={veKho ? (veKho.ratio >= 1 ? 'done' : undefined) : undefined}
-                basis={
-                  veKho ? `${veKho.du}/${veKho.tong} dòng vật tư kho` : 'đơn chưa gửi NCC'
-                }
-              />
-              <Metric
-                label="Đã có hoá đơn"
-                value={
-                  p.finance ? money(p.finance.invoiced_gross, header.currency) : null
-                }
-                basis={
-                  p.finance
-                    ? `${p.finance.invoices.length} hoá đơn · gồm VAT`
-                    : 'chưa tải được'
-                }
-              />
-              <Metric
-                label="Đã trả"
-                value={p.finance ? money(p.finance.paid, header.currency) : null}
-                basis={
-                  p.finance
-                    ? `${p.finance.payments.length} phiếu chi gắn đơn`
-                    : 'chưa tải được'
-                }
-              />
-            </MetricStrip>
+            <TongQuanSo d={d} />
             <div className="grid grid-cols-1 border-b border-[var(--line)] md:grid-cols-2">
               <div className="md:border-r md:border-[var(--line)]">
                 <FastTab fixed title="Vướng gì" summary={[['Việc', vuong.length]]}>
@@ -920,15 +885,16 @@ export function DonChungTuScreen(p: Props) {
                       />
                     </HeadField>
                   )}
-                  {supplierOpt && (supplierOpt.lead_time_days != null || supplierOpt.payment_terms) && (
-                    <span className="text-k-label text-[var(--ink-3)]">
-                      NCC giao{' '}
-                      {supplierOpt.lead_time_days != null
-                        ? `${supplierOpt.lead_time_days} ngày`
-                        : '—'}{' '}
-                      · thanh toán {supplierOpt.payment_terms ?? '—'}
-                    </span>
-                  )}
+                  {supplierOpt &&
+                    (supplierOpt.lead_time_days != null || supplierOpt.payment_terms) && (
+                      <span className="text-k-label text-[var(--ink-3)]">
+                        NCC giao{' '}
+                        {supplierOpt.lead_time_days != null
+                          ? `${supplierOpt.lead_time_days} ngày`
+                          : '—'}{' '}
+                        · thanh toán {supplierOpt.payment_terms ?? '—'}
+                      </span>
+                    )}
                 </HeadChips>
               )}
             </div>

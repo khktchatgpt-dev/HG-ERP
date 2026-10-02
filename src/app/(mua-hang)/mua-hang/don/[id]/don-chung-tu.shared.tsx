@@ -136,6 +136,8 @@ export type Props = {
     fix_of?: string | null
     /** Phiếu điều chỉnh chênh lệch của phiếu nào (`kind = 'adjustment'`, qty_total có dấu). */
     adjust_of?: string | null
+    /** Phiếu đảo trong hộp "Sửa phiếu" (A) — chờ lập lại phiếu nhập mới. */
+    for_fix?: boolean
   }[]
   stock: Record<string, number>
   position: { index: number; total: number } | null

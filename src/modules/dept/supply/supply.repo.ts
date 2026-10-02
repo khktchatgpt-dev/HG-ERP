@@ -1,7 +1,7 @@
 import { db } from '@/server/db'
 import { poLineAmount, type PriceBasis } from '@/lib/po-line'
 import { docEventAt } from '@/lib/date-vn'
-import { dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
+import { DAU_SUA_PHIEU, dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
 
 /**
  * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
@@ -298,6 +298,8 @@ export const supplyRepo = {
       fix_of: string | null
       /** `adjustment`: điều chỉnh chênh lệch của phiếu nào (C). `qty_total` CÓ DẤU (− = trừ). */
       adjust_of: string | null
+      /** Phiếu ĐẢO trong hộp "Sửa phiếu" (A) — chờ lập lại phiếu nhập mới thay nó. */
+      for_fix: boolean
     }[]
   > {
     const { data: lineRows } = await db()
@@ -309,7 +311,7 @@ export const supplyRepo = {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code, doc_date, note, reversal_of_doc_id)',
+        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code, doc_date, note, reason, reversal_of_doc_id)',
       )
       .in('po_line_id', lineIds)
       .not('doc_id', 'is', null)
@@ -318,6 +320,7 @@ export const supplyRepo = {
       code: string
       doc_date: string | null
       note: string | null
+      reason: string | null
       reversal_of_doc_id: string | null
     }
     type R = {
@@ -340,6 +343,7 @@ export const supplyRepo = {
         reversal_of_id: string | null
         fix_of: string | null
         adjust_of: string | null
+        for_fix: boolean
       }
     >()
     for (const r of (data ?? []) as unknown as R[]) {
@@ -361,6 +365,7 @@ export const supplyRepo = {
         reversal_of_id: d?.reversal_of_doc_id ?? null,
         fix_of: suaLaiTu(d?.note),
         adjust_of: adjustOf,
+        for_fix: !!d?.reversal_of_doc_id && !!d?.reason?.includes(DAU_SUA_PHIEU),
       }
       // "Đã nhận" cùng công thức BR-08: đạt + QC loại (NCC đã giao số đó).
       // Phiếu điều chỉnh mang DẤU — "−270" mới nói đúng là trừ bớt số đã nhận.

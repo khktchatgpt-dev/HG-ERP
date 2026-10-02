@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { invoiceLineGross, poFinanceView } from './po-finance'
+import { invoiceLineGross, poFinanceView, poVeThieu } from './po-finance'
 
 const base = { ordered_gross: 845_477_411, received_net: 0, invoiced_net: 0, invoiced_gross: 0, paid: 0 } // prettier-ignore
 
@@ -56,5 +56,29 @@ describe('invoiceLineGross', () => {
   it('cộng VAT của chính dòng; VAT trống là 0', () => {
     expect(invoiceLineGross(1_000_000, 8)).toBe(1_080_000)
     expect(invoiceLineGross(1_000_000, null)).toBe(1_000_000)
+  })
+})
+
+describe('poVeThieu — Đặt · Đã về · Còn thiếu bằng tiền (Tổng quan)', () => {
+  const dong = (qo: number, ao: number, qr: number, ar: number, closed = false) => ({
+    qty_ordered: qo,
+    amount_ordered: ao,
+    qty_received: qr,
+    amount_received: ar,
+    closed_short: closed,
+  })
+  it('còn thiếu = SL chưa về × đơn giá quy về ĐVT đặt; dòng đủ / vượt không thiếu', () => {
+    const r = poVeThieu([
+      dong(100, 1_000_000, 60, 600_000),
+      dong(10, 500_000, 12, 600_000),
+    ])
+    expect(r).toMatchObject({ ordered_net: 1_500_000, received_net: 1_200_000, missing_net: 400_000, missing_lines: 1, full_lines: 1 }) // prettier-ignore
+  })
+  it('dòng đã chốt thiếu không tính vào còn thiếu, đếm riêng', () => {
+    const r = poVeThieu([dong(100, 1_000_000, 60, 600_000, true)])
+    expect(r).toMatchObject({ missing_net: 0, missing_lines: 0, closed_lines: 1 })
+  })
+  it('dòng theo kg: về đủ cây mà nhẹ cân vẫn là đủ', () => {
+    expect(poVeThieu([dong(50, 2_000_000, 50, 1_900_000)]).missing_lines).toBe(0)
   })
 })
