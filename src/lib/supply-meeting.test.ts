@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MEETING_LEVEL,
+  MEETING_LEVELS,
   MEETING_STOP_DAYS,
   assessMeetingRisk,
   buildAgenda,
@@ -61,14 +63,31 @@ describe('meetingDue — mốc sát theo lệnh', () => {
 })
 
 describe('assessMeetingRisk', () => {
-  it('Kho đã xác nhận đủ = Đủ, bất kể mốc đã qua', () => {
+  it('mốc "đã nhận vật tư" không còn làm lệnh thành "về hết" (tạm bỏ, 03/10/2026)', () => {
     const r = assessMeetingRisk(
       lsx({ materials_received_at: '2026-09-01', materials_due_at: '2026-08-20' }),
       TODAY,
     )
+    expect(r.level).not.toBe('ready')
+  })
+
+  it('mọi đơn đã nhận xong = "Đơn đã về hết", không việc, không câu hỏi', () => {
+    const r = assessMeetingRisk(
+      lsx({
+        materials_due_at: '2026-08-20',
+        pos: [{ status: 'received', expected_at: '2026-08-10' }],
+      }),
+      TODAY,
+    )
     expect(r.level).toBe('ready')
+    expect(r.label).toBe('Đơn đã về hết')
     expect(r.action).toBe('')
     expect(r.decision).toBeNull()
+  })
+
+  it('nhãn mức không nói "thiếu / đủ vật tư" (03/10/2026)', () => {
+    for (const l of MEETING_LEVELS)
+      expect(MEETING_LEVEL[l].label).not.toMatch(/thiếu|đủ vật tư/i)
   })
 
   it('hạn vật tư là hôm nay mà còn đơn đang về = Khẩn, kèm câu hỏi cho Sản xuất', () => {
@@ -206,7 +225,10 @@ describe('assessMeetingRisk', () => {
 
 describe('buildMeeting', () => {
   const rows = [
-    { code: 'LSX-A', ...lsx({ materials_received_at: '2026-09-01' }) },
+    {
+      code: 'LSX-A',
+      ...lsx({ pos: [{ status: 'received', expected_at: '2026-08-10' }] }),
+    },
     {
       code: 'LSX-B',
       ...lsx({ materials_due_at: '2026-09-20', pos: [sent('2026-09-15')] }),
@@ -246,7 +268,10 @@ describe('buildMeeting', () => {
 describe('buildAgenda', () => {
   it('gom theo (bộ phận, việc); lệnh khẩn thêm dòng Sản xuất; đơn chờ ký thêm dòng Giám đốc', () => {
     const rows = [
-      { code: 'LSX-1', ...lsx({ materials_due_at: '2026-09-06', pos: [sent('2026-09-15')] }) },
+      {
+        code: 'LSX-1',
+        ...lsx({ materials_due_at: '2026-09-06', pos: [sent('2026-09-15')] }),
+      },
       { code: 'LSX-2', ...lsx({ materials_due_at: '2026-10-01' }) },
       { code: 'LSX-3', ...lsx({ materials_due_at: '2026-10-05' }) },
       {

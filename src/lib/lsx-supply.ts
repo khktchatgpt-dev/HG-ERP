@@ -19,8 +19,12 @@ export type LsxSupplyGateKey = 'none' | 'unsent' | 'late' | 'inflight' | 'done'
 export type LsxSupplyOwner = 'Cung ứng' | 'Nhà cung cấp' | 'Kho' | '—'
 
 export type LsxSupplyInput = {
-  /** Kho xác nhận vật tư của lệnh về đủ — mốc dứt khoát, không phải suy từ PO. */
-  materials_received_at: string | null
+  /**
+   * Mốc "đã nhận vật tư" của lệnh. TẠM KHÔNG DÙNG (03/10/2026, user chốt): chưa
+   * xác định được ai chốt đủ vật tư, bảng kê chưa hoàn thiện, và hai mốc đang có
+   * đều do tài khoản quản trị bấm. Giữ trường để caller không phải đổi.
+   */
+  materials_received_at?: string | null
   /** Đơn mua CÒN SỐNG của lệnh (trừ đơn đã huỷ). */
   posTotal: number
   /** Đơn còn nháp / chờ Giám đốc ký — chưa ra khỏi nhà. */
@@ -76,7 +80,7 @@ const GATES: Record<LsxSupplyGateKey, Omit<LsxSupplyGate, 'detail'>> = {
     mine: false,
     step: 4,
   },
-  done: { key: 'done', label: 'Vật tư đã về đủ', owner: '—', mine: false, step: 5 },
+  done: { key: 'done', label: 'Đơn mua đã về hết', owner: '—', mine: false, step: 5 },
 }
 
 export const LSX_SUPPLY_GATES = (Object.keys(GATES) as LsxSupplyGateKey[]).sort(
@@ -93,9 +97,10 @@ export const LSX_SUPPLY_GATES = (Object.keys(GATES) as LsxSupplyGateKey[]).sort(
  * tình trạng mua hàng thật — tệ hơn hẳn việc không có nó. Thêm lại khi BOM có
  * dữ liệu thật.
  *
- * `materials_received_at` xét trước mọi phép đếm PO: đó là chữ ký của Kho, dứt
- * khoát hơn suy diễn. Có lệnh mua thêm đơn lặt vặt sau khi Kho đã chốt đủ —
- * đếm PO sẽ kéo lệnh đã xong ngược về bậc "đang về".
+ * TẠM BỎ PHẦN "ĐỦ VẬT TƯ" (03/10/2026, user chốt): màn này chỉ nói đơn mua đi
+ * tới đâu. Chưa có nhu cầu vật tư đáng tin (định mức 0 SP xác nhận, bảng kê
+ * chưa xong) thì "đủ" hay "thiếu" đều là nói đoán. Mốc `materials_received_at`
+ * từng đè mọi phép đếm PO — JAWOLL báo "đủ" trong khi còn đơn trễ — nay bỏ qua.
  */
 export function lsxSupplyGate(r: LsxSupplyInput): LsxSupplyGate {
   const g = (key: LsxSupplyGateKey, detail: string): LsxSupplyGate => ({
@@ -103,7 +108,6 @@ export function lsxSupplyGate(r: LsxSupplyInput): LsxSupplyGate {
     detail,
   })
 
-  if (r.materials_received_at) return g('done', 'Kho đã xác nhận vật tư về đủ')
   if (r.posTotal === 0) return g('none', 'Chưa có đơn mua nào cho lệnh này')
   if (r.posUnsent > 0) {
     return g('unsent', `${r.posUnsent} đơn còn nháp hoặc chờ ký — chưa ra khỏi nhà`)
@@ -113,12 +117,9 @@ export function lsxSupplyGate(r: LsxSupplyInput): LsxSupplyGate {
   }
   if (r.posOpen > 0)
     return g('inflight', `${r.posOpen} đơn đã gửi, chờ nhà cung cấp giao`)
-  /*
-   * Còn sống mà không mở, không chưa-gửi ⇒ mọi đơn đã nhận xong, chỉ là Kho
-   * chưa bấm xác nhận cho lệnh. Nói đúng thực tế thay vì vẽ ra một bậc giả:
-   * chính cái mốc còn thiếu kia mới là việc cần ai đó làm nốt.
-   */
-  return g('done', 'Đơn mua đã nhận xong — chờ Kho xác nhận đủ cho lệnh')
+  // Còn sống mà không mở, không chưa-gửi ⇒ mọi đơn đã nhận xong. KHÔNG nói "đủ
+  // vật tư": đơn về hết chưa chắc đã đặt đủ cho lệnh.
+  return g('done', 'Mọi đơn mua của lệnh đã nhận xong')
 }
 
 // ── Mức khẩn theo HẠN VẬT TƯ PHẢI VỀ ──────────────────────────────────

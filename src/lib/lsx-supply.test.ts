@@ -51,18 +51,24 @@ describe('lsxSupplyGate', () => {
     expect(g.mine).toBe(false)
   })
 
-  it('Kho xác nhận về đủ là chốt hạ — không bị đơn lặt vặt kéo ngược', () => {
-    // Mua thêm một đơn nhỏ sau khi Kho đã chốt đủ: đếm PO sẽ ra "đang về".
+  it('mốc "đã nhận vật tư" KHÔNG còn đè đơn mua (tạm bỏ phần đủ vật tư, 03/10/2026)', () => {
+    // Trước đây mốc này làm lệnh "Đủ" dù còn đơn đang về / trễ (JAWOLL 01/26-27).
     const g = lsxSupplyGate(
       lsx({ materials_received_at: '2026-08-10', posTotal: 4, posOpen: 1 }),
     )
-    expect(g.key).toBe('done')
+    expect(g.key).toBe('inflight')
+    const late = lsxSupplyGate(
+      lsx({ materials_received_at: '2026-08-10', posTotal: 3, posOpen: 1, posLate: 1 }),
+    )
+    expect(late.key).toBe('late')
   })
 
-  it('đơn đã nhận hết mà Kho chưa xác nhận thì nói đúng thực tế', () => {
+  it('đơn đã nhận hết = "Đơn mua đã về hết", không nói "đủ vật tư"', () => {
     const g = lsxSupplyGate(lsx({ posTotal: 3, posOpen: 0, posUnsent: 0 }))
     expect(g.key).toBe('done')
-    expect(g.detail).toContain('chờ Kho xác nhận')
+    expect(g.label).toBe('Đơn mua đã về hết')
+    expect(g.detail).toBe('Mọi đơn mua của lệnh đã nhận xong')
+    expect(`${g.label} ${g.detail}`).not.toMatch(/đủ|thiếu/i)
   })
 })
 

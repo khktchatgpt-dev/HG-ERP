@@ -82,7 +82,7 @@ const NGHIA: Record<string, string> = {
   warn: 'Chưa lập đơn, đơn còn nháp/chờ ký, hoặc NCC đã trễ hẹn.',
   watch: 'Lệnh không có hạn vật tư lẫn ngày xuất — chưa đo được rủi ro.',
   inflight: 'Đơn đã gửi, đang chờ hàng về đúng hẹn.',
-  ready: 'Kho đã xác nhận đủ hoặc mọi đơn đã nhận xong.',
+  ready: 'Mọi đơn mua của lệnh đã nhận xong.',
 }
 
 function sentLate(pos: { status: string; late: boolean }[]): number {
@@ -244,7 +244,7 @@ export async function buildSupplyOrdersExcel(r: SupplyOrdersReport): Promise<Buf
       col: 3,
       label: 'Cần nêu trong họp',
       value: r.issues,
-      note: 'Lệnh ở mọi mức trừ Đang về và Đủ vật tư.',
+      note: 'Lệnh ở mọi mức trừ Đang về và Đơn đã về hết.',
     },
     { col: 4, label: 'Đơn mua', value: live.length, note: 'Không tính đơn đã huỷ.' },
     {
@@ -495,7 +495,7 @@ export async function buildSupplyOrdersExcel(r: SupplyOrdersReport): Promise<Buf
   }
   if (n === 0) {
     s3.addRow([
-      '— Không có việc gì cần quyết: mọi lệnh đã đủ vật tư hoặc đang về đúng hẹn —',
+      '— Không có việc gì cần quyết: mọi lệnh đã về hết đơn hoặc đang về đúng hẹn —',
     ])
   }
   numberCols(s3, [7])
