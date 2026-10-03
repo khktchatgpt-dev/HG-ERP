@@ -637,7 +637,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
           { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
           // Đơn bán của lệnh đặt cạnh đơn mua cho lệnh, cộng thẳng từ chứng từ (02/10/2026); lãi/lỗ là bước sau.
-          { href: '/exec/gia-tri-don', label: 'Giá trị đơn theo lệnh', icon: 'circle-dollar-sign' },
+          {
+            href: '/exec/gia-tri-don',
+            label: 'Giá trị đơn theo lệnh',
+            icon: 'circle-dollar-sign',
+          },
+          // Lãi/lỗ theo lệnh quay lại 03/10/2026 sau khi nạp 233 giá KH — đứng cạnh bảng kê, không thay nhau.
+          { href: '/exec/lai-lo', label: 'Lãi / lỗ theo lệnh', icon: 'scale' },
         ],
       },
       {
