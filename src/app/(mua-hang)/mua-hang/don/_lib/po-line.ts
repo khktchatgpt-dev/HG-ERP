@@ -168,6 +168,8 @@ export function draftOf(l: Line) {
     unit2_label: l.unit2_label || null,
     price_per: l.price_per || null,
     qty2_override: n(l.qty2_manual ?? ''),
+    // Mẫu gỗ: dòng vật tư danh mục giá theo ĐVT mua, dòng tự do theo m³ (deriveLine).
+    material_id: l.is_free ? null : l.material_id || null,
     lsx_split: splitPayload(l),
   }
 }
@@ -223,7 +225,9 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
   if (t === 'glass' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
     return 'thiếu m²/tấm'
   }
-  if (t === 'wood' && !(Number(l.m3_per_unit) > 0)) return 'thiếu m³/SP'
+  // Gỗ: chỉ dòng giá theo m³ (mã SP tự do, hoặc vật tư chọn "Giá theo" m³) mới cần m³/SP.
+  if (t === 'wood' && (l.is_free || l.price_per === 'unit2') && !(Number(l.m3_per_unit) > 0))
+    return 'thiếu m³/SP'
   if (
     t === 'foam' &&
     l.carton_basis === 'm3' &&
