@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
 import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { dotCuaPhieu } from '@/lib/phieu-nhap-cho'
+import { canNhacSoNcc, ghiChuPhieu, nguoiGiaoBanDau } from '@/lib/phieu-nhap-dau'
 import { api, apiErrorText } from '@/lib/api'
 import {
   WarehouseDocPrintSheet,
@@ -31,11 +32,7 @@ import {
   CommitBar,
   Consequence,
   Crumb,
-  DateInput,
   DocHead,
-  FastTab,
-  Field,
-  FieldGrid,
   Grid,
   GridBody,
   GridFoot,
@@ -58,6 +55,7 @@ import {
   useToast,
 } from '@/components/kit'
 import { DUONG, type NoiNhan } from './duong'
+import { DauPhieu, NhacSoNccSheet, O_SO_NCC } from './dau-phieu'
 
 export type { NoiNhan }
 
@@ -130,7 +128,10 @@ export function PhieuNhapScreen({
   const [rows, setRows] = useState(initialRows)
   const [docDate, setDocDate] = useState(suaLai?.docDate ?? today)
   const [supplierDocNo, setSupplierDocNo] = useState(suaLai?.supplierDocNo ?? '')
-  const [counterparty, setCounterparty] = useState(suaLai?.counterparty ?? '')
+  const [counterparty, setCounterparty] = useState(() => nguoiGiaoBanDau(suaLai, po.supplier_name)) // prettier-ignore
+  const [ghiChu, setGhiChu] = useState('')
+  /** Hộp nhắc số phiếu NCC (bản vẽ J1b) — mở khi bấm Ghi sổ mà ô còn trống. */
+  const [nhacSoNcc, setNhacSoNcc] = useState(false)
   const [overReason, setOverReason] = useState('')
   const [overDraft, setOverDraft] = useState('')
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -188,8 +189,26 @@ export function PhieuNhapScreen({
         : undefined
   const ghiDuoc = blocked == null
 
-  async function ghiSo() {
+  /** Nút Ghi sổ / Ctrl+Enter: thiếu số phiếu NCC thì nhắc một lần trước (không chặn). */
+  const bamGhiSo = () => {
+    if (!ghiDuoc) return nhayToi()
+    if (canNhacSoNcc(supplierDocNo)) return setNhacSoNcc(true)
+    void ghiSo(supplierDocNo)
+  }
+  /*
+    Ctrl+Enter khi con trỏ còn TRONG Ô (04/10/2026): ô kit chỉ chốt chữ lúc rời
+    ô, nên gõ số phiếu NCC / ghi chú / Lần này rồi Ctrl+Enter là ghi sổ bằng số
+    CŨ. Rời ô trước, rồi gọi bản bamGhiSo MỚI NHẤT (sau khi state đã nhận chữ)
+    qua ref — closure của lần render này còn giữ số cũ.
+  */
+  const bamMoiNhat = useRef(bamGhiSo)
+  useLayoutEffect(() => {
+    bamMoiNhat.current = bamGhiSo
+  })
+
+  async function ghiSo(soNcc: string) {
     if (!ghiDuoc) return
+    setNhacSoNcc(false)
     setBusy(true)
     try {
       const res = await api<{ id: string; code: string; po_status: string | null }>(
@@ -200,9 +219,9 @@ export function PhieuNhapScreen({
             po_id: po.id,
             shipment_id: dot?.id ?? null,
             counterparty: counterparty.trim() || null,
-            supplier_doc_no: supplierDocNo.trim() || null,
+            supplier_doc_no: soNcc.trim() || null,
             doc_date: docDate || null,
-            note: suaLai ? `Sửa lại ${suaLai.code} (đã đảo bởi ${suaLai.daoBoi})` : null,
+            note: ghiChuPhieu(suaLai, ghiChu),
             allow_over: dongVuot.length > 0 && coLyDoVuot,
             over_reason: dongVuot.length > 0 && coLyDoVuot ? overReason.trim() : null,
             lines: rows
@@ -264,8 +283,9 @@ export function PhieuNhapScreen({
       onKeyDown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
           e.preventDefault()
-          if (ghiDuoc) void ghiSo()
-          else nhayToi()
+          if (nhacSoNcc) return
+          ;(document.activeElement as HTMLElement | null)?.blur()
+          setTimeout(() => bamMoiNhat.current(), 0)
         }
       }}
     >
@@ -274,12 +294,7 @@ export function PhieuNhapScreen({
         <Crumb path={[...duong.crumbs, `Nhận hàng ${po.code}`]} />
         <ActionPane>
           <ActionGroup label="Phiếu">
-            <Action
-              primary
-              disabled={!ghiDuoc}
-              title={blocked}
-              onClick={() => void ghiSo()}
-            >
+            <Action primary disabled={!ghiDuoc} title={blocked} onClick={bamGhiSo}>
               {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
             </Action>
             <Action icon="huy" disabled={busy} onClick={() => router.push(duong.home)}>
@@ -310,95 +325,24 @@ export function PhieuNhapScreen({
           <StatusTrack label="Phiếu" steps={['Đang lập', 'Đã ghi sổ']} at={0} />
         </DocHead>
 
-        <FastTab title="Đầu phiếu" defaultOpen>
-          <FieldGrid
-            note={
-              lich.length > 0 ? (
-                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="font-semibold text-[var(--ink-label)]">
-                    Lịch giao cả đơn
-                  </span>
-                  {lich.map((d) => {
-                    const text = `Đợt ${d.seq} · ${isoToVn(d.date).slice(0, 5)} · ${d.label}`
-                    const tone =
-                      d.tone === 'done' || d.tone === 'stop' || d.tone === 'warn'
-                        ? d.tone
-                        : 'neutral'
-                    // Đợt còn nhận được mà không phải đợt đang mở → bấm là đổi đợt.
-                    return d.current || d.status === 'received' ? (
-                      <span
-                        key={d.id}
-                        className={d.current ? 'font-semibold' : undefined}
-                      >
-                        <Tag tone={tone}>{text}</Tag>
-                      </span>
-                    ) : (
-                      <Code key={d.id} as="a" href={`${duong.phieu(po.id)}?dot=${d.id}`}>
-                        {text}
-                      </Code>
-                    )
-                  })}
-                  {/* HÀNG GẤP / NCC chở không theo đợt (27/09/2026): nhận theo
-                      phần còn mở của CẢ ĐƠN, không gắn đợt — số tự rót vào các
-                      đợt theo thứ tự hẹn (po-shipments.sync). Trước đây đơn đã
-                      chia đợt thì không còn lối nào vào phiếu kiểu này. */}
-                  {dot ? (
-                    <Code as="a" href={duong.phieu(po.id)}>
-                      Ngoài đợt (hàng gấp)
-                    </Code>
-                  ) : (
-                    <span className="font-semibold">
-                      <Tag tone="neutral">Ngoài đợt — đang mở</Tag>
-                    </span>
-                  )}
-                </span>
-              ) : (
-                'Đơn chưa khai đợt giao — nhận theo phần còn mở của cả đơn; Cung ứng khai đợt ở trang đơn mua.'
-              )
-            }
-          >
-            <Field label="Đơn mua">
-              <Code as="a" href={`/mua-hang/don/${po.id}`}>
-                {po.code}
-              </Code>
-            </Field>
-            <Field label="Nhà cung cấp">{po.supplier_name}</Field>
-            <Field label="Lệnh SX">
-              {po.lsx_codes.length > 0 ? (
-                <span className="num">{po.lsx_codes.join(' · ')}</span>
-              ) : (
-                <span className="text-[var(--ink-3)]">không theo lệnh</span>
-              )}
-            </Field>
-            <Field label="Đợt giao">{dotLabel}</Field>
-            <Field label="Ngày chứng từ">
-              <DateInput value={docDate} onChange={setDocDate} label="Ngày chứng từ" />
-            </Field>
-            <Field label="Số phiếu giao NCC">
-              <TextInput
-                value={supplierDocNo}
-                onCommit={setSupplierDocNo}
-                placeholder="số trên phiếu của NCC"
-                mono
-                label="Số phiếu giao NCC"
-              />
-            </Field>
-            <Field label="Người giao">
-              <TextInput
-                value={counterparty}
-                onCommit={setCounterparty}
-                placeholder="tên tài xế / NV giao"
-                label="Người giao"
-              />
-            </Field>
-            <Field label="Người nhận">
-              <span className="text-[var(--ink-3)]">
-                {nguoiNhan} · theo phiên đăng nhập
-                {noi === 'cung-ung' ? ' · Cung ứng nhận thay Kho' : ''}
-              </span>
-            </Field>
-          </FieldGrid>
-        </FastTab>
+        <DauPhieu
+          po={po}
+          dot={dot}
+          lich={lich}
+          dotLabel={dotLabel}
+          phieuUrl={duong.phieu(po.id)}
+          nguoiNhan={nguoiNhan}
+          noi={noi}
+          busy={busy}
+          docDate={docDate}
+          setDocDate={setDocDate}
+          supplierDocNo={supplierDocNo}
+          setSupplierDocNo={setSupplierDocNo}
+          counterparty={counterparty}
+          setCounterparty={setCounterparty}
+          ghiChu={ghiChu}
+          setGhiChu={setGhiChu}
+        />
 
         {suaLai && (
           <NoticeBar tone="neutral" tag="Sửa phiếu">
@@ -664,6 +608,22 @@ export function PhieuNhapScreen({
             { label: 'Dòng nhận', value: tong.so_dong_nhan },
             { label: 'Lần này', value: fmt(tong.lan_nay) },
             { label: 'Vào khoá', value: fmt(tong.vao_khoa) },
+            ...(canNhacSoNcc(supplierDocNo)
+              ? [
+                  {
+                    label: 'Số phiếu NCC',
+                    value: (
+                      <button
+                        type="button"
+                        className="font-semibold text-[var(--warn)] underline"
+                        onClick={() => document.getElementById(O_SO_NCC)?.focus()}
+                      >
+                        chưa ghi — ghi ngay
+                      </button>
+                    ),
+                  },
+                ]
+              : []),
           ]}
           grand={{ label: 'Dùng được', value: fmt(tong.dung_duoc) }}
           blocked={blocked}
@@ -671,12 +631,7 @@ export function PhieuNhapScreen({
           actions={
             <>
               <span className="text-k-label text-[var(--ink-3)]">Ctrl + Enter</span>
-              <Action
-                primary
-                disabled={!ghiDuoc}
-                title={blocked}
-                onClick={() => void ghiSo()}
-              >
+              <Action primary disabled={!ghiDuoc} title={blocked} onClick={bamGhiSo}>
                 {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
               </Action>
             </>
@@ -736,6 +691,17 @@ export function PhieuNhapScreen({
             </Consequence>
           </Sheet>
         )}
+        {nhacSoNcc && (
+          <NhacSoNccSheet
+            poCode={po.code}
+            supplierName={po.supplier_name}
+            onClose={() => setNhacSoNcc(false)}
+            onGhiSo={(so) => {
+              if (so) setSupplierDocNo(so)
+              void ghiSo(so)
+            }}
+          />
+        )}
         {xemIn && (
           <Sheet
             open
@@ -752,6 +718,16 @@ export function PhieuNhapScreen({
                 supplier_doc_no: supplierDocNo.trim() || null,
                 counterparty: counterparty.trim() || null,
                 creator_name: nguoiNhan,
+                // Cùng cách server ghép: ghi chú phiếu, rồi lý do nhận vượt.
+                note:
+                  [
+                    ghiChuPhieu(suaLai, ghiChu),
+                    dongVuot.length > 0 && coLyDoVuot
+                      ? `[Nhận vượt] ${overReason.trim()}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || null,
                 nhap_cho: {
                   ncc: [po.supplier_name],
                   don: [po.code],
