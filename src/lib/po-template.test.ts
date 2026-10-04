@@ -444,3 +444,19 @@ describe('tổng gõ tay — ghi đè tổng kg / m³ / m² (02/10/2026)', () =>
     expect(poLineAmount({ qty_ordered: 141, unit_price: 50_000, ...d })).toBe(15_000_000)
   })
 })
+
+describe('mẫu gỗ — ván mua theo TẤM (PO-2026-0133, 03/10/2026)', () => {
+  const van = { qty_ordered: 152, m3_per_unit: 0.0072, material_id: 'go-0001' }
+  it('dòng vật tư danh mục: giá theo ĐVT mua, vẫn giữ tổng m³ để in', () => {
+    const d = deriveLine('wood', van)
+    expect(d).toEqual({ qty2: 1.0944, unit2: 'm³', price_basis: 'unit' })
+    expect(poLineAmount({ qty_ordered: 152, unit_price: 81_000, ...d })).toBe(12_312_000)
+  })
+  it('dòng mã SP tự do vẫn theo m³ tinh như cũ', () => {
+    expect(deriveLine('wood', { ...van, material_id: null }).price_basis).toBe('unit2')
+  })
+  it('người dùng chọn "Giá theo" m³ thì theo m³; tổng gõ tay không lật cơ sở giá', () => {
+    expect(deriveLine('wood', { ...van, price_per: 'unit2' }).price_basis).toBe('unit2')
+    expect(deriveLine('wood', { ...van, qty2_override: 1.1 }).price_basis).toBe('unit')
+  })
+})

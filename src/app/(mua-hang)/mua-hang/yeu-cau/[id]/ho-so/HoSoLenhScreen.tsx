@@ -130,18 +130,8 @@ export function HoSoLenhScreen({
                 con={conGiao}
                 nghia="Ngày hàng phải rời kho — mọi đơn mua phải về trước mốc này"
               />
-              <Row>
-                <Cell>Vật tư đã nhận</Cell>
-                <Cell>
-                  {lsx.materials_received_at ? (
-                    ngay(lsx.materials_received_at)
-                  ) : (
-                    <Tag tone="warn">chưa nhận</Tag>
-                  )}
-                </Cell>
-                <Cell>—</Cell>
-                <Cell muted>Mốc xưởng xác nhận đã nhận đủ vật tư của lệnh</Cell>
-              </Row>
+              {/* Dòng "Vật tư đã nhận" TẠM GỠ 03/10/2026 — mốc chưa ai dùng thật (hai lần
+                  bấm đều từ tài khoản quản trị), chưa chốt ai xác nhận đủ vật tư. */}
               <Row>
                 <Cell>Container</Cell>
                 <Cell>{lsx.container_summary || <Tag>chưa khai</Tag>}</Cell>

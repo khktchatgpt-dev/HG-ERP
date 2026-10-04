@@ -26,7 +26,6 @@ import {
   Table,
   Tag,
   showMoney,
-  showNum,
   ScopeSwitch,
 } from '@/components/kit'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
@@ -300,7 +299,6 @@ export function LenhScreen({
   bangKe: LsxBangKe | null
 }) {
   const router = useRouter()
-  const { coverage: cv } = lsx
   const moc = lsx.materials_due_at ?? lsx.ship_date
   const con = conLai(moc, today)
 
@@ -315,6 +313,10 @@ export function LenhScreen({
 
   const chuaGui = lsx.pos.filter((p) => p.status === 'draft' || p.status === 'pending_approval').length // prettier-ignore
   const tre = lsx.pos.filter((p) => p.late).length
+  // Hai ô theo ĐƠN MUA thay "Đã đủ / Còn phải đặt" (tính từ định mức) — 03/10/2026,
+  // user chốt tạm bỏ phần thiếu/đủ khi chưa có nhu cầu vật tư đáng tin.
+  const veHet = lsx.pos.filter((p) => p.status === 'received').length
+  const dangVe = lsx.pos.filter((p) => ['ordered', 'confirmed', 'in_transit', 'partial'].includes(p.status)).length // prettier-ignore
   /** Ai đang lo lệnh này — suy từ người phụ trách các đơn, như màn cũ vẫn làm. */
   const owners = [
     ...new Set(lsx.pos.map((p) => p.assignee_name).filter((v): v is string => !!v)),
@@ -386,12 +388,9 @@ export function LenhScreen({
             <Btn icon="excel" href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
               Báo cáo lệnh
             </Btn>
-            <Btn
-              icon="excel"
-              href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke`}
-            >
-              Bảng kê vật tư
-            </Btn>
+            {/* Nút Excel "Bảng kê vật tư" (tờ Cần mua / Đã đủ) TẠM GỠ 03/10/2026 — user chốt
+                bỏ phần thiếu/đủ khi chưa có nhu cầu vật tư đáng tin. Route
+                `lsx-report?loai=bangke` vẫn còn, bật lại chỉ cần trả nút này. */}
             {canEdit && (
               <>
                 <Btn icon="don" href={`/mua-hang/don?lsx=${lsx.id}`}>
@@ -407,22 +406,21 @@ export function LenhScreen({
       />
 
       {/*
-        DẢI ĐỘ PHỦ — câu hỏi số một của người mua khi mở một lệnh: còn thiếu
-        mấy mã. Mỗi ô kèm MẪU SỐ (luật 6 của sổ thiết kế): "12 / 37 mã" nói
-        được điều mà "12" một mình không nói.
+        DẢI ĐƠN MUA CỦA LỆNH — mỗi ô kèm MẪU SỐ (luật 6 của sổ thiết kế). Hai ô "Đã
+        đủ / Còn phải đặt" (độ phủ theo định mức) TẠM GỠ 03/10/2026: định mức chưa
+        SP nào xác nhận nên số đó báo thiếu cả lệnh đã nhận xong mọi đơn (08 MX).
       */}
       <MetricStrip>
         <Metric
-          label="Đã đủ"
-          value={`${cv.covered}/${cv.needed}`}
-          basis="tồn khả dụng + đã đặt ≥ còn cần"
-          tone={cv.missing === 0 ? 'done' : undefined}
+          label="Đơn đã về hết"
+          value={String(veHet)}
+          basis={`trên ${lsx.pos.length} đơn của lệnh`}
+          tone={lsx.pos.length > 0 && veHet === lsx.pos.length ? 'done' : undefined}
         />
         <Metric
-          label="Còn phải đặt"
-          value={String(cv.missing)}
-          basis={`trên ${cv.needed} mã lệnh cần`}
-          tone={cv.missing > 0 ? 'stop' : 'done'}
+          label="Đơn đang về"
+          value={String(dangVe)}
+          basis={`trên ${lsx.pos.length} đơn của lệnh`}
         />
         <Metric
           label="Đơn chưa gửi NCC"
@@ -448,28 +446,6 @@ export function LenhScreen({
         />
       )}
 
-      {xem !== 'vat-tu' && cv.missing > 0 && cv.missing_top.length > 0 && (
-        <div className="text-k-sm shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
-          <b className="text-[var(--ink)]">Còn phải đặt:</b>{' '}
-          {cv.missing_top.map((m, i) => (
-            <span key={m.code}>
-              {i > 0 && ' · '}
-              <span className="num text-[var(--act)]">{m.code}</span>{' '}
-              <span className="text-[var(--ink-2)]">{m.name}</span>{' '}
-              <span className="num text-[var(--ink-3)]">
-                {showNum(m.qty)} {m.unit}
-              </span>
-            </span>
-          ))}
-          {cv.missing > cv.missing_top.length && (
-            <span className="text-[var(--ink-3)]">
-              {' '}
-              · và {cv.missing - cv.missing_top.length} mã nữa
-            </span>
-          )}
-        </div>
-      )}
-
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
         <ScopeSwitch
           label="Xem theo"
@@ -490,7 +466,7 @@ export function LenhScreen({
             {
               value: 'vat-tu',
               label: 'Theo vật tư',
-              count: bangKe?.rows.length,
+              count: bangKe?.rows.filter((r) => r.pos.length > 0).length,
               hint: 'Bảng kê: gộp dòng các đơn theo mã vật tư',
             },
           ]}
@@ -498,15 +474,23 @@ export function LenhScreen({
       </div>
 
       {xem === 'vat-tu' && bangKe ? (
-        <BangKe bk={bangKe} canEdit={canEdit} />
+        <BangKe
+          bk={bangKe}
+          canEdit={canEdit}
+          // Chip bảng kê đếm ĐƠN bằng chính các con số trên đầu trang (03/10/2026):
+          // đơn có dòng không mã vật tư không có hàng nào trong bảng kê, đếm theo hàng sẽ hụt.
+          donTheo={{
+            nhap: lsx.pos.filter((p) => p.status === 'draft').length,
+            cho_duyet: lsx.pos.filter((p) => p.status === 'pending_approval').length,
+            dang_ve: dangVe,
+            da_ve: veHet,
+            tong: lsx.pos.length,
+          }}
+        />
       ) : lsx.pos.length === 0 ? (
         <Empty
           headline="Lệnh này chưa có đơn mua nào"
-          reason={
-            cv.missing > 0
-              ? `Lệnh còn ${cv.missing} mã chưa đủ — chúng chưa nằm trên đơn nào, nên chưa ai đang lo mua.`
-              : 'Tồn kho và các đơn hiện có đã phủ đủ nhu cầu của lệnh, nên chưa cần đặt thêm.'
-          }
+          reason="Chưa có đơn mua nào gắn với lệnh này, nên chưa ai đang lo mua cho nó."
           next={
             canEdit ? (
               <Btn icon="them" primary href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
@@ -650,7 +634,7 @@ export function LenhScreen({
           lsx.order_codes.length > 0 ? `Đơn hàng: ${lsx.order_codes.join(', ')}` : 'Không gắn đơn hàng', // prettier-ignore
           moc ? `Mốc vật tư ${ngay(moc)}${lsx.materials_due_at ? '' : ' (theo ngày xuất)'}` : 'Chưa đặt mốc vật tư', // prettier-ignore
         ]}
-        right={`${lsx.pos.length} đơn · ${cv.missing} mã còn hụt`}
+        right={`${lsx.pos.length} đơn`}
       />
     </ScreenFrame>
   )

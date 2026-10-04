@@ -389,6 +389,12 @@ export type PoLineDraft = {
    * tấm hay theo m²) vẫn theo luật của mẫu — ghi đè chỉ thay CON SỐ tổng.
    */
   qty2_override?: number | null
+  /**
+   * Dòng trỏ VẬT TƯ DANH MỤC (null / bỏ trống = dòng tự do gõ tên). Chỉ mẫu gỗ
+   * đọc: dòng mã SP tự do giá theo m³ tinh, dòng vật tư danh mục (ván MDF mua
+   * theo TẤM) giá theo ĐVT mua — xem `deriveByTemplate` case 'wood'.
+   */
+  material_id?: string | null
 }
 
 /** Mẫu có cột tổng gõ đè được → đơn vị của tổng đó. */
@@ -452,7 +458,13 @@ function withOverride(t: PoTemplate, l: PoLineDraft, d: PoLineDerived): PoLineDe
   if (!hasQty2Override(t, l)) return d
   const v = Number(l.qty2_override)
   const byTotal =
-    t === 'glass' ? l.carton_basis === 'm2' : t === 'foam' ? l.carton_basis === 'm3' : true
+    t === 'glass'
+      ? l.carton_basis === 'm2'
+      : t === 'foam'
+        ? l.carton_basis === 'm3'
+        : t === 'wood'
+          ? !l.material_id // gỗ: chỉ dòng mã SP tự do giá theo m³ (xem case 'wood')
+          : true
   return {
     qty2: t === 'wood' || t === 'foam' ? round6(v) : round4(v),
     unit2: QTY2_OVERRIDE_UNIT[t]!,
@@ -490,7 +502,17 @@ function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       if (m3 <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
       // round6 chứ không round4 — xem chú thích ở `round6`, tròn 4 lẻ là lệch
       // cent với hoá đơn NCC.
-      return { qty2: round6(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
+      //
+      // Giá theo m³ chỉ là mặc định của dòng MÃ SP tự do (cả 39 dòng gỗ cũ đều
+      // vậy). Dòng VẬT TƯ DANH MỤC — ván MDF đặt theo TẤM — NCC báo giá theo
+      // tấm: PO-2026-0133 (03/10/2026) ghi 81.000đ/tấm × 152 tấm mà bị tính
+      // 1,094 m³ × 81.000 = 88.614đ thay vì 12.312.000đ. Tổng m³ vẫn giữ để
+      // in/đối chiếu; muốn giá theo m³ thì chọn "Giá theo" ở chi tiết dòng.
+      return {
+        qty2: round6(m3 * qty),
+        unit2: 'm³',
+        price_basis: l.material_id ? 'unit' : 'unit2',
+      }
     }
     case 'foam': {
       // Xốp tấm theo KHỐI: D×R×Dày (mm) → m³/tấm × SL tấm × đơn giá/m³.

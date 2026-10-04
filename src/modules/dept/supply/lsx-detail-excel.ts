@@ -412,7 +412,6 @@ export async function buildLsxDetailExcel(
   kv(s1, 'Đơn hàng', lsx.order_codes.join(', '))
   kv(s1, 'Ngày xuất', fmtD(lsx.ship_date))
   kv(s1, 'Hạn vật tư về', fmtD(lsx.materials_due_at))
-  kv(s1, 'Kho xác nhận đủ', fmtD(lsx.materials_received_at))
   kv(s1, 'Mức rủi ro', risk.label)
   kv(s1, 'Lý do', risk.reason)
   kv(s1, 'Bộ phận cầm bóng', risk.owner)
