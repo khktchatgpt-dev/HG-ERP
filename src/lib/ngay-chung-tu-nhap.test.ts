@@ -40,14 +40,22 @@ describe('kiemNgayChungTu', () => {
     ).toMatchObject({ muc: 'chan', lui: 61 })
   })
   it('phiếu lập lại để sửa: giữ ngày cũ, không giới hạn, không cần lý do', () => {
-    expect(kiemNgayChungTu({ docDate: '2026-07-01', today: T, laLapLai: true }).muc).toBe(
-      'ok',
-    )
+    expect(
+      kiemNgayChungTu({ docDate: '2026-07-01', today: T, ngayPhieuCu: '2026-07-01' }).muc,
+    ).toBe('ok')
   })
 })
 
 describe('ghiChuLuiNgay', () => {
   it('nêu số ngày lùi + lý do', () => {
     expect(ghiChuLuiNgay(15, ' nhập bù ')).toBe('[Nhập lùi 15 ngày] nhập bù')
+  })
+})
+
+describe('lập lại phiếu — đổi ngày (sửa ngày chứng từ sai)', () => {
+  it('đổi sang ngày khác thì áp luật thường', () => {
+    expect(kiemNgayChungTu({ docDate: '2026-09-20', today: T, ngayPhieuCu: '2026-07-01' })).toMatchObject({ muc: 'can_ly_do', lui: 15 }) // prettier-ignore
+    expect(kiemNgayChungTu({ docDate: '2026-10-03', today: T, ngayPhieuCu: '2026-07-01' }).muc).toBe('ok') // prettier-ignore
+    expect(kiemNgayChungTu({ docDate: '2026-06-01', today: T, ngayPhieuCu: '2026-07-01', lyDo: 'x' }).muc).toBe('chan') // prettier-ignore
   })
 })

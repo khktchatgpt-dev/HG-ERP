@@ -12,8 +12,11 @@
  *  · lùi 0–7 ngày: bình thường;
  *  · lùi 8–60 ngày: được, BẮT lý do — lý do in lên phiếu;
  *  · lùi > 60 ngày: chặn;
- *  · phiếu LẬP LẠI để sửa (`laLapLai`): giữ đúng ngày của phiếu cũ, không
+ *  · phiếu LẬP LẠI để sửa (`ngayPhieuCu`): GIỮ đúng ngày phiếu cũ thì không
  *    giới hạn — server tự kiểm phiếu cũ có thật và đã đảo (stock.service).
+ *    ĐỔI sang ngày khác (sửa ngày chứng từ sai — chỉ có đường đảo + lập lại)
+ *    thì áp luật thường ở trên. Bản đầu 05/10 khoá luôn ô ngày khi lập lại →
+ *    mất đường sửa ngày; soát trên màn thật cùng ngày mới lộ.
  *
  * So bằng NGÀY LỊCH (chuỗi yyyy-mm-dd theo giờ VN), không bằng mili-giây —
  * bản cũ lấy `Date.now() - new Date(iso)` nên lệch 7 tiếng quanh nửa đêm.
@@ -37,11 +40,12 @@ export function kiemNgayChungTu(p: {
   docDate: string | null | undefined
   today: string
   lyDo?: string | null
-  laLapLai?: boolean
+  /** Ngày chứng từ của phiếu đang được LẬP LẠI — giữ đúng ngày đó thì miễn giới hạn. */
+  ngayPhieuCu?: string | null
 }): KetQuaNgay {
   if (!p.docDate) return { muc: 'ok', lui: 0 }
   const lui = soNgayLui(p.docDate, p.today)
-  if (p.laLapLai) return { muc: 'ok', lui }
+  if (giuNgayPhieuCu(p.docDate, p.ngayPhieuCu)) return { muc: 'ok', lui }
   if (lui < 0)
     return { muc: 'chan', lui, message: 'Ngày chứng từ không được ở tương lai' }
   if (lui > LUI_TOI_DA)
@@ -57,6 +61,14 @@ export function kiemNgayChungTu(p: {
       message: `Ngày chứng từ lùi ${lui} ngày — ghi lý do nhập lùi ngày`,
     }
   return { muc: 'ok', lui }
+}
+
+/** Phiếu lập lại đang giữ nguyên ngày chứng từ của phiếu cũ. */
+export function giuNgayPhieuCu(
+  docDate: string | null | undefined,
+  ngayPhieuCu: string | null | undefined,
+): boolean {
+  return !!docDate && !!ngayPhieuCu && docDate.slice(0, 10) === ngayPhieuCu.slice(0, 10)
 }
 
 /** Câu ghi vào ghi chú phiếu (in lên 01-VT) khi nhập lùi quá `LUI_TU_DO` ngày. */

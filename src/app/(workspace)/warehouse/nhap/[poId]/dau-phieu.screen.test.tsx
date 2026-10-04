@@ -112,7 +112,10 @@ describe('ngày chứng từ lùi xa (05/10/2026)', () => {
   it('lùi 15 ngày: hiện ô lý do, chưa có lý do thì Ghi sổ không gửi', () => {
     dung()
     doiNgay('16/09/2026')
-    expect(screen.getByText(/Lùi 15 ngày — ghi lý do/)).toBeTruthy()
+    expect(screen.getByText('Lý do lùi 15 ngày')).toBeTruthy()
+    expect(
+      screen.getByText(/Chưa lưu được: Ngày chứng từ lùi 15 ngày — ghi lý do/),
+    ).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeTruthy()
     fireEvent.click(nutGhiSo())
     expect(gui()).toBeNull()
@@ -144,19 +147,20 @@ describe('ngày chứng từ lùi xa (05/10/2026)', () => {
 })
 
 describe('lập lại phiếu cũ để sửa (05/10/2026)', () => {
-  it('giữ ngày phiếu cũ dù lùi xa, không hỏi lý do, gửi kèm mã phiếu cũ', async () => {
-    dung({
-      suaLai: {
-        id: 'phieu-cu',
-        code: 'PNK-2026-0023',
-        daoBoi: 'PXK-2026-0004',
-        docDate: '2026-07-01',
-        supplierDocNo: '6/2026- HG/ATP',
-        counterparty: 'Hồng Phát',
-      },
-    })
-    const ngay = screen.getByRole('textbox', { name: 'Ngày chứng từ' })
-    expect(ngay).toHaveProperty('disabled', true)
+  const suaLai = {
+    id: 'phieu-cu',
+    code: 'PNK-2026-0023',
+    daoBoi: 'PXK-2026-0004',
+    docDate: '2026-07-01',
+    supplierDocNo: '6/2026- HG/ATP',
+    counterparty: 'Hồng Phát',
+  }
+
+  it('giữ ngày phiếu cũ dù lùi xa: không hỏi lý do, gửi kèm mã phiếu cũ', async () => {
+    dung({ suaLai })
+    // Ô ngày vẫn MỞ — sai ngày chứng từ chỉ sửa được bằng đường đảo + lập lại.
+    expect(screen.getByRole('textbox', { name: 'Ngày chứng từ' })).toHaveProperty('disabled', false) // prettier-ignore
+    expect(screen.getByText('Ngày CT · giữ ngày cũ')).toBeTruthy()
     expect(screen.queryByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeNull()
     fireEvent.click(nutGhiSo())
     await waitFor(() => expect(gui()).not.toBeNull())
@@ -167,5 +171,24 @@ describe('lập lại phiếu cũ để sửa (05/10/2026)', () => {
       supplier_doc_no: '6/2026- HG/ATP',
     })
     expect(String(gui()!.note)).toMatch(/^Sửa lại PNK-2026-0023/)
+  })
+
+  it('đổi sang ngày khác (sửa ngày sai) → luật thường: lùi 15 ngày phải ghi lý do', async () => {
+    dung({ suaLai })
+    const o = screen.getByRole('textbox', { name: 'Ngày chứng từ' })
+    fireEvent.change(o, { target: { value: '16/09/2026' } })
+    fireEvent.blur(o)
+    const ly = screen.getByRole('textbox', { name: 'Lý do nhập lùi ngày' })
+    fireEvent.click(nutGhiSo())
+    expect(gui()).toBeNull()
+    go(ly, 'ngày cũ ghi nhầm, hàng về 16/09')
+    fireEvent.blur(ly)
+    fireEvent.click(nutGhiSo())
+    await waitFor(() => expect(gui()).not.toBeNull())
+    expect(gui()).toMatchObject({
+      doc_date: '2026-09-16',
+      fix_of_doc_id: 'phieu-cu',
+      backdate_reason: 'ngày cũ ghi nhầm, hàng về 16/09',
+    })
   })
 })

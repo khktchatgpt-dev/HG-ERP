@@ -379,11 +379,12 @@ export const receiptDocSchema = z
     path: ['production_order_id'],
   })
   .superRefine((d, ctx) => {
+    // Phiếu lập lại: ngày phiếu cũ chỉ service biết — service kiểm thay (stock.service).
+    if (d.fix_of_doc_id) return
     const kq = kiemNgayChungTu({
       docDate: d.doc_date,
       today: todayVn(),
       lyDo: d.backdate_reason,
-      laLapLai: !!d.fix_of_doc_id,
     })
     if (kq.muc !== 'ok')
       ctx.addIssue({
