@@ -30,30 +30,26 @@ import {
 import { kgDuKien, lechKg } from '@/lib/can-kg'
 import {
   Action,
-  ActionGroup,
-  ActionPane,
   Affected,
+  Btn,
   CellHint,
   Code,
   CommitBar,
   Consequence,
-  Crumb,
-  DocHead,
   Grid,
   GridBody,
   GridFoot,
   GridHead,
   GridRow,
-  GridToolbar,
+  Hint,
   LineStatus,
   NoticeBar,
   NumInput,
   Pick,
   ScreenFrame,
+  ScreenHeader,
   Sheet,
   SheetActions,
-  StatusBar,
-  StatusTrack,
   Tag,
   TextArea,
   TextInput,
@@ -293,6 +289,11 @@ export function PhieuNhapScreen({
   )
   const lich = useMemo(() => lichDot(dots, dot?.id ?? null, today), [dots, dot, today])
 
+  const dotNgan = dot
+    ? `đợt ${dot.seq}/${dot.total} · hẹn ${isoToVn(dot.expected_date).slice(0, 5)}`
+    : po.expected_at
+      ? `hẹn ${isoToVn(po.expected_at).slice(0, 5)}`
+      : 'chưa hẹn ngày'
   const dotLabel = dot
     ? `đợt ${dot.seq}/${dot.total} · hẹn ${isoToVn(dot.expected_date)}`
     : po.expected_at
@@ -313,39 +314,32 @@ export function PhieuNhapScreen({
     >
       {/* ScreenFrame chốt chiều cao — cùng lỗi với màn Xuất kho 16/09 (wrapper không trần). */}
       <ScreenFrame>
-        <Crumb path={[...duong.crumbs, `Nhận hàng ${po.code}`]} />
-        <ActionPane>
-          <ActionGroup label="Phiếu">
-            <Action primary disabled={!ghiDuoc} title={blocked} onClick={bamGhiSo}>
-              {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
-            </Action>
-            <Action icon="huy" disabled={busy} onClick={() => router.push(duong.home)}>
-              Huỷ
-            </Action>
-          </ActionGroup>
-          <ActionGroup label="Bản in">
-            <Action icon="in" onClick={() => setXemIn(true)}>
-              Xem bản in
-            </Action>
-          </ActionGroup>
-          <ActionGroup label="Đơn">
-            <Action icon="don" onClick={() => router.push(`/mua-hang/don/${po.id}`)}>
-              Mở đơn mua
-            </Action>
-          </ActionGroup>
-        </ActionPane>
-        <DocHead
+        {/* MỘT HÀNG ĐẦU (bản vẽ K1, 05/10/2026): thay đường dẫn + thanh nút + dòng
+            tên phiếu (30 + 63 + 35px). Ghi sổ chỉ còn ở thanh chốt đáy — màn gõ
+            (Khuôn F) có một chỗ chốt, không hai. */}
+        <ScreenHeader
           compact
-          kind={
-            noi === 'cung-ung'
-              ? 'Phiếu nhập kho · Cung ứng nhận thay Kho'
-              : 'Phiếu nhập kho · theo đơn mua'
+          eyebrow={noi === 'cung-ung' ? 'Phiếu nhập kho · Cung ứng nhận thay Kho' : 'Phiếu nhập kho · theo đơn mua'} // prettier-ignore
+          title={
+            <>
+              Nhận hàng <span className="num">{po.code}</span>
+            </>
           }
-          code={po.code}
-          sub={`${po.supplier_name} · ${dotLabel} · số phiếu PNK cấp khi ghi sổ`}
-        >
-          <StatusTrack label="Phiếu" steps={['Đang lập', 'Đã ghi sổ']} at={0} />
-        </DocHead>
+          chain={<Hint>người nhận {nguoiNhan} · số PNK cấp khi ghi sổ</Hint>}
+          actions={
+            <>
+              <Btn icon="in" onClick={() => setXemIn(true)}>
+                Xem bản in
+              </Btn>
+              <Btn icon="don" href={`/mua-hang/don/${po.id}`}>
+                Mở đơn mua
+              </Btn>
+              <Btn icon="quayLai" href={duong.home} aria-disabled={busy || undefined}>
+                {`Về ${duong.crumbs[duong.crumbs.length - 1].label}`}
+              </Btn>
+            </>
+          }
+        />
 
         <DauPhieu
           po={po}
@@ -353,8 +347,7 @@ export function PhieuNhapScreen({
           lich={lich}
           dotLabel={dotLabel}
           phieuUrl={duong.phieu(po.id)}
-          nguoiNhan={nguoiNhan}
-          noi={noi}
+          dotNgan={dotNgan}
           busy={busy}
           docDate={docDate}
           setDocDate={setDocDate}
@@ -395,15 +388,6 @@ export function PhieuNhapScreen({
             chiếu.
           </NoticeBar>
         )}
-
-        <GridToolbar
-          count={`${rows.length} dòng · ${rows.filter((r) => !r.editable).length} đã đủ`}
-        >
-          <span className="text-k-sm text-[var(--ink-3)]">
-            Nhận theo phần <b>còn mở</b> của {dot ? 'đợt' : 'đơn'} — dòng đã đủ không có ô
-            nhập
-          </span>
-        </GridToolbar>
 
         <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
           <Grid minWidth={coKg ? 1220 : 1180}>
@@ -613,7 +597,15 @@ export function PhieuNhapScreen({
               })}
             </GridBody>
             <GridFoot>
-              <td colSpan={5}>Tổng</td>
+              <td
+                colSpan={5}
+                title={`Nhận theo phần còn mở của ${dot ? 'đợt' : 'đơn'} — dòng đã đủ không có ô nhập`}
+              >
+                Tổng{' '}
+                <span className="font-normal text-[var(--ink-3)]">
+                  · {rows.length} dòng · {rows.filter((r) => !r.editable).length} đã đủ
+                </span>
+              </td>
               <td className="k-r num">{fmt(tong.tong_dat)}</td>
               <td className="k-r num">{fmt(tong.tong_da_ve)}</td>
               <td className="k-r num">{fmt(conCho)}</td>
@@ -634,7 +626,8 @@ export function PhieuNhapScreen({
             { label: 'Dòng nhận', value: tong.so_dong_nhan },
             { label: 'Lần này', value: fmt(tong.lan_nay) },
             { label: 'Vào khoá', value: fmt(tong.vao_khoa) },
-            ...(canNhacSoNcc(supplierDocNo)
+            // Đang có câu chặn thì câu đó là việc phải làm — bớt một mục để thanh không xuống dòng ở 1280.
+            ...(canNhacSoNcc(supplierDocNo) && !blocked
               ? [
                   {
                     label: 'Số phiếu NCC',
@@ -662,13 +655,6 @@ export function PhieuNhapScreen({
               </Action>
             </>
           }
-        />
-        <StatusBar
-          left={[
-            'Hàng đạt vào khu tiếp nhận · hàng sai quy cách vào kệ khoá · tồn chỉ đổi khi ghi sổ',
-            'Số Đặt / Đã về cùng nguồn với trang đơn mua',
-          ]}
-          right={`${rows.length} dòng`}
         />
 
         {sheetOpen && (

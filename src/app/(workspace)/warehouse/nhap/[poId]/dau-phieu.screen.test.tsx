@@ -112,7 +112,10 @@ describe('ngày chứng từ lùi xa (05/10/2026)', () => {
   it('lùi 15 ngày: hiện ô lý do, chưa có lý do thì Ghi sổ không gửi', () => {
     dung()
     doiNgay('16/09/2026')
-    expect(screen.getByText(/Lùi 15 ngày — ghi lý do/)).toBeTruthy()
+    expect(screen.getByText('Lý do lùi 15 ngày')).toBeTruthy()
+    expect(
+      screen.getByText(/Chưa lưu được: Ngày chứng từ lùi 15 ngày — ghi lý do/),
+    ).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeTruthy()
     fireEvent.click(nutGhiSo())
     expect(gui()).toBeNull()
@@ -157,7 +160,7 @@ describe('lập lại phiếu cũ để sửa (05/10/2026)', () => {
     dung({ suaLai })
     // Ô ngày vẫn MỞ — sai ngày chứng từ chỉ sửa được bằng đường đảo + lập lại.
     expect(screen.getByRole('textbox', { name: 'Ngày chứng từ' })).toHaveProperty('disabled', false) // prettier-ignore
-    expect(screen.getByText(/đang giữ ngày của phiếu cũ/)).toBeTruthy()
+    expect(screen.getByText('Ngày CT · giữ ngày cũ')).toBeTruthy()
     expect(screen.queryByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeNull()
     fireEvent.click(nutGhiSo())
     await waitFor(() => expect(gui()).not.toBeNull())
