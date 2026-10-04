@@ -6,6 +6,7 @@ import { isoToVn } from '@/lib/date-vn'
 import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { dotCuaPhieu } from '@/lib/phieu-nhap-cho'
 import { canNhacSoNcc, ghiChuPhieu, nguoiGiaoBanDau } from '@/lib/phieu-nhap-dau'
+import { ghiChuLuiNgay, kiemNgayChungTu, LUI_TU_DO } from '@/lib/ngay-chung-tu-nhap'
 import { api, apiErrorText } from '@/lib/api'
 import {
   WarehouseDocPrintSheet,
@@ -55,7 +56,7 @@ import {
   useToast,
 } from '@/components/kit'
 import { DUONG, type NoiNhan } from './duong'
-import { DauPhieu, NhacSoNccSheet, O_SO_NCC } from './dau-phieu'
+import { DauPhieu, NhacSoNccSheet, O_LY_DO_LUI, O_SO_NCC } from './dau-phieu'
 
 export type { NoiNhan }
 
@@ -120,7 +121,7 @@ export function PhieuNhapScreen({
   /** Cửa vào: khu Kho hay khu Cung ứng (nhận thay Kho). */
   noi: NoiNhan
   /** SỬA PHIẾU NHẬP (02/10/2026): phiếu cũ đã đảo — form điền sẵn số của nó. */
-  suaLai?: { code: string; daoBoi: string; docDate: string; supplierDocNo: string; counterparty: string } | null // prettier-ignore
+  suaLai?: { id: string; code: string; daoBoi: string; docDate: string; supplierDocNo: string; counterparty: string } | null // prettier-ignore
 }) {
   const duong = DUONG[noi]
   const router = useRouter()
@@ -132,6 +133,8 @@ export function PhieuNhapScreen({
   const [ghiChu, setGhiChu] = useState('')
   /** Hộp nhắc số phiếu NCC (bản vẽ J1b) — mở khi bấm Ghi sổ mà ô còn trống. */
   const [nhacSoNcc, setNhacSoNcc] = useState(false)
+  /** Lý do nhập lùi quá 7 ngày (05/10/2026) — chỉ hiện ô khi lùi xa. */
+  const [lyDoLui, setLyDoLui] = useState('')
   const [overReason, setOverReason] = useState('')
   const [overDraft, setOverDraft] = useState('')
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -170,7 +173,16 @@ export function PhieuNhapScreen({
 
   // Nhảy tới ô phải sửa bằng id: kit `NumInput`/`TextInput` là hàm thường,
   // không forwardRef, mà `id` thì đi qua `...rest` xuống <input>.
+  // Ngày chứng từ — luật chung với server (lib/ngay-chung-tu-nhap), báo NGAY tại ô.
+  const ngay = kiemNgayChungTu({ docDate, today, lyDo: lyDoLui, laLapLai: !!suaLai })
+  const luiXa = !suaLai && ngay.lui > LUI_TU_DO
+
   const nhayToi = () => {
+    if (ngay.muc !== 'ok') {
+      const sel =
+        ngay.muc === 'can_ly_do' ? `#${O_LY_DO_LUI}` : 'input[aria-label="Ngày chứng từ"]'
+      return (document.querySelector(sel) as HTMLInputElement | null)?.focus()
+    }
     if (kiem.ok) return
     if (kiem.reason === 'vuot_dung_sai') return moHopLyDo()
     if (kiem.line == null || kiem.line < 0) return
@@ -182,11 +194,13 @@ export function PhieuNhapScreen({
 
   const blocked = !canEdit
     ? 'Tài khoản này không có quyền ghi sổ kho'
-    : !kiem.ok
-      ? kiem.message
-      : busy
-        ? 'Đang ghi sổ…'
-        : undefined
+    : ngay.muc !== 'ok'
+      ? ngay.message
+      : !kiem.ok
+        ? kiem.message
+        : busy
+          ? 'Đang ghi sổ…'
+          : undefined
   const ghiDuoc = blocked == null
 
   /** Nút Ghi sổ / Ctrl+Enter: thiếu số phiếu NCC thì nhắc một lần trước (không chặn). */
@@ -221,6 +235,8 @@ export function PhieuNhapScreen({
             counterparty: counterparty.trim() || null,
             supplier_doc_no: soNcc.trim() || null,
             doc_date: docDate || null,
+            backdate_reason: luiXa ? lyDoLui.trim() || null : null,
+            fix_of_doc_id: suaLai?.id ?? null,
             note: ghiChuPhieu(suaLai, ghiChu),
             allow_over: dongVuot.length > 0 && coLyDoVuot,
             over_reason: dongVuot.length > 0 && coLyDoVuot ? overReason.trim() : null,
@@ -342,6 +358,10 @@ export function PhieuNhapScreen({
           setCounterparty={setCounterparty}
           ghiChu={ghiChu}
           setGhiChu={setGhiChu}
+          ngay={ngay}
+          laLapLai={!!suaLai}
+          lyDoLui={lyDoLui}
+          setLyDoLui={setLyDoLui}
         />
 
         {suaLai && (
@@ -722,6 +742,7 @@ export function PhieuNhapScreen({
                 note:
                   [
                     ghiChuPhieu(suaLai, ghiChu),
+                    luiXa && lyDoLui.trim() ? ghiChuLuiNgay(ngay.lui, lyDoLui) : null,
                     dongVuot.length > 0 && coLyDoVuot
                       ? `[Nhận vượt] ${overReason.trim()}`
                       : null,

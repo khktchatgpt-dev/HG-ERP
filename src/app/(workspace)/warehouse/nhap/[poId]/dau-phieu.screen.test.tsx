@@ -33,9 +33,12 @@ afterEach(() => {
 type Props = Parameters<typeof PhieuNhapScreen>[0]
 const NCC = 'CÔNG TY TNHH SX & TM TƯỜNG NGUYÊN'
 
-function dung() {
+function dung(them: Partial<Props> = {}) {
   api.mockResolvedValue({ id: 'doc', code: 'PNK-TEST', po_status: 'partial' })
-  const p = structuredClone(fixtures['PO-2026-0085']) as unknown as Props
+  const p = {
+    ...(structuredClone(fixtures['PO-2026-0085']) as unknown as Props),
+    ...them,
+  }
   render(
     <ToastProvider>
       <PhieuNhapScreen {...p} />
@@ -95,5 +98,74 @@ describe('đầu phiếu nhập', () => {
       supplier_doc_no: '7/2026- HG/TN',
       note: 'hàng về 2 xe',
     })
+  })
+})
+
+describe('ngày chứng từ lùi xa (05/10/2026)', () => {
+  // Fixture "hôm nay" = 01/10/2026; 16/09 = lùi 15 ngày.
+  const doiNgay = (vn: string) => {
+    const o = screen.getByRole('textbox', { name: 'Ngày chứng từ' })
+    fireEvent.change(o, { target: { value: vn } })
+    fireEvent.blur(o)
+  }
+
+  it('lùi 15 ngày: hiện ô lý do, chưa có lý do thì Ghi sổ không gửi', () => {
+    dung()
+    doiNgay('16/09/2026')
+    expect(screen.getByText(/Lùi 15 ngày — ghi lý do/)).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeTruthy()
+    fireEvent.click(nutGhiSo())
+    expect(gui()).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('có lý do → gửi doc_date + backdate_reason, xem bản in có dòng lùi ngày', async () => {
+    dung()
+    doiNgay('16/09/2026')
+    const ly = screen.getByRole('textbox', { name: 'Lý do nhập lùi ngày' })
+    go(ly, 'nhập bù hàng về trước khi dùng hệ thống')
+    fireEvent.blur(ly)
+    fireEvent.click(nutGhiSo())
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi sổ không có số' }))
+    await waitFor(() => expect(gui()).not.toBeNull())
+    expect(gui()).toMatchObject({
+      doc_date: '2026-09-16',
+      backdate_reason: 'nhập bù hàng về trước khi dùng hệ thống',
+      fix_of_doc_id: null,
+    })
+  })
+
+  it('lùi quá 60 ngày → báo chặn tại ô', () => {
+    dung()
+    doiNgay('01/07/2026')
+    expect(screen.getAllByText(/chỉ lùi được tối đa 60 ngày/).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeNull()
+  })
+})
+
+describe('lập lại phiếu cũ để sửa (05/10/2026)', () => {
+  it('giữ ngày phiếu cũ dù lùi xa, không hỏi lý do, gửi kèm mã phiếu cũ', async () => {
+    dung({
+      suaLai: {
+        id: 'phieu-cu',
+        code: 'PNK-2026-0023',
+        daoBoi: 'PXK-2026-0004',
+        docDate: '2026-07-01',
+        supplierDocNo: '6/2026- HG/ATP',
+        counterparty: 'Hồng Phát',
+      },
+    })
+    const ngay = screen.getByRole('textbox', { name: 'Ngày chứng từ' })
+    expect(ngay).toHaveProperty('disabled', true)
+    expect(screen.queryByRole('textbox', { name: 'Lý do nhập lùi ngày' })).toBeNull()
+    fireEvent.click(nutGhiSo())
+    await waitFor(() => expect(gui()).not.toBeNull())
+    expect(gui()).toMatchObject({
+      doc_date: '2026-07-01',
+      fix_of_doc_id: 'phieu-cu',
+      backdate_reason: null,
+      supplier_doc_no: '6/2026- HG/ATP',
+    })
+    expect(String(gui()!.note)).toMatch(/^Sửa lại PNK-2026-0023/)
   })
 })

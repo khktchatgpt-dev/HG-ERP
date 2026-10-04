@@ -10,6 +10,8 @@ import { z } from 'zod'
 import { doiUngBatBuoc, laMaLyDo, timMaLyDo } from '@/lib/kho-ma-ly-do'
 import { laMaLyDoXuat, thieuDienGiai } from '@/lib/ly-do-xuat'
 import { PO_TEMPLATES } from '@/lib/po-template'
+import { kiemNgayChungTu } from '@/lib/ngay-chung-tu-nhap'
+import { todayVn } from '@/lib/date-vn'
 
 export const materialCreateSchema = z.object({
   // Bỏ trống → server tự cấp `XX-0000` nối tiếp theo nhóm. Gõ tay mã là một hạng
@@ -343,8 +345,19 @@ export const receiptDocSchema = z
     reason: z.string().trim().max(200).optional().nullable(),
     /** Số phiếu giao / hoá đơn NCC (K3) — chìa khoá đối chiếu 3 chiều. */
     supplier_doc_no: z.string().trim().max(60).optional().nullable(),
-    /** Ngày chứng từ (K3) — lùi tối đa 7 ngày, xa hơn là bất thường. */
+    /**
+     * Ngày chứng từ (K3). Luật lùi ngày ở `lib/ngay-chung-tu-nhap` (05/10/2026):
+     * ≤ 7 ngày tự do · 8–60 ngày bắt `backdate_reason` · phiếu lập lại giữ ngày cũ.
+     */
     doc_date: z.string().date().optional().nullable(),
+    /** Lý do nhập lùi ngày quá 7 ngày — service ghép vào ghi chú phiếu (in lên 01-VT). */
+    backdate_reason: z.string().trim().max(300).optional().nullable(),
+    /**
+     * Phiếu này LẬP LẠI phiếu nhập nào (đã đảo trong hộp Sửa phiếu) — được giữ
+     * ngày của phiếu cũ dù cũ hơn 60 ngày. Service kiểm phiếu cũ có thật, đã đảo,
+     * và `doc_date` đúng bằng ngày phiếu cũ.
+     */
+    fix_of_doc_id: z.string().uuid().optional().nullable(),
     note: z.string().trim().max(2000).optional().nullable(),
     // Nhận VƯỢT số còn thiếu của đơn: mặc định chặn (409 OVER_RECEIPT). NCC giao
     // dư là chuyện có thật — người nhận xác nhận thì gửi lại kèm cờ + lý do
@@ -365,17 +378,20 @@ export const receiptDocSchema = z
     message: 'Một phiếu hoặc nhận từ NCC hoặc hoàn kho từ LSX — không trộn',
     path: ['production_order_id'],
   })
-  .refine(
-    (d) => {
-      if (!d.doc_date) return true
-      const diff = Date.now() - new Date(d.doc_date).getTime()
-      return diff >= -86_400_000 && diff <= 7 * 86_400_000
-    },
-    {
-      message: 'Ngày chứng từ chỉ lùi được tối đa 7 ngày (không ghi ngày tương lai)',
-      path: ['doc_date'],
-    },
-  )
+  .superRefine((d, ctx) => {
+    const kq = kiemNgayChungTu({
+      docDate: d.doc_date,
+      today: todayVn(),
+      lyDo: d.backdate_reason,
+      laLapLai: !!d.fix_of_doc_id,
+    })
+    if (kq.muc !== 'ok')
+      ctx.addIssue({
+        code: 'custom',
+        message: kq.message,
+        path: [kq.muc === 'can_ly_do' ? 'backdate_reason' : 'doc_date'],
+      })
+  })
 
 export const issueDocLineSchema = z.object({
   material_id: z.string().uuid(),

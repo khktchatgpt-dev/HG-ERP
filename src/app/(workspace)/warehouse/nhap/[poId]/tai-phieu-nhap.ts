@@ -103,7 +103,7 @@ export async function taiPhieuNhap(
     props: {
       noi,
       suaLai: suaHop
-        ? { code: cu.code, daoBoi: cuDao.code, docDate: cu.doc_date.slice(0, 10), supplierDocNo: cu.supplier_doc_no ?? '', counterparty: cu.counterparty ?? '' } // prettier-ignore
+        ? { id: cu.id, code: cu.code, daoBoi: cuDao.code, docDate: cu.doc_date.slice(0, 10), supplierDocNo: cu.supplier_doc_no ?? '', counterparty: cu.counterparty ?? '' } // prettier-ignore
         : null,
       po: {
         id: po.id,

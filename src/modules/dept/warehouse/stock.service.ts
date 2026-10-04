@@ -62,6 +62,8 @@ import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { DAU_DIEU_CHINH, dieuChinhCua } from '@/lib/da-ve'
+import { ghiChuLuiNgay, LUI_TU_DO, soNgayLui } from '@/lib/ngay-chung-tu-nhap'
+import { todayVn } from '@/lib/date-vn'
 import { tinhChenhLech } from '@/lib/dieu-chinh-nhap'
 
 type ReceiveInput = {
@@ -643,6 +645,10 @@ export const stockService = {
       supplier_doc_no?: string | null
       /** Ngày chứng từ (K3) — hàng về chiều tối, sáng sau mới nhập máy. */
       doc_date?: string | null
+      /** Lý do nhập lùi quá 7 ngày (schema đã bắt) — ghép vào ghi chú phiếu. */
+      backdate_reason?: string | null
+      /** Phiếu này lập lại phiếu nhập nào (đã đảo) — được giữ ngày cũ. */
+      fix_of_doc_id?: string | null
       note?: string | null
       /** Xác nhận vẫn nhập dù vượt số còn thiếu của đơn (kèm lý do). */
       allow_over?: boolean
@@ -693,6 +699,29 @@ export const stockService = {
         'Một phiếu hoặc nhận từ NCC (theo PO) hoặc hoàn kho từ LSX — không trộn',
       )
     }
+    /*
+     * LẬP LẠI PHIẾU ĐỂ SỬA (05/10/2026): schema miễn giới hạn lùi ngày khi có
+     * `fix_of_doc_id` — cửa đó chỉ mở cho đúng ca phiếu cũ CÓ THẬT, ĐÃ ĐẢO và
+     * phiếu mới giữ ĐÚNG ngày của nó. Không thì ai cũng gắn một id bất kỳ để
+     * ghi lùi ngày tuỳ ý.
+     */
+    if (input.fix_of_doc_id) {
+      const cu = await docsRepo.findById(input.fix_of_doc_id)
+      if (!cu || cu.kind !== 'receipt')
+        throw BadRequest('Phiếu cần lập lại không phải phiếu nhập')
+      if (!(await docsRepo.findReversalOf(cu.id)))
+        throw BadRequest(`Phiếu ${cu.code} chưa đảo — đảo trước rồi mới lập lại`)
+      if (input.doc_date && input.doc_date !== cu.doc_date.slice(0, 10))
+        throw BadRequest(
+          `Phiếu lập lại phải giữ ngày chứng từ của ${cu.code} (${cu.doc_date.slice(0, 10)})`,
+        )
+    }
+    const luiNgay =
+      input.doc_date && !input.fix_of_doc_id ? soNgayLui(input.doc_date, todayVn()) : 0
+    const ghiChuLui =
+      luiNgay > LUI_TU_DO && input.backdate_reason?.trim()
+        ? ghiChuLuiNgay(luiNgay, input.backdate_reason)
+        : null
     /*
      * HOÀN KHO TỪ LSX (K2): xưởng lĩnh 100 dùng 95 trả 5. Guard: LSX phải đã
      * qua cổng ký (kể cả 'completed' — SX xong mới gom trả thừa là chuyện
@@ -838,9 +867,12 @@ export const stockService = {
       l.stock_status ??
       (needQc.size > 0 && needQc.has(groupOf.get(l.material_id) ?? '') ? 'qc' : 'ok')
     // Ghi vết khi cố ý nhận vượt số còn thiếu — để hậu kiểm đối chiếu với NCC.
+    // Lùi ngày (05/10/2026) đứng SAU ghi chú người lập: dấu "Sửa lại PNK-…"
+    // phải ở đầu để `suaLaiTu` đọc được.
+    const noteGoc = [input.note?.trim(), ghiChuLui].filter(Boolean).join(' · ') || null
     const docNote = input.allow_over
-      ? `${input.note ? `${input.note} · ` : ''}[Nhận vượt] ${input.over_reason ?? ''}`.trim()
-      : (input.note ?? null)
+      ? `${noteGoc ? `${noteGoc} · ` : ''}[Nhận vượt] ${input.over_reason ?? ''}`.trim()
+      : noteGoc
     const doc = await docsRepo.insert({
       code,
       kind: 'receipt',

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { isoToVn } from '@/lib/date-vn'
 import type { lichDot } from '@/lib/kho-dot-giao'
 import { GHI_CHU_TOI_DA } from '@/lib/phieu-nhap-dau'
+import { LUI_TOI_DA, LUI_TU_DO, type KetQuaNgay } from '@/lib/ngay-chung-tu-nhap'
 import {
   Btn,
   Code,
@@ -20,9 +21,12 @@ import type { NoiNhan } from './duong'
 
 /** id ô Số phiếu giao NCC — thanh chốt và hộp nhắc nhảy tới đây. */
 export const O_SO_NCC = 'so-phieu-ncc'
+/** id ô Lý do nhập lùi ngày — thanh chốt nhảy tới đây. */
+export const O_LY_DO_LUI = 'ly-do-lui-ngay'
 
 const HINT_WARN = 'text-k-label mt-0.5 block font-semibold text-[var(--warn)]'
 const HINT = 'mt-0.5 block'
+const HINT_STOP = 'text-k-label mt-0.5 block font-semibold text-[var(--stop)]'
 
 /**
  * ĐẦU PHIẾU NHẬP (tách khỏi PhieuNhapScreen 04/10/2026 — file chạm trần 800).
@@ -48,7 +52,17 @@ export function DauPhieu({
   setCounterparty,
   ghiChu,
   setGhiChu,
+  ngay,
+  laLapLai,
+  lyDoLui,
+  setLyDoLui,
 }: {
+  /** Kết quả luật lùi ngày (lib/ngay-chung-tu-nhap) — màn tính, khối chỉ vẽ. */
+  ngay: KetQuaNgay
+  /** Phiếu lập lại để sửa — giữ ngày phiếu cũ, không giới hạn lùi. */
+  laLapLai: boolean
+  lyDoLui: string
+  setLyDoLui: (v: string) => void
   po: { id: string; code: string; supplier_name: string; lsx_codes: string[] }
   dot: { id: string } | null
   lich: ReturnType<typeof lichDot>
@@ -134,7 +148,39 @@ export function DauPhieu({
         </Field>
         <Field label="Đợt giao">{dotLabel}</Field>
         <Field label="Ngày chứng từ">
-          <DateInput value={docDate} onChange={setDocDate} label="Ngày chứng từ" />
+          <DateInput
+            value={docDate}
+            onChange={setDocDate}
+            label="Ngày chứng từ"
+            disabled={busy || laLapLai}
+          />
+          {laLapLai ? (
+            <span className={HINT}>
+              <Hint>giữ ngày của phiếu cũ — phiếu lập lại không đổi ngày</Hint>
+            </span>
+          ) : ngay.muc === 'chan' ? (
+            <span className={HINT_STOP}>{ngay.message}</span>
+          ) : ngay.lui > LUI_TU_DO ? (
+            <>
+              <span className={HINT_WARN}>
+                Lùi {ngay.lui} ngày — ghi lý do (in lên phiếu). Tối đa {LUI_TOI_DA} ngày.
+              </span>
+              <TextInput
+                id={O_LY_DO_LUI}
+                value={lyDoLui}
+                onCommit={setLyDoLui}
+                disabled={busy}
+                maxLength={300}
+                placeholder="vd: nhập bù hàng về trước khi dùng hệ thống"
+                label="Lý do nhập lùi ngày"
+                className={
+                  lyDoLui.trim()
+                    ? 'mt-1'
+                    : 'mt-1 border-[var(--warn-line)] bg-[var(--warn-wash)]'
+                }
+              />
+            </>
+          ) : null}
         </Field>
         <Field label="Số phiếu giao NCC">
           <TextInput
