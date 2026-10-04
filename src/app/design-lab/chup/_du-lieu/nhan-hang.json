@@ -6,6 +6,7 @@
    "code": "PO-2026-0085",
    "supplier_name": "CÔNG TY TNHH SX & TM TƯỜNG NGUYÊN",
    "lsx_code": "02/26-27 - ROSCO",
+   "lsx_codes": ["02/26-27 - ROSCO"],
    "expected_at": "2026-10-01"
   },
   "dot": null,
@@ -166,6 +167,7 @@
    "code": "PO-2026-0077",
    "supplier_name": "Công Ty TNHH Nhôm Đoàn Gia",
    "lsx_code": "10/26-27 - MX",
+   "lsx_codes": ["10/26-27 - MX"],
    "expected_at": null
   },
   "dot": null,

@@ -5,6 +5,7 @@ import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.
 import { WarehouseDocPrintSheet } from '../WarehouseDocPrintSheet'
 import { docsRepo, stocktakeRepo } from '@/modules/dept/warehouse/stock.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
+import { loadNhapCho } from '@/modules/dept/warehouse/nhap-cho.repo'
 import { resolveSignatures } from '@/lib/doc-templates'
 import {
   PrintLetterhead,
@@ -147,13 +148,18 @@ export default async function WarehouseDocPrintPage({
     settingsService.getAll(),
     docTemplatesService.get(doc.kind === 'receipt' ? 'PNK' : 'PXK'),
   ])
+  const nhapCho = doc.kind === 'receipt' ? await loadNhapCho(id, lines) : null
 
   return (
     <WarehouseDocPrintSheet
       head={{
         kind: doc.kind === 'receipt' ? 'receipt' : 'issue',
         code: doc.code,
-        date: new Date(doc.created_at),
+        // NGÀY CHỨNG TỪ, không phải lúc bấm ghi sổ (vá 04/10/2026): phiếu ghi
+        // hộ lùi ngày (PNK-2026-0056 hàng về 20/09, ghi sổ 30/09) từng in ra
+        // ngày ghi sổ. Giờ địa phương 00:00 để ngày không trôi theo múi giờ.
+        date: new Date(`${doc.doc_date.slice(0, 10)}T00:00:00`),
+        nhap_cho: nhapCho,
         supplier_doc_no: doc.supplier_doc_no,
         counterparty: doc.counterparty,
         reason: doc.reason,

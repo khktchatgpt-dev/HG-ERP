@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
 import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
+import { dotCuaPhieu } from '@/lib/phieu-nhap-cho'
 import { api, apiErrorText } from '@/lib/api'
 import {
   WarehouseDocPrintSheet,
@@ -69,7 +70,6 @@ const fmt = (n: number) => n.toLocaleString('vi-VN')
 /** Số kiểu VN: "1.390" = 1390 · "108,40" = 108,4. */
 const docSo = (v: string) => Number(v.replace(/\./g, '').replace(',', '.')) || 0
 
-
 /**
  * PHIẾU NHẬP THEO ĐƠN — màn chứng từ + lưới (Bước 1 Kho). Bản thiết kế:
  * https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf (artboard 2 + 2b).
@@ -105,6 +105,8 @@ export function PhieuNhapScreen({
     code: string
     supplier_name: string
     lsx_code: string | null
+    /** Lệnh chính + lệnh gom (0125) — đơn nhiều lệnh in đủ. */
+    lsx_codes: string[]
     expected_at: string | null
   }
   dot: { id: string; seq: number; total: number; expected_date: string } | null
@@ -362,8 +364,8 @@ export function PhieuNhapScreen({
             </Field>
             <Field label="Nhà cung cấp">{po.supplier_name}</Field>
             <Field label="Lệnh SX">
-              {po.lsx_code ? (
-                <span className="num">{po.lsx_code}</span>
+              {po.lsx_codes.length > 0 ? (
+                <span className="num">{po.lsx_codes.join(' · ')}</span>
               ) : (
                 <span className="text-[var(--ink-3)]">không theo lệnh</span>
               )}
@@ -400,7 +402,8 @@ export function PhieuNhapScreen({
 
         {suaLai && (
           <NoticeBar tone="neutral" tag="Sửa phiếu">
-            Lập lại <b>{suaLai.code}</b> (đã đảo bởi {suaLai.daoBoi}) — số đã điền sẵn theo phiếu cũ, sửa chỗ sai rồi Ghi sổ.
+            Lập lại <b>{suaLai.code}</b> (đã đảo bởi {suaLai.daoBoi}) — số đã điền sẵn
+            theo phiếu cũ, sửa chỗ sai rồi Ghi sổ.
           </NoticeBar>
         )}
 
@@ -745,10 +748,16 @@ export function PhieuNhapScreen({
               head={{
                 kind: 'receipt',
                 code: null,
-                date: new Date(docDate),
+                date: new Date(`${docDate}T00:00:00`),
                 supplier_doc_no: supplierDocNo.trim() || null,
                 counterparty: counterparty.trim() || null,
                 creator_name: nguoiNhan,
+                nhap_cho: {
+                  ncc: [po.supplier_name],
+                  don: [po.code],
+                  lenh: po.lsx_codes,
+                  dot: dotCuaPhieu(dot, dots.length),
+                },
               }}
               lines={rows
                 .filter((r) => r.qty > 0)
