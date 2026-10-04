@@ -7,6 +7,7 @@ import {
   type PrintCompany,
 } from '@/app/print/PrintSheet'
 import { resolveSignatures, type DocTemplate } from '@/lib/doc-templates'
+import { nhapChoRefs, type NhapCho } from '@/lib/phieu-nhap-cho'
 
 /**
  * PHIẾU NHẬP (01-VT) / PHIẾU XUẤT (02-VT) — phần thân, THUẦN HIỂN THỊ.
@@ -43,6 +44,11 @@ export type WarehousePrintHeader = {
   reason?: string | null
   note?: string | null
   creator_name?: string | null
+  /**
+   * Phiếu nhập: nhập cho NCC / đơn mua / lệnh SX / đợt giao nào (04/10/2026).
+   * Trước đó bản in chỉ có người lập + vật tư — đọc phiếu không biết hàng về cho lệnh nào.
+   */
+  nhap_cho?: NhapCho | null
 }
 
 export function WarehouseDocPrintSheet({
@@ -95,7 +101,12 @@ export function WarehouseDocPrintSheet({
       </div>
 
       <PrintMeta
+        refsBoxed
+        refs={isReceipt ? nhapChoRefs(head.nhap_cho) : undefined}
         rows={[
+          ...(isReceipt && head.nhap_cho && head.nhap_cho.ncc.length > 0
+            ? ([['— Nhà cung cấp:', head.nhap_cho.ncc.join('; ')]] as [string, string][])
+            : []),
           ...(isReceipt
             ? ([
                 ['— Số phiếu giao / hoá đơn NCC:', head.supplier_doc_no || '……………………………'],

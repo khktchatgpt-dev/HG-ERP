@@ -10,9 +10,13 @@ export type DaVeRow = {
   doc_date: string
   supplier_doc_no: string | null
   nguoi_nhan: string | null
+  /** Người LẬP phiếu (`created_by`) — cho lọc "Phiếu tôi lập" (04/10/2026). Khác người phụ trách đơn. */
+  nguoi_lap_id: string | null
   po_id: string
   po_code: string
   lsx_code: string | null
+  /** Lệnh GOM thêm của đơn (0125) — ngoài lệnh chính. */
+  lsx_them: string[]
   supplier_name: string
   /** Người phụ trách đơn (chưa giao ai thì người lập) — cho phạm vi "của tôi". */
   owner_id: string | null
@@ -47,7 +51,7 @@ const one = <T>(v: T | T[] | null | undefined): T | null =>
  * Gom theo LÔ (`in(...)`), không hỏi từng phiếu. Phiếu nhập ngoài đơn / hoàn
  * kho không có dòng đơn mua nên tự rơi khỏi tập (không phải việc của Cung ứng).
  */
-export async function loadDaVe(since: string): Promise<{
+export async function loadDaVe(since: string | null): Promise<{
   rows: DaVeRow[]
   truncatedAt: number | null
 }> {
@@ -55,11 +59,12 @@ export async function loadDaVe(since: string): Promise<{
   const { data: docs, error } = await db()
     .from('warehouse_docs')
     .select(
-      'id, code, doc_date, supplier_doc_no, counterparty, note, actor:users!warehouse_docs_created_by_fkey(name)',
+      'id, code, doc_date, supplier_doc_no, counterparty, note, created_by, actor:users!warehouse_docs_created_by_fkey(name)',
     )
     .eq('kind', 'receipt')
     .eq('status', 'posted')
-    .gte('doc_date', since)
+    // since = null: "Tất cả" (04/10/2026) — trần LIMIT vẫn canh, màn báo Cắt đuôi.
+    .gte('doc_date', since ?? '1900-01-01')
     .order('doc_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(LIMIT)
@@ -71,6 +76,7 @@ export async function loadDaVe(since: string): Promise<{
     supplier_doc_no: string | null
     note: string | null
     counterparty: string | null
+    created_by: string | null
     actor: { name: string | null } | { name: string | null }[] | null
   }[]
   if (docRows.length === 0) return { rows: [], truncatedAt: null }
@@ -194,7 +200,7 @@ export async function loadDaVe(since: string): Promise<{
   )
   const poIds = [...new Set([...poLines.values()].map((l) => l.po_id))]
 
-  const [{ data: pos }, { data: status }] = (
+  const [{ data: pos }, { data: status }, { data: extra }] = (
     await Promise.all([
       db()
         .from('supply_purchase_orders')
@@ -207,6 +213,10 @@ export async function loadDaVe(since: string): Promise<{
       db()
         .from('supply_po_line_status')
         .select('id, po_id, qty_ordered, qty_received, qty_open, closed_short_at')
+        .in('po_id', poIds),
+      db()
+        .from('supply_po_extra_lsx')
+        .select('po_id, lsx:production_orders(code)')
         .in('po_id', poIds),
     ])
   ).map(ok)
@@ -241,6 +251,14 @@ export async function loadDaVe(since: string): Promise<{
     qty_open: unknown
     closed_short_at: string | null
   }[]
+  const lsxThem = new Map<string, string[]>()
+  for (const e of (extra ?? []) as {
+    po_id: string
+    lsx: { code: string } | { code: string }[] | null
+  }[]) {
+    const c = one(e.lsx)?.code
+    if (c) lsxThem.set(e.po_id, [...(lsxThem.get(e.po_id) ?? []), c])
+  }
   const openByPo = new Map<string, number>()
   const overLine = new Set<string>()
   for (const s of statusRows) {
@@ -292,9 +310,11 @@ export async function loadDaVe(since: string): Promise<{
       doc_date: d.doc_date,
       supplier_doc_no: d.supplier_doc_no,
       nguoi_nhan: one(d.actor)?.name ?? null,
+      nguoi_lap_id: d.created_by,
       po_id: po.id,
       po_code: po.code,
       lsx_code: one(po.lsx)?.code ?? null,
+      lsx_them: lsxThem.get(po.id) ?? [],
       supplier_name: one(po.supplier)?.name ?? '',
       owner_id: ownerId,
       owner_name: ownerId ? (userName.get(ownerId) ?? null) : null,

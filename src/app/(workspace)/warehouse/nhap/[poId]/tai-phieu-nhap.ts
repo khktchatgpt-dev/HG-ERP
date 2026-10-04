@@ -10,6 +10,7 @@ import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { todayVn } from '@/lib/date-vn'
 import { dungLuoi } from '@/lib/kho-phieu-nhap'
+import { gopMa } from '@/lib/phieu-nhap-cho'
 import type { NoiNhan, PhieuNhapScreen } from './PhieuNhapScreen'
 
 type Props = ComponentProps<typeof PhieuNhapScreen>
@@ -38,7 +39,7 @@ export async function taiPhieuNhap(
   | { kind: 'chan'; po: { id: string; code: string }; reason: string; chuaGui: boolean }
   | { kind: 'ok'; props: Props }
 > {
-  const [{ po, lines, status_lines }, shipments, company, tpl, canEdit, cu, cuDong, cuDao] =
+  const [{ po, lines, status_lines, extra_lsx }, shipments, company, tpl, canEdit, cu, cuDong, cuDao] =
     await Promise.all([
       posService.detail(user, poId),
       poShipmentsRepo.listByPo(poId),
@@ -102,13 +103,15 @@ export async function taiPhieuNhap(
     props: {
       noi,
       suaLai: suaHop
-        ? { code: cu.code, daoBoi: cuDao.code, docDate: cu.doc_date.slice(0, 10), supplierDocNo: cu.supplier_doc_no ?? '', counterparty: cu.counterparty ?? '' } // prettier-ignore
+        ? { id: cu.id, code: cu.code, daoBoi: cuDao.code, docDate: cu.doc_date.slice(0, 10), supplierDocNo: cu.supplier_doc_no ?? '', counterparty: cu.counterparty ?? '' } // prettier-ignore
         : null,
       po: {
         id: po.id,
         code: po.code,
         supplier_name: po.supplier_name,
         lsx_code: po.lsx_code,
+        // Đơn gom nhiều lệnh (0125): đủ mọi lệnh — đầu phiếu + bản in (04/10/2026).
+        lsx_codes: gopMa([po.lsx_code, ...extra_lsx.map((x) => x.code)]),
         expected_at: po.expected_at,
       },
       dot: dot

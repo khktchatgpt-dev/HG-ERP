@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { todayVn } from '@/lib/date-vn'
 import {
   materialCreateSchema,
   materialUpdateSchema,
@@ -262,5 +263,39 @@ describe('issueDocSchema — BR-09 ở tầng schema', () => {
       lines: [{ material_id: UUID, qty: 2 }],
     })
     expect(p.kind).toBe('daily')
+  })
+})
+
+describe('receiptDocSchema — lùi ngày chứng từ (05/10/2026)', () => {
+  // Ngày tương đối theo lịch VN của hôm nay — test không gãy theo ngày chạy.
+  const lui = (n: number) => {
+    const t = todayVn()
+    return new Date(Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8, 10) - n))
+      .toISOString()
+      .slice(0, 10)
+  }
+  const phieu = (o: Record<string, unknown>) => ({
+    po_id: UUID,
+    lines: [{ material_id: UUID, qty: 1, po_line_id: UUID }],
+    ...o,
+  })
+  const loi = (o: Record<string, unknown>) =>
+    receiptDocSchema.safeParse(phieu(o)).error?.issues.map((i) => i.path.join('.'))
+
+  it('lùi ≤ 7 ngày: không cần lý do', () => {
+    expect(loi({ doc_date: lui(7) })).toBeUndefined()
+  })
+  it('lùi 8–60 ngày: thiếu lý do → lỗi ở backdate_reason; có lý do → qua', () => {
+    expect(loi({ doc_date: lui(15) })).toEqual(['backdate_reason'])
+    expect(
+      loi({ doc_date: lui(60), backdate_reason: 'nhập bù hàng về trước' }),
+    ).toBeUndefined()
+  })
+  it('lùi > 60 ngày hoặc tương lai → lỗi ở doc_date', () => {
+    expect(loi({ doc_date: lui(61), backdate_reason: 'nhập bù' })).toEqual(['doc_date'])
+    expect(loi({ doc_date: lui(-1) })).toEqual(['doc_date'])
+  })
+  it('phiếu lập lại (fix_of_doc_id) giữ ngày cũ — không giới hạn ở schema, service kiểm', () => {
+    expect(loi({ doc_date: lui(120), fix_of_doc_id: UUID })).toBeUndefined()
   })
 })

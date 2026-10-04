@@ -43,7 +43,12 @@ import { PhanTrang, useSucChua } from '../trang'
 import { PickVua } from '../DangVeScreen'
 
 const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
-const KHOANG = ['7', '14', '30'] as const
+const KHOANG = ['7', '14', '30', 'tat'] as const
+type Khoang = (typeof KHOANG)[number]
+const tenKhoang = (k: Khoang) => (k === 'tat' ? 'Mọi ngày' : `${k} ngày qua`)
+/** Ngày bắt đầu của khoảng; "tat" = không chặn dưới (04/10/2026, bản vẽ J2). */
+const tuNgay = (today: string, k: Khoang) =>
+  k === 'tat' ? '0000-00-00' : new Date(Date.parse(today + 'T00:00:00Z') - Number(k) * 86_400_000).toISOString().slice(0, 10) // prettier-ignore
 const ngan = (name: string | null) => (name ? name.split(' ').slice(-2).join(' ') : '—')
 
 /**
@@ -89,7 +94,9 @@ export function DaVeScreen({
   }
   const hop = (poId: string) => `/mua-hang/theo-doi/da-ve?don=${poId}`
   const [q, setQ] = useState('')
-  const [khoang, setKhoang] = useState<(typeof KHOANG)[number]>('14')
+  const [khoang, setKhoang] = useState<Khoang>('14')
+  /** "Phiếu tôi lập" (04/10/2026, bản vẽ J2) — theo NGƯỜI LẬP, khác "Đơn tôi phụ trách". */
+  const [toiLap, setToiLap] = useState(false)
   const [lsx, setLsx] = useState<string>(MOI)
   const [ncc, setNcc] = useState('')
   const [nguoiId, setNguoiId] = useState<string | null>(null)
@@ -105,18 +112,17 @@ export function DaVeScreen({
       setTrang(0)
     }
 
-  const tu = useMemo(
-    () => new Date(Date.parse(today + 'T00:00:00Z') - Number(khoang) * 86_400_000).toISOString().slice(0, 10), // prettier-ignore
-    [today, khoang],
-  )
+  const tu = useMemo(() => tuNgay(today, khoang), [today, khoang])
   const inScope = useMemo(
     () =>
       nguoiId
         ? allRows.filter((r) => r.owner_id === nguoiId)
-        : scope === 'toi'
-          ? allRows.filter((r) => r.owner_id === meId)
-          : allRows,
-    [allRows, scope, meId, nguoiId],
+        : toiLap
+          ? allRows.filter((r) => r.nguoi_lap_id === meId)
+          : scope === 'toi'
+            ? allRows.filter((r) => r.owner_id === meId)
+            : allRows,
+    [allRows, scope, meId, nguoiId, toiLap],
   )
   const inRange = useMemo(() => inScope.filter((r) => r.doc_date.slice(0, 10) >= tu), [inScope, tu]) // prettier-ignore
   const khop = (r: DaVeRow, bo?: 'lsx' | 'ncc') => {
@@ -130,10 +136,14 @@ export function DaVeScreen({
   }
   const kept = inRange.filter((r) => khop(r))
   const demCanXl = kept.filter((r) => canXuLy(r.phieu)).length
-  const demKhoang = (d: string) => {
-    const t = new Date(Date.parse(today + 'T00:00:00Z') - Number(d) * 86_400_000).toISOString().slice(0, 10) // prettier-ignore
+  const demKhoang = (d: Khoang) => {
+    const t = tuNgay(today, d)
     return inScope.filter((r) => r.doc_date.slice(0, 10) >= t).length
   }
+  const chuaSoNcc = kept.filter(
+    (r) => !r.phieu.reversed && !r.supplier_doc_no?.trim(),
+  ).length
+  const soToiLap = allRows.filter((r) => r.nguoi_lap_id === meId).length
   const lenh = demTheo(
     inRange.filter((r) => khop(r, 'lsx')),
     (r) => r.lsx_code,
@@ -184,7 +194,7 @@ export function DaVeScreen({
           <span className="num">{ngay(r.doc_date)}</span>
         </Cell>
         <Cell title={r.nguoi_nhan ? `Người nhận: ${r.nguoi_nhan}` : undefined}>
-          <Code as="a" href={`/print/warehouse/${r.doc_id}`}>
+          <Code as="a" href={`/mua-hang/theo-doi/da-ve/${r.doc_id}`}>
             {r.code}
           </Code>
           {(r.sua_lai_tu || r.thay_boi) && (
@@ -208,11 +218,26 @@ export function DaVeScreen({
         </Cell>
         {hienLenh && (
           <Cell muted>
-            <span className="num">{r.lsx_code ?? '— ngoài lệnh'}</span>
+            <span
+              className="num"
+              title={
+                r.lsx_them?.length ? [r.lsx_code, ...r.lsx_them].join(' · ') : undefined
+              }
+            >
+              {r.lsx_code ?? '— ngoài lệnh'}
+              {r.lsx_them?.length ? <b> +{r.lsx_them.length}</b> : null}
+            </span>
           </Cell>
         )}
         <Cell grow title={r.supplier_name}>
           <span className="truncate">{tenNccGon(r.supplier_name)}</span>
+        </Cell>
+        <Cell muted={!r.supplier_doc_no?.trim()}>
+          {r.supplier_doc_no?.trim() ? (
+            <span className="num">{r.supplier_doc_no}</span>
+          ) : (
+            '— chưa ghi'
+          )}
         </Cell>
         <Cell muted title={r.owner_name ?? undefined}>
           {ngan(r.owner_name)}
@@ -262,7 +287,7 @@ export function DaVeScreen({
       </Row>
     )
   }
-  const soCot = hienLenh ? 9 : 8
+  const soCot = hienLenh ? 10 : 9
 
   return (
     <ScreenFrame>
@@ -277,7 +302,8 @@ export function DaVeScreen({
             value: String(demCanXl),
             tone: demCanXl > 0 ? 'stop' : undefined,
           },
-          { label: `Phiếu nhập ${khoang} ngày`, value: dangLoc ? `${kept.length}/${inRange.length}` : String(inRange.length) }, // prettier-ignore
+          { label: `Phiếu nhập · ${tenKhoang(khoang).toLowerCase()}`, value: dangLoc ? `${kept.length}/${inRange.length}` : String(inRange.length) }, // prettier-ignore
+          { label: 'Chưa ghi số phiếu NCC', value: String(chuaSoNcc) },
         ]}
       />
 
@@ -319,21 +345,23 @@ export function DaVeScreen({
           options={nccs.map(([name, n]) => ({ value: name, label: tenNccGon(name), hint: `${n} phiếu` }))} // prettier-ignore
         />
         <PickVua
-          label="Người phụ trách"
-          value={nguoiId ? `u:${nguoiId}` : scope}
+          label="Người"
+          value={nguoiId ? `u:${nguoiId}` : toiLap ? 'lap' : scope}
           onChange={(v) => {
+            setToiLap(v === 'lap')
             if (v.startsWith('u:')) setNguoiId(v.slice(2))
             else {
               setNguoiId(null)
-              setScope(v as SupplyScope)
+              if (v !== 'lap') setScope(v as SupplyScope)
             }
             setTrang(0)
           }}
           options={[
             {
               value: 'toi',
-              label: `Của tôi (${allRows.filter((r) => r.owner_id === meId).length})`,
+              label: `Đơn tôi phụ trách (${allRows.filter((r) => r.owner_id === meId).length})`,
             },
+            { value: 'lap', label: `Phiếu tôi lập (${soToiLap})` },
             { value: 'phong', label: `Cả phòng (${allRows.length})` },
             ...nguoi.map(([k, n]) => ({ value: `u:${k.split('|')[0]}`, label: `${k.split('|')[1].split(' ').slice(-2).join(' ')} (${n})` })), // prettier-ignore
           ]}
@@ -341,10 +369,10 @@ export function DaVeScreen({
         <PickVua
           label="Ngày nhận"
           value={khoang}
-          onChange={doi((v: string) => setKhoang(v as (typeof KHOANG)[number]))}
+          onChange={doi((v: string) => setKhoang(v as Khoang))}
           options={KHOANG.map((d) => ({
             value: d,
-            label: `${d} ngày qua (${demKhoang(d)})`,
+            label: `${tenKhoang(d)} (${demKhoang(d)})`,
           }))}
         />
         <span className="ml-auto">
@@ -360,25 +388,49 @@ export function DaVeScreen({
       </FilterBar>
 
       <div ref={vung} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {kept.length === 0 ? (
+        {kept.length === 0 && toiLap && soToiLap === 0 ? (
+          <Empty
+            headline="Bạn chưa lập phiếu nhập nào"
+            reason={`Phiếu nhập bạn ghi sổ khi nhận hàng sẽ hiện ở đây — kể cả phiếu đã đảo. Cả phòng hiện có ${allRows.length} phiếu nhập theo đơn mua.`}
+            next={
+              <span className="flex gap-2">
+                <Btn
+                  primary
+                  onClick={() => {
+                    setToiLap(false)
+                    setScope('phong')
+                    setTrang(0)
+                  }}
+                >
+                  {`Xem cả phòng · ${allRows.length} phiếu`}
+                </Btn>
+                <Btn icon="nhanHang" href="/mua-hang/theo-doi">
+                  Sang Đang về để nhận hàng
+                </Btn>
+              </span>
+            }
+          />
+        ) : kept.length === 0 ? (
           <Empty
             headline={
               inRange.length === 0
-                ? `Chưa có hàng về trong ${khoang} ngày`
+                ? `Chưa có hàng về · ${tenKhoang(khoang).toLowerCase()}`
                 : 'Không có phiếu nào khớp'
             }
             reason={
               inRange.length === 0
-                ? scope === 'toi' && !nguoiId
-                  ? `Đơn bạn phụ trách chưa có phiếu nhập nào trong ${khoang} ngày qua.`
-                  : `Chưa có phiếu nhập theo đơn mua nào trong ${khoang} ngày qua.`
+                ? toiLap
+                  ? `Bạn chưa lập phiếu nhập nào · ${tenKhoang(khoang).toLowerCase()}.`
+                  : scope === 'toi' && !nguoiId
+                    ? `Đơn bạn phụ trách chưa có phiếu nhập nào · ${tenKhoang(khoang).toLowerCase()}.`
+                    : `Chưa có phiếu nhập theo đơn mua nào · ${tenKhoang(khoang).toLowerCase()}.`
                 : `Trong ${inRange.length} phiếu, không phiếu nào khớp bộ lọc hiện tại${q.trim() ? ` và từ khoá “${q.trim()}”` : ''}.`
             }
             next={
               inRange.length === 0 ? (
-                khoang !== '30' ? (
-                  <Btn primary icon="lich" onClick={() => setKhoang('30')}>
-                    Xem 30 ngày
+                khoang !== 'tat' ? (
+                  <Btn primary icon="lich" onClick={() => setKhoang('tat')}>
+                    Xem mọi ngày
                   </Btn>
                 ) : (
                   <Btn primary icon="nhanHang" href="/mua-hang/theo-doi">
@@ -400,6 +452,7 @@ export function DaVeScreen({
               <th>Đơn</th>
               {hienLenh && <th>Lệnh SX</th>}
               <th>Nhà cung cấp</th>
+              <th>Số phiếu NCC</th>
               <th>Phụ trách</th>
               <th>Kết quả nhận</th>
               <th>Việc phải làm</th>
@@ -426,7 +479,7 @@ export function DaVeScreen({
       <StatusBar
         left={[
           'Một dòng = một phiếu nhập theo đơn mua (không gồm nhập ngoài đơn, hoàn kho)',
-          'Rê chuột vào số phiếu để xem người nhận',
+          'Bấm số phiếu để xem chi tiết và sửa',
         ]}
         right={
           <PhanTrang trang={tr} soTrang={trangs.length} onTrang={setTrang} tu={kh.tu} den={kh.den} tong={kept.length} donVi="phiếu" /> // prettier-ignore

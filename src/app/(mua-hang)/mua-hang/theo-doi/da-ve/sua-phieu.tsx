@@ -22,7 +22,7 @@ const O_NHAP =
   'h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] text-k-sm bg-[var(--surface-card)] px-2 placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)]'
 const NHAN = 'text-k-sm flex flex-col gap-1'
 const NHAN_CHU = 'font-semibold text-[var(--ink-2)]'
-type Kieu = 'thong-tin' | 'so-luong' | 'chenh-lech'
+export type Kieu = 'thong-tin' | 'so-luong' | 'chenh-lech'
 
 /**
  * SỬA PHIẾU NHẬP ĐÃ GHI SỔ (02/10/2026, chủ dự án duyệt A + B). Hai cách, chọn ở
@@ -43,10 +43,19 @@ type Kieu = 'thong-tin' | 'so-luong' | 'chenh-lech'
  * Server là người quyết (hàng đã dùng, hàng QC loại, phiếu đã đảo…) — câu lỗi
  * hiện ngay trong hộp.
  */
-export function SuaPhieuSheet({ row, onClose }: { row: DaVeRow; onClose: () => void }) {
+export function SuaPhieuSheet({
+  row,
+  onClose,
+  kieuBanDau = 'thong-tin',
+}: {
+  row: DaVeRow
+  onClose: () => void
+  /** Mở thẳng cách sửa nào (trang chi tiết phiếu có ba nút riêng — 04/10/2026). */
+  kieuBanDau?: Kieu
+}) {
   const router = useRouter()
   const toast = useToast()
-  const [kieu, setKieu] = useState<Kieu>('thong-tin')
+  const [kieu, setKieu] = useState<Kieu>(kieuBanDau)
   const [soNcc, setSoNcc] = useState(row.supplier_doc_no ?? '')
   const [nguoiGiao, setNguoiGiao] = useState(row.counterparty ?? '')
   const [ghiChu, setGhiChu] = useState(row.ghi_chu ?? '')
