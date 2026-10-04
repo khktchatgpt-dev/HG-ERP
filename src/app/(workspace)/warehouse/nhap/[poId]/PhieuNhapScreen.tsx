@@ -6,7 +6,12 @@ import { isoToVn } from '@/lib/date-vn'
 import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { dotCuaPhieu } from '@/lib/phieu-nhap-cho'
 import { canNhacSoNcc, ghiChuPhieu, nguoiGiaoBanDau } from '@/lib/phieu-nhap-dau'
-import { ghiChuLuiNgay, kiemNgayChungTu, LUI_TU_DO } from '@/lib/ngay-chung-tu-nhap'
+import {
+  ghiChuLuiNgay,
+  giuNgayPhieuCu,
+  kiemNgayChungTu,
+  LUI_TU_DO,
+} from '@/lib/ngay-chung-tu-nhap'
 import { api, apiErrorText } from '@/lib/api'
 import {
   WarehouseDocPrintSheet,
@@ -174,8 +179,9 @@ export function PhieuNhapScreen({
   // Nhảy tới ô phải sửa bằng id: kit `NumInput`/`TextInput` là hàm thường,
   // không forwardRef, mà `id` thì đi qua `...rest` xuống <input>.
   // Ngày chứng từ — luật chung với server (lib/ngay-chung-tu-nhap), báo NGAY tại ô.
-  const ngay = kiemNgayChungTu({ docDate, today, lyDo: lyDoLui, laLapLai: !!suaLai })
-  const luiXa = !suaLai && ngay.lui > LUI_TU_DO
+  const ngay = kiemNgayChungTu({ docDate, today, lyDo: lyDoLui, ngayPhieuCu: suaLai?.docDate }) // prettier-ignore
+  const giuNgayCu = giuNgayPhieuCu(docDate, suaLai?.docDate)
+  const luiXa = !giuNgayCu && ngay.lui > LUI_TU_DO
 
   const nhayToi = () => {
     if (ngay.muc !== 'ok') {
@@ -359,7 +365,7 @@ export function PhieuNhapScreen({
           ghiChu={ghiChu}
           setGhiChu={setGhiChu}
           ngay={ngay}
-          laLapLai={!!suaLai}
+          giuNgayCu={giuNgayCu}
           lyDoLui={lyDoLui}
           setLyDoLui={setLyDoLui}
         />

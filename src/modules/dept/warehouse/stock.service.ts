@@ -62,7 +62,13 @@ import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { DAU_DIEU_CHINH, dieuChinhCua } from '@/lib/da-ve'
-import { ghiChuLuiNgay, LUI_TU_DO, soNgayLui } from '@/lib/ngay-chung-tu-nhap'
+import {
+  ghiChuLuiNgay,
+  giuNgayPhieuCu,
+  kiemNgayChungTu,
+  LUI_TU_DO,
+  soNgayLui,
+} from '@/lib/ngay-chung-tu-nhap'
 import { todayVn } from '@/lib/date-vn'
 import { tinhChenhLech } from '@/lib/dieu-chinh-nhap'
 
@@ -701,23 +707,31 @@ export const stockService = {
     }
     /*
      * LẬP LẠI PHIẾU ĐỂ SỬA (05/10/2026): schema miễn giới hạn lùi ngày khi có
-     * `fix_of_doc_id` — cửa đó chỉ mở cho đúng ca phiếu cũ CÓ THẬT, ĐÃ ĐẢO và
-     * phiếu mới giữ ĐÚNG ngày của nó. Không thì ai cũng gắn một id bất kỳ để
+     * `fix_of_doc_id` — cửa đó chỉ mở cho đúng ca phiếu cũ CÓ THẬT, ĐÃ ĐẢO;
+     * giữ ĐÚNG ngày của nó thì miễn giới hạn, đổi ngày thì luật thường. Không thì ai cũng gắn một id bất kỳ để
      * ghi lùi ngày tuỳ ý.
      */
+    let ngayPhieuCu: string | null = null
     if (input.fix_of_doc_id) {
       const cu = await docsRepo.findById(input.fix_of_doc_id)
       if (!cu || cu.kind !== 'receipt')
         throw BadRequest('Phiếu cần lập lại không phải phiếu nhập')
       if (!(await docsRepo.findReversalOf(cu.id)))
         throw BadRequest(`Phiếu ${cu.code} chưa đảo — đảo trước rồi mới lập lại`)
-      if (input.doc_date && input.doc_date !== cu.doc_date.slice(0, 10))
-        throw BadRequest(
-          `Phiếu lập lại phải giữ ngày chứng từ của ${cu.code} (${cu.doc_date.slice(0, 10)})`,
-        )
+      ngayPhieuCu = cu.doc_date
+      // Giữ ngày cũ → miễn giới hạn; đổi ngày (sửa ngày sai) → luật thường.
+      const kq = kiemNgayChungTu({
+        docDate: input.doc_date,
+        today: todayVn(),
+        lyDo: input.backdate_reason,
+        ngayPhieuCu: cu.doc_date,
+      })
+      if (kq.muc !== 'ok') throw BadRequest(kq.message)
     }
     const luiNgay =
-      input.doc_date && !input.fix_of_doc_id ? soNgayLui(input.doc_date, todayVn()) : 0
+      input.doc_date && !giuNgayPhieuCu(input.doc_date, ngayPhieuCu)
+        ? soNgayLui(input.doc_date, todayVn())
+        : 0
     const ghiChuLui =
       luiNgay > LUI_TU_DO && input.backdate_reason?.trim()
         ? ghiChuLuiNgay(luiNgay, input.backdate_reason)

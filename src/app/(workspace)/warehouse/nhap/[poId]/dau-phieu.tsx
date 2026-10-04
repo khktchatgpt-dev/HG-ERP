@@ -53,14 +53,14 @@ export function DauPhieu({
   ghiChu,
   setGhiChu,
   ngay,
-  laLapLai,
+  giuNgayCu,
   lyDoLui,
   setLyDoLui,
 }: {
   /** Kết quả luật lùi ngày (lib/ngay-chung-tu-nhap) — màn tính, khối chỉ vẽ. */
   ngay: KetQuaNgay
-  /** Phiếu lập lại để sửa — giữ ngày phiếu cũ, không giới hạn lùi. */
-  laLapLai: boolean
+  /** Phiếu lập lại đang GIỮ ngày phiếu cũ — miễn giới hạn lùi. Đổi ngày thì luật thường. */
+  giuNgayCu: boolean
   lyDoLui: string
   setLyDoLui: (v: string) => void
   po: { id: string; code: string; supplier_name: string; lsx_codes: string[] }
@@ -152,11 +152,11 @@ export function DauPhieu({
             value={docDate}
             onChange={setDocDate}
             label="Ngày chứng từ"
-            disabled={busy || laLapLai}
+            disabled={busy}
           />
-          {laLapLai ? (
+          {giuNgayCu ? (
             <span className={HINT}>
-              <Hint>giữ ngày của phiếu cũ — phiếu lập lại không đổi ngày</Hint>
+              <Hint>đang giữ ngày của phiếu cũ — đổi nếu ngày cũ sai</Hint>
             </span>
           ) : ngay.muc === 'chan' ? (
             <span className={HINT_STOP}>{ngay.message}</span>
