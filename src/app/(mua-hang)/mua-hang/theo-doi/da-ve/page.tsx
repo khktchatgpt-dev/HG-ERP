@@ -9,8 +9,6 @@ import { taiGiaoNhan } from '../giao-nhan/tai-giao-nhan'
 export const metadata = { title: 'Mua hàng · Theo dõi đơn hàng · Đã về' }
 export const dynamic = 'force-dynamic'
 
-/** Khoảng nạp tối đa — màn lọc 7 / 14 / 30 ngày trong tập này. */
-const NGAY_TOI_DA = 30
 
 /**
  * THEO DÕI ĐƠN HÀNG › ĐÃ VỀ (01/10/2026, bản vẽ G3 canvas "Cung ứng · Hàng về",
@@ -29,11 +27,10 @@ export default async function Page({
   const sp = await searchParams
   const user = await authService.requirePageUser()
   const today = todayVn()
-  const since = new Date(Date.parse(today + 'T00:00:00Z') - NGAY_TOI_DA * 86_400_000)
-    .toISOString()
-    .slice(0, 10)
   const [{ rows, truncatedAt }, canWrite, canApprove, giaoNhan] = await Promise.all([
-    loadDaVe(since),
+    // Nạp MỌI phiếu (04/10/2026, bản vẽ J2 — lọc "Tất cả" + "Phiếu tôi lập"): màn
+    // lọc 7 / 14 / 30 ngày / tất cả trong tập này; trần 500 phiếu báo Cắt đuôi.
+    loadDaVe(null),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
