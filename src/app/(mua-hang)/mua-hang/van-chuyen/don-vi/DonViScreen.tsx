@@ -33,6 +33,7 @@ import { api, apiErrorText } from '@/lib/api'
 import { CARRIER_KIND_LABEL, type CarrierKind } from '@/lib/po-cost'
 import type { Carrier } from '@/modules/dept/supply/po-costs.repo'
 import { dmy } from '../van-chuyen.shared'
+import { searchMatcher } from '@/lib/search-text'
 
 export type CarrierRow = Carrier & {
   trips_30d: number
@@ -201,16 +202,9 @@ export function DonViScreen({
 
   const kept = useMemo(() => {
     const test = CHIPS.find((c) => c.id === chip)?.test ?? (() => true)
-    const needle = q.trim().toLowerCase()
+    const tim = searchMatcher(q)
     return all
-      .filter(
-        (r) =>
-          test(r) &&
-          (!needle ||
-            [r.name, r.phone, r.contact_name, r.address, r.code]
-              .filter(Boolean)
-              .some((v) => String(v).toLowerCase().includes(needle))),
-      )
+      .filter((r) => test(r) && tim([r.name, r.phone, r.contact_name, r.address, r.code]))
       .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
   }, [all, q, chip])
 

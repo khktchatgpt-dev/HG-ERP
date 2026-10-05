@@ -100,7 +100,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       }))}
       gia={giaAll
         .filter((g) => g.supplier_id === id)
-        .map((g) => ({ code: g.code, name: g.name, price: g.price, unit: g.unit, currency: g.currency, price_unit: g.price_unit, at: g.at, times: g.times }))} // prettier-ignore
+        .map((g) => ({ material_id: g.material_id, code: g.code, name: g.name, price: g.price, unit: g.unit, currency: g.currency, price_unit: g.price_unit, at: g.at, times: g.times }))} // prettier-ignore
     />
   )
 }

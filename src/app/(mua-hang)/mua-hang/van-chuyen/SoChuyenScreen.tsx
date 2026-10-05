@@ -37,6 +37,7 @@ import {
   type CostMoneyState,
   type CostRow,
 } from './van-chuyen.shared'
+import { searchMatcher } from '@/lib/search-text'
 
 type Payer = { id: string; name: string }
 
@@ -80,14 +81,18 @@ export function SoChuyenScreen({
   const [busy, setBusy] = useState(false)
 
   const kept = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const tim = searchMatcher(q)
     return all.filter(
       (c) =>
         (chip === 'all' || costMoneyState(c) === chip) &&
-        (!needle ||
-          [c.doc_no, c.payee_name, c.payee_phone, c.note, ...c.allocations.map((a) => a.po_code), ...c.allocations.map((a) => a.po_supplier_name)] // prettier-ignore
-            .filter(Boolean)
-            .some((v) => String(v).toLowerCase().includes(needle))),
+        tim([
+          c.doc_no,
+          c.payee_name,
+          c.payee_phone,
+          c.note,
+          ...c.allocations.map((a) => a.po_code),
+          ...c.allocations.map((a) => a.po_supplier_name),
+        ]),
     )
   }, [all, q, chip])
 

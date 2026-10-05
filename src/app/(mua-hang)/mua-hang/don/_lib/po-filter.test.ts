@@ -54,9 +54,11 @@ describe('nhóm vòng đời', () => {
       }
   })
 
-  it('"đã duyệt · chưa gửi" tách riêng khỏi "đang về" — đây là chỗ đơn hay nằm im', () => {
+  it('"chờ NCC xác nhận" tách riêng khỏi "chờ giao · đang về" — đây là chỗ đơn hay nằm im', () => {
     expect(bucketOf('approved')).toBe('ready')
-    expect(bucketOf('ordered')).toBe('inflight')
+    // 06/10/2026: đơn "Đã gửi NCC" cũng đang chờ NCC xác nhận — cùng ngăn.
+    expect(bucketOf('ordered')).toBe('ready')
+    expect(bucketOf('confirmed')).toBe('inflight')
   })
 })
 
@@ -187,7 +189,7 @@ describe('countPos — số trên chip', () => {
       po({ id: '1', status: 'draft', assigned_to: 'u1' }),
       po({ id: '2', status: 'pending_approval', expected_at: '2026-08-01' }),
       po({ id: '3', status: 'approved', expected_at: null }),
-      po({ id: '4', status: 'ordered' }),
+      po({ id: '4', status: 'confirmed' }),
       po({ id: '5', status: 'received' }),
       po({ id: '6', status: 'cancelled', expected_at: null }),
     ]

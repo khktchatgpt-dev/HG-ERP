@@ -130,3 +130,26 @@ export function poVeThieu(
     total_lines: rows.length,
   }
 }
+
+/**
+ * Ba số Đặt · Đã về · Còn thiếu của `poVeThieu` quy về CHƯA VAT (05/10/2026).
+ *
+ * `poVeThieu` cộng theo ĐƠN GIÁ trên dòng: đơn tích "Đơn giá đã gồm VAT" (đơn của
+ * Thi — PO-2026-0133 ván 152 tấm × 81.000đ gồm VAT 8%) thì ba số là số GỒM thuế,
+ * trong khi Tổng quan ghi "chưa VAT" và đơn khác là số chưa thuế — hai đơn đặt
+ * cạnh nhau không so được. Tách đúng cách đầu đơn tách (`poMoney`):
+ * chưa VAT = gồm VAT × 100 / (100 + VAT%) → 12.312.000 → 11.400.000.
+ */
+export function veThieuChuaVat<
+  T extends { ordered_net: number; received_net: number; missing_net: number },
+>(vt: T, opts: { priceIncludesVat: boolean; vatRate: number | null }): T {
+  const rate = Number(opts.vatRate ?? 0) || 0
+  if (!opts.priceIncludesVat || rate <= 0) return vt
+  const k = (n: number) => r2((n * 100) / (100 + rate))
+  return {
+    ...vt,
+    ordered_net: k(vt.ordered_net),
+    received_net: k(vt.received_net),
+    missing_net: k(vt.missing_net),
+  }
+}

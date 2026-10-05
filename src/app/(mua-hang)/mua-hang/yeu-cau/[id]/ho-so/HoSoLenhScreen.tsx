@@ -1,25 +1,28 @@
 'use client'
 
-import Image from 'next/image'
+import { useState } from 'react'
 import type { LsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
+import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
+import type { LsxTemplate } from '@/lib/lsx-template'
 import { coThongSo, gomThongSo } from '@/lib/lsx-spec-summary'
 import {
   Btn,
   Cell,
+  Chip,
+  FilterBar,
   Code,
   Crumb,
   Empty,
-  Num,
   Row,
   ScreenFrame,
   ScreenHeader,
   StatusBar,
-  TFoot,
   THead,
   Table,
   Tag,
   showNum,
 } from '@/components/kit'
+import { PhieuLenh } from './phieu-lenh'
 
 const ngay = (iso: string | null) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
@@ -39,32 +42,54 @@ const conLai = (iso: string | null, today: string): number | null => {
  *   · màn kia — "còn thiếu gì, đã đặt đơn nào"  (trục: mua đủ chưa)
  *   · màn này — "làm cái gì, thông số ra sao"   (trục: nội dung lệnh)
  *
- * VÌ SAO DỰNG MỚI thay vì dẫn sang bản có sẵn: hồ sơ lệnh bản cũ
- * (`/planning/lsx/[id]/ho-so`) là màn DÙNG CHUNG cho Kế hoạch/Sản xuất/Giám
- * đốc — nó bày tiến độ công đoạn, jobs, số liệu xưởng. Người mua không cần
- * chỗ đó, mà lại THIẾU đúng thứ họ cần: thông số kỹ thuật để chép vào đơn
- * mua. Bản này lấy ba khối chủ dự án chốt 16/09/2026 — sản phẩm kèm ảnh, mốc
- * thời gian, thông số — và bỏ hẳn phần xưởng.
+ * 05/10/2026 — dựng lại theo artboard đã duyệt (chủ dự án: "xem lsx hiện tại
+ * rất khó nhìn", "trước hết cần cho xem đủ thông tin của lsx"):
+ *   · đầu trang gom ĐỦ thông tin lệnh (phát hành, bản chỉnh sửa + lý do, cont,
+ *     giao khách còn/quá bao nhiêu ngày, mốc vật tư, đơn khách, ghi chú) —
+ *     khối "Mốc thời gian" cũ bỏ vì đã nằm hết ở đây;
+ *   · khối "Sản phẩm phải làm" (mã·tên·ĐVT·SL) thay bằng ĐÚNG PHIẾU LỆNH
+ *     (`PhieuLenh`): cột theo mẫu khách, nhóm theo PO, màu như phiếu in;
+ *   · khối thông số gom theo lệnh giữ, đứng dưới phiếu (Q3 chốt giữ).
  *
- * KHÔNG SERVICE MỚI: cùng `buildLsxSupplyDetail` với màn vật tư, nên hai màn
- * không thể nói khác nhau về cùng một lệnh.
+ * KHÔNG SERVICE MỚI: `buildLsxSupplyDetail` cho phần mua, `lsxLinesService.sheet`
+ * cho phiếu — cùng nguồn với phiếu in và Excel.
  */
 export function HoSoLenhScreen({
   lsx,
+  dau,
+  template,
+  groups,
   today,
   imageUrls,
 }: {
   lsx: LsxSupplyDetail
+  dau: {
+    issued_at: string | null
+    revision: number
+    revised_at: string | null
+    revision_note: string | null
+    note: string | null
+  }
+  template: LsxTemplate
+  groups: (LsxGroup & { lines: LsxLine[] })[]
   today: string
   imageUrls: Record<string, string>
 }) {
+  const [xem, setXem] = useState<'phieu' | 'thongso'>('phieu')
+  const lines = groups.flatMap((g) => g.lines)
   const nhom = gomThongSo(
     lsx.products.map((p) => ({ code: p.code, name: p.name, specs: p.specs })),
   )
-  const tongSl = lsx.products.reduce((a, p) => a + p.qty, 0)
-  const dvt = [...new Set(lsx.products.map((p) => p.unit).filter(Boolean))]
+  const tongSl = lines.reduce((a, l) => a + l.qty, 0)
+  const dvt = [...new Set(lines.map((l) => l.unit).filter(Boolean))]
   const conMoc = conLai(lsx.materials_due_at, today)
   const conGiao = conLai(lsx.ship_date, today)
+  const con = (n: number | null) =>
+    n == null ? null : n < 0 ? (
+      <Tag tone="stop">quá {Math.abs(n)} ngày</Tag>
+    ) : (
+      <span className="text-[var(--ink-3)]">còn {n} ngày</span>
+    )
 
   return (
     <ScreenFrame>
@@ -81,17 +106,65 @@ export function HoSoLenhScreen({
         eyebrow={lsx.customer_name}
         title={lsx.code}
         facts={[
-          { label: 'Sản phẩm', value: String(lsx.products.length) },
+          { label: 'Sản phẩm', value: String(lines.length) },
           {
             label: 'Tổng SL',
             value: `${showNum(tongSl)}${dvt.length === 1 ? ' ' + dvt[0] : ''}`,
           },
-          { label: 'Đơn khách', value: lsx.order_codes.join(', ') || 'không có' },
+          { label: 'Phát hành', value: ngay(dau.issued_at) || '—' },
+          {
+            label: 'Bản',
+            value: dau.revision
+              ? `chỉnh sửa ${dau.revision} · ${ngay(dau.revised_at)}`
+              : 'gốc',
+          },
+          {
+            label: 'Cont',
+            value: lsx.container_summary || 'chưa khai',
+            tone: lsx.container_summary ? undefined : 'warn',
+          },
+          {
+            label: 'Giao khách',
+            value: (
+              <>
+                {ngay(lsx.ship_date) || 'chưa có'} {con(conGiao)}
+              </>
+            ),
+            tone: lsx.ship_date ? undefined : 'warn',
+          },
+          {
+            label: 'Mốc vật tư',
+            value: (
+              <>
+                {ngay(lsx.materials_due_at) || 'chưa có'} {con(conMoc)}
+              </>
+            ),
+            tone: lsx.materials_due_at ? undefined : 'warn',
+          },
+          // Chỉ ĐẾM đơn khách (05/10/2026, chủ dự án: "phần đơn hiển thị ở trên
+          // nên bỏ đi cho gọn") — LAURA 01 có 11 đơn, liệt kê mã chiếm ba dòng
+          // đầu trang; mã đơn nằm ở từng nhóm của phiếu bên dưới.
+          {
+            label: 'Đơn khách',
+            value: lsx.order_codes.length ? String(lsx.order_codes.length) : 'không có',
+            tone: lsx.order_codes.length ? undefined : 'warn',
+          },
         ]}
         actions={
           <>
             <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
               Vật tư của lệnh
+            </Btn>
+            {/*
+              PHIẾU LỆNH gốc của Bán hàng: xem = `/print/lsx/[id]`, tải =
+              `/api/dept/production/lsx/[id]/export` (.xlsx bày giống hệt phiếu in,
+              kèm ảnh) — ai xem được phiếu thì tải được.
+            */}
+            <Btn icon="in" onClick={() => window.open(`/print/lsx/${lsx.id}`, '_blank')}>
+              Xem phiếu lệnh
+            </Btn>
+            <Btn icon="excel" href={`/api/dept/production/lsx/${lsx.id}/export`}>
+              Xuất LSX
             </Btn>
             <Btn
               icon="baoCao"
@@ -102,130 +175,65 @@ export function HoSoLenhScreen({
           </>
         }
       />
-
-      <div className="min-h-0 flex-1 overflow-auto">
-        {/*
-          MỐC THỜI GIAN — ba ngày người mua phải đối chiếu trước khi hứa với
-          NCC, cộng container. Ngày nào chưa có thì NÓI RA là chưa có: mốc
-          trống là lý do đo được khiến cảnh báo trễ bỏ qua cả lệnh.
-        */}
-        <Muc title="Mốc thời gian">
-          <Table>
-            <THead>
-              <th>Mốc</th>
-              <th>Ngày</th>
-              <th>Còn lại</th>
-              <th>Nghĩa với người mua</th>
-            </THead>
-            <tbody>
-              <MocRow
-                nhan="Mốc vật tư"
-                iso={lsx.materials_due_at}
-                con={conMoc}
-                nghia="Hạn vật tư phải có mặt ở kho để xưởng vào việc"
-              />
-              <MocRow
-                nhan="Ngày giao khách"
-                iso={lsx.ship_date}
-                con={conGiao}
-                nghia="Ngày hàng phải rời kho — mọi đơn mua phải về trước mốc này"
-              />
-              {/* Dòng "Vật tư đã nhận" TẠM GỠ 03/10/2026 — mốc chưa ai dùng thật (hai lần
-                  bấm đều từ tài khoản quản trị), chưa chốt ai xác nhận đủ vật tư. */}
-              <Row>
-                <Cell>Container</Cell>
-                <Cell>{lsx.container_summary || <Tag>chưa khai</Tag>}</Cell>
-                <Cell>—</Cell>
-                <Cell muted>Hàng đi cont nào — quyết định thứ tự hàng phải về</Cell>
-              </Row>
-            </tbody>
-          </Table>
-        </Muc>
-
-        {/*
-          SẢN PHẨM PHẢI LÀM. Ảnh đi qua đường dẫn cố định `/api/files/<id>/img`
-          (xem page.tsx) chứ không phải URL ký đổi mỗi lượt render — URL ký là
-          thứ đã đốt hạn mức tối ưu ảnh ở màn thư viện sản phẩm.
-        */}
-        <Muc title={`Sản phẩm phải làm (${lsx.products.length})`}>
-          {lsx.products.length === 0 ? (
-            <Empty
-              headline="Lệnh chưa có dòng sản phẩm nào"
-              reason="Dòng lệnh do Bán hàng soạn. Lệnh không có dòng thì không tính ra được cần mua gì — mọi con số vật tư của lệnh này bằng 0 vì lý do đó, không phải vì đã mua đủ."
-              next={
-                <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
-                  Xem vật tư của lệnh
-                </Btn>
-              }
-            />
-          ) : (
-            <Table>
-              <THead>
-                <th></th>
-                <th>Mã SP</th>
-                <th>Tên</th>
-                <th>ĐVT</th>
-                <th>Số lượng</th>
-              </THead>
-              <tbody>
-                {lsx.products.map((p) => {
-                  const src = p.image_file_id ? imageUrls[p.image_file_id] : null
-                  return (
-                    <Row key={p.code}>
-                      <Cell>
-                        {src ? (
-                          <Image
-                            src={src}
-                            alt=""
-                            width={40}
-                            height={40}
-                            className="h-10 w-10 rounded-[3px] border border-[var(--line)] object-cover"
-                          />
-                        ) : (
-                          /* Ô trống CHIẾM CHỖ và nói ra: ảnh thiếu là việc của
-                             Kỹ thuật, giấu đi thì không ai biết mà bổ sung. */
-                          <span className="text-k-label flex h-10 w-10 items-center justify-center rounded-[3px] border border-dashed border-[var(--line)] text-[var(--ink-3)]">
-                            chưa
-                          </span>
-                        )}
-                      </Cell>
-                      <Cell>
-                        <Code>{p.code}</Code>
-                      </Cell>
-                      <Cell>{p.name}</Cell>
-                      <Cell muted>{p.unit ?? '—'}</Cell>
-                      <Cell num>
-                        <Num value={showNum(p.qty)} />
-                      </Cell>
-                    </Row>
-                  )
-                })}
-              </tbody>
-              {/* `label` và `cells` của TFoot được đặt THẲNG vào <tr>, nên
-                  cả hai phải là <td> — truyền chuỗi trần vào `label` là đẻ ra
-                  text node trong <tr> và React đổ hydration ngay. */}
-              <TFoot
-                label={<td colSpan={2}>Cộng {lsx.products.length} mã</td>}
-                cells={
-                  <>
-                    <td />
-                    <td />
-                    <td className="num text-right">
-                      <Num value={showNum(tongSl)} strong />
-                    </td>
-                  </>
-                }
-              />
-            </Table>
+      {/* Lý do bản chỉnh sửa + ghi chú lệnh — chữ Bán hàng viết cho xưởng, người
+          mua phải đọc trước khi hứa với NCC. */}
+      {(dau.revision_note || dau.note) && (
+        <div className="text-k-sm border-b border-[var(--line)] bg-[var(--rev-wash)] px-[var(--gutter)] py-1.5 text-[var(--ink-2)]">
+          {dau.revision_note && (
+            <div>
+              <b>Lần chỉnh sửa {dau.revision}:</b> {dau.revision_note}
+            </div>
           )}
-        </Muc>
+          {dau.note && (
+            <div>
+              <b>Ghi chú lệnh:</b> {dau.note}
+            </div>
+          )}
+        </div>
+      )}
 
-        {/*
-          THÔNG SỐ KỸ THUẬT — thứ người mua chép sang đơn khi đặt sơn, kính,
-          vải. Gom bằng `lib/lsx-spec-summary`: cả lệnh giống nhau thì nói một
-          câu, khác nhau thì bày đúng chỗ khác.
-        */}
-        <Muc title="Thông số kỹ thuật">
+      {/*
+        MỘT VÙNG CUỘN DUY NHẤT (05/10/2026 — chủ dự án: "có 2 thanh scroll rất khó
+        dùng"): bản trước thân màn cuộn dọc, bên trong phiếu lại cuộn riêng ở
+        560px — hai thanh lồng nhau và chiều cao cứng không hợp màn 730px lẫn
+        1080px. Nay phiếu và khối thông số là HAI CÁCH XEM, cái đang chọn chiếm
+        trọn phần còn lại của khung và tự cuộn (dọc lẫn ngang) — đầu bảng, cột
+        Mã SP, chân tổng dính đúng vì cùng một vùng cuộn.
+      */}
+      <FilterBar dense label="Xem theo">
+        <Chip on={xem === 'phieu'} count={lines.length} onClick={() => setXem('phieu')}>
+          Phiếu lệnh
+        </Chip>
+        <Chip on={xem === 'thongso'} onClick={() => setXem('thongso')}>
+          Thông số gom
+        </Chip>
+        <span className="text-k-label ml-auto text-[var(--ink-3)]">
+          {xem === 'phieu'
+            ? `${groups.length} nhóm · đúng cột của phiếu in, nhóm theo đơn hàng / số PO`
+            : 'cả lệnh có mấy loại sơn, kính, vải — để chép sang đơn mua'}
+        </span>
+      </FilterBar>
+      {xem === 'phieu' &&
+        (lines.length === 0 ? (
+          <Empty
+            headline="Lệnh chưa có dòng sản phẩm nào"
+            reason="Dòng lệnh do Bán hàng soạn ở màn lệnh của họ. Lệnh không có dòng thì không tính ra được cần mua gì — mọi con số vật tư của lệnh này bằng 0 vì lý do đó, không phải vì đã mua đủ."
+            next={
+              <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
+                Xem vật tư của lệnh
+              </Btn>
+            }
+          />
+        ) : (
+          <PhieuLenh
+            template={template}
+            groups={groups}
+            revision={dau.revision}
+            imageUrls={imageUrls}
+          />
+        ))}
+      {xem === 'thongso' && (
+        <div className="min-h-0 flex-1 overflow-auto">
           {!coThongSo(nhom) ? (
             <Empty
               headline="Lệnh chưa khai thông số nào"
@@ -248,8 +256,7 @@ export function HoSoLenhScreen({
                   <Row key={g.key}>
                     <Cell>{g.label}</Cell>
                     {/* Ô này BẺ DÒNG: Cell mặc định nowrap (đúng cho ô số/mã), nhưng
-                        danh sách 11 mã ở đây dài 300px và đẩy bảng cuộn ngang —
-                        người mua phải kéo mới đọc hết thứ đáng đọc nhất màn. */}
+                        danh sách 11 mã ở đây dài 300px và đẩy bảng cuộn ngang. */}
                     <Cell className="whitespace-normal">
                       {g.chung ? (
                         <b>{g.chung}</b>
@@ -283,54 +290,13 @@ export function HoSoLenhScreen({
               </tbody>
             </Table>
           )}
-        </Muc>
-      </div>
+        </div>
+      )}
 
       <StatusBar
         left={[`Lệnh ${lsx.code}`, lsx.customer_name]}
-        right={`${lsx.products.length} mã · ${showNum(tongSl)} SP · ${lsx.pos.length} đơn mua`}
+        right={`${lines.length} mã · ${showNum(tongSl)} SP · ${lsx.pos.length} đơn mua`}
       />
     </ScreenFrame>
-  )
-}
-
-/** Khối có tiêu đề — ngăn nhau bằng một vạch mảnh, không thẻ nổi (luật 4). */
-function Muc({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="border-b border-[var(--line)]">
-      <h2 className="text-k-label bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5 font-semibold tracking-[.06em] text-[var(--ink-2)] uppercase">
-        {title}
-      </h2>
-      {children}
-    </section>
-  )
-}
-
-function MocRow({
-  nhan,
-  iso,
-  con,
-  nghia,
-}: {
-  nhan: string
-  iso: string | null
-  con: number | null
-  nghia: string
-}) {
-  return (
-    <Row>
-      <Cell>{nhan}</Cell>
-      <Cell>{iso ? ngay(iso) : <Tag tone="warn">chưa có</Tag>}</Cell>
-      <Cell>
-        {con == null ? (
-          '—'
-        ) : con < 0 ? (
-          <Tag tone="stop">quá {Math.abs(con)} ngày</Tag>
-        ) : (
-          `còn ${con} ngày`
-        )}
-      </Cell>
-      <Cell muted>{nghia}</Cell>
-    </Row>
   )
 }

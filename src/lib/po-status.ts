@@ -44,7 +44,10 @@ export const PO_STATUS_LABEL: Record<PoStatus, string> = {
   pending_approval: 'Chờ duyệt',
   approved: 'Đã duyệt',
   ordered: 'Đã gửi NCC',
-  confirmed: 'NCC xác nhận',
+  // "Chờ giao" (06/10/2026): NCC đã xác nhận, việc còn lại là chờ hàng — gọi
+  // bằng việc ĐANG chờ, cùng kiểu "Chờ duyệt". Bước "Đã gửi NCC" chỉ còn ở đơn
+  // gửi gấp ký bù và đơn cũ.
+  confirmed: 'Chờ giao',
   in_transit: 'Đang giao',
   partial: 'Về một phần',
   received: 'Về đủ',
@@ -67,9 +70,9 @@ export const PO_STATUS_TONE: Record<PoStatus, PoStatusTone> = {
 export const PO_NEXT_HINT: Partial<Record<PoStatus, string>> = {
   draft: 'kiểm tra rồi gửi GĐ duyệt',
   pending_approval: 'chờ GĐ duyệt',
-  approved: 'gửi NCC',
+  approved: 'chờ NCC xác nhận',
   ordered: 'chờ NCC xác nhận',
-  confirmed: 'chờ giao',
+  confirmed: 'chờ NCC giao hàng',
   in_transit: 'chờ nhận hàng',
   partial: 'nhận tiếp',
 }
@@ -114,6 +117,20 @@ export function isPoOpen(status: string): boolean {
   return isPoStatus(status) && PO_OPEN_STATUSES.includes(status)
 }
 
+/**
+ * Bước "Gửi nhà cung cấp" có THẬT không. Từ 06/10/2026 đơn đi thẳng Đã duyệt →
+ * NCC xác nhận; server đóng `ordered_at` = `confirmed_at` (cùng một mốc) nên
+ * dấu đó nghĩa là bước gửi đã bị bỏ qua. Bày mốc gửi chỉ khi đơn thật sự đi qua
+ * "Đã gửi NCC" (gửi gấp ký bù, đơn cũ) — mốc chưa tới cũng không bày nữa, vì
+ * đường thường không còn bước đó.
+ */
+export function hadSendStep(po: {
+  ordered_at?: string | null
+  confirmed_at?: string | null
+}): boolean {
+  return !!po.ordered_at && po.ordered_at !== po.confirmed_at
+}
+
 /** Options cho ô lọc trạng thái — đúng thứ tự vòng đời. */
 export function poStatusOptions(): { value: PoStatus; label: string }[] {
   return PO_STATUSES.map((s) => ({ value: s, label: PO_STATUS_LABEL[s] }))
@@ -153,13 +170,15 @@ export function poSpineColor(status: PoStatus): string {
   }
 }
 
-/** Sáu bước của trục PHÁT HÀNH đơn — từ bàn soạn tới lúc hàng lên đường. */
+/**
+ * Năm bước của trục PHÁT HÀNH đơn — từ bàn soạn tới lúc hàng lên đường.
+ * "Đã gửi" bỏ khỏi trục 06/10/2026: duyệt xong là chờ NCC xác nhận.
+ */
 export const PO_TRACK_STEPS = [
   'Nháp',
   'Chờ duyệt',
   'Đã duyệt',
-  'Đã gửi',
-  'NCC xác nhận',
+  'Chờ giao',
   'Đang giao',
 ] as const
 
@@ -206,14 +225,15 @@ export function poTrackStep(status: PoStatus): {
       return { at: 0, tone: 'idle' }
     case 'pending_approval':
       return { at: 1, tone: 'wait' }
+    // Đã duyệt = đang chờ NCC xác nhận. Đơn "Đã gửi NCC" (gửi gấp, đơn cũ) cũng
+    // đang chờ đúng việc đó, nên đứng cùng bước — nhãn pill vẫn nói "Đã gửi NCC".
     case 'approved':
-      return { at: 2, tone: 'wait' }
     case 'ordered':
-      return { at: 3, tone: 'run' }
+      return { at: 2, tone: 'wait' }
     case 'confirmed':
-      return { at: 4, tone: 'run' }
+      return { at: 3, tone: 'run' }
     case 'in_transit':
-      return { at: 5, tone: 'run' }
+      return { at: 4, tone: 'run' }
     // Hàng đã bắt đầu về → cả trục phát hành đã xong.
     case 'partial':
     case 'received':

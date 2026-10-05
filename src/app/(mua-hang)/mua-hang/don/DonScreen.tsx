@@ -61,6 +61,7 @@ import {
   type GroupBy,
   type ViewState,
 } from './views'
+import { searchMatcher } from '@/lib/search-text'
 
 /**
  * Phần nhìn của Khuôn C — Phiếu mua. Tầng server ở `page.tsx`, phân tích ở
@@ -188,8 +189,8 @@ function LocLookup<T>({
       render={render ?? ((x) => textOf(x))}
       onPick={onPick}
       search={async (q) => {
-        const n = q.trim().toLowerCase()
-        return items.filter((x) => textOf(x).toLowerCase().includes(n)).slice(0, 20)
+        const tim = searchMatcher(q)
+        return items.filter((x) => tim([textOf(x)])).slice(0, 20)
       }}
     />
   )
@@ -553,13 +554,8 @@ export function DonScreen({
         /*
           BỐN CON SỐ NÀY LÀ BỘ LỌC, không phải bảng thành tích.
 
-          Trước 16/09/2026 chúng chỉ đọc, và ngay dưới là ba chip lọc mang
-          ĐÚNG những con số đó — cùng một khái niệm hiện hai lần, một lần bấm
-          được một lần không. Tệ hơn: chip "Quá hẹn" đếm gộp `late +
-          lateUnsent` còn ở đây tách làm hai, nên hai chỗ nói hai số khác nhau
-          về cùng một thứ.
-
-          Nay số ở đây bấm được và chip "Quá hẹn" bỏ đi. "NCC trễ hẹn" và
+          Trước 16/09/2026 chúng chỉ đọc mà dưới lại có chip lọc cùng số (một
+          khái niệm hiện hai lần). Nay số ở đây bấm được, chip "Quá hẹn" bỏ đi. "NCC trễ hẹn" và
           "Quá hẹn mà chưa gửi" vẫn là hai dòng riêng vì chúng là hai việc
           khác nhau: một cái đi giục nhà cung cấp, một cái tự mình phải gửi
           đơn đi — gộp lại thì không biết phải làm gì.
@@ -727,6 +723,9 @@ export function DonScreen({
         >
           Chưa hẹn giao
         </Chip>
+        {/* Cùng tập làn "NCC chưa xác nhận" của Bàn làm việc + màn Giám đốc (06/10/2026). */}
+        {/* prettier-ignore */}
+        <Chip on={view.filter.unconfirmed} count={inBucket.unconfirmed} icon="ncc" onClick={() => patchFilter({ unconfirmed: !view.filter.unconfirmed })}>NCC chưa xác nhận</Chip>
         {/*
           LỆNH ĐÃ HOÀN THÀNH (28/09/2026): đơn còn mở mà mọi lệnh của nó đã xong
           — sản xuất xong tức hàng đã về, chỉ là chưa ai cập nhật đơn. Chỉ hiện
@@ -795,6 +794,7 @@ export function DonScreen({
                   late: false,
                   lateSide: 'any',
                   noEta: false,
+                  unconfirmed: false,
                   ownerId: 'all',
                   template: 'all',
                   lsxDone: false,

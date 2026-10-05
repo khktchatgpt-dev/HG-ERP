@@ -53,15 +53,18 @@ describe('overdue — ghi việc đã giục', () => {
   })
 })
 
-describe('unsent — gửi nhà cung cấp', () => {
-  it('một lời gọi advance sang ordered, không hỏi gì thêm', () => {
-    expect(KIND_ACTION.unsent.kindOfUi).toBe('direct')
+describe('unsent — đã duyệt, chờ NCC xác nhận (06/10/2026: bỏ bước gửi)', () => {
+  it('một lời gọi confirm (không đợt — giữ lịch đề nghị), hỏi lại trước khi ghi', () => {
+    expect(KIND_ACTION.unsent.label).toBe('NCC xác nhận')
+    // Hộp hỏi chứ không bấm-là-chạy: bấm nhầm là ghi một lời hứa NCC chưa nói.
+    expect(KIND_ACTION.unsent.kindOfUi).toBe('sheet')
+    expect(KIND_ACTION.unsent.needNote).toBeFalsy()
     const calls = KIND_ACTION.unsent.build(base)
     expect(calls).toEqual([
       {
-        path: '/api/dept/supply/pos/po-1/advance',
+        path: '/api/dept/supply/pos/po-1/confirm',
         method: 'POST',
-        body: { to: 'ordered' },
+        body: { shipments: [] },
       },
     ])
   })
@@ -108,6 +111,9 @@ describe('không mở đường ghi mới', () => {
     const allowed = [
       '/api/doc-notes',
       '/api/dept/supply/pos/po-1/advance',
+      // Route sẵn có của tab Nhận hàng / hộp Giao nhận — 06/10/2026 dùng cho
+      // "NCC xác nhận" thay cho "Gửi NCC", không phải đường ghi mới.
+      '/api/dept/supply/pos/po-1/confirm',
       '/api/dept/supply/pos/po-1/reschedule',
       '/api/dept/supply/pos/po-1/submit',
     ]

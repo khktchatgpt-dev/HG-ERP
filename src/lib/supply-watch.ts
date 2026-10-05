@@ -72,11 +72,13 @@ export const SUPPLY_TODO: Record<
     tone: 'warn',
     order: 1.5,
   },
+  // Khoá giữ là 'unsent' (URL ?viec=unsent, số đếm màn GĐ đang trỏ); nghĩa đổi
+  // 06/10/2026 khi bỏ bước "Gửi NCC": đã duyệt mà chưa ghi NCC xác nhận.
   unsent: {
     icon: 'gui',
-    label: 'Đã duyệt · chưa gửi NCC',
-    action: 'Gửi nhà cung cấp',
-    why: 'Giám đốc ký rồi mà đơn chưa ra khỏi cửa — chỗ đơn nằm im lâu nhất.',
+    label: 'Đã duyệt · chờ NCC xác nhận',
+    action: 'Gọi NCC chốt đơn rồi ghi xác nhận',
+    why: 'Giám đốc ký rồi mà chưa ghi NCC xác nhận — chưa biết NCC có nhận đơn, giao ngày nào. Chỗ đơn nằm im lâu nhất.',
     tone: 'warn',
     order: 2,
   },

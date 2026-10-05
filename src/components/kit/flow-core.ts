@@ -1,4 +1,6 @@
-import type { PoStatus } from '@/lib/po-status'
+import { hadSendStep, type PoStatus } from '@/lib/po-status'
+
+export { hadSendStep }
 
 /**
  * LÕI LUỒNG — thuần, không React, test được.
@@ -77,7 +79,7 @@ export function poHolder(po: PoLike, meId: string | null): Holder {
     case 'approved':
       return {
         who: 'Cung ứng',
-        what: 'Đã duyệt — gửi đơn cho nhà cung cấp',
+        what: 'Đã duyệt — gọi NCC chốt đơn rồi ghi NCC xác nhận',
         since: po.approved_at ?? null,
         mine: !!meId && (po.assigned_to === meId || po.created_by === meId),
       }
@@ -91,7 +93,7 @@ export function poHolder(po: PoLike, meId: string | null): Holder {
     case 'confirmed':
       return {
         who: 'Nhà cung cấp',
-        what: 'NCC đã nhận đơn — chờ xếp hàng giao',
+        what: 'NCC đã xác nhận — chờ giao hàng',
         since: po.confirmed_at ?? null,
         mine: false,
       }
@@ -191,7 +193,16 @@ export function buildPoMarks(
       actor: opts.approverName ?? null,
       tone: 'done',
     },
-    { key: 'ordered', at: po.ordered_at ?? null, label: 'Gửi nhà cung cấp', tone: 'act' },
+    ...(hadSendStep(po)
+      ? [
+          {
+            key: 'ordered',
+            at: po.ordered_at ?? null,
+            label: 'Gửi nhà cung cấp',
+            tone: 'act' as const,
+          },
+        ]
+      : []),
     {
       key: 'confirmed',
       at: po.confirmed_at ?? null,

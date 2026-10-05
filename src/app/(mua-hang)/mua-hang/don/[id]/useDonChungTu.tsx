@@ -36,7 +36,7 @@ import { poFinanceView } from '@/lib/po-finance'
 import { poLineAmount } from '@/lib/po-line'
 import type { PoMaterial } from '@/lib/po-material.types'
 import type { ShipmentInput } from '@/lib/po-shipments'
-import { poTrackStep, type PoStatus } from '@/lib/po-status'
+import { hadSendStep, poTrackStep, type PoStatus } from '@/lib/po-status'
 import { deriveLine, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { moqHint } from '@/lib/po-tracking'
 import { useLocalPref } from '@/lib/use-local-pref'
@@ -768,8 +768,8 @@ export function useDonChungTu(p: Props) {
     ? [
         { key: 'tao', at: po.created_at, label: 'Tạo đơn', actor: po.assignee_name },
         { key: 'duyet', at: po.approved_at, label: 'Giám đốc duyệt', actor: po.approver_name ?? undefined, tone: po.approved_at ? 'done' : undefined }, // prettier-ignore
-        { key: 'gui', at: po.ordered_at, label: 'Gửi nhà cung cấp' },
-        { key: 'xn', at: po.confirmed_at, label: 'NCC nhận' },
+        ...(hadSendStep(po) ? [{ key: 'gui', at: po.ordered_at, label: 'Gửi nhà cung cấp' }] : []), // prettier-ignore
+        { key: 'xn', at: po.confirmed_at, label: 'NCC xác nhận' },
         ...p.shipments.map((s, i) => ({ key: `dot${i}`, at: s.expected_date, label: `${s.code ?? `Đợt giao ${i + 1}`} · ${SHIP_STATUS_LABEL[s.status] ?? s.status}` })), // prettier-ignore
         ...p.warehouseDocs.map((d) => ({ key: d.doc_id, at: d.at, label: `${d.kind === 'receipt' ? 'Phiếu nhập' : d.kind === 'reversal' ? 'Phiếu đảo' : d.kind === 'adjustment' ? 'Điều chỉnh' : 'Trả NCC'} ${d.code}`, detail: `${d.qty_total.toLocaleString('vi-VN')} đơn vị${d.reversal_of ? ` · đảo ${d.reversal_of}` : ''}${d.reversed_by ? ` · đã đảo bởi ${d.reversed_by}` : ''}${d.fix_of ? ` · lập lại thay ${d.fix_of}` : ''}${d.adjust_of ? ` · chênh lệch của ${d.adjust_of}` : ''}`, tone: 'done' as const })), // prettier-ignore
         ...adjustments.map((a) => ({ key: `dc${a.seq}`, at: a.created_at, label: `Điều chỉnh lần ${a.seq} · phát sinh ${signed(a.total_after - a.total_before, a.currency)}`, actor: a.created_by_name ?? undefined, detail: a.reason })), // prettier-ignore

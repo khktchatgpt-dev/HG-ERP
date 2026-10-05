@@ -20,6 +20,8 @@ import {
   refreshLineFromMaterial,
   laM3MotTam,
   tongM3,
+  tongLechBac,
+  docTongGo,
   withSpecDims,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
@@ -1120,5 +1122,38 @@ describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Ho
     const p = xop()
     expect(withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis).toBe('ctn')
     expect(withSpecDims('carton', p, { ...p, spec: '1000*800*50' }).inner_l_mm).toBe('')
+  })
+})
+
+describe('tongLechBac — tổng gõ tay lệch hàng nghìn lần (đơn xốp WA 05/10/2026)', () => {
+  const xop = (qty2_manual: Num) =>
+    ({ ...newLine('foam', { id: 'x', code: 'XM-0105', name: 'Xốp D8 - 8kg', unit: 'Tấm', spec: '1000*800*50mm' } as never), qty: 4480 as Num, price: 520000 as Num, carton_basis: 'm3' as const, qty2_manual }) // prettier-ignore
+  it('gõ 179200 cho 179,2 m³ → gấp 1.000 lần, chặn lưu', () => {
+    expect(tongLechBac('foam', xop(179200))).toEqual({ auto: 179.2, factor: 1000 })
+    expect(lineProblem('foam', xop(179200))).toMatch(/gấp 1\.000 lần/)
+  })
+  it('gõ đè lệch vài phần trăm cho khớp tờ NCC → hợp lệ', () => {
+    expect(tongLechBac('foam', xop(180.5))).toBeNull()
+    expect(lineProblem('foam', xop(180.5))).toBeNull()
+  })
+  it('gõ nhỏ hơn hàng nghìn lần cũng bắt', () => {
+    expect(tongLechBac('foam', xop(0.1792))?.factor).toBe(-1000)
+  })
+})
+
+describe('docTongGo — gõ số khối kiểu tiền (172900 = 172,9 m³), 05/10/2026', () => {
+  const xop = { ...newLine('foam', { id: 'x', code: 'XM-0105', name: 'Xốp D8 - 8kg', unit: 'Tấm', spec: '1000*800*50mm' } as never), qty: 4480 as Num, carton_basis: 'm3' as const } // prettier-ignore
+  it('179200 / 172900 gần số tự tính ×1.000 → hiểu là 179,2 / 172,9', () => {
+    expect(docTongGo('foam', xop, '179200')).toBe(179.2)
+    expect(docTongGo('foam', xop, '172900')).toBe(172.9)
+  })
+  it('gõ có dấu thập phân giữ nguyên; số không gần ×1.000 giữ nguyên', () => {
+    expect(docTongGo('foam', xop, '172,9')).toBe(172.9)
+    expect(docTongGo('foam', xop, '180')).toBe(180)
+    expect(docTongGo('foam', xop, '5000')).toBe(5000)
+    expect(docTongGo('foam', xop, '')).toBe('')
+  })
+  it('mẫu không phải m³ (nhôm kg) không đổi', () => {
+    expect(docTongGo('aluminium', xop, '179200')).toBe(179200)
   })
 })

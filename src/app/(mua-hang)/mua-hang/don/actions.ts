@@ -442,22 +442,34 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
 
     case 'approved':
       return [
+        /*
+          NCC XÁC NHẬN thay cho "Gửi nhà cung cấp" (06/10/2026, chủ dự án chốt):
+          Giám đốc duyệt xong, người mua gửi đơn ngoài hệ thống rồi chờ NCC ừ —
+          bấm khi NCC ĐÃ ừ, đơn sang "Chờ giao". Bỏ hẳn bước "Đã gửi NCC" ở giữa.
+          `id` giữ là 'send' (vị trí trên thanh, nhóm "Đi tiếp" không đổi); server
+          giữ đủ hàng rào của bước gửi — xem `posService.confirm`. Lịch giao đề
+          nghị lúc soạn giữ nguyên làm lịch giao; NCC hẹn khác thì sửa đợt ở hộp
+          Giao nhận.
+        */
         {
           id: 'send',
-          label: 'Gửi nhà cung cấp',
+          label: 'NCC xác nhận',
           primary: true,
-          ui: 'direct',
+          ui: 'sheet',
           stakes: 'vua',
           // Lý do NÓI LUÔN CÁCH GỠ — nút gỡ ("Sửa") đứng ngay đầu thanh (28/09/2026).
           blocked:
             notOwn ??
             (perm.noEta
-              ? 'Chưa có hẹn giao — bấm "Sửa" khai ngày dự kiến trước, không thì không ai đo được NCC trễ hay đúng'
+              ? 'Chưa có hẹn giao — bấm "Sửa" khai ngày NCC hứa giao trước, không thì không ai đo được NCC trễ hay đúng'
               : undefined),
-          done: 'Đã gửi NCC',
+          consequence:
+            'Ghi nhận nhà cung cấp đã nhận đơn và đồng ý giao. Đơn sang "Chờ giao" — Kho thấy để chờ nhận hàng. Chỉ bấm khi NCC đã thật sự xác nhận.',
+          confirmLabel: 'Ghi NCC xác nhận',
+          done: 'Đã ghi NCC xác nhận — đơn chờ giao',
           bulk: true,
           build: ({ id }) => [
-            { path: `/api/dept/supply/pos/${id}/advance`, method: 'POST', body: { to: 'ordered' } }, // prettier-ignore
+            { path: `/api/dept/supply/pos/${id}/confirm`, method: 'POST', body: { shipments: [] } }, // prettier-ignore
           ],
         },
         ADJUST(notOwn),

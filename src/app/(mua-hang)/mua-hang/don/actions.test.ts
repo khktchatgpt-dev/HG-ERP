@@ -164,6 +164,9 @@ describe('route — không mở đường ghi mới', () => {
       '/api/dept/supply/pos/p/withdraw',
       '/api/dept/supply/pos/p/decide',
       '/api/dept/supply/pos/p/advance',
+      // Route sẵn có của tab Nhận hàng — 06/10/2026 nút chính của đơn đã duyệt
+      // là "NCC xác nhận" (bỏ bước gửi), đi qua đúng route này.
+      '/api/dept/supply/pos/p/confirm',
       '/api/dept/supply/pos/p/reschedule',
       // Màn cũ gọi ở `PoDetailScreen.tsx:711` — không phải đường ghi mới.
       '/api/dept/supply/pos/p/cancel',
@@ -404,9 +407,22 @@ describe('trả lại để sửa — từ vựng và mức độ', () => {
   })
 })
 
-describe('gửi NCC đòi hẹn giao (17/09/2026)', () => {
+describe('đơn đã duyệt: nút chính "NCC xác nhận" (06/10/2026 — bỏ bước gửi)', () => {
+  it('ghi thẳng sang Chờ giao qua route confirm, có hộp hỏi lại', () => {
+    const a = actionsFor('approved', { own: true, approve: false }).find((x) => x.id === 'send')! // prettier-ignore
+    expect(a.label).toBe('NCC xác nhận')
+    expect(a.primary).toBe(true)
+    expect(a.ui).toBe('sheet')
+    expect(a.consequence).toMatch(/Chờ giao/)
+    expect(a.build!({ id: 'p', reason: '', date: '' })).toEqual([
+      { path: '/api/dept/supply/pos/p/confirm', method: 'POST', body: { shipments: [] } },
+    ])
+  })
+})
+
+describe('NCC xác nhận đòi hẹn giao (17/09/2026)', () => {
   const approved = { own: true, approve: false }
-  it('thiếu hẹn giao thì nút "Gửi nhà cung cấp" KHOÁ, lý do chỉ luôn cách gỡ', () => {
+  it('thiếu hẹn giao thì nút "NCC xác nhận" KHOÁ, lý do chỉ luôn cách gỡ', () => {
     const send = actionsFor('approved', { ...approved, noEta: true }).find(
       (a) => a.id === 'send',
     )!

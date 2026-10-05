@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeSearch, searchTokens, worthFuzzy } from './search-text'
+import { normalizeSearch, searchMatcher, searchTokens, worthFuzzy } from './search-text'
 
 /**
  * Ba kiểu gõ mà cách tìm cũ (`ilike '%q%'` trên từng cột rời) đều ra 0 kết quả —
@@ -60,5 +60,29 @@ describe('worthFuzzy — khi nào mới tìm gần đúng', () => {
   it('từ 3 ký tự trở lên thì có', () => {
     expect(worthFuzzy('ghe')).toBe(true)
     expect(worthFuzzy('Ghế')).toBe(true) // 3 ký tự sau khi bỏ dấu
+  })
+})
+
+describe('searchMatcher — lọc tại chỗ cùng luật với server', () => {
+  const ncc = ['NCC-012', 'CÔNG TY TNHH TÂN PHÁT', 'Tân Phát', '0312345678', 'Ngũ kim']
+  it('không dấu vẫn trúng chữ có dấu', () => {
+    expect(searchMatcher('tan phat')(ncc)).toBe(true)
+  })
+  it('chữ tổ hợp (NFD) từ bộ gõ vẫn trúng dữ liệu dựng sẵn (NFC)', () => {
+    expect(searchMatcher('tân phát'.normalize('NFD'))(ncc)).toBe(true)
+  })
+  it('nhiều từ: không cần liền nhau, không cần đúng thứ tự, mỗi từ có thể ở trường khác', () => {
+    expect(searchMatcher('phat ngu kim')(ncc)).toBe(true)
+    expect(searchMatcher('kim tan')(ncc)).toBe(true)
+  })
+  it('một từ không có mặt thì trượt', () => {
+    expect(searchMatcher('tan phat thep')(ncc)).toBe(false)
+  })
+  it('ô trống / chỉ dấu cách thì giữ mọi dòng; trường rỗng không làm vỡ', () => {
+    expect(searchMatcher('   ')(ncc)).toBe(true)
+    expect(searchMatcher('012')([null, undefined, '', 'NCC-012'])).toBe(true)
+  })
+  it('đ gõ thành d', () => {
+    expect(searchMatcher('dong')(['Đồng thau'])).toBe(true)
   })
 })

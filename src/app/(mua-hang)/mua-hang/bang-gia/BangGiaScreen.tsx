@@ -25,6 +25,7 @@ import {
 } from '@/components/kit'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
+import { searchMatcher } from '@/lib/search-text'
 
 const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 
@@ -88,16 +89,9 @@ export function BangGiaScreen({
 
   const kept = useMemo(() => {
     const test = CHIPS.find((c) => c.id === chip)?.test ?? (() => true)
-    const needle = q.trim().toLowerCase()
+    const tim = searchMatcher(q)
     return rows
-      .filter(
-        (r) =>
-          test(r) &&
-          (!needle ||
-            [r.code, r.name, r.supplier_name, r.group_name]
-              .filter(Boolean)
-              .some((v) => String(v).toLowerCase().includes(needle))),
-      )
+      .filter((r) => test(r) && tim([r.code, r.name, r.supplier_name, r.group_name]))
       .sort((a, b) =>
         a.code === b.code ? (a.at < b.at ? 1 : -1) : a.code < b.code ? -1 : 1,
       )
@@ -132,8 +126,18 @@ export function BangGiaScreen({
               value={scope}
               onChange={setScope}
               options={[
-                { value: 'toi', label: 'NCC của tôi', count: mineCount, hint: 'Giá của NCC tôi phụ trách' },
-                { value: 'phong', label: 'Cả công ty', count: allRows.length, hint: 'Mọi cặp mã × NCC' },
+                {
+                  value: 'toi',
+                  label: 'NCC của tôi',
+                  count: mineCount,
+                  hint: 'Giá của NCC tôi phụ trách',
+                },
+                {
+                  value: 'phong',
+                  label: 'Cả công ty',
+                  count: allRows.length,
+                  hint: 'Mọi cặp mã × NCC',
+                },
               ]}
             />
             {canEdit ? (
@@ -206,7 +210,7 @@ export function BangGiaScreen({
                     <span className="flex items-center gap-2">
                       <Code
                         as="a"
-                        href={`/mua-hang/vat-tu?q=${encodeURIComponent(r.code)}`}
+                        href={`/mua-hang/vat-tu/${r.material_id}`}
                       >
                         {r.code}
                       </Code>

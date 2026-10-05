@@ -97,11 +97,15 @@ export function DongHang({ d }: { d: DonCtx }) {
         title="Dòng đơn hàng"
         defaultOpen
         flush
-        summary={editing ? [] : [
-          ['Số dòng', <span key="a" className="num">{lines.length}</span>], // prettier-ignore
-          ['Thiếu số', <span key="b" className={issues.length ? 'num k-t-warn' : 'num'}>{issues.length}</span>], // prettier-ignore
-          ['Tổng', <span key="c" className="num">{money(totals.grandTotal, header.currency)}</span>], // prettier-ignore
-        ]}
+        summary={
+          editing
+            ? []
+            : [
+                ['Số dòng', <span key="a" className="num">{lines.length}</span>], // prettier-ignore
+                ['Thiếu số', <span key="b" className={issues.length ? 'num k-t-warn' : 'num'}>{issues.length}</span>], // prettier-ignore
+                ['Tổng', <span key="c" className="num">{money(totals.grandTotal, header.currency)}</span>], // prettier-ignore
+              ]
+        }
         actions={
           !editing ? (
             <>
@@ -199,7 +203,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                       ) : (
                         // Ô tên có trần 340px (29/09): tên dài từng đẩy SL/giá khỏi màn.
                         // prettier-ignore
-                        <span className="block max-w-[340px] truncate" title={`${l.code ? `${l.code} · ` : ''}${l.name}`}><span className="num k-strong">{l.code}</span>{l.code ? ' · ' : ''}{l.name}{l.is_free && <span className="text-[var(--ink-3)]"> · tự do</span>}</span>
+                        <span className="block max-w-[340px] truncate" title={`${l.code ? `${l.code} · ` : ''}${l.name}`}>{l.code && !l.is_free && !editing ? <a href={`/mua-hang/vat-tu/${l.material_id}`} className="num k-strong text-[var(--act)] hover:underline" title={`Hồ sơ ${l.code} — NCC đã bán, giá, lịch sử mua`}>{l.code}</a> : <span className="num k-strong">{l.code}</span>}{l.code ? ' · ' : ''}{l.name}{l.is_free && <span className="text-[var(--ink-3)]"> · tự do</span>}</span>
                       )}
                     </Td>
                     {gridFields.map((f) => (

@@ -29,6 +29,7 @@ import {
 } from '@/components/kit'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
+import { searchMatcher } from '@/lib/search-text'
 
 export type YeuCauRow = {
   id: string
@@ -115,16 +116,13 @@ export function YeuCauScreen({
   }, [rows])
 
   const kept = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const tim = searchMatcher(q)
     return (
       rows
         .filter((r) => {
           if (muc === 'toi' && r.owner !== 'Cung ứng') return false
           if (muc !== 'toi' && muc !== 'all' && r.level !== muc) return false
-          if (!needle) return true
-          return [r.code, r.customer_name, ...r.order_codes]
-            .filter(Boolean)
-            .some((v) => String(v).toLowerCase().includes(needle))
+          return tim([r.code, r.customer_name, ...r.order_codes])
         })
         /*
         KHẨN XẾP TRƯỚC, cùng mức thì MỐC GẦN trước — đúng thứ tự ba trang Họp
@@ -155,7 +153,10 @@ export function YeuCauScreen({
         eyebrow="Mua hàng"
         title="Vật tư theo lệnh"
         facts={[
-          { label: scope === 'toi' ? 'Lệnh của tôi' : 'Lệnh đang chạy', value: String(rows.length) },
+          {
+            label: scope === 'toi' ? 'Lệnh của tôi' : 'Lệnh đang chạy',
+            value: String(rows.length),
+          },
           {
             label: 'Cung ứng đang giữ',
             value: String(dem.toi ?? 0),
@@ -174,8 +175,18 @@ export function YeuCauScreen({
               value={scope}
               onChange={setScope}
               options={[
-                { value: 'toi', label: 'Lệnh của tôi', count: mineCount, hint: 'Lệnh có đơn tôi phụ trách' },
-                { value: 'phong', label: 'Cả phòng', count: allRows.length, hint: 'Mọi lệnh đang chạy' },
+                {
+                  value: 'toi',
+                  label: 'Lệnh của tôi',
+                  count: mineCount,
+                  hint: 'Lệnh có đơn tôi phụ trách',
+                },
+                {
+                  value: 'phong',
+                  label: 'Cả phòng',
+                  count: allRows.length,
+                  hint: 'Mọi lệnh đang chạy',
+                },
               ]}
             />
             {/*
@@ -231,7 +242,7 @@ export function YeuCauScreen({
               ? 'Chưa có lệnh sản xuất nào đang chạy. Kế hoạch SX phát lệnh thì nó hiện ở đây.'
               : rows.length === 0
                 ? `Bạn chưa có đơn mua nào trên ${allRows.length} lệnh đang chạy — lệnh của tôi tính theo đơn tôi phụ trách.`
-              : `Trong ${rows.length} lệnh đang chạy, không lệnh nào khớp bộ lọc hiện tại${q.trim() ? ` và từ khoá “${q.trim()}”` : ''}.`
+                : `Trong ${rows.length} lệnh đang chạy, không lệnh nào khớp bộ lọc hiện tại${q.trim() ? ` và từ khoá “${q.trim()}”` : ''}.`
           }
           next={
             <Btn
