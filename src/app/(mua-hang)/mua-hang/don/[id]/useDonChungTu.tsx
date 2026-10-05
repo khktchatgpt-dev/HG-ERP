@@ -16,6 +16,7 @@ import {
   newFreeLine,
   newLine,
   remapLinesForTemplate,
+  withSpecDims,
   type Line,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { poHolder, useToast, type IcoName, type Mark } from '@/components/kit'
@@ -408,13 +409,12 @@ export function useDonChungTu(p: Props) {
   const blockers = checks.filter((c) => c.level === 'stop')
 
   const cur = lines[Math.min(pick, lines.length - 1)] ?? null
-
   const curIdx = cur ? lines.indexOf(cur) : -1
 
   /* ── sửa dòng ─────────────────────────────────────────────────────── */
   // Sửa ô nào của dòng thì tổng kg đã chốt hết hiệu lực — số chạy theo ô nhập.
   const patch = (i: number, part: Partial<Line>) =>
-    setLines((ls) => ls.map((l, k) => (k === i ? { ...l, qty2_saved: null, ...part } : l))) // prettier-ignore
+    setLines((ls) => ls.map((l, k) => (k === i ? withSpecDims(template, l, { ...l, qty2_saved: null, ...part }) : l))) // prettier-ignore
 
   const setField = (i: number, f: PoField, v: string) => {
     if (!f.field) return

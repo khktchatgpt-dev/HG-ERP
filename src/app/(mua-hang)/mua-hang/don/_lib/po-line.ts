@@ -2,6 +2,7 @@ import { poLineAmount } from '@/lib/po-line'
 import {
   cartonAreaM2,
   deriveLine,
+  foamM3PerSheet,
   hasQty2Override,
   QTY2_OVERRIDE_UNIT,
   type PoTemplate,
@@ -226,7 +227,11 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
     return 'thiếu m²/tấm'
   }
   // Gỗ: chỉ dòng giá theo m³ (mã SP tự do, hoặc vật tư chọn "Giá theo" m³) mới cần m³/SP.
-  if (t === 'wood' && (l.is_free || l.price_per === 'unit2') && !(Number(l.m3_per_unit) > 0))
+  if (
+    t === 'wood' &&
+    (l.is_free || l.price_per === 'unit2') &&
+    !(Number(l.m3_per_unit) > 0)
+  )
     return 'thiếu m³/SP'
   if (
     t === 'foam' &&
@@ -288,6 +293,75 @@ export function recallBasis(
 ): Line['carton_basis'] {
   const ok = BASIS_DOMAIN[t]
   return ok && basis && ok.includes(basis) ? (basis as Line['carton_basis']) : 'ctn'
+}
+
+/** m³ của MỘT tấm xốp theo D×R×Dày của dòng — null khi chưa đủ ba số. */
+export function m3MotTam(l: Line): number | null {
+  return foamM3PerSheet(n(l.inner_l_mm), n(l.inner_w_mm), n(l.inner_h_mm))
+}
+
+/**
+ * XỐP: QUY CÁCH GÕ TRÊN LƯỚI → D×R×Dày + TÍNH THEO m³ (05/10/2026).
+ *
+ * Đơn Tân Hoàng Long "Xốp 8kg 1000*800*50 · 4.480 tấm · 520.000đ/m³": dòng tự gõ
+ * (không qua danh mục nên `newLine` không bóc quy cách), ba ô D×R×Dày nằm ở chi
+ * tiết dòng còn trống, "Tính theo" để tấm/cuộn, người soạn gõ 0,04 (m³ MỘT tấm)
+ * vào ô Tổng m³ → tiền ra 4.480 × 520.000 = 2,33 TỶ thay vì 179,2 m³ × 520.000 =
+ * 93.184.000đ.
+ *
+ * Luật (chỉ mẫu xốp; gọi mỗi lần sửa dòng):
+ *  · quy cách đổi và là ba số mm (`parseInnerDims` — mút cuộn "8mm x 1.05m x 50m"
+ *    có đơn vị nên KHÔNG khớp) → điền D×R×Dày, nếu ba ô đang trống hoặc đang là số
+ *    bóc từ quy cách cũ (sửa gõ nhầm quy cách thì kích thước chạy theo);
+ *  · lần điền đầu (ba ô trống) → "Tính theo" sang m³ — xốp tấm có kích thước là
+ *    loại NCC báo giá theo khối; người soạn đổi lại tấm được;
+ *  · Tổng m³ gõ tay đúng bằng m³ MỘT tấm (SL > 1) → xoá, về tự tính.
+ */
+export function withSpecDims(t: PoTemplate, prev: Line, next: Line): Line {
+  let out = next
+  /*
+   * ĐỔI "TÍNH THEO" THÌ BỎ "GIÁ THEO" CŨ (05/10/2026, soi trên app). Dòng ĐÃ LƯU
+   * mở lại mang `price_per` = cơ sở giá đã chốt ('unit' cho dòng theo tấm), và
+   * `deriveLine` để `price_per` THẮNG `carton_basis` — đổi sang m³ trên màn mà
+   * tiền đứng yên. Ở mẫu có ô "Tính theo" (bao bì, kính, xốp), người dùng vừa
+   * chọn lại ô đó là đã nói rõ ý; lựa chọn "Giá theo" cũ hết nghĩa.
+   */
+  if (BASIS_DOMAIN[t] && next.carton_basis !== prev.carton_basis)
+    out = { ...out, price_per: '' }
+  if (t !== 'foam') return out
+  if (next.spec !== prev.spec) {
+    const d = parseInnerDims(next.spec)
+    const trong =
+      prev.inner_l_mm === '' && prev.inner_w_mm === '' && prev.inner_h_mm === ''
+    const cu = parseInnerDims(prev.spec)
+    const theoQuyCachCu = !!cu && cu[0] === prev.inner_l_mm && cu[1] === prev.inner_w_mm && cu[2] === prev.inner_h_mm // prettier-ignore
+    if (d && (trong || theoQuyCachCu)) {
+      out = { ...out, inner_l_mm: d[0], inner_w_mm: d[1], inner_h_mm: d[2] }
+      if (trong) out = { ...out, carton_basis: 'm3', price_per: '' }
+      if (laM3MotTam(out)) out = { ...out, qty2_manual: '' }
+    }
+  }
+  return out
+}
+
+/** Tổng m³ của dòng xốp theo D×R×Dày × SL — bất kể đang tính tiền theo tấm hay m³. */
+export function tongM3(l: Line): number | null {
+  const mot = m3MotTam(l)
+  return mot == null ? null : Math.round(mot * (Number(l.qty) || 0) * 1e6) / 1e6
+}
+
+/**
+ * Tổng m³ GÕ TAY đúng bằng m³ của MỘT tấm mà SL > 1 — gần như chắc là gõ nhầm
+ * nghĩa ô (đơn THL: gõ 0,04 cho 4.480 tấm). Lưới hiện gợi ý tại ô để đổi.
+ */
+export function laM3MotTam(l: Line): boolean {
+  const mot = m3MotTam(l)
+  return (
+    mot != null &&
+    Number(l.qty) > 1 &&
+    (l.qty2_manual ?? '') !== '' &&
+    Math.abs(Number(l.qty2_manual) - mot) < 1e-9
+  )
 }
 
 /** Cặp quy đổi giá từ danh mục — rỗng khi không khai hoặc trùng ĐVT đặt. */
