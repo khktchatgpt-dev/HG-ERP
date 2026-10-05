@@ -1108,6 +1108,14 @@ describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Ho
     const tay = xop({ inner_l_mm: 1520, inner_w_mm: 920, inner_h_mm: 10 })
     expect(withSpecDims('foam', tay, { ...tay, spec: '1000*800*50' }).inner_l_mm).toBe(1520)
   })
+  it('đơn ĐÃ LƯU (Giá theo = ĐVT mua) đổi Tính theo sang m³ thì tiền theo m³ — không bị lựa chọn cũ đè', () => {
+    const luu = xop({ price_per: 'unit', inner_l_mm: 1000, inner_w_mm: 800, inner_h_mm: 50 })
+    const doi = withSpecDims('foam', luu, { ...luu, carton_basis: 'm3' })
+    expect(doi.price_per).toBe('')
+    expect(lineAmount('foam', doi)).toBe(93_184_000)
+    const tuQuyCach = withSpecDims('foam', xop({ price_per: 'unit' }), xop({ price_per: 'unit', spec: '1000*800*50' })) // prettier-ignore
+    expect(lineAmount('foam', tuQuyCach)).toBe(93_184_000)
+  })
   it('mút cuộn có đơn vị trong quy cách và mẫu khác: không đụng', () => {
     const p = xop()
     expect(withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis).toBe('ctn')

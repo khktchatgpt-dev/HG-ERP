@@ -419,7 +419,7 @@ export function EditCell({
           {template === 'foam' &&
             l.carton_basis !== 'm3' &&
             !laM3MotTam(l) &&
-            (m3MotTam(l) != null || manual !== '') && (
+            (m3MotTam(l) != null ? (
               <CellHint
                 tone="warn"
                 title="Dòng có số khối nhưng tiền đang tính SL × đơn giá (theo tấm/cuộn). Xốp báo giá theo m³ thì bấm để tính theo tổng m³."
@@ -427,7 +427,17 @@ export function EditCell({
               >
                 tiền theo tấm · đổi m³
               </CellHint>
-            )}
+            ) : manual !== '' ? (
+              // Chưa có kích thước thì KHÔNG cho đổi m³ — máy sẽ lấy số gõ tay
+              // (thường là m³ MỘT tấm) làm tổng và ra tiền bé hẳn. Gõ quy cách
+              // D×R×Dày là `withSpecDims` tự lo hết.
+              <CellHint
+                tone="warn"
+                title="Tiền đang tính SL × đơn giá (theo tấm/cuộn). Xốp báo giá theo m³: gõ quy cách dạng 1000*800*50 — máy tự điền kích thước, tính tổng m³ và tiền theo m³."
+              >
+                tiền theo tấm · gõ quy cách D×R×Dày
+              </CellHint>
+            ) : null)}
         </>
       )
     }

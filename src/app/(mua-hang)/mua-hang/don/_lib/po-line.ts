@@ -318,8 +318,17 @@ export function m3MotTam(l: Line): number | null {
  *  · Tổng m³ gõ tay đúng bằng m³ MỘT tấm (SL > 1) → xoá, về tự tính.
  */
 export function withSpecDims(t: PoTemplate, prev: Line, next: Line): Line {
-  if (t !== 'foam') return next
   let out = next
+  /*
+   * ĐỔI "TÍNH THEO" THÌ BỎ "GIÁ THEO" CŨ (05/10/2026, soi trên app). Dòng ĐÃ LƯU
+   * mở lại mang `price_per` = cơ sở giá đã chốt ('unit' cho dòng theo tấm), và
+   * `deriveLine` để `price_per` THẮNG `carton_basis` — đổi sang m³ trên màn mà
+   * tiền đứng yên. Ở mẫu có ô "Tính theo" (bao bì, kính, xốp), người dùng vừa
+   * chọn lại ô đó là đã nói rõ ý; lựa chọn "Giá theo" cũ hết nghĩa.
+   */
+  if (BASIS_DOMAIN[t] && next.carton_basis !== prev.carton_basis)
+    out = { ...out, price_per: '' }
+  if (t !== 'foam') return out
   if (next.spec !== prev.spec) {
     const d = parseInnerDims(next.spec)
     const trong =
@@ -328,7 +337,7 @@ export function withSpecDims(t: PoTemplate, prev: Line, next: Line): Line {
     const theoQuyCachCu = !!cu && cu[0] === prev.inner_l_mm && cu[1] === prev.inner_w_mm && cu[2] === prev.inner_h_mm // prettier-ignore
     if (d && (trong || theoQuyCachCu)) {
       out = { ...out, inner_l_mm: d[0], inner_w_mm: d[1], inner_h_mm: d[2] }
-      if (trong) out = { ...out, carton_basis: 'm3' }
+      if (trong) out = { ...out, carton_basis: 'm3', price_per: '' }
       if (laM3MotTam(out)) out = { ...out, qty2_manual: '' }
     }
   }
