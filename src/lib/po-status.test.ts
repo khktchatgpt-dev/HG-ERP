@@ -17,9 +17,15 @@ describe('poTrackStep', () => {
     }
   })
 
-  it('sáu bước phát hành ánh xạ đúng thứ tự', () => {
-    const doi = ['draft', 'pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit'] as const // prettier-ignore
+  it('năm bước phát hành ánh xạ đúng thứ tự (06/10/2026: bỏ bước "Đã gửi")', () => {
+    const doi = ['draft', 'pending_approval', 'approved', 'confirmed', 'in_transit'] as const // prettier-ignore
     doi.forEach((s, i) => expect(poTrackStep(s).at, s).toBe(i))
+    expect(PO_TRACK_STEPS).toHaveLength(doi.length)
+    expect(PO_TRACK_STEPS[poTrackStep('confirmed').at]).toBe('Chờ giao')
+  })
+
+  it('đơn "Đã gửi NCC" (gửi gấp, đơn cũ) đứng cùng bước với đã duyệt — cùng chờ NCC xác nhận', () => {
+    expect(poTrackStep('ordered')).toEqual(poTrackStep('approved'))
   })
 
   it('CHÍNH LỖI CŨ: về một phần / về đủ KHÔNG còn hiện là bước đầu', () => {
@@ -69,11 +75,12 @@ describe('poTrackStep', () => {
   Test canh cho cái đó không quay lại: tô hết về một tone là đỏ ngay.
 */
 describe('poTrackStep — tone nói nghĩa vòng đời, không dồn về một màu', () => {
-  it('nháp xám · chờ duyệt và đã duyệt hổ phách · đã gửi trở đi lam', () => {
+  it('nháp xám · chờ duyệt và chờ NCC xác nhận hổ phách · chờ giao trở đi lam', () => {
     expect(poTrackStep('draft').tone).toBe('idle')
     expect(poTrackStep('pending_approval').tone).toBe('wait')
     expect(poTrackStep('approved').tone).toBe('wait')
-    for (const s of ['ordered', 'confirmed', 'in_transit'] as const) {
+    expect(poTrackStep('ordered').tone).toBe('wait')
+    for (const s of ['confirmed', 'in_transit'] as const) {
       expect(poTrackStep(s).tone).toBe('run')
     }
   })

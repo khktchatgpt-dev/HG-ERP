@@ -116,21 +116,25 @@ export const KIND_ACTION: Record<SupplyTodoKind, ActionSpec> = {
   },
 
   /**
-   * ĐÃ DUYỆT · CHƯA GỬI NCC — một cú bấm, không hỏi gì thêm.
+   * ĐÃ DUYỆT · CHỜ NCC XÁC NHẬN (06/10/2026: bỏ bước "Gửi NCC", đơn đi thẳng
+   * sang "Chờ giao" khi NCC ừ).
    *
-   * Giám đốc đã ký, việc còn lại chỉ là bấm cho đơn ra khỏi cửa. Đây cũng là
-   * chỗ đơn nằm im lâu nhất theo số đo, nên phải là đường ngắn nhất trong màn.
+   * Giám đốc đã ký, việc còn lại là gọi NCC chốt. Đây cũng là chỗ đơn nằm im
+   * lâu nhất theo số đo, nên vẫn là đường ngắn nhất trong màn — nhưng có hộp
+   * hỏi lại, vì bấm nhầm là ghi một lời hứa NCC chưa nói.
    */
   unsent: {
-    label: 'Gửi nhà cung cấp',
-    done: 'Đã gửi NCC',
-    kindOfUi: 'direct',
+    label: 'NCC xác nhận',
+    done: 'Đã ghi NCC xác nhận — đơn chờ giao',
+    kindOfUi: 'sheet',
     stakes: 'vua',
+    sheetHint:
+      'Chỉ bấm khi nhà cung cấp đã nhận đơn và đồng ý giao. Đơn sang "Chờ giao"; lịch giao lúc soạn giữ nguyên, NCC hẹn khác thì sửa đợt ở Theo dõi đơn hàng.',
     build: ({ po }) => [
       {
-        path: `/api/dept/supply/pos/${po.id}/advance`,
+        path: `/api/dept/supply/pos/${po.id}/confirm`,
         method: 'POST',
-        body: { to: 'ordered' },
+        body: { shipments: [] },
       },
     ],
   },

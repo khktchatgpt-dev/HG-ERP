@@ -113,9 +113,9 @@ export function GiamSatMuaHangScreen({
               href="/exec/approvals?loai=po"
             />
             <WorkTile
-              label="Duyệt rồi, chưa gửi NCC"
+              label="Duyệt rồi, chờ NCC xác nhận"
               count={T.unsent}
-              hint="Người mua gửi đơn đi"
+              hint="Người mua gọi NCC chốt"
               tone="warn"
               href={hop('unsent')}
             />{' '}
@@ -150,7 +150,7 @@ export function GiamSatMuaHangScreen({
               <THead>
                 <th>Người mua</th>
                 <th style={{ textAlign: 'right' }}>Chờ ký</th>
-                <th style={{ textAlign: 'right' }}>Duyệt, chưa gửi</th>
+                <th style={{ textAlign: 'right' }}>Duyệt, chờ NCC</th>
                 <th style={{ textAlign: 'right' }}>Đang về</th>
                 <th style={{ textAlign: 'right' }}>NCC chưa xác nhận</th>
                 <th style={{ textAlign: 'right' }}>Chưa hẹn giao</th>

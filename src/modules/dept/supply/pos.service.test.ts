@@ -544,6 +544,66 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
   })
 
   /*
+   * BỎ BƯỚC GỬI (06/10/2026): Giám đốc duyệt xong là bấm "NCC xác nhận", đơn đi
+   * thẳng approved → confirmed. Bỏ bước nhưng giữ đủ hàng rào + dấu vết của nó.
+   */
+  it('approved → confirmed: một lần ghi, ordered_at = confirmed_at, vẫn bắn po.ordered', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'approved' } as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([{ material_id: 'm1', unit_price: 1000 }] as never) // prettier-ignore
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'confirmed' } as never)
+
+    await posService.confirm(staff, 'po1', { shipments: [] })
+
+    expect(posRepo.patch).toHaveBeenCalledTimes(1)
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('confirmed')
+    expect(patch.confirmed_at).toBeTruthy()
+    expect(patch.ordered_at).toBe(patch.confirmed_at)
+    const evt = vi.mocked(emit).mock.calls[0][0] as { name: string }
+    expect(evt.name).toBe('po.ordered')
+  })
+
+  it('advance(confirmed) từ approved đi cùng cửa confirm — có mốc confirmed_at', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'approved' } as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([] as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'confirmed' } as never)
+    await posService.advance(staff, 'po1', 'confirmed')
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch).toMatchObject({ status: 'confirmed' })
+    expect(patch.confirmed_at).toBeTruthy()
+  })
+
+  it('approved chưa có hẹn giao, không khai đợt → chặn xác nhận', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'approved', expected_at: null } as never) // prettier-ignore
+    await expect(posService.confirm(staff, 'po1', { shipments: [] })).rejects.toThrow(/hẹn giao/) // prettier-ignore
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('approved mà NCC đang khoá đặt hàng → chặn xác nhận', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'approved' } as never)
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1', is_active: true, can_order: false } as never) // prettier-ignore
+    await expect(posService.confirm(staff, 'po1', { shipments: [] })).rejects.toThrow(/khoá đặt hàng/) // prettier-ignore
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('ordered → confirm: KHÔNG đè ordered_at, KHÔNG bắn lại po.ordered', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'ordered' } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'confirmed' } as never)
+    await posService.confirm(staff, 'po1', { shipments: [] })
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect('ordered_at' in patch).toBe(false)
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it.each(['draft', 'pending_approval', 'confirmed'] as const)(
+    'từ "%s" không ghi NCC xác nhận được',
+    async (st) => {
+      vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: st } as never)
+      await expect(posService.confirm(staff, 'po1', { shipments: [] })).rejects.toMatchObject({ status: 400 }) // prettier-ignore
+    },
+  )
+
+  /*
    * "ĐÃ NHẬN ĐỦ" bằng tay (0134): luật là mọi DÒNG VẬT TƯ KHO phải về đủ theo
    * sổ (BR-08 giữ phần kho) — dòng tự do nghiệm thu ngoài sổ do người xác nhận.
    */

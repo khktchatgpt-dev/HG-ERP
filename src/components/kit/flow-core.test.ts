@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PO_STATUSES } from '@/lib/po-status'
-import { buildPoMarks, daysHeld, isStale, poHolder } from './flow-core'
+import { buildPoMarks, daysHeld, hadSendStep, isStale, poHolder } from './flow-core'
 
 /*
   Dữ liệu đo thật từ DB 09/09/2026: PO-2026-0065 (nháp), created_at
@@ -138,7 +138,23 @@ describe('buildPoMarks — dòng thời gian', () => {
   it('mốc chưa tới vẫn có mặt với at = null', () => {
     const marks = buildPoMarks(NHAP)
     expect(marks.find((m) => m.key === 'approved')?.at).toBeNull()
-    expect(marks.find((m) => m.key === 'ordered')?.at).toBeNull()
+    expect(marks.find((m) => m.key === 'confirmed')?.at).toBeNull()
+  })
+
+  /*
+    BỎ BƯỚC GỬI (06/10/2026): đường thường đi thẳng Đã duyệt → NCC xác nhận, server
+    đóng ordered_at = confirmed_at. Mốc "Gửi nhà cung cấp" chỉ bày khi đơn thật sự
+    đi qua "Đã gửi NCC" (gửi gấp ký bù, đơn cũ).
+  */
+  it('mốc gửi NCC chỉ có khi đơn thật sự đi qua bước gửi', () => {
+    const t = '2026-10-06T02:00:00Z'
+    expect(buildPoMarks(NHAP).some((m) => m.key === 'ordered')).toBe(false)
+    expect(buildPoMarks({ ...NHAP, status: 'confirmed', ordered_at: t, confirmed_at: t }).some((m) => m.key === 'ordered')).toBe(false) // prettier-ignore
+    const cu = buildPoMarks({ ...NHAP, status: 'confirmed', ordered_at: '2026-09-01T02:00:00Z', confirmed_at: t }) // prettier-ignore
+    expect(cu.find((m) => m.key === 'ordered')?.at).toBe('2026-09-01T02:00:00Z')
+    expect(hadSendStep({ ordered_at: '2026-09-01T02:00:00Z', confirmed_at: null })).toBe(
+      true,
+    )
   })
 
   it('đang chờ duyệt thì suy ra mốc gửi duyệt từ updated_at', () => {
@@ -160,14 +176,7 @@ describe('buildPoMarks — dòng thời gian', () => {
 
   it('mốc theo đúng thứ tự quy trình', () => {
     const keys = buildPoMarks(NHAP).map((m) => m.key)
-    expect(keys).toEqual([
-      'created',
-      'submitted',
-      'approved',
-      'ordered',
-      'confirmed',
-      'in_transit',
-    ])
+    expect(keys).toEqual(['created', 'submitted', 'approved', 'confirmed', 'in_transit'])
   })
 
   it('gắn được tên người soạn và người duyệt', () => {

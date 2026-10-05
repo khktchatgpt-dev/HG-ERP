@@ -8,7 +8,8 @@ type Params = { params: Promise<{ id: string }> }
 
 /**
  * NCC xác nhận đơn (0152) — NV cung ứng ghi lại cam kết + kế hoạch giao theo
- * đợt. Đơn `ordered` → `confirmed`; expected_at đồng bộ = ngày đợt sớm nhất.
+ * đợt. Đơn `approved` (06/10/2026 — bỏ bước gửi) hoặc `ordered` → `confirmed`;
+ * expected_at đồng bộ = ngày đợt sớm nhất.
  */
 export const POST = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()

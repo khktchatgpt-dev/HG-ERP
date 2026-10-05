@@ -302,6 +302,23 @@ async function traceReason(user: User, poId: string, body: string | null): Promi
   )
 }
 
+/**
+ * ĐƠN ĐÃ RA KHỎI CỬA = giá đã chốt thật → cập nhật "giá mua gần nhất" của danh
+ * mục (handler po.catalog — chỉ đơn VND, xem po-catalog-backfill). Bắn ở bước
+ * gửi NCC, hoặc ở bước NCC xác nhận khi đơn đi thẳng từ "Đã duyệt".
+ */
+async function emitOrdered(user: User, before: Po) {
+  const lines = await posRepo.listLines(before.id)
+  await emit({
+    name: 'po.ordered',
+    po_id: before.id,
+    code: before.code,
+    currency: before.currency ?? 'VND',
+    ordered_by: user.id,
+    lines: lines.map((l) => ({ material_id: l.material_id, unit_price: l.unit_price })),
+  })
+}
+
 export const posService = {
   /** Đọc: mọi NV đã đăng nhập (Kho nhận hàng, Kế toán xem phải trả…). */
   async list(_user: User, opts: Parameters<typeof posRepo.list>[0]) {
@@ -678,7 +695,8 @@ export const posService = {
 
   /**
    * ⭐ BR-05 nửa sau: CHƯA DUYỆT THÌ KHÔNG GỬI ĐƯỢC CHO NCC.
-   * approved → ordered (gửi NCC, đóng dấu ordered_at) → confirmed → in_transit.
+   * approved → confirmed (NCC xác nhận, 06/10/2026 — bỏ qua bước gửi) → in_transit.
+   * approved → ordered (gửi NCC) vẫn còn cho đường gửi gấp và đơn cũ.
    * partial/received do Kho tự cập nhật khi nhập hàng (BR-08).
    */
   async advance(
@@ -693,7 +711,8 @@ export const posService = {
 
     const allowed: Record<string, string[]> = {
       ordered: ['approved'], // ⭐ BR-05: chỉ từ approved
-      confirmed: ['ordered'],
+      // Từ 06/10/2026 xác nhận được thẳng từ "Đã duyệt" — xem `confirm`.
+      confirmed: ['approved', 'ordered'],
       in_transit: ['confirmed', 'ordered'],
       received: ['ordered', 'confirmed', 'in_transit', 'partial'],
     }
@@ -704,6 +723,9 @@ export const posService = {
           : `Không chuyển được từ "${before.status}" sang "${to}"`,
       )
     }
+    // NCC XÁC NHẬN đi một cửa duy nhất (`confirm`): mốc confirmed_at, sổ hẹn
+    // giao và — khi bỏ qua bước gửi — các hàng rào + sự kiện của bước gửi.
+    if (to === 'confirmed') return posService.confirm(user, id, { shipments: [] })
     /*
       GỬI NCC PHẢI CÓ HẸN GIAO (17/09/2026).
 
@@ -745,22 +767,7 @@ export const posService = {
       status: to,
       ...(to === 'ordered' ? { ordered_at: new Date().toISOString() } : {}),
     })
-    // GỬI NCC = giá đã chốt thật → cập nhật "giá mua gần nhất" của danh mục
-    // (handler po.catalog — chỉ đơn VND, xem po-catalog-backfill).
-    if (to === 'ordered') {
-      const lines = await posRepo.listLines(id)
-      await emit({
-        name: 'po.ordered',
-        po_id: id,
-        code: before.code,
-        currency: before.currency ?? 'VND',
-        ordered_by: user.id,
-        lines: lines.map((l) => ({
-          material_id: l.material_id,
-          unit_price: l.unit_price,
-        })),
-      })
-    }
+    if (to === 'ordered') await emitOrdered(user, before)
     return po
   },
 
@@ -790,8 +797,30 @@ export const posService = {
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     await assertPoOwner(user, before)
-    if (before.status !== 'ordered') {
-      throw BadRequest('Chỉ xác nhận được đơn ĐÃ GỬI NCC (đang ở "Đã gửi NCC")')
+    /*
+      BỎ BƯỚC "GỬI NCC" (06/10/2026, chủ dự án chốt): sau khi Giám đốc duyệt,
+      nút chính là "NCC xác nhận" — đơn đi thẳng approved → confirmed ("Chờ
+      giao"). Ngoài đời người mua gửi đơn qua Zalo/điện thoại rồi chờ NCC ừ; bấm
+      "Gửi NCC" chỉ để rồi lại phải bấm "NCC xác nhận" là một bước không ai làm
+      đúng lúc (đo 05/10: 23 đơn nằm "Đã gửi NCC" quá 2 ngày).
+
+      Bỏ bước KHÔNG bỏ hàng rào của nó: NCC khoá đặt hàng thì chặn, chưa có hẹn
+      giao (và cũng không khai đợt nào) thì chặn, `ordered_at` vẫn đóng dấu (mọi
+      báo cáo "ngày đặt" đọc cột này) và sự kiện `po.ordered` vẫn bắn để danh
+      mục cập nhật giá mua gần nhất. `ordered` vẫn sống cho đơn gửi gấp ký bù
+      và đơn cũ đã gửi — xác nhận chúng như trước.
+    */
+    if (before.status !== 'ordered' && before.status !== 'approved') {
+      throw BadRequest('Chỉ ghi NCC xác nhận cho đơn đã được Giám đốc duyệt')
+    }
+    const skipSend = before.status === 'approved'
+    if (skipSend) {
+      await assertSupplierCanOrder(before.supplier_id)
+      if (!before.expected_at && input.shipments.length === 0) {
+        throw BadRequest(
+          'Đơn chưa có hẹn giao — bấm "Sửa" khai ngày NCC hứa giao trước khi ghi xác nhận. Không có ngày thì không đo được trễ, và đơn không lên được lịch hàng về.',
+        )
+      }
     }
 
     /*
@@ -855,13 +884,19 @@ export const posService = {
     const minDate = earliestExpectedDate(
       input.shipments.map((s) => ({ expected_date: s.expected_date, status: 'planned' })),
     )
-    return posRepo.patch(id, {
+    const now = new Date().toISOString()
+    const po = await posRepo.patch(id, {
       status: 'confirmed',
-      confirmed_at: new Date().toISOString(),
+      confirmed_at: now,
       confirmed_note: input.confirmed_note ?? null,
+      // Bỏ qua bước gửi: ordered_at = CÙNG mốc với confirmed_at — dòng thời gian
+      // nhận ra dấu này để không bày thêm bước "Gửi NCC" chưa từng xảy ra.
+      ...(skipSend ? { ordered_at: now } : {}),
       // Không có đợt thì giữ nguyên hẹn giao cũ — đừng xoá mốc của đơn.
       ...(minDate ? { expected_at: minDate } : {}),
     })
+    if (skipSend) await emitOrdered(user, before)
+    return po
   },
 
   /** Kế hoạch giao của đơn — cho trang chi tiết + form nhập kho (GĐ2). */

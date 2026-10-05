@@ -50,16 +50,22 @@ export const PO_BUCKETS: {
     statuses: ['pending_approval'],
     actionable: true,
   },
+  /*
+    06/10/2026 — bỏ bước "Gửi NCC": duyệt xong là CHỜ NCC XÁC NHẬN, xác nhận xong
+    là CHỜ GIAO. Đơn "Đã gửi NCC" (gửi gấp, đơn cũ) cũng đang chờ NCC xác nhận
+    nên về chung ngăn — tên ngăn khớp đúng nhãn trạng thái ở trang đơn và màn
+    Giám đốc, một việc một tên.
+  */
   {
     key: 'ready',
-    label: 'Đã duyệt · chưa gửi',
-    statuses: ['approved'],
+    label: 'Chờ NCC xác nhận',
+    statuses: ['approved', 'ordered'],
     actionable: true,
   },
   {
     key: 'inflight',
-    label: 'Đang về',
-    statuses: ['ordered', 'confirmed', 'in_transit', 'partial'],
+    label: 'Chờ giao · đang về',
+    statuses: ['confirmed', 'in_transit', 'partial'],
   },
   { key: 'received', label: 'Về đủ', statuses: ['received'] },
   { key: 'cancelled', label: 'Đã huỷ', statuses: ['cancelled'] },
@@ -213,7 +219,8 @@ export function poMatches(
   if (f.unconfirmed && classifyTodo(watchOf(p), ctx.today) !== 'unconfirmed') return false
   if (
     f.ownerId !== 'all' &&
-    poOwner({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }) !== f.ownerId
+    poOwner({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }) !==
+      f.ownerId
   )
     return false
   if (f.template !== 'all' && (p.template ?? '') !== f.template) return false

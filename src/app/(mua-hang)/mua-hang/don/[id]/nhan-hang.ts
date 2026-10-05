@@ -202,10 +202,14 @@ export function receiveActions(i: {
   const gate = (ok: boolean, why: string) =>
     notOwn ? { ok: false, why: notOwn } : ok ? { ok: true } : { ok: false, why }
   return {
-    confirm: gate(i.status === 'ordered', i.status === 'confirmed' || i.status === 'in_transit' || i.status === 'partial' ? 'NCC đã xác nhận rồi — thêm đợt nếu NCC hẹn giao bù' : 'Chỉ ghi được sau khi đã gửi đơn cho NCC'), // prettier-ignore
+    // Từ 06/10/2026 xác nhận được ngay từ "Đã duyệt" (bỏ bước gửi — khớp service).
+    confirm: gate(i.status === 'approved' || i.status === 'ordered', i.status === 'confirmed' || i.status === 'in_transit' || i.status === 'partial' ? 'NCC đã xác nhận rồi — thêm đợt nếu NCC hẹn giao bù' : 'Chỉ ghi được sau khi Giám đốc duyệt đơn'), // prettier-ignore
     // Từ 27/09/2026 mở từ lúc đã duyệt — không phải chờ NCC xác nhận (khớp service).
     addShipment: gate(['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(i.status) && i.hasStockLines, !i.hasStockLines ? 'Đơn không có dòng vật tư kho để chia đợt' : 'Chỉ thêm đợt cho đơn đã duyệt và chưa về đủ'), // prettier-ignore
-    transit: gate(i.status === 'confirmed', 'Chỉ dùng khi đơn ở bước "NCC xác nhận"'),
+    transit: gate(
+      i.status === 'confirmed',
+      'Chỉ dùng khi đơn ở bước "Chờ giao" (NCC đã xác nhận)',
+    ),
     receive: { ok: sent, why: sent ? undefined : 'Chỉ nhận hàng được sau khi đơn đã gửi nhà cung cấp' }, // prettier-ignore
     closeShort: gate(sent && i.openStockLines > 0, i.openStockLines === 0 ? 'Không còn dòng nào đang chờ về' : 'Chỉ chốt thiếu trên đơn đã gửi NCC'), // prettier-ignore
     acceptByHand: gate(sent && !i.hasStockLines, i.hasStockLines ? 'Đơn có dòng vật tư kho — nhận qua phiếu nhập bên Kho' : 'Chỉ dùng cho đơn đã gửi NCC'), // prettier-ignore
