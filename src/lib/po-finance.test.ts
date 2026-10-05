@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { invoiceLineGross, poFinanceView, poVeThieu } from './po-finance'
+import { invoiceLineGross, poFinanceView, poVeThieu, veThieuChuaVat } from './po-finance'
 
 const base = { ordered_gross: 845_477_411, received_net: 0, invoiced_net: 0, invoiced_gross: 0, paid: 0 } // prettier-ignore
 
@@ -80,5 +80,18 @@ describe('poVeThieu — Đặt · Đã về · Còn thiếu bằng tiền (Tổn
   })
   it('dòng theo kg: về đủ cây mà nhẹ cân vẫn là đủ', () => {
     expect(poVeThieu([dong(50, 2_000_000, 50, 1_900_000)]).missing_lines).toBe(0)
+  })
+})
+
+describe('veThieuChuaVat — Tổng quan luôn là số CHƯA VAT (đơn của Thi, 05/10/2026)', () => {
+  const vt = { ordered_net: 12_312_000, received_net: 0, missing_net: 12_312_000, missing_lines: 1 }
+  it('đơn giá gồm VAT 8% → tách thuế như đầu đơn: 12.312.000 → 11.400.000', () => {
+    const r = veThieuChuaVat(vt, { priceIncludesVat: true, vatRate: 8 })
+    expect([r.ordered_net, r.missing_net, r.missing_lines]).toEqual([11_400_000, 11_400_000, 1])
+    expect(veThieuChuaVat({ ...vt, ordered_net: 1_332_000 }, { priceIncludesVat: true, vatRate: 8 }).ordered_net).toBe(1_233_333.33) // prettier-ignore
+  })
+  it('đơn giá chưa VAT hoặc không VAT → giữ nguyên', () => {
+    expect(veThieuChuaVat(vt, { priceIncludesVat: false, vatRate: 8 })).toBe(vt)
+    expect(veThieuChuaVat(vt, { priceIncludesVat: true, vatRate: 0 })).toBe(vt)
   })
 })
