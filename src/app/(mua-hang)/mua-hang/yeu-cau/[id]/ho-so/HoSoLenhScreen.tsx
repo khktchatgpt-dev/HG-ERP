@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { LsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
 import type { LsxTemplate } from '@/lib/lsx-template'
@@ -7,6 +8,8 @@ import { coThongSo, gomThongSo } from '@/lib/lsx-spec-summary'
 import {
   Btn,
   Cell,
+  Chip,
+  FilterBar,
   Code,
   Crumb,
   Empty,
@@ -72,6 +75,7 @@ export function HoSoLenhScreen({
   today: string
   imageUrls: Record<string, string>
 }) {
+  const [xem, setXem] = useState<'phieu' | 'thongso'>('phieu')
   const lines = groups.flatMap((g) => g.lines)
   const nhom = gomThongSo(
     lsx.products.map((p) => ({ code: p.code, name: p.name, specs: p.specs })),
@@ -188,40 +192,48 @@ export function HoSoLenhScreen({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <Muc
-          title={`Phiếu lệnh · ${lines.length} dòng · ${groups.length} nhóm`}
-          phu="đúng cột của phiếu in, nhóm theo đơn hàng / số PO"
-        >
-          {lines.length === 0 ? (
-            <Empty
-              headline="Lệnh chưa có dòng sản phẩm nào"
-              reason="Dòng lệnh do Bán hàng soạn ở màn lệnh của họ. Lệnh không có dòng thì không tính ra được cần mua gì — mọi con số vật tư của lệnh này bằng 0 vì lý do đó, không phải vì đã mua đủ."
-              next={
-                <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
-                  Xem vật tư của lệnh
-                </Btn>
-              }
-            />
-          ) : (
-            <PhieuLenh
-              template={template}
-              groups={groups}
-              revision={dau.revision}
-              imageUrls={imageUrls}
-            />
-          )}
-        </Muc>
-
-        {/*
-          THÔNG SỐ KỸ THUẬT GOM THEO LỆNH — thứ người mua chép sang đơn khi đặt
-          sơn, kính, vải. Phiếu ở trên bày từng dòng; khối này trả lời "cả lệnh
-          có mấy loại sơn" mà không phải dò 87 dòng. Gom bằng `lib/lsx-spec-summary`.
-        */}
-        <Muc
-          title="Thông số kỹ thuật gom theo lệnh"
-          phu="để chép sang đơn mua sơn, kính, vải"
-        >
+      {/*
+        MỘT VÙNG CUỘN DUY NHẤT (05/10/2026 — chủ dự án: "có 2 thanh scroll rất khó
+        dùng"): bản trước thân màn cuộn dọc, bên trong phiếu lại cuộn riêng ở
+        560px — hai thanh lồng nhau và chiều cao cứng không hợp màn 730px lẫn
+        1080px. Nay phiếu và khối thông số là HAI CÁCH XEM, cái đang chọn chiếm
+        trọn phần còn lại của khung và tự cuộn (dọc lẫn ngang) — đầu bảng, cột
+        Mã SP, chân tổng dính đúng vì cùng một vùng cuộn.
+      */}
+      <FilterBar dense label="Xem theo">
+        <Chip on={xem === 'phieu'} count={lines.length} onClick={() => setXem('phieu')}>
+          Phiếu lệnh
+        </Chip>
+        <Chip on={xem === 'thongso'} onClick={() => setXem('thongso')}>
+          Thông số gom
+        </Chip>
+        <span className="text-k-label ml-auto text-[var(--ink-3)]">
+          {xem === 'phieu'
+            ? `${groups.length} nhóm · đúng cột của phiếu in, nhóm theo đơn hàng / số PO`
+            : 'cả lệnh có mấy loại sơn, kính, vải — để chép sang đơn mua'}
+        </span>
+      </FilterBar>
+      {xem === 'phieu' &&
+        (lines.length === 0 ? (
+          <Empty
+            headline="Lệnh chưa có dòng sản phẩm nào"
+            reason="Dòng lệnh do Bán hàng soạn ở màn lệnh của họ. Lệnh không có dòng thì không tính ra được cần mua gì — mọi con số vật tư của lệnh này bằng 0 vì lý do đó, không phải vì đã mua đủ."
+            next={
+              <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
+                Xem vật tư của lệnh
+              </Btn>
+            }
+          />
+        ) : (
+          <PhieuLenh
+            template={template}
+            groups={groups}
+            revision={dau.revision}
+            imageUrls={imageUrls}
+          />
+        ))}
+      {xem === 'thongso' && (
+        <div className="min-h-0 flex-1 overflow-auto">
           {!coThongSo(nhom) ? (
             <Empty
               headline="Lệnh chưa khai thông số nào"
@@ -278,38 +290,13 @@ export function HoSoLenhScreen({
               </tbody>
             </Table>
           )}
-        </Muc>
-      </div>
+        </div>
+      )}
 
       <StatusBar
         left={[`Lệnh ${lsx.code}`, lsx.customer_name]}
         right={`${lines.length} mã · ${showNum(tongSl)} SP · ${lsx.pos.length} đơn mua`}
       />
     </ScreenFrame>
-  )
-}
-
-/** Khối có tiêu đề — ngăn nhau bằng một vạch mảnh, không thẻ nổi (luật 4). */
-function Muc({
-  title,
-  phu,
-  children,
-}: {
-  title: string
-  phu?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="border-b border-[var(--line)]">
-      <h2 className="text-k-label bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5 font-semibold tracking-[.06em] text-[var(--ink-2)] uppercase">
-        {title}
-        {phu && (
-          <span className="ml-2 font-normal tracking-normal text-[var(--ink-3)] normal-case">
-            — {phu}
-          </span>
-        )}
-      </h2>
-      {children}
-    </section>
   )
 }

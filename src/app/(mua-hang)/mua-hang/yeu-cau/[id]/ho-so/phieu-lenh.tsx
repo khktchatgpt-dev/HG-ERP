@@ -61,7 +61,7 @@ export function PhieuLenh({
   )
 
   return (
-    <div className="max-h-[560px] overflow-auto border-b border-[var(--line)]">
+    <div className="min-h-0 flex-1 overflow-auto border-b border-[var(--line)]">
       <table className="text-k-body min-w-full border-separate border-spacing-0">
         <thead>
           <tr>
