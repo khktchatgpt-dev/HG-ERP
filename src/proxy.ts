@@ -41,6 +41,9 @@ const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   // Hoá đơn NCC không phải việc của Cung ứng — trang bên khu Mua hàng đã bỏ
   // 17/09/2026, ai còn giữ link cũ thì đẩy thẳng sang sổ của Kế toán.
   ['/mua-hang/hoa-don', '/finance/hoa-don-ncc'],
+  // Trang lãi/lỗ theo lệnh gỡ 03/10/2026 (chủ dự án: "bỏ trang lãi lỗ, xem chi tiết
+  // sẽ phân tích bên trong") — phân tích nằm trong ngăn soi của bảng kê giá trị đơn.
+  ['/exec/lai-lo', '/exec/gia-tri-don'],
   /*
     KHU CUNG ỨNG CŨ `/planning/*` ĐÃ XOÁ HẲN (29/09/2026, chủ dự án chốt "xoá
     hết"). Link/bookmark cũ đẩy sang màn mới tương ứng. Khớp theo TIỀN TỐ và

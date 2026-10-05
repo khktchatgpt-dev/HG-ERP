@@ -1209,6 +1209,7 @@ export function Grid<T = unknown>({
   engine,
   onRowClick,
   isSelected,
+  size = 'sm',
 }: {
   /** Bề rộng tối thiểu trước khi cuộn ngang. Khai theo SỐ CỘT của chính màn:
    *  đóng cứng một con số thì lưới 14 cột luôn có cột cuối nằm ngoài tầm. */
@@ -1229,6 +1230,12 @@ export function Grid<T = unknown>({
   onRowClick?: (row: T) => void
   /** Chỉ kiểu máy: dòng nào đang chọn — tô nền nhạt màu hành động. */
   isSelected?: (row: T) => boolean
+  /**
+   * Cỡ chữ. `sm` (mặc định) = lưới chứng từ: thân 12px, tiêu đề 11px — dòng
+   * nhiều cột, cần nhét vừa. `md` = bảng BÁO CÁO để đọc (BGĐ, họp): thân 13px
+   * mono, tiêu đề 12px, đúng thang chữ nền — ít cột, người đọc dò số theo hàng.
+   */
+  size?: 'sm' | 'md'
 }) {
   const ref = useRef<HTMLDivElement>(null)
   useColSpanGuard(ref, 'Grid')
@@ -1237,7 +1244,10 @@ export function Grid<T = unknown>({
       className={cx('k-gridwrap', engine?.density === 'day' && 'kit kit-dense')}
       ref={ref}
     >
-      <table className="k-grid" style={minWidth ? { minWidth } : undefined}>
+      <table
+        className={cx('k-grid', size === 'md' && 'k-grid-md')}
+        style={minWidth ? { minWidth } : undefined}
+      >
         {engine ? (
           <EngineGrid engine={engine} onRowClick={onRowClick} isSelected={isSelected} />
         ) : (
@@ -1320,15 +1330,24 @@ function EngineGrid<T>({
   )
 }
 
-/** Tự bọc `<tr>` — hàng tiêu đề luôn là một dòng, không có ngoại lệ. */
+/**
+ * Tự bọc `<tr>`. Một hàng tiêu đề là mặc định; có `groups` thì thêm HÀNG NHÓM
+ * phía trên (03/10/2026 — bảng "Đơn bán của lệnh | Đơn mua cho lệnh"): cột
+ * đứng riêng khai ở hàng nhóm với `rows={2}`, nhóm khai `<Th group span>`, và
+ * `children` chỉ còn các cột CON của nhóm. Hàng con dính ngay dưới hàng nhóm.
+ */
 export function GridHead({
   children,
+  groups,
 }: {
-  /** Các `<Th>` — một ô mỗi cột. Không bọc `<tr>`, thành phần đã tự bọc. */
+  /** Các `<Th>` — một ô mỗi cột (có `groups` thì chỉ cột con). Không bọc `<tr>`, thành phần đã tự bọc. */
   children: ReactNode
+  /** Hàng tiêu đề NHÓM ở trên: `<Th rows={2}>` cho cột đứng riêng, `<Th group span={n}>` cho nhóm. Bỏ trống = một hàng. */
+  groups?: ReactNode
 }) {
   return (
-    <thead>
+    <thead className={groups ? 'k-gh2' : undefined}>
+      {groups && <tr>{groups}</tr>}
       <tr>{children}</tr>
     </thead>
   )
@@ -1410,17 +1429,35 @@ export function GridRow({
 export function Th({
   num,
   width,
+  span,
+  rows,
+  group,
+  sep,
   children,
 }: {
   /** Cột số: căn phải, để tiêu đề thẳng hàng với con số bên dưới. */
   num?: boolean
   /** Bề rộng cố định (px) cho cột hẹp: ô tick, STT, ĐVT. Cột chữ để trống cho tự giãn. */
   width?: number
+  /** Gộp cột (`colSpan`) — tiêu đề nhóm trải trên các cột con của nó. */
+  span?: number
+  /** Gộp hàng (`rowSpan`) — cột đứng riêng ở bảng có hàng nhóm (`GridHead groups`) khai `rows={2}`. */
+  rows?: number
+  /** Ô tiêu đề NHÓM: căn giữa, nền đậm hơn hàng con một bậc. */
+  group?: boolean
+  /** Vạch dọc bên trái — mở đầu một nhóm cột. Khai cùng cột ở `Td sep` để vạch chạy suốt thân bảng. */
+  sep?: boolean
   /** Tên cột. Cột ô tick không có chữ thì vẫn nên có tên ẩn (`sr-only`) — tiêu đề rỗng là cột câm. */
   children?: ReactNode
 }) {
   return (
-    <th className={cx(num && 'k-r')} style={width ? { width } : undefined}>
+    <th
+      className={cx(num && 'k-r', group && 'k-th-grp', sep && 'k-sep')}
+      colSpan={span}
+      rowSpan={rows}
+      scope={group ? 'colgroup' : 'col'}
+      style={width ? { width } : undefined}
+    >
       {children}
     </th>
   )
@@ -1430,6 +1467,7 @@ export function Td({
   num,
   tone,
   colSpan,
+  sep,
   children,
 }: {
   /** Ô số / tiền / ngày: căn phải + chữ mono tabular, để cột số thẳng hàng theo chiều dọc. */
@@ -1438,12 +1476,14 @@ export function Td({
   tone?: 'stop' | 'warn' | 'done'
   /** Gộp cột — chủ yếu cho nhãn ở chân bảng ("Cộng 2 dòng"). Tính vào tổng cột của hàng. */
   colSpan?: number
+  /** Vạch dọc bên trái — cùng cột với `Th sep`, mở đầu một nhóm cột. */
+  sep?: boolean
   /** Nội dung ô. Ô trống thật thì ghi "—" để người đọc biết không phải lỗi tải. */
   children?: ReactNode
 }) {
   return (
     <td
-      className={cx(num && 'k-r', num && 'num', tone && `k-t-${tone}`)}
+      className={cx(num && 'k-r', num && 'num', tone && `k-t-${tone}`, sep && 'k-sep')}
       colSpan={colSpan}
     >
       {children}
@@ -1518,68 +1558,9 @@ export function GridCheck({
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   13. HỒ SƠ DANH MỤC — mảng kit thiếu, lộ ra khi dựng màn nhà cung cấp
-   (Khuôn E) ngày 10/09/2026.
-
-   Chứng từ và hồ sơ danh mục KHÔNG dùng chung bộ đầu trang:
-
-     · chứng từ có vòng đời duyệt  → `StatusTrack` (đang ở bước nào);
-     · hồ sơ danh mục KHÔNG có     → `MetricStrip` (làm ăn ra sao).
-
-   Nhét hồ sơ vào khuôn chứng từ thì phải bịa ra một vòng đời cho nó, và
-   người dùng đi tìm nút "gửi duyệt" trên một thứ không ai duyệt bao giờ.
+   13. HỒ SƠ DANH MỤC (Khuôn E, 10/09/2026). `MetricStrip` / `Metric` đã tách
+   sang `Metric.tsx` (03/10/2026 — file này chạm trần độ dài).
    ══════════════════════════════════════════════════════════════════════ */
-
-export function MetricStrip({
-  children,
-}: {
-  /** Các `Metric`. Lưới tự xếp, mỗi ô tối thiểu 148px; vạch ngăn vẽ bằng bóng đổ nên hàng thiếu ô không lộ nền xám. */
-  children: ReactNode
-}) {
-  return <div className="k-metrics">{children}</div>
-}
-
-/**
- * MỘT Ô ĐO trên hồ sơ danh mục.
- *
- * `basis` BẮT BUỘC, không phải optional — cùng thủ pháp với `reason`/`next`
- * của `Empty`. Lý do: một tỉ lệ không kèm mẫu số là con số KHÔNG KIỂM ĐƯỢC.
- * "Giao đúng hẹn 89%" tính trên 9 đơn và trên 900 đơn là hai mức tin cậy
- * khác hẳn nhau, mà hai cái ô thì trông y hệt. Người duyệt chi vài trăm
- * triệu dựa vào ô đó, nên mẫu số phải nằm ngay dưới con số.
- *
- * `value = null` nghĩa là CHƯA ĐO ĐƯỢC, khác hẳn 0. Hiện "chưa đo được" chứ
- * không hiện 0% — 0% đọc thành "làm ăn tệ" trong khi sự thật là "chưa có gì
- * để chấm", và đó là hai kết luận trái ngược về cùng một nhà cung cấp.
- */
-export function Metric({
-  label,
-  value,
-  basis,
-  tone,
-}: {
-  /** Tên chỉ số, chữ hoa nhỏ ("Giao đúng hẹn", "QC loại"). */
-  label: string
-  /** Con số đã định dạng ("89%", "1,2 ngày"). null = chưa đủ dữ liệu để tính — ô hiện chữ "chưa đo được". KHÔNG được thay bằng 0. */
-  value: string | null
-  /** Mẫu số / cỡ mẫu, in ngay dưới con số ("8 / 9 đơn có hẹn ngày"). Bắt buộc: tỉ lệ không kèm mẫu số là con số không kiểm được. */
-  basis: string
-  /** Màu CON SỐ theo đánh giá: `done` tốt, `warn` cần để ý, `stop` xấu. Bỏ trống = trung tính. Bị bỏ qua khi `value` là null. */
-  tone?: 'stop' | 'warn' | 'done'
-}) {
-  return (
-    <div
-      className={cx(
-        'k-metric',
-        value == null ? 'k-metric-none' : tone && `k-metric-${tone}`,
-      )}
-    >
-      <div className="k-metric-l">{label}</div>
-      <div className="k-metric-v">{value ?? 'chưa đo được'}</div>
-      <div className="k-metric-b">{basis}</div>
-    </div>
-  )
-}
 
 /**
  * Dải cảnh báo "đây là BẢN GHI GỐC".

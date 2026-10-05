@@ -397,3 +397,72 @@ describe('Checks — dòng tóm tắt là vùng status', () => {
     await expectNoViolations(container)
   })
 })
+
+describe('GridHead groups — tiêu đề hai tầng (03/10/2026)', () => {
+  function BaoCao() {
+    return (
+      <Grid size="md">
+        <GridHead
+          groups={
+            <>
+              <Th rows={2}>Lệnh</Th>
+              <Th group sep span={2}>
+                Đơn bán của lệnh
+              </Th>
+            </>
+          }
+        >
+          <Th num sep>
+            Đơn
+          </Th>
+          <Th num>VND quy đổi</Th>
+        </GridHead>
+        <GridBody>
+          <GridRow>
+            <Td>02/26-27 - ROSCO</Td>
+            <Td num sep>
+              1
+            </Td>
+            <Td num>40.201.510.656</Td>
+          </GridRow>
+        </GridBody>
+      </Grid>
+    )
+  }
+
+  it('hai hàng tiêu đề, ô nhóm trải đúng số cột con, vạch mở nhóm ở cả tiêu đề lẫn thân', async () => {
+    const { container } = render(<BaoCao />)
+    const [top, sub] = container.querySelectorAll('thead tr')
+    expect(container.querySelector('thead')!.className).toContain('k-gh2')
+    expect(container.querySelector('table')!.className).toContain('k-grid-md')
+    const [lenh, nhom] = top.querySelectorAll('th')
+    expect(lenh.rowSpan).toBe(2)
+    expect(nhom.colSpan).toBe(2)
+    expect(nhom.getAttribute('scope')).toBe('colgroup')
+    expect(nhom.className).toContain('k-th-grp')
+    // Ô nhóm KHÔNG được mang lớp `k-grp` của thanh nhóm nút (đè padding/viền).
+    expect(nhom.className.split(' ')).not.toContain('k-grp')
+    expect(sub.querySelectorAll('th')).toHaveLength(2)
+    expect(sub.querySelector('th')!.className).toContain('k-sep')
+    expect(container.querySelector('tbody td.k-sep')!.textContent).toBe('1')
+    await expectNoViolations(container)
+  })
+
+  it('không khai groups thì vẫn một hàng tiêu đề như cũ', () => {
+    const { container } = render(
+      <Grid>
+        <GridHead>
+          <Th>Mã</Th>
+        </GridHead>
+        <GridBody>
+          <GridRow>
+            <Td>CN1527</Td>
+          </GridRow>
+        </GridBody>
+      </Grid>,
+    )
+    expect(container.querySelectorAll('thead tr')).toHaveLength(1)
+    expect(container.querySelector('thead')!.className).toBe('')
+    expect(container.querySelector('table')!.className).toBe('k-grid')
+  })
+})

@@ -7,6 +7,7 @@
 export * from './kit-core'
 export * from './Primitives'
 export * from './Erp'
+export * from './Metric'
 export * from './HeadChips'
 export * from './Icon'
 export * from './Nav'

@@ -642,8 +642,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Giá trị đơn theo lệnh',
             icon: 'circle-dollar-sign',
           },
-          // Lãi/lỗ theo lệnh quay lại 03/10/2026 sau khi nạp 233 giá KH — đứng cạnh bảng kê, không thay nhau.
-          { href: '/exec/lai-lo', label: 'Lãi / lỗ theo lệnh', icon: 'scale' },
+          // Trang Lãi/lỗ theo lệnh GỠ 03/10/2026 (chủ dự án) — phân tích nằm trong ngăn soi của bảng kê trên.
         ],
       },
       {

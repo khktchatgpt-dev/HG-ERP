@@ -971,6 +971,40 @@
   font-weight: 700;
   padding: 6px var(--pad-x);
 }
+/* HÀNG TIÊU ĐỀ NHÓM (`GridHead groups`, 03/10/2026). Hàng nhóm cao cố định để
+   hàng con dính ngay dưới nó mà không phải đo; ô `rowSpan` của hàng nhóm dính
+   top 0 và trải hết hai hàng. Nhóm nền đậm hơn một bậc, căn giữa. */
+.k-grid thead.k-gh2 > tr:first-child > th {
+  box-sizing: border-box;
+  height: var(--k-grid-h1, 30px);
+}
+.k-grid thead.k-gh2 > tr:nth-child(2) > th {
+  top: var(--k-grid-h1, 30px);
+}
+.k-grid th.k-th-grp {
+  text-align: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+/* Vạch mở đầu một nhóm cột — cùng cột ở tiêu đề, thân và chân. */
+.k-grid th.k-sep,
+.k-grid td.k-sep {
+  border-left: 1px solid var(--line);
+}
+/* CỠ "ĐỌC" (`Grid size="md"`): bảng báo cáo ít cột cho người đọc dò số — thân
+   13px mono theo thang chữ nền, tiêu đề 12px không nén chữ. */
+.k-grid.k-grid-md {
+  font-size: var(--fs-body);
+}
+.k-grid.k-grid-md tbody td,
+.k-grid.k-grid-md tfoot td {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.k-grid.k-grid-md th {
+  font-size: var(--fs-sm);
+  letter-spacing: 0;
+}
 .k-c-k {
   width: 26px;
   text-align: center;
@@ -1270,6 +1304,13 @@
 .k-metric-none .k-metric-v {
   color: var(--ink-empty);
   font-weight: 600;
+}
+/* Dải tóm tắt của màn báo cáo (`MetricStrip size="lg"`). */
+.k-metrics-lg .k-metric-v {
+  font-size: var(--fs-title);
+}
+.k-metrics-lg .k-metric-b {
+  font-size: var(--fs-sm);
 }
 
 /* ── 13. Dải cảnh báo SỬA BẢN GHI GỐC (Khuôn E) ────────────────────────

@@ -14,7 +14,8 @@ import {
 } from '@/lib/lai-lo'
 
 /**
- * LÃI / LỖ THEO LỆNH — tầng dữ liệu cho `/exec/lai-lo` (bước 4, 02/10/2026).
+ * LÃI / LỖ THEO LỆNH — tầng dữ liệu (bước 4, 02/10/2026). Trang `/exec/lai-lo`
+ * gỡ 03/10/2026; nay nuôi khối phân tích trong ngăn soi của `/exec/gia-tri-don`.
  *
  * Đọc MỘT LƯỢT sáu nguồn rồi giao hết cho `laiLoBoard` (thuần, có test). Service
  * không cộng trừ gì: cộng ở hai nơi là hai nguồn số.
