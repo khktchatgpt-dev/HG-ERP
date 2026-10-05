@@ -205,6 +205,8 @@ export const materialsService = {
       q?: string
       group_name?: string
       active_only?: boolean
+      /** Chỉ mã ngừng dùng — chip "Ngừng dùng" (05/10/2026). */
+      inactive_only?: boolean
       /** true = chỉ vật tư "chờ Kho rà" (khai nhanh từ form đơn — 0136). */
       needs_review?: boolean
       /** Hai rổ việc của màn danh mục bản Kho (Bước 4). */
@@ -220,6 +222,7 @@ export const materialsService = {
       q: opts.q,
       group_name: opts.group_name,
       active_only: opts.active_only ?? false,
+      inactive_only: opts.inactive_only,
       needs_review: opts.needs_review,
       no_min_stock: opts.no_min_stock,
       no_shelf: opts.no_shelf,
@@ -238,6 +241,7 @@ export const materialsService = {
       needs_review?: boolean
       no_sub?: boolean
       active_only?: boolean
+      inactive_only?: boolean
     },
   ) {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
@@ -481,6 +485,12 @@ export const materialsService = {
     return materialChangesRepo.listByMaterial(id)
   },
 
+  /** Ngày · người · lý do ngừng dùng gần nhất của các mã — cột "Ngừng dùng". */
+  async lastRetire(user: User, ids: string[]) {
+    void user // đọc sổ vết cùng mức xem vật tư (PUBLIC)
+    return materialChangesRepo.lastRetire(ids)
+  },
+
   /** Mã đang nằm ở đâu — panel dùng để chọn giữa "Xoá mã" và "Ngừng dùng". */
   async usage(user: User, id: string): Promise<MaterialUsage> {
     void user // xem vật tư là PUBLIC (warehouse.material.view)
@@ -505,7 +515,60 @@ export const materialsService = {
           `Dùng "Ngừng dùng" để mã không hiện khi soạn đơn / phiếu mới.`,
       )
     }
+    /*
+     * Ghi dòng "đã xoá" TRƯỚC khi xoá: sau 0221 khoá ngoại của sổ vết là SET
+     * NULL nên dòng này (và mọi vết cũ) còn lại, tra theo `material_code`.
+     */
+    await emit({
+      name: 'material.changed',
+      material_id: id,
+      material_code: before.code,
+      actor_id: user.id,
+      source: 'retire',
+      source_ref: null,
+      changes: [{ field: 'deleted', before: before.name, after: null }],
+    })
     await materialsRepo.delete(id)
+  },
+
+  /**
+   * NGỪNG DÙNG / DÙNG LẠI (05/10/2026, Bản 11 · V2) — thay cho xoá với mã đã
+   * dùng. Mã ngừng dùng không hiện ở ô chọn vật tư khi soạn đơn / phiếu MỚI
+   * (các ô đó vốn lọc `is_active`); đơn cũ, tồn, lịch sử giữ nguyên.
+   *
+   * Đi đường riêng chứ không qua `update`: `is_active` nằm trong nhóm trường
+   * của Kho ở `assertOwnedFields`, còn việc này mở cho cả Cung ứng
+   * (`warehouse.material.retire`) và BẮT lý do — lý do vào sổ vết.
+   */
+  async setActive(
+    user: User,
+    id: string,
+    input: { active: boolean; reason?: string },
+  ): Promise<Material> {
+    await assertAction(user, 'warehouse.material.retire')
+    const before = await materialsRepo.findById(id)
+    if (!before) throw NotFound('Vật tư không tồn tại')
+    const reason = input.reason?.trim() || null
+    if (!input.active && (reason?.length ?? 0) < 3)
+      throw BadRequest('Ghi lý do ngừng dùng')
+    if (before.is_active === input.active) return before
+    const saved = await materialsRepo.patch(id, { is_active: input.active })
+    await emit({
+      name: 'material.changed',
+      material_id: id,
+      material_code: saved.code,
+      actor_id: user.id,
+      source: 'retire',
+      source_ref: input.active ? null : reason,
+      changes: [
+        {
+          field: 'is_active',
+          before: String(before.is_active),
+          after: String(input.active),
+        },
+      ],
+    })
+    return saved
   },
 
   /**

@@ -574,3 +574,18 @@ export const transferDocSchema = z.object({
     .min(1, 'Phiếu chuyển phải có ít nhất 1 dòng')
     .max(200),
 })
+
+/**
+ * NGỪNG DÙNG / DÙNG LẠI một mã (05/10/2026, Bản 11 · V2). Ngừng thì BẮT lý do
+ * (vào sổ vết, hiện lại ở dải báo đầu panel); dùng lại thì không.
+ */
+export const materialActiveSchema = z
+  .object({
+    active: z.boolean(),
+    reason: z.string().trim().max(300).optional(),
+  })
+  .refine((v) => v.active || (v.reason?.length ?? 0) >= 3, {
+    message: 'Ghi lý do ngừng dùng (ít nhất 3 ký tự)',
+    path: ['reason'],
+  })
+export type MaterialActiveInput = z.infer<typeof materialActiveSchema>

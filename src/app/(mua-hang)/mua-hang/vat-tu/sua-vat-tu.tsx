@@ -31,6 +31,7 @@ import {
 import type { Material } from '@/modules/dept/warehouse/warehouse.repo'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { VatTuLichSu, type GiaMua, type ThayDoi } from './vat-tu-lich-su'
+import { DaiNgungDung, KhoiBoMa, NutBoMa, useMaHienDung, type BoMaCtx } from './bo-ma'
 
 type Nap = { m: Material; gia: GiaMua[] | null; doi: ThayDoi[] | null }
 
@@ -55,6 +56,7 @@ export function SuaVatTuSheet({
   suppliers,
   onClose,
   onSaved,
+  boMa,
 }: {
   id: string
   /** Danh mục ĐVT/nhóm — bỏ trống thì panel tự nạp. */
@@ -64,6 +66,11 @@ export function SuaVatTuSheet({
   onClose: () => void
   /** Bản vật tư SAU khi lưu (từ PATCH). */
   onSaved: (m: Material) => void
+  /**
+   * Ngừng dùng / xoá mã (Bản 11) — chỉ màn danh mục truyền. Ở màn soạn đơn mã
+   * đang nằm trên dòng đơn, bỏ mã ở đó là sai chỗ.
+   */
+  boMa?: BoMaCtx
 }) {
   const toast = useToast()
   const [nap, setNap] = useState<Nap | null>(null)
@@ -135,6 +142,7 @@ export function SuaVatTuSheet({
       suppliers={nen.suppliers}
       onClose={onClose}
       onSaved={onSaved}
+      boMa={boMa}
     />
   )
 }
@@ -145,15 +153,24 @@ function Form({
   suppliers,
   onClose,
   onSaved,
+  boMa,
 }: {
   nap: Nap
   tax: MaterialTaxonomy
   suppliers: { value: string; label: string }[]
   onClose: () => void
   onSaved: (m: Material) => void
+  boMa?: BoMaCtx
 }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const usage = useMaHienDung(m.id, !!boMa?.canRetire)
+  const [boMo, setBoMo] = useState(false)
+  // Lần ngừng dùng gần nhất — đọc từ sổ vết đã nạp sẵn cho phần Lịch sử.
+  const vetNgung = doi?.find((c) => c.field === 'is_active' && c.after_value === 'false')
+  const lanNgung = vetNgung
+    ? { at: vetNgung.created_at, by: vetNgung.actor_name ?? null, reason: vetNgung.source_ref ?? null }
+    : null
   const s = useMaterialCore({ active: true, initial: coreFromMaterial(m), taxonomy: tax, excludeCode: m.code }) // prettier-ignore
   const { f } = s
   const set = (k: keyof MaterialCore) => (v: string) => s.setF((p) => ({ ...p, [k]: v }))
@@ -224,6 +241,9 @@ function Form({
       width={720}
       footer={
         <div className="flex w-full items-center gap-3">
+          {boMa?.canRetire && (
+            <NutBoMa m={m} usage={usage} open={boMo} onOpen={() => setBoMo(true)} />
+          )}
           <span className="text-k-sm flex-1">
             {why && (
               <ToneText tone="stop" strong={false}>
@@ -244,6 +264,12 @@ function Form({
         </div>
       }
     >
+      {boMa && !m.is_active && <DaiNgungDung m={m} lan={lanNgung} ctx={boMa} />}
+      {boMa && boMo && usage && (
+        <div className="mb-4">
+          <KhoiBoMa m={m} usage={usage} ctx={boMa} onCancel={() => setBoMo(false)} />
+        </div>
+      )}
       {m.needs_review && (
         <div className="mb-3">
           <NoticeBar tag="Chờ Kho rà">
@@ -531,8 +557,7 @@ function Form({
       </div>
 
       <p className="text-k-sm mt-3 text-[var(--ink-3)]">
-        Kho giữ: kệ · ngưỡng tồn · cờ “Chờ Kho rà” · ngừng dùng — sửa ở màn Vật tư của
-        Kho.
+        Kho giữ: kệ · ngưỡng tồn · cờ “Chờ Kho rà” — sửa ở màn Vật tư của Kho.
       </p>
 
       <div className="k-sec">Ghi chú</div>

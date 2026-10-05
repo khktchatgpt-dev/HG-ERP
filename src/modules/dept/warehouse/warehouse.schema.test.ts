@@ -3,6 +3,7 @@ import { todayVn } from '@/lib/date-vn'
 import {
   materialCreateSchema,
   materialUpdateSchema,
+  materialActiveSchema,
   materialListQuerySchema,
   receiptSchema,
   issueSchema,
@@ -297,5 +298,17 @@ describe('receiptDocSchema — lùi ngày chứng từ (05/10/2026)', () => {
   })
   it('phiếu lập lại (fix_of_doc_id) giữ ngày cũ — không giới hạn ở schema, service kiểm', () => {
     expect(loi({ doc_date: lui(120), fix_of_doc_id: UUID })).toBeUndefined()
+  })
+})
+
+describe('materialActiveSchema — ngừng dùng bắt lý do', () => {
+  it('ngừng dùng không lý do → lỗi ở ô reason', () => {
+    const r = materialActiveSchema.safeParse({ active: false, reason: '  ' })
+    expect(r.success).toBe(false)
+    expect(r.error?.issues[0].path).toEqual(['reason'])
+  })
+  it('ngừng dùng có lý do / dùng lại không lý do → hợp lệ', () => {
+    expect(materialActiveSchema.safeParse({ active: false, reason: 'NCC ngừng SX' }).success).toBe(true)
+    expect(materialActiveSchema.safeParse({ active: true }).success).toBe(true)
   })
 })

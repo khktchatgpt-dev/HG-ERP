@@ -6625,7 +6625,7 @@ export type Database = {
           field: string
           id: string
           material_code: string | null
-          material_id: string
+          material_id: string | null
           source: string
           source_ref: string | null
         }
@@ -6637,7 +6637,7 @@ export type Database = {
           field: string
           id?: string
           material_code?: string | null
-          material_id: string
+          material_id?: string | null
           source?: string
           source_ref?: string | null
         }
@@ -6649,7 +6649,7 @@ export type Database = {
           field?: string
           id?: string
           material_code?: string | null
-          material_id?: string
+          material_id?: string | null
           source?: string
           source_ref?: string | null
         }

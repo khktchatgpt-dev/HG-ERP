@@ -20,6 +20,8 @@ export type ThayDoi = {
   source: string
   created_at: string
   actor_name?: string | null
+  /** Lý do ngừng dùng (nguồn `retire`) hoặc mã chứng từ gây ra thay đổi. */
+  source_ref?: string | null
 }
 
 const NHAN: Record<string, string> = {
@@ -38,12 +40,14 @@ const NHAN: Record<string, string> = {
   min_stock: 'Ngưỡng tồn',
   needs_review: 'Chờ Kho rà',
   is_active: 'Đang dùng',
+  deleted: 'Đã xoá mã',
 }
 const NGUON: Record<string, string> = {
   manual: 'sửa tay',
   po_enrich: 'từ đơn mua',
   import: 'script nạp',
   system: 'máy',
+  retire: 'ngừng dùng / xoá',
 }
 const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 
@@ -137,6 +141,7 @@ export function VatTuLichSu({
                   {c.actor_name ?? ''}
                   {c.actor_name ? ' · ' : ''}
                   {NGUON[c.source] ?? c.source}
+                  {c.source === 'retire' && c.source_ref ? `: “${c.source_ref}”` : ''}
                 </Cell>
               </Row>
             ))}
