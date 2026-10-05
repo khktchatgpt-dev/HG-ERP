@@ -385,6 +385,12 @@ export function LenhScreen({
             <Btn icon="in" onClick={() => window.open(`/print/lsx/${lsx.id}`, '_blank')}>
               In LSX
             </Btn>
+            {/* TẢI PHIẾU LỆNH .xlsx (05/10/2026 — chủ dự án: "xuất excel lsx cơ"): cùng
+                dữ liệu và bố cục với phiếu in (`/api/dept/production/lsx/[id]/export`,
+                có từ 0114 bên Bán hàng), khác "Báo cáo lệnh" là sổ theo dõi mua. */}
+            <Btn icon="excel" href={`/api/dept/production/lsx/${lsx.id}/export`}>
+              Xuất LSX
+            </Btn>
             <Btn icon="excel" href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
               Báo cáo lệnh
             </Btn>
