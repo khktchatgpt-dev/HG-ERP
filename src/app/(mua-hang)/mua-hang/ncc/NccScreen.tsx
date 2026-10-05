@@ -24,6 +24,7 @@ import {
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { ThemNccSheet } from './them-ncc'
+import { searchMatcher } from '@/lib/search-text'
 
 export type NccRow = {
   id: string
@@ -261,16 +262,9 @@ export function NccScreen({
 
   const kept = useMemo(() => {
     const test = CHIPS.find((c) => c.id === chip)?.test ?? (() => true)
-    const needle = q.trim().toLowerCase()
+    const tim = searchMatcher(q)
     return rows
-      .filter(
-        (r) =>
-          test(r) &&
-          (!needle ||
-            [r.code, r.name, r.short_name, r.tax_no, r.type]
-              .filter(Boolean)
-              .some((v) => String(v).toLowerCase().includes(needle))),
-      )
+      .filter((r) => test(r) && tim([r.code, r.name, r.short_name, r.tax_no, r.type]))
       .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
   }, [rows, q, chip])
 

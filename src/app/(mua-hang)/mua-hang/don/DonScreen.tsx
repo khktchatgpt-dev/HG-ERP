@@ -61,6 +61,7 @@ import {
   type GroupBy,
   type ViewState,
 } from './views'
+import { searchMatcher } from '@/lib/search-text'
 
 /**
  * Phần nhìn của Khuôn C — Phiếu mua. Tầng server ở `page.tsx`, phân tích ở
@@ -188,8 +189,8 @@ function LocLookup<T>({
       render={render ?? ((x) => textOf(x))}
       onPick={onPick}
       search={async (q) => {
-        const n = q.trim().toLowerCase()
-        return items.filter((x) => textOf(x).toLowerCase().includes(n)).slice(0, 20)
+        const tim = searchMatcher(q)
+        return items.filter((x) => tim([textOf(x)])).slice(0, 20)
       }}
     />
   )

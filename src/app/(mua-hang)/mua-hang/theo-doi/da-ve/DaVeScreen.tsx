@@ -41,6 +41,7 @@ import { GiaoNhanSheet } from '../giao-nhan/GiaoNhanSheet'
 import type { GiaoNhanData } from '../giao-nhan/tai-giao-nhan'
 import { PhanTrang, useSucChua } from '../trang'
 import { PickVua } from '../DangVeScreen'
+import { searchMatcher } from '@/lib/search-text'
 
 const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 const KHOANG = ['7', '14', '30', 'tat'] as const
@@ -128,11 +129,13 @@ export function DaVeScreen({
   const khop = (r: DaVeRow, bo?: 'lsx' | 'ncc') => {
     if (bo !== 'lsx' && !khopLenh(r.lsx_code, lsx)) return false
     if (bo !== 'ncc' && ncc && r.supplier_name !== ncc) return false
-    const n = q.trim().toLowerCase()
-    if (!n) return true
-    return [r.code, r.po_code, r.supplier_name, r.lsx_code, r.supplier_doc_no]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(n))
+    return searchMatcher(q)([
+      r.code,
+      r.po_code,
+      r.supplier_name,
+      r.lsx_code,
+      r.supplier_doc_no,
+    ])
   }
   const kept = inRange.filter((r) => khop(r))
   const demCanXl = kept.filter((r) => canXuLy(r.phieu)).length

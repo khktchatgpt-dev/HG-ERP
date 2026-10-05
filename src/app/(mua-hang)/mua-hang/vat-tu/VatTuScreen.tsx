@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
+import { useUrlSearch } from '@/lib/use-url-search'
 import {
   Ico,
   Btn,
@@ -94,24 +95,9 @@ export function VatTuScreen({
     mới đi hỏi. `useTransition` giữ danh sách CŨ trên màn trong lúc chờ thay vì
     chớp sang trống — trống một nhịp đọc thành "không có kết quả".
   */
-  const [nhap, setNhap] = useState(filters.q)
-  /*
-    Kéo ô nhập về khớp URL khi URL đổi từ NƠI KHÁC — nút "Bỏ lọc", nút Back của
-    trình duyệt, hay link ai đó gửi. Chỉnh NGAY TRONG RENDER theo mẫu React
-    ("adjust state when a prop changes"), không dùng effect: setState trong
-    effect đẻ thêm một vòng render thừa và cổng lint của dự án chặn thẳng.
-  */
-  const [qTruoc, setQTruoc] = useState(filters.q)
-  if (filters.q !== qTruoc) {
-    setQTruoc(filters.q)
-    setNhap(filters.q)
-  }
-  useEffect(() => {
-    if (nhap === filters.q) return
-    const t = setTimeout(() => doiLoc({ q: nhap, trang: '1' }), 350)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nhap])
+  // URL đổi từ NƠI KHÁC (Bỏ lọc, Back, link) thì ô theo URL; trang về sau lần
+  // đẩy của chính ô thì KHÔNG đè chữ đang gõ dở (lỗi nuốt chữ 06/10/2026).
+  const [nhap, setNhap] = useUrlSearch(filters.q, (q) => doiLoc({ q, trang: '1' }))
 
   function doiLoc(patch: Record<string, string>) {
     const p = new URLSearchParams(params.toString())
@@ -198,7 +184,11 @@ export function VatTuScreen({
           <>
             <Btn href="/mua-hang/vat-tu/nhom">Nhóm vật tư</Btn>
             {canCreate && (
-              <Btn icon="them" primary={chon.size === 0} onClick={() => doiLoc({ them: '1' })}>
+              <Btn
+                icon="them"
+                primary={chon.size === 0}
+                onClick={() => doiLoc({ them: '1' })}
+              >
                 Thêm vật tư
               </Btn>
             )}

@@ -56,6 +56,7 @@ import { ChuyenSheet, type CarrierOption, type TripEdit } from './chuyen-sheet'
 import { ChuyenDangDi, type TripCard } from './chuyen-dang-di'
 import { PhanTrang, useSucChua } from './trang'
 import { ThanhChon } from './chon-nhieu'
+import { searchMatcher } from '@/lib/search-text'
 
 export type DangVeRow = {
   id: string
@@ -243,11 +244,7 @@ export function DangVeScreen({
       if (hen !== MOI && hen !== 'tuan' && r.bucket !== hen) return false
     }
     if (trenXe && !poTrip.has(r.id)) return false
-    const n = q.trim().toLowerCase()
-    if (!n) return true
-    return [r.code, r.supplier_name, r.lsx_code, r.chanh]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(n))
+    return searchMatcher(q)([r.code, r.supplier_name, r.lsx_code, r.chanh])
   }
   const kept = theoNguoi.filter((r) => khop(r))
   const ngoaiHen = hen === MOI ? 0 : theoNguoi.filter((r) => khop(r, 'hen')).length

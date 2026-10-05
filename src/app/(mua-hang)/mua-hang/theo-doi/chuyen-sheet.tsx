@@ -21,6 +21,7 @@ import {
   tripProblem,
   type TripMode,
 } from '@/lib/chuyen-hang'
+import { searchMatcher } from '@/lib/search-text'
 
 /**
  * HỘP "GHI CHUYẾN HÀNG" (0216, bản vẽ C3 — chủ dự án duyệt 01/10/2026).
@@ -128,15 +129,9 @@ export function ChuyenSheet({
     }))
 
   const list = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const tim = searchMatcher(q)
     const all = [...pos, ...extra]
-    const hit = needle
-      ? all.filter((p) =>
-          [p.code, p.supplier_name, p.lsx_code, p.chanh].some(
-            (v) => v && v.toLowerCase().includes(needle),
-          ),
-        )
-      : all
+    const hit = all.filter((p) => tim([p.code, p.supplier_name, p.lsx_code, p.chanh]))
     // Đơn đã tích lên đầu, rồi đơn cùng chành với tên đang gõ, rồi theo mã.
     const c = carrier.trim().toLowerCase()
     return [...hit].sort((a, b) => {

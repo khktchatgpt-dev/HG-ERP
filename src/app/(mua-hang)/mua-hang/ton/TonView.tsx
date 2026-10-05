@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type {
   SupplyStockCounts,
@@ -29,6 +29,7 @@ import {
   showNum,
 } from '@/components/kit'
 import { PAGE_SIZE } from './ton-const'
+import { useUrlSearch } from '@/lib/use-url-search'
 
 /** Mỗi chip là một CÂU HỎI của người mua, không phải một giá trị enum. */
 const CHIPS: { id: SupplyStockFilter; label: string; dem: keyof SupplyStockCounts }[] = [
@@ -63,18 +64,7 @@ export function TonView({
   const [dangChay, batDau] = useTransition()
 
   // Ô tìm gõ ở client, truy vấn ở server — cùng luật với màn Vật tư.
-  const [nhap, setNhap] = useState(filters.q)
-  const [qTruoc, setQTruoc] = useState(filters.q)
-  if (filters.q !== qTruoc) {
-    setQTruoc(filters.q)
-    setNhap(filters.q)
-  }
-  useEffect(() => {
-    if (nhap === filters.q) return
-    const t = setTimeout(() => doiLoc({ q: nhap, trang: '1' }), 350)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nhap])
+  const [nhap, setNhap] = useUrlSearch(filters.q, (q) => doiLoc({ q, trang: '1' }))
 
   function doiLoc(patch: Record<string, string>) {
     const p = new URLSearchParams(params.toString())
