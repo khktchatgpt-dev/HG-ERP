@@ -21,6 +21,7 @@ import {
   laM3MotTam,
   tongM3,
   tongLechBac,
+  docTongGo,
   withSpecDims,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
@@ -1137,5 +1138,22 @@ describe('tongLechBac — tổng gõ tay lệch hàng nghìn lần (đơn xốp 
   })
   it('gõ nhỏ hơn hàng nghìn lần cũng bắt', () => {
     expect(tongLechBac('foam', xop(0.1792))?.factor).toBe(-1000)
+  })
+})
+
+describe('docTongGo — gõ số khối kiểu tiền (172900 = 172,9 m³), 05/10/2026', () => {
+  const xop = { ...newLine('foam', { id: 'x', code: 'XM-0105', name: 'Xốp D8 - 8kg', unit: 'Tấm', spec: '1000*800*50mm' } as never), qty: 4480 as Num, carton_basis: 'm3' as const } // prettier-ignore
+  it('179200 / 172900 gần số tự tính ×1.000 → hiểu là 179,2 / 172,9', () => {
+    expect(docTongGo('foam', xop, '179200')).toBe(179.2)
+    expect(docTongGo('foam', xop, '172900')).toBe(172.9)
+  })
+  it('gõ có dấu thập phân giữ nguyên; số không gần ×1.000 giữ nguyên', () => {
+    expect(docTongGo('foam', xop, '172,9')).toBe(172.9)
+    expect(docTongGo('foam', xop, '180')).toBe(180)
+    expect(docTongGo('foam', xop, '5000')).toBe(5000)
+    expect(docTongGo('foam', xop, '')).toBe('')
+  })
+  it('mẫu không phải m³ (nhôm kg) không đổi', () => {
+    expect(docTongGo('aluminium', xop, '179200')).toBe(179200)
   })
 })

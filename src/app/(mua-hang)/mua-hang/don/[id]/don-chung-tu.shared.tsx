@@ -5,6 +5,7 @@ import {
   lineQty2,
   laM3MotTam,
   tongLechBac,
+  docTongGo,
   m3MotTam,
   tongM3,
   lineQty2Auto,
@@ -396,7 +397,7 @@ export function EditCell({
           <NumInput
             aria-label={f.label}
             value={numStr(manual)}
-            onCommit={(v) => onPatch({ qty2_manual: toNum(v) })}
+            onCommit={(v) => onPatch({ qty2_manual: docTongGo(template, l, v) })}
             placeholder={shown == null ? '—' : shown.toLocaleString('vi-VN')}
           />
           {/* Xốp (05/10/2026, đơn THL): hai lỗi đắt nhất bày NGAY tại ô — gõ m³

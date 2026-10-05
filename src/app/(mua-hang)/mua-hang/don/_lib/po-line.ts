@@ -214,7 +214,10 @@ export function lineReady(t: PoTemplate, l: Line): boolean {
  * trăm; lệch từ 50 lần trở lên là gõ nhầm đơn vị / dấu thập phân, không phải số
  * thật. Trả hệ số lệch (làm tròn) + số tự tính để ô nói ra và chặn lưu.
  */
-export function tongLechBac(t: PoTemplate, l: Line): { auto: number; factor: number } | null {
+export function tongLechBac(
+  t: PoTemplate,
+  l: Line,
+): { auto: number; factor: number } | null {
   const manual = l.qty2_manual ?? ''
   if (manual === '' || !(Number(manual) > 0)) return null
   const auto = lineQty2Auto(t, l)
@@ -223,6 +226,26 @@ export function tongLechBac(t: PoTemplate, l: Line): { auto: number; factor: num
   if (ratio >= 50) return { auto, factor: Math.round(ratio) }
   if (ratio <= 1 / 50) return { auto, factor: -Math.round(1 / ratio) }
   return null
+}
+
+/**
+ * ĐỌC SỐ GÕ VÀO Ô TỔNG m³ THEO THÓI QUEN CỦA PHÒNG (05/10/2026 — chủ dự án: "thường
+ * khi thao tác vẫn nhập kiểu 172900"): số khối gõ BỎ DẤU PHẨY, ba số lẻ — 172900
+ * nghĩa là 172,900 m³. Nên số nguyên ≥ 1.000 gõ vào ô m³ mà CHIA 1.000 ra gần số tự
+ * tính (trong ±30 %) thì hiểu là đã chia. Số gõ có dấu phẩy / chấm thập phân thì
+ * giữ nguyên — người gõ đã nói rõ. Không có số tự tính (thiếu kích thước) thì không
+ * đoán, `tongLechBac` vẫn chặn khi lệch hàng nghìn lần.
+ */
+export function docTongGo(t: PoTemplate, l: Line, raw: string): Num {
+  const s = raw.trim()
+  if (s === '') return ''
+  const v = Number(s.replace(',', '.'))
+  if (!Number.isFinite(v)) return ''
+  if (QTY2_OVERRIDE_UNIT[t] !== 'm³' || !/^\d{4,}$/.test(s)) return v
+  const auto = lineQty2Auto(t, { ...l, qty2_manual: '' })
+  if (auto == null || !(auto > 0)) return v
+  const chia = v / 1000
+  return Math.abs(chia - auto) / auto <= 0.3 ? chia : v
 }
 
 export function lineProblem(t: PoTemplate, l: Line): string | null {
