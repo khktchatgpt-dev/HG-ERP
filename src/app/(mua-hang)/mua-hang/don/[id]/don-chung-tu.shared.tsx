@@ -4,6 +4,7 @@ import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import {
   lineQty2,
   laM3MotTam,
+  tongLechBac,
   m3MotTam,
   tongM3,
   lineQty2Auto,
@@ -400,7 +401,15 @@ export function EditCell({
           />
           {/* Xốp (05/10/2026, đơn THL): hai lỗi đắt nhất bày NGAY tại ô — gõ m³
               MỘT tấm vào ô tổng, và dòng có số khối mà tiền vẫn tính theo tấm. */}
-          {laM3MotTam(l) ? (
+          {tongLechBac(template, l) ? (
+            <CellHint
+              tone="warn"
+              title={`Số gõ ${numStr(manual)} lệch rất xa số tự tính từ kích thước / định mức — thường là gõ nhầm dấu thập phân (179,200 gõ thành 179200). Bấm để dùng số tự tính.`}
+              onClick={() => onPatch({ qty2_manual: '' })}
+            >
+              gõ nhầm? dùng {tongLechBac(template, l)!.auto.toLocaleString('vi-VN')} ↩
+            </CellHint>
+          ) : laM3MotTam(l) ? (
             <CellHint
               tone="warn"
               title={`Ô này là TỔNG m³ của cả dòng — ${numStr(manual)} là m³ của MỘT tấm. Bấm để dùng tổng ${tongM3(l)?.toLocaleString('vi-VN')} m³ và tính tiền theo m³.`}

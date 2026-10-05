@@ -20,6 +20,7 @@ import {
   refreshLineFromMaterial,
   laM3MotTam,
   tongM3,
+  tongLechBac,
   withSpecDims,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
@@ -1120,5 +1121,21 @@ describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Ho
     const p = xop()
     expect(withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis).toBe('ctn')
     expect(withSpecDims('carton', p, { ...p, spec: '1000*800*50' }).inner_l_mm).toBe('')
+  })
+})
+
+describe('tongLechBac — tổng gõ tay lệch hàng nghìn lần (đơn xốp WA 05/10/2026)', () => {
+  const xop = (qty2_manual: Num) =>
+    ({ ...newLine('foam', { id: 'x', code: 'XM-0105', name: 'Xốp D8 - 8kg', unit: 'Tấm', spec: '1000*800*50mm' } as never), qty: 4480 as Num, price: 520000 as Num, carton_basis: 'm3' as const, qty2_manual }) // prettier-ignore
+  it('gõ 179200 cho 179,2 m³ → gấp 1.000 lần, chặn lưu', () => {
+    expect(tongLechBac('foam', xop(179200))).toEqual({ auto: 179.2, factor: 1000 })
+    expect(lineProblem('foam', xop(179200))).toMatch(/gấp 1\.000 lần/)
+  })
+  it('gõ đè lệch vài phần trăm cho khớp tờ NCC → hợp lệ', () => {
+    expect(tongLechBac('foam', xop(180.5))).toBeNull()
+    expect(lineProblem('foam', xop(180.5))).toBeNull()
+  })
+  it('gõ nhỏ hơn hàng nghìn lần cũng bắt', () => {
+    expect(tongLechBac('foam', xop(0.1792))?.factor).toBe(-1000)
   })
 })

@@ -207,11 +207,32 @@ export function lineReady(t: PoTemplate, l: Line): boolean {
 }
 
 /** Lý do dòng chưa gửi được — hiện ngay cạnh nút, không bắt người dùng đoán. */
+/**
+ * TỔNG GÕ TAY LỆCH HÀNG TRĂM / NGHÌN LẦN số tự tính (05/10/2026, đơn xốp WA: gõ
+ * "179200" vào ô Tổng m³ với ý 179,200 m³ — kiểu viết của Excel — nên tiền
+ * ra 93,18 TỶ thay vì 93,18 triệu). Gõ đè tổng chỉ để khớp tờ NCC lệch vài phần
+ * trăm; lệch từ 50 lần trở lên là gõ nhầm đơn vị / dấu thập phân, không phải số
+ * thật. Trả hệ số lệch (làm tròn) + số tự tính để ô nói ra và chặn lưu.
+ */
+export function tongLechBac(t: PoTemplate, l: Line): { auto: number; factor: number } | null {
+  const manual = l.qty2_manual ?? ''
+  if (manual === '' || !(Number(manual) > 0)) return null
+  const auto = lineQty2Auto(t, l)
+  if (auto == null || !(auto > 0)) return null
+  const ratio = Number(manual) / auto
+  if (ratio >= 50) return { auto, factor: Math.round(ratio) }
+  if (ratio <= 1 / 50) return { auto, factor: -Math.round(1 / ratio) }
+  return null
+}
+
 export function lineProblem(t: PoTemplate, l: Line): string | null {
   // Dòng tự do (0134): tên hàng là danh tính duy nhất — trống thì phiếu in rỗng.
   if (l.is_free && !l.name.trim()) return 'thiếu tên hàng'
   if (l.qty === '' || Number(l.qty) <= 0) return 'thiếu SL đặt'
   if (l.price === '') return 'thiếu đơn giá'
+  const lech = tongLechBac(t, l)
+  if (lech)
+    return `tổng gõ tay ${lech.factor > 0 ? 'gấp ' : 'chỉ bằng 1/'}${Math.abs(lech.factor).toLocaleString('vi-VN')} lần số tự tính ${lech.auto.toLocaleString('vi-VN')} — gõ nhầm dấu thập phân?`
   // Tổng gõ tay (02/10/2026) đã là số tính tiền — không đòi thông số để dẫn xuất nó nữa.
   if (hasQty2Override(t, draftOf(l))) return null
   if (t === 'aluminium' && !(Number(l.weight_per_m) > 0)) return 'thiếu kg/m'
