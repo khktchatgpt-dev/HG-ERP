@@ -137,9 +137,12 @@ export function HoSoLenhScreen({
             ),
             tone: lsx.materials_due_at ? undefined : 'warn',
           },
+          // Chỉ ĐẾM đơn khách (05/10/2026, chủ dự án: "phần đơn hiển thị ở trên
+          // nên bỏ đi cho gọn") — LAURA 01 có 11 đơn, liệt kê mã chiếm ba dòng
+          // đầu trang; mã đơn nằm ở từng nhóm của phiếu bên dưới.
           {
             label: 'Đơn khách',
-            value: lsx.order_codes.join(', ') || 'không có',
+            value: lsx.order_codes.length ? String(lsx.order_codes.length) : 'không có',
             tone: lsx.order_codes.length ? undefined : 'warn',
           },
         ]}

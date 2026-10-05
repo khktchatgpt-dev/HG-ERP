@@ -75,10 +75,16 @@ export function PhieuLenh({
               <Th
                 key={c.label}
                 className={cn(
-                  rong(c) && 'min-w-[170px]',
+                  // Cột tên CO GIÃN theo khung (05/10/2026): chỉ chặn dưới, không chặn
+                  // trên — khung rộng ra thì tên dài ra một hàng, không còn gãy đôi.
+                  rong(c) && 'min-w-[200px]',
                   laSpec(c) && 'min-w-[110px]',
                   laSo(c) && 'text-right',
                   trong.has(c.label) && 'text-[var(--ink-3)]',
+                  // Cột Sales bôi đỏ trong phiếu (SL · Thời gian xuất · Số PO) — sai là
+                  // hỏng lô hàng, nên cả tiêu đề lẫn ô đều nổi lên như tờ giấy.
+                  c.emphasis === 'red' && 'text-[var(--stop)]',
+                  c.emphasis === 'yellow' && 'bg-[var(--warn-wash)]',
                 )}
                 title={trong.has(c.label) ? 'Cả lệnh không khai cột này' : undefined}
               >
@@ -105,7 +111,7 @@ export function PhieuLenh({
                       {g.po_no ? (
                         <>
                           {' · '}
-                          <span className="font-mono">PO {g.po_no}</span>
+                          <span className="font-mono font-semibold text-[var(--stop)]">PO {g.po_no}</span>
                         </>
                       ) : (
                         <span className="text-[var(--warn)]"> · chưa có số PO</span>
@@ -113,7 +119,7 @@ export function PhieuLenh({
                       {shipText(g) && (
                         <>
                           {' · xuất '}
-                          <span className="font-mono">{shipText(g)}</span>
+                          <span className="font-mono font-semibold text-[var(--stop)]">{shipText(g)}</span>
                         </>
                       )}
                       {g.note && ` · ${g.note}`}
@@ -170,8 +176,10 @@ export function PhieuLenh({
                             key={c.label}
                             className={cn(
                               nenDong,
-                              (rong(c) || laSpec(c)) && 'max-w-[240px] whitespace-normal',
+                              rong(c) && 'whitespace-normal',
+                              laSpec(c) && 'max-w-[240px] whitespace-normal',
                               laSo(c) && 'text-right font-mono tabular-nums',
+                              c.emphasis === 'red' && 'font-semibold text-[var(--stop)]',
                               st === 'pending' &&
                                 'bg-[var(--warn-wash)] text-[var(--warn)]',
                               st === 'missing' && 'font-semibold text-[var(--stop)]',
