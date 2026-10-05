@@ -13,7 +13,6 @@ import {
   GridRow,
   Metric,
   MetricStrip,
-  NoticeBar,
   ScreenFrame,
   ScreenHeader,
   Tag,
@@ -21,9 +20,10 @@ import {
   Th,
 } from '@/components/kit'
 import { mergeGtdQuy, type GtdQuy, type GtdRow } from '@/lib/gia-tri-don'
+import type { LaiLoRow } from '@/lib/lai-lo'
 import type { GiaTriDonScreen as Board } from '@/modules/core/exec/gia-tri-don.service'
 import { SoiLenh } from './soi-lenh'
-import { amountsText, ccy, missingText, tyGon, vnd } from './gia-tri-don.shared'
+import { amountsGon, ccy, ccyGon, missingText, tyGon, vnd } from './gia-tri-don.shared'
 
 /**
  * GIÁ TRỊ ĐƠN THEO LỆNH — Ban Giám đốc (bản vẽ duyệt 02/10/2026).
@@ -31,6 +31,10 @@ import { amountsText, ccy, missingText, tyGon, vnd } from './gia-tri-don.shared'
  * Khuôn C "Danh sách": một dòng một lệnh, hai khối cột — ĐƠN BÁN của lệnh và
  * ĐƠN MUA cho lệnh — bấm dòng mở ngăn soi liệt kê từng chứng từ. Mọi số do
  * `giaTriDonBoard` cộng; màn chỉ bày.
+ *
+ * BỐ CỤC THEO BẢN VẼ HTML user duyệt 03/10/2026 ("tôi muốn như thiết kế"): tiêu
+ * đề hai tầng "Đơn bán của lệnh | Đơn mua cho lệnh" với vạch ngăn hai khối, bảng
+ * cỡ "đọc" (13px mono), dải tóm tắt số lớn, tên khách không cắt.
  *
  * KHÔNG SUY LUẬN: đơn bán ghi giá 0 thì bày "—" kèm nhãn "0/N dòng có giá",
  * không thay bằng FOB kế hoạch — để Giám đốc thấy việc còn thiếu nằm ở Bán
@@ -55,7 +59,14 @@ function Money({ q, note }: { q: GtdQuy; note?: string }) {
   )
 }
 
-export function GiaTriDonScreen({ board }: { board: Board }) {
+export function GiaTriDonScreen({
+  board,
+  phanTich,
+}: {
+  board: Board
+  /** Phân tích lãi / lỗ theo lệnh (lsx_id → dòng). null = người xem không có quyền xem giá thành kế hoạch. */
+  phanTich: Record<string, LaiLoRow> | null
+}) {
   const [filter, setFilter] = useState<Filter>('all')
   const [customer, setCustomer] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -117,10 +128,10 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
           }
         />
 
-        <MetricStrip>
+        <MetricStrip size="lg">
           <Metric
             label="Đơn bán gắn lệnh"
-            value={t.order_count > 0 ? `${t.order_count} đơn · ${amountsText(t.order_amounts) || '0'}` : null} // prettier-ignore
+            value={t.order_count > 0 ? `${t.order_count} đơn · ${amountsGon(t.order_amounts) || '0'}` : null} // prettier-ignore
             basis={
               t.order_count > 0
                 ? `= ${tyGon(t.order_vnd.vnd)} theo tỷ giá chốt từng đơn${t.order_vnd.missing.length ? ` · ${missingText(t.order_vnd)}` : ''} · chỉ ${t.lsx_with_price}/${t.lsx_count} lệnh có đơn ghi giá` // prettier-ignore
@@ -164,13 +175,6 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
             basis="chưa tính — bước sau, khi đơn bán có giá đủ"
           />
         </MetricStrip>
-
-        {t.po_extra_lsx > 0 && (
-          <NoticeBar tone="warn" tag="Đơn gộp lệnh">
-            <b>{t.po_extra_lsx} đơn mua</b> gộp nhiều lệnh đang tính TRỌN cho lệnh chính —
-            lệnh chính đọc hơi cao, lệnh phụ đọc hơi thấp.
-          </NoticeBar>
-        )}
 
         <FilterBar dense>
           <Chip
@@ -237,30 +241,43 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
               }
             />
           ) : (
-            <Grid minWidth={1120}>
-              <GridHead>
-                <Th width={136}>Lệnh</Th>
-                <Th width={104}>Khách</Th>
-                <Th num width={56}>
-                  Đơn bán
+            <Grid minWidth={1120} size="md">
+              <GridHead
+                groups={
+                  <>
+                    <Th rows={2} width={150}>
+                      Lệnh
+                    </Th>
+                    <Th rows={2}>Khách</Th>
+                    <Th group sep span={4}>
+                      Đơn bán của lệnh
+                    </Th>
+                    <Th group sep span={4}>
+                      Đơn mua cho lệnh
+                    </Th>
+                  </>
+                }
+              >
+                <Th num sep width={56}>
+                  Đơn
                 </Th>
                 <Th num width={140}>
-                  Bán · giá trị gốc
+                  Giá trị gốc
                 </Th>
-                <Th num width={130}>
-                  Bán · VND quy đổi
+                <Th num width={140}>
+                  VND quy đổi
                 </Th>
-                <Th num width={96}>
+                <Th num width={100}>
                   Dòng có giá
                 </Th>
-                <Th num width={60}>
-                  Đơn mua
+                <Th num sep width={56}>
+                  Đơn
                 </Th>
-                <Th num width={130}>
-                  Mua · VND quy đổi
+                <Th num width={140}>
+                  VND quy đổi
                 </Th>
-                <Th num width={110}>
-                  Mua · nháp
+                <Th num width={120}>
+                  Trong đó nháp
                 </Th>
                 <Th>Ghi chú</Th>
               </GridHead>
@@ -279,9 +296,7 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
                       onClick={() => setOpenId(r.lsx_id)}
                     >
                       <Td>
-                        <span className="num font-semibold text-[var(--act-text)]">
-                          {r.code}
-                        </span>
+                        <span className="num text-[var(--act-text)]">{r.code}</span>
                         {board.all &&
                           r.status !== 'in_progress' &&
                           r.status !== 'approved' && (
@@ -290,15 +305,8 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
                             </span>
                           )}
                       </Td>
-                      <Td>
-                        <span
-                          className="block max-w-[100px] truncate"
-                          title={r.customer_name ?? undefined}
-                        >
-                          {r.customer_name ?? '—'}
-                        </span>
-                      </Td>
-                      <Td num>
+                      <Td>{r.customer_name ?? '—'}</Td>
+                      <Td num sep>
                         {r.order_count || (
                           <span className="text-[var(--ink-empty)]">—</span>
                         )}
@@ -309,7 +317,7 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
                             {r.order_count > 0 ? `0 ${r.orders[0].currency}` : '—'}
                           </span>
                         ) : (
-                          r.order_amounts.map((a) => <div key={a.currency}>{ccy(a.amount, a.currency)}</div>) // prettier-ignore
+                          r.order_amounts.map((a) => <div key={a.currency}>{ccyGon(a.amount, a.currency)}</div>) // prettier-ignore
                         )}
                       </Td>
                       <Td num>
@@ -326,7 +334,7 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
                           `${r.priced_lines}/${r.order_lines}`
                         )}
                       </Td>
-                      <Td num>
+                      <Td num sep>
                         {r.po_count || <span className="text-[var(--ink-empty)]">—</span>}
                       </Td>
                       <Td num>
@@ -350,9 +358,11 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
               </GridBody>
               <GridFoot>
                 <Td colSpan={2}>Cộng {rows.length} lệnh</Td>
-                <Td num>{sum.orders}</Td>
+                <Td num sep>
+                  {sum.orders}
+                </Td>
                 <Td num>
-                  {amountsText(
+                  {amountsGon(
                     rows
                       .flatMap((r) => r.order_amounts)
                       .reduce<{ currency: string; amount: number }[]>((acc, a) => {
@@ -373,7 +383,9 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
                 <Td num>
                   {sum.priced}/{sum.lines}
                 </Td>
-                <Td num>{sum.pos}</Td>
+                <Td num sep>
+                  {sum.pos}
+                </Td>
                 <Td num>
                   <Money
                     q={sum.po_vnd}
@@ -401,14 +413,25 @@ export function GiaTriDonScreen({ board }: { board: Board }) {
 
         <div className="text-k-label flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-1.5 text-[var(--ink-3)]">
           <span>
-            Đơn bán = Σ SL × đơn giá trên đơn, đúng số Bán hàng nhập (không thay bằng giá
-            kế hoạch). Đơn mua = Σ đơn gắn lệnh chưa huỷ, kể cả nháp. Mọi số VND theo tỷ
-            giá chốt trên từng chứng từ.
+            Sắp xếp: lệnh có đơn bán ghi giá lên đầu, rồi theo tiền mua giảm dần. Bấm một
+            dòng để xem từng đơn bán và đơn mua của lệnh. Đơn bán = Σ SL × đơn giá trên
+            đơn, đúng số Bán hàng nhập (không thay bằng giá kế hoạch). Đơn mua = Σ đơn gắn
+            lệnh chưa huỷ, kể cả nháp
+            {t.po_extra_lsx > 0
+              ? `; ${t.po_extra_lsx} đơn gộp nhiều lệnh tính TRỌN cho lệnh chính`
+              : ''}
+            . Mọi số VND theo tỷ giá chốt trên từng chứng từ.
           </span>
         </div>
       </ScreenFrame>
 
-      {open && <SoiLenh row={open} onClose={() => setOpenId(null)} />}
+      {open && (
+        <SoiLenh
+          row={open}
+          phanTich={phanTich ? (phanTich[open.lsx_id] ?? null) : undefined}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </>
   )
 }

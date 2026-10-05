@@ -35,7 +35,6 @@ import {
   Receipt,
   ReceiptText,
   Route,
-  Scale,
   Scissors,
   ScrollText,
   Settings,
@@ -79,8 +78,6 @@ const REGISTRY: Record<string, LucideIcon> = {
   factory: Factory,
   'chart-column': ChartColumn,
   'chart-gantt': ChartGantt,
-  // Lãi/lỗ theo lệnh — cái cân: doanh thu một bên, tiền mua một bên.
-  scale: Scale,
   receipt: Receipt,
   'receipt-text': ReceiptText,
   boxes: Boxes,

@@ -2,7 +2,7 @@
   "_": "SINH TỰ ĐỘNG bởi scripts/size-baseline.mjs — đừng sửa tay. Trần chỉ được HẠ.",
   "max": 800,
   "files": {
-    "src/app/(mua-hang)/mua-hang/don/[id]/DonChungTuScreen.tsx": 1291,
+    "src/app/(mua-hang)/mua-hang/don/[id]/DonChungTuScreen.tsx": 1290,
     "src/app/(mua-hang)/mua-hang/don/[id]/NhanHangPanel.tsx": 819,
     "src/app/(mua-hang)/mua-hang/don/[id]/useDonChungTu.tsx": 1647,
     "src/app/(mua-hang)/mua-hang/don/DonScreen.tsx": 1207,
@@ -10,7 +10,7 @@
     "src/app/(workspace)/sales/orders/OrdersManager.tsx": 861,
     "src/app/(workspace)/warehouse/xuat/XuatScreen.tsx": 805,
     "src/app/design-lab/thanh-phan/page.tsx": 1156,
-    "src/components/kit/Erp.tsx": 1837,
+    "src/components/kit/Erp.tsx": 1818,
     "src/components/kit/kit.a11y.test.tsx": 879,
     "src/components/kit/Nav.tsx": 982,
     "src/components/kit/Primitives.tsx": 1086,

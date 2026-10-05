@@ -2,9 +2,11 @@
 
 import { Btn, Grid, GridBody, GridFoot, GridHead, GridRow, Sheet, Tag, Td, Th, WhyBox } from '@/components/kit' // prettier-ignore
 import type { GtdRow } from '@/lib/gia-tri-don'
+import type { LaiLoRow } from '@/lib/lai-lo'
 import { STATUS_LABEL as ORDER_STATUS_LABEL } from '@/lib/order-progress'
 import { poStatusLabel } from '@/lib/po-status'
 import { ccy, dmy, missingText, vnd } from './gia-tri-don.shared'
+import { PhanTich } from './phan-tich'
 
 /**
  * NGĂN SOI MỘT LỆNH — phủ bên phải, bảng phía sau vẫn đọc được.
@@ -13,8 +15,20 @@ import { ccy, dmy, missingText, vnd } from './gia-tri-don.shared'
  * đơn bán (mã · ngày giao · tiền gốc · tỷ giá · VND · dòng có giá) và từng đơn
  * mua (mã · NCC · trạng thái · tiền · VND). Chân mỗi bảng khớp ô trên dòng —
  * con số là một lời hứa, bảng này là nơi kiểm lời hứa đó.
+ *
+ * Đầu ngăn là PHÂN TÍCH LÃI / LỖ của lệnh (03/10/2026 — trang /exec/lai-lo gỡ,
+ * phần phân tích dời vào đây), xem `PhanTich`.
  */
-export function SoiLenh({ row: r, onClose }: { row: GtdRow; onClose: () => void }) {
+export function SoiLenh({
+  row: r,
+  phanTich,
+  onClose,
+}: {
+  row: GtdRow
+  /** Dòng phân tích lãi / lỗ của lệnh; undefined = người xem không có quyền xem giá thành KH. */
+  phanTich: LaiLoRow | null | undefined
+  onClose: () => void
+}) {
   const sub = [r.customer_name, `${r.order_count} đơn bán`, `${r.po_count} đơn mua`]
     .filter(Boolean)
     .join(' · ')
@@ -23,8 +37,10 @@ export function SoiLenh({ row: r, onClose }: { row: GtdRow; onClose: () => void 
   const dash = <span className="text-[var(--ink-empty)]">—</span>
 
   return (
-    <Sheet open onClose={onClose} title={r.code} subtitle={sub} stakes="nhe" width={520}>
+    <Sheet open onClose={onClose} title={r.code} subtitle={sub} stakes="nhe" width={700}>
       <div className="flex flex-col gap-4">
+        <PhanTich row={phanTich} />
+
         <section>
           <h3 className={h3}>
             Đơn bán của lệnh · {r.order_count} đơn · {r.priced_lines}/{r.order_lines} dòng

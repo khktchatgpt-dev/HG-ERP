@@ -1319,6 +1319,13 @@
         "optional": true,
         "def": null,
         "doc": "Chỉ kiểu máy: bấm vào dòng (thường để chọn dòng cho `LineDetail`). Có hàm này thì mỗi dòng nhận Tab và nghe Enter / Space — xem `GridRow.onClick`."
+      },
+      {
+        "name": "size",
+        "type": "'sm' | 'md'",
+        "optional": true,
+        "def": "'sm'",
+        "doc": "Cỡ chữ. `sm` (mặc định) = lưới chứng từ: thân 12px, tiêu đề 11px — dòng nhiều cột, cần nhét vừa. `md` = bảng BÁO CÁO để đọc (BGĐ, họp): thân 13px mono, tiêu đề 12px, đúng thang chữ nền — ít cột, người đọc dò số theo hàng."
       }
     ],
     "extends": []
@@ -1418,7 +1425,14 @@
         "type": "ReactNode",
         "optional": false,
         "def": null,
-        "doc": "Các `<Th>` — một ô mỗi cột. Không bọc `<tr>`, thành phần đã tự bọc."
+        "doc": "Các `<Th>` — một ô mỗi cột (có `groups` thì chỉ cột con). Không bọc `<tr>`, thành phần đã tự bọc."
+      },
+      {
+        "name": "groups",
+        "type": "ReactNode",
+        "optional": true,
+        "def": null,
+        "doc": "Hàng tiêu đề NHÓM ở trên: `<Th rows={2}>` cho cột đứng riêng, `<Th group span={n}>` cho nhóm. Bỏ trống = một hàng."
       }
     ],
     "extends": []
@@ -1979,7 +1993,7 @@
     "extends": []
   },
   "Metric": {
-    "file": "src/components/kit/Erp.tsx",
+    "file": "src/components/kit/Metric.tsx",
     "props": [
       {
         "name": "basis",
@@ -2013,7 +2027,7 @@
     "extends": []
   },
   "MetricStrip": {
-    "file": "src/components/kit/Erp.tsx",
+    "file": "src/components/kit/Metric.tsx",
     "props": [
       {
         "name": "children",
@@ -2021,6 +2035,13 @@
         "optional": false,
         "def": null,
         "doc": "Các `Metric`. Lưới tự xếp, mỗi ô tối thiểu 148px; vạch ngăn vẽ bằng bóng đổ nên hàng thiếu ô không lộ nền xám."
+      },
+      {
+        "name": "size",
+        "type": "'md' | 'lg'",
+        "optional": true,
+        "def": "'md'",
+        "doc": "Cỡ con số. `md` (mặc định) = 15px, dải đầu hồ sơ / chứng từ. `lg` = 18px (`--fs-title`) + mẫu số 12px — dải tóm tắt của màn BÁO CÁO, nơi bốn con số là thứ người đọc nhìn trước nhất (bản vẽ \"Giá trị đơn theo lệnh\", 03/10/2026)."
       }
     ],
     "extends": []
@@ -3078,6 +3099,13 @@
         "doc": "Ô số / tiền / ngày: căn phải + chữ mono tabular, để cột số thẳng hàng theo chiều dọc."
       },
       {
+        "name": "sep",
+        "type": "boolean",
+        "optional": true,
+        "def": null,
+        "doc": "Vạch dọc bên trái — cùng cột với `Th sep`, mở đầu một nhóm cột."
+      },
+      {
         "name": "tone",
         "type": "'stop' | 'warn' | 'done'",
         "optional": true,
@@ -3266,11 +3294,39 @@
         "doc": "Tên cột. Cột ô tick không có chữ thì vẫn nên có tên ẩn (`sr-only`) — tiêu đề rỗng là cột câm."
       },
       {
+        "name": "group",
+        "type": "boolean",
+        "optional": true,
+        "def": null,
+        "doc": "Ô tiêu đề NHÓM: căn giữa, nền đậm hơn hàng con một bậc."
+      },
+      {
         "name": "num",
         "type": "boolean",
         "optional": true,
         "def": null,
         "doc": "Cột số: căn phải, để tiêu đề thẳng hàng với con số bên dưới."
+      },
+      {
+        "name": "rows",
+        "type": "number",
+        "optional": true,
+        "def": null,
+        "doc": "Gộp hàng (`rowSpan`) — cột đứng riêng ở bảng có hàng nhóm (`GridHead groups`) khai `rows={2}`."
+      },
+      {
+        "name": "sep",
+        "type": "boolean",
+        "optional": true,
+        "def": null,
+        "doc": "Vạch dọc bên trái — mở đầu một nhóm cột. Khai cùng cột ở `Td sep` để vạch chạy suốt thân bảng."
+      },
+      {
+        "name": "span",
+        "type": "number",
+        "optional": true,
+        "def": null,
+        "doc": "Gộp cột (`colSpan`) — tiêu đề nhóm trải trên các cột con của nó."
       },
       {
         "name": "width",

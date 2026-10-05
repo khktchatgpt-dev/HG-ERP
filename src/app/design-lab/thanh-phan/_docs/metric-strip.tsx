@@ -36,6 +36,26 @@ export default function DocMetricStrip() {
       }
       variants={[
         {
+          name: 'Dải tóm tắt báo cáo — size="lg"',
+          when: 'màn báo cáo cho Ban Giám đốc, nơi bốn con số là thứ đọc trước nhất (Giá trị đơn theo lệnh, 03/10/2026). Số 18px, mẫu số 12px.',
+          demo: (
+            <MetricStrip size="lg">
+              <Metric
+                label="Đơn bán gắn lệnh"
+                value="48 đơn · 1.846.997 USD"
+                basis="= 46,91 tỷ theo tỷ giá chốt từng đơn · chỉ 3/14 lệnh có đơn ghi giá"
+                tone="warn"
+              />
+              <Metric
+                label="Đơn mua gắn lệnh"
+                value="87 đơn · 12,81 tỷ"
+                basis="1,49 tỷ còn ở nháp / chờ duyệt"
+              />
+              <Metric label="Chênh lệch" value={null} basis="chưa tính — bước sau" />
+            </MetricStrip>
+          ),
+        },
+        {
           name: 'Hồ sơ nhà cung cấp — kèm ô chưa đo được',
           when: 'Khuôn E. Điểm chất lượng là số chấm tay, NCC này chưa ai chấm — hiện 0 là vu cho họ điểm kém.',
           demo: (

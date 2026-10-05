@@ -181,6 +181,11 @@ export default function DocGrid() {
           demo: <GhepTay />,
         },
         {
+          name: 'Báo cáo hai khối cột — GridHead groups + size="md"',
+          when: 'bảng đọc cho Ban Giám đốc / họp, ít cột, hai nhóm số cần tách bạch (màn Giá trị đơn theo lệnh, 03/10/2026). Cột đứng riêng khai rows={2} ở hàng nhóm; Th sep / Td sep vẽ vạch mở đầu mỗi nhóm.',
+          demo: <BaoCaoHaiKhoi />,
+        },
+        {
           name: 'Kiểu máy — engine từ useKitTable',
           when: 'cần bấm tiêu đề để sắp, và chân bảng không phải tự đếm cột. Bấm một dòng để chọn nó — hoặc Tab tới dòng rồi Enter / Space.',
           demo: <KieuMay />,
@@ -326,5 +331,74 @@ export default function DocGrid() {
       ]}
       tested={{ file: 'src/components/kit/table-engine.test.tsx' }}
     />
+  )
+}
+
+/** Biến thể báo cáo: tiêu đề hai tầng, cỡ chữ "đọc", vạch ngăn hai khối. */
+function BaoCaoHaiKhoi() {
+  const rows = [
+    {
+      lsx: '02/26-27 - ROSCO',
+      kh: 'ROSCO',
+      db: 1,
+      ban: '40.201.510.656',
+      gia: '5/6',
+      dm: 22,
+      mua: '7.979.036.804',
+    },
+    {
+      lsx: '09/26-27 - MX',
+      kh: 'MERXX HANDELS GMBH',
+      db: 1,
+      ban: '—',
+      gia: '0/10',
+      dm: 10,
+      mua: '798.819.942',
+    },
+  ]
+  return (
+    <Grid minWidth={720} size="md">
+      <GridHead
+        groups={
+          <>
+            <Th rows={2}>Lệnh</Th>
+            <Th rows={2}>Khách</Th>
+            <Th group sep span={3}>
+              Đơn bán của lệnh
+            </Th>
+            <Th group sep span={2}>
+              Đơn mua cho lệnh
+            </Th>
+          </>
+        }
+      >
+        <Th num sep>
+          Đơn
+        </Th>
+        <Th num>VND quy đổi</Th>
+        <Th num>Dòng có giá</Th>
+        <Th num sep>
+          Đơn
+        </Th>
+        <Th num>VND quy đổi</Th>
+      </GridHead>
+      <GridBody>
+        {rows.map((r) => (
+          <GridRow key={r.lsx}>
+            <Td>{r.lsx}</Td>
+            <Td>{r.kh}</Td>
+            <Td num sep>
+              {r.db}
+            </Td>
+            <Td num>{r.ban}</Td>
+            <Td num>{r.gia}</Td>
+            <Td num sep>
+              {r.dm}
+            </Td>
+            <Td num>{r.mua}</Td>
+          </GridRow>
+        ))}
+      </GridBody>
+    </Grid>
   )
 }
