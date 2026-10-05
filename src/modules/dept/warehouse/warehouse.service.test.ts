@@ -9,6 +9,7 @@ vi.mock('./warehouse.repo', () => ({
     insert: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
+    usage: vi.fn(),
   },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
@@ -415,5 +416,39 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
       group_name: 'Ngũ kim - phụ kiện',
     })
     expect(materialsRepo.insert).toHaveBeenCalled()
+  })
+})
+
+/*
+ * XOÁ MÃ (05/10/2026, Bản 11): quyền `warehouse.material.retire` mở cho cả
+ * Cung ứng, nên chốt "mã đã dùng thì không xoá" phải nằm ở service — DB chỉ
+ * RESTRICT một phần (khuôn CASCADE, kế hoạch lệnh SET NULL).
+ */
+describe('materialsService.remove — chỉ xoá mã chưa dùng ở đâu', () => {
+  const ZERO = { po: 0, stock: 0, bom: 0, prices: 0, other: 0 }
+
+  it('gác bằng quyền retire, không phải quyền sửa đủ trường của Kho', async () => {
+    vi.mocked(assertAction).mockRejectedValue(Forbidden('x'))
+    await expect(materialsService.remove(cungUng, 'm1')).rejects.toThrow()
+    expect(assertAction).toHaveBeenCalledWith(cungUng, 'warehouse.material.retire')
+    expect(materialsRepo.delete).not.toHaveBeenCalled()
+  })
+
+  it('mã chưa dùng → xoá', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.usage).mockResolvedValue(ZERO)
+    await materialsService.remove(cungUng, 'm1')
+    expect(materialsRepo.delete).toHaveBeenCalledWith('m1')
+  })
+
+  it('mã đã dùng (kể cả chỉ ở bảng CASCADE như vật tư khuôn) → chặn, nói dùng ở đâu', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.usage).mockResolvedValue({ ...ZERO, po: 1, stock: 1 })
+    await expect(materialsService.remove(kho, 'm1')).rejects.toThrow(
+      /VT-01 đang dùng ở 1 dòng đơn mua · 1 dòng sổ kho.*Ngừng dùng/,
+    )
+    vi.mocked(materialsRepo.usage).mockResolvedValue({ ...ZERO, bom: 1 })
+    await expect(materialsService.remove(kho, 'm1')).rejects.toThrow(/không xoá được/)
+    expect(materialsRepo.delete).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
 import { searchTokens } from '@/lib/search-text'
+import type { MaterialUsage } from '@/lib/material-usage'
 
 export type Material = {
   id: string
@@ -304,6 +305,47 @@ export const materialsRepo = {
   async delete(id: string): Promise<void> {
     const { error } = await db().from('warehouse_materials').delete().eq('id', id)
     if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Mã đang nằm ở đâu — đếm MỌI bảng có khoá ngoại tới vật tư (xem
+   * `lib/material-usage`). Thêm bảng mới trỏ tới `warehouse_materials` thì
+   * thêm vào đây, không thì xoá mã sẽ lọt qua chốt chặn. (Hai bảng cũ có khoá
+   * ngoại trong migration đã không còn: `production_order_components` bỏ ở
+   * 0084, `stock_cost_layers` không có trong DB — đếm chúng là hỏng cả hàm.)
+   */
+  async usage(id: string): Promise<MaterialUsage> {
+    // Mọi bảng dưới đều có cột `material_id`; ép về một tên cho kiểu sinh sẵn
+    // (supabase-js không nhận tên bảng dạng biến string).
+    const n = async (table: string) => {
+      const { count, error } = await db()
+        .from(table as 'warehouse_movements')
+        .select('material_id', { count: 'exact', head: true })
+        .eq('material_id', id)
+      // Đếm hỏng thì coi như ĐÃ dùng — sai về phía an toàn, không xoá nhầm.
+      if (error || count == null)
+        throw new Error(`Không đếm được ${table}: ${error?.message}`)
+      return count
+    }
+    const [po, mv, stocktake, bomLines, dies, prodComp, prices, needs, plan] =
+      await Promise.all([
+        n('supply_purchase_order_lines'),
+        n('warehouse_movements'),
+        n('warehouse_stocktake_lines'),
+        n('technical_bom_lines'),
+        n('technical_die_materials'),
+        n('production_components'),
+        n('supply_supplier_prices'),
+        n('supply_lsx_needs'),
+        n('supply_lsx_material_plan'),
+      ])
+    return {
+      po,
+      stock: mv + stocktake,
+      bom: bomLines + dies + prodComp,
+      prices,
+      other: needs + plan,
+    }
   },
 
   /**

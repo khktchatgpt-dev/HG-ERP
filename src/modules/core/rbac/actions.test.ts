@@ -216,3 +216,34 @@ describe('canDo — khuôn nhôm: Kỹ thuật + GĐ + Cung ứng sửa, chỉ K
     expect(canDo(byKey('technical.die.remove'), supplyLead)).toBe(false)
   })
 })
+
+/**
+ * Vật tư (05/10/2026, Bản 11): CẢ phòng Cung ứng thêm mã + ngừng dùng / xoá mã
+ * chưa dùng — không phụ thuộc vai Kho gán tạm, cũng không phụ thuộc quyền lẻ
+ * `warehouse.material.create`. Trường của Kho (kệ, ngưỡng tồn) vẫn của Kho.
+ */
+describe('canDo — vật tư: Cung ứng thêm + ngừng dùng/xoá, trường Kho vẫn của Kho', () => {
+  const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
+  const supplyBare = ctxOf(['supply.member'])
+  const warehouse = ctxOf(['warehouse.member', 'warehouse.edit'])
+  const production = ctxOf(['production.member'])
+  const SUPPLY_OK = [
+    'warehouse.material.create',
+    'warehouse.material.update_purchasing',
+    'warehouse.material.retire',
+    'warehouse.material.group_manage',
+  ]
+
+  it('NV Cung ứng chỉ có supply.member vẫn thêm / sửa trường mua / ngừng dùng được', () => {
+    expect(SUPPLY_OK.filter((k) => !canDo(byKey(k), supplyBare))).toEqual([])
+  })
+  it('Cung ứng KHÔNG có quyền sửa đủ trường (kệ, ngưỡng tồn của Kho)', () => {
+    expect(canDo(byKey('warehouse.material.update'), supplyBare)).toBe(false)
+  })
+  it('Kho ngừng dùng / xoá được; phòng khác thì không', () => {
+    expect(canDo(byKey('warehouse.material.retire'), warehouse)).toBe(true)
+    expect(canDo(byKey('warehouse.material.retire'), production)).toBe(false)
+    expect(canDo(byKey('warehouse.material.create'), production)).toBe(false)
+  })
+})

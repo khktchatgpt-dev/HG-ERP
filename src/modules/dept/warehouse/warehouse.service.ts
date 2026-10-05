@@ -3,6 +3,7 @@ import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { groupGateError } from '@/lib/material-group-gate'
+import { usageText, usageTotal, type MaterialUsage } from '@/lib/material-usage'
 import { type PoTemplate } from '@/lib/po-template'
 import {
   MIN_KEY_LEN,
@@ -480,10 +481,30 @@ export const materialsService = {
     return materialChangesRepo.listByMaterial(id)
   },
 
+  /** Mã đang nằm ở đâu — panel dùng để chọn giữa "Xoá mã" và "Ngừng dùng". */
+  async usage(user: User, id: string): Promise<MaterialUsage> {
+    void user // xem vật tư là PUBLIC (warehouse.material.view)
+    return materialsRepo.usage(id)
+  },
+
+  /**
+   * XOÁ HẲN — chỉ mã CHƯA DÙNG Ở ĐÂU (05/10/2026, Bản 11). Quyền mở cho cả
+   * Cung ứng lẫn Kho (`warehouse.material.retire`), nên chốt chặn nằm ở đây chứ
+   * không trông vào khoá ngoại: DB chỉ RESTRICT một phần, còn vật tư của khuôn
+   * thì CASCADE và kế hoạch vật tư lệnh thì SET NULL — xoá là chúng lặng lẽ mất.
+   * Trước đây mã đã dùng ăn lỗi khoá ngoại thô ("violates foreign key…").
+   */
   async remove(user: User, id: string): Promise<void> {
-    await assertAction(user, 'warehouse.material.update')
+    await assertAction(user, 'warehouse.material.retire')
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
+    const used = await materialsRepo.usage(id)
+    if (usageTotal(used) > 0) {
+      throw Conflict(
+        `Mã ${before.code} đang dùng ở ${usageText(used)} — không xoá được, xoá là mất dấu vết. ` +
+          `Dùng "Ngừng dùng" để mã không hiện khi soạn đơn / phiếu mới.`,
+      )
+    }
     await materialsRepo.delete(id)
   },
 
