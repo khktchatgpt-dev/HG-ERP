@@ -3,6 +3,9 @@
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import {
   lineQty2,
+  laM3MotTam,
+  m3MotTam,
+  tongM3,
   lineQty2Auto,
   type Line,
   type Num,
@@ -395,11 +398,36 @@ export function EditCell({
             onCommit={(v) => onPatch({ qty2_manual: toNum(v) })}
             placeholder={shown == null ? '—' : shown.toLocaleString('vi-VN')}
           />
-          {manual !== '' && (
-            <CellHint title="Tổng gõ tay — bấm để về số tự tính" onClick={() => onPatch({ qty2_manual: '' })}>
+          {/* Xốp (05/10/2026, đơn THL): hai lỗi đắt nhất bày NGAY tại ô — gõ m³
+              MỘT tấm vào ô tổng, và dòng có số khối mà tiền vẫn tính theo tấm. */}
+          {laM3MotTam(l) ? (
+            <CellHint
+              tone="warn"
+              title={`Ô này là TỔNG m³ của cả dòng — ${numStr(manual)} là m³ của MỘT tấm. Bấm để dùng tổng ${tongM3(l)?.toLocaleString('vi-VN')} m³ và tính tiền theo m³.`}
+              onClick={() => onPatch({ qty2_manual: '', carton_basis: 'm3' })}
+            >
+              m³ 1 tấm? dùng {tongM3(l)?.toLocaleString('vi-VN')} ↩
+            </CellHint>
+          ) : manual !== '' ? (
+            <CellHint
+              title="Tổng gõ tay — bấm để về số tự tính"
+              onClick={() => onPatch({ qty2_manual: '' })}
+            >
               tự tính {auto == null ? '—' : auto.toLocaleString('vi-VN')} ↩
             </CellHint>
-          )}
+          ) : null}
+          {template === 'foam' &&
+            l.carton_basis !== 'm3' &&
+            !laM3MotTam(l) &&
+            (m3MotTam(l) != null || manual !== '') && (
+              <CellHint
+                tone="warn"
+                title="Dòng có số khối nhưng tiền đang tính SL × đơn giá (theo tấm/cuộn). Xốp báo giá theo m³ thì bấm để tính theo tổng m³."
+                onClick={() => onPatch({ carton_basis: 'm3' })}
+              >
+                tiền theo tấm · đổi m³
+              </CellHint>
+            )}
         </>
       )
     }

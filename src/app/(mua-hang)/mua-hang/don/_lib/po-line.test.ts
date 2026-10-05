@@ -18,6 +18,9 @@ import {
   overridesCatalog,
   recallBasis,
   refreshLineFromMaterial,
+  laM3MotTam,
+  tongM3,
+  withSpecDims,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
@@ -1071,5 +1074,43 @@ describe('tổng gõ tay — mở lại đơn đã lưu (02/10/2026)', () => {
     )
     expect(lineProblem('aluminium', l)).toBeNull()
     expect(lineProblem('aluminium', { ...l, qty2_manual: '' })).toBe('thiếu kg/m')
+  })
+})
+
+describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Hoàng Long, 05/10/2026)', () => {
+  const xop = (over: Partial<Line> = {}): Line => ({
+    ...newFreeLine(),
+    name: 'Xốp 8kg',
+    qty: 4480,
+    price: 520_000,
+    carton_basis: 'ctn',
+    ...over,
+  })
+  it('gõ quy cách 1000*800*50 → D×R×Dày + tính theo m³ → 93.184.000đ như tờ', () => {
+    const prev = xop()
+    const next = withSpecDims('foam', prev, { ...prev, spec: '1000*800*50' })
+    expect([next.inner_l_mm, next.inner_w_mm, next.inner_h_mm, next.carton_basis]).toEqual([1000, 800, 50, 'm3']) // prettier-ignore
+    expect(lineQty2('foam', next)).toBe(179.2)
+    expect(lineAmount('foam', next)).toBe(93_184_000)
+  })
+  it('đã gõ 0,04 (m³ MỘT tấm) vào ô tổng: nhận ra; điền kích thước thì xoá số đó', () => {
+    const prev = xop({ qty2_manual: 0.04, inner_l_mm: 1000, inner_w_mm: 800, inner_h_mm: 50 })
+    expect(laM3MotTam(prev)).toBe(true)
+    expect(tongM3(prev)).toBe(179.2)
+    const tu = withSpecDims('foam', xop({ qty2_manual: 0.04 }), xop({ qty2_manual: 0.04, spec: '1000x800x50' })) // prettier-ignore
+    expect(tu.qty2_manual).toBe('')
+    expect(lineAmount('foam', tu)).toBe(93_184_000)
+  })
+  it('sửa quy cách gõ nhầm thì kích thước chạy theo; kích thước tự khai thì giữ, không lật cơ sở giá', () => {
+    const a = withSpecDims('foam', xop(), xop({ spec: '1000*800*5' }))
+    const b = withSpecDims('foam', a, { ...a, spec: '1000*800*50', carton_basis: 'ctn' })
+    expect([b.inner_h_mm, b.carton_basis]).toEqual([50, 'ctn'])
+    const tay = xop({ inner_l_mm: 1520, inner_w_mm: 920, inner_h_mm: 10 })
+    expect(withSpecDims('foam', tay, { ...tay, spec: '1000*800*50' }).inner_l_mm).toBe(1520)
+  })
+  it('mút cuộn có đơn vị trong quy cách và mẫu khác: không đụng', () => {
+    const p = xop()
+    expect(withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis).toBe('ctn')
+    expect(withSpecDims('carton', p, { ...p, spec: '1000*800*50' }).inner_l_mm).toBe('')
   })
 })
