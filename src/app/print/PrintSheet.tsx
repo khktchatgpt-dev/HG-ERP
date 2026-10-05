@@ -65,11 +65,14 @@ export function PrintPage({
   exportHref?: string
   children: React.ReactNode
 }) {
-  const margin = orientation === 'portrait' ? '12mm' : '10mm'
+  // `orientation` nay chỉ là khổ MẶC ĐỊNH — người dùng đổi Dọc/Ngang ở thanh nút,
+  // và luật `@page` (lề 0 để trình duyệt khỏi in URL + ngày) do thanh nút phát.
   return (
-    <div className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}>
-      <style>{`@page { size: A4 ${orientation}; margin: ${margin}; }`}</style>
-      <PrintToolbar exportHref={exportHref} />
+    <div
+      data-print-sheet
+      className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}
+    >
+      <PrintToolbar exportHref={exportHref} defaultKho={orientation} />
       {children}
     </div>
   )

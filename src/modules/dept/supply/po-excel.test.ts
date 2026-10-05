@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
-import { buildPoExcel, poExcelFilename } from '@/modules/dept/supply/po-excel'
+import { buildPoExcel, numFmtOf, poExcelFilename } from '@/modules/dept/supply/po-excel'
 import type { PoPrintHeader, PoPrintLine } from '@/app/print/supply/PoPrintSheet'
+import { DEFAULT_DOC_TEMPLATES } from '@/lib/doc-templates'
 
 /**
  * XUẤT EXCEL ĐƠN ĐẶT HÀNG phải GIỐNG PHIẾU IN — cùng nhãn cột (đọc chung
@@ -214,5 +215,88 @@ describe('buildPoExcel — khung giống phiếu in', () => {
 
   it('tên file làm sạch ký tự cấm của Windows', () => {
     expect(poExcelFilename('01/26 HG/MĐ')).toBe('DH 01-26 HG-MĐ.xlsx')
+  })
+})
+
+/*
+ * FILE EXCEL = TỜ IN WEB (05/10/2026). Người dùng in từ Excel ra một tờ khác tờ
+ * web: Excel gõ cứng tiêu đề + chữ ký, thiếu tên người lập, hẹn giao, lịch đợt.
+ * Nay đọc cùng mẫu chứng từ + cùng dữ liệu (`loadPoPrint`).
+ */
+describe('buildPoExcel — khớp phiếu in', () => {
+  const allText = (ws: ExcelJS.Worksheet) => {
+    const out: string[] = []
+    ws.eachRow((row) => row.eachCell((c) => out.push(String(c.value ?? ''))))
+    return out
+  }
+  const tpl = {
+    ...DEFAULT_DOC_TEMPLATES.PO,
+    title_vi: 'ĐƠN ĐẶT HÀNG',
+    title_en: 'PURCHASE ORDER',
+    signatures: [
+      { role: 'XÁC NHẬN CỦA NHÀ CUNG CẤP', hint: 'Ký, ghi rõ họ tên' },
+      { role: '{signer_role}', hint: 'Ký, ghi rõ họ tên', slot: 'creator' as const },
+      { role: '{company}', hint: 'Ký tên, đóng dấu' },
+    ],
+  }
+
+  it('tiêu đề + khối chữ ký theo MẪU CHỨNG TỪ, có tên người lập dưới nét ký', async () => {
+    const ws = await load(
+      await buildPoExcel({
+        company: COMPANY,
+        tpl: { ...tpl, title_vi: 'ĐƠN MUA HÀNG' },
+        po: header({ creator_name: 'Đặng Thị Thanh Nga' }),
+        supplier: null,
+        lines: [line()],
+      }),
+    )
+    const t = allText(ws)
+    expect(t).toContain('ĐƠN MUA HÀNG')
+    expect(t).toContain('NGƯỜI LẬP')
+    expect(t).toContain('(Ký, ghi rõ họ tên)')
+    expect(t).toContain('Đặng Thị Thanh Nga')
+    expect(t).toContain('CÔNG TY TNHH SX-TM HOÀNG GIA')
+  })
+
+  it('không có đợt → dòng "Hẹn giao"; có đợt → bảng lịch giao, KHÔNG in cả hai', async () => {
+    const one = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header(), supplier: null, lines: [line()] }))) // prettier-ignore
+    expect(one.some((x) => x.startsWith('Hẹn giao: '))).toBe(true)
+    const two = allText(
+      await load(
+        await buildPoExcel({
+          company: COMPANY,
+          tpl,
+          po: header(),
+          supplier: null,
+          lines: [line()],
+          shipments: [
+            { seq: 1, expected_date: '2026-08-10', lines: [{ name: 'Sơn xám', qty: 30, unit: 'KG', amount: 2_400_000 }] },
+            { seq: 2, expected_date: '2026-08-20', lines: [{ name: 'Sơn xám', qty: 30, unit: 'KG', amount: 2_400_000 }] },
+          ], // prettier-ignore
+        }),
+      ),
+    )
+    expect(two).toContain('Lịch giao hàng (2 đợt):')
+    expect(two.some((x) => x.startsWith('Hẹn giao: '))).toBe(false)
+  })
+
+  it('khổ giấy theo lựa chọn, co một trang ngang, không đầu/chân trang, có vùng in', async () => {
+    const ws = await load(
+      await buildPoExcel({ company: COMPANY, tpl, po: header(), supplier: null, lines: [line()], orientation: 'portrait' }), // prettier-ignore
+    )
+    expect(ws.pageSetup.orientation).toBe('portrait')
+    expect(ws.pageSetup.fitToWidth).toBe(1)
+    expect(ws.pageSetup.margins?.header).toBe(0)
+    expect(ws.headerFooter?.oddHeader ?? '').toBe('')
+    expect(ws.pageSetup.printArea).toMatch(/^A1:[A-Z]+\d+$/)
+  })
+})
+
+describe('numFmtOf — số trên file giống số trên phiếu in', () => {
+  it('số lẻ giữ tới 3 chữ số (m³/SP 0,006 không thành 0); số nguyên không dấu chấm thừa', () => {
+    expect(numFmtOf(0.00629)).toBe('#,##0.###')
+    expect(numFmtOf(0.629)).toBe('#,##0.###')
+    expect(numFmtOf(100)).toBe('#,##0')
+    expect(numFmtOf('')).toBe('#,##0')
   })
 })

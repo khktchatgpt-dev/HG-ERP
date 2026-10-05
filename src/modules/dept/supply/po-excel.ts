@@ -21,6 +21,7 @@ import type {
   PoPrintLine,
   PoPrintSupplier,
 } from '@/app/print/supply/PoPrintSheet'
+import { DEFAULT_DOC_TEMPLATES, resolveSignatures, type DocTemplate } from '@/lib/doc-templates'
 
 /**
  * XUẤT EXCEL đơn đặt hàng — file .xlsx bày GIỐNG HỆT phiếu in (PoPrintSheet),
@@ -62,6 +63,15 @@ type XCol = {
 }
 
 const nOrNull = (v: number | null | undefined) => (v == null ? '' : v)
+
+/**
+ * Định dạng số theo GIÁ TRỊ, giống `toLocaleString('vi-VN')` của phiếu in (tối
+ * đa 3 số lẻ). Một chuỗi `#,##0` cho mọi ô từng làm m³/SP 0,006 hiện "0" và
+ * tổng m³ 0,629 hiện "1" trên file (05/10/2026). Còn `#,##0.###` cho số
+ * nguyên thì Excel in kèm dấu chấm thừa ("100.") — nên tách hai nhánh.
+ */
+export const numFmtOf = (v: unknown) =>
+  typeof v === 'number' && !Number.isInteger(v) ? '#,##0.###' : '#,##0'
 
 /**
  * Định dạng số cho ô SL đặt khi dòng có chụp ĐÓNG GÓI MUA (0128): giữ ô là số
@@ -207,13 +217,34 @@ function excelColumns(
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
+/** Một đợt giao trên phiếu — cùng dạng `shipments` của PoPrintSheet. */
+export type PoExcelShipment = {
+  seq: number
+  expected_date: string
+  lines: { name: string; qty: number; unit: string; amount: number | null }[]
+}
+
 export async function buildPoExcel(input: {
   company: Record<string, string | null>
+  /**
+   * Mẫu chứng từ PO (0164) — tiêu đề, quốc hiệu, khối chữ ký. Cùng mẫu với phiếu
+   * in; trước 05/10/2026 file gõ cứng ba thứ này nên in ra khác tờ web.
+   */
+  tpl?: DocTemplate
   po: PoPrintHeader
   supplier: PoPrintSupplier
   lines: PoPrintLine[]
+  /** Lịch giao theo đợt (chỉ đợt còn sống) — có thì thay dòng "Hẹn giao". */
+  shipments?: PoExcelShipment[]
+  /**
+   * Khổ giấy khi in từ Excel. Bảng luôn co vừa MỘT trang ngang (fitToWidth),
+   * nên đổi khổ chỉ đổi tỉ lệ thu, không vỡ bố cục.
+   */
+  orientation?: 'portrait' | 'landscape'
 }): Promise<Buffer> {
   const { company, po, supplier, lines } = input
+  const tpl = input.tpl ?? DEFAULT_DOC_TEMPLATES.PO
+  const shipments = input.shipments ?? []
   const template = po.template ?? 'simple'
   const d = new Date(po.created_at)
   // LSX + Đơn hàng không là cột bảng kê — nằm ở khối tham chiếu đầu file.
@@ -253,12 +284,15 @@ export async function buildPoExcel(input: {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Đơn đặt hàng', {
     pageSetup: {
-      orientation: 'landscape',
+      orientation: input.orientation ?? 'landscape',
       paperSize: 9, // A4
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 0,
-      margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+      horizontalCentered: true,
+      // Lề ~1 cm như phiếu in web; KHÔNG đặt đầu/chân trang — tờ gửi NCC không
+      // mang tên file, số trang hay ngày in.
+      margins: { left: 0.4, right: 0.4, top: 0.45, bottom: 0.45, header: 0, footer: 0 },
     },
   })
   ws.columns = cols.map((c) => ({ width: c.width }))
@@ -283,20 +317,22 @@ export async function buildPoExcel(input: {
     font: { bold: true, size: 11 },
   })
   ws.mergeCells(r, rightStart, r, n)
-  set(r, rightStart, 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', {
-    font: { bold: true, size: 11 },
-    alignment: { horizontal: 'center' },
-  })
+  if (tpl.national_heading)
+    set(r, rightStart, 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', {
+      font: { bold: true, size: 11 },
+      alignment: { horizontal: 'center' },
+    })
   r++
   ws.mergeCells(r, 1, r, rightStart - 1)
   set(r, 1, company.company_address ? `Địa chỉ: ${company.company_address}` : '', {
     font: { size: 10 },
   })
   ws.mergeCells(r, rightStart, r, n)
-  set(r, rightStart, 'Độc lập – Tự do – Hạnh phúc', {
-    font: { bold: true, size: 10, underline: true },
-    alignment: { horizontal: 'center' },
-  })
+  if (tpl.national_heading)
+    set(r, rightStart, 'Độc lập – Tự do – Hạnh phúc', {
+      font: { bold: true, size: 10, underline: true },
+      alignment: { horizontal: 'center' },
+    })
   r++
   ws.mergeCells(r, 1, r, rightStart - 1)
   set(
@@ -323,16 +359,18 @@ export async function buildPoExcel(input: {
   /* ── Tiêu đề + khung số hiệu ────────────────────────────────────────────── */
   r += 2
   ws.mergeCells(r, 1, r, n)
-  set(r, 1, 'ĐƠN ĐẶT HÀNG', {
+  set(r, 1, tpl.title_vi, {
     font: { bold: true, size: 14 },
     alignment: { horizontal: 'center' },
   })
-  r++
-  ws.mergeCells(r, 1, r, n)
-  set(r, 1, 'PURCHASE ORDER', {
-    font: { italic: true, size: 10 },
-    alignment: { horizontal: 'center' },
-  })
+  if (tpl.title_en) {
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, tpl.title_en, {
+      font: { size: 10 },
+      alignment: { horizontal: 'center' },
+    })
+  }
 
   // Khung Số ĐH / LSX bên phải — mỗi dòng một ngăn, kẻ viền như mẫu.
   const refs: string[] = [
@@ -395,7 +433,7 @@ export async function buildPoExcel(input: {
         font: { size: 9 },
         alignment: { horizontal: c.align, vertical: 'middle', wrapText: true },
         border: BORDER,
-        ...(c.num ? { numFmt: c.numFmtFor?.(l) ?? '#,##0' } : null),
+        ...(c.num ? { numFmt: c.numFmtFor?.(l) ?? numFmtOf(c.value(l, i)) } : null),
       })
     })
   })
@@ -415,7 +453,7 @@ export async function buildPoExcel(input: {
         alignment: { horizontal: 'right' },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: HEAD_FILL } },
         border: BORDER,
-        numFmt: '#,##0',
+        numFmt: numFmtOf(t.value),
       })
       if (qtyTotalIdx + 2 <= n) {
         ws.mergeCells(r, qtyTotalIdx + 2, r, n)
@@ -508,6 +546,81 @@ export async function buildPoExcel(input: {
       { font: { bold: true, size: 10 } },
     )
   }
+  /*
+   * HẸN GIAO / LỊCH GIAO — cùng luật phiếu in: có đợt thì lịch là cam kết, dòng
+   * "Hẹn giao" đơn lẻ chỉ in khi KHÔNG có đợt (in cả hai là hai nguồn ngày).
+   */
+  const dmyStr = (iso: string) => new Date(iso).toLocaleDateString('vi-VN')
+  if (shipments.length === 0 && po.expected_at) {
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, `Hẹn giao: ${dmyStr(po.expected_at)}`, { font: { size: 10 } })
+  }
+  if (shipments.length > 0) {
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, `Lịch giao hàng (${shipments.length} đợt):`, { font: { bold: true, size: 10 } })
+    /*
+     * Sáu cột của bảng lịch trải trên n cột bảng hàng: Tên hàng ăn phần dư,
+     * các cột còn lại một ô mỗi cột (bảng hàng luôn có ≥ 8 cột).
+     */
+    const nameTo = Math.max(3, n - 3)
+    const shCols: [number, number][] = [
+      [1, 1],
+      [2, 2],
+      [3, nameTo],
+      [nameTo + 1, nameTo + 1],
+      [nameTo + 2, nameTo + 2],
+      [nameTo + 3, n],
+    ]
+    const heads: [string, 'left' | 'right'][] = [
+      ['Đợt', 'left'],
+      ['Ngày giao', 'left'],
+      ['Tên hàng', 'left'],
+      ['ĐVT', 'left'],
+      ['Số lượng', 'right'],
+      [`Tạm tính (${po.currency})`, 'right'],
+    ]
+    const cellAt = (row: number, k: number, v: ExcelJS.CellValue, st: Partial<ExcelJS.Style>) => {
+      const [a, b] = shCols[k]
+      if (b > a) ws.mergeCells(row, a, row, b)
+      set(row, a, v, { border: BORDER, ...st })
+    }
+    r++
+    heads.forEach(([h, align], k) =>
+      cellAt(r, k, h, {
+        font: { bold: true, size: 9 },
+        alignment: { horizontal: align },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: HEAD_FILL } },
+      }),
+    )
+    for (const sh of shipments) {
+      sh.lines.forEach((l, li) => {
+        r++
+        cellAt(r, 0, li === 0 ? sh.seq : '', { font: { size: 9 } })
+        cellAt(r, 1, li === 0 ? dmyStr(sh.expected_date) : '', { font: { size: 9 } })
+        cellAt(r, 2, l.name, { font: { size: 9 }, alignment: { wrapText: true } })
+        cellAt(r, 3, l.unit, { font: { size: 9 } })
+        cellAt(r, 4, l.qty, { font: { size: 9 }, numFmt: numFmtOf(l.qty), alignment: { horizontal: 'right' } })
+        cellAt(r, 5, l.amount != null && l.amount > 0 ? Math.round(l.amount) : '', {
+          font: { size: 9 },
+          numFmt: '#,##0',
+          alignment: { horizontal: 'right' },
+        })
+      })
+    }
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, 'Tạm tính theo đơn giá trên đơn; thanh toán theo thực nhận từng đợt.', {
+      font: { italic: true, size: 9 },
+    })
+  }
+  // Cột `terms` cũ — đơn tạo trước 0106 chỉ có một dòng điều khoản gộp.
+  if (po.terms && terms.length === 0) {
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, po.terms, { font: { size: 10 }, alignment: { wrapText: true } })
+  }
   if (po.note) {
     r++
     ws.mergeCells(r, 1, r, n)
@@ -524,39 +637,46 @@ export async function buildPoExcel(input: {
     },
   )
 
-  /* ── Ba cột chữ ký ──────────────────────────────────────────────────────── */
+  /*
+   * KHỐI CHỮ KÝ — đọc từ MẪU CHỨNG TỪ như phiếu in (`resolveSignatures`), kể
+   * cả tên người lập dưới nét ký. Trước 05/10/2026 file gõ cứng ba cột, đổi mẫu
+   * ở màn cấu hình thì web đổi mà Excel không.
+   */
   r += 2
-  const third = Math.max(1, Math.floor(n / 3))
-  const signs: [string, string, number, number][] = [
-    ['XÁC NHẬN CỦA NHÀ CUNG CẤP', '(Ký, ghi rõ họ tên, đóng dấu)', 1, third],
-    [
-      po.signer_role ?? poTemplateMeta(template).signerRole,
-      '(Ký, ghi rõ họ tên)',
-      third + 1,
-      third * 2,
-    ],
-    [
-      (company.company_name ?? 'GIÁM ĐỐC').toUpperCase(),
-      '(Ký tên, đóng dấu)',
-      third * 2 + 1,
-      n,
-    ],
-  ]
-  for (const [role, , a, b] of signs) {
-    ws.mergeCells(r, a, r, b)
-    set(r, a, role, {
-      font: { bold: true, size: 10 },
-      alignment: { horizontal: 'center' },
-    })
-  }
+  const signs = resolveSignatures(tpl.signatures, {
+    company: company.company_name,
+    signer_role: po.signer_role ?? poTemplateMeta(template).signerRole,
+    names: { creator: po.creator_name },
+  })
+  const k = Math.max(1, signs.length)
+  const spans = signs.map((_, i) => {
+    const a = Math.floor((i * n) / k) + 1
+    const b = Math.max(a, Math.floor(((i + 1) * n) / k))
+    return [a, b] as const
+  })
+  signs.forEach((c, i) => {
+    const [a, b] = spans[i]
+    if (b > a) ws.mergeCells(r, a, r, b)
+    set(r, a, c.role, { font: { bold: true, size: 10 }, alignment: { horizontal: 'center', wrapText: true } }) // prettier-ignore
+  })
   r++
-  for (const [, hint, a, b] of signs) {
-    ws.mergeCells(r, a, r, b)
-    set(r, a, hint, {
-      font: { italic: true, size: 9 },
-      alignment: { horizontal: 'center' },
+  signs.forEach((c, i) => {
+    const [a, b] = spans[i]
+    if (b > a) ws.mergeCells(r, a, r, b)
+    set(r, a, c.hint ? `(${c.hint})` : '', { font: { italic: true, size: 9 }, alignment: { horizontal: 'center' } }) // prettier-ignore
+  })
+  // Chừa chỗ ký (~4 dòng như mt-16 của phiếu in) rồi tới tên người ký.
+  if (signs.some((c) => c.name)) {
+    r += 4
+    signs.forEach((c, i) => {
+      const [a, b] = spans[i]
+      if (b > a) ws.mergeCells(r, a, r, b)
+      set(r, a, c.name ?? '', { font: { size: 10 }, alignment: { horizontal: 'center' } })
     })
   }
+
+  // Vùng in = đúng phần phiếu, không lẫn ô thừa nào ngoài bảng.
+  ws.pageSetup.printArea = `A1:${ws.getColumn(n).letter}${r}`
 
   const out = await wb.xlsx.writeBuffer()
   return Buffer.from(out as ArrayBuffer)
