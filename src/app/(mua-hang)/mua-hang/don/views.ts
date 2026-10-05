@@ -144,6 +144,7 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
     lateSide:
       sp.tre_ben === 'sent' || sp.tre_ben === 'unsent' ? sp.tre_ben : ('any' as const),
     noEta: sp.chua_hen === '1',
+    unconfirmed: sp.chua_xn === '1',
     ownerId: sp.nguoi || 'all',
     template: sp.loai_don || 'all',
     lsxDone: sp.lenh_xong === '1',
@@ -169,6 +170,7 @@ export function encodeView(s: ViewState): string {
   if (f.late) p.set('tre', '1')
   if (f.late && f.lateSide !== 'any') p.set('tre_ben', f.lateSide)
   if (f.noEta) p.set('chua_hen', '1')
+  if (f.unconfirmed) p.set('chua_xn', '1')
   if (f.ownerId !== 'all') p.set('nguoi', f.ownerId)
   if (f.template !== 'all') p.set('loai_don', f.template)
   if (f.lsxDone) p.set('lenh_xong', '1')
@@ -341,6 +343,7 @@ export const PARAM_KEYS: ReadonlySet<string> = new Set(
         late: true,
         lateSide: 'sent',
         noEta: true,
+        unconfirmed: true,
         ownerId: 'x',
         template: 'x',
         lsxDone: true,
