@@ -14,7 +14,9 @@ import {
   THead,
   Table,
   Tag,
-  WorkLanes,
+  BarSep,
+  Chip,
+  FilterBar,
   type Lane,
 } from '@/components/kit'
 import { MEETING_LEVEL, type MeetingRiskLevel } from '@/lib/supply-meeting'
@@ -257,14 +259,26 @@ export function BanLamViecScreen({
         </div>
       )}
 
-      {/* MỘT dải tab = mọi số đếm của trang; bảng dưới chiếm phần còn lại và tự cuộn. */}
+      {/*
+        MỘT dải việc = mọi số đếm của trang; bảng dưới chiếm phần còn lại và tự cuộn.
+        CHIP TỰ XUỐNG DÒNG, không phải dải tab (vá 05/10/2026): bản đầu dùng
+        WorkLanes — tab không xuống dòng, 8 làn cần 1519px mà chỉ có 800–1048px
+        nên dải tự cuộn ngang, dư 1px cao nên cuộn dọc luôn: hai thanh cuộn chen
+        nhau ở góc (chủ dự án: "chỗ này rất kì"). Bản vẽ M1 vốn là chip xuống dòng.
+      */}
       <section className="flex min-h-0 flex-1 flex-col bg-[var(--surface-card)]">
-        <div className="flex items-end border-b border-[var(--line)] bg-[var(--surface)]">
-          <div className="min-w-0 flex-1">
-            <WorkLanes lanes={lanes} activeId={tab} onPick={setTab} />
-          </div>
-          {/* Hai số này mở TRANG KHÁC (không phải lọc bảng dưới) — nên là liên kết có ↗, khác hình tab. */}
-          <span className="text-k-sm flex shrink-0 items-center gap-4 px-[var(--gutter)] pb-2">
+        <FilterBar dense label="Lọc việc theo loại">
+          {lanes.map((l, i) => (
+            <span key={l.id} className="contents">
+              {/* Vạch ngăn: hàng duyệt | việc của đơn | lệnh & họp. */}
+              {i > 0 && (l.id === 'toi' || l.id === 'lenh') && <BarSep />}
+              <Chip on={tab === l.id} count={l.rows.length} onClick={() => setTab(l.id)}>
+                {l.label}
+              </Chip>
+            </span>
+          ))}
+          {/* Hai số này mở TRANG KHÁC (không phải lọc bảng dưới) — nên là liên kết có ↗, khác hình chip. */}
+          <span className="text-k-sm ml-auto flex shrink-0 items-center gap-4">
             <a
               className="text-[var(--act-text)] hover:underline"
               href={`/mua-hang/theo-doi?nhom=tuan&${q}`}
@@ -281,8 +295,8 @@ export function BanLamViecScreen({
               </a>
             )}
           </span>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto">
+        </FilterBar>
+        <div className="min-h-0 flex-1 overflow-auto border-t border-[var(--line)]">
           {tab === 'duyet' &&
             approver &&
             (approver.pending.length === 0 ? (
