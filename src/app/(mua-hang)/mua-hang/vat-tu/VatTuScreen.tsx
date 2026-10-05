@@ -345,9 +345,14 @@ export function VatTuScreen({
                 */}
                 <Cell grow className="min-w-[260px]">
                   <span className="flex items-center gap-2">
-                    <span className="truncate" title={r.name}>
+                    {/* Tên → HỒ SƠ VẬT TƯ (06/10/2026): NCC đã bán, giá, lịch sử mua. */}
+                    <a
+                      href={`/mua-hang/vat-tu/${r.id}`}
+                      className="truncate text-[var(--act)] hover:underline"
+                      title={`Hồ sơ ${r.code} — NCC đã bán, giá, lịch sử mua`}
+                    >
                       {r.name}
-                    </span>
+                    </a>
                     {r.needs_review && <Tag tone="warn">Chờ rà</Tag>}
                   </span>
                 </Cell>

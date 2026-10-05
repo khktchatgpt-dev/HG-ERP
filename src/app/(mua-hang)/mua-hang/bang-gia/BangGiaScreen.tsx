@@ -210,7 +210,7 @@ export function BangGiaScreen({
                     <span className="flex items-center gap-2">
                       <Code
                         as="a"
-                        href={`/mua-hang/vat-tu?q=${encodeURIComponent(r.code)}`}
+                        href={`/mua-hang/vat-tu/${r.material_id}`}
                       >
                         {r.code}
                       </Code>

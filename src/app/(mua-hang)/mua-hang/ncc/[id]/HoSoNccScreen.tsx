@@ -87,6 +87,7 @@ type Po = {
 }
 
 type Gia = {
+  material_id: string
   code: string
   name: string
   price: number
@@ -619,7 +620,7 @@ export function HoSoNccScreen({
                   <Cell pin>
                     <Code
                       as="a"
-                      href={`/mua-hang/vat-tu?q=${encodeURIComponent(g.code)}`}
+                      href={`/mua-hang/vat-tu/${g.material_id}`}
                     >
                       {g.code}
                     </Code>

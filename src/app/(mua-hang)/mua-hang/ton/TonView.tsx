@@ -174,7 +174,7 @@ export function TonView({
             {rows.map((r) => (
               <Row key={r.material_id}>
                 <Cell pin>
-                  <Code as="a" href={`/mua-hang/vat-tu?q=${encodeURIComponent(r.code)}`}>
+                  <Code as="a" href={`/mua-hang/vat-tu/${r.material_id}`}>
                     {r.code}
                   </Code>
                 </Cell>
