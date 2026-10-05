@@ -93,6 +93,19 @@ export function HoSoLenhScreen({
             <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
               Vật tư của lệnh
             </Btn>
+            {/*
+              PHIẾU LỆNH gốc của Bán hàng (05/10/2026 — chủ dự án: "xuất excel lsx cơ"):
+              người mua cần đúng tờ lệnh xưởng đang cầm (nhóm theo PO, SKU khách, đóng
+              gói, thời gian xuất, ghi chú) chứ không chỉ bảng tóm tắt dưới đây. Xem =
+              `/print/lsx/[id]`, tải = `/api/dept/production/lsx/[id]/export` (file .xlsx
+              bày giống hệt phiếu in, kèm ảnh) — ai xem được phiếu thì tải được.
+            */}
+            <Btn icon="in" onClick={() => window.open(`/print/lsx/${lsx.id}`, '_blank')}>
+              Xem phiếu lệnh
+            </Btn>
+            <Btn icon="excel" href={`/api/dept/production/lsx/${lsx.id}/export`}>
+              Xuất LSX
+            </Btn>
             <Btn
               icon="baoCao"
               href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}
