@@ -1312,8 +1312,8 @@ export function useDonChungTu(p: Props) {
      nào, thân chỉ hiện mục đó. Màn SOẠN / SỬA giữ nguyên bố cục khối gập +
      cột phải. Hai bố cục dùng CÙNG các khối dưới đây — không chép hai bản. */
   const moneyRows: [string, React.ReactNode][] = [
-    ['Tiền hàng', <span key="a" className="num">{money(totals.subtotal, header.currency)}</span>], // prettier-ignore
-    ['VAT', <span key="b" className="num">{header.vat === '' ? 0 : header.vat}% · {money(totals.vatAmount, header.currency)}</span>], // prettier-ignore
+    [header.inclVat ? 'Tiền hàng (đã gồm VAT)' : 'Tiền hàng', <span key="a" className="num">{money(totals.subtotal, header.currency)}</span>], // prettier-ignore
+    ['VAT', <span key="b" className="num">{header.vat === '' ? 0 : header.vat}%{header.inclVat ? ' (đã gồm)' : ''} · {money(totals.vatAmount, header.currency)}</span>], // prettier-ignore
     ['Tổng thanh toán', <b key="c" className="num">{money(totals.grandTotal, header.currency)}</b>], // prettier-ignore
     ...(!editing && adjustments.length > 0 ? [['Bản duyệt', <span key="e" className="num">{money(adjustments[0].total_before, header.currency)}</span>], ['Phát sinh sau duyệt', <span key="f" className="num" title="Cộng các lần điều chỉnh — chi tiết ở khối Tiền của đơn">{signed(adjustments.at(-1)!.total_after - adjustments[0].total_before, header.currency)}</span>]] as [string, React.ReactNode][] : []), // prettier-ignore
     ...(!editing && costShare > 0 ? [['Chi phí mua · chưa VAT', <span key="g" className="num" title="Phí vận chuyển / bốc xếp chia cho đơn này — trả nhà xe hoặc NCC, chưa vào giá nhập kho">{money(costShare, header.currency)}</span>], ['Giá trị đơn + phí', <span key="h" className="num" title="Tiền hàng sau chiết khấu + chi phí mua, cùng CHƯA VAT">{money(totals.grandTotal - totals.vatAmount + costShare, header.currency)}</span>]] as [string, React.ReactNode][] : []), // prettier-ignore

@@ -44,6 +44,11 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
   const f = p.finance
   const vt = f ? poVeThieu(f.rows) : null
   const chuaCo = !daGui ? 'đơn chưa gửi NCC' : 'đơn không có dòng vật tư kho'
+  // Số tiền lấy theo ĐƠN GIÁ trên dòng: đơn ghi giá ĐÃ gồm VAT thì ba ô đầu cũng là số
+  // gồm VAT — nói đúng như vậy (05/10/2026: trước ghi "chưa VAT" cho mọi đơn).
+  const vatPct = header.vat === '' ? 0 : Number(header.vat)
+  const thue =
+    vatPct === 0 ? 'không VAT' : header.inclVat ? `đã gồm VAT ${vatPct}%` : 'chưa VAT'
   return (
     <MetricStrip>
       <Metric
@@ -51,9 +56,7 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
         value={vt ? money(vt.ordered_net, cur) : money(totals.grandTotal, cur)}
         basis={
           vt
-            ? Math.abs(vt.ordered_net - totals.grandTotal) < 0.5
-              ? `${lines.length} dòng · không VAT`
-              : `${lines.length} dòng · chưa VAT` // số gồm VAT là "Tổng thanh toán" ở đầu đơn
+            ? `${lines.length} dòng · ${thue}`
             : `${lines.length} dòng · gồm VAT ${header.vat === '' ? 0 : header.vat}%`
         }
       />
@@ -64,7 +67,7 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
         basis={
           !veKho
             ? chuaCo
-            : `${veKho.du}/${veKho.tong} dòng vật tư kho về đủ${vt ? ' · chưa VAT' : ''}`
+            : `${veKho.du}/${veKho.tong} dòng vật tư kho về đủ${vt ? ` · ${thue}` : ''}`
         }
       />
       <Metric
@@ -75,7 +78,7 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
             ? chuaCo
             : !vt
               ? 'chưa tải được số tài chính'
-              : `${vt.missing_lines} dòng chưa về đủ · chưa VAT${vt.closed_lines ? ` · không gồm ${vt.closed_lines} dòng đã chốt thiếu` : ''}`
+              : `${vt.missing_lines} dòng chưa về đủ · ${thue}${vt.closed_lines ? ` · không gồm ${vt.closed_lines} dòng đã chốt thiếu` : ''}`
         }
       />
       <Metric

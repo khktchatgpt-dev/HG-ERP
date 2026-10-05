@@ -890,11 +890,9 @@ export function DonChungTuScreen(p: Props) {
       {drafting && (
         <CommitBar
           totals={[
-            { label: 'Tiền hàng', value: money(totals.subtotal, header.currency) },
-            {
-              label: `VAT ${header.vat === '' ? 0 : header.vat}%`,
-              value: money(totals.vatAmount, header.currency),
-            },
+            // Giá ĐÃ gồm VAT: VAT TÁCH RA từ tiền hàng — nói trên nhãn như phiếu in (05/10/2026).
+            { label: header.inclVat ? 'Tiền hàng (đã gồm VAT)' : 'Tiền hàng', value: money(totals.subtotal, header.currency) }, // prettier-ignore
+            { label: `VAT ${header.vat === '' ? 0 : header.vat}%${header.inclVat ? ' (đã gồm)' : ''}`, value: money(totals.vatAmount, header.currency) }, // prettier-ignore
           ]}
           grand={{
             label: 'Tổng thanh toán',
