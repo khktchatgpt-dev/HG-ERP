@@ -14,20 +14,28 @@ import {
   THead,
   Table,
   Tag,
-  WorkLanes,
-  WorkTile,
-  WorkTiles,
+  BarSep,
+  Chip,
+  FilterBar,
   type Lane,
 } from '@/components/kit'
 import { MEETING_LEVEL, type MeetingRiskLevel } from '@/lib/supply-meeting'
-import { SUPPLY_TODO, type SupplyTodoKind } from '@/lib/supply-watch'
+import { SUPPLY_TODO, SUPPLY_TODO_KINDS, type SupplyTodoKind } from '@/lib/supply-watch'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
+import { ViecChoBang } from './viec-cho'
 
 /**
- * Phần nhìn của Bàn làm việc. Ba tầng theo Dynamics workspace: ô số → danh
- * sách theo tab → liên kết. Mọi số đã đếm xong ở server (hai bàn "của tôi" /
+ * Phần nhìn của Bàn làm việc. Mọi số đã đếm xong ở server (hai bàn "của tôi" /
  * "cả phòng"); công tắc phạm vi chỉ CHỌN bàn, không tính lại gì.
+ *
+ * GỌN LẠI 05/10/2026 (bản vẽ M1 canvas "Cung ứng · Hàng về" › Bản 10, chủ dự
+ * án duyệt): cùng một con số từng hiện ở BA chỗ — dòng đầu trang, sáu ô số, ba
+ * tab — và lệch nhau ("Nguy cơ dừng SX 1" vs "Lệnh có nguy cơ 4"); ô số bấm
+ * thì sang trang khác còn tab bấm thì lọc tại chỗ. Nay MỘT dải tab: mỗi loại
+ * việc một tab (kit tự đếm `rows.length`, số không lệch được), bấm là lọc
+ * ngay bảng dưới. Bảng việc nhóm theo loại (`viec-cho.tsx`). Cột liên kết bên
+ * phải bỏ — trùng menu trái.
  */
 
 export type Todo = {
@@ -106,6 +114,12 @@ const TONE: Record<string, 'stop' | 'warn' | 'done' | 'neutral'> = {
 }
 const dmy = (iso: string | null) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
+const THU = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+/** "Thứ Hai, 05/10/2026" — tính theo lịch, không theo múi giờ máy. */
+const homNay = (iso: string) =>
+  `${THU[new Date(`${iso.slice(0, 10)}T00:00:00Z`).getUTCDay()]}, ${dmy(iso)}`
+/** Làn một loại việc: `k:overdue`, `k:unconfirmed`… */
+const LAN_VIEC = 'k:'
 const money = (n: number, cur: string) =>
   n > 0 ? `${n.toLocaleString('vi-VN')} ${cur}` : ''
 const daysSince = (iso: string, today: string) =>
@@ -147,8 +161,6 @@ export function BanLamViecScreen({
   const d = desks[scope]
   const mine = scope === 'toi'
   const who = viewAs ? viewAs.name : 'tôi'
-  const todoTotal = Object.values(d.counts).reduce((s, n) => s + n, 0)
-  const stopWarn = d.riskCounts.stop + d.riskCounts.warn
   const pendingWarn = (approver?.pending ?? []).filter((p) => daysSince(p.since, today) > PENDING_WARN_DAYS).length // prettier-ignore
   const q = `pham_vi=${scope}`
 
@@ -166,7 +178,15 @@ export function BanLamViecScreen({
         ]
       : []),
     { id: 'toi', label: mine ? (viewAs ? `Việc chờ ${who}` : 'Việc chờ tôi') : 'Việc cả phòng', rows: d.todos, tone: undefined }, // prettier-ignore
-    { id: 'lenh', label: mine ? `Lệnh của ${who} có nguy cơ` : 'Lệnh có nguy cơ', rows: d.issues, tone: d.riskCounts.stop > 0 ? ('stop' as const) : undefined }, // prettier-ignore
+    // Mỗi loại việc một làn — chỉ loại đang có việc, theo thứ tự khẩn.
+    ...SUPPLY_TODO_KINDS.filter((k) => d.counts[k] > 0).map((k) => ({
+      id: `${LAN_VIEC}${k}`,
+      label: SUPPLY_TODO[k].label,
+      rows: d.todos.filter((t) => t.kind === k),
+      tone: SUPPLY_TODO[k].tone === 'stop' ? ('stop' as const) : undefined,
+    })),
+    // Một khái niệm, một số: làn đếm MỌI mức (cùng badge sidebar), số "dừng SX" nói kèm trong nhãn.
+    { id: 'lenh', label: `Lệnh có nguy cơ${d.riskCounts.stop > 0 ? ` · ${d.riskCounts.stop} dừng SX` : ''}`, rows: d.issues, tone: d.riskCounts.stop > 0 ? ('stop' as const) : undefined }, // prettier-ignore
     { id: 'hop', label: 'Cần quyết trong họp', rows: agenda, tone: undefined },
   ]
   const [tab, setTab] = useState(() => lanes.find((l) => l.rows.length > 0)?.id ?? 'toi')
@@ -177,25 +197,21 @@ export function BanLamViecScreen({
     if (da !== db) return (da < 0 ? 99 : da) - (db < 0 ? 99 : db)
     return a.rank - b.rank
   })
-  const TODO_CAP = 20
+  const lanViec = tab.startsWith(LAN_VIEC)
+    ? (tab.slice(LAN_VIEC.length) as SupplyTodoKind)
+    : null
+  const todosLan = lanViec ? d.todos.filter((t) => t.kind === lanViec) : d.todos
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ScreenHeader
         compact
         eyebrow={
           viewAs ? `Mua hàng · đang xem bàn của ${viewAs.name}` : `Mua hàng · ${userName}`
         }
         title="Bàn làm việc"
-        facts={[
-          { label: 'Hôm nay', value: dmy(today) },
-          ...(approver ? [{ label: 'Chờ tôi duyệt', value: String(approver.pending.length), tone: approver.pending.length > 0 ? ('warn' as const) : undefined }] : []), // prettier-ignore
-          { label: mine ? `Việc chờ ${who}` : 'Việc cả phòng', value: String(todoTotal), tone: todoTotal > 0 ? 'warn' : undefined }, // prettier-ignore
-          // Cùng số với tab 'Lệnh có nguy cơ' và badge sidebar (buildMeeting.issues —
-          // gồm cả mức theo dõi). Bản trước đếm dừng+cảnh báo: ba chỗ, hai con số.
-          { label: mine ? 'Lệnh của tôi nguy cơ' : 'Lệnh nguy cơ', value: String(d.issues.length), tone: d.riskCounts.stop > 0 ? 'stop' : stopWarn > 0 ? 'warn' : undefined }, // prettier-ignore
-          { label: mine ? 'Đơn của tôi' : 'Đơn trong sổ', value: String(d.openTotal) },
-        ]}
+        // Số đếm việc chỉ còn ở dải tab bên dưới — không nhắc lại ở đây (05/10/2026).
+        facts={[{ label: 'Hôm nay', value: homNay(today) }]}
         actions={
           <>
             {!viewAs && (
@@ -235,416 +251,250 @@ export function BanLamViecScreen({
         </div>
       )}
 
-      {/* Dynamics workspace: ô việc + danh sách theo tab chiếm phần chính, cột
-          LIÊN KẾT dán ở mép phải — không phải một hàng nút rơi xuống đáy trang
-          để lại khoảng trống (đo 10/09/2026 ở 1366×768: 40% màn dưới trống). */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-[1fr_232px]">
-        <div className="min-w-0 px-[var(--gutter)] py-2.5">
-          {/* Tầng 1 — ô số. Mỗi ô là một lời hứa dẫn tới đúng danh sách, CÙNG phạm vi. */}
-          <WorkTiles>
-            {approver && (
-              <WorkTile
-                strong
-                label="Chờ tôi duyệt"
-                count={approver.pending.length}
-                hint={pendingWarn > 0 ? `${pendingWarn} đơn chờ quá ${PENDING_WARN_DAYS} ngày` : 'Đơn mua đang đợi chữ ký'} // prettier-ignore
-                href="/mua-hang/cho-ky"
-                tone="warn"
-              />
-            )}
-            <WorkTile
-              strong={!approver}
-              label="Quá hẹn giao"
-              count={d.counts.overdue}
-              hint={
-                mine ? 'Giục nhà cung cấp · đơn của tôi' : 'Giục nhà cung cấp · cả phòng'
-              }
-              href={`/mua-hang/hop-thu?nhom=overdue&${q}`}
-              tone="stop"
-            />
-            <WorkTile
-              label="NCC chưa xác nhận"
-              count={d.counts.unconfirmed}
-              hint="Gửi quá 2 ngày chưa ai xác nhận"
-              href={`/mua-hang/hop-thu?nhom=unconfirmed&${q}`}
-              tone="warn"
-            />
-            <WorkTile
-              label="Đã duyệt · chưa gửi NCC"
-              count={d.counts.unsent}
-              hint="Gửi nhà cung cấp"
-              href={`/mua-hang/hop-thu?nhom=unsent&${q}`}
-              tone="warn"
-            />
-            {!approver && (
-              <WorkTile
-                label="Nháp chưa gửi duyệt"
-                count={d.counts.draft}
-                hint="Hoàn tất rồi gửi duyệt"
-                href={`/mua-hang/hop-thu?nhom=draft&${q}`}
-              />
-            )}
-            <WorkTile
-              label="Nguy cơ dừng SX"
-              count={d.riskCounts.stop}
-              hint={
-                mine
-                  ? 'Lệnh của tôi thiếu vật tư sát mốc'
-                  : 'Lệnh thiếu vật tư sát mốc · cả phòng'
-              }
-              href={`/mua-hang/yeu-cau?${q}`}
-              tone="stop"
-            />
-            <WorkTile
-              label="Hàng về 7 ngày tới"
-              count={d.incomingSoon}
-              hint={
-                mine
-                  ? 'Hàng của đơn tôi · không tính quá hẹn'
-                  : 'Cả phòng · không tính quá hẹn'
-              }
+      {truncatedAt != null && (
+        <div className="border-b border-[var(--line)] px-[var(--gutter)] py-2">
+          <NoticeBar tone="warn" tag="Cắt đuôi" action={{ label: 'Mở danh sách đơn' }}>
+            Sổ đơn chạm trần <b>{truncatedAt} đơn</b> khi nạp — các số dưới có thể thiếu.
+          </NoticeBar>
+        </div>
+      )}
+
+      {/*
+        MỘT dải việc = mọi số đếm của trang; bảng dưới chiếm phần còn lại và tự cuộn.
+        CHIP TỰ XUỐNG DÒNG, không phải dải tab (vá 05/10/2026): bản đầu dùng
+        WorkLanes — tab không xuống dòng, 8 làn cần 1519px mà chỉ có 800–1048px
+        nên dải tự cuộn ngang, dư 1px cao nên cuộn dọc luôn: hai thanh cuộn chen
+        nhau ở góc (chủ dự án: "chỗ này rất kì"). Bản vẽ M1 vốn là chip xuống dòng.
+      */}
+      <section className="flex min-h-0 flex-1 flex-col bg-[var(--surface-card)]">
+        <FilterBar dense label="Lọc việc theo loại">
+          {lanes.map((l, i) => (
+            <span key={l.id} className="contents">
+              {/* Vạch ngăn: hàng duyệt | việc của đơn | lệnh & họp. */}
+              {i > 0 && (l.id === 'toi' || l.id === 'lenh') && <BarSep />}
+              <Chip on={tab === l.id} count={l.rows.length} onClick={() => setTab(l.id)}>
+                {l.label}
+              </Chip>
+            </span>
+          ))}
+          {/* Hai số này mở TRANG KHÁC (không phải lọc bảng dưới) — nên là liên kết có ↗, khác hình chip. */}
+          <span className="text-k-sm ml-auto flex shrink-0 items-center gap-4">
+            <a
+              className="text-[var(--act-text)] hover:underline"
               href={`/mua-hang/theo-doi?nhom=tuan&${q}`}
-            />
-            {/*
-              LỆNH ĐÃ XONG, ĐƠN CÒN MỞ (28/09/2026) — chỉ hiện khi CÓ: sản xuất
-              xong tức hàng đã về, đơn chỉ chưa được cập nhật. Đếm bằng cùng hàm
-              với bộ lọc `lenh_xong` của sổ Đơn mua (rổ "Còn mở", gồm nháp).
-            */}
+            >
+              Hàng về 7 ngày tới <b className="num">{d.incomingSoon}</b> ↗
+            </a>
             {d.lsxDone > 0 && (
-              <WorkTile
-                label="Lệnh đã xong, đơn còn mở"
-                count={d.lsxDone}
-                hint="Cập nhật đã về đủ / huỷ"
-                tone="warn"
+              <a
+                className="text-[var(--warn)] hover:underline"
                 href={`/mua-hang/don?lenh_xong=1&trang_thai=open&${q}`}
-              />
-            )}
-          </WorkTiles>
-
-          {truncatedAt != null && (
-            <div className="mt-3">
-              <NoticeBar
-                tone="warn"
-                tag="Cắt đuôi"
-                action={{ label: 'Mở danh sách đơn' }}
+                title="Sản xuất xong mà đơn còn mở — cập nhật đã về đủ / huỷ"
               >
-                Sổ đơn chạm trần <b>{truncatedAt} đơn</b> khi nạp — các số trên có thể
-                thiếu.
-              </NoticeBar>
-            </div>
-          )}
-
-          {/* Tầng 2 — danh sách theo tab. */}
-          <section className="mt-3 border-y border-[var(--line)] bg-[var(--surface-card)]">
-            <div className="border-b border-[var(--line)] bg-[var(--surface)]">
-              <WorkLanes lanes={lanes} activeId={tab} onPick={setTab} />
-            </div>
-
-            {tab === 'duyet' &&
-              approver &&
-              (approver.pending.length === 0 ? (
-                <Empty headline="Không đơn nào chờ bạn duyệt" reason="Mọi đơn mua gửi lên đã được duyệt hoặc trả lại." next={<Btn icon="don" href="/mua-hang/don?pham_vi=phong">Xem sổ đơn mua</Btn>} /> // prettier-ignore
-              ) : (
-                <Table>
-                  <THead>
-                    <th>Đơn</th>
-                    <th>Người mua</th>
-                    <th>Nhà cung cấp</th>
-                    <th>Lệnh SX</th>
-                    <th style={{ textAlign: 'right' }}>Giá trị</th>
-                    <th style={{ textAlign: 'right' }}>Đã chờ</th>
-                  </THead>
-                  <tbody>
-                    {approver.pending.map((p) => {
-                      const age = daysSince(p.since, today)
-                      return (
-                        <Row key={p.id}>
-                          <Cell>
-                            <Code as="a" href={`/mua-hang/don/${p.id}`}>
-                              {p.code}
-                            </Code>
-                          </Cell>
-                          <Cell>{p.owner}</Cell>
-                          <Cell grow>{p.supplier}</Cell>
-                          <Cell muted>{p.lsx ?? 'Ngoài LSX'}</Cell>
-                          <Cell num>
-                            <Num value={money(p.total, p.currency)} />
-                          </Cell>
-                          <Cell num>
-                            <Tag tone={age > PENDING_WARN_DAYS ? 'warn' : 'neutral'}>
-                              {age === 0 ? 'hôm nay' : `${age} ngày`}
-                            </Tag>
-                          </Cell>
-                        </Row>
-                      )
-                    })}
-                  </tbody>
-                </Table>
-              ))}
-
-            {tab === 'nguoi' &&
-              approver &&
-              (approver.buyers.length === 0 ? (
-                <Empty headline="Chưa ai cầm đơn nào đang chạy" reason="Mọi đơn mua đã về đủ hoặc đã huỷ." next={<Btn icon="them" href="/mua-hang/don/moi">Soạn đơn mua</Btn>} /> // prettier-ignore
-              ) : (
-                <Table>
-                  <THead>
-                    <th>Người mua</th>
-                    <th style={{ textAlign: 'right' }}>Đơn đang chạy</th>
-                    <th style={{ textAlign: 'right' }}>Việc chờ</th>
-                    <th style={{ textAlign: 'right' }}>Chờ duyệt</th>
-                    <th style={{ textAlign: 'right' }}>Quá hẹn</th>
-                    <th style={{ textAlign: 'right' }}>NCC chưa xác nhận</th>
-                    <th style={{ textAlign: 'right' }}>Chưa hẹn giao</th>
-                    <th style={{ textAlign: 'right' }}>Hàng về 7 ngày</th>
-                    <th style={{ textAlign: 'right' }}>Lệnh</th>
-                    <th />
-                  </THead>
-                  <tbody>
-                    {approver.buyers.map((b) => (
-                      <Row key={b.id}>
-                        <Cell grow>
-                          <b>{b.name}</b>
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.open)} />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.todo)} zero="zero" />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.pending)} zero="zero" />
-                        </Cell>
-                        <Cell num>
-                          <Num
-                            value={String(b.overdue)}
-                            zero="zero"
-                            strong={b.overdue > 0}
-                          />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.unconfirmed)} zero="zero" />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.noEta)} zero="zero" />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.incomingSoon)} zero="zero" />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(b.lsx)} zero="zero" />
-                        </Cell>
+                Lệnh đã xong, đơn còn mở <b className="num">{d.lsxDone}</b> ↗
+              </a>
+            )}
+          </span>
+        </FilterBar>
+        <div className="min-h-0 flex-1 overflow-auto border-t border-[var(--line)]">
+          {tab === 'duyet' &&
+            approver &&
+            (approver.pending.length === 0 ? (
+              <Empty headline="Không đơn nào chờ bạn duyệt" reason="Mọi đơn mua gửi lên đã được duyệt hoặc trả lại." next={<Btn icon="don" href="/mua-hang/don?pham_vi=phong">Xem sổ đơn mua</Btn>} /> // prettier-ignore
+            ) : (
+              <Table>
+                <THead>
+                  <th>Đơn</th>
+                  <th>Người mua</th>
+                  <th>Nhà cung cấp</th>
+                  <th>Lệnh SX</th>
+                  <th style={{ textAlign: 'right' }}>Giá trị</th>
+                  <th style={{ textAlign: 'right' }}>Đã chờ</th>
+                </THead>
+                <tbody>
+                  {approver.pending.map((p) => {
+                    const age = daysSince(p.since, today)
+                    return (
+                      <Row key={p.id}>
                         <Cell>
-                          <Btn href={`/mua-hang?nguoi=${b.id}`}>Xem bàn làm việc</Btn>
-                        </Cell>
-                      </Row>
-                    ))}
-                  </tbody>
-                </Table>
-              ))}
-
-            {tab === 'toi' &&
-              (d.todos.length === 0 ? (
-                mine ? (
-                  <Empty headline={viewAs ? `Không có việc nào chờ ${who}` : 'Không có việc nào chờ bạn'} reason="Không đơn nào trong phạm vi này cần động tay hôm nay." next={viewAs ? <Btn icon="quayLai" href="/mua-hang">Về bàn của tôi</Btn> : <Btn onClick={() => setScope('phong')}>Xem việc cả phòng</Btn>} /> // prettier-ignore
-                ) : (
-                  <Empty headline="Cả phòng không còn việc nào" reason="Không đơn nào của phòng cần động tay hôm nay." next={<Btn icon="don" href="/mua-hang/don?pham_vi=phong">Xem sổ đơn mua</Btn>} /> // prettier-ignore
-                )
-              ) : (
-                <>
-                  <Table>
-                    <THead>
-                      <th>Đơn</th>
-                      <th>Nhà cung cấp</th>
-                      <th>Việc phải làm</th>
-                      {!mine && <th>Phụ trách</th>}
-                      <th>Lệnh SX</th>
-                      <th>Hẹn giao</th>
-                      <th style={{ textAlign: 'right' }}>Giá trị</th>
-                    </THead>
-                    <tbody>
-                      {d.todos.slice(0, TODO_CAP).map((t) => (
-                        <Row key={t.id}>
-                          <Cell>
-                            <Code as="a" href={`/mua-hang/don/${t.id}`}>
-                              {t.code}
-                            </Code>
-                          </Cell>
-                          <Cell grow>{t.supplier}</Cell>
-                          <Cell>
-                            <Tag tone={TONE[SUPPLY_TODO[t.kind].tone]}>{t.action}</Tag>
-                          </Cell>
-                          {!mine && <Cell muted>{t.owner}</Cell>}
-                          <Cell muted>{t.lsx ?? 'Ngoài LSX'}</Cell>
-                          <Cell num>
-                            <Num
-                              value={dmy(t.expected_at)}
-                              strong={t.kind === 'overdue'}
-                            />
-                          </Cell>
-                          <Cell num>
-                            <Num value={money(t.total, t.currency)} />
-                          </Cell>
-                        </Row>
-                      ))}
-                    </tbody>
-                  </Table>
-                  {d.todos.length > TODO_CAP && (
-                    <p className="text-k-sm px-[var(--gutter)] py-2 text-[var(--ink-3)]">
-                      Đang hiện {TODO_CAP}/{d.todos.length} việc —{' '}
-                      <a
-                        className="text-[var(--act-text)] hover:underline"
-                        href={`/mua-hang/hop-thu?${q}`}
-                      >
-                        xem đủ ở Hộp thư việc
-                      </a>
-                      .
-                    </p>
-                  )}
-                </>
-              ))}
-
-            {tab === 'lenh' &&
-              (d.issues.length === 0 ? (
-                <Empty headline={mine ? `Lệnh của ${who} không có nguy cơ` : 'Không lệnh nào có nguy cơ'} reason={mine ? `${d.lsxCount} lệnh có đơn của ${who} đều đã về hết đơn hoặc hàng đang về.` : 'Mọi lệnh đang chạy đều đã về hết đơn hoặc hàng đang về.'} next={<Btn icon="lenh" href={`/mua-hang/yeu-cau?${q}`}>Xem yêu cầu mua</Btn>} /> // prettier-ignore
-              ) : (
-                <Table>
-                  <THead>
-                    <th>Lệnh</th>
-                    <th>Khách</th>
-                    <th>Mức</th>
-                    <th>Vì sao</th>
-                    <th>Ai cầm bóng</th>
-                    <th>Mốc</th>
-                    <th style={{ textAlign: 'right' }}>Đơn</th>
-                  </THead>
-                  <tbody>
-                    {d.issues.slice(0, 12).map((i) => (
-                      <Row key={i.id}>
-                        <Cell>
-                          <Code as="a" href={`/mua-hang/yeu-cau/${i.id}`}>
-                            {i.code}
+                          <Code as="a" href={`/mua-hang/don/${p.id}`}>
+                            {p.code}
                           </Code>
                         </Cell>
-                        <Cell muted>{i.customer}</Cell>
-                        <Cell>
-                          <Tag tone={TONE[MEETING_LEVEL[i.level].tone]}>{i.label}</Tag>
+                        <Cell>{p.owner}</Cell>
+                        <Cell grow>{p.supplier}</Cell>
+                        <Cell muted>{p.lsx ?? 'Ngoài LSX'}</Cell>
+                        <Cell num>
+                          <Num value={money(p.total, p.currency)} />
                         </Cell>
-                        {/*
+                        <Cell num>
+                          <Tag tone={age > PENDING_WARN_DAYS ? 'warn' : 'neutral'}>
+                            {age === 0 ? 'hôm nay' : `${age} ngày`}
+                          </Tag>
+                        </Cell>
+                      </Row>
+                    )
+                  })}
+                </tbody>
+              </Table>
+            ))}
+
+          {tab === 'nguoi' &&
+            approver &&
+            (approver.buyers.length === 0 ? (
+              <Empty headline="Chưa ai cầm đơn nào đang chạy" reason="Mọi đơn mua đã về đủ hoặc đã huỷ." next={<Btn icon="them" href="/mua-hang/don/moi">Soạn đơn mua</Btn>} /> // prettier-ignore
+            ) : (
+              <Table>
+                <THead>
+                  <th>Người mua</th>
+                  <th style={{ textAlign: 'right' }}>Đơn đang chạy</th>
+                  <th style={{ textAlign: 'right' }}>Việc chờ</th>
+                  <th style={{ textAlign: 'right' }}>Chờ duyệt</th>
+                  <th style={{ textAlign: 'right' }}>Quá hẹn</th>
+                  <th style={{ textAlign: 'right' }}>NCC chưa xác nhận</th>
+                  <th style={{ textAlign: 'right' }}>Chưa hẹn giao</th>
+                  <th style={{ textAlign: 'right' }}>Hàng về 7 ngày</th>
+                  <th style={{ textAlign: 'right' }}>Lệnh</th>
+                  <th />
+                </THead>
+                <tbody>
+                  {approver.buyers.map((b) => (
+                    <Row key={b.id}>
+                      <Cell grow>
+                        <b>{b.name}</b>
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.open)} />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.todo)} zero="zero" />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.pending)} zero="zero" />
+                      </Cell>
+                      <Cell num>
+                        <Num
+                          value={String(b.overdue)}
+                          zero="zero"
+                          strong={b.overdue > 0}
+                        />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.unconfirmed)} zero="zero" />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.noEta)} zero="zero" />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.incomingSoon)} zero="zero" />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(b.lsx)} zero="zero" />
+                      </Cell>
+                      <Cell>
+                        <Btn href={`/mua-hang?nguoi=${b.id}`}>Xem bàn làm việc</Btn>
+                      </Cell>
+                    </Row>
+                  ))}
+                </tbody>
+              </Table>
+            ))}
+
+          {(tab === 'toi' || lanViec) &&
+            (todosLan.length === 0 ? (
+              mine ? (
+                <Empty headline={viewAs ? `Không có việc nào chờ ${who}` : 'Không có việc nào chờ bạn'} reason="Không đơn nào trong phạm vi này cần động tay hôm nay." next={viewAs ? <Btn icon="quayLai" href="/mua-hang">Về bàn của tôi</Btn> : <Btn onClick={() => setScope('phong')}>Xem việc cả phòng</Btn>} /> // prettier-ignore
+              ) : (
+                <Empty headline="Cả phòng không còn việc nào" reason="Không đơn nào của phòng cần động tay hôm nay." next={<Btn icon="don" href="/mua-hang/don?pham_vi=phong">Xem sổ đơn mua</Btn>} /> // prettier-ignore
+              )
+            ) : (
+              <ViecChoBang todos={todosLan} mine={mine} today={today} />
+            ))}
+
+          {tab === 'lenh' &&
+            (d.issues.length === 0 ? (
+              <Empty headline={mine ? `Lệnh của ${who} không có nguy cơ` : 'Không lệnh nào có nguy cơ'} reason={mine ? `${d.lsxCount} lệnh có đơn của ${who} đều đã về hết đơn hoặc hàng đang về.` : 'Mọi lệnh đang chạy đều đã về hết đơn hoặc hàng đang về.'} next={<Btn icon="lenh" href={`/mua-hang/yeu-cau?${q}`}>Xem yêu cầu mua</Btn>} /> // prettier-ignore
+            ) : (
+              <Table>
+                <THead>
+                  <th>Lệnh</th>
+                  <th>Khách</th>
+                  <th>Mức</th>
+                  <th>Vì sao</th>
+                  <th>Ai cầm bóng</th>
+                  <th>Mốc</th>
+                  <th style={{ textAlign: 'right' }}>Đơn</th>
+                </THead>
+                <tbody>
+                  {d.issues.slice(0, 12).map((i) => (
+                    <Row key={i.id}>
+                      <Cell>
+                        <Code as="a" href={`/mua-hang/yeu-cau/${i.id}`}>
+                          {i.code}
+                        </Code>
+                      </Cell>
+                      <Cell muted>{i.customer}</Cell>
+                      <Cell>
+                        <Tag tone={TONE[MEETING_LEVEL[i.level].tone]}>{i.label}</Tag>
+                      </Cell>
+                      {/*
                           "VÌ SAO" LÀ CỘT NỘI DUNG của bảng này — nó là câu trả
                           lời, không phải chú thích, nên sàn rộng hơn mặc định
                           và có tooltip đọc nguyên văn khi câu dài hơn ô.
                         */}
-                        <Cell grow className="min-w-[320px]" title={i.reason}>
-                          {i.reason}
-                        </Cell>
-                        <Cell muted>{i.owner}</Cell>
-                        <Cell num>
-                          <Num value={dmy(i.due)} />
-                        </Cell>
-                        <Cell num>
-                          <Num value={String(i.poCount)} zero="zero" />
-                        </Cell>
-                      </Row>
-                    ))}
-                  </tbody>
-                </Table>
-              ))}
+                      <Cell grow className="min-w-[320px]" title={i.reason}>
+                        {i.reason}
+                      </Cell>
+                      <Cell muted>{i.owner}</Cell>
+                      <Cell num>
+                        <Num value={dmy(i.due)} />
+                      </Cell>
+                      <Cell num>
+                        <Num value={String(i.poCount)} zero="zero" />
+                      </Cell>
+                    </Row>
+                  ))}
+                </tbody>
+              </Table>
+            ))}
 
-            {tab === 'hop' &&
-              (agendaSorted.length === 0 ? (
-                <Empty headline="Không có việc gì cần quyết" reason="Không lệnh nào ở mức khẩn và không đơn nào chờ ký." next={<Btn icon="don" href="/mua-hang/don?trang_thai=pending&pham_vi=phong">Xem đơn chờ duyệt</Btn>} /> // prettier-ignore
-              ) : (
-                <Table>
-                  <THead>
-                    <th>Bộ phận</th>
-                    <th>Việc</th>
-                    <th>Lệnh liên quan</th>
-                    <th>Mốc gần nhất</th>
-                  </THead>
-                  <tbody>
-                    {agendaSorted.map((a) => (
-                      <Row key={`${a.dept}|${a.action}`}>
-                        <Cell>
-                          <b>{a.dept}</b>
-                        </Cell>
-                        <Cell grow>
-                          {a.action}{' '}
-                          <span className="num text-[var(--ink-3)]">
-                            · {a.codes.length} lệnh
-                          </span>
-                        </Cell>
-                        <Cell muted>
-                          {a.codes.slice(0, 4).join(' · ')}
-                          {a.codes.length > 4 ? ` +${a.codes.length - 4}` : ''}
-                        </Cell>
-                        <Cell num>
-                          <Num value={dmy(a.due)} />
-                        </Cell>
-                      </Row>
-                    ))}
-                  </tbody>
-                </Table>
-              ))}
-          </section>
+          {tab === 'hop' &&
+            (agendaSorted.length === 0 ? (
+              <Empty headline="Không có việc gì cần quyết" reason="Không lệnh nào ở mức khẩn và không đơn nào chờ ký." next={<Btn icon="don" href="/mua-hang/don?trang_thai=pending&pham_vi=phong">Xem đơn chờ duyệt</Btn>} /> // prettier-ignore
+            ) : (
+              <Table>
+                <THead>
+                  <th>Bộ phận</th>
+                  <th>Việc</th>
+                  <th>Lệnh liên quan</th>
+                  <th>Mốc gần nhất</th>
+                </THead>
+                <tbody>
+                  {agendaSorted.map((a) => (
+                    <Row key={`${a.dept}|${a.action}`}>
+                      <Cell>
+                        <b>{a.dept}</b>
+                      </Cell>
+                      <Cell grow>
+                        {a.action}{' '}
+                        <span className="num text-[var(--ink-3)]">
+                          · {a.codes.length} lệnh
+                        </span>
+                      </Cell>
+                      <Cell muted>
+                        {a.codes.slice(0, 4).join(' · ')}
+                        {a.codes.length > 4 ? ` +${a.codes.length - 4}` : ''}
+                      </Cell>
+                      <Cell num>
+                        <Num value={dmy(a.due)} />
+                      </Cell>
+                    </Row>
+                  ))}
+                </tbody>
+              </Table>
+            ))}
         </div>
-
-        {/* Cột LIÊN KẾT — Dynamics "Links". "Của tôi" đứng đầu: đường tắt tới
-            đúng các danh sách đã lọc theo người, cùng một nghĩa (supply-scope). */}
-        <aside className="border-t border-[var(--line)] bg-[var(--surface-card)] lg:border-t-0 lg:border-l">
-          <LinkGroup title="Của tôi">
-            <LinkRow href="/mua-hang/don?pham_vi=toi">Đơn của tôi</LinkRow>
-            <LinkRow href="/mua-hang/hop-thu?pham_vi=toi">Việc chờ tôi</LinkRow>
-            <LinkRow href="/mua-hang/yeu-cau?pham_vi=toi">Lệnh của tôi</LinkRow>
-            <LinkRow href="/mua-hang/theo-doi?pham_vi=toi">Hàng về của tôi</LinkRow>
-            <LinkRow href="/mua-hang/ncc?pham_vi=toi">NCC của tôi</LinkRow>
-          </LinkGroup>
-          <LinkGroup title="Đơn mua · cả phòng">
-            <LinkRow href="/mua-hang/don?trang_thai=pending&pham_vi=phong">
-              Chờ duyệt
-            </LinkRow>
-            <LinkRow href="/mua-hang/don?tre=1&pham_vi=phong">NCC trễ hẹn</LinkRow>
-            <LinkRow href="/mua-hang/don?trang_thai=inflight&sap=hen_gan&pham_vi=phong">
-              Đang về theo tuần
-            </LinkRow>
-            <LinkRow href="/mua-hang/don?pham_vi=phong">Tất cả đơn</LinkRow>
-          </LinkGroup>
-          <LinkGroup title="Nhu cầu & danh mục">
-            <LinkRow href="/mua-hang/yeu-cau?pham_vi=phong">
-              Yêu cầu mua · vật tư theo lệnh
-            </LinkRow>
-            <LinkRow href="/mua-hang/ton">Tồn & cân đối</LinkRow>
-            <LinkRow href="/mua-hang/vat-tu">Vật tư</LinkRow>
-            <LinkRow href="/mua-hang/bang-gia">Bảng giá</LinkRow>
-          </LinkGroup>
-          <p className="text-k-sm px-[var(--gutter)] py-2 leading-relaxed text-[var(--ink-3)]">
-            Số trên ô và trên tab đếm bằng đúng hàm mà danh sách đích dùng, cùng phạm vi
-            đang chọn.
-          </p>
-        </aside>
-      </div>
+      </section>
     </div>
-  )
-}
-
-/* Nhóm liên kết ở cột phải — tiêu đề nhỏ in hoa, mỗi dòng một đích. */
-function LinkGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="border-b border-[var(--hair)] py-2">
-      <h2 className="text-k-label px-[var(--gutter)] pb-1 font-bold tracking-[.1em] text-[var(--ink-3)] uppercase">
-        {title}
-      </h2>
-      {children}
-    </section>
-  )
-}
-function LinkRow({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      className="text-k-sm block px-[var(--gutter)] py-1 text-[var(--act-text)] hover:bg-[var(--surface-hover)] hover:underline"
-    >
-      {children}
-    </a>
   )
 }

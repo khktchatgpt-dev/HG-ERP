@@ -503,7 +503,8 @@ export type DomainEvent =
       material_code: string | null
       /** NULL = máy tự ghi (event giá chạy ngoài phiên người dùng). */
       actor_id: string | null
-      source: 'manual' | 'po_enrich' | 'po_price' | 'import' | 'system'
+      /** `retire` = ngừng dùng / dùng lại / xoá mã (05/10/2026); lý do nằm ở source_ref. */
+      source: 'manual' | 'po_enrich' | 'po_price' | 'import' | 'system' | 'retire'
       /** Mã chứng từ gây ra thay đổi — PO-2026-0024, tên file nạp… */
       source_ref: string | null
       changes: { field: string; before: string | null; after: string | null }[]

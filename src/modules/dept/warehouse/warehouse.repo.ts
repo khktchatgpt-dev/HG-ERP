@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
 import { searchTokens } from '@/lib/search-text'
+import type { MaterialUsage } from '@/lib/material-usage'
 
 export type Material = {
   id: string
@@ -75,6 +76,8 @@ export type ListFilter = {
   q?: string
   group_name?: string
   active_only: boolean
+  /** Chỉ mã NGỪNG DÙNG — chip "Ngừng dùng" của màn Vật tư (05/10/2026). */
+  inactive_only?: boolean
   /** true = chỉ vật tư "chờ Kho rà" (0136). */
   needs_review?: boolean
   /**
@@ -134,6 +137,7 @@ export const materialsRepo = {
       .order('code', { ascending: true })
 
     if (filter.active_only) q = q.eq('is_active', true)
+    if (filter.inactive_only) q = q.eq('is_active', false)
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
     if (filter.needs_review) q = q.eq('needs_review', true)
     if (filter.no_min_stock) q = q.eq('min_stock', 0)
@@ -180,6 +184,7 @@ export const materialsRepo = {
     no_sub?: boolean
     /** Chỉ mã đang dùng — rổ chia nhóm đếm cùng nguồn với trang Nhóm vật tư. */
     active_only?: boolean
+    inactive_only?: boolean
   }): Promise<{
     total: number
     active: number
@@ -188,18 +193,21 @@ export const materialsRepo = {
     noMinStock: number
     /** Chưa có nhóm con, trong đúng bộ lọc đang áp. */
     noSub: number
+    /** Mã ngừng dùng trong đúng bộ lọc (bỏ qua cờ đang dùng / ngừng) — số trên chip. */
+    inactive: number
   }> {
-    const base = () => {
+    const base = (withActiveFlag = true) => {
       let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
       if (filter.needs_review) q = q.eq('needs_review', true)
       if (filter.no_sub) q = q.is('sub_group', null)
-      if (filter.active_only) q = q.eq('is_active', true)
+      if (withActiveFlag && filter.active_only) q = q.eq('is_active', true)
+      if (withActiveFlag && filter.inactive_only) q = q.eq('is_active', false)
       // Cùng luật tìm không dấu với list — hai nơi lệch nhau là StatsBar nói dối.
       for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
     }
-    const [all, act, shelf, review, noMin, noSub] = await Promise.all([
+    const [all, act, shelf, review, noMin, noSub, off] = await Promise.all([
       base(),
       base().eq('is_active', true),
       base().is('shelf_location', null),
@@ -210,6 +218,7 @@ export const materialsRepo = {
       // Chỉ mã ĐANG DÙNG: cùng số với `material-groups.overview` (trang Nhóm vật
       // tư) — bấm số ở đó sang rổ này phải ra đúng số đó (đo 29/09: 1.286 vs 1.288).
       base().is('sub_group', null).eq('is_active', true),
+      base(false).eq('is_active', false),
     ])
     return {
       total: all.count ?? 0,
@@ -218,6 +227,7 @@ export const materialsRepo = {
       needsReview: review.count ?? 0,
       noMinStock: noMin.count ?? 0,
       noSub: noSub.count ?? 0,
+      inactive: off.count ?? 0,
     }
   },
 
@@ -307,6 +317,47 @@ export const materialsRepo = {
   },
 
   /**
+   * Mã đang nằm ở đâu — đếm MỌI bảng có khoá ngoại tới vật tư (xem
+   * `lib/material-usage`). Thêm bảng mới trỏ tới `warehouse_materials` thì
+   * thêm vào đây, không thì xoá mã sẽ lọt qua chốt chặn. (Hai bảng cũ có khoá
+   * ngoại trong migration đã không còn: `production_order_components` bỏ ở
+   * 0084, `stock_cost_layers` không có trong DB — đếm chúng là hỏng cả hàm.)
+   */
+  async usage(id: string): Promise<MaterialUsage> {
+    // Mọi bảng dưới đều có cột `material_id`; ép về một tên cho kiểu sinh sẵn
+    // (supabase-js không nhận tên bảng dạng biến string).
+    const n = async (table: string) => {
+      const { count, error } = await db()
+        .from(table as 'warehouse_movements')
+        .select('material_id', { count: 'exact', head: true })
+        .eq('material_id', id)
+      // Đếm hỏng thì coi như ĐÃ dùng — sai về phía an toàn, không xoá nhầm.
+      if (error || count == null)
+        throw new Error(`Không đếm được ${table}: ${error?.message}`)
+      return count
+    }
+    const [po, mv, stocktake, bomLines, dies, prodComp, prices, needs, plan] =
+      await Promise.all([
+        n('supply_purchase_order_lines'),
+        n('warehouse_movements'),
+        n('warehouse_stocktake_lines'),
+        n('technical_bom_lines'),
+        n('technical_die_materials'),
+        n('production_components'),
+        n('supply_supplier_prices'),
+        n('supply_lsx_needs'),
+        n('supply_lsx_material_plan'),
+      ])
+    return {
+      po,
+      stock: mv + stocktake,
+      bom: bomLines + dies + prodComp,
+      prices,
+      other: needs + plan,
+    }
+  },
+
+  /**
    * Trần tồn theo vật tư (P3.1) — nuôi cảnh báo "mua vượt trần" trên form PO.
    * View warehouse_stock không mang max_stock nên tra thẳng danh mục.
    */
@@ -379,7 +430,7 @@ export const materialsRepo = {
  */
 export type MaterialChange = {
   id: string
-  material_id: string
+  material_id: string | null
   material_code: string | null
   field: string
   before_value: string | null
@@ -411,6 +462,44 @@ export const materialChangesRepo = {
     if (rows.length === 0) return
     const { error } = await db().from('warehouse_material_changes').insert(rows)
     if (error) console.error('material change log failed:', error.message)
+  },
+
+  /**
+   * Lần NGỪNG DÙNG gần nhất của từng mã (05/10/2026) — ngày · người · lý do,
+   * cho cột "Ngừng dùng" của danh sách và dải báo đầu panel. Lý do nằm ở
+   * `source_ref` của dòng vết `is_active → false` (nguồn `retire`).
+   */
+  async lastRetire(
+    ids: string[],
+  ): Promise<Map<string, { at: string; by: string | null; reason: string | null }>> {
+    const out = new Map<
+      string,
+      { at: string; by: string | null; reason: string | null }
+    >()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('warehouse_material_changes')
+      .select(
+        'material_id, source_ref, created_at, actor:users!warehouse_material_changes_actor_id_fkey(name)',
+      )
+      .in('material_id', ids)
+      .eq('field', 'is_active')
+      .eq('after_value', 'false')
+      .order('created_at', { ascending: false })
+    for (const r of (data ?? []) as unknown as {
+      material_id: string
+      source_ref: string | null
+      created_at: string
+      actor: { name: string } | null
+    }[]) {
+      if (out.has(r.material_id)) continue
+      out.set(r.material_id, {
+        at: r.created_at,
+        by: r.actor?.name ?? null,
+        reason: r.source_ref,
+      })
+    }
+    return out
   },
 
   /** Lịch sử của MỘT vật tư — mới nhất trên, kèm tên người sửa. */

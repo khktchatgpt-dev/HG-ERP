@@ -371,11 +371,13 @@ export const ACTIONS: Action[] = [
     key: 'warehouse.material.create',
     label: 'Tạo vật tư mới',
     domain: 'warehouse',
-    rule: perm('warehouse.material.create'),
+    // Cả phòng Cung ứng thêm được mã (05/10/2026, chủ dự án duyệt) — không chỉ
+    // người được gán lẻ quyền `warehouse.material.create` như trước.
+    rule: anyOf(perm('warehouse.material.create'), perm('supply.member')),
   },
   {
     key: 'warehouse.material.update',
-    label: 'Sửa / xoá danh mục vật tư',
+    label: 'Sửa mọi trường danh mục vật tư (kể cả trường của Kho)',
     domain: 'warehouse',
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
@@ -385,6 +387,16 @@ export const ACTIONS: Action[] = [
     // trường TỒN TRỮ (min/max, kệ, barcode, ngừng dùng) vẫn của Kho — service enforce.
     key: 'warehouse.material.update_purchasing',
     label: 'Sửa trường mua hàng của vật tư (Cung ứng)',
+    domain: 'warehouse',
+    rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
+  },
+  {
+    // NGỪNG DÙNG / DÙNG LẠI / XOÁ MÃ CHƯA DÙNG (05/10/2026, chủ dự án duyệt bản
+    // vẽ Bản 11): mở cho cả phòng Cung ứng cạnh Kho. Trước đó Cung ứng xoá được
+    // chỉ nhờ vai Kho gán TẠM 01/10 — gỡ vai là mất quyền. Mã ĐÃ dùng thì không
+    // ai xoá được (service chặn theo `materialsRepo.usage`), chỉ ngừng dùng.
+    key: 'warehouse.material.retire',
+    label: 'Ngừng dùng / dùng lại / xoá mã vật tư chưa dùng',
     domain: 'warehouse',
     rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
   },

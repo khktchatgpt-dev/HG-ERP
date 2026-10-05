@@ -26,8 +26,9 @@ import {
   showMoney,
 } from '@/components/kit'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
-import { SuaVatTuSheet } from './sua-vat-tu'
+import { SuaVatTuSheet, ThemVatTuSheet } from './sua-vat-tu'
 import { ChuyenNhomSheet } from './chuyen-nhom'
+import { TagNgung, type LanNgung } from './bo-ma'
 
 export type VatTuRow = {
   id: string
@@ -40,6 +41,8 @@ export type VatTuRow = {
   last_purchase_price: number | null
   price_unit: string | null
   needs_review: boolean
+  /** Lần ngừng dùng gần nhất — chỉ nạp khi đang xem chip "Ngừng dùng". */
+  ngung?: LanNgung | null
 }
 
 export function VatTuScreen({
@@ -49,6 +52,8 @@ export function VatTuScreen({
   page,
   filters,
   canEdit,
+  canRetire,
+  canCreate,
   tax,
   suppliers,
 }: {
@@ -59,12 +64,19 @@ export function VatTuScreen({
     noShelf: number
     needsReview: number
     noSub: number
+    /** Mã ngừng dùng trong bộ lọc — số trên chip. */
+    inactive: number
   }
   groups: string[]
   page: number
-  filters: { q: string; nhom: string; ra: boolean; kn: boolean }
+  /** `ng` = chip "Ngừng dùng": chỉ xem mã đã ngừng (mặc định ẩn chúng). */
+  filters: { q: string; nhom: string; ra: boolean; kn: boolean; ng: boolean }
   /** Quyền `warehouse.material.update_purchasing` — đúng quyền service kiểm khi lưu. */
   canEdit: boolean
+  /** Quyền `warehouse.material.retire` — ngừng dùng / dùng lại / xoá mã chưa dùng. */
+  canRetire: boolean
+  /** Quyền `warehouse.material.create` — nút "+ Thêm vật tư". */
+  canCreate: boolean
   tax: MaterialTaxonomy
   /** NCC cho ô "NCC mặc định". */
   suppliers: { value: string; label: string }[]
@@ -151,7 +163,7 @@ export function VatTuScreen({
     })
   const tatCa = rows.length > 0 && rows.every((r) => chon.has(r.id))
 
-  const dangLoc = !!filters.q || !!filters.nhom || filters.ra || filters.kn
+  const dangLoc = !!filters.q || !!filters.nhom || filters.ra || filters.kn || filters.ng
   const soTrang = Math.max(1, Math.ceil(counts.total / PAGE_SIZE))
   const tu = counts.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const den = Math.min(page * PAGE_SIZE, counts.total)
@@ -185,6 +197,11 @@ export function VatTuScreen({
         actions={
           <>
             <Btn href="/mua-hang/vat-tu/nhom">Nhóm vật tư</Btn>
+            {canCreate && (
+              <Btn icon="them" primary={chon.size === 0} onClick={() => doiLoc({ them: '1' })}>
+                Thêm vật tư
+              </Btn>
+            )}
             {canEdit && chon.size > 0 && (
               <Btn icon="sau" primary onClick={() => setChuyen(true)}>
                 Chuyển {chon.size} mã đã chọn…
@@ -225,17 +242,41 @@ export function VatTuScreen({
         >
           Chưa có nhóm con
         </Chip>
+        {/* Mã ngừng dùng ẨN khỏi danh sách mặc định — chip này mở riêng tập đó. */}
+        <Chip
+          on={filters.ng}
+          count={counts.inactive}
+          onClick={() => doiLoc({ ng: filters.ng ? '' : '1', trang: '1' })}
+        >
+          Ngừng dùng
+        </Chip>
         {dangLoc && (
           <Btn
             icon="boLoc"
-            onClick={() => doiLoc({ q: '', nhom: '', ra: '', kn: '', trang: '1' })}
+            onClick={() =>
+              doiLoc({ q: '', nhom: '', ra: '', kn: '', ng: '', trang: '1' })
+            }
           >
             Bỏ lọc
           </Btn>
         )}
       </FilterBar>
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && filters.ng && counts.total === 0 ? (
+        <Empty
+          headline="Chưa có mã nào ngừng dùng"
+          reason={
+            dangLoc && (filters.q || filters.nhom || filters.ra || filters.kn)
+              ? 'Không mã ngừng dùng nào khớp các điều kiện lọc còn lại.'
+              : 'Mã ngừng dùng từ panel Sửa vật tư (mã đã dùng ở đâu đó thì không xoá, chỉ ngừng dùng) sẽ hiện ở đây.'
+          }
+          next={
+            <Btn primary onClick={() => doiLoc({ ng: '', trang: '1' })}>
+              Về danh sách mã đang dùng
+            </Btn>
+          }
+        />
+      ) : rows.length === 0 ? (
         <Empty
           headline="Không có vật tư nào khớp"
           reason={
@@ -247,7 +288,9 @@ export function VatTuScreen({
             <Btn
               icon="boLoc"
               primary
-              onClick={() => doiLoc({ q: '', nhom: '', ra: '', kn: '', trang: '1' })}
+              onClick={() =>
+                doiLoc({ q: '', nhom: '', ra: '', kn: '', ng: '', trang: '1' })
+              }
             >
               Bỏ lọc, về trang 1
             </Btn>
@@ -272,7 +315,11 @@ export function VatTuScreen({
             <th>Nhóm con</th>
             <th>Quy cách</th>
             <th>ĐVT</th>
-            <th style={{ textAlign: 'right' }}>Giá mua gần nhất</th>
+            {filters.ng ? (
+              <th>Ngừng dùng</th>
+            ) : (
+              <th style={{ textAlign: 'right' }}>Giá mua gần nhất</th>
+            )}
           </THead>
           <tbody>
             {rows.map((r) => (
@@ -329,22 +376,28 @@ export function VatTuScreen({
                 </Cell>
                 <Cell muted>{r.spec ?? ''}</Cell>
                 <Cell muted>{r.unit}</Cell>
-                <Cell num>
-                  {/*
+                {filters.ng ? (
+                  <Cell>
+                    <TagNgung lan={r.ngung} />
+                  </Cell>
+                ) : (
+                  <Cell num>
+                    {/*
                     Ô TRỐNG Ở ĐÂY CÓ NGHĨA: "chưa từng mua qua hệ thống", không
                     phải nhập thiếu. 955/13.226 mã có giá — hệ thống mới chạy 69
                     đơn, nên trống là đúng chứ không phải hỏng.
                   */}
-                  <Num
-                    value={showMoney(r.last_purchase_price)}
-                    strong={(r.last_purchase_price ?? 0) > 0}
-                  />
-                  {(r.last_purchase_price ?? 0) > 0 && r.price_unit && (
-                    <span className="text-k-label ml-1 text-[var(--ink-3)]">
-                      /{r.price_unit}
-                    </span>
-                  )}
-                </Cell>
+                    <Num
+                      value={showMoney(r.last_purchase_price)}
+                      strong={(r.last_purchase_price ?? 0) > 0}
+                    />
+                    {(r.last_purchase_price ?? 0) > 0 && r.price_unit && (
+                      <span className="text-k-label ml-1 text-[var(--ink-3)]">
+                        /{r.price_unit}
+                      </span>
+                    )}
+                  </Cell>
+                )}
               </Row>
             ))}
           </tbody>
@@ -404,6 +457,23 @@ export function VatTuScreen({
           }}
         />
       )}
+      {/*
+        THÊM VẬT TƯ (Bản 11 · V1) — panel trên URL (`?them=1`) như panel Sửa:
+        Back đóng được. Thêm xong lọc danh sách về đúng mã vừa tạo cho thấy ngay.
+      */}
+      {canCreate && params.get('them') === '1' && (
+        <ThemVatTuSheet
+          tax={tax}
+          suppliers={suppliers}
+          group={filters.nhom || undefined}
+          onClose={() => doiLoc({ them: '' })}
+          onCreated={(m) => {
+            doiLoc({ them: '', q: m.code, ng: '', trang: '1' })
+            router.refresh()
+          }}
+          onOpenCode={(code) => doiLoc({ them: '', q: code, ng: '', trang: '1' })}
+        />
+      )}
       {sua && (
         <SuaVatTuSheet
           key={sua}
@@ -414,6 +484,17 @@ export function VatTuScreen({
           onSaved={() => {
             dongPanel()
             router.refresh()
+          }}
+          boMa={{
+            canRetire,
+            onRemoved: () => {
+              dongPanel()
+              router.refresh()
+            },
+            onActiveChanged: () => {
+              dongPanel()
+              router.refresh()
+            },
           }}
         />
       )}

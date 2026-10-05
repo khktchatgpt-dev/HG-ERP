@@ -1,43 +1,38 @@
 import { NextResponse } from 'next/server'
 import { handle, NotFound } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { settingsService } from '@/modules/core/settings/settings.service'
-import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { poAdjustmentsRepo } from '@/modules/dept/supply/po-adjustments.repo'
-import { poRevisionLabel } from '@/lib/po-lsx-refs'
-import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
+import { loadPoPrint } from '@/modules/dept/supply/po-print.service'
 import { buildPoExcel, poExcelFilename } from '@/modules/dept/supply/po-excel'
 
 /**
- * Tải ĐƠN ĐẶT HÀNG dạng .xlsx — bày giống hệt phiếu in (đơn ĐH chuẩn 08/2026:
- * tiêu đề vàng, khung Số ĐH, khối tổng, chữ ký). Cùng dữ liệu với
- * /print/supply/[id]; ai xem được phiếu thì tải được file.
+ * Tải ĐƠN ĐẶT HÀNG dạng .xlsx — bày giống hệt phiếu in. Dữ liệu nạp qua
+ * `loadPoPrint`, CHUNG với /print/supply/[id] (05/10/2026): tiêu đề, khối chữ
+ * ký theo mẫu chứng từ, tên người lập, hẹn giao, lịch giao theo đợt. Ai xem
+ * được phiếu thì tải được file.
+ *
+ * `?kho=doc|ngang` — khổ giấy đang chọn trên thanh in, để file mở ra in đúng
+ * chiều người dùng vừa xem (bỏ trống = ngang như mẫu chuẩn).
  */
 export const GET = handle(
-  async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     await authService.requireUser()
     const { id } = await params
 
-    const po = await posRepo.findById(id)
-    if (!po) throw NotFound('Đơn đặt hàng không tồn tại')
+    const d = await loadPoPrint(id)
+    if (!d) throw NotFound('Đơn đặt hàng không tồn tại')
 
-    const [lines, supplier, company, refs, adjs] = await Promise.all([
-      posRepo.listLines(id),
-      suppliersRepo.findById(po.supplier_id),
-      settingsService.getAll(),
-      posRepo.printRefs(po),
-      poAdjustmentsRepo.listByPo(id),
-    ])
-
+    const kho = new URL(req.url).searchParams.get('kho')
     const buf = await buildPoExcel({
-      company,
-      // Cùng dòng LSX + Đơn hàng với phiếu in — file từng chỉ ghi lệnh chính.
-      po: { ...po, ...refs, revision_label: poRevisionLabel(adjs), template: po.template ?? 'simple' },
-      supplier,
-      lines,
+      company: d.company,
+      tpl: d.tpl,
+      po: d.po,
+      supplier: d.supplier,
+      lines: d.lines,
+      shipments: d.shipments,
+      orientation: kho === 'doc' ? 'portrait' : 'landscape',
     })
 
-    const filename = poExcelFilename(po.code)
+    const filename = poExcelFilename(d.po.code)
     return new NextResponse(new Uint8Array(buf), {
       headers: {
         'content-type':

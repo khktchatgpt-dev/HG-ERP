@@ -9,6 +9,7 @@ vi.mock('./warehouse.repo', () => ({
     insert: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
+    usage: vi.fn(),
   },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
@@ -46,6 +47,7 @@ import { materialsService } from './warehouse.service'
 import { materialsRepo } from './warehouse.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Forbidden } from '@/server/http'
+import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
 
 const kho = { id: 'u-kho', role: 'employee' } as unknown as User
@@ -415,5 +417,106 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
       group_name: 'Ngũ kim - phụ kiện',
     })
     expect(materialsRepo.insert).toHaveBeenCalled()
+  })
+})
+
+/*
+ * XOÁ MÃ (05/10/2026, Bản 11): quyền `warehouse.material.retire` mở cho cả
+ * Cung ứng, nên chốt "mã đã dùng thì không xoá" phải nằm ở service — DB chỉ
+ * RESTRICT một phần (khuôn CASCADE, kế hoạch lệnh SET NULL).
+ */
+describe('materialsService.remove — chỉ xoá mã chưa dùng ở đâu', () => {
+  const ZERO = { po: 0, stock: 0, bom: 0, prices: 0, other: 0 }
+
+  it('gác bằng quyền retire, không phải quyền sửa đủ trường của Kho', async () => {
+    vi.mocked(assertAction).mockRejectedValue(Forbidden('x'))
+    await expect(materialsService.remove(cungUng, 'm1')).rejects.toThrow()
+    expect(assertAction).toHaveBeenCalledWith(cungUng, 'warehouse.material.retire')
+    expect(materialsRepo.delete).not.toHaveBeenCalled()
+  })
+
+  it('mã chưa dùng → xoá', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.usage).mockResolvedValue(ZERO)
+    await materialsService.remove(cungUng, 'm1')
+    expect(materialsRepo.delete).toHaveBeenCalledWith('m1')
+  })
+
+  it('mã đã dùng (kể cả chỉ ở bảng CASCADE như vật tư khuôn) → chặn, nói dùng ở đâu', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.usage).mockResolvedValue({ ...ZERO, po: 1, stock: 1 })
+    await expect(materialsService.remove(kho, 'm1')).rejects.toThrow(
+      /VT-01 đang dùng ở 1 dòng đơn mua · 1 dòng sổ kho.*Ngừng dùng/,
+    )
+    vi.mocked(materialsRepo.usage).mockResolvedValue({ ...ZERO, bom: 1 })
+    await expect(materialsService.remove(kho, 'm1')).rejects.toThrow(/không xoá được/)
+    expect(materialsRepo.delete).not.toHaveBeenCalled()
+  })
+})
+
+vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
+
+describe('materialsService.setActive — ngừng dùng / dùng lại (Bản 11)', () => {
+  it('gác bằng quyền retire', async () => {
+    vi.mocked(assertAction).mockRejectedValue(Forbidden('x'))
+    await expect(
+      materialsService.setActive(cungUng, 'm1', { active: false, reason: 'trùng mã' }),
+    ).rejects.toThrow()
+    expect(assertAction).toHaveBeenCalledWith(cungUng, 'warehouse.material.retire')
+    expect(materialsRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('ngừng dùng mà thiếu lý do → chặn', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    await expect(materialsService.setActive(cungUng, 'm1', { active: false })).rejects.toThrow(
+      /lý do/,
+    )
+    expect(materialsRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('ngừng dùng có lý do → ghi is_active=false + vết nguồn retire kèm lý do', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.patch).mockResolvedValue({ ...MAT, is_active: false } as never)
+    await materialsService.setActive(cungUng, 'm1', { active: false, reason: 'Trùng BUL0084' })
+    expect(materialsRepo.patch).toHaveBeenCalledWith('m1', { is_active: false })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'retire',
+        source_ref: 'Trùng BUL0084',
+        changes: [{ field: 'is_active', before: 'true', after: 'false' }],
+      }),
+    )
+  })
+
+  it('đã đúng trạng thái → không ghi gì', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    await materialsService.setActive(cungUng, 'm1', { active: true })
+    expect(materialsRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('xoá mã chưa dùng → ghi dòng vết "deleted" TRƯỚC khi xoá', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.usage).mockResolvedValue({ po: 0, stock: 0, bom: 0, prices: 0, other: 0 })
+    await materialsService.remove(cungUng, 'm1')
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ changes: [{ field: 'deleted', before: 'Ống sắt', after: null }] }),
+    )
+    expect(vi.mocked(emit).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(materialsRepo.delete).mock.invocationCallOrder[0],
+    )
+  })
+})
+
+describe('materialsService.previewCode — mã dự kiến ở panel Thêm vật tư', () => {
+  it('gác bằng quyền tạo; cùng hàm cấp mã với create', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
+      { code: 'NK-0203', name: 'a' },
+      { code: 'NK-0007', name: 'b' },
+    ] as never)
+    vi.mocked(materialsRepo.maxCodeNo).mockResolvedValue(203)
+    await expect(materialsService.previewCode(cungUng, 'Ngũ kim - phụ kiện')).resolves.toBe('NK-0204')
+    expect(assertAction).toHaveBeenCalledWith(cungUng, 'warehouse.material.create')
+    expect(materialsRepo.maxCodeNo).toHaveBeenCalledWith('NK')
   })
 })
