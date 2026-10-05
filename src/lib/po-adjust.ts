@@ -366,7 +366,7 @@ export function canAdjust(status: string): { ok: true } | { ok: false; reason: s
     case 'draft':
       return { ok: false, reason: 'Đơn còn nháp — bấm "Sửa" để sửa thẳng, không cần điều chỉnh' }
     case 'pending_approval':
-      return { ok: false, reason: 'Đơn đang chờ duyệt — bấm "Rút về nháp" rồi sửa' }
+      return { ok: false, reason: 'Đơn đang chờ duyệt — bấm "Rút về nháp để sửa"' }
     case 'received':
       return {
         ok: false,

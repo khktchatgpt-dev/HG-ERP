@@ -138,6 +138,13 @@ describe('splitForStatusBar — chuyển trạng thái về thanh trạng thái 
     expect(s.moves.filter((m) => m.group === 'Quay lại').map((m) => m.key)).toEqual(['doc:withdraw', 'doc:reject']) // prettier-ignore
   })
 
+  it('đơn chờ duyệt, người soạn không có quyền duyệt: bước kế tiếp là "Rút về nháp để sửa"', () => {
+    // actionsFor không trả approve/reject cho người này (05/10/2026).
+    const s = splitForStatusBar(barLayout('pending_approval', ['withdraw', 'duplicate', 'reassign'])) // prettier-ignore
+    expect(s.next).toBe('doc:withdraw')
+    expect(s.moves.map((m) => m.key)).not.toContain('doc:withdraw')
+  })
+
   it('đơn đã về đủ: không bước kế tiếp; mọi mục của thanh cũ vẫn còn ở một trong ba chỗ', () => {
     const l = barLayout('received', ['duplicate', 'cancel'])
     const s = splitForStatusBar(l)

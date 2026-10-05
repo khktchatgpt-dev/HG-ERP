@@ -26,11 +26,32 @@ describe('khoá kèm lý do, không giấu', () => {
     expect(acts.find((a) => a.id === 'delete')!.blocked).toBeTruthy()
   })
 
-  it('không có quyền duyệt thì Duyệt và Từ chối bị khoá, Rút về nháp thì không', () => {
-    const acts = actionsFor('pending_approval', own)
+  it('người ngoài không có quyền duyệt: Duyệt và Trả lại vẫn CÓ, bị khoá kèm lý do', () => {
+    const acts = actionsFor('pending_approval', other)
     expect(acts.find((a) => a.id === 'approve')!.blocked).toMatch(/quyền duyệt/)
     expect(acts.find((a) => a.id === 'reject')!.blocked).toMatch(/quyền duyệt/)
-    expect(acts.find((a) => a.id === 'withdraw')!.blocked).toBeUndefined()
+  })
+
+  /**
+   * Báo lỗi 05/10/2026: người soạn gửi duyệt xong không tìm ra đường về nháp —
+   * nút chính "Duyệt đơn" khoá, "Hạ về nháp để sửa" khoá ("Chỉ Giám đốc…") đứng
+   * cạnh "Rút về nháp". Với người soạn không có quyền duyệt: nút chính là rút về
+   * nháp, ba việc họ không bao giờ làm được không bày ra.
+   */
+  it('người soạn không có quyền duyệt: nút chính "Rút về nháp để sửa", không bày việc khoá vô ích', () => {
+    const acts = actionsFor('pending_approval', own)
+    expect(acts[0]).toMatchObject({ id: 'withdraw', label: 'Rút về nháp để sửa', primary: true }) // prettier-ignore
+    expect(acts[0].blocked).toBeUndefined()
+    expect(acts.filter((a) => a.primary)).toHaveLength(1)
+    for (const id of ['approve', 'reject', 'reopen'])
+      expect(acts.some((a) => a.id === id)).toBe(false)
+  })
+
+  it('người duyệt nhìn như cũ: nút chính Duyệt đơn, Rút về / Hạ về nháp vẫn trong menu', () => {
+    const acts = actionsFor('pending_approval', boss)
+    expect(acts[0]).toMatchObject({ id: 'approve', primary: true })
+    expect(acts.find((a) => a.id === 'withdraw')!.primary).toBeFalsy()
+    expect(acts.find((a) => a.id === 'reopen')!.blocked).toBeFalsy()
   })
 })
 

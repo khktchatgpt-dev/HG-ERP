@@ -571,7 +571,7 @@ export const posService = {
     if (before.status !== 'draft') {
       throw BadRequest(
         before.status === 'pending_approval'
-          ? 'Đơn đang chờ duyệt — bấm "Rút về nháp" rồi mới sửa được'
+          ? 'Đơn đang chờ duyệt — bấm "Rút về nháp để sửa" rồi mới sửa được'
           : 'Chỉ đơn nháp mới sửa được',
       )
     }

@@ -59,7 +59,7 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
     status === 'draft'
       ? doc('submit')
       : status === 'pending_approval'
-        ? doc('approve')
+        ? (doc('approve') ?? doc('withdraw')) // người soạn không có quyền duyệt: rút về nháp để sửa
         : status === 'approved'
           ? doc('send')
           : // Đơn đã gửi NCC: bước kế là "Xử lý giao nhận" — mở hộp Giao nhận

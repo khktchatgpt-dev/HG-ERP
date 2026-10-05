@@ -343,27 +343,42 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         OPEN,
       ]
 
-    case 'pending_approval':
+    case 'pending_approval': {
+      /*
+        NGƯỜI SOẠN KHÔNG CÓ QUYỀN DUYỆT (05/10/2026 — báo lỗi "đơn gửi sếp duyệt
+        không chuyển về nháp để sửa được"). Bản trước bày cho họ nút chính "Duyệt
+        đơn" KHOÁ, còn "Rút về nháp" nằm trong "Chuyển trạng thái" cạnh hai mục
+        cũng khoá: "Trả lại để sửa" và "Hạ về nháp để sửa" ("Chỉ Giám đốc hoặc
+        trưởng phòng…"). Người soạn bấm đúng mục có chữ "để sửa", gặp câu khoá,
+        kết luận là không sửa được. Nay với họ: nút chính = "Rút về nháp để sửa",
+        ba việc của người duyệt / người kéo đơn hộ không bày ra. Người duyệt nhìn
+        như cũ. Luật server không đổi (withdraw: người phụ trách / quản lý mọi đơn).
+      */
+      const chiRut = perm.own && !perm.approve
       return [
-        {
-          id: 'approve',
-          label: 'Duyệt đơn',
-          primary: true,
-          ui: 'direct',
-          stakes: 'vua',
-          blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
-          done: 'Đã duyệt',
-          /*
+        ...(chiRut
+          ? []
+          : [
+              {
+                id: 'approve' as const,
+                label: 'Duyệt đơn',
+                primary: true,
+                ui: 'direct',
+                stakes: 'vua',
+                blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
+                done: 'Đã duyệt',
+                /*
             KHÔNG KÝ HÀNG LOẠT Ở ĐÂY (27/09/2026, chủ dự án chốt "một nơi ký,
             một luật"). Ký nhiều đơn một lúc chỉ ở hộp ký (Chờ tôi ký /
             /exec/approvals), nơi phiếu GIÁ TRỊ LỚN không có ô tích. Đơn lẻ vẫn
             duyệt được ngay trên trang đơn.
           */
-          bulk: false,
-          build: ({ id }) => [
-            { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST', body: { decision: 'approve' } }, // prettier-ignore
-          ],
-        },
+                bulk: false,
+                build: ({ id }: { id: string }) => [
+                  { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST' as const, body: { decision: 'approve' } }, // prettier-ignore
+                ],
+              } satisfies Action,
+            ]),
         /**
          * RÚT VỀ NHÁP — hành động màn cũ CÓ HÀM mà KHÔNG CÓ NÚT ở đâu
          * (`usePoActions.withdrawPo`, đo 10/09/2026). Người gửi nhầm phải nhờ
@@ -371,7 +386,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
          */
         {
           id: 'withdraw',
-          label: 'Rút về nháp',
+          label: 'Rút về nháp để sửa',
+          primary: chiRut || undefined,
           ui: 'sheet',
           stakes: 'vua',
           blocked: notOwn,
@@ -382,8 +398,11 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
             { path: `/api/dept/supply/pos/${id}/withdraw`, method: 'POST' },
           ],
         },
-        {
-          /*
+        ...(chiRut
+          ? []
+          : [
+              {
+                /*
             TÊN THEO VIỆC ĐÃ XẢY RA. Hành động này đưa đơn về NHÁP kèm lý do,
             giữ số phiếu và lịch sử, để người soạn sửa rồi gửi lại — mở đường
             đi tiếp, không đóng cửa. Gọi nó là "Từ chối" thì người duyệt ngần
@@ -393,29 +412,33 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
             `id` và giá trị gửi lên server vẫn là `reject` — đổi nhãn là việc
             của tầng nhìn, đổi mã đã ghi vào sổ thì không.
           */
-          id: 'reject',
-          label: 'Trả lại để sửa',
-          ui: 'sheet',
-          stakes: 'vua',
-          blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
-          needReason: true,
-          reasonLabel: 'Cần sửa gì',
-          reasonHint: 'Người soạn đọc câu này để sửa — nói rõ thiếu gì, sai gì.',
-          consequence:
-            'Đơn về nháp kèm lý do, giữ nguyên số phiếu. Người soạn sửa rồi gửi duyệt lại.',
-          done: 'Đã trả lại để sửa',
-          build: ({ id, reason }) => [
-            { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST', body: { decision: 'reject', reason } }, // prettier-ignore
-          ],
-        },
+                id: 'reject',
+                label: 'Trả lại để sửa',
+                ui: 'sheet',
+                stakes: 'vua',
+                blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
+                needReason: true,
+                reasonLabel: 'Cần sửa gì',
+                reasonHint: 'Người soạn đọc câu này để sửa — nói rõ thiếu gì, sai gì.',
+                consequence:
+                  'Đơn về nháp kèm lý do, giữ nguyên số phiếu. Người soạn sửa rồi gửi duyệt lại.',
+                done: 'Đã trả lại để sửa',
+                build: ({ id, reason }: { id: string; reason: string }) => [
+                  { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST' as const, body: { decision: 'reject', reason } }, // prettier-ignore
+                ],
+              } satisfies Action,
+            ]),
         EDIT_TERMS(notOwn),
         URGENT_SEND(perm),
-        REOPEN(notReopen),
-        DELETE('Đơn đã gửi duyệt — bấm "Rút về nháp" trước, rồi mới xoá được'),
+        // "Hạ về nháp" là việc của GĐ / trưởng phòng (bắt lý do) — người soạn
+        // không có quyền duyệt đã có "Rút về nháp để sửa" làm đúng việc đó.
+        ...(chiRut ? [] : [REOPEN(notReopen)]),
+        DELETE('Đơn đã gửi duyệt — bấm "Rút về nháp để sửa" trước, rồi mới xoá được'),
         REASSIGN(canReassign),
         CANCEL(notCancel),
         OPEN,
       ]
+    }
 
     case 'approved':
       return [
