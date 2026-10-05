@@ -77,14 +77,16 @@ export function PhieuLenh({
                 className={cn(
                   // Cột tên CO GIÃN theo khung (05/10/2026): chỉ chặn dưới, không chặn
                   // trên — khung rộng ra thì tên dài ra một hàng, không còn gãy đôi.
-                  rong(c) && 'min-w-[200px]',
+                  rongCls(c),
                   laSpec(c) && 'min-w-[110px]',
                   laSo(c) && 'text-right',
-                  trong.has(c.label) && 'text-[var(--ink-3)]',
+                  // Cột trống cả lệnh co lại còn một nhãn — giữ chỗ cho người mua biết, không chiếm 110px mỗi cột.
+                  trong.has(c.label) && 'min-w-0 max-w-[88px] whitespace-normal text-[var(--ink-3)]',
                   // Cột Sales bôi đỏ trong phiếu (SL · Thời gian xuất · Số PO) — sai là
                   // hỏng lô hàng, nên cả tiêu đề lẫn ô đều nổi lên như tờ giấy.
-                  c.emphasis === 'red' && 'text-[var(--stop)]',
-                  c.emphasis === 'yellow' && 'bg-[var(--warn-wash)]',
+                  // `!`: lớp `.kit th` không nằm trong layer nên thắng utility thường (đo 05/10).
+                  c.emphasis === 'red' && '!text-[var(--stop)]',
+                  c.emphasis === 'yellow' && '!bg-[var(--warn-wash)]',
                 )}
                 title={trong.has(c.label) ? 'Cả lệnh không khai cột này' : undefined}
               >
@@ -252,6 +254,19 @@ const laSpec = (c: LsxSheetColumn) =>
 const laSo = (c: LsxSheetColumn) =>
   c.source.kind === 'total_cbm' ||
   (c.source.kind === 'line' && (c.source.field === 'qty' || c.source.field === 'cbm'))
+/** Cột chữ dài: chặn DƯỚI theo độ dài thật của dữ liệu (tên nước ngoài dài nhất 82 ký tự, tên Việt 66) — khung rộng ra thì cột rộng ra, không gãy đôi. */
+const rongCls = (c: LsxSheetColumn) =>
+  c.source.kind !== 'line'
+    ? false
+    : c.source.field === 'name_foreign'
+      ? 'min-w-[320px]'
+      : c.source.field === 'name_vi'
+        ? 'min-w-[260px]'
+        : c.source.field === 'name_customs'
+          ? 'min-w-[200px]'
+          : c.source.field === 'packing'
+            ? 'min-w-[140px]'
+            : false
 const rong = (c: LsxSheetColumn) =>
   c.source.kind === 'line' &&
   (c.source.field === 'name_foreign' ||
