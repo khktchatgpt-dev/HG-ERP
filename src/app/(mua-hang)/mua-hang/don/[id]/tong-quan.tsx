@@ -1,7 +1,7 @@
 'use client'
 
 import { Metric, MetricStrip } from '@/components/kit'
-import { poVeThieu } from '@/lib/po-finance'
+import { poVeThieu, veThieuChuaVat } from '@/lib/po-finance'
 import { money, type MucId, type Props } from './don-chung-tu.shared'
 import type { DonCtx } from './useDonChungTu'
 
@@ -42,13 +42,20 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
   const { p, header, totals, lines, veKho, sentToSupplier: daGui } = d
   const cur = header.currency
   const f = p.finance
-  const vt = f ? poVeThieu(f.rows) : null
-  const chuaCo = !daGui ? 'đơn chưa gửi NCC' : 'đơn không có dòng vật tư kho'
-  // Số tiền lấy theo ĐƠN GIÁ trên dòng: đơn ghi giá ĐÃ gồm VAT thì ba ô đầu cũng là số
-  // gồm VAT — nói đúng như vậy (05/10/2026: trước ghi "chưa VAT" cho mọi đơn).
   const vatPct = header.vat === '' ? 0 : Number(header.vat)
+  // Ba ô đầu LUÔN chưa VAT (05/10/2026, báo lỗi đơn của Thi): đơn giá gồm VAT thì
+  // tách thuế ra như đầu đơn tách — số gồm thuế là "Tổng thanh toán" ở đầu đơn.
+  const vt = f
+    ? veThieuChuaVat(poVeThieu(f.rows), { priceIncludesVat: header.inclVat, vatRate: vatPct }) // prettier-ignore
+    : null
+  const chuaCo = !daGui ? 'đơn chưa gửi NCC' : 'đơn không có dòng vật tư kho'
+  const thueNgan = vatPct === 0 ? 'không VAT' : 'chưa VAT'
   const thue =
-    vatPct === 0 ? 'không VAT' : header.inclVat ? `đã gồm VAT ${vatPct}%` : 'chưa VAT'
+    vatPct === 0
+      ? 'không VAT'
+      : header.inclVat
+        ? `chưa VAT · đã tách ${vatPct}%`
+        : 'chưa VAT'
   return (
     <MetricStrip>
       <Metric
@@ -67,7 +74,7 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
         basis={
           !veKho
             ? chuaCo
-            : `${veKho.du}/${veKho.tong} dòng vật tư kho về đủ${vt ? ` · ${thue}` : ''}`
+            : `${veKho.du}/${veKho.tong} dòng vật tư kho về đủ${vt ? ` · ${thueNgan}` : ''}`
         }
       />
       <Metric
@@ -78,7 +85,7 @@ export function TongQuanSo({ d }: { d: DonCtx }) {
             ? chuaCo
             : !vt
               ? 'chưa tải được số tài chính'
-              : `${vt.missing_lines} dòng chưa về đủ · ${thue}${vt.closed_lines ? ` · không gồm ${vt.closed_lines} dòng đã chốt thiếu` : ''}`
+              : `${vt.missing_lines} dòng chưa về đủ · ${thueNgan}${vt.closed_lines ? ` · không gồm ${vt.closed_lines} dòng đã chốt thiếu` : ''}`
         }
       />
       <Metric
