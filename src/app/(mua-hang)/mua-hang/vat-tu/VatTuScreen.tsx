@@ -26,7 +26,7 @@ import {
   showMoney,
 } from '@/components/kit'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
-import { SuaVatTuSheet } from './sua-vat-tu'
+import { SuaVatTuSheet, ThemVatTuSheet } from './sua-vat-tu'
 import { ChuyenNhomSheet } from './chuyen-nhom'
 import { TagNgung, type LanNgung } from './bo-ma'
 
@@ -53,6 +53,7 @@ export function VatTuScreen({
   filters,
   canEdit,
   canRetire,
+  canCreate,
   tax,
   suppliers,
 }: {
@@ -74,6 +75,8 @@ export function VatTuScreen({
   canEdit: boolean
   /** Quyền `warehouse.material.retire` — ngừng dùng / dùng lại / xoá mã chưa dùng. */
   canRetire: boolean
+  /** Quyền `warehouse.material.create` — nút "+ Thêm vật tư". */
+  canCreate: boolean
   tax: MaterialTaxonomy
   /** NCC cho ô "NCC mặc định". */
   suppliers: { value: string; label: string }[]
@@ -194,6 +197,11 @@ export function VatTuScreen({
         actions={
           <>
             <Btn href="/mua-hang/vat-tu/nhom">Nhóm vật tư</Btn>
+            {canCreate && (
+              <Btn icon="them" primary={chon.size === 0} onClick={() => doiLoc({ them: '1' })}>
+                Thêm vật tư
+              </Btn>
+            )}
             {canEdit && chon.size > 0 && (
               <Btn icon="sau" primary onClick={() => setChuyen(true)}>
                 Chuyển {chon.size} mã đã chọn…
@@ -447,6 +455,23 @@ export function VatTuScreen({
             setChon(new Set())
             router.refresh()
           }}
+        />
+      )}
+      {/*
+        THÊM VẬT TƯ (Bản 11 · V1) — panel trên URL (`?them=1`) như panel Sửa:
+        Back đóng được. Thêm xong lọc danh sách về đúng mã vừa tạo cho thấy ngay.
+      */}
+      {canCreate && params.get('them') === '1' && (
+        <ThemVatTuSheet
+          tax={tax}
+          suppliers={suppliers}
+          group={filters.nhom || undefined}
+          onClose={() => doiLoc({ them: '' })}
+          onCreated={(m) => {
+            doiLoc({ them: '', q: m.code, ng: '', trang: '1' })
+            router.refresh()
+          }}
+          onOpenCode={(code) => doiLoc({ them: '', q: code, ng: '', trang: '1' })}
         />
       )}
       {sua && (

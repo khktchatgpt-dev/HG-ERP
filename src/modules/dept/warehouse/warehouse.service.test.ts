@@ -506,3 +506,17 @@ describe('materialsService.setActive — ngừng dùng / dùng lại (Bản 11)'
     )
   })
 })
+
+describe('materialsService.previewCode — mã dự kiến ở panel Thêm vật tư', () => {
+  it('gác bằng quyền tạo; cùng hàm cấp mã với create', async () => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
+      { code: 'NK-0203', name: 'a' },
+      { code: 'NK-0007', name: 'b' },
+    ] as never)
+    vi.mocked(materialsRepo.maxCodeNo).mockResolvedValue(203)
+    await expect(materialsService.previewCode(cungUng, 'Ngũ kim - phụ kiện')).resolves.toBe('NK-0204')
+    expect(assertAction).toHaveBeenCalledWith(cungUng, 'warehouse.material.create')
+    expect(materialsRepo.maxCodeNo).toHaveBeenCalledWith('NK')
+  })
+})

@@ -32,8 +32,10 @@ import type { Material } from '@/modules/dept/warehouse/warehouse.repo'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { VatTuLichSu, type GiaMua, type ThayDoi } from './vat-tu-lich-su'
 import { DaiNgungDung, KhoiBoMa, NutBoMa, useMaHienDung, type BoMaCtx } from './bo-ma'
+import { DoiChieuGanGiong, MaMoiO, useMaMoi } from './them-vat-tu'
 
-type Nap = { m: Material; gia: GiaMua[] | null; doi: ThayDoi[] | null }
+/** `m` = null là THÊM vật tư mới (05/10/2026, Bản 11 · V1) — cùng bộ ô, cùng luật. */
+type Nap = { m: Material | null; gia: GiaMua[] | null; doi: ThayDoi[] | null }
 
 /**
  * SỬA VẬT TƯ TRONG KHU MUA HÀNG (29/09/2026, artboard 16/16b đã duyệt).
@@ -136,13 +138,48 @@ export function SuaVatTuSheet({
     )
   return (
     <Form
-      key={nap.m.id}
+      key={nap.m?.id}
       nap={nap}
       tax={nen.tax}
       suppliers={nen.suppliers}
       onClose={onClose}
       onSaved={onSaved}
       boMa={boMa}
+    />
+  )
+}
+
+/**
+ * THÊM VẬT TƯ (05/10/2026, bản vẽ Bản 11 · V1) — chính panel Sửa với `m = null`:
+ * cùng bộ ô, cùng luật (barem, ĐVT lạ, ghi null ô ngoài nhóm), thêm ô Mã tự
+ * cấp + bước đối chiếu tên gần giống. Chỉ màn danh mục mở (đã có sẵn `tax`,
+ * `suppliers` từ server); soạn đơn vẫn dùng hộp "Thêm nhanh" của nó.
+ */
+export function ThemVatTuSheet({
+  tax,
+  suppliers,
+  group,
+  onClose,
+  onCreated,
+  onOpenCode,
+}: {
+  tax: MaterialTaxonomy
+  suppliers: { value: string; label: string }[]
+  /** Nhóm điền sẵn — bộ lọc nhóm đang chọn ở danh sách. */
+  group?: string
+  onClose: () => void
+  onCreated: (m: Material) => void
+  onOpenCode: (code: string) => void
+}) {
+  return (
+    <Form
+      nap={{ m: null, gia: null, doi: null }}
+      tax={tax}
+      suppliers={suppliers}
+      onClose={onClose}
+      onSaved={onCreated}
+      initialGroup={group}
+      onOpenCode={onOpenCode}
     />
   )
 }
@@ -154,6 +191,8 @@ function Form({
   onClose,
   onSaved,
   boMa,
+  initialGroup,
+  onOpenCode,
 }: {
   nap: Nap
   tax: MaterialTaxonomy
@@ -161,40 +200,52 @@ function Form({
   onClose: () => void
   onSaved: (m: Material) => void
   boMa?: BoMaCtx
+  /** Chỉ khi THÊM: nhóm điền sẵn (bộ lọc nhóm đang chọn ở danh sách). */
+  initialGroup?: string
+  /** Chỉ khi THÊM: bấm một mã gần giống → đóng panel, mở mã đó. */
+  onOpenCode?: (code: string) => void
 }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
-  const usage = useMaHienDung(m.id, !!boMa?.canRetire)
+  const usage = useMaHienDung(m?.id ?? '', !!m && !!boMa?.canRetire)
   const [boMo, setBoMo] = useState(false)
   // Lần ngừng dùng gần nhất — đọc từ sổ vết đã nạp sẵn cho phần Lịch sử.
   const vetNgung = doi?.find((c) => c.field === 'is_active' && c.after_value === 'false')
   const lanNgung = vetNgung
     ? { at: vetNgung.created_at, by: vetNgung.actor_name ?? null, reason: vetNgung.source_ref ?? null }
     : null
-  const s = useMaterialCore({ active: true, initial: coreFromMaterial(m), taxonomy: tax, excludeCode: m.code }) // prettier-ignore
+  const s = useMaterialCore({ active: true, initial: m ? coreFromMaterial(m) : { group_name: initialGroup ?? '' }, taxonomy: tax, excludeCode: m?.code }) // prettier-ignore
   const { f } = s
   const set = (k: keyof MaterialCore) => (v: string) => s.setF((p) => ({ ...p, [k]: v }))
   const [mua, setMua] = useState({
-    price: m.last_purchase_price == null ? '' : String(m.last_purchase_price),
-    supplier: m.default_supplier_id ?? '',
-    tol: String(m.over_tolerance_pct ?? 0),
-    note: m.note ?? '',
+    price: m?.last_purchase_price == null ? '' : String(m.last_purchase_price),
+    supplier: m?.default_supplier_id ?? '',
+    tol: String(m?.over_tolerance_pct ?? 0),
+    note: m?.note ?? '',
   })
+  const ma = useMaMoi(!m, f.group_name)
+  /*
+   * GẦN GIỐNG PHẢI ĐỐI CHIẾU RỒI MỚI THÊM — luật của hộp "Thêm nhanh" ở soạn
+   * đơn (0136), đem sang đây. Tick gắn với ĐÚNG cái tên lúc xác nhận: sửa tên là
+   * danh sách gần giống đổi, phải đối chiếu lại.
+   */
+  const [daDoiChieu, setDaDoiChieu] = useState('')
+  const canDoiChieu = !m && s.similar.length > 0 && daDoiChieu !== f.name
 
   const payload = s.corePayload()
-  const cleared = useMemo(() => fieldsClearedByPayload(m as unknown as Record<string, unknown>, payload), [m, payload]) // prettier-ignore
+  const cleared = useMemo(() => (m ? fieldsClearedByPayload(m as unknown as Record<string, unknown>, payload) : []), [m, payload]) // prettier-ignore
   const clearKey = cleared.map((c) => c.field).join(',')
   const [clearOkFor, setClearOkFor] = useState('')
   const barHint = barLengthFromName(f.name)
   const lastBuy = gia?.[0] ?? null
   const units = useMemo(
-    () => [...new Set([...tax.units, m.unit].filter(Boolean))],
-    [tax.units, m.unit],
+    () => [...new Set([...tax.units, m?.unit ?? ''].filter(Boolean))],
+    [tax.units, m?.unit],
   )
   const subs =
     s.subs.includes(f.sub_group) || !f.sub_group ? s.subs : [f.sub_group, ...s.subs]
 
-  const why = saveBlockReason({
+  const whySave = saveBlockReason({
     name: f.name,
     unit: f.unit,
     unitUnconfirmed: s.unitWarn != null && !s.unitConfirmed,
@@ -202,17 +253,24 @@ function Form({
     kgOffPct: s.kgOff || null,
     clearedUnconfirmed: clearOkFor === clearKey ? [] : cleared.map((c) => c.label),
   })
+  const why =
+    whySave ??
+    (!m && !f.group_name ? 'chọn nhóm (nhóm quyết định mã và phạm vi chặn trùng)' : null) ??
+    (!m && ma.rieng && !ma.code.trim() ? 'gõ mã riêng hoặc bấm "Tự cấp mã"' : null) ??
+    (canDoiChieu ? `tick xác nhận đã đối chiếu ${s.similar.length} mã gần giống` : null)
 
   async function save() {
     if (why) return
     setBusy(true)
     try {
       const r = await api<{ material: Material }>(
-        `/api/dept/warehouse/materials/${m.id}`,
+        m ? `/api/dept/warehouse/materials/${m.id}` : '/api/dept/warehouse/materials',
         {
-          method: 'PATCH',
+          method: m ? 'PATCH' : 'POST',
           body: {
             ...payload,
+            // Mã: bỏ trống = server tự cấp (đúng hàm đã cho xem trước).
+            ...(m ? {} : { code: ma.rieng ? ma.code.trim() : null }),
             note: mua.note.trim() || null,
             last_purchase_price: mua.price.trim() === '' ? null : Number(mua.price.replace(/\./g, '').replace(',', '.')), // prettier-ignore
             default_supplier_id: mua.supplier || null,
@@ -220,10 +278,16 @@ function Form({
           },
         },
       )
-      toast.success(
-        `Đã lưu ${m.code}`,
-        'Đơn mua soạn từ giờ dùng thông tin mới; đơn đã gửi không đổi.',
-      )
+      if (m)
+        toast.success(
+          `Đã lưu ${m.code}`,
+          'Đơn mua soạn từ giờ dùng thông tin mới; đơn đã gửi không đổi.',
+        )
+      else
+        toast.success(
+          `Đã thêm ${r.material.code}`,
+          'Mã dùng được ngay ở mọi đơn mua và phiếu kho.',
+        )
       onSaved(r.material)
     } catch (e) {
       toast.error('Lưu không được', apiErrorText(e))
@@ -235,13 +299,17 @@ function Form({
     <Sheet
       open
       onClose={onClose}
-      title={`Sửa vật tư ${m.code}`}
-      subtitle={`${m.name} · ${m.group_name ?? 'chưa nhóm'} — đổi ở đây là đổi cho mọi đơn mua sau, đơn đã gửi không đổi.`}
+      title={m ? `Sửa vật tư ${m.code}` : 'Thêm vật tư'}
+      subtitle={
+        m
+          ? `${m.name} · ${m.group_name ?? 'chưa nhóm'} — đổi ở đây là đổi cho mọi đơn mua sau, đơn đã gửi không đổi.`
+          : 'Mã mới dùng được ngay ở mọi đơn mua và phiếu kho. Kệ, ngưỡng tồn để Kho khai sau.'
+      }
       stakes="nhe"
       width={720}
       footer={
         <div className="flex w-full items-center gap-3">
-          {boMa?.canRetire && (
+          {m && boMa?.canRetire && (
             <NutBoMa m={m} usage={usage} open={boMo} onOpen={() => setBoMo(true)} />
           )}
           <span className="text-k-sm flex-1">
@@ -258,19 +326,19 @@ function Form({
             onCancel={onClose}
             onConfirm={() => void save()}
             cancelLabel="Thôi"
-            confirmLabel="Lưu vật tư"
+            confirmLabel={m ? 'Lưu vật tư' : 'Thêm vật tư'}
           />{' '}
           {/* prettier-ignore */}
         </div>
       }
     >
-      {boMa && !m.is_active && <DaiNgungDung m={m} lan={lanNgung} ctx={boMa} />}
-      {boMa && boMo && usage && (
+      {m && boMa && !m.is_active && <DaiNgungDung m={m} lan={lanNgung} ctx={boMa} />}
+      {m && boMa && boMo && usage && (
         <div className="mb-4">
           <KhoiBoMa m={m} usage={usage} ctx={boMa} onCancel={() => setBoMo(false)} />
         </div>
       )}
-      {m.needs_review && (
+      {m?.needs_review && (
         <div className="mb-3">
           <NoticeBar tag="Chờ Kho rà">
             Mã khai vội lúc lên đơn. Sửa ở đây vẫn giữ cờ — Kho rà xong bấm “Đã rà xong” ở
@@ -323,6 +391,11 @@ function Form({
           />{' '}
           {/* prettier-ignore */}
         </Field>
+        {!m && (
+          <Field label="Mã vật tư">
+            <MaMoiO ma={ma} />
+          </Field>
+        )}
         <Field label="Vật liệu / màu">
           <TextInput
             value={f.material_grade}
@@ -385,7 +458,17 @@ function Form({
           </NoticeBar>
         </div>
       )}
-      {s.similar.length > 0 && (
+      {!m && s.similar.length > 0 && (
+        <div className="mt-3">
+          <DoiChieuGanGiong
+            similar={s.similar}
+            ok={daDoiChieu === f.name}
+            onOk={(on) => setDaDoiChieu(on ? f.name : '')}
+            onOpenCode={onOpenCode}
+          />
+        </div>
+      )}
+      {m && s.similar.length > 0 && (
         <div className="mt-3">
           <NoticeBar tag="Gần trùng">
             Nhóm này đã có {s.similar.map((x) => `${x.code} · ${x.name}`).join('; ')}. Hai
@@ -552,9 +635,11 @@ function Form({
         </div>
       )}
 
-      <div className="mt-3">
-        <VatTuLichSu gia={gia} doi={doi} />
-      </div>
+      {m && (
+        <div className="mt-3">
+          <VatTuLichSu gia={gia} doi={doi} />
+        </div>
+      )}
 
       <p className="text-k-sm mt-3 text-[var(--ink-3)]">
         Kho giữ: kệ · ngưỡng tồn · cờ “Chờ Kho rà” — sửa ở màn Vật tư của Kho.

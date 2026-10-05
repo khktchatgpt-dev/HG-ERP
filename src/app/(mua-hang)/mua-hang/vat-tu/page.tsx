@@ -62,7 +62,7 @@ export default async function Page({
   const ngung = sp.ng === '1'
   const page = Math.max(1, Number(sp.trang) || 1)
 
-  const [{ rows }, counts, tax, canEdit, canRetire, { rows: sups }] = await Promise.all([
+  const [{ rows }, counts, tax, canEdit, canRetire, canCreate, { rows: sups }] = await Promise.all([
     materialsService.list(user, {
       q,
       group_name: group,
@@ -87,6 +87,7 @@ export default async function Page({
     // Đúng quyền service kiểm khi lưu — nút không hứa điều service từ chối.
     canAction(user, 'warehouse.material.update_purchasing'),
     canAction(user, 'warehouse.material.retire'),
+    canAction(user, 'warehouse.material.create'),
     suppliersService.list(user, { page: 1, page_size: 500 }),
   ])
 
@@ -112,6 +113,7 @@ export default async function Page({
       groups={tax.groups.map((g) => g.name)}
       canEdit={canEdit}
       canRetire={canRetire}
+      canCreate={canCreate}
       tax={tax}
       suppliers={sups
         .filter((x) => !x.is_carrier)

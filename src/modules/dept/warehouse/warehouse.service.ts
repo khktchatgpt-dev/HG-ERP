@@ -485,6 +485,17 @@ export const materialsService = {
     return materialChangesRepo.listByMaterial(id)
   },
 
+  /**
+   * MÃ DỰ KIẾN cho vật tư mới của một nhóm (05/10/2026, panel Thêm vật tư) —
+   * ĐÚNG hàm `create` dùng khi bỏ trống mã, nên ô xem trước không hứa một mã
+   * khác mã sẽ cấp. Vẫn có thể nhích lên nếu người khác lưu trước: số cấp lúc
+   * lưu mới là số thật.
+   */
+  async previewCode(user: User, group: string | null): Promise<string> {
+    await assertAction(user, 'warehouse.material.create')
+    return nextCode(group, await materialsRepo.namesInGroup(group))
+  },
+
   /** Ngày · người · lý do ngừng dùng gần nhất của các mã — cột "Ngừng dùng". */
   async lastRetire(user: User, ids: string[]) {
     void user // đọc sổ vết cùng mức xem vật tư (PUBLIC)
