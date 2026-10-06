@@ -8,6 +8,7 @@ import {
   PO_SHARED_FIELD_PREFILL,
   prefillsFromCatalog,
   poField,
+  poPriceSuffix,
   poPriceUnitPerLine,
 } from './po-fields'
 
@@ -412,5 +413,29 @@ describe('poPriceUnitPerLine — đơn vị đơn giá của mẫu tính theo kg
     expect(suffix!({ price_basis: 'unit', material_unit: 'Cây' })).toBe('/cây')
     expect(suffix!({ price_basis: 'unit2', material_unit: 'Cây' })).toBe('/kg')
     expect(suffix!({ price_basis: 'unit', material_unit: null })).toBe('')
+  })
+})
+
+/*
+ * CƠ SỞ `ctn` = GIÁ THEO ĐVT ĐẶT (06/10/2026). PO-2026-0137 mua ván ép ĐVT Tấm
+ * theo mẫu bao bì, phiếu in "46.000/thùng" — NCC đọc sai giá.
+ */
+describe('poPriceSuffix — hậu tố đơn giá theo ĐVT dòng', () => {
+  it('bao bì tính theo ĐVT: lấy đúng ĐVT dòng, không in cứng "/thùng"', () => {
+    expect(poPriceSuffix('carton', 'ctn', 'Tấm')).toBe('/tấm')
+    expect(poPriceSuffix('carton', 'ctn', 'Cái')).toBe('/cái')
+    expect(poPriceSuffix('carton', 'ctn', 'Thùng')).toBe('/thùng')
+  })
+  it('tính theo m² vẫn là /m²; dòng không ĐVT thì lùi về chữ cũ', () => {
+    expect(poPriceSuffix('carton', 'm2', 'Tấm')).toBe('/m²')
+    expect(poPriceSuffix('carton', 'ctn', null)).toBe('/thùng')
+    expect(poPriceSuffix('carton', null, '  ')).toBe('/thùng')
+  })
+  it('kính: theo ĐVT dòng, m² giữ nguyên; xốp không đổi', () => {
+    expect(poPriceSuffix('glass', 'ctn', 'Tấm')).toBe('/tấm')
+    expect(poPriceSuffix('glass', 'ctn', 'Cái')).toBe('/cái')
+    expect(poPriceSuffix('glass', 'm2', 'Tấm')).toBe('/m²')
+    expect(poPriceSuffix('foam', 'm3', 'Tấm')).toBe('/m³')
+    expect(poPriceSuffix('foam', 'ctn', 'Tấm')).toBe('')
   })
 })

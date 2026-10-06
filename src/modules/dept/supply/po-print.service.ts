@@ -8,8 +8,6 @@ import { suppliersRepo } from './supply.repo'
 import { poRevisionLabel } from '@/lib/po-lsx-refs'
 import { poLineAmount } from '@/lib/po-line'
 import { shipmentAmount } from '@/lib/po-shipments'
-import { poStampGuard } from '@/lib/po-stamp'
-import { storage } from '@/modules/core/files/storage'
 
 /**
  * DỮ LIỆU MỘT TỜ ĐƠN ĐẶT HÀNG — MỘT nguồn cho cả phiếu in (`/print/supply/[id]`)
@@ -22,10 +20,10 @@ import { storage } from '@/modules/core/files/storage'
  *
  * Không gác quyền ở đây — trang in và route xuất tự gác đăng nhập như cũ.
  */
-export async function loadPoPrint(id: string, opts: { withStamp?: boolean } = {}) {
+export async function loadPoPrint(id: string) {
   const po = await posRepo.findById(id)
   if (!po) return null
-  const [lines, supplier, company, refs, tpl, rawShipments, adjs, creator, stampCfg] =
+  const [lines, supplier, company, refs, tpl, rawShipments, adjs, creator] =
     await Promise.all([
       posRepo.listLines(id),
       suppliersRepo.findById(po.supplier_id),
@@ -35,27 +33,7 @@ export async function loadPoPrint(id: string, opts: { withStamp?: boolean } = {}
       poShipmentsRepo.listByPo(id),
       poAdjustmentsRepo.listByPo(id),
       po.created_by ? usersRepo.findById(po.created_by) : Promise.resolve(null),
-      // Excel KHÔNG nhận dấu: file sửa được thì dấu nằm trên số ai cũng đổi được.
-      opts.withStamp ? settingsService.poStamp() : Promise.resolve(null),
     ])
-
-  /*
-   * DẤU + CHỮ KÝ GIÁM ĐỐC (06/10/2026) — luật ở lib/po-stamp. Ảnh nhúng thẳng
-   * thành data URL, chỉ tải khi luật cho phép: đơn không đủ điều kiện thì ảnh
-   * không bao giờ rời Storage. Tải hỏng thì in ô trống + nói lý do, không vỡ trang.
-   */
-  let stamp: { src: string } | null = null
-  let stampNote: string | null = null
-  if (opts.withStamp) {
-    const g = poStampGuard(po, stampCfg, adjs, po.approver_name)
-    if (g.ok && stampCfg) {
-      const src = await storage.downloadDataUrl('private', stampCfg.path)
-      if (src) stamp = { src }
-      else stampNote = 'Không tải được ảnh dấu — in ra ký tay'
-    } else if (!g.ok) {
-      stampNote = g.reason
-    }
-  }
 
   /*
    * LỊCH GIAO (28/08): chỉ đợt còn sống; tiền đợt chia TỶ LỆ từ thành tiền dòng
@@ -101,8 +79,6 @@ export async function loadPoPrint(id: string, opts: { withStamp?: boolean } = {}
     company,
     tpl,
     shipments,
-    stamp,
-    stampNote,
     supplier,
     lines,
     // Đơn gộp nhiều LSX (0125): phiếu ghi "LSX 04.26.27 + 02.26.27" như sổ thật.

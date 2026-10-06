@@ -146,7 +146,7 @@ function excelColumns(
           align: 'right',
           value: (l) =>
             l.unit_price != null
-              ? `${Number(l.unit_price).toLocaleString('vi-VN')}${poPriceSuffix(t, l.carton_basis)}`
+              ? `${Number(l.unit_price).toLocaleString('vi-VN')}${poPriceSuffix(t, l.carton_basis, l.material_unit)}`
               : '',
         }
       : {

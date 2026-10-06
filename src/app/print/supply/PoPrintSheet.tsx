@@ -7,7 +7,7 @@ import {
   roundMoney,
 } from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
-import { poPdfName } from '@/lib/po-stamp'
+import { poPdfName } from '@/lib/print-file-name'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
   PO_PRINT_ORDER,
@@ -241,7 +241,7 @@ function columnsFor(
           align: 'right',
           cell: (l) =>
             l.unit_price != null
-              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis)}`
+              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis, l.material_unit)}`
               : '',
         }
       : ctx.priceUnitOf
@@ -290,16 +290,7 @@ export function PoPrintSheet({
   lines,
   exportHref,
   shipments,
-  stamp,
-  stampNote,
 }: {
-  /**
-   * Dấu + chữ ký Giám đốc (06/10/2026) — chỉ trang in đơn ĐÃ LƯU truyền, khi
-   * luật `lib/po-stamp` cho phép; đứng vào cột tên công ty. Không có thì
-   * `stampNote` nói vì sao (hiện trên thanh nút, không in ra).
-   */
-  stamp?: { src: string } | null
-  stampNote?: string | null
   company: PrintCompany & { company_name?: string | null }
   /**
    * Mẫu in của loại PO (0164). Có mặc định vì ô "Xem trước phiếu in" trên form
@@ -379,7 +370,6 @@ export function PoPrintSheet({
       pdfName={
         exportHref ? poPdfName(po.code, supplier?.name ?? po.supplier_name) : undefined
       }
-      notice={stampNote ? `Phiếu không có dấu + chữ ký Giám đốc: ${stampNote}` : null}
     >
       <PrintLetterhead
         company={company}
@@ -651,11 +641,7 @@ export function PoPrintSheet({
           // một chuỗi cố định — mẫu chỉ giữ chỗ bằng {signer_role}.
           signer_role: po.signer_role ?? meta.signerRole,
           names: { creator: po.creator_name },
-        }).map((c, i) => ({
-          ...c,
-          // Dấu đứng vào cột TÊN CÔNG TY — chỗ Giám đốc ký, đóng dấu trên mẫu.
-          stamp: tpl.signatures[i]?.role.includes('{company}') ? stamp : null,
-        }))}
+        })}
       />
     </PrintPage>
   )
