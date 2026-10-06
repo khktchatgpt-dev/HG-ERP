@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { LanViec, MucViec } from '@/lib/viec-sale'
 import type { SalesHome } from '@/modules/dept/sales/sales-home.service'
+import { Nhan, SO_MAU, TD, TH } from './_erp/ui'
 
 /**
  * TRANG CHỦ SALE — "hôm nay tôi phải làm gì?" (06/10/2026).
@@ -32,35 +33,6 @@ const usd = (v: number | null | undefined) =>
 const ngay = (iso: string | null | undefined) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
 const THU = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']
-
-type Tone = 'stop' | 'warn' | 'done' | 'neutral'
-const SO_MAU: Record<LanViec['tone'], string> = {
-  stop: 'text-[var(--stop)]',
-  warn: 'text-[var(--warn)]',
-  neutral: 'text-foreground',
-}
-
-function Nhan({ tone, children }: { tone: Tone; children: React.ReactNode }) {
-  const cls =
-    tone === 'stop'
-      ? 'bg-[var(--stop)]/10 text-[var(--stop)] border-[var(--stop)]/30'
-      : tone === 'warn'
-        ? 'bg-[var(--warn)]/10 text-[var(--warn)] border-[var(--warn)]/30'
-        : tone === 'done'
-          ? 'bg-[var(--done)]/10 text-[var(--done)] border-[var(--done)]/30'
-          : 'bg-muted text-muted-foreground border-border'
-  return (
-    <span
-      className={`inline-flex items-center rounded-sm border px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap ${cls}`}
-    >
-      {children}
-    </span>
-  )
-}
-
-const TH =
-  'h-8 border-b border-border bg-muted px-3 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap'
-const TD = 'h-9 border-b border-border px-3 text-[13px] align-middle'
 
 export function TrangChuSaleScreen({
   home,
