@@ -43,6 +43,10 @@ export type DotXuat = {
     due: string | null
     da_nhan: boolean
   }
+  /** SL theo khoá SP (`khoaSp`) của riêng đợt này. */
+  sl?: Record<string, number>
+  /** 'sale' = đợt Sale chia ở Kế hoạch xuất (0222) · 'lenh' = nhóm của dòng lệnh. */
+  nguon?: 'sale' | 'lenh'
 }
 
 /** Ngưỡng "sắp xuất" — đợt trong 45 ngày tới mà vật tư chưa đủ là cần để ý. */
@@ -180,6 +184,29 @@ export type RawDongDon = {
   unit_price: number | null
 }
 export type RawDonMua = { production_order_id: string | null; status: string }
+/** Đợt xuất Sale chia (bảng `sales_ship_lots` + `sales_ship_lot_lines`, 0222). */
+export type RawLot = {
+  id: string
+  production_order_id: string
+  seq: number
+  po_no: string | null
+  po_ref: string | null
+  order_no: string | null
+  ship_date: string | null
+  note: string | null
+  lines: { product_key: string; qty: number }[]
+}
+
+/** Khoá cột SP: mã SP trên dòng lệnh (gọn khoảng trắng) — cùng khoá với `sales_ship_lot_lines.product_key`. */
+export const khoaSp = (l: Pick<RawDongLenh, 'product_code' | 'product_id'>) =>
+  (l.product_code ?? '').replace(/\s+/g, ' ').trim() || l.product_id || '—'
+
+/** Tên hiển thị của đợt Sale: PO tham chiếu · PO khách, thiếu cả hai thì "Đợt n". */
+export const tenDotSale = (l: Pick<RawLot, 'po_no' | 'po_ref' | 'seq'>) =>
+  [l.po_ref, l.po_no]
+    .map((x) => x?.trim())
+    .filter(Boolean)
+    .join(' · ') || `Đợt ${l.seq}`
 
 const tien = (l: Pick<RawDongDon, 'qty' | 'unit_price'>) =>
   Number(l.qty) * Number(l.unit_price ?? 0)
@@ -197,6 +224,8 @@ export function dungDotXuat(i: {
   don: RawDon[]
   dongDon: RawDongDon[]
   donMua: RawDonMua[]
+  /** Đợt Sale chia (0222). Lệnh CÓ đợt Sale thì đợt lấy từ đây, KHÔNG lấy nhóm lệnh. */
+  lots?: RawLot[]
 }): DotXuat[] {
   const dongDonById = new Map(i.dongDon.map((l) => [l.id, l]))
   const out: DotXuat[] = []
@@ -219,6 +248,53 @@ export function dungDotXuat(i: {
       po_chua_gui: mua.filter((p) => ['draft', 'pending_approval', 'approved'].includes(p.status)).length, // prettier-ignore
       due: x.materials_due_at,
       da_nhan: !!x.materials_received_at,
+    }
+    const lotsOf = (i.lots ?? [])
+      .filter((l) => l.production_order_id === x.id)
+      .sort((a, b) => a.seq - b.seq)
+    if (lotsOf.length) {
+      // Giá theo KHOÁ SP: dòng lệnh nối dòng đơn thì lấy giá dòng đó, không thì giá cùng SP trong đơn của lệnh.
+      const giaKhoa = new Map<string, number>()
+      for (const l of i.dongLenh.filter((d) => d.production_order_id === x.id)) {
+        const k = khoaSp(l)
+        if (giaKhoa.has(k)) continue
+        const gia = l.sales_order_line_id
+          ? Number(dongDonById.get(l.sales_order_line_id)?.unit_price ?? 0)
+          : ((l.product_id ? giaSp.get(l.product_id) : 0) ?? 0)
+        if (gia > 0) giaKhoa.set(k, gia)
+      }
+      for (const lot of lotsOf) {
+        const sl: Record<string, number> = {}
+        for (const ln of lot.lines)
+          sl[ln.product_key] = (sl[ln.product_key] ?? 0) + Number(ln.qty)
+        const co = lot.lines.filter((ln) => Number(ln.qty) > 0)
+        const coGia = co.filter((ln) => giaKhoa.has(ln.product_key))
+        const value = coGia.length ? coGia.reduce((s2, ln) => s2 + Number(ln.qty) * giaKhoa.get(ln.product_key)!, 0) : null // prettier-ignore
+        out.push({
+          id: lot.id,
+          lsx_id: x.id,
+          lsx_code: x.code,
+          lsx_status: x.status,
+          customer: x.customer,
+          label: tenDotSale(lot),
+          ship_label: lot.note,
+          ship_date: (lot.ship_date ?? x.ship_date)?.slice(0, 10) ?? null,
+          date_src: lot.ship_date ? 'nhom' : 'lenh',
+          order_code: lot.order_no ? `#${lot.order_no}` : null,
+          qty: co.reduce((s2, ln) => s2 + Number(ln.qty), 0),
+          value: value == null ? null : Math.round(value * 100) / 100,
+          value_src: !coGia.length
+            ? null
+            : coGia.length === co.length
+              ? 'gia-dong'
+              : 'thieu-gia',
+          cont: x.container_summary,
+          vt,
+          sl,
+          nguon: 'sale',
+        })
+      }
+      continue
     }
     for (const g of nhoms) {
       const dong = i.dongLenh.filter((l) => l.group_id === g.id)
@@ -259,6 +335,8 @@ export function dungDotXuat(i: {
         value_src: src,
         cont: x.container_summary,
         vt,
+        sl: dong.reduce<Record<string, number>>((m, l) => ((m[khoaSp(l)] = (m[khoaSp(l)] ?? 0) + Number(l.qty)), m), {}), // prettier-ignore
+        nguon: 'lenh',
       })
     }
   }
@@ -303,10 +381,9 @@ export type LenhXuat = {
   chua_chia: boolean
   /** Số đợt đang mượn ngày xuất cuối của lệnh. */
   muon: number
+  /** Kế hoạch Sale đã chia (0222) — null = lệnh chưa có, đợt đang đọc từ nhóm lệnh. */
+  ke_hoach: RawLot[] | null
 }
-
-const khoaSp = (l: RawDongLenh) =>
-  (l.product_code ?? '').replace(/\s+/g, ' ').trim() || l.product_id || '—'
 
 /** Gom đợt theo lệnh + dựng cột SP — đầu vào giống `dungDotXuat`. */
 export function gomTheoLenh(i: Parameters<typeof dungDotXuat>[0]): LenhXuat[] {
@@ -324,14 +401,12 @@ export function gomTheoLenh(i: Parameters<typeof dungDotXuat>[0]): LenhXuat[] {
     }
     const cuaLenh = dots
       .filter((d) => d.lsx_id === x.id)
-      .map((d) => {
-        const sl: Record<string, number> = {}
-        for (const l of dong.filter((l) => l.group_id === d.id))
-          sl[khoaSp(l)] = (sl[khoaSp(l)] ?? 0) + Number(l.qty)
-        return { ...d, sl }
-      })
+      .map((d) => ({ ...d, sl: d.sl ?? {} }))
       .sort((a, b) => ((a.ship_date ?? '9') < (b.ship_date ?? '9') ? -1 : a.ship_date === b.ship_date ? (a.label < b.label ? -1 : 1) : 1)) // prettier-ignore
     const coGia = cuaLenh.filter((d) => d.value != null)
+    const keHoach = (i.lots ?? [])
+      .filter((l) => l.production_order_id === x.id)
+      .sort((a, b) => a.seq - b.seq)
     return {
       lsx_id: x.id,
       lsx_code: x.code,
@@ -343,8 +418,60 @@ export function gomTheoLenh(i: Parameters<typeof dungDotXuat>[0]): LenhXuat[] {
       sps: [...sps.values()],
       dots: cuaLenh,
       value: coGia.length ? coGia.reduce((s, d) => s + (d.value ?? 0), 0) : null,
-      chua_chia: cuaLenh.length === 1 && cuaLenh[0].date_src === 'lenh',
+      chua_chia:
+        !keHoach.length && cuaLenh.length === 1 && cuaLenh[0].date_src === 'lenh',
       muon: cuaLenh.filter((d) => d.date_src === 'lenh').length,
+      ke_hoach: keHoach.length ? keHoach : null,
     }
   })
+}
+
+/* ── KIỂM KẾ HOẠCH SALE TRƯỚC KHI LƯU (dùng chung client + server) ───────── */
+
+export type LotInput = {
+  po_no: string | null
+  po_ref: string | null
+  order_no: string | null
+  ship_date: string | null
+  note: string | null
+  lines: { product_key: string; qty: number }[]
+}
+
+/**
+ * Kế hoạch có lưu được không — và mỗi SP còn bao nhiêu chưa xếp đợt.
+ *
+ * CHẶN: SP không thuộc lệnh · xếp VƯỢT SL lệnh (không xuất được nhiều hơn đơn) ·
+ * đợt không có SL nào. KHÔNG chặn xếp THIẾU: chia dần từng PO là chuyện thường —
+ * phần còn lại bày ở dòng "Chưa xếp đợt" để Sale thấy.
+ */
+export function kiemKeHoach(
+  lots: readonly LotInput[],
+  sps: readonly { key: string; code: string; qty: number }[],
+): { loi: string[]; daXep: Record<string, number>; conLai: Record<string, number> } {
+  const loi: string[] = []
+  const biet = new Map(sps.map((s) => [s.key, s]))
+  const daXep: Record<string, number> = {}
+  lots.forEach((lot, i) => {
+    const co = lot.lines.filter((l) => Number(l.qty) > 0)
+    if (!co.length) loi.push(`Đợt ${i + 1}${lot.po_ref || lot.po_no ? ` (${lot.po_ref || lot.po_no})` : ''} chưa có SL nào`) // prettier-ignore
+    for (const l of lot.lines) {
+      if (Number(l.qty) < 0) loi.push(`Đợt ${i + 1}: SL âm ở ${l.product_key}`)
+      if (!biet.has(l.product_key)) {
+        if (Number(l.qty) > 0)
+          loi.push(`Đợt ${i + 1}: SP ${l.product_key} không có trong lệnh`)
+        continue
+      }
+      daXep[l.product_key] = (daXep[l.product_key] ?? 0) + Number(l.qty)
+    }
+  })
+  const conLai: Record<string, number> = {}
+  for (const s of sps) {
+    const x = daXep[s.key] ?? 0
+    conLai[s.key] = s.qty - x
+    if (x > s.qty + 1e-9)
+      loi.push(
+        `${s.code}: xếp ${x.toLocaleString('vi-VN')} > SL lệnh ${s.qty.toLocaleString('vi-VN')}`,
+      )
+  }
+  return { loi, daXep, conLai }
 }

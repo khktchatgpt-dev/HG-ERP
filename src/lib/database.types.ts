@@ -2953,6 +2953,101 @@ export type Database = {
           },
         ]
       }
+      sales_ship_lot_lines: {
+        Row: {
+          created_at: string
+          id: string
+          lot_id: string
+          product_id: string | null
+          product_key: string
+          qty: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lot_id: string
+          product_id?: string | null
+          product_key: string
+          qty: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lot_id?: string
+          product_id?: string | null
+          product_key?: string
+          qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_ship_lot_lines_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "sales_ship_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lot_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "technical_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_ship_lots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          order_no: string | null
+          po_no: string | null
+          po_ref: string | null
+          production_order_id: string
+          seq: number
+          ship_date: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_no?: string | null
+          po_no?: string | null
+          po_ref?: string | null
+          production_order_id: string
+          seq?: number
+          ship_date?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_no?: string | null
+          po_no?: string | null
+          po_ref?: string | null
+          production_order_id?: string
+          seq?: number
+          ship_date?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_ship_lots_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           key: string

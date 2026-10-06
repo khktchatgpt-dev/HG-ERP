@@ -1,4 +1,5 @@
 import { authService } from '@/modules/core/auth/auth.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { shipPlanService } from '@/modules/dept/sales/ship-plan.service'
 import { todayVn } from '@/lib/date-vn'
 import { KeHoachXuatScreen } from './KeHoachXuatScreen'
@@ -13,6 +14,11 @@ export const dynamic = 'force-dynamic'
  */
 export default async function Page() {
   const user = await authService.requirePageUser()
-  const { lenhs, dots } = await shipPlanService.plan(user)
-  return <KeHoachXuatScreen lenhs={lenhs} dots={dots} today={todayVn()} />
+  const [{ lenhs, dots }, canEdit] = await Promise.all([
+    shipPlanService.plan(user),
+    canAction(user, 'sales.order.manage'),
+  ])
+  return (
+    <KeHoachXuatScreen lenhs={lenhs} dots={dots} today={todayVn()} canEdit={canEdit} />
+  )
 }

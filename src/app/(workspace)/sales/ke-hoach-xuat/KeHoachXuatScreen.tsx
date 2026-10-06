@@ -44,10 +44,13 @@ export function KeHoachXuatScreen({
   lenhs,
   dots,
   today,
+  canEdit,
 }: {
   lenhs: LenhXuat[]
   dots: DotXuat[]
   today: string
+  /** Được chia đợt / sửa kế hoạch (`sales.order.manage`). */
+  canEdit: boolean
 }) {
   const [xem, setXem] = useState<'lenh' | 'thang'>('lenh')
   const [khach, setKhach] = useState('')
@@ -185,6 +188,7 @@ export function KeHoachXuatScreen({
             </Panel>
           ) : (
             <TheoLenh
+              canEdit={canEdit}
               key={`${khach}|${anXong}|${chiViec}`}
               lenhs={lenhLoc}
               today={today}

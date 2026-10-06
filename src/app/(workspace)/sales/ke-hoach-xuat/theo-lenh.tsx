@@ -1,10 +1,13 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { Scissors, TriangleAlert } from 'lucide-react'
 import { tinhTrang, type LenhXuat, type TinhTrang } from '@/lib/ke-hoach-xuat'
 import { Nhan, NUM, Panel, TD, TH, ToolBtn, type Tone } from '../_erp/ui'
+import { ChiaDot } from './chia-dot'
+
+/** Lệnh còn lên kế hoạch xuất được — CÙNG danh sách với service (`SUA_DUOC`). */
+const SUA_DUOC = ['pending_approval', 'approved', 'in_progress']
 
 const usd = (v: number | null) => (v == null ? '' : Math.round(v).toLocaleString('vi-VN'))
 const so = (v: number) => (v ? v.toLocaleString('vi-VN') : '')
@@ -26,13 +29,22 @@ function ttLenh(l: LenhXuat, today: string): { tone: Tone; text: string; deY: nu
  * KẾ HOẠCH XUẤT THEO LỆNH (06/10/2026) — chủ dự án: "thực tế sale lên kế hoạch
  * xuất hàng cho các lệnh sản xuất". Chép đúng sổ Excel của Sale (ảnh IBIZA):
  * mỗi lệnh = các PO khách (hàng) × SP (cột), ngày Factory Ship Date mỗi PO,
- * dòng TỔNG SỐ CÁI mỗi SP. Trên hệ thống = nhóm lệnh × dòng lệnh, nên chia đợt /
- * sửa ngày làm ở màn dòng lệnh (`/sales/lsx/[id]/dong`) — màn này đọc + chỉ chỗ.
+ * dòng TỔNG SỐ CÁI mỗi SP. Sale chia đợt NGAY TẠI ĐÂY (`ChiaDot`, bảng 0222) —
+ * không đụng dòng lệnh nên không tạo bản chỉnh sửa lệnh. Lệnh chưa chia thì đọc
+ * nhóm của lệnh.
  *
  * Master–detail kiểu ERP: lưới LỆNH trên (chọn một dòng) → lưới KẾ HOẠCH của
  * lệnh đó dưới, cột SP cuộn ngang, ghim # · PO · Ngày xuất.
  */
-export function TheoLenh({ lenhs, today }: { lenhs: LenhXuat[]; today: string }) {
+export function TheoLenh({
+  lenhs,
+  today,
+  canEdit,
+}: {
+  lenhs: LenhXuat[]
+  today: string
+  canEdit: boolean
+}) {
   const tts = useMemo(
     () => new Map(lenhs.map((l) => [l.lsx_id, ttLenh(l, today)])),
     [lenhs, today],
@@ -115,13 +127,23 @@ export function TheoLenh({ lenhs, today }: { lenhs: LenhXuat[]; today: string })
         </div>
       </Panel>
 
-      {sel && <KeHoachMotLenh l={sel} today={today} />}
+      {sel && <KeHoachMotLenh key={sel.lsx_id} l={sel} today={today} canEdit={canEdit} />}
     </div>
   )
 }
 
 /** Lưới kế hoạch của MỘT lệnh: đợt (PO) × SP — như sổ Excel của Sale. */
-function KeHoachMotLenh({ l, today }: { l: LenhXuat; today: string }) {
+function KeHoachMotLenh({
+  l,
+  today,
+  canEdit,
+}: {
+  l: LenhXuat
+  today: string
+  canEdit: boolean
+}) {
+  const [sua, setSua] = useState(false)
+  const suaDuoc = canEdit && SUA_DUOC.includes(l.lsx_status)
   const tong = (k: string) => l.dots.reduce((s, d) => s + (d.sl[k] ?? 0), 0)
   const lech = l.sps.filter((sp) => tong(sp.key) !== sp.qty)
   const tts = new Map<string, TinhTrang>(l.dots.map((d) => [d.id, tinhTrang(d, today)]))
@@ -139,158 +161,178 @@ function KeHoachMotLenh({ l, today }: { l: LenhXuat; today: string }) {
       actions={
         <>
           <ToolBtn href={`/sales/lsx/${l.lsx_id}`}>Xem lệnh</ToolBtn>
-          <ToolBtn href={`/sales/lsx/${l.lsx_id}/dong`} primary>
-            Chia đợt / sửa ngày xuất
-          </ToolBtn>
+          {suaDuoc && !sua && (
+            <ToolBtn icon={Scissors} onClick={() => setSua(true)} primary>
+              {l.ke_hoach ? 'Sửa kế hoạch xuất' : 'Chia đợt theo PO'}
+            </ToolBtn>
+          )}
         </>
       }
     >
-      {l.chua_chia && (
-        <div className="text-foreground flex items-start gap-2 border-b border-[var(--warn)]/30 bg-[var(--warn)]/10 px-3 py-2 text-[13px]">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" />
-          <span>
-            <b>Lệnh chưa chia theo PO khách.</b> Cả{' '}
-            {so(l.sps.reduce((s, x) => s + x.qty, 0))} cái đang dồn vào một đợt, mượn ngày
-            giao cuối {ngay(l.ship_date)}. Chia theo từng PO khách + Factory Ship Date
-            (như sổ Excel) ở{' '}
-            <Link
-              href={`/sales/lsx/${l.lsx_id}/dong`}
-              className="text-[var(--primary)] hover:underline"
-            >
-              dòng lệnh
-            </Link>{' '}
-            — kế hoạch xuất và lịch tháng tự tách ra đúng ngày.
-          </span>
-        </div>
-      )}
-      <div className="max-h-[520px] overflow-auto">
-        <table className="border-separate border-spacing-0">
-          <thead className="sticky top-0 z-20">
-            <tr>
-              <th className={`${TH} sticky z-30 border-r text-right`} style={pin(0, 40)}>
-                #
-              </th>
-              <th className={`${TH} sticky z-30 border-r`} style={pin(40, 200)}>
-                PO khách / đợt
-              </th>
-              <th className={`${TH} sticky z-30 border-r`} style={pin(240, 110)}>
-                Ngày xuất
-              </th>
-              {l.sps.map((sp) => (
-                <th
-                  key={sp.key}
-                  className={`${TH} min-w-[96px] border-r text-right align-bottom whitespace-normal`}
-                  title={sp.name ?? sp.code}
-                >
-                  <span className="text-foreground block font-mono text-[11px] font-semibold">
-                    {sp.code}
-                  </span>
-                  <span className="block max-w-[120px] truncate text-[11px] font-normal">
-                    {sp.name}
-                  </span>
-                </th>
-              ))}
-              <th className={`${TH} border-r text-right`}>Trị giá USD</th>
-              <th className={TH}>Tình trạng</th>
-            </tr>
-            <tr>
-              <td
-                className="border-border sticky z-30 h-8 border-r border-b bg-[var(--accent)] px-3"
-                style={pin(0, 40)}
-              />
-              <td
-                colSpan={2}
-                className="border-border text-foreground sticky z-30 h-8 border-r border-b bg-[var(--accent)] px-3 text-xs font-bold"
-                style={pin(40, 310)}
-              >
-                TỔNG SỐ CÁI
-              </td>
-              {l.sps.map((sp) => (
-                <td
-                  key={sp.key}
-                  className={`border-border h-8 border-r border-b bg-[var(--accent)] px-3 ${NUM} text-[14px] font-bold ${tong(sp.key) !== sp.qty ? 'text-[var(--stop)]' : 'text-foreground'}`}
-                  title={`Lệnh: ${sp.qty.toLocaleString('vi-VN')}`}
-                >
-                  {so(tong(sp.key))}
-                </td>
-              ))}
-              <td
-                className={`border-border h-8 border-r border-b bg-[var(--accent)] px-3 ${NUM} text-[13px] font-bold`}
-              >
-                {usd(l.value)}
-              </td>
-              <td className="border-border h-8 border-b bg-[var(--accent)]" />
-            </tr>
-          </thead>
-          <tbody>
-            {l.dots.map((d, i) => {
-              const t = tts.get(d.id)!
-              return (
-                <tr key={d.id} className="group">
-                  <td
-                    className={`${TD} ${NUM} bg-card text-muted-foreground group-hover:bg-muted sticky z-10 border-r text-xs`}
+      {sua ? (
+        <ChiaDot l={l} onClose={() => setSua(false)} />
+      ) : (
+        <>
+          {l.chua_chia && (
+            <div className="text-foreground flex items-start gap-2 border-b border-[var(--warn)]/30 bg-[var(--warn)]/10 px-3 py-2 text-[13px]">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" />
+              <span>
+                <b>Lệnh chưa chia theo PO khách.</b> Cả{' '}
+                {so(l.sps.reduce((s, x) => s + x.qty, 0))} cái đang dồn vào một đợt, mượn
+                ngày giao cuối {ngay(l.ship_date)}. Chia theo từng PO khách + Factory Ship
+                Date (như sổ Excel){' '}
+                {suaDuoc ? (
+                  <>
+                    bằng nút{' '}
+                    <button
+                      type="button"
+                      onClick={() => setSua(true)}
+                      className="font-medium text-[var(--primary)] hover:underline"
+                    >
+                      Chia đợt theo PO
+                    </button>
+                  </>
+                ) : (
+                  'ở đây (cần quyền sửa đơn bán)'
+                )}{' '}
+                — không tạo bản chỉnh sửa lệnh; lịch tháng tự tách ra đúng ngày.
+              </span>
+            </div>
+          )}
+          <div className="max-h-[520px] overflow-auto">
+            <table className="border-separate border-spacing-0">
+              <thead className="sticky top-0 z-20">
+                <tr>
+                  <th
+                    className={`${TH} sticky z-30 border-r text-right`}
                     style={pin(0, 40)}
                   >
-                    {i + 1}
-                  </td>
-                  <td
-                    className={`${TD} bg-card group-hover:bg-muted sticky z-10 truncate border-r font-medium`}
-                    style={pin(40, 200)}
-                    title={d.label}
-                  >
-                    {d.label}
-                    {d.order_code && d.order_code !== d.label && (
-                      <span className="text-muted-foreground ml-1.5 text-xs font-normal">
-                        {d.order_code}
+                    #
+                  </th>
+                  <th className={`${TH} sticky z-30 border-r`} style={pin(40, 200)}>
+                    PO khách / đợt
+                  </th>
+                  <th className={`${TH} sticky z-30 border-r`} style={pin(240, 110)}>
+                    Ngày xuất
+                  </th>
+                  {l.sps.map((sp) => (
+                    <th
+                      key={sp.key}
+                      className={`${TH} min-w-[96px] border-r text-right align-bottom whitespace-normal`}
+                      title={sp.name ?? sp.code}
+                    >
+                      <span className="text-foreground block font-mono text-[11px] font-semibold">
+                        {sp.code}
                       </span>
-                    )}
-                  </td>
-                  <td
-                    className={`${TD} bg-card group-hover:bg-muted sticky z-10 border-r font-mono whitespace-nowrap tabular-nums`}
-                    style={pin(240, 110)}
-                  >
-                    {ngay(d.ship_date)}
-                    {d.date_src === 'lenh' && (
-                      <span
-                        className="ml-0.5 text-[var(--warn)]"
-                        title="Đợt chưa có ngày riêng — mượn ngày giao cuối của lệnh"
-                      >
-                        *
+                      <span className="block max-w-[120px] truncate text-[11px] font-normal">
+                        {sp.name}
                       </span>
-                    )}
+                    </th>
+                  ))}
+                  <th className={`${TH} border-r text-right`}>Trị giá USD</th>
+                  <th className={TH}>Tình trạng</th>
+                </tr>
+                <tr>
+                  <td
+                    className="border-border sticky z-30 h-8 border-r border-b bg-[var(--accent)] px-3"
+                    style={pin(0, 40)}
+                  />
+                  <td
+                    colSpan={2}
+                    className="border-border text-foreground sticky z-30 h-8 border-r border-b bg-[var(--accent)] px-3 text-xs font-bold"
+                    style={pin(40, 310)}
+                  >
+                    TỔNG SỐ CÁI
                   </td>
                   {l.sps.map((sp) => (
                     <td
                       key={sp.key}
-                      className={`${TD} ${NUM} group-hover:bg-muted border-r text-[14px] font-semibold`}
+                      className={`border-border h-8 border-r border-b bg-[var(--accent)] px-3 ${NUM} text-[14px] font-bold ${tong(sp.key) !== sp.qty ? 'text-[var(--stop)]' : 'text-foreground'}`}
+                      title={`Lệnh: ${sp.qty.toLocaleString('vi-VN')}`}
                     >
-                      {so(d.sl[sp.key] ?? 0)}
+                      {so(tong(sp.key))}
                     </td>
                   ))}
-                  <td className={`${TD} ${NUM} group-hover:bg-muted border-r`}>
-                    {usd(d.value)}
+                  <td
+                    className={`border-border h-8 border-r border-b bg-[var(--accent)] px-3 ${NUM} text-[13px] font-bold`}
+                  >
+                    {usd(l.value)}
                   </td>
-                  <td className={`${TD} group-hover:bg-muted`}>
-                    <Nhan tone={t.tone}>{t.text}</Nhan>
-                  </td>
+                  <td className="border-border h-8 border-b bg-[var(--accent)]" />
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="border-border text-muted-foreground border-t px-3 py-2 text-xs">
-        Mỗi hàng là một đợt xuất (nhóm của lệnh, thường một PO khách); mỗi cột một SP của
-        lệnh. TỔNG SỐ CÁI cộng các đợt —{' '}
-        {lech.length ? (
-          <b className="text-[var(--stop)]">
-            {lech.length} SP lệch với SL lệnh (tô đỏ, rê chuột xem SL lệnh)
-          </b>
-        ) : (
-          'khớp đúng SL lệnh từng SP'
-        )}
-        . <b className="text-[var(--warn)]">*</b> = đợt chưa có ngày xuất riêng.
-      </p>
+              </thead>
+              <tbody>
+                {l.dots.map((d, i) => {
+                  const t = tts.get(d.id)!
+                  return (
+                    <tr key={d.id} className="group">
+                      <td
+                        className={`${TD} ${NUM} bg-card text-muted-foreground group-hover:bg-muted sticky z-10 border-r text-xs`}
+                        style={pin(0, 40)}
+                      >
+                        {i + 1}
+                      </td>
+                      <td
+                        className={`${TD} bg-card group-hover:bg-muted sticky z-10 truncate border-r font-medium`}
+                        style={pin(40, 200)}
+                        title={d.label}
+                      >
+                        {d.label}
+                        {d.order_code && d.order_code !== d.label && (
+                          <span className="text-muted-foreground ml-1.5 text-xs font-normal">
+                            {d.order_code}
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className={`${TD} bg-card group-hover:bg-muted sticky z-10 border-r font-mono whitespace-nowrap tabular-nums`}
+                        style={pin(240, 110)}
+                      >
+                        {ngay(d.ship_date)}
+                        {d.date_src === 'lenh' && (
+                          <span
+                            className="ml-0.5 text-[var(--warn)]"
+                            title="Đợt chưa có ngày riêng — mượn ngày giao cuối của lệnh"
+                          >
+                            *
+                          </span>
+                        )}
+                      </td>
+                      {l.sps.map((sp) => (
+                        <td
+                          key={sp.key}
+                          className={`${TD} ${NUM} group-hover:bg-muted border-r text-[14px] font-semibold`}
+                        >
+                          {so(d.sl[sp.key] ?? 0)}
+                        </td>
+                      ))}
+                      <td className={`${TD} ${NUM} group-hover:bg-muted border-r`}>
+                        {usd(d.value)}
+                      </td>
+                      <td className={`${TD} group-hover:bg-muted`}>
+                        <Nhan tone={t.tone}>{t.text}</Nhan>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="border-border text-muted-foreground border-t px-3 py-2 text-xs">
+            Mỗi hàng là một đợt xuất (
+            {l.ke_hoach ? 'Sale chia theo PO khách' : 'nhóm của lệnh — chưa chia theo PO'}
+            ); mỗi cột một SP của lệnh. TỔNG SỐ CÁI cộng các đợt —{' '}
+            {lech.length ? (
+              <b className="text-[var(--stop)]">
+                {lech.length} SP lệch với SL lệnh (tô đỏ, rê chuột xem SL lệnh)
+              </b>
+            ) : (
+              'khớp đúng SL lệnh từng SP'
+            )}
+            . <b className="text-[var(--warn)]">*</b> = đợt chưa có ngày xuất riêng.
+          </p>
+        </>
+      )}
     </Panel>
   )
 }

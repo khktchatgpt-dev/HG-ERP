@@ -4,6 +4,7 @@ import {
   dayThang,
   dungDotXuat,
   gomTheoLenh,
+  kiemKeHoach,
   maTran,
   tinhTrang,
   type DotXuat,
@@ -178,5 +179,75 @@ describe('gomTheoLenh — kế hoạch xuất của một lệnh: đợt (PO) ×
     })[0]
     expect(r).toMatchObject({ chua_chia: true, muon: 1 })
     expect(r.dots[0].ship_date).toBe('2027-03-17')
+  })
+})
+
+describe('đợt Sale (0222) — thay nhóm lệnh khi lệnh đã có kế hoạch', () => {
+  const base = {
+    lsx: [LSX({ id: 'L1', ship_date: '2027-03-17' })],
+    don: [{ id: 'O1', code: 'DH-1', production_order_id: 'L1' }],
+    dongDon: [
+      { id: 'a', order_id: 'O1', product_id: 'P1', qty: 168, unit_price: 100 },
+      { id: 'b', order_id: 'O1', product_id: 'P2', qty: 84, unit_price: 50 },
+    ],
+    donMua: [],
+    nhom: [{ id: 'G1', production_order_id: 'L1', sales_order_id: null, po_no: null, title: 'ROSCO', ship_date: null, ship_label: null, sort_order: 1 }], // prettier-ignore
+    dongLenh: [
+      { production_order_id: 'L1', group_id: 'G1', qty: 168, product_id: 'P1', sales_order_line_id: null, product_code: '2723874' }, // prettier-ignore
+      { production_order_id: 'L1', group_id: 'G1', qty: 84, product_id: 'P2', sales_order_line_id: null, product_code: '2723875' }, // prettier-ignore
+    ],
+  }
+  const lots = [
+    { id: 'S1', production_order_id: 'L1', seq: 1, po_no: 'HCXD73295828', po_ref: '29415', order_no: '2', ship_date: '2026-10-17', note: null, lines: [{ product_key: '2723874', qty: 42 }, { product_key: '2723875', qty: 84 }] }, // prettier-ignore
+    { id: 'S2', production_order_id: 'L1', seq: 2, po_no: 'IRXD73295859', po_ref: '29416', order_no: '3', ship_date: null, note: null, lines: [{ product_key: '2723874', qty: 42 }] }, // prettier-ignore
+  ]
+  it('đợt lấy từ kế hoạch Sale: tên PO, ngày, SL, trị giá theo giá cùng SP', () => {
+    const d = dungDotXuat({ ...base, lots })
+    expect(
+      d.map((x) => [x.label, x.ship_date, x.date_src, x.qty, x.value, x.nguon]),
+    ).toEqual([
+      ['29415 · HCXD73295828', '2026-10-17', 'nhom', 126, 42 * 100 + 84 * 50, 'sale'],
+      ['29416 · IRXD73295859', '2027-03-17', 'lenh', 42, 4200, 'sale'],
+    ])
+    expect(d[0].order_code).toBe('#2')
+  })
+  it('lệnh có kế hoạch Sale thì KHÔNG còn "chưa chia", và mang theo kế hoạch để sửa', () => {
+    const l = gomTheoLenh({ ...base, lots })[0]
+    expect(l).toMatchObject({ chua_chia: false, muon: 1 })
+    expect(l.ke_hoach).toHaveLength(2)
+    expect(l.dots[0].sl).toEqual({ '2723874': 42, '2723875': 84 })
+    // Không có kế hoạch Sale → quay về nhóm lệnh như cũ.
+    expect(gomTheoLenh(base)[0]).toMatchObject({ chua_chia: true, ke_hoach: null })
+  })
+})
+
+describe('kiemKeHoach — chặn vượt SL lệnh, không chặn xếp thiếu', () => {
+  const sps = [
+    { key: 'A', code: 'A', qty: 168 },
+    { key: 'B', code: 'B', qty: 84 },
+  ]
+  const lot = (lines: { product_key: string; qty: number }[], po?: string) => ({
+    po_no: po ?? null,
+    po_ref: null,
+    order_no: null,
+    ship_date: null,
+    note: null,
+    lines, // prettier-ignore
+  })
+  it('xếp thiếu: lưu được, báo còn lại', () => {
+    const r = kiemKeHoach([lot([{ product_key: 'A', qty: 42 }])], sps)
+    expect(r.loi).toEqual([])
+    expect(r.conLai).toEqual({ A: 126, B: 84 })
+  })
+  it('vượt SL lệnh, SP lạ, đợt rỗng → lỗi', () => {
+    const r = kiemKeHoach(
+      [lot([{ product_key: 'A', qty: 100 }]), lot([{ product_key: 'A', qty: 100 }, { product_key: 'Z', qty: 1 }]), lot([], 'PO-9')], // prettier-ignore
+      sps,
+    )
+    expect(r.loi).toEqual([
+      'Đợt 2: SP Z không có trong lệnh',
+      'Đợt 3 (PO-9) chưa có SL nào',
+      'A: xếp 200 > SL lệnh 168',
+    ])
   })
 })
