@@ -4,6 +4,7 @@ import { sapLan, type LanViec } from './viec-sale'
 const L = (key: LanViec['key'], tone: LanViec['tone'], count: number): LanViec => ({
   key,
   title: key,
+  short: key,
   action: '',
   why: '',
   tone,

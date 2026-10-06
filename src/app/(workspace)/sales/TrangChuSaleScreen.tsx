@@ -1,85 +1,66 @@
 'use client'
 
-import { useState, type ComponentType } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
-  ArrowRight,
-  Calculator,
-  CalendarClock,
-  CalendarX,
-  ChartColumn,
+  BarChart3,
   ChevronRight,
   CircleCheck,
-  CircleDollarSign,
   Container,
-  Factory,
-  FileText,
-  ShoppingCart,
-  TriangleAlert,
-  Users,
+  ExternalLink,
+  Plus,
 } from 'lucide-react'
-import type { LanViec } from '@/lib/viec-sale'
+import type { LanViec, MucViec } from '@/lib/viec-sale'
 import type { SalesHome } from '@/modules/dept/sales/sales-home.service'
 
 /**
- * TRANG CHỦ SALE — "hôm nay tôi phải làm gì?" (06/10/2026, dựng thẳng màn thật
- * theo yêu cầu chủ dự án — KHÔNG qua bản vẽ design-lab, KHÔNG dùng bộ kit: chỉ
- * Tailwind + token của theme v3 mà shell khu Bán hàng đang phủ).
+ * TRANG CHỦ SALE — "hôm nay tôi phải làm gì?" (06/10/2026).
  *
- * Bố cục master–detail (chép SAP Fiori "My Inbox" / Dynamics workspace):
- *   · hàng Ô VIỆC — mỗi loại việc một ô (số · tên), bấm để chọn;
- *   · khung trái — các mục của ô đang chọn, mỗi mục bấm thẳng tới chỗ xử lý;
- *   · cột phải — đợt xuất 45 ngày tới + lối tắt.
- * Số trên ô = số mục trong khung (luật "con số là lời hứa"); nguồn số ở
- * `salesHomeService.home`, dùng CHUNG hàm với trang đích.
+ * Thiên hướng ERP (chủ dự án 06/10: "thiên hướng UI/UX ERP") — chép cách
+ * Dynamics 365 workspace / SAP Fiori worklist bày, KHÔNG dùng thẻ bo tròn nổi:
+ *   · thanh đầu trang: tên màn + thanh công cụ góc phải;
+ *   · dải Ô ĐẾM vuông, ngăn bằng vạch mảnh — bấm để chọn loại việc;
+ *   · LƯỚI của loại việc đang chọn: tiêu đề cột, STT, số căn phải mono, chân tổng;
+ *   · lưới lịch xuất 45 ngày; thanh trạng thái đáy.
+ * Không dùng bộ kit, không qua bản vẽ design-lab — Tailwind + token theme v3 của
+ * shell khu Bán hàng. Số trên ô = số dòng của lưới (nguồn `salesHomeService.home`).
  */
 
-const usd = (v: number) => Math.round(v).toLocaleString('vi-VN')
-const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
+const usd = (v: number | null | undefined) =>
+  v == null ? '' : Math.round(v).toLocaleString('vi-VN')
+const ngay = (iso: string | null | undefined) =>
+  iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
 const THU = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']
 
 type Tone = 'stop' | 'warn' | 'done' | 'neutral'
-
-const ICON: Record<
-  LanViec['key'],
-  ComponentType<{ className?: string; strokeWidth?: number }>
-> = {
-  'de-y': TriangleAlert,
-  'chua-ngay': CalendarX,
-  'gia-0': CircleDollarSign,
-  'gia-thanh': Calculator,
-  'bao-gia': FileText,
-  'han-giao': CalendarClock,
-}
-
-/** Màu theo nghĩa vòng đời (theme v3): đỏ = hỏng/quá hạn, cam = cần để ý. */
-const SO: Record<LanViec['tone'], string> = {
+const SO_MAU: Record<LanViec['tone'], string> = {
   stop: 'text-[var(--stop)]',
   warn: 'text-[var(--warn)]',
   neutral: 'text-foreground',
-}
-const NEN_ICON: Record<LanViec['tone'], string> = {
-  stop: 'bg-[var(--stop)]/10 text-[var(--stop)]',
-  warn: 'bg-[var(--warn)]/12 text-[var(--warn)]',
-  neutral: 'bg-muted text-muted-foreground',
 }
 
 function Nhan({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   const cls =
     tone === 'stop'
-      ? 'bg-[var(--stop)]/10 text-[var(--stop)]'
+      ? 'bg-[var(--stop)]/10 text-[var(--stop)] border-[var(--stop)]/30'
       : tone === 'warn'
-        ? 'bg-[var(--warn)]/12 text-[var(--warn)]'
+        ? 'bg-[var(--warn)]/10 text-[var(--warn)] border-[var(--warn)]/30'
         : tone === 'done'
-          ? 'bg-[var(--done)]/12 text-[var(--done)]'
-          : 'bg-muted text-muted-foreground'
+          ? 'bg-[var(--done)]/10 text-[var(--done)] border-[var(--done)]/30'
+          : 'bg-muted text-muted-foreground border-border'
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap ${cls}`}
+      className={`inline-flex items-center rounded-sm border px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap ${cls}`}
     >
       {children}
     </span>
   )
 }
+
+const TH =
+  'h-8 border-b border-border bg-muted px-3 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap'
+const TD = 'h-9 border-b border-border px-3 text-[13px] align-middle'
 
 export function TrangChuSaleScreen({
   home,
@@ -88,65 +69,60 @@ export function TrangChuSaleScreen({
   home: SalesHome
   userName: string
 }) {
+  const router = useRouter()
   const [chon, setChon] = useState<LanViec['key'] | null>(home.lans[0]?.key ?? null)
   const lan = home.lans.find((l) => l.key === chon) ?? home.lans[0] ?? null
   const tongMuc = home.lans.reduce((s, l) => s + l.count, 0)
   const d = new Date(`${home.today}T00:00:00`)
 
   return (
-    <div className="space-y-5">
-      {/* ── Đầu trang: chào + hai số của tháng ─────────────────────────── */}
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="bg-background -m-6 flex min-h-[calc(100dvh-3.5rem)] flex-col">
+      {/* ── Thanh đầu trang + thanh công cụ góc phải ─────────────────────── */}
+      <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 border-b px-6 py-3">
         <div>
-          <p className="text-muted-foreground text-xs tracking-wide uppercase">
-            Bán hàng · {THU[d.getDay()]}, {ngay(home.today)}
-          </p>
-          <h1 className="t-display text-foreground mt-0.5">Chào {userName}</h1>
-          <p className="t-body text-muted-foreground">
-            {home.lans.length
-              ? `${home.lans.length} loại việc · ${tongMuc} mục đang chờ`
-              : 'Không có việc nào đang chờ'}
-          </p>
+          <div className="text-muted-foreground text-xs">
+            Bán hàng <span className="mx-1">›</span> Việc hôm nay
+          </div>
+          <h1 className="text-foreground text-[17px] leading-6 font-semibold">
+            Việc hôm nay
+            <span className="text-muted-foreground ml-2 text-[13px] font-normal">
+              {THU[d.getDay()]}, {ngay(home.today)} · {userName}
+            </span>
+          </h1>
         </div>
-        <div className="flex gap-3">
-          <a
-            href="/sales/phan-tich"
-            className="group bg-card rounded-lg border px-4 py-2.5 transition-colors hover:border-[var(--primary)]/50"
-          >
-            <span className="text-muted-foreground block text-xs">
-              Nhận đơn tháng này
-            </span>
-            <span className="t-data text-foreground block font-semibold">
-              {usd(home.thangNay.nhan.value)} USD
-            </span>
-            <span className="text-muted-foreground block text-xs">
-              {home.thangNay.nhan.n} đơn
-            </span>
-          </a>
-          <a
+        <div className="flex items-center gap-2">
+          <Link
             href="/sales/ke-hoach-xuat"
-            className="group bg-card rounded-lg border px-4 py-2.5 transition-colors hover:border-[var(--primary)]/50"
+            className="border-border bg-card text-foreground hover:bg-muted inline-flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[13px]"
           >
-            <span className="text-muted-foreground block text-xs">Xuất tháng này</span>
-            <span className="t-data text-foreground block font-semibold">
-              {usd(home.thangNay.xuat.value)} USD
-            </span>
-            <span className="text-muted-foreground block text-xs">
-              {home.thangNay.xuat.n} đợt
-            </span>
-          </a>
+            <Container className="h-4 w-4" strokeWidth={1.8} />
+            Kế hoạch xuất hàng
+          </Link>
+          <Link
+            href="/sales/phan-tich"
+            className="border-border bg-card text-foreground hover:bg-muted inline-flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[13px]"
+          >
+            <BarChart3 className="h-4 w-4" strokeWidth={1.8} />
+            Phân tích doanh số
+          </Link>
+          <Link
+            href="/sales/orders/new"
+            className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-[var(--primary)] px-3 text-[13px] font-medium text-[var(--primary-foreground)] hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Tạo đơn hàng
+          </Link>
         </div>
-      </header>
+      </div>
 
-      {/* ── Ô việc: mỗi loại một ô, bấm để xem mục ─────────────────────── */}
-      {home.lans.length > 0 && (
+      {/* ── Dải ô đếm: vuông, ngăn bằng vạch mảnh; bấm để chọn loại việc ─── */}
+      <div className="border-border bg-card flex flex-wrap border-b">
         <div
           role="tablist"
           aria-label="Loại việc"
-          className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6"
+          className="flex min-w-0 flex-1 overflow-x-auto"
         >
           {home.lans.map((l) => {
-            const Icon = ICON[l.key]
             const on = lan?.key === l.key
             return (
               <button
@@ -155,201 +131,295 @@ export function TrangChuSaleScreen({
                 role="tab"
                 aria-selected={on}
                 onClick={() => setChon(l.key)}
-                className={`flex flex-col gap-2 rounded-lg border p-3 text-left transition-all ${
+                title={l.title}
+                className={`border-r-border min-w-[110px] flex-1 basis-0 border-t-2 border-r px-4 py-2.5 text-left transition-colors ${
                   on
-                    ? 'border-[var(--primary)] bg-[var(--accent)] shadow-sm ring-1 ring-[var(--primary)]'
-                    : 'bg-card hover:border-[var(--primary)]/50 hover:shadow-sm'
+                    ? 'border-t-[var(--primary)] bg-[var(--accent)]'
+                    : 'hover:bg-muted border-t-transparent'
                 }`}
               >
-                <span className="flex items-center justify-between">
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-md ${NEN_ICON[l.tone]}`}
-                  >
-                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                  </span>
-                  <span
-                    className={`text-[26px] leading-none font-semibold tabular-nums ${SO[l.tone]}`}
-                  >
-                    {l.count}
-                  </span>
+                <span className="text-muted-foreground block h-8 text-xs leading-4">
+                  {l.short}
                 </span>
-                <span className="t-body text-foreground leading-snug font-medium">
-                  {l.title}
+                <span
+                  className={`font-mono text-[22px] leading-7 font-semibold tabular-nums ${SO_MAU[l.tone]}`}
+                >
+                  {l.count}
                 </span>
               </button>
             )
           })}
+          {home.lans.length === 0 && (
+            <div className="flex items-center gap-2 px-6 py-4 text-[13px] text-[var(--done)]">
+              <CircleCheck className="h-4 w-4" /> Không có việc nào đang chờ
+            </div>
+          )}
         </div>
-      )}
+        <div className="border-border flex border-l">
+          <Link
+            href="/sales/phan-tich"
+            className="border-border hover:bg-muted w-[150px] border-r px-4 py-2.5"
+          >
+            <span className="text-muted-foreground block h-8 text-xs leading-4">
+              Nhận đơn tháng này
+            </span>
+            <span className="text-foreground font-mono text-[15px] font-semibold tabular-nums">
+              {usd(home.thangNay.nhan.value)}
+            </span>
+            <span className="text-muted-foreground ml-1 text-xs">
+              USD · {home.thangNay.nhan.n} đơn
+            </span>
+          </Link>
+          <Link
+            href="/sales/ke-hoach-xuat"
+            className="hover:bg-muted w-[150px] px-4 py-2.5"
+          >
+            <span className="text-muted-foreground block h-8 text-xs leading-4">
+              Xuất tháng này
+            </span>
+            <span className="text-foreground font-mono text-[15px] font-semibold tabular-nums">
+              {usd(home.thangNay.xuat.value)}
+            </span>
+            <span className="text-muted-foreground ml-1 text-xs">
+              USD · {home.thangNay.xuat.n} đợt
+            </span>
+          </Link>
+        </div>
+      </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        {/* ── Khung trái: các mục của loại việc đang chọn ────────────────── */}
+      <div className="grid flex-1 content-start gap-4 px-6 py-4 2xl:grid-cols-[minmax(0,1fr)_480px]">
+        {/* ── Lưới của loại việc đang chọn ─────────────────────────────── */}
         <section
           role="tabpanel"
           aria-label={lan?.title ?? 'Việc'}
-          className="bg-card min-w-0 rounded-lg border"
+          className="border-border bg-card min-w-0 self-start rounded-sm border"
         >
           {lan ? (
             <>
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
+              <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
                 <div className="min-w-0">
-                  <h2 className="t-title text-foreground">
+                  <h2 className="text-foreground text-[14px] font-semibold">
                     {lan.title}
-                    <span className={`ml-2 tabular-nums ${SO[lan.tone]}`}>
+                    <span className={`ml-2 font-mono tabular-nums ${SO_MAU[lan.tone]}`}>
                       {lan.count}
                     </span>
                     {lan.count_note && (
-                      <span className="text-muted-foreground ml-2 text-xs font-normal">
+                      <span className="text-muted-foreground ml-1.5 text-xs font-normal">
                         ({lan.count_note})
                       </span>
                     )}
                   </h2>
-                  <p className="t-body text-foreground mt-0.5">
-                    <span className="font-medium">{lan.action}</span>
+                  <p className="text-muted-foreground text-xs">
+                    <span className="text-foreground font-medium">{lan.action}</span> —{' '}
+                    {lan.why}
                   </p>
-                  <p className="t-body text-muted-foreground">{lan.why}</p>
                 </div>
                 {lan.more && (
-                  <a
+                  <Link
                     href={lan.more.href}
-                    className="t-body inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--primary)]/40 px-3 py-1.5 font-medium text-[var(--primary)] transition-colors hover:bg-[var(--accent)]"
+                    className="border-border inline-flex h-7 shrink-0 items-center gap-1.5 rounded-sm border px-2.5 text-xs text-[var(--primary)] hover:bg-[var(--accent)]"
                   >
-                    {lan.more.label}
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
+                    {lan.more.label.replace(/^Mở /, '')}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
                 )}
               </div>
-              <ul className="divide-y">
-                {lan.items.map((it) => (
-                  <li key={it.id}>
-                    <a
-                      href={it.href}
-                      className="group flex items-center gap-4 px-5 py-3 transition-colors hover:bg-[var(--accent)]"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="t-body text-foreground block truncate font-medium">
-                          {it.title}
-                        </span>
-                        {it.detail && (
-                          <span className="text-muted-foreground block truncate text-xs font-normal">
-                            {it.detail}
-                          </span>
-                        )}
-                      </span>
-                      {it.tag && <Nhan tone={it.tag.tone}>{it.tag.text}</Nhan>}
-                      <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-x-auto">
+                <LuoiViec lan={lan} onOpen={(h) => router.push(h)} />
+              </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
-              <CircleCheck className="h-10 w-10 text-[var(--done)]" strokeWidth={1.6} />
-              <p className="t-title text-foreground">Không có việc nào đang chờ</p>
-              <p className="t-body text-muted-foreground max-w-md">
-                Đợt xuất đúng nhịp, đơn đủ giá và hạn giao, báo giá không treo. Xem các
-                tháng tới ở{' '}
-                <a
-                  href="/sales/ke-hoach-xuat"
-                  className="text-[var(--primary)] hover:underline"
-                >
-                  Kế hoạch xuất hàng
-                </a>
-                .
-              </p>
+            <div className="text-muted-foreground flex items-center gap-2 px-4 py-8 text-[13px]">
+              <CircleCheck className="h-5 w-5 text-[var(--done)]" />
+              Không có việc nào đang chờ — đợt xuất đúng nhịp, đơn đủ giá và hạn giao.
             </div>
           )}
         </section>
 
-        {/* ── Cột phải: lịch xuất 45 ngày + lối tắt ─────────────────────── */}
-        <aside className="space-y-5">
-          <section aria-label="Xuất 45 ngày tới" className="bg-card rounded-lg border">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="t-title text-foreground flex items-center gap-2">
-                <Container
-                  className="text-muted-foreground h-[18px] w-[18px]"
-                  strokeWidth={1.9}
-                />
-                Xuất 45 ngày tới
-              </h2>
-              <a
-                href="/sales/ke-hoach-xuat"
-                className="t-body text-[var(--primary)] hover:underline"
-              >
-                Kế hoạch xuất
-              </a>
-            </div>
-            {home.sapXuat.length === 0 ? (
-              <p className="t-body text-muted-foreground px-4 py-6 text-center">
-                Không đợt nào xuất trong 45 ngày tới.
-              </p>
-            ) : (
-              <ol className="divide-y">
-                {home.sapXuat.map((x) => (
-                  <li key={x.id}>
-                    <a
-                      href={`/sales/lsx/${x.lsx_id}`}
-                      className="flex gap-3 px-4 py-3 transition-colors hover:bg-[var(--accent)]"
+        {/* ── Lịch xuất 45 ngày tới ────────────────────────────────────── */}
+        <section
+          aria-label="Xuất 45 ngày tới"
+          className="border-border bg-card min-w-0 self-start rounded-sm border"
+        >
+          <div className="border-border flex items-center justify-between border-b px-3 py-2">
+            <h2 className="text-foreground text-[14px] font-semibold">
+              Xuất 45 ngày tới
+              <span className="text-muted-foreground ml-2 font-mono tabular-nums">
+                {home.sapXuat.length}
+              </span>
+            </h2>
+            <Link
+              href="/sales/ke-hoach-xuat"
+              className="text-xs text-[var(--primary)] hover:underline"
+            >
+              Kế hoạch xuất hàng
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className={TH}>Ngày xuất</th>
+                  <th className={TH}>Khách</th>
+                  <th className={TH}>PO / đợt</th>
+                  <th className={`${TH} text-right`}>USD</th>
+                  <th className={TH}>Tình trạng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {home.sapXuat.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className={`${TD} text-muted-foreground text-center`}>
+                      Không đợt nào xuất trong 45 ngày tới.
+                    </td>
+                  </tr>
+                ) : (
+                  home.sapXuat.map((x) => (
+                    <tr
+                      key={x.id}
+                      onClick={() => router.push(`/sales/lsx/${x.lsx_id}`)}
+                      className="cursor-pointer hover:bg-[var(--accent)]"
                     >
-                      <span className="bg-background flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border">
-                        <span className="text-foreground text-[17px] leading-none font-semibold tabular-nums">
-                          {x.ship_date!.slice(8, 10)}
-                        </span>
-                        <span className="text-muted-foreground text-xs leading-none">
-                          th{x.ship_date!.slice(5, 7)}
-                        </span>
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="t-body text-foreground block truncate font-medium">
-                          {x.customer}
-                          {x.date_src === 'lenh' && (
-                            <span
-                              className="ml-1 text-[var(--warn)]"
-                              title="Đợt chưa có ngày riêng — đang mượn ngày xuất cuối của lệnh"
-                            >
-                              *
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-muted-foreground block truncate text-xs font-normal">
-                          {x.label} · {x.lsx_code}
-                        </span>
-                        <span className="mt-1 flex items-center justify-between gap-2">
-                          <Nhan tone={x.tt.tone}>{x.tt.text}</Nhan>
-                          <span className="t-data text-foreground shrink-0 text-[12px]">
-                            {x.value != null ? `${usd(x.value)} $` : '—'}
+                      <td className={`${TD} font-mono whitespace-nowrap tabular-nums`}>
+                        {ngay(x.ship_date)}
+                        {x.date_src === 'lenh' && (
+                          <span
+                            className="ml-0.5 text-[var(--warn)]"
+                            title="Đợt chưa có ngày riêng — đang mượn ngày xuất cuối của lệnh"
+                          >
+                            *
                           </span>
-                        </span>
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+                        )}
+                      </td>
+                      <td className={`${TD} whitespace-nowrap`}>{x.customer}</td>
+                      <td
+                        className={`${TD} text-muted-foreground max-w-[150px] truncate`}
+                        title={`${x.label} · ${x.lsx_code}`}
+                      >
+                        {x.label}
+                      </td>
+                      <td className={`${TD} text-right font-mono tabular-nums`}>
+                        {usd(x.value)}
+                      </td>
+                      <td className={TD}>
+                        <Nhan tone={x.tt.tone}>
+                          {x.tt.conNgay != null ? `còn ${x.tt.conNgay} ngày` : x.tt.text}
+                          {x.tt.canDeY && x.tt.conNgay != null ? ' · VT chưa đủ' : ''}
+                        </Nhan>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
 
-          <nav aria-label="Lối tắt" className="grid grid-cols-2 gap-3">
-            {(
-              [
-                ['/sales/orders', 'Đơn hàng', ShoppingCart],
-                ['/sales/lsx', 'Lệnh sản xuất', Factory],
-                ['/sales/phan-tich', 'Phân tích doanh số', ChartColumn],
-                ['/sales/customers', 'Khách hàng', Users],
-              ] as const
-            ).map(([href, label, Icon]) => (
-              <a
-                key={href}
-                href={href}
-                className="t-body bg-card text-foreground flex items-center gap-2 rounded-lg border px-3 py-2.5 font-medium transition-colors hover:border-[var(--primary)]/50 hover:text-[var(--primary)]"
-              >
-                <Icon className="text-muted-foreground h-4 w-4" strokeWidth={1.9} />
-                {label}
-              </a>
-            ))}
-          </nav>
-        </aside>
+      {/* ── Thanh trạng thái đáy ─────────────────────────────────────────── */}
+      <div className="border-border bg-card text-muted-foreground flex flex-wrap items-center justify-between gap-2 border-t px-6 py-1.5 text-xs">
+        <span>
+          Việc của cả phòng · {home.lans.length} loại · {tongMuc} mục · số trên ô = số
+          dòng của lưới
+        </span>
+        <span>* đợt chưa có ngày xuất riêng, đang mượn ngày cuối của lệnh</span>
       </div>
     </div>
+  )
+}
+
+/** Lưới một loại việc — cột ẩn khi cả làn không có dữ liệu cột đó. */
+function LuoiViec({ lan, onOpen }: { lan: LanViec; onOpen: (href: string) => void }) {
+  const co = (k: keyof MucViec) => lan.items.some((it) => it[k] != null && it[k] !== '')
+  const cMa = co('ma')
+  const cNgay = !!lan.cot_ngay && co('ngay')
+  const cTien = co('tri_gia')
+  const cTag = co('tag')
+  const tong = lan.items.reduce((s, it) => s + (it.tri_gia ?? 0), 0)
+  // Cột trước "Trị giá": # · Mã? · Khách · Nội dung · Ngày?
+  const truocTien = 3 + (cMa ? 1 : 0) + (cNgay ? 1 : 0)
+  return (
+    <table className="w-full border-collapse">
+      <thead>
+        <tr>
+          <th className={`${TH} w-10 text-right`}>#</th>
+          {cMa && <th className={TH}>Mã</th>}
+          <th className={TH}>Khách</th>
+          <th className={TH}>Nội dung</th>
+          {cNgay && <th className={TH}>{lan.cot_ngay}</th>}
+          {cTien && <th className={`${TH} text-right`}>Trị giá USD</th>}
+          {cTag && <th className={TH}>Tình trạng</th>}
+          <th className={`${TH} w-8`} />
+        </tr>
+      </thead>
+      <tbody>
+        {lan.items.map((it, i) => (
+          <tr
+            key={it.id}
+            onClick={() => onOpen(it.href)}
+            className="group cursor-pointer hover:bg-[var(--accent)]"
+          >
+            <td
+              className={`${TD} text-muted-foreground text-right font-mono text-xs tabular-nums`}
+            >
+              {i + 1}
+            </td>
+            {cMa && (
+              <td className={`${TD} font-mono whitespace-nowrap`}>
+                <Link
+                  href={it.href}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[var(--primary)] hover:underline"
+                >
+                  {it.ma}
+                </Link>
+              </td>
+            )}
+            <td className={`${TD} whitespace-nowrap`}>{it.khach ?? it.title}</td>
+            <td
+              className={`${TD} text-muted-foreground max-w-[320px] truncate`}
+              title={it.noi_dung ?? it.detail}
+            >
+              {it.noi_dung ?? it.detail}
+            </td>
+            {cNgay && (
+              <td className={`${TD} font-mono whitespace-nowrap tabular-nums`}>
+                {ngay(it.ngay)}
+              </td>
+            )}
+            {cTien && (
+              <td className={`${TD} text-right font-mono tabular-nums`}>
+                {usd(it.tri_gia)}
+              </td>
+            )}
+            {cTag && (
+              <td className={TD}>
+                {it.tag && <Nhan tone={it.tag.tone}>{it.tag.text}</Nhan>}
+              </td>
+            )}
+            <td className={`${TD} text-muted-foreground`}>
+              <ChevronRight className="h-4 w-4 group-hover:text-[var(--primary)]" />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr className="bg-muted/60">
+          <td
+            colSpan={truocTien}
+            className="text-foreground h-8 px-3 text-xs font-semibold"
+          >
+            Cộng {lan.items.length} dòng
+          </td>
+          {cTien && (
+            <td className="h-8 px-3 text-right font-mono text-[13px] font-semibold tabular-nums">
+              {usd(tong)}
+            </td>
+          )}
+          {cTag && <td />}
+          <td />
+        </tr>
+      </tfoot>
+    </table>
   )
 }

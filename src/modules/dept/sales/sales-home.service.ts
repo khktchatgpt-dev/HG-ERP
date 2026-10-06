@@ -53,6 +53,7 @@ export const salesHomeService = {
     lans.push({
       key: 'de-y',
       title: 'Đợt xuất cần để ý',
+      short: 'Đợt xuất cần để ý',
       action: 'Hỏi Cung ứng / xưởng — báo khách nếu phải dời',
       why: 'Quá ngày xuất, hoặc xuất trong 45 ngày mà đơn mua vật tư của lệnh chưa về đủ.',
       tone: deY.some((x) => x.t.tone === 'stop') ? 'stop' : 'warn',
@@ -63,8 +64,14 @@ export const salesHomeService = {
         detail: `${d.lsx_code} · ${d.value != null ? usd(d.value) + ' USD' : 'chưa có trị giá'}`,
         tag: { tone: t.tone, text: t.text },
         href: `/sales/lsx/${d.lsx_id}`,
+        ma: d.lsx_code,
+        khach: d.customer,
+        noi_dung: d.label,
+        ngay: d.ship_date,
+        tri_gia: d.value,
       })),
       more: { href: '/sales/ke-hoach-xuat', label: 'Mở Kế hoạch xuất hàng' },
+      cot_ngay: 'Ngày xuất',
     })
 
     // 2. Đơn còn dòng chưa có giá.
@@ -76,6 +83,7 @@ export const salesHomeService = {
     lans.push({
       key: 'gia-0',
       title: 'Đơn còn dòng chưa có giá',
+      short: 'Đơn còn giá 0',
       action: 'Điền đơn giá',
       why: 'Dòng giá 0 làm trị giá đơn, kế hoạch xuất và phân tích doanh số thiếu.',
       tone: 'warn',
@@ -85,8 +93,13 @@ export const salesHomeService = {
         title: `${o.code} · ${ten(o.customer as One<{ name: string }>)}`,
         detail: `${gia0.get(o.id)} dòng giá 0`,
         href: '/sales/orders/gia',
+        ma: o.code,
+        khach: ten(o.customer as One<{ name: string }>),
+        noi_dung: `${gia0.get(o.id)} dòng giá 0`,
+        ngay: o.created_at.slice(0, 10),
       })),
       more: { href: '/sales/orders/gia', label: 'Mở Điền đơn giá' },
+      cot_ngay: 'Ngày lập',
     })
 
     // 3. Đợt chưa có ngày xuất riêng — đang mượn ngày cuối của lệnh.
@@ -94,6 +107,7 @@ export const salesHomeService = {
     lans.push({
       key: 'chua-ngay',
       title: 'Đợt chưa có ngày xuất riêng',
+      short: 'Đợt chưa có ngày xuất',
       action: 'Chia đợt / ghi ngày xuất ở dòng lệnh',
       why: 'Đợt đang mượn ngày xuất cuối của lệnh — kế hoạch xuất dồn sai tháng.',
       tone: 'warn',
@@ -103,7 +117,13 @@ export const salesHomeService = {
         title: `${d.lsx_code} · ${d.label}`,
         detail: `${d.customer} · mượn ${d.ship_date ? ngay(d.ship_date) : '—'}${d.value != null ? ` · ${usd(d.value)} USD` : ''}`, // prettier-ignore
         href: `/sales/lsx/${d.lsx_id}/dong`,
+        ma: d.lsx_code,
+        khach: d.customer,
+        noi_dung: `${d.label} · đang mượn ngày cuối của lệnh`,
+        ngay: d.ship_date,
+        tri_gia: d.value,
       })),
+      cot_ngay: 'Ngày đang mượn',
     })
 
     // 4. Đơn đang chạy chưa có hạn giao.
@@ -113,6 +133,7 @@ export const salesHomeService = {
     lans.push({
       key: 'han-giao',
       title: 'Đơn chưa có hạn giao',
+      short: 'Đơn chưa có hạn giao',
       action: 'Ghi hạn giao khách',
       why: 'Không có hạn thì không cảnh báo trễ được.',
       tone: 'neutral',
@@ -122,7 +143,12 @@ export const salesHomeService = {
         title: `${o.code} · ${ten(o.customer as One<{ name: string }>)}`,
         detail: `lập ${ngay(o.created_at)}`,
         href: `/sales/orders/${o.id}/edit`,
+        ma: o.code,
+        khach: ten(o.customer as One<{ name: string }>),
+        noi_dung: 'chưa ghi hạn giao khách',
+        ngay: o.created_at.slice(0, 10),
       })),
+      cot_ngay: 'Ngày lập',
     })
 
     // 5. SP đang chạy chưa bóc tách giá thành — CÙNG `stats.complete` của trang Giá thành.
@@ -136,6 +162,7 @@ export const salesHomeService = {
       lans.push({
         key: 'gia-thanh',
         title: 'SP đang chạy chưa bóc tách giá thành',
+      short: 'SP chưa bóc giá thành',
         action: 'Điền chi phí trực tiếp · chung · lãi',
         why: `Chỉ có giá FOB thì không tính được lãi kế hoạch — đủ bóc tách ${plan.stats.complete}/${plan.stats.total} SP.`, // prettier-ignore
         tone: 'neutral',
@@ -148,6 +175,8 @@ export const salesHomeService = {
             title: k,
             detail: `${n} SP`,
             href: '/sales/gia-thanh',
+            khach: k,
+            noi_dung: `${n} SP chưa bóc tách (chỉ có FOB hoặc lệch tổng)`,
           })),
         more: { href: '/sales/gia-thanh', label: 'Mở Giá thành kế hoạch' },
       })
@@ -160,6 +189,7 @@ export const salesHomeService = {
     lans.push({
       key: 'bao-gia',
       title: 'Báo giá nằm im',
+      short: 'Báo giá nằm im',
       action: 'Gửi, chốt thành đơn, hoặc huỷ cho gọn sổ',
       why: `Nháp chưa gửi hoặc đã gửi mà chưa chốt, quá ${BAO_GIA_TREO} ngày.`,
       tone: 'neutral',
@@ -170,8 +200,13 @@ export const salesHomeService = {
         detail: `${q.status === 'draft' ? 'nháp' : 'đã gửi'} từ ${ngay(q.created_at)} · ${ngayGiua(today, q.created_at)} ngày`, // prettier-ignore
         tag: q.valid_to && q.valid_to < today ? { tone: 'stop', text: 'hết hiệu lực' } : undefined, // prettier-ignore
         href: `/sales/quotes/${q.id}`,
+        ma: q.code,
+        khach: ten(q.customer as One<{ name: string }>),
+        noi_dung: `${q.status === 'draft' ? 'Nháp chưa gửi' : 'Đã gửi, chưa chốt'} · ${ngayGiua(today, q.created_at)} ngày`, // prettier-ignore
+        ngay: q.created_at.slice(0, 10),
       })),
       more: { href: '/sales/quotes', label: 'Mở Báo giá' },
+      cot_ngay: 'Ngày lập',
     })
 
     const sapXuat = dots
