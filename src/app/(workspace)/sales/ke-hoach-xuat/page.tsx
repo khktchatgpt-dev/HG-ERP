@@ -8,11 +8,11 @@ export const dynamic = 'force-dynamic'
 
 /**
  * KẾ HOẠCH XUẤT HÀNG — "tháng này và các tháng tới xuất cho khách nào, bao
- * nhiêu, đợt nào có nguy cơ trễ?" (bản vẽ duyệt 06/10/2026). Đơn vị là ĐỢT
- * (nhóm lệnh), không phải lệnh — xem `lib/ke-hoach-xuat.ts`.
+ * nhiêu, đợt nào có nguy cơ trễ?" (06/10/2026). Khung chính THEO LỆNH — Sale lên kế hoạch
+ * xuất cho từng lệnh: đợt (PO khách) × SP — xem `lib/ke-hoach-xuat.ts`.
  */
 export default async function Page() {
   const user = await authService.requirePageUser()
-  const dots = await shipPlanService.board(user)
-  return <KeHoachXuatScreen dots={dots} today={todayVn()} />
+  const { lenhs, dots } = await shipPlanService.plan(user)
+  return <KeHoachXuatScreen lenhs={lenhs} dots={dots} today={todayVn()} />
 }

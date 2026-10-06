@@ -3,6 +3,7 @@ import {
   cong,
   dayThang,
   dungDotXuat,
+  gomTheoLenh,
   maTran,
   tinhTrang,
   type DotXuat,
@@ -129,5 +130,53 @@ describe('dayThang + maTran', () => {
     const m = maTran(ds)
     expect(m[0].tong).toEqual({ value: 200, n: 2, muon: 1 })
     expect(m[0].theoThang['2027-01']).toEqual({ value: 100, n: 1, muon: 1 })
+  })
+})
+
+describe('gomTheoLenh — kế hoạch xuất của một lệnh: đợt (PO) × SP', () => {
+  const base = {
+    lsx: [LSX({ id: 'L1', ship_date: '2027-03-17' })],
+    don: [{ id: 'O1', code: 'DH-1', production_order_id: 'L1' }],
+    dongDon: [
+      { id: 'a', order_id: 'O1', product_id: 'P1', qty: 84, unit_price: 10 },
+      { id: 'b', order_id: 'O1', product_id: 'P2', qty: 42, unit_price: 20 },
+    ],
+    donMua: [],
+  }
+  it('cột = SP của lệnh; mỗi đợt có SL theo cột; tổng cột = SL lệnh', () => {
+    const r = gomTheoLenh({
+      ...base,
+      nhom: [
+        { id: 'G2', production_order_id: 'L1', sales_order_id: null, po_no: '29416', title: null, ship_date: '2026-10-17', ship_label: null, sort_order: 2 }, // prettier-ignore
+        { id: 'G1', production_order_id: 'L1', sales_order_id: null, po_no: '29415', title: null, ship_date: '2026-10-17', ship_label: null, sort_order: 1 }, // prettier-ignore
+      ],
+      dongLenh: [
+        { production_order_id: 'L1', group_id: 'G1', qty: 42, product_id: 'P1', sales_order_line_id: null, product_code: 'BN0229HG-IR', name_vi: 'Băng 1' }, // prettier-ignore
+        { production_order_id: 'L1', group_id: 'G1', qty: 21, product_id: 'P2', sales_order_line_id: null, product_code: 'TB0286HG-IR', name_vi: 'Bàn tròn' }, // prettier-ignore
+        { production_order_id: 'L1', group_id: 'G2', qty: 42, product_id: 'P1', sales_order_line_id: null, product_code: 'BN0229HG-IR ', name_vi: 'Băng 1' }, // prettier-ignore
+        { production_order_id: 'L1', group_id: 'G2', qty: 21, product_id: 'P2', sales_order_line_id: null, product_code: 'TB0286HG-IR', name_vi: 'Bàn tròn' }, // prettier-ignore
+      ],
+    })[0]
+    expect(r.sps.map((s) => [s.code, s.qty])).toEqual([
+      ['BN0229HG-IR', 84],
+      ['TB0286HG-IR', 42],
+    ])
+    // Cùng ngày thì xếp theo PO; mỗi đợt có SL riêng từng cột.
+    expect(
+      r.dots.map((d) => [d.label, d.sl['BN0229HG-IR'], d.sl['TB0286HG-IR']]),
+    ).toEqual([
+      ['29415', 42, 21],
+      ['29416', 42, 21],
+    ])
+    expect(r).toMatchObject({ chua_chia: false, muon: 0 })
+  })
+  it('lệnh một nhóm chưa có ngày riêng = CHƯA CHIA theo PO khách', () => {
+    const r = gomTheoLenh({
+      ...base,
+      nhom: [{ id: 'G1', production_order_id: 'L1', sales_order_id: null, po_no: null, title: 'ROSCO', ship_date: null, ship_label: null, sort_order: 1 }], // prettier-ignore
+      dongLenh: [{ production_order_id: 'L1', group_id: 'G1', qty: 84, product_id: 'P1', sales_order_line_id: null, product_code: 'BN0229HG-IR' }], // prettier-ignore
+    })[0]
+    expect(r).toMatchObject({ chua_chia: true, muon: 1 })
+    expect(r.dots[0].ship_date).toBe('2027-03-17')
   })
 })

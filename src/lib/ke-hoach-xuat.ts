@@ -166,6 +166,10 @@ export type RawDongLenh = {
   qty: number
   product_id: string | null
   sales_order_line_id: string | null
+  /** Mã SP + tên trên dòng lệnh — để dựng cột SP của kế hoạch theo lệnh. */
+  product_code?: string | null
+  name_vi?: string | null
+  customer_item_code?: string | null
 }
 export type RawDon = { id: string; code: string; production_order_id: string | null }
 export type RawDongDon = {
@@ -259,4 +263,88 @@ export function dungDotXuat(i: {
     }
   }
   return out
+}
+
+/* ── KẾ HOẠCH XUẤT THEO LỆNH (06/10/2026) ───────────────────────────────────
+   Chủ dự án: "thực tế sale lên kế hoạch xuất hàng cho các lệnh sản xuất".
+   Sổ của Sale (ảnh IBIZA 06/10): mỗi LỆNH chia thành các PO khách — hàng = PO
+   (Order # · PO khách · ngày Factory Ship Date), cột = từng SP của lệnh, dòng
+   đầu "TỔNG SỐ CÁI" mỗi SP. Trên hệ thống chính là NHÓM của lệnh (PO + ngày
+   xuất) × DÒNG lệnh trong nhóm — nên màn đọc thẳng cấu trúc đó, không thêm bảng.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export type SpLenh = {
+  /** Khoá cột: mã SP (đã gọn khoảng trắng) — cùng mã ở hai nhóm là cùng cột. */
+  key: string
+  code: string
+  name: string | null
+  customer_item_code: string | null
+  /** Tổng SL của SP trong CẢ lệnh. */
+  qty: number
+}
+
+export type DotCuaLenh = DotXuat & {
+  /** SL theo cột SP (khoá `SpLenh.key`) của riêng đợt này. */
+  sl: Record<string, number>
+}
+
+export type LenhXuat = {
+  lsx_id: string
+  lsx_code: string
+  lsx_status: string
+  customer: string
+  ship_date: string | null
+  cont: string | null
+  vt: DotXuat['vt']
+  sps: SpLenh[]
+  dots: DotCuaLenh[]
+  value: number | null
+  /** Lệnh còn MỘT nhóm, chưa ngày riêng — Sale chưa chia theo PO khách (vd IBIZA 06/10). */
+  chua_chia: boolean
+  /** Số đợt đang mượn ngày xuất cuối của lệnh. */
+  muon: number
+}
+
+const khoaSp = (l: RawDongLenh) =>
+  (l.product_code ?? '').replace(/\s+/g, ' ').trim() || l.product_id || '—'
+
+/** Gom đợt theo lệnh + dựng cột SP — đầu vào giống `dungDotXuat`. */
+export function gomTheoLenh(i: Parameters<typeof dungDotXuat>[0]): LenhXuat[] {
+  const dots = dungDotXuat(i)
+  return i.lsx.map((x) => {
+    const dong = i.dongLenh.filter((l) => l.production_order_id === x.id)
+    const sps = new Map<string, SpLenh>()
+    for (const l of dong) {
+      const k = khoaSp(l)
+      const sp =
+        sps.get(k) ??
+        { key: k, code: k, name: l.name_vi ?? null, customer_item_code: l.customer_item_code ?? null, qty: 0 } // prettier-ignore
+      sp.qty += Number(l.qty)
+      sps.set(k, sp)
+    }
+    const cuaLenh = dots
+      .filter((d) => d.lsx_id === x.id)
+      .map((d) => {
+        const sl: Record<string, number> = {}
+        for (const l of dong.filter((l) => l.group_id === d.id))
+          sl[khoaSp(l)] = (sl[khoaSp(l)] ?? 0) + Number(l.qty)
+        return { ...d, sl }
+      })
+      .sort((a, b) => ((a.ship_date ?? '9') < (b.ship_date ?? '9') ? -1 : a.ship_date === b.ship_date ? (a.label < b.label ? -1 : 1) : 1)) // prettier-ignore
+    const coGia = cuaLenh.filter((d) => d.value != null)
+    return {
+      lsx_id: x.id,
+      lsx_code: x.code,
+      lsx_status: x.status,
+      customer: x.customer,
+      ship_date: x.ship_date,
+      cont: x.container_summary,
+      vt: cuaLenh[0]?.vt ?? { po_total: 0, po_open: 0, po_chua_gui: 0, due: x.materials_due_at, da_nhan: !!x.materials_received_at }, // prettier-ignore
+      sps: [...sps.values()],
+      dots: cuaLenh,
+      value: coGia.length ? coGia.reduce((s, d) => s + (d.value ?? 0), 0) : null,
+      chua_chia: cuaLenh.length === 1 && cuaLenh[0].date_src === 'lenh',
+      muon: cuaLenh.filter((d) => d.date_src === 'lenh').length,
+    }
+  })
 }

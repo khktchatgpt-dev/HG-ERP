@@ -63,7 +63,7 @@ export const shipPlanRepo = {
         .limit(TRAN),
       db()
         .from('production_order_lines')
-        .select('production_order_id, group_id, qty, product_id, sales_order_line_id')
+        .select('production_order_id, group_id, qty, product_id, sales_order_line_id, product_code, name_vi, customer_item_code')
         .in('production_order_id', ids)
         .limit(TRAN),
       db().from('sales_orders').select('id, code, production_order_id').in('production_order_id', ids).limit(TRAN), // prettier-ignore
