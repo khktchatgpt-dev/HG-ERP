@@ -639,3 +639,51 @@ export const PO_SHARED_FIELD_PREFILL: Record<
 export function prefillsFromCatalog(t: PoTemplate, field: string): boolean {
   return PO_SHARED_FIELD_PREFILL[field]?.[t] ?? false
 }
+
+/** Dòng đơn ở dạng tối thiểu để đọc giá trị một cột khai báo. */
+export type PoFieldLine = {
+  qty2?: number | null
+  unit2?: string | null
+  unit2_per_unit?: number | null
+  material_unit: string
+  inner_l_mm?: number | null
+  inner_w_mm?: number | null
+  inner_h_mm?: number | null
+}
+
+const fmtVi = (n: number | null | undefined) =>
+  n == null ? '' : Number(n).toLocaleString('vi-VN')
+
+/**
+ * CHỮ của một ô khai báo trên một dòng đơn — '' khi trống, KHÔNG trả '0'.
+ *
+ * Một hàm cho phiếu in gửi NCC lẫn màn ký của Giám đốc (07/10/2026): người ký
+ * phải thấy đúng chữ NCC sẽ nhận, hai bản dựng riêng thì sớm muộn lệch nhau.
+ */
+export function poFieldText(f: PoField, l: PoFieldLine): string {
+  const v = f.field ? (l as unknown as Record<string, unknown>)[f.field] : null
+  switch (f.kind) {
+    case 'text':
+    case 'die':
+    case 'openStyle':
+      return (v as string | null) ?? ''
+    case 'number':
+    case 'area':
+      return fmtVi(v as number | null)
+    case 'calc':
+      return fmtVi(l.qty2)
+    case 'unit2':
+      // "17,5 Lít/Thùng". 02/09: user quyết KHÔNG in cột này — PO_PRINT_ORDER
+      // không mẫu nào còn khai 'unit2' nên case này đang là đường chờ; giữ lại
+      // để lúc muốn in chỉ cần thêm key vào order, không phải dựng lại cell.
+      return l.unit2_per_unit != null && l.unit2
+        ? `${fmtVi(l.unit2_per_unit)} ${l.unit2}/${l.material_unit}`
+        : ''
+    case 'inner':
+      return l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
+        ? `${fmtVi(l.inner_l_mm)}×${fmtVi(l.inner_w_mm)}×${fmtVi(l.inner_h_mm)}`
+        : ''
+    default:
+      return ''
+  }
+}

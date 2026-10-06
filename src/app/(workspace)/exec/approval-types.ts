@@ -1,5 +1,13 @@
 import { type PoLine } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
 import type { PoQuestionThread } from '@/lib/po-signature'
+import type { PoLineTemplateFields } from '@/modules/dept/supply/pos.repo'
+
+/**
+ * Dòng đơn ở màn ký — kèm các ô RIÊNG của mẫu đơn (vật liệu, kg/m, lọt lòng…)
+ * và mã SP. Repo vốn trả đủ; kiểu client cũ bỏ quên nên lưới ký không đọc tới.
+ */
+export type ApprovalPoLine = PoLine &
+  Partial<PoLineTemplateFields> & { product_code?: string | null }
 
 /**
  * Kiểu dữ liệu phiếu chờ duyệt (LSX + đơn vật tư) cho khu Phê duyệt Ban GĐ —
@@ -24,7 +32,9 @@ export type PendingPo = {
   /** Ghi chú của đơn đặt (PO.note) — chỉ có ở màn duyệt đầy đủ. */
   note?: string | null
   /** Dòng đơn (nạp sẵn server-side) — panel phân tích khỏi round-trip. */
-  lines?: PoLine[]
+  lines?: ApprovalPoLine[]
+  /** Mẫu đơn (0106) — quyết định bộ cột lưới, như phiếu in gửi NCC. */
+  template?: string | null
   /**
    * "Giá trị lớn — đọc kỹ trước khi ký", tính THEO TIỀN TỆ của đơn
    * (`isBigApprovalWith` + ngưỡng ở /exec/luat-ky). Phải tính ở server như danh
@@ -118,6 +128,27 @@ export type PendingPo = {
   receipt_docs?: number
   /** Điều chỉnh xảy ra SAU khi ký (0210) — đơn đổi tiền sau chữ ký. */
   adjusted_after_sign?: { count: number; delta: number } | null
+  /*
+    ── 07/10/2026: "không hiển đủ thông tin các dòng hàng cũng như đợt giao".
+  */
+  /**
+   * KẾ HOẠCH GIAO theo đợt (0152), chỉ đợt còn sống, theo số thứ tự. Lập được
+   * từ lúc nháp nên có trước chữ ký; rỗng = giao một lần theo `expected_at`.
+   */
+  shipments?: {
+    seq: number
+    code: string | null
+    expected_date: string
+    status: 'planned' | 'arrived' | 'received'
+    note: string | null
+    lines: { po_line_id: string; qty: number }[]
+  }[]
+  /** Lệnh GỘP (0125) ngoài lệnh chính — DocChain chỉ bày lệnh chính. */
+  extra_lsx?: string[]
+  /** Ghi chú lúc NCC xác nhận đơn — có khi mở lại đơn đã ký. */
+  confirmed_note?: string | null
+  /** Tệp đính kèm đơn (báo giá NCC, tờ đơn chụp…). */
+  files?: { id: string; filename: string }[]
   /** Câu hỏi của Giám đốc + câu trả lời, mới nhất trước. */
   questions?: PoQuestionThread[]
   /** Lịch sử với NCC — nhà này đã giao bao nhiêu đơn, đang mở những đơn nào. */

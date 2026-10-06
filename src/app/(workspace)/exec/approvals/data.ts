@@ -10,6 +10,8 @@ import { filesService } from '@/modules/core/files/files.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { supplierFacts } from '@/modules/dept/supply/supplier-facts.repo'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
+import { filesRepo } from '@/modules/core/files/files.repo'
 import { poAdjustmentsRepo } from '@/modules/dept/supply/po-adjustments.repo'
 import { threadsOf } from '@/modules/dept/supply/po-signature.service'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
@@ -52,6 +54,9 @@ export async function loadPoApprovalDetail(
     docs,
     adjustments,
     names,
+    shipments,
+    extraLsx,
+    files,
   ] = await Promise.all([
     posRepo.listLines(id),
     po.created_by
@@ -71,6 +76,9 @@ export async function loadPoApprovalDetail(
     usersRepo.displayNamesByIds(
       [po.approved_by, po.urgent_sent_by].filter((x): x is string => !!x),
     ),
+    poShipmentsRepo.listByPo(id),
+    posRepo.extraLsxByPoIds([id]),
+    filesRepo.listByParent('purchase_order_id', id),
   ])
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
   const m = poMoneyOf(po, total)
@@ -110,6 +118,21 @@ export async function loadPoApprovalDetail(
     total,
     lines_count: lines.length,
     lines,
+    template: po.template ?? null,
+    shipments: shipments
+      .filter((sh) => sh.status !== 'cancelled')
+      .sort((a, b) => a.seq - b.seq)
+      .map((sh) => ({
+        seq: sh.seq,
+        code: sh.code,
+        expected_date: sh.expected_date,
+        status: sh.status as 'planned' | 'arrived' | 'received',
+        note: blank(sh.note),
+        lines: sh.lines,
+      })),
+    extra_lsx: (extraLsx.get(id) ?? []).map((x) => x.code),
+    confirmed_note: blank(po.confirmed_note),
+    files: files.map((f) => ({ id: f.id, filename: f.filename })),
     created_by_name: properName(creatorName) || null,
     note: po.note,
     // Ngưỡng so trên TỔNG THANH TOÁN (gồm VAT) — cùng số với hộp ký (signBox).

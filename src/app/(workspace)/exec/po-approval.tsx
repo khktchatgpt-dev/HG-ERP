@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   Btn,
   DocChain,
@@ -19,8 +20,10 @@ import {
   DUE_TEXT,
   fmtD,
   fmtVnd,
-  PoLineTable,
 } from './approval-parts'
+import { PoLineGrid } from './po-approval-lines'
+import { ShipmentPlan, shipmentsAfterShip } from './po-approval-giao'
+import { poTemplateMeta, isPoTemplate } from '@/lib/po-template'
 import type { ApprovalNav, PendingPo } from './approval-types'
 import {
   QuestionThreads,
@@ -78,6 +81,8 @@ export function PoApprovalBody({
   const t = p.terms
   const lsx = p.lsx
   const sup = p.supplier
+  const ships = p.shipments ?? []
+  const lateShips = shipmentsAfterShip(p)
   // 0218 — đầu màn đổi theo đơn đang ở đâu (po-approval-bands.tsx).
   const mode = signModeOf(p)
   const deciding = mode === 'decide'
@@ -152,6 +157,14 @@ export function PoApprovalBody({
       icon: 'hen',
       title: 'Hàng hẹn về SAU ngày xuất của lệnh',
       body: `Hẹn về ${fmtD(p.expected_at)}, lệnh ${lsx.code} xuất ${fmtD(lsx.ship_date)}.`,
+    })
+  }
+  if (lateShips.length > 0 && lsx?.ship_date) {
+    canhBao.push({
+      tone: 'warn',
+      icon: 'hen',
+      title: `${lateShips.length} đợt giao hẹn SAU ngày xuất của lệnh`,
+      body: `${lateShips.map((s) => `Đợt ${s.seq} hẹn ${fmtD(s.expected_date)}`).join(', ')} — lệnh ${lsx.code} xuất ${fmtD(lsx.ship_date)}. Xem bảng Kế hoạch giao bên dưới.`,
     })
   }
   if (sup && sup.others === 0) {
@@ -373,7 +386,13 @@ export function PoApprovalBody({
                     <Missing key="h">chưa hẹn</Missing>
                   ),
                 ],
+                ...(ships.length > 1
+                  ? [['Lịch giao', <span key="g"><b>{ships.length} đợt</b> · <span className="num">{fmtD(ships[0].expected_date)} → {fmtD(ships.at(-1)!.expected_date)}</span></span>] as [string, React.ReactNode]] // prettier-ignore
+                  : []),
                 ['Nơi giao', t?.delivery_place ?? <Muted key="n">chưa ghi</Muted>],
+                ...(p.confirmed_note
+                  ? [['NCC xác nhận', p.confirmed_note] as [string, React.ReactNode]]
+                  : []),
               ]}
             />
           </FactBlock>
@@ -382,12 +401,19 @@ export function PoApprovalBody({
             <FactKv
               prose
               rows={[
+                [
+                  'Mẫu đơn',
+                  isPoTemplate(p.template) ? poTemplateMeta(p.template).label : <Muted key="m">đơn giản</Muted>, // prettier-ignore
+                ],
                 ['Hợp đồng', t?.contract_no ?? <Muted key="h">chưa ghi</Muted>],
                 ...(t?.doc_no && t.doc_no !== p.code
                   ? [['Số đơn giấy', <span key="g" className="num">{t.doc_no}</span>] as [string, React.ReactNode]] // prettier-ignore
                   : []),
                 ['Hoá đơn', t?.invoice ?? <Muted key="i">chưa ghi</Muted>],
                 ['Chất lượng', t?.quality ?? <Muted key="q">chưa ghi</Muted>],
+                ...(p.files?.length
+                  ? [['Tệp đính kèm', <span key="f" title={p.files.map((f) => f.filename).join(', ')}>{p.files.length} tệp · <Link className="text-[var(--act)] underline-offset-2 hover:underline" href={`/mua-hang/don/${p.id}`}>xem ở trang đơn</Link></span>] as [string, React.ReactNode]] // prettier-ignore
+                  : []),
               ]}
             />
           </FactBlock>
@@ -420,6 +446,9 @@ export function PoApprovalBody({
                       <Muted key="x">chưa đặt trên lệnh</Muted>
                     ),
                   ],
+                  ...(p.extra_lsx?.length
+                    ? [['Gộp lệnh', <span key="g" className="num">{p.extra_lsx.join(', ')}</span>] as [string, React.ReactNode]] // prettier-ignore
+                    : []),
                   ['Đơn mua', lsxPoSummary(lsx)],
                   [
                     'Đã duyệt mua',
@@ -491,15 +520,21 @@ export function PoApprovalBody({
           Dòng vật tư
           <span className="num ml-1 font-normal tracking-normal text-[var(--ink-3)] normal-case">
             {lines.length} dòng
+            {isPoTemplate(p.template) &&
+              ` · cột theo phiếu in mẫu ${poTemplateMeta(p.template).label}`}
           </span>
         </div>
-        <PoLineTable
+        <PoLineGrid
           lines={lines}
+          template={p.template}
           total={p.total}
           currency={p.currency}
           lastPrices={p.last_prices}
           money={p.money}
         />
+
+        {/* ── DẢI 5b: KẾ HOẠCH GIAO — đợt giao lập từ lúc nháp (07/10/2026) ── */}
+        <ShipmentPlan p={p} nowIso={nowIso} />
 
         {/* ── DẢI 6: ghi chú NCC · ghi chú nội bộ · đường đi của đơn ───── */}
         <div className="flex flex-wrap gap-px border-t border-[var(--line)] bg-[var(--hair)] [--fact-min:260px]">

@@ -14,6 +14,7 @@ import {
   PO_PRINT_QTY_LABEL,
   poField,
   poPriceSuffix,
+  poFieldText,
   poPriceUnitPerLine,
   type PoField,
 } from '@/lib/po-fields'
@@ -171,36 +172,9 @@ const priceCol = (currency: string, unit: string | null): Col => ({
   align: 'right',
   cell: (l) => (l.unit_price == null ? '' : fmtMoney(l.unit_price, currency)),
 })
-/** Giá trị in của một cột khai báo — chuyển `kind` thành chữ trên giấy. */
+/** Giá trị in của một cột khai báo — chữ dựng ở `poFieldText` (dùng chung màn ký). */
 function printCell(f: PoField): (l: PoPrintLine) => React.ReactNode {
-  const get = (l: PoPrintLine) =>
-    f.field ? (l as unknown as Record<string, unknown>)[f.field] : null
-  switch (f.kind) {
-    case 'text':
-    case 'die':
-    case 'openStyle':
-      return (l) => (get(l) as string | null) ?? ''
-    case 'number':
-    case 'area':
-      return (l) => fmt(get(l) as number | null)
-    case 'calc':
-      return (l) => fmt(l.qty2)
-    case 'unit2':
-      // "17,5 Lít/Thùng". 02/09: user quyết KHÔNG in cột này — PO_PRINT_ORDER
-      // không mẫu nào còn khai 'unit2' nên case này đang là đường chờ; giữ lại
-      // để lúc muốn in chỉ cần thêm key vào order, không phải dựng lại cell.
-      return (l) =>
-        l.unit2_per_unit != null && l.unit2
-          ? `${fmt(l.unit2_per_unit)} ${l.unit2}/${l.material_unit}`
-          : ''
-    case 'inner':
-      return (l) =>
-        l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
-          ? `${fmt(l.inner_l_mm)}×${fmt(l.inner_w_mm)}×${fmt(l.inner_h_mm)}`
-          : ''
-    default:
-      return () => ''
-  }
+  return (l) => poFieldText(f, l)
 }
 
 /**
