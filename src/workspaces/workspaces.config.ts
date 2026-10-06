@@ -209,6 +209,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Kế hoạch xuất hàng',
             icon: 'container',
           },
+          // Phân tích doanh số (06/10/2026): khách / loại / khung / SP / tháng + lãi KH.
+          { href: '/sales/phan-tich', label: 'Phân tích doanh số', icon: 'chart-gantt' },
         ],
       },
       {
