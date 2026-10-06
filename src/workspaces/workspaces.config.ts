@@ -203,6 +203,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
            */
           { href: '/sales/gia-thanh', label: 'Giá thành kế hoạch', icon: 'chart-column' },
           { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
+          // Kế hoạch xuất hàng (06/10/2026): khách × tháng theo ĐỢT (nhóm lệnh).
+          {
+            href: '/sales/ke-hoach-xuat',
+            label: 'Kế hoạch xuất hàng',
+            icon: 'container',
+          },
         ],
       },
       {
