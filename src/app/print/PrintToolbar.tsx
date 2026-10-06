@@ -39,13 +39,12 @@ export function PrintToolbar({
   exportHref,
   defaultKho = 'landscape',
   pdfName,
-  notice,
 }: {
   exportHref?: string
   /** Khổ mặc định của loại phiếu (khi người dùng chưa chọn lần nào). */
   defaultKho?: Kho
+  /** Có = nút "Lưu PDF", tên file gợi ý này (không kèm đuôi). */
   pdfName?: string
-  notice?: string | null
 }) {
   /*
    * LƯU PDF (06/10/2026) — đi qua hộp in của trình duyệt (đích "Lưu dưới dạng
@@ -157,11 +156,6 @@ export function PrintToolbar({
           🖨 In
         </button>
       </div>
-      {notice && (
-        <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:hidden">
-          {notice}
-        </div>
-      )}
     </>
   )
 }

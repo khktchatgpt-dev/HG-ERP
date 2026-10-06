@@ -58,7 +58,6 @@ export function PrintPage({
   maxWidth = 'max-w-4xl',
   exportHref,
   pdfName,
-  notice,
   children,
 }: {
   orientation?: 'landscape' | 'portrait'
@@ -67,8 +66,6 @@ export function PrintPage({
   exportHref?: string
   /** Có = thanh nút thêm "Lưu PDF", tên file gợi ý này (không kèm đuôi). */
   pdfName?: string
-  /** Một dòng nhắc trên thanh nút (không in ra) — vd. vì sao phiếu không có dấu. */
-  notice?: string | null
   children: React.ReactNode
 }) {
   // `orientation` nay chỉ là khổ MẶC ĐỊNH — người dùng đổi Dọc/Ngang ở thanh nút,
@@ -78,12 +75,7 @@ export function PrintPage({
       data-print-sheet
       className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}
     >
-      <PrintToolbar
-        exportHref={exportHref}
-        defaultKho={orientation}
-        pdfName={pdfName}
-        notice={notice}
-      />
+      <PrintToolbar exportHref={exportHref} defaultKho={orientation} pdfName={pdfName} />
       {children}
     </div>
   )
@@ -270,17 +262,7 @@ export function PrintSignatures({
   cols,
   space = 'mt-10',
 }: {
-  cols: {
-    role: string
-    hint?: string
-    name?: string | null
-    /**
-     * Ảnh dấu + chữ ký đã duyệt trên hệ thống (đơn mua, 06/10/2026) — đứng vào
-     * đúng chỗ nét ký tay. Ảnh đã có sẵn chức danh + tên người ký nên không in
-     * thêm `name`.
-     */
-    stamp?: { src: string } | null
-  }[]
+  cols: { role: string; hint?: string; name?: string | null }[]
   /** Khoảng chừa phía trên để ký — phiếu kho cần nhiều hơn. */
   space?: string
 }) {
@@ -290,18 +272,7 @@ export function PrintSignatures({
         <div key={c.role} className="flex-1">
           <div className="font-bold">{c.role}</div>
           {c.hint && <div className="text-[11px] italic">({c.hint})</div>}
-          {c.stamp ? (
-            <div className="mt-1 flex break-inside-avoid flex-col items-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- data URL nhúng sẵn, next/image không tối ưu được và không cần */}
-              <img
-                src={c.stamp.src}
-                alt="Dấu và chữ ký Giám đốc"
-                className="h-auto w-[60mm] max-w-full"
-              />
-            </div>
-          ) : (
-            c.name && <div className="mt-16">{c.name}</div>
-          )}
+          {c.name && <div className="mt-16">{c.name}</div>}
         </div>
       ))}
     </div>

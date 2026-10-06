@@ -181,18 +181,6 @@ export const storage = {
     }
   },
 
-  /**
-   * Tải trọn object về thành `data:` URL — cho ảnh nhỏ cần NHÚNG thẳng vào HTML
-   * (dấu + chữ ký trên phiếu in): không phát ra URL ký nào sống ngoài trang.
-   * null = không đọc được.
-   */
-  async downloadDataUrl(bucket: FileBucket, path: string): Promise<string | null> {
-    const { data, error } = await db().storage.from(bucket).download(path)
-    if (error || !data) return null
-    const buf = Buffer.from(await data.arrayBuffer())
-    return `data:${data.type || 'image/png'};base64,${buf.toString('base64')}`
-  },
-
   /** Dung lượng THẬT của object trên Storage (byte), null nếu object chưa tồn tại. */
   async getObjectSize(bucket: FileBucket, path: string): Promise<number | null> {
     const { data, error } = await db().storage.from(bucket).info(path)
