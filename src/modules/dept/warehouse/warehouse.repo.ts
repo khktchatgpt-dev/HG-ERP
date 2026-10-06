@@ -2,6 +2,7 @@ import { db } from '@/server/db'
 import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
 import { searchTokens } from '@/lib/search-text'
 import type { MaterialUsage } from '@/lib/material-usage'
+import { supplierIdsIn, withSupplierNames } from '@/lib/material-change-display'
 
 export type Material = {
   id: string
@@ -515,9 +516,14 @@ export const materialChangesRepo = {
     type Raw = Omit<MaterialChange, 'actor_name'> & {
       actor: { name: string | null } | null
     }
-    return ((data ?? []) as unknown as Raw[]).map((r) => ({
+    const rows = ((data ?? []) as unknown as Raw[]).map(({ actor, ...r }) => ({
       ...r,
-      actor_name: r.actor?.name ?? null,
+      actor_name: actor?.name ?? null,
     }))
+    // "NCC mặc định" ghi UUID — dịch sang tên NCC lúc đọc (lib/material-change-display).
+    const ids = supplierIdsIn(rows)
+    if (ids.length === 0) return rows
+    const { data: sups } = await db().from('supply_suppliers').select('id, name').in('id', ids) // prettier-ignore
+    return withSupplierNames(rows, new Map((sups ?? []).map((s) => [s.id, s.name])))
   },
 }
