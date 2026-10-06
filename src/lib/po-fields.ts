@@ -39,7 +39,11 @@ export type PoField = {
   max?: string
   /** Nhãn trên PHIẾU IN khi khác nhãn trong form (giấy in hẹp hơn). */
   printLabel?: string
-  /** Riêng kind 'cartonBasis': bộ lựa chọn của mẫu (thùng/m², tấm/m³, SP/kg…). */
+  /**
+   * Riêng kind 'cartonBasis': bộ lựa chọn của mẫu (ĐVT/m², ĐVT/m³…). `ctn` gọi là
+   * "ĐVT" — giá theo ĐVT đặt của dòng. Từng gọi "thùng"/"tấm" nên đơn mua ván ép
+   * ĐVT Tấm theo mẫu bao bì đọc thành "tính theo thùng" (PO-2026-0137, 06/10).
+   */
   options?: { value: 'ctn' | 'm2' | 'm3' | 'kg'; label: string }[]
   /**
    * Có mặt trên PHIẾU IN nhưng KHÔNG bày ô nhập trong form.
@@ -176,7 +180,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       kind: 'cartonBasis',
       field: 'carton_basis',
       options: [
-        { value: 'ctn', label: 'thùng' },
+        { value: 'ctn', label: 'ĐVT' },
         { value: 'm2', label: 'm²' },
       ],
     },
@@ -229,7 +233,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       kind: 'cartonBasis',
       field: 'carton_basis',
       options: [
-        { value: 'ctn', label: 'tấm/cuộn' },
+        { value: 'ctn', label: 'ĐVT' },
         { value: 'm3', label: 'm³' },
       ],
     },
@@ -259,7 +263,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       kind: 'cartonBasis',
       field: 'carton_basis',
       options: [
-        { value: 'ctn', label: 'tấm' },
+        { value: 'ctn', label: 'ĐVT' },
         { value: 'm2', label: 'm²' },
       ],
     },
@@ -496,13 +500,28 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
  * — NCC phải thấy "70.681/thùng" hay "18.770/m²" mới đối chiếu được báo giá của
  * chính họ. Mẫu tính theo đơn vị cố định (nhôm, inox, gỗ) dùng nhãn cột
  * "Đơn giá (VND/kg)" sẵn có, không đi qua đây.
+ *
+ * CƠ SỞ `ctn` = GIÁ THEO ĐVT ĐẶT của dòng, không phải "theo thùng" (06/10/2026).
+ * Bản cũ in cứng "/thùng" (bao bì) và "/tấm" (kính): PO-2026-0137 mua ván ép
+ * lót thùng, ĐVT Tấm, in ra "46.000/thùng" — NCC đọc sai giá. Đo lúc vá: 72/93
+ * dòng bao bì cơ sở `ctn` có ĐVT khác Thùng (Cái, Tấm, Thanh, Thẻ, Quyển). Nay
+ * hậu tố lấy đúng ĐVT dòng; chỉ khi dòng không có ĐVT mới lùi về chữ cũ.
  */
-export function poPriceSuffix(t: PoTemplate, basis: string | null | undefined): string {
+export function poPriceSuffix(
+  t: PoTemplate,
+  basis: string | null | undefined,
+  /** ĐVT đặt của dòng ("Tấm", "Cái"…) — hậu tố khi tính theo ĐVT. */
+  unit?: string | null,
+): string {
+  const perUnit = (fallback: string) => {
+    const u = unit?.trim().toLowerCase()
+    return u ? `/${u}` : fallback
+  }
   switch (t) {
     case 'carton':
-      return basis === 'm2' ? '/m²' : '/thùng'
+      return basis === 'm2' ? '/m²' : perUnit('/thùng')
     case 'glass':
-      return basis === 'm2' ? '/m²' : '/tấm'
+      return basis === 'm2' ? '/m²' : perUnit('/tấm')
     case 'foam':
       return basis === 'm3' ? '/m³' : ''
     default:
