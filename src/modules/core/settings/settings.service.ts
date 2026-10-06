@@ -3,6 +3,7 @@ import { Forbidden } from '@/server/http'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { DEFAULT_APPROVAL_THRESHOLDS, type ApprovalThresholds } from '@/lib/exec-ops'
 import type { User } from '@/modules/core/users/users.repo'
+import { parseStampConfig, type PoStampConfig } from '@/lib/po-stamp'
 
 export type Settings = {
   company_name: string
@@ -101,6 +102,20 @@ export const settingsService = {
     // lấy mặc định (27/09/2026). Trước đó bản lưu {VND} che mất mọi mặc định
     // khác → USD rơi về "luôn là giá trị lớn".
     return { ...DEFAULT_APPROVAL_THRESHOLDS, ...(raw as ApprovalThresholds) }
+  },
+
+  /**
+   * Ảnh dấu + chữ ký Giám đốc in lên đơn mua (06/10/2026) — key `po_stamp`,
+   * cài bằng `scripts/po-stamp-setup.mjs`. Như ngưỡng ký, KHÔNG nằm trong
+   * `Settings`: giá trị là object, và nó không phải thứ admin gõ ở form công ty.
+   */
+  async poStamp(): Promise<PoStampConfig | null> {
+    const { data } = await db()
+      .from('settings')
+      .select('value')
+      .eq('key', 'po_stamp')
+      .maybeSingle()
+    return parseStampConfig((data as { value: unknown } | null)?.value)
   },
 
   /**
