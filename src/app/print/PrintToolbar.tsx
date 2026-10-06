@@ -38,11 +38,27 @@ function subscribe(cb: () => void) {
 export function PrintToolbar({
   exportHref,
   defaultKho = 'landscape',
+  pdfName,
+  notice,
 }: {
   exportHref?: string
   /** Khổ mặc định của loại phiếu (khi người dùng chưa chọn lần nào). */
   defaultKho?: Kho
+  pdfName?: string
+  notice?: string | null
 }) {
+  /*
+   * LƯU PDF (06/10/2026) — đi qua hộp in của trình duyệt (đích "Lưu dưới dạng
+   * PDF"), không dựng PDF ở server: tờ PDF giống hệt tờ in, không phải chạy
+   * Chrome ngầm trên Vercel. Chrome lấy `document.title` làm tên file gợi ý nên
+   * đổi tạm tiêu đề trong lúc hộp in mở rồi trả lại.
+   */
+  const luuPdf = () => {
+    const old = document.title
+    if (pdfName) document.title = pdfName
+    window.addEventListener('afterprint', () => (document.title = old), { once: true })
+    window.print()
+  }
   const kho = useSyncExternalStore(
     subscribe,
     () => readKho() ?? defaultKho,
@@ -123,6 +139,16 @@ export function PrintToolbar({
             ⬇ Xuất Excel
           </a>
         )}
+        {pdfName && (
+          <button
+            type="button"
+            onClick={luuPdf}
+            title='Mở hộp in — chọn Đích "Lưu dưới dạng PDF"'
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
+          >
+            ⬇ Lưu PDF
+          </button>
+        )}
         <button
           type="button"
           onClick={() => window.print()}
@@ -131,6 +157,11 @@ export function PrintToolbar({
           🖨 In
         </button>
       </div>
+      {notice && (
+        <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:hidden">
+          {notice}
+        </div>
+      )}
     </>
   )
 }
