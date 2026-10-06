@@ -20,7 +20,7 @@ const APPLY = process.argv.includes('--apply')
 const SO_DH = '1/2026- HG/HTC'
 
 async function id(table: string, code: string): Promise<string> {
-  const { data, error } = await db().from(table).select('id').eq('code', code).single()
+  const { data, error } = await db().from(table as 'supply_suppliers').select('id').eq('code', code).single()
   if (error || !data) throw new Error(`không thấy ${code}: ${error?.message}`)
   return (data as unknown as { id: string }).id
 }
