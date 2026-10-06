@@ -266,7 +266,7 @@ function columnsFor(
           align: 'right',
           cell: (l) =>
             l.unit_price != null
-              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis)}`
+              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis, l.material_unit)}`
               : '',
         }
       : ctx.priceUnitOf
