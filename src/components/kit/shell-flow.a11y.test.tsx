@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import fs from 'node:fs'
-import path from 'node:path'
 import { act, useState } from 'react'
 import { renderToString } from 'react-dom/server'
 import { hydrateRoot } from 'react-dom/client'
@@ -388,23 +386,6 @@ describe('WhyBox — phép tính bày ra', () => {
     const dong = [...container.firstElementChild!.children].slice(0, 2)
     expect(dong.map((d) => d.textContent)).toEqual(['Đã giao     12', 'Còn lại      3'])
     for (const d of dong) expect(d.className).toContain('whitespace-pre-wrap')
-  })
-})
-
-describe('NextAction — prop `since` đã gỡ', () => {
-  /*
-    `since` được khai nhưng kit không đọc: người đọc bảng thuộc tính tưởng kit
-    tự đếm ngày. Không nơi nào truyền nó (grep 24/09/2026), nên gỡ hẳn thay vì
-    giữ một prop nói dối. Canh ở bảng API sinh từ mã — cùng nguồn với sách tra.
-  */
-  it('bảng thuộc tính không còn `since`', () => {
-    const api = JSON.parse(
-      fs.readFileSync(
-        path.join(process.cwd(), 'src/app/design-lab/_lab/kit-api.json'),
-        'utf8',
-      ),
-    ) as Record<string, { props: { name: string }[] }>
-    expect(api.NextAction.props.map((p) => p.name)).not.toContain('since')
   })
 })
 

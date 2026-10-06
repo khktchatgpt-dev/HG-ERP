@@ -1,6 +1,6 @@
 # Luật kiểm trước khi coi màn là xong
 
-Nguồn gốc: mục 05 của sổ `/design-lab` (`src/app/design-lab/page.tsx`, `id="luat-kiem"`), cộng bốn dòng truy cập của kế hoạch hệ thiết kế (`docs/he-thiet-ke-erp-ke-hoach.md` §6). Sổ đổi thì sửa file này theo.
+Nguồn gốc: mục 05 của sổ `/design-lab` cũ (sổ đã xoá 07/10/2026 — file này nay là bản DUY NHẤT), cộng bốn dòng truy cập của kế hoạch hệ thiết kế (`docs/he-thiet-ke-erp-ke-hoach.md` §6). Luật đổi thì sửa thẳng ở đây.
 
 Mỗi dòng bắt một lỗi **đã thật sự xảy ra** trong dự án. Báo cáo cuối bước phải nói rõ từng dòng: đạt, không đạt, hoặc không áp dụng (kèm lý do).
 

@@ -63,3 +63,5 @@ Mỗi bẫy dưới đây đã làm hỏng một màn thật trong dự án, và
 22. **Đừng xoá `.next/dev` khi dev server đang chạy.**
 23. **Route sâu dưới `[id]` trả 404 dạng HTML** nghĩa là Next không khớp route: khởi động lại dev server. 404 dạng JSON mới là `NotFound` của app.
 24. **Bash tool nuốt backtick và gạch chéo ngược** trong heredoc / `node -e`. Nội dung có hai ký tự đó thì viết bằng Write/Edit.
+25. **`.kit .num` và `.kit th` thắng mọi class Tailwind.** CSS của kit (`tokens.css`, `erp.css`) KHÔNG nằm trong `@layer`, nên `text-left` / `whitespace-normal` đặt cạnh `num` hay trên `th` không ăn: `.num` luôn căn phải, `th` luôn `nowrap`. Đè bằng `style={{ textAlign: 'left' }}` / `style={{ whiteSpace: 'normal' }}` (07/10/2026, lưới màn ký đơn mua: mã vật tư dưới tên bị đẩy sang phải, tiêu đề cột không xuống dòng nên lưới carton rộng 1.380px).
+26. **Lưới rộng hơn khung: đo bề rộng TỐI THIỂU**, không đo bề rộng đang thấy — đặt tạm `table.style.width = '1px'` rồi đọc `offsetWidth`. Laptop phóng 125% trừ sidebar còn ~1.000px; quá mức đó thì ghim cột tiền ở mép phải (`sticky right-0` + nền đặc), đừng để Thành tiền trôi ra ngoài.

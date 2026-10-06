@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ToastProvider } from '@/components/kit'
-import daVe from '@/app/design-lab/chup/_du-lieu/da-ve.json'
+import daVe from '@/test/fixtures/da-ve.json'
 import type { DaVeRow } from '@/modules/dept/supply/da-ve.repo'
 import { DaVeScreen } from './DaVeScreen'
 

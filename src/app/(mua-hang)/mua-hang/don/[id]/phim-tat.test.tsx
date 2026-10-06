@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { ToastProvider } from '@/components/kit'
 // Hộp 'Khai nhanh vật tư' (QuickAddMaterial) còn là hệ CŨ, dùng toast của components/ui.
 import { ToastProvider as UiToastProvider } from '@/components/ui/Toast'
-import fixtures from '@/app/design-lab/chup/_du-lieu/don-chi-tiet.json'
+import fixtures from '@/test/fixtures/don-chi-tiet.json'
 import { DonChungTuScreen } from './DonChungTuScreen'
 
 /**

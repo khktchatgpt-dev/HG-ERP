@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ToastProvider } from '@/components/kit'
-import fixtures from '@/app/design-lab/chup/_du-lieu/nhan-hang.json'
+import fixtures from '@/test/fixtures/nhan-hang.json'
 import { PhieuNhapScreen } from './PhieuNhapScreen'
 
 /**

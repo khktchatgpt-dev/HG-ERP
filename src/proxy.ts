@@ -1,16 +1,13 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { verifySessionToken } from '@/modules/core/auth/session'
 
-// `/design-lab`: trang styleguide TĨNH (dữ liệu giả, không gọi API) để duyệt
-// bộ UI mới — mở public cho dễ xem/chia sẻ nội bộ; xoá khỏi danh sách nếu muốn
-// bắt đăng nhập.
+// `/design-lab` (sổ thiết kế public) đã XOÁ 07/10/2026 — không còn đường public nào ngoài đăng nhập.
 const PUBLIC_PATHS = [
   '/login',
   '/register',
   '/api/login',
   '/api/register',
   '/api/logout',
-  '/design-lab',
 ]
 
 /**

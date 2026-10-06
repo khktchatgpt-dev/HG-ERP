@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ToastProvider } from '@/components/kit'
 import { ToastProvider as UiToastProvider } from '@/components/ui/Toast'
-import fixtures from '@/app/design-lab/chup/_du-lieu/don-chi-tiet.json'
+import fixtures from '@/test/fixtures/don-chi-tiet.json'
 import { poUpdateSchema } from '@/modules/dept/supply/pos.schema'
 import { DonChungTuScreen } from './DonChungTuScreen'
 

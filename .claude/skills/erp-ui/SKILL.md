@@ -7,7 +7,9 @@ description: Quy trình thiết kế + dựng màn giao diện cho HG-ERP — t�
 
 Skill này là **QUY TRÌNH**, không phải máy sinh trang.
 
-Hai skill UI cũ (`add-erp-page`, `frontend-design`) bị gỡ 13/09/2026 vì chúng dựng sẵn "một trang danh sách + CRUD" bằng bộ kit cũ. Cách đó dẫn tới lối mòn "mỗi màn một bảng", đúng thứ sổ `/design-lab` sinh ra để bỏ. Skill này không có khuôn code để chép. Nó bắt đi đúng thứ tự: **nhiệm vụ → luồng → bản thiết kế được duyệt → dựng bằng kit → kiểm bằng số**.
+Hai skill UI cũ (`add-erp-page`, `frontend-design`) bị gỡ 13/09/2026 vì chúng dựng sẵn "một trang danh sách + CRUD" bằng bộ kit cũ. Cách đó dẫn tới lối mòn "mỗi màn một bảng". Skill này không có khuôn code để chép. Nó bắt đi đúng thứ tự: **nhiệm vụ → luồng → bản thiết kế được duyệt → dựng bằng kit → kiểm bằng số**.
+
+> **Sổ `/design-lab` ĐÃ XOÁ 07/10/2026** (chủ dự án: "không dùng nữa", trước đó 06/10: "UI/UX quá kém"). Không còn màn mẫu `/design-lab/mau-*`, sách tra `/design-lab/thanh-phan`, trang chụp `/design-lab/chup`. **Đừng dựng lại trang nào dưới `src/app/design-lab`**, kể cả trang tạm để duyệt. Mẫu tham chiếu nay là MÀN THẬT đang chạy (bảng ở bước 3).
 
 Hai luật của chủ dự án đứng trên mọi thứ dưới đây:
 
@@ -55,16 +57,18 @@ Phân biệt ngay: **danh mục ≠ chứng từ.** Danh mục (NCC, vật tư, 
 
 ### 3. Điểm xuất phát bố cục — khuôn + màn tương đương của ERP lớn
 
-Chọn khuôn gần nhất làm **điểm xuất phát**. Mẫu chạy được ở `/design-lab/mau-*` (public).
+Chọn khuôn gần nhất làm **điểm xuất phát**, rồi mở MÀN THẬT cùng khuôn để xem cách dự án đã giải (đọc mã + mở trong trình duyệt).
 
-| Câu người dùng đang hỏi                         | Khuôn              | Mẫu                         |
-| ----------------------------------------------- | ------------------ | --------------------------- |
-| Hôm nay tôi phải làm gì?                        | A · Vào việc       | `/design-lab/mau-vao-viec`  |
-| Việc nào chờ tôi, ở MỌI loại chứng từ?          | B · Hộp thư        | `/design-lab/mau-hop-thu`   |
-| Trong tập này, cái nào cần tôi động vào?        | C · Danh sách      | `/design-lab/mau-danh-sach` |
-| Tờ này ở đâu, ai giữ, vướng gì?                 | D · Chứng từ       | `/design-lab/mau-erp`       |
-| Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | E · Hồ sơ danh mục | `/design-lab/mau-ho-so-ncc` |
-| Khai 40 dòng nhanh như Excel mà không sai?      | F · Bảng nhập liệu | `/design-lab/mau-soan-don`  |
+| Câu người dùng đang hỏi                         | Khuôn              | Màn thật tham chiếu                                                       |
+| ----------------------------------------------- | ------------------ | ------------------------------------------------------------------------- |
+| Hôm nay tôi phải làm gì?                        | A · Vào việc       | `/mua-hang` (Bàn làm việc), `exec/ExecHomeScreen.tsx`                     |
+| Việc nào chờ tôi, ở MỌI loại chứng từ?          | B · Hộp thư        | `/mua-hang/hop-thu`, `/exec/approvals` (`ApprovalCenterScreen.tsx`)       |
+| Trong tập này, cái nào cần tôi động vào?        | C · Danh sách      | `/mua-hang/don` (`DonScreen.tsx`), `/mua-hang/vat-tu`, `/thongke/lenh`    |
+| Tờ này ở đâu, ai giữ, vướng gì?                 | D · Chứng từ       | `/mua-hang/don/[id]` (`DonChungTuScreen.tsx`), `/thongke/lsx/[id]`        |
+| Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | E · Hồ sơ danh mục | `/mua-hang/ncc/[id]` (`HoSoNccScreen.tsx`), `/khuon/[id]`                 |
+| Khai 40 dòng nhanh như Excel mà không sai?      | F · Bảng nhập liệu | `/mua-hang/don/moi` (soạn đơn mua), `/thongke/ghi` (`EntrySheetForm.tsx`) |
+
+Màn tham chiếu là bản ĐÃ CHẠY, không phải chuẩn mực: chép cách giải việc, không chép lỗi. Ghi chú đầu file của từng màn nói nó theo khuôn nào và vì sao.
 
 - Không khớp khuôn nào nghĩa là câu hỏi ở bước 1 chưa rõ. Quay lại bước 1, đừng chế khuôn thứ bảy.
 - Khớp khuôn nhưng nghiệp vụ cần khác thì **đi theo nghiệp vụ**. Ví dụ màn nhận hàng cần ba cột số + tình trạng lô ngay trên dòng: đừng cắt nghiệp vụ cho vừa khuôn.
@@ -77,9 +81,10 @@ Chọn khuôn gần nhất làm **điểm xuất phát**. Mẫu chạy được 
 
 Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. User nhận xét: _"giao diện lại gớm rồi, bỏ qua khâu thiết kế hả"_.
 
-- Thêm artboard vào canvas thiết kế của dự án: <https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf>.
-  - Đọc canvas bằng `Artifact` action `read`, thêm artboard, rồi publish lại **cùng URL**.
-  - Canvas mất hoặc không mở được thì hỏi user, đừng tự tạo canvas mới.
+- Artboard là một **Artifact HTML riêng cho màn đó**, thiết kế kỹ (token màu của kit, chữ 13px, lưới có cột + chân tổng, bố cục kiểu Dynamics/SAP: thanh công cụ góc phải, không thẻ bo tròn/bóng đổ). Tiền lệ được duyệt: bản vẽ Hồ sơ lệnh (05/10), màn ký đơn mua bày đủ dòng + đợt giao (07/10).
+  - Sửa vòng sau thì publish lại **cùng file** → cùng URL, để user so được hai bản.
+  - Canvas chung cũ (`G9Zso…`) không đọc được nữa; **không** dựng trang tạm trong `src/app` (`/design-lab/tam-*` bị chê "UI/UX quá kém" 06/10 và cả sổ đã xoá 07/10).
+- Mở đầu artboard bằng **số đo** của bước 1 (màn cũ thiếu gì, bao nhiêu dòng/đơn bị ảnh hưởng) và kết bằng **các câu cần chốt**, mỗi câu có một đề xuất.
 - Artboard phải bày **hình dạng dữ liệu thật** (mã, số, tên đúng kiểu dữ liệu đã đo ở bước 1), không dùng lorem. Phải bày đủ các trạng thái mà màn sẽ gặp:
   - rỗng (kèm lý do + việc tiếp);
   - bị chặn (kèm lý do + cách gỡ);
@@ -90,15 +95,14 @@ Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. U
 ### 5. Dựng bằng kit
 
 - Import **chỉ từ `@/components/kit`**, không import thẳng file con.
-- Tra thành phần ở sách tra `/design-lab/thanh-phan/<slug>`. Mỗi họ có đủ sáu mục: khi nào dùng · biến thể · thuộc tính (sinh từ mã) · trạng thái · truy cập · nên/đừng.
-  - Danh sách họ nằm ở `src/app/design-lab/_lab/kit-families.ts`.
-  - Bảng "cần gì → dùng gì" nằm ở [references/tra-thanh-phan.md](references/tra-thanh-phan.md).
+- Tra thành phần ở bảng "cần gì → dùng gì" [references/tra-thanh-phan.md](references/tra-thanh-phan.md), rồi đọc **JSDoc trên khai báo kiểu props** trong `src/components/kit/*.tsx` (nguồn sự thật duy nhất từ khi sách tra `/design-lab/thanh-phan` bị xoá 07/10/2026). Danh sách xuất khẩu: `src/components/kit/index.ts`.
 - Server component tải dữ liệu **song song** (`Promise.all`), rồi truyền xuống một Screen `'use client'` — chỉ thứ client cần.
 - Chia file theo khuôn ở mục "Cấu trúc code React" của CLAUDE.md (`page` → `XxxScreen` → `useXxx` → khối). File `.tsx` quá 800 dòng là lint đỏ.
 - File `'use client'` chỉ `import type` từ `@/modules` / `@/server` (`hg/client-server-boundary`).
 - Gọi API từ client qua `api()`/`ApiError` (`@/lib/api`), không `fetch` tay. Mutation đi theo chuỗi try/catch → `router.refresh()` → toast (`useToast` của kit).
 - Shell nằm ở layout `(<ws>)/layout.tsx`, không bọc trong page.
-- **Phải chế CSS tại chỗ nghĩa là kit đang thiếu.** Đừng vá trong màn; bổ sung vào kit theo mục "Khi kit thiếu" dưới đây.
+- **Kit là đồ nghề cho khung, không phải hàng rào** (chủ dự án 06/10/2026: "đừng phụ thuộc quá vào kit"). Kit hụt thì viết Tailwind + token ngay trong màn. Chỉ đưa vào kit khi thứ đó lặp lại ở màn thứ hai — theo mục "Khi kit thiếu" dưới đây.
+- **BẪY `.kit .num` / `.kit th`**: CSS của kit KHÔNG nằm trong `@layer`, nên thắng mọi class Tailwind (`text-left`, `whitespace-normal`…). Cần đè thì dùng `style={{ … }}` inline (dính 07/10/2026 ở lưới màn ký).
 
 ### 6. Kiểm — bằng số, trên trình duyệt thật
 
@@ -111,9 +115,14 @@ Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. U
 4. Rà mã bằng skill ngoài: `vercel-react-best-practices` (waterfall, re-render, gửi thừa dữ
    liệu xuống client) và `web-design-guidelines` (a11y/UX). Chỗ vênh với luật dự án thì luật
    dự án thắng — bảng vênh ở mục Skills của CLAUDE.md.
-5. Mở màn trong trình duyệt ở 1280×800 và NHÌN ở 1:1 — soi bằng số (độ rộng cột, số dòng) không
-   thay được việc nhìn. Màn cần đăng nhập / dữ liệu sống thì thêm vào `/design-lab/chup/[man]`
-   với dữ liệu đóng băng. (Playwright + ảnh chuẩn đã gỡ 30/09/2026.)
+5. Mở MÀN THẬT trong trình duyệt ở 1280×800 và NHÌN ở 1:1 — soi bằng số (độ rộng cột, số dòng,
+   `scrollWidth` của lưới) không thay được việc nhìn. Đo thêm bề rộng tối thiểu của lưới: laptop
+   phóng 125% trừ sidebar chỉ còn ~1.000px.
+   - Màn cần đăng nhập mà Claude không có phiên: KHÔNG tự nhập mật khẩu thật. Nhờ user mở và
+     chụp, hoặc user đăng nhập sẵn trong pane trình duyệt.
+   - Trang chụp `/design-lab/chup` đã xoá cùng sổ (07/10/2026). Dữ liệu đóng băng cho test màn
+     nằm ở `src/test/fixtures/*.json`.
+   - (Playwright + ảnh chuẩn đã gỡ 30/09/2026.)
 
 ### 7. Báo cáo và dừng
 
@@ -156,12 +165,9 @@ Các bẫy đã dính thật (Tailwind quét chú thích, lớp `text-` bọc bi
 
 ## Khi kit thiếu
 
-Muốn thêm hoặc đổi một thành phần kit, làm đủ năm việc. Thiếu việc nào thì test đỏ:
+Chỉ đưa một thành phần vào kit khi nó đã lặp ở **màn thứ hai** — lần đầu cứ viết Tailwind + token trong màn. Khi đưa vào, làm đủ bốn việc:
 
 1. Viết thành phần trong `src/components/kit/*.tsx` và xuất khẩu qua `index.ts`.
-2. Ghi **JSDoc cho từng prop trên KHAI BÁO KIỂU**, không phải trên biến destructure: bộ trích chỉ đọc chú thích ở khai báo kiểu. Sau đó chạy `npm run kit:api`.
-3. Thêm vào một họ trong `src/app/design-lab/_lab/kit-families.ts`.
-4. Viết trang `src/app/design-lab/thanh-phan/_docs/<slug>.tsx` bằng `CompDoc`, đủ sáu mục. Ví dụ phải sống, và nên/đừng phải có nguồn thật. Thêm dòng tương ứng vào `_docs/index.ts`.
-5. Có test dựng + `axe` nếu thành phần có tương tác (`src/components/kit/*.test.tsx`).
-
-Canh cả năm việc: `src/app/design-lab/_lab/kit-docs.test.tsx` và `kit-api.test.ts`.
+2. Ghi **JSDoc cho từng prop trên KHAI BÁO KIỂU**, không phải trên biến destructure — đó là chỗ duy nhất người sau tra được thuộc tính (sách tra sinh từ mã đã xoá cùng `/design-lab` 07/10/2026).
+3. Thêm một dòng vào [references/tra-thanh-phan.md](references/tra-thanh-phan.md) đúng nhóm việc.
+4. Có test dựng + `axe` (`expectNoViolations` ở `src/test/a11y.ts`) nếu thành phần có tương tác (`src/components/kit/*.test.tsx`).

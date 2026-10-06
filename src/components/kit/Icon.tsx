@@ -168,9 +168,9 @@ const MAP = {
 export type IcoName = keyof typeof MAP
 
 /**
- * NGHĨA của từng khái niệm — cho trang tra `/design-lab/thanh-phan/icon`.
- * Kiểu `Record<IcoName, …>`: thêm khái niệm vào MAP mà quên ghi nghĩa ở đây là
- * lỗi biên dịch, nên trang tra không bao giờ thiếu dòng.
+ * NGHĨA của từng khái niệm — bảng tra khi chọn icon (trang tra `/design-lab`
+ * đã xoá 07/10/2026; bảng này là nguồn duy nhất). Kiểu `Record<IcoName, …>`:
+ * thêm khái niệm vào MAP mà quên ghi nghĩa ở đây là lỗi biên dịch.
  */
 export const ICO_MEANING: Record<
   IcoName,

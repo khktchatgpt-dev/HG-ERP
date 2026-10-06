@@ -14,7 +14,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "kit:api": "node scripts/kit-api.mjs",
     "lint:all": "eslint",
     "size:baseline": "node scripts/size-baseline.mjs"
   },

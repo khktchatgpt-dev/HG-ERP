@@ -26,7 +26,7 @@ Dự án này là hệ thống **Phần mềm Quản trị Doanh nghiệp Sản 
 
 ### 2. BẮT BUỘC TÁI SỬ DỤNG BỘ KIT UI
 
-> **Màn MỚI dùng `@/components/kit`** (bộ kit ERP mới, tra ở `/design-lab/thanh-phan`).
+> **Màn MỚI dùng `@/components/kit`** (bộ kit ERP mới; tra ở `.claude/skills/erp-ui/references/tra-thanh-phan.md` + JSDoc trong `src/components/kit/*.tsx`).
 > Danh sách dưới đây là bộ CŨ, còn phủ 168 file — dùng khi sửa tại chỗ những màn đó.
 > Trong một file chỉ dùng MỘT hệ; trộn hai hệ là hai bộ token đánh nhau.
 
@@ -47,22 +47,22 @@ Bộ cũ (`src/components/erp/*` & `src/components/shadcn/*`):
 
 ### 3. MÀN HÌNH MẪU ĐỂ THAM KHẢO & BẮT CHƯỚC (Gold Standard References):
 
-**MÀN MỚI → theo sổ thiết kế `/design-lab` (public).** Việc đầu tiên là xác định màn thuộc
-khuôn nào trong sáu khuôn, rồi mới chọn thành phần:
+**MÀN MỚI → theo sáu khuôn màn.** Sổ `/design-lab` (màn mẫu, sách tra, trang chụp) ĐÃ XOÁ
+07/10/2026 — đừng dựng lại trang nào dưới `src/app/design-lab`, kể cả trang tạm để duyệt.
+Việc đầu tiên là xác định màn thuộc khuôn nào, rồi mở MÀN THẬT cùng khuôn làm tham chiếu:
 
-| Khuôn              | Trả lời câu hỏi                                 | Mẫu                         |
-| ------------------ | ----------------------------------------------- | --------------------------- |
-| A · Vào việc       | Hôm nay tôi phải làm gì?                        | `/design-lab/mau-vao-viec`  |
-| B · Hộp thư        | Việc nào chờ tôi, ở MỌI loại chứng từ?          | `/design-lab/mau-hop-thu`   |
-| C · Danh sách      | Trong tập này, cái nào cần tôi động vào?        | `/design-lab/mau-danh-sach` |
-| D · Chứng từ       | Tờ này ở đâu, ai giữ, vướng gì?                 | `/design-lab/mau-erp`       |
-| E · Hồ sơ danh mục | Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | `/design-lab/mau-ho-so-ncc` |
-| F · Bảng nhập liệu | Khai 40 dòng nhanh như Excel mà không sai?      | `/design-lab/mau-soan-don`  |
+| Khuôn              | Trả lời câu hỏi                                 | Màn thật tham chiếu                       |
+| ------------------ | ----------------------------------------------- | ----------------------------------------- |
+| A · Vào việc       | Hôm nay tôi phải làm gì?                        | `/mua-hang` (Bàn làm việc)                |
+| B · Hộp thư        | Việc nào chờ tôi, ở MỌI loại chứng từ?          | `/mua-hang/hop-thu`, `/exec/approvals`    |
+| C · Danh sách      | Trong tập này, cái nào cần tôi động vào?        | `/mua-hang/don`, `/mua-hang/vat-tu`       |
+| D · Chứng từ       | Tờ này ở đâu, ai giữ, vướng gì?                 | `/mua-hang/don/[id]`, `/thongke/lsx/[id]` |
+| E · Hồ sơ danh mục | Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | `/mua-hang/ncc/[id]`, `/khuon/[id]`       |
+| F · Bảng nhập liệu | Khai 40 dòng nhanh như Excel mà không sai?      | `/mua-hang/don/moi`, `/thongke/ghi`       |
 
-Sáu màn này dựng hoàn toàn bằng `@/components/kit`. Thư viện thành phần:
-`/design-lab/thanh-phan`. Nguyên tắc + luật kiểm: `/design-lab`. Bản đồ 12 trang thật của
-phòng Cung ứng → khuôn: mục 03b của sổ. Xem chi tiết ở mục "Thiết kế theo hướng ERP" trong
-CLAUDE.md.
+Quy trình (nhiệm vụ → luồng → artboard Artifact HTML được duyệt → dựng → kiểm), nguyên tắc và
+luật kiểm: skill `erp-ui` (`.claude/skills/erp-ui/`). Xem thêm mục "Thiết kế theo hướng ERP"
+trong CLAUDE.md.
 
 **Hai nhầm lẫn hay gặp**: hồ sơ danh mục (E) KHÔNG có vòng đời duyệt — chỗ của ba trục trạng
 thái ở đó là dải hiệu suất; màn nhập liệu (F) thì lưới là nhân vật chính, đầu đơn co thành
