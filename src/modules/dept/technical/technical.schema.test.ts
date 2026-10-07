@@ -275,3 +275,30 @@ describe('productClusterUpdateSchema — ba trường khai cụm', () => {
     )
   })
 })
+
+describe('productUpdateSchema — sửa một phần không đụng ô khác (07/10/2026)', () => {
+  it('PATCH chỉ có packing / ảnh KHÔNG chèn unit mặc định', () => {
+    expect(
+      productUpdateSchema.parse({ packing: { qty_per_carton: 2 } }),
+    ).not.toHaveProperty('unit')
+    expect(productUpdateSchema.parse({ image_file_id: null })).not.toHaveProperty('unit')
+  })
+  it('giữ đủ khoá thông số + KL cân thực tế của trang chi tiết', () => {
+    const p = productUpdateSchema.parse({
+      tech_spec: {
+        paint: 'RAL 7016',
+        fabric: 'Olefin',
+        hardware: 'Inox 304',
+        finish: 'Matt',
+      },
+      actual_weight_kg: 12.5,
+    })
+    expect(p.tech_spec).toEqual({
+      paint: 'RAL 7016',
+      fabric: 'Olefin',
+      hardware: 'Inox 304',
+      finish: 'Matt',
+    })
+    expect(p.actual_weight_kg).toBe(12.5)
+  })
+})
