@@ -2858,6 +2858,8 @@ export type Database = {
       }
       sales_quote_lines: {
         Row: {
+          plan_at: string | null
+          plan_price_snapshot: number | null
           discount_pct: number | null
           id: string
           note: string | null
@@ -2868,6 +2870,8 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          plan_at?: string | null
+          plan_price_snapshot?: number | null
           discount_pct?: number | null
           id?: string
           note?: string | null
@@ -2878,6 +2882,8 @@ export type Database = {
           unit_price?: number
         }
         Update: {
+          plan_at?: string | null
+          plan_price_snapshot?: number | null
           discount_pct?: number | null
           id?: string
           note?: string | null
@@ -2906,6 +2912,9 @@ export type Database = {
       }
       sales_quotes: {
         Row: {
+          lost_reason: string | null
+          revision_no: number
+          revision_of: string | null
           approved_at: string | null
           approved_by: string | null
           code: string
@@ -2926,6 +2935,9 @@ export type Database = {
           valid_to: string | null
         }
         Insert: {
+          lost_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           approved_at?: string | null
           approved_by?: string | null
           code: string
@@ -2946,6 +2958,9 @@ export type Database = {
           valid_to?: string | null
         }
         Update: {
+          lost_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           approved_at?: string | null
           approved_by?: string | null
           code?: string

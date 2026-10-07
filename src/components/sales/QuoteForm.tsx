@@ -1,17 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
-import {
-  Card as UiCard,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/shadcn/card'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
@@ -21,75 +15,40 @@ import {
   invalidateProductPickCache,
   type ProductPick,
 } from '@/components/sales/ProductPicker'
-import { ProductSpecFill, hasNoSpec } from '@/components/sales/ProductSpecFill'
+import { hasNoSpec } from '@/components/sales/ProductSpecFill'
+import {
+  addDays,
+  BOM_LABEL,
+  BOM_TONE,
+  Card,
+  cls,
+  dimStr,
+  fetchLastPrices,
+  inchStr,
+  L,
+  QuoteLineDetails,
+  type CustomerOption,
+  type LineDraft,
+  type QuoteInitial,
+  type QuoteLineInitial,
+} from './quote-form.shared'
+
+export type { CustomerOption, QuoteInitial, QuoteLineInitial } from './quote-form.shared'
+import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
+import { quoteNetPrice } from '@/lib/quote-price'
+import { todayVn } from '@/lib/date-vn'
 
 export type { ProductPick }
 
-export type CustomerOption = {
-  id: string
-  name: string
-  default_currency: string | null
-  default_price_term: string | null
-  default_payment_terms: string | null
-}
-
-export type QuoteInitial = {
-  id: string
-  code: string
-  customer_id: string
-  currency: string
-  valid_from: string | null
-  valid_to: string | null
-  price_term: string | null
-  payment_terms: string | null
-  note: string | null
-}
-
-export type QuoteLineInitial = {
-  product_id: string
-  unit_price: number
-  discount_pct: number | null
-  note: string | null
-}
-
-type LineDraft = { code: string; name: string; unit: string; itemCode: string }
 type LineRow = {
   key: number
   productId: string
   draft: LineDraft | null
+  /** SL dự kiến / MOQ (0225) — tuỳ chọn. */
+  qty: number | ''
   unitPrice: number | ''
   discount: number | ''
   note: string
-}
-
-const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
-const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
-
-/*
- * Lớp ô nhập dùng chung — CÙNG token với OrderForm (`.theme-v2`, bám
- * `components/shadcn/input.tsx`) để form báo giá và form đơn nhìn như một.
- */
-const cls =
-  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
-
-/** Giá đã báo cho ĐÚNG khách này, theo SP — dùng để tự điền đơn giá. */
-async function fetchLastPrices(
-  customerId: string,
-): Promise<Map<string, { unit_price: number; quote_code: string }>> {
-  const data = await api<{
-    prices: { product_id: string; unit_price: number; quote_code: string }[]
-  }>(`/api/dept/sales/quotes/last-prices?customer_id=${customerId}`)
-  return new Map(data.prices.map((x) => [x.product_id, x]))
-}
-
-/** "60.2×58.1×92.4" từ 3 chiều — thiếu bất kỳ chiều nào = null. */
-function dimStr(a?: number, b?: number, c?: number): string | null {
-  return a != null && b != null && c != null ? `${a}×${b}×${c}` : null
-}
-const cmToInch = (v?: number) => (v != null ? (v / 2.54).toFixed(1) : null)
-function inchStr(a?: number, b?: number, c?: number): string | null {
-  const [x, y, z] = [cmToInch(a), cmToInch(b), cmToInch(c)]
-  return x && y && z ? `${x}×${y}×${z}` : null
 }
 
 export function QuoteForm(props: {
@@ -125,8 +84,13 @@ export function QuoteForm(props: {
   const [payTerms, setPayTerms] = useState(
     initial?.payment_terms ?? preselectDefaults?.default_payment_terms ?? '',
   )
-  const [validFrom, setValidFrom] = useState(initial?.valid_from ?? '')
-  const [validTo, setValidTo] = useState(initial?.valid_to ?? '')
+  // Hiệu lực mặc định 30 ngày khi lập mới (07/10/2026) — gửi khách bắt buộc có.
+  const [validFrom, setValidFrom] = useState(
+    initial?.valid_from ?? (initial ? '' : todayVn()),
+  )
+  const [validTo, setValidTo] = useState(
+    initial?.valid_to ?? (initial ? '' : addDays(todayVn(), 30)),
+  )
   const [note, setNote] = useState(initial?.note ?? '')
 
   // SP đã BIẾT: dòng có sẵn + SP sale vừa chọn / vừa tạo. Không có "cả thư viện"
@@ -141,11 +105,44 @@ export function QuoteForm(props: {
       key: i,
       productId: l.product_id,
       draft: null,
+      qty: l.qty ?? '',
       unitPrice: l.unit_price,
       discount: l.discount_pct ?? '',
       note: l.note ?? '',
     })),
   )
+
+  // Giá thành KH theo SP (0225) — {} khi không có quyền (route không 403).
+  const [planPrices, setPlanPrices] = useState<
+    Map<string, { price: number; currency: string }>
+  >(new Map())
+  const [canSeeCost, setCanSeeCost] = useState(false)
+  const productIdsKey = lines
+    .map((l) => l.productId)
+    .filter(Boolean)
+    .sort()
+    .join(',')
+  useEffect(() => {
+    if (!productIdsKey) return
+    api<{ prices: Record<string, { price: number; currency: string }> }>(
+      `/api/dept/sales/quotes/plan-prices?ids=${encodeURIComponent(productIdsKey)}`,
+    )
+      .then((d) => {
+        const m = new Map(Object.entries(d.prices))
+        setPlanPrices(m)
+        if (m.size > 0) setCanSeeCost(true)
+      })
+      .catch(() => {})
+  }, [productIdsKey])
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [openKeys, setOpenKeys] = useState<Set<number>>(new Set())
+  const toggleOpen = (k: number) =>
+    setOpenKeys((s) => {
+      const n = new Set(s)
+      if (n.has(k)) n.delete(k)
+      else n.add(k)
+      return n
+    })
 
   // Giá gần nhất theo khách (tự điền) + giá thị trường (gợi ý).
   const [lastPrices, setLastPrices] = useState<
@@ -225,12 +222,50 @@ export function QuoteForm(props: {
         key: keyRef.current++,
         productId: '',
         draft: null,
+        qty: '',
         unitPrice: '',
         discount: '',
         note: '',
       },
     ])
   }
+
+  /** Thêm nhiều SP một lượt từ hộp chọn (07/10/2026) — giá điền sẵn theo khách này nếu có. */
+  function addPicked(products: ProductPick[]) {
+    for (const pr of products) rememberProduct(pr)
+    setLines((ls) => [
+      ...ls,
+      ...products
+        .filter((pr) => !ls.some((l) => l.productId === pr.id))
+        .map((pr) => ({
+          key: keyRef.current++,
+          productId: pr.id,
+          draft: null,
+          qty: '' as const,
+          unitPrice: (lastPrices.get(pr.id)?.unit_price ?? '') as number | '',
+          discount: '' as const,
+          note: '',
+        })),
+    ])
+  }
+  const belowCost = lines.filter((l) => {
+    const c = l.productId ? planPrices.get(l.productId)?.price : undefined
+    const net = quoteNetPrice(
+      Number(l.unitPrice) || 0,
+      l.discount === '' ? null : Number(l.discount),
+    )
+    return c != null && net > 0 && net < c
+  }).length
+  const refValue = lines.reduce(
+    (s, l) =>
+      s +
+      (Number(l.qty) || 0) *
+        quoteNetPrice(
+          Number(l.unitPrice) || 0,
+          l.discount === '' ? null : Number(l.discount),
+        ),
+    0,
+  )
 
   function addQuickProduct(p: QuickProduct, unitPrice: number | null) {
     rememberProduct({
@@ -253,6 +288,7 @@ export function QuoteForm(props: {
         key: keyRef.current++,
         productId: p.id,
         draft: null,
+        qty: '',
         unitPrice: unitPrice ?? '',
         discount: '',
         note: '',
@@ -277,6 +313,7 @@ export function QuoteForm(props: {
         note: note.trim() || null,
         lines: lines.map((l) => ({
           product_id: l.productId,
+          qty: l.qty === '' ? null : Number(l.qty),
           unit_price: Number(l.unitPrice),
           discount_pct: l.discount === '' ? null : Number(l.discount),
           note: l.note.trim() || null,
@@ -411,196 +448,312 @@ export function QuoteForm(props: {
         </div>
       </Card>
 
-      {/* 2. Dòng sản phẩm — đầy đủ quy cách */}
+      {/* 2. Dòng sản phẩm — LƯỚI (07/10/2026): một dòng một hàng, giá thành KH ·
+          net · lãi% ngay trên lưới; quy cách / điền spec / giá gợi ý mở ở hàng
+          chi tiết. Bản cũ là chuỗi thẻ ~200px/dòng — 30 SP là hàng chục màn cuộn. */}
       <Card
         title={`Dòng sản phẩm (${lines.length})`}
         right={
-          missingSpecCount > 0 ? (
-            <span className="text-xs text-amber-600">
-              ⚠ {missingSpecCount} SP thiếu quy cách — nhờ Kỹ thuật bổ sung
-            </span>
-          ) : null
+          <span className="flex items-center gap-3 text-xs">
+            {missingSpecCount > 0 && (
+              <span className="text-amber-600">
+                ⚠ {missingSpecCount} SP thiếu quy cách
+              </span>
+            )}
+            {canSeeCost && belowCost > 0 && (
+              <span className="text-red-600">{belowCost} dòng dưới giá thành KH</span>
+            )}
+          </span>
         }
       >
         {lines.length === 0 ? (
           <p className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-sm">
-            Chưa có dòng nào — bấm <b>“+ Chọn SP có sẵn”</b> bên dưới.
+            Chưa có dòng nào — bấm <b>“+ Chọn SP”</b> (chọn được nhiều mã một lượt) hoặc{' '}
+            <b>“SP mới”</b>.
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {lines.map((l) => {
-              const p = l.productId ? known.get(l.productId) : undefined
-              const pk = p?.packing ?? {}
-              const specs: [string, string | null][] = [
-                ['Mã KH đặt', p?.customer_item_code ?? null],
-                ['ĐVT', p?.unit ?? null],
-                ['KT SP (cm)', dimStr(pk.l_cm, pk.w_cm, pk.h_cm)],
-                ['Carton (cm)', dimStr(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm)],
-                [
-                  'Carton (inch)',
-                  inchStr(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm),
-                ],
-                ['SL/ctn', pk.qty_per_carton != null ? String(pk.qty_per_carton) : null],
-                [
-                  'Loading 40HC',
-                  pk.loading_40hc != null ? String(pk.loading_40hc) : null,
-                ],
-                [
-                  'NW/GW (kg)',
-                  pk.nw_kg != null || pk.gw_kg != null
-                    ? `${pk.nw_kg ?? '—'} / ${pk.gw_kg ?? '—'}`
-                    : null,
-                ],
-              ]
-              const noSpec =
-                !dimStr(pk.l_cm, pk.w_cm, pk.h_cm) && pk.qty_per_carton == null
-              const mine = l.productId ? lastPrices.get(l.productId) : undefined
-              const market = l.productId ? marketPrices.get(l.productId) : undefined
-              return (
-                <div key={l.key} className="rounded-lg border p-3">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <ProductPicker
-                        value={l.productId}
-                        selected={p}
-                        customerId={customerId || null}
-                        usedIds={usedIds}
-                        onPick={(picked) => {
-                          rememberProduct(picked)
-                          const last = lastPrices.get(picked.id)
-                          setLine(l.key, {
-                            productId: picked.id,
-                            ...(l.unitPrice === '' && last
-                              ? { unitPrice: last.unit_price }
-                              : {}),
-                          })
-                        }}
-                      />
-                      {p && (
-                        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                          <span className="font-mono">{p.code}</span>
-                          <Badge tone={BOM_TONE[p.bom_status]}>
-                            {BOM_LABEL[p.bom_status]}
-                          </Badge>
-                          {p.has_image ? (
-                            <span>🖼 có ảnh</span>
-                          ) : (
-                            <span className="text-amber-600">🖼 chưa có ảnh</span>
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full min-w-[1080px] border-collapse text-sm">
+              <thead>
+                <tr className="bg-muted/50 text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                  <th className="w-8 px-2 py-1.5 text-right">#</th>
+                  <th className="min-w-[280px] px-2 py-1.5 text-left">Sản phẩm</th>
+                  <th className="w-14 px-2 py-1.5 text-left">ĐVT</th>
+                  <th className="w-24 px-2 py-1.5 text-right">SL / MOQ</th>
+                  {canSeeCost && (
+                    <th className="w-24 px-2 py-1.5 text-right">Giá thành KH</th>
+                  )}
+                  <th className="w-28 px-2 py-1.5 text-right">Đơn giá ({currency})</th>
+                  <th className="w-20 px-2 py-1.5 text-right">CK %</th>
+                  <th className="w-24 px-2 py-1.5 text-right">Net</th>
+                  {canSeeCost && <th className="w-16 px-2 py-1.5 text-right">Lãi KH</th>}
+                  <th className="px-2 py-1.5 text-left">Ghi chú</th>
+                  <th className="w-16 px-2 py-1.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((l, i) => {
+                  const p = l.productId ? known.get(l.productId) : undefined
+                  const pk = p?.packing ?? {}
+                  const net = quoteNetPrice(
+                    Number(l.unitPrice) || 0,
+                    l.discount === '' ? null : Number(l.discount),
+                  )
+                  const cost = l.productId
+                    ? (planPrices.get(l.productId)?.price ?? null)
+                    : null
+                  const margin =
+                    cost != null && net > 0 ? ((net - cost) / net) * 100 : null
+                  const mine = l.productId ? lastPrices.get(l.productId) : undefined
+                  const market = l.productId ? marketPrices.get(l.productId) : undefined
+                  const noSpec =
+                    !dimStr(pk.l_cm, pk.w_cm, pk.h_cm) && pk.qty_per_carton == null
+                  const open = openKeys.has(l.key)
+                  const specs: [string, string | null][] = [
+                    ['Mã KH đặt', p?.customer_item_code ?? null],
+                    ['KT SP (cm)', dimStr(pk.l_cm, pk.w_cm, pk.h_cm)],
+                    [
+                      'Carton (cm)',
+                      dimStr(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm),
+                    ],
+                    [
+                      'Carton (inch)',
+                      inchStr(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm),
+                    ],
+                    [
+                      'SL/ctn',
+                      pk.qty_per_carton != null ? String(pk.qty_per_carton) : null,
+                    ],
+                    [
+                      'Loading 40HC',
+                      pk.loading_40hc != null ? String(pk.loading_40hc) : null,
+                    ],
+                    [
+                      'NW/GW (kg)',
+                      pk.nw_kg != null || pk.gw_kg != null
+                        ? `${pk.nw_kg ?? '—'} / ${pk.gw_kg ?? '—'}`
+                        : null,
+                    ],
+                  ]
+                  const colCount = 9 + (canSeeCost ? 2 : 0)
+                  return (
+                    <Fragment key={l.key}>
+                      <tr className="border-t align-top">
+                        <td className="text-muted-foreground px-2 py-1.5 text-right font-mono text-xs">
+                          {i + 1}
+                        </td>
+                        <td className="px-2 py-1">
+                          <ProductPicker
+                            value={l.productId}
+                            selected={p}
+                            customerId={customerId || null}
+                            usedIds={usedIds}
+                            onPick={(picked) => {
+                              rememberProduct(picked)
+                              const last = lastPrices.get(picked.id)
+                              setLine(l.key, {
+                                productId: picked.id,
+                                ...(l.unitPrice === '' && last
+                                  ? { unitPrice: last.unit_price }
+                                  : {}),
+                              })
+                            }}
+                          />
+                          {p && (
+                            <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
+                              <span className="font-mono">{p.code}</span>
+                              {p.customer_item_code && (
+                                <span className="font-mono">
+                                  · {p.customer_item_code}
+                                </span>
+                              )}
+                              <Badge tone={BOM_TONE[p.bom_status]}>
+                                {BOM_LABEL[p.bom_status]}
+                              </Badge>
+                              {noSpec && (
+                                <span className="text-amber-600">thiếu quy cách</span>
+                              )}
+                            </div>
                           )}
-                          {p.description_en && (
-                            <span className="italic">{p.description_en}</span>
-                          )}
-                        </div>
+                        </td>
+                        <td className="text-muted-foreground px-2 py-2 text-xs">
+                          {p?.unit ?? ''}
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={l.qty}
+                            onChange={(e) =>
+                              setLine(l.key, {
+                                qty: e.target.value === '' ? '' : Number(e.target.value),
+                              })
+                            }
+                            placeholder="tuỳ chọn"
+                            aria-label="Số lượng dự kiến / MOQ"
+                            className={`${cls} h-8 px-2 text-right text-xs`}
+                          />
+                        </td>
+                        {canSeeCost && (
+                          <td className="text-muted-foreground px-2 py-2 text-right font-mono text-xs tabular-nums">
+                            {cost != null
+                              ? cost.toLocaleString('en-US', { minimumFractionDigits: 2 })
+                              : '—'}
+                          </td>
+                        )}
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={l.unitPrice}
+                            onChange={(e) =>
+                              setLine(l.key, {
+                                unitPrice:
+                                  e.target.value === '' ? '' : Number(e.target.value),
+                              })
+                            }
+                            aria-label="Đơn giá"
+                            className={`${cls} h-8 px-2 text-right text-xs ${canSeeCost && cost != null && net > 0 && net < cost ? 'border-red-400' : ''}`}
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={l.discount}
+                            onChange={(e) =>
+                              setLine(l.key, {
+                                discount:
+                                  e.target.value === '' ? '' : Number(e.target.value),
+                              })
+                            }
+                            aria-label="Chiết khấu %"
+                            className={`${cls} h-8 px-2 text-right text-xs`}
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-xs font-medium tabular-nums">
+                          {net > 0
+                            ? net.toLocaleString('en-US', { minimumFractionDigits: 2 })
+                            : '—'}
+                        </td>
+                        {canSeeCost && (
+                          <td
+                            className={`px-2 py-2 text-right font-mono text-xs tabular-nums ${margin == null ? 'text-muted-foreground' : margin < 0 ? 'text-red-600' : margin < 10 ? 'text-amber-600' : 'text-emerald-700'}`}
+                          >
+                            {margin == null ? '—' : `${margin.toFixed(1)}%`}
+                          </td>
+                        )}
+                        <td className="px-2 py-1">
+                          <input
+                            value={l.note}
+                            maxLength={500}
+                            onChange={(e) => setLine(l.key, { note: e.target.value })}
+                            placeholder="tuỳ chọn"
+                            aria-label="Ghi chú dòng"
+                            className={`${cls} h-8 px-2 text-xs`}
+                          />
+                        </td>
+                        <td className="px-1 py-1 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => toggleOpen(l.key)}
+                            aria-expanded={open}
+                            className="text-muted-foreground hover:bg-accent rounded px-1.5 py-1 text-xs"
+                            title="Quy cách · giá gợi ý · điền spec"
+                          >
+                            {open ? '▴' : '▾'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeLine(l.key)}
+                            className="text-muted-foreground rounded p-1 text-xs hover:bg-red-50 hover:text-red-600"
+                            aria-label="Xoá dòng"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                      {open && (
+                        <QuoteLineDetails
+                          colCount={colCount}
+                          product={p}
+                          specs={specs}
+                          mine={mine}
+                          market={market}
+                          onSaved={rememberProduct}
+                        />
                       )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeLine(l.key)}
-                      className="text-muted-foreground shrink-0 rounded p-1.5 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Xoá dòng"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {/* Quy cách đầy đủ (read-only từ thư viện Kỹ thuật) */}
-                  {p && (
-                    <div className="bg-muted/40 mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md p-2.5 text-xs sm:grid-cols-4">
-                      {specs.map(([label, val]) => (
-                        <div key={label} className="flex flex-col">
-                          <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-                            {label}
-                          </span>
-                          <span className={val ? '' : 'text-amber-600'}>
-                            {val ?? '— thiếu'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {noSpec && p && (
-                    <p className="mt-1.5 text-[11px] text-amber-600">
-                      ⚠ SP <b>{p.code}</b> thiếu quy cách — in báo giá sẽ trống. Điền ngay
-                      bên dưới, hoặc nhờ Kỹ thuật bổ sung.
-                    </p>
-                  )}
-                  {p && <ProductSpecFill product={p} onSaved={rememberProduct} />}
-
-                  {/* Ô sửa: đơn giá / CK% / ghi chú (báo giá KHÔNG có số lượng) */}
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <LineField label={`Đơn giá * (${currency})`}>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={l.unitPrice}
-                        onChange={(e) =>
-                          setLine(l.key, {
-                            unitPrice:
-                              e.target.value === '' ? '' : Number(e.target.value),
-                          })
-                        }
-                        className={cls}
-                      />
-                    </LineField>
-                    <LineField label="Chiết khấu %">
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={l.discount}
-                        onChange={(e) =>
-                          setLine(l.key, {
-                            discount: e.target.value === '' ? '' : Number(e.target.value),
-                          })
-                        }
-                        className={cls}
-                      />
-                    </LineField>
-                    <LineField label="Ghi chú dòng" span2>
-                      <input
-                        value={l.note}
-                        maxLength={500}
-                        onChange={(e) => setLine(l.key, { note: e.target.value })}
-                        placeholder="tuỳ chọn"
-                        className={cls}
-                      />
-                    </LineField>
-                  </div>
-
-                  {(mine || market) && (
-                    <div className="text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 text-[11px]">
-                      {mine && (
-                        <span>
-                          Khách này: <b>{mine.unit_price.toLocaleString('en-US')}</b> (
-                          {mine.quote_code})
-                        </span>
-                      )}
-                      {market && (
-                        <span>
-                          Gần nhất: <b>{market.unit_price.toLocaleString('en-US')}</b>{' '}
-                          {market.currency} · {market.customer_name}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/50 border-t text-xs font-medium">
+                  <td className="px-2 py-1.5" colSpan={3}>
+                    Cộng {lines.length} dòng
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {lines
+                      .reduce((s, l) => s + (Number(l.qty) || 0), 0)
+                      .toLocaleString('vi-VN') || 0}
+                  </td>
+                  {canSeeCost && <td />}
+                  <td colSpan={2} />
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {refValue > 0
+                      ? refValue.toLocaleString('en-US', { minimumFractionDigits: 2 })
+                      : '—'}
+                  </td>
+                  {canSeeCost && <td />}
+                  <td
+                    className="text-muted-foreground px-2 py-1.5 font-normal"
+                    colSpan={2}
+                  >
+                    trị giá tham chiếu = Σ net × SL (dòng có SL)
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={addExistingLine}
-            className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm font-medium"
+            onClick={() => setPickerOpen(true)}
+            disabled={!customerId}
+            title={customerId ? undefined : 'Chọn khách hàng trước'}
+            className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
-            + Chọn SP có sẵn
+            + Chọn SP
+          </button>
+          <button
+            type="button"
+            onClick={addExistingLine}
+            className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm"
+          >
+            + Dòng trống
           </button>
           <QuickAddProduct customerId={customerId || null} onCreated={addQuickProduct} />
+          {!canSeeCost && (
+            <span className="text-muted-foreground ml-auto text-[11px]">
+              Giá thành KH chỉ hiện với người có quyền xem giá thành.
+            </span>
+          )}
         </div>
+        <ProductSearchDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          customerId={customerId || null}
+          usedIds={usedIds}
+          multi
+          title="Chọn sản phẩm vào báo giá"
+          onConfirm={addPicked}
+        />
       </Card>
 
       {/* Thanh hành động sticky — cùng khối với OrderForm. */}
@@ -634,64 +787,5 @@ export function QuoteForm(props: {
         </div>
       </div>
     </div>
-  )
-}
-
-/** Thẻ mục của form — cùng khối shadcn Card với OrderForm (tiêu đề chữ thật). */
-function Card({
-  title,
-  right,
-  children,
-}: {
-  title: string
-  right?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <UiCard>
-      <CardHeader>
-        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-        {right && (
-          <div className="col-start-2 row-span-2 row-start-1 self-center">{right}</div>
-        )}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </UiCard>
-  )
-}
-
-function L({
-  label,
-  span2,
-  children,
-}: {
-  label: string
-  span2?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className={`flex flex-col gap-1 text-sm ${span2 ? 'sm:col-span-2' : ''}`}>
-      {label}
-      {children}
-    </label>
-  )
-}
-
-function LineField({
-  label,
-  span2,
-  children,
-}: {
-  label: string
-  span2?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className={`flex flex-col gap-1 ${span2 ? 'col-span-2' : ''}`}>
-      <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-        {label}
-      </span>
-      {children}
-    </label>
   )
 }

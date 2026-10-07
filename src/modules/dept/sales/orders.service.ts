@@ -307,7 +307,7 @@ export const ordersService = {
       l.ship_date ? l : { ...l, ship_date: input.due_date ?? null },
     )
 
-    return ordersRepo.insert(
+    const created = await ordersRepo.insert(
       {
         code: input.code,
         quote_id: source.quote_id,
@@ -333,6 +333,15 @@ export const ordersService = {
       },
       lines,
     )
+    // Báo giá đã ra đơn → kết cục 'won' (0225). Best-effort: lỗi không làm hỏng đơn.
+    if (source.quote_id) {
+      try {
+        await quotesService.markWon(source.quote_id)
+      } catch (e) {
+        console.error('[orders.create] markWon lỗi', e)
+      }
+    }
+    return created
   },
 
   /**

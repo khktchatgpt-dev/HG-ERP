@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { QuoteForm } from '@/components/sales/QuoteForm'
 
@@ -20,11 +20,7 @@ export default async function NewQuotePage({
   searchParams: Promise<{ customer?: string }>
 }) {
   const user = await authService.requirePageUser()
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
-  if (!canEdit) redirect('/sales/quotes')
+  if (!(await canAction(user, 'sales.quote.manage'))) redirect('/sales/quotes')
 
   const { customer: preselect } = await searchParams
   const { rows: customers } = await customersRepo.list({

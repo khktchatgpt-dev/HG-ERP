@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
@@ -20,11 +20,7 @@ export default async function EditQuotePage({
   const user = await authService.requirePageUser()
   const { id } = await params
 
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
-  if (!canEdit) redirect(`/sales/quotes/${id}`)
+  if (!(await canAction(user, 'sales.quote.manage'))) redirect(`/sales/quotes/${id}`)
 
   let data
   try {
@@ -69,6 +65,7 @@ export default async function EditQuotePage({
       }}
       initialLines={lines.map((l) => ({
         product_id: l.product_id,
+        qty: l.qty,
         unit_price: l.unit_price,
         discount_pct: l.discount_pct,
         note: l.note,

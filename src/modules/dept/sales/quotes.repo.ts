@@ -38,6 +38,10 @@ export type Quote = {
   approved_by: string | null
   approved_at: string | null
   rejected_reason: string | null
+  /** Số bản (1 = bản đầu) và bản trước mà bản này sửa (0225). */
+  revision_no: number
+  revision_of: string | null
+  lost_reason: string | null
   created_at: string
   updated_at: string
 }
@@ -48,8 +52,11 @@ export type QuoteLine = {
   id: string
   quote_id: string
   product_id: string
+  qty: number | null
   unit_price: number
   discount_pct: number | null
+  /** Giá thành KH chụp lúc chào (0225) — null khi người lập không có quyền xem giá thành. */
+  plan_price_snapshot: number | null
   note: string | null
   sort_order: number
   product_code: string
@@ -64,20 +71,47 @@ export type QuoteLine = {
 
 export type QuoteLineInput = {
   product_id: string
+  qty?: number | null
   unit_price: number
   discount_pct?: number | null
   note?: string | null
+  plan_price_snapshot?: number | null
 }
 
-const COLS =
+const COLS_LEGACY =
   'id, code, customer_id, status, currency, valid_from, valid_to, price_term, payment_terms, note, created_by, submitted_at, submitted_by, approved_by, approved_at, rejected_reason, created_at, updated_at'
+const COLS_0225 = `${COLS_LEGACY}, revision_no, revision_of, lost_reason`
+
+/**
+ * 0225 CHƯA ÁP thì không chọn/ghi được cột mới — dò một lần rồi nhớ (07/10/2026).
+ * Thiếu cột: bản = 1, không chuỗi sửa đổi, không chụp giá thành. Áp xong thì
+ * khởi động lại server là đủ.
+ */
+let has0225: boolean | null = null
+async function probe0225(): Promise<boolean> {
+  if (has0225 != null) return has0225
+  const { error } = await db().from('sales_quotes').select('revision_no').limit(1)
+  has0225 = !error
+  if (!has0225)
+    console.error('[sales_quotes] 0225 chưa áp — chạy ở chế độ cột cũ:', error?.message)
+  return has0225
+}
+async function cols(): Promise<string> {
+  return (await probe0225()) ? COLS_0225 : COLS_LEGACY
+}
 
 type RawQuote = Quote & { customer: { name: string } | { name: string }[] | null }
 
 function unwrapCustomer(rows: RawQuote[] | null): QuoteWithCustomer[] {
   return (rows ?? []).map((r) => {
     const c = Array.isArray(r.customer) ? r.customer[0] : r.customer
-    return { ...r, customer_name: c?.name ?? '?' }
+    return {
+      ...r,
+      revision_no: r.revision_no ?? 1,
+      revision_of: r.revision_of ?? null,
+      lost_reason: r.lost_reason ?? null,
+      customer_name: c?.name ?? '?',
+    }
   })
 }
 
@@ -97,7 +131,7 @@ export const quotesRepo = {
   }): Promise<{ rows: QuoteWithCustomer[]; total: number }> {
     let q = db()
       .from('sales_quotes')
-      .select(`${COLS}, customer:sales_customers(name)`, { count: 'exact' })
+      .select(`${await cols()}, customer:sales_customers(name)`, { count: 'exact' })
       .order('created_at', { ascending: false })
     if (filter.customer_id) q = q.eq('customer_id', filter.customer_id)
     if (filter.status) q = q.eq('status', filter.status)
@@ -105,24 +139,29 @@ export const quotesRepo = {
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
-    return { rows: unwrapCustomer(data as RawQuote[] | null), total: count ?? 0 }
+    return {
+      rows: unwrapCustomer(data as unknown as RawQuote[] | null),
+      total: count ?? 0,
+    }
   },
 
   async findById(id: string): Promise<QuoteWithCustomer | null> {
     const { data } = await db()
       .from('sales_quotes')
-      .select(`${COLS}, customer:sales_customers(name)`)
+      .select(`${await cols()}, customer:sales_customers(name)`)
       .eq('id', id)
       .maybeSingle()
     if (!data) return null
-    return unwrapCustomer([data as RawQuote])[0]
+    return unwrapCustomer([data as unknown as RawQuote])[0]
   },
 
   async listLines(quoteId: string): Promise<QuoteLine[]> {
     const { data } = await db()
       .from('sales_quote_lines')
       .select(
-        'id, quote_id, product_id, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)',
+        (await probe0225())
+          ? 'id, quote_id, product_id, qty, unit_price, discount_pct, plan_price_snapshot, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)'
+          : 'id, quote_id, product_id, qty, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)',
       )
       .eq('quote_id', quoteId)
       .order('sort_order')
@@ -143,20 +182,25 @@ export const quotesRepo = {
       id: string
       quote_id: string
       product_id: string
+      qty: number | null
       unit_price: number
       discount_pct: number | null
+      plan_price_snapshot?: number | null
       note: string | null
       sort_order: number
       product: RawProduct | RawProduct[] | null
     }
-    return ((data ?? []) as RawLine[]).map((r) => {
+    return ((data ?? []) as unknown as RawLine[]).map((r) => {
       const p = Array.isArray(r.product) ? r.product[0] : r.product
       return {
         id: r.id,
         quote_id: r.quote_id,
         product_id: r.product_id,
+        qty: r.qty == null ? null : Number(r.qty),
         unit_price: r.unit_price,
         discount_pct: r.discount_pct,
+        plan_price_snapshot:
+          r.plan_price_snapshot == null ? null : Number(r.plan_price_snapshot),
         note: r.note,
         sort_order: r.sort_order,
         product_code: p?.code ?? '?',
@@ -181,21 +225,28 @@ export const quotesRepo = {
       payment_terms?: string | null
       note?: string | null
       created_by: string
+      revision_no?: number
+      revision_of?: string | null
     },
     lines: QuoteLineInput[],
   ): Promise<Quote> {
+    const ok = await probe0225()
+    const { revision_no, revision_of, ...legacy } = row
+    void revision_no
+    void revision_of
     const { data, error } = await db()
       .from('sales_quotes')
-      .insert(row)
-      .select(COLS)
+      .insert(ok ? row : legacy)
+      .select(await cols())
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert quote failed')
-    const quote = data as Quote
+    const quote = data as unknown as Quote
     if (lines.length > 0) await this.replaceLines(quote.id, lines)
     return quote
   },
 
   async replaceLines(quoteId: string, lines: QuoteLineInput[]): Promise<void> {
+    const ok = await probe0225()
     const { error: delErr } = await db()
       .from('sales_quote_lines')
       .delete()
@@ -208,8 +259,15 @@ export const quotesRepo = {
         lines.map((l, i) => ({
           quote_id: quoteId,
           product_id: l.product_id,
+          qty: l.qty ?? null,
           unit_price: l.unit_price,
           discount_pct: l.discount_pct ?? null,
+          ...(ok
+            ? {
+                plan_price_snapshot: l.plan_price_snapshot ?? null,
+                plan_at: l.plan_price_snapshot == null ? null : new Date().toISOString(),
+              }
+            : {}),
           note: l.note ?? null,
           sort_order: i,
         })),
@@ -222,15 +280,114 @@ export const quotesRepo = {
       .from('sales_quotes')
       .update(patch)
       .eq('id', id)
-      .select(COLS)
+      .select(await cols())
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Update quote failed')
-    return data as Quote
+    return data as unknown as Quote
   },
 
   async delete(id: string): Promise<void> {
     const { error } = await db().from('sales_quotes').delete().eq('id', id)
     if (error) throw new Error(error.message)
+  },
+
+  /** Chuỗi bản sửa đổi: mọi báo giá có cùng gốc (đi ngược revision_of tới bản đầu). */
+  async listRevisions(id: string): Promise<QuoteWithCustomer[]> {
+    if (!(await probe0225())) {
+      const one = await this.findById(id)
+      return one ? [one] : []
+    }
+    // Tìm gốc: đi ngược tối đa 50 bước.
+    let rootId = id
+    for (let i = 0; i < 50; i++) {
+      const cur = await this.findById(rootId)
+      if (!cur?.revision_of) break
+      rootId = cur.revision_of
+    }
+    const out: QuoteWithCustomer[] = []
+    let frontier = [rootId]
+    for (let i = 0; i < 50 && frontier.length; i++) {
+      const { data } = await db()
+        .from('sales_quotes')
+        .select(`${await cols()}, customer:sales_customers(name)`)
+        .in('id', frontier)
+      const rows = unwrapCustomer(data as unknown as RawQuote[] | null)
+      out.push(...rows.filter((r) => !out.some((x) => x.id === r.id)))
+      const { data: kids } = await db()
+        .from('sales_quotes')
+        .select('id')
+        .in('revision_of', frontier)
+      frontier = ((kids ?? []) as { id: string }[]).map((k) => k.id)
+    }
+    return out.sort(
+      (a, b) => a.revision_no - b.revision_no || a.created_at.localeCompare(b.created_at),
+    )
+  },
+
+  /** Đơn hàng sinh từ các báo giá — nút thông minh "Đơn hàng n". */
+  async ordersByQuoteIds(
+    ids: string[],
+  ): Promise<Map<string, { id: string; code: string; status: string }[]>> {
+    const m = new Map<string, { id: string; code: string; status: string }[]>()
+    if (!ids.length) return m
+    const { data } = await db()
+      .from('sales_orders')
+      .select('id, code, status, quote_id')
+      .in('quote_id', ids)
+    for (const r of (data ?? []) as {
+      id: string
+      code: string
+      status: string
+      quote_id: string
+    }[]) {
+      const arr = m.get(r.quote_id) ?? []
+      arr.push({ id: r.id, code: r.code, status: r.status })
+      m.set(r.quote_id, arr)
+    }
+    return m
+  },
+
+  /** Dòng của nhiều báo giá (SL · giá · CK) — trị giá tham chiếu của sổ, một query cho cả trang. */
+  async linesByQuoteIds(ids: string[]): Promise<
+    {
+      quote_id: string
+      qty: number | null
+      unit_price: number
+      discount_pct: number | null
+    }[]
+  > {
+    if (!ids.length) return []
+    const { data } = await db()
+      .from('sales_quote_lines')
+      .select('quote_id, qty, unit_price, discount_pct')
+      .in('quote_id', ids)
+      .limit(5000)
+    return (
+      (data ?? []) as {
+        quote_id: string
+        qty: number | null
+        unit_price: number
+        discount_pct: number | null
+      }[]
+    ).map((r) => ({
+      ...r,
+      qty: r.qty == null ? null : Number(r.qty),
+      unit_price: Number(r.unit_price),
+    }))
+  },
+
+  /** Số bản sửa đổi đã sinh từ mỗi báo giá (revision_of = id). */
+  async revisionCountByIds(ids: string[]): Promise<Map<string, number>> {
+    const m = new Map<string, number>()
+    if (!ids.length) return m
+    const { data } = await db()
+      .from('sales_quotes')
+      .select('revision_of')
+      .in('revision_of', ids)
+    for (const r of (data ?? []) as { revision_of: string | null }[]) {
+      if (r.revision_of) m.set(r.revision_of, (m.get(r.revision_of) ?? 0) + 1)
+    }
+    return m
   },
 
   async countLines(quoteId: string): Promise<number> {
@@ -352,7 +509,7 @@ export async function lastPricesForCustomer(
       'product_id, unit_price, quote:sales_quotes!inner(code, customer_id, status, currency, created_at)',
     )
     .eq('quote.customer_id', customerId)
-    .in('quote.status', ['sent', 'approved'])
+    .in('quote.status', ['sent', 'approved', 'won'])
   if (currency) q = q.eq('quote.currency', currency)
   const { data } = await q
     .order('created_at', { ascending: false, referencedTable: 'quote' })
@@ -401,7 +558,7 @@ export async function lastPricesGlobal(): Promise<LastPriceGlobal[]> {
     .select(
       'product_id, unit_price, quote:sales_quotes!inner(code, status, currency, created_at, customer:sales_customers(name))',
     )
-    .eq('quote.status', 'sent')
+    .in('quote.status', ['sent', 'won'])
     .order('created_at', { ascending: false, referencedTable: 'quote' })
     .limit(1000)
   type RawQ = {

@@ -368,5 +368,33 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      xuất / giao độc lập với lệnh hoàn thành (D4).
    - Chưa làm: `replaceAll` thành RPC transaction (cần migration hàm SQL); bảng
      `production_order_revisions` riêng (vết `revised` trong 0224 đã đủ tra).
-4. **Lượt 4 — Báo giá tầng 2** (bản sửa đổi, kết cục, giá thành trên dòng) — cần D3.
+4. **Lượt 4 — Báo giá tầng 2 + màn kiểu ERP** · ✅ XONG 07/10/2026 (D3 = giữ màn,
+   nối giá thành). Migration **0225 `bao_gia_ban_sua_doi_ket_cuc` CHƯA ÁP**
+   (`revision_no` · `revision_of` · `lost_reason` · status thêm superseded / won /
+   lost / cancelled · `plan_price_snapshot` dòng). Repo dò cột một lần, chưa áp
+   thì chạy chế độ cột cũ (bản = 1, không chuỗi, không chụp giá thành) — áp xong
+   khởi động lại server + "sync types". Token quản trị trong `.env.local` đã hết
+   hạn (401) nên không áp được từ phiên này.
+   - **Bản sửa đổi**: sao chép thành nháp bản N+1 trỏ bản trước; gửi bản mới thì
+     bản trước sang `superseded`. **Nhân bản** sang khách khác (điều khoản lấy mặc
+     định khách mới). **Kết cục**: `won` tự đặt khi tạo đơn từ báo giá (won vẫn
+     tạo thêm đơn được), `lost` có lý do, `cancelled`.
+   - **Giá thành KH trên dòng** (chỉ người có `technical.plan_cost.view`): giá
+     thành hiện tại + chụp lúc chào (`plan_price_snapshot`), net sau CK, lãi KH %,
+     cảnh báo dưới giá thành; route `quotes/plan-prices` trả rỗng khi thiếu quyền
+     (form vẫn dùng được). SL/MOQ tuỳ chọn trên dòng → trị giá tham chiếu = Σ net ×
+     SL. Hiệu lực mặc định hôm nay + 30 ngày. Giá "lần trước" gồm cả `won`.
+   - **Màn kiểu ERP**: sổ `/sales/quotes` (`SoBaoGiaScreen`): 9 ô đếm (Đang chào ·
+     Nháp · Chờ GĐ · Đã gửi · Thắng · Thua · Hết hiệu lực · Nằm im ≥ 14 ngày · Đã
+     đóng), cột Bản / Trạng thái / Hiệu lực / Trị giá tham chiếu / Đơn. Chi tiết
+     `/sales/quotes/[id]` (`BaoGiaScreen`): công cụ theo bước (Duyệt-Từ chối ·
+     Tạo đơn · Chốt & gửi · Trình GĐ · Bản sửa đổi · Sửa · In · ⋯ Nhân bản / Thua /
+     Huỷ / Xoá nháp), 7 ô đếm, hành động tại chỗ, lưới dòng có giá thành · net ·
+     lãi, Tổng quan 3 nhóm, Đơn từ báo giá, Các bản, Tài liệu. Form lập/sửa:
+     khối dòng chuyển từ chuỗi thẻ sang LƯỚI (SL/MOQ · Giá KH · Đơn giá · CK · Net
+     · Lãi), chọn nhiều SP một lượt, hàng chi tiết mở khi cần; helper dời sang
+     `quote-form.shared.tsx`. Xoá `QuotesManager` + `QuoteDetailView`.
+   - Test: 9 ca mới (revise / supersede / copy / lost / won / snapshot theo quyền /
+     hiệu lực mặc định / quoteLineMargin).
+   - Chưa làm: in báo giá chưa có cột SL/MOQ và "Rev n"; nhập Excel chưa đổi.
 5. **Lượt 5–7 — tầng 3** từng màn, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.
