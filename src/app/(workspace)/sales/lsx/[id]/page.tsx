@@ -1,23 +1,23 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { usersRepo } from '@/modules/core/users/users.repo'
-import { canMutateOwned } from '@/lib/record-ownership'
 import { canAction } from '@/modules/core/rbac/rbac.service'
+import { canMutateOwned } from '@/lib/record-ownership'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
-import { colKey, specColumnsOf } from '@/lib/lsx-template'
-import { shipText } from '@/lib/lsx-sheet-cells'
-import { entriesService } from '@/modules/dept/production/entries.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { filesService } from '@/modules/core/files/files.service'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { HttpError } from '@/server/http'
-import { LsxDetailView } from '@/components/production/LsxDetailView'
+import { shipText } from '@/lib/lsx-sheet-cells'
+import { lotShipText } from '@/lib/lsx-lots'
+import { khoaSp, kiemKeHoach } from '@/lib/ke-hoach-xuat'
+import { LenhScreen } from './LenhScreen'
 
 /**
- * Trang chi tiết LSX của SALES: xem hồ sơ + GỬI DUYỆT LẠI khi bị từ chối
- * (sửa kèm header). Thao tác xưởng/kế hoạch nằm bên workspace Sản xuất.
+ * Chi tiết LỆNH SẢN XUẤT phía Sale (khuôn D, kiểu ERP — 07/10/2026). Gác quyền
+ * qua RBAC + chủ lệnh; tải song song: lệnh (kèm vết + lô) · dòng · đơn · công
+ * đoạn · đơn mua · ứng viên gộp. Đợt xuất của dòng đọc theo LÔ (D1).
  */
 export default async function LsxDetailPage({
   params,
@@ -34,106 +34,152 @@ export default async function LsxDetailPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const { lsx, jobs } = data
+  const { lsx, jobs, changes, lots } = data
 
-  const [sheet, stages, summary, dept] = await Promise.all([
-    lsxLinesService.sheet(user, id),
-    productionRepo.listStages(),
-    entriesService.summary(user, id).catch(() => null),
-    user.department_id ? departmentsRepo.findById(user.department_id) : null,
+  const [sheet, orders, canApprove, canIssue, creator, { rows: pos }] = await Promise.all(
+    [
+      lsxLinesService.sheet(user, id),
+      ordersRepo.listByProductionOrder(id),
+      canAction(user, 'production.lsx.approve'),
+      canAction(user, 'production.lsx.issue'),
+      lsx.created_by ? usersRepo.findById(lsx.created_by) : null,
+      posRepo.list({ production_order_id: id, page: 1, page_size: 200 }),
+    ],
+  )
+  const canOwn = canIssue && canMutateOwned(user, lsx.created_by)
+  const orderIds = orders.map((o) => o.id)
+  const [orderLines, shippedByOrder, mergeCandidates] = await Promise.all([
+    ordersRepo.listLinesByOrders(orderIds),
+    ordersRepo.shippedByOrderIds(orderIds),
+    canOwn && !['completed', 'cancelled'].includes(lsx.status)
+      ? ordersRepo.listMergeCandidates(lsx.customer_id)
+      : Promise.resolve([]),
   ])
-  const groupTitle = new Map(sheet.groups.map((g) => [g.id, g.title ?? '']))
-  const sheetLines = sheet.groups.flatMap((g) => g.lines)
-
-  const imageUrls = new Map<string, string>()
-  await Promise.all(
-    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(
-      async (fid) => {
-        try {
-          imageUrls.set(
-            fid as string,
-            await filesService.getDownloadUrl(user, fid as string),
-          )
-        } catch {
-          /* ignore */
-        }
-      },
-    ),
+  const mergeLineCounts = await productionRepo.linesCountByOrder(
+    mergeCandidates.map((o) => o.id),
   )
+  const qtyByOrder = new Map<string, number>()
+  for (const l of orderLines)
+    qtyByOrder.set(l.order_id, (qtyByOrder.get(l.order_id) ?? 0) + l.qty)
 
-  // Duyệt/từ chối đi theo RBAC (chỉ Giám đốc có production.lsx.approve) — trước
-  // 07/10/2026 gác bằng role manager nên trưởng phòng Sale thấy nút rồi ăn 403.
-  const canApprove = await canAction(user, 'production.lsx.approve')
-  // Của ai người đó sửa (07/08/2026): sửa đầu lệnh / soạn dòng / gộp-gỡ đơn chỉ
-  // dành cho NGƯỜI LẬP lệnh (quản lý gánh mọi lệnh). Duyệt/từ chối là việc của GĐ,
-  // không đi qua cửa này.
-  const isSales = user.role === 'admin' || dept?.name === 'Bán Hàng'
-  const isOwner = isSales && canMutateOwned(user, lsx.created_by)
-
-  // Người LẬP lệnh (0119) — null với lệnh nhập bằng script trước khi có cột này.
-  const creator = lsx.created_by ? await usersRepo.findById(lsx.created_by) : null
-
-  // Đơn cùng khách chưa thuộc lệnh nào — Sales gộp thêm vào lệnh này (0113).
-  const ordersEditable = lsx.status !== 'completed' && lsx.status !== 'cancelled'
-  const candidates =
-    isSales && ordersEditable ? await ordersRepo.listMergeCandidates(lsx.customer_id) : []
-  const candidateLineCounts = await productionRepo.linesCountByOrder(
-    candidates.map((o) => o.id),
+  // Lô lệch lệnh? Cùng hàm màn chia đợt dùng (kiemKeHoach) — đọc là kiểm.
+  const sps = new Map<string, { key: string; code: string; qty: number }>()
+  for (const l of sheet.groups.flatMap((g) => g.lines)) {
+    const k = khoaSp(l)
+    const sp = sps.get(k) ?? { key: k, code: k, qty: 0 }
+    sp.qty += l.qty
+    sps.set(k, sp)
+  }
+  const kiem = kiemKeHoach(
+    lots.map((l) => ({
+      po_no: l.po_no,
+      po_ref: l.po_ref,
+      order_no: l.order_no,
+      ship_date: l.ship_date,
+      note: l.note,
+      lines: l.lines,
+    })),
+    [...sps.values()],
   )
+  const orderCodeById = new Map(orders.map((o) => [o.id, o.code]))
 
   return (
-    <LsxDetailView
+    <LenhScreen
       lsx={{
         id: lsx.id,
         code: lsx.code,
         status: lsx.status,
-        orders: lsx.order_ids.map((oid, i) => ({ id: oid, code: lsx.order_codes[i] })),
+        customer_id: lsx.customer_id,
         customer_name: lsx.customer_name,
         priority: lsx.priority,
+        revision: lsx.revision,
+        revision_note: lsx.revision_note,
+        revised_at: lsx.revised_at,
         ship_date: lsx.ship_date,
         received_date: lsx.received_date,
-        completed_at: lsx.completed_at,
-        approved_at: lsx.approved_at,
-        rejected_reason: lsx.rejected_reason,
-        materials_received_at: lsx.materials_received_at,
         container_summary: lsx.container_summary,
         note: lsx.note,
+        issued_at: lsx.issued_at,
+        approved_at: lsx.approved_at,
+        completed_at: lsx.completed_at,
+        rejected_reason: lsx.rejected_reason,
+        materials_due_at: lsx.materials_due_at,
+        materials_received_at: lsx.materials_received_at,
         created_at: lsx.created_at,
+        updated_at: lsx.updated_at,
         created_by_name: creator?.name ?? null,
       }}
-      lines={sheetLines.map((l) => ({
-        order_line_id: l.id,
-        group_title: groupTitle.get(l.group_id) ?? '',
-        product_code: l.product_code,
-        name_vi: l.name_vi ?? l.product_code,
-        unit: l.unit,
-        qty: l.qty,
-        // Đợt xuất là NGÀY (07/08/2026) — dùng chung `shipText` với phiếu in
-        // và file Excel để ba nơi hiện y hệt nhau, không mỗi chỗ một kiểu.
-        ship_text: shipText(l),
-        image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
-        spec: l.specs,
-      }))}
-      specColumns={specColumnsOf(sheet.template).map((c) => ({
-        key: colKey(c),
-        label: c.label,
-      }))}
-      jobs={jobs}
-      stages={stages}
-      components={summary?.components ?? []}
-      synced={summary?.synced_by_line ?? []}
-      supply={null}
-      breadcrumbs={[{ label: 'Bán hàng', href: '/sales' }, { label: `LSX ${lsx.code}` }]}
-      canApprove={canApprove}
-      canManage={false}
-      canResubmit={isOwner}
-      canEditOrders={isOwner}
-      linesHref={isOwner ? `/sales/lsx/${lsx.id}/dong` : null}
-      mergeCandidates={candidates.map((o) => ({
+      orders={orders.map((o) => ({
         id: o.id,
         code: o.code,
-        line_count: candidateLineCounts.get(o.id) ?? 0,
+        status: o.status,
+        customer_po_no: o.customer_po_no,
+        due_date: o.due_date,
+        qty: qtyByOrder.get(o.id) ?? 0,
+        shipped: shippedByOrder[o.id] ?? 0,
       }))}
+      groups={sheet.groups.map((g) => ({
+        id: g.id,
+        title: g.title ?? '',
+        po_no: g.po_no,
+        buyer_name: g.buyer_name,
+        sales_order_code: g.sales_order_id
+          ? (orderCodeById.get(g.sales_order_id) ?? null)
+          : null,
+        lines: g.lines.map((l) => ({
+          id: l.id,
+          group_id: l.group_id,
+          product_id: l.product_id,
+          product_code: l.product_code,
+          customer_item_code: l.customer_item_code,
+          name_vi: l.name_vi,
+          unit: l.unit,
+          qty: l.qty,
+          cbm: l.cbm,
+          ship_text:
+            lotShipText(l.product_code, lots) ||
+            shipText(l) ||
+            (g.ship_date ? shipText(g) : ''),
+          changed_in_rev: l.changed_in_rev,
+          spec_summary: Object.values(l.specs ?? {})
+            .filter(Boolean)
+            .join(' · '),
+          bom_missing: !l.product_id,
+        })),
+      }))}
+      lots={lots.map((l) => ({
+        id: l.id,
+        seq: l.seq,
+        po: l.po_ref || l.po_no,
+        ship_date: l.ship_date,
+        note: l.note,
+        qty: l.lines.reduce((s, x) => s + x.qty, 0),
+        lines: l.lines,
+      }))}
+      lotIssues={kiem.loi}
+      lotLeft={lots.length ? kiem.conLai : {}}
+      jobs={{ done: jobs.filter((j) => j.status === 'done').length, total: jobs.length }}
+      changes={changes.map((c) => ({
+        id: c.id,
+        changed_by_name: c.changed_by_name,
+        change: c.change,
+        note: c.note,
+        created_at: c.created_at,
+      }))}
+      pos={pos.map((p) => ({
+        id: p.id,
+        code: p.code,
+        status: p.status,
+        supplier_name: p.supplier_name,
+      }))}
+      mergeCandidates={mergeCandidates.map((o) => ({
+        id: o.id,
+        code: o.code,
+        line_count: mergeLineCounts.get(o.id) ?? 0,
+      }))}
+      canApprove={canApprove}
+      canOwn={canOwn}
+      canIssue={canIssue}
     />
   )
 }

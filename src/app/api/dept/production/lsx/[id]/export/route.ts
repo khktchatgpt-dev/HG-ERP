@@ -11,6 +11,8 @@ import {
   type LsxExcelImage,
 } from '@/modules/dept/production/lsx-excel'
 import { lsxPrintWatermark } from '@/lib/lsx-status'
+import { applyLotsToGroups } from '@/lib/lsx-lots'
+import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
 
 /**
  * Tải phiếu LỆNH SẢN XUẤT dạng .xlsx — bày giống hệt phiếu in (mẫu chuẩn, gộp
@@ -25,15 +27,17 @@ export const GET = handle(
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
 
-    const [sheet, company] = await Promise.all([
+    const [sheet, company, lots] = await Promise.all([
       lsxLinesService.sheet(user, id),
       settingsService.getAll(),
+      shipPlanRepo.lotsOf([id]),
     ])
+    const groups = applyLotsToGroups(sheet.groups, lots)
 
     // Ảnh SP: ký URL 1 lượt rồi tải về nhúng vào file — thiếu ảnh không chặn xuất.
     const fileIds = [
       ...new Set(
-        sheet.groups.flatMap((g) => g.lines.map((l) => l.image_file_id).filter(Boolean)),
+        groups.flatMap((g) => g.lines.map((l) => l.image_file_id).filter(Boolean)),
       ),
     ] as string[]
     const urls = await filesService.getDownloadUrls(user, fileIds)
@@ -73,7 +77,7 @@ export const GET = handle(
         watermark: lsxPrintWatermark(lsx.status),
       },
       template: sheet.template,
-      groups: sheet.groups,
+      groups,
       images,
     })
 

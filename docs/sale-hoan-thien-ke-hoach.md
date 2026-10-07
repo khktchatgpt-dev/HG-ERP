@@ -337,6 +337,36 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      (lưới phím Excel, dán từ Excel, CommitBar) ở lượt tầng 3.
    - Đo 07/10 sau khi dựng: 53/53 đơn "thiếu dữ liệu" (điều khoản 53, tuần giao
      ~20, PO 19, giá 5) — ô đếm này là việc dọn của Sale tuần tới.
-3. **Lượt 3 — Lệnh SX tầng 2** (xoá/huỷ lệnh, đồng bộ từ đơn, revision) — cần D1.
+3. **Lượt 3 — Lệnh SX tầng 2 + màn kiểu ERP** · ✅ XONG 07/10/2026 (commit af88550
+   logic + commit màn). Migration **0224 `lenh_sx_vet_thay_doi` CHƯA ÁP** (bảng
+   `production_order_changes` + 2 loại thông báo `lsx_cancelled`,
+   `lsx_header_changed`); repo chịu được khi bảng chưa có (ghi vết là phụ, lịch
+   sử tạm rỗng) — áp xong thì "sync types".
+   - **Xoá lệnh nháp / bị từ chối** (đơn về Xác nhận, phát lại được) và **Huỷ lệnh**
+     đã phát hành có lý do (đã có công đoạn chạy thì chỉ quản lý; đơn về Xác nhận;
+     báo xưởng + Cung ứng; đơn mua KHÔNG tự huỷ).
+   - **Đổi đầu lệnh sau duyệt** ghi vết + báo; **D1**: lệnh đã chia lô thì hạn xuất =
+     lô sớm nhất (tự tính khi lưu lô, không gõ tay được), đợt xuất của dòng trên
+     phiếu in / Excel / màn chi tiết / màn soạn đọc theo LÔ (`lib/lsx-lots`, 10 test);
+     ô ngày ở nhóm và dòng BỎ khỏi màn soạn (chỉ đọc + link Chia đợt).
+   - **Đồng bộ từ đơn**: so nhóm ↔ dòng đơn (`lib/lsx-sync`, 5 test) → xem trước,
+     áp phần tự áp được (thêm / bỏ / đổi SL), SP tách đợt báo chỉnh tay; lệnh đã
+     duyệt thì sinh bản phát lại có lý do.
+   - **Bản phát lại có kiểm soát**: lý do BẮT BUỘC khi lệnh đã duyệt và payload đổi
+     dòng (kiểm trước khi ghi), ô lý do chỉ hiện khi đã duyệt, khoá phiên bản
+     `expected_updated_at` (409), cảnh báo rời trang khi chưa lưu, vết `revised`.
+   - **Lô lệch lệnh** kiểm lúc đọc bằng chính `kiemKeHoach` → cờ đỏ trên màn chi tiết.
+   - **Màn kiểu ERP**: sổ lệnh `/sales/lsx` (`SoLenhScreen`): 8 ô đếm + "Đơn chờ
+     lệnh", lưới phẳng với công đoạn thật, vật tư, hạn xuất, lô kế tiếp, đã xếp lô,
+     bản N; chi tiết `/sales/lsx/[id]` (`LenhScreen` + 3 khối): công cụ góc phải
+     (duyệt / từ chối / gửi duyệt / trình lại / soạn dòng / sửa đầu lệnh / in / Excel
+     / ⋯ so với đơn · huỷ · xoá), 7 ô đếm, hành động TẠI CHỖ, lưới dòng theo nhóm,
+     Tổng quan 3 nhóm, Đơn trong lệnh (gộp / gỡ), Đợt xuất, Vật tư (đơn mua, ẩn
+     tiền), Lịch sử, Tài liệu. Xoá `LsxWorkbench` + `IssueLsxDialog` (phát lệnh làm
+     ở trang đơn). Khu Sản xuất vẫn dùng `LsxDetailView`.
+   - **Hoàn thành theo từng đơn (mục 6.3 cuối)**: không cần nữa — từ lượt 2 đơn
+     xuất / giao độc lập với lệnh hoàn thành (D4).
+   - Chưa làm: `replaceAll` thành RPC transaction (cần migration hàm SQL); bảng
+     `production_order_revisions` riêng (vết `revised` trong 0224 đã đủ tra).
 4. **Lượt 4 — Báo giá tầng 2** (bản sửa đổi, kết cục, giá thành trên dòng) — cần D3.
 5. **Lượt 5–7 — tầng 3** từng màn, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.

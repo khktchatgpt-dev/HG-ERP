@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { canMutateOwned } from '@/lib/record-ownership'
+import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { filesService } from '@/modules/core/files/files.service'
@@ -22,12 +24,16 @@ export default async function LsxLinesPage({
   const lsx = await productionRepo.findById(id)
   if (!lsx) notFound()
 
-  const [sheet, dept] = await Promise.all([
+  const [sheet, canIssue, lots] = await Promise.all([
     lsxLinesService.sheet(user, id),
-    user.department_id ? departmentsRepo.findById(user.department_id) : null,
+    canAction(user, 'production.lsx.issue'),
+    shipPlanRepo.lotsOf([id]),
   ])
+  // Cùng cửa với lsxLinesService.save: quyền phát lệnh + của ai người đó sửa
+  // (trước 07/10/2026 trang mở cho mọi NV Sale, bấm Lưu mới 403).
   const canEdit =
-    (user.role === 'admin' || dept?.name === 'Bán Hàng') &&
+    canIssue &&
+    canMutateOwned(user, lsx.created_by) &&
     lsx.status !== 'completed' &&
     lsx.status !== 'cancelled'
 
@@ -68,6 +74,10 @@ export default async function LsxLinesPage({
       revision={lsx.revision}
       canEdit={canEdit}
       isDraft={lsx.status === 'draft'}
+      status={lsx.status}
+      updatedAt={lsx.updated_at}
+      lots={lots}
+      lotsHref={`/sales/ke-hoach-xuat?lsx=${lsx.id}`}
       template={sheet.template}
       groups={sheet.groups}
       profiles={profiles}

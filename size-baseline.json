@@ -16,7 +16,7 @@
     "src/components/kit/Table.tsx": 959,
     "src/components/production/LsxComponentsPanel.tsx": 876,
     "src/components/production/LsxDetailView.tsx": 1314,
-    "src/components/production/LsxSheetEditor.tsx": 934,
+    "src/components/production/LsxSheetEditor.tsx": 917,
     "src/components/sales/OrderForm.tsx": 1388,
     "src/components/supply/MaterialPicker.tsx": 888,
     "src/components/technical/ProductPartsCard.tsx": 1587

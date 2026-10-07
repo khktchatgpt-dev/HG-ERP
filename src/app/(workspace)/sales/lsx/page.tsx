@@ -1,70 +1,88 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
+import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
-import { LsxWorkbench, type AwaitingOrder, type LsxRow } from './LsxWorkbench'
+import { todayVn } from '@/lib/date-vn'
+import { nextLot } from '@/lib/lsx-lots'
+import { SoLenhScreen } from './SoLenhScreen'
+import type { LenhRow } from './so-lenh.shared'
 
 /**
- * Trang LỆNH SẢN XUẤT của Sales — thay trang "Theo dõi đơn" cũ (route
- * /sales/tracking nay chuyển hướng về đây). Bảng theo dõi ĐƠN vẫn còn nguyên
- * cho Kế hoạch (/planning/tracking) và Ban GĐ (/exec/tracking).
+ * Sổ LỆNH SẢN XUẤT của Sale (khuôn C, kiểu ERP — 07/10/2026). Gác quyền + tải
+ * dữ liệu song song: lệnh · dòng/SL · công đoạn · lô 0222 · người lập · đơn
+ * chờ phát lệnh. Phát lệnh làm ở trang đơn.
  */
 export default async function SalesLsxPage() {
   const user = await authService.requirePageUser()
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng'
-
-  const [{ rows: lsxRows }, awaitingOrders] = await Promise.all([
+  const [canIssue, { rows: lsxRows }, awaitingOrders] = await Promise.all([
+    canAction(user, 'production.lsx.issue'),
     lsxService.list(user, { page: 1, page_size: 300 }),
     ordersRepo.listAwaitingLsx(),
   ])
-
-  // Số dòng/SL: của LỆNH lấy từ dòng lệnh, của ĐƠN chờ phát lấy từ dòng đơn.
-  // Người LẬP lệnh — một truy vấn cho cả trang (0119).
-  const creatorNames = await usersRepo.displayNamesByIds([
-    ...new Set(lsxRows.map((r) => r.created_by).filter((v) => v !== null)),
+  const ids = lsxRows.map((r) => r.id)
+  const [summary, jobs, lots, creatorNames] = await Promise.all([
+    lsxLinesRepo.summaryByLsx(ids),
+    jobsRepo.listByLsxBulk(ids),
+    shipPlanRepo.lotsOf(ids),
+    usersRepo.displayNamesByIds([
+      ...new Set(lsxRows.map((r) => r.created_by).filter((v) => v !== null)),
+    ]),
   ])
-
-  const [lsxSummary, awaitingLines] = await Promise.all([
-    lsxLinesRepo.summaryByLsx(lsxRows.map((r) => r.id)),
-    ordersRepo.listLinesByOrders(awaitingOrders.map((o) => o.id)),
-  ])
-  const perOrder = new Map<string, { lines: number; qty: number }>()
-  for (const l of awaitingLines) {
-    const cur = perOrder.get(l.order_id) ?? { lines: 0, qty: 0 }
-    cur.lines += 1
-    cur.qty += Number(l.qty) || 0
-    perOrder.set(l.order_id, cur)
+  const today = todayVn()
+  const jobsBy = new Map<string, { done: number; total: number }>()
+  for (const j of jobs) {
+    const cur = jobsBy.get(j.production_order_id) ?? { done: 0, total: 0 }
+    cur.total += 1
+    if (j.status === 'done') cur.done += 1
+    jobsBy.set(j.production_order_id, cur)
+  }
+  const lotsBy = new Map<string, typeof lots>()
+  for (const l of lots) {
+    const arr = lotsBy.get(l.production_order_id) ?? []
+    arr.push(l)
+    lotsBy.set(l.production_order_id, arr)
   }
 
-  const awaiting: AwaitingOrder[] = awaitingOrders.map((o) => ({
-    id: o.id,
-    code: o.code,
-    customer_id: o.customer_id,
-    customer_name: o.customer_name,
-    due_date: o.due_date,
-    line_count: perOrder.get(o.id)?.lines ?? 0,
-    qty: perOrder.get(o.id)?.qty ?? 0,
-  }))
+  const rows: LenhRow[] = lsxRows.map((r) => {
+    const myLots = lotsBy.get(r.id) ?? []
+    const nl = nextLot(myLots, today)
+    return {
+      id: r.id,
+      code: r.code,
+      customer_id: r.customer_id,
+      customer_name: r.customer_name,
+      order_codes: r.order_codes,
+      status: r.status,
+      revision: r.revision,
+      priority: r.priority,
+      issued_at: r.issued_at,
+      created_by: r.created_by,
+      created_by_name: r.created_by ? (creatorNames.get(r.created_by) ?? null) : null,
+      ship_date: r.ship_date,
+      materials_due_at: r.materials_due_at,
+      materials_received_at: r.materials_received_at,
+      lines: summary.get(r.id)?.lines ?? 0,
+      qty: summary.get(r.id)?.qty ?? 0,
+      jobs_done: jobsBy.get(r.id)?.done ?? 0,
+      jobs_total: jobsBy.get(r.id)?.total ?? 0,
+      lots: myLots.length,
+      next_lot: nl?.ship_date
+        ? { ship_date: nl.ship_date, po: nl.po_ref || nl.po_no }
+        : null,
+      lot_qty: myLots.reduce((s, l) => s + l.lines.reduce((a, x) => a + x.qty, 0), 0),
+    }
+  })
 
-  const rows: LsxRow[] = lsxRows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    customer_id: r.customer_id,
-    customer_name: r.customer_name,
-    order_codes: r.order_codes,
-    status: r.status,
-    revision: r.revision,
-    issued_at: r.issued_at,
-    created_by_name: r.created_by ? (creatorNames.get(r.created_by) ?? null) : null,
-    ship_date: r.ship_date,
-    lines: lsxSummary.get(r.id)?.lines ?? 0,
-    qty: lsxSummary.get(r.id)?.qty ?? 0,
-  }))
-
-  return <LsxWorkbench awaiting={awaiting} rows={rows} canIssue={canIssue} />
+  return (
+    <SoLenhScreen
+      rows={rows}
+      awaiting={awaitingOrders.length}
+      me={{ id: user.id }}
+      canIssue={canIssue}
+    />
+  )
 }

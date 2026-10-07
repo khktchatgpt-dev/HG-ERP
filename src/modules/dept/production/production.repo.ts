@@ -362,7 +362,8 @@ export const productionRepo = {
     const { error } = await db()
       .from('production_order_changes')
       .insert({ ...row, note: row.note ?? null, change: row.change as unknown as Json })
-    if (error) throw new Error(error.message)
+    // Vết là PHỤ: bảng chưa áp (0224) hay lỗi ghi không được chặn nghiệp vụ.
+    if (error) console.error('[production_order_changes] ghi vết lỗi:', error.message)
   },
 
   async listChanges(lsxId: string): Promise<ProductionOrderChange[]> {
@@ -374,7 +375,11 @@ export const productionRepo = {
       .eq('production_order_id', lsxId)
       .order('created_at', { ascending: false })
       .limit(500)
-    if (error) throw new Error(error.message)
+    if (error) {
+      // Chưa áp 0224 → màn vẫn mở được, lịch sử tạm rỗng.
+      console.error('[production_order_changes] đọc vết lỗi:', error.message)
+      return []
+    }
     type Raw = Omit<ProductionOrderChange, 'changed_by_name'> & {
       user: { name: string | null } | { name: string | null }[] | null
     }
