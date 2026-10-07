@@ -68,7 +68,7 @@ export const productCreateSchema = z.object({
     .transform((v) => normalizeCustomerLabel(v)),
   customer_item_code: z.string().trim().max(100).optional().nullable(),
   description_en: z.string().trim().max(2000).optional().nullable(),
-  unit: z.string().trim().min(1).max(30).default('cai'),
+  unit: z.string().trim().min(1).max(30).default('cái'),
   packing: packingSchema.optional(),
   notes: z.string().trim().max(2000).optional().nullable(),
   // Thông số kỹ thuật phục vụ LSX / hợp đồng (0026).
@@ -194,7 +194,7 @@ export const productListQuerySchema = z.object({
 export const quickProductCreateSchema = z.object({
   code: z.string().trim().min(1).max(100),
   name: z.string().trim().min(1).max(200),
-  unit: z.string().trim().min(1).max(30).default('cai'),
+  unit: z.string().trim().min(1).max(30).default('cái'),
   customer_id: z.string().uuid().optional().nullable(),
   customer_item_code: z.string().trim().max(100).optional().nullable(),
   description_en: z.string().trim().max(2000).optional().nullable(),

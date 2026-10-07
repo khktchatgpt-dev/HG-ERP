@@ -90,9 +90,9 @@ describe('productCreateSchema', () => {
     expect(p.packing?.carton_l_cm).toBe(75)
   })
 
-  it('unit mặc định "cai"; customer_name nullable (mẫu chung)', () => {
+  it('unit mặc định "cái" (cách viết của 799/807 SP); customer_name nullable (mẫu chung)', () => {
     const p = productCreateSchema.parse({ code: 'X', name: 'Y', customer_name: null })
-    expect(p.unit).toBe('cai')
+    expect(p.unit).toBe('cái')
     expect(p.customer_name).toBeNull()
   })
 
