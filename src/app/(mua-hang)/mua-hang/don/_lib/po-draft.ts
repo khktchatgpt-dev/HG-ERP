@@ -149,6 +149,8 @@ export function buildPoPayload(
         unit_price: l.price === '' ? null : Number(l.price),
         spec: l.spec.trim() || null,
         note: l.note.trim() || null,
+        // Chỉ mang theo, không có ô sửa — để lưu đơn không xoá mất (07/10/2026).
+        product_code: l.product_code?.trim() || null,
         material_grade: l.material_grade.trim() || null,
         dm_per_sp: l.dm_per_sp === '' ? null : Number(l.dm_per_sp),
         qty_demand: l.qty_demand === '' ? null : Number(l.qty_demand),

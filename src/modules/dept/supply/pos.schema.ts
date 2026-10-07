@@ -45,9 +45,11 @@ export const poLineInputSchema = z.object({
   note: optText(500), // truy vết: "50 bàn santorin (4c/sp)" / vị trí chi tiết
   // Dùng chung nhiều mẫu
   material_grade: optText(100), // vật liệu: "Nhựa đen", "Sắt xi trắng", "inox 201"
-  // Không còn `product_code`: ô "Mã SP" đã bỏ khỏi form soạn đơn và phiếu in
-  // (yêu cầu phòng Cung ứng). Cột DB giữ nguyên cho dữ liệu cũ — lúc bỏ thì
-  // 11/11 dòng đang để trống nên không mất gì.
+  // Mã SP khách: ô "Mã SP" đã bỏ khỏi form soạn đơn và phiếu in (yêu cầu phòng
+  // Cung ứng), nhưng đơn nạp từ file có cột này và nó phân biệt các dòng cùng
+  // mã vật tư (tem PQ 45 dòng / 2 mã). Màn soạn MANG THEO để lưu không xoá mất
+  // (07/10/2026 — trước đó replaceLines ghi lại dòng không có cột này).
+  product_code: optText(100),
   dm_per_sp: optNum(1e6), // định mức / sản phẩm
   qty_demand: optNum(1e9), // SL đơn hàng (nhu cầu gộp)
   qty_on_hand: optNum(1e9), // tồn kho lúc lập đơn

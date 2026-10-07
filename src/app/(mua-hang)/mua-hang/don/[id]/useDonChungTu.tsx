@@ -1,7 +1,6 @@
 'use client'
 
 import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
-import { sameMaterialManyLines } from '@/lib/po-line-dup'
 import {
   buildPoPayload,
   draftProblem,
@@ -13,6 +12,8 @@ import {
   lineFromPo,
   lineProblem,
   lineQty2,
+  migrateDraftLine,
+  qtyTheoMa,
   newFreeLine,
   newLine,
   remapLinesForTemplate,
@@ -429,24 +430,17 @@ export function useDonChungTu(p: Props) {
     })
 
   /**
-   * THÊM MỘT VẬT TƯ từ ô tìm. MÃ ĐÃ CÓ TRÊN ĐƠN THÌ NHẢY TỚI DÒNG ĐÓ (14/09/2026:
-   * trước đó gõ lại một mã là ra hai dòng, tới lúc Lưu mới ăn 400 trùng dòng) —
-   * nhảy chứ không im lặng bỏ qua, kẻo người dùng bấm lại rồi đi tìm lỗi. TRỪ mẫu
-   * cắt theo chiều dài (`sameMaterialManyLines`): thêm dòng để khai chiều dài khác.
+   * THÊM MỘT VẬT TƯ từ ô tìm — LUÔN thêm dòng mới, kể cả mã đã có (07/10/2026;
+   * 16/127 đơn có cùng mã nhiều dòng: chia SP/lệnh, khác quy cách/chiều dài/mã
+   * SP). Gõ nhầm hai lần thì `trung-dong.tsx` báo trùng + mời gộp.
    */
   const addMaterial = (m: PoMaterial) => {
     const cu = lines.findIndex((l) => l.material_id === m.id)
-    if (cu >= 0 && !sameMaterialManyLines(template)) {
-      setPick(cu)
-      focusQty(cu)
-      toast.info(`${m.code} đã có ở dòng ${cu + 1}`, 'Sửa số lượng ngay trên dòng đó.')
-      return
-    }
     const t = cu >= 0 ? template : tplForFirst(m)
     setLines((ls) => [...ls, newLine(t, m)])
     setPick(lines.length)
     focusQty(lines.length)
-    if (cu >= 0) toast.info(`${m.code} đã có ở dòng ${cu + 1} — thêm dòng mới`, 'Khai chiều dài cây / quy cách khác cho dòng này; trùng cả chiều dài thì gộp vào dòng cũ.') // prettier-ignore
+    if (cu >= 0) toast.info(`${m.code} đã có ở dòng ${cu + 1} — đã thêm dòng ${lines.length + 1}`, 'Ghi quy cách / chiều dài / ghi chú (SP, lệnh) cho dòng mới. Chỉ muốn tăng số lượng thì sửa dòng cũ rồi xoá dòng này.') // prettier-ignore
   }
 
   // Đơn mới: mẫu theo nhóm của vật tư đầu tiên (`templateForGroup`); trả mẫu để dòng dựng đúng ngay.
@@ -999,6 +993,8 @@ export function useDonChungTu(p: Props) {
 
   const pending = pendingNeeds(needs, lines)
 
+  const qtyByMat = useMemo(() => qtyTheoMa(lines), [lines])
+
   /** Đề xuất mua theo mã, từ nhu cầu của lệnh — nuôi nút "dùng N ↩" trên ô SL. */
   const suggestByMat = useMemo(
     () => new Map(needs.map((n) => [n.material_id, n.suggest])),
@@ -1054,33 +1050,30 @@ export function useDonChungTu(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drafting, header.poType, header.lsxId, header.extraLsxIds])
 
-  /** Thêm nhiều vật tư một lượt, kèm SL/giá/ghi chú (dán Excel, mồi từ URL). */
+  /** Thêm nhiều vật tư (dán Excel, mồi URL) — MỖI MỤC MỘT DÒNG kể cả cùng mã; bản cũ gộp theo material_id (07/10/2026). */
   // prettier-ignore
-  function addMaterials(list: PoMaterial[], extras?: Map<string, { qty?: number | null; price?: number | null; note?: string | null }>) {
-    const seen = new Set<string>()
-    const add = list.filter((m) => !usedIds.has(m.id) && !seen.has(m.id) && (seen.add(m.id), true))
-    if (add.length === 0) return
-    const t = tplForFirst(add[0])
+  function addMaterials(items: { m: PoMaterial; qty?: number | null; price?: number | null; note?: string | null }[]) {
+    if (items.length === 0) return 0
+    const t = tplForFirst(items[0].m)
     setPick(lines.length)
     setLines((ls) => [
       ...ls,
-      ...add.map((m) => {
+      ...items.map(({ m, qty, price, note }) => {
         const l = newLine(t, m)
-        const e = extras?.get(m.id)
-        return e ? { ...l, qty: (e.qty ?? l.qty) as Line['qty'], price: (e.price ?? l.price) as Line['price'], note: e.note ?? l.note } : l // prettier-ignore
+        return { ...l, qty: (qty ?? l.qty) as Line['qty'], price: (price ?? l.price) as Line['price'], note: note ?? l.note } // prettier-ignore
       }),
     ])
+    return items.length
   }
 
   function addFromPaste(picked: PasteConfirm) {
-    addMaterials(picked.matched.map((x) => x.material), new Map(picked.matched.map((x) => [x.material.id, { qty: x.qty, price: x.price, note: x.note }]))) // prettier-ignore
+    addMaterials(picked.matched.map((x) => ({ m: x.material, qty: x.qty, price: x.price, note: x.note }))) // prettier-ignore
     if (picked.free.length > 0) {
       setLines((ls) => [...ls, ...picked.free.map((f) => ({ ...newFreeLine(), name: f.name, qty: (f.qty ?? '') as Line['qty'], price: (f.price ?? '') as Line['price'], note: f.note ?? '' }))]) // prettier-ignore
     }
-    const dup = picked.matched.filter((x) => usedIds.has(x.material.id)).length
-    const n = picked.matched.length - dup + picked.free.length
-    if (n > 0) toast.success(`Đã thêm ${n} dòng từ vùng dán`, dup > 0 ? `${dup} mã đã có trên đơn, không thêm lại` : undefined) // prettier-ignore
-    else if (dup > 0) toast.warning('Không thêm dòng nào', `${dup} mã trong vùng dán đã có trên đơn`) // prettier-ignore
+    const cung = picked.matched.filter((x) => usedIds.has(x.material.id)).length
+    const n = picked.matched.length + picked.free.length
+    if (n > 0) toast.success(`Đã thêm ${n} dòng từ vùng dán`, cung > 0 ? `${cung} dòng cùng mã với dòng đã có trên đơn — xem cảnh báo trùng nếu là gõ lặp` : undefined) // prettier-ignore
   }
 
   /** Từ nhu cầu lệnh: nạp hồ sơ vật tư (kg/m, dài cây…) rồi mới thành dòng — thiếu thì dòng nhôm không tính được tiền. */
@@ -1108,7 +1101,7 @@ export function useDonChungTu(p: Props) {
   }
 
   function onCreatedMaterial(m: CreatedMaterial) {
-    addMaterials([{ ...m, vat_rate: null, default_supplier_id: null, last_purchase_price: null, on_hand: null, last_line: null } as PoMaterial]) // prettier-ignore
+    addMaterials([{ m: { ...m, vat_rate: null, default_supplier_id: null, last_purchase_price: null, on_hand: null, last_line: null } as PoMaterial }]) // prettier-ignore
   }
 
   /** Ghi số cân / quy cách về danh mục ngay từ dòng — khai một lần, mọi đơn sau tự điền. */
@@ -1116,6 +1109,7 @@ export function useDonChungTu(p: Props) {
     materialId: string,
     field: 'kgm' | 'kgunit' | 'spec',
     value: number | string,
+    lineKey?: string, // dòng bấm lưu: quy cách chỉ ghi về ĐÚNG dòng này (07/10/2026)
   ) {
     // prettier-ignore
     const col = field === 'kgm' ? 'kg_per_m' : field === 'kgunit' ? 'kg_per_unit' : 'spec'
@@ -1124,7 +1118,7 @@ export function useDonChungTu(p: Props) {
         method: 'PATCH',
         body: { [col]: value },
       })
-      setLines((ls) => ls.map((l) => l.material_id === materialId ? { ...l, ...(field === 'kgm' ? { catalog_kg_m: Number(value) } : field === 'kgunit' ? { catalog_kg_unit: Number(value) } : { spec: String(value) }) } : l)) // prettier-ignore
+      setLines((ls) => ls.map((l) => l.material_id !== materialId ? l : field === 'kgm' ? { ...l, catalog_kg_m: Number(value) } : field === 'kgunit' ? { ...l, catalog_kg_unit: Number(value) } : lineKey == null || rowKey(l) === lineKey ? { ...l, spec: String(value) } : l)) // prettier-ignore
       invalidateMaterialPickCache()
       toast.success('Đã lưu vào danh mục', `${col} = ${value}`)
     } catch (e) {
@@ -1144,15 +1138,13 @@ export function useDonChungTu(p: Props) {
     seeded.current = true
     const { codes, qtys } = p.seedCodes
     void Promise.all(codes.map((c) => fetchMaterialByCode(c))).then((found) => {
-      const list: PoMaterial[] = []
-      const extras = new Map<string, { qty?: number | null }>()
+      const items: { m: PoMaterial; qty?: number | null }[] = []
       const missing: string[] = []
       found.forEach((m, i) => {
         if (!m) return void missing.push(codes[i])
-        list.push(m)
-        if (Number.isFinite(qtys[i]) && qtys[i] > 0) extras.set(m.id, { qty: qtys[i] })
+        items.push({ m, qty: Number.isFinite(qtys[i]) && qtys[i] > 0 ? qtys[i] : null })
       })
-      if (list.length > 0) addMaterials(list, extras)
+      addMaterials(items)
       if (missing.length > 0) toast.error(`Không thấy vật tư "${missing.join('", "')}"`)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mồi một lần lúc mở
@@ -1192,7 +1184,7 @@ export function useDonChungTu(p: Props) {
 
   function restoreDraft(d: SavedDraft) {
     setHeader(d.header)
-    setLines(d.lines)
+    setLines(d.lines.map((l) => migrateDraftLine(d.header.template ?? template, l)))
     setShipCols(d.shipCols ?? [])
     dirty.current = { vat: true, currency: true, template: true }
   }
@@ -1600,6 +1592,7 @@ export function useDonChungTu(p: Props) {
     usedIds,
     pending,
     suggestByMat,
+    qtyByMat,
     capLeft,
     lsxsOfPo,
     lsxLabel,

@@ -23,18 +23,44 @@ export type DupLine = {
   material_id?: string | null
   spec?: string | null
   bar_length_m?: number | string | null
+  /*
+    07/10/2026 — "giống hệt" mới là trùng. Cùng mã nhiều dòng là chuyện thường
+    (đo 16/127 đơn): chia theo SP/lệnh qua GHI CHÚ, tem nhãn theo MÃ SP, carton
+    khác LỌT LÒNG, nhôm khác KHUÔN… Khác một ô trong số này là hai mặt hàng khác
+    nhau với NCC — không báo trùng, không mời gộp.
+  */
+  note?: string | null
+  product_code?: string | null
+  material_grade?: string | null
+  die_code?: string | null
+  dimension_text?: string | null
+  finish?: string | null
+  inner_l_mm?: number | string | null
+  inner_w_mm?: number | string | null
+  inner_h_mm?: number | string | null
 }
+
+const txt = (v: string | null | undefined) =>
+  (v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+const num = (v: number | string | null | undefined) =>
+  v == null || v === '' || !Number.isFinite(Number(v)) ? '' : String(Number(v))
 
 export function poLineDupKey(l: DupLine): string | null {
   if (!l.material_id) return null
-  const len =
-    l.bar_length_m == null ||
-    l.bar_length_m === '' ||
-    !Number.isFinite(Number(l.bar_length_m))
-      ? ''
-      : String(Number(l.bar_length_m))
-  const spec = (l.spec ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
-  return `${l.material_id}|${spec}|${len}`
+  return [
+    l.material_id,
+    txt(l.spec),
+    num(l.bar_length_m),
+    txt(l.note),
+    txt(l.product_code),
+    txt(l.material_grade),
+    txt(l.die_code),
+    txt(l.dimension_text),
+    txt(l.finish),
+    num(l.inner_l_mm),
+    num(l.inner_w_mm),
+    num(l.inner_h_mm),
+  ].join('|')
 }
 
 /** Cặp [dòng trước, dòng trùng] theo chỉ số 0 — dòng thứ ba trùng thì trỏ về dòng đầu tiên. */
@@ -55,15 +81,5 @@ export function duplicateLinePairs(lines: readonly DupLine[]): [number, number][
 export function duplicateLinesMessage(pairs: readonly [number, number][]): string | null {
   if (pairs.length === 0) return null
   const list = pairs.map(([a, b]) => `Dòng ${b + 1} trùng dòng ${a + 1}`).join(', ')
-  return `${list}: cùng mã, cùng quy cách, cùng chiều dài cây`
-}
-
-/**
- * Mẫu đơn cho CÙNG MỘT MÃ nằm nhiều dòng khi soạn: hàng cắt theo chiều dài
- * (nhôm định hình, sắt/inox theo kg). Chọn lại mã đã có trên đơn thì màn thêm
- * dòng mới để khai chiều dài khác thay vì nhảy về dòng cũ — không vậy thì không
- * có đường nào nhập được dòng thứ hai (đơn GIGA anh Truyền, 30/09/2026).
- */
-export function sameMaterialManyLines(template: string | null | undefined): boolean {
-  return template === 'aluminium' || template === 'metal_kg'
+  return `${list}: giống hệt nhau (cùng mã, quy cách, chiều dài, ghi chú, mã SP)`
 }

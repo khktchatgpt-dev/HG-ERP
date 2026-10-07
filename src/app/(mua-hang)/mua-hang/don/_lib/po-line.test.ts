@@ -10,6 +10,7 @@ import {
   lineProblem,
   lineReady,
   mergeLineInto,
+  migrateDraftLine,
   newFreeLine,
   newLine,
   lineQty2,
@@ -1155,5 +1156,37 @@ describe('docTongGo — gõ số khối kiểu tiền (172900 = 172,9 m³), 05/1
   })
   it('mẫu không phải m³ (nhôm kg) không đổi', () => {
     expect(docTongGo('aluminium', xop, '179200')).toBe(179200)
+  })
+})
+
+/* ── CÙNG MÃ NHIỀU DÒNG (07/10/2026) ─────────────────────────────────────── */
+describe('cùng vật tư nhiều dòng — giữ thứ phân biệt các dòng', () => {
+  it('mở đơn đã lưu MANG THEO mã SP khách (trước đó lưu lại là mất)', () => {
+    expect(lineFromPo({ ...base, product_code: '21610-217' }).product_code).toBe('21610-217')
+    expect(lineFromPo({ ...base, product_code: null }).product_code).toBe('')
+  })
+
+  it('gộp: tổng gõ tay cũng cộng; không ai gõ tay thì vẫn tự tính', () => {
+    const l = { ...newFreeLine(), qty: 10 as const, price: 1 as const, qty2_manual: 300 as const }
+    expect(mergeLineInto(l, { ...l, qty: 5, qty2_manual: 150 })!.qty2_manual).toBe(450)
+    const tu = { ...l, qty2_manual: '' as const }
+    expect(mergeLineInto(tu, { ...tu })!.qty2_manual).toBe('')
+  })
+
+  it('sửa danh mục: mã nằm nhiều dòng thì giữ quy cách riêng của dòng', () => {
+    const m: MaterialRefresh = { name: 'Bulon', unit: 'Con', spec: 'M8', kg_per_m: null, kg_per_unit: null, default_bar_length_m: null, price_unit: null, unit2_factor: null, pack_size: null, pack_unit: null, material_grade: null } // prettier-ignore
+    const l = { ...newFreeLine(), is_free: undefined, material_id: 'm1', spec: '8x20' }
+    expect(refreshLineFromMaterial('accessory', l, m, true).spec).toBe('8x20')
+    expect(refreshLineFromMaterial('accessory', l, m).spec).toBe('M8')
+    expect(refreshLineFromMaterial('accessory', { ...l, spec: '' }, m, true).spec).toBe('M8')
+  })
+
+  it('nháp đời trước thiếu uid → khôi phục cấp uid riêng từng dòng', () => {
+    const cu = { ...newFreeLine(), material_id: 'm1', uid: undefined }
+    const a = migrateDraftLine('accessory', cu)
+    const b = migrateDraftLine('accessory', { ...cu })
+    expect(a.uid).toBeTruthy()
+    expect(a.uid).not.toBe(b.uid)
+    expect(migrateDraftLine('accessory', { ...cu, uid: 'giu' }).uid).toBe('giu')
   })
 })

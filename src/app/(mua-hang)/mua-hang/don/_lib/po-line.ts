@@ -52,6 +52,13 @@ export type Line = {
   code: string
   name: string
   unit: string
+  /**
+   * MÃ SP KHÁCH của dòng (tem, bao bì chia theo SP) — ô đã bỏ khỏi form theo yêu
+   * cầu Cung ứng nhưng dữ liệu nạp từ file vẫn có, và là thứ phân biệt hai dòng
+   * cùng mã vật tư. Trước 07/10/2026 lưu đơn từ màn soạn XOÁ MẤT cột này
+   * (payload không mang) — nay chỉ mang theo, không bày ô sửa.
+   */
+  product_code?: string
   /** Tồn hiện tại — NULL = chưa có sổ kho, hiện "kho ?" thay vì tồn 0 giả. */
   on_hand: number | null
   spec: string
@@ -560,13 +567,18 @@ export function refreshLineFromMaterial(
   t: PoTemplate,
   l: Line,
   m: MaterialRefresh,
+  /**
+   * Giữ quy cách đang có của DÒNG (07/10/2026): mã nằm nhiều dòng thì mỗi dòng
+   * một quy cách riêng — sửa danh mục không được đè cả loạt về một quy cách.
+   */
+  keepSpec = false,
 ): Line {
   const kgUnit = kgPerUnitOf(m)
   const next: Line = {
     ...l,
     name: m.name,
     unit: m.unit,
-    spec: m.spec ?? '',
+    spec: keepSpec && l.spec.trim() ? l.spec : (m.spec ?? ''),
     pack_size: m.pack_size ?? null,
     pack_unit: m.pack_unit ?? '',
     catalog_kg_m: m.kg_per_m ?? null,
@@ -669,6 +681,8 @@ export type PoLineDto = {
   unit_price: number | null
   spec: string | null
   note: string | null
+  /** Mã SP khách (tem/bao bì chia theo SP) — mang theo, không có ô sửa. */
+  product_code?: string | null
   material_grade: string | null
   dm_per_sp: number | null
   qty_demand: number | null
@@ -758,6 +772,7 @@ function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): 
     code: l.material_code,
     name: l.material_name,
     unit: l.material_unit,
+    product_code: s2(l.product_code),
     on_hand: onHand,
     spec: s2(l.spec),
     note: s2(l.note),
@@ -840,6 +855,9 @@ export function migrateDraftLine(t: PoTemplate, l: Line): Line {
   // JSON nháp cũ thiếu key mới → `undefined` lọt vào state; ?? '' đưa về ô trống.
   const next: Line = {
     ...l,
+    // Nháp lưu trước khi có khoá cục bộ: thiếu `uid` thì rowKey rơi về
+    // material_id — hai dòng cùng mã tick một thành tick cả hai (07/10/2026).
+    uid: l.uid ?? l.po_line_id ?? crypto.randomUUID(),
     m3_per_unit: l.m3_per_unit ?? '',
     warranty_text: l.warranty_text ?? '',
     // 0182 — nháp lưu trước khi có cặp quy đổi giá.
@@ -952,11 +970,30 @@ export function mergeLineInto(into: Line, from: Line): Line | null {
   for (const [k, v] of Object.entries(from.lsx_split ?? {}))
     split[k] = add(split[k] ?? '', v)
   const notes = [into.note, from.note].map((s) => s.trim()).filter(Boolean)
+  const manual = (l: Line): Num => l.qty2_manual ?? ''
   return {
     ...into,
     qty: add(into.qty, from.qty),
     qty_demand: add(into.qty_demand, from.qty_demand),
+    // Tổng gõ tay (kg/m³ theo tờ NCC) cũng cộng — giữ số của dòng đầu là sai
+    // ngay khi SL đã cộng (07/10/2026).
+    qty2_manual:
+      manual(into) === '' && manual(from) === '' ? '' : add(manual(into), manual(from)),
     lsx_split: split,
     note: [...new Set(notes)].join(' · '),
   }
+}
+
+/**
+ * TỔNG SL ĐẶT theo mã trên mọi dòng (07/10/2026) — mã nằm nhiều dòng thì gợi ý
+ * "dùng N" theo nhu cầu lệnh và trần tồn phải tính trên TỔNG, không từng dòng
+ * một (bấm "dùng N" ở hai dòng là đặt gấp đôi).
+ */
+export function qtyTheoMa(
+  lines: readonly Pick<Line, 'material_id' | 'qty'>[],
+): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const l of lines)
+    if (l.qty !== '') m.set(l.material_id, (m.get(l.material_id) ?? 0) + Number(l.qty))
+  return m
 }

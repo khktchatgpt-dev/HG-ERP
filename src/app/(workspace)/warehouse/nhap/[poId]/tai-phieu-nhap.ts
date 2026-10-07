@@ -39,20 +39,28 @@ export async function taiPhieuNhap(
   | { kind: 'chan'; po: { id: string; code: string }; reason: string; chuaGui: boolean }
   | { kind: 'ok'; props: Props }
 > {
-  const [{ po, lines, status_lines, extra_lsx }, shipments, company, tpl, canEdit, cu, cuDong, cuDao] =
-    await Promise.all([
-      posService.detail(user, poId),
-      poShipmentsRepo.listByPo(poId),
-      // Xem bản in TRƯỚC khi ghi sổ (yêu cầu 16/09): mẫu 01-VT + khối công ty.
-      settingsService.getAll(),
-      docTemplatesService.get('PNK'),
-      user.role === 'admin'
-        ? Promise.resolve(true)
-        : canAction(user, 'warehouse.stock.write'),
-      suaId ? docsRepo.findById(suaId) : Promise.resolve(null),
-      suaId ? docsRepo.redoLines(suaId) : Promise.resolve(null),
-      suaId ? docsRepo.findReversalOf(suaId) : Promise.resolve(null),
-    ])
+  const [
+    { po, lines, status_lines, extra_lsx },
+    shipments,
+    company,
+    tpl,
+    canEdit,
+    cu,
+    cuDong,
+    cuDao,
+  ] = await Promise.all([
+    posService.detail(user, poId),
+    poShipmentsRepo.listByPo(poId),
+    // Xem bản in TRƯỚC khi ghi sổ (yêu cầu 16/09): mẫu 01-VT + khối công ty.
+    settingsService.getAll(),
+    docTemplatesService.get('PNK'),
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.stock.write'),
+    suaId ? docsRepo.findById(suaId) : Promise.resolve(null),
+    suaId ? docsRepo.redoLines(suaId) : Promise.resolve(null),
+    suaId ? docsRepo.findReversalOf(suaId) : Promise.resolve(null),
+  ])
 
   const chuaGui = noi === 'cung-ung' && po.status === 'approved'
   if (!(RECEIVABLE as readonly string[]).includes(po.status) || chuaGui) {
@@ -78,6 +86,9 @@ export async function taiPhieuNhap(
       product_code: l?.product_code ?? null,
       spec: l?.spec ?? null,
       line_note: l?.note ?? null,
+      bar_length_m: l?.bar_length_m ?? null,
+      die_code: l?.die_code ?? null,
+      dimension_text: l?.dimension_text ?? null,
     }
   })
   const dot = dotId ? (shipments.find((s) => s.id === dotId) ?? null) : null
@@ -89,7 +100,11 @@ export async function taiPhieuNhap(
     điền số lạ. Dòng không có trong phiếu cũ để 0: chỉ ghi lại đúng thứ đã ghi.
   */
   const suaHop =
-    cu && cuDong && cuDao && cu.kind === 'receipt' && [...cuDong.keys()].some((k) => lineById.has(k))
+    cu &&
+    cuDong &&
+    cuDao &&
+    cu.kind === 'receipt' &&
+    [...cuDong.keys()].some((k) => lineById.has(k))
   const rows = suaHop
     ? luoi.rows.map((r) => {
         const o = cuDong.get(r.po_line_id)
