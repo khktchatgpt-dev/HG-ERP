@@ -80,12 +80,19 @@ export const COMMIT_KIND_LABEL: Record<CommitKind, string> = {
  */
 export const SPLIT_REASON_PREFIX = 'Lấy trước từ đợt'
 
+/**
+ * Tiền tố lý do khi TÁCH ĐỢT THEO PHIẾU NHẬP (07/10/2026): đợt "đã nhận" dựng
+ * lại từ phiếu kho và phần còn chờ chia lại — sắp xếp lại sổ, không phải lời
+ * hứa đầu của NCC, nên cũng không làm mốc so trễ/sớm.
+ */
+export const TACH_REASON_PREFIX = 'Tách theo phiếu nhập'
+
 export function slipDays(
   log: { kind: string; date_after: string | null; created_at: string; reason?: string | null }[],
   currentEarliest: string | null,
 ): number | null {
   const firstCommit = log
-    .filter((e) => (e.kind === 'ncc_xac_nhan' || e.kind === 'them_dot') && e.date_after && !e.reason?.startsWith(SPLIT_REASON_PREFIX)) // prettier-ignore
+    .filter((e) => (e.kind === 'ncc_xac_nhan' || e.kind === 'them_dot') && e.date_after && !e.reason?.startsWith(SPLIT_REASON_PREFIX) && !e.reason?.startsWith(TACH_REASON_PREFIX)) // prettier-ignore
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
   if (firstCommit.length === 0 || !currentEarliest) return null
   const firstAt = firstCommit[0].created_at

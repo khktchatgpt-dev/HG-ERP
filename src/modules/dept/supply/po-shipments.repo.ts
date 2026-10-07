@@ -28,6 +28,8 @@ export type PoShipment = {
 
 export type PoShipmentInsert = {
   seq: number
+  /** Mặc định 'planned'. Tách đợt theo phiếu nhập (07/10/2026) chèn thẳng 'received'. */
+  status?: PoShipmentStatus
   expected_date: string
   method?: string | null
   place?: string | null
@@ -124,13 +126,13 @@ export const poShipmentsRepo = {
     }
   },
 
-  /** Ghi một bộ đợt (xác nhận lần đầu / thêm đợt bổ sung). */
+  /** Ghi một bộ đợt (xác nhận lần đầu / thêm đợt bổ sung). Trả id theo `seq`. */
   async insertMany(
     poId: string,
     shipments: PoShipmentInsert[],
     createdBy: string,
-  ): Promise<void> {
-    if (shipments.length === 0) return
+  ): Promise<Map<number, string>> {
+    if (shipments.length === 0) return new Map()
     /*
       CẤP MÃ TRƯỚC KHI CHÈN (0193). Đợt giao là chứng từ Kho mở ra làm việc, nên
       phải có danh tính riêng — `seq` chỉ đánh số trong phạm vi một đơn, "đợt 2"
@@ -157,6 +159,7 @@ export const poShipmentsRepo = {
           method: s.method ?? null,
           place: s.place ?? null,
           note: s.note ?? null,
+          ...(s.status ? { status: s.status } : {}),
           created_by: createdBy,
         })),
       )
@@ -172,9 +175,34 @@ export const poShipmentsRepo = {
         qty: l.qty,
       })),
     )
-    if (lineRows.length === 0) return
+    if (lineRows.length === 0) return idBySeq
     const { error: e2 } = await db().from('supply_po_shipment_lines').insert(lineRows)
     if (e2) throw new Error(e2.message)
+    return idBySeq
+  },
+
+  /** Phiếu kho → đợt đang nối (0153); phiếu không nối thì không có khoá. */
+  async shipmentOfDocs(docIds: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    if (docIds.length === 0) return out
+    const { data, error } = await db()
+      .from('warehouse_docs')
+      .select('id, shipment_id')
+      .in('id', docIds)
+    if (error) throw new Error(error.message)
+    for (const r of (data ?? []) as { id: string; shipment_id: string | null }[]) {
+      if (r.shipment_id) out.set(r.id, r.shipment_id)
+    }
+    return out
+  },
+
+  /** Nối một phiếu nhập vào đợt — chỉ đổi khoá nối, không đụng số trong sổ kho. */
+  async linkDoc(docId: string, shipmentId: string): Promise<void> {
+    const { error } = await db()
+      .from('warehouse_docs')
+      .update({ shipment_id: shipmentId })
+      .eq('id', docId)
+    if (error) throw new Error(error.message)
   },
 
   /**

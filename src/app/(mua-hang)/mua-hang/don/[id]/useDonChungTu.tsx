@@ -35,7 +35,6 @@ import { PO_FIELDS, type PoField } from '@/lib/po-fields'
 import { poFinanceView } from '@/lib/po-finance'
 import { poLineAmount } from '@/lib/po-line'
 import type { PoMaterial } from '@/lib/po-material.types'
-import type { ShipmentInput } from '@/lib/po-shipments'
 import { hadSendStep, poTrackStep, type PoStatus } from '@/lib/po-status'
 import { deriveLine, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { moqHint } from '@/lib/po-tracking'
@@ -64,7 +63,7 @@ import {
   signed,
   toNum,
 } from './don-chung-tu.shared'
-import { receiveActions, type ShipmentLineRef, type ShipmentLite } from './nhan-hang'
+import { receiveActions, type ShipmentLineRef } from './nhan-hang'
 import {
   columnsToShipments,
   lsxJoinedLabel,
@@ -205,12 +204,8 @@ export function useDonChungTu(p: Props) {
 
   const [sheet, setSheet] = useState<null | { action: DocAction }>(null)
 
-  const [xacNhan, setXacNhan] = useState<null | 'confirm' | 'add'>(null)
-
-  const [dot, setDot] = useState<null | {
-    kind: 'reschedule' | 'cancel' | 'edit' | 'split'
-    s: ShipmentLite
-  }>(null)
+  // Hộp NCC xác nhận / thêm-sửa-dời đợt đã rời trang đơn (07/10/2026, "một
+  // nơi"): làm ở hộp Giao nhận trên Theo dõi đơn hàng.
   // prettier-ignore
   /* ── soạn đơn: đợt giao khai lúc soạn, nhu cầu lệnh, dán Excel, danh mục ── */
   const [shipCols, setShipCols] = useState<PlanColumn[]>(
@@ -543,9 +538,6 @@ export function useDonChungTu(p: Props) {
   const sua = useSuaTaiCho({
     po,
     header,
-    shipments: p.shipments,
-    // Dòng ĐANG BÀY (đã sửa nếu đang điều chỉnh) — đợt giao kiểm theo SL mới.
-    poLines: lines.map((l, i) => ({ id: l.po_line_id, key: rowKey(l) ?? `tu-do-${i}`, material_name: l.name, qty_ordered: typeof l.qty === 'number' ? l.qty : 0 })), // prettier-ignore
     noteOver,
     termsEdit,
     setTermsEdit,
@@ -617,7 +609,6 @@ export function useDonChungTu(p: Props) {
   const isDirty = () =>
     termsEdit
       ? (!!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges)) ||
-        sua.shipChanges > 0 ||
         (!!po && JSON.stringify(header) !== JSON.stringify(headerFromPo(po, p.extraLsx.map((x) => x.id)))) // prettier-ignore
       : nhap.changed()
   // prettier-ignore
@@ -837,10 +828,6 @@ export function useDonChungTu(p: Props) {
     switch (k) {
       case 'edit':
         return editAct ? { label: editLabel, icon: 'sua', run: () => start(editAct), blocked: editAct.blocked } : null // prettier-ignore
-      case 'confirm':
-        return { label: 'NCC xác nhận', icon: 'xong', run: () => (shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN)), blocked: lyDo(recv.confirm) } // prettier-ignore
-      case 'addShipment':
-        return { label: po?.status === 'partial' ? 'Hẹn giao bù (đợt mới)' : 'Thêm đợt giao', icon: 'them', run: () => setXacNhan('add'), blocked: lyDo(recv.addShipment) } // prettier-ignore
       case 'transit':
         return { label: 'Hàng đang trên đường', icon: 'nhanHang', run: () => start(TRANSIT), blocked: lyDo(recv.transit) } // prettier-ignore
       case 'receive':
@@ -933,36 +920,6 @@ export function useDonChungTu(p: Props) {
     }
   }
 
-  const submitShipments = (ships: ShipmentInput[], note: string) =>
-    !po
-      ? Promise.resolve(false)
-      : xacNhan === 'add'
-        ? call(
-            `/api/dept/supply/pos/${po.id}/shipments`,
-            'POST',
-            { shipments: ships },
-            'Đã thêm đợt giao',
-          )
-        : call(
-            `/api/dept/supply/pos/${po.id}/confirm`,
-            'POST',
-            { confirmed_note: note || null, shipments: ships },
-            `Đã ghi nhận NCC xác nhận · ${ships.length} đợt`,
-          )
-  // prettier-ignore
-  const shipmentAct = (
-    id: string,
-    input: {
-      action: 'reschedule' | 'arrived' | 'cancel' | 'edit' | 'split'
-      expected_date?: string
-      reason?: string
-      lines?: { po_line_id: string; qty: number }[]
-    },
-    done: string,
-  ) =>
-    // prettier-ignore
-    call(`/api/dept/supply/shipments/${id}`, 'PATCH', input, done)
-
   // Hành động của tab Nhận hàng đi qua cùng cửa `start()`/`runAction()` với
   // luồng duyệt: một hộp thoại, một cách báo lỗi, một chỗ refresh.
   const ADV = (to: string) => ({
@@ -970,8 +927,6 @@ export function useDonChungTu(p: Props) {
     method: 'POST' as const,
     body: { to },
   })
-  // prettier-ignore
-  const CONFIRM_PLAIN: DocAction = { id: 'confirm', label: 'NCC xác nhận', ui: 'sheet', stakes: 'vua', consequence: `Ghi nhận ${po?.supplier_name ?? 'NCC'} đã nhận đơn. Đơn toàn dòng tự gõ nên không có đợt giao để khai.`, done: 'Đã ghi nhận NCC xác nhận', build: () => [ADV('confirmed')] }
   // prettier-ignore
   const TRANSIT: DocAction = { id: 'transit', label: 'Hàng đang trên đường', ui: 'sheet', stakes: 'vua', consequence: 'NCC báo đã xuất hàng. Đơn chuyển sang "Đang giao" để Kho biết mà chờ nhận — hẹn giao và số lượng không đổi.', done: 'Đã chuyển sang đang giao', build: () => [ADV('in_transit')] }
   // prettier-ignore
@@ -1472,10 +1427,6 @@ export function useDonChungTu(p: Props) {
     setBusy,
     sheet,
     setSheet,
-    xacNhan,
-    setXacNhan,
-    dot,
-    setDot,
     shipCols,
     setShipCols,
     needs,
@@ -1581,17 +1532,13 @@ export function useDonChungTu(p: Props) {
     editLabel,
     shipLines,
     shipLinesById,
-    shippedByLine,
     liveShipments,
     shipmentsDone,
     openStockLines,
     recv,
     sentToSupplier,
     call,
-    submitShipments,
-    shipmentAct,
     ADV,
-    CONFIRM_PLAIN,
     TRANSIT,
     ACCEPT,
     closeShortAct,

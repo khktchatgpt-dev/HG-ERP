@@ -170,4 +170,4 @@ Chỉ đưa một thành phần vào kit khi nó đã lặp ở **màn thứ hai
 1. Viết thành phần trong `src/components/kit/*.tsx` và xuất khẩu qua `index.ts`.
 2. Ghi **JSDoc cho từng prop trên KHAI BÁO KIỂU**, không phải trên biến destructure — đó là chỗ duy nhất người sau tra được thuộc tính (sách tra sinh từ mã đã xoá cùng `/design-lab` 07/10/2026).
 3. Thêm một dòng vào [references/tra-thanh-phan.md](references/tra-thanh-phan.md) đúng nhóm việc.
-4. Có test dựng + `axe` (`expectNoViolations` ở `src/test/a11y.ts`) nếu thành phần có tương tác (`src/components/kit/*.test.tsx`).
+4. Có test dựng + `axe` (`a11yViolations` ở `src/test/a11y.ts`) nếu thành phần có tương tác (`src/components/kit/*.test.tsx`).

@@ -324,6 +324,22 @@ export const poShipmentActionSchema = z
     message: 'Chưa có dòng hàng nào',
   })
 
+/** Tách đợt theo phiếu nhập (07/10/2026) — phần còn chờ chia lại thành đợt hẹn mới. */
+export const poShipmentTachSchema = z.object({
+  reason: z.string().trim().min(1, 'Ghi lý do tách đợt').max(1000),
+  rest: z
+    .array(
+      z.object({
+        expected_date: z.string().date(),
+        note: z.string().trim().max(500).nullish(),
+        lines: z
+          .array(z.object({ po_line_id: z.string().uuid(), qty: z.coerce.number().min(0) }))
+          .max(500),
+      }),
+    )
+    .max(20),
+})
+
 /** Bàn giao đơn cho NV cung ứng khác (0128) — trưởng phòng/GĐ/admin. */
 export const poReassignSchema = z.object({
   user_id: z.string().uuid(),

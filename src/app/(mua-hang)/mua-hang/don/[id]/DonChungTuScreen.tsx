@@ -62,7 +62,6 @@ import {
 } from '@/lib/po-status'
 import { FREE_LINE_TEMPLATES, PO_TEMPLATE_META, type PoTemplate } from '@/lib/po-template'
 import { GhiPhiSheet, HuyPhiSheet } from './ChiPhiPanel'
-import { DotSheet, DotSuaSheet, XacNhanSheet } from './NhanHangPanel'
 import { CapNhatDanhMucSheet, DanExcelSheet } from './SoanDonPanels'
 import { TaiChinhPanel } from './TaiChinhPanel'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
@@ -146,10 +145,6 @@ export function DonChungTuScreen(p: Props) {
     busy,
     sheet,
     setSheet,
-    xacNhan,
-    setXacNhan,
-    dot,
-    setDot,
     paste,
     setPaste,
     quickAdd,
@@ -198,12 +193,8 @@ export function DonChungTuScreen(p: Props) {
     supplierOptions,
     marks,
     code,
-    shipLines,
-    shippedByLine,
     liveShipments,
     call,
-    submitShipments,
-    shipmentAct,
     lsxLabel,
     addFromPaste,
     onCreatedMaterial,
@@ -1170,53 +1161,6 @@ export function DonChungTuScreen(p: Props) {
           }
         />
       )}
-      {xacNhan && po && (
-        <XacNhanSheet
-          mode={xacNhan}
-          poCode={po.code}
-          defaultDate={po.expected_at?.slice(0, 10) ?? today}
-          lines={shipLines}
-          existing={xacNhan === 'add' ? shippedByLine : new Map()}
-          busy={busy}
-          onClose={() => setXacNhan(null)}
-          onSubmit={submitShipments}
-        />
-      )}
-      {dot && (dot.kind === 'edit' || dot.kind === 'split') && (
-        <DotSuaSheet
-          kind={dot.kind}
-          shipment={dot.s}
-          lines={shipLines}
-          others={p.shipments
-            .filter((s) => s.id !== dot.s.id && s.status !== 'cancelled')
-            .flatMap((s) => s.lines)
-            .reduce((m, l) => m.set(l.po_line_id, (m.get(l.po_line_id) ?? 0) + l.qty), new Map<string, number>())} // prettier-ignore
-          busy={busy}
-          onClose={() => setDot(null)}
-          onSubmit={(d, reason, lines) =>
-            shipmentAct(
-              dot.s.id,
-              { action: dot.kind, expected_date: d, reason, lines },
-              dot.kind === 'split' ? 'Đã tách đợt lấy trước' : 'Đã sửa đợt giao',
-            )
-          }
-        />
-      )}
-      {dot && (dot.kind === 'reschedule' || dot.kind === 'cancel') && (
-        <DotSheet
-          kind={dot.kind}
-          shipment={dot.s}
-          busy={busy}
-          onClose={() => setDot(null)}
-          onSubmit={
-            (d, reason) =>
-            dot.kind === 'cancel'
-              ? shipmentAct(dot.s.id, { action: 'cancel', reason }, 'Đã huỷ đợt giao')
-              : shipmentAct(dot.s.id, { action: 'reschedule', expected_date: d, reason }, 'Đã dời ngày đợt giao') // prettier-ignore
-          }
-        />
-      )}
-
       {sheet && po && (
         <Sheet
           open
