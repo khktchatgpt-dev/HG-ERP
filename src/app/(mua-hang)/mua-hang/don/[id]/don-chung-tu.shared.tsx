@@ -1,6 +1,7 @@
 'use client'
 
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import type { LsxLastChange } from './nguyen-nhan'
 import {
   lineQty2,
   laM3MotTam,
@@ -103,6 +104,10 @@ export type StatusLineLite = {
 export type AdjustmentLite = {
   seq: number
   reason: string
+  /** Nguyên nhân cố định (0227); null/thiếu = chưa phân loại. */
+  cause?: string | null
+  /** Lệnh mà lần điều chỉnh theo (0227). */
+  lsx?: { id: string; code: string; orders: string[] }[]
   created_at: string
   created_by_name: string | null
   currency: string
@@ -201,6 +206,8 @@ export type Props = {
   tpl?: DocTemplate
   /** Sổ điều chỉnh của đơn (0210) — bản duyệt → phát sinh lần N → hiện hành. */
   adjustments?: AdjustmentLite[]
+  /** Lần đổi gần nhất của đơn khách theo lệnh đơn đang gắn — hộp Nguyên nhân bày để đối chiếu (0227). */
+  lsxLastChange?: Record<string, LsxLastChange>
   /** Mẫu của đơn gần nhất theo NCC — đơn mới chọn NCC thì mẫu tự theo (`templateForSupplier`). */
   lastTemplates?: Record<string, PoTemplate>
   /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */

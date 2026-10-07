@@ -1,4 +1,5 @@
 import { on } from '../bus'
+import { causeLabel } from '@/lib/po-adjust-cause'
 import { fmtMoney } from '@/lib/po-line'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
 
@@ -75,7 +76,7 @@ export function registerPoNotificationHandlers(): void {
           actorId: e.adjusted_by,
           type: 'po_adjusted',
           payload: {
-            title: `${e.code} · điều chỉnh lần ${e.seq} · phát sinh ${money}`,
+            title: `${e.code} · điều chỉnh lần ${e.seq} · ${causeLabel(e.cause)} · phát sinh ${money}`,
             reason: e.reason,
           },
         }),

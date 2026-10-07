@@ -12,6 +12,7 @@ import {
   Th,
 } from '@/components/kit'
 import { ChiPhiGrid } from './ChiPhiPanel'
+import { NguyenNhanCell } from './nguyen-nhan'
 import { dmyAt, fmtNum, money, signed } from './don-chung-tu.shared'
 import type { DonCtx } from './useDonChungTu'
 
@@ -36,14 +37,15 @@ export function PhatSinh({ d }: { d: DonCtx }) {
             ['Phát sinh', <span key="b" className="num">{signed(adjustments.at(-1)!.total_after - adjustments[0].total_before, po.currency)}</span>], // prettier-ignore
           ]}
         >
-          <Grid minWidth={700}>
+          <Grid minWidth={880}>
             <GridHead>
               <Th width={120}>Khoản</Th>
               <Th width={170}>Ngày · người</Th>
+              <Th width={190}>Nguyên nhân</Th>
               <Th num>Tiền hàng</Th>
               <Th num>VAT</Th>
               <Th num>Tổng thanh toán</Th>
-              <Th>Lý do · gửi NCC</Th>
+              <Th>Ghi chú · gửi NCC</Th>
             </GridHead>
             <GridBody>
               <GridRow>
@@ -53,6 +55,7 @@ export function PhatSinh({ d }: { d: DonCtx }) {
                 <Td>
                   {dmyAt(po.approved_at) || '—'} · {po.approver_name ?? '—'}
                 </Td>
+                <Td>—</Td>
                 <Td num>{money(adjustments[0].subtotal_before, po.currency)}</Td>
                 <Td num>{money(adjustments[0].vat_before, po.currency)}</Td>
                 <Td num>{money(adjustments[0].total_before, po.currency)}</Td>
@@ -65,6 +68,9 @@ export function PhatSinh({ d }: { d: DonCtx }) {
                   </Td>
                   <Td>
                     {dmyAt(a.created_at)} · {a.created_by_name ?? '—'}
+                  </Td>
+                  <Td>
+                    <NguyenNhanCell a={a} />
                   </Td>
                   <Td num>{signed(a.subtotal_after - a.subtotal_before, a.currency)}</Td>
                   <Td num>{signed(a.vat_after - a.vat_before, a.currency)}</Td>
@@ -81,7 +87,7 @@ export function PhatSinh({ d }: { d: DonCtx }) {
               ))}
             </GridBody>
             <GridFoot>
-              <Td colSpan={2}>Hiện hành — đối chiếu hoá đơn NCC theo dòng này</Td>
+              <Td colSpan={3}>Hiện hành — đối chiếu hoá đơn NCC theo dòng này</Td>
               <Td num>{money(adjustments.at(-1)!.subtotal_after, po.currency)}</Td>
               <Td num>{money(adjustments.at(-1)!.vat_after, po.currency)}</Td>
               <Td num>{money(adjustments.at(-1)!.total_after, po.currency)}</Td>

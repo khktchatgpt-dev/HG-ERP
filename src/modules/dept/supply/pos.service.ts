@@ -1329,6 +1329,8 @@ export const posService = {
     input: {
       base_seq: number
       reason: string
+      cause: string
+      lsx_ids?: string[]
       vat_rate?: number | null
       discount_amount?: number | null
       lines: (PoLineInput & { id?: string | null })[]
@@ -1463,6 +1465,8 @@ export const posService = {
         baseSeq: input.base_seq,
         actorId: user.id,
         reason: input.reason.trim(),
+        cause: input.cause,
+        lsxIds: [...new Set(input.lsx_ids ?? [])],
         updates: plan.updates.map((l) => ({ id: l.id, ...row(l as PoLineInput & { sort_order: number }) })), // prettier-ignore
         inserts: plan.inserts.map((l) => row(l as PoLineInput & { sort_order: number })),
         deleteIds: plan.deleteIds,
@@ -1501,6 +1505,7 @@ export const posService = {
       seq,
       adjusted_by: user.id,
       reason: input.reason.trim(),
+      cause: input.cause,
       currency: before.currency ?? 'VND',
       delta_total: plan.delta.total,
       total_after: plan.money.after.grandTotal,

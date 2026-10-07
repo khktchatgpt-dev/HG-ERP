@@ -1014,6 +1014,8 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
   const input = (over = {}) => ({
     base_seq: 0,
     reason: 'NCC tăng giá',
+    cause: 'ncc_doi',
+    lsx_ids: ['lsx1', 'lsx1'],
     lines: [{ id: 'l1', material_id: 'm1', qty_ordered: 100, unit_price: 120 }],
     ...over,
   })
@@ -1026,6 +1028,8 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
       expect.objectContaining({ id: 'l1', unit_price: 120, sort_order: 0 }),
     ])
     expect(call.inserts).toEqual([])
+    // Nguyên nhân + lệnh (0227) đi thẳng xuống hàm DB; lệnh trùng gộp một.
+    expect(call).toMatchObject({ cause: 'ncc_doi', lsxIds: ['lsx1'] })
     expect(call.record).toMatchObject({
       delta_by_price: 1_000,
       delta_by_qty: 0,

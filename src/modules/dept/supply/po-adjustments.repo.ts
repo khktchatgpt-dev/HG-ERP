@@ -11,6 +11,10 @@ export type PoAdjustment = {
   po_id: string
   seq: number
   reason: string
+  /** Nguyên nhân cố định (0227); null = bản ghi trước 0227 chưa phân loại. */
+  cause: string | null
+  /** Lệnh mà lần điều chỉnh theo (0227) — mã lệnh + mã các đơn khách của lệnh. */
+  lsx: { id: string; code: string; orders: string[] }[]
   created_by: string | null
   created_by_name: string | null
   created_at: string
@@ -59,18 +63,26 @@ export class PoAdjustDbError extends Error {
 
 export const poAdjustmentsRepo = {
   async listByPo(poId: string): Promise<PoAdjustment[]> {
-    const { data, error } = await db()
-      .from('supply_po_adjustments')
-      .select(
-        '*, creator:users!supply_po_adjustments_created_by_fkey(name, email), sender:users!supply_po_adjustments_sent_by_fkey(name, email)',
-      )
-      .eq('po_id', poId)
-      .order('seq')
+    const base =
+      '*, creator:users!supply_po_adjustments_created_by_fkey(name, email), sender:users!supply_po_adjustments_sent_by_fkey(name, email)'
+    const read = (cols: string) =>
+      db().from('supply_po_adjustments').select(cols).eq('po_id', poId).order('seq')
+    let { data, error } = await read(
+      `${base}, lsx:supply_po_adjustment_lsx(production_order_id, lenh:production_orders(id, code, orders:sales_orders!sales_orders_production_order_id_fkey(code)))`,
+    )
+    // DB chưa áp 0227 (code lên trước migration): đọc như cũ, trang đơn vẫn mở được.
+    if (error && /supply_po_adjustment_lsx/.test(error.message)) ({ data, error } = await read(base))
     if (error) throw new Error(error.message)
     type U = { name: string | null; email: string } | null
-    return ((data ?? []) as (Record<string, unknown> & { creator: U; sender: U })[]).map(
-      ({ creator, sender, ...r }) => {
+    type L = { lenh: { id: string; code: string; orders: { code: string }[] | null } | null }[] | null
+    return ((data ?? []) as unknown as (Record<string, unknown> & { creator: U; sender: U; lsx: L })[]).map(
+      ({ creator, sender, lsx, ...r }) => {
         const out = { ...r } as Record<string, unknown>
+        out.cause = r.cause ?? null
+        out.lsx = (lsx ?? [])
+          .map((x) => x.lenh)
+          .filter((x) => x != null)
+          .map((x) => ({ id: x.id, code: x.code, orders: (x.orders ?? []).map((o) => o.code) }))
         for (const k of MONEY) out[k] = Number(r[k] ?? 0)
         out.created_by_name = creator?.name ?? creator?.email ?? null
         out.sent_by_name = sender?.name ?? sender?.email ?? null
@@ -128,6 +140,8 @@ export const poAdjustmentsRepo = {
     baseSeq: number
     actorId: string
     reason: string
+    cause: string
+    lsxIds: string[]
     updates: Record<string, unknown>[]
     inserts: Record<string, unknown>[]
     deleteIds: string[]
@@ -135,7 +149,8 @@ export const poAdjustmentsRepo = {
     header: Record<string, unknown>
     record: Record<string, unknown>
   }): Promise<number> {
-    const { data, error } = await db().rpc('supply_po_apply_adjustment', {
+    // Hàm bọc 0227: điều chỉnh 0210 + nguyên nhân + lệnh, một giao dịch.
+    const { data, error } = await db().rpc('supply_po_apply_adjustment_v2', {
       p_po_id: args.poId,
       p_base_seq: args.baseSeq,
       p_actor: args.actorId,
@@ -146,6 +161,8 @@ export const poAdjustmentsRepo = {
       p_splits: args.splits,
       p_header: args.header,
       p_record: args.record,
+      p_cause: args.cause,
+      p_lsx_ids: args.lsxIds,
     } as never)
     if (error) {
       const m = error.message ?? ''

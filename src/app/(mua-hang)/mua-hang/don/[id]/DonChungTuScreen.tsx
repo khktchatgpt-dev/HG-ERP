@@ -64,6 +64,7 @@ import { FREE_LINE_TEMPLATES, PO_TEMPLATE_META, type PoTemplate } from '@/lib/po
 import { GhiPhiSheet, HuyPhiSheet } from './ChiPhiPanel'
 import { CapNhatDanhMucSheet, DanExcelSheet } from './SoanDonPanels'
 import { TaiChinhPanel } from './TaiChinhPanel'
+import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { templateForSupplier } from './chung-tu'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
@@ -119,8 +120,6 @@ export function DonChungTuScreen(p: Props) {
     viewMode,
     adjSheet,
     setAdjSheet,
-    adjReason,
-    setAdjReason,
     sentSheet,
     setSentSheet,
     sentNote,
@@ -991,7 +990,7 @@ export function DonChungTuScreen(p: Props) {
               onConfirm={() => void saveTerms(true)}
               cancelLabel="Quay lại sửa"
               confirmLabel="Áp dụng"
-              disabled={adjReason.trim().length < 5 || adjBlocked != null}
+              disabled={d.nn.block(d.adjLinkedLsx) != null || adjBlocked != null}
             />
           }
         >
@@ -1011,19 +1010,7 @@ export function DonChungTuScreen(p: Props) {
               ['Báo cho', <span key="d">{notifyWho ?? 'không ai — bạn là người đã duyệt đơn này'}</span>], // prettier-ignore
             ]}
           />
-          <Field label="Vì sao điều chỉnh">
-            <TextArea
-              aria-label="Vì sao điều chỉnh"
-              value={adjReason}
-              onChange={setAdjReason}
-              placeholder="VD: NCC báo tăng giá từ 25/09 (Zalo anh Nguyên); lệnh tăng 20 bộ"
-            />
-          </Field>
-          {adjReason.trim().length < 5 && (
-            <div className="k-t-warn text-k-sm">
-              Ghi lý do (ít nhất 5 ký tự) — vào sổ phát sinh và thông báo.
-            </div>
-          )}
+          <NguyenNhanField d={d} />
           <Consequence>
             Bản mới thay ngay bản đang chạy: Kho nhận theo số mới từ lúc này, đơn vẫn ở
             bước hiện tại. Khoản phát sinh vào sổ, không xoá được — muốn đảo thì điều

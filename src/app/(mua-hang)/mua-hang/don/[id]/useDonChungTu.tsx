@@ -1,6 +1,9 @@
 'use client'
 
 import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
+import { linkedLsxIds } from '@/lib/po-adjust-cause'
+import { useNguyenNhan } from './useNguyenNhan'
+import { causeText } from './nguyen-nhan'
 import {
   buildPoPayload,
   draftProblem,
@@ -134,7 +137,7 @@ export function useDonChungTu(p: Props) {
 
   const [adjSheet, setAdjSheet] = useState(false)
 
-  const [adjReason, setAdjReason] = useState('')
+  const nn = useNguyenNhan() // nguyên nhân + lệnh + ghi chú của hộp Áp dụng (0227)
 
   const [sentSheet, setSentSheet] = useState<number | null>(null)
 
@@ -557,7 +560,7 @@ export function useDonChungTu(p: Props) {
     adjust: {
       can: !!po && perms.canEdit && ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status), // prettier-ignore
       start: () => startAdjust(),
-      finish: () => { setAdjSheet(false); setAdjusting(false); setEditing(false); setAdjReason('') }, // prettier-ignore
+      finish: () => { setAdjSheet(false); setAdjusting(false); setEditing(false); nn.reset() }, // prettier-ignore
       pending: !!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges),
       blocked: adjBlocked,
       askReason: () => setAdjSheet(true),
@@ -568,7 +571,7 @@ export function useDonChungTu(p: Props) {
 
   /** Vào chế độ điều chỉnh đơn đang chạy — cùng lưới, lưu đi đường khác. */
   function startAdjust() {
-    setAdjReason('')
+    nn.reset()
     setLines(linesFromProps())
     setSel([])
     setAdjusting(true)
@@ -580,7 +583,7 @@ export function useDonChungTu(p: Props) {
     if (!po) throw new Error('Chưa có đơn')
     const body = buildPoPayload(header, lines)
     try {
-      return await api<{ seq: number; delta_total: number }>(`/api/dept/supply/pos/${po.id}/adjustments`, { method: 'POST', body: { base_seq: adjustments.at(-1)?.seq ?? 0, reason: adjReason.trim(), vat_rate: body.vat_rate, discount_amount: body.discount_amount, lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })) } }) // prettier-ignore
+      return await api<{ seq: number; delta_total: number }>(`/api/dept/supply/pos/${po.id}/adjustments`, { method: 'POST', body: { base_seq: adjustments.at(-1)?.seq ?? 0, reason: nn.note.trim(), cause: nn.cause, lsx_ids: nn.pickedLsx(adjLinkedLsx), vat_rate: body.vat_rate, discount_amount: body.discount_amount, lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })) } }) // prettier-ignore
     } catch (e) {
       // 409 = có người vừa điều chỉnh trước — bản đang sửa đã cũ, nói thẳng.
       if (e instanceof ApiError && e.status === 409) throw new Error(`Đơn vừa được điều chỉnh bởi người khác — ${apiErrorText(e)}`) // prettier-ignore
@@ -628,7 +631,7 @@ export function useDonChungTu(p: Props) {
     setSel([])
     setEditing(false)
     setAdjusting(false)
-    setAdjReason('')
+    nn.reset()
     sua.cancelTermsEdit()
   }
 
@@ -726,6 +729,7 @@ export function useDonChungTu(p: Props) {
     lọc, mà dòng trên vẫn ngắn để đọc lướt. Trước đây mọi thứ nối bằng dấu "·"
     thành một dòng dài, cuộn trong `<select>` 168 dòng.
   */
+  const adjLinkedLsx = linkedLsxIds(header.poType === 'lsx' ? header.lsxId : null, header.poType === 'lsx' ? header.extraLsxIds : [], lines.flatMap((l) => Object.keys(l.lsx_split ?? {}))) // prettier-ignore
   const lsxOptions = useMemo(
     () =>
       p.lsxs.map((l) => ({
@@ -757,7 +761,7 @@ export function useDonChungTu(p: Props) {
         { key: 'xn', at: po.confirmed_at, label: 'NCC xác nhận' },
         ...p.shipments.map((s, i) => ({ key: `dot${i}`, at: s.expected_date, label: `${s.code ?? `Đợt giao ${i + 1}`} · ${SHIP_STATUS_LABEL[s.status] ?? s.status}` })), // prettier-ignore
         ...p.warehouseDocs.map((d) => ({ key: d.doc_id, at: d.at, label: `${d.kind === 'receipt' ? 'Phiếu nhập' : d.kind === 'reversal' ? 'Phiếu đảo' : d.kind === 'adjustment' ? 'Điều chỉnh' : 'Trả NCC'} ${d.code}`, detail: `${d.qty_total.toLocaleString('vi-VN')} đơn vị${d.reversal_of ? ` · đảo ${d.reversal_of}` : ''}${d.reversed_by ? ` · đã đảo bởi ${d.reversed_by}` : ''}${d.fix_of ? ` · lập lại thay ${d.fix_of}` : ''}${d.adjust_of ? ` · chênh lệch của ${d.adjust_of}` : ''}`, tone: 'done' as const })), // prettier-ignore
-        ...adjustments.map((a) => ({ key: `dc${a.seq}`, at: a.created_at, label: `Điều chỉnh lần ${a.seq} · phát sinh ${signed(a.total_after - a.total_before, a.currency)}`, actor: a.created_by_name ?? undefined, detail: a.reason })), // prettier-ignore
+        ...adjustments.map((a) => ({ key: `dc${a.seq}`, at: a.created_at, label: `Điều chỉnh lần ${a.seq} · ${causeText(a)} · phát sinh ${signed(a.total_after - a.total_before, a.currency)}`, actor: a.created_by_name ?? undefined, detail: a.reason })), // prettier-ignore
         ...costs.map((c) => ({ key: `phi${c.id}`, at: c.cost_date, label: `Ghi phí ${c.kind === 'boc_xep' ? 'bốc xếp' : c.kind === 'khac' ? 'khác' : 'vận chuyển'}${c.doc_no ? ` ${c.doc_no}` : ''} · ${money(c.amount, c.currency)}${c.voided_at ? ' · đã huỷ' : ''}`, actor: c.created_by_name ?? undefined, detail: c.payee_name ?? undefined })), // prettier-ignore
         ...adjustments.flatMap((a) => (a.sent_at ? [{ key: `dcg${a.seq}`, at: a.sent_at, label: `Gửi NCC bản điều chỉnh lần ${a.seq}`, actor: a.sent_by_name ?? undefined, detail: a.sent_note ?? undefined }] : [])), // prettier-ignore
       ]
@@ -1388,8 +1392,9 @@ export function useDonChungTu(p: Props) {
     viewMode,
     adjSheet,
     setAdjSheet,
-    adjReason,
-    setAdjReason,
+    nn,
+    adjLinkedLsx,
+    lsxLastChange: p.lsxLastChange ?? {},
     sentSheet,
     setSentSheet,
     sentNote,
