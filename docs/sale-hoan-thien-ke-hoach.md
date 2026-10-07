@@ -455,6 +455,9 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
    nhất; dải cảnh báo thiếu điều khoản mặc định / hồ sơ in hợp đồng; ngăn Sửa tại chỗ;
    Đơn hàng · Báo giá · Hoạt động), `KhachForm` dùng chung (ô `O`/`INPUT` của
    orders/_form). Form đơn nhận `?customer=` (Trực tiếp + điều khoản mặc định). Xoá
-   CustomersManager / CustomerDetail / components/sales/CustomerForm. Còn trang nền
-   kiểu cũ: Điền đơn giá (`orders/gia`), Giá thành kế hoạch (`gia-thanh`).
+   CustomersManager / CustomerDetail / components/sales/CustomerForm. Khách hàng bổ sung
+   (07/10): phụ trách chỉ người Sale, sắp cột, gán hàng loạt, Excel, trùng tên/mã, khối
+   SP của khách + Giá đã chào, form lưới 12 cột. **Điền đơn giá** dựng lại khuôn F
+   (08/10, `orders/gia/DienGiaScreen` + `useDienGia`, xoá PricingBoardScreen). Còn
+   trang nền kiểu cũ: Giá thành kế hoạch (`gia-thanh`).
 7. **Lượt 7 — nhập Excel báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên. Tầng 3 của ba màn đã hết việc đã liệt kê; còn lại là 7 đợt nghiệp vụ ở mục 4 (bắt đầu Đợt 1 ghi xuất thật) và Q1–Q6.
