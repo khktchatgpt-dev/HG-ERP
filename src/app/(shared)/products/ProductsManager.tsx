@@ -3,9 +3,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, PackageSearch, Plus, Sparkles, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  FileSpreadsheet,
+  PackageSearch,
+  Plus,
+  Sparkles,
+  Upload,
+  X,
+} from 'lucide-react'
 import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { Button } from '@/components/shadcn/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -420,6 +436,44 @@ export function ProductsManager({
               <Button variant="outline" size="sm" onClick={() => setFromBom(true)}>
                 <Sparkles /> Tạo bằng AI
               </Button>
+            )}
+            {/*
+              Thêm hàng loạt bằng Excel (07/10/2026) — cùng quyền với "Thêm sản
+              phẩm". Tải mẫu là link thẳng tới route xuất file (trình duyệt tự tải,
+              không rời trang); tải lên đi màn soi trước /products/nhap-excel.
+            */}
+            {canEdit && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <FileSpreadsheet /> Nhập từ Excel <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  <DropdownMenuItem asChild>
+                    <a href="/api/dept/technical/products/import-excel" download>
+                      <FileSpreadsheet />
+                      <span className="flex flex-col">
+                        <span className="font-medium">Tải file mẫu</span>
+                        <span className="text-muted-foreground text-xs">
+                          Mau-nhap-san-pham.xlsx · danh sách thả xuống mới nhất
+                        </span>
+                      </span>
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/products/nhap-excel">
+                      <Upload />
+                      <span className="flex flex-col">
+                        <span className="font-medium">Tải lên file đã điền…</span>
+                        <span className="text-muted-foreground text-xs">
+                          Soi trước, chưa ghi gì cho tới khi bấm Thêm
+                        </span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {canEdit && (
               <Button size="sm" className={ACCENT_SOLID} asChild>

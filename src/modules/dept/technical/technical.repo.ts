@@ -613,6 +613,46 @@ export const productsRepo = {
   },
 
   /**
+   * Mã + tên + nhãn khách của MỌI SP (cả SP đã ngừng) — để thêm hàng loạt từ
+   * Excel kiểm trùng mã / trùng tên và cấp số kế tiếp. Đọc theo trang 1.000 dòng:
+   * PostgREST cắt ở trần 1.000 mà không báo.
+   */
+  async importIndex(): Promise<
+    { code: string; name: string; customer_name: string | null }[]
+  > {
+    const out: { code: string; name: string; customer_name: string | null }[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from('technical_products')
+        .select('code, name, customer_name')
+        .order('code')
+        .range(from, from + 999)
+      if (error) throw new Error(error.message)
+      out.push(...(data ?? []))
+      if (!data || data.length < 1000) return out
+    }
+  },
+
+  /**
+   * Chèn nhiều SP trong MỘT lệnh — một câu INSERT là một giao dịch: trùng mã ở
+   * dòng nào (unique `code`) thì cả lô không vào. Đúng luật "chặn cả lô" của
+   * thêm hàng loạt từ Excel.
+   */
+  async insertMany(
+    rows: (ProductWrite & Pick<Product, 'code' | 'name'> & { created_by: string })[],
+  ): Promise<{ id: string; code: string }[]> {
+    const { data, error } = await db()
+      .from('technical_products')
+      .insert(rows)
+      .select('id, code')
+    if (error) {
+      if (error.code === '23505') throw new Error('CODE_TAKEN')
+      throw new Error(error.message)
+    }
+    return data ?? []
+  },
+
+  /**
    * Đổi TRẠNG THÁI + các cờ đi kèm trong MỘT lệnh ghi (0145). Tách khỏi `patch`
    * để `ProductWrite` chặn được mọi đường ghi lifecycle khác — xem ghi chú ở
    * `ProductWrite`. Gọi từ `productsService.setLifecycle`, đừng gọi thẳng.
