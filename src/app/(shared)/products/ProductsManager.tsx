@@ -464,7 +464,7 @@ export function ProductsManager({
                         <span className="flex flex-col">
                           <span className="font-medium">Xuất {total} SP đang xem</span>
                           <span className="text-muted-foreground text-xs">
-                            Theo bộ lọc hiện tại · sửa rồi tải lên lại
+                            Theo bộ lọc hiện tại · kèm ảnh nhỏ · sửa rồi tải lên lại
                           </span>
                         </span>
                       </a>
@@ -478,7 +478,7 @@ export function ProductsManager({
                           Xuất cả thư viện ({counts.total} SP)
                         </span>
                         <span className="text-muted-foreground text-xs">
-                          Đủ thông tin trang chi tiết · sửa rồi tải lên lại
+                          Đủ thông tin + ảnh nhỏ · lần đầu có thể mất 1–2 phút
                         </span>
                       </span>
                     </a>

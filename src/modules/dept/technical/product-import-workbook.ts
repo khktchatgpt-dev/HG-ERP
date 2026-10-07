@@ -12,13 +12,30 @@ import {
   NOTE_ROW,
   columnForHeader,
   currentValue,
+  knownImage,
+  parseImageRef,
   exportValue,
   optionText,
   type CellValue,
   type ExistingProduct,
   type RawRow,
+  type RowImage,
 } from '@/lib/product-import'
 import { cellValue } from './bom-workbook'
+import {
+  PACKING_COLUMNS,
+  PACKING_SHEET,
+  packingColumnForHeader,
+  type OptionData,
+  type PackingRawRow,
+} from '@/lib/product-packing-import'
+import {
+  IMAGE_MIME,
+  imageHash,
+  imageSize,
+  previewDataUrl,
+  readInCellImages,
+} from './product-images'
 
 /**
  * FILE EXCEL của luồng thêm + cập nhật SP (07/10/2026) — xuất, đọc file đã sửa,
@@ -26,9 +43,21 @@ import { cellValue } from './bom-workbook'
  * (cùng lý do `bom-workbook.ts`).
  *
  * Bố cục: hàng 1 tên NHÓM (như trang chi tiết), hàng 2 TIÊU ĐỀ (đọc lại theo chữ
- * này), hàng 3 ghi chú, dữ liệu từ hàng 4. Ghim 2 cột trái (Mã · Tên) và 3 hàng
- * đầu — 46 cột mà cuộn mất tên SP thì không biết đang sửa dòng nào.
+ * này), hàng 3 ghi chú, dữ liệu từ hàng 4. Ghim 3 cột trái (Mã · Ảnh · Tên) và 3
+ * hàng đầu — 46 cột mà cuộn mất tên SP thì không biết đang sửa dòng nào.
+ *
+ * ẢNH (B2): xuất ảnh THU NHỎ neo vào ô Ảnh + ghi "Ảnh gốc" (id file | vân tay).
+ * Đọc lại: ảnh nổi neo vào ô Ảnh (góc trên-trái) + ảnh "Đặt trong ô" của Excel 365.
  */
+
+/** Ảnh thu nhỏ của một SP khi xuất: byte JPEG + ô "Ảnh gốc". */
+export type ExportThumb = { buffer: Buffer; ref: string }
+/** Byte gốc của ảnh trong file — thứ tự khớp `RawRow.images`. */
+export type RowImageBytes = { buffer: Buffer; ext: string }[]
+
+const IMAGE_ROW_PT = 40 // ~53px — vừa ảnh thu nhỏ 64×48
+const IMG_W = 64
+const IMG_H = 48
 
 const LIST_SHEET = 'Danh mục'
 const GUIDE_SHEET = 'Hướng dẫn'
@@ -37,6 +66,8 @@ const letter = (n: number): string => {
   for (let x = n; x > 0; x = Math.floor((x - 1) / 26)) s = String.fromCharCode(65 + ((x - 1) % 26)) + s // prettier-ignore
   return s
 }
+
+const colOf = (key: string) => IMPORT_COLUMNS.findIndex((c) => c.key === key) + 1
 
 /** Lỗi hình dạng file — service dịch sang 400 với đúng câu này. */
 export class ImportFileError extends Error {}
@@ -51,10 +82,17 @@ const FILL_GROUP = { type: 'pattern' as const, pattern: 'solid' as const, fgColo
 export async function buildProductWorkbook(
   products: readonly ExistingProduct[],
   customerLabels: readonly string[],
+  /** productId → ảnh thu nhỏ. Thiếu = SP chưa có ảnh (hoặc chưa kịp thu nhỏ). */
+  thumbs: ReadonlyMap<string, ExportThumb> = new Map(),
+  /** productId → phương án đóng gói nhiều kiện (sheet "Đóng gói"). */
+  packing: ReadonlyMap<string, OptionData[]> = new Map(),
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'HG-ERP'
   const ws = wb.addWorksheet(IMPORT_SHEET, {
+    views: [{ state: 'frozen', xSplit: 3, ySplit: NOTE_ROW }],
+  })
+  const pws = wb.addWorksheet(PACKING_SHEET, {
     views: [{ state: 'frozen', xSplit: 2, ySplit: NOTE_ROW }],
   })
   const lists = wb.addWorksheet(LIST_SHEET)
@@ -88,13 +126,15 @@ export async function buildProductWorkbook(
     h.fill = FILL_HEAD
     h.alignment = { vertical: 'middle', wrapText: true }
     const n = ws.getCell(NOTE_ROW, i + 1)
-    n.value = c.note ?? (c.kind === 'version' ? 'Hệ thống dùng — đừng sửa' : null)
+    n.value =
+      c.note ??
+      (c.kind === 'version' || c.kind === 'imageref' ? 'Hệ thống dùng — đừng sửa' : null)
     n.font = { italic: true, size: 9, color: { argb: 'FF5D6675' } }
     n.alignment = { vertical: 'top', wrapText: true }
   })
   ws.getRow(HEADER_ROW).height = 32
   ws.getRow(NOTE_ROW).height = 24
-  ws.getCell(NOTE_ROW, 2).value = 'Ô trống = giữ nguyên · gõ "-" = xoá trắng'
+  ws.getCell(NOTE_ROW, colOf('name')).value = 'Ô trống = giữ nguyên · gõ "-" = xoá trắng'
 
   // Dữ liệu.
   products.forEach((p, r) => {
@@ -103,8 +143,23 @@ export async function buildProductWorkbook(
       const cell = ws.getCell(rowNo, i + 1)
       if (c.kind === 'code') cell.value = p.code
       else if (c.kind === 'version') cell.value = p.updated_at
-      else cell.value = exportValue(c, currentValue(p, c))
+      else if (c.kind === 'imageref') cell.value = thumbs.get(p.id)?.ref ?? null
+      else if (c.kind !== 'image') cell.value = exportValue(c, currentValue(p, c))
     })
+    const t = thumbs.get(p.id)
+    if (t) {
+      // Neo MỘT ô (oneCell): kéo giãn hàng/cột thì ảnh đi theo ô, không trôi sang dòng khác.
+      const id = wb.addImage({
+        buffer: t.buffer as unknown as ExcelJS.Buffer,
+        extension: 'jpeg',
+      })
+      ws.addImage(id, {
+        tl: { col: colOf('image') - 1 + 0.08, row: rowNo - 1 + 0.08 },
+        ext: { width: IMG_W, height: IMG_H },
+        editAs: 'oneCell',
+      })
+      ws.getRow(rowNo).height = IMAGE_ROW_PT
+    }
   })
 
   // Danh mục — nguồn ô thả xuống. Tải file lúc nào thì danh sách mới lúc đó.
@@ -151,11 +206,62 @@ export async function buildProductWorkbook(
     const v = c.kind === 'bool' ? list(range(6, 2), false) : validation[c.key]
     const colNo = i + 1
     if (c.kind === 'code') ws.getColumn(colNo).numFmt = '@' // "0052" không thành 52
-    if (c.kind === 'version') ws.getColumn(colNo).hidden = true
+    if (c.kind === 'version' || c.kind === 'imageref') ws.getColumn(colNo).hidden = true
     if (!v) return
     for (let r = IMPORT_FIRST_ROW; r <= lastRow; r++)
       ws.getCell(r, colNo).dataValidation = v
   })
+
+  // ── Sheet "Đóng gói": mỗi dòng một KIỆN, ô phương án lặp lại trên các dòng kiện.
+  pws.columns = PACKING_COLUMNS.map((c) => ({ width: c.width }))
+  pws.mergeCells(GROUP_ROW, 1, GROUP_ROW, PACKING_COLUMNS.length)
+  const band = pws.getCell(GROUP_ROW, 1)
+  band.value =
+    'PHƯƠNG ÁN ĐÓNG GÓI — mỗi dòng một kiện. SP có mặt ở sheet này thì đóng gói của SP đó được THAY TRỌN BỘ bằng các dòng ở đây; SP không có dòng nào thì giữ nguyên.' // prettier-ignore
+  band.font = { bold: true, size: 9, color: { argb: 'FF3F4756' } }
+  band.fill = FILL_GROUP
+  band.alignment = { vertical: 'middle', wrapText: true }
+  pws.getRow(GROUP_ROW).height = 30
+  PACKING_COLUMNS.forEach((c, i) => {
+    const h = pws.getCell(HEADER_ROW, i + 1)
+    h.value = c.header
+    h.font = { bold: true }
+    h.fill = FILL_HEAD
+    h.alignment = { vertical: 'middle', wrapText: true }
+    const n = pws.getCell(NOTE_ROW, i + 1)
+    n.value = c.note ?? null
+    n.font = { italic: true, size: 9, color: { argb: 'FF5D6675' } }
+    n.alignment = { vertical: 'top', wrapText: true }
+  })
+  pws.getRow(HEADER_ROW).height = 32
+  pws.getRow(NOTE_ROW).height = 24
+  let prow = IMPORT_FIRST_ROW
+  for (const p of products) {
+    for (const o of packing.get(p.id) ?? []) {
+      const opt = {
+        code: p.code,
+        option_no: o.option_no,
+        label: o.label,
+        is_default: o.is_default ? 'có' : 'không',
+        cartons_per_set: o.cartons_per_set,
+        loading_40hc: o.loading_40hc,
+        note: o.note,
+      }
+      for (const pk of o.packages.length ? o.packages : [null]) {
+        const vals: Record<string, unknown> = { ...opt, ...(pk ?? {}) }
+        PACKING_COLUMNS.forEach((c, i) => {
+          const v = vals[c.key]
+          pws.getCell(prow, i + 1).value = v == null ? null : (v as ExcelJS.CellValue)
+        })
+        prow++
+      }
+    }
+  }
+  pws.getColumn(1).numFmt = '@'
+  const defCol = PACKING_COLUMNS.findIndex((c) => c.key === 'is_default') + 1
+  for (let r = IMPORT_FIRST_ROW; r <= prow + 200; r++) {
+    pws.getCell(r, defCol).dataValidation = list(range(6, 2), false)
+  }
 
   guide.columns = [{ width: 120 }]
   const lines = [
@@ -168,6 +274,10 @@ export async function buildProductWorkbook(
     '5. SP mới bắt buộc: Tên SP (tiếng Việt), Loại sản phẩm, Vật liệu khung. ĐVT trống = "cái".',
     '6. Cột thừa có thể xoá — cột vắng thì hệ thống không đụng tới. Đừng sửa cột ẩn "Phiên bản" (dùng để biết SP có bị sửa trên web sau khi xuất).',
     `7. Tối đa ${IMPORT_MAX_ROWS} dòng một lần. Dòng trống bị bỏ qua.`,
+    '8. Ảnh: ảnh thu nhỏ xuất ra để nguyên = không đổi ảnh. Dán ảnh khác vào ô Ảnh (dán đè hoặc "Đặt trong ô") = thay ảnh đại diện; ảnh cũ vẫn giữ ở tab Tài liệu.',
+    `9. Sheet "${PACKING_SHEET}": mỗi dòng một KIỆN. SP có mặt ở sheet này thì đóng gói của SP đó được THAY TRỌN BỘ; SP vắng mặt giữ nguyên.`,
+    '   Các dòng cùng "Phương án số" là cùng một phương án (ô Tên / Mặc định / Số thùng / Xếp cont chỉ cần ghi ở dòng đầu). Phương án không kiện = một dòng, để trống Tên kiện.',
+    '   Mỗi SP đúng MỘT phương án "Mặc định" (không đánh dấu thì lấy phương án số nhỏ nhất). Gõ "-" ở ô Phương án số = xoá hết phương án của SP.',
     '',
     'Tải lên: Thư viện sản phẩm → Excel → Tải lên file đã sửa. Hệ thống soi trước từng dòng (thêm mới / cập nhật ô nào, cũ → mới / lỗi),',
     'CHƯA ghi gì cho tới khi bấm Ghi. Còn dòng lỗi thì chưa ghi được: sửa trong file rồi tải lại.',
@@ -194,10 +304,7 @@ function raw(v: unknown): CellValue {
     chú nhiều dòng bị dồn thành một (đo 07/10) — ghi vào là phá ghi chú của
     người ta mà không ai sửa gì.
   */
-  return String(v)
-    .replace(/\r\n?/g, '\n')
-    .replace(/ /g, ' ')
-    .trim()
+  return String(v).replace(/\r\n?/g, '\n').replace(/ /g, ' ').trim()
 }
 
 async function loadSheet(buffer: Buffer) {
@@ -226,19 +333,29 @@ async function loadSheet(buffer: Buffer) {
 }
 
 /** Đọc các dòng có dữ liệu từ hàng 4. Quá giới hạn → lỗi, không cắt ngầm. */
-export async function readImportRows(
-  buffer: Buffer,
-): Promise<{ rows: RawRow[]; blank: number; sheet: string; columns: string[] }> {
-  const { ws, colOf } = await loadSheet(buffer)
+export async function readImportRows(buffer: Buffer): Promise<{
+  rows: RawRow[]
+  blank: number
+  sheet: string
+  columns: string[]
+  /** Byte gốc của ảnh theo hàng — chỉ service dùng khi ghi, màn soi không cần. */
+  imageBytes: Map<number, RowImageBytes>
+  /** Sheet "Đóng gói" — rỗng khi file không có sheet đó (file cũ / người dùng xoá). */
+  packingRows: PackingRawRow[]
+}> {
+  const { wb, ws, colOf: cols } = await loadSheet(buffer)
+  const imageBytes = await readRowImages(buffer, wb, ws, cols.get('image'))
   const rows: RawRow[] = []
-  for (let r = IMPORT_FIRST_ROW; r <= ws.rowCount; r++) {
+  const last = Math.max(ws.rowCount, ...imageBytes.keys())
+  for (let r = IMPORT_FIRST_ROW; r <= last; r++) {
     const cells: Record<string, CellValue> = {}
-    let any = false
-    for (const [key, colNo] of colOf) {
+    let any = imageBytes.has(r)
+    for (const [key, colNo] of cols) {
       const v = raw(cellValue(ws.getCell(r, colNo).value))
       cells[key] = v
-      // Cột "Phiên bản" một mình không làm dòng thành có dữ liệu.
-      if (v !== '' && key !== 'version') any = true
+      // Cột máy (Phiên bản, Ảnh gốc) một mình không làm dòng thành có dữ liệu.
+      if (v !== '' && key !== 'version' && key !== 'image_ref' && key !== 'image')
+        any = true
     }
     if (any) rows.push({ row: r, cells })
   }
@@ -250,7 +367,77 @@ export async function readImportRows(
       `File có ${rows.length} dòng — tối đa ${IMPORT_MAX_ROWS} dòng một lần. Chia làm nhiều file.`,
     )
   }
-  return { rows, blank, sheet: ws.name, columns: [...colOf.keys()] }
+  // Vân tay + cỡ cho MỌI ảnh; ảnh nhỏ xem trước chỉ cho ảnh KHÁC "Ảnh gốc" (ảnh
+  // thu nhỏ để nguyên khỏi tốn công — tải lên cả thư viện là 680 ảnh như thế).
+  for (const r of rows) {
+    const bytes = imageBytes.get(r.row)
+    if (!bytes) continue
+    const ref = parseImageRef(r.cells.image_ref)
+    r.images = await Promise.all(bytes.map(async ({ buffer: b, ext }) => describeImage(b, ext, ref?.hashes ?? []))) // prettier-ignore
+  }
+  return {
+    rows,
+    blank,
+    sheet: ws.name,
+    columns: [...cols.keys()],
+    imageBytes,
+    packingRows: readPackingRows(wb),
+  }
+}
+
+/** Một ảnh trong ô → thông tin để lib quyết (vân tay, cỡ) + câu lỗi nếu không dùng được. */
+async function describeImage(
+  buf: Buffer,
+  ext: string,
+  known: readonly string[],
+): Promise<RowImage> {
+  const base = { hash: '', bytes: buf.byteLength, width: 0, height: 0 }
+  if (!IMAGE_MIME[ext]) {
+    return { ...base, problem: `Ảnh dạng .${ext || '?'} không dùng được — chép ảnh gốc (PNG/JPG) rồi dán lại vào ô` } // prettier-ignore
+  }
+  const size = await imageSize(buf)
+  if (!size)
+    return { ...base, problem: 'Không đọc được ảnh trong ô — dán lại ảnh PNG/JPG' }
+  const hash = await imageHash(buf)
+  const same = knownImage(hash, known)
+  return { ...base, ...size, hash, preview: same ? undefined : await previewDataUrl(buf) }
+}
+
+/**
+ * Ảnh ở cột Ảnh theo hàng. Hai nguồn:
+ *  · ảnh NỔI (Chèn ảnh / dán) — tính cho hàng chứa góc trên-trái; nhận khi ảnh
+ *    phủ lên cột Ảnh (góc trái ở cột Ảnh, hoặc lấn từ cột bên trái sang);
+ *  · ảnh "ĐẶT TRONG Ô" của Excel 365 — exceljs không đọc, `readInCellImages` tự lần.
+ */
+async function readRowImages(
+  buffer: Buffer,
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  imageCol: number | undefined,
+): Promise<Map<number, RowImageBytes>> {
+  const out = new Map<number, RowImageBytes>()
+  if (!imageCol) return out
+  const add = (row: number, b: Buffer, ext: string) => {
+    if (row < IMPORT_FIRST_ROW) return
+    out.set(row, [...(out.get(row) ?? []), { buffer: b, ext: ext.toLowerCase() }])
+  }
+  for (const im of ws.getImages()) {
+    const tl = im.range.tl as unknown as { nativeCol: number; nativeRow: number }
+    const br = im.range.br as unknown as { nativeCol: number } | undefined
+    const left = tl.nativeCol + 1
+    const right = br ? br.nativeCol + 1 : left
+    if (left > imageCol || right < imageCol) continue
+    const media = wb.getImage(Number(im.imageId)) as unknown as {
+      buffer?: Buffer
+      extension?: string
+    }
+    if (media?.buffer)
+      add(tl.nativeRow + 1, Buffer.from(media.buffer), media.extension ?? '')
+  }
+  for (const c of await readInCellImages(buffer, ws.name)) {
+    if (c.col === imageCol) add(c.row, c.buffer, c.ext)
+  }
+  return out
 }
 
 /**
@@ -260,16 +447,49 @@ export async function readImportRows(
  */
 export async function fillWritten(
   buffer: Buffer,
-  written: readonly { row: number; code: string; version: string }[],
+  written: readonly {
+    row: number
+    code: string
+    version: string
+    imageRef?: string | null
+  }[],
 ): Promise<Buffer> {
-  const { wb, ws, colOf } = await loadSheet(buffer)
-  const codeCol = colOf.get('code')!
-  const verCol = colOf.get('version')
+  const { wb, ws, colOf: cols } = await loadSheet(buffer)
+  const codeCol = cols.get('code')!
+  const verCol = cols.get('version')
+  const refCol = cols.get('image_ref')
   for (const w of written) {
     const c = ws.getCell(w.row, codeCol)
     c.numFmt = '@'
     c.value = w.code
     if (verCol) ws.getCell(w.row, verCol).value = w.version
+    // Ảnh vừa ghi đang nằm trong ô — ghi vân tay của CHÍNH nó, lần tải lại sau mới
+    // nhận ra "không đổi" thay vì tải ảnh đó lên lần nữa.
+    if (refCol && w.imageRef) ws.getCell(w.row, refCol).value = w.imageRef
   }
   return Buffer.from(await wb.xlsx.writeBuffer())
+}
+
+/** Sheet "Đóng gói" → dòng thô theo TIÊU ĐỀ (hàng 2), dữ liệu từ hàng 4, bỏ dòng trống. */
+function readPackingRows(wb: ExcelJS.Workbook): PackingRawRow[] {
+  const ws = wb.getWorksheet(PACKING_SHEET)
+  if (!ws) return []
+  const cols = new Map<string, number>()
+  ws.getRow(HEADER_ROW).eachCell((cell, colNo) => {
+    const c = packingColumnForHeader(String(raw(cellValue(cell.value))))
+    if (c && !cols.has(c.key)) cols.set(c.key, colNo)
+  })
+  if (!cols.has('code')) return []
+  const out: PackingRawRow[] = []
+  for (let r = IMPORT_FIRST_ROW; r <= ws.rowCount; r++) {
+    const cells: Record<string, CellValue> = {}
+    let any = false
+    for (const [key, colNo] of cols) {
+      const v = raw(cellValue(ws.getCell(r, colNo).value))
+      cells[key] = v
+      if (v !== '') any = true
+    }
+    if (any) out.push({ row: r, cells })
+  }
+  return out
 }

@@ -12,6 +12,12 @@ import {
   fillWritten,
   readImportRows,
 } from './product-import-workbook'
+import {
+  PACKING_COLUMNS,
+  PACKING_SHEET,
+  planPacking,
+  type OptionData,
+} from '@/lib/product-packing-import'
 
 const SOFA: ExistingProduct = {
   id: 'id-sofa',
@@ -45,13 +51,14 @@ async function edit(buf: Buffer, f: (ws: ExcelJS.Worksheet) => void): Promise<Bu
 }
 
 describe('xuất', () => {
-  it('3 sheet, hàng nhóm / tiêu đề / ghi chú, dữ liệu từ hàng 4, cột phiên bản ẩn', async () => {
+  it('4 sheet, hàng nhóm / tiêu đề / ghi chú, dữ liệu từ hàng 4, cột phiên bản ẩn', async () => {
     const wb = new ExcelJS.Workbook()
     await wb.xlsx.load(
       (await buildProductWorkbook([SOFA], ['LAURA'])) as unknown as ArrayBuffer,
     )
     expect(wb.worksheets.map((w) => w.name)).toEqual([
       'Sản phẩm',
+      'Đóng gói',
       'Danh mục',
       'Hướng dẫn',
     ])
@@ -136,5 +143,61 @@ describe('ghi mã + phiên bản trở lại', () => {
     expect(r.rows[0].cells.version).toBe('2026-10-07T03:00:00Z')
     const created: ExistingProduct = { id: 'x', code: 'TB0301HG-AL', name: 'Bàn A', customer_name: null, updated_at: '2026-10-07T03:00:00Z', locked_at: null, packing: {}, tech_spec: {}, product_type: 'TB', frame_material: 'AL', unit: 'cái' } // prettier-ignore
     expect(planImport(r.rows, [created]).rows[0].action).toBe('same')
+  })
+})
+
+describe('cột ISO + CBM / HS + sheet Đóng gói', () => {
+  const ISO: ExistingProduct = {
+    ...SOFA,
+    hs_code: '9401.79',
+    origin_country: 'Việt Nam',
+    bom_rev: 0,
+    bom_effective_date: '2026-10-08',
+    bom_prepared_by: 'Nguyễn Văn A',
+    bom_approved_by: 'Trần B',
+    packing: { pack_unit_label: 'ctn', cbm: 0.512 },
+  }
+  const OPTS: OptionData[] = [
+    {
+      option_no: 1,
+      label: 'Hàng KD',
+      is_default: true,
+      cartons_per_set: 2,
+      loading_40hc: 120,
+      note: null,
+      packages: [
+        { package_label: 'Khung', qty: 1, carton_l_mm: 2050, carton_w_mm: 850, carton_h_mm: 400, net_weight_kg: 20, gross_weight_kg: 24 }, // prettier-ignore
+        { package_label: 'Nệm', qty: 2, carton_l_mm: 900, carton_w_mm: 600, carton_h_mm: 300, net_weight_kg: 3.5, gross_weight_kg: 4 }, // prettier-ignore
+      ],
+    },
+  ]
+  const refs = [{ id: SOFA.id, code: SOFA.code, locked_at: null }]
+
+  it('xuất → đọc lại: Rev 0, ngày, người lập/duyệt, CBM, HS đều "Không đổi"', async () => {
+    const buf = await buildProductWorkbook([ISO], ['LAURA'])
+    const r = await readImportRows(buf)
+    const p = planImport(r.rows, [ISO])
+    expect(p.rows[0].changes).toEqual([])
+    expect(p.rows[0].action).toBe('same')
+  })
+
+  it('sheet Đóng gói xuất → đọc lại = "Không đổi"; sửa một kiện → thay trọn bộ', async () => {
+    const old = new Map([[SOFA.id, OPTS]])
+    const buf = await buildProductWorkbook([SOFA], ['LAURA'], new Map(), old)
+    const r = await readImportRows(buf)
+    expect(r.packingRows).toHaveLength(2)
+    const same = planPacking(r.packingRows, refs, old)
+    expect(same.counts).toMatchObject({ products: 1, same: 1, replace: 0, error: 0 })
+
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load(buf as unknown as ArrayBuffer)
+    const ws = wb.getWorksheet(PACKING_SHEET)!
+    const qtyCol = PACKING_COLUMNS.findIndex((c) => c.key === 'qty') + 1
+    ws.getCell(5, qtyCol).value = 3
+    const r2 = await readImportRows(Buffer.from(await wb.xlsx.writeBuffer()))
+    const k = planPacking(r2.packingRows, refs, old)
+    expect(k.items[0].action).toBe('replace')
+    expect(k.items[0].options[0].packages[1].qty).toBe(3)
+    expect(k.items[0].options[0].packages[0]).toEqual(OPTS[0].packages[0])
   })
 })

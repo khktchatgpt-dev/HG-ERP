@@ -438,7 +438,7 @@ export const SECTIONS: Record<string, SectionSpec> = {
     title: 'Thông số sản xuất',
     hint: 'in trên LSX',
     fields: [
-      { name: 'machine', label: 'Máy', maxLength: 200, json: 'tech_spec' },
+      { name: 'machine', label: 'Mây / dây', maxLength: 200, json: 'tech_spec' },
       { name: 'showroom_sample', label: 'Có mẫu tại showroom', kind: 'checkbox' },
     ],
   },

@@ -989,7 +989,7 @@ function buildInfoSheet(wb: ExcelJS.Workbook, input: ProductExcelInput) {
     ['Gỗ', ts.wood],
     ['Kính', ts.glass],
     ['Nệm', ts.cushion],
-    ['Máy', ts.machine],
+    ['Mây / dây', ts.machine],
     ['#ĐẶC TÍNH', ''],
     ['Có nệm / bọc', p.is_upholstered ? 'Có' : 'Không'],
     ['Có kính', p.has_glass ? 'Có' : 'Không'],

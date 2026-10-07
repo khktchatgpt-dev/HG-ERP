@@ -160,7 +160,7 @@ export function ProductSpecsTab({
           title="Thông số sản xuất"
           hint="in trên LSX"
           fields={[
-            ['Máy', ts.machine],
+            ['Mây / dây', ts.machine],
             ['Mẫu showroom', product.showroom_sample ? 'Có' : 'Không'],
           ]}
           onEdit={editHandler('techSpec')}

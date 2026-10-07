@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import type { ExistingProduct } from '@/lib/product-import'
+import type { OptionData, PackageData } from '@/lib/product-packing-import'
 import { customerLabelFrom } from '@/lib/customer-label'
 import { searchTokens } from '@/lib/search-text'
 import type { Lifecycle } from '@/lib/product-lifecycle'
@@ -183,7 +184,7 @@ export type ProductWrite = Partial<Omit<Product, 'lifecycle' | 'created_by'>>
  * `IMPORT_COLUMNS` (lib/product-import) + khoá để khớp và cảnh báo.
  */
 const IMPORT_INDEX_COLS =
-  'id, code, name, updated_at, locked_at, product_type, frame_material, name_foreign, customer_name, customer_item_code, code_legacy, unit, barcode, reference_price, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, net_weight_kg, actual_weight_kg, max_load_kg, assembly, set_contents, is_set, material, is_upholstered, has_glass, showroom_sample, description_en, shipping_mark, notes, packing, tech_spec'
+  'id, code, name, updated_at, locked_at, image_file_id, product_type, frame_material, name_foreign, customer_name, customer_item_code, code_legacy, unit, barcode, reference_price, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, net_weight_kg, actual_weight_kg, max_load_kg, assembly, set_contents, is_set, material, is_upholstered, has_glass, showroom_sample, description_en, shipping_mark, notes, packing, tech_spec, hs_code, origin_country, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by'
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
@@ -656,6 +657,109 @@ export const productsRepo = {
       throw new Error(error.message)
     }
     return data ?? []
+  },
+
+  /**
+   * MỌI phương án đóng gói + kiện, gom theo SP — chỉ mục cho sheet "Đóng gói"
+   * (đo 07/10: 197 phương án / 128 kiện, đọc một lượt rẻ hơn N lượt theo SP).
+   */
+  async packingIndex(): Promise<Map<string, OptionData[]>> {
+    const out = new Map<string, OptionData[]>()
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from('technical_packing_options')
+        .select(
+          'product_id, option_no, label, cartons_per_set, loading_40hc, is_default, note, packages:technical_packages(package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
+        )
+        .order('product_id')
+        .order('option_no')
+        .range(from, from + 999)
+      if (error) throw new Error(error.message)
+      for (const o of data ?? []) {
+        const pk = [...((o.packages ?? []) as (PackageData & { sort_order: number })[])]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(({ sort_order: _s, ...p }) => {
+            void _s
+            // numeric về dạng chuỗi qua PostgREST — so bằng số ở lib.
+            return {
+              ...p,
+              qty: Number(p.qty),
+              carton_l_mm: p.carton_l_mm == null ? null : Number(p.carton_l_mm),
+              carton_w_mm: p.carton_w_mm == null ? null : Number(p.carton_w_mm),
+              carton_h_mm: p.carton_h_mm == null ? null : Number(p.carton_h_mm),
+              net_weight_kg: p.net_weight_kg == null ? null : Number(p.net_weight_kg),
+              gross_weight_kg:
+                p.gross_weight_kg == null ? null : Number(p.gross_weight_kg),
+            }
+          })
+        const list = out.get(o.product_id) ?? []
+        list.push({
+          option_no: o.option_no,
+          label: o.label,
+          is_default: o.is_default,
+          cartons_per_set: o.cartons_per_set,
+          loading_40hc: o.loading_40hc,
+          note: o.note,
+          packages: pk,
+        })
+        out.set(o.product_id, list)
+      }
+      if (!data || data.length < 1000) return out
+    }
+  },
+
+  /**
+   * THAY TRỌN BỘ đóng gói của một SP (sheet "Đóng gói"). Không có hàm DB một giao
+   * dịch nên làm: xoá cũ (kiện xoá theo cascade) → chèn mới; chèn hỏng thì CHÈN
+   * LẠI bản cũ (`previous`) rồi mới ném lỗi — không để SP trắng đóng gói.
+   */
+  async replacePacking(
+    productId: string,
+    options: readonly OptionData[],
+    previous: readonly OptionData[],
+  ): Promise<void> {
+    const insert = async (opts: readonly OptionData[]) => {
+      for (const o of opts) {
+        const { data, error } = await db()
+          .from('technical_packing_options')
+          .insert({
+            product_id: productId,
+            option_no: o.option_no,
+            label: o.label,
+            cartons_per_set: o.cartons_per_set,
+            loading_40hc: o.loading_40hc,
+            is_default: o.is_default,
+            note: o.note,
+          })
+          .select('id')
+          .single()
+        if (error || !data)
+          throw new Error(error?.message ?? 'Thêm phương án đóng gói hỏng')
+        if (o.packages.length) {
+          const { error: e2 } = await db()
+            .from('technical_packages')
+            .insert(
+              o.packages.map((p, i) => ({ ...p, option_id: data.id, sort_order: i })),
+            )
+          if (e2) throw new Error(e2.message)
+        }
+      }
+    }
+    const wipe = async () => {
+      const { error } = await db()
+        .from('technical_packing_options')
+        .delete()
+        .eq('product_id', productId)
+      if (error) throw new Error(error.message)
+    }
+    await wipe()
+    try {
+      await insert(options)
+    } catch (e) {
+      await wipe().catch(() => {})
+      await insert(previous).catch(() => {})
+      throw e
+    }
   },
 
   /**

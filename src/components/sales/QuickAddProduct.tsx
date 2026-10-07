@@ -39,7 +39,7 @@ export type QuickProduct = {
  */
 type SpecKey = 'machine' | 'cushion' | 'paint' | 'glass' | 'wood'
 const SPEC_FIELDS: [SpecKey, string, string][] = [
-  ['machine', 'Máy', 'vd Dây dù màu kem'],
+  ['machine', 'Mây / dây', 'vd Dây dù màu kem'],
   ['cushion', 'Nệm', 'vd Nệm dày 5cm'],
   ['paint', 'Sơn', 'vd Màu graphit'],
   ['glass', 'Kính', 'vd Cường lực 8mm'],

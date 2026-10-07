@@ -21,6 +21,12 @@ export const packingSchema = z.object({
   pack_unit_label: z.string().trim().max(30).optional(), // 'ctn' | 'pallet' — mẫu ghi "20 pcs/pallet"
   nw_kg: z.coerce.number().positive().optional(), // Net weight / carton
   gw_kg: z.coerce.number().positive().optional(), // Gross weight / carton
+  /**
+   * CBM/thùng khai tay (khi chưa đo đủ 3 chiều) — LSX đọc (`productCbm`), 20 SP có.
+   * Trước 08/10 schema thiếu khoá này: khung sửa đóng gói trộn giữ `cbm` nhưng zod
+   * lột mất, nên mỗi lần sửa đóng gói trên trang chi tiết là CBM khai tay biến mất.
+   */
+  cbm: z.coerce.number().positive().optional(),
 })
 
 /** Kiểu lắp ráp — hàng nội thất XK: nguyên chiếc hoặc tháo rời (knock-down). */

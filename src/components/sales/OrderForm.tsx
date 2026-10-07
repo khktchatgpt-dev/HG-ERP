@@ -61,7 +61,7 @@ export type OrderInitial = {
 type SpecKey = 'machine' | 'cushion' | 'paint' | 'glass' | 'wood'
 /** [khoá, nhãn, ví dụ] — ví dụ lấy từ dữ liệu thật để sale biết gõ kiểu gì. */
 const SPEC_FIELDS: [SpecKey, string, string][] = [
-  ['machine', 'Máy', 'Dây dù màu kem'],
+  ['machine', 'Mây / dây', 'Dây dù màu kem'],
   ['cushion', 'Nệm', 'Nệm dày 5cm · vải Stormstone'],
   ['paint', 'Sơn', 'Màu Graphit H-SM-9608'],
   ['glass', 'Kính', 'Kính cường lực 8mm'],

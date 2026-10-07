@@ -3,18 +3,23 @@ import { BadRequest, Conflict, Forbidden } from '@/server/http'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
 import { storage } from '@/modules/core/files/storage'
+import { filesRepo } from '@/modules/core/files/files.repo'
+import { filesService } from '@/modules/core/files/files.service'
 import { isLifecycle, type Lifecycle } from '@/lib/product-lifecycle'
 import { PRODUCT_TYPE_CODES } from '@/lib/product-code'
 import {
+  imageRefOf,
   planImport,
   type ImportPlan,
   type PlannedRow,
   type RawRow,
 } from '@/lib/product-import'
 import { productsRepo } from './technical.repo'
+import { planPacking, type OptionData, type PackingPlan, type PackingPlanItem } from '@/lib/product-packing-import' // prettier-ignore
 import { productsService } from './technical.service'
 import type { BomStatus } from './technical.schema'
-import { ImportFileError, buildProductWorkbook, fillWritten, readImportRows } from './product-import-workbook' // prettier-ignore
+import { ImportFileError, buildProductWorkbook, fillWritten, readImportRows, type ExportThumb } from './product-import-workbook' // prettier-ignore
+import { IMAGE_MIME, fitForUpload, imageHash, makeThumb } from './product-images'
 
 /**
  * THÊM + CẬP NHẬT SẢN PHẨM BẰNG EXCEL (07/10/2026, B1 của bản vẽ vòng 2). Luật ở
@@ -44,13 +49,93 @@ export type ImportPreview = Omit<ImportPlan, 'rows'> & {
   blank: number
   /** Cột có trong file — màn soi nói "file có X/46 cột". */
   columns: string[]
+  /** Sheet "Đóng gói" — bỏ `options` (thứ sẽ ghi) cho nhẹ. */
+  packing: { items: Omit<PackingPlanItem, 'options'>[]; counts: PackingPlan['counts'] }
 }
+
+/** Mỗi lần gọi ghi đóng gói tối đa chừng này SP (mỗi SP: xoá + chèn phương án + kiện). */
+export const PACKING_CHUNK = 40
 export type WrittenRow = {
   row: number
   code: string
   id: string
   version: string
   action: 'create' | 'update'
+  /** Ô "Ảnh gốc" mới khi dòng vừa ghi ảnh mới — để tải lại file không ghi ảnh lần hai. */
+  imageRef?: string | null
+}
+
+/** Ảnh thu nhỏ lưu sẵn — tạo một lần, mỗi lần xuất chỉ tải ~10 KB/ảnh thay vì ảnh gốc. */
+const THUMB_DIR = 'thumbs/products'
+/** Ngân sách thời gian tạo ảnh thu nhỏ còn thiếu trong một lần xuất. */
+const THUMB_BUDGET_MS = 70_000
+
+/** Chạy `fn` trên từng phần tử, tối đa `n` việc cùng lúc. */
+async function pool<T>(items: readonly T[], n: number, fn: (x: T) => Promise<void>) {
+  let i = 0
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (i < items.length) await fn(items[i++])
+    }),
+  )
+}
+
+type ExistingProductLike = { id: string; image_file_id?: unknown }
+
+/**
+ * Ảnh thu nhỏ cho các SP có ảnh. Có sẵn trong `thumbs/products` thì tải về; chưa có
+ * thì tải ảnh gốc, thu nhỏ, lưu lại — trong ngân sách thời gian. Lần xuất đầu cả
+ * thư viện (680 ảnh gốc, 229 MB) có thể không kịp hết: SP nào chưa kịp thì xuất
+ * không ảnh (`missing`), lần xuất sau tiếp tục từ chỗ đó.
+ */
+async function thumbsFor(
+  products: readonly ExistingProductLike[],
+): Promise<{ thumbs: Map<string, ExportThumb>; missing: number }> {
+  const deadline = Date.now() + THUMB_BUDGET_MS
+  const withImage = products.filter((p) => typeof p.image_file_id === 'string')
+  const fileIds = [...new Set(withImage.map((p) => p.image_file_id as string))]
+  const files = new Map<string, Awaited<ReturnType<typeof filesRepo.getByIds>>[number]>()
+  for (let i = 0; i < fileIds.length; i += 150) {
+    for (const f of await filesRepo.getByIds(fileIds.slice(i, i + 150)))
+      files.set(f.id, f)
+  }
+  const byFile = new Map<string, ExportThumb>()
+  let missing = 0
+  await pool(fileIds, 32, async (fileId) => {
+    const path = `${THUMB_DIR}/${fileId}-200.jpg`
+    let thumb = await storage.downloadBuffer(BUCKET, path)
+    if (!thumb) {
+      const f = files.get(fileId)
+      if (!f || Date.now() > deadline) {
+        missing++
+        return
+      }
+      const orig = await storage.downloadBuffer(f.bucket, f.path)
+      if (!orig) {
+        missing++
+        return
+      }
+      try {
+        thumb = await makeThumb(orig)
+      } catch {
+        missing++ // ảnh gốc hỏng / định dạng lạ — xuất không ảnh, không làm hỏng cả file
+        return
+      }
+      await storage
+        .uploadBuffer(BUCKET, path, thumb, 'image/jpeg', { upsert: true })
+        .catch(() => {})
+    }
+    byFile.set(fileId, {
+      buffer: thumb,
+      ref: imageRefOf(fileId, [await imageHash(thumb)]),
+    })
+  })
+  const thumbs = new Map<string, ExportThumb>()
+  for (const p of withImage) {
+    const t = byFile.get(p.image_file_id as string)
+    if (t) thumbs.set(p.id, t)
+  }
+  return { thumbs, missing }
 }
 
 /** Bộ lọc thư viện SP (đúng tham số URL của /products) → bộ lọc `listLite`. */
@@ -101,7 +186,12 @@ async function load(user: User, path: string): Promise<Buffer> {
 async function plan(
   buffer: Buffer,
   written: readonly { row: number; code: string }[] = [],
-): Promise<{ plan: ImportPlan; read: Awaited<ReturnType<typeof readImportRows>> }> {
+): Promise<{
+  plan: ImportPlan
+  packing: PackingPlan
+  packingOld: Map<string, OptionData[]>
+  read: Awaited<ReturnType<typeof readImportRows>>
+}> {
   let read
   try {
     read = await readImportRows(buffer)
@@ -113,8 +203,29 @@ async function plan(
   const rows: RawRow[] = read.rows.map((r) =>
     codeOf.has(r.row) ? { ...r, cells: { ...r.cells, code: codeOf.get(r.row)! } } : r,
   )
-  const existing = await productsRepo.importIndex()
-  return { plan: planImport(rows, existing), read }
+  const [existing, packingOld] = await Promise.all([
+    productsRepo.importIndex(),
+    productsRepo.packingIndex(),
+  ])
+  const refs = existing.map((p) => ({ id: p.id, code: p.code, locked_at: p.locked_at }))
+  return {
+    plan: planImport(rows, existing),
+    packing: planPacking(read.packingRows, refs, packingOld),
+    packingOld,
+    read,
+  }
+}
+
+/** Còn lỗi ở BẤT KỲ sheet nào thì không ghi gì (luật chặn cả file). */
+function assertNoErrors(p: ImportPlan, k: PackingPlan) {
+  if (p.counts.error > 0) {
+    const bad = p.rows.filter((r) => r.action === 'error').map((r) => r.row)
+    throw BadRequest(`Còn ${bad.length} dòng lỗi (dòng ${bad.slice(0, 8).join(', ')}${bad.length > 8 ? '…' : ''}) — sửa trong file rồi tải lại`) // prettier-ignore
+  }
+  if (k.counts.error > 0) {
+    const rows = k.items.filter((i) => i.action === 'error').flatMap((i) => i.rows)
+    throw BadRequest(`Sheet Đóng gói còn ${k.counts.error} SP lỗi (dòng ${rows.slice(0, 8).join(', ')}${rows.length > 8 ? '…' : ''}) — sửa trong file rồi tải lại`) // prettier-ignore
+  }
 }
 
 async function assertCanWrite(user: User, p: ImportPlan) {
@@ -140,10 +251,13 @@ export const productImportService = {
   async exportFile(
     user: User,
     filter: LibraryFilter | null,
-  ): Promise<{ buffer: Buffer; count: number }> {
-    const [names, all] = await Promise.all([
+  ): Promise<{ buffer: Buffer; count: number; missingImages: number }> {
+    const [names, all, packing] = await Promise.all([
       productsRepo.customerNames(),
       filter ? productsRepo.importIndex() : Promise.resolve([]),
+      filter
+        ? productsRepo.packingIndex()
+        : Promise.resolve(new Map<string, OptionData[]>()),
     ])
     let products = all
     if (filter && Object.values(filter).some((v) => v !== undefined)) {
@@ -161,10 +275,28 @@ export const productImportService = {
       products = all.filter((p) => ids.has(p.id))
     }
     const labels = [...names].sort((a, b) => b.count - a.count).map((n) => n.name)
+    const { thumbs, missing } = await thumbsFor(products)
     return {
-      buffer: await buildProductWorkbook(products, labels),
+      buffer: await buildProductWorkbook(products, labels, thumbs, packing),
       count: products.length,
+      missingImages: missing,
     }
+  },
+
+  /**
+   * Xuất rồi đặt file lên Storage, trả URL tải (15 phút): file kèm ảnh thu nhỏ của
+   * cả thư viện ~8 MB, vượt trần ~4,5 MB thân phản hồi của Vercel.
+   */
+  async exportToStorage(
+    user: User,
+    filter: LibraryFilter,
+    filename: string,
+  ): Promise<{ url: string; count: number; missingImages: number }> {
+    const r = await this.exportFile(user, filter)
+    const path = `${folderOf(user)}/${randomUUID()}-xuat.xlsx`
+    await storage.uploadBuffer(BUCKET, path, r.buffer, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') // prettier-ignore
+    const { url } = await storage.createSignedDownloadUrl(BUCKET, path, 15 * 60, filename)
+    return { url, count: r.count, missingImages: r.missingImages }
   },
 
   /**
@@ -188,7 +320,7 @@ export const productImportService = {
   async preview(user: User, path: string): Promise<ImportPreview> {
     if (!(await this.canUse(user)))
       throw Forbidden('Chỉ Kỹ thuật / Bán hàng / Giám đốc thêm, sửa SP')
-    const { plan: p, read } = await plan(await load(user, path))
+    const { plan: p, packing: k, read } = await plan(await load(user, path))
     return {
       ...p,
       // Màn soi không cần `write` (thứ sẽ ghi) — bỏ cho nhẹ.
@@ -197,6 +329,11 @@ export const productImportService = {
       sheet: read.sheet,
       blank: read.blank,
       columns: read.columns,
+      packing: {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        items: k.items.map(({ options, ...rest }) => rest),
+        counts: k.counts,
+      },
     }
   },
 
@@ -207,17 +344,46 @@ export const productImportService = {
    */
   async commitChunk(
     user: User,
-    input: { path: string; rows: number[]; written: { row: number; code: string }[] },
-  ): Promise<WrittenRow[]> {
+    input: {
+      path: string
+      rows: number[]
+      written: { row: number; code: string }[]
+      /** Mã SP có đóng gói cần THAY ở lô này (ghi sau khi xong mọi dòng sản phẩm). */
+      packingCodes?: string[]
+    },
+  ): Promise<{ written: WrittenRow[]; packed: string[] }> {
     if (input.rows.length > CHUNK) throw BadRequest(`Mỗi lô tối đa ${CHUNK} dòng`)
-    const { plan: p } = await plan(await load(user, input.path), input.written)
-    if (p.counts.error > 0) {
-      const bad = p.rows.filter((r) => r.action === 'error').map((r) => r.row)
-      throw BadRequest(`Còn ${bad.length} dòng lỗi (dòng ${bad.slice(0, 8).join(', ')}${bad.length > 8 ? '…' : ''}) — sửa trong file rồi tải lại`) // prettier-ignore
-    }
+    if ((input.packingCodes?.length ?? 0) > PACKING_CHUNK) throw BadRequest(`Mỗi lô đóng gói tối đa ${PACKING_CHUNK} SP`) // prettier-ignore
+    const { plan: p, packing: k, packingOld, read } = await plan(await load(user, input.path), input.written) // prettier-ignore
+    assertNoErrors(p, k)
     await assertCanWrite(user, p)
+    if (input.packingCodes?.length) await assertAction(user, 'technical.product.update')
     const want = new Set(input.rows)
     const mine = p.rows.filter((r) => want.has(r.row))
+
+    const rawOf = new Map(read.rows.map((r) => [r.row, r]))
+
+    /**
+     * Ảnh mới của một dòng → đính vào hồ sơ SP (tab Tài liệu, loại "ảnh") qua đúng
+     * đường đính file từ server; trả id file + ô "Ảnh gốc" mới (vân tay MỌI ảnh
+     * trong ô). Ảnh cũ KHÔNG xoá (Q3 bản vẽ: giữ ở tab Tài liệu).
+     */
+    const attachImage = async (r: PlannedRow, productId: string, code: string) => {
+      if (r.newImage == null) return null
+      const src = read.imageBytes.get(r.row)?.[r.newImage]
+      if (!src) return null
+      const fit = await fitForUpload(src.buffer, src.ext)
+      const fileId = await filesService.uploadFromServer(user, {
+        buffer: fit.buffer,
+        filename: `${code}.${fit.ext === 'jpeg' ? 'jpg' : fit.ext}`,
+        mime_type: IMAGE_MIME[fit.ext],
+        bucket: 'attachments',
+        parent: { kind: 'product', id: productId },
+        doc_type: 'image',
+      })
+      const hashes = (rawOf.get(r.row)?.images ?? []).map((i) => i.hash)
+      return { fileId, imageRef: imageRefOf(fileId, hashes) }
+    }
 
     const out: WrittenRow[] = []
     const creates = mine.filter((r) => r.action === 'create')
@@ -246,21 +412,34 @@ export const productImportService = {
       const byCode = new Map(inserted.map((x) => [x.code, x]))
       for (const r of creates) {
         const x = byCode.get(r.code!)!
-        out.push({
-          row: r.row,
-          code: x.code,
-          id: x.id,
-          version: x.updated_at,
-          action: 'create',
-        })
+        let version = x.updated_at
+        const img = await attachImage(r, x.id, x.code)
+        if (img) {
+          // SP vừa tạo chưa khoá, chưa ai sửa — ghi thẳng ảnh đại diện.
+          const saved = await productsRepo.patch(x.id, { image_file_id: img.fileId })
+          version = saved.updated_at
+        }
+        out.push({ row: r.row, code: x.code, id: x.id, version, action: 'create', imageRef: img?.imageRef ?? null }) // prettier-ignore
       }
     }
     // Cập nhật qua đúng hàm trang chi tiết dùng: quyền + chặn hồ sơ đã khoá.
     for (const r of mine.filter((x) => x.action === 'update')) {
-      const saved = await productsService.update(user, r.id!, r.write)
-      out.push({ row: r.row, code: saved.code, id: saved.id, version: saved.updated_at, action: 'update' }) // prettier-ignore
+      // Ảnh trước, rồi MỘT lần cập nhật cho cả ô + ảnh đại diện.
+      const img = await attachImage(r, r.id!, r.code!)
+      const patch = img ? { ...r.write, image_file_id: img.fileId } : r.write
+      const saved = await productsService.update(user, r.id!, patch)
+      out.push({ row: r.row, code: saved.code, id: saved.id, version: saved.updated_at, action: 'update', imageRef: img?.imageRef ?? null }) // prettier-ignore
     }
-    return out.sort((a, b) => a.row - b.row)
+    // Đóng gói: thay trọn bộ từng SP (repo tự khôi phục bản cũ nếu chèn hỏng).
+    const packed: string[] = []
+    const wantPack = new Set((input.packingCodes ?? []).map((c) => c.toUpperCase()))
+    for (const item of k.items) {
+      if (!wantPack.has(item.code) || item.action !== 'replace' || !item.productId)
+        continue
+      await productsRepo.replacePacking(item.productId, item.options, packingOld.get(item.productId) ?? []) // prettier-ignore
+      packed.push(item.code)
+    }
+    return { written: out.sort((a, b) => a.row - b.row), packed }
   },
 
   /**
@@ -270,7 +449,11 @@ export const productImportService = {
    */
   async finish(
     user: User,
-    input: { path: string; filename: string; written: { row: number; code: string; version: string }[] }, // prettier-ignore
+    input: {
+      path: string
+      filename: string
+      written: { row: number; code: string; version: string; imageRef?: string | null }[]
+    },
   ): Promise<{ url: string }> {
     const buf = await load(user, input.path)
     const filled = await fillWritten(buf, input.written)

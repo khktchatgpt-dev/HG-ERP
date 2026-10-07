@@ -62,6 +62,10 @@ type Kind =
   | 'bool'
   | 'assembly'
   | 'version'
+  | 'image'
+  | 'imageref'
+  | 'date'
+  | 'int0'
 
 /** Ô ghi vào đâu: cột thường, hay khoá trong jsonb `packing` / `tech_spec`. */
 export type Target = { col: string } | { json: 'packing' | 'tech_spec'; key: string }
@@ -85,6 +89,7 @@ const G_FEAT = 'Đặc tính sản phẩm'
 const G_MAT = 'Vật liệu & màu'
 const G_PROD = 'Thông số sản xuất'
 const G_TEXT = 'Mô tả & ghi chú'
+const G_ISO = 'Kiểm soát tài liệu (ISO)'
 
 const col = (c: string): Target => ({ col: c })
 const pack = (k: string): Target => ({ json: 'packing', key: k })
@@ -97,6 +102,8 @@ const spec = (k: string): Target => ({ json: 'tech_spec', key: k })
  */
 export const IMPORT_COLUMNS: ColumnSpec[] = [
   { key: 'code', header: 'Mã nội bộ', group: G_ID, kind: 'code', max: 100, width: 15, note: 'Trống = SP mới, tự cấp mã' }, // prettier-ignore
+  // B2 (07/10): ảnh dán vào ô. Ảnh thu nhỏ xuất ra để nguyên = không đổi ảnh.
+  { key: 'image', header: 'Ảnh', group: G_ID, kind: 'image', width: 11, note: 'Dán ảnh vào ô' }, // prettier-ignore
   { key: 'name', header: 'Tên SP (tiếng Việt)', group: G_ID, kind: 'text', target: col('name'), required: true, max: 200, width: 36 }, // prettier-ignore
   { key: 'type', header: 'Loại sản phẩm', group: G_ID, kind: 'type', target: col('product_type'), required: true, width: 22, note: 'Danh sách' }, // prettier-ignore
   { key: 'material', header: 'Vật liệu khung', group: G_ID, kind: 'material', target: col('frame_material'), required: true, width: 18, note: 'Danh sách' }, // prettier-ignore
@@ -107,6 +114,9 @@ export const IMPORT_COLUMNS: ColumnSpec[] = [
   { key: 'unit', header: 'ĐVT bán', group: G_ID, kind: 'unit', target: col('unit'), max: 30, width: 8 }, // prettier-ignore
   { key: 'barcode', header: 'Barcode', group: G_ID, kind: 'text', target: col('barcode'), max: 50, width: 16 }, // prettier-ignore
   { key: 'reference_price', header: 'Giá tham khảo', group: G_ID, kind: 'num', target: col('reference_price'), width: 12 }, // prettier-ignore
+  // Khai hải quan — Sale điền khi tạo nhanh SP; trang chi tiết chưa có ô (08/10).
+  { key: 'hs_code', header: 'Mã HS', group: G_ID, kind: 'text', target: col('hs_code'), max: 20, width: 12 }, // prettier-ignore
+  { key: 'origin_country', header: 'Xuất xứ', group: G_ID, kind: 'text', target: col('origin_country'), max: 100, width: 12 }, // prettier-ignore
 
   { key: 'length_mm', header: 'Dài SP (mm)', group: G_DIM, kind: 'num', target: col('length_mm'), width: 10 }, // prettier-ignore
   { key: 'width_mm', header: 'Rộng SP (mm)', group: G_DIM, kind: 'num', target: col('width_mm'), width: 10 }, // prettier-ignore
@@ -126,6 +136,8 @@ export const IMPORT_COLUMNS: ColumnSpec[] = [
   { key: 'nw_kg', header: 'NW / thùng (kg)', group: G_PACK, kind: 'pos', target: pack('nw_kg'), width: 11 }, // prettier-ignore
   { key: 'gw_kg', header: 'GW / thùng (kg)', group: G_PACK, kind: 'pos', target: pack('gw_kg'), width: 11 }, // prettier-ignore
   { key: 'pack_unit_label', header: 'Đơn vị đóng gói', group: G_PACK, kind: 'text', target: pack('pack_unit_label'), max: 30, width: 11, note: 'ctn / pallet' }, // prettier-ignore
+  // CBM khai tay — LSX dùng khi CHƯA đo đủ 3 chiều thùng (lsx-lines productCbm).
+  { key: 'cbm', header: 'CBM / thùng (m³)', group: G_PACK, kind: 'pos', target: pack('cbm'), width: 11, note: 'Bỏ trống nếu đã có 3 chiều thùng' }, // prettier-ignore
 
   { key: 'max_load_kg', header: 'Tải trọng tối đa (kg)', group: G_FEAT, kind: 'num', target: col('max_load_kg'), width: 12 }, // prettier-ignore
   { key: 'assembly', header: 'Lắp ráp', group: G_FEAT, kind: 'assembly', target: col('assembly'), width: 14, note: 'Danh sách' }, // prettier-ignore
@@ -143,12 +155,20 @@ export const IMPORT_COLUMNS: ColumnSpec[] = [
   { key: 'is_upholstered', header: 'Có nệm / bọc', group: G_MAT, kind: 'bool', target: col('is_upholstered'), width: 10, note: 'có / không' }, // prettier-ignore
   { key: 'has_glass', header: 'Có kính', group: G_MAT, kind: 'bool', target: col('has_glass'), width: 9, note: 'có / không' }, // prettier-ignore
 
-  { key: 'machine', header: 'Máy', group: G_PROD, kind: 'text', target: spec('machine'), max: 200, width: 14 }, // prettier-ignore
+  // Khoá "machine" là tên đặt sai từ đầu — dữ liệu vốn là MÂY / dây đan, LSX in
+  // nhãn "Mây / dây" (lib/lsx-spec-summary). Nhãn "Máy" làm người điền hiểu sai.
+  { key: 'machine', header: 'Mây / dây (in LSX)', group: G_PROD, kind: 'text', target: spec('machine'), max: 200, width: 14 }, // prettier-ignore
   { key: 'showroom_sample', header: 'Có mẫu tại showroom', group: G_PROD, kind: 'bool', target: col('showroom_sample'), width: 11, note: 'có / không' }, // prettier-ignore
 
   { key: 'description_en', header: 'Mô tả tiếng Anh (in báo giá)', group: G_TEXT, kind: 'text', target: col('description_en'), max: 2000, width: 36 }, // prettier-ignore
   { key: 'shipping_mark', header: 'Nội dung shipping mark', group: G_TEXT, kind: 'text', target: col('shipping_mark'), max: 2000, width: 30 }, // prettier-ignore
   { key: 'notes', header: 'Ghi chú nội bộ', group: G_TEXT, kind: 'text', target: col('notes'), max: 2000, width: 30 }, // prettier-ignore
+
+  // Khối ISO của biểu mẫu HG-QT-07/M02 (Xuất Excel hồ sơ SP) — chữ ký in trên giấy.
+  { key: 'bom_rev', header: 'Rev. (biểu mẫu ISO)', group: G_ISO, kind: 'int0', target: col('bom_rev'), width: 10 }, // prettier-ignore
+  { key: 'bom_effective_date', header: 'Ngày hiệu lực BOM', group: G_ISO, kind: 'date', target: col('bom_effective_date'), width: 12, note: 'dd/mm/yyyy' }, // prettier-ignore
+  { key: 'bom_prepared_by', header: 'Người lập BOM', group: G_ISO, kind: 'text', target: col('bom_prepared_by'), max: 200, width: 16 }, // prettier-ignore
+  { key: 'bom_approved_by', header: 'Người duyệt BOM', group: G_ISO, kind: 'text', target: col('bom_approved_by'), max: 200, width: 16 }, // prettier-ignore
 
   {
     key: 'version',
@@ -157,7 +177,59 @@ export const IMPORT_COLUMNS: ColumnSpec[] = [
     kind: 'version',
     width: 20,
   },
+  // "<id file ảnh>|<vân tay ảnh thu nhỏ đã xuất>" — để nhận ra ảnh để nguyên.
+  {
+    key: 'image_ref',
+    header: 'Ảnh gốc (đừng sửa)',
+    group: '',
+    kind: 'imageref',
+    width: 20,
+  },
 ]
+
+/**
+ * Hai vân tay ảnh (dHash 64 bit, hex) cách nhau ≤ ngưỡng này = CÙNG một ảnh.
+ * Excel có thể nén lại ảnh khi lưu nên KHÔNG so từng byte: ảnh thu nhỏ để nguyên
+ * mà bị tưởng là ảnh mới thì ảnh gốc độ nét cao bị đè bằng ảnh 200px. Ảnh SP khác
+ * nhau thật cách nhau ~20–40 bit.
+ */
+export const SAME_IMAGE_BITS = 10
+/** Ảnh mới cạnh dài ≤ chừng này → cảnh báo "có thể là ảnh thu nhỏ". */
+export const SMALL_IMAGE_PX = 240
+
+/** Số bit khác nhau giữa hai vân tay hex cùng độ dài; độ dài lệch = khác hẳn. */
+export function hashDistance(a: string, b: string): number {
+  if (!a || !b || a.length !== b.length) return 64
+  let d = 0
+  for (let i = 0; i < a.length; i += 4) {
+    let x = parseInt(a.slice(i, i + 4), 16) ^ parseInt(b.slice(i, i + 4), 16)
+    while (x) {
+      d += x & 1
+      x >>= 1
+    }
+  }
+  return d
+}
+
+/** Ô "Ảnh gốc" → id file + các vân tay đã biết. Sai dạng → null. */
+export function parseImageRef(v: unknown): { fileId: string; hashes: string[] } | null {
+  const m = /^([0-9a-f-]{36})((?:\|[0-9a-f]{16})+)$/i.exec(String(v ?? '').trim())
+  return m ? { fileId: m[1], hashes: m[2].slice(1).toLowerCase().split('|') } : null
+}
+
+/**
+ * Ô "Ảnh gốc" sau khi ghi: id file ảnh đại diện + vân tay của MỌI ảnh đang nằm
+ * trong ô. Dán ảnh mới ĐÈ lên ảnh thu nhỏ (không xoá nó) thì ô có 2 ảnh — chỉ
+ * nhớ ảnh mới thì lần tải lại sau ảnh thu nhỏ cũ bị tưởng là "ảnh mới" và đè mất
+ * ảnh thật vừa ghi (bắt được bằng test 07/10).
+ */
+export function imageRefOf(fileId: string, hashes: readonly string[]): string {
+  return [fileId, ...new Set(hashes.filter(Boolean))].join('|')
+}
+
+/** Ảnh có cùng hình với một trong các vân tay đã biết không. */
+export const knownImage = (hash: string, known: readonly string[]) =>
+  known.some((h) => hashDistance(hash, h) <= SAME_IMAGE_BITS)
 
 export const COLUMN_BY_KEY = new Map(IMPORT_COLUMNS.map((c) => [c.key, c]))
 
@@ -228,6 +300,21 @@ export type RawRow = {
   row: number
   /** Chỉ các cột CÓ trong file (theo tiêu đề); ô trống là ''. */
   cells: Record<string, CellValue>
+  /** Ảnh nằm ở ô Ảnh của dòng này (thường 0 hoặc 1; dán đè lên ảnh cũ thì 2). */
+  images?: RowImage[]
+}
+
+/** Thông tin một ảnh trong ô — server đọc từ file, lib chỉ cần chừng này để quyết. */
+export type RowImage = {
+  /** Vân tay dHash 64 bit (16 hex). */
+  hash: string
+  bytes: number
+  width: number
+  height: number
+  /** Ảnh nhỏ để bày trên màn soi (data URL). */
+  preview?: string
+  /** Ảnh không dùng được (EMF, quá lớn…) — câu nói vì sao. */
+  problem?: string
 }
 
 export type RowIssue = { field?: string; msg: string }
@@ -265,6 +352,10 @@ export type PlannedRow = {
   changes: CellChange[]
   /** Cột thường + jsonb đã gộp, đúng thứ sẽ ghi. Rỗng khi không đổi / lỗi. */
   write: Record<string, unknown>
+  /** Vị trí (trong `RawRow.images`) của ảnh MỚI sẽ làm ảnh đại diện; null = không đổi ảnh. */
+  newImage: number | null
+  /** Ảnh nhỏ của ảnh mới — màn soi bày để kiểm đúng SP. */
+  imagePreview: string | null
   errors: RowIssue[]
   warnings: RowIssue[]
 }
@@ -333,6 +424,37 @@ export function currentValue(p: ExistingProduct | null, c: ColumnSpec): unknown 
 
 const fmtNum = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
 
+/** "2026-10-08" → "08/10/2026". */
+const dmyOf = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
+}
+
+/**
+ * Ngày trong ô → "YYYY-MM-DD" (cột `date` của Postgres). Nhận ô ngày của Excel
+ * (đọc ra ISO), số sê-ri ngày của Excel, "dd/mm/yyyy", "d-m-yyyy", "yyyy-mm-dd".
+ * Ngày không có thật (31/02) → null.
+ */
+export function parseDateCell(v: string | number): string | null {
+  let y: number, m: number, d: number
+  if (typeof v === 'number') {
+    if (v < 20000 || v > 80000) return null // ngoài 1954–2119: không phải ngày
+    const t = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86_400_000)
+    ;[y, m, d] = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()]
+  } else {
+    const s = v.trim()
+    let r = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s)
+    if (r) [y, m, d] = [+r[1], +r[2], +r[3]]
+    else if ((r = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s)))
+      [d, m, y] = [+r[1], +r[2], +r[3]]
+    else return null
+  }
+  const t = new Date(Date.UTC(y, m - 1, d))
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d)
+    return null
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
 /** Chữ bày trên màn soi cho một giá trị. */
 export function displayValue(c: ColumnSpec, v: unknown): string {
   // Ô có/không: xoá trắng là ghi "không" — bày đúng thứ sẽ ghi, đừng bày "(trống)".
@@ -342,6 +464,7 @@ export function displayValue(c: ColumnSpec, v: unknown): string {
   if (c.kind === 'material') return optionText(FRAME_MATERIALS.find((o) => o.code === v) ?? { code: String(v), label: '' }) // prettier-ignore
   if (c.kind === 'assembly')
     return ASSEMBLY_OPTIONS.find((o) => o.code === v)?.label ?? String(v)
+  if (c.kind === 'date') return dmyOf(String(v))
   if (typeof v === 'number') return fmtNum(v)
   return String(v)
 }
@@ -350,10 +473,12 @@ export function displayValue(c: ColumnSpec, v: unknown): string {
 export function exportValue(c: ColumnSpec, v: unknown): string | number | null {
   if (v == null || v === '') return null
   if (c.kind === 'bool') return v ? 'có' : null
-  if (c.kind === 'num' || c.kind === 'pos' || c.kind === 'int') {
+  if (c.kind === 'num' || c.kind === 'pos' || c.kind === 'int' || c.kind === 'int0') {
     const n = typeof v === 'number' ? v : Number(v)
     return Number.isFinite(n) ? n : null
   }
+  // Ngày ghi CHỮ dd/mm/yyyy — ô ngày của Excel đổi theo vùng máy, chữ thì không.
+  if (c.kind === 'date') return dmyOf(String(v))
   if (c.kind === 'type' || c.kind === 'material' || c.kind === 'assembly')
     return displayValue(c, v)
   return String(v)
@@ -415,6 +540,17 @@ function parseCell(c: ColumnSpec, raw: CellValue, errors: RowIssue[]): Parsed {
         return bad(`${c.header} phải là số nguyên`)
       return n
     }
+    case 'int0': {
+      const n = parseNumberCell(raw)
+      if (n == null || n < 0 || !Number.isInteger(n)) return bad(`${c.header} "${s}" phải là số nguyên từ 0`) // prettier-ignore
+      return n
+    }
+    case 'date': {
+      const d = parseDateCell(raw)
+      return (
+        d ?? bad(`${c.header} "${s}" không phải ngày — gõ dd/mm/yyyy, ví dụ 08/10/2026`)
+      )
+    }
     case 'customer':
       if (c.max && s.length > c.max) return bad(`${c.header} dài quá ${c.max} ký tự`)
       return normalizeCustomerLabel(s)
@@ -458,7 +594,7 @@ export function planImport(
   const nameRows = new Map<string, number>()
   const pending: { r: PlannedRow; type: string; material: string }[] = []
 
-  const rows: PlannedRow[] = input.map(({ row, cells }) => {
+  const rows: PlannedRow[] = input.map(({ row, cells, images }) => {
     const errors: RowIssue[] = []
     const warnings: RowIssue[] = []
     const rawCode = String(cells.code ?? '')
@@ -547,6 +683,37 @@ export function planImport(
     const customer =
       custCell !== undefined ? ((custCell as string | null) ?? null) : (target?.customer_name ?? null) // prettier-ignore
 
+    // ── Ảnh (B2) ──────────────────────────────────────────────────────────
+    // Ảnh thu nhỏ xuất ra để nguyên = không đổi (so vân tay, không so byte).
+    // Dán ảnh khác vào ô (kể cả dán ĐÈ lên ảnh thu nhỏ — ô có 2 ảnh) = ảnh mới.
+    let newImage: number | null = null
+    let imagePreview: string | null = null
+    const imgs = images ?? []
+    if (imgs.length) {
+      const ref = parseImageRef(cells.image_ref)
+      const bad = imgs.find((im) => im.problem)
+      const kept = imgs.filter((im) => !im.problem && ref && knownImage(im.hash, ref.hashes)) // prettier-ignore
+      const fresh = imgs
+        .map((im, i) => ({ im, i }))
+        .filter(({ im }) => !im.problem && !kept.includes(im))
+      if (bad) errors.push({ field: 'image', msg: bad.problem! })
+      else if (fresh.length > 1)
+        errors.push({ field: 'image', msg: `Ô Ảnh có ${fresh.length} ảnh mới — xoá bớt, để lại một ảnh` }) // prettier-ignore
+      else if (fresh.length === 1) {
+        const { im, i } = fresh[0]
+        newImage = i
+        imagePreview = im.preview ?? null
+        const size = `${im.width}×${im.height}px · ${Math.max(1, Math.round(im.bytes / 1024))} KB`
+        if (target) changes.push({ key: 'image', label: 'Ảnh đại diện', before: target.image_file_id ? 'ảnh hiện tại (giữ ở tab Tài liệu)' : '(chưa có ảnh)', after: `ảnh mới ${size}` }) // prettier-ignore
+        if (Math.max(im.width, im.height) <= SMALL_IMAGE_PX) {
+          warnings.push({ field: 'image', msg: `Ảnh mới chỉ ${im.width}×${im.height}px — có thể là ảnh thu nhỏ chép từ dòng khác; dán ảnh gốc nếu cần in báo giá` }) // prettier-ignore
+        }
+      } else if (!target && kept.length) {
+        // Dòng MỚI mang ảnh thu nhỏ của SP khác (chép dòng) — không lấy ảnh 200px làm ảnh SP.
+        warnings.push({ field: 'image', msg: 'Ảnh là ảnh thu nhỏ chép từ dòng SP khác — không dùng; dán ảnh gốc nếu muốn có ảnh' }) // prettier-ignore
+      }
+    }
+
     // ── Cảnh báo ──────────────────────────────────────────────────────────
     if (target && changes.length) {
       if (write.product_type !== undefined || write.frame_material !== undefined) {
@@ -595,6 +762,8 @@ export function planImport(
       customer,
       changes: action === 'update' ? changes : [],
       write: action === 'create' || action === 'update' ? write : {},
+      newImage: action === 'create' || action === 'update' ? newImage : null,
+      imagePreview: action === 'create' || action === 'update' ? imagePreview : null,
       errors,
       warnings: action === 'same' ? [] : warnings,
     }
@@ -612,6 +781,7 @@ export function planImport(
       r.action = 'error'
       r.warn = false
       r.write = {}
+      r.newImage = null
       continue
     }
     maxSerial.set(type, serial)

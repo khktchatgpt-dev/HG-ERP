@@ -26,6 +26,7 @@ import type {
   PreviewRow,
   WrittenRow,
 } from '@/modules/dept/technical/product-import.service'
+import { BangDongGoi } from './bang-dong-goi'
 
 /**
  * THÊM + CẬP NHẬT SẢN PHẨM BẰNG EXCEL — màn soi trước và ghi (07/10/2026, B1
@@ -42,9 +43,13 @@ import type {
 
 const API = '/api/dept/technical/products/import-excel'
 const CHUNK = 50
+/** Mỗi lô tối đa chừng này ẢNH mới — tải ảnh lâu hơn ghi chữ nhiều (giới hạn 120 giây/lần gọi). */
+const CHUNK_IMAGES = 10
 const SHOW_CHANGES = 6
 
-type Filter = 'write' | 'all' | RowAction | 'warn'
+type Filter = 'write' | 'all' | RowAction | 'warn' | 'packing'
+/** Mỗi lô đóng gói tối đa chừng này SP (service: PACKING_CHUNK). */
+const PACKING_CHUNK = 40
 type Progress = { done: number; total: number; lot: number; lots: number }
 
 const ACTION_TAG: Record<
@@ -118,6 +123,7 @@ export function NhapExcelScreen() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [written, setWritten] = useState<WrittenRow[] | null>(null)
+  const [packed, setPacked] = useState<string[]>([])
   const [failed, setFailed] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
 
@@ -125,7 +131,15 @@ export function NhapExcelScreen() {
   const shown = rows.filter((r) => matches(r, filter))
   const errorRows = rows.filter((r) => r.action === 'error').map((r) => r.row)
   const toWrite = rows.filter((r) => r.action === 'create' || r.action === 'update')
+  // Sheet Đóng gói: SP cần thay đóng gói + SP lỗi (lỗi ở sheet nào cũng chặn cả file).
+  const packItems = preview?.packing.items ?? []
+  const toPack = packItems.filter((i) => i.action === 'replace').map((i) => i.code)
+  const packErrors = packItems.filter((i) => i.action === 'error')
+  const packErrorRows = packErrors.flatMap((i) => i.rows)
+  const nothing = toWrite.length === 0 && toPack.length === 0
+  const packLotCount = Math.ceil(toPack.length / PACKING_CHUNK)
   const count = (f: Filter) => rows.filter((r) => matches(r, f)).length
+  const newImages = toWrite.filter((r) => r.newImage != null).length
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -158,7 +172,15 @@ export function NhapExcelScreen() {
       setFailed(null)
       setDownloadUrl(null)
       setProgress(null)
-      setFilter(p.counts.error > 0 ? 'error' : 'write')
+      setPacked([])
+      setFilter(
+        p.counts.error > 0
+          ? 'error'
+          : p.packing.counts.error > 0 ||
+              (p.counts.create + p.counts.update === 0 && p.packing.counts.replace > 0)
+            ? 'packing'
+            : 'write',
+      )
     } catch (err) {
       toast.error('Không đọc được file', apiErrorText(err, err instanceof Error ? err.message : 'Có lỗi')) // prettier-ignore
     } finally {
@@ -167,20 +189,33 @@ export function NhapExcelScreen() {
   }
 
   async function commit() {
-    if (!file || !preview || !toWrite.length) return
+    if (!file || !preview || nothing) return
     setBusy(true)
     setFailed(null)
     const lots: number[][] = []
-    for (let i = 0; i < toWrite.length; i += CHUNK) lots.push(toWrite.slice(i, i + CHUNK).map((r) => r.row)) // prettier-ignore
+    // Lô đóng khi đủ 50 dòng HOẶC đủ 10 ảnh mới.
+    let lot: number[] = []
+    let lotImages = 0
+    for (const r of toWrite) {
+      const img = r.newImage != null ? 1 : 0
+      if (lot.length && (lot.length >= CHUNK || lotImages + img > CHUNK_IMAGES)) {
+        lots.push(lot)
+        lot = []
+        lotImages = 0
+      }
+      lot.push(r.row)
+      lotImages += img
+    }
+    if (lot.length) lots.push(lot)
+    // Đóng gói ghi SAU mọi dòng sản phẩm, 40 SP một lô.
+    const packLots: string[][] = []
+    for (let i = 0; i < toPack.length; i += PACKING_CHUNK) packLots.push(toPack.slice(i, i + PACKING_CHUNK)) // prettier-ignore
+    const total = lots.length + packLots.length
     const done: WrittenRow[] = []
+    const packedNow: string[] = []
     try {
       for (let i = 0; i < lots.length; i++) {
-        setProgress({
-          done: done.length,
-          total: toWrite.length,
-          lot: i + 1,
-          lots: lots.length,
-        })
+        setProgress({ done: done.length, total: toWrite.length, lot: i + 1, lots: total })
         const r = await api<{ written: WrittenRow[] }>(`${API}/commit`, {
           method: 'POST',
           body: {
@@ -191,16 +226,31 @@ export function NhapExcelScreen() {
         })
         done.push(...r.written)
       }
+      for (let j = 0; j < packLots.length; j++) {
+        setProgress({ done: done.length, total: toWrite.length, lot: lots.length + j + 1, lots: total }) // prettier-ignore
+        const r = await api<{ packed: string[] }>(`${API}/commit`, {
+          method: 'POST',
+          body: {
+            path: file.path,
+            rows: [],
+            written: done.filter((w) => w.action === 'create').map((w) => ({ row: w.row, code: w.code })), // prettier-ignore
+            packingCodes: packLots[j],
+          },
+        })
+        packedNow.push(...r.packed)
+      }
       setProgress(null)
       setWritten(done)
+      setPacked(packedNow)
       const c = done.filter((w) => w.action === 'create').length
       toast.success(
         `Đã ghi ${done.length} sản phẩm`,
-        `${c} thêm mới · ${done.length - c} cập nhật`,
+        `${c} thêm mới · ${done.length - c} cập nhật${packedNow.length ? ` · ${packedNow.length} SP thay đóng gói` : ''}`,
       )
     } catch (err) {
       setProgress(null)
       setWritten(done)
+      setPacked(packedNow)
       setFailed(apiErrorText(err))
     } finally {
       setBusy(false)
@@ -220,7 +270,7 @@ export function NhapExcelScreen() {
         body: {
           path: file.path,
           filename: file.name,
-          written: written.map((w) => ({ row: w.row, code: w.code, version: w.version })),
+          written: written.map((w) => ({ row: w.row, code: w.code, version: w.version, imageRef: w.imageRef ?? null })), // prettier-ignore
         },
       })
       setDownloadUrl(url)
@@ -293,7 +343,7 @@ export function NhapExcelScreen() {
         {!preview ? (
           <Empty
             headline="Chưa chọn file"
-            reason="Sửa SP đang có: ở Thư viện sản phẩm lọc rồi bấm Excel → Xuất SP đang xem, sửa ở máy mình. Thêm SP mới: dòng để trống Mã, hoặc tải file mẫu trống."
+            reason="Sửa SP đang có: ở Thư viện sản phẩm lọc rồi bấm Excel → Xuất SP đang xem (kèm ảnh nhỏ), sửa ở máy mình, dán ảnh mới vào ô Ảnh. Thêm SP mới: dòng để trống Mã, hoặc tải file mẫu trống."
             next={
               <>
                 Xong thì bấm <b>Chọn file đã sửa</b> — hệ thống soi từng dòng (thêm mới /
@@ -317,8 +367,10 @@ export function NhapExcelScreen() {
               </NoticeBar>
             ) : (
               <NoticeBar tone="done" tag="Đã ghi">
-                {nCreate} thêm mới · {written.length - nCreate} cập nhật. Tải file đã có
-                mã để lưu đè bản bên mình — lần sửa sau dùng tiếp chính file đó.
+                {nCreate} thêm mới · {written.length - nCreate} cập nhật
+                {packed.length ? ` · ${packed.length} SP thay đóng gói` : ''}.
+                {written.length > 0 &&
+                  ' Tải file đã có mã để lưu đè bản bên mình — lần sửa sau dùng tiếp chính file đó.'}
               </NoticeBar>
             )}
             {codeChanged.length > 0 && (
@@ -332,44 +384,60 @@ export function NhapExcelScreen() {
                 {codeChanged.length > 5 ? '…' : ''}
               </NoticeBar>
             )}
-            <Table label="Sản phẩm vừa ghi">
-              <THead>
-                <th style={{ textAlign: 'right' }}>Dòng</th>
-                <th>Việc</th>
-                <th>Mã nội bộ</th>
-                <th>Tên SP</th>
-              </THead>
-              <tbody>
-                {written.map((w) => (
-                  <Row key={w.row}>
-                    <Cell num>{w.row}</Cell>
-                    <Cell>
-                      <Tag tone={ACTION_TAG[w.action].tone}>
-                        {ACTION_TAG[w.action].label}
-                      </Tag>
-                    </Cell>
-                    <Cell>
-                      <Code as="a" href={`/products/${w.id}`}>
-                        {w.code}
-                      </Code>
-                    </Cell>
-                    <Cell grow>{nameOf.get(w.row) ?? ''}</Cell>
-                  </Row>
-                ))}
-              </tbody>
-            </Table>
+            {written.length > 0 && (
+              <Table label="Sản phẩm vừa ghi">
+                <THead>
+                  <th style={{ textAlign: 'right' }}>Dòng</th>
+                  <th>Việc</th>
+                  <th>Mã nội bộ</th>
+                  <th>Tên SP</th>
+                </THead>
+                <tbody>
+                  {written.map((w) => (
+                    <Row key={w.row}>
+                      <Cell num>{w.row}</Cell>
+                      <Cell>
+                        <Tag tone={ACTION_TAG[w.action].tone}>
+                          {ACTION_TAG[w.action].label}
+                        </Tag>
+                      </Cell>
+                      <Cell>
+                        <Code as="a" href={`/products/${w.id}`}>
+                          {w.code}
+                        </Code>
+                      </Cell>
+                      <Cell grow>{nameOf.get(w.row) ?? ''}</Cell>
+                    </Row>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+            {packed.length > 0 && preview && (
+              <BangDongGoi
+                packing={{
+                  items: preview.packing.items.filter((i) => packed.includes(i.code)),
+                  counts: { ...preview.packing.counts, products: packed.length, replace: packed.length }, // prettier-ignore
+                }}
+              />
+            )}
             <CommitBar
               totals={[
                 { label: 'Thêm mới', value: nCreate },
                 { label: 'Cập nhật', value: written.length - nCreate },
+                { label: 'Thay đóng gói', value: `${packed.length} SP` },
               ]}
-              grand={{ label: 'Đã ghi', value: `${written.length} SP` }}
+              grand={{ label: 'Đã ghi', value: `${new Set([...written.map((w) => w.code), ...packed]).size} SP` }} // prettier-ignore
               actions={
                 <>
-                  <Btn href="/products">Về thư viện</Btn>
-                  <Btn primary icon="excel" onClick={download} busy={busy}>
-                    Tải file đã có mã
+                  <Btn href="/products" primary={written.length === 0}>
+                    Về thư viện
                   </Btn>
+                  {/* Chỉ đổi đóng gói thì file không có gì mới để tải lại. */}
+                  {written.length > 0 && (
+                    <Btn primary icon="excel" onClick={download} busy={busy}>
+                      Tải file đã có mã
+                    </Btn>
+                  )}
                 </>
               }
             />
@@ -378,7 +446,10 @@ export function NhapExcelScreen() {
           <>
             {progress && (
               <NoticeBar tone="neutral" tag="Đang ghi">
-                Lô {progress.lot}/{progress.lots} · {progress.done}/{progress.total} dòng
+                Lô {progress.lot}/{progress.lots} ·{' '}
+                {progress.lot > progress.lots - packLotCount
+                  ? 'đóng gói '
+                  : `${progress.done}/${progress.total} dòng `}
                 — đừng đóng trang.
               </NoticeBar>
             )}
@@ -426,6 +497,13 @@ export function NhapExcelScreen() {
                 Không đổi
               </Chip>
               <Chip
+                on={filter === 'packing'}
+                count={packItems.length}
+                onClick={() => setFilter('packing')}
+              >
+                Đóng gói{packErrors.length ? ` (${packErrors.length} lỗi)` : ''}
+              </Chip>
+              <Chip
                 on={filter === 'all'}
                 count={rows.length}
                 onClick={() => setFilter('all')}
@@ -439,7 +517,9 @@ export function NhapExcelScreen() {
               )}
             </FilterBar>
 
-            {shown.length === 0 ? (
+            {filter === 'packing' ? (
+              <BangDongGoi packing={preview.packing} />
+            ) : shown.length === 0 ? (
               <Empty
                 headline="Không có dòng nào ở mục này"
                 reason={
@@ -454,6 +534,7 @@ export function NhapExcelScreen() {
                 <THead pinFirst>
                   <th style={{ textAlign: 'right' }}>Dòng</th>
                   <th>Việc</th>
+                  <th>Ảnh mới</th>
                   <th>Mã nội bộ</th>
                   <th style={{ width: 240 }}>Tên SP</th>
                   <th style={{ width: 110 }}>Khách</th>
@@ -479,6 +560,20 @@ export function NhapExcelScreen() {
                           )}
                           {r.warn && <Tag tone="warn">Cảnh báo</Tag>}
                         </span>
+                      </Cell>
+                      <Cell>
+                        {/* Ảnh mới bày ngay trên dòng — kiểm ảnh có nằm đúng SP không
+                            (ảnh nổi lệch dòng là lỗi đã dính một lần khi nạp ảnh). */}
+                        {r.imagePreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- data URL nhỏ do server dựng
+                          <img
+                            src={r.imagePreview}
+                            alt={`Ảnh mới của ${r.name || `dòng ${r.row}`}`}
+                            style={{ width: 48, height: 36, objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <span className="text-[var(--ink-3)]">—</span>
+                        )}
                       </Cell>
                       <Cell>
                         {r.code ? (
@@ -511,14 +606,15 @@ export function NhapExcelScreen() {
                     </Row>
                   ))}
                 </tbody>
-                {/* 6 cột = nhãn 3 + tổng 1 + caveat 2 — lệch là cột thừa chữ xếp dọc (bẫy TFoot). */}
+                {/* 7 cột = nhãn 4 + tổng 1 + caveat 2 — lệch là cột thừa chữ xếp dọc (bẫy TFoot). */}
                 <TFoot
-                  label={<td colSpan={3}>{rows.length} dòng</td>}
+                  label={<td colSpan={4}>{rows.length} dòng</td>}
                   caveatSpan={2}
                   cells={
                     <td colSpan={1}>
                       Sẽ ghi {toWrite.length}: {preview.counts.create} thêm mới ·{' '}
                       {preview.counts.update} cập nhật ({preview.changedCells} ô)
+                      {newImages > 0 ? ` · ${newImages} ảnh mới` : ''}
                     </td>
                   }
                   caveat={`${preview.counts.same} dòng không đổi không đụng tới${errorRows.length ? ` · không gồm ${errorRows.length} dòng lỗi` : ''}. Mã tự cấp tính lại lúc ghi.`}
@@ -533,20 +629,24 @@ export function NhapExcelScreen() {
                   label: 'Cập nhật',
                   value: `${preview.counts.update} (${preview.changedCells} ô)`,
                 },
+                { label: 'Ảnh mới', value: newImages },
                 { label: 'Không đổi', value: preview.counts.same },
+                { label: 'Đóng gói', value: `${toPack.length} SP` },
               ]}
-              grand={{ label: 'Sẽ ghi', value: `${toWrite.length} SP` }}
+              grand={{ label: 'Sẽ ghi', value: `${new Set([...toWrite.map((r) => r.code ?? `#${r.row}`), ...toPack]).size} SP` }} // prettier-ignore
               blocked={
                 errorRows.length > 0
                   ? `${errorRows.length} dòng lỗi (dòng ${errorRows.slice(0, 6).join(', ')}${errorRows.length > 6 ? '…' : ''}) — sửa trong file rồi bấm “Chọn file khác”`
-                  : toWrite.length === 0
-                    ? 'File không có gì khác dữ liệu đang có'
-                    : undefined
+                  : packErrors.length > 0
+                    ? `Sheet Đóng gói: ${packErrors.length} SP lỗi (dòng ${packErrorRows.slice(0, 6).join(', ')}${packErrorRows.length > 6 ? '…' : ''}) — sửa trong file rồi bấm “Chọn file khác”`
+                    : nothing
+                      ? 'File không có gì khác dữ liệu đang có'
+                      : undefined
               }
               onGoBlocked={
-                errorRows.length > 0
+                errorRows.length > 0 || packErrors.length > 0
                   ? () => {
-                      setFilter('error')
+                      setFilter(errorRows.length > 0 ? 'error' : 'packing')
                       top.current?.scrollIntoView({ block: 'start' })
                     }
                   : undefined
@@ -557,9 +657,15 @@ export function NhapExcelScreen() {
                   icon="ghiSo"
                   onClick={commit}
                   busy={busy && !!progress}
-                  disabled={errorRows.length > 0 || toWrite.length === 0 || busy}
+                  disabled={
+                    errorRows.length > 0 || packErrors.length > 0 || nothing || busy
+                  }
                 >
-                  Ghi {toWrite.length} sản phẩm
+                  {toPack.length === 0
+                    ? `Ghi ${toWrite.length} sản phẩm`
+                    : toWrite.length === 0
+                      ? `Ghi đóng gói ${toPack.length} SP`
+                      : `Ghi ${toWrite.length} SP + đóng gói ${toPack.length} SP`}
                 </Btn>
               }
             />

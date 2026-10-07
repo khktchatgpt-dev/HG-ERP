@@ -302,3 +302,10 @@ describe('productUpdateSchema — sửa một phần không đụng ô khác (07
     expect(p.actual_weight_kg).toBe(12.5)
   })
 })
+
+describe('packingSchema — giữ CBM khai tay (08/10/2026)', () => {
+  it('PATCH đóng gói không lột khoá cbm', () => {
+    const p = productUpdateSchema.parse({ packing: { qty_per_carton: 2, cbm: 0.42 } })
+    expect(p.packing).toEqual({ qty_per_carton: 2, cbm: 0.42 })
+  })
+})

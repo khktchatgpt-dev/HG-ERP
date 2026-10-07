@@ -4,8 +4,12 @@ import {
   IMPORT_COLUMNS,
   columnForHeader,
   matchOption,
+  hashDistance,
   nearLabel,
+  imageRefOf,
+  parseImageRef,
   parseBoolCell,
+  parseDateCell,
   parseNumberCell,
   planImport,
   type CellValue,
@@ -256,5 +260,123 @@ describe('cập nhật', () => {
       'qty_per_carton',
       'carton_h_cm',
     ])
+  })
+})
+
+describe('ảnh (B2)', () => {
+  const REF = '0b6c1f9a-1111-4222-8333-444455556666|f0f0f0f0aaaa5555'
+  const thumb = { hash: 'f0f0f0f0aaaa5555', bytes: 12000, width: 200, height: 150 }
+  const recompressed = { ...thumb, hash: 'f0f0f0f0aaaa5554' } // Excel nén lại: lệch 1 bit
+  const photo = { hash: '0f0f0f0f5555aaaa', bytes: 640_000, width: 1600, height: 1200, preview: 'data:x' } // prettier-ignore
+  const withImg = (cells: Record<string, CellValue>, images: RawRow['images']): RawRow => ({ ...row(cells), images }) // prettier-ignore
+
+  it('vân tay: đếm bit khác nhau', () => {
+    expect(hashDistance('ffff', 'fffe')).toBe(1)
+    expect(hashDistance('0000', 'ffff')).toBe(16)
+    expect(hashDistance('00', '0000')).toBe(64)
+  })
+
+  it('ảnh thu nhỏ để nguyên (kể cả bị nén lại) → không đổi ảnh', () => {
+    const p = planImport([withImg({ code: 'BN0029HG-AL', image_ref: REF }, [thumb]), withImg({ code: 'CH0291HG-AL', image_ref: REF }, [recompressed])], EXISTING) // prettier-ignore
+    expect(p.rows.map((r) => [r.action, r.newImage])).toEqual([
+      ['same', null],
+      ['same', null],
+    ])
+  })
+
+  it('dán ảnh khác vào ô → cập nhật ảnh đại diện, bày ảnh nhỏ', () => {
+    const p = planImport(
+      [withImg({ code: 'BN0029HG-AL', image_ref: REF }, [photo])],
+      EXISTING,
+    )
+    expect(p.rows[0]).toMatchObject({
+      action: 'update',
+      newImage: 0,
+      imagePreview: 'data:x',
+    })
+    expect(p.rows[0].changes[0]).toMatchObject({ key: 'image', label: 'Ảnh đại diện', after: 'ảnh mới 1600×1200px · 625 KB' }) // prettier-ignore
+  })
+
+  it('dán ĐÈ lên ảnh thu nhỏ (ô có 2 ảnh) → lấy ảnh mới', () => {
+    const p = planImport(
+      [withImg({ code: 'BN0029HG-AL', image_ref: REF }, [thumb, photo])],
+      EXISTING,
+    )
+    expect(p.rows[0]).toMatchObject({ action: 'update', newImage: 1 })
+  })
+
+  it('2 ảnh mới cùng ô → lỗi; ảnh hỏng → lỗi', () => {
+    const other = { ...photo, hash: '123456789abcdef0' }
+    const p = planImport(
+      [withImg({ code: 'BN0029HG-AL' }, [photo, other]), withImg({ code: 'CH0291HG-AL' }, [{ ...photo, problem: 'Ảnh dạng EMF' }])], // prettier-ignore
+      EXISTING,
+    )
+    expect(p.rows[0].errors[0].msg).toContain('2 ảnh mới')
+    expect(p.rows[1].errors[0].msg).toBe('Ảnh dạng EMF')
+  })
+
+  it('SP mới kèm ảnh → thêm mới có ảnh; ảnh nhỏ → cảnh báo', () => {
+    const p = planImport(
+      [withImg({ code: '', name: 'Ghế bar', type: 'CH', material: 'AL' }, [photo]), withImg({ code: '', name: 'Ghế nhỏ', type: 'CH', material: 'AL' }, [{ ...photo, width: 180, height: 120 }])], // prettier-ignore
+      EXISTING,
+    )
+    expect(p.rows[0]).toMatchObject({ action: 'create', newImage: 0, warn: false })
+    expect(p.rows[1]).toMatchObject({ action: 'create', newImage: 0, warn: true })
+  })
+
+  it('dòng mới chép ảnh thu nhỏ của SP khác → không dùng ảnh, cảnh báo', () => {
+    const p = planImport([withImg({ code: '', name: 'Bản sao', type: 'CH', material: 'AL', image_ref: REF }, [thumb])], EXISTING) // prettier-ignore
+    expect(p.rows[0]).toMatchObject({ action: 'create', newImage: null, warn: true })
+  })
+
+  it('ô Ảnh gốc sai dạng → coi như không có (ảnh nào cũng là ảnh mới)', () => {
+    expect(parseImageRef('rác')).toBeNull()
+    expect(parseImageRef(REF)).toEqual({ fileId: '0b6c1f9a-1111-4222-8333-444455556666', hashes: ['f0f0f0f0aaaa5555'] }) // prettier-ignore
+    // Nhiều vân tay (ô từng có ảnh thu nhỏ + ảnh mới dán đè).
+    const two = imageRefOf('0b6c1f9a-1111-4222-8333-444455556666', ['f0f0f0f0aaaa5555', '0f0f0f0f5555aaaa', 'f0f0f0f0aaaa5555']) // prettier-ignore
+    expect(parseImageRef(two)?.hashes).toEqual(['f0f0f0f0aaaa5555', '0f0f0f0f5555aaaa'])
+  })
+})
+
+describe('ô Sale / LSX cần (08/10)', () => {
+  it('có cột CBM, Mã HS, Xuất xứ; ô "machine" mang nhãn Mây / dây', () => {
+    const keys = IMPORT_COLUMNS.map((c) => c.key)
+    expect(keys).toEqual(
+      expect.arrayContaining(['cbm', 'hs_code', 'origin_country', 'machine']),
+    )
+    expect(IMPORT_COLUMNS.find((c) => c.key === 'machine')?.header).toContain('Mây')
+  })
+  it('CBM ghi vào packing, gộp với ô đóng gói đang có', () => {
+    const p = planImport([row({ code: 'BN0029HG-AL', cbm: '0,42', hs_code: '9401.79', origin_country: 'Việt Nam' })], EXISTING) // prettier-ignore
+    expect(p.rows[0].write).toEqual({
+      hs_code: '9401.79',
+      origin_country: 'Việt Nam',
+      packing: { pack_unit_label: 'ctn', cbm: 0.42 },
+    })
+  })
+})
+
+describe('khối ISO (08/10)', () => {
+  it('ngày: dd/mm/yyyy, yyyy-mm-dd, ô ngày Excel (ISO), số sê-ri; chặn ngày không có thật', () => {
+    expect(parseDateCell('08/10/2026')).toBe('2026-10-08')
+    expect(parseDateCell('8-10-2026')).toBe('2026-10-08')
+    expect(parseDateCell('2026-10-08')).toBe('2026-10-08')
+    expect(parseDateCell('2026-10-08T00:00:00.000Z')).toBe('2026-10-08')
+    expect(parseDateCell(46303)).toBe('2026-10-08') // 01/01/2026 = 46023, +280 ngày
+    expect(parseDateCell('31/02/2026')).toBeNull()
+    expect(parseDateCell('tháng 10')).toBeNull()
+  })
+  it('rev 0 hợp lệ, ngày đổi bày dd/mm/yyyy', () => {
+    const base = [...EXISTING, P({ code: 'TB0200HG-AL', name: 'Bàn ISO', bom_rev: 1, bom_effective_date: '2026-09-01' })] // prettier-ignore
+    const p = planImport([row({ code: 'TB0200HG-AL', bom_rev: 0, bom_effective_date: '08/10/2026', bom_prepared_by: 'Việt' })], base) // prettier-ignore
+    expect(p.rows[0].write).toEqual({
+      bom_rev: 0,
+      bom_effective_date: '2026-10-08',
+      bom_prepared_by: 'Việt',
+    })
+    expect(p.rows[0].changes.find((c) => c.key === 'bom_effective_date')).toMatchObject({ before: '01/09/2026', after: '08/10/2026' }) // prettier-ignore
+    expect(
+      planImport([row({ code: 'TB0200HG-AL', bom_rev: -1 })], base).rows[0].action,
+    ).toBe('error')
   })
 })
