@@ -33,6 +33,13 @@ export const techSpecSchema = z.object({
   paint: z.string().trim().max(200).optional(), // Sơn (mã màu)
   glass: z.string().trim().max(200).optional(), // Kính
   wood: z.string().trim().max(200).optional(), // Gỗ (loại + FSC + mã màu)
+  /*
+   * Ba ô trang chi tiết có từ 14/08/2026 (khối "Vật liệu & màu") mà schema chưa
+   * từng nhận — zod lột khoá lạ nên bấm Lưu là mất, DB 0/807 SP có (đo 07/10).
+   */
+  fabric: z.string().trim().max(200).optional(), // Vải
+  hardware: z.string().trim().max(200).optional(), // Phụ kiện ngũ kim
+  finish: z.string().trim().max(200).optional(), // Màu hoàn thiện
 })
 
 export const BOM_STATUSES = ['none', 'drawing', 'done'] as const
@@ -96,6 +103,8 @@ export const productCreateSchema = z.object({
   code_legacy: z.string().trim().max(100).optional().nullable(),
   /** Khối lượng tịnh CÂN THẬT — khác `frame_weight_kg` (Σ tính từ định mức). */
   net_weight_kg: z.coerce.number().min(0).optional().nullable(),
+  /** KL cân thực tế (ô "KL cân thực tế" trang chi tiết) — trước 07/10 schema không nhận, lưu là mất. */
+  actual_weight_kg: z.coerce.number().min(0).optional().nullable(),
   /**
    * Kích thước tổng thể (mm). Trước chỉ import BOM ghi được, giao diện không có
    * lối sửa — nên 5 SP có KTSP nhập nhằng (lẫn cm, hoặc chỉ chiều cao gập/mở)
@@ -129,6 +138,13 @@ export const productCreateSchema = z.object({
 })
 
 export const productUpdateSchema = productCreateSchema.partial().extend({
+  /*
+   * KHÔNG mặc định khi SỬA (07/10/2026). `.partial()` giữ `.default('cái')` của
+   * schema tạo, nên PATCH chỉ gửi `{ packing }` (khung đóng gói) hay
+   * `{ image_file_id }` (thay ảnh) cũng bị chèn `unit` mặc định — ĐVT "bộ" bị
+   * đặt lại, và "cai" cứ quay lại sau mỗi đợt dọn.
+   */
+  unit: z.string().trim().min(1).max(30).optional(),
   is_active: z.boolean().optional(),
   bom_status: z.enum(BOM_STATUSES).optional(), // FR-ENG-05: chưa có / đang vẽ / đã vẽ
   image_file_id: z.string().uuid().optional().nullable(), // ảnh đại diện (in BG/LSX)
