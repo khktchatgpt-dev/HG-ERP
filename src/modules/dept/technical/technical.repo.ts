@@ -413,6 +413,29 @@ export const productsRepo = {
     return (data ?? []) as ProductPickRow[]
   },
 
+  /**
+   * Tra SP theo MÃ — mã HG hoặc mã khách, không phân biệt hoa thường (dán dòng
+   * đơn từ sổ Excel: cột ART.No là MÃ KHÁCH). Mỗi mã có thể ra nhiều SP (cùng
+   * mã khách ở hai hồ sơ) — người gọi tự chọn; ưu tiên SP của đúng khách.
+   */
+  async listPickByCodes(codes: string[]): Promise<ProductPickRow[]> {
+    if (codes.length === 0) return []
+    // Dấu có nghĩa với PostgREST (`,` `(` `)`) và với ilike (`%` `_`) → bọc giá trị bằng dấu nháy kép.
+    const quote = (s: string) =>
+      `"${s.replace(/"/g, '').replace(/[%_]/g, (m) => `\\${m}`)}"`
+    const ors = codes.flatMap((c) => [
+      `code.ilike.${quote(c)}`,
+      `customer_item_code.ilike.${quote(c)}`,
+    ])
+    const { data } = await db()
+      .from('technical_products')
+      .select(PICK_COLS)
+      .eq('is_active', true)
+      .or(ors.join(','))
+      .limit(600)
+    return (data ?? []) as ProductPickRow[]
+  },
+
   /** Như `listForPick` nhưng lấy đúng một tập id, GIỮ thứ tự id truyền vào. */
   async listPickByIds(ids: string[]): Promise<ProductPickRow[]> {
     if (ids.length === 0) return []

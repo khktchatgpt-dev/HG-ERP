@@ -333,8 +333,20 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      · phát lệnh), lưới dòng 12 cột là nhân vật chính, Tổng quan 3 nhóm có tên,
      cảnh báo "Hợp đồng in sẽ thiếu: …". Xoá `OrdersManager.tsx` (815) và
      `OrderDetailView.tsx` (1419).
-   - **Chưa làm (tầng 3 form)**: form tạo/sửa vẫn kit v3 — chuyển khuôn F
-     (lưới phím Excel, dán từ Excel, CommitBar) ở lượt tầng 3.
+   - **Tầng 3 form đơn · ✅ XONG 07/10/2026 (lượt 5)**: form tạo/sửa dựng lại theo
+     khuôn F ở `sales/orders/_form/` (`DonHangForm` + `useDonHangForm` +
+     `khoi-dau-don` / `khoi-luoi-dong` / `khoi-dieu-khoan` + `don-form.shared`):
+     dải đầu đơn một hàng (mã · nguồn · khách gõ-lọc · tiền tệ · PO/tick · hạn
+     giao · container); lưới là nhân vật chính — Enter/↑/↓ đi cùng cột, tick nhiều
+     dòng, áp tuần giao hàng loạt, "Dán từ Excel" (`lib/order-paste.ts`, 10 test:
+     tiêu đề ART.No/QUANTITY/SHIPMENT hoặc đoán cột, `w37.26` ↔ ngày cuối tuần
+     ISO, SL kiểu VN "1.390") → tra mã HG **hoặc mã khách** một lượt
+     (`GET products?codes=`), mã không khớp thành dòng đỏ chọn SP tại chỗ; SP mới
+     khai trong ngăn, tạo vào thư viện lúc lưu; điều khoản gấp được, mồi từ khách
+     khi chọn khách; thanh chốt đáy liệt kê "còn thiếu" — mỗi mục BẤM là nhảy tới
+     ô. Sửa đơn: dòng đã xuất khoá SP/không bỏ/không giảm dưới số đã xuất
+     (`shippedByLine`), đơn đã có lệnh bắt lý do. Xoá `OrderForm.tsx` (1.388)
+     + `order-form.shared.tsx`.
    - Đo 07/10 sau khi dựng: 53/53 đơn "thiếu dữ liệu" (điều khoản 53, tuần giao
      ~20, PO 19, giá 5) — ô đếm này là việc dọn của Sale tuần tới.
 3. **Lượt 3 — Lệnh SX tầng 2 + màn kiểu ERP** · ✅ XONG 07/10/2026 (commit af88550
@@ -397,4 +409,5 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
    - Test: 9 ca mới (revise / supersede / copy / lost / won / snapshot theo quyền /
      hiệu lực mặc định / quoteLineMargin).
    - Chưa làm: in báo giá chưa có cột SL/MOQ và "Rev n"; nhập Excel chưa đổi.
-5. **Lượt 5–7 — tầng 3** từng màn, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.
+5. **Lượt 5 — tầng 3 form đơn (khuôn F)** · ✅ XONG 07/10/2026 — xem mục Lượt 2 ở trên.
+6. **Lượt 6–7 — tầng 3 còn lại**: in báo giá (SL/MOQ, Rev n), nhập Excel báo giá, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.

@@ -359,9 +359,16 @@ export const productsService = {
    */
   async pick(
     _user: User,
-    opts: { q?: string; customer_id?: string; ids?: string[]; limit: number },
+    opts: {
+      q?: string
+      customer_id?: string
+      ids?: string[]
+      codes?: string[]
+      limit: number
+    },
   ): Promise<{ rows: ProductPickRow[]; fuzzy?: boolean }> {
     if (opts.ids) return { rows: await productsRepo.listPickByIds(opts.ids) }
+    if (opts.codes) return { rows: await productsRepo.listPickByCodes(opts.codes) }
 
     const rows = await productsRepo.listForPick(opts)
     if (rows.length > 0 || !opts.q || !worthFuzzy(opts.q)) return { rows }

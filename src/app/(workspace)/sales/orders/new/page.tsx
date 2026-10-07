@@ -3,9 +3,9 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
-import { OrderForm } from '@/components/sales/OrderForm'
+import { DonHangForm } from '../_form/DonHangForm'
 
-/** Trang riêng tạo đơn hàng (thay modal chật) — bố cục rộng, có tạo nhanh SP. */
+/** Trang tạo đơn hàng — khuôn F (lưới nhập liệu), 07/10/2026. */
 export default async function NewOrderPage({
   searchParams,
 }: {
@@ -16,17 +16,23 @@ export default async function NewOrderPage({
   // Nút "Tạo đơn hàng" trên hồ sơ báo giá đã gửi → chọn sẵn báo giá đó.
   const { quote: initialQuoteId } = await searchParams
 
-  // Không nạp thư viện SP nữa: form tạo đơn bắt đầu từ 0 dòng, ô chọn SP tự tìm
-  // ở server khi Sales mở nó (xem ProductPicker).
+  // Không nạp thư viện SP: form bắt đầu từ 0 dòng, ô chọn SP tự tìm ở server.
   const [{ rows: sentQuotes }, { rows: customers }] = await Promise.all([
     quotesService.list(user, { status: 'sent', page: 1, page_size: 500 }),
     customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
   ])
 
   return (
-    <OrderForm
+    <DonHangForm
       mode="create"
-      customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+      customers={customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        default_currency: c.default_currency,
+        default_price_term: c.default_price_term,
+        default_payment_terms: c.default_payment_terms,
+        port_of_discharge: c.port_of_discharge,
+      }))}
       lineProducts={[]}
       initialQuoteId={initialQuoteId ?? null}
       sentQuotes={sentQuotes.map((q) => ({
