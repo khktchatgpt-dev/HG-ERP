@@ -1,20 +1,12 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import {
-  Card as UiCard,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/shadcn/card'
 import { api } from '@/lib/api'
 import { ProductSpecFill } from '@/components/sales/ProductSpecFill'
 import type { ProductPick } from '@/components/sales/ProductPicker'
 
 /**
- * Kiểu, hằng, hàm phụ và thành phần trình bày của form BÁO GIÁ — dời khỏi
- * QuoteForm 07/10/2026 (trần 800 dòng) khi khối dòng chuyển thành lưới có giá
- * thành / net / lãi (0225). Không state ngoài component con.
+ * Kiểu, hằng, hàm phụ và hàng chi tiết dòng của form BÁO GIÁ (nay là
+ * `sales/quotes/_form/BaoGiaForm`, khuôn F — 07/10/2026). Không state.
  */
 
 export type CustomerOption = {
@@ -45,21 +37,12 @@ export type QuoteLineInitial = {
   note: string | null
 }
 
-export type LineDraft = { code: string; name: string; unit: string; itemCode: string }
-
 export const BOM_LABEL = {
   none: 'Chưa có BOM',
   drawing: 'Đang vẽ',
   done: 'Đã vẽ',
 } as const
 export const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
-
-/*
- * Lớp ô nhập dùng chung — CÙNG token với OrderForm (`.theme-v2`, bám
- * `components/shadcn/input.tsx`) để form báo giá và form đơn nhìn như một.
- */
-export const cls =
-  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
 
 /** Giá đã báo cho ĐÚNG khách này, theo SP — dùng để tự điền đơn giá. */
 export async function fetchLastPrices(
@@ -86,65 +69,6 @@ export const cmToInch = (v?: number) => (v != null ? (v / 2.54).toFixed(1) : nul
 export function inchStr(a?: number, b?: number, c?: number): string | null {
   const [x, y, z] = [cmToInch(a), cmToInch(b), cmToInch(c)]
   return x && y && z ? `${x}×${y}×${z}` : null
-}
-
-/** Thẻ mục của form — cùng khối shadcn Card với OrderForm (tiêu đề chữ thật). */
-export function Card({
-  title,
-  right,
-  children,
-}: {
-  title: string
-  right?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <UiCard>
-      <CardHeader>
-        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-        {right && (
-          <div className="col-start-2 row-span-2 row-start-1 self-center">{right}</div>
-        )}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </UiCard>
-  )
-}
-
-export function L({
-  label,
-  span2,
-  children,
-}: {
-  label: string
-  span2?: boolean
-  children: ReactNode
-}) {
-  return (
-    <label className={`flex flex-col gap-1 text-sm ${span2 ? 'sm:col-span-2' : ''}`}>
-      {label}
-      {children}
-    </label>
-  )
-}
-
-export function LineField({
-  label,
-  span2,
-  children,
-}: {
-  label: string
-  span2?: boolean
-  children: ReactNode
-}) {
-  return (
-    <label className={`flex flex-col gap-1 ${span2 ? 'col-span-2' : ''}`}>
-      <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-        {label}
-      </span>
-      {children}
-    </label>
-  )
 }
 
 /** Hàng chi tiết của một dòng báo giá: quy cách · giá gợi ý · điền spec. */

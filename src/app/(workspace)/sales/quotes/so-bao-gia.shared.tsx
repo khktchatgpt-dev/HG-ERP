@@ -41,7 +41,7 @@ export const TAB_LABEL: Record<Tab, string> = {
   won: 'Thắng',
   lost: 'Thua',
   expired: 'Hết hiệu lực',
-  stale: 'Nằm im ≥ 14 ngày',
+  stale: 'Nằm im',
   closed: 'Đã đóng',
 }
 

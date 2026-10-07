@@ -82,6 +82,7 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
               key={t}
               label={TAB_LABEL[t]}
               value={fmtN(n)}
+              sub={t === 'stale' ? '≥ 14 ngày' : undefined}
               on={d.tab === t}
               onClick={() => d.setTab(t)}
               tone={
@@ -93,7 +94,7 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
                       ? 'done'
                       : 'neutral'
               }
-              width="min-w-[112px] flex-1 basis-0"
+              width="min-w-[96px] flex-1 basis-0"
             />
           )
         })}
@@ -143,21 +144,29 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
       </FilterRow>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[1180px] border-collapse">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-9" />
+            <col className="w-[128px]" />
+            <col />
+            <col className="w-[124px]" />
+            <col className="w-[168px]" />
+            <col className="w-[56px]" />
+            <col className="w-[136px]" />
+            <col className="w-[132px]" />
+            <col className="w-[104px]" />
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className={`${TH} w-10 text-right`}>#</th>
-              <th className={`${TH} w-[140px]`}>Số BG</th>
-              <th className={`${TH} w-[180px]`}>Khách hàng</th>
-              <th className={`${TH} w-[70px]`}>Bản</th>
-              <th className={`${TH} w-[150px]`}>Trạng thái</th>
-              <th className={`${TH} w-[150px]`}>Hiệu lực</th>
-              <th className={`${TH} w-[70px] text-right`}>Dòng</th>
-              <th className={`${TH} w-[150px] text-right`}>Trị giá tham chiếu</th>
-              <th className={`${TH} w-[160px]`}>Đơn hàng</th>
-              <th className={`${TH} w-[110px]`}>Incoterm</th>
-              <th className={`${TH} w-[90px]`}>Người lập</th>
-              <th className={`${TH} w-[90px]`}>Ngày lập</th>
+              <th className={`${TH} text-right`}>#</th>
+              <th className={TH}>Số BG · bản</th>
+              <th className={TH}>Khách hàng</th>
+              <th className={TH}>Trạng thái</th>
+              <th className={TH}>Hiệu lực</th>
+              <th className={`${TH} text-right`}>Dòng</th>
+              <th className={`${TH} text-right`}>Trị giá tham chiếu</th>
+              <th className={TH}>Đơn hàng</th>
+              <th className={TH}>Người lập</th>
             </tr>
           </thead>
           <tbody>
@@ -167,26 +176,24 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
               return (
                 <tr key={r.id} className="hover:bg-muted/40">
                   <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
-                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
+                  <td className={`${TD} whitespace-nowrap`}>
                     <Link
                       href={`/sales/quotes/${r.id}`}
-                      className="text-[var(--primary)] hover:underline"
+                      className="font-mono text-xs text-[var(--primary)] hover:underline"
                     >
                       {r.code}
                     </Link>
+                    <span className="text-muted-foreground block text-[11px] leading-4">
+                      {r.revision_no > 1 ? (
+                        <span className="text-[var(--warn)]">bản {r.revision_no}</span>
+                      ) : (
+                        'bản 1'
+                      )}
+                      {r.revisions > 0 && ` · +${r.revisions} bản sau`}
+                    </span>
                   </td>
                   <td className={`${TD} truncate`} title={r.customer_name}>
                     {r.customer_name}
-                  </td>
-                  <td className={`${TD} text-xs`}>
-                    {r.revision_no > 1 ? (
-                      <Nhan tone="warn">bản {r.revision_no}</Nhan>
-                    ) : (
-                      <span className="text-muted-foreground">bản 1</span>
-                    )}
-                    {r.revisions > 0 && (
-                      <span className="text-muted-foreground ml-1">+{r.revisions}</span>
-                    )}
                   </td>
                   <td className={TD}>
                     <Nhan tone={exp ? 'stop' : quoteTone(r.status)}>
@@ -240,18 +247,19 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className={`${TD} truncate text-xs`}>{r.price_term ?? '—'}</td>
                   <td className={`${TD} text-xs`} title={r.owner_name ?? ''}>
-                    {shortName(r.owner_name)}
+                    <span className="block truncate">{shortName(r.owner_name)}</span>
+                    <span className="text-muted-foreground block font-mono text-[11px] leading-4">
+                      {fmtD(r.created_at)}
+                    </span>
                   </td>
-                  <td className={`${TD} font-mono text-xs`}>{fmtD(r.created_at)}</td>
                 </tr>
               )
             })}
             {d.visible.length === 0 && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={9}
                   className={`${TD} text-muted-foreground py-8 text-center`}
                 >
                   Không có báo giá nào khớp. Đổi ô đếm phía trên, bỏ lọc khách hoặc xoá từ
@@ -262,7 +270,7 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
           </tbody>
           <tfoot className="sticky bottom-0 z-10">
             <tr className="bg-muted font-medium">
-              <td className={`${TD} border-t`} colSpan={6}>
+              <td className={`${TD} border-t`} colSpan={5}>
                 Cộng {fmtN(d.filtered.length)} báo giá
                 {d.filtered.length > d.visible.length && (
                   <button
@@ -288,7 +296,7 @@ export function SoBaoGiaScreen(props: SoBaoGiaProps) {
                   )
                   .join(' · ') || '—'}
               </td>
-              <td className={`${TD} border-t`} colSpan={4} />
+              <td className={`${TD} border-t`} colSpan={2} />
             </tr>
           </tfoot>
         </table>

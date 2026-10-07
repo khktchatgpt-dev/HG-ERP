@@ -144,7 +144,7 @@ export function KhoiDauDon({ d }: { d: DonHangFormCtx }) {
 }
 
 /** Ô chọn khách: gõ để lọc trong danh sách đang hoạt động, Enter chọn dòng đầu. */
-function KhachCombo({
+export function KhachCombo({
   id,
   customers,
   value,

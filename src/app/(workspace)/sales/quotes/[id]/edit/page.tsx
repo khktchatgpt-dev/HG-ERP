@@ -6,7 +6,7 @@ import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
-import { QuoteForm } from '@/components/sales/QuoteForm'
+import { BaoGiaForm } from '../../_form/BaoGiaForm'
 
 /**
  * Sửa báo giá nháp (chỉ draft) — dùng chung QuoteForm. Chỉ nạp ĐÚNG các SP đang
@@ -42,7 +42,7 @@ export default async function EditQuotePage({
   ])
 
   return (
-    <QuoteForm
+    <BaoGiaForm
       mode="edit"
       customers={customers.map((c) => ({
         id: c.id,

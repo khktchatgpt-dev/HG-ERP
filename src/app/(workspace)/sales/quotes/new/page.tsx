@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
-import { QuoteForm } from '@/components/sales/QuoteForm'
+import { BaoGiaForm } from '../_form/BaoGiaForm'
 
 /**
  * Trang lập báo giá (trang riêng, bố cục rộng, hiện đủ quy cách SP).
@@ -30,7 +30,7 @@ export default async function NewQuotePage({
   })
 
   return (
-    <QuoteForm
+    <BaoGiaForm
       mode="create"
       customers={customers.map((c) => ({
         id: c.id,

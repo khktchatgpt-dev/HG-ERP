@@ -430,4 +430,13 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      Mẫu Excel `docs/mau/MAU_BAO_GIA_SP_MOI.xlsx` sinh lại 22 cột.
 5. **Lượt 5 — tầng 3 form đơn (khuôn F)** · ✅ XONG 07/10/2026 — xem mục Lượt 2 ở trên.
 6. **Lượt 6 — in báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên.
+7a. **Rà UI/UX cả phần báo giá** · ✅ 07/10/2026 (user: "cải thiện UI/UX tất cả phần
+   báo giá"): sổ — 9 ô đếm không gãy chữ, bảng `table-fixed` 9 cột (Bản gộp vào Số
+   BG, Ngày lập gộp vào Người lập, bỏ Incoterm) hết tràn ngang ở 1280; chi tiết — bỏ
+   ô "Việc kế tiếp" khỏi dải đếm thành một dòng riêng dưới dải, Tổng quan 2 cột (3 ở
+   2xl), nhãn 92px, bảng dòng thu bề rộng cột; form — `sales/quotes/_form/BaoGiaForm`
+   + `useBaoGiaForm` theo khuôn F (dải đầu đơn · lưới Enter xuống dòng · thanh chốt
+   đáy bấm được), xoá `components/sales/QuoteForm.tsx` (theme v3, thẻ nổi); nhập
+   Excel — lưới dày 2 dòng/hàng, cột Tình trạng thay "SP sẽ dùng", ảnh thư viện / ảnh
+   nhúng. Soi thật ở 1280×800 cả 4 màn.
 7. **Lượt 7 — nhập Excel báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên. Tầng 3 của ba màn đã hết việc đã liệt kê; còn lại là 7 đợt nghiệp vụ ở mục 4 (bắt đầu Đợt 1 ghi xuất thật) và Q1–Q6.

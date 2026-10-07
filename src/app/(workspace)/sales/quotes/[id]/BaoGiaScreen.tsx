@@ -240,33 +240,42 @@ export function BaoGiaScreen(props: BaoGiaProps) {
         />
         <CountCell
           label="Bản"
-          value={
-            <span className="text-[15px]">
-              {q.revision_no}
-              {d.revisions.length > 1 ? ` / ${d.revisions.length}` : ''}
-            </span>
+          value={fmtN(q.revision_no)}
+          sub={
+            d.revisions.length > 1 ? `trong ${d.revisions.length} bản` : 'bản duy nhất'
           }
           onClick={goto('khoi-phu')}
         />
         <CountCell
           label="Hiệu lực đến"
           value={
-            <span className="text-[15px]">
+            <span className="whitespace-nowrap">
               {q.valid_to ? fmtD(q.valid_to) : 'chưa khai'}
             </span>
           }
-          tone={d.expired ? 'stop' : 'neutral'}
-        />
-        <CountCell
-          label="Việc kế tiếp"
-          value={<span className="text-[15px]">{d.nextStep}</span>}
-          tone={
-            ['lost', 'cancelled', 'rejected'].includes(q.status) || d.expired
-              ? 'stop'
-              : 'neutral'
+          sub={
+            d.expired
+              ? 'đã hết hiệu lực'
+              : q.valid_from
+                ? `từ ${fmtD(q.valid_from)}`
+                : undefined
           }
+          tone={d.expired ? 'stop' : q.valid_to ? 'neutral' : 'warn'}
         />
       </CountStrip>
+      {/* Việc kế tiếp: một dòng dưới dải đếm — thứ người mở tờ này cần đọc trước tiên. */}
+      <div
+        className={`border-border flex items-center gap-2 border-b px-6 py-1.5 text-[13px] ${
+          ['lost', 'cancelled', 'rejected'].includes(q.status) || d.expired
+            ? 'bg-[var(--stop)]/5 text-[var(--stop)]'
+            : 'text-foreground bg-[var(--accent)]/40'
+        }`}
+      >
+        <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          Việc kế tiếp
+        </span>
+        <span>{d.nextStep}</span>
+      </div>
 
       <KhoiBaoGiaHanhDong d={d} />
 
@@ -274,7 +283,7 @@ export function BaoGiaScreen(props: BaoGiaProps) {
         <div id="khoi-dong">
           <KhoiBaoGiaDong d={d} />
         </div>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex min-w-0 flex-col gap-4">
             <KhoiBaoGiaTongQuan d={d} />
           </div>

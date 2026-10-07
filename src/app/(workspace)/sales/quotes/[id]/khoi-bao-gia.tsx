@@ -51,21 +51,21 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
       }
     >
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-collapse">
+        <table className="w-full min-w-[940px] border-collapse">
           <thead>
             <tr>
-              <th className={`${TH} w-10 text-right`}>#</th>
-              <th className={`${TH} w-[140px]`}>Mã SP</th>
-              <th className={`${TH} w-[120px]`}>Mã khách</th>
+              <th className={`${TH} w-9 text-right`}>#</th>
+              <th className={`${TH} w-[118px]`}>Mã SP</th>
+              <th className={`${TH} w-[100px]`}>Mã khách</th>
               <th className={TH}>Tên</th>
-              <th className={`${TH} w-14`}>ĐVT</th>
-              <th className={`${TH} w-20 text-right`}>SL / MOQ</th>
-              {cost && <th className={`${TH} w-24 text-right`}>Giá thành KH</th>}
-              <th className={`${TH} w-24 text-right`}>Đơn giá</th>
-              <th className={`${TH} w-16 text-right`}>CK %</th>
-              <th className={`${TH} w-24 text-right`}>Giá chào (net)</th>
-              {cost && <th className={`${TH} w-16 text-right`}>Lãi KH</th>}
-              <th className={`${TH} w-[160px]`}>Ghi chú</th>
+              <th className={`${TH} w-12`}>ĐVT</th>
+              <th className={`${TH} w-[72px] text-right`}>SL/MOQ</th>
+              {cost && <th className={`${TH} w-[92px] text-right`}>Giá thành</th>}
+              <th className={`${TH} w-[88px] text-right`}>Đơn giá</th>
+              <th className={`${TH} w-[52px] text-right`}>CK%</th>
+              <th className={`${TH} w-[96px] text-right`}>Giá chào</th>
+              {cost && <th className={`${TH} w-[60px] text-right`}>Lãi</th>}
+              <th className={`${TH} w-[130px]`}>Ghi chú</th>
             </tr>
           </thead>
           <tbody>
@@ -345,7 +345,7 @@ export function KhoiBaoGiaTongQuan({ d }: { d: BaoGiaCtx }) {
         ) : undefined
       }
     >
-      <div className="grid gap-x-6 gap-y-3 px-3 py-2 lg:grid-cols-3">
+      <div className="grid gap-x-6 gap-y-3 px-3 py-2 md:grid-cols-2 2xl:grid-cols-3">
         <Nhom title="Chung">
           <Truong label="Khách hàng">
             <Link
