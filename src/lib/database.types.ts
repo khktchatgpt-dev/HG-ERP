@@ -1677,6 +1677,62 @@ export type Database = {
           },
         ]
       }
+      production_order_changes: {
+        Row: {
+          change: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          production_order_id: string
+        }
+        Insert: {
+          change: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id: string
+        }
+        Update: {
+          change?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_changes_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+        ]
+      }
       production_order_groups: {
         Row: {
           buyer_name: string | null
@@ -2517,49 +2573,6 @@ export type Database = {
           },
         ]
       }
-      // 0224 — thêm tay 07/10/2026 (migration chưa áp, chạy "sync types" sau khi áp sẽ sinh lại y hệt)
-      production_order_changes: {
-        Row: {
-          change: Json
-          changed_by: string | null
-          created_at: string
-          id: string
-          note: string | null
-          production_order_id: string
-        }
-        Insert: {
-          change: Json
-          changed_by?: string | null
-          created_at?: string
-          id?: string
-          note?: string | null
-          production_order_id: string
-        }
-        Update: {
-          change?: Json
-          changed_by?: string | null
-          created_at?: string
-          id?: string
-          note?: string | null
-          production_order_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "production_order_changes_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "production_order_changes_production_order_id_fkey"
-            columns: ["production_order_id"]
-            isOneToOne: false
-            referencedRelation: "production_orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       sales_order_changes: {
         Row: {
           change: Json
@@ -2858,11 +2871,11 @@ export type Database = {
       }
       sales_quote_lines: {
         Row: {
-          plan_at: string | null
-          plan_price_snapshot: number | null
           discount_pct: number | null
           id: string
           note: string | null
+          plan_at: string | null
+          plan_price_snapshot: number | null
           product_id: string
           qty: number | null
           quote_id: string
@@ -2870,11 +2883,11 @@ export type Database = {
           unit_price: number
         }
         Insert: {
-          plan_at?: string | null
-          plan_price_snapshot?: number | null
           discount_pct?: number | null
           id?: string
           note?: string | null
+          plan_at?: string | null
+          plan_price_snapshot?: number | null
           product_id: string
           qty?: number | null
           quote_id: string
@@ -2882,11 +2895,11 @@ export type Database = {
           unit_price?: number
         }
         Update: {
-          plan_at?: string | null
-          plan_price_snapshot?: number | null
           discount_pct?: number | null
           id?: string
           note?: string | null
+          plan_at?: string | null
+          plan_price_snapshot?: number | null
           product_id?: string
           qty?: number | null
           quote_id?: string
@@ -2912,9 +2925,6 @@ export type Database = {
       }
       sales_quotes: {
         Row: {
-          lost_reason: string | null
-          revision_no: number
-          revision_of: string | null
           approved_at: string | null
           approved_by: string | null
           code: string
@@ -2923,10 +2933,13 @@ export type Database = {
           currency: string
           customer_id: string
           id: string
+          lost_reason: string | null
           note: string | null
           payment_terms: string | null
           price_term: string | null
           rejected_reason: string | null
+          revision_no: number
+          revision_of: string | null
           status: string
           submitted_at: string | null
           submitted_by: string | null
@@ -2935,9 +2948,6 @@ export type Database = {
           valid_to: string | null
         }
         Insert: {
-          lost_reason?: string | null
-          revision_no?: number
-          revision_of?: string | null
           approved_at?: string | null
           approved_by?: string | null
           code: string
@@ -2946,10 +2956,13 @@ export type Database = {
           currency?: string
           customer_id: string
           id?: string
+          lost_reason?: string | null
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
           rejected_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           status?: string
           submitted_at?: string | null
           submitted_by?: string | null
@@ -2958,9 +2971,6 @@ export type Database = {
           valid_to?: string | null
         }
         Update: {
-          lost_reason?: string | null
-          revision_no?: number
-          revision_of?: string | null
           approved_at?: string | null
           approved_by?: string | null
           code?: string
@@ -2969,10 +2979,13 @@ export type Database = {
           currency?: string
           customer_id?: string
           id?: string
+          lost_reason?: string | null
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
           rejected_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           status?: string
           submitted_at?: string | null
           submitted_by?: string | null
@@ -3000,6 +3013,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_quotes_revision_of_fkey"
+            columns: ["revision_of"]
+            isOneToOne: false
+            referencedRelation: "sales_quotes"
             referencedColumns: ["id"]
           },
           {
@@ -3098,10 +3118,38 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "sales_ship_lots_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sales_ship_lots_production_order_id_fkey"
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
