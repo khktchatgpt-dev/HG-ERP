@@ -84,6 +84,9 @@ export function SoDonHangScreen(props: SoDonHangProps) {
               key={t}
               label={TAB_LABEL[t]}
               value={fmtN(n)}
+              sub={
+                t === 'done' ? 'chờ xuất' : t === 'running' ? 'đã phát lệnh' : undefined
+              }
               on={d.tab === t}
               onClick={() => d.setTab(t)}
               tone={
@@ -95,7 +98,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
                       ? 'done'
                       : 'neutral'
               }
-              width="min-w-[118px] flex-1 basis-0"
+              width="min-w-[92px] flex-1 basis-0"
             />
           )
         })}
@@ -161,21 +164,31 @@ export function SoDonHangScreen(props: SoDonHangProps) {
       </FilterRow>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[1180px] border-collapse">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-9" />
+            <col className="w-[150px]" />
+            <col />
+            <col className="w-[136px]" />
+            <col className="w-[150px]" />
+            <col className="w-[118px]" />
+            <col className="w-[68px]" />
+            <col className="w-[96px]" />
+            <col className="w-[128px]" />
+            <col className="w-[96px]" />
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className={`${TH} w-10 text-right`}>#</th>
-              <th className={`${TH} w-[150px]`}>Số đơn</th>
-              <th className={`${TH} w-[170px]`}>Khách hàng</th>
-              <th className={`${TH} w-[120px]`}>PO khách</th>
-              <th className={`${TH} w-[150px]`}>Trạng thái</th>
-              <th className={`${TH} w-[150px]`}>Lệnh SX</th>
-              <th className={`${TH} w-[110px]`}>Hạn giao</th>
-              <th className={`${TH} w-20 text-right`}>SL</th>
-              <th className={`${TH} w-24 text-right`}>Đã xuất</th>
-              <th className={`${TH} w-[130px] text-right`}>Giá trị</th>
-              <th className={`${TH} w-[90px]`}>Người tạo</th>
-              <th className={`${TH}`}>Thiếu</th>
+              <th className={`${TH} text-right`}>#</th>
+              <th className={TH}>Số đơn · PO khách</th>
+              <th className={TH}>Khách hàng</th>
+              <th className={TH}>Trạng thái</th>
+              <th className={TH}>Lệnh SX</th>
+              <th className={TH}>Hạn giao</th>
+              <th className={`${TH} text-right`}>SL</th>
+              <th className={`${TH} text-right`}>Đã xuất</th>
+              <th className={`${TH} text-right`}>Giá trị</th>
+              <th className={TH}>Người tạo</th>
             </tr>
           </thead>
           <tbody>
@@ -186,29 +199,40 @@ export function SoDonHangScreen(props: SoDonHangProps) {
               return (
                 <tr key={o.id} className="hover:bg-muted/40">
                   <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
-                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
+                  <td className={`${TD} min-w-0`}>
                     <Link
                       href={`/sales/orders/${o.id}`}
-                      className="text-[var(--primary)] hover:underline"
+                      className="block truncate font-mono text-xs text-[var(--primary)] hover:underline"
+                      title={o.code}
                     >
                       {o.code}
                     </Link>
+                    <span
+                      className="text-muted-foreground block truncate font-mono text-[11px] leading-4"
+                      title={o.customer_po_no ?? ''}
+                    >
+                      {o.customer_po_no ? (
+                        `PO ${o.customer_po_no}`
+                      ) : (
+                        <span className="text-[var(--warn)]">thiếu PO</span>
+                      )}
+                    </span>
                   </td>
                   <td className={`${TD} truncate`} title={o.customer_name}>
                     {o.customer_name}
                   </td>
-                  <td
-                    className={`${TD} truncate font-mono text-xs`}
-                    title={o.customer_po_no ?? ''}
-                  >
-                    {o.customer_po_no ?? (
-                      <span className="text-[var(--warn)]">thiếu</span>
-                    )}
-                  </td>
-                  <td className={TD}>
+                  <td className={`${TD} min-w-0`}>
                     <Nhan tone={orderStatusTone(o.status)}>
                       {orderStatusLabel(o.status)}
                     </Nhan>
+                    {o.missing.length > 0 && (
+                      <span
+                        className="block truncate text-[11px] leading-4 text-[var(--warn)]"
+                        title={o.missing.join(' · ')}
+                      >
+                        thiếu {o.missing.join(' · ')}
+                      </span>
+                    )}
                   </td>
                   <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
                     {o.lsx_id && o.lsx_code ? (
@@ -270,11 +294,11 @@ export function SoDonHangScreen(props: SoDonHangProps) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className={`${TD} text-xs`} title={o.created_by_name ?? ''}>
+                  <td
+                    className={`${TD} truncate text-xs`}
+                    title={o.created_by_name ?? ''}
+                  >
                     {shortName(o.created_by_name)}
-                  </td>
-                  <td className={`${TD} truncate text-xs text-[var(--warn)]`}>
-                    {o.missing.join(' · ')}
                   </td>
                 </tr>
               )
@@ -282,7 +306,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
             {d.visible.length === 0 && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={10}
                   className={`${TD} text-muted-foreground py-8 text-center`}
                 >
                   Không có đơn nào khớp. Đổi ô đếm phía trên, bỏ lọc khách hoặc xoá từ
@@ -293,7 +317,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
           </tbody>
           <tfoot className="sticky bottom-0 z-10">
             <tr className="bg-muted font-medium">
-              <td className={`${TD} border-t`} colSpan={7}>
+              <td className={`${TD} border-t`} colSpan={6}>
                 Cộng {fmtN(d.filtered.length)} đơn
                 {d.filtered.length > d.visible.length && (
                   <button
@@ -314,7 +338,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
               <td className={`${TD} ${NUM} border-t`}>
                 {fmtN(d.filtered.reduce((s, o) => s + o.shipped, 0))}
               </td>
-              <td className={`${TD} ${NUM} border-t text-xs`} colSpan={3}>
+              <td className={`${TD} ${NUM} border-t text-xs`} colSpan={2}>
                 {sumByCurrency(d.filtered)}
               </td>
             </tr>

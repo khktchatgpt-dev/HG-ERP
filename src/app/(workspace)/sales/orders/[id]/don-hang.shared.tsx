@@ -147,7 +147,7 @@ export function Truong({
   const empty = children == null || children === '' || children === '—'
   return (
     <div className="flex min-w-0 items-baseline gap-2 py-1 text-[13px]">
-      <span className="text-muted-foreground w-[120px] shrink-0 text-xs">{label}</span>
+      <span className="text-muted-foreground w-[96px] shrink-0 text-xs">{label}</span>
       <span
         className={`min-w-0 break-words ${mono ? 'font-mono tabular-nums' : ''} ${
           empty ? 'text-muted-foreground italic' : 'text-foreground'

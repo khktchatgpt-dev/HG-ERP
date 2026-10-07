@@ -42,7 +42,7 @@ export function KhoiTongQuan({ d }: { d: DonHangCtx }) {
         ) : undefined
       }
     >
-      <div className="grid gap-x-6 gap-y-3 px-3 py-2 lg:grid-cols-3">
+      <div className="grid gap-x-6 gap-y-3 px-3 py-2 md:grid-cols-2 2xl:grid-cols-3">
         <Nhom title="Chung">
           <Truong label="Khách hàng">
             <Link

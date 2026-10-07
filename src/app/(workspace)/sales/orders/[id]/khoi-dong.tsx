@@ -27,21 +27,21 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
       }
     >
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-collapse">
+        <table className="w-full table-fixed border-collapse">
           <thead>
             <tr>
               <th className={`${TH} w-10 text-right`}>#</th>
-              <th className={`${TH} w-[150px]`}>Mã SP</th>
-              <th className={`${TH} w-[120px]`}>Mã khách</th>
+              <th className={`${TH} w-[120px]`}>Mã SP</th>
+              <th className={`${TH} w-[100px]`}>Mã khách</th>
               <th className={TH}>Tên sản phẩm</th>
-              <th className={`${TH} w-14`}>ĐVT</th>
-              <th className={`${TH} w-20 text-right`}>SL</th>
-              <th className={`${TH} w-20 text-right`}>Đã xuất</th>
-              <th className={`${TH} w-20 text-right`}>Còn</th>
-              <th className={`${TH} w-[110px]`}>Tuần giao</th>
-              <th className={`${TH} w-24 text-right`}>Đơn giá</th>
-              <th className={`${TH} w-28 text-right`}>Thành tiền</th>
-              <th className={`${TH} w-[160px]`}>Ghi chú</th>
+              <th className={`${TH} w-12`}>ĐVT</th>
+              <th className={`${TH} w-[68px] text-right`}>SL</th>
+              <th className={`${TH} w-[72px] text-right`}>Đã xuất</th>
+              <th className={`${TH} w-[68px] text-right`}>Còn</th>
+              <th className={`${TH} w-[96px]`}>Tuần giao</th>
+              <th className={`${TH} w-[88px] text-right`}>Đơn giá</th>
+              <th className={`${TH} w-[104px] text-right`}>Thành tiền</th>
+              <th className={`${TH} w-[120px]`}>Ghi chú</th>
             </tr>
           </thead>
           <tbody>

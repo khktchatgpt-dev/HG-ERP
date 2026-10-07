@@ -44,8 +44,8 @@ export type Tab =
 export const TAB_LABEL: Record<Tab, string> = {
   all: 'Tất cả',
   todo: 'Chờ lệnh',
-  running: 'Đang sản xuất',
-  done: 'SX xong, chờ xuất',
+  running: 'Đang SX',
+  done: 'SX xong',
   partial: 'Xuất dở',
   shipped: 'Đã xuất đủ',
   delivered: 'Đã giao',

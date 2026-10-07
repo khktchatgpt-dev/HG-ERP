@@ -116,26 +116,39 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
       {d.draftOpen && <KhoiSpMoi d={d} />}
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-8" />
+            <col className="w-9" />
+            <col />
+            <col className="w-[100px]" />
+            <col className="w-11" />
+            <col className="w-[80px]" />
+            <col className="w-[100px]" />
+            <col className="w-[112px]" />
+            <col className="w-[150px]" />
+            <col className="w-[150px]" />
+            <col className="w-8" />
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className={`${TH} w-8 px-2`}>
+              <th className={`${TH} px-2`}>
                 <input
                   type="checkbox"
                   checked={allSel}
                   onChange={(e) => d.selectAll(e.target.checked)}
                 />
               </th>
-              <th className={`${TH} w-8 px-2 text-right`}>#</th>
-              <th className={`${TH} min-w-[260px]`}>Sản phẩm</th>
-              <th className={`${TH} w-[120px]`}>Mã khách</th>
-              <th className={`${TH} w-[60px]`}>ĐVT</th>
-              <th className={`${TH} w-[90px] text-right`}>SL *</th>
-              <th className={`${TH} w-[110px] text-right`}>Đơn giá * ({cur})</th>
-              <th className={`${TH} w-[120px] text-right`}>Thành tiền</th>
-              <th className={`${TH} w-[200px]`}>Tuần giao</th>
-              <th className={`${TH} min-w-[160px]`}>Ghi chú</th>
-              <th className={`${TH} w-8`} />
+              <th className={`${TH} px-2 text-right`}>#</th>
+              <th className={TH}>Sản phẩm</th>
+              <th className={TH}>Mã khách</th>
+              <th className={TH}>ĐVT</th>
+              <th className={`${TH} text-right`}>SL *</th>
+              <th className={`${TH} text-right`}>Đơn giá * ({cur})</th>
+              <th className={`${TH} text-right`}>Thành tiền</th>
+              <th className={TH}>Tuần giao</th>
+              <th className={TH}>Ghi chú</th>
+              <th className={TH} />
             </tr>
           </thead>
           <tbody>
@@ -323,21 +336,22 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
       </td>
       <td className={`${TD} ${NUM}`}>{fmtMoney(num(l.qty) * num(l.unitPrice))}</td>
       <td className={`${TD} px-1`}>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-col">
           <input
             data-r={i}
             data-c="ship"
             type="date"
-            className={`${CELL} w-[136px] ${late ? 'border-[var(--warn)]' : ''}`}
+            className={`${CELL} h-6 ${late ? 'border-[var(--warn)]' : ''}`}
             value={l.shipDate}
             disabled={ro}
             onChange={(e) => d.setLine(l.key, { shipDate: e.target.value })}
             onKeyDown={(e) => gridKey(e, i, 'ship')}
           />
           <span
-            className={`font-mono text-xs ${late ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+            className={`px-1.5 font-mono text-[11px] leading-4 ${late ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
           >
-            {week ?? '—'}
+            {week ? `tuần ${week}` : late ? 'sau hạn đơn' : ''}
+            {week && late ? ' · sau hạn đơn' : ''}
           </span>
         </div>
       </td>

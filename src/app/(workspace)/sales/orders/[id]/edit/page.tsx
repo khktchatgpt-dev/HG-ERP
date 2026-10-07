@@ -35,7 +35,11 @@ export default async function EditOrderPage({
   if (!canMutateOwned(user, order.created_by)) {
     redirect(`/sales/orders/${id}`)
   }
-  if (order.status === 'delivered' || order.status === 'cancelled' || order.status === 'shipped') {
+  if (
+    order.status === 'delivered' ||
+    order.status === 'cancelled' ||
+    order.status === 'shipped'
+  ) {
     redirect(`/sales/orders/${id}`)
   }
 

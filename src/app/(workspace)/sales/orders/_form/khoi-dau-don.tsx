@@ -121,7 +121,7 @@ export function KhoiDauDon({ d }: { d: DonHangFormCtx }) {
         </Tick>
       </div>
 
-      <O label="Hạn giao (mặc định cho dòng)" htmlFor="f-due" w="w-[150px]">
+      <O label="Hạn giao" htmlFor="f-due" w="w-[150px]" hint="mặc định cho dòng mới">
         <input
           id="f-due"
           type="date"

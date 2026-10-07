@@ -157,7 +157,11 @@ export function DonHangScreen(props: DonHangProps) {
         />
         <CountCell
           label="Lệnh sản xuất"
-          value={<span className="text-[15px]">{d.lsx ? d.lsx.code : 'chưa phát'}</span>}
+          value={
+            <span className="text-[15px] whitespace-nowrap">
+              {d.lsx ? d.lsx.code : 'chưa phát'}
+            </span>
+          }
           sub={d.lsx ? `${d.lsx.jobs_done}/${d.lsx.jobs_total} công đoạn` : undefined}
           tone={d.lsx?.status === 'rejected' ? 'stop' : 'neutral'}
           onClick={goto('khoi-lenh')}
@@ -172,18 +176,27 @@ export function DonHangScreen(props: DonHangProps) {
         <CountCell
           label="Hạn giao"
           value={
-            <span className="text-[15px]">
+            <span className="whitespace-nowrap">
               {o.due_date ? fmtD(o.due_date) : 'chưa khai'}
             </span>
           }
           sub={d.lsx?.ship_date ? `lệnh xuất ${fmtD(d.lsx.ship_date)}` : undefined}
-        />
-        <CountCell
-          label="Việc kế tiếp"
-          value={<span className="text-[15px]">{d.nextStep}</span>}
-          tone={o.status === 'cancelled' ? 'stop' : 'neutral'}
+          tone={o.due_date ? 'neutral' : 'warn'}
         />
       </CountStrip>
+      {/* Việc kế tiếp: một dòng dưới dải đếm — câu đầu tiên người mở đơn cần đọc. */}
+      <div
+        className={`border-border flex items-center gap-2 border-b px-6 py-1.5 text-[13px] ${
+          o.status === 'cancelled'
+            ? 'bg-[var(--stop)]/5 text-[var(--stop)]'
+            : 'text-foreground bg-[var(--accent)]/40'
+        }`}
+      >
+        <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          Việc kế tiếp
+        </span>
+        <span>{d.nextStep}</span>
+      </div>
 
       <KhoiHanhDong d={d} />
 
@@ -191,7 +204,7 @@ export function DonHangScreen(props: DonHangProps) {
         <div id="khoi-dong">
           <KhoiDong d={d} />
         </div>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex min-w-0 flex-col gap-4">
             <KhoiTongQuan d={d} />
             <div id="khoi-xuat">

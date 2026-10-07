@@ -439,4 +439,11 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
    đáy bấm được), xoá `components/sales/QuoteForm.tsx` (theme v3, thẻ nổi); nhập
    Excel — lưới dày 2 dòng/hàng, cột Tình trạng thay "SP sẽ dùng", ảnh thư viện / ảnh
    nhúng. Soi thật ở 1280×800 cả 4 màn.
+7b. **Rà UI/UX cả phần đơn hàng** · ✅ 07/10/2026 (user: "cải thiện UI/UX tất cả phần
+   đơn hàng"): sổ — 10 ô đếm rút nhãn + dòng phụ, bảng `table-fixed` 10 cột (PO khách
+   gộp dưới Số đơn, "Thiếu" gộp dưới Trạng thái) vừa 1280; chi tiết — "Việc kế tiếp"
+   ra khỏi dải đếm thành dòng riêng, Tổng quan md:2 / 2xl:3 cột, nhãn 96px, cột phụ
+   320px, bảng dòng `table-fixed` (đo 1003/1003); form — lưới `table-fixed` có
+   colgroup, nhãn tuần giao xuống dưới ô ngày, nhãn "Hạn giao" ngắn + hint. Đo tràn
+   ngang bằng JS (scrollWidth vs clientWidth) thay vì nhìn ảnh khi pane hẹp.
 7. **Lượt 7 — nhập Excel báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên. Tầng 3 của ba màn đã hết việc đã liệt kê; còn lại là 7 đợt nghiệp vụ ở mục 4 (bắt đầu Đợt 1 ghi xuất thật) và Q1–Q6.
