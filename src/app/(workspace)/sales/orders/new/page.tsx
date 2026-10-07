@@ -9,12 +9,13 @@ import { DonHangForm } from '../_form/DonHangForm'
 export default async function NewOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ quote?: string }>
+  searchParams: Promise<{ quote?: string; customer?: string }>
 }) {
   const user = await authService.requirePageUser()
   if (!(await canAction(user, 'sales.order.manage'))) redirect('/sales/orders')
   // Nút "Tạo đơn hàng" trên hồ sơ báo giá đã gửi → chọn sẵn báo giá đó.
-  const { quote: initialQuoteId } = await searchParams
+  // `?customer=` từ hồ sơ khách → chọn sẵn khách, nguồn Trực tiếp.
+  const { quote: initialQuoteId, customer: preselect } = await searchParams
 
   // Không nạp thư viện SP: form bắt đầu từ 0 dòng, ô chọn SP tự tìm ở server.
   const [{ rows: sentQuotes }, { rows: customers }] = await Promise.all([
@@ -35,6 +36,9 @@ export default async function NewOrderPage({
       }))}
       lineProducts={[]}
       initialQuoteId={initialQuoteId ?? null}
+      preselectCustomerId={
+        preselect && customers.some((c) => c.id === preselect) ? preselect : undefined
+      }
       sentQuotes={sentQuotes.map((q) => ({
         id: q.id,
         code: q.code,

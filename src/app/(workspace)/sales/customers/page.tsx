@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import { db } from '@/server/db'
-import { CustomersManager, type CustomerFilters } from './CustomersManager'
+import { SoKhachScreen, type CustomerFilters } from './SoKhachScreen'
 
 const PAGE_SIZE = 20
 
@@ -46,13 +46,15 @@ export default async function SalesCustomersPage({
     page_size: PAGE_SIZE,
   })
 
-  const [counts, activity, { data: salesMembers }] = await Promise.all([
+  const [counts, activity, { data: salesMembers }, mine] = await Promise.all([
     salesService.counts(),
     salesService.activity(
       user,
       rows.map((c) => c.id),
     ),
     db().from('users').select('id, name, email').eq('is_active', true).order('name'),
+    // Ô đếm "Của tôi": khách tôi phụ trách, mọi trạng thái — chỉ cần tổng.
+    salesService.list(user, { owner_id: user.id, status: 'all', page: 1, page_size: 1 }),
   ])
 
   const filters: CustomerFilters = {
@@ -62,7 +64,7 @@ export default async function SalesCustomersPage({
   }
 
   return (
-    <CustomersManager
+    <SoKhachScreen
       customers={rows}
       activity={activity}
       counts={counts}
@@ -76,6 +78,7 @@ export default async function SalesCustomersPage({
         id: m.id,
         label: m.name ?? m.email,
       }))}
+      mineCount={mine.total}
     />
   )
 }

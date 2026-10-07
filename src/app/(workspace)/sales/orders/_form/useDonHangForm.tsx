@@ -29,6 +29,8 @@ export type DonHangFormProps = {
   lineProducts: ProductPick[]
   sentQuotes?: QuoteOption[]
   initialQuoteId?: string | null
+  /** Chọn sẵn khách khi TẠO MỚI (vào từ hồ sơ khách) — server đã kiểm id có thật. */
+  preselectCustomerId?: string
   order?: OrderInitial
   initialLines?: LineInitial[]
 }
@@ -54,8 +56,11 @@ export function useDonHangForm(p: DonHangFormProps) {
 
   /* ── nguồn / khách / tiền tệ ─────────────────────────────────────────── */
   const initialQuoteId = mode === 'create' ? (p.initialQuoteId ?? null) : null
+  // Vào từ hồ sơ khách (`?customer=`) → Trực tiếp với khách chọn sẵn + điều khoản mặc định.
+  const preselect = mode === 'create' ? p.preselectCustomerId : undefined
+  const preDef = preselect ? p.customers.find((c) => c.id === preselect) : undefined
   const [source, setSource] = useState<'quote' | 'direct'>(
-    mode === 'edit'
+    mode === 'edit' || preselect
       ? 'direct'
       : initialQuoteId || (p.sentQuotes?.length ?? 0) > 0
         ? 'quote'
@@ -64,14 +69,14 @@ export function useDonHangForm(p: DonHangFormProps) {
   const [quoteId, setQuoteId] = useState(initialQuoteId ?? '')
   const [quoteCustomerId, setQuoteCustomerId] = useState('')
   const [loadingQuote, setLoadingQuote] = useState(false)
-  const [customerId, setCustomerId] = useState(order?.customer_id ?? '')
+  const [customerId, setCustomerId] = useState(order?.customer_id ?? preselect ?? '')
   const [code, setCode] = useState('')
 
   const [h, setH] = useState({
     customer_po_no: order?.customer_po_no ?? '',
     due_date: order?.due_date ?? '',
     container_summary: order?.container_summary ?? '',
-    currency: order?.currency ?? 'USD',
+    currency: order?.currency ?? preDef?.default_currency ?? 'USD',
     note: order?.note ?? '',
     change_note: '',
   })
@@ -80,13 +85,13 @@ export function useDonHangForm(p: DonHangFormProps) {
 
   const tri = (v: boolean | null | undefined) => (v == null ? '' : v ? 'true' : 'false')
   const [terms, setTerms] = useState({
-    price_term: order?.price_term ?? '',
-    payment_terms: order?.payment_terms ?? '',
+    price_term: order?.price_term ?? preDef?.default_price_term ?? '',
+    payment_terms: order?.payment_terms ?? preDef?.default_payment_terms ?? '',
     deposit_percent: order?.deposit_percent != null ? String(order.deposit_percent) : '',
     qty_tolerance_pct:
       order?.qty_tolerance_pct != null ? String(order.qty_tolerance_pct) : '',
     port_of_loading: order?.port_of_loading ?? '',
-    port_of_discharge: order?.port_of_discharge ?? '',
+    port_of_discharge: order?.port_of_discharge ?? preDef?.port_of_discharge ?? '',
     payment_method: order?.payment_method ?? '',
     required_docs: order?.required_docs ?? '',
     partial_shipment: tri(order?.partial_shipment),

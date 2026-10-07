@@ -6,7 +6,7 @@ import { ordersService } from '@/modules/dept/sales/orders.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { db } from '@/server/db'
 import { HttpError } from '@/server/http'
-import { CustomerDetail } from './CustomerDetail'
+import { HoSoKhachScreen } from './HoSoKhachScreen'
 
 /**
  * Hồ sơ khách hàng + lịch sử báo giá/đơn (FR-SAL-01). Server component: đọc KH
@@ -31,17 +31,28 @@ export default async function CustomerDetailPage({
     throw e
   }
 
-  const [{ rows: quotes }, orders, changes, { data: salesMembers }] = await Promise.all([
+  const [
+    { rows: quotes },
+    orders,
+    changes,
+    { data: salesMembers },
+    { count: productCount },
+  ] = await Promise.all([
     quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
     ordersService.listByCustomer(user, id),
     ordersRepo.listChangesByCustomer(id),
     db().from('users').select('id, name, email').eq('is_active', true).order('name'),
+    // "Dùng ở đâu": SP trong thư viện gắn khách này — chỉ đếm.
+    db()
+      .from('technical_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('customer_id', id),
   ])
   // Giá trị từng đơn — thống kê tiền (doanh số năm, TB đơn) tính phía client.
   const totals = await ordersRepo.totalsByOrderIds(orders.map((o) => o.id))
 
   return (
-    <CustomerDetail
+    <HoSoKhachScreen
       customer={customer}
       quotes={quotes.map((q) => ({
         id: q.id,
@@ -50,6 +61,7 @@ export default async function CustomerDetailPage({
         currency: q.currency,
         valid_from: q.valid_from,
         valid_to: q.valid_to,
+        revision_no: q.revision_no,
         created_at: q.created_at,
       }))}
       orders={orders.map((o) => ({
@@ -73,6 +85,7 @@ export default async function CustomerDetailPage({
         note: c.note,
         created_at: c.created_at,
       }))}
+      productCount={productCount ?? 0}
       currentUserId={user.id}
       role={user.role}
       members={(salesMembers ?? []).map((m) => ({
