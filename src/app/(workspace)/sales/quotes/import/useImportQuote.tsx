@@ -132,6 +132,10 @@ export function useImportQuote(customers: Customer[]) {
       return n
     })
 
+  /** Lấy / bỏ mọi dòng lấy được (dòng bị chặn không đổi). */
+  const setAll = (on: boolean) =>
+    setSkip(on ? new Set() : new Set((preview?.rows ?? []).map((r) => r.row)))
+
   /** Chỉ đích danh SP cho một dòng (ứng viên hoặc hộp tìm). */
   function setPick(row: number, p: Pick | ProductPick | null) {
     setPicks((m) => {
@@ -302,6 +306,7 @@ export function useImportQuote(customers: Customer[]) {
     kept,
     skip,
     toggle,
+    setAll,
     picks,
     setPick,
     pickFor,

@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, FileUp, RefreshCw, Save, Search, X } from 'lucide-react'
+import { AlertTriangle, Download, FileUp, RefreshCw, Save, X } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
 import {
@@ -10,10 +10,7 @@ import {
   ErpPage,
   ErpStatusBar,
   FilterRow,
-  NUM,
   Nhan,
-  TD,
-  TH,
   ToolBtn,
 } from '../../_erp/ui'
 import {
@@ -30,18 +27,43 @@ const BTN_SUB =
 const BTN_PRI =
   'inline-flex h-8 items-center gap-1.5 rounded-sm bg-[var(--primary)] px-3 text-[13px] font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50'
 
+/* Lưới dày: tiêu đề 28px, ô hai dòng chữ cố định (~46px), vạch ngang mảnh, số mono căn phải. */
+const TH =
+  'h-7 border-b border-border bg-muted px-2 text-left text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase'
+const TD = 'h-[46px] border-b border-border px-2 align-middle text-[13px]'
+const NUM = 'text-right font-mono tabular-nums whitespace-nowrap'
+const SUB = 'text-muted-foreground block truncate text-[11px] leading-4'
+
 const fmt = (n: number) =>
   n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dims = (r: RowView) =>
   r.length_mm != null && r.width_mm != null && r.height_mm != null
     ? `${r.length_mm}×${r.width_mm}×${r.height_mm}`
     : '—'
+/** Một dòng đóng gói gọn: ĐVT · SL/thùng · thùng · NW/GW · 40HC. */
+const packText = (r: RowView) =>
+  [
+    r.unit,
+    r.qty_per_carton != null && `${r.qty_per_carton}/thùng`,
+    r.carton_l_cm != null &&
+      r.carton_w_cm != null &&
+      r.carton_h_cm != null &&
+      `thùng ${r.carton_l_cm}×${r.carton_w_cm}×${r.carton_h_cm}`,
+    (r.nw_kg != null || r.gw_kg != null) && `NW ${r.nw_kg ?? '?'} / GW ${r.gw_kg ?? '?'}`,
+    r.loading_40hc != null && `${r.loading_40hc}/40HC`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+const amount = (r: RowView) =>
+  r.qty != null && r.unit_price != null
+    ? r.qty * r.unit_price * (1 - (r.discount_pct ?? 0) / 100)
+    : null
 
 /**
  * NHẬP BÁO GIÁ TỪ EXCEL — khuôn F kiểu ERP (07/10/2026). Hai nhịp, không ghi gì
- * tới khi bấm Lưu. Dòng mơ hồ (khớp nhiều SP) không còn chỉ "bị chặn": bày ứng
- * viên để chọn tại chỗ, hoặc mở hộp tìm. Dòng "SP mới" cũng đổi được sang SP có
- * sẵn nếu người dùng biết. Thanh chốt đáy nói còn thiếu gì, bấm là nhảy tới.
+ * tới khi bấm Lưu. Lưới là nhân vật chính: mỗi dòng file một hàng hai dòng chữ —
+ * trái là SP trong file (ảnh + tên + mã), giữa là quy cách và SP SẼ DÙNG (khớp /
+ * tạo mới / bạn chọn), phải là số. Dòng mơ hồ bày ứng viên để chọn tại chỗ.
  */
 export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
   const d = useImportQuote(customers)
@@ -55,7 +77,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
           { label: 'Nhập từ Excel' },
         ]}
         title="Nhập báo giá từ file Excel"
-        sub="Đọc file → khớp SP có sẵn / tạo SP mới kèm ảnh → báo giá nháp. File gốc gắn vào báo giá. Không ghi gì cho tới khi bấm Lưu."
+        sub="Soi từng dòng rồi mới lưu — SP mới kèm ảnh vào thư viện, file gốc gắn vào báo giá."
         actions={
           <>
             {/* Thẻ <a> thật để trình duyệt nhận content-disposition — Link của Next điều hướng client-side, không tải xuống được. */}
@@ -73,7 +95,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
             )}
             {d.preview && (
               <ToolBtn onClick={d.save} icon={Save} primary>
-                Lưu {d.counts.kept} dòng thành báo giá
+                Lưu {d.counts.kept} dòng
               </ToolBtn>
             )}
           </>
@@ -108,21 +130,20 @@ function ChonFile({ d }: { d: ImportQuoteCtx }) {
           }}
         />
       </label>
-      <p className="text-muted-foreground text-xs">
-        Sau khi đọc, bạn soi từng dòng: khớp SP nào, tạo SP mới nào, dòng nào cần chọn
-        tay.
-      </p>
     </div>
   )
 }
 
 function XemTruoc({ d }: { d: ImportQuoteCtx }) {
   const p = d.preview!
-  const go = (id?: string) => {
-    if (!id) return
-    document.getElementById(id)?.scrollIntoView({ block: 'center' })
-  }
   const pickRow = d.pickFor != null ? d.rows.find((r) => r.row === d.pickFor) : null
+  const goto = (id?: string) => {
+    if (!id) return
+    const el = document.getElementById(id)
+    el?.scrollIntoView({ block: 'center' })
+    el?.focus()
+  }
+  const allOn = d.counts.kept > 0 && d.counts.kept === d.counts.total - d.counts.blocked
   return (
     <>
       <CountStrip>
@@ -190,32 +211,52 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
             onChange={(e) => d.setCurrency(e.target.value.toUpperCase().slice(0, 3))}
           />
         </label>
-        <span className="text-muted-foreground text-xs">
-          File: <span className="font-mono">{p.source_name}</span> — sẽ gắn vào ngăn Tài
-          liệu của báo giá
+        <span className="text-muted-foreground ml-auto text-xs">
+          File <span className="text-foreground font-mono">{p.source_name}</span> · gắn
+          vào ngăn Tài liệu của báo giá
         </span>
       </FilterRow>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-8" />
+            <col className="w-10" />
+            <col className="w-12" />
+            <col />
+            <col className="w-[230px]" />
+            <col className="w-[300px]" />
+            <col className="w-[72px]" />
+            <col className="w-[88px]" />
+            <col className="w-[52px]" />
+            <col className="w-[104px]" />
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className={`${TH} w-8 px-2`}>Lấy</th>
-              <th className={`${TH} w-12 text-right`}>Dòng</th>
-              <th className={`${TH} w-[72px] text-center`}>Ảnh</th>
-              <th className={`${TH} min-w-[260px]`}>Sản phẩm trong file</th>
-              <th className={`${TH} min-w-[260px]`}>Việc sẽ làm</th>
-              <th className={`${TH} w-[120px]`}>KT (mm)</th>
-              <th className={`${TH} w-[80px] text-right`}>SL/MOQ</th>
-              <th className={`${TH} w-[100px] text-right`}>Đơn giá</th>
-              <th className={`${TH} w-[60px] text-right`}>CK %</th>
+              <th className={`${TH} text-center`}>
+                <input
+                  type="checkbox"
+                  aria-label="Lấy tất cả"
+                  checked={allOn}
+                  onChange={(e) => d.setAll(e.target.checked)}
+                />
+              </th>
+              <th className={`${TH} text-right`}>#</th>
+              <th className={`${TH} text-center`}>Ảnh</th>
+              <th className={TH}>Sản phẩm trong file</th>
+              <th className={TH}>Quy cách · đóng gói</th>
+              <th className={TH}>Sản phẩm sẽ dùng</th>
+              <th className={`${TH} text-right`}>SL/MOQ</th>
+              <th className={`${TH} text-right`}>Đơn giá</th>
+              <th className={`${TH} text-right`}>CK%</th>
+              <th className={`${TH} text-right`}>Thành tiền</th>
             </tr>
           </thead>
           <tbody>
             {d.visible.length === 0 && (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="text-muted-foreground px-6 py-8 text-center text-[13px]"
                 >
                   Không có dòng nào ở nhóm này.
@@ -226,6 +267,26 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
               <Dong key={r.row} d={d} r={r} />
             ))}
           </tbody>
+          {d.kept.length > 0 && (
+            <tfoot className="sticky bottom-0 z-10">
+              <tr className="bg-muted text-[12px] font-medium">
+                <td className="border-border h-8 border-t px-2" colSpan={6}>
+                  <span className="text-muted-foreground">
+                    Tổng {d.kept.length} dòng sẽ lưu
+                    {d.tong.withQty < d.kept.length &&
+                      ` · ${d.kept.length - d.tong.withQty} dòng chỉ chào đơn giá (không vào tổng)`}
+                  </span>
+                </td>
+                <td className={`border-border h-8 border-t px-2 ${NUM}`}>
+                  {d.kept.reduce((s, r) => s + (r.qty ?? 0), 0).toLocaleString('en-US')}
+                </td>
+                <td className="border-border h-8 border-t" colSpan={2} />
+                <td className={`border-border h-8 border-t px-2 ${NUM}`}>
+                  {fmt(d.tong.value)}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -238,40 +299,25 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
         />
       )}
 
-      {/* thanh chốt đáy */}
       <div className="border-border bg-card sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t px-6 py-2">
         <span className="text-[13px]">
           <span className="text-muted-foreground">Sẽ lưu</span>{' '}
           <span className="font-mono font-semibold tabular-nums">{d.counts.kept}</span>
-          <span className="text-muted-foreground"> dòng</span>
-          {d.tong.withQty > 0 && (
-            <>
-              <span className="text-muted-foreground"> · tổng theo SL </span>
-              <span className="font-mono font-semibold tabular-nums">
-                {fmt(d.tong.value)} {d.currency}
-              </span>
-              {d.tong.withQty < d.counts.kept && (
-                <span className="text-muted-foreground">
-                  {' '}
-                  ({d.tong.withQty}/{d.counts.kept} dòng có SL)
-                </span>
-              )}
-            </>
-          )}
+          <span className="text-muted-foreground"> dòng · </span>
+          <span className="font-mono font-semibold tabular-nums">
+            {fmt(d.tong.value)} {d.currency}
+          </span>
         </span>
         <span className="bg-border h-4 w-px" />
         {d.missing.length ? (
           <span className="flex flex-wrap items-center gap-x-2 text-[13px]">
-            <span className="text-[var(--stop)]">Chưa lưu được — còn thiếu:</span>
+            <span className="text-[var(--stop)]">Còn thiếu:</span>
             {d.missing.map((m, i) => (
               <button
                 key={i}
                 type="button"
                 className="underline decoration-dotted underline-offset-2 hover:text-[var(--primary)]"
-                onClick={() => {
-                  go(m.focus)
-                  document.getElementById(m.focus ?? '')?.focus()
-                }}
+                onClick={() => goto(m.focus)}
               >
                 {m.msg}
               </button>
@@ -279,7 +325,7 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
           </span>
         ) : (
           <span className="text-[13px] text-[var(--done)]">
-            Đủ điều kiện — tạo báo giá NHÁP, bạn soi lại rồi gửi khách
+            Đủ điều kiện — tạo báo giá NHÁP, soi lại rồi gửi khách
           </span>
         )}
         <span className="flex-1" />
@@ -318,14 +364,21 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
 }
 
 function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
-  const off = d.skip.has(r.row) || r.effective === 'blocked'
+  const blocked = r.effective === 'blocked'
+  const off = d.skip.has(r.row) || blocked
+  const amt = amount(r)
+  const warn = r.warnings[0]
   return (
-    <tr id={`row-${r.row}`} className={`${off ? 'opacity-60' : ''} hover:bg-muted/40`}>
-      <td className={`${TD} px-2`}>
+    <tr
+      id={`row-${r.row}`}
+      tabIndex={-1}
+      className={`${off ? 'text-muted-foreground' : ''} hover:bg-muted/40 focus:bg-[var(--accent)]/40 focus:outline-none`}
+    >
+      <td className={`${TD} text-center`}>
         <input
           type="checkbox"
           checked={!off}
-          disabled={r.effective === 'blocked'}
+          disabled={blocked}
           onChange={() => d.toggle(r.row)}
           aria-label={`Lấy dòng ${r.row}`}
         />
@@ -333,146 +386,184 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
       <td className={`${TD} text-muted-foreground text-right font-mono text-xs`}>
         {r.row}
       </td>
-      <td className={`${TD} px-1 py-1 text-center`}>
+      <td className={`${TD} px-1 text-center`}>
+        {/* Ảnh nhúng trong file ưu tiên; không có thì ảnh thư viện của SP sẽ dùng — tooltip nói rõ nguồn. */}
         <Thumb
           src={r.thumb}
           alt={r.name ?? ''}
-          embedded={!r.matched_image_url && !r.pick && !!r.image_data_url}
-          missingEmbedded={r.has_image && !r.image_data_url && !r.thumb}
+          title={
+            r.image_data_url
+              ? 'Ảnh trong file Excel — gắn vào SP mới khi lưu'
+              : r.thumb
+                ? 'Ảnh trong thư viện của SP sẽ dùng'
+                : r.has_image
+                  ? 'Có ảnh trong file (quá lớn để xem trước) — vẫn gắn khi lưu'
+                  : 'Chưa có ảnh (file không có, thư viện cũng chưa)'
+          }
         />
       </td>
-      <td className={`${TD} py-1`}>
-        <div className="flex flex-col">
-          <span className="font-medium">{r.name ?? '—'}</span>
-          <span className="text-muted-foreground font-mono text-[11px]">
-            {[r.code, r.customer_item_code && `KH: ${r.customer_item_code}`]
-              .filter(Boolean)
-              .join(' · ') || 'không mã'}
-          </span>
-          {r.description_en && (
-            <span className="text-muted-foreground text-[11px]">{r.description_en}</span>
-          )}
-          <span className="text-muted-foreground text-[11px]">
-            {[
-              r.material && `CL: ${r.material}`,
-              r.unit && `ĐVT: ${r.unit}`,
-              r.qty_per_carton != null && `${r.qty_per_carton}/thùng`,
-              r.carton_l_cm != null &&
-                r.carton_w_cm != null &&
-                r.carton_h_cm != null &&
-                `thùng ${r.carton_l_cm}×${r.carton_w_cm}×${r.carton_h_cm} cm`,
-              r.nw_kg != null && `NW ${r.nw_kg}`,
-              r.gw_kg != null && `GW ${r.gw_kg}`,
-              r.loading_40hc != null && `${r.loading_40hc}/40HC`,
-              r.note && `"${r.note}"`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-          {r.warnings.map((w) => (
-            <span key={w} className="text-[11px] text-[var(--warn)]">
-              ⚠ {w}
-            </span>
-          ))}
-        </div>
+      <td className={`${TD} min-w-0`}>
+        <span className="block truncate font-medium" title={r.name ?? ''}>
+          {r.name ?? '—'}
+        </span>
+        <span className={`${SUB} font-mono`}>
+          {[r.code, r.customer_item_code && `KH ${r.customer_item_code}`]
+            .filter(Boolean)
+            .join(' · ') || 'không mã'}
+          {r.description_en && <span className="font-sans"> · {r.description_en}</span>}
+        </span>
       </td>
-      <td className={`${TD} py-1`}>
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {r.effective === 'blocked' ? (
-              <Nhan tone="stop">cần xem</Nhan>
-            ) : r.effective === 'existing' ? (
-              <Nhan tone="neutral">{r.pick ? 'SP bạn chọn' : 'dùng SP có sẵn'}</Nhan>
-            ) : (
-              <Nhan tone="done">tạo SP mới</Nhan>
-            )}
-            {r.effectiveLabel && (
-              <span className="text-muted-foreground truncate text-[12px]">
-                {r.effectiveLabel}
-              </span>
-            )}
-          </div>
-          {r.why && <span className="text-[11px] text-[var(--stop)]">{r.why}</span>}
-          {r.missing.length === 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              {r.candidates
-                .filter((c) => c.id !== r.pick?.id)
-                .map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className="border-border hover:bg-muted inline-flex items-center gap-1 rounded-sm border py-0.5 pr-1.5 pl-0.5 font-mono text-[11px]"
-                    title={c.name}
-                    onClick={() => d.setPick(r.row, c)}
-                  >
-                    <Thumb src={c.image_url} alt={c.name} size={24} />
-                    {c.code}
-                  </button>
-                ))}
-              <button
-                type="button"
-                className="text-[11px] text-[var(--primary)] hover:underline"
-                onClick={() => d.setPickFor(r.row)}
-              >
-                <Search className="mr-0.5 inline size-3" strokeWidth={1.8} />
-                {r.pick
-                  ? 'đổi SP…'
-                  : r.effective === 'new'
-                    ? 'thật ra đã có? chọn SP…'
-                    : 'tìm SP…'}
-              </button>
-              {r.pick && (
-                <button
-                  type="button"
-                  className="text-muted-foreground text-[11px] hover:underline"
-                  onClick={() => d.setPick(r.row, null)}
-                >
-                  bỏ chọn
-                </button>
-              )}
-            </div>
+      <td className={`${TD} min-w-0`}>
+        <span className="block truncate font-mono text-xs tabular-nums">
+          {dims(r)} <span className="text-muted-foreground">mm</span>
+          {r.material && (
+            <span className="text-muted-foreground font-sans"> · {r.material}</span>
           )}
-        </div>
+        </span>
+        <span className={SUB} title={packText(r)}>
+          {packText(r) || '—'}
+        </span>
       </td>
-      <td className={`${TD} font-mono text-xs tabular-nums`}>{dims(r)}</td>
+      <td className={`${TD} min-w-0`}>
+        <SeDung d={d} r={r} />
+      </td>
       <td className={`${TD} ${NUM}`}>
         {r.qty != null ? r.qty.toLocaleString('en-US') : ''}
       </td>
-      <td className={`${TD} ${NUM}`}>{r.unit_price != null ? fmt(r.unit_price) : '—'}</td>
+      <td className={`${TD} ${NUM} ${r.unit_price == null ? 'text-[var(--stop)]' : ''}`}>
+        {r.unit_price != null ? fmt(r.unit_price) : 'thiếu'}
+      </td>
       <td className={`${TD} ${NUM}`}>{r.discount_pct != null ? r.discount_pct : ''}</td>
+      <td className={`${TD} ${NUM}`}>
+        {amt != null ? fmt(amt) : <span className="text-muted-foreground">—</span>}
+        {warn && (
+          <span className="mt-0.5 block text-right" title={warn}>
+            <AlertTriangle
+              className="inline size-3 text-[var(--warn)]"
+              strokeWidth={1.8}
+            />
+          </span>
+        )}
+      </td>
     </tr>
   )
 }
 
-/** Ảnh đại diện: thư viện (đường dẫn ký) hoặc ảnh nhúng (data URL). Không ảnh → ô trống có nhãn. */
+/** Cột "Sản phẩm sẽ dùng": dòng 1 = ảnh thư viện + mã + nhãn + hành động; dòng 2 = tên / ứng viên / lý do. */
+function SeDung({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
+  const hard = r.missing.length > 0
+  const code = r.effectiveLabel?.split(' — ')[0] ?? null
+  const name = r.effectiveLabel?.split(' — ').slice(1).join(' — ') ?? null
+  const link = (label: string, onClick: () => void) => (
+    <button
+      type="button"
+      className="shrink-0 text-[11px] text-[var(--primary)] hover:underline"
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  )
+  if (hard)
+    return (
+      <>
+        <span className="flex items-center gap-1.5">
+          <Nhan tone="stop">thiếu dữ liệu</Nhan>
+        </span>
+        <span className={`${SUB} text-[var(--stop)]`} title={r.why ?? ''}>
+          {r.why}
+        </span>
+      </>
+    )
+  if (r.effective === 'blocked' && r.ambiguous && !r.pick)
+    return (
+      <>
+        <span className="flex items-center gap-1.5">
+          <Nhan tone="warn">khớp {r.candidates.length} SP — chọn một</Nhan>
+          {link('tìm…', () => d.setPickFor(r.row))}
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-1">
+          {r.candidates.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="border-border bg-card inline-flex shrink-0 items-center gap-1 rounded-sm border py-px pr-1.5 pl-px font-mono text-[11px] hover:border-[var(--primary)]"
+              title={c.name}
+              onClick={() => d.setPick(r.row, c)}
+            >
+              <Thumb src={c.image_url} alt={c.name} size={18} />
+              {c.code}
+            </button>
+          ))}
+        </span>
+      </>
+    )
+  if (r.effective === 'blocked')
+    return (
+      <>
+        <span className="flex items-center gap-1.5">
+          <Nhan tone="stop">trùng</Nhan>
+          {code && <span className="truncate font-mono text-xs">{code}</span>}
+          {link('đổi…', () => d.setPickFor(r.row))}
+        </span>
+        <span className={`${SUB} text-[var(--stop)]`} title={r.why ?? ''}>
+          {r.why}
+        </span>
+      </>
+    )
+  if (r.effective === 'new')
+    return (
+      <>
+        <span className="flex items-center gap-1.5">
+          <Nhan tone="done">tạo SP mới</Nhan>
+          {link('đã có sẵn? chọn…', () => d.setPickFor(r.row))}
+        </span>
+        <span className={SUB}>
+          {r.code
+            ? `mã ${r.code} theo file`
+            : 'cấp mã tạm TMP-… · Kỹ thuật đặt mã chuẩn sau'}
+          {r.image_data_url || r.has_image ? ' · kèm ảnh trong file' : ' · chưa có ảnh'}
+        </span>
+      </>
+    )
+  return (
+    <>
+      <span className="flex items-center gap-1.5">
+        <Thumb
+          src={r.pick?.image_url ?? r.matched_image_url}
+          alt={name ?? ''}
+          size={18}
+        />
+        <span className="truncate font-mono text-xs font-medium">{code}</span>
+        <Nhan tone="neutral">{r.pick ? 'bạn chọn' : 'có sẵn'}</Nhan>
+        {link('đổi…', () => d.setPickFor(r.row))}
+        {r.pick && link('bỏ', () => d.setPick(r.row, null))}
+      </span>
+      <span className={SUB} title={name ?? ''}>
+        {name}
+      </span>
+    </>
+  )
+}
+
+/** Ảnh: thư viện (đường dẫn ký) hoặc nhúng (data URL). Không ảnh → ô trống cùng cỡ, giữ hàng thẳng. */
 function Thumb({
   src,
   alt,
-  size = 56,
-  embedded,
-  missingEmbedded,
+  size = 36,
+  title,
 }: {
   src: string | null
   alt: string
   size?: number
-  /** Ảnh lấy từ file Excel — sẽ gắn vào SP mới khi lưu. */
-  embedded?: boolean
-  /** File có ảnh nhưng quá lớn để xem trước. */
-  missingEmbedded?: boolean
+  title?: string
 }) {
   if (!src)
     return (
       <span
-        className="border-border bg-muted text-muted-foreground inline-flex items-center justify-center rounded-sm border text-[10px]"
+        className="border-border bg-muted inline-block rounded-sm border align-middle"
         style={{ width: size, height: size }}
-        title={
-          missingEmbedded
-            ? 'Có ảnh trong file (quá lớn để xem trước) — vẫn gắn khi lưu'
-            : 'Chưa có ảnh'
-        }
-      >
-        {missingEmbedded ? '🖼' : '—'}
-      </span>
+        title={title ?? 'Chưa có ảnh'}
+      />
     )
   return (
     // eslint-disable-next-line @next/next/no-img-element -- ảnh ký sẵn / data URL, không qua next/image
@@ -481,13 +572,9 @@ function Thumb({
       alt={alt}
       width={size}
       height={size}
-      className="border-border inline-block rounded-sm border object-contain"
+      className="border-border bg-card inline-block rounded-sm border object-contain align-middle"
       style={{ width: size, height: size }}
-      title={
-        embedded
-          ? 'Ảnh trong file Excel — sẽ gắn vào SP mới khi lưu'
-          : 'Ảnh trong thư viện'
-      }
+      title={title ?? 'Ảnh trong thư viện'}
     />
   )
 }
