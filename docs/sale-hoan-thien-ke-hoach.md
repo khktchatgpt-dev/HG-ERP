@@ -458,6 +458,19 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
    CustomersManager / CustomerDetail / components/sales/CustomerForm. Khách hàng bổ sung
    (07/10): phụ trách chỉ người Sale, sắp cột, gán hàng loạt, Excel, trùng tên/mã, khối
    SP của khách + Giá đã chào, form lưới 12 cột. **Điền đơn giá** dựng lại khuôn F
-   (08/10, `orders/gia/DienGiaScreen` + `useDienGia`, xoá PricingBoardScreen). Còn
-   trang nền kiểu cũ: Giá thành kế hoạch (`gia-thanh`).
+   (08/10, `orders/gia/DienGiaScreen` + `useDienGia`, xoá PricingBoardScreen).
+7d. **Trang nền Sale — Giá thành kế hoạch** · ✅ 08/10/2026 (user "oke" sau khi đo tình
+   hình giá SP: 807 SP, 252 có FOB KH, 124 đủ bảng tính; SP đang chạy 143 → 5 chưa có,
+   106 chỉ FOB, 32 đủ; chưa SP đang chạy nào có giá chào vì Sale vẫn chào bằng Excel).
+   Trang nền kiểu cũ CUỐI của Sale đổi sang khuôn F kiểu ERP: `gia-thanh/GiaThanhScreen`
+   + `useGiaThanh` + `khoi-dan` (ngăn dán tại chỗ, thay hộp Sheet `dan-sheet.tsx` đã
+   xoá). Dải đếm Chưa có · Chỉ FOB · Đủ 4 số · Khách thiếu nhiều nhất · Đang sửa; hàng
+   "Lần lưu này" (tiền tệ · dấu thập phân · tỷ giá · nguồn); lưới `table-fixed` 12 cột
+   có thêm **Đã chào** và **Giá đơn** gần nhất (service `board` thêm `last_quote` /
+   `last_order`, `stats.fob_only`) để người nạp thấy số đang bán ngay tại chỗ — KHÔNG
+   đưa giá vào hồ sơ SP dùng chung (bí mật Bán hàng, chốt 02/10). Lõi ghép ô gõ với số
+   đang có tách ra `lib/plan-cost-draft.ts` (9 test): ô trống = giữ số đang có nếu
+   cùng tiền tệ, chỉ FOB, suy trực tiếp, dở dang 1–2 số thì chặn. Hàng chi tiết mở ra
+   bày khối chi phí đã dán. Soi 1280 (1053/1053), Enter xuống cùng cột, dán bảng / dán
+   khối thử thật, không bấm Lưu. Hết trang nền kiểu cũ của Sale.
 7. **Lượt 7 — nhập Excel báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên. Tầng 3 của ba màn đã hết việc đã liệt kê; còn lại là 7 đợt nghiệp vụ ở mục 4 (bắt đầu Đợt 1 ghi xuất thật) và Q1–Q6.

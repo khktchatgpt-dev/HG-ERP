@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic'
  * GIÁ THÀNH KẾ HOẠCH THEO SẢN PHẨM (0220) — bốn số từ bảng tính giá của Sale.
  *
  * Câu hỏi của màn: *"SP đang chạy nào chưa có giá thành kế hoạch, và số đó
- * lấy từ bản báo giá nào?"* Khuôn F: dán từ Excel, xem lại, lưu một lần — cùng
- * cách với Bảng giá đơn hàng. Shell nằm ở layout của workspace Sales.
+ * lấy từ bản báo giá nào?"* Khuôn F kiểu ERP (dựng lại 08/10/2026): gõ hoặc
+ * dán từ bảng tính, xem lại, lưu một lần — cùng cách với Điền đơn giá. Shell
+ * nằm ở layout của workspace Sales.
  */
 export default async function Page() {
   const user = await authService.requirePageUser()
