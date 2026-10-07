@@ -5,7 +5,6 @@ import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { canMutateOwned } from '@/lib/record-ownership'
-import { productionRepo } from '@/modules/dept/production/production.repo'
 import { SoDonHangScreen } from './SoDonHangScreen'
 import type { DonRow } from './so-don-hang.shared'
 
@@ -29,15 +28,13 @@ export default async function SalesOrdersPage() {
   const ids = orders.map((o) => o.id)
 
   /*
-   * Bốn lô phụ, mỗi lô MỘT truy vấn cho cả trang: dòng (SL · giá · tuần giao ·
-   * mã SP/mã khách để tìm), Σ đã xuất (0120), mã lệnh, tên người tạo.
+   * Ba lô phụ, mỗi lô MỘT truy vấn cho cả trang: dòng (SL · giá · tuần giao ·
+   * mã SP/mã khách để tìm), Σ đã xuất (0120), tên người. Sổ đơn KHÔNG kéo lệnh
+   * sản xuất (07/10/2026): lệnh có sổ riêng, sổ này chỉ quản đơn.
    */
-  const [lines, shippedByOrder, lsxCodes, creatorNames] = await Promise.all([
+  const [lines, shippedByOrder, creatorNames] = await Promise.all([
     ordersRepo.listLinesByOrders(ids),
     ordersRepo.shippedByOrderIds(ids),
-    productionRepo.listCodesByIds([
-      ...new Set(orders.map((o) => o.production_order_id).filter((v) => v !== null)),
-    ]),
     // Tên người tạo + người phụ trách khách — một truy vấn cho cả hai.
     usersRepo.displayNamesByIds([
       ...new Set([
@@ -75,10 +72,6 @@ export default async function SalesOrdersPage() {
       qty: ls.reduce((s, l) => s + l.qty, 0),
       shipped: shippedByOrder[o.id] ?? 0,
       total: ls.reduce((s, l) => s + l.qty * l.unit_price, 0),
-      lsx_id: o.production_order_id,
-      lsx_code: o.production_order_id
-        ? (lsxCodes.get(o.production_order_id) ?? null)
-        : null,
       created_by: o.created_by,
       created_by_name: o.created_by ? (creatorNames.get(o.created_by) ?? null) : null,
       owner_id: ownerByCustomer.get(o.customer_id) ?? null,

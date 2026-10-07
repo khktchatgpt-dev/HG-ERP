@@ -18,8 +18,6 @@ export type DonRow = {
   qty: number
   shipped: number
   total: number
-  lsx_id: string | null
-  lsx_code: string | null
   created_by: string | null
   created_by_name: string | null
   /** Người phụ trách KHÁCH của đơn (owner_id trên hồ sơ khách) — null = khách chưa gán ai. */
@@ -46,9 +44,9 @@ export type Tab =
 
 export const TAB_LABEL: Record<Tab, string> = {
   all: 'Tất cả',
-  todo: 'Chờ lệnh',
-  running: 'Đang SX',
-  done: 'SX xong',
+  todo: 'Mới xác nhận',
+  running: 'Đang thực hiện',
+  done: 'Sẵn sàng xuất',
   partial: 'Xuất dở',
   shipped: 'Đã xuất đủ',
   delivered: 'Đã giao',
@@ -62,7 +60,6 @@ export type SortCol =
   | 'code'
   | 'customer'
   | 'status'
-  | 'lsx'
   | 'due'
   | 'qty'
   | 'shipped'
@@ -74,7 +71,6 @@ export const SORT_LABEL: Record<SortCol, string> = {
   code: 'Số đơn',
   customer: 'Khách hàng',
   status: 'Trạng thái',
-  lsx: 'Lệnh SX',
   due: 'Hạn giao',
   qty: 'SL',
   shipped: 'Đã xuất',
@@ -87,7 +83,6 @@ export const SORT_LABEL: Record<SortCol, string> = {
 export type Filters = {
   customer: string // 'all' | customer_id
   owner: string // 'all' | 'me' | 'none' | user_id
-  lsx: 'all' | 'has' | 'none'
   missing: 'all' | 'any' | 'PO' | 'tuần giao' | 'điều khoản' | 'giá'
   currency: string // 'all' | 'USD' …
   dueFrom: string
@@ -97,7 +92,6 @@ export type Filters = {
 export const EMPTY_FILTERS: Filters = {
   customer: 'all',
   owner: 'all',
-  lsx: 'all',
   missing: 'all',
   currency: 'all',
   dueFrom: '',
@@ -169,8 +163,6 @@ export function matchFilters(o: DonRow, f: Filters, meId: string): boolean {
   } else if (f.owner === 'none') {
     if (ownerOf(o)) return false
   } else if (f.owner !== 'all' && ownerOf(o) !== f.owner) return false
-  if (f.lsx === 'has' && !o.lsx_id) return false
-  if (f.lsx === 'none' && o.lsx_id) return false
   if (f.missing === 'any' && o.missing.length === 0) return false
   if (f.missing !== 'all' && f.missing !== 'any' && !o.missing.includes(f.missing))
     return false
@@ -180,7 +172,7 @@ export function matchFilters(o: DonRow, f: Filters, meId: string): boolean {
   const ql = f.q.trim().toLowerCase()
   if (ql) {
     const hay =
-      `${o.code} ${o.customer_name} ${o.customer_po_no ?? ''} ${o.lsx_code ?? ''} ${o.owner_name ?? ''} ${o.created_by_name ?? ''} ${o.search}`.toLowerCase()
+      `${o.code} ${o.customer_name} ${o.customer_po_no ?? ''} ${o.owner_name ?? ''} ${o.created_by_name ?? ''} ${o.search}`.toLowerCase()
     if (!hay.includes(ql)) return false
   }
   return true
@@ -196,7 +188,6 @@ export function sortRows(rows: DonRow[], col: SortCol, dir: SortDir): DonRow[] {
     code: (a, b) => str(a.code, b.code),
     customer: (a, b) => str(a.customer_name, b.customer_name) || str(a.code, b.code),
     status: (a, b) => str(a.status, b.status) || str(a.code, b.code),
-    lsx: (a, b) => str(a.lsx_code, b.lsx_code) || str(a.code, b.code),
     due: (a, b) => {
       const ka = isClosed(a) ? 2 : a.due_date ? 0 : 1
       const kb = isClosed(b) ? 2 : b.due_date ? 0 : 1

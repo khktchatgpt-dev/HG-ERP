@@ -106,9 +106,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
               key={t}
               label={TAB_LABEL[t]}
               value={fmtN(n)}
-              sub={
-                t === 'done' ? 'chờ xuất' : t === 'running' ? 'đã phát lệnh' : undefined
-              }
+              sub={t === 'done' ? 'chờ ghi xuất' : undefined}
               on={d.tab === t}
               onClick={() => d.setTab(t)}
               tone={
@@ -134,8 +132,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
             <col className="w-9" />
             <col className="w-[140px]" />
             <col />
-            <col className="w-[128px]" />
-            <col className="w-[136px]" />
+            <col className="w-[140px]" />
             <col className="w-[112px]" />
             <col className="w-[60px]" />
             <col className="w-[80px]" />
@@ -153,9 +150,6 @@ export function SoDonHangScreen(props: SoDonHangProps) {
               </ThSort>
               <ThSort d={d} col="status">
                 Trạng thái
-              </ThSort>
-              <ThSort d={d} col="lsx">
-                Lệnh SX
               </ThSort>
               <ThSort d={d} col="due">
                 Hạn giao
@@ -216,18 +210,6 @@ export function SoDonHangScreen(props: SoDonHangProps) {
                       >
                         thiếu {o.missing.join(' · ')}
                       </span>
-                    )}
-                  </td>
-                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
-                    {o.lsx_id && o.lsx_code ? (
-                      <Link
-                        href={`/sales/lsx/${o.lsx_id}`}
-                        className="text-[var(--primary)] hover:underline"
-                      >
-                        {o.lsx_code}
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">chưa phát</span>
                     )}
                   </td>
                   <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
@@ -306,7 +288,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
             {d.visible.length === 0 && (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={9}
                   className={`${TD} text-muted-foreground py-8 text-center`}
                 >
                   Không có đơn nào khớp.{' '}
@@ -327,7 +309,7 @@ export function SoDonHangScreen(props: SoDonHangProps) {
           </tbody>
           <tfoot className="sticky bottom-0 z-10">
             <tr className="bg-muted font-medium">
-              <td className={`${TD} border-t`} colSpan={6}>
+              <td className={`${TD} border-t`} colSpan={5}>
                 Cộng {fmtN(d.filtered.length)} đơn
                 <span className="text-muted-foreground ml-2 text-xs font-normal">
                   · giá trị chưa gồm đơn giá 0
@@ -412,7 +394,7 @@ function BoLoc({ d }: { d: SoDonHangCtx }) {
           <input
             value={f.q}
             onChange={(e) => d.setFilter('q', e.target.value)}
-            placeholder="số đơn · PO · lệnh · mã SP · mã khách · người"
+            placeholder="số đơn · PO · mã SP · mã khách · người"
             className={`${INPUT} w-[220px]`}
           />
         </label>
@@ -457,17 +439,6 @@ function BoLoc({ d }: { d: SoDonHangCtx }) {
             </button>
           )}
         </span>
-        <Chon
-          label="Lệnh SX"
-          value={f.lsx}
-          onChange={set('lsx')}
-          options={[
-            { value: 'all', label: 'Cả hai' },
-            { value: 'has', label: 'Đã phát lệnh' },
-            { value: 'none', label: 'Chưa phát' },
-          ]}
-          width={120}
-        />
         <Chon
           label="Thiếu"
           value={f.missing}

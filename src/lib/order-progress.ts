@@ -19,9 +19,11 @@ export type OrderStatus =
 
 export const STATUS_LABEL: Record<string, string> = {
   confirmed: 'Đã xác nhận',
-  lsx_pending: 'Chờ duyệt LSX',
-  lsx_issued: 'Đã phát LSX',
-  completed: 'SX xong — chờ xuất',
+  // Gọi theo vòng đời ĐƠN, không theo chứng từ lệnh (07/10/2026): sổ đơn là chỗ
+  // quản đơn, lệnh sản xuất có sổ riêng.
+  lsx_pending: 'Chờ duyệt sản xuất',
+  lsx_issued: 'Đang sản xuất',
+  completed: 'Sẵn sàng xuất',
   partially_shipped: 'Xuất một phần',
   shipped: 'Đã xuất đủ',
   delivered: 'Đã giao',
@@ -31,9 +33,9 @@ export const STATUS_LABEL: Record<string, string> = {
 /** Thứ tự các bước vòng đời (bỏ 'cancelled' — nhánh phụ) để vẽ timeline. */
 export const LIFECYCLE_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'confirmed', label: 'Xác nhận' },
-  { status: 'lsx_pending', label: 'Chờ duyệt LSX' },
-  { status: 'lsx_issued', label: 'Đã phát LSX' },
-  { status: 'completed', label: 'SX xong' },
+  { status: 'lsx_pending', label: 'Chờ duyệt SX' },
+  { status: 'lsx_issued', label: 'Đang SX' },
+  { status: 'completed', label: 'Sẵn sàng xuất' },
   { status: 'shipped', label: 'Đã xuất' },
   { status: 'delivered', label: 'Đã giao' },
 ]
