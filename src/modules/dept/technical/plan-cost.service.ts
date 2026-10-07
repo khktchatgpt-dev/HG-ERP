@@ -42,6 +42,23 @@ export type PlanCostRow = {
   /** Số lệnh đang chạy / đơn bán còn sống có SP này — vì sao nó ở trên bảng. */
   lsx_count: number
   order_count: number
+  /**
+   * Giá ĐÃ CHÀO gần nhất (báo giá sent/approved/won) và giá ĐƠN gần nhất (dòng
+   * đơn còn sống có giá > 0) — để người nạp FOB kế hoạch thấy ngay số đang bán,
+   * khỏi mở hồ sơ khách. null = chưa có.
+   */
+  last_quote: LastSeenPrice | null
+  last_order: LastSeenPrice | null
+}
+
+export type LastSeenPrice = {
+  price: number
+  currency: string
+  /** Mã báo giá / mã đơn. */
+  code: string
+  /** Ngày (ISO) — báo giá theo created_at, đơn theo created_at của đơn. */
+  at: string
+  customer: string | null
 }
 
 export type PlanCostBoard = {
@@ -50,6 +67,8 @@ export type PlanCostBoard = {
     total: number
     with_plan: number
     complete: number
+    /** Có FOB nhưng KHÔNG có bảng tính (ba số kia null) — doanh thu KH tính được, giá thành KH chưa. */
+    fob_only: number
     /** Theo khách: còn thiếu bao nhiêu SP. */
     missing_by_customer: { customer: string; missing: number; total: number }[]
   }
@@ -157,23 +176,77 @@ export const planCostService = {
       if (c && !customerOf.has(l.product_id)) customerOf.set(l.product_id, c)
     }
 
+    // Giá ĐƠN gần nhất theo SP — đơn mới nhất (created_at) có dòng giá > 0.
+    const orderById = new Map(live.map((o) => [o.id, o]))
+    const lastOrder = new Map<string, LastSeenPrice>()
+    for (const l of lines) {
+      if (!(l.unit_price > 0)) continue
+      const o = orderById.get(l.order_id)
+      if (!o) continue
+      const cur = lastOrder.get(l.product_id)
+      if (!cur || o.created_at > cur.at)
+        lastOrder.set(l.product_id, {
+          price: l.unit_price,
+          currency: o.currency,
+          code: o.code,
+          at: o.created_at,
+          customer: o.customer_name,
+        })
+    }
+
     const orderCount = new Map([...orderOf].map(([id, s]) => [id, s.size]))
     const ids = [...new Set([...lsxCount.keys(), ...orderCount.keys()])]
     if (ids.length === 0) {
       return {
         rows: [],
-        stats: { total: 0, with_plan: 0, complete: 0, missing_by_customer: [] },
+        stats: { total: 0, with_plan: 0, complete: 0, fob_only: 0, missing_by_customer: [] },
       }
     }
 
-    // 3. Hồ sơ SP + người nạp.
-    const prodRes = await db()
-      .from('technical_products')
-      .select(
-        'id, code, name, customer_name, customer_item_code, plan_direct_cost, plan_overhead, plan_profit, plan_price, plan_currency, plan_fx_rate, plan_breakdown, plan_source, plan_at, plan_by',
-      )
-      .in('id', ids)
+    // 3. Hồ sơ SP + người nạp + giá đã chào gần nhất (song song).
+    const [prodRes, quoteRes] = await Promise.all([
+      db()
+        .from('technical_products')
+        .select(
+          'id, code, name, customer_name, customer_item_code, plan_direct_cost, plan_overhead, plan_profit, plan_price, plan_currency, plan_fx_rate, plan_breakdown, plan_source, plan_at, plan_by',
+        )
+        .in('id', ids),
+      // Chỉ giá ĐÃ CHÀO (sent/approved/won) — bản nháp chưa phải giá (cùng luật
+      // với `lastPricesForCustomer` của quotes.repo).
+      db()
+        .from('sales_quote_lines')
+        .select(
+          'product_id, unit_price, quote:sales_quotes!inner(code, status, currency, created_at, customer:sales_customers(name))',
+        )
+        .in('product_id', ids)
+        .in('quote.status', ['sent', 'approved', 'won'])
+        .limit(2000),
+    ])
     if (prodRes.error) throw new Error(prodRes.error.message)
+    if (quoteRes.error) throw new Error(quoteRes.error.message)
+    type QRaw = {
+      product_id: string
+      unit_price: number
+      quote:
+        | { code: string; currency: string; created_at: string; customer: { name: string } | { name: string }[] | null }
+        | { code: string; currency: string; created_at: string; customer: { name: string } | { name: string }[] | null }[]
+    }
+    const lastQuote = new Map<string, LastSeenPrice>()
+    for (const r of (quoteRes.data ?? []) as QRaw[]) {
+      const q = Array.isArray(r.quote) ? r.quote[0] : r.quote
+      if (!q || !(r.unit_price > 0)) continue
+      const cur = lastQuote.get(r.product_id)
+      if (!cur || q.created_at > cur.at) {
+        const c = Array.isArray(q.customer) ? q.customer[0] : q.customer
+        lastQuote.set(r.product_id, {
+          price: Number(r.unit_price),
+          currency: q.currency,
+          code: q.code,
+          at: q.created_at,
+          customer: c?.name ?? null,
+        })
+      }
+    }
     const products = (prodRes.data ?? []) as ProductRaw[]
     const byIds = [
       ...new Set(products.map((p) => p.plan_by).filter((x): x is string => !!x)),
@@ -213,6 +286,8 @@ export const planCostService = {
         complete: has && planCheck({ direct, overhead, profit, price }, p.plan_currency ?? 'USD').ok, // prettier-ignore
         lsx_count: lsxCount.get(p.id) ?? 0,
         order_count: orderCount.get(p.id) ?? 0,
+        last_quote: lastQuote.get(p.id) ?? null,
+        last_order: lastOrder.get(p.id) ?? null,
       }
     })
     rows.sort(
@@ -236,6 +311,7 @@ export const planCostService = {
         total: rows.length,
         with_plan: rows.filter((r) => r.price != null).length,
         complete: rows.filter((r) => r.complete).length,
+        fob_only: rows.filter((r) => r.price != null && r.direct == null).length,
         missing_by_customer: [...byCust]
           .map(([customer, v]) => ({ customer, ...v }))
           .sort((a, b) => b.missing - a.missing),

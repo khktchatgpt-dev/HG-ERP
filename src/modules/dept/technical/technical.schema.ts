@@ -239,6 +239,24 @@ export const productPickQuerySchema = z.object({
       const ids = s.split(',').filter((x) => UUID_RE.test(x))
       return ids.length > 0 ? ids.slice(0, 200) : undefined
     }),
+  /** Tra theo MÃ (mã HG hoặc mã khách), nhiều mã cách dấu phẩy — dán dòng đơn từ Excel (07/10/2026). */
+  codes: z
+    .string()
+    .trim()
+    .max(8000)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined
+      const codes = [
+        ...new Set(
+          s
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean),
+        ),
+      ]
+      return codes.length > 0 ? codes.slice(0, 300) : undefined
+    }),
   limit: z.coerce.number().int().min(1).max(50).default(25),
 })
 

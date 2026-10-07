@@ -3,6 +3,7 @@ import { parseQuoteExcel } from '@/lib/quote-excel'
 import { resolveImportRows, type ResolvedRow } from '@/lib/quote-import-match'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { filesService } from '@/modules/core/files/files.service'
+import { fileImageSrc } from '@/server/file-image'
 import { quotesService } from './quotes.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
@@ -88,8 +89,13 @@ function readSheet(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook) {
   return { grid, images }
 }
 
-/** Dòng xem trước = dòng đã khớp (kiểu do `@/lib/quote-import-match` định nghĩa). */
-export type ImportPreviewRow = ResolvedRow
+/**
+ * Dòng xem trước = dòng đã khớp + ảnh NHÚNG trong file dưới dạng data URL để
+ * người soi nhìn thấy đúng cái sẽ gắn vào SP mới. Trần `EMBED_PREVIEW_MAX` mỗi
+ * ảnh: ảnh to hơn chỉ báo "có ảnh" (nhịp 2 vẫn bóc đủ từ file nguồn).
+ */
+export type ImportPreviewRow = ResolvedRow & { image_data_url: string | null }
+const EMBED_PREVIEW_MAX = 400 * 1024
 
 export type ImportPreview = {
   source_file_id: string
@@ -146,7 +152,7 @@ export const quoteImportService = {
       page_size: 5000,
       active_only: false,
     })
-    const rows = resolveImportRows(
+    const resolved = resolveImportRows(
       parsed.rows,
       products.map((p) => ({
         id: p.id,
@@ -154,8 +160,19 @@ export const quoteImportService = {
         name: p.name,
         customer_item_code: p.customer_item_code,
         is_active: p.is_active,
+        image_url: p.image_file_id ? fileImageSrc(p.image_file_id) : null,
       })),
     )
+    const rows: ImportPreviewRow[] = resolved.map((r) => {
+      const img = picked!.images.get(r.row)
+      const small = img && img.buffer.byteLength <= EMBED_PREVIEW_MAX
+      return {
+        ...r,
+        image_data_url: small
+          ? `data:${MIME_BY_EXT[img.extension] ?? 'image/png'};base64,${img.buffer.toString('base64')}`
+          : null,
+      }
+    })
 
     // Chỉ ghi MỘT thứ ở nhịp này: file nguồn (nhịp 2 đọc lại để bóc ảnh).
     const source_file_id = await filesService.uploadFromServer(user, {
@@ -164,6 +181,8 @@ export const quoteImportService = {
       mime_type: XLSX_MIME,
       bucket: 'attachments',
       parent: { kind: 'none' },
+      // Nhịp 2 gắn file này vào báo giá vừa tạo → hiện ở ngăn "Tài liệu" của BG.
+      doc_type: 'quote',
     })
 
     return {
@@ -199,7 +218,11 @@ export const quoteImportService = {
         description_en: string | null
         customer_item_code: string | null
         unit: string | null
+        /** SL dự kiến / MOQ (0225) — tuỳ chọn. */
+        qty: number | null
         unit_price: number
+        /** Chiết khấu dòng % — tuỳ chọn. */
+        discount_pct: number | null
         length_mm: number | null
         width_mm: number | null
         height_mm: number | null
@@ -238,7 +261,13 @@ export const quoteImportService = {
     }
 
     let created = 0
-    const lines: { product_id: string; unit_price: number; note?: string | null }[] = []
+    const lines: {
+      product_id: string
+      qty: number | null
+      unit_price: number
+      discount_pct: number | null
+      note?: string | null
+    }[] = []
     /** Mã đã cấp trong CHÍNH lượt này — chống đụng nhau trước khi kịp ghi DB. */
     const codesInBatch = new Set<string>()
     /** Chặn hai dòng cùng trỏ về một SP: báo giá không có ràng buộc chống trùng. */
@@ -255,6 +284,23 @@ export const quoteImportService = {
       if (!productId && r.code?.trim()) {
         productId = await productsRepo.findIdByCode(r.code.trim())
       }
+      /*
+       * KIỂM TRÙNG TRƯỚC KHI TẠO SP TẠM (07/10/2026): dòng không mã HG nhưng có mã
+       * khách, và thư viện đã có đúng MỘT hồ sơ cùng mã khách của CHÍNH khách này
+       * → dùng lại, không đẻ "TMP-…" thứ hai cho cùng một món. Nhiều hơn một thì
+       * để người dùng tự chọn ở màn xem trước (dòng đã bị chặn + ứng viên).
+       */
+      if (!productId && r.customer_item_code?.trim()) {
+        const want = r.customer_item_code.trim().toLowerCase()
+        const hits = (
+          await productsRepo.listPickByCodes([r.customer_item_code.trim()])
+        ).filter(
+          (p) =>
+            p.customer_id === input.customer_id &&
+            (p.customer_item_code ?? '').trim().toLowerCase() === want,
+        )
+        if (hits.length === 1) productId = hits[0].id
+      }
 
       if (!productId) {
         const product = await productsRepo.insert({
@@ -264,6 +310,8 @@ export const quoteImportService = {
           created_by: user.id,
           code: r.code?.trim() || (await nextProductCode(codesInBatch)),
           name: r.name,
+          // Khách của báo giá — để lần nhập sau khớp "mã khách + khách" mà không tạo trùng.
+          customer_id: input.customer_id,
           unit: r.unit?.trim() || 'cai',
           customer_item_code: r.customer_item_code,
           description_en: r.description_en,
@@ -303,7 +351,13 @@ export const quoteImportService = {
         )
       }
       seenProducts.add(productId)
-      lines.push({ product_id: productId, unit_price: r.unit_price, note: r.note })
+      lines.push({
+        product_id: productId,
+        qty: r.qty,
+        unit_price: r.unit_price,
+        discount_pct: r.discount_pct,
+        note: r.note,
+      })
     }
 
     const quote = await quotesService.create(user, {
@@ -311,6 +365,17 @@ export const quoteImportService = {
       currency: input.currency,
       lines,
     })
+    // File Excel gốc đi theo báo giá (ngăn "Tài liệu") — lỗi gắn không chặn kết quả.
+    try {
+      await filesService.attachOrphanToDocument(
+        user,
+        input.source_file_id,
+        'quote_id',
+        quote.id,
+      )
+    } catch (e) {
+      console.error('[quote-import] không gắn được file nguồn vào báo giá', e)
+    }
     return { quote_id: quote.id, created_products: created }
   },
 }

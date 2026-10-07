@@ -1,104 +1,71 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  Btn,
-  Chip,
-  CommitBar,
-  Empty,
-  Grid,
-  GridBody,
-  GridHead,
-  GridRow,
-  Metric,
-  MetricStrip,
-  NoticeBar,
-  NumInput,
-  Pick,
-  ScreenFrame,
-  ScreenHeader,
-  SearchInput,
-  Tag,
-  Td,
-  TextInput,
-  Th,
-  useToast,
-} from '@/components/kit'
-import { api, apiErrorText } from '@/lib/api'
-import { parsePriceText, type DecimalSep } from '@/lib/price-paste'
-import {
-  PLAN_WARN_PCT,
-  planCheck,
-  planDeviationPct,
-  planPct,
-  type BreakdownItem,
-  type PlanCost,
-  type PlanTarget,
-} from '@/lib/plan-cost'
+import Link from 'next/link'
+import type { KeyboardEvent } from 'react'
+import { ChevronDown, ChevronRight, ClipboardPaste, Save, X } from 'lucide-react'
+import { TopProgressBar } from '@/components/erp/Spinner'
+import { planPct, PLAN_WARN_PCT, planDeviationPct } from '@/lib/plan-cost'
+import type { DecimalSep } from '@/lib/price-paste'
 import type {
+  LastSeenPrice,
   PlanCostBoard,
   PlanCostRow,
 } from '@/modules/dept/technical/plan-cost.service'
-import { DanSheet, type PasteApply } from './dan-sheet'
+import {
+  Chon,
+  CountCell,
+  CountStrip,
+  ErpHeader,
+  ErpPage,
+  ErpStatusBar,
+  FilterRow,
+  Nhan,
+  Seg,
+  ToolBtn,
+} from '../_erp/ui'
+import { BTN_PRI, BTN_SUB, CELL, INPUT } from '../orders/_form/don-form.shared'
+import { KhoiDan } from './khoi-dan'
+import { custOf, useGiaThanh, type DraftKey, type GiaThanhCtx } from './useGiaThanh'
+
+const TH =
+  'h-7 border-b border-border bg-muted px-2 text-left text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase'
+const TD = 'h-[44px] border-b border-border px-2 align-middle text-[13px]'
+const NUM = 'text-right font-mono tabular-nums whitespace-nowrap'
+const SUB = 'text-muted-foreground block truncate text-[11px] leading-4'
 
 const fmt = (n: number | null, cur: string | null) =>
   n == null
     ? '—'
-    : n.toLocaleString('vi-VN', { maximumFractionDigits: cur === 'VND' ? 0 : 2, minimumFractionDigits: 0 }) // prettier-ignore
+    : n.toLocaleString('vi-VN', { maximumFractionDigits: cur === 'VND' ? 0 : 2 })
 /** Số để GÕ LẠI được: không nhóm nghìn, dấu thập phân theo `sep` đang chọn. */
 const fmtIn = (n: number, sep: DecimalSep) =>
-  n.toLocaleString(sep === ',' ? 'vi-VN' : 'en-US', { maximumFractionDigits: 2, useGrouping: false }) // prettier-ignore
-const pct = (p: number | null) => (p == null ? '—' : `${p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`) // prettier-ignore
-const dmy = (d: string | null) => (d ? d.split('-').reverse().join('/') : '')
+  n.toLocaleString(sep === ',' ? 'vi-VN' : 'en-US', {
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  })
+const pct = (p: number | null) =>
+  p == null ? '—' : `${p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
+const dmy = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '')
 
-type Draft = {
-  direct: string
-  overhead: string
-  profit: string
-  price: string
-  breakdown?: BreakdownItem[]
-  from_line?: number
-}
-const EMPTY_DRAFT: Draft = { direct: '', overhead: '', profit: '', price: '' }
-
-/** Ô nào có chữ → dòng đang sửa. */
-const isDirty = (d: Draft | undefined) =>
-  !!d && (d.direct !== '' || d.overhead !== '' || d.profit !== '' || d.price !== '')
-
-type Resolved =
-  { ok: true; plan: PlanCost; derived_direct: boolean } | { ok: false; reason: string }
-
-/**
- * Từ ô gõ ra bốn số. Trực tiếp để trống thì suy từ ba số kia (cùng luật với
- * hộp dán). Thiếu chung / lợi nhuận / FOB thì chưa lưu được.
- */
-function resolve(d: Draft, sep: DecimalSep, currency: string): Resolved {
-  const n = (s: string) => (s.trim() === '' ? null : parsePriceText(s, sep))
-  const overhead = n(d.overhead)
-  const profit = n(d.profit)
-  const price = n(d.price)
-  const directRaw = n(d.direct)
-  if (overhead == null || profit == null || price == null)
-    return { ok: false, reason: 'thiếu chi phí chung / lợi nhuận / FOB' }
-  const direct = directRaw ?? Math.round((price - overhead - profit) * 100) / 100
-  if (direct < 0 || overhead < 0 || price < 0) return { ok: false, reason: 'số âm' }
-  const plan = { direct, overhead, profit, price }
-  const chk = planCheck(plan, currency)
-  if (!chk.ok)
-    return { ok: false, reason: `trực tiếp + chung + lợi nhuận ≠ FOB (lệch ${chk.diff})` }
-  return { ok: true, plan, derived_direct: directRaw == null }
+/** Enter / ↓ xuống cùng cột dòng dưới, ↑ lên — bảng tính. */
+function gridKey(e: KeyboardEvent<HTMLInputElement>, r: number, c: DraftKey) {
+  if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+  const el = document.querySelector<HTMLInputElement>(
+    `[data-r="${e.key === 'ArrowUp' ? r - 1 : r + 1}"][data-c="${c}"]`,
+  )
+  if (el) {
+    e.preventDefault()
+    el.focus()
+    el.select()
+  }
 }
 
-type Filter = 'missing' | 'all' | { customer: string }
-
 /**
- * GIÁ THÀNH KẾ HOẠCH — Khuôn F (dán · soát · lưu một lần), chép cách Bảng giá
- * đơn hàng. Bốn ô số một dòng; a%/b% là số SUY RA, đổi theo ô đang gõ để người
- * nhập thấy ngay "20% · 9%" như trong bảng tính của mình.
- *
- * Chặn tại chỗ: tổng ba khoản ≠ FOB thì dòng đỏ và thanh đáy nói đúng mã SP;
- * lệch quá 30% so với số đang có thì chỉ cảnh báo.
+ * GIÁ THÀNH KẾ HOẠCH — khuôn F (Bảng nhập liệu, kiểu ERP — 08/10/2026). Tập SP
+ * = SP trong lệnh đang chạy hoặc đơn bán còn sống. Bốn ô số một dòng (trực
+ * tiếp · chung · lợi nhuận · FOB), a%/b% suy ra khi gõ; cạnh đó là giá đã chào
+ * và giá đơn gần nhất để người nạp thấy số đang bán. Gõ / dán chỉ điền vào ô,
+ * Lưu MỘT lần; thanh chốt đáy nói vì sao chưa lưu được.
  */
 export function GiaThanhScreen({
   board,
@@ -107,549 +74,551 @@ export function GiaThanhScreen({
   board: PlanCostBoard
   canManage: boolean
 }) {
-  const router = useRouter()
-  const toast = useToast()
-  const [q, setQ] = useState('')
-  const [filter, setFilter] = useState<Filter>(board.stats.with_plan === board.stats.total ? 'all' : 'missing') // prettier-ignore
-  const [draft, setDraft] = useState<Record<string, Draft>>({})
-  const [currency, setCurrency] = useState<'USD' | 'VND'>('USD')
-  const [sep, setSep] = useState<DecimalSep>('.')
-  const [source, setSource] = useState('')
-  const [fxRate, setFxRate] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [sheet, setSheet] = useState<{ mode: 'table' } | { mode: 'block'; row: PlanCostRow } | null>(null) // prettier-ignore
-  const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
-
-  const targets = useMemo<PlanTarget[]>(
-    () => board.rows.map((r) => ({ product_id: r.product_id, code: r.code, customer_code: r.customer_item_code })), // prettier-ignore
-    [board.rows],
-  )
-  const customers = useMemo(
-    () => board.stats.missing_by_customer.slice(0, 4),
-    [board.stats.missing_by_customer],
-  )
-
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return board.rows.filter((r) => {
-      if (filter === 'missing' && r.price != null && !isDirty(draft[r.product_id]))
-        return false
-      if (typeof filter === 'object' && (r.customer_name ?? '— chưa rõ khách —') !== filter.customer) return false // prettier-ignore
-      if (!needle) return true
-      return (
-        r.code.toLowerCase().includes(needle) ||
-        (r.customer_item_code?.toLowerCase().includes(needle) ?? false) ||
-        r.name.toLowerCase().includes(needle) ||
-        (r.customer_name?.toLowerCase().includes(needle) ?? false)
-      )
-    })
-  }, [board.rows, filter, q, draft])
-
-  /** Dòng đang sửa → kết quả kiểm. Nguồn chung cho thanh đáy, dải trên và tô dòng. */
-  const dirty = useMemo(() => {
-    const out: { row: PlanCostRow; d: Draft; res: Resolved }[] = []
-    for (const r of board.rows) {
-      const d = draft[r.product_id]
-      if (!isDirty(d)) continue
-      out.push({ row: r, d, res: resolve(d, sep, currency) })
-    }
-    return out
-  }, [board.rows, draft, sep, currency])
-  const bad = dirty.filter((x) => !x.res.ok)
-  const warn = dirty.filter(
-    (x) => x.res.ok && Math.abs(planDeviationPct(x.res.plan.price, x.row.price) ?? 0) > PLAN_WARN_PCT, // prettier-ignore
-  )
-  const blocked = !canManage
-    ? 'Chỉ Bán hàng và Kỹ thuật nạp được giá thành kế hoạch'
-    : dirty.length === 0
-      ? ''
-      : bad.length > 0
-        ? `${bad[0].row.code}: ${bad[0].res.ok ? '' : bad[0].res.reason}${bad.length > 1 ? ` (+${bad.length - 1} dòng nữa)` : ''} — sửa rồi mới lưu được`
-        : !source.trim()
-          ? 'Ghi tên bản báo giá đã lấy số ở ô Nguồn'
-          : ''
-
-  function setCell(id: string, k: keyof Draft, v: string): void {
-    setDraft((p) => ({ ...p, [id]: { ...(p[id] ?? EMPTY_DRAFT), [k]: v } }))
-  }
-
-  function applyPaste(items: PasteApply[]): void {
-    const s = (n: number) => String(n)
-    setDraft((p) => {
-      const next = { ...p }
-      for (const it of items) {
-        next[it.product_id] = {
-          direct: s(it.plan.direct),
-          overhead: s(it.plan.overhead),
-          profit: s(it.plan.profit),
-          price: s(it.plan.price),
-          breakdown: it.breakdown,
-          from_line: it.from_line,
-        }
-      }
-      return next
-    })
-    // Số dán ra dạng "144.5" → dấu chấm, để ô đọc đúng.
-    setSep('.')
-    if (filter === 'missing') setFilter('all')
-  }
-
-  async function save(): Promise<void> {
-    if (blocked || busy || dirty.length === 0) return
-    setBusy(true)
-    try {
-      const fx = fxRate.trim() ? parsePriceText(fxRate, sep) : null
-      const r = await api<{ updated: number }>('/api/dept/sales/gia-thanh', {
-        method: 'PATCH',
-        body: {
-          items: dirty.map((x) => ({
-            product_id: x.row.product_id,
-            ...(x.res.ok ? x.res.plan : { direct: 0, overhead: 0, profit: 0, price: 0 }),
-            ...(x.d.breakdown ? { breakdown: x.d.breakdown } : {}),
-          })),
-          currency,
-          fx_rate: fx,
-          source: source.trim(),
-        },
-      })
-      toast.success(`Đã lưu giá thành kế hoạch cho ${r.updated} sản phẩm`, `Nguồn: ${source.trim()}`) // prettier-ignore
-      setDraft({})
-      router.refresh()
-    } catch (e) {
-      toast.error(apiErrorText(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function goBlocked(): void {
-    const id = bad[0]?.row.product_id
-    if (!id) return
-    if (filter === 'missing') setFilter('all')
-    const el = rowRefs.current.get(id)
-    el?.scrollIntoView({ block: 'center' })
-    el?.querySelector<HTMLInputElement>('input')?.focus()
-  }
-
+  const d = useGiaThanh(board, canManage)
   const s = board.stats
+  const missing = s.total - s.with_plan
+  const topMissing = d.customers.filter((c) => c.missing > 0)
+  return (
+    <ErpPage>
+      <TopProgressBar active={d.busy} />
+      <ErpHeader
+        crumb={[{ label: 'Bán hàng', href: '/sales' }, { label: 'Giá thành kế hoạch' }]}
+        title="Giá thành kế hoạch"
+        sub="Bốn số từ bảng tính giá của Sale cho SP đang chạy — gõ hay dán đều chỉ điền vào ô, bạn soát rồi mới lưu một lần."
+        actions={
+          <>
+            <ToolBtn
+              onClick={() =>
+                d.paste?.kind === 'table'
+                  ? d.closePaste()
+                  : d.openPaste({ kind: 'table' })
+              }
+              icon={ClipboardPaste}
+            >
+              Dán từ bảng tính
+            </ToolBtn>
+            <ToolBtn onClick={d.save} icon={Save} primary>
+              Lưu {d.dirty.length} dòng
+            </ToolBtn>
+          </>
+        }
+      />
+
+      <CountStrip>
+        <CountCell
+          label="SP chưa có giá KH"
+          value={String(missing)}
+          sub={`trên ${s.total} SP đang chạy`}
+          tone={missing ? 'stop' : 'done'}
+          on={d.view === 'missing'}
+          onClick={() => d.setView('missing')}
+        />
+        <CountCell
+          label="Chỉ FOB, chưa bóc tách"
+          value={String(s.fob_only)}
+          sub="có giá chốt, không có bảng tính"
+          tone={s.fob_only ? 'warn' : 'neutral'}
+          on={d.view === 'fob_only'}
+          onClick={() => d.setView('fob_only')}
+        />
+        <CountCell
+          label="Đủ 4 số, khớp tổng"
+          value={String(s.complete)}
+          sub="trực tiếp + chung + lợi nhuận = FOB"
+          tone={s.complete === s.total && s.total > 0 ? 'done' : 'neutral'}
+          on={d.view === 'all'}
+          onClick={() => d.setView('all')}
+        />
+        <CountCell
+          label="Khách thiếu nhiều nhất"
+          value={topMissing[0] ? String(topMissing[0].missing) : '0'}
+          sub={
+            topMissing[0]
+              ? `${topMissing[0].customer} · ${topMissing[0].total} SP`
+              : 'mọi khách đã đủ'
+          }
+          on={topMissing[0] ? d.customer === topMissing[0].customer : false}
+          onClick={
+            topMissing[0]
+              ? () =>
+                  d.setCustomer(
+                    d.customer === topMissing[0].customer
+                      ? 'all'
+                      : topMissing[0].customer,
+                  )
+              : undefined
+          }
+        />
+        <CountCell
+          label="Đang sửa"
+          value={String(d.dirty.length)}
+          sub={
+            d.dirty.length
+              ? d.bad.length
+                ? `${d.bad.length} dòng chưa hợp lệ`
+                : 'chưa lưu'
+              : 'chưa gõ gì'
+          }
+          tone={d.bad.length ? 'stop' : 'neutral'}
+        />
+      </CountStrip>
+
+      <FilterRow>
+        <Seg
+          label="Hiện"
+          value={d.view}
+          onChange={d.setView}
+          options={[
+            { value: 'missing', label: 'Chưa có', count: missing },
+            { value: 'fob_only', label: 'Chỉ FOB', count: s.fob_only },
+            { value: 'all', label: 'Tất cả', count: s.total },
+          ]}
+        />
+        <Chon
+          label="Khách"
+          value={d.customer}
+          onChange={d.setCustomer}
+          options={[
+            { value: 'all', label: 'Mọi khách' },
+            ...d.customers.map((c) => ({
+              value: c.customer,
+              label: `${c.customer} (${c.missing ? `thiếu ${c.missing}/` : ''}${c.total})`,
+            })),
+          ]}
+          width={220}
+        />
+        <label className="text-muted-foreground flex items-center gap-2 text-xs">
+          Tìm
+          <input
+            value={d.q}
+            onChange={(e) => d.setQ(e.target.value)}
+            placeholder="mã HG · mã khách · tên SP · khách"
+            className={`${INPUT} w-[240px]`}
+          />
+        </label>
+      </FilterRow>
+
+      {/*
+        THIẾT LẬP CỦA LẦN LƯU — hàng riêng trên bảng, không nhét vào thanh đáy
+        (đo 02/10/2026 ở 1280px: bốn ô + nút Lưu làm thanh đáy gãy ba dòng). Áp
+        cho mọi dòng đang sửa.
+      */}
+      <div className="border-border bg-muted/40 flex flex-wrap items-center gap-4 border-b px-6 py-1.5">
+        <span className="text-muted-foreground text-xs font-semibold uppercase">
+          Lần lưu này
+        </span>
+        <Seg
+          label="Tiền tệ"
+          value={d.currency}
+          onChange={d.setCurrency}
+          options={[
+            { value: 'USD', label: 'USD' },
+            { value: 'VND', label: 'VND' },
+          ]}
+        />
+        <Seg
+          label="Dấu thập phân"
+          value={d.sep}
+          onChange={d.setSep}
+          options={[
+            { value: '.', label: '144.00' },
+            { value: ',', label: '144,00' },
+          ]}
+        />
+        <label className="text-muted-foreground flex items-center gap-2 text-xs">
+          Tỷ giá bảng tính
+          <input
+            id="gt-fx"
+            value={d.fxRate}
+            onChange={(e) => d.setFxRate(e.target.value)}
+            placeholder="26.000"
+            inputMode="decimal"
+            disabled={!canManage || d.busy}
+            className={`${INPUT} w-[110px] ${NUM} ${d.fxBad ? 'border-[var(--stop)]' : ''}`}
+          />
+        </label>
+        <label className="text-muted-foreground flex min-w-[280px] flex-1 items-center gap-2 text-xs">
+          Nguồn
+          <input
+            id="gt-source"
+            value={d.source}
+            onChange={(e) => d.setSource(e.target.value)}
+            placeholder="tên bản báo giá đã lấy số — vd: Quotation Halston 10/07/2026"
+            disabled={!canManage || d.busy}
+            className={`${INPUT} ${d.dirty.length && !d.source.trim() ? 'border-[var(--warn)]' : ''}`}
+          />
+        </label>
+      </div>
+
+      <KhoiDan d={d} />
+
+      {d.warn.length > 0 && (
+        <div className="border-border border-b bg-[var(--warn)]/10 px-6 py-1.5 text-[13px]">
+          <Nhan tone="warn">Lệch nhiều</Nhan> {d.warn.length} dòng có FOB mới lệch quá{' '}
+          {PLAN_WARN_PCT}% so với số đang có (
+          {d.warn
+            .slice(0, 3)
+            .map((r) => {
+              const x = d.resolved.get(r.product_id)!
+              return `${r.code} ${fmt(r.price, d.currency)} → ${x.ok ? fmt(x.price, d.currency) : ''}`
+            })
+            .join(' · ')}
+          ) — thường là thiếu số 0 hoặc dán nhầm cột. Vẫn lưu được.
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-9" />
+            <col />
+            <col className="w-[110px]" />
+            <col className="w-[92px]" />
+            <col className="w-[92px]" />
+            <col className="w-[46px]" />
+            <col className="w-[92px]" />
+            <col className="w-[46px]" />
+            <col className="w-[96px]" />
+            <col className="w-[104px]" />
+            <col className="w-[104px]" />
+            <col className="w-[170px]" />
+          </colgroup>
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${TH} text-right`}>#</th>
+              <th className={TH}>Sản phẩm · mã khách</th>
+              <th className={TH}>Khách</th>
+              <th className={`${TH} text-right`}>Trực tiếp</th>
+              <th className={`${TH} text-right`}>Chung</th>
+              <th className={`${TH} text-right`}>a%</th>
+              <th className={`${TH} text-right`}>Lợi nhuận</th>
+              <th className={`${TH} text-right`}>b%</th>
+              <th className={`${TH} text-right`}>Giá FOB</th>
+              <th className={`${TH} text-right`}>Đã chào</th>
+              <th className={`${TH} text-right`}>Giá đơn</th>
+              <th className={TH}>Tình trạng · nguồn</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={12}
+                  className="text-muted-foreground px-6 py-10 text-center text-[13px]"
+                >
+                  {board.rows.length === 0
+                    ? 'Chưa có SP nào đang chạy — bảng này chỉ bày SP nằm trong lệnh đang chạy hoặc đơn bán còn sống.'
+                    : d.view === 'missing'
+                      ? `${s.with_plan}/${s.total} SP đang chạy đã có giá — chuyển "Tất cả" để sửa số đang có.`
+                      : 'Không SP nào khớp bộ lọc.'}
+                </td>
+              </tr>
+            )}
+            {d.rows.map((r, i) => (
+              <Dong key={r.product_id} d={d} r={r} i={i} />
+            ))}
+          </tbody>
+          {d.rows.length > 0 && (
+            <tfoot className="sticky bottom-0 z-10">
+              <tr className="bg-muted text-[12px] font-medium">
+                <td className="border-border h-8 border-t px-2" colSpan={12}>
+                  <span className="text-muted-foreground">
+                    {d.rows.length} SP đang hiện · {d.dirty.length} dòng sẽ lưu
+                    {d.bad.length > 0 && (
+                      <span className="text-[var(--stop)]">
+                        {' '}
+                        · {d.bad.length} dòng chưa hợp lệ
+                      </span>
+                    )}
+                    {' · '}a% = chung / trực tiếp · b% = lợi nhuận / (trực tiếp + chung) —
+                    số suy ra, không nhập
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      {/* Thanh chốt đáy: luôn hiện — nói rõ vì sao chưa lưu được, bấm vào là nhảy tới chỗ. */}
+      <div className="border-border bg-card sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t px-6 py-2">
+        <span className="text-[13px]">
+          <span className="font-mono font-semibold tabular-nums">{d.dirty.length}</span>
+          <span className="text-muted-foreground"> dòng sẽ lưu · {d.currency}</span>
+          {d.source.trim() && (
+            <span className="text-muted-foreground"> · nguồn: {d.source.trim()}</span>
+          )}
+        </span>
+        <span className="bg-border h-4 w-px" />
+        {d.missing.length ? (
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 text-[13px]">
+            <span className="text-[var(--stop)]">Chưa lưu được:</span>
+            {d.missing.map((m, i) => (
+              <button
+                key={i}
+                type="button"
+                className="truncate underline decoration-dotted underline-offset-2 hover:text-[var(--primary)]"
+                onClick={() => {
+                  if (!m.focus) return
+                  if (m.focus.startsWith('gt-') && d.view !== 'all') d.setView('all')
+                  const el = document.getElementById(m.focus)
+                  el?.scrollIntoView({ block: 'center' })
+                  el?.focus()
+                }}
+              >
+                {m.msg}
+              </button>
+            ))}
+          </span>
+        ) : (
+          <span className="flex-1 text-[13px] text-[var(--done)]">
+            Đủ điều kiện lưu
+            {d.warn.length > 0 ? ` — ${d.warn.length} dòng lệch nhiều, bạn đã soát?` : ''}
+          </span>
+        )}
+        <button
+          type="button"
+          className={BTN_SUB}
+          onClick={d.reset}
+          disabled={d.busy || !d.dirty.length}
+        >
+          <X className="size-3.5" strokeWidth={1.8} /> Bỏ thay đổi
+        </button>
+        <button
+          type="button"
+          className={BTN_PRI}
+          disabled={d.busy || d.missing.length > 0}
+          onClick={d.save}
+        >
+          <Save className="size-4" strokeWidth={1.8} />
+          {d.busy ? 'Đang lưu…' : `Lưu ${d.dirty.length} dòng`}
+        </button>
+      </div>
+
+      <ErpStatusBar
+        left="Tập SP = nằm trong lệnh đang chạy hoặc đơn bán còn sống · ô trống = giữ số đang có (cùng tiền tệ) · một dòng lệch tổng là từ chối cả lô"
+        right={
+          <Link
+            href="/sales/orders/gia"
+            className="hover:text-[var(--primary)] hover:underline"
+          >
+            Điền đơn giá đơn hàng →
+          </Link>
+        }
+      />
+    </ErpPage>
+  )
+}
+
+function GiaGanNhat({ p, cur }: { p: LastSeenPrice | null; cur: string | null }) {
+  if (!p) return <span className="text-muted-foreground">—</span>
+  const other = cur != null && p.currency !== cur
+  return (
+    <>
+      {fmt(p.price, p.currency)}
+      <span
+        className={`${SUB} text-right font-sans ${other ? 'text-[var(--warn)]' : ''}`}
+        title={`${p.code} · ${dmy(p.at)}${p.customer ? ` · ${p.customer}` : ''}`}
+      >
+        {other ? p.currency : p.code}
+      </span>
+    </>
+  )
+}
+
+function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
+  const draft = d.draft[r.product_id]
+  const res = d.resolved.get(r.product_id)
+  const dirty = !!res
+  const live = res?.ok ? res : null
+  const same = r.currency == null || r.currency === d.currency
+  const pcts =
+    live && live.direct != null && live.overhead != null && live.profit != null
+      ? planPct({ direct: live.direct, overhead: live.overhead, profit: live.profit })
+      : live
+        ? { a: null, b: null }
+        : { a: r.a_pct, b: r.b_pct }
+  const dev = live && same ? planDeviationPct(live.price, r.price) : null
+  const cur = dirty ? d.currency : r.currency
+  const isOpen = d.open.has(r.product_id)
+  const canOpen = (r.breakdown?.length ?? 0) > 0 || !!draft?.breakdown
+  const bd = draft?.breakdown ?? r.breakdown ?? []
+
+  const cell = (k: DraftKey, saved: number | null) => (
+    <input
+      id={`gt-${r.product_id}-${k}`}
+      data-r={i}
+      data-c={k}
+      inputMode="decimal"
+      disabled={!d.canManage || d.busy}
+      value={draft?.[k] ?? ''}
+      onChange={(e) => d.setCell(r.product_id, k, e.target.value)}
+      onKeyDown={(e) => gridKey(e, i, k)}
+      // Gợi ý theo DẤU đang chọn, không theo vi-VN: gợi "28,8" khi ô đọc dấu chấm
+      // thì người gõ lại đúng chữ đó sẽ ra 288. Khác tiền tệ thì không gợi — số
+      // đó không được mượn.
+      placeholder={
+        k === 'direct' && live?.derived_direct && live.direct != null
+          ? fmtIn(live.direct, d.sep)
+          : saved == null || !same
+            ? ''
+            : fmtIn(saved, d.sep)
+      }
+      aria-label={`${k} của ${r.code}`}
+      className={`${CELL} ${NUM} ${
+        res && !res.ok
+          ? 'border-[var(--stop)]'
+          : draft?.[k]
+            ? 'border-[var(--primary)]'
+            : ''
+      }`}
+    />
+  )
 
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-      <ScreenFrame tableMin={1120}>
-        <ScreenHeader
-          compact
-          eyebrow="Bán hàng"
-          title="Giá thành kế hoạch"
-          actions={
-            <>
-              <Btn
-                icon="them"
-                primary
-                onClick={() => setSheet({ mode: 'table' })}
-                blockedBy={canManage ? undefined : 'Bán hàng / Kỹ thuật'}
+    <>
+      <tr
+        className={`${dirty ? 'bg-[var(--accent)]/40' : 'hover:bg-muted/40'} ${res && !res.ok ? 'bg-[var(--stop)]/5' : ''}`}
+      >
+        <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
+        <td className={`${TD} min-w-0`}>
+          <span className="flex items-center gap-1">
+            {canOpen ? (
+              <button
+                type="button"
+                className="text-muted-foreground -ml-1 shrink-0 hover:text-[var(--primary)]"
+                onClick={() => d.toggleOpen(r.product_id)}
+                aria-expanded={isOpen}
+                aria-label="Xem khối chi phí"
               >
-                Dán từ bảng tính giá
-              </Btn>
-              <Btn icon="tien" href="/sales/orders/gia">
-                Bảng giá đơn hàng
-              </Btn>
-            </>
-          }
-        />
-
-        <MetricStrip>
-          <Metric
-            label="SP đang chạy có giá thành KH"
-            value={String(s.with_plan)}
-            basis={`/ ${s.total} SP trong lệnh đang chạy và đơn bán còn sống`}
-            tone={
-              s.total > 0 && s.with_plan === s.total
-                ? 'done'
-                : s.with_plan === 0
-                  ? 'warn'
-                  : undefined
-            }
-          />
-          <Metric
-            label="Đủ 4 số, FOB khớp tổng"
-            value={String(s.complete)}
-            basis={`/ ${s.total} · trực tiếp + chi phí chung + lợi nhuận = FOB`}
-            tone={s.complete < s.with_plan ? 'warn' : undefined}
-          />
-          <Metric
-            label="Theo khách còn thiếu"
-            value={
-              customers.filter((c) => c.missing > 0).length === 0
-                ? '0'
-                : customers
-                    .filter((c) => c.missing > 0)
-                    .slice(0, 2)
-                    .map((c) => `${c.customer} ${c.missing}`)
-                    .join(' · ')
-            }
-            basis={
-              customers
-                .slice(2)
-                .map((c) => `${c.customer} ${c.missing}/${c.total}`)
-                .join(' · ') || 'mọi khách đã đủ'
-            }
-          />
-          <Metric
-            label="Đang sửa chưa lưu"
-            value={String(dirty.length)}
-            basis={
-              dirty.length === 0
-                ? 'gõ vào ô hoặc dán từ bảng tính'
-                : `${dirty.filter((x) => x.d.from_line != null).length} từ khối dán · ${dirty.filter((x) => x.d.from_line == null).length} gõ tay`
-            }
-            tone={bad.length > 0 ? 'stop' : undefined}
-          />
-        </MetricStrip>
-
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hair)] px-[var(--gutter)] py-2">
-          <SearchInput
-            value={q}
-            onChange={setQ}
-            label="Tìm sản phẩm"
-            placeholder="Tìm mã HG, mã khách, tên SP, khách…"
-            width={260}
-          />
-          <Chip
-            on={filter === 'missing'}
-            onClick={() => setFilter('missing')}
-            count={s.total - s.with_plan}
-          >
-            Chỉ SP chưa có
-          </Chip>
-          <Chip on={filter === 'all'} onClick={() => setFilter('all')} count={s.total}>
-            Tất cả đang chạy
-          </Chip>
-          {customers.map((c) => (
-            <Chip
-              key={c.customer}
-              on={typeof filter === 'object' && filter.customer === c.customer}
-              onClick={() => setFilter({ customer: c.customer })}
-              count={c.total}
+                {isOpen ? (
+                  <ChevronDown className="size-3.5" />
+                ) : (
+                  <ChevronRight className="size-3.5" />
+                )}
+              </button>
+            ) : null}
+            <Link
+              href={`/products/${r.product_id}`}
+              className="truncate font-mono text-xs text-[var(--primary)] hover:underline"
+              title={r.name}
             >
-              {c.customer}
-            </Chip>
-          ))}
-          <span className="text-k-sm ml-auto text-[var(--ink-3)]">
-            a% = chung / trực tiếp · b% = lợi nhuận / (trực tiếp + chung) — số suy ra,
-            không nhập
-          </span>
-        </div>
-
-        {/*
-          THIẾT LẬP CỦA LẦN LƯU — một hàng riêng trên bảng, không nhét vào thanh
-          đáy (đo 02/10/2026 ở 1280px: bốn ô + nút Lưu làm thanh đáy gãy ba
-          dòng). Áp cho mọi dòng đang sửa: tiền tệ của bản báo giá, dấu thập phân
-          khi gõ, tỷ giá Sale dùng trong bảng tính, và tên bản báo giá.
-        */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5">
-          <span className="text-k-label text-[var(--ink-label)]">Lần lưu này</span>
-          <Pick
-            label="Tiền tệ của bản báo giá"
-            width={80}
-            value={currency}
-            disabled={!canManage || busy}
-            onChange={(v) => setCurrency(v as 'USD' | 'VND')}
-            options={[
-              { value: 'USD', label: 'USD' },
-              { value: 'VND', label: 'VND' },
-            ]}
-          />
-          <Pick
-            label="Dấu thập phân khi gõ"
-            width={130}
-            value={sep}
-            disabled={!canManage || busy}
-            onChange={(v) => setSep(v as DecimalSep)}
-            options={[
-              { value: '.', label: 'Chấm 144.00' },
-              { value: ',', label: 'Phẩy 144,00' },
-            ]}
-          />
-          <NumInput
-            aria-label="Tỷ giá Sale dùng trong bảng tính"
-            value={fxRate}
-            placeholder="tỷ giá bảng tính (26.000)"
-            disabled={!canManage || busy}
-            style={{ width: 170 }}
-            onCommit={setFxRate}
-          />
-          <div className="min-w-[260px] flex-1">
-            <TextInput
-              label="Nguồn — tên bản báo giá"
-              value={source}
-              placeholder="Nguồn: Quotation - Halston 10/07/2026"
-              disabled={!canManage || busy}
-              onCommit={setSource}
-            />
-          </div>
-        </div>
-
-        {warn.length > 0 && (
-          <NoticeBar tone="warn" tag="Lệch nhiều">
-            {warn.length} dòng có giá FOB mới lệch quá {PLAN_WARN_PCT}% so với số đang có
-            (
-            {warn
-              .slice(0, 3)
-              .map(
-                (x) =>
-                  `${x.row.code} ${fmt(x.row.price, currency)} → ${x.res.ok ? fmt(x.res.plan.price, currency) : ''}`,
-              )
-              .join(' · ')}
-            ) — thường là thiếu số 0 hoặc dán nhầm cột. Vẫn lưu được.
-          </NoticeBar>
-        )}
-
-        <div className="min-h-0 flex-1 overflow-auto">
-          {rows.length === 0 ? (
-            <Empty
-              headline={
-                board.rows.length === 0
-                  ? 'Chưa có SP nào đang chạy'
-                  : filter === 'missing'
-                    ? `${s.with_plan}/${s.total} SP đang chạy đã có giá thành kế hoạch`
-                    : 'Không SP nào ở nhóm này'
-              }
-              reason={
-                board.rows.length === 0
-                  ? 'Bảng này chỉ bày SP nằm trong lệnh đang chạy hoặc đơn bán còn sống — chưa có lệnh/đơn nào thì chưa có gì để nạp.'
-                  : filter === 'missing'
-                    ? 'Không còn SP nào thiếu. Bỏ chip "Chỉ SP chưa có" để xem và sửa số đang có.'
-                    : 'Bộ lọc hoặc ô tìm đang thu hẹp danh sách.'
-              }
-              next={
-                <Btn
-                  icon="boLoc"
-                  onClick={() => {
-                    setFilter('all')
-                    setQ('')
-                  }}
-                >
-                  Xem tất cả
-                </Btn>
-              }
-            />
-          ) : (
-            <Grid minWidth={1120}>
-              <GridHead>
-                <Th width={104}>Mã HG</Th>
-                <Th width={112}>Mã khách</Th>
-                <Th>Tên SP</Th>
-                <Th width={76}>Khách</Th>
-                <Th num width={80}>
-                  Trực tiếp
-                </Th>
-                <Th num width={80}>
-                  Chi phí chung
-                </Th>
-                <Th num width={52}>
-                  a%
-                </Th>
-                <Th num width={80}>
-                  Lợi nhuận
-                </Th>
-                <Th num width={52}>
-                  b%
-                </Th>
-                <Th num width={80}>
-                  Giá FOB
-                </Th>
-                <Th width={40}>TT</Th>
-                <Th width={140}>Nguồn · ngày</Th>
-                <Th width={140}>Trạng thái</Th>
-              </GridHead>
-              <GridBody>
-                {rows.map((r) => {
-                  const d = draft[r.product_id]
-                  const dirtyRow = isDirty(d)
-                  const res = dirtyRow ? resolve(d!, sep, currency) : null
-                  const live = res?.ok ? res.plan : null
-                  const pcts = live
-                    ? planPct(live)
-                    : r.price != null
-                      ? { a: r.a_pct, b: r.b_pct }
-                      : { a: null, b: null }
-                  const dev = live ? planDeviationPct(live.price, r.price) : null
-                  const cell = (k: keyof Draft, saved: number | null) => (
-                    <NumInput
-                      aria-label={`${k} của ${r.code}`}
-                      value={
-                        d?.[k] != null && typeof d[k] === 'string' ? (d[k] as string) : ''
-                      }
-                      // Gợi ý theo DẤU đang chọn, không theo vi-VN: gợi "28,8" khi ô
-                      // đọc dấu chấm thì người gõ lại đúng chữ đó sẽ ra 288.
-                      placeholder={saved == null ? '' : fmtIn(saved, sep)}
-                      disabled={!canManage || busy}
-                      style={{ width: 76 }}
-                      onCommit={(v) => setCell(r.product_id, k, v)}
-                    />
-                  )
-                  return (
-                    <GridRow key={r.product_id} selected={dirtyRow}>
-                      <Td>
-                        <span className="num">{r.code}</span>
-                      </Td>
-                      {/*
-                        Ô chữ dài CẮT tại chỗ (bẫy 7 của sổ: một dòng cá biệt
-                        định đoạt bề rộng cả bảng — đo 02/10: tên SP 592px, mã
-                        khách 204px đẩy bảng lên 1796px ở màn 1280). Chữ đầy đủ
-                        nằm ở `title`.
-                      */}
-                      <Td>
-                        <span
-                          className="num block max-w-[96px] truncate"
-                          title={r.customer_item_code ?? undefined}
-                        >
-                          {r.customer_item_code ?? '—'}
-                        </span>
-                      </Td>
-                      <Td>
-                        <span className="block max-w-[220px] truncate" title={r.name}>
-                          {r.name}
-                          <span className="text-k-label ml-1 text-[var(--ink-3)]">
-                            {r.lsx_count > 0 ? `${r.lsx_count} lệnh` : ''}
-                            {r.lsx_count > 0 && r.order_count > 0 ? ' · ' : ''}
-                            {r.order_count > 0 ? `${r.order_count} đơn` : ''}
-                          </span>
-                        </span>
-                      </Td>
-                      <Td>
-                        <span
-                          className="block max-w-[76px] truncate"
-                          title={r.customer_name ?? undefined}
-                        >
-                          {r.customer_name ?? '—'}
-                        </span>
-                      </Td>
-                      <Td num>{cell('direct', r.direct)}</Td>
-                      <Td num>{cell('overhead', r.overhead)}</Td>
-                      <Td num>
-                        <span className="text-[var(--ink-3)]">{pct(pcts.a)}</span>
-                      </Td>
-                      <Td num>{cell('profit', r.profit)}</Td>
-                      <Td num>
-                        <span className="text-[var(--ink-3)]">{pct(pcts.b)}</span>
-                      </Td>
-                      <Td num tone={res && !res.ok ? 'stop' : undefined}>
-                        {cell('price', r.price)}
-                      </Td>
-                      <Td>{dirtyRow ? currency : (r.currency ?? '—')}</Td>
-                      <Td>
-                        {r.source ? (
-                          <span
-                            className="text-[var(--ink-2)]"
-                            title={`${r.source} · ${dmy(r.at)}${r.by_name ? ` · ${r.by_name}` : ''}`}
-                          >
-                            {' '}
-                            {/* prettier-ignore */}
-                            {r.source}
-                            <span className="text-k-label text-[var(--ink-3)]">
-                              {' '}
-                              · {dmy(r.at)}
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="text-[var(--ink-3)]">—</span>
-                        )}
-                      </Td>
-                      <Td>
-                        {res && !res.ok ? (
-                          <Tag tone="stop">{res.reason}</Tag>
-                        ) : dirtyRow ? (
-                          <>
-                            <Tag tone="run">
-                              {d?.from_line
-                                ? `khối dán · dòng ${d.from_line}`
-                                : d?.breakdown
-                                  ? 'khối chi phí'
-                                  : 'gõ tay'}
-                            </Tag>
-                            {dev != null && Math.abs(dev) > PLAN_WARN_PCT && (
-                              <Tag tone="warn">
-                                {dev > 0 ? '+' : ''}
-                                {pct(dev)} so số đang có
-                              </Tag>
-                            )}
-                          </>
-                        ) : r.price == null ? (
-                          <Tag tone="warn">chưa có</Tag>
-                        ) : r.direct == null ? (
-                          // Khách chỉ có bảng giá chốt, không có bảng tính — FOB dùng được
-                          // cho doanh thu theo KH, giá thành KH vẫn chờ (02/10/2026).
-                          <Tag tone="run">chỉ FOB</Tag>
-                        ) : !r.complete ? (
-                          <Tag tone="warn">FOB ≠ tổng 3 số</Tag>
-                        ) : (
-                          <span className="inline-flex items-center gap-1">
-                            <Tag tone="done">đủ</Tag>
-                            {r.breakdown && r.breakdown.length > 0 && (
-                              <span
-                                className="text-k-label text-[var(--ink-3)]"
-                                title={r.breakdown
-                                  .map((b) => `${b.label} ${fmt(b.amount, r.currency)}`)
-                                  .join(' · ')}
-                              >
-                                {r.breakdown.length} khoản
-                              </span>
-                            )}
-                          </span>
-                        )}
-                        {canManage && !dirtyRow && (
-                          <button
-                            type="button"
-                            className="text-k-label ml-2 text-[var(--act)] underline"
-                            onClick={() => setSheet({ mode: 'block', row: r })}
-                          >
-                            dán khối
-                          </button>
-                        )}
-                      </Td>
-                    </GridRow>
-                  )
-                })}
-              </GridBody>
-            </Grid>
-          )}
-        </div>
-
-        <CommitBar
-          totals={[
-            { label: 'Dòng đổi', value: <span className="num">{dirty.length}</span> },
-            { label: 'Lệch tổng', value: <span className="num">{bad.length}</span> },
-          ]}
-          grand={{ label: 'Nguồn', value: source.trim() || '—' }}
-          blocked={blocked}
-          onGoBlocked={bad.length > 0 ? goBlocked : undefined}
-          actions={
-            <>
-              <Btn
-                icon="ghiSo"
-                primary
-                busy={busy}
-                disabled={!!blocked || dirty.length === 0}
-                onClick={() => void save()}
+              {r.code}
+            </Link>
+            {r.customer_item_code && (
+              <span
+                className="text-muted-foreground truncate font-mono text-xs"
+                title={`Mã khách ${r.customer_item_code}`}
               >
-                Lưu {dirty.length > 0 ? `${dirty.length} dòng` : ''}
-              </Btn>
-            </>
-          }
-        />
-      </ScreenFrame>
-
-      {sheet && (
-        <DanSheet
-          mode={sheet.mode}
-          product={sheet.mode === 'block' ? { product_id: sheet.row.product_id, code: sheet.row.code, name: sheet.row.name } : null} // prettier-ignore
-          targets={targets}
-          currency={currency}
-          onClose={() => setSheet(null)}
-          onApply={applyPaste}
-        />
+                · {r.customer_item_code}
+              </span>
+            )}
+          </span>
+          <span className={SUB} title={r.name}>
+            {r.name}
+            <span className="text-muted-foreground">
+              {r.lsx_count > 0 ? ` · ${r.lsx_count} lệnh` : ''}
+              {r.order_count > 0 ? ` · ${r.order_count} đơn` : ''}
+            </span>
+          </span>
+        </td>
+        <td className={`${TD} min-w-0`}>
+          <span className="block truncate" title={custOf(r)}>
+            {custOf(r)}
+          </span>
+        </td>
+        <td className={`${TD} px-1`}>{cell('direct', r.direct)}</td>
+        <td className={`${TD} px-1`}>{cell('overhead', r.overhead)}</td>
+        <td className={`${TD} ${NUM} text-muted-foreground text-xs`}>{pct(pcts.a)}</td>
+        <td className={`${TD} px-1`}>{cell('profit', r.profit)}</td>
+        <td className={`${TD} ${NUM} text-muted-foreground text-xs`}>{pct(pcts.b)}</td>
+        <td className={`${TD} px-1`}>
+          {cell('price', r.price)}
+          <span className={`${SUB} text-right`}>{cur ?? ''}</span>
+        </td>
+        <td className={`${TD} ${NUM}`}>
+          <GiaGanNhat p={r.last_quote} cur={cur} />
+        </td>
+        <td className={`${TD} ${NUM}`}>
+          <GiaGanNhat p={r.last_order} cur={cur} />
+        </td>
+        <td className={`${TD} min-w-0`}>
+          {res && !res.ok ? (
+            <Nhan tone="stop">{res.reason}</Nhan>
+          ) : live ? (
+            <span className="flex flex-wrap items-center gap-1">
+              <Nhan tone="neutral">
+                {live.fob_only
+                  ? 'chỉ FOB'
+                  : draft?.from_line
+                    ? `khối dán · dòng ${draft.from_line}`
+                    : draft?.breakdown
+                      ? 'khối chi phí'
+                      : 'đang sửa'}
+              </Nhan>
+              {dev != null && Math.abs(dev) > PLAN_WARN_PCT && (
+                <Nhan tone="warn">
+                  {dev > 0 ? '+' : ''}
+                  {pct(dev)}
+                </Nhan>
+              )}
+              <button
+                type="button"
+                className="text-muted-foreground text-[11px] hover:text-[var(--primary)] hover:underline"
+                onClick={() => d.clearRow(r.product_id)}
+              >
+                bỏ
+              </button>
+            </span>
+          ) : r.price == null ? (
+            <Nhan tone="stop">chưa có</Nhan>
+          ) : r.direct == null ? (
+            <Nhan tone="warn">chỉ FOB</Nhan>
+          ) : !r.complete ? (
+            <Nhan tone="warn">FOB ≠ tổng 3 số</Nhan>
+          ) : (
+            <Nhan tone="done">đủ</Nhan>
+          )}
+          {!dirty && (
+            <span
+              className={SUB}
+              title={
+                r.source
+                  ? `${r.source} · ${dmy(r.at)}${r.by_name ? ` · ${r.by_name}` : ''}`
+                  : undefined
+              }
+            >
+              {r.source ? `${r.source} · ${dmy(r.at)}` : ''}
+              {d.canManage && (
+                <button
+                  type="button"
+                  className="ml-1 text-[var(--primary)] hover:underline"
+                  onClick={() => d.openPaste({ kind: 'block', row: r })}
+                >
+                  dán khối
+                </button>
+              )}
+            </span>
+          )}
+        </td>
+      </tr>
+      {isOpen && bd.length > 0 && (
+        <tr className="bg-muted/30">
+          <td />
+          <td colSpan={11} className="border-border border-b px-2 py-1.5 text-xs">
+            <span className="text-muted-foreground mr-2">
+              Khối chi phí trực tiếp ({bd.length} khoản
+              {draft?.breakdown ? ', vừa dán' : ''}):
+            </span>
+            {bd.map((b, j) => (
+              <span key={j} className="mr-3 inline-block whitespace-nowrap">
+                {b.label}{' '}
+                <span className="font-mono tabular-nums">{fmt(b.amount, cur)}</span>
+              </span>
+            ))}
+          </td>
+        </tr>
       )}
-    </div>
+    </>
   )
 }

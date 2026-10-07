@@ -32,7 +32,9 @@ export type QuoteExcelField =
   | 'gw_kg'
   | 'loading_40hc'
   | 'unit'
+  | 'qty'
   | 'unit_price'
+  | 'discount_pct'
   | 'note'
 
 /** Một dòng đọc được, CHƯA khớp với thư viện SP (việc khớp do service làm). */
@@ -56,7 +58,11 @@ export type QuoteExcelRow = {
   gw_kg: number | null
   loading_40hc: number | null
   unit: string | null
+  /** SL dự kiến / MOQ (0225) — tuỳ chọn; in lên tờ chào và nạp sẵn sang đơn. */
+  qty: number | null
   unit_price: number | null
+  /** Chiết khấu dòng % (0–100) — tuỳ chọn. */
+  discount_pct: number | null
   note: string | null
   /** Có ảnh nhúng neo vào dòng này không (id do lớp đọc file cấp). */
   image_id: string | null
@@ -131,6 +137,9 @@ const HEADER_RULES: [RegExp, QuoteExcelField][] = [
   [/chat lieu|material|nguyen lieu|n\.?lieu/, 'material'],
   [/mau|colour|color/, 'colour'],
   [/dvt|don vi tinh/, 'unit'],
+  // SL / MOQ đứng SAU "SL / thùng" (luật hẹp trước) và không bắt "sl / thung".
+  [/^sl(?!\s*\/)|so luong(?!\s*\/)|\bmoq\b|^qty(?!\s*\/)|quantity/, 'qty'],
+  [/\bck\b|chiet khau|discount/, 'discount_pct'],
   [/don gia|gia|price|fob/, 'unit_price'],
   [/ghi chu|note|remark/, 'note'],
 ]
@@ -234,7 +243,9 @@ export function parseQuoteExcel(
       gw_kg: parseNum(get('gw_kg')),
       loading_40hc: parseNum(get('loading_40hc')),
       unit: txt(get('unit')),
+      qty: parseNum(get('qty')),
       unit_price: parseNum(get('unit_price')),
+      discount_pct: parseNum(get('discount_pct')),
       note: txt(get('note')),
       image_id: imagesByRow.get(rowNo) ?? null,
       missing: [],
@@ -254,6 +265,10 @@ export function parseQuoteExcel(
      */
     if (dims.some((d) => d != null && d <= 0)) r.missing.push('kích thước phải lớn hơn 0')
     if (r.unit_price != null && r.unit_price < 0) r.missing.push('đơn giá không được âm')
+    if (r.qty != null && r.qty <= 0)
+      r.missing.push('SL / MOQ phải lớn hơn 0 (bỏ trống nếu chỉ chào đơn giá)')
+    if (r.discount_pct != null && (r.discount_pct < 0 || r.discount_pct > 100))
+      r.missing.push('CK % phải trong 0–100')
 
     const nonNegative: [number | null, string][] = [
       [r.qty_per_carton, 'SL/thùng'],

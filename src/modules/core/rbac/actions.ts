@@ -290,6 +290,18 @@ export const ACTIONS: Action[] = [
     domain: 'sales',
     rule: anyOf(role('admin', 'manager'), perm('sales.member')),
   },
+  {
+    /*
+     * GHI / GỠ ĐỢT XUẤT (0120). Tách khỏi `sales.order.manage` + chủ đơn
+     * (07/10/2026): trước đó chỉ NGƯỜI TẠO đơn ghi được, đơn nạp bằng script
+     * (created_by null) thì không nhân viên nào ghi → 0 đợt xuất dù 5 lệnh đã
+     * xong. Xuất hàng là việc của phòng, không của riêng người lập đơn.
+     */
+    key: 'sales.order.ship',
+    label: 'Ghi xuất hàng theo đơn',
+    domain: 'sales',
+    rule: anyOf(role('admin', 'manager'), perm('sales.member')),
+  },
 
   // ── Cung ứng (NCC, bảng giá, PO) ─────────────────────────────────────────
   {

@@ -6,6 +6,9 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { LsxPrintSheet } from '../LsxPrintSheet'
+import { lsxPrintWatermark } from '@/lib/lsx-status'
+import { applyLotsToGroups } from '@/lib/lsx-lots'
+import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
 
 /**
  * In phiếu LỆNH SẢN XUẤT chính thức — nhóm + dòng lệnh (0114), bộ cột theo mẫu
@@ -23,16 +26,19 @@ export default async function LsxPrintPage({
   const lsx = await productionRepo.findById(id)
   if (!lsx) redirect('/sales/lsx')
 
-  const [sheet, company, tpl] = await Promise.all([
+  const [sheet, company, tpl, lots] = await Promise.all([
     lsxLinesService.sheet(user, id),
     settingsService.getAll(),
     docTemplatesService.get('LSX'),
+    shipPlanRepo.lotsOf([id]),
   ])
+  // D1 (07/10/2026): lệnh đã chia lô thì cột "Đợt xuất" in theo lô của Sale.
+  const groups = applyLotsToGroups(sheet.groups, lots)
 
   // Ảnh SP (cột Hình ảnh) — signed URL ngắn hạn, lỗi thì bỏ ảnh, không chặn in.
   const fileIds = [
     ...new Set(
-      sheet.groups.flatMap((g) => g.lines.map((l) => l.image_file_id).filter(Boolean)),
+      groups.flatMap((g) => g.lines.map((l) => l.image_file_id).filter(Boolean)),
     ),
   ] as string[]
   const imageUrls = new Map<string, string>()
@@ -62,8 +68,9 @@ export default async function LsxPrintPage({
         revised_at: lsx.revised_at,
       }}
       template={sheet.template}
-      groups={sheet.groups}
+      groups={groups}
       imageUrls={imageUrls}
+      watermark={lsxPrintWatermark(lsx.status)}
     />
   )
 }

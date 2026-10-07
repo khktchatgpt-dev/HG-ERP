@@ -11,17 +11,21 @@ export type OrderStatus =
   | 'confirmed'
   | 'lsx_pending'
   | 'lsx_issued'
-  | 'in_production'
   | 'completed'
+  | 'partially_shipped'
+  | 'shipped'
   | 'delivered'
   | 'cancelled'
 
 export const STATUS_LABEL: Record<string, string> = {
   confirmed: 'Đã xác nhận',
-  lsx_pending: 'Chờ duyệt LSX',
-  lsx_issued: 'Đã phát LSX',
-  in_production: 'Đang sản xuất',
-  completed: 'Hoàn thành',
+  // Gọi theo vòng đời ĐƠN, không theo chứng từ lệnh (07/10/2026): sổ đơn là chỗ
+  // quản đơn, lệnh sản xuất có sổ riêng.
+  lsx_pending: 'Chờ duyệt sản xuất',
+  lsx_issued: 'Đang sản xuất',
+  completed: 'Sẵn sàng xuất',
+  partially_shipped: 'Xuất một phần',
+  shipped: 'Đã xuất đủ',
   delivered: 'Đã giao',
   cancelled: 'Đã huỷ',
 }
@@ -29,12 +33,17 @@ export const STATUS_LABEL: Record<string, string> = {
 /** Thứ tự các bước vòng đời (bỏ 'cancelled' — nhánh phụ) để vẽ timeline. */
 export const LIFECYCLE_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'confirmed', label: 'Xác nhận' },
-  { status: 'lsx_pending', label: 'Chờ duyệt LSX' },
-  { status: 'lsx_issued', label: 'Đã phát LSX' },
-  { status: 'in_production', label: 'Sản xuất' },
-  { status: 'completed', label: 'Hoàn thành' },
+  { status: 'lsx_pending', label: 'Chờ duyệt SX' },
+  { status: 'lsx_issued', label: 'Đang SX' },
+  { status: 'completed', label: 'Sẵn sàng xuất' },
+  { status: 'shipped', label: 'Đã xuất' },
   { status: 'delivered', label: 'Đã giao' },
 ]
+
+/** Vị trí trên trục của trạng thái không phải bước (xuất dở = đứng ở bước SX xong). */
+export const STEP_OF_STATUS: Record<string, OrderStatus> = {
+  partially_shipped: 'completed',
+}
 
 export type Stage = { code: string; label: string }
 
@@ -70,7 +79,11 @@ export function orderProgress(
   if (r.status === 'cancelled') return { label: 'Đã huỷ', pct: 0, tone: 'bg-zinc-300' }
   if (r.status === 'delivered')
     return { label: 'Đã giao', pct: 100, tone: 'bg-green-500' }
-  if (r.status === 'completed') return { label: 'Đã xuất xưởng', pct: 95, tone }
+  if (r.status === 'shipped')
+    return { label: 'Đã xuất đủ', pct: 98, tone: 'bg-green-500' }
+  if (r.status === 'partially_shipped')
+    return { label: 'Đang xuất từng đợt', pct: 93, tone }
+  if (r.status === 'completed') return { label: 'SX xong — chờ xuất', pct: 90, tone }
   if (!r.production_order_id) return { label: 'Chưa phát LSX', pct: 5, tone }
   if (r.lsx_status === 'rejected')
     return { label: 'LSX bị từ chối', pct: 8, tone: 'bg-red-500' }

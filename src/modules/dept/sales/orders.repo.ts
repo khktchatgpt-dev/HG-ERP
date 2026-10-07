@@ -67,6 +67,8 @@ export type OrderLine = {
 export type OrderLineSummary = { lines: number; qty: number; total: number }
 
 export type OrderLineInput = {
+  /** id dòng đang có (form sửa gửi kèm) — thiếu = dòng mới / form cũ khớp theo SP. */
+  id?: string | null
   product_id: string
   qty: number
   unit_price: number
@@ -359,12 +361,21 @@ export const ordersRepo = {
       .select('id, product_id')
       .eq('order_id', orderId)
     if (exErr) throw new Error(exErr.message)
-    const byProduct = new Map(
-      ((existing ?? []) as { id: string; product_id: string }[]).map((r) => [
-        r.product_id,
-        r.id,
-      ]),
-    )
+    /*
+     * D2 (07/10/2026): một SP được nhiều dòng → khớp theo ID DÒNG khi payload gửi
+     * kèm; dòng không có id thì khớp theo product_id vào dòng cũ CHƯA được khớp
+     * (form cũ / script). Giữ id dòng để FK (đợt xuất 0120, job) không đứt.
+     */
+    const rows = (existing ?? []) as { id: string; product_id: string }[]
+    const existingIds = new Set(rows.map((r) => r.id))
+    const freeByProduct = new Map<string, string[]>()
+    for (const r of rows) {
+      if (!lines.some((l) => l.id === r.id)) {
+        const arr = freeByProduct.get(r.product_id) ?? []
+        arr.push(r.id)
+        freeByProduct.set(r.product_id, arr)
+      }
+    }
 
     type LineRow = {
       order_id: string
@@ -386,7 +397,8 @@ export const ordersRepo = {
         note: l.note ?? null,
         sort_order: i,
       }
-      const id = byProduct.get(l.product_id)
+      const id =
+        l.id && existingIds.has(l.id) ? l.id : freeByProduct.get(l.product_id)?.shift()
       if (id) {
         const { error } = await db().from('sales_order_lines').update(row).eq('id', id)
         if (error) throw new Error(error.message)
@@ -402,7 +414,7 @@ export const ordersRepo = {
     // Xoá dòng bị bỏ = dòng CŨ không nằm trong danh sách giữ (không đụng dòng
     // vừa chèn — chỉ nhắm vào id đã tồn tại trước khi sync).
     const keep = new Set(keepIds)
-    const removeIds = [...byProduct.values()].filter((id) => !keep.has(id))
+    const removeIds = [...existingIds].filter((id) => !keep.has(id))
     if (removeIds.length > 0) {
       const { error: delErr } = await db()
         .from('sales_order_lines')

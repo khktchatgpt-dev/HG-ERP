@@ -2517,6 +2517,49 @@ export type Database = {
           },
         ]
       }
+      // 0224 — thêm tay 07/10/2026 (migration chưa áp, chạy "sync types" sau khi áp sẽ sinh lại y hệt)
+      production_order_changes: {
+        Row: {
+          change: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          production_order_id: string
+        }
+        Insert: {
+          change: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id: string
+        }
+        Update: {
+          change?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_changes_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_order_changes: {
         Row: {
           change: Json
@@ -2815,6 +2858,8 @@ export type Database = {
       }
       sales_quote_lines: {
         Row: {
+          plan_at: string | null
+          plan_price_snapshot: number | null
           discount_pct: number | null
           id: string
           note: string | null
@@ -2825,6 +2870,8 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          plan_at?: string | null
+          plan_price_snapshot?: number | null
           discount_pct?: number | null
           id?: string
           note?: string | null
@@ -2835,6 +2882,8 @@ export type Database = {
           unit_price?: number
         }
         Update: {
+          plan_at?: string | null
+          plan_price_snapshot?: number | null
           discount_pct?: number | null
           id?: string
           note?: string | null
@@ -2863,6 +2912,9 @@ export type Database = {
       }
       sales_quotes: {
         Row: {
+          lost_reason: string | null
+          revision_no: number
+          revision_of: string | null
           approved_at: string | null
           approved_by: string | null
           code: string
@@ -2883,6 +2935,9 @@ export type Database = {
           valid_to: string | null
         }
         Insert: {
+          lost_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           approved_at?: string | null
           approved_by?: string | null
           code: string
@@ -2903,6 +2958,9 @@ export type Database = {
           valid_to?: string | null
         }
         Update: {
+          lost_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           approved_at?: string | null
           approved_by?: string | null
           code?: string

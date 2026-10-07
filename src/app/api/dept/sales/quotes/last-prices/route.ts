@@ -4,7 +4,10 @@ import { handle, parseQuery } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { lastPricesForCustomer, lastPricesGlobal } from '@/modules/dept/sales/quotes.repo'
 
-const querySchema = z.object({ customer_id: z.string().uuid().optional() })
+const querySchema = z.object({
+  customer_id: z.string().uuid().optional(),
+  currency: z.string().length(3).optional(),
+})
 
 /**
  * Giá bán gần nhất — gợi ý khi lập báo giá (chống báo lệch giá).
@@ -13,9 +16,9 @@ const querySchema = z.object({ customer_id: z.string().uuid().optional() })
  */
 export const GET = handle(async (req: Request) => {
   await authService.requireUser()
-  const { customer_id } = parseQuery(new URL(req.url), querySchema)
+  const { customer_id, currency } = parseQuery(new URL(req.url), querySchema)
   const prices = customer_id
-    ? await lastPricesForCustomer(customer_id)
+    ? await lastPricesForCustomer(customer_id, currency ?? null)
     : await lastPricesGlobal()
   return NextResponse.json({ prices })
 })

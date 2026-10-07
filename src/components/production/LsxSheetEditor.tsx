@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -9,7 +9,6 @@ import {
   ExternalLink,
   Printer,
   Save,
-  SendHorizontal,
   TriangleAlert,
   Upload,
 } from 'lucide-react'
@@ -31,8 +30,11 @@ import {
   type ProfileMap,
   type ProfileTab,
 } from '@/lib/lsx-line-fill'
-import { valueState } from '@/lib/lsx-sheet-cells'
+import { shipText, valueState } from '@/lib/lsx-sheet-cells'
+import { lotShipText, type LotLite } from '@/lib/lsx-lots'
 import { LineMeter } from './lsx-editor/LineMeter'
+import { Fixed, LineImage } from './lsx-editor/Fixed'
+import { SaveBar } from './lsx-editor/SaveBar'
 import { SourceChip } from './lsx-editor/SourceChip'
 import { SheetReadinessBar } from './lsx-editor/SheetReadinessBar'
 
@@ -79,47 +81,6 @@ const th =
 // nhãn để màu muted nữa là ba sắc trắng-xám chồng nhau, không phân biệt nổi.
 const fieldLabel = 'flex flex-col gap-1 text-xs font-medium text-foreground'
 
-/**
- * Ô CHỈ ĐỌC cho thông tin sản phẩm cố định (chốt 07/08/2026: "thông tin sản
- * phẩm có tính cố định không cho sửa trong giao diện LSX").
- *
- * Cố tình KHÔNG dùng `<Input disabled>`: ô nhập xám vẫn trông như ô nhập, người
- * dùng bấm vào rồi mới biết gõ không được. Chữ trơn nói ngay "cái này lấy từ
- * nơi khác". `bad` = trường trống mà gate gửi duyệt đang chặn.
- */
-function Fixed({
-  value,
-  mono,
-  right,
-  bad,
-}: {
-  value?: string | null
-  mono?: boolean
-  right?: boolean
-  bad?: boolean
-}) {
-  const v = (value ?? '').trim()
-  return (
-    <div
-      className={`px-2 py-1.5 text-xs ${mono ? 'font-mono' : ''} ${
-        right ? 'text-right tabular-nums' : ''
-      } ${bad ? 'rounded-md ring-1 ring-red-400' : ''} ${
-        v ? '' : 'text-muted-foreground'
-      }`}
-      title={v || undefined}
-    >
-      {v || '—'}
-    </div>
-  )
-}
-
-/** Ảnh SP trong bảng soạn dòng — nhận mặt hàng bằng mắt, khỏi dò mã. */
-function LineImage({ url }: { url?: string }) {
-  if (!url) return <div className="bg-muted size-9 rounded" aria-hidden />
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" className="size-9 rounded object-contain" />
-}
-
 export function LsxSheetEditor({
   lsxId,
   lsxCode,
@@ -127,6 +88,10 @@ export function LsxSheetEditor({
   revision,
   canEdit,
   isDraft = false,
+  status,
+  updatedAt,
+  lots = [],
+  lotsHref,
   template,
   groups: initial,
   profiles = {},
@@ -140,6 +105,14 @@ export function LsxSheetEditor({
   canEdit: boolean
   /** Lệnh còn NHÁP (0117) — hiện nút "Gửi GĐ duyệt" ở thanh lưu. */
   isDraft?: boolean
+  /** Trạng thái lệnh — đã duyệt / đang SX thì mỗi lần lưu là bản sửa, lý do bắt buộc. */
+  status: string
+  /** `updated_at` lúc mở màn — gửi kèm để server chặn ghi đè (07/10/2026). */
+  updatedAt: string
+  /** Lô xuất của Sale (0222) — D1: đợt xuất của dòng đọc từ đây, không gõ ở dòng. */
+  lots?: LotLite[]
+  /** Link màn chia đợt. */
+  lotsHref: string
   template: LsxTemplate
   groups: (LsxGroup & { lines: LsxLine[] })[]
   /** productId → ảnh chụp hồ sơ SP: suy nguồn từng ô + biết hồ sơ thiếu gì. */
@@ -155,6 +128,18 @@ export function LsxSheetEditor({
   const [groups, setGroups] = useState<EditGroup[]>(
     initial.map((g) => ({ ...g, _key: newKey(), lines: g.lines.map(toEditLine) })),
   )
+  // Bản đã lưu (so tham chiếu) — rời trang khi còn khác là mất công soạn.
+  const [savedGroups, setSavedGroups] = useState<EditGroup[]>(groups)
+  const dirty = groups !== savedGroups
+  useEffect(() => {
+    if (!dirty || !canEdit) return
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [dirty, canEdit])
+  const published = status === 'approved' || status === 'in_progress'
   // Dòng đang mở phần chi tiết (nhận diện/quy cách/đóng gói/ghi chú).
   const [openLines, setOpenLines] = useState<Set<string>>(new Set())
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
@@ -336,16 +321,18 @@ export function LsxSheetEditor({
         })),
       })),
       revision_note: note.trim() || null,
+      expected_updated_at: updatedAt,
     }
   }
 
   async function save() {
     setBusy(true)
     try {
-      await api(`/api/dept/production/lsx/${lsxId}/lines`, {
-        method: 'PUT',
-        body: buildPayload(),
-      })
+      const sheet = await api<{ groups: (LsxGroup & { lines: LsxLine[] })[] }>(
+        `/api/dept/production/lsx/${lsxId}/lines`,
+        { method: 'PUT', body: buildPayload() },
+      )
+      adopt(sheet)
       toast.success('Đã lưu dòng lệnh', lsxCode)
       router.refresh()
     } catch (e) {
@@ -355,10 +342,30 @@ export function LsxSheetEditor({
     }
   }
 
+  /**
+   * Gán lại state từ bản API trả về sau Nạp/Lưu. State `groups` chỉ khởi tạo một
+   * lần từ props và `router.refresh()` KHÔNG chạm tới nó, nên trước 07/10/2026
+   * dòng vừa nạp không hiện ra, và lần Lưu kế gửi payload thiếu chúng →
+   * `replaceAll` xoá sạch dòng vừa nạp.
+   */
+  function adopt(sheet: { groups: (LsxGroup & { lines: LsxLine[] })[] }) {
+    const next = sheet.groups.map((g) => ({
+      ...g,
+      _key: newKey(),
+      lines: g.lines.map(toEditLine),
+    }))
+    setGroups(next)
+    setSavedGroups(next)
+  }
+
   async function reseed() {
     setBusy(true)
     try {
-      await api(`/api/dept/production/lsx/${lsxId}/lines`, { method: 'POST', body: {} })
+      const sheet = await api<{ groups: (LsxGroup & { lines: LsxLine[] })[] }>(
+        `/api/dept/production/lsx/${lsxId}/lines`,
+        { method: 'POST', body: {} },
+      )
+      adopt(sheet)
       toast.success('Đã nạp dòng từ đơn hàng')
       router.refresh()
     } catch (e) {
@@ -574,18 +581,28 @@ export function LsxSheetEditor({
                 className={`${cellInput} w-36`}
               />
             </label>
-            <label className={fieldLabel}>
-              Ngày giao
-              <Input
-                type="date"
-                value={g.ship_date ?? ''}
-                onChange={(e) =>
-                  patchGroup(g._key, { ship_date: e.target.value || null })
-                }
-                disabled={!canEdit}
-                className={`${cellInput} w-36`}
-              />
-            </label>
+            {/* D1 (07/10/2026): lịch xuất là LÔ của Sale (Kế hoạch xuất), nhóm
+                chỉ còn là cấu trúc in — ô ngày ở nhóm/dòng bỏ, bày chỉ đọc. */}
+            <span className={fieldLabel}>
+              Lịch xuất
+              <span className="text-foreground flex h-8 items-center gap-2 text-xs">
+                {lots.length ? (
+                  <span>{lots.length} lô</span>
+                ) : g.ship_date ? (
+                  <span title="Ngày cũ ghi ở nhóm — chia lô để thay">
+                    {shipText({
+                      ship_date: g.ship_date ?? null,
+                      ship_label: g.ship_label ?? null,
+                    })}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">chưa chia đợt</span>
+                )}
+                <Link href={lotsHref} className="text-primary hover:underline">
+                  Chia đợt
+                </Link>
+              </span>
+            </span>
             <span className="text-muted-foreground ml-auto text-xs">
               {g.lines.length} dòng ·{' '}
               {g.lines
@@ -681,17 +698,15 @@ export function LsxSheetEditor({
                               Ghi thẳng ship_date và xoá ship_label để hai cột
                               không còn mâu thuẫn nhau.
                             */}
-                            <Input
-                              type="date"
-                              value={l.ship_date ?? ''}
-                              onChange={(e) =>
-                                patchLine(g._key, l._key, {
-                                  ship_date: e.target.value || null,
-                                  ship_label: null,
-                                })
+                            <Fixed
+                              value={
+                                lotShipText(l.product_code, lots) ||
+                                shipText({
+                                  ship_date: l.ship_date ?? null,
+                                  ship_label: l.ship_label ?? null,
+                                }) ||
+                                null
                               }
-                              disabled={!canEdit}
-                              className={cellInput}
                             />
                           </td>
                           <td className="py-1.5 pr-2">
@@ -882,75 +897,20 @@ export function LsxSheetEditor({
 
       {/* ── Thanh lưu ghim đáy — sửa tới đâu lưu được tới đó ───────────────── */}
       {canEdit && (
-        <div className="bg-card/95 sticky bottom-0 z-10 -mx-1 rounded-t-xl border px-3 py-2.5 shadow-xs backdrop-blur">
-          <div className="flex flex-wrap items-end gap-2">
-            {/* Lệnh NHÁP chưa ai duyệt nên chưa có gì để "chỉnh sửa" — ô lý do
-                chỉ có nghĩa với lệnh đã qua duyệt (0117). */}
-            {isDraft ? (
-              <span className="text-muted-foreground flex-1 text-xs">
-                Lệnh đang là <b className="text-foreground">nháp</b> — sửa thoải mái, Giám
-                đốc chưa nhận được gì. Soạn xong bấm “Gửi GĐ duyệt”.
-              </span>
-            ) : (
-              <label className="text-muted-foreground flex min-w-56 flex-1 flex-col gap-1 text-xs">
-                Lý do chỉnh sửa (ghi vào bản phát lại — xưởng đọc để biết đổi gì)
-                <Input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Khách chốt lại số lượng SIGRID, thêm bộ IMANI"
-                  className="bg-background h-8 text-xs"
-                />
-              </label>
-            )}
-            <span className="text-muted-foreground text-xs">
-              {totalQty.toLocaleString('vi-VN')} SP · {groups.length} nhóm
-            </span>
-            {/* "Lưu" KHÔNG BAO GIỜ bị chặn — bản dở phải cất được. */}
-            <Button variant="outline" onClick={() => void save()} disabled={busy}>
-              {busy ? <Spinner size={14} /> : <Save />}
-              Lưu dòng lệnh
-            </Button>
-            {isDraft && (
-              <Button
-                onClick={() => void submitForApproval()}
-                disabled={busy || sheet.blocked.length > 0}
-                title={
-                  sheet.blocked.length
-                    ? `${sheet.blocked.length} dòng còn thiếu Mã SP / Số lượng / ĐVT`
-                    : undefined
-                }
-              >
-                {busy ? <Spinner size={14} /> : <SendHorizontal />}
-                Gửi GĐ duyệt
-              </Button>
-            )}
-
-            {isDraft && sheet.blocked.length > 0 && (
-              <div className="basis-full text-xs">
-                <span className="font-medium text-red-600">
-                  <TriangleAlert className="mr-1 inline size-3.5" aria-hidden />
-                  Chưa gửi được: {sheet.blocked.length} dòng thiếu Mã SP / Số lượng / ĐVT
-                </span>
-                <span className="text-muted-foreground ml-2">
-                  {sheet.blocked.slice(0, 6).map((b, i) => (
-                    <Fragment key={`${b.groupTitle}-${b.index}`}>
-                      {i > 0 && ' · '}
-                      <button
-                        onClick={() => jumpTo(b.groupTitle, b.index)}
-                        className="hover:text-foreground underline underline-offset-2"
-                        title={`Thiếu ${b.issues}`}
-                      >
-                        {b.groupTitle} #{b.index}
-                      </button>
-                    </Fragment>
-                  ))}
-                  {sheet.blocked.length > 6 &&
-                    ` … và ${sheet.blocked.length - 6} dòng nữa`}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+        <SaveBar
+          isDraft={isDraft}
+          published={published}
+          dirty={dirty}
+          note={note}
+          setNote={setNote}
+          totalQty={totalQty}
+          groupCount={groups.length}
+          busy={busy}
+          blocked={sheet.blocked}
+          onSave={() => void save()}
+          onSubmit={() => void submitForApproval()}
+          onJump={jumpTo}
+        />
       )}
     </div>
   )

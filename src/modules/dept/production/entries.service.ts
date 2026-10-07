@@ -3,7 +3,6 @@ import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { jobsRepo, type Job } from './jobs.repo'
 import { dayLocksRepo } from './day-locks.repo'
-import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { calcComponent } from '@/lib/component-needs'
@@ -240,7 +239,7 @@ export const entriesService = {
     input: RecordInput,
   ): Promise<{ warnings: string[]; doc_no: string }> {
     await assertAction(user, 'production.entries.record')
-    const { lsx, components, orderLines, orderIdByGroup, totalByComponent, routeByLine } =
+    const { lsx, components, orderLines, totalByComponent, routeByLine } =
       await loadLsxContext(lsxId)
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
@@ -714,20 +713,9 @@ export const entriesService = {
     if (lsx.status === 'approved') {
       await productionRepo.patch(lsxId, { status: 'in_progress' })
     }
-    // Lệnh gộp nhiều đơn (0113): chỉ ĐƠN có dòng vừa được ghi sổ mới sang "đang
-    // sản xuất" — đơn cùng lệnh nhưng chưa ai làm thì vẫn là "đã phát lệnh".
-    const orderIdsOfLines = new Set(
-      orderLines
-        .filter((l) => affectedLines.has(l.id))
-        .map((l) => orderIdByGroup.get(l.group_id))
-        .filter((x): x is string => !!x),
-    )
-    const started = await ordersRepo.listByProductionOrder(lsxId)
-    await Promise.all(
-      started
-        .filter((o) => orderIdsOfLines.has(o.id) && o.status === 'lsx_issued')
-        .map((o) => ordersRepo.patch(o.id, { status: 'in_production' })),
-    )
+    // Trạng thái đơn bán KHÔNG đổi theo sổ sản lượng nữa (0223, chốt D4
+    // 07/10/2026): 'in_production' đã bỏ — tiến độ xưởng bày bằng cột riêng
+    // lấy từ lệnh/job, trạng thái đơn chỉ đi theo lệnh và đợt xuất.
     return { warnings, doc_no: doc.doc_no }
   },
 

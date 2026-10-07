@@ -23,14 +23,20 @@ export type CatalogProduct = {
   name: string
   customer_item_code: string | null
   is_active: boolean
+  /** Ảnh thư viện (đường dẫn ký sẵn) — màn xem trước bày thumbnail. */
+  image_url?: string | null
 }
 
 export type ResolvedRow = QuoteExcelRow & {
   action: 'existing' | 'new' | 'blocked'
   matched_product_id: string | null
   matched_label: string | null
-  /** Khớp được nhiều SP — người dùng phải chỉ đích danh bằng mã nội bộ. */
+  /** Ảnh thư viện của SP đã khớp (null = chưa có ảnh). */
+  matched_image_url: string | null
+  /** Khớp được nhiều SP — người dùng chỉ đích danh: chọn một ứng viên ở màn xem trước hoặc điền mã. */
   ambiguous: boolean
+  /** Các SP khớp được khi mơ hồ (tối đa 5) — màn xem trước bày thành nút chọn. */
+  candidates: { id: string; code: string; name: string; image_url: string | null }[]
   has_image: boolean
   /** Vì sao bị chặn (chỉ có khi action = 'blocked'). */
   blocked_reason: string | null
@@ -78,7 +84,14 @@ export function resolveImportRows(
       ...r,
       matched_product_id: null as string | null,
       matched_label: null as string | null,
+      matched_image_url: null as string | null,
       ambiguous: false,
+      candidates: [] as {
+        id: string
+        code: string
+        name: string
+        image_url: string | null
+      }[],
       has_image: r.image_id != null,
       blocked_reason: null as string | null,
     }
@@ -103,10 +116,18 @@ export function resolveImportRows(
         ...base,
         action: 'blocked' as const,
         ambiguous: true,
+        candidates: hits
+          .slice(0, 5)
+          .map((h) => ({
+            id: h.id,
+            code: h.code,
+            name: h.name,
+            image_url: h.image_url ?? null,
+          })),
         blocked_reason: `khớp ${hits.length} sản phẩm trong thư viện (${hits
           .slice(0, 3)
           .map((h) => h.code)
-          .join(', ')}) — điền Mã SP (HG) để chỉ đích danh`,
+          .join(', ')}) — chọn đúng SP ở đây hoặc điền Mã SP (HG) trong file`,
       }
     }
 
@@ -131,6 +152,7 @@ export function resolveImportRows(
         action: 'blocked' as const,
         matched_product_id: one?.id ?? null,
         matched_label: one ? `${one.code} — ${one.name}` : null,
+        matched_image_url: one?.image_url ?? null,
         blocked_reason: `trùng với dòng ${firstAt} trong file`,
       }
     }
@@ -146,6 +168,7 @@ export function resolveImportRows(
         action: 'existing' as const,
         matched_product_id: one.id,
         matched_label: `${one.code} — ${one.name}`,
+        matched_image_url: one.image_url ?? null,
       }
     }
 

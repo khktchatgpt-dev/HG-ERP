@@ -1,12 +1,12 @@
 import { notFound, redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
-import { QuoteForm } from '@/components/sales/QuoteForm'
+import { BaoGiaForm } from '../../_form/BaoGiaForm'
 
 /**
  * Sửa báo giá nháp (chỉ draft) — dùng chung QuoteForm. Chỉ nạp ĐÚNG các SP đang
@@ -20,11 +20,7 @@ export default async function EditQuotePage({
   const user = await authService.requirePageUser()
   const { id } = await params
 
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
-  if (!canEdit) redirect(`/sales/quotes/${id}`)
+  if (!(await canAction(user, 'sales.quote.manage'))) redirect(`/sales/quotes/${id}`)
 
   let data
   try {
@@ -34,8 +30,11 @@ export default async function EditQuotePage({
     throw e
   }
   const { quote, lines } = data
-  // Chỉ báo giá nháp mới sửa được — đã gửi thì bất biến.
-  if (quote.status !== 'draft') redirect(`/sales/quotes/${id}`)
+  // Nháp hoặc BỊ TỪ CHỐI mới sửa được (0149: sửa theo lý do GĐ rồi trình lại)
+  // — trang này từng chặn cả 'rejected' dù menu có nút Sửa (07/10/2026).
+  if (quote.status !== 'draft' && quote.status !== 'rejected') {
+    redirect(`/sales/quotes/${id}`)
+  }
 
   const [{ rows: customers }, lineProducts] = await Promise.all([
     customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
@@ -43,7 +42,7 @@ export default async function EditQuotePage({
   ])
 
   return (
-    <QuoteForm
+    <BaoGiaForm
       mode="edit"
       customers={customers.map((c) => ({
         id: c.id,
@@ -66,6 +65,7 @@ export default async function EditQuotePage({
       }}
       initialLines={lines.map((l) => ({
         product_id: l.product_id,
+        qty: l.qty,
         unit_price: l.unit_price,
         discount_pct: l.discount_pct,
         note: l.note,

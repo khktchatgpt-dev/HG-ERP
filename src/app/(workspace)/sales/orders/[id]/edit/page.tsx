@@ -1,15 +1,15 @@
 import { notFound, redirect } from 'next/navigation'
 import { canMutateOwned } from '@/lib/record-ownership'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
-import { OrderForm } from '@/components/sales/OrderForm'
+import { DonHangForm } from '../../_form/DonHangForm'
 
-/** Trang sửa đơn (khách thay đổi) — dùng chung OrderForm, ghi lịch sử khi lưu. */
+/** Trang sửa đơn (khách thay đổi) — cùng form khuôn F, ghi lịch sử khi lưu. */
 export default async function EditOrderPage({
   params,
 }: {
@@ -18,10 +18,7 @@ export default async function EditOrderPage({
   const user = await authService.requirePageUser()
   const { id } = await params
 
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  if (user.role !== 'admin' && dept?.name !== 'Bán Hàng') {
+  if (!(await canAction(user, 'sales.order.manage'))) {
     redirect(`/sales/orders/${id}`)
   }
 
@@ -32,26 +29,37 @@ export default async function EditOrderPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const { order, lines } = data
+  const { order, lines, shippedByLine } = data
   // Của ai người đó sửa (07/08/2026) — chặn cả đường vào thẳng URL /edit, không
   // chỉ ẩn nút. Service vẫn là chốt chặn cuối.
   if (!canMutateOwned(user, order.created_by)) {
     redirect(`/sales/orders/${id}`)
   }
-  if (order.status === 'delivered' || order.status === 'cancelled') {
+  if (
+    order.status === 'delivered' ||
+    order.status === 'cancelled' ||
+    order.status === 'shipped'
+  ) {
     redirect(`/sales/orders/${id}`)
   }
 
-  // CHỈ các SP đang nằm trên dòng — ô chọn tự tìm ở server (xem ProductPicker).
+  // CHỈ các SP đang nằm trên dòng — ô chọn tự tìm ở server.
   const [{ rows: customers }, lineProducts] = await Promise.all([
     customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
     productsRepo.listPickByIds(lines.map((l) => l.product_id)),
   ])
 
   return (
-    <OrderForm
+    <DonHangForm
       mode="edit"
-      customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+      customers={customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        default_currency: c.default_currency,
+        default_price_term: c.default_price_term,
+        default_payment_terms: c.default_payment_terms,
+        port_of_discharge: c.port_of_discharge,
+      }))}
       lineProducts={lineProducts.map(toQuotePickPayload)}
       order={{
         id: order.id,
@@ -59,6 +67,7 @@ export default async function EditOrderPage({
         customer_id: order.customer_id,
         customer_name: order.customer_name,
         currency: order.currency,
+        status: order.status,
         quote_code: order.quote_code,
         customer_po_no: order.customer_po_no,
         due_date: order.due_date,
@@ -76,11 +85,13 @@ export default async function EditOrderPage({
         transhipment: order.transhipment,
       }}
       initialLines={lines.map((l) => ({
+        id: l.id,
         product_id: l.product_id,
         qty: l.qty,
         unit_price: l.unit_price,
         ship_date: l.ship_date,
         note: l.note ?? '',
+        shipped: shippedByLine[l.id] ?? 0,
       }))}
     />
   )

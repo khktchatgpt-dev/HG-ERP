@@ -149,7 +149,7 @@ export function TrackingManager({
       const rk = riskOf(r)
       if (rk?.level === 'overdue') late++
       else if (rk) risk++
-      if (r.status === 'in_production') inProd++
+      if (r.status === 'lsx_issued' && r.lsx_status === 'in_progress') inProd++
     }
     return { bomPending, posOpen, posUnsent, late, risk, inProd }
     // eslint-disable-next-line react-hooks/exhaustive-deps

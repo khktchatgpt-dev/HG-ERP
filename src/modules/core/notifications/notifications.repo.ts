@@ -41,6 +41,8 @@ export type NotificationType =
   | 'lsx_rejected'
   | 'lsx_orders_changed'
   | 'lsx_revised'
+  | 'lsx_cancelled'
+  | 'lsx_header_changed'
   | 'order_changed'
   | 'order_cancelled'
   | 'stage_handoff'

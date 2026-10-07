@@ -27,8 +27,10 @@ const STATUS_CLS: Record<string, string> = {
     'border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] text-[var(--warn)]',
   lsx_issued:
     'border-[color-mix(in_srgb,var(--primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--primary)]',
-  in_production:
-    'border-[color-mix(in_srgb,var(--primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--primary)]',
+  partially_shipped:
+    'border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] text-[var(--warn)]',
+  shipped:
+    'border-[color-mix(in_srgb,var(--done)_35%,transparent)] bg-[color-mix(in_srgb,var(--done)_12%,transparent)] text-[var(--done)]',
   completed:
     'border-[color-mix(in_srgb,var(--done)_35%,transparent)] bg-[color-mix(in_srgb,var(--done)_12%,transparent)] text-[var(--done)]',
   delivered:

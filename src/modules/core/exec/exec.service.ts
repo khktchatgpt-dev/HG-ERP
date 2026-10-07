@@ -47,7 +47,9 @@ const OPEN_ORDER_STATUSES = [
   'confirmed',
   'lsx_pending',
   'lsx_issued',
-  'in_production',
+  'completed',
+  'partially_shipped',
+  'shipped',
 ] as const
 
 /** Đơn mua ĐANG MỞ: đã duyệt và còn đang chạy tới lúc về đủ. */

@@ -28,6 +28,8 @@ export type LsxExcelHeader = {
   note: string | null
   revision: number
   revised_at: string | null
+  /** Lệnh chưa có hiệu lực (nháp / chờ duyệt / từ chối / huỷ) — in chữ đỏ đầu file. */
+  watermark?: string | null
 }
 
 export type LsxExcelImage = { buffer: Buffer; extension: 'png' | 'jpeg' }
@@ -186,6 +188,15 @@ export async function buildLsxExcel(input: {
     font: { bold: true, size: 16 },
     alignment: { horizontal: 'center' },
   })
+  if (header.watermark) {
+    // Lệnh chưa có hiệu lực — cùng câu với phiếu in (lsxPrintWatermark).
+    r++
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, header.watermark, {
+      font: { bold: true, size: 12, color: { argb: 'FFDC2626' } },
+      alignment: { horizontal: 'center' },
+    })
+  }
   if (isRevision) {
     r++
     ws.mergeCells(r, 1, r, n)
