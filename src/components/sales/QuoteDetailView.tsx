@@ -10,6 +10,7 @@ import {
   PenLine,
   Printer,
   Send,
+  ShoppingCart,
   Stamp,
   Trash2,
 } from 'lucide-react'
@@ -116,6 +117,7 @@ export function QuoteDetailView({
   const isRejected = quote.status === 'rejected'
   const isPending = quote.status === 'pending_approval'
   const isApproved = quote.status === 'approved'
+  const isSent = quote.status === 'sent'
   /** Sửa/xoá theo luật service: nháp + bị từ chối sửa được, chỉ nháp xoá được. */
   const editable = isDraft || isRejected
   const today = new Date().toISOString().slice(0, 10)
@@ -234,6 +236,14 @@ export function QuoteDetailView({
               >
                 <Stamp />
                 {isRejected ? 'Trình duyệt lại' : 'Trình GĐ duyệt'}
+              </Button>
+            )}
+            {canEdit && isSent && (
+              <Button asChild>
+                <Link href={`/sales/orders/new?quote=${quote.id}`}>
+                  <ShoppingCart />
+                  Tạo đơn hàng
+                </Link>
               </Button>
             )}
             <Button variant="outline" asChild>

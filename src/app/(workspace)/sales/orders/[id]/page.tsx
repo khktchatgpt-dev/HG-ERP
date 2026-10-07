@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { canMutateOwned } from '@/lib/record-ownership'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
@@ -34,15 +34,15 @@ export default async function OrderDetailPage({
   }
   const { order, lines, changes, shipments, shippedByLine } = data
 
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  // Sửa/huỷ: phải ở phòng Bán Hàng VÀ là người tạo đơn (quản lý gánh mọi đơn).
-  // Ẩn nút cho đúng — không thì bấm vào mới ăn 403 từ service.
-  const canEdit =
-    (user.role === 'admin' || dept?.name === 'Bán Hàng') &&
-    canMutateOwned(user, order.created_by)
-  const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng' // Sales phát LSX
+  // Mọi cờ đi qua RBAC — cùng cửa với service, nút nào hiện thì bấm được.
+  // Sửa/huỷ: quyền quản lý đơn VÀ là người tạo đơn (quản lý gánh mọi đơn).
+  const [canManage, canIssue, canShip, canDeliver] = await Promise.all([
+    canAction(user, 'sales.order.manage'),
+    canAction(user, 'production.lsx.issue'),
+    canAction(user, 'sales.order.ship'),
+    canAction(user, 'sales.order.confirm_delivery'),
+  ])
+  const canEdit = canManage && canMutateOwned(user, order.created_by)
   const lsx = await productionRepo.findByOrder(order.id)
 
   // Đơn cùng khách chưa có lệnh — Sales tick để gộp chung một LSX (0113).
@@ -188,6 +188,8 @@ export default async function OrderDetailPage({
       }))}
       canEdit={canEdit}
       canIssue={canIssue}
+      canShip={canShip}
+      canDeliver={canDeliver}
       lsx={
         lsx
           ? {

@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { canMutateOwned } from '@/lib/record-ownership'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
@@ -60,7 +61,9 @@ export default async function LsxDetailPage({
     ),
   )
 
-  const isMgr = user.role === 'admin' || user.role === 'manager'
+  // Duyệt/từ chối đi theo RBAC (chỉ Giám đốc có production.lsx.approve) — trước
+  // 07/10/2026 gác bằng role manager nên trưởng phòng Sale thấy nút rồi ăn 403.
+  const canApprove = await canAction(user, 'production.lsx.approve')
   // Của ai người đó sửa (07/08/2026): sửa đầu lệnh / soạn dòng / gộp-gỡ đơn chỉ
   // dành cho NGƯỜI LẬP lệnh (quản lý gánh mọi lệnh). Duyệt/từ chối là việc của GĐ,
   // không đi qua cửa này.
@@ -121,8 +124,8 @@ export default async function LsxDetailPage({
       synced={summary?.synced_by_line ?? []}
       supply={null}
       breadcrumbs={[{ label: 'Bán hàng', href: '/sales' }, { label: `LSX ${lsx.code}` }]}
-      canApprove={isMgr}
-      canManage={isMgr}
+      canApprove={canApprove}
+      canManage={false}
       canResubmit={isOwner}
       canEditOrders={isOwner}
       linesHref={isOwner ? `/sales/lsx/${lsx.id}/dong` : null}

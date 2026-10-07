@@ -88,7 +88,7 @@ describe('quotesService.send — sale tự chốt & gửi khách (FR-SAL-03)', (
 
   it('báo giá 0 dòng không chốt được', async () => {
     vi.mocked(quotesRepo.findById).mockResolvedValue(QUOTE as never)
-    vi.mocked(quotesRepo.countLines).mockResolvedValue(0)
+    vi.mocked(quotesRepo.listLines).mockResolvedValue([])
     await expect(quotesService.send(salesNv, 'q1')).rejects.toMatchObject({
       status: 400,
     })
@@ -96,12 +96,36 @@ describe('quotesService.send — sale tự chốt & gửi khách (FR-SAL-03)', (
 
   it('draft có dòng → sent (không cần ai duyệt)', async () => {
     vi.mocked(quotesRepo.findById).mockResolvedValue(QUOTE as never)
-    vi.mocked(quotesRepo.countLines).mockResolvedValue(2)
+    vi.mocked(quotesRepo.listLines).mockResolvedValue([
+      { unit_price: 10 },
+      { unit_price: 20 },
+    ] as never)
     vi.mocked(quotesRepo.patch).mockResolvedValue({ ...QUOTE, status: 'sent' } as never)
 
     await quotesService.send(salesNv, 'q1')
 
     expect(quotesRepo.patch).toHaveBeenCalledWith('q1', { status: 'sent' })
+  })
+
+  // 07/10/2026: gửi khách giá 0 là gửi tờ giấy trắng; hết hiệu lực là giá đã chết.
+  it('còn dòng giá 0 → 400, không gửi', async () => {
+    vi.mocked(quotesRepo.findById).mockResolvedValue(QUOTE as never)
+    vi.mocked(quotesRepo.listLines).mockResolvedValue([
+      { unit_price: 10 },
+      { unit_price: 0 },
+    ] as never)
+    await expect(quotesService.send(salesNv, 'q1')).rejects.toMatchObject({ status: 400 })
+    expect(quotesRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('hết hiệu lực (valid_to < hôm nay) → 400, không gửi', async () => {
+    vi.mocked(quotesRepo.findById).mockResolvedValue({
+      ...QUOTE,
+      valid_to: '2020-01-01',
+    } as never)
+    vi.mocked(quotesRepo.listLines).mockResolvedValue([{ unit_price: 10 }] as never)
+    await expect(quotesService.send(salesNv, 'q1')).rejects.toMatchObject({ status: 400 })
+    expect(quotesRepo.patch).not.toHaveBeenCalled()
   })
 
   it('đã sent thì không chốt lại được', async () => {
@@ -171,7 +195,7 @@ describe('quotesService.assertSent — cổng tạo đơn hàng', () => {
 describe('quotesService.send — admin', () => {
   it('admin chốt được báo giá', async () => {
     vi.mocked(quotesRepo.findById).mockResolvedValue(QUOTE as never)
-    vi.mocked(quotesRepo.countLines).mockResolvedValue(1)
+    vi.mocked(quotesRepo.listLines).mockResolvedValue([{ unit_price: 1 }] as never)
     vi.mocked(quotesRepo.patch).mockResolvedValue({ ...QUOTE, status: 'sent' } as never)
     await quotesService.send(admin, 'q1')
     expect(quotesRepo.patch).toHaveBeenCalledWith('q1', { status: 'sent' })

@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { canMutateOwned } from '@/lib/record-ownership'
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
@@ -18,10 +18,7 @@ export default async function EditOrderPage({
   const user = await authService.requirePageUser()
   const { id } = await params
 
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  if (user.role !== 'admin' && dept?.name !== 'Bán Hàng') {
+  if (!(await canAction(user, 'sales.order.manage'))) {
     redirect(`/sales/orders/${id}`)
   }
 

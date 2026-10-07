@@ -34,8 +34,11 @@ export default async function EditQuotePage({
     throw e
   }
   const { quote, lines } = data
-  // Chỉ báo giá nháp mới sửa được — đã gửi thì bất biến.
-  if (quote.status !== 'draft') redirect(`/sales/quotes/${id}`)
+  // Nháp hoặc BỊ TỪ CHỐI mới sửa được (0149: sửa theo lý do GĐ rồi trình lại)
+  // — trang này từng chặn cả 'rejected' dù menu có nút Sửa (07/10/2026).
+  if (quote.status !== 'draft' && quote.status !== 'rejected') {
+    redirect(`/sales/quotes/${id}`)
+  }
 
   const [{ rows: customers }, lineProducts] = await Promise.all([
     customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),

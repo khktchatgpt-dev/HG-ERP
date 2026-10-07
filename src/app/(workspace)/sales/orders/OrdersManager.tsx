@@ -40,6 +40,20 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
 import { OrderStageBar } from '@/components/sales/OrderStageBar'
 import type { OrderStatus } from '@/lib/order-progress'
+import {
+  fmtD,
+  fmtN,
+  shortName,
+  daysBetween,
+  isClosed,
+  isLate,
+  poIsDistinct,
+  sharedLsx,
+  sumByCurrency,
+  DueCell,
+  type Group,
+} from './orders-manager.shared'
+import { todayVn } from '@/lib/date-vn'
 
 /**
  * SỔ ĐƠN HÀNG của Sales — dựng lại theo style v2 (shadcn + `.theme-v2`), cùng
@@ -82,6 +96,8 @@ export type OrderRow = {
   /** Σ dòng SP / số lượng / giá trị của đơn (ordersRepo.lineSummaryByOrderIds). */
   lines: number
   qty: number
+  /** Σ đã xuất theo đợt (0120) — cột ĐÃ XUẤT / CÒN của sổ Excel. */
+  shipped: number
   total: number
   /** Lệnh sản xuất đang chạy đơn này — null = chưa phát lệnh. */
   lsx_id: string | null
@@ -96,94 +112,11 @@ export type OrderRow = {
   can_edit: boolean
 }
 
-const fmtD = (d: string | null) =>
-  d
-    ? new Date(d).toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-      })
-    : '—'
-const fmtN = (n: number) => n.toLocaleString('vi-VN')
-
-/**
- * Tên gọi (chữ cuối) để nhét vừa ô hẹp: "Nguyễn T.Minh Hằng" → "Hằng". In đủ
- * họ tên trong ô hẹp 190px thì bị cắt thành "Nguyễn T.Min…" — vừa mất chữ vừa
- * không phân biệt được ai. Tên đầy đủ vẫn còn ở tooltip.
- */
-const shortName = (full: string) => full.trim().split(/\s+/).at(-1) ?? full
-
-/** Chênh lệch ngày (b − a) trên chuỗi yyyy-mm-dd — cùng cách tính với LsxWorkbench. */
-const daysBetween = (a: string, b: string) =>
-  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
-
-/** Đơn đã đóng thì hạn giao không còn là việc phải lo. */
-const isClosed = (o: OrderRow) => o.status === 'delivered' || o.status === 'cancelled'
-const isLate = (o: OrderRow, today: string) =>
-  !!o.due_date && o.due_date < today && !isClosed(o)
-
-/**
- * PO khách có đáng một ô riêng không? Dữ liệu thật phần lớn là PO trùng hoặc
- * nằm gọn trong mã đơn (`18005 HG-MX` ⊃ `18005`) — in lại chỉ tổ nhiễu.
- */
-const poIsDistinct = (o: OrderRow) =>
-  !!o.customer_po_no && !o.code.toLowerCase().includes(o.customer_po_no.toLowerCase())
-
-/**
- * Cả cụm khách này chạy CHUNG một lệnh sản xuất? Sổ thật rất hay như vậy —
- * ROSCO 13 đơn cùng nằm trong lệnh `01/26-27 - ROSCO`, và bản cũ in lại đúng
- * chuỗi đó 13 lần trên 180px mỗi dòng. Chung lệnh thì nói MỘT lần ở dải khách,
- * ô của từng dòng để trống. Cụm một đơn không tính (không có gì để gộp).
- */
-function sharedLsx(g: Group): { id: string; code: string } | null {
-  if (g.orders.length < 2) return null
-  const first = g.orders[0]
-  if (!first.lsx_id || !first.lsx_code) return null
-  return g.orders.every((o) => o.lsx_id === first.lsx_id)
-    ? { id: first.lsx_id, code: first.lsx_code }
-    : null
-}
-
-/** Σ giá trị theo từng loại tiền → "1.250.000 USD · 300.000.000 VND". */
-function sumByCurrency(orders: OrderRow[]): string {
-  const by = new Map<string, number>()
-  for (const o of orders)
-    if (o.total > 0) by.set(o.currency, (by.get(o.currency) ?? 0) + o.total)
-  if (by.size === 0) return '—'
-  return [...by.entries()].map(([cur, v]) => `${fmtN(v)} ${cur}`).join(' · ')
-}
-
-/* ── Hạn giao: ngày giữ màu thường, dòng phụ mới là cảnh báo ────────────────── */
-function DueCell({ o, today }: { o: OrderRow; today: string }) {
-  if (!o.due_date) return <span className="text-muted-foreground">—</span>
-  const days = daysBetween(today, o.due_date.slice(0, 10))
-  return (
-    <div>
-      <div className="text-sm tabular-nums">{fmtD(o.due_date)}</div>
-      {!isClosed(o) && days < 0 && (
-        <div className="text-[11px] font-medium text-red-600">⚠ quá {-days} ngày</div>
-      )}
-      {!isClosed(o) && days >= 0 && days <= 7 && (
-        <div className="text-[11px] font-medium text-amber-600">còn {days} ngày</div>
-      )}
-    </div>
-  )
-}
-
 type SortKey = 'due' | 'new' | 'name'
 const SORT_LABEL: Record<SortKey, string> = {
   due: 'Hạn giao gần nhất',
   new: 'Mới tạo trước',
   name: 'Khách hàng A → Z',
-}
-
-type Group = {
-  id: string
-  name: string
-  orders: OrderRow[]
-  /** Hạn sớm nhất trong nhóm (đơn còn mở) — dùng để xếp nhóm khi sort theo hạn. */
-  earliestDue: string | null
-  newest: string
 }
 
 /**
@@ -233,13 +166,16 @@ export function OrdersManager({
    * phải có đơn hay không: admin lỡ tạo một đơn thử mà mở sổ ở "của tôi" là
    * thấy đúng một dòng, tưởng mất sổ.
    */
-  const [mineOnly, setMineOnly] = useState(me.ownsCustomers)
+  // Ôm khách mà chưa có đơn nào → mở "của tôi" là sổ trống không nút chuyển (07/10/2026).
+  const [mineOnly, setMineOnly] = useState(
+    () => me.ownsCustomers && orders.some((o) => isMine(o, me.id)),
+  )
   /** Số đơn hiện trong một cụm khách trước khi phải bấm "xem thêm". */
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [groupLimit, setGroupLimit] = useState(GROUP_PAGE)
   const [sort, setSort] = useState<SortKey>('due')
   const [showAllAttention, setShowAllAttention] = useState(false)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
 
   /*
    * Tab = bộ lọc theo NHÓM trạng thái, không phải từng status một: Sales nghĩ
@@ -342,7 +278,7 @@ export function OrdersManager({
   const showPo = shownOrders.some((o) => poIsDistinct(o))
   const showValue = shownOrders.some((o) => o.total > 0)
   /** Số đơn · [PO] · Tiến trình · SL · [Giá trị] · Hạn giao · LSX · menu. */
-  const colCount = 6 + (showPo ? 1 : 0) + (showValue ? 1 : 0)
+  const colCount = 7 + (showPo ? 1 : 0) + (showValue ? 1 : 0)
 
   /* Việc cần để mắt: đơn đã quá hạn hoặc tới hạn trong 7 ngày, gấp nhất lên đầu. */
   const attention = useMemo(
@@ -563,6 +499,7 @@ export function OrdersManager({
               {showPo && <col style={{ width: '140px' }} />}
               <col style={{ width: '165px' }} />
               <col style={{ width: '90px' }} />
+              <col style={{ width: '96px' }} />
               {showValue && <col style={{ width: '135px' }} />}
               <col style={{ width: '115px' }} />
               <col style={{ width: '180px' }} />
@@ -575,6 +512,7 @@ export function OrdersManager({
                   showPo ? 'PO khách' : null,
                   'Tiến trình',
                   'SL',
+                  'Đã xuất',
                   showValue ? 'Giá trị' : null,
                   'Hạn giao',
                   'Lệnh sản xuất',
@@ -585,7 +523,9 @@ export function OrdersManager({
                     <TableHead
                       key={i}
                       className={`text-foreground px-3 text-[11px] font-semibold tracking-wider uppercase ${
-                        label === 'SL' || label === 'Giá trị' ? 'text-right' : ''
+                        label === 'SL' || label === 'Đã xuất' || label === 'Giá trị'
+                          ? 'text-right'
+                          : ''
                       }`}
                     >
                       {label}
@@ -720,6 +660,23 @@ export function OrdersManager({
                             </>
                           ) : (
                             <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="px-3 py-2.5 text-right">
+                          {o.shipped > 0 ? (
+                            <>
+                              <div className="text-sm font-semibold tabular-nums">
+                                {fmtN(o.shipped)}
+                              </div>
+                              <div className="text-muted-foreground text-[11px] tabular-nums">
+                                còn {fmtN(Math.max(o.qty - o.shipped, 0))}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">
+                              Chưa xuất
+                            </span>
                           )}
                         </TableCell>
 

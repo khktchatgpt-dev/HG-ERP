@@ -325,6 +325,28 @@ export const lsxLinesService = {
   },
 
   /**
+   * Nút "Nạp dòng từ đơn" trên màn soạn — cùng cửa với `save` (quyền phát lệnh,
+   * của ai người đó sửa, lệnh chưa kết thúc). Route từng gọi thẳng
+   * `seedFromOrders` chỉ với điều kiện đã đăng nhập (07/10/2026): ai cũng nạp
+   * được, kể cả vào lệnh đã hoàn thành.
+   */
+  async reseed(user: User, lsxId: string): Promise<LsxSheet> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await productionRepo.findById(lsxId)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    if (!canMutateOwned(user, lsx.created_by)) {
+      throw Forbidden(
+        'Lệnh này do người khác lập — chỉ người lập hoặc quản lý mới nạp dòng được',
+      )
+    }
+    if (lsx.status === 'completed' || lsx.status === 'cancelled') {
+      throw BadRequest('Lệnh đã kết thúc — không nạp dòng được')
+    }
+    await lsxLinesService.seedFromOrders(lsxId)
+    return lsxLinesService.sheet(user, lsxId)
+  },
+
+  /**
    * LƯU nhóm + dòng do Sales soạn. Chặn xoá dòng đã vào sản xuất; lệnh đã duyệt
    * thì mỗi lần lưu là một bản chỉnh sửa (revision +1, đánh dấu dòng đổi).
    */

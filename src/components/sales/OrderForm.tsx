@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Paperclip, PackagePlus, Plus, Search } from 'lucide-react'
@@ -10,17 +10,13 @@ import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
 import { Button } from '@/components/shadcn/button'
 // Alias: helper `Card` cục bộ bên dưới (nhận prop `title`) đã được cả trang gọi,
 // nên thẻ shadcn vào đây dưới tên khác thay vì đổi hàng chục chỗ gọi.
-import {
-  Card as UiCard,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/shadcn/card'
+import { Card, L, LineField, Tab } from './order-form.shared'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
 import { shipWeekLabel } from '@/lib/ship-week'
+import { quoteNetPrice } from '@/lib/quote-price'
 import { NumberField } from '@/components/erp/NumberField'
 
 export type QuoteOption = {
@@ -171,6 +167,8 @@ export function OrderForm(props: {
    */
   lineProducts: ProductPick[]
   sentQuotes?: QuoteOption[]
+  /** Mở từ hồ sơ báo giá (?quote=) — chọn sẵn và nạp dòng ngay (chỉ mode create). */
+  initialQuoteId?: string | null
   order?: OrderInitial
   initialLines?: {
     product_id: string
@@ -186,11 +184,24 @@ export function OrderForm(props: {
   const [busy, setBusy] = useState(false)
   const keyRef = useRef(props.initialLines?.length ?? 0)
 
+  const initialQuoteId = mode === 'create' ? (props.initialQuoteId ?? null) : null
   const [source, setSource] = useState<'quote' | 'direct'>(
-    mode === 'edit' ? 'direct' : (props.sentQuotes?.length ?? 0) > 0 ? 'quote' : 'direct',
+    mode === 'edit'
+      ? 'direct'
+      : initialQuoteId || (props.sentQuotes?.length ?? 0) > 0
+        ? 'quote'
+        : 'direct',
   )
   const [code, setCode] = useState('')
-  const [quoteId, setQuoteId] = useState('')
+  const [quoteId, setQuoteId] = useState(initialQuoteId ?? '')
+  // Mở từ nút "Tạo đơn hàng" trên hồ sơ báo giá (?quote=) → nạp dòng ngay.
+  const bootQuote = useRef(initialQuoteId)
+  useEffect(() => {
+    const qid = bootQuote.current
+    bootQuote.current = null
+    if (qid) void selectQuote(qid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chạy một lần lúc mở
+  }, [])
   // Khách của báo giá đã chọn (đơn từ báo giá) — để nhóm SP theo đúng khách.
   const [quoteCustomerId, setQuoteCustomerId] = useState('')
   const [loadingQuote, setLoadingQuote] = useState(false)
@@ -292,7 +303,12 @@ export function OrderForm(props: {
     try {
       const data = await api<{
         quote: { customer_id: string; currency: string }
-        lines: { product_id: string; unit_price: number; note: string | null }[]
+        lines: {
+          product_id: string
+          unit_price: number
+          discount_pct: number | null
+          note: string | null
+        }[]
       }>(`/api/dept/sales/quotes/${qid}`)
       setQuoteCustomerId(data.quote.customer_id)
       setH((p) => ({ ...p, currency: data.quote.currency }))
@@ -302,7 +318,9 @@ export function OrderForm(props: {
           productId: l.product_id,
           draft: null,
           qty: '' as const,
-          unitPrice: l.unit_price,
+          // Giá SAU chiết khấu — bản in gửi khách là giá net; nạp giá gộp vào
+          // đơn là đơn ghi cao hơn giá đã chào (07/10/2026).
+          unitPrice: quoteNetPrice(l.unit_price, l.discount_pct),
           shipDate: '',
           note: l.note ?? '',
         })),
@@ -1407,104 +1425,3 @@ export function OrderForm(props: {
 }
 
 /** Thẻ mục của form — giữ nguyên tên `Card` nên mọi chỗ gọi không phải sửa. */
-function Card({
-  title,
-  right,
-  children,
-}: {
-  title: string
-  right?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <UiCard>
-      <CardHeader>
-        {/* Tiêu đề thẻ là CHỮ THẬT (14px, đậm, màu chữ chính) chứ không phải caps
-            11px xám: cả trang trước đây mọi tiêu đề cùng một sắc xám nhạt nên
-            không thẻ nào nổi lên được. */}
-        <CardTitle className="t-title">{title}</CardTitle>
-        {right && (
-          <div className="col-start-2 row-span-2 row-start-1 self-center">{right}</div>
-        )}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </UiCard>
-  )
-}
-
-/**
- * Nhãn trường của form. `strong` = trường Sales phải để mắt (hạn giao, số
- * lượng…) — nhãn đậm lên để mắt bắt được trước, thay vì mọi nhãn một sắc như cũ.
- */
-function L({
-  label,
-  span2,
-  strong,
-  children,
-}: {
-  label: string
-  span2?: boolean
-  strong?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label
-      className={`grid gap-1.5 ${span2 ? 'sm:col-span-2 lg:col-span-4 xl:col-span-1' : ''}`}
-    >
-      {/* Bậc `t-label` của thang chữ v3 — 11px hoa, giãn chữ 0.04em. Trước là
-          14px thường nên nhãn và giá trị cùng một cỡ, mắt không tách được đâu
-          là câu hỏi đâu là câu trả lời. */}
-      <span className={`t-label ${strong ? 'text-foreground' : 'text-muted-foreground'}`}>
-        {label}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-function LineField({
-  label,
-  strong,
-  children,
-}: {
-  label: string
-  strong?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      {/* Ở khổ rộng nhãn nằm ở hàng tiêu đề cột, in lại trên từng dòng là thừa —
-          nhưng vẫn giữ trong DOM cho trình đọc màn hình (`sr-only`). */}
-      <span
-        className={`t-label xl:sr-only ${strong ? 'text-foreground' : 'text-muted-foreground'}`}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-function Tab({
-  on,
-  onClick,
-  children,
-}: {
-  on: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
-        on
-          ? 'bg-card text-foreground shadow-xs'
-          : 'text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}

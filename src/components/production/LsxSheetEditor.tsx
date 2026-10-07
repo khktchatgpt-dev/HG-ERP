@@ -33,6 +33,7 @@ import {
 } from '@/lib/lsx-line-fill'
 import { valueState } from '@/lib/lsx-sheet-cells'
 import { LineMeter } from './lsx-editor/LineMeter'
+import { Fixed, LineImage } from './lsx-editor/Fixed'
 import { SourceChip } from './lsx-editor/SourceChip'
 import { SheetReadinessBar } from './lsx-editor/SheetReadinessBar'
 
@@ -78,47 +79,6 @@ const th =
 // Nhãn trường phải ĐỌC ĐƯỢC: panel chi tiết nền xám nhạt, ô nhập nền trắng —
 // nhãn để màu muted nữa là ba sắc trắng-xám chồng nhau, không phân biệt nổi.
 const fieldLabel = 'flex flex-col gap-1 text-xs font-medium text-foreground'
-
-/**
- * Ô CHỈ ĐỌC cho thông tin sản phẩm cố định (chốt 07/08/2026: "thông tin sản
- * phẩm có tính cố định không cho sửa trong giao diện LSX").
- *
- * Cố tình KHÔNG dùng `<Input disabled>`: ô nhập xám vẫn trông như ô nhập, người
- * dùng bấm vào rồi mới biết gõ không được. Chữ trơn nói ngay "cái này lấy từ
- * nơi khác". `bad` = trường trống mà gate gửi duyệt đang chặn.
- */
-function Fixed({
-  value,
-  mono,
-  right,
-  bad,
-}: {
-  value?: string | null
-  mono?: boolean
-  right?: boolean
-  bad?: boolean
-}) {
-  const v = (value ?? '').trim()
-  return (
-    <div
-      className={`px-2 py-1.5 text-xs ${mono ? 'font-mono' : ''} ${
-        right ? 'text-right tabular-nums' : ''
-      } ${bad ? 'rounded-md ring-1 ring-red-400' : ''} ${
-        v ? '' : 'text-muted-foreground'
-      }`}
-      title={v || undefined}
-    >
-      {v || '—'}
-    </div>
-  )
-}
-
-/** Ảnh SP trong bảng soạn dòng — nhận mặt hàng bằng mắt, khỏi dò mã. */
-function LineImage({ url }: { url?: string }) {
-  if (!url) return <div className="bg-muted size-9 rounded" aria-hidden />
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" className="size-9 rounded object-contain" />
-}
 
 export function LsxSheetEditor({
   lsxId,
@@ -342,10 +302,11 @@ export function LsxSheetEditor({
   async function save() {
     setBusy(true)
     try {
-      await api(`/api/dept/production/lsx/${lsxId}/lines`, {
-        method: 'PUT',
-        body: buildPayload(),
-      })
+      const sheet = await api<{ groups: (LsxGroup & { lines: LsxLine[] })[] }>(
+        `/api/dept/production/lsx/${lsxId}/lines`,
+        { method: 'PUT', body: buildPayload() },
+      )
+      adopt(sheet)
       toast.success('Đã lưu dòng lệnh', lsxCode)
       router.refresh()
     } catch (e) {
@@ -355,10 +316,26 @@ export function LsxSheetEditor({
     }
   }
 
+  /**
+   * Gán lại state từ bản API trả về sau Nạp/Lưu. State `groups` chỉ khởi tạo một
+   * lần từ props và `router.refresh()` KHÔNG chạm tới nó, nên trước 07/10/2026
+   * dòng vừa nạp không hiện ra, và lần Lưu kế gửi payload thiếu chúng →
+   * `replaceAll` xoá sạch dòng vừa nạp.
+   */
+  function adopt(sheet: { groups: (LsxGroup & { lines: LsxLine[] })[] }) {
+    setGroups(
+      sheet.groups.map((g) => ({ ...g, _key: newKey(), lines: g.lines.map(toEditLine) })),
+    )
+  }
+
   async function reseed() {
     setBusy(true)
     try {
-      await api(`/api/dept/production/lsx/${lsxId}/lines`, { method: 'POST', body: {} })
+      const sheet = await api<{ groups: (LsxGroup & { lines: LsxLine[] })[] }>(
+        `/api/dept/production/lsx/${lsxId}/lines`,
+        { method: 'POST', body: {} },
+      )
+      adopt(sheet)
       toast.success('Đã nạp dòng từ đơn hàng')
       router.refresh()
     } catch (e) {

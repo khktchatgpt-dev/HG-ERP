@@ -1,5 +1,5 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
@@ -18,10 +18,9 @@ const PAGE_CAP = 500
 
 export default async function SalesOrdersPage() {
   const user = await authService.requirePageUser()
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
+  // Cùng cửa với service (RBAC) — trước 07/10/2026 trang gác bằng tên phòng
+  // "Bán Hàng" nên có thể hiện nút rồi bấm mới ăn 403.
+  const canEdit = await canAction(user, 'sales.order.manage')
 
   // `total` để màn báo thật khi sổ vượt trần tải một lượt, thay vì lặng lẽ cắt.
   const [{ rows: orders, total }, { rows: customers }] = await Promise.all([
@@ -37,7 +36,7 @@ export default async function SalesOrdersPage() {
    *   · lsxCodes    — mã lệnh sản xuất của đơn đã phát lệnh; cột này thay chỗ
    *     cột "Từ BG" cũ (rỗng gần như 100% vì đơn hầu hết nhập thẳng).
    */
-  const [lineSummary, lsxCodes, creatorNames] = await Promise.all([
+  const [lineSummary, lsxCodes, creatorNames, shippedByOrder] = await Promise.all([
     ordersRepo.lineSummaryByOrderIds(orders.map((o) => o.id)),
     productionRepo.listCodesByIds([
       ...new Set(orders.map((o) => o.production_order_id).filter((v) => v !== null)),
@@ -46,6 +45,8 @@ export default async function SalesOrdersPage() {
     usersRepo.displayNamesByIds([
       ...new Set(orders.map((o) => o.created_by).filter((v) => v !== null)),
     ]),
+    // Σ đã xuất theo đơn (0120) — cột "Đã xuất / còn" của sổ Excel order HG.
+    ordersRepo.shippedByOrderIds(orders.map((o) => o.id)),
   ])
 
   return (
@@ -65,6 +66,7 @@ export default async function SalesOrdersPage() {
           created_at: o.created_at,
           lines: s?.lines ?? 0,
           qty: s?.qty ?? 0,
+          shipped: shippedByOrder[o.id] ?? 0,
           total: s?.total ?? 0,
           lsx_id: o.production_order_id,
           created_by_name: o.created_by ? (creatorNames.get(o.created_by) ?? null) : null,

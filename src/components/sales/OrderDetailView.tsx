@@ -52,6 +52,8 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { shipWeekLabel } from '@/lib/ship-week'
+import { InfoBlock, Tile } from './order-detail.shared'
+import { todayVn } from '@/lib/date-vn'
 import type { OrderStatus } from '@/lib/order-progress'
 
 /**
@@ -141,6 +143,8 @@ export type ChangeView = {
     lines?: unknown
     /** Số dòng được điền giá — chỉ có ở change type 'price_fill'. */
     count?: number
+    /** Mã lệnh — mốc do lsx.service ghi (lsx_submitted/approved/…). */
+    lsx_code?: string
   }
   note: string | null
   created_at: string
@@ -161,6 +165,17 @@ export type ProgressView = {
   note: string | null
   updated_by_name: string | null
   created_at: string
+}
+
+/** Mốc do lệnh / xưởng ghi vào lịch sử đơn (lsx.service.moveOrders, entries). */
+const LSX_EVENT_TITLE: Record<string, string> = {
+  lsx_submitted: 'Trình GĐ duyệt lệnh',
+  lsx_resubmitted: 'Trình duyệt lại lệnh',
+  lsx_approved: 'GĐ duyệt lệnh',
+  lsx_rejected: 'GĐ từ chối lệnh',
+  lsx_order_added: 'Gộp đơn vào lệnh',
+  lsx_order_removed: 'Gỡ đơn khỏi lệnh',
+  production_completed: 'Xưởng hoàn thành lệnh',
 }
 
 const FIELD_LABEL: Record<string, string> = {
@@ -222,85 +237,14 @@ export type MergeCandidate = {
 }
 
 /* ── Ô tóm tắt đầu trang ───────────────────────────────────────────────────── */
-function Tile({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0 px-4 py-2.5">
-      <div className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
-        {label}
-      </div>
-      <div className="mt-1">{children}</div>
-    </div>
-  )
-}
-
-/** Một ô thông tin — trả null khi rỗng để khối không bị rỗ dấu gạch. */
-function Info({
-  label,
-  value,
-  wide = false,
-}: {
-  label: string
-  value: string | null
-  wide?: boolean
-}) {
-  if (!value) return null
-  return (
-    <div className={`flex min-w-0 flex-col ${wide ? 'col-span-2' : ''}`}>
-      <span className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
-        {label}
-      </span>
-      <span className="text-sm break-words">{value}</span>
-    </div>
-  )
-}
-
-/**
- * Khối thông tin: chỉ vẽ ô có dữ liệu, tên các ô trống dồn xuống một dòng nhỏ.
- * Nhận mảng [nhãn, giá trị] để chỗ gọi khai một lần, không lặp hai lần cho hai
- * nhánh có/không.
- */
-function InfoBlock({
-  title,
-  fields,
-  footer,
-}: {
-  title: string
-  fields: [string, string | null, boolean?][]
-  footer?: React.ReactNode
-}) {
-  const filled = fields.filter(([, v]) => !!v)
-  const missing = fields.filter(([, v]) => !v).map(([l]) => l)
-  if (!filled.length && !footer) return null
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-          {filled.map(([label, value, wide]) => (
-            <Info key={label} label={label} value={value} wide={wide} />
-          ))}
-        </div>
-        {missing.length > 0 && (
-          <div className="text-muted-foreground border-t pt-2.5 text-xs">
-            Chưa khai: {missing.join(' · ')}
-          </div>
-        )}
-        {footer}
-      </CardContent>
-    </Card>
-  )
-}
-
 export function OrderDetailView({
   order,
   lines,
   changes,
   canEdit,
   canIssue,
+  canShip,
+  canDeliver,
   lsx,
   progress,
   stageLabels,
@@ -313,6 +257,10 @@ export function OrderDetailView({
   changes: ChangeView[]
   canEdit: boolean
   canIssue: boolean
+  /** Ghi / gỡ đợt xuất (sales.order.ship) — việc của phòng, không gác chủ đơn. */
+  canShip: boolean
+  /** Xác nhận đã giao (sales.order.confirm_delivery) — GĐ cũng có. */
+  canDeliver: boolean
   lsx: LsxView | null
   progress: ProgressView[]
   stageLabels: Record<string, string>
@@ -335,10 +283,10 @@ export function OrderDetailView({
   const [shipping, setShipping] = useState(false)
   const [shipLineId, setShipLineId] = useState('')
   const [shipQty, setShipQty] = useState('')
-  const [shipDay, setShipDay] = useState(() => new Date().toISOString().slice(0, 10))
+  const [shipDay, setShipDay] = useState(() => todayVn())
   const [shipNote, setShipNote] = useState('')
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
   const editable = order.status !== 'delivered' && order.status !== 'cancelled'
   const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
@@ -416,6 +364,23 @@ export function OrderDetailView({
           who: c.changed_by_name,
           detail: c.note,
           tone: 'blue',
+        })
+      } else if (t && t in LSX_EVENT_TITLE) {
+        // Mốc do LỆNH / XƯỞNG ghi vào lịch sử đơn (lsx.service.moveOrders) —
+        // trước 07/10/2026 rơi xuống nhánh else, hiện thành "Sửa đơn (khách
+        // thay đổi)" màu hổ phách dù khách không đổi gì.
+        const lsxCode = typeof c.change.lsx_code === 'string' ? c.change.lsx_code : null
+        evs.push({
+          at: c.created_at,
+          title: lsxCode ? `${LSX_EVENT_TITLE[t]} ${lsxCode}` : LSX_EVENT_TITLE[t],
+          who: c.changed_by_name,
+          detail: c.note,
+          tone:
+            t === 'lsx_rejected'
+              ? 'red'
+              : t === 'production_completed'
+                ? 'green'
+                : 'blue',
         })
       } else {
         const fields = c.change.fields
@@ -678,7 +643,7 @@ export function OrderDetailView({
                 Phát lệnh sản xuất
               </Button>
             )}
-            {canEdit && editable && order.status === 'completed' && (
+            {canDeliver && editable && order.status === 'completed' && (
               <Button onClick={() => void deliverOrder()} disabled={busy}>
                 <CheckCircle2 />
                 Xác nhận đã giao
@@ -1148,13 +1113,13 @@ export function OrderDetailView({
           </Card>
 
           {/* Giao hàng từng phần (0120) — thay cột ĐÃ XUẤT/CÒN của sổ Excel. */}
-          {(shipments.length > 0 || (canEdit && editable && openLines.length > 0)) && (
+          {(shipments.length > 0 || (canShip && editable && openLines.length > 0)) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Giao hàng ({fmtN(totalShipped)}/{fmtN(totalQty)})
                 </CardTitle>
-                {canEdit && editable && openLines.length > 0 && (
+                {canShip && editable && openLines.length > 0 && (
                   <div className="col-start-2 row-span-2 row-start-1 self-center">
                     <Button size="sm" onClick={() => setShipping(true)}>
                       <Truck />
@@ -1197,7 +1162,7 @@ export function OrderDetailView({
                           <span className="text-muted-foreground ml-auto text-[11px]">
                             {s.created_by_name}
                           </span>
-                          {canEdit && editable && (
+                          {canShip && editable && (
                             <button
                               onClick={() => void removeShipment(s)}
                               className="text-muted-foreground rounded p-1 text-xs hover:bg-red-50 hover:text-red-600"

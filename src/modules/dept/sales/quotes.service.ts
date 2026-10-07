@@ -10,6 +10,7 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { emit } from '@/events/bus'
+import { todayVn } from '@/lib/date-vn'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -124,8 +125,19 @@ export const quotesService = {
     if (before.status !== 'draft' && before.status !== 'approved') {
       throw BadRequest('Báo giá đã chốt rồi')
     }
-    if ((await quotesRepo.countLines(id)) === 0) {
+    const lines = await quotesRepo.listLines(id)
+    if (lines.length === 0) {
       throw BadRequest('Báo giá chưa có dòng sản phẩm nào')
+    }
+    // Giá 0 gửi khách là gửi tờ giấy trắng; hết hiệu lực là gửi giá đã chết.
+    const zero = lines.filter((l) => !(l.unit_price > 0))
+    if (zero.length) {
+      throw BadRequest(`Còn ${zero.length} dòng chưa có đơn giá — điền giá rồi mới gửi khách`)
+    }
+    if (before.valid_to && before.valid_to < todayVn()) {
+      throw BadRequest(
+        `Báo giá hết hiệu lực từ ${before.valid_to} — sửa ngày hiệu lực rồi mới gửi`,
+      )
     }
     return quotesRepo.patch(id, { status: 'sent' })
   },
@@ -206,6 +218,11 @@ export const quotesService = {
     if (!quote) throw NotFound('Báo giá không tồn tại')
     if (quote.status !== 'sent') {
       throw BadRequest('Chỉ tạo được đơn hàng từ báo giá đã chốt (gửi khách)')
+    }
+    if (quote.valid_to && quote.valid_to < todayVn()) {
+      throw BadRequest(
+        `Báo giá ${quote.code} hết hiệu lực từ ${quote.valid_to} — lập báo giá mới hoặc tạo đơn trực tiếp`,
+      )
     }
     return quote
   },

@@ -10,6 +10,7 @@ import {
   lsxExcelFilename,
   type LsxExcelImage,
 } from '@/modules/dept/production/lsx-excel'
+import { lsxPrintWatermark } from '@/lib/lsx-status'
 
 /**
  * Tải phiếu LỆNH SẢN XUẤT dạng .xlsx — bày giống hệt phiếu in (mẫu chuẩn, gộp
@@ -69,6 +70,7 @@ export const GET = handle(
         note: lsx.note,
         revision: lsx.revision,
         revised_at: lsx.revised_at,
+        watermark: lsxPrintWatermark(lsx.status),
       },
       template: sheet.template,
       groups: sheet.groups,

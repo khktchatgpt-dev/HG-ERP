@@ -180,6 +180,48 @@ describe('lsxLinesService.save — bản chỉnh sửa (0114)', () => {
   })
 })
 
+/**
+ * Nút "Nạp dòng từ đơn" (route POST lines) đi qua `reseed` — cùng cửa với
+ * `save`. Trước 07/10/2026 route gọi thẳng seedFromOrders chỉ cần đăng nhập.
+ */
+describe('lsxLinesService.reseed — cửa của nút Nạp dòng', () => {
+  beforeEach(() => {
+    vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([])
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([])
+    vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([])
+    vi.mocked(customersRepo.findById).mockResolvedValue({ lsx_template: null } as never)
+  })
+
+  it('người lập lệnh → nạp rồi trả sheet', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+    } as never)
+    const sheet = await lsxLinesService.reseed(sales, 'lsx1')
+    expect(sheet).toHaveProperty('groups')
+  })
+
+  it('lệnh của người khác lập → 403', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+      created_by: 'u-khac',
+    } as never)
+    await expect(lsxLinesService.reseed(sales, 'lsx1')).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
+  })
+
+  it.each(['completed', 'cancelled'])('lệnh %s → 400, không nạp', async (status) => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({ ...LSX, status } as never)
+    await expect(lsxLinesService.reseed(sales, 'lsx1')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
+  })
+})
+
 describe('lsxLinesService.seedFromOrders', () => {
   it('chỉ nạp đơn CHƯA có nhóm — không đụng nhóm đã soạn', async () => {
     vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([

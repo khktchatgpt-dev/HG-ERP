@@ -31,7 +31,15 @@ vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findByOrder: vi.fn(), patch: vi.fn(), detachOrders: vi.fn() },
 }))
 vi.mock('@/modules/dept/production/jobs.repo', () => ({
-  jobsRepo: { replaceForLine: vi.fn() },
+  jobsRepo: { replaceForLine: vi.fn(), listByLsx: vi.fn(async () => []) },
+}))
+// Huỷ đơn trong lệnh gộp xoá NHÓM của đơn (0114) — mock, không chạm DB.
+vi.mock('@/modules/dept/production/lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listGroups: vi.fn(async () => []),
+    listLines: vi.fn(async () => []),
+    deleteGroups: vi.fn(),
+  },
 }))
 vi.mock('@/modules/dept/supply/pos.repo', () => ({
   posRepo: { list: vi.fn(), patch: vi.fn(), listTouchingLsx: vi.fn() },
@@ -58,6 +66,7 @@ import { quotesService } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
@@ -103,7 +112,11 @@ beforeEach(() => {
     makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
   vi.mocked(ordersRepo.existsByCode).mockResolvedValue(false)
+  vi.mocked(ordersRepo.shippedByLine).mockResolvedValue({})
   vi.mocked(productionRepo.findByOrder).mockResolvedValue(null)
+  vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+  vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([])
+  vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([])
   vi.mocked(posRepo.list).mockResolvedValue({ rows: [], total: 0 } as never)
   vi.mocked(posRepo.listTouchingLsx).mockResolvedValue({ pos: [], lsxCodes: new Map() })
   vi.mocked(departmentsRepo.list).mockResolvedValue([] as never)
@@ -297,6 +310,49 @@ describe('ordersService.update — FR-SAL-05: mọi thay đổi có vết', () =
       ordersService.update(sales, 'o1', { due_date: '2026-08-01' }),
     ).rejects.toMatchObject({ status: 400 })
   })
+
+  /*
+   * Dòng ĐÃ XUẤT (0120): bỏ dòng = FK cascade xoá luôn đợt xuất; đổi SP cũng là
+   * bỏ dòng cũ (replaceLines khớp theo product_id). Chặn trước khi ghi (07/10/2026).
+   */
+  describe('dòng đã có đợt xuất', () => {
+    beforeEach(() => {
+      vi.mocked(ordersRepo.findById).mockResolvedValue(ORDER as never)
+      vi.mocked(ordersRepo.listLines).mockResolvedValue([
+        { id: 'l1', product_id: 'p1', qty: 100, unit_price: 10, product_code: 'SP1' },
+        { id: 'l2', product_id: 'p2', qty: 50, unit_price: 20, product_code: 'SP2' },
+      ] as never)
+      vi.mocked(ordersRepo.shippedByLine).mockResolvedValue({ l1: 30 })
+    })
+
+    it('bỏ dòng đã xuất → 400, không replaceLines', async () => {
+      await expect(
+        ordersService.update(sales, 'o1', {
+          lines: [{ product_id: 'p2', qty: 50, unit_price: 20 }],
+        }),
+      ).rejects.toMatchObject({ status: 400 })
+      expect(ordersRepo.replaceLines).not.toHaveBeenCalled()
+    })
+
+    it('giảm SL dưới số đã xuất (30) → 400', async () => {
+      await expect(
+        ordersService.update(sales, 'o1', {
+          lines: [
+            { product_id: 'p1', qty: 29, unit_price: 10 },
+            { product_id: 'p2', qty: 50, unit_price: 20 },
+          ],
+        }),
+      ).rejects.toMatchObject({ status: 400 })
+      expect(ordersRepo.replaceLines).not.toHaveBeenCalled()
+    })
+
+    it('giảm SL còn ≥ số đã xuất, bỏ dòng CHƯA xuất → ghi bình thường', async () => {
+      await ordersService.update(sales, 'o1', {
+        lines: [{ product_id: 'p1', qty: 30, unit_price: 10 }],
+      })
+      expect(ordersRepo.replaceLines).toHaveBeenCalled()
+    })
+  })
 })
 
 describe('ordersService.update — báo Cung ứng khi sửa sau phát LSX (P2)', () => {
@@ -472,24 +528,59 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
     expect(evt.pos_manual[1]).toMatch(/^PO-98 \(đơn nháp/)
   })
 
-  it('lệnh gộp còn đơn khác → chỉ gỡ đơn khỏi lệnh, lệnh KHÔNG dừng, PO giữ nguyên (0113)', async () => {
-    vi.mocked(productionRepo.findByOrder).mockResolvedValue({
-      id: 'lsx1',
-      code: 'LSX-01',
-      status: 'in_progress',
-      order_ids: ['o1', 'o2'],
-    } as never)
-    vi.mocked(ordersRepo.listLines).mockResolvedValue([{ id: 'line1' }] as never)
+  describe('lệnh gộp còn đơn khác (0113)', () => {
+    beforeEach(() => {
+      vi.mocked(productionRepo.findByOrder).mockResolvedValue({
+        id: 'lsx1',
+        code: 'LSX-01',
+        status: 'in_progress',
+        order_ids: ['o1', 'o2'],
+      } as never)
+      // Nhóm g1 của đơn o1 (2 dòng lệnh), nhóm g2 của đơn o2.
+      vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([
+        { id: 'g1', sales_order_id: 'o1' },
+        { id: 'g2', sales_order_id: 'o2' },
+      ] as never)
+      vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([
+        { id: 'pl1', group_id: 'g1' },
+        { id: 'pl2', group_id: 'g1' },
+        { id: 'pl3', group_id: 'g2' },
+      ] as never)
+    })
 
-    await ordersService.cancel(sales, 'o1', 'Khách huỷ 1 đơn')
+    it('chỉ gỡ đơn + XOÁ NHÓM của đơn (cascade dòng, job); lệnh KHÔNG dừng, PO giữ nguyên', async () => {
+      await ordersService.cancel(sales, 'o1', 'Khách huỷ 1 đơn')
 
-    expect(productionRepo.detachOrders).toHaveBeenCalledWith(['o1'])
-    expect(productionRepo.patch).not.toHaveBeenCalled()
-    expect(posRepo.patch).not.toHaveBeenCalled()
-    expect(jobsRepo.replaceForLine).toHaveBeenCalledWith('lsx1', 'line1', [])
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'order.cancelled', lsx_cancelled: false }),
-    )
+      expect(lsxLinesRepo.deleteGroups).toHaveBeenCalledWith(['g1'])
+      expect(productionRepo.detachOrders).toHaveBeenCalledWith(['o1'])
+      expect(productionRepo.patch).not.toHaveBeenCalled()
+      expect(posRepo.patch).not.toHaveBeenCalled()
+      expect(jobsRepo.replaceForLine).not.toHaveBeenCalled()
+      expect(emit).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'order.cancelled', lsx_cancelled: false }),
+      )
+    })
+
+    it('dòng của đơn đã vào sản xuất (job khác todo) → 400, đơn KHÔNG huỷ, lệnh nguyên', async () => {
+      vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+        { production_order_line_id: 'pl2', status: 'doing' },
+        { production_order_line_id: 'pl3', status: 'done' },
+      ] as never)
+      await expect(ordersService.cancel(sales, 'o1', 'Khách huỷ')).rejects.toMatchObject({
+        status: 400,
+      })
+      expect(ordersRepo.patch).not.toHaveBeenCalled()
+      expect(lsxLinesRepo.deleteGroups).not.toHaveBeenCalled()
+      expect(productionRepo.detachOrders).not.toHaveBeenCalled()
+    })
+
+    it('job đang chạy thuộc đơn KHÁC trong lệnh → vẫn huỷ được', async () => {
+      vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+        { production_order_line_id: 'pl3', status: 'done' },
+      ] as never)
+      await ordersService.cancel(sales, 'o1', 'Khách huỷ')
+      expect(lsxLinesRepo.deleteGroups).toHaveBeenCalledWith(['g1'])
+    })
   })
 
   it('LSX đã hoàn thành → không đụng LSX', async () => {
@@ -649,10 +740,30 @@ describe('ordersService.recordShipment', () => {
     ).rejects.toMatchObject({ status: 400 })
   })
 
-  it('sale khác (không phải chủ đơn) → 403', async () => {
+  /*
+   * Xuất hàng là việc của PHÒNG (sales.order.ship, 07/10/2026), không gác chủ
+   * đơn như sửa/huỷ: trước đó chỉ người tạo ghi được → đơn nạp script
+   * (created_by null) không ai ghi, 0 đợt xuất dù 5 lệnh đã xong.
+   */
+  it('sale khác (không phải chủ đơn) vẫn ghi được', async () => {
     const sale2 = { id: 'u-sale2', role: 'employee', department_id: 'd-sales' } as never
+    await ordersService.recordShipment(sale2, 'o1', { order_line_id: 'line1', qty: 1 })
+    expect(ordersRepo.insertShipment).toHaveBeenCalled()
+  })
+
+  it('đơn không có chủ (nạp bằng script) → sale ghi được', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      created_by: null,
+    } as never)
+    await ordersService.recordShipment(sales, 'o1', { order_line_id: 'line1', qty: 1 })
+    expect(ordersRepo.insertShipment).toHaveBeenCalled()
+  })
+
+  it('NV ngoài Kinh doanh → 403', async () => {
+    const kho = { id: 'u-kho', role: 'employee', department_id: 'd-kho' } as never
     await expect(
-      ordersService.recordShipment(sale2, 'o1', { order_line_id: 'line1', qty: 1 }),
+      ordersService.recordShipment(kho, 'o1', { order_line_id: 'line1', qty: 1 }),
     ).rejects.toMatchObject({ status: 403 })
   })
 })

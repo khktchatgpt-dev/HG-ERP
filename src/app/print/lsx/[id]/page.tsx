@@ -6,6 +6,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { LsxPrintSheet } from '../LsxPrintSheet'
+import { lsxPrintWatermark } from '@/lib/lsx-status'
 
 /**
  * In phiếu LỆNH SẢN XUẤT chính thức — nhóm + dòng lệnh (0114), bộ cột theo mẫu
@@ -64,6 +65,7 @@ export default async function LsxPrintPage({
       template={sheet.template}
       groups={sheet.groups}
       imageUrls={imageUrls}
+      watermark={lsxPrintWatermark(lsx.status)}
     />
   )
 }

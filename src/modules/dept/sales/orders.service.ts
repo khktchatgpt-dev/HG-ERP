@@ -11,6 +11,7 @@ import { planCostService } from '@/modules/dept/technical/plan-cost.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { planPoCascade } from '@/lib/po-cancel-cascade'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
@@ -311,6 +312,28 @@ export const ordersService = {
           .map((l) => `${l.product_id}:${l.qty}:${l.unit_price}:${l.ship_date ?? ''}`)
           .join('|')
       if (norm(beforeLines) !== norm(input.lines)) {
+        /*
+         * Dòng ĐÃ XUẤT: bỏ dòng = FK cascade xoá luôn đợt xuất (0120), đổi SP
+         * cũng là bỏ dòng cũ (replaceLines khớp theo product_id). Chặn ở đây,
+         * và chặn giảm SL xuống dưới số đã xuất (07/10/2026).
+         */
+        const shippedByLine = await ordersRepo.shippedByLine(id)
+        const afterByProduct = new Map(input.lines.map((l) => [l.product_id, l]))
+        for (const bl of beforeLines) {
+          const shipped = shippedByLine[bl.id] ?? 0
+          if (shipped <= 0) continue
+          const after = afterByProduct.get(bl.product_id)
+          if (!after) {
+            throw BadRequest(
+              `Dòng ${bl.product_code} đã xuất ${shipped} — không bỏ khỏi đơn được. Gỡ đợt xuất trước nếu ghi nhầm.`,
+            )
+          }
+          if (after.qty < shipped) {
+            throw BadRequest(
+              `Dòng ${bl.product_code} đã xuất ${shipped} — số lượng mới (${after.qty}) không được thấp hơn số đã xuất.`,
+            )
+          }
+        }
         linesChange = {
           before: beforeLines.map((l) => ({
             product_code: l.product_code,
@@ -528,6 +551,42 @@ export const ordersService = {
     assertOwner(user, before)
     assertEditable(before)
 
+    /*
+     * Lệnh gộp (0113): huỷ MỘT đơn thì phần lệnh của đơn đó (nhóm 0114 + dòng +
+     * job) phải đi theo, không thì xưởng vẫn làm và vẫn in hàng của đơn đã huỷ.
+     * Trước 07/10/2026 chỉ gỡ đơn khỏi lệnh và gọi `replaceForLine` với id dòng
+     * ĐƠN (không phải dòng LỆNH) nên không xoá được gì. Kiểm TRƯỚC khi đổi
+     * trạng thái: đơn đã vào sản xuất thì không huỷ âm thầm được.
+     */
+    let lsxOfOrder: Awaited<ReturnType<typeof productionRepo.findByOrder>> = null
+    try {
+      lsxOfOrder = await productionRepo.findByOrder(id)
+    } catch (err) {
+      // Đọc lệnh lỗi thì huỷ đơn vẫn đi tiếp (best-effort như trước), lệnh để nguyên.
+      console.error('[orders.cancel] đọc lệnh của đơn lỗi (đơn vẫn huỷ):', err)
+    }
+    const mergedGroupIds: string[] = []
+    if (lsxOfOrder && lsxOfOrder.order_ids.some((oid) => oid !== id)) {
+      const groups = (await lsxLinesRepo.listGroups(lsxOfOrder.id)).filter(
+        (g) => g.sales_order_id === id,
+      )
+      const groupIds = new Set(groups.map((g) => g.id))
+      const lineIds = new Set(
+        (await lsxLinesRepo.listLines(lsxOfOrder.id))
+          .filter((l) => groupIds.has(l.group_id))
+          .map((l) => l.id),
+      )
+      const jobs = await jobsRepo.listByLsx(lsxOfOrder.id)
+      if (
+        jobs.some((j) => lineIds.has(j.production_order_line_id) && j.status !== 'todo')
+      ) {
+        throw BadRequest(
+          `Đơn đã vào sản xuất trong lệnh gộp ${lsxOfOrder.code} (có công đoạn đang chạy/đã xong) — không huỷ được. Báo Kế hoạch SX dừng dòng của đơn này trước.`,
+        )
+      }
+      mergedGroupIds.push(...groupIds)
+    }
+
     const order = await ordersRepo.patch(id, { status: 'cancelled' })
     await ordersRepo.insertChange({
       order_id: id,
@@ -544,17 +603,15 @@ export const ordersService = {
     const posCancelled: string[] = []
     const posManual: string[] = []
     try {
-      const lsx = await productionRepo.findByOrder(id)
+      const lsx = lsxOfOrder
       if (lsx && lsx.order_ids.some((oid) => oid !== id)) {
         // Lệnh gộp nhiều đơn (0113): huỷ MỘT đơn không được dừng cả lệnh —
         // chỉ gỡ đơn đó ra, lệnh vẫn chạy cho các đơn còn lại. PO cũng giữ
-        // nguyên vì vật tư mua gộp cho cả lệnh.
+        // nguyên vì vật tư mua gộp cho cả lệnh. Xoá NHÓM của đơn → cascade dòng
+        // lệnh + job (đã kiểm phía trên: toàn bộ job còn 'todo').
         lsxCode = lsx.code
+        await lsxLinesRepo.deleteGroups(mergedGroupIds)
         await productionRepo.detachOrders([id])
-        // Bỏ luôn công việc đã lên kế hoạch cho dòng SP của đơn này, không thì
-        // gate "hoàn thành lệnh" đứng mãi vì chờ việc của đơn đã huỷ.
-        const lines = await ordersRepo.listLines(id)
-        await Promise.all(lines.map((l) => jobsRepo.replaceForLine(lsx.id, l.id, [])))
       } else if (lsx) {
         lsxCode = lsx.code
         if (
@@ -647,10 +704,10 @@ export const ordersService = {
       note?: string | null
     },
   ): Promise<void> {
-    await assertAction(user, 'sales.order.manage')
+    // Xuất hàng là việc của phòng (sales.order.ship) — KHÔNG gác chủ đơn như sửa/huỷ.
+    await assertAction(user, 'sales.order.ship')
     const order = await ordersRepo.findById(orderId)
     if (!order) throw NotFound('Đơn hàng không tồn tại')
-    assertOwner(user, order)
     assertEditable(order)
 
     const lines = await ordersRepo.listLines(orderId)
@@ -690,10 +747,10 @@ export const ordersService = {
 
   /** Gỡ một đợt xuất ghi nhầm — cùng quyền với ghi, có vết trong lịch sử. */
   async removeShipment(user: User, orderId: string, shipmentId: string): Promise<void> {
-    await assertAction(user, 'sales.order.manage')
+    // Xuất hàng là việc của phòng (sales.order.ship) — KHÔNG gác chủ đơn như sửa/huỷ.
+    await assertAction(user, 'sales.order.ship')
     const order = await ordersRepo.findById(orderId)
     if (!order) throw NotFound('Đơn hàng không tồn tại')
-    assertOwner(user, order)
     assertEditable(order)
     const shipment = await ordersRepo.findShipment(shipmentId)
     if (!shipment || shipment.order_id !== orderId)

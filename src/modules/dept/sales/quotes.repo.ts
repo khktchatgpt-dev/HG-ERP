@@ -340,13 +340,21 @@ export type LastPrice = {
   quoted_at: string
 }
 
-export async function lastPricesForCustomer(customerId: string): Promise<LastPrice[]> {
-  const { data } = await db()
+export async function lastPricesForCustomer(
+  customerId: string,
+  currency?: string | null,
+): Promise<LastPrice[]> {
+  // Chỉ giá ĐÃ CHÀO (sent) hoặc GĐ đã duyệt — bản nháp chưa phải giá; và cùng
+  // tiền tệ, không thì giá USD bị điền vào báo giá EUR (07/10/2026).
+  let q = db()
     .from('sales_quote_lines')
     .select(
-      'product_id, unit_price, quote:sales_quotes!inner(code, customer_id, created_at)',
+      'product_id, unit_price, quote:sales_quotes!inner(code, customer_id, status, currency, created_at)',
     )
     .eq('quote.customer_id', customerId)
+    .in('quote.status', ['sent', 'approved'])
+  if (currency) q = q.eq('quote.currency', currency)
+  const { data } = await q
     .order('created_at', { ascending: false, referencedTable: 'quote' })
     .limit(500)
   type Raw = {
