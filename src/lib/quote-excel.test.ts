@@ -284,3 +284,27 @@ describe('parseQuoteExcel — số âm và số 0 là dữ liệu SAI, không ph
     expect(r.rows[0].missing).toEqual([])
   })
 })
+
+describe('parseQuoteExcel — SL / MOQ và CK % (0225, 07/10/2026)', () => {
+  const HEAD2 = [...HEADER.slice(0, 18), 'SL / MOQ', 'Đơn giá (FOB) *', 'CK %', 'Ghi chú']
+  const r = (qty: unknown, ck: unknown) => [...rowFull.slice(0, 18), qty, 45.9, ck, 'x']
+  it('nhận cột SL/MOQ và CK — KHÔNG nhầm "SL / thùng" thành SL', () => {
+    const out = parseQuoteExcel([HEAD2, r(100, 10)])
+    expect(out.rows[0]).toMatchObject({ qty: 100, discount_pct: 10, qty_per_carton: 2 })
+    expect(out.rows[0].missing).toEqual([])
+  })
+  it('không có hai cột đó thì null, không chặn', () => {
+    const out = parseQuoteExcel([HEADER, rowFull])
+    expect(out.rows[0]).toMatchObject({ qty: null, discount_pct: null })
+    expect(out.rows[0].missing).toEqual([])
+  })
+  it('SL ≤ 0 hoặc CK ngoài 0–100 → chặn, nêu lý do', () => {
+    expect(parseQuoteExcel([HEAD2, r(0, 5)]).rows[0].missing.join()).toMatch(/SL \/ MOQ/)
+    expect(parseQuoteExcel([HEAD2, r(10, 120)]).rows[0].missing.join()).toMatch(/CK %/)
+  })
+  it('tiêu đề "Quantity" / "MOQ" / "Discount" cũng nhận', () => {
+    const head = [...HEADER.slice(0, 18), 'MOQ', 'Price', 'Discount (%)', 'Remark']
+    const out = parseQuoteExcel([head, r(50, 2.5)])
+    expect(out.rows[0]).toMatchObject({ qty: 50, unit_price: 45.9, discount_pct: 2.5 })
+  })
+})

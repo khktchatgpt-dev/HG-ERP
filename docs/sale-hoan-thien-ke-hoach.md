@@ -417,7 +417,17 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      Khối ký bỏ cột "KHÁCH HÀNG / CUSTOMER" (chủ dự án 07/10: khách không ký
      báo giá) — mặc định trong mã + migration 0226 sửa hàng BG của
      `doc_templates` (đã áp thẳng vào DB 07/10, chạy lại vô hại).
-   - Chưa làm: nhập Excel báo giá chưa đổi.
+   - **Nhập Excel · ✅ XONG 07/10/2026 (lượt 7)**: parser nhận thêm cột **SL / MOQ**
+     và **CK %** (tiêu đề VN/EN, không nhầm "SL / thùng"; SL ≤ 0 hay CK ngoài 0–100
+     → chặn); dòng mơ hồ (khớp nhiều SP) bày **ứng viên** để chọn tại chỗ + hộp tìm
+     SP (`ProductSearchDialog`) cho mọi dòng — dòng "SP mới" đổi được sang SP có
+     sẵn; **kiểm trùng trước khi tạo SP tạm**: không mã HG nhưng mã khách khớp đúng
+     một hồ sơ của chính khách đó → dùng lại; SP tạm tạo ra gắn `customer_id`
+     của báo giá; **file Excel gốc gắn vào báo giá** (`doc_type: quote`, ngăn Tài
+     liệu) qua `filesService.attachOrphanToDocument`; màn `/sales/quotes/import`
+     dựng lại kiểu ERP (`useImportQuote` + `ImportQuoteScreen`: ô đếm là bộ lọc,
+     thanh chốt đáy "còn thiếu" bấm được, chặn trước hai dòng cùng chọn một SP).
+     Mẫu Excel `docs/mau/MAU_BAO_GIA_SP_MOI.xlsx` sinh lại 22 cột.
 5. **Lượt 5 — tầng 3 form đơn (khuôn F)** · ✅ XONG 07/10/2026 — xem mục Lượt 2 ở trên.
 6. **Lượt 6 — in báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên.
-7. **Lượt 7 — tầng 3 còn lại**: nhập Excel báo giá, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.
+7. **Lượt 7 — nhập Excel báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên. Tầng 3 của ba màn đã hết việc đã liệt kê; còn lại là 7 đợt nghiệp vụ ở mục 4 (bắt đầu Đợt 1 ghi xuất thật) và Q1–Q6.

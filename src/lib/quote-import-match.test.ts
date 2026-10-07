@@ -56,7 +56,9 @@ function row(over: Partial<QuoteExcelRow> = {}): QuoteExcelRow {
     gw_kg: null,
     loading_40hc: null,
     unit: null,
+    qty: null,
     unit_price: 50,
+    discount_pct: null,
     note: null,
     image_id: null,
     missing: [],
@@ -180,5 +182,23 @@ describe('dòng thiếu dữ liệu', () => {
     )
     expect(rows[0].action).toBe('blocked')
     expect(rows[1].action).toBe('existing')
+  })
+})
+
+describe('dòng mơ hồ bày ỨNG VIÊN để chọn tại chỗ (07/10/2026)', () => {
+  it('trùng nhiều SP → candidates = các SP khớp, tối đa 5', () => {
+    const [r] = resolveImportRows([row({ customer_item_code: 'DUP-9' })], CATALOG)
+    expect(r.action).toBe('blocked')
+    expect(r.ambiguous).toBe(true)
+    expect(r.candidates.map((c) => c.id)).toEqual(['p2', 'p3'])
+    expect(r.blocked_reason).toMatch(/chọn đúng SP/)
+  })
+  it('dòng khớp một SP / SP mới → candidates rỗng', () => {
+    const [a, b] = resolveImportRows(
+      [row({ code: 'CH0065HG-AL' }), row({ row: 5, name: 'Hàng mới' })],
+      CATALOG,
+    )
+    expect(a.candidates).toEqual([])
+    expect(b.candidates).toEqual([])
   })
 })

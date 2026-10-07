@@ -163,6 +163,23 @@ export const filesRepo = {
     if (error) throw new Error(error.message)
   },
 
+  /**
+   * Gắn file đã có vào một chứng từ cha (07/10/2026): file Excel nguồn của nhập
+   * báo giá được tải lên TRƯỚC khi báo giá tồn tại (parent none), tạo xong mới
+   * trỏ về. Chỉ đặt một cột parent; các cột khác giữ nguyên.
+   */
+  async attachToParent(
+    id: string,
+    column: FileParentColumn,
+    parentId: string,
+  ): Promise<void> {
+    const { error } = await db()
+      .from('files')
+      .update({ [column]: parentId } as Partial<Record<FileParentColumn, string>>)
+      .eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
   async softDelete(id: string): Promise<void> {
     const { error } = await db()
       .from('files')

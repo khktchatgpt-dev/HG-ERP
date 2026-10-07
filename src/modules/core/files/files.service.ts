@@ -484,6 +484,23 @@ export const filesService = {
    * Chỉ áp cho file gắn SẢN PHẨM: ba cột này vô nghĩa với file của báo giá/đơn
    * hàng, và mở rộng bừa là mở luôn quyền cho parent chưa có ai nghĩ tới.
    */
+  /**
+   * Gắn file "mồ côi" (parent none) do CHÍNH người này tải lên vào một chứng từ
+   * vừa tạo — đường của nhập báo giá từ Excel. Không cho gắn file của người khác.
+   */
+  async attachOrphanToDocument(
+    user: User,
+    fileId: string,
+    column: FileParentColumn,
+    parentId: string,
+  ): Promise<void> {
+    const file = await filesRepo.getById(fileId)
+    if (!file || file.deleted_at) throw NotFound('File not found')
+    if (file.owner_id !== user.id)
+      throw Forbidden('Chỉ gắn được file do chính mình tải lên')
+    await filesRepo.attachToParent(fileId, column, parentId)
+  },
+
   async setProductFileMeta(
     user: User,
     fileId: string,

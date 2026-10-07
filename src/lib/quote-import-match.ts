@@ -29,8 +29,10 @@ export type ResolvedRow = QuoteExcelRow & {
   action: 'existing' | 'new' | 'blocked'
   matched_product_id: string | null
   matched_label: string | null
-  /** Khớp được nhiều SP — người dùng phải chỉ đích danh bằng mã nội bộ. */
+  /** Khớp được nhiều SP — người dùng chỉ đích danh: chọn một ứng viên ở màn xem trước hoặc điền mã. */
   ambiguous: boolean
+  /** Các SP khớp được khi mơ hồ (tối đa 5) — màn xem trước bày thành nút chọn. */
+  candidates: { id: string; code: string; name: string }[]
   has_image: boolean
   /** Vì sao bị chặn (chỉ có khi action = 'blocked'). */
   blocked_reason: string | null
@@ -79,6 +81,7 @@ export function resolveImportRows(
       matched_product_id: null as string | null,
       matched_label: null as string | null,
       ambiguous: false,
+      candidates: [] as { id: string; code: string; name: string }[],
       has_image: r.image_id != null,
       blocked_reason: null as string | null,
     }
@@ -103,10 +106,13 @@ export function resolveImportRows(
         ...base,
         action: 'blocked' as const,
         ambiguous: true,
+        candidates: hits
+          .slice(0, 5)
+          .map((h) => ({ id: h.id, code: h.code, name: h.name })),
         blocked_reason: `khớp ${hits.length} sản phẩm trong thư viện (${hits
           .slice(0, 3)
           .map((h) => h.code)
-          .join(', ')}) — điền Mã SP (HG) để chỉ đích danh`,
+          .join(', ')}) — chọn đúng SP ở đây hoặc điền Mã SP (HG) trong file`,
       }
     }
 
