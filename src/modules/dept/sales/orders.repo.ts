@@ -497,8 +497,9 @@ export const ordersRepo = {
   /**
    * LẦN ĐỔI DÒNG SP GẦN NHẤT của đơn khách, theo LỆNH (0227, 07/10/2026) — hộp
    * "Nguyên nhân" khi điều chỉnh đơn mua bày nó cạnh từng lệnh để người mua đối
-   * chiếu "khách đổi gì". Chỉ lấy lần đổi có `change.lines` (đổi dòng SP), bỏ
-   * lần chỉ đổi giá / ghi chú. Lệnh không có đơn khách nào đổi thì vắng mặt.
+   * chiếu "khách đổi gì". Chỉ lấy lần SỬA DÒNG trên app (`change.lines` dạng
+   * `{before, after}`); bỏ dạng mảng `{from, to}` của script điền giá FOB (05/10)
+   * — đó không phải khách đổi đơn. Lệnh không có lần sửa dòng nào thì vắng mặt.
    */
   async lastLineChangeByLsx(
     lsxIds: string[],
@@ -508,7 +509,7 @@ export const ordersRepo = {
       .from('sales_order_changes')
       .select('change, note, created_at, order:sales_orders!inner(code, production_order_id)')
       .in('order.production_order_id', lsxIds)
-      .not('change->lines', 'is', null)
+      .not('change->lines->after', 'is', null)
       .order('created_at', { ascending: false })
       .limit(200)
     if (error) throw new Error(error.message)

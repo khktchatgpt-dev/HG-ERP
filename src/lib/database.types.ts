@@ -3437,6 +3437,20 @@ export type Database = {
             referencedRelation: "production_orders"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "supply_po_adjustment_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustment_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
         ]
       }
       supply_po_adjustments: {
