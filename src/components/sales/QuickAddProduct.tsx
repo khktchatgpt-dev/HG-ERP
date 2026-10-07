@@ -74,7 +74,7 @@ export function QuickAddProduct({
   const [busy, setBusy] = useState(false)
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [unit, setUnit] = useState('cai')
+  const [unit, setUnit] = useState('cái')
   const [itemCode, setItemCode] = useState('')
   const [price, setPrice] = useState('')
   const [descEn, setDescEn] = useState('')
@@ -111,7 +111,7 @@ export function QuickAddProduct({
   function reset() {
     setCode('')
     setName('')
-    setUnit('cai')
+    setUnit('cái')
     setItemCode('')
     setPrice('')
     setDescEn('')
@@ -164,7 +164,7 @@ export function QuickAddProduct({
           body: {
             code: code.trim(),
             name: name.trim(),
-            unit: unit.trim() || 'cai',
+            unit: unit.trim() || 'cái',
             customer_id: customerId ?? null,
             customer_item_code: itemCode.trim() || null,
             description_en: descEn.trim() || null,

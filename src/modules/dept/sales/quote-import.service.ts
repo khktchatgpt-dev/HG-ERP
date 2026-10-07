@@ -264,7 +264,7 @@ export const quoteImportService = {
           created_by: user.id,
           code: r.code?.trim() || (await nextProductCode(codesInBatch)),
           name: r.name,
-          unit: r.unit?.trim() || 'cai',
+          unit: r.unit?.trim() || 'cái',
           customer_item_code: r.customer_item_code,
           description_en: r.description_en,
           material: r.material,

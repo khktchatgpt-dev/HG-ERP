@@ -526,7 +526,7 @@ export const productsService = {
       customer_name: input.customer_name || null,
       customer_item_code: input.customer_item_code ?? null,
       description_en: input.description_en ?? null,
-      unit: input.unit ?? 'cai',
+      unit: input.unit ?? 'cái',
       packing: input.packing ?? {},
       notes: input.notes ?? null,
       name_foreign: input.name_foreign ?? null,
@@ -589,7 +589,7 @@ export const productsService = {
       name: input.name,
       // Kinh doanh tạo nhanh thì không chọn loại/vật liệu — suy từ mã là đủ.
       ...classify(input),
-      unit: input.unit ?? 'cai',
+      unit: input.unit ?? 'cái',
       customer_id: input.customer_id ?? null,
       customer_name,
       customer_item_code: input.customer_item_code ?? null,

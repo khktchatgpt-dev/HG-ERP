@@ -222,7 +222,7 @@ export function OrderForm(props: {
   const [np, setNp] = useState({
     code: '',
     name: '',
-    unit: 'cai',
+    unit: 'cái',
     itemCode: '',
     price: '',
   })
@@ -399,7 +399,7 @@ export function OrderForm(props: {
         draft: {
           code: np.code.trim(),
           name: np.name.trim(),
-          unit: np.unit.trim() || 'cai',
+          unit: np.unit.trim() || 'cái',
           itemCode: np.itemCode.trim(),
           notes: npNotes.trim(),
           image: npImage,
@@ -412,7 +412,7 @@ export function OrderForm(props: {
         note: '',
       },
     ])
-    setNp({ code: '', name: '', unit: 'cai', itemCode: '', price: '' })
+    setNp({ code: '', name: '', unit: 'cái', itemCode: '', price: '' })
     setNpNotes('')
     setNpBarcode('')
     setNpSpec(emptySpec())

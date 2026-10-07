@@ -494,7 +494,7 @@ export const SECTION_TAB: Record<string, string> = {
  * cái để chọn. Trộn với giá trị thật đã dùng ở SP khác (`suggestions` từ server).
  */
 const SEED_SUGGEST: Record<string, string[]> = {
-  unit: ['cai', 'bo', 'set', 'pcs'],
+  unit: ['cái', 'bộ'],
   pack_unit_label: ['ctn', 'pallet'],
 }
 

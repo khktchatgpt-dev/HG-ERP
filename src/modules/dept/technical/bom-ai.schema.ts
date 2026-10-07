@@ -212,7 +212,7 @@ export const BOM_PRODUCT_FIELDS: FieldSpec[] = [
   {
     name: 'unit',
     type: 'string',
-    desc: 'Đơn vị tính của sản phẩm: "cai", "bo", "cap"… Không ghi thì null (mặc định là cái).',
+    desc: 'Đơn vị tính của sản phẩm, viết có dấu: "cái", "bộ", "cặp"… Không ghi thì null (mặc định là cái).',
   },
   {
     name: 'product_type',
