@@ -10,6 +10,8 @@ import {
   type LenhXuat,
 } from '@/lib/ke-hoach-xuat'
 import { shipPlanRepo } from './ship-plan.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxShipDateFromLots } from '@/lib/lsx-lots'
 import type { ShipPlanSaveInput } from './ship-plan.schema'
 
 /** Lệnh còn lên kế hoạch xuất được — đã xong / huỷ / nháp thì thôi. */
@@ -72,5 +74,19 @@ export const shipPlanService = {
       input.lots.map((l) => ({ ...l, product_ids: productIds })),
       user.id,
     )
+    // D1 (07/10/2026): hạn xuất đầu lệnh = lô sớm nhất. Lô chưa có ngày thì giữ
+    // hạn cũ (không xoá về null — xưởng vẫn cần một mốc).
+    const shipDate = lsxShipDateFromLots(input.lots.map((l, i) => ({ seq: i + 1, po_no: l.po_no, po_ref: l.po_ref, ship_date: l.ship_date, lines: l.lines }))) // prettier-ignore
+    if (shipDate) {
+      const cur = await productionRepo.findById(lsxId)
+      if (cur && cur.ship_date !== shipDate) {
+        await productionRepo.patch(lsxId, { ship_date: shipDate })
+        await productionRepo.insertChange({
+          production_order_id: lsxId,
+          changed_by: user.id,
+          change: { type: 'header_changed', fields: { ship_date: { from: cur.ship_date, to: shipDate } }, source: 'ship_lots' }, // prettier-ignore
+        })
+      }
+    }
   },
 }

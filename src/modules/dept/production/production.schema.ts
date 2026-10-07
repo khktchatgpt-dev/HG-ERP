@@ -126,6 +126,19 @@ export const lsxGroupSaveSchema = z.object({
 export const lsxSheetSaveSchema = z.object({
   groups: z.array(lsxGroupSaveSchema).min(1, 'Lệnh phải có ít nhất một nhóm').max(200),
   revision_note: z.string().trim().max(1000).optional().nullable(),
+  /** Khoá phiên bản lạc quan (07/10/2026): `updated_at` lúc mở màn — lệch là có người lưu trước. */
+  expected_updated_at: z.string().optional().nullable(),
+})
+
+/** Huỷ lệnh đã phát hành — bắt buộc lý do. */
+export const lsxCancelSchema = z.object({
+  reason: z.string().trim().min(1, 'Huỷ lệnh phải kèm lý do').max(1000),
+})
+
+/** Đồng bộ dòng lệnh từ dòng đơn: xem trước (apply=false) hoặc áp. */
+export const lsxSyncSchema = z.object({
+  apply: z.boolean().default(false),
+  revision_note: z.string().trim().max(1000).optional().nullable(),
 })
 
 /** Gộp thêm / gỡ bớt đơn của một lệnh đang chạy (0113). */

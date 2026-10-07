@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('./production.repo', () => ({
-  productionRepo: { findById: vi.fn(), patch: vi.fn() },
+  productionRepo: { findById: vi.fn(), patch: vi.fn(), insertChange: vi.fn() },
 }))
 vi.mock('./lsx-lines.repo', () => ({
   lsxLinesRepo: {
@@ -112,16 +112,48 @@ describe('lsxLinesService.save — bản chỉnh sửa (0114)', () => {
       .mockResolvedValueOnce([line({ qty: 100 })] as never) // trước khi lưu
       .mockResolvedValue([line({ qty: 80 })] as never) // sau khi lưu
 
-    await lsxLinesService.save(sales, 'lsx1', payload(80))
+    await lsxLinesService.save(sales, 'lsx1', {
+      ...payload(80),
+      revision_note: 'Khách giảm SL',
+    })
 
     expect(productionRepo.patch).toHaveBeenCalledWith(
       'lsx1',
       expect.objectContaining({ revision: 2 }),
     )
     expect(lsxLinesRepo.markChanged).toHaveBeenCalledWith(['l1'], 2)
+    expect(productionRepo.insertChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        change: expect.objectContaining({ type: 'revised', revision: 2 }),
+        note: 'Khách giảm SL',
+      }),
+    )
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'lsx.revised', changed_lines: 1 }),
     )
+  })
+
+  // 07/10/2026: bản sửa của lệnh đã duyệt là phiếu in lại cho xưởng — lý do bắt buộc.
+  it('lệnh ĐÃ DUYỆT + dòng đổi mà KHÔNG ghi lý do → 400, không ghi gì', async () => {
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([line({ qty: 100 })] as never)
+    await expect(lsxLinesService.save(sales, 'lsx1', payload(80))).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
+  })
+
+  it('khoá phiên bản: expected_updated_at lệch updated_at → 409 LSX_STALE', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      updated_at: '2026-10-07T03:00:00.000Z',
+    } as never)
+    await expect(
+      lsxLinesService.save(sales, 'lsx1', {
+        ...payload(80),
+        expected_updated_at: '2026-10-07T02:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'LSX_STALE' })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
   })
 
   it('không có gì đổi → KHÔNG tăng revision, không báo', async () => {

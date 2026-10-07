@@ -2517,6 +2517,49 @@ export type Database = {
           },
         ]
       }
+      // 0224 — thêm tay 07/10/2026 (migration chưa áp, chạy "sync types" sau khi áp sẽ sinh lại y hệt)
+      production_order_changes: {
+        Row: {
+          change: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          production_order_id: string
+        }
+        Insert: {
+          change: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id: string
+        }
+        Update: {
+          change?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_changes_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_order_changes: {
         Row: {
           change: Json

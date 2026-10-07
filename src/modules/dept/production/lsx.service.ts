@@ -19,6 +19,9 @@ import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canMutateOwned, canRemoveOrdersFromLsx } from '@/lib/record-ownership'
+import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
+import { diffLsxAgainstOrders, isAutoApplicable, type SyncItem } from '@/lib/lsx-sync'
+import type { LsxGroupInput, LsxLineInput } from './lsx-lines.repo'
 
 /**
  * Của ai người đó sửa (chốt 07/08/2026) — cửa thứ hai sau permission
@@ -113,8 +116,12 @@ export const lsxService = {
 
   async detail(_user: User, id: string) {
     const lsx = await lsxOrThrow(id)
-    const jobs = await jobsRepo.listByLsx(id)
-    return { lsx, jobs }
+    const [jobs, changes, lots] = await Promise.all([
+      jobsRepo.listByLsx(id),
+      productionRepo.listChanges(id),
+      shipPlanRepo.lotsOf([id]),
+    ])
+    return { lsx, jobs, changes, lots }
   },
 
   /**
@@ -413,7 +420,241 @@ export const lsxService = {
     if (input.note !== undefined) patch.note = input.note
 
     if (!Object.keys(patch).length) return lsx
-    return productionRepo.patch(id, patch)
+    // D1 (07/10/2026): lệnh đã chia lô thì hạn xuất = lô sớm nhất, sửa ở Kế
+    // hoạch xuất — gõ tay ở đây là hai nguồn một số.
+    if (patch.ship_date !== undefined && patch.ship_date !== lsx.ship_date) {
+      const lots = await shipPlanRepo.lotsOf([id])
+      if (lots.some((l) => l.ship_date)) {
+        throw BadRequest(
+          'Lệnh đã chia đợt xuất — hạn xuất lấy từ đợt sớm nhất. Sửa ngày ở Kế hoạch xuất hàng.',
+        )
+      }
+    }
+    const updated = await productionRepo.patch(id, patch)
+
+    // Sau khi GĐ duyệt, đổi đầu lệnh là thay đổi cam kết với xưởng → ghi vết +
+    // báo (trước 07/10/2026: đổi âm thầm, không ai biết hạn đã dời).
+    const published = lsx.status === 'approved' || lsx.status === 'in_progress'
+    const fields: Record<string, { from: unknown; to: unknown }> = {}
+    for (const k of [
+      'code',
+      'ship_date',
+      'container_summary',
+      'received_date',
+      'priority',
+    ] as const) {
+      if (k in patch && patch[k] !== lsx[k]) fields[k] = { from: lsx[k], to: patch[k] }
+    }
+    if (Object.keys(fields).length) {
+      await productionRepo.insertChange({
+        production_order_id: id,
+        changed_by: user.id,
+        change: { type: 'header_changed', fields, published },
+      })
+      if (published) {
+        await emit({
+          name: 'lsx.header.changed',
+          production_order_id: id,
+          code: updated.code,
+          fields,
+          changed_by: user.id,
+          notify_ids: await lsxAudienceIds(),
+        })
+      }
+    }
+    return updated
+  },
+
+  /**
+   * XOÁ LỆNH NHÁP / BỊ TỪ CHỐI (07/10/2026). Trước đó đơn cuối cùng kẹt trong
+   * lệnh nháp (gỡ đơn phải chừa ≥ 1 đơn) — muốn thoát chỉ còn cách huỷ cả đơn
+   * bán. Đơn trở về Xác nhận để phát lệnh lại; nhóm/dòng/lô/job cascade.
+   */
+  async deleteDraft(user: User, id: string): Promise<{ order_codes: string[] }> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
+    if (lsx.status !== 'draft' && lsx.status !== 'rejected') {
+      throw BadRequest(
+        'Chỉ xoá được lệnh NHÁP hoặc BỊ TỪ CHỐI — lệnh đã duyệt thì Huỷ lệnh',
+      )
+    }
+    const orders = await ordersRepo.listByProductionOrder(id)
+    await productionRepo.detachOrders(orders.map((o) => o.id))
+    await moveOrders(orders, 'confirmed', user.id, {
+      type: 'lsx_deleted',
+      lsx_code: lsx.code,
+    })
+    await productionRepo.deleteLsx(id)
+    return { order_codes: orders.map((o) => o.code) }
+  },
+
+  /**
+   * HUỶ LỆNH ĐÃ PHÁT HÀNH (chờ duyệt / đã duyệt / đang SX) — bắt lý do, đơn về
+   * Xác nhận (gỡ khỏi lệnh để phát lại được), báo xưởng + Cung ứng. Đã có công
+   * đoạn chạy thì chỉ quản lý mới huỷ được. KHÔNG tự huỷ đơn mua của lệnh:
+   * vật tư đã đặt có thể dùng cho lệnh khác — Cung ứng quyết.
+   */
+  async cancel(user: User, id: string, reason: string): Promise<ProductionOrder> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
+    if (!['pending_approval', 'approved', 'in_progress'].includes(lsx.status)) {
+      throw BadRequest(
+        'Lệnh không ở trạng thái huỷ được (nháp / từ chối thì Xoá; đã xong / đã huỷ thì thôi)',
+      )
+    }
+    const jobs = await jobsRepo.listByLsx(id)
+    const running = jobs.some((j) => j.status !== 'todo')
+    if (running && user.role !== 'admin' && user.role !== 'manager') {
+      throw BadRequest(
+        'Lệnh đã có công đoạn chạy — chỉ quản lý mới huỷ được lệnh đang sản xuất',
+      )
+    }
+    const orders = await ordersRepo.listByProductionOrder(id)
+    const updated = await productionRepo.patch(id, {
+      status: 'cancelled',
+      note: [`[Huỷ lệnh] ${reason}`, lsx.note].filter(Boolean).join(' · '),
+    })
+    await productionRepo.insertChange({
+      production_order_id: id,
+      changed_by: user.id,
+      change: { type: 'cancelled', from: lsx.status, running_jobs: running },
+      note: reason,
+    })
+    await productionRepo.detachOrders(orders.map((o) => o.id))
+    await moveOrders(
+      orders.filter((o) => !['delivered', 'cancelled'].includes(o.status)),
+      'confirmed',
+      user.id,
+      { type: 'lsx_cancelled', lsx_code: lsx.code },
+      reason,
+    )
+    await emit({
+      name: 'lsx.cancelled',
+      production_order_id: id,
+      code: lsx.code,
+      reason,
+      order_codes: orders.map((o) => o.code),
+      cancelled_by: user.id,
+      notify_ids: await lsxAudienceIds(),
+    })
+    return updated
+  },
+
+  /**
+   * ĐỒNG BỘ DÒNG LỆNH TỪ ĐƠN (07/10/2026): so từng nhóm gắn đơn với dòng đơn
+   * hiện tại → danh sách việc (thêm / bỏ / đổi SL / SP tách đợt phải chỉnh tay).
+   * `apply=false` chỉ xem; `apply=true` áp phần tự áp được qua `save` (lệnh đã
+   * phát hành thì sinh bản chỉnh sửa, lý do bắt buộc như mọi bản sửa).
+   */
+  async syncFromOrders(
+    user: User,
+    id: string,
+    opts: { apply: boolean; revision_note?: string | null },
+  ): Promise<{ items: SyncItem[]; applied: number; manual: number }> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
+    if (lsx.status === 'completed' || lsx.status === 'cancelled') {
+      throw BadRequest('Lệnh đã kết thúc — không đồng bộ được')
+    }
+    const [groups, lines, orders] = await Promise.all([
+      lsxLinesRepo.listGroups(id),
+      lsxLinesRepo.listLines(id),
+      ordersRepo.listByProductionOrder(id),
+    ])
+    const orderLines = await ordersRepo.listLinesByOrders(orders.map((o) => o.id))
+    const byOrder = new Map<
+      string,
+      { product_id: string; product_code: string; qty: number }[]
+    >()
+    for (const l of orderLines) {
+      const arr = byOrder.get(l.order_id) ?? []
+      arr.push({ product_id: l.product_id, product_code: l.product_code, qty: l.qty })
+      byOrder.set(l.order_id, arr)
+    }
+    const items = diffLsxAgainstOrders(
+      groups.map((g) => ({
+        id: g.id,
+        sales_order_id: g.sales_order_id,
+        lines: lines
+          .filter((l) => l.group_id === g.id)
+          .map((l) => ({
+            id: l.id,
+            product_id: l.product_id,
+            product_code: l.product_code,
+            qty: l.qty,
+          })),
+      })),
+      byOrder,
+    )
+    const manual = items.filter((it) => !isAutoApplicable(it)).length
+    if (!opts.apply) return { items, applied: 0, manual }
+
+    const auto = items.filter(isAutoApplicable)
+    if (!auto.length) return { items, applied: 0, manual }
+
+    // Dựng payload cho `save`: nhóm hiện có, áp từng việc.
+    const removeIds = new Set(
+      auto
+        .filter((it) => it.kind === 'remove')
+        .map((it) => (it as { line_id: string }).line_id),
+    )
+    const qtyById = new Map(
+      auto
+        .filter((it) => it.kind === 'qty')
+        .map((it) => [(it as { line_id: string }).line_id, (it as { to: number }).to]),
+    )
+    // Dòng THÊM: lấy bản nháp từ chính đơn (đủ nhận diện / quy cách từ hồ sơ SP).
+    const addByGroup = new Map<string, LsxLineInput[]>()
+    const addItems = auto.filter((it) => it.kind === 'add') as Extract<
+      SyncItem,
+      { kind: 'add' }
+    >[]
+    if (addItems.length) {
+      const orderIds = [
+        ...new Set(
+          addItems
+            .map((it) => groups.find((g) => g.id === it.group_id)?.sales_order_id)
+            .filter((x): x is string => !!x),
+        ),
+      ]
+      const drafts = await lsxLinesService.draftFromOrders(orderIds)
+      for (const it of addItems) {
+        const g = groups.find((x) => x.id === it.group_id)
+        const draft = drafts.find((d) => d.sales_order_id === g?.sales_order_id)
+        const line = draft?.lines.find((l) =>
+          it.product_id
+            ? l.product_id === it.product_id
+            : l.product_code === it.product_code,
+        )
+        if (!line) continue
+        const arr = addByGroup.get(it.group_id) ?? []
+        arr.push({ ...line, qty: it.qty })
+        addByGroup.set(it.group_id, arr)
+      }
+    }
+    const payload: (LsxGroupInput & { lines: LsxLineInput[] })[] = groups.map((g) => ({
+      ...g,
+      lines: [
+        ...lines
+          .filter((l) => l.group_id === g.id && !removeIds.has(l.id))
+          .map((l) => ({ ...l, qty: qtyById.get(l.id) ?? l.qty })),
+        ...(addByGroup.get(g.id) ?? []),
+      ],
+    }))
+    await lsxLinesService.save(user, id, {
+      groups: payload,
+      revision_note: opts.revision_note ?? 'Đồng bộ dòng lệnh theo đơn hàng',
+    })
+    await productionRepo.insertChange({
+      production_order_id: id,
+      changed_by: user.id,
+      change: { type: 'synced_from_orders', items: auto, manual },
+      note: opts.revision_note ?? null,
+    })
+    return { items, applied: auto.length, manual }
   },
 
   /**

@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import type { Json } from '@/lib/database.types'
 import type { LsxStatus } from './production.schema'
 
 /**
@@ -47,6 +48,16 @@ export type ProductionOrder = {
  * Lệnh + các ĐƠN nó đang chạy. Từ 0113 một lệnh gộp NHIỀU đơn (cùng khách),
  * nên chỗ nào trước đây đọc `order_code` nay đọc `order_codes` (đã sắp theo mã).
  */
+export type ProductionOrderChange = {
+  id: string
+  production_order_id: string
+  changed_by: string | null
+  changed_by_name: string | null
+  change: Record<string, unknown>
+  note: string | null
+  created_at: string
+}
+
 export type ProductionOrderWithOrders = ProductionOrder & {
   order_ids: string[]
   order_codes: string[]
@@ -339,6 +350,44 @@ export const productionRepo = {
       .eq('production_order_id', lsxId)
       .order('code')
     return ((data as { id: string }[] | null) ?? []).map((r) => r.id)
+  },
+
+  /** Vết thay đổi của lệnh (0224) — append-only, cùng mẫu sales_order_changes. */
+  async insertChange(row: {
+    production_order_id: string
+    changed_by: string | null
+    change: Record<string, unknown>
+    note?: string | null
+  }): Promise<void> {
+    const { error } = await db()
+      .from('production_order_changes')
+      .insert({ ...row, note: row.note ?? null, change: row.change as unknown as Json })
+    if (error) throw new Error(error.message)
+  },
+
+  async listChanges(lsxId: string): Promise<ProductionOrderChange[]> {
+    const { data, error } = await db()
+      .from('production_order_changes')
+      .select(
+        'id, production_order_id, changed_by, change, note, created_at, user:users(name)',
+      )
+      .eq('production_order_id', lsxId)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) throw new Error(error.message)
+    type Raw = Omit<ProductionOrderChange, 'changed_by_name'> & {
+      user: { name: string | null } | { name: string | null }[] | null
+    }
+    return ((data ?? []) as unknown as Raw[]).map(({ user, ...r }) => ({
+      ...r,
+      changed_by_name: (Array.isArray(user) ? user[0] : user)?.name ?? null,
+    }))
+  },
+
+  /** Xoá hẳn lệnh NHÁP / bị từ chối — cascade nhóm, dòng, lô, job, vết (chỉ service gọi sau khi kiểm). */
+  async deleteLsx(id: string): Promise<void> {
+    const { error } = await db().from('production_orders').delete().eq('id', id)
+    if (error) throw new Error(error.message)
   },
 
   async patch(id: string, patch: Partial<ProductionOrder>): Promise<ProductionOrder> {

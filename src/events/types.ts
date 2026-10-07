@@ -394,6 +394,27 @@ export type DomainEvent =
       notify_ids: string[]
     }
   | {
+      // HUỶ lệnh đã phát hành (07/10/2026): đơn về Xác nhận, xưởng dừng, Cung
+      // ứng soát lại đơn mua đã đặt cho lệnh (không tự huỷ đơn mua).
+      name: 'lsx.cancelled'
+      production_order_id: string
+      code: string
+      reason: string
+      order_codes: string[]
+      cancelled_by: string
+      notify_ids: string[]
+    }
+  | {
+      // Đổi ĐẦU LỆNH sau khi GĐ duyệt (hạn xuất / số lệnh / container): xưởng
+      // và Cung ứng đang chạy theo số cũ — phải biết.
+      name: 'lsx.header.changed'
+      production_order_id: string
+      code: string
+      fields: Record<string, { from: unknown; to: unknown }>
+      changed_by: string
+      notify_ids: string[]
+    }
+  | {
       // Đổi phạm vi lệnh ĐANG CHẠY: gộp thêm / gỡ bớt đơn (0113). Kế hoạch phải
       // thêm-bớt việc, Cung ứng phải soát lại vật tư đã đặt.
       name: 'lsx.orders.changed'
