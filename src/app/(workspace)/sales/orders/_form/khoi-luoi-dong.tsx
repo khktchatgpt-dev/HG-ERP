@@ -450,7 +450,7 @@ function KhoiSpMoi({ d }: { d: DonHangFormCtx }) {
   const [f, setF] = useState<LineDraft & { price: string }>({
     code: '',
     name: '',
-    unit: 'cai',
+    unit: 'cái',
     itemCode: '',
     notes: '',
     barcode: '',
@@ -544,7 +544,7 @@ function KhoiSpMoi({ d }: { d: DonHangFormCtx }) {
                 ...draft,
                 code: draft.code.trim(),
                 name: draft.name.trim(),
-                unit: draft.unit.trim() || 'cai',
+                unit: draft.unit.trim() || 'cái',
                 itemCode: draft.itemCode.trim(),
               },
               price.trim(),

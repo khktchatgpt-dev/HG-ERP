@@ -312,7 +312,7 @@ export const quoteImportService = {
           name: r.name,
           // Khách của báo giá — để lần nhập sau khớp "mã khách + khách" mà không tạo trùng.
           customer_id: input.customer_id,
-          unit: r.unit?.trim() || 'cai',
+          unit: r.unit?.trim() || 'cái',
           customer_item_code: r.customer_item_code,
           description_en: r.description_en,
           material: r.material,

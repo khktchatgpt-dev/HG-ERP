@@ -90,9 +90,9 @@ describe('productCreateSchema', () => {
     expect(p.packing?.carton_l_cm).toBe(75)
   })
 
-  it('unit mặc định "cai"; customer_name nullable (mẫu chung)', () => {
+  it('unit mặc định "cái" (cách viết của 799/807 SP); customer_name nullable (mẫu chung)', () => {
     const p = productCreateSchema.parse({ code: 'X', name: 'Y', customer_name: null })
-    expect(p.unit).toBe('cai')
+    expect(p.unit).toBe('cái')
     expect(p.customer_name).toBeNull()
   })
 
@@ -273,5 +273,39 @@ describe('productClusterUpdateSchema — ba trường khai cụm', () => {
     expect(productClusterUpdateSchema.safeParse({ name: 'Cụm chân trước' }).success).toBe(
       true,
     )
+  })
+})
+
+describe('productUpdateSchema — sửa một phần không đụng ô khác (07/10/2026)', () => {
+  it('PATCH chỉ có packing / ảnh KHÔNG chèn unit mặc định', () => {
+    expect(
+      productUpdateSchema.parse({ packing: { qty_per_carton: 2 } }),
+    ).not.toHaveProperty('unit')
+    expect(productUpdateSchema.parse({ image_file_id: null })).not.toHaveProperty('unit')
+  })
+  it('giữ đủ khoá thông số + KL cân thực tế của trang chi tiết', () => {
+    const p = productUpdateSchema.parse({
+      tech_spec: {
+        paint: 'RAL 7016',
+        fabric: 'Olefin',
+        hardware: 'Inox 304',
+        finish: 'Matt',
+      },
+      actual_weight_kg: 12.5,
+    })
+    expect(p.tech_spec).toEqual({
+      paint: 'RAL 7016',
+      fabric: 'Olefin',
+      hardware: 'Inox 304',
+      finish: 'Matt',
+    })
+    expect(p.actual_weight_kg).toBe(12.5)
+  })
+})
+
+describe('packingSchema — giữ CBM khai tay (08/10/2026)', () => {
+  it('PATCH đóng gói không lột khoá cbm', () => {
+    const p = productUpdateSchema.parse({ packing: { qty_per_carton: 2, cbm: 0.42 } })
+    expect(p.packing).toEqual({ qty_per_carton: 2, cbm: 0.42 })
   })
 })
