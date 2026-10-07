@@ -4,23 +4,20 @@ import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { db } from '@/server/db'
+import { lastPricesForCustomer } from '@/modules/dept/sales/quotes.repo'
+import { productsRepo } from '@/modules/dept/technical/technical.repo'
+import { fileImageSrc } from '@/server/file-image'
 import { HttpError } from '@/server/http'
 import { HoSoKhachScreen } from './HoSoKhachScreen'
 
 /**
- * Hồ sơ khách hàng + lịch sử báo giá/đơn (FR-SAL-01). Server component: đọc KH
- * + danh sách báo giá/đơn của KH rồi giao cho client render (tabs, bảng).
+ * Hồ sơ khách hàng (khuôn E): khách là ai · làm ăn ra sao (đơn, báo giá, giá đã
+ * chào) · dùng ở đâu (SP gắn khách). Server tải song song rồi giao client vẽ.
  */
-export default async function CustomerDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isSalesUser(user))
   if (!allowed) redirect('/')
-
   const { id } = await params
 
   let customer
@@ -31,25 +28,22 @@ export default async function CustomerDetailPage({
     throw e
   }
 
-  const [
-    { rows: quotes },
-    orders,
-    changes,
-    { data: salesMembers },
-    { count: productCount },
-  ] = await Promise.all([
-    quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
-    ordersService.listByCustomer(user, id),
-    ordersRepo.listChangesByCustomer(id),
-    db().from('users').select('id, name, email').eq('is_active', true).order('name'),
-    // "Dùng ở đâu": SP trong thư viện gắn khách này — chỉ đếm.
-    db()
-      .from('technical_products')
-      .select('id', { count: 'exact', head: true })
-      .eq('customer_id', id),
-  ])
-  // Giá trị từng đơn — thống kê tiền (doanh số năm, TB đơn) tính phía client.
+  const [{ rows: quotes }, orders, changes, members, { rows: products, total: productTotal }, lastPrices] =
+    await Promise.all([
+      quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
+      ordersService.listByCustomer(user, id),
+      ordersRepo.listChangesByCustomer(id),
+      salesService.members([user.id, customer.owner_id]),
+      productsRepo.list({ customer_id: id, active_only: false, page: 1, page_size: 200 }),
+      lastPricesForCustomer(id),
+    ])
   const totals = await ordersRepo.totalsByOrderIds(orders.map((o) => o.id))
+  // Giá đã chào có thể trỏ tới SP không gắn khách (báo giá chéo) — tra tên riêng.
+  const priceIds = lastPrices.map((p) => p.product_id).filter((pid) => !products.some((p) => p.id === pid))
+  const extra = priceIds.length ? await productsRepo.listPickByIds(priceIds) : []
+  const nameOf = new Map<string, { code: string; name: string }>()
+  for (const p of products) nameOf.set(p.id, { code: p.code, name: p.name })
+  for (const p of extra) nameOf.set(p.id, { code: p.code, name: p.name })
 
   return (
     <HoSoKhachScreen
@@ -85,13 +79,28 @@ export default async function CustomerDetailPage({
         note: c.note,
         created_at: c.created_at,
       }))}
-      productCount={productCount ?? 0}
+      products={products.map((p) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        customer_item_code: p.customer_item_code,
+        unit: p.unit,
+        bom_status: p.bom_status,
+        is_active: p.is_active,
+        image_url: p.image_file_id ? fileImageSrc(p.image_file_id) : null,
+      }))}
+      productTotal={productTotal}
+      lastPrices={lastPrices.map((lp) => ({
+        product_id: lp.product_id,
+        code: nameOf.get(lp.product_id)?.code ?? '?',
+        name: nameOf.get(lp.product_id)?.name ?? '',
+        unit_price: lp.unit_price,
+        quote_code: lp.quote_code,
+        quoted_at: lp.quoted_at,
+      }))}
       currentUserId={user.id}
       role={user.role}
-      members={(salesMembers ?? []).map((m) => ({
-        id: m.id,
-        label: m.name ?? m.email,
-      }))}
+      members={members}
     />
   )
 }

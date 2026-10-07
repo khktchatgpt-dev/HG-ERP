@@ -32,10 +32,13 @@ import { KhachForm } from '../KhachForm'
 import { fmtD, fmtDT, fmtMoney, fmtN } from '../khach.shared'
 import { useHoSoKhach, type HoSoKhachCtx, type HoSoKhachProps } from './useHoSoKhach'
 
+const BOM_LABEL = { none: 'chưa BOM', drawing: 'đang vẽ', done: 'đã BOM' } as const
+
 /**
  * HỒ SƠ KHÁCH HÀNG — khuôn E · Hồ sơ danh mục, kiểu ERP (07/10/2026): "khách
  * này là ai, làm ăn ra sao, dùng ở đâu?" KHÔNG có vòng đời duyệt — chỗ của ba
  * trục trạng thái là DẢI HIỆU SUẤT, mỗi ô kèm mẫu số. Sửa hồ sơ mở ngăn tại chỗ.
+ * Trái: đơn · báo giá · sản phẩm · giá đã chào. Phải: hồ sơ · hoạt động.
  */
 export function HoSoKhachScreen(props: HoSoKhachProps) {
   const d = useHoSoKhach(props)
@@ -46,6 +49,8 @@ export function HoSoKhachScreen(props: HoSoKhachProps) {
     m.size === 0
       ? null
       : [...m.entries()].map(([cur, v]) => `${fmtMoney(v)} ${cur}`).join(' · ')
+  const goto = (id: string) => () =>
+    document.getElementById(id)?.scrollIntoView({ block: 'start' })
   return (
     <ErpPage>
       <TopProgressBar active={d.busy} />
@@ -158,7 +163,11 @@ export function HoSoKhachScreen(props: HoSoKhachProps) {
       <CountStrip>
         <CountCell
           label={`Doanh số ${d.thisYear}`}
-          value={money(s.yearByCur)}
+          value={
+            money(s.yearByCur) ? (
+              <span className="text-[15px] whitespace-nowrap">{money(s.yearByCur)}</span>
+            ) : null
+          }
           sub={
             s.yearOrders
               ? `${fmtN(s.yearOrders)} đơn trong năm${s.noPrice ? ` · ${s.noPrice} đơn giá 0` : ''}`
@@ -169,32 +178,26 @@ export function HoSoKhachScreen(props: HoSoKhachProps) {
           label="Đơn đang mở"
           value={fmtN(s.open)}
           sub={`trên ${fmtN(s.live)} đơn (không tính huỷ)`}
-          tone={s.open ? 'neutral' : 'neutral'}
-          onClick={() =>
-            document.getElementById('khoi-don')?.scrollIntoView({ block: 'start' })
-          }
+          onClick={goto('khoi-don')}
         />
         <CountCell
           label="Trễ hạn"
           value={fmtN(s.late)}
           sub={`trên ${fmtN(s.open)} đơn đang mở`}
           tone={s.late ? 'stop' : 'neutral'}
-          onClick={() =>
-            document.getElementById('khoi-don')?.scrollIntoView({ block: 'start' })
-          }
+          onClick={goto('khoi-don')}
         />
         <CountCell
           label="Báo giá"
           value={`${fmtN(s.sentQuotes)} / ${fmtN(d.quotes.length)}`}
           sub={`đã gửi / tổng${s.wonQuotes ? ` · ${s.wonQuotes} thành đơn` : ''}`}
-          onClick={() =>
-            document.getElementById('khoi-bao-gia')?.scrollIntoView({ block: 'start' })
-          }
+          onClick={goto('khoi-bao-gia')}
         />
         <CountCell
           label="Sản phẩm"
-          value={fmtN(d.productCount)}
-          sub="hồ sơ SP gắn khách này"
+          value={fmtN(d.productTotal)}
+          sub={`${fmtN(d.lastPrices.length)} SP đã có giá chào`}
+          onClick={goto('khoi-sp')}
         />
         <CountCell
           label="Đơn gần nhất"
@@ -257,6 +260,10 @@ export function HoSoKhachScreen(props: HoSoKhachProps) {
             <div id="khoi-bao-gia">
               <KhoiBaoGia d={d} />
             </div>
+            <div id="khoi-sp">
+              <KhoiSanPham d={d} />
+            </div>
+            <KhoiGiaDaChao d={d} />
           </div>
           <div className="flex min-w-0 flex-col gap-4">
             <KhoiHoSo d={d} />
@@ -365,18 +372,16 @@ function KhoiDon({ d }: { d: HoSoKhachCtx }) {
       ) : (
         <table className="w-full table-fixed border-collapse">
           <colgroup>
-            <col className="w-[150px]" />
-            <col className="w-[130px]" />
             <col />
-            <col className="w-[96px]" />
-            <col className="w-[130px]" />
+            <col className="w-[128px]" />
             <col className="w-[88px]" />
+            <col className="w-[124px]" />
+            <col className="w-[80px]" />
           </colgroup>
           <thead>
             <tr>
-              <th className={TH}>Số đơn · PO</th>
+              <th className={TH}>Số đơn · PO · từ báo giá</th>
               <th className={TH}>Trạng thái</th>
-              <th className={TH}>Từ báo giá</th>
               <th className={TH}>Hạn giao</th>
               <th className={`${TH} text-right`}>Giá trị</th>
               <th className={TH}>Tạo</th>
@@ -403,17 +408,13 @@ function KhoiDon({ d }: { d: HoSoKhachCtx }) {
                       ) : (
                         <span className="text-[var(--warn)]">thiếu PO</span>
                       )}
+                      {o.quote_code && ` · từ ${o.quote_code}`}
                     </span>
                   </td>
                   <td className={TD}>
                     <Nhan tone={orderStatusTone(o.status)}>
                       {orderStatusLabel(o.status)}
                     </Nhan>
-                  </td>
-                  <td className={`${TD} truncate font-mono text-xs`}>
-                    {o.quote_code ?? (
-                      <span className="text-muted-foreground font-sans">trực tiếp</span>
-                    )}
                   </td>
                   <td
                     className={`${TD} font-mono text-xs whitespace-nowrap ${late ? 'text-[var(--stop)]' : ''}`}
@@ -471,7 +472,7 @@ function KhoiBaoGia({ d }: { d: HoSoKhachCtx }) {
             <col className="w-[150px]" />
             <col className="w-[130px]" />
             <col />
-            <col className="w-[88px]" />
+            <col className="w-[80px]" />
           </colgroup>
           <thead>
             <tr>
@@ -508,6 +509,173 @@ function KhoiBaoGia({ d }: { d: HoSoKhachCtx }) {
                   )}
                 </td>
                 <td className={`${TD} font-mono text-xs`}>{fmtD(q.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  )
+}
+
+/** "Dùng ở đâu": SP trong thư viện gắn khách này — ảnh · mã · tên · mã khách · BOM. */
+function KhoiSanPham({ d }: { d: HoSoKhachCtx }) {
+  const rows = d.products
+  return (
+    <Panel
+      title="Sản phẩm của khách"
+      count={d.productTotal}
+      label="Sản phẩm"
+      note={
+        d.productTotal > rows.length
+          ? `hiện ${rows.length} / ${d.productTotal} — xem đủ ở Thư viện SP`
+          : 'hồ sơ SP gắn khách này (Thư viện SP)'
+      }
+      actions={
+        <Link
+          href={`/products?customer=${encodeURIComponent(d.c.name)}`}
+          className="text-xs text-[var(--primary)] hover:underline"
+        >
+          Thư viện SP
+        </Link>
+      }
+    >
+      {rows.length === 0 ? (
+        <p className="text-muted-foreground px-3 py-3 text-[13px]">
+          Chưa có SP nào gắn khách này. Tạo nhanh từ form báo giá, hoặc gán ở hồ sơ SP.
+        </p>
+      ) : (
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-11" />
+            <col className="w-[130px]" />
+            <col />
+            <col className="w-[120px]" />
+            <col className="w-11" />
+            <col className="w-[84px]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={`${TH} text-center`}>Ảnh</th>
+              <th className={TH}>Mã SP</th>
+              <th className={TH}>Tên</th>
+              <th className={TH}>Mã khách</th>
+              <th className={TH}>ĐVT</th>
+              <th className={TH}>BOM</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr
+                key={p.id}
+                className={`hover:bg-muted/40 ${p.is_active ? '' : 'text-muted-foreground'}`}
+              >
+                <td className={`${TD} px-1 text-center`}>
+                  {p.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- ảnh ký sẵn, không qua next/image
+                    <img
+                      src={p.image_url}
+                      alt={p.name}
+                      width={32}
+                      height={32}
+                      className="border-border bg-card inline-block h-8 w-8 rounded-sm border object-contain align-middle"
+                    />
+                  ) : (
+                    <span
+                      className="border-border bg-muted inline-block h-8 w-8 rounded-sm border align-middle"
+                      title="Chưa có ảnh"
+                    />
+                  )}
+                </td>
+                <td className={`${TD} min-w-0`}>
+                  <Link
+                    href={`/products/${p.id}`}
+                    className="block truncate font-mono text-xs text-[var(--primary)] hover:underline"
+                  >
+                    {p.code}
+                  </Link>
+                  {!p.is_active && (
+                    <span className="block text-[11px] leading-4">ngừng dùng</span>
+                  )}
+                </td>
+                <td className={`${TD} truncate`} title={p.name}>
+                  {p.name}
+                </td>
+                <td className={`${TD} truncate font-mono text-xs`}>
+                  {p.customer_item_code ?? ''}
+                </td>
+                <td className={`${TD} text-muted-foreground text-xs`}>{p.unit}</td>
+                <td className={`${TD} text-xs`}>
+                  <span
+                    className={
+                      p.bom_status === 'done'
+                        ? 'text-[var(--done)]'
+                        : p.bom_status === 'drawing'
+                          ? 'text-[var(--warn)]'
+                          : 'text-muted-foreground'
+                    }
+                  >
+                    {BOM_LABEL[p.bom_status]}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  )
+}
+
+/** Giá ĐÃ CHÀO gần nhất theo SP — thứ Sale tra trước khi chào lại. */
+function KhoiGiaDaChao({ d }: { d: HoSoKhachCtx }) {
+  const rows = [...d.lastPrices].sort((a, b) => b.quoted_at.localeCompare(a.quoted_at))
+  return (
+    <Panel
+      title="Giá đã chào"
+      count={rows.length}
+      label="Giá đã chào"
+      note="giá gần nhất trên báo giá đã gửi / duyệt / thắng — form báo giá tự điền từ đây"
+    >
+      {rows.length === 0 ? (
+        <p className="text-muted-foreground px-3 py-3 text-[13px]">
+          Chưa chào giá SP nào cho khách này (báo giá nháp chưa tính).
+        </p>
+      ) : (
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[130px]" />
+            <col />
+            <col className="w-[110px]" />
+            <col className="w-[130px]" />
+            <col className="w-[80px]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={TH}>Mã SP</th>
+              <th className={TH}>Tên</th>
+              <th className={`${TH} text-right`}>Giá chào</th>
+              <th className={TH}>Báo giá</th>
+              <th className={TH}>Ngày</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.product_id} className="hover:bg-muted/40">
+                <td className={`${TD} truncate`}>
+                  <Link
+                    href={`/products/${r.product_id}`}
+                    className="font-mono text-xs text-[var(--primary)] hover:underline"
+                  >
+                    {r.code}
+                  </Link>
+                </td>
+                <td className={`${TD} truncate`} title={r.name}>
+                  {r.name}
+                </td>
+                <td className={`${TD} ${NUM} font-medium`}>{fmtMoney(r.unit_price)}</td>
+                <td className={`${TD} truncate font-mono text-xs`}>{r.quote_code}</td>
+                <td className={`${TD} font-mono text-xs`}>{fmtD(r.quoted_at)}</td>
               </tr>
             ))}
           </tbody>

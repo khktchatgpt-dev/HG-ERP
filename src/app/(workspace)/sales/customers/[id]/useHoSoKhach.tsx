@@ -45,13 +45,34 @@ export type ChangeRow = {
   note: string | null
   created_at: string
 }
+export type ProductRow = {
+  id: string
+  code: string
+  name: string
+  customer_item_code: string | null
+  unit: string
+  bom_status: 'none' | 'drawing' | 'done'
+  is_active: boolean
+  image_url: string | null
+}
+export type LastPriceRow = {
+  product_id: string
+  code: string
+  name: string
+  unit_price: number
+  quote_code: string
+  quoted_at: string
+}
 export type HoSoKhachProps = {
   customer: CustomerView
   quotes: QuoteRow[]
   orders: OrderRow[]
   changes: ChangeRow[]
-  /** SP trong thư viện gắn khách này (hồ sơ danh mục: "dùng ở đâu"). */
-  productCount: number
+  /** SP trong thư viện gắn khách này (hồ sơ danh mục: "dùng ở đâu") — tối đa 200 dòng. */
+  products: ProductRow[]
+  productTotal: number
+  /** Giá ĐÃ CHÀO gần nhất cho khách này theo SP (báo giá đã gửi / duyệt / thắng). */
+  lastPrices: LastPriceRow[]
   currentUserId: string
   role: 'admin' | 'manager' | 'employee'
   members: MemberOption[]
@@ -108,12 +129,12 @@ export function useHoSoKhach(p: HoSoKhachProps) {
     if (await patch({ is_active: !c.is_active }))
       toast.success(off ? 'Đã ngừng giao dịch' : 'Đã mở lại', c.name)
   }
-  const canDelete = p.quotes.length === 0 && p.orders.length === 0 && p.productCount === 0
+  const canDelete = p.quotes.length === 0 && p.orders.length === 0 && p.productTotal === 0
   async function remove() {
     if (!canDelete) {
       toast.error(
         'Không xoá được khách đã có lịch sử',
-        `${p.quotes.length} báo giá · ${p.orders.length} đơn · ${p.productCount} SP. Dùng "Ngừng giao dịch".`,
+        `${p.quotes.length} báo giá · ${p.orders.length} đơn · ${p.productTotal} SP. Dùng "Ngừng giao dịch".`,
       )
       return
     }

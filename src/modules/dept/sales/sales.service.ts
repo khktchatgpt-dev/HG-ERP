@@ -4,10 +4,13 @@ import {
   type CustomerActivity,
   type CustomerCounts,
   type CustomerStatusFilter,
+  type CustomerSort,
   type CustomerWithOwner,
 } from './sales.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -56,6 +59,7 @@ export const salesService = {
       owner_id?: string
       unassigned?: boolean
       status?: CustomerStatusFilter
+      sort?: CustomerSort
       page: number
       page_size: number
     },
@@ -65,9 +69,24 @@ export const salesService = {
       owner_id: opts.owner_id,
       unassigned: opts.unassigned,
       status: opts.status ?? 'active',
+      sort: opts.sort,
       page: opts.page,
       page_size: opts.page_size,
     })
+  },
+
+  /**
+   * Người gán được làm phụ trách khách = NGƯỜI PHÒNG SALE (quyền `sales.member`),
+   * không phải mọi tài khoản (danh sách cũ liệt kê cả thống kê tổ — 07/10/2026).
+   * Cộng thêm người đang phụ trách dù rời phòng, để ô chọn không "mất" giá trị.
+   */
+  async members(extraIds: (string | null)[] = []): Promise<{ id: string; label: string }[]> {
+    const ids = new Set(await rbacRepo.userIdsWithPermission('sales.member'))
+    for (const id of extraIds) if (id) ids.add(id)
+    const users = await usersRepo.list({ active_only: true })
+    return users
+      .filter((u) => ids.has(u.id))
+      .map((u) => ({ id: u.id, label: u.name ?? u.email }))
   },
 
   /**

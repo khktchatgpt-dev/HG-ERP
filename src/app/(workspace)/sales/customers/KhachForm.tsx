@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Save, X } from 'lucide-react'
-import { BTN_PRI, BTN_SUB, INPUT, O } from '../orders/_form/don-form.shared'
+import { BTN_PRI, BTN_SUB, INPUT } from '../orders/_form/don-form.shared'
 import type { CustomerView, MemberOption } from './khach.shared'
 
 type Draft = {
@@ -47,10 +47,13 @@ const fromInitial = (c: Partial<CustomerView> | undefined, me: string): Draft =>
   is_active: c?.is_active ?? true,
 })
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 /**
  * Form hồ sơ khách — dùng chung cho ngăn "Thêm khách" ở sổ và "Sửa hồ sơ" ở hồ
- * sơ, để hai chỗ không lệch nhau mỗi lần thêm trường. Điều khoản mặc định ở đây
- * là nguồn tự điền của báo giá / đơn (ĐƠN → KHÁCH → MẶC ĐỊNH).
+ * sơ, để hai chỗ không lệch nhau mỗi lần thêm trường. Lưới 12 cột cố định (ô
+ * cùng hàng thẳng nhau, nhãn trên, lỗi ngay dưới ô), bốn nhóm: Định danh ·
+ * Liên hệ · Pháp lý & địa chỉ · Điều khoản mặc định (nguồn tự điền báo giá/đơn).
  */
 export function KhachForm({
   members,
@@ -59,6 +62,7 @@ export function KhachForm({
   submitLabel,
   saving,
   withActive,
+  existing = [],
   onCancel,
   onSubmit,
 }: {
@@ -69,23 +73,43 @@ export function KhachForm({
   saving: boolean
   /** Hiện ô "đang giao dịch" — chỉ có nghĩa khi SỬA. */
   withActive?: boolean
+  /** Khách đã có (mọi trạng thái) — báo trùng tên / mã trước khi lưu, trừ chính mình. */
+  existing?: { id: string; name: string; code: string | null }[]
   onCancel?: () => void
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
 }) {
   const [d, setD] = useState<Draft>(() => fromInitial(initial, currentUserId))
+  const [touched, setTouched] = useState<Set<keyof Draft>>(new Set())
   const set =
     (k: keyof Draft) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setD((x) => ({ ...x, [k]: e.target.value }))
-  const missing: string[] = []
-  if (!d.name.trim()) missing.push('tên khách')
+  const touch = (k: keyof Draft) => () => setTouched((s) => new Set(s).add(k))
+
+  /* ── kiểm tra: lỗi theo ô + cảnh báo trùng tên ─────────────────────── */
+  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+  const dupName = existing.find(
+    (x) => x.id !== initial?.id && norm(x.name) === norm(d.name),
+  )
+  const dupCode = d.code.trim()
+    ? existing.find(
+        (x) =>
+          x.id !== initial?.id &&
+          (x.code ?? '').toLowerCase() === d.code.trim().toLowerCase(),
+      )
+    : undefined
+  const errors: Partial<Record<keyof Draft, string>> = {}
+  if (!d.name.trim()) errors.name = 'Bắt buộc'
+  if (dupCode) errors.code = `Mã đã của ${dupCode.name}`
+  if (d.email && !EMAIL_RE.test(d.email)) errors.email = 'Email chưa đúng dạng'
   if (d.default_currency && d.default_currency.trim().length !== 3)
-    missing.push('tiền tệ 3 ký tự')
-  if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email))
-    missing.push('email đúng dạng')
+    errors.default_currency = '3 ký tự (USD, EUR…)'
+  const errorList = Object.values(errors)
+  const show = (k: keyof Draft) => (touched.has(k) ? errors[k] : undefined)
 
   function submit() {
-    if (missing.length) return
+    setTouched(new Set(Object.keys(d) as (keyof Draft)[]))
+    if (errorList.length) return
     const s = (v: string) => v.trim() || null
     const body: Record<string, unknown> = {
       name: d.name.trim(),
@@ -111,29 +135,47 @@ export function KhachForm({
     if (withActive) body.is_active = d.is_active
     void onSubmit(body)
   }
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit()
+    if (e.key === 'Escape' && onCancel) onCancel()
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      <Nhom title="Hồ sơ">
-        <O label="Tên khách hàng *" htmlFor="kh-name" w="min-w-[280px] flex-1">
+    <div className="flex flex-col gap-3" onKeyDown={onKey}>
+      <Nhom title="Định danh">
+        <F
+          label="Tên khách hàng"
+          required
+          span={5}
+          err={show('name')}
+          warn={dupName ? `Đã có khách tên “${dupName.name}”` : undefined}
+        >
           <input
             id="kh-name"
             className={INPUT}
             value={d.name}
             onChange={set('name')}
+            onBlur={touch('name')}
             maxLength={200}
             autoFocus
+            placeholder="Tên trên hợp đồng / hoá đơn"
           />
-        </O>
-        <O label="Mã KH" w="w-[120px]" hint="không trùng">
+        </F>
+        <F label="Mã KH" span={2} err={show('code')} hint="để trống nếu chưa có mã riêng">
           <input
-            className={`${INPUT} font-mono`}
+            className={`${INPUT} font-mono uppercase`}
             value={d.code}
             onChange={set('code')}
+            onBlur={touch('code')}
             maxLength={50}
+            placeholder="VD: MERXX"
           />
-        </O>
-        <O label="Phụ trách" w="w-[200px]">
+        </F>
+        <F
+          label="Người phụ trách"
+          span={3}
+          hint="người của phòng Sale theo dõi khách này"
+        >
           <select className={INPUT} value={d.owner_id} onChange={set('owner_id')}>
             <option value="">— chưa gán —</option>
             {members.map((m) => (
@@ -143,85 +185,104 @@ export function KhachForm({
               </option>
             ))}
           </select>
-        </O>
-        <O label="Quốc gia" w="w-[140px]">
+        </F>
+        <F label="Quốc gia" span={2}>
           <input
             className={INPUT}
             value={d.country}
             onChange={set('country')}
             maxLength={100}
+            placeholder="Germany"
           />
-        </O>
-        <O label="Người liên hệ" w="w-[200px]">
+        </F>
+      </Nhom>
+
+      <Nhom title="Liên hệ">
+        <F label="Người liên hệ" span={3}>
           <input
             className={INPUT}
             value={d.contact_person}
             onChange={set('contact_person')}
             maxLength={200}
           />
-        </O>
-        <O label="Chức danh" w="w-[160px]" hint="in trên hợp đồng">
+        </F>
+        <F label="Chức danh" span={3} hint="in ở phần ký của hợp đồng">
           <input
             className={INPUT}
             value={d.representative_title}
             onChange={set('representative_title')}
             maxLength={100}
+            placeholder="Purchasing Manager"
           />
-        </O>
-        <O label="Email" w="w-[220px]">
-          <input className={INPUT} type="email" value={d.email} onChange={set('email')} />
-        </O>
-        <O label="Điện thoại" w="w-[140px]">
+        </F>
+        <F label="Email" span={3} err={show('email')}>
+          <input
+            className={INPUT}
+            type="email"
+            value={d.email}
+            onChange={set('email')}
+            onBlur={touch('email')}
+          />
+        </F>
+        <F label="Điện thoại" span={2}>
           <input
             className={`${INPUT} font-mono`}
             value={d.phone}
             onChange={set('phone')}
             maxLength={30}
           />
-        </O>
-        <O label="Fax" w="w-[140px]">
+        </F>
+        <F label="Fax" span={1}>
           <input
             className={`${INPUT} font-mono`}
             value={d.fax}
             onChange={set('fax')}
             maxLength={50}
           />
-        </O>
-        <O label="Địa chỉ" w="min-w-[320px] flex-1">
+        </F>
+      </Nhom>
+
+      <Nhom title="Pháp lý & địa chỉ" note="in lên hợp đồng, packing list, invoice">
+        <F label="Địa chỉ" span={6}>
           <input
             className={INPUT}
             value={d.address}
             onChange={set('address')}
             maxLength={500}
           />
-        </O>
-        <O label="Mã số thuế" w="w-[160px]">
+        </F>
+        <F label="Mã số thuế / VAT" span={3}>
           <input
             className={`${INPUT} font-mono`}
             value={d.tax_code}
             onChange={set('tax_code')}
             maxLength={50}
           />
-        </O>
-        <O label="FSC Cert của KH" w="w-[180px]">
+        </F>
+        <F label="FSC Cert của khách" span={3}>
           <input
             className={`${INPUT} font-mono`}
             value={d.fsc_cert}
             onChange={set('fsc_cert')}
             maxLength={100}
           />
-        </O>
+        </F>
       </Nhom>
-      <Nhom title="Điều khoản mặc định — tự điền vào báo giá & đơn">
-        <O label="Tiền tệ" w="w-[80px]">
+
+      <Nhom
+        title="Điều khoản mặc định"
+        note="tự điền vào báo giá và đơn mới của khách này — vẫn sửa được từng tờ"
+      >
+        <F label="Tiền tệ" span={1} err={show('default_currency')}>
           <input
             className={`${INPUT} font-mono uppercase`}
             value={d.default_currency}
             onChange={set('default_currency')}
+            onBlur={touch('default_currency')}
             maxLength={3}
           />
-        </O>
-        <O label="Điều kiện giá (Incoterm)" w="w-[160px]">
+        </F>
+        <F label="Điều kiện giá (Incoterm)" span={3}>
           <input
             className={INPUT}
             value={d.default_price_term}
@@ -229,48 +290,52 @@ export function KhachForm({
             maxLength={100}
             placeholder="FOB Quy Nhon"
           />
-        </O>
-        <O label="Thanh toán" w="min-w-[260px] flex-1">
+        </F>
+        <F label="Điều khoản thanh toán" span={5}>
           <input
             className={INPUT}
             value={d.default_payment_terms}
             onChange={set('default_payment_terms')}
             maxLength={500}
-            placeholder="T/T 30% cọc, 70% trước giao"
+            placeholder="T/T 30% deposit, 70% before shipment"
           />
-        </O>
-        <O label="Cảng đích (POD)" w="w-[200px]">
+        </F>
+        <F label="Cảng đích (POD)" span={3}>
           <input
             className={INPUT}
             value={d.port_of_discharge}
             onChange={set('port_of_discharge')}
             maxLength={200}
+            placeholder="Hamburg"
           />
-        </O>
-        <O label="Ghi chú nội bộ" w="w-full">
+        </F>
+        <F label="Ghi chú nội bộ" span={withActive ? 10 : 12} hint="không in ra ngoài">
           <textarea
             className={`${INPUT} h-12 resize-y py-1`}
             value={d.notes}
             onChange={set('notes')}
             maxLength={2000}
           />
-        </O>
+        </F>
         {withActive && (
-          <label className="flex items-center gap-1.5 pb-1 text-[13px]">
-            <input
-              type="checkbox"
-              checked={d.is_active}
-              onChange={(e) => setD((x) => ({ ...x, is_active: e.target.checked }))}
-            />
-            Đang giao dịch
-          </label>
+          <F label="Trạng thái" span={2}>
+            <label className="flex h-7 items-center gap-1.5 text-[13px]">
+              <input
+                type="checkbox"
+                checked={d.is_active}
+                onChange={(e) => setD((x) => ({ ...x, is_active: e.target.checked }))}
+              />
+              Đang giao dịch
+            </label>
+          </F>
         )}
       </Nhom>
-      <div className="flex flex-wrap items-center gap-2">
+
+      <div className="border-border flex flex-wrap items-center gap-2 border-t pt-2">
         <button
           type="button"
           className={BTN_PRI}
-          disabled={saving || missing.length > 0}
+          disabled={saving || errorList.length > 0}
           onClick={submit}
         >
           <Save className="size-4" strokeWidth={1.8} />
@@ -281,9 +346,13 @@ export function KhachForm({
             <X className="size-3.5" strokeWidth={1.8} /> Huỷ
           </button>
         )}
-        {missing.length > 0 && (
+        {errorList.length > 0 ? (
           <span className="text-xs text-[var(--stop)]">
-            Còn thiếu: {missing.join(' · ')}
+            Còn {errorList.length} ô chưa hợp lệ — xem lỗi dưới ô.
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">
+            Ctrl+Enter để lưu · Esc để huỷ
           </span>
         )}
       </div>
@@ -291,13 +360,77 @@ export function KhachForm({
   )
 }
 
-function Nhom({ title, children }: { title: string; children: React.ReactNode }) {
+/** Nhóm ô: tiêu đề nhỏ + lưới 12 cột, ô cùng hàng thẳng đáy. */
+function Nhom({
+  title,
+  note,
+  children,
+}: {
+  title: string
+  note?: string
+  children: ReactNode
+}) {
   return (
     <div>
-      <div className="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
-        {title}
+      <div className="mb-1 flex items-baseline gap-2">
+        <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          {title}
+        </span>
+        {note && <span className="text-muted-foreground text-[11px]">· {note}</span>}
       </div>
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">{children}</div>
+      <div className="grid grid-cols-12 gap-x-3 gap-y-2">{children}</div>
     </div>
+  )
+}
+
+const SPAN: Record<number, string> = {
+  1: 'col-span-1',
+  2: 'col-span-2',
+  3: 'col-span-3',
+  4: 'col-span-4',
+  5: 'col-span-5',
+  6: 'col-span-6',
+  10: 'col-span-10',
+  12: 'col-span-12',
+}
+
+/** Một ô: nhãn trên (chiều cao cố định), ô nhập, dòng lỗi / cảnh báo / gợi ý dưới (luôn giữ chỗ 16px). */
+function F({
+  label,
+  required,
+  span,
+  err,
+  warn,
+  hint,
+  children,
+}: {
+  label: string
+  required?: boolean
+  span: number
+  err?: string
+  warn?: string
+  hint?: string
+  children: ReactNode
+}) {
+  return (
+    <label className={`flex min-w-0 flex-col ${SPAN[span] ?? 'col-span-3'}`}>
+      <span className="text-muted-foreground h-4 truncate text-[11px] leading-4">
+        {label}
+        {required && <span className="text-[var(--stop)]"> *</span>}
+      </span>
+      <span
+        className={
+          err ? '[&>input]:border-[var(--stop)] [&>select]:border-[var(--stop)]' : ''
+        }
+      >
+        {children}
+      </span>
+      <span
+        className={`h-4 truncate text-[11px] leading-4 ${err ? 'text-[var(--stop)]' : warn ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+        title={err ?? warn ?? hint}
+      >
+        {err ?? warn ?? hint ?? ''}
+      </span>
+    </label>
   )
 }
