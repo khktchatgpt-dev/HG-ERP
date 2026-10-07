@@ -446,4 +446,15 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
    320px, bảng dòng `table-fixed` (đo 1003/1003); form — lưới `table-fixed` có
    colgroup, nhãn tuần giao xuống dưới ô ngày, nhãn "Hạn giao" ngắn + hint. Đo tràn
    ngang bằng JS (scrollWidth vs clientWidth) thay vì nhìn ảnh khi pane hẹp.
+7c. **Trang nền Sale — Khách hàng** · ✅ 07/10/2026 (user: "làm lại các trang và tính
+   năng cơ bản của sale, xuất hàng / tài chính tạm bỏ qua"): `customers/SoKhachScreen`
+   (khuôn C: ô đếm Đang giao dịch · Ngừng · Chưa gán · Của tôi · Tổng; lọc phụ trách /
+   trạng thái / tìm qua URL, phân trang server; ngăn Thêm khách tại chỗ → chuyển sang
+   hồ sơ), `customers/[id]/HoSoKhachScreen` + `useHoSoKhach` (khuôn E: dải hiệu suất
+   Doanh số năm · Đơn mở/tổng · Trễ/mở · Báo giá gửi/tổng · SP gắn khách · Đơn gần
+   nhất; dải cảnh báo thiếu điều khoản mặc định / hồ sơ in hợp đồng; ngăn Sửa tại chỗ;
+   Đơn hàng · Báo giá · Hoạt động), `KhachForm` dùng chung (ô `O`/`INPUT` của
+   orders/_form). Form đơn nhận `?customer=` (Trực tiếp + điều khoản mặc định). Xoá
+   CustomersManager / CustomerDetail / components/sales/CustomerForm. Còn trang nền
+   kiểu cũ: Điền đơn giá (`orders/gia`), Giá thành kế hoạch (`gia-thanh`).
 7. **Lượt 7 — nhập Excel báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên. Tầng 3 của ba màn đã hết việc đã liệt kê; còn lại là 7 đợt nghiệp vụ ở mục 4 (bắt đầu Đợt 1 ghi xuất thật) và Q1–Q6.
