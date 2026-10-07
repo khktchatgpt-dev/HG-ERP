@@ -56,6 +56,7 @@ export default async function EditOrderPage({
         customer_id: order.customer_id,
         customer_name: order.customer_name,
         currency: order.currency,
+        status: order.status,
         quote_code: order.quote_code,
         customer_po_no: order.customer_po_no,
         due_date: order.due_date,
@@ -73,6 +74,7 @@ export default async function EditOrderPage({
         transhipment: order.transhipment,
       }}
       initialLines={lines.map((l) => ({
+        id: l.id,
         product_id: l.product_id,
         qty: l.qty,
         unit_price: l.unit_price,

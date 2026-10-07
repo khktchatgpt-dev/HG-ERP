@@ -296,8 +296,10 @@ export const ordersService = {
      * thắng, khách lấp chỗ trống.
      */
     const cust = await customersRepo.findById(source.customer_id)
-    const priceTerm = source.price_term ?? cust?.default_price_term ?? null
-    const paymentTerms = source.payment_terms ?? cust?.default_payment_terms ?? null
+    const priceTerm =
+      input.price_term ?? source.price_term ?? cust?.default_price_term ?? null
+    const paymentTerms =
+      input.payment_terms ?? source.payment_terms ?? cust?.default_payment_terms ?? null
     const portOfDischarge = input.port_of_discharge ?? cust?.port_of_discharge ?? null
 
     // Dòng chưa có tuần giao → lấy hạn giao của đơn (77/275 dòng thật từng trống).

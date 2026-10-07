@@ -10,7 +10,23 @@ import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
 import { Button } from '@/components/shadcn/button'
 // Alias: helper `Card` cục bộ bên dưới (nhận prop `title`) đã được cả trang gọi,
 // nên thẻ shadcn vào đây dưới tên khác thay vì đổi hàng chục chỗ gọi.
-import { Card, L, LineField, Tab } from './order-form.shared'
+import {
+  BOM_LABEL,
+  BOM_TONE,
+  Card,
+  cls,
+  dimsOf,
+  emptySpec,
+  L,
+  LINE_GRID,
+  LineField,
+  NpField,
+  SPEC_FIELDS,
+  Tab,
+  type LineDraft,
+  type LineRow,
+  type SpecKey,
+} from './order-form.shared'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
@@ -33,6 +49,8 @@ export type OrderInitial = {
   customer_id: string
   customer_name: string
   currency: string
+  /** Trạng thái đơn — đã có lệnh (lsx_* / completed / *shipped) thì lý do sửa là bắt buộc. */
+  status: string
   quote_code: string | null
   customer_po_no: string | null
   due_date: string | null
@@ -51,113 +69,6 @@ export type OrderInitial = {
   transhipment: boolean | null
 }
 
-/**
- * Năm ô quy cách LSX in ra bảng. Khoá khớp `ProductTechSpec` (technical.repo).
- */
-type SpecKey = 'machine' | 'cushion' | 'paint' | 'glass' | 'wood'
-/** [khoá, nhãn, ví dụ] — ví dụ lấy từ dữ liệu thật để sale biết gõ kiểu gì. */
-const SPEC_FIELDS: [SpecKey, string, string][] = [
-  ['machine', 'Máy', 'Dây dù màu kem'],
-  ['cushion', 'Nệm', 'Nệm dày 5cm · vải Stormstone'],
-  ['paint', 'Sơn', 'Màu Graphit H-SM-9608'],
-  ['glass', 'Kính', 'Kính cường lực 8mm'],
-  ['wood', 'Gỗ', 'Acacia FSC 100%'],
-]
-const emptySpec = (): Record<SpecKey, string> => ({
-  machine: '',
-  cushion: '',
-  paint: '',
-  glass: '',
-  wood: '',
-})
-
-/** SP mới sale tự điền — chỉ tạo vào thư viện Kỹ thuật KHI submit đơn (không mồ côi). */
-type LineDraft = {
-  code: string
-  name: string
-  unit: string
-  itemCode: string
-  notes: string
-  image: File | null
-  /*
-   * Barcode + quy cách: LSX cần mà trước đây tạo nhanh không hỏi, nên SP mới vừa
-   * vào lệnh là đã báo 'hồ sơ SP đang thiếu' — mà từ 07/08/2026 lệnh KHÔNG cho
-   * sửa thông tin SP nữa, phải quay về hồ sơ SP mới điền được. Hỏi ngay tại đây.
-   */
-  barcode: string
-  spec: Record<SpecKey, string>
-}
-type LineRow = {
-  key: number
-  productId: string // '' nếu là SP mới (draft)
-  draft: LineDraft | null
-  qty: number | ''
-  unitPrice: number | ''
-  /** Ngày giao dòng = hạn cuối của tuần giao (yyyy-mm-dd) — nhãn w37.26 tự suy. */
-  shipDate: string
-  note: string
-}
-
-/** "68×62×99 cm" từ quy cách đóng gói — thiếu chiều nào thì thôi không in. */
-function dimsOf(p: ProductPick): string | null {
-  const k = p.packing ?? {}
-  return k.l_cm && k.w_cm && k.h_cm ? `${k.l_cm}×${k.w_cm}×${k.h_cm} cm` : null
-}
-
-const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
-const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
-
-/**
- * Nhãn + ô nhập của mini-form 'SP mới'. Nhãn là THẬT chứ không mượn placeholder:
- * placeholder biến mất ngay khi gõ, form 12 ô mà không nhãn thì nhìn lại không
- * biết ô nào là gì.
- */
-function NpField({
-  label,
-  required,
-  className = '',
-  children,
-}: {
-  label: string
-  required?: boolean
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <label className={`grid gap-1.5 ${className}`}>
-      <span className="t-label text-muted-foreground">
-        {label}
-        {required && <span className="text-destructive"> *</span>}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-/*
- * Lớp ô nhập DÙNG CHUNG cho mọi input/select/textarea của form. Đổi ở ĐÂY là
- * đổi cả trang. Vì sao không thay hết bằng <Input>/<Select> của shadcn: form có
- * <select> kèm <optgroup> (nhóm SP theo khách) mà Radix Select không dựng được,
- * nên giữ thẻ gốc và khoác đúng lớp da của Input — bám sát
- * `components/shadcn/input.tsx` để hai bên nhìn như một, và mọi màu ở đây đều là
- * token v3 (border-input / ring / bg-card), không có màu Tailwind cứng.
- */
-const cls =
-  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
-
-/**
- * Lưới một DÒNG SẢN PHẨM. Dưới xl là thẻ 2 cột (điện thoại/laptop hẹp), từ xl
- * thành HÀNG
- * BẢNG: sản phẩm co giãn, các ô số cố định bề ngang để cột số thẳng hàng suốt
- * bảng — đơn 26 dòng mà mỗi dòng tự căn một kiểu thì không đối chiếu được.
- *
- * Vì sao xl chứ không phải lg: khung nội dung của shell là max-w-1600 nhưng ở
- * màn 1100px thẻ chỉ còn ~750px — 4 cột số cố định ăn 470px, ô chọn SP còn
- * đúng 100px, không đọc nổi tên hàng. Đo trên máy trước khi chốt mốc.
- */
-const LINE_GRID =
-  'grid grid-cols-2 gap-3 xl:grid-cols-[minmax(0,2fr)_6rem_7rem_7rem_8.5rem_minmax(5rem,1fr)] xl:gap-2'
-
 export function OrderForm(props: {
   mode: 'create' | 'edit'
   customers: CustomerOption[]
@@ -171,6 +82,7 @@ export function OrderForm(props: {
   initialQuoteId?: string | null
   order?: OrderInitial
   initialLines?: {
+    id?: string
     product_id: string
     qty: number
     unit_price: number
@@ -209,6 +121,7 @@ export function OrderForm(props: {
   const [lines, setLines] = useState<LineRow[]>(() =>
     (props.initialLines ?? []).map((l, i) => ({
       key: i,
+      id: l.id,
       productId: l.product_id,
       draft: null,
       qty: l.qty,
@@ -244,6 +157,8 @@ export function OrderForm(props: {
 
   const [files, setFiles] = useState<File[]>([])
 
+  // PO khách là BẮT BUỘC (07/10/2026) trừ khi tick xác nhận khách không có số PO.
+  const [noPo, setNoPo] = useState(mode === 'edit' && !order?.customer_po_no)
   const [h, setH] = useState({
     customer_po_no: order?.customer_po_no ?? '',
     due_date: order?.due_date ?? '',
@@ -275,9 +190,11 @@ export function OrderForm(props: {
     setTerms((p) => ({ ...p, [k]: v }))
   // Điều khoản chỉnh được khi sửa đơn, hoặc khi tạo đơn TRỰC TIẾP. Đơn từ báo giá
   // snapshot điều khoản từ báo giá — sửa sau ở màn Sửa đơn.
-  const showTerms = mode === 'edit' || source === 'direct'
+  // Điều khoản LUÔN hiện (07/10/2026): 0/53 đơn thật có điều khoản vì khối này
+  // từng ghi "(tuỳ chọn)" và gập sẵn. Ô trống → server lấy mặc định hồ sơ khách.
+  const showTerms = true
   const hasTerms = Object.values(terms).some((v) => v !== '')
-  const [termsOpen, setTermsOpen] = useState(mode === 'edit' && hasTerms)
+  const [termsOpen, setTermsOpen] = useState(true)
 
   const productById = known
 
@@ -360,15 +277,21 @@ export function OrderForm(props: {
     if (lines.length === 0) missing.push('thêm ít nhất 1 dòng sản phẩm')
     else if (lines.some((l) => !l.productId && !l.draft))
       missing.push('chọn SP cho mọi dòng')
-    else if (
-      new Set(lines.filter((l) => l.productId).map((l) => l.productId)).size !==
-      lines.filter((l) => l.productId).length
-    )
-      missing.push('SP bị trùng dòng')
     else if (lines.some((l) => l.qty === '' || Number(l.qty) <= 0))
       missing.push('nhập số lượng > 0')
     else if (lines.some((l) => l.unitPrice === '')) missing.push('nhập đơn giá')
   }
+  if (!h.customer_po_no.trim() && !noPo)
+    missing.push('nhập số PO khách (hoặc tick "không có PO")')
+  // Đơn đã có lệnh: mỗi thay đổi báo tới xưởng + Cung ứng → lý do bắt buộc.
+  const afterLsx =
+    mode === 'edit' &&
+    !!order &&
+    ['lsx_pending', 'lsx_issued', 'completed', 'partially_shipped', 'shipped'].includes(
+      order.status,
+    )
+  if (afterLsx && !h.change_note.trim())
+    missing.push('ghi lý do thay đổi (đơn đã có lệnh)')
   const invalid = missing.length > 0
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -453,6 +376,7 @@ export function OrderForm(props: {
   function headerBody() {
     return {
       customer_po_no: h.customer_po_no.trim() || null,
+      no_customer_po: noPo && !h.customer_po_no.trim(),
       due_date: h.due_date || null,
       container_summary: h.container_summary.trim() || null,
       note: h.note.trim() || null,
@@ -483,6 +407,7 @@ export function OrderForm(props: {
    */
   async function materializeLines() {
     const result: {
+      id?: string | null
       product_id: string
       qty: number
       unit_price: number
@@ -531,6 +456,7 @@ export function OrderForm(props: {
         }
       }
       result.push({
+        id: l.id ?? null,
         product_id: pid,
         qty: Number(l.qty),
         unit_price: Number(l.unitPrice),
@@ -560,6 +486,7 @@ export function OrderForm(props: {
                 quote_id: quoteId,
                 lines: orderLines,
                 ...headerBody(),
+                ...termsBody(),
               }
             : {
                 code: code.trim(),
@@ -745,7 +672,7 @@ export function OrderForm(props: {
             </>
           )}
 
-          <L label="Số PO của khách">
+          <L label="Số PO của khách *" strong>
             <input
               value={h.customer_po_no}
               onChange={(e) => set('customer_po_no', e.target.value)}
@@ -753,6 +680,15 @@ export function OrderForm(props: {
               placeholder="HG-MX"
               className={`${cls} t-data`}
             />
+            <label className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+              <input
+                type="checkbox"
+                checked={noPo}
+                onChange={(e) => setNoPo(e.target.checked)}
+                className="h-3 w-3 accent-[var(--primary)]"
+              />
+              Khách không có số PO
+            </label>
           </L>
           {/* Hạn giao là trường DUY NHẤT ở khối này kéo theo hệ quả (cảnh báo trễ
               ở sổ đơn, thứ tự kế hoạch SX, ngày giao điền sẵn cho dòng mới) —
@@ -784,7 +720,15 @@ export function OrderForm(props: {
             />
           </L>
           {mode === 'edit' && (
-            <L label="Lý do thay đổi (ghi lịch sử)" span2>
+            <L
+              label={
+                afterLsx
+                  ? 'Lý do thay đổi * (đơn đã có lệnh — xưởng và Cung ứng được báo)'
+                  : 'Lý do thay đổi (ghi lịch sử)'
+              }
+              strong={afterLsx}
+              span2
+            >
               <input
                 value={h.change_note}
                 onChange={(e) => set('change_note', e.target.value)}
@@ -802,7 +746,21 @@ export function OrderForm(props: {
         <Card
           title={`Dòng sản phẩm (${lines.length})`}
           right={
-            <span className="text-muted-foreground text-xs">
+            <span className="text-muted-foreground flex items-center gap-3 text-xs">
+              {h.due_date && lines.some((l) => !l.shipDate) && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLines((ls) =>
+                      ls.map((l) => (l.shipDate ? l : { ...l, shipDate: h.due_date })),
+                    )
+                  }
+                  className="text-primary font-medium hover:underline"
+                >
+                  Áp hạn giao {shipWeekLabel(h.due_date)} cho{' '}
+                  {lines.filter((l) => !l.shipDate).length} dòng trống
+                </button>
+              )}
               {lines.length > 0 ? `${lines.length} dòng` : 'chưa có dòng'}
             </span>
           }
@@ -982,6 +940,9 @@ export function OrderForm(props: {
                       {l.shipDate && (
                         <span className="text-muted-foreground font-mono text-[10px]">
                           = {shipWeekLabel(l.shipDate)}
+                          {h.due_date && l.shipDate > h.due_date && (
+                            <span className="ml-1 text-[var(--warn)]">sau hạn đơn</span>
+                          )}
                         </span>
                       )}
                     </LineField>
@@ -1192,7 +1153,7 @@ export function OrderForm(props: {
       {/* 3b. Điều khoản thương mại (tuỳ chọn, gập được) */}
       {showTerms && (
         <Card
-          title="Điều khoản thương mại (tuỳ chọn)"
+          title="Điều khoản thương mại — ô trống lấy mặc định của hồ sơ khách khi lưu"
           right={
             <button
               type="button"

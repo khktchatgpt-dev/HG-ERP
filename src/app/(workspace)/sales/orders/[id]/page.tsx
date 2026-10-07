@@ -8,15 +8,14 @@ import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { filesService } from '@/modules/core/files/files.service'
 import { HttpError } from '@/server/http'
-import {
-  OrderDetailView,
-  type CancelImpact,
-  type ChangeView,
-} from '@/components/sales/OrderDetailView'
+import { DonHangScreen } from './DonHangScreen'
+import type { CancelImpact, ChangeView } from './don-hang.shared'
 
-/** Trang chi tiết đơn hàng: thông tin đầy đủ + ảnh SP + file + phát LSX / sửa / huỷ. */
+/**
+ * Chi tiết đơn bán (khuôn D · Chứng từ, kiểu ERP — 07/10/2026). Gác quyền + tải
+ * dữ liệu song song; chỉ truyền xuống thứ màn cần.
+ */
 export default async function OrderDetailPage({
   params,
 }: {
@@ -36,58 +35,29 @@ export default async function OrderDetailPage({
 
   // Mọi cờ đi qua RBAC — cùng cửa với service, nút nào hiện thì bấm được.
   // Sửa/huỷ: quyền quản lý đơn VÀ là người tạo đơn (quản lý gánh mọi đơn).
-  const [canManage, canIssue, canShip, canDeliver] = await Promise.all([
+  const [canManage, canIssue, canShip, canDeliver, lsx, owner] = await Promise.all([
     canAction(user, 'sales.order.manage'),
     canAction(user, 'production.lsx.issue'),
     canAction(user, 'sales.order.ship'),
     canAction(user, 'sales.order.confirm_delivery'),
+    productionRepo.findByOrder(order.id),
+    order.created_by ? usersRepo.findById(order.created_by) : null,
   ])
   const canEdit = canManage && canMutateOwned(user, order.created_by)
-  const lsx = await productionRepo.findByOrder(order.id)
 
-  // Đơn cùng khách chưa có lệnh — Sales tick để gộp chung một LSX (0113).
+  // Đơn cùng khách chưa có lệnh — Sale tick để gộp chung một lệnh (0113).
   const mergeCandidates =
     canIssue && order.status === 'confirmed' && !lsx
       ? (await ordersRepo.listMergeCandidates(order.customer_id)).filter(
           (o) => o.id !== order.id,
         )
       : []
-  const mergeLineCounts = await productionRepo.linesCountByOrder(
-    mergeCandidates.map((o) => o.id),
-  )
-
-  // Timeline: owner + công đoạn đã xong (jobs — 0084) + nhãn giai đoạn.
-  const [owner, jobs, stages] = await Promise.all([
-    order.created_by ? usersRepo.findById(order.created_by) : null,
+  const [mergeLineCounts, jobs] = await Promise.all([
+    productionRepo.linesCountByOrder(mergeCandidates.map((o) => o.id)),
     lsx ? jobsRepo.listByLsx(lsx.id) : Promise.resolve([]),
-    productionRepo.listStages(),
   ])
-  // Map jobs → sự kiện timeline (giữ nguyên OrderDetailView): job done = mốc
-  // "Hoàn thành công đoạn"; nhận vật tư = mốc trên header lệnh.
-  const progress = [
-    ...(lsx?.materials_received_at
-      ? [
-          {
-            stage: '',
-            action: 'received' as const,
-            note: null,
-            updated_by_name: null,
-            created_at: lsx.materials_received_at,
-          },
-        ]
-      : []),
-    ...jobs
-      .filter((j) => j.status === 'done' && j.done_at)
-      .map((j) => ({
-        stage: j.stage,
-        action: 'done' as const,
-        note: j.note,
-        updated_by_name: j.team_name,
-        created_at: j.done_at!,
-      })),
-  ]
 
-  // Hệ quả nếu huỷ đơn — confirm dialog nói thật thay vì câu chung chung (P3).
+  // Hệ quả nếu huỷ đơn — khối huỷ nói thật thay vì câu chung chung.
   let cancelImpact: CancelImpact | null = null
   if (lsx && order.status !== 'delivered' && order.status !== 'cancelled') {
     const { rows: pos } = await posRepo.list({
@@ -99,7 +69,6 @@ export default async function OrderDetailPage({
     cancelImpact = {
       lsx_active: ['pending_approval', 'approved', 'in_progress'].includes(lsx.status),
       lsx_shared: lsxShared,
-      // Lệnh còn phục vụ đơn khác → PO của lệnh không đụng tới (vật tư mua gộp).
       pos_auto: lsxShared
         ? []
         : pos
@@ -115,31 +84,19 @@ export default async function OrderDetailPage({
     }
   }
 
-  // Ảnh SP (signed URL ngắn hạn) — lỗi thì bỏ ảnh, không chặn xem đơn.
-  const imageUrls = new Map<string, string>()
-  await Promise.all(
-    [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
-      try {
-        imageUrls.set(
-          fid as string,
-          await filesService.getDownloadUrl(user, fid as string),
-        )
-      } catch {
-        /* ignore */
-      }
-    }),
-  )
-
   return (
-    <OrderDetailView
+    <DonHangScreen
       order={{
         id: order.id,
         code: order.code,
+        customer_id: order.customer_id,
         customer_name: order.customer_name,
         quote_code: order.quote_code,
         customer_po_no: order.customer_po_no,
         status: order.status,
         currency: order.currency,
+        fx_rate: order.fx_rate,
+        fx_date: order.fx_date,
         due_date: order.due_date,
         deposit_percent: order.deposit_percent,
         price_term: order.price_term,
@@ -158,6 +115,7 @@ export default async function OrderDetailPage({
       }}
       lines={lines.map((l) => ({
         id: l.id,
+        product_id: l.product_id,
         product_code: l.product_code,
         product_name: l.product_name,
         product_unit: l.product_unit,
@@ -169,7 +127,6 @@ export default async function OrderDetailPage({
         ship_date: l.ship_date,
         shipped: shippedByLine[l.id] ?? 0,
         note: l.note,
-        image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
       }))}
       shipments={shipments.map((s) => ({
         id: s.id,
@@ -186,10 +143,6 @@ export default async function OrderDetailPage({
         note: c.note,
         created_at: c.created_at,
       }))}
-      canEdit={canEdit}
-      canIssue={canIssue}
-      canShip={canShip}
-      canDeliver={canDeliver}
       lsx={
         lsx
           ? {
@@ -200,18 +153,16 @@ export default async function OrderDetailPage({
               approved_at: lsx.approved_at,
               completed_at: lsx.completed_at,
               rejected_reason: lsx.rejected_reason,
-              updated_at: lsx.updated_at,
+              ship_date: lsx.ship_date,
+              materials_received_at: lsx.materials_received_at,
+              jobs_done: jobs.filter((j) => j.status === 'done').length,
+              jobs_total: jobs.length,
+              other_orders: lsx.order_ids
+                .map((oid, i) => ({ id: oid, code: lsx.order_codes[i] ?? oid }))
+                .filter((o) => o.id !== order.id),
             }
           : null
       }
-      progress={progress.map((p) => ({
-        stage: p.stage,
-        action: p.action,
-        note: p.note,
-        updated_by_name: p.updated_by_name,
-        created_at: p.created_at,
-      }))}
-      stageLabels={Object.fromEntries(stages.map((s) => [s.code, s.label]))}
       cancelImpact={cancelImpact}
       mergeCandidates={mergeCandidates.map((o) => ({
         id: o.id,
@@ -219,6 +170,10 @@ export default async function OrderDetailPage({
         due_date: o.due_date,
         line_count: mergeLineCounts.get(o.id) ?? 0,
       }))}
+      canEdit={canEdit}
+      canIssue={canIssue}
+      canShip={canShip}
+      canDeliver={canDeliver}
     />
   )
 }

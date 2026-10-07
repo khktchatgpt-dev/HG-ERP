@@ -309,8 +309,34 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      trần baseline hạ 1510→1427, 1454→1419, 861→818, 957→934.
    - Quyền mới `sales.order.ship` tạm = Sale + quản lý; Kho ghi xuất hay không
      chờ Q1.
-2. **Lượt 2 — Đơn hàng tầng 2** (điều khoản thừa kế, ngày xuất mặc định, PO khách,
-   trạng thái xuất) — cần D1, D2, D4.
+2. **Lượt 2 — Đơn hàng tầng 2 + màn kiểu ERP** · ✅ XONG 07/10/2026 (D1 D2 D4 chốt theo
+   đề xuất; commit 43807d7 logic + commit màn).
+   - **Máy trạng thái (0223, CHƯA ÁP — áp qua SQL editor trước khi ghi xuất thật)**:
+     bỏ `in_production`; `partially_shipped` / `shipped` SUY từ Σ đợt xuất so Σ SL
+     có dung sai (`lib/order-ship-status`, 17 test); suy lại sau mỗi ghi/gỡ đợt;
+     lệnh hoàn thành không kéo đơn đã xuất về `completed`; xưởng ghi sổ không
+     đổi trạng thái đơn. Xác nhận giao từ completed / xuất dở / xuất đủ, giao
+     thiếu bắt lý do.
+   - **Ghi xuất một đợt nhiều dòng** (một container) — route nhận cả bản cũ.
+   - **D2**: một SP nhiều dòng; repo khớp theo id dòng, form gửi id.
+   - **Tạo đơn**: PO khách bắt buộc trừ tick "khách không có PO"; điều khoản
+     trống lấy mặc định hồ sơ khách (đơn > báo giá > khách); dòng thiếu tuần giao
+     lấy hạn đơn. Sửa đơn đã có lệnh: lý do bắt buộc (form khoá nút + câu "còn
+     thiếu"). Khối điều khoản luôn hiện. Nút "Áp hạn giao cho n dòng trống";
+     cảnh báo "sau hạn đơn" trên dòng.
+   - **Màn kiểu ERP** (khối `sales/_erp/ui.tsx`): sổ đơn `/sales/orders` dựng
+     lại phẳng (`SoDonHangScreen` + `useSoDonHang`): 9 ô đếm (vòng đời + Quá hạn
+     + Thiếu dữ liệu), lọc phạm vi/khách/tìm cả mã SP·mã khách/sắp, cột Đã xuất
+     · còn, cột Thiếu, chân tổng theo tiền tệ. Chi tiết `/sales/orders/[id]`
+     dựng lại (`DonHangScreen` + `useDonHang` + 4 khối): công cụ góc phải, 7 ô
+     đếm là nút cuộn, hành động mở TẠI CHỖ (ghi xuất nhiều dòng · đã giao · huỷ
+     · phát lệnh), lưới dòng 12 cột là nhân vật chính, Tổng quan 3 nhóm có tên,
+     cảnh báo "Hợp đồng in sẽ thiếu: …". Xoá `OrdersManager.tsx` (815) và
+     `OrderDetailView.tsx` (1419).
+   - **Chưa làm (tầng 3 form)**: form tạo/sửa vẫn kit v3 — chuyển khuôn F
+     (lưới phím Excel, dán từ Excel, CommitBar) ở lượt tầng 3.
+   - Đo 07/10 sau khi dựng: 53/53 đơn "thiếu dữ liệu" (điều khoản 53, tuần giao
+     ~20, PO 19, giá 5) — ô đếm này là việc dọn của Sale tuần tới.
 3. **Lượt 3 — Lệnh SX tầng 2** (xoá/huỷ lệnh, đồng bộ từ đơn, revision) — cần D1.
 4. **Lượt 4 — Báo giá tầng 2** (bản sửa đổi, kết cục, giá thành trên dòng) — cần D3.
 5. **Lượt 5–7 — tầng 3** từng màn, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.
