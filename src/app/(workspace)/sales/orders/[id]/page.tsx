@@ -9,6 +9,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { HttpError } from '@/server/http'
+import { fileImageSrc } from '@/server/file-image'
 import { DonHangScreen } from './DonHangScreen'
 import type { CancelImpact, ChangeView } from './don-hang.shared'
 
@@ -122,6 +123,7 @@ export default async function OrderDetailPage({
         customer_item_code: l.customer_item_code,
         barcode: l.barcode,
         bom_status: l.bom_status,
+        image_url: l.image_file_id ? fileImageSrc(l.image_file_id) : null,
         qty: l.qty,
         unit_price: l.unit_price,
         ship_date: l.ship_date,

@@ -1,20 +1,23 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Panel, TH, TD, NUM, Nhan } from '../../_erp/ui'
+import { Panel, TH, TD, NUM } from '../../_erp/ui'
 import { shipWeekLabel } from '@/lib/ship-week'
-import { fmtD, fmtMoney, fmtN } from './don-hang.shared'
+import { fmtD, fmtMoney, fmtN, type DongView } from './don-hang.shared'
 import type { DonHangCtx } from './useDonHang'
 
 /**
  * LƯỚI DÒNG SẢN PHẨM — nhân vật chính của màn chứng từ (tiêu chí ERP #1):
- * STT · Mã SP · Mã khách · Tên · ĐVT · SL · Đã xuất · Còn · Tuần giao · Đơn giá ·
- * Thành tiền · Ghi chú (12 cột, ≤ trần 11 + STT). Chân bảng: Cộng + tổng, nói
- * rõ tổng chưa gồm gì.
+ * STT · Ảnh · Mã SP (mã khách dòng dưới) · Tên · ĐVT · SL · Đã xuất · Còn ·
+ * Tuần giao · Đơn giá · Thành tiền · Ghi chú (12 cột). Bề rộng khai cố định
+ * (`table-fixed`) để vừa 1280 không tràn; ảnh bấm mở xem lớn. Chân bảng: Cộng +
+ * tổng, nói rõ tổng chưa gồm gì.
  */
 export function KhoiDong({ d }: { d: DonHangCtx }) {
   const { lines, order, tong } = d
   const noPrice = lines.length - tong.priced
+  const [xem, setXem] = useState<DongView | null>(null)
   return (
     <Panel
       title="Dòng sản phẩm"
@@ -28,20 +31,34 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
     >
       <div className="overflow-x-auto">
         <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-9" />
+            <col className="w-12" />
+            <col className="w-[118px]" />
+            <col />
+            <col className="w-11" />
+            <col className="w-[64px]" />
+            <col className="w-[68px]" />
+            <col className="w-[60px]" />
+            <col className="w-[92px]" />
+            <col className="w-[84px]" />
+            <col className="w-[100px]" />
+            <col className="w-[104px]" />
+          </colgroup>
           <thead>
             <tr>
-              <th className={`${TH} w-10 text-right`}>#</th>
-              <th className={`${TH} w-[120px]`}>Mã SP</th>
-              <th className={`${TH} w-[100px]`}>Mã khách</th>
+              <th className={`${TH} text-right`}>#</th>
+              <th className={`${TH} text-center`}>Ảnh</th>
+              <th className={TH}>Mã SP · mã khách</th>
               <th className={TH}>Tên sản phẩm</th>
-              <th className={`${TH} w-12`}>ĐVT</th>
-              <th className={`${TH} w-[68px] text-right`}>SL</th>
-              <th className={`${TH} w-[72px] text-right`}>Đã xuất</th>
-              <th className={`${TH} w-[68px] text-right`}>Còn</th>
-              <th className={`${TH} w-[96px]`}>Tuần giao</th>
-              <th className={`${TH} w-[88px] text-right`}>Đơn giá</th>
-              <th className={`${TH} w-[104px] text-right`}>Thành tiền</th>
-              <th className={`${TH} w-[120px]`}>Ghi chú</th>
+              <th className={TH}>ĐVT</th>
+              <th className={`${TH} text-right`}>SL</th>
+              <th className={`${TH} text-right`}>Đã xuất</th>
+              <th className={`${TH} text-right`}>Còn</th>
+              <th className={TH}>Tuần giao</th>
+              <th className={`${TH} text-right`}>Đơn giá</th>
+              <th className={`${TH} text-right`}>Thành tiền</th>
+              <th className={TH}>Ghi chú</th>
             </tr>
           </thead>
           <tbody>
@@ -50,21 +67,31 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
               return (
                 <tr key={l.id} className="hover:bg-muted/40">
                   <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
-                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
+                  <td className={`${TD} px-1 text-center`}>
+                    <AnhSp
+                      src={l.image_url}
+                      alt={l.product_name}
+                      onOpen={() => setXem(l)}
+                    />
+                  </td>
+                  <td className={`${TD} min-w-0`}>
                     <Link
                       href={`/products/${l.product_id}`}
-                      className="text-[var(--primary)] hover:underline"
+                      className="block truncate font-mono text-xs text-[var(--primary)] hover:underline"
                     >
                       {l.product_code}
                     </Link>
-                    {l.bom_status !== 'done' && (
-                      <span className="ml-1" title="Hồ sơ SP chưa có định mức">
-                        <Nhan tone="warn">BOM</Nhan>
-                      </span>
-                    )}
-                  </td>
-                  <td className={`${TD} font-mono text-xs`}>
-                    {l.customer_item_code ?? '—'}
+                    <span className="text-muted-foreground block truncate font-mono text-[11px] leading-4">
+                      {l.customer_item_code ?? '—'}
+                      {l.bom_status !== 'done' && (
+                        <span
+                          className="ml-1 text-[var(--warn)]"
+                          title="Hồ sơ SP chưa có định mức"
+                        >
+                          · chưa BOM
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className={`${TD} truncate`} title={l.product_name}>
                     {l.product_name}
@@ -81,14 +108,16 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
                   >
                     {left === 0 ? 'đủ' : fmtN(left)}
                   </td>
-                  <td className={`${TD} font-mono text-xs`}>
+                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
                     {l.ship_date ? (
-                      <span title={fmtD(l.ship_date)}>
-                        {shipWeekLabel(l.ship_date)}{' '}
-                        <span className="text-muted-foreground">
-                          · {fmtD(l.ship_date)}
+                      <>
+                        <span className="block leading-4">
+                          {shipWeekLabel(l.ship_date)}
                         </span>
-                      </span>
+                        <span className="text-muted-foreground block text-[11px] leading-4">
+                          {fmtD(l.ship_date)}
+                        </span>
+                      </>
                     ) : (
                       <span className="text-[var(--warn)]">chưa có</span>
                     )}
@@ -133,7 +162,7 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
               <td className={`${TD} ${NUM} border-b-0`}>{fmtN(tong.left)}</td>
               <td className={`${TD} border-b-0`} />
               <td className={`${TD} border-b-0`} />
-              <td className={`${TD} ${NUM} border-b-0`}>
+              <td className={`${TD} ${NUM} border-b-0 whitespace-nowrap`}>
                 {fmtMoney(tong.value)}{' '}
                 <span className="text-muted-foreground">{order.currency}</span>
               </td>
@@ -142,6 +171,87 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
           </tfoot>
         </table>
       </div>
+      {xem && <AnhLon line={xem} onClose={() => setXem(null)} />}
     </Panel>
+  )
+}
+
+/** Ảnh nhỏ 36px — bấm mở ảnh lớn; không ảnh → ô trống cùng cỡ để hàng thẳng. */
+function AnhSp({
+  src,
+  alt,
+  onOpen,
+}: {
+  src: string | null
+  alt: string
+  onOpen: () => void
+}) {
+  if (!src)
+    return (
+      <span
+        className="border-border bg-muted inline-block h-9 w-9 rounded-sm border align-middle"
+        title="Chưa có ảnh — thêm ở hồ sơ SP"
+      />
+    )
+  return (
+    <button type="button" onClick={onOpen} className="align-middle" title="Xem ảnh lớn">
+      {/* eslint-disable-next-line @next/next/no-img-element -- ảnh ký sẵn, không qua next/image */}
+      <img
+        src={src}
+        alt={alt}
+        width={36}
+        height={36}
+        className="border-border bg-card h-9 w-9 rounded-sm border object-contain hover:border-[var(--primary)]"
+      />
+    </button>
+  )
+}
+
+/** Ảnh lớn phủ màn — Esc hoặc bấm nền để đóng. */
+function AnhLon({ line, onClose }: { line: DongView; onClose: () => void }) {
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [onClose])
+  if (!line.image_url) return null
+  return (
+    <div
+      role="dialog"
+      aria-label={`Ảnh ${line.product_code}`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card flex max-h-full max-w-4xl flex-col rounded-sm shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-border flex items-center gap-3 border-b px-3 py-2 text-[13px]">
+          <span className="font-mono font-semibold">{line.product_code}</span>
+          <span className="text-muted-foreground truncate">{line.product_name}</span>
+          <span className="flex-1" />
+          <Link
+            href={`/products/${line.product_id}`}
+            className="text-xs text-[var(--primary)] hover:underline"
+          >
+            Hồ sơ SP
+          </Link>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground px-1"
+            aria-label="Đóng"
+          >
+            ✕
+          </button>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- ảnh ký sẵn, không qua next/image */}
+        <img
+          src={line.image_url}
+          alt={line.product_name}
+          className="max-h-[80vh] object-contain p-2"
+        />
+      </div>
+    </div>
   )
 }

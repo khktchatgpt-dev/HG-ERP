@@ -41,6 +41,8 @@ export type DongView = {
   customer_item_code: string | null
   barcode: string | null
   bom_status: 'none' | 'drawing' | 'done'
+  /** Ảnh đại diện SP — đường dẫn ký sẵn (server dựng), null = chưa có ảnh. */
+  image_url: string | null
   qty: number
   unit_price: number
   ship_date: string | null
