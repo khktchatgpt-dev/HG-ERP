@@ -5,6 +5,7 @@ import type {
 } from '@/modules/dept/technical/technical.repo'
 
 import { dimsText, packingWithDims } from '@/lib/packing-dims'
+import { fileImageSrc } from '@/server/file-image'
 
 /** SP như ô chọn của form báo giá/đơn cần — khớp `ProductPick` phía client. */
 export type QuotePickPayload = {
@@ -17,6 +18,8 @@ export type QuotePickPayload = {
   bom_status: 'none' | 'drawing' | 'done'
   description_en: string | null
   has_image: boolean
+  /** Ảnh đại diện — đường dẫn ký sẵn (07/10/2026, cho màn nhập Excel + ô chọn). */
+  image_url: string | null
   packing: ProductPacking
 }
 
@@ -43,6 +46,7 @@ export function toQuotePickPayload(p: ProductPickRow): QuotePickPayload {
     bom_status: p.bom_status,
     description_en: p.description_en,
     has_image: !!p.image_file_id,
+    image_url: p.image_file_id ? fileImageSrc(p.image_file_id) : null,
     packing: packingWithDims(pk, p),
   }
 }

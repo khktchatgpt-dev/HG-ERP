@@ -34,9 +34,12 @@ export type PreviewRow = {
   action: 'existing' | 'new' | 'blocked'
   matched_product_id: string | null
   matched_label: string | null
+  matched_image_url: string | null
   ambiguous: boolean
-  candidates: { id: string; code: string; name: string }[]
+  candidates: { id: string; code: string; name: string; image_url: string | null }[]
   has_image: boolean
+  /** Ảnh nhúng trong file (data URL, có trần) — null khi không có / quá lớn. */
+  image_data_url: string | null
   blocked_reason: string | null
 }
 
@@ -53,7 +56,7 @@ export type Preview = {
 export type Customer = { id: string; name: string; default_currency: string | null }
 
 /** Người dùng chỉ đích danh SP cho một dòng — thắng mọi kết quả khớp tự động. */
-export type Pick = { id: string; code: string; name: string }
+export type Pick = { id: string; code: string; name: string; image_url: string | null }
 
 /** Dòng SAU khi áp lựa chọn tay: việc sẽ làm + SP sẽ dùng. */
 export type RowView = PreviewRow & {
@@ -61,6 +64,8 @@ export type RowView = PreviewRow & {
   effective: 'existing' | 'new' | 'blocked'
   effectiveId: string | null
   effectiveLabel: string | null
+  /** Ảnh sẽ đi với dòng: thư viện (SP khớp / SP chọn) hoặc ảnh nhúng (SP mới). */
+  thumb: string | null
   /** Vì sao chưa lưu được dòng này (null = ổn). */
   why: string | null
 }
@@ -131,7 +136,13 @@ export function useImportQuote(customers: Customer[]) {
   function setPick(row: number, p: Pick | ProductPick | null) {
     setPicks((m) => {
       const n = new Map(m)
-      if (p) n.set(row, { id: p.id, code: p.code, name: p.name })
+      if (p)
+        n.set(row, {
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          image_url: p.image_url ?? null,
+        })
       else n.delete(row)
       return n
     })
@@ -153,11 +164,13 @@ export function useImportQuote(customers: Customer[]) {
       let effective: RowView['effective'] = r.action
       let effectiveId = r.matched_product_id
       let effectiveLabel = r.matched_label
+      let thumb: string | null = r.matched_image_url ?? r.image_data_url
       let why: string | null = r.action === 'blocked' ? r.blocked_reason : null
       if (pick && !hardBlocked) {
         effective = 'existing'
         effectiveId = pick.id
         effectiveLabel = `${pick.code} — ${pick.name}`
+        thumb = pick.image_url ?? r.image_data_url
         why = null
       }
       if (hardBlocked) {
@@ -171,7 +184,7 @@ export function useImportQuote(customers: Customer[]) {
           why = `trùng SP với dòng ${first} (đã chọn cùng một sản phẩm)`
         } else usedBy.set(effectiveId, r.row)
       }
-      return { ...r, pick, effective, effectiveId, effectiveLabel, why }
+      return { ...r, pick, effective, effectiveId, effectiveLabel, thumb, why }
     })
   }, [preview, picks, skip])
 

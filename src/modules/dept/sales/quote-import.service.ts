@@ -3,6 +3,7 @@ import { parseQuoteExcel } from '@/lib/quote-excel'
 import { resolveImportRows, type ResolvedRow } from '@/lib/quote-import-match'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { filesService } from '@/modules/core/files/files.service'
+import { fileImageSrc } from '@/server/file-image'
 import { quotesService } from './quotes.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
@@ -88,8 +89,13 @@ function readSheet(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook) {
   return { grid, images }
 }
 
-/** Dòng xem trước = dòng đã khớp (kiểu do `@/lib/quote-import-match` định nghĩa). */
-export type ImportPreviewRow = ResolvedRow
+/**
+ * Dòng xem trước = dòng đã khớp + ảnh NHÚNG trong file dưới dạng data URL để
+ * người soi nhìn thấy đúng cái sẽ gắn vào SP mới. Trần `EMBED_PREVIEW_MAX` mỗi
+ * ảnh: ảnh to hơn chỉ báo "có ảnh" (nhịp 2 vẫn bóc đủ từ file nguồn).
+ */
+export type ImportPreviewRow = ResolvedRow & { image_data_url: string | null }
+const EMBED_PREVIEW_MAX = 400 * 1024
 
 export type ImportPreview = {
   source_file_id: string
@@ -146,7 +152,7 @@ export const quoteImportService = {
       page_size: 5000,
       active_only: false,
     })
-    const rows = resolveImportRows(
+    const resolved = resolveImportRows(
       parsed.rows,
       products.map((p) => ({
         id: p.id,
@@ -154,8 +160,19 @@ export const quoteImportService = {
         name: p.name,
         customer_item_code: p.customer_item_code,
         is_active: p.is_active,
+        image_url: p.image_file_id ? fileImageSrc(p.image_file_id) : null,
       })),
     )
+    const rows: ImportPreviewRow[] = resolved.map((r) => {
+      const img = picked!.images.get(r.row)
+      const small = img && img.buffer.byteLength <= EMBED_PREVIEW_MAX
+      return {
+        ...r,
+        image_data_url: small
+          ? `data:${MIME_BY_EXT[img.extension] ?? 'image/png'};base64,${img.buffer.toString('base64')}`
+          : null,
+      }
+    })
 
     // Chỉ ghi MỘT thứ ở nhịp này: file nguồn (nhịp 2 đọc lại để bóc ảnh).
     const source_file_id = await filesService.uploadFromServer(user, {

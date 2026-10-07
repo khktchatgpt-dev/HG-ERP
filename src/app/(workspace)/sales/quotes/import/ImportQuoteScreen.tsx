@@ -202,13 +202,13 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
             <tr>
               <th className={`${TH} w-8 px-2`}>Lấy</th>
               <th className={`${TH} w-12 text-right`}>Dòng</th>
+              <th className={`${TH} w-[72px] text-center`}>Ảnh</th>
               <th className={`${TH} min-w-[260px]`}>Sản phẩm trong file</th>
               <th className={`${TH} min-w-[260px]`}>Việc sẽ làm</th>
               <th className={`${TH} w-[120px]`}>KT (mm)</th>
               <th className={`${TH} w-[80px] text-right`}>SL/MOQ</th>
               <th className={`${TH} w-[100px] text-right`}>Đơn giá</th>
               <th className={`${TH} w-[60px] text-right`}>CK %</th>
-              <th className={`${TH} w-10 text-center`}>Ảnh</th>
             </tr>
           </thead>
           <tbody>
@@ -333,6 +333,14 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
       <td className={`${TD} text-muted-foreground text-right font-mono text-xs`}>
         {r.row}
       </td>
+      <td className={`${TD} px-1 py-1 text-center`}>
+        <Thumb
+          src={r.thumb}
+          alt={r.name ?? ''}
+          embedded={!r.matched_image_url && !r.pick && !!r.image_data_url}
+          missingEmbedded={r.has_image && !r.image_data_url && !r.thumb}
+        />
+      </td>
       <td className={`${TD} py-1`}>
         <div className="flex flex-col">
           <span className="font-medium">{r.name ?? '—'}</span>
@@ -340,6 +348,26 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
             {[r.code, r.customer_item_code && `KH: ${r.customer_item_code}`]
               .filter(Boolean)
               .join(' · ') || 'không mã'}
+          </span>
+          {r.description_en && (
+            <span className="text-muted-foreground text-[11px]">{r.description_en}</span>
+          )}
+          <span className="text-muted-foreground text-[11px]">
+            {[
+              r.material && `CL: ${r.material}`,
+              r.unit && `ĐVT: ${r.unit}`,
+              r.qty_per_carton != null && `${r.qty_per_carton}/thùng`,
+              r.carton_l_cm != null &&
+                r.carton_w_cm != null &&
+                r.carton_h_cm != null &&
+                `thùng ${r.carton_l_cm}×${r.carton_w_cm}×${r.carton_h_cm} cm`,
+              r.nw_kg != null && `NW ${r.nw_kg}`,
+              r.gw_kg != null && `GW ${r.gw_kg}`,
+              r.loading_40hc != null && `${r.loading_40hc}/40HC`,
+              r.note && `"${r.note}"`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
           {r.warnings.map((w) => (
             <span key={w} className="text-[11px] text-[var(--warn)]">
@@ -373,10 +401,11 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
                   <button
                     key={c.id}
                     type="button"
-                    className="border-border hover:bg-muted rounded-sm border px-1.5 py-0.5 font-mono text-[11px]"
+                    className="border-border hover:bg-muted inline-flex items-center gap-1 rounded-sm border py-0.5 pr-1.5 pl-0.5 font-mono text-[11px]"
                     title={c.name}
                     onClick={() => d.setPick(r.row, c)}
                   >
+                    <Thumb src={c.image_url} alt={c.name} size={24} />
                     {c.code}
                   </button>
                 ))}
@@ -411,9 +440,54 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
       </td>
       <td className={`${TD} ${NUM}`}>{r.unit_price != null ? fmt(r.unit_price) : '—'}</td>
       <td className={`${TD} ${NUM}`}>{r.discount_pct != null ? r.discount_pct : ''}</td>
-      <td className={`${TD} text-center`}>
-        {r.has_image ? '🖼' : <span className="text-muted-foreground">—</span>}
-      </td>
     </tr>
+  )
+}
+
+/** Ảnh đại diện: thư viện (đường dẫn ký) hoặc ảnh nhúng (data URL). Không ảnh → ô trống có nhãn. */
+function Thumb({
+  src,
+  alt,
+  size = 56,
+  embedded,
+  missingEmbedded,
+}: {
+  src: string | null
+  alt: string
+  size?: number
+  /** Ảnh lấy từ file Excel — sẽ gắn vào SP mới khi lưu. */
+  embedded?: boolean
+  /** File có ảnh nhưng quá lớn để xem trước. */
+  missingEmbedded?: boolean
+}) {
+  if (!src)
+    return (
+      <span
+        className="border-border bg-muted text-muted-foreground inline-flex items-center justify-center rounded-sm border text-[10px]"
+        style={{ width: size, height: size }}
+        title={
+          missingEmbedded
+            ? 'Có ảnh trong file (quá lớn để xem trước) — vẫn gắn khi lưu'
+            : 'Chưa có ảnh'
+        }
+      >
+        {missingEmbedded ? '🖼' : '—'}
+      </span>
+    )
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- ảnh ký sẵn / data URL, không qua next/image
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      className="border-border inline-block rounded-sm border object-contain"
+      style={{ width: size, height: size }}
+      title={
+        embedded
+          ? 'Ảnh trong file Excel — sẽ gắn vào SP mới khi lưu'
+          : 'Ảnh trong thư viện'
+      }
+    />
   )
 }
