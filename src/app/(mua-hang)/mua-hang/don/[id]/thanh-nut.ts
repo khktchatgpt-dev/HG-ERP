@@ -17,8 +17,6 @@
 export type BarKey =
   | `doc:${string}`
   | 'edit'
-  | 'confirm'
-  | 'addShipment'
   | 'transit'
   | 'receive'
   | 'closeShort'
@@ -141,7 +139,6 @@ const MOVES: Partial<Record<BarKey, MoveGroup>> = {
   'doc:approve': 'Đi tiếp',
   'doc:send': 'Đi tiếp',
   'doc:urgent_send': 'Đi tiếp',
-  confirm: 'Đi tiếp',
   transit: 'Đi tiếp',
   receive: 'Đi tiếp',
   closeShort: 'Đi tiếp',

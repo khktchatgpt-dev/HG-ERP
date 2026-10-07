@@ -25,7 +25,6 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
     shipmentsDone,
     p,
     busy,
-    recv,
     router,
     lines,
     setShipCols,
@@ -34,8 +33,6 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
     shipLines,
     perms,
     today,
-    shipmentAct,
-    setDot,
     start,
     closeShortAct,
     reopenAct,
@@ -44,16 +41,11 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
     setSuCoClose,
     openShortLines,
     missingTotal,
-    termsEdit,
-    editCols,
-    setEditCols,
-    shipErrors,
-    shipChanges,
   } = d
-  // Chế độ SỬA TẠI CHỖ (B2, 28/09/2026): đợt đang hẹn sửa thẳng trong lưới chia
-  // đợt của lúc soạn; đợt xe đã tới / đã nhận nằm ngoài, khoá — Kho giữ chúng.
-  const suaDot = termsEdit && !drafting && !!po
-  const lockedShipments = p.shipments.filter((s) => s.status !== 'planned' && s.status !== 'cancelled') // prettier-ignore
+  // Lịch giao CHỈ XEM ở trang đơn, kể cả lúc bấm Sửa (07/10/2026, "một nơi"):
+  // lưới sửa đợt tại chỗ (B2) đã gỡ — đợt sửa ở hộp Giao nhận của Theo dõi.
+  const giaoNhanHref = po ? `/mua-hang/theo-doi?don=${po.id}` : '#'
+  const coLichGiao = !!po && ['approved', 'ordered', 'confirmed', 'in_transit', 'partial', 'received'].includes(po.status) // prettier-ignore
   return (
     <>
       {/* ══ 1b. GIAO & NHẬN HÀNG — hai sổ: NCC hẹn gì, Kho thực nhận gì ═══
@@ -91,11 +83,15 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
               H2): nhận hàng, đợt giao, giao bù, chốt thiếu, sự cố ghi ở hộp
               Giao nhận trên Theo dõi đơn hàng — một nút dẫn sang đó.
             */
+            /*
+              07/10/2026: mở được từ lúc ĐÃ DUYỆT (trước khoá theo "nhận hàng"
+              — đơn chưa gửi NCC không vào được hộp để ghi lịch giao).
+            */
             !drafting ? (
               <GridBtn
-                disabled={!recv.receive.ok}
-                title={recv.receive.why}
-                onClick={() => po && router.push(`/mua-hang/theo-doi?don=${po.id}`)}
+                disabled={!coLichGiao}
+                title={coLichGiao ? 'Ghi nhận hàng, thêm / sửa / tách đợt giao, chốt thiếu, sự cố' : 'Đơn chưa duyệt — lịch giao chia ở lưới soạn đơn'} // prettier-ignore
+                onClick={() => po && router.push(giaoNhanHref)}
               >
                 Xử lý giao nhận →
               </GridBtn>
@@ -110,17 +106,17 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
             </div>
           ) : (
             <>
-              {sentToSupplier && !suaDot && (
+              {coLichGiao && (
                 <div className="text-k-sm mx-[var(--gutter)] mt-2 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[var(--act-line)] bg-[var(--act-wash)] px-3 py-2 text-[var(--act-text)]">
                   <span>
-                    Mục này chỉ để <b>xem</b>. Nhận hàng, đợt giao, giao bù, chốt thiếu,
-                    sự cố — ghi ở <b>Theo dõi đơn hàng</b>.
+                    Mục này chỉ để <b>xem</b>. Nhận hàng, thêm / sửa / tách đợt giao, chốt
+                    thiếu, sự cố — ghi ở <b>Theo dõi đơn hàng</b>.
                   </span>
                   <Link
-                    href={`/mua-hang/theo-doi?don=${po.id}`}
+                    href={giaoNhanHref}
                     className="ml-auto font-semibold text-[var(--act)] hover:underline"
                   >
-                    Mở giao nhận của đơn này →
+                    Sửa lịch giao ở Giao nhận →
                   </Link>
                 </div>
               )}
@@ -145,59 +141,26 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                 </>
               )}
               <div className="px-[var(--gutter)] pt-3">
-                <h3 className="k-fgrp-h">
-                  {suaDot
-                    ? 'Đợt giao · đang sửa — mỗi cột một đợt, ô trống = không đi đợt đó'
-                    : 'Kế hoạch giao · NCC hẹn'}
-                </h3>
+                <h3 className="k-fgrp-h">Kế hoạch giao · NCC hẹn</h3>
               </div>
-              {suaDot && (
-                <>
-                  <ChiaDotSoanGrid
-                    lines={lines}
-                    columns={editCols}
-                    onChange={setEditCols}
-                  />
-                  <div className="text-k-sm px-[var(--gutter)] py-2 text-[var(--ink-2)]">
-                    {shipErrors.length > 0 ? (
-                      <span className="k-t-stop">
-                        Chưa lưu được: {shipErrors.join(' · ')}
-                      </span>
-                    ) : shipChanges > 0 ? (
-                      <span>
-                        <b className="num">{shipChanges}</b> đợt đổi — bấm <b>Lưu</b> ở
-                        đầu trang để ghi; bỏ cột = huỷ đợt (máy ghi lý do).
-                      </span>
-                    ) : (
-                      'Chưa đổi đợt nào. Đợt xe đã tới / đã nhận không sửa ở đây — Kho giữ.'
-                    )}
-                  </div>
-                  {lockedShipments.length > 0 && (
-                    <div className="px-[var(--gutter)] pt-2">
-                      <h3 className="k-fgrp-h">Đợt đã tới / đã nhận · khoá</h3>
-                    </div>
-                  )}
-                </>
-              )}
-              {(!suaDot || lockedShipments.length > 0) && (
-                <DotGiaoGrid
-                  shipments={suaDot ? lockedShipments : p.shipments}
-                  linesById={shipLinesById}
-                  currency={po.currency}
-                  receivedByLine={new Map(p.statusLines.map((s) => [s.id, s.qty_received ?? 0]))} // prettier-ignore
-                  linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
-                  confirmedNote={po.confirmed_note}
-                  emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0, !suaDot)}
-                  canAct={false}
-                  busy={busy}
-                  today={today}
-                  onArrived={(id) => void shipmentAct(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')} // prettier-ignore
-                  onReschedule={(s) => setDot({ kind: 'reschedule', s })}
-                  onCancel={(s) => setDot({ kind: 'cancel', s })}
-                  onEdit={(s) => setDot({ kind: 'edit', s })}
-                  onSplit={(s) => setDot({ kind: 'split', s })}
-                />
-              )}
+              <DotGiaoGrid
+                shipments={p.shipments}
+                linesById={shipLinesById}
+                currency={po.currency}
+                receivedByLine={new Map(p.statusLines.map((s) => [s.id, s.qty_received ?? 0]))} // prettier-ignore
+                linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
+                confirmedNote={po.confirmed_note}
+                emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0, true)}
+                canAct={false}
+                busy={busy}
+                today={today}
+                // Chỉ xem (canAct=false): mọi thao tác đợt ở hộp Giao nhận.
+                onArrived={() => {}}
+                onReschedule={() => {}}
+                onCancel={() => {}}
+                onEdit={() => {}}
+                onSplit={() => {}}
+              />
               {/* Bày sổ theo DÒNG từ lúc đơn rời tay mình, không đợi Kho lập
                     phiếu đầu tiên. Bản trước gác bằng `receiptBatches.length > 0`
                     nên đúng lúc cần nhất — NCC báo hết một mã mà chưa về gì —

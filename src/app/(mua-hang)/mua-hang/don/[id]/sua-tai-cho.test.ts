@@ -6,105 +6,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 import { api } from '@/lib/api'
-import {
-  dateEditState,
-  diffShipments,
-  plannedColumns,
-  remapShipCols,
-  saveSuaTaiCho,
-  shipmentsPreflight,
-  suaTaiChoPreflight,
-} from './sua-tai-cho'
-
-describe('remapShipCols — cột đợt đi theo DÒNG khi bỏ/thêm dòng hàng (B3)', () => {
-  it('bỏ dòng đứng trước → số của dòng sau vẫn về đúng dòng; mảnh của dòng đã bỏ rơi', () => {
-    const cols = [{ id: 'd1', date: '2026-10-05', qty: { 0: 5, 2: 7 } }]
-    expect(remapShipCols(cols, ['A', 'B', 'C'], ['B', 'C'])).toEqual([
-      { id: 'd1', date: '2026-10-05', qty: { 1: 7 } },
-    ])
-    // Thêm dòng mới ở đầu → chỉ số trượt xuống 1.
-    expect(remapShipCols(cols, ['A', 'B', 'C'], ['N', 'A', 'B', 'C'])[0].qty).toEqual({ 1: 5, 3: 7 }) // prettier-ignore
-    // Không đổi → y nguyên.
-    expect(remapShipCols(cols, ['A', 'B', 'C'], ['A', 'B', 'C'])[0].qty).toEqual({ 0: 5, 2: 7 }) // prettier-ignore
-  })
-})
-
-const LINES = [
-  { id: 'L1', name: 'Bulon 6x10', qty_ordered: 19_890 },
-  { id: 'L2', name: 'Bulong 6x20', qty_ordered: 73_114 },
-]
-const ship = (id: string, status: string, date: string, lines: [string, number][]) => ({
-  id,
-  seq: 1,
-  expected_date: date,
-  status,
-  note: null,
-  lines: lines.map(([po_line_id, qty]) => ({ po_line_id, qty })),
-})
-
-describe('plannedColumns / diffShipments — đợt giao sửa thẳng trong lưới (B2)', () => {
-  const before = [
-    ship('d1', 'planned', '2026-10-05', [['L1', 19_890]]),
-    ship('d2', 'planned', '2026-10-12', [['L2', 73_114]]),
-    ship('d0', 'received', '2026-09-20', [['L1', 5_000]]),
-    ship('dx', 'cancelled', '2026-09-01', [['L2', 1]]),
-  ]
-
-  it('chỉ đợt đang hẹn vào lưới, giữ id; đã nhận / huỷ đứng ngoài', () => {
-    const cols = plannedColumns(before, LINES)
-    expect(cols).toEqual([
-      { id: 'd1', date: '2026-10-05', qty: { 0: 19_890 } },
-      { id: 'd2', date: '2026-10-12', qty: { 1: 73_114 } },
-    ])
-  })
-
-  it('không đổi gì → không gọi gì', () => {
-    const d = diffShipments(plannedColumns(before, LINES), LINES, before)
-    expect(d).toEqual({ edits: [], adds: [], cancels: [] })
-  })
-
-  it('đổi ngày đợt 1, đổi số đợt 2 → hai lệnh sửa đúng đợt', () => {
-    const cols = plannedColumns(before, LINES)
-    cols[0] = { ...cols[0], date: '2026-10-08' }
-    cols[1] = { ...cols[1], qty: { 1: 70_000 } }
-    const d = diffShipments(cols, LINES, before)
-    expect(d.edits).toEqual([
-      {
-        id: 'd1',
-        expected_date: '2026-10-08',
-        lines: [{ po_line_id: 'L1', qty: 19_890 }],
-      },
-      {
-        id: 'd2',
-        expected_date: '2026-10-12',
-        lines: [{ po_line_id: 'L2', qty: 70_000 }],
-      },
-    ])
-    expect(d.adds).toEqual([])
-    expect(d.cancels).toEqual([])
-  })
-
-  it('cột mới có ngày + số → thêm; cột mới trống → bỏ qua; bỏ cột cũ hoặc xoá hết số → bỏ đợt', () => {
-    const cols = plannedColumns(before, LINES)
-    const d = diffShipments(
-      [cols[0], { ...cols[1], qty: {} }, { date: '2026-10-20', qty: { 1: 3_114 } }, { date: '', qty: { 0: 5 } }], // prettier-ignore
-      LINES,
-      before,
-    )
-    expect(d.adds).toEqual([{ expected_date: '2026-10-20', lines: [{ po_line_id: 'L2', qty: 3_114 }] }]) // prettier-ignore
-    expect(d.cancels).toEqual(['d2'])
-    expect(d.edits).toEqual([])
-  })
-
-  it('shipmentsPreflight cộng đợt ĐÃ NHẬN vào phần đã chia — vượt SL đặt thì chặn bằng câu của server', () => {
-    // d0 đã nhận 5.000 của L1; đợt hẹn 19.890 nữa là 24.890 > 19.890.
-    const errs = shipmentsPreflight(plannedColumns(before, LINES), LINES, before)
-    expect(errs.length).toBeGreaterThan(0)
-    expect(errs.join(' ')).toMatch(/Bulon 6x10/)
-    // Không cột nào → không lỗi (bỏ hết đợt là chuyện hợp lệ).
-    expect(shipmentsPreflight([], LINES, before)).toEqual([])
-  })
-})
+import { dateEditState, saveSuaTaiCho, suaTaiChoPreflight } from './sua-tai-cho'
 
 const header = {
   expectedAt: '2026-10-05',
@@ -204,35 +106,7 @@ describe('saveSuaTaiCho — lưu theo phần, hỏng giữa chừng nói phần 
     if (!r.ok) expect(r.title).toMatch(/Đã ghi hẹn giao — phần còn lại CHƯA lưu/)
   })
 
-  it('đợt giao: bỏ → sửa → thêm, mỗi đợt đúng route và lý do máy ghi; hỏng ở đợt thứ 2 thì nói "1/3 đợt"', async () => {
-    vi.mocked(api).mockClear().mockResolvedValue({})
-    const ships = {
-      cancels: ['d9'],
-      edits: [
-        { id: 'd1', expected_date: '2026-10-08', lines: [{ po_line_id: 'L1', qty: 1 }] },
-      ],
-      adds: [{ expected_date: '2026-10-20', lines: [{ po_line_id: 'L2', qty: 2 }] }],
-    }
-    const noDate = { ok: true, current: '', changed: false }
-    const r = await saveSuaTaiCho('p1', header, noDate, '', ships)
-    const calls = vi.mocked(api).mock.calls.map((c) => [c[0], c[1]?.method])
-    expect(calls).toEqual([
-      ['/api/dept/supply/pos/p1/terms', 'PATCH'],
-      ['/api/dept/supply/shipments/d9', 'PATCH'],
-      ['/api/dept/supply/shipments/d1', 'PATCH'],
-      ['/api/dept/supply/pos/p1/shipments', 'POST'],
-    ])
-    expect(vi.mocked(api).mock.calls[1][1]?.body).toMatchObject({ action: 'cancel', reason: expect.stringMatching(/sửa đơn tại chỗ/) }) // prettier-ignore
-    expect(vi.mocked(api).mock.calls[2][1]?.body).toMatchObject({ action: 'edit', expected_date: '2026-10-08' }) // prettier-ignore
-    if (r.ok) expect(r.detail).toMatch(/3 đợt giao \(1 sửa · 1 thêm · 1 bỏ\)/)
-
-    vi.mocked(api).mockClear().mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('vượt SL đặt')) // prettier-ignore
-    const r2 = await saveSuaTaiCho('p1', header, noDate, '', ships)
-    expect(r2).toMatchObject({ ok: false, dateSaved: true, detail: 'vượt SL đặt' })
-    if (!r2.ok) expect(r2.title).toMatch(/điều khoản, 1\/3 đợt/)
-  })
-
-  it('điều chỉnh dòng hàng (B3) chạy SAU điều khoản và TRƯỚC đợt giao; hỏng ở đợt thì nói đã ghi lần N', async () => {
+  it('điều chỉnh dòng hàng (B3) chạy SAU điều khoản; đợt giao không còn ghi ở đây (07/10/2026)', async () => {
     vi.mocked(api).mockClear().mockResolvedValue({})
     const order: string[] = []
     const adjust = vi.fn(async () => {
@@ -243,21 +117,24 @@ describe('saveSuaTaiCho — lưu theo phần, hỏng giữa chừng nói phần 
       order.push(String(u).replace(/.*\//, ''))
       return {}
     })
-    const ships = { cancels: [], edits: [], adds: [{ expected_date: '2026-10-20', lines: [{ po_line_id: 'L2', qty: 2 }] }] } // prettier-ignore
     const noDate = { ok: true, current: '', changed: false }
-    const r = await saveSuaTaiCho('p1', header, noDate, '', ships, adjust)
-    expect(order).toEqual(['terms', 'adjust', 'shipments'])
+    const r = await saveSuaTaiCho('p1', header, noDate, '', adjust)
+    expect(order).toEqual(['terms', 'adjust'])
     if (r.ok) expect(r.detail).toMatch(/điều chỉnh lần 2 \(phát sinh −1\.500\.000\)/)
 
-    vi.mocked(api).mockReset().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('vượt SL đặt')) // prettier-ignore
-    const r2 = await saveSuaTaiCho('p1', header, noDate, '', ships, adjust)
+    vi.mocked(api).mockReset().mockResolvedValue({})
+    const failing = vi.fn(async () => { throw new Error('Dòng đã nhận không bớt được') }) // prettier-ignore
+    const r2 = await saveSuaTaiCho('p1', header, noDate, '', failing)
     expect(r2).toMatchObject({ ok: false, dateSaved: true })
-    if (!r2.ok)
-      expect(r2.title).toMatch(/điều khoản, điều chỉnh lần 2 — phần còn lại CHƯA lưu/)
+    if (!r2.ok) expect(r2.title).toMatch(/Đã ghi điều khoản — phần còn lại CHƯA lưu/)
+    // Không gọi route đợt giao nào nữa.
+    expect(
+      vi.mocked(api).mock.calls.some((c) => String(c[0]).includes('shipments')),
+    ).toBe(false)
     // Không có thay đổi dòng → không truyền adjust → không gọi.
     vi.mocked(api).mockReset().mockResolvedValue({})
     adjust.mockClear()
-    await saveSuaTaiCho('p1', header, noDate, '', ships, null)
+    await saveSuaTaiCho('p1', header, noDate, '', null)
     expect(adjust).not.toHaveBeenCalled()
   })
 })
