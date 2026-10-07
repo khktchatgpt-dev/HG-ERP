@@ -225,7 +225,7 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
             <col className="w-12" />
             <col />
             <col className="w-[230px]" />
-            <col className="w-[300px]" />
+            <col className="w-[150px]" />
             <col className="w-[72px]" />
             <col className="w-[88px]" />
             <col className="w-[52px]" />
@@ -243,9 +243,9 @@ function XemTruoc({ d }: { d: ImportQuoteCtx }) {
               </th>
               <th className={`${TH} text-right`}>#</th>
               <th className={`${TH} text-center`}>Ảnh</th>
-              <th className={TH}>Sản phẩm trong file</th>
+              <th className={TH}>Sản phẩm</th>
               <th className={TH}>Quy cách · đóng gói</th>
-              <th className={TH}>Sản phẩm sẽ dùng</th>
+              <th className={TH}>Tình trạng</th>
               <th className={`${TH} text-right`}>SL/MOQ</th>
               <th className={`${TH} text-right`}>Đơn giá</th>
               <th className={`${TH} text-right`}>CK%</th>
@@ -412,6 +412,22 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
             .join(' · ') || 'không mã'}
           {r.description_en && <span className="font-sans"> · {r.description_en}</span>}
         </span>
+        {r.ambiguous && !r.pick && r.missing.length === 0 && (
+          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            {r.candidates.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="border-border bg-card inline-flex shrink-0 items-center gap-1 rounded-sm border py-px pr-1.5 pl-px font-mono text-[11px] hover:border-[var(--primary)]"
+                title={c.name}
+                onClick={() => d.setPick(r.row, c)}
+              >
+                <Thumb src={c.image_url} alt={c.name} size={18} />
+                {c.code}
+              </button>
+            ))}
+          </span>
+        )}
       </td>
       <td className={`${TD} min-w-0`}>
         <span className="block truncate font-mono text-xs tabular-nums">
@@ -425,7 +441,7 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
         </span>
       </td>
       <td className={`${TD} min-w-0`}>
-        <SeDung d={d} r={r} />
+        <TinhTrang d={d} r={r} />
       </td>
       <td className={`${TD} ${NUM}`}>
         {r.qty != null ? r.qty.toLocaleString('en-US') : ''}
@@ -449,11 +465,11 @@ function Dong({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
   )
 }
 
-/** Cột "Sản phẩm sẽ dùng": dòng 1 = ảnh thư viện + mã + nhãn + hành động; dòng 2 = tên / ứng viên / lý do. */
-function SeDung({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
-  const hard = r.missing.length > 0
-  const code = r.effectiveLabel?.split(' — ')[0] ?? null
-  const name = r.effectiveLabel?.split(' — ').slice(1).join(' — ') ?? null
+/**
+ * Cột "Tình trạng" — một nhãn + một dòng phụ. Không bày lại SP đã khớp (nó chính
+ * là SP trong file); chỉ nói mã thư viện khi KHÁC mã trong file (khớp qua mã khách).
+ */
+function TinhTrang({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
   const link = (label: string, onClick: () => void) => (
     <button
       type="button"
@@ -463,12 +479,12 @@ function SeDung({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
       {label}
     </button>
   )
-  if (hard)
+  const libCode = r.effectiveLabel?.split(' — ')[0] ?? null
+  const showLib = libCode && libCode.toLowerCase() !== (r.code ?? '').toLowerCase()
+  if (r.missing.length > 0)
     return (
       <>
-        <span className="flex items-center gap-1.5">
-          <Nhan tone="stop">thiếu dữ liệu</Nhan>
-        </span>
+        <Nhan tone="stop">thiếu dữ liệu</Nhan>
         <span className={`${SUB} text-[var(--stop)]`} title={r.why ?? ''}>
           {r.why}
         </span>
@@ -477,34 +493,16 @@ function SeDung({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
   if (r.effective === 'blocked' && r.ambiguous && !r.pick)
     return (
       <>
-        <span className="flex items-center gap-1.5">
-          <Nhan tone="warn">khớp {r.candidates.length} SP — chọn một</Nhan>
-          {link('tìm…', () => d.setPickFor(r.row))}
-        </span>
-        <span className="mt-0.5 flex flex-wrap items-center gap-1">
-          {r.candidates.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className="border-border bg-card inline-flex shrink-0 items-center gap-1 rounded-sm border py-px pr-1.5 pl-px font-mono text-[11px] hover:border-[var(--primary)]"
-              title={c.name}
-              onClick={() => d.setPick(r.row, c)}
-            >
-              <Thumb src={c.image_url} alt={c.name} size={18} />
-              {c.code}
-            </button>
-          ))}
+        <Nhan tone="warn">chọn 1 trong {r.candidates.length}</Nhan>
+        <span className={SUB}>
+          bấm mã bên trái · {link('tìm…', () => d.setPickFor(r.row))}
         </span>
       </>
     )
   if (r.effective === 'blocked')
     return (
       <>
-        <span className="flex items-center gap-1.5">
-          <Nhan tone="stop">trùng</Nhan>
-          {code && <span className="truncate font-mono text-xs">{code}</span>}
-          {link('đổi…', () => d.setPickFor(r.row))}
-        </span>
+        <Nhan tone="stop">trùng</Nhan>
         <span className={`${SUB} text-[var(--stop)]`} title={r.why ?? ''}>
           {r.why}
         </span>
@@ -513,33 +511,22 @@ function SeDung({ d, r }: { d: ImportQuoteCtx; r: RowView }) {
   if (r.effective === 'new')
     return (
       <>
-        <span className="flex items-center gap-1.5">
-          <Nhan tone="done">tạo SP mới</Nhan>
-          {link('đã có sẵn? chọn…', () => d.setPickFor(r.row))}
-        </span>
+        <Nhan tone="done">SP mới</Nhan>
         <span className={SUB}>
-          {r.code
-            ? `mã ${r.code} theo file`
-            : 'cấp mã tạm TMP-… · Kỹ thuật đặt mã chuẩn sau'}
-          {r.image_data_url || r.has_image ? ' · kèm ảnh trong file' : ' · chưa có ảnh'}
+          {r.code ? 'mã theo file' : 'cấp mã tạm'} ·{' '}
+          {link('đã có?', () => d.setPickFor(r.row))}
         </span>
       </>
     )
   return (
     <>
       <span className="flex items-center gap-1.5">
-        <Thumb
-          src={r.pick?.image_url ?? r.matched_image_url}
-          alt={name ?? ''}
-          size={18}
-        />
-        <span className="truncate font-mono text-xs font-medium">{code}</span>
         <Nhan tone="neutral">{r.pick ? 'bạn chọn' : 'có sẵn'}</Nhan>
-        {link('đổi…', () => d.setPickFor(r.row))}
+        {link('đổi', () => d.setPickFor(r.row))}
         {r.pick && link('bỏ', () => d.setPick(r.row, null))}
       </span>
-      <span className={SUB} title={name ?? ''}>
-        {name}
+      <span className={`${SUB} font-mono`} title={r.effectiveLabel ?? ''}>
+        {showLib ? `→ ${libCode}` : 'đúng mã trong file'}
       </span>
     </>
   )
