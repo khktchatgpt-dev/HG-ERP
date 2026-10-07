@@ -38,8 +38,12 @@ export default async function SalesOrdersPage() {
     productionRepo.listCodesByIds([
       ...new Set(orders.map((o) => o.production_order_id).filter((v) => v !== null)),
     ]),
+    // Tên người tạo + người phụ trách khách — một truy vấn cho cả hai.
     usersRepo.displayNamesByIds([
-      ...new Set(orders.map((o) => o.created_by).filter((v) => v !== null)),
+      ...new Set([
+        ...orders.map((o) => o.created_by).filter((v) => v !== null),
+        ...customers.map((c) => c.owner_id).filter((v): v is string => !!v),
+      ]),
     ]),
   ])
   const linesByOrder = new Map<string, typeof lines>()
@@ -77,7 +81,11 @@ export default async function SalesOrdersPage() {
         : null,
       created_by: o.created_by,
       created_by_name: o.created_by ? (creatorNames.get(o.created_by) ?? null) : null,
-      customer_owner_id: ownerByCustomer.get(o.customer_id) ?? null,
+      owner_id: ownerByCustomer.get(o.customer_id) ?? null,
+      owner_name: (() => {
+        const id = ownerByCustomer.get(o.customer_id)
+        return id ? (creatorNames.get(id) ?? null) : null
+      })(),
       can_edit: canEdit && canMutateOwned(user, o.created_by),
       search: ls.map((l) => `${l.product_code} ${l.customer_item_code ?? ''}`).join(' '),
       missing,
