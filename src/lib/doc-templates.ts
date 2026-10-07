@@ -108,8 +108,9 @@ export const DEFAULT_DOC_TEMPLATES: Record<DocKind, DocTemplate> = {
     // MERXX HANDELS GMBH là sai đối tượng đọc.
     national_heading: false,
     form_no: null,
+    // Báo giá là tờ CHÀO — khách không ký lên đó (chủ dự án 07/10/2026); khách
+    // ký ở hợp đồng / PO của họ. Hàng BG trong doc_templates sửa theo ở 0226.
     signatures: [
-      { role: 'KHÁCH HÀNG / CUSTOMER', hint: KY_DONG_DAU },
       { role: 'NGƯỜI LẬP / PREPARED BY', hint: KY },
       { role: 'GIÁM ĐỐC / DIRECTOR', hint: KY_DONG_DAU },
     ],

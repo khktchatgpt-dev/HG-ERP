@@ -414,6 +414,9 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      dòng "Supersedes: bản trước (ngày)", cột Q'ty (MOQ) + Amount + Total CHỈ khi
      có dòng khai SL (chân bảng nói "n of m items with quantity" khi lẫn), tên
      PDF "BG-… Rev n - Khách". Dòng in nạp thêm `qty`.
+     Khối ký bỏ cột "KHÁCH HÀNG / CUSTOMER" (chủ dự án 07/10: khách không ký
+     báo giá) — mặc định trong mã + migration 0226 sửa hàng BG của
+     `doc_templates` (đã áp thẳng vào DB 07/10, chạy lại vô hại).
    - Chưa làm: nhập Excel báo giá chưa đổi.
 5. **Lượt 5 — tầng 3 form đơn (khuôn F)** · ✅ XONG 07/10/2026 — xem mục Lượt 2 ở trên.
 6. **Lượt 6 — in báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên.
