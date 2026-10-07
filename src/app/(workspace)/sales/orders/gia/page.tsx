@@ -1,6 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
-import { PricingBoardScreen } from './PricingBoardScreen'
+import { DienGiaScreen } from './DienGiaScreen'
 
 /**
  * ĐIỀN ĐƠN GIÁ HÀNG LOẠT (/sales/orders/gia).
@@ -15,5 +15,5 @@ import { PricingBoardScreen } from './PricingBoardScreen'
 export default async function OrderPricingPage() {
   const user = await authService.requirePageUser()
   const board = await ordersService.pricingBoard(user)
-  return <PricingBoardScreen board={board} />
+  return <DienGiaScreen board={board} />
 }
