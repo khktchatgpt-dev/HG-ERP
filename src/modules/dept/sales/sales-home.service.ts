@@ -162,7 +162,7 @@ export const salesHomeService = {
       lans.push({
         key: 'gia-thanh',
         title: 'SP đang chạy chưa bóc tách giá thành',
-      short: 'SP chưa bóc giá thành',
+        short: 'SP chưa bóc giá thành',
         action: 'Điền chi phí trực tiếp · chung · lãi',
         why: `Chỉ có giá FOB thì không tính được lãi kế hoạch — đủ bóc tách ${plan.stats.complete}/${plan.stats.total} SP.`, // prettier-ignore
         tone: 'neutral',

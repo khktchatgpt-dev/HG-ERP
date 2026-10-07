@@ -12,7 +12,7 @@ const TODAY = '2026-07-21'
 
 function row(partial: Partial<OrderProgressInput>): OrderProgressInput {
   return {
-    status: 'in_production',
+    status: 'lsx_issued',
     due_date: null,
     lines_bom_pending: 0,
     pos_open: 0,

@@ -22,6 +22,14 @@ import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canMutateOwned } from '@/lib/record-ownership'
 import { todayVn } from '@/lib/date-vn'
+import {
+  baseStatus,
+  DELIVERABLE_STATUSES,
+  deliveryShortfall,
+  shipCapacity,
+  shipStatus,
+} from '@/lib/order-ship-status'
+import type { ShipmentsCreateInput } from './orders.schema'
 import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
@@ -118,8 +126,42 @@ function assertEditable(order: Order): void {
 const AFTER_LSX_STATUSES: Order['status'][] = [
   'lsx_pending',
   'lsx_issued',
-  'in_production',
+  'completed',
+  'partially_shipped',
+  'shipped',
 ]
+
+/**
+ * SUY LẠI trạng thái xuất của đơn sau mỗi lần ghi/gỡ đợt xuất (D4, 07/10/2026):
+ * partially_shipped / shipped tính từ Σ đợt xuất so với Σ SL dòng (có dung sai);
+ * hết đợt xuất thì về trạng thái NỀN theo lệnh. Đổi thì ghi lịch sử.
+ */
+async function recomputeShipStatus(
+  user: User,
+  order: Order,
+  lines: { qty: number }[],
+): Promise<void> {
+  if (order.status === 'delivered' || order.status === 'cancelled') return
+  const shippedByLine = await ordersRepo.shippedByLine(order.id)
+  const shipped = Object.values(shippedByLine).reduce((s, q) => s + q, 0)
+  const total = lines.reduce((s, l) => s + l.qty, 0)
+  const lsx = await productionRepo.findByOrder(order.id)
+  const base = baseStatus(order.status, lsx?.status ?? null, !!order.production_order_id)
+  const next = shipStatus(base, shipped, total, order.qty_tolerance_pct)
+  if (next === order.status) return
+  await ordersRepo.patch(order.id, { status: next })
+  await ordersRepo.insertChange({
+    order_id: order.id,
+    changed_by: user.id,
+    change: {
+      type: 'ship_status',
+      fields: { status: { from: order.status, to: next } },
+      shipped,
+      total,
+    },
+    note: null,
+  })
+}
 
 /** GĐ/QL + nhân sự phòng KH-CƯ (trừ người thao tác) — người cần biết khi đơn đổi/huỷ. */
 async function supplyAndManagerIds(excludeId: string): Promise<string[]> {
@@ -185,9 +227,13 @@ export const ordersService = {
       port_of_discharge?: string | null
       payment_method?: string | null
       required_docs?: string | null
+      no_customer_po?: boolean
     },
   ): Promise<Order> {
     await assertAction(user, 'sales.order.manage')
+    if (!input.customer_po_no?.trim() && !input.no_customer_po) {
+      throw BadRequest('Nhập số PO của khách, hoặc tick "Khách không có số PO"')
+    }
     if (await ordersRepo.existsByCode(input.code)) {
       throw Conflict(`Mã đơn "${input.code}" đã tồn tại`, 'CODE_TAKEN')
     }
@@ -243,31 +289,47 @@ export const ordersService = {
     const fxDate = todayVn()
     const fxRate = await fxRatesRepo.rateAt(source.currency, fxDate)
 
+    /*
+     * ĐIỀU KHOẢN THỪA KẾ TỪ KHÁCH (07/10/2026): ĐƠN → KHÁCH. 0/53 đơn thật có
+     * điều khoản vì form bắt khai lại từng đơn; nay ô trống thì lấy mặc định của
+     * hồ sơ khách (incoterm / thanh toán / cảng dỡ). Đơn từ báo giá: báo giá
+     * thắng, khách lấp chỗ trống.
+     */
+    const cust = await customersRepo.findById(source.customer_id)
+    const priceTerm = source.price_term ?? cust?.default_price_term ?? null
+    const paymentTerms = source.payment_terms ?? cust?.default_payment_terms ?? null
+    const portOfDischarge = input.port_of_discharge ?? cust?.port_of_discharge ?? null
+
+    // Dòng chưa có tuần giao → lấy hạn giao của đơn (77/275 dòng thật từng trống).
+    const lines = source.lines.map((l) =>
+      l.ship_date ? l : { ...l, ship_date: input.due_date ?? null },
+    )
+
     return ordersRepo.insert(
       {
         code: input.code,
         quote_id: source.quote_id,
         customer_id: source.customer_id,
-        customer_po_no: input.customer_po_no ?? null,
+        customer_po_no: input.customer_po_no?.trim() || null,
         currency: source.currency,
         fx_rate: fxRate,
         fx_date: fxRate == null ? null : fxDate,
         due_date: input.due_date ?? null,
         deposit_percent: input.deposit_percent ?? null,
-        price_term: source.price_term,
-        payment_terms: source.payment_terms,
+        price_term: priceTerm,
+        payment_terms: paymentTerms,
         container_summary: input.container_summary ?? null,
         note: input.note ?? null,
         qty_tolerance_pct: input.qty_tolerance_pct ?? null,
         partial_shipment: input.partial_shipment ?? null,
         transhipment: input.transhipment ?? null,
         port_of_loading: input.port_of_loading ?? null,
-        port_of_discharge: input.port_of_discharge ?? null,
+        port_of_discharge: portOfDischarge,
         payment_method: input.payment_method ?? null,
         required_docs: input.required_docs ?? null,
         created_by: user.id,
       },
-      source.lines,
+      lines,
     )
   },
 
@@ -318,11 +380,13 @@ export const ordersService = {
          * và chặn giảm SL xuống dưới số đã xuất (07/10/2026).
          */
         const shippedByLine = await ordersRepo.shippedByLine(id)
+        const afterById = new Map(input.lines.filter((l) => l.id).map((l) => [l.id, l]))
         const afterByProduct = new Map(input.lines.map((l) => [l.product_id, l]))
         for (const bl of beforeLines) {
           const shipped = shippedByLine[bl.id] ?? 0
           if (shipped <= 0) continue
-          const after = afterByProduct.get(bl.product_id)
+          // D2: khớp theo id dòng khi form gửi kèm; form cũ thì theo SP.
+          const after = afterById.get(bl.id) ?? afterByProduct.get(bl.product_id)
           if (!after) {
             throw BadRequest(
               `Dòng ${bl.product_code} đã xuất ${shipped} — không bỏ khỏi đơn được. Gỡ đợt xuất trước nếu ghi nhầm.`,
@@ -348,6 +412,13 @@ export const ordersService = {
 
     if (Object.keys(fieldChanges).length === 0 && !linesChange) {
       return before // không có gì đổi — không ghi lịch sử rác
+    }
+    // Đơn đã có lệnh: mỗi thay đổi là một thông báo tới xưởng + Cung ứng, nên
+    // lý do là BẮT BUỘC (07/10/2026) — không thì vết đổi chỉ là "ai đó đã sửa".
+    if (AFTER_LSX_STATUSES.includes(before.status) && !input.change_note?.trim()) {
+      throw BadRequest(
+        'Đơn đã phát lệnh sản xuất — ghi lý do thay đổi (khách đổi gì, vì sao) rồi mới lưu',
+      )
     }
 
     const order =
@@ -672,8 +743,24 @@ export const ordersService = {
     await assertAction(user, 'sales.order.confirm_delivery')
     const before = await ordersRepo.findById(id)
     if (!before) throw NotFound('Đơn hàng không tồn tại')
-    if (before.status !== 'completed') {
-      throw BadRequest('Chỉ xác nhận giao cho đơn đã hoàn thành sản xuất')
+    if (!DELIVERABLE_STATUSES.has(before.status)) {
+      throw BadRequest(
+        'Chỉ xác nhận giao cho đơn đã hoàn thành sản xuất hoặc đã có đợt xuất',
+      )
+    }
+    // Đối chiếu số đã xuất (07/10/2026): giao THIẾU so với mức đủ (đã trừ dung
+    // sai) thì không chặn, nhưng phải nói rõ vì sao (khách huỷ phần còn, gộp đợt sau…).
+    const [lines, shippedByLine] = await Promise.all([
+      ordersRepo.listLines(id),
+      ordersRepo.shippedByLine(id),
+    ])
+    const total = lines.reduce((s, l) => s + l.qty, 0)
+    const shipped = Object.values(shippedByLine).reduce((s, q) => s + q, 0)
+    const short = deliveryShortfall(shipped, total, before.qty_tolerance_pct)
+    if (short > 0 && !note?.trim()) {
+      throw BadRequest(
+        `Mới xuất ${shipped}/${total} — còn thiếu ${short}. Ghi lý do giao thiếu rồi mới xác nhận.`,
+      )
     }
 
     const order = await ordersRepo.patch(id, { status: 'delivered' })
@@ -682,7 +769,9 @@ export const ordersService = {
       changed_by: user.id,
       change: {
         type: 'delivered',
-        fields: { status: { from: 'completed', to: 'delivered' } },
+        fields: { status: { from: before.status, to: 'delivered' } },
+        shipped,
+        total,
       },
       note: note ?? null,
     })
@@ -704,45 +793,71 @@ export const ordersService = {
       note?: string | null
     },
   ): Promise<void> {
+    await ordersService.recordShipments(user, orderId, {
+      shipped_at: input.shipped_at ?? null,
+      note: input.note ?? null,
+      lines: [{ order_line_id: input.order_line_id, qty: input.qty }],
+    })
+  },
+
+  /**
+   * Ghi MỘT ĐỢT XUẤT cho nhiều dòng (một container, 07/10/2026). Mỗi dòng được
+   * xuất tới SL × (1 + dung sai) − đã xuất. Xong thì SUY LẠI trạng thái đơn
+   * (partially_shipped / shipped) — không ai phải bấm.
+   */
+  async recordShipments(
+    user: User,
+    orderId: string,
+    input: ShipmentsCreateInput,
+  ): Promise<void> {
     // Xuất hàng là việc của phòng (sales.order.ship) — KHÔNG gác chủ đơn như sửa/huỷ.
     await assertAction(user, 'sales.order.ship')
     const order = await ordersRepo.findById(orderId)
     if (!order) throw NotFound('Đơn hàng không tồn tại')
     assertEditable(order)
 
-    const lines = await ordersRepo.listLines(orderId)
-    const line = lines.find((l) => l.id === input.order_line_id)
-    if (!line) throw NotFound('Dòng sản phẩm không thuộc đơn này')
-    const shipped = (await ordersRepo.shippedByLine(orderId))[line.id] ?? 0
-    const left = line.qty - shipped
-    if (input.qty > left) {
-      throw BadRequest(
-        `Dòng ${line.product_code} chỉ còn ${left} ${line.product_unit || 'sp'} chưa xuất — muốn giao nhiều hơn hãy sửa SL dòng đơn trước`,
-      )
+    const [lines, shippedByLine] = await Promise.all([
+      ordersRepo.listLines(orderId),
+      ordersRepo.shippedByLine(orderId),
+    ])
+    const fields: Record<string, { from: string; to: string }> = {}
+    const toInsert = []
+    for (const it of input.lines) {
+      const line = lines.find((l) => l.id === it.order_line_id)
+      if (!line) throw NotFound('Dòng sản phẩm không thuộc đơn này')
+      const shipped = shippedByLine[line.id] ?? 0
+      const cap = shipCapacity(line.qty, shipped, order.qty_tolerance_pct)
+      if (it.qty > cap) {
+        throw BadRequest(
+          `Dòng ${line.product_code} chỉ còn xuất được ${cap} ${line.product_unit || 'sp'}` +
+            (order.qty_tolerance_pct
+              ? ` (đã gồm dung sai ${order.qty_tolerance_pct}%)`
+              : '') +
+            ' — muốn giao nhiều hơn hãy sửa SL dòng đơn trước',
+        )
+      }
+      fields[line.product_code] = {
+        from: `đã xuất ${shipped}`,
+        to: `đã xuất ${shipped + it.qty}/${line.qty}`,
+      }
+      toInsert.push({
+        order_id: orderId,
+        order_line_id: it.order_line_id,
+        qty: it.qty,
+        shipped_at: input.shipped_at ?? null,
+        note: input.note ?? null,
+        created_by: user.id,
+      })
     }
 
-    await ordersRepo.insertShipment({
-      order_id: orderId,
-      order_line_id: input.order_line_id,
-      qty: input.qty,
-      shipped_at: input.shipped_at ?? null,
-      note: input.note ?? null,
-      created_by: user.id,
-    })
+    for (const row of toInsert) await ordersRepo.insertShipment(row)
     await ordersRepo.insertChange({
       order_id: orderId,
       changed_by: user.id,
-      change: {
-        type: 'shipment',
-        fields: {
-          [line.product_code]: {
-            from: `đã xuất ${shipped}`,
-            to: `đã xuất ${shipped + input.qty}/${line.qty}`,
-          },
-        },
-      },
+      change: { type: 'shipment', fields, count: toInsert.length },
       note: input.note ?? null,
     })
+    await recomputeShipStatus(user, order, lines)
   },
 
   /** Gỡ một đợt xuất ghi nhầm — cùng quyền với ghi, có vết trong lịch sử. */
@@ -767,6 +882,7 @@ export const ordersService = {
       },
       note: null,
     })
+    await recomputeShipStatus(user, order, await ordersRepo.listLines(orderId))
   },
 
   /** Đơn của 1 khách (tab lịch sử đơn — FR-SAL-01). */

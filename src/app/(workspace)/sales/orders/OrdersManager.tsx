@@ -187,8 +187,12 @@ export function OrdersManager({
     () => ({
       all: () => true,
       todo: (o: OrderRow) => o.status === 'confirmed' || o.status === 'lsx_pending',
-      running: (o: OrderRow) => o.status === 'lsx_issued' || o.status === 'in_production',
-      done: (o: OrderRow) => o.status === 'completed' || o.status === 'delivered',
+      running: (o: OrderRow) => o.status === 'lsx_issued',
+      done: (o: OrderRow) =>
+        o.status === 'completed' ||
+        o.status === 'partially_shipped' ||
+        o.status === 'shipped' ||
+        o.status === 'delivered',
       late: (o: OrderRow) => isLate(o, today),
       cancelled: (o: OrderRow) => o.status === 'cancelled',
     }),

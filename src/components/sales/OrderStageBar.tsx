@@ -1,5 +1,5 @@
 import { Badge } from '@/components/shadcn/badge'
-import { LIFECYCLE_STEPS, STATUS_LABEL } from '@/lib/order-progress'
+import { LIFECYCLE_STEPS, STATUS_LABEL, STEP_OF_STATUS } from '@/lib/order-progress'
 
 /**
  * Thanh vòng đời ĐƠN HÀNG (style v2) — 6 đoạn Xác nhận → Chờ duyệt LSX → Phát
@@ -14,25 +14,30 @@ import { LIFECYCLE_STEPS, STATUS_LABEL } from '@/lib/order-progress'
  * chặng chỉ sửa một chỗ.
  */
 
-const STAGE_OF: Record<string, number> = Object.fromEntries(
-  LIFECYCLE_STEPS.map((s, i) => [s.status, i]),
-)
+const STAGE_OF: Record<string, number> = Object.fromEntries([
+  ...LIFECYCLE_STEPS.map((s, i) => [s.status, i] as const),
+  ...Object.entries(STEP_OF_STATUS).map(
+    ([st, step]) => [st, LIFECYCLE_STEPS.findIndex((s) => s.status === step)] as const,
+  ),
+])
 
 /** Màu theo "ai đang giữ việc": xanh dương = trôi chảy, hổ phách = đang chờ. */
 const BAR: Record<string, string> = {
   confirmed: 'bg-blue-500',
   lsx_pending: 'bg-amber-500',
   lsx_issued: 'bg-blue-500',
-  in_production: 'bg-amber-500',
   completed: 'bg-emerald-500',
+  partially_shipped: 'bg-amber-500',
+  shipped: 'bg-emerald-500',
   delivered: 'bg-emerald-500',
 }
 const TEXT: Record<string, string> = {
   confirmed: 'text-blue-700',
   lsx_pending: 'text-amber-700',
   lsx_issued: 'text-blue-700',
-  in_production: 'text-amber-700',
   completed: 'text-emerald-700',
+  partially_shipped: 'text-amber-700',
+  shipped: 'text-emerald-700',
   delivered: 'text-emerald-700',
 }
 

@@ -132,7 +132,9 @@ export const quotesService = {
     // Giá 0 gửi khách là gửi tờ giấy trắng; hết hiệu lực là gửi giá đã chết.
     const zero = lines.filter((l) => !(l.unit_price > 0))
     if (zero.length) {
-      throw BadRequest(`Còn ${zero.length} dòng chưa có đơn giá — điền giá rồi mới gửi khách`)
+      throw BadRequest(
+        `Còn ${zero.length} dòng chưa có đơn giá — điền giá rồi mới gửi khách`,
+      )
     }
     if (before.valid_to && before.valid_to < todayVn()) {
       throw BadRequest(

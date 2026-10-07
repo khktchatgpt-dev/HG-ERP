@@ -188,7 +188,8 @@ describe('entriesService.record', () => {
     ])
     expect(jobsRepo.markDoing).toHaveBeenCalledWith('lsx1', 'line1', 'han')
     expect(productionRepo.patch).toHaveBeenCalledWith('lsx1', { status: 'in_progress' })
-    expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'in_production' })
+    // D4 (0223): trạng thái đơn bán không còn đi theo sổ sản lượng.
+    expect(ordersRepo.patch).not.toHaveBeenCalled()
   })
 
   it('ĐỦ SỐ → job tự sang "xong", không cần ai bấm xác nhận (18/09)', async () => {

@@ -66,8 +66,9 @@ const ORDER_STATUS: Record<
   confirmed: { label: 'Đã xác nhận', tone: 'blue' },
   lsx_pending: { label: 'Chờ duyệt LSX', tone: 'amber' },
   lsx_issued: { label: 'Đã phát LSX', tone: 'amber' },
-  in_production: { label: 'Đang sản xuất', tone: 'amber' },
-  completed: { label: 'Hoàn thành', tone: 'green' },
+  completed: { label: 'SX xong — chờ xuất', tone: 'green' },
+  partially_shipped: { label: 'Xuất một phần', tone: 'amber' },
+  shipped: { label: 'Đã xuất đủ', tone: 'green' },
   delivered: { label: 'Đã giao', tone: 'green' },
   cancelled: { label: 'Đã huỷ', tone: 'red' },
 }

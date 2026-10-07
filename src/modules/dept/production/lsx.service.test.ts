@@ -132,14 +132,20 @@ describe('lsxService.complete — gate mọi việc đã xong', () => {
     })
   })
 
-  it('mọi job done → completed + đơn completed + ghi lịch sử', async () => {
+  it('mọi job done → completed + đơn completed + ghi lịch sử; đơn đã xuất KHÔNG bị kéo về', async () => {
     vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
       doneJob('j1', 'phoi'),
       doneJob('j2', 'han'),
     ] as never)
+    // Lệnh gộp: o1 còn ở nền, o2 đã xuất một đợt (D4) — chỉ o1 sang completed.
+    vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([
+      { id: 'o1', status: 'lsx_issued' },
+      { id: 'o2', status: 'partially_shipped' },
+    ] as never)
     const out = await lsxService.complete(quanDoc, 'lsx1')
     expect(out.status).toBe('completed')
     expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'completed' })
+    expect(ordersRepo.patch).not.toHaveBeenCalledWith('o2', expect.anything())
     expect(ordersRepo.insertChange).toHaveBeenCalledWith(
       expect.objectContaining({
         change: expect.objectContaining({ type: 'production_completed' }),

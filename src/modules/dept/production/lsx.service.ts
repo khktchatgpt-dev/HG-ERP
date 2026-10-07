@@ -555,8 +555,11 @@ export const lsxService = {
         ? `${lsx.note ? `${lsx.note}\n` : ''}[hoàn thành] ${opts.note.trim()}`
         : lsx.note,
     })
+    // Đơn đã có đợt xuất (partially_shipped / shipped — D4) KHÔNG bị kéo
+    // ngược về 'completed'; chỉ đơn còn ở trạng thái nền mới sang hoàn thành.
+    const orders = await ordersRepo.listByProductionOrder(id)
     await moveOrders(
-      lsx.order_ids.map((oid) => ({ id: oid })),
+      orders.filter((o) => ['confirmed', 'lsx_pending', 'lsx_issued'].includes(o.status)),
       'completed',
       user.id,
       { type: 'production_completed', lsx_code: lsx.code },
