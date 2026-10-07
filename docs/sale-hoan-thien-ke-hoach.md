@@ -408,6 +408,13 @@ Năm lỗi làm sai hoặc mất dữ liệu, ba ở màn soạn dòng:
      `quote-form.shared.tsx`. Xoá `QuotesManager` + `QuoteDetailView`.
    - Test: 9 ca mới (revise / supersede / copy / lost / won / snapshot theo quyền /
      hiệu lực mặc định / quoteLineMargin).
-   - Chưa làm: in báo giá chưa có cột SL/MOQ và "Rev n"; nhập Excel chưa đổi.
+   - **In báo giá · ✅ XONG 07/10/2026 (lượt 6)**: `lib/quote-print.ts` (8 test) —
+     dải đỏ đầu tờ theo trạng thái (DRAFT / PENDING / SUPERSEDED / CANCELLED /
+     EXPIRED theo valid_to; lost/won in sạch), "Quotation No: BG-… · Rev n" +
+     dòng "Supersedes: bản trước (ngày)", cột Q'ty (MOQ) + Amount + Total CHỈ khi
+     có dòng khai SL (chân bảng nói "n of m items with quantity" khi lẫn), tên
+     PDF "BG-… Rev n - Khách". Dòng in nạp thêm `qty`.
+   - Chưa làm: nhập Excel báo giá chưa đổi.
 5. **Lượt 5 — tầng 3 form đơn (khuôn F)** · ✅ XONG 07/10/2026 — xem mục Lượt 2 ở trên.
-6. **Lượt 6–7 — tầng 3 còn lại**: in báo giá (SL/MOQ, Rev n), nhập Excel báo giá, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.
+6. **Lượt 6 — in báo giá** · ✅ XONG 07/10/2026 — xem mục Lượt 4 ở trên.
+7. **Lượt 7 — tầng 3 còn lại**: nhập Excel báo giá, chuyển sang khối ERP (`sales/_erp/ui.tsx`) lúc chạm.

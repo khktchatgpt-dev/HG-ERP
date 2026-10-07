@@ -5,6 +5,13 @@ import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.
 import { resolveSignatures } from '@/lib/doc-templates'
 import { quotesRepo, listQuoteLinesForPrint } from '@/modules/dept/sales/quotes.repo'
 import { filesService } from '@/modules/core/files/files.service'
+import { todayVn } from '@/lib/date-vn'
+import {
+  quotePdfName,
+  quotePrintTotals,
+  quotePrintWatermark,
+  quoteRevisionLabel,
+} from '@/lib/quote-print'
 import {
   PrintLetterhead,
   PrintMeta,
@@ -16,6 +23,10 @@ import {
 /**
  * In báo giá theo mẫu Quotation Hoàng Gia (bảng dims / carton / loading 40HC /
  * giá FOB). HTML + print CSS — khổ ngang.
+ *
+ * 07/10/2026 (0225): in "Rev n" + bản thay thế; cột Q'ty (MOQ) + Amount + tổng
+ * CHỈ khi báo giá có khai SL; dải đỏ khi tờ chưa/không còn hiệu lực (nháp, chờ
+ * duyệt, đã bị thay thế, huỷ, quá hạn) — luật ở `lib/quote-print.ts`.
  */
 export default async function QuotePrintPage({
   params,
@@ -28,12 +39,16 @@ export default async function QuotePrintPage({
 
   const quote = await quotesRepo.findById(id)
   if (!quote) redirect('/sales/quotes')
-  const [lines, company, tpl] = await Promise.all([
+  const [lines, company, tpl, previous] = await Promise.all([
     listQuoteLinesForPrint(id),
     settingsService.getAll(),
     // Mẫu in (0164): tiêu đề, quốc hiệu, cột ký — /admin/doc-templates.
     docTemplatesService.get('BG'),
+    quote.revision_of ? quotesRepo.findById(quote.revision_of) : Promise.resolve(null),
   ])
+  const watermark = quotePrintWatermark(quote.status, quote.valid_to, todayVn())
+  const rev = quoteRevisionLabel(quote.revision_no)
+  const totals = quotePrintTotals(lines)
 
   // Ảnh đại diện SP (cột Picture của mẫu in) — signed URL ngắn hạn, lỗi thì bỏ ảnh.
   const imageUrls = new Map<string, string>()
@@ -75,7 +90,15 @@ export default async function QuotePrintPage({
   }
 
   return (
-    <PrintPage maxWidth="max-w-5xl">
+    <PrintPage
+      maxWidth="max-w-5xl"
+      pdfName={quotePdfName(quote.code, quote.revision_no, quote.customer_name)}
+    >
+      {watermark && (
+        <div className="mb-3 border-2 border-dashed border-red-500 bg-red-50 py-1.5 text-center text-sm font-bold tracking-widest text-red-600 uppercase print:bg-red-50">
+          {watermark}
+        </div>
+      )}
       {/*
         BÁO GIÁ KHÔNG IN QUỐC HIỆU.
         Đây là tờ gửi khách NƯỚC NGOÀI (MERXX, YOTRIO) và soạn bằng tiếng Anh —
@@ -96,7 +119,21 @@ export default async function QuotePrintPage({
           ['To:', quote.customer_name],
           ['Valid date:', `From ${fmtD(quote.valid_from)} to ${fmtD(quote.valid_to)}`],
         ]}
-        refs={[['Quotation No:', <b key="c">{quote.code}</b>]]}
+        refs={[
+          [
+            'Quotation No:',
+            <b key="c">
+              {quote.code}
+              {rev && ` · ${rev}`}
+            </b>,
+          ],
+          ...(previous
+            ? ([['Supersedes:', `${previous.code} (${fmtD(previous.created_at)})`]] as [
+                string,
+                React.ReactNode,
+              ][])
+            : []),
+        ]}
       />
 
       <p className="mt-2 mb-1 text-[12px]">
@@ -132,9 +169,21 @@ export default async function QuotePrintPage({
               <br />
               40HC
             </td>
+            {totals.showQty && (
+              <td rowSpan={2} className="border border-black px-1">
+                Q&apos;ty
+                <br />
+                (MOQ)
+              </td>
+            )}
             <td rowSpan={2} className="border border-black px-1 font-bold text-red-700">
               {quote.price_term ?? 'Price'} ({quote.currency})
             </td>
+            {totals.showQty && (
+              <td rowSpan={2} className="border border-black px-1 font-bold">
+                Amount ({quote.currency})
+              </td>
+            )}
           </tr>
           <tr className="bg-yellow-100 font-semibold print:bg-yellow-100">
             {['L', 'W', 'H', 'L', 'W', 'H', 'L', 'W', 'H'].map((h, i) => (
@@ -186,13 +235,37 @@ export default async function QuotePrintPage({
                 <td className="border border-black px-1">
                   {l.packing.loading_40hc ?? ''}
                 </td>
+                {totals.showQty && (
+                  <td className="border border-black px-1">
+                    {l.qty != null && l.qty > 0 ? l.qty.toLocaleString('en-US') : ''}
+                  </td>
+                )}
                 <td className="border border-black px-1 font-bold text-red-700">
                   {fmtMoney(effPrice(l))}
                 </td>
+                {totals.showQty && (
+                  <td className="border border-black px-1 text-right font-semibold">
+                    {totals.amounts[i] != null ? fmtMoney(totals.amounts[i]) : '—'}
+                  </td>
+                )}
               </tr>
             )
           })}
         </tbody>
+        {totals.showQty && (
+          <tfoot>
+            <tr className="font-bold">
+              <td colSpan={15} className="border border-black px-2 text-right">
+                Total
+                {totals.withoutQty > 0 &&
+                  ` (${totals.withQty} of ${lines.length} items with quantity)`}
+              </td>
+              <td className="border border-black px-1 text-right">
+                {fmtMoney(totals.total)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       <div className="mt-3 text-[13px]">

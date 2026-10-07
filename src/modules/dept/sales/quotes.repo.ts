@@ -425,6 +425,8 @@ export const quotesRepo = {
 
 /** Dòng báo giá + đủ thuộc tính SP để in mẫu Quotation (packing, mô tả EN). */
 export type QuotePrintLine = {
+  /** SL dự kiến / MOQ (0225) — null = chào đơn giá, không in cột SL. */
+  qty: number | null
   unit_price: number
   discount_pct: number | null
   note: string | null
@@ -450,7 +452,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
   const { data } = await db()
     .from('sales_quote_lines')
     .select(
-      'unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id, length_mm, width_mm, height_mm)',
+      'qty, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id, length_mm, width_mm, height_mm)',
     )
     .eq('quote_id', quoteId)
     .order('sort_order')
@@ -467,6 +469,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
     height_mm: number | null
   }
   type Raw = {
+    qty: number | null
     unit_price: number
     discount_pct: number | null
     note: string | null
@@ -475,6 +478,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
   return ((data ?? []) as Raw[]).map((r) => {
     const p = Array.isArray(r.product) ? r.product[0] : r.product
     return {
+      qty: r.qty == null ? null : Number(r.qty),
       unit_price: r.unit_price,
       discount_pct: r.discount_pct,
       note: r.note,
