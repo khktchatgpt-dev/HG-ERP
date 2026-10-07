@@ -76,6 +76,7 @@ export function DongHang({ d }: { d: DonCtx }) {
     template,
     setField,
     suggestByMat,
+    qtyByMat,
     capLeft,
     adjRow,
     adjPlan,
@@ -259,7 +260,14 @@ export function DongHang({ d }: { d: DonCtx }) {
                             // Ô còn TRỐNG mới mời; đã gõ số thì gợi ý là nhiễu.
                             if (l.qty !== '') return null
                             const short = l.qty_demand !== '' ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, l.dm_per_sp === '' ? null : Number(l.dm_per_sp)) : null // prettier-ignore
-                            const raw = short ?? suggestByMat.get(l.material_id) ?? null
+                            // Gợi ý theo MÃ (nhu cầu lệnh) trừ SL các dòng cùng mã khác đã đặt — mã
+                            // nằm nhiều dòng thì không mời đặt lại đủ số ở từng dòng (07/10/2026).
+                            const theoMa = suggestByMat.get(l.material_id)
+                            const raw =
+                              short ??
+                              (theoMa == null
+                                ? null
+                                : theoMa - (qtyByMat.get(l.material_id) ?? 0))
                             if (raw == null || raw <= 0) return null
                             const use = roundUpToPack(raw, l.pack_size)
                             return (
@@ -298,9 +306,11 @@ export function DongHang({ d }: { d: DonCtx }) {
                         )
                       })()}
                       {(() => {
+                        // So TỔNG các dòng cùng mã với trần — hai dòng mỗi dòng vừa trần
+                        // mà cộng lại vượt thì vẫn phải nhắc (07/10/2026).
                         const cap = capLeft.get(l.material_id)
-                        if (cap == null || l.qty === '' || Number(l.qty) <= cap)
-                          return null
+                        const tong = qtyByMat.get(l.material_id) ?? 0
+                        if (cap == null || l.qty === '' || tong <= cap) return null
                         return (
                           <CellHint
                             tone="warn"
@@ -308,6 +318,9 @@ export function DongHang({ d }: { d: DonCtx }) {
                           >
                             {' '}
                             {/* prettier-ignore */}⚠ vượt trần · thêm được {fmtNum(cap)}
+                            {tong !== Number(l.qty)
+                              ? ` (các dòng mã này cộng ${fmtNum(tong)})`
+                              : ''}
                           </CellHint>
                         )
                       })()}
@@ -625,7 +638,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                     {cur.spec.trim() !== '' && (
                       <GridBtn
                         title="Ghi quy cách đang gõ vào hồ sơ vật tư — lần đặt sau tự điền"
-                        onClick={() => void saveToCatalog(cur.material_id, 'spec', cur.spec.trim())} // prettier-ignore
+                        onClick={() => void saveToCatalog(cur.material_id, 'spec', cur.spec.trim(), rowKey(cur))} // prettier-ignore
                       >
                         Lưu quy cách vào danh mục
                       </GridBtn>

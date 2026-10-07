@@ -15,7 +15,7 @@ import type { DonCtx } from './useDonChungTu'
  * ba thao tác ít dùng gom vào menu "Thêm ▾".
  */
 export function ThanhLuoi({ d }: { d: DonCtx }) {
-  const { sel, addMaterial, addFree, removeSel, setPaste, setQuickAdd } = d
+  const { sel, addMaterial, addFree, removeSel, setPaste, setQuickAdd, usedIds } = d
   const { drafting, pending, addFromNeeds, goTo, shipCols, dotMo, setDotMo } = d
   return (
     // Nằm trong hàng tiêu đề khối "Dòng đơn hàng" (actions của FastTab) — không còn hàng riêng.
@@ -66,6 +66,12 @@ export function ThanhLuoi({ d }: { d: DonCtx }) {
                   <span className="truncate text-[var(--ink-3)]">{m.group_name}</span>
                 )}
               </span>
+              {/* Cùng mã nhiều dòng là hợp lệ (07/10/2026) — nói trước khi chọn. */}
+              {usedIds.has(m.id) && (
+                <span className="text-k-label block font-semibold text-[var(--ink-2)]">
+                  Đã có trên đơn — chọn sẽ thêm một dòng mới
+                </span>
+              )}
             </>
           )}
           onPick={addMaterial}

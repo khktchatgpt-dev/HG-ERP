@@ -1076,7 +1076,7 @@ export function DonChungTuScreen(p: Props) {
           id={editMaterial}
           onClose={() => setEditMaterial(null)}
           onSaved={(m) => {
-            setLines((ls) => ls.map((l) => (l.material_id === m.id ? refreshLineFromMaterial(template, l, m) : l))) // prettier-ignore
+            setLines((ls) => { const nhieu = ls.filter((l) => l.material_id === m.id).length > 1; return ls.map((l) => (l.material_id === m.id ? refreshLineFromMaterial(template, l, m, nhieu) : l)) }) // prettier-ignore
             invalidateMaterialPickCache()
             setEditMaterial(null)
           }}

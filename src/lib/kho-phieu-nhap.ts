@@ -33,6 +33,10 @@ export type DongDon = {
   product_code?: string | null
   spec?: string | null
   line_note?: string | null
+  /** Nhôm/sắt cắt theo chiều dài: cùng mã cùng quy cách, khác chiều dài cây. */
+  bar_length_m?: number | null
+  die_code?: string | null
+  dimension_text?: string | null
 }
 
 /**
@@ -47,12 +51,18 @@ export function chiTietDong(l: {
   product_code?: string | null
   spec?: string | null
   line_note?: string | null
+  bar_length_m?: number | null
+  die_code?: string | null
+  dimension_text?: string | null
 }): string | null {
   const ma = l.product_code?.trim() || null
   let note = l.line_note?.trim() || null
   if (ma && note?.startsWith(ma))
     note = note.slice(ma.length).replace(/^[\s·:,\-–—]+/, '') || null
-  const parts = [ma, l.spec?.trim() || null, note].filter((x): x is string => !!x)
+  // 07/10/2026: đơn nhôm GIGA 6 dòng cùng hộp 25x50, khác mỗi chiều dài cây —
+  // thiếu "dài 5,3 m" thì 6 dòng nhập kho trông như nhau.
+  const len = l.bar_length_m != null && Number(l.bar_length_m) > 0 ? `dài ${Number(l.bar_length_m).toLocaleString('vi-VN')} m` : null // prettier-ignore
+  const parts = [ma, l.die_code?.trim() || null, l.spec?.trim() || l.dimension_text?.trim() || null, len, note].filter((x): x is string => !!x) // prettier-ignore
   return parts.length ? parts.join(' · ') : null
 }
 
@@ -179,8 +189,7 @@ export type KiemKetQua =
   | { ok: true }
   | {
       ok: false
-      reason:
-        'khong_dong' | 'so_khong_hop_le' | 'thieu_ghi_chu' | 'vuot_dung_sai'
+      reason: 'khong_dong' | 'so_khong_hop_le' | 'thieu_ghi_chu' | 'vuot_dung_sai'
       message: string
       /** Chỉ số dòng để thanh chốt nhảy tới. */
       line?: number

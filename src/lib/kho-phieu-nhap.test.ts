@@ -237,3 +237,11 @@ describe('chiTietDong — phân biệt các dòng cùng mã vật tư (tem PQ 45
     expect(rows[0].chi_tiet).toBe('26904-910 · SL ĐH 100')
   })
 })
+
+describe('chiTietDong — nhôm cùng mã khác chiều dài cây (07/10/2026)', () => {
+  it('bày khuôn · quy cách · dài cây để thủ kho phân biệt dòng', () => {
+    expect(chiTietDong({ spec: 'Hộp 25x50 mềm', bar_length_m: 5.3, line_note: 'Ghế 3' })).toBe('Hộp 25x50 mềm · dài 5,3 m · Ghế 3') // prettier-ignore
+    expect(chiTietDong({ die_code: 'HG-01', bar_length_m: 6 })).toBe('HG-01 · dài 6 m')
+    expect(chiTietDong({ dimension_text: 'phi 15.9x1.5', bar_length_m: 0 })).toBe('phi 15.9x1.5')
+  })
+})

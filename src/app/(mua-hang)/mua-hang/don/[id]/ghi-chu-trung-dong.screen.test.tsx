@@ -123,8 +123,26 @@ describe('màn đơn mua — cột Ghi chú + cùng vật tư nhiều dòng (đ�
     expect(r.success, JSON.stringify(r.error?.issues)).toBe(true)
   })
 
-  it('gõ trùng chiều dài → cảnh báo trên lưới → Gộp → lưu còn 2 dòng, SL cộng dồn, ghi chú nối', async () => {
+  it('cùng chiều dài nhưng KHÁC ghi chú (chia theo SP) → hai dòng hợp lệ, không báo trùng (07/10/2026)', async () => {
     render(view(donNhomGia()))
+    const dai = screen.getAllByRole('textbox', { name: 'Dài cây (m)' })
+    fireEvent.change(dai[2], { target: { value: '5.3' } })
+    fireEvent.blur(dai[2])
+    expect(screen.queryByText(/Dòng 3 trùng dòng 2/)).toBeNull()
+    const body = await ctrlS()
+    expect(body.lines.map((l) => [l.bar_length_m, l.qty_ordered, l.note])).toEqual([
+      [5.1, 29, 'Ghế 2 · Ngang mê trước'],
+      [5.3, 33, 'Ghế 3 · Đố trước'],
+      [5.3, 137, 'Ghế 2-3 · Dọc mê'],
+    ])
+    expect(poUpdateSchema.safeParse(body).success).toBe(true)
+  })
+
+  it('gõ trùng GIỐNG HỆT (cùng dài, cùng ghi chú) → cảnh báo trên lưới → Gộp → lưu còn 2 dòng, SL cộng dồn', async () => {
+    render(view(donNhomGia()))
+    const ghiChu3 = screen.getByRole('textbox', { name: 'Ghi chú dòng 3' })
+    fireEvent.change(ghiChu3, { target: { value: 'Ghế 3 · Đố trước' } })
+    fireEvent.blur(ghiChu3)
     const dai = screen.getAllByRole('textbox', { name: 'Dài cây (m)' })
     fireEvent.change(dai[2], { target: { value: '5.3' } })
     fireEvent.blur(dai[2])
@@ -135,7 +153,7 @@ describe('màn đơn mua — cột Ghi chú + cùng vật tư nhiều dòng (đ�
     const body = await ctrlS()
     expect(body.lines.map((l) => [l.bar_length_m, l.qty_ordered, l.note])).toEqual([
       [5.1, 29, 'Ghế 2 · Ngang mê trước'],
-      [5.3, 170, 'Ghế 3 · Đố trước · Ghế 2-3 · Dọc mê'],
+      [5.3, 170, 'Ghế 3 · Đố trước'],
     ])
     expect(poUpdateSchema.safeParse(body).success).toBe(true)
   })

@@ -170,6 +170,8 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   /** Tổng gõ tay — deriveLine áp vào `qty2`; bản thân nó không phải cột DB. */
   qty2_override?: number | null
   note?: string | null
+  /** Mã SP khách của dòng — mang theo khi ghi lại dòng (xem pos.schema). */
+  product_code?: string | null
 }
 
 export const TEMPLATE_LINE_COLS = [
@@ -1140,6 +1142,7 @@ export const posRepo = {
             qty2: l.qty2 ?? null,
             unit2: l.unit2 ?? null,
             note: l.note ?? null,
+            product_code: l.product_code ?? null,
             sort_order: i,
             ...tpl,
           }

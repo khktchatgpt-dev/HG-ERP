@@ -54,8 +54,21 @@ describe('duplicateLinePairs — trùng dòng đơn mua', () => {
       [0, 2],
     ])
     expect(duplicateLinesMessage(pairs)).toBe(
-      'Dòng 2 trùng dòng 1, Dòng 3 trùng dòng 1: cùng mã, cùng quy cách, cùng chiều dài cây',
+      'Dòng 2 trùng dòng 1, Dòng 3 trùng dòng 1: giống hệt nhau (cùng mã, quy cách, chiều dài, ghi chú, mã SP)',
     )
     expect(duplicateLinesMessage([])).toBeNull()
+  })
+})
+
+describe('duplicateLinePairs — chỉ GIỐNG HỆT mới là trùng (07/10/2026)', () => {
+  const A = 'mat-a'
+  it('cùng mã khác ghi chú / mã SP / lọt lòng / khuôn → không trùng', () => {
+    expect(duplicateLinePairs([{ material_id: A, note: 'bàn tròn' }, { material_id: A, note: 'bàn chữ nhật' }])).toEqual([]) // prettier-ignore
+    expect(duplicateLinePairs([{ material_id: A, product_code: '21610-217' }, { material_id: A, product_code: '21610-218' }])).toEqual([]) // prettier-ignore
+    expect(duplicateLinePairs([{ material_id: A, inner_l_mm: 600 }, { material_id: A, inner_l_mm: 620 }])).toEqual([]) // prettier-ignore
+    expect(duplicateLinePairs([{ material_id: A, die_code: 'K1' }, { material_id: A, die_code: 'K2' }])).toEqual([]) // prettier-ignore
+  })
+  it('giống hệt (kể cả ghi chú viết hoa/thường, khoảng trắng) → trùng', () => {
+    expect(duplicateLinePairs([{ material_id: A, note: 'Bàn tròn', spec: 'M8' }, { material_id: A, note: ' bàn  tròn ', spec: 'm8' }])).toEqual([[0, 1]]) // prettier-ignore
   })
 })
