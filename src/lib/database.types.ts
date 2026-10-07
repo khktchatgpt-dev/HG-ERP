@@ -3409,8 +3409,39 @@ export type Database = {
           },
         ]
       }
+      supply_po_adjustment_lsx: {
+        Row: {
+          adjustment_id: string
+          production_order_id: string
+        }
+        Insert: {
+          adjustment_id: string
+          production_order_id: string
+        }
+        Update: {
+          adjustment_id?: string
+          production_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_adjustment_lsx_adjustment_id_fkey"
+            columns: ["adjustment_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_adjustments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustment_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_po_adjustments: {
         Row: {
+          cause: string | null
           created_at: string
           created_by: string | null
           currency: string
@@ -3436,6 +3467,7 @@ export type Database = {
           vat_before: number
         }
         Insert: {
+          cause?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -3461,6 +3493,7 @@ export type Database = {
           vat_before: number
         }
         Update: {
+          cause?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -7614,6 +7647,23 @@ export type Database = {
           p_delete_ids: string[]
           p_header: Json
           p_inserts: Json
+          p_po_id: string
+          p_reason: string
+          p_record: Json
+          p_splits: Json
+          p_updates: Json
+        }
+        Returns: number
+      }
+      supply_po_apply_adjustment_v2: {
+        Args: {
+          p_actor: string
+          p_base_seq: number
+          p_cause: string
+          p_delete_ids: string[]
+          p_header: Json
+          p_inserts: Json
+          p_lsx_ids: string[]
           p_po_id: string
           p_reason: string
           p_record: Json

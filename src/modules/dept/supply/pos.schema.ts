@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADJ_CAUSE_KEYS, causeNeedsLsx } from '@/lib/po-adjust-cause'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const PO_STATUSES = [
@@ -396,8 +397,12 @@ export const poRescheduleSchema = z.object({
 export const poAdjustLineSchema = poLineInputSchema.extend({
   id: z.string().uuid().nullish(),
 })
-export const poAdjustSchema = z.object({
+export const poAdjustSchema = z
+  .object({
   base_seq: z.coerce.number().int().min(0),
+  // Nguyên nhân cố định + lệnh mà lần sửa theo (0227, chốt 07/10/2026).
+  cause: z.enum(ADJ_CAUSE_KEYS, { error: 'Chọn nguyên nhân điều chỉnh' }),
+  lsx_ids: z.array(z.string().uuid()).max(20).default([]),
   reason: z
     .string()
     .trim()
@@ -416,6 +421,10 @@ export const poAdjustSchema = z.object({
       'Dòng không gắn vật tư phải có tên hàng',
     ),
 })
+  .refine((v) => !causeNeedsLsx(v.cause) || v.lsx_ids.length > 0, {
+    message: 'Khách đổi đơn — chọn lệnh / đơn khách mà lần điều chỉnh này theo',
+    path: ['lsx_ids'],
+  })
 
 /** Ghi mốc "đã gửi NCC bản điều chỉnh lần N" (chốt Q4 25/09). */
 export const poAdjustmentSentSchema = z.object({

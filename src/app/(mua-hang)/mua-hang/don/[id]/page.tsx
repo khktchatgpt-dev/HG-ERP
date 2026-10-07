@@ -20,6 +20,8 @@ import { todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { toCostRow } from '../../van-chuyen/van-chuyen.shared'
+import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { linkedLsxIds } from '@/lib/po-adjust-cause'
 import { DonChungTuScreen } from './DonChungTuScreen'
 
 export const dynamic = 'force-dynamic'
@@ -94,7 +96,7 @@ export default async function Page({
 
   const [
     [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates, users], // prettier-ignore
-    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt], // prettier-ignore
+    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt, lsxLastChange], // prettier-ignore
   ] = await Promise.all([
     indep,
     Promise.all([
@@ -127,6 +129,11 @@ export default async function Page({
             .lastSubmittedAt('po', [po.id])
             .then((m) => m.get(po.id) ?? null)
         : Promise.resolve(null),
+      // Lần đổi dòng SP gần nhất của đơn khách theo lệnh đơn đang gắn — hộp
+      // "Nguyên nhân" khi điều chỉnh bày để đối chiếu (0227). Hỏng thì bỏ qua.
+      ordersRepo
+        .lastLineChangeByLsx(linkedLsxIds(po.production_order_id, extra_lsx.map((x) => x.id), lines.flatMap((l) => ((l as { lsx_split?: { production_order_id: string }[] | null }).lsx_split ?? []).map((x) => x.production_order_id)))) // prettier-ignore
+        .catch(() => ({})),
     ]),
   ])
   const stock: Record<string, number> = {}
@@ -166,7 +173,8 @@ export default async function Page({
       // Dựng lại màn khi đơn vừa được điều chỉnh: dòng thêm mới phải nhận mã
       // dòng DB, không thì lần điều chỉnh sau coi chúng là dòng mới lần nữa.
       key={`${po.id}:${adjustments.length}`}
-      adjustments={adjustments.map((a) => ({ seq: a.seq, reason: a.reason, created_at: a.created_at, created_by_name: a.created_by_name, currency: a.currency, subtotal_before: a.subtotal_before, subtotal_after: a.subtotal_after, vat_before: a.vat_before, vat_after: a.vat_after, total_before: a.total_before, total_after: a.total_after, delta_by_price: a.delta_by_price, delta_by_qty: a.delta_by_qty, lines: a.lines, sent_at: a.sent_at, sent_by_name: a.sent_by_name, sent_note: a.sent_note }))} // prettier-ignore
+      lsxLastChange={lsxLastChange}
+      adjustments={adjustments.map((a) => ({ seq: a.seq, reason: a.reason, cause: a.cause, lsx: a.lsx, created_at: a.created_at, created_by_name: a.created_by_name, currency: a.currency, subtotal_before: a.subtotal_before, subtotal_after: a.subtotal_after, vat_before: a.vat_before, vat_after: a.vat_after, total_before: a.total_before, total_after: a.total_after, delta_by_price: a.delta_by_price, delta_by_qty: a.delta_by_qty, lines: a.lines, sent_at: a.sent_at, sent_by_name: a.sent_by_name, sent_note: a.sent_note }))} // prettier-ignore
       costs={costs.map(toCostRow)}
       payers={users.map((u) => ({ id: u.id, name: u.name ?? u.email }))}
       mode={sp.sua === '1' && canEdit && po.status === 'draft' ? 'edit' : 'view'}

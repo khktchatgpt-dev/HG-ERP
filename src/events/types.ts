@@ -237,6 +237,8 @@ export type DomainEvent =
       seq: number
       adjusted_by: string
       reason: string
+      /** Nguyên nhân cố định (0227) — nhãn qua causeLabel. */
+      cause?: string | null
       currency: string
       /** Phát sinh tổng thanh toán của lần này (âm = giảm). */
       delta_total: number
