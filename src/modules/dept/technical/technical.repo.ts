@@ -184,7 +184,7 @@ export type ProductWrite = Partial<Omit<Product, 'lifecycle' | 'created_by'>>
  * `IMPORT_COLUMNS` (lib/product-import) + khoá để khớp và cảnh báo.
  */
 const IMPORT_INDEX_COLS =
-  'id, code, name, updated_at, locked_at, image_file_id, product_type, frame_material, name_foreign, customer_name, customer_item_code, code_legacy, unit, barcode, reference_price, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, net_weight_kg, actual_weight_kg, max_load_kg, assembly, set_contents, is_set, material, is_upholstered, has_glass, showroom_sample, description_en, shipping_mark, notes, packing, tech_spec, hs_code, origin_country, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by'
+  'id, code, name, updated_at, locked_at, image_file_id, product_type, frame_material, name_foreign, customer_name, customer_item_code, code_legacy, unit, barcode, reference_price, length_mm, width_mm, height_mm, net_weight_kg, actual_weight_kg, max_load_kg, assembly, set_contents, is_set, material, is_upholstered, has_glass, showroom_sample, description_en, shipping_mark, notes, packing, tech_spec, category, owner_id, bom_status, is_active, created_by, created_at'
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
@@ -657,6 +657,18 @@ export const productsRepo = {
       throw new Error(error.message)
     }
     return data ?? []
+  },
+
+  /** Ba con số cho màn nhập Excel lúc chưa chọn file — đếm thẳng, không tải danh sách. */
+  async importFacts(): Promise<{ products: number; noImage: number; withPacking: number }> {
+    const head = { count: 'exact' as const, head: true }
+    const [all, noImg, pack] = await Promise.all([
+      db().from('technical_products').select('id', head),
+      db().from('technical_products').select('id', head).is('image_file_id', null),
+      // Mỗi SP có đúng MỘT phương án mặc định → đếm phương án mặc định = đếm SP.
+      db().from('technical_packing_options').select('id', head).eq('is_default', true),
+    ])
+    return { products: all.count ?? 0, noImage: noImg.count ?? 0, withPacking: pack.count ?? 0 }
   },
 
   /**

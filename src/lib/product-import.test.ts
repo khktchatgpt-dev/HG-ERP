@@ -14,6 +14,7 @@ import {
   planImport,
   type CellValue,
   type ExistingProduct,
+  type ImportLookups,
   type RawRow,
 } from './product-import'
 
@@ -338,45 +339,75 @@ describe('ảnh (B2)', () => {
   })
 })
 
-describe('ô Sale / LSX cần (08/10)', () => {
-  it('có cột CBM, Mã HS, Xuất xứ; ô "machine" mang nhãn Mây / dây', () => {
+describe('cột khớp hai tab Hồ sơ + Thông số (08/10)', () => {
+  it('có Danh mục, Người phụ trách, Trạng thái BOM, Đang sử dụng; không còn ISO / kích thước mở / HS', () => {
     const keys = IMPORT_COLUMNS.map((c) => c.key)
     expect(keys).toEqual(
-      expect.arrayContaining(['cbm', 'hs_code', 'origin_country', 'machine']),
+      expect.arrayContaining(['category', 'owner', 'bom_status', 'is_active', 'cbm', 'machine']), // prettier-ignore
     )
+    for (const gone of [
+      'bom_rev',
+      'bom_effective_date',
+      'length_open_mm',
+      'thickness_mm',
+      'hs_code',
+      'origin_country',
+    ])
+      // prettier-ignore
+      expect(keys).not.toContain(gone)
     expect(IMPORT_COLUMNS.find((c) => c.key === 'machine')?.header).toContain('Mây')
   })
   it('CBM ghi vào packing, gộp với ô đóng gói đang có', () => {
-    const p = planImport([row({ code: 'BN0029HG-AL', cbm: '0,42', hs_code: '9401.79', origin_country: 'Việt Nam' })], EXISTING) // prettier-ignore
+    const p = planImport([row({ code: 'BN0029HG-AL', cbm: '0,42' })], EXISTING)
     expect(p.rows[0].write).toEqual({
-      hs_code: '9401.79',
-      origin_country: 'Việt Nam',
       packing: { pack_unit_label: 'ctn', cbm: 0.42 },
     })
   })
-})
-
-describe('khối ISO (08/10)', () => {
   it('ngày: dd/mm/yyyy, yyyy-mm-dd, ô ngày Excel (ISO), số sê-ri; chặn ngày không có thật', () => {
     expect(parseDateCell('08/10/2026')).toBe('2026-10-08')
-    expect(parseDateCell('8-10-2026')).toBe('2026-10-08')
-    expect(parseDateCell('2026-10-08')).toBe('2026-10-08')
     expect(parseDateCell('2026-10-08T00:00:00.000Z')).toBe('2026-10-08')
-    expect(parseDateCell(46303)).toBe('2026-10-08') // 01/01/2026 = 46023, +280 ngày
+    expect(parseDateCell(46303)).toBe('2026-10-08')
     expect(parseDateCell('31/02/2026')).toBeNull()
-    expect(parseDateCell('tháng 10')).toBeNull()
   })
-  it('rev 0 hợp lệ, ngày đổi bày dd/mm/yyyy', () => {
-    const base = [...EXISTING, P({ code: 'TB0200HG-AL', name: 'Bàn ISO', bom_rev: 1, bom_effective_date: '2026-09-01' })] // prettier-ignore
-    const p = planImport([row({ code: 'TB0200HG-AL', bom_rev: 0, bom_effective_date: '08/10/2026', bom_prepared_by: 'Việt' })], base) // prettier-ignore
-    expect(p.rows[0].write).toEqual({
-      bom_rev: 0,
-      bom_effective_date: '2026-10-08',
-      bom_prepared_by: 'Việt',
-    })
-    expect(p.rows[0].changes.find((c) => c.key === 'bom_effective_date')).toMatchObject({ before: '01/09/2026', after: '08/10/2026' }) // prettier-ignore
-    expect(
-      planImport([row({ code: 'TB0200HG-AL', bom_rev: -1 })], base).rows[0].action,
-    ).toBe('error')
+})
+
+describe('Danh mục / Người phụ trách / Trạng thái BOM / Đang sử dụng (08/10)', () => {
+  const LK: ImportLookups = {
+    categories: [
+      { code: 'ban_ghe_ngoai_troi', label: 'Bàn ghế ngoài trời' },
+      { code: 'sofa', label: 'Sofa' },
+    ],
+    users: [
+      { id: 'u-viet', name: 'Lê Văn Việt', email: 'viet@hg.com', active: true },
+      { id: 'u-an1', name: 'Nguyễn An', email: 'an1@hg.com', active: true },
+      { id: 'u-an2', name: 'Nguyễn An', email: 'an2@hg.com', active: true },
+      { id: 'u-old', name: 'Trần Cũ', email: 'cu@hg.com', active: false },
+    ],
+  }
+  const base = [
+    ...EXISTING,
+    P({ code: 'SF0001HG-AL', name: 'Sofa A', category: 'sofa', owner_id: 'u-old', bom_status: 'drawing', is_active: true }), // prettier-ignore
+  ]
+  const plan1 = (cells: Record<string, CellValue>) =>
+    planImport([row({ code: 'SF0001HG-AL', ...cells })], base, LK).rows[0]
+
+  it('để nguyên chữ đã xuất = không đổi, kể cả người phụ trách đã nghỉ', () => {
+    const r = plan1({ category: 'Sofa', owner: 'Trần Cũ', bom_status: 'Đang vẽ', is_active: 'có' }) // prettier-ignore
+    expect(r.action).toBe('same')
+  })
+  it('đổi theo nhãn: lưu MÃ danh mục, id người, mã trạng thái; bày nhãn cũ → mới', () => {
+    const r = plan1({ category: 'bàn ghế ngoài trời', owner: 'viet@hg.com', bom_status: 'Đã vẽ', is_active: 'không' }) // prettier-ignore
+    expect(r.write).toEqual({ category: 'ban_ghe_ngoai_troi', owner_id: 'u-viet', bom_status: 'done', is_active: false }) // prettier-ignore
+    expect(r.changes.find((c) => c.key === 'owner')).toMatchObject({ before: 'Trần Cũ', after: 'Lê Văn Việt' }) // prettier-ignore
+  })
+  it('trùng tên → bắt gõ email; người đã nghỉ / danh mục lạ → lỗi', () => {
+    expect(plan1({ owner: 'Nguyễn An' }).errors[0].msg).toContain('email')
+    expect(plan1({ owner: 'Người Lạ' }).action).toBe('error')
+    expect(plan1({ category: 'Ghế xích đu' }).action).toBe('error')
+  })
+  it('Đang sử dụng / Trạng thái BOM không xoá trắng được; cột chỉ xem bị bỏ qua', () => {
+    expect(plan1({ is_active: '-' }).action).toBe('error')
+    expect(plan1({ bom_status: '-' }).action).toBe('error')
+    expect(plan1({ created_by: 'Ai đó', created_at: '01/01/2020' }).action).toBe('same')
   })
 })

@@ -66,6 +66,10 @@ type Kind =
   | 'imageref'
   | 'date'
   | 'int0'
+  | 'category'
+  | 'owner'
+  | 'bomstatus'
+  | 'readonly'
 
 /** Ô ghi vào đâu: cột thường, hay khoá trong jsonb `packing` / `tech_spec`. */
 export type Target = { col: string } | { json: 'packing' | 'tech_spec'; key: string }
@@ -80,7 +84,32 @@ export type ColumnSpec = {
   max?: number
   note?: string
   width: number
+  /** Không xoá trắng được bằng "-" (cột NOT NULL có nghĩa: Đang sử dụng, Trạng thái BOM). */
+  noClear?: boolean
+  /** Ô có/không ghi rõ cả "không" khi xuất (mặc định chỉ ghi "có"). */
+  exportNo?: boolean
 }
+
+/**
+ * Danh sách tra cứu lúc chạy — danh mục SP (quản trị sửa được) và nhân sự. Lib
+ * thuần nên service đọc DB rồi truyền vào; thiếu thì cột tương ứng chỉ bày mã.
+ */
+export type ImportLookups = {
+  categories: readonly Option[]
+  /** `active` = đang làm — chỉ người đang làm mới nhận làm Người phụ trách. */
+  users: readonly { id: string; name: string; email?: string | null; active: boolean }[]
+}
+export const NO_LOOKUPS: ImportLookups = { categories: [], users: [] }
+
+/** Đúng nhãn ô "Trạng thái BOM" của trang chi tiết. */
+export const BOM_STATUS_OPTIONS = [
+  { code: 'none', label: 'Chưa có BOM' },
+  { code: 'drawing', label: 'Đang vẽ' },
+  { code: 'done', label: 'Đã vẽ' },
+] as const
+
+/** Người cũ đã khoá / xoá — bày thay cho id lạ. */
+const OLD_USER = 'Người cũ (đã khoá / xoá)'
 
 const G_ID = 'Nhận diện'
 const G_DIM = 'Kích thước & khối lượng'
@@ -89,7 +118,6 @@ const G_FEAT = 'Đặc tính sản phẩm'
 const G_MAT = 'Vật liệu & màu'
 const G_PROD = 'Thông số sản xuất'
 const G_TEXT = 'Mô tả & ghi chú'
-const G_ISO = 'Kiểm soát tài liệu (ISO)'
 
 const col = (c: string): Target => ({ col: c })
 const pack = (k: string): Target => ({ json: 'packing', key: k })
@@ -111,20 +139,21 @@ export const IMPORT_COLUMNS: ColumnSpec[] = [
   { key: 'customer', header: 'Khách hàng / nhóm', group: G_ID, kind: 'customer', target: col('customer_name'), max: 200, width: 18 }, // prettier-ignore
   { key: 'customer_item_code', header: 'Mã KH đặt', group: G_ID, kind: 'text', target: col('customer_item_code'), max: 100, width: 14 }, // prettier-ignore
   { key: 'code_legacy', header: 'Mã cũ', group: G_ID, kind: 'text', target: col('code_legacy'), max: 100, width: 14 }, // prettier-ignore
+  // Danh mục quản trị sửa được (/admin/catalogs) — ô thả xuống là NHÃN, lưu mã.
+  { key: 'category', header: 'Danh mục', group: G_ID, kind: 'category', target: col('category'), width: 20, note: 'Danh sách' }, // prettier-ignore
+  { key: 'owner', header: 'Người phụ trách', group: G_ID, kind: 'owner', target: col('owner_id'), width: 18, note: 'Tên nhân sự đang làm' }, // prettier-ignore
   { key: 'unit', header: 'ĐVT bán', group: G_ID, kind: 'unit', target: col('unit'), max: 30, width: 8 }, // prettier-ignore
   { key: 'barcode', header: 'Barcode', group: G_ID, kind: 'text', target: col('barcode'), max: 50, width: 16 }, // prettier-ignore
   { key: 'reference_price', header: 'Giá tham khảo', group: G_ID, kind: 'num', target: col('reference_price'), width: 12 }, // prettier-ignore
-  // Khai hải quan — Sale điền khi tạo nhanh SP; trang chi tiết chưa có ô (08/10).
-  { key: 'hs_code', header: 'Mã HS', group: G_ID, kind: 'text', target: col('hs_code'), max: 20, width: 12 }, // prettier-ignore
-  { key: 'origin_country', header: 'Xuất xứ', group: G_ID, kind: 'text', target: col('origin_country'), max: 100, width: 12 }, // prettier-ignore
+  { key: 'bom_status', header: 'Trạng thái BOM', group: G_ID, kind: 'bomstatus', target: col('bom_status'), width: 13, noClear: true, note: 'Danh sách' }, // prettier-ignore
+  { key: 'is_active', header: 'Đang sử dụng', group: G_ID, kind: 'bool', target: col('is_active'), width: 10, noClear: true, exportNo: true, note: '"không" = ngừng sử dụng' }, // prettier-ignore
+  // Hệ thống tự ghi lúc tạo — bày cho đủ hồ sơ, không đọc lại.
+  { key: 'created_by', header: 'Người tạo (chỉ xem)', group: G_ID, kind: 'readonly', target: col('created_by'), width: 16 }, // prettier-ignore
+  { key: 'created_at', header: 'Ngày tạo (chỉ xem)', group: G_ID, kind: 'readonly', target: col('created_at'), width: 12 }, // prettier-ignore
 
   { key: 'length_mm', header: 'Dài SP (mm)', group: G_DIM, kind: 'num', target: col('length_mm'), width: 10 }, // prettier-ignore
   { key: 'width_mm', header: 'Rộng SP (mm)', group: G_DIM, kind: 'num', target: col('width_mm'), width: 10 }, // prettier-ignore
   { key: 'height_mm', header: 'Cao SP (mm)', group: G_DIM, kind: 'num', target: col('height_mm'), width: 10 }, // prettier-ignore
-  { key: 'length_open_mm', header: 'Dài khi mở (mm)', group: G_DIM, kind: 'num', target: col('length_open_mm'), width: 11 }, // prettier-ignore
-  { key: 'width_open_mm', header: 'Rộng khi mở (mm)', group: G_DIM, kind: 'num', target: col('width_open_mm'), width: 11 }, // prettier-ignore
-  { key: 'height_open_mm', header: 'Cao khi mở (mm)', group: G_DIM, kind: 'num', target: col('height_open_mm'), width: 11 }, // prettier-ignore
-  { key: 'thickness_mm', header: 'Độ dày (mm)', group: G_DIM, kind: 'num', target: col('thickness_mm'), width: 10 }, // prettier-ignore
   { key: 'net_weight_kg', header: 'Khối lượng tịnh (kg)', group: G_DIM, kind: 'num', target: col('net_weight_kg'), width: 12 }, // prettier-ignore
   { key: 'actual_weight_kg', header: 'KL cân thực tế (kg)', group: G_DIM, kind: 'num', target: col('actual_weight_kg'), width: 12 }, // prettier-ignore
 
@@ -163,12 +192,6 @@ export const IMPORT_COLUMNS: ColumnSpec[] = [
   { key: 'description_en', header: 'Mô tả tiếng Anh (in báo giá)', group: G_TEXT, kind: 'text', target: col('description_en'), max: 2000, width: 36 }, // prettier-ignore
   { key: 'shipping_mark', header: 'Nội dung shipping mark', group: G_TEXT, kind: 'text', target: col('shipping_mark'), max: 2000, width: 30 }, // prettier-ignore
   { key: 'notes', header: 'Ghi chú nội bộ', group: G_TEXT, kind: 'text', target: col('notes'), max: 2000, width: 30 }, // prettier-ignore
-
-  // Khối ISO của biểu mẫu HG-QT-07/M02 (Xuất Excel hồ sơ SP) — chữ ký in trên giấy.
-  { key: 'bom_rev', header: 'Rev. (biểu mẫu ISO)', group: G_ISO, kind: 'int0', target: col('bom_rev'), width: 10 }, // prettier-ignore
-  { key: 'bom_effective_date', header: 'Ngày hiệu lực BOM', group: G_ISO, kind: 'date', target: col('bom_effective_date'), width: 12, note: 'dd/mm/yyyy' }, // prettier-ignore
-  { key: 'bom_prepared_by', header: 'Người lập BOM', group: G_ISO, kind: 'text', target: col('bom_prepared_by'), max: 200, width: 16 }, // prettier-ignore
-  { key: 'bom_approved_by', header: 'Người duyệt BOM', group: G_ISO, kind: 'text', target: col('bom_approved_by'), max: 200, width: 16 }, // prettier-ignore
 
   {
     key: 'version',
@@ -232,6 +255,11 @@ export const knownImage = (hash: string, known: readonly string[]) =>
   known.some((h) => hashDistance(hash, h) <= SAME_IMAGE_BITS)
 
 export const COLUMN_BY_KEY = new Map(IMPORT_COLUMNS.map((c) => [c.key, c]))
+
+/** Số ô người dùng điền được (bỏ cột máy + cột chỉ xem) — mẫu số "đã điền n/…". */
+export const FILLABLE_COLUMNS = IMPORT_COLUMNS.filter(
+  (c) => c.target && c.kind !== 'readonly',
+).length
 
 /** Bỏ dấu, thường hoá, gộp khoảng trắng — để "ban", "Bàn", "BÀN" là một. */
 export function fold(s: string): string {
@@ -350,6 +378,8 @@ export type PlannedRow = {
   name: string
   customer: string | null
   changes: CellChange[]
+  /** Dòng THÊM MỚI: các ô đã điền (before rỗng) — màn soi bày khi mở dòng. */
+  filled: CellChange[]
   /** Cột thường + jsonb đã gộp, đúng thứ sẽ ghi. Rỗng khi không đổi / lỗi. */
   write: Record<string, unknown>
   /** Vị trí (trong `RawRow.images`) của ảnh MỚI sẽ làm ảnh đại diện; null = không đổi ảnh. */
@@ -456,10 +486,24 @@ export function parseDateCell(v: string | number): string | null {
 }
 
 /** Chữ bày trên màn soi cho một giá trị. */
-export function displayValue(c: ColumnSpec, v: unknown): string {
+export function displayValue(
+  c: ColumnSpec,
+  v: unknown,
+  lk: ImportLookups = NO_LOOKUPS,
+): string {
   // Ô có/không: xoá trắng là ghi "không" — bày đúng thứ sẽ ghi, đừng bày "(trống)".
   if (c.kind === 'bool') return v ? 'có' : 'không'
   if (v == null || v === '') return '(trống)'
+  if (c.kind === 'category')
+    return lk.categories.find((o) => o.code === v)?.label ?? String(v)
+  if (c.kind === 'owner') return lk.users.find((u) => u.id === v)?.name ?? OLD_USER
+  if (c.kind === 'bomstatus')
+    return BOM_STATUS_OPTIONS.find((o) => o.code === v)?.label ?? String(v)
+  if (c.kind === 'readonly') {
+    if (c.key === 'created_by') return lk.users.find((u) => u.id === v)?.name ?? OLD_USER
+    const t = new Date(String(v))
+    return Number.isNaN(t.getTime()) ? String(v) : t.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' }) // prettier-ignore
+  }
   if (c.kind === 'type') return optionText(PRODUCT_TYPES.find((o) => o.code === v) ?? { code: String(v), label: '' }) // prettier-ignore
   if (c.kind === 'material') return optionText(FRAME_MATERIALS.find((o) => o.code === v) ?? { code: String(v), label: '' }) // prettier-ignore
   if (c.kind === 'assembly')
@@ -470,9 +514,20 @@ export function displayValue(c: ColumnSpec, v: unknown): string {
 }
 
 /** Giá trị ghi ra ô khi XUẤT — cùng chữ ô thả xuống; ô có/không chỉ ghi "có". */
-export function exportValue(c: ColumnSpec, v: unknown): string | number | null {
+export function exportValue(
+  c: ColumnSpec,
+  v: unknown,
+  lk: ImportLookups = NO_LOOKUPS,
+): string | number | null {
   if (v == null || v === '') return null
-  if (c.kind === 'bool') return v ? 'có' : null
+  if (c.kind === 'bool') return v ? 'có' : c.exportNo ? 'không' : null
+  if (
+    c.kind === 'category' ||
+    c.kind === 'owner' ||
+    c.kind === 'bomstatus' ||
+    c.kind === 'readonly'
+  )
+    return displayValue(c, v, lk)
   if (c.kind === 'num' || c.kind === 'pos' || c.kind === 'int' || c.kind === 'int0') {
     const n = typeof v === 'number' ? v : Number(v)
     return Number.isFinite(n) ? n : null
@@ -505,11 +560,17 @@ function same(a: unknown, b: unknown): boolean {
  * Đọc MỘT ô theo loại cột. undefined = để nguyên (ô trống); null = xoá trắng ("-").
  * Sai dạng → đẩy lỗi, trả undefined.
  */
-function parseCell(c: ColumnSpec, raw: CellValue, errors: RowIssue[]): Parsed {
+function parseCell(
+  c: ColumnSpec,
+  raw: CellValue,
+  errors: RowIssue[],
+  lk: ImportLookups,
+): Parsed {
+  if (c.kind === 'readonly') return undefined
   const s = typeof raw === 'number' ? String(raw) : raw.trim()
   if (s === '') return undefined
   if (s === CLEAR_MARK) {
-    if (c.required || c.kind === 'unit') {
+    if (c.required || c.kind === 'unit' || c.noClear) {
       errors.push({ field: c.key, msg: `${c.header} không xoá trắng được` })
       return undefined
     }
@@ -554,6 +615,20 @@ function parseCell(c: ColumnSpec, raw: CellValue, errors: RowIssue[]): Parsed {
     case 'customer':
       if (c.max && s.length > c.max) return bad(`${c.header} dài quá ${c.max} ký tự`)
       return normalizeCustomerLabel(s)
+    case 'category':
+      return matchOption(s, lk.categories) ?? bad(`Danh mục "${s}" không có — chọn trong danh sách thả xuống (thêm danh mục mới ở Quản trị → Danh mục)`) // prettier-ignore
+    case 'bomstatus':
+      return matchOption(s, BOM_STATUS_OPTIONS) ?? bad(`Trạng thái BOM "${s}" — chọn Chưa có BOM, Đang vẽ hoặc Đã vẽ`) // prettier-ignore
+    case 'owner': {
+      const t = fold(s)
+      const hits = lk.users.filter((u) => u.active && (fold(u.name) === t || (u.email && fold(u.email) === t))) // prettier-ignore
+      if (hits.length === 1) return hits[0].id
+      return bad(
+        hits.length > 1
+          ? `Có ${hits.length} nhân sự tên "${s}" — gõ email của người đó thay cho tên`
+          : `Không có nhân sự đang làm tên "${s}" — chọn trong danh sách thả xuống`,
+      )
+    }
     default:
       if (c.max && s.length > c.max) return bad(`${c.header} dài quá ${c.max} ký tự`)
       return s
@@ -570,6 +645,7 @@ function parseCell(c: ColumnSpec, raw: CellValue, errors: RowIssue[]): Parsed {
 export function planImport(
   input: readonly RawRow[],
   existing: readonly ExistingProduct[],
+  lk: ImportLookups = NO_LOOKUPS,
 ): ImportPlan {
   const byCode = new Map(existing.map((p) => [p.code.toUpperCase(), p]))
   const byName = new Map<string, string>()
@@ -635,7 +711,16 @@ export function planImport(
     const parsed = new Map<string, Parsed>()
     for (const c of IMPORT_COLUMNS) {
       if (!c.target || !(c.key in cells)) continue
-      parsed.set(c.key, parseCell(c, cells[c.key], errors))
+      // Ô tra cứu để nguyên đúng chữ đã xuất = không đổi — kể cả khi chữ đó không
+      // còn chọn được (người phụ trách đã nghỉ, danh mục đã ẩn).
+      if (
+        target &&
+        (c.kind === 'category' || c.kind === 'owner' || c.kind === 'bomstatus')
+      ) {
+        const was = exportValue(c, currentValue(target, c), lk)
+        if (was != null && fold(String(cells[c.key])) === fold(String(was))) continue
+      }
+      parsed.set(c.key, parseCell(c, cells[c.key], errors, lk))
     }
 
     const isNew = !target && (!rawCode || manualNew)
@@ -651,6 +736,7 @@ export function planImport(
     // ── So với SP đang có, dựng bản ghi ───────────────────────────────────
     const write: Record<string, unknown> = {}
     const changes: CellChange[] = []
+    const filled: CellChange[] = []
     const packing = { ...(target?.packing ?? {}) }
     const techSpec = { ...(target?.tech_spec ?? {}) }
     let packingTouched = false
@@ -672,7 +758,8 @@ export function planImport(
         if (t.json === 'packing') packingTouched = true
         else specTouched = true
       }
-      if (target) changes.push({ key: c.key, label: c.header, before: displayValue(c, before), after: displayValue(c, next) }) // prettier-ignore
+      if (target) changes.push({ key: c.key, label: c.header, before: displayValue(c, before, lk), after: displayValue(c, next, lk) }) // prettier-ignore
+      else filled.push({ key: c.key, label: c.header, before: '', after: displayValue(c, next, lk) }) // prettier-ignore
     }
     if (packingTouched) write.packing = packing
     if (specTouched) write.tech_spec = techSpec
@@ -761,6 +848,7 @@ export function planImport(
       name,
       customer,
       changes: action === 'update' ? changes : [],
+      filled: action === 'create' ? filled : [],
       write: action === 'create' || action === 'update' ? write : {},
       newImage: action === 'create' || action === 'update' ? newImage : null,
       imagePreview: action === 'create' || action === 'update' ? imagePreview : null,

@@ -2,7 +2,9 @@ import ExcelJS from 'exceljs'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import {
   ASSEMBLY_OPTIONS,
+  BOM_STATUS_OPTIONS,
   DEFAULT_UNIT,
+  NO_LOOKUPS,
   GROUP_ROW,
   HEADER_ROW,
   IMPORT_COLUMNS,
@@ -18,6 +20,7 @@ import {
   optionText,
   type CellValue,
   type ExistingProduct,
+  type ImportLookups,
   type RawRow,
   type RowImage,
 } from '@/lib/product-import'
@@ -74,6 +77,7 @@ export class ImportFileError extends Error {}
 
 const FILL_HEAD = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8EEFB' } } // prettier-ignore
 const FILL_GROUP = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFDCE4F7' } } // prettier-ignore
+const FILL_READONLY = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFEEF0F4' } } // prettier-ignore
 
 /**
  * File Excel: sheet "Sản phẩm" (có thể rỗng = file mẫu để thêm mới) + "Danh mục"
@@ -86,6 +90,8 @@ export async function buildProductWorkbook(
   thumbs: ReadonlyMap<string, ExportThumb> = new Map(),
   /** productId → phương án đóng gói nhiều kiện (sheet "Đóng gói"). */
   packing: ReadonlyMap<string, OptionData[]> = new Map(),
+  /** Danh mục SP + nhân sự — cột Danh mục / Người phụ trách / Người tạo. */
+  lk: ImportLookups = NO_LOOKUPS,
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'HG-ERP'
@@ -128,7 +134,11 @@ export async function buildProductWorkbook(
     const n = ws.getCell(NOTE_ROW, i + 1)
     n.value =
       c.note ??
-      (c.kind === 'version' || c.kind === 'imageref' ? 'Hệ thống dùng — đừng sửa' : null)
+      (c.kind === 'version' || c.kind === 'imageref'
+        ? 'Hệ thống dùng — đừng sửa'
+        : c.kind === 'readonly'
+          ? 'Hệ thống ghi — sửa không có tác dụng'
+          : null)
     n.font = { italic: true, size: 9, color: { argb: 'FF5D6675' } }
     n.alignment = { vertical: 'top', wrapText: true }
   })
@@ -144,7 +154,8 @@ export async function buildProductWorkbook(
       if (c.kind === 'code') cell.value = p.code
       else if (c.kind === 'version') cell.value = p.updated_at
       else if (c.kind === 'imageref') cell.value = thumbs.get(p.id)?.ref ?? null
-      else if (c.kind !== 'image') cell.value = exportValue(c, currentValue(p, c))
+      else if (c.kind !== 'image') cell.value = exportValue(c, currentValue(p, c), lk)
+      if (c.kind === 'readonly') cell.font = { color: { argb: 'FF5D6675' } }
     })
     const t = thumbs.get(p.id)
     if (t) {
@@ -170,6 +181,9 @@ export async function buildProductWorkbook(
     ['ĐVT', [DEFAULT_UNIT, 'bộ']],
     ['Lắp ráp', ASSEMBLY_OPTIONS.map((o) => o.label)],
     ['Có / không', ['có', 'không']],
+    ['Danh mục', lk.categories.map((o) => o.label)],
+    ['Người phụ trách (đang làm)', lk.users.filter((u) => u.active).map((u) => u.name)],
+    ['Trạng thái BOM', BOM_STATUS_OPTIONS.map((o) => o.label)],
   ]
   lists.columns = listCols.map(() => ({ width: 30 }))
   listCols.forEach(([title, values], i) => {
@@ -200,6 +214,9 @@ export async function buildProductWorkbook(
     customer: list(range(3, customerLabels.length), false),
     unit: list(range(4, 2), false),
     assembly: list(range(5, ASSEMBLY_OPTIONS.length), true),
+    category: list(range(7, lk.categories.length), true),
+    owner: list(range(8, lk.users.filter((u) => u.active).length), true),
+    bom_status: list(range(9, BOM_STATUS_OPTIONS.length), true),
   }
   const lastRow = IMPORT_FIRST_ROW + Math.max(products.length, 0) + 300
   IMPORT_COLUMNS.forEach((c, i) => {
@@ -207,6 +224,7 @@ export async function buildProductWorkbook(
     const colNo = i + 1
     if (c.kind === 'code') ws.getColumn(colNo).numFmt = '@' // "0052" không thành 52
     if (c.kind === 'version' || c.kind === 'imageref') ws.getColumn(colNo).hidden = true
+    if (c.kind === 'readonly') ws.getCell(HEADER_ROW, colNo).fill = FILL_READONLY
     if (!v) return
     for (let r = IMPORT_FIRST_ROW; r <= lastRow; r++)
       ws.getCell(r, colNo).dataValidation = v
@@ -271,7 +289,8 @@ export async function buildProductWorkbook(
     '2. Dòng CÓ "Mã nội bộ" → CẬP NHẬT sản phẩm đó. Dòng KHÔNG mã → THÊM MỚI, hệ thống tự cấp mã [loại][số]HG-[vật liệu].',
     '3. Ô TRỐNG = GIỮ NGUYÊN giá trị đang có. Muốn xoá trắng một ô thì gõ dấu "-".',
     '4. Số gõ kiểu Việt Nam: 1.390 = một nghìn ba trăm chín mươi, 2,5 = hai phẩy năm. Ô có/không: gõ "có" hoặc "không".',
-    '5. SP mới bắt buộc: Tên SP (tiếng Việt), Loại sản phẩm, Vật liệu khung. ĐVT trống = "cái".',
+    '5. SP mới bắt buộc: Tên SP (tiếng Việt), Loại sản phẩm, Vật liệu khung. ĐVT trống = "cái"; Người phụ trách trống = người tải file.',
+    '   Cột "(chỉ xem)" — Người tạo, Ngày tạo — do hệ thống ghi, sửa trong file không có tác dụng. Đang sử dụng = "không" là ngừng sử dụng SP.',
     '6. Cột thừa có thể xoá — cột vắng thì hệ thống không đụng tới. Đừng sửa cột ẩn "Phiên bản" (dùng để biết SP có bị sửa trên web sau khi xuất).',
     `7. Tối đa ${IMPORT_MAX_ROWS} dòng một lần. Dòng trống bị bỏ qua.`,
     '8. Ảnh: ảnh thu nhỏ xuất ra để nguyên = không đổi ảnh. Dán ảnh khác vào ô Ảnh (dán đè hoặc "Đặt trong ô") = thay ảnh đại diện; ảnh cũ vẫn giữ ở tab Tài liệu.',

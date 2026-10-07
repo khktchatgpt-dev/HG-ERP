@@ -5,6 +5,7 @@ import {
   IMPORT_SHEET,
   planImport,
   type ExistingProduct,
+  type ImportLookups,
 } from '@/lib/product-import'
 import {
   ImportFileError,
@@ -146,16 +147,23 @@ describe('ghi mã + phiên bản trở lại', () => {
   })
 })
 
-describe('cột ISO + CBM / HS + sheet Đóng gói', () => {
-  const ISO: ExistingProduct = {
+describe('ô hai tab Hồ sơ + Thông số + sheet Đóng gói', () => {
+  const FULL: ExistingProduct = {
     ...SOFA,
-    hs_code: '9401.79',
-    origin_country: 'Việt Nam',
-    bom_rev: 0,
-    bom_effective_date: '2026-10-08',
-    bom_prepared_by: 'Nguyễn Văn A',
-    bom_approved_by: 'Trần B',
+    category: 'sofa',
+    owner_id: 'u-old',
+    bom_status: 'drawing',
+    is_active: true,
+    created_by: 'u-viet',
+    created_at: '2026-08-01T03:00:00Z',
     packing: { pack_unit_label: 'ctn', cbm: 0.512 },
+  }
+  const LK: ImportLookups = {
+    categories: [{ code: 'sofa', label: 'Sofa' }],
+    users: [
+      { id: 'u-viet', name: 'Lê Văn Việt', active: true },
+      { id: 'u-old', name: 'Trần Cũ', active: false },
+    ],
   }
   const OPTS: OptionData[] = [
     {
@@ -173,10 +181,11 @@ describe('cột ISO + CBM / HS + sheet Đóng gói', () => {
   ]
   const refs = [{ id: SOFA.id, code: SOFA.code, locked_at: null }]
 
-  it('xuất → đọc lại: Rev 0, ngày, người lập/duyệt, CBM, HS đều "Không đổi"', async () => {
-    const buf = await buildProductWorkbook([ISO], ['LAURA'])
+  it('xuất → đọc lại: Danh mục, người phụ trách đã nghỉ, trạng thái BOM, CBM đều "Không đổi"', async () => {
+    const buf = await buildProductWorkbook([FULL], ['LAURA'], new Map(), new Map(), LK)
     const r = await readImportRows(buf)
-    const p = planImport(r.rows, [ISO])
+    expect(r.rows[0].cells).toMatchObject({ category: 'Sofa', owner: 'Trần Cũ', bom_status: 'Đang vẽ', is_active: 'có', created_by: 'Lê Văn Việt', created_at: '01/08/2026' }) // prettier-ignore
+    const p = planImport(r.rows, [FULL], LK)
     expect(p.rows[0].changes).toEqual([])
     expect(p.rows[0].action).toBe('same')
   })

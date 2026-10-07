@@ -12,9 +12,16 @@ import {
   planImport,
   type ImportPlan,
   type PlannedRow,
+  type ExistingProduct,
+  type ImportLookups,
   type RawRow,
 } from '@/lib/product-import'
+import { fileImageSrc } from '@/server/file-image'
+import { profileSnapshot } from '@/modules/dept/production/lsx-lines.service'
+import type { Product } from './technical.repo'
 import { productsRepo } from './technical.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
+import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { planPacking, type OptionData, type PackingPlan, type PackingPlanItem } from '@/lib/product-packing-import' // prettier-ignore
 import { productsService } from './technical.service'
 import type { BomStatus } from './technical.schema'
@@ -42,15 +49,29 @@ const folderOf = (user: User) => `imports/products/${user.id}`
 const STALE_MS = 24 * 60 * 60 * 1000
 
 /** Màn soi không cần `write` (thứ sẽ ghi) — bỏ cho nhẹ. */
-export type PreviewRow = Omit<PlannedRow, 'write'>
+/**
+ * Ô hồ sơ còn trống SAU KHI ghi dòng này — đếm bằng đúng hàm của LSX
+ * (`profileSnapshot().gaps`), tách hai tầng: `core` là thứ Sale cần để in LSX /
+ * báo giá (tên nước ngoài, barcode, đóng gói, CBM); `spec` là thông số in LSX
+ * (sơn, gỗ, kính, nệm, mây) — trống là thường với SP không có thứ đó.
+ */
+export type ProfileGaps = { core: string[]; spec: string[] }
+export type PreviewRow = Omit<PlannedRow, 'write'> & {
+  gaps: ProfileGaps
+  /** Ảnh đại diện ĐANG CÓ (đường dẫn ký sẵn) — màn soi bày cũ → mới. */
+  imageUrl: string | null
+}
 export type ImportPreview = Omit<ImportPlan, 'rows'> & {
   rows: PreviewRow[]
   sheet: string
   blank: number
   /** Cột có trong file — màn soi nói "file có X/46 cột". */
   columns: string[]
-  /** Sheet "Đóng gói" — bỏ `options` (thứ sẽ ghi) cho nhẹ. */
-  packing: { items: Omit<PackingPlanItem, 'options'>[]; counts: PackingPlan['counts'] }
+  /** Sheet "Đóng gói" — kèm bộ phương án ĐANG CÓ để màn soi bày từng kiện cũ → mới. */
+  packing: {
+    items: (PackingPlanItem & { old: OptionData[]; name: string | null })[]
+    counts: PackingPlan['counts']
+  }
 }
 
 /** Mỗi lần gọi ghi đóng gói tối đa chừng này SP (mỗi SP: xoá + chèn phương án + kiện). */
@@ -182,8 +203,29 @@ async function load(user: User, path: string): Promise<Buffer> {
   return buf
 }
 
+/**
+ * Danh mục SP + nhân sự cho cột Danh mục / Người phụ trách / Người tạo. Lấy cả
+ * người đã nghỉ (để bày tên Người tạo), nhưng chỉ người ĐANG LÀM nhận làm phụ trách.
+ */
+async function loadLookups(user: User): Promise<ImportLookups> {
+  const [cats, users] = await Promise.all([
+    catalogsService.list(user, 'product_category'),
+    usersRepo.list({ include_deleted: true }),
+  ])
+  return {
+    categories: cats.map((c) => ({ code: c.code, label: c.label })),
+    users: users.map((u) => ({
+      id: u.id,
+      name: u.name || u.email,
+      email: u.email,
+      active: u.is_active && !u.deleted_at,
+    })),
+  }
+}
+
 /** Đọc + soi cả file. `written` = dòng THÊM MỚI đã ghi ở lô trước: coi như đã có mã. */
 async function plan(
+  user: User,
   buffer: Buffer,
   written: readonly { row: number; code: string }[] = [],
 ): Promise<{
@@ -191,6 +233,7 @@ async function plan(
   packing: PackingPlan
   packingOld: Map<string, OptionData[]>
   read: Awaited<ReturnType<typeof readImportRows>>
+  existing: ExistingProduct[]
 }> {
   let read
   try {
@@ -203,16 +246,37 @@ async function plan(
   const rows: RawRow[] = read.rows.map((r) =>
     codeOf.has(r.row) ? { ...r, cells: { ...r.cells, code: codeOf.get(r.row)! } } : r,
   )
-  const [existing, packingOld] = await Promise.all([
+  const [existing, packingOld, lk] = await Promise.all([
     productsRepo.importIndex(),
     productsRepo.packingIndex(),
+    loadLookups(user),
   ])
   const refs = existing.map((p) => ({ id: p.id, code: p.code, locked_at: p.locked_at }))
   return {
-    plan: planImport(rows, existing),
+    plan: planImport(rows, existing, lk),
     packing: planPacking(read.packingRows, refs, packingOld),
     packingOld,
     read,
+    existing,
+  }
+}
+
+const imageOf = (p: ExistingProduct | undefined) =>
+  typeof p?.image_file_id === 'string' ? fileImageSrc(p.image_file_id) : null
+
+/** Các khoá "thiếu" mà Sale cần khi in LSX / báo giá — còn lại là thông số in LSX. */
+const CORE_GAPS = new Set(['name_foreign', 'barcode', 'packing', 'cbm'])
+
+/** Ô hồ sơ còn trống sau khi ghi `write` lên SP đang có (hoặc SP mới). */
+function gapsAfter(
+  before: ExistingProduct | undefined,
+  write: Record<string, unknown>,
+): ProfileGaps {
+  const merged = { ...(before ?? {}), ...write } as unknown as Product
+  const gaps = profileSnapshot(merged).gaps
+  return {
+    core: gaps.filter((g) => CORE_GAPS.has(g.key)).map((g) => g.label),
+    spec: gaps.filter((g) => !CORE_GAPS.has(g.key)).map((g) => g.label),
   }
 }
 
@@ -252,12 +316,13 @@ export const productImportService = {
     user: User,
     filter: LibraryFilter | null,
   ): Promise<{ buffer: Buffer; count: number; missingImages: number }> {
-    const [names, all, packing] = await Promise.all([
+    const [names, all, packing, lk] = await Promise.all([
       productsRepo.customerNames(),
       filter ? productsRepo.importIndex() : Promise.resolve([]),
       filter
         ? productsRepo.packingIndex()
         : Promise.resolve(new Map<string, OptionData[]>()),
+      loadLookups(user),
     ])
     let products = all
     if (filter && Object.values(filter).some((v) => v !== undefined)) {
@@ -277,7 +342,7 @@ export const productImportService = {
     const labels = [...names].sort((a, b) => b.count - a.count).map((n) => n.name)
     const { thumbs, missing } = await thumbsFor(products)
     return {
-      buffer: await buildProductWorkbook(products, labels, thumbs, packing),
+      buffer: await buildProductWorkbook(products, labels, thumbs, packing, lk),
       count: products.length,
       missingImages: missing,
     }
@@ -317,21 +382,33 @@ export const productImportService = {
   },
 
   /** Soi trước — KHÔNG ghi gì. */
+  /** Số đếm thư viện cho màn chưa chọn file. */
+  libraryFacts() {
+    return productsRepo.importFacts()
+  },
+
   async preview(user: User, path: string): Promise<ImportPreview> {
     if (!(await this.canUse(user)))
       throw Forbidden('Chỉ Kỹ thuật / Bán hàng / Giám đốc thêm, sửa SP')
-    const { plan: p, packing: k, read } = await plan(await load(user, path))
+    const { plan: p, packing: k, packingOld, read, existing } = await plan(user, await load(user, path)) // prettier-ignore
+    const byId = new Map(existing.map((x) => [x.id, x]))
     return {
       ...p,
-      // Màn soi không cần `write` (thứ sẽ ghi) — bỏ cho nhẹ.
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      rows: p.rows.map(({ write, ...rest }) => rest),
+      // Màn soi không cần `write` (thứ sẽ ghi) — chỉ dùng để tính ô còn thiếu.
+      rows: p.rows.map(({ write, ...rest }) => ({
+        ...rest,
+        gaps: gapsAfter(rest.id ? byId.get(rest.id) : undefined, write),
+        imageUrl: imageOf(rest.id ? byId.get(rest.id) : undefined),
+      })),
       sheet: read.sheet,
       blank: read.blank,
       columns: read.columns,
       packing: {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        items: k.items.map(({ options, ...rest }) => rest),
+        items: k.items.map((it) => ({
+          ...it,
+          old: it.productId ? (packingOld.get(it.productId) ?? []) : [],
+          name: it.productId ? (byId.get(it.productId)?.name ?? null) : null,
+        })),
         counts: k.counts,
       },
     }
@@ -354,7 +431,7 @@ export const productImportService = {
   ): Promise<{ written: WrittenRow[]; packed: string[] }> {
     if (input.rows.length > CHUNK) throw BadRequest(`Mỗi lô tối đa ${CHUNK} dòng`)
     if ((input.packingCodes?.length ?? 0) > PACKING_CHUNK) throw BadRequest(`Mỗi lô đóng gói tối đa ${PACKING_CHUNK} SP`) // prettier-ignore
-    const { plan: p, packing: k, packingOld, read } = await plan(await load(user, input.path), input.written) // prettier-ignore
+    const { plan: p, packing: k, packingOld, read } = await plan(user, await load(user, input.path), input.written) // prettier-ignore
     assertNoErrors(p, k)
     await assertCanWrite(user, p)
     if (input.packingCodes?.length) await assertAction(user, 'technical.product.update')
@@ -398,7 +475,8 @@ export const productImportService = {
             showroom_sample: false,
             ...r.write,
             created_by: user.id,
-            owner_id: user.id,
+            // File không ghi người phụ trách → người tải file, như form tạo SP.
+            owner_id: (r.write.owner_id as string | null | undefined) ?? user.id,
             code: r.code!,
             name: String(r.write.name),
           })),

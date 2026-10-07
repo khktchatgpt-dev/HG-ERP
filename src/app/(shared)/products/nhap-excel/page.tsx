@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canCreateProducts } from '@/modules/dept/technical/technical.service'
+import { productImportService } from '@/modules/dept/technical/product-import.service'
 import { NhapExcelScreen } from './NhapExcelScreen'
 
 /**
@@ -10,5 +11,7 @@ import { NhapExcelScreen } from './NhapExcelScreen'
 export default async function NhapExcelPage() {
   const user = await authService.requirePageUser()
   if (!(await canCreateProducts(user))) redirect('/products')
-  return <NhapExcelScreen />
+  // Ba con số cột "Thư viện hiện có" của màn chưa chọn file.
+  const facts = await productImportService.libraryFacts()
+  return <NhapExcelScreen facts={facts} />
 }
