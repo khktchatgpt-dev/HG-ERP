@@ -181,6 +181,27 @@ export const storage = {
     }
   },
 
+  /**
+   * Tải trọn object về server — cho file người dùng tải thẳng lên Storage bằng
+   * URL ký (né giới hạn 4,5 MB thân request của Vercel) rồi server mới đọc.
+   * null = object không có.
+   */
+  async downloadBuffer(bucket: FileBucket, path: string): Promise<Buffer | null> {
+    const { data, error } = await db().storage.from(bucket).download(path)
+    if (error || !data) return null
+    return Buffer.from(await data.arrayBuffer())
+  },
+
+  /** Liệt kê object trong một "thư mục" — để dọn file tạm cũ. */
+  async listFolder(
+    bucket: FileBucket,
+    folder: string,
+  ): Promise<{ name: string; created_at: string | null }[]> {
+    const { data, error } = await db().storage.from(bucket).list(folder, { limit: 1000 })
+    if (error) return []
+    return (data ?? []).map((o) => ({ name: o.name, created_at: o.created_at ?? null }))
+  },
+
   /** Dung lượng THẬT của object trên Storage (byte), null nếu object chưa tồn tại. */
   async getObjectSize(bucket: FileBucket, path: string): Promise<number | null> {
     const { data, error } = await db().storage.from(bucket).info(path)

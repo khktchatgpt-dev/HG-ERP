@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import type { ExistingProduct } from '@/lib/product-import'
 import { customerLabelFrom } from '@/lib/customer-label'
 import { searchTokens } from '@/lib/search-text'
 import type { Lifecycle } from '@/lib/product-lifecycle'
@@ -176,6 +177,13 @@ export type Product = {
  * được chạm vào. Loại ở tầng type để quên là hỏng build, không phải hỏng dữ liệu.
  */
 export type ProductWrite = Partial<Omit<Product, 'lifecycle' | 'created_by'>>
+
+/**
+ * Cột của chỉ mục thêm/cập nhật SP bằng Excel — đủ mọi đích ghi của
+ * `IMPORT_COLUMNS` (lib/product-import) + khoá để khớp và cảnh báo.
+ */
+const IMPORT_INDEX_COLS =
+  'id, code, name, updated_at, locked_at, product_type, frame_material, name_foreign, customer_name, customer_item_code, code_legacy, unit, barcode, reference_price, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, net_weight_kg, actual_weight_kg, max_load_kg, assembly, set_contents, is_set, material, is_upholstered, has_glass, showroom_sample, description_en, shipping_mark, notes, packing, tech_spec'
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
@@ -613,22 +621,20 @@ export const productsRepo = {
   },
 
   /**
-   * Mã + tên + nhãn khách của MỌI SP (cả SP đã ngừng) — để thêm hàng loạt từ
-   * Excel kiểm trùng mã / trùng tên và cấp số kế tiếp. Đọc theo trang 1.000 dòng:
-   * PostgREST cắt ở trần 1.000 mà không báo.
+   * MỌI SP (cả SP đã ngừng) với đúng các cột file Excel thêm/cập nhật đọc-ghi —
+   * để soi "cũ → mới", kiểm trùng mã / tên và cấp số kế tiếp. Đọc theo trang
+   * 1.000 dòng: PostgREST cắt ở trần 1.000 mà không báo.
    */
-  async importIndex(): Promise<
-    { code: string; name: string; customer_name: string | null }[]
-  > {
-    const out: { code: string; name: string; customer_name: string | null }[] = []
+  async importIndex(): Promise<ExistingProduct[]> {
+    const out: ExistingProduct[] = []
     for (let from = 0; ; from += 1000) {
       const { data, error } = await db()
         .from('technical_products')
-        .select('code, name, customer_name')
+        .select(IMPORT_INDEX_COLS)
         .order('code')
         .range(from, from + 999)
       if (error) throw new Error(error.message)
-      out.push(...(data ?? []))
+      out.push(...((data ?? []) as unknown as ExistingProduct[]))
       if (!data || data.length < 1000) return out
     }
   },
@@ -640,11 +646,11 @@ export const productsRepo = {
    */
   async insertMany(
     rows: (ProductWrite & Pick<Product, 'code' | 'name'> & { created_by: string })[],
-  ): Promise<{ id: string; code: string }[]> {
+  ): Promise<{ id: string; code: string; updated_at: string }[]> {
     const { data, error } = await db()
       .from('technical_products')
       .insert(rows)
-      .select('id, code')
+      .select('id, code, updated_at')
     if (error) {
       if (error.code === '23505') throw new Error('CODE_TAKEN')
       throw new Error(error.message)

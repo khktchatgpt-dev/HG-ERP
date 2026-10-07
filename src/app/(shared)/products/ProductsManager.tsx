@@ -438,25 +438,58 @@ export function ProductsManager({
               </Button>
             )}
             {/*
-              Thêm hàng loạt bằng Excel (07/10/2026) — cùng quyền với "Thêm sản
-              phẩm". Tải mẫu là link thẳng tới route xuất file (trình duyệt tự tải,
-              không rời trang); tải lên đi màn soi trước /products/nhap-excel.
+              Thêm + cập nhật SP bằng Excel (07/10/2026) — cùng quyền với "Thêm sản
+              phẩm". Xuất / tải mẫu là link thẳng tới route xuất file (trình duyệt
+              tự tải, không rời trang); tải lên đi màn soi /products/nhap-excel.
             */}
             {canEdit && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <FileSpreadsheet /> Nhập từ Excel <ChevronDown />
+                    <FileSpreadsheet /> Excel <ChevronDown />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuContent align="end" className="w-80">
+                  {/*
+                    Xuất theo ĐÚNG tham số lọc trên URL — server lọc bằng chính hàm
+                    của thư viện, nên số dòng trong file = số "kết quả" trên màn.
+                  */}
+                  {hasFilter && (
+                    <DropdownMenuItem asChild>
+                      <a
+                        href={`/api/dept/technical/products/import-excel/export?${sp.toString()}`}
+                        download
+                      >
+                        <FileSpreadsheet />
+                        <span className="flex flex-col">
+                          <span className="font-medium">Xuất {total} SP đang xem</span>
+                          <span className="text-muted-foreground text-xs">
+                            Theo bộ lọc hiện tại · sửa rồi tải lên lại
+                          </span>
+                        </span>
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <a href="/api/dept/technical/products/import-excel/export" download>
+                      <FileSpreadsheet />
+                      <span className="flex flex-col">
+                        <span className="font-medium">
+                          Xuất cả thư viện ({counts.total} SP)
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          Đủ thông tin trang chi tiết · sửa rồi tải lên lại
+                        </span>
+                      </span>
+                    </a>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <a href="/api/dept/technical/products/import-excel" download>
                       <FileSpreadsheet />
                       <span className="flex flex-col">
-                        <span className="font-medium">Tải file mẫu</span>
+                        <span className="font-medium">Tải file mẫu trống</span>
                         <span className="text-muted-foreground text-xs">
-                          Mau-nhap-san-pham.xlsx · danh sách thả xuống mới nhất
+                          Chỉ để thêm SP mới
                         </span>
                       </span>
                     </a>
@@ -465,9 +498,9 @@ export function ProductsManager({
                     <Link href="/products/nhap-excel">
                       <Upload />
                       <span className="flex flex-col">
-                        <span className="font-medium">Tải lên file đã điền…</span>
+                        <span className="font-medium">Tải lên file đã sửa…</span>
                         <span className="text-muted-foreground text-xs">
-                          Soi trước, chưa ghi gì cho tới khi bấm Thêm
+                          Soi trước — chưa ghi gì cho tới khi bấm Ghi
                         </span>
                       </span>
                     </Link>

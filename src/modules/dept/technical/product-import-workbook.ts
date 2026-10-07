@@ -1,73 +1,120 @@
 import ExcelJS from 'exceljs'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import {
+  ASSEMBLY_OPTIONS,
   DEFAULT_UNIT,
+  GROUP_ROW,
+  HEADER_ROW,
   IMPORT_COLUMNS,
   IMPORT_FIRST_ROW,
   IMPORT_MAX_ROWS,
   IMPORT_SHEET,
-  isBlankCells,
+  NOTE_ROW,
+  columnForHeader,
+  currentValue,
+  exportValue,
   optionText,
-  type ImportField,
+  type CellValue,
+  type ExistingProduct,
   type RawRow,
 } from '@/lib/product-import'
 import { cellValue } from './bom-workbook'
 
 /**
- * FILE EXCEL của luồng thêm SP hàng loạt (07/10/2026) — dựng mẫu, đọc file đã
- * điền, ghi mã vừa cấp trở lại. Tách khỏi service để test được cả vòng mà không
- * nạp DB (cùng lý do `bom-workbook.ts`).
+ * FILE EXCEL của luồng thêm + cập nhật SP (07/10/2026) — xuất, đọc file đã sửa,
+ * ghi mã vừa cấp trở lại. Tách khỏi service để test được cả vòng mà không nạp DB
+ * (cùng lý do `bom-workbook.ts`).
+ *
+ * Bố cục: hàng 1 tên NHÓM (như trang chi tiết), hàng 2 TIÊU ĐỀ (đọc lại theo chữ
+ * này), hàng 3 ghi chú, dữ liệu từ hàng 4. Ghim 2 cột trái (Mã · Tên) và 3 hàng
+ * đầu — 46 cột mà cuộn mất tên SP thì không biết đang sửa dòng nào.
  */
 
 const LIST_SHEET = 'Danh mục'
 const GUIDE_SHEET = 'Hướng dẫn'
-const LAST_ROW = IMPORT_FIRST_ROW + IMPORT_MAX_ROWS - 1
-const colOf = (key: ImportField) => IMPORT_COLUMNS.findIndex((c) => c.key === key) + 1
-const letter = (n: number) => String.fromCharCode(64 + n)
+const letter = (n: number): string => {
+  let s = ''
+  for (let x = n; x > 0; x = Math.floor((x - 1) / 26)) s = String.fromCharCode(65 + ((x - 1) % 26)) + s // prettier-ignore
+  return s
+}
 
 /** Lỗi hình dạng file — service dịch sang 400 với đúng câu này. */
 export class ImportFileError extends Error {}
 
+const FILL_HEAD = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8EEFB' } } // prettier-ignore
+const FILL_GROUP = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFDCE4F7' } } // prettier-ignore
+
 /**
- * File mẫu: sheet "Nhập SP" (tiêu đề + ghi chú + ô thả xuống), "Danh mục"
- * (nguồn của ô thả xuống — tải lúc nào thì danh sách mới lúc đó), "Hướng dẫn".
+ * File Excel: sheet "Sản phẩm" (có thể rỗng = file mẫu để thêm mới) + "Danh mục"
+ * (nguồn ô thả xuống) + "Hướng dẫn". `products` rỗng = file mẫu trống.
  */
-export async function buildImportTemplate(
+export async function buildProductWorkbook(
+  products: readonly ExistingProduct[],
   customerLabels: readonly string[],
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'HG-ERP'
   const ws = wb.addWorksheet(IMPORT_SHEET, {
-    views: [{ state: 'frozen', ySplit: IMPORT_FIRST_ROW - 1 }],
+    views: [{ state: 'frozen', xSplit: 2, ySplit: NOTE_ROW }],
   })
   const lists = wb.addWorksheet(LIST_SHEET)
   const guide = wb.addWorksheet(GUIDE_SHEET)
 
   ws.columns = IMPORT_COLUMNS.map((c) => ({ width: c.width }))
-  const head = ws.getRow(1)
-  const note = ws.getRow(2)
+
+  // Hàng NHÓM — gộp ô theo từng nhóm liền nhau.
+  let start = 1
   IMPORT_COLUMNS.forEach((c, i) => {
-    const h = head.getCell(i + 1)
+    const next = IMPORT_COLUMNS[i + 1]
+    if (next && next.group === c.group) return
+    const end = i + 1
+    if (c.group) {
+      if (end > start) ws.mergeCells(GROUP_ROW, start, GROUP_ROW, end)
+      const cell = ws.getCell(GROUP_ROW, start)
+      cell.value = c.group.toUpperCase()
+      cell.font = { bold: true, size: 9, color: { argb: 'FF3F4756' } }
+      cell.fill = FILL_GROUP
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    }
+    start = end + 1
+  })
+
+  IMPORT_COLUMNS.forEach((c, i) => {
+    const h = ws.getCell(HEADER_ROW, i + 1)
     h.value = c.required
       ? { richText: [{ text: `${c.header} ` }, { text: '*', font: { bold: true, color: { argb: 'FFB0241A' } } }] } // prettier-ignore
       : c.header
     h.font = { bold: true }
-    h.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEFB' } }
+    h.fill = FILL_HEAD
     h.alignment = { vertical: 'middle', wrapText: true }
-    const n = note.getCell(i + 1)
-    n.value = c.note
+    const n = ws.getCell(NOTE_ROW, i + 1)
+    n.value = c.note ?? (c.kind === 'version' ? 'Hệ thống dùng — đừng sửa' : null)
     n.font = { italic: true, size: 9, color: { argb: 'FF5D6675' } }
     n.alignment = { vertical: 'top', wrapText: true }
   })
-  head.height = 32
-  note.height = 30
+  ws.getRow(HEADER_ROW).height = 32
+  ws.getRow(NOTE_ROW).height = 24
+  ws.getCell(NOTE_ROW, 2).value = 'Ô trống = giữ nguyên · gõ "-" = xoá trắng'
 
-  // Danh mục — cột A loại, B vật liệu, C nhãn khách, D ĐVT.
+  // Dữ liệu.
+  products.forEach((p, r) => {
+    const rowNo = IMPORT_FIRST_ROW + r
+    IMPORT_COLUMNS.forEach((c, i) => {
+      const cell = ws.getCell(rowNo, i + 1)
+      if (c.kind === 'code') cell.value = p.code
+      else if (c.kind === 'version') cell.value = p.updated_at
+      else cell.value = exportValue(c, currentValue(p, c))
+    })
+  })
+
+  // Danh mục — nguồn ô thả xuống. Tải file lúc nào thì danh sách mới lúc đó.
   const listCols: [string, string[]][] = [
     ['Loại sản phẩm', PRODUCT_TYPES.map(optionText)],
     ['Vật liệu khung', FRAME_MATERIALS.map(optionText)],
     ['Khách hàng / nhóm đang dùng', [...customerLabels]],
     ['ĐVT', [DEFAULT_UNIT, 'bộ']],
+    ['Lắp ráp', ASSEMBLY_OPTIONS.map((o) => o.label)],
+    ['Có / không', ['có', 'không']],
   ]
   lists.columns = listCols.map(() => ({ width: 30 }))
   listCols.forEach(([title, values], i) => {
@@ -76,56 +123,55 @@ export async function buildImportTemplate(
     c.font = { bold: true }
     values.forEach((v, r) => (lists.getCell(r + 2, i + 1).value = v))
   })
-  const range = (col: number, count: number) =>
-    `'${LIST_SHEET}'!$${letter(col)}$2:$${letter(col)}$${Math.max(2, count + 1)}`
-
+  const range = (listCol: number, count: number) =>
+    `'${LIST_SHEET}'!$${letter(listCol)}$2:$${letter(listCol)}$${Math.max(2, count + 1)}`
   /*
-    Ô thả xuống. Loại / Vật liệu BẮT chọn trong danh sách (cảnh báo dừng của
-    Excel) — server vẫn nhận "Bàn", "TB"… nên gõ tay lọt qua cũng không sao.
-    Khách / ĐVT chỉ GỢI Ý (tắt thông báo lỗi): nhãn khách gõ tự do (0091).
+    Ô thả xuống. Loại / Vật liệu / Lắp ráp CẢNH BÁO khi gõ ngoài danh sách — server
+    vẫn nhận "Bàn", "TB"… nên gõ tay lọt qua cũng không sao. Khách / ĐVT / có-không
+    chỉ GỢI Ý (tắt báo lỗi): nhãn khách gõ tự do (0091), và "-" phải gõ được.
   */
-  const strict = (formula: string, title: string) => ({
+  const list = (formula: string, strict: boolean) => ({
     type: 'list' as const,
     allowBlank: true,
     formulae: [formula],
-    showErrorMessage: true,
+    showErrorMessage: strict,
     errorStyle: 'warning' as const,
-    errorTitle: title,
-    error: 'Chọn trong danh sách thả xuống',
+    errorTitle: 'Ngoài danh sách',
+    error: 'Chọn trong danh sách thả xuống (gõ "-" để xoá trắng)',
   })
-  const loose = (formula: string) => ({
-    type: 'list' as const,
-    allowBlank: true,
-    formulae: [formula],
-    showErrorMessage: false,
-  })
-  for (let r = IMPORT_FIRST_ROW; r <= LAST_ROW; r++) {
-    ws.getCell(r, colOf('type')).dataValidation = strict(range(1, PRODUCT_TYPES.length), 'Loại sản phẩm') // prettier-ignore
-    ws.getCell(r, colOf('material')).dataValidation = strict(range(2, FRAME_MATERIALS.length), 'Vật liệu khung') // prettier-ignore
-    ws.getCell(r, colOf('customer')).dataValidation = loose(
-      range(3, customerLabels.length),
-    )
-    ws.getCell(r, colOf('unit')).dataValidation = loose(range(4, 2))
-    // Mã là CHỮ: "0052" không được thành số 52.
-    ws.getCell(r, colOf('code')).numFmt = '@'
+  const validation: Partial<Record<string, ReturnType<typeof list>>> = {
+    type: list(range(1, PRODUCT_TYPES.length), true),
+    material: list(range(2, FRAME_MATERIALS.length), true),
+    customer: list(range(3, customerLabels.length), false),
+    unit: list(range(4, 2), false),
+    assembly: list(range(5, ASSEMBLY_OPTIONS.length), true),
   }
+  const lastRow = IMPORT_FIRST_ROW + Math.max(products.length, 0) + 300
+  IMPORT_COLUMNS.forEach((c, i) => {
+    const v = c.kind === 'bool' ? list(range(6, 2), false) : validation[c.key]
+    const colNo = i + 1
+    if (c.kind === 'code') ws.getColumn(colNo).numFmt = '@' // "0052" không thành 52
+    if (c.kind === 'version') ws.getColumn(colNo).hidden = true
+    if (!v) return
+    for (let r = IMPORT_FIRST_ROW; r <= lastRow; r++)
+      ws.getCell(r, colNo).dataValidation = v
+  })
 
-  guide.columns = [{ width: 110 }]
+  guide.columns = [{ width: 120 }]
   const lines = [
-    'THÊM SẢN PHẨM HÀNG LOẠT — HG-ERP',
+    'THÊM VÀ CẬP NHẬT SẢN PHẨM BẰNG EXCEL — HG-ERP',
     '',
-    '1. Điền ở sheet "Nhập SP", mỗi dòng một sản phẩm, bắt đầu từ hàng 3. Hàng 1–2 là tiêu đề và ghi chú, đừng xoá.',
-    '2. Bắt buộc: Loại sản phẩm, Vật liệu khung, Tên SP (tiếng Việt). Chọn Loại / Vật liệu trong danh sách thả xuống.',
-    '3. Mã nội bộ: để TRỐNG thì hệ thống tự cấp theo quy tắc [loại][số thứ tự]HG-[vật liệu], ví dụ TB0301HG-AL.',
-    '   Chỉ gõ mã khi SP đã có mã cũ không theo quy tắc. Gõ mã đã có trong thư viện là lỗi — file này chỉ THÊM MỚI.',
-    '4. Khách hàng / nhóm: gõ tự do, hệ thống viết hoa. Danh sách gợi ý ở sheet "Danh mục". Trống = mẫu chung.',
-    '5. ĐVT bán: trống thì lấy "cái".',
-    `6. Tối đa ${IMPORT_MAX_ROWS} dòng một lần. Dòng trống bị bỏ qua.`,
+    `1. Sheet "${IMPORT_SHEET}": mỗi dòng một sản phẩm, dữ liệu từ hàng ${IMPORT_FIRST_ROW}. Hàng 1–3 là nhóm, tiêu đề, ghi chú — đừng xoá.`,
+    '2. Dòng CÓ "Mã nội bộ" → CẬP NHẬT sản phẩm đó. Dòng KHÔNG mã → THÊM MỚI, hệ thống tự cấp mã [loại][số]HG-[vật liệu].',
+    '3. Ô TRỐNG = GIỮ NGUYÊN giá trị đang có. Muốn xoá trắng một ô thì gõ dấu "-".',
+    '4. Số gõ kiểu Việt Nam: 1.390 = một nghìn ba trăm chín mươi, 2,5 = hai phẩy năm. Ô có/không: gõ "có" hoặc "không".',
+    '5. SP mới bắt buộc: Tên SP (tiếng Việt), Loại sản phẩm, Vật liệu khung. ĐVT trống = "cái".',
+    '6. Cột thừa có thể xoá — cột vắng thì hệ thống không đụng tới. Đừng sửa cột ẩn "Phiên bản" (dùng để biết SP có bị sửa trên web sau khi xuất).',
+    `7. Tối đa ${IMPORT_MAX_ROWS} dòng một lần. Dòng trống bị bỏ qua.`,
     '',
-    'Tải lên: Thư viện sản phẩm → Nhập từ Excel → Tải lên file đã điền.',
-    'Hệ thống soi trước từng dòng (mã sẽ cấp, lỗi, cảnh báo), CHƯA ghi gì cho tới khi bấm "Thêm".',
-    'Còn dòng lỗi thì chưa thêm được cả lô: sửa trong file rồi tải lại.',
-    'Thêm xong, bấm "Tải file đã có mã" để lấy lại chính file này với ô Mã nội bộ đã điền — lưu đè bên mình.',
+    'Tải lên: Thư viện sản phẩm → Excel → Tải lên file đã sửa. Hệ thống soi trước từng dòng (thêm mới / cập nhật ô nào, cũ → mới / lỗi),',
+    'CHƯA ghi gì cho tới khi bấm Ghi. Còn dòng lỗi thì chưa ghi được: sửa trong file rồi tải lại.',
+    'Ghi xong, bấm "Tải file đã có mã" để lấy lại chính file này với mã SP mới đã điền — lưu đè bên mình để lần sau sửa tiếp.',
   ]
   lines.forEach((t, i) => {
     const c = guide.getCell(i + 1, 1)
@@ -136,11 +182,21 @@ export async function buildImportTemplate(
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
 
-const text = (v: unknown): string => {
+/** Ô → giá trị thô: số giữ là SỐ (1,234 kg không thành "1.234" rồi bị đọc 1234). */
+function raw(v: unknown): CellValue {
   if (v == null) return ''
-  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  if (typeof v === 'number') return Number.isFinite(v) ? v : ''
+  if (typeof v === 'boolean') return v ? 'có' : 'không'
+  if (v instanceof Date) return v.toISOString()
+  /*
+    CHỈ cắt hai đầu + thống nhất xuống dòng. Bản đầu gộp MỌI khoảng trắng (cả
+    xuống dòng) → xuất 807 SP thật rồi đọc lại ra 469 dòng "cập nhật" chỉ vì ghi
+    chú nhiều dòng bị dồn thành một (đo 07/10) — ghi vào là phá ghi chú của
+    người ta mà không ai sửa gì.
+  */
   return String(v)
-    .replace(/[\s ]+/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/ /g, ' ')
     .trim()
 }
 
@@ -155,55 +211,65 @@ async function loadSheet(buffer: Buffer) {
   }
   const ws = wb.getWorksheet(IMPORT_SHEET) ?? wb.worksheets[0]
   if (!ws) throw new ImportFileError('File không có sheet nào')
-  // Nhận diện mẫu bằng tiêu đề cột Tên — chữ người dùng ít khi sửa nhất.
-  const nameHead = text(cellValue(ws.getCell(1, colOf('name')).value))
-  if (!nameHead.startsWith('Tên SP')) {
+  // Cột nào là gì: đọc theo TIÊU ĐỀ hàng 2, không theo vị trí.
+  const colOf = new Map<string, number>()
+  ws.getRow(HEADER_ROW).eachCell((cell, colNo) => {
+    const c = columnForHeader(String(raw(cellValue(cell.value))))
+    if (c && !colOf.has(c.key)) colOf.set(c.key, colNo)
+  })
+  if (!colOf.has('name') || !colOf.has('code')) {
     throw new ImportFileError(
-      `File không dùng mẫu: ô ${letter(colOf('name'))}1 phải là "Tên SP (tiếng Việt)". Tải file mẫu rồi chép dữ liệu sang.`,
+      `File không dùng mẫu: hàng ${HEADER_ROW} phải có cột "Mã nội bộ" và "Tên SP (tiếng Việt)". Xuất file từ Thư viện sản phẩm rồi sửa trên đó.`,
     )
   }
-  return { wb, ws }
+  return { wb, ws, colOf }
 }
 
-/** Đọc các dòng có dữ liệu từ hàng 3. Quá giới hạn → lỗi, không cắt ngầm. */
+/** Đọc các dòng có dữ liệu từ hàng 4. Quá giới hạn → lỗi, không cắt ngầm. */
 export async function readImportRows(
   buffer: Buffer,
-): Promise<{ rows: RawRow[]; blank: number; sheet: string }> {
-  const { ws } = await loadSheet(buffer)
+): Promise<{ rows: RawRow[]; blank: number; sheet: string; columns: string[] }> {
+  const { ws, colOf } = await loadSheet(buffer)
   const rows: RawRow[] = []
-  let blank = 0
   for (let r = IMPORT_FIRST_ROW; r <= ws.rowCount; r++) {
-    const cells = Object.fromEntries(
-      IMPORT_COLUMNS.map((c, i) => [c.key, text(cellValue(ws.getCell(r, i + 1).value))]),
-    ) as Record<ImportField, string>
-    if (isBlankCells(cells)) {
-      blank++
-      continue
+    const cells: Record<string, CellValue> = {}
+    let any = false
+    for (const [key, colNo] of colOf) {
+      const v = raw(cellValue(ws.getCell(r, colNo).value))
+      cells[key] = v
+      // Cột "Phiên bản" một mình không làm dòng thành có dữ liệu.
+      if (v !== '' && key !== 'version') any = true
     }
-    rows.push({ row: r, cells })
+    if (any) rows.push({ row: r, cells })
   }
-  // Dòng trống ĐUÔI (định dạng kéo dài tới hàng 502) không phải dòng người ta bỏ trống.
+  // Dòng trống GIỮA các dòng dữ liệu — dòng trống đuôi (định dạng kéo dài) không tính.
   const lastData = rows.at(-1)?.row ?? IMPORT_FIRST_ROW - 1
-  blank = Math.max(0, lastData - (IMPORT_FIRST_ROW - 1) - rows.length)
+  const blank = Math.max(0, lastData - (IMPORT_FIRST_ROW - 1) - rows.length)
   if (rows.length > IMPORT_MAX_ROWS) {
     throw new ImportFileError(
       `File có ${rows.length} dòng — tối đa ${IMPORT_MAX_ROWS} dòng một lần. Chia làm nhiều file.`,
     )
   }
-  return { rows, blank, sheet: ws.name }
+  return { rows, blank, sheet: ws.name, columns: [...colOf.keys()] }
 }
 
-/** Chính file người dùng gửi, ô Mã nội bộ điền mã vừa cấp — để họ lưu đè bên mình. */
-export async function fillCodes(
+/**
+ * Chính file người dùng gửi, ô Mã nội bộ điền mã vừa cấp + ô Phiên bản điền
+ * phiên bản mới — để lần sửa tiếp theo trên chính file đó không bị báo "đã sửa
+ * trên web sau khi xuất".
+ */
+export async function fillWritten(
   buffer: Buffer,
-  codes: readonly { row: number; code: string }[],
+  written: readonly { row: number; code: string; version: string }[],
 ): Promise<Buffer> {
-  const { wb, ws } = await loadSheet(buffer)
-  const col = colOf('code')
-  for (const { row, code } of codes) {
-    const c = ws.getCell(row, col)
+  const { wb, ws, colOf } = await loadSheet(buffer)
+  const codeCol = colOf.get('code')!
+  const verCol = colOf.get('version')
+  for (const w of written) {
+    const c = ws.getCell(w.row, codeCol)
     c.numFmt = '@'
-    c.value = code
+    c.value = w.code
+    if (verCol) ws.getCell(w.row, verCol).value = w.version
   }
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
