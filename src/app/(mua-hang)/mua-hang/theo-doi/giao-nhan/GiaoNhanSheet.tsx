@@ -38,6 +38,7 @@ import {
   type ShipmentLite,
 } from '../../don/[id]/nhan-hang'
 import type { GiaoNhanData } from './tai-giao-nhan'
+import { TachDotSheet } from './tach-dot'
 
 const so = (n: number) => n.toLocaleString('vi-VN')
 
@@ -84,6 +85,7 @@ export function GiaoNhanSheet({
   const [suCoOpen, setSuCoOpen] = useState(false)
   const [suCoClose, setSuCoClose] = useState<PoIssue | null>(null)
   const [hoi, setHoi] = useState<ViecXacNhan | null>(null)
+  const [tach, setTach] = useState(false)
   const [lyDo, setLyDo] = useState('')
 
   // Cùng cách trang đơn dựng (useDonChungTu) — tiền đợt để trống: hộp này lo
@@ -131,10 +133,16 @@ export function GiaoNhanSheet({
     .filter((s) => s.status === 'planned' || s.status === 'arrived')
     .sort((a, b) => b.seq - a.seq)
     .find((s) => s.lines.some((l) => openStockLines.some((o) => o.id === l.po_line_id)))
+  // Đợt mở đã có phiếu nhập chưa nối (07/10/2026): giao bù = TÁCH theo phiếu,
+  // không dời cả đợt — dời thì mất mốc "đợt này đã giao gì".
+  const tachPlan = data.canEdit ? data.tachPlan : null
+  const tachShip = tachPlan ? data.shipments.find((s) => s.id === tachPlan.shipment_id) : undefined // prettier-ignore
   const henGiaoBu = () =>
-    !conChuaXep && dotDangMo
-      ? setDot({ kind: 'reschedule', s: dotDangMo })
-      : setXacNhan('add')
+    tachShip
+      ? setTach(true)
+      : !conChuaXep && dotDangMo
+        ? setDot({ kind: 'reschedule', s: dotDangMo })
+        : setXacNhan('add')
   const openIssues = data.issues.filter((i) => i.status === 'mo').length
 
   async function call(
@@ -291,6 +299,21 @@ export function GiaoNhanSheet({
 
         <section aria-label="Đợt giao">
           <h3 className="k-fgrp-h px-4">Đợt giao · NCC hẹn</h3>
+          {tachPlan && tachShip && (
+            <div className="text-k-sm mx-4 mb-2 flex flex-wrap items-center gap-2 border-l-2 border-[var(--warn)] bg-[var(--warn-wash)] px-3 py-1.5">
+              <span>
+                <b>{tachShip.code ?? `Đợt ${tachShip.seq}`} mới về một phần</b> qua{' '}
+                {tachPlan.plan.receipts.length} phiếu nhập chưa nối đợt (
+                {tachPlan.plan.receipts.map((r) => r.doc_code).join(', ')}). Tách để mỗi
+                lần xe giao thành một đợt, phần còn chờ thành đợt hẹn mới.
+              </span>
+              <span className="ml-auto">
+                <Btn disabled={busy} onClick={() => setTach(true)}>
+                  Tách theo phiếu nhập…
+                </Btn>
+              </span>
+            </div>
+          )}
           <DotGiaoGrid
             shipments={data.shipments}
             linesById={shipLinesById}
@@ -361,6 +384,20 @@ export function GiaoNhanSheet({
             xacNhan === 'add'
               ? call(`/api/dept/supply/pos/${po.id}/shipments`, 'POST', { shipments: ships }, partial ? 'Đã hẹn giao bù' : 'Đã thêm đợt giao') // prettier-ignore
               : call(`/api/dept/supply/pos/${po.id}/confirm`, 'POST', { confirmed_note: note || null, shipments: ships }, `Đã ghi nhận NCC xác nhận · ${ships.length} đợt`) // prettier-ignore
+          }
+        />
+      )}
+      {tach && tachPlan && tachShip && (
+        <TachDotSheet
+          shipment={tachShip}
+          plan={tachPlan.plan}
+          lines={data.lines.flatMap((l) => (l.material_id ? [{ id: l.id, code: l.code, name: l.name, unit: l.unit, qty_ordered: l.qty_ordered }] : []))} // prettier-ignore
+          today={today}
+          busy={busy}
+          onClose={() => setTach(false)}
+          onSubmit={
+            (body) =>
+            call(`/api/dept/supply/shipments/${tachShip.id}/tach`, 'POST', body, `Đã tách ${tachShip.code ?? 'đợt ' + tachShip.seq} theo phiếu nhập`) // prettier-ignore
           }
         />
       )}

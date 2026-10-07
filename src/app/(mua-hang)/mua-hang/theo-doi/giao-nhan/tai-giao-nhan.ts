@@ -4,6 +4,7 @@ import { posService } from '@/modules/dept/supply/pos.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { loadReceiptBatches } from '@/modules/dept/supply/po-receipts.service'
 import { poTrackingService } from '@/modules/dept/supply/po-tracking.service'
+import { tachDotPlan } from '@/modules/dept/supply/po-shipments-tach.service'
 import { HttpError } from '@/server/http'
 
 /**
@@ -53,6 +54,8 @@ export async function taiGiaoNhan(user: User, poId: string) {
     loadReceiptBatches([po.id]).then((r) => r[po.id] ?? []),
     poTrackingService.forPo(user, po.id),
   ])
+  // Tách đợt theo phiếu nhập (07/10/2026) — chỉ có khi có phiếu nhập chưa nối đợt.
+  const tachPlan = await tachDotPlan(po.id, { shipments, batches, docs: warehouse_docs })
   return {
     po: {
       id: po.id,
@@ -99,6 +102,7 @@ export async function taiGiaoNhan(user: User, poId: string) {
     })),
     shipmentReceipts,
     receiptBatches: batches,
+    tachPlan,
     warehouseDocs: warehouse_docs,
     issues: tracking.issues,
     canEdit:

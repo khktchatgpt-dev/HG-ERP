@@ -422,9 +422,101 @@ export function splitShipmentLines(
   }
   if (pulled.length === 0) errors.push('Chưa nhập số lượng lấy trước cho dòng nào')
   const remain = current
-    .map((l) => ({ po_line_id: l.po_line_id, qty: Math.round((have.get(l.po_line_id) ?? 0) * 10000) / 10000 })) // prettier-ignore
+    .map((l) => ({
+      po_line_id: l.po_line_id,
+      qty: Math.round((have.get(l.po_line_id) ?? 0) * 10000) / 10000,
+    })) // prettier-ignore
     .filter((l) => l.qty > 1e-4)
   if (errors.length === 0 && remain.length === 0)
     errors.push('Lấy trước toàn bộ đợt = dời ngày cả đợt — dùng "Dời đợt"')
   return { remain, pulled, errors }
+}
+
+/**
+ * TÁCH ĐỢT THEO PHIẾU NHẬP (07/10/2026 — PO-2026-0084).
+ *
+ * Ca thật: lúc NCC xác nhận chỉ khai MỘT đợt ôm 100% số đặt; NCC giao lẻ nhiều
+ * chuyến; Kho nhập hai phiếu không nối đợt. Đợt đó đã "xe tới" nên Sửa / Lấy
+ * trước bị chặn, Thêm đợt thì "vượt SL đặt" — không còn đường nào ghi đúng.
+ *
+ * Luật (chủ dự án chốt 07/10): MỖI PHIẾU NHẬP MỘT ĐỢT "Đã nhận". Phiếu SỚM
+ * NHẤT ở lại đợt gốc (giữ mã GH + ngày hẹn cũ — đo NCC trễ so với cam kết
+ * đầu); các phiếu sau thành đợt mới, ngày = ngày phiếu. Phần còn chờ = số của
+ * đợt gốc trừ số đã về, chia thành một hay nhiều đợt hẹn mới.
+ *
+ * Số "đã về" của phiếu tính cả phần loại QC (BR-08 — NCC đã giao), cùng nghĩa
+ * với `loadReceiptBatches` / `receiptsByShipment`.
+ */
+export type ReceiptForSplit = {
+  doc_id: string
+  doc_code: string
+  /** yyyy-mm-dd — ngày chứng từ (ngày hàng về thật). */
+  date: string
+  lines: ShipmentLineInput[]
+}
+
+export type SplitPlan = {
+  /** Phiếu theo thứ tự ngày — phiếu [0] ở lại đợt gốc. */
+  receipts: ReceiptForSplit[]
+  /** Phần còn chờ theo dòng (> 0) — mặc định gom một đợt hẹn mới. */
+  rest: ShipmentLineInput[]
+}
+
+const r4 = (n: number) => Math.round(n * 10000) / 10000
+
+export function planSplitByReceipts(
+  shipment: { lines: ShipmentLineInput[] },
+  receipts: ReceiptForSplit[],
+): SplitPlan | null {
+  const used = receipts.filter((r) => r.lines.some((l) => l.qty > 1e-4))
+  if (used.length === 0) return null
+  const sorted = [...used].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.doc_code.localeCompare(b.doc_code),
+  )
+  const came = new Map<string, number>()
+  for (const r of sorted)
+    for (const l of r.lines) came.set(l.po_line_id, (came.get(l.po_line_id) ?? 0) + l.qty)
+  const rest = shipment.lines
+    .map((l) => ({
+      po_line_id: l.po_line_id,
+      qty: r4(Math.max(0, l.qty - (came.get(l.po_line_id) ?? 0))),
+    })) // prettier-ignore
+    .filter((l) => l.qty > 1e-4)
+  return { receipts: sorted, rest }
+}
+
+/**
+ * Kiểm phần còn chờ người dùng chia: mỗi dòng cộng các đợt hẹn mới phải ĐÚNG
+ * bằng phần còn chờ (bớt đi là việc của "Chốt thiếu", thêm vào là vượt cam
+ * kết), mỗi đợt có ngày, không ngày nào trước hôm nay.
+ */
+export function validateSplitRest(
+  plan: SplitPlan,
+  restShipments: ShipmentInput[],
+  today: string,
+  names: Map<string, string> = new Map(),
+): string[] {
+  const errors: string[] = []
+  if (plan.rest.length > 0 && restShipments.length === 0) {
+    errors.push('Phần còn chờ chưa xếp vào đợt nào')
+  }
+  const sum = new Map<string, number>()
+  for (const [i, s] of restShipments.entries()) {
+    const label = `Đợt hẹn ${i + 1}`
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s.expected_date))
+      errors.push(`${label}: chưa chọn ngày`)
+    else if (s.expected_date < today) errors.push(`${label}: ngày hẹn đã qua`)
+    const lines = s.lines.filter((l) => l.qty > 1e-4)
+    if (lines.length === 0) errors.push(`${label}: chưa có số lượng dòng nào`)
+    for (const l of lines) sum.set(l.po_line_id, (sum.get(l.po_line_id) ?? 0) + l.qty)
+  }
+  const want = new Map(plan.rest.map((l) => [l.po_line_id, l.qty]))
+  for (const id of new Set([...want.keys(), ...sum.keys()])) {
+    const w = want.get(id) ?? 0
+    const g = sum.get(id) ?? 0
+    if (Math.abs(w - g) > 1e-4) {
+      errors.push(`"${names.get(id) ?? 'Dòng'}": các đợt hẹn cộng ${fmt(g)}, phần còn chờ là ${fmt(w)}`) // prettier-ignore
+    }
+  }
+  return errors
 }
