@@ -46,7 +46,9 @@ describe('bẫy Tailwind quét file', () => {
       })
     }
     expect(hits, 'diễn đạt bằng chữ, đừng viết ví dụ lớp có var rỗng / ký tự đại diện').toEqual([]) // prettier-ignore
-  })
+    // Quét cả repo (hơn 3.000 file): chạy riêng 1,4 s, nhưng trong bộ đầy đủ khi máy
+    // đang gánh dev server thì 8–9 s và trượt mốc 5 s mặc định (08/10/2026).
+  }, 30_000)
 
   it('mẫu dò bắt đúng hai chuỗi đã làm vỡ CSS, bỏ qua chuỗi vô hại', () => {
     // Ghép chuỗi lúc chạy để chính file test không tự dính mẫu.

@@ -375,6 +375,12 @@ export function LenhScreen({
             <Btn icon="lenh" href={`/mua-hang/yeu-cau/${lsx.id}/ho-so`}>
               Hồ sơ lệnh
             </Btn>
+            {/* BẢNG KÊ VẬT TƯ — màn riêng (08/10/2026): "còn phải mua gì, bao nhiêu,
+                để lên đơn" — Cần · Tồn · Nháp · Còn phải đặt → tích dòng lên đơn.
+                Chế độ "Theo vật tư" ở đây chỉ bày mã đã có đơn, không có số cần. */}
+            <Btn icon="vattu" href={`/mua-hang/bang-ke/${lsx.id}`}>
+              Bảng kê vật tư
+            </Btn>
             {/*
               IN PHIẾU LỆNH — mẫu chính thức xưởng đang cầm (`/print/lsx/[id]`,
               đã có sẵn từ 0114). Khu Mua hàng trước nay không có đường tới, nên

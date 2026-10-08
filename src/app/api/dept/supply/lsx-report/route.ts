@@ -4,6 +4,8 @@ import { loadSupplyOrdersReport } from '@/modules/dept/supply/supply-orders-repo
 import { buildSupplyOrdersExcel } from '@/modules/dept/supply/supply-orders-excel'
 import { loadLsxDetailReport } from '@/modules/dept/supply/lsx-detail-report.service'
 import { buildLsxDetailExcel } from '@/modules/dept/supply/lsx-detail-excel'
+import { loadLsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
+import { buildBangKeExcel } from '@/modules/dept/supply/lsx-bang-ke-excel'
 import { NotFound } from '@/server/http'
 import { xlsxResponse as xlsx } from '@/server/xlsx'
 
@@ -29,25 +31,28 @@ export const GET = handle(async (req: Request) => {
   const url = new URL(req.url)
   const lsxId = url.searchParams.get('lsx')
   if (lsxId) {
-    // Hai loại file riêng — xem LsxExcelKind. Thiếu tham số thì hiểu là hồ sơ
-    // lệnh (đường cũ, để link đã gửi cho ai đó vẫn tải được).
-    const kind = url.searchParams.get('loai') === 'bangke' ? 'bangke' : 'lsx'
-    const report = await loadLsxDetailReport(
-      user,
-      lsxId,
-      today,
-      url.searchParams.get('nhap') === '1',
-      kind,
-    )
+    // BẢNG KÊ (08/10/2026): cùng nguồn số với màn `/mua-hang/bang-ke/[id]` —
+    // `loadLsxBangKe` + lõi `lsx-bang-ke-mua`. Định mức chưa kiểm MẶC ĐỊNH tính
+    // như màn (`?nhap=0` tắt). Bản cũ trong `buildLsxDetailExcel('bangke')` không
+    // trừ nháp, không làm tròn theo đơn vị mua — không còn dùng cho đường này.
+    if (url.searchParams.get('loai') === 'bangke') {
+      const bk = await loadLsxBangKe(
+        user,
+        lsxId,
+        today,
+        url.searchParams.get('nhap') !== '0',
+      )
+      if (!bk) throw NotFound('Không tìm thấy lệnh sản xuất')
+      const buf = await buildBangKeExcel(bk, today, user.name)
+      const safe = bk.lsx.code.replace(/[\/:*?"<>|]+/g, '-')
+      return xlsx(buf, `bang-ke-vat-tu_${safe}_${today}.xlsx`)
+    }
+    // Hồ sơ lệnh (đường cũ, để link đã gửi cho ai đó vẫn tải được).
+    const report = await loadLsxDetailReport(user, lsxId, today, false, 'lsx')
     if (!report) throw NotFound('Không tìm thấy lệnh sản xuất')
-    const buf = await buildLsxDetailExcel(report, kind)
+    const buf = await buildLsxDetailExcel(report, 'lsx')
     const safe = report.lsx.code.replace(/[\/:*?"<>|]+/g, '-')
-    return xlsx(
-      buf,
-      kind === 'bangke'
-        ? `bang-ke-vat-tu_${safe}_${today}.xlsx`
-        : `ho-so-cung-ung_${safe}_${today}.xlsx`,
-    )
+    return xlsx(buf, `ho-so-cung-ung_${safe}_${today}.xlsx`)
   }
 
   const report = await loadSupplyOrdersReport(user, today)

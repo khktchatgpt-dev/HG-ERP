@@ -163,6 +163,9 @@ export const SHARED_SECTION: NavSection = {
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
   items: [
     { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
+    // Màn MỚI dựng theo bản vẽ 08/10/2026 (khuôn C, checklist hồ sơ 6 ô) —
+    // chạy song song với màn cũ cho tới khi chủ dự án chốt thay thế.
+    { href: '/thu-vien', label: 'Thư viện SP (mới)', icon: 'armchair' },
     // Khuôn nhôm: Kỹ thuật giữ, nhưng Cung ứng tra để đặt hàng và Sản xuất tra
     // để nhận dạng cây nhôm — nên nó ở khu dùng chung, không nhốt trong /technical.
     { href: '/khuon', label: 'Khuôn nhôm', icon: 'shapes' },
@@ -446,6 +449,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
           { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
           { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
+          // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
+          // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
+          { href: '/mua-hang/bang-ke', label: 'Bảng kê vật tư', icon: 'clipboard-list' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
           // THEO DÕI ĐƠN HÀNG (01/10/2026, chủ dự án): đơn đã gửi NCC → tới khi
           // hàng về kho, gồm cả chuyến hàng. Thay mục 'Nhận hàng' / cách xem
