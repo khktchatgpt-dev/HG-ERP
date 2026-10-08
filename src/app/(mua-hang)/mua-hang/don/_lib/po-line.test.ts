@@ -23,6 +23,7 @@ import {
   tongM3,
   tongLechBac,
   docTongGo,
+  foamBasisMacDinh,
   withSpecDims,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
@@ -1097,7 +1098,12 @@ describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Ho
     expect(lineAmount('foam', next)).toBe(93_184_000)
   })
   it('đã gõ 0,04 (m³ MỘT tấm) vào ô tổng: nhận ra; điền kích thước thì xoá số đó', () => {
-    const prev = xop({ qty2_manual: 0.04, inner_l_mm: 1000, inner_w_mm: 800, inner_h_mm: 50 })
+    const prev = xop({
+      qty2_manual: 0.04,
+      inner_l_mm: 1000,
+      inner_w_mm: 800,
+      inner_h_mm: 50,
+    })
     expect(laM3MotTam(prev)).toBe(true)
     expect(tongM3(prev)).toBe(179.2)
     const tu = withSpecDims('foam', xop({ qty2_manual: 0.04 }), xop({ qty2_manual: 0.04, spec: '1000x800x50' })) // prettier-ignore
@@ -1109,10 +1115,17 @@ describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Ho
     const b = withSpecDims('foam', a, { ...a, spec: '1000*800*50', carton_basis: 'ctn' })
     expect([b.inner_h_mm, b.carton_basis]).toEqual([50, 'ctn'])
     const tay = xop({ inner_l_mm: 1520, inner_w_mm: 920, inner_h_mm: 10 })
-    expect(withSpecDims('foam', tay, { ...tay, spec: '1000*800*50' }).inner_l_mm).toBe(1520)
+    expect(withSpecDims('foam', tay, { ...tay, spec: '1000*800*50' }).inner_l_mm).toBe(
+      1520,
+    )
   })
   it('đơn ĐÃ LƯU (Giá theo = ĐVT mua) đổi Tính theo sang m³ thì tiền theo m³ — không bị lựa chọn cũ đè', () => {
-    const luu = xop({ price_per: 'unit', inner_l_mm: 1000, inner_w_mm: 800, inner_h_mm: 50 })
+    const luu = xop({
+      price_per: 'unit',
+      inner_l_mm: 1000,
+      inner_w_mm: 800,
+      inner_h_mm: 50,
+    })
     const doi = withSpecDims('foam', luu, { ...luu, carton_basis: 'm3' })
     expect(doi.price_per).toBe('')
     expect(lineAmount('foam', doi)).toBe(93_184_000)
@@ -1121,7 +1134,9 @@ describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Ho
   })
   it('mút cuộn có đơn vị trong quy cách và mẫu khác: không đụng', () => {
     const p = xop()
-    expect(withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis).toBe('ctn')
+    expect(
+      withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis,
+    ).toBe('ctn')
     expect(withSpecDims('carton', p, { ...p, spec: '1000*800*50' }).inner_l_mm).toBe('')
   })
 })
@@ -1162,12 +1177,19 @@ describe('docTongGo — gõ số khối kiểu tiền (172900 = 172,9 m³), 05/1
 /* ── CÙNG MÃ NHIỀU DÒNG (07/10/2026) ─────────────────────────────────────── */
 describe('cùng vật tư nhiều dòng — giữ thứ phân biệt các dòng', () => {
   it('mở đơn đã lưu MANG THEO mã SP khách (trước đó lưu lại là mất)', () => {
-    expect(lineFromPo({ ...base, product_code: '21610-217' }).product_code).toBe('21610-217')
+    expect(lineFromPo({ ...base, product_code: '21610-217' }).product_code).toBe(
+      '21610-217',
+    )
     expect(lineFromPo({ ...base, product_code: null }).product_code).toBe('')
   })
 
   it('gộp: tổng gõ tay cũng cộng; không ai gõ tay thì vẫn tự tính', () => {
-    const l = { ...newFreeLine(), qty: 10 as const, price: 1 as const, qty2_manual: 300 as const }
+    const l = {
+      ...newFreeLine(),
+      qty: 10 as const,
+      price: 1 as const,
+      qty2_manual: 300 as const,
+    }
     expect(mergeLineInto(l, { ...l, qty: 5, qty2_manual: 150 })!.qty2_manual).toBe(450)
     const tu = { ...l, qty2_manual: '' as const }
     expect(mergeLineInto(tu, { ...tu })!.qty2_manual).toBe('')
@@ -1178,7 +1200,9 @@ describe('cùng vật tư nhiều dòng — giữ thứ phân biệt các dòng'
     const l = { ...newFreeLine(), is_free: undefined, material_id: 'm1', spec: '8x20' }
     expect(refreshLineFromMaterial('accessory', l, m, true).spec).toBe('8x20')
     expect(refreshLineFromMaterial('accessory', l, m).spec).toBe('M8')
-    expect(refreshLineFromMaterial('accessory', { ...l, spec: '' }, m, true).spec).toBe('M8')
+    expect(refreshLineFromMaterial('accessory', { ...l, spec: '' }, m, true).spec).toBe(
+      'M8',
+    )
   })
 
   it('nháp đời trước thiếu uid → khôi phục cấp uid riêng từng dòng', () => {
@@ -1188,5 +1212,90 @@ describe('cùng vật tư nhiều dòng — giữ thứ phân biệt các dòng'
     expect(a.uid).toBeTruthy()
     expect(a.uid).not.toBe(b.uid)
     expect(migrateDraftLine('accessory', { ...cu, uid: 'giu' }).uid).toBe('giu')
+  })
+})
+
+/*
+ * XỐP CHỌN TỪ DANH MỤC → "TÍNH THEO" MẶC ĐỊNH m³ (08/10/2026). Vật tư "Mouse Mê
+ * Relax" 580x540x60 chọn vào đơn: Tổng m³ bày 4,698 nhưng tiền vẫn 250 tấm × giá
+ * (NCC báo giá/m³ → lệch 53 lần). Dòng tự gõ quy cách đã sang m³ từ 05/10, dòng
+ * danh mục đi đường `newLine` nên lọt.
+ */
+describe('newLine foam — có D×R×Dày thì mặc định tính theo m³', () => {
+  const mut: PoMaterial = {
+    id: 'm-xm',
+    code: 'XM-0108',
+    name: 'Mouse Mê Relax',
+    unit: 'Tấm',
+    group_name: 'Mút - xốp - nệm - gòn',
+    sub_group: null,
+    spec: '580x540x60',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('580x540x60 · Tấm · chưa từng đặt → m³, 250 tấm = 4,698 m³, tiền = m³ × giá', () => {
+    const l = { ...newLine('foam', mut), qty: 250 as Num, price: 1_000_000 as Num }
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([580, 540, 60])
+    expect(l.carton_basis).toBe('m3')
+    expect(lineQty2('foam', l)).toBe(4.698)
+    expect(lineAmount('foam', l)).toBe(4_698_000)
+  })
+
+  it('320x540x40 · 250 tấm → 1,728 m³', () => {
+    const l = { ...newLine('foam', { ...mut, spec: '320x540x40' }), qty: 250 as Num }
+    expect(lineQty2('foam', l)).toBe(1.728)
+  })
+
+  it('lần đặt trước chốt theo TẤM thì giữ tấm (NCC này bán theo tấm)', () => {
+    const l = newLine('foam', {
+      ...mut,
+      last_line: {
+        material_grade: null,
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: null,
+        open_style: null,
+        dm_per_sp: null,
+        carton_basis: 'ctn',
+      } as PoMaterial['last_line'],
+    })
+    expect(l.carton_basis).toBe('ctn')
+  })
+
+  it('mút CUỘN "300*1.05*1" · Cuộn → vẫn theo ĐVT, không phải tấm', () => {
+    const l = newLine('foam', {
+      ...mut,
+      name: 'Mousse dai 1mm',
+      unit: 'Cuộn',
+      spec: '300*1.05*1',
+    })
+    expect(l.carton_basis).toBe('ctn')
+  })
+
+  it('không có quy cách → theo ĐVT như cũ', () => {
+    const l = newLine('foam', { ...mut, spec: null })
+    expect(l.carton_basis).toBe('ctn')
+    expect(lineQty2('foam', l)).toBeNull()
+  })
+
+  it('foamBasisMacDinh: ĐVT tấm/thanh/miếng → m³; mét/kg → ĐVT', () => {
+    const d: [number, number, number] = [580, 540, 60]
+    expect(foamBasisMacDinh(null, 'Thanh', d)).toBe('m3')
+    expect(foamBasisMacDinh(null, 'Miếng', d)).toBe('m3')
+    expect(foamBasisMacDinh(null, 'Mét', d)).toBe('ctn')
+    expect(foamBasisMacDinh(null, 'Kg', d)).toBe('ctn')
+    expect(foamBasisMacDinh('m3', 'Cuộn', d)).toBe('m3')
   })
 })

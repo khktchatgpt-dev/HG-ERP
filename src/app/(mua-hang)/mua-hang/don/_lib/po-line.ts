@@ -4,11 +4,13 @@ import {
   deriveLine,
   foamM3PerSheet,
   hasQty2Override,
+  PO_TEMPLATE_META,
   QTY2_OVERRIDE_UNIT,
   type PoTemplate,
 } from '@/lib/po-template'
 import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
 import { parseInnerDims } from '@/lib/dims'
+import { nod } from '@/lib/material-key'
 import {
   PO_SHARED_FIELD_MEANING,
   prefillsFromCatalog,
@@ -193,6 +195,21 @@ export function lineQty2(t: PoTemplate, l: Line): number | null {
   return deriveLine(t, draftOf(l)).qty2
 }
 
+/** Cơ sở tiền THẬT của dòng sau mọi luật mẫu + ô "Giá theo" — 'unit2' là tiền theo kg/m²/m³. */
+export function lineBasis(t: PoTemplate, l: Line): 'unit' | 'unit2' {
+  return deriveLine(t, draftOf(l)).price_basis
+}
+
+/** Nhãn đơn vị quy đổi của dòng: ô gõ tay → đơn vị mẫu dẫn xuất (m³ xốp, m² kính) → đơn vị giá của mẫu. */
+export function lineUnit2Label(t: PoTemplate, l: Line): string {
+  return (
+    l.unit2_label ||
+    deriveLine(t, draftOf(l)).unit2 ||
+    PO_TEMPLATE_META[t].priceUnit ||
+    'đv quy đổi'
+  )
+}
+
 /** Thành tiền dòng — đi đúng đường server dùng (deriveLine → poLineAmount). */
 export function lineAmount(t: PoTemplate, l: Line): number {
   const d = deriveLine(t, draftOf(l))
@@ -344,6 +361,32 @@ export function recallBasis(
 ): Line['carton_basis'] {
   const ok = BASIS_DOMAIN[t]
   return ok && basis && ok.includes(basis) ? (basis as Line['carton_basis']) : 'ctn'
+}
+
+/** ĐVT mà "tấm" xốp KHÔNG thể là: cuộn / mét / kg / lít — hàng theo chiều dài hay cân. */
+const DVT_KHONG_PHAI_TAM = new Set(['cuon', 'met', 'm', 'kg', 'lit', 'l'])
+
+/**
+ * "TÍNH THEO" MẶC ĐỊNH CỦA DÒNG XỐP CHỌN TỪ DANH MỤC (08/10/2026).
+ *
+ * Vật tư "Mouse Mê Relax" khai quy cách 580x540x60, chọn vào đơn xốp: ba ô D×R×Dày
+ * bóc đúng, cột Tổng m³ bày đúng 4,698 — nhưng "Tính theo" vẫn ĐVT (tấm) nên tiền =
+ * 250 tấm × đơn giá, trong khi NCC xốp báo giá theo m³ (đơn giá 1 triệu/m³ ra 250
+ * triệu thay vì 4,698 triệu — lệch 53 lần). Dòng TỰ GÕ quy cách thì `withSpecDims`
+ * đã chuyển sang m³ từ 05/10; dòng chọn danh mục đi đường `newLine` nên lọt.
+ *
+ * Luật: lần đặt trước đã chốt cách tính thì theo lần trước (NCC này bán theo tấm thì
+ * cứ tấm). Chưa từng đặt mà đủ ba kích thước và ĐVT là tấm/thanh/miếng → m³. Mút
+ * CUỘN ("300*1.05*1", ĐVT Cuộn) vẫn theo ĐVT — ba số đó không phải tấm.
+ */
+export function foamBasisMacDinh(
+  lastBasis: string | null | undefined,
+  unit: string,
+  dims: [number, number, number] | null,
+): Line['carton_basis'] {
+  if (lastBasis) return recallBasis('foam', lastBasis)
+  if (!dims) return 'ctn'
+  return DVT_KHONG_PHAI_TAM.has(nod(unit).trim()) ? 'ctn' : 'm3'
 }
 
 /** m³ của MỘT tấm xốp theo D×R×Dày của dòng — null khi chưa đủ ba số. */
@@ -523,7 +566,10 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     // đặt trước (0136), chỉ ở mẫu carton (mẫu khác không có ô, gửi lên là rác).
     price_per_m2: t === 'carton' ? (last?.price_per_m2 ?? '') : '',
     print_fee: t === 'carton' ? (last?.print_fee ?? '') : '',
-    carton_basis: recallBasis(t, last?.carton_basis),
+    carton_basis:
+      t === 'foam'
+        ? foamBasisMacDinh(last?.carton_basis, m.unit, inner)
+        : recallBasis(t, last?.carton_basis),
     pack_size: m.pack_size ?? null,
     pack_unit: m.pack_unit ?? '',
     // 0182: danh mục khai "giá theo đv khác" (sơn lít/thùng…) thì điền sẵn cặp

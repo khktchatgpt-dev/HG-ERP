@@ -3,7 +3,9 @@
 import {
   cartonPriceSuggest,
   lineAmount,
+  lineBasis,
   lineQty2,
+  lineUnit2Label,
   type Line,
   type Num,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
@@ -561,11 +563,11 @@ export function DongHang({ d }: { d: DonCtx }) {
                     options={[
                       { value: 'mac-dinh', label: `Mặc định của mẫu ${meta.label.toLowerCase()}` }, // prettier-ignore
                       { value: 'unit', label: `Theo ĐVT mua (${cur.unit || 'đvt'})` },
-                      { value: 'unit2', label: `Theo đơn vị quy đổi (${cur.unit2_label || meta.priceUnit})` }, // prettier-ignore
+                      { value: 'unit2', label: `Theo đơn vị quy đổi (${lineUnit2Label(template, cur)})` }, // prettier-ignore
                     ]}
                   />
                 ) : cur.price_per === 'unit2' ? (
-                  `đơn vị quy đổi (${cur.unit2_label || meta.priceUnit})`
+                  `đơn vị quy đổi (${lineUnit2Label(template, cur)})`
                 ) : cur.price_per === 'unit' ? (
                   'ĐVT mua'
                 ) : (
@@ -573,15 +575,18 @@ export function DongHang({ d }: { d: DonCtx }) {
                 )}
               </Field>
               {/* Giá ở đơn vị CÒN LẠI — số để so với báo giá của NCC, không
-                    dùng để tính tiền. Chỉ dựng khi đủ SL, giá và hệ số quy đổi. */}
+                    dùng để tính tiền. Chỉ dựng khi đủ SL, giá và hệ số quy đổi.
+                    Chiều quy đổi theo CƠ SỞ TIỀN THẬT của dòng (`lineBasis`), không
+                    theo ô "Giá theo": xốp m³ / kính m² để "mặc định của mẫu" là
+                    tiền đã theo m³ — đọc ô chọn thì đảo chiều, ra 53 triệu/tấm. */}
               {(() => {
                 const q2 = lineQty2(template, cur)
                 const sl = cur.qty === '' ? 0 : Number(cur.qty)
                 const gia = cur.price === '' ? 0 : Number(cur.price)
                 if (q2 == null || q2 <= 0 || sl <= 0 || gia <= 0) return null
-                const theoUnit2 = cur.price_per === 'unit2'
+                const theoUnit2 = lineBasis(template, cur) === 'unit2'
                 const quy = theoUnit2 ? (gia * q2) / sl : (gia * sl) / q2
-                const nhan = theoUnit2 ? cur.unit || 'đvt' : cur.unit2_label || meta.priceUnit // prettier-ignore
+                const nhan = theoUnit2 ? cur.unit || 'đvt' : lineUnit2Label(template, cur)
                 return (
                   <Field label="Tương đương">
                     <span
