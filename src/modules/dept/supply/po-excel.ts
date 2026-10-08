@@ -21,7 +21,11 @@ import type {
   PoPrintLine,
   PoPrintSupplier,
 } from '@/app/print/supply/PoPrintSheet'
-import { DEFAULT_DOC_TEMPLATES, resolveSignatures, type DocTemplate } from '@/lib/doc-templates'
+import {
+  DEFAULT_DOC_TEMPLATES,
+  resolveSignatures,
+  type DocTemplate,
+} from '@/lib/doc-templates'
 
 /**
  * XUẤT EXCEL đơn đặt hàng — file .xlsx bày GIỐNG HỆT phiếu in (PoPrintSheet),
@@ -397,7 +401,13 @@ export async function buildPoExcel(input: {
     ['Kính gửi:', supplier?.name ?? po.supplier_name, true],
     ['Địa chỉ:', supplier?.address],
     ['MST:', supplier?.tax_no],
-    ['Người liên hệ:', supplier?.phone],
+    ['Điện thoại:', supplier?.phone],
+    // Người nhận đơn ở phía NCC — cùng tờ in (08/10/2026).
+    [
+      'Người nhận:',
+      [supplier?.contact_name, supplier?.contact_phone].filter(Boolean).join(' · ') ||
+        null,
+    ],
   ]
   r++
   for (const [label, value, bold] of meta) {
@@ -554,12 +564,14 @@ export async function buildPoExcel(input: {
   if (shipments.length === 0 && po.expected_at) {
     r++
     ws.mergeCells(r, 1, r, n)
-    set(r, 1, `Hẹn giao: ${dmyStr(po.expected_at)}`, { font: { size: 10 } })
+    set(r, 1, `Dự kiến giao hàng: ${dmyStr(po.expected_at)}`, { font: { size: 10 } })
   }
   if (shipments.length > 0) {
     r++
     ws.mergeCells(r, 1, r, n)
-    set(r, 1, `Lịch giao hàng (${shipments.length} đợt):`, { font: { bold: true, size: 10 } })
+    set(r, 1, `Lịch giao hàng (${shipments.length} đợt):`, {
+      font: { bold: true, size: 10 },
+    })
     /*
      * Sáu cột của bảng lịch trải trên n cột bảng hàng: Tên hàng ăn phần dư,
      * các cột còn lại một ô mỗi cột (bảng hàng luôn có ≥ 8 cột).
@@ -581,7 +593,12 @@ export async function buildPoExcel(input: {
       ['Số lượng', 'right'],
       [`Tạm tính (${po.currency})`, 'right'],
     ]
-    const cellAt = (row: number, k: number, v: ExcelJS.CellValue, st: Partial<ExcelJS.Style>) => {
+    const cellAt = (
+      row: number,
+      k: number,
+      v: ExcelJS.CellValue,
+      st: Partial<ExcelJS.Style>,
+    ) => {
       const [a, b] = shCols[k]
       if (b > a) ws.mergeCells(row, a, row, b)
       set(row, a, v, { border: BORDER, ...st })
@@ -601,12 +618,21 @@ export async function buildPoExcel(input: {
         cellAt(r, 1, li === 0 ? dmyStr(sh.expected_date) : '', { font: { size: 9 } })
         cellAt(r, 2, l.name, { font: { size: 9 }, alignment: { wrapText: true } })
         cellAt(r, 3, l.unit, { font: { size: 9 } })
-        cellAt(r, 4, l.qty, { font: { size: 9 }, numFmt: numFmtOf(l.qty), alignment: { horizontal: 'right' } })
-        cellAt(r, 5, l.amount != null && l.amount > 0 ? Math.round(l.amount) : '', {
+        cellAt(r, 4, l.qty, {
           font: { size: 9 },
-          numFmt: '#,##0',
+          numFmt: numFmtOf(l.qty),
           alignment: { horizontal: 'right' },
         })
+        cellAt(
+          r,
+          5,
+          l.amount != null && l.amount > 0 ? roundMoney(l.amount, po.currency) : '',
+          {
+            font: { size: 9 },
+            numFmt: '#,##0',
+            alignment: { horizontal: 'right' },
+          },
+        )
       })
     }
     r++
@@ -631,7 +657,7 @@ export async function buildPoExcel(input: {
   set(
     r,
     1,
-    'Đề nghị Quý công ty fax lại xác nhận thông tin cho công ty chúng tôi. Xin cảm ơn!',
+    'Đề nghị Quý Công ty fax lại xác nhận thông tin cho Công ty chúng tôi. Trân trọng cảm ơn!',
     {
       font: { italic: true, size: 10 },
     },

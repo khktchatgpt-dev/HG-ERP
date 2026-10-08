@@ -68,7 +68,9 @@ export type PoTemplateMeta = {
   terms: PoTerms
 }
 
-const DELIVERY_HG = 'Xưởng SX Cty TNHH Hoàng Gia - Cụm CN Cát Nhơn, Gia Lai'
+// Tên công ty VIẾT HOA đúng đăng ký + địa chỉ xưởng (08/10/2026, phòng Cung ứng: "địa điểm giao hàng như này: CÔNG TY TNHH SX-TM HOÀNG GIA").
+const DELIVERY_HG =
+  'CÔNG TY TNHH SX-TM HOÀNG GIA - Lô C3, Cụm CN Cát Nhơn, Xã Xuân An, Gia Lai'
 const INVOICE_VAT = 'Hóa đơn GTGT'
 
 /**

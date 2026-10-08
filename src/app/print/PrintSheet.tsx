@@ -195,7 +195,9 @@ export function PrintMeta({
                 <td className="pr-2 align-top font-semibold whitespace-nowrap">
                   {label}
                 </td>
-                <td>{v}</td>
+                {/* Cột giá trị ôm hết phần dư (08/10/2026): bảng auto-layout chia bề
+                    ngang đều hai cột nên nhãn "Kính gửi" từng cách giá trị cả gang tay. */}
+                <td className="w-full">{v}</td>
               </tr>
             ))}
         </tbody>

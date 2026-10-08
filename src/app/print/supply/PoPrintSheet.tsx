@@ -121,6 +121,8 @@ export type PoPrintSupplier = {
   address?: string | null
   tax_no?: string | null
   phone?: string | null
+  contact_name?: string | null
+  contact_phone?: string | null
 } | null
 
 const fmt = (n: number | null | undefined) =>
@@ -383,7 +385,16 @@ export function PoPrintSheet({
           ['Kính gửi:', <b key="n">{supplier?.name ?? po.supplier_name}</b>],
           ['Địa chỉ:', supplier?.address],
           ['MST:', supplier?.tax_no],
-          ['Người liên hệ:', supplier?.phone],
+          ['Điện thoại:', supplier?.phone],
+          // NGƯỜI NHẬN đơn ở phía NCC (08/10/2026, phản hồi phòng Cung ứng): tên +
+          // số của người liên hệ trong hồ sơ NCC — trước đây dòng "Người liên hệ"
+          // lại in số tổng đài, NCC không biết đơn gửi cho ai.
+          [
+            'Người nhận:',
+            [supplier?.contact_name, supplier?.contact_phone]
+              .filter(Boolean)
+              .join(' · ') || undefined,
+          ],
         ]}
         refsBoxed
         refs={[
@@ -543,7 +554,8 @@ export function PoPrintSheet({
             KHÔNG có đợt, in cả hai là hai nguồn ngày trên một tờ giấy. */}
         {(!shipments || shipments.length === 0) && po.expected_at && (
           <div>
-            Hẹn giao: <b>{new Date(po.expected_at).toLocaleDateString('vi-VN')}</b>
+            Dự kiến giao hàng:{' '}
+            <b>{new Date(po.expected_at).toLocaleDateString('vi-VN')}</b>
           </div>
         )}
         {shipments && shipments.length > 0 && (
@@ -605,8 +617,10 @@ export function PoPrintSheet({
                         {fmt(l.qty)}
                       </td>
                       <td className="border border-black px-1.5 py-0.5 text-right">
+                        {/* Theo tiền tệ của đơn: USD giữ hai số lẻ (08/10/2026, phòng
+                            Cung ứng: "các mục tạm tính thêm số thập phân"); VND nguyên. */}
                         {l.amount != null && l.amount > 0
-                          ? fmt(Math.round(l.amount))
+                          ? fmtMoney(roundMoney(l.amount, po.currency), po.currency)
                           : ''}
                       </td>
                     </tr>
@@ -624,8 +638,8 @@ export function PoPrintSheet({
         {po.note && <div className="italic">{po.note}</div>}
         {/* Câu chốt lấy nguyên văn đơn ĐH chuẩn của phòng Cung ứng. */}
         <div className="italic">
-          Đề nghị Quý công ty fax lại xác nhận thông tin cho công ty chúng tôi. Xin cảm
-          ơn!
+          Đề nghị Quý Công ty fax lại xác nhận thông tin cho Công ty chúng tôi. Trân trọng
+          cảm ơn!
         </div>
       </div>
 

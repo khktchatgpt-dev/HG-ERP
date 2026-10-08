@@ -5,6 +5,11 @@ import { cachGiao, tenChanh } from './cach-giao'
 describe('cachGiao', () => {
   it('tận xưởng — tên công ty hoặc địa chỉ xưởng', () => {
     expect(cachGiao('CÔNG TY TNHH SX & TM HOÀNG GIA')).toBe('xuong')
+    expect(
+      cachGiao(
+        'CÔNG TY TNHH SX-TM HOÀNG GIA - Lô C3, Cụm CN Cát Nhơn, Xã Xuân An, Gia Lai',
+      ),
+    ).toBe('xuong')
     expect(cachGiao('Xưởng SX Cty TNHH Hoàng Gia - Cụm CN Cát Nhơn, Gia Lai')).toBe(
       'xuong',
     )

@@ -140,7 +140,7 @@ describe('buildPoExcel — khung giống phiếu in', () => {
     expect(
       findCell(
         ws,
-        'Đề nghị Quý công ty fax lại xác nhận thông tin cho công ty chúng tôi. Xin cảm ơn!',
+        'Đề nghị Quý Công ty fax lại xác nhận thông tin cho Công ty chúng tôi. Trân trọng cảm ơn!',
       ),
     ).toBeTruthy()
   })
@@ -258,9 +258,9 @@ describe('buildPoExcel — khớp phiếu in', () => {
     expect(t).toContain('CÔNG TY TNHH SX-TM HOÀNG GIA')
   })
 
-  it('không có đợt → dòng "Hẹn giao"; có đợt → bảng lịch giao, KHÔNG in cả hai', async () => {
+  it('không có đợt → dòng "Dự kiến giao hàng"; có đợt → bảng lịch giao, KHÔNG in cả hai', async () => {
     const one = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header(), supplier: null, lines: [line()] }))) // prettier-ignore
-    expect(one.some((x) => x.startsWith('Hẹn giao: '))).toBe(true)
+    expect(one.some((x) => x.startsWith('Dự kiến giao hàng: '))).toBe(true)
     const two = allText(
       await load(
         await buildPoExcel({
@@ -277,7 +277,7 @@ describe('buildPoExcel — khớp phiếu in', () => {
       ),
     )
     expect(two).toContain('Lịch giao hàng (2 đợt):')
-    expect(two.some((x) => x.startsWith('Hẹn giao: '))).toBe(false)
+    expect(two.some((x) => x.startsWith('Dự kiến giao hàng: '))).toBe(false)
   })
 
   it('khổ giấy theo lựa chọn, co một trang ngang, không đầu/chân trang, có vùng in', async () => {
