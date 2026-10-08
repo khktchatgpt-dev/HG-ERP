@@ -1,7 +1,8 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { FileUp, Plus } from 'lucide-react'
+import Link from 'next/link'
+import { FileSpreadsheet, FileUp, Plus } from 'lucide-react'
 import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
@@ -50,6 +51,23 @@ function Fact({
       <b className={warn && n > 0 ? 'w' : undefined}>{n.toLocaleString('vi-VN')}</b>
     </button>
   )
+}
+
+const EXPORT_URL = '/api/dept/technical/products/sp-excel/export'
+
+/** Bộ lọc đang xem → query cho route xuất Excel (đúng tham số URL của trang). */
+function excelQuery(f: ThuVienFilters): string {
+  const p = new URLSearchParams()
+  if (f.q) p.set('q', f.q)
+  if (f.kh) p.set('kh', f.kh)
+  if (f.loai) p.set('loai', f.loai)
+  if (f.khung) p.set('khung', f.khung)
+  if (f.thieu) p.set('thieu', f.thieu)
+  if (f.kt) p.set('kt', '1')
+  p.set('tt', f.tt)
+  if (f.lenh) p.set('lenh', '1')
+  if (f.mau) p.set('mau', '1')
+  return p.toString()
 }
 
 export function ThuVienScreen({
@@ -137,6 +155,21 @@ export function ThuVienScreen({
         </div>
         {canEdit && (
           <div className="head-r">
+            <details className="dd">
+              <summary className="btn" title="Thêm / cập nhật SP bằng file Excel">
+                <FileSpreadsheet size={14} aria-hidden />
+                <span className="t">Excel</span> ▾
+              </summary>
+              <div className="dd-m">
+                <a href={`${EXPORT_URL}?blank=1`}>Tải file mẫu trống</a>
+                <a
+                  href={`/api/dept/technical/products/sp-excel/export?${excelQuery(filters)}`}
+                >
+                  Xuất SP đang lọc (kèm ảnh)
+                </a>
+                <Link href="/thu-vien/nhap-excel">Nhập file đã sửa…</Link>
+              </div>
+            </details>
             <button
               type="button"
               className="btn"
@@ -334,7 +367,11 @@ export function ThuVienScreen({
               </>
             ) : canEdit ? (
               <>
-                <button type="button" className="btn pri" onClick={() => d.setTaoMoi(true)}>
+                <button
+                  type="button"
+                  className="btn pri"
+                  onClick={() => d.setTaoMoi(true)}
+                >
                   <Plus size={14} aria-hidden />
                   Thêm sản phẩm
                 </button>

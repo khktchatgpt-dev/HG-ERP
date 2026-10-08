@@ -1676,3 +1676,30 @@
 .tv .tv-form input.pick, .tv .tv-form select.pick { height: 30px; font-size: 13px; color: var(--ink); }
 .tv .tv-form .form-foot { margin-top: 4px; flex-wrap: wrap; }
 .tv .btn.del.btn { color: var(--stop); }
+
+/* ── màn nhập Excel: 3 bước + bảng soi ── */
+.tv .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--card); border-bottom: 1px solid var(--line); }
+.tv .step { padding: 10px 14px; border-right: 1px solid var(--hair); min-width: 0; }
+.tv .step:last-child { border-right: 0; }
+.tv .step .n { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; background: var(--ink2); color: var(--card); font-size: 11px; align-items: center; justify-content: center; margin-right: 6px; }
+.tv .step.on .n { background: var(--act); }
+.tv .step b { font-weight: 600; }
+.tv .step p { margin: 4px 0 6px; color: var(--ink3); font-size: 12px; }
+.tv .step .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tv .strip button.metric { font: inherit; }
+.tv .strip .metric.act b { color: var(--act); }
+.tv table.soi td { white-space: nowrap; }
+.tv .diff { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.tv .diff span { background: var(--rev); border: 1px solid var(--hair); padding: 0 5px; font-size: 11px; white-space: nowrap; }
+.tv .diff span.img { background: var(--act-wash); }
+.tv .warn-t { color: var(--warn); font-size: 11px; }
+.tv .thumb { width: 28px; height: 28px; vertical-align: middle; }
+/* nút Excel ▾ ở đầu thư viện */
+.tv details.dd { position: relative; }
+.tv details.dd > summary { list-style: none; cursor: pointer; }
+.tv details.dd > summary::-webkit-details-marker { display: none; }
+.tv details.dd .dd-m { position: absolute; right: 0; top: 32px; z-index: 20; min-width: 220px; background: var(--card); border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); display: flex; flex-direction: column; }
+.tv details.dd .dd-m a { padding: 7px 12px; color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--hair); font-size: 12px; }
+.tv details.dd .dd-m a:last-child { border-bottom: 0; }
+.tv details.dd .dd-m a:hover { background: var(--hover); }
+@container (max-width: 759px) { .tv .steps { grid-template-columns: 1fr; } .tv .step { border-right: 0; border-bottom: 1px solid var(--hair); } }
