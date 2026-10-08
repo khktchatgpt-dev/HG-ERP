@@ -27,6 +27,7 @@ import {
   type ImageBytes,
 } from './sp-excel-workbook'
 import type { SpExcelExportQuery } from './sp-excel.schema'
+import { fitForUpload, thumbJpeg } from './sp-excel-images'
 
 /**
  * THÊM + CẬP NHẬT SP BẰNG EXCEL (09/10/2026) — gác quyền + nối DB + Storage.
@@ -209,11 +210,16 @@ export const spExcelService = {
         const f = p.image_file_id ? byFile.get(p.image_file_id) : null
         if (!f || !['image/png', 'image/jpeg'].includes(f.mime_type)) return
         const buf = await storage.downloadBuffer(f.bucket, f.path)
-        if (buf)
-          images.set(p.id, {
-            buffer: buf,
-            ext: f.mime_type === 'image/png' ? 'png' : 'jpeg',
-          })
+        if (!buf) return
+        // Ảnh THU NHỎ 200 px: cả thư viện với ảnh gốc là 40 MB (đo 09/10). Thu nhỏ hỏng
+        // (file lạ) thì nhúng ảnh gốc, không làm hỏng cả lần xuất.
+        const thumb = await thumbJpeg(buf).catch(() => null)
+        images.set(
+          p.id,
+          thumb
+            ? { buffer: thumb, ext: 'jpeg' }
+            : { buffer: buf, ext: f.mime_type === 'image/png' ? 'png' : 'jpeg' },
+        )
       }),
     )
     const buffer = await buildSpWorkbook(
@@ -308,10 +314,11 @@ export const spExcelService = {
     ): Promise<string | null> => {
       const img = read.images.get(r.row)
       if (!r.newImage || !img) return null
+      const fit = await fitForUpload(img.buffer, img.ext)
       const fileId = await filesService.uploadFromServer(user, {
-        buffer: img.buffer,
-        filename: `${code}.${img.ext === 'png' ? 'png' : 'jpg'}`,
-        mime_type: img.ext === 'png' ? 'image/png' : 'image/jpeg',
+        buffer: fit.buffer,
+        filename: `${code}.${fit.ext === 'png' ? 'png' : 'jpg'}`,
+        mime_type: fit.ext === 'png' ? 'image/png' : 'image/jpeg',
         bucket: 'attachments',
         parent: { kind: 'product', id: productId },
         doc_type: 'image',
