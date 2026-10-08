@@ -1667,3 +1667,12 @@
 .tv .hint-k {
   display: none;
 }
+
+/* ── form gọn trong hộp thoại (tạo SP) ── */
+.tv .tv-form { display: flex; flex-direction: column; gap: 10px; min-width: min(460px, 90vw); }
+.tv .tv-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); }
+.tv .tv-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tv .tv-form .req { color: var(--stop); }
+.tv .tv-form input.pick, .tv .tv-form select.pick { height: 30px; font-size: 13px; color: var(--ink); }
+.tv .tv-form .form-foot { margin-top: 4px; flex-wrap: wrap; }
+.tv .btn.del.btn { color: var(--stop); }

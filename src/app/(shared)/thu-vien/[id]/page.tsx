@@ -19,15 +19,18 @@ import { toHoSoView } from './ho-so.shared'
  */
 export default async function HoSoSanPhamPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ sua?: string }>
 }) {
   const user = await authService.requirePageUser()
-  const { id } = await params
-  const [canEdit, canBom, canPrice] = await Promise.all([
+  const [{ id }, sp] = await Promise.all([params, searchParams])
+  const [canEdit, canBom, canPrice, canRemove] = await Promise.all([
     canEditProducts(user),
     canEditBom(user),
     canAction(user, 'technical.plan_cost.view'),
+    canAction(user, 'technical.product.remove'),
   ])
   let data
   try {
@@ -36,5 +39,15 @@ export default async function HoSoSanPhamPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  return <HoSoScreen d={toHoSoView(data)} canEdit={canEdit} canPrice={canPrice} canBom={canBom} />
+  return (
+    <HoSoScreen
+      d={toHoSoView(data)}
+      canEdit={canEdit}
+      canPrice={canPrice}
+      canBom={canBom}
+      canRemove={canRemove}
+      // Vừa tạo xong (form gọn) → mở thẳng ở chế độ sửa để điền tiếp.
+      batDauSua={sp.sua === '1'}
+    />
+  )
 }

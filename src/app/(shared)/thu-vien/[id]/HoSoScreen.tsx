@@ -14,8 +14,10 @@ import {
   Package,
   PenLine,
   Table2,
+  Trash2,
 } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
+import { api, ApiError } from '@/lib/api'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { HO_SO_O, HO_SO_TEN } from '@/lib/ho-so-sp'
 import { LIFECYCLE_LABEL } from '@/lib/product-lifecycle'
@@ -43,18 +45,42 @@ export function HoSoScreen({
   canEdit,
   canPrice,
   canBom,
+  canRemove = false,
+  batDauSua = false,
 }: {
   d: HoSoView
   canEdit: boolean
   canPrice: boolean
   /** Quyền `technical.bom.save` — sửa dòng định mức tại chỗ. */
   canBom: boolean
+  /** Quyền `technical.product.remove` — nút Xoá ở đầu trang. */
+  canRemove?: boolean
+  /** Mở trang đã ở chế độ sửa (vừa tạo SP mới từ form gọn). */
+  batDauSua?: boolean
 }) {
-  const c = useHoSo({ d, canEdit: canEdit || canBom })
+  const c = useHoSo({ d, canEdit: canEdit || canBom, batDauSua })
   const confirm = useConfirm()
   const [dirtyBom, setDirtyBom] = useState(0)
   const onDirty = useCallback((n: number) => setDirtyBom(n), [])
   const suaDuocTrang = (canEdit || canBom) && !c.khoa
+
+  async function xoaSp() {
+    const ok = await confirm({
+      title: `Xoá sản phẩm "${d.name}"?`,
+      description:
+        'Định mức, đóng gói và file đính kèm của sản phẩm bị xoá theo. SP đang nằm trên báo giá / đơn hàng / mẫu thì không xoá được — dùng "Ngừng dùng". Không hoàn tác được.',
+      tone: 'danger',
+      confirmLabel: 'Xoá',
+    })
+    if (!ok) return
+    try {
+      await api(`/api/dept/technical/products/${d.id}`, { method: 'DELETE' })
+      c.toast.success('Đã xoá', d.code)
+      c.router.push('/thu-vien')
+    } catch (e) {
+      c.toast.error('Không xoá được', e instanceof ApiError ? e.message : 'Có lỗi')
+    }
+  }
 
   async function thoatSua() {
     if (dirtyBom > 0) {
@@ -169,6 +195,17 @@ export function HoSoScreen({
               <Copy size={14} aria-hidden />
               <span className="t">Nhân bản</span>
             </Link>
+          )}
+          {canRemove && !c.khoa && (
+            <button
+              type="button"
+              className="btn del"
+              onClick={() => void xoaSp()}
+              title="Xoá sản phẩm khỏi thư viện"
+            >
+              <Trash2 size={14} aria-hidden />
+              <span className="t">Xoá</span>
+            </button>
           )}
           {suaDuocTrang ? (
             c.cheDoSua ? (

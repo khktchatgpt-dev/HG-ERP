@@ -31,7 +31,16 @@ const SO: ReadonlySet<OSua> = new Set([
 ])
 
 /** State + xử lý của màn Hồ sơ SP: sửa tại chỗ từng ô, ảnh đang xem. */
-export function useHoSo({ d, canEdit }: { d: HoSoView; canEdit: boolean }) {
+export function useHoSo({
+  d,
+  canEdit,
+  batDauSua = false,
+}: {
+  d: HoSoView
+  canEdit: boolean
+  /** Mở trang đã ở chế độ sửa (sau khi tạo SP mới). */
+  batDauSua?: boolean
+}) {
   const router = useRouter()
   const toast = useToast()
   const [dangSua, setDangSua] = useState<OSua | null>(null)
@@ -42,7 +51,7 @@ export function useHoSo({ d, canEdit }: { d: HoSoView; canEdit: boolean }) {
    * được trạng thái chỉnh sửa hay là xem"): tắt = trang chỉ có chữ; bật = ô
    * nhập hiện ra ở phiếu, đóng gói, lưới định mức + dải vàng "Đang sửa".
    */
-  const [cheDoSua, setCheDoSua] = useState(false)
+  const [cheDoSua, setCheDoSua] = useState(batDauSua && canEdit && !d.locked_at)
   /** Hồ sơ đã khoá thì không sửa tại chỗ — nói lý do ngay trên ô. */
   const khoa = !!d.locked_at
   const suaDuoc = canEdit && !khoa && cheDoSua

@@ -101,6 +101,7 @@ export function useThuVien({
 
   // ── hộp thoại ──
   const [fromBom, setFromBom] = useState(false)
+  const [taoMoi, setTaoMoi] = useState(false)
   const [preview, setPreview] = useState<{ row: LibraryRow; url: string } | null>(null)
   const [cloning, setCloning] = useState<Product | null>(null)
   const [cloneCode, setCloneCode] = useState('')
@@ -246,6 +247,8 @@ export function useThuVien({
     doiXem,
     fromBom,
     setFromBom,
+    taoMoi,
+    setTaoMoi,
     preview,
     setPreview,
     cloning,

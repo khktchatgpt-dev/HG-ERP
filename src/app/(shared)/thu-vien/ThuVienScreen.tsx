@@ -1,7 +1,6 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import Link from 'next/link'
 import { FileUp, Plus } from 'lucide-react'
 import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { TopProgressBar } from '@/components/erp/Spinner'
@@ -12,6 +11,7 @@ import { CloneForm } from '../products/_components/CloneForm'
 import { ImagePreviewModal } from '../products/_components/ImagePreviewModal'
 import { BangThuVien } from './thu-vien-bang'
 import { LuoiThuVien } from './thu-vien-luoi'
+import { TaoSp } from './tao-sp'
 import {
   PAGE_SIZE,
   type LibraryCounts,
@@ -146,10 +146,15 @@ export function ThuVienScreen({
               <FileUp size={14} aria-hidden />
               <span className="t">Tạo từ file BOM</span>
             </button>
-            <Link href="/products/new" className="btn pri" title="Thêm sản phẩm">
+            <button
+              type="button"
+              className="btn pri"
+              title="Thêm sản phẩm"
+              onClick={() => d.setTaoMoi(true)}
+            >
               <Plus size={14} aria-hidden />
               <span className="t">Thêm sản phẩm</span>
-            </Link>
+            </button>
           </div>
         )}
       </header>
@@ -329,9 +334,10 @@ export function ThuVienScreen({
               </>
             ) : canEdit ? (
               <>
-                <Link href="/products/new" className="btn pri">
-                  + Thêm sản phẩm
-                </Link>
+                <button type="button" className="btn pri" onClick={() => d.setTaoMoi(true)}>
+                  <Plus size={14} aria-hidden />
+                  Thêm sản phẩm
+                </button>
                 <button type="button" className="btn" onClick={() => d.setFromBom(true)}>
                   Tạo từ file BOM
                 </button>
@@ -391,6 +397,7 @@ export function ThuVienScreen({
       </div>
 
       {d.fromBom && <BomAiNewProduct onClose={() => d.setFromBom(false)} />}
+      <TaoSp open={d.taoMoi} onClose={() => d.setTaoMoi(false)} customers={customers} />
       <ImagePreviewModal
         preview={d.preview ? { product: d.preview.row, url: d.preview.url } : null}
         onClose={() => d.setPreview(null)}
