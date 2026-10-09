@@ -399,10 +399,8 @@ export function PoPrintSheet({
         refsBoxed
         refs={[
           ['Số ĐH :', <b key="c">{po.code}</b>],
-          // Bản điều chỉnh sau khi gửi NCC — NCC phân biệt được tờ nào hiệu lực.
-          ...(po.revision_label
-            ? ([['Điều chỉnh:', <b key="rv">{po.revision_label}</b>]] as [string, React.ReactNode][]) // prettier-ignore
-            : []),
+          // Dòng "Điều chỉnh: lần N · ngày" BỎ 09/10/2026 (user chốt) — phiếu NCC chỉ
+          // cần bản hiện hành; lịch sử điều chỉnh xem trên đơn.
           // Trong KHUNG chỉ giữ dòng có giá trị — ô "Theo HD số:" trống mà vẫn
           // đóng khung thì thành một ngăn rỗng vô nghĩa trên phiếu.
           ...(po.contract_no

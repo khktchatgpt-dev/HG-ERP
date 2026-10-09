@@ -400,7 +400,7 @@ export async function buildPoExcel(input: {
   // Khung Số ĐH / LSX bên phải — mỗi dòng một ngăn, kẻ viền như mẫu.
   const refs: string[] = [
     `Số ĐH : ${po.code}`,
-    ...(po.revision_label ? [`Điều chỉnh: ${po.revision_label}`] : []),
+    // Dòng "Điều chỉnh" BỎ 09/10/2026 — cùng nhịp với phiếu in.
     ...(po.contract_no ? [`Theo HD số: ${po.contract_no}`] : []),
     ...(po.lsx_code ? [`LSX ${po.lsx_code}`] : []),
     // Dòng "Đơn hàng" BỎ 02/10/2026 (user chốt) — cùng nhịp với phiếu in.
