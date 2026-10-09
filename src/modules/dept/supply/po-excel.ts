@@ -113,6 +113,12 @@ function excelColumns(
   const moneyFmt = currencyDecimals(currency) > 0 ? '#,##0.00' : '#,##0'
   const fixed: Record<string, XCol> = {
     '@stt': { label: 'STT', width: 5, align: 'center', value: (_l, i) => i + 1 },
+    '@code': {
+      label: 'Mã sản phẩm',
+      width: 12,
+      align: 'center',
+      value: (l) => l.material_code,
+    },
     '@name': {
       label: 'Tên sản phẩm / vật tư',
       width: 24,

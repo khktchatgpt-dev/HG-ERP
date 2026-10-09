@@ -439,6 +439,8 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   // SL đặt — NCC đọc được vì sao đặt từng ấy kg (200 ghế × 5,9 = 1.180).
   rattan: [
     '@stt',
+    // Mã hàng của NCC (S.H.T đặt theo mã SHT 96/97 — mã vật tư đã đổi theo, 09/10/2026).
+    '@code',
     '@name',
     'spec',
     'lsx',

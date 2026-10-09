@@ -108,6 +108,7 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   // mây theo form Vipora (Định mức đứng sau tiền), sơn theo form Green Coatings.
   rattan: [
     'STT',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'SL theo LSX',
@@ -218,6 +219,7 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
 function nhanCot(t: PoTemplate): string[] {
   const CO_DINH: Record<string, string> = {
     '@stt': 'STT',
+    '@code': 'Mã sản phẩm',
     '@name': 'Tên sản phẩm / vật tư',
     '@unit': 'ĐVT',
     '@price': 'Đơn giá (VND)',

@@ -202,6 +202,8 @@ function columnsFor(
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
   const fixed: Record<string, Col> = {
     '@stt': colStt,
+    // Mã vật tư danh mục — mẫu nào khai '@code' thì NCC đặt hàng theo mã (mây S.H.T).
+    '@code': { label: 'Mã sản phẩm', cell: (l) => l.material_code },
     '@name': colName,
     '@unit': colUnit,
     '@orderdate': { label: 'Ngày đặt hàng', cell: () => dmy(ctx.orderDate) },
