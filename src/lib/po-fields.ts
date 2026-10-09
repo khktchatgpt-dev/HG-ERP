@@ -448,7 +448,8 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@qty',
     '@price',
     '@amount',
-    'dinhmuc',
+    // Cột "Định mức" chữ (barem g/5m) BỎ khỏi phiếu 09/10/2026 — đứng cạnh "Định mức SP"
+    // thành hai cột cùng tên; ô vẫn còn trên form ("Quy cách định mức").
     '@note',
   ],
   // Sơn theo form Dosa/Việt Sapa: mã màu NCC đứng cạnh tên. Hai cột "Ngày đặt ·

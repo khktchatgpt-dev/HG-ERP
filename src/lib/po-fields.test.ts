@@ -117,7 +117,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'SL đặt',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
-    'Định mức',
     'Ghi chú',
   ],
   paint: [
@@ -378,7 +377,7 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
     accessory: ['unit2'],
     aluminium: ['demand'],
     carton: ['demand', 'onhand', 'basis'],
-    rattan: ['onhand', 'unit2'],
+    rattan: ['dinhmuc', 'onhand', 'unit2'],
     paint: ['demand', 'onhand', 'unit2'],
     chemical: ['demand', 'onhand', 'unit2'],
     foam: ['dims', 'basis', 'demand', 'dm', 'onhand'],
