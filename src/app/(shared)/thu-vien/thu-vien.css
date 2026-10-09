@@ -2571,3 +2571,230 @@
 .tv .hs table.xl input.cell::placeholder {
   color: #6b7280;
 }
+/* ══════════════════════════════════════════════════════════════════════
+   HỒ SƠ SP — KHUÔN ERP PHẲNG (09/10/2026, chủ dự án: "cho hồ sơ sản phẩm cũng
+   theo khuôn ERP phẳng luôn"): cùng hệ với /thu-vien và /thu-vien/lenh — không
+   thẻ bo góc, không bóng; khối ngăn nhau bằng vạch mảnh, sát mép; ô đếm vuông;
+   tab gạch chân; nút và nhãn góc vuông. Giữ nguyên cấu trúc và màu icon theo phần.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv .hs {
+  padding: 0;
+  gap: 0;
+  background: var(--card);
+}
+.tv .hs .card {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.tv .hs .head {
+  padding: 8px 14px 8px;
+}
+.tv .hs h1 {
+  font-size: 16px;
+}
+.tv .hs .crumb {
+  margin-bottom: 1px;
+}
+.tv .hs .chip {
+  border-radius: 3px;
+  height: 20px;
+  font-size: 11px;
+}
+.tv .hs .chip.code {
+  border-radius: 3px;
+}
+.tv .hs .pill {
+  border-radius: 3px;
+  height: 20px;
+  font-size: 10.5px;
+}
+.tv .hs .btn {
+  border-radius: 3px;
+  height: 26px;
+}
+.tv .hs .btn.pri {
+  background: var(--act);
+  border-color: var(--act);
+}
+.tv .hs .btn.pri:hover {
+  background: var(--act-text);
+}
+.tv .hs .btn.out {
+  background: var(--card);
+  color: var(--act);
+  border-color: var(--act-line);
+}
+/* ô đếm vuông, ngăn bằng vạch, nhãn trên số dưới */
+.tv .hs .stats {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  border-top: 1px solid var(--line);
+  background: var(--raised);
+}
+.tv .hs .stat {
+  padding: 6px 14px;
+  border-right: 1px solid var(--line);
+  gap: 8px;
+}
+.tv .hs .stat .ic {
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+}
+.tv .hs .stat .ic svg {
+  width: 15px;
+  height: 15px;
+}
+.tv .hs .stat b {
+  font-size: 16px;
+}
+.tv .hs .warnbar {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  margin: 0;
+  padding: 6px 14px;
+}
+.tv .hs .editbar {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+/* ảnh + thông số: hai khối cạnh nhau, ngăn bằng vạch dọc */
+.tv .hs .two {
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.tv .hs .two .card {
+  border-bottom: 0;
+}
+.tv .hs .two .photo {
+  border-right: 1px solid var(--line);
+  padding: 10px 14px;
+}
+.tv .hs .photo .big {
+  border-radius: 0;
+}
+.tv .hs .thumbs button,
+.tv .hs .thumbs .add {
+  border-radius: 0;
+}
+.tv .hs .card-h {
+  padding: 6px 14px;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs .ic-sec {
+  border-radius: 2px;
+  width: 20px;
+  height: 20px;
+}
+.tv .hs .pad {
+  padding: 0;
+}
+.tv .hs table.xl {
+  border-collapse: collapse;
+}
+.tv .hs table.xl td {
+  border-left: 0;
+}
+.tv .hs table.xl td:last-child {
+  border-right: 0;
+}
+.tv .hs table.xl tr:last-child td {
+  border-bottom: 0;
+}
+.tv .hs table.xl input.cell {
+  border-radius: 2px;
+}
+/* tab gạch chân, phẳng */
+.tv .hs .tabs {
+  padding: 0 8px;
+  gap: 0;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs .tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 8px 12px;
+  background: transparent;
+}
+.tv .hs .tab .n {
+  border-radius: 2px;
+}
+.tv .hs .tab.on {
+  background: var(--card);
+  border: 0;
+  border-bottom: 2px solid var(--c-ts);
+  margin-bottom: -1px;
+}
+.tv .hs .tab.sec-dm.on {
+  border-bottom-color: var(--c-dm);
+}
+.tv .hs .tab.sec-dg.on {
+  border-bottom-color: var(--c-dg);
+}
+.tv .hs .tab.sec-tl.on {
+  border-bottom-color: var(--c-tl);
+}
+.tv .hs .tab.sec-ls.on {
+  border-bottom-color: var(--c-ls);
+}
+.tv .hs .tabs .hint {
+  padding: 0 6px;
+}
+.tv .hs .ph {
+  padding: 6px 14px;
+  background: var(--raised);
+}
+.tv .hs .bar {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.tv .hs .bar .chip {
+  border-radius: 3px;
+  height: 24px;
+}
+/* lưới định mức sát mép, kẻ ô */
+.tv .hs table.luoi {
+  margin: 0;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs table.luoi th:first-child,
+.tv .hs table.luoi td:first-child {
+  border-left: 0;
+}
+.tv .hs table.luoi th:last-child,
+.tv .hs table.luoi td:last-child {
+  border-right: 0;
+}
+.tv .hs .why {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--hair);
+  border-radius: 0;
+  background: var(--raised);
+  padding: 6px 14px;
+}
+.tv .hs .savebar {
+  border-radius: 0;
+}
+.tv .hs .form {
+  border-radius: 0;
+}
+.tv .hs .panel table:not(.luoi) th {
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs .panel .pad {
+  padding: 10px 14px;
+}
