@@ -23,11 +23,16 @@ export function LenhScreen({ lenh, all }: { lenh: LsxHoSo[]; all: boolean }) {
   const [chiThieu, setChiThieu] = useState(true)
   const [q, setQ] = useState('')
   const [kh, setKh] = useState('')
+  const [maLenh, setMaLenh] = useState('')
+  /** Xuất trong N ngày tới (0 = mọi lệnh). */
+  const [xuat, setXuat] = useState(0)
   const [now] = useState(() => Date.now())
 
   const khach = [
     ...new Set(lenh.map((l) => l.customer).filter((v): v is string => !!v)),
   ].sort()
+  const conNgay = (s: string | null) =>
+    s ? Math.round((new Date(s).getTime() - now) / 86_400_000) : null
   const thieuCua = (r: LsxHoSoLine) => r.thieu.length > 0 || r.thieu_so > 0
   const khop = (r: LsxHoSoLine) => {
     if (loc === 'bom') return r.thieu.includes('bom')
@@ -41,6 +46,12 @@ export function LenhScreen({ lenh, all }: { lenh: LsxHoSo[]; all: boolean }) {
   const qq = q.trim().toLowerCase()
   const hien = lenh
     .filter((l) => !kh || l.customer === kh)
+    .filter((l) => !maLenh || l.id === maLenh)
+    .filter((l) => {
+      if (!xuat) return true
+      const d = conNgay(l.ship_date)
+      return d != null && d <= xuat
+    })
     .map((l) => ({
       ...l,
       rows: l.lines.filter(
@@ -65,8 +76,6 @@ export function LenhScreen({ lenh, all }: { lenh: LsxHoSo[]; all: boolean }) {
     { sp: 0, bom: 0, so: 0, bv: 0, dg: 0, anh: 0, du: 0 },
   )
   const hienSp = hien.reduce((a, l) => a + l.rows.length, 0)
-  const conNgay = (s: string | null) =>
-    s ? Math.round((new Date(s).getTime() - now) / 86_400_000) : null
   return (
     <>
       <header className="head">
@@ -138,6 +147,60 @@ export function LenhScreen({ lenh, all }: { lenh: LsxHoSo[]; all: boolean }) {
             </option>
           ))}
         </select>
+        <select
+          className="pick"
+          value={maLenh}
+          onChange={(e) => setMaLenh(e.target.value)}
+          aria-label="Lệnh"
+        >
+          <option value="">Mọi lệnh ({lenh.length})</option>
+          {lenh.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.code}
+            </option>
+          ))}
+        </select>
+        <select
+          className="pick"
+          value={xuat}
+          onChange={(e) => setXuat(Number(e.target.value))}
+          aria-label="Xuất trong"
+        >
+          <option value={0}>Mọi ngày xuất</option>
+          <option value={7}>Xuất trong 7 ngày</option>
+          <option value={14}>Xuất trong 14 ngày</option>
+          <option value={30}>Xuất trong 30 ngày</option>
+          <option value={60}>Xuất trong 60 ngày</option>
+        </select>
+        <select
+          className="pick"
+          value={loc}
+          onChange={(e) => setLoc(e.target.value as Loc)}
+          aria-label="Còn thiếu"
+        >
+          <option value="">Còn thiếu: bất kỳ</option>
+          <option value="bom">Chưa có định mức</option>
+          <option value="so">Định mức thiếu số</option>
+          <option value="bv">Thiếu bản vẽ</option>
+          <option value="dg">Thiếu đóng gói / xếp cont</option>
+          <option value="anh">Thiếu ảnh</option>
+          <option value="du">Đã đủ hồ sơ</option>
+        </select>
+        {(q || kh || maLenh || xuat || loc) && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setQ('')
+              setKh('')
+              setMaLenh('')
+              setXuat(0)
+              setLoc('')
+            }}
+          >
+            Bỏ lọc
+          </button>
+        )}
         <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>
           Sắp theo ngày xuất gần nhất · bấm dữ kiện ở đầu trang để lọc theo thứ còn thiếu
         </span>
