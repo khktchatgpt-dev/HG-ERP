@@ -110,8 +110,11 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'STT',
     'Tên sản phẩm / vật tư',
     'Quy cách',
+    'SL theo LSX',
+    'Định mức SP',
+    'SL đơn hàng',
     'ĐVT',
-    'Số lượng',
+    'SL đặt',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Định mức',
@@ -375,7 +378,7 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
     accessory: ['unit2'],
     aluminium: ['demand'],
     carton: ['demand', 'onhand', 'basis'],
-    rattan: ['lsx', 'dm', 'demand', 'onhand', 'unit2'],
+    rattan: ['onhand', 'unit2'],
     paint: ['demand', 'onhand', 'unit2'],
     chemical: ['demand', 'onhand', 'unit2'],
     foam: ['dims', 'basis', 'demand', 'dm', 'onhand'],
@@ -459,5 +462,19 @@ describe('phiếu in xốp — m³/tấm + Tổng m³ (09/10/2026)', () => {
     )
     // Dòng theo m³ có qty2 đã lưu (kể cả số gõ đè theo tờ NCC) — in đúng số đó.
     expect(poFieldText(poField('foam', 'm3total')!, { ...relax, qty2: 4.7 })).toBe('4,7')
+  })
+})
+
+describe('phiếu in mây — SL theo LSX · Định mức SP · SL đơn hàng (09/10/2026)', () => {
+  // PO-2026-0154: 200 ghế relax xám × 5,9 kg = 1.180 kg; đặt thật 1.000 kg.
+  const may = { material_unit: 'Kg', qty_ordered: 1000, qty_demand: 1180, dm_per_sp: 5.9 }
+  it('SL theo LSX không lưu DB — tính ngược SL đơn hàng ÷ Định mức SP', () => {
+    expect(poFieldText(poField('rattan', 'lsx')!, may)).toBe('200')
+    expect(poFieldText(poField('rattan', 'dm')!, may)).toBe('5,9')
+    expect(poFieldText(poField('rattan', 'demand')!, may)).toBe('1.180')
+  })
+  it('thiếu định mức thì ô SL theo LSX trống, không chia cho 0', () => {
+    expect(poFieldText(poField('rattan', 'lsx')!, { ...may, dm_per_sp: null })).toBe('')
+    expect(poFieldText(poField('rattan', 'lsx')!, { ...may, qty_demand: null })).toBe('')
   })
 })

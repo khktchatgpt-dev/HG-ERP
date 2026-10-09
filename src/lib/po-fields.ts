@@ -57,8 +57,8 @@ export type PoField = {
   editHidden?: boolean
   /**
    * Ô CHỈ Ở TRÌNH DUYỆT — `field` là khoá của dòng trên form nhưng không có cột DB
-   * (vd "SL theo LSX" của mẫu mây, tính ngược từ SL đơn hàng ÷ Định mức). Không in,
-   * không gửi lên server.
+   * (vd "SL theo LSX" của mẫu mây, tính ngược từ SL đơn hàng ÷ Định mức). Không gửi
+   * lên server; phiếu in tính lại bằng `poLsxQty`.
    */
   clientOnly?: boolean
   /**
@@ -435,10 +435,15 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@note',
   ],
   // Mây theo form Vipora: … Mã số · ĐVT · SL · giá · tiền · ĐỊNH MỨC · ghi chú.
+  // 09/10/2026 (PO-2026-0154): in cả SL theo LSX · Định mức SP · SL đơn hàng trước
+  // SL đặt — NCC đọc được vì sao đặt từng ấy kg (200 ghế × 5,9 = 1.180).
   rattan: [
     '@stt',
     '@name',
     'spec',
+    'lsx',
+    'dm',
+    'demand',
     '@unit',
     '@qty',
     '@price',
@@ -534,7 +539,8 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   // "Số thùng" → "Số lượng" (12/08/2026) — bao bì có 24 ĐVT (Tấm/Cuộn/Kg…),
   // đơn vị thật nói ở cột ĐVT ngay trước.
   carton: 'Số lượng',
-  rattan: 'Số lượng',
+  // Đứng cạnh "SL đơn hàng" (09/10/2026) — gọi "Số lượng" thì hai cột cùng nghĩa.
+  rattan: 'SL đặt',
   paint: 'Số lượng',
   chemical: 'Số lượng',
   foam: 'Số lượng',
@@ -719,6 +725,19 @@ export type PoFieldLine = {
   inner_h_mm?: number | null
   /** SL đặt — để tính Tổng m³ xốp khi dòng theo tấm (đơn không lưu qty2). */
   qty_ordered?: number | null
+  /** Mẫu mây: SL theo LSX = SL đơn hàng ÷ Định mức SP (`poLsxQty`). */
+  qty_demand?: number | null
+  dm_per_sp?: number | null
+}
+
+/** SL theo LSX của mẫu mây — không lưu DB, tính ngược SL đơn hàng ÷ Định mức SP. */
+export function poLsxQty(
+  l: Pick<PoFieldLine, 'qty_demand' | 'dm_per_sp'>,
+): number | null {
+  const d = Number(l.qty_demand)
+  const m = Number(l.dm_per_sp)
+  if (l.qty_demand == null || !(m > 0)) return null
+  return Math.round((d / m) * 1000) / 1000
 }
 
 const fmtVi = (n: number | null | undefined) =>
@@ -739,6 +758,7 @@ export function poFieldText(f: PoField, l: PoFieldLine): string {
       return (v as string | null) ?? ''
     case 'number':
     case 'area':
+      if (f.field === 'qty_lsx') return fmtVi(poLsxQty(l))
       return fmtVi(v as number | null)
     case 'calc': {
       // Xốp tính tiền theo TẤM thì đơn không lưu tổng quy đổi — Tổng m³ trên phiếu

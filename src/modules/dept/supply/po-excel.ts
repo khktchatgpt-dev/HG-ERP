@@ -13,6 +13,7 @@ import {
   PO_PRINT_ORDER,
   PO_PRINT_QTY_LABEL,
   poField,
+  poLsxQty,
   poPriceSuffix,
   poPriceUnitPerLine,
 } from '@/lib/po-fields'
@@ -198,6 +199,8 @@ function excelColumns(
     switch (f.kind) {
       case 'number':
       case 'area':
+        if (f.field === 'qty_lsx')
+          return { ...base, num: true, value: (l) => poLsxQty(l) }
         return { ...base, num: true, value: (l) => nOrNull(get(l) as number | null) }
       case 'calc':
         return {
