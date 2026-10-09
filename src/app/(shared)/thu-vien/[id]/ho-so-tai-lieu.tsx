@@ -7,6 +7,7 @@ import { DOC_TYPE_LABEL, type DocType } from '@/lib/file-limits'
 import { uploadFileTracked } from '@/lib/upload'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { dmyShort, type HoSoView } from './ho-so.shared'
+import { OTxt } from './ho-so-o'
 import type { HoSoCtx } from './useHoSo'
 
 /** Loại tài liệu của HỒ SƠ SP (thứ tự hiện) — theo checklist: bản vẽ, BOM, đóng gói… */
@@ -71,6 +72,15 @@ export function HoSoTaiLieu({
     setTienDo(null)
     if (inputRef.current) inputRef.current.value = ''
     c.router.refresh()
+  }
+
+  async function luuGhiChu(f: HoSoView['files'][number], raw: string) {
+    try {
+      await api(`/api/files/${f.id}`, { method: 'PATCH', body: { rev: f.rev ?? null, note: raw.trim() || null } })
+      c.router.refresh()
+    } catch (e) {
+      c.toast.error('Chưa lưu ghi chú', e instanceof ApiError ? e.message : 'Có lỗi')
+    }
   }
 
   async function taiVe(id: string, name: string) {
@@ -170,6 +180,7 @@ export function HoSoTaiLieu({
               <th>Tên file</th>
               <th className="num c-md">Dung lượng</th>
               <th className="c-md">Ngày</th>
+              <th>Ghi chú</th>
               <th style={{ width: 60 }}>
                 <span className="sr">Thao tác</span>
               </th>
@@ -178,7 +189,7 @@ export function HoSoTaiLieu({
           {order.map((k) => (
             <tbody key={k}>
               <tr className="grp">
-                <th scope="rowgroup" colSpan={5}>
+                <th scope="rowgroup" colSpan={6}>
                   {DOC_TYPE_LABEL[k as DocType] ?? k}{' '}
                   <span className="n">{byLoai.get(k)?.length ?? 0} file</span>
                 </th>
@@ -191,6 +202,9 @@ export function HoSoTaiLieu({
                   <td title={f.filename}>{f.filename}</td>
                   <td className="num c-md">{kb(f.size_bytes)}</td>
                   <td className="num c-md">{dmyShort(f.created_at)}</td>
+                  <td style={{ whiteSpace: 'normal', minWidth: 140 }}>
+                    <OTxt sua={canEdit && c.suaDuoc} value={f.note ?? ''} ph="ghi chú…" onSave={(v) => luuGhiChu(f, v)} />
+                  </td>
                   <td>
                     <span style={{ display: 'inline-flex', gap: 4 }}>
                       <button

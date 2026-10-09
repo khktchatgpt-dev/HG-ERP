@@ -35,6 +35,8 @@ export type HoSoFile = {
   created_at: string
   mime_type: string
   size_bytes: number
+  rev: string | null
+  note: string | null
 }
 
 export type HoSoRevision = {
@@ -184,6 +186,8 @@ export const profileService = {
         created_at: f.created_at,
         mime_type: f.mime_type,
         size_bytes: f.size_bytes,
+        rev: f.rev,
+        note: f.note,
       })),
       revisions: revisions.map((r) => {
         const snap = (r.fields_snapshot ?? {}) as { from?: string; to?: string }

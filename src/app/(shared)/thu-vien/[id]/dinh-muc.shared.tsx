@@ -160,7 +160,7 @@ export const COLS: Col[] = [
   { key: 'tong', label: 'Tổng dài (m)', w: 70, tier: 'md', num: true, group: 'fx' },
   { key: 'kg', label: 'kg', w: 62, tier: 'sm', num: true, group: 'fx' },
   { key: 'm2', label: 'm² sơn', w: 62, tier: 'lg', num: true, group: 'fx' },
-  { key: 'note', label: 'Ghi chú', w: 130, tier: 'xl' },
+  { key: 'note', label: 'Ghi chú', w: 150, tier: 'sm' },
   { key: 'phoi', label: 'Phôi', w: 38, tier: 'xl', title: 'Xưởng phôi đã xác nhận' },
   { key: 'act', label: '', w: 30, tier: 'sm' },
 ]

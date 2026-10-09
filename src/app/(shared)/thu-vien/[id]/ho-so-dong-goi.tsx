@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { SuaPhuongAn } from './ho-so-dong-goi-sua'
 import { nz, type HoSoView } from './ho-so.shared'
+import { OTxt, soVn } from './ho-so-o'
 import type { HoSoCtx } from './useHoSo'
 
 /**
@@ -54,12 +55,69 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
       hc: o.loading_40hc,
       def: o.is_default,
       kien: o.packages.length,
+      note: o.note,
+      l,
+      w,
+      h,
     }
   })
   const gmJ =
     j.carton_l_cm && j.carton_w_cm && j.carton_h_cm
       ? j.carton_l_cm + 2 * j.carton_w_cm + 2 * j.carton_h_cm
       : null
+
+  /**
+   * Sửa TẠI CHỖ một ô của phương án (chế độ sửa): nhãn, cái/thùng, xếp cont, ghi
+   * chú ghi thẳng; kích thước / NW / GW ghi vào KIỆN ĐẦU (phương án nhiều kiện
+   * thì sửa bằng nút ✎). Số nhận kiểu VN.
+   */
+  async function luuOpt(
+    r: (typeof rows)[number],
+    patch: Record<string, string | number | null>,
+  ): Promise<boolean> {
+    setBusyRow(r.id)
+    try {
+      await api(`/api/dept/technical/products/${d.id}/packing/${r.id}`, {
+        method: 'PATCH',
+        body: patch,
+      })
+      c.router.refresh()
+      return true
+    } catch (e) {
+      c.toast.error('Chưa lưu được', e instanceof ApiError ? e.message : 'Có lỗi')
+      return false
+    } finally {
+      setBusyRow(null)
+    }
+  }
+  const soHoacBao = (raw: string): number | null | false => {
+    const n = soVn(raw)
+    if (n === undefined) {
+      c.toast.error('Số không hợp lệ', `"${raw}" — gõ số, ví dụ 62 hoặc 10,5`)
+      return false
+    }
+    return n
+  }
+  /** Kiện đầu, thay một trường (cm → mm với kích thước). */
+  const luuKien = (r: (typeof rows)[number], k: string, raw: string, cm = false) => {
+    const n = soHoacBao(raw)
+    if (n === false) return
+    const p = r.o.packages[0]
+    const mm = (v: number | null | undefined) => (v == null ? null : cm ? Math.round(v * 10) : v)
+    void luuOpt(r, {
+      packages: [
+        {
+          package_label: p?.package_label ?? 'Thùng',
+          qty: p?.qty ?? 1,
+          carton_l_mm: k === 'l' ? mm(n) : (p?.carton_l_mm ?? null),
+          carton_w_mm: k === 'w' ? mm(n) : (p?.carton_w_mm ?? null),
+          carton_h_mm: k === 'h' ? mm(n) : (p?.carton_h_mm ?? null),
+          net_weight_kg: k === 'nw' ? n : (p?.net_weight_kg ?? null),
+          gross_weight_kg: k === 'gw' ? n : (p?.gross_weight_kg ?? null),
+        },
+      ] as never,
+    })
+  }
 
   async function datMacDinh(id: string, no: number) {
     setBusyRow(id)
@@ -147,6 +205,7 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
               <th className="num c-lg">Fedex (in)</th>
               <th className="num c-sm">40HC</th>
               <th className="c-sm">Mặc định</th>
+              <th>Ghi chú</th>
               <th style={{ width: 84 }}>
                 <span className="sr">Thao tác</span>
               </th>
@@ -158,26 +217,57 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
                 <tr className={cn(sua === r.id && 'sel')}>
                   <td className="num">{r.no}</td>
                   <td>
-                    {r.label}
+                    {c.suaDuoc ? (
+                      <OTxt sua value={r.o.label ?? ''} ph="tên phương án" w={150} onSave={(v) => luuOpt(r, { label: v.trim() || null })} />
+                    ) : (
+                      r.label
+                    )}
                     {r.kien > 1 && (
                       <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
                         {r.kien} kiện
                       </span>
                     )}
                   </td>
-                  <td className="num">{r.cai ?? '—'}</td>
-                  <td className="num">{r.kt || '—'}</td>
-                  <td className="num c-md">{r.nw != null ? nz(r.nw, 1) : '—'}</td>
-                  <td className="num c-md">{r.gw != null ? nz(r.gw, 1) : '—'}</td>
+                  <td className="num">
+                    <OTxt sua={c.suaDuoc} num value={r.cai != null ? String(r.cai) : ''} show={r.cai != null ? nz(r.cai, 0) : ''} w={44} onSave={(v) => { const n = soHoacBao(v); if (n !== false) void luuOpt(r, { cartons_per_set: n }) }} />
+                  </td>
+                  <td className="num">
+                    {c.suaDuoc && r.kien <= 1 ? (
+                      <span className="dims" style={{ justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
+                        <OTxt sua num value={r.l != null ? String(r.l).replace('.', ',') : ''} ph="D" w={44} onSave={(v) => luuKien(r, 'l', v, true)} />
+                        <span className="muted">×</span>
+                        <OTxt sua num value={r.w != null ? String(r.w).replace('.', ',') : ''} ph="R" w={44} onSave={(v) => luuKien(r, 'w', v, true)} />
+                        <span className="muted">×</span>
+                        <OTxt sua num value={r.h != null ? String(r.h).replace('.', ',') : ''} ph="C" w={44} onSave={(v) => luuKien(r, 'h', v, true)} />
+                      </span>
+                    ) : (
+                      <span title={r.kien > 1 ? 'Nhiều kiện — sửa bằng nút ✎' : undefined}>{r.kt || '—'}</span>
+                    )}
+                  </td>
+                  <td className="num c-md">
+                    {c.suaDuoc && r.kien <= 1 ? (
+                      <OTxt sua num value={r.nw != null ? String(r.nw).replace('.', ',') : ''} w={52} onSave={(v) => luuKien(r, 'nw', v)} />
+                    ) : r.nw != null ? nz(r.nw, 1) : '—'}
+                  </td>
+                  <td className="num c-md">
+                    {c.suaDuoc && r.kien <= 1 ? (
+                      <OTxt sua num value={r.gw != null ? String(r.gw).replace('.', ',') : ''} w={52} onSave={(v) => luuKien(r, 'gw', v)} />
+                    ) : r.gw != null ? nz(r.gw, 1) : '—'}
+                  </td>
                   <td className="num c-lg">{r.gm != null ? nz(r.gm, 0) : '—'}</td>
                   <td className="num c-lg">{r.gm != null ? nz(r.gm / 2.54, 1) : '—'}</td>
-                  <td className="num c-sm">{r.hc ?? '—'}</td>
+                  <td className="num c-sm">
+                    <OTxt sua={c.suaDuoc} num value={r.hc != null ? String(r.hc) : ''} show={r.hc != null ? nz(r.hc, 0) : ''} w={52} onSave={(v) => { const n = soHoacBao(v); if (n !== false) void luuOpt(r, { loading_40hc: n }) }} />
+                  </td>
                   <td className="c-sm">
                     {r.def ? (
                       <span className="st run">Đang dùng</span>
                     ) : (
                       <span className="muted">—</span>
                     )}
+                  </td>
+                  <td style={{ whiteSpace: 'normal', minWidth: 140 }}>
+                    <OTxt sua={c.suaDuoc} value={r.note ?? ''} ph="ghi chú…" onSave={(v) => luuOpt(r, { note: v.trim() || null })} />
                   </td>
                   <td>
                     {c.suaDuoc && (
@@ -221,7 +311,7 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
                 {sua === r.id && (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={12}
                       style={{ padding: 0, whiteSpace: 'normal', height: 'auto' }}
                     >
                       <SuaPhuongAn
@@ -268,7 +358,10 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
               <td className="num">
                 <OSo c={c} k="loading_40hc" v={j.loading_40hc} digits={0} />
               </td>
-              <td className="muted c-sm">
+              <td style={{ whiteSpace: 'normal', minWidth: 140 }}>
+                <OTxt sua={c.suaDuoc} value={j.note ?? ''} ph="ghi chú…" onSave={(v) => c.luuPacking({ note: v.trim() || null })} />
+              </td>
+              <td className="muted c-sm" style={{ order: -1 }}>
                 {rows.length ? (
                   'dự phòng'
                 ) : coJson ? (
@@ -282,7 +375,7 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={11} style={{ fontWeight: 400 }}>
+              <td colSpan={12} style={{ fontWeight: 400 }}>
                 GM = D + 2R + 2C · Fedex = GM ÷ 2,54 — tính khi hiển thị, không lưu. Số
                 cont do Kỹ thuật khai, không suy từ kích thước. Dòng “Đang dùng” = phương
                 án in lên báo giá và lệnh.

@@ -40,6 +40,7 @@ export function toHoSoView(d: HoSoData) {
     material: p.material,
     hs_code: p.hs_code,
     origin_country: p.origin_country,
+    notes: p.notes,
     // Lộ trình công đoạn nằm ở cụm (`first_stage`/`final_stage`), chưa có trên SP → để trống.
     stage_route: null as string[] | null,
     tech_spec: {
@@ -104,6 +105,7 @@ export function toHoSoView(d: HoSoData) {
       nw_kg?: number
       gw_kg?: number
       cbm?: number
+      note?: string
     },
     revisions: d.revisions,
   }

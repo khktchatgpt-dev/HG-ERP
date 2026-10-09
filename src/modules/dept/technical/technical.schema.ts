@@ -27,6 +27,8 @@ export const packingSchema = z.object({
    * lột mất, nên mỗi lần sửa đóng gói trên trang chi tiết là CBM khai tay biến mất.
    */
   cbm: z.coerce.number().positive().optional(),
+  /** Ghi chú đóng gói của ô tóm tắt (09/10/2026) — chỉ chữ, không tính. */
+  note: z.string().trim().max(500).optional(),
 })
 
 /** Kiểu lắp ráp — hàng nội thất XK: nguyên chiếc hoặc tháo rời (knock-down). */

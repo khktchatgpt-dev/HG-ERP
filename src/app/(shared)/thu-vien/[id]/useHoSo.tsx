@@ -21,6 +21,12 @@ export type OSua =
   | 'height_mm'
   | 'net_weight_kg'
   | 'max_load_kg'
+  | 'notes'
+  // Thông số in LSX nằm trong jsonb tech_spec — service GỘP, gửi một khoá là đủ.
+  | 'ts_paint'
+  | 'ts_wood'
+  | 'ts_glass'
+  | 'ts_cushion'
 
 const SO: ReadonlySet<OSua> = new Set([
   'length_mm',
@@ -71,7 +77,10 @@ export function useHoSo({
         value = n
       }
     } else value = text || null
-    const cur = d[field as keyof HoSoView] as string | number | null
+    const ts = field.startsWith('ts_') ? field.slice(3) : null
+    const cur = ts
+      ? ((d.tech_spec as Record<string, string | undefined>)[ts] ?? null) || null
+      : (d[field as keyof HoSoView] as string | number | null)
     if ((cur ?? null) === value) {
       setDangSua(null)
       return true
@@ -80,7 +89,7 @@ export function useHoSo({
     try {
       await api(`/api/dept/technical/products/${d.id}`, {
         method: 'PATCH',
-        body: { [field]: value },
+        body: ts ? { tech_spec: { [ts]: value ?? '' } } : { [field]: value },
       })
       setDangSua(null)
       router.refresh()

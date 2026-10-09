@@ -242,9 +242,31 @@ export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
                 </td>
               </tr>
               <tr>
-                <td className="l">Ghi chú in LSX</td>
+                <td className="l">Thông số in LSX</td>
                 <td className="v" colSpan={3}>
-                  {ghiChuLsx ?? <span className="muted">chưa khai</span>}
+                  {c.suaDuoc ? (
+                    <>
+                      <span className="muted">Sơn </span>
+                      <V c={c} d={d} label="Sơn (mã màu)" field="ts_paint" v={d.tech_spec.paint || null} trong="sơn" w={120} />
+                      <span className="dot">·</span>
+                      <span className="muted">Gỗ </span>
+                      <V c={c} d={d} label="Gỗ" field="ts_wood" v={d.tech_spec.wood || null} trong="gỗ" w={120} />
+                      <span className="dot">·</span>
+                      <span className="muted">Kính </span>
+                      <V c={c} d={d} label="Kính" field="ts_glass" v={d.tech_spec.glass || null} trong="kính" w={110} />
+                      <span className="dot">·</span>
+                      <span className="muted">Nệm </span>
+                      <V c={c} d={d} label="Nệm / mút" field="ts_cushion" v={d.tech_spec.cushion || null} trong="nệm" w={110} />
+                    </>
+                  ) : (
+                    (ghiChuLsx ?? <span className="muted">chưa khai</span>)
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <td className="l">Ghi chú</td>
+                <td className="v" colSpan={3}>
+                  <V c={c} d={d} label="Ghi chú" field="notes" v={d.notes} trong="chưa có ghi chú" />
                 </td>
               </tr>
               <tr>
@@ -336,6 +358,8 @@ function V({
 }
 
 function fieldRaw(d: HoSoView, field: OSua): string {
+  if (field.startsWith('ts_'))
+    return (d.tech_spec as Record<string, string | undefined>)[field.slice(3)] ?? ''
   const v = d[field as keyof HoSoView]
   if (v == null) return ''
   return typeof v === 'number' ? String(v).replace('.', ',') : String(v)

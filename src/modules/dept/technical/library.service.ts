@@ -100,7 +100,7 @@ export type LibraryRow = {
   children: LibraryChild[]
 }
 
-type Flag = LibFlagRow & {
+export type Flag = LibFlagRow & {
   check: HoSoCheck
   has_dims: boolean
   parts: number
@@ -109,7 +109,7 @@ type Flag = LibFlagRow & {
   has_sample: boolean
 }
 
-async function loadFlags(): Promise<Map<string, Flag>> {
+export async function loadFlags(): Promise<Map<string, Flag>> {
   const [rows, parts, packing, samples, lsx, docs] = await Promise.all([
     libraryRepo.flagRows(),
     libraryRepo.partsCountByProduct(),

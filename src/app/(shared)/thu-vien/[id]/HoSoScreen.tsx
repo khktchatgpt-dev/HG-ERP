@@ -171,7 +171,14 @@ export function HoSoScreen({
   const kgTong = d.parts.reduce((a, p) => a + (p.weight_kg ?? 0), 0)
 
   return (
-    <div className="hs">
+    <div
+      className="hs"
+      onDoubleClick={(e) => {
+        // Nháy đúp vào một ô bảng khi đang XEM → bật chế độ sửa (thói quen Excel).
+        if (!suaDuocTrang || c.cheDoSua) return
+        if ((e.target as HTMLElement).closest('table')) c.setCheDoSua(true)
+      }}
+    >
       <TopProgressBar active={!!c.busy} />
 
       <section className="card">
@@ -408,6 +415,9 @@ export function HoSoScreen({
 
       <section className="card">
         <nav className="tabs" aria-label="Phần hồ sơ sản phẩm">
+          {suaDuocTrang && !c.cheDoSua && (
+            <span className="hint">Nháy đúp vào ô, hoặc bấm Sửa hồ sơ, để sửa thẳng như Excel</span>
+          )}
           {tabs.map((t) => (
             <button
               key={t.id}

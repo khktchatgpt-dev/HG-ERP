@@ -166,6 +166,8 @@ export const SHARED_SECTION: NavSection = {
     // Màn MỚI dựng theo bản vẽ 08/10/2026 (khuôn C, checklist hồ sơ 6 ô) —
     // chạy song song với màn cũ cho tới khi chủ dự án chốt thay thế.
     { href: '/thu-vien', label: 'Thư viện SP (mới)', icon: 'armchair' },
+    // Kỹ thuật theo dõi lệnh đang chạy: SP nào trên lệnh chưa có / chưa đủ hồ sơ (09/10/2026).
+    { href: '/thu-vien/lenh', label: 'Lệnh SX · hồ sơ SP', icon: 'clipboard-list' },
     // Khuôn nhôm: Kỹ thuật giữ, nhưng Cung ứng tra để đặt hàng và Sản xuất tra
     // để nhận dạng cây nhôm — nên nó ở khu dùng chung, không nhốt trong /technical.
     { href: '/khuon', label: 'Khuôn nhôm', icon: 'shapes' },

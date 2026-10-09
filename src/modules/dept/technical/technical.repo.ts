@@ -860,6 +860,7 @@ export type PackingOption = {
   cartons_per_set: number | null
   loading_40hc: number | null
   is_default: boolean
+  note: string | null
   packages: ProductPackage[]
 }
 
@@ -1209,7 +1210,7 @@ export const productProfileRepo = {
     const { data } = await db()
       .from('technical_packing_options')
       .select(
-        'id, option_no, label, cartons_per_set, loading_40hc, is_default, packages:technical_packages(id, package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
+        'id, option_no, label, cartons_per_set, loading_40hc, is_default, note, packages:technical_packages(id, package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
       )
       .eq('product_id', productId)
       .order('option_no')
