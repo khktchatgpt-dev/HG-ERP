@@ -207,8 +207,9 @@ export function LenhScreen({ lenh, all }: { lenh: LsxHoSo[]; all: boolean }) {
                     )}
                   </th>
                 </tr>
-                {l.rows.map((r) => (
-                  <tr key={r.product_id || r.code}>
+                {/* cùng SP có thể nằm nhiều dòng trên một lệnh (đợt xuất khác nhau) → khoá theo thứ tự */}
+                {l.rows.map((r, i) => (
+                  <tr key={`${r.product_id || r.code}:${i}`}>
                     <td>
                       <AnhNho url={r.image_url} alt="" />
                     </td>
