@@ -11,10 +11,12 @@ export function HoSoThanhPhan({ d }: { d: HoSoView }) {
     <section
       aria-label="Thành phần"
       id="thanh-phan"
-      className="block"
+      className="panel"
     >
-      <h2 className="sec">
-        <Boxes aria-hidden />
+      <h2 className="ph sec-ls">
+        <span className="ic-sec">
+          <Boxes aria-hidden />
+        </span>
         Thành phần của bộ <span className="n">{d.setItems.length} món</span>
       </h2>
       {d.setItems.length === 0 ? (

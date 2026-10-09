@@ -16,11 +16,12 @@ export function HoSoLichSu({ d }: { d: HoSoView }) {
     <section
       aria-label="Lịch sử"
       id="lich-su"
-      className="block"
-      style={{ marginBottom: 24 }}
+      className="panel"
     >
-      <h2 className="sec">
-        <History aria-hidden />
+      <h2 className="ph sec-ls">
+        <span className="ic-sec">
+          <History aria-hidden />
+        </span>
         Lịch sử{' '}
         <span className="n">
           {d.revisions.length} mốc · bản hiện tại #{d.rev}

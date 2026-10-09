@@ -371,8 +371,7 @@ export function HoSoDinhMuc({
       ref={secRef}
       aria-label="Định mức vật tư"
       id="dinh-muc"
-      className="block"
-      style={{ marginTop: 0 }}
+      className="panel"
       onKeyDown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
           e.preventDefault()

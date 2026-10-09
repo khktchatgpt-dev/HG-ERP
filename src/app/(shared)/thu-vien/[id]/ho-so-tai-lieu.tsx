@@ -110,9 +110,11 @@ export function HoSoTaiLieu({
   ]
 
   return (
-    <section aria-label="Tài liệu" id="tai-lieu" className="block">
-      <h2 className="sec">
-        <FileText aria-hidden />
+    <section aria-label="Tài liệu" id="tai-lieu" className="panel">
+      <h2 className="ph sec-tl">
+        <span className="ic-sec">
+          <FileText aria-hidden />
+        </span>
         Tài liệu
         <span className="n">
           {d.files.length} file{thieuBv ? ' · thiếu bản vẽ' : ''}

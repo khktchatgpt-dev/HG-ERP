@@ -103,9 +103,11 @@ export function HoSoDongGoi({ d, c }: { d: HoSoView; c: HoSoCtx }) {
   }
 
   return (
-    <section aria-label="Đóng gói" id="dong-goi" className="block">
-      <h2 className="sec">
-        <Package aria-hidden />
+    <section aria-label="Đóng gói" id="dong-goi" className="panel">
+      <h2 className="ph sec-dg">
+        <span className="ic-sec">
+          <Package aria-hidden />
+        </span>
         Đóng gói
         <span className="n">
           {rows.length
