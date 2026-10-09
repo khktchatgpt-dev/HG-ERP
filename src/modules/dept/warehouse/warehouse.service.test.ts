@@ -10,6 +10,7 @@ vi.mock('./warehouse.repo', () => ({
     patch: vi.fn(),
     delete: vi.fn(),
     usage: vi.fn(),
+    renameCodeRefs: vi.fn(),
   },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
@@ -468,16 +469,22 @@ describe('materialsService.setActive — ngừng dùng / dùng lại (Bản 11)'
 
   it('ngừng dùng mà thiếu lý do → chặn', async () => {
     vi.mocked(assertAction).mockResolvedValue(undefined)
-    await expect(materialsService.setActive(cungUng, 'm1', { active: false })).rejects.toThrow(
-      /lý do/,
-    )
+    await expect(
+      materialsService.setActive(cungUng, 'm1', { active: false }),
+    ).rejects.toThrow(/lý do/)
     expect(materialsRepo.patch).not.toHaveBeenCalled()
   })
 
   it('ngừng dùng có lý do → ghi is_active=false + vết nguồn retire kèm lý do', async () => {
     vi.mocked(assertAction).mockResolvedValue(undefined)
-    vi.mocked(materialsRepo.patch).mockResolvedValue({ ...MAT, is_active: false } as never)
-    await materialsService.setActive(cungUng, 'm1', { active: false, reason: 'Trùng BUL0084' })
+    vi.mocked(materialsRepo.patch).mockResolvedValue({
+      ...MAT,
+      is_active: false,
+    } as never)
+    await materialsService.setActive(cungUng, 'm1', {
+      active: false,
+      reason: 'Trùng BUL0084',
+    })
     expect(materialsRepo.patch).toHaveBeenCalledWith('m1', { is_active: false })
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -496,10 +503,18 @@ describe('materialsService.setActive — ngừng dùng / dùng lại (Bản 11)'
 
   it('xoá mã chưa dùng → ghi dòng vết "deleted" TRƯỚC khi xoá', async () => {
     vi.mocked(assertAction).mockResolvedValue(undefined)
-    vi.mocked(materialsRepo.usage).mockResolvedValue({ po: 0, stock: 0, bom: 0, prices: 0, other: 0 })
+    vi.mocked(materialsRepo.usage).mockResolvedValue({
+      po: 0,
+      stock: 0,
+      bom: 0,
+      prices: 0,
+      other: 0,
+    })
     await materialsService.remove(cungUng, 'm1')
     expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({ changes: [{ field: 'deleted', before: 'Ống sắt', after: null }] }),
+      expect.objectContaining({
+        changes: [{ field: 'deleted', before: 'Ống sắt', after: null }],
+      }),
     )
     expect(vi.mocked(emit).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(materialsRepo.delete).mock.invocationCallOrder[0],
@@ -515,8 +530,36 @@ describe('materialsService.previewCode — mã dự kiến ở panel Thêm vật
       { code: 'NK-0007', name: 'b' },
     ] as never)
     vi.mocked(materialsRepo.maxCodeNo).mockResolvedValue(203)
-    await expect(materialsService.previewCode(cungUng, 'Ngũ kim - phụ kiện')).resolves.toBe('NK-0204')
+    await expect(
+      materialsService.previewCode(cungUng, 'Ngũ kim - phụ kiện'),
+    ).resolves.toBe('NK-0204')
     expect(assertAction).toHaveBeenCalledWith(cungUng, 'warehouse.material.create')
     expect(materialsRepo.maxCodeNo).toHaveBeenCalledWith('NK')
+  })
+})
+
+describe('materialsService.update — đổi mã vật tư (09/10/2026)', () => {
+  it('đổi mã: gộp khoảng trắng, ghi mã mới, đổi theo mã chữ ở định mức SP + BOM lệnh', async () => {
+    vi.mocked(canAction).mockResolvedValue(false) // Cung ứng: mã thuộc trường nền
+    vi.mocked(materialsRepo.patch).mockResolvedValue({ ...MAT, code: 'SHT 96' } as never)
+    await materialsService.update(cungUng, 'm1', { code: '  SHT   96 ' })
+    expect(materialsRepo.patch).toHaveBeenCalledWith(
+      'm1',
+      expect.objectContaining({ code: 'SHT 96' }),
+    )
+    expect(materialsRepo.renameCodeRefs).toHaveBeenCalledWith('VT-01', 'SHT 96')
+  })
+  it('giữ mã cũ thì không đụng mã chữ; mã mới đã có thì chặn', async () => {
+    vi.mocked(canAction).mockResolvedValue(true)
+    await materialsService.update(kho, 'm1', { code: 'VT-01', name: 'Ống sắt 2' })
+    expect(materialsRepo.renameCodeRefs).not.toHaveBeenCalled()
+    vi.mocked(materialsRepo.findByCode).mockResolvedValue({
+      id: 'm2',
+      code: 'SHT 96',
+    } as never)
+    await expect(
+      materialsService.update(kho, 'm1', { code: 'SHT 96' }),
+    ).rejects.toMatchObject({ status: 409 })
+    expect(materialsRepo.renameCodeRefs).not.toHaveBeenCalled()
   })
 })

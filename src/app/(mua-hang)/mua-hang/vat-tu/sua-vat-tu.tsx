@@ -212,7 +212,11 @@ function Form({
   // Lần ngừng dùng gần nhất — đọc từ sổ vết đã nạp sẵn cho phần Lịch sử.
   const vetNgung = doi?.find((c) => c.field === 'is_active' && c.after_value === 'false')
   const lanNgung = vetNgung
-    ? { at: vetNgung.created_at, by: vetNgung.actor_name ?? null, reason: vetNgung.source_ref ?? null }
+    ? {
+        at: vetNgung.created_at,
+        by: vetNgung.actor_name ?? null,
+        reason: vetNgung.source_ref ?? null,
+      }
     : null
   const s = useMaterialCore({ active: true, initial: m ? coreFromMaterial(m) : { group_name: initialGroup ?? '' }, taxonomy: tax, excludeCode: m?.code }) // prettier-ignore
   const { f } = s
@@ -224,6 +228,10 @@ function Form({
     note: m?.note ?? '',
   })
   const ma = useMaMoi(!m, f.group_name)
+  // ĐỔI MÃ khi sửa (09/10/2026): ô mã sửa được; khác mã cũ thì gửi lên + nói hệ quả.
+  const [maSua, setMaSua] = useState(m?.code ?? '')
+  const maMoi = maSua.trim().replace(/\s+/g, ' ')
+  const doiMa = !!m && maMoi !== '' && maMoi !== m.code
   /*
    * GẦN GIỐNG PHẢI ĐỐI CHIẾU RỒI MỚI THÊM — luật của hộp "Thêm nhanh" ở soạn
    * đơn (0136), đem sang đây. Tick gắn với ĐÚNG cái tên lúc xác nhận: sửa tên là
@@ -255,8 +263,11 @@ function Form({
   })
   const why =
     whySave ??
-    (!m && !f.group_name ? 'chọn nhóm (nhóm quyết định mã và phạm vi chặn trùng)' : null) ??
+    (!m && !f.group_name
+      ? 'chọn nhóm (nhóm quyết định mã và phạm vi chặn trùng)'
+      : null) ??
     (!m && ma.rieng && !ma.code.trim() ? 'gõ mã riêng hoặc bấm "Tự cấp mã"' : null) ??
+    (m && maSua.trim() === '' ? 'mã vật tư không để trống' : null) ??
     (canDoiChieu ? `tick xác nhận đã đối chiếu ${s.similar.length} mã gần giống` : null)
 
   async function save() {
@@ -270,7 +281,11 @@ function Form({
           body: {
             ...payload,
             // Mã: bỏ trống = server tự cấp (đúng hàm đã cho xem trước).
-            ...(m ? {} : { code: ma.rieng ? ma.code.trim() : null }),
+            ...(m
+              ? doiMa
+                ? { code: maMoi }
+                : {}
+              : { code: ma.rieng ? ma.code.trim() : null }),
             note: mua.note.trim() || null,
             last_purchase_price: mua.price.trim() === '' ? null : Number(mua.price.replace(/\./g, '').replace(',', '.')), // prettier-ignore
             default_supplier_id: mua.supplier || null,
@@ -280,8 +295,10 @@ function Form({
       )
       if (m)
         toast.success(
-          `Đã lưu ${m.code}`,
-          'Đơn mua soạn từ giờ dùng thông tin mới; đơn đã gửi không đổi.',
+          doiMa ? `Đã đổi mã ${m.code} → ${r.material.code}` : `Đã lưu ${m.code}`,
+          doiMa
+            ? 'Đơn, phiếu đã có tự hiện mã mới; định mức SP và BOM lệnh đã đổi theo.'
+            : 'Đơn mua soạn từ giờ dùng thông tin mới; đơn đã gửi không đổi.',
         )
       else
         toast.success(
@@ -394,6 +411,18 @@ function Form({
         {!m && (
           <Field label="Mã vật tư">
             <MaMoiO ma={ma} />
+          </Field>
+        )}
+        {m && (
+          <Field label="Mã vật tư">
+            <TextInput value={maSua} onCommit={setMaSua} label="Mã vật tư" />
+            {doiMa && (
+              <Hint size="sm">
+                Đổi mã {m.code} → <b>{maMoi}</b>: đơn mua, phiếu kho, giá NCC đã có vẫn
+                theo vật tư này (in lại ra mã mới); định mức hồ sơ SP và BOM lệnh ghi mã
+                được đổi theo. Sổ vết giữ mã cũ.
+              </Hint>
+            )}
           </Field>
         )}
         <Field label="Vật liệu / màu">

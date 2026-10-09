@@ -251,6 +251,49 @@ export const materialsRepo = {
   },
 
   /**
+   * ĐỔI MÃ VẬT TƯ (09/10/2026): đơn mua, phiếu kho, giá NCC… trỏ theo id nên tự
+   * theo mã mới; chỉ hai bảng còn lưu MÃ CHỮ — định mức hồ sơ SP và BOM chụp của
+   * lệnh — mà các view nhu cầu / cân đối nối theo chữ. Đổi theo ở đây, không thì
+   * lệnh mất liên kết vật tư. Sổ vết (`warehouse_material_changes`) giữ mã cũ: là
+   * lịch sử. Trả số dòng đã đổi ở từng bảng.
+   */
+  async renameCodeRefs(
+    oldCode: string,
+    newCode: string,
+  ): Promise<{ parts: number; boms: number }> {
+    const out = { parts: 0, boms: 0 }
+    for (const [t, k] of [
+      ['technical_product_parts', 'parts'],
+      ['production_order_boms', 'boms'],
+    ] as const) {
+      const { data, error } = await db()
+        .from(t)
+        .update({ material_code: newCode })
+        .eq('material_code', oldCode)
+        .select('material_code')
+      if (error) throw new Error(`${t}: ${error.message}`)
+      out[k] = data?.length ?? 0
+    }
+    return out
+  },
+
+  /** Đếm chỗ lưu MÃ CHỮ của một mã — form sửa nói trước "đổi mã thì N dòng đổi theo". */
+  async codeRefCounts(code: string): Promise<{ parts: number; boms: number }> {
+    const head = { count: 'exact' as const, head: true }
+    const [p, b] = await Promise.all([
+      db()
+        .from('technical_product_parts')
+        .select('material_code', head)
+        .eq('material_code', code),
+      db()
+        .from('production_order_boms')
+        .select('material_code', head)
+        .eq('material_code', code),
+    ])
+    return { parts: p.count ?? 0, boms: b.count ?? 0 }
+  },
+
+  /**
    * Mã + tên của một NHÓM — đủ để so trùng tên và suy tiền tố mã đang dùng.
    *
    * Chỉ lấy hai cột: nhóm to nhất (Nhôm) là 276 dòng, kéo cả `COLS` mỗi lần khai

@@ -430,6 +430,8 @@ export const materialsService = {
     }
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
+    // Mã gõ tay: gộp khoảng trắng thừa ("SHT  96 " → "SHT 96") — mã là thứ in ra và tìm.
+    if (patch.code) patch.code = patch.code.trim().replace(/\s+/g, ' ')
     if (patch.code && patch.code !== before.code) {
       const dup = await materialsRepo.findByCode(patch.code)
       if (dup) throw Conflict(`Mã vật tư "${patch.code}" đã tồn tại`)
@@ -453,6 +455,10 @@ export const materialsService = {
     if (rest.needs_review === false) rest.needs_review_fields = []
     const written = code ? { ...rest, code } : rest
     const saved = await materialsRepo.patch(id, written)
+    // ĐỔI MÃ (09/10/2026): định mức hồ sơ SP + BOM lệnh lưu mã CHỮ — đổi theo, không thì
+    // lệnh mất liên kết vật tư. Đơn / phiếu trỏ theo id nên tự theo mã mới.
+    if (code && code !== before.code)
+      await materialsRepo.renameCodeRefs(before.code, code)
     /*
      * VẾT THAY ĐỔI (0177) — ghi SAU khi đã ghi vật tư, qua bus nên hỏng sổ vết
      * không kéo đổ thao tác. So bản trước với ĐÚNG những ô vừa ghi, nên patch
