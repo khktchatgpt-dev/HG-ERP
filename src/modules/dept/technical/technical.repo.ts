@@ -183,8 +183,10 @@ const COLS =
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
+// + net_weight_kg · is_set · showroom_sample (08/10/2026): màn thư viện mới bày
+// NW và hàng bộ/món. Giá KH (plan_*) KHÔNG đi đường này — xem `library.repo`.
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at, net_weight_kg, is_set, showroom_sample'
 
 export type ProductLite = Pick<
   Product,
@@ -213,6 +215,9 @@ export type ProductLite = Pick<
   | 'lifecycle'
   | 'is_active'
   | 'created_at'
+  | 'net_weight_kg'
+  | 'is_set'
+  | 'showroom_sample'
 >
 
 /**
@@ -336,15 +341,26 @@ export const productsRepo = {
      * người đang làm dở một hồ sơ và muốn quay lại. Mặc định vẫn là mới TẠO.
      */
     sort?: 'created' | 'updated'
+    /** Mã vật liệu khung ('AL', 'IR'…) — xem FRAME_MATERIALS ở lib/product-code. */
+    frame_material?: string
+    /**
+     * CHỈ các id này (thư viện 08/10/2026: lọc "thiếu hồ sơ" / "đang trên lệnh"
+     * tính ở app từ `libraryRepo` rồi đưa tập id xuống đây). Mảng rỗng = 0 dòng,
+     * người gọi nên tự ngắt trước để khỏi tốn một truy vấn.
+     */
+    ids?: string[]
     page: number
     page_size: number
   }): Promise<{ rows: ProductLite[]; total: number }> {
+    if (filter.ids && filter.ids.length === 0) return { rows: [], total: 0 }
     let q = db()
       .from('technical_products')
       .select(LITE_COLS, { count: 'exact' })
       .order(filter.sort === 'updated' ? 'updated_at' : 'created_at', {
         ascending: false,
       })
+    if (filter.ids) q = q.in('id', filter.ids)
+    if (filter.frame_material) q = q.eq('frame_material', filter.frame_material)
     if (filter.is_active != null) q = q.eq('is_active', filter.is_active)
     if (filter.customer_name === NO_CUSTOMER_FILTER) q = q.is('customer_name', null)
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
@@ -360,7 +376,9 @@ export const productsRepo = {
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
-    const { data, count } = await q
+    const { data, count, error } = await q
+    // Lỗi truy vấn phải NÓI RA: nuốt im thì màn thấy "0 dòng" mà không biết vì sao.
+    if (error) throw new Error(`technical_products listLite: ${error.message}`)
     return { rows: (data ?? []) as ProductLite[], total: count ?? 0 }
   },
 
@@ -842,6 +860,7 @@ export type PackingOption = {
   cartons_per_set: number | null
   loading_40hc: number | null
   is_default: boolean
+  note: string | null
   packages: ProductPackage[]
 }
 
@@ -1191,7 +1210,7 @@ export const productProfileRepo = {
     const { data } = await db()
       .from('technical_packing_options')
       .select(
-        'id, option_no, label, cartons_per_set, loading_40hc, is_default, packages:technical_packages(id, package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
+        'id, option_no, label, cartons_per_set, loading_40hc, is_default, note, packages:technical_packages(id, package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
       )
       .eq('product_id', productId)
       .order('option_no')
