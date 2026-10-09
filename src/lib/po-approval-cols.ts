@@ -64,7 +64,8 @@ export function approvalLineCols(
         f.align === 'right' ||
         f.kind === 'number' ||
         f.kind === 'area' ||
-        f.kind === 'calc',
+        f.kind === 'calc' ||
+        f.kind === 'm3sheet',
       calc: f.kind === 'calc',
       text,
     })

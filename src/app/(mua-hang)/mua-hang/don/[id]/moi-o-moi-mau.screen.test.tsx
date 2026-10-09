@@ -144,6 +144,7 @@ function kichBan(
     case 'calc':
       return [{ label: f.label, value: '300', field: 'qty2_override', want: 300 }]
     case 'cartonBasis':
+    case 'm3sheet': // chỉ đọc — m³/tấm tính từ D×R×Dày
       return []
     case 'inner':
       return (['dài', 'rộng', 'cao'] as const).map((s, k) => ({
@@ -193,7 +194,9 @@ describe('mọi ô nhập của mọi mẫu đơn mua gõ được và tới ser
     ])
     // Mẫu có cột tổng: server chạy deriveLine trên chính dòng này → tổng = số gõ tay.
     if (QTY2_OVERRIDE_UNIT[template]) {
-      expect(deriveLine(template, line as Parameters<typeof deriveLine>[1]).qty2).toBe(300)
+      expect(deriveLine(template, line as Parameters<typeof deriveLine>[1]).qty2).toBe(
+        300,
+      )
     }
   })
 })

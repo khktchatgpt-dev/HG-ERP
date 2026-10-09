@@ -349,6 +349,7 @@ export function ViewCell({
     const v = lineQty2(template, l) ?? (template === 'foam' ? tongM3(l) : null)
     return <span className="num">{v == null ? '—' : v.toLocaleString('vi-VN')}</span>
   }
+  if (f.kind === 'm3sheet') return <M3Tam l={l} />
   if (f.kind === 'inner')
     return (
       <span className="num">
@@ -390,6 +391,8 @@ export function EditCell({
   onPatch: (part: Partial<Line>) => void
 }) {
   switch (f.kind) {
+    case 'm3sheet':
+      return <M3Tam l={l} />
     case 'calc': {
       /*
         TỔNG GÕ ĐÈ ĐƯỢC (02/10/2026 — user chốt "cho ghi đè tổng thật"). Ô trống =
@@ -436,6 +439,12 @@ export function EditCell({
               onClick={() => onPatch({ qty2_manual: '' })}
             >
               tự tính {auto == null ? '—' : auto.toLocaleString('vi-VN')} ↩
+            </CellHint>
+          ) : shown != null && shown > 0 ? (
+            // Ô trống = máy đang tự tính; số chỉ là placeholder mờ nên nhìn tưởng
+            // ô chưa có gì và người soạn gõ đè (chị Nga 09/10/2026) — nói rõ ra.
+            <CellHint title="Máy tự tính từ kích thước × SL đặt — không cần gõ. Chỉ gõ khi tờ NCC ghi tổng khác.">
+              ✓ tự tính
             </CellHint>
           ) : null}
           {template === 'foam' &&
@@ -523,4 +532,14 @@ export function EditCell({
         />
       )
   }
+}
+
+/** m³ MỘT tấm xốp (D×R×Dày) — chỉ đọc, đúng cột "m3/tấm" của bảng NCC (09/10/2026). */
+function M3Tam({ l }: { l: Line }) {
+  const v = m3MotTam(l)
+  return (
+    <span className="num" title="D×R×Dày (mm) ÷ 10⁹ — sửa quy cách thì số này đổi theo">
+      {v == null ? '—' : v.toLocaleString('vi-VN', { maximumFractionDigits: 6 })}
+    </span>
+  )
 }

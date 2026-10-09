@@ -8,6 +8,7 @@ import {
   PO_SHARED_FIELD_PREFILL,
   prefillsFromCatalog,
   poField,
+  poFieldText,
   poPriceSuffix,
   poPriceUnitPerLine,
 } from './po-fields'
@@ -141,10 +142,12 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'STT',
     'Tên sản phẩm / vật tư',
     'Quy cách',
-    // "D×R×Dày" + "Tổng m³" bỏ khỏi phiếu in 12/08/2026 — vẫn là ô trên form
-    // để tính m³ và gợi ý giá, không in cho NCC.
+    // 09/10/2026: in lại m³/tấm + Tổng m³ — đúng bộ cột bảng NCC xốp (chị Nga).
+    // D×R×Dày vẫn chỉ là ô trên form (Quy cách đã ghi đủ ba số).
+    'm³/tấm',
     'ĐVT',
     'Số lượng',
+    'Tổng m³',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
@@ -375,7 +378,7 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
     rattan: ['demand', 'onhand', 'unit2'],
     paint: ['demand', 'onhand', 'unit2'],
     chemical: ['demand', 'onhand', 'unit2'],
-    foam: ['dims', 'm3total', 'basis', 'demand', 'onhand'],
+    foam: ['dims', 'basis', 'demand', 'dm', 'onhand'],
     glass: ['m2total', 'basis'],
     mro: ['unit2'],
     simple: ['unit2'],
@@ -400,7 +403,9 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
 
 describe('poPriceUnitPerLine — đơn vị đơn giá của mẫu tính theo kg', () => {
   it('mọi dòng tính theo kg → null (nhãn cột "/kg" giữ nguyên, phiếu cũ không đổi)', () => {
-    expect(poPriceUnitPerLine('kg', [{ price_basis: 'unit2' }, { price_basis: 'unit2' }])).toBeNull()
+    expect(
+      poPriceUnitPerLine('kg', [{ price_basis: 'unit2' }, { price_basis: 'unit2' }]),
+    ).toBeNull()
   })
 
   it('mẫu không có đơn vị giá riêng → null', () => {
@@ -408,7 +413,10 @@ describe('poPriceUnitPerLine — đơn vị đơn giá của mẫu tính theo kg
   })
 
   it('có dòng giá theo CÂY (Thép Visa PO-2026-0116) → hậu tố từng ô', () => {
-    const suffix = poPriceUnitPerLine('kg', [{ price_basis: 'unit' }, { price_basis: 'unit2' }])
+    const suffix = poPriceUnitPerLine('kg', [
+      { price_basis: 'unit' },
+      { price_basis: 'unit2' },
+    ])
     expect(suffix).not.toBeNull()
     expect(suffix!({ price_basis: 'unit', material_unit: 'Cây' })).toBe('/cây')
     expect(suffix!({ price_basis: 'unit2', material_unit: 'Cây' })).toBe('/kg')
@@ -437,5 +445,19 @@ describe('poPriceSuffix — hậu tố đơn giá theo ĐVT dòng', () => {
     expect(poPriceSuffix('glass', 'm2', 'Tấm')).toBe('/m²')
     expect(poPriceSuffix('foam', 'm3', 'Tấm')).toBe('/m³')
     expect(poPriceSuffix('foam', 'ctn', 'Tấm')).toBe('')
+  })
+})
+
+describe('phiếu in xốp — m³/tấm + Tổng m³ (09/10/2026)', () => {
+  const relax = { material_unit: 'Tấm', inner_l_mm: 580, inner_w_mm: 540, inner_h_mm: 60, qty_ordered: 250 } // prettier-ignore
+  it('m³/tấm đọc từ D×R×Dày; Tổng m³ của dòng theo tấm (qty2 null) = SL × m³/tấm', () => {
+    expect(poFieldText(poField('foam', 'm3tam')!, { ...relax, qty2: null })).toBe(
+      '0,018792',
+    )
+    expect(poFieldText(poField('foam', 'm3total')!, { ...relax, qty2: null })).toBe(
+      '4,698',
+    )
+    // Dòng theo m³ có qty2 đã lưu (kể cả số gõ đè theo tờ NCC) — in đúng số đó.
+    expect(poFieldText(poField('foam', 'm3total')!, { ...relax, qty2: 4.7 })).toBe('4,7')
   })
 })

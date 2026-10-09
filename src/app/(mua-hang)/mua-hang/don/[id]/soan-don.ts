@@ -1,4 +1,3 @@
-
 /**
  * LOGIC THUẦN CỦA PHẦN SOẠN ĐƠN trên màn chứng từ hợp nhất — không React, có
  * test. Chuyển từ `PoCreateForm.tsx` (bản cũ, 1.562 dòng trộn UI và logic)
@@ -112,7 +111,12 @@ export function lsxJoinedLabel(
    test bộ cột phiếu in không bắt được, vì thứ tự in là danh sách khác. */
 
 /** Ô có kiểu nằm ngoài tập này luôn xuống khay, dù đứng đầu danh sách. */
-export const GRID_KINDS: ReadonlySet<string> = new Set(['text', 'number', 'calc'])
+export const GRID_KINDS: ReadonlySet<string> = new Set([
+  'text',
+  'number',
+  'calc',
+  'm3sheet',
+])
 export const GRID_MAX = 3
 
 export function splitLineFields<T extends { kind: string; compact?: boolean }>(

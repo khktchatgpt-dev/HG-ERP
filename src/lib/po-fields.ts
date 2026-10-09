@@ -1,4 +1,4 @@
-import type { PoTemplate } from './po-template'
+import { foamM3PerSheet, type PoTemplate } from './po-template'
 
 /**
  * KHAI BÁO Ô NHẬP CỦA DÒNG ĐƠN THEO MẪU — một nguồn cho cả form nhập lẫn phiếu in.
@@ -23,6 +23,7 @@ export type PoFieldKind =
   | 'area' // m²/thùng·m²/tấm: tự tính (carton) hoặc gõ tay (kính)
   | 'cartonBasis' // cơ sở tính tiền từng dòng — nhãn lấy từ `options` của mẫu
   | 'unit2' // 0182: MỘT ô "17.5 Lít" ghi cặp unit2_per_unit + unit2_label — quy đổi giá tổng quát
+  | 'm3sheet' // 09/10/2026: m³ MỘT tấm xốp = D×R×Dày — chỉ đọc, như cột "m3/tấm" trên bảng NCC
 
 export type PoField = {
   key: string
@@ -216,6 +217,16 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   ],
   foam: [
     t('spec', 'Quy cách', 'w-[140px]', 'spec', '8mm x 1.05m x 50m…'),
+    // m³/tấm (09/10/2026 — chị Nga đưa bảng NCC "Quy cách · m3/tấm · SL · Tổng m3 ·
+    // Đơn giá"): đọc từ D×R×Dày, đứng ngay sau Quy cách để soi số NCC tính.
+    {
+      key: 'm3tam',
+      label: 'm³/tấm',
+      width: 'w-[68px]',
+      kind: 'm3sheet',
+      align: 'right',
+      compact: true,
+    },
     // Xốp TẤM theo KHỐI (0134 — DDH Tân Hoàng Long): D×R×Dày → m³/tấm, đơn
     // giá/m³, chốt "Tính theo m³" từng dòng. Mút cuộn để basis "tấm/cuộn" như cũ.
     {
@@ -238,6 +249,9 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       ],
     },
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    // Đm/sp (09/10/2026 — chị Nga): xốp nệm ghế cũng đặt theo SỐ SẢN PHẨM × tấm/SP
+    // như phụ kiện — có Đm thì gợi ý SL đặt = SL đơn hàng × Đm − tồn.
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
   ],
   // Kính (0134 — DDH Mai Trang): loại kính + quy cách mm + m²/tấm; giá theo TẤM
@@ -418,7 +432,20 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   chemical: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
   // Xốp: phiếu in CHỈ giữ Quy cách (user chốt 12/08/2026) — D×R×Dày và Tổng m³
   // vẫn là ô trên form để tính m³/gợi ý giá, nhưng không in cho NCC.
-  foam: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+  // 09/10/2026: thêm m³/tấm + Tổng m³ — đúng bộ cột bảng NCC xốp gửi (Quy cách ·
+  // m3/tấm · SL · Tổng m3 · Đơn giá · Thành tiền), thay chốt 12/08 "chỉ in Quy cách".
+  foam: [
+    '@stt',
+    '@name',
+    'spec',
+    'm3tam',
+    '@unit',
+    '@qty',
+    'm3total',
+    '@price',
+    '@amount',
+    '@note',
+  ],
   // Kính theo form Mai Trang: Loại kính · Quy cách · ĐVT · SL · m²/tấm. "Tổng m²"
   // bỏ khỏi phiếu in 12/08/2026 (duyệt cột từng mẫu) — vẫn tự tính trên form.
   glass: [
@@ -668,6 +695,8 @@ export type PoFieldLine = {
   inner_l_mm?: number | null
   inner_w_mm?: number | null
   inner_h_mm?: number | null
+  /** SL đặt — để tính Tổng m³ xốp khi dòng theo tấm (đơn không lưu qty2). */
+  qty_ordered?: number | null
 }
 
 const fmtVi = (n: number | null | undefined) =>
@@ -689,8 +718,16 @@ export function poFieldText(f: PoField, l: PoFieldLine): string {
     case 'number':
     case 'area':
       return fmtVi(v as number | null)
-    case 'calc':
+    case 'calc': {
+      // Xốp tính tiền theo TẤM thì đơn không lưu tổng quy đổi — Tổng m³ trên phiếu
+      // vẫn phải có (bảng NCC luôn ghi): SL × m³/tấm (09/10/2026).
+      if (l.qty2 == null && f.key === 'm3total') {
+        const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
+        const q = Number(l.qty_ordered) || 0
+        if (m3 != null && q > 0) return fmtVi(Math.round(m3 * q * 1e6) / 1e6)
+      }
       return fmtVi(l.qty2)
+    }
     case 'unit2':
       // "17,5 Lít/Thùng". 02/09: user quyết KHÔNG in cột này — PO_PRINT_ORDER
       // không mẫu nào còn khai 'unit2' nên case này đang là đường chờ; giữ lại
@@ -702,6 +739,10 @@ export function poFieldText(f: PoField, l: PoFieldLine): string {
       return l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
         ? `${fmtVi(l.inner_l_mm)}×${fmtVi(l.inner_w_mm)}×${fmtVi(l.inner_h_mm)}`
         : ''
+    case 'm3sheet': {
+      const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
+      return m3 == null ? '' : m3.toLocaleString('vi-VN', { maximumFractionDigits: 6 })
+    }
     default:
       return ''
   }

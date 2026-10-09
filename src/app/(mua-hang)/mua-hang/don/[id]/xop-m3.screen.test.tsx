@@ -144,4 +144,15 @@ describe('đơn xốp — gõ quy cách 580x540x60, 250 tấm, 1.000.000đ/m³',
     expect(o('Đơn giá m³').value).toBe('1064283')
     expect(chu()).not.toContain('đổi m³')
   })
+
+  it('Đm/sp: SL đơn hàng 240 × 2 → nhu cầu 480 (dòng có sẵn 250 → thiếu 230); Tổng m³ trống thì nói rõ "tự tính"', () => {
+    render(view(donXop()))
+    go('Quy cách', '580x540x60')
+    go('SL đơn hàng', '240')
+    go('Đm/sp', '2')
+    expect(chu()).toContain('thiếu 230 so với nhu cầu')
+    go('SL đặt', '480')
+    expect(o('Tổng m³').placeholder).toBe('9,02') // 480 × 0,018792 = 9,02016 m³
+    expect(chu()).toContain('✓ tự tính')
+  })
 })

@@ -7,7 +7,7 @@ import {
   qtyTotals,
   roundMoney,
 } from '@/lib/po-line'
-import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import { foamM3PerSheet, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
   PO_PRINT_ORDER,
@@ -200,7 +200,25 @@ function excelColumns(
       case 'area':
         return { ...base, num: true, value: (l) => nOrNull(get(l) as number | null) }
       case 'calc':
-        return { ...base, num: true, align: 'right', value: (l) => nOrNull(l.qty2) }
+        return {
+          ...base,
+          num: true,
+          align: 'right',
+          // Xốp theo tấm không lưu qty2 — Tổng m³ tính lại như phiếu in (09/10/2026).
+          value: (l) => {
+            if (l.qty2 != null || f.key !== 'm3total') return nOrNull(l.qty2)
+            const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
+            const q = Number(l.qty_ordered) || 0
+            return m3 != null && q > 0 ? Math.round(m3 * q * 1e6) / 1e6 : null
+          },
+        }
+      case 'm3sheet':
+        return {
+          ...base,
+          num: true,
+          align: 'right',
+          value: (l) => foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm),
+        }
       case 'inner':
         return {
           ...base,
