@@ -6,6 +6,7 @@ import {
   lineBasis,
   lineQty2,
   lineUnit2Label,
+  LSX_DEMAND_TEMPLATES,
   type Line,
   type Num,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
@@ -32,7 +33,7 @@ import {
 } from '@/components/kit'
 import { underDemand } from '@/lib/po-guards'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
-import { suggestOrderQty } from '@/lib/po-template'
+import { suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { priceDrift } from '@/lib/po-tracking'
 import { NhuCauGrid } from './SoanDonPanels'
 import { XopGiaO, XopGiaXem } from './xop-gia'
@@ -263,7 +264,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                           {(() => {
                             // Ô còn TRỐNG mới mời; đã gõ số thì gợi ý là nhiễu.
                             if (l.qty !== '') return null
-                            const short = l.qty_demand !== '' ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, l.dm_per_sp === '' ? null : Number(l.dm_per_sp)) : null // prettier-ignore
+                            const short = l.qty_demand !== '' ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, dmNhan(template, l)) : null // prettier-ignore
                             // Gợi ý theo MÃ (nhu cầu lệnh) trừ SL các dòng cùng mã khác đã đặt — mã
                             // nằm nhiều dòng thì không mời đặt lại đủ số ở từng dòng (07/10/2026).
                             const theoMa = suggestByMat.get(l.material_id)
@@ -277,7 +278,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                             return (
                               <CellHint
                                 onClick={() => patch(i, { qty: use })}
-                                title={`${short != null ? (l.dm_per_sp !== '' && Number(l.dm_per_sp) > 0 ? `SL đơn hàng × Đm/sp (${fmtNum(Number(l.dm_per_sp))}) − tồn kho` : 'SL cần cho lệnh − tồn kho') : 'Đề xuất từ nhu cầu của lệnh'}${use !== raw ? ` (${fmtNum(raw)} làm tròn lên nguyên ${l.pack_unit || 'bao'})` : ''} — bấm để dùng`} // prettier-ignore
+                                title={`${short != null ? (dmNhan(template, l) != null ? `SL đơn hàng × Đm/sp (${fmtNum(Number(l.dm_per_sp))}) − tồn kho` : 'SL cần cho lệnh − tồn kho') : 'Đề xuất từ nhu cầu của lệnh'}${use !== raw ? ` (${fmtNum(raw)} làm tròn lên nguyên ${l.pack_unit || 'bao'})` : ''} — bấm để dùng`} // prettier-ignore
                               >
                                 dùng {fmtNum(use)} ↩
                               </CellHint>
@@ -296,7 +297,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                           chặn: giao đợt khác / dùng hàng thay thế là chủ đích hợp lệ.
                         */
                         if (l.qty === '' || l.qty_demand === '') return null
-                        const need = suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, l.dm_per_sp === '' ? null : Number(l.dm_per_sp)) // prettier-ignore
+                        const need = suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, dmNhan(template, l)) // prettier-ignore
                         const gap = underDemand(Number(l.qty), need)
                         if (gap == null) return null
                         return (
@@ -750,4 +751,13 @@ export function NhuCau({ d }: { d: DonCtx }) {
       )}
     </>
   )
+}
+
+/**
+ * Định mức đem NHÂN vào gợi ý SL đặt. Mẫu tính "SL theo LSX × Định mức SP = SL đơn
+ * hàng" (mây) đã nhân sẵn trong SL đơn hàng — trả null để không nhân lần hai.
+ */
+function dmNhan(template: PoTemplate, l: Line): number | null {
+  if (LSX_DEMAND_TEMPLATES.has(template) || l.dm_per_sp === '') return null
+  return Number(l.dm_per_sp)
 }

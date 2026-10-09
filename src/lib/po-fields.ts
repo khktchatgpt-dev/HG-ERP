@@ -56,6 +56,12 @@ export type PoField = {
    */
   editHidden?: boolean
   /**
+   * Ô CHỈ Ở TRÌNH DUYỆT — `field` là khoá của dòng trên form nhưng không có cột DB
+   * (vd "SL theo LSX" của mẫu mây, tính ngược từ SL đơn hàng ÷ Định mức). Không in,
+   * không gửi lên server.
+   */
+  clientOnly?: boolean
+  /**
    * Ô số HẸP (≤ 64px) — không tính vào trần 3 ô của lưới soạn đơn; đứng ngay sau
    * ô trước nó trên lưới (`splitLineFields`). Dùng cho ô đi đôi với ô bên cạnh
    * như Đm/sp cạnh SL đơn hàng.
@@ -195,9 +201,25 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
    *   foam  : quy cách cuộn/tấm ("8mm x 1.05m x 50m") nằm ngay trong tên/spec.
    */
   rattan: [
-    t('spec', 'Quy cách', 'w-[120px]', 'spec', 'Mây dẹp 8mm…'),
-    t('dinhmuc', 'Định mức', 'w-[110px]', 'material_grade', '5m/g = 32-34g'),
+    // SL theo LSX × Định mức SP = SL đơn hàng (09/10/2026 — PO-2026-0154: 200 ghế ×
+    // 5,1 kg = 1.020 kg); SL đặt là số đặt thật, dư ra. "SL theo LSX" không lưu —
+    // tính ngược từ hai cột kia (xem `qty_lsx` ở po-line).
+    { ...n('lsx', 'SL theo LSX', 'w-[92px]', 'qty_lsx'), clientOnly: true },
+    { ...n('dm', 'Định mức SP', 'w-[80px]', 'dm_per_sp', '0.0001'), compact: true },
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    t('spec', 'Quy cách', 'w-[120px]', 'spec', 'Mây dẹp 8mm…'),
+    // Ô chữ "Định mức" cũ ("5m/g = 32-34g") giữ lại thành ô quy cách — phiếu in vẫn
+    // ghi nhãn cũ để bộ cột NCC đang nhận không đổi.
+    {
+      ...t(
+        'dinhmuc',
+        'Quy cách định mức',
+        'w-[130px]',
+        'material_grade',
+        '5m/g = 32-34g',
+      ),
+      printLabel: 'Định mức',
+    },
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
     UNIT2_FIELD,
   ],
@@ -621,7 +643,7 @@ export const PO_SHARED_FIELD_MEANING: Record<
   material_grade: {
     accessory: 'Vật liệu',
     metal_kg: 'Vật liệu',
-    rattan: 'Định mức',
+    rattan: 'Quy cách định mức',
     paint: 'Mã màu NCC',
     glass: 'Loại kính',
     wood: 'Loại gỗ',

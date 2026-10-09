@@ -21,6 +21,7 @@ import {
   newLine,
   remapLinesForTemplate,
   withSpecDims,
+  lineFromNeed,
   type Line,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { poHolder, useToast, type IcoName, type Mark } from '@/components/kit'
@@ -32,7 +33,6 @@ import {
 } from '@/components/supply/MaterialPicker'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { planAdjustment, type AdjBeforeLine } from '@/lib/po-adjust'
-import { allocationNote } from '@/lib/po-allocation'
 import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { canCarryCost } from '@/lib/po-cost'
 import { PO_FIELDS, type PoField } from '@/lib/po-fields'
@@ -1050,7 +1050,7 @@ export function useDonChungTu(p: Props) {
           const m = byId.get(n.material_id)
           if (!m || have.has(n.material_id)) continue
           // SL đặt để trống cho người mua quyết; nhu cầu và phân bổ theo SP đổ sẵn.
-          add.push({ ...newLine(t, m), qty_demand: n.qty_needed, note: allocationNote(n.breakdown ?? []).slice(0, 500) }) // prettier-ignore
+          add.push(lineFromNeed(t, m, n))
         }
         return [...ls, ...add]
       })

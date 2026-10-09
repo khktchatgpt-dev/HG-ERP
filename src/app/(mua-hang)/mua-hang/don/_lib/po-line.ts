@@ -11,6 +11,7 @@ import {
 import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
 import { parseInnerDims } from '@/lib/dims'
 import { nod } from '@/lib/material-key'
+import { allocationNote, type MaterialAllocation } from '@/lib/po-allocation'
 import {
   PO_SHARED_FIELD_MEANING,
   prefillsFromCatalog,
@@ -77,6 +78,14 @@ export type Line = {
   material_grade: string
   dm_per_sp: Num
   qty_demand: Num
+  /**
+   * SL THEO LSX (số sản phẩm) — CHỈ Ở TRÌNH DUYỆT, không lưu (09/10/2026, mẫu mây).
+   * Đơn lưu Định mức SP (`dm_per_sp`) + SL đơn hàng (`qty_demand` = SL theo LSX × Đm);
+   * mở đơn thì tính ngược = qty_demand ÷ dm_per_sp (`lsxOf`). Không thêm cột DB: hàm
+   * điều chỉnh 0210 chép CỐ ĐỊNH danh sách cột dòng — cột mới rơi mất khi sửa đơn
+   * đã duyệt. Thiếu key (nháp cũ, dòng dựng ở chỗ khác) = trống.
+   */
+  qty_lsx?: Num
   qty_on_hand: Num
   // aluminium
   die_code: string
@@ -422,7 +431,8 @@ export function withSpecDims(t: PoTemplate, prev: Line, next: Line): Line {
    */
   if (BASIS_DOMAIN[t] && next.carton_basis !== prev.carton_basis)
     out = { ...out, price_per: '' }
-  if (t !== 'foam') return out
+  // Mẫu mây: giữ SL theo LSX × Định mức SP = SL đơn hàng (09/10/2026).
+  if (t !== 'foam') return withLsxDemand(t, prev, out)
   if (next.spec !== prev.spec) {
     const d = parseInnerDims(next.spec)
     const trong =
@@ -442,6 +452,80 @@ export function withSpecDims(t: PoTemplate, prev: Line, next: Line): Line {
 export function tongM3(l: Line): number | null {
   const mot = m3MotTam(l)
   return mot == null ? null : Math.round(mot * (Number(l.qty) || 0) * 1e6) / 1e6
+}
+
+/**
+ * MẪU TÍNH "SL theo LSX × Định mức SP = SL đơn hàng" (09/10/2026 — PO-2026-0154 mây:
+ * 200 ghế relax × 5,1 kg = 1.020 kg; SL đặt là số đặt thật, dư ra). Khác mẫu phụ
+ * kiện, nơi "SL đơn hàng" vẫn là SỐ SP và gợi ý SL đặt = SL đơn hàng × Đm − tồn.
+ */
+export const LSX_DEMAND_TEMPLATES: ReadonlySet<PoTemplate> = new Set(['rattan'])
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000
+
+/** SL theo LSX tính ngược từ hai cột đã lưu: SL đơn hàng ÷ Định mức SP. */
+export function lsxOf(l: Pick<Line, 'qty_demand' | 'dm_per_sp'>): Num {
+  const m = Number(l.dm_per_sp)
+  if (l.qty_demand === '' || l.dm_per_sp === '' || !(m > 0)) return ''
+  return round3(Number(l.qty_demand) / m)
+}
+
+/**
+ * Giữ ba ô SL theo LSX · Định mức SP · SL đơn hàng khớp nhau khi sửa dòng (mẫu
+ * LSX_DEMAND_TEMPLATES): sửa SL theo LSX hoặc Định mức → SL đơn hàng = tích; sửa
+ * thẳng SL đơn hàng → SL theo LSX tính lại. Mẫu khác trả nguyên.
+ */
+export function withLsxDemand(t: PoTemplate, prev: Line, next: Line): Line {
+  if (!LSX_DEMAND_TEMPLATES.has(t)) return next
+  const lsx = next.qty_lsx ?? ''
+  const lsxDoi = lsx !== (prev.qty_lsx ?? '')
+  const dmDoi = next.dm_per_sp !== prev.dm_per_sp
+  const demandDoi = next.qty_demand !== prev.qty_demand
+  if (demandDoi && !lsxDoi) return { ...next, qty_lsx: lsxOf(next) }
+  if ((lsxDoi || dmDoi) && !demandDoi) {
+    if (lsx !== '' && next.dm_per_sp !== '')
+      return { ...next, qty_demand: round3(Number(lsx) * Number(next.dm_per_sp)) }
+    // Chưa biết SL theo LSX mà có SL đơn hàng: đổi Định mức thì tính ngược số SP.
+    if (lsx === '') return { ...next, qty_lsx: lsxOf(next) }
+  }
+  return next
+}
+
+/**
+ * TỰ ĐIỀN từ nhu cầu lệnh (nút "Thêm mã lệnh còn thiếu") cho mẫu LSX_DEMAND_TEMPLATES:
+ * SL theo LSX = tổng số SP dùng vật tư; Định mức SP = định mức chung nếu mọi SP cùng
+ * một số, không thì SL cần ÷ tổng SP. Thiếu phân bổ theo SP → không điền gì.
+ */
+export function lsxFromNeed(
+  t: PoTemplate,
+  n: { qty_needed: number; breakdown?: { qty: number; per_unit: number | null }[] },
+): Partial<Line> {
+  if (!LSX_DEMAND_TEMPLATES.has(t)) return {}
+  const items = (n.breakdown ?? []).filter((b) => b.qty > 0)
+  const sp = items.reduce((s, b) => s + b.qty, 0)
+  if (!(sp > 0) || !(n.qty_needed > 0)) return {}
+  const dm = items.every((b) => b.per_unit != null && b.per_unit === items[0].per_unit)
+    ? items[0].per_unit!
+    : Math.round((n.qty_needed / sp) * 10000) / 10000
+  return { qty_lsx: sp, dm_per_sp: dm }
+}
+
+/**
+ * DÒNG MỚI TỪ NHU CẦU LỆNH (nút "Thêm mã lệnh còn thiếu"): SL đặt để trống cho người
+ * mua quyết; nhu cầu, phân bổ theo SP (ghi chú) và — mẫu mây — SL theo LSX + Định
+ * mức SP đổ sẵn.
+ */
+export function lineFromNeed(
+  t: PoTemplate,
+  m: PoMaterial,
+  n: { qty_needed: number; breakdown?: MaterialAllocation[] },
+): Line {
+  return {
+    ...newLine(t, m),
+    qty_demand: n.qty_needed,
+    ...lsxFromNeed(t, n),
+    note: allocationNote(n.breakdown ?? []).slice(0, 500),
+  }
 }
 
 /**
@@ -856,6 +940,7 @@ function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): 
     material_grade: s2(l.material_grade),
     dm_per_sp: n2(l.dm_per_sp),
     qty_demand: n2(l.qty_demand),
+    qty_lsx: lsxOf({ qty_demand: n2(l.qty_demand), dm_per_sp: n2(l.dm_per_sp) }),
     qty_on_hand: n2(l.qty_on_hand),
     die_code: s2(l.die_code),
     weight_per_m: n2(l.weight_per_m),
@@ -1050,6 +1135,7 @@ export function mergeLineInto(into: Line, from: Line): Line | null {
     ...into,
     qty: add(into.qty, from.qty),
     qty_demand: add(into.qty_demand, from.qty_demand),
+    qty_lsx: add(into.qty_lsx ?? '', from.qty_lsx ?? ''),
     // Tổng gõ tay (kg/m³ theo tờ NCC) cũng cộng — giữ số của dòng đầu là sai
     // ngay khi SL đã cộng (07/10/2026).
     qty2_manual:

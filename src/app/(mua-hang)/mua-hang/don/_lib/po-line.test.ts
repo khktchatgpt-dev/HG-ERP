@@ -27,6 +27,9 @@ import {
   withSpecDims,
   xopHaiGia,
   xopM3MoiTam,
+  lsxOf,
+  withLsxDemand,
+  lsxFromNeed,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
@@ -1342,5 +1345,39 @@ describe('xopHaiGia — Đơn giá / Đơn giá m³', () => {
     const tron = relax({ inner_l_mm: '', inner_w_mm: '', inner_h_mm: '', carton_basis: 'ctn', price: 24_524 }) // prettier-ignore
     expect(xopM3MoiTam(tron)).toBeNull()
     expect(xopHaiGia('foam', tron).giaM3).toBeNull()
+  })
+})
+
+/*
+ * MẪU MÂY: SL theo LSX × Định mức SP = SL đơn hàng (09/10/2026 — PO-2026-0154:
+ * 200 ghế relax xám × 5,1 kg = 1.020 kg). SL theo LSX không lưu, tính ngược.
+ */
+describe('mây — SL theo LSX × Định mức SP = SL đơn hàng', () => {
+  const may = (part: Partial<Line>): Line => ({ ...lineFromPo(base), qty_lsx: '', dm_per_sp: '', qty_demand: '', ...part }) // prettier-ignore
+
+  it('mở đơn: SL theo LSX = SL đơn hàng ÷ Định mức SP; thiếu một số thì trống', () => {
+    expect(lsxOf({ qty_demand: 1020, dm_per_sp: 5.1 })).toBe(200)
+    expect(lsxOf({ qty_demand: 1020, dm_per_sp: '' })).toBe('')
+    expect(lineFromPo({ ...base, qty_demand: 100, dm_per_sp: 2.5 }).qty_lsx).toBe(40)
+  })
+
+  it('gõ SL theo LSX rồi Định mức → SL đơn hàng tự nhân; sửa thẳng SL đơn hàng → SL theo LSX tính lại', () => {
+    const a = withLsxDemand('rattan', may({}), may({ qty_lsx: 200 }))
+    expect(a.qty_demand).toBe('')
+    const b = withLsxDemand('rattan', a, { ...a, dm_per_sp: 5.1 })
+    expect(b.qty_demand).toBe(1020)
+    const c = withLsxDemand('rattan', b, { ...b, qty_demand: 1530 })
+    expect(c.qty_lsx).toBe(300)
+    // Mẫu khác giữ nguyên nghĩa cũ (phụ kiện: SL đơn hàng là số SP).
+    expect(
+      withLsxDemand('accessory', may({}), may({ qty_lsx: 200, dm_per_sp: 4 })).qty_demand,
+    ).toBe('')
+  })
+
+  it('thêm từ nhu cầu lệnh: SL theo LSX = tổng SP, Định mức = định mức chung hoặc SL cần ÷ SP', () => {
+    expect(lsxFromNeed('rattan', { qty_needed: 1020, breakdown: [{ qty: 200, per_unit: 5.1 }] })).toEqual({ qty_lsx: 200, dm_per_sp: 5.1 }) // prettier-ignore
+    expect(lsxFromNeed('rattan', { qty_needed: 1120, breakdown: [{ qty: 200, per_unit: 5.1 }, { qty: 40, per_unit: 2.5 }] })).toEqual({ qty_lsx: 240, dm_per_sp: 4.6667 }) // prettier-ignore
+    expect(lsxFromNeed('rattan', { qty_needed: 10, breakdown: [] })).toEqual({})
+    expect(lsxFromNeed('accessory', { qty_needed: 10, breakdown: [{ qty: 2, per_unit: 5 }] })).toEqual({}) // prettier-ignore
   })
 })

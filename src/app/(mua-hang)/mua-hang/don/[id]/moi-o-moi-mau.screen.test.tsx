@@ -140,6 +140,8 @@ function kichBan(
   i: number,
 ): { label: string; value: string; field: string; want: unknown }[] {
   const num = 3 + i // mỗi ô một số khác nhau để không nhầm ô này với ô kia
+  // Ô chỉ ở trình duyệt (SL theo LSX của mẫu mây) không có cột DB để kiểm payload.
+  if (f.clientOnly) return []
   switch (f.kind) {
     case 'calc':
       return [{ label: f.label, value: '300', field: 'qty2_override', want: 300 }]

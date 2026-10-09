@@ -375,7 +375,7 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
     accessory: ['unit2'],
     aluminium: ['demand'],
     carton: ['demand', 'onhand', 'basis'],
-    rattan: ['demand', 'onhand', 'unit2'],
+    rattan: ['lsx', 'dm', 'demand', 'onhand', 'unit2'],
     paint: ['demand', 'onhand', 'unit2'],
     chemical: ['demand', 'onhand', 'unit2'],
     foam: ['dims', 'basis', 'demand', 'dm', 'onhand'],
