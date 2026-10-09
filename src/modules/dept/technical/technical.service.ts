@@ -316,6 +316,10 @@ export const productsService = {
       category?: string
       /** 'updated' = xếp theo lần sửa gần nhất (lối tắt "Vừa sửa gần đây"). */
       sort?: 'created' | 'updated'
+      /** Mã vật liệu khung ('AL', 'IR'…) — thư viện 08/10/2026. */
+      frame_material?: string
+      /** Chỉ các id này (lọc tập tính ở `library.service`); mảng rỗng = 0 dòng. */
+      ids?: string[]
       page: number
       page_size: number
     },
@@ -327,10 +331,13 @@ export const productsService = {
     if (ids.length === 0) return strict
 
     const rows = await productsRepo.listLiteByIds(ids)
+    const idSet = opts.ids ? new Set(opts.ids) : null
     // Bộ lọc đang bật vẫn phải được tôn trọng — người dùng lọc "khách A" thì kết
     // quả gần đúng cũng chỉ được nằm trong khách A.
     const kept = rows.filter(
       (r) =>
+        (idSet == null || idSet.has(r.id)) &&
+        (opts.frame_material == null || r.frame_material === opts.frame_material) &&
         (opts.is_active == null || r.is_active === opts.is_active) &&
         (opts.customer_name == null ||
           (opts.customer_name === NO_CUSTOMER_FILTER
