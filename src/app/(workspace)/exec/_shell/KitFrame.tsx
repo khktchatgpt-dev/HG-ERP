@@ -1,6 +1,7 @@
 'use client'
 
 import { useLocalPref } from '@/lib/use-local-pref'
+import { cn } from '@/lib/utils'
 
 /**
  * LỚP TOKEN CỦA KIT cho khu Ban Giám đốc — cùng cách khu Mua hàng làm.
@@ -24,7 +25,33 @@ import { useLocalPref } from '@/lib/use-local-pref'
  */
 export const EXEC_DENSE_KEY = 'hg.exec.dense'
 
-export function ExecKitFrame({ children }: { children: React.ReactNode }) {
+export function ExecKitFrame({
+  children,
+  screen = false,
+}: {
+  children: React.ReactNode
+  /**
+   * Màn bên trong dùng `ScreenFrame` (tự chốt chiều cao, cuộn trong bảng).
+   *
+   * BẪY HAI THANH CUỘN (09/10/2026, /exec/gia-tri-don): layout exec KHÔNG
+   * `bare` — `<main>` có đệm `p-4 sm:px-6 sm:py-6` cho mười màn v3 cũ.
+   * `ScreenFrame` chỉ huỷ đệm của CHA TRỰC TIẾP, mà cha của nó là thẻ này
+   * (đệm 0), nên khung cao đúng tới đáy cửa sổ rồi còn cộng đệm đáy 24px của
+   * `<main>` → `<main>` tràn 24px và hiện thanh cuộn thứ hai ngoài thanh của
+   * bảng. Lề âm ở đây trả lại đúng phần đệm đó.
+   */
+  screen?: boolean
+}) {
   const [dense] = useLocalPref(EXEC_DENSE_KEY, '0')
-  return <div className={dense === '1' ? 'kit kit-dense' : 'kit'}>{children}</div>
+  return (
+    <div
+      className={cn(
+        'kit',
+        dense === '1' && 'kit-dense',
+        screen && '-m-4 sm:-mx-6 sm:-my-6',
+      )}
+    >
+      {children}
+    </div>
+  )
 }

@@ -14,7 +14,8 @@ import { VERDICT_LABEL, type LaiLoRow } from '@/lib/lai-lo'
 import { pct, VERDICT_TONE, vnd } from './gia-tri-don.shared'
 
 /**
- * PHÂN TÍCH LÃI / LỖ CỦA MỘT LỆNH — khối đầu ngăn soi (03/10/2026).
+ * PHÂN TÍCH LÃI / LỖ CỦA MỘT LỆNH — cột phải trang chi tiết lệnh `[id]`
+ * (03/10/2026; từ 09/10/2026 trang thay cho ngăn soi).
  *
  * Chủ dự án: "bỏ trang lãi lỗ đi, xem chi tiết sẽ phân tích bên trong". Ba khối
  * chuyển nguyên từ ngăn soi của trang `/exec/lai-lo` đã gỡ, đúng thứ tự Giám đốc
@@ -44,8 +45,8 @@ export function PhanTich({ row: r }: { row: LaiLoRow | null | undefined }) {
       <section>
         <h3 className={h3}>Phân tích lãi / lỗ</h3>
         <div className="text-k-sm text-[var(--ink-3)]">
-          Lệnh này không có trong bảng phân tích — thường do lệnh đã đóng; bấm “Cả lệnh đã
-          đóng” ở đầu trang để nạp.
+          Lệnh này không có trong bảng phân tích — tải lại trang; còn trống thì báo quản
+          trị.
         </div>
       </section>
     )

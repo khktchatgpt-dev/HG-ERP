@@ -31,14 +31,19 @@ const RUNNING = ['approved', 'in_progress']
 export type GiaTriDonScreen = GtdBoard & { all: boolean }
 
 export const giaTriDonService = {
-  async board(user: User, opts: { all?: boolean } = {}): Promise<GiaTriDonScreen> {
+  /** `lsxId`: chỉ MỘT lệnh, mọi trạng thái — cho trang chi tiết `/exec/gia-tri-don/[id]`. */
+  async board(
+    user: User,
+    opts: { all?: boolean; lsxId?: string } = {},
+  ): Promise<GiaTriDonScreen> {
     await assertAction(user, 'exec.tower.view')
 
     let q = db()
       .from('production_orders')
       .select('id, code, status, customer:sales_customers(name)')
       .order('code')
-    if (!opts.all) q = q.in('status', RUNNING)
+    if (opts.lsxId) q = q.eq('id', opts.lsxId)
+    else if (!opts.all) q = q.in('status', RUNNING)
     const lsxRes = await q
     if (lsxRes.error) throw new Error(lsxRes.error.message)
     type LsxRaw = { id: string; code: string; status: string; customer: { name: string } | { name: string }[] | null } // prettier-ignore

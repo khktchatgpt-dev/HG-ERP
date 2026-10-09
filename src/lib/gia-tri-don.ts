@@ -72,6 +72,22 @@ export type GtdPoRow = {
   extra_lsx: boolean
 }
 
+/**
+ * Vì sao chênh lệch của một lệnh CHƯA đáng tin trọn — màn nói ra ngay cạnh số:
+ * - `thieu_gia`: còn dòng đơn bán giá 0 → phần bán đang thiếu, chênh lệch thấp hơn thật.
+ * - `thieu_ty_gia`: có đơn (bán hoặc mua) ngoại tệ chưa tỷ giá → khoản đó không vào phép trừ.
+ * - `gop_lenh`: có đơn mua gộp nhiều lệnh, đang trừ TRỌN vào lệnh này (lệnh chính trừ thừa, lệnh kia trừ thiếu).
+ * - `chua_mua`: chưa có đơn mua nào → chênh lệch = cả giá bán, chưa nói gì.
+ */
+export type GtdDiffWarn = 'thieu_gia' | 'thieu_ty_gia' | 'gop_lenh' | 'chua_mua'
+export type GtdDiff = {
+  /** Bán − mua, VND đã quy. null = lệnh chưa có đơn bán ghi giá — không có gì để trừ. */
+  vnd: number | null
+  /** Mua / bán, % — mua ăn bao nhiêu phần giá bán. null khi bán = 0. */
+  buy_pct: number | null
+  warn: GtdDiffWarn[]
+}
+
 export type GtdRow = {
   lsx_id: string
   code: string
@@ -92,6 +108,18 @@ export type GtdRow = {
   po_draft_vnd: number
   po_extra_lsx: number
   pos: GtdPoRow[]
+  /* ---- chênh lệch bán − mua (09/10/2026) ---- */
+  diff: GtdDiff
+}
+
+/** Tổng chênh lệch của một tập lệnh — CHỈ cộng lệnh có đơn bán ghi giá. */
+export type GtdDiffSum = {
+  vnd: number
+  buy_pct: number | null
+  /** Số lệnh góp vào tổng (lệnh chưa có giá bán bị bỏ ra, không trừ mua của chúng). */
+  lsx: number
+  /** Trong số đó, bao nhiêu lệnh có lý do khiến số chưa trọn (`warn` khác rỗng). */
+  lsx_warn: number
 }
 
 export type GtdBoard = {
@@ -111,6 +139,7 @@ export type GtdBoard = {
     po_draft_vnd: number
     po_extra_lsx: number
     lsx_without_pos: number
+    diff: GtdDiffSum
   }
 }
 
@@ -151,6 +180,46 @@ function sumByCurrency(list: { currency: string; amount: number }[]) {
   const m = new Map<string, number>()
   for (const it of list) m.set(it.currency, r2((m.get(it.currency) ?? 0) + it.amount))
   return [...m].filter(([, a]) => a !== 0).map(([currency, amount]) => ({ currency, amount })) // prettier-ignore
+}
+
+const pct1 = (part: number, whole: number) =>
+  whole > 0 ? Math.round((part / whole) * 1000) / 10 : null
+
+/**
+ * Chênh lệch bán − mua của MỘT lệnh. Chỉ trừ hai số đã quy VND, không đoán phần
+ * thiếu: lệnh chưa có đơn bán ghi giá → `vnd = null` (đừng bày "−8 tỷ" chỉ vì
+ * Bán hàng chưa nhập giá). Mua tính MỌI đơn chưa huỷ, kể cả nháp — cùng số với
+ * cột "VND quy đổi" của khối đơn mua, để phép trừ đọc lại được bằng mắt.
+ */
+function diffOf(
+  r: Pick<GtdRow, 'order_vnd' | 'po_vnd' | 'order_lines' | 'priced_lines' | 'po_count' | 'po_extra_lsx'>, // prettier-ignore
+): GtdDiff {
+  if (r.priced_lines === 0 || r.order_vnd.vnd === 0) {
+    return { vnd: null, buy_pct: null, warn: [] }
+  }
+  const warn: GtdDiffWarn[] = []
+  if (r.priced_lines < r.order_lines) warn.push('thieu_gia')
+  if (r.order_vnd.missing.length + r.po_vnd.missing.length > 0) warn.push('thieu_ty_gia')
+  if (r.po_extra_lsx > 0) warn.push('gop_lenh')
+  if (r.po_count === 0) warn.push('chua_mua')
+  return {
+    vnd: r0(r.order_vnd.vnd - r.po_vnd.vnd),
+    buy_pct: pct1(r.po_vnd.vnd, r.order_vnd.vnd),
+    warn,
+  }
+}
+
+/** Tổng chênh lệch — cùng hàm cho dải đầu trang và chân bảng đang lọc. */
+export function sumGtdDiff(rows: GtdRow[]): GtdDiffSum {
+  const on = rows.filter((r) => r.diff.vnd != null)
+  const sell = on.reduce((s, r) => s + r.order_vnd.vnd, 0)
+  const buy = on.reduce((s, r) => s + r.po_vnd.vnd, 0)
+  return {
+    vnd: r0(sell - buy),
+    buy_pct: pct1(buy, sell),
+    lsx: on.length,
+    lsx_warn: on.filter((r) => r.diff.warn.length > 0).length,
+  }
 }
 
 export function giaTriDonBoard(input: {
@@ -203,7 +272,7 @@ export function giaTriDonBoard(input: {
       }))
       .sort((a, b) => (b.vnd ?? 0) - (a.vnd ?? 0) || a.code.localeCompare(b.code))
 
-    return {
+    const base = {
       lsx_id: L.id,
       code: L.code,
       status: L.status,
@@ -220,6 +289,7 @@ export function giaTriDonBoard(input: {
       po_extra_lsx: pos.filter((p) => p.extra_lsx).length,
       pos,
     }
+    return { ...base, diff: diffOf(base) }
   })
 
   // Lệnh có đơn bán ghi giá lên đầu (so được ngay), rồi theo tiền mua giảm dần —
@@ -248,6 +318,7 @@ export function giaTriDonBoard(input: {
       po_draft_vnd: r0(rows.reduce((s, r) => s + r.po_draft_vnd, 0)),
       po_extra_lsx: rows.reduce((s, r) => s + r.po_extra_lsx, 0),
       lsx_without_pos: rows.filter((r) => r.po_count === 0).length,
+      diff: sumGtdDiff(rows),
     },
   }
 }

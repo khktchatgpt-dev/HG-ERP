@@ -1,5 +1,5 @@
 import type { TagTone } from '@/components/kit'
-import type { GtdQuy } from '@/lib/gia-tri-don'
+import type { GtdDiff, GtdDiffWarn, GtdQuy } from '@/lib/gia-tri-don'
 import type { LaiLoVerdict } from '@/lib/lai-lo'
 
 /** Tiền VND đã quy, nhóm nghìn kiểu Việt, không lẻ. */
@@ -45,3 +45,31 @@ export const VERDICT_TONE: Record<LaiLoVerdict, TagTone> = {
 /** 2026-12-30 → 30/12/26. */
 export const dmy = (d: string | null) =>
   d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : '—'
+
+/** Lời cho từng lý do chênh lệch chưa trọn — nói CÁI GÌ thiếu, không nói mã. */
+export const DIFF_WARN_TEXT: Record<GtdDiffWarn, string> = {
+  thieu_gia: 'còn dòng chưa giá',
+  thieu_ty_gia: 'thiếu tỷ giá',
+  gop_lenh: 'có đơn gộp lệnh',
+  chua_mua: 'chưa có đơn mua',
+}
+
+/**
+ * Ô chênh lệch bán − mua: số (âm thì màu `--stop`), lý do chưa trọn nằm dòng
+ * dưới, nhạt. `vnd = null` = lệnh chưa có giá bán → "—", không bày số âm.
+ */
+export function DiffValue({ d }: { d: Pick<GtdDiff, 'vnd' | 'warn'> }) {
+  if (d.vnd == null) return <span className="text-[var(--ink-empty)]">—</span>
+  return (
+    <>
+      <span className={d.vnd < 0 ? 'font-semibold text-[var(--stop)]' : undefined}>
+        {vnd(d.vnd)}
+      </span>
+      {d.warn.length > 0 && (
+        <div className="text-k-label leading-tight whitespace-normal text-[var(--warn)]">
+          {d.warn.map((w) => DIFF_WARN_TEXT[w]).join(' · ')}
+        </div>
+      )}
+    </>
+  )
+}

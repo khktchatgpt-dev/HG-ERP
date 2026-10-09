@@ -39,7 +39,11 @@ export type LaiLoScreen = LaiLoBoard & {
 }
 
 export const laiLoService = {
-  async board(user: User, opts: { all?: boolean } = {}): Promise<LaiLoScreen> {
+  /** `lsxId`: chỉ MỘT lệnh, mọi trạng thái — cho trang chi tiết `/exec/gia-tri-don/[id]`. */
+  async board(
+    user: User,
+    opts: { all?: boolean; lsxId?: string } = {},
+  ): Promise<LaiLoScreen> {
     await assertAction(user, 'exec.tower.view')
     await assertAction(user, 'technical.plan_cost.view')
 
@@ -47,7 +51,8 @@ export const laiLoService = {
       .from('production_orders')
       .select('id, code, status, customer:sales_customers(name)')
       .order('code')
-    if (!opts.all) q = q.in('status', RUNNING)
+    if (opts.lsxId) q = q.eq('id', opts.lsxId)
+    else if (!opts.all) q = q.in('status', RUNNING)
     const lsxRes = await q
     if (lsxRes.error) throw new Error(lsxRes.error.message)
     type LsxRaw = { id: string; code: string; status: string; customer: { name: string } | { name: string }[] | null } // prettier-ignore

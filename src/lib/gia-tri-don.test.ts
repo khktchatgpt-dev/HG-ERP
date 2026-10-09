@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { giaTriDonBoard, mergeGtdQuy, type GtdOrder, type GtdPo } from './gia-tri-don'
+import {
+  giaTriDonBoard,
+  mergeGtdQuy,
+  sumGtdDiff,
+  type GtdOrder,
+  type GtdPo,
+} from './gia-tri-don'
 
 const L1 = { id: 'L1', code: '01/26-27 - X', status: 'approved', customer_name: 'X' }
 const L2 = { id: 'L2', code: '02/26-27 - Y', status: 'in_progress', customer_name: 'Y' }
@@ -122,5 +128,50 @@ describe('mergeGtdQuy', () => {
         { vnd: 2, missing: [{ currency: 'USD', amount: 2.25 }, { currency: 'EUR', amount: 1 }] }, // prettier-ignore
       ]),
     ).toEqual({ vnd: 3, missing: [{ currency: 'USD', amount: 3.75 }, { currency: 'EUR', amount: 1 }] }) // prettier-ignore
+  })
+})
+
+describe('chênh lệch bán − mua (09/10/2026)', () => {
+  const b = giaTriDonBoard({
+    lsx: [L1, L2, { ...L1, id: 'L3', code: '03/26-27 - Z' }],
+    orders: [
+      O({ id: 'o1', lsx_id: 'L1', currency: 'VND', fx_rate: null }),
+      O({ id: 'o2', lsx_id: 'L2', currency: 'VND', fx_rate: null }),
+    ],
+    orderLines: [
+      { order_id: 'o1', qty: 10, unit_price: 100_000 }, // bán L1 = 1.000.000
+      { order_id: 'o1', qty: 5, unit_price: 0 }, // một dòng chưa giá
+      { order_id: 'o2', qty: 1, unit_price: 0 }, // L2: đơn bán chưa ghi giá
+    ],
+    pos: [
+      PO({ id: 'p1', lsx_id: 'L1', amount: 400_000, extra_lsx: true }),
+      PO({ id: 'p2', lsx_id: 'L1', amount: 100, currency: 'USD', fx_rate: null }),
+      PO({ id: 'p3', lsx_id: 'L2', amount: 9_000_000 }),
+      PO({ id: 'p4', lsx_id: 'L3', amount: 5_000_000 }),
+    ],
+  })
+  const by = (id: string) => b.rows.find((r) => r.lsx_id === id)!
+  it('bán − mua theo VND đã quy, kèm tỷ lệ mua / bán', () => {
+    expect(by('L1').diff).toMatchObject({ vnd: 600_000, buy_pct: 40 })
+  })
+  it('nói ra vì sao số chưa trọn: dòng chưa giá, ngoại tệ chưa tỷ giá, đơn gộp lệnh', () => {
+    expect(by('L1').diff.warn).toEqual(['thieu_gia', 'thieu_ty_gia', 'gop_lenh'])
+  })
+  it('lệnh chưa có giá bán (hay chưa có đơn bán) → null, không bày số âm bằng cả tiền mua', () => {
+    expect(by('L2').diff).toEqual({ vnd: null, buy_pct: null, warn: [] })
+    expect(by('L3').diff.vnd).toBeNull()
+  })
+  it('tổng chỉ cộng lệnh có giá bán — mua của lệnh chưa giá không bị trừ vào', () => {
+    expect(b.totals.diff).toEqual({ vnd: 600_000, buy_pct: 40, lsx: 1, lsx_warn: 1 })
+    expect(sumGtdDiff([by('L2'), by('L3')])).toEqual({ vnd: 0, buy_pct: null, lsx: 0, lsx_warn: 0 }) // prettier-ignore
+  })
+  it('chưa có đơn mua → cảnh báo chua_mua, chênh lệch = cả giá bán', () => {
+    const c = giaTriDonBoard({
+      lsx: [L1],
+      orders: [O({ id: 'o1', currency: 'VND', fx_rate: null })],
+      orderLines: [{ order_id: 'o1', qty: 1, unit_price: 500 }],
+      pos: [],
+    })
+    expect(c.rows[0].diff).toEqual({ vnd: 500, buy_pct: 0, warn: ['chua_mua'] })
   })
 })
