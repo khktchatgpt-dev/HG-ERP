@@ -2,237 +2,342 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ClipboardList, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { HO_SO_TEN } from '@/lib/ho-so-sp'
+import { HO_SO_TEN, type HoSoO } from '@/lib/ho-so-sp'
 import { lsxStatusLabel } from '@/lib/lsx-status'
-import type { LsxHoSo } from '@/modules/dept/technical/lsx-ho-so.service'
+import type { LsxHoSo, LsxHoSoLine } from '@/modules/dept/technical/lsx-ho-so.service'
 import { AnhNho, OHoSo } from '../thu-vien.shared'
 import { dmyShort } from '../[id]/ho-so.shared'
 
+type Loc = '' | 'bom' | 'so' | 'bv' | 'dg' | 'anh' | 'du'
+
 /**
- * Trang theo dõi của Kỹ thuật: lệnh nào sắp xuất mà SP còn thiếu định mức / hồ
- * sơ. Dùng bộ thẻ `.hs` của hồ sơ SP. Lọc "Chỉ SP còn thiếu" giấu các dòng đã đủ
- * để mắt chỉ còn việc phải làm.
+ * LỆNH SX · HỒ SƠ SP — khuôn C · Danh sách theo kiểu ERP (09/10/2026, chủ dự án:
+ * "thiết kế thiên hướng ERP"): cùng hệ với /thu-vien — thanh đầu có dữ kiện bấm
+ * được, hàng lọc, MỘT lưới dày tiêu đề dính + chân tổng, mỗi lệnh là một hàng
+ * nhóm mang số đếm, không thẻ nổi. Câu hỏi của màn: "lệnh nào sắp xuất mà SP còn
+ * thiếu định mức / hồ sơ?" — sắp theo ngày xuất gần nhất, mặc định ẩn SP đã đủ.
  */
 export function LenhScreen({ lenh, all }: { lenh: LsxHoSo[]; all: boolean }) {
+  const [loc, setLoc] = useState<Loc>('')
   const [chiThieu, setChiThieu] = useState(true)
-  const [mo, setMo] = useState<Record<string, boolean>>({})
-  // Mốc "hôm nay" lấy một lần khi mở trang — render thuần, không gọi Date.now() giữa chừng.
+  const [q, setQ] = useState('')
+  const [kh, setKh] = useState('')
   const [now] = useState(() => Date.now())
+
+  const khach = [
+    ...new Set(lenh.map((l) => l.customer).filter((v): v is string => !!v)),
+  ].sort()
+  const thieuCua = (r: LsxHoSoLine) => r.thieu.length > 0 || r.thieu_so > 0
+  const khop = (r: LsxHoSoLine) => {
+    if (loc === 'bom') return r.thieu.includes('bom')
+    if (loc === 'so') return r.thieu_so > 0
+    if (loc === 'bv') return r.thieu.includes('bv')
+    if (loc === 'dg') return r.thieu.includes('dg') || r.thieu.includes('xc')
+    if (loc === 'anh') return r.thieu.includes('anh')
+    if (loc === 'du') return !thieuCua(r)
+    return !chiThieu || thieuCua(r)
+  }
+  const qq = q.trim().toLowerCase()
+  const hien = lenh
+    .filter((l) => !kh || l.customer === kh)
+    .map((l) => ({
+      ...l,
+      rows: l.lines.filter(
+        (r) =>
+          khop(r) &&
+          (!qq || r.code.toLowerCase().includes(qq) || r.name.toLowerCase().includes(qq)),
+      ),
+    }))
+    .filter((l) => l.rows.length > 0 || (!qq && loc === '' && !chiThieu))
+
   const tong = lenh.reduce(
     (a, l) => {
       a.sp += l.counts.sp
-      a.thieuBom += l.counts.thieu_bom
-      a.thieuSo += l.counts.thieu_so
+      a.bom += l.counts.thieu_bom
+      a.so += l.counts.thieu_so
+      a.bv += l.counts.thieu_bv
+      a.dg += l.counts.thieu_dg
+      a.anh += l.counts.thieu_anh
       a.du += l.counts.du
       return a
     },
-    { sp: 0, thieuBom: 0, thieuSo: 0, du: 0 },
+    { sp: 0, bom: 0, so: 0, bv: 0, dg: 0, anh: 0, du: 0 },
   )
-  const ngay = (s: string | null) => {
-    if (!s) return { t: 'chưa chốt', tone: 'gray' }
-    const d = Math.round((new Date(s).getTime() - now) / 86_400_000)
-    return {
-      t: `${dmyShort(s)} · ${d < 0 ? `quá ${-d} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`}`,
-      tone: d < 0 ? 'bad' : d <= 14 ? 'warn' : 'gray',
-    }
-  }
-
+  const hienSp = hien.reduce((a, l) => a + l.rows.length, 0)
+  const conNgay = (s: string | null) =>
+    s ? Math.round((new Date(s).getTime() - now) / 86_400_000) : null
   return (
-    <div className="hs">
-      <section className="card">
-        <header className="head">
-          <div style={{ minWidth: 0 }}>
-            <div className="crumb">
-              <Link href="/thu-vien">Thư viện sản phẩm</Link> › Lệnh sản xuất
-            </div>
-            <h1>Lệnh sản xuất · hồ sơ sản phẩm</h1>
-            <div className="meta">
-              <span className="chip">
-                {lenh.length} lệnh {all ? '(cả đã xong)' : 'đang chạy'}
-              </span>
-              <span className="chip">{tong.sp} dòng SP</span>
-              {tong.thieuBom > 0 && (
-                <span className="pill bad">{tong.thieuBom} SP chưa có định mức</span>
-              )}
-              {tong.thieuSo > 0 && (
-                <span className="pill warn">{tong.thieuSo} SP định mức thiếu số</span>
-              )}
-              <span className="pill ok">{tong.du} SP đủ hồ sơ</span>
-            </div>
-          </div>
-          <div className="r">
-            <button
-              type="button"
-              className={cn('btn', chiThieu && 'on')}
-              onClick={() => setChiThieu(!chiThieu)}
-            >
-              {chiThieu ? 'Đang ẩn SP đã đủ' : 'Chỉ SP còn thiếu'}
-            </button>
-            <Link
-              className="btn"
-              href={all ? '/thu-vien/lenh' : '/thu-vien/lenh?tat_ca=1'}
-            >
-              {all ? 'Chỉ lệnh đang chạy' : 'Cả lệnh đã xong'}
-            </Link>
-          </div>
-        </header>
-      </section>
+    <>
+      <header className="head">
+        <div className="head-l">
+          <span className="eyebrow">Dùng chung</span>
+          <h1>Lệnh SX · hồ sơ sản phẩm</h1>
+          <span className="fact">
+            Lệnh <b>{lenh.length}</b>
+          </span>
+          <span className="fact">
+            Dòng SP <b>{tong.sp}</b>
+          </span>
+          <Fact
+            k="bom"
+            label="Chưa có định mức"
+            n={tong.bom}
+            w
+            loc={loc}
+            setLoc={setLoc}
+          />
+          <Fact
+            k="so"
+            label="Định mức thiếu số"
+            n={tong.so}
+            w
+            loc={loc}
+            setLoc={setLoc}
+          />
+          <Fact k="bv" label="Thiếu bản vẽ" n={tong.bv} w loc={loc} setLoc={setLoc} />
+          <Fact k="dg" label="Thiếu đóng gói" n={tong.dg} w loc={loc} setLoc={setLoc} />
+          <Fact k="anh" label="Thiếu ảnh" n={tong.anh} loc={loc} setLoc={setLoc} />
+          <Fact k="du" label="Đủ hồ sơ" n={tong.du} loc={loc} setLoc={setLoc} />
+        </div>
+        <div className="head-r">
+          <button
+            type="button"
+            className={cn('btn', chiThieu && 'on')}
+            aria-pressed={chiThieu}
+            onClick={() => setChiThieu(!chiThieu)}
+            title="Ẩn các SP đã đủ hồ sơ"
+          >
+            Chỉ SP còn thiếu
+          </button>
+          <Link className="btn" href={all ? '/thu-vien/lenh' : '/thu-vien/lenh?tat_ca=1'}>
+            {all ? 'Chỉ lệnh đang chạy' : 'Cả lệnh đã xong'}
+          </Link>
+        </div>
+      </header>
 
-      {lenh.length === 0 && (
-        <section className="card">
-          <div className="pad">
-            Không có lệnh nào đang chạy. Lệnh mới do Kế hoạch SX lập ở khu Sản xuất.
-          </div>
-        </section>
-      )}
+      <div className="filters">
+        <input
+          className="pick"
+          style={{ width: 240 }}
+          placeholder="Tìm mã HG, tên SP…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Tìm sản phẩm"
+        />
+        <select
+          className="pick"
+          value={kh}
+          onChange={(e) => setKh(e.target.value)}
+          aria-label="Khách"
+        >
+          <option value="">Mọi khách ({khach.length})</option>
+          {khach.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+        <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>
+          Sắp theo ngày xuất gần nhất · bấm dữ kiện ở đầu trang để lọc theo thứ còn thiếu
+        </span>
+      </div>
 
-      {lenh.map((l) => {
-        const n = ngay(l.ship_date)
-        const rows = chiThieu
-          ? l.lines.filter((r) => r.thieu.length > 0 || r.thieu_so > 0)
-          : l.lines
-        const open = mo[l.id] ?? true
-        return (
-          <section key={l.id} className="card">
-            <div
-              className="card-h sec-dm"
-              style={{ cursor: 'pointer' }}
-              onClick={() => setMo({ ...mo, [l.id]: !open })}
-            >
-              <h2>
-                <span className="ic-sec">
-                  <ClipboardList aria-hidden />
-                </span>
-                {l.code}
-              </h2>
-              <span className="sub">{l.customer ?? '—'}</span>
-              <span className={cn('pill', n.tone)}>{n.t}</span>
-              <span className="chip">{lsxStatusLabel(l.status)}</span>
-              {l.revision > 0 && <span className="chip">bản #{l.revision}</span>}
-              <span className="r">
-                <span className="chip">{l.counts.sp} SP</span>
-                <span className={cn('pill', l.counts.thieu_bom ? 'bad' : 'ok')}>
-                  định mức {l.counts.bom}/{l.counts.sp}
-                </span>
-                {l.counts.thieu_so > 0 && (
-                  <span className="pill warn">{l.counts.thieu_so} thiếu số</span>
-                )}
-                {l.counts.thieu_bv > 0 && (
-                  <span className="pill warn">{l.counts.thieu_bv} thiếu bản vẽ</span>
-                )}
-                {l.counts.thieu_dg > 0 && (
-                  <span className="pill warn">{l.counts.thieu_dg} thiếu đóng gói</span>
-                )}
-                {l.counts.thieu_anh > 0 && (
-                  <span className="pill gray">{l.counts.thieu_anh} thiếu ảnh</span>
-                )}
-                <Link
-                  className="btn xs"
-                  href={`/mua-hang/yeu-cau/${l.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  title="Hồ sơ lệnh (Cung ứng)"
-                >
-                  <ExternalLink size={12} aria-hidden />
-                  Hồ sơ lệnh
-                </Link>
-              </span>
-            </div>
-            {open && (
-              <table className="soi" aria-label={`SP trên lệnh ${l.code}`}>
-                <thead>
-                  <tr>
-                    <th style={{ width: 36 }}>
-                      <span className="sr">Ảnh</span>
-                    </th>
-                    <th style={{ width: 120 }}>Mã HG</th>
-                    <th>Tên sản phẩm</th>
-                    <th className="num" style={{ width: 70 }}>
-                      SL
-                    </th>
-                    <th style={{ width: 110 }}>Xuất</th>
-                    <th style={{ width: 200 }}>Hồ sơ</th>
-                    <th style={{ width: 150 }}>Định mức</th>
-                    <th style={{ width: 220 }}>Còn thiếu</th>
+      <div className="scroll">
+        <table className="bang" aria-label="SP trên lệnh sản xuất">
+          <thead>
+            <tr>
+              <th style={{ width: 34 }}>
+                <span className="sr">Ảnh</span>
+              </th>
+              <th style={{ width: 118 }}>Mã HG</th>
+              <th>Tên sản phẩm</th>
+              <th className="num" style={{ width: 70 }}>
+                SL
+              </th>
+              <th style={{ width: 96 }}>Xuất</th>
+              <th style={{ width: 196 }}>Hồ sơ</th>
+              <th style={{ width: 150 }}>Định mức</th>
+              <th style={{ width: 240 }}>Còn thiếu</th>
+            </tr>
+          </thead>
+          {hien.map((l) => {
+            const d = conNgay(l.ship_date)
+            return (
+              <tbody key={l.id}>
+                <tr className="grp">
+                  <th scope="rowgroup" colSpan={8}>
+                    <Link className="code" href={`/thu-vien/lenh#${l.id}`} id={l.id}>
+                      {l.code}
+                    </Link>
+                    <span className="n">{l.customer ?? '—'}</span>
+                    <span className="n">
+                      xuất {l.ship_date ? dmyShort(l.ship_date) : 'chưa chốt'}
+                      {d != null && (
+                        <span
+                          className={cn(d < 0 ? 'red' : d <= 14 ? 'pend' : 'muted')}
+                          style={{ float: 'none', marginLeft: 4 }}
+                        >
+                          (
+                          {d < 0
+                            ? `quá ${-d} ngày`
+                            : d === 0
+                              ? 'hôm nay'
+                              : `còn ${d} ngày`}
+                          )
+                        </span>
+                      )}
+                    </span>
+                    <span className="n">
+                      {lsxStatusLabel(l.status)}
+                      {l.revision > 0 ? ` · bản #${l.revision}` : ''}
+                    </span>
+                    <span className="n">
+                      {l.counts.sp} SP · định mức {l.counts.bom}/{l.counts.sp}
+                      {l.counts.thieu_so ? ` · ${l.counts.thieu_so} thiếu số` : ''}
+                      {l.counts.thieu_bv ? ` · ${l.counts.thieu_bv} thiếu bản vẽ` : ''}
+                      {l.counts.thieu_dg ? ` · ${l.counts.thieu_dg} thiếu đóng gói` : ''}
+                    </span>
+                    {l.counts.du === l.counts.sp ? (
+                      <span className="ok">đủ hồ sơ</span>
+                    ) : (
+                      <span className="pend">
+                        {l.counts.sp - l.counts.du} SP còn thiếu
+                      </span>
+                    )}
+                  </th>
+                </tr>
+                {l.rows.map((r) => (
+                  <tr key={r.product_id || r.code}>
+                    <td>
+                      <AnhNho url={r.image_url} alt="" />
+                    </td>
+                    <td>
+                      {r.product_id ? (
+                        <Link
+                          className="code"
+                          href={`/thu-vien/${r.product_id}`}
+                          title="Mở hồ sơ"
+                        >
+                          {r.code}
+                        </Link>
+                      ) : (
+                        <span className="muted">{r.code}</span>
+                      )}
+                    </td>
+                    <td title={r.name}>
+                      {r.name}
+                      {r.locked && (
+                        <span className="tag done" style={{ marginLeft: 6 }}>
+                          khoá
+                        </span>
+                      )}
+                    </td>
+                    <td className="num">{r.qty.toLocaleString('vi-VN')}</td>
+                    <td className="num muted">
+                      {r.ship_date ? dmyShort(r.ship_date) : '—'}
+                    </td>
+                    <td>
+                      {r.check ? (
+                        <OHoSo check={r.check} />
+                      ) : (
+                        <span className="muted">chưa có hồ sơ</span>
+                      )}
+                    </td>
+                    <td className={cn(r.parts === 0 && 'red')}>
+                      {r.parts === 0 ? (
+                        'chưa có'
+                      ) : r.thieu_so > 0 ? (
+                        <span className="pend" style={{ float: 'none' }}>
+                          {r.parts} dòng · {r.thieu_so} thiếu số
+                        </span>
+                      ) : (
+                        <span className="ok" style={{ float: 'none' }}>
+                          {r.parts} dòng · đủ số
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      className={cn(thieuCua(r) ? 'loi' : 'muted')}
+                      style={{ whiteSpace: 'normal' }}
+                    >
+                      {thieuCua(r)
+                        ? [
+                            ...r.thieu.map((o: HoSoO) => HO_SO_TEN[o]),
+                            ...(r.thieu_so ? [`${r.thieu_so} dòng thiếu số`] : []),
+                          ].join(' · ')
+                        : 'đủ'}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.product_id || r.code}>
-                      <td>
-                        <AnhNho url={r.image_url} alt="" />
-                      </td>
-                      <td>
-                        {r.product_id ? (
-                          <Link
-                            className="code"
-                            href={`/thu-vien/${r.product_id}`}
-                            title="Mở hồ sơ"
-                          >
-                            {r.code}
-                          </Link>
-                        ) : (
-                          <span className="muted">{r.code}</span>
-                        )}
-                      </td>
-                      <td title={r.name} style={{ maxWidth: 360 }}>
-                        {r.name}
-                        {r.locked && (
-                          <span className="tag done" style={{ marginLeft: 6 }}>
-                            khoá
-                          </span>
-                        )}
-                      </td>
-                      <td className="num">{r.qty.toLocaleString('vi-VN')}</td>
-                      <td className="muted">
-                        {r.ship_date ? dmyShort(r.ship_date) : '—'}
-                      </td>
-                      <td>
-                        {r.check ? (
-                          <OHoSo check={r.check} />
-                        ) : (
-                          <span className="muted">chưa có hồ sơ</span>
-                        )}
-                      </td>
-                      <td>
-                        {r.parts === 0 ? (
-                          <span className="pill bad">Chưa có</span>
-                        ) : r.thieu_so > 0 ? (
-                          <span className="pill warn">
-                            {r.parts} dòng · {r.thieu_so} thiếu số
-                          </span>
-                        ) : (
-                          <span className="pill ok">{r.parts} dòng · đủ số</span>
-                        )}
-                      </td>
-                      <td style={{ whiteSpace: 'normal' }}>
-                        {r.thieu.length === 0 && r.thieu_so === 0 ? (
-                          <span className="muted">đủ</span>
-                        ) : (
-                          <span className="loi">
-                            {[
-                              ...r.thieu.map((o) => HO_SO_TEN[o]),
-                              ...(r.thieu_so ? [`${r.thieu_so} dòng thiếu số`] : []),
-                            ].join(' · ')}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="muted" style={{ textAlign: 'center' }}>
-                        Mọi SP trên lệnh đã đủ hồ sơ
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </section>
-        )
-      })}
-    </div>
+                ))}
+              </tbody>
+            )
+          })}
+          {hien.length === 0 && (
+            <tbody>
+              <tr>
+                <td
+                  colSpan={8}
+                  className="muted"
+                  style={{ textAlign: 'center', height: 60 }}
+                >
+                  Không có dòng nào khớp — bỏ bớt lọc hoặc tắt “Chỉ SP còn thiếu”.
+                </td>
+              </tr>
+            </tbody>
+          )}
+          <tfoot>
+            <tr>
+              <td colSpan={3}>
+                Hiện {hienSp} / {tong.sp} dòng SP trên {hien.length} / {lenh.length} lệnh
+                {all ? ' (cả đã xong)' : ' đang chạy'}
+              </td>
+              <td colSpan={5} style={{ fontWeight: 400 }}>
+                Hồ sơ đếm bằng đúng 6 ô của thư viện (BOM · Bản vẽ · Ảnh · Đóng gói · Xếp
+                cont · Mẫu). Định mức “thiếu số” = dòng không có SL hoặc thanh không có
+                dài cắt.
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div className="foot">
+        <span>
+          {tong.bom} SP chưa có định mức · {tong.so} thiếu số · {tong.du} đủ hồ sơ
+        </span>
+        <span className="num" style={{ marginLeft: 'auto' }}>
+          {hienSp} dòng
+        </span>
+      </div>
+    </>
+  )
+}
+
+/** Dữ kiện ở đầu trang: bấm là lọc theo thứ còn thiếu (đúng hàm đếm của bảng). */
+function Fact({
+  k,
+  label,
+  n,
+  w,
+  loc,
+  setLoc,
+}: {
+  k: Loc
+  label: string
+  n: number
+  w?: boolean
+  loc: Loc
+  setLoc: (l: Loc) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={cn('fact', loc === k && 'on')}
+      aria-pressed={loc === k}
+      onClick={() => setLoc(loc === k ? '' : k)}
+    >
+      {label} <b className={cn(w && n > 0 && 'w')}>{n}</b>
+    </button>
   )
 }
