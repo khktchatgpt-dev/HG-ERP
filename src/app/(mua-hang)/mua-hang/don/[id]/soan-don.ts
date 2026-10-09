@@ -1,3 +1,4 @@
+
 /**
  * LOGIC THUẦN CỦA PHẦN SOẠN ĐƠN trên màn chứng từ hợp nhất — không React, có
  * test. Chuyển từ `PoCreateForm.tsx` (bản cũ, 1.562 dòng trộn UI và logic)

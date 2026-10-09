@@ -156,10 +156,7 @@ function Chan({ text }: { text: string }) {
 }
 
 /** Nhãn nguyên nhân + lệnh của một lần điều chỉnh — dùng ở bảng phát sinh và dòng thời gian. */
-export function causeText(a: {
-  cause?: string | null
-  lsx?: { code: string }[]
-}): string {
+export function causeText(a: { cause?: string | null; lsx?: { code: string }[] }): string {
   const lsx = a.lsx ?? []
   return `${causeLabel(a.cause)}${lsx.length ? ` theo ${lsx.map((l) => l.code).join(', ')}` : ''}`
 }
@@ -196,10 +193,7 @@ export function NguyenNhanCell({
       {(a.lsx ?? []).map((l) => (
         <span key={l.id} className="text-k-sm text-[var(--ink-3)]">
           theo{' '}
-          <Link
-            href={`/mua-hang/yeu-cau/${l.id}`}
-            className="num text-[var(--act-text)] underline"
-          >
+          <Link href={`/mua-hang/yeu-cau/${l.id}`} className="num text-[var(--act-text)] underline">
             {l.code}
           </Link>
           {l.orders.length ? ` · ${l.orders.join(', ')}` : ''}

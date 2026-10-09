@@ -6,11 +6,7 @@ import {
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import type { Check } from '@/components/kit'
-import {
-  duplicateLinePairs,
-  duplicateLinesMessage,
-  type DupLine,
-} from '@/lib/po-line-dup'
+import { duplicateLinePairs, duplicateLinesMessage, type DupLine } from '@/lib/po-line-dup'
 
 /**
  * LOGIC THUẦN CỦA MÀN CHỨNG TỪ HỢP NHẤT — không React, có test.
