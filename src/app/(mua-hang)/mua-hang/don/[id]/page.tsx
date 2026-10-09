@@ -132,7 +132,18 @@ export default async function Page({
       // Lần đổi dòng SP gần nhất của đơn khách theo lệnh đơn đang gắn — hộp
       // "Nguyên nhân" khi điều chỉnh bày để đối chiếu (0227). Hỏng thì bỏ qua.
       ordersRepo
-        .lastLineChangeByLsx(linkedLsxIds(po.production_order_id, extra_lsx.map((x) => x.id), lines.flatMap((l) => ((l as { lsx_split?: { production_order_id: string }[] | null }).lsx_split ?? []).map((x) => x.production_order_id)))) // prettier-ignore
+        .lastLineChangeByLsx(
+          linkedLsxIds(
+            po.production_order_id,
+            extra_lsx.map((x) => x.id),
+            lines.flatMap((l) =>
+              (
+                (l as { lsx_split?: { production_order_id: string }[] | null })
+                  .lsx_split ?? []
+              ).map((x) => x.production_order_id),
+            ),
+          ),
+        ) // prettier-ignore
         .catch(() => ({})),
     ]),
   ])

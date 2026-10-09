@@ -445,6 +445,35 @@ export function tongM3(l: Line): number | null {
 }
 
 /**
+ * m³ của MỘT tấm dùng để QUY ĐỔI GIÁ xốp: tổng m³ đang dùng (kể cả số gõ đè theo
+ * tờ NCC) ÷ SL; chưa có SL thì theo D×R×Dày. Không có số nào → null.
+ */
+export function xopM3MoiTam(l: Line): number | null {
+  const q = Number(l.qty) || 0
+  const tong = (l.qty2_manual ?? '') !== '' ? Number(l.qty2_manual) : tongM3(l)
+  if (q > 0 && tong != null && tong > 0) return tong / q
+  return m3MotTam(l)
+}
+
+/**
+ * HAI CỘT GIÁ CỦA DÒNG XỐP (09/10/2026 — chị Nga: "bổ sung cột Đơn giá m³").
+ * Dòng chỉ lưu MỘT đơn giá theo cơ sở tiền của nó (tấm hoặc m³); cột kia là số
+ * QUY ĐỔI qua m³/tấm để đối chiếu với báo giá NCC — gõ vào cột nào thì dòng tính
+ * tiền theo cột đó (lưới đổi `carton_basis`).
+ */
+export function xopHaiGia(
+  t: PoTemplate,
+  l: Line,
+): { theo: 'tam' | 'm3'; donGia: number | null; giaM3: number | null } {
+  const theo = lineBasis(t, l) === 'unit2' ? 'm3' : 'tam'
+  const p = n(l.price)
+  const per = xopM3MoiTam(l)
+  if (p == null) return { theo, donGia: null, giaM3: null }
+  if (theo === 'm3') return { theo, giaM3: p, donGia: per == null ? null : p * per }
+  return { theo, donGia: p, giaM3: per == null || per <= 0 ? null : p / per }
+}
+
+/**
  * Tổng m³ GÕ TAY đúng bằng m³ của MỘT tấm mà SL > 1 — gần như chắc là gõ nhầm
  * nghĩa ô (đơn THL: gõ 0,04 cho 4.480 tấm). Lưới hiện gợi ý tại ô để đổi.
  */

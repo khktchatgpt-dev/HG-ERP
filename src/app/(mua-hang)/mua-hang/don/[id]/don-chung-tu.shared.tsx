@@ -346,7 +346,7 @@ export function ViewCell({
   template: PoTemplate
 }) {
   if (f.kind === 'calc') {
-    const v = lineQty2(template, l)
+    const v = lineQty2(template, l) ?? (template === 'foam' ? tongM3(l) : null)
     return <span className="num">{v == null ? '—' : v.toLocaleString('vi-VN')}</span>
   }
   if (f.kind === 'inner')
@@ -398,7 +398,12 @@ export function EditCell({
       */
       const manual = l.qty2_manual ?? ''
       const auto = lineQty2Auto(template, l)
-      const shown = manual === '' ? lineQty2(template, l) : null
+      // Xốp tính theo TẤM thì không có tổng tính tiền, nhưng tổng m³ vẫn phải bày để
+      // đối chiếu báo giá NCC (09/10/2026 — hai cột Đơn giá / Đơn giá m³).
+      const shown =
+        manual === ''
+          ? (lineQty2(template, l) ?? (template === 'foam' ? tongM3(l) : null))
+          : null
       return (
         <>
           <NumInput
@@ -436,15 +441,9 @@ export function EditCell({
           {template === 'foam' &&
             l.carton_basis !== 'm3' &&
             !laM3MotTam(l) &&
-            (m3MotTam(l) != null ? (
-              <CellHint
-                tone="warn"
-                title="Dòng có số khối nhưng tiền đang tính SL × đơn giá (theo tấm/cuộn). Xốp báo giá theo m³ thì bấm để tính theo tổng m³."
-                onClick={() => onPatch({ carton_basis: 'm3' })}
-              >
-                tiền theo tấm · đổi m³
-              </CellHint>
-            ) : manual !== '' ? (
+            // "tiền theo tấm · đổi m³" BỎ 09/10/2026: lưới xốp có hai cột Đơn giá /
+            // Đơn giá m³ — gõ cột nào là chọn cơ sở tiền, nhắc ở đây thành thừa.
+            (m3MotTam(l) == null && manual !== '' ? (
               // Chưa có kích thước thì KHÔNG cho đổi m³ — máy sẽ lấy số gõ tay
               // (thường là m³ MỘT tấm) làm tổng và ra tiền bé hẳn. Gõ quy cách
               // D×R×Dày là `withSpecDims` tự lo hết.

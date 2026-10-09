@@ -25,6 +25,8 @@ import {
   docTongGo,
   foamBasisMacDinh,
   withSpecDims,
+  xopHaiGia,
+  xopM3MoiTam,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
@@ -1297,5 +1299,48 @@ describe('newLine foam — có D×R×Dày thì mặc định tính theo m³', ()
     expect(foamBasisMacDinh(null, 'Mét', d)).toBe('ctn')
     expect(foamBasisMacDinh(null, 'Kg', d)).toBe('ctn')
     expect(foamBasisMacDinh('m3', 'Cuộn', d)).toBe('m3')
+  })
+})
+
+/*
+ * HAI CỘT GIÁ XỐP (09/10/2026 — chị Nga): "Đơn giá" theo tấm và "Đơn giá m³" đứng cạnh
+ * nhau; dòng lưu một giá theo cơ sở tiền, cột kia quy đổi qua m³/tấm.
+ * Mouse mê Relax 580×540×60 → 0,018792 m³/tấm; 240 tấm = 4,51008 m³.
+ */
+describe('xopHaiGia — Đơn giá / Đơn giá m³', () => {
+  const relax = (part: Partial<Line>): Line => ({
+    ...lineFromPo(base),
+    inner_l_mm: 580,
+    inner_w_mm: 540,
+    inner_h_mm: 60,
+    qty: 240,
+    qty2_manual: '',
+    price_per: '',
+    ...part,
+  })
+
+  it('tính theo m³: giá lưu là giá/m³, giá tấm = giá/m³ × m³/tấm', () => {
+    const l = relax({ carton_basis: 'm3', price: 1_300_000 })
+    const g = xopHaiGia('foam', l)
+    expect(g.theo).toBe('m3')
+    expect(g.giaM3).toBe(1_300_000)
+    expect(g.donGia).toBeCloseTo(1_300_000 * 0.018792, 6)
+    expect(lineAmount('foam', l)).toBeCloseTo(4.51008 * 1_300_000, 2)
+  })
+
+  it('tính theo tấm: giá lưu là giá tấm (24.524), giá/m³ quy đổi ngược; tiền = SL × giá tấm', () => {
+    const l = relax({ carton_basis: 'ctn', price: 24_524 })
+    const g = xopHaiGia('foam', l)
+    expect(g.theo).toBe('tam')
+    expect(g.donGia).toBe(24_524)
+    expect(g.giaM3).toBeCloseTo(24_524 / 0.018792, 4)
+    expect(lineAmount('foam', l)).toBe(240 * 24_524)
+  })
+
+  it('m³/tấm theo tổng gõ đè của tờ NCC; chưa có kích thước + chưa gõ tổng thì không quy đổi', () => {
+    expect(xopM3MoiTam(relax({ qty2_manual: 4.8 }))).toBeCloseTo(0.02, 9)
+    const tron = relax({ inner_l_mm: '', inner_w_mm: '', inner_h_mm: '', carton_basis: 'ctn', price: 24_524 }) // prettier-ignore
+    expect(xopM3MoiTam(tron)).toBeNull()
+    expect(xopHaiGia('foam', tron).giaM3).toBeNull()
   })
 })
