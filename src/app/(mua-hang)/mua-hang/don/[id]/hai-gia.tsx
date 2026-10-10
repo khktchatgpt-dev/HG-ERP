@@ -40,6 +40,11 @@ export function HaiGiaO({
   const active = g.theo === theo
   // Chưa biết lượng quy đổi của một ĐVT thì không tính được theo kg/m³/m² — tiền
   // sẽ ra SL × giá/kg. Bảo thiếu số nào thay vì cho gõ.
+  // ĐVT của dòng đã CHÍNH LÀ đơn vị quy đổi (nhôm bán theo Kg, gỗ theo m³): cột
+  // "Đơn giá" đã là giá /kg — nói thế thay vì đòi kg/m (soi đơn test 10/10/2026).
+  if (theo === 'dv2' && cfg && l.unit.trim().toLowerCase() === cfg.dv.toLowerCase()) {
+    return <CellHint title={`ĐVT của dòng đã là ${cfg.dv} — cột Đơn giá chính là giá /${cfg.dv}`}>ĐVT đã là {cfg.dv}</CellHint> // prettier-ignore
+  }
   if (theo === 'dv2' && dv2MotDv(template, l) == null) {
     return <CellHint title={`Điền số quy đổi của dòng (${cfg?.thieu?.replace('cần ', '')}) — khi đó mới nhập được giá theo ${cfg?.dv}`}>{cfg?.thieu}</CellHint> // prettier-ignore
   }

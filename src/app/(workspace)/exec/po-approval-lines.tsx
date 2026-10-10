@@ -263,7 +263,7 @@ export function PoLineGrid({
                         </td>
                       ) // prettier-ignore
                     case 'amount':
-                      return <td key={j} className={cn('num px-2 py-[6px] text-right font-semibold whitespace-nowrap', stick, tang ? 'bg-[var(--warn-wash)]' : 'bg-[var(--surface-card)]')}>{ln.unit_price != null ? fmtVnd(poLineAmount(ln)) : '—'}</td> // prettier-ignore
+                      return <td key={j} className={cn('num px-2 py-[6px] text-right font-semibold whitespace-nowrap', stick, tang ? 'bg-[var(--warn-wash)]' : 'bg-[var(--surface-card)]')}>{ln.unit_price != null ? fmtVnd(roundMoney(poLineAmount(ln), currency)) : '—'}</td> // prettier-ignore
                     case 'lenh':
                       return <td key={j} className="px-2 py-[6px]"><ChiaLenhKy ln={ln} lsx={gop!} /></td> // prettier-ignore
                     case 'field': {
