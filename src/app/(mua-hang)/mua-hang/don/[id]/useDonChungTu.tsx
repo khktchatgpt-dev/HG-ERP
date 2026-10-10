@@ -236,8 +236,6 @@ export function useDonChungTu(p: Props) {
 
   const [editMaterial, setEditMaterial] = useState<string | null>(null)
 
-  const [preview, setPreview] = useState(false)
-
   const [enrich, setEnrich] = useState<{
     items: CatalogSuggestion[]
     dest: string
@@ -1411,8 +1409,6 @@ export function useDonChungTu(p: Props) {
     setQuickAdd,
     editMaterial,
     setEditMaterial,
-    preview,
-    setPreview,
     enrich,
     setEnrich,
     enrichBusy,

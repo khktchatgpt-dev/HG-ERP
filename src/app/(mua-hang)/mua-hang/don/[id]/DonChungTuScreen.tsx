@@ -5,11 +5,7 @@ import { SuaVatTuSheet } from '@/app/(mua-hang)/mua-hang/vat-tu/sua-vat-tu'
 import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import { refreshLineFromMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
-import {
-  previewHeaderFromDraft,
-  previewLinesFromDraft,
-} from '@/app/(mua-hang)/mua-hang/don/_lib/po-preview'
-import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
+import { moXemTruoc } from './xem-truoc'
 import {
   Affected,
   Btn,
@@ -150,8 +146,6 @@ export function DonChungTuScreen(p: Props) {
     setQuickAdd,
     editMaterial,
     setEditMaterial,
-    preview,
-    setPreview,
     enrich,
     setEnrich,
     enrichBusy,
@@ -194,7 +188,6 @@ export function DonChungTuScreen(p: Props) {
     code,
     liveShipments,
     call,
-    lsxLabel,
     addFromPaste,
     onCreatedMaterial,
     toggleExtraLsx,
@@ -895,7 +888,19 @@ export function DonChungTuScreen(p: Props) {
               <Btn icon="huy" disabled={busy} onClick={askCancelEdit}>
                 Huỷ
               </Btn>
-              <Btn icon="in" disabled={!p.company} onClick={() => setPreview(true)}>
+              <Btn
+                icon="in"
+                onClick={() =>
+                  moXemTruoc({
+                    poId: po?.id ?? null,
+                    header,
+                    template,
+                    lines,
+                    shipCols: d.shipCols,
+                    supplierName: supplierOpt?.name ?? '—',
+                  })
+                }
+              >
                 Xem trước
               </Btn>
               <Btn
@@ -1076,25 +1081,6 @@ export function DonChungTuScreen(p: Props) {
           onSkip={() => { const d = enrich.dest; setEnrich(null); router.replace(d); router.refresh() }} // prettier-ignore
           onConfirm={(picked) => void confirmEnrich(picked)}
         />
-      )}
-      {preview && p.company && (
-        <Sheet
-          open
-          onClose={() => setPreview(false)}
-          width={900}
-          title="Xem trước phiếu đặt hàng"
-          subtitle="Dựng từ bản đang gõ — chưa lưu, chưa có số phiếu."
-        >
-          {' '}
-          {/* prettier-ignore */}
-          <PoPrintSheet
-            company={p.company}
-            tpl={p.tpl}
-            po={previewHeaderFromDraft(header, { code: po?.code ?? '(cấp khi lưu)', supplierName: supplierOpt?.name ?? '—', lsxCode: lsxLabel, lsxSet: d.lsxsOfPo, orderCode: null, createdAt: po?.created_at ?? new Date().toISOString() })} // prettier-ignore
-            supplier={supplierOpt ? { name: supplierOpt.name } : null}
-            lines={previewLinesFromDraft(template, lines)}
-          />
-        </Sheet>
       )}
       {phiOpen && po && (
         <GhiPhiSheet

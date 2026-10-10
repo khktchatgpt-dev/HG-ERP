@@ -151,4 +151,26 @@ describe('đơn gộp hai lệnh — chia SL đặt cho từng lệnh (đơn GI�
       { production_order_id: L09, qty: 550 },
     ])
   })
+
+  it('Xem trước: mở trang in chung (/print/supply/nhap) với bộ lệnh + phần chia của bản đang gõ', async () => {
+    const open = vi.fn()
+    vi.stubGlobal('open', open)
+    const { props } = donGop(800, 550)
+    render(view(props))
+    await nhuCauDaVe()
+    await new Promise((r) => setTimeout(r, 0))
+    go('SL đặt', '1350')
+    const nut = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Xem trước')) // prettier-ignore
+    fireEvent.click(nut!)
+    expect(open).toHaveBeenCalledTimes(1)
+    const url = String(open.mock.calls[0][0])
+    expect(url.startsWith('/print/supply/nhap?k=')).toBe(true)
+    const k = new URL(url, 'http://x').searchParams.get('k')!
+    const input = JSON.parse(localStorage.getItem('hg.po-print-nhap.' + k)!).input
+    expect([input.lsx_id, input.extra_lsx_ids]).toEqual([L08, [L09]])
+    expect(input.lines[0].lsx_split).toEqual([
+      { production_order_id: L08, qty: 800 },
+      { production_order_id: L09, qty: 550 },
+    ])
+  })
 })
