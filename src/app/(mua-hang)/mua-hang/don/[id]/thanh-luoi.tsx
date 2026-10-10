@@ -98,20 +98,6 @@ export function ThanhLuoi({ d }: { d: DonCtx }) {
             Chia đợt giao
           </GridBtn>
         )}
-        {/* Đơn gộp nhiều lệnh (10/10/2026): chia SL đặt cho từng lệnh theo nhu cầu. */}
-        {d.nhieuLenh && (
-          <Menu
-            label="Chia theo nhu cầu ▾"
-            ariaLabel="Chia số lượng cho từng lệnh"
-            items={[
-              { label: 'Điền các dòng chưa chia', onClick: () => d.chiaTheoNhuCau(true) },
-              {
-                label: 'Chia lại cả đơn (bỏ số đã gõ tay)',
-                onClick: () => d.chiaTheoNhuCau(false),
-              },
-            ]}
-          />
-        )}
         <Menu
           label="Thêm ▾"
           ariaLabel="Thêm cách nhập dòng"

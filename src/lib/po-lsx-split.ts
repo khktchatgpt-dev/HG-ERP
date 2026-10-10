@@ -258,3 +258,46 @@ export function chiaLenhDong(
     return q > 0 ? [`${lenhNgan(x.code)}: ${fmt(q)}`] : []
   })
 }
+
+/**
+ * TIỀN + SỐ DÒNG THEO LỆNH của một đơn gộp (10/10/2026, bản vẽ Chia lệnh Q4/Q7) —
+ * MỘT hàm cho chân mục Chia lệnh, màn ký Giám đốc, phiếu in và Excel. Cộng SL thì
+ * vô nghĩa (đơn trộn Cây với Kg), nên đơn vị chung là TIỀN: phần của lệnh = thành
+ * tiền dòng × SL lệnh ÷ SL đặt. Dòng ghi nhiều lệnh đếm ở mọi lệnh có phần.
+ *
+ * Dòng CHƯA CHIA tách riêng (`chuaChia`) — nơi dùng tự quyết: màn bày cột riêng,
+ * phiếu cộng vào lệnh chính (đúng quy ước 0185) kèm câu nói rõ.
+ */
+export function tienTheoLenh(
+  lines: { qty_ordered: number; amount: number | null; lsx_split?: LsxSplit[] | null }[],
+  lsxSet: { id: string; code: string }[],
+): {
+  lenh: { id: string; code: string; dong: number; tien: number }[]
+  chuaChia: { dong: number; tien: number }
+} {
+  const lenh = lsxSet.map((x) => ({ ...x, dong: 0, tien: 0 }))
+  const chuaChia = { dong: 0, tien: 0 }
+  for (const l of lines) {
+    const dat = Number(l.qty_ordered) || 0
+    const tien = Number(l.amount) || 0
+    const sp = (l.lsx_split ?? []).filter((s) => Number(s.qty) > 0)
+    if (sp.length === 0) {
+      if (dat > 0) {
+        chuaChia.dong++
+        chuaChia.tien += tien
+      }
+      continue
+    }
+    for (const s of sp) {
+      const x = lenh.find((y) => y.id === s.production_order_id)
+      if (!x) continue
+      x.dong++
+      x.tien += dat > 0 ? (tien * Number(s.qty)) / dat : 0
+    }
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  return {
+    lenh: lenh.map((x) => ({ ...x, tien: r2(x.tien) })),
+    chuaChia: { dong: chuaChia.dong, tien: r2(chuaChia.tien) },
+  }
+}

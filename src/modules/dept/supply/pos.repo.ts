@@ -1188,6 +1188,38 @@ export const posRepo = {
     }
   },
 
+  /**
+   * THAY phần chia theo lệnh của các dòng đã cho (Sửa chia lệnh, 10/10/2026) —
+   * xoá bản ghi cũ của đúng các dòng đó rồi ghi bản mới. Dòng không nằm trong
+   * danh sách giữ nguyên. Service đã kiểm tổng chia = SL đặt và lệnh thuộc đơn.
+   */
+  async replaceLineSplits(
+    items: {
+      line_id: string
+      lsx_split: { production_order_id: string; qty: number }[]
+    }[],
+  ): Promise<void> {
+    if (items.length === 0) return
+    const { error: e1 } = await db()
+      .from('supply_po_line_lsx')
+      .delete()
+      .in(
+        'line_id',
+        items.map((i) => i.line_id),
+      )
+    if (e1) throw new Error(e1.message)
+    const rows = items.flatMap((i) =>
+      i.lsx_split.map((sp) => ({
+        line_id: i.line_id,
+        production_order_id: sp.production_order_id,
+        qty: sp.qty,
+      })),
+    )
+    if (rows.length === 0) return
+    const { error: e2 } = await db().from('supply_po_line_lsx').insert(rows)
+    if (e2) throw new Error(e2.message)
+  },
+
   /** Lý do chốt thiếu theo dòng (0154) — cho tooltip trang chi tiết. */
   async closedShortReasons(poId: string): Promise<Map<string, string | null>> {
     const { data } = await db()

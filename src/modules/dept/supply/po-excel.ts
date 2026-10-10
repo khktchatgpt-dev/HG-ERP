@@ -1,4 +1,4 @@
-import { chiaLenhDong } from '@/lib/po-lsx-split'
+import { chiaLenhDong, tienTheoLenh } from '@/lib/po-lsx-split'
 import ExcelJS from 'exceljs'
 import {
   currencyDecimals,
@@ -553,6 +553,42 @@ export async function buildPoExcel(input: {
     if (amountIdx + 2 <= n) {
       ws.mergeCells(r, amountIdx + 2, r, n)
       set(r, amountIdx + 2, '', { border: BORDER })
+    }
+  }
+
+  /* ── Phân theo lệnh (đơn gộp, 10/10/2026) — cùng khối, cùng hàm với phiếu in ── */
+  if (lsxSet.length > 1) {
+    const t = tienTheoLenh(
+      lines.map((l) => ({
+        qty_ordered: l.qty_ordered,
+        amount: l.unit_price != null ? poLineAmount(l) : null,
+        lsx_split: l.lsx_split ?? null,
+      })),
+      lsxSet,
+    )
+    const o = { font: { size: 9 }, border: BORDER }
+    const head = { font: { bold: true, size: 9 }, border: BORDER, alignment: { horizontal: 'center' as const } } // prettier-ignore
+    r += 2
+    ws.mergeCells(r, 1, r, n)
+    set(r, 1, 'PHÂN THEO LỆNH SẢN XUẤT', { font: { bold: true, size: 10 } })
+    r++
+    ws.mergeCells(r, 1, r, 2)
+    set(r, 1, 'Lệnh', head)
+    set(r, 3, 'Số dòng', head)
+    ws.mergeCells(r, 4, r, 5)
+    set(r, 4, `Tiền hàng (${po.currency}, chưa VAT)`, head)
+    t.lenh.forEach((x, k) => {
+      r++
+      ws.mergeCells(r, 1, r, 2)
+      set(r, 1, x.code, o)
+      set(r, 3, x.dong + (k === 0 ? t.chuaChia.dong : 0), { ...o, alignment: { horizontal: 'right' } }) // prettier-ignore
+      ws.mergeCells(r, 4, r, 5)
+      set(r, 4, x.tien + (k === 0 ? t.chuaChia.tien : 0), { ...o, numFmt: moneyTotalFmt, alignment: { horizontal: 'right' } }) // prettier-ignore
+    })
+    if (t.chuaChia.dong > 0) {
+      r++
+      ws.mergeCells(r, 1, r, n)
+      set(r, 1, `${t.chuaChia.dong} dòng chưa chia nên đang tính cho lệnh chính ${lsxSet[0].code}.`, { font: { italic: true, size: 9 } }) // prettier-ignore
     }
   }
 

@@ -113,19 +113,53 @@ const nhuCauDaVe = () =>
   vi.waitFor(() => expect(api.mock.calls.some(([u]) => String(u).includes('/needs?'))).toBe(true)) // prettier-ignore
 
 describe('đơn gộp hai lệnh — chia SL đặt cho từng lệnh (đơn GIẢ)', () => {
-  it('đặt đúng nhu cầu 1.350: 08 = 800, 09 = 550; lưới bày cột Chia lệnh', async () => {
+  it('đặt đúng nhu cầu 1.350: 08 = 800, 09 = 550; cột Lệnh gọn + ma trận mục Chia lệnh', async () => {
     const { props } = donGop(800, 550)
     render(view(props))
     await nhuCauDaVe()
     await new Promise((r) => setTimeout(r, 0))
     go('SL đặt', '1350')
-    await vi.waitFor(() =>
-      expect(khu().getByText('08 LAURA 800 · 09 LAURA 550')).toBeTruthy(),
-    )
+    // Cột "Lệnh" trên lưới: chỉ số lệnh, không có ô nhập (bản vẽ A, Q1).
+    await vi.waitFor(() => {
+      const cot = khu().getByTitle(/08\/26-27 - LAURA: 800/)
+      expect(cot.textContent).toBe('08800' + '09550')
+    })
+    // Mục Chia lệnh: mỗi lệnh một cột ô nhập (bản vẽ B).
+    const muc = within(document.getElementById('chia-lenh')!)
+    const o08 = muc.getByLabelText('SL cho 08/26-27 - LAURA · dòng 1') as HTMLInputElement
+    const o09 = muc.getByLabelText('SL cho 09/26-27 - LAURA · dòng 1') as HTMLInputElement
+    expect([o08.value, o09.value].map((v) => v.replace(/\./g, ''))).toEqual([
+      '800',
+      '550',
+    ])
     const l = await ctrlS()
     expect(l.lsx_split).toEqual([
       { production_order_id: L08, qty: 800 },
       { production_order_id: L09, qty: 550 },
+    ])
+  })
+
+  it('gõ tay trong mục Chia lệnh: 1.000 / 350 đi tới server; lệch thì lưới báo "thừa"', async () => {
+    const { props } = donGop(800, 550)
+    render(view(props))
+    await nhuCauDaVe()
+    await new Promise((r) => setTimeout(r, 0))
+    go('SL đặt', '1350')
+    const muc = within(document.getElementById('chia-lenh')!)
+    const goMuc = (label: string, v: string) => {
+      const el = muc.getByLabelText(label)
+      fireEvent.focus(el)
+      fireEvent.change(el, { target: { value: v } })
+      fireEvent.blur(el)
+    }
+    goMuc('SL cho 08/26-27 - LAURA · dòng 1', '1100')
+    await vi.waitFor(() => expect(khu().getByText('thừa 300')).toBeTruthy())
+    goMuc('SL cho 08/26-27 - LAURA · dòng 1', '1000')
+    goMuc('SL cho 09/26-27 - LAURA · dòng 1', '350')
+    const l = await ctrlS()
+    expect(l.lsx_split).toEqual([
+      { production_order_id: L08, qty: 1000 },
+      { production_order_id: L09, qty: 350 },
     ])
   })
 

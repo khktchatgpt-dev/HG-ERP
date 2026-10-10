@@ -2,62 +2,78 @@
 
 import { CellHint, Td, Th } from '@/components/kit'
 import {
-  chiaText,
-  lenhNgan,
   loiChia,
+  nhanLenh,
   splitOf,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-lsx-chia'
 import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import type { DonCtx } from './useDonChungTu'
 
 /**
- * CỘT "CHIA LỆNH" CỦA LƯỚI DÒNG HÀNG — chỉ có khi đơn gộp từ 2 lệnh (10/10/2026).
- *
- * Trả lời "gộp lệnh khi mua thì lệnh nào bao nhiêu" ngay trên lưới, cả lúc xem
- * lẫn lúc soạn. Trước đây số chia nằm khuất trong khay chi tiết dòng và 113/113
- * dòng của 11 đơn gộp chưa chia — dòng chưa chia bị tính trọn cho lệnh chính.
- * Sửa số: bấm ô → mở khay chi tiết của dòng (các ô SL theo từng lệnh).
+ * CỘT "LỆNH" CỦA LƯỚI DÒNG HÀNG — chỉ có khi đơn gộp từ 2 lệnh; CHỈ ĐỂ NHÌN
+ * (bản vẽ Chia lệnh A, Q1 10/10/2026). Sửa ở MỘT chỗ là mục "Chia lệnh" ngay dưới
+ * lưới — bấm ô này là nhảy tới đúng dòng ở đó. Hẹp (~96px) để trả chỗ cho tên
+ * vật tư: bản trước ghi "08 MX 200 · 09 MX 88" ăn 157px, tên vật tư còn 191px.
  */
 export function ChiaLenhTh() {
-  return <Th>Chia lệnh</Th>
+  return <Th width={96}>Lệnh</Th>
 }
 
 export function ChiaLenhTd({ d, l, i }: { d: DonCtx; l: Line; i: number }) {
-  const { lsxsOfPo, editing, setPick, setDetailOpen } = d
-  const mo = editing
-    ? () => {
-        setPick(i)
-        setDetailOpen(true)
-      }
-    : undefined
+  const { lsxsOfPo, setPick } = d
+  const toi = () => {
+    setPick(i)
+    document.getElementById('chia-lenh')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) // prettier-ignore
+  }
   if (!(Number(l.qty) > 0)) return <Td><span className="text-[var(--ink-3)]">—</span></Td> // prettier-ignore
   const sp = splitOf(l)
   const loi = loiChia(l)
-  const chinh = lsxsOfPo[0]
-  const full = chiaText(l, lsxsOfPo)
-  return (
-    <Td tone={loi || sp.length === 0 ? 'warn' : undefined}>
-      {sp.length === 0 ? (
+  const nhan = nhanLenh(lsxsOfPo)
+  if (sp.length === 0) {
+    return (
+      <Td tone="warn">
         <CellHint
           tone="warn"
-          onClick={mo}
-          title={`Dòng chưa chia nên đang tính TRỌN cho lệnh chính ${chinh?.code ?? ''} — lệnh phụ thấy như chưa đặt. ${editing ? 'Bấm để chia, hoặc dùng nút "Chia theo nhu cầu".' : 'Sửa đơn để chia.'}`}
+          onClick={toi}
+          title={`Dòng chưa chia — đang tính trọn cho lệnh chính ${lsxsOfPo[0]?.code ?? ''}. Bấm để chia ở mục Chia lệnh.`}
         >
-          chưa chia · cả dòng → {lenhNgan(chinh?.code ?? '?')}
+          chưa chia ↓
         </CellHint>
-      ) : (
-        <span
-          className="num block max-w-[220px] truncate"
-          style={{ textAlign: 'left' }}
-          title={full}
-          onClick={mo}
-        >
-          {full}
-        </span>
-      )}
+      </Td>
+    )
+  }
+  const tong = sp.reduce((s, x) => s + x.qty, 0)
+  const lech = Math.round((Number(l.qty) - tong) * 1e4) / 1e4
+  return (
+    <Td tone={loi ? (lech < 0 ? 'stop' : 'warn') : undefined}>
+      <button
+        type="button"
+        onClick={toi}
+        title={`${lsxsOfPo
+          .flatMap((x) => {
+            const q = sp.find((s) => s.production_order_id === x.id)?.qty
+            return q ? [`${x.code}: ${q.toLocaleString('vi-VN')}`] : []
+          })
+          .join('\n')}\nBấm để xem / sửa ở mục Chia lệnh.`}
+        className="num grid cursor-pointer gap-px text-left text-[12px] leading-tight"
+      >
+        {lsxsOfPo.flatMap((x) => {
+          const q = sp.find((s) => s.production_order_id === x.id)?.qty
+          return q
+            ? [
+                <span key={x.id} className="whitespace-nowrap">
+                  <span className="mr-1 text-[var(--ink-3)]">{nhan.get(x.id)}</span>
+                  {q.toLocaleString('vi-VN')}
+                </span>,
+              ]
+            : []
+        })}
+      </button>
       {loi && (
-        <CellHint tone="warn" onClick={mo} title={`${loi} — bấm để sửa phần chia`}>
-          {loi}
+        <CellHint tone="warn" onClick={toi} title={loi}>
+          {lech < 0
+            ? `thừa ${(-lech).toLocaleString('vi-VN')}`
+            : `thiếu ${lech.toLocaleString('vi-VN')}`}
         </CellHint>
       )}
     </Td>

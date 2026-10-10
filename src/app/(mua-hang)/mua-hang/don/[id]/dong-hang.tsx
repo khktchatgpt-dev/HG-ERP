@@ -9,7 +9,6 @@ import {
   lineUnit2Label,
   LSX_DEMAND_TEMPLATES,
   type Line,
-  type Num,
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import {
   CellHint,
@@ -91,7 +90,6 @@ export function DongHang({ d }: { d: DonCtx }) {
     setDetailOpen,
     detailFields,
     meta,
-    lsxsOfPo,
     setEditMaterial,
     saveToCatalog,
   } = d
@@ -651,19 +649,6 @@ export function DongHang({ d }: { d: DonCtx }) {
                 </b>
               </Field>
             </FieldGroup>
-            {lsxsOfPo.length > 1 && (
-              <FieldGroup title="Chia số lượng cho lệnh">
-                {lsxsOfPo.map((lx) => (
-                  <Field key={lx.id} label={lx.code}>
-                    {editing ? (
-                      <NumInput value={cur.lsx_split?.[lx.id] === undefined || cur.lsx_split[lx.id] === '' ? '' : String(cur.lsx_split[lx.id])} aria-label={`SL cho ${lx.code}`} onCommit={(v) => patch(curIdx, { lsx_split: { ...cur.lsx_split, [lx.id]: (v.trim() === '' ? '' : Number(v.replace(',', '.'))) as Num } })} /> // prettier-ignore
-                    ) : (
-                      <span className="num">{cur.lsx_split?.[lx.id] === undefined || cur.lsx_split[lx.id] === '' ? '—' : Number(cur.lsx_split[lx.id]).toLocaleString('vi-VN')}</span> // prettier-ignore
-                    )}
-                  </Field>
-                ))}
-              </FieldGroup>
-            )}
             {editing && !cur.is_free && (
               <FieldGroup title="Danh mục vật tư">
                 <Field label="Hồ sơ">

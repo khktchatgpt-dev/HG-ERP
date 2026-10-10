@@ -172,9 +172,38 @@ describe('phiếu in đơn gộp lệnh — cột Chia lệnh', () => {
     expect(rows[2][at]).toBe('08 MX: 7')
   })
 
+  it('khối PHÂN THEO LỆNH dưới tổng: tiền chia theo SL, dòng chưa chia cộng lệnh chính + câu nói rõ', () => {
+    const gia = (q: number, tien: number, sp: PoPrintLine['lsx_split']) =>
+      ({ ...line('simple'), id: String(q), qty_ordered: q, unit_price: tien / q, price_basis: 'unit', qty2: null, lsx_split: sp }) as PoPrintLine // prettier-ignore
+    const { container } = render(
+      <PoPrintSheet
+        company={company}
+        po={{ ...header('simple'), lsx_set: SET }}
+        supplier={null}
+        lines={[
+          gia(288, 81_216_000, [{ production_order_id: 'L08', qty: 200 }, { production_order_id: 'L09', qty: 88 }]), // prettier-ignore
+          gia(63, 7_119_000, [{ production_order_id: 'L09', qty: 63 }]),
+          gia(20, 3_840_000, null),
+        ]}
+      />,
+    )
+    const text = container.textContent ?? ''
+    expect(text).toContain('PHÂN THEO LỆNH SẢN XUẤT')
+    // 08: 56.400.000 + 3.840.000 (chưa chia) = 60.240.000 · 09: 24.816.000 + 7.119.000 = 31.935.000
+    expect(text).toContain('60.240.000')
+    expect(text).toContain('31.935.000')
+    expect(text).toContain('1 dòng chưa chia nên đang tính cho lệnh chính 08/26-27 - MX')
+    // Dải cảnh báo chỉ trên màn (print:hidden).
+    const canh = [...container.querySelectorAll('p')].find((x) =>
+      x.textContent?.includes('chưa chia lệnh'),
+    )
+    expect(canh?.className).toContain('print:hidden')
+  })
+
   it('đơn MỘT lệnh: không có cột Chia lệnh — phiếu y như mẫu cũ', () => {
     const { head } = ve([SET[0]], [line('aluminium')])
     expect(head).not.toContain('Chia lệnh')
     expect(head).toHaveLength(PO_PRINT_ORDER.aluminium.length)
+    expect(document.body.textContent).not.toContain('PHÂN THEO LỆNH')
   })
 })

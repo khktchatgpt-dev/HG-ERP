@@ -156,3 +156,23 @@ export function chiaText(
     ) // prettier-ignore
     .join(' · ')
 }
+
+/**
+ * Nhãn SIÊU NGẮN của lệnh cho cột "Lệnh" trên lưới (bản vẽ Chia lệnh A): chỉ số
+ * lệnh "08", "09" — tên khách đã ở tiêu đề mục Chia lệnh và khung LSX. Hai lệnh
+ * cùng số khác khách (01 LAURA + 01 GIGA) thì ghi đủ "01 LAURA".
+ */
+export function nhanLenh(lsxs: { id: string; code: string }[]): Map<string, string> {
+  const so = (code: string) => /^(\d+)\//.exec(code.trim())?.[1] ?? null
+  const dem = new Map<string, number>()
+  for (const x of lsxs) {
+    const s = so(x.code)
+    if (s) dem.set(s, (dem.get(s) ?? 0) + 1)
+  }
+  return new Map(
+    lsxs.map((x) => {
+      const s = so(x.code)
+      return [x.id, s && dem.get(s) === 1 ? s : lenhNgan(x.code)]
+    }),
+  )
+}

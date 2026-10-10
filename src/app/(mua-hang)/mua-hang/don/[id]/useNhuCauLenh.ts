@@ -43,6 +43,8 @@ export function useNhuCauLenh({
   const toast = useToast()
   const [needs, setNeeds] = useState<Need[]>([])
   const [needsLoading, setNeedsLoading] = useState(false)
+  /** "Sửa chia lệnh" của đơn đã duyệt (bản vẽ Chia lệnh Q5) — chỉ sửa phần chia, lưu riêng. */
+  const [chiaMo, setChiaMo] = useState(false)
 
   const lsxsOfPo = useMemo(
     () => (header.poType === 'lsx' ? [header.lsxId, ...header.extraLsxIds].filter(Boolean).flatMap((id) => { const l = lsxs.find((x) => x.id === id); return l ? [{ id: l.id, code: l.code }] : [] }) : []), // prettier-ignore
@@ -83,7 +85,7 @@ export function useNhuCauLenh({
 
   useEffect(() => {
     // Soạn nháp: luôn nạp. Sửa đơn đã duyệt: chỉ khi gộp nhiều lệnh — để chia lệnh.
-    const can = drafting || (editing && header.extraLsxIds.length > 0)
+    const can = drafting || ((editing || chiaMo) && header.extraLsxIds.length > 0)
     if (!can || header.poType !== 'lsx' || !header.lsxId) {
       const t = setTimeout(() => setNeeds([]), 0)
       return () => clearTimeout(t)
@@ -109,7 +111,7 @@ export function useNhuCauLenh({
     }
     // toast ổn định theo provider
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drafting, editing, poId, header.poType, header.lsxId, header.extraLsxIds])
+  }, [drafting, editing, chiaMo, poId, header.poType, header.lsxId, header.extraLsxIds])
 
   return {
     needs,
@@ -118,6 +120,9 @@ export function useNhuCauLenh({
     setNeedsLoading,
     lsxsOfPo,
     nhieuLenh,
+    needsOf,
+    chiaMo,
+    setChiaMo,
     sauSua,
     chiaTheoNhuCau,
   } as const

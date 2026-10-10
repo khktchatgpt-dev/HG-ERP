@@ -1,4 +1,4 @@
-import { splitProblem } from '@/lib/po-lsx-split'
+import { chiaLenhDong, splitProblem, type LsxSplit } from '@/lib/po-lsx-split'
 import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.repo'
 import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
 import { canAdjust, planAdjustment } from '@/lib/po-adjust'
@@ -33,6 +33,7 @@ import { canReschedule, rescheduleNote, shiftPlannedShipments } from '@/lib/po-r
 import { canReopenForEdit, reopenNote } from '@/lib/po-reopen'
 import { reasonLine } from '@/lib/po-note'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
+import type { PoLsxSplitPatch } from './pos.schema'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import { syncPoExpectedAt } from './po-shipments.sync'
 import { SPLIT_REASON_PREFIX } from '@/lib/po-tracking'
@@ -578,6 +579,62 @@ export const posService = {
       signer_role: input.signer_role ?? null,
       note: input.note ?? null,
     })
+  },
+
+  /**
+   * SỬA CHIA LỆNH (10/10/2026, bản vẽ Chia lệnh Q5) — đơn ở MỌI trạng thái trừ
+   * huỷ: chỉ thay phần chia SL theo lệnh của dòng. Không đổi SL, giá, tiền hay
+   * thứ NCC cam kết (ngoài cột "Chia lệnh" trên phiếu), nên không qua điều chỉnh
+   * đơn và không phải ký lại. Vết: một ghi chú NỘI BỘ "[Sửa chia lệnh] …" ở Trao
+   * đổi của đơn — ai sửa, lúc nào, dòng nào đổi từ gì sang gì.
+   */
+  async updateLsxSplits(user: User, id: string, input: PoLsxSplitPatch) {
+    await assertAction(user, 'supply.po.manage')
+    const po = await posRepo.findById(id)
+    if (!po) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, po)
+    if (po.status === 'cancelled')
+      throw BadRequest('Đơn đã huỷ — hồ sơ đóng, không sửa nữa')
+    const [lines, extras] = await Promise.all([
+      posRepo.listLines(id),
+      posRepo.listExtraLsx(id),
+    ])
+    const { lsx_set: lsxSet } = await posRepo.printRefsByIds(
+      po.production_order_id,
+      extras,
+    )
+    if (lsxSet.length < 2)
+      throw BadRequest('Đơn chỉ thuộc một lệnh — không có gì để chia')
+    const hopLe = new Set(lsxSet.map((x) => x.id))
+    const byId = new Map(lines.map((l, i) => [l.id, { l, i }]))
+    const doi: string[] = []
+    for (const it of input.lines) {
+      const hit = byId.get(it.line_id)
+      if (!hit) throw BadRequest('Có dòng không thuộc đơn này')
+      const ten = hit.l.material_code || hit.l.material_name
+      for (const sp of it.lsx_split) {
+        if (!hopLe.has(sp.production_order_id))
+          throw BadRequest(
+            `Dòng ${hit.i + 1} (${ten}): chia cho một lệnh không thuộc đơn này`,
+          )
+      }
+      const loi = splitProblem(Number(hit.l.qty_ordered), it.lsx_split)
+      if (loi) throw BadRequest(`Dòng ${hit.i + 1} (${ten}): ${loi}`)
+      const truoc = chiaLenhDong({ qty_ordered: Number(hit.l.qty_ordered), lsx_split: (hit.l as { lsx_split?: LsxSplit[] | null }).lsx_split ?? null }, lsxSet).join(' · ') // prettier-ignore
+      const sau = chiaLenhDong({ qty_ordered: Number(hit.l.qty_ordered), lsx_split: it.lsx_split }, lsxSet).join(' · ') // prettier-ignore
+      const chuaChiaTruoc = !(
+        (hit.l as { lsx_split?: LsxSplit[] | null }).lsx_split ?? []
+      ).length
+      if (truoc !== sau || chuaChiaTruoc !== (it.lsx_split.length === 0))
+        doi.push(
+          `${ten}: ${chuaChiaTruoc ? 'chưa chia' : truoc} → ${it.lsx_split.length ? sau : 'chưa chia'}`,
+        )
+    }
+    await posRepo.replaceLineSplits(input.lines)
+    if (doi.length > 0) {
+      await traceReason(user, id, `[Sửa chia lệnh] ${doi.join('; ')}`.slice(0, 4000))
+    }
+    return { changed: doi.length }
   },
 
   async update(user: User, id: string, input: PoInput): Promise<Po> {

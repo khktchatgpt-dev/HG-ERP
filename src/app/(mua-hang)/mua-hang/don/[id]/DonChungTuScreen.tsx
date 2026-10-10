@@ -6,6 +6,7 @@ import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMat
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import { refreshLineFromMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { moXemTruoc } from './xem-truoc'
+import { MucChiaLenh } from './muc-chia-lenh'
 import {
   Affected,
   Btn,
@@ -214,6 +215,7 @@ export function DonChungTuScreen(p: Props) {
   const blkChecks = <BangKiem d={d} />
   const blkUnsent = <ChuaGuiNcc d={d} />
   const blkLines = <DongHang d={d} />
+  const blkChiaLenh = <MucChiaLenh d={d} />
   const blkPhatSinh = <PhatSinh d={d} />
   const blkNhuCau = <NhuCau d={d} />
   const blkGiao = <GiaoNhan d={d} />
@@ -474,6 +476,7 @@ export function DonChungTuScreen(p: Props) {
           <DocMenuPanel value="dong-hang">
             {blkChenh}
             {blkLines}
+            {blkChiaLenh}
           </DocMenuPanel>
           <DocMenuPanel value="giao-nhan">{blkGiao}</DocMenuPanel>
           <DocMenuPanel value="tai-chinh">
@@ -864,6 +867,7 @@ export function DonChungTuScreen(p: Props) {
           {/* Lúc SOẠN chỉ còn việc soạn (duyệt 30/09/2026): dòng hàng → nhu cầu lệnh (khi còn
               thiếu) → chia đợt (khi bấm) → điều khoản & ghi chú. Khối chỉ để XEM thì ẩn. */}
           {blkLines}
+          {blkChiaLenh}
           {blkNhuCau}
           {(d.shipCols.length > 0 || d.dotMo) && blkGiao}
           {blkDauDon}

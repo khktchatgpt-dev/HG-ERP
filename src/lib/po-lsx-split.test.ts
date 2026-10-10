@@ -6,6 +6,7 @@ import {
   chiaTheoNhuCau,
   chiaNhieuDong,
   boLenhKhoiChia,
+  tienTheoLenh,
   type LsxSplit,
 } from './po-lsx-split'
 
@@ -232,5 +233,58 @@ describe('boLenhKhoiChia', () => {
 
   it('gỡ hết lệnh đã chia → về lệnh chính', () => {
     expect(boLenhKhoiChia([{ production_order_id: '10', qty: 5 }], ['08'], 5)).toEqual([])
+  })
+})
+
+/*
+ * TIỀN THEO LỆNH (bản vẽ Chia lệnh, 10/10/2026): đơn thử 08 MX + 09 MX — dòng
+ * NH-0063 288 cây chia 200/88, NHO0090 chỉ 09, NH-0571 chưa chia.
+ */
+describe('tienTheoLenh', () => {
+  const SET = [
+    { id: '08', code: '08/26-27 - MX' },
+    { id: '09', code: '09/26-27 - MX' },
+  ]
+  it('chia tiền theo tỉ lệ SL; dòng nhiều lệnh đếm ở mọi lệnh; chưa chia tách riêng; tổng khớp', () => {
+    const r = tienTheoLenh(
+      [
+        {
+          qty_ordered: 7,
+          amount: 1_582_000,
+          lsx_split: [{ production_order_id: '08', qty: 7 }],
+        },
+        { qty_ordered: 288, amount: 81_216_000, lsx_split: [{ production_order_id: '08', qty: 200 }, { production_order_id: '09', qty: 88 }] }, // prettier-ignore
+        {
+          qty_ordered: 63,
+          amount: 7_119_000,
+          lsx_split: [{ production_order_id: '09', qty: 63 }],
+        },
+        { qty_ordered: 20, amount: 3_840_000, lsx_split: null },
+      ],
+      SET,
+    )
+    expect(r.lenh.map((x) => [x.dong, x.tien])).toEqual([
+      [2, 1_582_000 + 56_400_000],
+      [2, 24_816_000 + 7_119_000],
+    ])
+    expect(r.chuaChia).toEqual({ dong: 1, tien: 3_840_000 })
+    const tong = r.lenh.reduce((s, x) => s + x.tien, 0) + r.chuaChia.tien
+    expect(tong).toBe(1_582_000 + 81_216_000 + 7_119_000 + 3_840_000)
+  })
+
+  it('dòng chưa có giá: đếm dòng, tiền 0; dòng SL 0 không tính là chưa chia', () => {
+    const r = tienTheoLenh(
+      [
+        {
+          qty_ordered: 5,
+          amount: null,
+          lsx_split: [{ production_order_id: '09', qty: 5 }],
+        },
+        { qty_ordered: 0, amount: null, lsx_split: null },
+      ],
+      SET,
+    )
+    expect(r.lenh[1]).toMatchObject({ dong: 1, tien: 0 })
+    expect(r.chuaChia.dong).toBe(0)
   })
 })

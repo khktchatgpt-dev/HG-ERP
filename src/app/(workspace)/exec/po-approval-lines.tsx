@@ -13,7 +13,7 @@ import {
 } from '@/lib/po-fields'
 import { approvalLineCols, type ApprovalCol } from '@/lib/po-approval-cols'
 import { HAI_GIA, poHaiGia } from '@/lib/po-hai-gia'
-import { qtyForLsx } from '@/lib/po-lsx-split'
+import { qtyForLsx, tienTheoLenh } from '@/lib/po-lsx-split'
 import { lenhNgan } from '@/app/(mua-hang)/mua-hang/don/_lib/po-lsx-chia'
 import { money } from './approval-helpers'
 import { comparePrice, fmtVnd, type LastPriceOf } from './approval-parts'
@@ -321,6 +321,7 @@ export function PoLineGrid({
           )}
         </tfoot>
       </table>
+      {gop && <PhanTheoLenh lines={lines} lsx={gop} currency={currency} />}
     </div>
   )
 }
@@ -434,6 +435,62 @@ function ChiaLenhKy({
           </div>
         ) : null
       })}
+    </div>
+  )
+}
+
+/**
+ * PHÂN THEO LỆNH dưới lưới ký (bản vẽ Chia lệnh C, 10/10/2026): tiền hàng + số dòng
+ * từng lệnh — CÙNG hàm `tienTheoLenh` với mục Chia lệnh và phiếu in. Người ký
+ * đơn gộp biết mình chi bao nhiêu cho lệnh nào; dòng chưa chia nói rõ đang tính
+ * cho lệnh chính.
+ */
+function PhanTheoLenh({
+  lines,
+  lsx,
+  currency,
+}: {
+  lines: ApprovalPoLine[]
+  lsx: { id: string; code: string }[]
+  currency: string
+}) {
+  const t = tienTheoLenh(
+    lines.map((ln) => ({
+      qty_ordered: Number(ln.qty_ordered),
+      amount: ln.unit_price != null ? poLineAmount(ln) : null,
+      lsx_split: ln.lsx_split ?? null,
+    })),
+    lsx,
+  )
+  return (
+    <div className="text-k-sm mt-2 grid max-w-[560px] gap-1 px-2">
+      <div className="text-k-label font-bold tracking-[.04em] text-[var(--ink-label)] uppercase">
+        Phân theo lệnh
+      </div>
+      <table className="w-full border-collapse">
+        <tbody>
+          {t.lenh.map((x, k) => (
+            <tr key={x.id} className="border-b border-[var(--hair)]">
+              <td className="num py-[3px] pr-2" style={{ textAlign: 'left' }}>
+                {x.code}
+                {k === 0 && <span className="text-[var(--ink-3)]"> · lệnh chính</span>}
+              </td>
+              <td className="num py-[3px] pr-2 text-right text-[var(--ink-3)]">
+                {x.dong + (k === 0 ? t.chuaChia.dong : 0)} dòng
+              </td>
+              <td className="num py-[3px] text-right font-semibold">
+                {money(x.tien + (k === 0 ? t.chuaChia.tien : 0), currency)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {t.chuaChia.dong > 0 && (
+        <div className="text-[var(--warn)]">
+          {t.chuaChia.dong} dòng chưa chia — đang tính trọn cho {lsx[0].code} (đã cộng vào
+          dòng trên). Tiền chưa VAT, chia theo SL.
+        </div>
+      )}
     </div>
   )
 }

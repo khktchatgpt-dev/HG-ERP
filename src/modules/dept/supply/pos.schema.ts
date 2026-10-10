@@ -336,7 +336,9 @@ export const poShipmentTachSchema = z.object({
         expected_date: z.string().date(),
         note: z.string().trim().max(500).nullish(),
         lines: z
-          .array(z.object({ po_line_id: z.string().uuid(), qty: z.coerce.number().min(0) }))
+          .array(
+            z.object({ po_line_id: z.string().uuid(), qty: z.coerce.number().min(0) }),
+          )
           .max(500),
       }),
     )
@@ -399,28 +401,28 @@ export const poAdjustLineSchema = poLineInputSchema.extend({
 })
 export const poAdjustSchema = z
   .object({
-  base_seq: z.coerce.number().int().min(0),
-  // Nguyên nhân cố định + lệnh mà lần sửa theo (0227, chốt 07/10/2026).
-  cause: z.enum(ADJ_CAUSE_KEYS, { error: 'Chọn nguyên nhân điều chỉnh' }),
-  lsx_ids: z.array(z.string().uuid()).max(20).default([]),
-  reason: z
-    .string()
-    .trim()
-    .min(
-      5,
-      'Ghi rõ vì sao điều chỉnh (ít nhất 5 ký tự) — lý do vào sổ phát sinh và thông báo',
-    )
-    .max(1000),
-  vat_rate: z.coerce.number().min(0).max(100).nullish(),
-  discount_amount: z.coerce.number().min(0).nullish(),
-  lines: z
-    .array(poAdjustLineSchema)
-    .max(200)
-    .refine(
-      (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
-      'Dòng không gắn vật tư phải có tên hàng',
-    ),
-})
+    base_seq: z.coerce.number().int().min(0),
+    // Nguyên nhân cố định + lệnh mà lần sửa theo (0227, chốt 07/10/2026).
+    cause: z.enum(ADJ_CAUSE_KEYS, { error: 'Chọn nguyên nhân điều chỉnh' }),
+    lsx_ids: z.array(z.string().uuid()).max(20).default([]),
+    reason: z
+      .string()
+      .trim()
+      .min(
+        5,
+        'Ghi rõ vì sao điều chỉnh (ít nhất 5 ký tự) — lý do vào sổ phát sinh và thông báo',
+      )
+      .max(1000),
+    vat_rate: z.coerce.number().min(0).max(100).nullish(),
+    discount_amount: z.coerce.number().min(0).nullish(),
+    lines: z
+      .array(poAdjustLineSchema)
+      .max(200)
+      .refine(
+        (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
+        'Dòng không gắn vật tư phải có tên hàng',
+      ),
+  })
   .refine((v) => !causeNeedsLsx(v.cause) || v.lsx_ids.length > 0, {
     message: 'Khách đổi đơn — chọn lệnh / đơn khách mà lần điều chỉnh này theo',
     path: ['lsx_ids'],
@@ -431,3 +433,28 @@ export const poAdjustmentSentSchema = z.object({
   seq: z.coerce.number().int().min(1),
   note: optText(500),
 })
+
+/**
+ * SỬA CHIA LỆNH của đơn đã duyệt / đã gửi (10/10/2026, bản vẽ Chia lệnh Q5): chỉ
+ * phần chia SL theo lệnh của từng dòng — không đổi SL, giá, tiền, NCC, nên không
+ * đi luồng điều chỉnh và không phải ký lại. Mảng rỗng = trả dòng về "chưa chia".
+ */
+export const poLsxSplitPatchSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        line_id: z.string().uuid(),
+        lsx_split: z
+          .array(
+            z.object({
+              production_order_id: z.string().uuid(),
+              qty: z.coerce.number().positive(),
+            }),
+          )
+          .max(10),
+      }),
+    )
+    .min(1)
+    .max(1000),
+})
+export type PoLsxSplitPatch = z.infer<typeof poLsxSplitPatchSchema>

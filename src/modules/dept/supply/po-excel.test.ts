@@ -246,8 +246,10 @@ describe('buildPoExcel — khớp phiếu in', () => {
     const gop = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header({ lsx_set: SET }), supplier: null, lines: [chia] }))) // prettier-ignore
     expect(gop).toContain('Chia lệnh')
     expect(gop).toContain('08 MX: 200; 09 MX: 88')
+    expect(gop).toContain('PHÂN THEO LỆNH SẢN XUẤT')
     const mot = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header({ lsx_set: [SET[0]] }), supplier: null, lines: [chia] }))) // prettier-ignore
     expect(mot).not.toContain('Chia lệnh')
+    expect(mot).not.toContain('PHÂN THEO LỆNH SẢN XUẤT')
   })
 
   it('tiêu đề + khối chữ ký theo MẪU CHỨNG TỪ, có tên người lập dưới nét ký', async () => {

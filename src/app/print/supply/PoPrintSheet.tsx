@@ -1,3 +1,4 @@
+import { CanhBaoChuaChia, PhanTheoLenhIn } from './phan-theo-lenh-in'
 import { chiaLenhDong } from '@/lib/po-lsx-split'
 import {
   fmtMoney,
@@ -394,6 +395,7 @@ export function PoPrintSheet({
         exportHref ? poPdfName(po.code, supplier?.name ?? po.supplier_name) : undefined
       }
     >
+      <CanhBaoChuaChia lines={lines} lsxSet={lsxSet} />
       <PrintLetterhead
         company={company}
         date={d}
@@ -554,6 +556,8 @@ export function PoPrintSheet({
           ))}
         </tbody>
       </table>
+
+      <PhanTheoLenhIn lines={lines} lsxSet={lsxSet} currency={po.currency} />
 
       <PrintTerms items={terms} />
 
