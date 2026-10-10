@@ -3,6 +3,9 @@ import {
   qtyForLsx,
   splitProblem,
   rescaleSplit,
+  chiaTheoNhuCau,
+  chiaNhieuDong,
+  boLenhKhoiChia,
   type LsxSplit,
 } from './po-lsx-split'
 
@@ -69,9 +72,7 @@ describe('splitProblem', () => {
   })
 
   it('bắt số 0, số âm và lệnh trùng', () => {
-    expect(splitProblem(100, [{ production_order_id: L08, qty: 0 }])).toMatch(
-      /lớn hơn 0/,
-    )
+    expect(splitProblem(100, [{ production_order_id: L08, qty: 0 }])).toMatch(/lớn hơn 0/)
     expect(
       splitProblem(100, [
         { production_order_id: L08, qty: 60 },
@@ -109,5 +110,123 @@ describe('rescaleSplit', () => {
 
   it('chưa chia gì thì không đụng vào', () => {
     expect(rescaleSplit([], 600)).toEqual([])
+  })
+})
+
+/*
+ * TỰ CHIA THEO NHU CẦU (10/10/2026) — "gộp lệnh khi mua thì làm sao biết lệnh nào
+ * bao nhiêu". Lệnh 08 là lệnh CHÍNH, 09 và 10 là lệnh phụ.
+ */
+describe('chiaTheoNhuCau', () => {
+  const can = (a: number, b: number, c = 0) => [
+    { production_order_id: '08', need: a },
+    { production_order_id: '09', need: b },
+    { production_order_id: '10', need: c },
+  ]
+
+  it('đặt đúng bằng nhu cầu: mỗi lệnh đúng phần cần (1.350 = 800 + 550)', () => {
+    expect(chiaTheoNhuCau(1350, can(800, 550), '08')).toEqual([
+      { production_order_id: '08', qty: 800 },
+      { production_order_id: '09', qty: 550 },
+    ])
+  })
+
+  it('đặt DƯ (mua tròn bó): lệnh phụ đúng phần cần, phần dư ghi cho lệnh chính', () => {
+    expect(chiaTheoNhuCau(1500, can(800, 550), '08')).toEqual([
+      { production_order_id: '08', qty: 950 },
+      { production_order_id: '09', qty: 550 },
+    ])
+  })
+
+  it('đặt dư mà lệnh chính không cần mã này: phần dư vẫn ghi lệnh chính, thành dòng riêng', () => {
+    expect(chiaTheoNhuCau(600, can(0, 550), '08')).toEqual([
+      { production_order_id: '08', qty: 50 },
+      { production_order_id: '09', qty: 550 },
+    ])
+  })
+
+  it('đặt THIẾU (tồn kho bù): chia theo tỉ lệ, số nguyên, tổng khớp tuyệt đối', () => {
+    const r = chiaTheoNhuCau(1000, can(800, 550, 150), '08')
+    expect(r.reduce((s, a) => s + a.qty, 0)).toBe(1000)
+    expect(r.every((a) => Number.isInteger(a.qty))).toBe(true)
+    expect(r.map((a) => a.qty)).toEqual([533, 367, 100])
+  })
+
+  it('SL lẻ (kg): chia theo tỉ lệ 4 lẻ, tổng khớp', () => {
+    const r = chiaTheoNhuCau(100.5, can(60, 90), '08')
+    expect(r.reduce((s, a) => s + a.qty, 0)).toBeCloseTo(100.5, 9)
+    expect(r[0].qty).toBeCloseTo(40.2, 4)
+  })
+
+  it('chỉ lệnh PHỤ cần: ghi trọn cho lệnh phụ, không rơi về lệnh chính', () => {
+    expect(chiaTheoNhuCau(300, can(0, 300), '08')).toEqual([
+      { production_order_id: '09', qty: 300 },
+    ])
+  })
+
+  it('không lệnh nào cần / SL đặt 0: không chia', () => {
+    expect(chiaTheoNhuCau(100, can(0, 0), '08')).toEqual([])
+    expect(chiaTheoNhuCau(0, can(5, 5), '08')).toEqual([])
+  })
+})
+
+describe('chiaNhieuDong — cùng vật tư nằm nhiều dòng', () => {
+  it('chia trên TỔNG của mã rồi rót lần lượt, không dòng nào ăn trọn nhu cầu', () => {
+    const r = chiaNhieuDong(
+      [
+        { key: 'a', qty: 300 },
+        { key: 'b', qty: 200 },
+      ],
+      [
+        { production_order_id: '08', need: 350 },
+        { production_order_id: '09', need: 150 },
+      ],
+      '08',
+    )
+    expect(r.get('a')).toEqual([{ production_order_id: '08', qty: 300 }])
+    expect(r.get('b')).toEqual([
+      { production_order_id: '08', qty: 50 },
+      { production_order_id: '09', qty: 150 },
+    ])
+  })
+
+  it('mỗi dòng luôn chia đủ SL của chính nó', () => {
+    const r = chiaNhieuDong(
+      [
+        { key: 'a', qty: 7 },
+        { key: 'b', qty: 5 },
+      ],
+      [
+        { production_order_id: '08', need: 4 },
+        { production_order_id: '09', need: 4 },
+      ],
+      '08',
+    )
+    for (const [k, q] of [
+      ['a', 7],
+      ['b', 5],
+    ] as const) {
+      expect(r.get(k)!.reduce((s, x) => s + x.qty, 0)).toBe(q)
+    }
+  })
+})
+
+describe('boLenhKhoiChia', () => {
+  it('gỡ lệnh 10 khỏi đơn: phần còn lại chia lại theo tỉ lệ cho đủ SL', () => {
+    const r = boLenhKhoiChia(
+      [
+        { production_order_id: '08', qty: 600 },
+        { production_order_id: '09', qty: 300 },
+        { production_order_id: '10', qty: 100 },
+      ],
+      ['08', '09'],
+      1000,
+    )
+    expect(r.reduce((s, a) => s + a.qty, 0)).toBeCloseTo(1000, 6)
+    expect(r.map((a) => a.production_order_id)).toEqual(['08', '09'])
+  })
+
+  it('gỡ hết lệnh đã chia → về lệnh chính', () => {
+    expect(boLenhKhoiChia([{ production_order_id: '10', qty: 5 }], ['08'], 5)).toEqual([])
   })
 })

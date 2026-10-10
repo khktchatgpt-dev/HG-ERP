@@ -13,6 +13,8 @@ import {
 } from '@/lib/po-fields'
 import { approvalLineCols, type ApprovalCol } from '@/lib/po-approval-cols'
 import { HAI_GIA, poHaiGia } from '@/lib/po-hai-gia'
+import { qtyForLsx } from '@/lib/po-lsx-split'
+import { lenhNgan } from '@/app/(mua-hang)/mua-hang/don/_lib/po-lsx-chia'
 import { money } from './approval-helpers'
 import { comparePrice, fmtVnd, type LastPriceOf } from './approval-parts'
 import type { ApprovalPoLine, PendingPo } from './approval-types'
@@ -37,6 +39,7 @@ export function PoLineGrid({
   currency,
   lastPrices,
   money: m,
+  lsxSet,
 }: {
   lines: ApprovalPoLine[]
   template: string | null | undefined
@@ -48,6 +51,8 @@ export function PoLineGrid({
    * → VAT → TỔNG THANH TOÁN như phiếu in; không có thì chỉ một dòng tổng.
    */
   money?: PendingPo['money']
+  /** Bộ lệnh của đơn gộp (lệnh chính đầu) — ≥ 2 lệnh thì bày cột "Chia lệnh". */
+  lsxSet?: { id: string; code: string }[]
 }) {
   if (!lines.length) return null
   const t = isPoTemplate(template) ? template : 'simple'
@@ -75,6 +80,11 @@ export function PoLineGrid({
     Số tính tiền đậm, số quy đổi nhạt — người ký biết dòng đang trả theo cái nào.
   */
   const hai = HAI_GIA[t]
+  /*
+    CHIA LỆNH (10/10/2026): đơn gộp nhiều lệnh thì người ký phải thấy lệnh nào
+    lấy bao nhiêu. Dòng chưa chia = trọn lệnh chính (quy ước 0185) — nói rõ ra.
+  */
+  const gop = (lsxSet?.length ?? 0) > 1 ? lsxSet! : null
   const priceLabel = hai
     ? `Đơn giá (${currency})`
     : meta.priceUnit && !perLine && !PO_PRICE_SUFFIX_TEMPLATES.includes(t)
@@ -83,7 +93,7 @@ export function PoLineGrid({
 
   /** Cột hiển thị theo thứ tự — `@…` mở rộng ra ô của màn ký. */
   type Shown =
-    | { k: 'stt' | 'name' | 'product' | 'unit' | 'qty' | 'qty2' | 'price' | 'price2' | 'prev' | 'amount' } // prettier-ignore
+    | { k: 'stt' | 'name' | 'product' | 'unit' | 'qty' | 'qty2' | 'price' | 'price2' | 'prev' | 'amount' | 'lenh' } // prettier-ignore
     | { k: 'field'; c: Extract<ApprovalCol, { kind: 'field' }> }
   const shown: Shown[] = [{ k: 'stt' }]
   for (const c of cols) {
@@ -99,7 +109,8 @@ export function PoLineGrid({
       shown.push({ k: 'price' }, ...(hai ? [{ k: 'price2' } as const] : []), {
         k: 'prev',
       })
-    else if (c.key === '@amount') shown.push({ k: 'amount' })
+    else if (c.key === '@amount')
+      shown.push({ k: 'amount' }, ...(gop ? [{ k: 'lenh' } as const] : []))
   }
   const amountIdx = shown.findIndex((s) => s.k === 'amount')
   const after = shown.length - amountIdx - 1
@@ -122,6 +133,7 @@ export function PoLineGrid({
       case 'price2': return { t: `Đơn giá /${hai?.dv}`, w: 112, num: true }
       case 'prev': return { t: 'Giá lần trước', w: 118, num: true }
       case 'amount': return { t: `Thành tiền (${currency})`, w: 124, num: true }
+      case 'lenh': return { t: 'Chia lệnh', w: 150 }
       case 'field': return { t: s.c.label, num: s.c.right }
     }
   } // prettier-ignore
@@ -252,6 +264,8 @@ export function PoLineGrid({
                       ) // prettier-ignore
                     case 'amount':
                       return <td key={j} className={cn('num px-2 py-[6px] text-right font-semibold whitespace-nowrap', stick, tang ? 'bg-[var(--warn-wash)]' : 'bg-[var(--surface-card)]')}>{ln.unit_price != null ? fmtVnd(poLineAmount(ln)) : '—'}</td> // prettier-ignore
+                    case 'lenh':
+                      return <td key={j} className="px-2 py-[6px]"><ChiaLenhKy ln={ln} lsx={gop!} /></td> // prettier-ignore
                     case 'field': {
                       const v = s.c.text(ln)
                       return (
@@ -390,5 +404,36 @@ function HaiGiaKy({
       {fmtVnd(roundMoney(v, currency))}
       <span className="text-k-label text-[var(--ink-3)]">/{dv}</span>
     </span>
+  )
+}
+
+/** Ô "Chia lệnh" ở màn ký — mỗi lệnh một dòng; chưa chia thì nói đang tính cho lệnh chính. */
+function ChiaLenhKy({
+  ln,
+  lsx,
+}: {
+  ln: ApprovalPoLine
+  lsx: { id: string; code: string }[]
+}) {
+  const sp = (ln.lsx_split ?? []).filter((s) => Number(s.qty) > 0)
+  if (sp.length === 0) {
+    return (
+      <span className="text-k-label text-[var(--warn)]" title="Dòng chưa chia nên tính TRỌN cho lệnh chính — lệnh phụ thấy như chưa đặt">
+        chưa chia · cả dòng → {lenhNgan(lsx[0].code)}
+      </span>
+    ) // prettier-ignore
+  }
+  return (
+    <div className="num text-k-sm leading-tight" style={{ textAlign: 'left' }}>
+      {lsx.map((x) => {
+        const q = qtyForLsx(x.id, { qty_ordered: Number(ln.qty_ordered), main_lsx_id: lsx[0].id, allocations: sp }) // prettier-ignore
+        return q > 0 ? (
+          <div key={x.id} className="whitespace-nowrap">
+            <span className="text-[var(--ink-3)]">{lenhNgan(x.code)}</span>{' '}
+            {q.toLocaleString('vi-VN')}
+          </div>
+        ) : null
+      })}
+    </div>
   )
 }

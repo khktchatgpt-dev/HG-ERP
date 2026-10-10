@@ -1,5 +1,6 @@
 'use client'
 
+import { loiChia } from '@/app/(mua-hang)/mua-hang/don/_lib/po-lsx-chia'
 import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { linkedLsxIds } from '@/lib/po-adjust-cause'
 import { useNguyenNhan } from './useNguyenNhan'
@@ -26,6 +27,7 @@ import {
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { poHolder, useToast, type IcoName, type Mark } from '@/components/kit'
 import { useSuaTaiCho } from './useSuaTaiCho'
+import { useNhuCauLenh } from './useNhuCauLenh'
 import {
   fetchMaterialByCode,
   fetchMaterialsByIds,
@@ -217,9 +219,16 @@ export function useDonChungTu(p: Props) {
     po && p.mode !== 'create' ? planColumnsFromShipments(p.shipments, p.lines.map((l) => l.id)) : [], // prettier-ignore
   )
 
-  const [needs, setNeeds] = useState<Need[]>([])
-
-  const [needsLoading, setNeedsLoading] = useState(false)
+  const nc = useNhuCauLenh({
+    poId: po?.id ?? null,
+    drafting,
+    editing,
+    header,
+    lsxs: p.lsxs,
+    lines,
+    setLines,
+  })
+  const { needs, setNeeds, needsLoading, setNeedsLoading, lsxsOfPo } = nc
 
   const [paste, setPaste] = useState(false)
 
@@ -300,7 +309,7 @@ export function useDonChungTu(p: Props) {
 
   const totals = poTotals(header, lines)
 
-  const issues = lineIssues(template, lines, lineProblem)
+  const issues = lineIssues(template, lines, (t, l) => lineProblem(t, l) ?? loiChia(l))
 
   /** Ô chữ-trên-phiếu mở ra khi sửa đầy đủ (nháp) HOẶC sửa hẹp (đơn đã gửi). */
   const termsEditing = drafting || termsEdit
@@ -413,7 +422,7 @@ export function useDonChungTu(p: Props) {
   /* ── sửa dòng ─────────────────────────────────────────────────────── */
   // Sửa ô nào của dòng thì tổng kg đã chốt hết hiệu lực — số chạy theo ô nhập.
   const patch = (i: number, part: Partial<Line>) =>
-    setLines((ls) => ls.map((l, k) => (k === i ? withSpecDims(template, l, { ...l, qty2_saved: null, ...part }) : l))) // prettier-ignore
+    setLines((ls) => nc.sauSua(ls.map((l, k) => (k === i ? withSpecDims(template, l, { ...l, qty2_saved: null, ...part }) : l)), i, part)) // prettier-ignore
 
   const setField = (i: number, f: PoField, v: string) => {
     if (!f.field) return
@@ -969,45 +978,11 @@ export function useDonChungTu(p: Props) {
     [needs],
   )
 
-  const lsxsOfPo = useMemo(
-    () => (header.poType === 'lsx' ? [header.lsxId, ...header.extraLsxIds].filter(Boolean).flatMap((id) => { const l = p.lsxs.find((x) => x.id === id); return l ? [{ id: l.id, code: l.code }] : [] }) : []), // prettier-ignore
-    [header.poType, header.lsxId, header.extraLsxIds, p.lsxs],
-  )
-
   const lsxLabel =
     header.poType === 'lsx'
       ? lsxJoinedLabel(header.lsxId, header.extraLsxIds, p.lsxs)
       : null
   // prettier-ignore
-
-  // Nhu cầu của CẢ BỘ lệnh (chính + phụ), gộp ở server — cộng từng lệnh ở
-  // client sẽ trừ tồn hai lần. Chỉ nạp khi đang soạn.
-  useEffect(() => {
-    if (!drafting || header.poType !== 'lsx' || !header.lsxId) {
-      const t = setTimeout(() => setNeeds([]), 0)
-      return () => clearTimeout(t)
-    }
-    let gone = false
-    const t = setTimeout(() => setNeedsLoading(true), 0)
-    const qs =
-      header.extraLsxIds.length > 0
-        ? `&extra_lsx_ids=${header.extraLsxIds.join(',')}`
-        : ''
-    api<{ needs: Need[] }>(
-      `/api/dept/supply/needs?production_order_id=${header.lsxId}${qs}`,
-    )
-      .then((d) => !gone && setNeeds(d.needs))
-      .catch(
-        (e) => !gone && toast.error('Không tải được nhu cầu của lệnh', apiErrorText(e)),
-      )
-      .finally(() => !gone && setNeedsLoading(false))
-    return () => {
-      gone = true
-      clearTimeout(t)
-    }
-    // toast ổn định theo provider
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drafting, header.poType, header.lsxId, header.extraLsxIds])
 
   /** Thêm nhiều vật tư (dán Excel, mồi URL) — MỖI MỤC MỘT DÒNG kể cả cùng mã; bản cũ gộp theo material_id (07/10/2026). */
   // prettier-ignore
@@ -1547,6 +1522,8 @@ export function useDonChungTu(p: Props) {
     qtyByMat,
     capLeft,
     lsxsOfPo,
+    nhieuLenh: nc.nhieuLenh,
+    chiaTheoNhuCau: nc.chiaTheoNhuCau,
     lsxLabel,
     addMaterials,
     addFromPaste,

@@ -7,7 +7,11 @@ import type { PoLineTemplateFields } from '@/modules/dept/supply/pos.repo'
  * và mã SP. Repo vốn trả đủ; kiểu client cũ bỏ quên nên lưới ký không đọc tới.
  */
 export type ApprovalPoLine = PoLine &
-  Partial<PoLineTemplateFields> & { product_code?: string | null }
+  Partial<PoLineTemplateFields> & {
+    product_code?: string | null
+    /** Phần chia theo lệnh (0185) — `posRepo.listLines` nạp kèm. */
+    lsx_split?: { production_order_id: string; qty: number }[] | null
+  }
 
 /**
  * Kiểu dữ liệu phiếu chờ duyệt (LSX + đơn vật tư) cho khu Phê duyệt Ban GĐ —
@@ -145,6 +149,8 @@ export type PendingPo = {
   }[]
   /** Lệnh GỘP (0125) ngoài lệnh chính — DocChain chỉ bày lệnh chính. */
   extra_lsx?: string[]
+  /** Bộ lệnh của đơn gộp, lệnh CHÍNH đứng đầu — cột "Chia lệnh" của lưới ký (10/10/2026). */
+  lsx_set?: { id: string; code: string }[]
   /** Ghi chú lúc NCC xác nhận đơn — có khi mở lại đơn đã ký. */
   confirmed_note?: string | null
   /** Tệp đính kèm đơn (báo giá NCC, tờ đơn chụp…). */

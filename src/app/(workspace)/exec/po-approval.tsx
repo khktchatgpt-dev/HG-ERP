@@ -531,6 +531,7 @@ export function PoApprovalBody({
           currency={p.currency}
           lastPrices={p.last_prices}
           money={p.money}
+          lsxSet={p.lsx_set}
         />
 
         {/* ── DẢI 5b: KẾ HOẠCH GIAO — đợt giao lập từ lúc nháp (07/10/2026) ── */}

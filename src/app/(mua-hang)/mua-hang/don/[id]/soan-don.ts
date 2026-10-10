@@ -80,6 +80,8 @@ export type Need = {
   ordered?: number
   max_stock?: number | null
   breakdown?: { product: string; qty: number; per_unit: number | null }[]
+  /** Đơn gộp nhiều lệnh: còn phải đặt (`need`) / cần (`needed`) của TỪNG lệnh — để tự chia SL. */
+  by_lsx?: { production_order_id: string; need: number; needed: number }[]
 }
 
 /** Nhu cầu còn thiếu VÀ chưa có trên dòng nào — thứ đáng bấm "thêm". */

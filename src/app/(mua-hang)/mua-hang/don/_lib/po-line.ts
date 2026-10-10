@@ -1147,9 +1147,9 @@ export function recalcCartonArea(l: Line): Num {
 /**
  * Phần chia SL theo lệnh gửi lên server — null khi không có gì để chia.
  *
- * Bỏ ô trống và ô ≤ 0. Nếu sau khi lọc chỉ còn MỘT lệnh thì cũng trả null: quy
- * ước "dòng không có bản ghi = 100% thuộc LSX chính" đã nói đúng điều đó, ghi
- * thêm một dòng vào bảng chỉ tổ đẻ rác.
+ * Bỏ ô trống và ô ≤ 0. MỘT lệnh nhận trọn vẫn GIỮ (10/10/2026): bản trước trả
+ * null khi chỉ còn một lệnh, nên vật tư chỉ lệnh PHỤ cần bị lưu thành "thuộc lệnh
+ * chính". Đơn một lệnh thì lưới không bày ô chia nên `lsx_split` luôn rỗng.
  */
 export function splitPayload(
   l: Pick<Line, 'lsx_split'>,
@@ -1157,7 +1157,7 @@ export function splitPayload(
   const out = Object.entries(l.lsx_split ?? {})
     .map(([id, v]) => ({ production_order_id: id, qty: v === '' ? 0 : Number(v) }))
     .filter((x) => x.qty > 0)
-  return out.length > 1 ? out : null
+  return out.length > 0 ? out : null
 }
 
 /**
@@ -1174,9 +1174,14 @@ export function mergeLineInto(into: Line, from: Line): Line | null {
     return null
   const add = (a: Num, b: Num): Num =>
     a === '' && b === '' ? '' : Number(a || 0) + Number(b || 0)
-  const split: Record<string, Num> = { ...into.lsx_split }
-  for (const [k, v] of Object.entries(from.lsx_split ?? {}))
-    split[k] = add(split[k] ?? '', v)
+  // Phần chia theo lệnh: hai dòng đều đã chia thì cộng; MỘT dòng chưa chia thì
+  // bỏ chia của dòng gộp — cộng nửa vời là tổng chia lệch SL đặt, và dòng chưa
+  // chia không nói được nó thuộc lệnh nào (10/10/2026). Bấm "Chia theo nhu cầu".
+  const coChia = (l: Line) => Object.values(l.lsx_split ?? {}).some((v) => Number(v) > 0)
+  const split: Record<string, Num> = coChia(into) && coChia(from) ? { ...into.lsx_split } : {}
+  if (coChia(into) && coChia(from))
+    for (const [k, v] of Object.entries(from.lsx_split ?? {}))
+      split[k] = add(split[k] ?? '', v)
   const notes = [into.note, from.note].map((s) => s.trim()).filter(Boolean)
   const manual = (l: Line): Num => l.qty2_manual ?? ''
   return {

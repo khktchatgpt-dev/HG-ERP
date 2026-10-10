@@ -131,6 +131,9 @@ export async function loadPoApprovalDetail(
         lines: sh.lines,
       })),
     extra_lsx: (extraLsx.get(id) ?? []).map((x) => x.code),
+    lsx_set: po.production_order_id
+      ? [{ id: po.production_order_id, code: po.lsx_code ?? '?' }, ...(extraLsx.get(id) ?? []).map((x) => ({ id: x.id, code: x.code }))] // prettier-ignore
+      : [],
     confirmed_note: blank(po.confirmed_note),
     files: files.map((f) => ({ id: f.id, filename: f.filename })),
     created_by_name: properName(creatorName) || null,

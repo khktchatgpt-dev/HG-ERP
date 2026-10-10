@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { tiLeChoBo, type LsxSplit } from '@/lib/po-lsx-split'
 import { poLineAmount, type PriceBasis } from '@/lib/po-line'
 import { docEventAt } from '@/lib/date-vn'
 import { DAU_SUA_PHIEU, dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
@@ -527,11 +528,10 @@ export const supplyRepo = {
    *  2. Gọi từng lệnh rồi CỘNG các map (cách cũ của route needs) sẽ đếm đơn gộp
    *     HAI lần khi cả A lẫn B cùng nằm trong bộ đang tính.
    *
-   * Giới hạn nói thẳng: dòng đơn không tách được "phần của lệnh nào", nên đơn
-   * phục vụ nhiều lệnh được đếm TRỌN phần chưa về vào "đã đặt" của bộ này. Lệnh
-   * phụ đứng một mình vì thế có thể thấy "đã đặt" cao hơn phần thật của nó —
-   * nghiêng về KHÔNG giục mua trùng; cột "đã đặt" hiển thị trên form nên người
-   * mua vẫn thấy số mà tự quyết (suggest chỉ là đề xuất, không phải lệnh).
+   * ĐƠN GỘP NHIỀU LỆNH (10/10/2026): mỗi dòng chỉ đếm PHẦN của bộ đang tính
+   * (`tiLeChoBo` — theo phần chia 0185; dòng chưa chia thuộc lệnh chính). Bản
+   * trước đếm TRỌN dòng cho mọi lệnh của đơn: bảng kê lệnh 09 thấy "đã đặt
+   * 1.350" trong khi 800 trong đó là của lệnh 08 — lệnh 09 bị báo đủ mà thiếu.
    */
   async orderedPendingByLsxSet(
     productionOrderIds: string[],
@@ -539,57 +539,92 @@ export const supplyRepo = {
   ): Promise<Map<string, { ordered: number; pending: number }>> {
     const out = new Map<string, { ordered: number; pending: number }>()
     if (productionOrderIds.length === 0) return out
+    type P = { id: string; status: string; production_order_id: string | null }
     const [main, extra] = await Promise.all([
       db()
         .from('supply_purchase_orders')
-        .select('id, status')
+        .select('id, status, production_order_id')
         .in('production_order_id', productionOrderIds),
       db()
         .from('supply_po_extra_lsx')
-        .select('po:supply_purchase_orders!inner(id, status)')
+        .select('po:supply_purchase_orders!inner(id, status, production_order_id)')
         .in('production_order_id', productionOrderIds),
     ])
-    type P = { id: string; status: string }
-    const seen = new Set<string>()
-    const committed: string[] = []
-    const pending: string[] = []
+    const pos = new Map<string, P>()
     const take = (p: P | null | undefined) => {
-      if (!p || seen.has(p.id)) return
-      seen.add(p.id)
+      if (!p || pos.has(p.id)) return
       if (excludePoId && p.id === excludePoId) return
-      if ((RECEIVABLE as readonly string[]).includes(p.status)) committed.push(p.id)
-      else if (p.status === 'pending_approval') pending.push(p.id)
+      pos.set(p.id, p)
     }
     for (const p of (main.data as P[] | null) ?? []) take(p)
     for (const r of (extra.data as { po: P | P[] | null }[] | null) ?? []) {
       take(Array.isArray(r.po) ? r.po[0] : r.po)
     }
+    const committed = [...pos.values()].filter((p) => (RECEIVABLE as readonly string[]).includes(p.status)).map((p) => p.id) // prettier-ignore
+    const pending = [...pos.values()].filter((p) => p.status === 'pending_approval').map((p) => p.id) // prettier-ignore
+    const ids = [...committed, ...pending]
+    if (ids.length === 0) return out
+
+    // Bộ lệnh ĐẦY ĐỦ của từng đơn + phần chia từng dòng — để biết bao nhiêu
+    // của dòng thuộc về bộ đang tính.
+    const [allExtra, splitRes, statusRes, pendRes] = await Promise.all([
+      db()
+        .from('supply_po_extra_lsx')
+        .select('po_id, production_order_id')
+        .in('po_id', ids),
+      db()
+        .from('supply_po_line_lsx')
+        .select(
+          'line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)',
+        )
+        .in('line.po_id', ids),
+      committed.length
+        ? db().from('supply_po_line_status').select('id, po_id, material_id, qty_ordered, qty_open').in('po_id', committed) // prettier-ignore
+        : Promise.resolve({ data: [] }),
+      pending.length
+        ? db().from('supply_purchase_order_lines').select('id, po_id, material_id, qty_ordered').in('po_id', pending) // prettier-ignore
+        : Promise.resolve({ data: [] }),
+    ])
+    const lsxOfPo = new Map<string, string[]>()
+    for (const p of pos.values()) lsxOfPo.set(p.id, p.production_order_id ? [p.production_order_id] : []) // prettier-ignore
+    for (const e of (allExtra.data as
+      { po_id: string; production_order_id: string }[] | null) ?? []) {
+      lsxOfPo.get(e.po_id)?.push(e.production_order_id)
+    }
+    const splits = new Map<string, LsxSplit[]>()
+    for (const r of (splitRes.data as
+      { line_id: string; production_order_id: string; qty: number }[] | null) ?? []) {
+      const cur = splits.get(r.line_id) ?? []
+      cur.push({ production_order_id: r.production_order_id, qty: Number(r.qty) || 0 })
+      splits.set(r.line_id, cur)
+    }
+    const share = (lineId: string, poId: string, qtyOrdered: number) =>
+      tiLeChoBo(
+        { qty_ordered: qtyOrdered, main_lsx_id: pos.get(poId)?.production_order_id ?? null, allocations: splits.get(lineId) }, // prettier-ignore
+        lsxOfPo.get(poId) ?? [],
+        productionOrderIds,
+      )
     const bump = (mid: string, k: 'ordered' | 'pending', v: number) => {
+      if (!(v > 0)) return
       const e = out.get(mid) ?? { ordered: 0, pending: 0 }
       e[k] += v
       out.set(mid, e)
     }
-    if (committed.length > 0) {
-      // qty_open (0154): dòng đã CHỐT THIẾU không còn "đang đặt" — phần NCC bỏ
-      // phải được đề xuất mua lại chỗ khác, không để số ảo đè lên suggest.
-      const { data } = await db()
-        .from('supply_po_line_status')
-        .select('material_id, qty_open')
-        .in('po_id', committed)
-      for (const r of (data as { material_id: string; qty_open: number }[] | null) ??
-        []) {
-        bump(r.material_id, 'ordered', Math.max(Number(r.qty_open) || 0, 0))
-      }
+    // qty_open (0154): dòng đã CHỐT THIẾU không còn "đang đặt" — phần NCC bỏ phải
+    // được đề xuất mua lại chỗ khác, không để số ảo đè lên suggest.
+    type St = { id: string; po_id: string; material_id: string; qty_ordered: number; qty_open: number } // prettier-ignore
+    for (const r of (statusRes.data as St[] | null) ?? []) {
+      const open = Math.max(Number(r.qty_open) || 0, 0)
+      bump(
+        r.material_id,
+        'ordered',
+        open * share(r.id, r.po_id, Number(r.qty_ordered) || 0),
+      )
     }
-    if (pending.length > 0) {
-      const { data } = await db()
-        .from('supply_purchase_order_lines')
-        .select('material_id, qty_ordered')
-        .in('po_id', pending)
-      for (const r of (data as { material_id: string; qty_ordered: number }[] | null) ??
-        []) {
-        bump(r.material_id, 'pending', Number(r.qty_ordered) || 0)
-      }
+    type Pl = { id: string; po_id: string; material_id: string; qty_ordered: number }
+    for (const r of (pendRes.data as Pl[] | null) ?? []) {
+      const q = Number(r.qty_ordered) || 0
+      bump(r.material_id, 'pending', q * share(r.id, r.po_id, q))
     }
     return out
   },

@@ -38,6 +38,7 @@ import { suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { priceDrift } from '@/lib/po-tracking'
 import { NhuCauGrid } from './SoanDonPanels'
 import { HaiGiaO, HaiGiaXem } from './hai-gia'
+import { ChiaLenhFoot, ChiaLenhTd, ChiaLenhTh } from './chia-lenh'
 import {
   EditCell,
   ViewCell,
@@ -159,6 +160,7 @@ export function DongHang({ d }: { d: DonCtx }) {
               <Th num>Đơn giá</Th>
               {haiCot && <Th num>Đơn giá /{haiCot.dv}</Th>}
               <Th num>Thành tiền</Th>
+              {d.nhieuLenh && <ChiaLenhTh />}
               <GhiChuTh />
               {adjusting && <Th num>Đã nhận</Th>}
               {adjusting && <Th num>Phát sinh</Th>}
@@ -441,6 +443,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                         )
                       )}
                     </Td>
+                    {d.nhieuLenh && <ChiaLenhTd d={d} l={l} i={i} />}
                     <GhiChuTd d={d} l={l} i={i} />
                     {adjusting && (
                       <Td num>
@@ -504,6 +507,7 @@ export function DongHang({ d }: { d: DonCtx }) {
               <Td num>
                 {fmtMoney(roundMoney(totals.subtotal, header.currency), header.currency)}
               </Td>
+              {d.nhieuLenh && <ChiaLenhFoot />}
               <Td />
               {adjusting && <Td />}
               {adjusting && (
