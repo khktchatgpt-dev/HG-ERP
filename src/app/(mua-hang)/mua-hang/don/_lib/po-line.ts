@@ -540,21 +540,85 @@ export function xopM3MoiTam(l: Line): number | null {
 }
 
 /**
- * HAI CỘT GIÁ CỦA DÒNG XỐP (09/10/2026 — chị Nga: "bổ sung cột Đơn giá m³").
- * Dòng chỉ lưu MỘT đơn giá theo cơ sở tiền của nó (tấm hoặc m³); cột kia là số
- * QUY ĐỔI qua m³/tấm để đối chiếu với báo giá NCC — gõ vào cột nào thì dòng tính
- * tiền theo cột đó (lưới đổi `carton_basis`).
+ * HAI CỘT GIÁ (09/10/2026 xốp — chị Nga: "bổ sung cột Đơn giá m³"; 10/10/2026 mở
+ * rộng — sếp: nhôm, sắt/inox, gỗ, kính "ngoài giá theo ĐVT cần có giá theo kg
+ * hoặc m³"). "Đơn giá" theo ĐVT đặt và "Đơn giá <đv quy đổi>" đứng cạnh nhau.
+ * Dòng vẫn chỉ lưu MỘT đơn giá theo cơ sở tiền của nó; cột kia là số QUY ĐỔI qua
+ * lượng quy đổi của MỘT ĐVT (kg/cây, m³/tấm…) để đối chiếu báo giá NCC — gõ vào
+ * cột nào thì dòng tính tiền theo cột đó (`haiGiaPatch`).
+ *
+ * Bao bì KHÔNG có: mẫu đó đã có cột "Đơn giá/m²" riêng, và giá thùng = m² × giá/m²
+ * + bản in — không phải phép quy đổi thuần, bày thêm cột m² là hai số cãi nhau.
  */
-export function xopHaiGia(
+export const HAI_GIA: Partial<Record<PoTemplate, { dv: string; thieu: string }>> = {
+  aluminium: { dv: 'kg', thieu: 'cần kg/m + dài cây' },
+  metal_kg: { dv: 'kg', thieu: 'cần kg / đơn vị' },
+  wood: { dv: 'm³', thieu: 'cần m³ / SP' },
+  glass: { dv: 'm²', thieu: 'cần m² / tấm' },
+  foam: { dv: 'm³', thieu: 'cần D×R×Dày' },
+}
+
+/**
+ * Lượng quy đổi của MỘT ĐVT đặt (kg/cây, kg/đơn vị, m³/SP, m²/tấm, m³/tấm). Tổng
+ * đã chốt / gõ đè theo tờ NCC thắng công thức — chia cho SL. Không đủ số → null.
+ */
+export function dv2MotDv(t: PoTemplate, l: Line): number | null {
+  if (t === 'foam') return xopM3MoiTam(l)
+  const q = Number(l.qty) || 0
+  const tong =
+    l.qty2_saved ?? ((l.qty2_manual ?? '') !== '' ? Number(l.qty2_manual) : null)
+  if (q > 0 && tong != null && tong > 0) return tong / q
+  const per =
+    t === 'aluminium'
+      ? (Number(l.weight_per_m) || 0) * (Number(l.bar_length_m) || 0)
+      : t === 'metal_kg'
+        ? Number(l.weight_per_unit) || 0
+        : t === 'wood'
+          ? Number(l.m3_per_unit) || 0
+          : t === 'glass'
+            ? Number(l.area_m2) || 0
+            : 0
+  return per > 0 ? per : null
+}
+
+/** Hai giá của dòng: `theo` là cột đang tính tiền, cột kia quy đổi (null khi thiếu số). */
+export function haiGia(
   t: PoTemplate,
   l: Line,
-): { theo: 'tam' | 'm3'; donGia: number | null; giaM3: number | null } {
-  const theo = lineBasis(t, l) === 'unit2' ? 'm3' : 'tam'
+): { theo: 'dvt' | 'dv2'; donGia: number | null; gia2: number | null } {
+  const theo = lineBasis(t, l) === 'unit2' ? 'dv2' : 'dvt'
   const p = n(l.price)
-  const per = xopM3MoiTam(l)
-  if (p == null) return { theo, donGia: null, giaM3: null }
-  if (theo === 'm3') return { theo, giaM3: p, donGia: per == null ? null : p * per }
-  return { theo, donGia: p, giaM3: per == null || per <= 0 ? null : p / per }
+  const per = dv2MotDv(t, l)
+  if (p == null) return { theo, donGia: null, gia2: null }
+  if (theo === 'dv2') return { theo, gia2: p, donGia: per == null ? null : p * per }
+  return { theo, donGia: p, gia2: per == null || per <= 0 ? null : p / per }
+}
+
+/**
+ * Gõ giá vào một cột → dòng tính tiền theo cột đó. Kính / xốp chốt cơ sở bằng
+ * `carton_basis` (bỏ "Giá theo" cũ vì `deriveLine` để nó thắng); nhôm, sắt, gỗ
+ * chốt bằng `price_per`.
+ */
+export function haiGiaPatch(
+  t: PoTemplate,
+  theo: 'dvt' | 'dv2',
+  price: Num,
+): Partial<Line> {
+  if (t === 'foam') return { price, carton_basis: theo === 'dv2' ? 'm3' : 'ctn', price_per: '' } // prettier-ignore
+  if (t === 'glass') return { price, carton_basis: theo === 'dv2' ? 'm2' : 'ctn', price_per: '' } // prettier-ignore
+  return { price, price_per: theo === 'dv2' ? 'unit2' : 'unit' }
+}
+
+/**
+ * Tổng quy đổi để BÀY ở cột tổng khi dòng tính theo ĐVT (kính/xốp theo tấm thì
+ * `lineQty2` rỗng) — vẫn phải thấy tổng m² / m³ để đối chiếu tờ NCC.
+ */
+export function tongDv2(t: PoTemplate, l: Line): number | null {
+  if (t === 'foam') return tongM3(l)
+  if (t !== 'glass') return null
+  const a = Number(l.area_m2) || 0
+  const q = Number(l.qty) || 0
+  return a > 0 && q > 0 ? Math.round(a * q * 1e4) / 1e4 : null
 }
 
 /**

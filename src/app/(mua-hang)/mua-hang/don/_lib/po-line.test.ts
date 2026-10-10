@@ -25,7 +25,9 @@ import {
   docTongGo,
   foamBasisMacDinh,
   withSpecDims,
-  xopHaiGia,
+  haiGia,
+  haiGiaPatch,
+  dv2MotDv,
   xopM3MoiTam,
   lsxOf,
   withLsxDemand,
@@ -1310,7 +1312,7 @@ describe('newLine foam — có D×R×Dày thì mặc định tính theo m³', ()
  * nhau; dòng lưu một giá theo cơ sở tiền, cột kia quy đổi qua m³/tấm.
  * Mouse mê Relax 580×540×60 → 0,018792 m³/tấm; 240 tấm = 4,51008 m³.
  */
-describe('xopHaiGia — Đơn giá / Đơn giá m³', () => {
+describe('haiGia xốp — Đơn giá / Đơn giá m³', () => {
   const relax = (part: Partial<Line>): Line => ({
     ...lineFromPo(base),
     inner_l_mm: 580,
@@ -1324,19 +1326,19 @@ describe('xopHaiGia — Đơn giá / Đơn giá m³', () => {
 
   it('tính theo m³: giá lưu là giá/m³, giá tấm = giá/m³ × m³/tấm', () => {
     const l = relax({ carton_basis: 'm3', price: 1_300_000 })
-    const g = xopHaiGia('foam', l)
-    expect(g.theo).toBe('m3')
-    expect(g.giaM3).toBe(1_300_000)
+    const g = haiGia('foam', l)
+    expect(g.theo).toBe('dv2')
+    expect(g.gia2).toBe(1_300_000)
     expect(g.donGia).toBeCloseTo(1_300_000 * 0.018792, 6)
     expect(lineAmount('foam', l)).toBeCloseTo(4.51008 * 1_300_000, 2)
   })
 
   it('tính theo tấm: giá lưu là giá tấm (24.524), giá/m³ quy đổi ngược; tiền = SL × giá tấm', () => {
     const l = relax({ carton_basis: 'ctn', price: 24_524 })
-    const g = xopHaiGia('foam', l)
-    expect(g.theo).toBe('tam')
+    const g = haiGia('foam', l)
+    expect(g.theo).toBe('dvt')
     expect(g.donGia).toBe(24_524)
-    expect(g.giaM3).toBeCloseTo(24_524 / 0.018792, 4)
+    expect(g.gia2).toBeCloseTo(24_524 / 0.018792, 4)
     expect(lineAmount('foam', l)).toBe(240 * 24_524)
   })
 
@@ -1344,7 +1346,79 @@ describe('xopHaiGia — Đơn giá / Đơn giá m³', () => {
     expect(xopM3MoiTam(relax({ qty2_manual: 4.8 }))).toBeCloseTo(0.02, 9)
     const tron = relax({ inner_l_mm: '', inner_w_mm: '', inner_h_mm: '', carton_basis: 'ctn', price: 24_524 }) // prettier-ignore
     expect(xopM3MoiTam(tron)).toBeNull()
-    expect(xopHaiGia('foam', tron).giaM3).toBeNull()
+    expect(haiGia('foam', tron).gia2).toBeNull()
+  })
+})
+
+/*
+ * HAI CỘT GIÁ mở rộng (10/10/2026 — sếp: nhôm, sắt/inox, gỗ, kính "ngoài giá theo
+ * ĐVT cần có giá theo kg hoặc m³"). Gõ cột nào thì tiền tính theo cột đó, cột kia
+ * là số quy đổi — và tiền hai cách phải bằng nhau khi giá quy đổi đúng.
+ */
+describe('haiGia — nhôm · sắt · gỗ · kính', () => {
+  const dong = (part: Partial<Line>): Line => ({
+    ...lineFromPo(base),
+    qty: 100,
+    qty2_manual: '',
+    price_per: '',
+    ...part,
+  })
+
+  it('nhôm: mặc định theo kg; giá cây = giá/kg × kg/m × dài cây', () => {
+    const l = dong({ weight_per_m: 0.5, bar_length_m: 6, price: 80_000 })
+    const g = haiGia('aluminium', l)
+    expect(g.theo).toBe('dv2')
+    expect(g.gia2).toBe(80_000)
+    expect(g.donGia).toBeCloseTo(240_000, 6)
+    expect(lineAmount('aluminium', l)).toBeCloseTo(100 * 3 * 80_000, 2)
+  })
+
+  it('nhôm: gõ giá vào cột Đơn giá (cây) → tiền = SL × giá cây, cột kg quy đổi ngược', () => {
+    const l = dong({ weight_per_m: 0.5, bar_length_m: 6, ...haiGiaPatch('aluminium', 'dvt', 240_000) }) // prettier-ignore
+    const g = haiGia('aluminium', l)
+    expect(g.theo).toBe('dvt')
+    expect(g.gia2).toBeCloseTo(80_000, 6)
+    expect(lineAmount('aluminium', l)).toBe(100 * 240_000)
+  })
+
+  it('sắt / inox: kg / đơn vị là số quy đổi; gõ cột kg thì về lại theo kg', () => {
+    const tayCay = dong({ weight_per_unit: 2.5, ...haiGiaPatch('metal_kg', 'dvt', 100_000) }) // prettier-ignore
+    expect(haiGia('metal_kg', tayCay).gia2).toBeCloseTo(40_000, 6)
+    expect(lineAmount('metal_kg', tayCay)).toBe(100 * 100_000)
+    const theoKg = { ...tayCay, ...haiGiaPatch('metal_kg', 'dv2', 40_000) }
+    expect(haiGia('metal_kg', theoKg).theo).toBe('dv2')
+    expect(lineAmount('metal_kg', theoKg)).toBeCloseTo(100 * 100_000, 2)
+  })
+
+  it('gỗ: ván danh mục theo tấm, gõ giá m³ thì tính theo m³', () => {
+    const van = dong({ material_id: 'go-0001', m3_per_unit: 0.0072, price: 81_000 })
+    const g = haiGia('wood', van)
+    expect(g.theo).toBe('dvt')
+    expect(g.gia2).toBeCloseTo(81_000 / 0.0072, 4)
+    const m3 = { ...van, ...haiGiaPatch('wood', 'dv2', 11_250_000) }
+    expect(haiGia('wood', m3).theo).toBe('dv2')
+    expect(lineAmount('wood', m3)).toBeCloseTo(100 * 0.0072 * 11_250_000, 0)
+  })
+
+  it('kính: theo tấm vẫn ra giá/m²; gõ giá m² thì đổi cơ sở sang m² (bỏ "Giá theo" cũ)', () => {
+    const tam = dong({
+      area_m2: 0.3261,
+      carton_basis: 'ctn',
+      price_per: 'unit',
+      price: 65_220,
+    })
+    expect(haiGia('glass', tam).gia2).toBeCloseTo(200_000, 6)
+    const m2 = { ...tam, ...haiGiaPatch('glass', 'dv2', 200_000) }
+    expect(m2.carton_basis).toBe('m2')
+    expect(m2.price_per).toBe('')
+    expect(lineAmount('glass', m2)).toBeCloseTo(100 * 0.3261 * 200_000, 0)
+  })
+
+  it('tổng gõ đè theo tờ NCC thắng công thức; thiếu số quy đổi thì không bày giá thứ hai', () => {
+    expect(dv2MotDv('aluminium', dong({ weight_per_m: 0.5, bar_length_m: 6, qty2_manual: 290 }))).toBeCloseTo(2.9, 9) // prettier-ignore
+    const tron = dong({ price: 240_000, price_per: 'unit' })
+    expect(dv2MotDv('aluminium', tron)).toBeNull()
+    expect(haiGia('aluminium', tron).gia2).toBeNull()
   })
 })
 

@@ -8,6 +8,7 @@ import {
   tongLechBac,
   docTongGo,
   m3MotTam,
+  tongDv2,
   tongM3,
   lineQty2Auto,
   type Line,
@@ -346,7 +347,7 @@ export function ViewCell({
   template: PoTemplate
 }) {
   if (f.kind === 'calc') {
-    const v = lineQty2(template, l) ?? (template === 'foam' ? tongM3(l) : null)
+    const v = lineQty2(template, l) ?? tongDv2(template, l)
     return <span className="num">{v == null ? '—' : v.toLocaleString('vi-VN')}</span>
   }
   if (f.kind === 'm3sheet') return <M3Tam l={l} />
@@ -403,10 +404,7 @@ export function EditCell({
       const auto = lineQty2Auto(template, l)
       // Xốp tính theo TẤM thì không có tổng tính tiền, nhưng tổng m³ vẫn phải bày để
       // đối chiếu báo giá NCC (09/10/2026 — hai cột Đơn giá / Đơn giá m³).
-      const shown =
-        manual === ''
-          ? (lineQty2(template, l) ?? (template === 'foam' ? tongM3(l) : null))
-          : null
+      const shown = manual === '' ? (lineQty2(template, l) ?? tongDv2(template, l)) : null
       return (
         <>
           <NumInput

@@ -2,6 +2,7 @@
 
 import {
   cartonPriceSuggest,
+  HAI_GIA,
   lineAmount,
   lineBasis,
   lineQty2,
@@ -36,7 +37,7 @@ import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
 import { suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { priceDrift } from '@/lib/po-tracking'
 import { NhuCauGrid } from './SoanDonPanels'
-import { XopGiaO, XopGiaXem } from './xop-gia'
+import { HaiGiaO, HaiGiaXem } from './hai-gia'
 import {
   EditCell,
   ViewCell,
@@ -93,6 +94,8 @@ export function DongHang({ d }: { d: DonCtx }) {
     setEditMaterial,
     saveToCatalog,
   } = d
+  // Mẫu có hai cột giá (ĐVT + kg/m³/m²) — xem `HAI_GIA`.
+  const haiCot = HAI_GIA[template]
   return (
     <>
       {/* ══ 1. LƯỚI DÒNG — mở đầu, nhân vật chính ═══════════════════════ */}
@@ -154,7 +157,7 @@ export function DongHang({ d }: { d: DonCtx }) {
               <Th>ĐVT</Th>
               <Th num>SL đặt</Th>
               <Th num>Đơn giá</Th>
-              {template === 'foam' && <Th num>Đơn giá m³</Th>}
+              {haiCot && <Th num>Đơn giá {haiCot.dv}</Th>}
               <Th num>Thành tiền</Th>
               <GhiChuTh />
               {adjusting && <Th num>Đã nhận</Th>}
@@ -350,10 +353,10 @@ export function DongHang({ d }: { d: DonCtx }) {
                     <Td num tone={why?.includes('giá') ? 'warn' : undefined}>
                       {editing ? (
                         <>
-                          {template === 'foam' ? (
-                            <XopGiaO
+                          {haiCot ? (
+                            <HaiGiaO
                               label="Đơn giá"
-                              theo="tam"
+                              theo="dvt"
                               l={l}
                               template={template}
                               currency={header.currency}
@@ -404,18 +407,18 @@ export function DongHang({ d }: { d: DonCtx }) {
                         </>
                       ) : l.price === '' ? (
                         <span className="k-t-warn">—</span>
-                      ) : template === 'foam' ? (
-                        <XopGiaXem theo="tam" l={l} template={template} currency={header.currency} /> // prettier-ignore
+                      ) : haiCot ? (
+                        <HaiGiaXem theo="dvt" l={l} template={template} currency={header.currency} /> // prettier-ignore
                       ) : (
                         Number(l.price).toLocaleString('vi-VN')
                       )}
                     </Td>
-                    {template === 'foam' && (
+                    {haiCot && (
                       <Td num>
                         {editing ? (
-                          <XopGiaO
-                            label="Đơn giá m³"
-                            theo="m3"
+                          <HaiGiaO
+                            label={`Đơn giá ${haiCot.dv}`}
+                            theo="dv2"
                             l={l}
                             template={template}
                             currency={header.currency}
@@ -424,7 +427,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                         ) : l.price === '' ? (
                           <span className="k-t-warn">—</span>
                         ) : (
-                          <XopGiaXem theo="m3" l={l} template={template} currency={header.currency} /> // prettier-ignore
+                          <HaiGiaXem theo="dv2" l={l} template={template} currency={header.currency} /> // prettier-ignore
                         )}
                       </Td>
                     )}
@@ -497,7 +500,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                   .toLocaleString('vi-VN')}
               </Td>
               <Td />
-              {template === 'foam' && <Td />}
+              {haiCot && <Td />}
               <Td num>
                 {fmtMoney(roundMoney(totals.subtotal, header.currency), header.currency)}
               </Td>
