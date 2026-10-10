@@ -227,3 +227,34 @@ export function tiLeChoBo(
   const phan = boLenh.reduce((s, id) => s + qtyForLsx(id, line), 0)
   return Math.min(Math.max(phan / dat, 0), 1)
 }
+
+/**
+ * Nhãn NGẮN của lệnh cho cột hẹp: "01/26-27 - LAURA" → "01 LAURA". Hai lệnh cùng
+ * số khác khách (01 LAURA, 01 GIGA) vẫn phân biệt được.
+ */
+export function lenhNgan(code: string): string {
+  const m = /^(\d+)\/[\d-]+\s*-\s*(.+)$/.exec(code.trim())
+  return m ? `${m[1]} ${m[2].trim()}` : code
+}
+
+/**
+ * CHỮ CHIA LỆNH CỦA MỘT DÒNG cho phiếu in / Excel (10/10/2026 — user chọn cột
+ * "Chia lệnh" trên phiếu): mỗi lệnh có phần một mục "08 MX: 200", theo thứ tự bộ
+ * lệnh của đơn (lệnh chính đầu). Dòng chưa chia = trọn lệnh chính (quy ước 0185).
+ * Đơn một lệnh → [] (phiếu không bày cột).
+ */
+export function chiaLenhDong(
+  line: { qty_ordered: number; lsx_split?: LsxSplit[] | null },
+  lsxSet: { id: string; code: string }[],
+): string[] {
+  if (lsxSet.length < 2) return []
+  const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
+  return lsxSet.flatMap((x) => {
+    const q = qtyForLsx(x.id, {
+      qty_ordered: Number(line.qty_ordered) || 0,
+      main_lsx_id: lsxSet[0].id,
+      allocations: (line.lsx_split ?? []).filter((s) => Number(s.qty) > 0),
+    })
+    return q > 0 ? [`${lenhNgan(x.code)}: ${fmt(q)}`] : []
+  })
+}

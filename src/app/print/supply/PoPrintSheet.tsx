@@ -1,3 +1,4 @@
+import { chiaLenhDong } from '@/lib/po-lsx-split'
 import {
   fmtMoney,
   packCount,
@@ -48,6 +49,8 @@ import {
 /** Dòng hàng ở dạng phiếu in cần — khớp `PoLine` của repo, và dựng được từ nháp. */
 export type PoPrintLine = {
   id: string
+  /** Phần chia theo lệnh (0185) — chỉ đơn gộp mới dùng. */
+  lsx_split?: { production_order_id: string; qty: number }[] | null
   material_code: string
   material_name: string
   material_unit: string
@@ -108,6 +111,8 @@ export type PoPrintHeader = {
   signer_role: string | null
   lsx_code: string | null
   order_code: string | null
+  /** Bộ lệnh (lệnh chính đầu) — ≥ 2 lệnh thì phiếu có cột "Chia lệnh". */
+  lsx_set?: { id: string; code: string }[]
   /** "lần 2 · 26/09/2026" — đơn đã điều chỉnh sau khi gửi (0210); null = bản gốc. */
   revision_label?: string | null
   supplier_name: string
@@ -329,6 +334,20 @@ export function PoPrintSheet({
     expectedAt: po.expected_at,
     priceUnitOf: poPriceUnitPerLine(meta.priceUnit, lines),
   })
+  /*
+    CỘT "CHIA LỆNH" — chỉ đơn gộp từ 2 lệnh (10/10/2026, user chọn): mỗi lệnh một
+    dòng nhỏ trong ô, đứng ngay trước Ghi chú. NCC chia kiện / dán nhãn theo lệnh
+    được; đơn một lệnh giữ nguyên mẫu.
+  */
+  const lsxSet = po.lsx_set ?? []
+  if (lsxSet.length > 1) {
+    const at = cols.findIndex((c) => c.label === 'Ghi chú')
+    const col: Col = {
+      label: 'Chia lệnh',
+      cell: (l) => chiaLenhDong(l, lsxSet).map((t) => <div key={t} className="whitespace-nowrap">{t}</div>), // prettier-ignore
+    }
+    cols.splice(at < 0 ? cols.length : at, 0, col)
+  }
   const amountIdx = cols.findIndex((c) => c.isAmount)
 
   /*

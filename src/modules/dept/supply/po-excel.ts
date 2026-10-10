@@ -1,3 +1,4 @@
+import { chiaLenhDong } from '@/lib/po-lsx-split'
 import ExcelJS from 'exceljs'
 import {
   currencyDecimals,
@@ -284,6 +285,17 @@ export async function buildPoExcel(input: {
     expectedAt: po.expected_at,
     priceUnitOf: poPriceUnitPerLine(poTemplateMeta(template).priceUnit, lines),
   })
+  // Cột "Chia lệnh" của đơn gộp — cùng chỗ, cùng chữ với phiếu in (chiaLenhDong).
+  const lsxSet = po.lsx_set ?? []
+  if (lsxSet.length > 1) {
+    const at = cols.findIndex((c) => c.label === 'Ghi chú')
+    cols.splice(at < 0 ? cols.length : at, 0, {
+      label: 'Chia lệnh',
+      width: 16,
+      align: 'left',
+      value: (l) => chiaLenhDong(l, lsxSet).join('; '),
+    })
+  }
   const n = cols.length
   const amountIdx = cols.findIndex((c) => c.isAmount) // 0-based
 

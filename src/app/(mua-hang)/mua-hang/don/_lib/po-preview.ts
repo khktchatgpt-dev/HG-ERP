@@ -31,6 +31,8 @@ export function previewLinesFromDraft(
       unit_price: l.price === '' ? null : Number(l.price),
       price_basis: d.price_basis,
       qty2: d.qty2,
+      // Phần chia theo lệnh — cột "Chia lệnh" của phiếu đơn gộp (10/10/2026).
+      lsx_split: draft.lsx_split,
       // 0182 — nhãn lấy từ deriveLine (chỉ có khi cặp trọn vẹn), khớp bản in thật.
       unit2_per_unit: draft.unit2_per_unit,
       unit2: d.unit2,
@@ -83,6 +85,8 @@ export function previewHeaderFromDraft(
     supplierName: string
     lsxCode: string | null
     orderCode: string | null
+    /** Bộ lệnh của đơn (lệnh chính đầu) — ≥ 2 thì phiếu có cột "Chia lệnh". */
+    lsxSet?: { id: string; code: string }[]
     createdAt: string
   },
 ): PoPrintHeader {
@@ -105,6 +109,7 @@ export function previewHeaderFromDraft(
     signer_role: header.signerRole || null,
     lsx_code: opts.lsxCode,
     order_code: opts.orderCode,
+    lsx_set: opts.lsxSet ?? [],
     supplier_name: opts.supplierName,
     created_at: opts.createdAt,
   }

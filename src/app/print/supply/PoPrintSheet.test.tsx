@@ -137,3 +137,44 @@ describe('phiếu in đơn mua — 12 mẫu', () => {
     },
   )
 })
+
+/*
+ * CỘT "CHIA LỆNH" (10/10/2026 — user chọn cột trên phiếu): chỉ đơn gộp từ 2 lệnh,
+ * đứng ngay trước Ghi chú, mỗi lệnh một dòng. Dòng chưa chia = trọn lệnh chính.
+ */
+describe('phiếu in đơn gộp lệnh — cột Chia lệnh', () => {
+  const SET = [
+    { id: 'L08', code: '08/26-27 - MX' },
+    { id: 'L09', code: '09/26-27 - MX' },
+  ]
+  const ve = (lsxSet: typeof SET, lines: PoPrintLine[]) => {
+    const { container } = render(
+      <PoPrintSheet company={company} po={{ ...header('aluminium'), lsx_set: lsxSet }} supplier={null} lines={lines} />, // prettier-ignore
+    )
+    const main = container.querySelector('table.border-collapse')!
+    const head = [...main.querySelectorAll('thead td')].map((td) => td.textContent)
+    const rows = [...main.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent),
+    )
+    return { head, rows }
+  }
+
+  it('đơn gộp: cột Chia lệnh trước Ghi chú; dòng chia tay + dòng chưa chia (trọn lệnh chính)', () => {
+    const chia = { ...line('aluminium'), id: 'a', qty_ordered: 288, lsx_split: [{ production_order_id: 'L08', qty: 200 }, { production_order_id: 'L09', qty: 88 }] } // prettier-ignore
+    const tron = { ...line('aluminium'), id: 'b', qty_ordered: 63, lsx_split: [{ production_order_id: 'L09', qty: 63 }] } // prettier-ignore
+    const chuaChia = { ...line('aluminium'), id: 'c', qty_ordered: 7, lsx_split: null }
+    const { head, rows } = ve(SET, [chia, tron, chuaChia])
+    const at = head.indexOf('Chia lệnh')
+    expect(at).toBeGreaterThan(-1)
+    expect(head[at + 1]).toBe('Ghi chú')
+    expect(rows[0][at]).toBe('08 MX: 20009 MX: 88')
+    expect(rows[1][at]).toBe('09 MX: 63')
+    expect(rows[2][at]).toBe('08 MX: 7')
+  })
+
+  it('đơn MỘT lệnh: không có cột Chia lệnh — phiếu y như mẫu cũ', () => {
+    const { head } = ve([SET[0]], [line('aluminium')])
+    expect(head).not.toContain('Chia lệnh')
+    expect(head).toHaveLength(PO_PRINT_ORDER.aluminium.length)
+  })
+})

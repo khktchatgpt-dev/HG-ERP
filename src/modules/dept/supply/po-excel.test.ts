@@ -240,6 +240,16 @@ describe('buildPoExcel — khớp phiếu in', () => {
     ],
   }
 
+  it('đơn gộp 2 lệnh: cột "Chia lệnh" cùng chữ với phiếu in; đơn một lệnh không có cột', async () => {
+    const SET = [{ id: 'L08', code: '08/26-27 - MX' }, { id: 'L09', code: '09/26-27 - MX' }] // prettier-ignore
+    const chia = line({ qty_ordered: 288, lsx_split: [{ production_order_id: 'L08', qty: 200 }, { production_order_id: 'L09', qty: 88 }] }) // prettier-ignore
+    const gop = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header({ lsx_set: SET }), supplier: null, lines: [chia] }))) // prettier-ignore
+    expect(gop).toContain('Chia lệnh')
+    expect(gop).toContain('08 MX: 200; 09 MX: 88')
+    const mot = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header({ lsx_set: [SET[0]] }), supplier: null, lines: [chia] }))) // prettier-ignore
+    expect(mot).not.toContain('Chia lệnh')
+  })
+
   it('tiêu đề + khối chữ ký theo MẪU CHỨNG TỪ, có tên người lập dưới nét ký', async () => {
     const ws = await load(
       await buildPoExcel({

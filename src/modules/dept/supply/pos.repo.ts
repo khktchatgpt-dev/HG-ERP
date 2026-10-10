@@ -883,15 +883,17 @@ export const posRepo = {
    * đơn khách của từng lệnh. `order_code` trên `PoWithRefs` chỉ là đơn đầu của
    * lệnh chính, thiếu cho đơn gộp (xem lib/po-lsx-refs).
    */
-  async printRefs(po: {
-    id: string
-    production_order_id: string | null
-  }): Promise<{ lsx_code: string | null; order_code: string | null }> {
+  async printRefs(po: { id: string; production_order_id: string | null }): Promise<{
+    lsx_code: string | null
+    order_code: string | null
+    /** Bộ lệnh của đơn (lệnh chính đầu) — cột "Chia lệnh" của phiếu đơn gộp. */
+    lsx_set: { id: string; code: string }[]
+  }> {
     const extras = await this.listExtraLsx(po.id)
     const ids = [po.production_order_id, ...extras.map((e) => e.id)].filter(
       (x): x is string => !!x,
     )
-    if (ids.length === 0) return poLsxRefs(null, [])
+    if (ids.length === 0) return { ...poLsxRefs(null, []), lsx_set: [] }
     const { data, error } = await db()
       .from('production_orders')
       .select('id, code, order:sales_orders(code)')
@@ -914,10 +916,13 @@ export const posRepo = {
     const main = po.production_order_id
       ? (byId.get(po.production_order_id) ?? null)
       : null
-    return poLsxRefs(
-      main,
-      extras.map((e) => byId.get(e.id) ?? { code: e.code, order_codes: [] }),
-    )
+    return {
+      ...poLsxRefs(
+        main,
+        extras.map((e) => byId.get(e.id) ?? { code: e.code, order_codes: [] }),
+      ),
+      lsx_set: ids.map((id) => ({ id, code: byId.get(id)?.code ?? '?' })),
+    }
   },
 
   /**

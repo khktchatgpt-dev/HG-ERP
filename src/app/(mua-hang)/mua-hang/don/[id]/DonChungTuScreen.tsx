@@ -1090,7 +1090,7 @@ export function DonChungTuScreen(p: Props) {
           <PoPrintSheet
             company={p.company}
             tpl={p.tpl}
-            po={previewHeaderFromDraft(header, { code: po?.code ?? '(cấp khi lưu)', supplierName: supplierOpt?.name ?? '—', lsxCode: lsxLabel, orderCode: null, createdAt: po?.created_at ?? new Date().toISOString() })} // prettier-ignore
+            po={previewHeaderFromDraft(header, { code: po?.code ?? '(cấp khi lưu)', supplierName: supplierOpt?.name ?? '—', lsxCode: lsxLabel, lsxSet: d.lsxsOfPo, orderCode: null, createdAt: po?.created_at ?? new Date().toISOString() })} // prettier-ignore
             supplier={supplierOpt ? { name: supplierOpt.name } : null}
             lines={previewLinesFromDraft(template, lines)}
           />

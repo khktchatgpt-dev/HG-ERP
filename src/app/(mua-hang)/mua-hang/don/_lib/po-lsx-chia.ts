@@ -2,6 +2,7 @@ import {
   boLenhKhoiChia,
   chiaNhieuDong,
   chiaTheoNhuCau,
+  lenhNgan,
   rescaleSplit,
   splitProblem,
   type LsxNeedShare,
@@ -140,14 +141,8 @@ export function loiChia(l: Pick<Line, 'lsx_split' | 'qty'>): string | null {
   return s.length ? splitProblem(Number(l.qty) || 0, s) : null
 }
 
-/**
- * Nhãn NGẮN của lệnh cho cột hẹp: "01/26-27 - LAURA" → "01 LAURA". Hai lệnh cùng
- * số khác khách (01 LAURA, 01 GIGA) vẫn phân biệt được.
- */
-export function lenhNgan(code: string): string {
-  const m = /^(\d+)\/[\d-]+\s*-\s*(.+)$/.exec(code.trim())
-  return m ? `${m[1]} ${m[2].trim()}` : code
-}
+/** Nhãn ngắn của lệnh — một nguồn với phiếu in, xem `@/lib/po-lsx-split`. */
+export { lenhNgan }
 
 /** Chữ của ô "Chia lệnh": `01 LAURA 800 · 02 LAURA 550`. */
 export function chiaText(

@@ -86,6 +86,7 @@ export async function loadPoPrint(id: string) {
       ...po,
       template: po.template ?? 'simple',
       lsx_code: refs.lsx_code,
+      lsx_set: refs.lsx_set,
       order_code: refs.order_code,
       revision_label: poRevisionLabel(adjs),
       creator_name: creatorName,
