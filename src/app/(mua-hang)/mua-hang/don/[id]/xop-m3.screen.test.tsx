@@ -121,7 +121,7 @@ describe('đơn xốp — gõ quy cách 580x540x60, 250 tấm, 1.000.000đ/m³',
     go('Quy cách', '580x540x60')
     go('SL đặt', '250')
     // Giá NCC báo theo m³ → gõ vào cột Đơn giá m³ (09/10/2026).
-    go('Đơn giá m³', '1000000')
+    go('Đơn giá /m³', '1000000')
     expect([o('D×R×Dày (mm) dài').value, o('D×R×Dày (mm) rộng').value, o('D×R×Dày (mm) cao').value]).toEqual(['580', '540', '60']) // prettier-ignore
     expect(o('Tổng m³').placeholder).toBe('4,698')
     expect((o('Tính theo') as unknown as HTMLSelectElement).value).toBe('m3')
@@ -141,7 +141,7 @@ describe('đơn xốp — gõ quy cách 580x540x60, 250 tấm, 1.000.000đ/m³',
     expect((o('Tính theo') as unknown as HTMLSelectElement).value).toBe('ctn')
     expect(chu()).toContain('5.000.000') // 250 × 20.000
     // 20.000 ÷ 0,018792 m³/tấm ≈ 1.064.283 đ/m³ — cột kia hiện số quy đổi.
-    expect(o('Đơn giá m³').value).toBe('1064283')
+    expect(o('Đơn giá /m³').value).toBe('1064283')
     expect(chu()).not.toContain('đổi m³')
   })
 

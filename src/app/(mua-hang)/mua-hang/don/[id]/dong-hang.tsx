@@ -157,7 +157,7 @@ export function DongHang({ d }: { d: DonCtx }) {
               <Th>ĐVT</Th>
               <Th num>SL đặt</Th>
               <Th num>Đơn giá</Th>
-              {haiCot && <Th num>Đơn giá {haiCot.dv}</Th>}
+              {haiCot && <Th num>Đơn giá /{haiCot.dv}</Th>}
               <Th num>Thành tiền</Th>
               <GhiChuTh />
               {adjusting && <Th num>Đã nhận</Th>}
@@ -417,7 +417,7 @@ export function DongHang({ d }: { d: DonCtx }) {
                       <Td num>
                         {editing ? (
                           <HaiGiaO
-                            label={`Đơn giá ${haiCot.dv}`}
+                            label={`Đơn giá /${haiCot.dv}`}
                             theo="dv2"
                             l={l}
                             template={template}

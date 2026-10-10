@@ -96,7 +96,7 @@ describe('hai cột giá — gõ ô nào tính tiền theo ô đó (đơn GIẢ)
         }),
       ),
     )
-    expect(so('Đơn giá kg')).toBe(80_000)
+    expect(so('Đơn giá /kg')).toBe(80_000)
     expect(so('Đơn giá')).toBe(240_000)
 
     go('Đơn giá', '250000')
@@ -106,8 +106,8 @@ describe('hai cột giá — gõ ô nào tính tiền theo ô đó (đơn GIẢ)
 
   it('nhôm: dòng đang theo cây (giá 240.000), gõ giá kg thì về tiền theo kg', async () => {
     render(view(donNhap('aluminium', { weight_per_m: 0.5, bar_length_m: 6, unit_price: 240_000, price_basis: 'unit' }))) // prettier-ignore
-    expect(so('Đơn giá kg')).toBe(80_000)
-    go('Đơn giá kg', '90000')
+    expect(so('Đơn giá /kg')).toBe(80_000)
+    go('Đơn giá /kg', '90000')
     const kg = await ctrlS()
     expect([kg.unit_price, kg.price_per]).toEqual([90_000, 'unit2'])
   })
@@ -123,15 +123,15 @@ describe('hai cột giá — gõ ô nào tính tiền theo ô đó (đơn GIẢ)
         }),
       ),
     )
-    expect(so('Đơn giá m²')).toBe(200_000)
-    go('Đơn giá m²', '210000')
+    expect(so('Đơn giá /m²')).toBe(200_000)
+    go('Đơn giá /m²', '210000')
     const l = await ctrlS()
     expect([l.unit_price, l.carton_basis, l.price_per]).toEqual([210_000, 'm2', null])
   })
 
   it('sắt: chưa có kg / đơn vị thì ô giá kg nói thiếu gì, không cho gõ', () => {
     render(view(donNhap('metal_kg', { weight_per_unit: null, unit_price: 50_000, price_basis: 'unit' }))) // prettier-ignore
-    expect(khu().queryByLabelText('Đơn giá kg')).toBeNull()
+    expect(khu().queryByLabelText('Đơn giá /kg')).toBeNull()
     expect(khu().getByText('cần kg / đơn vị')).toBeTruthy()
   })
 })
