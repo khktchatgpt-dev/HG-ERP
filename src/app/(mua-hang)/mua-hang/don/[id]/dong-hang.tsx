@@ -147,7 +147,8 @@ export function DongHang({ d }: { d: DonCtx }) {
             <GridHead>
               <Th width={30} />
               <Th width={36}>#</Th>
-              <Th>Mã · tên vật tư</Th>
+              {/* Đơn gộp lệnh có thêm cột Lệnh: giữ chỗ cho tên vật tư (đo 10/10: tự co về 191px). */}
+              <Th width={d.nhieuLenh ? 240 : undefined}>Mã · tên vật tư</Th>
               {gridFields.map((f) => (
                 <Th key={f.key} num={f.align === 'right' || f.kind !== 'text'}>
                   {f.label}

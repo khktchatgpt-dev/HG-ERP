@@ -305,7 +305,16 @@ export function MucChiaLenh({ d }: { d: DonCtx }) {
               <Td colSpan={4}>Tiền hàng theo lệnh · chia theo SL · chưa VAT</Td>
               {tien.lenh.map((x) => (
                 <Td key={x.id} num>
-                  {money(x.tien)}
+                  {x.tien > 0 ? (
+                    money(x.tien)
+                  ) : (
+                    <span
+                      className="text-[var(--ink-3)]"
+                      title="Chưa có dòng nào chia cho lệnh này, hoặc các dòng của lệnh chưa có đơn giá"
+                    >
+                      —
+                    </span>
+                  )}
                 </Td>
               ))}
               <Td num tone={tien.chuaChia.dong > 0 ? 'warn' : undefined}>
