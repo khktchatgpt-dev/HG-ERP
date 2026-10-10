@@ -539,24 +539,8 @@ export function xopM3MoiTam(l: Line): number | null {
   return m3MotTam(l)
 }
 
-/**
- * HAI CỘT GIÁ (09/10/2026 xốp — chị Nga: "bổ sung cột Đơn giá m³"; 10/10/2026 mở
- * rộng — sếp: nhôm, sắt/inox, gỗ, kính "ngoài giá theo ĐVT cần có giá theo kg
- * hoặc m³"). "Đơn giá" theo ĐVT đặt và "Đơn giá <đv quy đổi>" đứng cạnh nhau.
- * Dòng vẫn chỉ lưu MỘT đơn giá theo cơ sở tiền của nó; cột kia là số QUY ĐỔI qua
- * lượng quy đổi của MỘT ĐVT (kg/cây, m³/tấm…) để đối chiếu báo giá NCC — gõ vào
- * cột nào thì dòng tính tiền theo cột đó (`haiGiaPatch`).
- *
- * Bao bì KHÔNG có: mẫu đó đã có cột "Đơn giá/m²" riêng, và giá thùng = m² × giá/m²
- * + bản in — không phải phép quy đổi thuần, bày thêm cột m² là hai số cãi nhau.
- */
-export const HAI_GIA: Partial<Record<PoTemplate, { dv: string; thieu: string }>> = {
-  aluminium: { dv: 'kg', thieu: 'cần kg/m + dài cây' },
-  metal_kg: { dv: 'kg', thieu: 'cần kg / đơn vị' },
-  wood: { dv: 'm³', thieu: 'cần m³ / SP' },
-  glass: { dv: 'm²', thieu: 'cần m² / tấm' },
-  foam: { dv: 'm³', thieu: 'cần D×R×Dày' },
-}
+/** Hai cột giá (ĐVT + kg/m³/m²) — cấu hình chung với màn ký, xem `@/lib/po-hai-gia`. */
+export { HAI_GIA } from '@/lib/po-hai-gia'
 
 /**
  * Lượng quy đổi của MỘT ĐVT đặt (kg/cây, kg/đơn vị, m³/SP, m²/tấm, m³/tấm). Tổng

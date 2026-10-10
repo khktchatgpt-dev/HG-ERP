@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Ico } from '@/components/kit'
 import { cn } from '@/lib/utils'
-import { poLineAmount } from '@/lib/po-line'
+import { poLineAmount, roundMoney } from '@/lib/po-line'
 import { isPoTemplate, poTemplateMeta } from '@/lib/po-template'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
@@ -12,6 +12,7 @@ import {
   poPriceUnitPerLine,
 } from '@/lib/po-fields'
 import { approvalLineCols, type ApprovalCol } from '@/lib/po-approval-cols'
+import { HAI_GIA, poHaiGia } from '@/lib/po-hai-gia'
 import { money } from './approval-helpers'
 import { comparePrice, fmtVnd, type LastPriceOf } from './approval-parts'
 import type { ApprovalPoLine, PendingPo } from './approval-types'
@@ -68,14 +69,21 @@ export function PoLineGrid({
         : !meta.priceUnit && ln.price_basis === 'unit2' && ln.unit2
           ? `/${ln.unit2}`
           : ''
-  const priceLabel =
-    meta.priceUnit && !perLine && !PO_PRICE_SUFFIX_TEMPLATES.includes(t)
+  /*
+    HAI CỘT GIÁ (10/10/2026 — "bên giám đốc cũng cần hiển thị để biết"): nhôm, sắt,
+    gỗ, kính, xốp bày cả giá theo ĐVT lẫn giá /kg · /m³ · /m² như lưới soạn đơn.
+    Số tính tiền đậm, số quy đổi nhạt — người ký biết dòng đang trả theo cái nào.
+  */
+  const hai = HAI_GIA[t]
+  const priceLabel = hai
+    ? `Đơn giá (${currency})`
+    : meta.priceUnit && !perLine && !PO_PRICE_SUFFIX_TEMPLATES.includes(t)
       ? `Đơn giá (${currency}/${meta.priceUnit})`
       : `Đơn giá (${currency})`
 
   /** Cột hiển thị theo thứ tự — `@…` mở rộng ra ô của màn ký. */
   type Shown =
-    | { k: 'stt' | 'name' | 'product' | 'unit' | 'qty' | 'qty2' | 'price' | 'prev' | 'amount' } // prettier-ignore
+    | { k: 'stt' | 'name' | 'product' | 'unit' | 'qty' | 'qty2' | 'price' | 'price2' | 'prev' | 'amount' } // prettier-ignore
     | { k: 'field'; c: Extract<ApprovalCol, { kind: 'field' }> }
   const shown: Shown[] = [{ k: 'stt' }]
   for (const c of cols) {
@@ -87,7 +95,10 @@ export function PoLineGrid({
     else if (c.key === '@qty') {
       shown.push({ k: 'qty' })
       if (showQty2) shown.push({ k: 'qty2' })
-    } else if (c.key === '@price') shown.push({ k: 'price' }, { k: 'prev' })
+    } else if (c.key === '@price')
+      shown.push({ k: 'price' }, ...(hai ? [{ k: 'price2' } as const] : []), {
+        k: 'prev',
+      })
     else if (c.key === '@amount') shown.push({ k: 'amount' })
   }
   const amountIdx = shown.findIndex((s) => s.k === 'amount')
@@ -108,6 +119,7 @@ export function PoLineGrid({
       case 'qty': return { t: PO_PRINT_QTY_LABEL[t], w: 92, num: true }
       case 'qty2': return { t: 'Quy đổi', w: 104, num: true }
       case 'price': return { t: priceLabel, w: 120, num: true }
+      case 'price2': return { t: `Đơn giá /${hai?.dv}`, w: 112, num: true }
       case 'prev': return { t: 'Giá lần trước', w: 118, num: true }
       case 'amount': return { t: `Thành tiền (${currency})`, w: 124, num: true }
       case 'field': return { t: s.c.label, num: s.c.right }
@@ -217,6 +229,7 @@ export function PoLineGrid({
                         </td>
                       ) // prettier-ignore
                     case 'price':
+                      if (hai) return <td key={j} className="num px-2 py-[6px] text-right whitespace-nowrap"><HaiGiaKy t={t} ln={ln} cot="dvt" currency={currency} /></td> // prettier-ignore
                       return (
                         <td key={j} className="num px-2 py-[6px] text-right whitespace-nowrap">
                           {ln.unit_price != null ? (
@@ -229,6 +242,8 @@ export function PoLineGrid({
                           )}
                         </td>
                       ) // prettier-ignore
+                    case 'price2':
+                      return <td key={j} className="num px-2 py-[6px] text-right whitespace-nowrap"><HaiGiaKy t={t} ln={ln} cot="dv2" currency={currency} /></td> // prettier-ignore
                     case 'prev':
                       return (
                         <td key={j} className="px-2 py-[6px] text-right whitespace-nowrap">
@@ -335,6 +350,45 @@ function PrevPrice({
         {' · '}
         {Math.abs(cmp.pct) < 0.1 ? 'không đổi' : (cmp.pct > 0 ? '+' : '') + cmp.pct + '%'}
       </span>
+    </span>
+  )
+}
+
+/** Một ô của HAI CỘT GIÁ ở màn ký — số tính tiền đậm, số quy đổi nhạt kèm đơn vị. */
+function HaiGiaKy({
+  t,
+  ln,
+  cot,
+  currency,
+}: {
+  t: Parameters<typeof poHaiGia>[0]
+  ln: ApprovalPoLine
+  cot: 'dvt' | 'dv2'
+  currency: string
+}) {
+  if (ln.unit_price == null) return <span className="text-[var(--warn)]">chưa có</span>
+  const g = poHaiGia(t, ln)
+  if (!g) return null
+  const v = cot === 'dvt' ? g.donGia : g.gia2
+  const dv = cot === 'dvt' ? ln.material_unit.trim().toLowerCase() : g.dv
+  if (v == null) {
+    return (
+      <span
+        className="text-k-label text-[var(--ink-3)]"
+        title="Dòng thiếu số quy đổi (kg/m, m³/SP, m²/tấm…)"
+      >
+        —
+      </span>
+    )
+  }
+  const tinh = g.theo === cot
+  return (
+    <span
+      className={tinh ? undefined : 'text-[var(--ink-3)]'}
+      title={tinh ? 'Tiền dòng tính theo giá này' : 'Số quy đổi — tiền tính theo cột kia'}
+    >
+      {fmtVnd(roundMoney(v, currency))}
+      <span className="text-k-label text-[var(--ink-3)]">/{dv}</span>
     </span>
   )
 }
