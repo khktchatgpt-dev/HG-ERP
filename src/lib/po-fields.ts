@@ -1,3 +1,4 @@
+import { laDvtKg } from './dvt-kg'
 import { foamM3PerSheet, type PoTemplate } from './po-template'
 
 /**
@@ -770,6 +771,10 @@ export function poFieldText(f: PoField, l: PoFieldLine): string {
         const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
         const q = Number(l.qty_ordered) || 0
         if (m3 != null && q > 0) return fmtVi(Math.round(m3 * q * 1e6) / 1e6)
+      }
+      // Dòng ĐVT Kg của mẫu nhôm / sắt: Tổng kg = SL đặt (không barem).
+      if (l.qty2 == null && f.key === 'kgtotal' && laDvtKg(l.material_unit)) {
+        return fmtVi(Number(l.qty_ordered) || null)
       }
       return fmtVi(l.qty2)
     }

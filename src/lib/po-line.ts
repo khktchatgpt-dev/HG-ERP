@@ -97,7 +97,8 @@ export function qtyTotals(
   }[],
 ): PoQtyTotal[] {
   if (kgBased) {
-    const kg = lines.reduce((s, l) => s + (l.qty2 ?? 0), 0)
+    // Dòng ĐVT Kg không có qty2 (không barem) — SL đặt chính là số kg.
+    const kg = lines.reduce((s, l) => s + (l.qty2 ?? (laDvtKg(l.material_unit) ? Number(l.qty_ordered) || 0 : 0)), 0) // prettier-ignore
     return kg > 0 ? [{ label: 'Tổng số KG', value: kg }] : []
   }
   const byUnit = new Map<string, number>()
@@ -181,3 +182,4 @@ export function poMoneyOf(
     currency: po.currency,
   })
 }
+import { laDvtKg } from './dvt-kg'

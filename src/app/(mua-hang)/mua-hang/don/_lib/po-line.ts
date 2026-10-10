@@ -1,3 +1,4 @@
+import { laDvtKg } from '@/lib/dvt-kg'
 import { poLineAmount } from '@/lib/po-line'
 import {
   cartonAreaM2,
@@ -291,9 +292,13 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
     return `tổng gõ tay ${lech.factor > 0 ? 'gấp ' : 'chỉ bằng 1/'}${Math.abs(lech.factor).toLocaleString('vi-VN')} lần số tự tính ${lech.auto.toLocaleString('vi-VN')} — gõ nhầm dấu thập phân?`
   // Tổng gõ tay (02/10/2026) đã là số tính tiền — không đòi thông số để dẫn xuất nó nữa.
   if (hasQty2Override(t, draftOf(l))) return null
-  if (t === 'aluminium' && !(Number(l.weight_per_m) > 0)) return 'thiếu kg/m'
-  if (t === 'aluminium' && !(Number(l.bar_length_m) > 0)) return 'thiếu dài cây'
-  if (t === 'metal_kg' && !(Number(l.weight_per_unit) > 0)) return 'thiếu kg/đơn vị'
+  // Dòng ĐVT Kg (NHO0090 "Nhôm 20x40" bán theo kg): SL đặt đã là số kg, tiền = SL ×
+  // giá — không cần barem (10/10/2026, trước bị chặn lưu "thiếu kg/m").
+  const kg = laDvtKg(l.unit)
+  if (t === 'aluminium' && !kg && !(Number(l.weight_per_m) > 0)) return 'thiếu kg/m'
+  if (t === 'aluminium' && !kg && !(Number(l.bar_length_m) > 0)) return 'thiếu dài cây'
+  if (t === 'metal_kg' && !kg && !(Number(l.weight_per_unit) > 0))
+    return 'thiếu kg/đơn vị'
   if (t === 'carton' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
     return 'thiếu m²/thùng'
   }
@@ -599,6 +604,10 @@ export function haiGiaPatch(
  */
 export function tongDv2(t: PoTemplate, l: Line): number | null {
   if (t === 'foam') return tongM3(l)
+  if ((t === 'aluminium' || t === 'metal_kg') && laDvtKg(l.unit)) {
+    const q = Number(l.qty) || 0
+    return q > 0 ? q : null
+  }
   if (t !== 'glass') return null
   const a = Number(l.area_m2) || 0
   const q = Number(l.qty) || 0
@@ -1178,7 +1187,8 @@ export function mergeLineInto(into: Line, from: Line): Line | null {
   // bỏ chia của dòng gộp — cộng nửa vời là tổng chia lệch SL đặt, và dòng chưa
   // chia không nói được nó thuộc lệnh nào (10/10/2026). Bấm "Chia theo nhu cầu".
   const coChia = (l: Line) => Object.values(l.lsx_split ?? {}).some((v) => Number(v) > 0)
-  const split: Record<string, Num> = coChia(into) && coChia(from) ? { ...into.lsx_split } : {}
+  const split: Record<string, Num> =
+    coChia(into) && coChia(from) ? { ...into.lsx_split } : {}
   if (coChia(into) && coChia(from))
     for (const [k, v] of Object.entries(from.lsx_split ?? {}))
       split[k] = add(split[k] ?? '', v)

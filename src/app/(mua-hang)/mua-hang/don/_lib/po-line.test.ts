@@ -26,6 +26,7 @@ import {
   foamBasisMacDinh,
   withSpecDims,
   haiGia,
+  tongDv2,
   haiGiaPatch,
   dv2MotDv,
   xopM3MoiTam,
@@ -1355,6 +1356,22 @@ describe('haiGia xốp — Đơn giá / Đơn giá m³', () => {
  * ĐVT cần có giá theo kg hoặc m³"). Gõ cột nào thì tiền tính theo cột đó, cột kia
  * là số quy đổi — và tiền hai cách phải bằng nhau khi giá quy đổi đúng.
  */
+describe('dòng ĐVT Kg trong mẫu nhôm / sắt — không đòi barem', () => {
+  const kg = (part: Partial<Line>): Line => ({ ...lineFromPo(base), qty: 63, price: 113_000, qty2_manual: '', price_per: '', weight_per_m: '', bar_length_m: '', weight_per_unit: '', ...part }) // prettier-ignore
+  it('NHO0090 ĐVT Kg: lưu được, tiền = SL × giá, Tổng kg = SL', () => {
+    for (const t of ['aluminium', 'metal_kg'] as const) {
+      const l = kg({ unit: 'Kg' })
+      expect(lineProblem(t, l)).toBeNull()
+      expect(lineAmount(t, l)).toBe(63 * 113_000)
+      expect(tongDv2(t, l)).toBe(63)
+    }
+  })
+  it('dòng ĐVT Cây vẫn phải có kg/m + dài cây', () => {
+    expect(lineProblem('aluminium', kg({ unit: 'Cây' }))).toBe('thiếu kg/m')
+    expect(lineProblem('metal_kg', kg({ unit: 'Cây' }))).toBe('thiếu kg/đơn vị')
+  })
+})
+
 describe('haiGia — nhôm · sắt · gỗ · kính', () => {
   const dong = (part: Partial<Line>): Line => ({
     ...lineFromPo(base),

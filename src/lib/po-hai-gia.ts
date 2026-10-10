@@ -1,3 +1,4 @@
+import { laDvtKg } from './dvt-kg'
 import { foamM3PerSheet, type PoTemplate } from './po-template'
 
 /**
@@ -25,6 +26,8 @@ export type HaiGiaLine = {
   unit_price: number | null
   price_basis: 'unit' | 'unit2' | null
   qty2: number | null
+  /** ĐVT đặt — dòng ĐVT Kg (mẫu nhôm / sắt) thì giá /kg = đơn giá. */
+  material_unit?: string | null
   weight_per_m?: number | null
   bar_length_m?: number | null
   weight_per_unit?: number | null
@@ -77,7 +80,12 @@ export function poHaiGia(
   const theo = l.price_basis === 'unit2' && l.qty2 != null ? 'dv2' : 'dvt'
   const q = Number(l.qty_ordered) || 0
   const tong = Number(l.qty2) || 0
-  const per = q > 0 && tong > 0 ? tong / q : dv2TheoCongThuc(t, l)
+  const per =
+    cfg.dv === 'kg' && laDvtKg(l.material_unit)
+      ? 1
+      : q > 0 && tong > 0
+        ? tong / q
+        : dv2TheoCongThuc(t, l)
   const p = l.unit_price
   if (p == null) return { dv: cfg.dv, theo, donGia: null, gia2: null }
   if (theo === 'dv2') return { dv: cfg.dv, theo, gia2: p, donGia: per == null ? null : p * per } // prettier-ignore
