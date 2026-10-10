@@ -138,10 +138,14 @@ describe('chiaTheoNhuCau', () => {
     ])
   })
 
-  it('đặt dư mà lệnh chính không cần mã này: phần dư vẫn ghi lệnh chính, thành dòng riêng', () => {
-    expect(chiaTheoNhuCau(600, can(0, 550), '08')).toEqual([
-      { production_order_id: '08', qty: 50 },
-      { production_order_id: '09', qty: 550 },
+  it('đặt dư mà lệnh chính KHÔNG cần mã này: phần dư về lệnh cần nhiều nhất, không đẻ dòng lệnh chính', () => {
+    // NHO0090 (soi thật 10/10): chỉ lệnh 09 cần 62,18 kg, gợi ý làm tròn 63.
+    expect(chiaTheoNhuCau(63, can(0, 62.18), '08')).toEqual([
+      { production_order_id: '09', qty: 63 },
+    ])
+    expect(chiaTheoNhuCau(100, can(0, 50, 30), '08')).toEqual([
+      { production_order_id: '09', qty: 70 },
+      { production_order_id: '10', qty: 30 },
     ])
   })
 

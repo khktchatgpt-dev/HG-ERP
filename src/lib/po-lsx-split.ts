@@ -99,8 +99,10 @@ export type LsxNeedShare = { production_order_id: string; need: number }
  * Chia SL đặt của MỘT vật tư cho các lệnh của đơn theo nhu cầu.
  *
  *  · Không lệnh nào cần → [] (dòng thuộc lệnh chính như quy ước cũ).
- *  · Đặt ĐỦ hoặc DƯ (mua tròn bó, dự trữ) → mỗi lệnh đúng phần cần, phần dư ghi
- *    cho LỆNH CHÍNH — không rải dư cho lệnh phụ khiến nó tưởng được mua thừa.
+ *  · Đặt ĐỦ hoặc DƯ (mua tròn bó, làm tròn lên) → mỗi lệnh đúng phần cần, phần dư
+ *    ghi cho LỆNH CHÍNH nếu lệnh chính có cần mã này; không thì cho lệnh cần nhiều
+ *    nhất. Soi thật 10/10: NHO0090 chỉ lệnh 09 cần 62,18 kg, đặt tròn 63 — bản đầu
+ *    đẩy 0,82 kg sang lệnh 08 vốn không dùng mã này, ra dòng "08 MX 0,82" vô nghĩa.
  *  · Đặt THIẾU (tồn kho bù phần còn lại) → chia theo tỉ lệ nhu cầu.
  *  · `nguyen` (SL đặt là số nguyên — cái, thanh, tấm) → chia số nguyên theo
  *    phần dư lớn nhất; còn lại (kg, m²) làm tròn 4 lẻ, phần lẻ dồn lệnh lớn nhất.
@@ -128,10 +130,10 @@ export function chiaTheoNhuCau(
     }))
     const du = r4(dat - out.reduce((s, a) => s + a.qty, 0))
     if (du > 0) {
-      const chinh = mainLsxId ?? out[0].production_order_id
-      const hit = out.find((a) => a.production_order_id === chinh)
-      if (hit) hit.qty = r4(hit.qty + du)
-      else out.unshift({ production_order_id: chinh, qty: du })
+      const nhan =
+        out.find((x) => x.production_order_id === mainLsxId) ??
+        out.reduce((m, x) => (x.qty > m.qty ? x : m), out[0])
+      nhan.qty = r4(nhan.qty + du)
     }
   } else if (nguyen) {
     // Phần dư lớn nhất (Hamilton): sàn từng phần, phát nốt số còn thiếu cho phần
