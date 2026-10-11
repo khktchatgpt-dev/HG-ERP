@@ -1,5 +1,6 @@
 import { chiaLenhDong, splitProblem, type LsxSplit } from '@/lib/po-lsx-split'
 import { projectsRepo } from './projects.repo'
+import { loiHangMuc, thieuViec } from '@/lib/hang-muc'
 import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.repo'
 import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
 import { canAdjust, planAdjustment } from '@/lib/po-adjust'
@@ -66,12 +67,8 @@ async function hangMucCua(
   hienCo?: string | null,
 ): Promise<{ project_id: string | null }> {
   if (lsxId || !projectId) return { project_id: null }
-  const pj = await projectsRepo.findById(projectId)
-  if (!pj) throw BadRequest('Hạng mục không tồn tại')
-  if (pj.status !== 'open' && projectId !== hienCo)
-    throw BadRequest(
-      `Hạng mục ${pj.code} đã đóng — mở lại ở trang Hạng mục, hoặc chọn hạng mục khác`,
-    )
+  const loi = loiHangMuc(await projectsRepo.findById(projectId), projectId, hienCo)
+  if (loi) throw BadRequest(loi)
   return { project_id: projectId }
 }
 
@@ -84,7 +81,7 @@ export function assertCoViec(po: {
   production_order_id: string | null
   project_id?: string | null
 }): void {
-  if (!po.production_order_id && !po.project_id) {
+  if (thieuViec(po)) {
     throw BadRequest(
       'Đơn ngoài lệnh chưa chọn hạng mục — bấm Sửa, chọn ở ô "Cho việc" (vd. Dự trữ kho, Xây dựng văn phòng) rồi mới gửi được',
     )

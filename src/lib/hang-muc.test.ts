@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { canChuY, lenhCuaKhach, soHangMuc, type HangMucDon } from './hang-muc'
+import {
+  canChuY,
+  docTienDuToan,
+  lenhCuaKhach,
+  loiHangMuc,
+  soHangMuc,
+  thieuViec,
+  type HangMucDon,
+} from './hang-muc'
 
 const don = (o: Partial<HangMucDon>): HangMucDon => ({
   status: 'ordered',
@@ -72,5 +80,59 @@ describe('lenhCuaKhach', () => {
     expect(lenhCuaKhach({ kind: 'Đơn khách chưa ra lệnh', name: 'Đơn khách Ibiza tháng 10' }, lenh)).toEqual(['05/26-27 - IBIZA']) // prettier-ignore
     expect(lenhCuaKhach({ kind: 'Đơn khách chưa ra lệnh', name: 'Đơn khách MX' }, lenh)).toEqual([]) // prettier-ignore
     expect(lenhCuaKhach({ kind: 'Khuôn mẫu', name: 'Khuôn Laura' }, lenh)).toEqual([])
+  })
+})
+
+describe('luật hạng mục của đơn ngoài lệnh', () => {
+  const open = { code: 'HM-2026-0001', status: 'open' }
+  const closed = { code: 'HM-2026-0002', status: 'closed' }
+  it('không tồn tại / đã đóng → lỗi; giữ nguyên hạng mục cũ đã đóng → hợp lệ', () => {
+    expect(loiHangMuc(null, 'x')).toBe('Hạng mục không tồn tại')
+    expect(loiHangMuc(open, 'a')).toBeNull()
+    expect(loiHangMuc(closed, 'b')).toMatch(/HM-2026-0002 đã đóng/)
+    expect(loiHangMuc(closed, 'b', 'b')).toBeNull()
+    expect(loiHangMuc(closed, 'b', 'c')).toMatch(/đã đóng/)
+  })
+  it('thieuViec: ngoài lệnh mà không hạng mục mới thiếu', () => {
+    expect(thieuViec({ production_order_id: null, project_id: null })).toBe(true)
+    expect(thieuViec({ production_order_id: null, project_id: 'p' })).toBe(false)
+    expect(thieuViec({ production_order_id: 'l' })).toBe(false)
+  })
+})
+
+describe('thiếu giá / lỗi đọc tài chính phải nói ra, không im lặng thành 0', () => {
+  it('đếm đơn thiếu giá + lỗi đọc, và canChuY nhắc', () => {
+    const so = soHangMuc({ budget: null, currency: 'VND' }, [
+      don({ gross: 100, received_net: 0, missing_price_lines: 6 }),
+      don({ gross: 50, received_net: null, finance_error: true }),
+    ])
+    expect([so.thieu_gia, so.loi_tai_chinh]).toEqual([1, 1])
+    expect(
+      canChuY({ status: 'open', kind: 'Dự trữ kho', budget: null, currency: 'VND' }, so),
+    ).toEqual([
+      // prettier-ignore
+      '1 đơn phiếu nhập thiếu giá — "đã về" chưa đủ',
+      '1 đơn chưa đọc được số tài chính',
+    ])
+  })
+  it('vượt dự toán ghi kèm tiền tệ khi không phải VND', () => {
+    const so = {
+      ...soHangMuc({ budget: 100, currency: 'USD' }, []),
+      ordered: 101.5,
+      pct: 102,
+    }
+    expect(canChuY({ status: 'open', kind: 'X', budget: 100, currency: 'USD' }, so)[0]).toBe('vượt dự toán 1,50 USD') // prettier-ignore
+  })
+})
+
+describe('docTienDuToan', () => {
+  it('chấm nghìn VN, phẩy nghìn kiểu Mỹ, phẩy thập phân, trống, sai', () => {
+    expect(docTienDuToan('300.000.000')).toBe(300_000_000)
+    expect(docTienDuToan('300,000,000')).toBe(300_000_000)
+    expect(docTienDuToan('1,5')).toBe(1.5)
+    expect(docTienDuToan(' 150 000 000 ')).toBe(150_000_000)
+    expect(docTienDuToan('')).toBeNull()
+    expect(docTienDuToan('abc')).toBeUndefined()
+    expect(docTienDuToan('-5')).toBeUndefined()
   })
 })

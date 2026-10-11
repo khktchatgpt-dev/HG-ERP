@@ -98,7 +98,20 @@ function cot(cur: string): KitCol<ProjectPo>[] {
         </span>
       ),
     },
-    { id: 've', header: 'Đã về', num: true, sort: (r) => r.received_net, title: () => 'Theo phiếu kho, chưa VAT', cell: (r) => t(r.received_net) }, // prettier-ignore
+    {
+      id: 've',
+      header: 'Đã về',
+      num: true,
+      sort: (r) => r.received_net,
+      title: (r) => (r.missing_price_lines ? `${r.missing_price_lines} dòng đã về nhưng phiếu nhập không có giá — tính 0` : 'Theo phiếu kho, chưa VAT'), // prettier-ignore
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1.5">
+          {t(r.received_net)}
+          {r.missing_price_lines > 0 && <Tag tone="warn">thiếu giá</Tag>}
+          {r.finance_error && <Tag tone="stop">chưa đọc được</Tag>}
+        </span>
+      ),
+    },
     {
       id: 'tra',
       header: 'Đã trả',
@@ -219,7 +232,8 @@ export function HoSoHangMucScreen({
         <Metric
           label="Đã về"
           value={so.n ? tien(so.received_net, h.currency) : null}
-          basis="theo phiếu kho, chưa VAT"
+          basis={so.thieu_gia ? `${so.thieu_gia} đơn phiếu nhập thiếu giá — số này đang THIẾU` : so.loi_tai_chinh ? `${so.loi_tai_chinh} đơn chưa đọc được — số này đang THIẾU` : 'theo phiếu kho, chưa VAT'} // prettier-ignore
+          tone={so.thieu_gia || so.loi_tai_chinh ? 'warn' : undefined}
         />
         <Metric
           label="Đã có hoá đơn"

@@ -14,6 +14,7 @@ import {
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { fmtMoney } from '@/lib/po-line'
+import { docTienDuToan } from '@/lib/hang-muc'
 
 /** Hạng mục vừa tạo / sửa — đủ để ô "Cho việc" và trang hạng mục cập nhật tại chỗ. */
 export type HangMucLuu = {
@@ -26,13 +27,7 @@ export type HangMucLuu = {
   status: string
 }
 
-/** "300.000.000" → 300000000; "1,5" → 1,5. Trống → null. Sai → undefined. */
-function docTien(v: string): number | null | undefined {
-  const t = v.replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
-  if (!t) return null
-  const n = Number(t)
-  return Number.isFinite(n) && n >= 0 ? n : undefined
-}
+const docTien = docTienDuToan
 
 /**
  * HỘP TẠO / SỬA HẠNG MỤC (0230) — mở ngay trên màn soạn đơn (ô "Cho việc" →

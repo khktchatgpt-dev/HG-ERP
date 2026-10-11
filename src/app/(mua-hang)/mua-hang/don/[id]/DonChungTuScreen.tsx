@@ -71,6 +71,7 @@ import {
   STATUS_ICON,
   daysBetween,
   dmy,
+  dmyAt,
   fmtNum,
   money,
   numStr,
@@ -347,7 +348,7 @@ export function DonChungTuScreen(p: Props) {
                 </Tag>{' '}
               </>
             )}
-            soạn {dmy(po.created_at)} · {po.assignee_name ?? '—'}
+            soạn {dmyAt(po.created_at)} · {po.assignee_name ?? '—'}
           </>
         }
       >
@@ -559,7 +560,7 @@ export function DonChungTuScreen(p: Props) {
                 </>
               ) : (
                 <>
-                  {po?.supplier_name} · soạn {dmy(po?.created_at)} bởi{' '}
+                  {po?.supplier_name} · soạn {dmyAt(po?.created_at)} bởi{' '}
                   {po?.assignee_name ?? '—'}
                 </>
               )
@@ -582,7 +583,7 @@ export function DonChungTuScreen(p: Props) {
                   at={track.at}
                   tone={track.tone}
                   marks={[
-                    dmy(po.created_at),
+                    dmyAt(po.created_at),
                     undefined,
                     po.approved_at ? dmy(po.approved_at) : null,
                     po.ordered_at ? dmy(po.ordered_at) : null,

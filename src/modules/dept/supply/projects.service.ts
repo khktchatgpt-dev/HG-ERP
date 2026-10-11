@@ -21,6 +21,10 @@ export type ProjectPo = PoWithRefs & {
   received_net: number | null
   invoiced_gross: number | null
   paid: number | null
+  /** Dòng đã về mà phiếu nhập thiếu giá (mục Tài chính "thiếu giá"). */
+  missing_price_lines: number
+  /** Đọc mục Tài chính của đơn lỗi — số của đơn này chưa có trong tổng. */
+  finance_error: boolean
   overdue: boolean
   materials: string[]
 }
@@ -35,36 +39,52 @@ export type ProjectOption = Pick<ProjectWithOwner, 'id' | 'code' | 'name' | 'kin
  * `poFinanceForPo` của tab Tài chính (không công thức thứ hai) — đơn ngoài lệnh
  * ít (7 đơn lúc làm), nên một lượt mỗi đơn là đủ. Đơn nháp / huỷ không đọc.
  */
+/** Trần một lượt đọc: PostgREST trả tối đa 1.000 dòng — chạm trần là phải NÓI, không im lặng cắt. */
+const TRAN = 1000
+/** Đọc tài chính từng lượt 8 đơn — mỗi đơn ~5 truy vấn, bắn cả trăm đơn một lúc là dồn Supabase. */
+const LUOT = 8
+
 async function posOf(projectIds: string[], withFinance: boolean): Promise<ProjectPo[]> {
   if (projectIds.length === 0) return []
-  const { rows } = await posRepo.list({
+  const { rows, total } = await posRepo.list({
     project_ids: projectIds,
     page: 1,
-    page_size: 2000,
+    page_size: TRAN,
   })
+  if (total > rows.length)
+    throw new Error(
+      `Hạng mục có ${total} đơn, vượt trần đọc ${TRAN} — cần chia trang trước khi cộng số`,
+    )
   const ids = rows.map((r) => r.id)
   const [totals, mats] = await Promise.all([
     posRepo.totalsByPoIds(ids),
     withFinance ? posRepo.materialNamesByPoIds(ids) : Promise.resolve(new Map<string, string[]>()), // prettier-ignore
   ])
   const today = todayVn()
-  return Promise.all(
-    rows.map(async (r) => {
-      const f =
-        withFinance && r.status !== 'draft' && r.status !== 'cancelled'
-          ? await poFinanceForPo(r.id).catch(() => null)
-          : null
-      return {
-        ...r,
-        gross: poMoneyOf(r, totals[r.id] ?? 0).grandTotal,
-        received_net: f?.received_net ?? null,
-        invoiced_gross: f?.invoiced_gross ?? null,
-        paid: f?.paid ?? null,
-        overdue: assessPoLate(r, today) === 'overdue',
-        materials: mats.get(r.id) ?? [],
-      }
-    }),
-  )
+  const out: ProjectPo[] = []
+  for (let i = 0; i < rows.length; i += LUOT) {
+    const part = await Promise.all(
+      rows.slice(i, i + LUOT).map(async (r) => {
+        const can = withFinance && r.status !== 'draft' && r.status !== 'cancelled'
+        // Lỗi đọc KHÔNG nuốt thành số 0: gắn cờ để màn nói "chưa đọc được" (lib/hang-muc).
+        const f = can ? await poFinanceForPo(r.id).catch(() => 'loi' as const) : null
+        const ok = f && f !== 'loi' ? f : null
+        return {
+          ...r,
+          gross: poMoneyOf(r, totals[r.id] ?? 0).grandTotal,
+          received_net: ok?.received_net ?? null,
+          invoiced_gross: ok?.invoiced_gross ?? null,
+          paid: ok?.paid ?? null,
+          missing_price_lines: ok?.missing_price_lines ?? 0,
+          finance_error: f === 'loi',
+          overdue: assessPoLate(r, today) === 'overdue',
+          materials: mats.get(r.id) ?? [],
+        }
+      }),
+    )
+    out.push(...part)
+  }
+  return out
 }
 
 async function lenhDangChay() {

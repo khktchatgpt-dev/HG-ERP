@@ -98,7 +98,7 @@ export default async function Page({
 
   const [
     [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates, taxes, users], // prettier-ignore
-    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt, lsxLastChange], // prettier-ignore
+    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt, lsxLastChange, hmOpts], // prettier-ignore
   ] = await Promise.all([
     indep,
     Promise.all([
@@ -136,6 +136,10 @@ export default async function Page({
       ordersRepo
         .lastLineChangeByLsx(linkedLsxIds(po.production_order_id, extra_lsx.map((x) => x.id), lines.flatMap((l) => ((l as { lsx_split?: { production_order_id: string }[] | null }).lsx_split ?? []).map((x) => x.production_order_id)))) // prettier-ignore
         .catch(() => ({})),
+      // Ô "Cho việc" chỉ sửa được ở NHÁP — đơn khác không cần nạp hạng mục.
+      po.status === 'draft'
+        ? projectsService.options(po.project_id)
+        : Promise.resolve(undefined),
     ]),
   ])
   const stock: Record<string, number> = {}
@@ -196,7 +200,7 @@ export default async function Page({
       company={company}
       tpl={tpl}
       lastTemplates={canEdit ? lastTemplates : undefined}
-      hangMuc={canEdit ? await projectsService.options(po.project_id) : undefined}
+      hangMuc={canEdit ? hmOpts : undefined}
       thueNcc={canEdit ? taxes : undefined}
       suppliers={pickable.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null, vat_rate: s.vat_rate ?? null }))} // prettier-ignore
       lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore

@@ -102,6 +102,12 @@ export function OChoViec({
           {pct != null ? ` (${pct}%)` : ''}
         </span>
       )}
+      {hm && hm.status !== 'open' && (
+        /* Đơn nhân bản / ?hm= trỏ hạng mục ĐÃ ĐÓNG: nói ngay, đừng đợi lúc lưu mới báo. */
+        <span className="k-t-warn text-k-label whitespace-nowrap">
+          {hm.code} đã đóng — chọn hạng mục khác
+        </span>
+      )}
       {tao && (
         <HangMucSheet
           goiYLoai={goiYMucDich(hangMuc.map((h) => h.kind))}

@@ -1,3 +1,4 @@
+import { fmtMoney } from './po-line'
 /**
  * SỐ CỦA MỘT HẠNG MỤC NGOÀI SẢN XUẤT (0230, B3 bản vẽ Đầu đơn) — logic thuần.
  *
@@ -21,6 +22,10 @@ export type HangMucDon = {
   paid: number | null
   /** Quá hẹn giao (`assessPoLate` = overdue). */
   overdue: boolean
+  /** Dòng đã về mà phiếu nhập không có giá — tiền về của chúng đang tính 0 (mục Tài chính: "thiếu giá"). */
+  missing_price_lines?: number
+  /** Đọc mục Tài chính của đơn bị lỗi — số về / hoá đơn / trả của đơn này CHƯA có trong tổng. */
+  finance_error?: boolean
 }
 
 export type HangMucSo = {
@@ -37,6 +42,10 @@ export type HangMucSo = {
   overdue: number
   /** Đơn khác tiền tệ — không cộng vào số nào ở trên. */
   khac_tien_te: number
+  /** Đơn có hàng về mà phiếu nhập THIẾU GIÁ — "đã về" của chúng tính 0, phải nói ra. */
+  thieu_gia: number
+  /** Đơn đọc tài chính lỗi — tổng về / hoá đơn / trả đang thiếu phần của chúng. */
+  loi_tai_chinh: number
   /** % dự toán đã đặt; null khi không có dự toán. */
   pct: number | null
 }
@@ -47,7 +56,7 @@ export function soHangMuc(
   hm: { budget: number | null; currency: string },
   dons: readonly HangMucDon[],
 ): HangMucSo {
-  const so: HangMucSo = { n: 0, nhap: 0, nhap_gross: 0, ordered: 0, received_net: 0, invoiced_gross: 0, paid: 0, owed: 0, overdue: 0, khac_tien_te: 0, pct: null } // prettier-ignore
+  const so: HangMucSo = { n: 0, nhap: 0, nhap_gross: 0, ordered: 0, received_net: 0, invoiced_gross: 0, paid: 0, owed: 0, overdue: 0, khac_tien_te: 0, thieu_gia: 0, loi_tai_chinh: 0, pct: null } // prettier-ignore
   for (const d of dons) {
     if (d.status === 'cancelled') continue
     if (d.currency !== hm.currency) {
@@ -65,6 +74,8 @@ export function soHangMuc(
     so.invoiced_gross += d.invoiced_gross ?? 0
     so.paid += d.paid ?? 0
     if (d.overdue) so.overdue++
+    if ((d.missing_price_lines ?? 0) > 0) so.thieu_gia++
+    if (d.finance_error) so.loi_tai_chinh++
   }
   so.ordered = r2(so.ordered)
   so.nhap_gross = r2(so.nhap_gross)
@@ -93,16 +104,47 @@ export function canChuY(
   const out: string[] = []
   if (hm.budget != null && hm.budget > 0) {
     const vuot = so.ordered - hm.budget
-    if (vuot > 0.005) out.push(`vượt dự toán ${fmt(vuot)}`)
+    if (vuot > 0.005) out.push(`vượt dự toán ${tienCo(vuot, hm.currency)}`)
     else if ((so.pct ?? 0) >= NGUONG_DU_TOAN) out.push(`đã đặt ${so.pct}% dự toán`)
   }
   if (so.overdue > 0) out.push(`${so.overdue} đơn quá hẹn`)
+  if (so.thieu_gia > 0)
+    out.push(`${so.thieu_gia} đơn phiếu nhập thiếu giá — "đã về" chưa đủ`)
+  if (so.loi_tai_chinh > 0) out.push(`${so.loi_tai_chinh} đơn chưa đọc được số tài chính`)
   if (lenhCuaKhach.length > 0)
     out.push(`đã có lệnh ${lenhCuaKhach.join(', ')} — đóng hạng mục?`)
   return out
 }
 
-const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN')
+const tienCo = (n: number, cur: string) =>
+  cur === 'VND' ? fmtMoney(n, cur) : `${fmtMoney(n, cur)} ${cur}`
+
+/**
+ * Luật hạng mục của đơn ngoài lệnh (0230) — thuần để test được; pos.service gọi.
+ * Trả câu lỗi, hoặc null khi hợp lệ.
+ *  - Hạng mục phải có thật.
+ *  - Phải đang mở — TRỪ khi đơn giữ nguyên hạng mục cũ (đóng hạng mục không làm
+ *    hỏng nháp đang dở của nó).
+ */
+export function loiHangMuc(
+  pj: { code: string; status: string } | null,
+  projectId: string,
+  hienCo?: string | null,
+): string | null {
+  if (!pj) return 'Hạng mục không tồn tại'
+  if (pj.status !== 'open' && projectId !== hienCo)
+    return `Hạng mục ${pj.code} đã đóng — mở lại ở trang Hạng mục, hoặc chọn hạng mục khác`
+  return null
+}
+
+/** Đơn ngoài lệnh lên bàn ký / đi NCC phải thuộc một hạng mục. */
+export function thieuViec(po: {
+  production_order_id: string | null
+  project_id?: string | null
+}): boolean {
+  // prettier-ignore
+  return !po.production_order_id && !po.project_id
+}
 
 /**
  * Lệnh đang chạy mà tên khách nằm trong tên hạng mục "Đơn khách chưa ra lệnh".
@@ -125,3 +167,16 @@ export function lenhCuaKhach(
 
 const boDau = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase() // prettier-ignore
+
+/**
+ * Ô DỰ TOÁN: "300.000.000" (kiểu VN) và "300,000,000" (dán từ Excel máy kiểu Mỹ)
+ * đều ra 300000000; "1,5" → 1,5 (phẩy là thập phân). Trống → null. Sai → undefined.
+ */
+export function docTienDuToan(v: string): number | null | undefined {
+  const s = v.replace(/\s/g, '')
+  if (!s) return null
+  const kieuMy = /^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)
+  const t = kieuMy ? s.replace(/,/g, '') : s.replace(/\./g, '').replace(',', '.')
+  const n = Number(t)
+  return Number.isFinite(n) && n >= 0 ? n : undefined
+}

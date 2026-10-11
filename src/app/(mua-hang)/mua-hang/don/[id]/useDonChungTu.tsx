@@ -1095,7 +1095,7 @@ export function useDonChungTu(p: Props) {
   }, [])
 
   // TỰ LƯU NHÁP + chặn rời trang mất dữ liệu — xem `useNhapAnToan`.
-  const draftKey = draftKeyFor(po?.id ?? null, [p.seed?.lsxId, p.seed?.supplierId, p.seedCodes?.codes.join(',')]) // prettier-ignore
+  const draftKey = draftKeyFor(po?.id ?? null, [p.seed?.lsxId, p.seed?.supplierId, p.seedCodes?.codes.join(','), p.seed?.projectId]) // prettier-ignore
   const snap = useMemo(() => ({ header, lines, shipCols }), [header, lines, shipCols])
   const nhap = useNhapAnToan({ drafting, draftKey, snap, isDirty: () => isDirty(), apply: restoreDraft }) // prettier-ignore
 

@@ -59,6 +59,7 @@ export async function loadPoApprovalDetail(
     shipments,
     extraLsx,
     files,
+    pj,
   ] = await Promise.all([
     posRepo.listLines(id),
     po.created_by
@@ -81,10 +82,10 @@ export async function loadPoApprovalDetail(
     poShipmentsRepo.listByPo(id),
     posRepo.extraLsxByPoIds([id]),
     filesRepo.listByParent('purchase_order_id', id),
+    // Hạng mục (0230): số của nó TRỪ chính đơn này — lib/hang-muc, cùng hàm trang Hạng mục.
+    po.project_id ? projectsService.summary(po.project_id) : Promise.resolve(null),
   ])
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
-  // Hạng mục (0230): số của nó TRỪ chính đơn này — lib/hang-muc, cùng hàm trang Hạng mục.
-  const pj = po.project_id ? await projectsService.summary(po.project_id) : null
   const pjTruoc = pj
     ? soHangMuc(
         pj,

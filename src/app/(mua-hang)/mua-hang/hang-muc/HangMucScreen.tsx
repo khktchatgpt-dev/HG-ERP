@@ -116,8 +116,17 @@ function cot(): KitCol<ProjectRow>[] {
       header: 'Đã về',
       num: true,
       sort: (r) => r.so.received_net,
-      title: () => 'Theo phiếu kho, chưa VAT — cùng số mục Tài chính của từng đơn',
-      cell: (r) => (r.so.received_net ? tien(r.so.received_net, r.currency) : ''),
+      title: (r) =>
+        r.so.thieu_gia
+          ? `${r.so.thieu_gia} đơn có phiếu nhập KHÔNG GIÁ — tiền về của chúng đang tính 0; bổ sung giá ở phiếu nhập`
+          : 'Theo phiếu kho, chưa VAT — cùng số mục Tài chính của từng đơn',
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1.5">
+          {r.so.received_net ? tien(r.so.received_net, r.currency) : ''}
+          {r.so.thieu_gia > 0 && <Tag tone="warn">thiếu giá</Tag>}
+          {r.so.loi_tai_chinh > 0 && <Tag tone="stop">chưa đọc được</Tag>}
+        </span>
+      ),
     },
     {
       id: 'no',
