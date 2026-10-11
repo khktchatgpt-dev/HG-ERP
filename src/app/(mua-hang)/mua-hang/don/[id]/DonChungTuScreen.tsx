@@ -64,6 +64,8 @@ import { TaiChinhPanel } from './TaiChinhPanel'
 import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { templateForSupplier } from './chung-tu'
+import { OMucDich } from './o-muc-dich'
+import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
 import {
   Props,
@@ -393,7 +395,7 @@ export function DonChungTuScreen(p: Props) {
         />
         <HeadChip
           label="Lệnh SX"
-          value={[po.lsx_code, ...p.extraLsx.map((l) => l.code)].filter(Boolean).join(' + ') || 'ngoài lệnh'} // prettier-ignore
+          value={[po.lsx_code, ...p.extraLsx.map((l) => l.code)].filter(Boolean).join(' + ') || nhanNgoaiLenh(po)} // prettier-ignore
           onClick={po.production_order_id ? () => router.push(`/mua-hang/yeu-cau/${po.production_order_id}`) : undefined} // prettier-ignore
         />
         {p.links?.source && (
@@ -689,22 +691,24 @@ export function DonChungTuScreen(p: Props) {
           {drafting && (
             <div className="flex flex-col gap-1 border-b border-[var(--line)] bg-[var(--surface-card)]">
               <HeadChips>
-                <HeadField
-                  label="Lệnh"
-                  need={header.poType === 'lsx'}
-                  empty={!header.lsxId}
-                  width={150}
-                >
-                  <Combobox
-                    label="Lệnh sản xuất"
-                    disabled={header.poType !== 'lsx'}
-                    value={header.lsxId}
-                    onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
-                    emptyLabel={header.poType === 'lsx' ? '— chọn lệnh —' : 'ngoài lệnh'}
-                    placeholder="Gõ số lệnh hoặc tên khách…"
-                    options={lsxOptions}
+                {header.poType === 'standalone' ? (
+                  <OMucDich
+                    header={header}
+                    setHeader={setHeader}
+                    goiY={p.mucDichGoiY ?? []}
                   />
-                </HeadField>
+                ) : (
+                  <HeadField label="Lệnh" need empty={!header.lsxId} width={150}>
+                    <Combobox
+                      label="Lệnh sản xuất"
+                      value={header.lsxId}
+                      onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
+                      emptyLabel="— chọn lệnh —"
+                      placeholder="Gõ số lệnh hoặc tên khách…"
+                      options={lsxOptions}
+                    />
+                  </HeadField>
+                )}
                 <HeadField label="NCC" need empty={!header.supplierId} width={180}>
                   <Combobox
                     label="Nhà cung cấp"

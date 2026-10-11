@@ -43,6 +43,9 @@ export type Po = {
   supplier_name: string
   /** null = PO ngoài LSX (0076). */
   lsx_code: string | null
+  /** Đơn ngoài lệnh (0229): mua cho việc gì + ghi rõ cho ai. */
+  standalone_purpose?: string | null
+  standalone_ref?: string | null
   /** Trạng thái lệnh chính — "đơn còn mở của lệnh đã hoàn thành" (lib/po-lsx-done). */
   lsx_status?: string | null
   order_code: string | null

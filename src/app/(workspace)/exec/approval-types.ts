@@ -25,6 +25,9 @@ export type PendingPo = {
   supplier_name: string
   /** null = PO ngoài LSX (0076). */
   lsx_code: string | null
+  /** Đơn ngoài lệnh (0229): mua cho việc gì + ghi rõ cho ai. */
+  standalone_purpose?: string | null
+  standalone_ref?: string | null
   order_code: string | null
   expected_at: string | null
   created_at: string

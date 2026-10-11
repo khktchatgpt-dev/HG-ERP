@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { nhanNgoaiLenh, nhomTheoMucDich } from '@/lib/po-muc-dich'
 import { useRouter } from 'next/navigation'
 import {
   Btn,
@@ -510,8 +511,8 @@ export function DonScreen({
         borrowed: x.borrowed,
         lsxId: x.lsx_id,
       }))
-      if (g.standalone.pos.length > 0)
-        out.push({ key: '@standalone', name: 'Ngoài lệnh sản xuất', meta: <span className="num">{g.standalone.pos.length} đơn</span>, pos: g.standalone.pos, borrowed: new Set(), lsxId: null }) // prettier-ignore
+      if (g.standalone.pos.length > 0) // ngoài lệnh: mỗi MỤC ĐÍCH một nhóm (0229)
+        out.push(...nhomTheoMucDich(g.standalone.pos).map(([md, pos]) => ({ key: `@standalone:${md}`, name: `Ngoài lệnh · ${md}`, meta: <span className="num">{pos.length} đơn</span>, pos, borrowed: new Set<string>(), lsxId: null }))) // prettier-ignore
       return out
     }
     return groupSimple(shown, view.groupBy).map((x) => ({ ...x, name: x.name as string | null, meta: <span>{x.meta}</span> as React.ReactNode, borrowed: new Set<string>(), lsxId: null as string | null })) // prettier-ignore
@@ -998,11 +999,8 @@ export function DonScreen({
                           {has('chuoi') && (
                             <Cell>
                               {p.lsx_code ? (
-                                /*
-                                  MỖI LỆNH MỘT DÒNG (30/09/2026). Đơn gộp lệnh từng
-                                  ghi "+1" phải rê chuột mới biết lệnh nào; nay bày
-                                  hết, xếp dọc, lệnh nào cũng bấm được để lọc.
-                                */
+                                /* MỖI LỆNH MỘT DÒNG (30/09/2026): đơn gộp từng ghi "+1" phải rê
+                                  chuột; nay bày hết, xếp dọc, lệnh nào cũng bấm được để lọc. */
                                 <span className="flex flex-col items-start gap-0.5">
                                   {[
                                     { id: p.production_order_id, code: p.lsx_code },
@@ -1023,7 +1021,7 @@ export function DonScreen({
                                   ))}
                                 </span>
                               ) : (
-                                <Hint size="sm">Ngoài LSX</Hint>
+                                <Hint size="sm">{nhanNgoaiLenh(p)}</Hint>
                               )}
                             </Cell>
                           )}

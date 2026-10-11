@@ -465,8 +465,15 @@ export function PoApprovalBody({
               />
             ) : (
               <p className="text-k-sm text-[var(--ink-2)]">
-                Đơn ngoài lệnh — mua dùng chung hoặc tiêu hao, không gắn lệnh sản xuất
-                nào.
+                {/* Mục đích (0229) — người ký cần biết đơn ngoài lệnh mua cho việc gì. */}
+                Đơn ngoài lệnh —{' '}
+                {p.standalone_purpose ? (
+                  <b className="text-[var(--ink)]">
+                    {[p.standalone_purpose, p.standalone_ref].filter(Boolean).join(' · ')}
+                  </b>
+                ) : (
+                  'chưa ghi mua cho việc gì'
+                )}
               </p>
             )}
           </FactBlock>

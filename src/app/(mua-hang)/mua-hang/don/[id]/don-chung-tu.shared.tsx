@@ -64,6 +64,9 @@ export type PoDoc = {
   lsx_code: string | null
   order_code: string | null
   production_order_id: string | null
+  /** Đơn ngoài lệnh (0229) — chip "Lệnh SX" bày mục đích thay chữ "ngoài lệnh". */
+  standalone_purpose?: string | null
+  standalone_ref?: string | null
   currency: string
   vat_rate: number | null
   price_includes_vat: boolean
@@ -211,6 +214,8 @@ export type Props = {
   lsxLastChange?: Record<string, LsxLastChange>
   /** Mẫu của đơn gần nhất theo NCC — đơn mới chọn NCC thì mẫu tự theo (`templateForSupplier`). */
   lastTemplates?: Record<string, PoTemplate>
+  /** Gợi ý ô Mục đích của đơn ngoài lệnh (0229) — lib/po-muc-dich `goiYMucDich`. */
+  mucDichGoiY?: string[]
   /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */
   groupTemplates?: Record<string, PoTemplate>
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */

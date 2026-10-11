@@ -56,6 +56,8 @@ const header = (over: Partial<PoHeader> = {}): PoHeader => ({
   poType: 'lsx',
   lsxId: 'lsx-1',
   extraLsxIds: [],
+  mucDich: '',
+  mucDichRef: '',
   supplierId: 'ncc-1',
   expectedAt: '',
   contractNo: '',

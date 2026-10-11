@@ -111,6 +111,8 @@ export async function loadPoApprovalDetail(
     code: po.code,
     supplier_name: po.supplier_name,
     lsx_code: po.lsx_code,
+    standalone_purpose: po.standalone_purpose ?? null,
+    standalone_ref: po.standalone_ref ?? null,
     order_code: po.order_code,
     expected_at: po.expected_at,
     created_at: po.created_at,

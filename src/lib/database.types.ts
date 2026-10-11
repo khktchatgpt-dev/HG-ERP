@@ -4392,6 +4392,8 @@ export type Database = {
           production_order_id: string | null
           signer_role: string | null
           source_po_id: string | null
+          standalone_purpose: string | null
+          standalone_ref: string | null
           status: string
           supplier_doc_no: string | null
           supplier_id: string
@@ -4432,6 +4434,8 @@ export type Database = {
           production_order_id?: string | null
           signer_role?: string | null
           source_po_id?: string | null
+          standalone_purpose?: string | null
+          standalone_ref?: string | null
           status?: string
           supplier_doc_no?: string | null
           supplier_id: string
@@ -4472,6 +4476,8 @@ export type Database = {
           production_order_id?: string | null
           signer_role?: string | null
           source_po_id?: string | null
+          standalone_purpose?: string | null
+          standalone_ref?: string | null
           status?: string
           supplier_doc_no?: string | null
           supplier_id?: string

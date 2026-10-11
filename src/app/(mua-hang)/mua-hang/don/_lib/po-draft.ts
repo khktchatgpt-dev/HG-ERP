@@ -27,6 +27,9 @@ export type PoHeader = {
   lsxId: string
   /** LSX PHỤ gộp thêm vào đơn (0125) — "LSX 01+2+3/26-27". */
   extraLsxIds: string[]
+  /** Đơn ngoài lệnh (0229): loại việc + ghi rõ cho ai — lib/po-muc-dich. */
+  mucDich: string
+  mucDichRef: string
   supplierId: string
   expectedAt: string
   contractNo: string
@@ -122,6 +125,8 @@ export function buildPoPayload(
     shipments,
     production_order_id: header.poType === 'lsx' ? header.lsxId : null,
     extra_lsx_ids: header.poType === 'lsx' ? header.extraLsxIds : [],
+    standalone_purpose: header.poType === 'lsx' ? null : header.mucDich.trim() || null,
+    standalone_ref: header.poType === 'lsx' ? null : header.mucDichRef.trim() || null,
     supplier_id: header.supplierId,
     template: header.template,
     currency: header.currency,

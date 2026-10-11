@@ -145,6 +145,12 @@ export const poCreateSchema = z.object({
   price_includes_vat: z.coerce.boolean().default(true),
   discount_amount: z.coerce.number().min(0).optional().nullable(),
   contract_no: optText(100), // "Theo HD số:"
+  /**
+   * Đơn NGOÀI LỆNH (0229): mục đích (loại việc) + ghi rõ cho ai. Gõ tự do kèm
+   * gợi ý (lib/po-muc-dich). Đơn theo lệnh: service bỏ qua, ghi null.
+   */
+  standalone_purpose: optText(120),
+  standalone_ref: optText(200),
   expected_at: z.string().date().optional().nullable(), // thời gian giao hàng
   terms: optText(1000), // bảo hành, điều kiện (cột cũ, giữ cho đơn đã tạo)
   // 5 điều khoản in thành 5 dòng riêng trên phiếu

@@ -543,7 +543,7 @@ function SignRow({
       )}
       <Cell muted>
         <span className="flex items-center gap-1.5">
-          {i.po?.lsx_code ?? (i.kind === 'po' ? 'Ngoài lệnh' : '—')}
+          {i.po?.lsx_code ?? (i.kind === 'po' ? (i.po?.ngoai_lenh ?? 'Ngoài lệnh') : '—')}
           {i.po?.lsx_done && (
             <span title="Mọi lệnh của đơn đã hoàn thành — sản xuất xong, đơn chưa được cập nhật">
               <Tag tone="warn">đã xong</Tag>

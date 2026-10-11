@@ -61,6 +61,9 @@ export type Po = {
   urgent_sent_at?: string | null
   urgent_sent_by?: string | null
   urgent_reason?: string | null
+  /** Đơn ngoài lệnh (0229): loại việc + ghi rõ cho ai. Null với đơn theo lệnh. */
+  standalone_purpose?: string | null
+  standalone_ref?: string | null
 }
 
 export type PoWithRefs = Po & {
@@ -203,7 +206,7 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref'
 
 /** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
 const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
@@ -863,6 +866,18 @@ export const posRepo = {
     return out
   },
 
+  /** Mục đích đơn ngoài lệnh đã dùng (0229), mỗi đơn một lần — nguồn gợi ý (lib/po-muc-dich). */
+  async standalonePurposes(): Promise<string[]> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select('standalone_purpose')
+      .not('standalone_purpose', 'is', null)
+      .neq('status', 'cancelled')
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => r.standalone_purpose as string)
+  },
+
   async listExtraLsx(poId: string): Promise<{ id: string; code: string }[]> {
     const { data } = await db()
       .from('supply_po_extra_lsx')
@@ -1099,6 +1114,8 @@ export const posRepo = {
       assigned_to: string
       /** Đơn bổ sung cho phần giao thiếu của đơn này (0213). */
       source_po_id?: string | null
+      standalone_purpose?: string | null
+      standalone_ref?: string | null
     },
     lines: PoLineInput[],
   ): Promise<Po> {

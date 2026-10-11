@@ -1,4 +1,5 @@
 import { posService } from '@/modules/dept/supply/pos.service'
+import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
@@ -217,6 +218,8 @@ export type SignItem = {
      * về, đơn chỉ chưa được cập nhật. Người ký cần biết trước khi ký.
      */
     lsx_done: boolean
+    /** Đơn ngoài lệnh (0229): "Ngoài lệnh · Khuôn mẫu · QM-5858"; đơn theo lệnh: null. */
+    ngoai_lenh?: string | null
   }
 }
 
@@ -354,7 +357,7 @@ export const execService = {
         code: p.code,
         party: p.supplier_name,
         facts: [
-          p.lsx_code ? `lệnh ${p.lsx_code}` : 'ngoài lệnh',
+          p.lsx_code ? `lệnh ${p.lsx_code}` : nhanNgoaiLenh(p).replace(/^N/, 'n'),
           p.expected_at ? `hàng về ${p.expected_at}` : 'chưa hẹn ngày về',
         ],
         currency: p.currency,
@@ -394,6 +397,7 @@ export const execService = {
           expected_at: p.expected_at ?? null,
           eta_late_days: lateDays != null && lateDays > 0 ? lateDays : 0,
           lsx_done: isPoOfDoneLsx({ ...p, extra_lsx: poExtraLsx.get(p.id) ?? [] }),
+          ngoai_lenh: p.lsx_code ? null : nhanNgoaiLenh(p),
         },
       })
     }

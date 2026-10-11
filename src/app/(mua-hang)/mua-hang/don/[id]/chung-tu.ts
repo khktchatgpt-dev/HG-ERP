@@ -19,6 +19,8 @@ import { duplicateLinePairs, duplicateLinesMessage, type DupLine } from '@/lib/p
 export type PoForHeader = {
   template: PoTemplate
   production_order_id: string | null
+  standalone_purpose?: string | null
+  standalone_ref?: string | null
   supplier_id: string
   currency: string
   vat_rate: number | null
@@ -57,6 +59,8 @@ export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
     poType: po.production_order_id ? 'lsx' : 'standalone',
     lsxId: po.production_order_id ?? '',
     extraLsxIds,
+    mucDich: po.standalone_purpose ?? '',
+    mucDichRef: po.standalone_ref ?? '',
     supplierId: po.supplier_id,
     expectedAt: po.expected_at ? po.expected_at.slice(0, 10) : '',
     contractNo: po.contract_no ?? '',
@@ -132,6 +136,9 @@ export function newHeader(opts: {
     poType: opts.fromStock && !opts.lsxId ? 'standalone' : 'lsx',
     lsxId: opts.lsxId ?? '',
     extraLsxIds: [],
+    // Mở từ dòng tồn kho = mua bù tồn: mục đích đã rõ, không bắt gõ lại.
+    mucDich: opts.fromStock && !opts.lsxId ? 'Dự trữ kho' : '',
+    mucDichRef: '',
     supplierId: opts.supplierId ?? '',
     expectedAt: '',
     contractNo: '',
@@ -159,7 +166,12 @@ export function retemplate(h: PoHeader, t: PoTemplate): PoHeader {
  * nháp hoặc chờ duyệt — đơn đã gửi NCC thì bảng kiểm không còn việc.
  */
 export function poChecks(
-  po: { status: string; production_order_id: string | null; expected_at: string | null },
+  po: {
+    status: string
+    production_order_id: string | null
+    expected_at: string | null
+    standalone_purpose?: string | null
+  },
   lines: ({ unit_price: number | null } & DupLine)[],
   today: string,
 ): Check[] {
@@ -179,7 +191,8 @@ export function poChecks(
   const noPrice = lines.filter((l) => l.unit_price == null).length
   if (lines.length === 0) out.push({ level: 'stop', what: 'Đơn chưa có dòng vật tư nào', fix: 'Thêm ít nhất một dòng' }) // prettier-ignore
   if (noPrice > 0) out.push({ level: 'stop', what: `${noPrice} dòng chưa có đơn giá`, fix: 'Nhập giá hoặc ghi “chờ báo giá”' }) // prettier-ignore
-  if (!po.production_order_id) out.push({ level: 'warn', what: 'Chưa gắn lệnh sản xuất', fix: 'Gắn lệnh, hoặc bỏ qua nếu mua bù tồn' }) // prettier-ignore
+  // Ngoài lệnh là lựa chọn hợp lệ — cái phải có là MỤC ĐÍCH (0229, server chặn cùng luật).
+  if (!po.production_order_id && !po.standalone_purpose?.trim()) out.push({ level: 'stop', what: 'Đơn ngoài lệnh chưa ghi mục đích', fix: 'Bấm "Sửa", điền ô "Mục đích" — vd. Khuôn mẫu, Đơn khách chưa ra lệnh' }) // prettier-ignore
   if (!po.expected_at) out.push(sapGui
     ? { level: 'stop', what: 'Chưa có hẹn giao', fix: 'Bấm "Sửa" khai ngày dự kiến — chưa có ngày thì gửi NCC xong không ai đo được trễ' }
     : { level: 'warn', what: 'Chưa có hẹn giao', fix: 'Điền hạn giao — tới bước gửi NCC là bắt buộc' }) // prettier-ignore
