@@ -44,7 +44,7 @@ export function OLenhHoacMucDich({
 }) {
   if (header.poType === 'lsx')
     return (
-      <HeadField label="Lệnh" need empty={!header.lsxId} width={150}>
+      <HeadField label="Lệnh" need empty={!header.lsxId} width={130}>
         <Combobox
           label="Lệnh sản xuất"
           value={header.lsxId}

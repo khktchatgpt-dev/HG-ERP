@@ -1,6 +1,7 @@
 'use client'
 
 import { templateDefaults } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import { OThue } from './o-thue'
 import {
   Checks,
   Combobox,
@@ -15,7 +16,6 @@ import {
   Pick,
   TextArea,
   TextInput,
-  Tick,
 } from '@/components/kit'
 import { PO_CURRENCIES } from '@/lib/po-line'
 import { TERM_FIELDS, dmy, dmyAt, money, numStr, toNum } from './don-chung-tu.shared'
@@ -320,22 +320,12 @@ export function DauDon({ d }: { d: DonCtx }) {
                       options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
                     />
                   </Field>
-                  <Field label="Thuế suất %">
-                    <NumInput
-                      aria-label="Thuế suất"
-                      value={numStr(header.vat)}
-                      onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
-                    />
-                  </Field>
-                  <Field label="Giá đã gồm VAT">
-                    <Tick
-                      label="Đơn giá đã gồm VAT"
-                      checked={header.inclVat}
-                      onChange={(v) => {
-                        // Tự tick / bỏ tick = đã tự chỉnh: đổi mẫu sau đó không được áp lại.
-                        markDirty('vat')
-                        setHeader((h) => ({ ...h, inclVat: v }))
-                      }}
+                  <Field label="Thuế">
+                    <OThue
+                      vat={header.vat}
+                      inclVat={header.inclVat}
+                      onChon={d.chonThue}
+                      macDinh={d.thueMd}
                     />
                   </Field>
                   {meta.hasDiscount && (

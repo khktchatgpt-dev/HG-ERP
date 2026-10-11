@@ -1,6 +1,7 @@
 'use client'
 
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import type { ThueNcc } from '@/lib/po-thue'
 import type { LsxLastChange } from './nguyen-nhan'
 import {
   lineQty2,
@@ -186,7 +187,7 @@ export type Props = {
   /** Đợt về theo phiếu nhập — ma trận nhận. */
   receiptBatches: ReceiptBatch[]
   /** `can_order` false = NCC đang khoá đặt hàng — không bày trong ô chọn (trừ NCC đơn đang mang). */
-  suppliers: { id: string; name: string; currency: string | null; payment_terms: string | null; lead_time_days: number | null; can_order?: boolean; lock_reason?: string | null; moq?: string | null }[] // prettier-ignore
+  suppliers: { id: string; name: string; currency: string | null; payment_terms: string | null; lead_time_days: number | null; can_order?: boolean; lock_reason?: string | null; moq?: string | null; vat_rate?: number | null }[] // prettier-ignore
   lsxs: { id: string; code: string; customer_name: string; order_codes: string[] }[]
   perms: {
     canEdit: boolean
@@ -216,6 +217,8 @@ export type Props = {
   lastTemplates?: Record<string, PoTemplate>
   /** Gợi ý ô Mục đích của đơn ngoài lệnh (0229) — lib/po-muc-dich `goiYMucDich`. */
   mucDichGoiY?: string[]
+  /** Thuế theo NCC (đơn gần nhất · số đơn · số kiểu) — ô Thuế mặc định theo đây (lib/po-thue). */
+  thueNcc?: Record<string, ThueNcc>
   /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */
   groupTemplates?: Record<string, PoTemplate>
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */

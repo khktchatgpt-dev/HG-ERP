@@ -1,3 +1,4 @@
+import { chuanThue, khoaThue, type KieuThue, type ThueNcc } from '@/lib/po-thue'
 import { db } from '@/server/db'
 import type { LsxSplit } from '@/lib/po-lsx-split'
 import { poLineAmount, type PoLineAmountInput } from '@/lib/po-line'
@@ -863,6 +864,35 @@ export const posRepo = {
     for (const r of (data ?? []) as { supplier_id: string; template: string }[]) {
       if (!(r.supplier_id in out)) out[r.supplier_id] = r.template as PoTemplate
     }
+    return out
+  },
+
+  /**
+   * THUẾ THEO NCC (B1 bản vẽ Đầu đơn, 11/10/2026) — kiểu thuế của đơn gần nhất,
+   * số đơn mang đúng kiểu đó, và số kiểu khác nhau NCC từng dùng. Đơn mới chọn
+   * NCC thì ô Thuế lấy theo đây (lib/po-thue `thueMacDinh`).
+   */
+  async taxBySupplier(): Promise<Record<string, ThueNcc>> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select('supplier_id, vat_rate, price_includes_vat, created_at')
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    const by = new Map<string, { first: KieuThue; dem: Map<string, number> }>()
+    for (const r of data ?? []) {
+      const k = chuanThue(
+        r.vat_rate == null ? null : Number(r.vat_rate),
+        r.price_includes_vat,
+      )
+      const cur = by.get(r.supplier_id) ?? { first: k, dem: new Map<string, number>() }
+      cur.dem.set(khoaThue(k), (cur.dem.get(khoaThue(k)) ?? 0) + 1)
+      by.set(r.supplier_id, cur)
+    }
+    const out: Record<string, ThueNcc> = {}
+    for (const [id, x] of by)
+      out[id] = { ...x.first, n: x.dem.get(khoaThue(x.first)) ?? 1, kieu: x.dem.size }
     return out
   },
 

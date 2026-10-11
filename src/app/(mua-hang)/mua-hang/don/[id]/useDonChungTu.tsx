@@ -1,6 +1,7 @@
 'use client'
 
 import { loiChia } from '@/app/(mua-hang)/mua-hang/don/_lib/po-lsx-chia'
+import { thueMacDinh, type KieuThue } from '@/lib/po-thue'
 import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { linkedLsxIds } from '@/lib/po-adjust-cause'
 import { useNguyenNhan } from './useNguyenNhan'
@@ -488,13 +489,19 @@ export function useDonChungTu(p: Props) {
     setPick(0)
   }
 
+  /** Thuế theo NCC (B1 11/10): đơn gần nhất của NCC → hồ sơ NCC; null = theo mẫu đơn như trước. */
+  const thueCua = (sid: string) => thueMacDinh({ ncc: p.thueNcc?.[sid], nccVat: p.suppliers.find((s) => s.id === sid)?.vat_rate }) // prettier-ignore
+  const chonThue = (k: KieuThue) => (markDirty('vat'), setHeader((h) => ({ ...h, vat: k.rate, inclVat: k.incl }))) // prettier-ignore
+  /** Đơn MỚI vừa chọn NCC, chưa tự chỉnh thuế → ô Thuế theo NCC. Gọi SAU đổi mẫu (mẫu cũng áp thuế). */
+  const apThueNcc = (sid: string) => { const t = !dirty.current.vat && !po ? thueCua(sid) : null; if (t) setHeader((h) => ({ ...h, vat: t.rate, inclVat: t.incl })) } // prettier-ignore
   const changeTemplate = (t: PoTemplate) => {
     setLines((ls) => remapLinesForTemplate(template, t, ls))
     // VAT chỉ áp mặc định của mẫu khi người dùng CHƯA tự chỉnh — phòng CƯ
     // phản hồi "nhiều NCC để 10%" mà đổi mẫu là bị áp lại 8%.
     setHeader((h) => {
       const r = retemplate(h, t)
-      return dirty.current.vat ? { ...r, vat: h.vat, inclVat: h.inclVat } : r
+      const n = thueCua(h.supplierId) // chưa tự chỉnh: thuế của NCC thắng mặc định của mẫu
+      return dirty.current.vat ? { ...r, vat: h.vat, inclVat: h.inclVat } : n ? { ...r, vat: n.rate, inclVat: n.incl } : r // prettier-ignore
     })
   }
 
@@ -1416,6 +1423,9 @@ export function useDonChungTu(p: Props) {
     nhap,
     dirty,
     markDirty,
+    thueMd: thueCua(header.supplierId),
+    chonThue,
+    apThueNcc,
     askCancel,
     setAskCancel,
     headOpen,

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { SuaVatTuSheet } from '@/app/(mua-hang)/mua-hang/vat-tu/sua-vat-tu'
 import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
-import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import { refreshLineFromMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import { moXemTruoc } from './xem-truoc'
 import { MucChiaLenh } from './muc-chia-lenh'
@@ -46,7 +45,6 @@ import {
   Tag,
   TextArea,
   TextInput,
-  Tick,
 } from '@/components/kit'
 import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import { PO_CURRENCIES } from '@/lib/po-line'
@@ -65,6 +63,7 @@ import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { templateForSupplier } from './chung-tu'
 import { OLenhHoacMucDich } from './o-muc-dich'
+import { OThue } from './o-thue'
 import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
 import {
@@ -105,6 +104,7 @@ export function DonChungTuScreen(p: Props) {
   const d = useDonChungTu(p)
   // Hàng phụ của đầu đơn — tự mở khi đơn đã có giá trị ở đó.
   const [headMore, setHeadMore] = useState<boolean | null>(null)
+  const [gopMo, setGopMo] = useState(false) // "+ gộp lệnh" bấm mới bày ô gộp (B1 11/10)
   const {
     router,
     muc,
@@ -210,8 +210,12 @@ export function DonChungTuScreen(p: Props) {
     hanText,
     vuong,
     markDirty,
+    thueMd,
+    chonThue,
+    apThueNcc,
   } = d
-  const moreOpen = headMore ?? (header.poType === 'standalone' || header.extraLsxIds.length > 0 || !!header.contractNo || header.currency !== 'VND') // prettier-ignore
+  const moreOpen = headMore ?? (!!header.contractNo || header.currency !== 'VND')
+  const gopHien = header.poType === 'lsx' && (gopMo || header.extraLsxIds.length > 0)
   const nccBody = <NhaCungCapTomTat d={d} />
   const notesPanel = <TraoDoiKhung d={d} />
   const blkChecks = <BangKiem d={d} />
@@ -686,8 +690,9 @@ export function DonChungTuScreen(p: Props) {
             NCC → tiền tệ + giá gợi ý, thuế → chân lưới) nên vẫn đứng TRÊN lưới.
             Nhưng lưới 3 cột 13 ô cũ cao ~200px, 3 ô chỉ đọc, đẩy dòng hàng đầu
             xuống y≈435 — nay co thành một hàng `HeadField` (ô gõ thật trong chip,
-            KHÔNG để ô nhập trong `HeadChip` vì đó là nút). Ô ít đổi (tiền tệ, VAT —
-            thanh chốt đáy đã bày cả hai) vào hàng phụ, tự mở khi đơn có giá trị ở đó. */}
+            KHÔNG để ô nhập trong `HeadChip` vì đó là nút). Ô Thuế lên hàng chính
+            (B1 11/10/2026: một lựa chọn thay "VAT %" + "giá gồm VAT", theo NCC); ô ít
+            đổi (tiền tệ, số HĐ, chiết khấu) vào hàng phụ, tự mở khi đơn có giá trị ở đó. */}
           {drafting && (
             <div className="flex flex-col gap-1 border-b border-[var(--line)] bg-[var(--surface-card)]">
               <HeadChips>
@@ -698,6 +703,38 @@ export function DonChungTuScreen(p: Props) {
                   lsxOptions={lsxOptions}
                   doiDuoc={!p.po}
                 />
+                {gopHien ? (
+                  <HeadField label="Gộp lệnh">
+                    <span className="flex flex-wrap items-center gap-1">
+                      {header.extraLsxIds.map((id) => (
+                        <GridBtn
+                          key={id}
+                          title="Bỏ lệnh này khỏi đơn"
+                          onClick={() => toggleExtraLsx(id, false)}
+                        >
+                          {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
+                        </GridBtn>
+                      ))}
+                      <Combobox
+                        label="Gộp thêm lệnh"
+                        value=""
+                        onChange={(v) => v && toggleExtraLsx(v, true)}
+                        emptyLabel={header.extraLsxIds.length ? '+ thêm lệnh nữa' : '— một đơn, nhiều lệnh —'} // prettier-ignore
+                        placeholder="Gõ số lệnh…"
+                        options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
+                      />
+                    </span>
+                  </HeadField>
+                ) : (
+                  header.poType === 'lsx' && (
+                    <GridBtn
+                      onClick={() => setGopMo(true)}
+                      title="Một đơn mua cho nhiều lệnh"
+                    >
+                      + gộp lệnh
+                    </GridBtn>
+                  )
+                )}
                 <HeadField label="NCC" need empty={!header.supplierId} width={180}>
                   <Combobox
                     label="Nhà cung cấp"
@@ -717,6 +754,7 @@ export function DonChungTuScreen(p: Props) {
                         changeTemplate(t)
                         toast.info(`Mẫu đơn: ${PO_TEMPLATE_META[t].label}`, 'Theo đơn gần nhất của NCC này — đổi được ở ô "Mẫu đơn".') // prettier-ignore
                       }
+                      apThueNcc(v)
                     }}
                     emptyLabel="— chọn NCC —"
                     placeholder="Gõ tên nhà cung cấp…"
@@ -742,13 +780,23 @@ export function DonChungTuScreen(p: Props) {
                     onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
                   />
                 </HeadField>
+                <HeadField label="Thuế">
+                  <OThue
+                    vat={header.vat}
+                    inclVat={header.inclVat}
+                    onChon={chonThue}
+                    macDinh={thueMd}
+                  />
+                </HeadField>
                 <GridBtn
                   onClick={() => setHeadMore(!moreOpen)}
-                  title="Tiền tệ · VAT · Giá gồm VAT · Loại đơn · Gộp lệnh · Số HĐ"
+                  title={`Tiền tệ (${header.currency}) · Số hợp đồng · Chiết khấu`}
                 >
                   {moreOpen
                     ? 'Ẩn bớt'
-                    : `${header.currency} · VAT ${header.vat === '' ? 0 : header.vat}% ▾`}
+                    : header.currency === 'VND'
+                      ? '⋯ Thêm'
+                      : `⋯ ${header.currency}`}
                 </GridBtn>
               </HeadChips>
               {supplierOpt?.can_order === false && (
@@ -773,64 +821,12 @@ export function DonChungTuScreen(p: Props) {
                       options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
                     />
                   </HeadField>
-                  <HeadField label="VAT %" width={48}>
-                    <NumInput
-                      aria-label="Thuế suất"
-                      value={numStr(header.vat)}
-                      onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
-                    />
-                  </HeadField>
-                  <HeadField label="Loại đơn" width={150}>
-                    <Pick
-                      label="Loại đơn"
-                      value={header.poType}
-                      onChange={(v) => setHeader((h) => ({ ...h, poType: v as PoHeader['poType'], lsxId: v === 'standalone' ? '' : h.lsxId }))} // prettier-ignore
-                      options={[
-                        { value: 'lsx', label: 'Theo lệnh sản xuất' },
-                        { value: 'standalone', label: 'Ngoài lệnh (mua bù tồn)' },
-                      ]}
-                    />
-                  </HeadField>
-                  {header.poType === 'lsx' && (
-                    <HeadField label="Gộp lệnh">
-                      <span className="flex flex-wrap items-center gap-1">
-                        {header.extraLsxIds.map((id) => (
-                          <GridBtn
-                            key={id}
-                            title="Bỏ lệnh này khỏi đơn"
-                            onClick={() => toggleExtraLsx(id, false)}
-                          >
-                            {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
-                          </GridBtn>
-                        ))}
-                        <Combobox
-                          label="Gộp thêm lệnh"
-                          value=""
-                          onChange={(v) => v && toggleExtraLsx(v, true)}
-                          emptyLabel={header.extraLsxIds.length ? '+ thêm lệnh nữa' : '— một đơn, nhiều lệnh —'} // prettier-ignore
-                          placeholder="Gõ số lệnh…"
-                          options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
-                        />
-                      </span>
-                    </HeadField>
-                  )}
                   <HeadField label="Số HĐ" width={120}>
                     <TextInput
                       label="Số hợp đồng"
                       value={header.contractNo}
                       onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
                       mono
-                    />
-                  </HeadField>
-                  <HeadField label="Giá gồm VAT">
-                    <Tick
-                      label="Đơn giá đã gồm VAT"
-                      checked={header.inclVat}
-                      onChange={(v) => {
-                        // Tự tick / bỏ tick = đã tự chỉnh: đổi mẫu sau đó không được áp lại.
-                        markDirty('vat')
-                        setHeader((h) => ({ ...h, inclVat: v }))
-                      }}
                     />
                   </HeadField>
                   {meta.hasDiscount && (
