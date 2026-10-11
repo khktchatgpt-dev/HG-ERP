@@ -1,7 +1,8 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { nhanNgoaiLenh, nhomTheoMucDich } from '@/lib/po-muc-dich'
+import { nhomTheoMucDich } from '@/lib/po-muc-dich'
+import { NgoaiLenhCell } from './ngoai-lenh-cell'
 import { useRouter } from 'next/navigation'
 import {
   Btn,
@@ -1021,7 +1022,7 @@ export function DonScreen({
                                   ))}
                                 </span>
                               ) : (
-                                <Hint size="sm">{nhanNgoaiLenh(p)}</Hint>
+                                <NgoaiLenhCell p={p} />
                               )}
                             </Cell>
                           )}

@@ -160,6 +160,17 @@ describe('buildPoPayload', () => {
     expect(p.production_order_id).toBeNull()
   })
 
+  it('mục đích (0229): đơn ngoài lệnh gửi đi, đơn theo lệnh luôn null', () => {
+    const md = { mucDich: 'Khuôn mẫu', mucDichRef: ' QM-5858 ' }
+    const ngoai = buildPoPayload(header({ poType: 'standalone', ...md }), [line()])
+    expect([ngoai.standalone_purpose, ngoai.standalone_ref]).toEqual([
+      'Khuôn mẫu',
+      'QM-5858',
+    ])
+    const lenh = buildPoPayload(header({ poType: 'lsx', lsxId: 'l', ...md }), [line()])
+    expect([lenh.standalone_purpose, lenh.standalone_ref]).toEqual([null, null])
+  })
+
   it('cơ sở tính tiền chỉ gửi ở mẫu bao bì', () => {
     expect(
       buildPoPayload(header(), [line({ carton_basis: 'm2' })]).lines[0].carton_basis,
@@ -191,7 +202,10 @@ describe('buildPoPayload', () => {
       { production_order_id: 'a', qty: 60 },
       { production_order_id: 'b', qty: 40 },
     ])
-    expect(buildPoPayload(header(), [line()]).lines[0]).toMatchObject({ price_per: null, lsx_split: null })
+    expect(buildPoPayload(header(), [line()]).lines[0]).toMatchObject({
+      price_per: null,
+      lsx_split: null,
+    })
   })
 
   it('chiết khấu 0 gửi null cho sạch chứng từ', () => {

@@ -256,7 +256,7 @@ export function poMatches(
   // ("đơn 17984 đã đặt nhôm chưa"), mà bản cũ tìm mã đó không ra gì.
   if (
     ql &&
-    !`${p.code} ${p.supplier_name} ${p.lsx_code ?? ''} ${p.standalone_purpose ?? ''} ${p.standalone_ref ?? ''} ${p.order_code ?? ''} ${p.assignee_name ?? ''} ${(p.material_names ?? []).join(' ')}`
+    !`${p.code} ${p.supplier_name} ${p.lsx_code ?? 'ngoài lệnh'} ${p.standalone_purpose ?? ''} ${p.standalone_ref ?? ''} ${p.order_code ?? ''} ${p.assignee_name ?? ''} ${(p.material_names ?? []).join(' ')}`
       .toLowerCase()
       .includes(ql)
   )

@@ -64,7 +64,7 @@ import { TaiChinhPanel } from './TaiChinhPanel'
 import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { templateForSupplier } from './chung-tu'
-import { OMucDich } from './o-muc-dich'
+import { OLenhHoacMucDich } from './o-muc-dich'
 import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
 import {
@@ -691,24 +691,13 @@ export function DonChungTuScreen(p: Props) {
           {drafting && (
             <div className="flex flex-col gap-1 border-b border-[var(--line)] bg-[var(--surface-card)]">
               <HeadChips>
-                {header.poType === 'standalone' ? (
-                  <OMucDich
-                    header={header}
-                    setHeader={setHeader}
-                    goiY={p.mucDichGoiY ?? []}
-                  />
-                ) : (
-                  <HeadField label="Lệnh" need empty={!header.lsxId} width={150}>
-                    <Combobox
-                      label="Lệnh sản xuất"
-                      value={header.lsxId}
-                      onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
-                      emptyLabel="— chọn lệnh —"
-                      placeholder="Gõ số lệnh hoặc tên khách…"
-                      options={lsxOptions}
-                    />
-                  </HeadField>
-                )}
+                <OLenhHoacMucDich
+                  header={header}
+                  setHeader={setHeader}
+                  goiY={p.mucDichGoiY ?? []}
+                  lsxOptions={lsxOptions}
+                  doiDuoc={!p.po}
+                />
                 <HeadField label="NCC" need empty={!header.supplierId} width={180}>
                   <Combobox
                     label="Nhà cung cấp"
