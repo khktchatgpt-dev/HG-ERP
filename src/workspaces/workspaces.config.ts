@@ -455,6 +455,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
           { href: '/mua-hang/bang-ke', label: 'Bảng kê vật tư', icon: 'clipboard-list' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
+          // Việc ngoài sản xuất gom nhiều đơn mua (0230) — Xây dựng văn phòng, Dự trữ kho…
+          { href: '/mua-hang/hang-muc', label: 'Hạng mục', icon: 'folder-kanban' },
           // THEO DÕI ĐƠN HÀNG (01/10/2026, chủ dự án): đơn đã gửi NCC → tới khi
           // hàng về kho, gồm cả chuyến hàng. Thay mục 'Nhận hàng' / cách xem
           // 'Đang về' trong Đơn mua — link cũ do proxy chuyển. Đơn chưa gửi ở Đơn mua.

@@ -56,8 +56,7 @@ const header = (over: Partial<PoHeader> = {}): PoHeader => ({
   poType: 'lsx',
   lsxId: 'lsx-1',
   extraLsxIds: [],
-  mucDich: '',
-  mucDichRef: '',
+  projectId: '',
   supplierId: 'ncc-1',
   expectedAt: '',
   contractNo: '',
@@ -160,15 +159,11 @@ describe('buildPoPayload', () => {
     expect(p.production_order_id).toBeNull()
   })
 
-  it('mục đích (0229): đơn ngoài lệnh gửi đi, đơn theo lệnh luôn null', () => {
-    const md = { mucDich: 'Khuôn mẫu', mucDichRef: ' QM-5858 ' }
-    const ngoai = buildPoPayload(header({ poType: 'standalone', ...md }), [line()])
-    expect([ngoai.standalone_purpose, ngoai.standalone_ref]).toEqual([
-      'Khuôn mẫu',
-      'QM-5858',
-    ])
-    const lenh = buildPoPayload(header({ poType: 'lsx', lsxId: 'l', ...md }), [line()])
-    expect([lenh.standalone_purpose, lenh.standalone_ref]).toEqual([null, null])
+  it('hạng mục (0230): đơn ngoài lệnh gửi project_id, đơn theo lệnh luôn null', () => {
+    const ngoai = buildPoPayload(header({ poType: 'standalone', projectId: 'hm-1' }), [line()])
+    expect(ngoai.project_id).toBe('hm-1')
+    const lenh = buildPoPayload(header({ poType: 'lsx', lsxId: 'l', projectId: 'hm-1' }), [line()])
+    expect(lenh.project_id).toBeNull()
   })
 
   it('cơ sở tính tiền chỉ gửi ở mẫu bao bì', () => {

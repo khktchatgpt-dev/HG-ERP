@@ -46,6 +46,11 @@ export type Po = {
   /** Đơn ngoài lệnh (0229): mua cho việc gì + ghi rõ cho ai. */
   standalone_purpose?: string | null
   standalone_ref?: string | null
+  /** Hạng mục ngoài sản xuất (0230). */
+  project_id?: string | null
+  project_code?: string | null
+  project_name?: string | null
+  project_kind?: string | null
   /** Trạng thái lệnh chính — "đơn còn mở của lệnh đã hoàn thành" (lib/po-lsx-done). */
   lsx_status?: string | null
   order_code: string | null

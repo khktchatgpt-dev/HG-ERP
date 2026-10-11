@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { nhomTheoMucDich } from '@/lib/po-muc-dich'
+import { nhomTheoHangMuc } from '@/lib/po-muc-dich'
 import { NgoaiLenhCell } from './ngoai-lenh-cell'
 import { useRouter } from 'next/navigation'
 import {
@@ -513,7 +513,7 @@ export function DonScreen({
         lsxId: x.lsx_id,
       }))
       if (g.standalone.pos.length > 0) // ngoài lệnh: mỗi MỤC ĐÍCH một nhóm (0229)
-        out.push(...nhomTheoMucDich(g.standalone.pos).map(([md, pos]) => ({ key: `@standalone:${md}`, name: `Ngoài lệnh · ${md}`, meta: <span className="num">{pos.length} đơn</span>, pos, borrowed: new Set<string>(), lsxId: null }))) // prettier-ignore
+        out.push(...nhomTheoHangMuc(g.standalone.pos).map(([md, pos]) => ({ key: `@standalone:${md}`, name: `Ngoài lệnh · ${md}`, meta: <span className="num">{pos.length} đơn</span>, pos, borrowed: new Set<string>(), lsxId: null }))) // prettier-ignore
       return out
     }
     return groupSimple(shown, view.groupBy).map((x) => ({ ...x, name: x.name as string | null, meta: <span>{x.meta}</span> as React.ReactNode, borrowed: new Set<string>(), lsxId: null as string | null })) // prettier-ignore

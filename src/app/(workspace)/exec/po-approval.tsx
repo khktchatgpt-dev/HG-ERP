@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { HangMucKy } from './hang-muc-ky'
 import {
   Btn,
   DocChain,
@@ -418,7 +419,7 @@ export function PoApprovalBody({
             />
           </FactBlock>
 
-          <FactBlock title="Lệnh sản xuất">
+          <FactBlock title={lsx || !p.project ? 'Lệnh sản xuất' : 'Hạng mục'}>
             {lsx ? (
               <FactKv
                 prose
@@ -463,6 +464,8 @@ export function PoApprovalBody({
                   ],
                 ]}
               />
+            ) : p.project ? (
+              <HangMucKy p={p} />
             ) : (
               <p className="text-k-sm text-[var(--ink-2)]">
                 {/* Mục đích (0229) — người ký cần biết đơn ngoài lệnh mua cho việc gì. */}

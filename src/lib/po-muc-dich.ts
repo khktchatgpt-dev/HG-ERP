@@ -54,33 +54,36 @@ export function goiYMucDich(daDung: readonly (string | null | undefined)[]): str
   return out
 }
 
-/**
- * Nhãn ở mọi chỗ trước đây ghi "Ngoài lệnh": "Ngoài lệnh · Khuôn mẫu · QM-5858".
- * Chưa ghi mục đích (đơn nháp cũ) thì vẫn là "Ngoài lệnh" trần.
- */
-export function nhanNgoaiLenh(p: {
+/** Đơn ngoài lệnh nhìn từ ngoài: hạng mục (0230), hoặc chữ mục đích cũ (0229). */
+type DonNgoai = {
+  project_code?: string | null
+  project_name?: string | null
   standalone_purpose?: string | null
   standalone_ref?: string | null
-}): string {
+}
+
+/**
+ * Nhãn ở mọi chỗ trước đây ghi "Ngoài lệnh": "HM-2026-0004 · Dự trữ kho".
+ * Đơn cũ chưa gắn hạng mục rơi về chữ mục đích 0229, rồi "Ngoài lệnh" trần.
+ */
+export function nhanNgoaiLenh(p: DonNgoai): string {
+  if (p.project_code) return `${p.project_code} · ${p.project_name ?? ''}`.trim()
   return ['Ngoài lệnh', p.standalone_purpose?.trim(), p.standalone_ref?.trim()]
     .filter(Boolean)
     .join(' · ')
 }
 
 /**
- * Chia đơn ngoài lệnh theo mục đích — mỗi loại một nhóm ở danh sách Đơn mua,
- * nhiều đơn trước. Đơn chưa ghi mục đích (nháp cũ) gom vào "chưa ghi mục đích".
+ * Chia đơn ngoài lệnh theo HẠNG MỤC — mỗi hạng mục một nhóm ở danh sách Đơn mua,
+ * nhiều đơn trước. Đơn chưa gắn hạng mục gom vào "chưa chọn hạng mục".
  */
-export function nhomTheoMucDich<T extends { standalone_purpose?: string | null }>(
-  pos: readonly T[],
-): [string, T[]][] {
+export function nhomTheoHangMuc<T extends DonNgoai>(pos: readonly T[]): [string, T[]][] {
   const m = new Map<string, { nhan: string; pos: T[] }>()
   for (const p of pos) {
-    const nhan = chuanMucDich(p.standalone_purpose) ?? 'chưa ghi mục đích'
-    const k = khoa(nhan)
-    const cur = m.get(k) ?? { nhan, pos: [] }
+    const nhan = p.project_code ? nhanNgoaiLenh(p) : 'chưa chọn hạng mục'
+    const cur = m.get(nhan) ?? { nhan, pos: [] }
     cur.pos.push(p)
-    m.set(k, cur)
+    m.set(nhan, cur)
   }
   return [...m.values()]
     .sort((a, b) => b.pos.length - a.pos.length || a.nhan.localeCompare(b.nhan, 'vi'))

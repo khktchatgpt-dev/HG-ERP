@@ -48,6 +48,7 @@ import {
   Truck,
   Users,
   UsersRound,
+  FolderKanban,
 } from 'lucide-react'
 
 /**
@@ -74,6 +75,7 @@ const REGISTRY: Record<string, LucideIcon> = {
   // Sơ đồ kệ (0193) — ô lưới là hình gần nhất với "khu trong kho".
   'grid-3x3': Grid3x3,
   'clipboard-list': ClipboardList,
+  'folder-kanban': FolderKanban,
   'clipboard-check': ClipboardCheck,
   factory: Factory,
   'chart-column': ChartColumn,

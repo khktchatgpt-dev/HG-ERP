@@ -62,7 +62,7 @@ import { TaiChinhPanel } from './TaiChinhPanel'
 import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { templateForSupplier } from './chung-tu'
-import { OLenhHoacMucDich } from './o-muc-dich'
+import { OChoViec } from './o-cho-viec'
 import { OThue } from './o-thue'
 import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
@@ -213,6 +213,8 @@ export function DonChungTuScreen(p: Props) {
     thueMd,
     chonThue,
     apThueNcc,
+    hangMuc,
+    themHangMuc,
   } = d
   const moreOpen = headMore ?? (!!header.contractNo || header.currency !== 'VND')
   const gopHien = header.poType === 'lsx' && (gopMo || header.extraLsxIds.length > 0)
@@ -398,9 +400,9 @@ export function DonChungTuScreen(p: Props) {
           value={money(totals.grandTotal, header.currency)}
         />
         <HeadChip
-          label="Lệnh SX"
+          label={po.production_order_id ? 'Lệnh SX' : 'Hạng mục'}
           value={[po.lsx_code, ...p.extraLsx.map((l) => l.code)].filter(Boolean).join(' + ') || nhanNgoaiLenh(po)} // prettier-ignore
-          onClick={po.production_order_id ? () => router.push(`/mua-hang/yeu-cau/${po.production_order_id}`) : undefined} // prettier-ignore
+          onClick={po.production_order_id ? () => router.push(`/mua-hang/yeu-cau/${po.production_order_id}`) : po.project_id ? () => router.push(`/mua-hang/hang-muc/${po.project_id}`) : undefined} // prettier-ignore
         />
         {p.links?.source && (
           <HeadChip
@@ -696,11 +698,12 @@ export function DonChungTuScreen(p: Props) {
           {drafting && (
             <div className="flex flex-col gap-1 border-b border-[var(--line)] bg-[var(--surface-card)]">
               <HeadChips>
-                <OLenhHoacMucDich
+                <OChoViec
                   header={header}
                   setHeader={setHeader}
-                  goiY={p.mucDichGoiY ?? []}
                   lsxOptions={lsxOptions}
+                  hangMuc={hangMuc}
+                  onHangMucMoi={themHangMuc}
                   doiDuoc={!p.po}
                 />
                 {gopHien ? (
@@ -795,7 +798,7 @@ export function DonChungTuScreen(p: Props) {
                   {moreOpen
                     ? 'Ẩn bớt'
                     : header.currency === 'VND'
-                      ? '⋯ Thêm'
+                      ? '⋯'
                       : `⋯ ${header.currency}`}
                 </GridBtn>
               </HeadChips>

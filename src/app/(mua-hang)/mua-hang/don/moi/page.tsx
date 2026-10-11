@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { goiYMucDich } from '@/lib/po-muc-dich'
+import { projectsService } from '@/modules/dept/supply/projects.service'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
@@ -43,6 +43,8 @@ export default async function Page({
     tu?: string
     /** Đơn BỔ SUNG cho phần giao thiếu của đơn này (0213): mồi dòng = SL còn thiếu. */
     'bo-sung'?: string
+    /** Hạng mục sẵn (0230) — nút "+ Đơn mua cho hạng mục" ở hồ sơ hạng mục. */
+    hm?: string
   }>
 }) {
   const sp = await searchParams
@@ -127,14 +129,14 @@ export default async function Page({
       shipmentReceipts={{}}
       receiptBatches={[]}
       lastTemplates={await posRepo.lastTemplateBySupplier()}
-      mucDichGoiY={goiYMucDich(await posRepo.standalonePurposes())}
+      hangMuc={await projectsService.options()}
       thueNcc={await posRepo.taxBySupplier()}
       groupTemplates={Object.fromEntries(tax.groups.flatMap((g) => (g.po_template ? [[g.name, g.po_template]] : [])))} // prettier-ignore
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null, vat_rate: s.vat_rate ?? null }))} // prettier-ignore
       lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore
       perms={{ canEdit: true, canApprove, isSupply: true }}
       me={{ id: user.id, name: user.name ?? user.email }}
-      seed={{ supplierId: sp.ncc, lsxId: sp.lsx }}
+      seed={{ supplierId: sp.ncc, lsxId: sp.lsx, projectId: sp.hm }}
       seedHeader={seedHeader}
       seedCodes={seedCodes}
       sourcePo={boSung ? { id: boSung.po.id, code: boSung.po.code } : null}

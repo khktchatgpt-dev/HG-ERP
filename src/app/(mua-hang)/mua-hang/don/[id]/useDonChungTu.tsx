@@ -1,6 +1,7 @@
 'use client'
 
 import { loiChia } from '@/app/(mua-hang)/mua-hang/don/_lib/po-lsx-chia'
+import type { ProjectOption } from '@/modules/dept/supply/projects.service'
 import { thueMacDinh, type KieuThue } from '@/lib/po-thue'
 import { type CreatedMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { linkedLsxIds } from '@/lib/po-adjust-cause'
@@ -171,7 +172,7 @@ export function useDonChungTu(p: Props) {
 
   const [header, setHeader] = useState<PoHeader>(
     () =>
-    po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId, fromStock: !!p.seedCodes })), // prettier-ignore
+    po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId, fromStock: !!p.seedCodes, projectId: p.seed?.projectId ?? (p.seedCodes ? p.hangMuc?.find((x) => x.kind === 'Dự trữ kho')?.id : undefined) })), // prettier-ignore
   )
 
   /*
@@ -489,6 +490,10 @@ export function useDonChungTu(p: Props) {
     setPick(0)
   }
 
+  /** Hạng mục cho ô "Cho việc" (0230) — thêm tại chỗ khi tạo mới trong hộp. */
+  const [hangMuc, setHangMuc] = useState(p.hangMuc ?? [])
+  const themHangMuc = (x: ProjectOption) =>
+    setHangMuc((l) => [x, ...l.filter((y) => y.id !== x.id)])
   /** Thuế theo NCC (B1 11/10): đơn gần nhất của NCC → hồ sơ NCC; null = theo mẫu đơn như trước. */
   const thueCua = (sid: string) => thueMacDinh({ ncc: p.thueNcc?.[sid], nccVat: p.suppliers.find((s) => s.id === sid)?.vat_rate }) // prettier-ignore
   const chonThue = (k: KieuThue) => (markDirty('vat'), setHeader((h) => ({ ...h, vat: k.rate, inclVat: k.incl }))) // prettier-ignore
@@ -1426,6 +1431,8 @@ export function useDonChungTu(p: Props) {
     thueMd: thueCua(header.supplierId),
     chonThue,
     apThueNcc,
+    hangMuc,
+    themHangMuc,
     askCancel,
     setAskCancel,
     headOpen,

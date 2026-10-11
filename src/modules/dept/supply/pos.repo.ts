@@ -65,6 +65,8 @@ export type Po = {
   /** Đơn ngoài lệnh (0229): loại việc + ghi rõ cho ai. Null với đơn theo lệnh. */
   standalone_purpose?: string | null
   standalone_ref?: string | null
+  /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh thuộc về đây. Null với đơn theo lệnh. */
+  project_id?: string | null
 }
 
 export type PoWithRefs = Po & {
@@ -81,6 +83,10 @@ export type PoWithRefs = Po & {
    * từng chỉ có giờ, không có tên — đơn duyệt rồi mà không đọc ra được AI duyệt.
    */
   approver_name: string | null
+  /** Hạng mục ngoài sản xuất (0230) — null với đơn theo lệnh. */
+  project_code: string | null
+  project_name: string | null
+  project_kind: string | null
 }
 
 /** Ô nhập riêng của từng mẫu đơn (0106) — mẫu nào dùng ô nấy, còn lại null. */
@@ -207,7 +213,7 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref, project_id'
 
 /** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
 const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
@@ -268,7 +274,9 @@ type Raw = Po & {
     | { name: string | null; email: string }
     | { name: string | null; email: string }[]
     | null
+  project?: ProjectRef | ProjectRef[] | null
 }
+type ProjectRef = { code: string; name: string; kind: string }
 
 function unwrap(rows: Raw[] | null): PoWithRefs[] {
   return (rows ?? []).map((r) => {
@@ -277,8 +285,12 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
     const ord = lx ? (Array.isArray(lx.order) ? lx.order[0] : lx.order) : null
     const asg = Array.isArray(r.assignee) ? r.assignee[0] : r.assignee
     const apv = Array.isArray(r.approver) ? r.approver[0] : r.approver
+    const pj = Array.isArray(r.project) ? r.project[0] : r.project
     return {
       ...r,
+      project_code: pj?.code ?? null,
+      project_name: pj?.name ?? null,
+      project_kind: pj?.kind ?? null,
       approver_name: apv ? (apv.name ?? apv.email) : null,
       supplier_name: sp?.name ?? '?',
       // production_order_id null (PO ngoài LSX) → join rỗng → lsx_code null.
@@ -300,7 +312,7 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
  * Embed `users` cũng phải CHỈ ĐÍCH DANH FK: bảng có 3 FK sang users
  * (created_by / approved_by / assigned_to) — để PostgREST tự đoán là mơ hồ.
  */
-const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, status, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email), approver:users!supply_purchase_orders_approved_by_fkey(name, email)`
+const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, status, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email), approver:users!supply_purchase_orders_approved_by_fkey(name, email), project:supply_projects!supply_purchase_orders_project_id_fkey(code, name, kind)`
 
 /** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
 export type PurchasedMaterial = {
@@ -369,6 +381,8 @@ export const posRepo = {
     supplier_id?: string
     production_order_id?: string
     scope?: 'lsx' | 'standalone'
+    /** Đơn của các hạng mục này (0230). */
+    project_ids?: string[]
     page: number
     page_size: number
   }): Promise<{ rows: PoWithRefs[]; total: number }> {
@@ -397,6 +411,7 @@ export const posRepo = {
     }
     if (filter.scope === 'lsx') q = q.not('production_order_id', 'is', null)
     if (filter.scope === 'standalone') q = q.is('production_order_id', null)
+    if (filter.project_ids) q = q.in('project_id', filter.project_ids.length ? filter.project_ids : ['00000000-0000-0000-0000-000000000000']) // prettier-ignore
     if (filter.q) q = q.ilike('code', `%${filter.q}%`)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -896,18 +911,6 @@ export const posRepo = {
     return out
   },
 
-  /** Mục đích đơn ngoài lệnh đã dùng (0229), mỗi đơn một lần — nguồn gợi ý (lib/po-muc-dich). */
-  async standalonePurposes(): Promise<string[]> {
-    const { data, error } = await db()
-      .from('supply_purchase_orders')
-      .select('standalone_purpose')
-      .not('standalone_purpose', 'is', null)
-      .neq('status', 'cancelled')
-      .limit(5000)
-    if (error) throw new Error(error.message)
-    return (data ?? []).map((r) => r.standalone_purpose as string)
-  },
-
   async listExtraLsx(poId: string): Promise<{ id: string; code: string }[]> {
     const { data } = await db()
       .from('supply_po_extra_lsx')
@@ -1146,6 +1149,7 @@ export const posRepo = {
       source_po_id?: string | null
       standalone_purpose?: string | null
       standalone_ref?: string | null
+      project_id?: string | null
     },
     lines: PoLineInput[],
   ): Promise<Po> {

@@ -1,5 +1,5 @@
 import { chiaLenhDong, splitProblem, type LsxSplit } from '@/lib/po-lsx-split'
-import { chuanMucDich } from '@/lib/po-muc-dich'
+import { projectsRepo } from './projects.repo'
 import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.repo'
 import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
 import { canAdjust, planAdjustment } from '@/lib/po-adjust'
@@ -56,31 +56,37 @@ import {
 const SHIPMENT_PO_STATUSES = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']
 
 /**
- * MỤC ĐÍCH ĐƠN NGOÀI LỆNH (0229) — đơn có lệnh luôn ghi null (đổi từ ngoài lệnh
- * sang theo lệnh không để sót chữ cũ), đơn ngoài lệnh ghi bản đã chuẩn hoá.
+ * HẠNG MỤC CỦA ĐƠN NGOÀI LỆNH (0230, thay ô chữ "Mục đích" của 0229). Đơn có
+ * lệnh luôn ghi null; đơn ngoài lệnh trỏ tới một hạng mục CÓ THẬT và ĐANG MỞ —
+ * trừ khi giữ nguyên hạng mục cũ của đơn (đóng hạng mục không làm hỏng nháp cũ).
  */
-function mucDichCua(
+async function hangMucCua(
   lsxId: string | null,
-  input: { standalone_purpose?: string | null; standalone_ref?: string | null },
-): { standalone_purpose: string | null; standalone_ref: string | null } {
-  if (lsxId) return { standalone_purpose: null, standalone_ref: null }
-  return {
-    standalone_purpose: chuanMucDich(input.standalone_purpose),
-    standalone_ref: input.standalone_ref?.replace(/\s+/g, ' ').trim() || null,
-  }
+  projectId: string | null | undefined,
+  hienCo?: string | null,
+): Promise<{ project_id: string | null }> {
+  if (lsxId || !projectId) return { project_id: null }
+  const pj = await projectsRepo.findById(projectId)
+  if (!pj) throw BadRequest('Hạng mục không tồn tại')
+  if (pj.status !== 'open' && projectId !== hienCo)
+    throw BadRequest(
+      `Hạng mục ${pj.code} đã đóng — mở lại ở trang Hạng mục, hoặc chọn hạng mục khác`,
+    )
+  return { project_id: projectId }
 }
 
 /**
- * Đơn ngoài lệnh lên bàn Giám đốc / đi NCC phải nói mua cho việc gì. Chặn ở cửa
- * gửi (không phải lúc lưu nháp) — cùng chỗ với luật bắt hẹn giao.
+ * Đơn ngoài lệnh lên bàn Giám đốc / đi NCC phải nói mua cho việc gì — tức thuộc
+ * một hạng mục. Chặn ở cửa gửi (không phải lúc lưu nháp) — cùng chỗ với luật
+ * bắt hẹn giao.
  */
-export function assertCoMucDich(po: {
+export function assertCoViec(po: {
   production_order_id: string | null
-  standalone_purpose?: string | null
+  project_id?: string | null
 }): void {
-  if (!po.production_order_id && !po.standalone_purpose?.trim()) {
+  if (!po.production_order_id && !po.project_id) {
     throw BadRequest(
-      'Đơn ngoài lệnh chưa ghi mục đích — bấm Sửa, điền ô "Mục đích" (vd. Khuôn mẫu, Đơn khách chưa ra lệnh) rồi mới gửi được',
+      'Đơn ngoài lệnh chưa chọn hạng mục — bấm Sửa, chọn ở ô "Cho việc" (vd. Dự trữ kho, Xây dựng văn phòng) rồi mới gửi được',
     )
   }
 }
@@ -109,8 +115,8 @@ type PoInput = {
   signer_role?: string | null
   note?: string | null
   /** Đơn ngoài lệnh (0229) — bỏ qua khi đơn có lệnh. */
-  standalone_purpose?: string | null
-  standalone_ref?: string | null
+  /** Hạng mục của đơn ngoài lệnh (0230) — bỏ qua khi đơn có lệnh. */
+  project_id?: string | null
   lines: PoLineInput[]
   /** Kế hoạch chia đợt khai ngay lúc soạn (28/08) — trỏ dòng theo line_index. */
   shipments?: {
@@ -481,7 +487,7 @@ export const posService = {
         created_by: user.id,
         assigned_to: user.id,
         source_po_id: input.source_po_id ?? null,
-        ...mucDichCua(lsxId, input),
+        ...(await hangMucCua(lsxId, input.project_id)),
       },
       withDerived(template, input.lines),
     )
@@ -517,7 +523,7 @@ export const posService = {
     }
     // NCC bị khoá SAU khi đơn đã soạn: chặn ở cửa gửi duyệt, không để lên bàn GĐ.
     await assertSupplierCanOrder(before.supplier_id)
-    assertCoMucDich(before)
+    assertCoViec(before)
     /**
      * BẮT BUỘC HẸN GIAO. Không có `expected_at` thì `assessPoLate` và
      * `assessPoFit` đều trả null: đơn không bao giờ đỏ "quá hẹn", không lên đèn
@@ -710,7 +716,11 @@ export const posService = {
       terms: input.terms ?? null,
       ...withTemplateDefaults(input, template),
       note: input.note ?? null,
-      ...mucDichCua(before.production_order_id, input),
+      ...(await hangMucCua(
+        before.production_order_id,
+        input.project_id,
+        before.project_id,
+      )),
     })
     assertSplits(input.lines, [before.production_order_id, ...extraLsxIds])
     await posRepo.replaceLines(id, withDerived(template, input.lines))

@@ -1,6 +1,7 @@
 'use client'
 
 import { type PoHeader } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
+import type { ProjectOption } from '@/modules/dept/supply/projects.service'
 import type { ThueNcc } from '@/lib/po-thue'
 import type { LsxLastChange } from './nguyen-nhan'
 import {
@@ -68,6 +69,10 @@ export type PoDoc = {
   /** Đơn ngoài lệnh (0229) — chip "Lệnh SX" bày mục đích thay chữ "ngoài lệnh". */
   standalone_purpose?: string | null
   standalone_ref?: string | null
+  /** Hạng mục ngoài sản xuất (0230) — chip "Cho việc" bấm mở hồ sơ hạng mục. */
+  project_id?: string | null
+  project_code?: string | null
+  project_name?: string | null
   currency: string
   vat_rate: number | null
   price_includes_vat: boolean
@@ -201,7 +206,7 @@ export type Props = {
     canRecordCost?: boolean
   }
   me: { id: string; name: string }
-  seed?: { supplierId?: string; lsxId?: string }
+  seed?: { supplierId?: string; lsxId?: string; projectId?: string }
   /** NHÂN BẢN: đầu đơn của đơn gốc (lines truyền qua `lines`, đã bỏ id). */
   seedHeader?: PoHeader
   /** Mở từ dòng tồn / bảng kê: mã vật tư + SL đề xuất cùng thứ tự — mồi thành dòng. */
@@ -215,8 +220,8 @@ export type Props = {
   lsxLastChange?: Record<string, LsxLastChange>
   /** Mẫu của đơn gần nhất theo NCC — đơn mới chọn NCC thì mẫu tự theo (`templateForSupplier`). */
   lastTemplates?: Record<string, PoTemplate>
-  /** Gợi ý ô Mục đích của đơn ngoài lệnh (0229) — lib/po-muc-dich `goiYMucDich`. */
-  mucDichGoiY?: string[]
+  /** Hạng mục đang mở cho ô "Cho việc" (0230) — projectsService.options. */
+  hangMuc?: ProjectOption[]
   /** Thuế theo NCC (đơn gần nhất · số đơn · số kiểu) — ô Thuế mặc định theo đây (lib/po-thue). */
   thueNcc?: Record<string, ThueNcc>
   /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */

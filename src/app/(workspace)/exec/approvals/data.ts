@@ -1,4 +1,6 @@
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { projectsService } from '@/modules/dept/supply/projects.service'
+import { soHangMuc } from '@/lib/hang-muc'
 import { pricesRepo } from '@/modules/dept/supply/prices.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
@@ -81,6 +83,14 @@ export async function loadPoApprovalDetail(
     filesRepo.listByParent('purchase_order_id', id),
   ])
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
+  // Hạng mục (0230): số của nó TRỪ chính đơn này — lib/hang-muc, cùng hàm trang Hạng mục.
+  const pj = po.project_id ? await projectsService.summary(po.project_id) : null
+  const pjTruoc = pj
+    ? soHangMuc(
+        pj,
+        pj.pos.filter((x) => x.id !== id),
+      )
+    : null
   const m = poMoneyOf(po, total)
   const submitted = events.filter((e) => e.action === 'submitted').at(-1)
   const threads = threadsOf(notes)
@@ -113,6 +123,7 @@ export async function loadPoApprovalDetail(
     lsx_code: po.lsx_code,
     standalone_purpose: po.standalone_purpose ?? null,
     standalone_ref: po.standalone_ref ?? null,
+    project: pj && pjTruoc ? { id: pj.id, code: pj.code, name: pj.name, kind: pj.kind, budget: pj.budget, currency: pj.currency, n_truoc: pjTruoc.n, ordered_truoc: pjTruoc.ordered } : null, // prettier-ignore
     order_code: po.order_code,
     expected_at: po.expected_at,
     created_at: po.created_at,

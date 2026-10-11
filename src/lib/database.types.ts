@@ -4167,6 +4167,79 @@ export type Database = {
           },
         ]
       }
+      supply_projects: {
+        Row: {
+          budget: number | null
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          kind: string
+          name: string
+          note: string | null
+          owner_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          budget?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          kind: string
+          name: string
+          note?: string | null
+          owner_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          budget?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          kind?: string
+          name?: string
+          note?: string | null
+          owner_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_projects_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_projects_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_purchase_order_lines: {
         Row: {
           area_m2: number | null
@@ -4390,6 +4463,7 @@ export type Database = {
           ordered_at: string | null
           price_includes_vat: boolean
           production_order_id: string | null
+          project_id: string | null
           signer_role: string | null
           source_po_id: string | null
           standalone_purpose: string | null
@@ -4432,6 +4506,7 @@ export type Database = {
           ordered_at?: string | null
           price_includes_vat?: boolean
           production_order_id?: string | null
+          project_id?: string | null
           signer_role?: string | null
           source_po_id?: string | null
           standalone_purpose?: string | null
@@ -4474,6 +4549,7 @@ export type Database = {
           ordered_at?: string | null
           price_includes_vat?: boolean
           production_order_id?: string | null
+          project_id?: string | null
           signer_role?: string | null
           source_po_id?: string | null
           standalone_purpose?: string | null
@@ -4496,6 +4572,13 @@ export type Database = {
           weigh_on_receipt?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_purchase_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "supply_projects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "supply_purchase_orders_approved_by_fkey"
             columns: ["approved_by"]

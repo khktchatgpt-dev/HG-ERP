@@ -19,8 +19,7 @@ import { duplicateLinePairs, duplicateLinesMessage, type DupLine } from '@/lib/p
 export type PoForHeader = {
   template: PoTemplate
   production_order_id: string | null
-  standalone_purpose?: string | null
-  standalone_ref?: string | null
+  project_id?: string | null
   supplier_id: string
   currency: string
   vat_rate: number | null
@@ -59,8 +58,7 @@ export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
     poType: po.production_order_id ? 'lsx' : 'standalone',
     lsxId: po.production_order_id ?? '',
     extraLsxIds,
-    mucDich: po.standalone_purpose ?? '',
-    mucDichRef: po.standalone_ref ?? '',
+    projectId: po.project_id ?? '',
     supplierId: po.supplier_id,
     expectedAt: po.expected_at ? po.expected_at.slice(0, 10) : '',
     contractNo: po.contract_no ?? '',
@@ -125,6 +123,8 @@ export function newHeader(opts: {
    * người soạn mở form ra thấy ô lệnh xám và không hiểu vì sao (đo 10/09/2026).
    */
   fromStock?: boolean
+  /** Hạng mục sẵn (`?hm=` từ hồ sơ hạng mục, hoặc "Dự trữ kho" khi mua bù tồn). */
+  projectId?: string
 }): PoHeader {
   // Mặc định PHỤ KIỆN (26/09/2026): 0/82 đơn thật dùng "Đơn giản", phụ kiện nhiều
   // nhất (33). "Đơn giản" kéo theo VAT 10% + "giá đã gồm VAT" — soạn đơn phụ kiện
@@ -133,12 +133,11 @@ export function newHeader(opts: {
   const d = templateDefaults(template)
   return {
     template,
-    poType: opts.fromStock && !opts.lsxId ? 'standalone' : 'lsx',
+    poType: (opts.fromStock || opts.projectId) && !opts.lsxId ? 'standalone' : 'lsx',
     lsxId: opts.lsxId ?? '',
     extraLsxIds: [],
-    // Mở từ dòng tồn kho = mua bù tồn: mục đích đã rõ, không bắt gõ lại.
-    mucDich: opts.fromStock && !opts.lsxId ? 'Dự trữ kho' : '',
-    mucDichRef: '',
+    // Mở từ dòng tồn kho = mua bù tồn: chỗ gọi truyền hạng mục "Dự trữ kho".
+    projectId: opts.projectId ?? '',
     supplierId: opts.supplierId ?? '',
     expectedAt: '',
     contractNo: '',
@@ -170,7 +169,7 @@ export function poChecks(
     status: string
     production_order_id: string | null
     expected_at: string | null
-    standalone_purpose?: string | null
+    project_id?: string | null
   },
   lines: ({ unit_price: number | null } & DupLine)[],
   today: string,
@@ -191,8 +190,8 @@ export function poChecks(
   const noPrice = lines.filter((l) => l.unit_price == null).length
   if (lines.length === 0) out.push({ level: 'stop', what: 'Đơn chưa có dòng vật tư nào', fix: 'Thêm ít nhất một dòng' }) // prettier-ignore
   if (noPrice > 0) out.push({ level: 'stop', what: `${noPrice} dòng chưa có đơn giá`, fix: 'Nhập giá hoặc ghi “chờ báo giá”' }) // prettier-ignore
-  // Ngoài lệnh là lựa chọn hợp lệ — cái phải có là MỤC ĐÍCH (0229, server chặn cùng luật).
-  if (!po.production_order_id && !po.standalone_purpose?.trim()) out.push({ level: 'stop', what: 'Đơn ngoài lệnh chưa ghi mục đích', fix: 'Bấm "Sửa", điền ô "Mục đích" — vd. Khuôn mẫu, Đơn khách chưa ra lệnh' }) // prettier-ignore
+  // Ngoài lệnh là lựa chọn hợp lệ — cái phải có là HẠNG MỤC (0230, server chặn cùng luật).
+  if (!po.production_order_id && !po.project_id) out.push({ level: 'stop', what: 'Đơn ngoài lệnh chưa chọn hạng mục', fix: 'Bấm "Sửa", chọn ở ô "Cho việc" — vd. Dự trữ kho, Xây dựng văn phòng' }) // prettier-ignore
   if (!po.expected_at) out.push(sapGui
     ? { level: 'stop', what: 'Chưa có hẹn giao', fix: 'Bấm "Sửa" khai ngày dự kiến — chưa có ngày thì gửi NCC xong không ai đo được trễ' }
     : { level: 'warn', what: 'Chưa có hẹn giao', fix: 'Điền hạn giao — tới bước gửi NCC là bắt buộc' }) // prettier-ignore

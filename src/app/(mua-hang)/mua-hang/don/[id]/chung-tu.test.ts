@@ -93,14 +93,14 @@ describe('poChecks — năm luật của màn chi tiết cũ', () => {
     const c2 = poChecks(base, [{ unit_price: null }, { unit_price: 1 }, { unit_price: null }], '2026-09-10') // prettier-ignore
     expect(c2.find((x) => /đơn giá/.test(x.what))?.what).toBe('2 dòng chưa có đơn giá')
   })
-  it('ngoài lệnh CÓ mục đích, hạn đã qua → chỉ cảnh báo hạn (0229)', () => {
-    const c = poChecks({ status: 'pending_approval', production_order_id: null, standalone_purpose: 'Khuôn mẫu', expected_at: '2026-09-01' }, [{ unit_price: 1 }], '2026-09-10') // prettier-ignore
+  it('ngoài lệnh CÓ hạng mục, hạn đã qua → chỉ cảnh báo hạn (0229)', () => {
+    const c = poChecks({ status: 'pending_approval', production_order_id: null, project_id: 'hm-1', expected_at: '2026-09-01' }, [{ unit_price: 1 }], '2026-09-10') // prettier-ignore
     expect(c.every((x) => x.level === 'warn')).toBe(true)
     expect(c.map((x) => x.what)).toEqual(['Hạn giao 01/09/2026 đã qua'])
   })
-  it('ngoài lệnh CHƯA ghi mục đích → chặn gửi (0229)', () => {
-    const c = poChecks({ status: 'draft', production_order_id: null, standalone_purpose: '  ', expected_at: '2026-09-20' }, [{ unit_price: 1 }], '2026-09-10') // prettier-ignore
-    expect(c).toEqual([expect.objectContaining({ level: 'stop', what: 'Đơn ngoài lệnh chưa ghi mục đích' })]) // prettier-ignore
+  it('ngoài lệnh CHƯA chọn hạng mục → chặn gửi (0229)', () => {
+    const c = poChecks({ status: 'draft', production_order_id: null, project_id: null, expected_at: '2026-09-20' }, [{ unit_price: 1 }], '2026-09-10') // prettier-ignore
+    expect(c).toEqual([expect.objectContaining({ level: 'stop', what: 'Đơn ngoài lệnh chưa chọn hạng mục' })]) // prettier-ignore
   })
   it('trùng dòng THẬT chỉ nhắc; cùng cây khác chiều dài thì im (PO-2026-0114)', () => {
     const l = (len: number) => ({ unit_price: 108000, material_id: 'm', spec: 'Hộp 25x50 mềm', bar_length_m: len }) // prettier-ignore
@@ -158,9 +158,10 @@ describe('newHeader — loại đơn mặc định', () => {
   })
   it('mở từ dòng tồn kho mà không kèm lệnh = mua bù tồn → ngoài lệnh', () => {
     expect(newHeader({ fromStock: true }).poType).toBe('standalone')
-    // Mua bù tồn: mục đích đã rõ, không bắt gõ (0229).
-    expect(newHeader({ fromStock: true }).mucDich).toBe('Dự trữ kho')
-    expect(newHeader({}).mucDich).toBe('')
+    // Hạng mục truyền sẵn (0230): ?hm= hoặc "Dự trữ kho" khi mua bù tồn.
+    expect(newHeader({ fromStock: true, projectId: 'hm-du-tru' }).projectId).toBe('hm-du-tru')
+    expect(newHeader({ projectId: 'hm-1' }).poType).toBe('standalone')
+    expect(newHeader({}).projectId).toBe('')
   })
   it('mở từ dòng tồn kho NHƯNG có lệnh trên URL thì vẫn theo lệnh', () => {
     expect(newHeader({ fromStock: true, lsxId: 'l1' }).poType).toBe('lsx')

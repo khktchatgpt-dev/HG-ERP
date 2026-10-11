@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { goiYMucDich } from '@/lib/po-muc-dich'
+import { projectsService } from '@/modules/dept/supply/projects.service'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posService } from '@/modules/dept/supply/pos.service'
@@ -79,7 +79,6 @@ export default async function Page({
     settingsService.getAll(),
     docTemplatesService.get('PO'),
     posRepo.lastTemplateBySupplier(),
-    posRepo.standalonePurposes(),
     posRepo.taxBySupplier(),
     // Người có thể đã trả phí tại chỗ (chi hộ) — ô "Người trả" của hộp ghi phí.
     usersRepo.list({ active_only: true }),
@@ -98,7 +97,7 @@ export default async function Page({
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
   const [
-    [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates, purposes, taxes, users], // prettier-ignore
+    [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates, taxes, users], // prettier-ignore
     [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt, lsxLastChange], // prettier-ignore
   ] = await Promise.all([
     indep,
@@ -197,7 +196,7 @@ export default async function Page({
       company={company}
       tpl={tpl}
       lastTemplates={canEdit ? lastTemplates : undefined}
-      mucDichGoiY={canEdit ? goiYMucDich(purposes) : undefined}
+      hangMuc={canEdit ? await projectsService.options(po.project_id) : undefined}
       thueNcc={canEdit ? taxes : undefined}
       suppliers={pickable.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null, vat_rate: s.vat_rate ?? null }))} // prettier-ignore
       lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore

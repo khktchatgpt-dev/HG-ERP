@@ -28,6 +28,20 @@ export type PendingPo = {
   /** Đơn ngoài lệnh (0229): mua cho việc gì + ghi rõ cho ai. */
   standalone_purpose?: string | null
   standalone_ref?: string | null
+  /**
+   * Hạng mục của đơn ngoài lệnh (0230) + số của nó TRỪ chính đơn này — người ký
+   * thấy "đã đặt trước · sau đơn này · dự toán" (lib/hang-muc `soHangMuc`).
+   */
+  project?: {
+    id: string
+    code: string
+    name: string
+    kind: string
+    budget: number | null
+    currency: string
+    n_truoc: number
+    ordered_truoc: number
+  } | null
   order_code: string | null
   expected_at: string | null
   created_at: string

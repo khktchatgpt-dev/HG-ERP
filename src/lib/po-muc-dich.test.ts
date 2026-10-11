@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { chuanMucDich, goiYMucDich, MUC_DICH_MOI, nhanNgoaiLenh, nhomTheoMucDich } from './po-muc-dich'
+import {
+  chuanMucDich,
+  goiYMucDich,
+  MUC_DICH_MOI,
+  nhanNgoaiLenh,
+  nhomTheoHangMuc,
+} from './po-muc-dich'
 
 describe('mục đích đơn ngoài lệnh', () => {
   it('chuẩn hoá: gọn khoảng trắng, hoa chữ đầu, rỗng → null', () => {
@@ -30,18 +36,21 @@ describe('mục đích đơn ngoài lệnh', () => {
   })
 })
 
-describe('nhomTheoMucDich', () => {
-  it('mỗi loại một nhóm, gộp hoa thường, nhiều trước; chưa ghi → nhóm riêng', () => {
-    const g = nhomTheoMucDich([
-      { id: 1, standalone_purpose: 'Khuôn mẫu' },
-      { id: 2, standalone_purpose: null },
-      { id: 3, standalone_purpose: 'khuôn mẫu' },
-      { id: 4, standalone_purpose: 'Dự trữ kho' },
+describe('nhomTheoHangMuc', () => {
+  it('mỗi hạng mục một nhóm, nhiều trước; chưa gắn → nhóm riêng', () => {
+    const g = nhomTheoHangMuc([
+      { id: 1, project_code: 'HM-2026-0002', project_name: 'Đơn khách PHIPPS' },
+      { id: 2 },
+      { id: 3, project_code: 'HM-2026-0002', project_name: 'Đơn khách PHIPPS' },
+      { id: 4, project_code: 'HM-2026-0003', project_name: 'Khuôn mẫu 2026' },
     ])
     expect(g.map(([n, ps]) => [n, ps.map((p) => p.id)])).toEqual([
-      ['Khuôn mẫu', [1, 3]],
-      ['chưa ghi mục đích', [2]],
-      ['Dự trữ kho', [4]],
+      ['HM-2026-0002 · Đơn khách PHIPPS', [1, 3]],
+      ['chưa chọn hạng mục', [2]],
+      ['HM-2026-0003 · Khuôn mẫu 2026', [4]],
     ])
+  })
+  it('nhãn: hạng mục thắng chữ mục đích cũ', () => {
+    expect(nhanNgoaiLenh({ project_code: 'HM-2026-0004', project_name: 'Dự trữ kho', standalone_purpose: 'X' })).toBe('HM-2026-0004 · Dự trữ kho') // prettier-ignore
   })
 })

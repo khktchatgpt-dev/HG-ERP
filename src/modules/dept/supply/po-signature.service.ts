@@ -1,6 +1,6 @@
 import { posRepo, type Po } from './pos.repo'
 import { supplyRepo } from './supply.repo'
-import { approverIds, assertCoMucDich, assertPoOwner, assertSupplierCanOrder } from './pos.service'
+import { approverIds, assertCoViec, assertPoOwner, assertSupplierCanOrder } from './pos.service'
 import {
   canSignLate,
   canUnapprove,
@@ -147,7 +147,7 @@ export const poSignatureService = {
     })
     if (!guard.ok) throw BadRequest(guard.reason)
     await assertSupplierCanOrder(before.supplier_id)
-    assertCoMucDich(before)
+    assertCoViec(before)
 
     const now = new Date().toISOString()
     const po = await posRepo.patch(id, {

@@ -151,6 +151,8 @@ export const poCreateSchema = z.object({
    */
   standalone_purpose: optText(120),
   standalone_ref: optText(200),
+  /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh bắt có ở cửa gửi duyệt. */
+  project_id: z.string().uuid().nullable().optional(),
   expected_at: z.string().date().optional().nullable(), // thời gian giao hàng
   terms: optText(1000), // bảo hành, điều kiện (cột cũ, giữ cho đơn đã tạo)
   // 5 điều khoản in thành 5 dòng riêng trên phiếu
