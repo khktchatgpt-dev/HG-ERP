@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToastProvider } from '@/components/kit'
 import { ToastProvider as UiToastProvider } from '@/components/ui/Toast'
@@ -51,6 +51,16 @@ const view = (p: Props) =>
   )
 const choViec = () =>
   screen.getAllByRole('combobox', { name: 'Cho việc' })[0] as HTMLInputElement
+/** Dòng có nghĩa đầu tiên của danh sách (sau dòng "— chọn … —"), rồi đóng lại. */
+async function dongDau(): Promise<string> {
+  await userEvent.click(document.body)
+  await userEvent.click(choViec())
+  const t =
+    within(screen.getByRole('listbox')).getAllByRole('option')[1].textContent ?? ''
+  // Đóng bằng bấm ra ngoài — Esc ở màn soạn còn là phím tắt Huỷ (mở hộp hỏi, che cả màn).
+  await userEvent.click(document.body)
+  return t
+}
 async function chon(go: string) {
   await userEvent.click(choViec())
   await userEvent.keyboard(go)
@@ -61,7 +71,18 @@ describe('ô Cho việc — lệnh SX hoặc hạng mục (dữ liệu GIẢ)', 
   it('chọn hạng mục → ô ghi mã · tên, cạnh ô bày đã đặt / dự toán; "+ gộp lệnh" biến mất', async () => {
     view(donMoi())
     expect(screen.getAllByText('+ gộp lệnh').length).toBeGreaterThan(0)
-    await chon('văn phòng')
+    // Dòng đầu danh sách theo lệnh là lối rẽ "Ngoài lệnh →" — hạng mục không lẫn trong lệnh.
+    expect(await dongDau()).toMatch(/^Ngoài lệnh →/)
+    await chon('ngoài lệnh')
+    expect(await dongDau()).toMatch(/^[+] Tạo hạng mục mới…/)
+    // Bấm thẳng dòng hạng mục (môi trường test giữ dòng sáng ở dòng trống sau khi gõ;
+    // trình duyệt thật sáng đúng dòng khớp đầu — đã soi 12/10 trên màn thật).
+    await userEvent.click(choViec())
+    await userEvent.click(
+      within(screen.getByRole('listbox')).getByText(
+        'HM-2026-0009 · Xây dựng văn phòng GIẢ',
+      ),
+    )
     expect(choViec().value).toBe('HM-2026-0009 · Xây dựng văn phòng GIẢ')
     expect(screen.getAllByText(/128,4 tr \/ 300 tr/).length).toBeGreaterThan(0)
     expect(screen.queryAllByText('+ gộp lệnh')).toHaveLength(0)
@@ -69,6 +90,7 @@ describe('ô Cho việc — lệnh SX hoặc hạng mục (dữ liệu GIẢ)', 
 
   it('"+ Tạo hạng mục mới…" mở hộp tạo — chưa có tên thì chưa lưu được', async () => {
     view(donMoi())
+    await chon('ngoài lệnh')
     await chon('tạo hạng mục')
     expect(screen.getByRole('dialog').textContent).toContain('Hạng mục mới')
     expect(screen.getByRole('dialog').textContent).toContain(

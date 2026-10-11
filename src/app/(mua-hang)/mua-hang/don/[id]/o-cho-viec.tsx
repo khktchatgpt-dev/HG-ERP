@@ -11,6 +11,8 @@ import { HangMucSheet } from '@/app/(mua-hang)/mua-hang/hang-muc/hang-muc-sheet'
 
 const HM = 'hm:'
 const MOI = '@moi'
+const NGOAI = '@ngoai'
+const LENH = '@lenh'
 
 /** "128,4 tr" — số gọn cho dòng gợi ý. */
 const gon = (n: number, cur: string) =>
@@ -29,6 +31,12 @@ function tieuHangMuc(h: ProjectOption): string {
  * Gõ để tìm, Enter để chọn; việc chưa có thì "+ Tạo hạng mục mới…" mở hộp tạo
  * ngay tại chỗ rồi chọn luôn. Chọn hạng mục thì cạnh ô bày việc đó đã tiêu bao
  * nhiêu (so dự toán nếu có) — người soạn và Giám đốc cùng thấy một con số.
+ *
+ * DÒNG ĐẦU LÀ LỐI RẼ (12/10/2026, user: "tạo đơn ngoài lsx ra sao, trên UI chưa
+ * thấy"): bản đầu bày lệnh rồi hạng mục chung một danh sách — đo trên màn thật,
+ * khung thả hiện 8 dòng mà hạng mục nằm ở dòng 15, "+ Tạo hạng mục" ở dòng 20.
+ * Nay theo lệnh thì dòng ĐẦU là "Ngoài lệnh →"; chọn xong danh sách chỉ còn hạng
+ * mục với "+ Tạo hạng mục mới…" đứng đầu, và dòng cuối "↩ Theo lệnh" để quay lại.
  *
  * Chỉ ĐƠN MỚI đổi được giữa lệnh và hạng mục: sửa nháp thì server giữ nguyên
  * lệnh chính (pos.service `update`); nháp ngoài lệnh vẫn đổi hạng mục được.
@@ -52,15 +60,17 @@ export function OChoViec({
   doiDuoc: boolean
 }) {
   const [tao, setTao] = useState(false)
-  const choLenh = doiDuoc || header.poType === 'lsx'
-  const choHm = doiDuoc || header.poType === 'standalone'
-  const options: ComboOption[] = [
-    ...(choLenh ? lsxOptions.map((o) => ({ ...o, hint: `Lệnh SX${o.hint ? ` · ${o.hint}` : ''}` })) : []), // prettier-ignore
-    ...(choHm
-      ? hangMuc.map((h) => ({ value: HM + h.id, label: `${h.code} · ${h.name}`, hint: `Hạng mục · ${h.kind} · ${tieuHangMuc(h)}${h.status !== 'open' ? ' · đã đóng' : ''}` })) // prettier-ignore
-      : []),
-    ...(choHm ? [{ value: MOI, label: '+ Tạo hạng mục mới…', hint: 'việc ngoài sản xuất chưa có trong danh sách' }] : []), // prettier-ignore
-  ]
+  const ngoai = header.poType === 'standalone'
+  const options: ComboOption[] = ngoai
+    ? [
+        { value: MOI, label: '+ Tạo hạng mục mới…', hint: 'việc ngoài sản xuất chưa có trong danh sách' /* KHÔNG ví dụ trong hint: gõ "văn phòng" từng khớp dòng này trước hạng mục có sẵn */ }, // prettier-ignore
+        ...hangMuc.map((h) => ({ value: HM + h.id, label: `${h.code} · ${h.name}`, hint: `${h.kind} · ${tieuHangMuc(h)}${h.status !== 'open' ? ' · đã đóng' : ''}` })), // prettier-ignore
+        ...(doiDuoc ? [{ value: LENH, label: '↩ Theo lệnh sản xuất', hint: 'đơn này mua cho một lệnh SX' }] : []), // prettier-ignore
+      ]
+    : [
+        ...(doiDuoc ? [{ value: NGOAI, label: 'Ngoài lệnh →', hint: 'mua cho việc ngoài sản xuất: dự trữ kho, khuôn mẫu, xây dựng… — chọn hạng mục' }] : []), // prettier-ignore
+        ...lsxOptions,
+      ]
   const value = header.poType === 'lsx' ? header.lsxId : header.projectId ? HM + header.projectId : '' // prettier-ignore
   const hm = header.poType === 'standalone' ? hangMuc.find((h) => h.id === header.projectId) : undefined // prettier-ignore
   const pct =
@@ -68,6 +78,8 @@ export function OChoViec({
 
   const chon = (v: string) => {
     if (v === MOI) return setTao(true)
+    if (v === NGOAI) return setHeader((h) => ({ ...h, poType: 'standalone', lsxId: '', extraLsxIds: [], projectId: '' })) // prettier-ignore
+    if (v === LENH) return setHeader((h) => ({ ...h, poType: 'lsx', projectId: '' }))
     if (v.startsWith(HM)) return setHeader((h) => ({ ...h, poType: 'standalone', projectId: v.slice(HM.length), lsxId: '', extraLsxIds: [] })) // prettier-ignore
     if (!v) return // dòng "bỏ chọn" — giữ việc cũ, ô này không để trống được
     setHeader((h) => ({ ...h, poType: 'lsx', lsxId: v, projectId: '' }))
@@ -76,17 +88,17 @@ export function OChoViec({
   return (
     <>
       <HeadField
-        label="Cho việc"
+        label={ngoai ? 'Hạng mục' : 'Lệnh SX'}
         need
         empty={!value}
-        width={header.poType === 'standalone' ? 170 : 130}
+        width={ngoai ? 170 : 130}
       >
         <Combobox
           label="Cho việc"
           value={value}
           onChange={chon}
-          emptyLabel="— chọn lệnh hoặc hạng mục —"
-          placeholder="Gõ số lệnh, tên khách, hạng mục…"
+          emptyLabel={ngoai ? '— chọn hạng mục —' : '— chọn lệnh —'}
+          placeholder={ngoai ? 'Gõ tên hạng mục…' : 'Gõ số lệnh, tên khách…'}
           options={options}
         />
       </HeadField>
