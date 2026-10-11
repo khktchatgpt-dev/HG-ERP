@@ -1,16 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { SuaVatTuSheet } from '@/app/(mua-hang)/mua-hang/vat-tu/sua-vat-tu'
 import { QuickAddMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/QuickAddMaterial'
 import { refreshLineFromMaterial } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
-import { moXemTruoc } from './xem-truoc'
 import { MucChiaLenh } from './muc-chia-lenh'
 import {
   Affected,
   Btn,
-  CommitBar,
-  Combobox,
   Consequence,
   CoverageBar,
   Crumb,
@@ -30,12 +26,10 @@ import {
   GridBtn,
   HeadChip,
   HeadChips,
-  HeadField,
   HolderBar,
   Menu,
   NoticeBar,
   NumInput,
-  Pick,
   PrimaryStep,
   Sheet,
   SheetActions,
@@ -47,7 +41,6 @@ import {
   TextInput,
 } from '@/components/kit'
 import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
-import { PO_CURRENCIES } from '@/lib/po-line'
 import {
   PO_NEXT_HINT,
   PO_STATUS_LABEL,
@@ -55,15 +48,13 @@ import {
   receiptTrackTone,
   type PoStatus,
 } from '@/lib/po-status'
-import { FREE_LINE_TEMPLATES, PO_TEMPLATE_META, type PoTemplate } from '@/lib/po-template'
+import { FREE_LINE_TEMPLATES } from '@/lib/po-template'
 import { GhiPhiSheet, HuyPhiSheet } from './ChiPhiPanel'
 import { CapNhatDanhMucSheet, DanExcelSheet } from './SoanDonPanels'
 import { TaiChinhPanel } from './TaiChinhPanel'
 import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
-import { templateForSupplier } from './chung-tu'
-import { hangMucSauDon, OChoViec } from './o-cho-viec'
-import { OThue } from './o-thue'
+import { ChanDonSoan, DauDonSoan } from './dau-don-soan'
 import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
 import {
@@ -103,14 +94,10 @@ export type { AdjustmentLite, PoDoc, StatusLineLite } from './don-chung-tu.share
  */
 export function DonChungTuScreen(p: Props) {
   const d = useDonChungTu(p)
-  // Hàng phụ của đầu đơn — tự mở khi đơn đã có giá trị ở đó.
-  const [headMore, setHeadMore] = useState<boolean | null>(null)
-  const [gopMo, setGopMo] = useState(false) // "+ gộp lệnh" bấm mới bày ô gộp (B1 11/10)
   const {
     router,
     muc,
     pickMuc,
-    toast,
     po,
     me,
     today,
@@ -154,10 +141,8 @@ export function DonChungTuScreen(p: Props) {
     setEnrich,
     enrichBusy,
     nhap,
-    dirty,
     askCancel,
     setAskCancel,
-    setHeadOpen,
     reason,
     setReason,
     date,
@@ -166,17 +151,13 @@ export function DonChungTuScreen(p: Props) {
     template,
     meta,
     totals,
-    problem,
     adjPlan,
     adjErrors,
     adjBlocked,
     nextSeq,
     notifyWho,
-    changeTemplate,
-    save,
     saveTerms,
     markSent,
-    askCancelEdit,
     cancelEdit,
     runAction,
     sheetInvalid,
@@ -186,18 +167,14 @@ export function DonChungTuScreen(p: Props) {
     veKho,
     supplierOpt,
     moqWarn,
-    lsxOptions,
-    supplierOptions,
     marks,
     code,
     liveShipments,
     call,
     addFromPaste,
     onCreatedMaterial,
-    toggleExtraLsx,
     confirmEnrich,
     goTo,
-    goToProblem,
     trackLines,
     moneyRows,
     headActions,
@@ -210,16 +187,7 @@ export function DonChungTuScreen(p: Props) {
     mucItems,
     hanText,
     vuong,
-    markDirty,
-    thueMd,
-    chonThue,
-    apThueNcc,
-    hangMuc,
-    themHangMuc,
   } = d
-  const moreOpen = headMore ?? (!!header.contractNo || header.currency !== 'VND')
-  const hmSau = header.poType === 'standalone' ? hangMucSauDon(hangMuc.find((x) => x.id === header.projectId), totals.grandTotal, header.currency) : null // prettier-ignore
-  const gopHien = header.poType === 'lsx' && (gopMo || header.extraLsxIds.length > 0)
   const nccBody = <NhaCungCapTomTat d={d} />
   const notesPanel = <TraoDoiKhung d={d} />
   const blkChecks = <BangKiem d={d} />
@@ -535,13 +503,15 @@ export function DonChungTuScreen(p: Props) {
 
       {!viewMode && (
         <>
-          {/* Chế độ soạn/sửa KHÔNG còn thanh nút trên đầu (29/09/2026): Huỷ · Xem trước
-              · Tạo đơn/Lưu nằm ở thanh chốt dính đáy, cạnh tổng tiền và câu chặn. */}
-          <DocHead
-            compact
-            kind="Đơn đặt vật tư"
-            code={code}
-            /*
+          {/* SOẠN: đầu đơn theo bản vẽ "Đầu đơn mua" (12/10/2026, viết tay) — dòng tên có
+              Xem trước · Tạo đơn ở góc phải + hàng ô Cho việc · NCC · Mẫu · Hạn giao · Thuế. */}
+          {drafting && <DauDonSoan d={d} />}
+          {!drafting && (
+            <DocHead
+              compact
+              kind="Đơn đặt vật tư"
+              code={code}
+              /*
           NHÃN "ĐANG SỬA" BẮT THEO VIỆC, KHÔNG BẮT THEO "ĐÃ CÓ ĐƠN LƯU".
 
           Bản cũ viết `po ? (tiêu đề thường) : (<Tag>Đang sửa</Tag>)` — tức nhãn
@@ -551,25 +521,27 @@ export function DonChungTuScreen(p: Props) {
           chỗ các ô đã thành ô nhập. Chủ dự án báo 15/09/2026 "không rõ cảnh báo
           rằng đang trong trạng thái chỉnh sửa" — đúng, và đây là dòng gây ra.
         */
-            sub={
-              editing ? (
+              sub={
+                editing ? (
+                  <>
+                    <Tag tone="warn">
+                      {p.mode === 'create'
+                        ? 'Đang tạo · chưa lưu'
+                        : 'Đang sửa · chưa lưu'}
+                    </Tag>{' '}
+                    {po?.supplier_name ?? supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
+                  </>
+                ) : (
+                  <>
+                    {po?.supplier_name} · soạn {dmyAt(po?.created_at)} bởi{' '}
+                    {po?.assignee_name ?? '—'}
+                  </>
+                )
+              }
+            >
+              {po && !editing && (
                 <>
-                  <Tag tone="warn">
-                    {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa · chưa lưu'}
-                  </Tag>{' '}
-                  {po?.supplier_name ?? supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
-                </>
-              ) : (
-                <>
-                  {po?.supplier_name} · soạn {dmyAt(po?.created_at)} bởi{' '}
-                  {po?.assignee_name ?? '—'}
-                </>
-              )
-            }
-          >
-            {po && !editing && (
-              <>
-                {/*
+                  {/*
               MỐC THẬT CHO TỪNG BƯỚC — xem `marks` ở `StatusTrack`.
 
               Ba bước có cột lưu mốc (`approved_at`, `ordered_at`,
@@ -578,28 +550,28 @@ export function DonChungTuScreen(p: Props) {
               giao" không có cột nào — truyền `undefined` để dải không kết luận
               gì về chúng, đúng hơn là bịa ra một dấu ✓ hay một dấu hỏi.
             */}
-                <StatusTrack
-                  label="Trạng thái đơn"
-                  steps={[...PO_TRACK_STEPS]}
-                  at={track.at}
-                  tone={track.tone}
-                  marks={[
-                    dmyAt(po.created_at),
-                    undefined,
-                    po.approved_at ? dmy(po.approved_at) : null,
-                    po.ordered_at ? dmy(po.ordered_at) : null,
-                    po.confirmed_at ? dmy(po.confirmed_at) : null,
-                    undefined,
-                  ]}
-                  terminal={track.terminal}
-                />
-                <StatusTrack
-                  label="Nhận hàng"
-                  steps={['Chưa', 'Một phần', 'Đủ']}
-                  at={recvIdx}
-                  tone={receiptTrackTone(recvIdx)}
-                />
-                {/* VỀ ĐƯỢC BAO NHIÊU — con số, không phải ba cái chip.
+                  <StatusTrack
+                    label="Trạng thái đơn"
+                    steps={[...PO_TRACK_STEPS]}
+                    at={track.at}
+                    tone={track.tone}
+                    marks={[
+                      dmyAt(po.created_at),
+                      undefined,
+                      po.approved_at ? dmy(po.approved_at) : null,
+                      po.ordered_at ? dmy(po.ordered_at) : null,
+                      po.confirmed_at ? dmy(po.confirmed_at) : null,
+                      undefined,
+                    ]}
+                    terminal={track.terminal}
+                  />
+                  <StatusTrack
+                    label="Nhận hàng"
+                    steps={['Chưa', 'Một phần', 'Đủ']}
+                    at={recvIdx}
+                    tone={receiptTrackTone(recvIdx)}
+                  />
+                  {/* VỀ ĐƯỢC BAO NHIÊU — con số, không phải ba cái chip.
 
                 Trục "Nhận hàng" chỉ nói Chưa / Một phần / Đủ. "Một phần" là 1
                 trong 4 dòng hay 39 trong 40 dòng thì cũng cùng một chữ, mà hai
@@ -610,18 +582,19 @@ export function DonChungTuScreen(p: Props) {
                 Đếm theo DÒNG chứ không theo số lượng cộng dồn: cộng 1.950 cái
                 nút với 8.504 con sò ra một con số vô nghĩa. Dòng đã chốt thiếu
                 tính là xong, cùng luật với `qty_open` mà sổ kho dùng. */}
-                {veKho && (
-                  <div>
-                    <div className="k-track-lab">Về kho</div>
-                    <CoverageBar
-                      ratio={veKho.ratio}
-                      label={`${veKho.du}/${veKho.tong} dòng`}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </DocHead>
+                  {veKho && (
+                    <div>
+                      <div className="k-track-lab">Về kho</div>
+                      <CoverageBar
+                        ratio={veKho.ratio}
+                        label={`${veKho.du}/${veKho.tong} dòng`}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </DocHead>
+          )}
 
           {/* Nút thông minh — chép Odoo. Số đếm là lời hứa: bấm ra đúng chừng ấy. */}
           {po && !editing && (
@@ -689,177 +662,6 @@ export function DonChungTuScreen(p: Props) {
             )
           }
         >
-          {/* ══ 0. ĐẦU ĐƠN — HÀNG CHIP (29/09/2026, artboard 19 · khuôn F) ══
-            Ô nào ở đây cũng là ĐIỀU KIỆN của lưới (mẫu → cột, lệnh → nhu cầu,
-            NCC → tiền tệ + giá gợi ý, thuế → chân lưới) nên vẫn đứng TRÊN lưới.
-            Nhưng lưới 3 cột 13 ô cũ cao ~200px, 3 ô chỉ đọc, đẩy dòng hàng đầu
-            xuống y≈435 — nay co thành một hàng `HeadField` (ô gõ thật trong chip,
-            KHÔNG để ô nhập trong `HeadChip` vì đó là nút). Ô Thuế lên hàng chính
-            (B1 11/10/2026: một lựa chọn thay "VAT %" + "giá gồm VAT", theo NCC); ô ít
-            đổi (tiền tệ, số HĐ, chiết khấu) vào hàng phụ, tự mở khi đơn có giá trị ở đó. */}
-          {drafting && (
-            <div className="flex flex-col gap-1 border-b border-[var(--line)] bg-[var(--surface-card)]">
-              <HeadChips>
-                <OChoViec
-                  header={header}
-                  setHeader={setHeader}
-                  lsxOptions={lsxOptions}
-                  hangMuc={hangMuc}
-                  onHangMucMoi={themHangMuc}
-                  doiDuoc={!p.po}
-                  toi={p.me.name}
-                />
-                {gopHien ? (
-                  <HeadField label="Gộp lệnh">
-                    <span className="flex flex-wrap items-center gap-1">
-                      {header.extraLsxIds.map((id) => (
-                        <GridBtn
-                          key={id}
-                          title="Bỏ lệnh này khỏi đơn"
-                          onClick={() => toggleExtraLsx(id, false)}
-                        >
-                          {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
-                        </GridBtn>
-                      ))}
-                      <Combobox
-                        label="Gộp thêm lệnh"
-                        value=""
-                        onChange={(v) => v && toggleExtraLsx(v, true)}
-                        emptyLabel={header.extraLsxIds.length ? '+ thêm lệnh nữa' : '— một đơn, nhiều lệnh —'} // prettier-ignore
-                        placeholder="Gõ số lệnh…"
-                        options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
-                      />
-                    </span>
-                  </HeadField>
-                ) : (
-                  header.poType === 'lsx' && (
-                    <GridBtn
-                      onClick={() => setGopMo(true)}
-                      title="Một đơn mua cho nhiều lệnh"
-                    >
-                      + gộp lệnh
-                    </GridBtn>
-                  )
-                )}
-                <HeadField label="NCC" need empty={!header.supplierId} width={180}>
-                  <Combobox
-                    label="Nhà cung cấp"
-                    value={header.supplierId}
-                    onChange={(v) => {
-                      const s = p.suppliers.find((x) => x.id === v)
-                      setHeader((h) => ({
-                        ...h,
-                        supplierId: v,
-                        // Tiền tệ theo NCC (gỗ báo USD) — trừ khi đã tự chọn.
-                        currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
-                      }))
-                      // Mẫu theo đơn gần nhất của NCC (kéo theo VAT / "giá gồm VAT"
-                      // của mẫu đó) — chỉ khi đơn mới và người soạn chưa tự chọn mẫu.
-                      const t = templateForSupplier({ supplierId: v, current: template, touched: dirty.current.template, isNew: !po, last: p.lastTemplates ?? {} }) // prettier-ignore
-                      if (t) {
-                        changeTemplate(t)
-                        toast.info(`Mẫu đơn: ${PO_TEMPLATE_META[t].label}`, 'Theo đơn gần nhất của NCC này — đổi được ở ô "Mẫu đơn".') // prettier-ignore
-                      }
-                      apThueNcc(v)
-                    }}
-                    emptyLabel="— chọn NCC —"
-                    placeholder="Gõ tên nhà cung cấp…"
-                    options={supplierOptions}
-                  />
-                </HeadField>
-                <HeadField label="Mẫu" width={130}>
-                  <Pick
-                    label="Mẫu đơn"
-                    width={130}
-                    value={template}
-                    onChange={(t) => {
-                      markDirty('template')
-                      changeTemplate(t as PoTemplate)
-                    }}
-                    options={Object.values(PO_TEMPLATE_META).map((m) => ({ value: m.key, label: m.label }))} // prettier-ignore
-                  />
-                </HeadField>
-                <HeadField label="Hạn giao" width={116}>
-                  <DateInput
-                    label="Hạn giao"
-                    value={header.expectedAt}
-                    onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
-                  />
-                </HeadField>
-                <HeadField label="Thuế">
-                  <OThue
-                    vat={header.vat}
-                    inclVat={header.inclVat}
-                    onChon={chonThue}
-                    macDinh={thueMd}
-                    dem={p.thueDem}
-                  />
-                </HeadField>
-                <GridBtn
-                  onClick={() => setHeadMore(!moreOpen)}
-                  title={`Tiền tệ (${header.currency}) · Số hợp đồng · Chiết khấu`}
-                >
-                  {moreOpen
-                    ? 'Ẩn bớt'
-                    : header.currency === 'VND'
-                      ? '⋯'
-                      : `⋯ ${header.currency}`}
-                </GridBtn>
-              </HeadChips>
-              {supplierOpt?.can_order === false && (
-                <span
-                  className="k-t-stop text-k-label px-[var(--gutter)]"
-                  title={supplierOpt.lock_reason ?? undefined}
-                >
-                  NCC này đang khoá đặt hàng
-                  {supplierOpt.lock_reason ? ` — ${supplierOpt.lock_reason}` : ''}
-                </span>
-              )}
-              {moreOpen && (
-                <HeadChips>
-                  <HeadField label="Tiền" width={70}>
-                    <Pick
-                      label="Tiền tệ"
-                      value={header.currency}
-                      onChange={(v) => {
-                        markDirty('currency')
-                        setHeader((h) => ({ ...h, currency: v }))
-                      }}
-                      options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
-                    />
-                  </HeadField>
-                  <HeadField label="Số HĐ" width={120}>
-                    <TextInput
-                      label="Số hợp đồng"
-                      value={header.contractNo}
-                      onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
-                      mono
-                    />
-                  </HeadField>
-                  {meta.hasDiscount && (
-                    <HeadField label="Chiết khấu" width={100}>
-                      <NumInput
-                        aria-label="Chiết khấu"
-                        value={numStr(header.discount)}
-                        onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
-                      />
-                    </HeadField>
-                  )}
-                  {supplierOpt &&
-                    (supplierOpt.lead_time_days != null || supplierOpt.payment_terms) && (
-                      <span className="text-k-label text-[var(--ink-3)]">
-                        NCC giao{' '}
-                        {supplierOpt.lead_time_days != null
-                          ? `${supplierOpt.lead_time_days} ngày`
-                          : '—'}{' '}
-                        · thanh toán {supplierOpt.payment_terms ?? '—'}
-                      </span>
-                    )}
-                </HeadChips>
-              )}
-            </div>
-          )}
-
           {/* Lúc SOẠN chỉ còn việc soạn (duyệt 30/09/2026): dòng hàng → nhu cầu lệnh (khi còn
               thiếu) → chia đợt (khi bấm) → điều khoản & ghi chú. Khối chỉ để XEM thì ẩn. */}
           {blkLines}
@@ -870,61 +672,7 @@ export function DonChungTuScreen(p: Props) {
         </DocBody>
       )}
 
-      {drafting && (
-        <CommitBar
-          totals={[
-            // Giá ĐÃ gồm VAT: VAT TÁCH RA từ tiền hàng — nói trên nhãn như phiếu in (05/10/2026).
-            { label: header.inclVat ? 'Tiền hàng (đã gồm VAT)' : 'Tiền hàng (chưa VAT)', value: money(totals.subtotal, header.currency) }, // prettier-ignore
-            { label: `VAT ${header.vat === '' ? 0 : header.vat}%${header.inclVat ? ' (đã gồm)' : ''}`, value: money(totals.vatAmount, header.currency) }, // prettier-ignore
-            ...(hmSau ? [{ label: 'Hạng mục sau đơn này', value: hmSau }] : []), // bản vẽ: "sau đơn này hạng mục lên …"
-          ]}
-          grand={{
-            label: 'Tổng thanh toán',
-            value: money(totals.grandTotal, header.currency),
-          }}
-          blocked={problem ?? undefined}
-          onGoBlocked={problem ? () => goToProblem(problem) : undefined}
-          actions={
-            <span className="flex shrink-0 items-center gap-2">
-              <Btn icon="huy" disabled={busy} onClick={askCancelEdit}>
-                Huỷ
-              </Btn>
-              <Btn
-                icon="in"
-                onClick={() =>
-                  moXemTruoc({
-                    poId: po?.id ?? null,
-                    header,
-                    template,
-                    lines,
-                    shipCols: d.shipCols,
-                    supplierName: supplierOpt?.name ?? '—',
-                  })
-                }
-              >
-                Xem trước
-              </Btn>
-              <Btn
-                onClick={() => {
-                  setHeadOpen(true)
-                  goTo('dau-don')
-                }}
-              >
-                Điều khoản
-              </Btn>
-              <Btn
-                primary
-                icon="luuNhap"
-                busy={busy}
-                disabled={!!problem}
-                onClick={() => void save()}
-              >
-                {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
-              </Btn>
-            </span>
-          }
-        />
-      )}
+      {drafting && <ChanDonSoan d={d} />}
 
       {viewMode && (
         <StatusBar
