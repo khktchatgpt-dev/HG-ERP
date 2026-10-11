@@ -41,6 +41,7 @@ describe('soHangMuc — một nghĩa cho "đã tiêu bao nhiêu"', () => {
       overdue: 1,
       khac_tien_te: 1,
       pct: 30,
+      co_hoa_don: 2,
     })
   })
 

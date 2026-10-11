@@ -224,6 +224,8 @@ export type Props = {
   hangMuc?: ProjectOption[]
   /** Thuế theo NCC (đơn gần nhất · số đơn · số kiểu) — ô Thuế mặc định theo đây (lib/po-thue). */
   thueNcc?: Record<string, ThueNcc>
+  /** Số đơn theo từng kiểu thuế cả công ty (khoá `khoaThue`) — "18 đơn" cạnh mỗi kiểu. */
+  thueDem?: Record<string, number>
   /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */
   groupTemplates?: Record<string, PoTemplate>
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */

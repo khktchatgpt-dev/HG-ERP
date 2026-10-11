@@ -124,7 +124,7 @@ export async function loadPoApprovalDetail(
     lsx_code: po.lsx_code,
     standalone_purpose: po.standalone_purpose ?? null,
     standalone_ref: po.standalone_ref ?? null,
-    project: pj && pjTruoc ? { id: pj.id, code: pj.code, name: pj.name, kind: pj.kind, budget: pj.budget, currency: pj.currency, n_truoc: pjTruoc.n, ordered_truoc: pjTruoc.ordered } : null, // prettier-ignore
+    project: pj && pjTruoc ? { id: pj.id, code: pj.code, name: pj.name, kind: pj.kind, budget: pj.budget, currency: pj.currency, owner_name: pj.owner_name, n_truoc: pjTruoc.n, ordered_truoc: pjTruoc.ordered } : null, // prettier-ignore
     order_code: po.order_code,
     expected_at: po.expected_at,
     created_at: po.created_at,

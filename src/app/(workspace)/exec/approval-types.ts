@@ -40,6 +40,7 @@ export type PendingPo = {
     budget: number | null
     currency: string
     n_truoc: number
+    owner_name: string | null
     ordered_truoc: number
   } | null
   order_code: string | null

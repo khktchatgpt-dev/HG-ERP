@@ -1,128 +1,37 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Btn,
-  Code,
-  Empty,
-  Metric,
-  MetricStrip,
-  ScreenFrame,
-  ScreenHeader,
-  StatusBar,
-  Table,
-  Tag,
-  useKitTable,
-  useToast,
-  type KitCol,
-} from '@/components/kit'
+import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
+import { downloadCsv } from '@/lib/csv'
 import { isoToVn, todayVn } from '@/lib/date-vn'
-
-/** Ngày theo giờ Việt Nam của một mốc timestamptz (cắt chuỗi UTC là lệch ngày sau 17h). */
-const ngay = (ts: string) => isoToVn(todayVn(new Date(ts)))
 import { NGUONG_DU_TOAN } from '@/lib/hang-muc'
 import { poStatusLabel, poStatusTone } from '@/lib/po-status'
 import { goiYMucDich } from '@/lib/po-muc-dich'
 import type { ProjectPo, ProjectRow } from '@/modules/dept/supply/projects.service'
+import { DaiSo, DauTrang, HangLoc, MenuBa, Nhan, NUM, Nut, OSo, TD, TF, TH, ThanhDuoi, Trang, type Tone } from '../../_erp/ui' // prettier-ignore
 import { HangMucSheet } from '../hang-muc-sheet'
 import { tien } from '../hang-muc.shared'
 
-const TONE = {
+/** Ngày theo giờ Việt Nam của một mốc timestamptz (cắt chuỗi UTC là lệch ngày sau 17h). */
+const ngay = (ts: string) => isoToVn(todayVn(new Date(ts)))
+const TONE: Record<string, Tone> = {
   gray: 'neutral',
   amber: 'warn',
   blue: 'run',
   green: 'done',
   red: 'stop',
-} as const
-
-function cot(cur: string): KitCol<ProjectPo>[] {
-  const t = (n: number | null) => (n ? tien(n, cur) : '')
-  return [
-    {
-      id: 'don',
-      header: 'Đơn',
-      pin: true,
-      sort: (r) => r.code,
-      cell: (r) => (
-        <Code as="a" href={`/mua-hang/don/${r.id}`}>
-          {r.code}
-        </Code>
-      ),
-    },
-    {
-      id: 'ncc',
-      header: 'Nhà cung cấp',
-      sort: (r) => r.supplier_name,
-      cell: (r) => r.supplier_name,
-    },
-    {
-      id: 'vt',
-      header: 'Vật tư',
-      grow: true,
-      muted: true,
-      title: (r) => r.materials.join(', '),
-      cell: (r) => r.materials.slice(0, 2).join(', ') + (r.materials.length > 2 ? ` +${r.materials.length - 2} mã` : ''), // prettier-ignore
-    },
-    {
-      id: 'tt',
-      header: 'Trạng thái',
-      sort: (r) => r.status,
-      cell: (r) => (
-        <span className="flex items-center gap-1.5">
-          <Tag tone={TONE[poStatusTone(r.status) as keyof typeof TONE] ?? 'neutral'}>
-            {poStatusLabel(r.status)}
-          </Tag>
-          {r.overdue && <Tag tone="stop">Quá hẹn</Tag>}
-        </span>
-      ),
-    },
-    { id: 'hen', header: 'Hẹn giao', sort: (r) => r.expected_at, cell: (r) => (r.expected_at ? <span className="num">{isoToVn(r.expected_at)}</span> : '') }, // prettier-ignore
-    {
-      id: 'gt',
-      header: 'Giá trị (gồm VAT)',
-      num: true,
-      sort: (r) => r.gross,
-      tone: (r) =>
-        r.status === 'draft' || r.status === 'cancelled' ? undefined : undefined,
-      cell: (r) => (
-        <span
-          className={
-            r.status === 'draft' || r.status === 'cancelled'
-              ? 'text-[var(--ink-3)]'
-              : undefined
-          }
-        >
-          {r.currency === cur ? t(r.gross) : tien(r.gross, r.currency)}
-        </span>
-      ),
-    },
-    {
-      id: 've',
-      header: 'Đã về',
-      num: true,
-      sort: (r) => r.received_net,
-      title: (r) => (r.missing_price_lines ? `${r.missing_price_lines} dòng đã về nhưng phiếu nhập không có giá — tính 0` : 'Theo phiếu kho, chưa VAT'), // prettier-ignore
-      cell: (r) => (
-        <span className="inline-flex items-center gap-1.5">
-          {t(r.received_net)}
-          {r.missing_price_lines > 0 && <Tag tone="warn">thiếu giá</Tag>}
-          {r.finance_error && <Tag tone="stop">chưa đọc được</Tag>}
-        </span>
-      ),
-    },
-    {
-      id: 'tra',
-      header: 'Đã trả',
-      num: true,
-      sort: (r) => r.paid,
-      cell: (r) => t(r.paid),
-    },
-  ]
 }
+const pctOf = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null)
 
-/** Hồ sơ một hạng mục — xem `page.tsx`. */
+/**
+ * HỒ SƠ HẠNG MỤC — chép khối "Hồ sơ hạng mục" của bản vẽ Đầu đơn mua, viết tay
+ * không qua kit. "Việc này đã tiêu bao nhiêu, qua những đơn nào?" Hạng mục không
+ * có vòng duyệt (chỉ mở / đóng) nên chỗ của trạng thái là dải 5 ô số, mỗi ô kèm
+ * mẫu số; số đi qua lib/hang-muc như danh sách.
+ */
 export function HoSoHangMucScreen({
   project: h,
   pos,
@@ -137,153 +46,273 @@ export function HoSoHangMucScreen({
   const router = useRouter()
   const toast = useToast()
   const [sua, setSua] = useState(false)
-  const [busy, setBusy] = useState(false)
   const so = h.so
   const mo = h.status === 'open'
-  const columns = useMemo(() => cot(h.currency), [h.currency])
-  const engine = useKitTable({
-    rows: pos,
-    columns,
-    rowKey: (r) => r.id,
-    prefsKey: 'mua-hang-hang-muc-don',
-    foot: {
-      label: `Cộng ${so.n} đơn đã đặt`,
-      note: `Đã đặt ${tien(so.ordered, h.currency)} · đã về ${tien(so.received_net, h.currency)} · đã trả ${tien(so.paid, h.currency)} — KHÔNG gồm ${so.nhap ? `${so.nhap} đơn nháp (${tien(so.nhap_gross, h.currency)}), ` : ''}đơn huỷ, phí vận chuyển${so.khac_tien_te ? `, ${so.khac_tien_te} đơn khác tiền tệ` : ''}.`, // prettier-ignore
-    },
-  })
+  const cur = h.currency
+  const vuot = h.budget != null ? so.ordered - h.budget : 0
+  const khoa = !canManage ? 'Chỉ phòng Cung ứng' : undefined
 
   async function doiTrangThai() {
-    setBusy(true)
     try {
       await api(`/api/dept/supply/projects/${h.id}`, { method: 'PATCH', body: { status: mo ? 'closed' : 'open' } }) // prettier-ignore
       toast.success(mo ? `Đã đóng ${h.code}` : `Đã mở lại ${h.code}`, mo ? 'Không chọn được cho đơn mới; đơn cũ giữ nguyên.' : undefined) // prettier-ignore
       router.refresh()
     } catch (e) {
       toast.error('Không đổi được', apiErrorText(e))
-    } finally {
-      setBusy(false)
     }
   }
+  const xuat = () =>
+    downloadCsv(`${h.code}.csv`, pos, [
+      { key: 'code', header: 'Đơn' },
+      { key: 'supplier_name', header: 'Nhà cung cấp' },
+      { key: 'materials', header: 'Vật tư', get: (r) => r.materials.join(', ') },
+      { key: 'status', header: 'Trạng thái', get: (r) => poStatusLabel(r.status) },
+      { key: 'expected_at', header: 'Hẹn giao', get: (r) => isoToVn(r.expected_at) },
+      { key: 'gross', header: 'Giá trị (gồm VAT)' },
+      { key: 'received_net', header: 'Đã về (chưa VAT)' },
+      { key: 'currency', header: 'Tiền tệ' },
+    ])
 
-  const vuot = h.budget != null ? so.ordered - h.budget : 0
   return (
-    <ScreenFrame>
-      <ScreenHeader
-        compact
-        eyebrow={`Hạng mục ngoài sản xuất · ${h.code}`}
-        title={h.name}
+    <Trang>
+      <DauTrang
+        eyebrow="Hạng mục ngoài sản xuất"
+        title={
+          <span className="flex items-center gap-2.5">
+            <span className="font-mono">{h.code}</span>
+            <span>{h.name}</span>
+          </span>
+        }
         status={
           mo ? (
-            <Tag tone="run">Đang mở</Tag>
+            <Nhan tone="run">Đang mở</Nhan>
           ) : (
-            <Tag>Đã đóng {h.closed_at ? ngay(h.closed_at) : ''}</Tag>
+            <Nhan>Đã đóng {h.closed_at ? ngay(h.closed_at) : ''}</Nhan>
           )
         }
-        facts={[
-          { label: 'Loại', value: h.kind },
-          { label: 'Phụ trách', value: h.owner_name ?? '—' },
-          { label: 'Mở từ', value: <span className="num">{ngay(h.created_at)}</span> },
-          ...(h.note ? [{ label: 'Ghi chú', value: h.note }] : []),
-          ...(h.chu_y.length ? [{ label: 'Cần chú ý', value: h.chu_y.join(' · '), tone: 'warn' as const }] : []), // prettier-ignore
-        ]}
         actions={
           <>
-            <Btn
-              icon="them"
-              primary
-              blockedBy={!canManage ? 'phòng Cung ứng' : !mo ? 'hạng mục đã đóng — mở lại trước' : undefined} // prettier-ignore
-              onClick={() => router.push(`/mua-hang/don/moi?hm=${h.id}`)}
+            <Nut
+              chinh
+              khoa={
+                khoa ??
+                (!mo ? 'Hạng mục đã đóng — mở lại (⋯) trước khi đặt thêm' : undefined)
+              }
+              href={`/mua-hang/don/moi?hm=${h.id}`}
             >
-              Đơn mua cho hạng mục
-            </Btn>
-            <Btn
-              icon="sua"
-              blockedBy={canManage ? undefined : 'phòng Cung ứng'}
-              onClick={() => setSua(true)}
-            >
+              + Đơn mua cho hạng mục
+            </Nut>
+            <Nut khoa={khoa} onClick={() => setSua(true)}>
               Sửa
-            </Btn>
-            <Btn
-              busy={busy}
-              blockedBy={canManage ? undefined : 'phòng Cung ứng'}
-              onClick={() => void doiTrangThai()}
-            >
-              {mo ? 'Đóng hạng mục' : 'Mở lại'}
-            </Btn>
+            </Nut>
+            <MenuBa
+              items={[
+                {
+                  label: mo ? 'Đóng hạng mục' : 'Mở lại hạng mục',
+                  khoa,
+                  onClick: () => void doiTrangThai(),
+                },
+                { label: 'Xuất Excel đơn của hạng mục', onClick: xuat },
+              ]}
+            />
           </>
         }
+        facts={[
+          { k: 'Loại', v: h.kind },
+          { k: 'Phụ trách', v: h.owner_name ?? '—' },
+          { k: 'Mở từ', v: <span className="font-mono">{ngay(h.created_at)}</span> },
+          ...(h.note ? [{ k: 'Ghi chú', v: h.note }] : []),
+          ...(h.chu_y.length
+            ? [{ k: 'Cần chú ý', v: h.chu_y.join(' · '), tone: 'warn' as const }]
+            : []),
+        ]}
       />
-      <MetricStrip>
-        <Metric
-          label="Dự toán"
-          value={h.budget != null ? tien(h.budget, h.currency) : '—'}
-          basis={
+      <DaiSo>
+        <OSo
+          k="Dự toán"
+          v={h.budget != null ? tien(h.budget, cur) : '—'}
+          sub={
             h.budget != null
               ? 'chỉ để theo dõi — không chặn đơn'
               : 'chưa đặt — bấm Sửa để thêm'
           }
         />
-        <Metric
-          label="Đã đặt"
-          value={tien(so.ordered, h.currency)}
-          basis={`${so.n} đơn, gồm VAT${so.pct != null ? ` · ${so.pct}% dự toán` : ''}${vuot > 0.005 ? ` · vượt ${tien(vuot, h.currency)}` : ''}`} // prettier-ignore
+        <OSo
+          k="Đã đặt"
+          v={tien(so.ordered, cur)}
+          sub={`${so.pct != null ? `${so.pct}% dự toán · ` : ''}${so.n} đơn, trừ nháp + huỷ${vuot > 0.005 ? ` · vượt ${tien(vuot, cur)}` : ''}`}
           tone={so.pct != null && so.pct >= NGUONG_DU_TOAN ? 'warn' : undefined}
+          thanh={so.pct ?? undefined}
         />
-        <Metric
-          label="Đã về"
-          value={so.n ? tien(so.received_net, h.currency) : null}
-          basis={so.thieu_gia ? `${so.thieu_gia} đơn phiếu nhập thiếu giá — số này đang THIẾU` : so.loi_tai_chinh ? `${so.loi_tai_chinh} đơn chưa đọc được — số này đang THIẾU` : 'theo phiếu kho, chưa VAT'} // prettier-ignore
+        <OSo
+          k="Đã về"
+          v={so.n ? tien(so.received_net, cur) : '—'}
+          sub={
+            so.thieu_gia
+              ? `${so.thieu_gia} đơn phiếu nhập thiếu giá — số này đang THIẾU`
+              : so.loi_tai_chinh
+                ? `${so.loi_tai_chinh} đơn chưa đọc được — số này đang THIẾU`
+                : `${pctOf(so.received_net, so.ordered) ?? 0}% đã đặt · theo phiếu kho, chưa VAT`
+          }
           tone={so.thieu_gia || so.loi_tai_chinh ? 'warn' : undefined}
         />
-        <Metric
-          label="Đã có hoá đơn"
-          value={so.n ? tien(so.invoiced_gross, h.currency) : null}
-          basis="gồm VAT, hoá đơn đã ghi sổ"
-        />
-        <Metric
-          label="Đã trả"
-          value={so.n ? tien(so.paid, h.currency) : null}
-          basis={
+        <OSo
+          k="Đã có hoá đơn"
+          v={so.n ? tien(so.invoiced_gross, cur) : '—'}
+          sub={`${so.co_hoa_don} / ${so.n} đơn · gồm VAT`}
+        />{' '}
+        <OSo
+          k="Đã trả"
+          v={so.n ? tien(so.paid, cur) : '—'}
+          sub={
             so.owed > 0.005
-              ? `còn nợ NCC ${tien(so.owed, h.currency)}`
+              ? `còn nợ NCC ${tien(so.owed, cur)}`
               : 'không còn nợ trên hoá đơn'
           }
           tone={so.owed > 0.005 ? 'warn' : undefined}
         />
-      </MetricStrip>
-      {pos.length === 0 ? (
-        <Empty
-          headline="Hạng mục chưa có đơn mua nào"
-          reason="Đơn ngoài lệnh chọn hạng mục ở ô “Cho việc” của màn soạn đơn."
-          next={
-            mo && canManage ? (
-              <Btn
-                icon="them"
-                primary
-                onClick={() => router.push(`/mua-hang/don/moi?hm=${h.id}`)}
-              >
-                Soạn đơn đầu tiên cho hạng mục
-              </Btn>
-            ) : (
-              'Mở lại hạng mục rồi soạn đơn.'
-            )
-          }
-        />
-      ) : (
-        <Table engine={engine} />
-      )}
-      <StatusBar
-        left={['Bấm mã đơn để mở đơn mua']}
+      </DaiSo>
+      <HangLoc>
+        <span>
+          <b className="text-[var(--ink)]">{pos.length} đơn</b> · {so.nhap} nháp
+        </span>
+        <span className="ml-auto">
+          <Nut onClick={xuat}>Excel</Nut>
+        </span>
+      </HangLoc>
+      <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
+        <table
+          className="w-full border-separate border-spacing-0"
+          aria-label={`Đơn mua của ${h.code}`}
+        >
+          <thead>
+            <tr>
+              <th className={TH}>Đơn</th>
+              <th className={TH}>Nhà cung cấp</th>
+              <th className={TH}>Vật tư</th>
+              <th className={TH}>Trạng thái</th>
+              <th className={TH}>Hẹn giao</th>
+              <th className={`${TH} text-right`}>Giá trị (gồm VAT)</th>
+              <th className={`${TH} text-right`} title="Theo phiếu kho, chưa VAT">
+                Đã về
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {pos.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-[var(--ink-2)]">
+                  <b className="text-[var(--ink)]">Hạng mục chưa có đơn mua nào</b>
+                  <div className="mt-1 text-[12px]">
+                    {mo && canManage ? (
+                      <Link
+                        href={`/mua-hang/don/moi?hm=${h.id}`}
+                        className="font-semibold text-[var(--act)] hover:underline"
+                      >
+                        Soạn đơn đầu tiên cho hạng mục →
+                      </Link>
+                    ) : (
+                      'Mở lại hạng mục rồi soạn đơn.'
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )}
+            {pos.map((r) => (
+              <DongDon key={r.id} r={r} cur={cur} />
+            ))}
+          </tbody>
+          {so.n > 0 && (
+            <tfoot>
+              <tr>
+                <td colSpan={5} className={TF}>
+                  Cộng {so.n} đơn đã đặt
+                  <span className="ml-1.5 font-normal text-[var(--ink-3)]">
+                    — KHÔNG gồm
+                    {so.nhap ? ` ${so.nhap} nháp (${tien(so.nhap_gross, cur)}),` : ''} đơn
+                    huỷ, phí vận chuyển
+                    {so.khac_tien_te ? `, ${so.khac_tien_te} đơn khác tiền tệ` : ''}
+                  </span>
+                </td>
+                <td className={`${TF} ${NUM}`}>{tien(so.ordered, cur)}</td>
+                <td className={`${TF} ${NUM}`}>{tien(so.received_net, cur)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      <ThanhDuoi
+        left={<span>Bấm mã đơn để mở đơn mua</span>}
         right={`${pos.length} đơn · ${so.nhap} nháp`}
       />
       {sua && (
         <HangMucSheet
-          ban={{ id: h.id, name: h.name, kind: h.kind, budget: h.budget, note: h.note, currency: h.currency }} // prettier-ignore
+          ban={{ id: h.id, code: h.code, name: h.name, kind: h.kind, budget: h.budget, note: h.note, currency: cur, owner_name: h.owner_name }} // prettier-ignore
           goiYLoai={goiYMucDich(kinds)}
           onClose={() => setSua(false)}
           onSaved={() => router.refresh()}
         />
       )}
-    </ScreenFrame>
+    </Trang>
+  )
+}
+
+/** Một đơn của hạng mục — nháp / huỷ chữ nhạt (không cộng vào tổng). */
+function DongDon({ r, cur }: { r: ProjectPo; cur: string }) {
+  const nhat = r.status === 'draft' || r.status === 'cancelled'
+  const m = (n: number | null) =>
+    n ? (r.currency === cur ? tien(n, cur) : `${tien(n, r.currency)} ${r.currency}`) : ''
+  return (
+    <tr className="hover:bg-[var(--surface-hover)]">
+      <td className={TD}>
+        <Link
+          href={`/mua-hang/don/${r.id}`}
+          className="font-mono font-semibold text-[var(--act)] hover:underline"
+        >
+          {r.code}
+        </Link>
+      </td>
+      <td className={TD}>{r.supplier_name}</td>
+      <td
+        className={`${TD} max-w-[360px] truncate text-[var(--ink-3)]`}
+        title={r.materials.join(', ')}
+      >
+        {r.materials.slice(0, 2).join(', ')}
+        {r.materials.length > 2 ? ` +${r.materials.length - 2} mã` : ''}
+      </td>
+      <td className={TD}>
+        <span className="inline-flex items-center gap-1.5">
+          <Nhan tone={TONE[poStatusTone(r.status)] ?? 'neutral'}>
+            {poStatusLabel(r.status)}
+          </Nhan>
+          {r.overdue && <Nhan tone="stop">Quá hẹn</Nhan>}
+        </span>
+      </td>
+      <td className={`${TD} font-mono`}>{isoToVn(r.expected_at)}</td>
+      <td className={`${TD} ${NUM} ${nhat ? 'text-[var(--ink-3)]' : ''}`}>
+        {m(r.gross)}
+      </td>
+      <td
+        className={`${TD} ${NUM}`}
+        title={
+          r.missing_price_lines
+            ? `${r.missing_price_lines} dòng đã về nhưng phiếu nhập không có giá — tính 0`
+            : undefined
+        }
+      >
+        {' '}
+        {m(r.received_net)}
+        {r.missing_price_lines > 0 && (
+          <span className="ml-1.5">
+            <Nhan tone="warn">thiếu giá</Nhan>
+          </span>
+        )}
+        {r.finance_error && (
+          <span className="ml-1.5">
+            <Nhan tone="stop">chưa đọc được</Nhan>
+          </span>
+        )}
+      </td>
+    </tr>
   )
 }

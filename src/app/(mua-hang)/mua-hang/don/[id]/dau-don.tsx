@@ -326,6 +326,7 @@ export function DauDon({ d }: { d: DonCtx }) {
                       inclVat={header.inclVat}
                       onChon={d.chonThue}
                       macDinh={d.thueMd}
+                      dem={d.p.thueDem}
                     />
                   </Field>
                   {meta.hasDiscount && (

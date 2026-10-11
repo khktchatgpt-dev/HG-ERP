@@ -1,152 +1,46 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Btn,
-  Chip,
-  Code,
-  Empty,
-  FilterBar,
-  ScreenFrame,
-  ScreenHeader,
-  SearchInput,
-  StatusBar,
-  Table,
-  TableSettings,
-  Tag,
-  useKitTable,
-  type KitCol,
-} from '@/components/kit'
 import { goiYMucDich } from '@/lib/po-muc-dich'
 import { NGUONG_DU_TOAN } from '@/lib/hang-muc'
-import { searchMatcher } from '@/lib/search-text'
+import { downloadCsv } from '@/lib/csv'
 import type { ProjectRow } from '@/modules/dept/supply/projects.service'
+import { khop } from '../_erp/chon-nhom'
+import {
+  ChipLoc,
+  ChonLoc,
+  DauTrang,
+  HangLoc,
+  INPUT,
+  Nhan,
+  NUM,
+  Nut,
+  TD,
+  TF,
+  TH,
+  Thanh,
+  ThanhDuoi,
+  Trang,
+} from '../_erp/ui'
 import { HangMucSheet } from './hang-muc-sheet'
 import { tien, tienTheoLoai } from './hang-muc.shared'
 
-const CHIPS = [
-  { id: 'mo', label: 'Đang mở', test: (r: ProjectRow) => r.status === 'open' },
-  { id: 'chuY', label: 'Cần chú ý', test: (r: ProjectRow) => r.chu_y.length > 0 },
-  { id: 'dong', label: 'Đã đóng', test: (r: ProjectRow) => r.status === 'closed' },
-  { id: 'all', label: 'Tất cả', test: () => true },
-] as const
-type ChipId = (typeof CHIPS)[number]['id']
+type Chip = 'mo' | 'chuY' | 'dong'
+const CHIPS: { id: Chip; label: string; test: (r: ProjectRow) => boolean }[] = [
+  { id: 'mo', label: 'Đang mở', test: (r) => r.status === 'open' },
+  { id: 'chuY', label: 'Cần chú ý', test: (r) => r.chu_y.length > 0 },
+  { id: 'dong', label: 'Đã đóng', test: (r) => r.status === 'closed' },
+]
+const TAT_CA = '*'
 
-function cot(): KitCol<ProjectRow>[] {
-  return [
-    {
-      id: 'ma',
-      header: 'Mã',
-      pin: true,
-      sort: (r) => r.code,
-      cell: (r) => (
-        <Code as="a" href={`/mua-hang/hang-muc/${r.id}`}>
-          {r.code}
-        </Code>
-      ),
-    },
-    {
-      id: 'ten',
-      header: 'Hạng mục',
-      rowHeader: true,
-      grow: true,
-      sort: (r) => r.name,
-      cell: (r) => (
-        <span className="flex items-center gap-2">
-          <a
-            href={`/mua-hang/hang-muc/${r.id}`}
-            className="font-semibold hover:underline"
-          >
-            {r.name}
-          </a>
-          {r.status === 'closed' && <Tag>Đã đóng</Tag>}
-        </span>
-      ),
-    },
-    { id: 'loai', header: 'Loại', muted: true, sort: (r) => r.kind, cell: (r) => r.kind },
-    { id: 'phuTrach', header: 'Phụ trách', sort: (r) => r.owner_name, cell: (r) => r.owner_name ?? '' }, // prettier-ignore
-    {
-      id: 'don',
-      header: 'Đơn',
-      num: true,
-      sort: (r) => r.so.n,
-      cell: (r) => (
-        <span className="num">
-          {r.so.n || ''}
-          {r.so.nhap > 0 && (
-            <span className="text-[var(--ink-3)]"> +{r.so.nhap} nháp</span>
-          )}
-        </span>
-      ),
-    },
-    {
-      id: 'dat',
-      header: 'Đã đặt',
-      num: true,
-      sort: (r) => r.so.ordered,
-      title: () => 'Tổng thanh toán (gồm VAT) các đơn đã rời nháp, trừ đơn huỷ',
-      cell: (r) => (r.so.ordered ? tien(r.so.ordered, r.currency) : ''),
-    },
-    {
-      id: 'duToan',
-      header: 'So dự toán',
-      width: 170,
-      sort: (r) => r.so.pct ?? -1,
-      tone: (r) => (r.so.pct != null && r.so.pct >= NGUONG_DU_TOAN ? 'warn' : undefined),
-      cell: (r) =>
-        r.budget == null ? (
-          <span className="text-[var(--ink-3)]">không dự toán</span>
-        ) : (
-          <span className="flex flex-col gap-0.5">
-            <span className="block h-1.5 w-full bg-[var(--line-soft,#e3e7ee)]">
-              <span
-                className="block h-full"
-                style={{ width: `${Math.min(r.so.pct ?? 0, 100)}%`, background: (r.so.pct ?? 0) >= NGUONG_DU_TOAN ? 'var(--warn)' : 'var(--act)' }} // prettier-ignore
-              />
-            </span>
-            <span className="num text-k-label">
-              {r.so.pct}% của {tien(r.budget, r.currency)}
-            </span>
-          </span>
-        ),
-    },
-    {
-      id: 've',
-      header: 'Đã về',
-      num: true,
-      sort: (r) => r.so.received_net,
-      title: (r) =>
-        r.so.thieu_gia
-          ? `${r.so.thieu_gia} đơn có phiếu nhập KHÔNG GIÁ — tiền về của chúng đang tính 0; bổ sung giá ở phiếu nhập`
-          : 'Theo phiếu kho, chưa VAT — cùng số mục Tài chính của từng đơn',
-      cell: (r) => (
-        <span className="inline-flex items-center gap-1.5">
-          {r.so.received_net ? tien(r.so.received_net, r.currency) : ''}
-          {r.so.thieu_gia > 0 && <Tag tone="warn">thiếu giá</Tag>}
-          {r.so.loi_tai_chinh > 0 && <Tag tone="stop">chưa đọc được</Tag>}
-        </span>
-      ),
-    },
-    {
-      id: 'no',
-      header: 'Còn nợ NCC',
-      num: true,
-      sort: (r) => r.so.owed,
-      title: () => 'Hoá đơn gồm VAT − đã trả',
-      cell: (r) => (r.so.owed ? tien(r.so.owed, r.currency) : ''),
-    },
-    {
-      id: 'chuY',
-      header: 'Cần chú ý',
-      sort: (r) => r.chu_y.length,
-      tone: (r) => (r.chu_y.length ? 'warn' : undefined),
-      cell: (r) => r.chu_y.join(' · '),
-    },
-  ]
-}
-
-/** Danh sách hạng mục ngoài sản xuất — xem `page.tsx`. */
+/**
+ * DANH SÁCH HẠNG MỤC NGOÀI SẢN XUẤT — chép bản vẽ Đầu đơn mua (khối "Dễ quản lí"),
+ * viết tay không qua kit. Mọi việc ngoài sản xuất trên một bảng: lọc Đang mở /
+ * Cần chú ý / Đã đóng + Loại + Phụ trách, gom theo loại, thanh so dự toán, chân
+ * tổng dính. Số đi qua lib/hang-muc như hồ sơ hạng mục.
+ */
 export function HangMucScreen({
   rows,
   canManage,
@@ -155,115 +49,228 @@ export function HangMucScreen({
   canManage: boolean
 }) {
   const router = useRouter()
-  const [chip, setChip] = useState<ChipId>('mo')
+  const [chip, setChip] = useState<Chip>('mo')
+  const [loai, setLoai] = useState(TAT_CA)
+  const [phuTrach, setPhuTrach] = useState(TAT_CA)
+  const [gom, setGom] = useState<'khong' | 'loai'>('khong')
   const [q, setQ] = useState('')
   const [tao, setTao] = useState(false)
-  const match = searchMatcher(q)
+
+  const kinds = [...new Set(rows.map((r) => r.kind))].sort((a, b) =>
+    a.localeCompare(b, 'vi'),
+  )
+  const owners = [...new Set(rows.map((r) => r.owner_name ?? '—'))].sort((a, b) =>
+    a.localeCompare(b, 'vi'),
+  )
   const kept = rows.filter(
     (r) =>
       CHIPS.find((c) => c.id === chip)!.test(r) &&
-      match([r.code, r.name, r.kind, r.owner_name]),
+      (loai === TAT_CA || r.kind === loai) &&
+      (phuTrach === TAT_CA || (r.owner_name ?? '—') === phuTrach) &&
+      (!q.trim() || khop(q, r.code, r.name, r.kind, r.owner_name)),
   )
-  const cong = (k: 'ordered' | 'received_net' | 'owed') => {
+  const nhom =
+    gom === 'loai'
+      ? kinds
+          .filter((k) => kept.some((r) => r.kind === k))
+          .map((k) => ({ k, rs: kept.filter((r) => r.kind === k) }))
+      : [{ k: '', rs: kept }]
+  const cong = (rs: ProjectRow[], key: 'ordered' | 'received_net' | 'owed') => {
     const m: Record<string, number> = {}
-    for (const r of kept) m[r.currency] = (m[r.currency] ?? 0) + r.so[k]
-    return tienTheoLoai(m)
+    for (const r of rs) m[r.currency] = (m[r.currency] ?? 0) + r.so[key]
+    return tienTheoLoai(m) || '0'
   }
-  const columns = useMemo(() => cot(), [])
-  const engine = useKitTable({
-    rows: kept,
-    columns,
-    rowKey: (r) => r.id,
-    prefsKey: 'mua-hang-hang-muc',
-    foot: {
-      label: `Cộng ${kept.length} hạng mục đang hiện`,
-      note: `Đã đặt ${cong('ordered') || '0'} · đã về ${cong('received_net') || '0'} · còn nợ ${cong('owed') || '0'} — KHÔNG gồm đơn nháp, đơn huỷ, phí vận chuyển; cộng riêng từng loại tiền.`, // prettier-ignore
-    },
-  })
-  const mo = rows.filter((r) => r.status === 'open')
-  const chuY = rows.filter((r) => r.chu_y.length > 0).length
+  const soDon = (rs: ProjectRow[]) => rs.reduce((t, r) => t + r.so.n, 0)
+
+  const xuat = () =>
+    downloadCsv('hang-muc.csv', kept, [
+      { key: 'code', header: 'Mã' },
+      { key: 'name', header: 'Hạng mục' },
+      { key: 'kind', header: 'Loại' },
+      { key: 'owner_name', header: 'Phụ trách' },
+      {
+        key: 'status',
+        header: 'Trạng thái',
+        get: (r) => (r.status === 'open' ? 'Đang mở' : 'Đã đóng'),
+      },
+      { key: 'so', header: 'Đơn', get: (r) => r.so.n },
+      { key: 'so', header: 'Nháp', get: (r) => r.so.nhap },
+      { key: 'so', header: 'Đã đặt (gồm VAT)', get: (r) => r.so.ordered },
+      { key: 'budget', header: 'Dự toán' },
+      { key: 'so', header: 'Đã về (chưa VAT)', get: (r) => r.so.received_net },
+      { key: 'so', header: 'Còn nợ NCC', get: (r) => r.so.owed },
+      { key: 'currency', header: 'Tiền tệ' },
+      { key: 'chu_y', header: 'Cần chú ý', get: (r) => r.chu_y.join(' · ') },
+    ])
+
+  const loaiOpts = [
+    { value: TAT_CA, label: 'tất cả' },
+    ...kinds.map((k) => ({ value: k, label: k })),
+  ]
+  const ptOpts = [
+    { value: TAT_CA, label: 'cả phòng' },
+    ...owners.map((o) => ({ value: o, label: o })),
+  ]
+  const gomOpts = [
+    { value: 'khong', label: 'Không gom' },
+    { value: 'loai', label: 'Loại' },
+  ]
 
   return (
-    <ScreenFrame>
-      <ScreenHeader
-        compact
+    <Trang>
+      <DauTrang
         eyebrow="Mua hàng"
         title="Hạng mục ngoài sản xuất"
-        facts={[
-          { label: 'Đang mở', value: String(mo.length) },
-          {
-            label: 'Cần chú ý',
-            value: String(chuY),
-            tone: chuY > 0 ? 'warn' : 'neutral',
-          },
-          { label: 'Đơn đã đặt', value: String(mo.reduce((t, r) => t + r.so.n, 0)) },
-        ]}
         actions={
-          <Btn
-            icon="them"
-            primary
-            blockedBy={canManage ? undefined : 'phòng Cung ứng'}
-            onClick={() => setTao(true)}
-          >
-            Hạng mục mới
-          </Btn>
+          <>
+            <Nut onClick={xuat} title={`Xuất ${kept.length} hạng mục đang hiện`}>
+              Xuất Excel
+            </Nut>
+            <Nut
+              chinh
+              khoa={canManage ? undefined : 'Chỉ phòng Cung ứng tạo được hạng mục'}
+              onClick={() => setTao(true)}
+            >
+              + Hạng mục mới
+            </Nut>
+          </>
         }
       />
-      <FilterBar>
-        <SearchInput
-          value={q}
-          onChange={setQ}
-          placeholder="Tìm mã, tên, loại, người phụ trách…"
-          width={300}
-        />{' '}
+      <HangLoc>
         {CHIPS.map((c) => (
-          <Chip
+          <ChipLoc
             key={c.id}
             on={chip === c.id}
             count={rows.filter(c.test).length}
             onClick={() => setChip(c.id)}
           >
-            {' '}
             {c.label}
-          </Chip>
+          </ChipLoc>
         ))}
-        <span className="ml-auto">
-          <TableSettings engine={engine} />
-        </span>
-      </FilterBar>
-      {kept.length === 0 ? (
-        <Empty
-          headline={
-            rows.length === 0 ? 'Chưa có hạng mục nào' : 'Không có hạng mục nào khớp'
-          }
-          reason={
-            rows.length === 0
-              ? 'Hạng mục là việc ngoài sản xuất gom nhiều đơn mua — vd. Xây dựng văn phòng, Dự trữ kho.'
-              : `Bộ lọc “${CHIPS.find((c) => c.id === chip)!.label}”${q.trim() ? ` cộng từ khoá “${q.trim()}”` : ''} không còn dòng nào.` // prettier-ignore
-          }
-          next={
-            rows.length === 0 ? (
-              <Btn
-                icon="them"
-                primary
-                onClick={() => setTao(true)}
-                blockedBy={canManage ? undefined : 'phòng Cung ứng'}
-              >
-                {' '}
-                Tạo hạng mục đầu tiên
-              </Btn>
-            ) : (
-              <Btn icon="boLoc" onClick={() => (setQ(''), setChip('all'))}>
-                Bỏ lọc, xem cả {rows.length} hạng mục
-              </Btn>
-            )
-          }
+        <ChonLoc label="Loại" value={loai} onChange={setLoai} options={loaiOpts} />
+        <ChonLoc
+          label="Phụ trách"
+          value={phuTrach}
+          onChange={setPhuTrach}
+          options={ptOpts}
         />
-      ) : (
-        <Table engine={engine} />
-      )}
-      <StatusBar
-        left={['Bấm mã hoặc tên để mở hồ sơ hạng mục', 'Tạo đơn cho hạng mục: ô "Cho việc" ở màn soạn đơn']} // prettier-ignore
+        <input
+          aria-label="Tìm hạng mục"
+          className={`${INPUT} w-[240px] py-[4px]`}
+          value={q}
+          placeholder="Tìm mã, tên, loại, người phụ trách…"
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <span className="ml-auto flex items-center gap-1.5">
+          <ChonLoc
+            label="Gom theo"
+            value={gom}
+            onChange={(v) => setGom(v as 'khong' | 'loai')}
+            options={gomOpts}
+          />
+        </span>
+      </HangLoc>
+
+      <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
+        <table
+          className="w-full border-separate border-spacing-0"
+          aria-label="Danh sách hạng mục"
+        >
+          <thead>
+            <tr>
+              <th className={TH}>Mã</th>
+              <th className={TH}>Hạng mục</th>
+              <th className={TH}>Loại</th>
+              <th className={TH}>Phụ trách</th>
+              <th className={`${TH} text-right`}>Đơn</th>
+              <th
+                className={`${TH} text-right`}
+                title="Tổng thanh toán (gồm VAT) các đơn đã rời nháp, trừ đơn huỷ"
+              >
+                Đã đặt
+              </th>
+              <th className={TH} style={{ width: 170 }}>
+                So dự toán
+              </th>
+              <th
+                className={`${TH} text-right`}
+                title="Theo phiếu kho, chưa VAT — cùng số mục Tài chính của từng đơn"
+              >
+                Đã về
+              </th>
+              <th className={`${TH} text-right`} title="Hoá đơn gồm VAT − đã trả">
+                Còn nợ NCC
+              </th>
+              <th className={TH}>Cần chú ý</th>
+            </tr>
+          </thead>
+          <tbody>
+            {kept.length === 0 && (
+              <tr>
+                <td
+                  colSpan={10}
+                  className="px-4 py-8 text-center text-[13px] text-[var(--ink-2)]"
+                >
+                  <b className="text-[var(--ink)]">
+                    {rows.length === 0
+                      ? 'Chưa có hạng mục nào'
+                      : 'Không có hạng mục nào khớp bộ lọc'}
+                  </b>
+                  <div className="mt-1 text-[12px]">
+                    {rows.length === 0
+                      ? 'Hạng mục là việc ngoài sản xuất gom nhiều đơn mua — vd. Xây dựng văn phòng, Dự trữ kho.'
+                      : 'Bỏ bớt bộ lọc ở hàng trên để thấy thêm.'}
+                  </div>
+                </td>
+              </tr>
+            )}
+            {nhom.map((g) => (
+              <Fragment key={g.k || '_'}>
+                {g.k && (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="border-b border-[var(--hair)] bg-[#fafbfc] px-2.5 py-1.5 text-[11px] font-bold tracking-[.05em] text-[var(--ink-3)] uppercase"
+                    >
+                      {g.k} · {g.rs.length} hạng mục · {soDon(g.rs)} đơn · đã đặt{' '}
+                      {cong(g.rs, 'ordered')}
+                    </td>
+                  </tr>
+                )}
+                {g.rs.map((r) => (
+                  <Dong key={r.id} r={r} />
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+          {kept.length > 0 && (
+            <tfoot>
+              <tr>
+                <td colSpan={4} className={TF}>
+                  Cộng {kept.length} hạng mục đang hiện
+                  <span className="ml-1.5 font-normal text-[var(--ink-3)]">
+                    — KHÔNG gồm đơn nháp, đơn huỷ, phí vận chuyển; cộng riêng từng loại
+                    tiền
+                  </span>
+                </td>
+                <td className={`${TF} ${NUM}`}>{soDon(kept)}</td>
+                <td className={`${TF} ${NUM}`}>{cong(kept, 'ordered')}</td>
+                <td className={TF} />
+                <td className={`${TF} ${NUM}`}>{cong(kept, 'received_net')}</td>
+                <td className={`${TF} ${NUM}`}>{cong(kept, 'owed')}</td>
+                <td className={TF} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      <ThanhDuoi
+        left={
+          <>
+            <span>Bấm mã hoặc tên để mở hồ sơ hạng mục</span>
+            <span>Tạo đơn cho hạng mục: ô “Cho việc” ở màn soạn đơn</span>
+          </>
+        }
         right={`${kept.length} / ${rows.length} hạng mục`}
       />
       {tao && (
@@ -273,6 +280,83 @@ export function HangMucScreen({
           onSaved={(p) => router.push(`/mua-hang/hang-muc/${p.id}`)}
         />
       )}
-    </ScreenFrame>
+    </Trang>
+  )
+}
+
+/** Một dòng hạng mục. */
+function Dong({ r }: { r: ProjectRow }) {
+  const pct = r.so.pct ?? 0
+  return (
+    <tr className="hover:bg-[var(--surface-hover)]">
+      <td className={TD}>
+        <Link
+          href={`/mua-hang/hang-muc/${r.id}`}
+          className="font-mono font-semibold text-[var(--act)] hover:underline"
+        >
+          {r.code}
+        </Link>
+      </td>
+      <td className={TD}>
+        <Link
+          href={`/mua-hang/hang-muc/${r.id}`}
+          className="font-semibold hover:underline"
+        >
+          {r.name}
+        </Link>
+        {r.status === 'closed' && (
+          <span className="ml-1.5">
+            <Nhan>Đã đóng</Nhan>
+          </span>
+        )}
+      </td>
+      <td className={`${TD} text-[var(--ink-3)]`}>{r.kind}</td>
+      <td className={TD}>{r.owner_name ?? '—'}</td>
+      <td className={`${TD} ${NUM}`}>
+        {r.so.n || ''}
+        {r.so.nhap > 0 && <span className="text-[var(--ink-3)]"> +{r.so.nhap} nháp</span>}
+      </td>
+      <td className={`${TD} ${NUM}`}>
+        {r.so.ordered ? tien(r.so.ordered, r.currency) : ''}
+      </td>
+      <td className={TD}>
+        {r.budget == null ? (
+          <span className="text-[var(--ink-3)]">không dự toán</span>
+        ) : (
+          <span className="flex flex-col gap-0.5">
+            <Thanh pct={pct} canh={NGUONG_DU_TOAN} />
+            <span
+              className={`font-mono text-[11.5px] ${pct >= NGUONG_DU_TOAN ? 'text-[var(--warn)]' : 'text-[var(--ink-3)]'}`}
+            >
+              {pct}% của {tien(r.budget, r.currency)}
+            </span>
+          </span>
+        )}
+      </td>
+      <td
+        className={`${TD} ${NUM}`}
+        title={
+          r.so.thieu_gia
+            ? `${r.so.thieu_gia} đơn có phiếu nhập KHÔNG GIÁ — tiền về của chúng đang tính 0`
+            : undefined
+        }
+      >
+        {r.so.received_net ? tien(r.so.received_net, r.currency) : ''}
+        {r.so.thieu_gia > 0 && (
+          <span className="ml-1.5">
+            <Nhan tone="warn">thiếu giá</Nhan>
+          </span>
+        )}
+        {r.so.loi_tai_chinh > 0 && (
+          <span className="ml-1.5">
+            <Nhan tone="stop">chưa đọc được</Nhan>
+          </span>
+        )}
+      </td>
+      <td className={`${TD} ${NUM}`}>{r.so.owed ? tien(r.so.owed, r.currency) : ''}</td>
+      <td className={TD}>
+        {r.chu_y.length > 0 && <Nhan tone="warn">{r.chu_y.join(' · ')}</Nhan>}
+      </td>
+    </tr>
   )
 }

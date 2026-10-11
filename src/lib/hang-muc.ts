@@ -46,6 +46,8 @@ export type HangMucSo = {
   thieu_gia: number
   /** Đơn đọc tài chính lỗi — tổng về / hoá đơn / trả đang thiếu phần của chúng. */
   loi_tai_chinh: number
+  /** Đơn đã có hoá đơn NCC (ô "Đã có hoá đơn · 2 / 4 đơn"). */
+  co_hoa_don: number
   /** % dự toán đã đặt; null khi không có dự toán. */
   pct: number | null
 }
@@ -56,7 +58,7 @@ export function soHangMuc(
   hm: { budget: number | null; currency: string },
   dons: readonly HangMucDon[],
 ): HangMucSo {
-  const so: HangMucSo = { n: 0, nhap: 0, nhap_gross: 0, ordered: 0, received_net: 0, invoiced_gross: 0, paid: 0, owed: 0, overdue: 0, khac_tien_te: 0, thieu_gia: 0, loi_tai_chinh: 0, pct: null } // prettier-ignore
+  const so: HangMucSo = { n: 0, nhap: 0, nhap_gross: 0, ordered: 0, received_net: 0, invoiced_gross: 0, paid: 0, owed: 0, overdue: 0, khac_tien_te: 0, thieu_gia: 0, loi_tai_chinh: 0, co_hoa_don: 0, pct: null } // prettier-ignore
   for (const d of dons) {
     if (d.status === 'cancelled') continue
     if (d.currency !== hm.currency) {
@@ -76,6 +78,7 @@ export function soHangMuc(
     if (d.overdue) so.overdue++
     if ((d.missing_price_lines ?? 0) > 0) so.thieu_gia++
     if (d.finance_error) so.loi_tai_chinh++
+    if ((d.invoiced_gross ?? 0) > 0.005) so.co_hoa_don++
   }
   so.ordered = r2(so.ordered)
   so.nhap_gross = r2(so.nhap_gross)

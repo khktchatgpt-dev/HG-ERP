@@ -887,7 +887,7 @@ export const posRepo = {
    * số đơn mang đúng kiểu đó, và số kiểu khác nhau NCC từng dùng. Đơn mới chọn
    * NCC thì ô Thuế lấy theo đây (lib/po-thue `thueMacDinh`).
    */
-  async taxBySupplier(): Promise<Record<string, ThueNcc>> {
+  async taxBySupplier(): Promise<{ ncc: Record<string, ThueNcc>; dem: Record<string, number> }> {
     const { data, error } = await db()
       .from('supply_purchase_orders')
       .select('supplier_id, vat_rate, price_includes_vat, created_at')
@@ -906,9 +906,13 @@ export const posRepo = {
       by.set(r.supplier_id, cur)
     }
     const out: Record<string, ThueNcc> = {}
-    for (const [id, x] of by)
+    // Số đơn theo từng kiểu, cả công ty — ô Thuế bày "18 đơn" cạnh mỗi kiểu (bản vẽ).
+    const dem: Record<string, number> = {}
+    for (const [id, x] of by) {
       out[id] = { ...x.first, n: x.dem.get(khoaThue(x.first)) ?? 1, kieu: x.dem.size }
-    return out
+      for (const [k, c] of x.dem) dem[k] = (dem[k] ?? 0) + c
+    }
+    return { ncc: out, dem }
   },
 
   async listExtraLsx(poId: string): Promise<{ id: string; code: string }[]> {

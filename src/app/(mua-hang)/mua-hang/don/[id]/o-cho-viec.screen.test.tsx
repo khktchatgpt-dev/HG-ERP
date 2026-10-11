@@ -67,34 +67,29 @@ async function chon(go: string) {
   await userEvent.keyboard('{Enter}')
 }
 
-describe('ô Cho việc — lệnh SX hoặc hạng mục (dữ liệu GIẢ)', () => {
-  it('chọn hạng mục → ô ghi mã · tên, cạnh ô bày đã đặt / dự toán; "+ gộp lệnh" biến mất', async () => {
+describe('ô Cho việc — lệnh SX hoặc hạng mục, hai nhóm (dữ liệu GIẢ)', () => {
+  it('chưa gõ: nhóm lệnh chỉ 3 dòng + "… lệnh nữa", nhóm hạng mục THẤY NGAY; chọn hạng mục → thẻ HẠNG MỤC + đã đặt / dự toán', async () => {
     view(donMoi())
     expect(screen.getAllByText('+ gộp lệnh').length).toBeGreaterThan(0)
-    // Dòng đầu danh sách theo lệnh là lối rẽ "Ngoài lệnh →" — hạng mục không lẫn trong lệnh.
-    expect(await dongDau()).toMatch(/^Ngoài lệnh →/)
-    await chon('ngoài lệnh')
-    expect(await dongDau()).toMatch(/^[+] Tạo hạng mục mới…/)
-    // Bấm thẳng dòng hạng mục (môi trường test giữ dòng sáng ở dòng trống sau khi gõ;
-    // trình duyệt thật sáng đúng dòng khớp đầu — đã soi 12/10 trên màn thật).
     await userEvent.click(choViec())
-    await userEvent.click(
-      within(screen.getByRole('listbox')).getByText(
-        'HM-2026-0009 · Xây dựng văn phòng GIẢ',
-      ),
-    )
+    const ds = within(screen.getByRole('listbox'))
+    expect(ds.getByRole('group', { name: 'Lệnh sản xuất đang chạy' })).toBeTruthy()
+    expect(within(ds.getByRole('group', { name: 'Lệnh sản xuất đang chạy' })).getAllByRole('option')).toHaveLength(3) // prettier-ignore
+    expect(ds.getByText(/lệnh nữa — gõ số lệnh hoặc tên khách/)).toBeTruthy()
+    await userEvent.click(ds.getByText('HM-2026-0009 · Xây dựng văn phòng GIẢ'))
     expect(choViec().value).toBe('HM-2026-0009 · Xây dựng văn phòng GIẢ')
-    expect(screen.getAllByText(/128,4 tr \/ 300 tr/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('HẠNG MỤC').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('128,4 tr / 300 tr (43%)').length).toBeGreaterThan(0)
     expect(screen.queryAllByText('+ gộp lệnh')).toHaveLength(0)
   })
 
-  it('"+ Tạo hạng mục mới…" mở hộp tạo — chưa có tên thì chưa lưu được', async () => {
+  it('gõ việc chưa có rồi Enter → hộp "Hạng mục mới" mở, tên điền sẵn chữ đã gõ', async () => {
     view(donMoi())
-    await chon('ngoài lệnh')
-    await chon('tạo hạng mục')
-    expect(screen.getByRole('dialog').textContent).toContain('Hạng mục mới')
-    expect(screen.getByRole('dialog').textContent).toContain(
-      'Chưa lưu được: chưa có tên hạng mục',
+    await chon('sửa mái xưởng')
+    const hop = screen.getByRole('dialog', { name: 'Hạng mục mới' })
+    expect((within(hop).getByLabelText('Tên hạng mục') as HTMLInputElement).value).toBe(
+      'sửa mái xưởng',
     )
+    expect(hop.textContent).toContain('Chưa lưu được: chưa có loại')
   })
 })

@@ -62,7 +62,7 @@ import { TaiChinhPanel } from './TaiChinhPanel'
 import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { templateForSupplier } from './chung-tu'
-import { OChoViec } from './o-cho-viec'
+import { hangMucSauDon, OChoViec } from './o-cho-viec'
 import { OThue } from './o-thue'
 import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
@@ -218,6 +218,7 @@ export function DonChungTuScreen(p: Props) {
     themHangMuc,
   } = d
   const moreOpen = headMore ?? (!!header.contractNo || header.currency !== 'VND')
+  const hmSau = header.poType === 'standalone' ? hangMucSauDon(hangMuc.find((x) => x.id === header.projectId), totals.grandTotal, header.currency) : null // prettier-ignore
   const gopHien = header.poType === 'lsx' && (gopMo || header.extraLsxIds.length > 0)
   const nccBody = <NhaCungCapTomTat d={d} />
   const notesPanel = <TraoDoiKhung d={d} />
@@ -706,6 +707,7 @@ export function DonChungTuScreen(p: Props) {
                   hangMuc={hangMuc}
                   onHangMucMoi={themHangMuc}
                   doiDuoc={!p.po}
+                  toi={p.me.name}
                 />
                 {gopHien ? (
                   <HeadField label="Gộp lệnh">
@@ -790,6 +792,7 @@ export function DonChungTuScreen(p: Props) {
                     inclVat={header.inclVat}
                     onChon={chonThue}
                     macDinh={thueMd}
+                    dem={p.thueDem}
                   />
                 </HeadField>
                 <GridBtn
@@ -871,8 +874,9 @@ export function DonChungTuScreen(p: Props) {
         <CommitBar
           totals={[
             // Giá ĐÃ gồm VAT: VAT TÁCH RA từ tiền hàng — nói trên nhãn như phiếu in (05/10/2026).
-            { label: header.inclVat ? 'Tiền hàng (đã gồm VAT)' : 'Tiền hàng', value: money(totals.subtotal, header.currency) }, // prettier-ignore
+            { label: header.inclVat ? 'Tiền hàng (đã gồm VAT)' : 'Tiền hàng (chưa VAT)', value: money(totals.subtotal, header.currency) }, // prettier-ignore
             { label: `VAT ${header.vat === '' ? 0 : header.vat}%${header.inclVat ? ' (đã gồm)' : ''}`, value: money(totals.vatAmount, header.currency) }, // prettier-ignore
+            ...(hmSau ? [{ label: 'Hạng mục sau đơn này', value: hmSau }] : []), // bản vẽ: "sau đơn này hạng mục lên …"
           ]}
           grand={{
             label: 'Tổng thanh toán',

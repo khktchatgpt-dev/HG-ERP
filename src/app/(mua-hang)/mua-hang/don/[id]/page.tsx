@@ -201,7 +201,8 @@ export default async function Page({
       tpl={tpl}
       lastTemplates={canEdit ? lastTemplates : undefined}
       hangMuc={canEdit ? hmOpts : undefined}
-      thueNcc={canEdit ? taxes : undefined}
+      thueNcc={canEdit ? taxes.ncc : undefined}
+      thueDem={canEdit ? taxes.dem : undefined}
       suppliers={pickable.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null, vat_rate: s.vat_rate ?? null }))} // prettier-ignore
       lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore
       perms={{
