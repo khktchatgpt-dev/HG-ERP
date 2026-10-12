@@ -100,6 +100,8 @@ export type Line = {
   m3_per_unit: Num
   // mro: bảo hành — cột riêng từ 0139 (trước mượn finish).
   warranty_text: string
+  // label: kiểu in / gia công — cột riêng 0233.
+  print_spec: string
   // carton
   open_style: string
   pcs_per_ctn: Num
@@ -726,6 +728,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     // Gỗ đặt theo dòng tự do là chính; chọn từ danh mục thì m³/SP vẫn gõ tay.
     m3_per_unit: '',
     warranty_text: '',
+    print_spec: '',
     open_style: openStyle,
     pcs_per_ctn: last?.pcs_per_ctn ?? m.pcs_per_ctn ?? '',
     inner_l_mm: inner?.[0] ?? '',
@@ -863,6 +866,7 @@ export function newFreeLine(): Line {
     weight_per_unit: '',
     m3_per_unit: '',
     warranty_text: '',
+    print_spec: '',
     open_style: '',
     pcs_per_ctn: '',
     inner_l_mm: '',
@@ -911,6 +915,7 @@ export type PoLineDto = {
   weight_per_unit: number | null
   m3_per_unit: number | null
   warranty_text: string | null
+  print_spec: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -1007,6 +1012,7 @@ function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): 
     weight_per_unit: n2(l.weight_per_unit),
     m3_per_unit: n2(l.m3_per_unit),
     warranty_text: s2(l.warranty_text),
+    print_spec: s2(l.print_spec),
     open_style: s2(l.open_style),
     pcs_per_ctn: n2(l.pcs_per_ctn),
     inner_l_mm: n2(l.inner_l_mm),
@@ -1077,6 +1083,7 @@ export function migrateDraftLine(t: PoTemplate, l: Line): Line {
     uid: l.uid ?? l.po_line_id ?? crypto.randomUUID(),
     m3_per_unit: l.m3_per_unit ?? '',
     warranty_text: l.warranty_text ?? '',
+    print_spec: l.print_spec ?? '',
     // 0182 — nháp lưu trước khi có cặp quy đổi giá.
     unit2_per_unit: l.unit2_per_unit ?? '',
     unit2_label: l.unit2_label ?? '',

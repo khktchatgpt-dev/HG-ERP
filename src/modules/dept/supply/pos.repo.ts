@@ -105,6 +105,7 @@ export type PoLineTemplateFields = {
   m3_per_unit: number | null
   /** 0139 — cột riêng: mro bảo hành (trước mượn finish). */
   warranty_text: string | null
+  print_spec: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -197,6 +198,7 @@ export const TEMPLATE_LINE_COLS = [
   'weight_per_unit',
   'm3_per_unit',
   'warranty_text',
+  'print_spec',
   'open_style',
   'pcs_per_ctn',
   'inner_l_mm',
@@ -887,7 +889,10 @@ export const posRepo = {
    * số đơn mang đúng kiểu đó, và số kiểu khác nhau NCC từng dùng. Đơn mới chọn
    * NCC thì ô Thuế lấy theo đây (lib/po-thue `thueMacDinh`).
    */
-  async taxBySupplier(): Promise<{ ncc: Record<string, ThueNcc>; dem: Record<string, number> }> {
+  async taxBySupplier(): Promise<{
+    ncc: Record<string, ThueNcc>
+    dem: Record<string, number>
+  }> {
     const { data, error } = await db()
       .from('supply_purchase_orders')
       .select('supplier_id, vat_rate, price_includes_vat, created_at')
@@ -1078,7 +1083,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, product_code, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, product_code, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, print_spec, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')

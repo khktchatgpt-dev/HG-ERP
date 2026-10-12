@@ -68,6 +68,7 @@ const base: PoLineDto = {
   weight_per_unit: null,
   m3_per_unit: null,
   warranty_text: null,
+  print_spec: null,
   open_style: null,
   pcs_per_ctn: null,
   inner_l_mm: null,

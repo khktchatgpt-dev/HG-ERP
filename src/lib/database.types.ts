@@ -4278,6 +4278,7 @@ export type Database = {
           price_basis: string
           price_per_m2: number | null
           print_fee: number | null
+          print_spec: string | null
           product_code: string | null
           qty_basis: string
           qty_demand: number | null
@@ -4332,6 +4333,7 @@ export type Database = {
           price_basis?: string
           price_per_m2?: number | null
           print_fee?: number | null
+          print_spec?: string | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null
@@ -4386,6 +4388,7 @@ export type Database = {
           price_basis?: string
           price_per_m2?: number | null
           print_fee?: number | null
+          print_spec?: string | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null

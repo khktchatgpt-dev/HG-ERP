@@ -3,6 +3,7 @@
 import { Combobox, GridBtn, Menu } from '@/components/kit'
 import { api } from '@/lib/api'
 import type { PoMaterial } from '@/lib/po-material.types'
+import { ChonMau } from './chon-mau'
 import type { DonCtx } from './useDonChungTu'
 
 /**
@@ -17,6 +18,26 @@ import type { DonCtx } from './useDonChungTu'
 export function ThanhLuoi({ d }: { d: DonCtx }) {
   const { sel, addMaterial, addFree, removeSel, setPaste, setQuickAdd, usedIds } = d
   const { drafting, pending, addFromNeeds, goTo, shipCols, dotMo, setDotMo } = d
+  // Đơn mới chưa chọn mẫu (12/10/2026): CHỖ thêm dòng nói lý do + cho chọn ngay tại đây —
+  // mọi đường thêm dòng đều chặn ở `chuaChonMau` cho tới khi chọn.
+  if (!d.mauDaChon)
+    return (
+      <span className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className="text-[var(--ink-2)]">
+          Chọn mẫu đơn để thêm dòng — mỗi mẫu có bộ cột riêng (tem nhãn, carton, nhôm…)
+          {d.p.seedCodes
+            ? ` · ${d.p.seedCodes.codes.length} vật tư đang chờ đổ vào lưới`
+            : ''}
+        </span>
+        <ChonMau
+          value={null}
+          goiY={d.mauGoiY}
+          nccTen={d.supplierOpt?.name}
+          onChon={d.chonMau}
+          className="h-[28px] rounded-[3px] border border-[var(--stop-line)] bg-[var(--surface-card)] px-1.5 text-[13px]"
+        />
+      </span>
+    )
   return (
     // Nằm trong hàng tiêu đề khối "Dòng đơn hàng" (actions của FastTab) — không còn hàng riêng.
     <span className="flex flex-wrap items-center gap-1">

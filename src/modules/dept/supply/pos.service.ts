@@ -179,6 +179,7 @@ function catalogLines(lines: PoLineInput[]) {
     // m³/SP + Bảo hành — danh mục có cột từ 0178.
     m3_per_unit: l.m3_per_unit ?? null,
     warranty_text: l.warranty_text ?? null,
+    print_spec: l.print_spec ?? null,
   }))
 }
 

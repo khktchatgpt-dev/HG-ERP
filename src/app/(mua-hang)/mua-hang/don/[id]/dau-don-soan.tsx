@@ -3,10 +3,9 @@
 import { useState, type ReactNode } from 'react'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 import { PO_CURRENCIES } from '@/lib/po-line'
-import { PO_TEMPLATE_META, type PoTemplate } from '@/lib/po-template'
 import { ChonNhom, khop } from '../../_erp/chon-nhom'
 import { MenuBa, Nut } from '../../_erp/ui'
-import { templateForSupplier } from './chung-tu'
+import { ChonMau } from './chon-mau'
 import { money, numStr, toNum } from './don-chung-tu.shared'
 import { hangMucSauDon, OChoViec } from './o-cho-viec'
 import { OThue } from './o-thue'
@@ -115,7 +114,7 @@ function ONgay({
 
 /** Dòng tên + hàng ô + hàng phụ của đơn đang soạn. */
 export function DauDonSoan({ d }: { d: DonCtx }) {
-  const { p, po, header, setHeader, dirty, template, changeTemplate, toast, supplierOpt, meta, busy, problem } = d // prettier-ignore
+  const { p, po, header, setHeader, dirty, template, supplierOpt, meta, busy, problem } = d // prettier-ignore
   const [phu, setPhu] = useState<boolean | null>(null)
   const [gopMo, setGopMo] = useState(false)
   const phuMo = phu ?? (!!header.contractNo || header.currency !== 'VND')
@@ -129,12 +128,7 @@ export function DauDonSoan({ d }: { d: DonCtx }) {
       currency:
         !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency,
     }))
-    // Mẫu theo đơn gần nhất của NCC — chỉ khi đơn mới và người soạn chưa tự chọn mẫu.
-    const t = templateForSupplier({ supplierId: v, current: template, touched: dirty.current.template, isNew: !po, last: p.lastTemplates ?? {} }) // prettier-ignore
-    if (t) {
-      changeTemplate(t)
-      toast.info(`Mẫu đơn: ${PO_TEMPLATE_META[t].label}`, 'Theo đơn gần nhất của NCC này — đổi được ở ô "Mẫu".') // prettier-ignore
-    }
+    // Mẫu KHÔNG đổi theo NCC nữa (12/10/2026) — mẫu NCC hay dùng chỉ đứng đầu ô Mẫu (`ChonMau`).
     d.apThueNcc(v)
   }
 
@@ -243,22 +237,14 @@ export function DauDonSoan({ d }: { d: DonCtx }) {
             onPick={chonNcc}
           />
         </Hf>
-        <Hf label="Mẫu">
-          <select
-            aria-label="Mẫu đơn"
+        <Hf label="Mẫu" need empty={!d.mauDaChon}>
+          <ChonMau
+            value={d.mauDaChon ? template : null}
+            goiY={d.mauGoiY}
+            nccTen={supplierOpt?.name}
+            onChon={d.chonMau}
             className="bg-transparent text-[13px] outline-none"
-            value={template}
-            onChange={(e) => {
-              d.markDirty('template')
-              changeTemplate(e.target.value as PoTemplate)
-            }}
-          >
-            {Object.values(PO_TEMPLATE_META).map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          />
         </Hf>
         <Hf label="Hạn giao">
           <ONgay

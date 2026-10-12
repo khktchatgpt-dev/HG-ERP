@@ -202,6 +202,22 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Bảo hành',
     'Ghi chú',
   ],
+  // Tem nhãn (12/10/2026) — bộ cột user duyệt: thông số in cạnh tên, SL đơn hàng ·
+  // Đm/sp trước ĐVT như tờ PQ (PO-2026-0123).
+  label: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'Chất liệu',
+    'Kích thước',
+    'Kiểu in / gia công',
+    'SL đơn hàng',
+    'Đm/sp',
+    'ĐVT',
+    'SL đặt',
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Ghi chú',
+  ],
   simple: [
     'STT',
     'Tên sản phẩm / vật tư',

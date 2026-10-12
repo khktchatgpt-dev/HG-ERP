@@ -690,9 +690,11 @@ export function DongHang({ d }: { d: DonCtx }) {
         ) : (
           <div className="k-ft-note">
             Chưa có dòng nào.{' '}
-            {editing
-              ? 'Gõ mã vật tư ở ô tìm phía trên rồi Enter.'
-              : 'Bấm Sửa để thêm dòng.'}
+            {editing && !d.mauDaChon
+              ? 'Chọn mẫu đơn ở ô phía trên trước — rồi mới thêm vật tư.'
+              : editing
+                ? 'Gõ mã vật tư ở ô tìm phía trên rồi Enter.'
+                : 'Bấm Sửa để thêm dòng.'}
           </div>
         )}
       </FastTab>
@@ -711,6 +713,7 @@ export function NhuCau({ d }: { d: DonCtx }) {
     needs,
     needsLoading,
     usedIds,
+    mauDaChon,
   } = d
   return (
     <>
@@ -727,10 +730,10 @@ export function NhuCau({ d }: { d: DonCtx }) {
           ]}
           actions={
             <GridBtn
-              disabled={pending.length === 0}
+              disabled={pending.length === 0 || !mauDaChon}
               onClick={() => void addFromNeeds(pending)}
             >
-              + Thêm tất cả còn thiếu
+              {mauDaChon ? '+ Thêm tất cả còn thiếu' : 'Chọn mẫu đơn trước khi thêm'}
             </GridBtn>
           }
         >

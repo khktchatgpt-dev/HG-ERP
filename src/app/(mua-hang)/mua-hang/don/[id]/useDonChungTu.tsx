@@ -56,7 +56,8 @@ import { costShareOf, type CostRow } from './ChiPhiPanel'
 import { type PasteConfirm } from './SoanDonPanels'
 import { type TrackLine } from './TheoDoiPanel'
 // prettier-ignore
-import { headerFromPo, lineIssues, newHeader, poChecks, retemplate, templateForGroup } from './chung-tu'
+import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'
+import { useChonMau } from './useChonMau'
 import {
   MUC_IDS,
   MUC_OF,
@@ -271,6 +272,8 @@ export function useDonChungTu(p: Props) {
   const dense = denseRaw !== '0'
 
   const template = header.template
+  const mau = useChonMau({ daChon: !!po || !!p.seedHeader, template, changeTemplate: (t) => changeTemplate(t), markDirty: () => markDirty('template'), bao: () => toast.info('Chọn mẫu đơn trước', 'Mỗi mẫu có bộ cột riêng — chọn ở ô "Mẫu đơn" trên thanh dòng hàng.'), supplierId: header.supplierId, lastTemplates: p.lastTemplates }) // prettier-ignore
+  const { mauDaChon, chuaChonMau } = mau
 
   const meta = poTemplateMeta(template)
 
@@ -442,20 +445,12 @@ export function useDonChungTu(p: Props) {
    * SP). Gõ nhầm hai lần thì `trung-dong.tsx` báo trùng + mời gộp.
    */
   const addMaterial = (m: PoMaterial) => {
+    if (chuaChonMau()) return
     const cu = lines.findIndex((l) => l.material_id === m.id)
-    const t = cu >= 0 ? template : tplForFirst(m)
-    setLines((ls) => [...ls, newLine(t, m)])
+    setLines((ls) => [...ls, newLine(template, m)])
     setPick(lines.length)
     focusQty(lines.length)
     if (cu >= 0) toast.info(`${m.code} đã có ở dòng ${cu + 1} — đã thêm dòng ${lines.length + 1}`, 'Ghi quy cách / chiều dài / ghi chú (SP, lệnh) cho dòng mới. Chỉ muốn tăng số lượng thì sửa dòng cũ rồi xoá dòng này.') // prettier-ignore
-  }
-
-  // Đơn mới: mẫu theo nhóm của vật tư đầu tiên (`templateForGroup`); trả mẫu để dòng dựng đúng ngay.
-  function tplForFirst(m?: PoMaterial): PoTemplate {
-    const t = templateForGroup({ group: m?.group_name, current: template, touched: dirty.current.template, isNew: !po && lines.length === 0, groups: p.groupTemplates ?? {} }) // prettier-ignore
-    if (t) changeTemplate(t)
-    if (t) toast.info(`Mẫu đơn: ${poTemplateMeta(t).label}`, `Theo nhóm "${m?.group_name}" — đổi được ở ô "Mẫu đơn".`) // prettier-ignore
-    return t ?? template
   }
 
   /**
@@ -478,6 +473,7 @@ export function useDonChungTu(p: Props) {
   }
 
   const addFree = () => {
+    if (chuaChonMau()) return
     setLines((ls) => [...ls, newFreeLine()])
     setPick(lines.length)
   }
@@ -997,8 +993,8 @@ export function useDonChungTu(p: Props) {
   /** Thêm nhiều vật tư (dán Excel, mồi URL) — MỖI MỤC MỘT DÒNG kể cả cùng mã; bản cũ gộp theo material_id (07/10/2026). */
   // prettier-ignore
   function addMaterials(items: { m: PoMaterial; qty?: number | null; price?: number | null; note?: string | null }[]) {
-    if (items.length === 0) return 0
-    const t = tplForFirst(items[0].m)
+    if (items.length === 0 || chuaChonMau()) return 0
+    const t = template
     setPick(lines.length)
     setLines((ls) => [
       ...ls,
@@ -1023,11 +1019,11 @@ export function useDonChungTu(p: Props) {
   /** Từ nhu cầu lệnh: nạp hồ sơ vật tư (kg/m, dài cây…) rồi mới thành dòng — thiếu thì dòng nhôm không tính được tiền. */
   async function addFromNeeds(list: Need[]) {
     const ids = list.map((n) => n.material_id).filter((id) => !usedIds.has(id))
-    if (ids.length === 0) return
+    if (ids.length === 0 || chuaChonMau()) return
     try {
       const mats = await fetchMaterialsByIds(ids)
       const byId = new Map(mats.map((m) => [m.id, m]))
-      const t = tplForFirst(byId.get(ids[0]))
+      const t = template
       setLines((ls) => {
         const have = new Set(ls.map((l) => l.material_id))
         const add: Line[] = []
@@ -1078,7 +1074,7 @@ export function useDonChungTu(p: Props) {
   const seeded = useRef(false)
 
   useEffect(() => {
-    if (!p.seedCodes || seeded.current || !editing) return
+    if (!p.seedCodes || seeded.current || !editing || !mauDaChon) return
     seeded.current = true
     const { codes, qtys } = p.seedCodes
     void Promise.all(codes.map((c) => fetchMaterialByCode(c))).then((found) => {
@@ -1091,8 +1087,8 @@ export function useDonChungTu(p: Props) {
       addMaterials(items)
       if (missing.length > 0) toast.error(`Không thấy vật tư "${missing.join('", "')}"`)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mồi một lần lúc mở
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mồi một lần, ngay khi đã chọn mẫu đơn
+  }, [mauDaChon])
 
   // TỰ LƯU NHÁP + chặn rời trang mất dữ liệu — xem `useNhapAnToan`.
   const draftKey = draftKeyFor(po?.id ?? null, [p.seed?.lsxId, p.seed?.supplierId, p.seedCodes?.codes.join(','), p.seed?.projectId]) // prettier-ignore
@@ -1131,6 +1127,7 @@ export function useDonChungTu(p: Props) {
     setLines(d.lines.map((l) => migrateDraftLine(d.header.template ?? template, l)))
     setShipCols(d.shipCols ?? [])
     dirty.current = { vat: true, currency: true, template: true }
+    mau.setMauDaChon(true)
   }
 
   async function confirmEnrich(picked: CatalogSuggestion[]) {
@@ -1428,6 +1425,7 @@ export function useDonChungTu(p: Props) {
     nhap,
     dirty,
     markDirty,
+    ...mau,
     thueMd: thueCua(header.supplierId),
     chonThue,
     apThueNcc,

@@ -11,7 +11,7 @@ import {
 import { foamM3PerSheet, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
-  PO_PRINT_ORDER,
+  poPrintKeys,
   PO_PRINT_QTY_LABEL,
   poField,
   poLsxQty,
@@ -106,6 +106,8 @@ function excelColumns(
     expectedAt: string | null
     /** Mẫu tính theo kg mà có dòng giá theo ĐVT — xem `poPriceUnitPerLine`. */
     priceUnitOf?: ReturnType<typeof poPriceUnitPerLine>
+    /** Dòng của đơn — cột khai báo trống ở mọi dòng thì không xuất (`poPrintKeys`). */
+    lines: readonly PoPrintLine[]
   },
 ): XCol[] {
   const meta = poTemplateMeta(t)
@@ -191,7 +193,8 @@ function excelColumns(
     '@note': { label: 'Ghi chú', width: 22, align: 'left', value: (l) => l.note ?? '' },
   }
 
-  return PO_PRINT_ORDER[t].map((key) => {
+  // Cột trắng ở mọi dòng không xuất (12/10/2026) — cùng luật phiếu in, xem `poPrintKeys`.
+  return poPrintKeys(t, ctx.lines).map((key) => {
     const hit = fixed[key]
     if (hit) return hit
     const f = poField(t, key)!
@@ -284,6 +287,7 @@ export async function buildPoExcel(input: {
     orderDate: d,
     expectedAt: po.expected_at,
     priceUnitOf: poPriceUnitPerLine(poTemplateMeta(template).priceUnit, lines),
+    lines,
   })
   // Cột "Chia lệnh" của đơn gộp — cùng chỗ, cùng chữ với phiếu in (chiaLenhDong).
   const lsxSet = po.lsx_set ?? []

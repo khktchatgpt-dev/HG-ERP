@@ -34,6 +34,7 @@ export const ADJ_COMPARE_FIELDS = [
   'weight_per_unit',
   'm3_per_unit',
   'warranty_text',
+  'print_spec',
   'open_style',
   'pcs_per_ctn',
   'inner_l_mm',
@@ -364,16 +365,23 @@ export function canAdjust(status: string): { ok: true } | { ok: false; reason: s
     case 'partial':
       return { ok: true }
     case 'draft':
-      return { ok: false, reason: 'Đơn còn nháp — bấm "Sửa" để sửa thẳng, không cần điều chỉnh' }
+      return {
+        ok: false,
+        reason: 'Đơn còn nháp — bấm "Sửa" để sửa thẳng, không cần điều chỉnh',
+      }
     case 'pending_approval':
       return { ok: false, reason: 'Đơn đang chờ duyệt — bấm "Rút về nháp để sửa"' }
     case 'received':
       return {
         ok: false,
-        reason: 'Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn',
+        reason:
+          'Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn',
       }
     case 'cancelled':
-      return { ok: false, reason: 'Đơn đã huỷ — muốn mua tiếp thì Nhân bản thành đơn mới' }
+      return {
+        ok: false,
+        reason: 'Đơn đã huỷ — muốn mua tiếp thì Nhân bản thành đơn mới',
+      }
     default:
       return { ok: false, reason: `Đơn ở bước "${status}" không điều chỉnh được` }
   }

@@ -47,7 +47,9 @@ describe('guessTemplate — ngũ kim xét trước vật liệu', () => {
 describe('guessTemplate — các mẫu còn lại', () => {
   it.each([
     ['Thùng carton 5 lớp KT: 715x660x415', 'carton'],
-    ['Tem made in VietNam', 'accessory'],
+    ['Tem made in VietNam', 'label'],
+    ['Thẻ treo 2 mặt ghế Amalfi', 'label'],
+    ['Mạc đồng dán', 'accessory'],
     ['Nút nhựa vuông 76', 'accessory'],
     // ĐỔI 10/08/2026: trước ra 'simple' vì chưa có mẫu nào nhận hàng bảo trì.
     // Vòng bi là ca MRO điển hình — mua lẻ, NCC giao theo mã hãng, cần ghi lắp
@@ -104,7 +106,7 @@ describe('resolveTemplate — người chọn thắng máy đoán', () => {
 
   it('giá trị lạ / bỏ trống thì lấy mẫu đoán', () => {
     const g = guessTemplate('Tem made in VietNam')
-    expect(resolveTemplate(null, g)).toBe('accessory')
-    expect(resolveTemplate('linh tinh', g)).toBe('accessory')
+    expect(resolveTemplate(null, g)).toBe('label')
+    expect(resolveTemplate('linh tinh', g)).toBe('label')
   })
 })

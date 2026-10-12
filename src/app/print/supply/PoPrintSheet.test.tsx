@@ -83,6 +83,7 @@ function line(template: PoTemplate): PoPrintLine {
     dimension_text: 'Inox phi 15.9x1.5li',
     finish: 'inox bóng',
     warranty_text: '12 tháng',
+    print_spec: 'Offset 4 màu 2 mặt',
     open_style: 'AD',
     pcs_per_ctn: 1,
     price_per_m2: 18_770,
@@ -205,5 +206,52 @@ describe('phiếu in đơn gộp lệnh — cột Chia lệnh', () => {
     expect(head).not.toContain('Chia lệnh')
     expect(head).toHaveLength(PO_PRINT_ORDER.aluminium.length)
     expect(document.body.textContent).not.toContain('PHÂN THEO LỆNH')
+  })
+})
+
+/*
+ * CỘT TRẮNG KHÔNG IN (12/10/2026): đo 142 đơn thật — Bản in + công trống ở 9/9 đơn
+ * bao bì, Vật liệu 15/15 đơn inox/sắt. Cột khai báo trống ở MỌI dòng thì bỏ khỏi
+ * phiếu; cột cố định và thứ tự các cột còn lại giữ nguyên.
+ */
+describe('phiếu in đơn mua — cột trắng ở mọi dòng không in', () => {
+  const heads = (t: PoTemplate, lines: PoPrintLine[]) => {
+    const { container } = render(
+      <PoPrintSheet
+        company={company}
+        po={header(t)}
+        supplier={{ name: 'NCC', address: null, tax_no: null, phone: null } as never}
+        lines={lines}
+      />,
+    )
+    const main = container.querySelector('table.border-collapse')!
+    return [...main.querySelectorAll('thead td')].map((td) => td.textContent?.trim())
+  }
+
+  it('bao bì: thiếu Cách mở + Bản in ở mọi dòng → hai cột đó biến mất, phần còn lại giữ thứ tự', () => {
+    const a = { ...line('carton'), open_style: null, print_fee: null }
+    const b = { ...line('carton'), id: 'l2', open_style: null, print_fee: null }
+    const h = heads('carton', [a, b])
+    expect(h).not.toContain('Cách mở')
+    expect(h).not.toContain('Bản in + công')
+    expect(h).toEqual(['STT', 'Tên sản phẩm / vật tư', 'Pcs/thùng', 'ĐVT', 'Số lượng', 'Lọt lòng D×R×C (mm)', 'm²/thùng', 'Đơn giá/m²', 'Đơn giá (VND)', 'Thành tiền (VND)', 'Ghi chú']) // prettier-ignore
+  })
+
+  it('một dòng có giá trị là đủ giữ cột', () => {
+    const a = { ...line('carton'), print_fee: null }
+    const b = { ...line('carton'), id: 'l2', print_fee: 3_278 }
+    expect(heads('carton', [a, b])).toContain('Bản in + công')
+  })
+
+  it('inox/sắt: Vật liệu trống mọi dòng → bỏ; Kích thước chưa nhập vẫn in vì lấy tạm quy cách', () => {
+    const a = { ...line('metal_kg'), material_grade: null, dimension_text: null }
+    const h = heads('metal_kg', [a])
+    expect(h).not.toContain('Vật liệu')
+    expect(h).toContain('Kích thước')
+  })
+
+  it('cột cố định (STT, tên, ĐVT, SL, giá, tiền, ghi chú) luôn còn dù dòng trống trơn', () => {
+    const empty = { ...line('accessory'), material_grade: null, spec: null, qty_demand: null, dm_per_sp: null, note: null } // prettier-ignore
+    expect(heads('accessory', [empty])).toEqual(['STT', 'Tên sản phẩm / vật tư', 'ĐVT', 'SL đặt', 'Đơn giá (VND)', 'Thành tiền (VND)', 'Ghi chú']) // prettier-ignore
   })
 })

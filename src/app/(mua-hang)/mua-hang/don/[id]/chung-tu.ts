@@ -6,7 +6,11 @@ import {
 } from '@/app/(mua-hang)/mua-hang/don/_lib/po-draft'
 import type { Line } from '@/app/(mua-hang)/mua-hang/don/_lib/po-line'
 import type { Check } from '@/components/kit'
-import { duplicateLinePairs, duplicateLinesMessage, type DupLine } from '@/lib/po-line-dup'
+import {
+  duplicateLinePairs,
+  duplicateLinesMessage,
+  type DupLine,
+} from '@/lib/po-line-dup'
 
 /**
  * LOGIC THUẦN CỦA MÀN CHỨNG TỪ HỢP NHẤT — không React, có test.
@@ -73,43 +77,6 @@ export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
 }
 
 /** Đầu đơn cho ĐƠN MỚI — mẫu 'simple', mọi thứ lấy mặc định của mẫu. */
-/**
- * Chọn NCC trên đơn MỚI → mẫu theo đơn gần nhất của NCC đó (26/09/2026).
- *
- * Đo: 17/19 NCC có từ 2 đơn trở lên luôn dùng MỘT mẫu. Trả null = không đổi:
- * người soạn đã tự chọn mẫu, đơn đã lưu (đổi mẫu là đổi cột đang có số), NCC
- * chưa có đơn nào, hoặc đang đúng mẫu rồi.
- */
-export function templateForSupplier(i: {
-  supplierId: string
-  current: PoTemplate
-  touched: boolean
-  isNew: boolean
-  last: Readonly<Record<string, PoTemplate>>
-}): PoTemplate | null {
-  if (i.touched || !i.isNew) return null
-  const t = i.last[i.supplierId]
-  return t && t !== i.current ? t : null
-}
-
-/**
- * Thêm vật tư ĐẦU TIÊN vào đơn MỚI → mẫu theo nhóm của nó (`po_template` của
- * nhóm, 0183) — 29/09/2026. Tới đó mẫu mặc định "Phụ kiện" nên đơn bao bì / sắt
- * mở ra sai bộ cột (đo: 4/71 đơn thật mang mẫu lệch hàng). Trả null = không
- * đổi: đã tự chọn mẫu, đơn đã có dòng / đã lưu, nhóm chưa đặt mẫu, hoặc đúng rồi.
- */
-export function templateForGroup(i: {
-  group: string | null | undefined
-  current: PoTemplate
-  touched: boolean
-  isNew: boolean
-  groups: Readonly<Record<string, PoTemplate>>
-}): PoTemplate | null {
-  if (i.touched || !i.isNew || !i.group) return null
-  const t = i.groups[i.group]
-  return t && t !== i.current ? t : null
-}
-
 export function newHeader(opts: {
   supplierId?: string
   lsxId?: string

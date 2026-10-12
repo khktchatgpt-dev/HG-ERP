@@ -26,6 +26,7 @@ export const PO_TEMPLATES = [
   'glass',
   'wood',
   'mro',
+  'label',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
@@ -311,6 +312,33 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       payment: 'Chuyển khoản sau khi nhận đủ hàng và hoá đơn',
       invoice: INVOICE_VAT,
       lead_time: 'Theo thời gian NCC xác nhận trên báo giá',
+    },
+  },
+  /*
+   * TEM NHÃN / IN ẤN (12/10/2026). Trước đó tem nhãn đi mẫu Phụ kiện (PQ, HLH)
+   * hoặc RƠI vào mẫu carton vì chung nhóm "Bao bì - đóng gói - tem nhãn" — ra
+   * cột Cách mở / Lọt lòng vô nghĩa, còn thứ xưởng in cần nhất là KIỂU IN thì
+   * không có chỗ: Hiệp Hưng nhét "in offset, cán màng mờ 2 mặt, đục lỗ" vào tên
+   * (PO-2026-0089/0106), Tân Vinh để quy cách in sổ HDLR trong ghi chú
+   * (PO-2026-0158). Thuế theo 6/6 đơn tem nhãn thật: 8%, giá chưa gồm VAT.
+   * Điều khoản là BẢN NHÁP TRUNG TÍNH như MRO — 6 đơn đó đều để trống, dùng mặc
+   * định của mẫu nên chưa có câu chữ thật để chép.
+   */
+  label: {
+    key: 'label',
+    label: 'Tem nhãn / in ấn',
+    hint: 'Tem, nhãn, thẻ treo, decal, barcode, sổ HDLR — chất liệu + kích thước + kiểu in. PQ, HLH, Hiệp Hưng, Tân Vinh',
+    priceUnit: null,
+    vatRate: 8,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'NGƯỜI LẬP',
+    terms: {
+      quality: 'In đúng mẫu đã duyệt — đúng màu, kích thước, chất liệu giấy',
+      delivery_place: DELIVERY_HG,
+      payment: 'Thanh toán công nợ cuối tháng',
+      invoice: INVOICE_VAT,
+      lead_time: 'Từ 5 đến 7 ngày kể từ ngày duyệt mẫu in',
     },
   },
   simple: {
@@ -631,6 +659,7 @@ export const PO_TEMPLATE_SHORT: Record<PoTemplate, string> = {
   glass: 'Kính',
   wood: 'Gỗ',
   mro: 'Phụ tùng',
+  label: 'Tem nhãn',
   simple: 'Đơn giản',
 }
 

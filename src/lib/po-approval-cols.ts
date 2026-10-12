@@ -1,4 +1,9 @@
-import { PO_PRINT_ORDER, poField, poFieldText, type PoFieldLine } from './po-fields'
+import {
+  PO_PRINT_ORDER,
+  poField,
+  poPrintFieldText,
+  type PoPrintTextLine,
+} from './po-fields'
 import { isPoTemplate } from './po-template'
 
 /**
@@ -15,10 +20,7 @@ import { isPoTemplate } from './po-template'
  *  · `@stt` do lưới tự vẽ; "Giá lần trước" do màn ký tự chèn sau `@price`.
  */
 
-export type ApprovalColLine = PoFieldLine & {
-  spec?: string | null
-  dimension_text?: string | null
-}
+export type ApprovalColLine = PoPrintTextLine
 
 export type ApprovalCol =
   | { kind: 'fixed'; key: '@name' | '@unit' | '@qty' | '@price' | '@amount' }
@@ -49,11 +51,8 @@ export function approvalLineCols(
     }
     const f = poField(t, key)
     if (!f) continue
-    // "Kích thước" của mẫu inox/sắt: chưa nhập thì lấy tạm quy cách — như phiếu in.
-    const text =
-      f.key === 'dim'
-        ? (l: ApprovalColLine) => l.dimension_text ?? l.spec ?? ''
-        : (l: ApprovalColLine) => poFieldText(f, l)
+    // Chữ đọc CHUNG phiếu in (`poPrintFieldText`) — cột trắng mọi dòng thì bỏ, như `poPrintKeys`.
+    const text = (l: ApprovalColLine) => poPrintFieldText(f, l)
     if (!lines.some((l) => text(l) !== '')) continue
     out.push({
       kind: 'field',

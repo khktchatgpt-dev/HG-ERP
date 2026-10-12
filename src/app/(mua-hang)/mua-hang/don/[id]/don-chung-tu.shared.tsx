@@ -218,7 +218,7 @@ export type Props = {
   adjustments?: AdjustmentLite[]
   /** Lần đổi gần nhất của đơn khách theo lệnh đơn đang gắn — hộp Nguyên nhân bày để đối chiếu (0227). */
   lsxLastChange?: Record<string, LsxLastChange>
-  /** Mẫu của đơn gần nhất theo NCC — đơn mới chọn NCC thì mẫu tự theo (`templateForSupplier`). */
+  /** Mẫu của đơn gần nhất theo NCC — chỉ GỢI Ý đầu danh sách chọn mẫu, không tự áp (12/10/2026). */
   lastTemplates?: Record<string, PoTemplate>
   /** Hạng mục đang mở cho ô "Cho việc" (0230) — projectsService.options. */
   hangMuc?: ProjectOption[]
@@ -226,8 +226,6 @@ export type Props = {
   thueNcc?: Record<string, ThueNcc>
   /** Số đơn theo từng kiểu thuế cả công ty (khoá `khoaThue`) — "18 đơn" cạnh mỗi kiểu. */
   thueDem?: Record<string, number>
-  /** Mẫu đơn theo nhóm vật tư (0183) — đơn mới lấy mẫu theo nhóm của dòng đầu. */
-  groupTemplates?: Record<string, PoTemplate>
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */
   costs?: CostRow[]
   /** Người có thể đã trả phí tại chỗ (chi hộ, 0215) — ô "Người trả" của hộp ghi phí. */
