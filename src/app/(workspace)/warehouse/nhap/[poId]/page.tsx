@@ -21,11 +21,12 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ poId: string }>
-  searchParams: Promise<{ dot?: string }>
+  /** `sua` = phiếu cũ đã đảo để LẬP LẠI — Sửa phiếu ở chi tiết phiếu Kho (12/10/2026). */
+  searchParams: Promise<{ dot?: string; sua?: string }>
 }) {
   const user = await authService.requirePageUser()
   const [{ poId }, sp] = await Promise.all([params, searchParams])
-  const r = await taiPhieuNhap(user, poId, sp.dot, 'kho')
+  const r = await taiPhieuNhap(user, poId, sp.dot, 'kho', sp.sua)
 
   if (r.kind === 'chan') {
     return (
@@ -38,8 +39,9 @@ export default async function Page({
               <Btn icon="quayLai" href="/warehouse/nhap">
                 Về Hàng về
               </Btn>
-              <Btn icon="don" primary href={`/mua-hang/don/${r.po.id}`}>
-                Mở đơn {r.po.code}
+              {/* Hộp "Hàng của đơn" trong Kho — NV Kho không vào được khu Mua hàng. */}
+              <Btn icon="don" primary href={`/warehouse/nhap?don=${r.po.id}`}>
+                Xem hàng của đơn {r.po.code}
               </Btn>
             </>
           }

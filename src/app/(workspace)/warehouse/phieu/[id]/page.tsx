@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { stockService } from '@/modules/dept/warehouse/stock.service'
+import { loadChiTietPhieuNhap } from '@/modules/dept/supply/phieu-nhap-chi-tiet.repo'
 import { suyMaTuLichSu } from '@/lib/kho-ma-ly-do'
 import { canDao } from '@/lib/kho-dao-phieu'
 import { PhieuChiTietScreen } from './PhieuChiTietScreen'
@@ -28,12 +29,20 @@ export default async function PhieuChiTietPage({
   const user = await authService.requirePageUser()
   const { id } = await params
 
-  const detail = await stockService.docDetail(user, id).catch(() => null)
+  // Ba nguồn SONG SONG. Phiếu nhập theo đơn thì nạp thêm dữ liệu của trang chi
+  // tiết Cung ứng (`loadChiTietPhieuNhap` — kết quả nhận, lịch sử, đảo/lập lại)
+  // để Kho sửa phiếu ngay tại đây (Kho đợt 2 · Bước 2, 12/10/2026). Phiếu khác
+  // loại thì hàm trả null / 'khong-theo-don' — rẻ, một truy vấn.
+  const [detail, canEdit, ct] = await Promise.all([
+    stockService.docDetail(user, id).catch(() => null),
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.stock.write'),
+    loadChiTietPhieuNhap(id).catch(() => null),
+  ])
   if (!detail) notFound()
   const { doc, lines, stocktake_lines, reversed_by } = detail
-
-  const canEdit =
-    user.role === 'admin' ? true : await canAction(user, 'warehouse.stock.write')
+  const nhap = ct && ct !== 'khong-theo-don' ? ct : null
 
   return (
     <PhieuChiTietScreen
@@ -80,6 +89,7 @@ export default async function PhieuChiTietPage({
         soDong: lines.length,
       })}
       canEdit={canEdit}
+      nhap={nhap}
     />
   )
 }
