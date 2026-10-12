@@ -1,106 +1,143 @@
 import { describe, expect, it } from 'vitest'
 import {
-  demTheoLan,
-  khopTimKiem,
-  laneOf,
+  chiDongTuDo,
+  dotKeTiep,
+  ngay,
+  ngayBatThuong,
   soNgayToi,
-  whyOf,
-  xepTrongLan,
+  xepHangVe,
+  type DotMo,
   type HangVeRow,
 } from './kho-hang-ve'
 
-const TODAY = '2026-09-16'
+const TODAY = '2026-10-12'
 
-const row = (p: Partial<HangVeRow> & { key: string }): HangVeRow => ({
-  po_id: 'po-' + p.key,
-  po_code: 'PO-' + p.key,
+const row = (p: Partial<HangVeRow> & { po_code: string }): HangVeRow => ({
+  po_id: 'id-' + p.po_code,
   supplier_name: 'NCC',
   lsx_code: null,
-  shipment_id: null,
-  seq: null,
-  arrived: false,
-  date: null,
-  line_count: null,
-  total_qty: null,
+  extra_lsx: [],
+  template: 'accessory',
+  bucket: 'later',
+  expected_at: null,
   lines_done: 0,
   lines_total: 1,
+  owner_name: null,
+  dot: null,
   ...p,
 })
 
-describe('laneOf', () => {
-  it('không có ngày → chưa hẹn', () => expect(laneOf(null, TODAY)).toBe('no_eta'))
-  it('trước hôm nay → quá hẹn', () => expect(laneOf('2026-09-12', TODAY)).toBe('late'))
-  it('đúng hôm nay → hôm nay', () => expect(laneOf('2026-09-16', TODAY)).toBe('today'))
-  it('sau hôm nay → sắp tới', () => expect(laneOf('2026-09-18', TODAY)).toBe('soon'))
+describe('dotKeTiep', () => {
+  it('không có đợt mở → null (cột ghi "chưa chia đợt")', () => {
+    expect(dotKeTiep([], 0, new Map())).toBeNull()
+  })
+
+  it('có đợt nhưng không đợt nào còn mở → lịch đã hẹn hết, không phải "chưa chia đợt"', () => {
+    expect(dotKeTiep([], 2, new Map())).toEqual({
+      so_dot: 2,
+      ke_tiep: null,
+      da_nhap_truoc: [],
+    })
+  })
+
+  it('PO-2026-0100: đợt 1 đã nhập trước, kế tiếp là đợt 2', () => {
+    const dots: DotMo[] = [
+      { id: 's1', seq: 1, date: '2026-10-12', arrived: false, line_ids: ['a', 'b', 'c'] },
+      { id: 's2', seq: 2, date: '2026-10-22', arrived: false, line_ids: ['d'] },
+    ]
+    const open = new Map([['a', 0], ['b', 0], ['c', 0], ['d', 500]]) // prettier-ignore
+    expect(dotKeTiep(dots, 2, open)).toEqual({
+      so_dot: 2,
+      ke_tiep: { id: 's2', seq: 2, date: '2026-10-22', arrived: false },
+      da_nhap_truoc: [1],
+    })
+  })
+
+  it('xếp theo NGÀY chứ không theo số đợt', () => {
+    const dots: DotMo[] = [
+      { id: 's3', seq: 3, date: '2027-01-02', arrived: false, line_ids: ['x'] },
+      { id: 's2', seq: 2, date: '2026-10-25', arrived: true, line_ids: ['y'] },
+    ]
+    const r = dotKeTiep(dots, 3, new Map([['x', 1], ['y', 1]])) // prettier-ignore
+    expect(r?.ke_tiep).toEqual({ id: 's2', seq: 2, date: '2026-10-25', arrived: true })
+    expect(r?.da_nhap_truoc).toEqual([])
+  })
+
+  it('mọi đợt mở đã nhập đủ → ke_tiep null, liệt kê đợt đã nhập trước', () => {
+    const dots: DotMo[] = [
+      { id: 's1', seq: 1, date: '2026-10-12', arrived: false, line_ids: ['a'] },
+    ]
+    expect(dotKeTiep(dots, 1, new Map([['a', 0]]))).toEqual({
+      so_dot: 1,
+      ke_tiep: null,
+      da_nhap_truoc: [1],
+    })
+  })
+
+  it('dòng thiếu số trong lineOpen coi như CÒN chờ — không tự tuyên bố xong', () => {
+    const dots: DotMo[] = [{ id: 's1', seq: 1, date: '2026-10-12', arrived: false, line_ids: ['a', 'zz'] }] // prettier-ignore
+    expect(dotKeTiep(dots, 1, new Map([['a', 0]]))?.ke_tiep?.seq).toBe(1)
+  })
+
+  it('đợt không có dòng nào là đợt còn mở (chưa khai dòng), không phải đã xong', () => {
+    const dots: DotMo[] = [
+      { id: 's1', seq: 1, date: '2026-10-12', arrived: false, line_ids: [] },
+    ]
+    expect(dotKeTiep(dots, 1, new Map())?.ke_tiep?.seq).toBe(1)
+  })
+})
+
+describe('ngayBatThuong', () => {
+  it('PO-2026-0085 hẹn năm 2610 là bất thường', () => {
+    expect(ngayBatThuong('2610-10-03', TODAY)).toBe(true)
+  })
+  it('trễ hơn một năm về trước cũng bất thường', () => {
+    expect(ngayBatThuong('2025-09-01', TODAY)).toBe(true)
+  })
+  it('trong một năm thì bình thường; chưa hẹn thì không gắn nhãn', () => {
+    expect(ngayBatThuong('2027-02-10', TODAY)).toBe(false)
+    expect(ngayBatThuong('2026-09-05', TODAY)).toBe(false)
+    expect(ngayBatThuong(null, TODAY)).toBe(false)
+  })
+})
+
+describe('ngay', () => {
+  it('cùng năm với hôm nay thì dd/mm, khác năm thì thêm năm', () => {
+    expect(ngay('2026-10-22', TODAY)).toBe('22/10')
+    expect(ngay('2027-01-02', TODAY)).toBe('02/01/2027')
+    expect(ngay('2610-10-03', TODAY)).toBe('03/10/2610')
+    expect(ngay('2026-10-06T08:00:00+07:00', TODAY)).toBe('06/10')
+  })
 })
 
 describe('soNgayToi', () => {
-  it('đếm đúng qua ranh giới tháng', () => {
-    expect(soNgayToi('2026-10-01', '2026-09-30')).toBe(1)
-    expect(soNgayToi('2026-09-12', TODAY)).toBe(-4)
+  it('âm khi đã qua, 0 hôm nay', () => {
+    expect(soNgayToi('2026-10-05', TODAY)).toBe(-7)
+    expect(soNgayToi(TODAY, TODAY)).toBe(0)
+    expect(soNgayToi('2026-10-22', TODAY)).toBe(10)
   })
 })
 
-describe('demTheoLan — số trên chip là lời hứa', () => {
-  it('tổng các làn = tổng dòng, mỗi dòng đúng một làn', () => {
-    const rows = [
-      row({ key: '1', date: '2026-09-12' }),
-      row({ key: '2', date: '2026-09-16' }),
-      row({ key: '3', date: '2026-09-16', arrived: true }),
-      row({ key: '4', date: '2026-09-19' }),
-      row({ key: '5' }),
-      row({ key: '6' }),
+describe('chiDongTuDo', () => {
+  it('đơn gỗ chỉ có dòng theo mã SP (0 dòng vật tư) không vào sổ kho', () => {
+    expect(chiDongTuDo({ lines_total: 0 })).toBe(true)
+    expect(chiDongTuDo({ lines_total: 7 })).toBe(false)
+  })
+})
+
+describe('xepHangVe', () => {
+  it('hẹn sớm trước, chưa hẹn cuối, cùng ngày theo mã', () => {
+    const rs = [
+      row({ po_code: 'PO-3', expected_at: null }),
+      row({ po_code: 'PO-2', expected_at: '2026-10-13' }),
+      row({ po_code: 'PO-1', expected_at: '2026-10-13' }),
+      row({ po_code: 'PO-0', expected_at: '2026-10-02' }),
     ]
-    const c = demTheoLan(rows, TODAY)
-    expect(c).toEqual({ late: 1, today: 2, soon: 1, no_eta: 2, all: 6 })
-    expect(c.late + c.today + c.soon + c.no_eta).toBe(c.all)
+    expect(rs.sort(xepHangVe).map((r) => r.po_code)).toEqual([
+      'PO-0',
+      'PO-1',
+      'PO-2',
+      'PO-3',
+    ])
   })
-})
-
-describe('whyOf — dòng phụ nói điều cần biết', () => {
-  it('trễ nói số ngày trễ, tone stop, kèm đợt', () => {
-    expect(whyOf({ date: '2026-09-12', arrived: false, seq: 1 }, TODAY)).toEqual({
-      text: 'trễ 4 ngày · đợt 1',
-      tone: 'stop',
-    })
-  })
-  it('xe đã tới hôm nay → warn, không nói "còn 0 ngày"', () => {
-    expect(whyOf({ date: TODAY, arrived: true, seq: 2 }, TODAY)).toEqual({
-      text: 'NCC báo xe đã tới · đợt 2',
-      tone: 'warn',
-    })
-  })
-  it('trễ mà xe đã tới: trễ đứng trước, tone stop thắng', () => {
-    const r = whyOf({ date: '2026-09-15', arrived: true, seq: null }, TODAY)
-    expect(r.text).toBe('trễ 1 ngày · NCC báo xe đã tới')
-    expect(r.tone).toBe('stop')
-  })
-  it('chưa hẹn ngày nói thẳng', () => {
-    expect(whyOf({ date: null, arrived: false, seq: null }, TODAY).text).toBe(
-      'chưa chốt ngày giao',
-    )
-  })
-})
-
-describe('xepTrongLan', () => {
-  it('ngày sớm trước, cùng ngày thì xe tới trước, rồi theo mã', () => {
-    const rows = [
-      row({ key: 'c', date: '2026-09-18' }),
-      row({ key: 'b', date: '2026-09-17' }),
-      row({ key: 'a', date: '2026-09-17', arrived: true }),
-      row({ key: 'z' }),
-    ]
-    expect(rows.sort(xepTrongLan).map((r) => r.key)).toEqual(['a', 'b', 'c', 'z'])
-  })
-})
-
-describe('khopTimKiem', () => {
-  const r = row({ key: '0044', supplier_name: 'Vạn Vi Thành', lsx_code: 'LSX 07/26-14' })
-  it('khớp mã đơn, NCC, lệnh — không phân biệt hoa thường', () => {
-    expect(khopTimKiem(r, 'po-0044')).toBe(true)
-    expect(khopTimKiem(r, 'vi thành')).toBe(true)
-    expect(khopTimKiem(r, '07/26')).toBe(true)
-    expect(khopTimKiem(r, 'sơn')).toBe(false)
-  })
-  it('rỗng thì khớp tất cả', () => expect(khopTimKiem(r, '  ')).toBe(true))
 })

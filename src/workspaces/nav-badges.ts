@@ -25,10 +25,28 @@ export async function resolveNavBadges(
   try {
     if (workspaceId === 'exec') return await execBadges(user)
     if (workspaceId === 'planning') return await supplyBadges(user)
+    if (workspaceId === 'warehouse') return await warehouseBadges()
     return {}
   } catch {
     return {}
   }
+}
+
+/**
+ * Khu Kho: "Hàng về" = đơn QUÁ HẸN + HÔM NAY (Kho đợt 2 · Bước 1, 12/10/2026).
+ *
+ * Đếm bằng `incomingBucket` — đúng hàm trang `/warehouse/nhap` dùng để xếp mốc
+ * và đếm ô "Quá hẹn"/"Hôm nay", cũng là hàm badge Theo dõi của Cung ứng. Kho xem
+ * CẢ PHÒNG nên không lọc theo người phụ trách (khác badge bên Cung ứng).
+ */
+async function warehouseBadges(): Promise<Record<string, number>> {
+  const today = todayVn()
+  const rows = await posRepo.listWatchFields()
+  const ganVe = rows.filter((p) => {
+    const b = incomingBucket(p, today)
+    return b === 'overdue' || b === 'today'
+  }).length
+  return ganVe > 0 ? { '/warehouse/nhap': ganVe } : {}
 }
 
 /** Khu Giám đốc: "Chờ tôi phê duyệt" = PO + LSX + báo giá đang chờ ký. */
@@ -70,7 +88,10 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   const scope = defaultScope({ canApprove })
   const [rows, owned] = await Promise.all([posRepo.listWatchFields(), scope === 'toi' ? posRepo.listOwnership() : Promise.resolve(null)]) // prettier-ignore
   const inScope = scope === 'toi' ? rows.filter((p) => isMyPo(p, user.id)) : rows
-  const issues = await countMeetingIssues(today, owned ? myLsxIds(owned, user.id) : undefined)
+  const issues = await countMeetingIssues(
+    today,
+    owned ? myLsxIds(owned, user.id) : undefined,
+  )
   // Hộp thư: mọi việc trong phạm vi (trang cộng đủ các làn).
   const todo = scope === 'toi' ? countMyTodos(rows, user.id, today) : inScope.filter((p) => classifyTodo(p, today)).length // prettier-ignore
   /*
