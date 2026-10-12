@@ -126,6 +126,16 @@ mức** (chốt 16/09). `XuatScreen.tsx` 805 dòng → khối là file riêng.
 **B5 · Tồn theo lệnh.** Công tắc "Theo lệnh" ở Tồn kho: mỗi lệnh đã nhận · đã xuất
 · còn trong kho; rổ **Lệnh xong còn hàng** với hai nút Xuất bổ sung / Về tồn chung (Q4).
 
+> **B5 XONG 12/10** `8c21864` (bản vẽ https://claude.ai/artifact/L2FFuzCdLzMPzQJ7ULUprF,
+> duyệt theo đề xuất Q1–Q5): `/warehouse/ton?xem=lenh` — 15 lệnh có hàng về, rổ Kho còn hàng 10 ·
+> Quá hạn/≤ 7 ngày 2 · Lệnh xong chưa ghi xuất 3; 161 mã còn trong kho cho lệnh; ngăn chi tiết
+> Còn trong kho / Kho hết (nói vì sao) / Đã xuất đủ. Theo mã thêm cột "Của lệnh" + rổ "Tồn chung"
+> (10 mã). **Chia tồn** (`lib/kho-ton-lenh` `chiaTon`): 12 mã thuộc nhiều lệnh, B4 từng đếm trùng
+> (PKN0390 kho 9.880 hiện ở cả 05-MX và 02-ROSCO) — nay lệnh đang SX hạn xuất sớm trước, lệnh xong
+> sau cùng; B4 dùng cùng phần chia (09-MX 48 mã, mã bị chia hết ghi "giữ cho …"). Đổi so với kế hoạch
+> gốc: **không** có nút Xuất bổ sung / Về tồn chung — đo ra 3 lệnh đã xong đều kho hết (kiểm kê 15/09
+> đã trừ), ghi bù sẽ âm tồn. Tải mọi lệnh một lượt ~2 s → Tồn kho mở chậm hơn ~1–2 s.
+
 **B6 · Báo cáo Nhập–Xuất–Tồn theo kỳ** `/warehouse/bao-cao`: tồn đầu (RPC 0200) ·
 nhập theo N1/N2/N3/N4 · xuất theo X1/X3/X5/khác · tồn cuối · giá trị; lọc nhóm /
 lệnh; Excel. Nghiệm thu: tổng kỳ 10/2026 khớp Sổ phiếu cùng kỳ.
