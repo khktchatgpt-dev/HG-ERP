@@ -72,13 +72,13 @@ type XCol = {
 const nOrNull = (v: number | null | undefined) => (v == null ? '' : v)
 
 /**
- * Định dạng số theo GIÁ TRỊ, giống `toLocaleString('vi-VN')` của phiếu in (tối
- * đa 3 số lẻ). Một chuỗi `#,##0` cho mọi ô từng làm m³/SP 0,006 hiện "0" và
+ * Định dạng số theo GIÁ TRỊ, giống `fmtSoVn` của phiếu in (tối đa 6 số lẻ — 12/10/2026,
+ * m³/SP 0,000487 của PO-2026-0177 hiện "0" với 3 lẻ). Một chuỗi `#,##0` cho mọi ô từng làm m³/SP 0,006 hiện "0" và
  * tổng m³ 0,629 hiện "1" trên file (05/10/2026). Còn `#,##0.###` cho số
  * nguyên thì Excel in kèm dấu chấm thừa ("100.") — nên tách hai nhánh.
  */
 export const numFmtOf = (v: unknown) =>
-  typeof v === 'number' && !Number.isInteger(v) ? '#,##0.###' : '#,##0'
+  typeof v === 'number' && !Number.isInteger(v) ? '#,##0.######' : '#,##0'
 
 /**
  * Định dạng số cho ô SL đặt khi dòng có chụp ĐÓNG GÓI MUA (0128): giữ ô là số

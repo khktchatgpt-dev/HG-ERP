@@ -21,7 +21,7 @@ import { CellHint, NumInput, Pick, TextInput, type IcoName } from '@/components/
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import type { DocTemplate } from '@/lib/doc-templates'
 import { type AdjChange } from '@/lib/po-adjust'
-import { type PoField } from '@/lib/po-fields'
+import { fmtSoVn, type PoField } from '@/lib/po-fields'
 import { fmtMoney, roundMoney } from '@/lib/po-line'
 import { type PoStatus } from '@/lib/po-status'
 import { type PoTemplate } from '@/lib/po-template'
@@ -361,7 +361,7 @@ export function ViewCell({
 }) {
   if (f.kind === 'calc') {
     const v = lineQty2(template, l) ?? tongDv2(template, l)
-    return <span className="num">{v == null ? '—' : v.toLocaleString('vi-VN')}</span>
+    return <span className="num">{v == null ? '—' : fmtSoVn(v)}</span>
   }
   if (f.kind === 'm3sheet') return <M3Tam l={l} />
   if (f.kind === 'inner')
@@ -385,7 +385,7 @@ export function ViewCell({
   const v = f.field ? (l as unknown as Record<string, Num | string>)[f.field] : ''
   if (v === '' || v == null) return <span className="text-[var(--ink-empty)]">—</span>
   return typeof v === 'number' ? (
-    <span className="num">{v.toLocaleString('vi-VN')}</span>
+    <span className="num">{fmtSoVn(v)}</span>
   ) : (
     <>{String(v)}</>
   )

@@ -306,9 +306,10 @@ describe('buildPoExcel — khớp phiếu in', () => {
 })
 
 describe('numFmtOf — số trên file giống số trên phiếu in', () => {
-  it('số lẻ giữ tới 3 chữ số (m³/SP 0,006 không thành 0); số nguyên không dấu chấm thừa', () => {
-    expect(numFmtOf(0.00629)).toBe('#,##0.###')
-    expect(numFmtOf(0.629)).toBe('#,##0.###')
+  it('số lẻ giữ tới 6 chữ số (m³/SP 0,000487 của PO-2026-0177 không thành 0); số nguyên không dấu chấm thừa', () => {
+    expect(numFmtOf(0.000487)).toBe('#,##0.######')
+    expect(numFmtOf(0.00629)).toBe('#,##0.######')
+    expect(numFmtOf(0.629)).toBe('#,##0.######')
     expect(numFmtOf(100)).toBe('#,##0')
     expect(numFmtOf('')).toBe('#,##0')
   })

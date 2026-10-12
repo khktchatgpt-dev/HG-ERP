@@ -813,8 +813,18 @@ export function poLsxQty(
   return Math.round((d / m) * 1000) / 1000
 }
 
-const fmtVi = (n: number | null | undefined) =>
-  n == null ? '' : Number(n).toLocaleString('vi-VN')
+/**
+ * SỐ KIỂU VN, GIỮ TỚI 6 SỐ LẺ — cho ô thông số của dòng đơn (m³/SP, kg/m, m²…).
+ *
+ * `toLocaleString('vi-VN')` trơn chỉ giữ 3 số lẻ: m³/SP 0,000487 của tay vịn gỗ
+ * (PO-2026-0177, 12/10/2026) hiện thành "0" trên màn đơn, phiếu in lẫn màn ký —
+ * trong khi tiền vẫn tính đúng 0,753876 m³. 6 lẻ = cùng độ chính xác mọi tổng m³
+ * đang làm tròn (`round6`, po-template). Số nguyên và số ít lẻ in y như cũ.
+ */
+export const fmtSoVn = (n: number | null | undefined) =>
+  n == null ? '' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 6 })
+
+const fmtVi = fmtSoVn
 
 /**
  * CHỮ của một ô khai báo trên một dòng đơn — '' khi trống, KHÔNG trả '0'.
