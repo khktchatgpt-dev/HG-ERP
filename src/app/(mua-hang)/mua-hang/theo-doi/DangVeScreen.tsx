@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type ComponentProps } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { DaGhiSoBar } from '@/components/warehouse/DaGhiSoBar'
+import { DaGhiSoBar } from './da-ghi-so-bar'
 import {
   INCOMING_BUCKET,
   INCOMING_BUCKETS,

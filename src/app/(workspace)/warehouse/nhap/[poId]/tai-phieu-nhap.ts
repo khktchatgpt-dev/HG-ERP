@@ -16,7 +16,8 @@ import type { NoiNhan, PhieuNhapScreen } from './PhieuNhapScreen'
 type Props = ComponentProps<typeof PhieuNhapScreen>
 
 /**
- * NẠP PHIẾU NHẬP THEO ĐƠN — dùng chung cho HAI cửa vào cùng một form:
+ * NẠP PHIẾU NHẬP THEO ĐƠN (12/10/2026: Kho và Cung ứng mỗi bên một bản — luật
+ * dưới đây phải sửa ở CẢ HAI nếu đổi). Bản gốc viết cho HAI cửa vào cùng một form:
  * Kho › Hàng về (`/warehouse/nhap/[poId]`) và Cung ứng › Đang về
  * (`/mua-hang/don/[id]/nhan`, 01/10/2026 — Cung ứng tạm nhận hàng thay Kho).
  *

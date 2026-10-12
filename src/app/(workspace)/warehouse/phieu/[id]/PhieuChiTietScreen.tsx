@@ -20,11 +20,8 @@ import {
   Timeline,
 } from '@/components/kit'
 import type { ChiTietPhieuNhap } from '@/modules/dept/supply/phieu-nhap-chi-tiet.repo'
-import {
-  SuaPhieuSheet,
-  type Kieu,
-} from '@/app/(mua-hang)/mua-hang/theo-doi/da-ve/sua-phieu'
-import { KgCanSheet } from '@/app/(mua-hang)/mua-hang/theo-doi/da-ve/kg-can-sheet'
+import { SuaPhieuSheet, type Kieu } from './sua-phieu'
+import { KgCanSheet } from './kg-can-sheet'
 import { DaoSheet } from './dao-sheet'
 import { BangDongKho, BangDongNhap } from './dong-phieu'
 
@@ -93,9 +90,10 @@ const HEP = 900
  * Tờ phiếu tự kể ba chuyện: đã vào sổ chưa, ai ghi, CÒN HIỆU LỰC KHÔNG.
  *
  * Phiếu nhập THEO ĐƠN MUA (`nhap` có giá trị) sửa được NGAY TẠI KHO — trước
- * 12/10 chỉ có Đảo phiếu, ba cách sửa nằm ở khu Cung ứng. Dùng lại đúng hộp
- * của Cung ứng (`SuaPhieuSheet`, `KgCanSheet`) và đúng route ghi; riêng "Sửa số
- * lượng" mở form nhận TRONG khu Kho (`/warehouse/nhap/[đơn]?sua=`).
+ * 12/10 chỉ có Đảo phiếu, ba cách sửa nằm ở khu Cung ứng. Hộp sửa là BẢN RIÊNG
+ * của Kho (`./sua-phieu`, `./kg-can-sheet` — chép từ Cung ứng 12/10, chủ dự án:
+ * "không dùng chung giao diện giữa 2 phòng"), cùng route ghi và cùng luật;
+ * "Sửa số lượng" mở form nhận TRONG khu Kho (`/warehouse/nhap/[đơn]?sua=`).
  *
  * Luật màn hẹp: một đầu trang một hàng, đầu phiếu là dải chip tự xuống dòng (bản
  * cũ là cột FactBox bên phải — nguyên nhân cuộn ngang 800/880 ở 1280), một vùng
@@ -456,12 +454,7 @@ export function PhieuChiTietScreen({
         />
       )}
       {row && sua && (
-        <SuaPhieuSheet
-          row={row}
-          kieuBanDau={sua}
-          lapLaiHref={`/warehouse/nhap/${row.po_id}?sua=${row.doc_id}`}
-          onClose={() => setSua(null)}
-        />
+        <SuaPhieuSheet row={row} kieuBanDau={sua} onClose={() => setSua(null)} />
       )}
       {row && moKg && <KgCanSheet row={row} onClose={() => setMoKg(false)} />}
     </div>

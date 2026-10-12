@@ -10,8 +10,9 @@ export const dynamic = 'force-dynamic'
  * PHIẾU NHẬP THEO ĐƠN MUA — `/warehouse/nhap/[poId]?dot=<shipment_id>`
  * (Bước 1 Kho, việc 3: form; việc 4 nối ghi sổ).
  *
- * Dữ liệu nạp qua `taiPhieuNhap` — dùng chung với cửa Cung ứng
- * (`/mua-hang/don/[id]/nhan`), nên hai cửa không thể đếm khác nhau.
+ * Form + bộ nạp là của RIÊNG Kho (12/10/2026: cửa Cung ứng `/mua-hang/don/[id]/nhan`
+ * có bản riêng — hai phòng không dùng chung giao diện). Đường ghi + luật vẫn chung
+ * (POST `docs/receipt`, `lib/kho-phieu-nhap`), nên hai cửa không thể ghi khác nhau.
  *
  * Đơn không ở trạng thái nhận được (chưa duyệt, đã về đủ, đã huỷ) thì màn
  * nói thẳng vì sao và dẫn về đơn — không mở một form ghi sổ vào đơn sai.

@@ -47,18 +47,11 @@ export function SuaPhieuSheet({
   row,
   onClose,
   kieuBanDau = 'thong-tin',
-  lapLaiHref,
 }: {
   row: DaVeRow
   onClose: () => void
   /** Mở thẳng cách sửa nào (trang chi tiết phiếu có ba nút riêng — 04/10/2026). */
   kieuBanDau?: Kieu
-  /**
-   * Đường mở form LẬP LẠI sau khi đảo (cách "Sửa số lượng"). Mặc định cửa Cung
-   * ứng `/mua-hang/don/[đơn]/nhan?sua=`; khu Kho truyền `/warehouse/nhap/[đơn]?sua=`
-   * để thủ kho không bị đá sang khu Mua hàng (12/10/2026).
-   */
-  lapLaiHref?: string
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -138,7 +131,7 @@ export function SuaPhieuSheet({
         `Đã đảo ${row.code}`,
         `Phiếu đảo ${rev.code} — mở phiếu mới để lập lại`,
       )
-      router.push(lapLaiHref ?? `/mua-hang/don/${row.po_id}/nhan?sua=${row.doc_id}`)
+      router.push(`/mua-hang/don/${row.po_id}/nhan?sua=${row.doc_id}`)
     } catch (e) {
       setLoi(apiErrorText(e))
       setMoiChenh(e instanceof ApiError && e.code === 'REVERSAL_STOCK_SHORT')

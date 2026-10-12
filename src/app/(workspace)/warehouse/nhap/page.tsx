@@ -4,7 +4,7 @@ import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { hangVeRepo } from '@/modules/dept/warehouse/hang-ve.repo'
 import { incomingBucket, isIncoming } from '@/lib/supply-watch'
 import { dotKeTiep, type HangVeRow } from '@/lib/kho-hang-ve'
-import { loadWatchPos, todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
+import { loadWatchPos, todayIso } from '@/modules/dept/supply/watch-pos'
 import { HangVeScreen } from './HangVeScreen'
 import { taiHangCuaDon } from './tai-hang-cua-don'
 

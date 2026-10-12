@@ -1,5 +1,6 @@
 /**
- * Form này có HAI cửa vào (01/10/2026): Kho › Hàng về, và Cung ứng › Đang về
+ * (12/10/2026: mỗi phòng đã có bản form RIÊNG — bảng này giữ cả hai khoá cho bộ nạp.)
+ * Form này từng có HAI cửa vào (01/10/2026): Kho › Hàng về, và Cung ứng › Đang về
  * khi Cung ứng tạm nhận hàng thay Kho. Cùng một form, cùng đường ghi sổ — chỉ
  * khác đường dẫn quay về, breadcrumb và khung bọc của khu.
  */
