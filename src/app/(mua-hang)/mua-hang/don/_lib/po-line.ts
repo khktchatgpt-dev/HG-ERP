@@ -4,6 +4,7 @@ import {
   cartonAreaM2,
   deriveLine,
   foamM3PerSheet,
+  FREE_LINE_TEMPLATES,
   hasQty2Override,
   PO_TEMPLATE_META,
   QTY2_OVERRIDE_UNIT,
@@ -1106,6 +1107,8 @@ export function migrateDraftLine(t: PoTemplate, l: Line): Line {
     m3_per_unit: l.m3_per_unit ?? '',
     warranty_text: l.warranty_text ?? '',
     print_spec: l.print_spec ?? '',
+    // Nháp lưu từ bản trước 0234: dòng phí thiếu cờ — ngoài mẫu gỗ, dòng tự do CHỈ là phí.
+    fee: l.fee ?? (l.is_free === true && !FREE_LINE_TEMPLATES.includes(t)),
     // 0182 — nháp lưu trước khi có cặp quy đổi giá.
     unit2_per_unit: l.unit2_per_unit ?? '',
     unit2_label: l.unit2_label ?? '',

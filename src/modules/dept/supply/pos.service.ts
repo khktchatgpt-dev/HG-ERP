@@ -5,6 +5,7 @@ import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.re
 import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
 import { canAdjust, planAdjustment } from '@/lib/po-adjust'
 import {
+  dongKhongMaLaPhi,
   FREE_LINE_TEMPLATES,
   deriveLine,
   poTemplateMeta,
@@ -471,6 +472,8 @@ export const posService = {
     }
 
     const template = input.template ?? 'simple'
+    // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
+    input.lines = dongKhongMaLaPhi(template, input.lines)
     assertFreeLinesAllowed(template, input.lines)
     assertSplits(input.lines, [lsxId, ...extraLsxIds])
     const code = await posRepo.nextCode()
@@ -706,6 +709,8 @@ export const posService = {
     // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
     // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
     const template = input.template ?? before.template ?? 'simple'
+    // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
+    input.lines = dongKhongMaLaPhi(template, input.lines)
     assertFreeLinesAllowed(template, input.lines)
     // Đổi sang NCC khác lúc sửa nháp — NCC mới cũng phải đặt được.
     if (input.supplier_id !== before.supplier_id)
@@ -1465,6 +1470,8 @@ export const posService = {
     }
 
     const template = (before.template ?? 'simple') as PoTemplate
+    // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
+    input.lines = dongKhongMaLaPhi(template, input.lines)
     assertFreeLinesAllowed(template, input.lines)
     const extra = await posRepo.listExtraLsx(id)
     assertSplits(input.lines, [before.production_order_id, ...extra.map((x) => x.id)])

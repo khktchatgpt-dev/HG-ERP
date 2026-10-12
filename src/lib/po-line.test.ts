@@ -268,3 +268,31 @@ describe('dòng phí / dịch vụ (0234)', () => {
     expect(feeLast(ds).map((l) => l.id)).toEqual(['a', 'b', 'phi1', 'phi2'])
   })
 })
+
+import { dongKhongMaLaPhi } from './po-template'
+
+/*
+ * 13/10/2026 — chị Nga sửa PO-2026-0176 bị chặn "chỉ mẫu gỗ": tab / nháp từ bản cũ
+ * gửi dòng phí thiếu `line_kind`. Ngoài mẫu gỗ, dòng không mã CHỈ là phí.
+ */
+describe('dongKhongMaLaPhi — dòng không mã thiếu cờ', () => {
+  const ds = [
+    { material_id: 'vt-1', line_kind: null },
+    { material_id: null, line_kind: null, line_name: 'Công dán + keo bồi' },
+    { material_id: null, line_kind: 'phi' },
+  ]
+  it('mẫu khác gỗ: dòng không mã thành dòng phí; dòng hàng giữ nguyên', () => {
+    expect(dongKhongMaLaPhi('carton', ds).map((l) => l.line_kind)).toEqual([
+      null,
+      'phi',
+      'phi',
+    ])
+  })
+  it('mẫu gỗ: dòng tự do là mã SP — không tự gắn phí', () => {
+    expect(dongKhongMaLaPhi('wood', ds).map((l) => l.line_kind)).toEqual([
+      null,
+      null,
+      'phi',
+    ])
+  })
+})

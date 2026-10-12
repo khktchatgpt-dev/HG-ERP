@@ -45,6 +45,23 @@ export type PoTemplate = (typeof PO_TEMPLATES)[number]
  */
 export const FREE_LINE_TEMPLATES: readonly PoTemplate[] = ['wood']
 
+/**
+ * DÒNG KHÔNG MÃ Ở MẪU KHÁC GỖ = DÒNG PHÍ / DỊCH VỤ (0234, 13/10/2026).
+ *
+ * Ngoài mẫu gỗ, dòng không gắn vật tư CHỈ có thể là dòng phí. Nhưng tab mở từ trước
+ * khi có 0234 (JS cũ không biết `line_kind`) hoặc bản gõ dở tự lưu từ bản cũ gửi dòng
+ * phí lên thiếu cờ → server chặn "chỉ mẫu gỗ" (chị Nga sửa PO-2026-0176). Server và
+ * khôi phục nháp tự gắn lại cờ thay vì chặn; mẫu gỗ giữ nguyên (dòng mã SP tự do).
+ */
+export function dongKhongMaLaPhi<
+  T extends { material_id?: string | null; line_kind?: string | null },
+>(t: PoTemplate, lines: readonly T[]): T[] {
+  if (FREE_LINE_TEMPLATES.includes(t)) return [...lines]
+  return lines.map((l) =>
+    !l.material_id && l.line_kind == null ? { ...l, line_kind: 'phi' } : l,
+  )
+}
+
 export type PoTerms = {
   quality: string
   delivery_place: string

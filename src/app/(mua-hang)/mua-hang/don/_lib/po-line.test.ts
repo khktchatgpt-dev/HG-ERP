@@ -1493,3 +1493,13 @@ describe('dòng phí / dịch vụ trên lưới (0234)', () => {
     expect(l.material_id.startsWith('free-')).toBe(true)
   })
 })
+
+describe('khôi phục nháp cũ có dòng phí (13/10/2026)', () => {
+  it('nháp từ bản trước 0234: dòng tự do ở mẫu khác gỗ nhận lại cờ phí; mẫu gỗ thì không', () => {
+    const { fee: _bo, ...cu } = { ...newFeeLine('Công dán + keo bồi'), qty: 557 as Num, price: 3_000 as Num } // prettier-ignore
+    void _bo
+    expect(migrateDraftLine('carton', cu as Line).fee).toBe(true)
+    expect(migrateDraftLine('wood', cu as Line).fee).toBe(false)
+    expect(migrateDraftLine('wood', { ...cu, fee: true } as Line).fee).toBe(true)
+  })
+})
