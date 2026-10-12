@@ -102,6 +102,12 @@ ngay ở khu mình.
 cố" dùng chung đường ghi `GhiSuCoSheet` hiện có → hiện ở hộp Giao nhận của Cung
 ứng để họ xử lý với NCC.
 
+> **B3 (bản gọn) XONG 12/10** `f05d848` (bản vẽ https://claude.ai/artifact/WLinMQm3FQ1T7NVufZQHjS):
+> ⋯ trên dòng Hàng về + hộp Báo sự cố RIÊNG của Kho (nhận / từ chối nhận cả lô → "[Từ chối nhận]"
+> đầu mô tả), nhãn "N sự cố", mục Sự cố trong hộp Hàng của đơn; server phát `po.issue_recorded` →
+> thông báo `po_issue` cho người phụ trách đơn. **Migration 0231 CHƯA ÁP** — áp xong mới có thông
+> báo (trước đó sự cố vẫn ghi vào sổ). Đo trước khi dựng: sổ sự cố 0 dòng, nên chỉ làm bản gọn.
+
 **B4 · Xuất cho lệnh: điền từ hàng đã về cho lệnh.** Chọn lệnh → khối "Hàng về cho
 lệnh này còn trong kho" (nhận qua đơn của lệnh, cả đơn gộp lệnh − đã xuất cho
 lệnh, ≤ tồn thực) → tích / Lấy tất cả → sửa số thực lấy → Ghi sổ. **Không dùng định
