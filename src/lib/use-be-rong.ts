@@ -18,8 +18,12 @@ export function useBeRong(ref: RefObject<HTMLElement | null>, macDinh = 1200): n
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const tinh = () =>
+    const tinh = () => {
+      // 0 = khung chưa dàn trang (ẩn, tab nền, môi trường test) — giữ số cũ,
+      // đừng coi là "màn hẹp nhất" rồi bóp hết cột.
+      if (el.clientWidth === 0) return
       setRong((w) => (Math.abs(w - el.clientWidth) < 2 ? w : el.clientWidth))
+    }
     tinh()
     const ro = new ResizeObserver(tinh)
     ro.observe(el)

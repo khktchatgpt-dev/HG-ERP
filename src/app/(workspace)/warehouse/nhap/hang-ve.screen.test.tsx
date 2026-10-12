@@ -151,3 +151,24 @@ describe('Kho › Hàng về', () => {
     expect(nhan.getAttribute('href')).toBe('/warehouse/nhap/id-PO-2026-0100?dot=dot-2')
   })
 })
+
+describe('Kho › Hàng về · màn hẹp (luật 12/10/2026)', () => {
+  it('khung 800px (1024 có sidebar): ẩn Loại hàng + Phụ trách, nút "Nhận", đợt gọn', () => {
+    const goc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 800 }) // prettier-ignore
+    try {
+      dung()
+      const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
+      expect(heads).not.toContain('Loại hàng')
+      expect(heads).not.toContain('Phụ trách')
+      const tr = dongCua('PO-2026-0100')
+      expect(within(tr).getByText('2/2 · 22/10')).toBeTruthy()
+      expect(within(tr).getByRole('link', { name: /^Nhận$/ })).toBeTruthy()
+      // Giá trị bị ẩn không mất: nằm ở tooltip của mã đơn.
+      expect(within(tr).getByRole('button', { name: 'PO-2026-0100' }).getAttribute('title')).toContain('Đặng Thị Thanh Nga') // prettier-ignore
+      expect(screen.getByRole('button', { name: /Lọc thêm/ })).toBeTruthy()
+    } finally {
+      if (goc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', goc)
+    }
+  })
+})

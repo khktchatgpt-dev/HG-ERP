@@ -22,53 +22,31 @@ import type { DocTemplate } from '@/lib/doc-templates'
 import {
   danhGiaVuot,
   kiemTruocGhiSo,
-  sauPhieu,
   tinhTong,
   type DongNhan,
-  type TinhTrang,
 } from '@/lib/kho-phieu-nhap'
-import { kgDuKien, lechKg } from '@/lib/can-kg'
 import {
   Action,
   Affected,
   Btn,
-  CellHint,
-  Code,
   CommitBar,
   Consequence,
-  Grid,
-  GridBody,
-  GridFoot,
-  GridHead,
-  GridRow,
   Hint,
-  LineStatus,
   NoticeBar,
-  NumInput,
-  Pick,
   ScreenFrame,
   ScreenHeader,
   Sheet,
   SheetActions,
-  Tag,
   TextArea,
-  TextInput,
-  Th,
   useToast,
 } from '@/components/kit'
 import { DUONG, type NoiNhan } from './duong'
 import { DauPhieu, NhacSoNccSheet, O_LY_DO_LUI, O_SO_NCC } from './dau-phieu'
+import { LuoiNhan } from './luoi-nhan'
 
 export type { NoiNhan }
 
-const TINH_TRANG: { value: TinhTrang; label: string }[] = [
-  { value: 'ok', label: 'Đạt' },
-  { value: 'blocked', label: 'Sai quy cách' },
-]
-
 const fmt = (n: number) => n.toLocaleString('vi-VN')
-/** Số kiểu VN: "1.390" = 1390 · "108,40" = 108,4. */
-const docSo = (v: string) => Number(v.replace(/\./g, '').replace(',', '.')) || 0
 
 /**
  * PHIẾU NHẬP THEO ĐƠN — màn chứng từ + lưới (Bước 1 Kho). Bản thiết kế:
@@ -389,237 +367,20 @@ export function PhieuNhapScreen({
           </NoticeBar>
         )}
 
-        <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-          <Grid minWidth={coKg ? 1220 : 1180}>
-            <GridHead>
-              <Th width={30}>#</Th>
-              <Th width={96}>Mã</Th>
-              <Th width={dots.length > 0 ? 128 : 56}>Đợt</Th>
-              <Th>Tên vật tư</Th>
-              <Th width={52}>ĐVT</Th>
-              <Th num width={80}>
-                Đặt
-              </Th>
-              <Th num width={80}>
-                Đã về
-              </Th>
-              <Th num width={80}>
-                Còn chờ
-              </Th>
-              <Th num width={120}>
-                Lần này
-              </Th>
-              {coKg && (
-                <Th num width={140}>
-                  Kg cân (nếu có)
-                </Th>
-              )}
-              <Th width={146}>Tình trạng</Th>
-              <Th width={coKg ? 200 : 300}>Ghi chú</Th>
-            </GridHead>
-            <GridBody>
-              {rows.map((r, i) => {
-                const vuot = r.editable ? danhGiaVuot(r) : null
-                return (
-                  <GridRow key={r.po_line_id}>
-                    <td className="k-c-n">{i + 1}</td>
-                    <td>
-                      <Code>{r.code}</Code>
-                    </td>
-                    <td className="text-k-label">
-                      {(() => {
-                        const n = nhan.get(r.po_line_id) ?? { kind: 'none' as const }
-                        if (n.kind === 'this')
-                          return (
-                            <Tag tone="neutral">
-                              đợt {n.seq} · {fmt(n.qty)} {r.unit}
-                            </Tag>
-                          )
-                        if (n.kind === 'other')
-                          return (
-                            <span className="text-[var(--ink-3)]">
-                              đợt {n.seq} · {isoToVn(n.date).slice(0, 5)}
-                              {n.arrived ? ' · xe đã tới' : ''}
-                            </span>
-                          )
-                        if (n.kind === 'done')
-                          return <Tag tone="done">đã nhận đợt {n.seq}</Tag>
-                        return (
-                          <span className="text-[var(--ink-empty)]">
-                            {dots.length > 0 ? 'chưa xếp đợt' : '—'}
-                          </span>
-                        )
-                      })()}
-                    </td>
-                    <td
-                      className="max-w-0"
-                      title={r.chi_tiet ? `${r.name}\n${r.chi_tiet}` : r.name}
-                    >
-                      <div className="truncate">{r.name}</div>
-                      {r.chi_tiet && (
-                        <div className="text-k-label truncate text-[var(--ink-3)]">
-                          {r.chi_tiet}
-                        </div>
-                      )}
-                    </td>
-                    <td className="text-[var(--ink-3)]">{r.unit}</td>
-                    <td className="k-r num">{fmt(r.qty_ordered)}</td>
-                    <td className="k-r num text-[var(--ink-3)]">{fmt(r.qty_received)}</td>
-                    <td className="k-r num">
-                      {r.editable ? (
-                        fmt(r.qty_open)
-                      ) : (
-                        <span className="text-[var(--ink-empty)]">0</span>
-                      )}
-                    </td>
-                    <td className="k-r">
-                      {r.editable ? (
-                        <>
-                          <NumInput
-                            id={`lan-nay-${i}`}
-                            value={String(r.qty)}
-                            disabled={busy}
-                            onCommit={(v) => patch(i, { qty: docSo(v) })}
-                            aria-label={`Lần này ${r.code}`}
-                          />
-                          {(() => {
-                            // Thiếu KHÔNG chặn: đơn thành "Về một phần", người mua
-                            // quyết giao bù / chốt thiếu ở trang đơn. Nói trước.
-                            const sp = sauPhieu(r)
-                            return sp?.kind === 'thieu' ? (
-                              <CellHint tone="neutral">
-                                còn thiếu {fmt(sp.n)} {r.unit}
-                              </CellHint>
-                            ) : null
-                          })()}
-                          {r.status === 'blocked' && r.qty > 0 && (
-                            <CellHint tone="warn">
-                              {fmt(r.qty)} {r.unit} vào KHOÁ
-                            </CellHint>
-                          )}
-                          {vuot &&
-                            (vuot.trong_dung_sai ? (
-                              <CellHint tone="neutral">
-                                vượt {vuot.pct.toFixed(0)}% · trong dung sai{' '}
-                                {r.over_tolerance_pct}%
-                              </CellHint>
-                            ) : (
-                              <CellHint
-                                tone="warn"
-                                onClick={moHopLyDo}
-                                title="Vượt ngưỡng của mã — bấm để ghi lý do nhận vượt"
-                              >
-                                vượt {vuot.pct.toFixed(0)}% · dung sai{' '}
-                                {r.over_tolerance_pct}% ·{' '}
-                                {coLyDoVuot ? 'đã có lý do' : 'ghi lý do'}
-                              </CellHint>
-                            ))}
-                        </>
-                      ) : (
-                        <LineStatus kind={r.closed_short ? 'short' : 'done'}>
-                          {r.closed_short ? 'đã chốt thiếu' : 'đã đủ'}
-                        </LineStatus>
-                      )}
-                    </td>
-                    {coKg && (
-                      <td className="k-r">
-                        {r.editable && r.can_kg ? (
-                          <>
-                            <NumInput
-                              id={`kg-can-${i}`}
-                              value={r.kg_can == null ? '' : String(r.kg_can)}
-                              disabled={busy}
-                              placeholder="cân rồi ghi"
-                              onCommit={(v) =>
-                                patch(i, { kg_can: v.trim() ? docSo(v) || null : null })
-                              }
-                              aria-label={`Kg cân thực ${r.code}`}
-                            />
-                            {(() => {
-                              const du = kgDuKien(r.qty, {
-                                qty_ordered: r.qty_ordered,
-                                qty2: r.kg_don,
-                              })
-                              if (r.qty > 0 && !(r.kg_can! > 0))
-                                return (
-                                  <CellHint tone="warn">
-                                    bắt buộc{du != null ? ` · đơn ~${fmt(du)} kg` : ''}
-                                  </CellHint>
-                                )
-                              const l = r.kg_can ? lechKg(r.kg_can, du) : null
-                              return l != null ? (
-                                <CellHint tone={Math.abs(l) >= 3 ? 'warn' : 'neutral'}>
-                                  đơn ~{fmt(du!)} kg · lệch {l > 0 ? '+' : ''}
-                                  {l.toLocaleString('vi-VN')}%
-                                </CellHint>
-                              ) : null
-                            })()}
-                          </>
-                        ) : (
-                          <span className="text-[var(--ink-empty)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    <td>
-                      {r.editable ? (
-                        <Pick
-                          value={r.status}
-                          onChange={(v) => patch(i, { status: v as TinhTrang })}
-                          options={TINH_TRANG}
-                          label={`Tình trạng ${r.code}`}
-                          width={130}
-                          disabled={busy}
-                        />
-                      ) : (
-                        <span className="text-[var(--ink-empty)]">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {r.editable ? (
-                        <TextInput
-                          id={`ghi-chu-${i}`}
-                          value={r.note}
-                          onCommit={(v) => patch(i, { note: v })}
-                          disabled={busy}
-                          placeholder={
-                            r.status === 'blocked'
-                              ? 'bắt buộc: vì sao sai quy cách'
-                              : 'ghi chú (không bắt buộc)'
-                          }
-                          label={`Ghi chú ${r.code}`}
-                        />
-                      ) : (
-                        <span className="text-[var(--ink-empty)]">—</span>
-                      )}
-                    </td>
-                  </GridRow>
-                )
-              })}
-            </GridBody>
-            <GridFoot>
-              <td
-                colSpan={5}
-                title={`Nhận theo phần còn mở của ${dot ? 'đợt' : 'đơn'} — dòng đã đủ không có ô nhập`}
-              >
-                Tổng{' '}
-                <span className="font-normal text-[var(--ink-3)]">
-                  · {rows.length} dòng · {rows.filter((r) => !r.editable).length} đã đủ
-                </span>
-              </td>
-              <td className="k-r num">{fmt(tong.tong_dat)}</td>
-              <td className="k-r num">{fmt(tong.tong_da_ve)}</td>
-              <td className="k-r num">{fmt(conCho)}</td>
-              <td className="k-r num">{fmt(tong.lan_nay)}</td>
-              {coKg && (
-                <td className="k-r num">{kgCan > 0 ? `${fmt(kgCan)} kg` : '—'}</td>
-              )}
-              <td colSpan={2} className="font-normal text-[var(--ink-3)]">
-                {tong.so_dong_nhan} dòng nhận · {fmt(tong.vao_khoa)} vào khoá ·{' '}
-                {fmt(tong.dung_duoc)} dùng được
-              </td>
-            </GridFoot>
-          </Grid>
-        </div>
+        <LuoiNhan
+          rows={rows}
+          nhan={nhan}
+          hasDots={dots.length > 0}
+          dangTheoDot={!!dot}
+          coKg={coKg}
+          busy={busy}
+          patch={patch}
+          moHopLyDo={moHopLyDo}
+          coLyDoVuot={coLyDoVuot}
+          tong={tong}
+          conCho={conCho}
+          kgCan={kgCan}
+        />
 
         <CommitBar
           totals={[

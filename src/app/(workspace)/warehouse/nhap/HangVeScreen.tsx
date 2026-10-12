@@ -3,6 +3,7 @@
 import {
   Fragment,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ComponentProps,
@@ -18,6 +19,7 @@ import { poTemplateShort } from '@/lib/po-template'
 import { MOI, NGOAI_LENH, demTheo, khopLenh, tenNccGon } from '@/lib/theo-doi-loc'
 import { searchMatcher } from '@/lib/search-text'
 import { useLocalPref } from '@/lib/use-local-pref'
+import { useBeRong } from '@/lib/use-be-rong'
 import {
   chiDongTuDo,
   ngay,
@@ -113,6 +115,17 @@ export function HangVeScreen({
   const [lsx, setLsx] = useState<string>(MOI)
   const [ncc, setNcc] = useState('')
   const [loai, setLoai] = useState<string>(MOI)
+  /*
+    LUẬT MÀN HẸP (Kho đợt 2 · Bước 2c, bản vẽ B2-4): đo KHUNG chứ không đo cửa sổ —
+    B1 "vừa 1280" lúc sidebar thu gọn, mở sidebar ra là 1053/1151 cuộn ngang.
+    < 1100px: ẩn Loại hàng + Phụ trách (còn ở tooltip mã đơn), gom ô lọc phụ vào
+    "Lọc thêm". < 900px (1024 có sidebar): cột Đợt / Về kho / nút nhận co lại.
+  */
+  const khung = useRef<HTMLDivElement>(null)
+  const rong = useBeRong(khung)
+  const gon = rong < 1100
+  const hep = rong < 900
+  const [themLoc, setThemLoc] = useState(false)
   const [gomRaw, setGom] = useLocalPref('hg.kho.hang-ve.gom', 'moc')
   const gom: Gom = gomRaw === 'lsx' || gomRaw === 'ncc' ? gomRaw : 'moc'
 
@@ -177,7 +190,7 @@ export function HangVeScreen({
 
   // Đúng MỘT lệnh đang lọc thì cột Lệnh SX lặp một giá trị — ẩn.
   const hienLenh = lsx === MOI || lsx === NGOAI_LENH
-  const soCot = hienLenh ? 9 : 8
+  const soCot = (hienLenh ? 9 : 8) - (gon ? 2 : 0)
   const soGo = kept.filter(chiDongTuDo).length
 
   const dong = (r: HangVeRow) => {
@@ -190,22 +203,30 @@ export function HangVeScreen({
         <Cell pin>
           {r.expected_at ? (
             <span className="flex items-baseline gap-2 whitespace-nowrap">
-              <span
-                className={
-                  !la && n != null && n < 0
-                    ? 'num font-semibold text-[var(--stop)]'
-                    : 'num'
-                }
-              >
-                {ngay(r.expected_at, today)}
-              </span>
+              {/* Khung gọn: ngày lạ (năm 2610) chỉ còn nhãn — chuỗi ngày dài kéo cả cột. */}
+              {!(la && gon) && (
+                <span
+                  className={
+                    !la && n != null && n < 0
+                      ? 'num font-semibold text-[var(--stop)]'
+                      : 'num'
+                  }
+                >
+                  {ngay(r.expected_at, today)}
+                </span>
+              )}
               {la ? (
-                <span title="Hẹn cách hôm nay hơn một năm — có thể gõ nhầm năm. Nhờ người phụ trách sửa.">
+                <span
+                  title={`Hẹn ${ngay(r.expected_at, today)} — cách hôm nay hơn một năm, có thể gõ nhầm năm. Nhờ người phụ trách sửa.`}
+                >
                   <Tag tone="warn">ngày lạ</Tag>
                 </span>
               ) : n != null && n < 0 ? (
-                <span className="text-k-sm font-semibold text-[var(--stop)]">
-                  trễ {-n} ngày
+                <span
+                  className="text-k-sm font-semibold text-[var(--stop)]"
+                  title={`trễ ${-n} ngày`}
+                >
+                  {gon ? `−${-n}` : `trễ ${-n} ngày`}
                 </span>
               ) : n === 0 ? (
                 <span className="text-k-sm text-[var(--ink-3)]">hôm nay</span>
@@ -216,7 +237,17 @@ export function HangVeScreen({
           )}
         </Cell>
         <Cell>
-          <Code as="button" onClick={() => moDon(r.po_id)} title="Xem hàng của đơn">
+          <Code
+            as="button"
+            onClick={() => moDon(r.po_id)}
+            title={[
+              'Xem hàng của đơn',
+              gon && (poTemplateShort(r.template) ?? r.template),
+              gon && r.owner_name && `phụ trách ${r.owner_name}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          >
             {r.po_code}
           </Code>
         </Cell>
@@ -231,13 +262,22 @@ export function HangVeScreen({
         <Cell grow title={r.supplier_name}>
           <span className="truncate">{tenNccGon(r.supplier_name)}</span>
         </Cell>
-        <Cell muted>{poTemplateShort(r.template) ?? r.template}</Cell>
+        {!gon && <Cell muted>{poTemplateShort(r.template) ?? r.template}</Cell>}
         <Cell>
-          <DotCell r={r} today={today} />
+          <DotCell r={r} today={today} hep={gon} />
         </Cell>
         <Cell>
           {tuDo ? (
-            <span className="text-[var(--ink-3)]">dòng theo mã SP</span>
+            <span
+              className="text-[var(--ink-3)]"
+              title="Đơn chỉ có dòng theo mã SP — không vào sổ kho"
+            >
+              {hep ? '—' : 'dòng theo mã SP'}
+            </span>
+          ) : hep ? (
+            <span className="num">
+              {r.lines_done}/{r.lines_total}
+            </span>
           ) : (
             <CoverageBar
               ratio={r.lines_done / r.lines_total}
@@ -245,9 +285,11 @@ export function HangVeScreen({
             />
           )}
         </Cell>
-        <Cell muted title={r.owner_name ?? undefined}>
-          {r.owner_name ? r.owner_name.split(' ').slice(-1)[0] : '—'}
-        </Cell>
+        {!gon && (
+          <Cell muted title={r.owner_name ?? undefined}>
+            {r.owner_name ? r.owner_name.split(' ').slice(-1)[0] : '—'}
+          </Cell>
+        )}
         <Cell>
           <span className="flex justify-end">
             {tuDo ? (
@@ -256,7 +298,7 @@ export function HangVeScreen({
                 className="text-k-sm h-6 px-2"
                 title="Đơn chỉ có dòng theo mã SP (gỗ…): không vào tồn kho, Cung ứng nghiệm thu ngoài sổ."
               >
-                Ngoài sổ kho
+                {hep ? 'Ngoài sổ' : 'Ngoài sổ kho'}
               </Btn>
             ) : (
               <Btn
@@ -266,7 +308,7 @@ export function HangVeScreen({
                 href={`/warehouse/nhap/${r.po_id}${r.dot?.ke_tiep ? `?dot=${r.dot.ke_tiep.id}` : ''}`}
                 className="text-k-sm h-6 px-2"
               >
-                Nhận hàng
+                {hep ? 'Nhận' : 'Nhận hàng'}
               </Btn>
             )}
           </span>
@@ -284,7 +326,7 @@ export function HangVeScreen({
       className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
       // Cột NCC co tới 140px (kit mặc định 200): 9 cột phải vừa 1280 không cuộn
       // ngang — đo 12/10: 1275px trong khung 1213px. Tên đầy đủ nằm ở `title`.
-      style={{ '--col-grow': '140px' } as CSSProperties}
+      style={{ '--col-grow': hep ? '110px' : '140px' } as CSSProperties}
     >
       <ScreenFrame>
         <ScreenHeader
@@ -373,25 +415,41 @@ export function HangVeScreen({
               ...INCOMING_BUCKETS.map((b) => ({ value: b, label: `${INCOMING_BUCKET[b].label} (${demMoc(b)})` })), // prettier-ignore
             ]}
           />
-          <PickVua
-            label="Loại hàng"
-            value={loai}
-            onChange={setLoai}
-            options={[
-              {
-                value: MOI,
-                label: `Mọi loại hàng (${rows.filter((r) => khop(r, 'loai')).length})`,
-              },
-              ...loais.map(([t, n]) => ({ value: t, label: `${poTemplateShort(t) ?? t} (${n})` })), // prettier-ignore
-            ]}
-          />
-          <span className="ml-auto flex items-center gap-2">
+          {(!gon || themLoc) && (
             <PickVua
-              label="Gom theo"
-              value={gom}
-              onChange={setGom}
-              options={(Object.keys(GOM_LABEL) as Gom[]).map((g) => ({ value: g, label: `Gom: ${GOM_LABEL[g]}` }))} // prettier-ignore
+              label="Loại hàng"
+              value={loai}
+              onChange={setLoai}
+              options={[
+                {
+                  value: MOI,
+                  label: `Mọi loại hàng (${rows.filter((r) => khop(r, 'loai')).length})`,
+                },
+                ...loais.map(([t, n]) => ({ value: t, label: `${poTemplateShort(t) ?? t} (${n})` })), // prettier-ignore
+              ]}
             />
+          )}
+          <span className="ml-auto flex items-center gap-2">
+            {gon && (
+              <Btn
+                icon="boLoc"
+                aria-expanded={themLoc}
+                onClick={() => setThemLoc(!themLoc)}
+                title="Loại hàng và cách gom"
+              >
+                {themLoc
+                  ? 'Thu lọc'
+                  : `Lọc thêm${(loai !== MOI ? 1 : 0) + (gom !== 'moc' ? 1 : 0) ? ` (${(loai !== MOI ? 1 : 0) + (gom !== 'moc' ? 1 : 0)})` : ''}`}
+              </Btn>
+            )}
+            {(!gon || themLoc) && (
+              <PickVua
+                label="Gom theo"
+                value={gom}
+                onChange={setGom}
+                options={(Object.keys(GOM_LABEL) as Gom[]).map((g) => ({ value: g, label: `Gom: ${GOM_LABEL[g]}` }))} // prettier-ignore
+              />
+            )}
             <Btn
               icon="boLoc"
               disabled={!dangLoc}
@@ -402,6 +460,7 @@ export function HangVeScreen({
             </Btn>
           </span>
         </FilterBar>
+        <div ref={khung} className="h-0 w-full" aria-hidden />
         {kept.length === 0 ? (
           <Empty
             headline={
@@ -425,16 +484,16 @@ export function HangVeScreen({
             }
           />
         ) : (
-          <Table>
+          <Table minWidth={hep ? 680 : gon ? 860 : undefined}>
             <THead pinFirst>
               <th>Hẹn giao</th>
               <th>Đơn</th>
               {hienLenh && <th>Lệnh SX</th>}
               <th>Nhà cung cấp</th>
-              <th>Loại hàng</th>
+              {!gon && <th>Loại hàng</th>}
               <th>Đợt · xe tới</th>
               <th>Về kho</th>
-              <th>Phụ trách</th>
+              {!gon && <th>Phụ trách</th>}
               <th />
             </THead>
             <tbody>
@@ -484,7 +543,7 @@ export function HangVeScreen({
  * Cột "Đợt · xe tới": đợt kế tiếp đứng trước (thứ thủ kho chờ), đợt đã nhập
  * trước hạn đi sau, gọn một dòng — câu đầy đủ nằm ở `title` và trong hộp đơn.
  */
-function DotCell({ r, today }: { r: HangVeRow; today: string }) {
+function DotCell({ r, today, hep }: { r: HangVeRow; today: string; hep: boolean }) {
   const d = r.dot
   if (!d) return <span className="text-[var(--ink-3)]">chưa chia đợt</span>
   const truoc = d.da_nhap_truoc.join(', ')
@@ -498,17 +557,22 @@ function DotCell({ r, today }: { r: HangVeRow; today: string }) {
     <span className="whitespace-nowrap" title={cau}>
       {d.ke_tiep ? (
         <span className="num">
-          Đợt {d.ke_tiep.seq}/{d.so_dot} · {ngay(d.ke_tiep.date, today)}
+          {hep ? '' : 'Đợt '}
+          {d.ke_tiep.seq}/{d.so_dot} · {ngay(d.ke_tiep.date, today)}
         </span>
       ) : (
         !truoc && <span className="text-[var(--ink-3)]">hết đợt đã hẹn</span>
       )}
       {d.ke_tiep?.arrived && (
-        <span className="font-semibold text-[var(--warn)]"> · đã tới</span>
+        <span className="font-semibold text-[var(--warn)]">
+          {' '}
+          · {hep ? 'tới' : 'đã tới'}
+        </span>
       )}
       {truoc && (
         <span className="font-semibold text-[var(--done)]">
-          {d.ke_tiep ? ' · ' : ''}đợt {truoc} đã về
+          {d.ke_tiep ? ' · ' : ''}
+          {hep ? `✓đ${truoc}` : `đợt ${truoc} đã về`}
         </span>
       )}
     </span>
