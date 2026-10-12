@@ -20,6 +20,7 @@ import {
   lineQty2,
   migrateDraftLine,
   qtyTheoMa,
+  newFeeLine,
   newFreeLine,
   newLine,
   remapLinesForTemplate,
@@ -264,7 +265,6 @@ export function useDonChungTu(p: Props) {
   const [dotMo, setDotMo] = useState(false) // Lúc soạn, khối Chia đợt chỉ hiện khi bấm nút (30/09/2026).
 
   const [reason, setReason] = useState('')
-
   const [date, setDate] = useState('')
 
   const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, DENSE_DEFAULT)
@@ -472,9 +472,10 @@ export function useDonChungTu(p: Props) {
     )
   }
 
-  const addFree = () => {
+  // `fee` = dòng PHÍ / DỊCH VỤ (0234, mọi mẫu); không = dòng hàng tự do (chỉ mẫu gỗ).
+  const addFree = (fee = false) => {
     if (chuaChonMau()) return
-    setLines((ls) => [...ls, newFreeLine()])
+    setLines((ls) => [...ls, fee ? newFeeLine() : newFreeLine()])
     setPick(lines.length)
   }
 
@@ -1127,6 +1128,7 @@ export function useDonChungTu(p: Props) {
     setLines(d.lines.map((l) => migrateDraftLine(d.header.template ?? template, l)))
     setShipCols(d.shipCols ?? [])
     dirty.current = { vat: true, currency: true, template: true }
+    seeded.current = true // nháp đã gồm dòng mồi từ URL — chọn mẫu xong đừng đổ lần nữa (12/10)
     mau.setMauDaChon(true)
   }
 

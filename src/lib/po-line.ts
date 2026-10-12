@@ -80,6 +80,19 @@ export function roundUpToPack(qty: number, packSize: number | null): number {
 export type PoQtyTotal = { label: string; value: number }
 
 /**
+ * DÒNG PHÍ / DỊCH VỤ XUỐNG CUỐI (0234) — phiếu in và Excel gửi NCC bày hàng hoá
+ * trước, khoản phí (công dán, phí in bản…) sau; giữ nguyên thứ tự trong từng nhóm.
+ */
+export function feeLast<T extends { line_kind?: string | null }>(
+  lines: readonly T[],
+): T[] {
+  return [
+    ...lines.filter((l) => l.line_kind !== 'phi'),
+    ...lines.filter((l) => l.line_kind === 'phi'),
+  ]
+}
+
+/**
  * Dòng "Tổng số …" ngay dưới bảng hàng của phiếu in / file xuất.
  *
  * Mẫu tính tiền theo kg (nhôm, inox/sắt) cộng cột tổng kg → đúng một dòng.
@@ -94,6 +107,8 @@ export function qtyTotals(
     material_unit: string
     qty_ordered: number
     qty2?: number | null
+    /** 0234 — dòng phí / dịch vụ không cộng vào "Tổng số …" (Lần, Chuyến không phải hàng). */
+    line_kind?: string | null
   }[],
 ): PoQtyTotal[] {
   if (kgBased) {
@@ -102,7 +117,8 @@ export function qtyTotals(
     return kg > 0 ? [{ label: 'Tổng số KG', value: kg }] : []
   }
   const byUnit = new Map<string, number>()
-  for (const l of lines) {
+  const hang = lines.filter((l) => l.line_kind !== 'phi')
+  for (const l of hang) {
     const u = (l.material_unit ?? '').trim()
     byUnit.set(u, (byUnit.get(u) ?? 0) + (Number(l.qty_ordered) || 0))
   }

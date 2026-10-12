@@ -20,6 +20,7 @@ import { poLineAmount, poMoney, roundMoney, type PriceBasis } from './po-line'
 export const ADJ_COMPARE_FIELDS = [
   'line_name',
   'line_unit',
+  'line_kind',
   'spec',
   'note',
   'material_grade',

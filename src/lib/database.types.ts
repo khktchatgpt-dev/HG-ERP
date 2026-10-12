@@ -4264,6 +4264,7 @@ export type Database = {
           inner_l_mm: number | null
           inner_w_mm: number | null
           kg_per_m: number | null
+          line_kind: string | null
           line_name: string | null
           line_unit: string | null
           m3_per_unit: number | null
@@ -4319,6 +4320,7 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_kind?: string | null
           line_name?: string | null
           line_unit?: string | null
           m3_per_unit?: number | null
@@ -4374,6 +4376,7 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_kind?: string | null
           line_name?: string | null
           line_unit?: string | null
           m3_per_unit?: number | null

@@ -52,6 +52,11 @@ export type Line = {
    * gỗ/gia công đặt theo MÃ SP — tên và ĐVT gõ thẳng trên dòng.
    */
   is_free?: boolean
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234) — luôn kèm `is_free`: không gắn vật tư, tên + ĐVT gõ
+   * tay, SL × giá, dùng được ở mọi mẫu, không vào phiếu nhập kho.
+   */
+  fee?: boolean
   material_id: string
   code: string
   name: string
@@ -175,6 +180,8 @@ const n = (v: Num): number | null => (v === '' ? null : Number(v))
 /** Ô nhập của dòng → dạng `deriveLine` hiểu (kg/m, dài cây, kg/đv, m²…). */
 export function draftOf(l: Line) {
   return {
+    // Dòng phí / dịch vụ (0234): deriveLine trả thẳng SL × giá.
+    line_kind: l.fee ? ('phi' as const) : null,
     qty_ordered: Number(l.qty) || 0,
     weight_per_m: n(l.weight_per_m),
     bar_length_m: n(l.bar_length_m),
@@ -286,9 +293,12 @@ export function docTongGo(t: PoTemplate, l: Line, raw: string): Num {
 
 export function lineProblem(t: PoTemplate, l: Line): string | null {
   // Dòng tự do (0134): tên hàng là danh tính duy nhất — trống thì phiếu in rỗng.
-  if (l.is_free && !l.name.trim()) return 'thiếu tên hàng'
+  if (l.is_free && !l.name.trim())
+    return l.fee ? 'thiếu tên phí / dịch vụ' : 'thiếu tên hàng'
   if (l.qty === '' || Number(l.qty) <= 0) return 'thiếu SL đặt'
   if (l.price === '') return 'thiếu đơn giá'
+  // Dòng phí / dịch vụ (0234): SL × giá — không đòi thông số dẫn xuất của mẫu.
+  if (l.fee) return null
   const lech = tongLechBac(t, l)
   if (lech)
     return `tổng gõ tay ${lech.factor > 0 ? 'gấp ' : 'chỉ bằng 1/'}${Math.abs(lech.factor).toLocaleString('vi-VN')} lần số tự tính ${lech.auto.toLocaleString('vi-VN')} — gõ nhầm dấu thập phân?`
@@ -887,6 +897,15 @@ export function newFreeLine(): Line {
   }
 }
 
+/**
+ * DÒNG PHÍ / DỊCH VỤ (0234) — công dán, phí in bản, phí giao hàng NCC thu chung
+ * hoá đơn, gia công… Không khai "vật tư" cho từng khoản phí: danh mục đã có 239
+ * mã dịch vụ chưa đơn nào dùng, vì dòng gắn vật tư bắt Kho lập phiếu nhập.
+ */
+export function newFeeLine(name = ''): Line {
+  return { ...newFreeLine(), fee: true, name, unit: 'Lần' }
+}
+
 /** Dòng đơn như repo trả về — chỉ những trường form cần. */
 export type PoLineDto = {
   id?: string
@@ -899,6 +918,8 @@ export type PoLineDto = {
   material_unit: string
   qty_ordered: number
   unit_price: number | null
+  /** 0234 — 'phi' = dòng phí / dịch vụ. */
+  line_kind?: string | null
   spec: string | null
   note: string | null
   /** Mã SP khách (tem/bao bì chia theo SP) — mang theo, không có ô sửa. */
@@ -989,6 +1010,7 @@ function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): 
     po_line_id: l.id,
     uid: l.id ?? crypto.randomUUID(),
     is_free: isFree,
+    fee: l.line_kind === 'phi',
     material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,
     name: l.material_name,

@@ -179,7 +179,6 @@ function catalogLines(lines: PoLineInput[]) {
     // m³/SP + Bảo hành — danh mục có cột từ 0178.
     m3_per_unit: l.m3_per_unit ?? null,
     warranty_text: l.warranty_text ?? null,
-    print_spec: l.print_spec ?? null,
   }))
 }
 
@@ -190,9 +189,18 @@ function catalogLines(lines: PoLineInput[]) {
  * biết template sau khi update fallback về mẫu cũ của đơn).
  */
 function assertFreeLinesAllowed(template: PoTemplate, lines: PoLineInput[]): void {
+  // Dòng PHÍ / DỊCH VỤ (0234) không bao giờ gắn vật tư — DB check cũng chặn.
+  if (lines.some((l) => l.line_kind === 'phi' && l.material_id)) {
+    throw BadRequest(
+      'Dòng phí / dịch vụ không gắn mã vật tư — bỏ mã hoặc đổi thành dòng hàng',
+    )
+  }
   if (FREE_LINE_TEMPLATES.includes(template)) return
-  if (lines.some((l) => !l.material_id)) {
-    throw BadRequest('Dòng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³"')
+  // Mẫu khác: dòng HÀNG phải gắn vật tư; dòng phí / dịch vụ thì được mọi mẫu (0234).
+  if (lines.some((l) => !l.material_id && l.line_kind !== 'phi')) {
+    throw BadRequest(
+      'Dòng hàng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³" — khoản phí / dịch vụ thì thêm bằng "+ Phí / dịch vụ"',
+    )
   }
 }
 
@@ -1534,6 +1542,7 @@ export const posService = {
         material_id: l.material_id ?? null,
         line_name: l.line_name ?? null,
         line_unit: l.line_unit ?? null,
+        line_kind: l.line_kind ?? null,
         qty_ordered: l.qty_ordered,
         unit_price: l.unit_price ?? null,
         price_basis: l.price_basis ?? 'unit',

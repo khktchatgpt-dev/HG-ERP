@@ -148,6 +148,7 @@ export function buildPoPayload(
         material_id: l.is_free ? null : l.material_id,
         line_name: l.is_free ? l.name.trim() || null : null,
         line_unit: l.is_free ? l.unit.trim() || null : null,
+        line_kind: l.fee ? ('phi' as const) : null,
         qty_ordered: d.qty_ordered,
         unit_price: l.price === '' ? null : Number(l.price),
         spec: l.spec.trim() || null,

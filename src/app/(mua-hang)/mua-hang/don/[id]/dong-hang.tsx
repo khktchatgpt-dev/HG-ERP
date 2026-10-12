@@ -205,20 +205,27 @@ export function DongHang({ d }: { d: DonCtx }) {
                     <Td>
                       {l.is_free && editing ? (
                         <OChuNo
-                          label="Tên hàng"
+                          label={l.fee ? 'Tên phí / dịch vụ' : 'Tên hàng'}
                           value={l.name}
                           onCommit={(v) => patch(i, { name: v })}
-                          placeholder="Tên hàng (dòng tự do)"
+                          placeholder={
+                            l.fee
+                              ? 'Phí / dịch vụ: công dán + keo bồi, phí in bản, phí giao hàng…'
+                              : 'Tên hàng (dòng tự do)'
+                          }
                         />
                       ) : (
                         // Ô tên có trần 340px (29/09): tên dài từng đẩy SL/giá khỏi màn.
                         // prettier-ignore
-                        <span className="block max-w-[340px] truncate" title={`${l.code ? `${l.code} · ` : ''}${l.name}`}>{l.code && !l.is_free && !editing ? <a href={`/mua-hang/vat-tu/${l.material_id}`} className="num k-strong text-[var(--act)] hover:underline" title={`Hồ sơ ${l.code} — NCC đã bán, giá, lịch sử mua`}>{l.code}</a> : <span className="num k-strong">{l.code}</span>}{l.code ? ' · ' : ''}{l.name}{l.is_free && <span className="text-[var(--ink-3)]"> · tự do</span>}</span>
+                        <span className="block max-w-[340px] truncate" title={`${l.code ? `${l.code} · ` : ''}${l.name}`}>{l.code && !l.is_free && !editing ? <a href={`/mua-hang/vat-tu/${l.material_id}`} className="num k-strong text-[var(--act)] hover:underline" title={`Hồ sơ ${l.code} — NCC đã bán, giá, lịch sử mua`}>{l.code}</a> : <span className="num k-strong">{l.code}</span>}{l.code ? ' · ' : ''}{l.name}{l.is_free && <span className="text-[var(--ink-3)]"> · {l.fee ? 'phí / dịch vụ' : 'tự do'}</span>}</span>
                       )}
                     </Td>
                     {gridFields.map((f) => (
                       <Td key={f.key} num={f.kind !== 'text'}>
-                        {editing ? (
+                        {/* Dòng phí / dịch vụ (0234) không có thông số của mẫu. */}
+                        {l.fee ? (
+                          <span className="text-[var(--ink-empty)]">—</span>
+                        ) : editing ? (
                           <EditCell
                             f={f}
                             l={l}

@@ -372,6 +372,11 @@ export function poTemplateMeta(t: PoTemplate | null | undefined): PoTemplateMeta
 export type PoLineDraft = {
   /** SL đặt cuối cùng — luôn theo ĐVT mua (cây / con / tấm / thùng). */
   qty_ordered: number
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234): luôn SL × đơn giá — không dẫn xuất kg / m² / m³ theo
+   * mẫu (dòng "Công dán + keo bồi" trên đơn bao bì không có lọt lòng để tính).
+   */
+  line_kind?: string | null
   /** aluminium */
   weight_per_m?: number | null
   bar_length_m?: number | null
@@ -471,6 +476,7 @@ function round6(n: number): number {
  * ngay, hơn là im lặng ra thành tiền 0 rồi lọt qua duyệt.
  */
 export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
+  if (l.line_kind === 'phi') return { qty2: null, unit2: null, price_basis: 'unit' }
   const d = withOverride(t, l, deriveByTemplate(t, l))
   // Người dùng chọn đơn vị tính giá thì theo họ — nhưng chỉ cho chọn 'unit2'
   // khi dòng thật sự có số quy đổi, không thì tiền thành 0 mà không ai hiểu vì sao.

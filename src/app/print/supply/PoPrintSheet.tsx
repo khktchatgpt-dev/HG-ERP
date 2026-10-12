@@ -1,6 +1,7 @@
 import { CanhBaoChuaChia, PhanTheoLenhIn } from './phan-theo-lenh-in'
 import { chiaLenhDong } from '@/lib/po-lsx-split'
 import {
+  feeLast,
   fmtMoney,
   packCount,
   poLineAmount,
@@ -77,6 +78,8 @@ export type PoPrintLine = {
   m3_per_unit: number | null
   warranty_text: string | null
   print_spec: string | null
+  /** 0234 — 'phi' = dòng phí / dịch vụ (đứng cuối bảng, không vào "Tổng số …"). */
+  line_kind?: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -292,7 +295,7 @@ export function PoPrintSheet({
   tpl = DEFAULT_DOC_TEMPLATES.PO,
   po,
   supplier,
-  lines,
+  lines: linesIn,
   exportHref,
   shipments,
 }: {
@@ -319,6 +322,8 @@ export function PoPrintSheet({
     lines: { name: string; qty: number; unit: string; amount: number | null }[]
   }[]
 }) {
+  // Dòng phí / dịch vụ (0234) xuống cuối bảng — hàng hoá trước, khoản phí sau.
+  const lines = feeLast(linesIn)
   const template = po.template ?? 'simple'
   const meta = poTemplateMeta(template)
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`

@@ -2,6 +2,7 @@ import { chiaLenhDong, tienTheoLenh } from '@/lib/po-lsx-split'
 import ExcelJS from 'exceljs'
 import {
   currencyDecimals,
+  feeLast,
   packCount,
   poLineAmount,
   poMoney,
@@ -277,7 +278,9 @@ export async function buildPoExcel(input: {
    */
   orientation?: 'portrait' | 'landscape'
 }): Promise<Buffer> {
-  const { company, po, supplier, lines } = input
+  const { company, po, supplier } = input
+  // Dòng phí / dịch vụ (0234) xuống cuối bảng — cùng thứ tự phiếu in.
+  const lines = feeLast(input.lines)
   const tpl = input.tpl ?? DEFAULT_DOC_TEMPLATES.PO
   const shipments = input.shipments ?? []
   const template = po.template ?? 'simple'

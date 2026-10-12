@@ -3,6 +3,7 @@
 import { Combobox, GridBtn, Menu } from '@/components/kit'
 import { api } from '@/lib/api'
 import type { PoMaterial } from '@/lib/po-material.types'
+import { FREE_LINE_TEMPLATES } from '@/lib/po-template'
 import { ChonMau } from './chon-mau'
 import type { DonCtx } from './useDonChungTu'
 
@@ -119,11 +120,27 @@ export function ThanhLuoi({ d }: { d: DonCtx }) {
             Chia đợt giao
           </GridBtn>
         )}
+        {/* PHÍ / DỊCH VỤ (0234) — công dán, phí in bản, phí giao hàng NCC thu chung
+            hoá đơn… Không khai vật tư cho từng khoản phí; mọi mẫu dùng được. */}
+        <GridBtn
+          title="Khoản phí / dịch vụ NCC tính trên đơn này (công dán, phí in bản, phí giao hàng…) — gõ tên, không cần mã vật tư, không nhập kho"
+          onClick={() => addFree(true)}
+        >
+          + Phí / dịch vụ
+        </GridBtn>
         <Menu
           label="Thêm ▾"
           ariaLabel="Thêm cách nhập dòng"
           items={[
-            { label: 'Dòng tự do (không gắn vật tư)', onClick: addFree },
+            // Dòng HÀNG không mã chỉ mẫu gỗ (đặt theo mã SP) — mẫu khác service chặn khi lưu.
+            ...(FREE_LINE_TEMPLATES.includes(d.template)
+              ? [
+                  {
+                    label: 'Dòng tự do (mã SP, không gắn vật tư)',
+                    onClick: () => addFree(),
+                  },
+                ]
+              : []),
             { label: 'Dán từ Excel', onClick: () => setPaste(true) },
             { label: 'Khai vật tư mới vào danh mục', onClick: () => setQuickAdd(true) },
           ]}

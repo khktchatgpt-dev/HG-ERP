@@ -153,6 +153,8 @@ export type PoLine = PoLineTemplateFields & {
   /** Tên/ĐVT tự gõ của dòng tự do — material_* bên dưới fallback về cặp này. */
   line_name: string | null
   line_unit: string | null
+  /** 0234 — `'phi'` = dòng phí / dịch vụ (không gắn vật tư); null = dòng hàng. */
+  line_kind: string | null
   material_code: string
   material_name: string
   material_unit: string
@@ -163,6 +165,7 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   material_id?: string | null
   line_name?: string | null
   line_unit?: string | null
+  line_kind?: 'phi' | null
   qty_ordered: number
   /**
    * CHIA SL CỦA DÒNG cho nhiều lệnh (0185) — rỗng = 100% thuộc LSX chính của
@@ -1083,7 +1086,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, product_code, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, print_spec, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, product_code, sort_order, line_name, line_unit, line_kind, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, print_spec, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -1210,6 +1213,7 @@ export const posRepo = {
             material_id: l.material_id ?? null,
             line_name: l.line_name ?? null,
             line_unit: l.line_unit ?? null,
+            line_kind: l.line_kind ?? null,
             qty_ordered: l.qty_ordered,
             unit_price: l.unit_price ?? null,
             price_basis: l.price_basis ?? 'unit',
