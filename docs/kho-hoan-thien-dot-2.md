@@ -80,6 +80,18 @@ không có nút việc với NCC.
 > + `hang-cua-don.tsx`). Bỏ nhãn "cân kg" của bản vẽ: từ 02/10 kg cân không bắt buộc và
 > xét theo từng dòng (`lib/can-kg`), nhãn theo mẫu đơn sẽ báo sai.
 
+> **B0 XONG 12/10** — 4 mã âm: mỗi mã chỉ còn 1 dòng KK-2026-0004 mồ côi (phiếu vào đã bị
+> xoá cứng) → xoá 4 dòng đó, tồn 0. Kèm: 44 phiếu đứng tên admin@hg.com chuyển về người phụ
+> trách đơn (chủ dự án: "đơn thật chuyển về đúng người"), xoá 2 phiếu E2E test PNK/PXK-2026-0001
+> (+ trừ 45 ở dòng KK-0004 của VT-NK-001 để khỏi âm). Backup ở `backups/kho-*-2026-10-12.json`.
+> KK-2026-0005 (treo counting từ 15/09) CHƯA xử lý.
+>
+> **B2 + luật màn hẹp XONG 12/10** (bản vẽ https://claude.ai/artifact/Me6k3W7JPPX3AHMyPzQ2Wt):
+> 2a chi tiết phiếu `6e48e17` · 2b Sổ phiếu `3bd8683` · 2c Hàng về + form nhận `6c4d35a`.
+> Luật: đo KHUNG bằng `lib/use-be-rong` (không đo cửa sổ — sidebar mở/thu đổi 212px), ẩn cột
+> bậc thấp thay vì cuộn ngang, một vùng cuộn mỗi màn. Nghiệm thu 1536×730 / 1280×800 / 1024×700
+> sidebar mở: 4 màn Kho 0 cuộn ngang, đúng 1 vùng cuộn. B3 (ghi sự cố lúc nhận) là bước kế.
+
 **B2 · Phiếu đã nhập: sửa được tại Kho.** Chi tiết phiếu `/warehouse/phieu/[id]`
 thêm Sửa phiếu 3 kiểu + Ghi kg cân bổ sung + lịch sử (dùng lại `sua-phieu.tsx`,
 `kg-can-sheet.tsx`, `lib/phieu-nhap-lich-su.ts`). Sổ phiếu thêm rổ **Cần xử lý**
