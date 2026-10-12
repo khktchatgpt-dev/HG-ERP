@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
 import type { HangLenhRow } from '@/lib/kho-hang-lenh'
+import { lenhGon } from '../ton/ton-lenh.shared'
 import { searchMatcher } from '@/lib/search-text'
 import {
   Btn,
@@ -254,8 +255,9 @@ function HangLenhSheet({
         {ro !== 'con' && rows.some((r) => r.het) && (
           <p className="text-k-sm m-0 text-[var(--ink-3)]">
             Mã “kho hết”: đã về cho lệnh nhưng tồn hiện bằng 0 — đã dùng cho việc khác,
-            hoặc kiểm kê đã đưa về 0 (đợt nạp nền 11/09). Không gợi ý; tổ vẫn lấy thì thêm
-            bằng ô tìm.
+            hoặc kiểm kê đã đưa về 0 (đợt nạp nền 11/09). “Giữ cho …”: mã chung nhiều
+            lệnh, tồn chia trước cho lệnh hạn xuất sớm hơn. Không gợi ý; tổ vẫn lấy thì
+            thêm bằng ô tìm.
           </p>
         )}
         <Table minWidth={640}>
@@ -315,12 +317,16 @@ function HangLenhSheet({
                   <Cell
                     num
                     title={
-                      !r.het && r.ton < r.con ? `Kho chỉ còn ${so(r.ton)}` : undefined
+                      r.giu_cho
+                        ? `Kho còn ${so(r.ton)}, chia trước cho ${r.giu_cho.join(', ')}`
+                        : !r.het && r.goi_y < r.con
+                          ? `Kho chỉ còn ${so(r.goi_y)} cho lệnh này`
+                          : undefined
                     }
                   >
                     <span
                       className={
-                        !r.het && r.ton < r.con
+                        !r.het && r.goi_y < r.con
                           ? 'font-semibold text-[var(--warn)]'
                           : r.het
                             ? 'text-[var(--ink-3)]'
@@ -332,7 +338,11 @@ function HangLenhSheet({
                   </Cell>
                   <Cell num>
                     {r.het ? (
-                      <span className="text-[var(--ink-3)]">kho hết</span>
+                      <span className="block truncate text-[var(--ink-3)]">
+                        {r.giu_cho && r.ton > 0
+                          ? `giữ cho ${r.giu_cho.map(lenhGon).join(', ')}`
+                          : 'kho hết'}
+                      </span>
                     ) : (
                       <input
                         value={so_[r.material_id] ?? ''}

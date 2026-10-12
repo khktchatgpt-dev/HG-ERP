@@ -14,6 +14,9 @@
  *  · Đã xuất = xuất RÒNG cho lệnh (xuất − hoàn kho − phiếu đảo), cùng `issuedByLsx`.
  *  · Gợi ý lấy = min(còn của lệnh, tồn dùng được) (Q1). Kho hết thì vẫn bày, mờ,
  *    không gợi ý (Q4) — giấu đi là người xem tưởng lệnh chưa nhận hàng.
+ *  · B5 (12/10): một mã thuộc nhiều lệnh thì tồn được CHIA (`lib/kho-ton-lenh`
+ *    `chiaTon`) — truyền `chia` vào đây thì gợi ý theo phần chia, không theo cả
+ *    tồn (trước: PKN0390 kho 9.880 hiện ở cả 05-MX lẫn 02-ROSCO).
  */
 
 export type DongDonLenh = {
@@ -39,12 +42,32 @@ export type HangLenhRow = {
   ton: number
   /** Số điền sẵn = min(con, tồn); 0 khi kho hết. */
   goi_y: number
-  /** Kho hết: hiện mờ, không tích được. */
+  /** Kho hết (hoặc tồn đã chia hết cho lệnh khác): hiện mờ, không tích được. */
   het: boolean
+  /** Lệnh khác đang được chia tồn của mã — chỉ có khi phần của lệnh này thiếu. */
+  giu_cho?: string[]
 }
 
 const EPS = 1e-6
 const tron = (n: number) => Math.round(n * 10_000) / 10_000
+
+/**
+ * Đã về cho lệnh theo vật tư: Σ SL nhận của dòng × phần của lệnh / SL đặt (Q2).
+ * Dùng chung cho B4 (một lệnh) và B5 (mọi lệnh) — một chỗ luật.
+ */
+export function veTheoMa(
+  dong: readonly DongDonLenh[],
+  nhanTheoDong: ReadonlyMap<string, number>,
+): Map<string, number> {
+  const ve = new Map<string, number>()
+  for (const d of dong) {
+    const nhan = nhanTheoDong.get(d.line_id) ?? 0
+    if (nhan <= EPS || d.qty_ordered <= EPS || d.phan_lenh <= EPS) continue
+    const phan = Math.min(1, d.phan_lenh / d.qty_ordered)
+    ve.set(d.material_id, (ve.get(d.material_id) ?? 0) + nhan * phan)
+  }
+  return ve
+}
 
 export function tinhHangLenh(input: {
   dong: DongDonLenh[]
@@ -55,20 +78,20 @@ export function tinhHangLenh(input: {
   /** Tồn dùng được theo vật tư. */
   ton: ReadonlyMap<string, number>
   vatTu: ReadonlyMap<string, { code: string; name: string; unit: string }>
+  /** Phần tồn chia cho lệnh này theo vật tư (B5). Không truyền thì dùng cả tồn. */
+  chia?: ReadonlyMap<string, number>
+  /** Lệnh khác đang được chia tồn của mã (B5) — bày khi phần chia thiếu. */
+  giuCho?: ReadonlyMap<string, string[]>
 }): HangLenhRow[] {
-  const ve = new Map<string, number>()
-  for (const d of input.dong) {
-    const nhan = input.nhanTheoDong.get(d.line_id) ?? 0
-    if (nhan <= EPS || d.qty_ordered <= EPS || d.phan_lenh <= EPS) continue
-    const phan = Math.min(1, d.phan_lenh / d.qty_ordered)
-    ve.set(d.material_id, (ve.get(d.material_id) ?? 0) + nhan * phan)
-  }
+  const ve = veTheoMa(input.dong, input.nhanTheoDong)
   const out: HangLenhRow[] = []
   for (const [m, v] of ve) {
     const xuat = Math.max(0, input.daXuat.get(m) ?? 0)
     const con = v - xuat
     if (con <= EPS) continue
     const ton = Math.max(0, input.ton.get(m) ?? 0)
+    const coThe = input.chia ? Math.max(0, input.chia.get(m) ?? 0) : ton
+    const giu = coThe < con - EPS ? (input.giuCho?.get(m) ?? []) : []
     const vt = input.vatTu.get(m) ?? { code: '?', name: '(vật tư không còn trong danh mục)', unit: '' } // prettier-ignore
     out.push({
       material_id: m,
@@ -79,8 +102,9 @@ export function tinhHangLenh(input: {
       xuat: tron(xuat),
       con: tron(con),
       ton: tron(ton),
-      goi_y: tron(Math.min(con, ton)),
-      het: ton <= EPS,
+      goi_y: tron(Math.min(con, coThe)),
+      het: coThe <= EPS,
+      ...(giu.length > 0 ? { giu_cho: giu } : {}),
     })
   }
   // Còn tồn trước, kho hết sau; trong mỗi nhóm theo mã.

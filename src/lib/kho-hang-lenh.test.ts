@@ -87,6 +87,26 @@ describe('tinhHangLenh', () => {
     expect(x.ve).toBeCloseTo(407.4074, 4)
   })
 
+  it('B5: có phần CHIA thì gợi ý theo phần chia; chia 0 mà kho còn → hết + giữ cho lệnh khác', () => {
+    const d = [
+      dong({ line_id: 'a', material_id: 'm-tang', qty_ordered: 35264, phan_lenh: 35264 }),
+      dong({ line_id: 'b', material_id: 'm-vit' }),
+    ]
+    const r = tinhHangLenh({
+      dong: d,
+      nhanTheoDong: new Map([['a', 35264], ['b', 100]]), // prettier-ignore
+      daXuat: new Map(),
+      ton: new Map([['m-tang', 9880], ['m-vit', 100]]), // prettier-ignore
+      vatTu: vt,
+      chia: new Map([['m-tang', 0], ['m-vit', 40]]), // prettier-ignore
+      giuCho: new Map([['m-tang', ['02/26-27 - ROSCO']], ['m-vit', ['09/26-27 - MX']]]), // prettier-ignore
+    })
+    expect(r.map((x) => [x.code, x.goi_y, x.het, x.giu_cho])).toEqual([
+      ['NK-0083', 40, false, ['09/26-27 - MX']],
+      ['PKN0289', 0, true, ['02/26-27 - ROSCO']],
+    ])
+  })
+
   it('cộng nhiều dòng (nhiều đơn) cùng một mã; bỏ dòng chưa về / phần 0', () => {
     const r = chay(
       [

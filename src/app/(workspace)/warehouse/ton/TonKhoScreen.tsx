@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   Ico,
@@ -20,7 +20,10 @@ import {
   THead,
   Table,
 } from '@/components/kit'
+import { useBeRong } from '@/lib/use-be-rong'
 import { RO_NHAN, RO_TON, type RoTon } from './ro-ton'
+import { lenhGon, type CuaLenh } from './ton-lenh.shared'
+import { XemSwitch } from './xem-switch'
 
 export type TonRow = {
   material_id: string
@@ -71,6 +74,7 @@ const num = (n: number, tone?: 'warn' | 'stop' | 'ok') =>
  */
 export function TonKhoScreen({
   rows,
+  cuaLenh,
   counts,
   total,
   trang,
@@ -81,6 +85,8 @@ export function TonKhoScreen({
   nhomOptions,
 }: {
   rows: TonRow[]
+  /** Lệnh được chia tồn của từng mã trên trang (Kho đợt 2 · B5, cột "Của lệnh"). */
+  cuaLenh: Record<string, CuaLenh>
   counts: Record<RoTon, number>
   total: number
   trang: number
@@ -94,6 +100,14 @@ export function TonKhoScreen({
   const pathname = usePathname()
   const params = useSearchParams()
   const [q, setQ] = useState(qUrl)
+  /*
+    Cột "Của lệnh" (B5 Q4) chỉ khi khung đủ rộng; hẹp hơn thì nằm ở ô gợi ý của
+    mã. Đo khung, không đo cửa sổ (luật màn hẹp Kho đợt 2).
+  */
+  const khung = useRef<HTMLDivElement>(null)
+  const coCotLenh = useBeRong(khung) >= 1000
+  const ghiLenh = (id: string) =>
+    (cuaLenh[id] ?? []).map((c) => `${lenhGon(c.code)} ${fmt(c.qty)}`).join(' · ')
 
   /** Đổi một tham số → về trang 1 (giữ trang cũ là lọc xong rơi vào trang trống). */
   const dat = (p: Record<string, string | null>) => {
@@ -147,6 +161,7 @@ export function TonKhoScreen({
         />
 
         <FilterBar>
+          <XemSwitch xem="ma" />
           <SearchInput
             value={q}
             onChange={setQ}
@@ -178,6 +193,7 @@ export function TonKhoScreen({
           ))}
         </FilterBar>
 
+        <div ref={khung} className="h-0 w-full" aria-hidden />
         {rows.length === 0 ? (
           <Empty
             headline={
@@ -210,18 +226,22 @@ export function TonKhoScreen({
               <th>Mã</th>
               <th>Tên vật tư</th>
               <th>ĐVT</th>
-              <th style={{ textAlign: 'right' }}>Dùng được</th>
-              <th style={{ textAlign: 'right' }}>Chờ kiểm</th>
-              <th style={{ textAlign: 'right' }}>Khoá</th>
-              <th style={{ textAlign: 'right' }}>Giữ cho lệnh</th>
-              <th style={{ textAlign: 'right' }}>Còn dùng</th>
+              <th style={{ textAlign: 'right', whiteSpace: 'normal' }}>Dùng được</th>
+              <th style={{ textAlign: 'right', whiteSpace: 'normal' }}>Chờ kiểm</th>
+              <th style={{ textAlign: 'right', whiteSpace: 'normal' }}>Khoá</th>
+              <th style={{ textAlign: 'right', whiteSpace: 'normal' }}>Giữ cho lệnh</th>
+              <th style={{ textAlign: 'right', whiteSpace: 'normal' }}>Còn dùng</th>
+              {coCotLenh && <th style={{ width: 190 }}>Của lệnh</th>}
               <th>Kệ</th>
               <th />
             </THead>
             <tbody>
               {rows.map((r) => (
                 <Row key={r.material_id}>
-                  <Cell pin>
+                  <Cell
+                    pin
+                    title={!coCotLenh && cuaLenh[r.material_id] ? `Của lệnh: ${ghiLenh(r.material_id)}` : undefined} // prettier-ignore
+                  >
                     <Code>{r.code}</Code>
                   </Cell>
                   <Cell grow>
@@ -240,6 +260,25 @@ export function TonKhoScreen({
                   <Cell num>
                     {r.available < 0 ? num(r.available, 'stop') : num(r.available)}
                   </Cell>
+                  {coCotLenh && (
+                    <Cell title={ghiLenh(r.material_id) || undefined}>
+                      {cuaLenh[r.material_id] ? (
+                        <span className="text-k-sm block truncate">
+                          {cuaLenh[r.material_id].map((c, i) => (
+                            <span key={c.lsx_id}>
+                              {i > 0 && ' · '}
+                              {lenhGon(c.code)}{' '}
+                              <b className="num font-semibold">{fmt(c.qty)}</b>
+                            </span>
+                          ))}
+                        </span>
+                      ) : r.qty_ok > 0 ? (
+                        <i className="text-k-sm text-[var(--ink-3)]">tồn chung</i>
+                      ) : (
+                        <span className="text-[var(--ink-empty)]">—</span>
+                      )}
+                    </Cell>
+                  )}
                   <Cell muted>
                     {r.shelf_location ?? (
                       <span className="text-[var(--ink-empty)]">—</span>
@@ -271,6 +310,7 @@ export function TonKhoScreen({
                 </>
               }
               caveat={`Cộng theo TRANG và cộng chéo nhiều đơn vị — chỉ để đối chiếu. Rổ này có ${fmt(total)} mã.`}
+              caveatSpan={coCotLenh ? 3 : 2}
             />
           </Table>
         )}

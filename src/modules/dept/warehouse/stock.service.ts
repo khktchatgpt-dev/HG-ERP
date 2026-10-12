@@ -324,15 +324,21 @@ export const stockService = {
    * RỔ `short` đi đường riêng vì `reserved` không nằm trong view SQL. Nó KHÔNG
    * phải quét cả danh mục: tập có giữ chỗ bị chặn bởi số dòng định mức của các
    * lệnh đang cam kết (vài trăm), nên lọc trong bộ nhớ ở đây là đúng chỗ.
+   *
+   * RỔ `chung` (Kho đợt 2 · B5, Q4): mã CÓ tồn mà không lệnh đang mở nào được
+   * chia — "hàng nào trong kho không lệnh nào đặt?". Chỗ gọi đưa tập mã đã chia
+   * cho lệnh (`cuaLenh`, dạng Promise để tải song song với phần còn lại); không
+   * đưa thì rổ đếm 0. Lọc trong bộ nhớ trên rổ `has` (168 mã, đo 12/10/2026).
    */
   async listStockPage(
     user: User,
     opts: {
       q?: string
       group_name?: string
-      bucket: StockBucket
+      bucket: StockBucket | 'chung'
       page: number
       page_size: number
+      cuaLenh?: Promise<ReadonlySet<string>>
     },
   ): Promise<{
     rows: StockRowAvail[]
@@ -345,6 +351,7 @@ export const stockService = {
       qc: number
       blocked: number
       short: number
+      chung: number
     }
   }> {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
@@ -385,14 +392,31 @@ export const stockService = {
             .map(withRes)
             .filter((r) => r.available < 0)
 
-    const base = await stockRepo.counts({ q: opts.q, group_name: opts.group_name })
-    const counts = { ...base, short: shortAll.length }
+    const [base, chungAll] = await Promise.all([
+      stockRepo.counts({ q: opts.q, group_name: opts.group_name }),
+      opts.cuaLenh
+        ? Promise.all([
+            opts.cuaLenh,
+            stockRepo.page({
+              q: opts.q,
+              group_name: opts.group_name,
+              bucket: 'has',
+              page: 1,
+              page_size: 1000,
+            }),
+          ]).then(([set, p]) =>
+            p.rows.filter((r) => !set.has(r.material_id)).map(withRes),
+          )
+        : Promise.resolve([] as StockRowAvail[]),
+    ])
+    const counts = { ...base, short: shortAll.length, chung: chungAll.length }
 
-    if (opts.bucket === 'short') {
+    if (opts.bucket === 'short' || opts.bucket === 'chung') {
+      const tap = opts.bucket === 'short' ? shortAll : chungAll
       const from = (opts.page - 1) * opts.page_size
       return {
-        rows: shortAll.slice(from, from + opts.page_size),
-        total: shortAll.length,
+        rows: tap.slice(from, from + opts.page_size),
+        total: tap.length,
         counts,
       }
     }
