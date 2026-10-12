@@ -789,10 +789,18 @@ export const docsRepo = {
      * mở 20 lần/ngày, và tập doc_id của một mã trong một kỳ là nhỏ.
      */
     reason_code?: string
+    /**
+     * Thu về đúng tập phiếu này (rổ "Thiếu số phiếu NCC" của Sổ phiếu, 12/10/2026).
+     * Mảng rỗng = không phiếu nào — trả rỗng ngay, không để `.in([])` trả cả sổ.
+     */
+    ids?: string[]
+    /** Lọc theo người lập phiếu (ô "Người lập" của Sổ phiếu). */
+    created_by?: string
     page: number
     page_size: number
   }): Promise<{ rows: WarehouseDoc[]; total: number }> {
-    let docIds: string[] | null = null
+    if (filter.ids && filter.ids.length === 0) return { rows: [], total: 0 }
+    let docIds: string[] | null = filter.ids ?? null
     if (filter.reason_code) {
       const { data } = await db()
         .from('warehouse_movements')
@@ -800,13 +808,13 @@ export const docsRepo = {
         .eq('reason_code', filter.reason_code)
         .not('doc_id', 'is', null)
         .limit(20000)
-      docIds = [
-        ...new Set(
-          ((data as { doc_id: string | null }[] | null) ?? [])
-            .map((r) => r.doc_id)
-            .filter((v): v is string => !!v),
-        ),
-      ]
+      const theoMa = new Set(
+        ((data as { doc_id: string | null }[] | null) ?? [])
+          .map((r) => r.doc_id)
+          .filter((v): v is string => !!v),
+      )
+      // Có cả tập id (rổ) lẫn mã lý do → GIAO hai tập.
+      docIds = docIds ? docIds.filter((id) => theoMa.has(id)) : [...theoMa]
       // Không phiếu nào mang mã này → trả rỗng NGAY. Bỏ qua bước này thì `.in`
       // với mảng rỗng và PostgREST trả về TOÀN BỘ sổ — đúng ngược ý người lọc.
       if (docIds.length === 0) return { rows: [], total: 0 }
@@ -817,6 +825,7 @@ export const docsRepo = {
       .select(`${DOC_COLS}, ${DOC_JOINS}`, { count: 'exact' })
       .order('created_at', { ascending: false })
     if (filter.kind) q = q.eq('kind', filter.kind)
+    if (filter.created_by) q = q.eq('created_by', filter.created_by)
     if (docIds) q = q.in('id', docIds)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)

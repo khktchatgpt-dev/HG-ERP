@@ -1,5 +1,6 @@
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { soPhieuRepo } from '@/modules/dept/warehouse/so-phieu.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
@@ -41,12 +42,20 @@ export async function resolveNavBadges(
  */
 async function warehouseBadges(): Promise<Record<string, number>> {
   const today = todayVn()
-  const rows = await posRepo.listWatchFields()
+  const [rows, thieu] = await Promise.all([
+    posRepo.listWatchFields(),
+    // Sổ phiếu: phiếu nhập thiếu số phiếu NCC có ngày CT trong 14 ngày — đúng
+    // số ô "… trong 14 ngày" trên đầu Sổ phiếu (cùng `thieuSoNcc`, Bước 2b).
+    soPhieuRepo.thieuSoNcc(today),
+  ])
   const ganVe = rows.filter((p) => {
     const b = incomingBucket(p, today)
     return b === 'overdue' || b === 'today'
   }).length
-  return ganVe > 0 ? { '/warehouse/nhap': ganVe } : {}
+  const out: Record<string, number> = {}
+  if (ganVe > 0) out['/warehouse/nhap'] = ganVe
+  if (thieu.ganDay > 0) out['/warehouse/phieu'] = thieu.ganDay
+  return out
 }
 
 /** Khu Giám đốc: "Chờ tôi phê duyệt" = PO + LSX + báo giá đang chờ ký. */

@@ -484,7 +484,14 @@ export const stockService = {
    */
   async listDocs(
     user: User,
-    opts: { kind?: DocKind; reason_code?: string; page: number; page_size: number },
+    opts: {
+      kind?: DocKind
+      reason_code?: string
+      ids?: string[]
+      created_by?: string
+      page: number
+      page_size: number
+    },
   ) {
     if (!(await canViewWarehouse(user))) throw Forbidden()
     const { rows, total } = await docsRepo.list(opts)

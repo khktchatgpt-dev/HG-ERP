@@ -1,6 +1,8 @@
 'use client'
 
+import { useRef, useState, type CSSProperties } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useBeRong } from '@/lib/use-be-rong'
 import { cn } from '@/lib/utils'
 import { isoToVn } from '@/lib/date-vn'
 import { MA_LY_DO_KHO, nhanLyDo } from '@/lib/kho-ma-ly-do'
@@ -23,6 +25,7 @@ import {
   Tag,
 } from '@/components/kit'
 import { RO_PHIEU, RO_PHIEU_NHAN, type RoPhieu } from './ro-phieu'
+import { GhiSoNccSheet } from './ghi-so-ncc'
 
 export type PhieuRow = {
   id: string
@@ -38,6 +41,11 @@ export type PhieuRow = {
   da_bi_dao: boolean
   created_by_name: string | null
   ma_ly_do: string[]
+  supplier_doc_no: string | null
+  /** Đơn mua + lệnh của phiếu (nhập/trả theo đơn); null = phiếu không nối đơn. */
+  don: { po_id: string; po_code: string; lsx: string[] } | null
+  /** Thuộc rổ "Thiếu số phiếu NCC" — cùng tập với badge menu. */
+  thieu_ncc: boolean
 }
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
@@ -71,6 +79,10 @@ export function SoPhieuScreen({
   ro,
   lyDo,
   canEdit,
+  thieuGanDay,
+  nguoi,
+  nguoiLap,
+  meId,
 }: {
   rows: PhieuRow[]
   dem: Record<RoPhieu, number>
@@ -80,10 +92,21 @@ export function SoPhieuScreen({
   ro: RoPhieu
   lyDo: string
   canEdit: boolean
+  /** Phần của rổ có ngày chứng từ trong 14 ngày — đúng số badge menu Sổ phiếu. */
+  thieuGanDay: number
+  /** Ô Người lập: '' mọi người · 'toi' · id người lập. */
+  nguoi: string
+  nguoiLap: { id: string; name: string; n: number }[]
+  meId: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
+  const khung = useRef<HTMLDivElement>(null)
+  // Khung hẹp (< 960px: 1024 có sidebar mở) thì ẩn cột Lệnh SX + Người lập + nhãn chữ
+  // của mã lý do — luật màn hẹp: ẩn cột bậc thấp thay vì cuộn ngang (12/10/2026).
+  const hep = useBeRong(khung) < 960
+  const [ghiSo, setGhiSo] = useState<PhieuRow | null>(null)
 
   const dat = (p: Record<string, string | null>) => {
     const s = new URLSearchParams(params.toString())
@@ -97,16 +120,28 @@ export function SoPhieuScreen({
   }
 
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
+    <div
+      className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
+      // Đối ứng co tới 140px (kit mặc định 200): đo 12/10 bảng 1110px trong khung
+      // 1053px (1280, sidebar mở). Tên đầy đủ ở `title`.
+      style={{ '--col-grow': '140px' } as CSSProperties}
+    >
       <ScreenFrame>
         <ScreenHeader
           compact
           eyebrow="Kho"
           title="Sổ phiếu"
           facts={[
+            { label: 'Tất cả', value: fmt(dem.all) },
             { label: 'Phiếu nhập', value: fmt(dem.receipt) },
             { label: 'Phiếu xuất', value: fmt(dem.issue) },
-            { label: 'Tất cả', value: fmt(dem.all) },
+            {
+              label: 'Thiếu số phiếu NCC',
+              value: `${fmt(dem.thieu_ncc)} · ${fmt(thieuGanDay)} trong 14 ngày`,
+              tone: dem.thieu_ncc > 0 ? 'warn' : undefined,
+              on: ro === 'thieu_ncc',
+              onClick: () => dat({ ro: ro === 'thieu_ncc' ? null : 'thieu_ncc' }),
+            },
           ]}
           actions={
             canEdit ? (
@@ -131,7 +166,23 @@ export function SoPhieuScreen({
               ...MA_LY_DO_KHO.map((x) => ({ value: x.ma, label: `${x.ma} · ${x.nhan}` })),
             ]}
             label="Mã lý do"
-            width={260}
+            width={hep ? 170 : 240}
+          />
+          <Pick
+            value={nguoi}
+            onChange={(v) => dat({ nguoi: v || null })}
+            options={[
+              { value: '', label: 'Mọi người lập' },
+              {
+                value: 'toi',
+                label: `Tôi lập (${fmt(nguoiLap.find((x) => x.id === meId)?.n ?? 0)})`,
+              },
+              ...nguoiLap
+                .filter((x) => x.id !== meId)
+                .map((x) => ({ value: x.id, label: `${x.name} (${fmt(x.n)})` })),
+            ]}
+            label="Người lập"
+            width={hep ? 150 : 190}
           />
           {RO_PHIEU.map((id) => (
             <Chip
@@ -143,16 +194,17 @@ export function SoPhieuScreen({
               {RO_PHIEU_NHAN[id]}
             </Chip>
           ))}
-          {lyDo && (
+          {(lyDo || nguoi) && (
             <Btn
               icon="boLoc"
-              onClick={() => dat({ ly_do: null })}
+              onClick={() => dat({ ly_do: null, nguoi: null })}
               className="text-k-sm h-[26px] px-2"
             >
-              Bỏ lọc lý do
+              Bỏ lọc
             </Btn>
           )}
         </FilterBar>
+        <div ref={khung} className="h-0 w-full" aria-hidden />
 
         {/*
           DẢI NÀY CHỈ HIỆN KHI ĐANG LỌC. Bản đầu để nó hiện thường trực như một
@@ -160,15 +212,20 @@ export function SoPhieuScreen({
           vĩnh viễn thì nó thành hình nền và lần có cảnh báo thật không ai
           thấy. Câu giải thích chuyển xuống chân màn, chỗ của luật nền.
         */}
-        {(lyDo || ro !== 'all') && (
+        {(lyDo || nguoi || ro !== 'all') && (
           <NoticeBar
             tone="warn"
             tag="Đang lọc"
-            action={{ label: 'Xem cả sổ', onClick: () => dat({ ro: null, ly_do: null }) }}
+            action={{
+              label: 'Xem cả sổ',
+              onClick: () => dat({ ro: null, ly_do: null, nguoi: null }),
+            }}
           >
             Sổ đang thu lại còn rổ “{RO_PHIEU_NHAN[ro]}”
-            {lyDo && ` và mã lý do ${lyDo} · ${nhanLyDo(lyDo)}`}. Tổng ở đầu trang vẫn là
-            số của CẢ SỔ, không phải của phần đang lọc.
+            {lyDo && ` và mã lý do ${lyDo} · ${nhanLyDo(lyDo)}`}
+            {nguoi &&
+              ` · người lập: ${nguoi === 'toi' ? 'tôi' : (nguoiLap.find((x) => x.id === nguoi)?.name ?? '—')}`}
+            . Tổng ở đầu trang vẫn là số của CẢ SỔ, không phải của phần đang lọc.
           </NoticeBar>
         )}
 
@@ -181,20 +238,27 @@ export function SoPhieuScreen({
                 : `Rổ “${RO_PHIEU_NHAN[ro]}” đang trống. Sổ đang có ${fmt(dem.all)} phiếu.`
             }
             next={
-              <Btn icon="boLoc" primary onClick={() => dat({ ro: null, ly_do: null })}>
+              <Btn
+                icon="boLoc"
+                primary
+                onClick={() => dat({ ro: null, ly_do: null, nguoi: null })}
+              >
                 Xem cả {fmt(dem.all)} phiếu
               </Btn>
             }
           />
         ) : (
-          <Table>
+          <Table minWidth={hep ? 640 : 900}>
             <THead pinFirst>
-              <th>Ngày</th>
-              <th>Số phiếu</th>
-              <th>Lý do</th>
+              <th style={{ width: 58 }}>Ngày</th>
+              <th style={{ width: 150 }}>Số phiếu</th>
+              <th style={{ width: hep ? 64 : 120 }}>Lý do</th>
+              <th style={{ width: 112 }}>Đơn</th>
+              {!hep && <th style={{ width: 132 }}>Lệnh SX</th>}
               <th>Đối ứng</th>
-              <th>Người lập</th>
-              <th />
+              <th style={{ width: 130 }}>Số phiếu NCC</th>
+              {!hep && <th style={{ width: 110 }}>Người lập</th>}
+              <th style={{ width: 64 }} />
             </THead>
             <tbody>
               {rows.map((d) => (
@@ -210,28 +274,31 @@ export function SoPhieuScreen({
                         // lịch sử, giấu đi là sổ không cộng lại đúng.
                         d.da_bi_dao && 'line-through decoration-[var(--ink-3)]',
                       )}
+                      title={
+                        d.reversal_of_code ? `Đảo của ${d.reversal_of_code}` : undefined
+                      }
                     >
                       <Code>{d.code}</Code>
-                      {d.da_bi_dao && <Tag tone="stop">đã bị đảo</Tag>}
+                      {d.da_bi_dao && <Tag tone="stop">đã đảo</Tag>}
                       {d.reversal_of_code && (
-                        <span className="text-k-label text-[var(--ink-3)]">
-                          đảo của {d.reversal_of_code}
-                        </span>
+                        <span className="text-k-label text-[var(--ink-3)]">đảo</span>
                       )}
                       {d.status === 'pending' && <Tag tone="warn">chờ duyệt</Tag>}
-                      {d.status === 'rejected' && <Tag tone="stop">đã từ chối</Tag>}
+                      {d.status === 'rejected' && <Tag tone="stop">từ chối</Tag>}
                     </span>
                   </Cell>
-                  <Cell>
+                  <Cell title={d.ma_ly_do.map((m) => `${m} · ${nhanLyDo(m)}`).join(', ')}>
                     <span className="flex items-center gap-2">
                       {d.ma_ly_do.length === 0 ? (
                         <span className="text-[var(--ink-empty)]">—</span>
                       ) : (
                         <>
                           <MaLyDo ma={d.ma_ly_do[0]} />
-                          <span className="text-k-sm truncate text-[var(--ink-2)]">
-                            {nhanLyDo(d.ma_ly_do[0])}
-                          </span>
+                          {!hep && (
+                            <span className="text-k-sm truncate text-[var(--ink-2)]">
+                              {nhanLyDo(d.ma_ly_do[0])}
+                            </span>
+                          )}
                           {d.ma_ly_do.length > 1 && (
                             <span className="num text-k-label text-[var(--ink-3)]">
                               +{d.ma_ly_do.length - 1}
@@ -241,12 +308,59 @@ export function SoPhieuScreen({
                       )}
                     </span>
                   </Cell>
-                  <Cell grow muted>
-                    <span className="truncate" title={d.counterparty ?? d.reason ?? ''}>
-                      {d.counterparty ?? d.reason ?? '—'}
-                    </span>
+                  <Cell title={d.don?.lsx.join(', ') || undefined}>
+                    {d.don ? (
+                      <span className="num">{d.don.po_code}</span>
+                    ) : (
+                      <span className="text-[var(--ink-empty)]">—</span>
+                    )}
                   </Cell>
-                  <Cell muted>{d.created_by_name ?? '—'}</Cell>
+                  {!hep && (
+                    <Cell muted title={d.don?.lsx.join(', ') || undefined}>
+                      {d.don && d.don.lsx.length > 0 ? (
+                        <span className="num">
+                          {d.don.lsx[0]}
+                          {d.don.lsx.length > 1 && (
+                            <span className="text-k-label ml-1">
+                              +{d.don.lsx.length - 1}
+                            </span>
+                          )}
+                        </span>
+                      ) : d.don ? (
+                        'ngoài lệnh'
+                      ) : (
+                        ''
+                      )}
+                    </Cell>
+                  )}
+                  <Cell grow muted title={d.counterparty ?? d.reason ?? ''}>
+                    {d.counterparty ?? d.reason ?? '—'}
+                  </Cell>
+                  <Cell>
+                    {d.supplier_doc_no?.trim() ? (
+                      <span className="num">{d.supplier_doc_no}</span>
+                    ) : d.thieu_ncc ? (
+                      <span className="flex items-center gap-2">
+                        <span className="font-semibold text-[var(--warn)]">chưa ghi</span>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="text-k-sm text-[var(--act-text)] underline underline-offset-2"
+                            aria-label={`Ghi số phiếu NCC cho ${d.code}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setGhiSo(d)
+                            }}
+                          >
+                            ghi
+                          </button>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--ink-empty)]">—</span>
+                    )}
+                  </Cell>
+                  {!hep && <Cell muted>{d.created_by_name ?? '—'}</Cell>}
                   <Cell>
                     <span className="flex justify-end">
                       <Btn
@@ -298,6 +412,12 @@ export function SoPhieuScreen({
           right={`${rows.length} / ${fmt(total)} phiếu`}
         />
       </ScreenFrame>
+      {ghiSo && (
+        <GhiSoNccSheet
+          doc={{ id: ghiSo.id, code: ghiSo.code, po_code: ghiSo.don?.po_code ?? null }}
+          onClose={() => setGhiSo(null)}
+        />
+      )}
     </div>
   )
 }
