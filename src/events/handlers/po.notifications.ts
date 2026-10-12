@@ -142,6 +142,19 @@ export function registerPoNotificationHandlers(): void {
   })
 
   // Chốt PHẦN THIẾU (0154): báo Kho ngừng chờ lô này + GĐ/QL nắm.
+  // Sự cố giao hàng (0213 + 0231): báo người phụ trách đơn — Kho thấy hàng sai
+  // trước, Cung ứng là người đi nói với NCC. Chính người phụ trách ghi thì khỏi báo.
+  on('po.issue_recorded', async (e) => {
+    if (!e.owner_id || e.owner_id === e.reported_by) return
+    const mo = e.description.length > 140 ? `${e.description.slice(0, 139)}…` : e.description
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.reported_by,
+      type: 'po_issue',
+      payload: { title: `${e.code} — ${e.supplier_name} · ${e.kind_label}: ${mo}` },
+    })
+  })
+
   on('po.closed_short', async (e) => {
     await Promise.all(
       e.notify_ids.map((rid) =>

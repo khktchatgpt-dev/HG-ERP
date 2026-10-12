@@ -35,6 +35,7 @@ import {
   Combobox,
   CoverageBar,
   Empty,
+  Menu,
   FilterBar,
   GroupRow,
   NoticeBar,
@@ -50,6 +51,7 @@ import {
   Tag,
 } from '@/components/kit'
 import { HangCuaDonSheet } from './hang-cua-don'
+import { BaoSuCoSheet } from './bao-su-co'
 import type { HangCuaDonData } from './tai-hang-cua-don'
 
 type Hen = typeof MOI | 'tuan' | IncomingBucket
@@ -77,6 +79,7 @@ export function HangVeScreen({
   canEdit,
   truncatedAt,
   hangCuaDon,
+  suCo,
 }: {
   rows: HangVeRow[]
   today: string
@@ -85,6 +88,8 @@ export function HangVeScreen({
   truncatedAt: number | null
   /** Hộp "Hàng của đơn" đang mở (`?don=`). */
   hangCuaDon: HangCuaDonData | null
+  /** Hộp "Báo sự cố giao hàng" đang mở (`?su_co=`) — Bước 3. */
+  suCo: HangCuaDonData | null
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -97,6 +102,13 @@ export function HangVeScreen({
   }
   const moDon = (id: string) => thayUrl((p) => p.set('don', id))
   const dongDon = () => thayUrl((p) => p.delete('don'))
+  // Báo sự cố: đóng hộp Hàng của đơn (nếu đang mở) rồi mở hộp báo — một hộp một lúc.
+  const moSuCo = (id: string) =>
+    thayUrl((p) => {
+      p.delete('don')
+      p.set('su_co', id)
+    })
+  const dongSuCo = () => thayUrl((p) => p.delete('su_co'))
   /*
     Phiếu VỪA GHI ở form nhận hàng — form đẩy mã phiếu sang đây qua URL để dải
     "Đã ghi sổ" (có nút In) sống qua lần điều hướng. Đóng dải = xoá tham số.
@@ -250,6 +262,14 @@ export function HangVeScreen({
           >
             {r.po_code}
           </Code>
+          {r.su_co_mo > 0 && (
+            <span
+              className="ml-1.5"
+              title={`${r.su_co_mo} sự cố giao hàng đang chờ Cung ứng xử lý với NCC`}
+            >
+              <Tag tone="warn">{r.su_co_mo} sự cố</Tag>
+            </span>
+          )}
         </Cell>
         {hienLenh && (
           <Cell muted title={[r.lsx_code, ...r.extra_lsx].filter(Boolean).join(', ')}>
@@ -291,7 +311,7 @@ export function HangVeScreen({
           </Cell>
         )}
         <Cell>
-          <span className="flex justify-end">
+          <span className="flex items-center justify-end gap-1">
             {tuDo ? (
               <Btn
                 disabled
@@ -311,6 +331,13 @@ export function HangVeScreen({
                 {hep ? 'Nhận' : 'Nhận hàng'}
               </Btn>
             )}
+            <Menu
+              ariaLabel={`Thao tác đơn ${r.po_code}`}
+              items={[
+                { label: 'Báo sự cố giao hàng', blockedBy: canEdit ? undefined : 'Kho', onClick: () => moSuCo(r.po_id) }, // prettier-ignore
+                { label: 'Xem hàng của đơn', onClick: () => moDon(r.po_id) },
+              ]}
+            />
           </span>
         </Cell>
       </Row>
@@ -326,7 +353,7 @@ export function HangVeScreen({
       className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
       // Cột NCC co tới 140px (kit mặc định 200): 9 cột phải vừa 1280 không cuộn
       // ngang — đo 12/10: 1275px trong khung 1213px. Tên đầy đủ nằm ở `title`.
-      style={{ '--col-grow': hep ? '110px' : '140px' } as CSSProperties}
+      style={{ '--col-grow': hep ? '96px' : '140px' } as CSSProperties}
     >
       <ScreenFrame>
         <ScreenHeader
@@ -491,7 +518,7 @@ export function HangVeScreen({
               {hienLenh && <th>Lệnh SX</th>}
               <th>Nhà cung cấp</th>
               {!gon && <th>Loại hàng</th>}
-              <th>Đợt · xe tới</th>
+              <th>{gon ? 'Đợt' : 'Đợt · xe tới'}</th>
               <th>Về kho</th>
               {!gon && <th>Phụ trách</th>}
               <th />
@@ -533,8 +560,10 @@ export function HangVeScreen({
           today={today}
           canEdit={canEdit}
           onClose={dongDon}
+          onBaoSuCo={canEdit ? () => moSuCo(hangCuaDon.po.id) : undefined}
         />
       )}
+      {suCo && <BaoSuCoSheet data={suCo} onClose={dongSuCo} />}
     </div>
   )
 }

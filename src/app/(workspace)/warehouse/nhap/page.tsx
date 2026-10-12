@@ -33,25 +33,30 @@ export default async function WarehouseInboundPage({
   searchParams: Promise<{
     /** Mở hộp "Hàng của đơn" (chỉ xem) — bản vẽ B1-3. */
     don?: string
+    /** Mở hộp "Báo sự cố giao hàng" (Bước 3, bản vẽ B3-2). */
+    su_co?: string
   }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
   const today = todayIso()
 
-  const [{ rows: all, truncatedAt }, canEdit, hangCuaDon] = await Promise.all([
+  const [{ rows: all, truncatedAt }, canEdit, hangCuaDon, suCo] = await Promise.all([
     loadWatchPos(user),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
     sp.don ? taiHangCuaDon(user, sp.don) : Promise.resolve(null),
+    // Hộp báo sự cố cần đầu đơn + dòng hàng — cùng bộ nạp của hộp Hàng của đơn.
+    sp.su_co ? taiHangCuaDon(user, sp.su_co) : Promise.resolve(null),
   ])
   const incoming = all.filter(isIncoming)
   const ids = incoming.map((p) => p.id)
-  const [dotBy, lineOpen, extraBy] = await Promise.all([
+  const [dotBy, lineOpen, extraBy, suCoMo] = await Promise.all([
     hangVeRepo.dotMoTheoDon(ids),
     hangVeRepo.lineOpenByPoIds(ids),
     supplyRepo.extraLsxCodesByPoIds(ids),
+    hangVeRepo.suCoMoTheoDon(ids),
   ])
 
   const rows: HangVeRow[] = incoming.map((p) => {
@@ -69,6 +74,7 @@ export default async function WarehouseInboundPage({
       lines_total: p.lines_total,
       owner_name: p.assignee_name,
       dot: d ? dotKeTiep(d.dots, d.so_dot, lineOpen) : null,
+      su_co_mo: suCoMo.get(p.id) ?? 0,
     }
   })
 
@@ -79,6 +85,7 @@ export default async function WarehouseInboundPage({
       canEdit={canEdit}
       truncatedAt={truncatedAt}
       hangCuaDon={hangCuaDon}
+      suCo={suCo}
     />
   )
 }

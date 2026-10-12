@@ -1,5 +1,6 @@
 import type { User } from '@/modules/core/users/users.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
+import { poTrackingService } from '@/modules/dept/supply/po-tracking.service'
 import { HttpError } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 
@@ -23,7 +24,11 @@ export async function taiHangCuaDon(user: User, poId: string) {
     throw e
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
-  const shipments = await posService.listShipments(user, po.id)
+  const [shipments, { issues }] = await Promise.all([
+    posService.listShipments(user, po.id),
+    // Sổ sự cố của đơn (0213) — Kho xem + báo (Bước 3); đóng là việc của Cung ứng.
+    poTrackingService.forPo(user, po.id),
+  ])
   const st = new Map(status_lines.map((s) => [s.id, s]))
   const dotCuaDong = new Map<string, number[]>()
   const songs = shipments
@@ -68,6 +73,17 @@ export async function taiHangCuaDon(user: User, poId: string) {
       status: s.status,
       note: s.note,
       lines: s.lines.map((l) => ({ po_line_id: l.po_line_id, qty: Number(l.qty) })),
+    })),
+    issues: issues.map((i) => ({
+      id: i.id,
+      kind: i.kind,
+      qty: i.qty,
+      po_line_id: i.po_line_id,
+      description: i.description,
+      status: i.status,
+      resolution: i.resolution,
+      created_by_name: i.created_by_name,
+      created_at: i.created_at,
     })),
     docs: warehouse_docs.map((d) => ({
       doc_id: d.doc_id,

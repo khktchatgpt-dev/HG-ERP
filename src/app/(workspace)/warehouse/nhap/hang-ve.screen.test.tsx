@@ -35,6 +35,7 @@ const r = (p: Partial<HangVeRow> & Pick<HangVeRow, 'po_code' | 'bucket'>): HangV
   lines_total: 1,
   owner_name: 'Đặng Thị Thanh Nga',
   dot: null,
+  su_co_mo: 0,
   ...p,
 })
 const ROWS: HangVeRow[] = [
@@ -74,6 +75,7 @@ const PO100: HangCuaDonData = {
     { id: 'dot-1', seq: 1, date: '2026-10-12', status: 'planned', note: null, lines: [{ po_line_id: 'l1', qty: 816 }] }, // prettier-ignore
     { id: 'dot-2', seq: 2, date: '2026-10-22', status: 'planned', note: null, lines: [{ po_line_id: 'l4', qty: 500 }] }, // prettier-ignore
   ],
+  issues: [],
   docs: [{ doc_id: 'd99', code: 'PNK-2026-0099', kind: 'receipt', at: '2026-10-06', qty_total: 4969, reversed_by: null }], // prettier-ignore
 }
 
@@ -86,6 +88,7 @@ function dung(them: Partial<Parameters<typeof HangVeScreen>[0]> = {}) {
         canEdit
         truncatedAt={null}
         hangCuaDon={null}
+        suCo={null}
         {...them}
       />
     </ToastProvider>,
@@ -170,5 +173,27 @@ describe('Kho › Hàng về · màn hẹp (luật 12/10/2026)', () => {
     } finally {
       if (goc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', goc)
     }
+  })
+})
+
+describe('Kho › Hàng về · sự cố (Bước 3)', () => {
+  it('đơn có sự cố mở hiện nhãn "N sự cố"; ⋯ mở hộp báo bằng ?su_co=', () => {
+    render(
+      <ToastProvider>
+        <HangVeScreen
+          rows={ROWS.map((x) =>
+            x.po_code === 'PO-2026-0108' ? { ...x, su_co_mo: 1 } : x,
+          )}
+          today={TODAY}
+          canEdit
+          truncatedAt={null}
+          hangCuaDon={null}
+          suCo={null}
+        />
+      </ToastProvider>,
+    )
+    const tr = dongCua('PO-2026-0108')
+    expect(within(tr).getByText('1 sự cố')).toBeTruthy()
+    expect(within(dongCua('PO-2026-0115')).queryByText(/sự cố/)).toBeNull()
   })
 })

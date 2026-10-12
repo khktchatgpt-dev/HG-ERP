@@ -63,6 +63,25 @@ export const hangVeRepo = {
     return out
   },
 
+  /**
+   * Số sự cố giao hàng CÒN MỞ theo đơn (sổ 0213) — nhãn "N sự cố" trên dòng Hàng
+   * về: lô đang chờ Cung ứng xử lý với NCC, thủ kho khỏi nhận nhầm (Bước 3).
+   */
+  async suCoMoTheoDon(poIds: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    if (poIds.length === 0) return out
+    const { data, error } = await db()
+      .from('supply_po_issues')
+      .select('po_id')
+      .in('po_id', poIds)
+      .eq('status', 'mo')
+      .limit(5000)
+    if (error) throw new Error(`hangVeRepo.suCoMoTheoDon: ${error.message}`)
+    for (const r of (data ?? []) as { po_id: string }[])
+      out.set(r.po_id, (out.get(r.po_id) ?? 0) + 1)
+    return out
+  },
+
   /** Phần CÒN CHỜ (`qty_open`, 0154) theo dòng đơn — chốt thiếu đếm là xong. */
   async lineOpenByPoIds(poIds: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>()

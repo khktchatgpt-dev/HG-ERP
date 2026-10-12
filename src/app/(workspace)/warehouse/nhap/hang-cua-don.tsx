@@ -12,7 +12,9 @@ import {
   Table,
   Tag,
 } from '@/components/kit'
-import { ngay } from '@/lib/kho-hang-ve'
+import { ngay, TU_CHOI_NHAN } from '@/lib/kho-hang-ve'
+import { ISSUE_KIND_LABEL, type IssueKind } from '@/lib/po-tracking'
+import { todayVn } from '@/lib/date-vn'
 import type { HangCuaDonData } from './tai-hang-cua-don'
 
 const so = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
@@ -49,11 +51,14 @@ export function HangCuaDonSheet({
   today,
   canEdit,
   onClose,
+  onBaoSuCo,
 }: {
   data: HangCuaDonData
   today: string
   canEdit: boolean
   onClose: () => void
+  /** Mở hộp Báo sự cố của đơn này (Bước 3). Không có = không có quyền ghi kho. */
+  onBaoSuCo?: () => void
 }) {
   const { po, lines, shipments, docs, free_lines } = data
   const open = new Map(lines.map((l) => [l.id, l.open]))
@@ -89,6 +94,13 @@ export function HangCuaDonSheet({
           </span>
           <span className="ml-auto flex gap-2">
             <Btn onClick={onClose}>Đóng</Btn>
+            <Btn
+              icon="canhBao"
+              blockedBy={onBaoSuCo ? undefined : 'Kho'}
+              onClick={onBaoSuCo}
+            >
+              Báo sự cố
+            </Btn>
             {!tuDo && (
               <Btn
                 icon="nhanHang"
@@ -250,6 +262,73 @@ export function HangCuaDonSheet({
                             ? `${ma[0].code ?? ma[0].name} · ${so(s.lines[0].qty)} ${ma[0].unit}`
                             : `${s.lines.length} dòng`}
                         </span>
+                      </Cell>
+                    </Row>
+                  )
+                })}
+              </tbody>
+            </Table>
+          )}
+        </section>
+
+        <section aria-label="Sự cố giao hàng">
+          <h3 className="text-k-label mb-1 font-semibold text-[var(--ink-3)] uppercase">
+            Sự cố giao hàng
+            {data.issues.length > 0 &&
+              ` · ${data.issues.filter((i) => i.status === 'mo').length} đang mở / ${data.issues.length}`}
+          </h3>
+          {data.issues.length === 0 ? (
+            <p className="text-k-sm m-0 text-[var(--ink-3)]">
+              Chưa có sự cố nào. Hàng tới sai, hỏng, thiếu — hoặc không nhận lô — thì bấm
+              “Báo sự cố”: người phụ trách đơn bên Cung ứng nhận thông báo.
+            </p>
+          ) : (
+            <Table>
+              <THead>
+                <th>Ngày</th>
+                <th>Loại</th>
+                <th>Mô tả</th>
+                <th>Người báo</th>
+                <th>Tình trạng</th>
+              </THead>
+              <tbody>
+                {data.issues.map((i) => {
+                  const tuChoi = i.description.startsWith(TU_CHOI_NHAN)
+                  const moTa = tuChoi
+                    ? i.description.slice(TU_CHOI_NHAN.length).trim()
+                    : i.description
+                  return (
+                    <Row key={i.id}>
+                      <Cell>
+                        <span className="num">
+                          {ngay(todayVn(new Date(i.created_at)), today)}
+                        </span>
+                      </Cell>
+                      <Cell>{ISSUE_KIND_LABEL[i.kind as IssueKind] ?? i.kind}</Cell>
+                      <Cell
+                        grow
+                        title={[
+                          i.description,
+                          i.resolution && `Cách xử lý: ${i.resolution}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' — ')}
+                      >
+                        {tuChoi && (
+                          <span className="mr-1">
+                            <Tag tone="warn">từ chối nhận</Tag>
+                          </span>
+                        )}
+                        {i.qty != null ? `${so(i.qty)} · ` : ''}
+                        {moTa}
+                      </Cell>
+                      <Cell muted>{i.created_by_name ?? '—'}</Cell>
+                      <Cell>
+                        {i.status === 'mo' ? (
+                          <Tag tone="warn">đang mở</Tag>
+                        ) : (
+                          <Tag tone="done">đã xử lý</Tag>
+                        )}
                       </Cell>
                     </Row>
                   )

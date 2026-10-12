@@ -31,6 +31,8 @@ export type HangVeRow = {
   /** Người mua phụ trách — thủ kho biết gọi ai khi hàng sai/thiếu (Q6). */
   owner_name: string | null
   dot: DotKeTiep | null
+  /** Sự cố giao hàng còn mở của đơn (sổ 0213) — nhãn "N sự cố" (Bước 3). */
+  su_co_mo: number
 }
 
 /** Một đợt giao còn mở (planned/arrived) cùng các dòng đơn nó chở. */
@@ -128,4 +130,44 @@ export function xepHangVe(a: HangVeRow, b: HangVeRow): number {
 export function ngay(iso: string, today: string): string {
   const [y, m, d] = iso.slice(0, 10).split('-')
   return y === today.slice(0, 4) ? `${d}/${m}` : `${d}/${m}/${y}`
+}
+
+/** Chữ đầu mô tả khi Kho KHÔNG nhận lô hàng (Q1 bản vẽ B3: lựa chọn, không phải loại mới). */
+export const TU_CHOI_NHAN = '[Từ chối nhận]'
+
+/**
+ * Dựng thân POST `pos/[id]/issues` từ hộp Báo sự cố của Kho (Kho đợt 2 · Bước 3).
+ * Trả `{ loi }` khi chưa gửi được — cùng luật `issueSchema` của route (mô tả ≥ 5
+ * ký tự, SL không âm), nói TRƯỚC khi bấm thay vì để route trả 400.
+ */
+export function thanSuCo(f: {
+  kind: string | null
+  tuChoi: boolean
+  poLineId: string | null
+  qty: string
+  moTa: string
+}):
+  | {
+      body: {
+        kind: string
+        po_line_id: string | null
+        qty: number | null
+        description: string
+      }
+    }
+  | { loi: string } {
+  if (!f.kind) return { loi: 'Chọn loại sự cố' }
+  const mo = f.moTa.trim()
+  if (mo.length < 5) return { loi: 'Mô tả sự cố ít nhất 5 ký tự' }
+  const q = f.qty.trim() ? Number(f.qty.replace(/\./g, '').replace(',', '.')) : null
+  if (q != null && (!Number.isFinite(q) || q < 0))
+    return { loi: 'Số lượng phải là số không âm' }
+  return {
+    body: {
+      kind: f.kind,
+      po_line_id: f.poLineId || null,
+      qty: q,
+      description: f.tuChoi ? `${TU_CHOI_NHAN} ${mo}` : mo,
+    },
+  }
 }

@@ -43,6 +43,7 @@ const TYPE_LABEL: Record<string, string> = {
   po_unapproved: 'đã thu hồi chữ ký trên đơn đặt',
   po_question: 'hỏi về đơn đặt bạn phụ trách',
   po_answered: 'đã trả lời câu hỏi về đơn đặt',
+  po_issue: 'báo sự cố giao hàng',
   po_urgent_sent: 'đã gửi gấp đơn đặt, chờ ký bù',
   po_reassigned: 'đã bàn giao đơn đặt',
   po_closed_short: 'đã chốt phần thiếu đơn đặt',

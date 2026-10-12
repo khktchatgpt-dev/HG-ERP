@@ -32,6 +32,7 @@ export type NotificationType =
   | 'po_question'
   | 'po_answered'
   | 'po_urgent_sent'
+  | 'po_issue'
   | 'po_reassigned'
   | 'po_closed_short'
   /** Quét sáng pg_cron (0159) — insert thẳng từ SQL, không qua event bus. */

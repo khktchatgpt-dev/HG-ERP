@@ -264,6 +264,23 @@ export type DomainEvent =
    * GỬI GẤP, KÝ BÙ SAU (0218): trưởng phòng Cung ứng gửi NCC trước khi có chữ
    * ký. Báo MỌI người có quyền duyệt — đơn vào mục "Chờ ký bù" của hộp ký.
    */
+  /**
+   * SỰ CỐ GIAO HÀNG vừa ghi vào sổ 0213 (Kho đợt 2 · Bước 3, 12/10/2026) — thường
+   * do Kho báo lúc nhận (kể cả từ chối nhận cả lô). Báo NGƯỜI PHỤ TRÁCH đơn để đi
+   * làm việc với NCC; không đổi tồn, không đổi đơn.
+   */
+  | {
+      name: 'po.issue_recorded'
+      po_id: string
+      code: string
+      supplier_name: string
+      /** Người phụ trách đơn (chưa giao ai thì người lập) — người nhận thông báo. */
+      owner_id: string | null
+      reported_by: string
+      /** Nhãn loại, đã dịch ("Hàng hỏng / lỗi"). */
+      kind_label: string
+      description: string
+    }
   | {
       name: 'po.urgent_sent'
       po_id: string

@@ -5,10 +5,12 @@ import {
   ngay,
   ngayBatThuong,
   soNgayToi,
+  thanSuCo,
   xepHangVe,
   type DotMo,
   type HangVeRow,
 } from './kho-hang-ve'
+import { issueSchema } from '@/modules/dept/supply/po-tracking.schema'
 
 const TODAY = '2026-10-12'
 
@@ -24,6 +26,7 @@ const row = (p: Partial<HangVeRow> & { po_code: string }): HangVeRow => ({
   lines_total: 1,
   owner_name: null,
   dot: null,
+  su_co_mo: 0,
   ...p,
 })
 
@@ -139,5 +142,53 @@ describe('xepHangVe', () => {
       'PO-2',
       'PO-3',
     ])
+  })
+})
+
+describe('thanSuCo', () => {
+  const goc = {
+    kind: 'hong_loi',
+    tuChoi: true,
+    poLineId: '91934f48-4e79-4710-9d38-05c20c6c515a',
+    qty: '140',
+    moTa: '  Thùng bị ướt, móp góc  ',
+  }
+  it('từ chối nhận → ghi chữ đầu mô tả, SL số, cắt khoảng trắng', () => {
+    expect(thanSuCo(goc)).toEqual({
+      body: {
+        kind: 'hong_loi',
+        po_line_id: '91934f48-4e79-4710-9d38-05c20c6c515a',
+        qty: 140,
+        description: '[Từ chối nhận] Thùng bị ướt, móp góc',
+      },
+    })
+  })
+  it('vẫn nhận → mô tả giữ nguyên; dòng + SL bỏ trống được', () => {
+    expect(thanSuCo({ ...goc, tuChoi: false, poLineId: null, qty: '' })).toEqual({
+      body: {
+        kind: 'hong_loi',
+        po_line_id: null,
+        qty: null,
+        description: 'Thùng bị ướt, móp góc',
+      },
+    })
+  })
+  it('SL kiểu VN "1.250" = 1250', () => {
+    expect(
+      'body' in thanSuCo({ ...goc, qty: '1.250' }) && thanSuCo({ ...goc, qty: '1.250' }),
+    ).toMatchObject({ body: { qty: 1250 } })
+  })
+  it('chặn trước khi gửi: chưa chọn loại, mô tả ngắn, SL âm', () => {
+    expect(thanSuCo({ ...goc, kind: null })).toEqual({ loi: 'Chọn loại sự cố' })
+    expect(thanSuCo({ ...goc, moTa: ' ướt ' })).toEqual({
+      loi: 'Mô tả sự cố ít nhất 5 ký tự',
+    })
+    expect(thanSuCo({ ...goc, qty: '-3' })).toEqual({
+      loi: 'Số lượng phải là số không âm',
+    })
+  })
+  it('thân gửi lên qua được zod của route', () => {
+    const r = thanSuCo(goc)
+    expect('body' in r && issueSchema.safeParse(r.body).success).toBe(true)
   })
 })

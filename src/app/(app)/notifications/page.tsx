@@ -25,6 +25,7 @@ const TYPE_LABEL: Record<string, string> = {
   po_unapproved: 'đã thu hồi chữ ký trên đơn đặt vật tư — đơn quay về chờ duyệt, chưa gửi NCC được',
   po_question: 'hỏi về đơn đặt vật tư bạn phụ trách — trả lời ngay trên đơn',
   po_answered: 'đã trả lời câu hỏi của bạn về đơn đặt vật tư',
+  po_issue: 'báo sự cố giao hàng',
   po_urgent_sent: 'đã gửi gấp đơn đặt vật tư cho NCC trước khi ký — cần ký bù',
   po_reassigned: 'đã bàn giao đơn đặt vật tư cho bạn phụ trách',
   lsx_submitted: 'gửi LSX chờ bạn duyệt',

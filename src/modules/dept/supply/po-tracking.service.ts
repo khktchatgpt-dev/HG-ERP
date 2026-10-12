@@ -1,6 +1,8 @@
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
+import { emit } from '@/events/bus'
+import { ISSUE_KIND_LABEL } from '@/lib/po-tracking'
 import { posRepo } from './pos.repo'
 import { poTrackingRepo, type CommitLogRow, type PoIssue } from './po-tracking.repo'
 import type { IssueInput } from './po-tracking.schema'
@@ -48,6 +50,18 @@ export const poTrackingService = {
       qty: input.qty ?? null,
       description: input.description.trim(),
       created_by: user.id,
+    })
+    // Báo người phụ trách đơn (Kho đợt 2 · Bước 3). Ghi sổ TRƯỚC, báo SAU: bus nuốt
+    // lỗi handler (vd. chưa áp 0231) — sự cố vẫn nằm trong sổ.
+    await emit({
+      name: 'po.issue_recorded',
+      po_id: poId,
+      code: po.code,
+      supplier_name: po.supplier_name,
+      owner_id: po.assigned_to ?? po.created_by ?? null,
+      reported_by: user.id,
+      kind_label: ISSUE_KIND_LABEL[input.kind],
+      description: input.description.trim(),
     })
     return { id }
   },
