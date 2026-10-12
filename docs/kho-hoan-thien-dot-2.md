@@ -113,6 +113,16 @@ lệnh này còn trong kho" (nhận qua đơn của lệnh, cả đơn gộp l�
 lệnh, ≤ tồn thực) → tích / Lấy tất cả → sửa số thực lấy → Ghi sổ. **Không dùng định
 mức** (chốt 16/09). `XuatScreen.tsx` 805 dòng → khối là file riêng.
 
+> **B4 XONG 12/10** `ef7e2fe` (bản vẽ https://claude.ai/artifact/4x4FTaGvwxx1xqF6ozFZLA):
+> chọn lệnh → dải "Kho còn N mã đã mua cho lệnh, chưa ghi xuất" + nút **Lấy hàng của lệnh (N)** →
+> hộp tích chọn, số điền sẵn = min(còn của lệnh, tồn dùng được) (Q1); đã về chia theo tỉ lệ khi
+> dòng có chia 0185 (Q2); lệnh quá hạn xuất hàng thì nhắc ghi bù (Q3); mã đã về mà kho hết bày mờ,
+> không tích được (Q4). Luật thuần `lib/kho-hang-lenh.ts` (7 ca test), đã xuất = `issuedByLsx`
+> (ròng) như bảng kê lệnh. Số thật: 09-MX 49 còn / 0 hết · YOTRIO 28 / 13 · 06-MX 22 / 4 · 08-MX
+> 0 / 12. Hộp không cuộn ngang ở 1280 và 1024 (một vùng cuộn dọc). `XuatScreen` 772 dòng (tách
+> `Buoc`/`Seg` sang `xuat-khoi.tsx`). Lệnh đã hoàn thành chưa có trong ô chọn → để B5.
+> Còn treo (có từ trước, không do B4): lưới phiếu xuất ở 1024 cuộn ngang 797/900px.
+
 **B5 · Tồn theo lệnh.** Công tắc "Theo lệnh" ở Tồn kho: mỗi lệnh đã nhận · đã xuất
 · còn trong kho; rổ **Lệnh xong còn hàng** với hai nút Xuất bổ sung / Về tồn chung (Q4).
 
