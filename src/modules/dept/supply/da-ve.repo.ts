@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { theoLo } from '@/server/theo-lo'
 import { canCanKg } from '@/lib/can-kg'
 import { DAU_DIEU_CHINH, DAU_SUA_PHIEU, dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
 import type { DongNhanVe, PhieuNhanVe } from '@/lib/da-ve'
@@ -87,28 +88,36 @@ export async function loadDaVe(since: string | null): Promise<{
     if (r.error) throw new Error(r.error.message)
     return r
   }
-  const [{ data: mvs }, { data: rev }, { data: adjDocs }] = (
-    await Promise.all([
+  /*
+    Tập id ở đây LỚN DẦN theo sổ (mọi phiếu nhập, mọi dòng đơn đã nhận) — đi qua
+    `theoLo` chứ không `.in()` trần: 12/10/2026 màn sập "fetch failed" khi
+    `in('id', 410 dòng đơn)` vượt độ dài URL (xem `server/theo-lo.ts`).
+  */
+  const [mvs, rev, { data: adjDocs }] = await Promise.all([
+    theoLo<unknown>(docIds, (lo) =>
       db()
         .from('warehouse_movements')
         .select(
           'id, doc_id, po_line_id, qty, stock_status, qty2_actual, material:warehouse_materials(code, name, unit)',
         )
-        .in('doc_id', docIds)
+        .in('doc_id', lo)
         .not('po_line_id', 'is', null),
+    ),
+    theoLo<unknown>(docIds, (lo) =>
       db()
         .from('warehouse_docs')
         .select('reversal_of_doc_id, reason')
-        .in('reversal_of_doc_id', docIds),
-      // Phiếu ĐIỀU CHỈNH chênh lệch (C) — cả PNK lẫn PXK, nối phiếu gốc qua ghi chú.
-      db()
-        .from('warehouse_docs')
-        .select('id, code, note')
-        .eq('status', 'posted')
-        .like('note', `${DAU_DIEU_CHINH} PNK-%`)
-        .limit(1000),
-    ])
-  ).map(ok)
+        .in('reversal_of_doc_id', lo),
+    ),
+    // Phiếu ĐIỀU CHỈNH chênh lệch (C) — cả PNK lẫn PXK, nối phiếu gốc qua ghi chú.
+    db()
+      .from('warehouse_docs')
+      .select('id, code, note')
+      .eq('status', 'posted')
+      .like('note', `${DAU_DIEU_CHINH} PNK-%`)
+      .limit(1000)
+      .then(ok),
+  ])
   const adjRows = ((adjDocs ?? []) as { id: string; code: string; note: string | null }[])
     .map((a) => ({ ...a, goc: dieuChinhCua(a.note) }))
     .filter((a): a is typeof a & { goc: string } => !!a.goc)
@@ -117,21 +126,21 @@ export async function loadDaVe(since: string | null): Promise<{
   const chenhByGoc = new Map<string, Record<string, number>>()
   const dcByGoc = new Map<string, string[]>()
   if (adjRows.length > 0) {
-    const { data: adjRev } = ok(
-      await db()
+    const adjRev = await theoLo<unknown>([...adjIds], (lo) =>
+      db()
         .from('warehouse_docs')
         .select('id, reversal_of_doc_id')
-        .in('reversal_of_doc_id', [...adjIds]),
+        .in('reversal_of_doc_id', lo),
     )
     const revOf = new Map(
       ((adjRev ?? []) as { id: string; reversal_of_doc_id: string }[]).map((r) => [r.id, r.reversal_of_doc_id]), // prettier-ignore
     )
     const gocOf = new Map(adjRows.map((a) => [a.id, a.goc]))
-    const { data: adjMv } = ok(
-      await db()
+    const adjMv = await theoLo<unknown>([...adjIds, ...revOf.keys()], (lo) =>
+      db()
         .from('warehouse_movements')
         .select('doc_id, po_line_id, direction, qty')
-        .in('doc_id', [...adjIds, ...revOf.keys()])
+        .in('doc_id', lo)
         .not('po_line_id', 'is', null),
     )
     for (const m of (adjMv ?? []) as {
@@ -180,11 +189,11 @@ export async function loadDaVe(since: string | null): Promise<{
   const lineIds = [...new Set(movements.map((m) => m.po_line_id))]
   if (lineIds.length === 0) return { rows: [], truncatedAt: null }
 
-  const { data: pls } = ok(
-    await db()
+  const pls = await theoLo<unknown>(lineIds, (lo) =>
+    db()
       .from('supply_purchase_order_lines')
       .select('id, po_id, qty_ordered, price_basis, unit2, qty2')
-      .in('id', lineIds),
+      .in('id', lo),
   )
   const poLines = new Map(
     (
@@ -200,8 +209,8 @@ export async function loadDaVe(since: string | null): Promise<{
   )
   const poIds = [...new Set([...poLines.values()].map((l) => l.po_id))]
 
-  const [{ data: pos }, { data: status }, { data: extra }] = (
-    await Promise.all([
+  const [pos, status, extra] = await Promise.all([
+    theoLo<unknown>(poIds, (lo) =>
       db()
         .from('supply_purchase_orders')
         .select(
@@ -209,17 +218,21 @@ export async function loadDaVe(since: string | null): Promise<{
           // relationship", PostgREST trả lỗi. Hint đích danh FK lệnh chính.
           'id, code, status, template, assigned_to, created_by, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code)',
         )
-        .in('id', poIds),
+        .in('id', lo),
+    ),
+    theoLo<unknown>(poIds, (lo) =>
       db()
         .from('supply_po_line_status')
         .select('id, po_id, qty_ordered, qty_received, qty_open, closed_short_at')
-        .in('po_id', poIds),
+        .in('po_id', lo),
+    ),
+    theoLo<unknown>(poIds, (lo) =>
       db()
         .from('supply_po_extra_lsx')
         .select('po_id, lsx:production_orders(code)')
-        .in('po_id', poIds),
-    ])
-  ).map(ok)
+        .in('po_id', lo),
+    ),
+  ])
   type PoRow = {
     id: string
     code: string
@@ -236,9 +249,9 @@ export async function loadDaVe(since: string | null): Promise<{
       [...poById.values()].map((p) => p.assigned_to ?? p.created_by).filter(Boolean),
     ),
   ] as string[]
-  const { data: users } = ownerIds.length
-    ? await db().from('users').select('id, name').in('id', ownerIds)
-    : { data: [] }
+  const users = await theoLo<unknown>(ownerIds, (lo) =>
+    db().from('users').select('id, name').in('id', lo),
+  )
   const userName = new Map(
     ((users ?? []) as { id: string; name: string | null }[]).map((u) => [u.id, u.name]),
   )
