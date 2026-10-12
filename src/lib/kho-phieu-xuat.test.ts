@@ -5,6 +5,7 @@ import {
   type DauPhieuXuat,
   lyDoCanLenh,
   themDong,
+  themTuLenh,
   thieuTon,
   tinhTongXuat,
   type DongXuat,
@@ -115,4 +116,28 @@ describe('kiemTruocGhiSoXuat — theo thứ tự câu hỏi của đầu phiếu
     }))
   it('đủ → ok', () =>
     expect(kiemTruocGhiSoXuat(head(), [row('a', 5)])).toEqual({ ok: true }))
+})
+
+describe('themTuLenh', () => {
+  const vt = (id: string) => ({
+    id,
+    code: id.toUpperCase(),
+    name: 'tên ' + id,
+    unit: 'Con',
+  })
+  it('thêm nhiều mã kèm số gợi ý; mã đã có thì giữ dòng cũ và đếm trùng', () => {
+    const co = themDong([], vt('a'), 10).rows.map((r) => ({ ...r, qty: 3 }))
+    const r = themTuLenh(co, [
+      { ...vt('a'), qty_ok: 10, qty: 10 },
+      { ...vt('b'), qty_ok: 50, qty: 40 },
+      { ...vt('c'), qty_ok: 7, qty: 7 },
+    ])
+    expect(r.them).toBe(2)
+    expect(r.trung).toBe(1)
+    expect(r.rows.map((x) => [x.id, x.qty, x.qty_ok])).toEqual([
+      ['a', 3, 10],
+      ['b', 40, 50],
+      ['c', 7, 7],
+    ])
+  })
 })

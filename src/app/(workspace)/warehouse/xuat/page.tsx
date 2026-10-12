@@ -67,6 +67,7 @@ export default async function WarehouseIssuePage() {
         customer_name: l.customer_name,
         order_codes: l.order_codes,
         status: l.status,
+        ship_date: l.ship_date ?? null,
       }))}
       to={to}
       phong={deps.map((d) => d.name).sort((a, b) => a.localeCompare(b, 'vi'))}

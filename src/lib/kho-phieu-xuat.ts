@@ -171,3 +171,31 @@ export function thieuTon(r: Pick<DongXuat, 'qty' | 'qty_ok'>): number | null {
   if (r.qty_ok == null) return null
   return r.qty > r.qty_ok ? r.qty - r.qty_ok : null
 }
+
+/**
+ * Đưa NHIỀU mã vào lưới cùng lúc — "Lấy hàng của lệnh" (Kho đợt 2 · Bước 4).
+ * Mã đã có trong lưới thì GIỮ dòng cũ (người dùng có thể đã sửa số), không đè,
+ * không đẻ dòng thứ hai — trả số mã bị bỏ qua để màn nói ra.
+ */
+export function themTuLenh(
+  rows: DongXuat[],
+  chon: (VatTuChon & { qty_ok: number | null; qty: number })[],
+): { rows: DongXuat[]; them: number; trung: number } {
+  let out = rows
+  let them = 0
+  let trung = 0
+  for (const c of chon) {
+    const r = themDong(
+      out,
+      { id: c.id, code: c.code, name: c.name, unit: c.unit },
+      c.qty_ok,
+    )
+    if (r.trung) {
+      trung++
+      continue
+    }
+    out = r.rows.map((x, i) => (i === r.index ? { ...x, qty: c.qty } : x))
+    them++
+  }
+  return { rows: out, them, trung }
+}

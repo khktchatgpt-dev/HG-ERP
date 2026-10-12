@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
@@ -16,6 +16,7 @@ import {
   kiemTruocGhiSoXuat,
   lyDoCanLenh,
   themDong,
+  themTuLenh,
   thieuTon,
   tinhTongXuat,
   type DauPhieuXuat,
@@ -23,8 +24,40 @@ import {
   type LoaiXuat,
   type VatTuChon,
 } from '@/lib/kho-phieu-xuat'
-import { cn } from '@/lib/utils'
-import { Action, ActionGroup, ActionPane, Btn, CellHint, Code, CommitBar, Crumb, DateInput, DocHead, Grid, GridBody, GridBtn, GridFoot, GridHead, GridRow, Consequence, NumInput, Pick, ScreenFrame, Sheet, SheetActions, StatusBar, StatusTrack, Tag, TextArea, TextInput, Th, useToast, Combobox } from '@/components/kit'
+import { Buoc, Seg } from './xuat-khoi'
+import { HangLenh, type LayHang } from './hang-lenh'
+import {
+  Action,
+  ActionGroup,
+  ActionPane,
+  Btn,
+  CellHint,
+  Code,
+  CommitBar,
+  Crumb,
+  DateInput,
+  DocHead,
+  Grid,
+  GridBody,
+  GridBtn,
+  GridFoot,
+  GridHead,
+  GridRow,
+  Consequence,
+  NumInput,
+  Pick,
+  ScreenFrame,
+  Sheet,
+  SheetActions,
+  StatusBar,
+  StatusTrack,
+  Tag,
+  TextArea,
+  TextInput,
+  Th,
+  useToast,
+  Combobox,
+} from '@/components/kit'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 
@@ -34,90 +67,8 @@ type LsxOpt = {
   customer_name: string
   order_codes: string[]
   status: string
-}
-
-/* ── Hai mảnh nhỏ của đầu phiếu, chỉ màn này dùng ─────────────────────── */
-
-/** Nhãn ô đầu phiếu kèm số thứ tự câu hỏi (1 xuất cho → 2 lệnh → 3 tổ → 4 ngày). */
-function Buoc({
-  n,
-  dim = false,
-  need = false,
-  children,
-}: {
-  n: number | string
-  dim?: boolean
-  /** Ô bắt buộc đang TRỐNG sau khi đã bấm Ghi sổ — mới đỏ, không đỏ lúc mở form. */
-  need?: boolean
-  children: ReactNode
-}) {
-  return (
-    <span
-      className={cn(
-        'text-k-label inline-flex items-center gap-1.5 font-bold tracking-[.07em] whitespace-nowrap uppercase',
-        need ? 'text-[var(--stop)]' : 'text-[var(--ink-label)]',
-      )}
-    >
-      <i
-        className={cn(
-          'text-k-label grid h-4 w-4 place-items-center rounded-full font-bold tracking-normal not-italic',
-          need
-            ? 'bg-[var(--stop)] text-white'
-            : dim
-              ? 'bg-[var(--track)] text-[var(--ink-2)]'
-              : 'bg-[var(--act)] text-[var(--act-ink)]',
-        )}
-      >
-        {n}
-      </i>
-      {children}
-    </span>
-  )
-}
-
-/** Dải nút chọn một — segmented control dựng từ `Btn` của kit. */
-function Seg<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-  disabled,
-  need = false,
-}: {
-  value: T | ''
-  options: { value: T; label: string }[]
-  onChange: (v: T) => void
-  label: string
-  disabled?: boolean
-  need?: boolean
-}) {
-  return (
-    <span
-      role="radiogroup"
-      aria-label={label}
-      className={cn(
-        'inline-flex h-[26px] overflow-hidden rounded-[var(--radius)] border',
-        need ? 'border-[var(--stop)]' : 'border-[var(--line)]',
-      )}
-    >
-      {options.map((o) => (
-        <Btn
-          key={o.value}
-          primary={o.value === value}
-          disabled={disabled}
-          aria-checked={o.value === value}
-          role="radio"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            'text-k-sm h-full rounded-none border-0 border-r border-[var(--line)] px-3 last:border-r-0',
-            o.value !== value && 'bg-[var(--surface-card)] font-medium',
-          )}
-        >
-          {o.label}
-        </Btn>
-      ))}
-    </span>
-  )
+  /** Hạn xuất hàng — nhắc ghi bù khi lệnh quá hạn mà còn hàng trên máy (B4). */
+  ship_date: string | null
 }
 
 const tenTo = (n: string) => n.replace(/^tổ\s+/i, '')
@@ -236,6 +187,18 @@ export function XuatScreen({
       )
     else setRows(r.rows)
     setTimeout(() => focusQty(r.index), 0)
+  }
+
+  // "Lấy hàng của lệnh" (Kho đợt 2 · Bước 4): đưa cả loạt vào lưới, giữ dòng đã có.
+  const layHangLenh = (chon: LayHang[]) => {
+    const r = themTuLenh(rows, chon)
+    setRows(r.rows)
+    toast.success(
+      `Đã đưa ${r.them} dòng vào phiếu`,
+      r.trung > 0
+        ? `${r.trung} mã đã có trong phiếu — giữ dòng cũ.`
+        : 'Sửa số thực lấy rồi Ghi sổ.',
+    )
   }
 
   const focusQty = (i: number) => {
@@ -564,6 +527,10 @@ export function XuatScreen({
             Thêm dòng: gõ ở ô ngay trên lưới · Enter chọn · Tab sang số
           </span>
         </div>
+
+        {canLenh && lsxChon && (
+          <HangLenh key={lsxChon.id} lsx={lsxChon} today={today} onLay={layHangLenh} />
+        )}
 
         {/*
           Ô tìm đứng NGOÀI khung cuộn của lưới: đặt nó làm dòng cuối lưới thì
