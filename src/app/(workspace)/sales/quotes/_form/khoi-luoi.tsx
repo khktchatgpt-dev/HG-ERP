@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, type KeyboardEvent } from 'react'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Search, Trash2 } from 'lucide-react'
 import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
@@ -405,7 +406,10 @@ function Dong({
             id={`cell-${l.key}-price`}
             data-r={i}
             data-c="price"
-            className={`${CELL} ${NUM} ${(l.productId && l.unitPrice.trim() === '') || under ? 'border-[var(--stop)]' : ''}`}
+            className={cn(
+              CELL,
+              `${NUM} ${(l.productId && l.unitPrice.trim() === '') || under ? 'border-[var(--stop)]' : ''}`,
+            )}
             value={l.unitPrice}
             inputMode="decimal"
             onChange={(e) => d.setLine(l.key, { unitPrice: e.target.value })}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type KeyboardEvent } from 'react'
+import { cn } from '@/lib/utils'
 import { ClipboardPaste, PackagePlus, Plus, Search, Trash2 } from 'lucide-react'
 import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
 import { shipWeekLabel } from '@/lib/ship-week'
@@ -312,7 +313,7 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
           id={`cell-${l.key}-qty`}
           data-r={i}
           data-c="qty"
-          className={`${CELL} ${NUM} ${qtyBad ? 'border-[var(--stop)]' : ''}`}
+          className={cn(CELL, `${NUM} ${qtyBad ? 'border-[var(--stop)]' : ''}`)}
           value={l.qty}
           inputMode="numeric"
           disabled={ro}
@@ -326,7 +327,10 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
           id={`cell-${l.key}-price`}
           data-r={i}
           data-c="price"
-          className={`${CELL} ${NUM} ${l.unitPrice.trim() === '' ? 'border-[var(--stop)]' : ''}`}
+          className={cn(
+            CELL,
+            `${NUM} ${l.unitPrice.trim() === '' ? 'border-[var(--stop)]' : ''}`,
+          )}
           value={l.unitPrice}
           inputMode="decimal"
           disabled={ro}
@@ -341,7 +345,7 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
             data-r={i}
             data-c="ship"
             type="date"
-            className={`${CELL} h-6 ${late ? 'border-[var(--warn)]' : ''}`}
+            className={cn(CELL, `h-6 ${late ? 'border-[var(--warn)]' : ''}`)}
             value={l.shipDate}
             disabled={ro}
             onChange={(e) => d.setLine(l.key, { shipDate: e.target.value })}
