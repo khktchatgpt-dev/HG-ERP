@@ -378,7 +378,7 @@ export function GiaThanhScreen({
           {d.rows.length > 0 && (
             <tfoot className="sticky bottom-0 z-10">
               <tr className="bg-muted text-[12px] font-medium">
-                <td className="border-border h-8 border-t px-2" colSpan={12}>
+                <td className="border-border h-8 border-t px-2" colSpan={10}>
                   <span className="text-muted-foreground">
                     {d.rows.length} SP đang hiện · {d.dirty.length} dòng sẽ lưu
                     {d.bad.length > 0 && (
