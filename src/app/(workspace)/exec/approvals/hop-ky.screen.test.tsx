@@ -62,8 +62,10 @@ const dung = () =>
 describe('Hộp ký phân loại', () => {
   it('khối "Cần ký trước" trên cùng (chờ ≥ 3 ngày), rồi mỗi loại một khối theo thứ tự phòng', () => {
     dung()
-    const nhom = screen.getAllByRole('rowheader').map((h) => h.textContent ?? '')
-    expect(nhom.map((t) => t.split(/\d/)[0].trim())).toEqual([
+    const nhom = screen
+      .getAllByRole('rowheader')
+      .map((h) => h.querySelector('.ten')?.textContent ?? '')
+    expect(nhom).toEqual([
       'Cần ký trước',
       'Mua hàng · Đơn mua NCC',
       'Kho · Đề nghị mua vật tư',
@@ -71,13 +73,13 @@ describe('Hộp ký phân loại', () => {
     ])
   })
 
-  it('chip theo phòng đếm đúng và lọc được', () => {
+  it('ô đếm theo loại (kèm phòng) đếm đúng và lọc được', () => {
     dung()
     const bar = screen.getByRole('toolbar', { name: 'Lọc phiếu chờ ký' })
     expect(within(bar).getByRole('button', { name: /Mua hàng/ }).textContent).toContain(
       '3',
     )
-    fireEvent.click(within(bar).getByRole('button', { name: /^Kho/ }))
+    fireEvent.click(within(bar).getByRole('button', { name: /^Đề nghị mua vật tư/ }))
     const nhom = screen.getAllByRole('rowheader').map((h) => h.textContent ?? '')
     expect(nhom.some((t) => t.startsWith('Mua hàng'))).toBe(false)
     expect(nhom.some((t) => t.startsWith('Kho · Đề nghị mua'))).toBe(true)

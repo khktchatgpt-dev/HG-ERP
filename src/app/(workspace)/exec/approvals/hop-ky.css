@@ -1,0 +1,509 @@
+/*
+ * HỘP KÝ — viết tay, KHÔNG dùng kit (chủ dự án 14/10/2026: "không dùng kit nữa",
+ * chỉ áp màn này). Bản vẽ v2 lối ERP: https://claude.ai/artifact/Ar4nCXv8ruVNkwHpc3NYJ4
+ *
+ * BẪY ĐỘ ƯU TIÊN: màn vẫn nằm trong khung có lớp `.kit` (layout Mua hàng) và CSS
+ * của kit KHÔNG ở trong @layer — `.kit table:not(.k-grid) thead th` (0,2,3) thắng
+ * mọi tiện ích Tailwind. Mọi luật ở đây mở đầu bằng `.hk.hk` (0,2,…) và luật
+ * bảng thêm `.hk-tb` → (0,3,…) để thắng mà không cần !important.
+ *
+ * MÀU LOẠI PHIẾU tách hẳn khỏi màu bấm được (xanh cobalt) và ba màu vòng đời —
+ * chỉ hiện ở vạch trên ô đếm, vạch + nền nhạt dòng nhóm, ô vuông cột "Loại".
+ */
+.hk.hk {
+  --hk-bg: #e9ecf1;
+  --hk-card: #ffffff;
+  --hk-raised: #f4f6f9;
+  --hk-ink: #12161f;
+  --hk-ink2: #3a4252;
+  --hk-ink3: #5d6675;
+  --hk-line: #c9d0db;
+  --hk-hair: #e3e7ee;
+  --hk-zebra: #fafbfc;
+  --hk-act: #1f4bb8;
+  --hk-act-wash: #e3eafa;
+  --hk-head: #25324a;
+  --hk-warn: #8a5200;
+  --hk-warn-wash: #fbf0dc;
+  --hk-warn-line: #e8cf9f;
+  --hk-stop: #b0241a;
+  --hk-po: #0f766e;
+  --hk-po-wash: #e2f2ef;
+  --hk-dnm: #6d3fc0;
+  --hk-dnm-wash: #eee8fa;
+  --hk-lsx: #a3245e;
+  --hk-lsx-wash: #f9e7ef;
+  --hk-quote: #475569;
+  --hk-quote-wash: #edf0f4;
+  --hk-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--hk-card);
+  color: var(--hk-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.hk.hk .hk-num {
+  font-family: var(--hk-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tiêu đề trang + thanh hành động góc phải (Action Pane) ── */
+.hk.hk .hk-ph {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--hk-line);
+  flex-wrap: wrap;
+}
+.hk.hk .hk-ph h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.hk.hk .hk-crumb {
+  font-size: 12px;
+  color: var(--hk-ink3);
+}
+.hk.hk .hk-ap {
+  margin-left: auto;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--hk-line);
+}
+.hk.hk .hk-ap > div {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-right: 1px solid var(--hk-line);
+}
+.hk.hk .hk-ap > div:last-child {
+  border-right: 0;
+}
+.hk.hk .hk-btn {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--hk-ink);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.hk.hk .hk-btn:hover:not(:disabled) {
+  background: var(--hk-act-wash);
+}
+.hk.hk .hk-btn.p:not(:disabled) {
+  background: var(--hk-act);
+  color: #fff;
+  font-weight: 600;
+}
+.hk.hk .hk-btn:disabled {
+  color: #9aa3b2;
+  cursor: not-allowed;
+}
+.hk.hk .hk-btn:focus-visible,
+.hk.hk .hk-tile:focus-visible,
+.hk.hk .hk-seg button:focus-visible {
+  outline: 2px solid var(--hk-act);
+  outline-offset: -2px;
+}
+
+/* ── Dải ô đếm vuông — đồng thời là bộ lọc ── */
+.hk.hk .hk-tiles {
+  display: flex;
+  background: var(--hk-raised);
+  border-bottom: 1px solid var(--hk-line);
+  overflow-x: auto;
+}
+.hk.hk .hk-tile {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 148px;
+  padding: 7px 12px 7px;
+  border: 0;
+  border-right: 1px solid var(--hk-line);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.hk.hk .hk-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--c, var(--hk-ink2));
+}
+.hk.hk .hk-tile[aria-pressed='true'] {
+  background: var(--hk-card);
+  box-shadow: inset 0 -2px 0 var(--hk-act);
+}
+.hk.hk .hk-tile .t {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--c, var(--hk-ink2));
+}
+.hk.hk .hk-tile .n {
+  font-family: var(--hk-mono);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.hk.hk .hk-tile .s {
+  font-size: 11.5px;
+  color: var(--hk-ink3);
+}
+.hk.hk .hk-tile:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* ── Thanh lọc / đã chọn ── */
+.hk.hk .hk-fb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--hk-line);
+  font-size: 12.5px;
+  color: var(--hk-ink3);
+  flex-wrap: wrap;
+}
+.hk.hk .hk-fb input {
+  height: 26px;
+  border: 1px solid var(--hk-line);
+  padding: 0 8px;
+  min-width: 240px;
+  font: inherit;
+  color: var(--hk-ink);
+  background: #fff;
+}
+.hk.hk .hk-fb input:focus {
+  outline: 2px solid var(--hk-act);
+  outline-offset: -1px;
+}
+.hk.hk .hk-sel {
+  color: var(--hk-act);
+  font-weight: 600;
+}
+.hk.hk .hk-seg {
+  display: inline-flex;
+  border: 1px solid var(--hk-line);
+  margin-left: auto;
+}
+.hk.hk .hk-seg button {
+  padding: 2px 10px;
+  border: 0;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  color: var(--hk-ink2);
+}
+.hk.hk .hk-seg button[aria-pressed='true'] {
+  background: var(--hk-act-wash);
+  color: var(--hk-act);
+  font-weight: 600;
+}
+.hk.hk .hk-who {
+  border: 1px solid var(--hk-line);
+  background: #fff;
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--hk-ink2);
+}
+.hk.hk .hk-who[aria-pressed='true'] {
+  background: var(--hk-act-wash);
+  border-color: var(--hk-act);
+  color: var(--hk-act);
+  font-weight: 600;
+}
+
+/* ── Lưới liền một khối ── */
+.hk.hk .hk-grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.hk.hk .hk-tb.hk-tb {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.hk.hk .hk-tb.hk-tb thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--hk-head);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  white-space: nowrap;
+}
+.hk.hk .hk-tb.hk-tb tbody td {
+  padding: 5px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--hk-hair);
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--hk-card);
+}
+.hk.hk .hk-tb.hk-tb tbody tr.d:nth-child(even) > td {
+  background: var(--hk-zebra);
+}
+.hk.hk .hk-tb.hk-tb tbody tr.d {
+  cursor: pointer;
+}
+.hk.hk .hk-tb.hk-tb tbody tr.d:hover > td {
+  background: #f1f5fd;
+}
+.hk.hk .hk-tb.hk-tb tbody tr.d.on > td {
+  background: var(--hk-act-wash);
+}
+.hk.hk .hk-tb.hk-tb tbody tr.d.on > td:first-child {
+  box-shadow: inset 3px 0 0 var(--hk-act);
+}
+/* dòng nhóm: vạch màu loại + nền nhạt + chữ hoa */
+.hk.hk .hk-tb.hk-tb tbody tr.grp > th {
+  text-align: left;
+  font-weight: 400;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--hk-ink2);
+  background: var(--w, var(--hk-raised));
+  border-top: 1px solid var(--hk-line);
+  border-bottom: 1px solid var(--hk-line);
+  box-shadow: inset 4px 0 0 var(--c, var(--hk-ink3));
+}
+.hk.hk .hk-tb.hk-tb tbody tr.grp .ten {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--c, var(--hk-ink2));
+}
+.hk.hk .hk-tb.hk-tb tbody tr.grp .rr {
+  float: right;
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+}
+.hk.hk .hk-tb.hk-tb tbody tr.grp label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+.hk.hk .hk-tb.hk-tb tbody tr.grp a {
+  color: var(--hk-act);
+  text-decoration: underline;
+}
+/* hàng tiêu đề cột riêng của khối */
+.hk.hk .hk-tb.hk-tb tbody tr.sub > td {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hk-ink3);
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--hk-line);
+  background: var(--hk-card);
+}
+.hk.hk .hk-tb.hk-tb tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--hk-raised);
+  border-top: 2px solid var(--hk-line);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hk-ink2);
+}
+.hk.hk .hk-tb.hk-tb .r {
+  text-align: right;
+}
+
+/* ô / chữ trong lưới */
+.hk.hk .hk-loai {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--c);
+}
+.hk.hk .hk-loai i {
+  width: 9px;
+  height: 9px;
+  background: var(--c);
+  display: inline-block;
+}
+.hk.hk .hk-ma {
+  color: var(--hk-act);
+  font-family: var(--hk-mono);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hk.hk .hk-why {
+  color: var(--hk-warn);
+  font-weight: 600;
+}
+.hk.hk .hk-mut {
+  color: var(--hk-ink3);
+}
+.hk.hk .hk-b {
+  font-weight: 600;
+}
+.hk.hk .hk-late {
+  color: var(--hk-stop);
+  font-weight: 600;
+}
+.hk.hk .hk-warn {
+  color: var(--hk-warn);
+  font-weight: 600;
+}
+.hk.hk .hk-lock {
+  font-size: 10.5px;
+  color: var(--hk-ink3);
+  border: 1px solid var(--hk-line);
+  padding: 0 3px;
+}
+.hk.hk .hk-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  margin-left: 6px;
+}
+.hk.hk input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--hk-act);
+  cursor: pointer;
+  margin: 0;
+  vertical-align: middle;
+}
+
+/* thanh trạng thái */
+.hk.hk .hk-sb {
+  display: flex;
+  gap: 16px;
+  padding: 3px 14px;
+  border-top: 1px solid var(--hk-line);
+  background: var(--hk-raised);
+  font-size: 11.5px;
+  color: var(--hk-ink3);
+  flex-wrap: wrap;
+}
+.hk.hk .hk-note {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--hk-warn-line);
+  background: var(--hk-warn-wash);
+  font-size: 12.5px;
+}
+.hk.hk .hk-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--hk-ink2);
+}
+.hk.hk .hk-empty b {
+  display: block;
+  font-size: 15px;
+  color: var(--hk-ink);
+  margin-bottom: 4px;
+}
+
+/* ── Điện thoại: danh sách phẳng, vạch màu trái ── */
+.hk.hk .hk-p-sec {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--hk-line);
+  background: var(--w, var(--hk-raised));
+  color: var(--c, var(--hk-ink2));
+  box-shadow: inset 4px 0 0 var(--c, var(--hk-ink3));
+}
+.hk.hk .hk-p-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 10px;
+  width: 100%;
+  padding: 9px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--hk-hair);
+  background: var(--hk-card);
+  box-shadow: inset 4px 0 0 var(--c, transparent);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.hk.hk .hk-p-row:disabled {
+  color: #97a0ae;
+  cursor: default;
+}
+.hk.hk .hk-p-row .s {
+  font-size: 12px;
+  color: var(--hk-ink3);
+}
+.hk.hk .hk-p-row .n {
+  font-family: var(--hk-mono);
+  font-size: 17px;
+  font-weight: 700;
+  align-self: center;
+}
+
+/* Màu theo loại — gắn bằng lớp ở phần tử: .lp-po, .lp-dnm… và .gap */
+.hk.hk .lp-po {
+  --c: var(--hk-po);
+  --w: var(--hk-po-wash);
+}
+.hk.hk .lp-dnm {
+  --c: var(--hk-dnm);
+  --w: var(--hk-dnm-wash);
+}
+.hk.hk .lp-lsx {
+  --c: var(--hk-lsx);
+  --w: var(--hk-lsx-wash);
+}
+.hk.hk .lp-quote {
+  --c: var(--hk-quote);
+  --w: var(--hk-quote-wash);
+}
+.hk.hk .lp-gap {
+  --c: var(--hk-warn);
+  --w: var(--hk-warn-wash);
+}
+.hk.hk .lp-all {
+  --c: var(--hk-ink2);
+}
