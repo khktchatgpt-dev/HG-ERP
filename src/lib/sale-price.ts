@@ -128,6 +128,42 @@ export function vsPlanTotal(
   return { pct: planned > 0 ? r1((got / planned - 1) * 100) : null, n }
 }
 
+export type PriceSuggestion = {
+  price: number
+  /** quote = giá chào gần nhất · order = đơn giá gần nhất · plan = Giá bán KH */
+  from: 'quote' | 'order' | 'plan'
+  /** Mã chứng từ nguồn (BG-… / mã đơn) — null với Giá bán KH. */
+  ref: string | null
+}
+
+/**
+ * Giá gợi ý cho một dòng mới (form đơn / báo giá — 13/10/2026). Thứ tự = độ gần
+ * với giá KHÁCH ĐÃ CHẤP NHẬN: giá đã chào khách này → giá đã bán cho khách này →
+ * Giá bán KH (mức Sale tính trước, chưa ai chốt). Giá bán KH chỉ dùng khi CÙNG
+ * tiền tệ. Không có gì → null (ô để trống, người dùng tự gõ).
+ */
+export function suggestPrice(opts: {
+  currency: string
+  quote?: { unit_price: number; quote_code: string } | null
+  order?: { unit_price: number; order_code: string } | null
+  plan?: PlanPrice | null
+}): PriceSuggestion | null {
+  if (opts.quote && opts.quote.unit_price > 0)
+    return { price: opts.quote.unit_price, from: 'quote', ref: opts.quote.quote_code }
+  if (opts.order && opts.order.unit_price > 0)
+    return { price: opts.order.unit_price, from: 'order', ref: opts.order.order_code }
+  if (opts.plan && opts.plan.price > 0 && opts.plan.currency === opts.currency)
+    return { price: opts.plan.price, from: 'plan', ref: null }
+  return null
+}
+
+/** Câu ngắn dưới ô giá nói giá gợi ý lấy từ đâu. */
+export function suggestionNote(s: Pick<PriceSuggestion, 'from' | 'ref'>): string {
+  if (s.from === 'quote') return `giá chào ${s.ref ?? ''}`.trim()
+  if (s.from === 'order') return `giá đơn ${s.ref ?? ''}`.trim()
+  return `gợi ý ${PRICE_NAME.plan}`
+}
+
 /**
  * Giá bán KH này được SUY NGƯỢC từ giá đơn, không tính trước khi chào (Q3, chốt
  * 13/10/2026). Lúc nạp 0220 nhiều SP lấy lãi KH = đơn giá − giá vốn, nên 270/270
