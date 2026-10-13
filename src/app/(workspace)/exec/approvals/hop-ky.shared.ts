@@ -29,9 +29,6 @@ export const LOP_MAU: Record<LoaiPhieu, string> = {
   quote: 'lp-quote',
 }
 
-/** Số cột của lưới Hộp ký — tiêu đề, dòng nhóm, hàng tiêu đề khối, chân dùng chung. */
-export const COLS = 10
-
 /** Cộng tiền theo TỪNG tiền tệ — USD và VND không bao giờ cộng chung. */
 export function sumByCurrency(items: readonly SignItem[]): [string, number][] {
   const m = new Map<string, number>()

@@ -20,15 +20,8 @@ import { searchMatcher } from '@/lib/search-text'
 import { money } from '../approval-helpers'
 import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
 import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
-import {
-  COLS,
-  LOP_MAU,
-  itemKey,
-  moneyShort,
-  moneyText,
-  sumByCurrency,
-} from './hop-ky.shared'
-import { KhoiDauCot, SignRow } from './sign-row'
+import { LOP_MAU, itemKey, moneyShort, moneyText, sumByCurrency } from './hop-ky.shared'
+import { KhoiDauCot, SignRow, cotHopKy } from './sign-row'
 import { HopKyHep } from './hop-ky-hep'
 
 /**
@@ -89,7 +82,13 @@ export function ApprovalCenterScreen({
   const [pick, setPick] = useState<string | null>(null)
   // Khung < 900px (điện thoại — giám đốc mở từ thông báo): danh sách nhóm (HK-4).
   const khung = useRef<HTMLDivElement>(null)
-  const hep = useBeRong(khung) < 900
+  const beRong = useBeRong(khung)
+  // Dưới 840px (điện thoại, máy tính bảng dọc): danh sách nhóm — bộ cột vừa cần ~820px.
+  const hep = beRong < 840
+  /* Bộ cột theo bề rộng KHUNG (sign-row · cotHopKy): ≥ 1440 đủ 10 cột, vừa thì
+     gộp lệnh + người trình xuống dòng hai của ô Nội dung. */
+  const rong = beRong >= 1440
+  const cot = cotHopKy(rong)
   /* CHỐT CHIỀU CAO = 100dvh − đỉnh của màn (cách `ScreenFrame` của kit làm) —
      để chỉ LƯỚI cuộn, tiêu đề + ô đếm + thanh trạng thái đứng yên. */
   const goc = useRef<HTMLDivElement>(null)
@@ -304,7 +303,9 @@ export function ApprovalCenterScreen({
           >
             <span className="t">Cần ký trước</span>
             <span className="n">{gap.length}</span>
-            <span className="s">ký bù · quá hẹn · ≥ 3 ngày</span>
+            <span className="s" title="ký bù · quá hẹn · chờ ≥ 3 ngày">
+              ký bù · quá hẹn · ≥ 3 ngày
+            </span>
           </button>
           {LOAI_THEO_THU_TU.map((l) => {
             const rows = base.filter((i) => i.kind === l)
@@ -320,7 +321,10 @@ export function ApprovalCenterScreen({
               >
                 <span className="t">{LOAI_PHIEU[l].ten}</span>
                 <span className="n">{rows.length}</span>
-                <span className="s">
+                <span
+                  className="s"
+                  title={`${PHONG_NHAN[LOAI_PHIEU[l].phong]}${tien ? ` · ${tien}` : ''}`}
+                >
                   {PHONG_NHAN[LOAI_PHIEU[l].phong]}
                   {tien ? ` · ${tien}` : ''}
                 </span>
@@ -426,35 +430,27 @@ export function ApprovalCenterScreen({
         <div className="hk-grid">
           <table className="hk-tb" aria-label="Phiếu chờ ký">
             <colgroup>
-              <col style={{ width: 30 }} />
-              <col style={{ width: 112 }} />
-              <col style={{ width: 132 }} />
-              <col style={{ width: 150 }} />
-              <col />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 70 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 128 }} />
-              <col style={{ width: 66 }} />
+              {cot.map((c) => (
+                <col key={c.key} style={c.w ? { width: c.w } : undefined} />
+              ))}
             </colgroup>
             <thead>
               <tr>
-                <th aria-label="Chọn" />
-                <th>Loại</th>
-                <th>Mã phiếu</th>
-                <th>Đối tác / người</th>
-                <th>Nội dung</th>
-                <th>Lệnh / ngữ cảnh</th>
-                <th className="r">Hẹn</th>
-                <th>Người trình</th>
-                <th className="r">Giá trị</th>
-                <th className="r">Chờ</th>
+                {cot.map((c) => (
+                  <th
+                    key={c.key}
+                    className={c.r ? 'r' : undefined}
+                    aria-label={c.key === 'chon' ? 'Chọn' : undefined}
+                  >
+                    {c.nhan}
+                  </th>
+                ))}
               </tr>
             </thead>
             {lane.length > 0 && (
               <tbody>
                 <tr className="grp lp-gap">
-                  <th scope="rowgroup" colSpan={COLS}>
+                  <th scope="rowgroup" colSpan={cot.length}>
                     <span className="ten">Cần ký trước</span> ·{' '}
                     <b className="hk-num">{lane.length}</b> phiếu · mọi loại · ký bù, hẹn
                     giao đã qua, chờ từ 3 ngày
@@ -462,6 +458,7 @@ export function ApprovalCenterScreen({
                 </tr>
                 {lane.map((i) => (
                   <SignRow
+                    rong={rong}
                     key={`gap-${itemKey(i)}`}
                     i={i}
                     today={today}
@@ -481,7 +478,7 @@ export function ApprovalCenterScreen({
               return (
                 <tbody key={g.key}>
                   <tr className={`grp ${g.lop}`}>
-                    <th scope="rowgroup" colSpan={COLS}>
+                    <th scope="rowgroup" colSpan={cot.length}>
                       <span className="ten">{g.ten}</span> ·{' '}
                       <b className="hk-num">{g.rows.length}</b> phiếu ·{' '}
                       {moneyText(g.rows)} · lâu nhất {lau(g.rows)} ngày
@@ -501,9 +498,10 @@ export function ApprovalCenterScreen({
                       </span>
                     </th>
                   </tr>
-                  {g.loai && <KhoiDauCot loai={g.loai} />}
+                  {g.loai && <KhoiDauCot loai={g.loai} rong={rong} />}
                   {g.rows.map((i) => (
                     <SignRow
+                      rong={rong}
                       key={itemKey(i)}
                       i={i}
                       today={today}
@@ -520,7 +518,7 @@ export function ApprovalCenterScreen({
             {/* Phiếu ở khối "Cần ký trước" cũng nằm trong khối loại của nó — chỉ cộng một lần. */}
             <tfoot>
               <tr>
-                <td colSpan={8}>
+                <td colSpan={cot.length - 2}>
                   Cộng {items.length} phiếu · cộng riêng từng loại tiền, không quy đổi
                 </td>
                 <td className="r hk-num" colSpan={2}>

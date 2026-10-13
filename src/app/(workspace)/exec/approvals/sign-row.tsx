@@ -1,24 +1,95 @@
 'use client'
 
 import Link from 'next/link'
-import { LOAI_PHIEU, kyNhanhDuoc, vungGap } from '@/lib/loai-phieu-duyet'
+import { Lock } from 'lucide-react'
+import { LOAI_PHIEU, kyNhanhDuoc, vungGap, type KhaiLoai } from '@/lib/loai-phieu-duyet'
 import { materialSummary } from '@/lib/po-list-labels'
 import type { SignItem } from '@/modules/core/exec/exec.service'
 import { money } from '../approval-helpers'
 import { LOP_MAU, dm } from './hop-ky.shared'
 
 /**
- * Một phiếu trong Hộp ký — lưới 10 cột viết tay (`hop-ky.css`, không kit).
- * Cột NGHĨA THEO LOẠI: đơn mua bày NCC · mua gì · lệnh · hẹn giao; đề nghị mua
- * bày bộ phận · số dòng + lưu ý · cần trước; lệnh SX bày khách · đơn · giao.
- * Hàng tiêu đề của khối (`KhoiDauCot`) nói cột đó nghĩa là gì với loại này.
+ * BỘ CỘT CỦA HỘP KÝ theo bề rộng KHUNG LƯỚI (đo bằng `useBeRong`, không đo cửa
+ * sổ — 14/10/2026). Ảnh chủ dự án ở laptop phóng 125%: khung 980px, 9 cột cố
+ * định chiếm 928px → "Nội dung" còn ~50px, mọi ô bị cắt ("NỘI DUI", "k…",
+ * "233.095.541 V…", "hôm n…").
  *
- * `trongGap` = dòng ở khối "Cần ký trước": câu vì sao gấp đứng đầu cột nội
- * dung; không có ô tích — ký nhanh chỉ trong khối cùng loại (Q26).
+ *  · RỘNG (≥ 1440px — Nội dung còn ≥ 380px): đủ 10 cột.
+ *  · VỪA (840–1440px): bỏ cột Loại / Lệnh / Người trình — màu loại thành ô vuông
+ *    trước mã phiếu; lệnh + người trình xuống DÒNG HAI của ô Nội dung (không mất
+ *    thông tin, chỉ đổi chỗ).
+ *  · HẸP (< 840px): danh sách nhóm (`hop-ky-hep.tsx`), không dùng lưới.
+ */
+export type CotKey =
+  | 'chon'
+  | 'loai'
+  | 'ma'
+  | 'doiTac'
+  | 'noiDung'
+  | 'boiCanh'
+  | 'hen'
+  | 'nguoi'
+  | 'giaTri'
+  | 'cho'
+
+export type Cot = { key: CotKey; w?: number; r?: boolean; nhan: string }
+
+const COT_RONG: Cot[] = [
+  { key: 'chon', w: 34, nhan: '' },
+  { key: 'loai', w: 112, nhan: 'Loại' },
+  { key: 'ma', w: 136, nhan: 'Mã phiếu' },
+  { key: 'doiTac', w: 160, nhan: 'Đối tác / người' },
+  { key: 'noiDung', nhan: 'Nội dung' },
+  { key: 'boiCanh', w: 160, nhan: 'Lệnh / ngữ cảnh' },
+  { key: 'hen', w: 92, r: true, nhan: 'Hẹn' },
+  { key: 'nguoi', w: 140, nhan: 'Người trình' },
+  { key: 'giaTri', w: 146, r: true, nhan: 'Giá trị' },
+  { key: 'cho', w: 76, r: true, nhan: 'Chờ' },
+]
+const COT_VUA: Cot[] = COT_RONG.filter(
+  (c) => c.key !== 'loai' && c.key !== 'boiCanh' && c.key !== 'nguoi',
+).map((c) =>
+  c.key === 'ma' ? { ...c, w: 144 } : c.key === 'doiTac' ? { ...c, w: 140 } : c,
+)
+
+export const cotHopKy = (rong: boolean) => (rong ? COT_RONG : COT_VUA)
+
+/** Nhãn cột của MỘT KHỐI — nghĩa của cột theo loại phiếu. */
+function nhanTheoLoai(k: CotKey, khai: KhaiLoai): string {
+  const c = khai.cot
+  switch (k) {
+    case 'chon':
+    case 'loai':
+      return ''
+    case 'ma':
+      return 'Mã'
+    case 'doiTac':
+      return c.doiTac
+    case 'noiDung':
+      return c.noiDung
+    case 'boiCanh':
+      return c.boiCanh
+    case 'hen':
+      return c.hen
+    case 'nguoi':
+      return 'Người trình'
+    case 'giaTri':
+      return c.giaTri
+    case 'cho':
+      return 'Chờ'
+  }
+}
+
+/**
+ * Một phiếu trong Hộp ký — cột NGHĨA THEO LOẠI: đơn mua bày NCC · mua gì · lệnh
+ * · hẹn giao; đề nghị mua bày bộ phận · số dòng + lưu ý · cần trước; lệnh SX bày
+ * khách · đơn · giao. `trongGap` = dòng ở khối "Cần ký trước": câu vì sao gấp
+ * đứng đầu ô nội dung, không ô tích (ký nhanh chỉ trong khối cùng loại — Q26).
  */
 export function SignRow({
   i,
   today,
+  rong,
   selected,
   checked,
   onPick,
@@ -27,6 +98,8 @@ export function SignRow({
 }: {
   i: SignItem
   today: string
+  /** Khung rộng (≥ 1440px) — đủ 10 cột; không thì bộ cột vừa. */
+  rong: boolean
   selected: boolean
   checked: boolean
   onPick: () => void
@@ -42,13 +115,16 @@ export function SignRow({
       ? 'Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt'
       : `${khai.ten} — mở ra đọc rồi ký riêng`
   const ngCanh =
-    i.kind === 'po' ? (i.po?.lsx_code ?? i.po?.ngoai_lenh ?? 'Ngoài lệnh') : (i.boi_canh ?? '—') // prettier-ignore
+    i.kind === 'po' ? (i.po?.lsx_code ?? i.po?.ngoai_lenh ?? 'Ngoài lệnh') : (i.boi_canh ?? null) // prettier-ignore
   const choCls =
     i.waiting_days >= 7 || (i.po?.eta_late_days ?? 0) > 0
       ? 'r hk-late'
       : i.waiting_days >= 3
         ? 'r hk-warn'
         : 'r'
+  const tien = i.value > 0 ? money(i.value, i.currency) : '—'
+  /* Bộ cột VỪA: lệnh + người trình xuống dòng hai của ô Nội dung. */
+  const dong2 = rong ? null : [ngCanh && ngCanh !== '—' ? ngCanh : null, i.owner_name].filter(Boolean).join(' · ') // prettier-ignore
   return (
     <tr className={selected ? 'd on' : 'd'} onClick={onPick} aria-selected={selected}>
       <td onClick={(e) => e.stopPropagation()}>
@@ -60,18 +136,25 @@ export function SignRow({
             aria-label={`Chọn phiếu ${i.code} để ký nhanh`}
           />
         ) : (
-          <span className="hk-lock" title={khoaVi}>
-            khoá
+          <span className="hk-mut" title={khoaVi} style={{ display: 'inline-flex' }}>
+            <Lock size={13} aria-label={khoaVi} />
           </span>
         )}
       </td>
-      <td className={LOP_MAU[i.kind]}>
-        <span className="hk-loai">
-          <i aria-hidden />
-          {khai.nhan}
-        </span>
-      </td>
-      <td title={i.code}>
+      {rong && (
+        <td className={LOP_MAU[i.kind]}>
+          <span className="hk-loai">
+            <i aria-hidden />
+            {khai.nhan}
+          </span>
+        </td>
+      )}
+      <td title={`${khai.nhan} · ${i.code}`}>
+        {!rong && (
+          <span className={`hk-loai ${LOP_MAU[i.kind]}`} style={{ marginRight: 6 }}>
+            <i aria-label={khai.nhan} />
+          </span>
+        )}
         <Link href={i.href} className="hk-ma" onClick={(e) => e.stopPropagation()}>
           {i.code}
         </Link>
@@ -94,70 +177,92 @@ export function SignRow({
       <td className="hk-b" title={i.party}>
         {i.po?.supplier_short ?? i.party}
       </td>
-      <NoiDung i={i} gapCau={gap?.cau ?? null} />
-      <td className="hk-mut" title={ngCanh}>
-        {ngCanh}
-        {i.po?.lsx_done && (
-          <span
-            className="hk-tag hk-warn"
-            title="Mọi lệnh của đơn đã hoàn thành — sản xuất xong, đơn chưa được cập nhật"
-          >
-            đã xong
-          </span>
-        )}
-      </td>
+      <NoiDung i={i} gapCau={gap?.cau ?? null} dong2={dong2} />
+      {rong && (
+        <td className="hk-mut hk-xuong" title={ngCanh ?? undefined}>
+          {ngCanh ?? '—'}
+          {i.po?.lsx_done && (
+            <span
+              className="hk-tag hk-warn"
+              title="Mọi lệnh của đơn đã hoàn thành — sản xuất xong, đơn chưa được cập nhật"
+            >
+              đã xong
+            </span>
+          )}
+        </td>
+      )}
       <td className="r hk-num">
         <Hen i={i} today={today} />
       </td>
-      <td className="hk-mut" title={i.owner_name ?? undefined}>
-        {i.owner_name ?? '—'}
+      {rong && (
+        <td className="hk-mut hk-xuong" title={i.owner_name ?? undefined}>
+          {i.owner_name ?? '—'}
+        </td>
+      )}
+      <td className="r hk-num hk-b" title={tien}>
+        {tien}
       </td>
-      <td className="r hk-num hk-b">{i.value > 0 ? money(i.value, i.currency) : '—'}</td>
       <td className={choCls}>
-        {i.waiting_days <= 0 ? 'hôm nay' : `${i.waiting_days} ng`}
+        {i.waiting_days <= 0 ? 'hôm nay' : `${i.waiting_days} ngày`}
       </td>
     </tr>
   )
 }
 
-/** Cột "Nội dung" theo loại; dòng ở khối gấp mở đầu bằng câu vì sao gấp. */
-function NoiDung({ i, gapCau }: { i: SignItem; gapCau: string | null }) {
-  const why = gapCau && (
-    <>
-      <span className="hk-why">{gapCau}</span>
-      {' · '}
-    </>
-  )
+/**
+ * Ô "Nội dung" theo loại. Dòng ở khối gấp mở đầu bằng câu vì sao gấp. Bộ cột
+ * vừa có thêm dòng hai (lệnh · người trình) chữ nhỏ nhạt.
+ */
+function NoiDung({
+  i,
+  gapCau,
+  dong2,
+}: {
+  i: SignItem
+  gapCau: string | null
+  dong2: string | null
+}) {
+  let chinh: React.ReactNode
+  let title: string | undefined
   if (i.po) {
     const m = materialSummary(i.po.materials)
-    const full = [i.po.loai, ...i.po.materials].filter(Boolean).join(' · ')
-    return (
-      <td title={full}>
-        {why}
+    title = [i.po.loai, ...i.po.materials].filter(Boolean).join(' · ')
+    chinh = (
+      <>
         {i.po.loai && <span className="hk-b">{i.po.loai}</span>}
         {i.po.loai && m.head && ' · '}
         {m.head}
         {m.more > 0 && <span className="hk-mut"> +{m.more} mã</span>}
-      </td>
+      </>
     )
-  }
-  if (i.dnm) {
+  } else if (i.dnm) {
     const luuY = [
       i.dnm.chua_ma > 0 && `${i.dnm.chua_ma} chưa có mã`,
       i.dnm.thieu_gia > 0 && `${i.dnm.thieu_gia} chưa có giá`,
     ].filter(Boolean)
-    return (
-      <td title={luuY.join(' · ') || undefined}>
-        {why}
+    title = luuY.join(' · ') || undefined
+    chinh = (
+      <>
         {i.dnm.so_dong} dòng
         {luuY.length > 0 && <span className="hk-warn"> · {luuY.join(' · ')}</span>}
-      </td>
+      </>
     )
+  } else {
+    title = i.facts.join(' · ')
+    chinh = <span className="hk-mut">{i.facts.join(' · ')}</span>
   }
   return (
-    <td title={i.facts.join(' · ')}>
-      {why}
-      <span className="hk-mut">{i.facts.join(' · ')}</span>
+    <td title={[gapCau, title, dong2].filter(Boolean).join(' · ') || undefined}>
+      <div className="hk-1dong">
+        {gapCau && (
+          <>
+            <span className="hk-why">{gapCau}</span>
+            {' · '}
+          </>
+        )}
+        {chinh}
+      </div>
+      {dong2 && <div className="hk-1dong hk-dong2">{dong2}</div>}
     </td>
   )
 }
@@ -178,18 +283,18 @@ function Hen({ i, today }: { i: SignItem; today: string }) {
   return <>{dm(i.po.expected_at, today)}</>
 }
 
-/**
- * Hàng tiêu đề RIÊNG của một khối — lưới dùng chung 10 cột, mỗi khối nói lại
- * cột đó nghĩa là gì với loại của mình.
- */
-export function KhoiDauCot({ loai }: { loai: SignItem['kind'] }) {
-  const c = LOAI_PHIEU[loai].cot
-  const nhan = ['', '', 'Mã', c.doiTac, c.noiDung, c.boiCanh, c.hen, 'Người trình', c.giaTri, 'Chờ'] // prettier-ignore
+/** Hàng tiêu đề RIÊNG của một khối — mỗi khối nói lại cột nghĩa là gì với loại của mình. */
+export function KhoiDauCot({ loai, rong }: { loai: SignItem['kind']; rong: boolean }) {
+  const khai = LOAI_PHIEU[loai]
   return (
     <tr className="sub" aria-hidden>
-      {nhan.map((t, k) => (
-        <td key={k} className={k === 6 || k >= 8 ? 'r' : undefined}>
-          {t}
+      {cotHopKy(rong).map((c) => (
+        <td
+          key={c.key}
+          className={c.r ? 'r' : undefined}
+          title={nhanTheoLoai(c.key, khai)}
+        >
+          {nhanTheoLoai(c.key, khai)}
         </td>
       ))}
     </tr>
