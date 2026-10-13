@@ -49,6 +49,30 @@ const pct = (p: number | null) =>
   p == null ? '—' : `${p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
 const dmy = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '')
 
+/**
+ * Tình trạng số kế hoạch của MỘT SP đã lưu — MỘT hàm cho cả nhãn ở cột Tình trạng
+ * lẫn ô đếm đầu trang (soi UI 13/10/2026: ô đếm "lãi tính lại theo đơn" từng ra
+ * 50 trong khi lưới chỉ gắn nhãn 4 dòng, vì ô đếm tính cả SP chưa bóc vốn).
+ * Thứ tự là thứ tự ưu tiên: một SP chỉ mang một nhãn.
+ */
+type TinhTrang = 'chua-co' | 'chua-boc' | 'lech' | 'lai-am' | 'theo-don' | 'du'
+function tinhTrang(r: PlanCostRow): TinhTrang {
+  if (r.price == null) return 'chua-co'
+  if (r.direct == null) return 'chua-boc'
+  if (!r.complete) return 'lech'
+  if (r.profit != null && r.profit < 0) return 'lai-am'
+  if (planFromOrder(r.source)) return 'theo-don'
+  return 'du'
+}
+const TT_NHAN: Record<TinhTrang, { tone: 'stop' | 'warn' | 'done'; text: string }> = {
+  'chua-co': { tone: 'stop', text: 'chưa có' },
+  'chua-boc': { tone: 'warn', text: 'chưa bóc vốn' },
+  lech: { tone: 'warn', text: 'Giá bán KH ≠ tổng 3 số' },
+  'lai-am': { tone: 'stop', text: 'lãi KH âm' },
+  'theo-don': { tone: 'warn', text: 'lãi tính lại theo đơn' },
+  du: { tone: 'done', text: 'đủ' },
+}
+
 /** Enter / ↓ xuống cùng cột dòng dưới, ↑ lên — bảng tính. */
 function gridKey(e: KeyboardEvent<HTMLInputElement>, r: number, c: DraftKey) {
   if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
@@ -83,9 +107,7 @@ export function GiaThanhScreen({
   const missing = s.total - s.with_plan
   const topMissing = d.customers.filter((c) => c.missing > 0)
   // Cùng điều kiện với nhãn ở cột Tình trạng (Dong) — một hàm, hai chỗ, không lệch số.
-  const fromOrder = board.rows.filter(
-    (r) => r.price != null && planFromOrder(r.source),
-  ).length
+  const fromOrder = board.rows.filter((r) => tinhTrang(r) === 'theo-don').length
   return (
     <ErpPage>
       <TopProgressBar active={d.busy} />
@@ -504,7 +526,6 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
   const von = live
     ? planCostOf(live.direct, live.overhead)
     : planCostOf(r.direct, r.overhead)
-  const fromOrder = !dirty && r.price != null && planFromOrder(r.source)
 
   const cell = (k: DraftKey, saved: number | null) => (
     <input
@@ -642,18 +663,8 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
                 bỏ
               </button>
             </span>
-          ) : r.price == null ? (
-            <Nhan tone="stop">chưa có</Nhan>
-          ) : r.direct == null ? (
-            <Nhan tone="warn">chưa bóc vốn</Nhan>
-          ) : !r.complete ? (
-            <Nhan tone="warn">Giá bán KH ≠ tổng 3 số</Nhan>
-          ) : r.profit != null && r.profit < 0 ? (
-            <Nhan tone="stop">lãi KH âm</Nhan>
-          ) : fromOrder ? (
-            <Nhan tone="warn">lãi tính lại theo đơn</Nhan>
           ) : (
-            <Nhan tone="done">đủ</Nhan>
+            <Nhan tone={TT_NHAN[tinhTrang(r)].tone}>{TT_NHAN[tinhTrang(r)].text}</Nhan>
           )}
           {!dirty && (
             <span
