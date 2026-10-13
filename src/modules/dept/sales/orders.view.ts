@@ -21,6 +21,8 @@ export type QuotePickPayload = {
   /** Ảnh đại diện — đường dẫn ký sẵn (07/10/2026, cho màn nhập Excel + ô chọn). */
   image_url: string | null
   packing: ProductPacking
+  /** SP của khách đang chọn (theo customer_id HOẶC nhãn chữ) — route tính khi có `customer_id`. */
+  is_own?: boolean
 }
 
 /**

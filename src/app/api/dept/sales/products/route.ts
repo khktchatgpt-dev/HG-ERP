@@ -7,6 +7,8 @@ import {
   quickProductCreateSchema,
 } from '@/modules/dept/technical/technical.schema'
 import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
+import { customersRepo } from '@/modules/dept/sales/sales.repo'
+import { customerLabelFrom, normalizeCustomerLabel } from '@/lib/customer-label'
 
 /**
  * Ô chọn SP của form báo giá / đơn hàng: tìm phía server, trả ≤25 dòng cột hẹp.
@@ -15,11 +17,24 @@ import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
   const q = parseQuery(new URL(req.url), productPickQuerySchema)
-  const { rows, fuzzy } = await productsService.pick(user, q)
-  return NextResponse.json({
-    products: rows.map(toQuotePickPayload),
-    fuzzy: fuzzy ?? false,
+  // SP của khách nhận theo customer_id HOẶC nhãn chữ trên hồ sơ SP (cùng luật
+  // `customerLabelFrom` mà Kinh doanh dùng khi tạo nhanh SP) — 13/10/2026.
+  const customer = q.customer_id ? await customersRepo.findById(q.customer_id) : null
+  const label = customer ? customerLabelFrom(customer) : null
+  const { rows, fuzzy } = await productsService.pick(user, {
+    ...q,
+    customer_label: label,
   })
+  const products = rows.map((r) => ({
+    ...toQuotePickPayload(r),
+    is_own:
+      !!q.customer_id &&
+      (r.customer_id === q.customer_id ||
+        (!!label && normalizeCustomerLabel(r.customer_name) === label)),
+  }))
+  // SP của khách lên đầu, giữ nguyên thứ tự còn lại (sort ổn định).
+  products.sort((a, b) => Number(b.is_own) - Number(a.is_own))
+  return NextResponse.json({ products, fuzzy: fuzzy ?? false })
 })
 
 /**

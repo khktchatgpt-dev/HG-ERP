@@ -108,7 +108,7 @@ export function ProductSearchDialog({
     const common: ProductPick[] = []
     const others: ProductPick[] = []
     for (const p of rows) {
-      if (customerId && p.customer_id === customerId) own.push(p)
+      if (customerId && (p.customer_id === customerId || p.is_own)) own.push(p)
       else if (!p.customer_id) common.push(p)
       else others.push(p)
     }

@@ -227,7 +227,7 @@ export type ProductLite = Pick<
  * ~715 kB egress Supabase cho một cái `<select>`. Nay tìm ở server, trả ≤25 dòng.
  */
 const PICK_COLS =
-  'id, code, name, unit, customer_id, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
+  'id, code, name, unit, customer_id, customer_name, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
 
 export type ProductPickRow = Pick<
   Product,
@@ -236,6 +236,7 @@ export type ProductPickRow = Pick<
   | 'name'
   | 'unit'
   | 'customer_id'
+  | 'customer_name'
   | 'customer_item_code'
   | 'bom_status'
   | 'packing'
@@ -415,8 +416,36 @@ export const productsRepo = {
   async listForPick(filter: {
     q?: string
     customer_id?: string
+    /** Nhãn chữ của khách (`customerLabelFrom`) — SP chỉ ghi nhãn, không gắn customer_id. */
+    customer_label?: string | null
     limit: number
   }): Promise<ProductPickRow[]> {
+    // Chưa gõ tìm + có khách: SP CỦA KHÁCH trước (theo id HOẶC nhãn chữ), thiếu chỗ mới
+    // bù mẫu chung. Trước 13/10/2026 lấy 25 SP mới nhất (khách + mọi SP không gắn id) —
+    // 26 SP LAURA chỉ có nhãn nên có thể không lọt vào danh sách.
+    if (!filter.q && filter.customer_id) {
+      const own = filter.customer_label
+        ? `customer_id.eq.${filter.customer_id},customer_name.eq."${filter.customer_label.replace(/"/g, '')}"`
+        : `customer_id.eq.${filter.customer_id}`
+      const { data: mine } = await db()
+        .from('technical_products')
+        .select(PICK_COLS)
+        .eq('is_active', true)
+        .or(own)
+        .order('created_at', { ascending: false })
+        .limit(filter.limit)
+      const rows = (mine ?? []) as ProductPickRow[]
+      if (rows.length >= filter.limit) return rows
+      const { data: common } = await db()
+        .from('technical_products')
+        .select(PICK_COLS)
+        .eq('is_active', true)
+        .is('customer_id', null)
+        .is('customer_name', null)
+        .order('created_at', { ascending: false })
+        .limit(filter.limit - rows.length)
+      return [...rows, ...((common ?? []) as ProductPickRow[])]
+    }
     let q = db()
       .from('technical_products')
       .select(PICK_COLS)
