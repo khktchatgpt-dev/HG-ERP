@@ -31,7 +31,7 @@ export default async function Page() {
   return (
     <ApprovalCenterScreen
       box={box}
-      initialKind="po"
+      initialKind="all"
       eyebrow="Mua hàng"
       historyHref={full ? '/exec/approvals/history' : null}
       ruleHref={rule ? '/exec/luat-ky' : null}

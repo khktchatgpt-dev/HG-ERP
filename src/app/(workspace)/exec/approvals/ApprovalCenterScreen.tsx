@@ -1,86 +1,65 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   BarLabel,
   BarSep,
   Btn,
-  FilterBar,
-  Hint,
-  Ico,
-  ToneText,
-  type IcoName,
-  Cell,
   Chip,
-  Code,
   Empty,
+  FilterBar,
   GroupRow,
+  Hint,
   NoticeBar,
-  Row,
   ScreenFrame,
   ScreenHeader,
   StatusBar,
   Table,
-  Tag,
   TFoot,
   THead,
   Tick,
 } from '@/components/kit'
+import {
+  LOAI_PHIEU,
+  PHONG_NHAN,
+  demTheoPhong,
+  gomTheoLoai,
+  kyNhanhDuoc,
+  xepGap,
+  type LoaiPhieu,
+  type PhongTrinh,
+} from '@/lib/loai-phieu-duyet'
 // `money` dùng CHUNG với trang chi tiết duyệt — hai màn nói cùng một con số.
 import { money } from '../approval-helpers'
 import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
 import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
-import { materialSummary } from '@/lib/po-list-labels'
+import { COLS, itemKey, moneyText, sumByCurrency } from './hop-ky.shared'
+import { KhoiDauCot, SignRow } from './sign-row'
 
 /**
- * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — MỌI loại phiếu chờ ký gom một chỗ,
- * KHÔNG chia theo phòng ban; chip lọc mới phân loại. Ký / trả lại ngay tại
- * dòng; "Xem kỹ" mở màn thẩm định đầy đủ của từng phiếu.
+ * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — MỌI loại phiếu chờ ký gom một chỗ.
+ * Ký / trả lại ngay tại dòng; "Xem kỹ" mở màn thẩm định đầy đủ của từng phiếu.
  *
- * CHUYỂN SANG KIT 17/09/2026: bản cũ bày mỗi phiếu thành một THẺ cao ~110px
- * cộng một bản bảng riêng từ 1280px — hai bố cục cho cùng một danh sách. Nay
- * MỘT lưới 30px, 15 phiếu vừa một màn, chân bảng cộng tiền theo từng loại tệ.
- *
- * MỘT HỘP KÝ CHO CẢ BA NGƯỜI KÝ (27/09/2026, artboard 5 — chủ dự án chốt):
- * anh Điền, Alex (khu Giám đốc) và chị Thảo (khu Cung ứng, chỉ có quyền duyệt
- * đơn mua — mở màn này ở /mua-hang/cho-ky). Người ký cần biết thêm ba điều mà
- * bản trước không nói:
- *  · AI TRÌNH — gom nhóm theo người mua / người gửi, lọc được theo người;
- *  · MUA GÌ — cột "loại · vật tư" (2 tên đầu + số mã còn lại);
- *  · HẸN GIAO ĐÃ QUA CHƯA — đo 27/09: 14/16 phiếu chờ có hẹn giao đã qua,
- *    lâu nhất 85 ngày; ký mà không biết là ký một đơn đã trễ.
- * Phiếu giá trị lớn mang BIỂU TƯỢNG KHOÁ ở ô tích thay vì nhãn lặp ở mọi dòng
- * (soi 1:1: 14 nhãn "Giá trị lớn" y hệt nhau chỉ là nhiễu).
+ * PHÂN LOẠI LẠI 14/10/2026 (H2, bản vẽ https://claude.ai/artifact/XDy5RfHWzAfAAoULJpobBB,
+ * Q23–Q28): chủ dự án — "không phân loại ra sao sẽ dễ bị rối lắm vì sau này sẽ
+ * có rất nhiều yêu cầu duyệt". Bản trước là một bảng chung gom theo NGƯỜI TRÌNH,
+ * đơn mua 233 triệu nằm sát phiếu đề nghị 392 nghìn. Nay:
+ *  · khối "CẦN KÝ TRƯỚC" trên cùng (mọi loại): ký bù, hẹn giao đã qua, chờ ≥ 3
+ *    ngày (`lib/loai-phieu-duyet` · Q24) — giá trị lớn không tự vào;
+ *  · MỖI LOẠI PHIẾU MỘT KHỐI (`<tbody>` riêng) theo thứ tự phòng, hàng tiêu đề
+ *    riêng nói cột nghĩa là gì với loại đó; một vùng cuộn duy nhất;
+ *  · chip lọc theo PHÒNG trình (Q28), công tắc gom theo loại / người trình (Q23);
+ *  · ký nhanh chỉ trong MỘT khối (Q26) — chọn phiếu khác loại thì bỏ chọn cũ.
+ * Thêm loại phiếu mới: khai ở `LOAI_PHIEU`, màn này tự có khối + chip.
  *
  * BA LUẬT GIỮ NGUYÊN:
- *  · phiếu GIÁ TRỊ LỚN không có ô tích — phải mở ra đọc, ký riêng;
+ *  · phiếu GIÁ TRỊ LỚN / lệnh SX / chờ ký bù không có ô tích — mở ra đọc, ký riêng;
  *  · ký nhiều phiếu gọi tuần tự, phiếu lỗi nằm lại trong hộp;
  *  · màn rỗng phải nói THẬT vì sao rỗng (đã ký hết ↔ chưa ai lập phiếu).
  */
 
-const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá', dnm: 'Đề nghị mua' } as const // prettier-ignore
-const KIND_ICON: Record<SignItem['kind'], IcoName> = { lsx: 'lenh', po: 'don', quote: 'baoGia', dnm: 'vattu' } // prettier-ignore
-const COLS = 8
-
-export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote' | 'dnm'
-
-/** Cộng tiền theo TỪNG tiền tệ — USD và VND không bao giờ cộng chung. */
-function sumByCurrency(items: SignItem[]): [string, number][] {
-  const m = new Map<string, number>()
-  for (const i of items) m.set(i.currency, (m.get(i.currency) ?? 0) + i.value)
-  return [...m.entries()]
-}
-const moneyText = (items: SignItem[]) =>
-  sumByCurrency(items)
-    .map(([cur, v]) => money(v, cur))
-    .join(' · ')
-
-/** "30/08" năm nay, "30/08/2025" năm khác. */
-function dm(iso: string, today: string): string {
-  const [y, m, d] = iso.slice(0, 10).split('-')
-  return y === today.slice(0, 4) ? `${d}/${m}` : `${d}/${m}/${y}`
-}
+export type ApprovalKind = 'all' | LoaiPhieu
 
 export function ApprovalCenterScreen({
   box,
@@ -90,6 +69,7 @@ export function ApprovalCenterScreen({
   ruleHref = '/exec/luat-ky',
 }: {
   box: SignBox
+  /** `?loai=` từ thẻ ở Tổng quan — chỉ bày khối của loại đó (bỏ được). */
   initialKind: ApprovalKind
   /** Dòng nhỏ trên tiêu đề — "Mua hàng" khi mở ở khu Cung ứng. */
   eyebrow?: string
@@ -101,6 +81,8 @@ export function ApprovalCenterScreen({
   const router = useRouter()
   const today = new Date().toISOString().slice(0, 10)
   const [kind, setKind] = useState<ApprovalKind>(initialKind)
+  const [phong, setPhong] = useState<'all' | PhongTrinh>('all')
+  const [gom, setGom] = useState<'loai' | 'nguoi'>('loai')
   const [who, setWho] = useState<string>('all')
   const [picked, setPicked] = useState<SignItem[]>([])
   const [pick, setPick] = useState<string | null>(null)
@@ -112,38 +94,47 @@ export function ApprovalCenterScreen({
     },
   )
 
-  const counts = useMemo(
-    () => ({
-      all: box.items.length,
-      lsx: box.items.filter((i) => i.kind === 'lsx').length,
-      po: box.items.filter((i) => i.kind === 'po').length,
-      quote: box.items.filter((i) => i.kind === 'quote').length,
-      dnm: box.items.filter((i) => i.kind === 'dnm').length,
-    }),
-    [box.items],
-  )
-  const ofKind = kind === 'all' ? box.items : box.items.filter((i) => i.kind === kind)
+  const theoLoai = kind === 'all' ? box.items : box.items.filter((i) => i.kind === kind)
+  const phongs = useMemo(() => demTheoPhong(theoLoai), [theoLoai])
+  const base =
+    phong === 'all'
+      ? theoLoai
+      : theoLoai.filter((i) => LOAI_PHIEU[i.kind].phong === phong)
+
   const ownerKey = (i: SignItem) => i.owner_id ?? '@none'
-  /* Người trình trong loại đang xem, đông phiếu trước — chip lọc + nhóm bảng. */
+  /* Người trình trong phạm vi đang xem, đông phiếu trước — chỉ khi gom theo người. */
   const owners = useMemo(() => {
     const m = new Map<string, { name: string; n: number }>()
-    for (const i of ofKind) {
+    for (const i of base) {
       const k = ownerKey(i)
       const cur = m.get(k) ?? { name: i.owner_name ?? 'Chưa rõ người trình', n: 0 }
       cur.n++
       m.set(k, cur)
     }
     return [...m.entries()].sort((a, b) => b[1].n - a[1].n)
-  }, [ofKind])
-  const items = who === 'all' ? ofKind : ofKind.filter((i) => ownerKey(i) === who)
-  const groups = owners
-    .map(([k, o]) => ({
-      key: k,
-      name: o.name,
-      rows: items.filter((i) => ownerKey(i) === k),
-    }))
-    .filter((g) => g.rows.length > 0)
-  const onlyPo = ofKind.length > 0 && ofKind.every((i) => i.kind === 'po')
+  }, [base])
+  const items = gom === 'nguoi' && who !== 'all' ? base.filter((i) => ownerKey(i) === who) : base // prettier-ignore
+
+  /* Khối hiển thị: theo loại (mặc định) hoặc theo người trình. */
+  const gap = gom === 'loai' ? xepGap(items) : []
+  const khoi =
+    gom === 'loai'
+      ? gomTheoLoai(items).map((g) => ({
+          key: g.loai,
+          loai: g.loai as LoaiPhieu | null,
+          ten: `${PHONG_NHAN[g.khai.phong]} · ${g.khai.ten}`,
+          so: g.khai.so,
+          rows: g.items,
+        }))
+      : owners
+          .map(([k, o]) => ({
+            key: k,
+            loai: null as LoaiPhieu | null,
+            ten: o.name,
+            so: null as string | null,
+            rows: items.filter((i) => ownerKey(i) === k),
+          }))
+          .filter((g) => g.rows.length > 0)
 
   const target = (i: SignItem): DecideTarget => ({
     kind: i.kind,
@@ -152,14 +143,8 @@ export function ApprovalCenterScreen({
     label: `${i.party} · ${i.facts[0] ?? ''}`,
   })
 
-  const key = (i: SignItem) => `${i.kind}-${i.id}`
-  /**
-   * Phiếu giá trị lớn KHÔNG được ký hàng loạt — phải mở ra đọc rồi ký riêng.
-   * Đơn chờ KÝ BÙ (0218) cũng vậy: phải đọc lý do gửi gấp trước.
-   */
-  const bulkable = items.filter((i) => !i.big && !i.late_sign)
-  const pickedKeys = new Set(picked.map(key))
-  const sel = items.find((i) => key(i) === pick) ?? null
+  const pickedKeys = new Set(picked.map(itemKey))
+  const sel = items.find((i) => itemKey(i) === pick) ?? null
   const bigCount = items.filter((i) => i.big).length
   /* Tiền tệ chưa có ngưỡng → mọi phiếu tệ đó đều "giá trị lớn". Nói ra, đừng
      để người ký tự đoán vì sao cả nhóm không có ô tích. */
@@ -171,17 +156,18 @@ export function ApprovalCenterScreen({
     ),
   ]
 
+  /** Ký nhanh CHỈ trong một loại (Q26): tích phiếu khác loại thì bỏ chọn cũ. */
   function toggle(i: SignItem) {
-    setPicked((s) =>
-      pickedKeys.has(key(i)) ? s.filter((x) => key(x) !== key(i)) : [...s, i],
-    )
+    setPicked((s) => {
+      if (s.length > 0 && s[0].kind !== i.kind) return [i]
+      return pickedKeys.has(itemKey(i))
+        ? s.filter((x) => itemKey(x) !== itemKey(i))
+        : [...s, i]
+    })
   }
+  const chonCaKhoi = (rows: SignItem[], on: boolean) =>
+    setPicked(on ? rows.filter(kyNhanhDuoc) : [])
 
-  /*
-    THANH HÀNH ĐỘNG — nút LUÔN nhìn thấy, chỉ bật/tắt theo lựa chọn hiện tại.
-    Tích NHIỀU phiếu → ký hàng loạt; chọn MỘT dòng → ký / trả lại / xem kỹ;
-    chưa chọn gì → cả ba nút xám kèm lý do.
-  */
   const nhieu = picked.length > 0
   const chuaChon = !nhieu && !sel
   const lyDo = chuaChon ? 'Chọn một phiếu trong bảng trước' : undefined
@@ -190,6 +176,7 @@ export function ApprovalCenterScreen({
     !nhieu && sel?.late_sign
       ? 'Đơn đã gửi gấp — bấm "Xem kỹ" đọc lý do rồi ký bù'
       : undefined
+  const gapTong = xepGap(box.items).length
 
   return (
     <ScreenFrame>
@@ -199,6 +186,9 @@ export function ApprovalCenterScreen({
         title="Chờ tôi phê duyệt"
         facts={[
           { label: 'Phiếu chờ', value: String(box.stats.total) },
+          ...(gapTong > 0
+            ? [{ label: 'Cần ký trước', value: String(gapTong), tone: 'warn' as const }]
+            : []),
           ...(box.stats.total > 0
             ? [
                 {
@@ -246,25 +236,53 @@ export function ApprovalCenterScreen({
 
       {box.stats.total > 0 && (
         <FilterBar dense label="Lọc phiếu chờ ký">
-          {(['all', 'lsx', 'po', 'quote', 'dnm'] as const).map((k) => (
+          <BarLabel>Phòng</BarLabel>
+          <Chip
+            on={phong === 'all'}
+            count={theoLoai.length}
+            onClick={() => {
+              setPhong('all')
+              setPicked([])
+            }}
+          >
+            Tất cả
+          </Chip>
+          {phongs.map((p) => (
             <Chip
-              key={k}
-              on={kind === k}
-              count={counts[k]}
-              icon={k === 'all' ? undefined : KIND_ICON[k]}
+              key={p.phong}
+              on={phong === p.phong}
+              count={p.n}
               onClick={() => {
-                setKind(k)
+                setPhong(phong === p.phong ? 'all' : p.phong)
                 setWho('all')
                 setPicked([])
               }}
             >
-              {k === 'all' ? 'Tất cả' : KIND_LABEL[k]}
+              {p.nhan}
             </Chip>
           ))}
-          {owners.length > 1 && (
+          {kind !== 'all' && (
+            <Chip on onClick={() => setKind('all')}>
+              Chỉ {LOAI_PHIEU[kind].nhan} ✕
+            </Chip>
+          )}
+          <BarSep />
+          <BarLabel>Gom</BarLabel>
+          <Chip on={gom === 'loai'} onClick={() => setGom('loai')}>
+            Theo loại phiếu
+          </Chip>
+          <Chip
+            on={gom === 'nguoi'}
+            onClick={() => {
+              setGom('nguoi')
+              setWho('all')
+            }}
+          >
+            Theo người trình
+          </Chip>
+          {gom === 'nguoi' && owners.length > 1 && (
             <>
               <BarSep />
-              <BarLabel>{onlyPo ? 'Người mua' : 'Người trình'}</BarLabel>
               {owners.map(([k, o]) => (
                 <Chip
                   key={k}
@@ -279,16 +297,6 @@ export function ApprovalCenterScreen({
                 </Chip>
               ))}
             </>
-          )}
-          {bulkable.length > 1 && (
-            <label className="text-k-sm ml-auto flex cursor-pointer items-center gap-2 text-[var(--ink-2)]">
-              <Tick
-                checked={bulkable.every((i) => pickedKeys.has(key(i)))}
-                label={`Chọn ${bulkable.length} phiếu ký nhanh được`}
-                onChange={(on) => setPicked(on ? bulkable : [])}
-              />
-              Chọn {bulkable.length} phiếu ký nhanh được
-            </label>
           )}
         </FilterBar>
       )}
@@ -309,11 +317,7 @@ export function ApprovalCenterScreen({
       )}
 
       {items.length === 0 ? (
-        <EmptyCenter
-          box={box}
-          filtered={kind !== 'all' && box.stats.total > 0}
-          historyHref={historyHref}
-        />
+        <EmptyCenter box={box} filtered={box.stats.total > 0} historyHref={historyHref} />
       ) : (
         <>
           <FilterBar dense tone={nhieu ? 'selected' : 'raised'} label="Ký phiếu">
@@ -325,7 +329,7 @@ export function ApprovalCenterScreen({
               }
             >
               {nhieu
-                ? `${picked.length} phiếu đã chọn · ${moneyText(picked)}`
+                ? `${picked.length} ${LOAI_PHIEU[picked[0].kind].nhan.toLowerCase()} đã chọn · ${moneyText(picked)}`
                 : sel
                   ? `${sel.code} · ${sel.po?.supplier_short ?? sel.party} · ${money(sel.value, sel.currency)}`
                   : 'Chưa chọn phiếu nào'}
@@ -372,45 +376,91 @@ export function ApprovalCenterScreen({
           <Table>
             <THead pinFirst>
               <th style={{ width: 30 }} />
-              <th style={{ width: 170 }}>Mã phiếu</th>
-              <th style={{ width: 170 }}>Nhà cung cấp / khách</th>
+              <th style={{ width: 190 }}>Mã phiếu</th>
+              <th style={{ width: 200 }}>Đối tác / người</th>
               <th>Nội dung</th>
-              <th style={{ width: 150 }}>Lệnh SX</th>
-              <th style={{ width: 120, textAlign: 'right' }}>Hẹn giao</th>
-              <th
-                style={{ width: 130, textAlign: 'right' }}
-                title="Đơn mua: tổng thanh toán đã gồm VAT"
-              >
-                Giá trị
-              </th>
+              <th style={{ width: 140 }}>Lệnh / ngữ cảnh</th>
+              <th style={{ width: 110, textAlign: 'right' }}>Hẹn</th>
+              <th style={{ width: 130, textAlign: 'right' }}>Giá trị</th>
               <th style={{ width: 92 }}>Chờ</th>
             </THead>
-            <tbody>
-              {groups.map((g) => (
-                <Fragment key={g.key}>
-                  <GroupRow
-                    name={g.name}
-                    cols={COLS}
-                    meta={`${g.rows.length} phiếu · ${moneyText(g.rows)} · lâu nhất ${Math.max(...g.rows.map((r) => r.waiting_days))} ngày`}
+            {gap.length > 0 && (
+              <tbody>
+                <GroupRow
+                  name="Cần ký trước"
+                  cols={COLS}
+                  meta={`${gap.length} phiếu · mọi loại · ký bù, hẹn giao đã qua, chờ từ 3 ngày`}
+                />
+                {gap.map((i) => (
+                  <SignRow
+                    key={`gap-${itemKey(i)}`}
+                    i={i}
+                    today={today}
+                    trongGap
+                    selected={itemKey(i) === pick}
+                    checked={false}
+                    onPick={() => setPick(itemKey(i))}
+                    onToggle={() => toggle(i)}
                   />
+                ))}
+              </tbody>
+            )}
+            {khoi.map((g) => {
+              const nhanh = g.loai ? g.rows.filter(kyNhanhDuoc) : []
+              const daChon =
+                nhanh.length > 0 && nhanh.every((i) => pickedKeys.has(itemKey(i)))
+              return (
+                <tbody key={g.key}>
+                  <GroupRow
+                    name={g.ten}
+                    cols={COLS}
+                    meta={
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>
+                          {g.rows.length} phiếu · {moneyText(g.rows)} · lâu nhất{' '}
+                          {Math.max(...g.rows.map((r) => r.waiting_days))} ngày
+                        </span>
+                        {nhanh.length > 1 && (
+                          <label className="flex cursor-pointer items-center gap-1.5 normal-case">
+                            <Tick
+                              checked={daChon}
+                              label={`Chọn ${nhanh.length} phiếu ký nhanh trong khối ${g.ten}`}
+                              onChange={(on) => chonCaKhoi(g.rows, on)}
+                            />
+                            Chọn {nhanh.length} phiếu ký nhanh
+                          </label>
+                        )}
+                        {g.so && (
+                          <a
+                            href={g.so}
+                            className="text-[var(--act-text)] normal-case hover:underline"
+                          >
+                            Sổ tra cứu ›
+                          </a>
+                        )}
+                      </span>
+                    }
+                  />
+                  {g.loai && <KhoiDauCot loai={g.loai} />}
                   {g.rows.map((i) => (
                     <SignRow
-                      key={key(i)}
+                      key={itemKey(i)}
                       i={i}
                       today={today}
-                      selected={key(i) === pick}
-                      checked={pickedKeys.has(key(i))}
-                      onPick={() => setPick(key(i))}
+                      selected={itemKey(i) === pick}
+                      checked={pickedKeys.has(itemKey(i))}
+                      onPick={() => setPick(itemKey(i))}
                       onToggle={() => toggle(i)}
                     />
                   ))}
-                </Fragment>
-              ))}
-            </tbody>
+                </tbody>
+              )
+            })}
             {/*
               CHÂN BẢNG: 6 + 2 = 8 cột, bằng THead. Tiền mỗi loại một dòng —
               "118.452 USD · 1.720.560.560 ₫" nhét một ô 130px thì vỡ dòng giữa
-              chừng (soi 1:1, 27/09/2026).
+              chừng (soi 1:1, 27/09/2026). Phiếu trong khối "Cần ký trước" cũng
+              nằm trong khối loại của nó — chỉ cộng một lần.
             */}
             <TFoot
               label={
@@ -435,8 +485,8 @@ export function ApprovalCenterScreen({
 
       <StatusBar
         left={[
-          kind === 'all' ? 'Mọi loại phiếu' : `Lọc: ${KIND_LABEL[kind]}`,
-          who === 'all' ? 'Mọi người trình' : `Người trình: ${owners.find(([k]) => k === who)?.[1].name ?? ''}`, // prettier-ignore
+          phong === 'all' ? 'Mọi phòng' : `Phòng: ${PHONG_NHAN[phong]}`,
+          gom === 'loai' ? 'Gom theo loại phiếu' : 'Gom theo người trình',
           bigCount > 0 ? `${bigCount} phiếu Giá trị lớn` : 'Không có phiếu Giá trị lớn',
         ]}
         right={`${items.length} / ${box.stats.total} phiếu`}
@@ -444,149 +494,6 @@ export function ApprovalCenterScreen({
 
       {dialogs}
     </ScreenFrame>
-  )
-}
-
-/** Một phiếu trong hộp ký. */
-function SignRow({
-  i,
-  today,
-  selected,
-  checked,
-  onPick,
-  onToggle,
-}: {
-  i: SignItem
-  today: string
-  selected: boolean
-  checked: boolean
-  onPick: () => void
-  onToggle: () => void
-}) {
-  const late = i.waiting_days >= 7
-  const m = materialSummary(i.po?.materials ?? [])
-  return (
-    <Row selected={selected} onClick={onPick}>
-      <Cell>
-        {i.big || i.late_sign ? (
-          <span
-            className="flex text-[var(--ink-3)]"
-            title={
-              i.late_sign
-                ? 'Đơn gửi gấp — mở ra đọc lý do rồi ký bù'
-                : 'Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt'
-            }
-          >
-            <Ico
-              name="khoa"
-              size={13}
-              label={
-                i.late_sign
-                  ? 'Chờ ký bù — không ký hàng loạt'
-                  : 'Giá trị lớn — không ký hàng loạt'
-              }
-            />
-          </span>
-        ) : (
-          <Tick
-            checked={checked}
-            label={`Chọn phiếu ${i.code} để ký nhanh`}
-            onChange={onToggle}
-          />
-        )}
-      </Cell>
-      <Cell>
-        <span className="flex items-center gap-1.5">
-          <Ico name={KIND_ICON[i.kind]} size={13} label={KIND_LABEL[i.kind]} />
-          <Code
-            as="a"
-            href={i.href}
-            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-          >
-            {i.code}
-          </Code>
-          {/* 0218 — hàng đã đi trước chữ ký; câu hỏi đang chờ Cung ứng trả lời. */}
-          {i.late_sign && (
-            <span
-              title={
-                i.late_sign.reason ? `Lý do gửi gấp: ${i.late_sign.reason}` : undefined
-              }
-            >
-              <Tag tone="stop">chờ ký bù</Tag>
-            </span>
-          )}
-          {i.question_since && (
-            <span title="Bạn đã hỏi Cung ứng — đang chờ trả lời">
-              <Tag tone="run">đang hỏi</Tag>
-            </span>
-          )}
-        </span>
-      </Cell>
-      <Cell title={i.party}>
-        <span className="font-semibold">{i.po?.supplier_short ?? i.party}</span>
-      </Cell>
-      {i.po ? (
-        <Cell grow title={[i.po.loai, ...i.po.materials].filter(Boolean).join(' · ')}>
-          {i.po.loai && <span className="font-semibold">{i.po.loai}</span>}
-          {i.po.loai && m.head && ' · '}
-          {m.head}
-          {m.more > 0 && (
-            <>
-              {' '}
-              <Hint>+{m.more} mã</Hint>
-            </>
-          )}
-        </Cell>
-      ) : (
-        <Cell grow muted title={i.facts.join(' · ')}>
-          {i.facts.join(' · ')}
-        </Cell>
-      )}
-      <Cell muted>
-        <span className="flex items-center gap-1.5">
-          {i.po?.lsx_code ?? (i.kind === 'po' ? (i.po?.ngoai_lenh ?? 'Ngoài lệnh') : '—')}
-          {i.po?.lsx_done && (
-            <span title="Mọi lệnh của đơn đã hoàn thành — sản xuất xong, đơn chưa được cập nhật">
-              <Tag tone="warn">đã xong</Tag>
-            </span>
-          )}
-        </span>
-      </Cell>
-      <Cell num>
-        {!i.po ? (
-          <span className="text-[var(--ink-empty)]">—</span>
-        ) : !i.po.expected_at ? (
-          <Tag tone="warn">chưa hẹn</Tag>
-        ) : i.po.eta_late_days > 0 ? (
-          <ToneText
-            tone="stop"
-            title={`Hẹn giao ${dm(i.po.expected_at, today)} đã qua ${i.po.eta_late_days} ngày`}
-          >
-            {dm(i.po.expected_at, today)}{' '}
-            <span className="text-k-label">qua {i.po.eta_late_days} ng</span>
-          </ToneText>
-        ) : (
-          dm(i.po.expected_at, today)
-        )}
-      </Cell>
-      <Cell num>
-        <span className="font-semibold">
-          {i.value > 0 ? money(i.value, i.currency) : '—'}
-        </span>
-      </Cell>
-      <Cell>
-        <span
-          className={
-            late
-              ? 'text-k-sm flex items-center gap-1 font-semibold text-[var(--stop)]'
-              : 'text-k-sm flex items-center gap-1 text-[var(--ink-2)]'
-          }
-        >
-          <Ico name={late ? 'canhBao' : 'cho'} size={13} />
-          {i.waiting_days <= 0 ? 'hôm nay' : `${i.waiting_days} ngày`}
-        </span>
-      </Cell>
-    </Row>
   )
 }
 
