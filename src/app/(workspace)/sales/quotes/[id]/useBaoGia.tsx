@@ -111,7 +111,7 @@ export function useBaoGia(p: BaoGiaProps) {
       case 'approved':
         return 'Gửi khách'
       case 'rejected':
-        return 'Sửa theo lý do từ chối, trình lại'
+        return `GĐ trả lại: "${q.rejected_reason ?? 'không ghi lý do'}" — sửa rồi trình lại`
       case 'sent':
         return expired
           ? 'Hết hiệu lực — lập bản sửa đổi'
