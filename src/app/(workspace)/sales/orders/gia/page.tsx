@@ -2,6 +2,8 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { DienGiaScreen } from './DienGiaScreen'
 
+export const metadata = { title: 'Bán hàng · Điền đơn giá' }
+
 /**
  * ĐIỀN ĐƠN GIÁ HÀNG LOẠT (/sales/orders/gia).
  *
