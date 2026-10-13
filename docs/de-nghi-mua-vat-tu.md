@@ -14,6 +14,10 @@ mua) → Đang nhập (đã nhập một phần) → Xong. Không qua Cung ứng
 | Đ2 | Lãnh đạo duyệt (điện thoại + Hộp ký) · sửa SL · từ chối có lý do · thông báo | **XONG 13/10** — 0237 ĐÃ ÁP (MCP) |
 | Đ3 | **Kho tự mua** (đổi 13/10, không qua Cung ứng): "Nhập hàng đã mua" trên phiếu đã duyệt — PNK N2 có đơn giá thật, nơi mua, số hoá đơn; gắn / tạo mã dòng chưa có mã; nhập nhiều lần | **XONG 13/10** — 0238 ĐÃ ÁP (MCP), types sửa tay 3 bảng |
 | Đ4 | Đếm đã nhập / duyệt · tự sang Xong khi đủ · Chốt xong có lý do khi thiếu | **XONG 13/10** (cùng 0238) |
+| Đ5 | Danh sách cho lãnh đạo `/duyet/de-nghi` (bản vẽ vòng 4 https://claude.ai/artifact/Tu7kTTCUPr2aALmAZ2g18b, Q15–Q22 duyệt 14/10) | **XONG 14/10** — không migration |
+| Đ6 | Thông tin dòng: chưa theo dõi / giá lần trước gồm Kho tự mua / trùng / đang về / phiếu trước | **XONG 14/10** — không migration |
+| Đ7 | VAT % + phí vận chuyển ở đầu phiếu · ô "Dặn Kho" khi duyệt | chưa làm (cần migration) |
+| Đ8 | Lập lại từ phiếu cũ | chưa làm |
 | Treo | Đính ảnh hoá đơn (Q13 — cần loại tệp `purchase_request` mới) · xem bản in 01-VT trước khi ghi · cột "đã nhập x/y" trên sổ đề nghị · phiếu điều chỉnh (C) của PNK không mang dòng đề nghị | chưa làm |
 
 **Đ1 gồm:** bảng `warehouse_purchase_requests` + `_lines` (0236, RLS bật không
@@ -62,3 +66,21 @@ import de-nghi.service — vòng import). Trạng thái: chưa nhập → Đã d
 → Đang nhập · đủ mọi dòng (dòng duyệt 0 không tính) → Xong; "Chốt xong" (Q14) bắt
 lý do, giữ Xong dù đảo bớt. Phiếu chi tiết (DN-5, `tinh-hinh-nhap.tsx`): Số duyệt ·
 Đã nhập · Phiếu nhập (bấm mở PNK) · Tình trạng (đủ / còn x / chốt thiếu / không mua).
+
+**Đ5 gồm:** `/duyet/de-nghi` (khu dùng chung; người không duyệt mà là Kho thì về
+sổ Kho). Rổ Chờ tôi duyệt / Đang mua / Xong / Trả lại / Tất cả theo `lib/de-nghi-duyet`
+(`choToiDuyet`, `roDuyet`) — CÙNG luật cho Hộp ký (`execService.signBox`), số đếm
+menu (`nav-badges`: mục "Đề nghị mua" ở khu Giám đốc + "Đề nghị mua của Kho" ở Mua
+hàng cho người có `supply.approve`; "Chờ tôi phê duyệt" nay cộng cả đề nghị) và
+trang. Tổng tháng = phiếu duyệt trong tháng (giờ VN): dự kiến theo số duyệt vs tiền
+thật trên phiếu nhập (`soKho` trả thêm `tien`). Nháp Kho chưa gửi lần nào không hiện.
+
+**Đ6 gồm:** `thongTinMa` trong service (một hàm cho `goiY` của màn Kho và `get` của
+màn duyệt): `daTheoDoi` (mỗi mã một truy vấn `limit(1)` — gom `in()` thì mã nhiều
+giao dịch đẩy mã khác khỏi trần 1000 dòng), `lanMuaKho` (dòng sổ nhập theo đề nghị có
+đơn giá, bỏ phiếu đã đảo) gộp với `pricesRepo.lastPurchases` lấy lần mới hơn,
+`dongDeNghiMo` (đề nghị khác chờ duyệt/đã duyệt/đang nhập; `goi-y?tru=` loại chính
+phiếu đang sửa), `dangVe` (`supply_po_line_status.qty_open > 0` của đơn RECEIVABLE).
+"Phiếu trước" = phiếu cùng bộ phận đã duyệt trước phiếu đang xem và đã có mua. Câu
+chữ chung `lib/de-nghi-goi-y`; màn Kho (`goi-y-dong.tsx`) và màn duyệt
+(`thong-tin-dong.tsx`) bày riêng.
