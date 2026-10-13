@@ -51,6 +51,9 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   hasPermission: vi.fn(),
 }))
+vi.mock('@/modules/core/rbac/rbac.repo', () => ({
+  rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
+}))
 vi.mock('@/events/register', () => ({}))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
@@ -77,6 +80,7 @@ import { componentsRepo } from './components.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 const quanDoc = { id: 'u-qd', role: 'employee', department_id: 'd-vp' } as unknown as User
@@ -287,6 +291,25 @@ describe('lsxService.submit — nháp → chờ GĐ duyệt (0117)', () => {
     })
     expect(out.status).toBe('pending_approval')
     expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'lsx_pending' })
+  })
+
+  it('báo người CÓ QUYỀN duyệt + admin, không báo quản lý thiếu quyền / tài khoản khoá / người gửi', async () => {
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'u-gd', role: 'employee', is_active: true }, // Giám đốc: quyền qua vai
+      { id: 'u-admin', role: 'admin', is_active: true },
+      { id: 'u-ql', role: 'manager', is_active: true }, // quản lý không có quyền duyệt
+      { id: 'u-gd-cu', role: 'employee', is_active: false }, // có quyền nhưng đã khoá
+      { id: 'u-qd', role: 'admin', is_active: true }, // chính người gửi
+    ] as never)
+    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-gd', 'u-gd-cu'])
+
+    await lsxService.submit(quanDoc, 'lsx1')
+
+    const ev = vi.mocked(emit).mock.calls.find(([e]) => e.name === 'lsx.submitted')![0]
+    expect((ev as { approver_ids: string[] }).approver_ids.sort()).toEqual([
+      'u-admin',
+      'u-gd',
+    ])
   })
 
   it('lệnh chưa có dòng nào → 400, không gửi đi', async () => {
