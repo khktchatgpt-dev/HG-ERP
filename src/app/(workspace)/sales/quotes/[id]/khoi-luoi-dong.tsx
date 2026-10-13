@@ -277,9 +277,9 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
                   >
                     Σ lãi{' '}
                     <span
-                      className={`font-mono ${d.tong.gain < 0 ? 'text-[var(--stop)]' : 'text-foreground'}`}
+                      className={`font-mono ${d.tong.gain != null && d.tong.gain < 0 ? 'text-[var(--stop)]' : 'text-foreground'}`}
                     >
-                      {fmtMoney(d.tong.gain)}
+                      {d.tong.gain == null ? '—' : fmtMoney(d.tong.gain)}
                     </span>{' '}
                     {d.quote.currency}
                   </td>
