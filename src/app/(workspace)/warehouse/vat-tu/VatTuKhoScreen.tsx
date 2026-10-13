@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import {
@@ -24,6 +24,7 @@ import {
   TextInput,
   useToast,
 } from '@/components/kit'
+import { useBeRong } from '@/lib/use-be-rong'
 import { RO_VT, RO_VT_NHAN, RO_VT_VIEC, type RoVatTu } from './ro-vat-tu'
 
 export type VatTuRow = {
@@ -83,6 +84,8 @@ export function VatTuKhoScreen({
   const params = useSearchParams()
   const toast = useToast()
   const [q, setQ] = useState(qUrl)
+  const khung = useRef<HTMLDivElement>(null)
+  const hep = useBeRong(khung) < 900
   const [rows, setRows] = useState(initialRows)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -131,7 +134,11 @@ export function VatTuKhoScreen({
   const viec = RO_VT_VIEC[ro]
 
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
+    <div
+      className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
+      // Luật màn hẹp (Kho đợt 2): cột tên co tới 160px — 1024 + sidebar mở từng tràn 1003/957px.
+      style={{ '--col-grow': '160px' } as CSSProperties}
+    >
       <ScreenFrame>
         <ScreenHeader
           compact
@@ -206,6 +213,7 @@ export function VatTuKhoScreen({
           </NoticeBar>
         )}
 
+        <div ref={khung} className="h-0 w-full" aria-hidden />
         {rows.length === 0 ? (
           <Empty
             headline={`Không có mã nào trong rổ “${RO_VT_NHAN[ro]}”`}
@@ -229,14 +237,16 @@ export function VatTuKhoScreen({
             }
           />
         ) : (
-          <Table>
+          <Table minWidth={640}>
             <THead pinFirst>
-              <th>Mã</th>
+              <th style={{ width: 100 }}>Mã</th>
               <th>Tên vật tư</th>
-              <th>ĐVT</th>
-              <th>Nhóm</th>
-              <th>Kệ gợi ý</th>
-              <th style={{ textAlign: 'right' }}>Ngưỡng tối thiểu</th>
+              <th style={{ width: 108 }}>ĐVT</th>
+              <th style={{ width: hep ? 130 : 170 }}>Nhóm</th>
+              <th style={{ width: 108 }}>Kệ gợi ý</th>
+              <th style={{ textAlign: 'right', whiteSpace: 'normal', width: 96 }}>
+                Ngưỡng tối thiểu
+              </th>
               <th />
             </THead>
             <tbody>
@@ -272,10 +282,18 @@ export function VatTuKhoScreen({
                     )}
                   </Cell>
                   <Cell muted>
-                    <span className="block truncate" title={r.group_name ?? ''}>
+                    <span
+                      className="block truncate"
+                      style={{ maxWidth: hep ? 120 : 160 }}
+                      title={r.group_name ?? ''}
+                    >
                       {r.group_name ?? '—'}
                     </span>
-                    <span className="text-k-label block text-[var(--ink-3)]">
+                    <span
+                      className="text-k-label block truncate text-[var(--ink-3)]"
+                      style={{ maxWidth: hep ? 120 : 160 }}
+                      title={r.sub_group ?? undefined}
+                    >
                       {r.sub_group ?? 'chưa có nhóm phụ'}
                     </span>
                   </Cell>
@@ -336,7 +354,7 @@ export function VatTuKhoScreen({
                         href={`/warehouse/ton?ro=all&q=${encodeURIComponent(r.code)}`}
                         className="text-k-sm h-6 px-2"
                       >
-                        Xem tồn
+                        {hep ? 'Tồn' : 'Xem tồn'}
                       </Btn>
                     </span>
                   </Cell>

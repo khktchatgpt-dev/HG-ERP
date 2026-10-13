@@ -353,7 +353,7 @@ export function HangVeScreen({
       className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
       // Cột NCC co tới 140px (kit mặc định 200): 9 cột phải vừa 1280 không cuộn
       // ngang — đo 12/10: 1275px trong khung 1213px. Tên đầy đủ nằm ở `title`.
-      style={{ '--col-grow': hep ? '96px' : '140px' } as CSSProperties}
+      style={{ '--col-grow': hep ? '80px' : '140px' } as CSSProperties}
     >
       <ScreenFrame>
         <ScreenHeader
