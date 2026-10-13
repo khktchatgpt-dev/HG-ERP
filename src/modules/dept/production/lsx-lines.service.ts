@@ -315,7 +315,10 @@ export const lsxLinesService = {
             qty: l.qty,
             packing: snap?.packing ?? null,
             cbm: snap?.cbm ?? null,
-            ship_date: o.due_date,
+            // Tuần giao CỦA DÒNG ĐƠN trước, hạn giao của đơn sau (13/10/2026): trước
+            // đây mọi dòng nhận `o.due_date` nên đơn giao nhiều tuần bị gộp về một
+            // ngày trên tờ lệnh. Chia lô (0222) vẫn thắng khi in — xem applyLotsToGroups.
+            ship_date: l.ship_date ?? o.due_date,
             ship_label: null,
             specs: snap?.specs ?? {},
             checks: {},

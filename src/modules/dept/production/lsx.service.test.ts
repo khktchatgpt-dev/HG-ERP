@@ -318,6 +318,32 @@ describe('lsxService.submit — nháp → chờ GĐ duyệt (0117)', () => {
   })
 })
 
+describe('lsxService.approve — báo cả người phát lệnh (13/10/2026)', () => {
+  it('Sale phát lệnh nhận thông báo duyệt, cùng Kế hoạch/Cung ứng/xưởng', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'pending_approval',
+      issued_by: 'u-sale',
+    } as never)
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd-cu', name: 'Cung Ứng - Mua Hàng', workspace_id: 'planning' },
+    ] as never)
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'u-cu', department_id: 'd-cu' },
+      { id: 'u-sale', department_id: 'd-sales' },
+    ] as never)
+    vi.mocked(ordersRepo.findById).mockImplementation(
+      async (id) => freeOrder(id, 'DH-01') as never,
+    )
+
+    await lsxService.approve(manager, 'lsx1')
+
+    const ev = vi.mocked(emit).mock.calls.find(([e]) => e.name === 'lsx.decided')![0]
+    expect(ev).toMatchObject({ decision: 'approved' })
+    expect((ev as { notify_ids: string[] }).notify_ids.sort()).toEqual(['u-cu', 'u-sale'])
+  })
+})
+
 /** 0117: sửa đầu lệnh mọi lúc trước khi lệnh kết thúc, không cần bị từ chối. */
 describe('lsxService.updateHeader — sửa thông tin đầu lệnh (0117)', () => {
   beforeEach(() => {

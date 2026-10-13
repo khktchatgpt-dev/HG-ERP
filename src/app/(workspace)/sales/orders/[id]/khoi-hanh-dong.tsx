@@ -340,7 +340,7 @@ function PhatLenh({ d }: { d: DonHangCtx }) {
           </div>
         </div>
       )}
-      <Chan d={d} label="Phát lệnh" blocked={s.blocked} onSubmit={s.submit} />
+      <Chan d={d} label="Tạo lệnh nháp" blocked={s.blocked} onSubmit={s.submit} />
     </div>
   )
 }
