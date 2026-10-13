@@ -1837,6 +1837,13 @@ button.k-headchip-plain:hover > span + span {
    `--k-pin-w` do Table tự đo bề rộng cột ghim (đổi theo dữ liệu).
    ══════════════════════════════════════════════════════════════════════ */
 .k-tscroll {
+  /* KHUNG ĐỊNH VỊ cho mọi thứ `position:absolute` trong bảng (13/10/2026).
+     Chữ ẩn `sr-only` của ô trống ("Chưa có số" — `Num`) là absolute; thiếu
+     tổ tiên định vị thì nó bám vào CẢ TRANG, nằm đúng toạ độ dòng của nó dù
+     dòng đã bị vùng cuộn này cắt — `overflow` không cắt được phần tử absolute
+     có khung định vị nằm NGOÀI nó. Danh mục vật tư 50 dòng/trang kéo tài liệu
+     dài thêm ~800px: hai thanh cuộn, cuộn quá đáy màn ra vùng trống. */
+  position: relative;
   /* Dự phòng trước khi đo xong (lượt vẽ đầu); sau đó là SỐ ĐO THẬT của
      `useStickyPadding`. Cộng 4px để viền focus (2px + lệch 1px) cũng không bị
      dải dính cắt mất. */
