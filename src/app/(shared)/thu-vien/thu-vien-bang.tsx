@@ -105,8 +105,8 @@ export function BangThuVien({
               </th>
             )}
             {cot.gia && (
-              <th className="num" style={{ width: 86 }}>
-                Giá KH
+              <th className="num" style={{ width: 92 }}>
+                Giá bán KH
               </th>
             )}
             <th style={{ width: 36 }}>
@@ -127,7 +127,8 @@ export function BangThuVien({
             </td>
             <td colSpan={soCot - 4} style={{ fontWeight: 400 }}>
               {thieuTrenTrang}/{rows.length} dòng trên trang còn thiếu hồ sơ.{' '}
-              {canPrice && 'Giá KH là giá kế hoạch của Bán hàng, không phải giá thành.'}
+              {canPrice &&
+                'Giá bán KH = giá vốn KH + lãi KH của Bán hàng — không phải giá vốn.'}
             </td>
           </tr>
         </tfoot>

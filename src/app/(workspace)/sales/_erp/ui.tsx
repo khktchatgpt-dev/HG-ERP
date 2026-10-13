@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { Lock } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 
 /**
@@ -133,6 +134,8 @@ export function CountStrip({ children }: { children: ReactNode }) {
 /**
  * Ô đếm. `onClick` → nút chọn (gạch trên màu chính khi `on`); `href` → link;
  * không có cả hai → ô chỉ đọc. `value` null = chưa đo được (in chữ, không in 0).
+ * `internal` = số NỘI BỘ (giá vốn, lãi): nền xám + khoá, cùng dấu hiệu với cột
+ * nội bộ của lưới (`_erp/gia-noi-bo.tsx`).
  */
 export function CountCell({
   label,
@@ -143,6 +146,7 @@ export function CountCell({
   onClick,
   href,
   title,
+  internal,
   width = 'min-w-[150px] flex-1 basis-0',
 }: {
   label: string
@@ -153,14 +157,18 @@ export function CountCell({
   onClick?: () => void
   href?: string
   title?: string
+  internal?: boolean
   width?: string
 }) {
-  const cls = `${width} border-t-2 border-r border-r-border px-4 py-2.5 text-left transition-colors ${
+  const cls = `${width} ${internal ? 'bg-muted' : ''} border-t-2 border-r border-r-border px-4 py-2.5 text-left transition-colors ${
     on ? 'border-t-[var(--primary)] bg-[var(--accent)]' : 'border-t-transparent'
   } ${onClick || href ? 'hover:bg-muted' : ''}`
   const body = (
     <>
-      <span className="text-muted-foreground block text-xs leading-4">{label}</span>
+      <span className="text-muted-foreground flex items-center gap-1 text-xs leading-4">
+        {internal && <Lock className="size-3" strokeWidth={2} aria-label="Nội bộ" />}
+        {label}
+      </span>
       {value == null ? (
         <span className="text-muted-foreground mt-1 block text-[13px] italic">
           chưa đo được

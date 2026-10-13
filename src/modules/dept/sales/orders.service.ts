@@ -22,6 +22,7 @@ import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canMutateOwned } from '@/lib/record-ownership'
 import { todayVn } from '@/lib/date-vn'
+import { checkPrice, PRICE_NAME, type PlanPrice } from '@/lib/sale-price'
 import {
   baseStatus,
   DELIVERABLE_STATUSES,
@@ -78,12 +79,14 @@ export type PricingLine = {
   qty: number
   unit_price: number
   /**
-   * Giá FOB KẾ HOẠCH của SP (0220) để mồi vào ô đơn giá khi Sale chưa điền —
-   * null khi SP chưa có số, hoặc người xem không có `technical.plan_cost.view`
-   * (số riêng của Bán hàng). Kèm tiền tệ của bản báo giá: khác tiền tệ đơn thì
-   * KHÔNG mồi, bày để người xem tự quy.
+   * GIÁ BÁN KH của SP (0220, = FOB tính ra) để mồi vào ô đơn giá khi Sale chưa
+   * điền — null khi SP chưa có số, hoặc người xem không có
+   * `technical.plan_cost.view` (số riêng của Bán hàng). Kèm tiền tệ của bản báo
+   * giá: khác tiền tệ đơn thì KHÔNG mồi, bày để người xem tự quy.
    */
   plan_price: number | null
+  /** GIÁ VỐN KH (trực tiếp + chung) — null khi SP chỉ có giá bán KH / không quyền. */
+  plan_cost: number | null
   plan_currency: string | null
   /** false = đơn của người khác → UI khoá dòng (xem canMutateOwned). */
   editable: boolean
@@ -498,7 +501,7 @@ export const ordersService = {
      */
     const plans = (await canAction(user, 'technical.plan_cost.view'))
       ? await planCostService.pricesFor(lines.map((l) => l.product_id))
-      : new Map<string, { price: number; currency: string }>()
+      : new Map<string, PlanPrice>()
 
     const rows: PricingLine[] = []
     for (const l of lines) {
@@ -507,6 +510,7 @@ export const ordersService = {
       const plan = plans.get(l.product_id)
       rows.push({
         plan_price: plan?.price ?? null,
+        plan_cost: plan?.cost ?? null,
         plan_currency: plan?.currency ?? null,
         line_id: l.id,
         order_id: o.id,
@@ -588,6 +592,31 @@ export const ordersService = {
       (i) => (byLine.get(i.line_id)?.unit_price ?? 0) !== i.unit_price,
     )
     if (changed.length === 0) return { updated: 0, orders: 0 }
+
+    /*
+     * Q5 (artboard bước 2, 13/10/2026): bán DƯỚI giá vốn KH không chặn — giá đã
+     * chốt với khách là thật — nhưng bắt LÝ DO, để 6 tháng sau còn biết là cố ý.
+     * Chỉ áp cho người thấy được giá vốn: người không quyền không biết dòng nào
+     * dưới vốn, chặn họ bằng một điều họ không nhìn thấy là vô lý.
+     */
+    if (!input.note?.trim() && (await canAction(user, 'technical.plan_cost.view'))) {
+      const plans = await planCostService.pricesFor(
+        changed.map((c) => byLine.get(c.line_id)!.product_id),
+      )
+      const curOf = new Map(orders.filter(Boolean).map((o) => [o!.id, o!.currency]))
+      const below = changed.filter((c) => {
+        const l = byLine.get(c.line_id)!
+        return checkPrice(
+          c.unit_price,
+          curOf.get(l.order_id) ?? '',
+          plans.get(l.product_id),
+        ).below_cost
+      }).length
+      if (below > 0)
+        throw BadRequest(
+          `${below} dòng dưới ${PRICE_NAME.cost} — ghi lý do vào ô Lý do rồi lưu lại`,
+        )
+    }
 
     await ordersRepo.updateLinePrices(changed)
 

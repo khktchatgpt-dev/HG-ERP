@@ -23,7 +23,7 @@ vi.mock('@/modules/dept/technical/plan-cost.service', () => ({
         new Map(
           ids
             .filter((id) => id === 'p1')
-            .map((id) => [id, { price: 100, currency: 'USD' }]),
+            .map((id) => [id, { price: 100, cost: 90, currency: 'USD' }]),
         ),
     ),
   },
@@ -38,7 +38,7 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   canAction: vi.fn(async () => true),
 }))
 
-import { quotesService, quoteLineMargin } from './quotes.service'
+import { quotesService } from './quotes.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { quotesRepo } from './quotes.repo'
 import { customersRepo } from './sales.repo'
@@ -265,8 +265,14 @@ describe('quotesService — bản sửa đổi / nhân bản / kết cục (0225
       unit_price: 150,
       discount_pct: 5,
       plan_price_snapshot: 100,
+      plan_cost_snapshot: 90,
+      plan_currency_snapshot: 'USD',
     })
-    expect(lines[1]).toMatchObject({ product_id: 'p2', plan_price_snapshot: null })
+    expect(lines[1]).toMatchObject({
+      product_id: 'p2',
+      plan_price_snapshot: null,
+      plan_cost_snapshot: null,
+    })
   })
 
   it('revise từ nháp → 400 (nháp thì sửa thẳng)', async () => {
@@ -284,6 +290,7 @@ describe('quotesService — bản sửa đổi / nhân bản / kết cục (0225
     await quotesService.revise(salesNv, 'q1')
     const [, lines] = vi.mocked(quotesRepo.insert).mock.calls[0]
     expect(lines[0]).not.toHaveProperty('plan_price_snapshot')
+    expect(lines[0]).not.toHaveProperty('plan_cost_snapshot')
   })
 
   it('gửi bản 2 → bản 1 (đang sent) sang superseded', async () => {
@@ -351,12 +358,5 @@ describe('quotesService — bản sửa đổi / nhân bản / kết cục (0225
     expect(row.valid_to).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(row.valid_to! > row.valid_from!).toBe(true)
     expect(lines[0]).toMatchObject({ plan_price_snapshot: 100 })
-  })
-
-  it('quoteLineMargin: (net − giá thành) / net; thiếu một vế → null', () => {
-    expect(quoteLineMargin(150, 5, 100)).toBe(29.8)
-    expect(quoteLineMargin(100, null, 120)).toBe(-20)
-    expect(quoteLineMargin(100, null, null)).toBeNull()
-    expect(quoteLineMargin(0, null, 50)).toBeNull()
   })
 })

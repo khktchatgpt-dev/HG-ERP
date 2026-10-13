@@ -55,8 +55,14 @@ export type QuoteLine = {
   qty: number | null
   unit_price: number
   discount_pct: number | null
-  /** Giá thành KH chụp lúc chào (0225) — null khi người lập không có quyền xem giá thành. */
+  /**
+   * Giá kế hoạch chụp lúc chào — null khi người lập không có quyền xem.
+   * `plan_price_snapshot` = GIÁ BÁN KH (0225), `plan_cost_snapshot` = GIÁ VỐN KH
+   * (0235). `plan_currency_snapshot` null = chụp trước 0235 → màn đọc số hiện tại.
+   */
   plan_price_snapshot: number | null
+  plan_cost_snapshot: number | null
+  plan_currency_snapshot: string | null
   note: string | null
   sort_order: number
   product_code: string
@@ -76,6 +82,8 @@ export type QuoteLineInput = {
   discount_pct?: number | null
   note?: string | null
   plan_price_snapshot?: number | null
+  plan_cost_snapshot?: number | null
+  plan_currency_snapshot?: string | null
 }
 
 const COLS_LEGACY =
@@ -95,6 +103,22 @@ async function probe0225(): Promise<boolean> {
   if (!has0225)
     console.error('[sales_quotes] 0225 chưa áp — chạy ở chế độ cột cũ:', error?.message)
   return has0225
+}
+/** 0235 (chụp giá vốn KH + tiền tệ) — cùng cách dò như 0225. */
+let has0235: boolean | null = null
+async function probe0235(): Promise<boolean> {
+  if (has0235 != null) return has0235
+  const { error } = await db()
+    .from('sales_quote_lines')
+    .select('plan_cost_snapshot')
+    .limit(1)
+  has0235 = !error
+  if (!has0235)
+    console.error(
+      '[sales_quote_lines] 0235 chưa áp — chưa chụp giá vốn KH:',
+      error?.message,
+    )
+  return has0235
 }
 async function cols(): Promise<string> {
   return (await probe0225()) ? COLS_0225 : COLS_LEGACY
@@ -156,12 +180,15 @@ export const quotesRepo = {
   },
 
   async listLines(quoteId: string): Promise<QuoteLine[]> {
+    const plan = (await probe0225())
+      ? (await probe0235())
+        ? 'plan_price_snapshot, plan_cost_snapshot, plan_currency_snapshot, '
+        : 'plan_price_snapshot, '
+      : ''
     const { data } = await db()
       .from('sales_quote_lines')
       .select(
-        (await probe0225())
-          ? 'id, quote_id, product_id, qty, unit_price, discount_pct, plan_price_snapshot, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)'
-          : 'id, quote_id, product_id, qty, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)',
+        `id, quote_id, product_id, qty, unit_price, discount_pct, ${plan}note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)`,
       )
       .eq('quote_id', quoteId)
       .order('sort_order')
@@ -186,6 +213,8 @@ export const quotesRepo = {
       unit_price: number
       discount_pct: number | null
       plan_price_snapshot?: number | null
+      plan_cost_snapshot?: number | null
+      plan_currency_snapshot?: string | null
       note: string | null
       sort_order: number
       product: RawProduct | RawProduct[] | null
@@ -201,6 +230,9 @@ export const quotesRepo = {
         discount_pct: r.discount_pct,
         plan_price_snapshot:
           r.plan_price_snapshot == null ? null : Number(r.plan_price_snapshot),
+        plan_cost_snapshot:
+          r.plan_cost_snapshot == null ? null : Number(r.plan_cost_snapshot),
+        plan_currency_snapshot: r.plan_currency_snapshot ?? null,
         note: r.note,
         sort_order: r.sort_order,
         product_code: p?.code ?? '?',
@@ -247,6 +279,7 @@ export const quotesRepo = {
 
   async replaceLines(quoteId: string, lines: QuoteLineInput[]): Promise<void> {
     const ok = await probe0225()
+    const ok35 = ok && (await probe0235())
     const { error: delErr } = await db()
       .from('sales_quote_lines')
       .delete()
@@ -266,6 +299,15 @@ export const quotesRepo = {
             ? {
                 plan_price_snapshot: l.plan_price_snapshot ?? null,
                 plan_at: l.plan_price_snapshot == null ? null : new Date().toISOString(),
+              }
+            : {}),
+          ...(ok35
+            ? {
+                plan_cost_snapshot: l.plan_cost_snapshot ?? null,
+                plan_currency_snapshot:
+                  l.plan_price_snapshot == null
+                    ? null
+                    : (l.plan_currency_snapshot ?? null),
               }
             : {}),
           note: l.note ?? null,

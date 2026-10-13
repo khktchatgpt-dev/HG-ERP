@@ -25,7 +25,13 @@ vi.mock('./orders.repo', () => ({
 vi.mock('./quotes.service', () => ({
   quotesService: { assertSent: vi.fn() },
 }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({
+  assertAction: vi.fn(),
+  canAction: vi.fn(async () => false),
+}))
+vi.mock('@/modules/dept/technical/plan-cost.service', () => ({
+  planCostService: { pricesFor: vi.fn(async () => new Map()) },
+}))
 vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn() } }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findByOrder: vi.fn(), patch: vi.fn(), detachOrders: vi.fn() },
@@ -73,7 +79,8 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { planCostService } from '@/modules/dept/technical/plan-cost.service'
 import { makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import { BadRequest } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
@@ -1156,6 +1163,47 @@ describe('ordersService.bulkPrice — điền đơn giá hàng loạt', () => {
       }),
     ).rejects.toMatchObject({ status: 403 })
     expect(ordersRepo.updateLinePrices).not.toHaveBeenCalled()
+  })
+
+  describe('Q5: dưới giá vốn KH không chặn nhưng bắt lý do (13/10/2026)', () => {
+    // Đôn Aria 45cm thật: vốn 20,62, giá đơn 20,20.
+    const PLAN = new Map([['p-l1', { cost: 20.62, price: 20.2, currency: 'USD' }]])
+    beforeEach(() => {
+      vi.mocked(canAction).mockResolvedValue(true)
+      vi.mocked(planCostService.pricesFor).mockResolvedValue(PLAN as never)
+      vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 0)] as never)
+    })
+
+    it('không lý do → 400, không ghi', async () => {
+      await expect(
+        ordersService.bulkPrice(sales, { items: [{ line_id: 'l1', unit_price: 20.2 }] }),
+      ).rejects.toMatchObject({ status: 400 })
+      expect(ordersRepo.updateLinePrices).not.toHaveBeenCalled()
+    })
+
+    it('có lý do → ghi, lý do vào lịch sử', async () => {
+      const res = await ordersService.bulkPrice(sales, {
+        items: [{ line_id: 'l1', unit_price: 20.2 }],
+        note: 'LAURA chốt 20,20 — chấp nhận lỗ để giữ bộ Aria',
+      })
+      expect(res.updated).toBe(1)
+    })
+
+    it('trên giá vốn → không cần lý do', async () => {
+      const res = await ordersService.bulkPrice(sales, {
+        items: [{ line_id: 'l1', unit_price: 21 }],
+      })
+      expect(res.updated).toBe(1)
+    })
+
+    it('người không thấy giá vốn → không bị chặn bởi điều họ không thấy', async () => {
+      vi.mocked(canAction).mockResolvedValue(false)
+      const res = await ordersService.bulkPrice(sales, {
+        items: [{ line_id: 'l1', unit_price: 20.2 }],
+      })
+      expect(res.updated).toBe(1)
+      expect(planCostService.pricesFor).not.toHaveBeenCalled()
+    })
   })
 
   it('quản lý điền được giá cho đơn của mọi sale', async () => {

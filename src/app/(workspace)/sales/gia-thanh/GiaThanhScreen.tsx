@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { KeyboardEvent } from 'react'
-import { ChevronDown, ChevronRight, ClipboardPaste, Save, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardPaste, Lock, Save, X } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { planPct, PLAN_WARN_PCT, planDeviationPct } from '@/lib/plan-cost'
 import type { DecimalSep } from '@/lib/price-paste'
@@ -24,6 +24,8 @@ import {
   ToolBtn,
 } from '../_erp/ui'
 import { BTN_PRI, BTN_SUB, CELL, INPUT } from '../orders/_form/don-form.shared'
+import { EDGE, INT_HEAD, NhomTh } from '../_erp/gia-noi-bo'
+import { planCostOf, planFromOrder, PRICE_NAME } from '@/lib/sale-price'
 import { KhoiDan } from './khoi-dan'
 import { custOf, useGiaThanh, type DraftKey, type GiaThanhCtx } from './useGiaThanh'
 
@@ -61,7 +63,9 @@ function gridKey(e: KeyboardEvent<HTMLInputElement>, r: number, c: DraftKey) {
 }
 
 /**
- * GIÁ THÀNH KẾ HOẠCH — khuôn F (Bảng nhập liệu, kiểu ERP — 08/10/2026). Tập SP
+ * TÍNH GIÁ SP (tên cũ "Giá thành kế hoạch", đổi 13/10/2026 — Q2: "giá thành" là
+ * chữ của kế toán, dễ lẫn với giá vốn KH, mà màn này ra cả GIÁ BÁN KH. Giữ
+ * đường dẫn /sales/gia-thanh). Khuôn F (Bảng nhập liệu, kiểu ERP). Tập SP
  * = SP trong lệnh đang chạy hoặc đơn bán còn sống. Bốn ô số một dòng (trực
  * tiếp · chung · lợi nhuận · FOB), a%/b% suy ra khi gõ; cạnh đó là giá đã chào
  * và giá đơn gần nhất để người nạp thấy số đang bán. Gõ / dán chỉ điền vào ô,
@@ -78,13 +82,17 @@ export function GiaThanhScreen({
   const s = board.stats
   const missing = s.total - s.with_plan
   const topMissing = d.customers.filter((c) => c.missing > 0)
+  // Cùng điều kiện với nhãn ở cột Tình trạng (Dong) — một hàm, hai chỗ, không lệch số.
+  const fromOrder = board.rows.filter(
+    (r) => r.price != null && planFromOrder(r.source),
+  ).length
   return (
     <ErpPage>
       <TopProgressBar active={d.busy} />
       <ErpHeader
-        crumb={[{ label: 'Bán hàng', href: '/sales' }, { label: 'Giá thành kế hoạch' }]}
-        title="Giá thành kế hoạch"
-        sub="Bốn số từ bảng tính giá của Sale cho SP đang chạy — gõ hay dán đều chỉ điền vào ô, bạn soát rồi mới lưu một lần."
+        crumb={[{ label: 'Bán hàng', href: '/sales' }, { label: 'Tính giá SP' }]}
+        title="Tính giá SP"
+        sub={`${PRICE_NAME.cost} + ${PRICE_NAME.profit} = ${PRICE_NAME.plan}, cho SP đang chạy — gõ hay dán đều chỉ điền vào ô, bạn soát rồi mới lưu một lần.`}
         actions={
           <>
             <ToolBtn
@@ -104,9 +112,17 @@ export function GiaThanhScreen({
         }
       />
 
+      <div className="border-border bg-muted text-foreground/80 flex items-center gap-2 border-b px-6 py-1.5 text-xs">
+        <Lock className="size-3.5 shrink-0" strokeWidth={1.9} aria-hidden />
+        <span>
+          Toàn bộ số trên màn này là <b>nội bộ</b> — không in, chỉ Sale · Kỹ thuật · BGĐ
+          xem được. {PRICE_NAME.plan} là mức tính TRƯỚC khi chào, không sửa theo giá đơn.
+        </span>
+      </div>
+
       <CountStrip>
         <CountCell
-          label="SP chưa có giá KH"
+          label="SP chưa có Giá bán KH"
           value={String(missing)}
           sub={`trên ${s.total} SP đang chạy`}
           tone={missing ? 'stop' : 'done'}
@@ -114,7 +130,7 @@ export function GiaThanhScreen({
           onClick={() => d.setView('missing')}
         />
         <CountCell
-          label="Chỉ FOB, chưa bóc tách"
+          label="Chỉ Giá bán KH, chưa bóc vốn"
           value={String(s.fob_only)}
           sub="có giá chốt, không có bảng tính"
           tone={s.fob_only ? 'warn' : 'neutral'}
@@ -124,10 +140,17 @@ export function GiaThanhScreen({
         <CountCell
           label="Đủ 4 số, khớp tổng"
           value={String(s.complete)}
-          sub="trực tiếp + chung + lợi nhuận = FOB"
+          sub="Giá vốn KH (trực tiếp + chung) + Lãi KH = Giá bán KH"
           tone={s.complete === s.total && s.total > 0 ? 'done' : 'neutral'}
           on={d.view === 'all'}
           onClick={() => d.setView('all')}
+        />
+        <CountCell
+          internal
+          label="Lãi tính lại theo đơn"
+          value={String(fromOrder)}
+          sub={`${PRICE_NAME.plan} suy ngược từ đơn giá — nên tính lại`}
+          tone={fromOrder ? 'warn' : 'neutral'}
         />
         <CountCell
           label="Khách thiếu nhiều nhất"
@@ -170,7 +193,7 @@ export function GiaThanhScreen({
           onChange={d.setView}
           options={[
             { value: 'missing', label: 'Chưa có', count: missing },
-            { value: 'fob_only', label: 'Chỉ FOB', count: s.fob_only },
+            { value: 'fob_only', label: 'Chưa bóc vốn', count: s.fob_only },
             { value: 'all', label: 'Tất cả', count: s.total },
           ]}
         />
@@ -254,8 +277,8 @@ export function GiaThanhScreen({
 
       {d.warn.length > 0 && (
         <div className="border-border border-b bg-[var(--warn)]/10 px-6 py-1.5 text-[13px]">
-          <Nhan tone="warn">Lệch nhiều</Nhan> {d.warn.length} dòng có FOB mới lệch quá{' '}
-          {PLAN_WARN_PCT}% so với số đang có (
+          <Nhan tone="warn">Lệch nhiều</Nhan> {d.warn.length} dòng có Giá bán KH mới lệch
+          quá {PLAN_WARN_PCT}% so với số đang có (
           {d.warn
             .slice(0, 3)
             .map((r) => {
@@ -269,33 +292,67 @@ export function GiaThanhScreen({
 
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full table-fixed border-collapse">
+          {/* a% nằm dưới ô Chung, b% dưới ô Lãi KH, khách dưới tên SP — để 1.053px
+              (1280 trừ sidebar) còn chỗ cho cột Giá vốn KH mới mà tên SP không bị bóp. */}
           <colgroup>
             <col className="w-9" />
             <col />
-            <col className="w-[110px]" />
-            <col className="w-[92px]" />
-            <col className="w-[92px]" />
-            <col className="w-[46px]" />
-            <col className="w-[92px]" />
-            <col className="w-[46px]" />
+            <col className="w-[88px]" />
+            <col className="w-[88px]" />
+            <col className="w-[88px]" />
+            <col className="w-[88px]" />
             <col className="w-[96px]" />
-            <col className="w-[104px]" />
-            <col className="w-[104px]" />
-            <col className="w-[170px]" />
+            <col className="w-[92px]" />
+            <col className="w-[92px]" />
+            <col className="w-[150px]" />
           </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
+              <NhomTh kind="trong" colSpan={2} />
+              <NhomTh kind="noi-bo" plain colSpan={3}>
+                = {PRICE_NAME.cost}
+              </NhomTh>
+              <NhomTh kind="noi-bo" plain colSpan={1}>
+                + {PRICE_NAME.profit}
+              </NhomTh>
+              <NhomTh kind="noi-bo" plain colSpan={1}>
+                = {PRICE_NAME.plan}
+              </NhomTh>
+              <NhomTh kind="khach" colSpan={2}>
+                Giá thật đã gửi khách
+              </NhomTh>
+              <NhomTh kind="trong" colSpan={1} />
+            </tr>
+            <tr>
               <th className={`${TH} text-right`}>#</th>
-              <th className={TH}>Sản phẩm · mã khách</th>
-              <th className={TH}>Khách</th>
-              <th className={`${TH} text-right`}>Trực tiếp</th>
-              <th className={`${TH} text-right`}>Chung</th>
-              <th className={`${TH} text-right`}>a%</th>
-              <th className={`${TH} text-right`}>Lợi nhuận</th>
-              <th className={`${TH} text-right`}>b%</th>
-              <th className={`${TH} text-right`}>Giá FOB</th>
-              <th className={`${TH} text-right`}>Đã chào</th>
-              <th className={`${TH} text-right`}>Giá đơn</th>
+              <th className={TH}>Sản phẩm · mã khách · khách</th>
+              <th className={`${TH} ${INT_HEAD} ${EDGE} text-right`}>Trực tiếp</th>
+              <th
+                className={`${TH} ${INT_HEAD} text-right`}
+                title="a% = chung ÷ trực tiếp"
+              >
+                Chung · a%
+              </th>
+              <th
+                className={`${TH} ${INT_HEAD} text-foreground text-right`}
+                title={`${PRICE_NAME.cost} = trực tiếp + chung (tự tính)`}
+              >
+                {PRICE_NAME.cost}
+              </th>
+              <th
+                className={`${TH} ${INT_HEAD} ${EDGE} text-right`}
+                title="Lợi nhuận kế hoạch Sale đặt cho SP · b% = lãi ÷ giá vốn KH"
+              >
+                Lãi KH · b%
+              </th>
+              <th
+                className={`${TH} ${INT_HEAD} ${EDGE} text-foreground text-right`}
+                title={`${PRICE_NAME.plan} = ${PRICE_NAME.cost} + ${PRICE_NAME.profit} (FOB tính ra)`}
+              >
+                {PRICE_NAME.plan}
+              </th>
+              <th className={`${TH} text-right`}>{PRICE_NAME.quote}</th>
+              <th className={`${TH} text-right`}>{PRICE_NAME.order}</th>
               <th className={TH}>Tình trạng · nguồn</th>
             </tr>
           </thead>
@@ -303,7 +360,7 @@ export function GiaThanhScreen({
             {d.rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={10}
                   className="text-muted-foreground px-6 py-10 text-center text-[13px]"
                 >
                   {board.rows.length === 0
@@ -443,6 +500,11 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
   const isOpen = d.open.has(r.product_id)
   const canOpen = (r.breakdown?.length ?? 0) > 0 || !!draft?.breakdown
   const bd = draft?.breakdown ?? r.breakdown ?? []
+  // Giá vốn KH = trực tiếp + chung: số đang gõ (nếu hợp lệ) thắng số đã lưu.
+  const von = live
+    ? planCostOf(live.direct, live.overhead)
+    : planCostOf(r.direct, r.overhead)
+  const fromOrder = !dirty && r.price != null && planFromOrder(r.source)
 
   const cell = (k: DraftKey, saved: number | null) => (
     <input
@@ -514,25 +576,35 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
               </span>
             )}
           </span>
-          <span className={SUB} title={r.name}>
+          <span className={SUB} title={`${r.name} · ${custOf(r)}`}>
             {r.name}
             <span className="text-muted-foreground">
+              {' · '}
+              {custOf(r)}
               {r.lsx_count > 0 ? ` · ${r.lsx_count} lệnh` : ''}
               {r.order_count > 0 ? ` · ${r.order_count} đơn` : ''}
             </span>
           </span>
         </td>
-        <td className={`${TD} min-w-0`}>
-          <span className="block truncate" title={custOf(r)}>
-            {custOf(r)}
+        <td className={`${TD} ${EDGE} px-1`}>{cell('direct', r.direct)}</td>
+        <td className={`${TD} px-1`}>
+          {cell('overhead', r.overhead)}
+          <span className={`${SUB} text-right font-mono`}>a {pct(pcts.a)}</span>
+        </td>
+        <td
+          className={`${TD} ${NUM} bg-muted font-semibold ${von == null ? 'text-muted-foreground font-normal' : ''}`}
+        >
+          {von != null ? fmt(von, cur) : r.price != null || live ? 'chưa bóc' : '—'}
+        </td>
+        <td className={`${TD} ${EDGE} px-1`}>
+          {cell('profit', r.profit)}
+          <span
+            className={`${SUB} text-right font-mono ${pcts.b != null && pcts.b < 0 ? 'text-[var(--stop)]' : ''}`}
+          >
+            b {pct(pcts.b)}
           </span>
         </td>
-        <td className={`${TD} px-1`}>{cell('direct', r.direct)}</td>
-        <td className={`${TD} px-1`}>{cell('overhead', r.overhead)}</td>
-        <td className={`${TD} ${NUM} text-muted-foreground text-xs`}>{pct(pcts.a)}</td>
-        <td className={`${TD} px-1`}>{cell('profit', r.profit)}</td>
-        <td className={`${TD} ${NUM} text-muted-foreground text-xs`}>{pct(pcts.b)}</td>
-        <td className={`${TD} px-1`}>
+        <td className={`${TD} ${EDGE} px-1`}>
           {cell('price', r.price)}
           <span className={`${SUB} text-right`}>{cur ?? ''}</span>
         </td>
@@ -549,7 +621,7 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
             <span className="flex flex-wrap items-center gap-1">
               <Nhan tone="neutral">
                 {live.fob_only
-                  ? 'chỉ FOB'
+                  ? 'chưa bóc vốn'
                   : draft?.from_line
                     ? `khối dán · dòng ${draft.from_line}`
                     : draft?.breakdown
@@ -573,9 +645,13 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
           ) : r.price == null ? (
             <Nhan tone="stop">chưa có</Nhan>
           ) : r.direct == null ? (
-            <Nhan tone="warn">chỉ FOB</Nhan>
+            <Nhan tone="warn">chưa bóc vốn</Nhan>
           ) : !r.complete ? (
-            <Nhan tone="warn">FOB ≠ tổng 3 số</Nhan>
+            <Nhan tone="warn">Giá bán KH ≠ tổng 3 số</Nhan>
+          ) : r.profit != null && r.profit < 0 ? (
+            <Nhan tone="stop">lãi KH âm</Nhan>
+          ) : fromOrder ? (
+            <Nhan tone="warn">lãi tính lại theo đơn</Nhan>
           ) : (
             <Nhan tone="done">đủ</Nhan>
           )}
@@ -605,7 +681,7 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
       {isOpen && bd.length > 0 && (
         <tr className="bg-muted/30">
           <td />
-          <td colSpan={11} className="border-border border-b px-2 py-1.5 text-xs">
+          <td colSpan={9} className="border-border border-b px-2 py-1.5 text-xs">
             <span className="text-muted-foreground mr-2">
               Khối chi phí trực tiếp ({bd.length} khoản
               {draft?.breakdown ? ', vừa dán' : ''}):
