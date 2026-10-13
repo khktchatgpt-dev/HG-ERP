@@ -17,7 +17,7 @@ mua) → Đang nhập (đã nhập một phần) → Xong. Không qua Cung ứng
 | Đ5 | Danh sách cho lãnh đạo `/duyet/de-nghi` (bản vẽ vòng 4 https://claude.ai/artifact/Tu7kTTCUPr2aALmAZ2g18b, Q15–Q22 duyệt 14/10) | **XONG 14/10** — không migration |
 | Đ6 | Thông tin dòng: chưa theo dõi / giá lần trước gồm Kho tự mua / trùng / đang về / phiếu trước | **XONG 14/10** — không migration |
 | Đ7 | VAT **theo dòng** (chủ dự án 14/10: một phiếu lẫn dòng có / không VAT) + phí vận chuyển cả phiếu · ô "Dặn Kho" khi duyệt | **XONG 14/10** — 0239 ĐÃ ÁP (MCP), types sửa tay |
-| Đ8 | Lập lại từ phiếu cũ | chưa làm |
+| Đ8 | Lập lại từ phiếu cũ | **XONG 14/10** — không migration |
 | Treo | Đính ảnh hoá đơn (Q13 — cần loại tệp `purchase_request` mới) · xem bản in 01-VT trước khi ghi · cột "đã nhập x/y" trên sổ đề nghị · phiếu điều chỉnh (C) của PNK không mang dòng đề nghị | chưa làm |
 
 **Đ1 gồm:** bảng `warehouse_purchase_requests` + `_lines` (0236, RLS bật không
@@ -86,3 +86,5 @@ chữ chung `lib/de-nghi-goi-y`; màn Kho (`goi-y-dong.tsx`) và màn duyệt
 (`thong-tin-dong.tsx`) bày riêng.
 
 **Đ7 gồm (0239):** `lines.vat_rate` (0 = không VAT; chọn Không / 5% / 8% / 10%, mặc định theo dòng trên), `requests.shipping_fee`, `requests.approve_note`. `tongDuKien(lines, phiVc, { theoDuyet })` trả `{ hang, vat, vc, tong, thieuGia }` — MỌI nơi bày "tổng dự kiến" (thanh chốt Kho, màn duyệt, danh sách lãnh đạo, Hộp ký, thông báo, sổ Kho, phiếu in) nay gồm VAT + vận chuyển; `tongTheoDuyet` không tính vận chuyển khi duyệt 0 hết. Phiếu nhập kho (Đ3) vẫn ghi đơn giá CHƯA VAT. Ô "Dặn Kho" gửi qua `reason` của quyết định duyệt → `approve_note` + tiêu đề thông báo. Bẫy bố cục: `CellHint` của kit một dòng không xuống hàng — câu dài (trùng, đang về) dùng khối `Goi` riêng ở `goi-y-dong.tsx`, đặt dưới cột tên; tiêu đề kit `Th` không xuống dòng nên khung hẹp dùng nhãn ngắn.
+
+**Đ8 gồm:** `/warehouse/de-nghi/moi?tu=<id>` dựng bản nháp CHƯA LƯU bằng `phieuLapLai` (`tai-phieu.ts`, có test): số lượng = số đã duyệt, bỏ dòng duyệt 0, giá = lần mua gần nhất (đơn Cung ứng / Kho tự mua) nếu có, chép VAT + mục đích + vận chuyển + bộ phận + ghi chú phiếu; không chép cần trước, lệnh SX, ghi chú dòng. Phiếu nguồn còn mở thì thêm chính nó vào danh sách trùng (service loại nó vì lúc đó nó là phiếu đang xem). Lối vào: "Lập lại từ phiếu cũ…" trên màn lập mới (`lap-lai.tsx`, 30 phiếu gần nhất đã gửi duyệt) và "Lập lại phiếu này" trên phiếu đã gửi. Màn mới dùng `key` theo phiếu nguồn để state dựng lại khi chọn phiếu khác.
