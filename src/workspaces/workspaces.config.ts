@@ -163,11 +163,9 @@ export const SHARED_SECTION: NavSection = {
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
   items: [
     { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
-    // Màn MỚI dựng theo bản vẽ 08/10/2026 (khuôn C, checklist hồ sơ 6 ô) —
-    // chạy song song với màn cũ cho tới khi chủ dự án chốt thay thế.
-    { href: '/thu-vien', label: 'Thư viện SP (mới)', icon: 'armchair' },
-    // Kỹ thuật theo dõi lệnh đang chạy: SP nào trên lệnh chưa có / chưa đủ hồ sơ (09/10/2026).
-    { href: '/thu-vien/lenh', label: 'Lệnh SX · hồ sơ SP', icon: 'clipboard-list' },
+    // "Thư viện SP (mới)" + "Lệnh SX · hồ sơ SP" (/thu-vien) KHÔNG ở đây nữa —
+    // chủ dự án chốt 13/10/2026: đó là phần riêng của Kỹ thuật. Xem nav
+    // workspace `technical` + cửa chặn ở `(shared)/thu-vien/layout.tsx`.
     // Khuôn nhôm: Kỹ thuật giữ, nhưng Cung ứng tra để đặt hàng và Sản xuất tra
     // để nhận dạng cây nhôm — nên nó ở khu dùng chung, không nhốt trong /technical.
     { href: '/khuon', label: 'Khuôn nhôm', icon: 'shapes' },
@@ -368,6 +366,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/technical', label: 'Trang chủ', icon: 'home' },
           // "Thư viện sản phẩm" đã chuyển sang SHARED_SECTION (/products) —
           // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
+          // Hai màn RIÊNG của Kỹ thuật (13/10/2026 — trước nằm ở Dùng chung):
+          // thư viện SP mới (khuôn C, checklist hồ sơ 6 ô, 08/10) và lệnh đang
+          // chạy thiếu hồ sơ SP (09/10). URL giữ /thu-vien; cửa chặn ở layout.
+          { href: '/thu-vien', label: 'Thư viện SP (mới)', icon: 'armchair' },
+          { href: '/thu-vien/lenh', label: 'Lệnh SX · hồ sơ SP', icon: 'clipboard-list' },
           { href: '/technical/showroom', label: 'Mẫu showroom', icon: 'store' },
           { href: '/technical/load-cont', label: 'Tính load cont', icon: 'container' },
           // Trang DÙNG CHUNG (/cat-phoi, khu (shared)) — Kỹ thuật lập quy cắt,
