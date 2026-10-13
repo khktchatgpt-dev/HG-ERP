@@ -8,6 +8,7 @@ import {
   DE_NGHI_NHAN,
   DE_NGHI_TONE,
   dongTrong,
+  gio,
   tongDuKien,
   vuongGuiDuyet,
 } from '@/lib/de-nghi'
@@ -58,16 +59,6 @@ const docSo = (v: string): number | null => {
   const n = Number(t.replace(/\./g, '').replace(',', '.'))
   return Number.isFinite(n) ? n : null
 }
-const gio = (iso: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString('vi-VN', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-      })
-    : ''
 
 type VatTuChon = { id: string; code: string; name: string; unit: string }
 const BUOC = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đang nhập', 'Xong']
@@ -415,11 +406,11 @@ export function DeNghiScreen({
             <NoticeBar tone="neutral" tag="Đã duyệt">
               {phieu.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(phieu.approved_at)}
               {phieu.lines.some((l) => l.approved_qty != null) &&
-                ` · sửa số ${phieu.lines.filter((l) => l.approved_qty != null).length} dòng (cột Số lượng ghi số duyệt)`}
-              . Đã nhập đủ {muaDong.length - thieu.length}/{muaDong.length} dòng
-              {thieu.length > 0 &&
-                ' — mua chuyến sau thì bấm “Nhập hàng đã mua” lần nữa (lưới chỉ còn phần thiếu), không mua nữa thì “Chốt xong” + lý do'}
-              .
+                ` · sửa số ${phieu.lines.filter((l) => l.approved_qty != null).length} dòng (cột Số duyệt)`}
+              .{' '}
+              {phieu.status === 'approved'
+                ? 'Kho đi mua theo số duyệt rồi bấm “Nhập hàng đã mua”; không mua nữa thì “Chốt xong” + lý do.'
+                : `Đã nhập đủ ${muaDong.length - thieu.length}/${muaDong.length} dòng — mua chuyến sau thì bấm “Nhập hàng đã mua” lần nữa (lưới chỉ còn phần thiếu), không mua nữa thì “Chốt xong” + lý do.`}
             </NoticeBar>
           )}
         {phieu.status === 'done' && (

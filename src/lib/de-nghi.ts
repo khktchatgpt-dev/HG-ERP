@@ -97,3 +97,21 @@ export function tongDuKien(lines: readonly Pick<DongDeNghi, 'qty' | 'unit_price'
   }
   return { tong: Math.round(tong), thieuGia }
 }
+
+/** "15:18 13/10" theo giờ VN — ghép tay: toLocaleString vi-VN ra "13-10" ở vài máy. */
+export function gio(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(iso))
+      .map((x) => [x.type, x.value]),
+  )
+  return `${p.hour}:${p.minute} ${p.day}/${p.month}`
+}

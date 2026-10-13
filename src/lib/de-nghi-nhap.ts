@@ -105,11 +105,11 @@ export function kiemNhapDeNghi(
     if (!(r.qty > EPS)) return
     const ten = `Dòng ${i + 1} (${r.name})`
     if (!r.material_id)
-      chan(i, 'ma', `${ten} chưa gắn mã → bấm "gắn mã" chọn mã có sẵn hoặc tạo mã mới`)
+      chan(i, 'ma', `${ten} chưa gắn mã — bấm "gắn mã" chọn mã có sẵn hoặc tạo mã mới`)
     if (r.unit_price == null) chan(i, 'gia', `${ten} chưa có đơn giá thật`)
     else if (r.unit_price < 0) chan(i, 'gia', `${ten}: đơn giá không được âm`)
     else if (r.unit_price === 0 && !r.note.trim())
-      chan(i, 'note', `${ten} giá 0 → ghi chú vì sao (hàng được cho, hàng tặng…)`)
+      chan(i, 'note', `${ten} giá 0: ghi chú vì sao (hàng được cho, hàng tặng…)`)
     const v = mucVuot(r.can, r.daNhap, r.qty)
     if (v > VUOT_TU_DO + EPS) {
       if (!r.note.trim())
@@ -117,8 +117,8 @@ export function kiemNhapDeNghi(
           i,
           'note',
           r.can <= EPS
-            ? `${ten}: lãnh đạo duyệt 0 (không mua) → ghi lý do vẫn nhập`
-            : `${ten} vượt số duyệt ${pct(v)} (quá ${pct(VUOT_TU_DO)}) → ghi lý do ở ô Ghi chú`,
+            ? `${ten}: lãnh đạo duyệt 0 (không mua): ghi lý do vẫn nhập`
+            : `${ten} vượt số duyệt ${pct(v)} (quá ${pct(VUOT_TU_DO)}): ghi lý do ở ô Ghi chú`,
         )
     } else if (v > EPS) canhBao.push({ dong: i, cau: `${ten} vượt số duyệt ${pct(v)}` })
   })

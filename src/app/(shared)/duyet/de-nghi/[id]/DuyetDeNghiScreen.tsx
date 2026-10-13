@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { DeNghiChiTiet } from '@/modules/dept/warehouse/de-nghi.service'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, todayVn } from '@/lib/date-vn'
-import { DE_NGHI_NHAN, DE_NGHI_TONE } from '@/lib/de-nghi'
+import { DE_NGHI_NHAN, DE_NGHI_TONE, gio } from '@/lib/de-nghi'
 import {
   Btn,
   Code,
@@ -24,23 +24,6 @@ const docSo = (v: string): number | null => {
   if (!t) return null
   const n = Number(t.replace(/\./g, '').replace(',', '.'))
   return Number.isFinite(n) && n >= 0 ? n : null
-}
-/** "15:18 13/10" theo giờ VN — ghép tay: toLocaleString vi-VN ra "13-10" ở vài máy. */
-const gio = (iso: string | null) => {
-  if (!iso) return ''
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      hour: '2-digit',
-      minute: '2-digit',
-      day: '2-digit',
-      month: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(new Date(iso))
-      .map((x) => [x.type, x.value]),
-  )
-  return `${p.hour}:${p.minute} ${p.day}/${p.month}`
 }
 
 /**
