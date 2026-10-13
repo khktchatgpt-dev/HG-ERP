@@ -233,3 +233,12 @@ Chủ dự án 14/10: *"bên trang của giám đốc không phân loại ra sao
 - **H3 · điện thoại + menu**: khung < 900px → `hop-ky-hep.tsx` (khối gấp + danh sách nhóm → phiếu). Menu: "Sổ đề nghị mua" không đếm; một phiếu chỉ đếm ở "Chờ tôi phê duyệt" / "Chờ tôi ký".
 
 Bẫy bố cục: bảng kit dùng `table-layout` tự động — nhãn loại trong cột Mã từng đẩy cột lên 222px, chuỗi lệnh "HM-2026-0008 · ARUBA 159 (AK)" đẩy cột Lệnh 218px → tràn ngang. Nhãn loại nằm trong câu lý do gấp; cột ngữ cảnh cắt chữ `max-w-[150px]`.
+
+### Hộp ký viết tay, có màu (14/10/2026 · bbfec08)
+
+Chủ dự án: "không có màu sắc phân biệt các thành phần gây khó nhìn" · "không dùng kit nữa" (CHỈ Hộp ký) · "thiết kế thiên hướng ERP không làm như web thường được". Bản vẽ v2 https://claude.ai/artifact/Ar4nCXv8ruVNkwHpc3NYJ4 (v1 thẻ bo góc + khoảng hở bị chê là web).
+
+- Màn không import `@/components/kit`; kiểu ở `approvals/hop-ky.css`, icon `lucide-react`. Luật CSS mở đầu `.hk.hk` (bảng `.hk-tb.hk-tb`) để thắng CSS kit ngoài `@layer` — layout Mua hàng (`/mua-hang/cho-ky`) vẫn gắn `.kit`.
+- Màu loại phiếu: đơn mua xanh ngọc `#0f766e` · đề nghị tím `#6d3fc0` · lệnh hồng sẫm `#a3245e` · báo giá xám đá `#475569` (`LOP_MAU` + `.lp-*` đặt `--c`/`--w`). CHỈ ở vạch ô đếm, vạch + nền nhạt dòng nhóm, ô vuông cột "Loại". Không dùng cho nút, không trùng màu bấm được / vòng đời.
+- Màn tự chốt chiều cao `calc(100dvh − đỉnh)` (như `ScreenFrame`) — chỉ lưới cuộn.
+- Thêm loại phiếu mới: thêm mục `LOAI_PHIEU` + một màu trong `LOP_MAU` / `hop-ky.css`.
