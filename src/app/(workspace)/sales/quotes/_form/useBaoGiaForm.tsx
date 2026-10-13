@@ -40,6 +40,8 @@ export type LineRow = {
   unitPrice: string
   discount: string
   note: string
+  /** Ô giá đang là GIÁ BÁN KH gợi sẵn (khách chưa từng được chào SP này) — gõ tay là xoá. */
+  priceFrom?: 'plan'
 }
 
 /**
@@ -179,10 +181,38 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
   /** Thêm nhiều SP một lượt — báo giá KHÔNG cho trùng SP (schema chặn), bỏ cái đã có. */
   function addPicked(ps: ProductPick[]) {
     ps.forEach(remember)
+    const fresh = ps
+      .filter((x) => !lines.some((l) => l.productId === x.id))
+      .map((x) => newRow(x.id))
     setLines((ls) => [
       ...ls,
-      ...ps.filter((x) => !ls.some((l) => l.productId === x.id)).map((x) => newRow(x.id)),
+      ...fresh.filter((r) => !ls.some((l) => l.productId === r.productId)),
     ])
+    // Khách chưa từng được chào SP này → gợi sẵn GIÁ BÁN KH (13/10/2026). Hỏi server vì
+    // giá kế hoạch của SP vừa thêm chưa tải; chỉ điền ô CÒN TRỐNG, người có quyền mới nhận.
+    const empty = fresh.filter((r) => r.unitPrice === '')
+    if (empty.length) void fillPlan(empty)
+  }
+  async function fillPlan(rows: LineRow[]) {
+    try {
+      const ids = [...new Set(rows.map((r) => r.productId))].join(',')
+      const d = await api<{ prices: Record<string, PlanPrice> }>(
+        `/api/dept/sales/quotes/plan-prices?ids=${encodeURIComponent(ids)}`,
+      )
+      const m = new Map(Object.entries(d.prices))
+      if (!m.size) return
+      const keys = new Set(rows.map((r) => r.key))
+      setLines((ls) =>
+        ls.map((l) => {
+          const p = m.get(l.productId)
+          if (!keys.has(l.key) || l.unitPrice !== '' || !p || p.currency !== h.currency)
+            return l
+          return { ...l, unitPrice: String(p.price), priceFrom: 'plan' }
+        }),
+      )
+    } catch {
+      /* không có gợi ý thì ô để trống */
+    }
   }
   function replaceProduct(key: number, x: ProductPick) {
     remember(x)
