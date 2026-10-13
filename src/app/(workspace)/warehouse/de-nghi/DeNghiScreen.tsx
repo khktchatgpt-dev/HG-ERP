@@ -40,6 +40,9 @@ import {
   useToast,
 } from '@/components/kit'
 import { HuyPhieuSheet } from './huy-phieu'
+import { ChotPhieuSheet } from './chot-phieu'
+import { TinhHinhNhap } from './tinh-hinh-nhap'
+import { DauPhieu, type DauPhieuState } from './dau-phieu'
 import {
   MUC_DICH_GOI_Y,
   type DongForm,
@@ -67,7 +70,7 @@ const gio = (iso: string | null) =>
     : ''
 
 type VatTuChon = { id: string; code: string; name: string; unit: string }
-const BUOC = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đang mua', 'Xong']
+const BUOC = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đang nhập', 'Xong']
 const BUOC_AT = {
   draft: 0,
   pending: 1,
@@ -96,15 +99,18 @@ export function DeNghiScreen({
   phieu,
   lsx,
   canManage,
+  canNhap = false,
 }: {
   phieu: PhieuForm
   lsx: { id: string; code: string }[]
   canManage: boolean
+  /** Ghi phiếu nhập được (quản phiếu + ghi sổ kho) — nút "Nhập hàng đã mua" (0238). */
+  canNhap?: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
   const sua = canManage && phieu.status === 'draft'
-  const [head, setHead] = useState({
+  const [head, setHead] = useState<DauPhieuState>({
     department: phieu.department,
     need_by: phieu.need_by,
     note: phieu.note,
@@ -114,6 +120,12 @@ export function DeNghiScreen({
   const [busy, setBusy] = useState(false)
   const [dangTra, setDangTra] = useState(false)
   const [moHuy, setMoHuy] = useState(false)
+  const [moChot, setMoChot] = useState(false)
+  // Đã duyệt trở đi: lưới đổi sang TÌNH HÌNH NHẬP (DN-5), đếm từ sổ kho.
+  const daDuyet = ['approved', 'ordering', 'done'].includes(phieu.status)
+  const dangNhap = phieu.status === 'approved' || phieu.status === 'ordering'
+  const muaDong = phieu.lines.filter((l) => (l.can ?? 0) > 0)
+  const thieu = muaDong.filter((l) => (l.da_nhap ?? 0) < (l.can ?? 0))
   const khung = useRef<HTMLDivElement>(null)
   const hep = useBeRong(khung) < 900
 
@@ -122,7 +134,6 @@ export function DeNghiScreen({
   const tong = useMemo(() => tongDuKien(rows), [rows])
   const vuong = useMemo(() => vuongGuiDuyet(rows), [rows])
   const soChuaMa = rows.filter((r) => !r.material_id && !dongTrong(r)).length
-  const lsxChon = lsx.find((l) => l.id === head.production_order_id) ?? null
 
   async function timVatTu(q: string): Promise<VatTuChon[]> {
     const res = await api<{ rows: VatTuChon[] }>(
@@ -334,6 +345,20 @@ export function DeNghiScreen({
                   Huỷ phiếu
                 </Action>
               )}
+            {canNhap && dangNhap && phieu.id && (
+              <Action
+                primary
+                icon="nhanHang"
+                onClick={() => router.push(`/warehouse/de-nghi/${phieu.id}/nhap`)}
+              >
+                Nhập hàng đã mua
+              </Action>
+            )}
+            {canManage && dangNhap && phieu.id && (
+              <Action icon="xong" onClick={() => setMoChot(true)}>
+                Chốt xong…
+              </Action>
+            )}
           </ActionGroup>
           {phieu.id && phieu.status !== 'draft' && phieu.status !== 'cancelled' && (
             <ActionGroup label="Gửi">
@@ -391,9 +416,19 @@ export function DeNghiScreen({
               {phieu.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(phieu.approved_at)}
               {phieu.lines.some((l) => l.approved_qty != null) &&
                 ` · sửa số ${phieu.lines.filter((l) => l.approved_qty != null).length} dòng (cột Số lượng ghi số duyệt)`}
-              . Kho đi mua theo số duyệt rồi nhập kho theo phiếu.
+              . Đã nhập đủ {muaDong.length - thieu.length}/{muaDong.length} dòng
+              {thieu.length > 0 &&
+                ' — mua chuyến sau thì bấm “Nhập hàng đã mua” lần nữa (lưới chỉ còn phần thiếu), không mua nữa thì “Chốt xong” + lý do'}
+              .
             </NoticeBar>
           )}
+        {phieu.status === 'done' && (
+          <NoticeBar tone={phieu.closed_at ? 'warn' : 'neutral'} tag="Xong">
+            {phieu.closed_at
+              ? `${phieu.closed_by_name ?? 'Kho'} chốt xong lúc ${gio(phieu.closed_at)} khi còn ${thieu.length} dòng thiếu · lý do: ${phieu.closed_reason ?? ''}`
+              : 'Đã nhập đủ mọi dòng theo số duyệt.'}
+          </NoticeBar>
+        )}
         {phieu.status === 'cancelled' && (
           <NoticeBar tone="neutral" tag="Đã huỷ">
             Huỷ lúc {gio(phieu.cancelled_at)} · lý do: {phieu.cancel_reason}
@@ -401,84 +436,13 @@ export function DeNghiScreen({
         )}
 
         {/* Đầu phiếu một dải (khuôn F): bộ phận · cần trước · lệnh · ghi chú. */}
-        <div className="text-k-sm flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
-          <label className="inline-flex items-center gap-2">
-            <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
-              Bộ phận
-            </span>
-            {sua ? (
-              <TextInput
-                value={head.department}
-                onCommit={(v) => setHead((h) => ({ ...h, department: v }))}
-                label="Bộ phận đề nghị"
-                style={{ width: 150 }}
-              />
-            ) : (
-              <b>{head.department}</b>
-            )}
-          </label>
-          <span className="inline-flex items-center gap-2">
-            <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
-              Ngày
-            </span>
-            <b className="num">
-              {isoToVn(
-                phieu.created_at ? todayVn(new Date(phieu.created_at)) : todayVn(),
-              )}
-            </b>
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
-              Cần trước
-            </span>
-            {sua ? (
-              <DateInput
-                value={head.need_by}
-                onChange={(v) => setHead((h) => ({ ...h, need_by: v }))}
-                label="Cần trước ngày"
-              />
-            ) : (
-              <b className="num">{head.need_by ? isoToVn(head.need_by) : '—'}</b>
-            )}
-          </span>
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
-              Lệnh SX
-            </span>
-            {sua ? (
-              <Combobox
-                value={head.production_order_id ?? ''}
-                onChange={(v) =>
-                  setHead((h) => ({ ...h, production_order_id: v || null }))
-                }
-                options={[
-                  { value: '', label: 'Không gắn lệnh' },
-                  ...lsx.map((l) => ({ value: l.id, label: l.code })),
-                ]}
-                label="Lệnh sản xuất (tuỳ chọn)"
-                width={190}
-              />
-            ) : (
-              <b className="num">{lsxChon?.code ?? '—'}</b>
-            )}
-          </span>
-          <label className="inline-flex min-w-0 flex-1 basis-[260px] items-center gap-2">
-            <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
-              Ghi chú
-            </span>
-            {sua ? (
-              <TextInput
-                value={head.note}
-                onCommit={(v) => setHead((h) => ({ ...h, note: v }))}
-                placeholder="VD: cấp phục vụ sản xuất tuần 42"
-                label="Ghi chú chung"
-                style={{ width: '100%' }}
-              />
-            ) : (
-              <span className="truncate">{head.note || '—'}</span>
-            )}
-          </label>
-        </div>
+        <DauPhieu
+          sua={sua}
+          head={head}
+          setHead={setHead}
+          createdAt={phieu.created_at}
+          lsx={lsx}
+        />
 
         {sua && (
           <div className="flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
@@ -516,191 +480,199 @@ export function DeNghiScreen({
 
         <div ref={khung} className="h-0 w-full" aria-hidden />
         <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-          <Grid minWidth={hep ? 680 : 900}>
-            <GridHead>
-              <Th width={30}>#</Th>
-              <Th width={hep ? 86 : 100}>Mã</Th>
-              <Th>Tên vật tư</Th>
-              <Th width={64}>ĐVT</Th>
-              {!hep && (
-                <Th num width={84}>
-                  Tồn hiện tại
+          {daDuyet ? (
+            <TinhHinhNhap rows={rows} hep={hep} daChot={!!phieu.closed_at} />
+          ) : (
+            <Grid minWidth={hep ? 680 : 900}>
+              <GridHead>
+                <Th width={30}>#</Th>
+                <Th width={hep ? 86 : 100}>Mã</Th>
+                <Th>Tên vật tư</Th>
+                <Th width={64}>ĐVT</Th>
+                {!hep && (
+                  <Th num width={84}>
+                    Tồn hiện tại
+                  </Th>
+                )}
+                <Th num width={100}>
+                  Số lượng
                 </Th>
-              )}
-              <Th num width={100}>
-                Số lượng
-              </Th>
-              <Th num width={110}>
-                Đơn giá dự kiến
-              </Th>
-              {!hep && (
                 <Th num width={110}>
-                  Thành tiền
+                  Đơn giá dự kiến
                 </Th>
-              )}
-              <Th width={hep ? 130 : 160}>Mục đích / tổ dùng</Th>
-              {sua && <Th width={50}></Th>}
-            </GridHead>
-            <GridBody>
-              {rows.map((r, i) => {
-                const tuDo = !r.material_id
-                const tonThap = r.ton != null && r.qty != null && r.ton <= 0
-                return (
-                  <GridRow key={r.key}>
-                    <td className="k-c-n">{i + 1}</td>
-                    <td>
-                      {r.code ? <Code>{r.code}</Code> : <Tag tone="warn">chưa có mã</Tag>}
-                    </td>
-                    <td className="max-w-0" title={r.name}>
-                      {sua && tuDo ? (
-                        <TextInput
-                          id={`dn-ten-${i}`}
-                          value={r.name}
-                          onCommit={(v) => patch(i, { name: v })}
-                          placeholder="tên vật tư (chưa có mã)"
-                          label={`Tên vật tư dòng ${i + 1}`}
-                        />
-                      ) : (
-                        <span className="block truncate">{r.name}</span>
-                      )}
-                    </td>
-                    <td className="text-[var(--ink-3)]">
-                      {sua && tuDo ? (
-                        <TextInput
-                          value={r.unit}
-                          onCommit={(v) => patch(i, { unit: v })}
-                          placeholder="ĐVT"
-                          label={`ĐVT dòng ${i + 1}`}
-                        />
-                      ) : (
-                        r.unit
-                      )}
-                    </td>
-                    {!hep && (
-                      <td className="k-r num">
-                        {r.ton == null ? (
-                          <span className="text-[var(--ink-empty)]">—</span>
+                {!hep && (
+                  <Th num width={110}>
+                    Thành tiền
+                  </Th>
+                )}
+                <Th width={hep ? 130 : 160}>Mục đích / tổ dùng</Th>
+                {sua && <Th width={50}></Th>}
+              </GridHead>
+              <GridBody>
+                {rows.map((r, i) => {
+                  const tuDo = !r.material_id
+                  const tonThap = r.ton != null && r.qty != null && r.ton <= 0
+                  return (
+                    <GridRow key={r.key}>
+                      <td className="k-c-n">{i + 1}</td>
+                      <td>
+                        {r.code ? (
+                          <Code>{r.code}</Code>
                         ) : (
-                          <span
-                            className={
-                              r.ton <= 0
-                                ? 'font-semibold text-[var(--warn)]'
-                                : 'text-[var(--ink-3)]'
-                            }
+                          <Tag tone="warn">chưa có mã</Tag>
+                        )}
+                      </td>
+                      <td className="max-w-0" title={r.name}>
+                        {sua && tuDo ? (
+                          <TextInput
+                            id={`dn-ten-${i}`}
+                            value={r.name}
+                            onCommit={(v) => patch(i, { name: v })}
+                            placeholder="tên vật tư (chưa có mã)"
+                            label={`Tên vật tư dòng ${i + 1}`}
+                          />
+                        ) : (
+                          <span className="block truncate">{r.name}</span>
+                        )}
+                      </td>
+                      <td className="text-[var(--ink-3)]">
+                        {sua && tuDo ? (
+                          <TextInput
+                            value={r.unit}
+                            onCommit={(v) => patch(i, { unit: v })}
+                            placeholder="ĐVT"
+                            label={`ĐVT dòng ${i + 1}`}
+                          />
+                        ) : (
+                          r.unit
+                        )}
+                      </td>
+                      {!hep && (
+                        <td className="k-r num">
+                          {r.ton == null ? (
+                            <span className="text-[var(--ink-empty)]">—</span>
+                          ) : (
+                            <span
+                              className={
+                                r.ton <= 0
+                                  ? 'font-semibold text-[var(--warn)]'
+                                  : 'text-[var(--ink-3)]'
+                              }
+                            >
+                              {fmt(r.ton)}
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      <td className="k-r">
+                        {sua ? (
+                          <NumInput
+                            id={`dn-qty-${i}`}
+                            value={r.qty == null ? '' : String(r.qty)}
+                            onCommit={(v) => patch(i, { qty: docSo(v) })}
+                            aria-label={`Số lượng ${r.code ?? r.name}`}
+                          />
+                        ) : (
+                          <>
+                            <b className="num">
+                              {r.qty == null ? '—' : fmt(r.approved_qty ?? r.qty)}
+                            </b>
+                            {r.approved_qty != null && r.qty != null && (
+                              <CellHint tone="warn">đề nghị {fmt(r.qty)}</CellHint>
+                            )}
+                          </>
+                        )}
+                        {hep && r.ton != null && (
+                          <CellHint tone={tonThap ? 'warn' : 'neutral'}>
+                            tồn {fmt(r.ton)}
+                          </CellHint>
+                        )}
+                      </td>
+                      <td className="k-r">
+                        {sua ? (
+                          <NumInput
+                            value={r.unit_price == null ? '' : String(r.unit_price)}
+                            onCommit={(v) => patch(i, { unit_price: docSo(v) })}
+                            aria-label={`Đơn giá dự kiến ${r.code ?? r.name}`}
+                          />
+                        ) : (
+                          <span className="num">
+                            {r.unit_price == null ? '—' : fmt(r.unit_price)}
+                          </span>
+                        )}
+                        {r.gia_goi_y && (
+                          <CellHint
+                            title={`${r.gia_goi_y.po_code} · ${r.gia_goi_y.supplier_name} · ${isoToVn(todayVn(new Date(r.gia_goi_y.at)))}`}
                           >
-                            {fmt(r.ton)}
+                            lần trước {fmt(r.gia_goi_y.unit_price)}
+                          </CellHint>
+                        )}
+                      </td>
+                      {!hep && (
+                        <td className="k-r num">
+                          {r.qty != null && r.unit_price != null ? (
+                            fmt(Math.round(r.qty * r.unit_price))
+                          ) : (
+                            <span className="text-[var(--ink-empty)]">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td>
+                        {sua ? (
+                          <>
+                            <input
+                              list="dn-muc-dich"
+                              defaultValue={r.purpose}
+                              onBlur={(e) => patch(i, { purpose: e.target.value })}
+                              placeholder="tổ / việc dùng"
+                              aria-label={`Mục đích dòng ${i + 1}`}
+                              className="text-k-sm h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface-card)] px-1.5 placeholder:text-[var(--ink-3)] focus:border-[var(--act)]"
+                            />
+                          </>
+                        ) : (
+                          <span className="block truncate text-[var(--ink-2)]">
+                            {r.purpose || '—'}
                           </span>
                         )}
                       </td>
-                    )}
-                    <td className="k-r">
-                      {sua ? (
-                        <NumInput
-                          id={`dn-qty-${i}`}
-                          value={r.qty == null ? '' : String(r.qty)}
-                          onCommit={(v) => patch(i, { qty: docSo(v) })}
-                          aria-label={`Số lượng ${r.code ?? r.name}`}
-                        />
-                      ) : (
-                        <>
-                          <b className="num">
-                            {r.qty == null ? '—' : fmt(r.approved_qty ?? r.qty)}
-                          </b>
-                          {r.approved_qty != null && r.qty != null && (
-                            <CellHint tone="warn">đề nghị {fmt(r.qty)}</CellHint>
-                          )}
-                        </>
+                      {sua && (
+                        <td>
+                          <GridBtn
+                            onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                          >
+                            Xoá
+                          </GridBtn>
+                        </td>
                       )}
-                      {hep && r.ton != null && (
-                        <CellHint tone={tonThap ? 'warn' : 'neutral'}>
-                          tồn {fmt(r.ton)}
-                        </CellHint>
-                      )}
+                    </GridRow>
+                  )
+                })}
+                {rows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={soCot + (sua ? 1 : 0)}
+                      className="py-6 text-center text-[var(--ink-3)]"
+                    >
+                      {sua
+                        ? 'Chưa có dòng nào — gõ mã hoặc tên ở ô “Thêm dòng”; thứ chưa có mã thì bấm “+ Dòng chưa có mã”.'
+                        : 'Phiếu không có dòng nào.'}
                     </td>
-                    <td className="k-r">
-                      {sua ? (
-                        <NumInput
-                          value={r.unit_price == null ? '' : String(r.unit_price)}
-                          onCommit={(v) => patch(i, { unit_price: docSo(v) })}
-                          aria-label={`Đơn giá dự kiến ${r.code ?? r.name}`}
-                        />
-                      ) : (
-                        <span className="num">
-                          {r.unit_price == null ? '—' : fmt(r.unit_price)}
-                        </span>
-                      )}
-                      {r.gia_goi_y && (
-                        <CellHint
-                          title={`${r.gia_goi_y.po_code} · ${r.gia_goi_y.supplier_name} · ${isoToVn(todayVn(new Date(r.gia_goi_y.at)))}`}
-                        >
-                          lần trước {fmt(r.gia_goi_y.unit_price)}
-                        </CellHint>
-                      )}
-                    </td>
-                    {!hep && (
-                      <td className="k-r num">
-                        {r.qty != null && r.unit_price != null ? (
-                          fmt(Math.round(r.qty * r.unit_price))
-                        ) : (
-                          <span className="text-[var(--ink-empty)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    <td>
-                      {sua ? (
-                        <>
-                          <input
-                            list="dn-muc-dich"
-                            defaultValue={r.purpose}
-                            onBlur={(e) => patch(i, { purpose: e.target.value })}
-                            placeholder="tổ / việc dùng"
-                            aria-label={`Mục đích dòng ${i + 1}`}
-                            className="text-k-sm h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface-card)] px-1.5 placeholder:text-[var(--ink-3)] focus:border-[var(--act)]"
-                          />
-                        </>
-                      ) : (
-                        <span className="block truncate text-[var(--ink-2)]">
-                          {r.purpose || '—'}
-                        </span>
-                      )}
-                    </td>
-                    {sua && (
-                      <td>
-                        <GridBtn
-                          onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                        >
-                          Xoá
-                        </GridBtn>
-                      </td>
-                    )}
-                  </GridRow>
-                )
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={soCot + (sua ? 1 : 0)}
-                    className="py-6 text-center text-[var(--ink-3)]"
-                  >
-                    {sua
-                      ? 'Chưa có dòng nào — gõ mã hoặc tên ở ô “Thêm dòng”; thứ chưa có mã thì bấm “+ Dòng chưa có mã”.'
-                      : 'Phiếu không có dòng nào.'}
-                  </td>
-                </tr>
-              )}
-            </GridBody>
-            <GridFoot>
-              <td colSpan={hep ? 5 : 7}>
-                {rows.length} dòng
-                {soChuaMa > 0 && ` · ${soChuaMa} dòng chưa có mã (gắn mã khi nhập kho)`}
-              </td>
-              {!hep && <td className="k-r num">{fmt(tong.tong)}</td>}
-              <td colSpan={sua ? 2 : 1} className="font-normal text-[var(--ink-3)]">
-                {hep ? `${fmt(tong.tong)} · ` : ''}chưa VAT, chưa vận chuyển
-                {tong.thieuGia > 0 && ` · ${tong.thieuGia} dòng chưa có giá`}
-              </td>
-            </GridFoot>
-          </Grid>
+                  </tr>
+                )}
+              </GridBody>
+              <GridFoot>
+                <td colSpan={hep ? 5 : 7}>
+                  {rows.length} dòng
+                  {soChuaMa > 0 && ` · ${soChuaMa} dòng chưa có mã (gắn mã khi nhập kho)`}
+                </td>
+                {!hep && <td className="k-r num">{fmt(tong.tong)}</td>}
+                <td colSpan={sua ? 2 : 1} className="font-normal text-[var(--ink-3)]">
+                  {hep ? `${fmt(tong.tong)} · ` : ''}chưa VAT, chưa vận chuyển
+                  {tong.thieuGia > 0 && ` · ${tong.thieuGia} dòng chưa có giá`}
+                </td>
+              </GridFoot>
+            </Grid>
+          )}
           <datalist id="dn-muc-dich">
             {MUC_DICH_GOI_Y.map((m) => (
               <option key={m} value={m} />
@@ -708,50 +680,52 @@ export function DeNghiScreen({
           </datalist>
         </div>
 
-        <CommitBar
-          totals={[
-            { label: 'Dòng', value: rows.length },
-            ...(soChuaMa > 0 ? [{ label: 'Chưa có mã', value: soChuaMa }] : []),
-          ]}
-          grand={{ label: 'Dự kiến (chưa VAT)', value: fmt(tong.tong) }}
-          actions={
-            sua ? (
-              <>
-                {/* Không dùng `blocked` của CommitBar: kit ghi "Chưa LƯU được" —
+        {!daDuyet && (
+          <CommitBar
+            totals={[
+              { label: 'Dòng', value: rows.length },
+              ...(soChuaMa > 0 ? [{ label: 'Chưa có mã', value: soChuaMa }] : []),
+            ]}
+            grand={{ label: 'Dự kiến (chưa VAT)', value: fmt(tong.tong) }}
+            actions={
+              sua ? (
+                <>
+                  {/* Không dùng `blocked` của CommitBar: kit ghi "Chưa LƯU được" —
                     sai ở đây, lưu nháp vẫn được, chỉ GỬI DUYỆT bị chặn. */}
-                {blocked && (
-                  <button
-                    type="button"
-                    className="text-k-sm max-w-[360px] truncate font-semibold text-[var(--warn)] underline-offset-2 hover:underline"
+                  {blocked && (
+                    <button
+                      type="button"
+                      className="text-k-sm max-w-[360px] truncate font-semibold text-[var(--warn)] underline-offset-2 hover:underline"
+                      title={blocked}
+                      onClick={() => {
+                        const v = vuong[0]
+                        if (v?.dong != null)
+                          focus(
+                            rows[v.dong]?.name.trim()
+                              ? `dn-qty-${v.dong}`
+                              : `dn-ten-${v.dong}`,
+                          )
+                      }}
+                    >
+                      Chưa gửi được: {blocked} →
+                    </button>
+                  )}
+                  <Btn onClick={() => void luuNhap()} disabled={busy}>
+                    Lưu nháp
+                  </Btn>
+                  <Action
+                    primary
+                    onClick={() => void guiDuyet()}
+                    disabled={busy || vuong.length > 0}
                     title={blocked}
-                    onClick={() => {
-                      const v = vuong[0]
-                      if (v?.dong != null)
-                        focus(
-                          rows[v.dong]?.name.trim()
-                            ? `dn-qty-${v.dong}`
-                            : `dn-ten-${v.dong}`,
-                        )
-                    }}
                   >
-                    Chưa gửi được: {blocked} →
-                  </button>
-                )}
-                <Btn onClick={() => void luuNhap()} disabled={busy}>
-                  Lưu nháp
-                </Btn>
-                <Action
-                  primary
-                  onClick={() => void guiDuyet()}
-                  disabled={busy || vuong.length > 0}
-                  title={blocked}
-                >
-                  Gửi lãnh đạo duyệt
-                </Action>
-              </>
-            ) : undefined
-          }
-        />
+                    Gửi lãnh đạo duyệt
+                  </Action>
+                </>
+              ) : undefined
+            }
+          />
+        )}
         <StatusBar
           left={[
             'Đơn giá tự điền theo lần mua gần nhất (đơn VND) — sửa được',
@@ -760,6 +734,20 @@ export function DeNghiScreen({
           right={`${rows.length} dòng`}
         />
       </ScreenFrame>
+      {moChot && phieu.id && (
+        <ChotPhieuSheet
+          id={phieu.id}
+          code={phieu.code ?? ''}
+          thieu={thieu.map(
+            (l) => `${l.name} còn ${fmt((l.can ?? 0) - (l.da_nhap ?? 0))} ${l.unit}`,
+          )}
+          onClose={() => setMoChot(false)}
+          onDone={() => {
+            setMoChot(false)
+            router.refresh()
+          }}
+        />
+      )}
       {moHuy && phieu.id && (
         <HuyPhieuSheet
           id={phieu.id}

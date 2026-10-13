@@ -22,6 +22,9 @@ export type DeNghi = {
   rejected_reason: string | null
   cancelled_at: string | null
   cancel_reason: string | null
+  /** "Chốt xong" khi còn dòng thiếu mà không mua nữa (0238 · Q14). */
+  closed_at: string | null
+  closed_reason: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -46,18 +49,28 @@ export type DeNghiDay = DeNghi & {
   requested_by_name: string | null
   approved_by_name: string | null
   rejected_by_name: string | null
+  closed_by_name: string | null
   lsx_code: string | null
   lines: DeNghiDong[]
 }
 
+/** Một phiếu nhập kho đã nhập cho dòng đề nghị (chưa bị đảo). */
+export type PhieuNhapDong = {
+  doc_id: string
+  code: string
+  doc_date: string
+  qty: number
+}
+
 const COLS =
-  'id, code, status, department, requested_by, need_by, note, production_order_id, submitted_at, approved_at, rejected_at, rejected_reason, cancelled_at, cancel_reason, created_by, created_at, updated_at'
+  'id, code, status, department, requested_by, need_by, note, production_order_id, submitted_at, approved_at, rejected_at, rejected_reason, cancelled_at, cancel_reason, closed_at, closed_reason, created_by, created_at, updated_at'
 const LINE_COLS =
   'id, line_no, material_id, name, unit, qty, approved_qty, unit_price, purpose, note, po_line_id'
 const SEL = `${COLS},
   nguoi:users!warehouse_purchase_requests_requested_by_fkey(name, email),
   duyet:users!warehouse_purchase_requests_approved_by_fkey(name, email),
   tuchoi:users!warehouse_purchase_requests_rejected_by_fkey(name, email),
+  chot:users!warehouse_purchase_requests_closed_by_fkey(name, email),
   lsx:production_orders!warehouse_purchase_requests_production_order_id_fkey(code),
   lines:warehouse_purchase_request_lines(${LINE_COLS})`
 
@@ -73,6 +86,7 @@ type Raw = DeNghi & {
   nguoi: U
   duyet: U
   tuchoi: U
+  chot: U
   lsx: { code: string } | { code: string }[] | null
   lines: (Omit<DeNghiDong, 'qty' | 'approved_qty' | 'unit_price'> & {
     qty: unknown
@@ -82,13 +96,14 @@ type Raw = DeNghi & {
 }
 
 function unwrap(r: Raw): DeNghiDay {
-  const { nguoi, duyet, tuchoi, lsx, lines, ...rest } = r
+  const { nguoi, duyet, tuchoi, chot, lsx, lines, ...rest } = r
   const l = Array.isArray(lsx) ? lsx[0] : lsx
   return {
     ...rest,
     requested_by_name: ten(nguoi),
     approved_by_name: ten(duyet),
     rejected_by_name: ten(tuchoi),
+    closed_by_name: ten(chot),
     lsx_code: l?.code ?? null,
     lines: (lines ?? [])
       .map((x) => ({
@@ -175,6 +190,9 @@ export const deNghiRepo = {
       rejected_at: string | null
       rejected_by: string | null
       rejected_reason: string | null
+      closed_at: string | null
+      closed_by: string | null
+      closed_reason: string | null
     }>,
     /** Chỉ cập nhật khi phiếu còn ở trạng thái này — chặn hai người bấm cùng lúc. */
     khiDang?: DeNghiStatus[],
@@ -227,6 +245,87 @@ export const deNghiRepo = {
         db().from('warehouse_materials').select('id, code, name, unit').in('id', lo),
     )
     return new Map(rows.map((r) => [r.id, { code: r.code, name: r.name, unit: r.unit }]))
+  },
+
+  /**
+   * ĐÃ NHẬP của từng dòng đề nghị, đọc thẳng từ SỔ KHO (0238): Σ in − Σ out các
+   * dòng sổ trỏ về dòng đề nghị. Dòng đảo phiếu chép lại `purchase_request_line_id`
+   * nên đảo PNK tự trừ; phiếu nhập đã bị đảo không liệt kê ở `phieu`.
+   */
+  async soKho(
+    lineIds: string[],
+  ): Promise<Map<string, { daNhap: number; phieu: PhieuNhapDong[] }>> {
+    type R = {
+      purchase_request_line_id: string
+      direction: string
+      qty: unknown
+      doc:
+        | {
+            id: string
+            code: string
+            doc_date: string
+            reversal_of_doc_id: string | null
+          }
+        | {
+            id: string
+            code: string
+            doc_date: string
+            reversal_of_doc_id: string | null
+          }[]
+        | null
+    }
+    const rows = await theoLo<R>(lineIds, (lo) =>
+      db()
+        .from('warehouse_movements')
+        .select(
+          'purchase_request_line_id, direction, qty, doc:warehouse_docs!warehouse_movements_doc_id_fkey(id, code, doc_date, reversal_of_doc_id)',
+        )
+        .in('purchase_request_line_id', lo),
+    )
+    const daDao = new Set<string>()
+    for (const r of rows) {
+      const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      if (d?.reversal_of_doc_id) daDao.add(d.reversal_of_doc_id)
+    }
+    const out = new Map<string, { daNhap: number; phieu: PhieuNhapDong[] }>()
+    for (const r of rows) {
+      const k = r.purchase_request_line_id
+      const cur = out.get(k) ?? { daNhap: 0, phieu: [] }
+      const q = Number(r.qty) || 0
+      cur.daNhap += r.direction === 'in' ? q : -q
+      const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      if (r.direction === 'in' && d && !d.reversal_of_doc_id && !daDao.has(d.id)) {
+        const p = cur.phieu.find((x) => x.doc_id === d.id)
+        if (p) p.qty += q
+        else cur.phieu.push({ doc_id: d.id, code: d.code, doc_date: d.doc_date, qty: q })
+      }
+      out.set(k, cur)
+    }
+    for (const v of out.values()) v.phieu.sort((a, b) => a.code.localeCompare(b.code))
+    return out
+  },
+
+  /** Phiếu đề nghị của các dòng — để đảo PNK biết phiếu nào phải tính lại. */
+  async requestIdsOfLines(lineIds: string[]): Promise<string[]> {
+    const rows = await theoLo<{ request_id: string }>(lineIds, (lo) =>
+      db().from('warehouse_purchase_request_lines').select('request_id').in('id', lo),
+    )
+    return [...new Set(rows.map((r) => r.request_id))]
+  },
+
+  /** Kho gắn mã cho dòng "chưa có mã" lúc nhập (DN-3): tên + ĐVT theo danh mục. */
+  async ganMa(
+    lineId: string,
+    m: { material_id: string; name: string; unit: string },
+  ): Promise<void> {
+    ok(
+      await db()
+        .from('warehouse_purchase_request_lines')
+        .update(m)
+        .eq('id', lineId)
+        .is('material_id', null),
+      'ganMa',
+    )
   },
 
   /** Tồn dùng được (`qty_ok`) của các mã — để lãnh đạo thấy kho còn bao nhiêu. */

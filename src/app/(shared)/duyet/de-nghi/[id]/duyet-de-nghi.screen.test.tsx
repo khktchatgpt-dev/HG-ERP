@@ -45,16 +45,19 @@ const P: DeNghiChiTiet = {
   rejected_reason: null,
   cancelled_at: null,
   cancel_reason: null,
+  closed_at: null,
+  closed_reason: null,
   created_by: 'u-hao',
   created_at: '2026-10-13T06:10:00Z',
   updated_at: '2026-10-13T06:12:00Z',
   requested_by_name: 'Lê Khắc Hào',
   approved_by_name: null,
   rejected_by_name: null,
+  closed_by_name: null,
   lsx_code: null,
   lines: [
-    { id: 'l1', line_no: 1, material_id: 'm1', code: 'BHL0006', name: 'Găng tay len 50gr', unit: 'Đôi', qty: 80, approved_qty: null, unit_price: 5000, purpose: 'Phục vụ sản xuất', note: null, po_line_id: null, ton: 0, gia_gan_nhat: null }, // prettier-ignore
-    { id: 'l2', line_no: 2, material_id: null, code: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: null, purpose: 'Tổ sơn', note: null, po_line_id: null, ton: null, gia_gan_nhat: null }, // prettier-ignore
+    { id: 'l1', line_no: 1, material_id: 'm1', code: 'BHL0006', name: 'Găng tay len 50gr', unit: 'Đôi', qty: 80, approved_qty: null, unit_price: 5000, purpose: 'Phục vụ sản xuất', note: null, po_line_id: null, ton: 0, gia_gan_nhat: null, can: 80, da_nhap: 0, phieu_nhap: [] }, // prettier-ignore
+    { id: 'l2', line_no: 2, material_id: null, code: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: null, purpose: 'Tổ sơn', note: null, po_line_id: null, ton: null, gia_gan_nhat: null, can: 20, da_nhap: 0, phieu_nhap: [] }, // prettier-ignore
   ],
 }
 

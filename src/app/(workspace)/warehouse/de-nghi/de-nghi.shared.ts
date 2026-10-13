@@ -28,6 +28,12 @@ export type DongForm = {
   purpose: string
   note: string
   gia_goi_y: GiaGoiY | null
+  /** Số phải nhập = số duyệt (0238 · DN-5). */
+  can?: number
+  /** Đã nhập, đọc từ sổ kho. */
+  da_nhap?: number
+  /** Phiếu nhập kho đã nhập cho dòng (chưa đảo). */
+  phieu_nhap?: { doc_id: string; code: string; doc_date: string; qty: number }[]
 }
 
 export type PhieuForm = {
@@ -48,6 +54,10 @@ export type PhieuForm = {
   rejected_reason: string | null
   cancelled_at: string | null
   cancel_reason: string | null
+  /** Chốt xong khi còn thiếu (0238 · Q14). */
+  closed_at?: string | null
+  closed_reason?: string | null
+  closed_by_name?: string | null
   lines: DongForm[]
 }
 

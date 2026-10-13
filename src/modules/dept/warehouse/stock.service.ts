@@ -43,6 +43,9 @@ import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { phanLoaiDong, type KetQuaCap } from '@/lib/cap-vat-tu'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
+import { deNghiRepo } from './de-nghi.repo'
+import { capNhatTheoSoKho } from './de-nghi.so-kho'
+import { gopMa } from '@/lib/phieu-nhap-cho'
 import { canViewWarehouse } from './warehouse.service'
 import { giaTriTon } from '@/lib/ton-kho-gia-tri'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -690,9 +693,19 @@ export const stockService = {
       /** Xác nhận vẫn nhập dù vượt số còn thiếu của đơn (kèm lý do). */
       allow_over?: boolean
       over_reason?: string | null
+      /**
+       * NHẬP HÀNG KHO TỰ MUA theo đề nghị (0238 · Đ3). CHỈ gọi nội bộ từ
+       * `deNghiService.nhapKho` — zod của route nhập không có trường này, nên
+       * gọi thẳng API không gắn được (và không tự khai được đơn giá).
+       */
+      purchase_request_id?: string | null
       lines: {
         material_id: string
         qty: number
+        /** Đơn giá thật của dòng mua theo đề nghị (0238) — dòng PO lấy giá từ đơn. */
+        unit_cost?: number | null
+        /** Dòng đề nghị mua dòng sổ này nhập cho (0238). */
+        purchase_request_line_id?: string | null
         qty_rejected?: number
         qc_status?: 'pass' | 'partial' | 'fail' | null
         po_line_id?: string | null
@@ -929,6 +942,7 @@ export const stockService = {
       shipment_id: shipment?.id ?? null,
       supplier_doc_no: input.supplier_doc_no?.trim() || null,
       ...(input.doc_date ? { doc_date: input.doc_date } : {}),
+      purchase_request_id: input.purchase_request_id ?? null,
       created_by: user.id,
     })
     /*
@@ -961,7 +975,13 @@ export const stockService = {
           material_id: l.material_id,
           direction: 'in' as const,
           qty: l.qty,
-          unit_cost: l.po_line_id ? (costByLine.get(l.po_line_id) ?? null) : null,
+          // Dòng mua theo đề nghị (0238): giá thật Kho ghi theo hoá đơn.
+          unit_cost: l.po_line_id
+            ? (costByLine.get(l.po_line_id) ?? null)
+            : l.purchase_request_line_id
+              ? (l.unit_cost ?? null)
+              : null,
+          purchase_request_line_id: l.purchase_request_line_id ?? null,
           qty_rejected: l.qty_rejected ?? 0,
           qc_status: l.qc_status ?? null,
           // 'lsx' = HOÀN KHO (K2) — issuedByLsx net trừ lại "đã cấp" của lệnh.
@@ -1828,8 +1848,13 @@ export const stockService = {
         warehouse_id: warehouseId,
         po_line_id: l.po_line_id ?? null,
         production_order_id: l.production_order_id ?? null,
+        purchase_request_line_id: l.purchase_request_line_id ?? null,
       })),
     )
+
+    // Phiếu gốc nhập theo đề nghị mua (0238) → "đã nhập" lùi → trạng thái phiếu lùi theo.
+    const dnmLineIds = gopMa(lines.map((l) => l.purchase_request_line_id))
+    if (dnmLineIds.length > 0) await capNhatTheoSoKho(await deNghiRepo.requestIdsOfLines(dnmLineIds)) // prettier-ignore
 
     // Phiếu gốc dính PO → trạng thái đơn + đợt giao phải lùi theo sự thật mới.
     const poLineIds = [

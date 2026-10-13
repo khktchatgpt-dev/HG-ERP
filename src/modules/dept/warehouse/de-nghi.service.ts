@@ -7,14 +7,26 @@ import '@/events/register'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { dongTrong, tongDuKien, vuongGuiDuyet } from '@/lib/de-nghi'
-import { deNghiRepo, type DeNghiDay, type DeNghiDong, type DongGhi } from './de-nghi.repo'
-import type { DeNghiDecideInput, DeNghiSaveInput } from './de-nghi.schema'
+import { kiemNhapDeNghi, soDuyet, vetVuot, type DongNhapDeNghi } from '@/lib/de-nghi-nhap'
+import { kiemNgayChungTu } from '@/lib/ngay-chung-tu-nhap'
+import { todayVn } from '@/lib/date-vn'
+import {
+  deNghiRepo,
+  type DeNghiDay,
+  type DeNghiDong,
+  type DongGhi,
+  type PhieuNhapDong,
+} from './de-nghi.repo'
+import type { DeNghiDecideInput, DeNghiNhapInput, DeNghiSaveInput } from './de-nghi.schema'
+import { capNhatTheoSoKho } from './de-nghi.so-kho'
+import { stockService } from './stock.service'
 import { canViewWarehouse } from './warehouse.service'
 
 /**
  * ĐỀ NGHỊ MUA VẬT TƯ (0236) — Đ1: Kho lập, sửa nháp, gửi duyệt, rút về, huỷ.
  * Đ2: lãnh đạo duyệt (sửa số từng dòng) / từ chối có lý do + thông báo (0237).
- * Duyệt (Đ2) và lập đơn mua từ phiếu (Đ3) đến sau. Bản vẽ
+ * Đ3/Đ4 (0238): KHO tự mua rồi nhập kho theo phiếu (không qua Cung ứng), tự
+ * sang Xong khi đủ, Chốt xong có lý do khi thiếu. Bản vẽ
  * https://claude.ai/artifact/6bFb19HuFtSzT8y2wqT17g (duyệt 13/10/2026).
  */
 
@@ -32,6 +44,12 @@ export type DongChiTiet = DeNghiDong & {
   /** Tồn dùng được hiện tại, null = dòng chưa có mã. */
   ton: number | null
   gia_gan_nhat: GiaGanNhat | null
+  /** Số phải nhập = số duyệt (null = đúng số đề nghị). */
+  can: number
+  /** Đã nhập, đọc từ sổ kho (0238): Σ vào − Σ ra của dòng sổ trỏ về dòng này. */
+  da_nhap: number
+  /** Phiếu nhập kho đã nhập cho dòng (chưa đảo). */
+  phieu_nhap: PhieuNhapDong[]
 }
 
 export type DeNghiChiTiet = Omit<DeNghiDay, 'lines'> & { lines: DongChiTiet[] }
@@ -130,17 +148,25 @@ export const deNghiService = {
   async get(
     user: User,
     id: string,
-  ): Promise<{ phieu: DeNghiChiTiet; canManage: boolean; canApprove: boolean }> {
+  ): Promise<{
+    phieu: DeNghiChiTiet
+    canManage: boolean
+    canApprove: boolean
+    /** Ghi phiếu nhập được: quản phiếu đề nghị + ghi sổ kho. */
+    canNhap: boolean
+  }> {
     await xemDuoc(user)
     const p = await phieu(id)
     const ids = [
       ...new Set(p.lines.map((l) => l.material_id).filter((x): x is string => !!x)),
     ]
-    const [vt, { ton, gia }, sua, duyet] = await Promise.all([
+    const [vt, { ton, gia }, sua, duyet, ghiSo, so] = await Promise.all([
       deNghiRepo.vatTu(ids),
       goiYTheoMa(ids),
       canManage(user),
       canApprove(user),
+      canAction(user, 'warehouse.stock.write'),
+      deNghiRepo.soKho(p.lines.map((l) => l.id)),
     ])
     return {
       phieu: {
@@ -150,9 +176,13 @@ export const deNghiService = {
           code: l.material_id ? (vt.get(l.material_id)?.code ?? null) : null,
           ton: l.material_id ? (ton.get(l.material_id) ?? 0) : null,
           gia_gan_nhat: l.material_id ? (gia.get(l.material_id) ?? null) : null,
+          can: soDuyet(l),
+          da_nhap: so.get(l.id)?.daNhap ?? 0,
+          phieu_nhap: so.get(l.id)?.phieu ?? [],
         })),
       },
       canManage: sua,
+      canNhap: sua && ghiSo,
       // Không tự duyệt phiếu mình đề nghị (trừ admin) — màn ẩn nút theo cờ này.
       canApprove: duyet && (user.role === 'admin' || p.requested_by !== user.id),
     }
@@ -309,6 +339,119 @@ export const deNghiService = {
       decided_by: user.id,
       requester_id: p.requested_by,
     })
+  },
+
+  /**
+   * KHO NHẬP HÀNG ĐÃ MUA (0238 · Đ3, bản vẽ DN-3): ghi một PNK mã lý do N2 có
+   * ĐƠN GIÁ THẬT, mỗi dòng sổ trỏ về dòng đề nghị. Nhập được nhiều lần; sau mỗi
+   * lần trạng thái phiếu tính lại từ sổ kho (đủ hết → Xong).
+   *
+   * Luật chặn = đúng hàm màn dùng (`kiemNhapDeNghi`): thiếu nơi mua, dòng có số
+   * mà chưa gắn mã / chưa có giá, giá 0 không ghi chú, vượt số duyệt quá 10% không
+   * lý do (Q11, Q12). Dòng "chưa có mã" được gắn mã lúc này — SAU khi ghi sổ xong.
+   */
+  async nhapKho(
+    user: User,
+    id: string,
+    input: DeNghiNhapInput,
+  ): Promise<{ doc_id: string; code: string; status: string }> {
+    await assertAction(user, 'warehouse.request.manage')
+    const p = await phieu(id)
+    if (p.status !== 'approved' && p.status !== 'ordering')
+      throw Conflict(
+        p.status === 'done'
+          ? `Phiếu ${p.code} đã xong — không nhập thêm`
+          : `Phiếu ${p.code} chưa được duyệt — chưa nhập kho được`,
+      )
+    const ngay = kiemNgayChungTu({
+      docDate: input.doc_date,
+      today: todayVn(),
+      lyDo: input.backdate_reason,
+    })
+    if (ngay.muc !== 'ok') throw BadRequest(ngay.message)
+
+    const theoId = new Map(p.lines.map((l) => [l.id, l]))
+    const so = await deNghiRepo.soKho(p.lines.map((l) => l.id))
+    const gap = new Set<string>()
+    const rows: DongNhapDeNghi[] = input.lines.map((x) => {
+      const l = theoId.get(x.line_id)
+      if (!l) throw BadRequest('Có dòng không thuộc phiếu đề nghị này — tải lại trang')
+      if (gap.has(x.line_id)) throw BadRequest(`Dòng "${l.name}" gửi hai lần`)
+      gap.add(x.line_id)
+      if (l.material_id && x.material_id && x.material_id !== l.material_id)
+        throw BadRequest(`Dòng "${l.name}" đã có mã — không đổi mã lúc nhập`)
+      return {
+        line_id: l.id,
+        name: l.name,
+        material_id: l.material_id ?? x.material_id ?? null,
+        can: soDuyet(l),
+        daNhap: so.get(l.id)?.daNhap ?? 0,
+        qty: x.qty,
+        unit_price: x.unit_price ?? null,
+        note: x.note ?? '',
+      }
+    })
+    const kiem = kiemNhapDeNghi({ noi_mua: input.noi_mua }, rows)
+    if (!kiem.ok) throw BadRequest(kiem.message)
+
+    const nhap = rows.filter((r) => r.qty > 0)
+    const ganMoi = nhap.filter((r) => !theoId.get(r.line_id)!.material_id)
+    const vt = await deNghiRepo.vatTu(ganMoi.map((r) => r.material_id!))
+    for (const r of ganMoi)
+      if (!vt.has(r.material_id!))
+        throw BadRequest(`Mã gắn cho dòng "${r.name}" không còn trong danh mục`)
+
+    const res = await stockService.createReceiptDoc(user, {
+      po_id: null,
+      counterparty: input.noi_mua.trim(),
+      reason: `Mua theo đề nghị ${p.code}`,
+      supplier_doc_no: input.supplier_doc_no ?? null,
+      doc_date: input.doc_date ?? null,
+      backdate_reason: input.backdate_reason ?? null,
+      note: input.note ?? null,
+      purchase_request_id: id,
+      lines: nhap.map((r) => ({
+        material_id: r.material_id!,
+        qty: r.qty,
+        unit_cost: r.unit_price,
+        purchase_request_line_id: r.line_id,
+        note:
+          [r.note.trim(), vetVuot(r.can, r.daNhap, r.qty)].filter(Boolean).join(' · ') ||
+          null,
+      })),
+    })
+    for (const r of ganMoi) {
+      const m = vt.get(r.material_id!)!
+      await deNghiRepo.ganMa(r.line_id, {
+        material_id: r.material_id!,
+        name: m.name,
+        unit: m.unit,
+      })
+    }
+    await capNhatTheoSoKho([id])
+    const sau = await deNghiRepo.findById(id)
+    return { doc_id: res.id, code: res.code, status: sau?.status ?? p.status }
+  },
+
+  /** CHỐT XONG khi còn dòng thiếu mà không mua nữa (Q14): bắt lý do, khoá ở Xong. */
+  async chot(user: User, id: string, reason: string): Promise<void> {
+    await assertAction(user, 'warehouse.request.manage')
+    const p = await phieu(id)
+    if (p.status !== 'approved' && p.status !== 'ordering')
+      throw Conflict(
+        `Chỉ chốt được phiếu đã duyệt / đang nhập — ${p.code} không ở bước đó`,
+      )
+    const ok = await deNghiRepo.update(
+      id,
+      {
+        status: 'done',
+        closed_at: new Date().toISOString(),
+        closed_by: user.id,
+        closed_reason: reason.trim(),
+      },
+      ['approved', 'ordering'],
+    )
+    if (!ok) throw Conflict(`Phiếu ${p.code} vừa được xử lý — tải lại trang`)
   },
 
   /** Rút về nháp khi lãnh đạo CHƯA duyệt (pending → draft). */

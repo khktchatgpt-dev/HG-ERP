@@ -393,6 +393,8 @@ export type DocLine = Movement & {
   qty_ordered: number | null // SL theo chứng từ (dòng PO) — mẫu 01-VT
   /** Giá vốn dòng — phiếu đảo / điều chỉnh chép lại để công nợ trừ đúng. */
   unit_cost?: number | null
+  /** Dòng đề nghị mua (0238) — phiếu đảo chép lại để "đã nhập" của dòng tự trừ. */
+  purchase_request_line_id?: string | null
 }
 
 const DOC_COLS =
@@ -642,6 +644,8 @@ export const docsRepo = {
     supplier_doc_no?: string | null
     /** Phiếu ĐẢO (K1) — trỏ phiếu gốc. */
     reversal_of_doc_id?: string
+    /** PNK nhập hàng Kho tự mua theo đề nghị nào (0238). */
+    purchase_request_id?: string | null
     created_by: string
   }): Promise<{ id: string; code: string }> {
     const { data, error } = await db()
@@ -945,7 +949,7 @@ export const docsRepo = {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        `${MV_COLS}, unit_cost, po_line_id, production_order_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
+        `${MV_COLS}, unit_cost, po_line_id, production_order_id, purchase_request_line_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
       )
       .eq('doc_id', docId)
       .order('created_at')
@@ -974,6 +978,7 @@ export const docsRepo = {
         production_order_id: (r.production_order_id as string | null) ?? null,
         qty_ordered: pl ? num((pl as { qty_ordered: unknown }).qty_ordered) : null,
         unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+        purchase_request_line_id: (r.purchase_request_line_id as string | null) ?? null,
       } satisfies DocLine
     })
   },
@@ -1249,6 +1254,8 @@ export async function insertMovements(
     transfer_group?: string | null
     /** Kg cân thực của dòng nhập (nhôm / thép trả tiền theo kg). */
     qty2_actual?: number | null
+    /** Dòng đề nghị mua mà dòng sổ này nhập cho (0238). */
+    purchase_request_line_id?: string | null
   }[],
 ): Promise<void> {
   const { error } = await db().from('warehouse_movements').insert(rows)

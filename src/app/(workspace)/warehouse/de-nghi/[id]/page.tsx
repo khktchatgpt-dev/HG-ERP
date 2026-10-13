@@ -15,7 +15,7 @@ export default async function DeNghiPage({
 }) {
   const user = await authService.requirePageUser()
   const { id } = await params
-  const [{ phieu, canManage }, lsx] = await Promise.all([
+  const [{ phieu, canManage, canNhap }, lsx] = await Promise.all([
     deNghiService.get(user, id),
     productionRepo.listActive(),
   ])
@@ -24,6 +24,7 @@ export default async function DeNghiPage({
       phieu={phieuForm(phieu)}
       lsx={lsx.map((l) => ({ id: l.id, code: l.code }))}
       canManage={canManage}
+      canNhap={canNhap}
     />
   )
 }

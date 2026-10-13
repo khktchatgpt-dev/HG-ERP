@@ -21,6 +21,9 @@ export function phieuForm(p: DeNghiChiTiet): PhieuForm {
     rejected_reason: p.rejected_reason,
     cancelled_at: p.cancelled_at,
     cancel_reason: p.cancel_reason,
+    closed_at: p.closed_at,
+    closed_reason: p.closed_reason,
+    closed_by_name: p.closed_by_name,
     lines: p.lines.map((l) => ({
       key: l.id,
       material_id: l.material_id,
@@ -34,6 +37,9 @@ export function phieuForm(p: DeNghiChiTiet): PhieuForm {
       purpose: l.purpose ?? '',
       note: l.note ?? '',
       gia_goi_y: l.gia_gan_nhat,
+      can: l.can,
+      da_nhap: l.da_nhap,
+      phieu_nhap: l.phieu_nhap,
     })),
   }
 }

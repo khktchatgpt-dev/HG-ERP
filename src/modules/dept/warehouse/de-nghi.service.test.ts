@@ -11,8 +11,11 @@ vi.mock('./de-nghi.repo', () => ({
     tonDungDuoc: vi.fn(),
     list: vi.fn(),
     setApprovedQty: vi.fn(),
+    soKho: vi.fn(),
+    ganMa: vi.fn(),
   },
 }))
+vi.mock('./stock.service', () => ({ stockService: { createReceiptDoc: vi.fn() } }))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 vi.mock('@/events/register', () => ({}))
 vi.mock('@/modules/core/rbac/rbac.repo', () => ({
@@ -34,6 +37,7 @@ vi.mock('./warehouse.service', () => ({
 
 import { deNghiService } from './de-nghi.service'
 import { deNghiRepo, type DeNghiDay } from './de-nghi.repo'
+import { stockService } from './stock.service'
 import { pricesRepo } from '@/modules/dept/supply/prices.repo'
 import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
@@ -55,12 +59,15 @@ const phieu = (p: Partial<DeNghiDay> = {}): DeNghiDay => ({
   rejected_reason: null,
   cancelled_at: null,
   cancel_reason: null,
+  closed_at: null,
+  closed_reason: null,
   created_by: 'u-hao',
   created_at: '2026-10-13T06:12:00Z',
   updated_at: '2026-10-13T06:12:00Z',
   requested_by_name: 'Lê Khắc Hào',
   approved_by_name: null,
   rejected_by_name: null,
+  closed_by_name: null,
   lsx_code: null,
   lines: [
     { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo trong 4F7', unit: 'Cuộn', qty: 200, approved_qty: null, unit_price: 5500, purpose: 'Đóng gói', note: null, po_line_id: null }, // prettier-ignore
@@ -71,6 +78,7 @@ const phieu = (p: Partial<DeNghiDay> = {}): DeNghiDay => ({
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(deNghiRepo.update).mockResolvedValue(true)
+  vi.mocked(deNghiRepo.soKho).mockResolvedValue(new Map())
   vi.mocked(deNghiRepo.vatTu).mockResolvedValue(
     new Map([['m-keo', { code: 'KEO0030', name: 'Băng keo trong 4F7', unit: 'Cuộn' }]]),
   )
@@ -200,5 +208,112 @@ describe('Đ2 · gửi duyệt báo ai + lãnh đạo quyết', () => {
     vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu({ status: 'draft' }))
     await expect(deNghiService.decide(alex, 'dn1', { decision: 'approve' })).rejects.toThrow(/không còn chờ duyệt/) // prettier-ignore
     expect(deNghiRepo.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('Đ3/Đ4 · Kho nhập hàng đã mua + khép phiếu (0238)', () => {
+  const duyet = (p: Partial<DeNghiDay> = {}) =>
+    phieu({
+      status: 'approved',
+      approved_by_name: 'Alex',
+      lines: [
+        { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo trong 4F7', unit: 'Cuộn', qty: 200, approved_qty: 150, unit_price: 5500, purpose: null, note: null, po_line_id: null }, // prettier-ignore
+        { id: 'l2', line_no: 2, material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: null, purpose: null, note: null, po_line_id: null }, // prettier-ignore
+      ],
+      ...p,
+    })
+  const vao = {
+    noi_mua: 'Tiệm Tân Hưng',
+    supplier_doc_no: 'BN 0457',
+    doc_date: null,
+    backdate_reason: null,
+    note: null,
+  }
+
+  beforeEach(() => {
+    vi.mocked(stockService.createReceiptDoc).mockResolvedValue({ id: 'doc1', code: 'PNK-2026-0121', po_status: null, stock_after: [] }) // prettier-ignore
+    vi.mocked(deNghiRepo.vatTu).mockResolvedValue(new Map([['m-gie', { code: 'GIE0001', name: 'Giẻ lau trắng', unit: 'Kg' }]])) // prettier-ignore
+  })
+
+  it('ghi PNK N2 có đơn giá thật, mỗi dòng sổ trỏ dòng đề nghị; dòng chưa có mã được gắn SAU khi ghi sổ', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet())
+    const r = await deNghiService.nhapKho(hao, 'dn1', {
+      ...vao,
+      lines: [
+        { line_id: 'l1', qty: 150, unit_price: 5200, note: null },
+        { line_id: 'l2', material_id: 'm-gie', qty: 20, unit_price: 18000, note: null },
+      ],
+    })
+    expect(r.code).toBe('PNK-2026-0121')
+    const arg = vi.mocked(stockService.createReceiptDoc).mock.calls[0][1]
+    expect(arg).toMatchObject({ po_id: null, counterparty: 'Tiệm Tân Hưng', reason: 'Mua theo đề nghị DNM-2026-0001', supplier_doc_no: 'BN 0457', purchase_request_id: 'dn1' }) // prettier-ignore
+    expect(arg.lines).toEqual([
+      { material_id: 'm-keo', qty: 150, unit_cost: 5200, purchase_request_line_id: 'l1', note: null }, // prettier-ignore
+      { material_id: 'm-gie', qty: 20, unit_cost: 18000, purchase_request_line_id: 'l2', note: null }, // prettier-ignore
+    ])
+    expect(deNghiRepo.ganMa).toHaveBeenCalledWith('l2', { material_id: 'm-gie', name: 'Giẻ lau trắng', unit: 'Kg' }) // prettier-ignore
+  })
+
+  it('chặn đúng câu của màn: dòng có số mà chưa gắn mã → không ghi sổ, không gắn gì', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet())
+    await expect(
+      deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l2', qty: 20, unit_price: 18000 }] }), // prettier-ignore
+    ).rejects.toThrow(/Dòng 1 \(Giẻ lau\) chưa gắn mã/)
+    expect(stockService.createReceiptDoc).not.toHaveBeenCalled()
+    expect(deNghiRepo.ganMa).not.toHaveBeenCalled()
+  })
+
+  it('vượt > 10% số duyệt (đã nhập cộng dồn) bắt lý do; có lý do thì dòng sổ mang vết vượt', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet({ status: 'ordering' }))
+    vi.mocked(deNghiRepo.soKho).mockResolvedValue(
+      new Map([['l1', { daNhap: 100, phieu: [] }]]),
+    )
+    await expect(
+      deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l1', qty: 70, unit_price: 5500 }] }), // prettier-ignore
+    ).rejects.toThrow(/vượt số duyệt 13%/)
+    await deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l1', qty: 70, unit_price: 5500, note: 'bán theo thùng' }] }) // prettier-ignore
+    expect(vi.mocked(stockService.createReceiptDoc).mock.calls[0][1].lines[0].note).toBe('bán theo thùng · [Vượt 13% số duyệt]') // prettier-ignore
+  })
+
+  it('không đổi được mã của dòng đã có mã; dòng lạ bị chặn; phiếu chưa duyệt / đã xong không nhập', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet())
+    await expect(deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l1', material_id: 'm-khac', qty: 1, unit_price: 1 }] })).rejects.toThrow(/không đổi mã/) // prettier-ignore
+    await expect(deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'la', qty: 1, unit_price: 1 }] })).rejects.toThrow(/không thuộc/) // prettier-ignore
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet({ status: 'pending' }))
+    await expect(deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l1', qty: 1, unit_price: 1 }] })).rejects.toThrow(/chưa được duyệt/) // prettier-ignore
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet({ status: 'done' }))
+    await expect(deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l1', qty: 1, unit_price: 1 }] })).rejects.toThrow(/đã xong/) // prettier-ignore
+    expect(stockService.createReceiptDoc).not.toHaveBeenCalled()
+  })
+
+  it('sau khi nhập: trạng thái tính lại từ sổ kho — một phần → Đang nhập, đủ → Xong', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet())
+    vi.mocked(deNghiRepo.soKho).mockResolvedValueOnce(new Map()) // trước khi ghi
+    vi.mocked(deNghiRepo.soKho).mockResolvedValueOnce(
+      new Map([['l1', { daNhap: 150, phieu: [] }]]),
+    ) // sau khi ghi
+    await deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l1', qty: 150, unit_price: 5500 }] }) // prettier-ignore
+    expect(vi.mocked(deNghiRepo.update).mock.calls.at(-1)?.slice(1)).toEqual([{ status: 'ordering' }, ['approved', 'ordering', 'done']]) // prettier-ignore
+
+    vi.mocked(deNghiRepo.update).mockClear()
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet({ status: 'ordering' }))
+    vi.mocked(deNghiRepo.soKho).mockResolvedValueOnce(
+      new Map([['l1', { daNhap: 150, phieu: [] }]]),
+    )
+    vi.mocked(deNghiRepo.soKho).mockResolvedValueOnce(new Map([['l1', { daNhap: 150, phieu: [] }], ['l2', { daNhap: 20, phieu: [] }]])) // prettier-ignore
+    await deNghiService.nhapKho(hao, 'dn1', { ...vao, lines: [{ line_id: 'l2', material_id: 'm-gie', qty: 20, unit_price: 18000 }] }) // prettier-ignore
+    expect(vi.mocked(deNghiRepo.update).mock.calls.at(-1)?.[1]).toEqual({
+      status: 'done',
+    })
+  })
+
+  it('Chốt xong: chỉ khi đã duyệt / đang nhập, ghi người + lý do; phiếu nháp không chốt được', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet({ status: 'ordering' }))
+    await deNghiService.chot(hao, 'dn1', 'tiệm hết hàng, không mua nữa')
+    const [, patch, khiDang] = vi.mocked(deNghiRepo.update).mock.calls[0]
+    expect(patch).toMatchObject({ status: 'done', closed_by: 'u-hao', closed_reason: 'tiệm hết hàng, không mua nữa' }) // prettier-ignore
+    expect(khiDang).toEqual(['approved', 'ordering'])
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(duyet({ status: 'draft' }))
+    await expect(deNghiService.chot(hao, 'dn1', 'abc')).rejects.toThrow(/Chỉ chốt được/)
   })
 })

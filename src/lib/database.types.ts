@@ -7169,6 +7169,7 @@ export type Database = {
           id: string
           kind: string
           note: string | null
+          purchase_request_id: string | null
           reason: string | null
           reason_code: string | null
           reject_reason: string | null
@@ -7191,6 +7192,7 @@ export type Database = {
           id?: string
           kind: string
           note?: string | null
+          purchase_request_id?: string | null
           reason?: string | null
           reason_code?: string | null
           reject_reason?: string | null
@@ -7213,6 +7215,7 @@ export type Database = {
           id?: string
           kind?: string
           note?: string | null
+          purchase_request_id?: string | null
           reason?: string | null
           reason_code?: string | null
           reject_reason?: string | null
@@ -7225,6 +7228,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_docs_purchase_request_id_fkey"
+            columns: ["purchase_request_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_requests"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_docs_approved_by_fkey"
             columns: ["approved_by"]
@@ -7490,6 +7500,7 @@ export type Database = {
           note: string | null
           po_line_id: string | null
           production_order_id: string | null
+          purchase_request_line_id: string | null
           qc_status: string | null
           qty: number
           qty_rejected: number
@@ -7514,6 +7525,7 @@ export type Database = {
           note?: string | null
           po_line_id?: string | null
           production_order_id?: string | null
+          purchase_request_line_id?: string | null
           qc_status?: string | null
           qty: number
           qty_rejected?: number
@@ -7538,6 +7550,7 @@ export type Database = {
           note?: string | null
           po_line_id?: string | null
           production_order_id?: string | null
+          purchase_request_line_id?: string | null
           qc_status?: string | null
           qty?: number
           qty_rejected?: number
@@ -7552,6 +7565,13 @@ export type Database = {
           warehouse_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_purchase_request_line_id_fkey"
+            columns: ["purchase_request_line_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_request_lines"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_movements_bin_id_fkey"
             columns: ["bin_id"]
@@ -7746,6 +7766,9 @@ export type Database = {
           cancel_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
+          closed_at: string | null
+          closed_by: string | null
+          closed_reason: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -7769,6 +7792,9 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_reason?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -7792,6 +7818,9 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_reason?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
@@ -7810,6 +7839,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_purchase_requests_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_purchase_requests_approved_by_fkey"
             columns: ["approved_by"]

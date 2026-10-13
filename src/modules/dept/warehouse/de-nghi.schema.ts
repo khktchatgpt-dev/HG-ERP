@@ -74,3 +74,38 @@ export const deNghiDecideSchema = z
   })
 
 export type DeNghiDecideInput = z.infer<typeof deNghiDecideSchema>
+
+/**
+ * KHO NHẬP HÀNG ĐÃ MUA (0238 · Đ3, bản vẽ DN-3). Luật chặn (thiếu mã, thiếu
+ * giá, vượt > 10% không lý do) ở `lib/de-nghi-nhap` — service gọi lại đúng hàm
+ * màn dùng, zod ở đây chỉ canh hình dạng.
+ */
+export const deNghiNhapSchema = z.object({
+  /** Nơi mua — tên tiệm / NCC gõ tự do (Q10). */
+  noi_mua: z.string().trim().min(1, 'Chưa ghi nơi mua').max(200),
+  /** Số hoá đơn / biên nhận (Q13) — không bắt buộc. */
+  supplier_doc_no: text(60),
+  doc_date: z.string().date().optional().nullable(),
+  /** Lý do nhập lùi quá 7 ngày (luật chung của phiếu nhập). */
+  backdate_reason: text(300),
+  note: text(2000),
+  lines: z
+    .array(
+      z.object({
+        line_id: z.string().uuid(),
+        /** Bắt buộc với dòng có số nhận; dòng "chưa có mã" gắn ở đây. */
+        material_id: z.string().uuid().nullable().optional(),
+        qty: z.coerce.number().min(0),
+        unit_price: z.coerce.number().min(0).nullable().optional(),
+        note: z.string().trim().max(500).optional().nullable(),
+      }),
+    )
+    .min(1)
+    .max(200),
+})
+export type DeNghiNhapInput = z.infer<typeof deNghiNhapSchema>
+
+/** Chốt xong khi còn dòng thiếu mà không mua nữa (Q14). */
+export const deNghiChotSchema = z.object({
+  reason: z.string().trim().min(3, 'Ghi lý do chốt (ít nhất 3 ký tự)').max(1000),
+})

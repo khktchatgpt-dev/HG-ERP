@@ -33,7 +33,7 @@ type Ro = (typeof RO)[number]
 const RO_NHAN: Record<Ro, string> = {
   viec: 'Kho cần làm',
   cho: 'Chờ duyệt',
-  mua: 'Đã duyệt · đang mua',
+  mua: 'Đã duyệt · Kho đi mua',
   xong: 'Xong · đã huỷ',
   all: 'Tất cả',
 }
