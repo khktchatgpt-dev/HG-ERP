@@ -221,3 +221,15 @@ hoạt động đúng — nó nói thật rằng không so được — nhưng s
 
 Đây là **vấn đề dữ liệu, không phải giao diện**, và cùng gốc với ghi chú
 "Người lập đơn — (nạp từ file)" ở khay phải.
+
+---
+
+## Phân loại lại Hộp ký (14/10/2026 · H1–H3)
+
+Chủ dự án 14/10: *"bên trang của giám đốc không phân loại ra sao sẽ dễ bị rối lắm vì sau này sẽ có rất nhiều yêu cầu duyệt"*. Bản vẽ https://claude.ai/artifact/XDy5RfHWzAfAAoULJpobBB (Q23–Q28 duyệt theo đề xuất).
+
+- **H1 · danh mục loại phiếu** `src/lib/loai-phieu-duyet.ts` (có test): tên, phòng trình, thứ tự khối, ký nhanh được không, sổ tra cứu, nhãn cột theo loại; luật "Cần ký trước" (`vungGap`/`xepGap`: ký bù > hẹn giao đã qua > chờ ≥ 3 ngày — giá trị lớn KHÔNG vào). `SignItem.kind = LoaiPhieu`, thêm `hen` / `boi_canh` / `dnm`. **Thêm loại phiếu mới = một mục `LOAI_PHIEU` + một nhánh lấy phiếu trong `execService.signBox`** — màn tự có khối, chip phòng, nhóm điện thoại.
+- **H2 · máy tính**: khối "Cần ký trước" trên cùng, rồi mỗi loại một `<tbody>` (GroupRow tên `Phòng · Loại` + tổng + lâu nhất + "Chọn n phiếu ký nhanh" + "Sổ tra cứu ›", hàng tiêu đề cột riêng `KhoiDauCot`); một vùng cuộn. Chip lọc theo PHÒNG, công tắc gom theo loại / người trình. Ký nhanh chỉ trong một loại (tích phiếu loại khác thì bỏ chọn cũ); lệnh SX luôn mở ra đọc. "Chờ tôi ký" (Mua hàng) mở mọi loại (đơn mua + đề nghị mua).
+- **H3 · điện thoại + menu**: khung < 900px → `hop-ky-hep.tsx` (khối gấp + danh sách nhóm → phiếu). Menu: "Sổ đề nghị mua" không đếm; một phiếu chỉ đếm ở "Chờ tôi phê duyệt" / "Chờ tôi ký".
+
+Bẫy bố cục: bảng kit dùng `table-layout` tự động — nhãn loại trong cột Mã từng đẩy cột lên 222px, chuỗi lệnh "HM-2026-0008 · ARUBA 159 (AK)" đẩy cột Lệnh 218px → tràn ngang. Nhãn loại nằm trong câu lý do gấp; cột ngữ cảnh cắt chữ `max-w-[150px]`.
