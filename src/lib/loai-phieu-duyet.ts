@@ -11,16 +11,23 @@
  * Luật thuần, dùng chung server + màn (không chạm DB).
  */
 
-/** Phòng TRÌNH phiếu — chip lọc của Hộp ký, thứ tự cố định (Q25: người ký quen vị trí). */
+/**
+ * Phòng TRÌNH phiếu — TAB NGANG của Hộp ký, thứ tự cố định (Q25: người ký quen
+ * vị trí). Chủ dự án 14/10/2026: "làm tab ngang các phòng có cảnh báo số lượng
+ * trên tab … mặc định hiển thị là phòng cung ứng" → `PHONG_MAC_DINH`.
+ */
 export const PHONG_TRINH = ['mua_hang', 'kho', 'san_xuat', 'ban_hang'] as const
 export type PhongTrinh = (typeof PHONG_TRINH)[number]
 
 export const PHONG_NHAN: Record<PhongTrinh, string> = {
-  mua_hang: 'Mua hàng',
+  mua_hang: 'Cung ứng',
   kho: 'Kho',
   san_xuat: 'Sản xuất',
   ban_hang: 'Bán hàng',
 }
+
+/** Tab mở sẵn khi vào Hộp ký (chủ dự án 14/10/2026). */
+export const PHONG_MAC_DINH: PhongTrinh = 'mua_hang'
 
 export type LoaiPhieu = 'po' | 'dnm' | 'lsx' | 'quote'
 
@@ -95,6 +102,10 @@ export const LOAI_PHIEU: Record<LoaiPhieu, KhaiLoai> = {
 export const LOAI_THEO_THU_TU = (Object.keys(LOAI_PHIEU) as LoaiPhieu[]).sort(
   (a, b) => LOAI_PHIEU[a].thuTu - LOAI_PHIEU[b].thuTu,
 )
+
+/** Các loại phiếu của một phòng, theo thứ tự khối. */
+export const loaiCuaPhong = (p: PhongTrinh): LoaiPhieu[] =>
+  LOAI_THEO_THU_TU.filter((l) => LOAI_PHIEU[l].phong === p)
 
 /** Chờ từ bao nhiêu ngày thì vào khối "Cần ký trước" (Q24). */
 export const CHO_LAU = 3

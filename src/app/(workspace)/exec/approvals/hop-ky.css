@@ -113,69 +113,9 @@
   cursor: not-allowed;
 }
 .hk.hk .hk-btn:focus-visible,
-.hk.hk .hk-tile:focus-visible,
 .hk.hk .hk-seg button:focus-visible {
   outline: 2px solid var(--hk-act);
   outline-offset: -2px;
-}
-
-/* ── Dải ô đếm vuông — đồng thời là bộ lọc ── */
-.hk.hk .hk-tiles {
-  display: flex;
-  background: var(--hk-raised);
-  border-bottom: 1px solid var(--hk-line);
-  /* Ô co theo khung, không cuộn ngang (vùng cuộn thứ hai) — hẹp quá thì xuống hàng. */
-  flex-wrap: wrap;
-}
-.hk.hk .hk-tile {
-  position: relative;
-  flex: 1 1 128px;
-  min-width: 0;
-  max-width: 220px;
-  padding: 7px 12px 7px;
-  border: 0;
-  border-right: 1px solid var(--hk-line);
-  background: transparent;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-}
-.hk.hk .hk-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--c, var(--hk-ink2));
-}
-.hk.hk .hk-tile[aria-pressed='true'] {
-  background: var(--hk-card);
-  box-shadow: inset 0 -2px 0 var(--hk-act);
-}
-.hk.hk .hk-tile .t {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--c, var(--hk-ink2));
-}
-.hk.hk .hk-tile .n {
-  font-family: var(--hk-mono);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-.hk.hk .hk-tile .s {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11.5px;
-  color: var(--hk-ink3);
-}
-.hk.hk .hk-tile:disabled {
-  cursor: default;
-  opacity: 0.55;
 }
 
 /* ── Thanh lọc / đã chọn ── */
@@ -530,4 +470,129 @@
 .hk.hk .hk-tb.hk-tb tbody td.hk-xuong {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* ── TAB NGANG THEO PHÒNG (chủ dự án 14/10/2026) — thay dải ô đếm theo loại.
+   Vạch trên mang màu phòng; số cảnh báo nền đặc khi có phiếu, đỏ khi có phiếu
+   gấp, viền mờ khi 0. Hẹp thì xuống hàng, không cuộn ngang. ── */
+.hk.hk .hk-ptabs {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--hk-raised);
+  border-bottom: 1px solid var(--hk-line);
+}
+.hk.hk .hk-pt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-right: 1px solid var(--hk-line);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hk-ink2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hk.hk .hk-pt::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--c, var(--hk-ink2));
+  opacity: 0.55;
+}
+.hk.hk .hk-pt:hover {
+  background: var(--hk-card);
+}
+.hk.hk .hk-pt[aria-selected='true'] {
+  background: var(--hk-card);
+  color: var(--hk-ink);
+  box-shadow: inset 0 -2px 0 var(--hk-act);
+}
+.hk.hk .hk-pt[aria-selected='true']::before {
+  opacity: 1;
+}
+.hk.hk .hk-pt:focus-visible {
+  outline: 2px solid var(--hk-act);
+  outline-offset: -2px;
+}
+.hk.hk .hk-pt .ten {
+  color: inherit;
+}
+.hk.hk .hk-badge {
+  min-width: 22px;
+  height: 19px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hk-warn);
+  color: #fff;
+  font-family: var(--hk-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.hk.hk .hk-badge.gap {
+  background: var(--hk-stop);
+}
+.hk.hk .hk-badge.zero {
+  background: transparent;
+  color: var(--hk-ink3);
+  border: 1px solid var(--hk-line);
+  font-weight: 600;
+}
+.hk.hk .hk-pt-gap {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--hk-stop);
+}
+
+/* Hàng LOẠI trong phòng — chỉ hiện khi phòng có từ 2 loại phiếu. */
+.hk.hk .hk-ltabs {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--hk-line);
+  background: var(--hk-card);
+  font-size: 12.5px;
+}
+.hk.hk .hk-ltabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 5px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  color: var(--hk-ink2);
+  cursor: pointer;
+}
+.hk.hk .hk-ltabs button i {
+  width: 9px;
+  height: 9px;
+  background: var(--c);
+}
+.hk.hk .hk-ltabs button[aria-pressed='true'] {
+  color: var(--hk-act);
+  border-bottom-color: var(--hk-act);
+  font-weight: 600;
+}
+
+/* Điện thoại: tab phòng co đều trên hai hàng, bỏ chữ "cần ký trước" (số đỏ đã báo). */
+@media (max-width: 839px) {
+  .hk.hk .hk-pt {
+    flex: 1 1 auto;
+    justify-content: center;
+    height: 36px;
+    padding: 0 10px;
+  }
+  .hk.hk .hk-pt-gap {
+    display: none;
+  }
 }

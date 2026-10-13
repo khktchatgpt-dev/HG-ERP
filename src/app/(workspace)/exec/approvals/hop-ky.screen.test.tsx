@@ -52,43 +52,54 @@ const box: SignBox = {
   thresholds: { VND: 50_000_000, USD: 2_000 },
   emptiness: { pos_total: 10, lsx_total: 5 },
 }
-const dung = () =>
+const dung = (initialKind: 'all' | 'dnm' = 'all') =>
   render(
     <ToastProvider>
-      <ApprovalCenterScreen box={box} initialKind="all" />
+      <ApprovalCenterScreen box={box} initialKind={initialKind} />
     </ToastProvider>,
   )
+const nhom = () =>
+  screen.getAllByRole('rowheader').map((h) => h.querySelector('.ten')?.textContent ?? '')
+const tabs = () => screen.getByRole('tablist', { name: 'Phòng trình phiếu' })
 
-describe('Hộp ký phân loại', () => {
-  it('khối "Cần ký trước" trên cùng (chờ ≥ 3 ngày), rồi mỗi loại một khối theo thứ tự phòng', () => {
+describe('Hộp ký — tab ngang theo phòng', () => {
+  it('mặc định mở tab Cung ứng; số trên tab đếm theo phòng', () => {
     dung()
-    const nhom = screen
-      .getAllByRole('rowheader')
-      .map((h) => h.querySelector('.ten')?.textContent ?? '')
-    expect(nhom).toEqual([
+    const tl = tabs()
+    expect(within(tl).getByRole('tab', { name: /^Cung ứng/ }).getAttribute('aria-selected')).toBe('true') // prettier-ignore
+    const so = (re: RegExp) => within(tl).getByRole('tab', { name: re }).querySelector('.hk-badge')?.textContent // prettier-ignore
+    expect([so(/^Cung ứng/), so(/^Kho/), so(/^Sản xuất/), so(/^Bán hàng/), so(/^Tất cả phòng/)]).toEqual(['3', '1', '1', '0', '5']) // prettier-ignore
+    expect(nhom()).toEqual(['Đơn mua NCC'])
+    // Một loại → tiêu đề cột thật của đơn mua
+    expect(screen.getByRole('columnheader', { name: 'Nhà cung cấp' })).toBeTruthy()
+    // Phiếu chờ 5 ngày đứng đầu khối
+    expect(screen.getAllByRole('link', { name: /^PO-/ })[0].textContent).toBe(
+      'PO-2026-0159',
+    )
+  })
+
+  it('?loai=dnm mở thẳng tab Kho; tab có phiếu gấp báo "cần ký trước"', () => {
+    dung('dnm')
+    expect(nhom()).toEqual(['Đề nghị mua vật tư'])
+    expect(within(tabs()).getByRole('tab', { name: /^Kho/ }).textContent).toContain('1 cần ký trước') // prettier-ignore
+  })
+
+  it('tab Tất cả phòng: khối "Cần ký trước" rồi mỗi loại một khối theo thứ tự phòng', () => {
+    dung()
+    fireEvent.click(within(tabs()).getByRole('tab', { name: /^Tất cả phòng/ }))
+    expect(nhom()).toEqual([
       'Cần ký trước',
-      'Mua hàng · Đơn mua NCC',
+      'Cung ứng · Đơn mua NCC',
       'Kho · Đề nghị mua vật tư',
       'Sản xuất · Lệnh sản xuất',
     ])
   })
 
-  it('ô đếm theo loại (kèm phòng) đếm đúng và lọc được', () => {
-    dung()
-    const bar = screen.getByRole('toolbar', { name: 'Lọc phiếu chờ ký' })
-    expect(within(bar).getByRole('button', { name: /Mua hàng/ }).textContent).toContain(
-      '3',
-    )
-    fireEvent.click(within(bar).getByRole('button', { name: /^Đề nghị mua vật tư/ }))
-    const nhom = screen.getAllByRole('rowheader').map((h) => h.textContent ?? '')
-    expect(nhom.some((t) => t.startsWith('Mua hàng'))).toBe(false)
-    expect(nhom.some((t) => t.startsWith('Kho · Đề nghị mua'))).toBe(true)
-  })
-
   it('ký nhanh chỉ trong một khối: tích cả khối đơn mua bỏ phiếu giá trị lớn; tích phiếu khác loại thì bỏ chọn cũ', () => {
     dung()
+    fireEvent.click(within(tabs()).getByRole('tab', { name: /^Tất cả phòng/ }))
     fireEvent.click(
-      screen.getByRole('checkbox', { name: /Chọn 2 phiếu ký nhanh trong khối Mua hàng/ }),
+      screen.getByRole('checkbox', { name: /Chọn 2 phiếu ký nhanh trong khối Cung ứng/ }),
     )
     expect(screen.getByText(/2 đơn mua đã chọn/)).toBeTruthy()
     fireEvent.click(
@@ -99,6 +110,15 @@ describe('Hộp ký phân loại', () => {
 
   it('lệnh SX không có ô tích — mở ra đọc rồi ký riêng', () => {
     dung()
+    fireEvent.click(within(tabs()).getByRole('tab', { name: /^Sản xuất/ }))
+    expect(nhom()).toEqual(['Lệnh sản xuất'])
     expect(screen.queryByRole('checkbox', { name: /LSX 11\/26-27 MX/ })).toBeNull()
+  })
+
+  it('tab không có phiếu nói rõ còn phiếu ở phòng khác', () => {
+    dung()
+    fireEvent.click(within(tabs()).getByRole('tab', { name: /^Bán hàng/ }))
+    expect(screen.getByText('Phòng Bán hàng không có phiếu chờ bạn ký')).toBeTruthy()
+    expect(screen.getByText(/Còn 5 phiếu ở phòng khác/)).toBeTruthy()
   })
 })

@@ -22,23 +22,39 @@ import { LOP_MAU, itemKey, moneyShort } from './hop-ky.shared'
  * Ký trên điện thoại là ký trong màn duyệt của từng phiếu (đề nghị mua có màn
  * duyệt dựng cho điện thoại); không ký hàng loạt ở đây.
  */
-export function HopKyHep({ items, gap }: { items: SignItem[]; gap: SignItem[] }) {
-  const [nhom, setNhom] = useState<LoaiPhieu | null>(null)
+export function HopKyHep({
+  items,
+  gap,
+  loais = LOAI_THEO_THU_TU,
+}: {
+  items: SignItem[]
+  gap: SignItem[]
+  /** Loại thuộc tab phòng đang mở. Chỉ MỘT loại → bày thẳng phiếu, bỏ bước chọn nhóm. */
+  loais?: readonly LoaiPhieu[]
+}) {
+  const [chon, setNhom] = useState<LoaiPhieu | null>(null)
+  const motLoai = loais.length === 1
+  const nhom = motLoai ? loais[0] : chon
 
   if (nhom) {
     const khai = LOAI_PHIEU[nhom]
     const rows = items.filter((i) => i.kind === nhom)
     return (
       <div className="hk-grid">
-        <button type="button" className="hk-p-row" onClick={() => setNhom(null)}>
-          <span className="hk-sel">‹ Tất cả nhóm</span>
-        </button>
+        {!motLoai && (
+          <button type="button" className="hk-p-row" onClick={() => setNhom(null)}>
+            <span className="hk-sel">‹ Tất cả nhóm</span>
+          </button>
+        )}
         <div className={`hk-p-sec ${LOP_MAU[nhom]}`}>
           {PHONG_NHAN[khai.phong]} · {khai.ten} · {rows.length} phiếu
         </div>
-        {rows.map((i) => (
-          <Phieu key={itemKey(i)} i={i} />
-        ))}
+        {/* Phiếu gấp lên đầu, kèm câu vì sao gấp. */}
+        {[...gap.filter((i) => i.kind === nhom), ...rows.filter((i) => !vungGap(i))].map(
+          (i) => (
+            <Phieu key={itemKey(i)} i={i} gap={!!vungGap(i)} />
+          ),
+        )}
         {khai.so && (
           <Link href={khai.so} className="hk-p-row">
             <span className="hk-sel">Sổ tra cứu {khai.ten.toLowerCase()} ›</span>
@@ -59,7 +75,7 @@ export function HopKyHep({ items, gap }: { items: SignItem[]; gap: SignItem[] })
         </>
       )}
       <div className="hk-p-sec">Theo loại phiếu</div>
-      {LOAI_THEO_THU_TU.map((loai) => {
+      {loais.map((loai) => {
         const khai = LOAI_PHIEU[loai]
         const rows = items.filter((i) => i.kind === loai)
         const lau = rows.length ? Math.max(...rows.map((r) => r.waiting_days)) : 0

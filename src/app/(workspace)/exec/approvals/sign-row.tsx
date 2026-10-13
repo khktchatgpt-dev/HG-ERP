@@ -2,7 +2,13 @@
 
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
-import { LOAI_PHIEU, kyNhanhDuoc, vungGap, type KhaiLoai } from '@/lib/loai-phieu-duyet'
+import {
+  LOAI_PHIEU,
+  kyNhanhDuoc,
+  vungGap,
+  type KhaiLoai,
+  type LoaiPhieu,
+} from '@/lib/loai-phieu-duyet'
 import { materialSummary } from '@/lib/po-list-labels'
 import type { SignItem } from '@/modules/core/exec/exec.service'
 import { money } from '../approval-helpers'
@@ -52,7 +58,19 @@ const COT_VUA: Cot[] = COT_RONG.filter(
   c.key === 'ma' ? { ...c, w: 144 } : c.key === 'doiTac' ? { ...c, w: 140 } : c,
 )
 
-export const cotHopKy = (rong: boolean) => (rong ? COT_RONG : COT_VUA)
+/**
+ * Bộ cột của lưới. `loai` = lưới đang bày ĐÚNG MỘT loại phiếu (tab phòng chỉ có
+ * một loại) → tiêu đề cột là cột THẬT của loại đó (Nhà cung cấp, Mua gì…), bỏ cột
+ * "Loại" thừa và cột ngữ cảnh khi loại không có (lệnh SX, báo giá).
+ */
+export function cotHopKy(rong: boolean, loai?: LoaiPhieu | null): Cot[] {
+  const goc = rong ? COT_RONG : COT_VUA
+  if (!loai) return goc
+  const khai = LOAI_PHIEU[loai]
+  return goc
+    .filter((c) => c.key !== 'loai' && !(c.key === 'boiCanh' && khai.cot.boiCanh === '—'))
+    .map((c) => ({ ...c, nhan: c.key === 'ma' ? 'Mã phiếu' : nhanTheoLoai(c.key, khai) }))
+}
 
 /** Nhãn cột của MỘT KHỐI — nghĩa của cột theo loại phiếu. */
 function nhanTheoLoai(k: CotKey, khai: KhaiLoai): string {
@@ -89,7 +107,7 @@ function nhanTheoLoai(k: CotKey, khai: KhaiLoai): string {
 export function SignRow({
   i,
   today,
-  rong,
+  cot,
   selected,
   checked,
   onPick,
@@ -98,8 +116,8 @@ export function SignRow({
 }: {
   i: SignItem
   today: string
-  /** Khung rộng (≥ 1440px) — đủ 10 cột; không thì bộ cột vừa. */
-  rong: boolean
+  /** Bộ cột đang bày (`cotHopKy`) — ô nào không có cột thì xuống dòng hai của Nội dung. */
+  cot: Cot[]
   selected: boolean
   checked: boolean
   onPick: () => void
@@ -107,7 +125,13 @@ export function SignRow({
   trongGap?: boolean
 }) {
   const khai = LOAI_PHIEU[i.kind]
-  const gap = trongGap ? vungGap(i) : null
+  const co = (k: CotKey) => cot.some((c) => c.key === k)
+  const coLoai = co('loai')
+  const coBoiCanh = co('boiCanh')
+  const coNguoi = co('nguoi')
+  /* Câu vì sao gấp đứng đầu ô Nội dung — ở khối "Cần ký trước" lẫn trong tab phòng
+     (phiếu gấp xếp lên đầu khối của nó). */
+  const gap = vungGap(i)
   const nhanh = kyNhanhDuoc(i)
   const khoaVi = i.late_sign
     ? 'Đơn gửi gấp — mở ra đọc lý do rồi ký bù'
@@ -123,8 +147,8 @@ export function SignRow({
         ? 'r hk-warn'
         : 'r'
   const tien = i.value > 0 ? money(i.value, i.currency) : '—'
-  /* Bộ cột VỪA: lệnh + người trình xuống dòng hai của ô Nội dung. */
-  const dong2 = rong ? null : [ngCanh && ngCanh !== '—' ? ngCanh : null, i.owner_name].filter(Boolean).join(' · ') // prettier-ignore
+  /* Cột nào không có (bộ cột vừa) thì lệnh / người trình xuống dòng hai của ô Nội dung. */
+  const dong2 = [!coBoiCanh && ngCanh && ngCanh !== '—' ? ngCanh : null, !coNguoi ? i.owner_name : null].filter(Boolean).join(' · ') || null // prettier-ignore
   return (
     <tr className={selected ? 'd on' : 'd'} onClick={onPick} aria-selected={selected}>
       <td onClick={(e) => e.stopPropagation()}>
@@ -141,7 +165,7 @@ export function SignRow({
           </span>
         )}
       </td>
-      {rong && (
+      {coLoai && (
         <td className={LOP_MAU[i.kind]}>
           <span className="hk-loai">
             <i aria-hidden />
@@ -150,7 +174,7 @@ export function SignRow({
         </td>
       )}
       <td title={`${khai.nhan} · ${i.code}`}>
-        {!rong && (
+        {!coLoai && (
           <span className={`hk-loai ${LOP_MAU[i.kind]}`} style={{ marginRight: 6 }}>
             <i aria-label={khai.nhan} />
           </span>
@@ -178,7 +202,7 @@ export function SignRow({
         {i.po?.supplier_short ?? i.party}
       </td>
       <NoiDung i={i} gapCau={gap?.cau ?? null} dong2={dong2} />
-      {rong && (
+      {coBoiCanh && (
         <td className="hk-mut hk-xuong" title={ngCanh ?? undefined}>
           {ngCanh ?? '—'}
           {i.po?.lsx_done && (
@@ -194,7 +218,7 @@ export function SignRow({
       <td className="r hk-num">
         <Hen i={i} today={today} />
       </td>
-      {rong && (
+      {coNguoi && (
         <td className="hk-mut hk-xuong" title={i.owner_name ?? undefined}>
           {i.owner_name ?? '—'}
         </td>
@@ -284,11 +308,11 @@ function Hen({ i, today }: { i: SignItem; today: string }) {
 }
 
 /** Hàng tiêu đề RIÊNG của một khối — mỗi khối nói lại cột nghĩa là gì với loại của mình. */
-export function KhoiDauCot({ loai, rong }: { loai: SignItem['kind']; rong: boolean }) {
+export function KhoiDauCot({ loai, cot }: { loai: SignItem['kind']; cot: Cot[] }) {
   const khai = LOAI_PHIEU[loai]
   return (
     <tr className="sub" aria-hidden>
-      {cotHopKy(rong).map((c) => (
+      {cot.map((c) => (
         <td
           key={c.key}
           className={c.r ? 'r' : undefined}

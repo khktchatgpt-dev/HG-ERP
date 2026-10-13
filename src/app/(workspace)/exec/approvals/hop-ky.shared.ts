@@ -6,7 +6,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { money } from '../approval-helpers'
-import type { LoaiPhieu } from '@/lib/loai-phieu-duyet'
+import type { LoaiPhieu, PhongTrinh } from '@/lib/loai-phieu-duyet'
 import type { SignItem } from '@/modules/core/exec/exec.service'
 
 /**
@@ -27,6 +27,14 @@ export const LOP_MAU: Record<LoaiPhieu, string> = {
   dnm: 'lp-dnm',
   lsx: 'lp-lsx',
   quote: 'lp-quote',
+}
+
+/** Màu tab phòng = màu loại phiếu chính của phòng đó. */
+export const LOP_PHONG: Record<PhongTrinh, string> = {
+  mua_hang: 'lp-po',
+  kho: 'lp-dnm',
+  san_xuat: 'lp-lsx',
+  ban_hang: 'lp-quote',
 }
 
 /** Cộng tiền theo TỪNG tiền tệ — USD và VND không bao giờ cộng chung. */
