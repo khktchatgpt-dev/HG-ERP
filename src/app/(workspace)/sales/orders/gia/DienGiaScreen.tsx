@@ -65,8 +65,14 @@ function gridKey(e: KeyboardEvent<HTMLInputElement>, r: number) {
  * Excel vào ngăn tại chỗ có xem trước — rồi Lưu MỘT lần. Dòng chưa có giá làm
  * doanh số, giá trị đơn và bảng tin Giám đốc ra 0.
  */
-export function DienGiaScreen({ board }: { board: PricingBoard }) {
-  const d = useDienGia(board)
+export function DienGiaScreen({
+  board,
+  initialOrder = null,
+}: {
+  board: PricingBoard
+  initialOrder?: string | null
+}) {
+  const d = useDienGia(board, initialOrder)
   const an = useAnGiaNoiBo()
   /** Nhóm NỘI BỘ hiện khi người xem có quyền thấy giá kế hoạch và không bấm ẩn. */
   const cost = d.hasPlanColumn && !an.hidden
