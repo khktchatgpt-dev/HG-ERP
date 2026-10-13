@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useBeRong } from '@/lib/use-be-rong'
 import { useRouter } from 'next/navigation'
 import {
   BarLabel,
@@ -36,6 +37,7 @@ import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
 import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
 import { COLS, itemKey, moneyText, sumByCurrency } from './hop-ky.shared'
 import { KhoiDauCot, SignRow } from './sign-row'
+import { HopKyHep } from './hop-ky-hep'
 
 /**
  * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — MỌI loại phiếu chờ ký gom một chỗ.
@@ -86,6 +88,9 @@ export function ApprovalCenterScreen({
   const [who, setWho] = useState<string>('all')
   const [picked, setPicked] = useState<SignItem[]>([])
   const [pick, setPick] = useState<string | null>(null)
+  // Khung < 900px (điện thoại — giám đốc mở từ thông báo): danh sách nhóm (HK-2).
+  const khung = useRef<HTMLDivElement>(null)
+  const hep = useBeRong(khung) < 900
   const { busy, askApprove, askReject, askApproveMany, dialogs } = useApprovalDecision(
     () => {
       setPicked([])
@@ -234,7 +239,8 @@ export function ApprovalCenterScreen({
         }
       />
 
-      {box.stats.total > 0 && (
+      <div ref={khung} className="h-0 w-full" aria-hidden />
+      {box.stats.total > 0 && !hep && (
         <FilterBar dense label="Lọc phiếu chờ ký">
           <BarLabel>Phòng</BarLabel>
           <Chip
@@ -316,7 +322,13 @@ export function ApprovalCenterScreen({
         </NoticeBar>
       )}
 
-      {items.length === 0 ? (
+      {hep ? (
+        box.stats.total === 0 ? (
+          <EmptyCenter box={box} filtered={false} historyHref={historyHref} />
+        ) : (
+          <HopKyHep items={theoLoai} gap={xepGap(theoLoai)} />
+        )
+      ) : items.length === 0 ? (
         <EmptyCenter box={box} filtered={box.stats.total > 0} historyHref={historyHref} />
       ) : (
         <>

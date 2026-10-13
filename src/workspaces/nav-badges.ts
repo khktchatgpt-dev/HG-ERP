@@ -81,7 +81,6 @@ async function execBadges(user: User): Promise<Record<string, number>> {
   const total = pos.total + lsx.total + quotes.total + dnm
   const out: Record<string, number> = {}
   if (total > 0) out['/exec/approvals'] = total
-  if (dnm > 0) out['/duyet/de-nghi'] = dnm
   return out
 }
 
@@ -138,9 +137,19 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
     return b === 'overdue' || b === 'today'
   }).length
   const out: Record<string, number> = {}
-  // Đề nghị mua của Kho chờ chị Thảo duyệt (Đ5) — cùng luật Hộp ký.
-  const dnm = canApprove ? await deNghiChoToi(user) : 0
-  if (dnm > 0) out['/duyet/de-nghi'] = dnm
+  /*
+    "CHỜ TÔI KÝ" (Hộp ký H3 · Q27) — MỘT con số cho mọi phiếu chờ người duyệt
+    đơn mua: đơn mua chờ duyệt + đề nghị mua của Kho (cùng luật Hộp ký). Sổ đề
+    nghị mua không đếm nữa — trước đó một phiếu đề nghị hiện số ở hai mục.
+  */
+  if (canApprove) {
+    const [pend, dnm] = await Promise.all([
+      posRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
+      deNghiChoToi(user),
+    ])
+    const n = pend.total + dnm
+    if (n > 0) out['/mua-hang/cho-ky'] = n
+  }
   if (todo > 0) out['/mua-hang/hop-thu'] = todo
   if (ganVe > 0) out['/mua-hang/theo-doi'] = ganVe
   if (issues > 0) out['/mua-hang'] = issues
