@@ -13,6 +13,10 @@ vi.mock('./de-nghi.repo', () => ({
     setApprovedQty: vi.fn(),
     soKho: vi.fn(),
     ganMa: vi.fn(),
+    lanMuaKho: vi.fn(),
+    daTheoDoi: vi.fn(),
+    dongDeNghiMo: vi.fn(),
+    dangVe: vi.fn(),
   },
 }))
 vi.mock('./stock.service', () => ({ stockService: { createReceiptDoc: vi.fn() } }))
@@ -79,6 +83,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(deNghiRepo.update).mockResolvedValue(true)
   vi.mocked(deNghiRepo.soKho).mockResolvedValue(new Map())
+  vi.mocked(deNghiRepo.lanMuaKho).mockResolvedValue(new Map())
+  vi.mocked(deNghiRepo.daTheoDoi).mockResolvedValue(new Set())
+  vi.mocked(deNghiRepo.dongDeNghiMo).mockResolvedValue(new Map())
+  vi.mocked(deNghiRepo.dangVe).mockResolvedValue(new Map())
   vi.mocked(deNghiRepo.vatTu).mockResolvedValue(
     new Map([['m-keo', { code: 'KEO0030', name: 'Băng keo trong 4F7', unit: 'Cuộn' }]]),
   )
@@ -158,16 +166,55 @@ describe('deNghiService.submit / withdraw / cancel', () => {
   })
 })
 
-describe('deNghiService.goiY', () => {
-  it('tồn + giá mua gần nhất; giá đơn USD không gợi ý', async () => {
+describe('deNghiService.goiY (Đ6 · thông tin dòng)', () => {
+  it('tồn + giá mua gần nhất; giá đơn USD không gợi ý; mã chưa từng có giao dịch = chưa theo dõi', async () => {
     vi.mocked(deNghiRepo.tonDungDuoc).mockResolvedValue(new Map([['m-keo', 36]]))
+    vi.mocked(deNghiRepo.daTheoDoi).mockResolvedValue(new Set(['m-keo']))
     vi.mocked(pricesRepo.lastPurchases).mockResolvedValue([
       { material_id: 'm-keo', unit_price: 5500, currency: 'VND', po_code: 'PO-2026-0140', supplier_id: 's1', supplier_name: 'Phước Khang', at: '2026-10-06T00:00:00Z' }, // prettier-ignore
       { material_id: 'm-usd', unit_price: 2, currency: 'USD', po_code: 'PO-2026-0136', supplier_id: 's2', supplier_name: 'An Khánh', at: '2026-10-06T00:00:00Z' }, // prettier-ignore
     ])
     const r = await deNghiService.goiY(hao, ['m-keo', 'm-usd'])
-    expect(r['m-keo']).toEqual({ ton: 36, gia: { unit_price: 5500, po_code: 'PO-2026-0140', supplier_name: 'Phước Khang', at: '2026-10-06T00:00:00Z' } }) // prettier-ignore
-    expect(r['m-usd']).toEqual({ ton: 0, gia: null })
+    expect(r['m-keo']).toEqual({ ton: 36, theo_doi: true, gia: { unit_price: 5500, po_code: 'PO-2026-0140', supplier_name: 'Phước Khang', at: '2026-10-06T00:00:00Z', nguon: 'po' }, trung: [], dang_ve: [] }) // prettier-ignore
+    expect(r['m-usd']).toMatchObject({ ton: 0, theo_doi: false, gia: null })
+  })
+
+  it('giá lần trước: lần Kho tự mua MỚI HƠN đơn Cung ứng thì lấy lần Kho mua (nơi mua theo phiếu nhập)', async () => {
+    vi.mocked(pricesRepo.lastPurchases).mockResolvedValue([
+      { material_id: 'm-keo', unit_price: 5500, currency: 'VND', po_code: 'PO-2026-0140', supplier_id: 's1', supplier_name: 'Phước Khang', at: '2026-10-06T00:00:00Z' }, // prettier-ignore
+    ])
+    vi.mocked(deNghiRepo.lanMuaKho).mockResolvedValue(new Map([['m-keo', { unit_price: 5200, at: '2026-10-13', noi_mua: 'Tiệm Tân Hưng', doc_code: 'PNK-2026-0121' }]])) // prettier-ignore
+    const r = await deNghiService.goiY(hao, ['m-keo'])
+    expect(r['m-keo'].gia).toEqual({ unit_price: 5200, po_code: 'PNK-2026-0121', supplier_name: 'Tiệm Tân Hưng', at: '2026-10-13', nguon: 'kho' }) // prettier-ignore
+  })
+
+  it('trùng đề nghị khác + đơn mua còn về đi kèm; phiếu đang sửa không tự báo trùng chính nó', async () => {
+    vi.mocked(deNghiRepo.dongDeNghiMo).mockResolvedValue(new Map([['m-keo', [{ code: 'DNM-2026-0005', status: 'pending', qty: 20 }]]])) // prettier-ignore
+    vi.mocked(deNghiRepo.dangVe).mockResolvedValue(new Map([['m-keo', [{ po_code: 'PO-2026-0174', qty_open: 50 }]]])) // prettier-ignore
+    const r = await deNghiService.goiY(hao, ['m-keo'], 'dn1')
+    expect(deNghiRepo.dongDeNghiMo).toHaveBeenCalledWith(['m-keo'], 'dn1')
+    expect(r['m-keo']).toMatchObject({ trung: [{ code: 'DNM-2026-0005' }], dang_ve: [{ po_code: 'PO-2026-0174', qty_open: 50 }] }) // prettier-ignore
+  })
+})
+
+describe('deNghiService.get — phiếu trước của Kho (Đ6 · DN-8)', () => {
+  it('lấy phiếu cùng bộ phận đã duyệt TRƯỚC phiếu đang xem, có mua; dự kiến theo số duyệt vs chi thật', async () => {
+    const cur = phieu({ id: 'dn2', code: 'DNM-2026-0002', status: 'pending', submitted_at: '2026-10-13T01:00:00Z' }) // prettier-ignore
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(cur)
+    vi.mocked(deNghiRepo.list).mockResolvedValue([
+      cur,
+      phieu({ id: 'dn1', status: 'done', approved_at: '2026-10-02T03:00:00Z' }),
+      phieu({ id: 'dn0', status: 'done', approved_at: '2026-09-20T03:00:00Z', code: 'DNM-2026-0000' }), // prettier-ignore
+      phieu({
+        id: 'dnx',
+        status: 'done',
+        approved_at: '2026-10-14T03:00:00Z',
+        code: 'DNM-2026-0009',
+      }), // sau phiếu đang xem
+    ])
+    vi.mocked(deNghiRepo.soKho).mockResolvedValue(new Map([['l1', { daNhap: 200, tien: 1_040_000, phieu: [] }]])) // prettier-ignore
+    const { phieu: p } = await deNghiService.get(hao, 'dn2')
+    expect(p.phieu_truoc).toEqual({ id: 'dn1', code: 'DNM-2026-0001', approved_at: '2026-10-02T03:00:00Z', du_kien: 1_100_000, thuc_chi: 1_040_000, du_dong: 1, mua_dong: 1 }) // prettier-ignore
   })
 })
 

@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { theoLo } from '@/server/theo-lo'
+import { RECEIVABLE } from '@/modules/dept/supply/supply.repo'
 import type { DeNghiStatus } from '@/lib/de-nghi'
 
 /**
@@ -307,6 +308,160 @@ export const deNghiRepo = {
       out.set(k, cur)
     }
     for (const v of out.values()) v.phieu.sort((a, b) => a.code.localeCompare(b.code))
+    return out
+  },
+
+  /**
+   * Mã nào ĐÃ TỪNG có giao dịch sổ kho (Đ6). Mã chưa từng có thì "tồn 0" là số
+   * giả — kho chưa theo dõi, không phải hết hàng (đo 13/10: hàn–cắt 0/241 mã).
+   * Mỗi mã một truy vấn `limit(1)`: một phiếu ≤ 200 dòng, còn gom `in()` thì một
+   * mã nhiều giao dịch đẩy mã khác ra khỏi trần 1000 dòng của PostgREST.
+   */
+  async daTheoDoi(materialIds: string[]): Promise<Set<string>> {
+    const ids = [...new Set(materialIds)].slice(0, 200)
+    const co = await Promise.all(
+      ids.map(async (id) => {
+        const r = ok<{ id: string }[]>(
+          await db()
+            .from('warehouse_movements')
+            .select('id')
+            .eq('material_id', id)
+            .limit(1),
+          'daTheoDoi',
+        )
+        return (r ?? []).length > 0 ? id : null
+      }),
+    )
+    return new Set(co.filter((x): x is string => !!x))
+  },
+
+  /**
+   * Lần KHO TỰ MUA gần nhất của từng mã (Đ6): dòng sổ nhập theo đề nghị có đơn
+   * giá thật, bỏ phiếu đã đảo. Bù cho `pricesRepo.lastPurchases` chỉ đọc đơn mua
+   * Cung ứng — hàng Kho tự mua (từ 13/10) không bao giờ có ở đó.
+   */
+  async lanMuaKho(
+    materialIds: string[],
+  ): Promise<
+    Map<
+      string,
+      { unit_price: number; at: string; noi_mua: string | null; doc_code: string }
+    >
+  > {
+    type D = { id: string; code: string; doc_date: string; counterparty: string | null }
+    type R = {
+      material_id: string
+      unit_cost: unknown
+      created_at: string
+      doc: D | D[] | null
+    }
+    const rows = await theoLo<R>(materialIds, (lo) =>
+      db()
+        .from('warehouse_movements')
+        .select(
+          'material_id, unit_cost, created_at, doc:warehouse_docs!warehouse_movements_doc_id_fkey(id, code, doc_date, counterparty)',
+        )
+        .in('material_id', lo)
+        .eq('direction', 'in')
+        .not('purchase_request_line_id', 'is', null)
+        .not('unit_cost', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1000),
+    )
+    const docIds = [...new Set(rows.map((r) => (Array.isArray(r.doc) ? r.doc[0] : r.doc)?.id).filter((x): x is string => !!x))] // prettier-ignore
+    const dao = await theoLo<{ reversal_of_doc_id: string }>(docIds, (lo) =>
+      db()
+        .from('warehouse_docs')
+        .select('reversal_of_doc_id')
+        .in('reversal_of_doc_id', lo),
+    )
+    const daDao = new Set(dao.map((x) => x.reversal_of_doc_id))
+    const out = new Map<string, { unit_price: number; at: string; noi_mua: string | null; doc_code: string }>() // prettier-ignore
+    for (const r of rows) {
+      const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      if (!d || daDao.has(d.id) || out.has(r.material_id)) continue
+      out.set(r.material_id, {
+        unit_price: Number(r.unit_cost) || 0,
+        at: d.doc_date,
+        noi_mua: d.counterparty,
+        doc_code: d.code,
+      })
+    }
+    return out
+  },
+
+  /**
+   * Phiếu đề nghị KHÁC đang mở (chờ duyệt / đã duyệt / đang nhập) có cùng mã —
+   * cảnh báo trùng trên dòng (Đ6, không chặn: hai tổ cùng cần là chuyện thật).
+   */
+  async dongDeNghiMo(
+    materialIds: string[],
+    truPhieu: string | null,
+  ): Promise<Map<string, { code: string; status: DeNghiStatus; qty: number }[]>> {
+    type Q = { id: string; code: string; status: DeNghiStatus }
+    type R = {
+      material_id: string
+      qty: unknown
+      approved_qty: unknown
+      request: Q | Q[] | null
+    }
+    const rows = await theoLo<R>(materialIds, (lo) =>
+      db()
+        .from('warehouse_purchase_request_lines')
+        .select(
+          'material_id, qty, approved_qty, request:warehouse_purchase_requests!inner(id, code, status)',
+        )
+        .in('material_id', lo)
+        .in('request.status', ['pending', 'approved', 'ordering']),
+    )
+    const out = new Map<string, { code: string; status: DeNghiStatus; qty: number }[]>()
+    for (const r of rows) {
+      const q = Array.isArray(r.request) ? r.request[0] : r.request
+      if (!q || q.id === truPhieu) continue
+      const ds = out.get(r.material_id) ?? []
+      ds.push({
+        code: q.code,
+        status: q.status,
+        qty: so(r.approved_qty) ?? (Number(r.qty) || 0),
+      })
+      out.set(r.material_id, ds)
+    }
+    return out
+  },
+
+  /**
+   * Đơn mua của Cung ứng CÒN ĐANG VỀ có cùng mã (Đ6): dòng còn thiếu
+   * (`qty_open > 0`) của đơn ở trạng thái nhận hàng được. Mua lẻ thêm trong lúc
+   * hàng đơn sắp về là chi hai lần — nói ra để người duyệt quyết.
+   */
+  async dangVe(
+    materialIds: string[],
+  ): Promise<Map<string, { po_code: string; qty_open: number }[]>> {
+    type L = { po_id: string; material_id: string; qty_open: unknown }
+    const lines = await theoLo<L>(materialIds, (lo) =>
+      db()
+        .from('supply_po_line_status')
+        .select('po_id, material_id, qty_open')
+        .in('material_id', lo)
+        .gt('qty_open', 0),
+    )
+    const poIds = [...new Set(lines.map((l) => l.po_id))]
+    const pos = await theoLo<{ id: string; code: string }>(poIds, (lo) =>
+      db()
+        .from('supply_purchase_orders')
+        .select('id, code')
+        .in('id', lo)
+        .in('status', [...RECEIVABLE]),
+    )
+    const ma = new Map(pos.map((p) => [p.id, p.code]))
+    const out = new Map<string, { po_code: string; qty_open: number }[]>()
+    for (const l of lines) {
+      const code = ma.get(l.po_id)
+      if (!code) continue
+      const ds = out.get(l.material_id) ?? []
+      ds.push({ po_code: code, qty_open: Number(l.qty_open) || 0 })
+      out.set(l.material_id, ds)
+    }
     return out
   },
 

@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
-import { isoToVn, todayVn } from '@/lib/date-vn'
 import {
   DE_NGHI_NHAN,
   DE_NGHI_TONE,
@@ -40,13 +39,15 @@ import {
   useToast,
 } from '@/components/kit'
 import { HuyPhieuSheet } from './huy-phieu'
+import { GoiYGia, GoiYSoLuong, TonO } from './goi-y-dong'
+import { tonNhan } from '@/lib/de-nghi-goi-y'
 import { ChotPhieuSheet } from './chot-phieu'
 import { TinhHinhNhap } from './tinh-hinh-nhap'
 import { DauPhieu, type DauPhieuState } from './dau-phieu'
 import {
   MUC_DICH_GOI_Y,
   type DongForm,
-  type GiaGoiY,
+  type GoiYMa,
   type PhieuForm,
 } from './de-nghi.shared'
 
@@ -150,11 +151,11 @@ export function DeNghiScreen({
       return
     }
     setDangTra(true)
-    let goiY: { ton: number; gia: GiaGoiY | null } = { ton: 0, gia: null }
+    let goiY: GoiYMa = { ton: 0, theo_doi: true, gia: null, trung: [], dang_ve: [] }
     try {
-      const res = await api<{
-        goi_y: Record<string, { ton: number; gia: GiaGoiY | null }>
-      }>(`/api/dept/warehouse/de-nghi/goi-y?ids=${vt.id}`)
+      const res = await api<{ goi_y: Record<string, GoiYMa> }>(
+        `/api/dept/warehouse/de-nghi/goi-y?ids=${vt.id}${phieu.id ? `&tru=${phieu.id}` : ''}`,
+      )
       goiY = res.goi_y[vt.id] ?? goiY
     } catch (e) {
       toast.error('Không tra được tồn / giá gần nhất', apiErrorText(e))
@@ -176,6 +177,9 @@ export function DeNghiScreen({
         purpose: '',
         note: '',
         gia_goi_y: goiY.gia,
+        theo_doi: goiY.theo_doi,
+        trung: goiY.trung,
+        dang_ve: goiY.dang_ve,
       },
     ])
     focus(`dn-qty-${i}`)
@@ -501,7 +505,7 @@ export function DeNghiScreen({
               <GridBody>
                 {rows.map((r, i) => {
                   const tuDo = !r.material_id
-                  const tonThap = r.ton != null && r.qty != null && r.ton <= 0
+                  const ton = tonNhan(r)
                   return (
                     <GridRow key={r.key}>
                       <td className="k-c-n">{i + 1}</td>
@@ -539,19 +543,7 @@ export function DeNghiScreen({
                       </td>
                       {!hep && (
                         <td className="k-r num">
-                          {r.ton == null ? (
-                            <span className="text-[var(--ink-empty)]">—</span>
-                          ) : (
-                            <span
-                              className={
-                                r.ton <= 0
-                                  ? 'font-semibold text-[var(--warn)]'
-                                  : 'text-[var(--ink-3)]'
-                              }
-                            >
-                              {fmt(r.ton)}
-                            </span>
-                          )}
+                          <TonO ton={ton} />
                         </td>
                       )}
                       <td className="k-r">
@@ -572,11 +564,7 @@ export function DeNghiScreen({
                             )}
                           </>
                         )}
-                        {hep && r.ton != null && (
-                          <CellHint tone={tonThap ? 'warn' : 'neutral'}>
-                            tồn {fmt(r.ton)}
-                          </CellHint>
-                        )}
+                        <GoiYSoLuong r={r} ton={hep ? ton : null} />
                       </td>
                       <td className="k-r">
                         {sua ? (
@@ -590,13 +578,7 @@ export function DeNghiScreen({
                             {r.unit_price == null ? '—' : fmt(r.unit_price)}
                           </span>
                         )}
-                        {r.gia_goi_y && (
-                          <CellHint
-                            title={`${r.gia_goi_y.po_code} · ${r.gia_goi_y.supplier_name} · ${isoToVn(todayVn(new Date(r.gia_goi_y.at)))}`}
-                          >
-                            lần trước {fmt(r.gia_goi_y.unit_price)}
-                          </CellHint>
-                        )}
+                        <GoiYGia r={r} />
                       </td>
                       {!hep && (
                         <td className="k-r num">

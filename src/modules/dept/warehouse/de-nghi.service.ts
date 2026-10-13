@@ -18,7 +18,11 @@ import {
   type DongGhi,
   type PhieuNhapDong,
 } from './de-nghi.repo'
-import type { DeNghiDecideInput, DeNghiNhapInput, DeNghiSaveInput } from './de-nghi.schema'
+import type {
+  DeNghiDecideInput,
+  DeNghiNhapInput,
+  DeNghiSaveInput,
+} from './de-nghi.schema'
 import { capNhatTheoSoKho } from './de-nghi.so-kho'
 import { stockService } from './stock.service'
 import { canViewWarehouse } from './warehouse.service'
@@ -31,12 +35,33 @@ import { canViewWarehouse } from './warehouse.service'
  * https://claude.ai/artifact/6bFb19HuFtSzT8y2wqT17g (duyệt 13/10/2026).
  */
 
-/** Giá mua gần nhất của một mã — từ DÒNG ĐƠN thật (`pricesRepo.lastPurchases`). */
+/**
+ * Giá mua gần nhất của một mã — lần mới hơn giữa đơn mua Cung ứng
+ * (`pricesRepo.lastPurchases`) và phiếu nhập Kho tự mua theo đề nghị (Đ6).
+ */
 export type GiaGanNhat = {
   unit_price: number
+  /** Chứng từ: mã đơn mua (`po`) hoặc mã phiếu nhập (`kho`). */
   po_code: string
+  /** Nơi mua: NCC của đơn, hoặc tiệm Kho ghi trên phiếu nhập. */
   supplier_name: string
   at: string
+  nguon?: 'po' | 'kho'
+}
+
+/** Đề nghị khác đang mở cùng mã — cảnh báo trùng (Đ6). */
+export type DongTrung = { code: string; status: DeNghiDay['status']; qty: number }
+/** Đơn mua Cung ứng còn về cùng mã (Đ6). */
+export type DangVe = { po_code: string; qty_open: number }
+
+/** Thông tin bày dưới một dòng có mã — dùng chung màn Kho lập phiếu + màn duyệt. */
+export type ThongTinMa = {
+  ton: number
+  /** false = mã chưa từng có giao dịch sổ kho: "tồn 0" là chưa theo dõi, không phải hết. */
+  theo_doi: boolean
+  gia: GiaGanNhat | null
+  trung: DongTrung[]
+  dang_ve: DangVe[]
 }
 
 export type DongChiTiet = DeNghiDong & {
@@ -45,6 +70,10 @@ export type DongChiTiet = DeNghiDong & {
   /** Tồn dùng được hiện tại, null = dòng chưa có mã. */
   ton: number | null
   gia_gan_nhat: GiaGanNhat | null
+  /** Mã đã từng có giao dịch sổ kho chưa (Đ6); null = dòng chưa có mã. */
+  theo_doi: boolean | null
+  trung: DongTrung[]
+  dang_ve: DangVe[]
   /** Số phải nhập = số duyệt (null = đúng số đề nghị). */
   can: number
   /** Đã nhập, đọc từ sổ kho (0238): Σ vào − Σ ra của dòng sổ trỏ về dòng này. */
@@ -53,7 +82,19 @@ export type DongChiTiet = DeNghiDong & {
   phieu_nhap: PhieuNhapDong[]
 }
 
-export type DeNghiChiTiet = Omit<DeNghiDay, 'lines'> & { lines: DongChiTiet[] }
+export type DeNghiChiTiet = Omit<DeNghiDay, 'lines'> & {
+  lines: DongChiTiet[]
+  /** Phiếu trước của cùng bộ phận đã mua (Đ6 · DN-8): dự kiến vs chi thật. */
+  phieu_truoc: {
+    id: string
+    code: string
+    approved_at: string | null
+    du_kien: number
+    thuc_chi: number
+    du_dong: number
+    mua_dong: number
+  } | null
+}
 
 /** Một dòng danh sách đề nghị cho lãnh đạo (Đ5 · DN-6) — chỉ số đếm, không gửi dòng hàng. */
 export type DuyetRow = {
@@ -82,15 +123,24 @@ export type DuyetRow = {
   closed: boolean
 }
 
-/** Gợi ý khi thêm dòng có mã: tồn + giá mua gần nhất (VND). */
-async function goiYTheoMa(ids: string[]): Promise<{
-  ton: Map<string, number>
-  gia: Map<string, GiaGanNhat>
-}> {
-  if (ids.length === 0) return { ton: new Map(), gia: new Map() }
-  const [ton, mua] = await Promise.all([
+/**
+ * THÔNG TIN DÒNG (Đ6 · DN-7/DN-8): tồn + đã từng theo dõi chưa, giá lần trước
+ * (đơn mua Cung ứng hoặc Kho tự mua — lấy lần mới hơn, chỉ VND), đề nghị khác
+ * đang mở cùng mã, đơn mua còn về. Một hàm cho màn Kho lập phiếu và màn duyệt.
+ */
+async function thongTinMa(
+  ids: string[],
+  truPhieu: string | null,
+): Promise<Map<string, ThongTinMa>> {
+  const out = new Map<string, ThongTinMa>()
+  if (ids.length === 0) return out
+  const [ton, mua, kho, theoDoi, trung, ve] = await Promise.all([
     deNghiRepo.tonDungDuoc(ids),
     pricesRepo.lastPurchases(ids),
+    deNghiRepo.lanMuaKho(ids),
+    deNghiRepo.daTheoDoi(ids),
+    deNghiRepo.dongDeNghiMo(ids, truPhieu),
+    deNghiRepo.dangVe(ids),
   ])
   const gia = new Map<string, GiaGanNhat>()
   // Phiếu đề nghị tính bằng VND; giá đơn USD không gợi ý (đổi tỷ giá là đoán).
@@ -101,8 +151,28 @@ async function goiYTheoMa(ids: string[]): Promise<{
         po_code: p.po_code,
         supplier_name: p.supplier_name,
         at: p.at,
+        nguon: 'po',
       })
-  return { ton, gia }
+  for (const [id, k] of kho) {
+    const cu = gia.get(id)
+    if (!cu || cu.at.slice(0, 10) <= k.at)
+      gia.set(id, {
+        unit_price: k.unit_price,
+        po_code: k.doc_code,
+        supplier_name: k.noi_mua ?? 'Kho tự mua',
+        at: k.at,
+        nguon: 'kho',
+      })
+  }
+  for (const id of ids)
+    out.set(id, {
+      ton: ton.get(id) ?? 0,
+      theo_doi: theoDoi.has(id),
+      gia: gia.get(id) ?? null,
+      trung: trung.get(id) ?? [],
+      dang_ve: ve.get(id) ?? [],
+    })
+  return out
 }
 
 async function canManage(user: User) {
@@ -167,6 +237,38 @@ async function phieu(id: string): Promise<DeNghiDay> {
   return p
 }
 
+/**
+ * PHIẾU TRƯỚC của cùng bộ phận đã duyệt xong và có mua (Đ6 · DN-8): lần trước
+ * dự kiến bao nhiêu, chi thật bao nhiêu — để người duyệt biết Kho ghi giá sát
+ * hay không. Chỉ xét phiếu duyệt TRƯỚC phiếu đang xem.
+ */
+async function phieuTruoc(p: DeNghiDay): Promise<DeNghiChiTiet['phieu_truoc']> {
+  const moc = p.submitted_at ?? p.created_at
+  const ds = (await deNghiRepo.list())
+    .filter(
+      (x) =>
+        x.id !== p.id &&
+        x.department === p.department &&
+        (x.status === 'ordering' || x.status === 'done') &&
+        !!x.approved_at &&
+        x.approved_at < moc,
+    )
+    .sort((x, y) => (y.approved_at ?? '').localeCompare(x.approved_at ?? ''))
+  const t = ds[0]
+  if (!t) return null
+  const so = await deNghiRepo.soKho(t.lines.map((l) => l.id))
+  const mua = t.lines.filter((l) => soDuyet(l) > 0)
+  return {
+    id: t.id,
+    code: t.code,
+    approved_at: t.approved_at,
+    du_kien: tongTheoDuyet(t.lines),
+    thuc_chi: Math.round(t.lines.reduce((a, l) => a + (so.get(l.id)?.tien ?? 0), 0)),
+    du_dong: mua.filter((l) => (so.get(l.id)?.daNhap ?? 0) >= soDuyet(l) - 1e-9).length,
+    mua_dong: mua.length,
+  }
+}
+
 export const deNghiService = {
   async list(user: User): Promise<DeNghiDay[]> {
     await xemDuoc(user)
@@ -187,7 +289,8 @@ export const deNghiService = {
     const ds = (await deNghiRepo.list())
       .map((p) => ({ p, ro: roDuyet(p, user) }))
       .filter((x): x is { p: DeNghiDay; ro: RoDuyet | 'khac' } => x.ro != null)
-    const daDuyet = (st: string) => st === 'approved' || st === 'ordering' || st === 'done'
+    const daDuyet = (st: string) =>
+      st === 'approved' || st === 'ordering' || st === 'done'
     const so = await deNghiRepo.soKho(
       ds.filter((x) => daDuyet(x.p.status)).flatMap((x) => x.p.lines.map((l) => l.id)),
     )
@@ -215,7 +318,9 @@ export const deNghiService = {
           : 0,
         thuc_chi: Math.round(p.lines.reduce((a, l) => a + (so.get(l.id)?.tien ?? 0), 0)),
         phieu_nhap: [
-          ...new Set(p.lines.flatMap((l) => (so.get(l.id)?.phieu ?? []).map((x) => x.code))),
+          ...new Set(
+            p.lines.flatMap((l) => (so.get(l.id)?.phieu ?? []).map((x) => x.code)),
+          ),
         ].sort(),
         rejected_reason: p.rejected_reason,
         approved_by_name: p.approved_by_name,
@@ -254,22 +359,27 @@ export const deNghiService = {
     const ids = [
       ...new Set(p.lines.map((l) => l.material_id).filter((x): x is string => !!x)),
     ]
-    const [vt, { ton, gia }, sua, duyet, ghiSo, so] = await Promise.all([
+    const [vt, tt, sua, duyet, ghiSo, so, truoc] = await Promise.all([
       deNghiRepo.vatTu(ids),
-      goiYTheoMa(ids),
+      thongTinMa(ids, p.id),
       canManage(user),
       canApprove(user),
       canAction(user, 'warehouse.stock.write'),
       deNghiRepo.soKho(p.lines.map((l) => l.id)),
+      phieuTruoc(p),
     ])
     return {
       phieu: {
         ...p,
+        phieu_truoc: truoc,
         lines: p.lines.map((l) => ({
           ...l,
           code: l.material_id ? (vt.get(l.material_id)?.code ?? null) : null,
-          ton: l.material_id ? (ton.get(l.material_id) ?? 0) : null,
-          gia_gan_nhat: l.material_id ? (gia.get(l.material_id) ?? null) : null,
+          ton: l.material_id ? (tt.get(l.material_id)?.ton ?? 0) : null,
+          gia_gan_nhat: l.material_id ? (tt.get(l.material_id)?.gia ?? null) : null,
+          theo_doi: l.material_id ? (tt.get(l.material_id)?.theo_doi ?? false) : null,
+          trung: l.material_id ? (tt.get(l.material_id)?.trung ?? []) : [],
+          dang_ve: l.material_id ? (tt.get(l.material_id)?.dang_ve ?? []) : [],
           can: soDuyet(l),
           da_nhap: so.get(l.id)?.daNhap ?? 0,
           phieu_nhap: so.get(l.id)?.phieu ?? [],
@@ -282,17 +392,19 @@ export const deNghiService = {
     }
   },
 
-  /** Gợi ý tồn + giá gần nhất cho các mã vừa thêm trên màn lập phiếu. */
+  /**
+   * Thông tin cho các mã vừa thêm trên màn lập phiếu (Đ6): tồn / chưa theo dõi,
+   * giá lần trước, trùng đề nghị khác, đơn mua còn về. `truPhieu` = phiếu đang
+   * sửa (không tự báo trùng với chính nó).
+   */
   async goiY(
     user: User,
     ids: string[],
-  ): Promise<Record<string, { ton: number; gia: GiaGanNhat | null }>> {
+    truPhieu: string | null = null,
+  ): Promise<Record<string, ThongTinMa>> {
     await xemDuoc(user)
-    const { ton, gia } = await goiYTheoMa([...new Set(ids)].slice(0, 200))
-    const out: Record<string, { ton: number; gia: GiaGanNhat | null }> = {}
-    for (const id of new Set(ids))
-      out[id] = { ton: ton.get(id) ?? 0, gia: gia.get(id) ?? null }
-    return out
+    const tt = await thongTinMa([...new Set(ids)].slice(0, 200), truPhieu)
+    return Object.fromEntries(tt)
   },
 
   async create(

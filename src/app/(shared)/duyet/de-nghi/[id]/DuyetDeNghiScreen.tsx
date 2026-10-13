@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { PhieuTruoc, ThongTinDong, TonChu } from './thong-tin-dong'
 import type { DeNghiChiTiet } from '@/modules/dept/warehouse/de-nghi.service'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, todayVn } from '@/lib/date-vn'
@@ -201,6 +202,8 @@ export function DuyetDeNghiScreen({
           </NoticeBar>
         )}
 
+        {p.phieu_truoc && <PhieuTruoc t={p.phieu_truoc} />}
+
         {/* Dòng hàng: mỗi dòng một khối chữ — đọc được ở 390px, không cuộn ngang. */}
         <ul className="m-0 flex list-none flex-col p-0" aria-label="Vật tư đề nghị mua">
           {p.lines.map((l) => {
@@ -230,14 +233,7 @@ export function DuyetDeNghiScreen({
                 </span>
                 <span className="text-k-sm min-w-0 text-[var(--ink-3)]">
                   {l.code ? <Code>{l.code}</Code> : <Tag tone="warn">chưa có mã</Tag>}
-                  {l.ton != null && (
-                    <span
-                      className={l.ton <= 0 ? 'font-semibold text-[var(--warn)]' : ''}
-                    >
-                      {' '}
-                      · tồn {fmt(l.ton)}
-                    </span>
-                  )}
+                  <TonChu l={l} />
                   {l.purpose && <span> · {l.purpose}</span>}
                 </span>
                 <span className="text-k-sm text-right text-[var(--ink-2)]">
@@ -250,6 +246,7 @@ export function DuyetDeNghiScreen({
                     <span className="num">{fmt(Math.round(q * l.unit_price))} đ</span>
                   )}
                 </span>
+                <ThongTinDong l={l} />
               </li>
             )
           })}

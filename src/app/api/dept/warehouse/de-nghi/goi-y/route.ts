@@ -16,11 +16,13 @@ const query = z.object({
         .filter(Boolean),
     )
     .pipe(z.array(z.string().uuid()).min(1).max(200)),
+  /** Phiếu đang sửa — không tự báo trùng với chính nó (Đ6). */
+  tru: z.string().uuid().optional(),
 })
 
-/** Tồn dùng được + giá mua gần nhất cho các mã vừa thêm vào phiếu đề nghị. */
+/** Tồn / chưa theo dõi, giá lần trước, trùng đề nghị khác, đơn mua còn về (Đ6) cho các mã vừa thêm. */
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const { ids } = parseQuery(new URL(req.url), query)
-  return NextResponse.json({ goi_y: await deNghiService.goiY(user, ids) })
+  const { ids, tru } = parseQuery(new URL(req.url), query)
+  return NextResponse.json({ goi_y: await deNghiService.goiY(user, ids, tru ?? null) })
 })

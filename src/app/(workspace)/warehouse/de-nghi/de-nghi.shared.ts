@@ -10,6 +10,16 @@ export type GiaGoiY = {
   po_code: string
   supplier_name: string
   at: string
+  nguon?: 'po' | 'kho'
+}
+
+/** Gợi ý của một mã (Đ6) — đúng hình `ThongTinMa` của service. */
+export type GoiYMa = {
+  ton: number
+  theo_doi: boolean
+  gia: GiaGoiY | null
+  trung: { code: string; status: DeNghiStatus; qty: number }[]
+  dang_ve: { po_code: string; qty_open: number }[]
 }
 
 export type DongForm = {
@@ -28,6 +38,11 @@ export type DongForm = {
   purpose: string
   note: string
   gia_goi_y: GiaGoiY | null
+  /** Mã đã từng có giao dịch sổ kho chưa (Đ6) — false: tồn 0 là "chưa theo dõi". */
+  theo_doi?: boolean | null
+  /** Đề nghị khác đang mở cùng mã / đơn mua Cung ứng còn về (Đ6). */
+  trung?: GoiYMa['trung']
+  dang_ve?: GoiYMa['dang_ve']
   /** Số phải nhập = số duyệt (0238 · DN-5). */
   can?: number
   /** Đã nhập, đọc từ sổ kho. */
