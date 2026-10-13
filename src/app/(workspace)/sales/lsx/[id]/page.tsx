@@ -57,6 +57,10 @@ export default async function LsxDetailPage({
       ? ordersRepo.listMergeCandidates(lsx.customer_id)
       : Promise.resolve([]),
   ])
+  // BOM của SP theo dòng đơn — cùng nguồn `bom_status` mà lsx.service đếm "thiếu
+  // BOM" khi gửi duyệt. Trước 13/10/2026 ô "chưa có định mức" đếm dòng KHÔNG GẮN SP
+  // (!product_id), tức một thứ khác hẳn, nên lệnh 2 SP chưa chốt BOM vẫn báo 0.
+  const bomByProduct = new Map(orderLines.map((l) => [l.product_id, l.bom_status]))
   const mergeLineCounts = await productionRepo.linesCountByOrder(
     mergeCandidates.map((o) => o.id),
   )
@@ -146,7 +150,7 @@ export default async function LsxDetailPage({
           spec_summary: Object.values(l.specs ?? {})
             .filter(Boolean)
             .join(' · '),
-          bom_missing: !l.product_id,
+          bom_missing: !l.product_id || bomByProduct.get(l.product_id) !== 'done',
         })),
       }))}
       lots={lots.map((l) => ({
