@@ -469,7 +469,6 @@ export function useDonHangForm(p: DonHangFormProps) {
               customer_id: activeCustomerId || null,
               customer_item_code: l.draft.itemCode || null,
               notes: l.draft.notes || null,
-              reference_price: l.unitPrice.trim() === '' ? null : num(l.unitPrice),
               barcode: l.draft.barcode || null,
               tech_spec: Object.fromEntries(
                 SPEC_FIELDS.map(([k]) => [k, l.draft!.spec[k].trim()]).filter(

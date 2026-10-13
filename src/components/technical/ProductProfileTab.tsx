@@ -264,13 +264,8 @@ export function ProductProfileTab({
                         false,
                       ],
                       ['Barcode', product.barcode, true],
-                      [
-                        'Giá tham khảo',
-                        product.reference_price != null
-                          ? product.reference_price.toLocaleString('en-US')
-                          : null,
-                        false,
-                      ],
+                      // "Giá tham khảo" GỠ 13/10/2026: Sale tạo SP từ đơn/báo giá là giá
+                      // BÁN bị ghi vào đây, mà hồ sơ này mọi phòng xem — lộ giá bán.
                     ] as [string, string | null, boolean][]
                   ).map(([label, value, mono]) => (
                     <div key={label} className="flex min-w-0 flex-col gap-0.5">
@@ -488,7 +483,6 @@ function buildTracks(
         { label: 'Tên theo khách', done: !!p.name_foreign, section: 'identity' },
         { label: 'Mã KH đặt', done: !!p.customer_item_code, section: 'identity' },
         { label: 'Barcode', done: !!p.barcode, section: 'identity' },
-        { label: 'Giá tham khảo', done: p.reference_price != null, section: 'identity' },
         { label: 'Mô tả tiếng Anh', done: !!p.description_en, section: 'text' },
       ],
     },
