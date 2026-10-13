@@ -8,6 +8,7 @@ import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
 import { tongDuKien } from '@/lib/de-nghi'
 import { choToiDuyet } from '@/lib/de-nghi-duyet'
+import type { LoaiPhieu } from '@/lib/loai-phieu-duyet'
 import { assessPoLate } from '@/lib/late-risk'
 import { isBigApprovalWith, type ApprovalThresholds } from '@/lib/exec-ops'
 import { settingsService } from '@/modules/core/settings/settings.service'
@@ -172,7 +173,7 @@ function sumByCurrency(rows: { currency: string; value: number }[]) {
 /** Một phiếu đang nằm chờ chữ ký ở Trung tâm phê duyệt (/exec/approvals). */
 export type SignItem = {
   /** `dnm` = đề nghị mua vật tư của Kho (0236 · Đ2). */
-  kind: 'lsx' | 'po' | 'quote' | 'dnm'
+  kind: LoaiPhieu
   id: string
   code: string
   /** Đối tác: khách hàng (LSX) hoặc nhà cung cấp (PO). */
@@ -194,6 +195,16 @@ export type SignItem = {
   big: boolean
   /** Trang thẩm định đầy đủ. */
   href: string
+  /**
+   * Ngày của cột "Hẹn" — nghĩa theo loại (`LOAI_PHIEU[kind].cot.hen`): lệnh =
+   * ngày giao, đề nghị = cần trước, báo giá = hiệu lực đến. Đơn mua đọc
+   * `po.expected_at` (kèm số ngày quá hẹn). YYYY-MM-DD.
+   */
+  hen?: string | null
+  /** Cột ngữ cảnh ngoài đơn mua — đề nghị mua: lệnh SX gắn kèm. */
+  boi_canh?: string | null
+  /** Đề nghị mua (Đ5 · Hộp ký H2): số dòng + lưu ý để khối của nó có cột riêng. */
+  dnm?: { so_dong: number; chua_ma: number; thieu_gia: number }
   /**
    * 0218 — đơn GỬI GẤP trước khi ký, đang chờ ký bù. Không ký hàng loạt được:
    * phải mở ra đọc lý do gấp rồi ký bù (hoặc không đồng ý).
@@ -451,6 +462,7 @@ export const execService = {
         // vào đây thì mọi lệnh đều đỏ và cái cờ mất nghĩa.
         big: false,
         href: `/exec/approvals/lsx/${l.id}`,
+        hen: l.ship_date ?? null,
       })
     }
 
@@ -480,6 +492,7 @@ export const execService = {
         // Không có tiền cam kết chi — không bao giờ mang cờ "giá trị lớn".
         big: false,
         href: `/exec/approvals/quote/${q.id}`,
+        hen: q.valid_to ?? null,
       })
     }
 
@@ -517,6 +530,9 @@ export const execService = {
           warnings: t.thieuGia > 0 ? [`${t.thieuGia} dòng chưa có giá dự kiến`] : [],
           big: false,
           href: `/duyet/de-nghi/${r.id}`,
+          hen: r.need_by,
+          boi_canh: r.lsx_code,
+          dnm: { so_dong: r.lines.length, chua_ma: chuaMa, thieu_gia: t.thieuGia },
         })
       }
     }
