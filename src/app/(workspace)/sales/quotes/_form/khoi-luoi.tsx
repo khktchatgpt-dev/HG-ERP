@@ -13,7 +13,7 @@ import {
   inchStr,
   QuoteLineDetails,
 } from '@/components/sales/quote-form.shared'
-import { PRICE_NAME, type PlanPrice } from '@/lib/sale-price'
+import { PRICE_NAME, suggestionNote, type PlanPrice } from '@/lib/sale-price'
 import {
   EDGE,
   GhiChuNoiBo,
@@ -408,11 +408,14 @@ function Dong({
             data-c="price"
             className={cn(
               CELL,
-              `${NUM} ${(l.productId && l.unitPrice.trim() === '') || under ? 'border-[var(--stop)]' : ''}`,
+              `${NUM} ${l.priceFrom ? 'h-6' : ''} ${(l.productId && l.unitPrice.trim() === '') || under ? 'border-[var(--stop)]' : ''}`,
             )}
             value={l.unitPrice}
             inputMode="decimal"
-            onChange={(e) => d.setLine(l.key, { unitPrice: e.target.value })}
+            // Gõ tay là xoá cờ "gợi ý Giá bán KH".
+            onChange={(e) =>
+              d.setLine(l.key, { unitPrice: e.target.value, priceFrom: undefined })
+            }
             onKeyDown={(e) => gridKey(e, i, 'price')}
             aria-label="Giá trước chiết khấu"
             title={
@@ -421,6 +424,14 @@ function Dong({
                 : undefined
             }
           />
+          {l.priceFrom && (
+            <span
+              className="text-muted-foreground block truncate px-1.5 text-right text-[11px] leading-4"
+              title="Khách chưa từng được chào SP này — giá gợi sẵn bằng Giá bán KH, soát lại"
+            >
+              {suggestionNote({ from: 'plan', ref: null })}
+            </span>
+          )}
         </td>
         <td className={`${TD} px-1`}>
           <input
