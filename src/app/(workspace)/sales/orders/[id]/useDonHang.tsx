@@ -243,21 +243,27 @@ export function useDonHang(p: DonHangProps) {
     setBusy(true)
     setErr(null)
     try {
-      await api('/api/dept/production/lsx', {
-        method: 'POST',
-        body: {
-          code: lsxCode.trim(),
-          order_ids: [p.order.id, ...mergeIds],
-          ship_date: lsxShipDate || null,
-          container_summary: lsxContainer.trim() || p.order.container_summary,
+      const { lsx } = await api<{ lsx: { id: string; code: string } }>(
+        '/api/dept/production/lsx',
+        {
+          method: 'POST',
+          body: {
+            code: lsxCode.trim(),
+            order_ids: [p.order.id, ...mergeIds],
+            ship_date: lsxShipDate || null,
+            container_summary: lsxContainer.trim() || p.order.container_summary,
+          },
         },
-      })
+      )
+      // Lệnh vừa tạo là NHÁP — Giám đốc chưa nhận gì. Câu cũ "chờ Giám đốc duyệt"
+      // làm Sale tưởng đã gửi rồi bỏ đó (13/10/2026). Đưa thẳng sang tờ lệnh để
+      // soát dòng và bấm "Gửi GĐ duyệt".
       toast.success(
-        'Đã phát lệnh — chờ Giám đốc duyệt',
-        mergeIds.length ? `${p.order.code} + ${mergeIds.length} đơn gộp` : p.order.code,
+        `Đã tạo lệnh nháp ${lsx.code}`,
+        'Soát dòng lệnh rồi bấm "Gửi GĐ duyệt" — Giám đốc chưa nhận được lệnh này',
       )
       setPanel(null)
-      router.refresh()
+      router.push(`/sales/lsx/${lsx.id}`)
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Phát lệnh thất bại')
     } finally {

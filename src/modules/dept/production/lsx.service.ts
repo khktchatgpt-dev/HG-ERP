@@ -340,7 +340,14 @@ export const lsxService = {
       decision: 'approved',
       decided_by: user.id,
       issued_by: lsx.issued_by,
-      notify_ids: await lsxAudienceIds(),
+      // Kế hoạch · Cung ứng · Kỹ thuật · xưởng — CỘNG người phát lệnh (Sale):
+      // trước 13/10/2026 Sale không được báo, phải tự mở lại lệnh để biết đã duyệt.
+      notify_ids: [
+        ...new Set([
+          ...(await lsxAudienceIds()),
+          ...(lsx.issued_by ? [lsx.issued_by] : []),
+        ]),
+      ],
     })
     return updated
   },

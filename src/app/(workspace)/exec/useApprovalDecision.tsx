@@ -41,6 +41,17 @@ export type DecideTarget = {
 
 /** Tên loại phiếu trong tiêu đề dialog. */
 const KIND_NOUN = { lsx: 'LSX', po: 'đơn đặt', quote: 'báo giá' } as const
+/**
+ * Trả lại thì phiếu đi đâu — mỗi loại một đường, đừng nói chung "về NHÁP" (13/10/2026:
+ * LSX bị trả sang "Bị từ chối" và người lập phải bấm "Trình duyệt lại", không phải
+ * "Gửi GĐ duyệt"; câu cũ dẫn người soạn đi tìm nút không có).
+ */
+const REJECT_THEN = {
+  lsx: 'Lệnh sang "Bị từ chối", các đơn của lệnh về "Đã xác nhận" — người lập sửa theo lý do rồi bấm "Trình duyệt lại".',
+  po: 'Đơn đặt quay về NHÁP, giữ nguyên số và lịch sử — người soạn sửa theo lý do rồi gửi duyệt lại.',
+  quote:
+    'Báo giá sang "Bị từ chối", giữ nguyên số và lịch sử — Sale sửa theo lý do rồi gửi duyệt lại.',
+} as const
 /** Duyệt xong thì chuyện gì được mở khoá — câu nhắc trong dialog duyệt. */
 const APPROVE_UNLOCKS = {
   lsx: 'Duyệt xong Cung ứng mới đặt được vật tư.',
@@ -286,8 +297,8 @@ export function useApprovalDecision(onSettled?: () => void) {
               {rejectTarget?.code}
             </DialogTitle>
             <DialogDescription>
-              {rejectTarget?.label}. Phiếu quay về NHÁP, giữ nguyên số và lịch sử — người
-              soạn sửa theo lý do rồi gửi duyệt lại. Ghi rõ cần sửa gì.
+              {rejectTarget?.label}. {rejectTarget ? REJECT_THEN[rejectTarget.kind] : ''}{' '}
+              Ghi rõ cần sửa gì.
             </DialogDescription>
           </DialogHeader>
           <Textarea
