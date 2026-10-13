@@ -11,6 +11,7 @@ import {
   lineReady,
   mergeLineInto,
   migrateDraftLine,
+  newFeeLine,
   newFreeLine,
   newLine,
   lineQty2,
@@ -68,6 +69,7 @@ const base: PoLineDto = {
   weight_per_unit: null,
   m3_per_unit: null,
   warranty_text: null,
+  print_spec: null,
   open_style: null,
   pcs_per_ctn: null,
   inner_l_mm: null,
@@ -1470,5 +1472,34 @@ describe('mây — SL theo LSX × Định mức SP = SL đơn hàng', () => {
     expect(lsxFromNeed('rattan', { qty_needed: 1120, breakdown: [{ qty: 200, per_unit: 5.1 }, { qty: 40, per_unit: 2.5 }] })).toEqual({ qty_lsx: 240, dm_per_sp: 4.6667 }) // prettier-ignore
     expect(lsxFromNeed('rattan', { qty_needed: 10, breakdown: [] })).toEqual({})
     expect(lsxFromNeed('accessory', { qty_needed: 10, breakdown: [{ qty: 2, per_unit: 5 }] })).toEqual({}) // prettier-ignore
+  })
+})
+
+describe('dòng phí / dịch vụ trên lưới (0234)', () => {
+  it('chỉ đòi tên + SL + giá — không đòi kg/m, lọt lòng, m³ của mẫu', () => {
+    const l = {
+      ...newFeeLine('Công dán + keo bồi'),
+      qty: 557 as Num,
+      price: 3_000 as Num,
+    }
+    for (const t of ['aluminium', 'metal_kg', 'carton', 'glass', 'wood', 'foam'] as const)
+      expect(lineProblem(t, l), t).toBeNull()
+    expect(lineProblem('carton', { ...l, name: ' ' })).toBe('thiếu tên phí / dịch vụ')
+  })
+
+  it('dòng phí là dòng tự do mang cờ phí; payload deriveLine nhận line_kind', () => {
+    const l = newFeeLine()
+    expect(l.is_free && l.fee).toBe(true)
+    expect(l.material_id.startsWith('free-')).toBe(true)
+  })
+})
+
+describe('khôi phục nháp cũ có dòng phí (13/10/2026)', () => {
+  it('nháp từ bản trước 0234: dòng tự do ở mẫu khác gỗ nhận lại cờ phí; mẫu gỗ thì không', () => {
+    const { fee: _bo, ...cu } = { ...newFeeLine('Công dán + keo bồi'), qty: 557 as Num, price: 3_000 as Num } // prettier-ignore
+    void _bo
+    expect(migrateDraftLine('carton', cu as Line).fee).toBe(true)
+    expect(migrateDraftLine('wood', cu as Line).fee).toBe(false)
+    expect(migrateDraftLine('wood', { ...cu, fee: true } as Line).fee).toBe(true)
   })
 })

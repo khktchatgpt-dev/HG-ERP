@@ -66,6 +66,7 @@ const line = (over: Partial<PoPrintLine> = {}): PoPrintLine => ({
   weight_per_unit: null,
   m3_per_unit: null,
   warranty_text: null,
+  print_spec: null,
   open_style: null,
   pcs_per_ctn: null,
   inner_l_mm: null,
@@ -305,10 +306,34 @@ describe('buildPoExcel — khớp phiếu in', () => {
 })
 
 describe('numFmtOf — số trên file giống số trên phiếu in', () => {
-  it('số lẻ giữ tới 3 chữ số (m³/SP 0,006 không thành 0); số nguyên không dấu chấm thừa', () => {
-    expect(numFmtOf(0.00629)).toBe('#,##0.###')
-    expect(numFmtOf(0.629)).toBe('#,##0.###')
+  it('số lẻ giữ tới 6 chữ số (m³/SP 0,000487 của PO-2026-0177 không thành 0); số nguyên không dấu chấm thừa', () => {
+    expect(numFmtOf(0.000487)).toBe('#,##0.######')
+    expect(numFmtOf(0.00629)).toBe('#,##0.######')
+    expect(numFmtOf(0.629)).toBe('#,##0.######')
     expect(numFmtOf(100)).toBe('#,##0')
     expect(numFmtOf('')).toBe('#,##0')
+  })
+})
+
+describe('buildPoExcel — cột trắng ở mọi dòng không xuất (12/10/2026, cùng luật phiếu in)', () => {
+  const texts = async (lines: PoPrintLine[]) => {
+    const ws = await load(await buildPoExcel({ company: COMPANY, po: header({ template: 'carton' }), supplier: null, lines })) // prettier-ignore
+    const out: string[] = []
+    ws.eachRow((row) => row.eachCell((c) => out.push(String(c.value ?? ''))))
+    return out
+  }
+  const thung = { spec: '78.5x75.5x76.5 cm', pcs_per_ctn: 1, qty_demand: 200, inner_l_mm: 785, inner_w_mm: 755, inner_h_mm: 765 } // prettier-ignore
+
+  it('bao bì chưa ghi Cách mở / Bản in ở dòng nào → hai cột đó không có trên file', async () => {
+    const t = await texts([line(thung), line({ ...thung, id: 'l2' })])
+    expect(t).not.toContain('Cách mở')
+    expect(t).not.toContain('Bản in + công')
+    expect(t).toContain('Pcs/thùng')
+    expect(t).toContain('Lọt lòng D×R×C (mm)')
+  })
+
+  it('một dòng có Bản in là cột còn', async () => {
+    const t = await texts([line(thung), line({ ...thung, id: 'l2', print_fee: 3_278 })])
+    expect(t).toContain('Bản in + công')
   })
 })

@@ -1,6 +1,7 @@
 import { CanhBaoChuaChia, PhanTheoLenhIn } from './phan-theo-lenh-in'
 import { chiaLenhDong } from '@/lib/po-lsx-split'
 import {
+  feeLast,
   fmtMoney,
   packCount,
   poLineAmount,
@@ -12,13 +13,12 @@ import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { poPdfName } from '@/lib/print-file-name'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
-  PO_PRINT_ORDER,
+  poPrintFieldText,
+  poPrintKeys,
   PO_PRINT_QTY_LABEL,
   poField,
   poPriceSuffix,
-  poFieldText,
   poPriceUnitPerLine,
-  type PoField,
 } from '@/lib/po-fields'
 import {
   PrintLetterhead,
@@ -77,6 +77,9 @@ export type PoPrintLine = {
   /** 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành. */
   m3_per_unit: number | null
   warranty_text: string | null
+  print_spec: string | null
+  /** 0234 — 'phi' = dòng phí / dịch vụ (đứng cuối bảng, không vào "Tổng số …"). */
+  line_kind?: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -180,10 +183,6 @@ const priceCol = (currency: string, unit: string | null): Col => ({
   align: 'right',
   cell: (l) => (l.unit_price == null ? '' : fmtMoney(l.unit_price, currency)),
 })
-/** Giá trị in của một cột khai báo — chữ dựng ở `poFieldText` (dùng chung màn ký). */
-function printCell(f: PoField): (l: PoPrintLine) => React.ReactNode {
-  return (l) => poFieldText(f, l)
-}
 
 /**
  * Bộ cột của phiếu in theo MẪU ĐƠN — thứ tự và nhãn đọc từ `PO_PRINT_ORDER`
@@ -202,6 +201,8 @@ function columnsFor(
     expectedAt: string | null
     /** Mẫu tính theo kg mà có dòng giá theo ĐVT — xem `poPriceUnitPerLine`. */
     priceUnitOf?: ReturnType<typeof poPriceUnitPerLine>
+    /** Dòng của đơn — cột khai báo trống ở mọi dòng thì không in (`poPrintKeys`). */
+    lines: readonly PoPrintLine[]
   },
 ): Col[] {
   const meta = poTemplateMeta(t)
@@ -269,18 +270,15 @@ function columnsFor(
     '@note': colNote,
   }
 
-  return PO_PRINT_ORDER[t].map((key) => {
+  // Cột trắng ở mọi dòng không in (12/10/2026) — xem `poPrintKeys`.
+  return poPrintKeys(t, ctx.lines).map((key) => {
     const hit = fixed[key]
     if (hit) return hit
     const f = poField(t, key)!
     return {
       label: f.printLabel ?? f.label,
       align: f.align === 'right' ? 'right' : 'left',
-      // "Kích thước" của mẫu inox/sắt: chưa nhập thì lấy tạm quy cách chung.
-      cell:
-        f.key === 'dim'
-          ? (l: PoPrintLine) => l.dimension_text ?? l.spec ?? ''
-          : printCell(f),
+      cell: (l: PoPrintLine) => poPrintFieldText(f, l),
     } satisfies Col
   })
 }
@@ -297,7 +295,7 @@ export function PoPrintSheet({
   tpl = DEFAULT_DOC_TEMPLATES.PO,
   po,
   supplier,
-  lines,
+  lines: linesIn,
   exportHref,
   shipments,
 }: {
@@ -324,6 +322,8 @@ export function PoPrintSheet({
     lines: { name: string; qty: number; unit: string; amount: number | null }[]
   }[]
 }) {
+  // Dòng phí / dịch vụ (0234) xuống cuối bảng — hàng hoá trước, khoản phí sau.
+  const lines = feeLast(linesIn)
   const template = po.template ?? 'simple'
   const meta = poTemplateMeta(template)
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`
@@ -334,6 +334,7 @@ export function PoPrintSheet({
     orderDate: d,
     expectedAt: po.expected_at,
     priceUnitOf: poPriceUnitPerLine(meta.priceUnit, lines),
+    lines,
   })
   /*
     CỘT "CHIA LỆNH" — chỉ đơn gộp từ 2 lệnh (10/10/2026, user chọn): mỗi lệnh một

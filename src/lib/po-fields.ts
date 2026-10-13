@@ -338,6 +338,25 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('baohanh', 'Bảo hành', 'w-[90px]', 'warranty_text', '12 tháng'),
     UNIT2_FIELD,
   ],
+  /*
+   * TEM NHÃN (12/10/2026) — bộ cột user chốt: Chất liệu · Kích thước · Kiểu in /
+   * gia công · SL đơn hàng · Đm/sp. Kiểu in có CỘT RIÊNG `print_spec` (0233),
+   * không mượn `finish`. Lưới soạn đơn giữ 3 ô đầu; SL đơn hàng + Đm/sp xuống
+   * khay chi tiết dòng — phiếu in vẫn đủ cả năm cột (`PO_PRINT_ORDER`).
+   */
+  label: [
+    t('grade', 'Chất liệu', 'w-[110px]', 'material_grade', 'Decal 80gr…'),
+    t('spec', 'Kích thước', 'w-[100px]', 'spec', '19.5x7.5cm'),
+    t(
+      'inan',
+      'Kiểu in / gia công',
+      'w-[170px]',
+      'print_spec',
+      'Offset 4 màu 2 mặt, cán mờ…',
+    ),
+    n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
+  ],
   simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…'), UNIT2_FIELD],
 }
 
@@ -528,9 +547,55 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'baohanh',
     '@note',
   ],
+  // Tem nhãn: thông số in đứng cạnh tên, SL đơn hàng · Đm/sp ngay trước ĐVT như
+  // mẫu phụ kiện (tờ PQ, PO-2026-0123) — NCC đọc được vì sao đặt từng ấy nhãn.
+  label: [
+    '@stt',
+    '@name',
+    'grade',
+    'spec',
+    'inan',
+    'demand',
+    'dm',
+    '@unit',
+    '@qty',
+    '@price',
+    '@amount',
+    '@note',
+  ],
   // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 cùng nhịp với mẫu sơn — hai ngày
   // nằm ở đầu phiếu, 12 mẫu không còn mẫu nào lặp ngày xuống dòng.
   simple: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+}
+
+/** Dòng tối thiểu để đọc chữ một cột in — thêm hai trường của nhánh 'dim'. */
+export type PoPrintTextLine = PoFieldLine & {
+  spec?: string | null
+  dimension_text?: string | null
+}
+
+/** Chữ in của một cột khai báo — 'dim' (inox/sắt) chưa nhập thì lấy tạm quy cách chung. */
+export function poPrintFieldText(f: PoField, l: PoPrintTextLine): string {
+  return f.key === 'dim' ? (l.dimension_text ?? l.spec ?? '') : poFieldText(f, l)
+}
+
+/**
+ * CỘT TRẮNG KHÔNG IN (12/10/2026, phòng Cung ứng: "nhiều đơn phải để quá nhiều ô
+ * trống"). Đo 142 đơn thật: Mã khuôn trống ở 10/10 đơn nhôm, Vật liệu 15/15 đơn
+ * inox/sắt, Bản in + công 9/9 đơn bao bì, Quy cách 18/19 đơn gỗ — tờ gửi NCC kẻ
+ * cả cột trắng nguyên.
+ *
+ * Cột khai báo của mẫu TRỐNG Ở MỌI DÒNG của đơn thì bỏ; cột cố định (`@…`: STT,
+ * tên, ĐVT, SL, giá, tiền, ghi chú) luôn giữ. Cột còn lại GIỮ THỨ TỰ của
+ * `PO_PRINT_ORDER` — NCC không phải dò lại bố cục. Một hàm cho phiếu in, Excel
+ * và màn ký (`po-approval-cols`) để ba nơi không lệch nhau.
+ */
+export function poPrintKeys(t: PoTemplate, lines: readonly PoPrintTextLine[]): string[] {
+  return PO_PRINT_ORDER[t].filter((key) => {
+    if (key.startsWith('@')) return true
+    const f = poField(t, key)
+    return !!f && lines.some((l) => poPrintFieldText(f, l) !== '')
+  })
 }
 
 /** Nhãn cột số lượng trên phiếu in — mỗi mẫu gọi một kiểu theo đơn vị mua. */
@@ -551,6 +616,8 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   glass: 'Số lượng',
   wood: 'Số lượng',
   mro: 'Số lượng',
+  // Đứng cạnh "SL đơn hàng" như phụ kiện/mây.
+  label: 'SL đặt',
   simple: 'Số lượng',
 }
 
@@ -658,6 +725,7 @@ export const PO_SHARED_FIELD_MEANING: Record<
     glass: 'Loại kính',
     wood: 'Loại gỗ',
     mro: 'Model / Mã hãng',
+    label: 'Chất liệu',
   },
   dimension_text: {
     metal_kg: 'Kích thước',
@@ -701,6 +769,7 @@ export const PO_SHARED_FIELD_PREFILL: Record<
     glass: true,
     wood: true,
     mro: false, // "Model / Mã hãng"
+    label: true, // "Chất liệu" — giấy/decal, đúng nghĩa "vật liệu" của danh mục
   },
   dimension_text: {
     metal_kg: true,
@@ -744,8 +813,18 @@ export function poLsxQty(
   return Math.round((d / m) * 1000) / 1000
 }
 
-const fmtVi = (n: number | null | undefined) =>
-  n == null ? '' : Number(n).toLocaleString('vi-VN')
+/**
+ * SỐ KIỂU VN, GIỮ TỚI 6 SỐ LẺ — cho ô thông số của dòng đơn (m³/SP, kg/m, m²…).
+ *
+ * `toLocaleString('vi-VN')` trơn chỉ giữ 3 số lẻ: m³/SP 0,000487 của tay vịn gỗ
+ * (PO-2026-0177, 12/10/2026) hiện thành "0" trên màn đơn, phiếu in lẫn màn ký —
+ * trong khi tiền vẫn tính đúng 0,753876 m³. 6 lẻ = cùng độ chính xác mọi tổng m³
+ * đang làm tròn (`round6`, po-template). Số nguyên và số ít lẻ in y như cũ.
+ */
+export const fmtSoVn = (n: number | null | undefined) =>
+  n == null ? '' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 6 })
+
+const fmtVi = fmtSoVn
 
 /**
  * CHỮ của một ô khai báo trên một dòng đơn — '' khi trống, KHÔNG trả '0'.

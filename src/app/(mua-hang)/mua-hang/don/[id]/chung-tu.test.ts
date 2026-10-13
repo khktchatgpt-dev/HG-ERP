@@ -5,8 +5,6 @@ import {
   poChecks,
   retemplate,
   type PoForHeader,
-  templateForGroup,
-  templateForSupplier,
 } from './chung-tu'
 
 const po: PoForHeader = {
@@ -66,19 +64,6 @@ describe('newHeader / retemplate', () => {
     expect(h.template).toBe('carton')
     expect(h.supplierId).toBe('s')
     expect(h.lsxId).toBe('l')
-  })
-})
-
-describe('templateForSupplier — chọn NCC thì mẫu theo đơn gần nhất của NCC đó', () => {
-  const last = { atp: 'accessory', vipora: 'accessory', doan_gia: 'aluminium' } as const
-  it('đơn MỚI, người soạn CHƯA tự chọn mẫu → mẫu của đơn gần nhất cùng NCC', () => {
-    expect(templateForSupplier({ supplierId: 'doan_gia', current: 'accessory', touched: false, isNew: true, last })).toBe('aluminium') // prettier-ignore
-  })
-  it('đã tự chọn mẫu / đơn đã lưu / NCC chưa có đơn / đang đúng mẫu → không đổi (null)', () => {
-    expect(templateForSupplier({ supplierId: 'doan_gia', current: 'accessory', touched: true, isNew: true, last })).toBeNull() // prettier-ignore
-    expect(templateForSupplier({ supplierId: 'doan_gia', current: 'accessory', touched: false, isNew: false, last })).toBeNull() // prettier-ignore
-    expect(templateForSupplier({ supplierId: 'moi', current: 'accessory', touched: false, isNew: true, last })).toBeNull() // prettier-ignore
-    expect(templateForSupplier({ supplierId: 'atp', current: 'accessory', touched: false, isNew: true, last })).toBeNull() // prettier-ignore
   })
 })
 
@@ -159,26 +144,13 @@ describe('newHeader — loại đơn mặc định', () => {
   it('mở từ dòng tồn kho mà không kèm lệnh = mua bù tồn → ngoài lệnh', () => {
     expect(newHeader({ fromStock: true }).poType).toBe('standalone')
     // Hạng mục truyền sẵn (0230): ?hm= hoặc "Dự trữ kho" khi mua bù tồn.
-    expect(newHeader({ fromStock: true, projectId: 'hm-du-tru' }).projectId).toBe('hm-du-tru')
+    expect(newHeader({ fromStock: true, projectId: 'hm-du-tru' }).projectId).toBe(
+      'hm-du-tru',
+    )
     expect(newHeader({ projectId: 'hm-1' }).poType).toBe('standalone')
     expect(newHeader({}).projectId).toBe('')
   })
   it('mở từ dòng tồn kho NHƯNG có lệnh trên URL thì vẫn theo lệnh', () => {
     expect(newHeader({ fromStock: true, lsxId: 'l1' }).poType).toBe('lsx')
-  })
-})
-
-describe('templateForGroup — đơn mới lấy mẫu theo nhóm của vật tư đầu tiên', () => {
-  const groups = { 'Bao bì': 'carton', 'Sắt thép': 'metal_kg' } as const
-  const base = { current: 'accessory', touched: false, isNew: true, groups } as const
-  it('nhóm có mẫu → đổi sang mẫu đó', () => {
-    expect(templateForGroup({ ...base, group: 'Bao bì' })).toBe('carton')
-  })
-  it('không đổi khi đã tự chọn mẫu, đơn đã có dòng, nhóm chưa đặt mẫu, hoặc đã đúng', () => {
-    expect(templateForGroup({ ...base, group: 'Bao bì', touched: true })).toBeNull()
-    expect(templateForGroup({ ...base, group: 'Bao bì', isNew: false })).toBeNull()
-    expect(templateForGroup({ ...base, group: 'Ngũ kim' })).toBeNull()
-    expect(templateForGroup({ ...base, group: null })).toBeNull()
-    expect(templateForGroup({ ...base, group: 'Bao bì', current: 'carton' })).toBeNull()
   })
 })

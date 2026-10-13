@@ -26,6 +26,7 @@ export const PO_TEMPLATES = [
   'glass',
   'wood',
   'mro',
+  'label',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
@@ -43,6 +44,23 @@ export type PoTemplate = (typeof PO_TEMPLATES)[number]
  * vẫn bắt buộc chọn từ danh mục để tồn kho/giá có chỗ bám.
  */
 export const FREE_LINE_TEMPLATES: readonly PoTemplate[] = ['wood']
+
+/**
+ * DÒNG KHÔNG MÃ Ở MẪU KHÁC GỖ = DÒNG PHÍ / DỊCH VỤ (0234, 13/10/2026).
+ *
+ * Ngoài mẫu gỗ, dòng không gắn vật tư CHỈ có thể là dòng phí. Nhưng tab mở từ trước
+ * khi có 0234 (JS cũ không biết `line_kind`) hoặc bản gõ dở tự lưu từ bản cũ gửi dòng
+ * phí lên thiếu cờ → server chặn "chỉ mẫu gỗ" (chị Nga sửa PO-2026-0176). Server và
+ * khôi phục nháp tự gắn lại cờ thay vì chặn; mẫu gỗ giữ nguyên (dòng mã SP tự do).
+ */
+export function dongKhongMaLaPhi<
+  T extends { material_id?: string | null; line_kind?: string | null },
+>(t: PoTemplate, lines: readonly T[]): T[] {
+  if (FREE_LINE_TEMPLATES.includes(t)) return [...lines]
+  return lines.map((l) =>
+    !l.material_id && l.line_kind == null ? { ...l, line_kind: 'phi' } : l,
+  )
+}
 
 export type PoTerms = {
   quality: string
@@ -313,6 +331,33 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       lead_time: 'Theo thời gian NCC xác nhận trên báo giá',
     },
   },
+  /*
+   * TEM NHÃN / IN ẤN (12/10/2026). Trước đó tem nhãn đi mẫu Phụ kiện (PQ, HLH)
+   * hoặc RƠI vào mẫu carton vì chung nhóm "Bao bì - đóng gói - tem nhãn" — ra
+   * cột Cách mở / Lọt lòng vô nghĩa, còn thứ xưởng in cần nhất là KIỂU IN thì
+   * không có chỗ: Hiệp Hưng nhét "in offset, cán màng mờ 2 mặt, đục lỗ" vào tên
+   * (PO-2026-0089/0106), Tân Vinh để quy cách in sổ HDLR trong ghi chú
+   * (PO-2026-0158). Thuế theo 6/6 đơn tem nhãn thật: 8%, giá chưa gồm VAT.
+   * Điều khoản là BẢN NHÁP TRUNG TÍNH như MRO — 6 đơn đó đều để trống, dùng mặc
+   * định của mẫu nên chưa có câu chữ thật để chép.
+   */
+  label: {
+    key: 'label',
+    label: 'Tem nhãn / in ấn',
+    hint: 'Tem, nhãn, thẻ treo, decal, barcode, sổ HDLR — chất liệu + kích thước + kiểu in. PQ, HLH, Hiệp Hưng, Tân Vinh',
+    priceUnit: null,
+    vatRate: 8,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'NGƯỜI LẬP',
+    terms: {
+      quality: 'In đúng mẫu đã duyệt — đúng màu, kích thước, chất liệu giấy',
+      delivery_place: DELIVERY_HG,
+      payment: 'Thanh toán công nợ cuối tháng',
+      invoice: INVOICE_VAT,
+      lead_time: 'Từ 5 đến 7 ngày kể từ ngày duyệt mẫu in',
+    },
+  },
   simple: {
     key: 'simple',
     label: 'Đơn giản',
@@ -344,6 +389,11 @@ export function poTemplateMeta(t: PoTemplate | null | undefined): PoTemplateMeta
 export type PoLineDraft = {
   /** SL đặt cuối cùng — luôn theo ĐVT mua (cây / con / tấm / thùng). */
   qty_ordered: number
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234): luôn SL × đơn giá — không dẫn xuất kg / m² / m³ theo
+   * mẫu (dòng "Công dán + keo bồi" trên đơn bao bì không có lọt lòng để tính).
+   */
+  line_kind?: string | null
   /** aluminium */
   weight_per_m?: number | null
   bar_length_m?: number | null
@@ -443,6 +493,7 @@ function round6(n: number): number {
  * ngay, hơn là im lặng ra thành tiền 0 rồi lọt qua duyệt.
  */
 export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
+  if (l.line_kind === 'phi') return { qty2: null, unit2: null, price_basis: 'unit' }
   const d = withOverride(t, l, deriveByTemplate(t, l))
   // Người dùng chọn đơn vị tính giá thì theo họ — nhưng chỉ cho chọn 'unit2'
   // khi dòng thật sự có số quy đổi, không thì tiền thành 0 mà không ai hiểu vì sao.
@@ -631,6 +682,7 @@ export const PO_TEMPLATE_SHORT: Record<PoTemplate, string> = {
   glass: 'Kính',
   wood: 'Gỗ',
   mro: 'Phụ tùng',
+  label: 'Tem nhãn',
   simple: 'Đơn giản',
 }
 

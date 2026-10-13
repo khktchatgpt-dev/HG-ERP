@@ -4,6 +4,7 @@ import {
   cartonAreaM2,
   deriveLine,
   foamM3PerSheet,
+  FREE_LINE_TEMPLATES,
   hasQty2Override,
   PO_TEMPLATE_META,
   QTY2_OVERRIDE_UNIT,
@@ -52,6 +53,11 @@ export type Line = {
    * gỗ/gia công đặt theo MÃ SP — tên và ĐVT gõ thẳng trên dòng.
    */
   is_free?: boolean
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234) — luôn kèm `is_free`: không gắn vật tư, tên + ĐVT gõ
+   * tay, SL × giá, dùng được ở mọi mẫu, không vào phiếu nhập kho.
+   */
+  fee?: boolean
   material_id: string
   code: string
   name: string
@@ -100,6 +106,8 @@ export type Line = {
   m3_per_unit: Num
   // mro: bảo hành — cột riêng từ 0139 (trước mượn finish).
   warranty_text: string
+  // label: kiểu in / gia công — cột riêng 0233.
+  print_spec: string
   // carton
   open_style: string
   pcs_per_ctn: Num
@@ -173,6 +181,8 @@ const n = (v: Num): number | null => (v === '' ? null : Number(v))
 /** Ô nhập của dòng → dạng `deriveLine` hiểu (kg/m, dài cây, kg/đv, m²…). */
 export function draftOf(l: Line) {
   return {
+    // Dòng phí / dịch vụ (0234): deriveLine trả thẳng SL × giá.
+    line_kind: l.fee ? ('phi' as const) : null,
     qty_ordered: Number(l.qty) || 0,
     weight_per_m: n(l.weight_per_m),
     bar_length_m: n(l.bar_length_m),
@@ -284,9 +294,12 @@ export function docTongGo(t: PoTemplate, l: Line, raw: string): Num {
 
 export function lineProblem(t: PoTemplate, l: Line): string | null {
   // Dòng tự do (0134): tên hàng là danh tính duy nhất — trống thì phiếu in rỗng.
-  if (l.is_free && !l.name.trim()) return 'thiếu tên hàng'
+  if (l.is_free && !l.name.trim())
+    return l.fee ? 'thiếu tên phí / dịch vụ' : 'thiếu tên hàng'
   if (l.qty === '' || Number(l.qty) <= 0) return 'thiếu SL đặt'
   if (l.price === '') return 'thiếu đơn giá'
+  // Dòng phí / dịch vụ (0234): SL × giá — không đòi thông số dẫn xuất của mẫu.
+  if (l.fee) return null
   const lech = tongLechBac(t, l)
   if (lech)
     return `tổng gõ tay ${lech.factor > 0 ? 'gấp ' : 'chỉ bằng 1/'}${Math.abs(lech.factor).toLocaleString('vi-VN')} lần số tự tính ${lech.auto.toLocaleString('vi-VN')} — gõ nhầm dấu thập phân?`
@@ -726,6 +739,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     // Gỗ đặt theo dòng tự do là chính; chọn từ danh mục thì m³/SP vẫn gõ tay.
     m3_per_unit: '',
     warranty_text: '',
+    print_spec: '',
     open_style: openStyle,
     pcs_per_ctn: last?.pcs_per_ctn ?? m.pcs_per_ctn ?? '',
     inner_l_mm: inner?.[0] ?? '',
@@ -863,6 +877,7 @@ export function newFreeLine(): Line {
     weight_per_unit: '',
     m3_per_unit: '',
     warranty_text: '',
+    print_spec: '',
     open_style: '',
     pcs_per_ctn: '',
     inner_l_mm: '',
@@ -883,6 +898,15 @@ export function newFreeLine(): Line {
   }
 }
 
+/**
+ * DÒNG PHÍ / DỊCH VỤ (0234) — công dán, phí in bản, phí giao hàng NCC thu chung
+ * hoá đơn, gia công… Không khai "vật tư" cho từng khoản phí: danh mục đã có 239
+ * mã dịch vụ chưa đơn nào dùng, vì dòng gắn vật tư bắt Kho lập phiếu nhập.
+ */
+export function newFeeLine(name = ''): Line {
+  return { ...newFreeLine(), fee: true, name, unit: 'Lần' }
+}
+
 /** Dòng đơn như repo trả về — chỉ những trường form cần. */
 export type PoLineDto = {
   id?: string
@@ -895,6 +919,8 @@ export type PoLineDto = {
   material_unit: string
   qty_ordered: number
   unit_price: number | null
+  /** 0234 — 'phi' = dòng phí / dịch vụ. */
+  line_kind?: string | null
   spec: string | null
   note: string | null
   /** Mã SP khách (tem/bao bì chia theo SP) — mang theo, không có ô sửa. */
@@ -911,6 +937,7 @@ export type PoLineDto = {
   weight_per_unit: number | null
   m3_per_unit: number | null
   warranty_text: string | null
+  print_spec: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -984,6 +1011,7 @@ function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): 
     po_line_id: l.id,
     uid: l.id ?? crypto.randomUUID(),
     is_free: isFree,
+    fee: l.line_kind === 'phi',
     material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,
     name: l.material_name,
@@ -1007,6 +1035,7 @@ function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): 
     weight_per_unit: n2(l.weight_per_unit),
     m3_per_unit: n2(l.m3_per_unit),
     warranty_text: s2(l.warranty_text),
+    print_spec: s2(l.print_spec),
     open_style: s2(l.open_style),
     pcs_per_ctn: n2(l.pcs_per_ctn),
     inner_l_mm: n2(l.inner_l_mm),
@@ -1077,6 +1106,9 @@ export function migrateDraftLine(t: PoTemplate, l: Line): Line {
     uid: l.uid ?? l.po_line_id ?? crypto.randomUUID(),
     m3_per_unit: l.m3_per_unit ?? '',
     warranty_text: l.warranty_text ?? '',
+    print_spec: l.print_spec ?? '',
+    // Nháp lưu từ bản trước 0234: dòng phí thiếu cờ — ngoài mẫu gỗ, dòng tự do CHỈ là phí.
+    fee: l.fee ?? (l.is_free === true && !FREE_LINE_TEMPLATES.includes(t)),
     // 0182 — nháp lưu trước khi có cặp quy đổi giá.
     unit2_per_unit: l.unit2_per_unit ?? '',
     unit2_label: l.unit2_label ?? '',

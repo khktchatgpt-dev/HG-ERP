@@ -33,6 +33,7 @@ const line = (over: Partial<Line> = {}): Line => ({
   weight_per_unit: '',
   m3_per_unit: '',
   warranty_text: '',
+  print_spec: '',
   open_style: '',
   pcs_per_ctn: '',
   inner_l_mm: '',
@@ -160,9 +161,14 @@ describe('buildPoPayload', () => {
   })
 
   it('hạng mục (0230): đơn ngoài lệnh gửi project_id, đơn theo lệnh luôn null', () => {
-    const ngoai = buildPoPayload(header({ poType: 'standalone', projectId: 'hm-1' }), [line()])
+    const ngoai = buildPoPayload(header({ poType: 'standalone', projectId: 'hm-1' }), [
+      line(),
+    ])
     expect(ngoai.project_id).toBe('hm-1')
-    const lenh = buildPoPayload(header({ poType: 'lsx', lsxId: 'l', projectId: 'hm-1' }), [line()])
+    const lenh = buildPoPayload(
+      header({ poType: 'lsx', lsxId: 'l', projectId: 'hm-1' }),
+      [line()],
+    )
     expect(lenh.project_id).toBeNull()
   })
 

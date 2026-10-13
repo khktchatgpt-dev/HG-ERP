@@ -208,10 +208,7 @@ export function BangGiaScreen({
                 <Row key={`${r.material_id}|${r.supplier_id}`}>
                   <Cell pin>
                     <span className="flex items-center gap-2">
-                      <Code
-                        as="a"
-                        href={`/mua-hang/vat-tu/${r.material_id}`}
-                      >
+                      <Code as="a" href={`/mua-hang/vat-tu/${r.material_id}`}>
                         {r.code}
                       </Code>
                       {nhieuNcc.has(r.material_id) && <Tag tone="done">so được</Tag>}
@@ -291,7 +288,6 @@ export function BangGiaScreen({
               </td>
             }
             cells={null}
-            caveat={`Giá lấy từ ĐƠN ĐÃ GỬI NCC trở đi — đơn nháp và chờ duyệt không tính. Giá cũ hơn ${CU_NGAY} ngày được đánh dấu: đừng đem đi chào lại mà chưa hỏi.`}
           />
         </Table>
       )}

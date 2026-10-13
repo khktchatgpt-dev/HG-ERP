@@ -682,7 +682,12 @@ describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', (
     expect(posRepo.insert).toHaveBeenCalled()
   })
 
-  it('create mẫu khác (accessory) mang dòng tự do là CHẶN', async () => {
+  /*
+   * 13/10/2026 (0234): ngoài mẫu gỗ, dòng không mã CHỈ có thể là dòng PHÍ / DỊCH VỤ.
+   * Tab mở từ trước khi có dòng phí (JS cũ) / nháp cũ gửi lên thiếu `line_kind` —
+   * trước chặn "chỉ mẫu gỗ" (chị Nga sửa PO-2026-0176), nay server tự gắn 'phi'.
+   */
+  it('create mẫu khác (accessory) mang dòng không mã thiếu cờ → lưu thành DÒNG PHÍ, không chặn', async () => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue({
       id: 's1',
       is_active: true,
@@ -691,7 +696,27 @@ describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', (
       id: 'lsx1',
       status: 'approved',
     } as never)
+    vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0003')
+    vi.mocked(posRepo.insert).mockResolvedValue({ ...PO, id: 'po3' } as never)
 
+    await posService.create(staff, {
+      production_order_id: 'lsx1',
+      supplier_id: 's1',
+      template: 'accessory',
+      currency: 'VND',
+      price_includes_vat: false,
+      lines: [freeLine as never],
+    })
+    const lines = vi.mocked(posRepo.insert).mock.calls.at(-1)![1] as { line_kind?: string | null }[] // prettier-ignore
+    expect(lines[0].line_kind).toBe('phi')
+  })
+
+  it('dòng phí mà lại gắn mã vật tư là CHẶN', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({
+      id: 's1',
+      is_active: true,
+    } as never)
+    vi.mocked(productionRepo.findById).mockResolvedValue({ id: 'lsx1', status: 'approved' } as never) // prettier-ignore
     await expect(
       posService.create(staff, {
         production_order_id: 'lsx1',
@@ -699,7 +724,9 @@ describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', (
         template: 'accessory',
         currency: 'VND',
         price_includes_vat: false,
-        lines: [freeLine as never],
+        lines: [
+          { ...(freeLine as object), material_id: 'm1', line_kind: 'phi' } as never,
+        ],
       }),
     ).rejects.toMatchObject({ status: 400 })
     expect(posRepo.insert).not.toHaveBeenCalled()

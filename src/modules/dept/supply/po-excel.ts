@@ -2,6 +2,7 @@ import { chiaLenhDong, tienTheoLenh } from '@/lib/po-lsx-split'
 import ExcelJS from 'exceljs'
 import {
   currencyDecimals,
+  feeLast,
   packCount,
   poLineAmount,
   poMoney,
@@ -11,7 +12,7 @@ import {
 import { foamM3PerSheet, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
-  PO_PRINT_ORDER,
+  poPrintKeys,
   PO_PRINT_QTY_LABEL,
   poField,
   poLsxQty,
@@ -71,13 +72,13 @@ type XCol = {
 const nOrNull = (v: number | null | undefined) => (v == null ? '' : v)
 
 /**
- * Định dạng số theo GIÁ TRỊ, giống `toLocaleString('vi-VN')` của phiếu in (tối
- * đa 3 số lẻ). Một chuỗi `#,##0` cho mọi ô từng làm m³/SP 0,006 hiện "0" và
+ * Định dạng số theo GIÁ TRỊ, giống `fmtSoVn` của phiếu in (tối đa 6 số lẻ — 12/10/2026,
+ * m³/SP 0,000487 của PO-2026-0177 hiện "0" với 3 lẻ). Một chuỗi `#,##0` cho mọi ô từng làm m³/SP 0,006 hiện "0" và
  * tổng m³ 0,629 hiện "1" trên file (05/10/2026). Còn `#,##0.###` cho số
  * nguyên thì Excel in kèm dấu chấm thừa ("100.") — nên tách hai nhánh.
  */
 export const numFmtOf = (v: unknown) =>
-  typeof v === 'number' && !Number.isInteger(v) ? '#,##0.###' : '#,##0'
+  typeof v === 'number' && !Number.isInteger(v) ? '#,##0.######' : '#,##0'
 
 /**
  * Định dạng số cho ô SL đặt khi dòng có chụp ĐÓNG GÓI MUA (0128): giữ ô là số
@@ -106,6 +107,8 @@ function excelColumns(
     expectedAt: string | null
     /** Mẫu tính theo kg mà có dòng giá theo ĐVT — xem `poPriceUnitPerLine`. */
     priceUnitOf?: ReturnType<typeof poPriceUnitPerLine>
+    /** Dòng của đơn — cột khai báo trống ở mọi dòng thì không xuất (`poPrintKeys`). */
+    lines: readonly PoPrintLine[]
   },
 ): XCol[] {
   const meta = poTemplateMeta(t)
@@ -191,7 +194,8 @@ function excelColumns(
     '@note': { label: 'Ghi chú', width: 22, align: 'left', value: (l) => l.note ?? '' },
   }
 
-  return PO_PRINT_ORDER[t].map((key) => {
+  // Cột trắng ở mọi dòng không xuất (12/10/2026) — cùng luật phiếu in, xem `poPrintKeys`.
+  return poPrintKeys(t, ctx.lines).map((key) => {
     const hit = fixed[key]
     if (hit) return hit
     const f = poField(t, key)!
@@ -274,7 +278,9 @@ export async function buildPoExcel(input: {
    */
   orientation?: 'portrait' | 'landscape'
 }): Promise<Buffer> {
-  const { company, po, supplier, lines } = input
+  const { company, po, supplier } = input
+  // Dòng phí / dịch vụ (0234) xuống cuối bảng — cùng thứ tự phiếu in.
+  const lines = feeLast(input.lines)
   const tpl = input.tpl ?? DEFAULT_DOC_TEMPLATES.PO
   const shipments = input.shipments ?? []
   const template = po.template ?? 'simple'
@@ -284,6 +290,7 @@ export async function buildPoExcel(input: {
     orderDate: d,
     expectedAt: po.expected_at,
     priceUnitOf: poPriceUnitPerLine(poTemplateMeta(template).priceUnit, lines),
+    lines,
   })
   // Cột "Chia lệnh" của đơn gộp — cùng chỗ, cùng chữ với phiếu in (chiaLenhDong).
   const lsxSet = po.lsx_set ?? []

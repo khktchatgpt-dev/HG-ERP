@@ -39,6 +39,12 @@ export const poLineInputSchema = z.object({
   material_id: z.string().uuid().nullable().optional(),
   line_name: z.string().trim().max(300).optional().nullable(),
   line_unit: z.string().trim().max(30).optional().nullable(),
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234): 'phi' = không gắn vật tư (material_id null, tên +
+   * ĐVT gõ tay), dùng được ở MỌI mẫu, luôn SL × giá, không vào phiếu nhập kho.
+   * null = dòng hàng.
+   */
+  line_kind: z.enum(['phi']).nullable().optional(),
   /** SL đặt cuối cùng, luôn theo ĐVT mua (cây / con / tấm / thùng) — trục tồn kho. */
   qty_ordered: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0).optional().nullable(),
@@ -70,6 +76,8 @@ export const poLineInputSchema = z.object({
   // 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành.
   m3_per_unit: optNum(1e4),
   warranty_text: optText(100),
+  // Mẫu tem nhãn — kiểu in / gia công (0233)
+  print_spec: optText(200),
   // Mẫu carton
   open_style: optText(20),
   pcs_per_ctn: optNum(1e6),

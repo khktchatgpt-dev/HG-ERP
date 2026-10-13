@@ -4264,6 +4264,7 @@ export type Database = {
           inner_l_mm: number | null
           inner_w_mm: number | null
           kg_per_m: number | null
+          line_kind: string | null
           line_name: string | null
           line_unit: string | null
           m3_per_unit: number | null
@@ -4278,6 +4279,7 @@ export type Database = {
           price_basis: string
           price_per_m2: number | null
           print_fee: number | null
+          print_spec: string | null
           product_code: string | null
           qty_basis: string
           qty_demand: number | null
@@ -4318,6 +4320,7 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_kind?: string | null
           line_name?: string | null
           line_unit?: string | null
           m3_per_unit?: number | null
@@ -4332,6 +4335,7 @@ export type Database = {
           price_basis?: string
           price_per_m2?: number | null
           print_fee?: number | null
+          print_spec?: string | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null
@@ -4372,6 +4376,7 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_kind?: string | null
           line_name?: string | null
           line_unit?: string | null
           m3_per_unit?: number | null
@@ -4386,6 +4391,7 @@ export type Database = {
           price_basis?: string
           price_per_m2?: number | null
           print_fee?: number | null
+          print_spec?: string | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null

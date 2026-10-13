@@ -148,6 +148,7 @@ export function buildPoPayload(
         material_id: l.is_free ? null : l.material_id,
         line_name: l.is_free ? l.name.trim() || null : null,
         line_unit: l.is_free ? l.unit.trim() || null : null,
+        line_kind: l.fee ? ('phi' as const) : null,
         qty_ordered: d.qty_ordered,
         unit_price: l.price === '' ? null : Number(l.price),
         spec: l.spec.trim() || null,
@@ -167,6 +168,7 @@ export function buildPoPayload(
         // 0139 — cột riêng: gỗ m³/SP, mro bảo hành (hết mượn weight_per_unit/finish).
         m3_per_unit: d.m3_per_unit,
         warranty_text: l.warranty_text.trim() || null,
+        print_spec: l.print_spec.trim() || null,
         open_style: l.open_style || null,
         pcs_per_ctn: l.pcs_per_ctn === '' ? null : Number(l.pcs_per_ctn),
         inner_l_mm: l.inner_l_mm === '' ? null : Number(l.inner_l_mm),

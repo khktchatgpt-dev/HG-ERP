@@ -202,6 +202,22 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Bảo hành',
     'Ghi chú',
   ],
+  // Tem nhãn (12/10/2026) — bộ cột user duyệt: thông số in cạnh tên, SL đơn hàng ·
+  // Đm/sp trước ĐVT như tờ PQ (PO-2026-0123).
+  label: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'Chất liệu',
+    'Kích thước',
+    'Kiểu in / gia công',
+    'SL đơn hàng',
+    'Đm/sp',
+    'ĐVT',
+    'SL đặt',
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Ghi chú',
+  ],
   simple: [
     'STT',
     'Tên sản phẩm / vật tư',
@@ -477,5 +493,33 @@ describe('phiếu in mây — SL theo LSX · Định mức SP · SL đơn hàng 
   it('thiếu định mức thì ô SL theo LSX trống, không chia cho 0', () => {
     expect(poFieldText(poField('rattan', 'lsx')!, { ...may, dm_per_sp: null })).toBe('')
     expect(poFieldText(poField('rattan', 'lsx')!, { ...may, qty_demand: null })).toBe('')
+  })
+})
+
+import {
+  fmtSoVn,
+  poField as poFieldSoLe,
+  poFieldText as poFieldTextSoLe,
+} from './po-fields'
+
+/*
+ * m³/SP NHỎ HIỆN "0" (12/10/2026, PO-2026-0177 của Huy): tay vịn gỗ 0,000487 m³/SP,
+ * `toLocaleString('vi-VN')` trơn chỉ giữ 3 số lẻ. Tiền vẫn đúng — chỉ chữ hiển thị sai.
+ */
+describe('fmtSoVn — giữ tới 6 số lẻ', () => {
+  it('m³/SP của PO-2026-0177 không còn thành 0', () => {
+    expect(fmtSoVn(0.000487)).toBe('0,000487')
+    expect(fmtSoVn(0.020646)).toBe('0,020646')
+    expect(fmtSoVn(0.753876)).toBe('0,753876')
+  })
+  it('số nguyên và số ít lẻ in y như cũ; trống thì chuỗi rỗng', () => {
+    expect(fmtSoVn(1548)).toBe('1.548')
+    expect(fmtSoVn(2.97)).toBe('2,97')
+    expect(fmtSoVn(0.1 + 0.2)).toBe('0,3')
+    expect(fmtSoVn(null)).toBe('')
+  })
+  it('phiếu in mẫu gỗ: ô m³ / SP đọc ra đủ số', () => {
+    const f = poFieldSoLe('wood', 'm3sp')!
+    expect(poFieldTextSoLe(f, { material_unit: 'Cái', m3_per_unit: 0.000487 } as never)).toBe('0,000487') // prettier-ignore
   })
 })

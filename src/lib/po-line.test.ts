@@ -230,3 +230,69 @@ describe('poMoneyOf — tiền của đơn đọc từ đầu đơn (màn duyệ
     expect(m.vatAmount).toBe(1_000_000)
   })
 })
+
+import { feeLast, qtyTotals as qtyTotalsPhi } from './po-line'
+import { deriveLine as deriveLinePhi, PO_TEMPLATES as TPL_PHI } from './po-template'
+
+/*
+ * DÒNG PHÍ / DỊCH VỤ (0234) — tờ Hiệp Hưng JAWOOL 12/10/2026: "Công dán + keo bồi"
+ * 557 × 3.000 trên đơn bao bì. Không khai vật tư cho từng khoản phí.
+ */
+describe('dòng phí / dịch vụ (0234)', () => {
+  it('mọi mẫu: luôn SL × đơn giá — không dẫn xuất kg / m² / m³ dù dòng mang thông số', () => {
+    for (const t of TPL_PHI) {
+      const d = deriveLinePhi(t, { line_kind: 'phi', qty_ordered: 557, weight_per_m: 1.2, bar_length_m: 6, area_m2: 2.97, m3_per_unit: 0.01, carton_basis: 'm2' }) // prettier-ignore
+      expect(d, t).toEqual({ qty2: null, unit2: null, price_basis: 'unit' })
+      expect(poLineAmount({ qty_ordered: 557, unit_price: 3_000, ...d }), t).toBe(
+        1_671_000,
+      )
+    }
+  })
+
+  it('không cộng vào dòng "Tổng số …" — Lần / Chuyến không phải hàng', () => {
+    const t = qtyTotalsPhi(false, [
+      { material_unit: 'Thùng', qty_ordered: 557 },
+      { material_unit: 'Tờ', qty_ordered: 557 },
+      { material_unit: 'Lần', qty_ordered: 557, line_kind: 'phi' },
+    ])
+    expect(t.map((x) => x.label)).toEqual(['Tổng số THÙNG', 'Tổng số TỜ'])
+  })
+
+  it('phiếu in: dòng phí xuống cuối, giữ thứ tự trong từng nhóm', () => {
+    const ds = [
+      { id: 'phi1', line_kind: 'phi' },
+      { id: 'a', line_kind: null },
+      { id: 'phi2', line_kind: 'phi' },
+      { id: 'b' },
+    ]
+    expect(feeLast(ds).map((l) => l.id)).toEqual(['a', 'b', 'phi1', 'phi2'])
+  })
+})
+
+import { dongKhongMaLaPhi } from './po-template'
+
+/*
+ * 13/10/2026 — chị Nga sửa PO-2026-0176 bị chặn "chỉ mẫu gỗ": tab / nháp từ bản cũ
+ * gửi dòng phí thiếu `line_kind`. Ngoài mẫu gỗ, dòng không mã CHỈ là phí.
+ */
+describe('dongKhongMaLaPhi — dòng không mã thiếu cờ', () => {
+  const ds = [
+    { material_id: 'vt-1', line_kind: null },
+    { material_id: null, line_kind: null, line_name: 'Công dán + keo bồi' },
+    { material_id: null, line_kind: 'phi' },
+  ]
+  it('mẫu khác gỗ: dòng không mã thành dòng phí; dòng hàng giữ nguyên', () => {
+    expect(dongKhongMaLaPhi('carton', ds).map((l) => l.line_kind)).toEqual([
+      null,
+      'phi',
+      'phi',
+    ])
+  })
+  it('mẫu gỗ: dòng tự do là mã SP — không tự gắn phí', () => {
+    expect(dongKhongMaLaPhi('wood', ds).map((l) => l.line_kind)).toEqual([
+      null,
+      null,
+      'phi',
+    ])
+  })
+})
