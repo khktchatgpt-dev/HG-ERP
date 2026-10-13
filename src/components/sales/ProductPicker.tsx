@@ -35,6 +35,8 @@ export type ProductPick = {
   /** Đường dẫn ảnh ký sẵn (server dựng) — có thể thiếu ở payload cũ. */
   image_url?: string | null
   packing: Packing
+  /** SP của khách đang chọn — theo customer_id HOẶC nhãn chữ (server tính, 13/10/2026). */
+  is_own?: boolean
 }
 
 const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
