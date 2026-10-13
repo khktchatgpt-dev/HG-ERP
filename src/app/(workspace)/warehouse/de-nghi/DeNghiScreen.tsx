@@ -22,7 +22,6 @@ import {
   Code,
   Combobox,
   CommitBar,
-  DateInput,
   DocHead,
   Grid,
   GridBody,
