@@ -82,20 +82,48 @@ export function dongTrong(l: Pick<DongDeNghi, 'name' | 'qty' | 'material_id'>): 
   return !l.material_id && !l.name.trim() && !(Number(l.qty) > 0)
 }
 
-/** Tổng dự kiến (VND, chưa VAT) + số dòng chưa có giá để chân bảng nói thật. */
-export function tongDuKien(lines: readonly Pick<DongDeNghi, 'qty' | 'unit_price'>[]): {
-  tong: number
-  thieuGia: number
-} {
-  let tong = 0
+/**
+ * Mức VAT chọn được trên dòng (Đ7 · 0239). 0 = KHÔNG VAT (tiệm không xuất hoá
+ * đơn). Chủ dự án 14/10: một phiếu có cả dòng có VAT lẫn dòng không VAT → VAT
+ * theo dòng, không theo phiếu.
+ */
+export const VAT_CHON = [0, 5, 8, 10] as const
+
+export const vatNhan = (v: number | null | undefined) => (v ? `VAT ${v}%` : 'Không VAT')
+
+type DongTien = Pick<DongDeNghi, 'qty' | 'unit_price'> & {
+  vat_rate?: number | null
+  approved_qty?: number | null
+}
+
+/**
+ * TỔNG DỰ KIẾN của phiếu (VND): tiền hàng + VAT từng dòng + phí vận chuyển cả
+ * phiếu (Đ7). `theoDuyet` = tính theo số lãnh đạo duyệt (null = số đề nghị).
+ * Dòng chưa có giá không cộng — `thieuGia` đếm để chân bảng nói thật.
+ */
+export function tongDuKien(
+  lines: readonly DongTien[],
+  phiVanChuyen = 0,
+  opt: { theoDuyet?: boolean } = {},
+): { hang: number; vat: number; vc: number; tong: number; thieuGia: number } {
+  let hang = 0
+  let vat = 0
   let thieuGia = 0
   for (const l of lines) {
-    const q = Number(l.qty) || 0
+    const q = Number(opt.theoDuyet ? (l.approved_qty ?? l.qty) : l.qty) || 0
     if (q <= 0) continue
-    if (l.unit_price == null) thieuGia++
-    else tong += q * l.unit_price
+    if (l.unit_price == null) {
+      thieuGia++
+      continue
+    }
+    const t = q * l.unit_price
+    hang += t
+    vat += (t * (Number(l.vat_rate) || 0)) / 100
   }
-  return { tong: Math.round(tong), thieuGia }
+  const vc = Math.max(0, Number(phiVanChuyen) || 0)
+  hang = Math.round(hang)
+  vat = Math.round(vat)
+  return { hang, vat, vc, tong: hang + vat + vc, thieuGia }
 }
 
 /** "15:18 13/10" theo giờ VN — ghép tay: toLocaleString vi-VN ra "13-10" ở vài máy. */

@@ -43,7 +43,7 @@ const daGui: PhieuForm = {
   submitted_at: '2026-10-13T06:12:00Z',
   created_at: '2026-10-13T06:10:00Z',
   lines: [
-    { key: 'l1', material_id: 'm-keo', code: 'KEO0030', name: 'Băng keo trong 4F7', unit: 'Cuộn', ton: 36, qty: 200, unit_price: 5500, purpose: 'Đóng gói', note: '', gia_goi_y: null }, // prettier-ignore
+    { key: 'l1', material_id: 'm-keo', code: 'KEO0030', name: 'Băng keo trong 4F7', unit: 'Cuộn', ton: 36, qty: 200, unit_price: 5500, vat_rate: 8, purpose: 'Đóng gói', note: '', gia_goi_y: null }, // prettier-ignore
   ],
 }
 
@@ -78,7 +78,7 @@ describe('DeNghiScreen', () => {
     await waitFor(() => expect(api).toHaveBeenCalledTimes(2))
     expect(api.mock.calls[0][0]).toBe('/api/dept/warehouse/de-nghi')
     expect(api.mock.calls[0][1].body.lines).toEqual([
-      { material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, unit_price: null, purpose: null, note: null }, // prettier-ignore
+      { material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, unit_price: null, vat_rate: 0, purpose: null, note: null }, // prettier-ignore
     ])
     expect(api.mock.calls[1][0]).toBe('/api/dept/warehouse/de-nghi/dn9/gui')
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/warehouse/de-nghi/dn9'))

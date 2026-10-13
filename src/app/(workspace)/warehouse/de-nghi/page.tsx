@@ -19,7 +19,7 @@ export default async function DeNghiSoPage() {
     canAction(user, 'warehouse.request.manage'),
   ])
   const rows: DeNghiSoRow[] = ds.map((p) => {
-    const t = tongDuKien(p.lines)
+    const t = tongDuKien(p.lines, p.shipping_fee)
     return {
       id: p.id,
       code: p.code,

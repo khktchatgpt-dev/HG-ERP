@@ -32,6 +32,8 @@ export const deNghiLineSchema = z.object({
   qty: z.coerce.number().positive('Số lượng phải lớn hơn 0'),
   /** Dự kiến, VND, chưa VAT (Q4) — không bắt buộc. */
   unit_price: z.coerce.number().min(0).nullable().optional(),
+  /** % VAT của dòng (Đ7): 0 = không VAT. Một phiếu có thể lẫn dòng có / không VAT. */
+  vat_rate: z.coerce.number().min(0).max(100).default(0),
   /** Tổ / bộ phận dùng (Q5) — gõ tự do kèm gợi ý. */
   purpose: text(200),
   note: text(500),
@@ -47,6 +49,8 @@ export const deNghiSaveSchema = z.object({
     .optional(),
   note: text(2000),
   production_order_id: z.string().uuid().nullable().optional(),
+  /** Phí vận chuyển dự kiến cả phiếu, VND (Đ7). */
+  shipping_fee: z.coerce.number().min(0).max(10_000_000_000).default(0),
   lines: z.array(deNghiLineSchema).max(200, 'Tối đa 200 dòng một phiếu'),
 })
 

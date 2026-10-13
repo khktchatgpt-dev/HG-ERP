@@ -35,6 +35,8 @@ export type DongForm = {
   /** Số lãnh đạo duyệt (Đ2), null = duyệt đúng số đề nghị / chưa duyệt. */
   approved_qty?: number | null
   unit_price: number | null
+  /** % VAT của dòng, 0 = không VAT (Đ7 · 0239). */
+  vat_rate: number
   purpose: string
   note: string
   gia_goi_y: GiaGoiY | null
@@ -59,6 +61,10 @@ export type PhieuForm = {
   need_by: string
   note: string
   production_order_id: string | null
+  /** Phí vận chuyển dự kiến cả phiếu (Đ7). */
+  shipping_fee: number
+  /** Lời lãnh đạo dặn Kho khi duyệt (Đ7). */
+  approve_note?: string | null
   nguoi_de_nghi: string
   created_at: string | null
   submitted_at: string | null

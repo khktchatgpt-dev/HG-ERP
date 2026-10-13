@@ -7681,6 +7681,7 @@ export type Database = {
           unit: string
           unit_price: number | null
           updated_at: string
+          vat_rate: number
         }
         Insert: {
           approved_qty?: number | null
@@ -7697,6 +7698,7 @@ export type Database = {
           unit: string
           unit_price?: number | null
           updated_at?: string
+          vat_rate?: number
         }
         Update: {
           approved_qty?: number | null
@@ -7713,6 +7715,7 @@ export type Database = {
           unit?: string
           unit_price?: number | null
           updated_at?: string
+          vat_rate?: number
         }
         Relationships: [
           {
@@ -7761,6 +7764,7 @@ export type Database = {
       }
       warehouse_purchase_requests: {
         Row: {
+          approve_note: string | null
           approved_at: string | null
           approved_by: string | null
           cancel_reason: string | null
@@ -7781,12 +7785,14 @@ export type Database = {
           rejected_by: string | null
           rejected_reason: string | null
           requested_by: string | null
+          shipping_fee: number
           status: string
           submitted_at: string | null
           submitted_by: string | null
           updated_at: string
         }
         Insert: {
+          approve_note?: string | null
           approved_at?: string | null
           approved_by?: string | null
           cancel_reason?: string | null
@@ -7807,12 +7813,14 @@ export type Database = {
           rejected_by?: string | null
           rejected_reason?: string | null
           requested_by?: string | null
+          shipping_fee?: number
           status?: string
           submitted_at?: string | null
           submitted_by?: string | null
           updated_at?: string
         }
         Update: {
+          approve_note?: string | null
           approved_at?: string | null
           approved_by?: string | null
           cancel_reason?: string | null
@@ -7833,6 +7841,7 @@ export type Database = {
           rejected_by?: string | null
           rejected_reason?: string | null
           requested_by?: string | null
+          shipping_fee?: number
           status?: string
           submitted_at?: string | null
           submitted_by?: string | null

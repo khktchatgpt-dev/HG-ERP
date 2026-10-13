@@ -38,7 +38,9 @@ export default async function DeNghiPrintPage({
     settingsService.getAll(),
     docTemplatesService.get('DNM'),
   ])
-  const t = tongDuKien(p.lines)
+  // Đã duyệt trở đi in theo SỐ DUYỆT (cột Số lượng in số duyệt) — tổng phải khớp cột.
+  const daDuyet = ['approved', 'ordering', 'done'].includes(p.status)
+  const t = tongDuKien(p.lines, p.shipping_fee, { theoDuyet: daDuyet })
   const chuaChinhThuc =
     p.status === 'draft' || p.status === 'pending' || p.status === 'cancelled'
 
@@ -76,6 +78,7 @@ export default async function DeNghiPrintPage({
             <td className="border border-black px-1">Số lượng</td>
             <td className="border border-black px-1">Đơn giá</td>
             <td className="border border-black px-1">Thành tiền</td>
+            <td className="border border-black px-1">VAT</td>
             <td className="border border-black px-2">Mục đích sử dụng</td>
           </tr>
         </thead>
@@ -97,20 +100,42 @@ export default async function DeNghiPrintPage({
                 <td className="border border-black px-1 text-right">
                   {l.unit_price == null ? '' : so(Math.round(sl * l.unit_price))}
                 </td>
+                <td className="border border-black px-1">
+                  {l.vat_rate ? `${l.vat_rate}%` : 'Không'}
+                </td>
                 <td className="border border-black px-2 text-left text-[11px]">
                   {[l.purpose, l.note].filter(Boolean).join(' · ')}
                 </td>
               </tr>
             )
           })}
+          {(
+            [
+              [
+                'Tiền hàng',
+                t.hang,
+                t.thieuGia > 0 ? `${t.thieuGia} dòng chưa có giá` : '',
+              ],
+              ['Thuế VAT (theo từng dòng)', t.vat, ''],
+              ['Vận chuyển', t.vc, ''],
+            ] as const
+          ).map(([nhan, tien, chu]) => (
+            <tr key={nhan}>
+              <td className="border border-black px-2 text-left" colSpan={6}>
+                {nhan}
+              </td>
+              <td className="border border-black px-1 text-right">{so(tien)}</td>
+              <td className="border border-black px-2 text-left text-[11px]" colSpan={2}>
+                {chu}
+              </td>
+            </tr>
+          ))}
           <tr className="font-semibold">
             <td className="border border-black px-2 text-left" colSpan={6}>
-              TỔNG CỘNG (chưa VAT, chưa vận chuyển)
+              TỔNG CỘNG
             </td>
             <td className="border border-black px-1 text-right">{so(t.tong)}</td>
-            <td className="border border-black px-2 text-left text-[11px] font-normal">
-              {t.thieuGia > 0 ? `${t.thieuGia} dòng chưa có giá` : ''}
-            </td>
+            <td className="border border-black px-2" colSpan={2} />
           </tr>
         </tbody>
       </table>

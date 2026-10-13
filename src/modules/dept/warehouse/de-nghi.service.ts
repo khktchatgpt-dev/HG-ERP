@@ -225,6 +225,7 @@ async function chuanDong(input: DeNghiSaveInput['lines']): Promise<DongGhi[]> {
       unit: m ? m.unit : l.unit,
       qty: l.qty,
       unit_price: l.unit_price ?? null,
+      vat_rate: l.vat_rate ?? 0,
       purpose: l.purpose ?? null,
       note: l.note ?? null,
     }
@@ -262,7 +263,7 @@ async function phieuTruoc(p: DeNghiDay): Promise<DeNghiChiTiet['phieu_truoc']> {
     id: t.id,
     code: t.code,
     approved_at: t.approved_at,
-    du_kien: tongTheoDuyet(t.lines),
+    du_kien: tongTheoDuyet(t.lines, t.shipping_fee),
     thuc_chi: Math.round(t.lines.reduce((a, l) => a + (so.get(l.id)?.tien ?? 0), 0)),
     du_dong: mua.filter((l) => (so.get(l.id)?.daNhap ?? 0) >= soDuyet(l) - 1e-9).length,
     mua_dong: mua.length,
@@ -297,7 +298,7 @@ export const deNghiService = {
     const rows: DuyetRow[] = ds.map(({ p, ro }) => {
       const duyet = daDuyet(p.status)
       const mua = p.lines.filter((l) => soDuyet(l) > 0)
-      const t = tongDuKien(p.lines)
+      const t = tongDuKien(p.lines, p.shipping_fee)
       return {
         id: p.id,
         code: p.code,
@@ -310,7 +311,7 @@ export const deNghiService = {
         lsx_code: p.lsx_code,
         so_dong: p.lines.length,
         chua_ma: p.lines.filter((l) => !l.material_id).length,
-        du_kien: duyet ? tongTheoDuyet(p.lines) : t.tong,
+        du_kien: duyet ? tongTheoDuyet(p.lines, p.shipping_fee) : t.tong,
         thieu_gia: t.thieuGia,
         mua_dong: mua.length,
         du_dong: duyet
@@ -420,6 +421,7 @@ export const deNghiService = {
       need_by: input.need_by ?? null,
       note: input.note ?? null,
       production_order_id: input.production_order_id ?? null,
+      shipping_fee: input.shipping_fee ?? 0,
       requested_by: user.id,
       created_by: user.id,
     })
@@ -441,6 +443,7 @@ export const deNghiService = {
         need_by: input.need_by ?? null,
         note: input.note ?? null,
         production_order_id: input.production_order_id ?? null,
+        shipping_fee: input.shipping_fee ?? 0,
       },
       ['draft'],
     )
@@ -473,7 +476,7 @@ export const deNghiService = {
       submitted_by: user.id,
       approver_ids: await nguoiDuyet(user.id),
       so_dong: p.lines.length,
-      tong: tongDuKien(p.lines).tong,
+      tong: tongDuKien(p.lines, p.shipping_fee).tong,
     })
   },
 
@@ -532,7 +535,13 @@ export const deNghiService = {
     )
     const ok = await deNghiRepo.update(
       id,
-      { status: 'approved', approved_at: now, approved_by: user.id },
+      {
+        status: 'approved',
+        approved_at: now,
+        approved_by: user.id,
+        // Lời dặn Kho (Đ7) — hiện trên phiếu bên Kho + trong thông báo "đã duyệt".
+        approve_note: (input.reason ?? '').trim() || null,
+      },
       ['pending'],
     )
     if (!ok) throw Conflict(`Phiếu ${p.code} vừa được xử lý — tải lại trang`)

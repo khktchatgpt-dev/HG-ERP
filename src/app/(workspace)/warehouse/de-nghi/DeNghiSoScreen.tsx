@@ -145,7 +145,7 @@ export function DeNghiSoScreen({
               <th style={{ width: 92 }}>Ngày</th>
               {!hep && <th style={{ width: 150 }}>Người đề nghị</th>}
               <th style={{ ...R, width: 64 }}>Số dòng</th>
-              <th style={{ ...R, width: 120 }}>Dự kiến</th>
+              <th style={{ ...R, width: 120 }}>Tổng dự kiến</th>
               <th style={{ width: 100 }}>Trạng thái</th>
               <th>Đang ở</th>
             </THead>
@@ -220,7 +220,7 @@ export function DeNghiSoScreen({
             <TFoot
               label={<td colSpan={hep ? 3 : 4}>{hien.length} phiếu</td>}
               cells={<td className="num">{fmt(tong)}</td>}
-              caveat="Dự kiến = SL × đơn giá Kho ghi (chưa VAT, chưa vận chuyển); dòng chưa có giá không cộng."
+              caveat="Dự kiến = SL × đơn giá Kho ghi + VAT từng dòng + vận chuyển; dòng chưa có giá không cộng."
             />
           </Table>
         )}

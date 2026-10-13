@@ -39,7 +39,7 @@ import {
   useToast,
 } from '@/components/kit'
 import { HuyPhieuSheet } from './huy-phieu'
-import { GoiYGia, GoiYSoLuong, TonO } from './goi-y-dong'
+import { GoiYGia, GoiYSoLuong, GoiYTen, TonO, VatO } from './goi-y-dong'
 import { tonNhan } from '@/lib/de-nghi-goi-y'
 import { ChotPhieuSheet } from './chot-phieu'
 import { TinhHinhNhap } from './tinh-hinh-nhap'
@@ -106,6 +106,7 @@ export function DeNghiScreen({
     need_by: phieu.need_by,
     note: phieu.note,
     production_order_id: phieu.production_order_id,
+    shipping_fee: phieu.shipping_fee,
   })
   const [rows, setRows] = useState<DongForm[]>(phieu.lines)
   const [busy, setBusy] = useState(false)
@@ -122,7 +123,10 @@ export function DeNghiScreen({
 
   const patch = (i: number, p: Partial<DongForm>) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)))
-  const tong = useMemo(() => tongDuKien(rows), [rows])
+  const tong = useMemo(
+    () => tongDuKien(rows, head.shipping_fee),
+    [rows, head.shipping_fee],
+  )
   const vuong = useMemo(() => vuongGuiDuyet(rows), [rows])
   const soChuaMa = rows.filter((r) => !r.material_id && !dongTrong(r)).length
 
@@ -174,6 +178,7 @@ export function DeNghiScreen({
         ton: goiY.ton,
         qty: null,
         unit_price: goiY.gia?.unit_price ?? null,
+        vat_rate: rows.at(-1)?.vat_rate ?? 0,
         purpose: '',
         note: '',
         gia_goi_y: goiY.gia,
@@ -198,6 +203,7 @@ export function DeNghiScreen({
         ton: null,
         qty: null,
         unit_price: null,
+        vat_rate: rows.at(-1)?.vat_rate ?? 0,
         purpose: '',
         note: '',
         gia_goi_y: null,
@@ -211,6 +217,7 @@ export function DeNghiScreen({
     need_by: head.need_by || null,
     note: head.note.trim() || null,
     production_order_id: head.production_order_id,
+    shipping_fee: head.shipping_fee || 0,
     lines: rows
       .filter((r) => !dongTrong(r))
       .map((r) => ({
@@ -219,6 +226,7 @@ export function DeNghiScreen({
         unit: r.unit.trim(),
         qty: r.qty ?? 0,
         unit_price: r.unit_price,
+        vat_rate: r.vat_rate || 0,
         purpose: r.purpose.trim() || null,
         note: r.note.trim() || null,
       })),
@@ -305,7 +313,7 @@ export function DeNghiScreen({
   }
 
   const blocked = !sua ? undefined : vuong.length > 0 ? vuong[0].cau : undefined
-  const soCot = hep ? 8 : 9
+  const soCot = hep ? 7 : 10
 
   return (
     <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
@@ -414,6 +422,9 @@ export function DeNghiScreen({
               {phieu.status === 'approved'
                 ? 'Kho đi mua theo số duyệt rồi bấm “Nhập hàng đã mua”; không mua nữa thì “Chốt xong” + lý do.'
                 : `Đã nhập đủ ${muaDong.length - thieu.length}/${muaDong.length} dòng — mua chuyến sau thì bấm “Nhập hàng đã mua” lần nữa (lưới chỉ còn phần thiếu), không mua nữa thì “Chốt xong” + lý do.`}
+              {phieu.approve_note && (
+                <b className="mt-0.5 block">Lãnh đạo dặn: “{phieu.approve_note}”</b>
+              )}
             </NoticeBar>
           )}
         {phieu.status === 'done' && (
@@ -477,7 +488,7 @@ export function DeNghiScreen({
           {daDuyet ? (
             <TinhHinhNhap rows={rows} hep={hep} daChot={!!phieu.closed_at} />
           ) : (
-            <Grid minWidth={hep ? 680 : 900}>
+            <Grid minWidth={hep ? 680 : 980}>
               <GridHead>
                 <Th width={30}>#</Th>
                 <Th width={hep ? 86 : 100}>Mã</Th>
@@ -488,18 +499,19 @@ export function DeNghiScreen({
                     Tồn hiện tại
                   </Th>
                 )}
-                <Th num width={100}>
-                  Số lượng
+                <Th num width={hep ? 86 : 100}>
+                  {hep ? 'SL' : 'Số lượng'}
                 </Th>
                 <Th num width={110}>
-                  Đơn giá dự kiến
+                  {hep ? 'Giá dự kiến' : 'Đơn giá dự kiến'}
                 </Th>
+                {!hep && <Th width={82}>VAT</Th>}
                 {!hep && (
                   <Th num width={110}>
                     Thành tiền
                   </Th>
                 )}
-                <Th width={hep ? 130 : 160}>Mục đích / tổ dùng</Th>
+                <Th width={hep ? 100 : 130}>{hep ? 'Mục đích' : 'Mục đích / tổ dùng'}</Th>
                 {sua && <Th width={50}></Th>}
               </GridHead>
               <GridBody>
@@ -528,6 +540,7 @@ export function DeNghiScreen({
                         ) : (
                           <span className="block truncate">{r.name}</span>
                         )}
+                        <GoiYTen r={r} />
                       </td>
                       <td className="text-[var(--ink-3)]">
                         {sua && tuDo ? (
@@ -564,7 +577,7 @@ export function DeNghiScreen({
                             )}
                           </>
                         )}
-                        <GoiYSoLuong r={r} ton={hep ? ton : null} />
+                        <GoiYSoLuong ton={hep ? ton : null} />
                       </td>
                       <td className="k-r">
                         {sua ? (
@@ -579,7 +592,26 @@ export function DeNghiScreen({
                           </span>
                         )}
                         <GoiYGia r={r} />
+                        {/* Khung hẹp: VAT nằm dưới ô giá, nhường chỗ cho cột tên. */}
+                        {hep && (
+                          <div className="mt-1 flex justify-end">
+                            <VatO
+                              r={r}
+                              sua={sua}
+                              onChange={(v) => patch(i, { vat_rate: v })}
+                            />
+                          </div>
+                        )}
                       </td>
+                      {!hep && (
+                        <td>
+                          <VatO
+                            r={r}
+                            sua={sua}
+                            onChange={(v) => patch(i, { vat_rate: v })}
+                          />
+                        </td>
+                      )}
                       {!hep && (
                         <td className="k-r num">
                           {r.qty != null && r.unit_price != null ? (
@@ -594,6 +626,7 @@ export function DeNghiScreen({
                           <>
                             <input
                               list="dn-muc-dich"
+                              size={1}
                               defaultValue={r.purpose}
                               onBlur={(e) => patch(i, { purpose: e.target.value })}
                               placeholder="tổ / việc dùng"
@@ -633,13 +666,13 @@ export function DeNghiScreen({
                 )}
               </GridBody>
               <GridFoot>
-                <td colSpan={hep ? 6 : 7}>
+                <td colSpan={hep ? 6 : 8}>
                   {rows.length} dòng
                   {soChuaMa > 0 && ` · ${soChuaMa} dòng chưa có mã (gắn mã khi nhập kho)`}
                 </td>
-                {!hep && <td className="k-r num">{fmt(tong.tong)}</td>}
+                {!hep && <td className="k-r num">{fmt(tong.hang)}</td>}
                 <td colSpan={sua ? 2 : 1} className="font-normal text-[var(--ink-3)]">
-                  {hep ? `${fmt(tong.tong)} · ` : ''}chưa VAT, chưa vận chuyển
+                  {hep ? `${fmt(tong.hang)} · ` : ''}tiền hàng chưa VAT
                   {tong.thieuGia > 0 && ` · ${tong.thieuGia} dòng chưa có giá`}
                 </td>
               </GridFoot>
@@ -657,8 +690,11 @@ export function DeNghiScreen({
             totals={[
               { label: 'Dòng', value: rows.length },
               ...(soChuaMa > 0 ? [{ label: 'Chưa có mã', value: soChuaMa }] : []),
+              { label: 'Tiền hàng', value: fmt(tong.hang) },
+              { label: 'VAT', value: fmt(tong.vat) },
+              { label: 'Vận chuyển', value: fmt(tong.vc) },
             ]}
-            grand={{ label: 'Dự kiến (chưa VAT)', value: fmt(tong.tong) }}
+            grand={{ label: 'Tổng dự kiến', value: fmt(tong.tong) }}
             actions={
               sua ? (
                 <>

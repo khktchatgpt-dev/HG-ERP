@@ -65,6 +65,8 @@ const phieu = (p: Partial<DeNghiDay> = {}): DeNghiDay => ({
   cancel_reason: null,
   closed_at: null,
   closed_reason: null,
+  shipping_fee: 0,
+  approve_note: null,
   created_by: 'u-hao',
   created_at: '2026-10-13T06:12:00Z',
   updated_at: '2026-10-13T06:12:00Z',
@@ -74,7 +76,7 @@ const phieu = (p: Partial<DeNghiDay> = {}): DeNghiDay => ({
   closed_by_name: null,
   lsx_code: null,
   lines: [
-    { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo trong 4F7', unit: 'Cuộn', qty: 200, approved_qty: null, unit_price: 5500, purpose: 'Đóng gói', note: null, po_line_id: null }, // prettier-ignore
+    { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo trong 4F7', unit: 'Cuộn', qty: 200, approved_qty: null, unit_price: 5500, vat_rate: 0, purpose: 'Đóng gói', note: null, po_line_id: null }, // prettier-ignore
   ],
   ...p,
 })
@@ -264,8 +266,8 @@ describe('Đ3/Đ4 · Kho nhập hàng đã mua + khép phiếu (0238)', () => {
       status: 'approved',
       approved_by_name: 'Alex',
       lines: [
-        { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo trong 4F7', unit: 'Cuộn', qty: 200, approved_qty: 150, unit_price: 5500, purpose: null, note: null, po_line_id: null }, // prettier-ignore
-        { id: 'l2', line_no: 2, material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: null, purpose: null, note: null, po_line_id: null }, // prettier-ignore
+        { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo trong 4F7', unit: 'Cuộn', qty: 200, approved_qty: 150, unit_price: 5500, vat_rate: 0, purpose: null, note: null, po_line_id: null }, // prettier-ignore
+        { id: 'l2', line_no: 2, material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: null, vat_rate: 0, purpose: null, note: null, po_line_id: null }, // prettier-ignore
       ],
       ...p,
     })
@@ -372,8 +374,8 @@ describe('Đ5 · danhSachDuyet — danh sách cho lãnh đạo', () => {
     vi.mocked(deNghiRepo.list).mockResolvedValue([
       phieu({ id: 'a', status: 'pending', submitted_at: '2026-10-11T01:00:00Z' }),
       phieu({ id: 'b', status: 'ordering', submitted_at: '2026-10-10T01:00:00Z', approved_at: new Date().toISOString(), lines: [
-        { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo', unit: 'Cuộn', qty: 200, approved_qty: 150, unit_price: 5500, purpose: null, note: null, po_line_id: null }, // prettier-ignore
-        { id: 'l2', line_no: 2, material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: 15000, purpose: null, note: null, po_line_id: null }, // prettier-ignore
+        { id: 'l1', line_no: 1, material_id: 'm-keo', name: 'Băng keo', unit: 'Cuộn', qty: 200, approved_qty: 150, unit_price: 5500, vat_rate: 0, purpose: null, note: null, po_line_id: null }, // prettier-ignore
+        { id: 'l2', line_no: 2, material_id: null, name: 'Giẻ lau', unit: 'Kg', qty: 20, approved_qty: null, unit_price: 15000, vat_rate: 0, purpose: null, note: null, po_line_id: null }, // prettier-ignore
       ] }), // prettier-ignore
       phieu({ id: 'c', status: 'draft', submitted_at: null }),
     ])
@@ -391,5 +393,53 @@ describe('Đ5 · danhSachDuyet — danh sách cho lãnh đạo', () => {
     const { canAction } = await import('@/modules/core/rbac/rbac.service')
     vi.mocked(canAction).mockResolvedValueOnce(false)
     await expect(deNghiService.danhSachDuyet(alex)).rejects.toThrow(/người duyệt/)
+  })
+})
+
+describe('Đ7 · VAT từng dòng, vận chuyển, lời dặn (0239)', () => {
+  it('lưu VAT theo DÒNG (dòng có VAT + dòng không VAT cùng phiếu) và phí vận chuyển của phiếu', async () => {
+    vi.mocked(deNghiRepo.nextCode).mockResolvedValue('DNM-2026-0002')
+    vi.mocked(deNghiRepo.insert).mockResolvedValue({ id: 'dn2' })
+    await deNghiService.create(hao, {
+      department: 'Kho vật tư',
+      shipping_fee: 30_000,
+      lines: [
+        {
+          material_id: 'm-keo',
+          name: 'x',
+          unit: 'x',
+          qty: 200,
+          unit_price: 5500,
+          vat_rate: 8,
+        },
+        {
+          material_id: null,
+          name: 'Giẻ lau',
+          unit: 'Kg',
+          qty: 20,
+          unit_price: 15000,
+          vat_rate: 0,
+        },
+      ],
+    } as never)
+    expect(vi.mocked(deNghiRepo.insert).mock.calls[0][0]).toMatchObject({
+      shipping_fee: 30_000,
+    })
+    expect(vi.mocked(deNghiRepo.replaceLines).mock.calls[0][1].map((d) => d.vat_rate)).toEqual([8, 0]) // prettier-ignore
+  })
+
+  it('duyệt kèm lời dặn → lưu approve_note; tổng gửi người duyệt gồm VAT + vận chuyển', async () => {
+    const alex = { id: 'u-alex', role: 'employee' } as unknown as User
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu({ status: 'pending' }))
+    await deNghiService.decide(alex, 'dn1', { decision: 'approve', reason: ' que hàn chờ PO-0174 ' }) // prettier-ignore
+    expect(vi.mocked(deNghiRepo.update).mock.calls[0][1]).toMatchObject({ status: 'approved', approve_note: 'que hàn chờ PO-0174' }) // prettier-ignore
+
+    vi.mocked(deNghiRepo.update).mockClear()
+    vi.mocked(emit).mockClear()
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(
+      phieu({ shipping_fee: 30_000, lines: [{ ...phieu().lines[0], vat_rate: 8 }] }),
+    )
+    await deNghiService.submit(hao, 'dn1')
+    expect((vi.mocked(emit).mock.calls[0][0] as { tong: number }).tong).toBe(1_100_000 + 88_000 + 30_000) // prettier-ignore
   })
 })

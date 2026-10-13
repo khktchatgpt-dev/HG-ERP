@@ -1,5 +1,5 @@
 import { TZ_VN } from './date-vn'
-import type { DeNghiStatus } from './de-nghi'
+import { tongDuKien, type DeNghiStatus } from './de-nghi'
 
 /**
  * DANH SÁCH ĐỀ NGHỊ MUA CHO LÃNH ĐẠO (Đ5, bản vẽ DN-6
@@ -56,16 +56,19 @@ export function thangVn(iso: string | Date): string {
   return `${p.year}-${p.month}`
 }
 
-/** Tổng theo SỐ DUYỆT (null = đúng số đề nghị) × giá dự kiến — dòng chưa giá không cộng. */
+/**
+ * Tổng theo SỐ DUYỆT (null = đúng số đề nghị): hàng + VAT từng dòng + vận chuyển
+ * (Đ7) — dòng chưa giá không cộng. Duyệt 0 hết thì không tính vận chuyển.
+ */
 export function tongTheoDuyet(
   lines: readonly {
     qty: number
     approved_qty: number | null
     unit_price: number | null
+    vat_rate?: number | null
   }[],
+  phiVanChuyen = 0,
 ): number {
-  let t = 0
-  for (const l of lines)
-    if (l.unit_price != null) t += (l.approved_qty ?? l.qty) * l.unit_price
-  return Math.round(t)
+  const conMua = lines.some((l) => (l.approved_qty ?? l.qty) > 0)
+  return tongDuKien(lines, conMua ? phiVanChuyen : 0, { theoDuyet: true }).tong
 }

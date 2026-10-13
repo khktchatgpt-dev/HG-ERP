@@ -46,7 +46,26 @@ describe('tongDuKien', () => {
         { qty: 0, unit_price: 9000 },
         { qty: 2.5, unit_price: 25000 },
       ]),
-    ).toEqual({ tong: 1_162_500, thieuGia: 1 })
+    ).toEqual({ hang: 1_162_500, vat: 0, vc: 0, tong: 1_162_500, thieuGia: 1 })
+  })
+
+  it('VAT theo TỪNG dòng (dòng có VAT, dòng không VAT cùng phiếu) + vận chuyển cả phiếu (Đ7)', () => {
+    expect(
+      tongDuKien(
+        [
+          { qty: 200, unit_price: 5500, vat_rate: 8 }, // NCC có hoá đơn
+          { qty: 20, unit_price: 15000, vat_rate: 0 }, // tiệm không hoá đơn
+          { qty: 10, unit_price: 25000, vat_rate: 10 },
+        ],
+        30_000,
+      ),
+    ).toEqual({ hang: 1_650_000, vat: 88_000 + 25_000, vc: 30_000, tong: 1_793_000, thieuGia: 0 }) // prettier-ignore
+  })
+
+  it('theoDuyet: tính theo số lãnh đạo duyệt (null = số đề nghị)', () => {
+    const l = [{ qty: 200, approved_qty: 150, unit_price: 5500, vat_rate: 8 }]
+    expect(tongDuKien(l, 0, { theoDuyet: true }).tong).toBe(825_000 + 66_000)
+    expect(tongDuKien(l).tong).toBe(1_100_000 + 88_000)
   })
 })
 

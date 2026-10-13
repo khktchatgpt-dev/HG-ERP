@@ -1,14 +1,8 @@
 'use client'
 
-import { CellHint } from '@/components/kit'
-import {
-  chenhGia,
-  dangVeCau,
-  giaTruocCau,
-  trungCau,
-  type TonDong,
-  tonNhan,
-} from '@/lib/de-nghi-goi-y'
+import { CellHint, Pick } from '@/components/kit'
+import { VAT_CHON, vatNhan } from '@/lib/de-nghi'
+import { chenhGia, dangVeCau, giaTruocCau, trungCau, tonNhan } from '@/lib/de-nghi-goi-y'
 import type { DongForm } from './de-nghi.shared'
 
 /**
@@ -18,6 +12,38 @@ import type { DongForm } from './de-nghi.shared'
  */
 
 type Ton = ReturnType<typeof tonNhan>
+
+/**
+ * Câu gợi ý DÀI (trùng phiếu, đơn đang về, giá lần trước) — `CellHint` của kit là
+ * một dòng không xuống hàng, câu dài làm cột số phình 300px và bóp cột tên (đo
+ * 14/10). Cùng cỡ chữ / màu với CellHint nhưng được xuống dòng.
+ */
+function Goi({
+  warn,
+  left,
+  title,
+  children,
+}: {
+  warn?: boolean
+  /** Căn trái (dưới cột chữ) — mặc định căn phải như CellHint ở cột số. */
+  left?: boolean
+  title?: string
+  children: string
+}) {
+  return (
+    <div
+      title={title}
+      className={
+        warn
+          ? 'text-k-label mt-px leading-[1.3] text-[var(--warn)]'
+          : 'text-k-label mt-px leading-[1.3] text-[var(--ink-3)]'
+      }
+      style={{ whiteSpace: 'normal', textAlign: left ? 'left' : 'right' }}
+    >
+      {children}
+    </div>
+  )
+}
 
 /** Ô Tồn hiện tại (khung rộng). */
 export function TonO({ ton }: { ton: Ton }) {
@@ -40,19 +66,32 @@ export function TonO({ ton }: { ton: Ton }) {
   )
 }
 
-/** Dưới ô Số lượng: tồn (khung hẹp), trùng đề nghị khác, đơn mua còn về. */
-export function GoiYSoLuong({ r, ton }: { r: DongForm & TonDong; ton: Ton }) {
+/** Dưới ô Số lượng: tồn — chỉ khi khung hẹp đã bỏ cột Tồn. */
+export function GoiYSoLuong({ ton }: { ton: Ton }) {
+  if (!ton) return null
+  return (
+    <CellHint tone={ton.het ? 'warn' : 'neutral'}>
+      {ton.chuaTheoDoi ? 'chưa theo dõi tồn' : 'tồn ' + ton.text}
+    </CellHint>
+  )
+}
+
+/**
+ * Dưới TÊN vật tư: trùng đề nghị khác + đơn mua Cung ứng còn về. Đặt ở cột tên
+ * (cột co giãn) chứ không ở cột số — câu dài nhồi vào cột 100px là dòng cao 97px.
+ */
+export function GoiYTen({ r }: { r: DongForm }) {
   const trung = trungCau(r.trung, r.unit)
   const ve = dangVeCau(r.dang_ve, r.unit)
+  if (!trung && !ve) return null
   return (
     <>
-      {ton && (
-        <CellHint tone={ton.het ? 'warn' : 'neutral'}>
-          {ton.chuaTheoDoi ? 'chưa theo dõi tồn' : `tồn ${ton.text}`}
-        </CellHint>
+      {trung && (
+        <Goi warn left>
+          {trung}
+        </Goi>
       )}
-      {trung && <CellHint tone="warn">{trung}</CellHint>}
-      {ve && <CellHint tone="neutral">{ve}</CellHint>}
+      {ve && <Goi left>{ve}</Goi>}
     </>
   )
 }
@@ -61,21 +100,46 @@ export function GoiYSoLuong({ r, ton }: { r: DongForm & TonDong; ton: Ton }) {
 export function GoiYGia({ r }: { r: DongForm }) {
   if (!r.material_id) return null
   const cau = giaTruocCau(r.gia_goi_y)
-  if (!cau) return <CellHint tone="neutral">chưa có giá mua trên hệ thống</CellHint>
+  if (!cau)
+    return (
+      <CellHint title="Chưa có giá mua trên hệ thống — chưa từng có đơn mua / phiếu nhập Kho tự mua">
+        chưa mua lần nào
+      </CellHint>
+    )
   const c = chenhGia(r.unit_price, r.gia_goi_y)
   return (
     <>
-      <CellHint
-        tone="neutral"
-        title={`${r.gia_goi_y?.po_code} · ${r.gia_goi_y?.supplier_name}`}
-      >
-        {cau}
-      </CellHint>
+      <Goi title={`${r.gia_goi_y?.po_code} · ${r.gia_goi_y?.supplier_name}`}>{cau}</Goi>
       {c != null && Math.abs(c) >= 5 && (
         <CellHint tone={c > 0 ? 'warn' : 'neutral'}>
           {c > 0 ? `cao hơn lần trước ${c}%` : `thấp hơn lần trước ${-c}%`}
         </CellHint>
       )}
     </>
+  )
+}
+
+/**
+ * Ô VAT của dòng (Đ7 · 0239). Chủ dự án 14/10: một phiếu có dòng có VAT (NCC
+ * xuất hoá đơn) lẫn dòng không VAT (tiệm không hoá đơn) → chọn theo dòng.
+ */
+export function VatO({
+  r,
+  sua,
+  onChange,
+}: {
+  r: DongForm
+  sua: boolean
+  onChange: (v: number) => void
+}) {
+  if (!sua) return <span className="text-[var(--ink-2)]">{vatNhan(r.vat_rate)}</span>
+  return (
+    <Pick
+      value={String(r.vat_rate ?? 0)}
+      onChange={(v) => onChange(Number(v) || 0)}
+      options={VAT_CHON.map((v) => ({ value: String(v), label: v ? `${v}%` : 'Không' }))}
+      label={`VAT dòng ${r.code ?? r.name}`}
+      width={70}
+    />
   )
 }

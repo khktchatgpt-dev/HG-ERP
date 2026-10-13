@@ -193,14 +193,14 @@ export function DuyetDeNghiSoScreen({
                   )}
                   {td && <span className="text-k-sm text-[var(--ink-2)]">{td}</span>}
                   <span className="text-k-sm flex justify-between text-[var(--ink-3)]">
-                    <span>Dự kiến (chưa VAT)</span>
+                    <span>Tổng dự kiến (gồm VAT + vận chuyển)</span>
                     <b className="num text-[var(--ink)]">{fmt(r.du_kien)}</b>
                   </span>
                 </Link>
               )
             })}
             <div className="text-k-sm flex justify-between px-[var(--gutter)] py-2 text-[var(--ink-3)]">
-              <span>{hien.length} phiếu · dự kiến chưa VAT, chưa vận chuyển</span>
+              <span>{hien.length} phiếu · tổng dự kiến gồm VAT + vận chuyển</span>
               <b className="num text-[var(--ink)]">{fmt(tong)}</b>
             </div>
           </div>
@@ -211,7 +211,7 @@ export function DuyetDeNghiSoScreen({
               <th style={{ width: 84 }}>Gửi</th>
               <th>Người đề nghị · lưu ý</th>
               <th style={{ ...R, width: 56 }}>Dòng</th>
-              <th style={{ ...R, width: 112 }}>Dự kiến (chưa VAT)</th>
+              <th style={{ ...R, width: 112 }}>Tổng dự kiến</th>
               <th style={{ width: 100 }}>Trạng thái</th>
               <th style={{ width: 210 }}>Tiến độ mua</th>
               <th style={{ ...R, width: 76 }}>Chờ</th>
@@ -288,7 +288,7 @@ export function DuyetDeNghiSoScreen({
                   <td />
                 </>
               }
-              caveat="Dự kiến = SL × giá Kho ghi (chưa VAT, chưa vận chuyển); phiếu đã duyệt tính theo số duyệt. Chi = tiền trên phiếu nhập kho."
+              caveat="Tổng dự kiến = SL × giá Kho ghi + VAT từng dòng + vận chuyển; phiếu đã duyệt tính theo số duyệt. Chi = tiền trên phiếu nhập kho."
             />
           </Table>
         )}

@@ -26,6 +26,10 @@ export type DeNghi = {
   /** "Chốt xong" khi còn dòng thiếu mà không mua nữa (0238 · Q14). */
   closed_at: string | null
   closed_reason: string | null
+  /** Phí vận chuyển dự kiến cả phiếu, VND (Đ7 · 0239). */
+  shipping_fee: number
+  /** Lời lãnh đạo dặn Kho khi duyệt (Đ7 · 0239). */
+  approve_note: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -40,6 +44,8 @@ export type DeNghiDong = {
   qty: number
   approved_qty: number | null
   unit_price: number | null
+  /** % VAT của dòng, 0 = không VAT (Đ7 · 0239). */
+  vat_rate: number
   purpose: string | null
   note: string | null
   po_line_id: string | null
@@ -67,9 +73,9 @@ export type PhieuNhapDong = {
 }
 
 const COLS =
-  'id, code, status, department, requested_by, need_by, note, production_order_id, submitted_at, approved_at, rejected_at, rejected_reason, cancelled_at, cancel_reason, closed_at, closed_reason, created_by, created_at, updated_at'
+  'id, code, status, department, requested_by, need_by, note, production_order_id, submitted_at, approved_at, rejected_at, rejected_reason, cancelled_at, cancel_reason, closed_at, closed_reason, shipping_fee, approve_note, created_by, created_at, updated_at'
 const LINE_COLS =
-  'id, line_no, material_id, name, unit, qty, approved_qty, unit_price, purpose, note, po_line_id'
+  'id, line_no, material_id, name, unit, qty, approved_qty, unit_price, vat_rate, purpose, note, po_line_id'
 const SEL = `${COLS},
   nguoi:users!warehouse_purchase_requests_requested_by_fkey(name, email),
   duyet:users!warehouse_purchase_requests_approved_by_fkey(name, email),
@@ -92,10 +98,11 @@ type Raw = DeNghi & {
   tuchoi: U
   chot: U
   lsx: { code: string } | { code: string }[] | null
-  lines: (Omit<DeNghiDong, 'qty' | 'approved_qty' | 'unit_price'> & {
+  lines: (Omit<DeNghiDong, 'qty' | 'approved_qty' | 'unit_price' | 'vat_rate'> & {
     qty: unknown
     approved_qty: unknown
     unit_price: unknown
+    vat_rate: unknown
   })[]
 }
 
@@ -108,6 +115,7 @@ function unwrap(r: Raw): DeNghiDay {
     approved_by_name: ten(duyet),
     rejected_by_name: ten(tuchoi),
     closed_by_name: ten(chot),
+    shipping_fee: Number(rest.shipping_fee) || 0,
     lsx_code: l?.code ?? null,
     lines: (lines ?? [])
       .map((x) => ({
@@ -115,6 +123,7 @@ function unwrap(r: Raw): DeNghiDay {
         qty: Number(x.qty) || 0,
         approved_qty: so(x.approved_qty),
         unit_price: so(x.unit_price),
+        vat_rate: Number(x.vat_rate) || 0,
       }))
       .sort((a, b) => a.line_no - b.line_no),
   }
@@ -167,6 +176,7 @@ export const deNghiRepo = {
     need_by: string | null
     note: string | null
     production_order_id: string | null
+    shipping_fee: number
     requested_by: string
     created_by: string
   }): Promise<{ id: string }> {
@@ -197,6 +207,8 @@ export const deNghiRepo = {
       closed_at: string | null
       closed_by: string | null
       closed_reason: string | null
+      shipping_fee: number
+      approve_note: string | null
     }>,
     /** Chỉ cập nhật khi phiếu còn ở trạng thái này — chặn hai người bấm cùng lúc. */
     khiDang?: DeNghiStatus[],

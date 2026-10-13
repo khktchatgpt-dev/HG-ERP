@@ -7,7 +7,7 @@ import { PhieuTruoc, ThongTinDong, TonChu } from './thong-tin-dong'
 import type { DeNghiChiTiet } from '@/modules/dept/warehouse/de-nghi.service'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, todayVn } from '@/lib/date-vn'
-import { DE_NGHI_NHAN, DE_NGHI_TONE, gio } from '@/lib/de-nghi'
+import { DE_NGHI_NHAN, DE_NGHI_TONE, gio, tongDuKien, vatNhan } from '@/lib/de-nghi'
 import {
   Btn,
   Code,
@@ -60,21 +60,21 @@ export function DuyetDeNghiScreen({
   const [busy, setBusy] = useState(false)
   const [moTuChoi, setMoTuChoi] = useState(false)
   const [ly, setLy] = useState('')
+  /** Lời dặn Kho khi duyệt (Đ7) — không bắt buộc; đi theo thông báo + hiện trên phiếu Kho. */
+  const [dan, setDan] = useState('')
 
-  const tong = useMemo(
-    () =>
-      p.lines.reduce(
-        (a, l) => {
-          const q = so[l.id] ?? l.qty
-          if (l.unit_price == null) return { ...a, thieu: a.thieu + (q > 0 ? 1 : 0) }
-          return { ...a, tien: a.tien + q * l.unit_price }
-        },
-        { tien: 0, thieu: 0 },
-      ),
-    [p.lines, so],
-  )
   const daSua = p.lines.filter((l) => Math.abs((so[l.id] ?? l.qty) - l.qty) > 1e-9)
   const conMua = p.lines.filter((l) => (so[l.id] ?? l.qty) > 0).length
+  // Tổng theo SỐ ĐANG ĐỂ trên màn: hàng + VAT từng dòng + vận chuyển (Đ7).
+  // Không mua dòng nào thì không tính vận chuyển.
+  const tong = useMemo(
+    () =>
+      tongDuKien(
+        p.lines.map((l) => ({ ...l, qty: so[l.id] ?? l.qty })),
+        conMua > 0 ? p.shipping_fee : 0,
+      ),
+    [p.lines, p.shipping_fee, so, conMua],
+  )
 
   async function quyet(decision: 'approve' | 'reject') {
     setBusy(true)
@@ -86,6 +86,7 @@ export function DuyetDeNghiScreen({
             ? { decision, reason: ly.trim() }
             : {
                 decision,
+                reason: dan.trim() || null,
                 lines: daSua.map((l) => ({ id: l.id, approved_qty: so[l.id] })),
               },
       })
@@ -235,6 +236,7 @@ export function DuyetDeNghiScreen({
                   {l.code ? <Code>{l.code}</Code> : <Tag tone="warn">chưa có mã</Tag>}
                   <TonChu l={l} />
                   {l.purpose && <span> · {l.purpose}</span>}
+                  <span> · {vatNhan(l.vat_rate)}</span>
                 </span>
                 <span className="text-k-sm text-right text-[var(--ink-2)]">
                   {sua || l.approved_qty != null ? (
@@ -252,15 +254,42 @@ export function DuyetDeNghiScreen({
           })}
         </ul>
 
-        <div className="text-k-sm flex flex-wrap items-baseline justify-between gap-2 bg-[var(--surface-card)] px-4 py-2.5">
-          <span className="text-[var(--ink-2)]">
-            {p.lines.length} dòng{tong.thieu > 0 && ` · ${tong.thieu} dòng chưa có giá`} ·
-            chưa VAT, chưa vận chuyển
-          </span>
-          <span>
-            Dự kiến <b className="num text-k-lg">{fmt(Math.round(tong.tien))} đ</b>
-          </span>
-        </div>
+        {/* Tổng phải chi (Đ7): hàng + VAT từng dòng + vận chuyển — như tờ giấy. */}
+        <dl className="text-k-sm m-0 grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 bg-[var(--surface-card)] px-4 py-2.5">
+          <dt className="text-[var(--ink-2)]">
+            Tiền hàng · {p.lines.length} dòng
+            {tong.thieuGia > 0 && ` · ${tong.thieuGia} dòng chưa có giá`}
+          </dt>
+          <dd className="num m-0 text-right">{fmt(tong.hang)}</dd>
+          <dt className="text-[var(--ink-2)]">VAT (theo từng dòng)</dt>
+          <dd className="num m-0 text-right">{fmt(tong.vat)}</dd>
+          <dt className="text-[var(--ink-2)]">Vận chuyển dự kiến</dt>
+          <dd className="num m-0 text-right">{fmt(tong.vc)}</dd>
+          <dt className="font-semibold">Tổng phải chi (dự kiến)</dt>
+          <dd className="m-0 text-right">
+            <b className="num text-k-lg">{fmt(tong.tong)} đ</b>
+          </dd>
+        </dl>
+
+        {duyetDuoc && (
+          <label className="flex flex-col gap-1 border-t border-[var(--hair)] bg-[var(--surface-card)] px-4 py-2.5">
+            <span className="text-k-sm font-semibold text-[var(--ink-2)]">
+              Dặn Kho (không bắt buộc)
+            </span>
+            <TextArea
+              value={dan}
+              onChange={setDan}
+              rows={2}
+              placeholder="VD: que hàn chờ hàng PO-0174, không mua · mua ở tiệm Tân Hưng"
+              aria-label="Dặn Kho khi duyệt"
+            />
+          </label>
+        )}
+        {p.approve_note && !cho && (
+          <NoticeBar tone="neutral" tag="Đã dặn Kho">
+            “{p.approve_note}”
+          </NoticeBar>
+        )}
 
         {/* Điện thoại: hai nút lớn dính đáy (bản vẽ DN-2). Máy tính đã có ở đầu phiếu. */}
         {duyetDuoc && (

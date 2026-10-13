@@ -486,14 +486,14 @@ export const execService = {
     /*
       ĐỀ NGHỊ MUA VẬT TƯ (0236 · Đ2) — người duyệt = người duyệt đơn mua, nên cả
       người "chỉ duyệt đơn mua" cũng thấy. Không tự duyệt phiếu mình đề nghị.
-      Tiền là DỰ KIẾN của Kho (chưa VAT) — không gắn cờ giá trị lớn: hàng tiêu hao
+      Tiền là DỰ KIẾN của Kho (gồm VAT + vận chuyển) — không gắn cờ giá trị lớn: hàng tiêu hao
       lặt vặt, Kho tự mua theo số duyệt (từ 13/10, không qua Cung ứng). Luật "chờ
       tôi duyệt" dùng chung với danh sách /duyet/de-nghi + số đếm menu.
     */
     if (await canAction(user, 'warehouse.request.approve')) {
       const dn = (await deNghiRepo.list()).filter((r) => choToiDuyet(r, user))
       for (const r of dn) {
-        const t = tongDuKien(r.lines)
+        const t = tongDuKien(r.lines, r.shipping_fee)
         const chuaMa = r.lines.filter((l) => !l.material_id).length
         items.push({
           kind: 'dnm',

@@ -2,13 +2,15 @@
 
 import type { Dispatch, SetStateAction } from 'react'
 import { isoToVn, todayVn } from '@/lib/date-vn'
-import { Combobox, DateInput, TextInput } from '@/components/kit'
+import { Combobox, DateInput, NumInput, TextInput } from '@/components/kit'
 
 export type DauPhieuState = {
   department: string
   need_by: string
   note: string
   production_order_id: string | null
+  /** Phí vận chuyển dự kiến cả phiếu (Đ7). */
+  shipping_fee: number
 }
 
 /**
@@ -89,6 +91,31 @@ export function DauPhieu({
           <b className="num">{lsxChon?.code ?? '—'}</b>
         )}
       </span>
+      {/* Phí vận chuyển cả phiếu (Đ7) — tờ giấy có cột này; tổng lãnh đạo thấy gồm nó. */}
+      <label className="inline-flex items-center gap-2">
+        <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
+          Vận chuyển
+        </span>
+        {sua ? (
+          <NumInput
+            value={head.shipping_fee ? String(head.shipping_fee) : ''}
+            onCommit={(v) => {
+              const n = Number(v.replace(/\./g, '').replace(',', '.'))
+              setHead((h) => ({
+                ...h,
+                shipping_fee: Number.isFinite(n) && n > 0 ? n : 0,
+              }))
+            }}
+            placeholder="0"
+            aria-label="Phí vận chuyển dự kiến"
+            style={{ width: 100 }}
+          />
+        ) : (
+          <b className="num">
+            {head.shipping_fee ? head.shipping_fee.toLocaleString('vi-VN') : '—'}
+          </b>
+        )}
+      </label>
       <label className="inline-flex min-w-0 flex-1 basis-[260px] items-center gap-2">
         <span className="text-k-label font-semibold tracking-[.06em] whitespace-nowrap text-[var(--ink-3)] uppercase">
           Ghi chú
