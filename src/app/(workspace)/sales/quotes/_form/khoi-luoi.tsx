@@ -78,7 +78,8 @@ function planTitle(plan: PlanPrice | null, currency: string) {
 export function KhoiLuoiBaoGia({ d }: { d: BaoGiaFormCtx }) {
   const an = useAnGiaNoiBo()
   const cost = d.canSeeCost && !an.hidden
-  const cols = 9 + (cost ? 4 : 0)
+  // # · SP · SL · giá trước CK · CK · giá chào · thành tiền · nút = 8, + 4 cột nội bộ.
+  const cols = 8 + (cost ? 4 : 0)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-border bg-card flex flex-wrap items-center gap-2 border-b px-6 py-1.5">
