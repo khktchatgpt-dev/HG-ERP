@@ -169,7 +169,8 @@ export function QuickAddProduct({
             customer_item_code: itemCode.trim() || null,
             description_en: descEn.trim() || null,
             notes: notes.trim() || null,
-            reference_price: unitPrice,
+            // KHÔNG ghi giá bán vào reference_price (13/10/2026): ô "Giá tham khảo" của
+            // hồ sơ SP dùng chung đã gỡ — giá bán là bí mật Bán hàng, sống ở dòng báo giá.
             packing: buildPacking(),
             material: material.trim() || null,
             hs_code: hsCode.trim() || null,
