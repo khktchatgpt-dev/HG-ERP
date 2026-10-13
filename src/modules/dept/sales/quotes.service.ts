@@ -9,10 +9,10 @@ import type { QuoteStatus } from './quotes.schema'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { planCostService } from '@/modules/dept/technical/plan-cost.service'
-import { quoteNetPrice } from '@/lib/quote-price'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { emit } from '@/events/bus'
 import { todayVn } from '@/lib/date-vn'
+import type { PlanPrice } from '@/lib/sale-price'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -28,8 +28,9 @@ function addDays(iso: string, n: number): string {
 }
 
 /**
- * Chụp GIÁ THÀNH KẾ HOẠCH (0220) vào từng dòng lúc chào (0225) — chỉ khi người
- * lập có quyền xem giá thành; không thì null (bí mật Bán hàng không rò qua dòng).
+ * Chụp giá kế hoạch (0220) vào từng dòng lúc chào: GIÁ BÁN KH (0225) + GIÁ VỐN
+ * KH + tiền tệ (0235) — chỉ khi người lập có quyền xem; không thì không chụp gì
+ * (bí mật Bán hàng không rò qua dòng).
  */
 async function withPlanSnapshot(
   user: User,
@@ -37,21 +38,15 @@ async function withPlanSnapshot(
 ): Promise<QuoteLineInput[]> {
   if (!lines.length || !(await canAction(user, 'technical.plan_cost.view'))) return lines
   const prices = await planCostService.pricesFor(lines.map((l) => l.product_id))
-  return lines.map((l) => ({
-    ...l,
-    plan_price_snapshot: prices.get(l.product_id)?.price ?? null,
-  }))
-}
-
-/** Lãi kế hoạch % của một dòng = (net − giá thành) / net. null khi thiếu một trong hai. */
-export function quoteLineMargin(
-  unitPrice: number,
-  discountPct: number | null | undefined,
-  planPrice: number | null | undefined,
-): number | null {
-  const net = quoteNetPrice(unitPrice, discountPct)
-  if (!(net > 0) || planPrice == null) return null
-  return Math.round(((net - planPrice) / net) * 1000) / 10
+  return lines.map((l) => {
+    const p = prices.get(l.product_id)
+    return {
+      ...l,
+      plan_price_snapshot: p?.price ?? null,
+      plan_cost_snapshot: p?.cost ?? null,
+      plan_currency_snapshot: p?.currency ?? null,
+    }
+  })
 }
 
 type QuoteInput = {
@@ -92,10 +87,17 @@ export const quotesService = {
     // Giá thành KH là bí mật Bán hàng — không có quyền thì không trả cột (kể cả snapshot).
     const planPrices = canSeeCost
       ? await planCostService.pricesFor(lines.map((l) => l.product_id))
-      : new Map<string, { price: number; currency: string }>()
+      : new Map<string, PlanPrice>()
     return {
       quote,
-      lines: canSeeCost ? lines : lines.map((l) => ({ ...l, plan_price_snapshot: null })),
+      lines: canSeeCost
+        ? lines
+        : lines.map((l) => ({
+            ...l,
+            plan_price_snapshot: null,
+            plan_cost_snapshot: null,
+            plan_currency_snapshot: null,
+          })),
       canSeeCost,
       planPrices: Object.fromEntries(planPrices),
       orders: orders.get(id) ?? [],

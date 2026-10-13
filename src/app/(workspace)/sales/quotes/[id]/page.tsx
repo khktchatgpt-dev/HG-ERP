@@ -5,7 +5,33 @@ import { usersRepo } from '@/modules/core/users/users.repo'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { HttpError } from '@/server/http'
+import type { QuoteLine } from '@/modules/dept/sales/quotes.repo'
+import type { PlanPrice } from '@/lib/sale-price'
 import { BaoGiaScreen } from './BaoGiaScreen'
+
+/**
+ * Giá kế hoạch của một dòng: số CHỤP lúc chào nếu dòng chụp sau 0235 (có tiền
+ * tệ đi kèm), không thì số HIỆN TẠI. Không ghép giá bán chụp cũ với giá vốn hiện
+ * tại — hai vế khác thời điểm thì lãi ra số không ai kiểm được.
+ */
+function planOf(
+  canSeeCost: boolean,
+  l: QuoteLine,
+  now: PlanPrice | null,
+): { plan: PlanPrice | null; plan_is_snapshot: boolean; plan_now: PlanPrice | null } {
+  if (!canSeeCost) return { plan: null, plan_is_snapshot: false, plan_now: null }
+  if (l.plan_currency_snapshot != null && l.plan_price_snapshot != null)
+    return {
+      plan: {
+        price: l.plan_price_snapshot,
+        cost: l.plan_cost_snapshot,
+        currency: l.plan_currency_snapshot,
+      },
+      plan_is_snapshot: true,
+      plan_now: now,
+    }
+  return { plan: now, plan_is_snapshot: false, plan_now: now }
+}
 
 /**
  * Chi tiết BÁO GIÁ (khuôn D, kiểu ERP — 07/10/2026). Giá thành KH chỉ xuống
@@ -89,8 +115,7 @@ export default async function QuoteDetailPage({
         qty: l.qty,
         unit_price: l.unit_price,
         discount_pct: l.discount_pct,
-        plan_price: canSeeCost ? (planPrices[l.product_id]?.price ?? null) : null,
-        plan_snapshot: canSeeCost ? l.plan_price_snapshot : null,
+        ...planOf(canSeeCost, l, planPrices[l.product_id] ?? null),
         note: l.note,
         packing_text: packingText(l.packing),
       }))}

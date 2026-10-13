@@ -5,6 +5,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { todayVn } from '@/lib/date-vn'
 import { planCheck, planPct, type BreakdownItem } from '@/lib/plan-cost'
+import { planCostOf, type PlanPrice } from '@/lib/sale-price'
 import { hasFullPlan, type PlanCostBulkInput } from './plan-cost.schema'
 
 /**
@@ -96,26 +97,30 @@ const num = (v: unknown) => (v == null ? null : Number(v))
 
 export const planCostService = {
   /**
-   * Giá FOB kế hoạch của một lô SP — cho Bảng giá đơn hàng mồi đơn giá (bước 3).
-   * KHÔNG gác quyền ở đây: chỗ gọi (orders.service) đã kiểm
+   * Giá kế hoạch của một lô SP: `price` = GIÁ BÁN KH (FOB, đã gồm lãi), `cost`
+   * = GIÁ VỐN KH (trực tiếp + chung; null khi SP mới có FOB) — xem lib/sale-price.
+   * Hai số này từng bị bày lẫn: báo giá lấy `price` làm "giá thành" (13/10/2026).
+   * KHÔNG gác quyền ở đây: chỗ gọi (orders/quotes.service) đã kiểm
    * `technical.plan_cost.view` trước khi hỏi, vì đây là số riêng của Bán hàng.
    */
-  async pricesFor(
-    productIds: string[],
-  ): Promise<Map<string, { price: number; currency: string }>> {
+  async pricesFor(productIds: string[]): Promise<Map<string, PlanPrice>> {
     const ids = [...new Set(productIds)]
     if (ids.length === 0) return new Map()
     const { data, error } = await db()
       .from('technical_products')
-      .select('id, plan_price, plan_currency')
+      .select('id, plan_direct_cost, plan_overhead, plan_price, plan_currency')
       .in('id', ids)
       .not('plan_price', 'is', null)
     if (error) throw new Error(error.message)
-    type R = { id: string; plan_price: unknown; plan_currency: string | null }
+    type R = { id: string; plan_direct_cost: unknown; plan_overhead: unknown; plan_price: unknown; plan_currency: string | null } // prettier-ignore
     return new Map(
       ((data ?? []) as R[]).map((r) => [
         r.id,
-        { price: Number(r.plan_price), currency: r.plan_currency ?? 'USD' },
+        {
+          price: Number(r.plan_price),
+          cost: planCostOf(num(r.plan_direct_cost), num(r.plan_overhead)),
+          currency: r.plan_currency ?? 'USD',
+        },
       ]),
     )
   },
@@ -199,7 +204,13 @@ export const planCostService = {
     if (ids.length === 0) {
       return {
         rows: [],
-        stats: { total: 0, with_plan: 0, complete: 0, fob_only: 0, missing_by_customer: [] },
+        stats: {
+          total: 0,
+          with_plan: 0,
+          complete: 0,
+          fob_only: 0,
+          missing_by_customer: [],
+        },
       }
     }
 
@@ -228,8 +239,18 @@ export const planCostService = {
       product_id: string
       unit_price: number
       quote:
-        | { code: string; currency: string; created_at: string; customer: { name: string } | { name: string }[] | null }
-        | { code: string; currency: string; created_at: string; customer: { name: string } | { name: string }[] | null }[]
+        | {
+            code: string
+            currency: string
+            created_at: string
+            customer: { name: string } | { name: string }[] | null
+          }
+        | {
+            code: string
+            currency: string
+            created_at: string
+            customer: { name: string } | { name: string }[] | null
+          }[]
     }
     const lastQuote = new Map<string, LastSeenPrice>()
     for (const r of (quoteRes.data ?? []) as QRaw[]) {

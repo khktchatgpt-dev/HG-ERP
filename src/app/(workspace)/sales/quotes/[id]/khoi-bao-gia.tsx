@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Panel, TH, TD, NUM, Nhan } from '../../_erp/ui'
 import { DocumentFiles } from '@/components/DocumentFiles'
 import { quoteNetPrice } from '@/lib/quote-price'
+import { checkPrice, PRICE_NAME, type PlanPrice } from '@/lib/sale-price'
 import { orderStatusLabel, orderStatusTone } from '@/lib/order-status-ui'
 import { QUOTE_LABEL, quoteTone } from '../so-bao-gia.shared'
 import {
@@ -21,10 +22,29 @@ import {
 } from './bao-gia.shared'
 import type { BaoGiaCtx } from './useBaoGia'
 
+/* ── Tên giá + chú giải (lib/sale-price) ─────────────────────────────── */
+const TIP_COST = `${PRICE_NAME.cost} = trực tiếp + chi phí chung. Nội bộ, không in.`
+const TIP_LAI = `Lãi thực = (${PRICE_NAME.quote} − ${PRICE_NAME.cost}) / ${PRICE_NAME.quote}`
+const TIP_VS = `So với ${PRICE_NAME.plan} (= giá vốn + lãi KH): âm = chào thấp hơn mức đã tính`
+function fmtPct(v: number | null, signed = false) {
+  if (v == null) return '—'
+  const s = Math.abs(v).toFixed(1)
+  return v < 0 ? `−${s}%` : signed && v > 0 ? `+${s}%` : `${s}%`
+}
+function planNote(plan: PlanPrice | null, now: PlanPrice | null, snap: boolean) {
+  if (!plan) return `SP chưa có ${PRICE_NAME.plan}`
+  const one = (p: PlanPrice) =>
+    `vốn ${p.cost != null ? fmtMoney(p.cost) : '—'} · bán KH ${fmtMoney(p.price)} ${p.currency}`
+  if (!snap) return `Số hiện tại (dòng chụp trước 13/10): ${one(plan)}`
+  if (now && (now.price !== plan.price || now.cost !== plan.cost))
+    return `Lúc chào: ${one(plan)} — hiện: ${one(now)}`
+  return `Lúc chào: ${one(plan)}`
+}
+
 /* ── Lưới dòng: nhân vật chính ──────────────────────────────────────────── */
 export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
   const cost = d.canSeeCost
-  const cols = 9 + (cost ? 2 : 0)
+  const cols = 9 + (cost ? 3 : 0)
   return (
     <Panel
       title="Dòng sản phẩm"
@@ -33,7 +53,11 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
       note={
         cost && d.tong.below > 0 ? (
           <span className="text-[var(--stop)]">
-            {d.tong.below} dòng chào DƯỚI giá thành kế hoạch
+            {d.tong.below} dòng chào DƯỚI {PRICE_NAME.cost} — bán lỗ
+          </span>
+        ) : cost && d.tong.belowPlan > 0 ? (
+          <span className="text-[var(--warn)]">
+            {d.tong.belowPlan} dòng chào thấp hơn {PRICE_NAME.plan}
           </span>
         ) : d.tong.zero > 0 ? (
           <span className="text-[var(--warn)]">{d.tong.zero} dòng chưa có đơn giá</span>
@@ -60,19 +84,31 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
               <th className={TH}>Tên</th>
               <th className={`${TH} w-12`}>ĐVT</th>
               <th className={`${TH} w-[72px] text-right`}>SL/MOQ</th>
-              {cost && <th className={`${TH} w-[92px] text-right`}>Giá thành</th>}
-              <th className={`${TH} w-[88px] text-right`}>Đơn giá</th>
+              {cost && (
+                <th className={`${TH} w-[92px] text-right`} title={TIP_COST}>
+                  {PRICE_NAME.cost}
+                </th>
+              )}
+              <th className={`${TH} w-[96px] text-right`}>Giá trước CK</th>
               <th className={`${TH} w-[52px] text-right`}>CK%</th>
-              <th className={`${TH} w-[96px] text-right`}>Giá chào</th>
-              {cost && <th className={`${TH} w-[60px] text-right`}>Lãi</th>}
+              <th className={`${TH} w-[96px] text-right`}>{PRICE_NAME.quote}</th>
+              {cost && (
+                <th className={`${TH} w-[76px] text-right`} title={TIP_LAI}>
+                  Lãi thực
+                </th>
+              )}
+              {cost && (
+                <th className={`${TH} w-[80px] text-right`} title={TIP_VS}>
+                  ± Bán KH
+                </th>
+              )}
               <th className={`${TH} w-[130px]`}>Ghi chú</th>
             </tr>
           </thead>
           <tbody>
             {d.lines.map((l, i) => {
               const net = quoteNetPrice(l.unit_price, l.discount_pct)
-              const c = l.plan_snapshot ?? l.plan_price
-              const margin = c != null && net > 0 ? ((net - c) / net) * 100 : null
+              const chk = checkPrice(net, d.quote.currency, l.plan)
               return (
                 <tr key={l.id} className="hover:bg-muted/40">
                   <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
@@ -105,15 +141,11 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
                   {cost && (
                     <td
                       className={`${TD} ${NUM} text-muted-foreground`}
-                      title={
-                        l.plan_snapshot != null &&
-                        l.plan_price != null &&
-                        l.plan_snapshot !== l.plan_price
-                          ? `lúc chào ${fmtMoney(l.plan_snapshot)} · hiện ${fmtMoney(l.plan_price)}`
-                          : undefined
-                      }
+                      title={planNote(l.plan, l.plan_now, l.plan_is_snapshot)}
                     >
-                      {c != null ? fmtMoney(c) : '—'}
+                      {l.plan?.cost != null
+                        ? `${fmtMoney(l.plan.cost)}${chk.currency_mismatch ? ` ${l.plan.currency}` : ''}`
+                        : '—'}
                     </td>
                   )}
                   <td
@@ -129,9 +161,21 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
                   </td>
                   {cost && (
                     <td
-                      className={`${TD} ${NUM} ${margin == null ? 'text-muted-foreground' : margin < 0 ? 'text-[var(--stop)]' : margin < 10 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
+                      className={`${TD} ${NUM} ${chk.lai_pct == null ? 'text-muted-foreground' : chk.lai_pct < 0 ? 'text-[var(--stop)]' : ''}`}
                     >
-                      {margin == null ? '—' : `${margin.toFixed(1)}%`}
+                      {fmtPct(chk.lai_pct)}
+                    </td>
+                  )}
+                  {cost && (
+                    <td
+                      className={`${TD} ${NUM} ${chk.vs_plan_pct != null && chk.vs_plan_pct < 0 ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+                      title={
+                        l.plan && !chk.currency_mismatch
+                          ? `${PRICE_NAME.plan} ${fmtMoney(l.plan.price)} ${l.plan.currency}`
+                          : undefined
+                      }
+                    >
+                      {fmtPct(chk.vs_plan_pct, true)}
                     </td>
                   )}
                   <td className={`${TD} truncate text-xs`} title={l.note ?? ''}>
@@ -176,10 +220,14 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
                 )}
               </td>
               {cost && (
-                <td className={`${TD} ${NUM} border-b-0`}>
-                  {d.tong.avgMargin != null ? `${d.tong.avgMargin.toFixed(1)}%` : '—'}
+                <td
+                  className={`${TD} ${NUM} border-b-0`}
+                  title="Lãi thực bình quân, gia quyền theo trị giá (dòng thiếu SL tính 1)"
+                >
+                  {fmtPct(d.tong.avgLai)}
                 </td>
               )}
+              {cost && <td className={`${TD} border-b-0`} />}
               <td className={`${TD} border-b-0`} />
             </tr>
           </tfoot>

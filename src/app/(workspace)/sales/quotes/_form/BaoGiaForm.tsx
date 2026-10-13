@@ -12,6 +12,7 @@ import {
   inchStr,
   QuoteLineDetails,
 } from '@/components/sales/quote-form.shared'
+import { PRICE_NAME, type PlanPrice } from '@/lib/sale-price'
 import { ErpHeader, ErpPage, Nhan, ToolBtn } from '../../_erp/ui'
 import {
   BTN_PRI,
@@ -193,10 +194,30 @@ function DauDon({ d }: { d: BaoGiaFormCtx }) {
   )
 }
 
+/* ── Tên giá + chú giải (lib/sale-price) ─────────────────────────────── */
+const TIP = {
+  cost: `${PRICE_NAME.cost} = trực tiếp + chi phí chung (màn Giá thành kế hoạch). Nội bộ, không in.`,
+  lai: `Lãi thực = (${PRICE_NAME.quote} − ${PRICE_NAME.cost}) / ${PRICE_NAME.quote}`,
+  vs: `So với ${PRICE_NAME.plan} (= giá vốn + lãi KH): âm = đang chào thấp hơn mức đã tính`,
+}
+function fmtPct(v: number | null, signed = false) {
+  if (v == null) return '—'
+  const s = Math.abs(v).toFixed(1)
+  return v < 0 ? `−${s}%` : signed && v > 0 ? `+${s}%` : `${s}%`
+}
+function planTitle(plan: PlanPrice | null, currency: string) {
+  if (!plan) return `SP chưa có ${PRICE_NAME.plan}`
+  if (plan.currency !== currency)
+    return `Giá kế hoạch tính bằng ${plan.currency}, báo giá bằng ${currency} — không so lãi`
+  return plan.cost == null
+    ? `SP mới có ${PRICE_NAME.plan} ${fmtMoney(plan.price)}, chưa bóc giá vốn`
+    : `${PRICE_NAME.cost} ${fmtMoney(plan.cost)} · ${PRICE_NAME.plan} ${fmtMoney(plan.price)}`
+}
+
 /* ── Lưới dòng ─────────────────────────────────────────────────────────── */
 function LuoiDong({ d }: { d: BaoGiaFormCtx }) {
   const cost = d.canSeeCost
-  const cols = 10 + (cost ? 2 : 0)
+  const cols = 10 + (cost ? 3 : 0)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-border bg-card flex flex-wrap items-center gap-2 border-b px-6 py-1.5">
@@ -229,12 +250,17 @@ function LuoiDong({ d }: { d: BaoGiaFormCtx }) {
         )}
         {cost && d.tong.below > 0 && (
           <span className="text-xs text-[var(--stop)]">
-            {d.tong.below} dòng dưới giá thành KH
+            {d.tong.below} dòng dưới {PRICE_NAME.cost} — bán lỗ
+          </span>
+        )}
+        {cost && d.tong.belowPlan > 0 && (
+          <span className="text-xs text-[var(--warn)]">
+            {d.tong.belowPlan} dòng thấp hơn {PRICE_NAME.plan}
           </span>
         )}
         {!cost && (
           <span className="text-muted-foreground text-xs">
-            Giá thành KH chỉ hiện với người có quyền xem
+            {PRICE_NAME.cost} · {PRICE_NAME.plan} chỉ hiện với người có quyền xem
           </span>
         )}
       </div>
@@ -251,7 +277,8 @@ function LuoiDong({ d }: { d: BaoGiaFormCtx }) {
             <col className="w-[104px]" />
             <col className="w-[64px]" />
             <col className="w-[96px]" />
-            {cost && <col className="w-[64px]" />}
+            {cost && <col className="w-[76px]" />}
+            {cost && <col className="w-[80px]" />}
             <col className="w-[180px]" />
             <col className="w-[60px]" />
           </colgroup>
@@ -262,11 +289,24 @@ function LuoiDong({ d }: { d: BaoGiaFormCtx }) {
               <th className={TH}>Mã khách</th>
               <th className={TH}>ĐVT</th>
               <th className={`${TH} text-right`}>SL/MOQ</th>
-              {cost && <th className={`${TH} text-right`}>Giá thành</th>}
-              <th className={`${TH} text-right`}>Đơn giá ({d.h.currency}) *</th>
+              {cost && (
+                <th className={`${TH} text-right`} title={TIP.cost}>
+                  {PRICE_NAME.cost}
+                </th>
+              )}
+              <th className={`${TH} text-right`}>Giá trước CK ({d.h.currency}) *</th>
               <th className={`${TH} text-right`}>CK%</th>
-              <th className={`${TH} text-right`}>Giá chào</th>
-              {cost && <th className={`${TH} text-right`}>Lãi</th>}
+              <th className={`${TH} text-right`}>{PRICE_NAME.quote}</th>
+              {cost && (
+                <th className={`${TH} text-right`} title={TIP.lai}>
+                  Lãi thực
+                </th>
+              )}
+              {cost && (
+                <th className={`${TH} text-right`} title={TIP.vs}>
+                  ± Bán KH
+                </th>
+              )}
               <th className={TH}>Ghi chú</th>
               <th className={TH} />
             </tr>
@@ -306,7 +346,7 @@ function LuoiDong({ d }: { d: BaoGiaFormCtx }) {
                 <td className={`border-border h-8 border-t px-1.5 ${NUM}`}>
                   {d.tong.ref > 0 ? fmtMoney(d.tong.ref) : '—'}
                 </td>
-                {cost && <td className="border-border h-8 border-t" />}
+                {cost && <td className="border-border h-8 border-t" colSpan={2} />}
                 <td className="border-border h-8 border-t" colSpan={2} />
               </tr>
             </tfoot>
@@ -348,12 +388,12 @@ function Dong({
 }) {
   const p = l.productId ? d.known.get(l.productId) : undefined
   const pk = p?.packing ?? {}
-  const { net, cost, margin } = d.calc(l)
+  const { net, plan, check } = d.calc(l)
   const open = d.openKeys.has(l.key)
   const mine = l.productId ? d.lastPrices.get(l.productId) : undefined
   const market = l.productId ? d.marketPrices.get(l.productId) : undefined
   const noSpec = p ? hasNoSpec(p) : false
-  const under = d.canSeeCost && cost != null && net > 0 && net < cost
+  const under = d.canSeeCost && check.below_cost
   const specs: [string, string | null][] = [
     ['Mã KH đặt', p?.customer_item_code ?? null],
     ['KT SP (cm)', dimStr(pk.l_cm, pk.w_cm, pk.h_cm)],
@@ -440,8 +480,13 @@ function Dong({
           />
         </td>
         {d.canSeeCost && (
-          <td className={`${TD} ${NUM} text-muted-foreground`}>
-            {cost != null ? fmtMoney(cost) : '—'}
+          <td
+            className={`${TD} ${NUM} text-muted-foreground`}
+            title={planTitle(plan, d.h.currency)}
+          >
+            {plan?.cost != null
+              ? `${fmtMoney(plan.cost)}${check.currency_mismatch ? ` ${plan.currency}` : ''}`
+              : '—'}
           </td>
         )}
         <td className={`${TD} px-1`}>
@@ -454,8 +499,12 @@ function Dong({
             inputMode="decimal"
             onChange={(e) => d.setLine(l.key, { unitPrice: e.target.value })}
             onKeyDown={(e) => gridKey(e, i, 'price')}
-            aria-label="Đơn giá"
-            title={under ? `Dưới giá thành KH ${fmtMoney(cost!)}` : undefined}
+            aria-label="Giá trước chiết khấu"
+            title={
+              under
+                ? `Giá chào dưới ${PRICE_NAME.cost} ${fmtMoney(plan!.cost!)}`
+                : undefined
+            }
           />
         </td>
         <td className={`${TD} px-1`}>
@@ -477,9 +526,22 @@ function Dong({
         </td>
         {d.canSeeCost && (
           <td
-            className={`${TD} ${NUM} ${margin == null ? 'text-muted-foreground' : margin < 0 ? 'text-[var(--stop)]' : margin < 10 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
+            className={`${TD} ${NUM} ${check.lai_pct == null ? 'text-muted-foreground' : check.lai_pct < 0 ? 'text-[var(--stop)]' : ''}`}
+            title={TIP.lai}
           >
-            {margin == null ? '—' : `${margin.toFixed(1)}%`}
+            {fmtPct(check.lai_pct)}
+          </td>
+        )}
+        {d.canSeeCost && (
+          <td
+            className={`${TD} ${NUM} ${check.vs_plan_pct == null ? 'text-muted-foreground' : check.vs_plan_pct < 0 ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+            title={
+              plan && !check.currency_mismatch
+                ? `${PRICE_NAME.plan} ${fmtMoney(plan.price)} ${plan.currency}`
+                : TIP.vs
+            }
+          >
+            {fmtPct(check.vs_plan_pct, true)}
           </td>
         )}
         <td className={`${TD} px-1`}>
@@ -553,7 +615,9 @@ function CommitBar({ d, back }: { d: BaoGiaFormCtx; back: string }) {
           </>
         )}
         {d.canSeeCost && d.tong.below > 0 && (
-          <Nhan tone="stop">{d.tong.below} dòng dưới giá thành</Nhan>
+          <Nhan tone="stop">
+            {d.tong.below} dòng dưới {PRICE_NAME.cost}
+          </Nhan>
         )}
       </span>
       <span className="bg-border h-4 w-px" />

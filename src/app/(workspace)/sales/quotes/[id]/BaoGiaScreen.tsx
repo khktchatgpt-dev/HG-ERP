@@ -35,6 +35,7 @@ import {
   KhoiBaoGiaTongQuan,
 } from './khoi-bao-gia'
 import { useBaoGia, type BaoGiaProps } from './useBaoGia'
+import { PRICE_NAME } from '@/lib/sale-price'
 
 /**
  * CHI TIẾT BÁO GIÁ — khuôn D · Chứng từ, kiểu ERP. Công cụ góc phải theo bước
@@ -216,20 +217,14 @@ export function BaoGiaScreen(props: BaoGiaProps) {
         />
         {d.canSeeCost && (
           <CountCell
-            label="Lãi kế hoạch"
-            value={d.tong.avgMargin != null ? `${d.tong.avgMargin.toFixed(1)}%` : null}
+            label="Lãi thực"
+            value={d.tong.avgLai != null ? `${d.tong.avgLai.toFixed(1)}%` : null}
             sub={
               d.tong.withCost
-                ? `${d.tong.withCost}/${d.lines.length} dòng có giá thành${d.tong.below ? ` · ${d.tong.below} dưới giá thành` : ''}`
-                : 'chưa có giá thành KH'
+                ? `${d.tong.withCost}/${d.lines.length} dòng có ${PRICE_NAME.cost}${d.tong.below ? ` · ${d.tong.below} dưới giá vốn` : d.tong.belowPlan ? ` · ${d.tong.belowPlan} thấp hơn ${PRICE_NAME.plan}` : ''}`
+                : `chưa có ${PRICE_NAME.cost}`
             }
-            tone={
-              d.tong.below
-                ? 'stop'
-                : d.tong.avgMargin != null && d.tong.avgMargin < 10
-                  ? 'warn'
-                  : 'neutral'
-            }
+            tone={d.tong.below ? 'stop' : d.tong.belowPlan ? 'warn' : 'neutral'}
           />
         )}
         <CountCell

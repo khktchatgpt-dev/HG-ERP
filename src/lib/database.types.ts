@@ -2875,6 +2875,8 @@ export type Database = {
           id: string
           note: string | null
           plan_at: string | null
+          plan_cost_snapshot: number | null
+          plan_currency_snapshot: string | null
           plan_price_snapshot: number | null
           product_id: string
           qty: number | null
@@ -2887,6 +2889,8 @@ export type Database = {
           id?: string
           note?: string | null
           plan_at?: string | null
+          plan_cost_snapshot?: number | null
+          plan_currency_snapshot?: string | null
           plan_price_snapshot?: number | null
           product_id: string
           qty?: number | null
@@ -2899,6 +2903,8 @@ export type Database = {
           id?: string
           note?: string | null
           plan_at?: string | null
+          plan_cost_snapshot?: number | null
+          plan_currency_snapshot?: string | null
           plan_price_snapshot?: number | null
           product_id?: string
           qty?: number | null

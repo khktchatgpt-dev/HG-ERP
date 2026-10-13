@@ -146,7 +146,7 @@ export function ThuVienScreen({
           />
           {canPrice && (
             <Fact
-              label="Chưa giá KH"
+              label="Chưa giá bán KH"
               n={counts.gia}
               on={filters.gia}
               onClick={() => d.latCo('gia')}

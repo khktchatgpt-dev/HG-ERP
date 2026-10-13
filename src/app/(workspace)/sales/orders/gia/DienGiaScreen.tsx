@@ -64,12 +64,12 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
           { label: 'Điền đơn giá' },
         ]}
         title="Điền đơn giá"
-        sub="Gõ giá cho từng dòng rồi lưu một lần — dán từ Excel hay mồi FOB kế hoạch đều chỉ điền vào ô, bạn soát rồi mới lưu."
+        sub="Gõ giá cho từng dòng rồi lưu một lần — dán từ Excel hay mồi Giá bán KH đều chỉ điền vào ô, bạn soát rồi mới lưu."
         actions={
           <>
             {d.hasPlanColumn && (
               <ToolBtn onClick={d.fillFromPlan} icon={Target}>
-                Lấy FOB kế hoạch ({d.planFillable.length})
+                Lấy Giá bán KH ({d.planFillable.length})
               </ToolBtn>
             )}
             <ToolBtn onClick={() => d.setPasteOpen(!d.pasteOpen)} icon={ClipboardPaste}>
@@ -104,9 +104,9 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
         />
         {d.hasPlanColumn && (
           <CountCell
-            label="Mồi được FOB KH"
+            label="Mồi được Giá bán KH"
             value={String(d.planFillable.length)}
-            sub="dòng trống có FOB cùng tiền tệ"
+            sub="dòng trống có Giá bán KH cùng tiền tệ"
             onClick={d.fillFromPlan}
           />
         )}
@@ -173,7 +173,7 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
             <col className="w-[84px]" />
             {d.hasPlanColumn && <col className="w-[120px]" />}
             <col className="w-[150px]" />
-            {d.hasPlanColumn && <col className="w-[64px]" />}
+            {d.hasPlanColumn && <col className="w-[80px]" />}
             <col className="w-[120px]" />
           </colgroup>
           <thead className="sticky top-0 z-10">
@@ -182,9 +182,9 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
               <th className={TH}>Đơn · khách</th>
               <th className={TH}>Sản phẩm · mã khách</th>
               <th className={`${TH} text-right`}>SL</th>
-              {d.hasPlanColumn && <th className={`${TH} text-right`}>FOB kế hoạch</th>}
+              {d.hasPlanColumn && <th className={`${TH} text-right`}>Giá bán KH</th>}
               <th className={`${TH} text-right`}>Đơn giá</th>
-              {d.hasPlanColumn && <th className={`${TH} text-right`}>± FOB</th>}
+              {d.hasPlanColumn && <th className={`${TH} text-right`}>± Bán KH</th>}
               <th className={`${TH} text-right`}>Thành tiền</th>
             </tr>
           </thead>
@@ -217,7 +217,7 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
                     {d.belowPlan > 0 && (
                       <span className="text-[var(--warn)]">
                         {' '}
-                        · {d.belowPlan} dòng gõ thấp hơn FOB KH
+                        · {d.belowPlan} dòng gõ thấp hơn Giá bán KH
                       </span>
                     )}
                   </span>
@@ -276,7 +276,7 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
           <span className="text-[13px] text-[var(--done)]">
             Đủ điều kiện lưu
             {d.belowPlan > 0
-              ? ` — ${d.belowPlan} dòng thấp hơn FOB KH, bạn đã soát?`
+              ? ` — ${d.belowPlan} dòng thấp hơn Giá bán KH, bạn đã soát?`
               : ''}
           </span>
         )}

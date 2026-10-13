@@ -106,7 +106,7 @@ export function GiaThanhScreen({
 
       <CountStrip>
         <CountCell
-          label="SP chưa có giá KH"
+          label="SP chưa có Giá bán KH"
           value={String(missing)}
           sub={`trên ${s.total} SP đang chạy`}
           tone={missing ? 'stop' : 'done'}
@@ -114,7 +114,7 @@ export function GiaThanhScreen({
           onClick={() => d.setView('missing')}
         />
         <CountCell
-          label="Chỉ FOB, chưa bóc tách"
+          label="Chỉ Giá bán KH, chưa bóc vốn"
           value={String(s.fob_only)}
           sub="có giá chốt, không có bảng tính"
           tone={s.fob_only ? 'warn' : 'neutral'}
@@ -124,7 +124,7 @@ export function GiaThanhScreen({
         <CountCell
           label="Đủ 4 số, khớp tổng"
           value={String(s.complete)}
-          sub="trực tiếp + chung + lợi nhuận = FOB"
+          sub="Giá vốn KH (trực tiếp + chung) + Lãi KH = Giá bán KH"
           tone={s.complete === s.total && s.total > 0 ? 'done' : 'neutral'}
           on={d.view === 'all'}
           onClick={() => d.setView('all')}
@@ -170,7 +170,7 @@ export function GiaThanhScreen({
           onChange={d.setView}
           options={[
             { value: 'missing', label: 'Chưa có', count: missing },
-            { value: 'fob_only', label: 'Chỉ FOB', count: s.fob_only },
+            { value: 'fob_only', label: 'Chưa bóc vốn', count: s.fob_only },
             { value: 'all', label: 'Tất cả', count: s.total },
           ]}
         />
@@ -254,8 +254,8 @@ export function GiaThanhScreen({
 
       {d.warn.length > 0 && (
         <div className="border-border border-b bg-[var(--warn)]/10 px-6 py-1.5 text-[13px]">
-          <Nhan tone="warn">Lệch nhiều</Nhan> {d.warn.length} dòng có FOB mới lệch quá{' '}
-          {PLAN_WARN_PCT}% so với số đang có (
+          <Nhan tone="warn">Lệch nhiều</Nhan> {d.warn.length} dòng có Giá bán KH mới lệch
+          quá {PLAN_WARN_PCT}% so với số đang có (
           {d.warn
             .slice(0, 3)
             .map((r) => {
@@ -291,11 +291,21 @@ export function GiaThanhScreen({
               <th className={`${TH} text-right`}>Trực tiếp</th>
               <th className={`${TH} text-right`}>Chung</th>
               <th className={`${TH} text-right`}>a%</th>
-              <th className={`${TH} text-right`}>Lợi nhuận</th>
+              <th
+                className={`${TH} text-right`}
+                title="Lợi nhuận kế hoạch Sale đặt cho SP"
+              >
+                Lãi KH
+              </th>
               <th className={`${TH} text-right`}>b%</th>
-              <th className={`${TH} text-right`}>Giá FOB</th>
-              <th className={`${TH} text-right`}>Đã chào</th>
-              <th className={`${TH} text-right`}>Giá đơn</th>
+              <th
+                className={`${TH} text-right`}
+                title="FOB tính ra = trực tiếp + chung + Lãi KH"
+              >
+                Giá bán KH
+              </th>
+              <th className={`${TH} text-right`}>Giá chào</th>
+              <th className={`${TH} text-right`}>Đơn giá</th>
               <th className={TH}>Tình trạng · nguồn</th>
             </tr>
           </thead>
@@ -549,7 +559,7 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
             <span className="flex flex-wrap items-center gap-1">
               <Nhan tone="neutral">
                 {live.fob_only
-                  ? 'chỉ FOB'
+                  ? 'chưa bóc vốn'
                   : draft?.from_line
                     ? `khối dán · dòng ${draft.from_line}`
                     : draft?.breakdown
@@ -573,9 +583,9 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
           ) : r.price == null ? (
             <Nhan tone="stop">chưa có</Nhan>
           ) : r.direct == null ? (
-            <Nhan tone="warn">chỉ FOB</Nhan>
+            <Nhan tone="warn">chưa bóc vốn</Nhan>
           ) : !r.complete ? (
-            <Nhan tone="warn">FOB ≠ tổng 3 số</Nhan>
+            <Nhan tone="warn">Giá bán KH ≠ tổng 3 số</Nhan>
           ) : (
             <Nhan tone="done">đủ</Nhan>
           )}
