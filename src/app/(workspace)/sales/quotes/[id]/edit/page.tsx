@@ -8,6 +8,8 @@ import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
 import { BaoGiaForm } from '../../_form/BaoGiaForm'
 
+export const metadata = { title: 'Bán hàng · Sửa báo giá' }
+
 /**
  * Sửa báo giá nháp (chỉ draft) — dùng chung QuoteForm. Chỉ nạp ĐÚNG các SP đang
  * nằm trên dòng (không phải cả thư viện): ô chọn SP tự tìm ở server.

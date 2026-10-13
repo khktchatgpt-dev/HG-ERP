@@ -9,6 +9,8 @@ import type { QuoteLine } from '@/modules/dept/sales/quotes.repo'
 import type { PlanPrice } from '@/lib/sale-price'
 import { BaoGiaScreen } from './BaoGiaScreen'
 
+export const metadata = { title: 'Bán hàng · Báo giá' }
+
 /**
  * Giá kế hoạch của một dòng: số CHỤP lúc chào nếu dòng chụp sau 0235 (có tiền
  * tệ đi kèm), không thì số HIỆN TẠI. Không ghép giá bán chụp cũ với giá vốn hiện

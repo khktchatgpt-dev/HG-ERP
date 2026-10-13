@@ -14,6 +14,8 @@ import { lotShipText } from '@/lib/lsx-lots'
 import { khoaSp, kiemKeHoach } from '@/lib/ke-hoach-xuat'
 import { LenhScreen } from './LenhScreen'
 
+export const metadata = { title: 'Bán hàng · Lệnh sản xuất' }
+
 /**
  * Chi tiết LỆNH SẢN XUẤT phía Sale (khuôn D, kiểu ERP — 07/10/2026). Gác quyền
  * qua RBAC + chủ lệnh; tải song song: lệnh (kèm vết + lô) · dòng · đơn · công

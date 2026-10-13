@@ -5,6 +5,8 @@ import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { DonHangForm } from '../_form/DonHangForm'
 
+export const metadata = { title: 'Bán hàng · Tạo đơn hàng' }
+
 /** Trang tạo đơn hàng — khuôn F (lưới nhập liệu), 07/10/2026. */
 export default async function NewOrderPage({
   searchParams,
