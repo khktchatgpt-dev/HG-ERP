@@ -40,6 +40,7 @@ export function useBaoGia(p: BaoGiaProps) {
     let below = 0
     let belowPlan = 0
     let gain = 0
+    let gainN = 0
     const rows: Parameters<typeof avgLai>[0] = []
     const vsRows: Parameters<typeof vsPlanTotal>[0] = []
     for (const l of p.lines) {
@@ -53,8 +54,10 @@ export function useBaoGia(p: BaoGiaProps) {
       const comparable = !!l.plan && !c.currency_mismatch
       rows.push({ price: net, qty: l.qty, cost: l.plan?.cost ?? null, comparable })
       vsRows.push({ price: net, qty: l.qty, plan: l.plan?.price ?? null, comparable })
-      if (comparable && l.plan?.cost != null && net > 0 && l.qty)
+      if (comparable && l.plan?.cost != null && net > 0 && l.qty) {
         gain += (net - l.plan.cost) * l.qty
+        gainN++
+      }
     }
     // Lãi thực bình quân GIA QUYỀN theo trị giá — trước đây là trung bình cộng % (13/10/2026).
     const lai = avgLai(rows)
@@ -64,7 +67,8 @@ export function useBaoGia(p: BaoGiaProps) {
       zero,
       below,
       belowPlan,
-      gain,
+      // null = không dòng nào tính được lãi (thiếu SL / chưa bóc vốn) — đừng in "0,00".
+      gain: gainN ? gain : null,
       withCost: lai.n,
       avgLai: lai.pct,
       vsPlan: vsPlanTotal(vsRows),

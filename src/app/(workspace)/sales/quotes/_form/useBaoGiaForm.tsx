@@ -241,6 +241,7 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
     let noSpec = 0
     let withQty = 0
     let gain = 0
+    let gainN = 0
     let firstBelow: number | null = null
     let firstBelowPlan: number | null = null
     const laiRows: Parameters<typeof avgLai>[0] = []
@@ -266,8 +267,10 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
         comparable,
       })
       // Σ lãi chỉ trên dòng CÓ SL — dòng thiếu SL không có tiền để cộng.
-      if (comparable && plan?.cost != null && net > 0 && qty > 0)
+      if (comparable && plan?.cost != null && net > 0 && qty > 0) {
         gain += (net - plan.cost) * qty
+        gainN++
+      }
       const pr = l.productId ? known.get(l.productId) : undefined
       if (pr && hasNoSpec(pr)) noSpec++
     }
@@ -278,7 +281,8 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
       belowPlan,
       noSpec,
       withQty,
-      gain,
+      // null = không dòng nào tính được lãi (thiếu SL / chưa bóc vốn) — đừng in "0,00".
+      gain: gainN ? gain : null,
       avgLai: lai.pct,
       withCost: lai.n,
       firstBelow,
