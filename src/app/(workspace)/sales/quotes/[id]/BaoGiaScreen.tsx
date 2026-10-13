@@ -28,12 +28,9 @@ import {
 } from '../../_erp/ui'
 import { QUOTE_LABEL, quoteTone } from '../so-bao-gia.shared'
 import { fmtD, fmtMoney, fmtN } from './bao-gia.shared'
-import {
-  KhoiBaoGiaDong,
-  KhoiBaoGiaHanhDong,
-  KhoiBaoGiaPhu,
-  KhoiBaoGiaTongQuan,
-} from './khoi-bao-gia'
+import { KhoiBaoGiaDong } from './khoi-luoi-dong'
+import { NutAnGiaNoiBo, fmtPct, useAnGiaNoiBo } from '../../_erp/gia-noi-bo'
+import { KhoiBaoGiaHanhDong, KhoiBaoGiaPhu, KhoiBaoGiaTongQuan } from './khoi-bao-gia'
 import { useBaoGia, type BaoGiaProps } from './useBaoGia'
 import { PRICE_NAME } from '@/lib/sale-price'
 
@@ -45,6 +42,7 @@ import { PRICE_NAME } from '@/lib/sale-price'
  */
 export function BaoGiaScreen(props: BaoGiaProps) {
   const d = useBaoGia(props)
+  const an = useAnGiaNoiBo()
   const q = d.quote
   const [menu, setMenu] = useState(false)
   const goto = (id: string) => () =>
@@ -76,6 +74,7 @@ export function BaoGiaScreen(props: BaoGiaProps) {
         }
         actions={
           <>
+            {d.canSeeCost && <NutAnGiaNoiBo hidden={an.hidden} onToggle={an.toggle} />}
             {d.can.decide && (
               <>
                 <ToolBtn primary icon={Check} onClick={() => void d.approve()}>
@@ -215,16 +214,30 @@ export function BaoGiaScreen(props: BaoGiaProps) {
               : 'chưa có SL dòng nào'
           }
         />
-        {d.canSeeCost && (
+        {d.canSeeCost && !an.hidden && (
           <CountCell
+            internal
             label="Lãi thực"
-            value={d.tong.avgLai != null ? `${d.tong.avgLai.toFixed(1)}%` : null}
+            value={d.tong.avgLai != null ? fmtPct(d.tong.avgLai) : null}
             sub={
               d.tong.withCost
                 ? `${d.tong.withCost}/${d.lines.length} dòng có ${PRICE_NAME.cost}${d.tong.below ? ` · ${d.tong.below} dưới giá vốn` : d.tong.belowPlan ? ` · ${d.tong.belowPlan} thấp hơn ${PRICE_NAME.plan}` : ''}`
                 : `chưa có ${PRICE_NAME.cost}`
             }
             tone={d.tong.below ? 'stop' : d.tong.belowPlan ? 'warn' : 'neutral'}
+          />
+        )}
+        {d.canSeeCost && !an.hidden && (
+          <CountCell
+            internal
+            label={`So ${PRICE_NAME.plan}`}
+            value={d.tong.vsPlan.pct != null ? fmtPct(d.tong.vsPlan.pct, true) : null}
+            sub={
+              d.tong.vsPlan.n
+                ? `trị giá chào so mức đã tính · ${d.tong.vsPlan.n} dòng có SL`
+                : `cần dòng có SL và ${PRICE_NAME.plan}`
+            }
+            tone={d.tong.vsPlan.pct != null && d.tong.vsPlan.pct < 0 ? 'warn' : 'neutral'}
           />
         )}
         <CountCell

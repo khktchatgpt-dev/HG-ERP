@@ -279,7 +279,7 @@ export function PhanTichDoanhSoScreen({
             — chưa có mùa trước để so. Số đơn ở chân bảng là số đơn khác nhau (một đơn có
             thể nằm ở nhiều dòng).
             {canSeeCost &&
-              ' Lãi KH = SL × Lãi KH/SP (màn Giá thành kế hoạch), chỉ trên SP có Giá vốn KH bóc tách; % lãi chia cho trị giá của chính các dòng đó. Đơn giá đang được điền từ Giá bán KH nên chưa so được bán trên / dưới giá.'}
+              ' Lãi KH = SL × Lãi KH/SP (màn Tính giá SP), chỉ trên SP có Giá vốn KH bóc tách; % lãi chia cho trị giá của chính các dòng đó. Đơn giá đang được điền từ Giá bán KH nên chưa so được bán trên / dưới giá.'}
           </p>
         </Panel>
       </div>

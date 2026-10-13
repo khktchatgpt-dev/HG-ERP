@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { avgLai, checkPrice, planCostOf } from './sale-price'
+import { avgLai, checkPrice, planCostOf, planFromOrder, vsPlanTotal } from './sale-price'
 
 // Ví dụ trong lời giải thích gửi user 13/10: trực tiếp 80, chung 12, lợi nhuận 9,2 → FOB 101,2.
 const PLAN = { cost: 92, price: 101.2, currency: 'USD' }
@@ -66,5 +66,51 @@ describe('avgLai', () => {
   })
   it('không dòng nào → null', () => {
     expect(avgLai([])).toEqual({ pct: null, n: 0 })
+  })
+})
+
+describe('vsPlanTotal', () => {
+  it('tờ LAURA trên artboard: 41.911,20 / 43.598 − 1 = −3,9%, bỏ dòng thiếu SL', () => {
+    const r = vsPlanTotal([
+      { price: 87, qty: 160, plan: 87, comparable: true },
+      { price: 110.2, qty: 170, plan: 116, comparable: true },
+      { price: 172.48, qty: 40, plan: 190, comparable: true },
+      { price: 19.65, qty: 120, plan: 19.65, comparable: true },
+      { price: 84, qty: null, plan: 81.58, comparable: true },
+    ])
+    expect(r).toEqual({ pct: -3.9, n: 4 })
+  })
+  it('khác tiền tệ / chưa có giá bán KH → bỏ', () => {
+    expect(vsPlanTotal([{ price: 10, qty: 1, plan: 12, comparable: false }])).toEqual({
+      pct: null,
+      n: 0,
+    })
+  })
+})
+
+describe('planFromOrder', () => {
+  it('nhận đúng ba kiểu câu nguồn đã nạp ngược từ đơn (chép nguyên DB 13/10)', () => {
+    expect(
+      planFromOrder(
+        'TONG HOP DON HANG CON LAI 2026-2027.xlsx › sheet LAURA — giá thành: Ban Hali.xlsx, lợi nhuận tính lại theo giá đơn (báo giá 82)',
+      ),
+    ).toBe(true)
+    expect(
+      planFromOrder(
+        'order HG 2026-2027.xlsx — giá trên đơn MERXX 18023/18028; chưa có bảng tính giá thành',
+      ),
+    ).toBe(true)
+    expect(
+      planFromOrder(
+        'Sale điền cột "The price" (05/10/2026) — giá kế hoạch đơn, chưa có bảng tính giá thành',
+      ),
+    ).toBe(true)
+  })
+  it('bảng tính giá thật → không gắn nhãn', () => {
+    expect(planFromOrder('Quotation - Halston (10 Jul 2026, Drive 18q18J9T)')).toBe(false)
+    expect(
+      planFromOrder('quotation 10 Aruba-tinh gia.xlsx › dining chair · dòng 29'),
+    ).toBe(false)
+    expect(planFromOrder(null)).toBe(false)
   })
 })

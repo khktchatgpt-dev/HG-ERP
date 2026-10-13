@@ -161,10 +161,10 @@ export const salesHomeService = {
       }
       lans.push({
         key: 'gia-thanh',
-        title: 'SP đang chạy chưa bóc tách giá thành',
-        short: 'SP chưa bóc giá thành',
+        title: 'SP đang chạy chưa bóc giá vốn KH',
+        short: 'SP chưa bóc giá vốn',
         action: 'Điền chi phí trực tiếp · chung · lãi',
-        why: `Chỉ có giá FOB thì không tính được lãi kế hoạch — đủ bóc tách ${plan.stats.complete}/${plan.stats.total} SP.`, // prettier-ignore
+        why: `Chỉ có Giá bán KH thì không tính được lãi thực — đủ bóc tách ${plan.stats.complete}/${plan.stats.total} SP.`, // prettier-ignore
         tone: 'neutral',
         count: thieu.length,
         count_note: 'gom theo khách',
@@ -176,9 +176,9 @@ export const salesHomeService = {
             detail: `${n} SP`,
             href: '/sales/gia-thanh',
             khach: k,
-            noi_dung: `${n} SP chưa bóc tách (chỉ có FOB hoặc lệch tổng)`,
+            noi_dung: `${n} SP chưa bóc tách (chỉ có Giá bán KH hoặc lệch tổng)`,
           })),
-        more: { href: '/sales/gia-thanh', label: 'Mở Giá thành kế hoạch' },
+        more: { href: '/sales/gia-thanh', label: 'Mở Tính giá SP' },
       })
     }
 

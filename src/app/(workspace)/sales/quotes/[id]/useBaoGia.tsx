@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { todayVn } from '@/lib/date-vn'
 import { quoteNetPrice } from '@/lib/quote-price'
-import { avgLai, checkPrice } from '@/lib/sale-price'
+import { avgLai, checkPrice, vsPlanTotal } from '@/lib/sale-price'
 import type { BaoGiaView, DonView, DongBaoGia, RevisionView } from './bao-gia.shared'
 
 export type BaoGiaProps = {
@@ -39,7 +39,9 @@ export function useBaoGia(p: BaoGiaProps) {
     let zero = 0
     let below = 0
     let belowPlan = 0
+    let gain = 0
     const rows: Parameters<typeof avgLai>[0] = []
+    const vsRows: Parameters<typeof vsPlanTotal>[0] = []
     for (const l of p.lines) {
       const net = quoteNetPrice(l.unit_price, l.discount_pct)
       if (!(net > 0)) zero++
@@ -48,16 +50,25 @@ export function useBaoGia(p: BaoGiaProps) {
       const c = checkPrice(net, p.quote.currency, l.plan)
       if (c.below_cost) below++
       else if (c.below_plan) belowPlan++
-      rows.push({
-        price: net,
-        qty: l.qty,
-        cost: l.plan?.cost ?? null,
-        comparable: !!l.plan && !c.currency_mismatch,
-      })
+      const comparable = !!l.plan && !c.currency_mismatch
+      rows.push({ price: net, qty: l.qty, cost: l.plan?.cost ?? null, comparable })
+      vsRows.push({ price: net, qty: l.qty, plan: l.plan?.price ?? null, comparable })
+      if (comparable && l.plan?.cost != null && net > 0 && l.qty)
+        gain += (net - l.plan.cost) * l.qty
     }
     // Lãi thực bình quân GIA QUYỀN theo trị giá — trước đây là trung bình cộng % (13/10/2026).
     const lai = avgLai(rows)
-    return { ref, noQty, zero, below, belowPlan, withCost: lai.n, avgLai: lai.pct }
+    return {
+      ref,
+      noQty,
+      zero,
+      below,
+      belowPlan,
+      gain,
+      withCost: lai.n,
+      avgLai: lai.pct,
+      vsPlan: vsPlanTotal(vsRows),
+    }
   }, [p.lines, p.quote.currency])
 
   const expired =

@@ -206,7 +206,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
            * Giá thành kế hoạch (0220): bốn số từ bảng tính giá của Sale, theo
            * SP. Giám đốc đọc nó ở Tiền theo lệnh; Sale nạp ở đây.
            */
-          { href: '/sales/gia-thanh', label: 'Giá thành kế hoạch', icon: 'chart-column' },
+          { href: '/sales/gia-thanh', label: 'Tính giá SP', icon: 'chart-column' },
           { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
           // Kế hoạch xuất hàng (06/10/2026): khách × tháng theo ĐỢT (nhóm lệnh).
           {

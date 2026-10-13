@@ -4,7 +4,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { planCostService } from '@/modules/dept/technical/plan-cost.service'
 import { GiaThanhScreen } from './GiaThanhScreen'
 
-export const metadata = { title: 'Bán hàng · Giá thành kế hoạch' }
+export const metadata = { title: 'Bán hàng · Tính giá SP' }
 export const dynamic = 'force-dynamic'
 
 /**

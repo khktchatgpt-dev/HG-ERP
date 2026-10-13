@@ -106,3 +106,36 @@ export function avgLai(
   }
   return { pct: rev > 0 ? r1((gain / rev) * 100) : null, n }
 }
+
+/**
+ * Cả tờ chào cao/thấp hơn Giá bán KH bao nhiêu: Σ giá·SL ÷ Σ giá bán KH·SL − 1.
+ * CHỈ dòng có SL (khác `avgLai`): % này trả lời "tôi đã nhường bao nhiêu tiền",
+ * dòng không SL không có tiền nào để nhường. Trả `n` = số dòng góp vào.
+ */
+export function vsPlanTotal(
+  rows: { price: number; qty: number | null; plan: number | null; comparable: boolean }[],
+): { pct: number | null; n: number } {
+  let got = 0
+  let planned = 0
+  let n = 0
+  for (const r of rows) {
+    if (!r.comparable || r.plan == null || !(r.plan > 0) || !(r.price > 0)) continue
+    if (!r.qty || r.qty <= 0) continue
+    got += r.price * r.qty
+    planned += r.plan * r.qty
+    n++
+  }
+  return { pct: planned > 0 ? r1((got / planned - 1) * 100) : null, n }
+}
+
+/**
+ * Giá bán KH này được SUY NGƯỢC từ giá đơn, không tính trước khi chào (Q3, chốt
+ * 13/10/2026). Lúc nạp 0220 nhiều SP lấy lãi KH = đơn giá − giá vốn, nên 270/270
+ * dòng đơn có Đơn giá đúng bằng Giá bán KH và cột "± Bán KH" mãi là 0. Chưa có
+ * cột DB riêng: nhận theo câu ghi nguồn mà người nạp đã viết. Sale tính lại (nguồn
+ * mới) thì nhãn tự mất.
+ */
+export function planFromOrder(source: string | null | undefined): boolean {
+  if (!source) return false
+  return /tính lại theo giá đơn|giá trên đơn|giá kế hoạch đơn/i.test(source)
+}

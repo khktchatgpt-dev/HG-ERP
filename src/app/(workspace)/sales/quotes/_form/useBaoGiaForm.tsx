@@ -11,7 +11,7 @@ import {
 import type { QuickProduct } from '@/components/sales/QuickAddProduct'
 import { hasNoSpec } from '@/components/sales/ProductSpecFill'
 import { quoteNetPrice } from '@/lib/quote-price'
-import { checkPrice, type PlanPrice } from '@/lib/sale-price'
+import { avgLai, checkPrice, type PlanPrice } from '@/lib/sale-price'
 import { todayVn } from '@/lib/date-vn'
 import {
   addDays,
@@ -240,18 +240,50 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
     let belowPlan = 0
     let noSpec = 0
     let withQty = 0
+    let gain = 0
+    let firstBelow: number | null = null
+    let firstBelowPlan: number | null = null
+    const laiRows: Parameters<typeof avgLai>[0] = []
     for (const l of lines) {
-      const { net, check } = calc(l)
-      if (num(l.qty) > 0) {
-        ref += num(l.qty) * net
+      const { net, plan, check } = calc(l)
+      const qty = num(l.qty)
+      if (qty > 0) {
+        ref += qty * net
         withQty++
       }
-      if (check.below_cost) below++
-      else if (check.below_plan) belowPlan++
+      if (check.below_cost) {
+        below++
+        firstBelow ??= l.key
+      } else if (check.below_plan) {
+        belowPlan++
+        firstBelowPlan ??= l.key
+      }
+      const comparable = !!plan && !check.currency_mismatch
+      laiRows.push({
+        price: net,
+        qty: qty > 0 ? qty : null,
+        cost: plan?.cost ?? null,
+        comparable,
+      })
+      // Σ lãi chỉ trên dòng CÓ SL — dòng thiếu SL không có tiền để cộng.
+      if (comparable && plan?.cost != null && net > 0 && qty > 0)
+        gain += (net - plan.cost) * qty
       const pr = l.productId ? known.get(l.productId) : undefined
       if (pr && hasNoSpec(pr)) noSpec++
     }
-    return { ref, below, belowPlan, noSpec, withQty }
+    const lai = avgLai(laiRows)
+    return {
+      ref,
+      below,
+      belowPlan,
+      noSpec,
+      withQty,
+      gain,
+      avgLai: lai.pct,
+      withCost: lai.n,
+      firstBelow,
+      firstBelowPlan,
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- calc đọc planPrices (đã trong deps)
   }, [lines, planPrices, known, h.currency])
 
