@@ -56,3 +56,21 @@ export const deNghiCancelSchema = z.object({
 
 export type DeNghiLineInput = z.infer<typeof deNghiLineSchema>
 export type DeNghiSaveInput = z.infer<typeof deNghiSaveSchema>
+
+/** Lãnh đạo quyết (Đ2): duyệt (sửa số từng dòng được) hoặc từ chối có lý do. */
+export const deNghiDecideSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().trim().max(1000).optional().nullable(),
+    /** Số DUYỆT từng dòng — chỉ gửi dòng muốn đổi; thiếu = duyệt đúng số đề nghị. */
+    lines: z
+      .array(z.object({ id: z.string().uuid(), approved_qty: z.coerce.number().min(0) }))
+      .max(200)
+      .optional(),
+  })
+  .refine((v) => v.decision === 'approve' || (v.reason ?? '').trim().length >= 3, {
+    message: 'Từ chối phải ghi lý do (ít nhất 3 ký tự) — Kho sửa theo lý do đó',
+    path: ['reason'],
+  })
+
+export type DeNghiDecideInput = z.infer<typeof deNghiDecideSchema>

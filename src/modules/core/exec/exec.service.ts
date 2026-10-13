@@ -5,6 +5,8 @@ import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
+import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
+import { tongDuKien } from '@/lib/de-nghi'
 import { assessPoLate } from '@/lib/late-risk'
 import { isBigApprovalWith, type ApprovalThresholds } from '@/lib/exec-ops'
 import { settingsService } from '@/modules/core/settings/settings.service'
@@ -168,7 +170,8 @@ function sumByCurrency(rows: { currency: string; value: number }[]) {
 
 /** Một phiếu đang nằm chờ chữ ký ở Trung tâm phê duyệt (/exec/approvals). */
 export type SignItem = {
-  kind: 'lsx' | 'po' | 'quote'
+  /** `dnm` = đề nghị mua vật tư của Kho (0236 · Đ2). */
+  kind: 'lsx' | 'po' | 'quote' | 'dnm'
   id: string
   code: string
   /** Đối tác: khách hàng (LSX) hoặc nhà cung cấp (PO). */
@@ -477,6 +480,46 @@ export const execService = {
         big: false,
         href: `/exec/approvals/quote/${q.id}`,
       })
+    }
+
+    /*
+      ĐỀ NGHỊ MUA VẬT TƯ (0236 · Đ2) — người duyệt = người duyệt đơn mua, nên cả
+      người "chỉ duyệt đơn mua" cũng thấy. Không tự duyệt phiếu mình đề nghị.
+      Tiền là DỰ KIẾN của Kho (chưa VAT) — không gắn cờ giá trị lớn: ký là cho
+      phép Cung ứng đi hỏi giá, chưa cam kết chi; đơn mua lập từ phiếu vẫn qua luật đơn mua.
+    */
+    if (await canAction(user, 'warehouse.request.approve')) {
+      const dn = (await deNghiRepo.list()).filter(
+        (r) =>
+          r.status === 'pending' && (user.role === 'admin' || r.requested_by !== user.id),
+      )
+      for (const r of dn) {
+        const t = tongDuKien(r.lines)
+        const chuaMa = r.lines.filter((l) => !l.material_id).length
+        items.push({
+          kind: 'dnm',
+          id: r.id,
+          code: r.code,
+          party: r.department,
+          facts: [
+            `${r.lines.length} dòng${chuaMa > 0 ? ` · ${chuaMa} chưa có mã` : ''}`,
+            ...(r.need_by ? [`cần trước ${r.need_by}`] : []),
+            ...(r.lsx_code ? [`lệnh ${r.lsx_code}`] : []),
+          ],
+          currency: 'VND',
+          value: t.tong,
+          waiting_days: daysSince(r.submitted_at ?? r.created_at, today) ?? 0,
+          submitted_at: r.submitted_at ?? r.created_at,
+          submitted_by: r.requested_by_name,
+          owner_id: r.requested_by,
+          owner_name: r.requested_by_name
+            ? properName(r.requested_by_name) || null
+            : null,
+          warnings: t.thieuGia > 0 ? [`${t.thieuGia} dòng chưa có giá dự kiến`] : [],
+          big: false,
+          href: `/duyet/de-nghi/${r.id}`,
+        })
+      }
     }
 
     // Đơn CHỜ KÝ BÙ lên đầu: hàng đã đi, chữ ký đang nợ — việc đó không chờ được.

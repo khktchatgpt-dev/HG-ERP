@@ -380,11 +380,20 @@ export function DeNghiScreen({
         )}
         {phieu.status === 'pending' && (
           <NoticeBar tone="warn" tag="Chờ duyệt">
-            Đã gửi lúc {gio(phieu.submitted_at)}. Màn duyệt trên hệ thống đang làm (bước
-            Đ2) — trong lúc chờ, bấm “Chép đường dẫn” rồi gửi Zalo cho lãnh đạo. Muốn sửa
-            thì rút về nháp.
+            Đã gửi lúc {gio(phieu.submitted_at)} — lãnh đạo đã nhận thông báo và duyệt
+            trên hệ thống (cả trên điện thoại). Cần nhắc thì bấm “Chép đường dẫn” gửi
+            Zalo. Muốn sửa thì rút về nháp.
           </NoticeBar>
         )}
+        {(phieu.status === 'approved' || phieu.status === 'ordering') &&
+          phieu.approved_at && (
+            <NoticeBar tone="neutral" tag="Đã duyệt">
+              {phieu.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(phieu.approved_at)}
+              {phieu.lines.some((l) => l.approved_qty != null) &&
+                ` · sửa số ${phieu.lines.filter((l) => l.approved_qty != null).length} dòng (cột Số lượng ghi số duyệt)`}
+              . Cung ứng lập đơn mua từ phiếu này.
+            </NoticeBar>
+          )}
         {phieu.status === 'cancelled' && (
           <NoticeBar tone="neutral" tag="Đã huỷ">
             Huỷ lúc {gio(phieu.cancelled_at)} · lý do: {phieu.cancel_reason}
@@ -593,7 +602,14 @@ export function DeNghiScreen({
                           aria-label={`Số lượng ${r.code ?? r.name}`}
                         />
                       ) : (
-                        <b className="num">{r.qty == null ? '—' : fmt(r.qty)}</b>
+                        <>
+                          <b className="num">
+                            {r.qty == null ? '—' : fmt(r.approved_qty ?? r.qty)}
+                          </b>
+                          {r.approved_qty != null && r.qty != null && (
+                            <CellHint tone="warn">đề nghị {fmt(r.qty)}</CellHint>
+                          )}
+                        </>
                       )}
                       {hep && r.ton != null && (
                         <CellHint tone={tonThap ? 'warn' : 'neutral'}>

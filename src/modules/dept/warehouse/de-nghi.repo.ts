@@ -170,6 +170,11 @@ export const deNghiRepo = {
       cancelled_at: string | null
       cancelled_by: string | null
       cancel_reason: string | null
+      approved_at: string | null
+      approved_by: string | null
+      rejected_at: string | null
+      rejected_by: string | null
+      rejected_reason: string | null
     }>,
     /** Chỉ cập nhật khi phiếu còn ở trạng thái này — chặn hai người bấm cùng lúc. */
     khiDang?: DeNghiStatus[],
@@ -178,6 +183,20 @@ export const deNghiRepo = {
     if (khiDang) q = q.in('status', khiDang)
     const rows = ok<{ id: string }[]>(await q.select('id'), 'update')
     return (rows ?? []).length > 0
+  },
+
+  /** Số DUYỆT từng dòng (Đ2). null = duyệt đúng số đề nghị. */
+  async setApprovedQty(
+    rows: { id: string; approved_qty: number | null }[],
+  ): Promise<void> {
+    for (const r of rows)
+      ok(
+        await db()
+          .from('warehouse_purchase_request_lines')
+          .update({ approved_qty: r.approved_qty })
+          .eq('id', r.id),
+        'setApprovedQty',
+      )
   },
 
   /** Thay CẢ BỘ dòng — chỉ gọi khi phiếu còn nháp (chưa dòng nào có đơn mua). */

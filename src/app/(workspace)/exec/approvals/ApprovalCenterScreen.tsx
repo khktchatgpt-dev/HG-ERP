@@ -59,11 +59,11 @@ import { materialSummary } from '@/lib/po-list-labels'
  *  · màn rỗng phải nói THẬT vì sao rỗng (đã ký hết ↔ chưa ai lập phiếu).
  */
 
-const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá' } as const
-const KIND_ICON: Record<'lsx' | 'po' | 'quote', IcoName> = { lsx: 'lenh', po: 'don', quote: 'baoGia' } // prettier-ignore
+const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá', dnm: 'Đề nghị mua' } as const // prettier-ignore
+const KIND_ICON: Record<SignItem['kind'], IcoName> = { lsx: 'lenh', po: 'don', quote: 'baoGia', dnm: 'vattu' } // prettier-ignore
 const COLS = 8
 
-export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote'
+export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote' | 'dnm'
 
 /** Cộng tiền theo TỪNG tiền tệ — USD và VND không bao giờ cộng chung. */
 function sumByCurrency(items: SignItem[]): [string, number][] {
@@ -118,6 +118,7 @@ export function ApprovalCenterScreen({
       lsx: box.items.filter((i) => i.kind === 'lsx').length,
       po: box.items.filter((i) => i.kind === 'po').length,
       quote: box.items.filter((i) => i.kind === 'quote').length,
+      dnm: box.items.filter((i) => i.kind === 'dnm').length,
     }),
     [box.items],
   )
@@ -245,7 +246,7 @@ export function ApprovalCenterScreen({
 
       {box.stats.total > 0 && (
         <FilterBar dense label="Lọc phiếu chờ ký">
-          {(['all', 'lsx', 'po', 'quote'] as const).map((k) => (
+          {(['all', 'lsx', 'po', 'quote', 'dnm'] as const).map((k) => (
             <Chip
               key={k}
               on={kind === k}

@@ -10,7 +10,7 @@ type Notif = {
   id: string
   type: string
   task_id: string | null
-  payload: { title?: string } | null
+  payload: { title?: string; href?: string } | null
   read_at: string | null
   created_at: string
 }
@@ -44,6 +44,9 @@ const TYPE_LABEL: Record<string, string> = {
   po_question: 'hỏi về đơn đặt bạn phụ trách',
   po_answered: 'đã trả lời câu hỏi về đơn đặt',
   po_issue: 'báo sự cố giao hàng',
+  dnm_submitted: 'gửi đề nghị mua chờ duyệt',
+  dnm_approved: 'đã duyệt đề nghị mua',
+  dnm_rejected: 'đã từ chối đề nghị mua',
   po_urgent_sent: 'đã gửi gấp đơn đặt, chờ ký bù',
   po_reassigned: 'đã bàn giao đơn đặt',
   po_closed_short: 'đã chốt phần thiếu đơn đặt',
@@ -167,7 +170,13 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
                     className={n.read_at ? 'opacity-60' : 'bg-[var(--accent)]/40'}
                   >
                     <Link
-                      href={n.task_id ? `/tasks/${n.task_id}` : '/notifications'}
+                      href={
+                        n.task_id
+                          ? `/tasks/${n.task_id}`
+                          : n.payload?.href?.startsWith('/')
+                            ? n.payload.href
+                            : '/notifications'
+                      }
                       onClick={() => setOpen(false)}
                       className="hover:bg-accent block px-3 py-2 transition-colors"
                     >

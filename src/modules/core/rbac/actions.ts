@@ -447,6 +447,15 @@ export const ACTIONS: Action[] = [
     domain: 'warehouse',
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
+  {
+    // 0236 · Đ2 (Q1 duyệt 13/10/2026): người duyệt đề nghị mua = người đang duyệt
+    // ĐƠN MUA (ban giám đốc) — một người duyệt là đủ. Service còn chặn tự duyệt
+    // phiếu mình đề nghị (trừ admin).
+    key: 'warehouse.request.approve',
+    label: 'Duyệt / từ chối đề nghị mua vật tư',
+    domain: 'warehouse',
+    rule: perm('supply.po.approve'),
+  },
 
   // ── Sản xuất (thiết kế lại theo VAI 0084: KH / thống kê / tổ trưởng / QĐ) ─
   {

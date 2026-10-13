@@ -10,7 +10,16 @@ vi.mock('./de-nghi.repo', () => ({
     vatTu: vi.fn(),
     tonDungDuoc: vi.fn(),
     list: vi.fn(),
+    setApprovedQty: vi.fn(),
   },
+}))
+vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
+vi.mock('@/events/register', () => ({}))
+vi.mock('@/modules/core/rbac/rbac.repo', () => ({
+  rbacRepo: { userIdsWithPermission: vi.fn().mockResolvedValue(['u-alex', 'u-hao']) },
+}))
+vi.mock('@/modules/core/users/users.repo', () => ({
+  usersRepo: { list: vi.fn().mockResolvedValue([{ id: 'u-admin', role: 'admin' }]) },
 }))
 vi.mock('@/modules/dept/supply/prices.repo', () => ({
   pricesRepo: { lastPurchases: vi.fn() },
@@ -26,6 +35,7 @@ vi.mock('./warehouse.service', () => ({
 import { deNghiService } from './de-nghi.service'
 import { deNghiRepo, type DeNghiDay } from './de-nghi.repo'
 import { pricesRepo } from '@/modules/dept/supply/prices.repo'
+import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
 
 /** Tờ đề nghị 13/10 của anh Hào (rút gọn) — 0236 · Đ1. */
@@ -150,5 +160,45 @@ describe('deNghiService.goiY', () => {
     const r = await deNghiService.goiY(hao, ['m-keo', 'm-usd'])
     expect(r['m-keo']).toEqual({ ton: 36, gia: { unit_price: 5500, po_code: 'PO-2026-0140', supplier_name: 'Phước Khang', at: '2026-10-06T00:00:00Z' } }) // prettier-ignore
     expect(r['m-usd']).toEqual({ ton: 0, gia: null })
+  })
+})
+
+describe('Đ2 · gửi duyệt báo ai + lãnh đạo quyết', () => {
+  const alex = { id: 'u-alex', role: 'employee' } as unknown as User
+
+  it('gửi duyệt báo người có quyền duyệt + admin, TRỪ chính người gửi', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu())
+    await deNghiService.submit(hao, 'dn1')
+    const e = vi.mocked(emit).mock.calls[0][0] as { name: string; approver_ids: string[]; tong: number } // prettier-ignore
+    expect(e.name).toBe('de_nghi.submitted')
+    expect(e.approver_ids.sort()).toEqual(['u-admin', 'u-alex'])
+    expect(e.tong).toBe(1_100_000)
+  })
+
+  it('duyệt: ghi số duyệt dòng bị sửa (trùng số đề nghị → null), báo người đề nghị + Cung ứng', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu({ status: 'pending' }))
+    await deNghiService.decide(alex, 'dn1', { decision: 'approve', lines: [{ id: 'l1', approved_qty: 150 }, { id: 'la-ngoai', approved_qty: 1 }] }) // prettier-ignore
+    expect(vi.mocked(deNghiRepo.setApprovedQty).mock.calls[0][0]).toEqual([{ id: 'l1', approved_qty: 150 }]) // prettier-ignore
+    const [, patch, khiDang] = vi.mocked(deNghiRepo.update).mock.calls[0]
+    expect(patch).toMatchObject({ status: 'approved', approved_by: 'u-alex' })
+    expect(khiDang).toEqual(['pending'])
+    expect(vi.mocked(emit).mock.calls[0][0]).toMatchObject({ name: 'de_nghi.decided', decision: 'approved', requester_id: 'u-hao' }) // prettier-ignore
+  })
+
+  it('từ chối: về nháp + lý do; không tự duyệt phiếu mình; duyệt 0 hết bị chặn', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu({ status: 'pending' }))
+    await deNghiService.decide(alex, 'dn1', {
+      decision: 'reject',
+      reason: 'Kiểm lại tồn',
+    })
+    expect(vi.mocked(deNghiRepo.update).mock.calls[0][1]).toMatchObject({ status: 'draft', rejected_reason: 'Kiểm lại tồn', rejected_by: 'u-alex' }) // prettier-ignore
+    await expect(deNghiService.decide(hao, 'dn1', { decision: 'approve' })).rejects.toThrow(/Không tự duyệt/) // prettier-ignore
+    await expect(deNghiService.decide(alex, 'dn1', { decision: 'approve', lines: [{ id: 'l1', approved_qty: 0 }] })).rejects.toThrow(/Từ chối/) // prettier-ignore
+  })
+
+  it('phiếu không còn chờ duyệt (Kho vừa rút về) → báo rõ, không ghi gì', async () => {
+    vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu({ status: 'draft' }))
+    await expect(deNghiService.decide(alex, 'dn1', { decision: 'approve' })).rejects.toThrow(/không còn chờ duyệt/) // prettier-ignore
+    expect(deNghiRepo.update).not.toHaveBeenCalled()
   })
 })

@@ -11,7 +11,7 @@ lời "Ok" trong chat). Bản vẽ duyệt 13/10: https://claude.ai/artifact/6bF
 | Bước | Việc | Trạng thái |
 | --- | --- | --- |
 | Đ1 | Kho lập / sửa nháp / gửi / rút / huỷ · sổ đề nghị · in theo mẫu giấy | **XONG 13/10** — 0236 + 0231 ĐÃ ÁP (MCP), types đã sync, thử trọn luồng trên DB thật |
-| Đ2 | Lãnh đạo duyệt (điện thoại + Hộp thư duyệt) · sửa SL · từ chối có lý do · thông báo | chưa làm |
+| Đ2 | Lãnh đạo duyệt (điện thoại + Hộp ký) · sửa SL · từ chối có lý do · thông báo | **XONG 13/10** — 0237 ĐÃ ÁP (MCP) |
 | Đ3 | Cung ứng: "Đề nghị đã duyệt, chờ lập đơn" → lập đơn mẫu Phụ tùng/bảo trì (chọn hạng mục 0230), nối dòng ↔ dòng đơn | chưa làm |
 | Đ4 | Nhãn "từ ĐNM" ở Hàng về · tự sang Xong khi về đủ · (Q8) nhận hàng mua lẻ N2 | chưa làm |
 
@@ -28,3 +28,14 @@ hiệu, hai ô ký "Duyệt của lãnh đạo" · "Người đề nghị"). Lu�
 → `de_nghi`) — chưa áp 0236 thì đếm lỗi và **chặn xoá mọi mã vật tư** (an toàn,
 nhưng phải áp migration TRƯỚC khi deploy). Kiểu bảng trong `database.types.ts`
 khai tay — áp xong chạy "sync types" để thay bằng bản sinh.
+
+**Đ2 gồm:** quyền `warehouse.request.approve` (= người duyệt đơn mua, Q1); màn
+duyệt `/duyet/de-nghi/[id]` ở KHU DÙNG CHUNG (người chỉ duyệt đơn mua không vào
+được `/exec`; mở từ thông báo trên điện thoại) — mỗi dòng một khối chữ cho 390px,
+sửa số duyệt từng dòng, Duyệt / Từ chối (bắt lý do), hai nút lớn ở đáy trên điện
+thoại, góc trên phải trên máy tính, khung đọc 900px; Hộp ký (`signBox`) có loại
+"Đề nghị mua" (ký nhanh được, không cờ giá trị lớn — chưa cam kết chi); thông báo
+`dnm_submitted` (người duyệt) · `dnm_approved` (người đề nghị + trưởng phòng Cung
+ứng) · `dnm_rejected` (người đề nghị, kèm lý do), mỗi thông báo mang `href` mở
+thẳng phiếu (trang thông báo + chuông nay mở được chứng từ, không chỉ việc). Không
+tự duyệt phiếu mình đề nghị (trừ admin).

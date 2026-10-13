@@ -33,6 +33,10 @@ export type NotificationType =
   | 'po_answered'
   | 'po_urgent_sent'
   | 'po_issue'
+  // 0237 — đề nghị mua vật tư của Kho (0236).
+  | 'dnm_submitted'
+  | 'dnm_approved'
+  | 'dnm_rejected'
   | 'po_reassigned'
   | 'po_closed_short'
   /** Quét sáng pg_cron (0159) — insert thẳng từ SQL, không qua event bus. */

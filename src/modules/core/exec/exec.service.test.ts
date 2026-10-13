@@ -29,6 +29,10 @@ vi.mock('@/modules/dept/sales/quotes.repo', () => ({
   quotesRepo: { list: vi.fn(), lineCountByQuoteIds: vi.fn() },
 }))
 vi.mock('@/modules/dept/warehouse/stock.repo', () => ({ stockRepo: { list: vi.fn() } }))
+// Đề nghị mua (0236 · Đ2) — hộp ký gom thêm; các ca dưới không có phiếu đề nghị nào.
+vi.mock('@/modules/dept/warehouse/de-nghi.repo', () => ({
+  deNghiRepo: { list: vi.fn().mockResolvedValue([]) },
+}))
 vi.mock('@/modules/core/approvals/approvals.repo', () => ({
   approvalEventsRepo: { listRecent: vi.fn(), lastSubmittedAt: vi.fn() },
 }))
@@ -54,6 +58,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
 
 const gd = { id: 'u-gd', role: 'manager' } as unknown as User
 
@@ -333,6 +338,28 @@ describe('execService.signBox — một hộp ký cho mọi người ký (27/09/
     expect(box.items[0].href).toBe('/mua-hang/don/p1')
     // Không đọc danh sách lệnh / báo giá của người không ký được chúng.
     expect(vi.mocked(quotesRepo.list)).not.toHaveBeenCalled()
+  })
+
+  it('ĐỀ NGHỊ MUA (0236 · Đ2): phiếu chờ duyệt vào hộp, mở màn duyệt dùng chung; phiếu CỦA CHÍNH MÌNH thì không', async () => {
+    vi.mocked(canAction).mockImplementation(
+      async (_u, key) =>
+        key === 'supply.po.approve' || key === 'warehouse.request.approve',
+    )
+    mockLists({})
+    const dong = (q: number, gia: number | null, ma: string | null = 'm') => ({ id: 'l', line_no: 1, material_id: ma, name: 'x', unit: 'Cái', qty: q, approved_qty: null, unit_price: gia, purpose: null, note: null, po_line_id: null }) // prettier-ignore
+    vi.mocked(deNghiRepo.list).mockResolvedValueOnce([
+      { id: 'd1', code: 'DNM-2026-0001', status: 'pending', department: 'Kho vật tư', requested_by: 'u-hao', requested_by_name: 'Lê Khắc Hào', submitted_at: daysAgo(2), created_at: daysAgo(2), need_by: null, lsx_code: null, lines: [dong(80, 5000), dong(20, null, null)] }, // prettier-ignore
+      { id: 'd2', code: 'DNM-2026-0002', status: 'pending', department: 'Kho vật tư', requested_by: 'u-thao', requested_by_name: 'Thảo', submitted_at: daysAgo(1), created_at: daysAgo(1), need_by: null, lsx_code: null, lines: [dong(1, 1)] }, // prettier-ignore
+      { id: 'd3', code: 'DNM-2026-0003', status: 'draft', department: 'Kho vật tư', requested_by: 'u-hao', requested_by_name: 'Lê Khắc Hào', submitted_at: null, created_at: daysAgo(1), need_by: null, lsx_code: null, lines: [] }, // prettier-ignore
+    ] as never)
+    const box = await execService.signBox({
+      id: 'u-thao',
+      role: 'manager',
+    } as unknown as User)
+    const dn = box.items.filter((i) => i.kind === 'dnm')
+    expect(dn.map((i) => [i.code, i.value, i.href, i.waiting_days])).toEqual([['DNM-2026-0001', 400_000, '/duyet/de-nghi/d1', 2]]) // prettier-ignore
+    expect(dn[0].facts[0]).toBe('2 dòng · 1 chưa có mã')
+    expect(dn[0].warnings).toEqual(['1 dòng chưa có giá dự kiến'])
   })
 
   it('không có quyền ký gì → bị chặn', async () => {

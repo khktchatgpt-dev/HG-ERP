@@ -21,11 +21,16 @@ const TYPE_LABEL: Record<string, string> = {
   po_rejected: 'đã từ chối đơn đặt vật tư — đơn về nháp',
   po_withdrawn: 'đã rút đơn đặt vật tư về nháp (bỏ khỏi bàn duyệt)',
   po_reopened: 'đã mở lại đơn đặt vật tư ĐÃ DUYỆT để sửa — đơn sẽ quay lại bàn duyệt',
-  po_adjusted: 'đã điều chỉnh đơn đặt vật tư đã gửi NCC — xem phần phát sinh và lý do trên đơn',
-  po_unapproved: 'đã thu hồi chữ ký trên đơn đặt vật tư — đơn quay về chờ duyệt, chưa gửi NCC được',
+  po_adjusted:
+    'đã điều chỉnh đơn đặt vật tư đã gửi NCC — xem phần phát sinh và lý do trên đơn',
+  po_unapproved:
+    'đã thu hồi chữ ký trên đơn đặt vật tư — đơn quay về chờ duyệt, chưa gửi NCC được',
   po_question: 'hỏi về đơn đặt vật tư bạn phụ trách — trả lời ngay trên đơn',
   po_answered: 'đã trả lời câu hỏi của bạn về đơn đặt vật tư',
   po_issue: 'báo sự cố giao hàng',
+  dnm_submitted: 'gửi đề nghị mua vật tư chờ bạn duyệt',
+  dnm_approved: 'đã duyệt đề nghị mua vật tư',
+  dnm_rejected: 'đã từ chối đề nghị mua vật tư — phiếu về nháp',
   po_urgent_sent: 'đã gửi gấp đơn đặt vật tư cho NCC trước khi ký — cần ký bù',
   po_reassigned: 'đã bàn giao đơn đặt vật tư cho bạn phụ trách',
   lsx_submitted: 'gửi LSX chờ bạn duyệt',
@@ -62,6 +67,13 @@ export default async function NotificationsPage() {
           <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             {items.map((n) => {
               const title = (n.payload as { title?: string })?.title
+              // Đường dẫn chứng từ trong payload (đề nghị mua 0237) — chỉ nhận đường nội bộ.
+              const href = (n.payload as { href?: string })?.href
+              const moTai = n.task_id
+                ? `/tasks/${n.task_id}`
+                : href?.startsWith('/')
+                  ? href
+                  : null
               return (
                 <li
                   key={n.id}
@@ -72,8 +84,8 @@ export default async function NotificationsPage() {
                       <span className="font-medium">{TYPE_LABEL[n.type] ?? n.type}</span>
                       {title && <span className="text-zinc-500"> — {title}</span>}
                     </div>
-                    {n.task_id && (
-                      <Link href={`/tasks/${n.task_id}`} className="text-xs underline">
+                    {moTai && (
+                      <Link href={moTai} className="text-xs underline">
                         Mở
                       </Link>
                     )}

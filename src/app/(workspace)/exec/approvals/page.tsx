@@ -23,7 +23,7 @@ export default async function ApprovalCenterPage({
   ])
   const box = await execService.signBox(user)
   const initialKind: ApprovalKind =
-    loai === 'lsx' || loai === 'po' || loai === 'quote' ? loai : 'all'
+    loai === 'lsx' || loai === 'po' || loai === 'quote' || loai === 'dnm' ? loai : 'all'
   return (
     <ExecKitFrame>
       <ApprovalCenterScreen box={box} initialKind={initialKind} />

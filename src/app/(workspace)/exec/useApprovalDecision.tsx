@@ -33,19 +33,25 @@ import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
  * (/exec/approvals/{lsx,po}/[id]). API giữ nguyên.
  */
 export type DecideTarget = {
-  kind: 'lsx' | 'po' | 'quote'
+  kind: 'lsx' | 'po' | 'quote' | 'dnm'
   id: string
   code: string
   label: string
 }
 
 /** Tên loại phiếu trong tiêu đề dialog. */
-const KIND_NOUN = { lsx: 'LSX', po: 'đơn đặt', quote: 'báo giá' } as const
+const KIND_NOUN = {
+  lsx: 'LSX',
+  po: 'đơn đặt',
+  quote: 'báo giá',
+  dnm: 'đề nghị mua',
+} as const
 /** Duyệt xong thì chuyện gì được mở khoá — câu nhắc trong dialog duyệt. */
 const APPROVE_UNLOCKS = {
   lsx: 'Duyệt xong Cung ứng mới đặt được vật tư.',
   po: 'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).',
   quote: 'Duyệt xong Sale mới chốt & gửi khách được.',
+  dnm: 'Duyệt xong Cung ứng lập đơn mua từ phiếu (duyệt đúng số Kho đề nghị — muốn sửa số thì bấm Xem kỹ).',
 } as const
 
 export function targetLsx(
@@ -83,6 +89,11 @@ async function callDecide(
     await api(`/api/dept/production/lsx/${t.id}/${decision}`, {
       method: 'POST',
       body: decision === 'reject' ? { reason } : {},
+    })
+  } else if (t.kind === 'dnm') {
+    await api(`/api/dept/warehouse/de-nghi/${t.id}/duyet`, {
+      method: 'POST',
+      body: { decision, reason },
     })
   } else if (t.kind === 'quote') {
     await api(`/api/dept/sales/quotes/${t.id}/decide`, {

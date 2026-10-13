@@ -22,6 +22,8 @@ export type DongForm = {
   /** Tồn dùng được lúc thêm dòng; null = dòng chưa có mã. */
   ton: number | null
   qty: number | null
+  /** Số lãnh đạo duyệt (Đ2), null = duyệt đúng số đề nghị / chưa duyệt. */
+  approved_qty?: number | null
   unit_price: number | null
   purpose: string
   note: string
@@ -39,6 +41,8 @@ export type PhieuForm = {
   nguoi_de_nghi: string
   created_at: string | null
   submitted_at: string | null
+  approved_at?: string | null
+  approved_by_name?: string | null
   rejected_at: string | null
   rejected_by_name: string | null
   rejected_reason: string | null

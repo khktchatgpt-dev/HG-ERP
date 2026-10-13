@@ -269,6 +269,33 @@ export type DomainEvent =
    * do Kho báo lúc nhận (kể cả từ chối nhận cả lô). Báo NGƯỜI PHỤ TRÁCH đơn để đi
    * làm việc với NCC; không đổi tồn, không đổi đơn.
    */
+  /**
+   * 0236/0237 — ĐỀ NGHỊ MUA VẬT TƯ của Kho. Gửi duyệt → báo người duyệt (quyền
+   * supply.po.approve + admin, trừ người gửi). Quyết → báo người đề nghị; duyệt
+   * thì báo thêm trưởng phòng Cung ứng (người lập đơn mua từ phiếu).
+   */
+  | {
+      name: 'de_nghi.submitted'
+      request_id: string
+      code: string
+      department: string
+      submitted_by: string
+      approver_ids: string[]
+      so_dong: number
+      /** Tổng dự kiến (VND, chưa VAT). */
+      tong: number
+    }
+  | {
+      name: 'de_nghi.decided'
+      request_id: string
+      code: string
+      decision: 'approved' | 'rejected'
+      reason: string | null
+      decided_by: string
+      requester_id: string | null
+      /** Chỉ khi duyệt: người bên Cung ứng nhận việc lập đơn. */
+      supply_ids: string[]
+    }
   | {
       name: 'po.issue_recorded'
       po_id: string

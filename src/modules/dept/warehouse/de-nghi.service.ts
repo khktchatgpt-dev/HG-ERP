@@ -2,13 +2,18 @@ import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { pricesRepo } from '@/modules/dept/supply/prices.repo'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
-import { dongTrong, vuongGuiDuyet } from '@/lib/de-nghi'
+import { emit } from '@/events/bus'
+import '@/events/register'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
+import { dongTrong, tongDuKien, vuongGuiDuyet } from '@/lib/de-nghi'
 import { deNghiRepo, type DeNghiDay, type DeNghiDong, type DongGhi } from './de-nghi.repo'
-import type { DeNghiSaveInput } from './de-nghi.schema'
+import type { DeNghiDecideInput, DeNghiSaveInput } from './de-nghi.schema'
 import { canViewWarehouse } from './warehouse.service'
 
 /**
  * ĐỀ NGHỊ MUA VẬT TƯ (0236) — Đ1: Kho lập, sửa nháp, gửi duyệt, rút về, huỷ.
+ * Đ2: lãnh đạo duyệt (sửa số từng dòng) / từ chối có lý do + thông báo (0237).
  * Duyệt (Đ2) và lập đơn mua từ phiếu (Đ3) đến sau. Bản vẽ
  * https://claude.ai/artifact/6bFb19HuFtSzT8y2wqT17g (duyệt 13/10/2026).
  */
@@ -58,8 +63,34 @@ async function canManage(user: User) {
   return canAction(user, 'warehouse.request.manage')
 }
 
+async function canApprove(user: User) {
+  return canAction(user, 'warehouse.request.approve')
+}
+
+/**
+ * Ai XEM được phiếu: Kho (lập), người duyệt (lãnh đạo — thường không có quyền
+ * vào khu Kho), Cung ứng (lập đơn mua từ phiếu đã duyệt, Đ3).
+ */
 async function xemDuoc(user: User) {
-  if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+  const [kho, duyet, cungUng] = await Promise.all([
+    canViewWarehouse(user),
+    canApprove(user),
+    canAction(user, 'supply.po.manage'),
+  ])
+  if (!kho && !duyet && !cungUng)
+    throw Forbidden('Chỉ Kho, người duyệt và Cung ứng xem được đề nghị mua')
+}
+
+/** Người nhận thông báo duyệt: có quyền duyệt đơn mua thật ∪ admin, trừ người gửi. */
+async function nguoiDuyet(tru: string): Promise<string[]> {
+  const [coQuyen, users] = await Promise.all([
+    rbacRepo.userIdsWithPermission('supply.po.approve'),
+    usersRepo.list(),
+  ])
+  const ids = new Set(coQuyen)
+  for (const u of users) if (u.role === 'admin') ids.add(u.id)
+  ids.delete(tru)
+  return [...ids]
 }
 
 /** Chuẩn hoá dòng gửi lên: bỏ dòng trống, dòng có mã lấy tên / ĐVT từ danh mục. */
@@ -99,16 +130,17 @@ export const deNghiService = {
   async get(
     user: User,
     id: string,
-  ): Promise<{ phieu: DeNghiChiTiet; canManage: boolean }> {
+  ): Promise<{ phieu: DeNghiChiTiet; canManage: boolean; canApprove: boolean }> {
     await xemDuoc(user)
     const p = await phieu(id)
     const ids = [
       ...new Set(p.lines.map((l) => l.material_id).filter((x): x is string => !!x)),
     ]
-    const [vt, { ton, gia }, sua] = await Promise.all([
+    const [vt, { ton, gia }, sua, duyet] = await Promise.all([
       deNghiRepo.vatTu(ids),
       goiYTheoMa(ids),
       canManage(user),
+      canApprove(user),
     ])
     return {
       phieu: {
@@ -121,6 +153,8 @@ export const deNghiService = {
         })),
       },
       canManage: sua,
+      // Không tự duyệt phiếu mình đề nghị (trừ admin) — màn ẩn nút theo cờ này.
+      canApprove: duyet && (user.role === 'admin' || p.requested_by !== user.id),
     }
   },
 
@@ -195,6 +229,88 @@ export const deNghiService = {
       ['draft'],
     )
     if (!ok) throw Conflict(`Phiếu ${p.code} vừa đổi trạng thái — tải lại trang`)
+    await emit({
+      name: 'de_nghi.submitted',
+      request_id: id,
+      code: p.code,
+      department: p.department,
+      submitted_by: user.id,
+      approver_ids: await nguoiDuyet(user.id),
+      so_dong: p.lines.length,
+      tong: tongDuKien(p.lines).tong,
+    })
+  },
+
+  /**
+   * Lãnh đạo QUYẾT (Đ2): duyệt — sửa được số từng dòng (0 = không mua dòng đó) —
+   * hoặc từ chối về nháp kèm lý do. Chỉ khi phiếu đang chờ duyệt.
+   */
+  async decide(user: User, id: string, input: DeNghiDecideInput): Promise<void> {
+    await assertAction(user, 'warehouse.request.approve')
+    const p = await phieu(id)
+    if (p.status !== 'pending')
+      throw Conflict(
+        `Phiếu ${p.code} không còn chờ duyệt — Kho vừa rút về hoặc người khác đã quyết`,
+      )
+    if (p.requested_by === user.id && user.role !== 'admin')
+      throw Forbidden('Không tự duyệt phiếu mình đề nghị — nhờ người duyệt khác')
+    const now = new Date().toISOString()
+
+    if (input.decision === 'reject') {
+      const reason = (input.reason ?? '').trim()
+      const ok = await deNghiRepo.update(
+        id,
+        {
+          status: 'draft',
+          rejected_at: now,
+          rejected_by: user.id,
+          rejected_reason: reason,
+        },
+        ['pending'],
+      )
+      if (!ok) throw Conflict(`Phiếu ${p.code} vừa được xử lý — tải lại trang`)
+      await emit({
+        name: 'de_nghi.decided',
+        request_id: id,
+        code: p.code,
+        decision: 'rejected',
+        reason,
+        decided_by: user.id,
+        requester_id: p.requested_by,
+        supply_ids: [],
+      })
+      return
+    }
+
+    // Số duyệt: chỉ nhận dòng của CHÍNH phiếu này; trùng số đề nghị thì để null.
+    const theoId = new Map(p.lines.map((l) => [l.id, l]))
+    const doi = (input.lines ?? []).filter((x) => theoId.has(x.id))
+    const soDuyet = new Map(doi.map((x) => [x.id, x.approved_qty]))
+    if (p.lines.length > 0 && p.lines.every((l) => (soDuyet.get(l.id) ?? l.qty) <= 0))
+      throw BadRequest('Duyệt 0 cho mọi dòng là không mua gì — bấm Từ chối và ghi lý do')
+    await deNghiRepo.setApprovedQty(
+      doi.map((x) => ({
+        id: x.id,
+        approved_qty:
+          Math.abs(x.approved_qty - theoId.get(x.id)!.qty) < 1e-9 ? null : x.approved_qty,
+      })),
+    )
+    const ok = await deNghiRepo.update(
+      id,
+      { status: 'approved', approved_at: now, approved_by: user.id },
+      ['pending'],
+    )
+    if (!ok) throw Conflict(`Phiếu ${p.code} vừa được xử lý — tải lại trang`)
+    await emit({
+      name: 'de_nghi.decided',
+      request_id: id,
+      code: p.code,
+      decision: 'approved',
+      reason: (input.reason ?? '').trim() || null,
+      decided_by: user.id,
+      requester_id: p.requested_by,
+      supply_ids: await rbacRepo.userIdsWithPermission('supply.lead'),
+    })
   },
 
   /** Rút về nháp khi lãnh đạo CHƯA duyệt (pending → draft). */
