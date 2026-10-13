@@ -18,3 +18,12 @@ describe('material-usage', () => {
     expect(usageText({ ...ZERO, other: 1200 })).toBe('1.200 dòng kế hoạch lệnh')
   })
 })
+
+describe('dòng đề nghị mua (0236)', () => {
+  it('tính vào tổng "đã dùng" và có tên riêng trong câu báo', () => {
+    expect(usageTotal({ ...ZERO, de_nghi: 2 })).toBe(2)
+    expect(usageText({ ...ZERO, po: 1, de_nghi: 2 })).toBe(
+      '1 dòng đơn mua · 2 dòng đề nghị mua',
+    )
+  })
+})

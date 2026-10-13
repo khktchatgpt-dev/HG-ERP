@@ -1,0 +1,99 @@
+/**
+ * ĐỀ NGHỊ MUA VẬT TƯ — luật thuần dùng chung server + màn (0236, bản vẽ
+ * https://claude.ai/artifact/6bFb19HuFtSzT8y2wqT17g, duyệt 13/10/2026).
+ *
+ * Một chỗ cho: nhãn trạng thái, AI ĐANG GIỮ phiếu (DN-0), điều kiện gửi duyệt
+ * (nói vướng gì TẠI CHỖ, không cho bấm rồi mới báo lỗi), tổng tiền dự kiến.
+ */
+
+export type DeNghiStatus = 'draft' | 'pending' | 'approved' | 'ordering' | 'done' | 'cancelled' // prettier-ignore
+
+export const DE_NGHI_NHAN: Record<DeNghiStatus, string> = {
+  draft: 'Nháp',
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  ordering: 'Đang mua',
+  done: 'Xong',
+  cancelled: 'Đã huỷ',
+}
+
+/** Tone của nhãn trạng thái (kit `Tag`): chỉ mã hoá vòng đời. */
+export const DE_NGHI_TONE: Record<
+  DeNghiStatus,
+  'neutral' | 'warn' | 'run' | 'done' | 'stop'
+> = {
+  draft: 'neutral',
+  pending: 'warn',
+  approved: 'run',
+  ordering: 'run',
+  done: 'done',
+  cancelled: 'neutral',
+}
+
+/** Ai đang giữ phiếu ở trạng thái này — câu "phiếu kẹt ở ai" của sổ DN-4. */
+export function dangO(s: DeNghiStatus, biTuChoi = false): string {
+  switch (s) {
+    case 'draft':
+      return biTuChoi ? 'Kho (sửa theo lý do từ chối)' : 'Kho (đang soạn)'
+    case 'pending':
+      return 'Lãnh đạo (chờ duyệt)'
+    case 'approved':
+      return 'Cung ứng (chờ lập đơn)'
+    case 'ordering':
+      return 'Cung ứng → Kho nhận hàng'
+    case 'done':
+    case 'cancelled':
+      return '—'
+  }
+}
+
+export type DongDeNghi = {
+  material_id: string | null
+  name: string
+  unit: string
+  qty: number | null
+  unit_price: number | null
+}
+
+/**
+ * Vướng gì khi GỬI DUYỆT — rỗng = gửi được. Mỗi câu nói rõ dòng nào để màn
+ * nhảy tới (`dong` = chỉ số 0-based, null = lỗi cả phiếu).
+ */
+export function vuongGuiDuyet(
+  lines: readonly DongDonGui[],
+): { dong: number | null; cau: string }[] {
+  const out: { dong: number | null; cau: string }[] = []
+  const coDong = lines.filter((l) => !dongTrong(l))
+  if (coDong.length === 0) out.push({ dong: null, cau: 'Phiếu chưa có dòng vật tư nào' })
+  lines.forEach((l, i) => {
+    if (dongTrong(l)) return
+    if (!l.name.trim()) out.push({ dong: i, cau: `Dòng ${i + 1} thiếu tên vật tư` })
+    else if (!l.unit.trim())
+      out.push({ dong: i, cau: `Dòng ${i + 1} (${l.name}) thiếu đơn vị tính` })
+    else if (!(Number(l.qty) > 0))
+      out.push({ dong: i, cau: `Dòng ${i + 1} (${l.name}) chưa có số lượng` })
+  })
+  return out
+}
+type DongDonGui = Pick<DongDeNghi, 'name' | 'unit' | 'qty' | 'material_id'>
+
+/** Dòng bỏ trống hoàn toàn (chưa gõ gì) — bỏ qua khi lưu / gửi. */
+export function dongTrong(l: Pick<DongDeNghi, 'name' | 'qty' | 'material_id'>): boolean {
+  return !l.material_id && !l.name.trim() && !(Number(l.qty) > 0)
+}
+
+/** Tổng dự kiến (VND, chưa VAT) + số dòng chưa có giá để chân bảng nói thật. */
+export function tongDuKien(lines: readonly Pick<DongDeNghi, 'qty' | 'unit_price'>[]): {
+  tong: number
+  thieuGia: number
+} {
+  let tong = 0
+  let thieuGia = 0
+  for (const l of lines) {
+    const q = Number(l.qty) || 0
+    if (q <= 0) continue
+    if (l.unit_price == null) thieuGia++
+    else tong += q * l.unit_price
+  }
+  return { tong: Math.round(tong), thieuGia }
+}

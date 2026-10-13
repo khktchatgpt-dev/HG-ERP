@@ -175,7 +175,10 @@ export function KhoiBoMa({
         {o(usage.po, 'dòng đơn mua')}
         {o(usage.stock, 'dòng sổ kho')}
         {o(usage.bom, 'dòng định mức')}
-        {o(usage.prices + usage.other, 'giá NCC · kế hoạch')}
+        {o(
+          usage.prices + usage.other + (usage.de_nghi ?? 0),
+          'giá NCC · kế hoạch · đề nghị',
+        )}
       </div>
 
       {daDung ? (

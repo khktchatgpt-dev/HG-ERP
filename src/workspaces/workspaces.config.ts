@@ -338,6 +338,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
           // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
           { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
+          // 0236 (13/10/2026): "Giấy đề nghị mua vật tư" — Kho lập thay tờ giấy
+          // chụp gửi Zalo; lãnh đạo duyệt, Cung ứng lập đơn mua từ phiếu.
+          { href: '/warehouse/de-nghi', label: 'Đề nghị mua', icon: 'clipboard-list' },
           // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO. Ba màn trên từng
           // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
           // và đảo phiếu ghi sai chỉ làm được ở màn cũ.

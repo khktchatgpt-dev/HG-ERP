@@ -380,7 +380,7 @@ export const materialsRepo = {
         throw new Error(`Không đếm được ${table}: ${error?.message}`)
       return count
     }
-    const [po, mv, stocktake, bomLines, dies, prodComp, prices, needs, plan] =
+    const [po, mv, stocktake, bomLines, dies, prodComp, prices, needs, plan, deNghi] =
       await Promise.all([
         n('supply_purchase_order_lines'),
         n('warehouse_movements'),
@@ -391,6 +391,9 @@ export const materialsRepo = {
         n('supply_supplier_prices'),
         n('supply_lsx_needs'),
         n('supply_lsx_material_plan'),
+        // 0236 — mã đã nằm trên phiếu đề nghị mua của Kho: xoá mã là dòng phiếu mất
+        // liên kết (FK set null), Cung ứng không lập đơn từ dòng đó được nữa.
+        n('warehouse_purchase_request_lines'),
       ])
     return {
       po,
@@ -398,6 +401,7 @@ export const materialsRepo = {
       bom: bomLines + dies + prodComp,
       prices,
       other: needs + plan,
+      de_nghi: deNghi,
     }
   },
 

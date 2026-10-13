@@ -7335,6 +7335,201 @@ export type Database = {
           },
         ]
       }
+      warehouse_purchase_request_lines: {
+        Row: {
+          approved_qty: number | null
+          created_at: string
+          id: string
+          line_no: number
+          material_id: string | null
+          name: string
+          note: string | null
+          po_line_id: string | null
+          purpose: string | null
+          qty: number
+          request_id: string
+          unit: string
+          unit_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          approved_qty?: number | null
+          created_at?: string
+          id?: string
+          line_no: number
+          material_id?: string | null
+          name: string
+          note?: string | null
+          po_line_id?: string | null
+          purpose?: string | null
+          qty: number
+          request_id: string
+          unit: string
+          unit_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          approved_qty?: number | null
+          created_at?: string
+          id?: string
+          line_no?: number
+          material_id?: string | null
+          name?: string
+          note?: string | null
+          po_line_id?: string | null
+          purpose?: string | null
+          qty?: number
+          request_id?: string
+          unit?: string
+          unit_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_purchase_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          department: string
+          id: string
+          need_by: string | null
+          note: string | null
+          production_order_id: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejected_reason: string | null
+          requested_by: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          department?: string
+          id?: string
+          need_by?: string | null
+          note?: string | null
+          production_order_id?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejected_reason?: string | null
+          requested_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          department?: string
+          id?: string
+          need_by?: string | null
+          note?: string | null
+          production_order_id?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejected_reason?: string | null
+          requested_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_purchase_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouse_reason_codes: {
         Row: {
           active: boolean

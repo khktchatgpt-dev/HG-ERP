@@ -22,10 +22,12 @@ export type MaterialUsage = {
   prices: number
   /** Nhu cầu lệnh · kế hoạch vật tư lệnh. */
   other: number
+  /** Dòng phiếu đề nghị mua của Kho (0236). Thiếu = 0 (bản cũ không đếm). */
+  de_nghi?: number
 }
 
 export const usageTotal = (u: MaterialUsage) =>
-  u.po + u.stock + u.bom + u.prices + u.other
+  u.po + u.stock + u.bom + u.prices + u.other + (u.de_nghi ?? 0)
 
 /** "1 đơn mua · 1 phiếu kho" — chỉ nhóm khác 0; rỗng khi chưa dùng ở đâu. */
 export function usageText(u: MaterialUsage): string {
@@ -35,6 +37,7 @@ export function usageText(u: MaterialUsage): string {
     [u.bom, 'dòng định mức'],
     [u.prices, 'giá NCC'],
     [u.other, 'dòng kế hoạch lệnh'],
+    [u.de_nghi ?? 0, 'dòng đề nghị mua'],
   ]
     .filter(([n]) => (n as number) > 0)
     .map(([n, t]) => `${(n as number).toLocaleString('vi-VN')} ${t}`)

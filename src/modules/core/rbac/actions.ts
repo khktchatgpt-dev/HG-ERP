@@ -439,6 +439,14 @@ export const ACTIONS: Action[] = [
     domain: 'warehouse',
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
+  {
+    // 0236 — "Giấy đề nghị mua vật tư" của Kho: lập, sửa nháp, gửi / rút / huỷ.
+    // Duyệt là việc của lãnh đạo (Đ2, action riêng).
+    key: 'warehouse.request.manage',
+    label: 'Lập / gửi đề nghị mua vật tư',
+    domain: 'warehouse',
+    rule: memberEdit('warehouse.member', 'warehouse.edit'),
+  },
 
   // ── Sản xuất (thiết kế lại theo VAI 0084: KH / thống kê / tổ trưởng / QĐ) ─
   {
