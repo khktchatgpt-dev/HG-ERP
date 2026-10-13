@@ -254,7 +254,16 @@ export function useDienGia(board: PricingBoard) {
   }
 
   async function save() {
-    if (missing.length) return
+    if (missing.length) {
+      // Nút Lưu góc trên vẫn bấm được khi thanh đáy đang khoá — đừng im lặng
+      // (soi UI 13/10/2026): nói thiếu gì và đưa con trỏ tới chỗ đầu tiên.
+      toast.error('Chưa lưu được', missing.map((m) => m.msg).join(' · '))
+      const id = missing.find((m) => m.focus)?.focus
+      const el = id ? document.getElementById(id) : null
+      el?.scrollIntoView({ block: 'center' })
+      el?.focus()
+      return
+    }
     setBusy(true)
     try {
       const res = await api<{ updated: number; orders: number }>(
