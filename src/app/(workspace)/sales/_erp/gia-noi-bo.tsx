@@ -79,10 +79,13 @@ export const GIA_TIP = {
   vs: `So với ${PRICE_NAME.plan}: âm = thấp hơn mức đã tính`,
 } as const
 
-/** % một chữ số lẻ, dấu trừ thật; `signed` thêm "+" cho số dương. */
+/** % một chữ số lẻ, dấu PHẨY thập phân như mọi số của khu Bán hàng (vi-VN), dấu trừ thật; `signed` thêm "+" cho số dương. */
 export function fmtPct(v: number | null | undefined, signed = false): string {
   if (v == null) return '—'
-  const s = Math.abs(v).toFixed(1)
+  const s = Math.abs(v).toLocaleString('vi-VN', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
   return v < 0 ? `−${s}%` : signed && v > 0 ? `+${s}%` : `${s}%`
 }
 
