@@ -422,7 +422,7 @@ export type DomainEvent =
       decided_by: string
       issued_by: string | null
       reason?: string
-      // approved → báo Cung ứng + Kỹ thuật; rejected → báo người phát.
+      // approved → báo Kế hoạch + Cung ứng + Kỹ thuật + xưởng + người phát; rejected → báo người phát.
       notify_ids: string[]
     }
   | {

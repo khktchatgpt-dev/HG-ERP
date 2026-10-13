@@ -51,6 +51,9 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   hasPermission: vi.fn(),
 }))
+vi.mock('@/modules/core/rbac/rbac.repo', () => ({
+  rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
+}))
 vi.mock('@/events/register', () => ({}))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
@@ -77,6 +80,7 @@ import { componentsRepo } from './components.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 const quanDoc = { id: 'u-qd', role: 'employee', department_id: 'd-vp' } as unknown as User
@@ -289,6 +293,25 @@ describe('lsxService.submit — nháp → chờ GĐ duyệt (0117)', () => {
     expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'lsx_pending' })
   })
 
+  it('báo người CÓ QUYỀN duyệt + admin, không báo quản lý thiếu quyền / tài khoản khoá / người gửi', async () => {
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'u-gd', role: 'employee', is_active: true }, // Giám đốc: quyền qua vai
+      { id: 'u-admin', role: 'admin', is_active: true },
+      { id: 'u-ql', role: 'manager', is_active: true }, // quản lý không có quyền duyệt
+      { id: 'u-gd-cu', role: 'employee', is_active: false }, // có quyền nhưng đã khoá
+      { id: 'u-qd', role: 'admin', is_active: true }, // chính người gửi
+    ] as never)
+    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-gd', 'u-gd-cu'])
+
+    await lsxService.submit(quanDoc, 'lsx1')
+
+    const ev = vi.mocked(emit).mock.calls.find(([e]) => e.name === 'lsx.submitted')![0]
+    expect((ev as { approver_ids: string[] }).approver_ids.sort()).toEqual([
+      'u-admin',
+      'u-gd',
+    ])
+  })
+
   it('lệnh chưa có dòng nào → 400, không gửi đi', async () => {
     vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([] as never)
     await expect(lsxService.submit(quanDoc, 'lsx1')).rejects.toMatchObject({
@@ -315,6 +338,32 @@ describe('lsxService.submit — nháp → chờ GĐ duyệt (0117)', () => {
     await expect(lsxService.submit(quanDoc, 'lsx1')).rejects.toMatchObject({
       status: 400,
     })
+  })
+})
+
+describe('lsxService.approve — báo cả người phát lệnh (13/10/2026)', () => {
+  it('Sale phát lệnh nhận thông báo duyệt, cùng Kế hoạch/Cung ứng/xưởng', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'pending_approval',
+      issued_by: 'u-sale',
+    } as never)
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd-cu', name: 'Cung Ứng - Mua Hàng', workspace_id: 'planning' },
+    ] as never)
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'u-cu', department_id: 'd-cu' },
+      { id: 'u-sale', department_id: 'd-sales' },
+    ] as never)
+    vi.mocked(ordersRepo.findById).mockImplementation(
+      async (id) => freeOrder(id, 'DH-01') as never,
+    )
+
+    await lsxService.approve(manager, 'lsx1')
+
+    const ev = vi.mocked(emit).mock.calls.find(([e]) => e.name === 'lsx.decided')![0]
+    expect(ev).toMatchObject({ decision: 'approved' })
+    expect((ev as { notify_ids: string[] }).notify_ids.sort()).toEqual(['u-cu', 'u-sale'])
   })
 })
 

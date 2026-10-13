@@ -11,6 +11,7 @@ import {
 import type { QuickProduct } from '@/components/sales/QuickAddProduct'
 import { hasNoSpec } from '@/components/sales/ProductSpecFill'
 import { quoteNetPrice } from '@/lib/quote-price'
+import { avgLai, checkPrice, type PlanPrice } from '@/lib/sale-price'
 import { todayVn } from '@/lib/date-vn'
 import {
   addDays,
@@ -39,6 +40,8 @@ export type LineRow = {
   unitPrice: string
   discount: string
   note: string
+  /** Ô giá đang là GIÁ BÁN KH gợi sẵn (khách chưa từng được chào SP này) — gõ tay là xoá. */
+  priceFrom?: 'plan'
 }
 
 /**
@@ -128,10 +131,8 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
       .catch(() => setLastByCust((x) => new Map(x).set(cid, new Map())))
   }, [customerId, lastByCust])
 
-  /* ── giá thành KH (chỉ khi có quyền — route trả {} chứ không 403) ──────── */
-  const [planPrices, setPlanPrices] = useState<
-    Map<string, { price: number; currency: string }>
-  >(new Map())
+  /* ── giá vốn KH + giá bán KH (chỉ khi có quyền — route trả {} chứ không 403) */
+  const [planPrices, setPlanPrices] = useState<Map<string, PlanPrice>>(new Map())
   const [canSeeCost, setCanSeeCost] = useState(false)
   const idsKey = lines
     .map((l) => l.productId)
@@ -140,7 +141,7 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
     .join(',')
   useEffect(() => {
     if (!idsKey) return
-    api<{ prices: Record<string, { price: number; currency: string }> }>(
+    api<{ prices: Record<string, PlanPrice> }>(
       `/api/dept/sales/quotes/plan-prices?ids=${encodeURIComponent(idsKey)}`,
     )
       .then((d) => {
@@ -180,10 +181,38 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
   /** Thêm nhiều SP một lượt — báo giá KHÔNG cho trùng SP (schema chặn), bỏ cái đã có. */
   function addPicked(ps: ProductPick[]) {
     ps.forEach(remember)
+    const fresh = ps
+      .filter((x) => !lines.some((l) => l.productId === x.id))
+      .map((x) => newRow(x.id))
     setLines((ls) => [
       ...ls,
-      ...ps.filter((x) => !ls.some((l) => l.productId === x.id)).map((x) => newRow(x.id)),
+      ...fresh.filter((r) => !ls.some((l) => l.productId === r.productId)),
     ])
+    // Khách chưa từng được chào SP này → gợi sẵn GIÁ BÁN KH (13/10/2026). Hỏi server vì
+    // giá kế hoạch của SP vừa thêm chưa tải; chỉ điền ô CÒN TRỐNG, người có quyền mới nhận.
+    const empty = fresh.filter((r) => r.unitPrice === '')
+    if (empty.length) void fillPlan(empty)
+  }
+  async function fillPlan(rows: LineRow[]) {
+    try {
+      const ids = [...new Set(rows.map((r) => r.productId))].join(',')
+      const d = await api<{ prices: Record<string, PlanPrice> }>(
+        `/api/dept/sales/quotes/plan-prices?ids=${encodeURIComponent(ids)}`,
+      )
+      const m = new Map(Object.entries(d.prices))
+      if (!m.size) return
+      const keys = new Set(rows.map((r) => r.key))
+      setLines((ls) =>
+        ls.map((l) => {
+          const p = m.get(l.productId)
+          if (!keys.has(l.key) || l.unitPrice !== '' || !p || p.currency !== h.currency)
+            return l
+          return { ...l, unitPrice: String(p.price), priceFrom: 'plan' }
+        }),
+      )
+    } catch {
+      /* không có gợi ý thì ô để trống */
+    }
   }
   function replaceProduct(key: number, x: ProductPick) {
     remember(x)
@@ -232,28 +261,65 @@ export function useBaoGiaForm(p: BaoGiaFormProps) {
       num(l.unitPrice),
       l.discount === '' ? null : num(l.discount),
     )
-    const cost = l.productId ? (planPrices.get(l.productId)?.price ?? null) : null
-    const margin = cost != null && net > 0 ? ((net - cost) / net) * 100 : null
-    return { net, cost, margin }
+    const plan = l.productId ? (planPrices.get(l.productId) ?? null) : null
+    return { net, plan, check: checkPrice(net, h.currency, plan) }
   }
   const tong = useMemo(() => {
     let ref = 0
     let below = 0
+    let belowPlan = 0
     let noSpec = 0
     let withQty = 0
+    let gain = 0
+    let gainN = 0
+    let firstBelow: number | null = null
+    let firstBelowPlan: number | null = null
+    const laiRows: Parameters<typeof avgLai>[0] = []
     for (const l of lines) {
-      const { net, cost } = calc(l)
-      if (num(l.qty) > 0) {
-        ref += num(l.qty) * net
+      const { net, plan, check } = calc(l)
+      const qty = num(l.qty)
+      if (qty > 0) {
+        ref += qty * net
         withQty++
       }
-      if (cost != null && net > 0 && net < cost) below++
+      if (check.below_cost) {
+        below++
+        firstBelow ??= l.key
+      } else if (check.below_plan) {
+        belowPlan++
+        firstBelowPlan ??= l.key
+      }
+      const comparable = !!plan && !check.currency_mismatch
+      laiRows.push({
+        price: net,
+        qty: qty > 0 ? qty : null,
+        cost: plan?.cost ?? null,
+        comparable,
+      })
+      // Σ lãi chỉ trên dòng CÓ SL — dòng thiếu SL không có tiền để cộng.
+      if (comparable && plan?.cost != null && net > 0 && qty > 0) {
+        gain += (net - plan.cost) * qty
+        gainN++
+      }
       const pr = l.productId ? known.get(l.productId) : undefined
       if (pr && hasNoSpec(pr)) noSpec++
     }
-    return { ref, below, noSpec, withQty }
+    const lai = avgLai(laiRows)
+    return {
+      ref,
+      below,
+      belowPlan,
+      noSpec,
+      withQty,
+      // null = không dòng nào tính được lãi (thiếu SL / chưa bóc vốn) — đừng in "0,00".
+      gain: gainN ? gain : null,
+      avgLai: lai.pct,
+      withCost: lai.n,
+      firstBelow,
+      firstBelowPlan,
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- calc đọc planPrices (đã trong deps)
-  }, [lines, planPrices, known])
+  }, [lines, planPrices, known, h.currency])
 
   const missing = useMemo<Missing[]>(() => {
     const m: Missing[] = []

@@ -87,7 +87,8 @@ export function useLenh(p: LenhProps) {
       case 'pending_approval':
         return 'Chờ Giám đốc duyệt'
       case 'rejected':
-        return 'Sửa theo lý do từ chối, trình lại'
+        // Nói LUÔN lý do — trước chỉ ghi "sửa theo lý do", lý do nằm lẫn trong khung Bản phát hành (soi UI 13/10).
+        return `GĐ trả lại: "${l.rejected_reason ?? 'không ghi lý do'}" — sửa rồi bấm "Trình duyệt lại"`
       case 'approved':
         return p.lots.length === 0
           ? 'Chia đợt xuất'

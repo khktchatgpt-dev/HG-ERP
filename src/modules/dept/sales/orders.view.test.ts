@@ -11,6 +11,7 @@ const base: ProductPickRow = {
   name: 'Ghế xếp Florenz',
   unit: 'cai',
   customer_id: null,
+  customer_name: null,
   customer_item_code: null,
   bom_status: 'none',
   description_en: null,

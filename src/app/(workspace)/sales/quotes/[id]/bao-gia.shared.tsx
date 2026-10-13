@@ -2,6 +2,7 @@
  * Kiểu + ô nhỏ của màn CHI TIẾT BÁO GIÁ (khuôn D · Chứng từ, khối ERP, 07/10/2026).
  */
 import type { ReactNode } from 'react'
+import type { PlanPrice } from '@/lib/sale-price'
 
 export type BaoGiaView = {
   id: string
@@ -39,10 +40,15 @@ export type DongBaoGia = {
   qty: number | null
   unit_price: number
   discount_pct: number | null
-  /** Giá thành KH hiện tại (null khi không quyền / chưa có). */
-  plan_price: number | null
-  /** Giá thành KH chụp lúc chào. */
-  plan_snapshot: number | null
+  /**
+   * Giá kế hoạch dùng để so (lib/sale-price): số CHỤP lúc chào nếu dòng chụp sau
+   * 0235, không thì số hiện tại. null khi không quyền / SP chưa có.
+   */
+  plan: PlanPrice | null
+  /** true = `plan` là số chụp lúc chào. */
+  plan_is_snapshot: boolean
+  /** Giá kế hoạch HIỆN TẠI — để báo "lúc chào X · hiện Y" khi đã đổi. */
+  plan_now: PlanPrice | null
   note: string | null
   packing_text: string | null
 }

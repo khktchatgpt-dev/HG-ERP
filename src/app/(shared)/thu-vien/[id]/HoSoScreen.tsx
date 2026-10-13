@@ -330,7 +330,7 @@ export function HoSoScreen({
                 <DollarSign aria-hidden />
               </span>
               <span>
-                <span className="l">Giá KH</span>
+                <span className="l">Giá bán KH</span>
                 <b>
                   {d.plan?.price != null
                     ? `${nz(d.plan.price, 2)} ${d.plan.currency ?? ''}`
@@ -416,7 +416,9 @@ export function HoSoScreen({
       <section className="card">
         <nav className="tabs" aria-label="Phần hồ sơ sản phẩm">
           {suaDuocTrang && !c.cheDoSua && (
-            <span className="hint">Nháy đúp vào ô, hoặc bấm Sửa hồ sơ, để sửa thẳng như Excel</span>
+            <span className="hint">
+              Nháy đúp vào ô, hoặc bấm Sửa hồ sơ, để sửa thẳng như Excel
+            </span>
           )}
           {tabs.map((t) => (
             <button

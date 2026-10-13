@@ -13,6 +13,8 @@ import { fileImageSrc } from '@/server/file-image'
 import { DonHangScreen } from './DonHangScreen'
 import type { CancelImpact, ChangeView } from './don-hang.shared'
 
+export const metadata = { title: 'Bán hàng · Đơn hàng' }
+
 /**
  * Chi tiết đơn bán (khuôn D · Chứng từ, kiểu ERP — 07/10/2026). Gác quyền + tải
  * dữ liệu song song; chỉ truyền xuống thứ màn cần.

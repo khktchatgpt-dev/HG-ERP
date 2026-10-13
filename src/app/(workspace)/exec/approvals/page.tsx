@@ -3,6 +3,8 @@ import { execService } from '@/modules/core/exec/exec.service'
 import { ApprovalCenterScreen, type ApprovalKind } from './ApprovalCenterScreen'
 import { ExecKitFrame } from '../_shell/KitFrame'
 
+export const metadata = { title: 'Ban Giám đốc · Hộp ký duyệt' }
+
 /**
  * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — 15/08/2026.
  *

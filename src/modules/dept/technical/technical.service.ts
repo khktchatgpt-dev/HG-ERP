@@ -369,6 +369,7 @@ export const productsService = {
     opts: {
       q?: string
       customer_id?: string
+      customer_label?: string | null
       ids?: string[]
       codes?: string[]
       limit: number

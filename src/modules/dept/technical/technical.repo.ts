@@ -227,7 +227,7 @@ export type ProductLite = Pick<
  * ~715 kB egress Supabase cho một cái `<select>`. Nay tìm ở server, trả ≤25 dòng.
  */
 const PICK_COLS =
-  'id, code, name, unit, customer_id, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
+  'id, code, name, unit, customer_id, customer_name, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
 
 export type ProductPickRow = Pick<
   Product,
@@ -236,6 +236,7 @@ export type ProductPickRow = Pick<
   | 'name'
   | 'unit'
   | 'customer_id'
+  | 'customer_name'
   | 'customer_item_code'
   | 'bom_status'
   | 'packing'
@@ -415,8 +416,40 @@ export const productsRepo = {
   async listForPick(filter: {
     q?: string
     customer_id?: string
+    /** Nhãn chữ của khách (`customerLabelFrom`) — SP chỉ ghi nhãn, không gắn customer_id. */
+    customer_label?: string | null
     limit: number
   }): Promise<ProductPickRow[]> {
+    // Có khách: SP CỦA KHÁCH trước (theo id HOẶC nhãn chữ), thiếu chỗ mới bù — chưa gõ
+    // thì bù mẫu chung, có gõ thì bù SP khớp của khách khác. Trước 13/10/2026 lấy 25 SP
+    // mới nhất của mọi khách: 26 SP LAURA chỉ có nhãn chữ nên gõ "ghe" chỉ lọt 1 cái.
+    if (filter.customer_id) {
+      const own = filter.customer_label
+        ? `customer_id.eq.${filter.customer_id},customer_name.eq."${filter.customer_label.replace(/"/g, '')}"`
+        : `customer_id.eq.${filter.customer_id}`
+      const base = () =>
+        db()
+          .from('technical_products')
+          .select(PICK_COLS)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(filter.limit)
+      let mineQ = base().or(own)
+      if (filter.q) mineQ = applySearch(mineQ, filter.q)
+      const { data: mine } = await mineQ
+      const rows = (mine ?? []) as ProductPickRow[]
+      if (rows.length >= filter.limit) return rows
+      let restQ = base()
+      restQ = filter.q
+        ? applySearch(restQ, filter.q)
+        : restQ.is('customer_id', null).is('customer_name', null)
+      const { data: rest } = await restQ
+      const seen = new Set(rows.map((r) => r.id))
+      return [
+        ...rows,
+        ...((rest ?? []) as ProductPickRow[]).filter((r) => !seen.has(r.id)),
+      ].slice(0, filter.limit)
+    }
     let q = db()
       .from('technical_products')
       .select(PICK_COLS)
@@ -424,9 +457,6 @@ export const productsRepo = {
       .order('created_at', { ascending: false })
       .limit(filter.limit)
     if (filter.q) q = applySearch(q, filter.q)
-    else if (filter.customer_id) {
-      q = q.or(`customer_id.eq.${filter.customer_id},customer_id.is.null`)
-    }
     const { data } = await q
     return (data ?? []) as ProductPickRow[]
   },

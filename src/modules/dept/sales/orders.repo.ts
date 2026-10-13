@@ -115,7 +115,57 @@ function unwrap(rows: RawOrder[] | null): OrderWithCustomer[] {
   })
 }
 
+/** Đơn giá gần nhất đã bán cho một khách, theo SP (gợi ý giá ở form đơn — 13/10/2026). */
+export type LastOrderPrice = {
+  product_id: string
+  unit_price: number
+  order_code: string
+  ordered_at: string
+}
+
 export const ordersRepo = {
+  /**
+   * Đơn giá > 0 gần nhất của từng SP trong các đơn CÒN SỐNG (không huỷ) của khách,
+   * CÙNG tiền tệ — giá USD không được gợi vào đơn EUR. Trần 1000 dòng: sổ cả năm
+   * của một khách ~ vài trăm dòng (đo 13/10: LAURA 17 đơn).
+   */
+  async lastPricesForCustomer(
+    customerId: string,
+    currency: string,
+  ): Promise<LastOrderPrice[]> {
+    const { data, error } = await db()
+      .from('sales_order_lines')
+      .select(
+        'product_id, unit_price, order:sales_orders!inner(code, customer_id, currency, status, created_at)',
+      )
+      .eq('order.customer_id', customerId)
+      .eq('order.currency', currency)
+      .neq('order.status', 'cancelled')
+      .gt('unit_price', 0)
+      .order('created_at', { ascending: false, referencedTable: 'order' })
+      .limit(1000)
+    if (error) throw new Error(error.message)
+    type Raw = {
+      product_id: string
+      unit_price: number
+      order: { code: string; created_at: string } | { code: string; created_at: string }[]
+    }
+    const seen = new Map<string, LastOrderPrice>()
+    for (const r of (data ?? []) as Raw[]) {
+      const o = Array.isArray(r.order) ? r.order[0] : r.order
+      if (!o) continue
+      const cur = seen.get(r.product_id)
+      if (cur && cur.ordered_at >= o.created_at) continue
+      seen.set(r.product_id, {
+        product_id: r.product_id,
+        unit_price: Number(r.unit_price),
+        order_code: o.code,
+        ordered_at: o.created_at,
+      })
+    }
+    return [...seen.values()]
+  },
+
   async nextCode(): Promise<string> {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'DH' })
     if (error || !data) throw new Error(error?.message ?? 'next_doc_code failed')
@@ -519,7 +569,9 @@ export const ordersRepo = {
     if (lsxIds.length === 0) return {}
     const { data, error } = await db()
       .from('sales_order_changes')
-      .select('change, note, created_at, order:sales_orders!inner(code, production_order_id)')
+      .select(
+        'change, note, created_at, order:sales_orders!inner(code, production_order_id)',
+      )
       .in('order.production_order_id', lsxIds)
       .not('change->lines->after', 'is', null)
       .order('created_at', { ascending: false })
@@ -528,9 +580,13 @@ export const ordersRepo = {
     type Raw = {
       note: string | null
       created_at: string
-      order: { code: string; production_order_id: string | null } | { code: string; production_order_id: string | null }[] | null
+      order:
+        | { code: string; production_order_id: string | null }
+        | { code: string; production_order_id: string | null }[]
+        | null
     }
-    const out: Record<string, { order_code: string; at: string; note: string | null }> = {}
+    const out: Record<string, { order_code: string; at: string; note: string | null }> =
+      {}
     for (const r of (data ?? []) as Raw[]) {
       const o = Array.isArray(r.order) ? r.order[0] : r.order
       if (!o?.production_order_id || out[o.production_order_id]) continue

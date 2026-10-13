@@ -1,10 +1,23 @@
 'use client'
 
 import { useState, type KeyboardEvent } from 'react'
+import { cn } from '@/lib/utils'
 import { ClipboardPaste, PackagePlus, Plus, Search, Trash2 } from 'lucide-react'
 import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
 import { shipWeekLabel } from '@/lib/ship-week'
 import { NUM, TD, TH } from '../../_erp/ui'
+import {
+  EDGE,
+  GhiChuNoiBo,
+  GIA_TIP,
+  INT,
+  INT_HEAD,
+  NHOM,
+  NhomTh,
+  fmtPct,
+  useAnGiaNoiBo,
+} from '../../_erp/gia-noi-bo'
+import { PRICE_NAME, suggestionNote } from '@/lib/sale-price'
 import {
   BTN_SUB,
   CELL,
@@ -39,6 +52,11 @@ function gridKey(e: KeyboardEvent<HTMLElement>, r: number, c: Col) {
 /** Lưới dòng — nhân vật chính của màn. */
 export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
   const [bulkDate, setBulkDate] = useState('')
+  const an = useAnGiaNoiBo()
+  /** Nhóm NỘI BỘ (± Bán KH · Lãi thực) — chỉ người thấy giá kế hoạch, và khi không bấm ẩn. */
+  const cost = d.canSeeCost && !an.hidden
+  // chọn · # · SP · SL · đơn giá · thành tiền · tuần giao · ghi chú · bỏ = 9, + 2 cột nội bộ.
+  const cols = 9 + (cost ? 2 : 0)
   const allSel = d.lines.length > 0 && d.selected.size === d.lines.length
   const cur = d.currency
 
@@ -90,6 +108,30 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
             </button>
           </>
         )}
+        {cost && d.tong.below > 0 && (
+          <button
+            type="button"
+            className="text-xs text-[var(--stop)] underline underline-offset-2"
+            onClick={() => goPrice(d.tong.firstBelow)}
+          >
+            {d.tong.below} dòng dưới {PRICE_NAME.cost} (bán lỗ)
+          </button>
+        )}
+        {cost && d.tong.belowPlan > 0 && (
+          <button
+            type="button"
+            className="text-xs text-[var(--warn)] underline underline-offset-2"
+            onClick={() => goPrice(d.tong.firstBelowPlan)}
+          >
+            {d.tong.belowPlan} dòng thấp hơn {PRICE_NAME.plan}
+          </button>
+        )}
+        <GhiChuNoiBo
+          canSee={d.canSeeCost}
+          hidden={an.hidden}
+          cols={2}
+          onShow={an.toggle}
+        />
         <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
           Tuần giao
           <input
@@ -117,20 +159,38 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
 
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full table-fixed border-collapse">
+          {/* Mã khách + ĐVT xuống dòng 2 của ô SP (13/10/2026) để chỗ cho nhóm nội bộ
+              mà tên SP không bị bóp ở 1.053px (1280 trừ sidebar). */}
           <colgroup>
             <col className="w-8" />
             <col className="w-9" />
             <col />
-            <col className="w-[100px]" />
-            <col className="w-11" />
             <col className="w-[80px]" />
+            <col className="w-[120px]" />
             <col className="w-[100px]" />
-            <col className="w-[112px]" />
-            <col className="w-[150px]" />
-            <col className="w-[150px]" />
+            {cost && (
+              <>
+                <col className="w-[80px]" />
+                <col className="w-[76px]" />
+              </>
+            )}
+            <col className="w-[140px]" />
+            <col className="w-[130px]" />
             <col className="w-8" />
           </colgroup>
           <thead className="sticky top-0 z-10">
+            <tr>
+              <NhomTh kind="trong" colSpan={4} />
+              <NhomTh kind="khach" colSpan={2}>
+                {NHOM.order}
+              </NhomTh>
+              {cost && (
+                <NhomTh kind="noi-bo" colSpan={2}>
+                  {NHOM.int}
+                </NhomTh>
+              )}
+              <NhomTh kind="trong" colSpan={3} />
+            </tr>
             <tr>
               <th className={`${TH} px-2`}>
                 <input
@@ -140,12 +200,23 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
                 />
               </th>
               <th className={`${TH} px-2 text-right`}>#</th>
-              <th className={TH}>Sản phẩm</th>
-              <th className={TH}>Mã khách</th>
-              <th className={TH}>ĐVT</th>
+              <th className={TH}>Sản phẩm · mã khách</th>
               <th className={`${TH} text-right`}>SL *</th>
               <th className={`${TH} text-right`}>Đơn giá * ({cur})</th>
               <th className={`${TH} text-right`}>Thành tiền</th>
+              {cost && (
+                <>
+                  <th
+                    className={`${TH} ${INT_HEAD} ${EDGE} text-right`}
+                    title={GIA_TIP.vs}
+                  >
+                    ± Bán KH
+                  </th>
+                  <th className={`${TH} ${INT_HEAD} text-right`} title={GIA_TIP.lai}>
+                    Lãi thực
+                  </th>
+                </>
+              )}
               <th className={TH}>Tuần giao</th>
               <th className={TH}>Ghi chú</th>
               <th className={TH} />
@@ -155,7 +226,7 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
             {d.lines.length === 0 && (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={cols}
                   className="text-muted-foreground px-6 py-10 text-center text-[13px]"
                 >
                   {d.linesEditable
@@ -167,13 +238,13 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
               </tr>
             )}
             {d.lines.map((l, i) => (
-              <Dong key={l.key} d={d} l={l} i={i} />
+              <Dong key={l.key} d={d} l={l} i={i} cost={cost} />
             ))}
           </tbody>
           {d.lines.length > 0 && (
             <tfoot className="sticky bottom-0 z-10">
               <tr className="bg-muted font-medium">
-                <td className={`${TD} border-t`} colSpan={5}>
+                <td className={`${TD} border-t`} colSpan={3}>
                   <span className="text-muted-foreground text-xs">
                     Tổng {d.lines.length} dòng
                     {d.tong.zero > 0 && ` · ${d.tong.zero} dòng giá 0`}
@@ -189,6 +260,9 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
                 <td className={`${TD} ${NUM} border-t`}>{fmtN(d.tong.qty)}</td>
                 <td className={`${TD} border-t`} />
                 <td className={`${TD} ${NUM} border-t`}>{fmtMoney(d.tong.value)}</td>
+                {cost && (
+                  <td className={`${TD} ${INT_HEAD} ${EDGE} border-t`} colSpan={2} />
+                )}
                 <td className={`${TD} border-t`} colSpan={3}>
                   <span className="text-muted-foreground text-xs">
                     Chưa gồm thuế / phí — giá theo đơn giá dòng
@@ -223,8 +297,37 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
   )
 }
 
-function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
+/** Đưa ô giá của một dòng ra giữa khung và đặt con trỏ vào đó. */
+function goPrice(key: number | null) {
+  if (key == null) return
+  const el = document.getElementById(`cell-${key}-price`)
+  el?.scrollIntoView({ block: 'center' })
+  el?.focus()
+}
+
+function Dong({
+  d,
+  l,
+  i,
+  cost,
+}: {
+  d: DonHangFormCtx
+  l: LineRow
+  i: number
+  cost: boolean
+}) {
   const p = l.productId ? d.known.get(l.productId) : undefined
+  const { check } = d.calc(l)
+  const under = cost && check.below_cost
+  const itemCode = p?.customer_item_code ?? l.draft?.itemCode ?? ''
+  const unit = p?.unit ?? l.draft?.unit ?? ''
+  const flag = !cost
+    ? ''
+    : check.below_cost
+      ? 'shadow-[inset_3px_0_0_var(--stop)]'
+      : check.below_plan
+        ? 'shadow-[inset_3px_0_0_var(--warn)]'
+        : ''
   const locked = l.shipped > 0
   const qtyBad = !(num(l.qty) > 0) || num(l.qty) < l.shipped
   const week = l.shipDate ? shipWeekLabel(l.shipDate) : null
@@ -241,7 +344,9 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
           onChange={(e) => d.toggleSel(l.key, e.target.checked)}
         />
       </td>
-      <td className={`${TD} text-muted-foreground px-2 text-right font-mono text-xs`}>
+      <td
+        className={`${TD} text-muted-foreground px-2 text-right font-mono text-xs ${flag}`}
+      >
         {i + 1}
       </td>
       <td className={`${TD} py-1`}>
@@ -261,8 +366,13 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
             title={locked ? `Đã xuất ${l.shipped} — không đổi SP` : 'Bấm để đổi SP'}
           >
             <span className="font-mono text-[13px] leading-4 font-medium">{p.code}</span>
-            <span className="text-muted-foreground truncate text-[11px] leading-4">
+            <span
+              className="text-muted-foreground truncate text-[11px] leading-4"
+              title={p.name}
+            >
               {p.name}
+              {itemCode && <span className="font-mono"> · {itemCode}</span>}
+              {unit && ` · ${unit}`}
             </span>
           </button>
         ) : l.draft ? (
@@ -275,6 +385,8 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
             </span>
             <span className="text-muted-foreground truncate text-[11px] leading-4">
               {l.draft.name}
+              {itemCode && <span className="font-mono"> · {itemCode}</span>}
+              {unit && ` · ${unit}`}
             </span>
           </div>
         ) : (
@@ -301,18 +413,12 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
           </button>
         )}
       </td>
-      <td className={`${TD} text-muted-foreground font-mono text-xs`}>
-        {p?.customer_item_code ?? l.draft?.itemCode ?? ''}
-      </td>
-      <td className={`${TD} text-muted-foreground text-xs`}>
-        {p?.unit ?? l.draft?.unit ?? ''}
-      </td>
       <td className={`${TD} px-1`}>
         <input
           id={`cell-${l.key}-qty`}
           data-r={i}
           data-c="qty"
-          className={`${CELL} ${NUM} ${qtyBad ? 'border-[var(--stop)]' : ''}`}
+          className={cn(CELL, `${NUM} ${qtyBad ? 'border-[var(--stop)]' : ''}`)}
           value={l.qty}
           inputMode="numeric"
           disabled={ro}
@@ -322,26 +428,62 @@ function Dong({ d, l, i }: { d: DonHangFormCtx; l: LineRow; i: number }) {
         />
       </td>
       <td className={`${TD} px-1`}>
-        <input
-          id={`cell-${l.key}-price`}
-          data-r={i}
-          data-c="price"
-          className={`${CELL} ${NUM} ${l.unitPrice.trim() === '' ? 'border-[var(--stop)]' : ''}`}
-          value={l.unitPrice}
-          inputMode="decimal"
-          disabled={ro}
-          onChange={(e) => d.setLine(l.key, { unitPrice: e.target.value })}
-          onKeyDown={(e) => gridKey(e, i, 'price')}
-        />
+        <div className="flex flex-col">
+          <input
+            id={`cell-${l.key}-price`}
+            data-r={i}
+            data-c="price"
+            className={cn(
+              CELL,
+              `${NUM} ${l.priceFrom ? 'h-6' : ''} ${l.unitPrice.trim() === '' || under ? 'border-[var(--stop)]' : ''}`,
+            )}
+            value={l.unitPrice}
+            inputMode="decimal"
+            disabled={ro}
+            // Gõ tay là xoá cờ "giá gợi ý".
+            onChange={(e) =>
+              d.setLine(l.key, {
+                unitPrice: e.target.value,
+                priceFrom: undefined,
+                priceRef: null,
+              })
+            }
+            onKeyDown={(e) => gridKey(e, i, 'price')}
+            aria-label={`Đơn giá dòng ${i + 1}`}
+            title={under ? `Dưới ${PRICE_NAME.cost} — bán lỗ` : undefined}
+          />
+          {l.priceFrom && (
+            <span
+              className="text-muted-foreground truncate px-1.5 text-right text-[11px] leading-4"
+              title="Giá gợi ý — soát lại trước khi lưu"
+            >
+              {suggestionNote({ from: l.priceFrom, ref: l.priceRef ?? null })}
+            </span>
+          )}
+        </div>
       </td>
       <td className={`${TD} ${NUM}`}>{fmtMoney(num(l.qty) * num(l.unitPrice))}</td>
+      {cost && (
+        <>
+          <td
+            className={`${TD} ${NUM} ${INT} ${EDGE} ${check.vs_plan_pct != null && check.vs_plan_pct < 0 ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+          >
+            {fmtPct(check.vs_plan_pct, true)}
+          </td>
+          <td
+            className={`${TD} ${NUM} ${INT} ${check.lai_pct == null ? 'text-muted-foreground' : check.lai_pct < 0 ? 'text-[var(--stop)]' : ''}`}
+          >
+            {fmtPct(check.lai_pct)}
+          </td>
+        </>
+      )}
       <td className={`${TD} px-1`}>
         <div className="flex flex-col">
           <input
             data-r={i}
             data-c="ship"
             type="date"
-            className={`${CELL} h-6 ${late ? 'border-[var(--warn)]' : ''}`}
+            className={cn(CELL, `h-6 ${late ? 'border-[var(--warn)]' : ''}`)}
             value={l.shipDate}
             disabled={ro}
             onChange={(e) => d.setLine(l.key, { shipDate: e.target.value })}

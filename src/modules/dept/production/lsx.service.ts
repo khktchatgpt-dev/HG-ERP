@@ -17,6 +17,7 @@ import type { OrderStatus } from '@/modules/dept/sales/orders.schema'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canMutateOwned, canRemoveOrdersFromLsx } from '@/lib/record-ownership'
 import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
@@ -47,11 +48,23 @@ function assertLsxOwner(user: User, lsx: ProductionOrder): void {
  * hoàn thành (addOrders/removeOrders).
  */
 
-/** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
+/**
+ * Ai được báo "lệnh chờ duyệt": người CÓ QUYỀN duyệt lệnh (`production.lsx.approve`)
+ * + admin (admin vượt mọi quyền nên duyệt được), còn hoạt động, trừ chính người
+ * gửi. Trước 13/10/2026 lọc theo vai toàn cục admin/manager — báo cả quản lý không
+ * duyệt được, mà bỏ sót người được cấp quyền duyệt qua vai (vd Giám đốc là employee).
+ */
 async function approverIds(excludeId: string): Promise<string[]> {
-  const users = await usersRepo.list()
+  const [users, canApprove] = await Promise.all([
+    usersRepo.list(),
+    rbacRepo.userIdsWithPermission('production.lsx.approve'),
+  ])
+  const allowed = new Set(canApprove)
   return users
-    .filter((u) => (u.role === 'admin' || u.role === 'manager') && u.id !== excludeId)
+    .filter(
+      (u) =>
+        u.is_active && u.id !== excludeId && (u.role === 'admin' || allowed.has(u.id)),
+    )
     .map((u) => u.id)
 }
 
@@ -340,7 +353,14 @@ export const lsxService = {
       decision: 'approved',
       decided_by: user.id,
       issued_by: lsx.issued_by,
-      notify_ids: await lsxAudienceIds(),
+      // Kế hoạch · Cung ứng · Kỹ thuật · xưởng — CỘNG người phát lệnh (Sale):
+      // trước 13/10/2026 Sale không được báo, phải tự mở lại lệnh để biết đã duyệt.
+      notify_ids: [
+        ...new Set([
+          ...(await lsxAudienceIds()),
+          ...(lsx.issued_by ? [lsx.issued_by] : []),
+        ]),
+      ],
     })
     return updated
   },

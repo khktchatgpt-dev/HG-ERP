@@ -361,6 +361,34 @@ describe('profileSnapshot ≡ dữ liệu draftFromOrders nạp vào dòng', () 
     expect(line.customer_item_code).toBe(snap.customer_item_code)
   })
 
+  it('ngày xuất dòng lệnh = tuần giao của DÒNG ĐƠN; dòng trống mới lấy hạn đơn', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      id: 'o1',
+      code: 'DH-01',
+      customer_po_no: 'PO-1',
+      due_date: '2026-11-20',
+    } as never)
+    const base = {
+      order_id: 'o1',
+      product_id: 'p1',
+      product_code: 'SP1',
+      product_name: 'Ghế Alicante',
+      product_unit: 'cái',
+      qty: 10,
+      note: null,
+      image_file_id: null,
+    }
+    vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([
+      { ...base, id: 'ol1', ship_date: '2026-12-30' },
+      { ...base, id: 'ol2', ship_date: null },
+    ] as never)
+    vi.mocked(productsRepo.listByIds).mockResolvedValue([PRODUCT] as never)
+
+    const [group] = await lsxLinesService.draftFromOrders(['o1'])
+    expect(group.lines.map((l) => l.ship_date)).toEqual(['2026-12-30', '2026-11-20'])
+    expect(group.ship_date).toBe('2026-11-20')
+  })
+
   it('gap mang đúng tab hồ sơ để dẫn Sales tới chỗ sửa', () => {
     const snap = profileSnapshot(
       { ...PRODUCT, barcode: null, packing: {} } as never,

@@ -11,8 +11,15 @@ import {
   type DecimalSep,
 } from '@/lib/price-paste'
 import type { PricingBoard, PricingLine } from '@/modules/dept/sales/orders.service'
+import { avgLai, checkPrice, PRICE_NAME, type PlanPrice } from '@/lib/sale-price'
 
 export type Missing = { msg: string; focus?: string }
+
+/** Giá kế hoạch của một dòng theo khuôn lib/sale-price (null = SP chưa có / không quyền). */
+export const planOf = (l: PricingLine): PlanPrice | null =>
+  l.plan_price == null
+    ? null
+    : { cost: l.plan_cost, price: l.plan_price, currency: l.plan_currency ?? l.currency }
 
 /** Giá hợp lệ từ ô gõ: '' = chưa gõ (null), số âm / chữ = NaN. */
 export const parsePrice = (raw: string | undefined): number | null => {
@@ -26,13 +33,20 @@ export const parsePrice = (raw: string | undefined): number | null => {
  * DÁN / MỒI KHÔNG LƯU THẲNG — chỉ điền vào ô, người dùng soát rồi bấm Lưu.
  * Đây là tiền hợp đồng; một cú dán nhầm cột mà tự lưu là hỏng cả sổ đơn.
  */
-export function useDienGia(board: PricingBoard) {
+export function useDienGia(board: PricingBoard, initialOrder: string | null = null) {
   const toast = useToast()
   const router = useRouter()
   const [draft, setDraft] = useState<Record<string, string>>({})
-  const [onlyUnpriced, setOnlyUnpriced] = useState(true)
+  // Vào từ "Sửa giá" của một đơn → hiện MỌI dòng của đơn đó (giá đã có), không chỉ dòng thiếu giá.
+  const [onlyUnpriced, setOnlyUnprice] = useState(!initialOrder)
+  /** Lọc "dưới giá vốn" (bấm ô đếm) — đè lên lọc thiếu giá. */
+  const [belowOnly, setBelowOnly] = useState(false)
+  const setOnlyUnpriced = (v: boolean) => {
+    setOnlyUnprice(v)
+    setBelowOnly(false)
+  }
   const [customer, setCustomer] = useState('all')
-  const [order, setOrder] = useState('all')
+  const [order, setOrder] = useState(initialOrder ?? 'all')
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -59,10 +73,34 @@ export function useDienGia(board: PricingBoard) {
     return [...m.entries()].sort((a, b) => a[1].code.localeCompare(b[1].code))
   }, [board.lines, customer])
 
+  /** Giá đang có hiệu lực của dòng: số đang gõ (nếu hợp lệ), không thì số đã lưu. */
+  const effPrice = (l: PricingLine) => {
+    const t = parsePrice(draft[l.line_id])
+    return t == null || Number.isNaN(t) ? l.unit_price : t
+  }
+  /** Dòng bán dưới giá vốn KH — CÙNG hàm `checkPrice` với cột Lãi thực, để ô đếm và cột không lệch. */
+  const belowCostIds = useMemo(
+    () =>
+      new Set(
+        board.lines
+          .filter((l) => checkPrice(effPrice(l), l.currency, planOf(l)).below_cost)
+          .map((l) => l.line_id),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effPrice đọc draft (đã trong deps)
+    [board.lines, draft],
+  )
+
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return board.lines.filter((l) => {
-      if (onlyUnpriced && l.unit_price > 0 && draft[l.line_id] === undefined) return false
+      if (belowOnly && !belowCostIds.has(l.line_id)) return false
+      if (
+        !belowOnly &&
+        onlyUnpriced &&
+        l.unit_price > 0 &&
+        draft[l.line_id] === undefined
+      )
+        return false
       if (customer !== 'all' && l.customer_name !== customer) return false
       if (order !== 'all' && l.order_id !== order) return false
       if (!needle) return true
@@ -70,7 +108,30 @@ export function useDienGia(board: PricingBoard) {
         .toLowerCase()
         .includes(needle)
     })
-  }, [board.lines, onlyUnpriced, customer, order, q, draft])
+  }, [board.lines, onlyUnpriced, belowOnly, belowCostIds, customer, order, q, draft])
+
+  /** Σ lãi + lãi thực bình quân trên các dòng ĐANG HIỆN (giá hiệu lực, có giá vốn cùng tiền tệ). */
+  const rowsLai = useMemo(() => {
+    let gain = 0
+    const curs = new Set<string>()
+    const xs: Parameters<typeof avgLai>[0] = []
+    for (const l of rows) {
+      const price = effPrice(l)
+      const plan = planOf(l)
+      const c = checkPrice(price, l.currency, plan)
+      const comparable = !!plan && !c.currency_mismatch
+      xs.push({ price, qty: l.qty, cost: plan?.cost ?? null, comparable })
+      if (comparable && plan?.cost != null && price > 0) {
+        gain += (price - plan.cost) * l.qty
+        curs.add(l.currency)
+      }
+    }
+    const a = avgLai(xs)
+    // Nhiều tiền tệ thì KHÔNG cộng chung — trả cur null để màn nói thẳng.
+    const cur = curs.size === 1 ? [...curs][0] : null
+    return { gain, cur, pct: curs.size > 1 ? null : a.pct, n: a.n }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effPrice đọc draft (đã trong deps)
+  }, [rows, draft])
 
   /** Dòng thực sự đổi số — nguồn cho nút Lưu và chân bảng. */
   const dirty = useMemo(() => {
@@ -97,8 +158,15 @@ export function useDienGia(board: PricingBoard) {
         focus: `cell-${invalidIds[0]}`,
       })
     if (!dirty.length && !invalidIds.length) m.push({ msg: 'chưa gõ giá nào' })
+    // Q5 (13/10/2026): bán dưới giá vốn không chặn, nhưng bắt lý do — server cũng gác.
+    const below = dirty.filter((x) => belowCostIds.has(x.line.line_id)).length
+    if (below && !note.trim())
+      m.push({
+        msg: `ghi lý do: ${below} dòng dưới ${PRICE_NAME.cost}`,
+        focus: 'f-ly-do',
+      })
     return m
-  }, [dirty.length, invalidIds])
+  }, [dirty, invalidIds, belowCostIds, note])
 
   const totalByCurrency = useMemo(() => {
     const m = new Map<string, number>()
@@ -187,7 +255,16 @@ export function useDienGia(board: PricingBoard) {
   }
 
   async function save() {
-    if (missing.length) return
+    if (missing.length) {
+      // Nút Lưu góc trên vẫn bấm được khi thanh đáy đang khoá — đừng im lặng
+      // (soi UI 13/10/2026): nói thiếu gì và đưa con trỏ tới chỗ đầu tiên.
+      toast.error('Chưa lưu được', missing.map((m) => m.msg).join(' · '))
+      const id = missing.find((m) => m.focus)?.focus
+      const el = id ? document.getElementById(id) : null
+      el?.scrollIntoView({ block: 'center' })
+      el?.focus()
+      return
+    }
     setBusy(true)
     try {
       const res = await api<{ updated: number; orders: number }>(
@@ -217,6 +294,13 @@ export function useDienGia(board: PricingBoard) {
     setCell,
     onlyUnpriced,
     setOnlyUnpriced,
+    belowOnly,
+    showBelowCost: () => {
+      setBelowOnly(true)
+      setOnlyUnprice(false)
+    },
+    belowCostCount: belowCostIds.size,
+    rowsLai,
     customer,
     setCustomer: (v: string) => {
       setCustomer(v)

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import type { KeyboardEvent } from 'react'
 import { ClipboardPaste, Lock, Save, Target, X } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
@@ -17,8 +18,21 @@ import {
   Seg,
   ToolBtn,
 } from '../../_erp/ui'
+import {
+  EDGE,
+  GhiChuNoiBo,
+  GIA_TIP,
+  INT,
+  INT_HEAD,
+  NHOM,
+  NhomTh,
+  NutAnGiaNoiBo,
+  fmtPct,
+  useAnGiaNoiBo,
+} from '../../_erp/gia-noi-bo'
+import { checkPrice, PRICE_NAME } from '@/lib/sale-price'
 import { BTN_PRI, BTN_SUB, CELL, INPUT } from '../_form/don-form.shared'
-import { parsePrice, useDienGia, type DienGiaCtx } from './useDienGia'
+import { parsePrice, planOf, useDienGia, type DienGiaCtx } from './useDienGia'
 
 const TH =
   'h-7 border-b border-border bg-muted px-2 text-left text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase'
@@ -51,8 +65,17 @@ function gridKey(e: KeyboardEvent<HTMLInputElement>, r: number) {
  * Excel vào ngăn tại chỗ có xem trước — rồi Lưu MỘT lần. Dòng chưa có giá làm
  * doanh số, giá trị đơn và bảng tin Giám đốc ra 0.
  */
-export function DienGiaScreen({ board }: { board: PricingBoard }) {
-  const d = useDienGia(board)
+export function DienGiaScreen({
+  board,
+  initialOrder = null,
+}: {
+  board: PricingBoard
+  initialOrder?: string | null
+}) {
+  const d = useDienGia(board, initialOrder)
+  const an = useAnGiaNoiBo()
+  /** Nhóm NỘI BỘ hiện khi người xem có quyền thấy giá kế hoạch và không bấm ẩn. */
+  const cost = d.hasPlanColumn && !an.hidden
   const s = board.stats
   return (
     <ErpPage>
@@ -64,12 +87,23 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
           { label: 'Điền đơn giá' },
         ]}
         title="Điền đơn giá"
-        sub="Gõ giá cho từng dòng rồi lưu một lần — dán từ Excel hay mồi FOB kế hoạch đều chỉ điền vào ô, bạn soát rồi mới lưu."
+        sub="Gõ giá cho từng dòng rồi lưu một lần — dán từ Excel hay mồi Giá bán KH đều chỉ điền vào ô, bạn soát rồi mới lưu."
         actions={
           <>
             {d.hasPlanColumn && (
+              <NutAnGiaNoiBo
+                hidden={an.hidden}
+                onToggle={() => {
+                  // Đang lọc "dưới giá vốn" mà ẩn cột nội bộ thì lưới bị lọc theo
+                  // một tiêu chí không còn thấy trên màn (soi UI 13/10) — bỏ lọc đó.
+                  if (!an.hidden && d.belowOnly) d.setOnlyUnpriced(false)
+                  an.toggle()
+                }}
+              />
+            )}
+            {d.hasPlanColumn && (
               <ToolBtn onClick={d.fillFromPlan} icon={Target}>
-                Lấy FOB kế hoạch ({d.planFillable.length})
+                Lấy Giá bán KH ({d.planFillable.length})
               </ToolBtn>
             )}
             <ToolBtn onClick={() => d.setPasteOpen(!d.pasteOpen)} icon={ClipboardPaste}>
@@ -104,10 +138,23 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
         />
         {d.hasPlanColumn && (
           <CountCell
-            label="Mồi được FOB KH"
+            label="Mồi được Giá bán KH"
             value={String(d.planFillable.length)}
-            sub="dòng trống có FOB cùng tiền tệ"
+            sub="dòng trống có Giá bán KH cùng tiền tệ"
             onClick={d.fillFromPlan}
+          />
+        )}
+        {cost && (
+          <CountCell
+            internal
+            label={`Dưới ${PRICE_NAME.cost}`}
+            value={String(d.belowCostCount)}
+            sub={
+              d.belowCostCount ? 'bấm để lọc · lưu cần lý do' : 'không dòng nào bán lỗ'
+            }
+            tone={d.belowCostCount ? 'stop' : 'neutral'}
+            on={d.belowOnly}
+            onClick={d.showBelowCost}
           />
         )}
         <CountCell
@@ -121,12 +168,23 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
       <FilterRow>
         <Seg
           label="Hiện"
-          value={d.onlyUnpriced ? 'unpriced' : 'all'}
-          onChange={(v) => d.setOnlyUnpriced(v === 'unpriced')}
+          value={d.belowOnly ? 'below' : d.onlyUnpriced ? 'unpriced' : 'all'}
+          onChange={(v) =>
+            v === 'below' ? d.showBelowCost() : d.setOnlyUnpriced(v === 'unpriced')
+          }
           options={[
             { value: 'unpriced', label: 'Thiếu giá', count: s.unpriced },
             { value: 'all', label: 'Mọi dòng', count: s.lines_total },
+            ...(cost
+              ? [{ value: 'below', label: 'Dưới giá vốn', count: d.belowCostCount }]
+              : []),
           ]}
+        />
+        <GhiChuNoiBo
+          canSee={d.hasPlanColumn}
+          hidden={an.hidden}
+          cols={4}
+          onShow={an.toggle}
         />
         <Chon
           label="Khách"
@@ -168,71 +226,134 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
         <table className="w-full table-fixed border-collapse">
           <colgroup>
             <col className="w-9" />
-            <col className="w-[170px]" />
-            <col />
-            <col className="w-[84px]" />
-            {d.hasPlanColumn && <col className="w-[120px]" />}
             <col className="w-[150px]" />
-            {d.hasPlanColumn && <col className="w-[64px]" />}
-            <col className="w-[120px]" />
+            <col />
+            <col className="w-[72px]" />
+            <col className="w-[132px]" />
+            <col className="w-[112px]" />
+            {cost && (
+              <>
+                <col className="w-[92px]" />
+                <col className="w-[108px]" />
+                <col className="w-[80px]" />
+                <col className="w-[76px]" />
+              </>
+            )}
           </colgroup>
           <thead className="sticky top-0 z-10">
+            <tr>
+              <NhomTh kind="trong" colSpan={4} />
+              <NhomTh kind="khach" colSpan={2}>
+                {NHOM.order}
+              </NhomTh>
+              {cost && (
+                <NhomTh kind="noi-bo" colSpan={4}>
+                  {NHOM.int}
+                </NhomTh>
+              )}
+            </tr>
             <tr>
               <th className={`${TH} text-right`}>#</th>
               <th className={TH}>Đơn · khách</th>
               <th className={TH}>Sản phẩm · mã khách</th>
               <th className={`${TH} text-right`}>SL</th>
-              {d.hasPlanColumn && <th className={`${TH} text-right`}>FOB kế hoạch</th>}
-              <th className={`${TH} text-right`}>Đơn giá</th>
-              {d.hasPlanColumn && <th className={`${TH} text-right`}>± FOB</th>}
+              <th className={`${TH} text-right`}>{PRICE_NAME.order} *</th>
               <th className={`${TH} text-right`}>Thành tiền</th>
+              {cost && (
+                <>
+                  <th
+                    className={`${TH} ${INT_HEAD} ${EDGE} text-right`}
+                    title={GIA_TIP.cost}
+                  >
+                    {PRICE_NAME.cost}
+                  </th>
+                  <th className={`${TH} ${INT_HEAD} text-right`} title={GIA_TIP.plan}>
+                    {PRICE_NAME.plan}
+                  </th>
+                  <th className={`${TH} ${INT_HEAD} text-right`} title={GIA_TIP.vs}>
+                    ± Bán KH
+                  </th>
+                  <th className={`${TH} ${INT_HEAD} text-right`} title={GIA_TIP.lai}>
+                    Lãi thực
+                  </th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
             {d.rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={d.hasPlanColumn ? 8 : 6}
+                  colSpan={cost ? 10 : 6}
                   className="text-muted-foreground px-6 py-10 text-center text-[13px]"
                 >
-                  {d.onlyUnpriced
-                    ? 'Không còn dòng nào thiếu giá trong phạm vi lọc — chuyển "Mọi dòng" để sửa giá đã có.'
-                    : 'Không có dòng nào khớp bộ lọc.'}
+                  {d.belowOnly
+                    ? `Không còn dòng nào dưới ${PRICE_NAME.cost} trong phạm vi lọc.`
+                    : d.onlyUnpriced
+                      ? 'Không còn dòng nào thiếu giá trong phạm vi lọc — chuyển "Mọi dòng" để sửa giá đã có.'
+                      : 'Không có dòng nào khớp bộ lọc.'}
                 </td>
               </tr>
             )}
             {d.rows.map((l, i) => (
-              <Dong key={l.line_id} d={d} l={l} i={i} />
+              <Dong key={l.line_id} d={d} l={l} i={i} cost={cost} />
             ))}
           </tbody>
           {d.rows.length > 0 && (
             <tfoot className="sticky bottom-0 z-10">
               <tr className="bg-muted text-[12px] font-medium">
-                <td
-                  className="border-border h-8 border-t px-2"
-                  colSpan={d.hasPlanColumn ? 5 : 4}
-                >
+                <td className="border-border h-8 border-t px-2" colSpan={5}>
                   <span className="text-muted-foreground">
                     {d.rows.length} dòng đang hiện · {d.dirty.length} dòng sẽ lưu
-                    {d.belowPlan > 0 && (
+                    {cost && d.belowPlan > 0 && (
                       <span className="text-[var(--warn)]">
                         {' '}
-                        · {d.belowPlan} dòng gõ thấp hơn FOB KH
+                        · {d.belowPlan} dòng gõ thấp hơn {PRICE_NAME.plan}
                       </span>
                     )}
                   </span>
                 </td>
                 <td
-                  className="border-border h-8 border-t"
-                  colSpan={d.hasPlanColumn ? 2 : 1}
-                />
-                <td className={`border-border h-8 border-t px-2 ${NUM}`}>
+                  className={`border-border h-8 border-t px-2 ${NUM}`}
+                  title="Tổng tiền các dòng SẼ LƯU, theo tiền tệ — USD và VND không cộng chung"
+                >
                   {d.totalByCurrency.length
                     ? d.totalByCurrency
                         .map(([cur, v]) => `${money(v, cur)} ${cur}`)
                         .join(' · ')
                     : '—'}
                 </td>
+                {cost && (
+                  <>
+                    <td
+                      className={`border-border text-muted-foreground h-8 border-t px-2 font-normal ${INT_HEAD} ${EDGE}`}
+                      colSpan={3}
+                      title="Σ (giá − giá vốn KH) × SL trên các dòng đang hiện có giá vốn cùng tiền tệ"
+                    >
+                      {d.rowsLai.cur ? (
+                        <>
+                          Σ lãi{' '}
+                          <span
+                            className={`font-mono ${d.rowsLai.gain < 0 ? 'text-[var(--stop)]' : 'text-foreground'}`}
+                          >
+                            {money(d.rowsLai.gain, d.rowsLai.cur)}
+                          </span>{' '}
+                          {d.rowsLai.cur} · {d.rowsLai.n} dòng có giá vốn
+                        </>
+                      ) : d.rowsLai.n ? (
+                        'Nhiều tiền tệ — lọc theo khách để xem Σ lãi'
+                      ) : (
+                        `Chưa dòng nào có ${PRICE_NAME.cost}`
+                      )}
+                    </td>
+                    <td
+                      className={`border-border h-8 border-t px-2 ${NUM} ${INT_HEAD} ${d.rowsLai.pct != null && d.rowsLai.pct < 0 ? 'text-[var(--stop)]' : ''}`}
+                      title="Lãi thực bình quân, gia quyền theo trị giá"
+                    >
+                      {fmtPct(d.rowsLai.pct)}
+                    </td>
+                  </>
+                )}
               </tr>
             </tfoot>
           )}
@@ -275,15 +396,16 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
         ) : (
           <span className="text-[13px] text-[var(--done)]">
             Đủ điều kiện lưu
-            {d.belowPlan > 0
-              ? ` — ${d.belowPlan} dòng thấp hơn FOB KH, bạn đã soát?`
+            {cost && d.belowPlan > 0
+              ? ` — ${d.belowPlan} dòng thấp hơn ${PRICE_NAME.plan}, bạn đã soát?`
               : ''}
           </span>
         )}
         <input
+          id="f-ly-do"
           value={d.note}
           onChange={(e) => d.setNote(e.target.value)}
-          placeholder="Lý do / nguồn giá (vào lịch sử đơn, không bắt buộc)"
+          placeholder={`Lý do / nguồn giá (vào lịch sử đơn) — bắt buộc khi dưới ${PRICE_NAME.cost}`}
           className={`${INPUT} min-w-[240px] flex-1`}
         />
         <button
@@ -320,22 +442,37 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
   )
 }
 
-function Dong({ d, l, i }: { d: DienGiaCtx; l: PricingLine; i: number }) {
+function Dong({
+  d,
+  l,
+  i,
+  cost,
+}: {
+  d: DienGiaCtx
+  l: PricingLine
+  i: number
+  cost: boolean
+}) {
   const raw = d.draft[l.line_id]
   const typed = parsePrice(raw)
   const price = typed == null ? l.unit_price : typed
   const bad = Number.isNaN(typed)
   const changed = !bad && typed != null && typed !== l.unit_price
-  const samePlan = l.plan_price != null && l.plan_currency === l.currency
-  const diff =
-    samePlan && Number.isFinite(price) && price > 0
-      ? ((price - l.plan_price!) / l.plan_price!) * 100
-      : null
+  const plan = planOf(l)
+  const chk = checkPrice(Number.isFinite(price) ? price : 0, l.currency, plan)
+  const mm = chk.currency_mismatch
+  const flag = !cost
+    ? ''
+    : chk.below_cost
+      ? 'shadow-[inset_3px_0_0_var(--stop)]'
+      : chk.below_plan
+        ? 'shadow-[inset_3px_0_0_var(--warn)]'
+        : ''
   return (
     <tr
       className={`${changed ? 'bg-[var(--accent)]/40' : 'hover:bg-muted/40'} ${l.editable ? '' : 'text-muted-foreground'}`}
     >
-      <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
+      <td className={`${TD} ${NUM} text-muted-foreground ${flag}`}>{i + 1}</td>
       <td className={`${TD} min-w-0`}>
         <Link
           href={`/sales/orders/${l.order_id}`}
@@ -365,36 +502,6 @@ function Dong({ d, l, i }: { d: DienGiaCtx; l: PricingLine; i: number }) {
         {money(l.qty, 'VND')}
         <span className={`${SUB} text-right font-sans`}>{l.product_unit}</span>
       </td>
-      {d.hasPlanColumn && (
-        <td className={`${TD} ${NUM} text-muted-foreground`}>
-          {l.plan_price != null ? (
-            <>
-              {money(l.plan_price, l.plan_currency ?? l.currency)}
-              <span className={`${SUB} text-right font-sans`}>
-                {l.plan_currency !== l.currency ? (
-                  <span className="text-[var(--warn)]">{l.plan_currency} ≠ đơn</span>
-                ) : l.editable &&
-                  l.unit_price <= 0 &&
-                  (raw === undefined || raw === '') ? (
-                  <button
-                    type="button"
-                    className="text-[var(--primary)] hover:underline"
-                    onClick={() =>
-                      d.applyMany([{ line_id: l.line_id, price: l.plan_price! }])
-                    }
-                  >
-                    lấy giá này
-                  </button>
-                ) : (
-                  l.plan_currency
-                )}
-              </span>
-            </>
-          ) : (
-            '—'
-          )}
-        </td>
-      )}
       <td className={`${TD} px-1`}>
         <div className="flex items-center gap-1">
           {!l.editable && (
@@ -412,24 +519,22 @@ function Dong({ d, l, i }: { d: DienGiaCtx; l: PricingLine; i: number }) {
             onChange={(e) => d.setCell(l.line_id, e.target.value)}
             onKeyDown={(e) => gridKey(e, i)}
             placeholder="0"
-            className={`${CELL} ${NUM} ${bad ? 'border-[var(--stop)]' : changed ? 'border-[var(--primary)]' : l.editable && l.unit_price <= 0 ? 'border-[var(--warn)]/60' : ''}`}
+            className={cn(
+              CELL,
+              `${NUM} ${bad || (cost && chk.below_cost) ? 'border-[var(--stop)]' : changed ? 'border-[var(--primary)]' : l.editable && l.unit_price <= 0 ? 'border-[var(--warn)]/60' : ''}`,
+            )}
             aria-label={`Đơn giá ${l.product_code} của đơn ${l.order_code}`}
             title={
-              l.editable
-                ? undefined
-                : 'Đơn của người khác — chỉ người tạo hoặc quản lý sửa'
+              !l.editable
+                ? 'Đơn của người khác — chỉ người tạo hoặc quản lý sửa'
+                : cost && chk.below_cost
+                  ? `Dưới ${PRICE_NAME.cost} — lưu cần ghi lý do`
+                  : undefined
             }
           />
           <span className="text-muted-foreground w-8 shrink-0 text-xs">{l.currency}</span>
         </div>
       </td>
-      {d.hasPlanColumn && (
-        <td
-          className={`${TD} ${NUM} text-xs ${diff == null ? 'text-muted-foreground' : diff < 0 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
-        >
-          {diff == null ? '—' : `${diff >= 0 ? '+' : ''}${Math.round(diff * 10) / 10}%`}
-        </td>
-      )}
       <td className={`${TD} ${NUM} ${changed ? 'font-medium' : ''}`}>
         {Number.isFinite(price) && price > 0 ? (
           money(price * l.qty, l.currency)
@@ -437,6 +542,62 @@ function Dong({ d, l, i }: { d: DienGiaCtx; l: PricingLine; i: number }) {
           <span className="text-muted-foreground">—</span>
         )}
       </td>
+      {cost && (
+        <>
+          <td
+            className={`${TD} ${NUM} ${INT} ${EDGE} text-muted-foreground`}
+            title={
+              plan && plan.cost == null
+                ? `SP mới có ${PRICE_NAME.plan}, chưa bóc giá vốn`
+                : undefined
+            }
+          >
+            {plan?.cost != null
+              ? `${money(plan.cost, plan.currency)}${mm ? ` ${plan.currency}` : ''}`
+              : plan
+                ? 'chưa bóc'
+                : '—'}
+          </td>
+          <td className={`${TD} ${NUM} ${INT} text-muted-foreground`}>
+            {plan ? (
+              <>
+                {money(plan.price, plan.currency)}
+                <span className={`${SUB} text-right font-sans`}>
+                  {mm ? (
+                    <span className="text-[var(--warn)]">{plan.currency} ≠ đơn</span>
+                  ) : l.editable &&
+                    l.unit_price <= 0 &&
+                    (raw === undefined || raw === '') ? (
+                    <button
+                      type="button"
+                      className="text-[var(--primary)] hover:underline"
+                      onClick={() =>
+                        d.applyMany([{ line_id: l.line_id, price: plan.price }])
+                      }
+                    >
+                      lấy giá này
+                    </button>
+                  ) : (
+                    plan.currency
+                  )}
+                </span>
+              </>
+            ) : (
+              '—'
+            )}
+          </td>
+          <td
+            className={`${TD} ${NUM} ${INT} ${chk.vs_plan_pct != null && chk.vs_plan_pct < 0 ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+          >
+            {fmtPct(chk.vs_plan_pct, true)}
+          </td>
+          <td
+            className={`${TD} ${NUM} ${INT} ${chk.lai_pct == null ? 'text-muted-foreground' : chk.lai_pct < 0 ? 'text-[var(--stop)]' : ''}`}
+          >
+            {fmtPct(chk.lai_pct)}
+          </td>
+        </>
+      )}
     </tr>
   )
 }

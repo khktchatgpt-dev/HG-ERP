@@ -4,6 +4,8 @@ import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { ImportQuoteScreen } from './ImportQuoteScreen'
 
+export const metadata = { title: 'Bán hàng · Nhập báo giá từ Excel' }
+
 /**
  * Nhập báo giá từ file Excel — dành cho tờ báo giá có SẢN PHẨM MỚI (ảnh + thông
  * số đi kèm trong file). Gác quyền y như lập báo giá tay.

@@ -114,8 +114,8 @@ export function PhanTichDoanhSoScreen({
             tone={t.phu < 0.5 ? 'warn' : 'neutral'}
             sub={
               t.lai_pct == null
-                ? 'chưa SP nào có giá thành bóc tách'
-                : `${usd(t.lai)} USD · chỉ trên ${pct(t.phu)} trị giá có giá thành`
+                ? 'chưa SP nào có Giá vốn KH bóc tách'
+                : `${usd(t.lai)} USD · chỉ trên ${pct(t.phu)} trị giá có Giá vốn KH`
             }
             width="min-w-[220px] flex-[1.4] basis-0"
           />
@@ -168,7 +168,7 @@ export function PhanTichDoanhSoScreen({
                     <th className={`${TH} text-right`}>% tổng</th>
                     {canSeeCost && <th className={`${TH} text-right`}>Lãi KH USD</th>}
                     {canSeeCost && <th className={`${TH} text-right`}>Lãi KH %</th>}
-                    {canSeeCost && <th className={`${TH} text-right`}>Có giá thành</th>}
+                    {canSeeCost && <th className={`${TH} text-right`}>Có giá vốn KH</th>}
                     {chieu === 'khach' && <th className={`${TH} w-20`} />}
                   </tr>
                 </thead>
@@ -279,7 +279,7 @@ export function PhanTichDoanhSoScreen({
             — chưa có mùa trước để so. Số đơn ở chân bảng là số đơn khác nhau (một đơn có
             thể nằm ở nhiều dòng).
             {canSeeCost &&
-              ' Lãi KH = SL × lãi/SP của giá thành kế hoạch, chỉ trên SP có giá thành bóc tách; % lãi chia cho trị giá của chính các dòng đó. Đơn giá đang được điền từ giá FOB kế hoạch nên chưa so được bán trên / dưới giá.'}
+              ' Lãi KH = SL × Lãi KH/SP (màn Tính giá SP), chỉ trên SP có Giá vốn KH bóc tách; % lãi chia cho trị giá của chính các dòng đó. Đơn giá đang được điền từ Giá bán KH nên chưa so được bán trên / dưới giá.'}
           </p>
         </Panel>
       </div>

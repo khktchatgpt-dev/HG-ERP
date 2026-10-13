@@ -7,6 +7,8 @@ import { quoteNetPrice } from '@/lib/quote-price'
 import { SoBaoGiaScreen } from './SoBaoGiaScreen'
 import type { BaoGiaRow } from './so-bao-gia.shared'
 
+export const metadata = { title: 'Bán hàng · Sổ báo giá' }
+
 /**
  * Sổ BÁO GIÁ (khuôn C, kiểu ERP — 07/10/2026). Gác quyền qua RBAC; tải song
  * song: báo giá · dòng (trị giá tham chiếu) · đơn đã ra · số bản sửa đổi · người lập.

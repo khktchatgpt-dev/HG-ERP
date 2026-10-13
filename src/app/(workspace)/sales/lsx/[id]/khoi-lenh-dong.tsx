@@ -21,7 +21,7 @@ export function KhoiLenhDong({ d }: { d: LenhCtx }) {
       note={
         d.tong.bomMissing > 0 ? (
           <span className="text-[var(--warn)]">
-            {d.tong.bomMissing} dòng có SP chưa có định mức
+            {d.tong.bomMissing} dòng có SP chưa chốt BOM
           </span>
         ) : undefined
       }

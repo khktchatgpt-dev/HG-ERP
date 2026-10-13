@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { todayVn } from '@/lib/date-vn'
 import { quoteNetPrice } from '@/lib/quote-price'
+import { avgLai, checkPrice, vsPlanTotal } from '@/lib/sale-price'
 import type { BaoGiaView, DonView, DongBaoGia, RevisionView } from './bao-gia.shared'
 
 export type BaoGiaProps = {
@@ -37,30 +38,42 @@ export function useBaoGia(p: BaoGiaProps) {
     let noQty = 0
     let zero = 0
     let below = 0
-    let margins: number[] = []
+    let belowPlan = 0
+    let gain = 0
+    let gainN = 0
+    const rows: Parameters<typeof avgLai>[0] = []
+    const vsRows: Parameters<typeof vsPlanTotal>[0] = []
     for (const l of p.lines) {
       const net = quoteNetPrice(l.unit_price, l.discount_pct)
       if (!(net > 0)) zero++
       if (l.qty) ref += l.qty * net
       else noQty++
-      const cost = l.plan_snapshot ?? l.plan_price
-      if (cost != null && net > 0) {
-        if (net < cost) below++
-        margins.push(((net - cost) / net) * 100)
+      const c = checkPrice(net, p.quote.currency, l.plan)
+      if (c.below_cost) below++
+      else if (c.below_plan) belowPlan++
+      const comparable = !!l.plan && !c.currency_mismatch
+      rows.push({ price: net, qty: l.qty, cost: l.plan?.cost ?? null, comparable })
+      vsRows.push({ price: net, qty: l.qty, plan: l.plan?.price ?? null, comparable })
+      if (comparable && l.plan?.cost != null && net > 0 && l.qty) {
+        gain += (net - l.plan.cost) * l.qty
+        gainN++
       }
     }
-    margins = margins.filter((m) => Number.isFinite(m))
+    // Lãi thực bình quân GIA QUYỀN theo trị giá — trước đây là trung bình cộng % (13/10/2026).
+    const lai = avgLai(rows)
     return {
       ref,
       noQty,
       zero,
       below,
-      withCost: margins.length,
-      avgMargin: margins.length
-        ? margins.reduce((s, m) => s + m, 0) / margins.length
-        : null,
+      belowPlan,
+      // null = không dòng nào tính được lãi (thiếu SL / chưa bóc vốn) — đừng in "0,00".
+      gain: gainN ? gain : null,
+      withCost: lai.n,
+      avgLai: lai.pct,
+      vsPlan: vsPlanTotal(vsRows),
     }
-  }, [p.lines])
+  }, [p.lines, p.quote.currency])
 
   const expired =
     !!q.valid_to &&
@@ -98,7 +111,7 @@ export function useBaoGia(p: BaoGiaProps) {
       case 'approved':
         return 'Gửi khách'
       case 'rejected':
-        return 'Sửa theo lý do từ chối, trình lại'
+        return `GĐ trả lại: "${q.rejected_reason ?? 'không ghi lý do'}" — sửa rồi trình lại`
       case 'sent':
         return expired
           ? 'Hết hiệu lực — lập bản sửa đổi'

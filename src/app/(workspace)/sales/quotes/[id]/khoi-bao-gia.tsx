@@ -1,9 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Panel, TH, TD, NUM, Nhan } from '../../_erp/ui'
+import { Panel, Nhan } from '../../_erp/ui'
 import { DocumentFiles } from '@/components/DocumentFiles'
-import { quoteNetPrice } from '@/lib/quote-price'
 import { orderStatusLabel, orderStatusTone } from '@/lib/order-status-ui'
 import { QUOTE_LABEL, quoteTone } from '../so-bao-gia.shared'
 import {
@@ -12,182 +11,12 @@ import {
   BTN_SUB,
   fmtD,
   fmtDT,
-  fmtMoney,
-  fmtN,
   INPUT,
   Nhom,
   TEXTAREA,
   Truong,
 } from './bao-gia.shared'
 import type { BaoGiaCtx } from './useBaoGia'
-
-/* ── Lưới dòng: nhân vật chính ──────────────────────────────────────────── */
-export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
-  const cost = d.canSeeCost
-  const cols = 9 + (cost ? 2 : 0)
-  return (
-    <Panel
-      title="Dòng sản phẩm"
-      count={d.lines.length}
-      label="Dòng sản phẩm"
-      note={
-        cost && d.tong.below > 0 ? (
-          <span className="text-[var(--stop)]">
-            {d.tong.below} dòng chào DƯỚI giá thành kế hoạch
-          </span>
-        ) : d.tong.zero > 0 ? (
-          <span className="text-[var(--warn)]">{d.tong.zero} dòng chưa có đơn giá</span>
-        ) : undefined
-      }
-      actions={
-        d.can.edit ? (
-          <Link
-            href={`/sales/quotes/${d.quote.id}/edit`}
-            className="text-xs text-[var(--primary)] hover:underline"
-          >
-            Sửa dòng
-          </Link>
-        ) : undefined
-      }
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[940px] border-collapse">
-          <thead>
-            <tr>
-              <th className={`${TH} w-9 text-right`}>#</th>
-              <th className={`${TH} w-[118px]`}>Mã SP</th>
-              <th className={`${TH} w-[100px]`}>Mã khách</th>
-              <th className={TH}>Tên</th>
-              <th className={`${TH} w-12`}>ĐVT</th>
-              <th className={`${TH} w-[72px] text-right`}>SL/MOQ</th>
-              {cost && <th className={`${TH} w-[92px] text-right`}>Giá thành</th>}
-              <th className={`${TH} w-[88px] text-right`}>Đơn giá</th>
-              <th className={`${TH} w-[52px] text-right`}>CK%</th>
-              <th className={`${TH} w-[96px] text-right`}>Giá chào</th>
-              {cost && <th className={`${TH} w-[60px] text-right`}>Lãi</th>}
-              <th className={`${TH} w-[130px]`}>Ghi chú</th>
-            </tr>
-          </thead>
-          <tbody>
-            {d.lines.map((l, i) => {
-              const net = quoteNetPrice(l.unit_price, l.discount_pct)
-              const c = l.plan_snapshot ?? l.plan_price
-              const margin = c != null && net > 0 ? ((net - c) / net) * 100 : null
-              return (
-                <tr key={l.id} className="hover:bg-muted/40">
-                  <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
-                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
-                    <Link
-                      href={`/products/${l.product_id}`}
-                      className="text-[var(--primary)] hover:underline"
-                    >
-                      {l.product_code}
-                    </Link>
-                  </td>
-                  <td
-                    className={`${TD} max-w-[120px] truncate font-mono text-xs`}
-                    title={l.customer_item_code ?? ''}
-                  >
-                    {l.customer_item_code ?? '—'}
-                  </td>
-                  <td className={`${TD} truncate`} title={l.product_name}>
-                    {l.product_name}
-                    {l.packing_text && (
-                      <span className="text-muted-foreground block truncate text-[11px]">
-                        {l.packing_text}
-                      </span>
-                    )}
-                  </td>
-                  <td className={`${TD} text-muted-foreground`}>{l.product_unit}</td>
-                  <td className={`${TD} ${NUM} ${l.qty ? '' : 'text-muted-foreground'}`}>
-                    {l.qty ? fmtN(l.qty) : '—'}
-                  </td>
-                  {cost && (
-                    <td
-                      className={`${TD} ${NUM} text-muted-foreground`}
-                      title={
-                        l.plan_snapshot != null &&
-                        l.plan_price != null &&
-                        l.plan_snapshot !== l.plan_price
-                          ? `lúc chào ${fmtMoney(l.plan_snapshot)} · hiện ${fmtMoney(l.plan_price)}`
-                          : undefined
-                      }
-                    >
-                      {c != null ? fmtMoney(c) : '—'}
-                    </td>
-                  )}
-                  <td
-                    className={`${TD} ${NUM} ${l.unit_price > 0 ? '' : 'text-[var(--warn)]'}`}
-                  >
-                    {l.unit_price > 0 ? fmtMoney(l.unit_price) : 'giá 0'}
-                  </td>
-                  <td className={`${TD} ${NUM} text-muted-foreground`}>
-                    {l.discount_pct ? l.discount_pct : '—'}
-                  </td>
-                  <td className={`${TD} ${NUM} font-medium`}>
-                    {net > 0 ? fmtMoney(net) : '—'}
-                  </td>
-                  {cost && (
-                    <td
-                      className={`${TD} ${NUM} ${margin == null ? 'text-muted-foreground' : margin < 0 ? 'text-[var(--stop)]' : margin < 10 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
-                    >
-                      {margin == null ? '—' : `${margin.toFixed(1)}%`}
-                    </td>
-                  )}
-                  <td className={`${TD} truncate text-xs`} title={l.note ?? ''}>
-                    {l.note ?? ''}
-                  </td>
-                </tr>
-              )
-            })}
-            {d.lines.length === 0 && (
-              <tr>
-                <td
-                  colSpan={cols + 1}
-                  className={`${TD} text-muted-foreground py-6 text-center`}
-                >
-                  Báo giá chưa có dòng — bấm Sửa để thêm sản phẩm.
-                </td>
-              </tr>
-            )}
-          </tbody>
-          <tfoot>
-            <tr className="bg-muted/60 font-medium">
-              <td className={`${TD} border-b-0`} colSpan={5}>
-                Cộng {d.lines.length} dòng
-                <span className="text-muted-foreground ml-2 text-xs font-normal">
-                  · trị giá tham chiếu = Σ net × SL (chỉ dòng có SL
-                  {d.tong.noQty ? `, thiếu ${d.tong.noQty} dòng` : ''})
-                </span>
-              </td>
-              <td className={`${TD} ${NUM} border-b-0`}>
-                {fmtN(d.lines.reduce((s, l) => s + (l.qty ?? 0), 0))}
-              </td>
-              {cost && <td className={`${TD} border-b-0`} />}
-              <td className={`${TD} border-b-0`} colSpan={2} />
-              <td className={`${TD} ${NUM} border-b-0`}>
-                {d.tong.ref > 0 ? (
-                  <>
-                    {fmtMoney(d.tong.ref)}{' '}
-                    <span className="text-muted-foreground">{d.quote.currency}</span>
-                  </>
-                ) : (
-                  '—'
-                )}
-              </td>
-              {cost && (
-                <td className={`${TD} ${NUM} border-b-0`}>
-                  {d.tong.avgMargin != null ? `${d.tong.avgMargin.toFixed(1)}%` : '—'}
-                </td>
-              )}
-              <td className={`${TD} border-b-0`} />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </Panel>
-  )
-}
 
 function Chan({
   d,

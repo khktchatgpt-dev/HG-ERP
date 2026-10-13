@@ -148,21 +148,37 @@ export function SoLenhScreen(props: SoLenhProps) {
       </FilterRow>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[1240px] border-collapse">
+        {/* 9 cột table-fixed (soi UI 13/10/2026): bản 12 cột rộng 1.481px phải cuộn
+            ngang ở 1280. Đơn xuống dưới số lệnh, người lập dưới khách, đã xếp lô
+            dưới SL — đủ thông tin cũ, vừa 1.053px (1280 trừ sidebar). */}
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-9" />
+            <col className="w-[150px]" />
+            <col className="w-[130px]" />
+            <col className="w-[120px]" />
+            <col className="w-[130px]" />
+            <col className="w-[84px]" />
+            <col className="w-[104px]" />
+            <col />
+            <col className="w-[96px]" />
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className={`${TH} w-10 text-right`}>#</th>
-              <th className={`${TH} w-[170px]`}>Số lệnh</th>
-              <th className={`${TH} w-[160px]`}>Khách hàng</th>
-              <th className={`${TH} w-[150px]`}>Đơn</th>
-              <th className={`${TH} w-[130px]`}>Trạng thái</th>
-              <th className={`${TH} w-[150px]`}>Công đoạn</th>
-              <th className={`${TH} w-[90px]`}>Vật tư</th>
-              <th className={`${TH} w-[110px]`}>Hạn xuất</th>
-              <th className={`${TH} w-[190px]`}>Lô kế tiếp</th>
-              <th className={`${TH} w-20 text-right`}>SL</th>
-              <th className={`${TH} w-20 text-right`}>Đã xếp lô</th>
-              <th className={`${TH} w-[90px]`}>Người lập</th>
+              <th className={`${TH} text-right`}>#</th>
+              <th className={TH}>Số lệnh · đơn</th>
+              <th className={TH}>Khách · người lập</th>
+              <th className={TH}>Trạng thái</th>
+              <th className={TH}>Công đoạn</th>
+              <th className={TH}>Vật tư</th>
+              <th className={TH}>Hạn xuất</th>
+              <th className={TH}>Lô kế tiếp</th>
+              <th
+                className={`${TH} text-right`}
+                title="SL của lệnh · dòng dưới: đã xếp vào lô"
+              >
+                SL · xếp lô
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -173,35 +189,36 @@ export function SoLenhScreen(props: SoLenhProps) {
               return (
                 <tr key={r.id} className="hover:bg-muted/40">
                   <td className={`${TD} ${NUM} text-muted-foreground`}>{i + 1}</td>
-                  <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
-                    <Link
-                      href={`/sales/lsx/${r.id}`}
-                      className="text-[var(--primary)] hover:underline"
+                  <td className={`${TD} min-w-0`}>
+                    <span className="flex items-center gap-1 font-mono text-xs whitespace-nowrap">
+                      <Link
+                        href={`/sales/lsx/${r.id}`}
+                        className="truncate text-[var(--primary)] hover:underline"
+                      >
+                        {r.code}
+                      </Link>
+                      {r.revision > 1 && <Nhan tone="warn">bản {r.revision}</Nhan>}
+                    </span>
+                    <span
+                      className="text-muted-foreground block truncate font-mono text-[11px] leading-4"
+                      title={r.order_codes.join(', ')}
                     >
-                      {r.code}
-                    </Link>
-                    {r.revision > 1 && (
-                      <span className="ml-1">
-                        <Nhan tone="warn">bản {r.revision}</Nhan>
-                      </span>
-                    )}
+                      {r.order_codes[0] ?? '—'}
+                      {r.order_codes.length > 1 && ` +${r.order_codes.length - 1}`}
+                    </span>
                   </td>
-                  <td className={`${TD} truncate`} title={r.customer_name}>
-                    {r.customer_name}
+                  <td className={`${TD} min-w-0`}>
+                    <span className="block truncate" title={r.customer_name}>
+                      {r.customer_name}
+                    </span>
+                    <span
+                      className="text-muted-foreground block truncate text-[11px] leading-4"
+                      title={r.created_by_name ?? ''}
+                    >
+                      {shortName(r.created_by_name)}
+                    </span>
                   </td>
-                  <td
-                    className={`${TD} truncate font-mono text-xs`}
-                    title={r.order_codes.join(', ')}
-                  >
-                    {r.order_codes[0] ?? '—'}
-                    {r.order_codes.length > 1 && (
-                      <span className="text-muted-foreground">
-                        {' '}
-                        +{r.order_codes.length - 1}
-                      </span>
-                    )}
-                  </td>
-                  <td className={TD}>
+                  <td className={`${TD} overflow-hidden`}>
                     <Nhan tone={lsxTone(r.status)}>
                       {LSX_LABEL[r.status] ?? r.status}
                     </Nhan>
@@ -237,10 +254,14 @@ export function SoLenhScreen(props: SoLenhProps) {
                   <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
                     {fmtD(r.ship_date)}
                     {run && days != null && days < 0 && (
-                      <span className="ml-1 text-[var(--stop)]">quá {-days}n</span>
+                      <span className="block text-[11px] leading-4 text-[var(--stop)]">
+                        quá {-days} ngày
+                      </span>
                     )}
                     {run && days != null && days >= 0 && days <= 14 && (
-                      <span className="ml-1 text-[var(--warn)]">còn {days}n</span>
+                      <span className="block text-[11px] leading-4 text-[var(--warn)]">
+                        còn {days} ngày
+                      </span>
                     )}
                   </td>
                   <td className={`${TD} truncate text-xs`}>
@@ -266,14 +287,13 @@ export function SoLenhScreen(props: SoLenhProps) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className={`${TD} ${NUM}`}>{fmtN(r.qty)}</td>
-                  <td
-                    className={`${TD} ${NUM} ${r.lot_qty < r.qty && run ? 'text-[var(--warn)]' : ''}`}
-                  >
-                    {r.lots ? fmtN(r.lot_qty) : '—'}
-                  </td>
-                  <td className={`${TD} text-xs`} title={r.created_by_name ?? ''}>
-                    {shortName(r.created_by_name)}
+                  <td className={`${TD} ${NUM}`}>
+                    {fmtN(r.qty)}
+                    <span
+                      className={`block text-[11px] leading-4 ${r.lot_qty < r.qty && run ? 'text-[var(--warn)]' : 'text-muted-foreground'}`}
+                    >
+                      {r.lots ? `xếp ${fmtN(r.lot_qty)}` : '—'}
+                    </span>
                   </td>
                 </tr>
               )
@@ -281,7 +301,7 @@ export function SoLenhScreen(props: SoLenhProps) {
             {d.visible.length === 0 && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={9}
                   className={`${TD} text-muted-foreground py-8 text-center`}
                 >
                   Không có lệnh nào khớp. Đổi ô đếm phía trên, bỏ lọc khách hoặc xoá từ
@@ -292,7 +312,7 @@ export function SoLenhScreen(props: SoLenhProps) {
           </tbody>
           <tfoot className="sticky bottom-0 z-10">
             <tr className="bg-muted font-medium">
-              <td className={`${TD} border-t`} colSpan={9}>
+              <td className={`${TD} border-t`} colSpan={8}>
                 Cộng {fmtN(d.filtered.length)} lệnh
                 {d.filtered.length > d.visible.length && (
                   <button
@@ -306,11 +326,10 @@ export function SoLenhScreen(props: SoLenhProps) {
               </td>
               <td className={`${TD} ${NUM} border-t`}>
                 {fmtN(d.filtered.reduce((s, r) => s + r.qty, 0))}
+                <span className="text-muted-foreground block text-[11px] leading-4 font-normal">
+                  xếp {fmtN(d.filtered.reduce((s, r) => s + r.lot_qty, 0))}
+                </span>
               </td>
-              <td className={`${TD} ${NUM} border-t`}>
-                {fmtN(d.filtered.reduce((s, r) => s + r.lot_qty, 0))}
-              </td>
-              <td className={`${TD} border-t`} />
             </tr>
           </tfoot>
         </table>

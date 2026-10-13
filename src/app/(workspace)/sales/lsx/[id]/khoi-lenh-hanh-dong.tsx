@@ -180,7 +180,7 @@ function GuiDuyet({ d }: { d: LenhCtx }) {
       />
       {d.tong.bomMissing > 0 && (
         <p className="mb-2 text-xs text-[var(--warn)]">
-          {d.tong.bomMissing} dòng có SP chưa có định mức — vẫn gửi được, Kỹ thuật sẽ được
+          {d.tong.bomMissing} dòng có SP chưa chốt BOM — vẫn gửi được, Kỹ thuật sẽ được
           báo.
         </p>
       )}
