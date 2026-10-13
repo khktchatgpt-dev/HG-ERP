@@ -54,6 +54,9 @@ export type DeNghiDay = DeNghi & {
   lines: DeNghiDong[]
 }
 
+/** Sổ kho của một dòng đề nghị: đã nhập (vào − ra), tiền thật (Σ SL × đơn giá), phiếu nhập. */
+export type SoKhoDong = { daNhap: number; tien: number; phieu: PhieuNhapDong[] }
+
 /** Một phiếu nhập kho đã nhập cho dòng đề nghị (chưa bị đảo). */
 export type PhieuNhapDong = {
   doc_id: string
@@ -252,13 +255,12 @@ export const deNghiRepo = {
    * dòng sổ trỏ về dòng đề nghị. Dòng đảo phiếu chép lại `purchase_request_line_id`
    * nên đảo PNK tự trừ; phiếu nhập đã bị đảo không liệt kê ở `phieu`.
    */
-  async soKho(
-    lineIds: string[],
-  ): Promise<Map<string, { daNhap: number; phieu: PhieuNhapDong[] }>> {
+  async soKho(lineIds: string[]): Promise<Map<string, SoKhoDong>> {
     type R = {
       purchase_request_line_id: string
       direction: string
       qty: unknown
+      unit_cost: unknown
       doc:
         | {
             id: string
@@ -278,7 +280,7 @@ export const deNghiRepo = {
       db()
         .from('warehouse_movements')
         .select(
-          'purchase_request_line_id, direction, qty, doc:warehouse_docs!warehouse_movements_doc_id_fkey(id, code, doc_date, reversal_of_doc_id)',
+          'purchase_request_line_id, direction, qty, unit_cost, doc:warehouse_docs!warehouse_movements_doc_id_fkey(id, code, doc_date, reversal_of_doc_id)',
         )
         .in('purchase_request_line_id', lo),
     )
@@ -287,12 +289,15 @@ export const deNghiRepo = {
       const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
       if (d?.reversal_of_doc_id) daDao.add(d.reversal_of_doc_id)
     }
-    const out = new Map<string, { daNhap: number; phieu: PhieuNhapDong[] }>()
+    const out = new Map<string, SoKhoDong>()
     for (const r of rows) {
       const k = r.purchase_request_line_id
-      const cur = out.get(k) ?? { daNhap: 0, phieu: [] }
+      const cur = out.get(k) ?? { daNhap: 0, tien: 0, phieu: [] }
       const q = Number(r.qty) || 0
-      cur.daNhap += r.direction === 'in' ? q : -q
+      const dau = r.direction === 'in' ? 1 : -1
+      cur.daNhap += dau * q
+      // Dòng đảo chép unit_cost của dòng gốc (reverseDoc) nên tiền cũng tự trừ.
+      if (r.unit_cost != null) cur.tien += dau * q * (Number(r.unit_cost) || 0)
       const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
       if (r.direction === 'in' && d && !d.reversal_of_doc_id && !daDao.has(d.id)) {
         const p = cur.phieu.find((x) => x.doc_id === d.id)
@@ -303,6 +308,18 @@ export const deNghiRepo = {
     }
     for (const v of out.values()) v.phieu.sort((a, b) => a.code.localeCompare(b.code))
     return out
+  },
+
+  /** Phiếu đang chờ duyệt, chỉ hai cột — cho số đếm menu (chạy mỗi lần mở trang). */
+  async dangChoDuyet(): Promise<{ status: 'pending'; requested_by: string | null }[]> {
+    return ok<{ status: 'pending'; requested_by: string | null }[]>(
+      await db()
+        .from('warehouse_purchase_requests')
+        .select('status, requested_by')
+        .eq('status', 'pending')
+        .limit(1000),
+      'dangChoDuyet',
+    )
   },
 
   /** Phiếu đề nghị của các dòng — để đảo PNK biết phiếu nào phải tính lại. */

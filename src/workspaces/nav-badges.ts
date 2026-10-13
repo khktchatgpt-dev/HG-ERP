@@ -1,6 +1,8 @@
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { soPhieuRepo } from '@/modules/dept/warehouse/so-phieu.repo'
+import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
+import { choToiDuyet } from '@/lib/de-nghi-duyet'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
@@ -58,16 +60,29 @@ async function warehouseBadges(): Promise<Record<string, number>> {
   return out
 }
 
-/** Khu Giám đốc: "Chờ tôi phê duyệt" = PO + LSX + báo giá đang chờ ký. */
+/**
+ * Đề nghị mua CHỜ CHÍNH NGƯỜI XEM duyệt — cùng `choToiDuyet` mà Hộp ký và trang
+ * `/duyet/de-nghi` dùng (Đ5 · DN-6). 0 khi người xem không có quyền duyệt.
+ */
+async function deNghiChoToi(user: User): Promise<number> {
+  if (!(await canAction(user, 'warehouse.request.approve'))) return 0
+  return (await deNghiRepo.dangChoDuyet()).filter((r) => choToiDuyet(r, user)).length
+}
+
+/** Khu Giám đốc: "Chờ tôi phê duyệt" = PO + LSX + báo giá + đề nghị mua đang chờ ký. */
 async function execBadges(user: User): Promise<Record<string, number>> {
   if (!(await canAction(user, 'exec.approvals.view'))) return {}
-  const [pos, lsx, quotes] = await Promise.all([
+  const [pos, lsx, quotes, dnm] = await Promise.all([
     posRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
     productionRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
     quotesRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
+    deNghiChoToi(user),
   ])
-  const total = pos.total + lsx.total + quotes.total
-  return total > 0 ? { '/exec/approvals': total } : {}
+  const total = pos.total + lsx.total + quotes.total + dnm
+  const out: Record<string, number> = {}
+  if (total > 0) out['/exec/approvals'] = total
+  if (dnm > 0) out['/duyet/de-nghi'] = dnm
+  return out
 }
 
 /**
@@ -123,6 +138,9 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
     return b === 'overdue' || b === 'today'
   }).length
   const out: Record<string, number> = {}
+  // Đề nghị mua của Kho chờ chị Thảo duyệt (Đ5) — cùng luật Hộp ký.
+  const dnm = canApprove ? await deNghiChoToi(user) : 0
+  if (dnm > 0) out['/duyet/de-nghi'] = dnm
   if (todo > 0) out['/mua-hang/hop-thu'] = todo
   if (ganVe > 0) out['/mua-hang/theo-doi'] = ganVe
   if (issues > 0) out['/mua-hang'] = issues

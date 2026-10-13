@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { DeNghiChiTiet } from '@/modules/dept/warehouse/de-nghi.service'
@@ -138,6 +139,14 @@ export function DuyetDeNghiScreen({
         <header className="flex flex-wrap items-start gap-x-4 gap-y-1 border-b border-[var(--line)] bg-[var(--surface-card)] px-4 py-3">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-k-label font-semibold tracking-[.08em] text-[var(--ink-3)] uppercase">
+              {canApprove && (
+                <Link
+                  href="/duyet/de-nghi"
+                  className="text-[var(--act-text)] hover:underline"
+                >
+                  ‹ Danh sách ·{' '}
+                </Link>
+              )}
               Đề nghị mua vật tư{cho && canApprove ? ' · chờ anh duyệt' : ''}
             </span>
             <h1 className="text-k-title m-0 flex flex-wrap items-center gap-2 font-semibold">

@@ -9,6 +9,7 @@ import { usersRepo } from '@/modules/core/users/users.repo'
 import { dongTrong, tongDuKien, vuongGuiDuyet } from '@/lib/de-nghi'
 import { kiemNhapDeNghi, soDuyet, vetVuot, type DongNhapDeNghi } from '@/lib/de-nghi-nhap'
 import { kiemNgayChungTu } from '@/lib/ngay-chung-tu-nhap'
+import { roDuyet, thangVn, tongTheoDuyet, type RoDuyet } from '@/lib/de-nghi-duyet'
 import { todayVn } from '@/lib/date-vn'
 import {
   deNghiRepo,
@@ -53,6 +54,33 @@ export type DongChiTiet = DeNghiDong & {
 }
 
 export type DeNghiChiTiet = Omit<DeNghiDay, 'lines'> & { lines: DongChiTiet[] }
+
+/** Một dòng danh sách đề nghị cho lãnh đạo (Đ5 · DN-6) — chỉ số đếm, không gửi dòng hàng. */
+export type DuyetRow = {
+  id: string
+  code: string
+  status: DeNghiDay['status']
+  ro: RoDuyet | 'khac'
+  department: string
+  nguoi: string | null
+  submitted_at: string | null
+  need_by: string | null
+  lsx_code: string | null
+  so_dong: number
+  chua_ma: number
+  /** Dự kiến: chờ duyệt = theo số đề nghị; đã duyệt trở đi = theo số duyệt. Chưa VAT. */
+  du_kien: number
+  thieu_gia: number
+  /** Dòng phải mua (số duyệt > 0) / dòng đã nhập đủ. */
+  mua_dong: number
+  du_dong: number
+  /** Tiền thật Kho đã nhập (Σ SL × đơn giá trên phiếu nhập, trừ phiếu đảo). */
+  thuc_chi: number
+  phieu_nhap: string[]
+  rejected_reason: string | null
+  approved_by_name: string | null
+  closed: boolean
+}
 
 /** Gợi ý khi thêm dòng có mã: tồn + giá mua gần nhất (VND). */
 async function goiYTheoMa(ids: string[]): Promise<{
@@ -143,6 +171,72 @@ export const deNghiService = {
   async list(user: User): Promise<DeNghiDay[]> {
     await xemDuoc(user)
     return deNghiRepo.list()
+  },
+
+  /**
+   * DANH SÁCH CHO LÃNH ĐẠO (Đ5 · DN-6): mọi phiếu đã gửi duyệt ít nhất một lần,
+   * xếp rổ theo `roDuyet` (cùng luật Hộp ký + số đếm menu), kèm tiến độ mua đếm
+   * từ sổ kho và tổng THÁNG NÀY (phiếu duyệt trong tháng: dự kiến vs tiền thật).
+   */
+  async danhSachDuyet(user: User): Promise<{
+    rows: DuyetRow[]
+    thang: { ma: string; so_phieu: number; du_kien: number; thuc_chi: number }
+  }> {
+    if (!(await canApprove(user)))
+      throw Forbidden('Chỉ người duyệt đơn mua xem được danh sách duyệt đề nghị')
+    const ds = (await deNghiRepo.list())
+      .map((p) => ({ p, ro: roDuyet(p, user) }))
+      .filter((x): x is { p: DeNghiDay; ro: RoDuyet | 'khac' } => x.ro != null)
+    const daDuyet = (st: string) => st === 'approved' || st === 'ordering' || st === 'done'
+    const so = await deNghiRepo.soKho(
+      ds.filter((x) => daDuyet(x.p.status)).flatMap((x) => x.p.lines.map((l) => l.id)),
+    )
+    const rows: DuyetRow[] = ds.map(({ p, ro }) => {
+      const duyet = daDuyet(p.status)
+      const mua = p.lines.filter((l) => soDuyet(l) > 0)
+      const t = tongDuKien(p.lines)
+      return {
+        id: p.id,
+        code: p.code,
+        status: p.status,
+        ro,
+        department: p.department,
+        nguoi: p.requested_by_name,
+        submitted_at: p.submitted_at,
+        need_by: p.need_by,
+        lsx_code: p.lsx_code,
+        so_dong: p.lines.length,
+        chua_ma: p.lines.filter((l) => !l.material_id).length,
+        du_kien: duyet ? tongTheoDuyet(p.lines) : t.tong,
+        thieu_gia: t.thieuGia,
+        mua_dong: mua.length,
+        du_dong: duyet
+          ? mua.filter((l) => (so.get(l.id)?.daNhap ?? 0) >= soDuyet(l) - 1e-9).length
+          : 0,
+        thuc_chi: Math.round(p.lines.reduce((a, l) => a + (so.get(l.id)?.tien ?? 0), 0)),
+        phieu_nhap: [
+          ...new Set(p.lines.flatMap((l) => (so.get(l.id)?.phieu ?? []).map((x) => x.code))),
+        ].sort(),
+        rejected_reason: p.rejected_reason,
+        approved_by_name: p.approved_by_name,
+        closed: !!p.closed_at,
+      }
+    })
+    const ma = thangVn(new Date())
+    const trongThang = ds.filter(
+      (x) => daDuyet(x.p.status) && x.p.approved_at && thangVn(x.p.approved_at) === ma,
+    )
+    const ids = new Set(trongThang.map((x) => x.p.id))
+    const rt = rows.filter((r) => ids.has(r.id))
+    return {
+      rows,
+      thang: {
+        ma,
+        so_phieu: rt.length,
+        du_kien: rt.reduce((a, r) => a + r.du_kien, 0),
+        thuc_chi: rt.reduce((a, r) => a + r.thuc_chi, 0),
+      },
+    }
   },
 
   async get(

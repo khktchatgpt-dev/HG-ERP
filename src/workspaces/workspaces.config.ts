@@ -453,6 +453,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'stamp',
             capability: 'supply.approve',
           },
+          // Đề nghị mua của Kho (Đ5) — người duyệt đơn mua cũng là người duyệt đề nghị.
+          {
+            href: '/duyet/de-nghi',
+            label: 'Đề nghị mua của Kho',
+            icon: 'receipt-text',
+            capability: 'supply.approve',
+          },
           // Hộp thư việc: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
           // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
           { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
@@ -660,6 +667,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/exec', label: 'Tổng quan', icon: 'home' },
           // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
           { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
+          // Đề nghị mua của Kho (Đ5 · DN-6) — trang dùng chung, danh sách + tiến độ mua.
+          { href: '/duyet/de-nghi', label: 'Đề nghị mua', icon: 'receipt-text' },
           // Đơn bán của lệnh đặt cạnh đơn mua cho lệnh, cộng thẳng từ chứng từ (02/10/2026); lãi/lỗ là bước sau.
           {
             href: '/exec/gia-tri-don',
