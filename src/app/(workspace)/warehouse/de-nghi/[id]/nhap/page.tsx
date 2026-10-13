@@ -57,7 +57,7 @@ export default async function NhapDeNghiPage({
         approved_by_name: phieu.approved_by_name,
       }}
       dong={dong}
-      nccGoiY={ncc.rows.map((s) => s.name)}
+      nccGoiY={[...new Set(ncc.rows.map((s) => s.name.trim()))]}
       nhomOptions={taxonomy.groups.map((g) => g.name)}
       canCreateMa={canCreateMa}
       today={todayVn()}

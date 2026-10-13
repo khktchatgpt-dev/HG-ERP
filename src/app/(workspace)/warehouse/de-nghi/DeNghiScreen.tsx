@@ -651,7 +651,7 @@ export function DeNghiScreen({
                 )}
               </GridBody>
               <GridFoot>
-                <td colSpan={hep ? 5 : 7}>
+                <td colSpan={hep ? 6 : 7}>
                   {rows.length} dòng
                   {soChuaMa > 0 && ` · ${soChuaMa} dòng chưa có mã (gắn mã khi nhập kho)`}
                 </td>

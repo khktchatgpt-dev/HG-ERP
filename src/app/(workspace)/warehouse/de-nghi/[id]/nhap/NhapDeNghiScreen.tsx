@@ -489,7 +489,7 @@ export function NhapDeNghiScreen({
               )}
             </GridBody>
             <GridFoot>
-              <td colSpan={hep ? 6 : 8}>
+              <td colSpan={hep ? 7 : 8}>
                 {coNhap.length} dòng nhập lần này
                 {deSau > 0 && ` · ${deSau} dòng để chuyến sau (nhận 0)`}
               </td>
