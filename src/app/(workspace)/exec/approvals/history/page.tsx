@@ -5,6 +5,8 @@ import { poWhereNow } from '@/lib/po-signature'
 import { PO_STATUS_LABEL } from '@/lib/po-status'
 import { HistoryManager, type PoNow } from './HistoryManager'
 
+export const metadata = { title: 'Ban Giám đốc · Lịch sử ký' }
+
 /**
  * Lịch sử phê duyệt (FR-ADM-03) — GĐ soi ai duyệt/từ chối phiếu nào, khi nào,
  * lý do gì. Nguồn: bảng approval_events (ghi khi po.decided / lsx.decided).

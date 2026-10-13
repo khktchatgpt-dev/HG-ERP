@@ -5,6 +5,8 @@ import { loadApprovalNav } from '../../nav'
 import { ApprovalDetailScreen } from '../../../ApprovalDetailScreen'
 import { ExecKitFrame } from '../../../_shell/KitFrame'
 
+export const metadata = { title: 'Ban Giám đốc · Duyệt đơn mua' }
+
 /**
  * Màn KÝ một đơn đặt vật tư — trang riêng dưới khu Phê duyệt. Đơn chờ duyệt:
  * duyệt / trả lại / hỏi lại ngay tại đây. Từ 0218 (01/10/2026) mở được cả đơn

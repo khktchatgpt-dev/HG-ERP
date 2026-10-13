@@ -10,11 +10,17 @@ import { fileImageSrc } from '@/server/file-image'
 import { HttpError } from '@/server/http'
 import { HoSoKhachScreen } from './HoSoKhachScreen'
 
+export const metadata = { title: 'Bán hàng · Hồ sơ khách hàng' }
+
 /**
  * Hồ sơ khách hàng (khuôn E): khách là ai · làm ăn ra sao (đơn, báo giá, giá đã
  * chào) · dùng ở đâu (SP gắn khách). Server tải song song rồi giao client vẽ.
  */
-export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
   const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isSalesUser(user))
   if (!allowed) redirect('/')
@@ -28,18 +34,26 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     throw e
   }
 
-  const [{ rows: quotes }, orders, changes, members, { rows: products, total: productTotal }, lastPrices] =
-    await Promise.all([
-      quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
-      ordersService.listByCustomer(user, id),
-      ordersRepo.listChangesByCustomer(id),
-      salesService.members([user.id, customer.owner_id]),
-      productsRepo.list({ customer_id: id, active_only: false, page: 1, page_size: 200 }),
-      lastPricesForCustomer(id),
-    ])
+  const [
+    { rows: quotes },
+    orders,
+    changes,
+    members,
+    { rows: products, total: productTotal },
+    lastPrices,
+  ] = await Promise.all([
+    quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
+    ordersService.listByCustomer(user, id),
+    ordersRepo.listChangesByCustomer(id),
+    salesService.members([user.id, customer.owner_id]),
+    productsRepo.list({ customer_id: id, active_only: false, page: 1, page_size: 200 }),
+    lastPricesForCustomer(id),
+  ])
   const totals = await ordersRepo.totalsByOrderIds(orders.map((o) => o.id))
   // Giá đã chào có thể trỏ tới SP không gắn khách (báo giá chéo) — tra tên riêng.
-  const priceIds = lastPrices.map((p) => p.product_id).filter((pid) => !products.some((p) => p.id === pid))
+  const priceIds = lastPrices
+    .map((p) => p.product_id)
+    .filter((pid) => !products.some((p) => p.id === pid))
   const extra = priceIds.length ? await productsRepo.listPickByIds(priceIds) : []
   const nameOf = new Map<string, { code: string; name: string }>()
   for (const p of products) nameOf.set(p.id, { code: p.code, name: p.name })

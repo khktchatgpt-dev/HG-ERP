@@ -3,6 +3,8 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { loadPendingLsxDetail } from '../../data'
 import { ApprovalDetailScreen } from '../../../ApprovalDetailScreen'
 
+export const metadata = { title: 'Ban Giám đốc · Duyệt lệnh sản xuất' }
+
 /**
  * Chi tiết một Lệnh sản xuất CHỜ DUYỆT — trang riêng dưới khu Phê duyệt
  * (không mở hồ sơ SX/Báo cáo CEO). Duyệt/từ chối ngay tại đây.

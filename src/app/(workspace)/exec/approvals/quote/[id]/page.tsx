@@ -3,6 +3,8 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { loadPendingQuoteDetail } from '../../data'
 import { ApprovalDetailScreen } from '../../../ApprovalDetailScreen'
 
+export const metadata = { title: 'Ban Giám đốc · Duyệt báo giá' }
+
 /**
  * Chi tiết một BÁO GIÁ chờ duyệt (0149 — Sale trình tuỳ chọn). GĐ so từng dòng
  * với giá đã chào lần trước cho cùng khách rồi ký / trả lại ngay tại đây.

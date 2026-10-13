@@ -9,6 +9,8 @@ import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
 import { DonHangForm } from '../../_form/DonHangForm'
 
+export const metadata = { title: 'Bán hàng · Sửa đơn hàng' }
+
 /** Trang sửa đơn (khách thay đổi) — cùng form khuôn F, ghi lịch sử khi lưu. */
 export default async function EditOrderPage({
   params,

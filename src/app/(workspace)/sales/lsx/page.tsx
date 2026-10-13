@@ -11,6 +11,8 @@ import { nextLot } from '@/lib/lsx-lots'
 import { SoLenhScreen } from './SoLenhScreen'
 import type { LenhRow } from './so-lenh.shared'
 
+export const metadata = { title: 'Bán hàng · Sổ lệnh sản xuất' }
+
 /**
  * Sổ LỆNH SẢN XUẤT của Sale (khuôn C, kiểu ERP — 07/10/2026). Gác quyền + tải
  * dữ liệu song song: lệnh · dòng/SL · công đoạn · lô 0222 · người lập · đơn

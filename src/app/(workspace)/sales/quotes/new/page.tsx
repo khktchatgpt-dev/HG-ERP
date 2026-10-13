@@ -4,6 +4,8 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { BaoGiaForm } from '../_form/BaoGiaForm'
 
+export const metadata = { title: 'Bán hàng · Lập báo giá' }
+
 /**
  * Trang lập báo giá (trang riêng, bố cục rộng, hiện đủ quy cách SP).
  *

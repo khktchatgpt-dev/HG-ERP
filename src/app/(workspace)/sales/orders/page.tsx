@@ -8,6 +8,8 @@ import { canMutateOwned } from '@/lib/record-ownership'
 import { SoDonHangScreen } from './SoDonHangScreen'
 import type { DonRow } from './so-don-hang.shared'
 
+export const metadata = { title: 'Bán hàng · Sổ đơn hàng' }
+
 /**
  * Trần tải một lượt. Sổ 53 đơn (10/2026) ~ 300 đơn/năm: bốc cả sổ vẫn nhẹ vài
  * năm tới, và bốc hết mới lọc/đếm phía client được. Chạm trần thì thanh trạng

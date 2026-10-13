@@ -4,6 +4,8 @@ import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import type { CustomerSort } from '@/modules/dept/sales/sales.repo'
 import { SoKhachScreen, type CustomerFilters } from './SoKhachScreen'
 
+export const metadata = { title: 'Bán hàng · Khách hàng' }
+
 const PAGE_SIZE = 20
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SORTS = new Set<string>(['new', 'old', 'name', 'country'])
@@ -16,7 +18,13 @@ const SORTS = new Set<string>(['new', 'old', 'name', 'country'])
 export default async function SalesCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; owner?: string; status?: string; sort?: string; page?: string }>
+  searchParams: Promise<{
+    q?: string
+    owner?: string
+    status?: string
+    sort?: string
+    page?: string
+  }>
 }) {
   const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isSalesUser(user))
@@ -25,8 +33,10 @@ export default async function SalesCustomersPage({
   const sp = await searchParams
   const q = sp.q?.trim() || undefined
   const page = Math.max(1, Number(sp.page) || 1)
-  const status = sp.status === 'inactive' || sp.status === 'all' ? sp.status : ('active' as const)
-  const ownerParam = sp.owner === 'none' || UUID_RE.test(sp.owner ?? '') ? sp.owner! : 'all'
+  const status =
+    sp.status === 'inactive' || sp.status === 'all' ? sp.status : ('active' as const)
+  const ownerParam =
+    sp.owner === 'none' || UUID_RE.test(sp.owner ?? '') ? sp.owner! : 'all'
   const sort = (SORTS.has(sp.sort ?? '') ? sp.sort : 'new') as CustomerSort
 
   const [{ rows, total }, all] = await Promise.all([
@@ -45,7 +55,10 @@ export default async function SalesCustomersPage({
   ])
   const [counts, activity, members] = await Promise.all([
     salesService.counts(),
-    salesService.activity(user, rows.map((c) => c.id)),
+    salesService.activity(
+      user,
+      rows.map((c) => c.id),
+    ),
     salesService.members([user.id, ...all.rows.map((c) => c.owner_id)]),
   ])
 

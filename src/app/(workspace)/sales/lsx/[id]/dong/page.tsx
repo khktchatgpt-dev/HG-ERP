@@ -8,6 +8,8 @@ import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { LsxSheetEditor } from '@/components/production/LsxSheetEditor'
 
+export const metadata = { title: 'Bán hàng · Soạn dòng lệnh' }
+
 /**
  * Sales SOẠN DÒNG LỆNH (0114) — màn thay file Excel: nhóm theo PO/bộ sưu tập,
  * tách đợt xuất, spec theo mẫu cột của khách. Lệnh đã duyệt mà lưu ở đây =
