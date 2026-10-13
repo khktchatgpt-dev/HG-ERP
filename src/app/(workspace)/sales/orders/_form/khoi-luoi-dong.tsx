@@ -55,7 +55,8 @@ export function KhoiLuoiDong({ d }: { d: DonHangFormCtx }) {
   const an = useAnGiaNoiBo()
   /** Nhóm NỘI BỘ (± Bán KH · Lãi thực) — chỉ người thấy giá kế hoạch, và khi không bấm ẩn. */
   const cost = d.canSeeCost && !an.hidden
-  const cols = 10 + (cost ? 2 : 0)
+  // chọn · # · SP · SL · đơn giá · thành tiền · tuần giao · ghi chú · bỏ = 9, + 2 cột nội bộ.
+  const cols = 9 + (cost ? 2 : 0)
   const allSel = d.lines.length > 0 && d.selected.size === d.lines.length
   const cur = d.currency
 
