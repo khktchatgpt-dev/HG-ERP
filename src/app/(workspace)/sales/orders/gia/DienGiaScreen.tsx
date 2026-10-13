@@ -83,7 +83,17 @@ export function DienGiaScreen({ board }: { board: PricingBoard }) {
         sub="Gõ giá cho từng dòng rồi lưu một lần — dán từ Excel hay mồi Giá bán KH đều chỉ điền vào ô, bạn soát rồi mới lưu."
         actions={
           <>
-            {d.hasPlanColumn && <NutAnGiaNoiBo hidden={an.hidden} onToggle={an.toggle} />}
+            {d.hasPlanColumn && (
+              <NutAnGiaNoiBo
+                hidden={an.hidden}
+                onToggle={() => {
+                  // Đang lọc "dưới giá vốn" mà ẩn cột nội bộ thì lưới bị lọc theo
+                  // một tiêu chí không còn thấy trên màn (soi UI 13/10) — bỏ lọc đó.
+                  if (!an.hidden && d.belowOnly) d.setOnlyUnpriced(false)
+                  an.toggle()
+                }}
+              />
+            )}
             {d.hasPlanColumn && (
               <ToolBtn onClick={d.fillFromPlan} icon={Target}>
                 Lấy Giá bán KH ({d.planFillable.length})
