@@ -271,8 +271,8 @@ export type DomainEvent =
    */
   /**
    * 0236/0237 — ĐỀ NGHỊ MUA VẬT TƯ của Kho. Gửi duyệt → báo người duyệt (quyền
-   * supply.po.approve + admin, trừ người gửi). Quyết → báo người đề nghị; duyệt
-   * thì báo thêm trưởng phòng Cung ứng (người lập đơn mua từ phiếu).
+   * supply.po.approve + admin, trừ người gửi). Quyết → báo người đề nghị. KHO tự
+   * đi mua + nhập kho theo phiếu đã duyệt (chủ dự án 13/10) — không qua Cung ứng.
    */
   | {
       name: 'de_nghi.submitted'
@@ -293,8 +293,6 @@ export type DomainEvent =
       reason: string | null
       decided_by: string
       requester_id: string | null
-      /** Chỉ khi duyệt: người bên Cung ứng nhận việc lập đơn. */
-      supply_ids: string[]
     }
   | {
       name: 'po.issue_recorded'

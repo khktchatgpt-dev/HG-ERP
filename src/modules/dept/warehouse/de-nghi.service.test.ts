@@ -175,7 +175,7 @@ describe('Đ2 · gửi duyệt báo ai + lãnh đạo quyết', () => {
     expect(e.tong).toBe(1_100_000)
   })
 
-  it('duyệt: ghi số duyệt dòng bị sửa (trùng số đề nghị → null), báo người đề nghị + Cung ứng', async () => {
+  it('duyệt: ghi số duyệt dòng bị sửa (trùng số đề nghị → null), báo người đề nghị', async () => {
     vi.mocked(deNghiRepo.findById).mockResolvedValue(phieu({ status: 'pending' }))
     await deNghiService.decide(alex, 'dn1', { decision: 'approve', lines: [{ id: 'l1', approved_qty: 150 }, { id: 'la-ngoai', approved_qty: 1 }] }) // prettier-ignore
     expect(vi.mocked(deNghiRepo.setApprovedQty).mock.calls[0][0]).toEqual([{ id: 'l1', approved_qty: 150 }]) // prettier-ignore

@@ -51,7 +51,7 @@ const APPROVE_UNLOCKS = {
   lsx: 'Duyệt xong Cung ứng mới đặt được vật tư.',
   po: 'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).',
   quote: 'Duyệt xong Sale mới chốt & gửi khách được.',
-  dnm: 'Duyệt xong Cung ứng lập đơn mua từ phiếu (duyệt đúng số Kho đề nghị — muốn sửa số thì bấm Xem kỹ).',
+  dnm: 'Duyệt xong Kho tự đi mua theo đúng số đề nghị — muốn sửa số thì bấm Xem kỹ.',
 } as const
 
 export function targetLsx(

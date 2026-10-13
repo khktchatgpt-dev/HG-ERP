@@ -12,7 +12,7 @@ export const DE_NGHI_NHAN: Record<DeNghiStatus, string> = {
   draft: 'Nháp',
   pending: 'Chờ duyệt',
   approved: 'Đã duyệt',
-  ordering: 'Đang mua',
+  ordering: 'Đang nhập',
   done: 'Xong',
   cancelled: 'Đã huỷ',
 }
@@ -38,9 +38,9 @@ export function dangO(s: DeNghiStatus, biTuChoi = false): string {
     case 'pending':
       return 'Lãnh đạo (chờ duyệt)'
     case 'approved':
-      return 'Cung ứng (chờ lập đơn)'
+      return 'Kho (đi mua theo số duyệt)'
     case 'ordering':
-      return 'Cung ứng → Kho nhận hàng'
+      return 'Kho (đã nhập một phần)'
     case 'done':
     case 'cancelled':
       return '—'

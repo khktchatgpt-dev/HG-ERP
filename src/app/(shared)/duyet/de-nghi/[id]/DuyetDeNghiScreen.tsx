@@ -107,7 +107,7 @@ export function DuyetDeNghiScreen({
       toast.success(
         decision === 'approve' ? `Đã duyệt ${p.code}` : `Đã trả lại ${p.code}`,
         decision === 'approve'
-          ? 'Kho và Cung ứng đã nhận thông báo — Cung ứng lập đơn mua từ phiếu.'
+          ? 'Kho đã nhận thông báo và đi mua theo số duyệt.'
           : 'Phiếu về nháp; Kho nhận lý do để sửa.',
       )
       setMoTuChoi(false)
@@ -193,8 +193,8 @@ export function DuyetDeNghiScreen({
         )}
         {p.status === 'approved' && (
           <NoticeBar tone="neutral" tag="Đã duyệt">
-            {p.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(p.approved_at)} — Cung ứng
-            lập đơn mua từ phiếu này.
+            {p.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(p.approved_at)} — Kho đi mua
+            theo số duyệt rồi nhập kho theo phiếu.
           </NoticeBar>
         )}
         {p.status === 'draft' && p.rejected_at && (

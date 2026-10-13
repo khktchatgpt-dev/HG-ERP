@@ -25,34 +25,17 @@ export function registerDeNghiNotificationHandlers() {
   })
 
   on('de_nghi.decided', async (e) => {
-    const jobs: Promise<unknown>[] = []
-    if (e.requester_id && e.requester_id !== e.decided_by)
-      jobs.push(
-        notificationsService.notify({
-          recipientId: e.requester_id,
-          actorId: e.decided_by,
-          type: e.decision === 'approved' ? 'dnm_approved' : 'dnm_rejected',
-          payload: {
-            title: e.reason ? `${e.code} — ${e.reason}` : e.code,
-            reason: e.reason,
-            href: `/warehouse/de-nghi/${e.request_id}`,
-          },
-        }),
-      )
-    if (e.decision === 'approved')
-      for (const sid of e.supply_ids)
-        if (sid !== e.decided_by && sid !== e.requester_id)
-          jobs.push(
-            notificationsService.notify({
-              recipientId: sid,
-              actorId: e.decided_by,
-              type: 'dnm_approved',
-              payload: {
-                title: `${e.code} — chờ Cung ứng lập đơn mua`,
-                href: `/duyet/de-nghi/${e.request_id}`,
-              },
-            }),
-          )
-    await Promise.all(jobs)
+    // Chỉ báo NGƯỜI ĐỀ NGHỊ: duyệt xong chính Kho đi mua (không qua Cung ứng).
+    if (!e.requester_id || e.requester_id === e.decided_by) return
+    await notificationsService.notify({
+      recipientId: e.requester_id,
+      actorId: e.decided_by,
+      type: e.decision === 'approved' ? 'dnm_approved' : 'dnm_rejected',
+      payload: {
+        title: e.reason ? `${e.code} — ${e.reason}` : e.code,
+        reason: e.reason,
+        href: `/warehouse/de-nghi/${e.request_id}`,
+      },
+    })
   })
 }

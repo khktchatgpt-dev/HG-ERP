@@ -54,7 +54,7 @@ describe('dangO + dongTrong', () => {
   it('ai giữ phiếu ở từng trạng thái', () => {
     expect(dangO('pending')).toBe('Lãnh đạo (chờ duyệt)')
     expect(dangO('draft', true)).toMatch(/từ chối/)
-    expect(dangO('approved')).toMatch(/Cung ứng/)
+    expect(dangO('approved')).toMatch(/Kho \(đi mua/)
   })
   it('dòng trống = chưa mã, chưa tên, chưa SL', () => {
     expect(dongTrong({ material_id: null, name: ' ', qty: null })).toBe(true)

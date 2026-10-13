@@ -69,7 +69,7 @@ async function canApprove(user: User) {
 
 /**
  * Ai XEM được phiếu: Kho (lập), người duyệt (lãnh đạo — thường không có quyền
- * vào khu Kho), Cung ứng (lập đơn mua từ phiếu đã duyệt, Đ3).
+ * vào khu Kho), Cung ứng (chỉ xem — từ 13/10 Kho tự mua, không qua Cung ứng).
  */
 async function xemDuoc(user: User) {
   const [kho, duyet, cungUng] = await Promise.all([
@@ -277,7 +277,6 @@ export const deNghiService = {
         reason,
         decided_by: user.id,
         requester_id: p.requested_by,
-        supply_ids: [],
       })
       return
     }
@@ -309,7 +308,6 @@ export const deNghiService = {
       reason: (input.reason ?? '').trim() || null,
       decided_by: user.id,
       requester_id: p.requested_by,
-      supply_ids: await rbacRepo.userIdsWithPermission('supply.lead'),
     })
   },
 

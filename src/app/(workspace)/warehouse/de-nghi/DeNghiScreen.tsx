@@ -363,7 +363,7 @@ export function DeNghiScreen({
           compact
           kind="Đề nghị mua vật tư"
           code={phieu.code ?? 'Phiếu mới'}
-          sub={`${head.department} lập · lãnh đạo duyệt · Cung ứng lập đơn mua · người đề nghị ${phieu.nguoi_de_nghi}`}
+          sub={`${head.department} lập · lãnh đạo duyệt · Kho mua + nhập kho · người đề nghị ${phieu.nguoi_de_nghi}`}
         >
           {phieu.status === 'cancelled' ? (
             <Tag tone={DE_NGHI_TONE.cancelled}>{DE_NGHI_NHAN.cancelled}</Tag>
@@ -391,7 +391,7 @@ export function DeNghiScreen({
               {phieu.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(phieu.approved_at)}
               {phieu.lines.some((l) => l.approved_qty != null) &&
                 ` · sửa số ${phieu.lines.filter((l) => l.approved_qty != null).length} dòng (cột Số lượng ghi số duyệt)`}
-              . Cung ứng lập đơn mua từ phiếu này.
+              . Kho đi mua theo số duyệt rồi nhập kho theo phiếu.
             </NoticeBar>
           )}
         {phieu.status === 'cancelled' && (
@@ -692,8 +692,7 @@ export function DeNghiScreen({
             <GridFoot>
               <td colSpan={hep ? 5 : 7}>
                 {rows.length} dòng
-                {soChuaMa > 0 &&
-                  ` · ${soChuaMa} dòng chưa có mã (Cung ứng gắn mã khi lập đơn)`}
+                {soChuaMa > 0 && ` · ${soChuaMa} dòng chưa có mã (gắn mã khi nhập kho)`}
               </td>
               {!hep && <td className="k-r num">{fmt(tong.tong)}</td>}
               <td colSpan={sua ? 2 : 1} className="font-normal text-[var(--ink-3)]">

@@ -47,7 +47,7 @@ const thuoc = (r: DeNghiSoRow, ro: Ro) =>
 /**
  * SỔ ĐỀ NGHỊ MUA VẬT TƯ — khuôn C (0236 · Đ1, bản vẽ DN-4). Câu màn trả lời:
  * phiếu nào của Kho đang kẹt ở ai — nháp chưa gửi, bị từ chối chờ sửa, đang chờ
- * lãnh đạo, hay đã sang Cung ứng. Rổ mặc định "Kho cần làm" (nháp + bị từ chối).
+ * lãnh đạo, hay đã duyệt chờ Kho đi mua. Rổ mặc định "Kho cần làm" (nháp + bị từ chối).
  */
 export function DeNghiSoScreen({
   rows,
@@ -114,7 +114,7 @@ export function DeNghiSoScreen({
             }
             reason={
               rows.length === 0
-                ? 'Kho lập "Giấy đề nghị mua vật tư" ở đây thay cho tờ giấy chụp gửi Zalo: lãnh đạo duyệt trên hệ thống, Cung ứng lập đơn mua từ phiếu.'
+                ? 'Kho lập "Giấy đề nghị mua vật tư" ở đây thay cho tờ giấy chụp gửi Zalo: lãnh đạo duyệt trên hệ thống, Kho đi mua rồi nhập kho theo phiếu.'
                 : q.trim()
                   ? `Không phiếu nào khớp "${q.trim()}".`
                   : 'Rổ này đang trống.'
@@ -172,7 +172,7 @@ export function DeNghiSoScreen({
                     {r.chua_ma > 0 && (
                       <span
                         className="block text-[11px] text-[var(--warn)]"
-                        title="Dòng chưa có mã — Cung ứng gắn mã khi lập đơn"
+                        title="Dòng chưa có mã — gắn mã khi nhập kho"
                       >
                         {r.chua_ma} chưa mã
                       </span>
@@ -226,7 +226,7 @@ export function DeNghiSoScreen({
         )}
         <StatusBar
           left={[
-            'Lãnh đạo duyệt · Cung ứng lập đơn mua từ phiếu đã duyệt — bước sau đang làm',
+            'Lãnh đạo duyệt · Kho tự mua rồi nhập kho theo phiếu đã duyệt (bước nhập đang làm)',
           ]}
           right={`${hien.length} / ${rows.length} phiếu`}
         />
