@@ -112,3 +112,17 @@ export const MUC_DICH_GOI_Y = [
   'Bảo hộ lao động',
   'Văn phòng',
 ] as const
+
+/** Một phiếu cũ để "Lập lại từ phiếu cũ" (Đ8) — chỉ số đếm, không gửi dòng. */
+export type PhieuCu = {
+  id: string
+  code: string
+  status: DeNghiStatus
+  /** Ngày gửi duyệt (ISO). */
+  ngay: string
+  so_dong: number
+  /** Tổng dự kiến gồm VAT + vận chuyển (theo số duyệt nếu đã duyệt). */
+  tong: number
+  /** Ba tên vật tư đầu — để nhận ra phiếu mà không phải mở. */
+  ten: string
+}

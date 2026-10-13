@@ -7,7 +7,6 @@ import {
   DE_NGHI_NHAN,
   DE_NGHI_TONE,
   dongTrong,
-  gio,
   tongDuKien,
   vuongGuiDuyet,
 } from '@/lib/de-nghi'
@@ -28,7 +27,6 @@ import {
   GridFoot,
   GridHead,
   GridRow,
-  NoticeBar,
   NumInput,
   ScreenFrame,
   StatusBar,
@@ -42,12 +40,15 @@ import { HuyPhieuSheet } from './huy-phieu'
 import { GoiYGia, GoiYSoLuong, GoiYTen, TonO, VatO } from './goi-y-dong'
 import { tonNhan } from '@/lib/de-nghi-goi-y'
 import { ChotPhieuSheet } from './chot-phieu'
+import { LapLaiSheet } from './lap-lai'
+import { ThongBaoPhieu } from './thong-bao-phieu'
 import { TinhHinhNhap } from './tinh-hinh-nhap'
 import { DauPhieu, type DauPhieuState } from './dau-phieu'
 import {
   MUC_DICH_GOI_Y,
   type DongForm,
   type GoiYMa,
+  type PhieuCu,
   type PhieuForm,
 } from './de-nghi.shared'
 
@@ -91,12 +92,18 @@ export function DeNghiScreen({
   lsx,
   canManage,
   canNhap = false,
+  phieuCu = [],
+  lapLaiTu = null,
 }: {
   phieu: PhieuForm
   lsx: { id: string; code: string }[]
   canManage: boolean
   /** Ghi phiếu nhập được (quản phiếu + ghi sổ kho) — nút "Nhập hàng đã mua" (0238). */
   canNhap?: boolean
+  /** Phiếu cũ chọn được để "Lập lại từ phiếu cũ" (Đ8) — chỉ màn lập mới truyền. */
+  phieuCu?: PhieuCu[]
+  /** Mã phiếu nguồn khi màn đang là bản lập lại (`?tu=`). */
+  lapLaiTu?: string | null
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -113,6 +120,7 @@ export function DeNghiScreen({
   const [dangTra, setDangTra] = useState(false)
   const [moHuy, setMoHuy] = useState(false)
   const [moChot, setMoChot] = useState(false)
+  const [moLapLai, setMoLapLai] = useState(false)
   // Đã duyệt trở đi: lưới đổi sang TÌNH HÌNH NHẬP (DN-5), đếm từ sổ kho.
   const daDuyet = ['approved', 'ordering', 'done'].includes(phieu.status)
   const dangNhap = phieu.status === 'approved' || phieu.status === 'ordering'
@@ -362,6 +370,25 @@ export function DeNghiScreen({
               </Action>
             )}
           </ActionGroup>
+          {canManage && (
+            <ActionGroup label="Lập lại">
+              {/* Màn lập mới: chọn phiếu cũ. Phiếu đã gửi: lập lại chính nó (Đ8). */}
+              {!phieu.id ? (
+                <Action icon="saoChep" onClick={() => setMoLapLai(true)}>
+                  Lập lại từ phiếu cũ…
+                </Action>
+              ) : (
+                phieu.submitted_at && (
+                  <Action
+                    icon="saoChep"
+                    onClick={() => router.push(`/warehouse/de-nghi/moi?tu=${phieu.id}`)}
+                  >
+                    Lập lại phiếu này
+                  </Action>
+                )
+              )}
+            </ActionGroup>
+          )}
           {phieu.id && phieu.status !== 'draft' && phieu.status !== 'cancelled' && (
             <ActionGroup label="Gửi">
               <Action icon="saoChep" onClick={() => void chepLink()}>
@@ -399,46 +426,12 @@ export function DeNghiScreen({
           )}
         </DocHead>
 
-        {phieu.status === 'draft' && phieu.rejected_at && (
-          <NoticeBar tone="stop" tag="Bị từ chối">
-            {phieu.rejected_by_name ?? 'Lãnh đạo'} từ chối lúc {gio(phieu.rejected_at)}: “
-            {phieu.rejected_reason}”. Sửa theo lý do rồi gửi lại.
-          </NoticeBar>
-        )}
-        {phieu.status === 'pending' && (
-          <NoticeBar tone="warn" tag="Chờ duyệt">
-            Đã gửi lúc {gio(phieu.submitted_at)} — lãnh đạo đã nhận thông báo và duyệt
-            trên hệ thống (cả trên điện thoại). Cần nhắc thì bấm “Chép đường dẫn” gửi
-            Zalo. Muốn sửa thì rút về nháp.
-          </NoticeBar>
-        )}
-        {(phieu.status === 'approved' || phieu.status === 'ordering') &&
-          phieu.approved_at && (
-            <NoticeBar tone="neutral" tag="Đã duyệt">
-              {phieu.approved_by_name ?? 'Lãnh đạo'} duyệt lúc {gio(phieu.approved_at)}
-              {phieu.lines.some((l) => l.approved_qty != null) &&
-                ` · sửa số ${phieu.lines.filter((l) => l.approved_qty != null).length} dòng (cột Số duyệt)`}
-              .{' '}
-              {phieu.status === 'approved'
-                ? 'Kho đi mua theo số duyệt rồi bấm “Nhập hàng đã mua”; không mua nữa thì “Chốt xong” + lý do.'
-                : `Đã nhập đủ ${muaDong.length - thieu.length}/${muaDong.length} dòng — mua chuyến sau thì bấm “Nhập hàng đã mua” lần nữa (lưới chỉ còn phần thiếu), không mua nữa thì “Chốt xong” + lý do.`}
-              {phieu.approve_note && (
-                <b className="mt-0.5 block">Lãnh đạo dặn: “{phieu.approve_note}”</b>
-              )}
-            </NoticeBar>
-          )}
-        {phieu.status === 'done' && (
-          <NoticeBar tone={phieu.closed_at ? 'warn' : 'neutral'} tag="Xong">
-            {phieu.closed_at
-              ? `${phieu.closed_by_name ?? 'Kho'} chốt xong lúc ${gio(phieu.closed_at)} khi còn ${thieu.length} dòng thiếu · lý do: ${phieu.closed_reason ?? ''}`
-              : 'Đã nhập đủ mọi dòng theo số duyệt.'}
-          </NoticeBar>
-        )}
-        {phieu.status === 'cancelled' && (
-          <NoticeBar tone="neutral" tag="Đã huỷ">
-            Huỷ lúc {gio(phieu.cancelled_at)} · lý do: {phieu.cancel_reason}
-          </NoticeBar>
-        )}
+        <ThongBaoPhieu
+          phieu={phieu}
+          lapLaiTu={lapLaiTu}
+          muaDong={muaDong.length}
+          thieu={thieu.length}
+        />
 
         {/* Đầu phiếu một dải (khuôn F): bộ phận · cần trước · lệnh · ghi chú. */}
         <DauPhieu
@@ -742,6 +735,13 @@ export function DeNghiScreen({
           right={`${rows.length} dòng`}
         />
       </ScreenFrame>
+      {moLapLai && (
+        <LapLaiSheet
+          rows={phieuCu}
+          coDong={rows.some((r) => !dongTrong(r))}
+          onClose={() => setMoLapLai(false)}
+        />
+      )}
       {moChot && phieu.id && (
         <ChotPhieuSheet
           id={phieu.id}

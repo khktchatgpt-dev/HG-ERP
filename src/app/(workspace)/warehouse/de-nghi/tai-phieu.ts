@@ -72,3 +72,53 @@ export function phieuMoi(nguoi: string): PhieuForm {
     lines: [],
   }
 }
+
+/**
+ * LẬP LẠI TỪ PHIẾU CŨ (Đ8, Q22): bản nháp MỚI (chưa lưu) chép dòng của phiếu cũ —
+ * hàng tiêu hao mua lặp hằng tháng, khỏi gõ lại 9 dòng.
+ *
+ *   · Số lượng = số ĐÃ DUYỆT lần trước (lãnh đạo sửa 200 → 150 thì lấy 150).
+ *     Dòng duyệt 0 (lãnh đạo bảo không mua) thì bỏ.
+ *   · Đơn giá = giá lần mua gần nhất (đơn Cung ứng hoặc Kho tự mua) nếu có, không
+ *     thì giữ giá dự kiến cũ. VAT, mục đích, phí vận chuyển chép nguyên.
+ *   · Không chép: cần trước ngày, lệnh SX, ghi chú dòng — đó là chuyện của lần cũ.
+ *
+ * Không ghi gì vào DB: bấm Lưu nháp / Gửi mới tạo phiếu, bỏ ngang thì không sinh
+ * phiếu rác. Tồn, giá, trùng đã được service tính lại cho HÔM NAY.
+ */
+export function phieuLapLai(nguoi: string, src: DeNghiChiTiet): PhieuForm {
+  // Phiếu cũ còn mở (chờ duyệt / đang mua) thì chính nó là một phiếu trùng của
+  // bản mới — service đã loại nó khỏi danh sách trùng (lúc đó nó là phiếu đang xem).
+  const conMo =
+    src.status === 'pending' || src.status === 'approved' || src.status === 'ordering'
+  return {
+    ...phieuMoi(nguoi),
+    department: src.department,
+    note: src.note ?? '',
+    shipping_fee: src.shipping_fee,
+    lines: src.lines
+      .filter((l) => (l.approved_qty ?? l.qty) > 0)
+      .map((l, i) => ({
+        key: `lai-${i}-${l.id}`,
+        material_id: l.material_id,
+        code: l.code,
+        name: l.name,
+        unit: l.unit,
+        ton: l.ton,
+        qty: l.approved_qty ?? l.qty,
+        unit_price: l.gia_gan_nhat?.unit_price ?? l.unit_price,
+        vat_rate: l.vat_rate,
+        purpose: l.purpose ?? '',
+        note: '',
+        gia_goi_y: l.gia_gan_nhat,
+        theo_doi: l.theo_doi,
+        trung: conMo
+          ? [
+              { code: src.code, status: src.status, qty: l.approved_qty ?? l.qty },
+              ...l.trung,
+            ]
+          : l.trung,
+        dang_ve: l.dang_ve,
+      })),
+  }
+}
