@@ -10,7 +10,7 @@ lời "Ok" trong chat). Bản vẽ duyệt 13/10: https://claude.ai/artifact/6bF
 
 | Bước | Việc | Trạng thái |
 | --- | --- | --- |
-| Đ1 | Kho lập / sửa nháp / gửi / rút / huỷ · sổ đề nghị · in theo mẫu giấy | **XONG 13/10** — cần áp `0236` |
+| Đ1 | Kho lập / sửa nháp / gửi / rút / huỷ · sổ đề nghị · in theo mẫu giấy | **XONG 13/10** — 0236 + 0231 ĐÃ ÁP (MCP), types đã sync, thử trọn luồng trên DB thật |
 | Đ2 | Lãnh đạo duyệt (điện thoại + Hộp thư duyệt) · sửa SL · từ chối có lý do · thông báo | chưa làm |
 | Đ3 | Cung ứng: "Đề nghị đã duyệt, chờ lập đơn" → lập đơn mẫu Phụ tùng/bảo trì (chọn hạng mục 0230), nối dòng ↔ dòng đơn | chưa làm |
 | Đ4 | Nhãn "từ ĐNM" ở Hàng về · tự sang Xong khi về đủ · (Q8) nhận hàng mua lẻ N2 | chưa làm |
