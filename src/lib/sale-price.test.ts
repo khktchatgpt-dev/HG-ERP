@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { avgLai, checkPrice, planCostOf, planFromOrder, vsPlanTotal } from './sale-price'
+import {
+  avgLai,
+  checkPrice,
+  planCostOf,
+  planFromOrder,
+  suggestPrice,
+  suggestionNote,
+  vsPlanTotal,
+} from './sale-price'
 
 // Ví dụ trong lời giải thích gửi user 13/10: trực tiếp 80, chung 12, lợi nhuận 9,2 → FOB 101,2.
 const PLAN = { cost: 92, price: 101.2, currency: 'USD' }
@@ -112,5 +120,39 @@ describe('planFromOrder', () => {
       planFromOrder('quotation 10 Aruba-tinh gia.xlsx › dining chair · dòng 29'),
     ).toBe(false)
     expect(planFromOrder(null)).toBe(false)
+  })
+})
+
+describe('suggestPrice', () => {
+  const plan = { cost: 72.25, price: 87, currency: 'USD' }
+  it('giá chào khách này thắng giá đơn thắng Giá bán KH', () => {
+    expect(
+      suggestPrice({
+        currency: 'USD',
+        quote: { unit_price: 85, quote_code: 'BG-2026-0007' },
+        order: { unit_price: 86, order_code: '31032193244' },
+        plan,
+      }),
+    ).toEqual({ price: 85, from: 'quote', ref: 'BG-2026-0007' })
+    expect(
+      suggestPrice({ currency: 'USD', order: { unit_price: 86, order_code: 'X' }, plan }),
+    ).toEqual({ price: 86, from: 'order', ref: 'X' })
+    expect(suggestPrice({ currency: 'USD', plan })).toEqual({
+      price: 87,
+      from: 'plan',
+      ref: null,
+    })
+  })
+  it('Giá bán KH khác tiền tệ / giá 0 / không có gì → null', () => {
+    expect(suggestPrice({ currency: 'EUR', plan })).toBeNull()
+    expect(
+      suggestPrice({ currency: 'USD', quote: { unit_price: 0, quote_code: 'BG' } }),
+    ).toBeNull()
+    expect(suggestPrice({ currency: 'USD' })).toBeNull()
+  })
+  it('câu nguồn', () => {
+    expect(suggestionNote({ from: 'quote', ref: 'BG-1' })).toBe('giá chào BG-1')
+    expect(suggestionNote({ from: 'order', ref: 'DH-1' })).toBe('giá đơn DH-1')
+    expect(suggestionNote({ from: 'plan', ref: null })).toBe('gợi ý Giá bán KH')
   })
 })

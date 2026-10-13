@@ -98,6 +98,12 @@ export type LineRow = {
   shipped: number
   /** Dòng dán từ Excel chưa khớp mã — giữ để người dùng chọn SP. */
   pastedCode?: string
+  /**
+   * Giá trong ô là GỢI Ý (lib/sale-price `suggestPrice`), chưa ai gõ: nguồn + mã
+   * chứng từ để lưới ghi "giá chào BG-…" dưới ô. Người dùng sửa giá là xoá cờ.
+   */
+  priceFrom?: 'quote' | 'order' | 'plan'
+  priceRef?: string | null
 }
 
 export type Missing = { msg: string; focus?: string }

@@ -3,6 +3,7 @@
 import { Save, X } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { ErpHeader, ErpPage, ToolBtn } from '../../_erp/ui'
+import { NutAnGiaNoiBo, useAnGiaNoiBo } from '../../_erp/gia-noi-bo'
 import { BTN_PRI, BTN_SUB, fmtMoney } from './don-form.shared'
 import { KhoiDauDon } from './khoi-dau-don'
 import { KhoiDieuKhoan } from './khoi-dieu-khoan'
@@ -17,6 +18,7 @@ import { useDonHangForm, type DonHangFormProps } from './useDonHangForm'
  */
 export function DonHangForm(props: DonHangFormProps) {
   const d = useDonHangForm(props)
+  const an = useAnGiaNoiBo()
   const edit = d.mode === 'edit'
   const back = edit ? `/sales/orders/${d.order!.id}` : '/sales/orders'
   return (
@@ -36,6 +38,7 @@ export function DonHangForm(props: DonHangFormProps) {
         }
         actions={
           <>
+            {d.canSeeCost && <NutAnGiaNoiBo hidden={an.hidden} onToggle={an.toggle} />}
             <ToolBtn href={back} icon={X}>
               Huỷ
             </ToolBtn>

@@ -6,6 +6,12 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
 import { quoteNetPrice } from '@/lib/quote-price'
+import {
+  checkPrice,
+  suggestPrice,
+  type PlanPrice,
+  type PriceSuggestion,
+} from '@/lib/sale-price'
 import { parseOrderPaste, type PastedOrderRow } from '@/lib/order-paste'
 import { invalidateProductPickCache } from '@/components/sales/ProductPicker'
 import {
@@ -171,7 +177,11 @@ export function useDonHangForm(p: DonHangFormProps) {
   /** Thêm nhiều SP một lượt từ hộp chọn — mỗi SP một dòng (D2: cùng SP thêm lần nữa vẫn được). */
   function addPicked(products: ProductPick[]) {
     products.forEach(remember)
-    setLines((ls) => [...ls, ...products.map((x) => newRow({ productId: x.id }))])
+    const rows = products.map((x) => newRow({ productId: x.id, ...suggestRow(x.id) }))
+    setLines((ls) => [...ls, ...rows])
+    // SP chưa có giá gợi ý mà Giá bán KH chưa tải → hỏi server rồi điền vào ô CÒN TRỐNG.
+    const need = rows.filter((r) => !r.unitPrice && !planPrices.has(r.productId))
+    if (need.length) void fillPlanSuggestions(need)
   }
   /** Đổi SP của MỘT dòng (dán chưa khớp / chọn nhầm). */
   function replaceProduct(key: number, x: ProductPick) {
@@ -336,6 +346,93 @@ export function useDonHangForm(p: DonHangFormProps) {
   const linesEditable =
     mode === 'edit' || source === 'direct' || (source === 'quote' && !!quoteId)
 
+  /* ── giá kế hoạch + giá gợi ý (13/10/2026) ──────────────────────────────────
+   * Giá vốn KH / Giá bán KH chỉ về khi có quyền `technical.plan_cost.view` (route
+   * trả {} chứ không 403). Giá chào / đơn giá gần nhất theo (khách, tiền tệ), nhớ
+   * theo khoá — đổi khách là đổi bảng, không setState đồng bộ trong effect. */
+  const [planPrices, setPlanPrices] = useState<Map<string, PlanPrice>>(new Map())
+  const [canSeeCost, setCanSeeCost] = useState(false)
+  const idsKey = [...new Set(lines.map((l) => l.productId).filter(Boolean))]
+    .sort()
+    .join(',')
+  useEffect(() => {
+    if (!idsKey) return
+    api<{ prices: Record<string, PlanPrice> }>(
+      `/api/dept/sales/quotes/plan-prices?ids=${encodeURIComponent(idsKey)}`,
+    )
+      .then((d) => {
+        const m = new Map(Object.entries(d.prices))
+        setPlanPrices((old) => new Map([...old, ...m]))
+        if (m.size > 0) setCanSeeCost(true)
+      })
+      .catch(() => {})
+  }, [idsKey])
+  type Last = {
+    quote: Map<string, { unit_price: number; quote_code: string }>
+    order: Map<string, { unit_price: number; order_code: string }>
+  }
+  const [lastBy, setLastBy] = useState<Map<string, Last>>(new Map())
+  const lastKey = activeCustomerId ? `${activeCustomerId}|${currency}` : ''
+  useEffect(() => {
+    if (!lastKey || lastBy.has(lastKey)) return
+    const [cid, cur] = lastKey.split('|')
+    const qs = `customer_id=${cid}&currency=${cur}`
+    Promise.all([
+      api<{ prices: { product_id: string; unit_price: number; quote_code: string }[] }>(
+        `/api/dept/sales/quotes/last-prices?${qs}`,
+      ).catch(() => ({ prices: [] })),
+      api<{ prices: { product_id: string; unit_price: number; order_code: string }[] }>(
+        `/api/dept/sales/orders/last-prices?${qs}`,
+      ).catch(() => ({ prices: [] })),
+    ]).then(([q, o]) =>
+      setLastBy((m) =>
+        new Map(m).set(lastKey, {
+          quote: new Map(q.prices.map((p) => [p.product_id, p])),
+          order: new Map(o.prices.map((p) => [p.product_id, p])),
+        }),
+      ),
+    )
+  }, [lastKey, lastBy])
+  const last = lastBy.get(lastKey)
+  /** Giá gợi ý cho một SP mới thêm — rỗng nếu không có nguồn nào. */
+  function suggestRow(productId: string): Partial<LineRow> {
+    const s: PriceSuggestion | null = suggestPrice({
+      currency,
+      quote: last?.quote.get(productId),
+      order: last?.order.get(productId),
+      plan: planPrices.get(productId),
+    })
+    return s ? { unitPrice: String(s.price), priceFrom: s.from, priceRef: s.ref } : {}
+  }
+  async function fillPlanSuggestions(rows: LineRow[]) {
+    try {
+      const ids = [...new Set(rows.map((r) => r.productId))].join(',')
+      const d = await api<{ prices: Record<string, PlanPrice> }>(
+        `/api/dept/sales/quotes/plan-prices?ids=${encodeURIComponent(ids)}`,
+      )
+      const m = new Map(Object.entries(d.prices))
+      if (!m.size) return
+      setCanSeeCost(true)
+      setPlanPrices((old) => new Map([...old, ...m]))
+      const keys = new Set(rows.map((r) => r.key))
+      setLines((ls) =>
+        ls.map((l) => {
+          const p = m.get(l.productId)
+          if (!keys.has(l.key) || l.unitPrice !== '' || !p || p.currency !== currency)
+            return l
+          return { ...l, unitPrice: String(p.price), priceFrom: 'plan', priceRef: null }
+        }),
+      )
+    } catch {
+      /* không có giá gợi ý thì ô để trống — người dùng tự gõ */
+    }
+  }
+  /** Lãi thực / ± Giá bán KH của một dòng — cùng hàm với báo giá, Điền đơn giá. */
+  const calc = (l: LineRow) => {
+    const plan = l.productId ? (planPrices.get(l.productId) ?? null) : null
+    return { plan, check: checkPrice(num(l.unitPrice), currency, plan) }
+  }
+
   /* ── file ───────────────────────────────────────────────────────────────── */
   const [files, setFiles] = useState<File[]>([])
   function addFiles(list: FileList | null) {
@@ -414,8 +511,33 @@ export function useDonHangForm(p: DonHangFormProps) {
     const late = h.due_date
       ? lines.filter((l) => l.shipDate && l.shipDate > h.due_date).length
       : 0
-    return { qty, value, zero, noDate, late }
-  }, [lines, h.due_date])
+    let below = 0
+    let belowPlan = 0
+    let firstBelow: number | null = null
+    let firstBelowPlan: number | null = null
+    for (const l of lines) {
+      const c = calc(l).check
+      if (c.below_cost) {
+        below++
+        firstBelow ??= l.key
+      } else if (c.below_plan) {
+        belowPlan++
+        firstBelowPlan ??= l.key
+      }
+    }
+    return {
+      qty,
+      value,
+      zero,
+      noDate,
+      late,
+      below,
+      belowPlan,
+      firstBelow,
+      firstBelowPlan,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calc đọc planPrices + currency (đã trong deps)
+  }, [lines, h.due_date, planPrices, currency])
 
   /* ── lưu ────────────────────────────────────────────────────────────────── */
   const headerBody = () => ({
@@ -636,6 +758,9 @@ export function useDonHangForm(p: DonHangFormProps) {
     activeCustomerId,
     currency,
     linesEditable,
+    planPrices,
+    canSeeCost,
+    calc,
     afterLsx,
     files,
     addFiles,
