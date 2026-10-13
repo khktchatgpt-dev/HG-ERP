@@ -12,8 +12,8 @@ lời "Ok" trong chat). Bản vẽ duyệt 13/10: https://claude.ai/artifact/6bF
 | --- | --- | --- |
 | Đ1 | Kho lập / sửa nháp / gửi / rút / huỷ · sổ đề nghị · in theo mẫu giấy | **XONG 13/10** — 0236 + 0231 ĐÃ ÁP (MCP), types đã sync, thử trọn luồng trên DB thật |
 | Đ2 | Lãnh đạo duyệt (điện thoại + Hộp ký) · sửa SL · từ chối có lý do · thông báo | **XONG 13/10** — 0237 ĐÃ ÁP (MCP) |
-| Đ3 | Cung ứng: "Đề nghị đã duyệt, chờ lập đơn" → lập đơn mẫu Phụ tùng/bảo trì (chọn hạng mục 0230), nối dòng ↔ dòng đơn | chưa làm |
-| Đ4 | Nhãn "từ ĐNM" ở Hàng về · tự sang Xong khi về đủ · (Q8) nhận hàng mua lẻ N2 | chưa làm |
+| Đ3 | **Kho tự mua** (đổi 13/10, không qua Cung ứng): "Nhập hàng đã mua" trên phiếu đã duyệt — PNK N2 có đơn giá thật, nơi mua, số hoá đơn; gắn / tạo mã dòng chưa có mã; nhập nhiều lần | chờ duyệt bản vẽ v3 |
+| Đ4 | Đếm đã nhập / duyệt · tự sang Xong khi đủ · Chốt xong có lý do khi thiếu | chưa làm |
 
 **Đ1 gồm:** bảng `warehouse_purchase_requests` + `_lines` (0236, RLS bật không
 policy, mã `DNM-YYYY-NNNN`), quyền `warehouse.request.manage` (Kho), màn
