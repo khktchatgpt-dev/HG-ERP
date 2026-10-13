@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import type { KeyboardEvent } from 'react'
 import { ClipboardPaste, Lock, Save, Target, X } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
@@ -512,7 +513,10 @@ function Dong({
             onChange={(e) => d.setCell(l.line_id, e.target.value)}
             onKeyDown={(e) => gridKey(e, i)}
             placeholder="0"
-            className={`${CELL} ${NUM} ${bad || (cost && chk.below_cost) ? 'border-[var(--stop)]' : changed ? 'border-[var(--primary)]' : l.editable && l.unit_price <= 0 ? 'border-[var(--warn)]/60' : ''}`}
+            className={cn(
+              CELL,
+              `${NUM} ${bad || (cost && chk.below_cost) ? 'border-[var(--stop)]' : changed ? 'border-[var(--primary)]' : l.editable && l.unit_price <= 0 ? 'border-[var(--warn)]/60' : ''}`,
+            )}
             aria-label={`Đơn giá ${l.product_code} của đơn ${l.order_code}`}
             title={
               !l.editable

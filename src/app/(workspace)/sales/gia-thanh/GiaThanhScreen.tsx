@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import type { KeyboardEvent } from 'react'
 import { ChevronDown, ChevronRight, ClipboardPaste, Lock, Save, X } from 'lucide-react'
 import { TopProgressBar } from '@/components/erp/Spinner'
@@ -548,13 +549,16 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
             : fmtIn(saved, d.sep)
       }
       aria-label={`${k} của ${r.code}`}
-      className={`${CELL} ${NUM} ${
-        res && !res.ok
-          ? 'border-[var(--stop)]'
-          : draft?.[k]
-            ? 'border-[var(--primary)]'
-            : ''
-      }`}
+      className={cn(
+        CELL,
+        `${NUM} ${
+          res && !res.ok
+            ? 'border-[var(--stop)]'
+            : draft?.[k]
+              ? 'border-[var(--primary)]'
+              : ''
+        }`,
+      )}
     />
   )
 
