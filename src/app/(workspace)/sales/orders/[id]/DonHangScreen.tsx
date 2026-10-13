@@ -93,9 +93,16 @@ export function DonHangScreen(props: DonHangProps) {
                 Xác nhận đã giao
               </ToolBtn>
             )}
-            {d.canEdit && d.editable && (
+            {/* Đơn đã xuất đủ: khoá SL/dòng (trang /edit từ chối), chỉ còn sửa GIÁ ở Điền
+                đơn giá. Trước 13/10/2026 nút "Sửa" vẫn hiện rồi /edit âm thầm đẩy về đây. */}
+            {d.canEdit && d.editable && o.status !== 'shipped' && (
               <ToolBtn href={`/sales/orders/${o.id}/edit`} icon={PenLine}>
                 Sửa
+              </ToolBtn>
+            )}
+            {d.canEdit && o.status === 'shipped' && (
+              <ToolBtn href={`/sales/orders/gia?order=${o.id}`} icon={PenLine}>
+                Sửa giá
               </ToolBtn>
             )}
             <ToolBtn href={`/print/orders/${o.id}`} icon={Printer}>

@@ -33,11 +33,12 @@ export const parsePrice = (raw: string | undefined): number | null => {
  * DÁN / MỒI KHÔNG LƯU THẲNG — chỉ điền vào ô, người dùng soát rồi bấm Lưu.
  * Đây là tiền hợp đồng; một cú dán nhầm cột mà tự lưu là hỏng cả sổ đơn.
  */
-export function useDienGia(board: PricingBoard) {
+export function useDienGia(board: PricingBoard, initialOrder: string | null = null) {
   const toast = useToast()
   const router = useRouter()
   const [draft, setDraft] = useState<Record<string, string>>({})
-  const [onlyUnpriced, setOnlyUnprice] = useState(true)
+  // Vào từ "Sửa giá" của một đơn → hiện MỌI dòng của đơn đó (giá đã có), không chỉ dòng thiếu giá.
+  const [onlyUnpriced, setOnlyUnprice] = useState(!initialOrder)
   /** Lọc "dưới giá vốn" (bấm ô đếm) — đè lên lọc thiếu giá. */
   const [belowOnly, setBelowOnly] = useState(false)
   const setOnlyUnpriced = (v: boolean) => {
@@ -45,7 +46,7 @@ export function useDienGia(board: PricingBoard) {
     setBelowOnly(false)
   }
   const [customer, setCustomer] = useState('all')
-  const [order, setOrder] = useState('all')
+  const [order, setOrder] = useState(initialOrder ?? 'all')
   const [q, setQ] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)

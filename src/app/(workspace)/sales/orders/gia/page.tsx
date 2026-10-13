@@ -14,8 +14,15 @@ export const metadata = { title: 'Bán hàng · Điền đơn giá' }
  * Quyền: `pricingBoard` gác `sales.order.manage`; từng dòng còn gác theo CHỦ đơn
  * (canMutateOwned) và trả cờ `editable` để UI khoá dòng của người khác.
  */
-export default async function OrderPricingPage() {
+export default async function OrderPricingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ order?: string }>
+}) {
   const user = await authService.requirePageUser()
-  const board = await ordersService.pricingBoard(user)
-  return <DienGiaScreen board={board} />
+  const [board, sp] = await Promise.all([ordersService.pricingBoard(user), searchParams])
+  // ?order= — lối vào "Sửa giá" từ chi tiết đơn đã xuất đủ: lọc sẵn đúng đơn đó.
+  const order =
+    sp.order && board.lines.some((l) => l.order_id === sp.order) ? sp.order : null
+  return <DienGiaScreen board={board} initialOrder={order} />
 }
