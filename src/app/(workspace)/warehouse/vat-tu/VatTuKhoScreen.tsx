@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Boxes, Pencil } from 'lucide-react'
+import { Boxes, Pencil, Plus } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -20,7 +20,7 @@ import {
 } from '../_erp/khung'
 import { HopThoai, OChu, OSo, docSoVn } from '../_erp/o-nhap'
 import { RO_VT_NHAN, RO_VT_VIEC, type RoVatTu } from './ro-vat-tu'
-import { SuaMaHop } from './sua-ma'
+import { SuaMaHop, ThemMaHop } from './sua-ma'
 
 export type VatTuRow = {
   id: string
@@ -77,6 +77,7 @@ export function VatTuKhoScreen({
   dvtOptions,
   keOptions = [],
   canEdit,
+  canCreate = false,
 }: {
   rows: VatTuRow[]
   counts: Record<RoVatTu, number>
@@ -91,6 +92,8 @@ export function VatTuKhoScreen({
   /** Mã các ô kệ đang dùng — gợi ý cho ô Kệ. */
   keOptions?: string[]
   canEdit: boolean
+  /** Quyền `warehouse.material.create` — nút Thêm mã (B7b). */
+  canCreate?: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -111,6 +114,8 @@ export function VatTuKhoScreen({
   const [dvtReset, setDvtReset] = useState(0)
   /** Mã đang mở hộp Sửa (B7a). */
   const [sua, setSua] = useState<string | null>(null)
+  /** Hộp Thêm mã đang mở (B7b). */
+  const [them, setThem] = useState(false)
 
   // Dữ liệu server đổi (đổi tab, sang trang) thì vẽ lại lưới — chỉnh state ngay
   // trong lượt render, không `useEffect`.
@@ -211,6 +216,13 @@ export function VatTuKhoScreen({
             <ApNhom>
               <ApNut
                 primary
+                icon={<Plus size={15} aria-hidden />}
+                onClick={canCreate ? () => setThem(true) : undefined}
+                why={canCreate ? null : 'Tài khoản này không thêm được mã vật tư'}
+              >
+                Thêm mã
+              </ApNut>
+              <ApNut
                 icon={<Pencil size={15} aria-hidden />}
                 onClick={motMa ? () => setSua(motMa.id) : undefined}
                 why={
@@ -496,6 +508,27 @@ export function VatTuKhoScreen({
           </>
         }
       />
+
+      {them && (
+        <ThemMaHop
+          nhom={nhom || undefined}
+          keList={dsKe}
+          onClose={() => setThem(false)}
+          onOpenCode={(c) => {
+            setThem(false)
+            setQ(c)
+            dat({ q: c, ro: 'all' })
+          }}
+          onSaved={(m, cau) => {
+            setThem(false)
+            setBao({ tone: 'ok', text: cau })
+            // Đưa mã vừa thêm lên lưới: tìm đúng mã ở tab Tất cả.
+            setQ(m.code)
+            dat({ q: m.code, ro: 'all' })
+            router.refresh()
+          }}
+        />
+      )}
 
       {sua && (
         <SuaMaHop

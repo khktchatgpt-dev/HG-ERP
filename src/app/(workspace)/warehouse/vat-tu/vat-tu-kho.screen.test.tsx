@@ -60,6 +60,7 @@ const dung = () =>
       dvtOptions={['Cái', 'Kg', 'Thùng']}
       keOptions={['BB-H', 'GO-K']}
       canEdit
+      canCreate
     />,
   )
 const doi = (label: string, v: string) => {
@@ -159,5 +160,55 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     ])
       expect(k in body).toBe(false)
     expect(screen.getByRole('status').textContent).toMatch(/^Đã lưu BAO0687.$/)
+  })
+
+  it('B7b: Thêm mã — xem trước mã tự cấp; gần giống chưa tích thì không gửi; tích rồi POST code null + kệ', async () => {
+    const NHOM = 'Sắt thép - tôn - tấm'
+    api.mockImplementation((url: string, opt?: { method?: string; body?: unknown }) => {
+      if (opt?.method === 'POST')
+        return Promise.resolve({ material: { id: 'n', code: 'SAT1238', name: 'Thép ống kẽm phi 15.9x0.8x6m' } }) // prettier-ignore
+      if (url.includes('material-taxonomy'))
+        return Promise.resolve({ units: ['Cây', 'Kg'], groups: [{ name: NHOM, subs: [], grades: [], finishes: [], po_template: null }], packUnits: [] }) // prettier-ignore
+      if (url.includes('/next-code')) return Promise.resolve({ code: 'SAT1238' })
+      if (url.includes('/similar'))
+        return Promise.resolve({ materials: [{ code: 'SAT0516', name: 'Thép ống kẽm 15.9x0.8' }] }) // prettier-ignore
+      return Promise.resolve({ rows: [], materials: [] })
+    })
+    dung()
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
+    const hop = await screen.findByRole('dialog', { name: 'Thêm mã vật tư' })
+    expect(within(hop).queryByText(/Cung ứng giữ · chỉ xem/)).toBeNull()
+    fireEvent.change(within(hop).getByLabelText('Nhóm'), { target: { value: NHOM } })
+    expect(await within(hop).findByText('SAT1238 · tự cấp')).toBeTruthy()
+    const go = (label: string, v: string) => {
+      const o = within(hop).getByLabelText(label)
+      fireEvent.change(o, { target: { value: v } })
+      fireEvent.blur(o)
+    }
+    go('Tên vật tư', 'Thép ống kẽm phi 15.9x0.8x6m')
+    go('ĐVT', 'Cây')
+    go('Kệ gợi ý', 'A-01')
+    expect(await within(hop).findByText('SAT0516', {}, { timeout: 2000 })).toBeTruthy()
+    fireEvent.click(within(hop).getByRole('button', { name: 'Thêm mã' }))
+    expect(
+      await within(hop).findByText(/tích “đã đối chiếu” 1 mã gần giống/),
+    ).toBeTruthy()
+    expect(api.mock.calls.some((c) => (c[1] as { method?: string })?.method === 'POST')).toBe(false) // prettier-ignore
+    fireEvent.click(within(hop).getByLabelText(/Đã đối chiếu/))
+    fireEvent.click(within(hop).getByRole('button', { name: 'Thêm mã' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const post = api.mock.calls.find(
+      (c) => (c[1] as { method?: string })?.method === 'POST',
+    )!
+    expect(post[0]).toBe('/api/dept/warehouse/materials')
+    const body = (post[1] as { body: Record<string, unknown> }).body
+    expect(body).toMatchObject({
+      code: null,
+      group_name: NHOM,
+      unit: 'Cây',
+      shelf_location: 'A-01',
+    })
+    expect('needs_review' in body).toBe(false)
+    expect(screen.getByRole('status').textContent).toMatch(/^Đã thêm SAT1238/)
   })
 })

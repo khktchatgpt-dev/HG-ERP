@@ -11,7 +11,17 @@ import {
 } from '@/components/warehouse/useMaterialCore'
 import type { Material } from '@/modules/dept/warehouse/warehouse.repo'
 import { GoiY, HopThoai, OChu, OSo, docSoVn } from '../_erp/o-nhap'
-import { LichSu, XacNhanDoiMa, ngay, tien, type GiaMua, type ThayDoi } from './sua-ma-phu'
+import {
+  DoiChieu,
+  LichSu,
+  OMaMoi,
+  XacNhanDoiMa,
+  ngay,
+  tien,
+  useMaTuCap,
+  type GiaMua,
+  type ThayDoi,
+} from './sua-ma-phu'
 
 const soChu = (v: string) => (v.trim() === '' ? '' : String(docSoVn(v)))
 
@@ -29,6 +39,11 @@ const soChu = (v: string) => (v.trim() === '' ? '' : String(docSoVn(v)))
  * Bước "Chờ Kho rà" đã BỎ ở cả hai phòng (14/10/2026) — hộp không đọc, không ghi
  * cờ `needs_review` nữa.
  * Q3: đổi mã qua hộp xác nhận nói số dòng định mức SP / BOM lệnh đổi theo.
+ *
+ * THÊM MÃ (B7b, bản vẽ K-5d) = chính hộp này với `m = null`: cùng bộ ô, cùng
+ * luật; thêm mã tự cấp theo nhóm (Nhóm đứng đầu vì nhóm quyết định mã) và bước
+ * đối chiếu tên gần giống phải tích mới lưu. Khối Mua hàng ẩn; kệ, ngưỡng, mã
+ * vạch khai luôn được (Kho giữ `warehouse.material.update`). `POST materials`.
  */
 export function SuaMaHop({
   id,
@@ -77,16 +92,48 @@ export function SuaMaHop({
   return <Form m={m} keList={keList} onClose={onClose} onSaved={onSaved} />
 }
 
-function Form({
-  m,
+/** Thêm mã mới (B7b). `nhom` = nhóm đang lọc ở danh sách, điền sẵn. */
+export function ThemMaHop({
+  nhom,
   keList,
   onClose,
   onSaved,
+  onOpenCode,
 }: {
-  m: Material
+  nhom?: string
   keList: string
   onClose: () => void
   onSaved: (m: Material, cau: string) => void
+  /** Bấm "dùng mã này" ở khối gần giống — đóng hộp, tìm mã đó. */
+  onOpenCode: (code: string) => void
+}) {
+  return (
+    <Form
+      m={null}
+      nhom={nhom}
+      keList={keList}
+      onClose={onClose}
+      onSaved={onSaved}
+      onOpenCode={onOpenCode}
+    />
+  )
+}
+
+function Form({
+  m,
+  nhom,
+  keList,
+  onClose,
+  onSaved,
+  onOpenCode,
+}: {
+  /** null = THÊM mã mới (B7b). */
+  m: Material | null
+  nhom?: string
+  keList: string
+  onClose: () => void
+  onSaved: (m: Material, cau: string) => void
+  onOpenCode?: (code: string) => void
 }) {
   const dsDvt = useId()
   const dsCon = useId()
@@ -97,18 +144,22 @@ function Form({
   const [loiGhi, setLoiGhi] = useState<string | null>(null)
   const [daThu, setDaThu] = useState(false)
 
-  const s = useMaterialCore({ active: true, initial: coreFromMaterial(m), excludeCode: m.code }) // prettier-ignore
+  const s = useMaterialCore({ active: true, initial: m ? coreFromMaterial(m) : { group_name: nhom ?? '' }, excludeCode: m?.code }) // prettier-ignore
   const { f } = s
   const set = (k: keyof MaterialCore) => (v: string) => s.setF((p) => ({ ...p, [k]: v }))
 
   const [kho, setKho] = useState({
-    shelf: m.shelf_location ?? '',
-    min: String(m.min_stock ?? 0),
-    barcode: m.barcode ?? '',
+    shelf: m?.shelf_location ?? '',
+    min: String(m?.min_stock ?? 0),
+    barcode: m?.barcode ?? '',
   })
-  const [maSua, setMaSua] = useState(m.code)
+  const [maSua, setMaSua] = useState(m?.code ?? '')
   const maMoi = maSua.trim().replace(/\s+/g, ' ')
-  const doiMa = maMoi !== '' && maMoi !== m.code
+  const doiMa = !!m && maMoi !== '' && maMoi !== m.code
+  const ma = useMaTuCap(m ? '' : f.group_name)
+  /** Tên đã đối chiếu gần giống (chỉ khi THÊM) — sửa tên là phải đối chiếu lại. */
+  const [daDoiChieu, setDaDoiChieu] = useState('')
+  const canDoiChieu = !m && s.similar.length > 0 && daDoiChieu !== f.name
   /** Hộp xác nhận đổi mã: số dòng mã chữ sẽ đổi theo (Q3). */
   const [xacNhanMa, setXacNhanMa] = useState<{ parts: number; boms: number } | null>(null)
 
@@ -116,6 +167,7 @@ function Form({
   const [doi, setDoi] = useState<ThayDoi[] | null>(null)
   const [gia, setGia] = useState<GiaMua[] | null>(null)
   useEffect(() => {
+    if (!m) return
     let live = true
     api<{ changes: ThayDoi[] }>(`/api/dept/warehouse/materials/${m.id}/changes`)
       .then((r) => live && setDoi(r.changes))
@@ -126,14 +178,14 @@ function Form({
     return () => {
       live = false
     }
-  }, [m.id])
+  }, [m])
 
   const payload = s.corePayload()
-  const cleared = useMemo(() => fieldsClearedByPayload(m as unknown as Record<string, unknown>, payload), [m, payload]) // prettier-ignore
+  const cleared = useMemo(() => (m ? fieldsClearedByPayload(m as unknown as Record<string, unknown>, payload) : []), [m, payload]) // prettier-ignore
   const clearKey = cleared.map((c) => c.field).join(',')
   const [clearOkFor, setClearOkFor] = useState('')
   const barHint = barLengthFromName(f.name)
-  const units = useMemo(() => [...new Set([...s.tax.units, m.unit].filter(Boolean))], [s.tax.units, m.unit]) // prettier-ignore
+  const units = useMemo(() => [...new Set([...s.tax.units, m?.unit ?? ''].filter(Boolean))], [s.tax.units, m?.unit]) // prettier-ignore
   const unitWarnOpen = s.unitWarn != null && !s.unitConfirmed
 
   const why =
@@ -146,19 +198,26 @@ function Form({
       clearedUnconfirmed: clearOkFor === clearKey ? [] : cleared.map((c) => c.label),
     }) ??
     (!f.group_name.trim() ? 'chọn nhóm' : null) ??
-    (maSua.trim() === '' ? 'mã vật tư không để trống' : null)
+    (m && maSua.trim() === '' ? 'mã vật tư không để trống' : null) ??
+    (!m && ma.rieng && !ma.code.trim() ? 'gõ mã riêng hoặc bấm “tự cấp mã”' : null) ??
+    (canDoiChieu ? `tích “đã đối chiếu” ${s.similar.length} mã gần giống` : null)
 
   async function ghi() {
     setBusy(true)
     setLoiGhi(null)
     try {
       const r = await api<{ material: Material }>(
-        `/api/dept/warehouse/materials/${m.id}`,
+        m ? `/api/dept/warehouse/materials/${m.id}` : '/api/dept/warehouse/materials',
         {
-          method: 'PATCH',
+          method: m ? 'PATCH' : 'POST',
           body: {
             ...payload,
-            ...(doiMa ? { code: maMoi } : {}),
+            // THÊM: bỏ trống = server tự cấp (đúng hàm đã cho xem trước).
+            ...(m
+              ? doiMa
+                ? { code: maMoi }
+                : {}
+              : { code: ma.rieng ? ma.code.trim() : null }),
             shelf_location: kho.shelf.trim() || null,
             min_stock: docSoVn(kho.min),
             barcode: kho.barcode.trim() || null,
@@ -167,9 +226,11 @@ function Form({
       )
       onSaved(
         r.material,
-        doiMa
-          ? `Đã đổi mã ${m.code} → ${r.material.code} — phiếu, đơn đã có tự hiện mã mới; định mức SP và BOM lệnh đã đổi theo.`
-          : `Đã lưu ${r.material.code}.`,
+        !m
+          ? `Đã thêm ${r.material.code} — dùng được ngay ở phiếu nhập, xuất và đơn mua.`
+          : doiMa
+            ? `Đã đổi mã ${m.code} → ${r.material.code} — phiếu, đơn đã có tự hiện mã mới; định mức SP và BOM lệnh đã đổi theo.`
+            : `Đã lưu ${r.material.code}.`,
       )
     } catch (e) {
       setLoiGhi(apiErrorText(e))
@@ -200,7 +261,28 @@ function Form({
   const tay = doi?.filter((c) => c.source !== 'import').length ?? null
   const lanMua = gia?.[0] ?? null
 
-  if (xacNhanMa)
+  const oNhom = (
+    <label>
+      <span className={can(daThu && !f.group_name.trim())}>Nhóm *</span>
+      <select
+        className="kh-o"
+        value={f.group_name}
+        onChange={(e) =>
+          s.setF((p) => ({ ...p, group_name: e.target.value, sub_group: '' }))
+        }
+        aria-label="Nhóm"
+      >
+        <option value="">— chưa chọn —</option>
+        {s.tax.groups.map((g) => (
+          <option key={g.name} value={g.name}>
+            {g.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+
+  if (m && xacNhanMa)
     return (
       <XacNhanDoiMa
         m={m}
@@ -214,10 +296,12 @@ function Form({
 
   return (
     <HopThoai
-      title={`Sửa mã ${m.code}`}
-      subtitle={[m.group_name ?? 'chưa nhóm', m.is_active ? null : 'ĐANG NGỪNG DÙNG']
-        .filter(Boolean)
-        .join(' · ')}
+      title={m ? `Sửa mã ${m.code}` : 'Thêm mã vật tư'}
+      subtitle={
+        m
+          ? [m.group_name ?? 'chưa nhóm', m.is_active ? null : 'ĐANG NGỪNG DÙNG'].filter(Boolean).join(' · ') // prettier-ignore
+          : 'mã cấp khi lưu · chọn nhóm trước, nhóm quyết định mã'
+      }
       onClose={onClose}
       width={780}
       footer={
@@ -231,7 +315,9 @@ function Form({
               <span className="kh-stop">Chưa lưu được: {why}</span>
             ) : (
               <span className="kh-mut">
-                Lưu là đổi cho mọi phiếu, đơn sau · vào sổ vết
+                {m
+                  ? 'Lưu là đổi cho mọi phiếu, đơn sau · vào sổ vết'
+                  : 'Mã mới dùng được ngay ở phiếu nhập, xuất, đơn mua'}
               </span>
             )}
           </span>
@@ -245,34 +331,36 @@ function Form({
             title={why ?? undefined}
             onClick={() => void bamLuu()}
           >
-            {busy ? 'Đang lưu…' : 'Lưu'}
+            {busy ? 'Đang lưu…' : m ? 'Lưu' : 'Thêm mã'}
           </button>
         </>
       }
     >
-      <div
-        className="kh-in-tabs"
-        role="tablist"
-        aria-label="Nội dung mã"
-        style={{ margin: '-12px -14px 0' }}
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'tt'}
-          onClick={() => setTab('tt')}
+      {m && (
+        <div
+          className="kh-in-tabs"
+          role="tablist"
+          aria-label="Nội dung mã"
+          style={{ margin: '-12px -14px 0' }}
         >
-          Thông tin
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'ls'}
-          onClick={() => setTab('ls')}
-        >
-          Lịch sử{tay != null ? ` · ${tay}` : ''}
-        </button>
-      </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'tt'}
+            onClick={() => setTab('tt')}
+          >
+            Thông tin
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'ls'}
+            onClick={() => setTab('ls')}
+          >
+            Lịch sử{tay != null ? ` · ${tay}` : ''}
+          </button>
+        </div>
+      )}
 
       {tab === 'ls' ? (
         <LichSu doi={doi} gia={gia} />
@@ -304,9 +392,24 @@ function Form({
               Nhận diện<span className="o">dùng chung hai phòng</span>
             </div>
             <div className="kh-fg">
+              {!m && oNhom}
               <label>
-                <span className={can(daThu && maSua.trim() === '')}>Mã</span>
-                <OChu value={maSua} onCommit={setMaSua} mono label="Mã vật tư" />
+                <span
+                  className={can(
+                    daThu && (m ? maSua.trim() === '' : ma.rieng && !ma.code.trim()),
+                  )}
+                >
+                  Mã
+                </span>
+                {m ? (
+                  <OChu value={maSua} onCommit={setMaSua} mono label="Mã vật tư" />
+                ) : (
+                  <OMaMoi
+                    ma={ma}
+                    group={f.group_name}
+                    need={daThu && ma.rieng && !ma.code.trim()}
+                  />
+                )}
               </label>
               <label className="w2">
                 <span className={can(daThu && !f.name.trim())}>Tên vật tư *</span>
@@ -339,24 +442,7 @@ function Form({
                   placeholder={s.groupCfg.specPlaceholder}
                 />
               </label>
-              <label>
-                <span className={can(daThu && !f.group_name.trim())}>Nhóm *</span>
-                <select
-                  className="kh-o"
-                  value={f.group_name}
-                  onChange={(e) =>
-                    s.setF((p) => ({ ...p, group_name: e.target.value, sub_group: '' }))
-                  }
-                  aria-label="Nhóm"
-                >
-                  <option value="">— chưa chọn —</option>
-                  {s.tax.groups.map((g) => (
-                    <option key={g.name} value={g.name}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {m && oNhom}
               <label>
                 <span className="k">Nhóm con</span>
                 <OChu
@@ -413,8 +499,8 @@ function Form({
               {doiMa && (
                 <div className="w4">
                   <GoiY tone="warn">
-                    Đổi mã {m.code} → <b>{maMoi}</b>: bấm Lưu sẽ hỏi lại, kèm số dòng định
-                    mức SP / BOM lệnh đổi theo.
+                    Đổi mã {m?.code} → <b>{maMoi}</b>: bấm Lưu sẽ hỏi lại, kèm số dòng
+                    định mức SP / BOM lệnh đổi theo.
                   </GoiY>
                 </div>
               )}
@@ -447,7 +533,15 @@ function Form({
               </span>
             </div>
           )}
-          {s.similar.length > 0 && (
+          {!m && s.similar.length > 0 && (
+            <DoiChieu
+              similar={s.similar}
+              ok={daDoiChieu === f.name}
+              onOk={(on) => setDaDoiChieu(on ? f.name : '')}
+              onOpenCode={(c) => onOpenCode?.(c)}
+            />
+          )}
+          {m && s.similar.length > 0 && (
             <div className="kh-note">
               <span className="tag">Gần trùng</span>
               <span>
@@ -609,51 +703,53 @@ function Form({
             </div>
           </div>
 
-          <div className="kh-sec">
-            <div className="st">
-              Mua hàng<span className="o">Cung ứng giữ · chỉ xem</span>
+          {m && (
+            <div className="kh-sec">
+              <div className="st">
+                Mua hàng<span className="o">Cung ứng giữ · chỉ xem</span>
+              </div>
+              <div className="kh-fg">
+                <div>
+                  <span className="k">Giá tham chiếu</span>
+                  <span className="ro kh-num">
+                    {m.last_purchase_price != null
+                      ? `${tien(m.last_purchase_price)} ₫/${m.price_unit || m.unit}`
+                      : '— chưa có'}
+                  </span>
+                </div>
+                <div className="w3">
+                  <span className="k">Lần mua gần nhất</span>
+                  <span
+                    className="ro"
+                    style={{ whiteSpace: 'normal', paddingBlock: 3 }}
+                    title={
+                      lanMua
+                        ? `${lanMua.po_code} · ${lanMua.supplier_name ?? ''}`
+                        : undefined
+                    }
+                  >
+                    {gia == null
+                      ? 'đang tải…'
+                      : lanMua
+                        ? `${lanMua.po_code} · ${lanMua.supplier_name ?? 'NCC ?'} · ${tien(lanMua.unit_price, lanMua.currency)} ${lanMua.currency} · ${ngay(lanMua.at)}`
+                        : 'chưa đơn nào mua mã này'}
+                  </span>
+                </div>
+                <div>
+                  <span className="k">Nhận vượt tối đa</span>
+                  <span className="ro kh-num">
+                    {(m.over_tolerance_pct ?? 0).toLocaleString('vi-VN')} %
+                  </span>
+                </div>
+                <div className="w4">
+                  <GoiY tone="mut">
+                    NCC mặc định {m.default_supplier_id ? 'đã chọn' : 'chưa chọn'} · giá,
+                    NCC, nhận vượt, mẫu đơn sửa ở Mua hàng › Vật tư.
+                  </GoiY>
+                </div>
+              </div>
             </div>
-            <div className="kh-fg">
-              <div>
-                <span className="k">Giá tham chiếu</span>
-                <span className="ro kh-num">
-                  {m.last_purchase_price != null
-                    ? `${tien(m.last_purchase_price)} ₫/${m.price_unit || m.unit}`
-                    : '— chưa có'}
-                </span>
-              </div>
-              <div className="w3">
-                <span className="k">Lần mua gần nhất</span>
-                <span
-                  className="ro"
-                  style={{ whiteSpace: 'normal', paddingBlock: 3 }}
-                  title={
-                    lanMua
-                      ? `${lanMua.po_code} · ${lanMua.supplier_name ?? ''}`
-                      : undefined
-                  }
-                >
-                  {gia == null
-                    ? 'đang tải…'
-                    : lanMua
-                      ? `${lanMua.po_code} · ${lanMua.supplier_name ?? 'NCC ?'} · ${tien(lanMua.unit_price, lanMua.currency)} ${lanMua.currency} · ${ngay(lanMua.at)}`
-                      : 'chưa đơn nào mua mã này'}
-                </span>
-              </div>
-              <div>
-                <span className="k">Nhận vượt tối đa</span>
-                <span className="ro kh-num">
-                  {(m.over_tolerance_pct ?? 0).toLocaleString('vi-VN')} %
-                </span>
-              </div>
-              <div className="w4">
-                <GoiY tone="mut">
-                  NCC mặc định {m.default_supplier_id ? 'đã chọn' : 'chưa chọn'} · giá,
-                  NCC, nhận vượt, mẫu đơn sửa ở Mua hàng › Vật tư.
-                </GoiY>
-              </div>
-            </div>
-          </div>
+          )}
         </>
       )}
     </HopThoai>

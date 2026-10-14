@@ -1,11 +1,14 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { api } from '@/lib/api'
 import { MATERIAL_FIELD_LABELS } from '@/lib/material-group-fields'
-import { HopThoai } from '../_erp/o-nhap'
+import { HopThoai, OChu } from '../_erp/o-nhap'
 
 /*
  * PHẦN PHỤ CỦA HỘP SỬA MÃ (B7a) — tab Lịch sử (sổ vết 0177 + giá mua trên đơn,
- * chỉ xem) và hộp xác nhận đổi mã (Q3). Tách khỏi `sua-ma.tsx` cho dưới trần 800.
+ * chỉ xem), hộp xác nhận đổi mã (Q3), và hai mảnh của chế độ THÊM (B7b): mã tự
+ * cấp theo nhóm + khối đối chiếu mã gần giống. Tách khỏi `sua-ma.tsx` cho dưới trần 800.
  */
 
 export type ThayDoi = {
@@ -203,4 +206,114 @@ export function LichSu({ doi, gia }: { doi: ThayDoi[] | null; gia: GiaMua[] | nu
       </div>
     </>
   )
+}
+
+/**
+ * MÃ TỰ CẤP (B7b) — xem trước mã server SẼ cấp cho nhóm đang chọn (`GET
+ * materials/next-code`, đúng hàm `create` dùng). Gõ mã riêng chỉ khi thật cần
+ * (nối nếp mã cũ). Bỏ trống lúc gửi = server tự cấp.
+ */
+export function useMaTuCap(group: string) {
+  const [xem, setXem] = useState<{ group: string; code: string | null }>({ group: '', code: null }) // prettier-ignore
+  const [rieng, setRieng] = useState(false)
+  const [code, setCode] = useState('')
+  useEffect(() => {
+    if (!group) return
+    let live = true
+    api<{ code: string }>(
+      `/api/dept/warehouse/materials/next-code?group_name=${encodeURIComponent(group)}`,
+    )
+      .then((r) => live && setXem({ group, code: r.code }))
+      .catch(() => live && setXem({ group, code: null }))
+    return () => {
+      live = false
+    }
+  }, [group])
+  return {
+    /** Mã dự kiến của ĐÚNG nhóm đang chọn (nhóm vừa đổi thì chưa có). */
+    du_kien: group && xem.group === group ? xem.code : null,
+    rieng,
+    code,
+    setCode,
+    goRieng: () => setRieng(true),
+    tuCap: () => {
+      setRieng(false)
+      setCode('')
+    },
+  } as const
+}
+export type MaTuCap = ReturnType<typeof useMaTuCap>
+
+export function OMaMoi({
+  ma,
+  group,
+  need,
+}: {
+  ma: MaTuCap
+  group: string
+  need: boolean
+}) {
+  if (ma.rieng)
+    return (
+      <>
+        <OChu value={ma.code} onCommit={ma.setCode} mono label="Mã vật tư gõ riêng" tone={need ? 'need' : undefined} placeholder="vd. BUL0608" />
+        <button type="button" className="kh-lnk" style={{ fontFamily: 'inherit', fontSize: 11.5, alignSelf: 'flex-start' }} onClick={ma.tuCap}>
+          tự cấp mã
+        </button>
+      </>
+    ) // prettier-ignore
+  return (
+    <>
+      <span className="ro kh-num" title="Mã cấp khi lưu, theo nếp mã của nhóm">
+        {!group ? 'chọn nhóm trước' : ma.du_kien ? `${ma.du_kien} · tự cấp` : 'đang xem mã…'}
+      </span>
+      <button type="button" className="kh-lnk" style={{ fontFamily: 'inherit', fontSize: 11.5, alignSelf: 'flex-start' }} onClick={ma.goRieng}>
+        gõ mã riêng
+      </button>
+    </>
+  ) // prettier-ignore
+}
+
+/**
+ * GẦN GIỐNG PHẢI ĐỐI CHIẾU RỒI MỚI THÊM (luật 0136, cùng luật hộp Thêm của Mua
+ * hàng). Tick gắn với ĐÚNG cái tên lúc xác nhận — sửa tên là phải đối chiếu lại.
+ */
+export function DoiChieu({
+  similar,
+  ok,
+  onOk,
+  onOpenCode,
+}: {
+  similar: { code: string; name: string }[]
+  ok: boolean
+  onOk: (on: boolean) => void
+  onOpenCode: (code: string) => void
+}) {
+  return (
+    <div className="kh-hau">
+      <b>{similar.length} mã gần giống trong nhóm</b> — kiểm trước khi tạo mới. Hai mã một
+      hàng thì tồn và đơn tách làm hai.
+      <table className="kh-in" style={{ marginTop: 6 }} aria-label="Mã gần giống">
+        <tbody>
+          {similar.map((x) => (
+            <tr key={x.code}>
+              <td className="kh-ma" style={{ width: 110 }}>{x.code}</td>
+              <td style={{ whiteSpace: 'normal' }}>{x.name}</td>
+              <td className="r" style={{ width: 120 }}>
+                <button type="button" className="kh-lnk" style={{ fontFamily: 'inherit' }} onClick={() => onOpenCode(x.code)}>
+                  dùng mã này
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+        <input type="checkbox" checked={ok} onChange={(e) => onOk(e.target.checked)} />
+        <span>
+          Đã đối chiếu — đây là <b>hàng khác</b>, vẫn thêm mã mới
+        </span>
+      </label>
+    </div>
+  ) // prettier-ignore
 }

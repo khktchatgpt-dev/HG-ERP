@@ -44,7 +44,7 @@ export default async function VatTuKhoPage({
     no_shelf: ro === 'no_shelf' || undefined,
   }
 
-  const [res, counts, taxonomy, canEdit, bins] = await Promise.all([
+  const [res, counts, taxonomy, canEdit, canCreate, bins] = await Promise.all([
     materialsService.list(user, { ...loc, page: trang, page_size: PAGE_SIZE }),
     // Đếm rổ trên bộ lọc tìm/nhóm ĐANG ÁP, không đếm cả danh mục — chip nói 52
     // mà mở ra 7 là hỏng nguyên tắc "con số là một lời hứa".
@@ -53,6 +53,10 @@ export default async function VatTuKhoPage({
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.material.update'),
+    // Thêm mã (B7b) — đúng quyền service kiểm khi tạo.
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.material.create'),
     // Gợi ý cho ô Kệ (K4: ô gõ có gợi ý thay hộp chọn). Hỏng thì ô vẫn gõ tự do.
     binsService.list(user).catch(() => []),
   ])
@@ -85,6 +89,7 @@ export default async function VatTuKhoPage({
       dvtOptions={taxonomy.units}
       keOptions={bins.filter((b) => b.is_active !== false).map((b) => b.code)}
       canEdit={canEdit}
+      canCreate={canCreate}
     />
   )
 }
