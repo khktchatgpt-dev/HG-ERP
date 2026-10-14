@@ -123,4 +123,54 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
       ['/api/dept/warehouse/materials/b', { needs_review: false }],
     ])
   })
+
+  it('B7a: nhấp đúp dòng → hộp Sửa; mã chờ rà mặc định "đã rà"; Lưu KHÔNG gửi giá / NCC', async () => {
+    const M = {
+      id: 'a', code: 'BAO0687', name: 'BB BAO0687', unit: 'Cái', spec: null,
+      group_name: 'Bao bì - đóng gói - tem nhãn', sub_group: null, price_unit: null,
+      unit2_factor: null, kg_per_m: null, default_bar_length_m: null, kg_per_unit: null,
+      material_grade: null, pack_size: null, pack_unit: null, open_style: null,
+      pcs_per_ctn: null, finish: null, shelf_location: null, min_stock: 0, barcode: null,
+      needs_review: true, needs_review_fields: [], is_active: true,
+      last_purchase_price: 12000, default_supplier_id: 's1', over_tolerance_pct: 5,
+    } // prettier-ignore
+    api.mockImplementation((url: string, opt?: { method?: string }) => {
+      if (opt?.method === 'PATCH') return Promise.resolve({ material: { ...M, needs_review: false, shelf_location: 'BB-H' } }) // prettier-ignore
+      if (url === '/api/dept/warehouse/materials/a')
+        return Promise.resolve({ material: M })
+      if (url.includes('/changes')) return Promise.resolve({ changes: [] })
+      if (url.includes('/price-history')) return Promise.resolve({ prices: [] })
+      if (url.includes('material-taxonomy'))
+        return Promise.resolve({ units: ['Cái', 'Kg'], groups: [{ name: 'Bao bì - đóng gói - tem nhãn', subs: [], grades: [], finishes: [], po_template: null }], packUnits: [] }) // prettier-ignore
+      return Promise.resolve({ rows: [], similar: [] })
+    })
+    dung()
+    fireEvent.doubleClick(screen.getByText('BAO0687'))
+    const hop = await screen.findByRole('dialog', { name: 'Sửa mã BAO0687' })
+    expect((within(hop).getByLabelText(/Kho đã rà xong/) as HTMLInputElement).checked).toBe(true) // prettier-ignore
+    expect(within(hop).getByText(/Cung ứng giữ · chỉ xem/)).toBeTruthy()
+    const ke = within(hop).getByLabelText('Kệ gợi ý')
+    fireEvent.change(ke, { target: { value: 'BB-H' } })
+    fireEvent.blur(ke)
+    fireEvent.click(within(hop).getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const patch = api.mock.calls.find(
+      (c) => (c[1] as { method?: string })?.method === 'PATCH',
+    )!
+    expect(patch[0]).toBe('/api/dept/warehouse/materials/a')
+    const body = (patch[1] as { body: Record<string, unknown> }).body
+    expect(body).toMatchObject({
+      shelf_location: 'BB-H',
+      needs_review: false,
+      min_stock: 0,
+    })
+    for (const k of [
+      'last_purchase_price',
+      'default_supplier_id',
+      'over_tolerance_pct',
+      'code',
+    ])
+      expect(k in body).toBe(false)
+    expect(screen.getByRole('status').textContent).toMatch(/Đã lưu BAO0687 · đã rà xong/)
+  })
 })

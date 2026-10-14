@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Boxes, Check } from 'lucide-react'
+import { Boxes, Check, Pencil } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -20,6 +20,7 @@ import {
 } from '../_erp/khung'
 import { HopThoai, OChu, OSo, docSoVn } from '../_erp/o-nhap'
 import { RO_VT_NHAN, RO_VT_VIEC, type RoVatTu } from './ro-vat-tu'
+import { SuaMaHop } from './sua-ma'
 
 export type VatTuRow = {
   id: string
@@ -58,6 +59,10 @@ type Bao = { tone: 'ok' | 'stop'; text: string }
  *  · Kệ gợi ý: ô gõ có gợi ý các ô kệ của kho;
  *  · Ngưỡng: ô số kiểu VN.
  * Chọn nhiều dòng rồi "Đã rà xong" một lượt ở Action Pane.
+ *
+ * B7a (14/10): Kho SỬA ĐỦ một mã — tích đúng một dòng rồi "Sửa" ở Action Pane,
+ * hoặc nhấp đúp dòng (ngoài ô gõ) → hộp `sua-ma.tsx` (nhận diện · quy đổi · tồn
+ * trữ; trường mua hàng chỉ xem).
  *
  * Danh mục KHÔNG có vòng đời duyệt: `needs_review` là hàng đợi việc "Cung ứng
  * khai vội, Kho xác nhận lại", không phải một bậc duyệt. Trường mua hàng (giá,
@@ -108,6 +113,8 @@ export function VatTuKhoScreen({
   const [dvtLa, setDvtLa] = useState<{ r: VatTuRow; unit: string } | null>(null)
   /** Tăng khi bỏ ĐVT lạ — dựng lại ô ĐVT để chữ gõ dở trở về đơn vị cũ. */
   const [dvtReset, setDvtReset] = useState(0)
+  /** Mã đang mở hộp Sửa (B7a). */
+  const [sua, setSua] = useState<string | null>(null)
 
   // Dữ liệu server đổi (đổi tab, sang trang) thì vẽ lại lưới — chỉnh state ngay
   // trong lượt render, không `useEffect`.
@@ -239,6 +246,21 @@ export function VatTuKhoScreen({
                 why={motMa ? null : 'Tích đúng một mã trước'}
               >
                 Xem tồn
+              </ApNut>
+            </ApNhom>
+            <ApNhom>
+              <ApNut
+                icon={<Pencil size={15} aria-hidden />}
+                onClick={motMa ? () => setSua(motMa.id) : undefined}
+                why={
+                  !canEdit
+                    ? 'Tài khoản này không sửa được danh mục'
+                    : motMa
+                      ? null
+                      : 'Tích đúng một mã trước (hoặc nhấp đúp dòng)'
+                }
+              >
+                {motMa ? `Sửa ${motMa.code}` : 'Sửa mã'}
               </ApNut>
             </ApNhom>
             <ApNhom>
@@ -387,7 +409,18 @@ export function VatTuKhoScreen({
               {rows.map((r) => {
                 const on = chon.has(r.id)
                 return (
-                  <tr key={r.id} className={on ? 'd f on' : 'd f'} aria-selected={on}>
+                  <tr
+                    key={r.id}
+                    className={on ? 'd f on' : 'd f'}
+                    aria-selected={on}
+                    title={canEdit ? 'Nhấp đúp để sửa mã' : undefined}
+                    onDoubleClick={(e) => {
+                      if (!canEdit) return
+                      if ((e.target as HTMLElement).closest('input, select, a, button'))
+                        return
+                      setSua(r.id)
+                    }}
+                  >
                     <td className="c0">
                       <input
                         type="checkbox"
@@ -504,7 +537,7 @@ export function VatTuKhoScreen({
       )}
 
       <ThanhTT
-        left="Tab / Enter đi ô như Excel · sửa xong ô là lưu ô đó · giá mua, NCC, mẫu đơn là của Cung ứng"
+        left="Tab / Enter đi ô như Excel · sửa xong ô là lưu ô đó · nhấp đúp dòng = sửa đủ mã · giá mua, NCC, mẫu đơn là của Cung ứng"
         right={
           <>
             <PhanTrang
@@ -519,6 +552,36 @@ export function VatTuKhoScreen({
           </>
         }
       />
+
+      {sua && (
+        <SuaMaHop
+          id={sua}
+          keList={dsKe}
+          onClose={() => setSua(null)}
+          onSaved={(m, cau) => {
+            setRows((rs) =>
+              rs.map((r) =>
+                r.id === m.id
+                  ? {
+                      ...r,
+                      code: m.code,
+                      name: m.name,
+                      unit: m.unit,
+                      group_name: m.group_name,
+                      sub_group: m.sub_group,
+                      shelf_location: m.shelf_location,
+                      min_stock: m.min_stock,
+                      needs_review: m.needs_review,
+                    }
+                  : r,
+              ),
+            )
+            setSua(null)
+            setBao({ tone: 'ok', text: cau })
+            router.refresh()
+          }}
+        />
+      )}
 
       {dvtLa && (
         <HopThoai
