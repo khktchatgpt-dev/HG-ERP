@@ -51,6 +51,19 @@ export type Bin = {
   is_active: boolean
 }
 
+/** Một dòng biến động gần nhất của một mã (`movementsRepo.ganDay`). */
+export type BienDongGanDay = {
+  id: string
+  created_at: string
+  direction: Direction
+  qty: number
+  stock_status: string | null
+  reason_code: string | null
+  doc_id: string | null
+  doc_code: string | null
+  lenh_code: string | null
+}
+
 export type Movement = {
   id: string
   material_id: string
@@ -301,6 +314,38 @@ export const movementsRepo = {
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert movement failed')
     return data as { id: string }
+  },
+
+  /**
+   * Biến động GẦN NHẤT của một mã kèm số phiếu + lệnh — ô chi tiết dưới dòng của
+   * màn Tồn kho (Kho lối ERP · B1, 14/10/2026). `ref_no` thường trống từ khi có
+   * phiếu nhiều dòng, nên số phiếu lấy qua `doc_id`.
+   */
+  async ganDay(material_id: string, limit: number): Promise<BienDongGanDay[]> {
+    const { data, error } = await db()
+      .from('warehouse_movements')
+      .select(
+        'id, created_at, direction, qty, stock_status, reason_code, doc_id, doc:warehouse_docs(code), lenh:production_orders(code)',
+      )
+      .eq('material_id', material_id)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw new Error(error.message)
+    return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      const one = (v: unknown) =>
+        (Array.isArray(v) ? v[0] : v) as { code?: string } | null
+      return {
+        id: r.id as string,
+        created_at: r.created_at as string,
+        direction: r.direction as Direction,
+        qty: num(r.qty),
+        stock_status: (r.stock_status as string | null) ?? null,
+        reason_code: (r.reason_code as string | null) ?? null,
+        doc_id: (r.doc_id as string | null) ?? null,
+        doc_code: one(r.doc)?.code ?? null,
+        lenh_code: one(r.lenh)?.code ?? null,
+      }
+    })
   },
 
   async list(filter: {

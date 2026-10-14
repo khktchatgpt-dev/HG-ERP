@@ -498,6 +498,19 @@ export const stockService = {
     })
   },
 
+  /**
+   * CHI TIẾT MỘT MÃ cho ô mở dưới dòng của Tồn kho (B1 lối ERP): tồn theo kệ ×
+   * tình trạng + 40 dòng biến động gần nhất (màn gộp theo phiếu). Đọc thuần.
+   */
+  async chiTietMa(user: User, materialId: string) {
+    if (!(await canViewWarehouse(user))) throw Forbidden()
+    const [ke, bienDong] = await Promise.all([
+      stockByBin({ material_ids: [materialId] }),
+      movementsRepo.ganDay(materialId, 40),
+    ])
+    return { ke, bienDong }
+  },
+
   // ── Phiếu kho nhiều dòng (0017) ──
 
   /**
