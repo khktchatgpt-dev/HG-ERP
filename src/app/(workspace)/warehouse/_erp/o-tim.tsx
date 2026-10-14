@@ -1,6 +1,13 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 /**
  * Ô TÌM CÓ DANH SÁCH GỢI Ý của khu Kho (lối ERP, không kit — B3, 14/10/2026).
@@ -11,6 +18,9 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
  * Bàn phím theo mẫu combobox của WAI-ARIA: ↓/↑ đi trong danh sách, Enter chọn,
  * Esc đóng. `giuChu=false` (mặc định) = chọn xong ô trống lại để gõ mã kế tiếp;
  * `giuChu` = ô hiện tên mục đã chọn (ô chọn một giá trị).
+ *
+ * Danh sách gợi ý đặt `position: fixed` theo vị trí ô (đo lại khi cuộn / đổi cỡ):
+ * nằm trong lưới cuộn hay hộp thoại cuộn thì gợi ý cũng không bị cắt.
  */
 export function OTim<T>({
   id,
@@ -118,10 +128,29 @@ export function OTim<T>({
     setQ(giuChu && textOf ? textOf(item) : '')
   }
   const hienDs = mo && (items ? true : q.trim().length > 0)
+  const oNhap = useRef<HTMLInputElement>(null)
+  const [viTri, setViTri] = useState<{ top: number; left: number; w: number } | null>(
+    null,
+  )
+  useLayoutEffect(() => {
+    if (!hienDs) return
+    const do_ = () => {
+      const b = oNhap.current?.getBoundingClientRect()
+      if (b) setViTri({ top: b.bottom + 2, left: b.left, w: b.width })
+    }
+    do_()
+    window.addEventListener('scroll', do_, true)
+    window.addEventListener('resize', do_)
+    return () => {
+      window.removeEventListener('scroll', do_, true)
+      window.removeEventListener('resize', do_)
+    }
+  }, [hienDs])
 
   return (
     <div ref={goc} className="kh-tim" style={{ width }}>
       <input
+        ref={oNhap}
         id={id}
         type="text"
         role="combobox"
@@ -161,7 +190,15 @@ export function OTim<T>({
         }}
       />
       {hienDs && (
-        <ul id={listId} role="listbox" aria-label={label} className="kh-tim-ds">
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          className="kh-tim-ds"
+          style={
+            viTri ? { top: viTri.top, left: viTri.left, minWidth: viTri.w } : undefined
+          }
+        >
           {dangTim && loc.length === 0 ? (
             <li className="rong">Đang tìm…</li>
           ) : loc.length === 0 ? (

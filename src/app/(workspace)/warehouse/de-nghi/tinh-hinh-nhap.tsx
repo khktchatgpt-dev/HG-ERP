@@ -1,28 +1,17 @@
 'use client'
 
+import Link from 'next/link'
 import { isoToVn } from '@/lib/date-vn'
 import { conPhaiNhap } from '@/lib/de-nghi-nhap'
-import {
-  CellHint,
-  Code,
-  Grid,
-  GridBody,
-  GridFoot,
-  GridHead,
-  GridRow,
-  Tag,
-  Th,
-} from '@/components/kit'
+import { GoiY } from '../_erp/o-nhap'
 import type { DongForm } from './de-nghi.shared'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
-const R = { textAlign: 'right', whiteSpace: 'normal' } as const
 
 /**
- * TÌNH HÌNH NHẬP của phiếu đề nghị đã duyệt (0238 · Đ4, bản vẽ DN-5). Mỗi dòng
- * nói đã nhập bao nhiêu trên số duyệt, ở phiếu nhập nào (bấm mở PNK). Đếm từ
- * SỔ KHO — đảo một PNK thì số ở đây tự lùi.
- *
+ * TÌNH HÌNH NHẬP của phiếu đề nghị đã duyệt (0238 · Đ4, bản vẽ DN-5), viết lại
+ * không kit (Kho lối ERP · B5). Mỗi dòng nói đã nhập bao nhiêu trên số duyệt, ở
+ * phiếu nhập nào (bấm mở PNK). Đếm từ SỔ KHO — đảo một PNK thì số ở đây tự lùi.
  * Khung < 900px: cột Phiếu nhập xuống thành gợi ý dưới Đã nhập.
  */
 export function TinhHinhNhap({
@@ -38,95 +27,107 @@ export function TinhHinhNhap({
   const muaDong = rows.filter((r) => (r.can ?? 0) > 0)
   const du = muaDong.filter((r) => conPhaiNhap(r.can ?? 0, r.da_nhap ?? 0) <= 0).length
   return (
-    <Grid minWidth={hep ? 640 : 900}>
-      <GridHead>
-        <Th width={30}>#</Th>
-        <Th width={hep ? 86 : 100}>Mã</Th>
-        <Th>Tên vật tư</Th>
-        <Th width={56}>ĐVT</Th>
-        <th scope="col" style={{ ...R, width: 84 }}>
-          Số duyệt
-        </th>
-        <th scope="col" style={{ ...R, width: 84 }}>
-          Đã nhập
-        </th>
-        {!hep && <Th width={190}>Phiếu nhập</Th>}
-        <Th width={hep ? 110 : 130}>Tình trạng</Th>
-      </GridHead>
-      <GridBody>
+    <table className="kh-tb" aria-label="Tình hình nhập theo phiếu đề nghị">
+      <colgroup>
+        <col style={{ width: 34 }} />
+        <col style={{ width: hep ? 86 : 100 }} />
+        <col />
+        <col style={{ width: 56 }} />
+        <col style={{ width: 92 }} />
+        <col style={{ width: 92 }} />
+        {!hep && <col style={{ width: 200 }} />}
+        <col style={{ width: hep ? 110 : 140 }} />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Mã</th>
+          <th>Tên vật tư</th>
+          <th>ĐVT</th>
+          <th className="r">Số duyệt</th>
+          <th className="r">Đã nhập</th>
+          {!hep && <th>Phiếu nhập</th>}
+          <th>Tình trạng</th>
+        </tr>
+      </thead>
+      <tbody>
         {rows.map((r, i) => {
           const can = r.can ?? r.approved_qty ?? r.qty ?? 0
           const da = r.da_nhap ?? 0
           const con = conPhaiNhap(can, da)
           const phieu = r.phieu_nhap ?? []
           return (
-            <GridRow key={r.key}>
-              <td className="k-c-n">{i + 1}</td>
+            <tr key={r.key} className="d f">
+              <td className="kh-num kh-mut">{i + 1}</td>
               <td>
-                {r.code ? <Code>{r.code}</Code> : <Tag tone="warn">chưa có mã</Tag>}
-              </td>
-              <td className="max-w-0" title={r.name}>
-                <span className="block truncate">{r.name}</span>
-              </td>
-              <td className="text-[var(--ink-3)]">{r.unit}</td>
-              <td className="k-r num">
-                <b>{fmt(can)}</b>
-                {r.approved_qty != null && r.qty != null && (
-                  <CellHint tone="warn">đề nghị {fmt(r.qty)}</CellHint>
+                {r.code ? (
+                  <span className="kh-ma">{r.code}</span>
+                ) : (
+                  <span className="kh-tag warn">chưa có mã</span>
                 )}
               </td>
-              <td className="k-r num">
-                {da > 0 ? fmt(da) : <span className="text-[var(--ink-empty)]">0</span>}
+              <td title={r.name}>{r.name}</td>
+              <td className="kh-mut">{r.unit}</td>
+              <td className="r kh-num go">
+                <b>{fmt(can)}</b>
+                {r.approved_qty != null && r.qty != null && (
+                  <GoiY tone="warn">đề nghị {fmt(r.qty)}</GoiY>
+                )}
+              </td>
+              <td className="r kh-num go">
+                {da > 0 ? fmt(da) : <span className="kh-empty">0</span>}
                 {hep && phieu.length > 0 && (
-                  <CellHint tone="neutral">
-                    {phieu.map((p) => p.code).join(', ')}
-                  </CellHint>
+                  <GoiY>{phieu.map((p) => p.code).join(', ')}</GoiY>
                 )}
               </td>
               {!hep && (
-                <td>
+                <td className="go">
                   {phieu.length === 0 ? (
-                    <span className="text-[var(--ink-empty)]">—</span>
+                    <span className="kh-empty">—</span>
                   ) : (
-                    <span className="flex flex-col gap-0.5">
-                      {phieu.map((p) => (
-                        <span key={p.doc_id} className="flex items-baseline gap-1.5">
-                          <Code as="a" href={`/warehouse/phieu/${p.doc_id}`}>
-                            {p.code}
-                          </Code>
-                          <span className="text-k-sm text-[var(--ink-3)]">
-                            {isoToVn(p.doc_date)}
-                            {phieu.length > 1 && ` · ${fmt(p.qty)}`}
-                          </span>
+                    phieu.map((p) => (
+                      <span key={p.doc_id} style={{ display: 'block' }}>
+                        <span className="kh-sq c-nhap" aria-hidden />
+                        <Link href={`/warehouse/phieu/${p.doc_id}`} className="kh-lnk">
+                          {p.code}
+                        </Link>
+                        <span className="kh-mut" style={{ fontSize: 12 }}>
+                          {' '}
+                          {isoToVn(p.doc_date)}
+                          {phieu.length > 1 && ` · ${fmt(p.qty)}`}
                         </span>
-                      ))}
-                    </span>
+                      </span>
+                    ))
                   )}
                 </td>
               )}
               <td>
                 {can <= 0 ? (
-                  <Tag tone="neutral">không mua</Tag>
+                  <span className="kh-tag">không mua</span>
                 ) : con <= 0 ? (
-                  <Tag tone="done">{da > can ? `đủ · vượt ${fmt(da - can)}` : 'đủ'}</Tag>
+                  <span className="kh-tag done">
+                    {da > can ? `đủ · vượt ${fmt(da - can)}` : 'đủ'}
+                  </span>
                 ) : daChot ? (
-                  <Tag tone="neutral">chốt thiếu {fmt(con)}</Tag>
+                  <span className="kh-tag">chốt thiếu {fmt(con)}</span>
                 ) : (
-                  <Tag tone="warn">còn {fmt(con)}</Tag>
+                  <span className="kh-tag warn">còn {fmt(con)}</span>
                 )}
               </td>
-            </GridRow>
+            </tr>
           )
         })}
-      </GridBody>
-      <GridFoot>
-        <td colSpan={hep ? 7 : 8}>
-          Đã nhập đủ {du}/{muaDong.length} dòng
-          {rows.length > muaDong.length &&
-            ` · ${rows.length - muaDong.length} dòng lãnh đạo duyệt 0 (không mua)`}
-          {' · '}số đếm từ sổ kho, đảo phiếu nhập thì tự lùi
-        </td>
-      </GridFoot>
-    </Grid>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colSpan={hep ? 7 : 8}>
+            Đã nhập đủ {du}/{muaDong.length} dòng
+            {rows.length > muaDong.length &&
+              ` · ${rows.length - muaDong.length} dòng lãnh đạo duyệt 0 (không mua)`}
+            {' · '}số đếm từ sổ kho, đảo phiếu nhập thì tự lùi
+          </td>
+        </tr>
+      </tfoot>
+    </table>
   )
 }

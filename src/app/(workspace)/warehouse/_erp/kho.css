@@ -1237,10 +1237,8 @@
   min-width: 0;
 }
 .kh.kh .kh-tim-ds {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  z-index: 30;
+  position: fixed;
+  z-index: 70;
   min-width: 100%;
   width: max-content;
   max-width: min(640px, calc(100vw - 32px));
@@ -1363,4 +1361,44 @@
   background: var(--kh-act-wash);
   color: var(--kh-act);
   font-weight: 700;
+}
+
+.kh.kh .kh-note.stop {
+  background: var(--kh-stop-wash);
+}
+.kh.kh .kh-note.stop .tag {
+  color: var(--kh-stop);
+}
+/* Dải bước vòng đời của chứng từ — CHỮ, không hộp; bước đang đứng nền nhạt + chấm. */
+.kh.kh .kh-steps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-steps > span {
+  padding: 2px 8px;
+  border-right: 1px solid var(--kh-hair);
+}
+.kh.kh .kh-steps > span:last-child {
+  border-right: 0;
+}
+.kh.kh .kh-steps > span.qua {
+  color: var(--kh-ink2);
+}
+.kh.kh .kh-steps > span.on {
+  background: var(--kh-dnm-wash, #eee8fa);
+  color: var(--kh-ink);
+  font-weight: 700;
+}
+.kh.kh .kh-steps > span.on::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--kh-dnm);
+  vertical-align: 1px;
 }
