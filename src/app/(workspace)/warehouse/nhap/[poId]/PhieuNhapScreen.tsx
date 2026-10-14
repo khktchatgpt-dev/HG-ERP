@@ -25,21 +25,9 @@ import {
   tinhTong,
   type DongNhan,
 } from '@/lib/kho-phieu-nhap'
-import {
-  Action,
-  Affected,
-  Btn,
-  CommitBar,
-  Consequence,
-  Hint,
-  NoticeBar,
-  ScreenFrame,
-  ScreenHeader,
-  Sheet,
-  SheetActions,
-  TextArea,
-  useToast,
-} from '@/components/kit'
+import { ArrowLeft, ListChecks, Printer } from 'lucide-react'
+import { ApNhom, ApNut, DauTrang, KhoKhung } from '../../_erp/khung'
+import { HopThoai } from '../../_erp/o-nhap'
 import { DUONG, type NoiNhan } from './duong'
 import { DauPhieu, NhacSoNccSheet, O_LY_DO_LUI, O_SO_NCC } from './dau-phieu'
 import { LuoiNhan } from './luoi-nhan'
@@ -49,8 +37,10 @@ export type { NoiNhan }
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 
 /**
- * PHIẾU NHẬP THEO ĐƠN — màn chứng từ + lưới (Bước 1 Kho). Bản thiết kế:
- * https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf (artboard 2 + 2b).
+ * PHIẾU NHẬP THEO ĐƠN — màn chứng từ + lưới. Kho lối ERP · B2 (bản vẽ K-3
+ * https://claude.ai/artifact/F2uVKzc4tb28FhHZY6BDiR, 14/10/2026): viết tay, không
+ * kit — khung `../../_erp/khung.tsx`, ô nhập `../../_erp/o-nhap.tsx`. Gốc thiết
+ * kế: https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf (artboard 2 + 2b).
  *
  * Ba cột số Đặt · Đã về · Lần này (SAP MIGO / BC). Tình trạng chỉ HAI giá trị
  * vì thủ kho vừa nhận vừa kiểm (chốt 15/09): Đạt → tồn dùng được; Sai quy
@@ -104,7 +94,8 @@ export function PhieuNhapScreen({
 }) {
   const duong = DUONG[noi]
   const router = useRouter()
-  const toast = useToast()
+  /* Lỗi ghi sổ hiện ngay trên thanh chốt (không toast — toast tắt trước khi đọc xong). */
+  const [loiGhi, setLoiGhi] = useState<string | null>(null)
   const [rows, setRows] = useState(initialRows)
   const [docDate, setDocDate] = useState(suaLai?.docDate ?? today)
   const [supplierDocNo, setSupplierDocNo] = useState(suaLai?.supplierDocNo ?? '')
@@ -204,6 +195,7 @@ export function PhieuNhapScreen({
     if (!ghiDuoc) return
     setNhacSoNcc(false)
     setBusy(true)
+    setLoiGhi(null)
     try {
       const res = await api<{ id: string; code: string; po_status: string | null }>(
         '/api/dept/warehouse/docs/receipt',
@@ -250,7 +242,7 @@ export function PhieuNhapScreen({
     } catch (e) {
       // Server là người quyết: OVER_RECEIPT (409) tới đây khi dung sai server
       // khác số màn đoán — câu của server nói rõ dòng nào, vượt bao nhiêu.
-      toast.error('Chưa ghi sổ được', apiErrorText(e))
+      setLoiGhi(apiErrorText(e))
       setBusy(false)
     }
   }
@@ -278,9 +270,15 @@ export function PhieuNhapScreen({
       ? `không theo đợt · hẹn giao ${isoToVn(po.expected_at)}`
       : 'không theo đợt · chưa hẹn ngày'
 
+  const nhanDu = () =>
+    setRows((rs) => rs.map((r) => (r.editable ? { ...r, qty: r.qty_open } : r)))
+  const xoaSo = () => setRows((rs) => rs.map((r) => (r.editable ? { ...r, qty: 0 } : r)))
+  const chuaGhiSoNcc = canNhacSoNcc(supplierDocNo) && !blocked
+  const dangGhi = busy ? 'Đang ghi sổ…' : null
+
   return (
-    <div
-      className={duong.wrap}
+    <KhoKhung
+      label={`Nhận hàng ${po.code}`}
       onKeyDown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
           e.preventDefault()
@@ -290,245 +288,320 @@ export function PhieuNhapScreen({
         }
       }}
     >
-      {/* ScreenFrame chốt chiều cao — cùng lỗi với màn Xuất kho 16/09 (wrapper không trần). */}
-      <ScreenFrame>
-        {/* MỘT HÀNG ĐẦU (bản vẽ K1, 05/10/2026): thay đường dẫn + thanh nút + dòng
-            tên phiếu (30 + 63 + 35px). Ghi sổ chỉ còn ở thanh chốt đáy — màn gõ
-            (Khuôn F) có một chỗ chốt, không hai. */}
-        <ScreenHeader
-          compact
-          eyebrow={noi === 'cung-ung' ? 'Phiếu nhập kho · Cung ứng nhận thay Kho' : 'Phiếu nhập kho · theo đơn mua'} // prettier-ignore
-          title={
-            <>
-              Nhận hàng <span className="num">{po.code}</span>
-            </>
-          }
-          chain={<Hint>người nhận {nguoiNhan} · số PNK cấp khi ghi sổ</Hint>}
-          actions={
-            <>
-              <Btn icon="in" onClick={() => setXemIn(true)}>
+      {/* MỘT HÀNG ĐẦU: Ghi sổ chỉ ở thanh chốt đáy — màn gõ (khuôn F) có một chỗ chốt. */}
+      <DauTrang
+        crumb="Kho › Hàng về"
+        title={
+          <>
+            Nhận hàng{' '}
+            <span className="kh-num" style={{ color: 'var(--kh-nhap)' }}>
+              {po.code}
+            </span>
+          </>
+        }
+        ctx={`phiếu nhập · người nhận ${nguoiNhan} · số PNK cấp khi ghi sổ`}
+        actions={
+          <>
+            <ApNhom>
+              <ApNut onClick={nhanDu} why={dangGhi}>
+                Nhận đủ tất cả
+              </ApNut>
+              <ApNut onClick={xoaSo} why={dangGhi}>
+                Xoá số đã gõ
+              </ApNut>
+            </ApNhom>
+            <ApNhom>
+              <ApNut
+                icon={<Printer size={15} aria-hidden />}
+                onClick={() => setXemIn(true)}
+              >
                 Xem bản in
-              </Btn>
-              <Btn icon="don" href={`/mua-hang/don/${po.id}`}>
-                Mở đơn mua
-              </Btn>
-              <Btn icon="quayLai" href={duong.home} aria-disabled={busy || undefined}>
-                {`Về ${duong.crumbs[duong.crumbs.length - 1].label}`}
-              </Btn>
-            </>
-          }
-        />
+              </ApNut>
+              <ApNut
+                icon={<ListChecks size={15} aria-hidden />}
+                href={`/warehouse/nhap?don=${po.id}`}
+                why={dangGhi}
+              >
+                Hàng của đơn
+              </ApNut>
+              <ApNut
+                icon={<ArrowLeft size={15} aria-hidden />}
+                href={duong.home}
+                why={dangGhi}
+              >
+                Về Hàng về
+              </ApNut>
+            </ApNhom>
+          </>
+        }
+      />
 
-        <DauPhieu
-          po={po}
-          dot={dot}
-          lich={lich}
-          dotLabel={dotLabel}
-          phieuUrl={duong.phieu(po.id)}
-          dotNgan={dotNgan}
-          busy={busy}
-          docDate={docDate}
-          setDocDate={setDocDate}
-          supplierDocNo={supplierDocNo}
-          setSupplierDocNo={setSupplierDocNo}
-          counterparty={counterparty}
-          setCounterparty={setCounterparty}
-          ghiChu={ghiChu}
-          setGhiChu={setGhiChu}
-          ngay={ngay}
-          giuNgayCu={giuNgayCu}
-          lyDoLui={lyDoLui}
-          setLyDoLui={setLyDoLui}
-        />
+      <DauPhieu
+        po={po}
+        dot={dot}
+        lich={lich}
+        dotLabel={dotLabel}
+        phieuUrl={duong.phieu(po.id)}
+        dotNgan={dotNgan}
+        busy={busy}
+        docDate={docDate}
+        setDocDate={setDocDate}
+        supplierDocNo={supplierDocNo}
+        setSupplierDocNo={setSupplierDocNo}
+        counterparty={counterparty}
+        setCounterparty={setCounterparty}
+        ghiChu={ghiChu}
+        setGhiChu={setGhiChu}
+        ngay={ngay}
+        giuNgayCu={giuNgayCu}
+        lyDoLui={lyDoLui}
+        setLyDoLui={setLyDoLui}
+      />
 
-        {suaLai && (
-          <NoticeBar tone="neutral" tag="Sửa phiếu">
+      {suaLai && (
+        <div className="kh-note mut">
+          <span className="tag">Sửa phiếu</span>
+          <span>
             Lập lại <b>{suaLai.code}</b> (đã đảo bởi {suaLai.daoBoi}) — số đã điền sẵn
             theo phiếu cũ, sửa chỗ sai rồi Ghi sổ.
-          </NoticeBar>
-        )}
-
-        {boQuaTuDo > 0 && (
-          <NoticeBar tone="warn" tag="Dòng tự do" action={{ label: 'Xem ở đơn mua' }}>
+          </span>
+        </div>
+      )}
+      {boQuaTuDo > 0 && (
+        <div className="kh-note">
+          <span className="tag">Dòng tự do</span>
+          <span>
             Đơn có <b>{boQuaTuDo}</b> dòng tự do (gỗ / gia công không mã vật tư) — nghiệm
             thu ở trang đơn, không lên phiếu nhập.
-          </NoticeBar>
-        )}
-
-        {dongVuot.length > 0 && coLyDoVuot && (
-          <NoticeBar
-            tone="warn"
-            tag="Nhận vượt"
-            action={{ label: 'Sửa lý do', onClick: moHopLyDo }}
-          >
+          </span>
+        </div>
+      )}
+      {dongVuot.length > 0 && coLyDoVuot && (
+        <div className="kh-note">
+          <span className="tag">Nhận vượt</span>
+          <span>
             {dongVuot.map((x) => x.r.code).join(', ')} nhận vượt dung sai — lý do:{' '}
             <b>{overReason.trim()}</b>. Ghi vào ghi chú phiếu, Cung ứng thấy khi đối
-            chiếu.
-          </NoticeBar>
+            chiếu.{' '}
+            <button
+              type="button"
+              className="kh-lnk"
+              style={{ fontFamily: 'inherit' }}
+              onClick={moHopLyDo}
+            >
+              Sửa lý do
+            </button>
+          </span>
+        </div>
+      )}
+
+      <LuoiNhan
+        rows={rows}
+        nhan={nhan}
+        hasDots={dots.length > 0}
+        dangTheoDot={!!dot}
+        coKg={coKg}
+        busy={busy}
+        patch={patch}
+        moHopLyDo={moHopLyDo}
+        coLyDoVuot={coLyDoVuot}
+        tong={tong}
+        conCho={conCho}
+        kgCan={kgCan}
+      />
+
+      {/* THANH CHỐT ĐÁY — nói vì sao chưa ghi sổ được bằng một câu BẤM ĐƯỢC. */}
+      <div className="kh-commit" role="group" aria-label="Ghi sổ phiếu nhập">
+        <span className="m">
+          <span className="k">Dòng nhận</span>
+          <span className="v">{tong.so_dong_nhan}</span>
+        </span>
+        <span className="m">
+          <span className="k">Lần này</span>
+          <span className="v">{fmt(tong.lan_nay)}</span>
+        </span>
+        <span className="m">
+          <span className="k">Vào khoá</span>
+          <span
+            className="v"
+            style={tong.vao_khoa > 0 ? { color: 'var(--kh-stop)' } : undefined}
+          >
+            {fmt(tong.vao_khoa)}
+          </span>
+        </span>
+        <span className="m">
+          <span className="k">Dùng được</span>
+          <span className="v" style={{ color: 'var(--kh-done)' }}>
+            {fmt(tong.dung_duoc)}
+          </span>
+        </span>
+        {loiGhi ? (
+          <span className="why" role="alert">
+            Chưa ghi sổ được: {loiGhi}
+          </span>
+        ) : blocked && !busy ? (
+          <button type="button" className="why" onClick={nhayToi}>
+            Chưa lưu được: {blocked}
+          </button>
+        ) : chuaGhiSoNcc ? (
+          <button
+            type="button"
+            className="why"
+            style={{ color: 'var(--kh-warn)' }}
+            onClick={() => document.getElementById(O_SO_NCC)?.focus()}
+          >
+            Số phiếu NCC chưa ghi — ghi ngay (không bắt buộc)
+          </button>
+        ) : (
+          <span className="why" />
         )}
+        <span className="ghi">
+          <span className="kh-kbd">Ctrl + Enter</span>
+          <button
+            type="button"
+            className="kh-btn p"
+            aria-disabled={ghiDuoc ? undefined : true}
+            title={blocked}
+            onClick={bamGhiSo}
+          >
+            {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
+          </button>
+        </span>
+      </div>
 
-        <LuoiNhan
-          rows={rows}
-          nhan={nhan}
-          hasDots={dots.length > 0}
-          dangTheoDot={!!dot}
-          coKg={coKg}
-          busy={busy}
-          patch={patch}
-          moHopLyDo={moHopLyDo}
-          coLyDoVuot={coLyDoVuot}
-          tong={tong}
-          conCho={conCho}
-          kgCan={kgCan}
-        />
-
-        <CommitBar
-          totals={[
-            { label: 'Dòng nhận', value: tong.so_dong_nhan },
-            { label: 'Lần này', value: fmt(tong.lan_nay) },
-            { label: 'Vào khoá', value: fmt(tong.vao_khoa) },
-            // Đang có câu chặn thì câu đó là việc phải làm — bớt một mục để thanh không xuống dòng ở 1280.
-            ...(canNhacSoNcc(supplierDocNo) && !blocked
-              ? [
-                  {
-                    label: 'Số phiếu NCC',
-                    value: (
-                      <button
-                        type="button"
-                        className="font-semibold text-[var(--warn)] underline"
-                        onClick={() => document.getElementById(O_SO_NCC)?.focus()}
-                      >
-                        chưa ghi — ghi ngay
-                      </button>
-                    ),
-                  },
-                ]
-              : []),
-          ]}
-          grand={{ label: 'Dùng được', value: fmt(tong.dung_duoc) }}
-          blocked={blocked}
-          onGoBlocked={kiem.ok ? undefined : nhayToi}
-          actions={
+      {sheetOpen && (
+        <HopThoai
+          title="Nhận vượt dung sai"
+          subtitle={`${dongVuot.length} dòng nhận nhiều hơn phần còn mở, quá ngưỡng của mã. Lý do đi vào ghi chú phiếu.`}
+          onClose={() => setSheetOpen(false)}
+          footer={
             <>
-              <span className="text-k-label text-[var(--ink-3)]">Ctrl + Enter</span>
-              <Action primary disabled={!ghiDuoc} title={blocked} onClick={bamGhiSo}>
-                {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
-              </Action>
-            </>
-          }
-        />
-
-        {sheetOpen && (
-          <Sheet
-            open
-            onClose={() => setSheetOpen(false)}
-            stakes="vua"
-            title="Nhận vượt dung sai"
-            subtitle={`${dongVuot.length} dòng nhận nhiều hơn phần còn mở, quá ngưỡng của mã. Lý do đi vào ghi chú phiếu.`}
-            footer={
-              <SheetActions
-                onCancel={() => setSheetOpen(false)}
-                onConfirm={() => {
+              <button
+                type="button"
+                className="kh-btn"
+                onClick={() => setSheetOpen(false)}
+              >
+                Quay lại sửa số
+              </button>
+              <button
+                type="button"
+                className="kh-btn p"
+                disabled={overDraft.trim() === ''}
+                onClick={() => {
                   setOverReason(overDraft)
                   setSheetOpen(false)
                 }}
-                confirmLabel="Xác nhận nhận vượt"
-                cancelLabel="Quay lại sửa số"
-                disabled={overDraft.trim() === ''}
-              />
-            }
-          >
-            <Affected
-              items={dongVuot.map(({ r, v }) => ({
-                code: r.code,
-                label: r.name,
-                amount: `+${fmt(v.vuot)} ${r.unit} · ${v.pct.toFixed(0)}%`,
-                note: `đặt ${fmt(r.qty_ordered)} · còn mở ${fmt(r.qty_open)} · lần này ${fmt(r.qty)} · dung sai ${r.over_tolerance_pct}%`,
-              }))}
-            />
-            <div className="mt-3">
-              <div className="text-k-label mb-1 font-bold tracking-[.09em] text-[var(--ink-label)] uppercase">
-                Lý do nhận vượt · bắt buộc
+              >
+                Xác nhận nhận vượt
+              </button>
+            </>
+          }
+        >
+          <div className="kh-ds">
+            {dongVuot.map(({ r, v }) => (
+              <div key={r.po_line_id}>
+                <span className="kh-ma">{r.code}</span>
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {r.name}
+                </span>
+                <b className="kh-num kh-warn">
+                  +{fmt(v.vuot)} {r.unit} · {v.pct.toFixed(0)}%
+                </b>
+                <span className="note">
+                  đặt {fmt(r.qty_ordered)} · còn mở {fmt(r.qty_open)} · lần này{' '}
+                  {fmt(r.qty)} · dung sai {r.over_tolerance_pct}%
+                </span>
               </div>
-              <TextArea
-                value={overDraft}
-                onChange={setOverDraft}
-                rows={3}
-                placeholder="ví dụ: NCC gộp phần thiếu của đợt trước, Cung ứng đã đồng ý"
-                aria-label="Lý do nhận vượt"
-              />
-            </div>
-            <Consequence>
-              Đơn mua sẽ hiện phần nhận vượt cho Cung ứng đối chiếu hoá đơn. Không muốn
-              nhận vượt thì sửa số Lần này về bằng phần còn mở.
-            </Consequence>
-          </Sheet>
-        )}
-        {nhacSoNcc && (
-          <NhacSoNccSheet
-            poCode={po.code}
-            supplierName={po.supplier_name}
-            onClose={() => setNhacSoNcc(false)}
-            onGhiSo={(so) => {
-              if (so) setSupplierDocNo(so)
-              void ghiSo(so)
-            }}
-          />
-        )}
-        {xemIn && (
-          <Sheet
-            open
-            onClose={() => setXemIn(false)}
-            width={900}
-            title="Xem trước phiếu nhập kho"
-            subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 01-VT sẽ in ra."
-          >
-            <WarehouseDocPrintSheet
-              head={{
-                kind: 'receipt',
-                code: null,
-                date: new Date(`${docDate}T00:00:00`),
-                supplier_doc_no: supplierDocNo.trim() || null,
-                counterparty: counterparty.trim() || null,
-                creator_name: nguoiNhan,
-                // Cùng cách server ghép: ghi chú phiếu, rồi lý do nhận vượt.
-                note:
-                  [
-                    ghiChuPhieu(suaLai, ghiChu),
-                    luiXa && lyDoLui.trim() ? ghiChuLuiNgay(ngay.lui, lyDoLui) : null,
-                    dongVuot.length > 0 && coLyDoVuot
-                      ? `[Nhận vượt] ${overReason.trim()}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || null,
-                nhap_cho: {
-                  ncc: [po.supplier_name],
-                  don: [po.code],
-                  lenh: po.lsx_codes,
-                  dot: dotCuaPhieu(dot, dots.length),
-                },
-              }}
-              lines={rows
-                .filter((r) => r.qty > 0)
-                .map<WarehousePrintLine>((r) => ({
-                  id: r.po_line_id,
-                  material_code: r.code,
-                  material_name: r.name,
-                  material_unit: r.unit,
-                  qty_doc: r.qty_ordered,
-                  qty: r.qty,
-                  note:
-                    r.status === 'blocked'
-                      ? [`Sai quy cách`, r.note].filter(Boolean).join(' · ')
-                      : r.note || null,
-                }))}
-              company={company}
-              tpl={tpl}
+            ))}
+          </div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="kh-mut" style={{ fontSize: 11, fontWeight: 700 }}>
+              LÝ DO NHẬN VƯỢT · BẮT BUỘC
+            </span>
+            <textarea
+              className="kh-o"
+              value={overDraft}
+              onChange={(e) => setOverDraft(e.target.value)}
+              rows={3}
+              placeholder="ví dụ: NCC gộp phần thiếu của đợt trước, Cung ứng đã đồng ý"
+              aria-label="Lý do nhận vượt"
             />
-          </Sheet>
-        )}
-      </ScreenFrame>
-    </div>
+          </label>
+          <div className="kh-hau">
+            Đơn mua sẽ hiện phần nhận vượt cho Cung ứng đối chiếu hoá đơn. Không muốn nhận
+            vượt thì sửa số Lần này về bằng phần còn mở.
+          </div>
+        </HopThoai>
+      )}
+      {nhacSoNcc && (
+        <NhacSoNccSheet
+          poCode={po.code}
+          supplierName={po.supplier_name}
+          onClose={() => setNhacSoNcc(false)}
+          onGhiSo={(so) => {
+            if (so) setSupplierDocNo(so)
+            void ghiSo(so)
+          }}
+        />
+      )}
+      {xemIn && (
+        <HopThoai
+          title="Xem trước phiếu nhập kho"
+          subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 01-VT sẽ in ra."
+          onClose={() => setXemIn(false)}
+          width={900}
+        >
+          <WarehouseDocPrintSheet
+            head={{
+              kind: 'receipt',
+              code: null,
+              date: new Date(`${docDate}T00:00:00`),
+              supplier_doc_no: supplierDocNo.trim() || null,
+              counterparty: counterparty.trim() || null,
+              creator_name: nguoiNhan,
+              // Cùng cách server ghép: ghi chú phiếu, rồi lý do nhận vượt.
+              note:
+                [
+                  ghiChuPhieu(suaLai, ghiChu),
+                  luiXa && lyDoLui.trim() ? ghiChuLuiNgay(ngay.lui, lyDoLui) : null,
+                  dongVuot.length > 0 && coLyDoVuot
+                    ? `[Nhận vượt] ${overReason.trim()}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || null,
+              nhap_cho: {
+                ncc: [po.supplier_name],
+                don: [po.code],
+                lenh: po.lsx_codes,
+                dot: dotCuaPhieu(dot, dots.length),
+              },
+            }}
+            lines={rows
+              .filter((r) => r.qty > 0)
+              .map<WarehousePrintLine>((r) => ({
+                id: r.po_line_id,
+                material_code: r.code,
+                material_name: r.name,
+                material_unit: r.unit,
+                qty_doc: r.qty_ordered,
+                qty: r.qty,
+                note:
+                  r.status === 'blocked'
+                    ? [`Sai quy cách`, r.note].filter(Boolean).join(' · ')
+                    : r.note || null,
+              }))}
+            company={company}
+            tpl={tpl}
+          />
+        </HopThoai>
+      )}
+    </KhoKhung>
   )
 }

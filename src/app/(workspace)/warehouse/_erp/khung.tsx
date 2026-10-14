@@ -2,7 +2,13 @@
 
 import './kho.css'
 import Link from 'next/link'
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 
 /**
  * KHUNG CHUNG CỦA KHU KHO — lối ERP, viết tay, không kit (B1, bản vẽ
@@ -18,7 +24,16 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
  * CAO = 100dvh − đỉnh màn, để chỉ lưới cuộn — đầu trang, tab, lọc, thanh trạng
  * thái đứng yên (cùng cách Hộp ký).
  */
-export function KhoKhung({ children, label }: { children: ReactNode; label?: string }) {
+export function KhoKhung({
+  children,
+  label,
+  onKeyDown,
+}: {
+  children: ReactNode
+  label?: string
+  /** Phím tắt cả màn (Ctrl+Enter ghi sổ ở màn gõ). */
+  onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void
+}) {
   const goc = useRef<HTMLDivElement>(null)
   const [cao, setCao] = useState('calc(100dvh - 60px)')
   useLayoutEffect(() => {
@@ -36,6 +51,7 @@ export function KhoKhung({ children, label }: { children: ReactNode; label?: str
       className="kh -m-4 sm:-mx-6 sm:-my-6"
       style={{ height: cao }}
       aria-label={label}
+      onKeyDown={onKeyDown}
     >
       {children}
     </div>
@@ -332,5 +348,41 @@ export function So({ n, tone }: { n: number; tone?: 'warn' | 'stop' | 'ok' | 'b'
             : undefined
   return (
     <span className={cls}>{n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</span>
+  )
+}
+
+/**
+ * Dải "ĐÃ GHI SỔ" của Kho — sau khi ghi phiếu, có nút In (thủ kho in ngay đưa
+ * người giao / tổ ký; toast tự tắt trước khi họ với tới chuột).
+ */
+export function DaGhiSo({
+  code,
+  docId,
+  detail,
+  soPhieuHref,
+  onClose,
+}: {
+  code: string
+  docId: string
+  detail: string
+  soPhieuHref: string
+  onClose: () => void
+}) {
+  return (
+    <div className="kh-note ok" role="status">
+      <span className="tag">Đã ghi sổ</span>
+      <span>
+        <b className="kh-num">{code}</b> · {detail}
+      </span>
+      <Link href={`/print/warehouse/${docId}`} className="kh-btn">
+        In phiếu
+      </Link>
+      <Link href={soPhieuHref} className="kh-btn">
+        Xem ở sổ phiếu
+      </Link>
+      <button type="button" className="kh-btn dong" onClick={onClose}>
+        Đóng
+      </button>
+    </div>
   )
 }
