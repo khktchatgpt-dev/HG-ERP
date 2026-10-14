@@ -12,7 +12,7 @@ import { VatTuKhoScreen, type VatTuRow } from './VatTuKhoScreen'
 
 /**
  * DANH MỤC VẬT TƯ bản Kho trên khung lối ERP (B4, bản vẽ K-5). Mã rút từ màn thật
- * 14/10/2026: ba mã bao bì Cung ứng khai vội (chờ Kho rà).
+ * 14/10/2026: ba mã bao bì. Bước "Chờ Kho rà" đã bỏ 14/10 — không còn rổ, nút, ô rà.
  */
 const refresh = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -40,25 +40,20 @@ const row = (id: string, code: string, p: Partial<VatTuRow> = {}): VatTuRow => (
   sub_group: null,
   shelf_location: null,
   min_stock: 0,
-  needs_review: true,
   is_active: true,
   ...p,
 })
-const ROWS = [
-  row('a', 'BAO0687'),
-  row('b', 'BAO0688'),
-  row('c', 'BAO0689', { needs_review: false }),
-]
+const ROWS = [row('a', 'BAO0687'), row('b', 'BAO0688'), row('c', 'BAO0689')]
 
 const dung = () =>
   render(
     <VatTuKhoScreen
       rows={ROWS}
-      counts={{ review: 253, no_min: 13476, no_shelf: 495, all: 13481 }}
+      counts={{ no_min: 13476, no_shelf: 495, all: 13481 }}
       total={3}
       trang={1}
       soTrang={1}
-      ro="review"
+      ro="no_shelf"
       q=""
       nhom=""
       nhomOptions={['Bao bì - đóng gói - tem nhãn']}
@@ -74,19 +69,15 @@ const doi = (label: string, v: string) => {
 }
 
 describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
-  it('tab theo việc: Chờ Kho rà → Chưa có kệ → Chưa khai ngưỡng → Tất cả', () => {
+  it('tab theo việc: Chưa có kệ → Chưa khai ngưỡng → Tất cả (không còn "Chờ Kho rà")', () => {
     dung()
     const tl = screen.getByRole('tablist', { name: 'Việc trên danh mục' })
     expect(
       within(tl)
         .getAllByRole('tab')
         .map((t) => t.textContent),
-    ).toEqual([
-      'Chờ Kho rà253',
-      'Chưa có kệ495',
-      'Chưa khai ngưỡng13.476',
-      'Tất cả13.481',
-    ])
+    ).toEqual(['Chưa có kệ495', 'Chưa khai ngưỡng13.476', 'Tất cả13.481'])
+    expect(screen.queryByRole('button', { name: /Đã rà xong/ })).toBeNull()
   })
 
   it('ĐVT gõ "kg" → lưu đúng chữ trong danh sách "Kg"', async () => {
@@ -110,21 +101,17 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('tích 2 mã chờ rà → "Đã rà xong 2 mã" gửi needs_review=false cho từng mã rồi làm mới', async () => {
-    api.mockResolvedValue({})
+  it('chọn MỘT dòng: tích dòng khác là bỏ dòng trước; nút "Sửa" theo dòng đang chọn', () => {
     dung()
     fireEvent.click(screen.getByLabelText('Chọn BAO0687'))
     fireEvent.click(screen.getByLabelText('Chọn BAO0688'))
-    fireEvent.click(screen.getByLabelText('Chọn BAO0689')) // đã rà rồi — không tính
-    fireEvent.click(screen.getByRole('button', { name: 'Đã rà xong 2 mã' }))
-    await waitFor(() => expect(refresh).toHaveBeenCalled())
-    expect(api.mock.calls.map((c) => [c[0], (c[1] as { body: unknown }).body])).toEqual([
-      ['/api/dept/warehouse/materials/a', { needs_review: false }],
-      ['/api/dept/warehouse/materials/b', { needs_review: false }],
-    ])
+    expect((screen.getByLabelText('Chọn BAO0687') as HTMLInputElement).checked).toBe(
+      false,
+    )
+    expect(screen.getByRole('button', { name: /Sửa BAO0688/ })).toBeTruthy()
   })
 
-  it('B7a: nhấp đúp dòng → hộp Sửa; mã chờ rà mặc định "đã rà"; Lưu KHÔNG gửi giá / NCC', async () => {
+  it('B7a: nhấp đúp dòng → hộp Sửa; Lưu KHÔNG gửi giá / NCC / cờ rà', async () => {
     const M = {
       id: 'a', code: 'BAO0687', name: 'BB BAO0687', unit: 'Cái', spec: null,
       group_name: 'Bao bì - đóng gói - tem nhãn', sub_group: null, price_unit: null,
@@ -147,7 +134,7 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     dung()
     fireEvent.doubleClick(screen.getByText('BAO0687'))
     const hop = await screen.findByRole('dialog', { name: 'Sửa mã BAO0687' })
-    expect((within(hop).getByLabelText(/Kho đã rà xong/) as HTMLInputElement).checked).toBe(true) // prettier-ignore
+    expect(within(hop).queryByText(/Rà mã|đã rà/)).toBeNull()
     expect(within(hop).getByText(/Cung ứng giữ · chỉ xem/)).toBeTruthy()
     const ke = within(hop).getByLabelText('Kệ gợi ý')
     fireEvent.change(ke, { target: { value: 'BB-H' } })
@@ -161,7 +148,6 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     const body = (patch[1] as { body: Record<string, unknown> }).body
     expect(body).toMatchObject({
       shelf_location: 'BB-H',
-      needs_review: false,
       min_stock: 0,
     })
     for (const k of [
@@ -169,8 +155,9 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
       'default_supplier_id',
       'over_tolerance_pct',
       'code',
+      'needs_review',
     ])
       expect(k in body).toBe(false)
-    expect(screen.getByRole('status').textContent).toMatch(/Đã lưu BAO0687 · đã rà xong/)
+    expect(screen.getByRole('status').textContent).toMatch(/^Đã lưu BAO0687.$/)
   })
 })

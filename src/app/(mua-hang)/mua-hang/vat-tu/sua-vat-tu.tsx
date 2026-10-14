@@ -45,7 +45,7 @@ type Nap = { m: Material | null; gia: GiaMua[] | null; doi: ThayDoi[] | null }
  * ngoài nhóm) — chỉ giao diện dựng lại bằng kit.
  *
  * Chỉ các ô NGƯỜI MUA được sửa (`PURCHASING_EDITABLE_FIELDS` ở service): kệ,
- * ngưỡng tồn, cờ "Chờ Kho rà", ngừng dùng là của Kho — nói ra, không bày ô.
+ * ngưỡng tồn, ngừng dùng là của Kho — nói ra, không bày ô.
  * VAT không bày: 0/13.316 mã có khai (đo 29/09).
  *
  * DÙNG CHUNG HAI NƠI: danh mục `/mua-hang/vat-tu` (truyền sẵn `tax`, `suppliers`
@@ -353,14 +353,6 @@ function Form({
       {m && boMa && boMo && usage && (
         <div className="mb-4">
           <KhoiBoMa m={m} usage={usage} ctx={boMa} onCancel={() => setBoMo(false)} />
-        </div>
-      )}
-      {m?.needs_review && (
-        <div className="mb-3">
-          <NoticeBar tag="Chờ Kho rà">
-            Mã khai vội lúc lên đơn. Sửa ở đây vẫn giữ cờ — Kho rà xong bấm “Đã rà xong” ở
-            màn Vật tư của Kho.
-          </NoticeBar>
         </div>
       )}
 
@@ -671,7 +663,7 @@ function Form({
       )}
 
       <p className="text-k-sm mt-3 text-[var(--ink-3)]">
-        Kho giữ: kệ · ngưỡng tồn · cờ “Chờ Kho rà” — sửa ở màn Vật tư của Kho.
+        Kho giữ: kệ · ngưỡng tồn — sửa ở màn Danh mục vật tư của Kho.
       </p>
 
       <div className="k-sec">Ghi chú</div>

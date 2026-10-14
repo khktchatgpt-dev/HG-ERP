@@ -32,7 +32,7 @@ export default async function VatTuKhoPage({
   const sp = await searchParams
   const ro: RoVatTu = (RO_VT as readonly string[]).includes(sp.ro ?? '')
     ? (sp.ro as RoVatTu)
-    : 'review'
+    : 'no_shelf'
   const q = sp.q?.trim() || undefined
   const nhom = sp.nhom?.trim() || undefined
   const trang = Math.max(1, Number(sp.trang) || 1)
@@ -40,7 +40,6 @@ export default async function VatTuKhoPage({
   const loc = {
     q,
     group_name: nhom,
-    needs_review: ro === 'review' || undefined,
     no_min_stock: ro === 'no_min' || undefined,
     no_shelf: ro === 'no_shelf' || undefined,
   }
@@ -69,11 +68,9 @@ export default async function VatTuKhoPage({
         sub_group: m.sub_group,
         shelf_location: m.shelf_location,
         min_stock: m.min_stock,
-        needs_review: m.needs_review,
         is_active: m.is_active,
       }))}
       counts={{
-        review: counts.needsReview,
         no_min: counts.noMinStock,
         no_shelf: counts.noShelf,
         all: counts.total,

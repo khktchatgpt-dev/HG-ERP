@@ -24,9 +24,10 @@ const soChu = (v: string) => (v.trim() === '' ? '' : String(docSoVn(v)))
  * lạ, dò gần trùng, ghi null ô ngoài nhóm) và cùng `PATCH materials/[id]`, nên
  * hai phòng không thể ghi lệch luật nhau. Bốn khối:
  *   · Nhận diện + Quy đổi — trường nền hai phòng cùng dùng;
- *   · Tồn trữ — của Kho (kệ, ngưỡng, mã vạch, "đã rà");
+ *   · Tồn trữ — của Kho (kệ, ngưỡng, mã vạch);
  *   · Mua hàng — CHỈ XEM (Q1: giá, NCC, nhận vượt là việc của Cung ứng).
- * Q2: mở hộp sửa một mã "Chờ Kho rà" thì mặc định tích "Kho đã rà" (bỏ được).
+ * Bước "Chờ Kho rà" đã BỎ ở cả hai phòng (14/10/2026) — hộp không đọc, không ghi
+ * cờ `needs_review` nữa.
  * Q3: đổi mã qua hộp xác nhận nói số dòng định mức SP / BOM lệnh đổi theo.
  */
 export function SuaMaHop({
@@ -104,8 +105,6 @@ function Form({
     shelf: m.shelf_location ?? '',
     min: String(m.min_stock ?? 0),
     barcode: m.barcode ?? '',
-    // Q2: mở hộp sửa tức là Kho đã nhìn kỹ — mặc định tích, bỏ được.
-    daRa: m.needs_review,
   })
   const [maSua, setMaSua] = useState(m.code)
   const maMoi = maSua.trim().replace(/\s+/g, ' ')
@@ -163,7 +162,6 @@ function Form({
             shelf_location: kho.shelf.trim() || null,
             min_stock: docSoVn(kho.min),
             barcode: kho.barcode.trim() || null,
-            ...(m.needs_review && kho.daRa ? { needs_review: false } : {}),
           },
         },
       )
@@ -171,7 +169,7 @@ function Form({
         r.material,
         doiMa
           ? `Đã đổi mã ${m.code} → ${r.material.code} — phiếu, đơn đã có tự hiện mã mới; định mức SP và BOM lệnh đã đổi theo.`
-          : `Đã lưu ${r.material.code}${m.needs_review && kho.daRa ? ' · đã rà xong' : ''}.`,
+          : `Đã lưu ${r.material.code}.`,
       )
     } catch (e) {
       setLoiGhi(apiErrorText(e))
@@ -217,11 +215,7 @@ function Form({
   return (
     <HopThoai
       title={`Sửa mã ${m.code}`}
-      subtitle={[
-        m.group_name ?? 'chưa nhóm',
-        m.needs_review ? 'chờ Kho rà' : null,
-        m.is_active ? null : 'ĐANG NGỪNG DÙNG',
-      ]
+      subtitle={[m.group_name ?? 'chưa nhóm', m.is_active ? null : 'ĐANG NGỪNG DÙNG']
         .filter(Boolean)
         .join(' · ')}
       onClose={onClose}
@@ -612,28 +606,6 @@ function Form({
                   placeholder="EAN của NCC (nếu có)"
                 />
               </label>
-              <div>
-                <span className="k">Rà mã</span>
-                {m.needs_review ? (
-                  <label
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      minHeight: 26,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={kho.daRa}
-                      onChange={(e) => setKho((k) => ({ ...k, daRa: e.target.checked }))}
-                    />
-                    Kho đã rà xong khi lưu
-                  </label>
-                ) : (
-                  <span className="ro">đã rà</span>
-                )}
-              </div>
             </div>
           </div>
 

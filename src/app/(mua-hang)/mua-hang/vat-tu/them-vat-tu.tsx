@@ -131,8 +131,8 @@ export function DoiChieuGanGiong({
         </span>
       </label>
       <p className="text-k-sm px-[var(--gutter)] pb-2 text-[var(--ink-3)]">
-        Tên trùng hẳn (chỉ khác dấu câu / khoảng trắng) thì không thêm được — hệ thống chỉ ra
-        mã đang có.
+        Tên trùng hẳn (chỉ khác dấu câu / khoảng trắng) thì không thêm được — hệ thống chỉ
+        ra mã đang có.
       </p>
     </div>
   )

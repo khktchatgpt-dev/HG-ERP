@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Boxes, Check, Pencil } from 'lucide-react'
+import { Boxes, Pencil } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -31,15 +31,13 @@ export type VatTuRow = {
   sub_group: string | null
   shelf_location: string | null
   min_stock: number
-  needs_review: boolean
   is_active: boolean
 }
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
-/** Thứ tự tab theo VIỆC (bản vẽ K-5): chờ rà → chưa kệ → chưa ngưỡng → tất cả. */
-const THU_TU: RoVatTu[] = ['review', 'no_shelf', 'no_min', 'all']
+/** Thứ tự tab theo VIỆC: chưa kệ → chưa ngưỡng → tất cả (rổ "Chờ Kho rà" bỏ 14/10). */
+const THU_TU: RoVatTu[] = ['no_shelf', 'no_min', 'all']
 const TAB_MAU: Record<RoVatTu, { mau: string; tone: TabMuc['tone'] }> = {
-  review: { mau: 'c-warn', tone: 'warn' },
   no_shelf: { mau: 'c-mut', tone: 'mut' },
   no_min: { mau: 'c-mut', tone: 'mut' },
   all: { mau: 'c-mut', tone: 'mut' },
@@ -51,22 +49,20 @@ type Bao = { tone: 'ok' | 'stop'; text: string }
  * DANH MỤC VẬT TƯ — bản của Kho. Kho lối ERP · B4 (bản vẽ K-5
  * https://claude.ai/artifact/F2uVKzc4tb28FhHZY6BDiR), viết tay không kit.
  *
- * Tab theo VIỆC: Chờ Kho rà · Chưa có kệ · Chưa khai ngưỡng · Tất cả. Lưới sửa
+ * Tab theo VIỆC: Chưa có kệ · Chưa khai ngưỡng · Tất cả. Lưới sửa
  * tại chỗ như bảng tính — rời ô là `PATCH materials/[id]`, sổ vết 0177 tự ghi:
  *  · ĐVT là Ô GÕ CÓ GỢI Ý (một `datalist` chung) thay hộp chọn 55 lựa chọn mỗi
  *    dòng (50 dòng = 2.750 lựa chọn trong trang). Gõ "kg" ra "Kg"; ĐVT chưa có
  *    trong danh sách thì HỎI trước khi lưu (K4);
  *  · Kệ gợi ý: ô gõ có gợi ý các ô kệ của kho;
  *  · Ngưỡng: ô số kiểu VN.
- * Chọn nhiều dòng rồi "Đã rà xong" một lượt ở Action Pane.
- *
  * B7a (14/10): Kho SỬA ĐỦ một mã — tích đúng một dòng rồi "Sửa" ở Action Pane,
  * hoặc nhấp đúp dòng (ngoài ô gõ) → hộp `sua-ma.tsx` (nhận diện · quy đổi · tồn
  * trữ; trường mua hàng chỉ xem).
  *
- * Danh mục KHÔNG có vòng đời duyệt: `needs_review` là hàng đợi việc "Cung ứng
- * khai vội, Kho xác nhận lại", không phải một bậc duyệt. Trường mua hàng (giá,
- * NCC, mẫu đơn) là của Cung ứng — không sửa ở đây.
+ * Danh mục KHÔNG có vòng đời duyệt. Bước "Chờ Kho rà" (Cung ứng khai vội, Kho
+ * xác nhận lại) đã BỎ 14/10/2026 — chủ dự án: "không cần thiết". Trường mua hàng
+ * (giá, NCC, mẫu đơn) là của Cung ứng — không sửa ở đây.
  */
 export function VatTuKhoScreen({
   rows: initialRows,
@@ -171,28 +167,8 @@ export function VatTuKhoScreen({
     } else setDvtLa({ r, unit: v })
   }
 
-  const raDuoc = rows.filter((r) => chon.has(r.id) && r.needs_review)
-  async function daRaXong() {
-    let ok = 0
-    for (const r of raDuoc)
-      if (await ghi(r.id, { needs_review: false }, 'cờ chờ rà')) ok++
-    if (ok > 0) {
-      setBao({
-        tone: 'ok',
-        text: `${ok} mã đã rà xong — rời khỏi tab “Chờ Kho rà” khi tải lại.`,
-      })
-      setChon(new Set())
-      router.refresh()
-    }
-  }
-  const lat = (id: string) =>
-    setChon((s) => {
-      const n = new Set(s)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
-  const tatCa = rows.length > 0 && rows.every((r) => chon.has(r.id))
+  // Chọn MỘT dòng (không còn việc hàng loạt từ khi bỏ "Đã rà xong").
+  const lat = (id: string) => setChon((s) => (s.has(id) ? new Set() : new Set([id])))
 
   const dangLoc = qUrl.trim() !== '' || nhom !== ''
   const viec = RO_VT_VIEC[ro]
@@ -202,7 +178,7 @@ export function VatTuKhoScreen({
     key: id,
     label: RO_VT_NHAN[id],
     on: ro === id,
-    onClick: () => dat({ ro: id === 'review' ? null : id }),
+    onClick: () => dat({ ro: id === 'no_shelf' ? null : id }),
     n: counts[id],
     tone: counts[id] > 0 ? TAB_MAU[id].tone : undefined,
     mau: TAB_MAU[id].mau,
@@ -221,22 +197,6 @@ export function VatTuKhoScreen({
           <>
             <ApNhom>
               <ApNut
-                primary
-                icon={<Check size={15} aria-hidden />}
-                onClick={() => void daRaXong()}
-                why={
-                  !canEdit
-                    ? 'Tài khoản này không sửa được danh mục'
-                    : raDuoc.length === 0
-                      ? 'Tích các mã đang chờ rà trước'
-                      : busy
-                        ? 'Đang lưu…'
-                        : null
-                }
-              >
-                {raDuoc.length > 0 ? `Đã rà xong ${raDuoc.length} mã` : 'Đã rà xong'}
-              </ApNut>
-              <ApNut
                 icon={<Boxes size={15} aria-hidden />}
                 href={
                   motMa
@@ -250,6 +210,7 @@ export function VatTuKhoScreen({
             </ApNhom>
             <ApNhom>
               <ApNut
+                primary
                 icon={<Pencil size={15} aria-hidden />}
                 onClick={motMa ? () => setSua(motMa.id) : undefined}
                 why={
@@ -353,11 +314,9 @@ export function VatTuKhoScreen({
         <Rong
           tieuDe={`Không có mã nào trong “${RO_VT_NHAN[ro]}”`}
           lyDo={
-            ro === 'review'
-              ? 'Không còn mã nào chờ Kho rà — Cung ứng chưa khai mã mới nào từ lần rà trước.'
-              : dangLoc
-                ? 'Tab này trống với bộ lọc hiện tại. Bỏ lọc để xem lại.'
-                : `Tab này trống. Danh mục đang có ${fmt(counts.all)} mã.`
+            dangLoc
+              ? 'Tab này trống với bộ lọc hiện tại. Bỏ lọc để xem lại.'
+              : `Tab này trống. Danh mục đang có ${fmt(counts.all)} mã.`
           }
           tiep={
             <button
@@ -382,27 +341,18 @@ export function VatTuKhoScreen({
               {!hep && <col style={{ width: 210 }} />}
               <col style={{ width: 108 }} />
               <col style={{ width: 134 }} />
-              {!hep && <col style={{ width: 110 }} />}
+              {!hep && <col style={{ width: 64 }} />}
             </colgroup>
             <thead>
               <tr>
-                <th className="c0">
-                  <input
-                    type="checkbox"
-                    checked={tatCa}
-                    onChange={() =>
-                      setChon(tatCa ? new Set() : new Set(rows.map((r) => r.id)))
-                    }
-                    aria-label="Chọn cả trang"
-                  />
-                </th>
+                <th className="c0" aria-label="Chọn" />
                 <th>Mã</th>
                 <th>Tên vật tư</th>
                 <th>ĐVT</th>
                 {!hep && <th>Nhóm</th>}
                 <th>Kệ gợi ý</th>
                 <th className="r">Ngưỡng tối thiểu</th>
-                {!hep && <th>Tình trạng</th>}
+                {!hep && <th>Tồn</th>}
               </tr>
             </thead>
             <tbody>
@@ -505,11 +455,6 @@ export function VatTuKhoScreen({
                     </td>
                     {!hep && (
                       <td>
-                        {r.needs_review ? (
-                          <span className="kh-tag warn">chờ rà</span>
-                        ) : (
-                          <span className="kh-mut">—</span>
-                        )}{' '}
                         <Link
                           href={`/warehouse/ton?ro=all&q=${encodeURIComponent(r.code)}`}
                           className="kh-mut"
@@ -526,9 +471,8 @@ export function VatTuKhoScreen({
             <tfoot>
               <tr>
                 <td colSpan={hep ? 6 : 8}>
-                  {rows.length} mã trang này · đã chọn {chon.size}
-                  {raDuoc.length > 0 && ` (${raDuoc.length} đang chờ rà)`} · rời ô là lưu,
-                  mọi lượt sửa vào sổ vết
+                  {rows.length} mã trang này{motMa ? ` · đang chọn ${motMa.code}` : ''} ·
+                  rời ô là lưu, mọi lượt sửa vào sổ vết
                 </td>
               </tr>
             </tfoot>
@@ -571,7 +515,6 @@ export function VatTuKhoScreen({
                       sub_group: m.sub_group,
                       shelf_location: m.shelf_location,
                       min_stock: m.min_stock,
-                      needs_review: m.needs_review,
                     }
                   : r,
               ),
