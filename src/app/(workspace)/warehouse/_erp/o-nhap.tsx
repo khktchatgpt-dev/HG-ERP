@@ -51,7 +51,13 @@ export function OChu({
   className,
   maxLength,
   mono,
-}: ChungO & { maxLength?: number; mono?: boolean }) {
+  list,
+}: ChungO & {
+  maxLength?: number
+  mono?: boolean
+  /** id một `<datalist>` — gợi ý khi gõ. */
+  list?: string
+}) {
   const [text, setText] = useChuRieng(value)
   return (
     <input
@@ -62,6 +68,7 @@ export function OChu({
       disabled={disabled}
       placeholder={placeholder}
       maxLength={maxLength}
+      list={list}
       aria-label={label}
       title={title}
       onChange={(e) => setText(e.target.value)}
