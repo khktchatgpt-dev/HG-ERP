@@ -79,8 +79,7 @@ const nhanHref = (r: HangVeRow) =>
  * sự cố ở Action Pane; Enter hoặc bấm đúp trên dòng = Nhận hàng. Mã đơn vẫn
  * bấm mở hộp "Hàng của đơn" (?don=).
  *
- * Hai hộp (Hàng của đơn, Báo sự cố) còn là Sheet của kit — bọc lớp token
- * `.kit` riêng; chuyển sang lối mới ở bước sau.
+ * Hai hộp (Hàng của đơn, Báo sự cố) là hộp thoại của Kho (B6).
  */
 export function HangVeScreen({
   rows,
@@ -702,9 +701,8 @@ export function HangVeScreen({
         }
       />
 
-      {/* Hai hộp còn là Sheet của kit — cần lớp token .kit để có màu. */}
       {(hangCuaDon || suCo) && (
-        <div className="theme-v3 kit">
+        <>
           {hangCuaDon && (
             <HangCuaDonSheet
               data={hangCuaDon}
@@ -715,7 +713,7 @@ export function HangVeScreen({
             />
           )}
           {suCo && <BaoSuCoSheet data={suCo} onClose={dongSuCo} />}
-        </div>
+        </>
       )}
     </KhoKhung>
   )

@@ -1,31 +1,18 @@
 'use client'
 
-import {
-  Btn,
-  Cell,
-  Code,
-  NoticeBar,
-  Row,
-  Sheet,
-  TFoot,
-  THead,
-  Table,
-  Tag,
-} from '@/components/kit'
+import Link from 'next/link'
 import { ngay, TU_CHOI_NHAN } from '@/lib/kho-hang-ve'
 import { ISSUE_KIND_LABEL, type IssueKind } from '@/lib/po-tracking'
 import { todayVn } from '@/lib/date-vn'
+import { HopThoai } from '../_erp/o-nhap'
 import type { HangCuaDonData } from './tai-hang-cua-don'
 
 const so = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
 
-const TRANG_THAI_DOT: Record<
-  string,
-  { label: string; tone: 'neutral' | 'warn' | 'done' }
-> = {
-  planned: { label: 'chưa tới', tone: 'neutral' },
-  arrived: { label: 'NCC báo đã tới', tone: 'warn' },
-  received: { label: 'đã nhận', tone: 'done' },
+const TRANG_THAI_DOT: Record<string, { label: string; cls: string }> = {
+  planned: { label: 'chưa tới', cls: 'kh-tag' },
+  arrived: { label: 'NCC báo đã tới', cls: 'kh-tag warn' },
+  received: { label: 'đã nhận', cls: 'kh-tag done' },
 }
 
 const LOAI_PHIEU: Record<string, string> = {
@@ -35,16 +22,30 @@ const LOAI_PHIEU: Record<string, string> = {
   adjustment: 'Điều chỉnh',
 }
 
+/** Tiêu đề một mục trong hộp. */
+const Muc = ({ children }: { children: React.ReactNode }) => (
+  <h3
+    className="kh-mut"
+    style={{
+      margin: '0 0 4px',
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: '.05em',
+      textTransform: 'uppercase',
+    }}
+  >
+    {children}
+  </h3>
+)
+
 /**
- * HỘP "HÀNG CỦA ĐƠN" — bản vẽ B1-3 (duyệt 12/10/2026). Thủ kho bấm mã đơn ở
- * Hàng về thì thấy đơn chở gì, đã về bao nhiêu, đợt nào sắp tới — mà không rời
- * khu Kho (NV Kho không vào được khu Mua hàng).
+ * HỘP "HÀNG CỦA ĐƠN" — bản vẽ B1-3 (duyệt 12/10/2026), viết lại không kit (Kho
+ * lối ERP · B6). Thủ kho bấm mã đơn ở Hàng về thì thấy đơn chở gì, đã về bao
+ * nhiêu, đợt nào sắp tới — mà không rời khu Kho (NV Kho không vào khu Mua hàng).
  *
  * CHỈ XEM. Việc với NCC (hẹn/dời đợt, chốt thiếu, đòi giao bù) là của Cung ứng —
- * hộp nói rõ ai giữ việc đó thay vì bày nút khoá.
- *
- * "Đợt đã nhập trước" (đợt mở mà mọi dòng đã hết phần chờ) được NÓI RA ở đầu
- * hộp: PO-2026-0100 đợt 1 hẹn 12/10 mà cả 6 dòng đã vào PNK-2026-0099 ngày 06/10.
+ * hộp nói rõ ai giữ việc đó thay vì bày nút khoá. "Đợt đã nhập trước" (đợt mở mà
+ * mọi dòng đã hết phần chờ) được NÓI RA ở đầu hộp.
  */
 export function HangCuaDonSheet({
   data,
@@ -57,7 +58,7 @@ export function HangCuaDonSheet({
   today: string
   canEdit: boolean
   onClose: () => void
-  /** Mở hộp Báo sự cố của đơn này (Bước 3). Không có = không có quyền ghi kho. */
+  /** Mở hộp Báo sự cố của đơn này. Không có = không có quyền ghi kho. */
   onBaoSuCo?: () => void
 }) {
   const { po, lines, shipments, docs, free_lines } = data
@@ -76,320 +77,343 @@ export function HangCuaDonSheet({
   const tuDo = lines.length === 0
 
   return (
-    <Sheet
-      open
-      onClose={onClose}
+    <HopThoai
       title={`Hàng của đơn ${po.code}`}
       subtitle={po.supplier_name}
-      stakes="nhe"
-      width={680}
+      onClose={onClose}
+      width={760}
       footer={
-        <span className="flex w-full items-center gap-3">
-          <span className="text-k-sm text-[var(--ink-3)]">
+        <>
+          <span
+            className="kh-mut"
+            style={{ marginRight: 'auto', alignSelf: 'center', fontSize: 12 }}
+          >
             {keTiep
               ? `Đợt kế tiếp: đợt ${keTiep.seq} · ${ngay(keTiep.date, today)}`
               : conCho.length > 0
                 ? `Còn chờ ${conCho.length} dòng, chưa hẹn đợt`
                 : 'Không còn dòng nào chờ về'}
           </span>
-          <span className="ml-auto flex gap-2">
-            <Btn onClick={onClose}>Đóng</Btn>
-            <Btn
-              icon="canhBao"
-              blockedBy={onBaoSuCo ? undefined : 'Kho'}
-              onClick={onBaoSuCo}
+          <button type="button" className="kh-btn" onClick={onClose}>
+            Đóng
+          </button>
+          {onBaoSuCo ? (
+            <button type="button" className="kh-btn" onClick={onBaoSuCo}>
+              Báo sự cố
+            </button>
+          ) : (
+            <span
+              className="kh-btn"
+              aria-disabled="true"
+              title="Chỉ phòng Kho báo sự cố giao hàng"
             >
               Báo sự cố
-            </Btn>
-            {!tuDo && (
-              <Btn
-                icon="nhanHang"
-                primary={canEdit}
-                blockedBy={canEdit ? undefined : 'Kho'}
+            </span>
+          )}
+          {!tuDo &&
+            (canEdit ? (
+              <Link
                 href={`/warehouse/nhap/${po.id}${keTiep ? `?dot=${keTiep.id}` : ''}`}
+                className="kh-btn p"
               >
                 Nhận hàng
-              </Btn>
-            )}
-          </span>
-        </span>
+              </Link>
+            ) : (
+              <span
+                className="kh-btn p"
+                aria-disabled="true"
+                title="Chỉ phòng Kho ghi phiếu nhập"
+              >
+                Nhận hàng
+              </span>
+            ))}
+        </>
       }
     >
-      <div className="flex flex-col gap-3">
-        <dl className="text-k-sm grid grid-cols-4 gap-x-4 gap-y-0.5">
-          <dt className="text-k-label text-[var(--ink-3)] uppercase">Lệnh SX</dt>
-          <dt className="text-k-label text-[var(--ink-3)] uppercase">Hẹn giao (đơn)</dt>
-          <dt className="text-k-label text-[var(--ink-3)] uppercase">Phụ trách</dt>
-          <dt className="text-k-label text-[var(--ink-3)] uppercase">Về kho</dt>
-          <dd className="num m-0 font-semibold">
+      <div className="kh-hc" style={{ border: '1px solid var(--kh-line)' }}>
+        <div>
+          <span className="k">Lệnh SX</span>
+          <span className="v kh-num">
             {po.lsx_code ?? '— ngoài lệnh'}
             {po.extra_lsx.length > 0 && (
-              <span className="text-k-label ml-1 font-normal text-[var(--ink-3)]">
+              <span className="kh-mut" style={{ fontWeight: 400 }}>
+                {' '}
                 + {po.extra_lsx.join(', ')}
               </span>
             )}
-          </dd>
-          <dd className="num m-0 font-semibold">
+          </span>
+        </div>
+        <div>
+          <span className="k">Hẹn giao (đơn)</span>
+          <span className="v kh-num">
             {po.expected_at ? ngay(po.expected_at, today) : 'chưa hẹn'}
-          </dd>
-          <dd className="m-0 font-semibold">{po.assignee_name ?? '—'}</dd>
-          <dd className="num m-0 font-semibold">
-            {tuDo ? '—' : `${done}/${lines.length} dòng`}
-          </dd>
-        </dl>
+          </span>
+        </div>
+        <div>
+          <span className="k">Phụ trách</span>
+          <span className="v">{po.assignee_name ?? '—'}</span>
+        </div>
+        <div>
+          <span className="k">Về kho</span>
+          <span className="v kh-num">{tuDo ? '—' : `${done}/${lines.length} dòng`}</span>
+        </div>
+      </div>
 
-        {daNhapTruoc.length > 0 && (
-          <NoticeBar tone="warn" tag="Đã nhập trước">
-            {daNhapTruoc.map((s) => `Đợt ${s.seq} hẹn ${ngay(s.date, today)}`).join(', ')}{' '}
-            nhưng hàng của {daNhapTruoc.length > 1 ? 'các đợt này' : 'đợt này'} đã nhập đủ
-            trước hạn — không phải chờ xe.{' '}
-            {keTiep
-              ? `Còn lại thuộc đợt ${keTiep.seq}, hẹn ${ngay(keTiep.date, today)}.`
-              : conCho.length > 0
-                ? `Còn ${conCho.length} dòng chờ, chưa hẹn đợt.`
-                : 'Đơn không còn dòng nào chờ.'}
-          </NoticeBar>
-        )}
+      {daNhapTruoc.length > 0 && (
+        <div className="kh-hau">
+          <b>Đã nhập trước · </b>
+          {daNhapTruoc
+            .map((s) => `Đợt ${s.seq} hẹn ${ngay(s.date, today)}`)
+            .join(', ')}{' '}
+          nhưng hàng của {daNhapTruoc.length > 1 ? 'các đợt này' : 'đợt này'} đã nhập đủ
+          trước hạn — không phải chờ xe.{' '}
+          {keTiep
+            ? `Còn lại thuộc đợt ${keTiep.seq}, hẹn ${ngay(keTiep.date, today)}.`
+            : conCho.length > 0
+              ? `Còn ${conCho.length} dòng chờ, chưa hẹn đợt.`
+              : 'Đơn không còn dòng nào chờ.'}
+        </div>
+      )}
 
-        {tuDo ? (
-          <NoticeBar tone="neutral" tag="Không vào sổ kho">
-            Đơn chỉ có {free_lines} dòng theo mã SP (gỗ…): không vào tồn kho, Cung ứng
-            nghiệm thu ngoài sổ. Thủ kho chỉ cần biết có xe tới.
-          </NoticeBar>
-        ) : (
-          <section aria-label="Dòng hàng">
-            <h3 className="text-k-label mb-1 font-semibold text-[var(--ink-3)] uppercase">
-              Dòng hàng
-            </h3>
-            <Table>
-              <THead>
+      {tuDo ? (
+        <div
+          className="kh-hau"
+          style={{ borderLeftColor: 'var(--kh-ink3)', background: 'var(--kh-raised)' }}
+        >
+          Đơn chỉ có {free_lines} dòng theo mã SP (gỗ…): không vào tồn kho, Cung ứng
+          nghiệm thu ngoài sổ. Thủ kho chỉ cần biết có xe tới.
+        </div>
+      ) : (
+        <section aria-label="Dòng hàng">
+          <Muc>Dòng hàng</Muc>
+          <table className="kh-in">
+            <colgroup>
+              <col style={{ width: 96 }} />
+              <col />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 92 }} />
+              <col style={{ width: 90 }} />
+            </colgroup>
+            <thead>
+              <tr>
                 <th>Mã</th>
                 <th>Tên vật tư</th>
                 <th>ĐVT</th>
-                <th style={{ textAlign: 'right' }}>Đặt</th>
-                <th style={{ textAlign: 'right' }}>Đã về</th>
-                <th style={{ textAlign: 'right' }}>Còn chờ</th>
+                <th className="r">Đặt</th>
+                <th className="r">Đã về</th>
+                <th className="r">Còn chờ</th>
                 <th>Đợt</th>
-              </THead>
-              <tbody>
-                {lines.map((l) => (
-                  <Row key={l.id}>
-                    <Cell>
-                      <span className="num">{l.code ?? '—'}</span>
-                    </Cell>
-                    <Cell grow title={l.name}>
-                      <span className="truncate">{l.name}</span>
-                    </Cell>
-                    <Cell muted>{l.unit}</Cell>
-                    <Cell num>{so(l.ordered)}</Cell>
-                    <Cell num>{so(l.received)}</Cell>
-                    <Cell num>
-                      {l.closed_short ? (
-                        <Tag tone="neutral">chốt thiếu</Tag>
-                      ) : l.open > 0 ? (
-                        <span className="font-semibold text-[var(--warn)]">
-                          {so(l.open)}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--ink-3)]">0</span>
-                      )}
-                    </Cell>
-                    <Cell muted>
-                      <span className="num">
-                        {l.dots.length ? l.dots.map((d) => `Đợt ${d}`).join(', ') : '—'}
-                      </span>
-                    </Cell>
-                  </Row>
-                ))}
-              </tbody>
-              <TFoot
-                label={
-                  <td colSpan={3}>
-                    Còn chờ {conCho.length} dòng
-                    {free_lines > 0 ? ` · ${free_lines} dòng tự do ngoài sổ kho` : ''}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr key={l.id}>
+                  <td className="kh-ma">{l.code ?? '—'}</td>
+                  <td title={l.name}>{l.name}</td>
+                  <td className="kh-mut">{l.unit}</td>
+                  <td className="r kh-num">{so(l.ordered)}</td>
+                  <td className="r kh-num">{so(l.received)}</td>
+                  <td className="r kh-num">
+                    {l.closed_short ? (
+                      <span className="kh-tag">chốt thiếu</span>
+                    ) : l.open > 0 ? (
+                      <span className="kh-warn">{so(l.open)}</span>
+                    ) : (
+                      <span className="kh-mut">0</span>
+                    )}
                   </td>
-                }
-                cells={null}
-                caveatSpan={4}
-                caveat="“Đã về” lấy từ sổ kho (phiếu nhập đã ghi), không lấy từ lời báo của NCC."
-              />
-            </Table>
-          </section>
-        )}
+                  <td className="kh-mut kh-num">
+                    {l.dots.length ? l.dots.map((d) => `Đợt ${d}`).join(', ') : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="kh-mut" style={{ fontSize: 12, marginTop: 4 }}>
+            Còn chờ {conCho.length} dòng
+            {free_lines > 0 ? ` · ${free_lines} dòng tự do ngoài sổ kho` : ''} · “Đã về”
+            lấy từ sổ kho (phiếu nhập đã ghi), không lấy từ lời báo của NCC.
+          </p>
+        </section>
+      )}
 
-        <section aria-label="Đợt giao">
-          <h3 className="text-k-label mb-1 font-semibold text-[var(--ink-3)] uppercase">
-            Đợt giao (Cung ứng hẹn với NCC)
-          </h3>
-          {shipments.length === 0 ? (
-            <p className="text-k-sm m-0 text-[var(--ink-3)]">
-              Đơn chưa chia đợt — NCC giao theo hẹn giao của đơn.
-            </p>
-          ) : (
-            <Table>
-              <THead>
+      <section aria-label="Đợt giao">
+        <Muc>Đợt giao (Cung ứng hẹn với NCC)</Muc>
+        {shipments.length === 0 ? (
+          <p className="kh-mut">Đơn chưa chia đợt — NCC giao theo hẹn giao của đơn.</p>
+        ) : (
+          <table className="kh-in">
+            <colgroup>
+              <col style={{ width: 70 }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 170 }} />
+              <col />
+            </colgroup>
+            <thead>
+              <tr>
                 <th>Đợt</th>
                 <th>Hẹn</th>
                 <th>Tình trạng</th>
                 <th>Chở</th>
-              </THead>
-              <tbody>
-                {shipments.map((s) => {
-                  const xong =
-                    (s.status === 'planned' || s.status === 'arrived') && xongDot(s)
-                  const tt = TRANG_THAI_DOT[s.status] ?? { label: s.status, tone: 'neutral' as const } // prettier-ignore
-                  const ma = s.lines
-                    .map((l) => lineById.get(l.po_line_id))
-                    .filter((l): l is NonNullable<typeof l> => !!l)
-                  return (
-                    <Row key={s.seq}>
-                      <Cell>
-                        <span className="num">Đợt {s.seq}</span>
-                      </Cell>
-                      <Cell>
-                        <span className="num">{ngay(s.date, today)}</span>
-                      </Cell>
-                      <Cell>
-                        {xong ? (
-                          <Tag tone="done">đã nhập đủ trước hạn</Tag>
-                        ) : (
-                          <Tag tone={tt.tone}>{tt.label}</Tag>
-                        )}
-                      </Cell>
-                      <Cell grow title={ma.map((l) => l.code ?? l.name).join(', ')}>
-                        <span className="truncate">
-                          {ma.length === 1
-                            ? `${ma[0].code ?? ma[0].name} · ${so(s.lines[0].qty)} ${ma[0].unit}`
-                            : `${s.lines.length} dòng`}
-                        </span>
-                      </Cell>
-                    </Row>
-                  )
-                })}
-              </tbody>
-            </Table>
-          )}
-        </section>
+              </tr>
+            </thead>
+            <tbody>
+              {shipments.map((s) => {
+                const xong =
+                  (s.status === 'planned' || s.status === 'arrived') && xongDot(s)
+                const tt = TRANG_THAI_DOT[s.status] ?? { label: s.status, cls: 'kh-tag' }
+                const ma = s.lines
+                  .map((l) => lineById.get(l.po_line_id))
+                  .filter((l): l is NonNullable<typeof l> => !!l)
+                return (
+                  <tr key={s.seq}>
+                    <td className="kh-num">Đợt {s.seq}</td>
+                    <td className="kh-num">{ngay(s.date, today)}</td>
+                    <td>
+                      {xong ? (
+                        <span className="kh-tag done">đã nhập đủ trước hạn</span>
+                      ) : (
+                        <span className={tt.cls}>{tt.label}</span>
+                      )}
+                    </td>
+                    <td title={ma.map((l) => l.code ?? l.name).join(', ')}>
+                      {ma.length === 1
+                        ? `${ma[0].code ?? ma[0].name} · ${so(s.lines[0].qty)} ${ma[0].unit}`
+                        : `${s.lines.length} dòng`}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
 
-        <section aria-label="Sự cố giao hàng">
-          <h3 className="text-k-label mb-1 font-semibold text-[var(--ink-3)] uppercase">
-            Sự cố giao hàng
-            {data.issues.length > 0 &&
-              ` · ${data.issues.filter((i) => i.status === 'mo').length} đang mở / ${data.issues.length}`}
-          </h3>
-          {data.issues.length === 0 ? (
-            <p className="text-k-sm m-0 text-[var(--ink-3)]">
-              Chưa có sự cố nào. Hàng tới sai, hỏng, thiếu — hoặc không nhận lô — thì bấm
-              “Báo sự cố”: người phụ trách đơn bên Cung ứng nhận thông báo.
-            </p>
-          ) : (
-            <Table>
-              <THead>
+      <section aria-label="Sự cố giao hàng">
+        <Muc>
+          Sự cố giao hàng
+          {data.issues.length > 0 &&
+            ` · ${data.issues.filter((i) => i.status === 'mo').length} đang mở / ${data.issues.length}`}
+        </Muc>
+        {data.issues.length === 0 ? (
+          <p className="kh-mut">
+            Chưa có sự cố nào. Hàng tới sai, hỏng, thiếu — hoặc không nhận lô — thì bấm
+            “Báo sự cố”: người phụ trách đơn bên Cung ứng nhận thông báo.
+          </p>
+        ) : (
+          <table className="kh-in">
+            <colgroup>
+              <col style={{ width: 64 }} />
+              <col style={{ width: 120 }} />
+              <col />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 90 }} />
+            </colgroup>
+            <thead>
+              <tr>
                 <th>Ngày</th>
                 <th>Loại</th>
                 <th>Mô tả</th>
                 <th>Người báo</th>
                 <th>Tình trạng</th>
-              </THead>
-              <tbody>
-                {data.issues.map((i) => {
-                  const tuChoi = i.description.startsWith(TU_CHOI_NHAN)
-                  const moTa = tuChoi
-                    ? i.description.slice(TU_CHOI_NHAN.length).trim()
-                    : i.description
-                  return (
-                    <Row key={i.id}>
-                      <Cell>
-                        <span className="num">
-                          {ngay(todayVn(new Date(i.created_at)), today)}
-                        </span>
-                      </Cell>
-                      <Cell>{ISSUE_KIND_LABEL[i.kind as IssueKind] ?? i.kind}</Cell>
-                      <Cell
-                        grow
-                        title={[
-                          i.description,
-                          i.resolution && `Cách xử lý: ${i.resolution}`,
-                        ]
-                          .filter(Boolean)
-                          .join(' — ')}
-                      >
-                        {tuChoi && (
-                          <span className="mr-1">
-                            <Tag tone="warn">từ chối nhận</Tag>
-                          </span>
-                        )}
-                        {i.qty != null ? `${so(i.qty)} · ` : ''}
-                        {moTa}
-                      </Cell>
-                      <Cell muted>{i.created_by_name ?? '—'}</Cell>
-                      <Cell>
-                        {i.status === 'mo' ? (
-                          <Tag tone="warn">đang mở</Tag>
-                        ) : (
-                          <Tag tone="done">đã xử lý</Tag>
-                        )}
-                      </Cell>
-                    </Row>
-                  )
-                })}
-              </tbody>
-            </Table>
-          )}
-        </section>
+              </tr>
+            </thead>
+            <tbody>
+              {data.issues.map((i) => {
+                const tuChoi = i.description.startsWith(TU_CHOI_NHAN)
+                const moTa = tuChoi
+                  ? i.description.slice(TU_CHOI_NHAN.length).trim()
+                  : i.description
+                return (
+                  <tr key={i.id}>
+                    <td className="kh-num">
+                      {ngay(todayVn(new Date(i.created_at)), today)}
+                    </td>
+                    <td>{ISSUE_KIND_LABEL[i.kind as IssueKind] ?? i.kind}</td>
+                    <td
+                      title={[
+                        i.description,
+                        i.resolution && `Cách xử lý: ${i.resolution}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' — ')}
+                    >
+                      {tuChoi && <span className="kh-tag warn">từ chối nhận</span>}
+                      {i.qty != null ? `${so(i.qty)} · ` : ''}
+                      {moTa}
+                    </td>
+                    <td className="kh-mut">{i.created_by_name ?? '—'}</td>
+                    <td>
+                      {i.status === 'mo' ? (
+                        <span className="kh-tag warn">đang mở</span>
+                      ) : (
+                        <span className="kh-tag done">đã xử lý</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
 
-        <section aria-label="Phiếu nhập của đơn">
-          <h3 className="text-k-label mb-1 font-semibold text-[var(--ink-3)] uppercase">
-            Phiếu của đơn
-          </h3>
-          {docs.length === 0 ? (
-            <p className="text-k-sm m-0 text-[var(--ink-3)]">Chưa có phiếu nhập nào.</p>
-          ) : (
-            <Table>
-              <THead>
+      <section aria-label="Phiếu nhập của đơn">
+        <Muc>Phiếu của đơn</Muc>
+        {docs.length === 0 ? (
+          <p className="kh-mut">Chưa có phiếu nhập nào.</p>
+        ) : (
+          <table className="kh-in">
+            <colgroup>
+              <col style={{ width: 160 }} />
+              <col />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 100 }} />
+            </colgroup>
+            <thead>
+              <tr>
                 <th>Phiếu</th>
                 <th>Loại</th>
                 <th>Ngày</th>
-                <th style={{ textAlign: 'right' }}>Số lượng</th>
-              </THead>
-              <tbody>
-                {docs.map((d) => (
-                  <Row key={d.doc_id}>
-                    <Cell>
-                      <Code as="a" href={`/warehouse/phieu/${d.doc_id}`}>
-                        {d.code}
-                      </Code>
-                    </Cell>
-                    <Cell muted>
-                      {LOAI_PHIEU[d.kind] ?? d.kind}
-                      {d.reversed_by && (
-                        <span className="ml-1 text-[var(--ink-3)]">
-                          · đã đảo ({d.reversed_by})
-                        </span>
-                      )}
-                    </Cell>
-                    <Cell>
-                      <span className="num">{ngay(d.at, today)}</span>
-                    </Cell>
-                    <Cell num>{so(d.qty_total)}</Cell>
-                  </Row>
-                ))}
-              </tbody>
-            </Table>
-          )}
-          {phieuNhap.length === 0 && docs.length > 0 && (
-            <p className="text-k-sm m-0 mt-1 text-[var(--ink-3)]">
-              Không còn phiếu nhập nào hiệu lực.
-            </p>
-          )}
-        </section>
+                <th className="r">Số lượng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.doc_id}>
+                  <td>
+                    <Link href={`/warehouse/phieu/${d.doc_id}`} className="kh-lnk">
+                      {d.code}
+                    </Link>
+                  </td>
+                  <td className="kh-mut">
+                    {LOAI_PHIEU[d.kind] ?? d.kind}
+                    {d.reversed_by && ` · đã đảo (${d.reversed_by})`}
+                  </td>
+                  <td className="kh-num">{ngay(d.at, today)}</td>
+                  <td className="r kh-num">{so(d.qty_total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {phieuNhap.length === 0 && docs.length > 0 && (
+          <p className="kh-mut" style={{ marginTop: 4 }}>
+            Không còn phiếu nhập nào hiệu lực.
+          </p>
+        )}
+      </section>
 
-        <NoticeBar tone="neutral" tag="Chỉ xem">
-          Hẹn hay dời đợt, chốt thiếu, đòi NCC giao bù là việc của Cung ứng
-          {po.assignee_name ? ` (${po.assignee_name})` : ''}. Hàng về sai hay thiếu thì
-          báo người phụ trách.
-        </NoticeBar>
+      <div
+        className="kh-hau"
+        style={{ borderLeftColor: 'var(--kh-ink3)', background: 'var(--kh-raised)' }}
+      >
+        <b>Chỉ xem · </b>Hẹn hay dời đợt, chốt thiếu, đòi NCC giao bù là việc của Cung ứng
+        {po.assignee_name ? ` (${po.assignee_name})` : ''}. Hàng về sai hay thiếu thì báo
+        người phụ trách.
       </div>
-    </Sheet>
+    </HopThoai>
   )
 }
