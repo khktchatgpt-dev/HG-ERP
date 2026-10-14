@@ -1,24 +1,22 @@
 'use client'
 
-import { useRef, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRef, useState } from 'react'
 import { isoToVn } from '@/lib/date-vn'
 import { dongThieuKg, ketQuaPhieu } from '@/lib/da-ve'
 import type { KetQuaDao } from '@/lib/kho-dao-phieu'
 import { useBeRong } from '@/lib/use-be-rong'
+import Link from 'next/link'
+import { ArrowDownToLine, BookOpen, Printer, RotateCcw } from 'lucide-react'
 import {
-  Btn,
-  Code,
-  HeadChip,
-  HeadChips,
-  Menu,
-  NoticeBar,
-  ScreenFrame,
-  ScreenHeader,
-  StatusBar,
-  Tag,
-  Timeline,
-} from '@/components/kit'
+  ApNhom,
+  ApNut,
+  DauTrang,
+  DongThoiGian,
+  KhoKhung,
+  MenuNut,
+  TabNgang,
+  ThanhTT,
+} from '../../_erp/khung'
 import type { ChiTietPhieuNhap } from '@/modules/dept/supply/phieu-nhap-chi-tiet.repo'
 import { SuaPhieuSheet, type Kieu } from './sua-phieu'
 import { KgCanSheet } from './kg-can-sheet'
@@ -73,12 +71,31 @@ const gio = (iso: string) => {
   return `${isoToVn(vn.slice(0, 10))} ${vn.slice(11, 16)}`
 }
 /** Chữ dài (ghi chú, lý do) một dòng, cắt "…" — đầu trang không phình cao; `title` đọc nguyên văn. */
-const dai = (s: string) => (
-  <span className="inline-block max-w-[440px] truncate align-bottom" title={s}>
-    {s}
-  </span>
-)
-const chua = (s: string) => <span className="font-semibold text-[var(--warn)]">{s}</span>
+const chua = (s: string) => <span className="kh-warn">{s}</span>
+const MAU_LOAI: Record<PhieuDoc['kind'], string> = {
+  receipt: 'c-nhap',
+  issue: 'c-xuat',
+  transfer: 'c-kiem',
+  stocktake: 'c-kiem',
+}
+
+/** Một ô nhãn–giá trị của dải đầu phiếu (chỉ đọc). */
+function O({
+  k,
+  children,
+  rong,
+}: {
+  k: string
+  children: React.ReactNode
+  rong?: number
+}) {
+  return (
+    <div style={rong ? { maxWidth: rong } : undefined}>
+      <span className="k">{k}</span>
+      <span className="v">{children}</span>
+    </div>
+  )
+}
 
 /** Khung hẹp hơn mức này thì ẩn cột phụ (Kệ, Ghi chú) thay vì cuộn ngang. */
 const HEP = 900
@@ -98,6 +115,9 @@ const HEP = 900
  * Luật màn hẹp: một đầu trang một hàng, đầu phiếu là dải chip tự xuống dòng (bản
  * cũ là cột FactBox bên phải — nguyên nhân cuộn ngang 800/880 ở 1280), một vùng
  * cuộn duy nhất là bảng dòng; Lịch sử là TAB chứ không xếp chồng bắt cuộn trang.
+ *
+ * Kho lối ERP · B6 (14/10/2026): viết tay, không kit — khung `../../_erp`; Sửa
+ * phiếu là nút thả xuống ở Action Pane, mục khoá vẫn hiện kèm lý do.
  */
 export function PhieuChiTietScreen({
   doc,
@@ -117,9 +137,9 @@ export function PhieuChiTietScreen({
   /** Phiếu nhập theo đơn mua — dữ liệu của trang chi tiết Cung ứng (`loadChiTietPhieuNhap`). */
   nhap: ChiTietPhieuNhap | null
 }) {
-  const router = useRouter()
   const khung = useRef<HTMLDivElement>(null)
-  const hep = useBeRong(khung) < HEP
+  const beRong = useBeRong(khung)
+  const hep = beRong > 0 && beRong < HEP
   const [moDao, setMoDao] = useState(false)
   const [sua, setSua] = useState<Kieu | null>(null)
   const [moKg, setMoKg] = useState(false)
@@ -140,309 +160,307 @@ export function PhieuChiTietScreen({
   const whySua = daDao
     ? `Phiếu đã đảo — sửa trên phiếu đang hiệu lực${dangHieuLuc.length ? ` (${dangHieuLuc.map((k) => k.code).join(', ')})` : ''}.`
     : undefined
-  const khoaQuyen = canEdit ? undefined : 'Kho'
   const whyDao = !dao.duoc ? `${dao.vuong}. ${dao.goBang}` : undefined
 
   const status =
     doc.status === 'pending' ? (
-      <Tag tone="warn">chờ duyệt</Tag>
+      <span className="kh-tag warn">chờ duyệt</span>
     ) : doc.status === 'rejected' ? (
-      <Tag tone="stop">đã từ chối</Tag>
+      <span className="kh-tag" style={{ color: 'var(--kh-stop)' }}>
+        đã từ chối
+      </span>
     ) : daDao ? (
-      <Tag tone="stop">đã đảo · không còn tính tồn</Tag>
+      <span className="kh-tag" style={{ color: 'var(--kh-stop)', fontWeight: 600 }}>
+        đã đảo · không còn tính tồn
+      </span>
     ) : (
-      <Tag tone="done">đã ghi sổ</Tag>
+      <span className="kh-tag done">đã ghi sổ</span>
     )
 
+  const whyQuyen = canEdit ? null : 'Chỉ phòng Kho sửa phiếu kho'
   const suaPhieu = row ? (
     row.phieu.cho_lap_lai && canEdit ? (
-      <Btn icon="nhapKho" primary href={`/warehouse/nhap/${row.po_id}?sua=${row.doc_id}`}>
+      <ApNut
+        primary
+        icon={<ArrowDownToLine size={15} aria-hidden />}
+        href={`/warehouse/nhap/${row.po_id}?sua=${row.doc_id}`}
+      >
         Lập lại phiếu
-      </Btn>
+      </ApNut>
     ) : (
-      <Menu
-        label="Sửa phiếu ▾"
+      <MenuNut
+        label="Sửa phiếu"
         items={[
-          { label: 'Sửa thông tin', group: 'Sửa phiếu', blockedBy: khoaQuyen, why: whySua, onClick: () => setSua('thong-tin') }, // prettier-ignore
-          { label: 'Sửa số lượng / dòng', group: 'Sửa phiếu', blockedBy: khoaQuyen, why: whySua, onClick: () => setSua('so-luong') }, // prettier-ignore
-          { label: 'Điều chỉnh chênh lệch', group: 'Sửa phiếu', blockedBy: khoaQuyen, why: whySua, onClick: () => setSua('chenh-lech') }, // prettier-ignore
+          {
+            label: 'Sửa thông tin',
+            why: whyQuyen ?? whySua,
+            onClick: () => setSua('thong-tin'),
+          },
+          { label: 'Sửa số lượng / dòng', why: whyQuyen ?? whySua, onClick: () => setSua('so-luong') }, // prettier-ignore
+          { label: 'Điều chỉnh chênh lệch', why: whyQuyen ?? whySua, onClick: () => setSua('chenh-lech') }, // prettier-ignore
           ...(dongKg.length > 0
-            ? [{ label: `Ghi kg cân (${dongKg.length} dòng)`, group: 'Sửa phiếu', blockedBy: khoaQuyen, why: whySua, onClick: () => setMoKg(true) }] // prettier-ignore
+            ? [{ label: `Ghi kg cân (${dongKg.length} dòng)`, why: whyQuyen ?? whySua, onClick: () => setMoKg(true) }] // prettier-ignore
             : []),
-          { label: 'Đảo phiếu', danger: true, blockedBy: khoaQuyen, why: whyDao, onClick: () => setMoDao(true) }, // prettier-ignore
+          { label: 'Đảo phiếu', nguy: true, why: whyQuyen ?? whyDao, onClick: () => setMoDao(true) }, // prettier-ignore
         ]}
       />
     )
   ) : (
-    <Btn
-      icon="dao"
-      blockedBy={khoaQuyen}
-      disabled={canEdit && !dao.duoc}
-      title={canEdit && !dao.duoc ? whyDao : undefined}
+    <ApNut
+      icon={<RotateCcw size={15} aria-hidden />}
+      why={whyQuyen ?? whyDao}
       onClick={() => setMoDao(true)}
     >
       Đảo phiếu
-    </Btn>
+    </ApNut>
   )
 
-  const chips: ReactNode = row ? (
-    <HeadChips>
-      <HeadChip
-        plain
-        label="NCC"
-        value={nhap?.nhap_cho?.ncc.join('; ') || row.supplier_name}
-      />
-      <HeadChip
-        plain
-        label="Đơn"
-        value={<span className="num">{row.po_code}</span>}
-        onClick={() => router.push(`/warehouse/nhap?don=${row.po_id}`)}
-      />
-      <HeadChip
-        plain
-        label="Lệnh"
-        value={
-          (nhap?.nhap_cho?.lenh ?? [row.lsx_code, ...(row.lsx_them ?? [])].filter(Boolean)).join(' · ') || 'không theo lệnh' // prettier-ignore
-        }
-      />
-      <HeadChip plain label="Đợt" value={nhap?.nhap_cho?.dot ?? 'không chia đợt'} />
-      <HeadChip
-        plain
-        label="Ngày CT"
-        value={<span className="num">{isoToVn(row.doc_date.slice(0, 10))}</span>}
-      />
-      <HeadChip
-        plain
-        label="Ghi sổ"
-        value={
-          <span>
-            <span className="num">{gio(nhap!.created_at)}</span>
-            {nhap?.nguoi_lap ? ` · ${nhap.nguoi_lap}` : ''}
+  const lenh =
+    (nhap?.nhap_cho?.lenh ?? [row?.lsx_code, ...(row?.lsx_them ?? [])].filter(Boolean)).join(' · ') || 'không theo lệnh' // prettier-ignore
+  const chips = row ? (
+    <div className="kh-hc" role="group" aria-label="Đầu phiếu">
+      <O k="NCC" rong={260}>
+        <span title={nhap?.nhap_cho?.ncc.join('; ') || row.supplier_name}>
+          {nhap?.nhap_cho?.ncc.join('; ') || row.supplier_name}
+        </span>
+      </O>
+      <O k="Đơn">
+        <Link href={`/warehouse/nhap?don=${row.po_id}`} className="kh-lnk">
+          {row.po_code}
+        </Link>
+      </O>
+      <O k="Lệnh" rong={240}>
+        <span title={lenh}>{lenh}</span>
+      </O>
+      <O k="Đợt">{nhap?.nhap_cho?.dot ?? 'không chia đợt'}</O>
+      <O k="Ngày CT">
+        <span className="kh-num">{isoToVn(row.doc_date.slice(0, 10))}</span>
+      </O>
+      <O k="Ghi sổ">
+        <span className="kh-num">{gio(nhap!.created_at)}</span>
+        {nhap?.nguoi_lap ? ` · ${nhap.nguoi_lap}` : ''}
+      </O>
+      <O k="Số phiếu NCC">
+        {row.supplier_doc_no?.trim() ? (
+          <span className="kh-num">{row.supplier_doc_no}</span>
+        ) : canEdit && !daDao ? (
+          <button
+            type="button"
+            className="kh-lnk"
+            style={{ fontFamily: 'inherit', color: 'var(--kh-warn)' }}
+            onClick={() => setSua('thong-tin')}
+          >
+            chưa ghi — ghi ngay
+          </button>
+        ) : (
+          chua('chưa ghi')
+        )}
+      </O>
+      <O k="Người giao">{row.counterparty?.trim() || chua('chưa ghi')}</O>
+      {row.ghi_chu?.trim() && (
+        <O k="Ghi chú" rong={440}>
+          <span title={row.ghi_chu} style={{ fontWeight: 400 }}>
+            {row.ghi_chu}
           </span>
-        }
-      />
-      <HeadChip
-        plain
-        label="Số phiếu NCC"
-        value={
-          row.supplier_doc_no?.trim() ? (
-            <span className="num">{row.supplier_doc_no}</span>
-          ) : (
-            chua('chưa ghi')
-          )
-        }
-        onClick={canEdit && !daDao ? () => setSua('thong-tin') : undefined}
-      />
-      <HeadChip
-        plain
-        label="Người giao"
-        value={row.counterparty?.trim() || chua('chưa ghi')}
-      />
-      {row.ghi_chu?.trim() && <HeadChip plain label="Ghi chú" value={dai(row.ghi_chu)} />}
-    </HeadChips>
+        </O>
+      )}
+    </div>
   ) : (
-    <HeadChips>
-      <HeadChip
-        plain
-        label={doc.kind === 'receipt' ? 'Bên giao' : 'Bên nhận'}
-        value={doc.counterparty ?? '—'}
-      />
-      <HeadChip
-        plain
-        label="Ngày CT"
-        value={<span className="num">{isoToVn(doc.doc_date)}</span>}
-      />
-      <HeadChip
-        plain
-        label="Ghi sổ"
-        value={
-          <span>
-            <span className="num">{gio(doc.created_at)}</span>
-            {doc.created_by_name ? ` · ${doc.created_by_name}` : ''}
+    <div className="kh-hc" role="group" aria-label="Đầu phiếu">
+      <O k={doc.kind === 'receipt' ? 'Bên giao' : 'Bên nhận'} rong={280}>
+        {doc.counterparty ?? '—'}
+      </O>
+      <O k="Ngày CT">
+        <span className="kh-num">{isoToVn(doc.doc_date)}</span>
+      </O>
+      <O k="Ghi sổ">
+        <span className="kh-num">{gio(doc.created_at)}</span>
+        {doc.created_by_name ? ` · ${doc.created_by_name}` : ''}
+      </O>
+      {doc.reason && (
+        <O k="Lý do" rong={440}>
+          <span title={doc.reason} style={{ fontWeight: 400 }}>
+            {doc.reason}
           </span>
-        }
-      />
-      {doc.reason && <HeadChip plain label="Lý do" value={dai(doc.reason)} />}
+        </O>
+      )}
       {doc.supplier_doc_no && (
-        <HeadChip
-          plain
-          label="Số phiếu NCC"
-          value={<span className="num">{doc.supplier_doc_no}</span>}
-        />
+        <O k="Số phiếu NCC">
+          <span className="kh-num">{doc.supplier_doc_no}</span>
+        </O>
       )}
       {doc.reversal_of_code && (
-        <HeadChip plain label="Đảo cho" value={<Code>{doc.reversal_of_code}</Code>} />
+        <O k="Đảo cho">
+          <span className="kh-ma">{doc.reversal_of_code}</span>
+        </O>
       )}
       {doc.status !== 'posted' && (
-        <HeadChip
-          plain
-          label="Duyệt"
-          value={[
+        <O k="Duyệt" rong={360}>
+          {[
             doc.approved_by_name ?? 'chưa duyệt',
             doc.approved_at ? isoToVn(doc.approved_at.slice(0, 10)) : null,
             doc.reject_reason ? `“${doc.reject_reason}”` : null,
           ]
             .filter(Boolean)
             .join(' · ')}
-        />
+        </O>
       )}
-      {doc.note && <HeadChip plain label="Ghi chú" value={dai(doc.note)} />}
-    </HeadChips>
+      {doc.note && (
+        <O k="Ghi chú" rong={440}>
+          <span title={doc.note} style={{ fontWeight: 400 }}>
+            {doc.note}
+          </span>
+        </O>
+      )}
+    </div>
   )
 
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-      <ScreenFrame>
-        <ScreenHeader
-          compact
-          eyebrow={row ? `${LOAI[doc.kind]} · theo đơn mua` : LOAI[doc.kind]}
-          title={<span className="num">{doc.code}</span>}
-          status={status}
-          actions={
-            <>
-              <Btn icon="quayLai" href="/warehouse/phieu">
-                Sổ phiếu
-              </Btn>
-              <Btn
-                icon="in"
+    <KhoKhung label={`${LOAI[doc.kind]} ${doc.code}`}>
+      <DauTrang
+        crumb="Kho › Sổ phiếu"
+        title={
+          <>
+            <span className={`kh-sq ${MAU_LOAI[doc.kind]}`} aria-hidden />
+            <span className="kh-num">{doc.code}</span>
+          </>
+        }
+        ctx={
+          <>
+            {row ? `${LOAI[doc.kind]} · theo đơn mua` : LOAI[doc.kind]} {status}
+          </>
+        }
+        actions={
+          <>
+            <ApNhom>{suaPhieu}</ApNhom>
+            <ApNhom>
+              <ApNut
+                icon={<Printer size={15} aria-hidden />}
                 onClick={() => window.open(`/print/warehouse/${doc.id}`, '_blank')}
               >
                 In phiếu
-              </Btn>
-              {suaPhieu}
-            </>
-          }
-        >
-          {chips}
-        </ScreenHeader>
-        <div ref={khung} className="h-0 w-full" aria-hidden />
+              </ApNut>
+              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
+                Sổ phiếu
+              </ApNut>
+            </ApNhom>
+          </>
+        }
+      />
+      {chips}
+      <div ref={khung} style={{ height: 0, width: '100%' }} aria-hidden />
 
-        {reversedBy && (
-          <NoticeBar
-            tone="stop"
-            tag="Tờ này đã bị đảo"
-            action={{
-              label: `Mở ${reversedBy.code}`,
-              onClick: () => router.push(`/warehouse/phieu/${reversedBy.id}`),
-            }}
-          >
-            Bút toán của phiếu đã ghi ngược bằng {reversedBy.code} — tờ này không còn tác
-            dụng lên tồn
+      {reversedBy && (
+        <div className="kh-note stop">
+          <span className="tag">Tờ này đã bị đảo</span>
+          <span>
+            Bút toán của phiếu đã ghi ngược bằng{' '}
+            <Link href={`/warehouse/phieu/${reversedBy.id}`} className="kh-lnk">
+              {reversedBy.code}
+            </Link>{' '}
+            — tờ này không còn tác dụng lên tồn
             {row?.thay_boi
               ? `. Phiếu ghi lại: ${row.thay_boi}`
               : dangHieuLuc.length > 0
                 ? `. Phiếu nhập đang hiệu lực của đơn: ${dangHieuLuc.map((k) => k.code).join(', ')}`
                 : ''}
             .
-          </NoticeBar>
-        )}
-        {!row && !reversedBy && !dao.duoc && doc.status === 'posted' && (
-          <NoticeBar tone="warn" tag="Không đảo được" action={{ label: 'Đã hiểu' }}>
-            {whyDao}
-          </NoticeBar>
-        )}
-        {row && !daDao && thieu.length > 0 && (
-          <NoticeBar
-            tone="warn"
-            tag="Thiếu thông tin"
-            action={
-              canEdit
-                ? { label: 'Ghi ngay', onClick: () => setSua('thong-tin') }
-                : undefined
-            }
-          >
+          </span>
+        </div>
+      )}
+      {!row && !reversedBy && !dao.duoc && doc.status === 'posted' && (
+        <div className="kh-note">
+          <span className="tag">Không đảo được</span>
+          <span>{whyDao}</span>
+        </div>
+      )}
+      {row && !daDao && thieu.length > 0 && (
+        <div className="kh-note">
+          <span className="tag">Thiếu thông tin</span>
+          <span>
             Chưa có <b>{thieu.join(' và ')}</b> — Kế toán đối chiếu công nợ bằng số phiếu
-            giao của NCC.
-          </NoticeBar>
-        )}
-        {kq.length > 0 && (
-          <NoticeBar tone="neutral" tag="Đơn">
+            giao của NCC.{' '}
+            {canEdit && (
+              <button
+                type="button"
+                className="kh-lnk"
+                style={{ fontFamily: 'inherit' }}
+                onClick={() => setSua('thong-tin')}
+              >
+                Ghi ngay
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+      {kq.length > 0 && (
+        <div className="kh-note mut">
+          <span className="tag">Đơn</span>
+          <span>
             {kq.map((k) => `${k.text}${k.viec ? ` — ${k.viec}` : ''}`).join(' · ')} (việc
             của Cung ứng{row?.owner_name ? `, ${row.owner_name}` : ''}).
-          </NoticeBar>
-        )}
+          </span>
+        </div>
+      )}
 
-        {nhap && (
-          <div
-            role="tablist"
-            aria-label="Nội dung phiếu"
-            className="flex shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-3"
-          >
-            {(
-              [
-                ['hang', `Hàng nhập (${nhap.dong.length})`],
-                ['lich-su', `Lịch sử (${nhap.lich_su.length})`],
-              ] as const
-            ).map(([id, ten]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                id={`tab-${id}`}
-                aria-selected={tab === id}
-                aria-controls={`pn-${id}`}
-                onClick={() => setTab(id)}
-                className={
-                  tab === id
-                    ? 'text-k-body -mb-px border-b-2 border-[var(--act)] px-3.5 py-2 font-semibold text-[var(--act-text)]'
-                    : 'text-k-body -mb-px border-b-2 border-transparent px-3.5 py-2 text-[var(--ink-2)] hover:text-[var(--act-text)]'
-                }
-              >
-                {ten}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {nhap && tab === 'lich-su' ? (
-          <div
-            role="tabpanel"
-            id="pn-lich-su"
-            aria-labelledby="tab-lich-su"
-            className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)] px-[var(--gutter)] py-3"
-          >
-            <Timeline marks={nhap.lich_su} />
-            {nhap.khac.length > 0 && (
-              <div className="text-k-sm mt-4 flex flex-wrap items-center gap-x-5 gap-y-1">
-                <span className="text-k-label font-semibold text-[var(--ink-3)] uppercase">
-                  Phiếu nhập khác của đơn
-                </span>
-                {nhap.khac.map((k) => (
-                  <span key={k.doc_id} className="flex items-center gap-1.5">
-                    <Code as="a" href={`/warehouse/phieu/${k.doc_id}`}>
-                      {k.code}
-                    </Code>
-                    <span className="num text-[var(--ink-3)]">
-                      {isoToVn(k.at.slice(0, 10))}
-                    </span>
-                    <Tag tone={k.con_hieu_luc ? 'done' : 'neutral'}>
-                      {k.con_hieu_luc ? 'đang hiệu lực' : 'đã đảo'}
-                    </Tag>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : nhap ? (
-          <BangDongNhap dong={nhap.dong} daDao={daDao} hep={hep} />
-        ) : (
-          <BangDongKho
-            lines={lines}
-            kind={doc.kind}
-            hep={hep}
-            soDongKiemKe={soDongKiemKe}
-          />
-        )}
-
-        <StatusBar
-          left={[
-            row
-              ? 'Sửa thông tin không đổi tồn · sửa số lượng = đảo rồi lập lại · hàng đã dùng thì điều chỉnh chênh lệch'
-              : 'Phiếu đã ghi không sửa, không xoá — sai thì lập phiếu đảo, cả hai tờ cùng nằm trong sổ',
+      {nhap && (
+        <TabNgang
+          label="Nội dung phiếu"
+          tabs={[
+            { key: 'hang', label: 'Hàng nhập', n: nhap.dong.length, on: tab === 'hang', onClick: () => setTab('hang'), mau: 'c-nhap' }, // prettier-ignore
+            { key: 'lich-su', label: 'Lịch sử', n: nhap.lich_su.length, on: tab === 'lich-su', onClick: () => setTab('lich-su'), mau: 'c-mut' }, // prettier-ignore
           ]}
-          right={`${nhap ? nhap.dong.length : lines.length} dòng`}
         />
-      </ScreenFrame>
+      )}
+
+      {nhap && tab === 'lich-su' ? (
+        <div
+          className="kh-grid"
+          role="tabpanel"
+          aria-label="Lịch sử phiếu"
+          style={{ padding: '12px 16px' }}
+        >
+          <DongThoiGian marks={nhap.lich_su} />
+          {nhap.khac.length > 0 && (
+            <div
+              style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: '4px 18px', alignItems: 'center', fontSize: 12.5 }} // prettier-ignore
+            >
+              <span className="kh-mut" style={{ fontSize: 11, fontWeight: 700 }}>
+                PHIẾU NHẬP KHÁC CỦA ĐƠN
+              </span>
+              {nhap.khac.map((k) => (
+                <span key={k.doc_id}>
+                  <Link href={`/warehouse/phieu/${k.doc_id}`} className="kh-lnk">
+                    {k.code}
+                  </Link>{' '}
+                  <span className="kh-num kh-mut">{isoToVn(k.at.slice(0, 10))}</span>{' '}
+                  <span className={k.con_hieu_luc ? 'kh-tag done' : 'kh-tag'}>
+                    {k.con_hieu_luc ? 'đang hiệu lực' : 'đã đảo'}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : nhap ? (
+        <BangDongNhap dong={nhap.dong} daDao={daDao} hep={hep} />
+      ) : (
+        <BangDongKho
+          lines={lines}
+          kind={doc.kind}
+          hep={hep}
+          soDongKiemKe={soDongKiemKe}
+        />
+      )}
+
+      <ThanhTT
+        left={
+          row
+            ? 'Sửa thông tin không đổi tồn · sửa số lượng = đảo rồi lập lại · hàng đã dùng thì điều chỉnh chênh lệch'
+            : 'Phiếu đã ghi không sửa, không xoá — sai thì lập phiếu đảo, cả hai tờ cùng nằm trong sổ'
+        }
+        right={<b>{nhap ? nhap.dong.length : lines.length} dòng</b>}
+      />
 
       {moDao && (
         <DaoSheet
@@ -457,6 +475,6 @@ export function PhieuChiTietScreen({
         <SuaPhieuSheet row={row} kieuBanDau={sua} onClose={() => setSua(null)} />
       )}
       {row && moKg && <KgCanSheet row={row} onClose={() => setMoKg(false)} />}
-    </div>
+    </KhoKhung>
   )
 }

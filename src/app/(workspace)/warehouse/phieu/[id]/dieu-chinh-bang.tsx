@@ -1,13 +1,10 @@
 'use client'
 
-// BẢN CỦA KHO (12/10/2026) — chép từ bảng điều chỉnh của Cung ứng.
-import { Code } from '@/components/kit'
+// BẢN CỦA KHO (12/10/2026) — chép từ bảng điều chỉnh của Cung ứng; không kit (B6).
 import { parseNum } from '@/lib/cut-plan/paste'
 import type { DaVeRow } from '@/modules/dept/supply/da-ve.repo'
 
 const so = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
-const O_SO =
-  'num h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] text-k-sm bg-[var(--surface-card)] px-2 text-right hover:border-[var(--ink-3)] focus:border-[var(--act)]'
 
 export type DongDc = {
   po_line_id: string
@@ -63,50 +60,61 @@ export function DieuChinhBang({
   go: Record<string, string>
   onGo: (po_line_id: string, v: string) => void
 }) {
+  const luoi = { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 92px 108px 80px', gap: 8, alignItems: 'center' } as const // prettier-ignore
   return (
-    <div className="flex flex-col">
-      <div className="text-k-label grid grid-cols-[minmax(0,1fr)_88px_104px_80px] gap-2 border-b border-[var(--line)] pb-1 font-bold tracking-[.06em] text-[var(--ink-label)] uppercase">
+    <div className="kh-ds">
+      <div
+        style={{
+          ...luoi,
+          background: '#eef1f6',
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: '.05em',
+          textTransform: 'uppercase',
+          color: 'var(--kh-ink3)',
+        }}
+      >
         <span>Vật tư</span>
-        <span className="text-right">Đang ghi</span>
-        <span className="text-right">Số đúng</span>
-        <span className="text-right">Chênh</span>
+        <span style={{ textAlign: 'right' }}>Đang ghi</span>
+        <span style={{ textAlign: 'right' }}>Số đúng</span>
+        <span style={{ textAlign: 'right' }}>Chênh</span>
       </div>
       {dong.map((d) => {
         const raw = go[d.po_line_id] ?? ''
         const n = raw.trim() ? parseNum(raw) : null
         const chenh = n == null ? null : Math.round((n - d.hien) * 1e6) / 1e6
         return (
-          <div
-            key={d.po_line_id}
-            className="grid grid-cols-[minmax(0,1fr)_88px_104px_80px] items-center gap-2 border-b border-[var(--line)] py-1.5"
-          >
-            <span className="text-k-sm flex min-w-0 flex-col items-start">
-              <span className="whitespace-nowrap">
-                <Code>{d.code}</Code>
-              </span>
-              <span className="w-full truncate text-[var(--ink-2)]" title={d.name}>
+          <div key={d.po_line_id} style={luoi}>
+            <span style={{ minWidth: 0 }}>
+              <span className="kh-ma">{d.code}</span>
+              <span
+                className="kh-mut"
+                style={{
+                  display: 'block',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontSize: 12,
+                }}
+                title={d.name}
+              >
                 {d.name}
               </span>
             </span>
-            <span className="num text-k-sm text-right">
-              {so(d.hien)} <span className="text-[var(--ink-3)]">{d.unit}</span>
+            <span className="kh-num" style={{ textAlign: 'right' }}>
+              {so(d.hien)} <span className="kh-mut">{d.unit}</span>
             </span>
             <input
               inputMode="decimal"
-              className={O_SO}
+              className="kh-o num"
               value={raw}
               placeholder={so(d.hien)}
               onChange={(e) => onGo(d.po_line_id, e.target.value)}
               aria-label={`Số đúng của ${d.code}`}
             />
             <span
-              className={`num text-k-sm text-right font-semibold ${
-                chenh == null || chenh === 0
-                  ? 'text-[var(--ink-3)]'
-                  : n == null || n < 0
-                    ? 'text-[var(--stop)]'
-                    : 'text-[var(--ink)]'
-              }`}
+              className={`kh-num kh-b ${chenh == null || chenh === 0 ? 'kh-mut' : n == null || n < 0 ? 'kh-stop' : ''}`}
+              style={{ textAlign: 'right' }}
             >
               {raw.trim() && n == null
                 ? 'sai số'

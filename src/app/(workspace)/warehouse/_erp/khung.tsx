@@ -386,3 +386,119 @@ export function DaGhiSo({
     </div>
   )
 }
+
+export type MenuMuc = {
+  label: string
+  onClick?: () => void
+  href?: string
+  /** Vì sao khoá — mục vẫn hiện, mờ, nói lý do. */
+  why?: string | null
+  /** Việc không lùi được (đảo phiếu) — chữ đỏ, tách vạch. */
+  nguy?: boolean
+}
+
+/**
+ * Nút thả xuống của Action Pane ("Sửa phiếu ▾"). Mục khoá vẫn hiện kèm lý do —
+ * không giấu việc người dùng đang tìm. Esc / bấm ra ngoài là đóng.
+ */
+export function MenuNut({ label, items }: { label: string; items: MenuMuc[] }) {
+  const [mo, setMo] = useState(false)
+  const goc = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (!mo) return
+    const ngoai = (e: MouseEvent) => {
+      if (!goc.current?.contains(e.target as Node)) setMo(false)
+    }
+    const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && setMo(false)
+    document.addEventListener('mousedown', ngoai)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', ngoai)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [mo])
+  return (
+    <div ref={goc} className="kh-menu">
+      <button
+        type="button"
+        className="kh-btn"
+        aria-haspopup="menu"
+        aria-expanded={mo}
+        onClick={() => setMo(!mo)}
+      >
+        {label} ▾
+      </button>
+      {mo && (
+        <div role="menu" className="kh-menu-ds">
+          {items.map((m) => {
+            const cls = m.nguy ? 'nguy' : undefined
+            if (m.why)
+              return (
+                <span
+                  key={m.label}
+                  role="menuitem"
+                  aria-disabled="true"
+                  className={cls}
+                  title={m.why}
+                >
+                  {m.label}
+                  <small>{m.why}</small>
+                </span>
+              )
+            return m.href ? (
+              <Link key={m.label} role="menuitem" href={m.href} className={cls}>
+                {m.label}
+              </Link>
+            ) : (
+              <button
+                key={m.label}
+                type="button"
+                role="menuitem"
+                className={cls}
+                onClick={() => {
+                  setMo(false)
+                  m.onClick?.()
+                }}
+              >
+                {m.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export type MocTg = {
+  key: string
+  /** ISO; null = mốc chưa tới (mờ). */
+  at: string | null
+  label: string
+  actor?: string | null
+  detail?: string | null
+  tone?: 'act' | 'done' | 'warn' | 'stop'
+}
+
+const ngayGio = (at: string) => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(at)) return `${at.slice(8, 10)}/${at.slice(5, 7)}`
+  const d = new Date(at)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** DÒNG THỜI GIAN của chứng từ — mốc chưa tới vẫn hiện, mờ (thấy còn mấy bước). */
+export function DongThoiGian({ marks }: { marks: MocTg[] }) {
+  return (
+    <ol className="kh-tl">
+      {marks.map((m) => (
+        <li key={m.key} className={m.at ? `roi ${m.tone ?? 'act'}` : 'chua'}>
+          <span className="nhan">{m.label}</span>
+          <span className="kh-num kh-mut"> {m.at ? ngayGio(m.at) : 'chưa tới'}</span>
+          {m.actor && m.at && <span> · {m.actor}</span>}
+          {m.detail && m.at && <p>{m.detail}</p>}
+        </li>
+      ))}
+    </ol>
+  )
+}

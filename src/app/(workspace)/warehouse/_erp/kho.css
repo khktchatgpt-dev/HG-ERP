@@ -1402,3 +1402,99 @@
   background: var(--kh-dnm);
   vertical-align: 1px;
 }
+
+/* ── Menu thả xuống của Action Pane ── */
+.kh.kh .kh-menu {
+  position: relative;
+}
+.kh.kh .kh-menu-ds {
+  position: absolute;
+  top: calc(100% + 3px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  border: 1px solid var(--kh-line);
+  background: var(--kh-card);
+  box-shadow: 0 6px 18px rgba(18, 22, 31, 0.14);
+}
+.kh.kh .kh-menu-ds > * {
+  display: block;
+  padding: 7px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--kh-hair);
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--kh-ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.kh.kh .kh-menu-ds > *:hover {
+  background: var(--kh-act-wash);
+}
+.kh.kh .kh-menu-ds > [aria-disabled='true'] {
+  color: #8f98a7;
+  cursor: not-allowed;
+}
+.kh.kh .kh-menu-ds > [aria-disabled='true']:hover {
+  background: none;
+}
+.kh.kh .kh-menu-ds small {
+  display: block;
+  font-size: 11px;
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-menu-ds .nguy {
+  border-top: 1px solid var(--kh-line);
+  color: var(--kh-stop);
+}
+/* ── Dòng thời gian ── */
+.kh.kh .kh-tl {
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: none;
+  border-left: 1px solid var(--kh-line);
+  margin-left: 6px;
+}
+.kh.kh .kh-tl li {
+  position: relative;
+  padding: 6px 0;
+  font-size: 12.5px;
+}
+.kh.kh .kh-tl li::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: -21px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--kh-card);
+  background: var(--kh-act);
+}
+.kh.kh .kh-tl li.done::before {
+  background: var(--kh-done);
+}
+.kh.kh .kh-tl li.warn::before {
+  background: var(--kh-warn);
+}
+.kh.kh .kh-tl li.stop::before {
+  background: var(--kh-stop);
+}
+.kh.kh .kh-tl li.chua::before {
+  background: var(--kh-empty);
+}
+.kh.kh .kh-tl li.chua .nhan {
+  color: var(--kh-ink3);
+  font-weight: 400;
+}
+.kh.kh .kh-tl .nhan {
+  font-weight: 600;
+}
+.kh.kh .kh-tl p {
+  margin: 2px 0 0;
+  color: var(--kh-ink2);
+}

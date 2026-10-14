@@ -4,24 +4,14 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { DAU_SUA_PHIEU } from '@/lib/da-ve'
-import {
-  Chip,
-  Code,
-  Consequence,
-  Sheet,
-  SheetActions,
-  TextArea,
-  useToast,
-} from '@/components/kit'
+import { HopThoai } from '../../_erp/o-nhap'
 import type { DaVeRow } from '@/modules/dept/supply/da-ve.repo'
 import { DieuChinhBang, dongDieuChinh, dongDoi } from './dieu-chinh-bang'
 
 const so = (n: number) => n.toLocaleString('vi-VN')
-/** Cùng lớp với kit `TextInput` — nhưng cập nhật theo TỪNG PHÍM: nút Lưu phải mở ngay khi gõ, không đợi rời ô. */
-const O_NHAP =
-  'h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] text-k-sm bg-[var(--surface-card)] px-2 placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)]'
-const NHAN = 'text-k-sm flex flex-col gap-1'
-const NHAN_CHU = 'font-semibold text-[var(--ink-2)]'
+/** Ô cập nhật theo TỪNG PHÍM: nút Lưu phải mở ngay khi gõ, không đợi rời ô. */
+const NHAN = { display: 'flex', flexDirection: 'column', gap: 4 } as const
+const NHAN_CHU = { fontWeight: 600, color: 'var(--kh-ink2)' } as const
 export type Kieu = 'thong-tin' | 'so-luong' | 'chenh-lech'
 
 /**
@@ -57,7 +47,6 @@ export function SuaPhieuSheet({
   kieuBanDau?: Kieu
 }) {
   const router = useRouter()
-  const toast = useToast()
   const [kieu, setKieu] = useState<Kieu>(kieuBanDau)
   const [soNcc, setSoNcc] = useState(row.supplier_doc_no ?? '')
   const [nguoiGiao, setNguoiGiao] = useState(row.counterparty ?? '')
@@ -96,13 +85,9 @@ export function SuaPhieuSheet({
     setMoiChenh(false)
     try {
       if (kieu === 'chenh-lech') {
-        const r = await api<{ docs: { code: string }[] }>(
+        await api<{ docs: { code: string }[] }>(
           `/api/dept/warehouse/docs/${row.doc_id}/dieu-chinh`,
           { method: 'POST', body: { lines: doi.map((d) => ({ po_line_id: d.po_line_id, qty: d.qty })), reason: lyDo.trim() } }, // prettier-ignore
-        )
-        toast.success(
-          `Đã điều chỉnh ${row.code}`,
-          `Ghi ${r.docs.map((d) => d.code).join(' + ')} — vết vào Trao đổi của ${row.po_code}`,
         )
         onClose()
         router.refresh()
@@ -118,22 +103,14 @@ export function SuaPhieuSheet({
             reason: lyDo.trim(),
           },
         })
-        toast.success(
-          `Đã sửa thông tin ${row.code}`,
-          `Vết ghi vào Trao đổi của ${row.po_code}`,
-        )
         onClose()
         router.refresh()
         return
       }
-      const rev = await api<{ code: string }>(
-        `/api/dept/warehouse/docs/${row.doc_id}/reverse`,
-        { method: 'POST', body: { reason: `${DAU_SUA_PHIEU} — ${lyDo.trim()}` } },
-      )
-      toast.success(
-        `Đã đảo ${row.code}`,
-        `Phiếu đảo ${rev.code} — mở phiếu mới để lập lại`,
-      )
+      await api<{ code: string }>(`/api/dept/warehouse/docs/${row.doc_id}/reverse`, {
+        method: 'POST',
+        body: { reason: `${DAU_SUA_PHIEU} — ${lyDo.trim()}` },
+      })
       // Bản của KHO: lập lại ngay trong khu Kho (12/10/2026).
       router.push(`/warehouse/nhap/${row.po_id}?sua=${row.doc_id}`)
     } catch (e) {
@@ -144,23 +121,24 @@ export function SuaPhieuSheet({
   }
 
   return (
-    <Sheet
-      open
-      onClose={onClose}
-      stakes="vua"
+    <HopThoai
       title={`Sửa phiếu nhập · ${row.code}`}
       subtitle={`${row.po_code} · ${row.supplier_name} — nhận ngày ${row.doc_date.slice(0, 10).split('-').reverse().join('/')}`}
+      onClose={onClose}
+      width={640}
       footer={
         <>
           {(loi || why) && (
-            <div
-              className={`text-k-sm mb-2 ${loi ? 'text-[var(--stop)]' : 'text-[var(--warn)]'}`}
+            <span
+              style={{ marginRight: 'auto', alignSelf: 'center', fontSize: 12 }}
+              className={loi ? 'kh-stop' : 'kh-warn'}
             >
               {loi ?? why}
               {moiChenh && (
                 <button
                   type="button"
-                  className="ml-2 font-semibold text-[var(--act)] hover:underline"
+                  className="kh-lnk"
+                  style={{ fontFamily: 'inherit', marginLeft: 8 }}
                   onClick={() => {
                     setKieu('chenh-lech')
                     setLoi(null)
@@ -170,66 +148,90 @@ export function SuaPhieuSheet({
                   Điều chỉnh chênh lệch thay vì đảo →
                 </button>
               )}
-            </div>
+            </span>
           )}
-          <SheetActions
-            onCancel={onClose}
-            onConfirm={() => void luu()}
-            confirmLabel={
-              kieu === 'thong-tin'
+          <button type="button" className="kh-btn" onClick={onClose}>
+            Thôi
+          </button>
+          <button
+            type="button"
+            className="kh-btn p"
+            disabled={!!why || busy}
+            onClick={() => void luu()}
+          >
+            {busy
+              ? 'Đang lưu…'
+              : kieu === 'thong-tin'
                 ? 'Lưu thông tin'
                 : kieu === 'so-luong'
                   ? 'Đảo phiếu và lập lại'
-                  : 'Ghi phiếu điều chỉnh'
-            }
-            busy={busy}
-            disabled={!!why}
-          />
+                  : 'Ghi phiếu điều chỉnh'}
+          </button>
         </>
       }
     >
-      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Sửa gì">
-        <Chip on={kieu === 'thong-tin'} onClick={() => setKieu('thong-tin')}>
+      <span
+        className="kh-loc-nho"
+        role="group"
+        aria-label="Sửa gì"
+        style={{ flexWrap: 'wrap' }}
+      >
+        <button
+          type="button"
+          aria-pressed={kieu === 'thong-tin'}
+          onClick={() => setKieu('thong-tin')}
+        >
           Sửa thông tin (số phiếu NCC, người giao, ghi chú)
-        </Chip>
-        <Chip on={kieu === 'so-luong'} onClick={() => setKieu('so-luong')}>
+        </button>
+        <button
+          type="button"
+          aria-pressed={kieu === 'so-luong'}
+          onClick={() => setKieu('so-luong')}
+        >
           Sửa số lượng / dòng
-        </Chip>
-        <Chip on={kieu === 'chenh-lech'} onClick={() => setKieu('chenh-lech')}>
+        </button>
+        <button
+          type="button"
+          aria-pressed={kieu === 'chenh-lech'}
+          onClick={() => setKieu('chenh-lech')}
+        >
           Điều chỉnh chênh lệch (hàng đã dùng)
-        </Chip>
-      </div>
+        </button>
+      </span>
 
       {kieu === 'thong-tin' ? (
-        <div className="flex flex-col gap-3">
-          <label className={NHAN}>
-            <span className={NHAN_CHU}>Số phiếu giao của NCC</span>
+        <>
+          <label style={NHAN}>
+            <span style={NHAN_CHU}>Số phiếu giao của NCC</span>
             <input
-              className={O_NHAP}
+              className="kh-o mono"
               value={soNcc}
               onChange={(e) => setSoNcc(e.target.value)}
               maxLength={60}
+              aria-label="Số phiếu giao của NCC"
             />
           </label>
-          <label className={NHAN}>
-            <span className={NHAN_CHU}>Người giao</span>
+          <label style={NHAN}>
+            <span style={NHAN_CHU}>Người giao</span>
             <input
-              className={O_NHAP}
+              className="kh-o"
               value={nguoiGiao}
               onChange={(e) => setNguoiGiao(e.target.value)}
               maxLength={200}
+              aria-label="Người giao"
             />
           </label>
-          <label className={NHAN}>
-            <span className={NHAN_CHU}>Ghi chú phiếu</span>
-            <TextArea
+          <label style={NHAN}>
+            <span style={NHAN_CHU}>Ghi chú phiếu</span>
+            <textarea
+              className="kh-o"
               value={ghiChu}
-              onChange={setGhiChu}
+              onChange={(e) => setGhiChu(e.target.value)}
               rows={2}
               aria-label="Ghi chú phiếu"
             />
           </label>
-        </div>
+        </>
       ) : kieu === 'chenh-lech' ? (
         <DieuChinhBang
           dong={dong}
@@ -237,17 +239,24 @@ export function SuaPhieuSheet({
           onGo={(id, v) => setGo((g) => ({ ...g, [id]: v }))}
         />
       ) : (
-        <div className="flex flex-col">
+        <div className="kh-ds">
           {row.lines.map((l) => (
             <div
               key={l.movement_id}
-              className="grid grid-cols-[96px_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--line)] py-2"
+              style={{ gridTemplateColumns: '96px minmax(0,1fr) auto' }}
             >
-              <Code>{l.material_code}</Code>
-              <span className="text-k-sm truncate" title={l.material_name}>
+              <span className="kh-ma">{l.material_code}</span>
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={l.material_name}
+              >
                 {l.material_name}
               </span>
-              <span className="num text-k-sm">
+              <span className="kh-num">
                 {so(l.qty)} {l.unit}
                 {l.stock_status === 'blocked' ? ' · sai quy cách' : ''}
               </span>
@@ -256,13 +265,14 @@ export function SuaPhieuSheet({
         </div>
       )}
 
-      <div className="mt-3">
-        <div className="text-k-label mb-1 font-bold tracking-[.09em] text-[var(--ink-label)] uppercase">
-          Sai gì · bắt buộc
-        </div>
-        <TextArea
+      <label style={NHAN}>
+        <span className="kh-mut" style={{ fontSize: 11, fontWeight: 700 }}>
+          SAI GÌ · BẮT BUỘC
+        </span>
+        <textarea
+          className="kh-o"
           value={lyDo}
-          onChange={setLyDo}
+          onChange={(e) => setLyDo(e.target.value)}
           rows={2}
           placeholder={
             kieu === 'thong-tin'
@@ -271,14 +281,14 @@ export function SuaPhieuSheet({
           }
           aria-label="Lý do sửa phiếu nhập"
         />
-      </div>
-      <Consequence>
+      </label>
+      <div className="kh-hau">
         {kieu === 'chenh-lech'
           ? `Phiếu ${row.code} giữ nguyên. Ghi thêm phiếu điều chỉnh đúng phần lệch: số đúng NHỎ hơn → phiếu xuất điều chỉnh (chỉ cần tồn còn đủ phần lệch, không cần cả phiếu); LỚN hơn → phiếu nhập bổ sung. Số đã nhận, trạng thái đơn và công nợ tính lại theo số đúng; ngày chứng từ là hôm nay.${daDieuChinh.length ? ` Đã điều chỉnh trước: ${daDieuChinh.join(', ')} — cột "Đang ghi" đã tính cả lần đó.` : ''}`
           : kieu === 'thong-tin'
             ? 'Chỉ đổi thông tin trên phiếu — tồn kho, số đã nhận và công nợ giữ nguyên. Ai sửa, lúc nào, trước → sau và lý do ghi vào Trao đổi của đơn. Sai ngày chứng từ thì dùng Sửa số lượng / dòng.'
             : `Bước 1: đảo ${row.code} — ghi một phiếu xuất ngược đúng các dòng trên (tồn trừ lại, đơn quay về số đã nhận trước phiếu này). Bước 2: mở phiếu nhập mới, số đã điền sẵn theo phiếu cũ — sửa chỗ sai rồi Ghi sổ. Hàng đã lấy ra dùng thì không đảo được.`}
-      </Consequence>
-    </Sheet>
+      </div>
+    </HopThoai>
   )
 }
