@@ -41,6 +41,10 @@ const nextConfig: NextConfig = {
   // thì root là repo cha (chứa cả worktree lẫn node_modules), route vẫn đúng vì
   // project dir vẫn là cwd. Không đặt biến thì y như cũ.
   turbopack: { root: process.env.HG_TURBOPACK_ROOT || process.cwd() },
+  // Thư viện đọc máy chấm công ZKTeco (giao thức TCP/UDP cổng 4370, dùng `net` +
+  // `dgram`). Để Node nạp thẳng, không đóng gói: `hr/cham-cong/zk.ts` vá hàm giải
+  // mã của nó (tên tiếng Việt utf8, giờ tường) qua chung một bộ đệm require.
+  serverExternalPackages: ['zkteco-js'],
   images: {
     remotePatterns: supabaseImagePatterns(),
     /*

@@ -624,6 +624,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/hr', label: 'Trang chủ', icon: 'home' },
           { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },
+          // Một trang "Kỳ công tháng" cho cả quy trình (bản vẽ vòng 3, 12/10/2026).
+          { href: '/hr/cham-cong', label: 'Chấm công', icon: 'fingerprint' },
         ],
       },
     ],

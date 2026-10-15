@@ -904,6 +904,265 @@ export type Database = {
           },
         ]
       }
+      hr_attendance_devices: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          ip: string
+          last_error: string | null
+          last_log_count: number | null
+          last_pulled_at: string | null
+          last_user_count: number | null
+          log_capacity: number | null
+          name: string
+          port: number
+          serial: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          ip: string
+          last_error?: string | null
+          last_log_count?: number | null
+          last_pulled_at?: string | null
+          last_user_count?: number | null
+          log_capacity?: number | null
+          name: string
+          port?: number
+          serial?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          ip?: string
+          last_error?: string | null
+          last_log_count?: number | null
+          last_pulled_at?: string | null
+          last_user_count?: number | null
+          log_capacity?: number | null
+          name?: string
+          port?: number
+          serial?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hr_attendance_logs: {
+        Row: {
+          created_at: string
+          device_id: string
+          device_user_id: string
+          id: number
+          punched_at: string
+          state: number | null
+          verify_type: number | null
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          device_user_id: string
+          id?: never
+          punched_at: string
+          state?: number | null
+          verify_type?: number | null
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          device_user_id?: string
+          id?: never
+          punched_at?: string
+          state?: number | null
+          verify_type?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_logs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hr_attendance_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_attendance_pulls: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date_from: string
+          date_to: string
+          device_id: string
+          device_log_count: number | null
+          error: string | null
+          finished_at: string
+          id: string
+          logs_in_range: number | null
+          logs_new: number | null
+          ok: boolean
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date_from: string
+          date_to: string
+          device_id: string
+          device_log_count?: number | null
+          error?: string | null
+          finished_at?: string
+          id?: string
+          logs_in_range?: number | null
+          logs_new?: number | null
+          ok: boolean
+          started_at: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date_from?: string
+          date_to?: string
+          device_id?: string
+          device_log_count?: number | null
+          error?: string | null
+          finished_at?: string
+          id?: string
+          logs_in_range?: number | null
+          logs_new?: number | null
+          ok?: boolean
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_pulls_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_pulls_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hr_attendance_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_device_users: {
+        Row: {
+          created_at: string
+          device_id: string
+          device_user_id: string
+          employee_id: string | null
+          id: string
+          name_on_device: string | null
+          needs_review: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          device_user_id: string
+          employee_id?: string | null
+          id?: string
+          name_on_device?: string | null
+          needs_review?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          device_user_id?: string
+          employee_id?: string | null
+          id?: string
+          name_on_device?: string | null
+          needs_review?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_device_users_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hr_attendance_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_device_users_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_employees: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          full_name: string
+          id: string
+          note: string | null
+          shift_id: string
+          team: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          full_name: string
+          id?: string
+          note?: string | null
+          shift_id: string
+          team?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          full_name?: string
+          id?: string
+          note?: string | null
+          shift_id?: string
+          team?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_employees_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "hr_shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_holidays: {
+        Row: {
+          created_at: string
+          holiday_date: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          holiday_date: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          holiday_date?: string
+          name?: string
+        }
+        Relationships: []
+      }
       hr_leave_requests: {
         Row: {
           approved_at: string | null
@@ -966,6 +1225,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hr_shifts: {
+        Row: {
+          active: boolean
+          break_minutes: number
+          code: string
+          created_at: string
+          end_time: string
+          id: string
+          late_grace_minutes: number
+          name: string
+          ot_from: string
+          ot_round_minutes: number
+          required_punches: number
+          sort_order: number
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          break_minutes?: number
+          code: string
+          created_at?: string
+          end_time: string
+          id?: string
+          late_grace_minutes?: number
+          name: string
+          ot_from: string
+          ot_round_minutes?: number
+          required_punches?: number
+          sort_order?: number
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          break_minutes?: number
+          code?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          late_grace_minutes?: number
+          name?: string
+          ot_from?: string
+          ot_round_minutes?: number
+          required_punches?: number
+          sort_order?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
