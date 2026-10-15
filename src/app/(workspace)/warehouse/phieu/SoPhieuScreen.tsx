@@ -113,7 +113,10 @@ export function SoPhieuScreen({
   const params = useSearchParams()
   const khung = useRef<HTMLDivElement>(null)
   const beRong = useBeRong(khung)
-  // < 960px: ẩn Lệnh SX + Người lập + nhãn chữ của mã lý do; < 600px: danh sách phẳng.
+  // < 1120px (laptop 125%: khung ~985): mã lý do không kèm nhãn chữ + ẩn Người lập —
+  // đo 15/10: tổng cột cố định 1020 > 985, cột Đối ứng còn 0px và lưới cuộn ngang.
+  // < 960px: ẩn thêm Lệnh SX; < 600px: danh sách phẳng.
+  const gon = beRong > 0 && beRong < 1120
   const hep = beRong > 0 && beRong < 960
   const dien = beRong > 0 && beRong < 600
   const [chon, setChon] = useState<string | null>(null)
@@ -151,7 +154,7 @@ export function SoPhieuScreen({
   const sel = rows.find((r) => r.id === chon) ?? null
   const dangLoc = !!lyDo || !!nguoi
   const canChon = 'Chọn một phiếu trong bảng trước'
-  const soCot = hep ? 6 : 8
+  const soCot = hep ? 6 : gon ? 7 : 8
 
   const tabs: TabMuc[] = RO_PHIEU.map((id) => ({
     key: id,
@@ -369,12 +372,12 @@ export function SoPhieuScreen({
             <colgroup>
               <col style={{ width: 62 }} />
               <col style={{ width: 186 }} />
-              <col style={{ width: hep ? 64 : 178 }} />
+              <col style={{ width: gon ? 64 : 178 }} />
               <col style={{ width: 120 }} />
               {!hep && <col style={{ width: 152 }} />}
               <col />
               <col style={{ width: 172 }} />
-              {!hep && <col style={{ width: 150 }} />}
+              {!gon && <col style={{ width: 150 }} />}
             </colgroup>
             <thead>
               <tr>
@@ -385,7 +388,7 @@ export function SoPhieuScreen({
                 {!hep && <th>Lệnh SX</th>}
                 <th>Đối ứng</th>
                 <th>Số phiếu NCC</th>
-                {!hep && <th>Người lập</th>}
+                {!gon && <th>Người lập</th>}
               </tr>
             </thead>
             <tbody>
@@ -409,7 +412,7 @@ export function SoPhieuScreen({
                       ) : (
                         <>
                           <MaLyDo ma={d.ma_ly_do[0]} />
-                          {!hep && (
+                          {!gon && (
                             <span className="kh-mut">{nhanLyDo(d.ma_ly_do[0])}</span>
                           )}
                           {d.ma_ly_do.length > 1 && (
@@ -448,7 +451,7 @@ export function SoPhieuScreen({
                     >
                       {soNcc(d)}
                     </td>
-                    {!hep && <td className="kh-mut">{d.created_by_name ?? '—'}</td>}
+                    {!gon && <td className="kh-mut">{d.created_by_name ?? '—'}</td>}
                   </tr>
                 )
               })}

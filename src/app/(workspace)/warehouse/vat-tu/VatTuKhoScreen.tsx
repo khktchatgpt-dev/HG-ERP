@@ -229,18 +229,26 @@ export function VatTuKhoScreen({
           <>
             <ApNhom>
               <ApNut
-                icon={<Boxes size={15} aria-hidden />}
-                href={
-                  motMa
-                    ? `/warehouse/ton?ro=all&q=${encodeURIComponent(motMa.code)}`
-                    : undefined
-                }
-                why={motMa ? null : 'Tích đúng một mã trước'}
+                primary
+                icon={<Plus size={15} aria-hidden />}
+                onClick={canCreate ? () => setThem(true) : undefined}
+                why={canCreate ? null : 'Tài khoản này không thêm được mã vật tư'}
               >
-                Xem tồn
+                Thêm mã
               </ApNut>
-            </ApNhom>
-            <ApNhom>
+              <ApNut
+                icon={<Pencil size={15} aria-hidden />}
+                onClick={motMa ? () => setSua(motMa.id) : undefined}
+                why={
+                  !canEdit
+                    ? 'Tài khoản này không sửa được danh mục'
+                    : motMa
+                      ? null
+                      : 'Tích đúng một mã trước (hoặc nhấp đúp dòng)'
+                }
+              >
+                {motMa ? `Sửa ${motMa.code}` : 'Sửa mã'}
+              </ApNut>
               {motMa && !motMa.is_active ? (
                 <ApNut
                   icon={<RotateCcw size={15} aria-hidden />}
@@ -273,28 +281,16 @@ export function VatTuKhoScreen({
             </ApNhom>
             <ApNhom>
               <ApNut
-                primary
-                icon={<Plus size={15} aria-hidden />}
-                onClick={canCreate ? () => setThem(true) : undefined}
-                why={canCreate ? null : 'Tài khoản này không thêm được mã vật tư'}
-              >
-                Thêm mã
-              </ApNut>
-              <ApNut
-                icon={<Pencil size={15} aria-hidden />}
-                onClick={motMa ? () => setSua(motMa.id) : undefined}
-                why={
-                  !canEdit
-                    ? 'Tài khoản này không sửa được danh mục'
-                    : motMa
-                      ? null
-                      : 'Tích đúng một mã trước (hoặc nhấp đúp dòng)'
+                icon={<Boxes size={15} aria-hidden />}
+                href={
+                  motMa
+                    ? `/warehouse/ton?ro=all&q=${encodeURIComponent(motMa.code)}`
+                    : undefined
                 }
+                why={motMa ? null : 'Tích đúng một mã trước'}
               >
-                {motMa ? `Sửa ${motMa.code}` : 'Sửa mã'}
+                Xem tồn
               </ApNut>
-            </ApNhom>
-            <ApNhom>
               <ApNut href="/warehouse/ton">Tồn kho</ApNut>
             </ApNhom>
           </>

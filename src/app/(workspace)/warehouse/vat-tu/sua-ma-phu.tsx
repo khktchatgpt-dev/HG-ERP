@@ -46,7 +46,7 @@ const NHAN: Record<string, string> = {
   min_stock: 'Ngưỡng tồn',
   barcode: 'Mã vạch',
   needs_review: 'Chờ Kho rà',
-  is_active: 'Đang dùng',
+  is_active: 'Trạng thái dùng',
   deleted: 'Đã xoá mã',
 }
 const NGUON: Record<string, string> = {
@@ -55,6 +55,15 @@ const NGUON: Record<string, string> = {
   import: 'script nạp',
   system: 'máy',
   retire: 'ngừng dùng / xoá',
+}
+/** Giá trị trong sổ vết ra chữ đọc được: cờ true/false không bày trần. */
+export function giaTri(field: string, v: string | null): string {
+  if (v == null || v === '') return '—'
+  if (field === 'is_active')
+    return v === 'true' ? 'đang dùng' : v === 'false' ? 'ngừng dùng' : v
+  if (v === 'true') return 'có'
+  if (v === 'false') return 'không'
+  return v
 }
 export const ngay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 export const tien = (n: number, cur = 'VND') =>
@@ -151,8 +160,8 @@ export function LichSu({ doi, gia }: { doi: ThayDoi[] | null; gia: GiaMua[] | nu
                   <td className="kh-num kh-mut">{ngay(c.created_at)}</td>
                   <td>{NHAN[c.field] ?? c.field}</td>
                   <td style={{ whiteSpace: 'normal' }}>
-                    <span className="kh-mut">{c.before_value ?? '—'}</span> →{' '}
-                    {c.after_value ?? '—'}
+                    <span className="kh-mut">{giaTri(c.field, c.before_value)}</span> →{' '}
+                    {giaTri(c.field, c.after_value)}
                   </td>
                   <td className="kh-mut">
                     {[c.actor_name, NGUON[c.source] ?? c.source]
