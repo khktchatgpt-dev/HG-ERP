@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Boxes, Pencil, Plus } from 'lucide-react'
+import { Ban, Boxes, Pencil, Plus, RotateCcw } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -21,6 +21,7 @@ import {
 import { HopThoai, OChu, OSo, docSoVn } from '../_erp/o-nhap'
 import { RO_VT_NHAN, RO_VT_VIEC, type RoVatTu } from './ro-vat-tu'
 import { SuaMaHop, ThemMaHop } from './sua-ma'
+import { BoMaHop } from './bo-ma'
 
 export type VatTuRow = {
   id: string
@@ -32,15 +33,18 @@ export type VatTuRow = {
   shelf_location: string | null
   min_stock: number
   is_active: boolean
+  /** Lần ngừng dùng gần nhất — chỉ nạp ở rổ "Ngừng dùng". */
+  ngung?: { at: string; by: string | null; reason: string | null } | null
 }
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 /** Thứ tự tab theo VIỆC: chưa kệ → chưa ngưỡng → tất cả (rổ "Chờ Kho rà" bỏ 14/10). */
-const THU_TU: RoVatTu[] = ['no_shelf', 'no_min', 'all']
+const THU_TU: RoVatTu[] = ['no_shelf', 'no_min', 'all', 'off']
 const TAB_MAU: Record<RoVatTu, { mau: string; tone: TabMuc['tone'] }> = {
   no_shelf: { mau: 'c-mut', tone: 'mut' },
   no_min: { mau: 'c-mut', tone: 'mut' },
   all: { mau: 'c-mut', tone: 'mut' },
+  off: { mau: 'c-mut', tone: 'mut' },
 }
 
 type Bao = { tone: 'ok' | 'stop'; text: string }
@@ -78,6 +82,7 @@ export function VatTuKhoScreen({
   keOptions = [],
   canEdit,
   canCreate = false,
+  canRetire = false,
 }: {
   rows: VatTuRow[]
   counts: Record<RoVatTu, number>
@@ -94,6 +99,8 @@ export function VatTuKhoScreen({
   canEdit: boolean
   /** Quyền `warehouse.material.create` — nút Thêm mã (B7b). */
   canCreate?: boolean
+  /** Quyền `warehouse.material.retire` — Ngừng dùng / Xoá / Dùng lại (B7c). */
+  canRetire?: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -116,6 +123,8 @@ export function VatTuKhoScreen({
   const [sua, setSua] = useState<string | null>(null)
   /** Hộp Thêm mã đang mở (B7b). */
   const [them, setThem] = useState(false)
+  /** Mã đang mở hộp Ngừng dùng / Xoá (B7c). */
+  const [boMa, setBoMa] = useState<VatTuRow | null>(null)
 
   // Dữ liệu server đổi (đổi tab, sang trang) thì vẽ lại lưới — chỉnh state ngay
   // trong lượt render, không `useEffect`.
@@ -179,7 +188,25 @@ export function VatTuKhoScreen({
   const viec = RO_VT_VIEC[ro]
   const motMa = chon.size === 1 ? rows.find((r) => chon.has(r.id)) : null
 
-  const tabs: TabMuc[] = THU_TU.map((id) => ({
+  /** Dùng lại mã đang ngừng — đảo được nên không hỏi lại, báo tại chỗ. */
+  async function dungLai(r: VatTuRow) {
+    setBusy(r.id)
+    try {
+      await api(`/api/dept/warehouse/materials/${r.id}/active`, { method: 'POST', body: { active: true } })
+      setBao({ tone: 'ok', text: `${r.code} dùng lại — hiện lại ở ô tìm khi nhập, xuất, soạn đơn.` })
+      setChon(new Set())
+      router.refresh()
+    } catch (e) {
+      setBao({ tone: 'stop', text: `Không dùng lại được ${r.code}: ${apiErrorText(e)}` })
+    } finally {
+      setBusy(null)
+    }
+  } // prettier-ignore
+
+  // Q4: tab "Ngừng dùng" chỉ hiện khi có mã ngừng (hoặc đang đứng ở đó).
+  const tabs: TabMuc[] = THU_TU.filter(
+    (id) => id !== 'off' || counts.off > 0 || ro === 'off',
+  ).map((id) => ({
     key: id,
     label: RO_VT_NHAN[id],
     on: ro === id,
@@ -212,6 +239,37 @@ export function VatTuKhoScreen({
               >
                 Xem tồn
               </ApNut>
+            </ApNhom>
+            <ApNhom>
+              {motMa && !motMa.is_active ? (
+                <ApNut
+                  icon={<RotateCcw size={15} aria-hidden />}
+                  onClick={canRetire && !busy ? () => void dungLai(motMa) : undefined}
+                  why={
+                    !canRetire
+                      ? 'Tài khoản này không đổi được trạng thái dùng của mã'
+                      : busy
+                        ? 'Đang lưu…'
+                        : null
+                  }
+                >
+                  {`Dùng lại ${motMa.code}`}
+                </ApNut>
+              ) : (
+                <ApNut
+                  icon={<Ban size={15} aria-hidden />}
+                  onClick={motMa && canRetire ? () => setBoMa(motMa) : undefined}
+                  why={
+                    !canRetire
+                      ? 'Tài khoản này không ngừng dùng / xoá được mã'
+                      : motMa
+                        ? null
+                        : 'Tích đúng một mã trước'
+                  }
+                >
+                  Ngừng dùng / xoá…
+                </ApNut>
+              )}
             </ApNhom>
             <ApNhom>
               <ApNut
@@ -398,6 +456,21 @@ export function VatTuKhoScreen({
                         .join(' · ')}
                     >
                       {r.name}
+                      {!r.is_active && (
+                        <span
+                          className="kh-mut"
+                          style={{
+                            display: 'block',
+                            fontSize: 11.5,
+                            whiteSpace: 'normal',
+                          }}
+                        >
+                          <span className="kh-tag warn">ngừng dùng</span>{' '}
+                          {r.ngung
+                            ? [r.ngung.at.slice(0, 10).split('-').reverse().join('/'), r.ngung.by, r.ngung.reason && `“${r.ngung.reason}”`].filter(Boolean).join(' · ') // prettier-ignore
+                            : null}
+                        </span>
+                      )}
                       {hep && (
                         <span
                           className="kh-mut"
@@ -508,6 +581,20 @@ export function VatTuKhoScreen({
           </>
         }
       />
+
+      {boMa && (
+        <BoMaHop
+          m={boMa}
+          onClose={() => setBoMa(null)}
+          onDone={(kieu, cau) => {
+            if (kieu === 'xoa') setRows((rs) => rs.filter((r) => r.id !== boMa.id))
+            setBoMa(null)
+            setChon(new Set())
+            setBao({ tone: 'ok', text: cau })
+            router.refresh()
+          }}
+        />
+      )}
 
       {them && (
         <ThemMaHop

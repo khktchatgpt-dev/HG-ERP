@@ -7,13 +7,16 @@
 
 // Rổ "Chờ Kho rà" đã BỎ 14/10/2026 (chủ dự án: "không cần thiết") — Kho sửa
 // thẳng mã ở hộp Sửa, không còn hàng đợi xác nhận mã Cung ứng khai.
-export const RO_VT = ['no_shelf', 'no_min', 'all'] as const
+// Rổ "Ngừng dùng" (B7c, 14/10): mã đã ngừng chỉ hiện ở đây — ba rổ kia chỉ mã
+// đang dùng, cùng nếp danh sách Mua hàng và ô tìm khi nhập / xuất.
+export const RO_VT = ['no_shelf', 'no_min', 'all', 'off'] as const
 export type RoVatTu = (typeof RO_VT)[number]
 
 export const RO_VT_NHAN: Record<RoVatTu, string> = {
   no_min: 'Chưa khai ngưỡng',
   no_shelf: 'Chưa có kệ',
   all: 'Tất cả',
+  off: 'Ngừng dùng',
 }
 
 /** Câu giải thích rổ — hiện thành dải trên bảng, nói VIỆC chứ không tả bộ lọc. */
@@ -21,4 +24,5 @@ export const RO_VT_VIEC: Partial<Record<RoVatTu, string>> = {
   no_min:
     'Chưa khai ngưỡng thì cảnh báo “sắp hết” không bao giờ kêu cho mã đó. Khai ngưỡng cho mã hay dùng trước, không cần khai hết.',
   no_shelf: 'Chưa có kệ gợi ý thì lúc cất hàng phải chọn tay. Khai theo biển hiệu thật.',
+  off: 'Mã ngừng dùng không hiện ở ô tìm khi nhập, xuất, soạn đơn mới; tồn và lịch sử giữ nguyên. Chọn dòng rồi bấm “Dùng lại” nếu cần dùng tiếp.',
 }

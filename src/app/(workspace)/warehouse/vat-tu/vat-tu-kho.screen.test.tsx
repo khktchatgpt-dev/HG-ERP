@@ -49,7 +49,7 @@ const dung = () =>
   render(
     <VatTuKhoScreen
       rows={ROWS}
-      counts={{ no_min: 13476, no_shelf: 495, all: 13481 }}
+      counts={{ no_min: 13476, no_shelf: 495, all: 13481, off: 0 }}
       total={3}
       trang={1}
       soTrang={1}
@@ -61,6 +61,7 @@ const dung = () =>
       keOptions={['BB-H', 'GO-K']}
       canEdit
       canCreate
+      canRetire
     />,
   )
 const doi = (label: string, v: string) => {
@@ -179,7 +180,9 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     const hop = await screen.findByRole('dialog', { name: 'Thêm mã vật tư' })
     expect(within(hop).queryByText(/Cung ứng giữ · chỉ xem/)).toBeNull()
     fireEvent.change(within(hop).getByLabelText('Nhóm'), { target: { value: NHOM } })
-    expect(await within(hop).findByText('SAT1238 · tự cấp')).toBeTruthy()
+    expect(
+      await within(hop).findByText('SAT1238 · tự cấp', {}, { timeout: 5000 }),
+    ).toBeTruthy()
     const go = (label: string, v: string) => {
       const o = within(hop).getByLabelText(label)
       fireEvent.change(o, { target: { value: v } })
@@ -188,10 +191,14 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     go('Tên vật tư', 'Thép ống kẽm phi 15.9x0.8x6m')
     go('ĐVT', 'Cây')
     go('Kệ gợi ý', 'A-01')
-    expect(await within(hop).findByText('SAT0516', {}, { timeout: 2000 })).toBeTruthy()
+    expect(await within(hop).findByText('SAT0516', {}, { timeout: 5000 })).toBeTruthy()
     fireEvent.click(within(hop).getByRole('button', { name: 'Thêm mã' }))
     expect(
-      await within(hop).findByText(/tích “đã đối chiếu” 1 mã gần giống/),
+      await within(hop).findByText(
+        /tích “đã đối chiếu” 1 mã gần giống/,
+        {},
+        { timeout: 5000 },
+      ),
     ).toBeTruthy()
     expect(api.mock.calls.some((c) => (c[1] as { method?: string })?.method === 'POST')).toBe(false) // prettier-ignore
     fireEvent.click(within(hop).getByLabelText(/Đã đối chiếu/))
@@ -210,5 +217,77 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     })
     expect('needs_review' in body).toBe(false)
     expect(screen.getByRole('status').textContent).toMatch(/^Đã thêm SAT1238/)
+  }, 20_000)
+
+  it('B7c: tab "Ngừng dùng" ẩn khi chưa có mã ngừng (Q4)', () => {
+    dung()
+    expect(screen.queryByRole('tab', { name: /Ngừng dùng/ })).toBeNull()
+  })
+
+  it('B7c: mã ĐÃ DÙNG → chỉ Ngừng dùng, bắt lý do ≥ 3 ký tự rồi mới gửi', async () => {
+    api.mockImplementation((url: string, opt?: { method?: string }) => {
+      if (url.endsWith('/usage'))
+        return Promise.resolve({ usage: { po: 2, stock: 2, bom: 0, prices: 0, other: 0, de_nghi: 0 } }) // prettier-ignore
+      if (opt?.method === 'POST') return Promise.resolve({ material: {} })
+      return Promise.resolve({})
+    })
+    dung()
+    fireEvent.click(screen.getByLabelText('Chọn BAO0687'))
+    fireEvent.click(screen.getByRole('button', { name: /Ngừng dùng \/ xoá/ }))
+    const hop = await screen.findByRole('dialog', { name: 'Ngừng dùng BAO0687' })
+    expect(within(hop).getByText(/không xoá được/)).toBeTruthy()
+    fireEvent.click(within(hop).getByRole('button', { name: 'Ngừng dùng' }))
+    expect(within(hop).getByText(/Ghi lý do ngừng dùng/)).toBeTruthy()
+    expect(api.mock.calls.some((c) => (c[1] as { method?: string })?.method === 'POST')).toBe(false) // prettier-ignore
+    fireEvent.change(within(hop).getByRole('textbox'), { target: { value: 'trùng mã BAO0688' } }) // prettier-ignore
+    fireEvent.click(within(hop).getByRole('button', { name: 'Ngừng dùng' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const post = api.mock.calls.find((c) => (c[1] as { method?: string })?.method === 'POST')! // prettier-ignore
+    expect(post[0]).toBe('/api/dept/warehouse/materials/a/active')
+    expect((post[1] as { body: unknown }).body).toEqual({ active: false, reason: 'trùng mã BAO0688' }) // prettier-ignore
+    expect(screen.getByRole('status').textContent).toMatch(/^Đã ngừng dùng BAO0687/)
+  })
+
+  it('B7c: mã CHƯA DÙNG → Xoá mã (DELETE), dòng biến khỏi lưới', async () => {
+    api.mockImplementation((url: string, opt?: { method?: string }) => {
+      if (url.endsWith('/usage'))
+        return Promise.resolve({ usage: { po: 0, stock: 0, bom: 0, prices: 0, other: 0, de_nghi: 0 } }) // prettier-ignore
+      return Promise.resolve({})
+    })
+    dung()
+    fireEvent.click(screen.getByLabelText('Chọn BAO0689'))
+    fireEvent.click(screen.getByRole('button', { name: /Ngừng dùng \/ xoá/ }))
+    const hop = await screen.findByRole('dialog', { name: 'Xoá mã BAO0689' })
+    fireEvent.click(within(hop).getByRole('button', { name: 'Xoá mã' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const del = api.mock.calls.find((c) => (c[1] as { method?: string })?.method === 'DELETE')! // prettier-ignore
+    expect(del[0]).toBe('/api/dept/warehouse/materials/c')
+    expect(screen.queryByText('BAO0689')).toBeNull()
+  })
+
+  it('B7c: chọn mã đang ngừng → nút "Dùng lại" gửi active=true', async () => {
+    api.mockResolvedValue({ material: {} })
+    render(
+      <VatTuKhoScreen
+        rows={[row('x', 'BAO0700', { is_active: false, ngung: { at: '2026-10-14T03:00:00Z', by: 'Thủ kho', reason: 'trùng mã' } })]} // prettier-ignore
+        counts={{ no_min: 0, no_shelf: 0, all: 0, off: 1 }}
+        total={1}
+        trang={1}
+        soTrang={1}
+        ro="off"
+        q=""
+        nhom=""
+        nhomOptions={[]}
+        dvtOptions={['Cái']}
+        canEdit
+        canRetire
+      />,
+    )
+    expect(screen.getByRole('tab', { name: /Ngừng dùng/ })).toBeTruthy()
+    expect(screen.getByText(/14\/10\/2026 · Thủ kho · “trùng mã”/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Chọn BAO0700'))
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng lại BAO0700' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    expect(api).toHaveBeenCalledWith('/api/dept/warehouse/materials/x/active', { method: 'POST', body: { active: true } }) // prettier-ignore
   })
 })

@@ -42,13 +42,17 @@ export default async function VatTuKhoPage({
     group_name: nhom,
     no_min_stock: ro === 'no_min' || undefined,
     no_shelf: ro === 'no_shelf' || undefined,
+    // Ba rổ việc chỉ mã ĐANG DÙNG; rổ "Ngừng dùng" chỉ mã đã ngừng (B7c).
+    active_only: ro !== 'off',
+    inactive_only: ro === 'off' || undefined,
   }
 
-  const [res, counts, taxonomy, canEdit, canCreate, bins] = await Promise.all([
+  const [res, counts, taxonomy, canEdit, canCreate, canRetire, bins] = await Promise.all([
     materialsService.list(user, { ...loc, page: trang, page_size: PAGE_SIZE }),
     // Đếm rổ trên bộ lọc tìm/nhóm ĐANG ÁP, không đếm cả danh mục — chip nói 52
     // mà mở ra 7 là hỏng nguyên tắc "con số là một lời hứa".
-    materialsService.counts(user, { q, group_name: nhom }),
+    // Đếm trên mã đang dùng; `inactive` tự bỏ qua cờ này (số trên tab Ngừng dùng).
+    materialsService.counts(user, { q, group_name: nhom, active_only: true }),
     materialTaxonomy(),
     user.role === 'admin'
       ? Promise.resolve(true)
@@ -57,9 +61,16 @@ export default async function VatTuKhoPage({
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.material.create'),
+    // Ngừng dùng / dùng lại / xoá mã chưa dùng (B7c).
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.material.retire'),
     // Gợi ý cho ô Kệ (K4: ô gõ có gợi ý thay hộp chọn). Hỏng thì ô vẫn gõ tự do.
     binsService.list(user).catch(() => []),
   ])
+
+  // Ngày · người · lý do ngừng — chỉ cần khi đang xem rổ Ngừng dùng.
+  const ngungBy = ro === 'off' ? await materialsService.lastRetire(user, res.rows.map((m) => m.id)) : null // prettier-ignore
 
   return (
     <VatTuKhoScreen
@@ -73,11 +84,13 @@ export default async function VatTuKhoPage({
         shelf_location: m.shelf_location,
         min_stock: m.min_stock,
         is_active: m.is_active,
+        ngung: ngungBy?.get(m.id) ?? null,
       }))}
       counts={{
         no_min: counts.noMinStock,
         no_shelf: counts.noShelf,
         all: counts.total,
+        off: counts.inactive,
       }}
       total={res.total}
       trang={trang}
@@ -90,6 +103,7 @@ export default async function VatTuKhoPage({
       keOptions={bins.filter((b) => b.is_active !== false).map((b) => b.code)}
       canEdit={canEdit}
       canCreate={canCreate}
+      canRetire={canRetire}
     />
   )
 }
