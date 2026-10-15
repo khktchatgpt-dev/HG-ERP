@@ -587,6 +587,20 @@ export const ACTIONS: Action[] = [
     rowLevel: 'Chỉ huỷ đơn của mình (admin huỷ mọi đơn).',
   },
 
+  // ── Nhân sự (chấm công) ──────────────────────────────────────────────────
+  {
+    key: 'hr.attendance.view',
+    label: 'Xem bảng công',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.pull',
+    label: 'Kéo lượt quẹt từ máy chấm công',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {
     key: 'accounting.invoice.view',
