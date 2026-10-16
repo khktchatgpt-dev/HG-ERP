@@ -34,6 +34,11 @@ export type NavItem = {
   href: string
   label: string
   icon: string
+  /**
+   * Chỉ sáng khi pathname KHỚP ĐÚNG href — cho trang gốc của một nhóm có trang con
+   * cùng tiền tố ('/hr/cham-cong' Tổng quan vs '/hr/cham-cong/luot').
+   */
+  exact?: boolean
   /** Visible cho role nào. Bỏ trống = mọi role trong workspace này thấy. */
   roles?: readonly Role[]
   /** Ngoài role, còn cần là head của dept? Chỉ có ý nghĩa nếu roles không loại. */
@@ -632,14 +637,33 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     logoText: 'HR',
     // Đã migrate sang (workspace)/hr.
     ready: true,
+    // Menu 3 nhóm cha theo LOẠI DỮ LIỆU (chủ dự án duyệt 17/10/2026): Nhân sự = danh
+    // mục người; Chấm công = sự thật thô máy ghi, không tính gì; Tính công = kết quả
+    // có luật + duyệt + chốt — ẨN tới khi chốt luật tính công (câu 21).
     sections: [
       {
         heading: 'Nhân sự',
         items: [
           { href: '/hr', label: 'Trang chủ', icon: 'home' },
+          { href: '/hr/nhan-vien', label: 'Hồ sơ nhân viên', icon: 'users' },
           { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },
-          // Một trang "Kỳ công tháng" cho cả quy trình (bản vẽ vòng 3, 12/10/2026).
-          { href: '/hr/cham-cong', label: 'Chấm công', icon: 'fingerprint' },
+        ],
+      },
+      {
+        heading: 'Chấm công',
+        items: [
+          { href: '/hr/cham-cong', label: 'Tổng quan', icon: 'fingerprint', exact: true },
+          {
+            href: '/hr/cham-cong/lay-du-lieu',
+            label: 'Lấy dữ liệu từ máy',
+            icon: 'arrow-down-to-line',
+          },
+          { href: '/hr/cham-cong/luot', label: 'Lượt quẹt', icon: 'table' },
+          {
+            href: '/hr/cham-cong/co-mat',
+            label: 'Có mặt theo tổ',
+            icon: 'calendar-range',
+          },
         ],
       },
     ],

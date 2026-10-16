@@ -1,34 +1,40 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Btn, DateInput, Empty, NoticeBar, Sheet } from '@/components/kit'
+import { useRouter } from 'next/navigation'
+import { Btn, DateInput, Empty, NoticeBar } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { deYNgay, laChuNhat, tomTatMotNguoi } from '@/lib/cham-cong/mot-nguoi'
 import type { MotNguoi } from '@/modules/dept/hr/cham-cong/cham-cong.service'
-import type { KyCongCtx } from './useKyCong'
+import { KhungTrang } from './khung-trang'
 import { THU, dm, doiThang, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
 
+/** Kỳ đang xem — chỉ cần ngần này để đặt khoảng mặc định và nút nhanh. */
+export type KyXem = { thang: string; tu: string; den: string; homNay: string }
+
 /**
- * NGĂN "CHẤM CÔNG MỘT NGƯỜI" (bản vẽ MotNguoi.dc.html, duyệt 16/10/2026) — mọi ngày
- * trong khoảng Từ–Đến, kể cả ngày không quẹt; xuất Excel đúng khoảng đang xem. Mở từ
- * tên ở lưới lượt, ở ngăn chi tiết Có mặt theo tổ, và hồ sơ bước ②. Chỉ bày lượt —
- * chưa tính công.
+ * TRANG "CHẤM CÔNG MỘT NGƯỜI" (bản vẽ MotNguoi.dc.html, duyệt 16/10/2026; thành
+ * trang riêng 17/10/2026 khi tách trang — link gửi được). Mọi ngày trong khoảng
+ * Từ–Đến, kể cả ngày không quẹt; xuất Excel đúng khoảng đang xem. Mở từ tên ở trang
+ * Lượt quẹt, Có mặt theo tổ và Hồ sơ nhân viên. Chỉ bày lượt — chưa tính công.
  */
-export function NganMotNguoi({ d }: { d: KyCongCtx }) {
-  const ma = d.motNguoi
+export function MotNguoiScreen({ ky, ma }: { ky: KyXem; ma: string }) {
+  const router = useRouter()
   return (
-    <Sheet
-      open={!!ma}
-      onClose={() => d.setMotNguoi(null)}
-      title="Chấm công của một người"
-      subtitle="Chỉ bày lượt quẹt — chưa tính công"
-      stakes="nhe"
-      width={640}
+    <KhungTrang
+      ten="Chấm công một người"
+      actions={
+        <Btn icon="quayLai" onClick={() => router.back()}>
+          Quay lại
+        </Btn>
+      }
     >
-      {ma && <NoiDung key={ma} d={d} ma={ma} />}
-    </Sheet>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface-card)] px-[var(--gutter)] py-3">
+        <NoiDung key={ma} ky={ky} ma={ma} />
+      </div>
+    </KhungTrang>
   )
 }
 
@@ -42,8 +48,7 @@ const cuoiThang = (t: string) => {
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
 }
 
-function NoiDung({ d, ma }: { d: KyCongCtx; ma: string }) {
-  const { k } = d
+function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
   const homNay = k.homNay
   const denKy = homNay < k.den ? homNay : k.den
   const [tu, setTu] = useState(k.tu)
@@ -211,7 +216,7 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
         </div>
       </div>
 
-      <div className="max-h-[52vh] overflow-y-auto border border-[var(--line)]">
+      <div className="overflow-y-auto border border-[var(--line)]">
         <table className="text-k-sm w-full table-fixed border-separate border-spacing-0">
           <colgroup>
             <col style={{ width: 72 }} />

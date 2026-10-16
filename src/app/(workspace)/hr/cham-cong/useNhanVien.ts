@@ -6,7 +6,15 @@ import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
 import type { NhanVienData, NvDong } from '@/modules/dept/hr/cham-cong/cham-cong.service'
-import type { KyCongCtx } from './useKyCong'
+
+/**
+ * Hồ sơ đang mở bên phải: sửa một người (`id`), hoặc thêm mới — có thể điền sẵn từ
+ * một mã trên máy chưa ghép (`duId`, `code`, `tenMay`).
+ */
+export type HoSoMo =
+  | { id: string }
+  | { moi: true; code?: string; duId?: string; tenMay?: string | null }
+  | null
 
 /**
  * Ô đếm đầu bước ② — mỗi ô là một bộ lọc. Đếm bằng ĐÚNG hàm `khopLoc` mà lưới dùng
@@ -32,9 +40,10 @@ export function khopLoc(n: NvDong, loc: LocId): boolean {
 }
 
 /** State + xử lý của bước ② Nhân viên & ca. */
-export function useNhanVien(d: KyCongCtx, nv: NhanVienData) {
+export function useNhanVien(nv: NhanVienData) {
   const router = useRouter()
   const toast = useToast()
+  const [hoSo, setHoSo] = useState<HoSoMo>(null)
   const [loc, setLoc] = useState<LocId>(
     nv.ds.some((n) => khopLoc(n, 'ten-may')) ? 'ten-may' : 'dang-lam',
   )
@@ -202,9 +211,11 @@ export function useNhanVien(d: KyCongCtx, nv: NhanVienData) {
     doiCa,
     hangLoat,
     ghep,
-    hoSo: d.hoSo,
-    setHoSo: d.setHoSo,
-    moChamCong: d.setMotNguoi,
+    hoSo,
+    setHoSo,
+    /** Trang "Chấm công một người" (tháng hiện tại). */
+    moChamCong: (ma: string) =>
+      router.push(`/hr/cham-cong/nguoi/${encodeURIComponent(ma)}`),
   } as const
 }
 

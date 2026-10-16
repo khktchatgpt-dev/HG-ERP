@@ -123,6 +123,7 @@ export function MobileDrawer({
                         accentSoftBg={accentSoftBg}
                         accentText={accentText}
                         exact={
+                          i.exact ||
                           i.href === workspace.route ||
                           i.href === `${workspace.route}/` ||
                           i.href === '/'

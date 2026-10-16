@@ -8,7 +8,7 @@ import type {
   NvDong,
   NvMa,
 } from '@/modules/dept/hr/cham-cong/cham-cong.service'
-import type { KyCongCtx } from './useKyCong'
+import { KhungTrang } from './khung-trang'
 import { LOC, TRONG, useNhanVien, type NhanVienCtx } from './useNhanVien'
 import { HoSoNv } from './ho-so-nv'
 import { dm } from './ky-cong.shared'
@@ -21,10 +21,19 @@ import { so } from './cham-cong.shared'
  * mã trên máy để gán tay. Ca ở đây chỉ là CA THƯỜNG LÀM (một ngày làm nhiều đoạn
  * thì từng đoạn tự nhận ca — làm ở phần tính công, sau).
  */
-export function BuocNhanVien({ d, nv }: { d: KyCongCtx; nv: NhanVienData }) {
-  const v = useNhanVien(d, nv)
+export function NhanVienScreen({ nv }: { nv: NhanVienData }) {
+  const v = useNhanVien(nv)
   return (
-    <>
+    <KhungTrang
+      nhom="Nhân sự"
+      ten="Hồ sơ nhân viên"
+      facts={[{ label: 'Đang làm', value: so(v.dem('dang-lam')) }]}
+      actions={
+        <Btn primary icon="them" onClick={() => v.setHoSo({ moi: true })}>
+          Thêm nhân viên
+        </Btn>
+      }
+    >
       <div
         className="flex border-b border-[var(--line)] bg-[var(--surface-card)]"
         role="group"
@@ -102,7 +111,7 @@ export function BuocNhanVien({ d, nv }: { d: KyCongCtx; nv: NhanVienData }) {
         {v.loc === 'chua-ghep' ? <LuoiMaChuaGhep v={v} /> : <LuoiNhanVien v={v} />}
         <HoSoNv v={v} />
       </div>
-    </>
+    </KhungTrang>
   )
 }
 

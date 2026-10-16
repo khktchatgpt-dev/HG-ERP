@@ -5,9 +5,10 @@ import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
 
 /**
- * KHU CHẤM CÔNG — nhiều trang, mỗi trang một câu hỏi (chủ dự án 12/10/2026: "nên
- * làm nhiều trang thay vì tập trung một trang"). Bản vẽ vòng 2: Tổng quan · Lấy
- * dữ liệu · Nhân viên & ca · Cần xử lý · Bảng công · Ca & cách tính · Máy chấm công.
+ * NHÓM CHẤM CÔNG — nhiều trang, mỗi trang một việc (chủ dự án 17/10/2026: "dồn hết
+ * vào 1 trang không ổn"; menu 3 nhóm cha Nhân sự · Chấm công · Tính công): Tổng quan ·
+ * Lấy dữ liệu · Lượt quẹt · Có mặt theo tổ · Một người. Nhóm Tính công (Bảng công,
+ * Cần xử lý, Ca & cách tính, Chốt kỳ) ẩn tới khi chốt luật tính công.
  *
  * Layout gác quyền xem một lần cho cả khu, gắn vỏ app (bare: màn kit tự lo mép +
  * chiều cao bằng `ScreenFrame`) và lớp token `.kit`.
