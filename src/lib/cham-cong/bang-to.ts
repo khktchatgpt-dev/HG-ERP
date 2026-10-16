@@ -28,6 +28,8 @@ export type OTo = {
   congCN: number
   /** Phút tăng ca (đã làm tròn). */
   tc: number
+  /** Phút làm trong ca (sau trừ nghỉ trưa) — cộng với tc ra giờ làm. */
+  gioCong: number
   vao: string | null
   ra: string | null
   /** Phút vào → ra (tổng thời gian); null khi < 2 lượt. */
@@ -41,6 +43,10 @@ export type NguoiTo = {
   ten: string
   ca: string
   o: OTo[]
+  /** Số ngày có quẹt (không tính hôm nay). */
+  diLam: number
+  /** Phút làm = trong ca + tăng ca. */
+  gioLam: number
   cong: number
   congCN: number
   tc: number
@@ -75,6 +81,8 @@ export type BangTo = {
   nguoi: NguoiTo[]
   loiNgay: LoiNgay[]
   tong: {
+    diLam: number
+    gioLam: number
     cong: number
     congCN: number
     tc: number
@@ -124,7 +132,16 @@ export function tinhO(
 ): OTo {
   const cn = laChuNhat(ngay)
   const x = tachLuot(luot)
-  const goc = { ngay, cong: 0, congCN: 0, tc: 0, vao: x.vao, ra: x.ra, phut: x.coMatPhut }
+  const goc = {
+    ngay,
+    cong: 0,
+    congCN: 0,
+    tc: 0,
+    gioCong: 0,
+    vao: x.vao,
+    ra: x.ra,
+    phut: x.coMatPhut,
+  }
   if (!luot.length) {
     const vang = !ctx.homNay && ctx.daLay && !cn
     return { ...goc, ky: vang ? 'V' : '' }
@@ -148,8 +165,15 @@ export function tinhO(
       tc: k.tangCa,
       lyDo: `Chỉ ${Math.floor(k.gioCong / 60)} giờ ${k.gioCong % 60} phút trong ca`,
     }
-  if (cn) return { ...goc, ky: cong === 1 ? 'CN' : 'CN½', congCN: cong, tc: k.tangCa }
-  return { ...goc, ky: cong === 1 ? 'X' : '½', cong, tc: k.tangCa }
+  if (cn)
+    return {
+      ...goc,
+      ky: cong === 1 ? 'CN' : 'CN½',
+      congCN: cong,
+      tc: k.tangCa,
+      gioCong: k.gioCong,
+    }
+  return { ...goc, ky: cong === 1 ? 'X' : '½', cong, tc: k.tangCa, gioCong: k.gioCong }
 }
 
 export function tinhBangTo(d: BangToVao): BangTo {
@@ -177,6 +201,8 @@ export function tinhBangTo(d: BangToVao): BangTo {
       ma: p.ma,
       ten: p.ten,
       ca: p.ca.name,
+      diLam: o.filter((x) => x.vao != null && x.ky !== '•').length,
+      gioLam: o.reduce((t, x) => t + x.gioCong + x.tc, 0),
       o,
       cong: sum((x) => x.cong),
       congCN: sum((x) => x.congCN),
@@ -206,6 +232,8 @@ export function tinhBangTo(d: BangToVao): BangTo {
 
   const tong = nguoi.reduce(
     (s, p) => ({
+      diLam: s.diLam + p.diLam,
+      gioLam: s.gioLam + p.gioLam,
       cong: s.cong + p.cong,
       congCN: s.congCN + p.congCN,
       tc: s.tc + p.tc,
@@ -213,7 +241,7 @@ export function tinhBangTo(d: BangToVao): BangTo {
       vang: s.vang + p.vang,
       canXuLy: s.canXuLy + p.canXuLy,
     }),
-    { cong: 0, congCN: 0, tc: 0, nghi: 0, vang: 0, canXuLy: 0 },
+    { diLam: 0, gioLam: 0, cong: 0, congCN: 0, tc: 0, nghi: 0, vang: 0, canXuLy: 0 },
   )
   return { to: d.to, ngays, nguoi, loiNgay, tong }
 }

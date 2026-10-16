@@ -116,7 +116,17 @@ describe('tinhBangTo', () => {
     expect(b2.loiNgay).toEqual([{ ngay: '2026-10-03', so: 3, diLam: 3 }])
   })
   it('tổng cả tổ', () => {
-    expect(b.tong).toEqual({ cong: 2, congCN: 1, tc: 300, nghi: 0, vang: 2, canXuLy: 2 })
+    expect(b.tong).toEqual({
+      // B: 01 (8 giờ + 5 TC) · 03 thiếu · 04 CN 8 giờ; A: 01 8 giờ · 03 thiếu
+      diLam: 5,
+      gioLam: 480 + 300 + 480 + 480,
+      cong: 2,
+      congCN: 1,
+      tc: 300,
+      nghi: 0,
+      vang: 2,
+      canXuLy: 2,
+    })
   })
 })
 

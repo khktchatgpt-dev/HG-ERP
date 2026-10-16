@@ -1,17 +1,18 @@
 import ExcelJS from 'exceljs'
-import { soCong, tcGon, tinhBangTo } from '@/lib/cham-cong/bang-to'
+import { tinhBangTo } from '@/lib/cham-cong/bang-to'
 import type { DuLieu } from './cham-cong.service'
 
 const THU = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 const thuIdx = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay()
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const gio = (phut: number) => Math.round((phut / 60) * 10) / 10
 const nen = (argb: string) =>
   ({ type: 'pattern', pattern: 'solid', fgColor: { argb } }) as const
 
 /**
- * Excel "Bảng chấm công theo tổ" v2 — đúng lưới trang bày (cùng `tinhBangTo`): ô ghi
- * công (X · ½ · CN · V · ?) kèm giờ tăng ca (X+5), cột tổng Công · Công CN · Giờ TC ·
- * Nghỉ có lý do · Vắng · Cần xử lý.
+ * Excel "Bảng chấm công theo tổ" — đúng lưới trang bày (cùng `tinhBangTo`): ô chỉ
+ * nói đi làm hay không (✓ · V), lỗi tô cam + ghi chú ô; cột tổng Ngày đi làm · Công ·
+ * Giờ làm · Tăng ca · Vắng · Lỗi chấm công.
  */
 export async function buildBangToExcel(
   d: DuLieu,
@@ -31,7 +32,7 @@ export async function buildBangToExcel(
     `Bảng chấm công ${to} · tháng ${d.khoang.tu.slice(5, 7)}/${d.khoang.tu.slice(0, 4)}`,
   ]).font = { bold: true, size: 13 }
   ws.addRow([
-    'X đủ công · ½ nửa công · CN công chủ nhật · V vắng · ? thiếu lượt cần xử lý · số sau dấu + là giờ tăng ca · hôm nay chưa tính',
+    '✓ đi làm · ✓ nền cam: đi làm nhưng chấm công lỗi · V vắng · • hôm nay đã vào (chưa tính) · trống: chủ nhật nghỉ / chưa có dữ liệu',
   ])
   for (const x of b.loiNgay)
     ws.addRow([
@@ -43,12 +44,12 @@ export async function buildBangToExcel(
     'Mã',
     'Họ tên',
     ...b.ngays.map((n) => `${Number(n.ngay.slice(8))} ${THU[thuIdx(n.ngay)]}`),
+    'Ngày đi làm',
     'Công',
-    'Công CN',
-    'Giờ TC',
-    'Nghỉ có lý do',
+    'Giờ làm',
+    'Tăng ca (giờ)',
     'Vắng',
-    'Cần xử lý',
+    'Lỗi chấm công',
   ])
   head.font = { bold: true }
   head.eachCell((c, i) => {
@@ -67,30 +68,31 @@ export async function buildBangToExcel(
     const row = ws.addRow([
       p.ma,
       p.khongQuet ? `${p.ten} (cả tháng không quẹt)` : p.ten,
-      ...p.o.map((o) => (o.ky ? `${o.ky}${o.tc ? `+${tcGon(o.tc)}` : ''}` : '')),
-      p.cong,
-      p.congCN,
-      Math.round((p.tc / 60) * 10) / 10,
-      p.nghi,
+      ...p.o.map((o) => (o.ky === 'V' ? 'V' : o.ky === '•' ? '•' : o.ky ? '✓' : '')),
+      p.diLam,
+      p.cong + p.congCN,
+      gio(p.gioLam),
+      gio(p.tc),
       p.vang,
       p.canXuLy,
     ])
     p.o.forEach((o, i) => {
       const c = row.getCell(i + 3)
       c.alignment = { horizontal: 'center' }
-      if (o.ky === '½' || o.ky === '?' || o.ky === 'CN½') c.fill = nen('FFFDF1E3')
+      if (o.lyDo) c.note = o.lyDo
+      if (o.ky === '?') c.fill = nen('FFFDF1E3')
       else if (o.ky === 'V') c.fill = nen('FFFBECEB')
       else if (b.ngays[i].cn) c.fill = nen('FFE4E8F0')
     })
   }
   ws.addRow([
     '',
-    `Cộng ${n} người`,
-    ...b.ngays.map((x) => (x.daLay && !x.homNay ? soCong(x.cong) : '')),
-    b.tong.cong,
-    b.tong.congCN,
-    Math.round((b.tong.tc / 60) * 10) / 10,
-    b.tong.nghi,
+    `Đi làm · cộng ${n} người`,
+    ...b.ngays.map((x) => (x.daLay ? x.diLam : '')),
+    b.tong.diLam,
+    b.tong.cong + b.tong.congCN,
+    gio(b.tong.gioLam),
+    gio(b.tong.tc),
     b.tong.vang,
     b.tong.canXuLy,
   ]).font = { bold: true }
