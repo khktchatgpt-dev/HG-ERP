@@ -664,6 +664,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Có mặt theo tổ',
             icon: 'calendar-range',
           },
+          {
+            href: '/hr/cham-cong/theo-to',
+            label: 'Bảng chấm công theo tổ',
+            icon: 'users-round',
+          },
         ],
       },
     ],

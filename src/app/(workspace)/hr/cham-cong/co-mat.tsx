@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { Empty } from '@/components/kit'
 import { cn } from '@/lib/utils'
@@ -156,7 +157,12 @@ export function CoMat({
                   )}
                 >
                   <span className="flex justify-between gap-1" title={t.to}>
-                    <span className="truncate">{t.to}</span>
+                    <Link
+                      href={`/hr/cham-cong/theo-to?thang=${k.thang}&to=${encodeURIComponent(t.to)}`}
+                      className="truncate text-[var(--act-text)] hover:underline"
+                    >
+                      {t.to}
+                    </Link>
                     <span className="num shrink-0 text-[var(--ink-3)]">
                       {so(t.ds.length)}
                     </span>
@@ -189,6 +195,9 @@ export function CoMat({
                           )}
                         >
                           {n}
+                          <span className="text-[10px] text-[var(--ink-3)]">
+                            /{t.ds.length}
+                          </span>
                         </button>
                       )}
                     </td>

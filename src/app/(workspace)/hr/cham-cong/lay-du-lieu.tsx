@@ -2,6 +2,7 @@
 
 import { Btn, Empty, NoticeBar, Tag } from '@/components/kit'
 import { cn } from '@/lib/utils'
+import { tenMay } from '@/lib/cham-cong/mot-nguoi'
 import type { MayTomTat } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { useKyCong, type KyCongCtx } from './useKyCong'
 import { KhungTrang } from './khung-trang'
@@ -86,7 +87,7 @@ export function LayDuLieuScreen({ k }: { k: KyCong }) {
       {d.ketQua?.may
         .filter((m) => !m.ok)
         .map((m) => (
-          <NoticeBar key={m.ip} tone="stop" tag={m.ten}>
+          <NoticeBar key={m.ip} tone="stop" tag={tenMay(m.ip.split('.').pop() ?? m.ten)}>
             {m.loi}
           </NoticeBar>
         ))}
@@ -166,7 +167,7 @@ function MayVaLichSu({ d }: { d: KyCongCtx }) {
       {may
         .filter((m) => (pct(m) ?? 0) >= SAP_DAY)
         .map((m) => (
-          <NoticeBar key={m.id} tone="warn" tag={`${m.ten} sắp đầy`}>
+          <NoticeBar key={m.id} tone="warn" tag={`${tenMay(m.nhan)} sắp đầy`}>
             Đã dùng {pct(m)}% bộ nhớ ({so(m.luot!)} / {so(m.sucChua!)} lượt). Chỉ dọn log
             trên máy SAU KHI đã lấy về đủ các tháng cũ.
           </NoticeBar>
@@ -192,7 +193,7 @@ function MayVaLichSu({ d }: { d: KyCongCtx }) {
                   className={cn(c, 'font-semibold')}
                   title={m.serial ? `Serial ${m.serial}` : undefined}
                 >
-                  {m.ten}
+                  {tenMay(m.nhan)}
                 </td>
                 <td className={cn(c, 'num')} style={l}>
                   {m.ip}

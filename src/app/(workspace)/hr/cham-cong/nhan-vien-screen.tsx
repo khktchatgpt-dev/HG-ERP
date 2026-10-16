@@ -244,6 +244,12 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
               Ca thường làm
             </th>
             <th className={h}>Mã trên máy</th>
+            <th
+              className={h}
+              title="Ngày quẹt gần nhất trong 45 ngày — để thấy ai đã nghỉ mà chưa đánh dấu"
+            >
+              Quẹt gần nhất
+            </th>
             <th className={h}>Cần xem lại</th>
           </tr>
         </thead>
@@ -297,6 +303,12 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
                 ) : n.khongChamCong ? null : (
                   <span className="text-[var(--ink-3)]">—</span>
                 )}
+              </td>
+              <td
+                className={cn(c, 'num', !n.lanCuoi && 'text-[var(--ink-3)]')}
+                style={{ textAlign: 'left' }}
+              >
+                {n.lanCuoi ? dm(n.lanCuoi) : n.khongChamCong ? '—' : 'chưa quẹt'}
               </td>
               <td className={cn(c, 'whitespace-normal')}>
                 <CanXem n={n} />

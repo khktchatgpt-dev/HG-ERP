@@ -50,7 +50,6 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
         .filter((t) => t.ds.length > 0)
         .map((t) => ({ t, n: t.ngay[iCuoi] ?? 0, r: (t.ngay[iCuoi] ?? 0) / t.ds.length }))
         .sort((a, b) => a.r - b.r || b.t.ds.length - a.t.ds.length)
-        .slice(0, 5)
     : []
   const q = `?thang=${k.thang}`
 
@@ -204,11 +203,11 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
 
       <div className="grid min-h-0 flex-1 grid-cols-2 overflow-y-auto bg-[var(--surface-card)]">
         <section
-          aria-label="Tổ có mặt thấp nhất"
+          aria-label="Đi làm theo tổ"
           className="min-w-0 border-r border-[var(--line)]"
         >
           <h2 className="text-k-sm flex justify-between border-b border-[var(--line)] px-3.5 py-2 font-semibold">
-            Tổ có mặt thấp nhất {ngayCuoi ? `${THU[thu(ngayCuoi)]} ${dm(ngayCuoi)}` : ''}
+            Đi làm theo tổ {ngayCuoi ? `${THU[thu(ngayCuoi)]} ${dm(ngayCuoi)}` : ''}
             <Link
               href={`/hr/cham-cong/co-mat${q}`}
               className="font-normal text-[var(--act-text)] hover:underline"
@@ -246,7 +245,12 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
                 {toThap.map(({ t, n, r }) => (
                   <tr key={t.to}>
                     <td className={cn(c, 'truncate')} title={t.to}>
-                      {t.to}
+                      <Link
+                        href={`/hr/cham-cong/theo-to${q}&to=${encodeURIComponent(t.to)}`}
+                        className="text-[var(--act-text)] hover:underline"
+                      >
+                        {t.to}
+                      </Link>
                     </td>
                     <td className={cn(c, 'num')} style={{ textAlign: 'right' }}>
                       {n} / {t.ds.length}
