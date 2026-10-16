@@ -1,8 +1,9 @@
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
-import { BadRequest } from '@/server/http'
+import { BadRequest, Conflict, NotFound } from '@/server/http'
+import { todayVn } from '@/lib/date-vn'
+import { boSo0, khopDuoiTen } from '@/lib/cham-cong/ghep-ten'
 import {
-  doanCa,
   gopLap,
   tinhNgay,
   tongThang,
@@ -85,8 +86,10 @@ export type KhoangNgay = { tu: string; den: string }
 export type KetQuaKeo = {
   khoang: KhoangNgay
   may: KetQuaMay[]
-  nhanVienMoi: number
+  /** (máy, mã) có quẹt trong khoảng, lần này mới ghép được người. */
   maDaGhep: number
+  /** (máy, mã) có quẹt trong khoảng mà chưa ghép được ai — Nhân sự gán tay. */
+  maChuaGhep: number
   canXem: number
 }
 
@@ -211,131 +214,70 @@ async function keoMot(d: DeviceRow, k: KhoangNgay, userId: string): Promise<KetQ
 }
 
 /**
- * Ghép (máy, mã) chưa có người cho các mã có quẹt TRONG KHOẢNG vừa lấy (câu 7: không
- * tạo hồ sơ cho 1.042 mã cũ trên máy, chỉ người đang đi làm):
- *   - cùng số + cùng tên ở máy kia → CÙNG một người;
- *   - cùng số khác tên → hai người, đánh dấu `needs_review` cả hai phía;
- *   - người mới: mã NV = mã máy (trùng thì thêm đuôi máy), ca đoán theo giờ quẹt.
+ * Ghép (máy, mã) chưa có người cho các mã có quẹt TRONG KHOẢNG vừa lấy. KHÔNG tạo
+ * nhân viên mới (15/10/2026: tạo tự động từ tên máy đẻ ra 139 hồ sơ tên rác kiểu
+ * "P TUAN"; danh sách nhân viên nay do Nhân sự lập) — mã không ghép được ở lại
+ * "chưa ghép" để Nhân sự gán tay. Chỉ ghép khi chắc:
+ *   - cùng số + tên máy khớp ở máy kia, và phía đó đã có người → cùng người đó;
+ *   - nhân viên có mã NV = mã máy VÀ tên máy là đuôi họ tên của họ.
+ * Cùng số khác tên giữa hai máy = hai người: đánh dấu `needs_review` cả hai phía.
  * Không bao giờ gỡ hay đổi một ghép đã có.
  */
 async function ghepNguoi(
   k: KhoangNgay,
-): Promise<{ moi: number; ghep: number; canXem: number }> {
-  const [devices, dus, emps, shifts] = await Promise.all([
-    chamCongRepo.devices(),
+): Promise<{ ghep: number; chuaGhep: number; canXem: number }> {
+  const [dus, emps] = await Promise.all([
     chamCongRepo.deviceUsers(),
     chamCongRepo.employees(),
-    chamCongRepo.shifts(),
   ])
   const logs = await chamCongRepo.logsBetween(
     `${k.tu}T00:00:00+07:00`,
     `${sauNgay(k.den)}T00:00:00+07:00`,
   )
-
-  // Ngày → lượt, theo (máy, mã)
-  const theoMa = new Map<string, Map<string, string[]>>()
-  for (const l of logs) {
-    const k = `${l.device_id}|${l.device_user_id}`
-    const vn = toVn(l.punched_at)
-    const m = theoMa.get(k) ?? new Map<string, string[]>()
-    const arr = m.get(vn.slice(0, 10)) ?? []
-    arr.push(vn.slice(11))
-    m.set(vn.slice(0, 10), arr)
-    theoMa.set(k, m)
-  }
-
+  const coQuet = new Set(logs.map((l) => `${l.device_id}|${l.device_user_id}`))
   const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
-  const empById = new Map(emps.map((e) => [e.id, e]))
-  const codes = new Set(emps.map((e) => e.code))
-  const shiftByCode = new Map(shifts.map((s) => [s.code, s]))
-  const devById = new Map(devices.map((d) => [d.id, d]))
+  const empByCode = new Map(emps.map((e) => [boSo0(e.code), e]))
   const sua = new Map<string, DeviceUserRow>()
+  let chuaGhep = 0
 
-  type Nhom = { dus: DeviceUserRow[]; ten: string; code: string; reviewKhac: boolean }
-  const nhom: Nhom[] = []
-  const daXet = new Set<string>()
-
-  for (const k of theoMa.keys()) {
-    const du = duBy.get(k)
-    if (!du || du.employee_id || daXet.has(du.id)) continue
-    daXet.add(du.id)
+  for (const key of coQuet) {
+    const du = duBy.get(key)
+    if (!du || du.employee_id) continue
     const khac = dus.filter(
       (o) => o.device_user_id === du.device_user_id && o.device_id !== du.device_id,
     )
     const cungTen = khac.filter((o) => norm(o.name_on_device) === norm(du.name_on_device))
-    const khacTen = khac.filter((o) => norm(o.name_on_device) !== norm(du.name_on_device))
-    for (const o of khacTen) {
-      if (!o.needs_review) sua.set(o.id, { ...o, needs_review: true })
-    }
-    // Phía máy kia đã có người → ghép theo luôn.
-    const daCoNguoi = cungTen.find((o) => o.employee_id)
-    if (daCoNguoi) {
-      sua.set(du.id, {
-        ...du,
-        employee_id: daCoNguoi.employee_id,
-        needs_review: khacTen.length > 0,
-      })
-      continue
-    }
-    // Nhân viên cùng mã + cùng tên (nhập tay trước đó) → ghép.
-    const trung = emps.find(
-      (e) =>
-        e.code === du.device_user_id && norm(e.full_name) === norm(du.name_on_device),
-    )
-    if (trung) {
-      for (const x of [du, ...cungTen])
-        sua.set(x.id, { ...x, employee_id: trung.id, needs_review: khacTen.length > 0 })
-      cungTen.forEach((x) => daXet.add(x.id))
-      continue
-    }
-    cungTen.forEach((x) => daXet.add(x.id))
-    nhom.push({
-      dus: [du, ...cungTen],
-      ten: du.name_on_device || `Mã ${du.device_user_id}`,
-      code: du.device_user_id,
-      reviewKhac: khacTen.length > 0,
-    })
-  }
+    const khacTen = khac.length > cungTen.length
+    for (const o of khac)
+      if (!cungTen.includes(o) && !o.needs_review)
+        sua.set(o.id, { ...o, needs_review: true })
 
-  // Tạo người mới
-  const moi = nhom.map((n) => {
-    let code = n.code
-    if (codes.has(code)) code = `${n.code}${nhanMay(devById.get(n.dus[0].device_id)!)}`
-    codes.add(code)
-    const ngay = new Map<string, string[]>()
-    for (const du of n.dus) {
-      for (const [d, arr] of theoMa.get(`${du.device_id}|${du.device_user_id}`) ?? []) {
-        ngay.set(d, [...(ngay.get(d) ?? []), ...arr])
-      }
+    const nguoi =
+      cungTen.find((o) => o.employee_id)?.employee_id ??
+      (() => {
+        const e = empByCode.get(boSo0(du.device_user_id))
+        return e && khopDuoiTen(e.full_name, du.name_on_device) ? e.id : null
+      })()
+    if (nguoi) sua.set(du.id, { ...du, employee_id: nguoi, needs_review: khacTen })
+    else {
+      chuaGhep++
+      if (khacTen && !du.needs_review) sua.set(du.id, { ...du, needs_review: true })
     }
-    const caCode = doanCa(
-      [...ngay.values()].map((arr) => {
-        const g = gopLap(arr.map((gio) => ({ may: '', gio })))
-        return { dau: g[0].gio, soLuot: g.length }
-      }),
-    )
-    const shift = shiftByCode.get(caCode) ?? shifts[0]
-    if (!shift) throw new Error('Chưa có ca làm việc nào (hr_shifts rỗng)')
-    return { code, full_name: n.ten, shift_id: shift.id }
-  })
-  const tao = moi.length ? await chamCongRepo.insertEmployees(moi) : []
-  const byCode = new Map(tao.map((e) => [e.code, e]))
-  nhom.forEach((n, i) => {
-    const e = byCode.get(moi[i].code)
-    if (!e) return
-    empById.set(e.id, e)
-    for (const du of n.dus)
-      sua.set(du.id, { ...du, employee_id: e.id, needs_review: n.reviewKhac })
-  })
+  }
 
   const rows = [...sua.values()]
   if (rows.length) await chamCongRepo.linkDeviceUsers(rows)
   return {
-    moi: tao.length,
-    ghep: rows.filter((r) => r.employee_id).length,
+    ghep: rows.filter(
+      (r) => r.employee_id && !dus.find((d) => d.id === r.id)?.employee_id,
+    ).length,
+    chuaGhep,
     canXem: rows.filter((r) => r.needs_review).length,
   }
 }
+
+/** Máy đang được đọc (id) — chặn hai lượt lấy chồng nhau trên cùng máy. */
+const dangDoc = new Set<string>()
 
 /** Xem lượt thô tối đa ngần này ngày một lần (một tháng ~2.600 dòng người-ngày). */
 export const XEM_TOI_DA_NGAY = 62
@@ -389,6 +331,8 @@ export type DongLuot = {
   ngay: string
   ma: string
   ten: string
+  /** Bộ phận / tổ của nhân viên; null khi chưa ghép hoặc chưa khai. */
+  boPhan: string | null
   /** false = mã trên máy chưa ghép nhân viên nào. */
   daGhep: boolean
   /** Lượt sau khi gộp lặp 2 phút; `lap` = số lượt lặp đã gộp vào. */
@@ -406,6 +350,10 @@ export type DuLieu = {
   lanCuoi: LanLay[]
   /** Mã trên máy có quẹt trong khoảng mà cùng số ở máy kia là người khác (`needs_review`). */
   maCanXem: number
+  /** Nhân viên đang làm CẦN chấm công — mẫu số của bảng có mặt theo tổ. */
+  nhanSu: { ma: string; ten: string; boPhan: string | null }[]
+  /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
+  khongCham: number
 }
 
 /**
@@ -421,6 +369,8 @@ export type KyCong = {
   homNay: string
   du: DuLieu
   lanLay: LanLay[]
+  /** Chỉ nạp khi mở bước ② (danh sách nhân viên + mã máy 45 ngày). */
+  nv: NhanVienData | null
 }
 
 function soNgay(k: KhoangNgay): number {
@@ -447,7 +397,312 @@ function toLanLay(
   }))
 }
 
+/** Số ngày nhìn lại để biết mã nào "đang quẹt" (người đang đi làm). */
+export const NV_NHIN_LAI_NGAY = 45
+
+/** Một mã trên máy (dòng `hr_device_users`) như bước ② bày. */
+export type NvMa = {
+  /** id dòng `hr_device_users` */
+  id: string
+  may: string
+  ma: string
+  ten: string | null
+  /** Cùng số ở máy kia là người khác — Nhân sự phải xem. */
+  canXem: boolean
+  /** Số lượt trong NV_NHIN_LAI_NGAY ngày gần nhất. */
+  luotGanDay: number
+  /** Ngày quẹt cuối 'YYYY-MM-DD' (trong khoảng nhìn lại), null = không quẹt. */
+  lanCuoi: string | null
+}
+
+export type NvDong = {
+  id: string
+  code: string
+  hoTen: string
+  boPhan: string | null
+  shiftId: string
+  active: boolean
+  ma: NvMa[]
+  /** Họ tên vẫn y như tên trên máy (chưa ai gõ họ tên đầy đủ). */
+  tenTuMay: boolean
+  /** Tạo với ca mặc định khi nạp, chưa ai xem lại ca. */
+  caMacDinh: boolean
+  /** Không chấm công (Kinh Doanh, Tài Xế, Bốc xếp, Bảo Vệ…): không bị tính thiếu công. */
+  khongChamCong: boolean
+  lanCuoi: string | null
+}
+
+export type NhanVienData = {
+  ds: NvDong[]
+  cas: { id: string; ten: string; gio: string }[]
+  /** Mã có quẹt gần đây mà chưa ghép ai. */
+  maChuaGhep: NvMa[]
+  boPhan: string[]
+  nhinLaiTu: string
+}
+
+/** Đuôi ghi chú đánh dấu "ca mặc định khi nạp" — xoá khi có người đổi/xác nhận ca. */
+const DUOI_CA_MAC_DINH = ' · ca mặc định Xưởng, cần xem lại'
+
+async function taiNhanVien(homNay: string): Promise<NhanVienData> {
+  const tu = new Date(`${homNay}T00:00:00Z`)
+  tu.setUTCDate(tu.getUTCDate() - NV_NHIN_LAI_NGAY + 1)
+  const nhinLaiTu = tu.toISOString().slice(0, 10)
+  const [devices, dus, emps, shifts, logs] = await Promise.all([
+    chamCongRepo.devices(),
+    chamCongRepo.deviceUsers(),
+    chamCongRepo.employees(),
+    chamCongRepo.shifts(),
+    chamCongRepo.logsBetween(
+      `${nhinLaiTu}T00:00:00+07:00`,
+      `${sauNgay(homNay)}T00:00:00+07:00`,
+    ),
+  ])
+  const devById = new Map(devices.map((d) => [d.id, d]))
+  const dem = new Map<string, { n: number; cuoi: string }>()
+  for (const l of logs) {
+    const k = `${l.device_id}|${l.device_user_id}`
+    const ngay = toVn(l.punched_at).slice(0, 10)
+    const x = dem.get(k) ?? { n: 0, cuoi: '' }
+    x.n++
+    if (ngay > x.cuoi) x.cuoi = ngay
+    dem.set(k, x)
+  }
+  const toMa = (u: DeviceUserRow): NvMa => {
+    const x = dem.get(`${u.device_id}|${u.device_user_id}`)
+    return {
+      id: u.id,
+      may: nhanMay(devById.get(u.device_id)!),
+      ma: u.device_user_id,
+      ten: u.name_on_device,
+      canXem: u.needs_review,
+      luotGanDay: x?.n ?? 0,
+      lanCuoi: x?.cuoi || null,
+    }
+  }
+  const maTheoNguoi = new Map<string, NvMa[]>()
+  for (const u of dus) {
+    if (!u.employee_id) continue
+    maTheoNguoi.set(u.employee_id, [...(maTheoNguoi.get(u.employee_id) ?? []), toMa(u)])
+  }
+  const ds: NvDong[] = emps.map((e) => {
+    const ma = (maTheoNguoi.get(e.id) ?? []).sort((a, b) => a.may.localeCompare(b.may))
+    return {
+      id: e.id,
+      code: e.code,
+      hoTen: e.full_name,
+      boPhan: e.team,
+      shiftId: e.shift_id,
+      active: e.active,
+      ma,
+      tenTuMay: ma.some((m) => norm(m.ten) === norm(e.full_name)),
+      caMacDinh: (e.note ?? '').includes('ca mặc định'),
+      khongChamCong: e.attendance_exempt,
+      lanCuoi: ma.reduce<string | null>(
+        (c, m) => (m.lanCuoi && (!c || m.lanCuoi > c) ? m.lanCuoi : c),
+        null,
+      ),
+    }
+  })
+  return {
+    ds,
+    cas: shifts.map((s) => ({
+      id: s.id,
+      ten: s.name,
+      gio: `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`,
+    })),
+    maChuaGhep: dus
+      .filter((u) => !u.employee_id)
+      .map(toMa)
+      .filter((m) => m.luotGanDay > 0)
+      .sort((a, b) => b.luotGanDay - a.luotGanDay),
+    boPhan: [...new Set(emps.map((e) => e.team).filter((t): t is string => !!t))].sort(
+      (a, b) => a.localeCompare(b, 'vi'),
+    ),
+    nhinLaiTu,
+  }
+}
+
+const boDuoiCa = (note: string | null) =>
+  note?.includes(DUOI_CA_MAC_DINH) ? note.replace(DUOI_CA_MAC_DINH, '') || null : note
+
+/** Một lần xem "Chấm công một người" tối đa ngần này ngày (câu 16, duyệt 16/10/2026). */
+export const MOT_NGUOI_TOI_DA_NGAY = 366
+
+/** Một ngày trong ngăn "Chấm công một người" — có cả ngày không quẹt. */
+export type NgayMotNguoi = {
+  ngay: string
+  /** Lượt sau khi gộp lặp 2 phút (giờ · máy), rỗng = không quẹt. */
+  luot: { gio: string; may: string; lap: number }[]
+  /** Số lượt máy ghi, kể cả lượt bấm lặp. */
+  soLuotTho: number
+  /** false = cả công ty chưa có lượt nào ngày này: CHƯA LẤY về, không phải vắng. */
+  daLay: boolean
+}
+
+export type MotNguoi = {
+  nguoi: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    ca: string
+    khongChamCong: boolean
+    maMay: string[]
+  }
+  khoang: KhoangNgay
+  ngay: NgayMotNguoi[]
+}
+
 export const chamCongService = {
+  /** Ngăn "Chấm công một người": mọi ngày trong khoảng, kể cả ngày không quẹt. */
+  async motNguoi(user: User, ma: string, k: KhoangNgay): Promise<MotNguoi> {
+    await assertAction(user, 'hr.attendance.view')
+    if (k.den < k.tu) throw BadRequest('"Đến ngày" phải sau hoặc bằng "Từ ngày"')
+    if (soNgay(k) > MOT_NGUOI_TOI_DA_NGAY)
+      throw BadRequest(`Mỗi lần xem tối đa ${MOT_NGUOI_TOI_DA_NGAY} ngày`)
+    const [emps, dus, devices, shifts] = await Promise.all([
+      chamCongRepo.employees(),
+      chamCongRepo.deviceUsers(),
+      chamCongRepo.devices(),
+      chamCongRepo.shifts(),
+    ])
+    const e = emps.find((x) => x.code === ma)
+    if (!e) throw NotFound(`Không có nhân viên mã ${ma}`)
+    const devById = new Map(devices.map((d) => [d.id, d]))
+    const cua = dus.filter((u) => u.employee_id === e.id)
+    const tuIso = `${k.tu}T00:00:00+07:00`
+    const denIso = `${sauNgay(k.den)}T00:00:00+07:00`
+    const [logs, coLuot] = await Promise.all([
+      chamCongRepo.logsOfCodes(
+        [...new Set(cua.map((u) => u.device_user_id))],
+        tuIso,
+        denIso,
+      ),
+      chamCongRepo.ngayCoLuot(tuIso, denIso),
+    ])
+    const laCua = new Set(cua.map((u) => `${u.device_id}|${u.device_user_id}`))
+    const theoNgay = new Map<string, LuotQuet[]>()
+    for (const l of logs) {
+      if (!laCua.has(`${l.device_id}|${l.device_user_id}`)) continue
+      const vn = toVn(l.punched_at)
+      const arr = theoNgay.get(vn.slice(0, 10)) ?? []
+      arr.push({ may: nhanMay(devById.get(l.device_id)!), gio: vn.slice(11) })
+      theoNgay.set(vn.slice(0, 10), arr)
+    }
+    const daLay = new Set(coLuot)
+    const ngay: NgayMotNguoi[] = []
+    // Ngày sau hôm nay chưa tới — không bày (17/10/2026: 10 dòng "chưa lấy" thừa).
+    const homNay = todayVn()
+    const cuoi = k.den < homNay ? k.den : homNay
+    for (let d = k.tu; d <= cuoi; d = sauNgay(d)) {
+      const tho = theoNgay.get(d) ?? []
+      ngay.push({
+        ngay: d,
+        luot: gopLap(tho).map((x) => ({ gio: x.gio, may: x.may, lap: x.lap })),
+        soLuotTho: tho.length,
+        daLay: daLay.has(d) || tho.length > 0,
+      })
+    }
+    return {
+      nguoi: {
+        ma: e.code,
+        ten: e.full_name,
+        boPhan: e.team,
+        ca: shifts.find((s) => s.id === e.shift_id)?.name ?? '',
+        khongChamCong: e.attendance_exempt,
+        maMay: cua.map(
+          (u) => `${nhanMay(devById.get(u.device_id)!)} ${u.device_user_id}`,
+        ),
+      },
+      khoang: k,
+      ngay,
+    }
+  },
+
+  /** Bước ② — danh sách nhân viên chấm công + mã trên máy + mã có quẹt chưa ghép. */
+  async nhanVien(user: User, homNay: string): Promise<NhanVienData> {
+    await assertAction(user, 'hr.attendance.view')
+    return taiNhanVien(homNay)
+  },
+
+  async suaNhanVien(
+    user: User,
+    id: string,
+    v: {
+      full_name: string
+      team: string | null
+      shift_id: string
+      active: boolean
+      attendance_exempt: boolean
+    },
+  ): Promise<void> {
+    await assertAction(user, 'hr.attendance.employee_edit')
+    const e = (await chamCongRepo.employees()).find((x) => x.id === id)
+    if (!e) throw NotFound('Không tìm thấy nhân viên')
+    // Lưu hồ sơ = có người đã nhìn ca → bỏ dấu "ca mặc định".
+    await chamCongRepo.updateEmployee(id, { ...v, note: boDuoiCa(e.note) })
+  },
+
+  async themNhanVien(
+    user: User,
+    v: {
+      code: string
+      full_name: string
+      team: string | null
+      shift_id: string
+      device_user_id?: string
+    },
+  ): Promise<{ id: string }> {
+    await assertAction(user, 'hr.attendance.employee_edit')
+    const emps = await chamCongRepo.employees()
+    const trung = emps.find((e) => boSo0(e.code) === v.code)
+    if (trung) throw Conflict(`Mã ${v.code} đã là của ${trung.full_name}`)
+    const e = await chamCongRepo.addEmployee({
+      code: v.code,
+      full_name: v.full_name,
+      team: v.team,
+      shift_id: v.shift_id,
+      note: null,
+    })
+    if (v.device_user_id)
+      await chamCongRepo.updateDeviceUser(v.device_user_id, {
+        employee_id: e.id,
+        needs_review: false,
+      })
+    return { id: e.id }
+  },
+
+  async doiHangLoat(
+    user: User,
+    v: { ids: string[]; shift_id?: string; team?: string | null },
+  ): Promise<{ so: number }> {
+    await assertAction(user, 'hr.attendance.employee_edit')
+    const byId = new Map((await chamCongRepo.employees()).map((e) => [e.id, e]))
+    let so = 0
+    for (const id of v.ids) {
+      const e = byId.get(id)
+      if (!e) continue
+      await chamCongRepo.updateEmployee(id, {
+        ...(v.shift_id !== undefined && { shift_id: v.shift_id, note: boDuoiCa(e.note) }),
+        ...(v.team !== undefined && { team: v.team }),
+      })
+      so++
+    }
+    return { so }
+  },
+
+  /** Ghép một mã trên máy vào nhân viên, hoặc gỡ (`employee_id` null). */
+  async ghepMa(
+    user: User,
+    v: { device_user_id: string; employee_id: string | null },
+  ): Promise<void> {
+    await assertAction(user, 'hr.attendance.employee_edit')
+    await chamCongRepo.updateDeviceUser(v.device_user_id, {
+      employee_id: v.employee_id,
+      needs_review: false,
+    })
+  },
+
   /**
    * LƯỢT THÔ trong khoảng ngày — đúng những gì máy ghi, KHÔNG tính công, không kết
    * luận thiếu/đủ (chủ dự án 12/10/2026: lấy dữ liệu trước, tính sau). Gộp theo
@@ -476,7 +731,14 @@ export const chamCongService = {
     for (let d = k.tu; d <= k.den; d = sauNgay(d)) theoNgay.set(d, {})
     const nhom = new Map<
       string,
-      { ngay: string; ma: string; ten: string; daGhep: boolean; luot: LuotQuet[] }
+      {
+        ngay: string
+        ma: string
+        ten: string
+        boPhan: string | null
+        daGhep: boolean
+        luot: LuotQuet[]
+      }
     >()
     for (const l of logs) {
       const vn = toVn(l.punched_at)
@@ -493,6 +755,7 @@ export const chamCongService = {
         ngay,
         ma: emp?.code ?? l.device_user_id,
         ten: emp?.full_name ?? du?.name_on_device ?? '',
+        boPhan: emp?.team ?? null,
         daGhep: !!emp,
         luot: [],
       }
@@ -504,6 +767,7 @@ export const chamCongService = {
         ngay: g.ngay,
         ma: g.ma,
         ten: g.ten,
+        boPhan: g.boPhan,
         daGhep: g.daGhep,
         luot: gopLap(g.luot).map((x) => ({ gio: x.gio, may: x.may, lap: x.lap })),
         soLuotTho: g.luot.length,
@@ -530,21 +794,31 @@ export const chamCongService = {
           .filter((u) => u?.needs_review)
           .map((u) => u!.id),
       ).size,
+      nhanSu: emps
+        .filter((e) => e.active && !e.attendance_exempt)
+        .map((e) => ({ ma: e.code, ten: e.full_name, boPhan: e.team })),
+      khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
     }
   },
 
   /** Dữ liệu cho trang Kỳ công tháng `thang` ('YYYY-MM'). */
-  async kyCong(user: User, thang: string, homNay: string): Promise<KyCong> {
+  async kyCong(
+    user: User,
+    thang: string,
+    homNay: string,
+    coNhanVien = false,
+  ): Promise<KyCong> {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
       throw BadRequest('Tháng phải dạng YYYY-MM')
     const [y, m] = thang.split('-').map(Number)
     const tu = `${thang}-01`
     const den = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    const [du, may] = await Promise.all([
+    const [du, may, nv] = await Promise.all([
       chamCongService.duLieu(user, { tu, den }),
       chamCongService.mayChamCong(user),
+      coNhanVien ? chamCongService.nhanVien(user, homNay) : null,
     ])
-    return { thang, tu, den, homNay, du, lanLay: may.lanLay }
+    return { thang, tu, den, homNay, du, lanLay: may.lanLay, nv }
   },
 
   /** Trang Máy chấm công: tình trạng từng máy + lịch sử các lần lấy. */
@@ -588,17 +862,29 @@ export const chamCongService = {
     await assertAction(user, 'hr.attendance.pull')
     if (k.den < k.tu) throw BadRequest('"Đến ngày" phải sau hoặc bằng "Từ ngày"')
     const devices = (await chamCongRepo.devices()).filter((d) => d.active)
-    const may: KetQuaMay[] = []
-    // Lần lượt từng máy: đọc song song hai máy cùng lúc không nhanh hơn (mỗi máy
-    // một đường), lại khó biết máy nào làm hỏng.
-    for (const d of devices) may.push(await keoMot(d, k, user.id))
-    const g = may.some((m) => m.ok) ? await ghepNguoi(k) : { moi: 0, ghep: 0, canXem: 0 }
-    return {
-      khoang: k,
-      may,
-      nhanVienMoi: g.moi,
-      maDaGhep: g.ghep,
-      canXem: g.canXem,
+    // Máy ZK chỉ phục vụ một kết nối: hai người bấm cùng lúc thì lượt sau đọc hỏng
+    // hoặc thiếu. Server chạy một tiến trình trong LAN xưởng nên khoá trong bộ nhớ là đủ.
+    const ban = devices.find((d) => dangDoc.has(d.id))
+    if (ban)
+      throw Conflict(`Đang có người lấy từ ${ban.name} — đợi lượt đó xong rồi bấm lại.`)
+    devices.forEach((d) => dangDoc.add(d.id))
+    try {
+      const may: KetQuaMay[] = []
+      // Lần lượt từng máy: đọc song song hai máy cùng lúc không nhanh hơn (mỗi máy
+      // một đường), lại khó biết máy nào làm hỏng.
+      for (const d of devices) may.push(await keoMot(d, k, user.id))
+      const g = may.some((m) => m.ok)
+        ? await ghepNguoi(k)
+        : { ghep: 0, chuaGhep: 0, canXem: 0 }
+      return {
+        khoang: k,
+        may,
+        maDaGhep: g.ghep,
+        maChuaGhep: g.chuaGhep,
+        canXem: g.canXem,
+      }
+    } finally {
+      devices.forEach((d) => dangDoc.delete(d.id))
     }
   },
 

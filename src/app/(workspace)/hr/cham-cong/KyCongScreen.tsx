@@ -15,7 +15,9 @@
 import { Btn, Empty, Menu, ScreenFrame, ScreenHeader, Tag } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { BuocDuLieu } from './buoc-du-lieu'
+import { BuocNhanVien } from './buoc-nhan-vien'
 import { NganMay } from './ngan-may'
+import { NganMotNguoi } from './ngan-mot-nguoi'
 import { useKyCong, type KyCongCtx } from './useKyCong'
 import {
   doiThang,
@@ -40,7 +42,7 @@ export function KyCongScreen({ k, buocDau }: { k: KyCong; buocDau: BuocId }) {
   )
 
   return (
-    <ScreenFrame tableMin={1100}>
+    <ScreenFrame tableMin={0}>
       <ScreenHeader
         compact
         eyebrow="Chấm công"
@@ -90,9 +92,22 @@ export function KyCongScreen({ k, buocDau }: { k: KyCong; buocDau: BuocId }) {
         <ThanhBuoc d={d} />
       </ScreenHeader>
 
-      {d.buoc === 'du-lieu' ? <BuocDuLieu d={d} /> : <SapCo d={d} />}
+      {d.buoc === 'du-lieu' ? (
+        <BuocDuLieu d={d} />
+      ) : d.buoc === 'nhan-vien' ? (
+        k.nv ? (
+          <BuocNhanVien d={d} nv={k.nv} />
+        ) : (
+          <p className="text-k-sm flex-1 bg-[var(--surface-card)] px-[var(--gutter)] py-3 text-[var(--ink-2)]">
+            Đang tải danh sách nhân viên…
+          </p>
+        )
+      ) : (
+        <SapCo d={d} />
+      )}
 
       <NganMay d={d} />
+      <NganMotNguoi d={d} />
     </ScreenFrame>
   )
 }
@@ -101,14 +116,35 @@ export function KyCongScreen({ k, buocDau }: { k: KyCong; buocDau: BuocId }) {
 function NutChinh({ d }: { d: KyCongCtx }) {
   if (d.buoc === 'du-lieu') {
     return (
-      <Btn
-        primary
-        icon="lamMoi"
-        busy={d.dangLay}
-        aria-disabled={!!d.loiKhoang}
-        onClick={d.layVe}
-      >
-        {d.dangLay ? 'Đang đọc máy…' : 'Lấy về từ máy'}
+      <>
+        <Btn
+          icon="excel"
+          aria-disabled={d.k.du.dong.length === 0}
+          onClick={() => {
+            if (d.k.du.dong.length === 0) return
+            window.location.assign(
+              `/api/dept/hr/cham-cong/du-lieu/excel?tu=${d.k.tu}&den=${d.k.den}`,
+            )
+          }}
+        >
+          Xuất Excel
+        </Btn>
+        <Btn
+          primary
+          icon="lamMoi"
+          busy={d.dangLay}
+          aria-disabled={!!d.loiKhoang}
+          onClick={d.layVe}
+        >
+          {d.dangLay ? 'Đang đọc máy…' : 'Lấy về từ máy'}
+        </Btn>
+      </>
+    )
+  }
+  if (d.buoc === 'nhan-vien') {
+    return (
+      <Btn primary icon="them" onClick={() => d.setHoSo({ moi: true })}>
+        Thêm nhân viên
       </Btn>
     )
   }

@@ -600,6 +600,12 @@ export const ACTIONS: Action[] = [
     domain: 'hr',
     rule: perm('hr.member'),
   },
+  {
+    key: 'hr.attendance.employee_edit',
+    label: 'Sửa danh sách nhân viên chấm công (họ tên, bộ phận, ca, ghép mã máy)',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
 
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {

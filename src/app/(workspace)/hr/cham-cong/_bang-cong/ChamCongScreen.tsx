@@ -28,7 +28,15 @@ import { BangPhu } from './bang-phu'
 import { LuoiCong } from './luoi-cong'
 import { SoiNgay } from './soi-ngay'
 import { useChamCong, type ChamCongCtx, type Muc } from './useChamCong'
-import { canXuLy, doiThang, luc, ngayCuoiThang, so, thangVn, type BangCong } from '../cham-cong.shared'
+import {
+  canXuLy,
+  doiThang,
+  luc,
+  ngayCuoiThang,
+  so,
+  thangVn,
+  type BangCong,
+} from '../cham-cong.shared'
 
 export function ChamCongScreen({ b }: { b: BangCong }) {
   const d = useChamCong(b)

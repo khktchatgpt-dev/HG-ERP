@@ -55,6 +55,11 @@ export type EmployeeRow = {
   full_name: string
   shift_id: string
   active: boolean
+  /** Bộ phận / tổ (gõ tự do, nạp từ DS tổng hợp 15/10/2026). */
+  team: string | null
+  note: string | null
+  /** Không chấm công (Kinh Doanh, Tài Xế…): không quẹt máy, không bị tính thiếu công. */
+  attendance_exempt: boolean
 }
 
 export type ShiftRow = {
@@ -134,7 +139,7 @@ export const chamCongRepo = {
     return docHet((a, b) =>
       db()
         .from('hr_employees')
-        .select('id, code, full_name, shift_id, active')
+        .select('id, code, full_name, shift_id, active, team, note, attendance_exempt')
         .order('code')
         .range(a, b),
     )
@@ -150,11 +155,56 @@ export const chamCongRepo = {
           await db()
             .from('hr_employees')
             .insert(rows.slice(i, i + LO_GHI))
-            .select('id, code, full_name, shift_id, active'),
+            .select(
+              'id, code, full_name, shift_id, active, team, note, attendance_exempt',
+            ),
         ),
       )
     }
     return out
+  },
+
+  async updateEmployee(
+    id: string,
+    patch: Partial<
+      Pick<
+        EmployeeRow,
+        'full_name' | 'team' | 'shift_id' | 'active' | 'note' | 'attendance_exempt'
+      >
+    >,
+  ): Promise<EmployeeRow> {
+    return must(
+      await db()
+        .from('hr_employees')
+        .update(patch)
+        .eq('id', id)
+        .select('id, code, full_name, shift_id, active, team, note, attendance_exempt')
+        .single(),
+    )
+  },
+
+  async addEmployee(row: {
+    code: string
+    full_name: string
+    shift_id: string
+    team: string | null
+    note: string | null
+    attendance_exempt?: boolean
+  }): Promise<EmployeeRow> {
+    return must(
+      await db()
+        .from('hr_employees')
+        .insert(row)
+        .select('id, code, full_name, shift_id, active, team, note, attendance_exempt')
+        .single(),
+    )
+  },
+
+  async updateDeviceUser(
+    id: string,
+    patch: Pick<DeviceUserRow, 'employee_id' | 'needs_review'>,
+  ): Promise<void> {
+    must(await db().from('hr_device_users').update(patch).eq('id', id))
   },
 
   async deviceUsers(): Promise<DeviceUserRow[]> {
@@ -252,6 +302,31 @@ export const chamCongRepo = {
       ...r,
       created_by_name: nguoi ? (nguoi.name ?? nguoi.email) : null,
     }))
+  },
+
+  /** Lượt của MỘT nhóm mã trên máy (một người) trong khoảng — lọc ở DB, không kéo cả công ty. */
+  async logsOfCodes(codes: string[], fromIso: string, toIso: string): Promise<LogRow[]> {
+    if (!codes.length) return []
+    return docHet((a, b) =>
+      db()
+        .from('hr_attendance_logs')
+        .select('device_id, device_user_id, punched_at')
+        .in('device_user_id', codes)
+        .gte('punched_at', fromIso)
+        .lt('punched_at', toIso)
+        .order('id')
+        .range(a, b),
+    )
+  },
+
+  /** Ngày (giờ VN) cả công ty có ít nhất 1 lượt — ngày không có là CHƯA LẤY về (0235). */
+  async ngayCoLuot(fromIso: string, toIso: string): Promise<string[]> {
+    const { data, error } = await db().rpc('hr_attendance_days', {
+      p_from: fromIso,
+      p_to: toIso,
+    })
+    if (error) throw new Error(error.message)
+    return (data ?? []) as string[]
   },
 
   async logsBetween(fromIso: string, toIso: string): Promise<LogRow[]> {

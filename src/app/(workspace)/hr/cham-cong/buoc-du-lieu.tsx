@@ -15,6 +15,14 @@ import type { DongLuot } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import type { KyCongCtx } from './useKyCong'
 import { THU, dm, dmy, thu } from './ky-cong.shared'
 import { luc, so } from './cham-cong.shared'
+import { khongDau } from '@/lib/cham-cong/ghep-ten'
+import { CoMat } from './co-mat'
+
+/** Giá trị lọc cho dòng chưa có bộ phận (Pick không nhận chuỗi rỗng làm lựa chọn riêng). */
+const BO_PHAN_TRONG = '__trong__'
+
+/** Nhóm số lượt sau gộp lặp: '1' · '2' · '3' (= 3 trở lên, ngày nhiều đoạn làm). */
+const nhomLuot = (r: DongLuot) => (r.luot.length >= 3 ? '3' : String(r.luot.length))
 
 /**
  * BƯỚC ① DỮ LIỆU — "máy đã ghi những lượt quẹt nào trong kỳ?". CHỈ bày đúng
@@ -26,21 +34,35 @@ import { luc, so } from './cham-cong.shared'
  */
 export function BuocDuLieu({ d }: { d: KyCongCtx }) {
   const { k } = d
+  const [xem, setXem] = useState<'luot' | 'to'>('luot')
   const [tim, setTim] = useState('')
   const [ngay, setNgay] = useState('')
-  const [motLuot, setMotLuot] = useState(false)
+  const [boPhan, setBoPhan] = useState('')
+  const [soLuot, setSoLuot] = useState('')
+  const [chuaGhep, setChuaGhep] = useState(false)
+
+  const dsBoPhan = useMemo(
+    () =>
+      [...new Set(k.du.dong.map((r) => r.boPhan ?? ''))].sort((a, b) =>
+        a.localeCompare(b, 'vi'),
+      ),
+    [k.du.dong],
+  )
 
   const dong = useMemo(() => {
-    const q = tim.trim().toLowerCase()
+    const q = khongDau(tim)
     return k.du.dong.filter(
       (r) =>
         (!ngay || r.ngay === ngay) &&
-        (!motLuot || r.luot.length < 2) &&
-        (!q || r.ma.toLowerCase().includes(q) || r.ten.toLowerCase().includes(q)),
+        (!boPhan || (r.boPhan ?? '') === (boPhan === BO_PHAN_TRONG ? '' : boPhan)) &&
+        (!soLuot || nhomLuot(r) === soLuot) &&
+        (!chuaGhep || !r.daGhep) &&
+        (!q || khongDau(`${r.ma} ${r.ten}`).includes(q)),
     )
-  }, [k.du.dong, tim, ngay, motLuot])
+  }, [k.du.dong, tim, ngay, boPhan, soLuot, chuaGhep])
 
-  const soMotLuot = k.du.dong.filter((r) => r.luot.length < 2).length
+  const soChuaGhep = k.du.dong.filter((r) => !r.daGhep).length
+  const demLuot = (n: string) => k.du.dong.filter((r) => nhomLuot(r) === n).length
   const lan = k.lanLay[0]
 
   return (
@@ -103,63 +125,142 @@ export function BuocDuLieu({ d }: { d: KyCongCtx }) {
 
       <DaiNgay d={d} />
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
-        <SearchInput
-          value={tim}
-          onChange={setTim}
-          placeholder="Tìm mã hoặc tên"
-          width={220}
-          label="Tìm mã hoặc tên"
-        />
-        <Pick
-          label="Ngày"
-          value={ngay}
-          onChange={setNgay}
-          options={[
-            { value: '', label: 'Cả kỳ' },
-            ...k.du.theoNgay.map((n) => ({
-              value: n.ngay,
-              label: `${dm(n.ngay)} ${THU[thu(n.ngay)]}`,
-            })),
-          ]}
-        />
-        <label className="text-k-sm flex items-center gap-2 text-[var(--ink-2)]">
-          <Tick label="Chỉ dòng có 1 lượt" checked={motLuot} onChange={setMotLuot} />
-          Chỉ dòng có 1 lượt ({so(soMotLuot)})
-        </label>
-        <span className="text-k-sm ml-auto text-[var(--ink-3)]">
-          Bước này chỉ bày đúng những gì máy ghi — chưa tính công
-        </span>
+      <div className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
+        <div
+          role="radiogroup"
+          aria-label="Cách xem dữ liệu"
+          className="inline-flex overflow-hidden border border-[var(--line)]"
+        >
+          {(
+            [
+              ['luot', 'Lượt từng người'],
+              ['to', 'Có mặt theo tổ'],
+            ] as const
+          ).map(([id, ten], i) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={xem === id}
+              onClick={() => setXem(id)}
+              className={cn(
+                'text-k-sm h-7 px-3',
+                i > 0 && 'border-l border-[var(--line)]',
+                xem === id
+                  ? 'bg-[var(--act)] font-medium text-white'
+                  : 'bg-[var(--surface-card)] hover:bg-[var(--surface-hover)]',
+              )}
+            >
+              {ten}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {k.du.dong.length === 0 ? (
-        <div className="flex-1 bg-[var(--surface-card)]">
-          <Empty
-            headline={`Kỳ ${dm(k.tu)} → ${dm(k.den)} chưa có lượt nào trong ERP`}
-            reason="Dữ liệu chỉ vào ERP khi bấm lấy về — máy chấm công không tự gửi lên."
-            next="Chọn khoảng ngày ở thanh trên rồi bấm “Lấy về từ máy” ở góc phải."
-          />
-        </div>
-      ) : dong.length === 0 ? (
-        <div className="flex-1 bg-[var(--surface-card)]">
-          <Empty
-            headline="Không có dòng nào khớp bộ lọc"
-            reason={`Kỳ này có ${so(k.du.dong.length)} dòng, nhưng không dòng nào khớp ô tìm / ngày / chỉ 1 lượt.`}
-            next={
-              <Btn
-                onClick={() => {
-                  setTim('')
-                  setNgay('')
-                  setMotLuot(false)
-                }}
-              >
-                Bỏ lọc
-              </Btn>
-            }
-          />
-        </div>
+      {xem === 'to' ? (
+        <CoMat
+          k={k}
+          onMoNguoi={d.setMotNguoi}
+          onXemLuot={(ng, bp) => {
+            setTim('')
+            setNgay(ng)
+            setBoPhan(bp)
+            setSoLuot('')
+            setChuaGhep(false)
+            setXem('luot')
+          }}
+        />
       ) : (
-        <BangLuot dong={dong} tong={k.du.dong.length} />
+        <>
+          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
+            <SearchInput
+              value={tim}
+              onChange={setTim}
+              placeholder="Tìm mã hoặc tên"
+              width={220}
+              label="Tìm mã hoặc tên"
+            />
+            <Pick
+              label="Ngày"
+              value={ngay}
+              onChange={setNgay}
+              options={[
+                { value: '', label: 'Cả kỳ' },
+                ...k.du.theoNgay.map((n) => ({
+                  value: n.ngay,
+                  label: `${dm(n.ngay)} ${THU[thu(n.ngay)]}`,
+                })),
+              ]}
+            />
+            <Pick
+              label="Bộ phận"
+              value={boPhan}
+              onChange={setBoPhan}
+              options={[
+                { value: '', label: 'Mọi bộ phận' },
+                ...dsBoPhan.map((b) =>
+                  b
+                    ? { value: b, label: b }
+                    : { value: BO_PHAN_TRONG, label: '(chưa có bộ phận)' },
+                ),
+              ]}
+            />
+            <Pick
+              label="Số lượt"
+              value={soLuot}
+              onChange={setSoLuot}
+              options={[
+                { value: '', label: 'Mọi số lượt' },
+                { value: '1', label: `1 lượt (${so(demLuot('1'))})` },
+                { value: '2', label: `2 lượt (${so(demLuot('2'))})` },
+                { value: '3', label: `3 lượt trở lên (${so(demLuot('3'))})` },
+              ]}
+            />
+            <label className="text-k-sm flex items-center gap-2 text-[var(--ink-2)]">
+              <Tick
+                label="Chỉ mã chưa ghép người"
+                checked={chuaGhep}
+                onChange={setChuaGhep}
+              />
+              Chỉ mã chưa ghép người ({so(soChuaGhep)})
+            </label>
+            <span className="text-k-sm ml-auto text-[var(--ink-3)]">
+              Bước này chỉ bày đúng những gì máy ghi — chưa tính công
+            </span>
+          </div>
+
+          {k.du.dong.length === 0 ? (
+            <div className="flex-1 bg-[var(--surface-card)]">
+              <Empty
+                headline={`Kỳ ${dm(k.tu)} → ${dm(k.den)} chưa có lượt nào trong ERP`}
+                reason="Dữ liệu chỉ vào ERP khi bấm lấy về — máy chấm công không tự gửi lên."
+                next="Chọn khoảng ngày ở thanh trên rồi bấm “Lấy về từ máy” ở góc phải."
+              />
+            </div>
+          ) : dong.length === 0 ? (
+            <div className="flex-1 bg-[var(--surface-card)]">
+              <Empty
+                headline="Không có dòng nào khớp bộ lọc"
+                reason={`Kỳ này có ${so(k.du.dong.length)} dòng, nhưng không dòng nào khớp ô tìm / ngày / bộ phận / số lượt.`}
+                next={
+                  <Btn
+                    onClick={() => {
+                      setTim('')
+                      setNgay('')
+                      setBoPhan('')
+                      setSoLuot('')
+                      setChuaGhep(false)
+                    }}
+                  >
+                    Bỏ lọc
+                  </Btn>
+                }
+              />
+            </div>
+          ) : (
+            <BangLuot dong={dong} tong={k.du.dong.length} onMoNguoi={d.setMotNguoi} />
+          )}
+        </>
       )}
 
       {k.du.dong.length > 0 && (
@@ -226,7 +327,7 @@ function DaiNgay({ d }: { d: KyCongCtx }) {
 
 function deY(r: DongLuot): { text: string; tone?: 'stop' | 'warn' }[] {
   const out: { text: string; tone?: 'stop' | 'warn' }[] = []
-  if (r.luot.length < 2) out.push({ text: '1 lượt', tone: 'stop' })
+  if (r.luot.length >= 3) out.push({ text: 'nhiều đoạn' })
   if (r.soLuotTho > r.luot.length)
     out.push({ text: `bấm lặp ${r.soLuotTho - r.luot.length}` })
   if (new Set(r.luot.map((l) => l.may)).size > 1)
@@ -235,36 +336,50 @@ function deY(r: DongLuot): { text: string; tone?: 'stop' | 'warn' }[] {
   return out
 }
 
-function BangLuot({ dong, tong }: { dong: DongLuot[]; tong: number }) {
-  const c = 'border-b border-[var(--line-faint)]/40 px-2.5 py-0.5 whitespace-nowrap'
+/**
+ * Lưới lượt: KHÔNG cuộn ngang (chủ dự án 17/10/2026 "hạn chế scroll ngang"). Cột
+ * cố định bề rộng (`table-fixed`), mã + họ tên chung một ô, bỏ cột Máy (máy đã ghi
+ * cạnh từng lượt), "Các lượt" và "Để ý" được xuống dòng. Giờ bày HH:MM, giờ đủ giây
+ * ở tooltip.
+ */
+function BangLuot({
+  dong,
+  tong,
+  onMoNguoi,
+}: {
+  dong: DongLuot[]
+  tong: number
+  /** Mở ngăn "Chấm công một người" — chỉ cho mã đã ghép người. */
+  onMoNguoi: (ma: string) => void
+}) {
+  const c = 'border-b border-[var(--line-faint)]/40 px-2 py-0.5 align-top'
   const h = cn(
     c,
-    'sticky top-0 z-[1] border-[var(--line)] bg-[var(--surface-raised)] text-left font-semibold text-[var(--ink-2)]',
+    'sticky top-0 z-[1] border-[var(--line)] bg-[var(--surface-raised)] text-left font-semibold whitespace-nowrap text-[var(--ink-2)]',
   )
-  const r = { textAlign: 'right' as const }
-  const l = { textAlign: 'left' as const }
   return (
     <div
-      className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]"
+      className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface-card)]"
       role="region"
       aria-label="Lượt quẹt theo người và ngày"
       tabIndex={0}
     >
-      <table className="text-k-sm w-full border-separate border-spacing-0">
+      <table className="text-k-sm w-full table-fixed border-separate border-spacing-0">
+        <colgroup>
+          <col style={{ width: 76 }} />
+          <col style={{ width: '24%' }} />
+          <col style={{ width: '18%' }} />
+          <col style={{ width: 48 }} />
+          <col />
+          <col style={{ width: '16%' }} />
+        </colgroup>
         <thead>
           <tr>
             <th className={h}>Ngày</th>
-            <th className={h}>Mã</th>
-            <th className={h}>Tên trên máy</th>
-            <th className={h}>Máy</th>
-            <th className={h} style={r}>
-              Lượt đầu
-            </th>
-            <th className={h} style={r}>
-              Lượt cuối
-            </th>
-            <th className={h} style={r}>
-              Số lượt
+            <th className={h}>Mã · Họ tên</th>
+            <th className={h}>Bộ phận</th>
+            <th className={h} style={{ textAlign: 'right' }}>
+              Lượt
             </th>
             <th className={h}>Các lượt (giờ · máy)</th>
             <th className={h}>Để ý</th>
@@ -276,25 +391,43 @@ function BangLuot({ dong, tong }: { dong: DongLuot[]; tong: number }) {
               key={`${x.ngay}|${x.ma}|${x.daGhep}`}
               className="hover:bg-[var(--surface-hover)]"
             >
-              <td className={cn(c, 'num')} style={l}>
+              <td
+                className={cn(c, 'num whitespace-nowrap')}
+                style={{ textAlign: 'left' }}
+              >
                 {dm(x.ngay)} {THU[thu(x.ngay)]}
               </td>
-              <td className={cn(c, 'num')} style={l}>
-                {x.ma}
+              <td className={cn(c, 'truncate')} title={`${x.ma} · ${x.ten}`}>
+                <span className="num mr-1.5 text-[var(--ink-3)]">{x.ma}</span>
+                {x.daGhep ? (
+                  <button
+                    type="button"
+                    className="text-left text-[var(--act-text)] hover:underline"
+                    onClick={() => onMoNguoi(x.ma)}
+                  >
+                    {x.ten}
+                  </button>
+                ) : (
+                  x.ten
+                )}
               </td>
-              <td className={c}>{x.ten}</td>
-              <td className={cn(c, 'num')} style={l}>
-                {[...new Set(x.luot.map((y) => y.may))].join(' ')}
+              <td
+                className={cn(c, 'truncate', !x.boPhan && 'text-[var(--ink-3)]')}
+                title={x.boPhan ?? undefined}
+              >
+                {x.boPhan ?? '—'}
               </td>
-              <td className={cn(c, 'num')}>{x.luot[0].gio.slice(0, 5)}</td>
-              <td className={cn(c, 'num')}>
-                {x.luot.length > 1 ? x.luot[x.luot.length - 1].gio.slice(0, 5) : '—'}
+              <td className={cn(c, 'num')} style={{ textAlign: 'right' }}>
+                {x.luot.length}
               </td>
-              <td className={cn(c, 'num')}>{x.soLuotTho}</td>
-              <td className={cn(c, 'num')} style={l}>
+              <td className={cn(c, 'num')} style={{ textAlign: 'left' }}>
                 {x.luot.map((y, i) => (
-                  <span key={i} className="mr-2">
-                    {y.gio}
+                  <span
+                    key={i}
+                    className="mr-2 inline-block whitespace-nowrap"
+                    title={y.gio}
+                  >
+                    {y.gio.slice(0, 5)}
                     {y.lap > 0 && (
                       <span className="text-[var(--ink-3)]">×{y.lap + 1}</span>
                     )}{' '}
@@ -307,7 +440,7 @@ function BangLuot({ dong, tong }: { dong: DongLuot[]; tong: number }) {
                   <span
                     key={f.text}
                     className={cn(
-                      'mr-1 border px-1.5 text-[11px]',
+                      'mr-1 mb-0.5 inline-block border px-1.5 text-[11px] whitespace-nowrap',
                       f.tone === 'stop'
                         ? 'border-[var(--stop-line)] bg-[var(--stop-wash)] text-[var(--stop)]'
                         : f.tone === 'warn'
@@ -325,15 +458,16 @@ function BangLuot({ dong, tong }: { dong: DongLuot[]; tong: number }) {
         <tfoot>
           <tr>
             <td
-              colSpan={9}
+              colSpan={6}
               className={cn(
                 c,
                 'sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
               )}
             >
               {so(dong.length)}
-              {dong.length < tong ? ` / ${so(tong)}` : ''} dòng người-ngày · “Số lượt” gồm
-              cả lượt bấm lặp trong 2 phút · ×2 = cùng giờ bấm 2 lần
+              {dong.length < tong ? ` / ${so(tong)}` : ''} dòng người-ngày · “Lượt” đã gộp
+              lượt bấm lặp trong 2 phút (×2 = cùng giờ bấm 2 lần) · bày ĐỦ mọi lượt, chưa
+              tính công · rê chuột lên giờ để xem đủ giây
             </td>
           </tr>
         </tfoot>

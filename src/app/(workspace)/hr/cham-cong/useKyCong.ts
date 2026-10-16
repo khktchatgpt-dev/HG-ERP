@@ -9,6 +9,15 @@ import { cacBuoc, type BuocId, type KyCong } from './ky-cong.shared'
 
 export type NganKeo = 'may' | null
 
+/**
+ * Hồ sơ nhân viên đang mở ở bước ②: sửa một người (`id`), hoặc thêm mới — có thể
+ * điền sẵn từ một mã trên máy chưa ghép (`duId`, `code`, `tenMay`).
+ */
+export type HoSoMo =
+  | { id: string }
+  | { moi: true; code?: string; duId?: string; tenMay?: string | null }
+  | null
+
 /** Toàn bộ state + xử lý của trang Kỳ công. */
 export function useKyCong(k: KyCong, buocDau: BuocId) {
   const router = useRouter()
@@ -21,6 +30,9 @@ export function useKyCong(k: KyCong, buocDau: BuocId) {
   const [dangLay, setDangLay] = useState(false)
   const [ketQua, setKetQua] = useState<KetQuaKeo | null>(null)
   const [dangKiem, setDangKiem] = useState(false)
+  const [hoSo, setHoSo] = useState<HoSoMo>(null)
+  /** Mã NV đang mở ở ngăn "Chấm công một người" (null = đóng). */
+  const [motNguoi, setMotNguoi] = useState<string | null>(null)
 
   const buocs = cacBuoc(k)
 
@@ -62,8 +74,8 @@ export function useKyCong(k: KyCong, buocDau: BuocId) {
           title: moi
             ? `Đã lấy ${moi.toLocaleString('vi-VN')} lượt mới`
             : 'Không có lượt mới — khoảng này đã lấy đủ',
-          description: r.nhanVienMoi
-            ? `Tạo ${r.nhanVienMoi} nhân viên mới từ mã trên máy.`
+          description: r.maChuaGhep
+            ? `${r.maChuaGhep} mã trên máy chưa ghép được nhân viên — gán ở ② Nhân viên & ca.`
             : undefined,
         })
       router.refresh()
@@ -111,6 +123,10 @@ export function useKyCong(k: KyCong, buocDau: BuocId) {
     layVe,
     dangKiem,
     kiemMay,
+    hoSo,
+    setHoSo,
+    motNguoi,
+    setMotNguoi,
   } as const
 }
 

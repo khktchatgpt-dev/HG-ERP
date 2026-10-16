@@ -22,6 +22,6 @@ export default async function ChamCongPage({
   const buoc: BuocId = BUOC_IDS.includes(sp.buoc as BuocId)
     ? (sp.buoc as BuocId)
     : 'du-lieu'
-  const k = await chamCongService.kyCong(user, thang, homNay)
+  const k = await chamCongService.kyCong(user, thang, homNay, buoc === 'nhan-vien')
   return <KyCongScreen k={k} buocDau={buoc} />
 }

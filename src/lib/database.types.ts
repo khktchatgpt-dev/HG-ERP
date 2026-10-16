@@ -1104,6 +1104,7 @@ export type Database = {
       hr_employees: {
         Row: {
           active: boolean
+          attendance_exempt: boolean
           code: string
           created_at: string
           full_name: string
@@ -1115,6 +1116,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          attendance_exempt?: boolean
           code: string
           created_at?: string
           full_name: string
@@ -1126,6 +1128,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          attendance_exempt?: boolean
           code?: string
           created_at?: string
           full_name?: string
@@ -8442,6 +8445,10 @@ export type Database = {
       }
     }
     Functions: {
+      hr_attendance_days: {
+        Args: { p_from: string; p_to: string }
+        Returns: string[]
+      }
       immutable_unaccent: { Args: { "": string }; Returns: string }
       next_doc_code: { Args: { p_kind: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
