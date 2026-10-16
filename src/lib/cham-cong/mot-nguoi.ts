@@ -73,3 +73,40 @@ export function deYNgay(d: NgayLuot): { text: string; tone?: 'stop' | 'warn' }[]
     out.push({ text: '2 máy', tone: 'warn' })
   return out
 }
+
+/**
+ * Bày lượt của một ngày cho người đọc hiểu ngay (chủ dự án 17/10/2026: "nhìn vào
+ * biết là thông tin gì"): lượt ĐẦU = giờ vào, lượt CUỐI = giờ ra, các lượt còn lại
+ * là lượt giữa; "có mặt" = từ lượt đầu tới lượt cuối. Chỉ để XEM — chưa phải công.
+ */
+export type LuotNgay = {
+  vao: string | null
+  ra: string | null
+  giua: string[]
+  /** Phút từ lượt đầu tới lượt cuối; null khi < 2 lượt. */
+  coMatPhut: number | null
+  /** Máy đã quẹt, dạng 'Máy 203'. */
+  may: string[]
+}
+
+const phutCua = (gio: string) => Number(gio.slice(0, 2)) * 60 + Number(gio.slice(3, 5))
+
+/** '.203' → 'Máy 203' — '.203' không ai đọc ra là máy. */
+export const tenMay = (nhan: string) => `Máy ${nhan.replace(/^\./, '')}`
+
+/** 684 → '11:24' (giờ:phút). */
+export function gioPhut(phut: number): string {
+  return `${Math.floor(phut / 60)}:${String(phut % 60).padStart(2, '0')}`
+}
+
+export function tachLuot(luot: { gio: string; may: string }[]): LuotNgay {
+  const n = luot.length
+  const hm = (g: string) => g.slice(0, 5)
+  return {
+    vao: n ? hm(luot[0].gio) : null,
+    ra: n > 1 ? hm(luot[n - 1].gio) : null,
+    giua: n > 2 ? luot.slice(1, -1).map((l) => hm(l.gio)) : [],
+    coMatPhut: n > 1 ? phutCua(luot[n - 1].gio) - phutCua(luot[0].gio) : null,
+    may: [...new Set(luot.map((l) => tenMay(l.may)))],
+  }
+}

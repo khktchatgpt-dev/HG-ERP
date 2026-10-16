@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import { tinhCoMat } from '@/lib/cham-cong/co-mat'
+import { gioPhut, tachLuot } from '@/lib/cham-cong/mot-nguoi'
 import type { DuLieu } from './cham-cong.service'
 
 const THU = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
@@ -52,19 +53,22 @@ function luotQuet(wb: ExcelJS.Workbook, d: DuLieu) {
     'Mã NV',
     'Họ tên',
     'Bộ phận',
+    'Giờ vào',
+    'Giờ ra',
+    'Lượt giữa',
+    'Có mặt (giờ:phút)',
     'Máy',
     'Số lượt',
-    'Các lượt (giờ · máy)',
     'Để ý',
   ])
   head.font = { bold: true }
   head.eachCell((c) => (c.fill = NEN_DAU))
   for (const r of d.dong) {
-    const may = [...new Set(r.luot.map((l) => l.may))]
+    const t = tachLuot(r.luot)
     const de: string[] = []
     if (r.luot.length >= 3) de.push('nhiều đoạn')
     if (r.soLuotTho > r.luot.length) de.push(`bấm lặp ${r.soLuotTho - r.luot.length}`)
-    if (may.length > 1) de.push('2 máy')
+    if (t.may.length > 1) de.push('2 máy')
     if (!r.daGhep) de.push('mã chưa ghép người')
     const row = ws.addRow([
       dmy(r.ngay),
@@ -72,21 +76,24 @@ function luotQuet(wb: ExcelJS.Workbook, d: DuLieu) {
       r.ma,
       r.ten,
       r.boPhan ?? '',
-      may.join(' '),
+      t.vao ?? '',
+      t.ra ?? '',
+      t.giua.join(' · '),
+      t.coMatPhut != null ? gioPhut(t.coMatPhut) : '',
+      t.may.join(', '),
       r.luot.length,
-      r.luot.map((l) => `${l.gio.slice(0, 5)} ${l.may}`).join(' · '),
       de.join(', '),
     ])
     if (thuIdx(r.ngay) === 0) row.getCell(2).fill = NEN_CN
   }
   ws.addRow([])
   ws.addRow([
-    `${d.dong.length} dòng người-ngày · "Số lượt" đã gộp lượt bấm lặp trong 2 phút · bày đủ mọi lượt, chưa tính công`,
+    `${d.dong.length} dòng người-ngày · giờ vào = lượt đầu, giờ ra = lượt cuối, có mặt = từ vào tới ra · lượt bấm lặp trong 2 phút đã gộp · chưa tính công`,
   ])
   ws.columns.forEach((c, i) => {
-    c.width = [12, 5, 9, 26, 24, 10, 8, 60, 26][i]
+    c.width = [12, 5, 9, 26, 24, 9, 9, 18, 12, 18, 8, 26][i]
   })
-  ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 9 } }
+  ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } }
   ws.views = [{ state: 'frozen', ySplit: 3 }]
 }
 

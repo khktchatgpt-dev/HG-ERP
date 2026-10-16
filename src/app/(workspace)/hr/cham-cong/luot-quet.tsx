@@ -6,6 +6,7 @@ import { Btn, Empty, Pick, SearchInput, Tick } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import type { DongLuot } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
+import { gioPhut, tachLuot } from '@/lib/cham-cong/mot-nguoi'
 import { useKyCong } from './useKyCong'
 import { KhungTrang } from './khung-trang'
 import { THU, dm, thu, type KyCong } from './ky-cong.shared'
@@ -223,21 +224,33 @@ function BangLuot({
       <table className="text-k-sm w-full table-fixed border-separate border-spacing-0">
         <colgroup>
           <col style={{ width: 76 }} />
-          <col style={{ width: '24%' }} />
-          <col style={{ width: '18%' }} />
-          <col style={{ width: 48 }} />
+          <col style={{ width: '21%' }} />
+          <col style={{ width: '14%' }} />
+          <col style={{ width: 62 }} />
+          <col style={{ width: 62 }} />
           <col />
-          <col style={{ width: '16%' }} />
+          <col style={{ width: 62 }} />
+          <col style={{ width: 86 }} />
+          <col style={{ width: '13%' }} />
         </colgroup>
         <thead>
           <tr>
             <th className={h}>Ngày</th>
             <th className={h}>Mã · Họ tên</th>
             <th className={h}>Bộ phận</th>
-            <th className={h} style={{ textAlign: 'right' }}>
-              Lượt
+            <th className={h} title="Lượt quẹt đầu tiên trong ngày">
+              Giờ vào
             </th>
-            <th className={h}>Các lượt (giờ · máy)</th>
+            <th className={h} title="Lượt quẹt cuối cùng trong ngày">
+              Giờ ra
+            </th>
+            <th className={h} title="Các lượt giữa lượt đầu và lượt cuối">
+              Lượt giữa
+            </th>
+            <th className={h} title="Từ giờ vào tới giờ ra — chỉ để xem, chưa phải công">
+              Có mặt
+            </th>
+            <th className={h}>Máy</th>
             <th className={h}>Để ý</th>
           </tr>
         </thead>
@@ -273,24 +286,34 @@ function BangLuot({
               >
                 {x.boPhan ?? '—'}
               </td>
-              <td className={cn(c, 'num')} style={{ textAlign: 'right' }}>
-                {x.luot.length}
-              </td>
-              <td className={cn(c, 'num')} style={{ textAlign: 'left' }}>
-                {x.luot.map((y, i) => (
-                  <span
-                    key={i}
-                    className="mr-2 inline-block whitespace-nowrap"
-                    title={y.gio}
-                  >
-                    {y.gio.slice(0, 5)}
-                    {y.lap > 0 && (
-                      <span className="text-[var(--ink-3)]">×{y.lap + 1}</span>
-                    )}{' '}
-                    <span className="text-[var(--ink-3)]">{y.may}</span>
-                  </span>
-                ))}
-              </td>
+              {(() => {
+                const t = tachLuot(x.luot)
+                const trai = { textAlign: 'left' as const }
+                return (
+                  <>
+                    <td className={cn(c, 'num font-semibold')} style={trai}>
+                      {t.vao ?? '—'}
+                    </td>
+                    <td className={cn(c, 'num font-semibold')} style={trai}>
+                      {t.ra ?? (
+                        <span className="font-normal text-[var(--warn)]">chưa có</span>
+                      )}
+                    </td>
+                    <td className={cn(c, 'num text-[var(--ink-2)]')} style={trai}>
+                      {t.giua.join(' · ')}
+                    </td>
+                    <td className={cn(c, 'num')} style={trai}>
+                      {t.coMatPhut != null ? gioPhut(t.coMatPhut) : ''}
+                    </td>
+                    <td
+                      className={cn(c, 'truncate text-[var(--ink-2)]')}
+                      title={t.may.join(', ')}
+                    >
+                      {t.may.join(', ')}
+                    </td>
+                  </>
+                )
+              })()}
               <td className={c}>
                 {deY(x).map((f) => (
                   <span
@@ -314,16 +337,16 @@ function BangLuot({
         <tfoot>
           <tr>
             <td
-              colSpan={6}
+              colSpan={9}
               className={cn(
                 c,
                 'sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
               )}
             >
               {so(dong.length)}
-              {dong.length < tong ? ` / ${so(tong)}` : ''} dòng người-ngày · “Lượt” đã gộp
-              lượt bấm lặp trong 2 phút (×2 = cùng giờ bấm 2 lần) · bày ĐỦ mọi lượt, chưa
-              tính công · rê chuột lên giờ để xem đủ giây
+              {dong.length < tong ? ` / ${so(tong)}` : ''} dòng người-ngày · giờ vào =
+              lượt đầu, giờ ra = lượt cuối, lượt bấm lặp trong 2 phút đã gộp · chỉ bày
+              lượt, chưa tính công
             </td>
           </tr>
         </tfoot>

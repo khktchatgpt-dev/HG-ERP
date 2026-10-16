@@ -5,7 +5,14 @@ import { useRouter } from 'next/navigation'
 import { Btn, DateInput, Empty, NoticeBar } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { deYNgay, laChuNhat, tomTatMotNguoi } from '@/lib/cham-cong/mot-nguoi'
+import {
+  deYNgay,
+  gioPhut,
+  laChuNhat,
+  tachLuot,
+  tenMay,
+  tomTatMotNguoi,
+} from '@/lib/cham-cong/mot-nguoi'
 import type { MotNguoi } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { KhungTrang } from './khung-trang'
 import { THU, dm, doiThang, thu } from './ky-cong.shared'
@@ -94,14 +101,35 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
     <div className="grid gap-3">
       {data && (
         <div>
-          <div className="text-k-lg font-semibold">
-            <span className="num text-[var(--act-text)]">{data.nguoi.ma}</span>{' '}
-            {data.nguoi.ten}
-          </div>
-          <div className="text-k-label text-[var(--ink-2)]">
-            {data.nguoi.boPhan ?? '(chưa có bộ phận)'} · ca thường làm {data.nguoi.ca} ·
-            mã máy {data.nguoi.maMay.join(', ') || '—'}
-          </div>
+          <div className="text-k-lg font-semibold">{data.nguoi.ten}</div>
+          <dl className="text-k-sm mt-1 grid grid-cols-[repeat(4,minmax(0,auto))] justify-start gap-x-6 gap-y-0.5">
+            <div>
+              <dt className="text-k-label text-[var(--ink-3)]">Mã chấm công</dt>
+              <dd className="num text-[var(--ink)]" style={{ textAlign: 'left' }}>
+                {data.nguoi.ma}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-k-label text-[var(--ink-3)]">Bộ phận</dt>
+              <dd className={cn(!data.nguoi.boPhan && 'text-[var(--warn)]')}>
+                {data.nguoi.boPhan ?? 'chưa có'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-k-label text-[var(--ink-3)]">Ca thường làm</dt>
+              <dd>{data.nguoi.ca || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-k-label text-[var(--ink-3)]">Quẹt ở máy</dt>
+              <dd>
+                {data.nguoi.maMay.length
+                  ? [
+                      ...new Set(data.nguoi.maMay.map((x) => tenMay(x.split(' ')[0]))),
+                    ].join(', ')
+                  : 'chưa ghép máy'}
+              </dd>
+            </div>
+          </dl>
         </div>
       )}
       {data?.nguoi.khongChamCong && (
@@ -156,6 +184,12 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
 
 function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
   const t = tomTatMotNguoi(data.ngay)
+  const coMat = data.ngay
+    .map((n) => tachLuot(n.luot).coMatPhut)
+    .filter((v): v is number => v != null)
+  const tbCoMat = coMat.length
+    ? Math.round(coMat.reduce((a, b) => a + b, 0) / coMat.length)
+    : null
   const o = 'min-w-0 border-r border-[var(--line)] px-2.5 py-1.5 last:border-r-0'
   // Không cuộn ngang (17/10/2026): cột cố định bề rộng, ô dài được xuống dòng.
   const c = 'border-b border-[var(--line-faint)]/40 px-2 py-1 align-top'
@@ -219,17 +253,40 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
       <div className="overflow-y-auto border border-[var(--line)]">
         <table className="text-k-sm w-full table-fixed border-separate border-spacing-0">
           <colgroup>
-            <col style={{ width: 72 }} />
+            <col style={{ width: 76 }} />
+            <col style={{ width: 66 }} />
+            <col style={{ width: 66 }} />
             <col />
-            <col style={{ width: 44 }} />
-            <col style={{ width: '30%' }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 92 }} />
+            <col style={{ width: 52 }} />
+            <col style={{ width: '22%' }} />
           </colgroup>
           <thead>
             <tr>
               <th className={h}>Ngày</th>
-              <th className={h}>Các lượt (giờ · máy)</th>
-              <th className={h} style={{ textAlign: 'right' }}>
-                Lượt
+              <th className={h} title="Lượt quẹt đầu tiên trong ngày">
+                Giờ vào
+              </th>
+              <th className={h} title="Lượt quẹt cuối cùng trong ngày">
+                Giờ ra
+              </th>
+              <th className={h} title="Các lượt giữa lượt đầu và lượt cuối">
+                Lượt giữa
+              </th>
+              <th
+                className={h}
+                title="Từ giờ vào tới giờ ra — chỉ để xem, chưa phải công"
+              >
+                Có mặt
+              </th>
+              <th className={h}>Máy</th>
+              <th
+                className={h}
+                style={{ textAlign: 'right' }}
+                title="Số lượt sau khi gộp lượt bấm lặp trong 2 phút"
+              >
+                Số lượt
               </th>
               <th className={h}>Để ý</th>
             </tr>
@@ -237,43 +294,49 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
           <tbody>
             {data.ngay.map((n) => {
               const de = deYNgay(n)
+              const x = tachLuot(n.luot)
               const nen = laChuNhat(n.ngay)
                 ? 'bg-[var(--chrome)]/60 text-[var(--ink-2)]'
-                : de.some((x) => x.tone === 'stop')
+                : de.some((y) => y.tone === 'stop')
                   ? 'bg-[var(--stop-wash)]'
-                  : de.some((x) => x.tone === 'warn')
+                  : de.some((y) => y.tone === 'warn')
                     ? 'bg-[var(--warn-wash)]'
                     : ''
+              const trai = { textAlign: 'left' as const }
               return (
                 <tr key={n.ngay} className={nen}>
-                  <td className={cn(c, 'num whitespace-nowrap')}>
+                  <td className={cn(c, 'num whitespace-nowrap')} style={trai}>
                     {dm(n.ngay)} {THU[thu(n.ngay)]}
                   </td>
-                  <td className={cn(c, 'num')}>
-                    {n.luot.length
-                      ? n.luot.map((l, i) => (
-                          <span
-                            key={i}
-                            className="mr-2 inline-block whitespace-nowrap"
-                            title={l.gio}
-                          >
-                            {l.gio.slice(0, 5)}{' '}
-                            <span className="text-[var(--ink-3)]">{l.may}</span>
-                          </span>
-                        ))
-                      : '—'}
+                  <td className={cn(c, 'num font-semibold')} style={trai}>
+                    {x.vao ?? '—'}
                   </td>
+                  <td className={cn(c, 'num font-semibold')} style={trai}>
+                    {x.ra ??
+                      (x.vao ? (
+                        <span className="font-normal text-[var(--warn)]">chưa có</span>
+                      ) : (
+                        '—'
+                      ))}
+                  </td>
+                  <td className={cn(c, 'num text-[var(--ink-2)]')} style={trai}>
+                    {x.giua.join(' · ')}
+                  </td>
+                  <td className={cn(c, 'num')} style={trai}>
+                    {x.coMatPhut != null ? `${gioPhut(x.coMatPhut)}` : ''}
+                  </td>
+                  <td className={cn(c, 'text-[var(--ink-2)]')}>{x.may.join(', ')}</td>
                   <td className={cn(c, 'num')} style={{ textAlign: 'right' }}>
                     {n.daLay ? n.luot.length : ''}
                   </td>
                   <td
                     className={cn(
                       c,
-                      de.some((x) => x.tone === 'stop') && 'text-[var(--stop)]',
-                      de.some((x) => x.tone === 'warn') && 'text-[var(--warn)]',
+                      de.some((y) => y.tone === 'stop') && 'text-[var(--stop)]',
+                      de.some((y) => y.tone === 'warn') && 'text-[var(--warn)]',
                     )}
                   >
-                    {de.map((x) => x.text).join(', ')}
+                    {de.map((y) => y.text).join(', ')}
                   </td>
                 </tr>
               )
@@ -282,7 +345,7 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
           <tfoot>
             <tr>
               <td
-                colSpan={2}
+                colSpan={4}
                 className={cn(
                   c,
                   'sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
@@ -297,6 +360,22 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
                   </span>
                 )}
               </td>
+              <td
+                className={cn(
+                  c,
+                  'num sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
+                )}
+                style={{ textAlign: 'left' }}
+                title="Trung bình có mặt các ngày có cả giờ vào và giờ ra"
+              >
+                {tbCoMat != null ? `TB ${gioPhut(tbCoMat)}` : ''}
+              </td>
+              <td
+                className={cn(
+                  c,
+                  'sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)]',
+                )}
+              />
               <td
                 className={cn(
                   c,
