@@ -669,6 +669,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Bảng chấm công theo tổ',
             icon: 'users-round',
           },
+          {
+            href: '/hr/cham-cong/dieu-chinh',
+            label: 'Điều chỉnh công',
+            icon: 'notebook-pen',
+          },
         ],
       },
     ],

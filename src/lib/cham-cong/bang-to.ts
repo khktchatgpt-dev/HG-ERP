@@ -1,6 +1,7 @@
 import { CHUA_BO_PHAN } from './co-mat'
 import { laChuNhat, tachLuot } from './mot-nguoi'
 import { gioChuan, tinhNgay, type Ca } from './tinh-cong'
+import { apDieuChinh, theoNguoiNgay, type DieuChinh, type LoaiNghi } from './dieu-chinh'
 
 /**
  * BẢNG CHẤM CÔNG THEO TỔ v2 — người × ngày, ô ghi CÔNG + giờ tăng ca (bản vẽ
@@ -16,8 +17,8 @@ import { gioChuan, tinhNgay, type Ca } from './tinh-cong'
  * Ngày lễ chưa tách riêng (tháng 10 không có lễ) — xem như ngày thường.
  */
 
-/** Ký hiệu ô. '' = trống (CN nghỉ, ngày chưa lấy dữ liệu, hôm nay chưa quẹt). */
-export type KyHieu = 'X' | '½' | 'CN' | 'CN½' | 'V' | '?' | '•' | ''
+/** Ký hiệu ô. '' = trống (CN nghỉ, ngày chưa lấy dữ liệu, hôm nay chưa quẹt). N = nghỉ có lý do (đã duyệt). */
+export type KyHieu = 'X' | '½' | 'CN' | 'CN½' | 'V' | '?' | '•' | 'N' | ''
 
 export type OTo = {
   ngay: string
@@ -36,6 +37,12 @@ export type OTo = {
   phut: number | null
   /** Vì sao ô là '?' — cho tooltip / ngăn điều chỉnh. */
   lyDo?: string
+  /** Loại nghỉ khi ky = 'N'. */
+  nghi?: LoaiNghi | null
+  /** Đã có điều chỉnh được duyệt (ô viền liền). */
+  daSua?: boolean
+  /** Số điều chỉnh chờ duyệt (ô viền gạch đứt). */
+  choDuyet?: number
 }
 
 export type NguoiTo = {
@@ -50,7 +57,7 @@ export type NguoiTo = {
   cong: number
   congCN: number
   tc: number
-  /** Nghỉ có lý do — có khi làm bước Điều chỉnh. */
+  /** Nghỉ có lý do (điều chỉnh đã duyệt). */
   nghi: number
   vang: number
   /** Ô '?' — cần Nhân sự xử lý. */
@@ -105,6 +112,8 @@ export type BangToVao = {
   }[]
   nhanSu: NhanSuTo[]
   homNay: string
+  /** Điều chỉnh của kỳ (mọi tình trạng) — chỉ bản đã duyệt đổi kết quả. */
+  dieuChinh?: DieuChinh[]
 }
 
 /** Danh sách tổ có người (để chọn), lớn trước, "(chưa có bộ phận)" cuối. */
@@ -188,26 +197,51 @@ export function tinhBangTo(d: BangToVao): BangTo {
     d.dong.filter((r) => r.daGhep).map((r) => [`${r.ngay}|${r.ma}`, r] as const),
   )
   const ngayDaQua = ngaysIso.filter((x) => x < d.homNay && daLay.has(x))
+  const dcMap = theoNguoiNgay(d.dieuChinh ?? [])
 
   const nguoi: NguoiTo[] = ds.map((p) => {
-    const o = ngaysIso.map((ngay) =>
-      tinhO(ngay, theo.get(`${ngay}|${p.ma}`)?.luot ?? [], p.ca, {
-        homNay: ngay === d.homNay,
-        daLay: daLay.has(ngay),
-      }),
-    )
+    const o = ngaysIso.map((ngay): OTo => {
+      const sau = apDieuChinh(
+        theo.get(`${ngay}|${p.ma}`)?.luot ?? [],
+        dcMap.get(`${p.ma}|${ngay}`) ?? [],
+      )
+      const dc = { daSua: sau.daSua, choDuyet: sau.choDuyet }
+      if (sau.nghi) {
+        const x = tachLuot(sau.luot)
+        return {
+          ngay,
+          ky: 'N',
+          cong: 0,
+          congCN: 0,
+          tc: 0,
+          gioCong: 0,
+          vao: x.vao,
+          ra: x.ra,
+          phut: x.coMatPhut,
+          nghi: sau.nghi,
+          ...dc,
+        }
+      }
+      return {
+        ...tinhO(ngay, sau.luot, p.ca, {
+          homNay: ngay === d.homNay,
+          daLay: daLay.has(ngay),
+        }),
+        ...dc,
+      }
+    })
     const sum = (f: (x: OTo) => number) => o.reduce((s, x) => s + f(x), 0)
     return {
       ma: p.ma,
       ten: p.ten,
       ca: p.ca.name,
-      diLam: o.filter((x) => x.vao != null && x.ky !== '•').length,
+      diLam: o.filter((x) => x.vao != null && x.ky !== '•' && x.ky !== 'N').length,
       gioLam: o.reduce((t, x) => t + x.gioCong + x.tc, 0),
       o,
       cong: sum((x) => x.cong),
       congCN: sum((x) => x.congCN),
       tc: sum((x) => x.tc),
-      nghi: 0,
+      nghi: o.filter((x) => x.ky === 'N').length,
       vang: o.filter((x) => x.ky === 'V').length,
       canXuLy: o.filter((x) => x.ky === '?').length,
       khongQuet:
@@ -221,7 +255,7 @@ export function tinhBangTo(d: BangToVao): BangTo {
     cn: laChuNhat(ngay),
     homNay: ngay === d.homNay,
     daLay: daLay.has(ngay),
-    diLam: nguoi.filter((p) => p.o[i].vao != null).length,
+    diLam: nguoi.filter((p) => p.o[i].vao != null && p.o[i].ky !== 'N').length,
     cong: nguoi.reduce((s, p) => s + p.o[i].cong + p.o[i].congCN, 0),
     canXuLy: nguoi.filter((p) => p.o[i].ky === '?').length,
   }))

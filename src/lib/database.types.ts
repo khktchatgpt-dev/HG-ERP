@@ -904,6 +904,85 @@ export type Database = {
           },
         ]
       }
+      hr_attendance_adjustments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decide_note: string | null
+          decided_at: string | null
+          decided_by: string | null
+          employee_id: string
+          evidence: string | null
+          id: string
+          kind: string
+          leave_type: string | null
+          punch_dir: string | null
+          punch_time: string | null
+          reason: string
+          status: string
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decide_note?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          employee_id: string
+          evidence?: string | null
+          id?: string
+          kind: string
+          leave_type?: string | null
+          punch_dir?: string | null
+          punch_time?: string | null
+          reason: string
+          status?: string
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decide_note?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          employee_id?: string
+          evidence?: string | null
+          id?: string
+          kind?: string
+          leave_type?: string | null
+          punch_dir?: string | null
+          punch_time?: string | null
+          reason?: string
+          status?: string
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_adjustments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_adjustments_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_adjustments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_attendance_devices: {
         Row: {
           active: boolean

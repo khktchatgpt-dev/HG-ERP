@@ -17,6 +17,8 @@ import type { MotNguoi } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { KhungTrang } from './khung-trang'
 import { THU, dm, doiThang, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
+import { moTaDc, TEN_TINH_TRANG } from '@/lib/cham-cong/dieu-chinh'
+import { DieuChinhSheet, type MoDieuChinh } from './dieu-chinh-sheet'
 
 /** Kỳ đang xem — chỉ cần ngần này để đặt khoảng mặc định và nút nhanh. */
 export type KyXem = { thang: string; tu: string; den: string; homNay: string }
@@ -63,6 +65,8 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
   const [kq, setKq] = useState<{ khoa: string; data?: MotNguoi; loi?: string } | null>(
     null,
   )
+  // Tăng sau mỗi lần điều chỉnh để nạp lại (dữ liệu trang này tải ở client).
+  const [lan, setLan] = useState(0)
 
   const sai =
     !tu || !den
@@ -72,7 +76,7 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
         : (Date.parse(den) - Date.parse(tu)) / 86400_000 >= 366
           ? 'Mỗi lần xem tối đa 1 năm'
           : null
-  const khoa = `${ma}|${tu}|${den}`
+  const khoa = `${ma}|${tu}|${den}|${lan}`
   const q = `ma=${encodeURIComponent(ma)}&tu=${tu}&den=${den}`
 
   useEffect(() => {
@@ -94,7 +98,8 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
     { ten: '30 ngày', tu: congNgay(homNay, -29), den: homNay },
   ]
 
-  const xong = kq?.khoa === khoa ? kq : null
+  // Đang nạp lại sau điều chỉnh: giữ bảng cũ thay vì nháy "Đang tải…".
+  const xong = kq?.khoa === khoa || kq?.khoa.startsWith(`${ma}|${tu}|${den}|`) ? kq : null
   const data = xong?.data
 
   return (
@@ -176,14 +181,24 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
       ) : !data ? (
         <p className="text-k-sm text-[var(--ink-2)]">Đang tải…</p>
       ) : (
-        <BangNgay data={data} q={q} />
+        <BangNgay data={data} q={q} taiLai={() => setLan((x) => x + 1)} />
       )}
     </div>
   )
 }
 
-function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
+function BangNgay({
+  data,
+  q,
+  taiLai,
+}: {
+  data: MotNguoi
+  q: string
+  taiLai: () => void
+}) {
   const t = tomTatMotNguoi(data.ngay)
+  const [mo, setMo] = useState<MoDieuChinh | null>(null)
+  const coDc = data.quyen.gui || data.quyen.duyet
   const coMat = data.ngay
     .map((n) => tachLuot(n.luot).coMatPhut)
     .filter((v): v is number => v != null)
@@ -260,7 +275,7 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
             <col style={{ width: 92 }} />
             <col style={{ width: 92 }} />
             <col style={{ width: 52 }} />
-            <col style={{ width: '22%' }} />
+            <col style={{ width: '28%' }} />
           </colgroup>
           <thead>
             <tr>
@@ -303,6 +318,11 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
                     ? 'bg-[var(--warn-wash)]'
                     : ''
               const trai = { textAlign: 'left' as const }
+              const dc = data.dieuChinh.filter(
+                (d) =>
+                  d.ngay === n.ngay &&
+                  (d.tinhTrang === 'approved' || d.tinhTrang === 'pending'),
+              )
               return (
                 <tr key={n.ngay} className={nen}>
                   <td className={cn(c, 'num whitespace-nowrap')} style={trai}>
@@ -337,6 +357,37 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
                     )}
                   >
                     {de.map((y) => y.text).join(', ')}
+                    {dc.map((d) => (
+                      <span
+                        key={d.id}
+                        className={cn(
+                          'block',
+                          d.tinhTrang === 'approved'
+                            ? 'text-[var(--act-text)]'
+                            : 'text-[var(--warn)]',
+                        )}
+                      >
+                        {moTaDc(d)} · {TEN_TINH_TRANG[d.tinhTrang].toLowerCase()}
+                      </span>
+                    ))}
+                    {coDc && n.daLay && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMo({
+                            ma: data.nguoi.ma,
+                            ten: data.nguoi.ten,
+                            to: data.nguoi.boPhan,
+                            ca: data.nguoi.ca,
+                            ngay: n.ngay,
+                            luot: n.luot,
+                          })
+                        }
+                        className="text-k-label block text-[var(--act-text)] hover:underline"
+                      >
+                        Điều chỉnh…
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
@@ -406,6 +457,13 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
           Xuất Excel người này
         </Btn>
       </div>
+      <DieuChinhSheet
+        mo={mo}
+        dcs={data.dieuChinh}
+        quyen={data.quyen}
+        onClose={() => setMo(null)}
+        onDoi={taiLai}
+      />
     </>
   )
 }

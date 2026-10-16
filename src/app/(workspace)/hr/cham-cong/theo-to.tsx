@@ -7,6 +7,8 @@ import { Btn, Empty, NoticeBar, Pick } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { dsTo, soCong, tcGon, tinhBangTo, type OTo } from '@/lib/cham-cong/bang-to'
 import { gioPhut } from '@/lib/cham-cong/mot-nguoi'
+import { KY_NGHI, TEN_NGHI, moTaDc, theoNguoiNgay } from '@/lib/cham-cong/dieu-chinh'
+import { DieuChinhSheet, type MoDieuChinh } from './dieu-chinh-sheet'
 import { useKyCong } from './useKyCong'
 import { KhungTrang } from './khung-trang'
 import { THU, dm, thu, type KyCong } from './ky-cong.shared'
@@ -20,7 +22,8 @@ const TONG = [
   ['Công', 46, 'Công ngày thường + công chủ nhật'],
   ['Giờ làm', 54, 'Giờ làm trong ca (trừ nghỉ trưa) + tăng ca'],
   ['Tăng ca', 52, 'Giờ tăng ca, từ giờ tan ca, làm tròn xuống 30 phút'],
-  ['Vắng', 40, 'Ngày thường không quẹt'],
+  ['Nghỉ', 40, 'Nghỉ có lý do đã duyệt (phép, ốm, việc riêng, công tác, không lương)'],
+  ['Vắng', 40, 'Ngày thường không quẹt, không có lý do'],
   ['Lỗi chấm công', 52, 'Đi làm nhưng thiếu lượt / thiếu giờ — cần xử lý'],
 ] as const
 const W_TONG = TONG.reduce((s, x) => s + x[1], 0)
@@ -33,6 +36,12 @@ const NGAY_THAY = 7
 function O({ o }: { o: OTo }) {
   if (o.ky === 'V') return <span className="font-semibold text-[var(--stop)]">V</span>
   if (o.ky === '•') return <span className="text-[var(--act-text)]">•</span>
+  if (o.ky === 'N')
+    return (
+      <span className="font-semibold text-[var(--ink-2)]">
+        {o.nghi ? KY_NGHI[o.nghi] : 'N'}
+      </span>
+    )
   if (!o.ky) return null
   const loi = o.ky === '?'
   return (
@@ -44,9 +53,10 @@ function O({ o }: { o: OTo }) {
   )
 }
 
-const goiY = (o: OTo) =>
+const goiY = (o: OTo, dc: string[]) =>
   [
     `${dm(o.ngay)} ${THU[thu(o.ngay)]}`,
+    o.nghi && TEN_NGHI[o.nghi],
     o.ky === 'V' && 'không quẹt',
     o.vao && `vào ${o.vao}`,
     o.ra && `ra ${o.ra}`,
@@ -54,6 +64,7 @@ const goiY = (o: OTo) =>
     o.tc ? `tăng ca ${tcGon(o.tc)} giờ` : null,
     o.ky === '½' && 'nửa công',
     o.lyDo && `LỖI: ${o.lyDo}`,
+    ...dc,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -79,10 +90,21 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
         dong: k.du.dong,
         nhanSu: k.du.nhanSu,
         homNay: k.homNay,
+        dieuChinh: k.du.dieuChinh,
       }),
     [k, to],
   )
   const nguoi = b.nguoi.length
+  const [mo, setMo] = useState<MoDieuChinh | null>(null)
+  const coDc = k.quyen.gui || k.quyen.duyet
+  const luotCua = useMemo(
+    () =>
+      new Map(
+        k.du.dong.filter((x) => x.daGhep).map((x) => [`${x.ma}|${x.ngay}`, x.luot]),
+      ),
+    [k.du.dong],
+  )
+  const dcCua = useMemo(() => theoNguoiNgay(k.du.dieuChinh), [k.du.dieuChinh])
 
   // Bề rộng một cột ngày = (khung − tên − tổng) / 7, tối thiểu 44px.
   const khung = useRef<HTMLDivElement>(null)
@@ -127,6 +149,7 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
     (p: (typeof b.nguoi)[number]) => soCong(p.cong + p.congCN),
     (p: (typeof b.nguoi)[number]) => soCong(p.gioLam / 60),
     (p: (typeof b.nguoi)[number]) => soCong(p.tc / 60),
+    (p: (typeof b.nguoi)[number]) => so(p.nghi),
     (p: (typeof b.nguoi)[number]) => so(p.vang),
     (p: (typeof b.nguoi)[number]) => so(p.canXuLy),
   ]
@@ -135,13 +158,14 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
     soCong(b.tong.cong + b.tong.congCN),
     soCong(b.tong.gioLam / 60),
     soCong(b.tong.tc / 60),
+    so(b.tong.nghi),
     so(b.tong.vang),
     so(b.tong.canXuLy),
   ]
   const mauTong = (i: number, v: number) =>
-    i === 4 && v > 0
+    i === 5 && v > 0
       ? 'font-semibold text-[var(--stop)]'
-      : i === 5 && v > 0
+      : i === 6 && v > 0
         ? 'font-semibold text-[var(--warn)]'
         : i === 3
           ? 'text-[var(--done)]'
@@ -212,9 +236,22 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
         <span>
           <b className="text-[var(--act-text)]">•</b> hôm nay, đã vào
         </span>
+        <span>
+          <b>P · Ô · R · CT · KL</b> nghỉ phép · ốm · việc riêng · công tác · không lương
+        </span>
+        <span>
+          <span className="inline-block h-3 w-4 align-middle outline outline-1 -outline-offset-1 outline-[var(--act)]" />{' '}
+          đã điều chỉnh
+        </span>
+        <span>
+          <span className="inline-block h-3 w-4 align-middle outline-1 -outline-offset-1 outline-[var(--warn)] outline-dashed" />{' '}
+          chờ duyệt
+        </span>
         <span>ô trống: chủ nhật nghỉ / chưa lấy dữ liệu</span>
         <span className="ml-auto">
-          Rê chuột lên ô xem giờ vào–ra, lỗi · bấm ô hoặc tên → chấm công của người đó
+          {coDc
+            ? 'Bấm ô → điều chỉnh ngày đó · bấm tên → chấm công của người đó'
+            : 'Rê chuột lên ô xem giờ vào–ra, lỗi · bấm ô hoặc tên → chấm công của người đó'}
         </span>
       </div>
 
@@ -340,14 +377,36 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                     return (
                       <td
                         key={o.ngay}
-                        title={goiY(o)}
-                        onClick={() => d.moNguoi(p.ma)}
+                        title={goiY(
+                          o,
+                          (dcCua.get(`${p.ma}|${o.ngay}`) ?? []).map(
+                            (x) =>
+                              `${moTaDc(x)} (${x.tinhTrang === 'approved' ? 'đã duyệt' : 'chờ duyệt'})`,
+                          ),
+                        )}
+                        onClick={() =>
+                          coDc && n.daLay
+                            ? setMo({
+                                ma: p.ma,
+                                ten: p.ten,
+                                to,
+                                ca: p.ca,
+                                ngay: o.ngay,
+                                luot: luotCua.get(`${p.ma}|${o.ngay}`) ?? [],
+                                loi: o.lyDo,
+                              })
+                            : d.moNguoi(p.ma)
+                        }
                         className={cn(
                           c,
                           'cursor-pointer border-l px-0 text-center group-hover:bg-[var(--surface-hover)]',
                           n.cn && 'bg-[var(--chrome)]/50',
                           o.ky === 'V' && 'bg-[var(--stop-wash)]',
                           o.ky === '?' && 'bg-[var(--warn-wash)]',
+                          o.choDuyet
+                            ? 'outline-2 -outline-offset-3 outline-[var(--warn)] outline-dashed'
+                            : o.daSua &&
+                                'outline outline-2 -outline-offset-3 outline-[var(--act)]',
                         )}
                       >
                         <O o={o} />
@@ -355,7 +414,7 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                     )
                   })}
                   {giaTri.map((g, i) => {
-                    const v = [p.diLam, 0, 0, p.tc, p.vang, p.canXuLy][i]
+                    const v = [p.diLam, 0, 0, p.tc, p.nghi, p.vang, p.canXuLy][i]
                     return (
                       <td
                         key={TONG[i][0]}
@@ -418,7 +477,15 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                       'z-[4] border-t border-[var(--line)] font-semibold',
                       mauTong(
                         i,
-                        [b.tong.diLam, 0, 0, b.tong.tc, b.tong.vang, b.tong.canXuLy][i],
+                        [
+                          b.tong.diLam,
+                          0,
+                          0,
+                          b.tong.tc,
+                          b.tong.nghi,
+                          b.tong.vang,
+                          b.tong.canXuLy,
+                        ][i],
                       ),
                     )}
                     style={{ right: phai(i), textAlign: 'right', zIndex: 7 }}
@@ -431,6 +498,12 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
           </table>
         </div>
       )}
+      <DieuChinhSheet
+        mo={mo}
+        dcs={k.du.dieuChinh}
+        quyen={k.quyen}
+        onClose={() => setMo(null)}
+      />
     </KhungTrang>
   )
 }

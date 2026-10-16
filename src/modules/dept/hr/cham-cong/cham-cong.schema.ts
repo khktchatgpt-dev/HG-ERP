@@ -84,3 +84,52 @@ export const motNguoiQuerySchema = z
     message: 'Mỗi lần xem tối đa 1 năm',
     path: ['den'],
   })
+
+const gio = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Giờ phải dạng HH:MM')
+  .transform((v) => (v.length === 5 ? `${v}:00` : v))
+const chu = (max: number, ten: string) =>
+  z.string().trim().max(max, `${ten} tối đa ${max} ký tự`)
+
+/** Gửi một điều chỉnh chấm công (bản vẽ DieuChinh, câu 22–25). */
+export const dieuChinhGuiSchema = z.discriminatedUnion('loai', [
+  z.object({
+    loai: z.literal('add_punch'),
+    ma: z.string().trim().min(1),
+    ngay,
+    gio,
+    chieu: z.enum(['in', 'out']),
+    lyDo: chu(200, 'Lý do').min(2, 'Ghi lý do'),
+    canCu: chu(300, 'Căn cứ').optional(),
+  }),
+  z.object({
+    loai: z.literal('ignore_punch'),
+    ma: z.string().trim().min(1),
+    ngay,
+    gio,
+    lyDo: chu(200, 'Lý do').min(2, 'Ghi lý do'),
+    canCu: chu(300, 'Căn cứ').optional(),
+  }),
+  z.object({
+    loai: z.literal('leave'),
+    ma: z.string().trim().min(1),
+    ngay,
+    nghi: z.enum(['annual', 'sick', 'personal', 'business_trip', 'unpaid']),
+    lyDo: chu(200, 'Lý do').min(2, 'Ghi lý do'),
+    canCu: chu(300, 'Căn cứ').optional(),
+  }),
+])
+export type DieuChinhGui = z.infer<typeof dieuChinhGuiSchema>
+
+/** Duyệt / từ chối / rút một (hoặc nhiều) điều chỉnh. */
+export const dieuChinhQuyetSchema = z
+  .object({
+    ids: z.array(uuid).min(1).max(500),
+    viec: z.enum(['duyet', 'tu_choi', 'rut']),
+    ghiChu: chu(300, 'Ghi chú').optional(),
+  })
+  .refine((v) => v.viec !== 'tu_choi' || (v.ghiChu ?? '').length >= 2, {
+    message: 'Từ chối phải ghi lý do',
+    path: ['ghiChu'],
+  })

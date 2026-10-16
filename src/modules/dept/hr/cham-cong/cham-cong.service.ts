@@ -20,6 +20,9 @@ import {
   type ShiftRow,
 } from './cham-cong.repo'
 import { infoDevice, readDevice } from './zk'
+import { dieuChinhRepo } from './dieu-chinh.repo'
+import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
+import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
 
 /**
  * CHẤM CÔNG — kéo lượt quẹt thẳng từ máy ZKTeco, ghép người, tính công tháng.
@@ -354,6 +357,8 @@ export type DuLieu = {
   nhanSu: { ma: string; ten: string; boPhan: string | null; ca: Ca }[]
   /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
   khongCham: number
+  /** Điều chỉnh trong khoảng (mọi tình trạng) — chỉ bản đã duyệt đổi kết quả. */
+  dieuChinh: DieuChinh[]
 }
 
 /**
@@ -371,6 +376,7 @@ export type KyCong = {
   lanLay: LanLay[]
   /** Chỉ nạp khi mở bước ② (danh sách nhân viên + mã máy 45 ngày). */
   nv: NhanVienData | null
+  quyen: QuyenDieuChinh
 }
 
 function soNgay(k: KhoangNgay): number {
@@ -551,6 +557,8 @@ export type MotNguoi = {
   }
   khoang: KhoangNgay
   ngay: NgayMotNguoi[]
+  dieuChinh: DieuChinh[]
+  quyen: QuyenDieuChinh
 }
 
 export const chamCongService = {
@@ -572,13 +580,15 @@ export const chamCongService = {
     const cua = dus.filter((u) => u.employee_id === e.id)
     const tuIso = `${k.tu}T00:00:00+07:00`
     const denIso = `${sauNgay(k.den)}T00:00:00+07:00`
-    const [logs, coLuot] = await Promise.all([
+    const [logs, coLuot, dieuChinh, quyen] = await Promise.all([
       chamCongRepo.logsOfCodes(
         [...new Set(cua.map((u) => u.device_user_id))],
         tuIso,
         denIso,
       ),
       chamCongRepo.ngayCoLuot(tuIso, denIso),
+      dieuChinhRepo.trongKhoang(k.tu, k.den, e.id),
+      quyenDieuChinh(user),
     ])
     const laCua = new Set(cua.map((u) => `${u.device_id}|${u.device_user_id}`))
     const theoNgay = new Map<string, LuotQuet[]>()
@@ -616,6 +626,8 @@ export const chamCongService = {
       },
       khoang: k,
       ngay,
+      dieuChinh,
+      quyen,
     }
   },
 
@@ -713,7 +725,7 @@ export const chamCongService = {
     if (k.den < k.tu) throw BadRequest('"Đến ngày" phải sau hoặc bằng "Từ ngày"')
     if (soNgay(k) > XEM_TOI_DA_NGAY)
       throw BadRequest(`Mỗi lần xem tối đa ${XEM_TOI_DA_NGAY} ngày`)
-    const [devices, dus, emps, logs, pulls, shifts] = await Promise.all([
+    const [devices, dus, emps, logs, pulls, shifts, dieuChinh] = await Promise.all([
       chamCongRepo.devices(),
       chamCongRepo.deviceUsers(),
       chamCongRepo.employees(),
@@ -723,6 +735,7 @@ export const chamCongService = {
       ),
       chamCongRepo.recentPulls(5),
       chamCongRepo.shifts(),
+      dieuChinhRepo.trongKhoang(k.tu, k.den),
     ])
     const devById = new Map(devices.map((d) => [d.id, d]))
     const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
@@ -805,6 +818,7 @@ export const chamCongService = {
           ca: toCa(shifts.find((x) => x.id === e.shift_id) ?? shifts[0]),
         })),
       khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
+      dieuChinh,
     }
   },
 
@@ -820,12 +834,13 @@ export const chamCongService = {
     const [y, m] = thang.split('-').map(Number)
     const tu = `${thang}-01`
     const den = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
-    const [du, may, nv] = await Promise.all([
+    const [du, may, nv, quyen] = await Promise.all([
       chamCongService.duLieu(user, { tu, den }),
       chamCongService.mayChamCong(user),
       coNhanVien ? chamCongService.nhanVien(user, homNay) : null,
+      quyenDieuChinh(user),
     ])
-    return { thang, tu, den, homNay, du, lanLay: may.lanLay, nv }
+    return { thang, tu, den, homNay, du, lanLay: may.lanLay, nv, quyen }
   },
 
   /** Trang Máy chấm công: tình trạng từng máy + lịch sử các lần lấy. */

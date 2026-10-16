@@ -606,6 +606,18 @@ export const ACTIONS: Action[] = [
     domain: 'hr',
     rule: perm('hr.member'),
   },
+  {
+    key: 'hr.attendance.adjust',
+    label: 'Gửi điều chỉnh chấm công (bổ sung lượt, nghỉ có lý do, bỏ qua lượt)',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.adjust_decide',
+    label: 'Duyệt / từ chối điều chỉnh chấm công',
+    domain: 'hr',
+    rule: perm('hr.attendance.adjust_decide'),
+  },
 
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {
