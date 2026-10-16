@@ -50,7 +50,7 @@ describe('deYNgay', () => {
 })
 
 describe('tachLuot', () => {
-  it('lượt đầu là vào, cuối là ra, còn lại là giữa; có mặt tính từ đầu tới cuối', () => {
+  it('lượt đầu là vào, cuối là ra, còn lại là giữa; tổng thời gian tính từ đầu tới cuối', () => {
     expect(
       tachLuot([l('06:52:10'), l('10:53:00', '.201'), l('13:36:00'), l('19:12:59')]),
     ).toEqual({
@@ -62,10 +62,14 @@ describe('tachLuot', () => {
     })
   })
   it('một lượt: chỉ có vào, chưa có ra', () => {
-    expect(tachLuot([l('03:54:00')])).toMatchObject({ vao: '03:54', ra: null, coMatPhut: null })
+    expect(tachLuot([l('03:54:00')])).toMatchObject({
+      vao: '03:54',
+      ra: null,
+      coMatPhut: null,
+    })
   })
   it('gioPhut', () => {
-    expect(gioPhut(684)).toBe('11:24')
-    expect(gioPhut(65)).toBe('1:05')
+    expect(gioPhut(684)).toBe('11 giờ 24')
+    expect(gioPhut(65)).toBe('1 giờ 05')
   })
 })

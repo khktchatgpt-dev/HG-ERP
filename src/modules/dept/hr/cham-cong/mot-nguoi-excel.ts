@@ -36,7 +36,7 @@ export async function buildMotNguoiExcel(d: MotNguoi): Promise<Buffer> {
     'Giờ vào',
     'Giờ ra',
     'Lượt giữa',
-    'Có mặt (giờ:phút)',
+    'Tổng thời gian (vào → ra)',
     'Máy',
     'Số lượt',
     'Để ý',

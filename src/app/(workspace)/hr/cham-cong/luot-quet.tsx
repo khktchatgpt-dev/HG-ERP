@@ -229,7 +229,7 @@ function BangLuot({
           <col style={{ width: 62 }} />
           <col style={{ width: 62 }} />
           <col />
-          <col style={{ width: 62 }} />
+          <col style={{ width: 92 }} />
           <col style={{ width: 86 }} />
           <col style={{ width: '13%' }} />
         </colgroup>
@@ -247,8 +247,11 @@ function BangLuot({
             <th className={h} title="Các lượt giữa lượt đầu và lượt cuối">
               Lượt giữa
             </th>
-            <th className={h} title="Từ giờ vào tới giờ ra — chỉ để xem, chưa phải công">
-              Có mặt
+            <th
+              className={h}
+              title="Từ giờ vào tới giờ ra, chưa trừ nghỉ trưa — chỉ để xem, chưa phải giờ công"
+            >
+              Tổng thời gian
             </th>
             <th className={h}>Máy</th>
             <th className={h}>Để ý</th>

@@ -257,7 +257,7 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
             <col style={{ width: 66 }} />
             <col style={{ width: 66 }} />
             <col />
-            <col style={{ width: 70 }} />
+            <col style={{ width: 92 }} />
             <col style={{ width: 92 }} />
             <col style={{ width: 52 }} />
             <col style={{ width: '22%' }} />
@@ -276,9 +276,9 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
               </th>
               <th
                 className={h}
-                title="Từ giờ vào tới giờ ra — chỉ để xem, chưa phải công"
+                title="Từ giờ vào tới giờ ra, chưa trừ nghỉ trưa — chỉ để xem, chưa phải giờ công"
               >
-                Có mặt
+                Tổng thời gian
               </th>
               <th className={h}>Máy</th>
               <th
@@ -366,7 +366,7 @@ function BangNgay({ data, q }: { data: MotNguoi; q: string }) {
                   'num sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
                 )}
                 style={{ textAlign: 'left' }}
-                title="Trung bình có mặt các ngày có cả giờ vào và giờ ra"
+                title="Tổng thời gian trung bình — các ngày có cả giờ vào và giờ ra"
               >
                 {tbCoMat != null ? `TB ${gioPhut(tbCoMat)}` : ''}
               </td>

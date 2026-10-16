@@ -56,7 +56,7 @@ function luotQuet(wb: ExcelJS.Workbook, d: DuLieu) {
     'Giờ vào',
     'Giờ ra',
     'Lượt giữa',
-    'Có mặt (giờ:phút)',
+    'Tổng thời gian (vào → ra)',
     'Máy',
     'Số lượt',
     'Để ý',
@@ -88,7 +88,7 @@ function luotQuet(wb: ExcelJS.Workbook, d: DuLieu) {
   }
   ws.addRow([])
   ws.addRow([
-    `${d.dong.length} dòng người-ngày · giờ vào = lượt đầu, giờ ra = lượt cuối, có mặt = từ vào tới ra · lượt bấm lặp trong 2 phút đã gộp · chưa tính công`,
+    `${d.dong.length} dòng người-ngày · giờ vào = lượt đầu, giờ ra = lượt cuối, tổng thời gian = từ vào tới ra, chưa trừ nghỉ trưa · lượt bấm lặp trong 2 phút đã gộp · chưa tính công`,
   ])
   ws.columns.forEach((c, i) => {
     c.width = [12, 5, 9, 26, 24, 9, 9, 18, 12, 18, 8, 26][i]

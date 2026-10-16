@@ -77,7 +77,7 @@ export function deYNgay(d: NgayLuot): { text: string; tone?: 'stop' | 'warn' }[]
 /**
  * Bày lượt của một ngày cho người đọc hiểu ngay (chủ dự án 17/10/2026: "nhìn vào
  * biết là thông tin gì"): lượt ĐẦU = giờ vào, lượt CUỐI = giờ ra, các lượt còn lại
- * là lượt giữa; "có mặt" = từ lượt đầu tới lượt cuối. Chỉ để XEM — chưa phải công.
+ * là lượt giữa; "tổng thời gian" = từ lượt đầu tới lượt cuối, chưa trừ nghỉ trưa. Chỉ để XEM — chưa phải công.
  */
 export type LuotNgay = {
   vao: string | null
@@ -94,9 +94,12 @@ const phutCua = (gio: string) => Number(gio.slice(0, 2)) * 60 + Number(gio.slice
 /** '.203' → 'Máy 203' — '.203' không ai đọc ra là máy. */
 export const tenMay = (nhan: string) => `Máy ${nhan.replace(/^\./, '')}`
 
-/** 684 → '11:24' (giờ:phút). */
+/**
+ * 684 → '11 giờ 24' — ghi chữ 'giờ' để không lẫn với một mốc giờ như 11:24 (cột
+ * Tổng thời gian đứng cạnh Giờ vào / Giờ ra).
+ */
 export function gioPhut(phut: number): string {
-  return `${Math.floor(phut / 60)}:${String(phut % 60).padStart(2, '0')}`
+  return `${Math.floor(phut / 60)} giờ ${String(phut % 60).padStart(2, '0')}`
 }
 
 export function tachLuot(luot: { gio: string; may: string }[]): LuotNgay {
