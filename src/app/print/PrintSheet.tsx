@@ -58,6 +58,7 @@ export function PrintPage({
   maxWidth = 'max-w-4xl',
   exportHref,
   pdfName,
+  fitOnePage = false,
   children,
 }: {
   orientation?: 'landscape' | 'portrait'
@@ -66,6 +67,11 @@ export function PrintPage({
   exportHref?: string
   /** Có = thanh nút thêm "Lưu PDF", tên file gợi ý này (không kèm đuôi). */
   pdfName?: string
+  /**
+   * Thu nhỏ thân phiếu cho VỪA MỘT TỜ khi in (đơn đặt hàng dài). Chỉ phiếu bật
+   * cờ này mới có `data-print-body`; phiếu khác giữ nguyên DOM.
+   */
+  fitOnePage?: boolean
   children: React.ReactNode
 }) {
   // `orientation` nay chỉ là khổ MẶC ĐỊNH — người dùng đổi Dọc/Ngang ở thanh nút,
@@ -75,8 +81,13 @@ export function PrintPage({
       data-print-sheet
       className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}
     >
-      <PrintToolbar exportHref={exportHref} defaultKho={orientation} pdfName={pdfName} />
-      {children}
+      <PrintToolbar
+        exportHref={exportHref}
+        defaultKho={orientation}
+        pdfName={pdfName}
+        fitOnePage={fitOnePage}
+      />
+      {fitOnePage ? <div data-print-body>{children}</div> : children}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 
 export type Kho = 'portrait' | 'landscape'
 
@@ -35,16 +35,39 @@ function subscribe(cb: () => void) {
  * Thanh nút In / Đóng (+ Xuất Excel nếu phiếu có) + chọn khổ Dọc/Ngang — tự ẩn
  * khi in (print:hidden). Thanh này cũng phát luật `@page` của trang in.
  */
+const MM_PX = 96 / 25.4
+
+/*
+ * VỪA MỘT TỜ (16/10/2026): đơn dài tràn sang trang 2 vì thân phiếu cao hơn vùng in.
+ * Đo chiều cao THẬT của thân phiếu ở đúng bề ngang trang in (trừ lề), rồi tính hệ
+ * số thu nhỏ để chiều cao vừa vùng in. Đo lúc màn hình đang hiện nhưng ép bề ngang
+ * về bề ngang trang in trong lúc đo, nên không phụ thuộc cửa sổ trình duyệt.
+ */
+function fitScale(body: HTMLElement, kho: Kho, padMm: number): number {
+  const [pageW, pageH] = kho === 'portrait' ? [210, 297] : [297, 210]
+  const availW = (pageW - 2 * padMm) * MM_PX
+  const availH = (pageH - 2 * padMm) * MM_PX
+  body.style.width = `${availW}px`
+  const h = body.getBoundingClientRect().height
+  body.style.width = ''
+  if (h <= 0) return 1
+  // Chừa 2% để làm tròn của máy in không đẩy dòng cuối sang tờ sau.
+  return Math.min(1, (availH * 0.98) / h)
+}
+
 export function PrintToolbar({
   exportHref,
   defaultKho = 'landscape',
   pdfName,
+  fitOnePage = false,
 }: {
   exportHref?: string
   /** Khổ mặc định của loại phiếu (khi người dùng chưa chọn lần nào). */
   defaultKho?: Kho
   /** Có = nút "Lưu PDF", tên file gợi ý này (không kèm đuôi). */
   pdfName?: string
+  /** Có = thu nhỏ thân phiếu cho vừa một tờ khi in (xem `fitScale`). */
+  fitOnePage?: boolean
 }) {
   /*
    * LƯU PDF (06/10/2026) — đi qua hộp in của trình duyệt (đích "Lưu dưới dạng
@@ -71,7 +94,27 @@ export function PrintToolbar({
     }
     window.dispatchEvent(new Event(EVT))
   }
-  const pad = kho === 'portrait' ? '12mm' : '10mm'
+  const padMm = kho === 'portrait' ? 12 : 10
+  const pad = `${padMm}mm`
+  // Bề ngang thân phiếu khi in = vùng in sau lề (khớp `fitScale`).
+  const bodyW = `${(kho === 'portrait' ? 210 : 297) - 2 * padMm}mm`
+
+  // Tính lại hệ số mỗi khi đổi khổ, và ngay trước khi in (nội dung có thể đã đổi).
+  useEffect(() => {
+    if (!fitOnePage) return
+    const run = () => {
+      const body = document.querySelector<HTMLElement>('[data-print-body]')
+      if (!body) return
+      document.documentElement.style.setProperty(
+        '--print-fit',
+        fitScale(body, kho, padMm).toFixed(4),
+      )
+    }
+    run()
+    window.addEventListener('beforeprint', run)
+    return () => window.removeEventListener('beforeprint', run)
+  }, [fitOnePage, kho, padMm])
+
   // File Excel mở ra in cùng chiều với bản đang xem (route xuất đọc `kho`).
   const excelHref = exportHref
     ? `${exportHref}${exportHref.includes('?') ? '&' : '?'}kho=${kho === 'portrait' ? 'doc' : 'ngang'}`
@@ -95,6 +138,11 @@ export function PrintToolbar({
             max-width: none !important;
             -webkit-box-decoration-break: clone;
             box-decoration-break: clone;
+          }
+          ${
+            fitOnePage
+              ? `[data-print-body] { width: ${bodyW}; margin: 0 auto; zoom: var(--print-fit, 1); }`
+              : ''
           }
         }
       `}</style>
