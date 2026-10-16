@@ -114,11 +114,13 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
     c,
     'border-[var(--line)] bg-[var(--surface-raised)] font-semibold text-[var(--ink-2)]',
   )
-  const ghimTrai = 'sticky left-0 z-[1] border-r border-[var(--line)]'
+  const ghimTrai = 'sticky left-0 z-[1] border-r-2 border-r-[var(--line)]'
+  const nhom =
+    'border-b border-[var(--line)] bg-[var(--surface-raised)] px-2 py-0.5 text-left text-[11px] font-semibold tracking-wide text-[var(--ink-3)] uppercase'
   const tong = (i: number) =>
     cn(
-      'sticky z-[1] bg-[var(--surface-raised)] num',
-      i === 0 && 'border-l border-[var(--line)]',
+      'sticky z-[1] bg-[var(--chrome)] num',
+      i === 0 && 'border-l-2 border-l-[var(--line)]',
     )
   const giaTri = [
     (p: (typeof b.nguoi)[number]) => so(p.diLam),
@@ -212,8 +214,7 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
         </span>
         <span>ô trống: chủ nhật nghỉ / chưa lấy dữ liệu</span>
         <span className="ml-auto">
-          Rê chuột lên ô xem giờ vào–ra, lỗi · bấm ô hoặc tên → chấm công của người đó ·
-          kéo ngang xem ngày cũ hơn
+          Rê chuột lên ô xem giờ vào–ra, lỗi · bấm ô hoặc tên → chấm công của người đó
         </span>
       </div>
 
@@ -251,12 +252,29 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
             <thead className="sticky top-0 z-[3]">
               <tr>
                 <th
-                  className={cn(h, ghimTrai, 'z-[4] text-left')}
+                  className={cn(h, ghimTrai, 'border-r-2 text-left align-bottom')}
                   rowSpan={2}
                   style={{ zIndex: 7 }}
                 >
                   Mã · Họ tên
                 </th>
+                <th colSpan={b.ngays.length} className={cn(nhom, 'text-left')}>
+                  <span className="sticky" style={{ left: W_TEN + 8 }}>
+                    Từng ngày · ← kéo ngang xem ngày trước
+                  </span>
+                </th>
+                <th
+                  colSpan={TONG.length}
+                  className={cn(
+                    nhom,
+                    'sticky border-l-2 border-[var(--line)] bg-[var(--chrome)] text-center',
+                  )}
+                  style={{ right: 0, zIndex: 7 }}
+                >
+                  Cộng tháng {k.thang.slice(5)}
+                </th>
+              </tr>
+              <tr>
                 {b.ngays.map((n) => (
                   <th
                     key={n.ngay}
@@ -269,16 +287,15 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                   >
                     {Number(n.ngay.slice(8))}/{n.ngay.slice(5, 7)}
                     <span className="block text-[11px] font-normal">
-                      {THU[thu(n.ngay)]}
+                      {n.homNay ? 'hôm nay' : THU[thu(n.ngay)]}
                     </span>
                   </th>
                 ))}
                 {TONG.map((x, i) => (
                   <th
                     key={x[0]}
-                    rowSpan={2}
                     title={x[2]}
-                    className={cn(h, tong(i), 'z-[4] text-[11px] leading-3')}
+                    className={cn(h, tong(i), 'text-[11px] leading-3')}
                     style={{
                       right: phai(i),
                       textAlign: 'right',
@@ -289,24 +306,6 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                     {x[0]}
                   </th>
                 ))}
-              </tr>
-              <tr>
-                {b.ngays.map((n) => {
-                  const thap = !n.cn && !n.homNay && n.daLay && n.diLam / nguoi < 0.85
-                  return (
-                    <td
-                      key={n.ngay}
-                      title="Người của tổ đi làm / người của tổ"
-                      className={cn(
-                        c,
-                        'num border-l border-[var(--line)] bg-[var(--surface-raised)] px-0 text-center text-[11px]',
-                        thap && 'bg-[var(--warn-wash)] font-semibold text-[var(--warn)]',
-                      )}
-                    >
-                      {n.daLay ? `${n.diLam}/${nguoi}` : '·'}
-                    </td>
-                  )
-                })}
               </tr>
             </thead>
             <tbody>
@@ -385,20 +384,31 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                   )}
                   style={{ zIndex: 7 }}
                 >
-                  Đi làm · cộng {so(nguoi)} người
+                  Số người đi làm
+                  <span className="block text-[11px] font-normal text-[var(--ink-3)]">
+                    trên {so(nguoi)} người của tổ
+                  </span>
                 </td>
-                {b.ngays.map((n) => (
-                  <td
-                    key={n.ngay}
-                    title="Số người đi làm ngày này"
-                    className={cn(
-                      c,
-                      'num border-t border-l border-[var(--line)] bg-[var(--surface-raised)] px-0 text-center font-semibold',
-                    )}
-                  >
-                    {n.daLay ? n.diLam : '·'}
-                  </td>
-                ))}
+                {b.ngays.map((n) => {
+                  const thap = !n.cn && !n.homNay && n.daLay && n.diLam / nguoi < 0.85
+                  return (
+                    <td
+                      key={n.ngay}
+                      title={
+                        thap
+                          ? 'Dưới 85% người của tổ đi làm'
+                          : 'Người của tổ đi làm / người của tổ'
+                      }
+                      className={cn(
+                        c,
+                        'num border-t border-l border-[var(--line)] bg-[var(--surface-raised)] px-0 text-center font-semibold',
+                        thap && 'bg-[var(--warn-wash)] text-[var(--warn)]',
+                      )}
+                    >
+                      {n.daLay ? `${n.diLam}/${nguoi}` : '·'}
+                    </td>
+                  )
+                })}
                 {tongTo.map((v, i) => (
                   <td
                     key={TONG[i][0]}
