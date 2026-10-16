@@ -3,25 +3,35 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Btn, Empty, Pick } from '@/components/kit'
+import { Btn, Empty, NoticeBar, Pick } from '@/components/kit'
 import { cn } from '@/lib/utils'
-import { chuO, dsTo, tinhBangTo, type OTo } from '@/lib/cham-cong/bang-to'
+import {
+  dsTo,
+  soCong,
+  tcGon,
+  tinhBangTo,
+  type KyHieu,
+  type OTo,
+} from '@/lib/cham-cong/bang-to'
 import { gioPhut } from '@/lib/cham-cong/mot-nguoi'
 import { useKyCong } from './useKyCong'
 import { KhungTrang } from './khung-trang'
 import { THU, dm, thu, type KyCong } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
 
-/** Màu ô theo kiểu — cùng ký hiệu chú giải đầu bảng. */
-const NEN: Record<OTo['kieu'], string> = {
-  gio: '',
-  mot: 'bg-[var(--warn-wash)] font-semibold text-[var(--warn)]',
-  vang: 'bg-[var(--stop-wash)] font-semibold text-[var(--stop)]',
-  dangLam: 'text-[var(--act-text)]',
-  trong: '',
+/** Màu ô theo ký hiệu — cùng chú giải đầu bảng. */
+const NEN: Record<KyHieu, string> = {
+  X: '',
+  '½': 'bg-[var(--warn-wash)] text-[var(--warn)]',
+  CN: 'bg-[var(--chrome)] text-[var(--ink)]',
+  'CN½': 'bg-[var(--chrome)] text-[var(--warn)]',
+  V: 'bg-[var(--stop-wash)] text-[var(--stop)]',
+  '?': 'bg-[var(--warn-wash)] text-[var(--warn)] outline outline-1 -outline-offset-[3px] outline-[var(--warn-line)]',
+  '•': 'text-[var(--act-text)]',
+  '': '',
 }
 
-/** Tuần (thứ Hai → Chủ nhật) chứa các ngày của kỳ — cho chế độ "Giờ vào – ra". */
+/** Tuần (thứ Hai → Chủ nhật) của kỳ — cho chế độ "Giờ vào – ra". */
 function chiaTuan(ngays: string[]): string[][] {
   const out: string[][] = []
   for (const d of ngays) {
@@ -31,11 +41,23 @@ function chiaTuan(ngays: string[]): string[][] {
   return out
 }
 
+const goiY = (o: OTo) =>
+  [
+    `${dm(o.ngay)} ${THU[thu(o.ngay)]}`,
+    o.vao && `vào ${o.vao}`,
+    o.ra && `ra ${o.ra}`,
+    o.phut != null && `tổng ${gioPhut(o.phut)}`,
+    o.tc ? `tăng ca ${tcGon(o.tc)} giờ` : null,
+    o.lyDo,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
 /**
- * BẢNG CHẤM CÔNG THEO TỔ (bản vẽ TheoTo.dc.html, duyệt 17/10/2026) — "ngày hôm đó tổ
- * có bao nhiêu người đi làm, từng người đi làm thế nào?". Giống sổ chấm công Excel:
- * mỗi dòng một người, mỗi cột một ngày; dòng đầu là số người đi làm của tổ. Chỉ bày
- * lượt quẹt — ô là tổng thời gian vào → ra, chưa phải công.
+ * BẢNG CHẤM CÔNG THEO TỔ v2 (bản vẽ TheoTo.dc.html v2, duyệt 17/10/2026) — theo mẫu
+ * bảng chấm công Nhân sự quen dùng: ô ghi CÔNG (X · ½ · CN · V · ?), số nhỏ là giờ
+ * tăng ca; cột tổng đúng thứ bảng lương cần. Dòng đầu: người đi làm của tổ mỗi ngày.
+ * Lỗi chung cả ngày (hơn nửa tổ cùng thiếu lượt) báo một lần ở dải trên bảng.
  */
 export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
   const d = useKyCong(k)
@@ -44,7 +66,7 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
   const [to, setTo] = useState(
     toDau && tos.some((x) => x.to === toDau) ? toDau : (tos[0]?.to ?? ''),
   )
-  const [che, setChe] = useState<'gio' | 'vaora'>('gio')
+  const [che, setChe] = useState<'cong' | 'vaora'>('cong')
   const b = useMemo(
     () =>
       tinhBangTo({
@@ -60,9 +82,11 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
   const [tuan, setTuan] = useState(() => Math.max(0, tuans.length - 1))
   const iTuan = Math.min(tuan, Math.max(0, tuans.length - 1))
   const hien =
-    che === 'gio'
+    che === 'cong'
       ? b.ngays.map((_, i) => i)
       : b.ngays.flatMap((n, i) => (tuans[iTuan]?.includes(n.ngay) ? [i] : []))
+  const nguoi = b.nguoi.length
+  const cacCa = [...new Set(b.nguoi.map((p) => p.ca))]
 
   function doiTo(v: string) {
     setTo(v)
@@ -76,16 +100,23 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
     c,
     'border-[var(--line)] bg-[var(--surface-raised)] font-semibold text-[var(--ink-2)]',
   )
-  const nguoi = b.nguoi.length
+  const s = cn(c, 'num border-l border-[var(--line)] bg-[var(--surface-raised)]')
+  const f = cn(
+    c,
+    'num border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
+  )
 
   return (
     <KhungTrang
-      ten="Bảng chấm công theo tổ"
+      ten="Bảng chấm công"
       thang={k.thang}
       onThang={(t) =>
         router.push(`/hr/cham-cong/theo-to?thang=${t}&to=${encodeURIComponent(to)}`)
       }
-      facts={[{ label: 'Người của tổ', value: so(nguoi) }]}
+      facts={[
+        { label: 'Người', value: so(nguoi) },
+        { label: 'Ca', value: cacCa.join(', ') || '—' },
+      ]}
       actions={
         <>
           <Pick
@@ -101,8 +132,8 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
           >
             {(
               [
-                ['gio', 'Tổng giờ'],
-                ['vaora', 'Giờ vào – ra (theo tuần)'],
+                ['cong', 'Công'],
+                ['vaora', 'Giờ vào – ra'],
               ] as const
             ).map(([id, ten], i) => (
               <button
@@ -133,17 +164,31 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                 )
             }}
           >
-            Xuất Excel tổ
+            Xuất Excel
           </Btn>
         </>
       }
     >
+      {b.loiNgay.map((x) => (
+        <NoticeBar
+          key={x.ngay}
+          tone="warn"
+          tag={`${THU[thu(x.ngay)]} ${dm(x.ngay)}`}
+          action={{
+            label: 'Xem lượt ngày này',
+            onClick: () =>
+              router.push(
+                `/hr/cham-cong/luot?thang=${k.thang}&ngay=${x.ngay}&bo-phan=${encodeURIComponent(to)}`,
+              ),
+          }}
+        >
+          {x.so}/{x.diLam} người đi làm chỉ có 1 lượt hoặc thiếu giờ — có thể máy lỗi hoặc
+          cả tổ làm nửa buổi. Điều chỉnh cả tổ một lần sẽ có ở bước Điều chỉnh.
+        </NoticeBar>
+      ))}
+
       <div className="text-k-label flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1 text-[var(--ink-2)]">
-        {che === 'gio' ? (
-          <span>
-            Ô = tổng giờ từ lượt đầu tới lượt cuối (làm tròn xuống) — chưa phải công
-          </span>
-        ) : (
+        {che === 'vaora' && (
           <span className="flex flex-wrap items-center gap-1">
             Tuần:
             {tuans.map((w, i) => (
@@ -164,13 +209,34 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
             ))}
           </span>
         )}
-        <span className="num border border-[var(--line)] px-1">14</span> có vào + ra
-        <span className="num bg-[var(--warn-wash)] px-1 text-[var(--warn)]">!</span> chỉ 1
-        lượt
-        <span className="num bg-[var(--stop-wash)] px-1 text-[var(--stop)]">V</span> không
-        quẹt
-        <span className="num px-1 text-[var(--act-text)]">•</span> hôm nay, mới vào
-        <span className="num bg-[var(--chrome)] px-1">CN</span> chủ nhật
+        <span>
+          <b className="num border border-[var(--line)] px-1">X</b> đủ công
+        </span>
+        <span>
+          <b className={cn('num px-1', NEN['½'])}>½</b> nửa công
+        </span>
+        <span>
+          <b className="num border border-[var(--line)] px-1">
+            X<sup className="text-[9px] font-normal text-[var(--done)]">5</sup>
+          </b>{' '}
+          + giờ tăng ca
+        </span>
+        <span>
+          <b className={cn('num px-1', NEN.CN)}>CN</b> công chủ nhật
+        </span>
+        <span>
+          <b className={cn('num px-1', NEN.V)}>V</b> vắng
+        </span>
+        <span>
+          <b className="num bg-[var(--warn-wash)] px-1 text-[var(--warn)]">?</b> thiếu
+          lượt — cần xử lý
+        </span>
+        <span>
+          <b className="num px-1 text-[var(--act-text)]">•</b> hôm nay, chưa tính
+        </span>
+        <span className="ml-auto">
+          Đủ công khi làm ≥ giờ chuẩn − 30 phút trong ca; ½ khi ≥ 3,5 giờ
+        </span>
       </div>
 
       {nguoi === 0 ? (
@@ -192,14 +258,16 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
         >
           <table className="text-k-sm w-full table-fixed border-separate border-spacing-0">
             <colgroup>
-              <col style={{ width: 200 }} />
+              <col style={{ width: 196 }} />
               {hien.map((i) => (
                 <col key={b.ngays[i].ngay} />
               ))}
-              <col style={{ width: 52 }} />
-              <col style={{ width: 48 }} />
               <col style={{ width: 44 }} />
-              <col style={{ width: 60 }} />
+              <col style={{ width: 40 }} />
+              <col style={{ width: 46 }} />
+              <col style={{ width: 46 }} />
+              <col style={{ width: 38 }} />
+              <col style={{ width: 46 }} />
             </colgroup>
             <thead className="sticky top-0 z-[2]">
               <tr>
@@ -224,29 +292,34 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                     </th>
                   )
                 })}
-                {['Ngày đi làm', 'Thiếu lượt', 'Vắng', 'Tổng giờ'].map((x, i) => (
-                  <th
-                    key={x}
-                    rowSpan={2}
-                    className={cn(h, 'text-[11px] leading-3', i === 0 && 'border-l')}
-                    style={{ textAlign: 'right', whiteSpace: 'normal' }}
-                    title={i < 3 ? 'Cả tháng, không tính hôm nay' : 'Cả tháng'}
-                  >
-                    {x}
-                  </th>
-                ))}
+                {['Công', 'Công CN', 'Giờ TC', 'Nghỉ có lý do', 'Vắng', 'Cần xử lý'].map(
+                  (x, i) => (
+                    <th
+                      key={x}
+                      rowSpan={2}
+                      className={cn(h, 'text-[11px] leading-3', i === 0 && 'border-l')}
+                      style={{ textAlign: 'right', whiteSpace: 'normal' }}
+                    >
+                      {x}
+                    </th>
+                  ),
+                )}
               </tr>
               <tr>
                 {hien.map((i) => {
                   const n = b.ngays[i]
-                  const thap = !n.cn && !n.homNay && n.daLay && n.diLam / nguoi < 0.85
+                  const thap =
+                    !n.cn &&
+                    !n.homNay &&
+                    n.daLay &&
+                    (n.diLam / nguoi < 0.85 || n.canXuLy * 2 > n.diLam)
                   return (
                     <td
                       key={n.ngay}
-                      title="Số người của tổ có quẹt trong ngày / người của tổ"
+                      title="Người của tổ có quẹt trong ngày / người của tổ"
                       className={cn(
                         c,
-                        'num border-l border-[var(--line)] bg-[var(--surface-raised)] px-0 text-center text-[11px]',
+                        'num border-l border-[var(--line)] bg-[var(--surface-raised)] px-0 text-center text-[10px]',
                         thap && 'bg-[var(--warn-wash)] font-semibold text-[var(--warn)]',
                       )}
                     >
@@ -258,8 +331,17 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
             </thead>
             <tbody>
               {b.nguoi.map((p) => (
-                <tr key={p.ma} className="hover:bg-[var(--surface-hover)]">
-                  <td className={cn(c, 'truncate py-0.5')} title={`${p.ma} · ${p.ten}`}>
+                <tr
+                  key={p.ma}
+                  className={cn(
+                    'hover:bg-[var(--surface-hover)]',
+                    p.khongQuet && 'text-[var(--ink-3)]',
+                  )}
+                >
+                  <td
+                    className={cn(c, 'truncate py-0.5')}
+                    title={`${p.ma} · ${p.ten} · ca ${p.ca}`}
+                  >
                     <span className="num mr-1.5 text-[var(--ink-3)]">{p.ma}</span>
                     <Link
                       href={`/hr/cham-cong/nguoi/${encodeURIComponent(p.ma)}?thang=${k.thang}`}
@@ -267,139 +349,126 @@ export function TheoToScreen({ k, toDau }: { k: KyCong; toDau?: string }) {
                     >
                       {p.ten}
                     </Link>
+                    {p.khongQuet && (
+                      <span className="ml-1.5 border border-[var(--stop-line)] bg-[var(--stop-wash)] px-1 text-[10px] text-[var(--stop)]">
+                        cả tháng không quẹt — đã nghỉ?
+                      </span>
+                    )}
                   </td>
                   {hien.map((i) => {
                     const o = p.o[i]
                     const n = b.ngays[i]
-                    const tip = `${dm(o.ngay)} ${THU[thu(o.ngay)]}${o.vao ? ` · vào ${o.vao}` : ''}${o.ra ? ` · ra ${o.ra}` : ''}${o.phut != null ? ` · ${gioPhut(o.phut)}` : ''}`
                     return (
                       <td
                         key={o.ngay}
-                        title={tip}
+                        title={goiY(o)}
                         onClick={() => d.moNguoi(p.ma)}
                         className={cn(
                           c,
-                          'num cursor-pointer border-l px-0 text-center',
-                          n.cn && 'bg-[var(--chrome)]/60 text-[var(--ink-2)]',
-                          NEN[o.kieu],
+                          'num cursor-pointer border-l px-0 text-center font-semibold',
+                          n.cn && !o.ky && 'bg-[var(--chrome)]/60',
+                          NEN[o.ky],
                         )}
                       >
-                        {che === 'gio' ? (
-                          chuO(o)
-                        ) : o.vao ? (
-                          <span className="block py-0.5 text-[11px] leading-[14px]">
+                        {che === 'vaora' && o.vao ? (
+                          <span className="block py-0.5 text-[11px] leading-[14px] font-normal">
                             {o.vao}
                             <br />
-                            {o.ra ?? (o.kieu === 'dangLam' ? '…' : '—')}
+                            {o.ra ?? (o.ky === '•' ? '…' : '—')}
                           </span>
                         ) : (
-                          chuO(o)
+                          <>
+                            {o.ky}
+                            {o.tc > 0 && (
+                              <sup className="ml-px text-[9px] font-normal text-[var(--done)]">
+                                {tcGon(o.tc)}
+                              </sup>
+                            )}
+                          </>
                         )}
                       </td>
                     )
                   })}
-                  <td
-                    className={cn(c, 'num border-l bg-[var(--surface-raised)]')}
-                    style={{ textAlign: 'right' }}
-                  >
-                    {p.diLam}
+                  <td className={cn(s, 'font-semibold')} style={{ textAlign: 'right' }}>
+                    {soCong(p.cong)}
+                  </td>
+                  <td className={s} style={{ textAlign: 'right' }}>
+                    {soCong(p.congCN)}
                   </td>
                   <td
-                    className={cn(
-                      c,
-                      'num bg-[var(--surface-raised)]',
-                      p.thieu > 0 && 'text-[var(--warn)]',
-                    )}
+                    className={cn(s, 'text-[var(--done)]')}
                     style={{ textAlign: 'right' }}
                   >
-                    {p.thieu}
+                    {soCong(p.tc / 60)}
+                  </td>
+                  <td className={s} style={{ textAlign: 'right' }}>
+                    {p.nghi}
                   </td>
                   <td
-                    className={cn(
-                      c,
-                      'num bg-[var(--surface-raised)]',
-                      p.vang > 0 && 'font-semibold text-[var(--stop)]',
-                    )}
+                    className={cn(s, p.vang > 0 && 'font-semibold text-[var(--stop)]')}
                     style={{ textAlign: 'right' }}
                   >
                     {p.vang}
                   </td>
                   <td
-                    className={cn(c, 'num bg-[var(--surface-raised)]')}
+                    className={cn(s, p.canXuLy > 0 && 'font-semibold text-[var(--warn)]')}
                     style={{ textAlign: 'right' }}
                   >
-                    {so(Math.round(p.phut / 60))}
+                    {p.canXuLy}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="sticky bottom-0 z-[2]">
               <tr>
-                <td
-                  className={cn(
-                    c,
-                    'border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
-                  )}
-                >
-                  Cộng {so(nguoi)} người
-                </td>
+                <td className={cn(f, 'font-sans')}>Cộng {so(nguoi)} người</td>
                 {hien.map((i) => {
                   const n = b.ngays[i]
                   return (
                     <td
                       key={n.ngay}
-                      className={cn(
-                        c,
-                        'num border-t border-l border-[var(--line)] bg-[var(--surface-raised)] px-0 text-center font-semibold',
-                      )}
+                      title="Tổng công của tổ ngày này"
+                      className={cn(f, 'border-l px-0 text-center text-[11px]')}
                     >
-                      {n.daLay ? n.diLam : '·'}
+                      {n.daLay && !n.homNay ? soCong(n.cong) : '·'}
                     </td>
                   )
                 })}
-                <td
-                  className={cn(
-                    c,
-                    'num border-t border-l border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
-                  )}
-                  style={{ textAlign: 'right' }}
-                >
-                  {so(b.tong.diLam)}
+                <td className={cn(f, 'border-l')} style={{ textAlign: 'right' }}>
+                  {soCong(b.tong.cong)}
+                </td>
+                <td className={f} style={{ textAlign: 'right' }}>
+                  {soCong(b.tong.congCN)}
                 </td>
                 <td
-                  className={cn(
-                    c,
-                    'num border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold text-[var(--warn)]',
-                  )}
+                  className={cn(f, 'text-[var(--done)]')}
                   style={{ textAlign: 'right' }}
                 >
-                  {so(b.tong.thieu)}
+                  {soCong(b.tong.tc / 60)}
+                </td>
+                <td className={f} style={{ textAlign: 'right' }}>
+                  {b.tong.nghi}
                 </td>
                 <td
-                  className={cn(
-                    c,
-                    'num border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold text-[var(--stop)]',
-                  )}
+                  className={cn(f, 'text-[var(--stop)]')}
                   style={{ textAlign: 'right' }}
                 >
-                  {so(b.tong.vang)}
+                  {b.tong.vang}
                 </td>
                 <td
-                  className={cn(
-                    c,
-                    'num border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',
-                  )}
+                  className={cn(f, 'text-[var(--warn)]')}
                   style={{ textAlign: 'right' }}
                 >
-                  {so(Math.round(b.tong.phut / 60))}
+                  {b.tong.canXuLy}
                 </td>
               </tr>
             </tfoot>
           </table>
           <p className="text-k-label px-[var(--gutter)] py-1.5 text-[var(--ink-3)]">
-            Bấm tên hoặc một ô → Chấm công một người. Ngày chưa lấy dữ liệu ghi “·”, hôm
-            nay chưa tính vắng. Điều chỉnh công (bổ sung lượt, nghỉ có lý do) làm ở bước
-            sau.
+            Công tính theo luật đã chốt 12/10: trong ca trừ nghỉ trưa, tăng ca từ giờ tan
+            ca làm tròn xuống 30 phút. Hôm nay chưa tính; ngày chưa lấy dữ liệu ghi “·”.
+            Bấm tên hoặc ô → Chấm công một người. Nghỉ có lý do và điều chỉnh làm ở bước
+            Điều chỉnh.
           </p>
         </div>
       )}

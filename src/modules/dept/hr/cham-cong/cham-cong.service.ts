@@ -351,7 +351,7 @@ export type DuLieu = {
   /** Mã trên máy có quẹt trong khoảng mà cùng số ở máy kia là người khác (`needs_review`). */
   maCanXem: number
   /** Nhân viên đang làm CẦN chấm công — mẫu số của bảng có mặt theo tổ. */
-  nhanSu: { ma: string; ten: string; boPhan: string | null }[]
+  nhanSu: { ma: string; ten: string; boPhan: string | null; ca: Ca }[]
   /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
   khongCham: number
 }
@@ -713,7 +713,7 @@ export const chamCongService = {
     if (k.den < k.tu) throw BadRequest('"Đến ngày" phải sau hoặc bằng "Từ ngày"')
     if (soNgay(k) > XEM_TOI_DA_NGAY)
       throw BadRequest(`Mỗi lần xem tối đa ${XEM_TOI_DA_NGAY} ngày`)
-    const [devices, dus, emps, logs, pulls] = await Promise.all([
+    const [devices, dus, emps, logs, pulls, shifts] = await Promise.all([
       chamCongRepo.devices(),
       chamCongRepo.deviceUsers(),
       chamCongRepo.employees(),
@@ -722,6 +722,7 @@ export const chamCongService = {
         `${sauNgay(k.den)}T00:00:00+07:00`,
       ),
       chamCongRepo.recentPulls(5),
+      chamCongRepo.shifts(),
     ])
     const devById = new Map(devices.map((d) => [d.id, d]))
     const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
@@ -796,7 +797,13 @@ export const chamCongService = {
       ).size,
       nhanSu: emps
         .filter((e) => e.active && !e.attendance_exempt)
-        .map((e) => ({ ma: e.code, ten: e.full_name, boPhan: e.team })),
+        // Ca của từng người — bảng tổ tính công theo đúng ca đó (luật chốt 12/10/2026).
+        .map((e) => ({
+          ma: e.code,
+          ten: e.full_name,
+          boPhan: e.team,
+          ca: toCa(shifts.find((x) => x.id === e.shift_id) ?? shifts[0]),
+        })),
       khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
     }
   },
