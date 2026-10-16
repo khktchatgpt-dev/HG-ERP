@@ -392,6 +392,7 @@ export function PoPrintSheet({
   return (
     <PrintPage
       exportHref={exportHref}
+      fitOnePage
       pdfName={
         exportHref ? poPdfName(po.code, supplier?.name ?? po.supplier_name) : undefined
       }
