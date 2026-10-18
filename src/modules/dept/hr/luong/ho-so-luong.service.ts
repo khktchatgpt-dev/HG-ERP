@@ -74,6 +74,7 @@ export type BanNhap = {
   luongBh: number | null
   coBh: boolean
   npt: number
+  khauTru10: boolean
   ghiChu: string | null
   phuCap: Record<string, number>
 }
@@ -243,6 +244,7 @@ export const hoSoLuongService = {
           luongBh: cu?.luongBh ?? null,
           coBh: cu?.coBh ?? true,
           npt: cu?.npt ?? 0,
+          khauTru10: cu?.khauTru10 ?? false,
           ghiChu: cu?.ghiChu ?? null,
           nguon: `đơn giá cả tổ ${v.to}`,
           phuCap: cu?.phuCap ?? {},
@@ -337,6 +339,7 @@ export const hoSoLuongService = {
         luongBh: luongBh ?? cu?.luongBh ?? null,
         coBh: cu?.coBh ?? true,
         npt: npt ?? cu?.npt ?? 0,
+        khauTru10: cu?.khauTru10 ?? false,
         ghiChu: cu?.ghiChu ?? null,
         nguon: 'nạp Excel',
         phuCap: cu?.phuCap ?? {},

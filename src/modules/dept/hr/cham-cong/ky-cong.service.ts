@@ -17,6 +17,8 @@ import {
 import { chamCongRepo } from './cham-cong.repo'
 import { gioCongService, type GioCong } from './gio-cong.service'
 import { kyCongRepo, type KyDong, type SuKien, type XacNhanDong } from './ky-cong.repo'
+import { bangLuongRepo, type TrangThaiLuong } from '../luong/bang-luong.repo'
+import { bangLuongService } from '../luong/bang-luong.service'
 
 /**
  * KỲ CÔNG (B3, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất) — chứng từ:
@@ -60,6 +62,8 @@ export type KyCongTrang = {
   khung: { ma: string; ten: string }[]
   suKien: SuKien[]
   phutMotCong: number
+  /** Trạng thái bảng lương của kỳ (B5) — dải vòng đời đi tiếp "Đã tính lương" / "Đã trả". */
+  bangLuong: TrangThaiLuong | null
   quyen: { xacNhan: boolean; chot: boolean; xinMo: boolean; duyetMo: boolean }
 }
 
@@ -148,6 +152,7 @@ export const kyCongService = {
       khung: g.khung,
       suKien: ky ? await kyCongRepo.suKien(ky.id) : [],
       phutMotCong: g.phutMotCong,
+      bangLuong: (await bangLuongRepo.bang(thang))?.trangThai ?? null,
       quyen: q,
     }
   },
@@ -269,6 +274,7 @@ export const kyCongService = {
     await assertAction(user, 'hr.attendance.adjust')
     const ky = await kyCongRepo.ky(thang)
     if (!ky || ky.trangThai !== 'closed') throw Conflict('Chỉ xin mở lại được kỳ đã chốt')
+    await bangLuongService.kiemMoLaiKyCong(thang)
     const ok = await kyCongRepo.doi(ky.id, 'closed', {
       status: 'reopen_requested',
       reopen_reason: lyDo,

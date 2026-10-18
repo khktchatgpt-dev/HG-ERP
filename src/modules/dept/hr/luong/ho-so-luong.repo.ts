@@ -20,6 +20,8 @@ export type BanLuong = {
   luongBh: number | null
   coBh: boolean
   npt: number
+  /** Q4 (B5): khấu trừ thẳng 10 % thay cho biểu luỹ tiến. */
+  khauTru10: boolean
   ghiChu: string | null
   nguon: string | null
   /** typeId → số tiền. */
@@ -34,6 +36,8 @@ export type LoaiPhuCap = {
   tinhBh: boolean
   chiuThue: boolean
   dangDung: boolean
+  /** Q2 (B5): tính theo số ngày có đi làm (Ăn ca) thay vì theo công thực. */
+  theoNgay: boolean
 }
 
 export type Rieng = {
@@ -56,7 +60,7 @@ export const hoSoLuongRepo = {
           .from('hr_pay_profiles')
           .select(
             `id, employee_id, from_period, pay_type, daily_rate, monthly_salary, insurance_salary,
-             insured, dependents, note, source, created_at,
+             insured, dependents, flat_tax, note, source, created_at,
              tao:users!hr_pay_profiles_created_by_fkey(name),
              pc:hr_pay_profile_allowances(allowance_type_id, amount)`,
           )
@@ -74,6 +78,7 @@ export const hoSoLuongRepo = {
           luongBh: n(r.insurance_salary),
           coBh: r.insured,
           npt: r.dependents,
+          khauTru10: r.flat_tax,
           ghiChu: r.note,
           nguon: r.source,
           phuCap: Object.fromEntries(
@@ -90,7 +95,7 @@ export const hoSoLuongRepo = {
     const rows = must(
       await db()
         .from('hr_allowance_types')
-        .select('id, name, insurable, taxable, active')
+        .select('id, name, insurable, taxable, active, per_workday')
         .order('sort_order')
         .order('name'),
     )
@@ -100,10 +105,12 @@ export const hoSoLuongRepo = {
       tinhBh: r.insurable,
       chiuThue: r.taxable,
       dangDung: r.active,
+      theoNgay: r.per_workday,
     }))
   },
 
   async luuLoaiPhuCap(v: {
+    theoNgay?: boolean
     id?: string
     ten: string
     tinhBh: boolean
@@ -208,6 +215,7 @@ export const hoSoLuongRepo = {
             insurance_salary: v.luongBh,
             insured: v.coBh,
             dependents: v.npt,
+            flat_tax: v.khauTru10,
             note: v.ghiChu,
             source: v.nguon,
             created_by: userId,

@@ -58,6 +58,7 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
   const [luongBh, setLuongBh] = useState(tienVn(b?.luongBh))
   const [coBh, setCoBh] = useState(b?.coBh ?? true)
   const [npt, setNpt] = useState(String(b?.npt ?? 0))
+  const [khauTru10, setKhauTru10] = useState(b?.khauTru10 ?? false)
   const [ghiChu, setGhiChu] = useState(b?.ghiChu ?? '')
   const [phuCap, setPhuCap] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(b?.phuCap ?? {}).map(([k, v]) => [k, tienVn(v)])),
@@ -91,6 +92,7 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
         luongBh: coBh ? (tien(luongBh) ?? null) : null,
         coBh,
         npt: Math.max(0, Math.round(Number(npt) || 0)),
+        khauTru10,
         ghiChu: ghiChu.trim() || null,
         phuCap: Object.fromEntries(
           Object.entries(phuCap)
@@ -176,6 +178,12 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
             value={npt}
             onCommit={setNpt}
             className="w-16 border border-[var(--line)] px-1.5 py-0.5"
+          />
+          <span className="text-[var(--ink-3)]">Thuế TNCN</span>
+          <Tick
+            label="Khấu trừ thẳng 10 % (thời vụ, HĐ dưới 3 tháng)"
+            checked={khauTru10}
+            onChange={setKhauTru10}
           />
           {loaiDung.map((l) => (
             <PhuCapO

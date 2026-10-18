@@ -906,6 +906,7 @@ export type Database = {
       }
       hr_allowance_types: {
         Row: {
+          per_workday: boolean
           active: boolean
           created_at: string
           id: string
@@ -915,6 +916,7 @@ export type Database = {
           taxable: boolean
         }
         Insert: {
+          per_workday?: boolean
           active?: boolean
           created_at?: string
           id?: string
@@ -924,6 +926,7 @@ export type Database = {
           taxable?: boolean
         }
         Update: {
+          per_workday?: boolean
           active?: boolean
           created_at?: string
           id?: string
@@ -1667,6 +1670,7 @@ export type Database = {
       }
       hr_pay_profiles: {
         Row: {
+          flat_tax: boolean
           created_at: string
           created_by: string | null
           daily_rate: number | null
@@ -1684,6 +1688,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          flat_tax?: boolean
           created_at?: string
           created_by?: string | null
           daily_rate?: number | null
@@ -1701,6 +1706,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          flat_tax?: boolean
           created_at?: string
           created_by?: string | null
           daily_rate?: number | null
@@ -1737,6 +1743,297 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payroll_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          id: number
+          kind: string
+          note: string | null
+          payroll_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind: string
+          note?: string | null
+          payroll_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind?: string
+          note?: string | null
+          payroll_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payroll_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payroll_events_payroll_id_fkey"
+            columns: ["payroll_id"]
+            isOneToOne: false
+            referencedRelation: "hr_payrolls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payroll_items: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          kind: string
+          note: string | null
+          period: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          kind: string
+          note?: string | null
+          period: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          period?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payroll_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payroll_items_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payrolls: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          calc_count: number
+          calc_version_id: string | null
+          calculated_at: string | null
+          calculated_by: string | null
+          created_at: string
+          id: string
+          paid_at: string | null
+          paid_by: string | null
+          period: string
+          return_reason: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          time_close_no: number | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calc_count?: number
+          calc_version_id?: string | null
+          calculated_at?: string | null
+          calculated_by?: string | null
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          period: string
+          return_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          time_close_no?: number | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calc_count?: number
+          calc_version_id?: string | null
+          calculated_at?: string | null
+          calculated_by?: string | null
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          period?: string
+          return_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          time_close_no?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payrolls_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_calc_version_id_fkey"
+            columns: ["calc_version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_calculated_by_fkey"
+            columns: ["calculated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payslips: {
+        Row: {
+          bank_account: string | null
+          bank_name: string | null
+          calc_no: number
+          code: string
+          employee_id: string
+          full_name: string
+          id: number
+          lines: Json
+          pay_type: string
+          payroll_id: string
+          problems: Json
+          team: string | null
+          why: Json
+          work_units: number
+          base_pay: number
+          overtime_pay: number
+          leave_pay: number
+          allowance_pay: number
+          item_plus: number
+          gross: number
+          insurance_employee: number
+          insurance_company: number
+          union_fee: number
+          tax: number
+          item_minus: number
+          net: number
+        }
+        Insert: {
+          bank_account?: string | null
+          bank_name?: string | null
+          calc_no: number
+          code: string
+          employee_id: string
+          full_name: string
+          id?: number
+          lines?: Json
+          pay_type: string
+          payroll_id: string
+          problems?: Json
+          team?: string | null
+          why?: Json
+          work_units?: number
+          base_pay?: number
+          overtime_pay?: number
+          leave_pay?: number
+          allowance_pay?: number
+          item_plus?: number
+          gross?: number
+          insurance_employee?: number
+          insurance_company?: number
+          union_fee?: number
+          tax?: number
+          item_minus?: number
+          net?: number
+        }
+        Update: {
+          bank_account?: string | null
+          bank_name?: string | null
+          calc_no?: number
+          code?: string
+          employee_id?: string
+          full_name?: string
+          id?: number
+          lines?: Json
+          pay_type?: string
+          payroll_id?: string
+          problems?: Json
+          team?: string | null
+          why?: Json
+          work_units?: number
+          base_pay?: number
+          overtime_pay?: number
+          leave_pay?: number
+          allowance_pay?: number
+          item_plus?: number
+          gross?: number
+          insurance_employee?: number
+          insurance_company?: number
+          union_fee?: number
+          tax?: number
+          item_minus?: number
+          net?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payslips_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payslips_payroll_id_fkey"
+            columns: ["payroll_id"]
+            isOneToOne: false
+            referencedRelation: "hr_payrolls"
             referencedColumns: ["id"]
           },
         ]

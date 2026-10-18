@@ -272,6 +272,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'wallet',
             capability: 'hr.payroll',
           },
+          {
+            href: '/bang-luong',
+            label: 'Bảng lương',
+            icon: 'receipt',
+            capability: 'hr.payroll',
+          },
           /*
            * Điều khoản thanh toán là DANH MỤC, không phải chứng từ — nhưng nó
            * đứng riêng ở nav vì đang là chốt chặn: 0/164 NCC khai số ngày, nên
@@ -659,6 +665,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             href: '/ho-so-luong',
             label: 'Hồ sơ lương',
             icon: 'wallet',
+            capability: 'hr.payroll',
+          },
+          {
+            href: '/bang-luong',
+            label: 'Bảng lương',
+            icon: 'receipt',
             capability: 'hr.payroll',
           },
           { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },

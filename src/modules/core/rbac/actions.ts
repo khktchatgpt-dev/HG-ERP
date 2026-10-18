@@ -651,6 +651,19 @@ export const ACTIONS: Action[] = [
     domain: 'hr',
     rule: anyOf(perm('accounting.member'), perm('hr.payroll.profile')),
   },
+  {
+    // Bảng lương B5 (0246): Kế toán tính · gửi · chi.
+    key: 'hr.payroll.run',
+    label: 'Tính, gửi duyệt và chi bảng lương',
+    domain: 'hr',
+    rule: anyOf(perm('accounting.member'), perm('hr.payroll.run')),
+  },
+  {
+    key: 'hr.payroll.approve',
+    label: 'Duyệt bảng lương',
+    domain: 'hr',
+    rule: perm('hr.payroll.approve'),
+  },
 
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {

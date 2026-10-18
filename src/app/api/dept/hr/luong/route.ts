@@ -29,6 +29,7 @@ export const POST = handle(async (req: Request) => {
         luongBh,
         coBh,
         npt,
+        khauTru10,
         ghiChu,
         phuCap,
       } = v
@@ -40,6 +41,7 @@ export const POST = handle(async (req: Request) => {
         luongBh,
         coBh,
         npt,
+        khauTru10,
         ghiChu,
         phuCap,
       })

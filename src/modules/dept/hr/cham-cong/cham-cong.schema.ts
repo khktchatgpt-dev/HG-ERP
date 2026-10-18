@@ -258,6 +258,7 @@ export const luongViecSchema = z.discriminatedUnion('viec', [
     luongBh: tien,
     coBh: z.boolean(),
     npt: z.number().int().min(0).max(20),
+    khauTru10: z.boolean().default(false),
     ghiChu: z.string().trim().max(300).nullable(),
     phuCap: z.record(z.string().uuid(), z.number().min(0).max(1_000_000_000)),
   }),
@@ -314,4 +315,37 @@ export const luongViecSchema = z.discriminatedUnion('viec', [
     chiuThue: z.boolean(),
     dangDung: z.boolean(),
   }),
+])
+
+// ── Bảng lương (B5, 0246) ───────────────────────────────────────────────
+
+export const bangLuongViecSchema = z.discriminatedUnion('viec', [
+  z.object({ viec: z.literal('tinh') }),
+  z.object({ viec: z.literal('gui') }),
+  z.object({ viec: z.literal('rut') }),
+  z.object({
+    viec: z.literal('quyet'),
+    dongY: z.boolean(),
+    lyDo: z.string().trim().max(300).optional(),
+  }),
+  z.object({
+    viec: z.literal('mo_lai'),
+    lyDo: z.string().trim().min(5, 'Ghi lý do (ít nhất 5 ký tự)').max(300),
+  }),
+  z.object({ viec: z.literal('chi') }),
+  z.object({
+    viec: z.literal('them_khoan'),
+    ds: z
+      .array(
+        z.object({
+          employeeId: z.string().uuid(),
+          loai: z.enum(['advance', 'bonus', 'back_pay', 'claw_back', 'deduction']),
+          tien: z.number().int().min(1).max(10_000_000_000),
+          ghiChu: z.string().trim().max(200).nullable(),
+        }),
+      )
+      .min(1)
+      .max(1000),
+  }),
+  z.object({ viec: z.literal('xoa_khoan'), id: z.string().uuid() }),
 ])

@@ -101,7 +101,15 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
           <StatusTrack
             label="Vòng đời kỳ công"
             steps={['Đang mở', 'Đã chốt', 'Đã tính lương', 'Đã trả']}
-            at={k.trangThai === 'open' ? 0 : 1}
+            at={
+              k.bangLuong === 'paid'
+                ? 3
+                : k.bangLuong === 'approved'
+                  ? 2
+                  : k.trangThai === 'open'
+                    ? 0
+                    : 1
+            }
             tone={
               k.trangThai === 'reopen_requested'
                 ? 'wait'
