@@ -631,6 +631,19 @@ export const ACTIONS: Action[] = [
     domain: 'hr',
     rule: anyOf(perm('hr.member'), perm('hr.calc.rules_edit')),
   },
+  {
+    // Kỳ công B3 (0244): chốt kỳ — director seed; admin gán thêm cho Trưởng phòng Nhân sự.
+    key: 'hr.period.close',
+    label: 'Chốt kỳ công',
+    domain: 'hr',
+    rule: perm('hr.period.close'),
+  },
+  {
+    key: 'hr.period.reopen_decide',
+    label: 'Duyệt mở lại kỳ công đã chốt',
+    domain: 'hr',
+    rule: perm('hr.period.reopen_decide'),
+  },
 
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {

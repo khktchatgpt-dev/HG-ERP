@@ -242,11 +242,13 @@ export const cachTinhService = {
   },
 
   /** Tham số giờ khung cho kỳ — Bảng giờ công dùng. Chưa có bản nào thì dùng số mặc định. */
-  async thamSoChoKy(thang: string): Promise<{ thamSo: ThamSoKhung; ban: number | null }> {
+  async thamSoChoKy(
+    thang: string,
+  ): Promise<{ thamSo: ThamSoKhung; ban: number | null; banId: string | null }> {
     const ds = await cachTinhRepo.dsBan()
     const b = banChoKy(ds, thang)
-    if (!b) return { thamSo: THAM_SO_MAC_DINH, ban: null }
+    if (!b) return { thamSo: THAM_SO_MAC_DINH, ban: null, banId: null }
     const khung = await cachTinhRepo.khung(b.id)
-    return { thamSo: thamSoTuBan(khung, b.quyTac), ban: b.so }
+    return { thamSo: thamSoTuBan(khung, b.quyTac), ban: b.so, banId: b.id }
   },
 }

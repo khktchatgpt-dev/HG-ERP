@@ -5,6 +5,7 @@ import { todayVn } from '@/lib/date-vn'
 import { chamCongRepo } from './cham-cong.repo'
 import { dieuChinhRepo, type DieuChinhDong } from './dieu-chinh.repo'
 import type { DieuChinhGui } from './cham-cong.schema'
+import { boXacNhanViPhieu, kiemKhoaKy } from './ky-khoa'
 
 /**
  * ĐIỀU CHỈNH CHẤM CÔNG (bản vẽ DieuChinh.dc.html, câu 22–25 duyệt 17/10/2026).
@@ -38,6 +39,7 @@ export const dieuChinhService = {
   async gui(user: User, v: DieuChinhGui): Promise<string> {
     await assertAction(user, 'hr.attendance.adjust')
     if (v.ngay > todayVn()) throw BadRequest('Không điều chỉnh ngày chưa tới')
+    await kiemKhoaKy([v.ngay])
     const e = (await chamCongRepo.employees()).find((x) => x.code === v.ma)
     if (!e) throw NotFound(`Không có nhân viên mã ${v.ma}`)
     return dieuChinhRepo.them({
@@ -65,6 +67,7 @@ export const dieuChinhService = {
     if (ds.length !== ids.length) throw NotFound('Có điều chỉnh không còn tồn tại')
     if (ds.some((d) => d.status !== 'pending'))
       throw BadRequest('Chỉ xử lý được điều chỉnh đang chờ duyệt — tải lại trang')
+    await kiemKhoaKy([...new Set(ds.map((d) => d.work_date))])
     if (viec === 'rut') {
       if (!q.duyet && ds.some((d) => d.created_by !== user.id))
         throw Forbidden('Chỉ người gửi được rút điều chỉnh của mình')
@@ -76,12 +79,22 @@ export const dieuChinhService = {
       throw Forbidden(
         `${cuaMinh} điều chỉnh do chính bạn gửi — người khác có quyền duyệt phải xử lý`,
       )
-    return dieuChinhRepo.doiTinhTrang(ids, {
+    const so = await dieuChinhRepo.doiTinhTrang(ids, {
       status: viec === 'duyet' ? 'approved' : 'rejected',
       decided_by: user.id,
       decided_at: new Date().toISOString(),
       decide_note: ghiChu || null,
     })
+    if (viec === 'duyet')
+      await boXacNhanViPhieu(
+        ds.map((d) => ({
+          ngay: d.work_date,
+          boPhan: d.nv?.team ?? null,
+          moTa: `${d.nv?.code ?? ''} ${d.nv?.full_name ?? ''} ngày ${d.work_date.slice(8, 10)}/${d.work_date.slice(5, 7)}`.trim(),
+        })),
+        user.id,
+      )
+    return so
   },
 
   /** Trang "Điều chỉnh công": chờ duyệt (mọi kỳ) + lịch sử kỳ đang xem. */

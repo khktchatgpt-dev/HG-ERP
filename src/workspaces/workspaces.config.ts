@@ -671,6 +671,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'users-round',
           },
           {
+            // B3 (0244): kỳ công — tổ xác nhận, chốt kỳ, mở lại.
+            href: '/hr/cham-cong/ky',
+            label: 'Kỳ công & chốt',
+            icon: 'lock',
+          },
+          {
             // B2 (0243): bản cách tính theo kỳ — hệ số lương, khung giờ, cách tính theo tổ.
             href: '/hr/cham-cong/cach-tinh',
             label: 'Cách tính công',

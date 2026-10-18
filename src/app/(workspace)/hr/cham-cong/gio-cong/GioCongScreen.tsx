@@ -92,6 +92,19 @@ export function GioCongScreen({ b, bpDau }: { b: GioCong; bpDau?: string }) {
         }
       />
       <ThanhNhom d={d} />
+      {b.ky && b.ky.trangThai !== 'open' && (
+        <NoticeBar
+          tone="neutral"
+          tag={b.ky.trangThai === 'closed' ? 'Đã chốt' : 'Chờ mở lại'}
+          action={{
+            label: 'Mở Kỳ công',
+            onClick: () => (window.location.href = `/hr/cham-cong/ky?thang=${b.thang}`),
+          }}
+        >
+          Giờ kỳ này lấy từ bản chốt lần {b.ky.lanChot}; bổ sung giờ, tick làm trưa cho
+          ngày trong kỳ đều bị khoá.
+        </NoticeBar>
+      )}
       {truaCho > 0 && d.b.quyen.trua && (
         <NoticeBar
           tone="neutral"

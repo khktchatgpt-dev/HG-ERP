@@ -214,3 +214,29 @@ export const banLuuSchema = z
 export const banApDungSchema = z.object({
   tuKy: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Kỳ phải dạng YYYY-MM'),
 })
+
+// ── Kỳ công (B3, 0244) ───────────────────────────────────────────────────
+
+export const kyThangSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Kỳ phải dạng YYYY-MM')
+
+export const kyViecSchema = z.discriminatedUnion('viec', [
+  z.object({
+    viec: z.literal('xac_nhan'),
+    to: z.string().trim().min(1).max(120),
+    dongY0: z.boolean(),
+  }),
+  z.object({ viec: z.literal('bo_xac_nhan'), to: z.string().trim().min(1).max(120) }),
+  z.object({ viec: z.literal('chot') }),
+  z.object({
+    viec: z.literal('xin_mo'),
+    lyDo: z.string().trim().min(5, 'Ghi lý do xin mở lại (ít nhất 5 ký tự)').max(300),
+  }),
+  z.object({ viec: z.literal('rut_xin') }),
+  z.object({
+    viec: z.literal('quyet_mo'),
+    dongY: z.boolean(),
+    ghiChu: z.string().trim().max(300).optional(),
+  }),
+])

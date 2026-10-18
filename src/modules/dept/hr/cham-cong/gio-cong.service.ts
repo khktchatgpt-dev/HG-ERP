@@ -13,6 +13,9 @@ import { chamCongService } from './cham-cong.service'
 import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
 import { gioCongRepo } from './gio-cong.repo'
 import { cachTinhService } from './cach-tinh.service'
+import { kyCongRepo, type KyDong } from './ky-cong.repo'
+import { apBanChot } from '@/lib/cham-cong/ky-cong'
+import { kiemKhoaKy } from './ky-khoa'
 
 /**
  * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (26 → 25) cho từng người, theo luật thật của
@@ -31,7 +34,14 @@ export type GioCong = {
   khung: { ma: string; ten: string }[]
   /** Bản cách tính kỳ này dùng (null = chưa có bản, đang dùng số mặc định). */
   ban: number | null
+  banId: string | null
+  /** Ngày (giờ VN) lấy dữ liệu máy thành công gần nhất. */
+  ngayLay: string | null
+  /** Dòng kỳ công (B3) — null = kỳ chưa có chuyển tiếp nào, tức đang mở. */
+  ky: KyDong | null
   heSoTrua: number
+  /** Phút một công của bản cách tính kỳ này. */
+  phutMotCong: number
   phutTruaMacDinh: number
   khongCham: number
   /** Điều chỉnh của kỳ (mọi tình trạng) — ngăn điều chỉnh tự lọc. */
@@ -51,13 +61,14 @@ export const gioCongService = {
     const k = kyCuaThang(thang)
     // Lấy dư một ngày hai đầu: ca đêm ngày cuối kỳ cần lượt rạng sáng hôm sau; lượt rạng
     // sáng ngày đầu kỳ có thể thuộc ca đêm hôm trước (không được tính vào kỳ này).
-    const [du, trua, cachTinh, quyen, quyenSua, ct] = await Promise.all([
+    const [du, trua, cachTinh, quyen, quyenSua, ct, ky] = await Promise.all([
       chamCongService.duLieu(user, { tu: congNgay(k.tu, -1), den: congNgay(k.den, 1) }),
       gioCongRepo.trua(k.tu, k.den),
       gioCongRepo.cachTinh(),
       quyenDieuChinh(user),
       canAction(user, 'hr.attendance.employee_edit'),
       cachTinhService.thamSoChoKy(thang),
+      kyCongRepo.ky(thang),
     ])
     const t = ct.thamSo
     // Ngày lấy dữ liệu lần cuối (giờ VN) trở đi là ngày đang dở: lấy giữa ngày thì chưa có
@@ -70,7 +81,7 @@ export const gioCongService = {
     const ngayLay = lanOk
       ? new Date(Date.parse(lanOk) + 7 * 3600_000).toISOString().slice(0, 10)
       : homNay
-    const nguoi = tinhKyGioCong({
+    const song = tinhKyGioCong({
       ngayDoDang: ngayLay < homNay ? ngayLay : homNay,
       tu: k.tu,
       den: k.den,
@@ -81,6 +92,16 @@ export const gioCongService = {
       cachTinh,
       thamSo: t,
     })
+    // Kỳ đã chốt (B3): giờ từng ngày lấy từ BẢN CHỐT; lượt máy vẫn bày để soi.
+    const nguoi =
+      ky && ky.trangThai !== 'open' && ky.lanChot > 0
+        ? apBanChot(
+            song,
+            await kyCongRepo.banChot(ky.id, ky.lanChot),
+            t.khung.map((x) => x.ma),
+            t.phutMotCong,
+          )
+        : song
     const dem = new Map<string, number>()
     for (const n of du.nhanSu)
       dem.set(n.boPhan ?? CHUA_CO, (dem.get(n.boPhan ?? CHUA_CO) ?? 0) + 1)
@@ -99,7 +120,11 @@ export const gioCongService = {
       boPhan,
       khung: t.khung.map((x) => ({ ma: x.ma, ten: x.ten })),
       ban: ct.ban,
+      banId: ct.banId,
+      ngayLay: lanOk ? ngayLay : null,
+      ky,
       heSoTrua: t.heSoTrua,
+      phutMotCong: t.phutMotCong,
       phutTruaMacDinh: t.phutTruaMacDinh,
       khongCham: du.khongCham,
       dieuChinh: du.dieuChinh.filter((d) => d.ngay >= k.tu && d.ngay <= k.den),
@@ -121,6 +146,7 @@ export const gioCongService = {
     muc: { ma: string; ngay: string; phut: number | null }[],
   ): Promise<number> {
     await assertAction(user, 'hr.attendance.adjust')
+    await kiemKhoaKy([...new Set(muc.map((m) => m.ngay))])
     const id = await gioCongRepo.idTheoMa(muc.map((m) => m.ma))
     const thieu = muc.filter((m) => !id.has(m.ma))
     if (thieu.length) throw BadRequest(`Không có nhân viên mã ${thieu[0].ma}`)

@@ -87,13 +87,22 @@ export const dieuChinhRepo = {
     return (must(r) as unknown as Dong[]).map(doi)
   },
 
-  async theoIds(
-    ids: string[],
-  ): Promise<{ id: string; status: string; created_by: string | null }[]> {
+  async theoIds(ids: string[]): Promise<
+    {
+      id: string
+      status: string
+      created_by: string | null
+      work_date: string
+      kind: string
+      nv: { code: string; full_name: string; team: string | null } | null
+    }[]
+  > {
     return must(
       await db()
         .from('hr_attendance_adjustments')
-        .select('id, status, created_by')
+        .select(
+          'id, status, created_by, work_date, kind, nv:hr_employees!hr_attendance_adjustments_employee_id_fkey(code, full_name, team)',
+        )
         .in('id', ids),
     )
   },

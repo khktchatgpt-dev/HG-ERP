@@ -1552,6 +1552,110 @@ export type Database = {
           },
         ]
       }
+      hr_period_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          id: number
+          kind: string
+          note: string | null
+          period_id: string
+          team_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind: string
+          note?: string | null
+          period_id: string
+          team_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind?: string
+          note?: string | null
+          period_id?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_period_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_events_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "hr_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_period_team_confirms: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string | null
+          paper_signed: boolean
+          period_id: string
+          team_id: string
+          zero_days: number
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          paper_signed?: boolean
+          period_id: string
+          team_id: string
+          zero_days?: number
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          paper_signed?: boolean
+          period_id?: string
+          team_id?: string
+          zero_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_period_team_confirms_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_team_confirms_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_team_confirms_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "hr_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_shifts: {
         Row: {
           active: boolean
@@ -1645,6 +1749,145 @@ export type Database = {
           {
             foreignKeyName: "hr_teams_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_time_results: {
+        Row: {
+          close_no: number
+          code: string
+          employee_id: string
+          exempt: boolean
+          frame_minutes: Json
+          full_name: string
+          id: number
+          leave_type: string | null
+          lunch_minutes: number
+          period_id: string
+          team: string | null
+          total_minutes: number
+          work_date: string | null
+          zero_day: boolean
+        }
+        Insert: {
+          close_no: number
+          code: string
+          employee_id: string
+          exempt?: boolean
+          frame_minutes?: Json
+          full_name: string
+          id?: number
+          leave_type?: string | null
+          lunch_minutes?: number
+          period_id: string
+          team?: string | null
+          total_minutes?: number
+          work_date?: string | null
+          zero_day?: boolean
+        }
+        Update: {
+          close_no?: number
+          code?: string
+          employee_id?: string
+          exempt?: boolean
+          frame_minutes?: Json
+          full_name?: string
+          id?: number
+          leave_type?: string | null
+          lunch_minutes?: number
+          period_id?: string
+          team?: string | null
+          total_minutes?: number
+          work_date?: string | null
+          zero_day?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_results_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_results_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_time_periods: {
+        Row: {
+          calc_version_id: string | null
+          close_count: number
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          date_from: string
+          date_to: string
+          id: string
+          period: string
+          reopen_at: string | null
+          reopen_by: string | null
+          reopen_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          calc_version_id?: string | null
+          close_count?: number
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          date_from: string
+          date_to: string
+          id?: string
+          period: string
+          reopen_at?: string | null
+          reopen_by?: string | null
+          reopen_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          calc_version_id?: string | null
+          close_count?: number
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          date_from?: string
+          date_to?: string
+          id?: string
+          period?: string
+          reopen_at?: string | null
+          reopen_by?: string | null
+          reopen_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_periods_calc_version_id_fkey"
+            columns: ["calc_version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_periods_reopen_by_fkey"
+            columns: ["reopen_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
