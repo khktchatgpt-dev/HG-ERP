@@ -644,6 +644,13 @@ export const ACTIONS: Action[] = [
     domain: 'hr',
     rule: perm('hr.period.reopen_decide'),
   },
+  {
+    // Hồ sơ lương B4 (0245): Kế toán có sẵn; director seed; admin gán TP Nhân sự.
+    key: 'hr.payroll.profile',
+    label: 'Xem và sửa hồ sơ lương nhân viên',
+    domain: 'hr',
+    rule: anyOf(perm('accounting.member'), perm('hr.payroll.profile')),
+  },
 
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {

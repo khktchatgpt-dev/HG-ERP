@@ -904,6 +904,38 @@ export type Database = {
           },
         ]
       }
+      hr_allowance_types: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          insurable: boolean
+          name: string
+          sort_order: number
+          taxable: boolean
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          insurable?: boolean
+          name: string
+          sort_order?: number
+          taxable?: boolean
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          insurable?: boolean
+          name?: string
+          sort_order?: number
+          taxable?: boolean
+        }
+        Relationships: [
+
+        ]
+      }
       hr_attendance_adjustments: {
         Row: {
           created_at: string
@@ -1369,6 +1401,54 @@ export type Database = {
           },
         ]
       }
+      hr_employee_private: {
+        Row: {
+          bank_account: string | null
+          bank_name: string | null
+          employee_id: string
+          join_date: string | null
+          national_id: string | null
+          tax_code: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bank_account?: string | null
+          bank_name?: string | null
+          employee_id: string
+          join_date?: string | null
+          national_id?: string | null
+          tax_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bank_account?: string | null
+          bank_name?: string | null
+          employee_id?: string
+          join_date?: string | null
+          national_id?: string | null
+          tax_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_employee_private_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employee_private_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_employees: {
         Row: {
           active: boolean
@@ -1552,6 +1632,115 @@ export type Database = {
           },
         ]
       }
+      hr_pay_profile_allowances: {
+        Row: {
+          allowance_type_id: string
+          amount: number
+          profile_id: string
+        }
+        Insert: {
+          allowance_type_id: string
+          amount: number
+          profile_id: string
+        }
+        Update: {
+          allowance_type_id?: string
+          amount?: number
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_pay_profile_allowances_allowance_type_id_fkey"
+            columns: ["allowance_type_id"]
+            isOneToOne: false
+            referencedRelation: "hr_allowance_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_pay_profile_allowances_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "hr_pay_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_pay_profiles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          daily_rate: number | null
+          dependents: number
+          employee_id: string
+          from_period: string
+          id: string
+          insurance_salary: number | null
+          insured: boolean
+          monthly_salary: number | null
+          note: string | null
+          pay_type: string
+          source: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          daily_rate?: number | null
+          dependents?: number
+          employee_id: string
+          from_period: string
+          id?: string
+          insurance_salary?: number | null
+          insured?: boolean
+          monthly_salary?: number | null
+          note?: string | null
+          pay_type: string
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          daily_rate?: number | null
+          dependents?: number
+          employee_id?: string
+          from_period?: string
+          id?: string
+          insurance_salary?: number | null
+          insured?: boolean
+          monthly_salary?: number | null
+          note?: string | null
+          pay_type?: string
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_pay_profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_pay_profiles_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_pay_profiles_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_period_events: {
         Row: {
           actor_id: string | null
@@ -1652,6 +1841,45 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "hr_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_private_access_log: {
+        Row: {
+          employee_id: string
+          field: string
+          id: number
+          viewed_at: string
+          viewer_id: string | null
+        }
+        Insert: {
+          employee_id: string
+          field: string
+          id?: number
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Update: {
+          employee_id?: string
+          field?: string
+          id?: number
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_private_access_log_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_private_access_log_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

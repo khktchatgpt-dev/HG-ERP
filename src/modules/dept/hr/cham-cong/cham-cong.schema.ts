@@ -240,3 +240,78 @@ export const kyViecSchema = z.discriminatedUnion('viec', [
     ghiChu: z.string().trim().max(300).optional(),
   }),
 ])
+
+// ── Hồ sơ lương (B4, 0245) ───────────────────────────────────────────────
+
+const tien = z.number().min(0, 'Số tiền không âm').max(10_000_000_000).nullable()
+const kyLuong = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Kỳ phải dạng YYYY-MM')
+const giaTriNap = z.record(z.string(), z.string().max(200))
+
+export const luongViecSchema = z.discriminatedUnion('viec', [
+  z.object({
+    viec: z.literal('ban'),
+    employeeId: z.string().uuid(),
+    tuKy: kyLuong,
+    cachTra: z.enum(['daily', 'monthly']),
+    donGia: tien,
+    luongThang: tien,
+    luongBh: tien,
+    coBh: z.boolean(),
+    npt: z.number().int().min(0).max(20),
+    ghiChu: z.string().trim().max(300).nullable(),
+    phuCap: z.record(z.string().uuid(), z.number().min(0).max(1_000_000_000)),
+  }),
+  z.object({
+    viec: z.literal('rieng'),
+    employeeId: z.string().uuid(),
+    cccd: z
+      .string()
+      .trim()
+      .regex(/^(\d{9}|\d{12})?$/, 'CCCD 12 số (CMND cũ 9 số)')
+      .optional(),
+    mst: z
+      .string()
+      .trim()
+      .regex(/^(\d{10}|\d{12}|\d{13})?$/, 'MST 10, 12 hoặc 13 số')
+      .optional(),
+    nganHang: z.string().trim().max(60).optional(),
+    stk: z
+      .string()
+      .trim()
+      .regex(/^[0-9A-Za-z]{0,30}$/, 'Số tài khoản chỉ gồm chữ số')
+      .optional(),
+    ngayVao: z
+      .string()
+      .regex(/^(\d{4}-\d{2}-\d{2})?$/)
+      .optional(),
+  }),
+  z.object({
+    viec: z.literal('hien'),
+    employeeId: z.string().uuid(),
+    truong: z.enum(['bank_account', 'national_id', 'tax_code']),
+  }),
+  z.object({
+    viec: z.literal('don_gia_to'),
+    to: z.string().trim().min(1).max(120),
+    tuKy: kyLuong,
+    donGia: z.number().min(1).max(100_000_000),
+    ghiDe: z.boolean(),
+  }),
+  z.object({ viec: z.literal('nap_xem'), text: z.string().min(1).max(500_000) }),
+  z.object({
+    viec: z.literal('nap_ghi'),
+    tuKy: kyLuong,
+    dong: z
+      .array(z.object({ employeeId: z.string().uuid(), giaTri: giaTriNap }))
+      .min(1)
+      .max(2000),
+  }),
+  z.object({
+    viec: z.literal('phu_cap'),
+    id: z.string().uuid().optional(),
+    ten: z.string().trim().min(1).max(60),
+    tinhBh: z.boolean(),
+    chiuThue: z.boolean(),
+    dangDung: z.boolean(),
+  }),
+])

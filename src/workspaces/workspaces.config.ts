@@ -29,6 +29,8 @@ export type NavCapability =
   | 'production.team'
   /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
   | 'supply.approve'
+  /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — Kế toán, TP Nhân sự, Giám đốc. */
+  | 'hr.payroll'
 
 export type NavItem = {
   href: string
@@ -264,6 +266,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'circle-dollar-sign',
           },
           { href: '/finance/invoices', label: 'Hoá đơn', icon: 'receipt' },
+          {
+            href: '/ho-so-luong',
+            label: 'Hồ sơ lương',
+            icon: 'wallet',
+            capability: 'hr.payroll',
+          },
           /*
            * Điều khoản thanh toán là DANH MỤC, không phải chứng từ — nhưng nó
            * đứng riêng ở nav vì đang là chốt chặn: 0/164 NCC khai số ngày, nên
@@ -646,6 +654,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/hr', label: 'Trang chủ', icon: 'home' },
           { href: '/hr/nhan-vien', label: 'Hồ sơ nhân viên', icon: 'users' },
+          // Trang DÙNG CHUNG (khu (luong)) — Kế toán vào từ menu Tài chính (B4).
+          {
+            href: '/ho-so-luong',
+            label: 'Hồ sơ lương',
+            icon: 'wallet',
+            capability: 'hr.payroll',
+          },
           { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },
         ],
       },

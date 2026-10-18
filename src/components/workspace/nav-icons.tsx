@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDownToLine,
   Calculator,
+  WalletCards,
   LockKeyhole,
   ArrowLeftRight,
   ArrowRightToLine,
@@ -104,6 +105,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   calculator: Calculator,
   // Kỳ công & chốt (B3).
   lock: LockKeyhole,
+  // Hồ sơ lương (B4).
+  wallet: WalletCards,
   // Sổ phiếu kho — sổ đã ghi, chỉ đọc; khác 'notebook-pen' là sổ đang viết.
   'book-open': BookOpenText,
   'arrow-right-to-line': ArrowRightToLine,
