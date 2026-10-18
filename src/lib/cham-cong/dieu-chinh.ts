@@ -55,6 +55,8 @@ export type DieuChinh = {
   canCu: string | null
   tinhTrang: TinhTrangDc
   nguoiGui: string | null
+  /** Tài khoản người gửi — so với `QuyenDieuChinh.toi` để không tự duyệt phiếu mình. */
+  guiId?: string | null
   luc: string
   nguoiDuyet: string | null
   lucDuyet: string | null

@@ -10,16 +10,18 @@ import type { DieuChinhGui } from './cham-cong.schema'
  * ĐIỀU CHỈNH CHẤM CÔNG (bản vẽ DieuChinh.dc.html, câu 22–25 duyệt 17/10/2026).
  * Nhân sự gửi → người có `hr.attendance.adjust_decide` duyệt / từ chối; người gửi
  * rút được khi còn chờ. Không xoá — mọi bản giữ lại làm lịch sử.
+ * KHÔNG tự duyệt phiếu của mình (18/10/2026): người gửi và người duyệt phải khác nhau.
  */
 
-export type QuyenDieuChinh = { gui: boolean; duyet: boolean }
+/** `toi` = tài khoản đang xem: phiếu có `guiId === toi` thì không được tự duyệt. */
+export type QuyenDieuChinh = { gui: boolean; duyet: boolean; toi: string }
 
 export async function quyenDieuChinh(user: User): Promise<QuyenDieuChinh> {
   const [gui, duyet] = await Promise.all([
     canAction(user, 'hr.attendance.adjust'),
     canAction(user, 'hr.attendance.adjust_decide'),
   ])
-  return { gui, duyet }
+  return { gui, duyet, toi: user.id }
 }
 
 export type TrangDieuChinh = {
@@ -69,6 +71,11 @@ export const dieuChinhService = {
       return dieuChinhRepo.doiTinhTrang(ids, { status: 'cancelled' })
     }
     if (!q.duyet) throw Forbidden('Bạn chưa có quyền duyệt điều chỉnh chấm công')
+    const cuaMinh = ds.filter((d) => d.created_by === user.id).length
+    if (cuaMinh)
+      throw Forbidden(
+        `${cuaMinh} điều chỉnh do chính bạn gửi — người khác có quyền duyệt phải xử lý`,
+      )
     return dieuChinhRepo.doiTinhTrang(ids, {
       status: viec === 'duyet' ? 'approved' : 'rejected',
       decided_by: user.id,

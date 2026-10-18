@@ -158,7 +158,7 @@ export function CoMat({
                 >
                   <span className="flex justify-between gap-1" title={t.to}>
                     <Link
-                      href={`/hr/cham-cong/theo-to?thang=${k.thang}&to=${encodeURIComponent(t.to)}`}
+                      href={`/hr/cham-cong/gio-cong?thang=${k.thang}&bp=${encodeURIComponent(t.to)}`}
                       className="truncate text-[var(--act-text)] hover:underline"
                     >
                       {t.to}

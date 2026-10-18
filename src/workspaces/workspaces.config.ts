@@ -665,8 +665,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'calendar-range',
           },
           {
-            href: '/hr/cham-cong/theo-to',
-            label: 'Bảng chấm công theo tổ',
+            // Giờ theo khung — luật thật của Nhân sự (17/10/2026), thay bảng tổ theo ca.
+            href: '/hr/cham-cong/gio-cong',
+            label: 'Bảng công',
             icon: 'users-round',
           },
           {

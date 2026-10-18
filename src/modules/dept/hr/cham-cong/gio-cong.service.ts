@@ -1,0 +1,134 @@
+import type { User } from '@/modules/core/users/users.repo'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { BadRequest } from '@/server/http'
+import { THAM_SO_MAC_DINH } from '@/lib/cham-cong/gio-khung'
+import {
+  congNgay,
+  kyCuaThang,
+  tinhKyGioCong,
+  type CachTinh,
+  type NguoiGio,
+} from '@/lib/cham-cong/ky-gio-cong'
+import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
+import { chamCongService } from './cham-cong.service'
+import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
+import { gioCongRepo } from './gio-cong.repo'
+
+/**
+ * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (26 → 25) cho từng người, theo luật thật của
+ * Nhân sự (`lib/cham-cong/gio-khung.ts`, khớp 241/241 ngày file Tổ sơn sắt T9).
+ */
+
+export type GioCong = {
+  thang: string
+  tu: string
+  den: string
+  homNay: string
+  nguoi: NguoiGio[]
+  /** Mọi bộ phận có người, kèm cách tính. */
+  boPhan: { ten: string; so: number; cachTinh: CachTinh }[]
+  khung: { ma: string; ten: string }[]
+  heSoTrua: number
+  phutTruaMacDinh: number
+  khongCham: number
+  /** Điều chỉnh của kỳ (mọi tình trạng) — ngăn điều chỉnh tự lọc. */
+  dieuChinh: DieuChinh[]
+  /** 'ma|ngay' → lượt MÁY gốc (chưa áp điều chỉnh) — cho ngăn điều chỉnh. */
+  luotMay: Record<string, { gio: string; may: string }[]>
+  quyen: QuyenDieuChinh & { trua: boolean; cachTinh: boolean }
+}
+
+const CHUA_CO = '(chưa có bộ phận)'
+
+export const gioCongService = {
+  async bang(user: User, thang: string, homNay: string): Promise<GioCong> {
+    await assertAction(user, 'hr.attendance.view')
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
+      throw BadRequest('Tháng phải dạng YYYY-MM')
+    const k = kyCuaThang(thang)
+    // Lấy dư một ngày hai đầu: ca đêm ngày cuối kỳ cần lượt rạng sáng hôm sau; lượt rạng
+    // sáng ngày đầu kỳ có thể thuộc ca đêm hôm trước (không được tính vào kỳ này).
+    const [du, trua, cachTinh, quyen, quyenSua] = await Promise.all([
+      chamCongService.duLieu(user, { tu: congNgay(k.tu, -1), den: congNgay(k.den, 1) }),
+      gioCongRepo.trua(k.tu, k.den),
+      gioCongRepo.cachTinh(),
+      quyenDieuChinh(user),
+      canAction(user, 'hr.attendance.employee_edit'),
+    ])
+    // Ngày lấy dữ liệu lần cuối (giờ VN) trở đi là ngày đang dở: lấy giữa ngày thì chưa có
+    // lượt ra — 1 lượt hôm đó không phải lỗi chấm công.
+    const lanOk = du.lanCuoi
+      .filter((x) => x.ok)
+      .map((x) => x.batDau)
+      .sort()
+      .at(-1)
+    const ngayLay = lanOk
+      ? new Date(Date.parse(lanOk) + 7 * 3600_000).toISOString().slice(0, 10)
+      : homNay
+    const nguoi = tinhKyGioCong({
+      ngayDoDang: ngayLay < homNay ? ngayLay : homNay,
+      tu: k.tu,
+      den: k.den,
+      nhanSu: du.nhanSu,
+      dong: du.dong,
+      dieuChinh: du.dieuChinh,
+      trua,
+      cachTinh,
+    })
+    const dem = new Map<string, number>()
+    for (const n of du.nhanSu)
+      dem.set(n.boPhan ?? CHUA_CO, (dem.get(n.boPhan ?? CHUA_CO) ?? 0) + 1)
+    const boPhan = [...dem]
+      .map(([ten, so]) => ({ ten, so, cachTinh: cachTinh[ten] ?? ('khung' as CachTinh) }))
+      .sort(
+        (a, b) =>
+          (a.ten === CHUA_CO ? 1 : 0) - (b.ten === CHUA_CO ? 1 : 0) || b.so - a.so,
+      )
+    return {
+      thang,
+      tu: k.tu,
+      den: k.den,
+      homNay,
+      nguoi: nguoi.map((n) => ({ ...n, boPhan: n.boPhan ?? CHUA_CO })),
+      boPhan,
+      khung: THAM_SO_MAC_DINH.khung.map((x) => ({ ma: x.ma, ten: x.ten })),
+      heSoTrua: THAM_SO_MAC_DINH.heSoTrua,
+      phutTruaMacDinh: THAM_SO_MAC_DINH.phutTruaMacDinh,
+      khongCham: du.khongCham,
+      dieuChinh: du.dieuChinh.filter((d) => d.ngay >= k.tu && d.ngay <= k.den),
+      luotMay: Object.fromEntries(
+        du.dong
+          .filter((r) => r.daGhep && r.ngay >= k.tu && r.ngay <= k.den)
+          .map((r) => [
+            `${r.ma}|${r.ngay}`,
+            r.luot.map((l) => ({ gio: l.gio, may: l.may })),
+          ]),
+      ),
+      quyen: { ...quyen, trua: quyen.gui, cachTinh: quyenSua },
+    }
+  },
+
+  /** Ghi / bỏ tick làm trưa (sổ tay tổ trưởng) cho một hoặc nhiều người-ngày. */
+  async ghiTrua(
+    user: User,
+    muc: { ma: string; ngay: string; phut: number | null }[],
+  ): Promise<number> {
+    await assertAction(user, 'hr.attendance.adjust')
+    const id = await gioCongRepo.idTheoMa(muc.map((m) => m.ma))
+    const thieu = muc.filter((m) => !id.has(m.ma))
+    if (thieu.length) throw BadRequest(`Không có nhân viên mã ${thieu[0].ma}`)
+    await gioCongRepo.ghiTrua(
+      muc.map((m) => ({ employeeId: id.get(m.ma)!, ngay: m.ngay, phut: m.phut })),
+      user.id,
+    )
+    return muc.length
+  },
+
+  /** Đổi cách tính của một bộ phận (khung / theo ngày). */
+  async ghiCachTinh(user: User, boPhan: string, cachTinh: CachTinh): Promise<void> {
+    await assertAction(user, 'hr.attendance.employee_edit')
+    if (boPhan === CHUA_CO)
+      throw BadRequest('Gán bộ phận cho người trước, rồi mới chọn cách tính')
+    await gioCongRepo.ghiCachTinh(boPhan, cachTinh, user.id)
+  },
+}

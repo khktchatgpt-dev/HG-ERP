@@ -133,3 +133,25 @@ export const dieuChinhQuyetSchema = z
     message: 'Từ chối phải ghi lý do',
     path: ['ghiChu'],
   })
+
+/** Ghi / bỏ tick làm trưa: `phut` null = bỏ tick. */
+export const truaSchema = z.object({
+  muc: z
+    .array(
+      z.object({
+        ma: z.string().trim().min(1),
+        ngay: z
+          .string()
+          .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, 'Ngày phải dạng YYYY-MM-DD'),
+        phut: z.number().int().min(1).max(240).nullable(),
+      }),
+    )
+    .min(1)
+    .max(500),
+})
+
+/** Đổi cách tính giờ công của một bộ phận. */
+export const cachTinhSchema = z.object({
+  boPhan: z.string().trim().min(1).max(120),
+  cachTinh: z.enum(['khung', 'ngay']),
+})

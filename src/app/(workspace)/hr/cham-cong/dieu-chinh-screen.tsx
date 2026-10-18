@@ -34,7 +34,10 @@ export function DieuChinhScreen({
   const [busy, setBusy] = useState(false)
   const ds = xem === 'cho' ? d.choDuyet : [...d.trongKy].reverse()
   const coChon = d.quyen.duyet && xem === 'cho'
-  const tatCa = coChon && ds.length > 0 && ds.every((x) => chon.has(x.id))
+  // Phiếu mình gửi không tự duyệt được — không cho chọn, nói lý do ngay ở ô chọn.
+  const cuaMinh = (x: { guiId?: string | null }) => x.guiId === d.quyen.toi
+  const chonDuoc = ds.filter((x) => !cuaMinh(x))
+  const tatCa = coChon && chonDuoc.length > 0 && chonDuoc.every((x) => chon.has(x.id))
   const demTT = useMemo(() => {
     const m = { pending: 0, approved: 0, rejected: 0, cancelled: 0 }
     for (const x of d.trongKy) m[x.tinhTrang]++
@@ -123,7 +126,7 @@ export function DieuChinhScreen({
         )}
         <span className="text-k-label ml-auto pb-1.5 text-[var(--ink-3)]">
           {d.quyen.duyet
-            ? 'Gửi điều chỉnh ở Bảng chấm công theo tổ — bấm vào ô của ngày cần sửa'
+            ? 'Gửi điều chỉnh ở Bảng giờ công — bấm vào ô của ngày cần sửa'
             : 'Bạn gửi được, chưa duyệt được — người có quyền duyệt sẽ xử lý ở trang này'}
         </span>
       </div>
@@ -136,10 +139,10 @@ export function DieuChinhScreen({
                 ? 'Không có điều chỉnh nào chờ duyệt'
                 : 'Tháng này chưa có điều chỉnh'
             }
-            reason="Điều chỉnh được gửi từ ô của bảng chấm công theo tổ hoặc trang một người."
+            reason="Điều chỉnh được gửi từ ô của Bảng giờ công hoặc trang một người."
             next={
-              <Btn onClick={() => router.push(`/hr/cham-cong/theo-to?thang=${thang}`)}>
-                Sang Bảng chấm công theo tổ
+              <Btn onClick={() => router.push(`/hr/cham-cong/gio-cong?thang=${thang}`)}>
+                Sang Bảng giờ công
               </Btn>
             }
           />
@@ -156,7 +159,7 @@ export function DieuChinhScreen({
                       aria-label="Chọn tất cả"
                       checked={tatCa}
                       onChange={() =>
-                        setChon(tatCa ? new Set() : new Set(ds.map((x) => x.id)))
+                        setChon(tatCa ? new Set() : new Set(chonDuoc.map((x) => x.id)))
                       }
                     />
                   </th>
@@ -176,17 +179,26 @@ export function DieuChinhScreen({
                   <tr key={x.id} className={cn(chon.has(x.id) && 'bg-[var(--act-wash)]')}>
                     {coChon && (
                       <td className={td}>
-                        <input
-                          type="checkbox"
-                          aria-label={`Chọn ${n?.ten ?? x.ma} ${x.ngay}`}
-                          checked={chon.has(x.id)}
-                          onChange={() => {
-                            const s = new Set(chon)
-                            if (s.has(x.id)) s.delete(x.id)
-                            else s.add(x.id)
-                            setChon(s)
-                          }}
-                        />
+                        {cuaMinh(x) ? (
+                          <span
+                            className="block w-8 text-[var(--ink-3)]"
+                            title="Phiếu của bạn — người khác có quyền duyệt phải xử lý"
+                          >
+                            của bạn
+                          </span>
+                        ) : (
+                          <input
+                            type="checkbox"
+                            aria-label={`Chọn ${n?.ten ?? x.ma} ${x.ngay}`}
+                            checked={chon.has(x.id)}
+                            onChange={() => {
+                              const s = new Set(chon)
+                              if (s.has(x.id)) s.delete(x.id)
+                              else s.add(x.id)
+                              setChon(s)
+                            }}
+                          />
+                        )}
                       </td>
                     )}
                     <td className={cn(td, 'num')}>

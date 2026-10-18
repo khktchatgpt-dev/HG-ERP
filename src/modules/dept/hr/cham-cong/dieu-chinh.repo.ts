@@ -4,7 +4,7 @@ import type { DieuChinh, LoaiDc, LoaiNghi, TinhTrangDc } from '@/lib/cham-cong/d
 /** Bảng `hr_attendance_adjustments` (0240) — lớp điều chỉnh đặt lên lượt máy. */
 
 const COT = `id, work_date, kind, punch_time, punch_dir, leave_type, reason, evidence, status,
-  created_at, decided_at, decide_note, employee_id,
+  created_at, created_by, decided_at, decide_note, employee_id,
   emp:hr_employees!hr_attendance_adjustments_employee_id_fkey(code),
   gui:users!hr_attendance_adjustments_created_by_fkey(name),
   duyet:users!hr_attendance_adjustments_decided_by_fkey(name)`
@@ -20,6 +20,7 @@ type Dong = {
   evidence: string | null
   status: string
   created_at: string
+  created_by: string | null
   decided_at: string | null
   decide_note: string | null
   employee_id: string
@@ -34,6 +35,7 @@ function doi(r: Dong): DieuChinhDong {
   return {
     id: r.id,
     employeeId: r.employee_id,
+    guiId: r.created_by,
     ma: r.emp?.code ?? '',
     ngay: r.work_date,
     loai: r.kind as LoaiDc,
@@ -58,7 +60,11 @@ function must<T>(r: { data: T | null; error: { message: string } | null }): T {
 
 export const dieuChinhRepo = {
   /** Mọi điều chỉnh trong khoảng ngày (cả đã rút / từ chối — cho lịch sử). */
-  async trongKhoang(tu: string, den: string, employeeId?: string): Promise<DieuChinhDong[]> {
+  async trongKhoang(
+    tu: string,
+    den: string,
+    employeeId?: string,
+  ): Promise<DieuChinhDong[]> {
     let q = db()
       .from('hr_attendance_adjustments')
       .select(COT)
@@ -81,7 +87,9 @@ export const dieuChinhRepo = {
     return (must(r) as unknown as Dong[]).map(doi)
   },
 
-  async theoIds(ids: string[]): Promise<{ id: string; status: string; created_by: string | null }[]> {
+  async theoIds(
+    ids: string[],
+  ): Promise<{ id: string; status: string; created_by: string | null }[]> {
     return must(
       await db()
         .from('hr_attendance_adjustments')

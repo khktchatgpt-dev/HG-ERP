@@ -192,9 +192,9 @@ function Than({
           : { loai, ma: mo.ma, ngay: mo.ngay, gio: boQua, lyDo, canCu }
     const ok = await chay(
       () => api('/api/dept/hr/cham-cong/dieu-chinh', { method: 'POST', body }),
-      quyen.duyet ? 'Đã gửi — duyệt ở mục Lịch sử bên dưới' : 'Đã gửi — chờ duyệt',
+      'Đã gửi — chờ người khác duyệt',
     )
-    if (ok && !quyen.duyet) onClose()
+    if (ok) onClose()
     if (ok) {
       setLyDo('')
       setCanCu('')
@@ -454,13 +454,18 @@ function Than({
                     <TinhTrang d={d} />
                     {d.tinhTrang === 'pending' && (
                       <span className="mt-1 flex gap-1">
-                        {quyen.duyet && (
+                        {quyen.duyet && d.guiId !== quyen.toi && (
                           <>
                             <Btn primary onClick={() => quyet(d.id, 'duyet')}>
                               Duyệt
                             </Btn>
                             <Btn onClick={() => quyet(d.id, 'tu_choi')}>Từ chối</Btn>
                           </>
+                        )}
+                        {quyen.duyet && d.guiId === quyen.toi && (
+                          <span className="text-[var(--ink-3)]">
+                            Phiếu của bạn — người khác duyệt
+                          </span>
                         )}
                         {quyen.gui && <Btn onClick={() => quyet(d.id, 'rut')}>Rút</Btn>}
                       </span>

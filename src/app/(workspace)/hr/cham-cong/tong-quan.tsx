@@ -246,7 +246,7 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
                   <tr key={t.to}>
                     <td className={cn(c, 'truncate')} title={t.to}>
                       <Link
-                        href={`/hr/cham-cong/theo-to${q}&to=${encodeURIComponent(t.to)}`}
+                        href={`/hr/cham-cong/gio-cong${q}&bp=${encodeURIComponent(t.to)}`}
                         className="text-[var(--act-text)] hover:underline"
                       >
                         {t.to}

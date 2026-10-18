@@ -3,32 +3,18 @@ import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { boSo0, khopDuoiTen } from '@/lib/cham-cong/ghep-ten'
-import {
-  gopLap,
-  tinhNgay,
-  tongThang,
-  type Ca,
-  type KetQuaNgay,
-  type LoaiNgay,
-  type LuotQuet,
-  type TongThang,
-} from '@/lib/cham-cong/tinh-cong'
-import {
-  chamCongRepo,
-  type DeviceRow,
-  type DeviceUserRow,
-  type ShiftRow,
-} from './cham-cong.repo'
+import { gopLap, type LuotQuet } from '@/lib/cham-cong/luot'
+import { chamCongRepo, type DeviceRow, type DeviceUserRow } from './cham-cong.repo'
 import { infoDevice, readDevice } from './zk'
 import { dieuChinhRepo } from './dieu-chinh.repo'
 import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
 import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
 
 /**
- * CHẤM CÔNG — kéo lượt quẹt thẳng từ máy ZKTeco, ghép người, tính công tháng.
+ * CHẤM CÔNG — kéo lượt quẹt thẳng từ máy ZKTeco, ghép người, bày lượt thô.
  *
- * Luật tính: `@/lib/cham-cong/tinh-cong` (thuần, có test). File này lo phần dữ liệu:
- * lượt thô bất biến → (máy, mã) → nhân viên → ngày giờ Việt Nam → tinhNgay.
+ * File này lo phần dữ liệu: lượt thô bất biến → (máy, mã) → nhân viên → ngày giờ
+ * Việt Nam. Tính giờ công ở `gio-cong.service.ts` (luật khung giờ `gio-khung.ts`).
  */
 
 const VN_MS = 7 * 3600_000
@@ -57,20 +43,6 @@ function sauNgay(d: string): string {
 /** Nhãn ngắn của máy cho lưới: '.201'. */
 const nhanMay = (d: DeviceRow) => '.' + d.ip.split('.').pop()
 
-function toCa(s: ShiftRow): Ca {
-  return {
-    code: s.code,
-    name: s.name,
-    start: s.start_time.slice(0, 5),
-    end: s.end_time.slice(0, 5),
-    breakMin: s.break_minutes,
-    requiredPunches: s.required_punches === 1 ? 1 : 2,
-    otFrom: s.ot_from.slice(0, 5),
-    otRound: s.ot_round_minutes,
-    graceMin: s.late_grace_minutes,
-  }
-}
-
 export type KetQuaMay = {
   ten: string
   ip: string
@@ -94,41 +66,6 @@ export type KetQuaKeo = {
   /** (máy, mã) có quẹt trong khoảng mà chưa ghép được ai — Nhân sự gán tay. */
   maChuaGhep: number
   canXem: number
-}
-
-export type NguoiCong = {
-  id: string
-  code: string
-  ten: string
-  ca: string
-  /** Nhãn các máy người này có quẹt trong tháng ('.201', '.203'). */
-  may: string[]
-  /** Khoá = ngày trong tháng (1..31). */
-  ngay: Record<number, KetQuaNgay>
-  tong: TongThang
-}
-
-export type BangCong = {
-  thang: string
-  soNgay: number
-  /** Thứ của ngày 1 (0 = chủ nhật) — client suy thứ mọi ngày khác. */
-  thuNgay1: number
-  ngayLe: { ngay: number; ten: string }[]
-  cas: (Ca & { soNguoi: number })[]
-  may: {
-    ten: string
-    ip: string
-    keoLuc: string | null
-    luot: number | null
-    sucChua: number | null
-    loi: string | null
-  }[]
-  nguoi: NguoiCong[]
-  canXem: { may: string; ma: string; ten: string; tenMayKia: string | null }[]
-  /** Lượt trong tháng của mã chưa ghép người — KHÔNG có trong bảng công. */
-  luotChuaGhep: number
-  /** Ngày trong tháng đã có lượt trong ERP (đã lấy về) — ngày thiếu ở đây là CHƯA LẤY, không phải vắng. */
-  ngayCoDuLieu: number[]
 }
 
 /**
@@ -354,7 +291,7 @@ export type DuLieu = {
   /** Mã trên máy có quẹt trong khoảng mà cùng số ở máy kia là người khác (`needs_review`). */
   maCanXem: number
   /** Nhân viên đang làm CẦN chấm công — mẫu số của bảng có mặt theo tổ. */
-  nhanSu: { ma: string; ten: string; boPhan: string | null; ca: Ca }[]
+  nhanSu: { ma: string; ten: string; boPhan: string | null }[]
   /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
   khongCham: number
   /** Điều chỉnh trong khoảng (mọi tình trạng) — chỉ bản đã duyệt đổi kết quả. */
@@ -725,7 +662,7 @@ export const chamCongService = {
     if (k.den < k.tu) throw BadRequest('"Đến ngày" phải sau hoặc bằng "Từ ngày"')
     if (soNgay(k) > XEM_TOI_DA_NGAY)
       throw BadRequest(`Mỗi lần xem tối đa ${XEM_TOI_DA_NGAY} ngày`)
-    const [devices, dus, emps, logs, pulls, shifts, dieuChinh] = await Promise.all([
+    const [devices, dus, emps, logs, pulls, dieuChinh] = await Promise.all([
       chamCongRepo.devices(),
       chamCongRepo.deviceUsers(),
       chamCongRepo.employees(),
@@ -734,7 +671,6 @@ export const chamCongService = {
         `${sauNgay(k.den)}T00:00:00+07:00`,
       ),
       chamCongRepo.recentPulls(5),
-      chamCongRepo.shifts(),
       dieuChinhRepo.trongKhoang(k.tu, k.den),
     ])
     const devById = new Map(devices.map((d) => [d.id, d]))
@@ -810,13 +746,7 @@ export const chamCongService = {
       ).size,
       nhanSu: emps
         .filter((e) => e.active && !e.attendance_exempt)
-        // Ca của từng người — bảng tổ tính công theo đúng ca đó (luật chốt 12/10/2026).
-        .map((e) => ({
-          ma: e.code,
-          ten: e.full_name,
-          boPhan: e.team,
-          ca: toCa(shifts.find((x) => x.id === e.shift_id) ?? shifts[0]),
-        })),
+        .map((e) => ({ ma: e.code, ten: e.full_name, boPhan: e.team })),
       khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
       dieuChinh,
     }
@@ -907,125 +837,6 @@ export const chamCongService = {
       }
     } finally {
       devices.forEach((d) => dangDoc.delete(d.id))
-    }
-  },
-
-  async bangCong(user: User, thang: string): Promise<BangCong> {
-    await assertAction(user, 'hr.attendance.view')
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
-      throw BadRequest('Tháng phải dạng YYYY-MM')
-    const [y, m] = thang.split('-').map(Number)
-    const soNgay = new Date(Date.UTC(y, m, 0)).getUTCDate()
-    const sau = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
-    const tu = `${thang}-01`
-    const den = `${sau}-01`
-
-    const [devices, dus, emps, shifts, hols, logs] = await Promise.all([
-      chamCongRepo.devices(),
-      chamCongRepo.deviceUsers(),
-      chamCongRepo.employees(),
-      chamCongRepo.shifts(),
-      chamCongRepo.holidays(tu, den),
-      chamCongRepo.logsBetween(`${tu}T00:00:00+07:00`, `${den}T00:00:00+07:00`),
-    ])
-
-    const devById = new Map(devices.map((d) => [d.id, d]))
-    const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
-    const shiftById = new Map(shifts.map((s) => [s.id, s]))
-    const le = new Map(hols.map((h) => [Number(h.holiday_date.slice(8, 10)), h.name]))
-    const thuNgay1 = new Date(Date.UTC(y, m - 1, 1)).getUTCDay()
-
-    // nhân viên → ngày → lượt
-    const theoNguoi = new Map<string, Map<number, LuotQuet[]>>()
-    const mayCua = new Map<string, Set<string>>()
-    let luotChuaGhep = 0
-    const coDuLieu = new Set<number>()
-    for (const l of logs) {
-      coDuLieu.add(Number(toVn(l.punched_at).slice(8, 10)))
-      const du = duBy.get(`${l.device_id}|${l.device_user_id}`)
-      if (!du?.employee_id) {
-        luotChuaGhep++
-        continue
-      }
-      const vn = toVn(l.punched_at)
-      const ngay = Number(vn.slice(8, 10))
-      const nhan = nhanMay(devById.get(l.device_id)!)
-      const byDay = theoNguoi.get(du.employee_id) ?? new Map<number, LuotQuet[]>()
-      byDay.set(ngay, [...(byDay.get(ngay) ?? []), { may: nhan, gio: vn.slice(11) }])
-      theoNguoi.set(du.employee_id, byDay)
-      const s = mayCua.get(du.employee_id) ?? new Set<string>()
-      s.add(nhan)
-      mayCua.set(du.employee_id, s)
-    }
-
-    const nguoi: NguoiCong[] = []
-    for (const e of emps) {
-      const byDay = theoNguoi.get(e.id)
-      if (!byDay) continue
-      const shift = shiftById.get(e.shift_id)
-      if (!shift) continue
-      const ca = toCa(shift)
-      const ngay: Record<number, KetQuaNgay> = {}
-      for (const [d, luot] of byDay) {
-        const loai: LoaiNgay = le.has(d)
-          ? 'le'
-          : (thuNgay1 + d - 1) % 7 === 0
-            ? 'cn'
-            : 'thuong'
-        const r = tinhNgay(luot, ca, loai)
-        if (r) ngay[d] = r
-      }
-      nguoi.push({
-        id: e.id,
-        code: e.code,
-        ten: e.full_name,
-        ca: shift.code,
-        may: [...(mayCua.get(e.id) ?? [])].sort(),
-        ngay,
-        tong: tongThang(Object.values(ngay), ca),
-      })
-    }
-    nguoi.sort((a, b) => a.code.localeCompare(b.code, 'vi', { numeric: true }))
-
-    const canXem = dus
-      .filter((u) => u.needs_review)
-      .map((u) => {
-        const kia = dus.find(
-          (o) => o.device_user_id === u.device_user_id && o.device_id !== u.device_id,
-        )
-        return {
-          may: devById.get(u.device_id)?.name ?? '',
-          ma: u.device_user_id,
-          ten: u.name_on_device ?? '',
-          tenMayKia: kia?.name_on_device ?? null,
-        }
-      })
-      .sort(
-        (a, b) =>
-          a.ma.localeCompare(b.ma, 'vi', { numeric: true }) || a.may.localeCompare(b.may),
-      )
-
-    return {
-      thang,
-      soNgay,
-      thuNgay1,
-      ngayLe: [...le].map(([ngay, ten]) => ({ ngay, ten })),
-      cas: shifts.map((s) => ({
-        ...toCa(s),
-        soNguoi: nguoi.filter((n) => n.ca === s.code).length,
-      })),
-      may: devices.map((d) => ({
-        ten: d.name,
-        ip: d.ip,
-        keoLuc: d.last_pulled_at,
-        luot: d.last_log_count,
-        sucChua: d.log_capacity,
-        loi: d.last_error,
-      })),
-      nguoi,
-      canXem,
-      luotChuaGhep,
-      ngayCoDuLieu: [...coDuLieu].sort((a, b) => a - b),
     }
   },
 }

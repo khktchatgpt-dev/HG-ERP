@@ -6,8 +6,6 @@ import {
   MAY_BO_SUNG,
   type DieuChinh,
 } from './dieu-chinh'
-import { tinhBangTo } from './bang-to'
-import type { Ca } from './tinh-cong'
 
 const l = (gio: string, may = '.203') => ({ gio, may, lap: 1 })
 const dc = (p: Partial<DieuChinh>): DieuChinh => ({
@@ -69,55 +67,5 @@ describe('apDieuChinh', () => {
     expect(moTaDc({ loai: 'leave', gio: null, chieu: null, nghi: 'annual' })).toBe(
       'Nghỉ phép',
     )
-  })
-})
-
-describe('bảng tổ dùng điều chỉnh', () => {
-  const XUONG: Ca = {
-    code: 'XUONG',
-    name: 'Xưởng',
-    start: '07:00',
-    end: '16:00',
-    breakMin: 60,
-    requiredPunches: 2,
-    otFrom: '16:00',
-    otRound: 30,
-    graceMin: 5,
-  }
-  const vao = {
-    to: 'T',
-    homNay: '2026-10-05',
-    theoNgay: ['01', '02'].map((d) => ({
-      ngay: `2026-10-${d}`,
-      theoMay: { '.203': 3 } as Record<string, number>,
-    })),
-    nhanSu: [{ ma: '1', ten: 'A', boPhan: 'T', ca: XUONG }],
-    dong: [{ ngay: '2026-10-01', ma: '1', daGhep: true, luot: [l('06:55:00')] }],
-  }
-  it('thiếu lượt + bổ sung ra đã duyệt → X; nghỉ phép đã duyệt → N, không vắng', () => {
-    const b = tinhBangTo({
-      ...vao,
-      dieuChinh: [
-        dc({ ngay: '2026-10-01', gio: '16:05:00', chieu: 'out' }),
-        dc({ ngay: '2026-10-02', loai: 'leave', nghi: 'annual' }),
-      ],
-    })
-    const p = b.nguoi[0]
-    expect(p.o.map((o) => o.ky)).toEqual(['X', 'N'])
-    expect(p).toMatchObject({ diLam: 1, vang: 0, nghi: 1, canXuLy: 0 })
-    expect(p.o[0].daSua).toBe(true)
-  })
-  it('chờ duyệt: ô vẫn ? và V, chỉ đánh dấu choDuyet', () => {
-    const b = tinhBangTo({
-      ...vao,
-      dieuChinh: [
-        dc({ ngay: '2026-10-01', gio: '16:05:00', tinhTrang: 'pending' }),
-        dc({ ngay: '2026-10-02', loai: 'leave', nghi: 'annual', tinhTrang: 'pending' }),
-      ],
-    })
-    expect(b.nguoi[0].o.map((o) => [o.ky, o.choDuyet])).toEqual([
-      ['?', 1],
-      ['V', 1],
-    ])
   })
 })

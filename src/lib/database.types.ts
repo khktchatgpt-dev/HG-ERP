@@ -1191,6 +1191,7 @@ export type Database = {
           note: string | null
           shift_id: string
           team: string | null
+          team_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1203,6 +1204,7 @@ export type Database = {
           note?: string | null
           shift_id: string
           team?: string | null
+          team_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1215,6 +1217,7 @@ export type Database = {
           note?: string | null
           shift_id?: string
           team?: string | null
+          team_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1223,6 +1226,13 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "hr_shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employees_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "hr_teams"
             referencedColumns: ["id"]
           },
         ]
@@ -1308,6 +1318,51 @@ export type Database = {
           },
         ]
       }
+      hr_lunch_ticks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          minutes: number
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          minutes: number
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          minutes?: number
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_lunch_ticks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_lunch_ticks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_shifts: {
         Row: {
           active: boolean
@@ -1358,6 +1413,54 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      hr_teams: {
+        Row: {
+          active: boolean
+          calc_mode: string
+          created_at: string
+          department_id: string | null
+          id: string
+          name: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          calc_mode?: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          calc_mode?: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_teams_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_teams_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
