@@ -671,6 +671,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'users-round',
           },
           {
+            // B2 (0243): bản cách tính theo kỳ — hệ số lương, khung giờ, cách tính theo tổ.
+            href: '/hr/cham-cong/cach-tinh',
+            label: 'Cách tính công',
+            icon: 'calculator',
+          },
+          {
             href: '/hr/cham-cong/dieu-chinh',
             label: 'Điều chỉnh công',
             icon: 'notebook-pen',

@@ -618,6 +618,19 @@ export const ACTIONS: Action[] = [
     domain: 'hr',
     rule: perm('hr.attendance.adjust_decide'),
   },
+  {
+    // Cách tính công B2 (0243): Kế toán sửa hệ số lương; director được seed thêm.
+    key: 'hr.calc.rates_edit',
+    label: 'Sửa hệ số lương trong Cách tính công',
+    domain: 'hr',
+    rule: anyOf(perm('accounting.member'), perm('hr.calc.rates_edit')),
+  },
+  {
+    key: 'hr.calc.rules_edit',
+    label: 'Sửa khung giờ và quy tắc tính công',
+    domain: 'hr',
+    rule: anyOf(perm('hr.member'), perm('hr.calc.rules_edit')),
+  },
 
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {

@@ -1132,6 +1132,195 @@ export type Database = {
           },
         ]
       }
+      hr_calc_frames: {
+        Row: {
+          code: string
+          drop_remainder: boolean
+          from_minute: number
+          is_office: boolean
+          name: string
+          to_minute: number
+          version_id: string
+        }
+        Insert: {
+          code: string
+          drop_remainder?: boolean
+          from_minute: number
+          is_office?: boolean
+          name: string
+          to_minute: number
+          version_id: string
+        }
+        Update: {
+          code?: string
+          drop_remainder?: boolean
+          from_minute?: number
+          is_office?: boolean
+          name?: string
+          to_minute?: number
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_calc_frames_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_calc_rates: {
+        Row: {
+          below_law_reason: string | null
+          code: string
+          day_kind: string
+          kind: string
+          percent: number | null
+          updated_at: string
+          updated_by: string | null
+          version_id: string
+        }
+        Insert: {
+          below_law_reason?: string | null
+          code: string
+          day_kind: string
+          kind: string
+          percent?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version_id: string
+        }
+        Update: {
+          below_law_reason?: string | null
+          code?: string
+          day_kind?: string
+          kind?: string
+          percent?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_calc_rates_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_calc_rates_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_calc_versions: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          count_early: boolean
+          created_at: string
+          created_by: string | null
+          early_from: number
+          from_period: string | null
+          full_threshold: number
+          grace_minutes: number
+          half_threshold: number
+          id: string
+          lunch_default_minutes: number
+          lunch_factor: number
+          lunch_from: number
+          lunch_to: number
+          minutes_per_cong: number
+          night_before: number
+          note: string | null
+          round_in_afternoon: boolean
+          round_out_mode: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+          version_no: number
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          count_early?: boolean
+          created_at?: string
+          created_by?: string | null
+          early_from: number
+          from_period?: string | null
+          full_threshold: number
+          grace_minutes: number
+          half_threshold: number
+          id?: string
+          lunch_default_minutes: number
+          lunch_factor: number
+          lunch_from: number
+          lunch_to: number
+          minutes_per_cong: number
+          night_before: number
+          note?: string | null
+          round_in_afternoon?: boolean
+          round_out_mode?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          version_no: number
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          count_early?: boolean
+          created_at?: string
+          created_by?: string | null
+          early_from?: number
+          from_period?: string | null
+          full_threshold?: number
+          grace_minutes?: number
+          half_threshold?: number
+          id?: string
+          lunch_default_minutes?: number
+          lunch_factor?: number
+          lunch_from?: number
+          lunch_to?: number
+          minutes_per_cong?: number
+          night_before?: number
+          note?: string | null
+          round_in_afternoon?: boolean
+          round_out_mode?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_calc_versions_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_calc_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_calc_versions_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_device_users: {
         Row: {
           created_at: string

@@ -1,7 +1,6 @@
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest } from '@/server/http'
-import { THAM_SO_MAC_DINH } from '@/lib/cham-cong/gio-khung'
 import {
   congNgay,
   kyCuaThang,
@@ -13,10 +12,12 @@ import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
 import { chamCongService } from './cham-cong.service'
 import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
 import { gioCongRepo } from './gio-cong.repo'
+import { cachTinhService } from './cach-tinh.service'
 
 /**
  * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (26 → 25) cho từng người, theo luật thật của
- * Nhân sự (`lib/cham-cong/gio-khung.ts`, khớp 241/241 ngày file Tổ sơn sắt T9).
+ * Nhân sự (`lib/cham-cong/gio-khung.ts`, khớp 241/241 ngày file Tổ sơn sắt T9). Tham số
+ * lấy từ BẢN cách tính áp dụng cho kỳ (B2, 0243) — đổi bản không đổi số kỳ trước.
  */
 
 export type GioCong = {
@@ -28,6 +29,8 @@ export type GioCong = {
   /** Mọi bộ phận có người, kèm cách tính. */
   boPhan: { ten: string; so: number; cachTinh: CachTinh }[]
   khung: { ma: string; ten: string }[]
+  /** Bản cách tính kỳ này dùng (null = chưa có bản, đang dùng số mặc định). */
+  ban: number | null
   heSoTrua: number
   phutTruaMacDinh: number
   khongCham: number
@@ -48,13 +51,15 @@ export const gioCongService = {
     const k = kyCuaThang(thang)
     // Lấy dư một ngày hai đầu: ca đêm ngày cuối kỳ cần lượt rạng sáng hôm sau; lượt rạng
     // sáng ngày đầu kỳ có thể thuộc ca đêm hôm trước (không được tính vào kỳ này).
-    const [du, trua, cachTinh, quyen, quyenSua] = await Promise.all([
+    const [du, trua, cachTinh, quyen, quyenSua, ct] = await Promise.all([
       chamCongService.duLieu(user, { tu: congNgay(k.tu, -1), den: congNgay(k.den, 1) }),
       gioCongRepo.trua(k.tu, k.den),
       gioCongRepo.cachTinh(),
       quyenDieuChinh(user),
       canAction(user, 'hr.attendance.employee_edit'),
+      cachTinhService.thamSoChoKy(thang),
     ])
+    const t = ct.thamSo
     // Ngày lấy dữ liệu lần cuối (giờ VN) trở đi là ngày đang dở: lấy giữa ngày thì chưa có
     // lượt ra — 1 lượt hôm đó không phải lỗi chấm công.
     const lanOk = du.lanCuoi
@@ -74,6 +79,7 @@ export const gioCongService = {
       dieuChinh: du.dieuChinh,
       trua,
       cachTinh,
+      thamSo: t,
     })
     const dem = new Map<string, number>()
     for (const n of du.nhanSu)
@@ -91,9 +97,10 @@ export const gioCongService = {
       homNay,
       nguoi: nguoi.map((n) => ({ ...n, boPhan: n.boPhan ?? CHUA_CO })),
       boPhan,
-      khung: THAM_SO_MAC_DINH.khung.map((x) => ({ ma: x.ma, ten: x.ten })),
-      heSoTrua: THAM_SO_MAC_DINH.heSoTrua,
-      phutTruaMacDinh: THAM_SO_MAC_DINH.phutTruaMacDinh,
+      khung: t.khung.map((x) => ({ ma: x.ma, ten: x.ten })),
+      ban: ct.ban,
+      heSoTrua: t.heSoTrua,
+      phutTruaMacDinh: t.phutTruaMacDinh,
       khongCham: du.khongCham,
       dieuChinh: du.dieuChinh.filter((d) => d.ngay >= k.tu && d.ngay <= k.den),
       luotMay: Object.fromEntries(

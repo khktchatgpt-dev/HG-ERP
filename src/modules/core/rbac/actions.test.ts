@@ -20,6 +20,7 @@ const seedSql = [
   'supabase/migrations/0149_sales_quote_approval.sql',
   'supabase/migrations/0175_tach_vai_thong_ke_to_truong.sql',
   'supabase/migrations/0240_hr_attendance_adjustments.sql',
+  'supabase/migrations/0243_hr_calc_versions.sql',
 ]
   .map((p) => readFileSync(resolve(process.cwd(), p), 'utf8'))
   .join('\n')

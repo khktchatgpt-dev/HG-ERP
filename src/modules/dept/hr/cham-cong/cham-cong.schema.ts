@@ -155,3 +155,62 @@ export const cachTinhSchema = z.object({
   boPhan: z.string().trim().min(1).max(120),
   cachTinh: z.enum(['khung', 'ngay']),
 })
+
+// ── Cách tính công (B2, 0243) ─────────────────────────────────────────────
+
+const phutTrongNgay = z.number().int().min(0).max(2880)
+const pt = z.number().min(0, 'Hệ số không âm').max(1000, 'Hệ số tối đa 1000 %')
+
+export const banMoiSchema = z.object({ tuBan: z.string().uuid() })
+
+export const banLuuSchema = z
+  .object({
+    quyTac: z
+      .object({
+        truaTu: phutTrongNgay,
+        truaDen: phutTrongNgay,
+        anHanPhut: z.number().int().min(0).max(120),
+        lamTronRaKieu: z.enum(['bac_thang', 'xuong_30']),
+        nguongNuaGio: z.number().int().min(0).max(59),
+        nguongDuGio: z.number().int().min(0).max(59),
+        lamTronVaoChieu: z.boolean(),
+        tinhDenSom: z.boolean(),
+        denSomTu: phutTrongNgay,
+        caDemDen: phutTrongNgay,
+        phutMotCong: z.number().int().min(60).max(720),
+        heSoTrua: z.number().min(0).max(10),
+        phutTruaMacDinh: z.number().int().min(1).max(240),
+      })
+      .optional(),
+    khung: z
+      .array(
+        z.object({
+          ma: z.string().regex(/^K[1-9]$/),
+          ten: z.string().trim().min(1, 'Khung cần tên').max(60),
+          tu: phutTrongNgay,
+          den: phutTrongNgay,
+          boPhanLo: z.boolean(),
+          hanhChinh: z.boolean(),
+        }),
+      )
+      .min(1)
+      .max(9)
+      .optional(),
+    heSo: z
+      .array(
+        z.object({
+          loai: z.enum(['frame', 'leave']),
+          ma: z.string().min(1).max(20),
+          ngay: z.enum(['thuong', 'cn', 'le', 'any']),
+          pt: pt.nullable(),
+          lyDo: z.string().trim().max(300, 'Lý do tối đa 300 ký tự').nullable(),
+        }),
+      )
+      .max(100)
+      .optional(),
+  })
+  .refine((v) => v.quyTac || v.khung || v.heSo, { message: 'Không có gì để lưu' })
+
+export const banApDungSchema = z.object({
+  tuKy: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Kỳ phải dạng YYYY-MM'),
+})

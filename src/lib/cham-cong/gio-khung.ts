@@ -27,7 +27,16 @@ export type Khung = {
   /** Phút tính từ 0h NGÀY BẮT ĐẦU ca; qua 0h thì > 1440 (5:00 hôm sau = 1740). */
   tu: number
   den: number
+  /** Kiểu làm tròn 'xuong_30': phần lố dưới 30 phút của khung này bị bỏ (file Excel cột G). */
+  boPhanLo?: boolean
 }
+
+/**
+ * 'bac_thang' — giờ ra làm tròn bậc thang theo nửa giờ (file tổ Sơn sắt 17/10/2026).
+ * 'xuong_30' — giờ ra giữ thực tế; mỗi khung có `boPhanLo` làm tròn XUỐNG bội số 30 phút
+ * (file TẤT CẢ CÁC TỔ 15/10/2026). Chọn theo bản cách tính (B2, câu Q2).
+ */
+export type KieuLamTronRa = 'bac_thang' | 'xuong_30'
 
 export type ThamSoKhung = {
   khung: Khung[]
@@ -41,6 +50,8 @@ export type ThamSoKhung = {
   nguongNuaGio: number
   /** Bậc thang: phút lẻ từ mốc này → tính đủ 1 giờ. */
   nguongDuGio: number
+  /** Mặc định 'bac_thang'. */
+  lamTronRaKieu?: KieuLamTronRa
   /** true = giờ vào buổi chiều (từ giờ nghỉ trưa tới hết khung hành chính) cũng làm tròn bậc thang. */
   lamTronVaoChieu: boolean
   /** false = vào từ `denSomTu` tới giờ vào ca bị kéo về giờ vào ca (không tính giờ đến sớm). */
@@ -59,12 +70,12 @@ const h = (gio: number, phut = 0) => gio * 60 + phut
 /** Đúng các ô xanh C12–C19, C30–C31 của tờ "Khung giờ & hệ số" (T9/2026). */
 export const THAM_SO_MAC_DINH: ThamSoKhung = {
   khung: [
-    { ma: 'K1', ten: 'Ca hành chính', tu: h(7), den: h(16) },
-    { ma: 'K2', ten: '16h – 19h', tu: h(16), den: h(19) },
-    { ma: 'K3', ten: '19h – 22h', tu: h(19), den: h(22) },
-    { ma: 'K4', ten: '22h – 24h', tu: h(22), den: h(24) },
-    { ma: 'K5', ten: '24h – 5h', tu: h(24), den: h(29) },
-    { ma: 'K6', ten: '5h – 7h', tu: h(29), den: h(31) },
+    { ma: 'K1', ten: 'Ca hành chính', tu: h(7), den: h(16), boPhanLo: false },
+    { ma: 'K2', ten: '16h – 19h', tu: h(16), den: h(19), boPhanLo: true },
+    { ma: 'K3', ten: '19h – 22h', tu: h(19), den: h(22), boPhanLo: true },
+    { ma: 'K4', ten: '22h – 24h', tu: h(22), den: h(24), boPhanLo: true },
+    { ma: 'K5', ten: '24h – 5h', tu: h(24), den: h(29), boPhanLo: true },
+    { ma: 'K6', ten: '5h – 7h', tu: h(29), den: h(31), boPhanLo: true },
   ],
   khungHanhChinh: 'K1',
   truaTu: h(11),
@@ -72,6 +83,7 @@ export const THAM_SO_MAC_DINH: ThamSoKhung = {
   anHanPhut: 30,
   nguongNuaGio: 20,
   nguongDuGio: 50,
+  lamTronRaKieu: 'bac_thang',
   lamTronVaoChieu: true,
   tinhDenSom: false,
   denSomTu: h(5),
@@ -98,6 +110,7 @@ export function gioCua(phut: number): string {
 
 /** Bậc thang cho giờ RA: phút lẻ trong giờ < 20 → :00; 20–49 → :30; ≥ 50 → giờ sau. */
 export function lamTronRa(phut: number, t: ThamSoKhung = THAM_SO_MAC_DINH): number {
+  if (t.lamTronRaKieu === 'xuong_30') return phut
   const gio = Math.floor(phut / 60)
   const le = phut - gio * 60
   if (le < t.nguongNuaGio) return gio * 60
@@ -180,6 +193,9 @@ export function tinhGioNgay(
       theoKhung[k.ma] += Math.max(0, giao)
     }
   }
+  if (t.lamTronRaKieu === 'xuong_30')
+    for (const k of t.khung)
+      if (k.boPhanLo) theoKhung[k.ma] = Math.floor(theoKhung[k.ma] / 30) * 30
   const truaQuyDoi = phutTrua * t.heSoTrua
   const tong = Object.values(theoKhung).reduce((a, b) => a + b, 0) + truaQuyDoi
   return { theoKhung, truaQuyDoi, tong }
