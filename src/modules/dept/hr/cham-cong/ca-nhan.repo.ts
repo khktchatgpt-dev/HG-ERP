@@ -57,9 +57,24 @@ export const caNhanRepo = {
     return out
   },
 
+  /** Mọi dòng riêng tư (giá trị đầy đủ + MST) — chỉ cho nạp Excel so khác, không trả ra màn. */
+  async tatCa(): Promise<Map<string, DongCaNhan & { tax_code: string | null }>> {
+    const { data, error } = await db()
+      .from('hr_employee_private')
+      .select(`employee_id, tax_code, ${CHON}`)
+    if (error) throw new Error(error.message)
+    const out = new Map<string, DongCaNhan & { tax_code: string | null }>()
+    for (const r of (data ?? []) as unknown as (DongCaNhan & {
+      employee_id: string
+      tax_code: string | null
+    })[])
+      out.set(r.employee_id, r)
+    return out
+  },
+
   async luu(
     employeeId: string,
-    patch: Partial<DongCaNhan>,
+    patch: Partial<DongCaNhan & { tax_code: string | null }>,
     userId: string,
   ): Promise<void> {
     const { error } = await db()

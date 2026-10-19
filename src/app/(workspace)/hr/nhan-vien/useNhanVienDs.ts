@@ -39,6 +39,7 @@ export function useNhanVienDs(h: TrangDs) {
   const [chon, setChon] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [moTuyen, setMoTuyen] = useState(false)
+  const [moNap, setMoNap] = useState(false)
 
   const dem = useMemo(() => demLocNv(h.nv.ds, h.homNay), [h.nv.ds, h.homNay])
   const ds = useMemo(
@@ -108,6 +109,8 @@ export function useNhanVienDs(h: TrangDs) {
     hangLoat,
     moHoSo,
     moTuyen,
+    moNap,
+    setMoNap,
     setMoTuyen,
   } as const
 }

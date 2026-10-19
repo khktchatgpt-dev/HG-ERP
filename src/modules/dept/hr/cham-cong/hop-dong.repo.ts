@@ -97,6 +97,32 @@ export const hopDongRepo = {
     }))
   },
 
+  /** HĐ chưa huỷ của mọi người, có loại + số — cho sổ quản lý lao động (quyền riêng tư). */
+  async tatCaChuaHuy(): Promise<
+    {
+      employeeId: string
+      so: string | null
+      loai: LoaiHd
+      tuNgay: string
+      denNgay: string | null
+      huy: false
+    }[]
+  > {
+    const { data, error } = await db()
+      .from('hr_contracts')
+      .select('employee_id, contract_no, kind, start_date, end_date')
+      .is('cancelled_at', null)
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => ({
+      employeeId: r.employee_id,
+      so: r.contract_no,
+      loai: r.kind as LoaiHd,
+      tuNgay: r.start_date,
+      denNgay: r.end_date,
+      huy: false as const,
+    }))
+  },
+
   async them(v: {
     employeeId: string
     so: string | null

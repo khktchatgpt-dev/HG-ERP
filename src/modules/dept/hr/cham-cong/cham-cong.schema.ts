@@ -433,3 +433,20 @@ export const hopDongSchema = z.discriminatedUnion('viec', [
     lyDo: z.string().trim().min(3, 'Ghi lý do huỷ (ít nhất 3 ký tự)').max(300),
   }),
 ])
+
+/** Nạp hồ sơ nhân viên từ vùng dán Excel (B4): xem trước, hoặc ghi (kèm người đã chọn). */
+export const napHoSoSchema = z.discriminatedUnion('viec', [
+  z.object({
+    viec: z.literal('xem'),
+    text: z.string().max(2_000_000),
+    ghiDe: z.boolean(),
+    /** Người đã chọn cho dòng trùng tên / không thấy — để xem trước so đúng người. */
+    chon: z.record(z.string().regex(/^\d+$/), uuid).optional(),
+  }),
+  z.object({
+    viec: z.literal('ghi'),
+    text: z.string().max(2_000_000),
+    ghiDe: z.boolean(),
+    chon: z.record(z.string().regex(/^\d+$/), uuid),
+  }),
+])

@@ -17,6 +17,7 @@ import { conThieu, LOC_NV, SO_MUC_HO_SO, thamNien } from '@/lib/nhan-su/ho-so'
 import { useNhanVienDs, type DsCtx, type TrangDs } from './useNhanVienDs'
 import { Avatar, TagTinhTrang, TD, TH } from './nv.shared'
 import { HopTuyen } from './hop-tuyen'
+import { HopNap } from './hop-nap'
 
 export function NhanVienDsScreen({ h }: { h: TrangDs }) {
   const d = useNhanVienDs(h)
@@ -32,20 +33,33 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
           { label: 'Có ngày nghỉ', value: String(d.dem.co_ngay_nghi) },
         ]}
         actions={
-          <Btn
-            primary
-            icon="them"
-            blockedBy={h.sua ? undefined : 'Phòng Nhân sự'}
-            onClick={() => d.setMoTuyen(true)}
-          >
-            Tuyển vào
-          </Btn>
+          <>
+            <Btn
+              icon="excel"
+              blockedBy={h.sua ? undefined : 'Phòng Nhân sự'}
+              onClick={() => d.setMoNap(true)}
+            >
+              Nhập từ Excel
+            </Btn>
+            <Btn icon="excel" href="/api/dept/hr/cham-cong/nhan-vien/excel">
+              Xuất sổ lao động
+            </Btn>
+            <Btn
+              primary
+              icon="them"
+              blockedBy={h.sua ? undefined : 'Phòng Nhân sự'}
+              onClick={() => d.setMoTuyen(true)}
+            >
+              Tuyển vào
+            </Btn>
+          </>
         }
       />
       <ThanhLoc d={d} />
       {d.chon.size > 0 && <ThanhChon d={d} />}
       <Bang d={d} />
       {d.moTuyen && <HopTuyen d={d} />}
+      {d.moNap && <HopNap d={d} />}
     </ScreenFrame>
   )
 }

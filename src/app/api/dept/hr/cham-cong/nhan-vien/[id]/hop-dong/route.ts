@@ -11,8 +11,10 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
   const user = await authService.requireUser()
   const { id } = await ctx.params
   const v = await parseJson(req, hopDongSchema)
-  if (v.viec === 'them') return NextResponse.json(await hopDongService.them(user, id, v.hd))
-  if (v.viec === 'sua') return NextResponse.json(await hopDongService.sua(user, v.id, v.hd))
+  if (v.viec === 'them')
+    return NextResponse.json(await hopDongService.them(user, id, v.hd))
+  if (v.viec === 'sua')
+    return NextResponse.json(await hopDongService.sua(user, v.id, v.hd))
   await hopDongService.huy(user, v.id, v.lyDo)
   return NextResponse.json({ ok: true })
 })
