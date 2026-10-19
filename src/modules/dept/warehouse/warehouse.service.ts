@@ -211,7 +211,7 @@ export const materialsService = {
    * mua cũng phải nhập kho; chưa có mã thì hệ thống TỰ CẤP lúc lưu đơn.
    *
    * Tìm trước, tạo sau — cùng khoá trùng tên "chắc chắn" với `create`, nên đặt
-   * lại cùng một mã SP không đẻ mã thứ hai. Mã mới gắn cờ "chờ Kho rà" (0136).
+   * lại cùng một mã SP không đẻ mã thứ hai. Không gắn cờ "chờ Kho rà" — bước đó đã gỡ (4bf4c79).
    * Không hỏi quyền `warehouse.material.create`: đây là hệ quả của việc lưu đơn,
    * người lưu đơn đã qua cửa quyền của đơn.
    */
@@ -265,7 +265,7 @@ export const materialsService = {
       m3_per_unit: null,
       warranty_text: null,
       note: `Tự cấp mã từ dòng tự gõ của đơn mua${poCode ? ` ${poCode}` : ''}`,
-      needs_review: true,
+      needs_review: false,
       needs_review_fields: [],
       created_by: user.id,
     })
