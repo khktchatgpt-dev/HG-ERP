@@ -27,7 +27,7 @@ const COT_NV =
   'id, code, full_name, shift_id, active, team, note, attendance_exempt, hire_date, leave_date, leave_reason, job_title'
 
 /**
- * Lật active=false cho người đã qua ngày làm cuối (0248) — trigger 0247 khoá tài khoản ERP
+ * Lật active=false cho người đã qua ngày làm cuối (0248) — trigger 0252 khoá tài khoản ERP
  * lúc đó. Gọi trước mỗi lần đọc danh sách, nhưng mỗi tiến trình tối đa một lần / phút.
  */
 let lanLatCuoi = 0
@@ -158,7 +158,7 @@ export const chamCongRepo = {
     )
   },
 
-  /** Tài khoản ERP gắn với nhân viên (0247) — cột chỉ-xem ở Hồ sơ nhân viên. */
+  /** Tài khoản ERP gắn với nhân viên (0252) — cột chỉ-xem ở Hồ sơ nhân viên. */
   async taiKhoanGan(): Promise<
     { employee_id: string; email: string; is_active: boolean }[]
   > {

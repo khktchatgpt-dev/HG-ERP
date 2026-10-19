@@ -1,5 +1,5 @@
 /**
- * Nhân viên là gốc, tài khoản ERP gắn vào (0247 · bản vẽ duyệt 19/10/2026).
+ * Nhân viên là gốc, tài khoản ERP gắn vào (0252 · bản vẽ duyệt 19/10/2026).
  *
  * Logic THUẦN cho màn Admin › Nhân viên & tài khoản: ghép hai danh sách thành một
  * bảng, đếm chip lọc, gợi ý gắn theo họ tên. Không chạm DB — client dùng được.
@@ -84,7 +84,7 @@ export const TEN_LOC: Record<Loc, string> = {
   nghi_con_tk: 'Đã nghỉ việc còn tài khoản',
 }
 
-/** Người đã nghỉ việc mà tài khoản vẫn mở — trigger 0247 lẽ ra đã khoá; còn thì là lỗi. */
+/** Người đã nghỉ việc mà tài khoản vẫn mở — trigger 0252 lẽ ra đã khoá; còn thì là lỗi. */
 const nghiConTk = (d: DongNvTk) =>
   d.kieu === 'nv' && !d.nv.dangLam && !!d.tk && tkSong(d.tk)
 

@@ -65,7 +65,7 @@ export const userAuditListSchema = z.object({
   limit: z.coerce.number().int().positive().max(200).default(50),
 })
 
-// ─── Nhân viên ↔ tài khoản (0247) ────────────────────────────────────────────
+// ─── Nhân viên ↔ tài khoản (0252) ────────────────────────────────────────────
 
 /** Cấp tài khoản cá nhân từ dòng nhân viên — họ tên lấy từ hồ sơ nhân viên. */
 export const userFromEmployeeSchema = z.object({

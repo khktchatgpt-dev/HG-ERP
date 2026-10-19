@@ -1,7 +1,7 @@
 import { db } from '@/server/db'
 import type { NvGoc, TkGoc } from '@/lib/nhan-vien-tai-khoan'
 
-/** Đọc hai danh sách người cho màn Admin › Nhân viên & tài khoản (0247). */
+/** Đọc hai danh sách người cho màn Admin › Nhân viên & tài khoản (0252). */
 export const nhanVienTaiKhoanRepo = {
   /** Mọi nhân viên (cả đã nghỉ) kèm tên tổ và phòng gợi ý theo tổ. */
   async nhanVien(): Promise<(NvGoc & { phongGoiY: string | null })[]> {

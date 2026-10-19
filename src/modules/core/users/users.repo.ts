@@ -19,7 +19,7 @@ export type User = {
   password_changed_at: string | null
   last_login_at: string | null
   created_at: string
-  /** Nhân viên mà tài khoản CÁ NHÂN này thuộc về (0247). Trống = chưa gắn người. */
+  /** Nhân viên mà tài khoản CÁ NHÂN này thuộc về (0252). Trống = chưa gắn người. */
   employee_id: string | null
   /** person | shared — tài khoản dùng chung không gắn nhân viên, ghi ai cầm ở shared_holder. */
   account_kind: 'person' | 'shared'
@@ -266,7 +266,7 @@ export type UserAuditAction =
   // user_audit_log.action, lệch thì insert bị chặn và mất vết trong im lặng.
   | 'password_change'
   | 'profile_update'
-  // Nhân viên ↔ tài khoản (0247): gắn/gỡ/dùng chung; trigger tự khoá khi nhân viên nghỉ (actor null).
+  // Nhân viên ↔ tài khoản (0252): gắn/gỡ/dùng chung; trigger tự khoá khi nhân viên nghỉ (actor null).
   | 'link'
   | 'auto_lock'
 

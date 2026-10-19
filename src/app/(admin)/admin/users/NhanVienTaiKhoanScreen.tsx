@@ -7,7 +7,7 @@
  * tài khoản nào không biết là của ai?".
  *
  * Nhân viên (Nhân sự quản) là gốc, mỗi người một dòng dù có tài khoản hay không; tài khoản
- * ERP gắn vào (0247). Admin không thêm nhân viên — chỉ cấp, gắn, khoá tài khoản.
+ * ERP gắn vào (0252). Admin không thêm nhân viên — chỉ cấp, gắn, khoá tài khoản.
  */
 
 import {

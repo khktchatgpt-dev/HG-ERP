@@ -5,7 +5,7 @@ import { NhanVienTaiKhoanScreen } from './NhanVienTaiKhoanScreen'
 
 export const metadata = { title: 'Nhân viên & tài khoản' }
 
-/** Admin › Nhân viên & tài khoản (0247) — thay trang Người dùng cũ. */
+/** Admin › Nhân viên & tài khoản (0252) — thay trang Người dùng cũ. */
 export default async function AdminUsersPage() {
   const user = await authService.requirePageUser()
   const [data, departments] = await Promise.all([

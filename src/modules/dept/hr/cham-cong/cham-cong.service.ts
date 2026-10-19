@@ -379,7 +379,7 @@ export type NvDong = {
   ngayCuoi: string | null
   lyDoNghi: string | null
   chucDanh: string | null
-  /** Tài khoản ERP gắn với người này (Admin cấp, 0247). Chỉ để xem ở Nhân sự. */
+  /** Tài khoản ERP gắn với người này (Admin cấp, 0252). Chỉ để xem ở Nhân sự. */
   taiKhoan: { email: string; mo: boolean } | null
 }
 

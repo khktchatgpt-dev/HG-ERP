@@ -1,5 +1,5 @@
 /**
- * Admin › Nhân viên & tài khoản (0247 · bản vẽ duyệt 19/10/2026, Q1–Q5 theo đề xuất).
+ * Admin › Nhân viên & tài khoản (0252 · bản vẽ duyệt 19/10/2026, Q1–Q5 theo đề xuất).
  *
  * Nhân viên (`hr_employees`, Nhân sự quản) là gốc; tài khoản ERP (`users`, Admin quản)
  * gắn vào. Admin KHÔNG thêm nhân viên (Q3) — chỉ cấp, gắn, khoá tài khoản. Tài khoản
@@ -14,7 +14,7 @@ import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { ghepDong, goiYGan, type DongNvTk, type GoiYGan } from '@/lib/nhan-vien-tai-khoan'
 
 /**
- * Trigger 0247 chặn mở/gắn tài khoản vào người đã nghỉ bằng một câu tiếng Việt đã nói
+ * Trigger 0252 chặn mở/gắn tài khoản vào người đã nghỉ bằng một câu tiếng Việt đã nói
  * cách gỡ; repo ném Error thường → dịch sang 409 để câu đó tới tay người dùng thay vì
  * "Internal server error". Trùng `users_employee_id_uidx` cũng vậy.
  */

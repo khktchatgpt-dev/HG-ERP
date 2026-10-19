@@ -1,5 +1,9 @@
--- 0247_users_employee_link.sql — Nhân viên là gốc, tài khoản ERP gắn vào (bản vẽ duyệt 19/10/2026,
+-- 0252_users_employee_link.sql — Nhân viên là gốc, tài khoản ERP gắn vào (bản vẽ duyệt 19/10/2026,
 -- Q1–Q5 theo đề xuất).
+--
+-- ĐỔI SỐ 19/10/2026 khi gộp main: file này viết ra với số 0247 và ĐÃ ÁP lên DB dưới tên đó;
+-- main cũng có 0247_ke_toan_xem_kho.sql nên đổi tên file sang 0252 cho khỏi trùng số. Nội dung
+-- giữ nguyên, idempotent — chạy lại không đổi gì.
 --
 -- Trước đây ERP giữ HAI danh sách người không nối nhau: `users` (tài khoản, trang Admin) và
 -- `hr_employees` (Nhân sự, chấm công, lương). Tài xế không có tài khoản thì Admin không biết

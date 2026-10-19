@@ -6,7 +6,7 @@ import { userLinkSchema } from '@/modules/core/users/users.schema'
 
 type Params = { params: Promise<{ id: string }> }
 
-// Gắn / gỡ tài khoản ↔ nhân viên, hoặc đánh dấu dùng chung (0247).
+// Gắn / gỡ tài khoản ↔ nhân viên, hoặc đánh dấu dùng chung (0252).
 export const PATCH = handle(async (req: Request, { params }: Params) => {
   const actor = await authService.requireUser()
   const { id } = await params

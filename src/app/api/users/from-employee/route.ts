@@ -4,7 +4,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { nhanVienTaiKhoanService } from '@/modules/core/users/nhan-vien-tai-khoan.service'
 import { userFromEmployeeSchema } from '@/modules/core/users/users.schema'
 
-// Cấp tài khoản cá nhân từ dòng nhân viên (0247).
+// Cấp tài khoản cá nhân từ dòng nhân viên (0252).
 export const POST = handle(async (req: Request) => {
   const actor = await authService.requireUser()
   const input = await parseJson(req, userFromEmployeeSchema)
