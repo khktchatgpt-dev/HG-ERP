@@ -140,12 +140,54 @@ mức** (chốt 16/09). `XuatScreen.tsx` 805 dòng → khối là file riêng.
 nhập theo N1/N2/N3/N4 · xuất theo X1/X3/X5/khác · tồn cuối · giá trị; lọc nhóm /
 lệnh; Excel. Nghiệm thu: tổng kỳ 10/2026 khớp Sổ phiếu cùng kỳ.
 
+> **B6 XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/XCqeNa92MkBZ5oGGwcGrjS, duyệt Q1–Q6 theo đề xuất,
+> nhánh feat/kho-erp-1014, chưa commit): `/warehouse/bao-cao` + Excel 2 tờ (`api/dept/warehouse/bao-cao/excel`).
+> Luật thuần `lib/kho-nxt.ts` (20 test): kỳ theo ngày chứng từ, bình quân gia quyền cả kỳ nối từng tháng,
+> đảo phiếu trừ vào cột gốc (phiếu đảo mang LOẠI ngược phiếu gốc → suy mã theo CHIỀU dòng), USD quy theo
+> `po.fx_rate`. Số thật 10/2026: 277 mã, đối chiếu sổ khớp (638 dòng), giá trị tồn cuối 2.499.400.088 ₫,
+> 2 mã thiếu giá. Không ghi giá vào phiếu xuất, chưa khoá kỳ. **0247 (Kế toán xem khu Kho) ĐÃ ÁP 19/10** (4 tài khoản ketoan*@).
+
 **B7 · Kiểm kê định kỳ** `/warehouse/kiem-ke` trên service có sẵn: lập đợt theo
 nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 05-VT.
+
+> **B7a XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/ACMarfdaHqyud9RrdYMyzX, duyệt Q1–Q6 theo đề xuất):
+> `/warehouse/kiem-ke` sổ đợt (tab theo trạng thái, huỷ đợt có lý do) + hộp Mở đợt (cảnh báo hàng của lệnh chưa
+> ghi xuất đứng đầu — 12 lệnh / 205 mã đo 19/10; nhóm · có tồn · sẽ đếm · kiểm lần cuối; người đếm; đếm mù).
+> Q1: danh sách đếm theo nhóm = có tồn ∪ có phiếu 180 ngày (`lib/kho-kiem-ke.ts`, dùng chung cho hộp và dòng
+> đếm: Nhôm 50, Bao bì 74 — khớp). Vá: hàm xem đợt gọi quyền `warehouse.stock.read` không tồn tại → 500 cho
+> mọi tài khoản không phải admin. KK-2026-0005 đã huỷ. Còn B7b phiếu đếm, B7c đối chiếu + duyệt (Q2 chặn tự duyệt).
+
+> **B7b XONG 19/10/2026**: phiếu đếm `/warehouse/kiem-ke/[id]` — Bắt đầu đếm (chốt sổ giờ server) · lưới
+> đếm mù (số sổ `null` trong dữ liệu gửi xuống, đã kiểm) · tự lưu sau 2 s + Ctrl+S · Enter xuống dòng · lọc
+> tìm / kệ / chưa đếm · thêm tay mã ngoài kệ (số sổ lấy tại mốc chốt) · Gửi đối chiếu chặn tại chỗ khi còn
+> trống hoặc gõ sai, câu chặn bấm được · bản điện thoại < 700px ô số to. Sổ đợt: Enter / bấm đúp mở phiếu.
+> Thử thật cả vòng trên đợt thử rồi xoá + trả số KK về 6. Còn B7c đối chiếu + duyệt.
+
+> **B7c XONG 19/10/2026 — B7 Kiểm kê đủ vòng**: đối chiếu trên cùng màn `/warehouse/kiem-ke/[id]` khi đợt chờ
+> duyệt / đã duyệt: dải tóm tắt (khớp · thừa N4 · thiếu X5 · chênh ròng tiền) · "Đáng soát" cho mã sổ còn hàng mà
+> đếm 0 · bảng chỉ dòng lệch với đơn giá BQ kỳ chứa ngày chốt (Q4, cùng `dungNxt`) · Duyệt qua hộp xác nhận ·
+> Trả về đếm lại bắt lý do · đã duyệt thì In 05-VT + mở phiếu KK. Q2: người được phân đếm / đã ghi số đếm không
+> tự duyệt (`lyDoKhongTuDuyet`, chặn ở service + nút khoá nói lý do); duyệt/trả về theo quyền
+> `warehouse.stocktake.approve`. Thử thật duyệt một đợt thử (sinh KK-2026-0008 · 1 N4, in 05-VT) rồi xoá phiếu,
+> dòng sổ, đợt và trả số KK về 6 — tồn trước/sau như nhau.
 
 **B8 · Bàn làm việc Kho + thông báo.** Trang đầu khu Kho: hàng về hôm nay · lệnh có
 hàng chờ xuất · lệnh xong còn hàng · mã dưới mức · kiểm kê đang mở. Kho nhận thông
 báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.
+
+> **B8a XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/PvUSfGoMDrT7nMjGz4yezC, duyệt Q1–Q6 theo đề xuất):
+> `/warehouse` Bàn làm việc là trang đầu khu Kho (home + mục đầu menu, exact). 11 ô việc 3 nhóm — mỗi ô đếm bằng
+> đúng hàm màn đích, đã đối chiếu từng ô với màn đích ngày 19/10 (Hàng về 5/2/9 · Sổ phiếu 95 · Theo lệnh 12/2/3 ·
+> Tồn 5/73 · Kiểm kê 0 · Đề nghị 0). Lệch bản vẽ có lý do: "quá hạn" + "≤ 7 ngày" gộp một ô vì Theo lệnh là một rổ;
+> "thiếu số NCC" đếm cả sổ như tab Sổ phiếu. Hai bảng việc gấp (Nhận → form đúng đợt kế tiếp; Ghi xuất → Xuất kho
+> đã chọn lệnh). Hàng về nhận `?hen=` để ô mở đúng tab. Còn B8b thông báo cho Kho.
+
+> **B8b XONG (mã) 19/10/2026 — giai đoạn 1 của Kho đợt 2 đã đủ B0–B8**: sự kiện `po.confirmed` (NCC xác nhận)
+> và `po.rescheduled` (dời một đợt · sửa đợt đổi ngày · dời cả đơn) → handler `kho-hang-ve.notifications` báo
+> mọi người có vai Kho trừ người bấm: xác nhận chỉ khi hẹn ≤ 3 ngày tới / đã quá (Q4), dời hẹn khi ngày thật sự đổi
+> (`lib/kho-bao-hang-ve.ts`, test). Bấm thông báo mở Hàng về đúng tab. **Migration 0251 (2 loại thông báo
+> po_inbound_soon / po_inbound_moved) CHƯA ÁP** — chưa áp thì đơn vẫn xác nhận / dời bình thường, chỉ Kho chưa
+> nhận thông báo. Số 0251 vì nhánh chấm công đã dùng 0247–0250.
 
 ## Giai đoạn 2 — Chuyển giao
 

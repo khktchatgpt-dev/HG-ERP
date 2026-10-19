@@ -1,91 +1,51 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  ArrowDownToLine,
+  BookOpen,
+  Copy,
+  Link2,
+  Printer,
+  Save,
+  Send,
+  Undo2,
+  X,
+  CheckCheck,
+} from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
-import {
-  DE_NGHI_NHAN,
-  DE_NGHI_TONE,
-  dongTrong,
-  tongDuKien,
-  vuongGuiDuyet,
-} from '@/lib/de-nghi'
+import { DE_NGHI_NHAN, dongTrong, tongDuKien, vuongGuiDuyet } from '@/lib/de-nghi'
 import { useBeRong } from '@/lib/use-be-rong'
-import {
-  Action,
-  ActionGroup,
-  ActionPane,
-  Btn,
-  CellHint,
-  Code,
-  Combobox,
-  CommitBar,
-  DocHead,
-  Grid,
-  GridBody,
-  GridBtn,
-  GridFoot,
-  GridHead,
-  GridRow,
-  NumInput,
-  ScreenFrame,
-  StatusBar,
-  StatusTrack,
-  Tag,
-  TextInput,
-  Th,
-  useToast,
-} from '@/components/kit'
+import { ApNhom, ApNut, DauTrang, KhoKhung, ThanhTT } from '../_erp/khung'
+import { OTim } from '../_erp/o-tim'
 import { HuyPhieuSheet } from './huy-phieu'
-import { GoiYGia, GoiYSoLuong, GoiYTen, TonO, VatO } from './goi-y-dong'
-import { tonNhan } from '@/lib/de-nghi-goi-y'
 import { ChotPhieuSheet } from './chot-phieu'
 import { LapLaiSheet } from './lap-lai'
 import { ThongBaoPhieu } from './thong-bao-phieu'
 import { TinhHinhNhap } from './tinh-hinh-nhap'
+import { LuoiDeNghi } from './luoi-de-nghi'
 import { DauPhieu, type DauPhieuState } from './dau-phieu'
-import {
-  MUC_DICH_GOI_Y,
-  type DongForm,
-  type GoiYMa,
-  type PhieuCu,
-  type PhieuForm,
-} from './de-nghi.shared'
+import type { DongForm, GoiYMa, PhieuCu, PhieuForm } from './de-nghi.shared'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
-/** Số kiểu VN: "1.390" = 1390 · "2,5" = 2,5. Rỗng = null. */
-const docSo = (v: string): number | null => {
-  const t = v.trim()
-  if (!t) return null
-  const n = Number(t.replace(/\./g, '').replace(',', '.'))
-  return Number.isFinite(n) ? n : null
-}
 
 type VatTuChon = { id: string; code: string; name: string; unit: string }
+type Bao = { tone: 'ok' | 'warn' | 'stop'; text: string }
 const BUOC = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đang nhập', 'Xong']
-const BUOC_AT = {
-  draft: 0,
-  pending: 1,
-  approved: 2,
-  ordering: 3,
-  done: 4,
-  cancelled: 0,
-} as const
+const BUOC_AT = { draft: 0, pending: 1, approved: 2, ordering: 3, done: 4, cancelled: 0 } as const // prettier-ignore
 let khoaTam = 0
 
 /**
  * ĐỀ NGHỊ MUA VẬT TƯ — Kho lập phiếu (0236 · Đ1, bản vẽ DN-1
- * https://claude.ai/artifact/6bFb19HuFtSzT8y2wqT17g, duyệt 13/10/2026). Khuôn F:
- * lưới là nhân vật chính, đầu phiếu một dải, thanh chốt đáy nói vì sao chưa
- * gửi được bằng câu bấm được.
+ * https://claude.ai/artifact/6bFb19HuFtSzT8y2wqT17g), dựng lại trên khung Kho
+ * lối ERP · B5 (https://claude.ai/artifact/F2uVKzc4tb28FhHZY6BDiR, 14/10/2026):
+ * viết tay, không kit. Khuôn F: lưới là nhân vật chính, đầu phiếu một dải, thanh
+ * chốt đáy nói vì sao chưa gửi được bằng câu bấm được.
  *
- * Số hoá tờ giấy anh Hào gửi Zalo 13/10: cột Tên · ĐVT · SL · Đơn giá · Mục đích
- * giữ nguyên; thêm TỒN HIỆN TẠI (lãnh đạo thấy vì sao cần mua) và giá mua gần
- * nhất tự điền (Q4). Thứ chưa có mã thì gõ tên tự do (Q3).
- *
- * Sửa được khi phiếu còn NHÁP và người xem có quyền lập; còn lại chỉ xem.
- * Luật màn hẹp: < 900px bỏ cột Thành tiền (tổng vẫn ở thanh chốt), tồn xuống
- * thành dòng gợi ý dưới ô số lượng.
+ * Sửa được khi phiếu còn NHÁP và người xem có quyền lập; còn lại chỉ xem. Đã
+ * duyệt trở đi lưới đổi sang TÌNH HÌNH NHẬP (DN-5). Thông báo (lưu, gửi, lỗi)
+ * hiện TẠI CHỖ trên thanh chốt, không toast tự tắt.
  */
 export function DeNghiScreen({
   phieu,
@@ -106,7 +66,7 @@ export function DeNghiScreen({
   lapLaiTu?: string | null
 }) {
   const router = useRouter()
-  const toast = useToast()
+  const dsMucDich = useId()
   const sua = canManage && phieu.status === 'draft'
   const [head, setHead] = useState<DauPhieuState>({
     department: phieu.department,
@@ -121,13 +81,14 @@ export function DeNghiScreen({
   const [moHuy, setMoHuy] = useState(false)
   const [moChot, setMoChot] = useState(false)
   const [moLapLai, setMoLapLai] = useState(false)
-  // Đã duyệt trở đi: lưới đổi sang TÌNH HÌNH NHẬP (DN-5), đếm từ sổ kho.
+  const [bao, setBao] = useState<Bao | null>(null)
   const daDuyet = ['approved', 'ordering', 'done'].includes(phieu.status)
   const dangNhap = phieu.status === 'approved' || phieu.status === 'ordering'
   const muaDong = phieu.lines.filter((l) => (l.can ?? 0) > 0)
   const thieu = muaDong.filter((l) => (l.da_nhap ?? 0) < (l.can ?? 0))
   const khung = useRef<HTMLDivElement>(null)
-  const hep = useBeRong(khung) < 900
+  const beRong = useBeRong(khung)
+  const hep = beRong > 0 && beRong < 900
 
   const patch = (i: number, p: Partial<DongForm>) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)))
@@ -150,15 +111,12 @@ export function DeNghiScreen({
       const el = document.getElementById(id) as HTMLInputElement | null
       el?.focus()
       el?.select?.()
-    }, 0)
+    }, 40)
 
   async function chonVatTu(vt: VatTuChon) {
     const trung = rows.findIndex((r) => r.material_id === vt.id)
     if (trung >= 0) {
-      toast.error(
-        `${vt.code} đã có ở dòng ${trung + 1}`,
-        'Một mã một dòng — sửa số ở dòng đó.',
-      )
+      setBao({ tone: 'warn', text: `${vt.code} đã có ở dòng ${trung + 1} — một mã một dòng, sửa số ở dòng đó.` }) // prettier-ignore
       focus(`dn-qty-${trung}`)
       return
     }
@@ -170,7 +128,7 @@ export function DeNghiScreen({
       )
       goiY = res.goi_y[vt.id] ?? goiY
     } catch (e) {
-      toast.error('Không tra được tồn / giá gần nhất', apiErrorText(e))
+      setBao({ tone: 'warn', text: `Không tra được tồn / giá gần nhất của ${vt.code}: ${apiErrorText(e)}` }) // prettier-ignore
     } finally {
       setDangTra(false)
     }
@@ -245,7 +203,7 @@ export function DeNghiScreen({
     const b = body()
     if (b.lines.some((l) => !(l.qty > 0) || !l.name || !l.unit)) {
       const v = vuong.find((x) => x.dong != null)
-      toast.error('Chưa lưu được', v?.cau ?? 'Có dòng chưa đủ tên / ĐVT / số lượng')
+      setBao({ tone: 'stop', text: `Chưa lưu được: ${v?.cau ?? 'có dòng chưa đủ tên / ĐVT / số lượng'}` }) // prettier-ignore
       if (v?.dong != null) focus(`dn-qty-${v.dong}`)
       return null
     }
@@ -260,481 +218,356 @@ export function DeNghiScreen({
     return r.id
   }
 
-  async function luuNhap() {
+  /** Chạy một việc có khoá `busy`, lỗi nói tại chỗ. */
+  async function lam(viec: () => Promise<void>, loi: string) {
     setBusy(true)
     try {
-      const id = await luu()
-      if (!id) return
-      toast.success('Đã lưu nháp', 'Phiếu chưa gửi — lãnh đạo chưa thấy.')
-      if (!phieu.id) router.replace(`/warehouse/de-nghi/${id}`)
-      else router.refresh()
+      await viec()
     } catch (e) {
-      toast.error('Lưu nháp không được', apiErrorText(e))
+      setBao({ tone: 'stop', text: `${loi}: ${apiErrorText(e)}` })
     } finally {
       setBusy(false)
     }
   }
 
-  async function guiDuyet() {
-    if (vuong.length > 0) {
-      const v = vuong[0]
-      if (v.dong != null) focus(v.dong != null && rows[v.dong]?.material_id ? `dn-qty-${v.dong}` : `dn-ten-${v.dong}`) // prettier-ignore
-      return
-    }
-    setBusy(true)
-    try {
+  const luuNhap = () =>
+    lam(async () => {
+      const id = await luu()
+      if (!id) return
+      setBao({ tone: 'ok', text: 'Đã lưu nháp — phiếu chưa gửi, lãnh đạo chưa thấy.' })
+      if (!phieu.id) router.replace(`/warehouse/de-nghi/${id}`)
+      else router.refresh()
+    }, 'Lưu nháp không được')
+
+  const nhayVuong = () => {
+    const v = vuong[0]
+    if (v?.dong != null) focus(rows[v.dong]?.name.trim() ? `dn-qty-${v.dong}` : `dn-ten-${v.dong}`) // prettier-ignore
+  }
+
+  const guiDuyet = () => {
+    if (vuong.length > 0) return nhayVuong()
+    return lam(async () => {
       const id = await luu()
       if (!id) return
       await api(`/api/dept/warehouse/de-nghi/${id}/gui`, { method: 'POST' })
-      toast.success('Đã gửi lãnh đạo duyệt', 'Phiếu khoá lại; muốn sửa thì rút về nháp.')
+      setBao({ tone: 'ok', text: 'Đã gửi lãnh đạo duyệt — phiếu khoá lại; muốn sửa thì rút về nháp.' }) // prettier-ignore
       if (!phieu.id) router.replace(`/warehouse/de-nghi/${id}`)
       else router.refresh()
-    } catch (e) {
-      toast.error('Gửi duyệt không được', apiErrorText(e))
-    } finally {
-      setBusy(false)
-    }
+    }, 'Gửi duyệt không được')
   }
 
-  async function rutVe() {
-    if (!phieu.id) return
-    setBusy(true)
-    try {
+  const rutVe = () =>
+    lam(async () => {
+      if (!phieu.id) return
       await api(`/api/dept/warehouse/de-nghi/${phieu.id}/rut`, { method: 'POST' })
-      toast.success('Đã rút về nháp', 'Sửa xong gửi lại.')
+      setBao({ tone: 'ok', text: 'Đã rút về nháp — sửa xong gửi lại.' })
       router.refresh()
-    } catch (e) {
-      toast.error('Rút về không được', apiErrorText(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+    }, 'Rút về không được')
 
   async function chepLink() {
     const url = `${window.location.origin}/warehouse/de-nghi/${phieu.id}`
     try {
       await navigator.clipboard.writeText(url)
-      toast.success('Đã chép đường dẫn', 'Dán vào Zalo để lãnh đạo mở thẳng phiếu.')
+      setBao({ tone: 'ok', text: 'Đã chép đường dẫn — dán vào Zalo để lãnh đạo mở thẳng phiếu.' }) // prettier-ignore
     } catch {
-      toast.error('Không chép được', url)
+      setBao({ tone: 'warn', text: `Không chép được, chép tay: ${url}` })
     }
   }
 
-  const blocked = !sua ? undefined : vuong.length > 0 ? vuong[0].cau : undefined
-  const soCot = hep ? 7 : 10
+  const blocked = sua && vuong.length > 0 ? vuong[0].cau : undefined
+  const dangBan = busy ? 'Đang lưu…' : null
+  const at = BUOC_AT[phieu.status]
 
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-      <ScreenFrame>
-        <ActionPane>
-          <ActionGroup label="Phiếu">
-            {sua && (
-              <Action
-                primary
-                onClick={() => void guiDuyet()}
-                disabled={busy}
-                title={blocked}
-              >
-                {busy ? 'Đang gửi…' : 'Gửi lãnh đạo duyệt'}
-              </Action>
-            )}
-            {sua && (
-              <Action icon="luuNhap" onClick={() => void luuNhap()} disabled={busy}>
-                Lưu nháp
-              </Action>
-            )}
-            {canManage && phieu.status === 'pending' && (
-              <Action icon="quayLai" onClick={() => void rutVe()} disabled={busy}>
-                Rút về nháp
-              </Action>
-            )}
-            {canManage &&
-              phieu.id &&
-              (phieu.status === 'draft' || phieu.status === 'pending') && (
-                <Action icon="huy" onClick={() => setMoHuy(true)} disabled={busy}>
-                  Huỷ phiếu
-                </Action>
-              )}
-            {canNhap && dangNhap && phieu.id && (
-              <Action
-                primary
-                icon="nhanHang"
-                onClick={() => router.push(`/warehouse/de-nghi/${phieu.id}/nhap`)}
-              >
-                Nhập hàng đã mua
-              </Action>
-            )}
-            {canManage && dangNhap && phieu.id && (
-              <Action icon="xong" onClick={() => setMoChot(true)}>
-                Chốt xong…
-              </Action>
-            )}
-          </ActionGroup>
-          {canManage && (
-            <ActionGroup label="Lập lại">
-              {/* Màn lập mới: chọn phiếu cũ. Phiếu đã gửi: lập lại chính nó (Đ8). */}
-              {!phieu.id ? (
-                <Action icon="saoChep" onClick={() => setMoLapLai(true)}>
-                  Lập lại từ phiếu cũ…
-                </Action>
-              ) : (
-                phieu.submitted_at && (
-                  <Action
-                    icon="saoChep"
-                    onClick={() => router.push(`/warehouse/de-nghi/moi?tu=${phieu.id}`)}
-                  >
-                    Lập lại phiếu này
-                  </Action>
-                )
-              )}
-            </ActionGroup>
-          )}
-          {phieu.id && phieu.status !== 'draft' && phieu.status !== 'cancelled' && (
-            <ActionGroup label="Gửi">
-              <Action icon="saoChep" onClick={() => void chepLink()}>
-                Chép đường dẫn
-              </Action>
-            </ActionGroup>
-          )}
-          {phieu.id && (
-            <ActionGroup label="Bản in">
-              <Action
-                icon="in"
-                onClick={() => window.open(`/print/de-nghi/${phieu.id}`, '_blank')}
-              >
-                In giấy đề nghị
-              </Action>
-            </ActionGroup>
-          )}
-          <ActionGroup label="Sổ">
-            <Action icon="so" onClick={() => router.push('/warehouse/de-nghi')}>
-              Sổ đề nghị
-            </Action>
-          </ActionGroup>
-        </ActionPane>
-
-        <DocHead
-          compact
-          kind="Đề nghị mua vật tư"
-          code={phieu.code ?? 'Phiếu mới'}
-          sub={`${head.department} lập · lãnh đạo duyệt · Kho mua + nhập kho · người đề nghị ${phieu.nguoi_de_nghi}`}
-        >
-          {phieu.status === 'cancelled' ? (
-            <Tag tone={DE_NGHI_TONE.cancelled}>{DE_NGHI_NHAN.cancelled}</Tag>
-          ) : (
-            <StatusTrack label="Phiếu" steps={BUOC} at={BUOC_AT[phieu.status]} />
-          )}
-        </DocHead>
-
-        <ThongBaoPhieu
-          phieu={phieu}
-          lapLaiTu={lapLaiTu}
-          muaDong={muaDong.length}
-          thieu={thieu.length}
-        />
-
-        {/* Đầu phiếu một dải (khuôn F): bộ phận · cần trước · lệnh · ghi chú. */}
-        <DauPhieu
-          sua={sua}
-          head={head}
-          setHead={setHead}
-          createdAt={phieu.created_at}
-          lsx={lsx}
-        />
-
-        {sua && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
-            <span className="text-k-label font-bold tracking-[.07em] text-[var(--act-text)] uppercase">
-              + Thêm dòng
+    <KhoKhung label={`Đề nghị mua vật tư ${phieu.code ?? 'mới'}`}>
+      <DauTrang
+        crumb="Kho › Đề nghị mua"
+        title={
+          <>
+            Đề nghị mua vật tư{' '}
+            <span className="kh-num" style={{ color: 'var(--kh-dnm)' }}>
+              {phieu.code ?? 'phiếu mới'}
             </span>
-            <Combobox<VatTuChon>
-              search={timVatTu}
-              onPick={(vt) => void chonVatTu(vt)}
-              keyOf={(m) => m.id}
-              render={(m) => (
-                <span className="flex items-baseline gap-2">
-                  <Code>{m.code}</Code>
-                  <span className="truncate">{m.name}</span>
-                  <span className="ml-auto text-[var(--ink-3)]">{m.unit}</span>
+          </>
+        }
+        ctx={
+          phieu.status === 'cancelled' ? (
+            <span className="kh-tag">{DE_NGHI_NHAN.cancelled}</span>
+          ) : (
+            <span className="kh-steps" aria-label={`Phiếu đang ở bước ${BUOC[at]}`}>
+              {BUOC.map((b, i) => (
+                <span key={b} className={i === at ? 'on' : i < at ? 'qua' : undefined}>
+                  {b}
                 </span>
-              )}
-              placeholder={
-                dangTra
-                  ? 'Đang tra tồn + giá…'
-                  : 'Gõ mã hoặc tên vật tư có trong danh mục'
-              }
-              label="Tìm vật tư để thêm dòng"
-              width={hep ? 300 : 420}
-              disabled={dangTra}
-            />
-            <Btn onClick={themDongTuDo} className="text-k-sm h-6 px-2">
-              + Dòng chưa có mã
-            </Btn>
-            <span className="text-k-sm ml-auto text-[var(--ink-3)]">
-              {rows.length} dòng
+              ))}
             </span>
-          </div>
-        )}
-
-        <div ref={khung} className="h-0 w-full" aria-hidden />
-        <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-          {daDuyet ? (
-            <TinhHinhNhap rows={rows} hep={hep} daChot={!!phieu.closed_at} />
-          ) : (
-            <Grid minWidth={hep ? 680 : 980}>
-              <GridHead>
-                <Th width={30}>#</Th>
-                <Th width={hep ? 86 : 100}>Mã</Th>
-                <Th>Tên vật tư</Th>
-                <Th width={64}>ĐVT</Th>
-                {!hep && (
-                  <Th num width={84}>
-                    Tồn hiện tại
-                  </Th>
-                )}
-                <Th num width={hep ? 86 : 100}>
-                  {hep ? 'SL' : 'Số lượng'}
-                </Th>
-                <Th num width={110}>
-                  {hep ? 'Giá dự kiến' : 'Đơn giá dự kiến'}
-                </Th>
-                {!hep && <Th width={82}>VAT</Th>}
-                {!hep && (
-                  <Th num width={110}>
-                    Thành tiền
-                  </Th>
-                )}
-                <Th width={hep ? 100 : 130}>{hep ? 'Mục đích' : 'Mục đích / tổ dùng'}</Th>
-                {sua && <Th width={50}></Th>}
-              </GridHead>
-              <GridBody>
-                {rows.map((r, i) => {
-                  const tuDo = !r.material_id
-                  const ton = tonNhan(r)
-                  return (
-                    <GridRow key={r.key}>
-                      <td className="k-c-n">{i + 1}</td>
-                      <td>
-                        {r.code ? (
-                          <Code>{r.code}</Code>
-                        ) : (
-                          <Tag tone="warn">chưa có mã</Tag>
-                        )}
-                      </td>
-                      <td className="max-w-0" title={r.name}>
-                        {sua && tuDo ? (
-                          <TextInput
-                            id={`dn-ten-${i}`}
-                            value={r.name}
-                            onCommit={(v) => patch(i, { name: v })}
-                            placeholder="tên vật tư (chưa có mã)"
-                            label={`Tên vật tư dòng ${i + 1}`}
-                          />
-                        ) : (
-                          <span className="block truncate">{r.name}</span>
-                        )}
-                        <GoiYTen r={r} />
-                      </td>
-                      <td className="text-[var(--ink-3)]">
-                        {sua && tuDo ? (
-                          <TextInput
-                            value={r.unit}
-                            onCommit={(v) => patch(i, { unit: v })}
-                            placeholder="ĐVT"
-                            label={`ĐVT dòng ${i + 1}`}
-                          />
-                        ) : (
-                          r.unit
-                        )}
-                      </td>
-                      {!hep && (
-                        <td className="k-r num">
-                          <TonO ton={ton} />
-                        </td>
-                      )}
-                      <td className="k-r">
-                        {sua ? (
-                          <NumInput
-                            id={`dn-qty-${i}`}
-                            value={r.qty == null ? '' : String(r.qty)}
-                            onCommit={(v) => patch(i, { qty: docSo(v) })}
-                            aria-label={`Số lượng ${r.code ?? r.name}`}
-                          />
-                        ) : (
-                          <>
-                            <b className="num">
-                              {r.qty == null ? '—' : fmt(r.approved_qty ?? r.qty)}
-                            </b>
-                            {r.approved_qty != null && r.qty != null && (
-                              <CellHint tone="warn">đề nghị {fmt(r.qty)}</CellHint>
-                            )}
-                          </>
-                        )}
-                        <GoiYSoLuong ton={hep ? ton : null} />
-                      </td>
-                      <td className="k-r">
-                        {sua ? (
-                          <NumInput
-                            value={r.unit_price == null ? '' : String(r.unit_price)}
-                            onCommit={(v) => patch(i, { unit_price: docSo(v) })}
-                            aria-label={`Đơn giá dự kiến ${r.code ?? r.name}`}
-                          />
-                        ) : (
-                          <span className="num">
-                            {r.unit_price == null ? '—' : fmt(r.unit_price)}
-                          </span>
-                        )}
-                        <GoiYGia r={r} />
-                        {/* Khung hẹp: VAT nằm dưới ô giá, nhường chỗ cho cột tên. */}
-                        {hep && (
-                          <div className="mt-1 flex justify-end">
-                            <VatO
-                              r={r}
-                              sua={sua}
-                              onChange={(v) => patch(i, { vat_rate: v })}
-                            />
-                          </div>
-                        )}
-                      </td>
-                      {!hep && (
-                        <td>
-                          <VatO
-                            r={r}
-                            sua={sua}
-                            onChange={(v) => patch(i, { vat_rate: v })}
-                          />
-                        </td>
-                      )}
-                      {!hep && (
-                        <td className="k-r num">
-                          {r.qty != null && r.unit_price != null ? (
-                            fmt(Math.round(r.qty * r.unit_price))
-                          ) : (
-                            <span className="text-[var(--ink-empty)]">—</span>
-                          )}
-                        </td>
-                      )}
-                      <td>
-                        {sua ? (
-                          <>
-                            <input
-                              list="dn-muc-dich"
-                              size={1}
-                              defaultValue={r.purpose}
-                              onBlur={(e) => patch(i, { purpose: e.target.value })}
-                              placeholder="tổ / việc dùng"
-                              aria-label={`Mục đích dòng ${i + 1}`}
-                              className="text-k-sm h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface-card)] px-1.5 placeholder:text-[var(--ink-3)] focus:border-[var(--act)]"
-                            />
-                          </>
-                        ) : (
-                          <span className="block truncate text-[var(--ink-2)]">
-                            {r.purpose || '—'}
-                          </span>
-                        )}
-                      </td>
-                      {sua && (
-                        <td>
-                          <GridBtn
-                            onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                          >
-                            Xoá
-                          </GridBtn>
-                        </td>
-                      )}
-                    </GridRow>
-                  )
-                })}
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={soCot + (sua ? 1 : 0)}
-                      className="py-6 text-center text-[var(--ink-3)]"
-                    >
-                      {sua
-                        ? 'Chưa có dòng nào — gõ mã hoặc tên ở ô “Thêm dòng”; thứ chưa có mã thì bấm “+ Dòng chưa có mã”.'
-                        : 'Phiếu không có dòng nào.'}
-                    </td>
-                  </tr>
-                )}
-              </GridBody>
-              <GridFoot>
-                <td colSpan={hep ? 6 : 8}>
-                  {rows.length} dòng
-                  {soChuaMa > 0 && ` · ${soChuaMa} dòng chưa có mã (gắn mã khi nhập kho)`}
-                </td>
-                {!hep && <td className="k-r num">{fmt(tong.hang)}</td>}
-                <td colSpan={sua ? 2 : 1} className="font-normal text-[var(--ink-3)]">
-                  {hep ? `${fmt(tong.hang)} · ` : ''}tiền hàng chưa VAT
-                  {tong.thieuGia > 0 && ` · ${tong.thieuGia} dòng chưa có giá`}
-                </td>
-              </GridFoot>
-            </Grid>
-          )}
-          <datalist id="dn-muc-dich">
-            {MUC_DICH_GOI_Y.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        </div>
-
-        {!daDuyet && (
-          <CommitBar
-            totals={[
-              { label: 'Dòng', value: rows.length },
-              ...(soChuaMa > 0 ? [{ label: 'Chưa có mã', value: soChuaMa }] : []),
-              { label: 'Tiền hàng', value: fmt(tong.hang) },
-              { label: 'VAT', value: fmt(tong.vat) },
-              { label: 'Vận chuyển', value: fmt(tong.vc) },
-            ]}
-            grand={{ label: 'Tổng dự kiến', value: fmt(tong.tong) }}
-            actions={
-              sua ? (
-                <>
-                  {/* Không dùng `blocked` của CommitBar: kit ghi "Chưa LƯU được" —
-                    sai ở đây, lưu nháp vẫn được, chỉ GỬI DUYỆT bị chặn. */}
-                  {blocked && (
-                    <button
-                      type="button"
-                      className="text-k-sm max-w-[360px] truncate font-semibold text-[var(--warn)] underline-offset-2 hover:underline"
-                      title={blocked}
-                      onClick={() => {
-                        const v = vuong[0]
-                        if (v?.dong != null)
-                          focus(
-                            rows[v.dong]?.name.trim()
-                              ? `dn-qty-${v.dong}`
-                              : `dn-ten-${v.dong}`,
-                          )
-                      }}
-                    >
-                      Chưa gửi được: {blocked} →
-                    </button>
-                  )}
-                  <Btn onClick={() => void luuNhap()} disabled={busy}>
-                    Lưu nháp
-                  </Btn>
-                  <Action
-                    primary
-                    onClick={() => void guiDuyet()}
-                    disabled={busy || vuong.length > 0}
-                    title={blocked}
+          )
+        }
+        actions={
+          <>
+            <ApNhom>
+              {sua && (
+                <ApNut
+                  primary
+                  icon={<Send size={15} aria-hidden />}
+                  onClick={() => void guiDuyet()}
+                  why={dangBan}
+                >
+                  Gửi lãnh đạo duyệt
+                </ApNut>
+              )}
+              {sua && (
+                <ApNut
+                  icon={<Save size={15} aria-hidden />}
+                  onClick={() => void luuNhap()}
+                  why={dangBan}
+                >
+                  Lưu nháp
+                </ApNut>
+              )}
+              {canManage && phieu.status === 'pending' && (
+                <ApNut
+                  icon={<Undo2 size={15} aria-hidden />}
+                  onClick={() => void rutVe()}
+                  why={dangBan}
+                >
+                  Rút về nháp
+                </ApNut>
+              )}
+              {canNhap && dangNhap && phieu.id && (
+                <ApNut
+                  primary
+                  icon={<ArrowDownToLine size={15} aria-hidden />}
+                  href={`/warehouse/de-nghi/${phieu.id}/nhap`}
+                >
+                  Nhập hàng đã mua
+                </ApNut>
+              )}
+              {canManage && dangNhap && phieu.id && (
+                <ApNut
+                  icon={<CheckCheck size={15} aria-hidden />}
+                  onClick={() => setMoChot(true)}
+                >
+                  Chốt xong…
+                </ApNut>
+              )}
+              {canManage &&
+                phieu.id &&
+                (phieu.status === 'draft' || phieu.status === 'pending') && (
+                  <ApNut
+                    icon={<X size={15} aria-hidden />}
+                    onClick={() => setMoHuy(true)}
+                    why={dangBan}
                   >
-                    Gửi lãnh đạo duyệt
-                  </Action>
-                </>
-              ) : undefined
+                    Huỷ phiếu
+                  </ApNut>
+                )}
+            </ApNhom>
+            <ApNhom>
+              {canManage &&
+                (!phieu.id ? (
+                  <ApNut
+                    icon={<Copy size={15} aria-hidden />}
+                    onClick={() => setMoLapLai(true)}
+                  >
+                    Lập lại từ phiếu cũ…
+                  </ApNut>
+                ) : (
+                  phieu.submitted_at && (
+                    <ApNut
+                      icon={<Copy size={15} aria-hidden />}
+                      href={`/warehouse/de-nghi/moi?tu=${phieu.id}`}
+                    >
+                      Lập lại phiếu này
+                    </ApNut>
+                  )
+                ))}
+              {phieu.id && phieu.status !== 'draft' && phieu.status !== 'cancelled' && (
+                <ApNut
+                  icon={<Link2 size={15} aria-hidden />}
+                  onClick={() => void chepLink()}
+                >
+                  Chép đường dẫn
+                </ApNut>
+              )}
+              {phieu.id && (
+                <ApNut
+                  icon={<Printer size={15} aria-hidden />}
+                  onClick={() => window.open(`/print/de-nghi/${phieu.id}`, '_blank')}
+                >
+                  In giấy đề nghị
+                </ApNut>
+              )}
+              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/de-nghi">
+                Sổ đề nghị
+              </ApNut>
+            </ApNhom>
+          </>
+        }
+      />
+
+      <ThongBaoPhieu
+        phieu={phieu}
+        lapLaiTu={lapLaiTu}
+        muaDong={muaDong.length}
+        thieu={thieu.length}
+      />
+
+      <DauPhieu
+        sua={sua}
+        head={head}
+        setHead={setHead}
+        createdAt={phieu.created_at}
+        lsx={lsx}
+      />
+
+      {sua && (
+        <div className="kh-them">
+          <span className="lbl">+ Thêm dòng</span>
+          <OTim<VatTuChon>
+            search={timVatTu}
+            onPick={(vt) => void chonVatTu(vt)}
+            keyOf={(m) => m.id}
+            render={(m) => (
+              <span style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <b className="kh-ma">{m.code}</b>
+                <span>{m.name}</span>
+                <span className="kh-mut" style={{ marginLeft: 'auto' }}>
+                  {m.unit}
+                </span>
+              </span>
+            )}
+            placeholder={
+              dangTra ? 'Đang tra tồn + giá…' : 'Gõ mã hoặc tên vật tư có trong danh mục'
             }
+            label="Tìm vật tư để thêm dòng"
+            disabled={dangTra}
+            width={hep ? 280 : 420}
+            rong="Không có vật tư nào khớp — thứ chưa có mã thì bấm “+ Dòng chưa có mã”"
+          />
+          <button
+            type="button"
+            className="kh-btn"
+            style={{ border: '1px solid var(--kh-line)', background: 'var(--kh-card)' }}
+            onClick={themDongTuDo}
+          >
+            + Dòng chưa có mã
+          </button>
+          <span className="kh-mut" style={{ marginLeft: 'auto' }}>
+            {rows.length} dòng
+          </span>
+        </div>
+      )}
+
+      <div ref={khung} style={{ height: 0, width: '100%' }} aria-hidden />
+      <div className="kh-grid">
+        {daDuyet ? (
+          <TinhHinhNhap rows={rows} hep={hep} daChot={!!phieu.closed_at} />
+        ) : (
+          <LuoiDeNghi
+            rows={rows}
+            sua={sua}
+            hep={hep}
+            patch={patch}
+            xoa={(i) => setRows((rs) => rs.filter((_, j) => j !== i))}
+            tong={tong}
+            soChuaMa={soChuaMa}
+            dsMucDich={dsMucDich}
           />
         )}
-        <StatusBar
-          left={[
-            'Đơn giá tự điền theo lần mua gần nhất (đơn VND) — sửa được',
-            'Gửi rồi phiếu khoá; muốn sửa thì rút về nháp khi lãnh đạo chưa duyệt',
-          ]}
-          right={`${rows.length} dòng`}
-        />
-      </ScreenFrame>
+      </div>
+
+      {(!daDuyet || bao) && (
+        <div className="kh-commit" role="group" aria-label="Tổng phiếu đề nghị">
+          {!daDuyet && (
+            <>
+              <span className="m">
+                <span className="k">Dòng</span>
+                <span className="v">{rows.length}</span>
+              </span>
+              {soChuaMa > 0 && (
+                <span className="m">
+                  <span className="k">Chưa có mã</span>
+                  <span className="v" style={{ color: 'var(--kh-warn)' }}>
+                    {soChuaMa}
+                  </span>
+                </span>
+              )}
+              <span className="m">
+                <span className="k">Tiền hàng</span>
+                <span className="v">{fmt(tong.hang)}</span>
+              </span>
+              <span className="m">
+                <span className="k">VAT</span>
+                <span className="v">{fmt(tong.vat)}</span>
+              </span>
+              <span className="m">
+                <span className="k">Vận chuyển</span>
+                <span className="v">{fmt(tong.vc)}</span>
+              </span>
+              <span className="m">
+                <span className="k">Tổng dự kiến</span>
+                <span className="v" style={{ color: 'var(--kh-dnm)' }}>
+                  {fmt(tong.tong)}
+                </span>
+              </span>
+            </>
+          )}
+          {bao ? (
+            <span
+              className="why"
+              role="status"
+              style={bao.tone === 'ok' ? { color: 'var(--kh-done)' } : bao.tone === 'warn' ? { color: 'var(--kh-warn)' } : undefined} // prettier-ignore
+            >
+              {bao.text}
+            </span>
+          ) : blocked ? (
+            /* Lưu nháp vẫn được — chỉ GỬI DUYỆT bị chặn, nên câu nói "Chưa gửi được". */
+            <button
+              type="button"
+              className="why"
+              style={{ color: 'var(--kh-warn)' }}
+              title={blocked}
+              onClick={nhayVuong}
+            >
+              Chưa gửi được: {blocked} →
+            </button>
+          ) : (
+            <span className="why" />
+          )}
+          {sua && (
+            <span className="ghi">
+              <button
+                type="button"
+                className="kh-btn"
+                style={{
+                  border: '1px solid var(--kh-line)',
+                  background: 'var(--kh-card)',
+                }}
+                disabled={busy}
+                onClick={() => void luuNhap()}
+              >
+                Lưu nháp
+              </button>
+              <button
+                type="button"
+                className="kh-btn p"
+                disabled={busy || vuong.length > 0}
+                title={blocked}
+                onClick={() => void guiDuyet()}
+              >
+                Gửi lãnh đạo duyệt
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
+      <ThanhTT
+        left="Đơn giá tự điền theo lần mua gần nhất (đơn VND) — sửa được · gửi rồi phiếu khoá, muốn sửa thì rút về nháp khi lãnh đạo chưa duyệt"
+        right={<b>{rows.length} dòng</b>}
+      />
+
       {moLapLai && (
         <LapLaiSheet
           rows={phieuCu}
@@ -750,8 +583,9 @@ export function DeNghiScreen({
             (l) => `${l.name} còn ${fmt((l.can ?? 0) - (l.da_nhap ?? 0))} ${l.unit}`,
           )}
           onClose={() => setMoChot(false)}
-          onDone={() => {
+          onDone={(t) => {
             setMoChot(false)
+            setBao({ tone: 'ok', text: t })
             router.refresh()
           }}
         />
@@ -761,12 +595,13 @@ export function DeNghiScreen({
           id={phieu.id}
           code={phieu.code ?? ''}
           onClose={() => setMoHuy(false)}
-          onDone={() => {
+          onDone={(t) => {
             setMoHuy(false)
+            setBao({ tone: 'ok', text: t })
             router.refresh()
           }}
         />
       )}
-    </div>
+    </KhoKhung>
   )
 }

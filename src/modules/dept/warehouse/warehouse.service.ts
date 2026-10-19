@@ -14,6 +14,7 @@ import {
 } from '@/lib/material-key'
 import { invalidateTaxonomy, materialTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
+import { nhomChoDongTuGo } from '@/lib/nhom-dong-tu-go'
 import { catalogFillPatch, type CatalogLineInfo } from '@/lib/po-catalog-backfill'
 import { diffMaterial } from '@/lib/material-diff'
 import { emit } from '@/events/bus'
@@ -199,6 +200,78 @@ async function nextCode(
 }
 
 export const materialsService = {
+  /**
+   * MÃ VẬT TƯ CHO DÒNG TỰ GÕ của đơn mua (gỗ / gia công theo mã SP — 0134).
+   *
+   * Vì sao (19/10/2026, chủ dự án): dòng tự gõ không có mã nên không lên phiếu
+   * nhập — ĐH02HGTĐ (400 + 400 ghế gỗ, trễ hẹn) mở form nhận hàng ra lưới
+   * trống, người phụ trách không ghi nhận được hàng về. Luật mới: hàng nào đặt
+   * mua cũng phải nhập kho; chưa có mã thì hệ thống TỰ CẤP lúc lưu đơn.
+   *
+   * Tìm trước, tạo sau — cùng khoá trùng tên "chắc chắn" với `create`, nên đặt
+   * lại cùng một mã SP không đẻ mã thứ hai. Không gắn cờ "chờ Kho rà" — bước đó đã gỡ (4bf4c79).
+   * Không hỏi quyền `warehouse.material.create`: đây là hệ quả của việc lưu đơn,
+   * người lưu đơn đã qua cửa quyền của đơn.
+   */
+  async ensureForFreeLine(
+    user: User,
+    line: { name: string; unit: string | null },
+    poCode?: string,
+  ): Promise<string> {
+    const name = line.name.trim().slice(0, 200)
+    // Nhóm đoán theo tên (nệm / vải / mây / gỗ) — lib/nhom-dong-tu-go.
+    const group = nhomChoDongTuGo(name)
+    const siblings = await materialsRepo.namesInGroup(group)
+    const key = sureKey(name)
+    const same = siblings.find((m) =>
+      key.length >= MIN_KEY_LEN
+        ? sureKey(m.name) === key
+        : m.name.trim().toLowerCase() === name.toLowerCase(),
+    )
+    if (same) {
+      const m = await materialsRepo.findByCode(same.code)
+      if (m) return m.id
+    }
+    const created = await materialsRepo.insert({
+      code: await nextCode(group, siblings),
+      name,
+      unit: normalizeUnit(line.unit?.trim() || 'Cái'),
+      barcode: null,
+      spec: null,
+      price_unit: null,
+      unit2_factor: null,
+      group_name: group,
+      sub_group: null,
+      min_stock: 0,
+      max_stock: null,
+      over_tolerance_pct: 0,
+      reorder_point: null,
+      reorder_qty: null,
+      shelf_location: null,
+      vat_rate: null,
+      default_supplier_id: null,
+      last_purchase_price: null,
+      po_template: 'wood',
+      kg_per_m: null,
+      kg_per_unit: null,
+      default_bar_length_m: null,
+      pack_size: null,
+      pack_unit: null,
+      material_grade: null,
+      open_style: null,
+      pcs_per_ctn: null,
+      finish: null,
+      m3_per_unit: null,
+      warranty_text: null,
+      note: `Tự cấp mã từ dòng tự gõ của đơn mua${poCode ? ` ${poCode}` : ''}`,
+      needs_review: false,
+      needs_review_fields: [],
+      created_by: user.id,
+    })
+    invalidateTaxonomy()
+    return created.id
+  },
+
   async list(
     user: User,
     opts: {
@@ -506,6 +579,17 @@ export const materialsService = {
   async lastRetire(user: User, ids: string[]) {
     void user // đọc sổ vết cùng mức xem vật tư (PUBLIC)
     return materialChangesRepo.lastRetire(ids)
+  },
+
+  /**
+   * Số dòng lưu MÃ CHỮ của vật tư (định mức hồ sơ SP, BOM lệnh) — hộp đổi mã của
+   * Kho nói trước "đổi mã thì N dòng đổi theo" (đúng hai bảng `renameCodeRefs` ghi).
+   */
+  async codeRefs(user: User, id: string): Promise<{ parts: number; boms: number }> {
+    void user // xem vật tư là PUBLIC (warehouse.material.view)
+    const m = await materialsRepo.findById(id)
+    if (!m) throw NotFound('Vật tư không tồn tại')
+    return materialsRepo.codeRefCounts(m.code)
   },
 
   /** Mã đang nằm ở đâu — panel dùng để chọn giữa "Xoá mã" và "Ngừng dùng". */

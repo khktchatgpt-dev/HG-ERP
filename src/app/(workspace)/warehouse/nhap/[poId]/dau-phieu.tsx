@@ -7,38 +7,20 @@ import type { lichDot } from '@/lib/kho-dot-giao'
 import { GHI_CHU_TOI_DA } from '@/lib/phieu-nhap-dau'
 import { LUI_TOI_DA, LUI_TU_DO, type KetQuaNgay } from '@/lib/ngay-chung-tu-nhap'
 import { tenNccGon } from '@/lib/theo-doi-loc'
-import {
-  Btn,
-  DateInput,
-  HeadChip,
-  HeadChips,
-  HeadField,
-  Menu,
-  Sheet,
-  TextInput,
-} from '@/components/kit'
+import { HopThoai, OChu, ONgay } from '../../_erp/o-nhap'
 
 /** id ô Số phiếu giao NCC — thanh chốt và hộp nhắc nhảy tới đây. */
 export const O_SO_NCC = 'so-phieu-ncc'
 /** id ô Lý do nhập lùi ngày — thanh chốt nhảy tới đây. */
 export const O_LY_DO_LUI = 'ly-do-lui-ngay'
 
-/** Ô trống "nên ghi" (không bắt buộc) — nền vàng nhạt, khác viền đỏ của ô bắt buộc. */
-const NEN_VANG = 'border-[var(--warn-line)] bg-[var(--warn-wash)]'
-
 /**
- * ĐẦU PHIẾU NHẬP — MỘT DẢI CHIP (05/10/2026, bản vẽ K1/K2 canvas "Cung ứng ·
- * Hàng về" › Bản 8, chủ dự án duyệt).
- *
- * Đo trước khi đổi, form PO-2026-0100 ở 1536×730: khối Đầu phiếu dạng lưới
- * nhãn–giá trị 3 cột cao 267px, cả phần ngoài lưới 543/730px (74%) — lưới
- * nhập còn 187px, thấy 4 dòng. Đây là màn GÕ (Khuôn F), không phải màn ĐỌC:
- * mỗi hàng đầu trang là một hàng lưới bị lấy mất. Nên:
- *  · giá trị kế thừa (NCC, lệnh, đợt) = `HeadChip`, rê chuột ra đủ chữ;
- *  · thứ gõ tại chỗ (ngày, số phiếu NCC, người giao, ghi chú) = `HeadField`;
- *  · câu giải thích dài thành tooltip; "Lịch giao cả đơn" thành menu của chip
- *    Đợt; ô lý do lùi ngày chỉ mọc ra khi lùi quá 7 ngày.
- * State nằm ở màn — khối này chỉ vẽ và gọi setter.
+ * ĐẦU PHIẾU NHẬP — MỘT DẢI Ô NHÃN–GIÁ TRỊ (Kho lối ERP · B2, bản vẽ K-3; khung
+ * gốc K1/K2 05/10/2026). Màn GÕ (khuôn F): mỗi hàng đầu trang là một hàng lưới
+ * bị lấy mất, nên giá trị kế thừa (NCC, lệnh, đợt) đứng thành ô chữ đậm, thứ gõ
+ * tại chỗ (ngày, số phiếu NCC, người giao, ghi chú) là ô nhập ngay trong dải;
+ * ô lý do lùi ngày chỉ mọc ra khi lùi quá 7 ngày. Đơn chia đợt: ô Đợt là hộp
+ * chọn — đổi đợt là mở lại phiếu của đợt đó. State nằm ở màn.
  */
 export function DauPhieu({
   po,
@@ -64,11 +46,11 @@ export function DauPhieu({
   po: { id: string; code: string; supplier_name: string; lsx_codes: string[] }
   dot: { id: string } | null
   lich: ReturnType<typeof lichDot>
-  /** Câu đợt đầy đủ — tooltip của chip Đợt. */
+  /** Câu đợt đầy đủ — tooltip của ô Đợt. */
   dotLabel: string
-  /** Câu đợt NGẮN cho chip ("đợt 1/2 · hẹn 01/10", "hẹn 05/10") — dải chip phải vừa một hàng ở 1536. */
+  /** Câu đợt NGẮN ("đợt 1/2 · hẹn 01/10", "hẹn 05/10"). */
   dotNgan: string
-  /** Đường tới form phiếu của đơn (`DUONG[noi].phieu`) — để đổi đợt. */
+  /** Đường tới form phiếu của đơn — để đổi đợt. */
   phieuUrl: string
   busy: boolean
   docDate: string
@@ -81,7 +63,7 @@ export function DauPhieu({
   setGhiChu: (v: string) => void
   /** Kết quả luật lùi ngày (lib/ngay-chung-tu-nhap) — màn tính, khối chỉ vẽ. */
   ngay: KetQuaNgay
-  /** Phiếu lập lại đang GIỮ ngày phiếu cũ — miễn giới hạn lùi. Đổi ngày thì luật thường. */
+  /** Phiếu lập lại đang GIỮ ngày phiếu cũ — miễn giới hạn lùi. */
   giuNgayCu: boolean
   lyDoLui: string
   setLyDoLui: (v: string) => void
@@ -90,86 +72,77 @@ export function DauPhieu({
   const lenh = po.lsx_codes
   const luiXa = !giuNgayCu && ngay.muc !== 'chan' && ngay.lui > LUI_TU_DO
   const chuaSo = !supplierDocNo.trim()
+  const dangDot = lich.find((d) => d.current)?.id ?? ''
 
   return (
-    <HeadChips>
-      <HeadChip
-        label="NCC"
-        value={
+    <div className="kh-hc" role="group" aria-label="Đầu phiếu nhập">
+      <div style={{ maxWidth: 220 }}>
+        <span className="k">Nhà cung cấp</span>
+        <span className="v" title={po.supplier_name}>
+          {tenNccGon(po.supplier_name)}
+        </span>
+      </div>
+      <div style={{ maxWidth: 200 }}>
+        <span className="k">Lệnh SX</span>
+        {lenh.length > 0 ? (
           <span
-            title={po.supplier_name}
-            className="inline-block max-w-[150px] truncate align-bottom"
+            className="v kh-num"
+            title={lenh.length > 1 ? `Đơn gom ${lenh.length} lệnh — phiếu in đủ: ${lenh.join(' · ')}` : undefined} // prettier-ignore
           >
-            {tenNccGon(po.supplier_name)}
+            {lenh[0]}
+            {lenh.length > 1 && <b> +{lenh.length - 1}</b>}
           </span>
-        }
-      />
-      <HeadChip
-        label="Lệnh"
-        value={
-          lenh.length > 0 ? (
-            <span
-              className="num"
-              title={
-                lenh.length > 1
-                  ? `Đơn gom ${lenh.length} lệnh — phiếu in đủ: ${lenh.join(' · ')}`
-                  : undefined
-              }
-            >
-              {lenh[0]}
-              {lenh.length > 1 && <b> +{lenh.length - 1}</b>}
-            </span>
-          ) : (
-            'không theo lệnh'
-          )
-        }
-        muted={lenh.length === 0}
-      />
-      {lich.length > 0 ? (
-        // Đơn chia đợt: "Lịch giao cả đơn" thành menu của chip — không chiếm một hàng riêng.
-        <Menu
-          label={`Đợt: ${dotNgan} ▾`}
-          ariaLabel="Lịch giao cả đơn — đổi đợt nhận"
-          items={[
-            ...lich.map((d) => ({
-              label: `Đợt ${d.seq} · ${isoToVn(d.date).slice(0, 5)} · ${d.label}${d.current ? ' · đang nhận' : ''}`,
-              onClick: () => router.push(`${phieuUrl}?dot=${d.id}`),
-              disabled: d.current || d.status === 'received',
-              group: 'Lịch giao cả đơn',
-            })),
-            {
-              label: `Ngoài đợt (hàng gấp)${dot ? '' : ' · đang nhận'}`,
-              onClick: () => router.push(phieuUrl),
-              disabled: !dot,
-              group: 'Không theo lịch',
-            },
-          ]}
-        />
-      ) : (
-        <HeadChip label="Đợt" value={<span title={dotLabel}>{dotNgan}</span>} muted />
-      )}
-
-      <HeadField
-        label={giuNgayCu ? 'Ngày CT · giữ ngày cũ' : 'Ngày CT'}
-        need={ngay.muc === 'chan'}
-        empty={ngay.muc === 'chan'}
-        width={128}
-      >
-        <DateInput
+        ) : (
+          <span className="v mut">không theo lệnh</span>
+        )}
+      </div>
+      <div>
+        <span className="k">Đợt</span>
+        {lich.length > 0 ? (
+          <select
+            className="kh-o"
+            value={dot ? dangDot : ''}
+            disabled={busy}
+            aria-label="Lịch giao cả đơn — đổi đợt nhận"
+            title={dotLabel}
+            onChange={(e) =>
+              router.push(e.target.value ? `${phieuUrl}?dot=${e.target.value}` : phieuUrl)
+            }
+            style={{ width: 210 }}
+          >
+            {lich.map((d) => (
+              <option
+                key={d.id}
+                value={d.id}
+                disabled={!d.current && d.status === 'received'}
+              >
+                Đợt {d.seq} · {isoToVn(d.date).slice(0, 5)} · {d.label}
+              </option>
+            ))}
+            <option value="">Ngoài đợt (hàng gấp)</option>
+          </select>
+        ) : (
+          <span className="v mut" title={dotLabel}>
+            {dotNgan}
+          </span>
+        )}
+      </div>
+      <div style={{ width: 128 }}>
+        <span className={ngay.muc === 'chan' ? 'k need' : 'k'}>
+          {giuNgayCu ? 'Ngày CT · giữ ngày cũ' : 'Ngày CT'}
+        </span>
+        <ONgay
           value={docDate}
           onChange={setDocDate}
           label="Ngày chứng từ"
           disabled={busy}
+          tone={ngay.muc === 'chan' ? 'need' : undefined}
         />
-      </HeadField>
+      </div>
       {luiXa && (
-        <HeadField
-          label={`Lý do lùi ${ngay.lui} ngày`}
-          need
-          empty={!lyDoLui.trim()}
-          width={280}
-        >
-          <TextInput
+        <div style={{ width: 280 }}>
+          <span className="k need">{`Lý do lùi ${ngay.lui} ngày`}</span>
+          <OChu
             id={O_LY_DO_LUI}
             value={lyDoLui}
             onCommit={setLyDoLui}
@@ -178,11 +151,13 @@ export function DauPhieu({
             placeholder="vd: nhập bù hàng về trước khi dùng hệ thống"
             label="Lý do nhập lùi ngày"
             title={`Lùi ${ngay.lui} ngày — tối đa ${LUI_TOI_DA} ngày; lý do in lên phiếu 01-VT`}
+            tone={lyDoLui.trim() ? undefined : 'need'}
           />
-        </HeadField>
+        </div>
       )}
-      <HeadField label="Số phiếu NCC" width={110}>
-        <TextInput
+      <div style={{ width: 130 }}>
+        <span className="k">Số phiếu NCC</span>
+        <OChu
           id={O_SO_NCC}
           value={supplierDocNo}
           onCommit={setSupplierDocNo}
@@ -191,11 +166,12 @@ export function DauPhieu({
           mono
           label="Số phiếu giao NCC"
           title="Số trên phiếu giao / hoá đơn của NCC — Kế toán đối chiếu công nợ bằng số này. Không bắt buộc, Ghi sổ sẽ nhắc một lần."
-          className={chuaSo ? NEN_VANG : undefined}
+          tone={chuaSo ? 'nen' : undefined}
         />
-      </HeadField>
-      <HeadField label="Người giao" width={120}>
-        <TextInput
+      </div>
+      <div style={{ width: 150 }}>
+        <span className="k">Người giao</span>
+        <OChu
           value={counterparty}
           onCommit={setCounterparty}
           disabled={busy}
@@ -203,9 +179,10 @@ export function DauPhieu({
           label="Người giao"
           title="Điền sẵn tên NCC — sửa thành tên tài xế / NV giao nếu biết"
         />
-      </HeadField>
-      <HeadField label="Ghi chú" width={170}>
-        <TextInput
+      </div>
+      <div style={{ flex: '1 1 180px' }}>
+        <span className="k">Ghi chú</span>
+        <OChu
           value={ghiChu}
           onCommit={(v) => setGhiChu(v.slice(0, GHI_CHU_TOI_DA))}
           disabled={busy}
@@ -214,15 +191,20 @@ export function DauPhieu({
           label="Ghi chú phiếu"
           title="In lên phiếu 01-VT. Ghi chú từng dòng hàng ở cột Ghi chú của lưới."
         />
-      </HeadField>
-    </HeadChips>
+      </div>
+      {ngay.muc === 'chan' && (
+        <div style={{ flexBasis: '100%', borderTop: '1px solid var(--kh-hair)' }}>
+          <span className="loi">{ngay.message}</span>
+        </div>
+      )}
+    </div>
   )
 }
 
 /**
  * NHẮC SỐ PHIẾU NCC khi bấm Ghi sổ mà ô còn trống (bản vẽ J1b) — nhắc, KHÔNG
- * chặn: có ô nhập ngay trong hộp, hoặc ghi sổ không có số (bổ sung sau ở Đã
- * về › Sửa thông tin). Esc / ✕ = quay lại phiếu, chưa ghi gì.
+ * chặn: có ô nhập ngay trong hộp, hoặc ghi sổ không có số (bổ sung sau ở Sổ
+ * phiếu). Esc / ✕ = quay lại phiếu, chưa ghi gì.
  */
 export function NhacSoNccSheet({
   poCode,
@@ -239,35 +221,37 @@ export function NhacSoNccSheet({
   const [so, setSo] = useState('')
   const coSo = so.trim() !== ''
   return (
-    <Sheet
-      open
-      onClose={onClose}
-      stakes="nhe"
+    <HopThoai
       title="Ghi sổ khi chưa có số phiếu giao NCC?"
       subtitle={`Phiếu nhập cho ${poCode} · ${supplierName}`}
+      onClose={onClose}
       footer={
         <>
-          <Btn onClick={() => onGhiSo('')}>Ghi sổ không có số</Btn>
-          <Btn
-            primary
+          <button type="button" className="kh-btn" onClick={() => onGhiSo('')}>
+            Ghi sổ không có số
+          </button>
+          <button
+            type="button"
+            className="kh-btn p"
             disabled={!coSo}
             title={coSo ? undefined : 'Gõ số phiếu giao NCC trước'}
             onClick={() => onGhiSo(so.trim())}
           >
             Lưu số và ghi sổ
-          </Btn>
+          </button>
         </>
       }
     >
-      <p className="text-k-body mb-3 text-[var(--ink-2)]">
+      <p>
         Kế toán đối chiếu hoá đơn / công nợ bằng số này — chép số in trên phiếu giao của
         NCC nếu đang có trong tay.
       </p>
-      <label className="text-k-sm flex flex-col gap-1">
-        <span className="text-[var(--ink-3)]">Số phiếu giao NCC</span>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="kh-mut" style={{ fontSize: 12 }}>
+          Số phiếu giao NCC
+        </span>
         <input
-          // Hộp mở ra chỉ để gõ đúng ô này.
-          autoFocus
+          className="kh-o mono"
           value={so}
           maxLength={60}
           onChange={(e) => setSo(e.target.value)}
@@ -278,13 +262,11 @@ export function NhacSoNccSheet({
             }
           }}
           placeholder="vd 5/2026- HG/TTL"
-          className="text-k-sm h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface-card)] px-2 font-[family-name:var(--font-mono)] placeholder:text-[var(--ink-3)] focus:border-[var(--act)]"
         />
       </label>
-      <p className="text-k-sm mt-2 text-[var(--ink-3)]">
-        Bổ sung sau vẫn được: Theo dõi đơn hàng › Đã về › Sửa phiếu › Sửa thông tin (không
-        đổi tồn).
+      <p className="kh-mut" style={{ fontSize: 12 }}>
+        Bổ sung sau vẫn được: Sổ phiếu › mở phiếu › ghi số phiếu NCC (không đổi tồn).
       </p>
-    </Sheet>
+    </HopThoai>
   )
 }

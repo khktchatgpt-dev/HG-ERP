@@ -33,6 +33,9 @@ export type NotificationType =
   | 'po_answered'
   | 'po_urgent_sent'
   | 'po_issue'
+  // 0251 — hàng sắp về cho Kho (B8b): NCC xác nhận hẹn ≤ 3 ngày · dời hẹn.
+  | 'po_inbound_soon'
+  | 'po_inbound_moved'
   // 0237 — đề nghị mua vật tư của Kho (0236).
   | 'dnm_submitted'
   | 'dnm_approved'

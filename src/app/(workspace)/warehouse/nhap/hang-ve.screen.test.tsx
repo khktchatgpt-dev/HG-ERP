@@ -95,39 +95,50 @@ function dung(them: Partial<Parameters<typeof HangVeScreen>[0]> = {}) {
   )
 }
 const dongCua = (ma: string) => screen.getByRole('button', { name: ma }).closest('tr')!
+const tab = (ten: RegExp) =>
+  fireEvent.click(within(screen.getByRole('tablist', { name: 'Mốc hẹn giao' })).getByRole('tab', { name: ten })) // prettier-ignore
+const pane = () => screen.getByRole('toolbar', { name: 'Thao tác' })
 
-describe('Kho › Hàng về', () => {
-  it('bấm ô "Quá hẹn" thì chỉ còn đơn quá hẹn', () => {
+describe('Kho › Hàng về (khung Kho lối ERP · B2)', () => {
+  it('mở ra đứng ở tab "Quá hẹn" (có đơn quá hẹn); tab Tất cả ra đủ 5', () => {
     dung()
-    fireEvent.click(screen.getByRole('button', { name: /Quá hẹn/ }))
-    expect(screen.queryByRole('button', { name: 'PO-2026-0100' })).toBeNull()
     expect(screen.getByRole('button', { name: 'PO-2026-0108' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'PO-2026-0100' })).toBeNull()
     expect(screen.getByText('2 / 5 đơn')).toBeTruthy()
+    tab(/^Tất cả/)
+    expect(screen.getByText('5 / 5 đơn')).toBeTruthy()
   })
 
-  it('PO-0100: nói đợt 1 đã nhập trước, Nhận hàng mở đúng đợt 2', () => {
+  it('PO-0100: nói đợt 1 đã nhập trước; chọn dòng → Nhận hàng mở đúng đợt 2', () => {
     dung()
+    tab(/^Hôm nay/)
     const tr = dongCua('PO-2026-0100')
     expect(within(tr).getByText(/đợt 1 đã về/)).toBeTruthy()
     expect(within(tr).getByText('Đợt 2/2 · 22/10')).toBeTruthy()
     expect(within(tr).getByText('+1')).toBeTruthy()
-    const nhan = within(tr).getByRole('link', { name: /Nhận hàng/ })
+    expect(within(tr).queryByRole('link')).toBeNull() // không nút trên dòng (K1)
+    fireEvent.click(tr)
+    const nhan = within(pane()).getByRole('link', { name: /Nhận hàng PO-2026-0100/ })
     expect(nhan.getAttribute('href')).toBe('/warehouse/nhap/id-PO-2026-0100?dot=dot-2')
   })
 
-  it('đơn chỉ có dòng theo mã SP: không có nút Nhận hàng, nút khoá nói lý do', () => {
+  it('đơn chỉ có dòng theo mã SP: Nhận hàng khoá, nói lý do', () => {
     dung()
     const tr = dongCua('ĐH02HGTĐ')
-    expect(within(tr).queryByRole('link', { name: /Nhận hàng/ })).toBeNull()
-    expect(within(tr).getByRole('button', { name: 'Ngoài sổ kho' })).toBeTruthy()
+    expect(within(tr).getByText('ngoài sổ kho')).toBeTruthy()
+    fireEvent.click(tr)
+    const nut = within(pane()).getByRole('button', { name: /Nhận hàng ĐH02HGTĐ/ })
+    expect(nut.getAttribute('aria-disabled')).toBe('true')
+    expect(nut.getAttribute('title')).toMatch(/nghiệm thu ngoài sổ/)
   })
 
   it('hẹn năm 2610 gắn nhãn "ngày lạ", không tô trễ', () => {
     dung()
+    tab(/^Sau đó/)
     const tr = dongCua('PO-2026-0085')
     expect(within(tr).getByText('ngày lạ')).toBeTruthy()
     expect(within(tr).getByText('03/10/2610')).toBeTruthy()
-    expect(within(tr).queryByText(/trễ/)).toBeNull()
+    expect(within(tr).queryByText(/ngày$/)).toBeNull()
   })
 
   it('bấm mã đơn mở hộp bằng ?don= (không sang khu Mua hàng)', () => {
@@ -138,10 +149,13 @@ describe('Kho › Hàng về', () => {
     })
   })
 
-  it('không có quyền ghi sổ kho: Nhận hàng khoá mềm', () => {
+  it('không có quyền ghi sổ kho: Nhận hàng khoá mềm, nói phòng giữ quyền', () => {
     dung({ canEdit: false })
-    const nut = within(dongCua('PO-2026-0115')).getByRole('button', { name: /Nhận hàng/ })
+    tab(/^7 ngày tới/)
+    fireEvent.click(dongCua('PO-2026-0115'))
+    const nut = within(pane()).getByRole('button', { name: /Nhận hàng PO-2026-0115/ })
     expect(nut.getAttribute('aria-disabled')).toBe('true')
+    expect(nut.getAttribute('title')).toMatch(/Chỉ phòng Kho/)
   })
 
   it('hộp Hàng của đơn: nói đã nhập trước, ngày phiếu theo giờ VN, Nhận hàng đúng đợt', () => {
@@ -155,45 +169,35 @@ describe('Kho › Hàng về', () => {
   })
 })
 
-describe('Kho › Hàng về · màn hẹp (luật 12/10/2026)', () => {
-  it('khung 800px (1024 có sidebar): ẩn Loại hàng + Phụ trách, nút "Nhận", đợt gọn', () => {
+describe('Kho › Hàng về · khung hẹp', () => {
+  it('khung 800px: bỏ Loại hàng + Phụ trách + Trễ, đợt gọn, giá trị ẩn nằm ở tooltip mã đơn', () => {
     const goc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 800 }) // prettier-ignore
     try {
       dung()
+      tab(/^Hôm nay/)
       const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
       expect(heads).not.toContain('Loại hàng')
       expect(heads).not.toContain('Phụ trách')
+      expect(heads).not.toContain('Trễ')
       const tr = dongCua('PO-2026-0100')
       expect(within(tr).getByText('2/2 · 22/10')).toBeTruthy()
-      expect(within(tr).getByRole('link', { name: /^Nhận$/ })).toBeTruthy()
-      // Giá trị bị ẩn không mất: nằm ở tooltip của mã đơn.
       expect(within(tr).getByRole('button', { name: 'PO-2026-0100' }).getAttribute('title')).toContain('Đặng Thị Thanh Nga') // prettier-ignore
-      expect(screen.getByRole('button', { name: /Lọc thêm/ })).toBeTruthy()
     } finally {
       if (goc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', goc)
     }
   })
 })
 
-describe('Kho › Hàng về · sự cố (Bước 3)', () => {
-  it('đơn có sự cố mở hiện nhãn "N sự cố"; ⋯ mở hộp báo bằng ?su_co=', () => {
-    render(
-      <ToastProvider>
-        <HangVeScreen
-          rows={ROWS.map((x) =>
-            x.po_code === 'PO-2026-0108' ? { ...x, su_co_mo: 1 } : x,
-          )}
-          today={TODAY}
-          canEdit
-          truncatedAt={null}
-          hangCuaDon={null}
-          suCo={null}
-        />
-      </ToastProvider>,
-    )
+describe('Kho › Hàng về · sự cố', () => {
+  it('đơn có sự cố mở hiện nhãn "N sự cố"; Báo sự cố ở Action Pane mở ?su_co=', () => {
+    dung({ rows: ROWS.map((x) => (x.po_code === 'PO-2026-0108' ? { ...x, su_co_mo: 1 } : x)) }) // prettier-ignore
     const tr = dongCua('PO-2026-0108')
     expect(within(tr).getByText('1 sự cố')).toBeTruthy()
-    expect(within(dongCua('PO-2026-0115')).queryByText(/sự cố/)).toBeNull()
+    fireEvent.click(tr)
+    fireEvent.click(within(pane()).getByRole('button', { name: /Báo sự cố/ }))
+    expect(replace).toHaveBeenCalledWith('/warehouse/nhap?su_co=id-PO-2026-0108', {
+      scroll: false,
+    })
   })
 })

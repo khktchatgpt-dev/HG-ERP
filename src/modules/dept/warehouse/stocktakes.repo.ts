@@ -1,5 +1,7 @@
 import { db } from '@/server/db'
 import type { Json } from '@/lib/database.types'
+import { theoLo } from '@/server/theo-lo'
+import { danhSachDem, mocPhatSinh, type NhomDem } from '@/lib/kho-kiem-ke'
 
 /**
  * ĐỢT KIỂM KÊ (0199) — tách khỏi `stock.repo.ts` vì đó đã hơn 1.000 dòng và
@@ -43,6 +45,8 @@ export type TakeLine = {
   material_code: string | null
   material_name: string | null
   material_unit: string | null
+  /** Kệ gợi ý trên danh mục (lọc phiếu đếm theo kệ). */
+  material_shelf: string | null
   /** Tồn sổ TẠI freeze_at. Null = đợt chưa chốt sổ. */
   book_qty_frozen: number | null
   /** Null = CHƯA ĐẾM (khác hẳn đếm được 0). */
@@ -202,7 +206,7 @@ export const stocktakesRepo = {
       const { data } = await db()
         .from('warehouse_stocktake_lines')
         .select(
-          'id, material_id, book_qty_frozen, counted_qty, counted_by, counted_at, note, material:warehouse_materials(code, name, unit)',
+          'id, material_id, book_qty_frozen, counted_qty, counted_by, counted_at, note, material:warehouse_materials(code, name, unit, shelf_location)',
         )
         .eq('stocktake_id', stocktakeId)
         .order('material_id')
@@ -213,6 +217,7 @@ export const stocktakesRepo = {
           code?: string
           name?: string
           unit?: string
+          shelf_location?: string | null
         }
         out.push({
           id: r.id as string,
@@ -220,6 +225,7 @@ export const stocktakesRepo = {
           material_code: mat.code ?? null,
           material_name: mat.name ?? null,
           material_unit: mat.unit ?? null,
+          material_shelf: mat.shelf_location ?? null,
           book_qty_frozen: r.book_qty_frozen == null ? null : Number(r.book_qty_frozen),
           // KHÔNG dùng num(): nó biến null thành 0, và "chưa đếm" sẽ thành
           // "đếm được 0" — mất đúng thông tin đợt này cần nhất.
@@ -297,17 +303,9 @@ export async function materialsInScope(scope: StocktakeScope): Promise<string[]>
   }
 
   if (scope.kind === 'group') {
-    for (let from = 0; ; from += 1000) {
-      const { data } = await db()
-        .from('warehouse_materials')
-        .select('id')
-        .eq('is_active', true)
-        .in('group_name', scope.groups)
-        .range(from, from + 999)
-      const rows = (data as { id: string }[] | null) ?? []
-      for (const r of rows) ids.add(r.id)
-      if (rows.length < 1000) break
-    }
+    // Q1 (B7, 19/10/2026): có tồn ∪ có phiếu 180 ngày — KHÔNG cả nhóm danh mục.
+    for (const n of await danhSachDemNhom(scope.groups))
+      for (const id of n.ids) ids.add(id)
     return [...ids]
   }
 
@@ -341,4 +339,122 @@ export async function materialsInScope(scope: StocktakeScope): Promise<string[]>
     if (rows.length < 1000) break
   }
   return [...ids]
+}
+
+/** Đọc hết các trang của một truy vấn (PostgREST cắt im lặng ở 1000 dòng). */
+async function hetTrang<T>(
+  q: (
+    tu: number,
+    den: number,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<T[]> {
+  // prettier-ignore
+  const out: T[] = []
+  for (let tu = 0; ; tu += 1000) {
+    const { data, error } = await q(tu, tu + 999)
+    if (error) throw new Error(error.message)
+    const rows = (data as T[] | null) ?? []
+    out.push(...rows)
+    if (rows.length < 1000) return out
+  }
+}
+
+/**
+ * DANH SÁCH ĐẾM THEO NHÓM (Q1) — nguồn DUY NHẤT cho cả số trên hộp mở đợt lẫn
+ * dòng phiếu đếm (`materialsInScope`). Luật gộp ở `lib/kho-kiem-ke.ts`.
+ *
+ * Có tồn đọc từ view `warehouse_stock` (cùng nguồn màn Tồn kho); phát sinh
+ * đọc theo giờ ghi sổ trong 180 ngày.
+ */
+export async function danhSachDemNhom(chiNhom?: readonly string[]): Promise<NhomDem[]> {
+  const [ton, mv] = await Promise.all([
+    hetTrang<{ material_id: string; group_name: string | null; is_active: boolean }>(
+      (tu, den) => {
+        let q = db().from('warehouse_stock').select('material_id, group_name, is_active').neq('on_hand', 0) // prettier-ignore
+        if (chiNhom) q = q.in('group_name', [...chiNhom])
+        return q.order('material_id').range(tu, den)
+      },
+    ),
+    hetTrang<{ material_id: string }>(
+      (tu, den) =>
+      db().from('warehouse_movements').select('material_id').gte('created_at', mocPhatSinh()).order('id').range(tu, den), // prettier-ignore
+    ),
+  ])
+  const nhomCua = new Map<string, string>()
+  const coTon = new Set<string>()
+  for (const r of ton) {
+    if (!r.is_active || !r.group_name) continue
+    nhomCua.set(r.material_id, r.group_name)
+    coTon.add(r.material_id)
+  }
+  const phatSinh = new Set(mv.map((r) => r.material_id))
+  const canTra = [...phatSinh].filter((id) => !nhomCua.has(id))
+  const them = await theoLo<{
+    id: string
+    group_name: string | null
+    is_active: boolean
+  }>(
+    canTra,
+    (lo) =>
+    db().from('warehouse_materials').select('id, group_name, is_active').in('id', lo).order('id'), // prettier-ignore
+  )
+  for (const r of them) if (r.is_active && r.group_name) nhomCua.set(r.id, r.group_name)
+  return danhSachDem(nhomCua, coTon, phatSinh, chiNhom)
+}
+
+/** Người có vai Kho (`warehouse.member`) đang hoạt động — ô "Người đếm". */
+export async function nguoiKho(): Promise<{ id: string; name: string }[]> {
+  const { data: rp } = await db()
+    .from('role_permissions')
+    .select('role_id')
+    .eq('permission_key', 'warehouse.member')
+  const roleIds = ((rp ?? []) as { role_id: string }[]).map((r) => r.role_id)
+  if (roleIds.length === 0) return []
+  const { data: ur } = await db()
+    .from('user_roles')
+    .select('user_id')
+    .in('role_id', roleIds)
+  const ids = [...new Set(((ur ?? []) as { user_id: string }[]).map((r) => r.user_id))]
+  if (ids.length === 0) return []
+  const { data: us } = await db()
+    .from('users')
+    .select('id, name, email, is_active')
+    .in('id', ids)
+  return (
+    (us ?? []) as { id: string; name: string | null; email: string; is_active: boolean }[]
+  )
+    .filter((u) => u.is_active)
+    .map((u) => ({ id: u.id, name: u.name ?? u.email }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+}
+
+/** Đợt theo nhóm đã duyệt — nuôi cột "Kiểm lần cuối". */
+export async function dotNhomDaDuyet(): Promise<
+  { scope_kind: string; scope_ref: Record<string, unknown>; approved_at: string | null }[]
+> {
+  const { data } = await db()
+    .from('warehouse_stocktakes')
+    .select('scope_kind, scope_ref, approved_at')
+    .eq('status', 'approved')
+    .eq('scope_kind', 'group')
+  return (data ?? []) as { scope_kind: string; scope_ref: Record<string, unknown>; approved_at: string | null }[] // prettier-ignore
+}
+
+/** Tiến độ đếm theo đợt: tổng dòng / đã có số đếm (cột "Đã đếm" của sổ đợt). */
+export async function tienDoDem(
+  takeIds: string[],
+): Promise<Map<string, { total: number; counted: number }>> {
+  const rows = await theoLo<{ stocktake_id: string; counted_qty: number | null }>(
+    takeIds,
+    (lo) =>
+    db().from('warehouse_stocktake_lines').select('stocktake_id, counted_qty').in('stocktake_id', lo).order('id'), // prettier-ignore
+  )
+  const out = new Map<string, { total: number; counted: number }>()
+  for (const r of rows) {
+    const x = out.get(r.stocktake_id) ?? { total: 0, counted: 0 }
+    x.total++
+    if (r.counted_qty != null) x.counted++
+    out.set(r.stocktake_id, x)
+  }
+  return out
 }

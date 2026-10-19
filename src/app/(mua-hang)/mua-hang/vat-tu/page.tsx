@@ -43,7 +43,6 @@ export default async function Page({
   searchParams: Promise<{
     q?: string
     nhom?: string
-    ra?: string
     kn?: string
     ng?: string
     trang?: string
@@ -54,7 +53,7 @@ export default async function Page({
 
   const q = sp.q?.trim() || undefined
   const group = sp.nhom?.trim() || undefined
-  const review = sp.ra === '1'
+  // Chip "Chờ Kho rà" đã BỎ 14/10/2026 (chủ dự án: "không cần thiết") — `?ra=` cũ bị bỏ qua.
   // Chưa có nhóm con — rổ việc chia nhóm (29/09/2026).
   const noSub = sp.kn === '1'
   // Chip 'Ngừng dùng' (05/10/2026): mặc định danh sách CHỈ mã đang dùng, mã
@@ -62,37 +61,41 @@ export default async function Page({
   const ngung = sp.ng === '1'
   const page = Math.max(1, Number(sp.trang) || 1)
 
-  const [{ rows }, counts, tax, canEdit, canRetire, canCreate, { rows: sups }] = await Promise.all([
-    materialsService.list(user, {
-      q,
-      group_name: group,
-      needs_review: review ? true : undefined,
-      no_sub: noSub || undefined,
-      page,
-      page_size: PAGE_SIZE,
-      active_only: !ngung,
-      inactive_only: ngung,
-    }),
-    // Đếm ở DB theo ĐÚNG bộ lọc đang áp, không cộng từ trang đang xem: 50 dòng
-    // trên màn không nói được gì về 13.226 dòng phía sau.
-    materialsService.counts(user, {
-      q,
-      group_name: group,
-      needs_review: review ? true : undefined,
-      no_sub: noSub || undefined,
-      active_only: !ngung,
-      inactive_only: ngung,
-    }),
-    materialTaxonomy(),
-    // Đúng quyền service kiểm khi lưu — nút không hứa điều service từ chối.
-    canAction(user, 'warehouse.material.update_purchasing'),
-    canAction(user, 'warehouse.material.retire'),
-    canAction(user, 'warehouse.material.create'),
-    suppliersService.list(user, { page: 1, page_size: 500 }),
-  ])
+  const [{ rows }, counts, tax, canEdit, canRetire, canCreate, { rows: sups }] =
+    await Promise.all([
+      materialsService.list(user, {
+        q,
+        group_name: group,
+        no_sub: noSub || undefined,
+        page,
+        page_size: PAGE_SIZE,
+        active_only: !ngung,
+        inactive_only: ngung,
+      }),
+      // Đếm ở DB theo ĐÚNG bộ lọc đang áp, không cộng từ trang đang xem: 50 dòng
+      // trên màn không nói được gì về 13.226 dòng phía sau.
+      materialsService.counts(user, {
+        q,
+        group_name: group,
+        no_sub: noSub || undefined,
+        active_only: !ngung,
+        inactive_only: ngung,
+      }),
+      materialTaxonomy(),
+      // Đúng quyền service kiểm khi lưu — nút không hứa điều service từ chối.
+      canAction(user, 'warehouse.material.update_purchasing'),
+      canAction(user, 'warehouse.material.retire'),
+      canAction(user, 'warehouse.material.create'),
+      suppliersService.list(user, { page: 1, page_size: 500 }),
+    ])
 
   // Ngày · người · lý do ngừng — chỉ cần khi đang xem tập ngừng dùng.
-  const ngungBy = ngung ? await materialsService.lastRetire(user, rows.map((m) => m.id)) : null
+  const ngungBy = ngung
+    ? await materialsService.lastRetire(
+        user,
+        rows.map((m) => m.id),
+      )
+    : null
 
   return (
     <VatTuScreen
@@ -106,7 +109,6 @@ export default async function Page({
         spec: m.spec,
         last_purchase_price: m.last_purchase_price,
         price_unit: m.price_unit,
-        needs_review: m.needs_review,
         ngung: ngungBy?.get(m.id) ?? null,
       }))}
       counts={counts}
@@ -122,7 +124,7 @@ export default async function Page({
           label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name,
         }))}
       page={page}
-      filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', ra: review, kn: noSub, ng: ngung }}
+      filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', kn: noSub, ng: ngung }}
     />
   )
 }

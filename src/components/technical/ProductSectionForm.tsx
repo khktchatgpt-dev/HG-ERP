@@ -259,11 +259,12 @@ export function ProductSectionForm({
                     placeholder={f.placeholder ?? placeholders?.[f.name]}
                     onChange={
                       f.unit
-                        ? (e) =>
-                            setWarn((w) => ({
-                              ...w,
-                              [f.name]: unitWarning(f, e.currentTarget.value),
-                            }))
+                        ? (e) => {
+                            // Đọc giá trị NGAY: hàm cập nhật của setState chạy
+                            // muộn, lúc đó `e.currentTarget` đã là null → sập trang.
+                            const msg = unitWarning(f, e.currentTarget.value)
+                            setWarn((w) => ({ ...w, [f.name]: msg }))
+                          }
                         : undefined
                     }
                     className={cn(

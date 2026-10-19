@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ToastProvider } from '@/components/kit'
 import { TonLenhScreen } from './TonLenhScreen'
 import type { LenhDong, MaChiTiet } from './ton-lenh.shared'
 
@@ -48,43 +47,46 @@ const CHI_TIET: MaChiTiet[] = [
 
 const dung = (ro: 'con' | 'han' | 'xong' | 'all' = 'con', mo: string | null = null) =>
   render(
-    <ToastProvider>
-      <TonLenhScreen lenh={LENH} chiTiet={CHI_TIET} ro={ro} mo={mo} today="2026-10-12" />
-    </ToastProvider>,
+    <TonLenhScreen lenh={LENH} chiTiet={CHI_TIET} ro={ro} mo={mo} today="2026-10-12" />,
   )
 
-describe('TonLenhScreen', () => {
-  it('rổ mặc định "Kho còn hàng của lệnh": 2 lệnh, YOTRIO ghi quá 2 ngày, nút Xuất cho lệnh', () => {
+describe('TonLenhScreen (khung Kho lối ERP)', () => {
+  it('rổ mặc định "Kho còn hàng của lệnh": 2 lệnh, YOTRIO ghi quá 2 ngày; chọn dòng → Xuất cho lệnh ở Action Pane', () => {
     dung()
-    const bang = screen.getByRole('table')
+    const bang = screen.getByRole('table', { name: 'Tồn kho theo lệnh' })
     expect(within(bang).getAllByRole('row').length).toBe(1 + 2 + 1) // đầu + 2 lệnh + chân
     expect(within(bang).getByText('quá 2 ngày')).toBeTruthy()
-    const nut = within(bang).getAllByRole('link', { name: /Xuất cho lệnh/ })
-    expect(nut[0].getAttribute('href')).toBe('/warehouse/xuat?lsx=yo')
+    // Không còn nút trên dòng (K1)
+    expect(within(bang).queryByRole('link', { name: /Xuất/ })).toBeNull()
+    const pane = screen.getByRole('toolbar', { name: 'Thao tác' })
+    expect(within(pane).getByRole('button', { name: /Xuất cho lệnh/ }).getAttribute('aria-disabled')).toBe('true') // prettier-ignore
+    fireEvent.click(within(bang).getByText('01/26-27 - YOTRIO'))
+    expect(within(pane).getByRole('link', { name: /Xuất cho 01\/26-27 - YOTRIO/ }).getAttribute('href')).toBe('/warehouse/xuat?lsx=yo') // prettier-ignore
     expect(screen.getByRole('button', { name: /Tất cả\s*4/ })).toBeTruthy()
   })
 
-  it('rổ "Lệnh xong chưa ghi xuất": 05-MX, có lời giải thích, KHÔNG có nút xuất', () => {
+  it('rổ "Lệnh xong chưa ghi xuất": 05-MX, có lời giải thích, Action Pane nói vì sao không xuất', () => {
     dung('xong')
-    const bang = screen.getByRole('table')
-    expect(within(bang).getByText('05/26-27 - MX')).toBeTruthy()
-    expect(within(bang).queryByRole('link', { name: /Xuất/ })).toBeNull()
+    const bang = screen.getByRole('table', { name: 'Tồn kho theo lệnh' })
+    fireEvent.click(within(bang).getByText('05/26-27 - MX'))
     expect(screen.getByText(/Ghi xuất bù bây giờ sẽ làm/)).toBeTruthy()
+    const pane = screen.getByRole('toolbar', { name: 'Thao tác' })
+    expect(within(pane).getByRole('button', { name: /Xuất cho 05/ }).getAttribute('title')).toMatch(/Lệnh đã xong/) // prettier-ignore
   })
 
-  it('ngăn chi tiết 06-MX: còn 2 mã (1 thiếu, 1 chung), kho hết nói vì sao, đã xuất đủ 1', () => {
+  it('chi tiết 06-MX mở dưới dòng: còn 2 mã (1 thiếu, 1 chung), kho hết nói vì sao, đã xuất đủ 1', () => {
     dung('con', 'mx6')
-    const hop = screen.getByRole('dialog')
-    expect(within(hop).getByText('thiếu 130')).toBeTruthy()
-    expect(within(hop).getByText('chung 09-MX')).toBeTruthy()
-    fireEvent.click(within(hop).getByRole('tab', { name: /Kho hết/ }))
-    expect(within(hop).getByText('Kho còn 824, đang chia cho 01-YOTRIO')).toBeTruthy()
-    fireEvent.click(within(hop).getByRole('tab', { name: /Đã xuất đủ/ }))
-    expect(within(hop).getByText('BAO0689')).toBeTruthy()
-    expect(within(hop).getByRole('link', { name: /Xuất cho lệnh này/ }).getAttribute('href')).toBe('/warehouse/xuat?lsx=mx6') // prettier-ignore
+    const vung = screen.getByRole('region', { name: /Hàng của lệnh 06\/26-27 - MX/ })
+    expect(within(vung).getByText('thiếu 130')).toBeTruthy()
+    expect(within(vung).getByText('chung 09-MX')).toBeTruthy()
+    fireEvent.click(within(vung).getByRole('tab', { name: /Kho hết/ }))
+    expect(within(vung).getByText('Kho còn 824, đang chia cho 01-YOTRIO')).toBeTruthy()
+    fireEvent.click(within(vung).getByRole('tab', { name: /Đã xuất đủ/ }))
+    expect(within(vung).getByText('BAO0689')).toBeTruthy()
+    expect(within(vung).getByRole('link', { name: /Xuất cho lệnh này/ }).getAttribute('href')).toBe('/warehouse/xuat?lsx=mx6') // prettier-ignore
   })
 
-  it('tìm không ra lệnh nào → Empty có lý do + nút xem tất cả', () => {
+  it('tìm không ra lệnh nào → rỗng có lý do + nút xem tất cả', () => {
     dung()
     fireEvent.change(screen.getByPlaceholderText('Tìm lệnh, khách…'), {
       target: { value: 'không-có' },

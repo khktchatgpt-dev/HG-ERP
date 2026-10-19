@@ -347,11 +347,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
      * người dùng vào 404.
      */
     ready: true,
-    home: '/warehouse/nhap',
+    // B8a (19/10/2026): vào khu Kho là Bàn làm việc — Hàng về lùi xuống mục thứ hai.
+    home: '/warehouse',
     sections: [
       {
         heading: 'Nghiệp vụ',
         items: [
+          // B8a: trang đầu — exact để mục này không sáng ở mọi trang con /warehouse/*.
+          { href: '/warehouse', label: 'Bàn làm việc', icon: 'home', exact: true },
           { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
           // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
           { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
@@ -364,6 +367,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
           // và đảo phiếu ghi sai chỉ làm được ở màn cũ.
           { href: '/warehouse/phieu', label: 'Sổ phiếu', icon: 'book-open' },
+          // Kho đợt 2 · B6 (19/10/2026): báo cáo nhập–xuất–tồn theo kỳ, có giá trị
+          // (bình quân gia quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
+          { href: '/warehouse/bao-cao', label: 'Nhập–Xuất–Tồn', icon: 'chart-column' },
+          // Kho đợt 2 · B7 (19/10/2026): đợt kiểm kê — đếm mù, sổ chốt lúc bắt đầu đếm.
+          { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
           // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
           // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
           // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.

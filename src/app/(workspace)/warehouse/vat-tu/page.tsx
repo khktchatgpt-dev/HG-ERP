@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
+import { binsService } from '@/modules/dept/warehouse/stock.service'
 import { VatTuKhoScreen } from './VatTuKhoScreen'
 import { RO_VT, type RoVatTu } from './ro-vat-tu'
 
@@ -31,7 +32,7 @@ export default async function VatTuKhoPage({
   const sp = await searchParams
   const ro: RoVatTu = (RO_VT as readonly string[]).includes(sp.ro ?? '')
     ? (sp.ro as RoVatTu)
-    : 'review'
+    : 'no_shelf'
   const q = sp.q?.trim() || undefined
   const nhom = sp.nhom?.trim() || undefined
   const trang = Math.max(1, Number(sp.trang) || 1)
@@ -39,21 +40,37 @@ export default async function VatTuKhoPage({
   const loc = {
     q,
     group_name: nhom,
-    needs_review: ro === 'review' || undefined,
     no_min_stock: ro === 'no_min' || undefined,
     no_shelf: ro === 'no_shelf' || undefined,
+    // Ba rổ việc chỉ mã ĐANG DÙNG; rổ "Ngừng dùng" chỉ mã đã ngừng (B7c).
+    active_only: ro !== 'off',
+    inactive_only: ro === 'off' || undefined,
   }
 
-  const [res, counts, taxonomy, canEdit] = await Promise.all([
+  const [res, counts, taxonomy, canEdit, canCreate, canRetire, bins] = await Promise.all([
     materialsService.list(user, { ...loc, page: trang, page_size: PAGE_SIZE }),
     // Đếm rổ trên bộ lọc tìm/nhóm ĐANG ÁP, không đếm cả danh mục — chip nói 52
     // mà mở ra 7 là hỏng nguyên tắc "con số là một lời hứa".
-    materialsService.counts(user, { q, group_name: nhom }),
+    // Đếm trên mã đang dùng; `inactive` tự bỏ qua cờ này (số trên tab Ngừng dùng).
+    materialsService.counts(user, { q, group_name: nhom, active_only: true }),
     materialTaxonomy(),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.material.update'),
+    // Thêm mã (B7b) — đúng quyền service kiểm khi tạo.
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.material.create'),
+    // Ngừng dùng / dùng lại / xoá mã chưa dùng (B7c).
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.material.retire'),
+    // Gợi ý cho ô Kệ (K4: ô gõ có gợi ý thay hộp chọn). Hỏng thì ô vẫn gõ tự do.
+    binsService.list(user).catch(() => []),
   ])
+
+  // Ngày · người · lý do ngừng — chỉ cần khi đang xem rổ Ngừng dùng.
+  const ngungBy = ro === 'off' ? await materialsService.lastRetire(user, res.rows.map((m) => m.id)) : null // prettier-ignore
 
   return (
     <VatTuKhoScreen
@@ -66,14 +83,14 @@ export default async function VatTuKhoPage({
         sub_group: m.sub_group,
         shelf_location: m.shelf_location,
         min_stock: m.min_stock,
-        needs_review: m.needs_review,
         is_active: m.is_active,
+        ngung: ngungBy?.get(m.id) ?? null,
       }))}
       counts={{
-        review: counts.needsReview,
         no_min: counts.noMinStock,
         no_shelf: counts.noShelf,
         all: counts.total,
+        off: counts.inactive,
       }}
       total={res.total}
       trang={trang}
@@ -83,7 +100,10 @@ export default async function VatTuKhoPage({
       nhom={nhom ?? ''}
       nhomOptions={taxonomy.groups.map((g) => g.name)}
       dvtOptions={taxonomy.units}
+      keOptions={bins.filter((b) => b.is_active !== false).map((b) => b.code)}
       canEdit={canEdit}
+      canCreate={canCreate}
+      canRetire={canRetire}
     />
   )
 }

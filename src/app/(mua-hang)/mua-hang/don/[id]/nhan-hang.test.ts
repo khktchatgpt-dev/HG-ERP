@@ -79,7 +79,8 @@ describe('receiveActions', () => {
     expect(a.addShipment.ok).toBe(true)
     expect(a.receive.ok).toBe(true)
     expect(a.closeShort.ok).toBe(true)
-    expect(a.acceptByHand.ok).toBe(false)
+    // "Nghiệm thu ngoài sổ" đã gỡ (19/10/2026) — dòng tự gõ được cấp mã, nhận qua phiếu nhập.
+    expect('acceptByHand' in a).toBe(false)
   })
   it('không phải người phụ trách thì mọi nút ghi đều khoá kèm lý do, nút DẪN sang Kho vẫn mở', () => {
     const a = receiveActions({ status: 'confirmed', canEdit: false, hasStockLines: true, openStockLines: 1 }) // prettier-ignore
@@ -89,9 +90,8 @@ describe('receiveActions', () => {
     })
     expect(a.receive.ok).toBe(true)
   })
-  it('đơn toàn dòng tự do: nghiệm thu ngoài sổ, không chia đợt', () => {
+  it('đơn chưa có dòng vật tư kho (dữ liệu cũ): không chia đợt', () => {
     const a = receiveActions({ status: 'in_transit', canEdit: true, hasStockLines: false, openStockLines: 0 }) // prettier-ignore
-    expect(a.acceptByHand.ok).toBe(true)
     expect(a.addShipment.why).toMatch(/không có dòng vật tư kho/)
   })
   it('chờ duyệt thì chưa thêm đợt (sửa trong nháp), đã duyệt thì được', () => {

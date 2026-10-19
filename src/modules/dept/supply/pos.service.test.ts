@@ -65,6 +65,10 @@ vi.mock('@/modules/core/users/users.repo', () => ({
 }))
 // on: pos.service nay import '@/events/register' → registerEventHandlers gọi on().
 vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
+// Cấp mã cho dòng tự gõ (19/10/2026) — không chạm DB trong test.
+vi.mock('@/modules/dept/warehouse/warehouse.service', () => ({
+  materialsService: { ensureForFreeLine: vi.fn(async () => 'mat-go-1') },
+}))
 // Tỷ giá chốt lúc duyệt (0219): mặc định bảng CHƯA có dòng → null, duyệt vẫn đi.
 vi.mock('@/modules/dept/accounting/fx-rates.repo', () => ({
   fxRatesRepo: { rateAt: vi.fn(async () => null) },
@@ -95,6 +99,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
+import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
@@ -592,7 +597,10 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
     await posService.confirm(staff, 'po1', { shipments: [] })
     const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
     expect('ordered_at' in patch).toBe(false)
-    expect(emit).not.toHaveBeenCalled()
+    // Không bắn lại po.ordered; po.confirmed (B8b, báo Kho hàng sắp về) thì có.
+    const ten = vi.mocked(emit).mock.calls.map((c) => (c[0] as { name: string }).name)
+    expect(ten).not.toContain('po.ordered')
+    expect(ten).toContain('po.confirmed')
   })
 
   it.each(['draft', 'pending_approval', 'confirmed'] as const)(
@@ -659,7 +667,7 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
 describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', () => {
   const freeLine = { material_id: null, line_name: 'Bàn CN Tilos', qty_ordered: 20 }
 
-  it('create mẫu wood nhận dòng tự do', async () => {
+  it('create mẫu wood: dòng tự gõ được CẤP MÃ vật tư, tiền vẫn theo m³ như cũ', async () => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue({
       id: 's1',
       is_active: true,
@@ -677,9 +685,20 @@ describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', (
       template: 'wood',
       currency: 'USD',
       price_includes_vat: false,
-      lines: [freeLine as never],
+      lines: [
+        { ...freeLine, line_unit: 'cái', m3_per_unit: 0.05, unit_price: 1600 } as never,
+        // Hai dòng cùng tên → cùng một mã (không gọi cấp mã lần hai).
+        { ...freeLine, line_unit: 'cái', qty_ordered: 5 } as never,
+      ],
     })
-    expect(posRepo.insert).toHaveBeenCalled()
+    const lines = vi.mocked(posRepo.insert).mock.calls[0][1] as Record<string, unknown>[]
+    expect(lines[0]).toMatchObject({
+      material_id: 'mat-go-1',
+      price_basis: 'unit2',
+      unit2: 'm³',
+    })
+    expect(lines[1].material_id).toBe('mat-go-1')
+    expect(materialsService.ensureForFreeLine).toHaveBeenCalledTimes(1)
   })
 
   /*

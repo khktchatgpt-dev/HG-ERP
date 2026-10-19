@@ -11,29 +11,13 @@ import {
 } from '@/lib/kho-phieu-nhap'
 import { kgDuKien, lechKg } from '@/lib/can-kg'
 import { useBeRong } from '@/lib/use-be-rong'
-import {
-  CellHint,
-  Code,
-  Grid,
-  GridBody,
-  GridFoot,
-  GridHead,
-  GridRow,
-  LineStatus,
-  NumInput,
-  Pick,
-  Tag,
-  TextInput,
-  Th,
-} from '@/components/kit'
+import { GoiY, OChu, OSo, docSoVn } from '../../_erp/o-nhap'
 
 const TINH_TRANG: { value: TinhTrang; label: string }[] = [
   { value: 'ok', label: 'Đạt' },
   { value: 'blocked', label: 'Sai quy cách' },
 ]
 const fmt = (n: number) => n.toLocaleString('vi-VN')
-/** Số kiểu VN: "1.390" = 1390 · "108,40" = 108,4. */
-const docSo = (v: string) => Number(v.replace(/\./g, '').replace(',', '.')) || 0
 
 /** Khung hẹp hơn: cột Ghi chú co thành nút ✎ mở dòng phụ. */
 const GON = 1150
@@ -41,15 +25,14 @@ const GON = 1150
 const HEP = 900
 
 /**
- * LƯỚI PHIẾU NHẬP — tách khỏi `PhieuNhapScreen` (12/10/2026, Kho đợt 2 · Bước
- * 2c) để thêm luật màn hẹp mà màn không vượt trần 800 dòng. Logic ô giữ nguyên.
+ * LƯỚI PHIẾU NHẬP — Kho lối ERP · B2 (bản vẽ K-3), viết tay không kit. Ba cột số
+ * Đặt / Đã về / Còn chờ đứng yên, chỉ Lần này · Kg cân · Tình trạng · Ghi chú gõ
+ * được. Câu nhắc hiện NGAY DƯỚI Ô (thiếu, vào khoá, vượt dung sai — bấm được để
+ * ghi lý do).
  *
- * Đo trước khi sửa (PO-2026-0090, 25 dòng): lưới 1180px trong khung 1065px ở
- * 1280 (sidebar mở) và 797px ở 1024 — riêng ô Ghi chú 300px. Nay:
- *  · < 1150px: Ghi chú thành nút ✎ (● khi đã có chữ); bấm mở DÒNG PHỤ ngay dưới
- *    để gõ. Dòng "Sai quy cách" luôn mở dòng phụ — ghi chú bắt buộc, và thanh
- *    chốt nhảy tới `#ghi-chu-<i>` nên ô phải có mặt trong DOM.
- *  · < 900px: cột số 66px, Đợt rút thành "đ2" (câu đủ ở `title`), Tình trạng hẹp.
+ * Khung < 1150px: Ghi chú thành nút ✎ (● khi đã có chữ) mở DÒNG PHỤ ngay dưới;
+ * dòng "Sai quy cách" luôn mở dòng phụ — ghi chú bắt buộc, và thanh chốt nhảy
+ * tới `#ghi-chu-<i>` nên ô phải có mặt. < 900px: cột số hẹp, Đợt rút thành "đ2".
  */
 export function LuoiNhan({
   rows,
@@ -82,8 +65,8 @@ export function LuoiNhan({
 }) {
   const khung = useRef<HTMLDivElement>(null)
   const rong = useBeRong(khung)
-  const gon = rong < GON
-  const hep = rong < HEP
+  const gon = rong > 0 && rong < GON
+  const hep = rong > 0 && rong < HEP
   const [moGhiChu, setMoGhiChu] = useState<Set<number>>(new Set())
   const lat = (i: number) =>
     setMoGhiChu((s) => {
@@ -95,109 +78,184 @@ export function LuoiNhan({
 
   const wSo = hep ? 66 : 80
   const wDot = hep ? 48 : hasDots ? 128 : 56
-  const minWidth = hep
-    ? 760 + (coKg ? 120 : 0)
-    : gon
-      ? 900 + (hasDots ? 72 : 0) + (coKg ? 140 : 0)
-      : coKg
-        ? 1220
-        : 1180
   const soCot = 11 + (coKg ? 1 : 0)
 
   const oGhiChu = (r: DongNhan, i: number) => (
-    <TextInput
+    <OChu
       id={`ghi-chu-${i}`}
       value={r.note}
       onCommit={(v) => patch(i, { note: v })}
       disabled={busy}
-      placeholder={
-        r.status === 'blocked'
-          ? 'bắt buộc: vì sao sai quy cách'
-          : 'ghi chú (không bắt buộc)'
-      }
+      placeholder={r.status === 'blocked' ? 'bắt buộc: vì sao sai quy cách' : 'ghi chú (không bắt buộc)'} // prettier-ignore
       label={`Ghi chú ${r.code}`}
+      tone={r.status === 'blocked' && !r.note.trim() ? 'need' : undefined}
     />
   )
 
+  const oDot = (r: DongNhan) => {
+    const n = nhan.get(r.po_line_id) ?? { kind: 'none' as const }
+    if (n.kind === 'this') {
+      const cau = `đợt ${n.seq} · ${fmt(n.qty)} ${r.unit}`
+      return hep ? (
+        <span title={cau}>đ{n.seq}</span>
+      ) : (
+        <span className="kh-tag">{cau}</span>
+      )
+    }
+    if (n.kind === 'other') {
+      const cau = `đợt ${n.seq} · ${isoToVn(n.date).slice(0, 5)}${n.arrived ? ' · xe đã tới' : ''}` // prettier-ignore
+      return (
+        <span className="kh-mut" title={cau}>
+          {hep ? `đ${n.seq}` : cau}
+        </span>
+      )
+    }
+    if (n.kind === 'done')
+      return hep ? (
+        <span className="kh-ok" title={`đã nhận đợt ${n.seq}`}>
+          ✓{n.seq}
+        </span>
+      ) : (
+        <span className="kh-tag done">đã nhận đợt {n.seq}</span>
+      )
+    return <span className="kh-empty">{hasDots && !hep ? 'chưa xếp đợt' : '—'}</span>
+  }
+
+  /* ĐIỆN THOẠI (K5, khung < 600px): mỗi dòng hàng một khối — số đứng trên, ô Lần
+     này to, ghi chú cả bề ngang. Cùng id ô (`lan-nay-i`, `ghi-chu-i`) để thanh chốt
+     nhảy tới được. */
+  if (rong > 0 && rong < 600)
+    return (
+      <div ref={khung} className="kh-pl" aria-label="Dòng hàng nhận">
+        {rows.map((r, i) => {
+          const vuot = r.editable ? danhGiaVuot(r) : null
+          const sp = r.editable ? sauPhieu(r) : null
+          return (
+            <div key={r.po_line_id} className="kh-pl-dong">
+              <span style={{ minWidth: 0 }}>
+                <span className="kh-ma">{r.code}</span>{' '}
+                <span style={{ fontSize: 11.5 }}>{oDot(r)}</span>
+                <span style={{ display: 'block', fontWeight: 600 }}>{r.name}</span>
+                <span
+                  className="kh-mut kh-num"
+                  style={{ display: 'block', fontSize: 12 }}
+                >
+                  đặt {fmt(r.qty_ordered)} · đã về {fmt(r.qty_received)} · còn{' '}
+                  {r.editable ? fmt(r.qty_open) : 0} {r.unit}
+                </span>
+              </span>
+              <span>
+                {r.editable ? (
+                  <>
+                    <OSo
+                      id={`lan-nay-${i}`}
+                      value={String(r.qty)}
+                      disabled={busy}
+                      onCommit={(v) => patch(i, { qty: docSoVn(v) })}
+                      label={`Lần này ${r.code}`}
+                    />
+                    {sp?.kind === 'thieu' && <GoiY>còn thiếu {fmt(sp.n)}</GoiY>}
+                    {vuot && !vuot.trong_dung_sai && (
+                      <GoiY tone="warn" onClick={moHopLyDo}>
+                        vượt {vuot.pct.toFixed(0)}% ·{' '}
+                        {coLyDoVuot ? 'đã có lý do' : 'ghi lý do'}
+                      </GoiY>
+                    )}
+                  </>
+                ) : (
+                  <span className={r.closed_short ? 'kh-warn' : 'kh-ok'}>
+                    {r.closed_short ? 'đã chốt thiếu' : 'đã đủ'}
+                  </span>
+                )}
+              </span>
+              {r.editable && (
+                <>
+                  <select
+                    className="kh-o full"
+                    value={r.status}
+                    onChange={(e) => patch(i, { status: e.target.value as TinhTrang })}
+                    aria-label={`Tình trạng ${r.code}`}
+                    disabled={busy}
+                  >
+                    {TINH_TRANG.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  {r.can_kg && (
+                    <span className="full">
+                      <OSo
+                        id={`kg-can-${i}`}
+                        value={r.kg_can == null ? '' : String(r.kg_can)}
+                        disabled={busy}
+                        placeholder="kg cân thực"
+                        onCommit={(v) => patch(i, { kg_can: v.trim() ? docSoVn(v) || null : null })} // prettier-ignore
+                        label={`Kg cân thực ${r.code}`}
+                        tone={r.qty > 0 && !(r.kg_can! > 0) ? 'need' : undefined}
+                      />
+                    </span>
+                  )}
+                  <span className="full">{oGhiChu(r, i)}</span>
+                </>
+              )}
+            </div>
+          )
+        })}
+        <div className="kh-pl-dong kh-mut" style={{ fontSize: 12 }}>
+          <span className="full">
+            {rows.length} dòng · {rows.filter((r) => !r.editable).length} đã đủ · lần này{' '}
+            {fmt(tong.lan_nay)}
+          </span>
+        </div>
+      </div>
+    )
+
   return (
-    <div ref={khung} className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-      <Grid minWidth={minWidth}>
-        <GridHead>
-          <Th width={30}>#</Th>
-          <Th width={hep ? 84 : 96}>Mã</Th>
-          <Th width={wDot}>Đợt</Th>
-          <Th>Tên vật tư</Th>
-          <Th width={hep ? 46 : 52}>ĐVT</Th>
-          <Th num width={wSo}>
-            Đặt
-          </Th>
-          <Th num width={wSo}>
-            Đã về
-          </Th>
-          <Th num width={wSo}>
-            Còn chờ
-          </Th>
-          <Th num width={hep ? 104 : 120}>
-            Lần này
-          </Th>
-          {coKg && (
-            <Th num width={hep ? 120 : 140}>
-              Kg cân (nếu có)
-            </Th>
-          )}
-          <Th width={hep ? 112 : 146}>Tình trạng</Th>
-          <Th width={gon ? 44 : coKg ? 200 : 300}>{gon ? '' : 'Ghi chú'}</Th>
-        </GridHead>
-        <GridBody>
+    <div ref={khung} className="kh-grid">
+      <table className="kh-tb" aria-label="Dòng hàng nhận">
+        <colgroup>
+          <col style={{ width: 34 }} />
+          <col style={{ width: hep ? 84 : 96 }} />
+          <col style={{ width: wDot }} />
+          <col />
+          <col style={{ width: hep ? 46 : 54 }} />
+          <col style={{ width: wSo }} />
+          <col style={{ width: wSo }} />
+          <col style={{ width: wSo }} />
+          <col style={{ width: hep ? 104 : 120 }} />
+          {coKg && <col style={{ width: hep ? 120 : 140 }} />}
+          <col style={{ width: hep ? 112 : 136 }} />
+          <col style={{ width: gon ? 40 : coKg ? 180 : 210 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Mã</th>
+            <th>Đợt</th>
+            <th>Tên vật tư</th>
+            <th>ĐVT</th>
+            <th className="r">Đặt</th>
+            <th className="r">Đã về</th>
+            <th className="r">Còn chờ</th>
+            <th className="r">Lần này</th>
+            {coKg && <th className="r">Kg cân (nếu có)</th>}
+            <th>Tình trạng</th>
+            <th aria-label={gon ? 'Ghi chú' : undefined}>{gon ? '' : 'Ghi chú'}</th>
+          </tr>
+        </thead>
+        <tbody>
           {rows.map((r, i) => {
             const vuot = r.editable ? danhGiaVuot(r) : null
             const phu = gon && r.editable && (moGhiChu.has(i) || r.status === 'blocked')
+            const sp = r.editable ? sauPhieu(r) : null
             return (
               <Fragment key={r.po_line_id}>
-                <GridRow>
-                  <td className="k-c-n">{i + 1}</td>
-                  <td>
-                    <Code>{r.code}</Code>
-                  </td>
-                  <td className="text-k-label">
-                    {(() => {
-                      const n = nhan.get(r.po_line_id) ?? { kind: 'none' as const }
-                      if (n.kind === 'this') {
-                        const cau = `đợt ${n.seq} · ${fmt(n.qty)} ${r.unit}`
-                        return hep ? (
-                          <span title={cau}>đ{n.seq}</span>
-                        ) : (
-                          <Tag tone="neutral">{cau}</Tag>
-                        )
-                      }
-                      if (n.kind === 'other') {
-                        const cau = `đợt ${n.seq} · ${isoToVn(n.date).slice(0, 5)}${n.arrived ? ' · xe đã tới' : ''}` // prettier-ignore
-                        return (
-                          <span className="text-[var(--ink-3)]" title={cau}>
-                            {hep ? `đ${n.seq}` : cau}
-                          </span>
-                        )
-                      }
-                      if (n.kind === 'done')
-                        return hep ? (
-                          <span
-                            className="text-[var(--done)]"
-                            title={`đã nhận đợt ${n.seq}`}
-                          >
-                            ✓{n.seq}
-                          </span>
-                        ) : (
-                          <Tag tone="done">đã nhận đợt {n.seq}</Tag>
-                        )
-                      return (
-                        <span className="text-[var(--ink-empty)]">
-                          {hasDots && !hep ? 'chưa xếp đợt' : '—'}
-                        </span>
-                      )
-                    })()}
-                  </td>
+                <tr className="d f">
+                  <td className="kh-num kh-mut">{i + 1}</td>
+                  <td className="kh-ma">{r.code}</td>
+                  <td style={{ fontSize: 11.5 }}>{oDot(r)}</td>
                   <td
-                    className="max-w-0"
                     title={[
                       r.name,
                       r.chi_tiet,
@@ -206,56 +264,56 @@ export function LuoiNhan({
                       .filter(Boolean)
                       .join('\n')}
                   >
-                    <div className="truncate">{r.name}</div>
+                    {r.name}
                     {r.chi_tiet && (
-                      <div className="text-k-label truncate text-[var(--ink-3)]">
+                      <span
+                        className="kh-mut"
+                        style={{
+                          display: 'block',
+                          fontSize: 11.5,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
                         {r.chi_tiet}
-                      </div>
+                      </span>
                     )}
                   </td>
-                  <td className="text-[var(--ink-3)]">{r.unit}</td>
-                  <td className="k-r num">{fmt(r.qty_ordered)}</td>
-                  <td className="k-r num text-[var(--ink-3)]">{fmt(r.qty_received)}</td>
-                  <td className="k-r num">
-                    {r.editable ? (
-                      fmt(r.qty_open)
-                    ) : (
-                      <span className="text-[var(--ink-empty)]">0</span>
-                    )}
+                  <td className="kh-mut">{r.unit}</td>
+                  <td className="r kh-num">{fmt(r.qty_ordered)}</td>
+                  <td className="r kh-num kh-mut">{fmt(r.qty_received)}</td>
+                  <td className="r kh-num">
+                    {r.editable ? fmt(r.qty_open) : <span className="kh-empty">0</span>}
                   </td>
-                  <td className="k-r">
+                  <td className={r.editable ? 'r go' : 'r'}>
                     {r.editable ? (
                       <>
-                        <NumInput
+                        <OSo
                           id={`lan-nay-${i}`}
                           value={String(r.qty)}
                           disabled={busy}
-                          onCommit={(v) => patch(i, { qty: docSo(v) })}
-                          aria-label={`Lần này ${r.code}`}
+                          onCommit={(v) => patch(i, { qty: docSoVn(v) })}
+                          label={`Lần này ${r.code}`}
                         />
-                        {(() => {
-                          // Thiếu KHÔNG chặn: đơn thành "Về một phần", người mua
-                          // quyết giao bù / chốt thiếu ở trang đơn. Nói trước.
-                          const sp = sauPhieu(r)
-                          return sp?.kind === 'thieu' ? (
-                            <CellHint tone="neutral">
-                              còn thiếu {fmt(sp.n)} {r.unit}
-                            </CellHint>
-                          ) : null
-                        })()}
+                        {/* Thiếu KHÔNG chặn: đơn thành "Về một phần", người mua quyết giao bù / chốt thiếu. */}
+                        {sp?.kind === 'thieu' && (
+                          <GoiY>
+                            còn thiếu {fmt(sp.n)} {r.unit}
+                          </GoiY>
+                        )}
                         {r.status === 'blocked' && r.qty > 0 && (
-                          <CellHint tone="warn">
+                          <GoiY tone="warn">
                             {fmt(r.qty)} {r.unit} vào KHOÁ
-                          </CellHint>
+                          </GoiY>
                         )}
                         {vuot &&
                           (vuot.trong_dung_sai ? (
-                            <CellHint tone="neutral">
+                            <GoiY>
                               vượt {vuot.pct.toFixed(0)}% · trong dung sai{' '}
                               {r.over_tolerance_pct}%
-                            </CellHint>
+                            </GoiY>
                           ) : (
-                            <CellHint
+                            <GoiY
                               tone="warn"
                               onClick={moHopLyDo}
                               title="Vượt ngưỡng của mã — bấm để ghi lý do nhận vượt"
@@ -263,82 +321,85 @@ export function LuoiNhan({
                               vượt {vuot.pct.toFixed(0)}% · dung sai{' '}
                               {r.over_tolerance_pct}% ·{' '}
                               {coLyDoVuot ? 'đã có lý do' : 'ghi lý do'}
-                            </CellHint>
+                            </GoiY>
                           ))}
                       </>
                     ) : (
-                      <LineStatus kind={r.closed_short ? 'short' : 'done'}>
+                      <span className={r.closed_short ? 'kh-warn' : 'kh-ok'}>
                         {r.closed_short ? 'đã chốt thiếu' : 'đã đủ'}
-                      </LineStatus>
+                      </span>
                     )}
                   </td>
                   {coKg && (
-                    <td className="k-r">
+                    <td className={r.editable && r.can_kg ? 'r go' : 'r'}>
                       {r.editable && r.can_kg ? (
                         <>
-                          <NumInput
+                          <OSo
                             id={`kg-can-${i}`}
                             value={r.kg_can == null ? '' : String(r.kg_can)}
                             disabled={busy}
                             placeholder="cân rồi ghi"
-                            onCommit={(v) =>
-                              patch(i, { kg_can: v.trim() ? docSo(v) || null : null })
-                            }
-                            aria-label={`Kg cân thực ${r.code}`}
+                            onCommit={(v) => patch(i, { kg_can: v.trim() ? docSoVn(v) || null : null })} // prettier-ignore
+                            label={`Kg cân thực ${r.code}`}
+                            tone={r.qty > 0 && !(r.kg_can! > 0) ? 'need' : undefined}
                           />
                           {(() => {
-                            const du = kgDuKien(r.qty, {
-                              qty_ordered: r.qty_ordered,
-                              qty2: r.kg_don,
-                            })
+                            const du = kgDuKien(r.qty, { qty_ordered: r.qty_ordered, qty2: r.kg_don }) // prettier-ignore
                             if (r.qty > 0 && !(r.kg_can! > 0))
                               return (
-                                <CellHint tone="warn">
+                                <GoiY tone="warn">
                                   bắt buộc{du != null ? ` · đơn ~${fmt(du)} kg` : ''}
-                                </CellHint>
+                                </GoiY>
                               )
                             const l = r.kg_can ? lechKg(r.kg_can, du) : null
                             return l != null ? (
-                              <CellHint tone={Math.abs(l) >= 3 ? 'warn' : 'neutral'}>
+                              <GoiY tone={Math.abs(l) >= 3 ? 'warn' : 'mut'}>
                                 đơn ~{fmt(du!)} kg · lệch {l > 0 ? '+' : ''}
                                 {l.toLocaleString('vi-VN')}%
-                              </CellHint>
+                              </GoiY>
                             ) : null
                           })()}
                         </>
                       ) : (
-                        <span className="text-[var(--ink-empty)]">—</span>
+                        <span className="kh-empty">—</span>
                       )}
                     </td>
                   )}
-                  <td>
+                  <td className={r.editable ? 'go' : undefined}>
                     {r.editable ? (
-                      <Pick
+                      <select
+                        className="kh-o"
                         value={r.status}
-                        onChange={(v) => patch(i, { status: v as TinhTrang })}
-                        options={TINH_TRANG}
-                        label={`Tình trạng ${r.code}`}
-                        width={hep ? 100 : 130}
+                        onChange={(e) =>
+                          patch(i, { status: e.target.value as TinhTrang })
+                        }
+                        aria-label={`Tình trạng ${r.code}`}
                         disabled={busy}
-                      />
+                        style={r.status === 'blocked' ? { color: 'var(--kh-stop)', fontWeight: 600 } : undefined} // prettier-ignore
+                      >
+                        {TINH_TRANG.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
-                      <span className="text-[var(--ink-empty)]">—</span>
+                      <span className="kh-empty">—</span>
                     )}
                   </td>
-                  <td>
+                  <td className={r.editable && !gon ? 'go' : undefined}>
                     {!r.editable ? (
-                      <span className="text-[var(--ink-empty)]">—</span>
+                      <span className="kh-empty">—</span>
                     ) : gon ? (
                       <button
                         type="button"
+                        className="mo"
                         onClick={() => lat(i)}
                         aria-expanded={phu}
                         aria-label={`${phu ? 'Đóng' : 'Mở'} ghi chú ${r.code}`}
                         title={r.note || 'Thêm ghi chú'}
-                        className={
-                          r.note
-                            ? 'font-semibold text-[var(--act-text)]'
-                            : 'text-[var(--ink-3)] hover:text-[var(--act-text)]'
+                        style={
+                          r.note ? { color: 'var(--kh-act)', fontWeight: 700 } : undefined
                         }
                       >
                         {r.note ? '●' : '✎'}
@@ -347,16 +408,24 @@ export function LuoiNhan({
                       oGhiChu(r, i)
                     )}
                   </td>
-                </GridRow>
+                </tr>
                 {phu && (
-                  <tr className="bg-[var(--surface-raised)]">
+                  <tr className="phu">
                     <td />
-                    <td colSpan={soCot - 1} className="py-1">
-                      <span className="flex items-center gap-2">
-                        <span className="text-k-label shrink-0 font-semibold text-[var(--ink-2)] uppercase">
+                    <td colSpan={soCot - 1}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          className="kh-mut"
+                          style={{
+                            flex: 'none',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                          }}
+                        >
                           Ghi chú {r.code}
                         </span>
-                        <span className="min-w-0 flex-1">{oGhiChu(r, i)}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>{oGhiChu(r, i)}</span>
                       </span>
                     </td>
                   </tr>
@@ -364,33 +433,26 @@ export function LuoiNhan({
               </Fragment>
             )
           })}
-        </GridBody>
-        <GridFoot>
-          <td
-            colSpan={5}
-            title={`Nhận theo phần còn mở của ${dangTheoDot ? 'đợt' : 'đơn'} — dòng đã đủ không có ô nhập`}
-          >
-            Tổng{' '}
-            <span className="font-normal text-[var(--ink-3)]">
-              · {rows.length} dòng · {rows.filter((r) => !r.editable).length} đã đủ
-            </span>
-          </td>
-          <td className="k-r num">{fmt(tong.tong_dat)}</td>
-          <td className="k-r num">{fmt(tong.tong_da_ve)}</td>
-          <td className="k-r num">{fmt(conCho)}</td>
-          <td className="k-r num">{fmt(tong.lan_nay)}</td>
-          {coKg && <td className="k-r num">{kgCan > 0 ? `${fmt(kgCan)} kg` : '—'}</td>}
-          <td
-            colSpan={2}
-            className="font-normal text-[var(--ink-3)]"
-            // Chữ dòng tổng không được ép hai cột cuối phình 299px ở khung hẹp (đo 12/10).
-            style={gon ? { whiteSpace: 'normal' } : undefined}
-          >
-            {tong.so_dong_nhan} dòng nhận · {fmt(tong.vao_khoa)} vào khoá ·{' '}
-            {fmt(tong.dung_duoc)} dùng được
-          </td>
-        </GridFoot>
-      </Grid>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td
+              colSpan={5}
+              title={`Nhận theo phần còn mở của ${dangTheoDot ? 'đợt' : 'đơn'} — dòng đã đủ không có ô nhập`}
+            >
+              Tổng · {rows.length} dòng · {rows.filter((r) => !r.editable).length} đã đủ
+            </td>
+            <td className="r kh-num">{fmt(tong.tong_dat)}</td>
+            <td className="r kh-num">{fmt(tong.tong_da_ve)}</td>
+            <td className="r kh-num">{fmt(conCho)}</td>
+            <td className="r kh-num">{fmt(tong.lan_nay)}</td>
+            {coKg && <td className="r kh-num">{kgCan > 0 ? `${fmt(kgCan)} kg` : '—'}</td>}
+            <td colSpan={2} style={{ fontWeight: 400 }}>
+              {tong.so_dong_nhan} dòng nhận · {fmt(tong.vao_khoa)} vào khoá
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   )
 }

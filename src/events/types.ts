@@ -294,6 +294,33 @@ export type DomainEvent =
       decided_by: string
       requester_id: string | null
     }
+  /**
+   * NCC XÁC NHẬN đơn (B8b, 0251) — Kho được báo khi hẹn giao trong 3 ngày tới
+   * (luật `baoKhoKhiXacNhan`). Bắn sau khi đơn đã sang "Chờ giao".
+   */
+  | {
+      name: 'po.confirmed'
+      po_id: string
+      code: string
+      supplier_name: string
+      /** Hẹn giao sớm nhất (YYYY-MM-DD); null = NCC chưa chốt ngày. */
+      expected: string | null
+      confirmed_by: string
+    }
+  /** DỜI HẸN một đợt / cả đơn đang chờ giao (B8b, 0251) — báo Kho. */
+  | {
+      name: 'po.rescheduled'
+      po_id: string
+      code: string
+      supplier_name: string
+      /** Hẹn cũ / hẹn mới (YYYY-MM-DD). */
+      from: string | null
+      to: string
+      /** "đợt 2" khi dời một đợt; null khi dời cả đơn. */
+      dot: string | null
+      reason: string | null
+      moved_by: string
+    }
   | {
       name: 'po.issue_recorded'
       po_id: string
