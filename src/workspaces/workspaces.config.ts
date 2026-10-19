@@ -350,6 +350,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
           // và đảo phiếu ghi sai chỉ làm được ở màn cũ.
           { href: '/warehouse/phieu', label: 'Sổ phiếu', icon: 'book-open' },
+          // Kho đợt 2 · B6 (19/10/2026): báo cáo nhập–xuất–tồn theo kỳ, có giá trị
+          // (bình quân gia quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
+          { href: '/warehouse/bao-cao', label: 'Nhập–Xuất–Tồn', icon: 'chart-column' },
           // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
           // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
           // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.
