@@ -395,7 +395,12 @@ export type NhanVienData = {
 /** Đuôi ghi chú đánh dấu "ca mặc định khi nạp" — xoá khi có người đổi/xác nhận ca. */
 const DUOI_CA_MAC_DINH = ' · ca mặc định Xưởng, cần xem lại'
 
-async function taiNhanVien(homNay: string): Promise<NhanVienData> {
+/**
+ * `luot: false` — bỏ đọc lượt quẹt 45 ngày của cả công ty (phần nặng nhất, ~1–2 s): hồ sơ
+ * nhân viên không bày "quẹt gần nhất" trên danh sách, còn trang một người tự đọc của riêng
+ * người đó. Khi đó `lanCuoi` / `luotGanDay` = trống và `maChuaGhep` rỗng.
+ */
+async function taiNhanVien(homNay: string, luot = true): Promise<NhanVienData> {
   const tu = new Date(`${homNay}T00:00:00Z`)
   tu.setUTCDate(tu.getUTCDate() - NV_NHIN_LAI_NGAY + 1)
   const nhinLaiTu = tu.toISOString().slice(0, 10)
@@ -404,10 +409,12 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
     chamCongRepo.deviceUsers(),
     chamCongRepo.employees(),
     chamCongRepo.shifts(),
-    chamCongRepo.logsBetween(
-      `${nhinLaiTu}T00:00:00+07:00`,
-      `${sauNgay(homNay)}T00:00:00+07:00`,
-    ),
+    luot
+      ? chamCongRepo.logsBetween(
+          `${nhinLaiTu}T00:00:00+07:00`,
+          `${sauNgay(homNay)}T00:00:00+07:00`,
+        )
+      : Promise.resolve([]),
     chamCongRepo.taiKhoanGan(),
   ])
   const tkTheoNv = new Map(
@@ -586,9 +593,13 @@ export const chamCongService = {
   },
 
   /** Bước ② — danh sách nhân viên chấm công + mã trên máy + mã có quẹt chưa ghép. */
-  async nhanVien(user: User, homNay: string): Promise<NhanVienData> {
+  async nhanVien(
+    user: User,
+    homNay: string,
+    opts: { luot?: boolean } = {},
+  ): Promise<NhanVienData> {
     await assertAction(user, 'hr.attendance.view')
-    return taiNhanVien(homNay)
+    return taiNhanVien(homNay, opts.luot ?? true)
   },
 
   async suaNhanVien(

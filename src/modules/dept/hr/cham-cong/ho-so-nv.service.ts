@@ -12,7 +12,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
-import { kyCuaThang, thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { congNgay, kyCuaThang, thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
 import { soSanhMa } from '@/lib/nhan-su/ho-so'
 import {
   cheCccd,
@@ -24,7 +24,14 @@ import {
   type GioiTinh,
 } from '@/lib/nhan-su/ca-nhan'
 import { banHieuLuc, che, TEN_CACH_TRA, type CachTra } from '@/lib/luong/ho-so-luong'
-import { chamCongService, type NhanVienData, type NvDong } from './cham-cong.service'
+import {
+  chamCongService,
+  NV_NHIN_LAI_NGAY,
+  toVn,
+  type NhanVienData,
+  type NvDong,
+} from './cham-cong.service'
+import { chamCongRepo } from './cham-cong.repo'
 import { bienDongRepo, type BienDongDong } from './bien-dong.repo'
 import { caNhanRepo, COT_CA_NHAN, type CotCaNhan, type DongCaNhan } from './ca-nhan.repo'
 import { hoSoLuongRepo } from '../luong/ho-so-luong.repo'
@@ -145,11 +152,37 @@ const TEN_KHOI: Record<KhoiCaNhan, string> = {
   lien_he: 'Liên hệ',
 }
 
+/** Ngày quẹt gần nhất trong 45 ngày — chỉ đọc lượt của người này (đúng cặp máy · mã). */
+async function quetGanNhat(n: NvDong, homNay: string): Promise<string | null> {
+  if (!n.ma.length) return null
+  const tu = new Date(`${homNay}T00:00:00Z`)
+  tu.setUTCDate(tu.getUTCDate() - NV_NHIN_LAI_NGAY + 1)
+  const dus = await chamCongRepo.deviceUsers()
+  const cap = new Set(
+    dus
+      .filter((u) => n.ma.some((m) => m.id === u.id))
+      .map((u) => `${u.device_id}|${u.device_user_id}`),
+  )
+  const logs = await chamCongRepo.logsOfCodes(
+    [...new Set(n.ma.map((m) => m.ma))],
+    `${tu.toISOString().slice(0, 10)}T00:00:00+07:00`,
+    `${congNgay(homNay, 1)}T00:00:00+07:00`,
+  )
+  let cuoi: string | null = null
+  for (const l of logs) {
+    if (!cap.has(`${l.device_id}|${l.device_user_id}`)) continue
+    const ngay = toVn(l.punched_at).slice(0, 10)
+    if (!cuoi || ngay > cuoi) cuoi = ngay
+  }
+  return cuoi
+}
+
 export const hoSoNvService = {
   async danhSach(user: User, homNay: string): Promise<DsNhanVien> {
     await assertAction(user, 'hr.attendance.view')
     const [nv, co] = await Promise.all([
-      chamCongService.nhanVien(user, homNay),
+      // Không đọc lượt quẹt cả công ty — danh sách hồ sơ không bày quẹt gần nhất.
+      chamCongService.nhanVien(user, homNay, { luot: false }),
       caNhanRepo.coTatCa(),
     ])
     return {
@@ -172,14 +205,16 @@ export const hoSoNvService = {
     const thang = thangCuaNgay(homNay)
     const k = kyCuaThang(thang)
     const den = k.den < homNay ? k.den : homNay
-    const [bienDong, mot, caNhan, tl] = await Promise.all([
+    const [bienDong, mot, caNhan, tl, lanCuoi] = await Promise.all([
       bienDongRepo.cuaNguoi(n.id),
       n.khongChamCong || den < k.tu
         ? null
         : chamCongService.motNguoi(user, ma, { tu: k.tu, den }),
       rieng ? caNhanRepo.cua(n.id) : null,
       luong ? tomLuong(n.id, thang) : null,
+      quetGanNhat(n, homNay),
     ])
+    n.lanCuoi = lanCuoi
     const ngayDaLay = mot?.ngay.filter((d) => d.daLay) ?? []
     return {
       n,
