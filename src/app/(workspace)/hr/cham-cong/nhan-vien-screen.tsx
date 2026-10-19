@@ -15,7 +15,9 @@ import { dm } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
 
 /**
- * BƯỚC ② NHÂN VIÊN & CA — "ai là ai, làm ca nào?" (bản vẽ Nv.dc.html, duyệt 15/10/2026).
+ * CHẤM CÔNG › MÃ TRÊN MÁY & CA (dời từ Hồ sơ nhân viên 19/10/2026, bản vẽ lượt 2 Q5):
+ * dọn dữ liệu máy — tên lấy từ máy, ca mặc định, mã chưa ghép. Hồ sơ người ở /hr/nhan-vien.
+ * Gốc: BƯỚC ② NHÂN VIÊN & CA — "ai là ai, làm ca nào?" (bản vẽ Nv.dc.html, duyệt 15/10/2026).
  * Ô đếm = bộ lọc; lưới nhân viên chọn nhiều để đổi ca / bộ phận một lần; bấm một
  * dòng mở hồ sơ bên phải. Ô "Mã có quẹt, chưa ghép người" đổi lưới sang danh sách
  * mã trên máy để gán tay. Ca ở đây chỉ là CA THƯỜNG LÀM (một ngày làm nhiều đoạn
@@ -25,12 +27,12 @@ export function NhanVienScreen({ nv }: { nv: NhanVienData }) {
   const v = useNhanVien(nv)
   return (
     <KhungTrang
-      nhom="Nhân sự"
-      ten="Hồ sơ nhân viên"
+      nhom="Chấm công"
+      ten="Mã trên máy & ca"
       facts={[{ label: 'Đang làm', value: so(v.dem('dang-lam')) }]}
       actions={
         <Btn primary icon="them" onClick={() => v.setHoSo({ moi: true })}>
-          Thêm nhân viên
+          Tuyển vào
         </Btn>
       }
     >
@@ -237,7 +239,10 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
             <th className={h}>Mã NV</th>
             <th className={h}>Họ tên</th>
             <th className={h}>Bộ phận / Tổ</th>
-            <th className={h} title="Admin cấp ở Admin › Nhân viên & tài khoản — ở đây chỉ để xem">
+            <th
+              className={h}
+              title="Admin cấp ở Admin › Nhân viên & tài khoản — ở đây chỉ để xem"
+            >
               Tài khoản ERP
             </th>
             <th
@@ -285,7 +290,9 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
                   <>
                     <span className="num">{n.taiKhoan.email}</span>
                     {!n.taiKhoan.mo && (
-                      <span className="ml-1.5 text-[11px] text-[var(--stop)]">đã khoá</span>
+                      <span className="ml-1.5 text-[11px] text-[var(--stop)]">
+                        đã khoá
+                      </span>
                     )}
                   </>
                 ) : (

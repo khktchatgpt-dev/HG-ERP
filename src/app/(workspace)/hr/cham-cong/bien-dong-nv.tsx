@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
-  Btn,
   Consequence,
   DateInput,
   Pick,
@@ -10,26 +9,23 @@ import {
   SheetActions,
   TextInput,
 } from '@/components/kit'
-import { api } from '@/lib/api'
 import {
   LY_DO_NGHI,
   ngaySau,
   ngayVn,
-  TEN_BIEN_DONG,
   TEN_LY_DO_NGHI,
   tinhTrangLam,
   type LyDoNghi,
 } from '@/lib/nhan-su/bien-dong'
 import type { NvDong } from '@/modules/dept/hr/cham-cong/cham-cong.service'
-import type { BienDongDong } from '@/modules/dept/hr/cham-cong/bien-dong.repo'
-import type { NhanVienCtx } from './useNhanVien'
 
 /**
- * Biến động vào / ra / chuyển trên hồ sơ một người (Hồ sơ nhân viên B1, bản vẽ duyệt
- * 19/10/2026). Tình trạng suy từ ngày, không gõ tay; mỗi việc có ngày + lý do + vết.
+ * Hộp biến động vào / ra / chuyển (Hồ sơ nhân viên B1, bản vẽ duyệt 19/10/2026) — dùng ở
+ * trang hồ sơ /hr/nhan-vien/[mã]. Tình trạng suy từ ngày, không gõ tay; mỗi việc có ngày +
+ * lý do + vết.
  */
 
-const lyDo = (r: string | null) => (r ? (TEN_LY_DO_NGHI[r as LyDoNghi] ?? r) : '')
+export const lyDo = (r: string | null) => (r ? (TEN_LY_DO_NGHI[r as LyDoNghi] ?? r) : '')
 
 /** Một dòng dưới tên: đang làm từ … / làm tới … / đã nghỉ từ …. */
 export function TinhTrang({ n, homNay }: { n: NvDong; homNay: string }) {
@@ -59,78 +55,14 @@ export function TinhTrang({ n, homNay }: { n: NvDong; homNay: string }) {
   )
 }
 
-type Hop = null | 'nghi' | 'lam_lai' | 'chuyen'
-
-export function BienDongNv({ v, n }: { v: NhanVienCtx; n: NvDong }) {
-  const [hop, setHop] = useState<Hop>(null)
-  const [ds, setDs] = useState<BienDongDong[] | null>(null)
-
-  // Tải lại vết khi hồ sơ đổi sau router.refresh (biến động vừa ghi).
-  useEffect(() => {
-    let huy = false
-    api<{ ds: BienDongDong[] }>(`/api/dept/hr/cham-cong/nhan-vien/${n.id}/bien-dong`)
-      .then((r) => !huy && setDs(r.ds))
-      .catch(() => !huy && setDs([]))
-    return () => {
-      huy = true
-    }
-  }, [n.id, n.active, n.ngayVao, n.ngayCuoi, n.boPhan, n.chucDanh])
-
-  return (
-    <div className="border-b border-[var(--line)] px-3.5 py-2">
-      <div className="text-k-sm mb-1.5 font-semibold">Vào / ra</div>
-      <div className="flex flex-wrap gap-1.5">
-        {n.active && !n.ngayCuoi && (
-          <>
-            <Btn onClick={() => setHop('nghi')}>Cho nghỉ việc</Btn>
-            <Btn onClick={() => setHop('chuyen')}>Chuyển tổ / chức danh</Btn>
-          </>
-        )}
-        {n.ngayCuoi && (
-          <Btn
-            busy={v.busy}
-            onClick={() =>
-              v.bienDong(n.id, { viec: 'huy_nghi' }, `Đã huỷ cho nghỉ ${n.hoTen}`)
-            }
-          >
-            Huỷ cho nghỉ
-          </Btn>
-        )}
-        {!n.active && <Btn onClick={() => setHop('lam_lai')}>Đi làm lại</Btn>}
-      </div>
-
-      <ul className="text-k-label mt-2 space-y-1">
-        {ds == null ? (
-          <li className="text-[var(--ink-3)]">Đang tải…</li>
-        ) : ds.length === 0 ? (
-          <li className="text-[var(--ink-3)]">
-            Chưa có biến động nào — ghi ngày vào làm ở trên để có mốc Tuyển vào.
-          </li>
-        ) : (
-          ds.map((b) => (
-            <li key={b.id} className={b.huyLuc ? 'text-[var(--ink-3)] line-through' : ''}>
-              <span className="num mr-1.5">{ngayVn(b.ngay)}</span>
-              {TEN_BIEN_DONG[b.loai]}
-              {b.lyDo ? ` · ${lyDo(b.lyDo)}` : ''}
-              {b.loai === 'transfer' && b.sau ? ` → ${moTaChuyen(b.sau)}` : ''}
-              {b.ghiChu ? ` · ${b.ghiChu}` : ''}
-              <span className="block text-[var(--ink-3)]">
-                {b.nguoi ?? 'hệ thống'}
-                {b.huyLuc ? ' · đã huỷ' : ''}
-              </span>
-            </li>
-          ))
-        )}
-      </ul>
-
-      {hop === 'nghi' && <HopNghi v={v} n={n} dong={() => setHop(null)} />}
-      {hop === 'lam_lai' && <HopLamLai v={v} n={n} dong={() => setHop(null)} />}
-      {hop === 'chuyen' && <HopChuyen v={v} n={n} dong={() => setHop(null)} />}
-    </div>
-  )
+/** Thứ các hộp biến động cần từ màn gọi — màn Mã trên máy và trang hồ sơ đều có. */
+export type BdCtx = {
+  bienDong: (id: string, body: Record<string, unknown>, xong: string) => Promise<boolean>
+  busy: boolean
+  homNay: string
 }
 
-function moTaChuyen(sau: unknown): string {
+export function moTaChuyen(sau: unknown): string {
   const x = sau as { team?: string | null; job_title?: string | null }
   return [x.team, x.job_title].filter(Boolean).join(' · ')
 }
@@ -139,7 +71,7 @@ const LUOI = 'text-k-sm grid grid-cols-[130px_1fr] items-center gap-x-2 gap-y-2'
 const NHAN = 'text-[var(--ink-3)]'
 const O = 'w-full border border-[var(--line)] px-1.5 py-0.5'
 
-function HopNghi({ v, n, dong }: { v: NhanVienCtx; n: NvDong; dong: () => void }) {
+export function HopNghi({ v, n, dong }: { v: BdCtx; n: NvDong; dong: () => void }) {
   const [ngay, setNgay] = useState(v.homNay)
   const [ly, setLy] = useState<LyDoNghi>('resign')
   const [ghi, setGhi] = useState('')
@@ -206,7 +138,7 @@ function HopNghi({ v, n, dong }: { v: NhanVienCtx; n: NvDong; dong: () => void }
   )
 }
 
-function HopLamLai({ v, n, dong }: { v: NhanVienCtx; n: NvDong; dong: () => void }) {
+export function HopLamLai({ v, n, dong }: { v: BdCtx; n: NvDong; dong: () => void }) {
   const [ngay, setNgay] = useState(v.homNay)
   const [ghi, setGhi] = useState('')
   const sai = !!(n.ngayCuoi && ngay && ngay <= n.ngayCuoi)
@@ -259,7 +191,7 @@ function HopLamLai({ v, n, dong }: { v: NhanVienCtx; n: NvDong; dong: () => void
   )
 }
 
-function HopChuyen({ v, n, dong }: { v: NhanVienCtx; n: NvDong; dong: () => void }) {
+export function HopChuyen({ v, n, dong }: { v: BdCtx; n: NvDong; dong: () => void }) {
   const [ngay, setNgay] = useState(v.homNay)
   const [to, setTo] = useState(n.boPhan ?? '')
   const [cd, setCd] = useState(n.chucDanh ?? '')

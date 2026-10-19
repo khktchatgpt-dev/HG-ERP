@@ -167,7 +167,8 @@ export function useNhanVien(nv: NhanVienData) {
   /** Ghi một biến động: ngày vào · cho nghỉ · huỷ cho nghỉ · đi làm lại · chuyển. */
   const bienDong = (id: string, body: Record<string, unknown>, xong: string) =>
     chay(
-      () => api(`/api/dept/hr/cham-cong/nhan-vien/${id}/bien-dong`, { method: 'POST', body }),
+      () =>
+        api(`/api/dept/hr/cham-cong/nhan-vien/${id}/bien-dong`, { method: 'POST', body }),
       xong,
     )
 

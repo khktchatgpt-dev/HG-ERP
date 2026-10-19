@@ -687,6 +687,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           },
           { href: '/hr/cham-cong/luot', label: 'Lượt quẹt', icon: 'table' },
           {
+            // Dọn mã máy: tên lấy từ máy, ca mặc định, mã chưa ghép (dời khỏi Hồ sơ nhân viên).
+            href: '/hr/cham-cong/ma-may',
+            label: 'Mã trên máy & ca',
+            icon: 'key-round',
+          },
+          {
             href: '/hr/cham-cong/co-mat',
             label: 'Có mặt theo tổ',
             icon: 'calendar-range',

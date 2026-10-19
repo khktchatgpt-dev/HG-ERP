@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Btn, DateInput } from '@/components/kit'
-import { BienDongNv, TinhTrang } from './bien-dong-nv'
+import Link from 'next/link'
+import { TinhTrang } from './bien-dong-nv'
 import { cn } from '@/lib/utils'
 import type { NvDong } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import type { NhanVienCtx } from './useNhanVien'
@@ -65,10 +66,10 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
       : !n && !ngayVao
         ? 'Nhập ngày vào làm'
         : hoTen.trim().length < 2
-        ? n?.tenTuMay
-          ? `Gõ họ tên đầy đủ — máy chỉ ghi "${n.hoTen}"`
-          : 'Gõ họ tên đầy đủ'
-        : null
+          ? n?.tenTuMay
+            ? `Gõ họ tên đầy đủ — máy chỉ ghi "${n.hoTen}"`
+            : 'Gõ họ tên đầy đủ'
+          : null
 
   async function luu() {
     if (loi) return
@@ -81,7 +82,11 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
         job_title: chucDanh.trim() || null,
       })
       if (ok && ngayVao !== (n.ngayVao ?? ''))
-        await v.bienDong(n.id, { viec: 'ngay_vao', ngay: ngayVao || null }, 'Đã ghi ngày vào')
+        await v.bienDong(
+          n.id,
+          { viec: 'ngay_vao', ngay: ngayVao || null },
+          'Đã ghi ngày vào',
+        )
     } else {
       const ok = await v.tuyen({
         khong_cham: khongCham,
@@ -189,26 +194,23 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
             Chỉ là gợi ý — ngày làm nhiều đoạn thì từng đoạn tự nhận ca theo giờ
           </span>
         </span>
-        <label className={nhan} htmlFor="nv-cd">
-          Chức danh
-        </label>
-        <input
-          id="nv-cd"
-          className={o}
-          list="hr-chuc-danh"
-          value={chucDanh}
-          onChange={(e) => setChucDanh(e.target.value)}
-          placeholder="gõ hoặc chọn"
-        />
-        <span className={nhan}>Ngày vào làm</span>
-        <span>
-          <DateInput label="Ngày vào làm" value={ngayVao} onChange={setNgayVao} />
-          {n && !n.ngayVao && (
-            <span className="text-k-label mt-0.5 block text-[var(--ink-3)]">
-              chưa có — nhập theo hồ sơ giấy
-            </span>
-          )}
-        </span>
+        {!n && (
+          <>
+            <label className={nhan} htmlFor="nv-cd">
+              Chức danh
+            </label>
+            <input
+              id="nv-cd"
+              className={o}
+              list="hr-chuc-danh"
+              value={chucDanh}
+              onChange={(e) => setChucDanh(e.target.value)}
+              placeholder="gõ hoặc chọn"
+            />
+            <span className={nhan}>Ngày vào làm</span>
+            <DateInput label="Ngày vào làm" value={ngayVao} onChange={setNgayVao} />
+          </>
+        )}
         {n && (
           <>
             <span className={nhan}>Tài khoản ERP</span>
@@ -216,7 +218,9 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
               {n.taiKhoan ? (
                 <span className="num">
                   {n.taiKhoan.email}
-                  {!n.taiKhoan.mo && <span className="text-[var(--stop)]"> · đã khoá</span>}
+                  {!n.taiKhoan.mo && (
+                    <span className="text-[var(--stop)]"> · đã khoá</span>
+                  )}
                 </span>
               ) : (
                 <span className="text-[var(--ink-3)]">chưa có — Admin cấp nếu cần</span>
@@ -225,25 +229,35 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
           </>
         )}
         <>
-            <span className={nhan}>Chấm công</span>
-            <label className="text-k-sm flex items-start gap-1.5">
-              <input
-                type="checkbox"
-                checked={khongCham}
-                onChange={(e) => setKhongCham(e.target.checked)}
-                className="mt-0.5 accent-[var(--act)]"
-              />
-              <span>
-                Không chấm công
-                <span className="text-k-label block text-[var(--ink-3)]">
-                  không quẹt máy, không bị tính thiếu công (Kinh Doanh, Tài Xế…)
-                </span>
+          <span className={nhan}>Chấm công</span>
+          <label className="text-k-sm flex items-start gap-1.5">
+            <input
+              type="checkbox"
+              checked={khongCham}
+              onChange={(e) => setKhongCham(e.target.checked)}
+              className="mt-0.5 accent-[var(--act)]"
+            />
+            <span>
+              Không chấm công
+              <span className="text-k-label block text-[var(--ink-3)]">
+                không quẹt máy, không bị tính thiếu công (Kinh Doanh, Tài Xế…)
               </span>
-            </label>
+            </span>
+          </label>
         </>
       </div>
 
-      {n && <BienDongNv key={n.id} v={v} n={n} />}
+      {n && (
+        <div className="text-k-sm border-b border-[var(--line)] px-3.5 py-2 text-[var(--ink-2)]">
+          Chức danh, ngày vào, cho nghỉ việc, chuyển tổ:{' '}
+          <Link
+            href={`/hr/nhan-vien/${encodeURIComponent(n.code)}`}
+            className="font-semibold text-[var(--act-text)] underline"
+          >
+            mở hồ sơ {n.code}
+          </Link>
+        </div>
+      )}
 
       {n && (
         <div className="border-b border-[var(--line)] px-3.5 py-2">
