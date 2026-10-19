@@ -69,6 +69,8 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
       return { sample_id: input.parent.id }
     case 'die':
       return { die_id: input.parent.id }
+    case 'hr_employee':
+      return { hr_employee_id: input.parent.id }
     case 'none':
       return {}
   }
@@ -115,6 +117,12 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     await assertAction(user, 'technical.die.update')
     return
   }
+  if (input.parent.kind === 'hr_employee') {
+    // Giấy tờ nhân viên (0250): CCCD, bằng cấp, hợp đồng — cùng ranh giới với thông tin
+    // cá nhân (Nhân sự + BGĐ). Rơi xuống "any signed-in user" ở dưới là lộ giấy tờ.
+    await assertAction(user, 'hr.employee.private')
+    return
+  }
   if (input.parent.kind === 'product') {
     // Tài liệu SP (bản vẽ / BOM / hướng dẫn lắp) là một tab của hồ sơ sản phẩm.
     // Hồ sơ nằm ở khu DÙNG CHUNG `/products` — mọi phòng XEM được, nên nhánh
@@ -129,6 +137,12 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
 
 async function assertCanReadFile(user: User, file: FileRow): Promise<void> {
   if (user.role === 'admin') return
+  if (file.hr_employee_id) {
+    // Giấy tờ nhân viên (0250) — xét TRƯỚC nhánh người tải lên: kể cả người tải lên
+    // cũng phải còn quyền hr.employee.private (chuyển phòng là mất quyền xem CCCD).
+    await assertAction(user, 'hr.employee.private')
+    return
+  }
   if (file.owner_id === user.id) return
   if (file.task_id) {
     const task = await tasksRepo.findById(file.task_id)
@@ -532,7 +546,11 @@ export const filesService = {
   async delete(user: User, fileId: string): Promise<void> {
     const file = await filesRepo.getById(fileId)
     if (!file) throw NotFound('File not found')
-    if (file.owner_id !== user.id && user.role !== 'admin')
+    if (file.hr_employee_id) {
+      // Giấy tờ nhân viên (0250): ai giữ quyền hr.employee.private gỡ được, kể cả file người
+      // khác tải — Nhân sự làm chung một hồ sơ. Mất quyền thì kể cả người tải cũng không gỡ.
+      await assertAction(user, 'hr.employee.private')
+    } else if (file.owner_id !== user.id && user.role !== 'admin')
       throw Forbidden('Only uploader or admin can delete')
     await storage.remove(file.bucket, [file.path])
     storage.invalidateSignedUrl(file.bucket, file.path)

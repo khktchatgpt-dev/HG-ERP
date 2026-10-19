@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { LY_DO_NGHI } from '@/lib/nhan-su/bien-dong'
+import { LOAI_HD } from '@/lib/nhan-su/hop-dong'
 
 /** Tháng của bảng công: 'YYYY-MM'. */
 export const bangCongQuerySchema = z.object({
@@ -410,4 +411,25 @@ export const caNhanSchema = z.discriminatedUnion('viec', [
     gia: z.record(z.string(), z.string().trim().max(300).nullable()),
   }),
   z.object({ viec: z.literal('hien') }),
+])
+
+/** Hợp đồng lao động trên hồ sơ (0250): thêm / sửa / huỷ (ghi nhầm, bắt lý do). */
+const hdNhap = z.object({
+  so: z.string().trim().max(60).nullable(),
+  loai: z.enum(LOAI_HD),
+  tuNgay: ngay,
+  denNgay: ngay.nullable(),
+  chucDanh: z.string().trim().max(80).nullable(),
+  luong: z.number().min(0).max(10_000_000_000).nullable(),
+  ghiChu: z.string().trim().max(300).nullable(),
+  fileId: uuid.nullable(),
+})
+export const hopDongSchema = z.discriminatedUnion('viec', [
+  z.object({ viec: z.literal('them'), hd: hdNhap }),
+  z.object({ viec: z.literal('sua'), id: uuid, hd: hdNhap }),
+  z.object({
+    viec: z.literal('huy'),
+    id: uuid,
+    lyDo: z.string().trim().min(3, 'Ghi lý do huỷ (ít nhất 3 ký tự)').max(300),
+  }),
 ])

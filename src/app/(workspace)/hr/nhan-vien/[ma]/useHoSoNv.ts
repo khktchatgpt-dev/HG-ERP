@@ -9,6 +9,7 @@ import type {
   HoSoNvTrang,
   KhoiCaNhan,
 } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
+import type { HdDong } from '@/modules/dept/hr/cham-cong/hop-dong.repo'
 import { KHOA_TAP } from '../useNhanVienDs'
 import type { Muc } from './muc'
 
@@ -26,6 +27,10 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
   // Khối của tab Cá nhân đang sửa — mỗi lúc một khối (sửa theo khối, Q2 lượt 2).
   const [suaCn, setSuaCn] = useState<KhoiCaNhan | null>(null)
   const [cccd, setCccd] = useState<string | null>(null)
+  // Hộp hợp đồng: thêm mới / sửa một HĐ / huỷ một HĐ.
+  const [hopHd, setHopHd] = useState<
+    null | { moi: true } | { sua: HdDong } | { huy: HdDong }
+  >(null)
   const [hop, setHop] = useState<HopBd>(null)
   const [busy, setBusy] = useState(false)
   // ‹ ›: tập người xem vừa lọc ở danh sách; không có người này thì danh sách mặc định.
@@ -131,9 +136,54 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     }
   }
 
+  /** Thêm / sửa / huỷ hợp đồng. Cảnh báo luật lao động (nếu có) hiện thành toast vàng. */
+  async function guiHd(body: Record<string, unknown>, xong: string) {
+    if (busy) return false
+    setBusy(true)
+    try {
+      const r = await api<{ canhBao?: string[] }>(
+        `/api/dept/hr/cham-cong/nhan-vien/${n.id}/hop-dong`,
+        { method: 'POST', body },
+      )
+      toast.success(xong)
+      for (const c of r.canhBao ?? []) toast.warning('Lưu ý', c)
+      setHopHd(null)
+      router.refresh()
+      return true
+    } catch (e) {
+      toast.error('Chưa lưu được', apiErrorText(e))
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Mở / tải một file (giấy tờ, scan HĐ) — server kiểm quyền rồi trả URL ký ngắn hạn. */
+  async function moFile(id: string, taiVe = false) {
+    try {
+      const r = await api<{ url: string }>(
+        `/api/files/${id}${taiVe ? '?download=1' : ''}`,
+      )
+      window.open(r.url, '_blank', 'noopener')
+    } catch (e) {
+      toast.error('Không mở được file', apiErrorText(e))
+    }
+  }
+
+  const xoaFile = (id: string, ten: string) =>
+    chay(() => api(`/api/files/${id}`, { method: 'DELETE' }), `Đã gỡ ${ten}`)
+
+  const sauTai = (ten: string) => {
+    toast.success(`Đã tải lên ${ten}`)
+    router.refresh()
+  }
+
   /** Bấm một mục "Còn thiếu": mở đúng tab + khối ở chế độ sửa. */
-  function moSua(khoi: 'cong_viec' | KhoiCaNhan) {
-    if (khoi === 'cong_viec') {
+  function moSua(khoi: 'cong_viec' | 'hop_dong' | KhoiCaNhan) {
+    if (khoi === 'hop_dong') {
+      setMuc('hop-dong')
+      setHopHd({ moi: true })
+    } else if (khoi === 'cong_viec') {
       setMuc('tong-quan')
       setSuaCv(true)
     } else {
@@ -162,6 +212,13 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     cccd,
     hienCccd,
     moSua,
+    hopHd,
+    setHopHd,
+    guiHd,
+    moFile,
+    xoaFile,
+    sauTai,
+    toast,
     hop,
     setHop,
     busy,

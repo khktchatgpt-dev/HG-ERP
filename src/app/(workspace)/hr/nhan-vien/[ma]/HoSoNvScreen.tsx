@@ -44,6 +44,9 @@ import { Dong, Khoi, KhoiChamCong, KhoiCongViec, LUOI } from './khoi-cong-viec'
 import { TabLichSu } from './tab-lich-su'
 import { TabCaNhan } from './tab-ca-nhan'
 import { TabLuong } from './tab-luong'
+import { TabHopDong } from './tab-hop-dong'
+import { TabGiayTo } from './tab-giay-to'
+import { soNgay, tinhTrangHd } from '@/lib/nhan-su/hop-dong'
 
 export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
   const d = useHoSoNv(h, muc)
@@ -51,6 +54,15 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
   const ca = h.cas.find((c) => c.id === n.shiftId)
   const huy = h.bienDong.filter((b) => !b.huyLuc).length
   const thieuCn = conThieu(n).filter((t) => MUC_CA_NHAN.includes(t)).length
+  const ttHd = n.hd ? tinhTrangHd(n.hd, d.homNay) : null
+  const hdTag =
+    ttHd === 'sap_het'
+      ? { text: 'sắp hết hạn', tone: 'warn' as const }
+      : ttHd === 'het_han'
+        ? { text: 'hết hạn', tone: 'stop' as const }
+        : !n.hd
+          ? { text: 'chưa có', tone: 'warn' as const }
+          : null
   return (
     <ScreenFrame tableMin={0}>
       <Crumb
@@ -107,6 +119,16 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
               ? { signal: { text: `thiếu ${thieuCn}`, tone: 'warn' as const } }
               : {}),
           },
+          {
+            id: 'hop-dong',
+            label: 'Hợp đồng',
+            ...(hdTag ? { signal: hdTag } : {}),
+          },
+          {
+            id: 'giay-to',
+            label: 'Giấy tờ',
+            ...(h.giayTo?.length ? { signal: { text: String(h.giayTo.length) } } : {}),
+          },
           { id: 'luong', label: 'Lương & ngân hàng' },
           {
             id: 'lich-su',
@@ -120,6 +142,12 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
         </DocMenuPanel>
         <DocMenuPanel value="ca-nhan">
           <TabCaNhan d={d} />
+        </DocMenuPanel>
+        <DocMenuPanel value="hop-dong">
+          <TabHopDong d={d} />
+        </DocMenuPanel>
+        <DocMenuPanel value="giay-to">
+          <TabGiayTo d={d} />
         </DocMenuPanel>
         <DocMenuPanel value="luong">
           <TabLuong d={d} />
@@ -189,6 +217,7 @@ function DaiSo({ d }: { d: HoSoCtx }) {
   const { n, h } = d
   const thieu = conThieu(n)
   const tn = thamNien(n.ngayVao, d.homNay)
+  const tt = n.hd ? tinhTrangHd(n.hd, d.homNay) : null
   const kyVn = `${h.ky.thang.slice(5)}/${h.ky.thang.slice(0, 4)}`
   return (
     <MetricStrip>
@@ -210,6 +239,26 @@ function DaiSo({ d }: { d: HoSoCtx }) {
         label="Quẹt gần nhất"
         value={n.lanCuoi ? dm(n.lanCuoi) : null}
         basis={n.khongChamCong ? 'không chấm công' : 'trong 45 ngày gần nhất'}
+      />
+      <Metric
+        label="Hợp đồng"
+        value={
+          !n.hd
+            ? null
+            : !n.hd.denNgay
+              ? 'không thời hạn'
+              : tt === 'het_han'
+                ? `hết ${ngayVn(n.hd.denNgay)}`
+                : `còn ${soNgay(d.homNay, n.hd.denNgay)} ngày`
+        }
+        basis={
+          !n.hd
+            ? 'chưa có hợp đồng nào'
+            : n.hd.denNgay
+              ? `đến ${ngayVn(n.hd.denNgay)}`
+              : `từ ${ngayVn(n.hd.tuNgay)}`
+        }
+        tone={tt === 'het_han' ? 'stop' : tt === 'sap_het' ? 'warn' : undefined}
       />
       <Metric
         label="Hồ sơ"
@@ -315,7 +364,10 @@ function TongQuan({ d }: { d: HoSoCtx }) {
 }
 
 /** Mục thiếu → khối mở để sửa. */
-const KHOI_CUA: Record<Exclude<MucThieu, 'ma_may'>, 'cong_viec' | KhoiCaNhan> & {
+const KHOI_CUA: Record<
+  Exclude<MucThieu, 'ma_may'>,
+  'cong_viec' | 'hop_dong' | KhoiCaNhan
+> & {
   ma_may: 'cong_viec'
 } = {
   ho_ten: 'cong_viec',
@@ -329,6 +381,7 @@ const KHOI_CUA: Record<Exclude<MucThieu, 'ma_may'>, 'cong_viec' | KhoiCaNhan> & 
   dia_chi: 'dinh_danh',
   dien_thoai: 'lien_he',
   khan_cap: 'lien_he',
+  hop_dong: 'hop_dong',
 }
 
 /** Liên hệ trên Tổng quan — chỉ xem; sửa ở tab Cá nhân. Không có quyền thì không hiện số. */

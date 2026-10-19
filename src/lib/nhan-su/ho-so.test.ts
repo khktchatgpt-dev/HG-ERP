@@ -23,6 +23,7 @@ const nv = (p: Partial<NvTom> = {}): NvTom => ({
   tenTuMay: false,
   ma: [{}],
   coRieng: DU,
+  hd: { tuNgay: '2021-03-02', denNgay: null, huy: false },
   ...p,
 })
 const H = '2026-10-19'
@@ -62,7 +63,8 @@ describe('còn thiếu', () => {
       'cccd',
       'khan_cap',
     ])
-    expect(SO_MUC_HO_SO).toBe(11)
+    expect(SO_MUC_HO_SO).toBe(12)
+    expect(conThieu(nv({ hd: null }))).toContain('hop_dong')
     // Không chấm công thì không đòi mã máy.
     expect(conThieu(nv({ khongChamCong: true, ma: [] }))).not.toContain('ma_may')
   })
@@ -79,13 +81,19 @@ describe('chip danh sách', () => {
       ngayVao: '2026-10-01',
     }),
     nv({ code: '7', active: false, ngayCuoi: '2026-10-10' }),
-    nv({ code: '8', ngayCuoi: '2026-10-30' }),
+    nv({
+      code: '8',
+      ngayCuoi: '2026-10-30',
+      hd: { tuNgay: '2026-01-01', denNgay: '2026-11-01', huy: false },
+    }),
   ]
   it('đếm bằng đúng hàm lọc', () => {
     expect(demLocNv(ds, H)).toEqual({
       dang_lam: 4,
       thieu: 3,
       chua_to: 1,
+      hd_sap_het: 1,
+      hd_qua_han: 0,
       moi_vao: 1,
       co_ngay_nghi: 1,
       khong_cham: 1,

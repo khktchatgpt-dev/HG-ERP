@@ -20,6 +20,8 @@ export type FileRow = {
   production_order_id: string | null
   purchase_order_id: string | null
   sample_id: string | null
+  /** Giấy tờ nhân viên (0250). */
+  hr_employee_id: string | null
   created_at: string
   doc_type: string | null
   finalized_at: string | null
@@ -48,6 +50,7 @@ export type FileParentColumns = {
   purchase_order_id?: string | null
   sample_id?: string | null
   die_id?: string | null
+  hr_employee_id?: string | null
 }
 
 /** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061). */
@@ -58,6 +61,7 @@ export type FileParentColumn =
   | 'production_order_id'
   | 'purchase_order_id'
   | 'sample_id'
+  | 'hr_employee_id'
 
 export const filesRepo = {
   async insert(row: {

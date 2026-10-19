@@ -675,6 +675,7 @@ export type Database = {
           doc_type: string | null
           filename: string
           finalized_at: string | null
+          hr_employee_id: string | null
           id: string
           invoice_id: string | null
           is_current: boolean
@@ -703,6 +704,7 @@ export type Database = {
           doc_type?: string | null
           filename: string
           finalized_at?: string | null
+          hr_employee_id?: string | null
           id?: string
           invoice_id?: string | null
           is_current?: boolean
@@ -731,6 +733,7 @@ export type Database = {
           doc_type?: string | null
           filename?: string
           finalized_at?: string | null
+          hr_employee_id?: string | null
           id?: string
           invoice_id?: string | null
           is_current?: boolean
@@ -1350,6 +1353,85 @@ export type Database = {
           {
             foreignKeyName: "hr_calc_versions_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_contracts: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          contract_no: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          end_date: string | null
+          file_id: string | null
+          id: string
+          job_title: string | null
+          kind: string
+          note: string | null
+          salary: number | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          contract_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          end_date?: string | null
+          file_id?: string | null
+          id?: string
+          job_title?: string | null
+          kind: string
+          note?: string | null
+          salary?: number | null
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          contract_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          end_date?: string | null
+          file_id?: string | null
+          id?: string
+          job_title?: string | null
+          kind?: string
+          note?: string | null
+          salary?: number | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_contracts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_contracts_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_contracts_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

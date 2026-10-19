@@ -35,6 +35,13 @@ export const DOC_TYPES = [
   'contract',
   'delivery_note',
   'invoice',
+  // 0250 — giấy tờ nhân viên (Hồ sơ nhân viên B3). Chỉ quyền hr.employee.private.
+  'hr_contract',
+  'hr_id_card',
+  'hr_degree',
+  'hr_cv',
+  'hr_health',
+  'hr_other',
 ] as const
 export type DocType = (typeof DOC_TYPES)[number]
 
@@ -64,12 +71,21 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   contract: 'Hợp đồng mua bán',
   delivery_note: 'Phiếu giao hàng NCC',
   invoice: 'Hoá đơn NCC',
+  hr_contract: 'Hợp đồng lao động',
+  hr_id_card: 'CCCD (2 mặt)',
+  hr_degree: 'Bằng cấp / chứng chỉ',
+  hr_cv: 'Sơ yếu lý lịch',
+  hr_health: 'Giấy khám sức khoẻ',
+  hr_other: 'Giấy tờ khác',
 }
 
 /**
  * Loại chứng từ chọn được khi đính file vào ĐƠN MUA (0213) — theo thứ tự đời
  * đơn: báo giá → xác nhận → hợp đồng → phiếu giao → hoá đơn → CO/CQ.
  */
+/** Loại giấy tờ trên hồ sơ nhân viên (0250), theo thứ tự hay dùng. */
+export const HR_DOC_TYPES = ['hr_contract', 'hr_id_card', 'hr_degree', 'hr_cv', 'hr_health', 'hr_other'] as const satisfies readonly DocType[] // prettier-ignore
+
 export const PO_DOC_TYPES = ['quote', 'po_confirm', 'contract', 'delivery_note', 'invoice', 'cert', 'other'] as const satisfies readonly DocType[] // prettier-ignore
 
 /**
@@ -112,6 +128,13 @@ export const DOC_TYPE_MAX_BYTES: Record<DocType, number> = {
   contract: HARD_MAX,
   delivery_note: HARD_MAX,
   invoice: HARD_MAX,
+  // Giấy tờ nhân viên: scan / ảnh chụp giấy — 10MB đủ cho PDF nhiều trang.
+  hr_contract: 10 * MB,
+  hr_id_card: 10 * MB,
+  hr_degree: 10 * MB,
+  hr_cv: 10 * MB,
+  hr_health: 10 * MB,
+  hr_other: 10 * MB,
 }
 
 /** Chưa phân loại (doc_type null) → mức mặc định. */

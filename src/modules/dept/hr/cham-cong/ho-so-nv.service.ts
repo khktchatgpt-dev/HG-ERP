@@ -34,12 +34,16 @@ import {
 import { chamCongRepo } from './cham-cong.repo'
 import { bienDongRepo, type BienDongDong } from './bien-dong.repo'
 import { caNhanRepo, COT_CA_NHAN, type CotCaNhan, type DongCaNhan } from './ca-nhan.repo'
+import { hopDongRepo, type HdDong } from './hop-dong.repo'
+import { hopDongService, type GiayTo } from './hop-dong.service'
+import { hdHienHanh, type HdNgay } from '@/lib/nhan-su/hop-dong'
 import { hoSoLuongRepo } from '../luong/ho-so-luong.repo'
 
 const XEM_RIENG = 'hr.employee.private'
 const XEM_LUONG = 'hr.payroll.profile'
 
-export type NvHoSo = NvDong & { coRieng: CoRieng }
+/** Một dòng hồ sơ: dòng Chấm công + cờ cá nhân + ngày HĐ đang áp (không lương, không số HĐ). */
+export type NvHoSo = NvDong & { coRieng: CoRieng; hd: HdNgay | null }
 
 export type DsNhanVien = Omit<NhanVienData, 'ds'> & { ds: NvHoSo[] }
 
@@ -77,6 +81,9 @@ export type HoSoNvTrang = {
   caNhan: CaNhan | null
   /** null = người xem không có quyền hồ sơ lương. */
   luong: TomLuong | null
+  /** Hợp đồng + giấy tờ — null khi không có quyền hr.employee.private (HĐ ghi lương, giấy tờ có CCCD). */
+  hopDong: HdDong[] | null
+  giayTo: GiayTo[] | null
   quyen: { sua: boolean; rieng: boolean; luong: boolean }
 }
 
@@ -180,14 +187,22 @@ async function quetGanNhat(n: NvDong, homNay: string): Promise<string | null> {
 export const hoSoNvService = {
   async danhSach(user: User, homNay: string): Promise<DsNhanVien> {
     await assertAction(user, 'hr.attendance.view')
-    const [nv, co] = await Promise.all([
+    const [nv, co, hds] = await Promise.all([
       // Không đọc lượt quẹt cả công ty — danh sách hồ sơ không bày quẹt gần nhất.
       chamCongService.nhanVien(user, homNay, { luot: false }),
       caNhanRepo.coTatCa(),
+      hopDongRepo.ngayTatCa(),
     ])
+    const hdCua = new Map<string, HdNgay[]>()
+    for (const h of hds)
+      hdCua.set(h.employeeId, [...(hdCua.get(h.employeeId) ?? []), h.hd])
     return {
       ...nv,
-      ds: nv.ds.map((n) => ({ ...n, coRieng: co.get(n.id) ?? KHONG_CO_RIENG })),
+      ds: nv.ds.map((n) => ({
+        ...n,
+        coRieng: co.get(n.id) ?? KHONG_CO_RIENG,
+        hd: hdHienHanh(hdCua.get(n.id) ?? [], homNay),
+      })),
     }
   },
 
@@ -205,7 +220,7 @@ export const hoSoNvService = {
     const thang = thangCuaNgay(homNay)
     const k = kyCuaThang(thang)
     const den = k.den < homNay ? k.den : homNay
-    const [bienDong, mot, caNhan, tl, lanCuoi] = await Promise.all([
+    const [bienDong, mot, caNhan, tl, lanCuoi, hopDong, giayTo] = await Promise.all([
       bienDongRepo.cuaNguoi(n.id),
       n.khongChamCong || den < k.tu
         ? null
@@ -213,6 +228,8 @@ export const hoSoNvService = {
       rieng ? caNhanRepo.cua(n.id) : null,
       luong ? tomLuong(n.id, thang) : null,
       quetGanNhat(n, homNay),
+      rieng ? hopDongRepo.cuaNguoi(n.id) : null,
+      rieng ? hopDongService.giayTo(user, n.id) : null,
     ])
     n.lanCuoi = lanCuoi
     const ngayDaLay = mot?.ngay.filter((d) => d.daLay) ?? []
@@ -238,6 +255,8 @@ export const hoSoNvService = {
       },
       caNhan: rieng ? doiCaNhan(caNhan) : null,
       luong: tl,
+      hopDong,
+      giayTo,
       quyen: { sua, rieng, luong },
     }
   },

@@ -5,6 +5,7 @@
  */
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
 import type { CoRieng } from './ca-nhan'
+import { tinhTrangHd, type HdNgay } from './hop-dong'
 
 /** Phần của một dòng nhân viên mà các hàm dưới cần (khớp `NvDong` của Chấm công). */
 export type NvTom = {
@@ -20,6 +21,8 @@ export type NvTom = {
   ma: unknown[]
   /** Cờ có / chưa có thông tin cá nhân (0249) — không mang giá trị. */
   coRieng: CoRieng
+  /** HĐ đang áp (hoặc gần nhất chưa huỷ) — `hdHienHanh` ở service; null = chưa có HĐ nào. */
+  hd: HdNgay | null
 }
 
 /** Mã xếp theo số khi là số (5 < 31 < 105), mã chữ (KCC-…) sau. */
@@ -59,6 +62,7 @@ export type MucThieu =
   | 'dien_thoai'
   | 'trinh_do'
   | 'khan_cap'
+  | 'hop_dong'
 export const TEN_THIEU: Record<MucThieu, string> = {
   ho_ten: 'Họ tên đầy đủ (đang là tên máy)',
   to: 'Tổ',
@@ -71,6 +75,7 @@ export const TEN_THIEU: Record<MucThieu, string> = {
   dien_thoai: 'Điện thoại',
   trinh_do: 'Trình độ',
   khan_cap: 'Liên hệ khẩn cấp',
+  hop_dong: 'Hợp đồng lao động',
 }
 
 /** Mục nằm ở tab Cá nhân (còn lại ở khối Công việc / Chấm công). */
@@ -83,7 +88,7 @@ export const MUC_CA_NHAN: MucThieu[] = [
   'khan_cap',
 ]
 
-/** Mục còn thiếu theo sổ quản lý lao động (B3 thêm hợp đồng). */
+/** Mục còn thiếu theo sổ quản lý lao động (12 mục, gồm hợp đồng — 0250). */
 export function conThieu(n: NvTom): MucThieu[] {
   const out: MucThieu[] = []
   if (n.tenTuMay) out.push('ho_ten')
@@ -98,6 +103,7 @@ export function conThieu(n: NvTom): MucThieu[] {
   if (!r.dienThoai) out.push('dien_thoai')
   if (!r.trinhDo) out.push('trinh_do')
   if (!r.khanCap) out.push('khan_cap')
+  if (!n.hd) out.push('hop_dong')
   return out
 }
 export const SO_MUC_HO_SO = Object.keys(TEN_THIEU).length
@@ -112,6 +118,8 @@ export const LOC_NV = [
   { id: 'dang_lam', ten: 'Đang làm' },
   { id: 'thieu', ten: 'Hồ sơ thiếu', bao: true },
   { id: 'chua_to', ten: 'Chưa có tổ', bao: true },
+  { id: 'hd_sap_het', ten: 'HĐ hết hạn 30 ngày', bao: true },
+  { id: 'hd_qua_han', ten: 'HĐ đã hết hạn', bao: true },
   { id: 'moi_vao', ten: 'Mới vào 30 ngày' },
   { id: 'co_ngay_nghi', ten: 'Có ngày nghỉ' },
   { id: 'khong_cham', ten: 'Không chấm công' },
@@ -127,6 +135,10 @@ export function thuocLoc(n: NvTom, loc: LocNv, homNay: string): boolean {
       return n.active && conThieu(n).length > 0
     case 'chua_to':
       return n.active && !n.boPhan
+    case 'hd_sap_het':
+      return n.active && !!n.hd && tinhTrangHd(n.hd, homNay) === 'sap_het'
+    case 'hd_qua_han':
+      return n.active && !!n.hd && tinhTrangHd(n.hd, homNay) === 'het_han'
     case 'moi_vao':
       return n.active && !!n.ngayVao && n.ngayVao > congNgay(homNay, -30)
     case 'co_ngay_nghi':
