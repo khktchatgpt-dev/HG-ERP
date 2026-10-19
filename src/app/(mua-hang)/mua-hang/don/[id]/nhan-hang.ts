@@ -194,7 +194,7 @@ export function receiveActions(i: {
   hasStockLines: boolean
   openStockLines: number
 }): Record<
-  'confirm' | 'addShipment' | 'transit' | 'receive' | 'closeShort' | 'acceptByHand',
+  'confirm' | 'addShipment' | 'transit' | 'receive' | 'closeShort',
   { ok: boolean; why?: string }
 > {
   const sent = ['ordered', 'confirmed', 'in_transit', 'partial'].includes(i.status)
@@ -212,7 +212,6 @@ export function receiveActions(i: {
     ),
     receive: { ok: sent, why: sent ? undefined : 'Chỉ nhận hàng được sau khi đơn đã gửi nhà cung cấp' }, // prettier-ignore
     closeShort: gate(sent && i.openStockLines > 0, i.openStockLines === 0 ? 'Không còn dòng nào đang chờ về' : 'Chỉ chốt thiếu trên đơn đã gửi NCC'), // prettier-ignore
-    acceptByHand: gate(sent && !i.hasStockLines, i.hasStockLines ? 'Đơn có dòng vật tư kho — nhận qua phiếu nhập bên Kho' : 'Chỉ dùng cho đơn đã gửi NCC'), // prettier-ignore
   }
 }
 

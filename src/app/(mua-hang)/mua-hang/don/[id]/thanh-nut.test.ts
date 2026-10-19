@@ -123,7 +123,7 @@ describe('splitForStatusBar — chuyển trạng thái về thanh trạng thái 
     expect(s.moves.map((m) => m.key)).toEqual(['doc:reopen', 'doc:cancel'])
     expect(s.moves.map((m) => m.group)).toEqual(['Quay lại', 'Dừng'])
     // NCC xác nhận / đang giao / chốt thiếu / nghiệm thu / thêm đợt đã rời trang đơn.
-    for (const k of ['confirm', 'transit', 'closeShort', 'acceptByHand', 'addShipment'])
+    for (const k of ['confirm', 'transit', 'closeShort', 'addShipment'])
       expect(keys(barLayout('partial', DOC.partial ?? []))).not.toContain(k)
     // Việc không đổi trạng thái vẫn cạnh mã đơn / trong ⋯ — không mục nào rơi mất.
     expect(s.actions).toEqual(['doc:edit_terms', 'doc:nudge', 'print'])

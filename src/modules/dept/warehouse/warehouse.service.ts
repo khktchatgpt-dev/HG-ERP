@@ -14,6 +14,7 @@ import {
 } from '@/lib/material-key'
 import { invalidateTaxonomy, materialTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
+import { nhomChoDongTuGo } from '@/lib/nhom-dong-tu-go'
 import { catalogFillPatch, type CatalogLineInfo } from '@/lib/po-catalog-backfill'
 import { diffMaterial } from '@/lib/material-diff'
 import { emit } from '@/events/bus'
@@ -198,9 +199,6 @@ async function nextCode(
   return `${prefix}-${String(no + 1).padStart(4, '0')}`
 }
 
-/** Nhóm nhận mã tự cấp cho dòng tự gõ của đơn mua gỗ (19/10/2026). */
-export const NHOM_DONG_TU_GO = 'Gỗ - ván - chi tiết gỗ mua ngoài'
-
 export const materialsService = {
   /**
    * MÃ VẬT TƯ CHO DÒNG TỰ GÕ của đơn mua (gỗ / gia công theo mã SP — 0134).
@@ -221,7 +219,8 @@ export const materialsService = {
     poCode?: string,
   ): Promise<string> {
     const name = line.name.trim().slice(0, 200)
-    const group = NHOM_DONG_TU_GO
+    // Nhóm đoán theo tên (nệm / vải / mây / gỗ) — lib/nhom-dong-tu-go.
+    const group = nhomChoDongTuGo(name)
     const siblings = await materialsRepo.namesInGroup(group)
     const key = sureKey(name)
     const same = siblings.find((m) =>
