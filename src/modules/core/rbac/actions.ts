@@ -587,6 +587,38 @@ export const ACTIONS: Action[] = [
     rowLevel: 'Chỉ huỷ đơn của mình (admin huỷ mọi đơn).',
   },
 
+  // ── Nhân sự (chấm công) ──────────────────────────────────────────────────
+  {
+    key: 'hr.attendance.view',
+    label: 'Xem bảng công',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.pull',
+    label: 'Kéo lượt quẹt từ máy chấm công',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.employee_edit',
+    label: 'Sửa danh sách nhân viên chấm công (họ tên, bộ phận, ca, ghép mã máy)',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.adjust',
+    label: 'Gửi điều chỉnh chấm công (bổ sung lượt, nghỉ có lý do, bỏ qua lượt)',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.adjust_decide',
+    label: 'Duyệt / từ chối điều chỉnh chấm công',
+    domain: 'hr',
+    rule: perm('hr.attendance.adjust_decide'),
+  },
+
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {
     key: 'accounting.invoice.view',

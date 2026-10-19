@@ -112,7 +112,9 @@ export function DesktopSidebar({
                 label={i.label}
                 icon={i.icon}
                 compact={compact}
-                exact={i.href === route || i.href === `${route}/` || i.href === '/'}
+                exact={
+                  i.exact || i.href === route || i.href === `${route}/` || i.href === '/'
+                }
                 badge={i.badge}
                 /* Đỏ chỉ cho việc CHẶN. "Chờ tôi xử lý" là hàng đợi có người
                    đang đợi mình; các mục còn lại chỉ là danh sách. */
