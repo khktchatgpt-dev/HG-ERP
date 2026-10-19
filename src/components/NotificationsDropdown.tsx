@@ -44,6 +44,8 @@ const TYPE_LABEL: Record<string, string> = {
   po_question: 'hỏi về đơn đặt bạn phụ trách',
   po_answered: 'đã trả lời câu hỏi về đơn đặt',
   po_issue: 'báo sự cố giao hàng',
+  po_inbound_soon: 'NCC xác nhận — hàng sắp về kho',
+  po_inbound_moved: 'đã dời hẹn giao hàng về kho',
   dnm_submitted: 'gửi đề nghị mua chờ duyệt',
   dnm_approved: 'đã duyệt đề nghị mua',
   dnm_rejected: 'đã từ chối đề nghị mua',

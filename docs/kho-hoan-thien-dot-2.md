@@ -182,6 +182,13 @@ báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.
 > "thiếu số NCC" đếm cả sổ như tab Sổ phiếu. Hai bảng việc gấp (Nhận → form đúng đợt kế tiếp; Ghi xuất → Xuất kho
 > đã chọn lệnh). Hàng về nhận `?hen=` để ô mở đúng tab. Còn B8b thông báo cho Kho.
 
+> **B8b XONG (mã) 19/10/2026 — giai đoạn 1 của Kho đợt 2 đã đủ B0–B8**: sự kiện `po.confirmed` (NCC xác nhận)
+> và `po.rescheduled` (dời một đợt · sửa đợt đổi ngày · dời cả đơn) → handler `kho-hang-ve.notifications` báo
+> mọi người có vai Kho trừ người bấm: xác nhận chỉ khi hẹn ≤ 3 ngày tới / đã quá (Q4), dời hẹn khi ngày thật sự đổi
+> (`lib/kho-bao-hang-ve.ts`, test). Bấm thông báo mở Hàng về đúng tab. **Migration 0251 (2 loại thông báo
+> po_inbound_soon / po_inbound_moved) CHƯA ÁP** — chưa áp thì đơn vẫn xác nhận / dời bình thường, chỉ Kho chưa
+> nhận thông báo. Số 0251 vì nhánh chấm công đã dùng 0247–0250.
+
 ## Giai đoạn 2 — Chuyển giao
 
 **C1 · Chạy song song (~2 tuần).** Mở tài khoản wh1/wh2 (đặt mật khẩu tạm, bắt đổi

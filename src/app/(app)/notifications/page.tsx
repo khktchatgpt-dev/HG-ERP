@@ -28,6 +28,8 @@ const TYPE_LABEL: Record<string, string> = {
   po_question: 'hỏi về đơn đặt vật tư bạn phụ trách — trả lời ngay trên đơn',
   po_answered: 'đã trả lời câu hỏi của bạn về đơn đặt vật tư',
   po_issue: 'báo sự cố giao hàng',
+  po_inbound_soon: 'NCC xác nhận đơn — hàng sắp về kho, chuẩn bị nhận',
+  po_inbound_moved: 'đã dời hẹn giao một lô đang chờ về kho',
   dnm_submitted: 'gửi đề nghị mua vật tư chờ bạn duyệt',
   dnm_approved: 'đã duyệt đề nghị mua vật tư',
   dnm_rejected: 'đã từ chối đề nghị mua vật tư — phiếu về nháp',

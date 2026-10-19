@@ -1052,6 +1052,15 @@ export const posService = {
       ...(minDate ? { expected_at: minDate } : {}),
     })
     if (skipSend) await emitOrdered(user, before)
+    // B8b: Kho được báo khi hẹn giao gần (handler lọc ≤ 3 ngày) — 0251.
+    await emit({
+      name: 'po.confirmed',
+      po_id: id,
+      code: before.code,
+      supplier_name: before.supplier_name,
+      expected: (minDate ?? before.expected_at)?.slice(0, 10) ?? null,
+      confirmed_by: user.id,
+    })
     return po
   },
 
@@ -1164,6 +1173,9 @@ export const posService = {
           note: `[Sửa đợt ${dmy(input.expected_date!)}] ${input.reason}${shipment.note ? ` · ${shipment.note}` : ''}`, // prettier-ignore
         })
         await poTrackingRepo.logCommits([{ po_id: po.id, shipment_id: shipmentId, kind: 'doi_hen', date_before: shipment.expected_date, date_after: input.expected_date!, lines: want, reason: `Sửa đợt: ${input.reason}`, created_by: user.id }]) // prettier-ignore
+        if (input.expected_date!.slice(0, 10) !== shipment.expected_date.slice(0, 10)) {
+          await emit({ name: 'po.rescheduled', po_id: po.id, code: po.code, supplier_name: po.supplier_name, from: shipment.expected_date.slice(0, 10), to: input.expected_date!.slice(0, 10), dot: `đợt ${shipment.seq}`, reason: input.reason ?? null, moved_by: user.id }) // prettier-ignore
+        }
       } else {
         const s = splitShipmentLines(shipment.lines, want, names)
         if (s.errors.length > 0) throw BadRequest(s.errors.join(' · '))
@@ -1203,6 +1215,7 @@ export const posService = {
           shipment.note ? ` · ${shipment.note}` : ''
         }`,
       })
+      await emit({ name: 'po.rescheduled', po_id: po.id, code: po.code, supplier_name: po.supplier_name, from: shipment.expected_date.slice(0, 10), to: input.expected_date!.slice(0, 10), dot: `đợt ${shipment.seq}`, reason: input.reason ?? null, moved_by: user.id }) // prettier-ignore
     } else {
       await poShipmentsRepo.patch(shipmentId, {
         status: 'cancelled',
@@ -1388,6 +1401,7 @@ export const posService = {
     if (moves.length)
       await poTrackingRepo.logCommits(moves.map((m) => ({ po_id: id, shipment_id: m.id, kind: 'doi_hen' as const, date_before: m.from, date_after: m.to, reason: reason ? `Dời theo cả đơn: ${reason}` : 'Dời theo cả đơn', created_by: user.id }))) // prettier-ignore
     await traceReason(user, id, rescheduleNote(before.expected_at, input.expected_at, reason)) // prettier-ignore
+    await emit({ name: 'po.rescheduled', po_id: id, code: before.code, supplier_name: before.supplier_name, from: before.expected_at?.slice(0, 10) ?? null, to: input.expected_at.slice(0, 10), dot: null, reason: reason || null, moved_by: user.id }) // prettier-ignore
     return po
   },
 

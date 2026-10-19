@@ -597,7 +597,10 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
     await posService.confirm(staff, 'po1', { shipments: [] })
     const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
     expect('ordered_at' in patch).toBe(false)
-    expect(emit).not.toHaveBeenCalled()
+    // Không bắn lại po.ordered; po.confirmed (B8b, báo Kho hàng sắp về) thì có.
+    const ten = vi.mocked(emit).mock.calls.map((c) => (c[0] as { name: string }).name)
+    expect(ten).not.toContain('po.ordered')
+    expect(ten).toContain('po.confirmed')
   })
 
   it.each(['draft', 'pending_approval', 'confirmed'] as const)(
