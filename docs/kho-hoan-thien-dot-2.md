@@ -150,6 +150,13 @@ lệnh; Excel. Nghiệm thu: tổng kỳ 10/2026 khớp Sổ phiếu cùng kỳ.
 **B7 · Kiểm kê định kỳ** `/warehouse/kiem-ke` trên service có sẵn: lập đợt theo
 nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 05-VT.
 
+> **B7a XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/ACMarfdaHqyud9RrdYMyzX, duyệt Q1–Q6 theo đề xuất):
+> `/warehouse/kiem-ke` sổ đợt (tab theo trạng thái, huỷ đợt có lý do) + hộp Mở đợt (cảnh báo hàng của lệnh chưa
+> ghi xuất đứng đầu — 12 lệnh / 205 mã đo 19/10; nhóm · có tồn · sẽ đếm · kiểm lần cuối; người đếm; đếm mù).
+> Q1: danh sách đếm theo nhóm = có tồn ∪ có phiếu 180 ngày (`lib/kho-kiem-ke.ts`, dùng chung cho hộp và dòng
+> đếm: Nhôm 50, Bao bì 74 — khớp). Vá: hàm xem đợt gọi quyền `warehouse.stock.read` không tồn tại → 500 cho
+> mọi tài khoản không phải admin. KK-2026-0005 đã huỷ. Còn B7b phiếu đếm, B7c đối chiếu + duyệt (Q2 chặn tự duyệt).
+
 **B8 · Bàn làm việc Kho + thông báo.** Trang đầu khu Kho: hàng về hôm nay · lệnh có
 hàng chờ xuất · lệnh xong còn hàng · mã dưới mức · kiểm kê đang mở. Kho nhận thông
 báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.

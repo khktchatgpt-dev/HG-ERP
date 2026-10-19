@@ -1,0 +1,82 @@
+/*
+ * KIỂM KÊ (Kho B7) — phần riêng của màn, trên khung `../_erp/kho.css`.
+ * Bản vẽ duyệt 19/10/2026: https://claude.ai/artifact/ACMarfdaHqyud9RrdYMyzX
+ */
+
+/* Hộp mở đợt: hàng nhãn – ô. */
+.kh.kh .kk-dong,
+.kh-hop .kk-dong {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.kh-hop .kk-nhan {
+  padding-top: 4px;
+  color: var(--kh-ink3);
+}
+.kh-hop .kk-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 3px;
+}
+
+/* Danh sách nhóm: lưới 5 cột, tiêu đề dính, cuộn trong khung. */
+.kh-hop .kk-nhom {
+  border: 1px solid var(--kh-line);
+  max-height: 260px;
+  overflow: auto;
+}
+.kh-hop .kk-nhom > .h,
+.kh-hop .kk-nhom > label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 62px 70px 104px;
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--kh-hair);
+  font-size: 12.5px;
+}
+.kh-hop .kk-nhom > .h {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--kh-raised);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+}
+.kh-hop .kk-nhom > label {
+  cursor: pointer;
+}
+.kh-hop .kk-nhom > label.on {
+  background: var(--kh-act-wash);
+}
+.kh-hop .kk-nhom .r {
+  text-align: right;
+}
+.kh-hop .kk-nhom input:focus-visible,
+.kh-hop .kk-chk input:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: 1px;
+}
+
+/* Cảnh báo đầu hộp: dải vàng sát mép, không thẻ nổi. */
+.kh-hop .kk-canh {
+  margin: -2px 0 2px;
+  border: 1px solid var(--kh-line);
+}
+
+@media (max-width: 600px) {
+  .kh-hop .kk-nhom > .h,
+  .kh-hop .kk-nhom > label {
+    grid-template-columns: 22px minmax(0, 1fr) 54px 60px;
+  }
+  .kh-hop .kk-nhom > .h > :last-child,
+  .kh-hop .kk-nhom > label > :last-child {
+    display: none;
+  }
+}

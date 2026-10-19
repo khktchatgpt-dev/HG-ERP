@@ -1,10 +1,17 @@
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { canEnterWorkspace } from '@/workspaces/access'
+import { kiemCuoiTheoNhom } from '@/lib/kho-kiem-ke'
+import { tomTatLenh } from '@/lib/kho-ton-lenh'
+import { hangLenhService } from './hang-lenh.service'
 import { docsRepo, insertMovements, warehousesRepo } from './stock.repo'
 import {
   bookQtyAt,
+  danhSachDemNhom,
+  dotNhomDaDuyet,
   materialsInScope,
+  nguoiKho,
   stocktakesRepo,
   type Stocktake,
   type StocktakeScope,
@@ -23,6 +30,18 @@ import {
  *   ② SỔ ĐÓNG BĂNG tại `freeze_at`, và chênh tính so với số đóng băng đó.
  *   ③ ĐẾM MÙ: số sổ không rời server khi đợt đang đếm.
  */
+
+/**
+ * Ai vào được khu Kho thì xem được đợt. Trước 19/10/2026 hàm đọc gọi
+ * `assertAction(user, 'warehouse.stock.read')` — mã quyền KHÔNG có trong
+ * `actions.ts`, nên mọi tài khoản không phải admin ăn lỗi 500 "Unknown action".
+ * Không ai thấy vì chưa có màn nào gọi tới.
+ */
+async function assertRead(user: User): Promise<void> {
+  if (!(await canEnterWorkspace(user, 'warehouse'))) {
+    throw Forbidden('Kiểm kê thuộc khu Kho. Nhờ quản trị cấp quyền xem khu Kho.')
+  }
+}
 
 /** Ai cũng xem được nếu xem được kho; sửa thì cần quyền ghi. */
 async function assertWrite(user: User): Promise<void> {
@@ -54,17 +73,61 @@ function maskBook(t: Stocktake, lines: TakeLine[]): TakeLine[] {
   return lines.map((l) => ({ ...l, book_qty_frozen: null }))
 }
 
+export type NhomMoDot = {
+  group_name: string
+  co_ton: number
+  se_dem: number
+  /** Mốc duyệt đợt theo nhóm gần nhất; null = chưa bao giờ kiểm. */
+  kiem_cuoi: string | null
+}
+
+export type ChuanBiMoDot = {
+  nhom: NhomMoDot[]
+  nguoi: { id: string; name: string }[]
+  /** Q3: hàng của lệnh đã về mà chưa ghi xuất — cảnh báo đầu hộp mở đợt. */
+  lenhChuaXuat: { so_lenh: number; so_ma: number }
+}
+
 export const stocktakesService = {
+  /**
+   * DỮ LIỆU HỘP MỞ ĐỢT (B7a). Số "Sẽ đếm" lấy từ CHÍNH hàm sinh dòng đếm
+   * (`danhSachDemNhom`), cảnh báo lệnh từ cùng hàm màn Tồn kho › Theo lệnh.
+   */
+  async chuanBiMoDot(user: User): Promise<ChuanBiMoDot> {
+    await assertRead(user)
+    const [ds, nguoi, dot, lenh] = await Promise.all([
+      danhSachDemNhom(),
+      nguoiKho(),
+      dotNhomDaDuyet(),
+      hangLenhService.tatCa(user),
+    ])
+    const cuoi = kiemCuoiTheoNhom(dot)
+    const con = tomTatLenh(lenh.rows, lenh.lenh).filter((x) => x.con_kho > 0)
+    return {
+      nhom: ds.map((n) => ({
+        group_name: n.group_name,
+        co_ton: n.co_ton,
+        se_dem: n.ids.length,
+        kiem_cuoi: cuoi.get(n.group_name) ?? null,
+      })),
+      nguoi,
+      lenhChuaXuat: {
+        so_lenh: con.length,
+        so_ma: con.reduce((s, x) => s + x.con_kho, 0),
+      },
+    }
+  },
+
   async list(
     user: User,
     opts: { status?: Stocktake['status']; page: number; page_size: number },
   ) {
-    await assertAction(user, 'warehouse.stock.read')
+    await assertRead(user)
     return stocktakesRepo.list(opts)
   },
 
   async detail(user: User, id: string) {
-    await assertAction(user, 'warehouse.stock.read')
+    await assertRead(user)
     const take = await stocktakesRepo.findById(id)
     if (!take) throw NotFound('Đợt kiểm kê không tồn tại')
     const lines = await stocktakesRepo.listLines(id)

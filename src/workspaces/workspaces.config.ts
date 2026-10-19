@@ -353,6 +353,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // Kho đợt 2 · B6 (19/10/2026): báo cáo nhập–xuất–tồn theo kỳ, có giá trị
           // (bình quân gia quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
           { href: '/warehouse/bao-cao', label: 'Nhập–Xuất–Tồn', icon: 'chart-column' },
+          // Kho đợt 2 · B7 (19/10/2026): đợt kiểm kê — đếm mù, sổ chốt lúc bắt đầu đếm.
+          { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
           // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
           // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
           // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.
