@@ -145,7 +145,7 @@ lệnh; Excel. Nghiệm thu: tổng kỳ 10/2026 khớp Sổ phiếu cùng kỳ.
 > Luật thuần `lib/kho-nxt.ts` (20 test): kỳ theo ngày chứng từ, bình quân gia quyền cả kỳ nối từng tháng,
 > đảo phiếu trừ vào cột gốc (phiếu đảo mang LOẠI ngược phiếu gốc → suy mã theo CHIỀU dòng), USD quy theo
 > `po.fx_rate`. Số thật 10/2026: 277 mã, đối chiếu sổ khớp (638 dòng), giá trị tồn cuối 2.499.400.088 ₫,
-> 2 mã thiếu giá. Không ghi giá vào phiếu xuất, chưa khoá kỳ. **0247 (Kế toán xem khu Kho) CHƯA ÁP.**
+> 2 mã thiếu giá. Không ghi giá vào phiếu xuất, chưa khoá kỳ. **0247 (Kế toán xem khu Kho) ĐÃ ÁP 19/10** (4 tài khoản ketoan*@).
 
 **B7 · Kiểm kê định kỳ** `/warehouse/kiem-ke` trên service có sẵn: lập đợt theo
 nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 05-VT.
