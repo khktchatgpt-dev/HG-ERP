@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  fieldsClearedByPayload,
-  groupFieldConfig,
-  quickReviewFields,
-} from './material-group-fields'
+import { fieldsClearedByPayload, groupFieldConfig } from './material-group-fields'
 
 /*
  * Cấu hình bộ-trường-theo-nhóm (0137) — tên nhóm lấy đúng 14 nhóm thật trong
@@ -92,57 +88,5 @@ describe('fieldsClearedByPayload — cảnh báo trước khi null đè', () => 
 
   it('trường ngoài danh sách nhãn (name, unit…) không bao giờ vào cảnh báo', () => {
     expect(fieldsClearedByPayload({ name: 'Vít 4x20' }, { name: null })).toEqual([])
-  })
-})
-
-describe('quickReviewFields — khai vội thiếu gì thì Kho rà đúng chỗ đó', () => {
-  const full = {
-    spec: '25×50×1li',
-    sub_group: 'Vít',
-    material_grade: 'Sắt xi trắng',
-    kg_per_m: '',
-    kg_per_unit: '',
-    open_style: '',
-    pcs_per_ctn: '',
-    finish: '',
-  }
-  const NO_WEIGHT = {
-    groupCfg: groupFieldConfig('Phụ kiện nội thất'),
-    needsBarWeight: false,
-    needsSheetWeight: false,
-    derivedKg: null,
-  }
-
-  it('khai đủ theo nhóm thường → không có gì phải rà', () => {
-    expect(quickReviewFields(full, NO_WEIGHT)).toEqual([])
-  })
-
-  it('bỏ trống quy cách + vật liệu → chấm đúng hai trường', () => {
-    expect(
-      quickReviewFields({ ...full, spec: '', material_grade: '' }, NO_WEIGHT),
-    ).toEqual(['spec', 'material_grade'])
-  })
-
-  it('hàng cây cần barem: kg/m trống VÀ máy không đọc được mới tính là thiếu', () => {
-    const ctx = { ...NO_WEIGHT, needsBarWeight: true }
-    expect(quickReviewFields(full, ctx)).toContain('kg_per_m')
-    expect(quickReviewFields(full, { ...ctx, derivedKg: 0.248 })).not.toContain(
-      'kg_per_m',
-    )
-  })
-
-  it('bao bì: cách mở + pcs/thùng trống là phải rà; kim loại: bề mặt', () => {
-    const carton = {
-      ...NO_WEIGHT,
-      groupCfg: groupFieldConfig('Bao bì - đóng gói - tem nhãn'),
-    }
-    expect(quickReviewFields(full, carton)).toEqual(
-      expect.arrayContaining(['open_style', 'pcs_per_ctn']),
-    )
-    const metal = {
-      ...NO_WEIGHT,
-      groupCfg: groupFieldConfig('Sắt thép - inox - nhôm - tôn'),
-    }
-    expect(quickReviewFields(full, metal)).toContain('finish')
   })
 })

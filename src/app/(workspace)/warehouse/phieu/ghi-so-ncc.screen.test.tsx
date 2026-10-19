@@ -1,14 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ToastProvider } from '@/components/kit'
 import { docInfoSchema } from '@/modules/dept/warehouse/warehouse.schema'
-import { GhiSoNccSheet, LY_DO_BO_SUNG_SO_NCC } from './ghi-so-ncc'
+import { OSoNcc, LY_DO_BO_SUNG_SO_NCC } from './ghi-so-ncc'
 
 /**
- * GHI SỐ PHIẾU NCC NGAY TẠI DÒNG SỔ (Kho đợt 2 · Bước 2b). Soi payload gửi lên
- * route sửa thông tin: chỉ đổi số phiếu NCC, kèm lý do qua được zod của route —
- * lý do ngắn hơn 3 ký tự thì route trả 400 và hộp vô dụng mà test không hay.
+ * GHI SỐ PHIẾU NCC NGAY TRONG Ô CỦA DÒNG SỔ (Kho lối ERP · B4). Soi payload gửi
+ * lên route sửa thông tin: chỉ đổi số phiếu NCC, kèm lý do qua được zod của
+ * route — lý do ngắn hơn 3 ký tự thì route trả 400 mà test không hay.
  */
 
 const refresh = vi.fn()
@@ -26,40 +25,24 @@ afterEach(() => {
   refresh.mockReset()
 })
 
-function dung(onClose = vi.fn()) {
-  render(
-    <ToastProvider>
-      <GhiSoNccSheet
-        doc={{ id: 'doc-128', code: 'PNK-2026-0128', po_code: 'PO-2026-0090' }}
-        onClose={onClose}
-      />
-    </ToastProvider>,
-  )
-  return onClose
+const o = () => screen.getByLabelText('Số phiếu giao NCC của PNK-2026-0128')
+function dung(onXong = vi.fn()) {
+  render(<OSoNcc doc={{ id: 'doc-128', code: 'PNK-2026-0128' }} onXong={onXong} />)
+  return onXong
 }
 
-describe('GhiSoNccSheet', () => {
-  it('nút Lưu khoá khi chưa gõ, mở ngay khi gõ (không đợi rời ô)', () => {
+describe('OSoNcc', () => {
+  it('ô trống: Enter không gửi gì', () => {
     dung()
-    const luu = screen.getByRole('button', { name: /Lưu số phiếu/ })
-    expect(
-      luu.getAttribute('aria-disabled') === 'true' || luu.hasAttribute('disabled'),
-    ).toBe(true)
-    fireEvent.change(screen.getByLabelText('Số phiếu giao của NCC'), {
-      target: { value: 'HH-1110' },
-    })
-    expect(
-      luu.getAttribute('aria-disabled') === 'true' || luu.hasAttribute('disabled'),
-    ).toBe(false)
+    fireEvent.keyDown(o(), { key: 'Enter' })
+    expect(api).not.toHaveBeenCalled()
   })
 
-  it('PATCH đúng route, chỉ số phiếu NCC + lý do qua được zod của route', async () => {
+  it('gõ rồi Enter: PATCH đúng route, chỉ số phiếu NCC + lý do qua được zod; xong thì báo màn + làm mới', async () => {
     api.mockResolvedValue({ changed: 1 })
-    const onClose = dung()
-    fireEvent.change(screen.getByLabelText('Số phiếu giao của NCC'), {
-      target: { value: '  HH-1110 ' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /Lưu số phiếu/ }))
+    const onXong = dung()
+    fireEvent.change(o(), { target: { value: '  HH-1110 ' } })
+    fireEvent.keyDown(o(), { key: 'Enter' })
     await waitFor(() => expect(api).toHaveBeenCalled())
     const [url, init] = api.mock.calls[0] as [string, { method: string; body: unknown }]
     expect(url).toBe('/api/dept/warehouse/docs/doc-128/thong-tin')
@@ -69,21 +52,21 @@ describe('GhiSoNccSheet', () => {
       reason: LY_DO_BO_SUNG_SO_NCC,
     })
     expect(docInfoSchema.safeParse(init.body).success).toBe(true)
-    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    await waitFor(() => expect(onXong).toHaveBeenCalled())
     expect(refresh).toHaveBeenCalled()
+    expect(await screen.findByText('HH-1110')).toBeTruthy()
   })
 
-  it('server từ chối thì nói lý do trong hộp, không đóng', async () => {
+  it('server từ chối thì nói lý do ngay dưới ô, ô còn nguyên', async () => {
     const { ApiError } = await import('@/lib/api')
     api.mockRejectedValue(
       new ApiError(400, 'Phiếu PNK-2026-0128 đã bị đảo — hết hiệu lực, không sửa nữa'),
     )
-    const onClose = dung()
-    fireEvent.change(screen.getByLabelText('Số phiếu giao của NCC'), {
-      target: { value: 'X1' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /Lưu số phiếu/ }))
+    const onXong = dung()
+    fireEvent.change(o(), { target: { value: 'X1' } })
+    fireEvent.keyDown(o(), { key: 'Enter' })
     expect(await screen.findByText(/đã bị đảo/)).toBeTruthy()
-    expect(onClose).not.toHaveBeenCalled()
+    expect(onXong).not.toHaveBeenCalled()
+    expect((o() as HTMLInputElement).value).toBe('X1')
   })
 })

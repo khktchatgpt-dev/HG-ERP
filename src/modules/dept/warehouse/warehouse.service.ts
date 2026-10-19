@@ -582,6 +582,17 @@ export const materialsService = {
     return materialChangesRepo.lastRetire(ids)
   },
 
+  /**
+   * Số dòng lưu MÃ CHỮ của vật tư (định mức hồ sơ SP, BOM lệnh) — hộp đổi mã của
+   * Kho nói trước "đổi mã thì N dòng đổi theo" (đúng hai bảng `renameCodeRefs` ghi).
+   */
+  async codeRefs(user: User, id: string): Promise<{ parts: number; boms: number }> {
+    void user // xem vật tư là PUBLIC (warehouse.material.view)
+    const m = await materialsRepo.findById(id)
+    if (!m) throw NotFound('Vật tư không tồn tại')
+    return materialsRepo.codeRefCounts(m.code)
+  },
+
   /** Mã đang nằm ở đâu — panel dùng để chọn giữa "Xoá mã" và "Ngừng dùng". */
   async usage(user: User, id: string): Promise<MaterialUsage> {
     void user // xem vật tư là PUBLIC (warehouse.material.view)

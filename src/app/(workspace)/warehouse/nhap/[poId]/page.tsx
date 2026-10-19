@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { Btn, Empty } from '@/components/kit'
+import Link from 'next/link'
+import { KhoKhung, Rong } from '../../_erp/khung'
 import { PhieuNhapScreen } from './PhieuNhapScreen'
 import { taiPhieuNhap } from './tai-phieu-nhap'
 
@@ -31,23 +32,23 @@ export default async function Page({
 
   if (r.kind === 'chan') {
     return (
-      <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-        <Empty
-          headline={`${r.po.code} chưa nhận hàng được`}
-          reason={r.reason}
-          next={
-            <>
-              <Btn icon="quayLai" href="/warehouse/nhap">
+      <KhoKhung label={`${r.po.code} chưa nhận hàng được`}>
+        <Rong
+          tieuDe={`${r.po.code} chưa nhận hàng được`}
+          lyDo={r.reason}
+          tiep={
+            <span style={{ display: 'flex', gap: 8 }}>
+              <Link href="/warehouse/nhap" className="kh-btn">
                 Về Hàng về
-              </Btn>
+              </Link>
               {/* Hộp "Hàng của đơn" trong Kho — NV Kho không vào được khu Mua hàng. */}
-              <Btn icon="don" primary href={`/warehouse/nhap?don=${r.po.id}`}>
+              <Link href={`/warehouse/nhap?don=${r.po.id}`} className="kh-btn p">
                 Xem hàng của đơn {r.po.code}
-              </Btn>
-            </>
+              </Link>
+            </span>
           }
         />
-      </div>
+      </KhoKhung>
     )
   }
 

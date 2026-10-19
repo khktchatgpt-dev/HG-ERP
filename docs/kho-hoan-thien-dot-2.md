@@ -140,6 +140,13 @@ mức** (chốt 16/09). `XuatScreen.tsx` 805 dòng → khối là file riêng.
 nhập theo N1/N2/N3/N4 · xuất theo X1/X3/X5/khác · tồn cuối · giá trị; lọc nhóm /
 lệnh; Excel. Nghiệm thu: tổng kỳ 10/2026 khớp Sổ phiếu cùng kỳ.
 
+> **B6 XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/XCqeNa92MkBZ5oGGwcGrjS, duyệt Q1–Q6 theo đề xuất,
+> nhánh feat/kho-erp-1014, chưa commit): `/warehouse/bao-cao` + Excel 2 tờ (`api/dept/warehouse/bao-cao/excel`).
+> Luật thuần `lib/kho-nxt.ts` (20 test): kỳ theo ngày chứng từ, bình quân gia quyền cả kỳ nối từng tháng,
+> đảo phiếu trừ vào cột gốc (phiếu đảo mang LOẠI ngược phiếu gốc → suy mã theo CHIỀU dòng), USD quy theo
+> `po.fx_rate`. Số thật 10/2026: 277 mã, đối chiếu sổ khớp (638 dòng), giá trị tồn cuối 2.499.400.088 ₫,
+> 2 mã thiếu giá. Không ghi giá vào phiếu xuất, chưa khoá kỳ. **0247 (Kế toán xem khu Kho) ĐÃ ÁP 19/10** (4 tài khoản ketoan*@).
+
 **B7 · Kiểm kê định kỳ** `/warehouse/kiem-ke` trên service có sẵn: lập đợt theo
 nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 05-VT.
 

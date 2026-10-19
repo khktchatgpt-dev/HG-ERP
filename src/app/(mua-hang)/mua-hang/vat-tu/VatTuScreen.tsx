@@ -22,7 +22,6 @@ import {
   TFoot,
   THead,
   Table,
-  Tag,
   Tick,
   showMoney,
 } from '@/components/kit'
@@ -41,7 +40,6 @@ export type VatTuRow = {
   spec: string | null
   last_purchase_price: number | null
   price_unit: string | null
-  needs_review: boolean
   /** Lần ngừng dùng gần nhất — chỉ nạp khi đang xem chip "Ngừng dùng". */
   ngung?: LanNgung | null
 }
@@ -63,7 +61,6 @@ export function VatTuScreen({
     total: number
     active: number
     noShelf: number
-    needsReview: number
     noSub: number
     /** Mã ngừng dùng trong bộ lọc — số trên chip. */
     inactive: number
@@ -71,7 +68,7 @@ export function VatTuScreen({
   groups: string[]
   page: number
   /** `ng` = chip "Ngừng dùng": chỉ xem mã đã ngừng (mặc định ẩn chúng). */
-  filters: { q: string; nhom: string; ra: boolean; kn: boolean; ng: boolean }
+  filters: { q: string; nhom: string; kn: boolean; ng: boolean }
   /** Quyền `warehouse.material.update_purchasing` — đúng quyền service kiểm khi lưu. */
   canEdit: boolean
   /** Quyền `warehouse.material.retire` — ngừng dùng / dùng lại / xoá mã chưa dùng. */
@@ -149,7 +146,7 @@ export function VatTuScreen({
     })
   const tatCa = rows.length > 0 && rows.every((r) => chon.has(r.id))
 
-  const dangLoc = !!filters.q || !!filters.nhom || filters.ra || filters.kn || filters.ng
+  const dangLoc = !!filters.q || !!filters.nhom || filters.kn || filters.ng
   const soTrang = Math.max(1, Math.ceil(counts.total / PAGE_SIZE))
   const tu = counts.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const den = Math.min(page * PAGE_SIZE, counts.total)
@@ -163,16 +160,6 @@ export function VatTuScreen({
         title="Vật tư"
         facts={[
           { label: 'Mã trong danh mục', value: counts.total.toLocaleString('vi-VN') },
-          /*
-            "Chờ Kho rà" là việc CÓ NGƯỜI PHẢI LÀM nên tô hổ phách khi còn; các
-            ô còn lại chỉ là quy mô danh mục, không phải cảnh báo — tô màu hết
-            thì màu hết nghĩa.
-          */
-          {
-            label: 'Chờ Kho rà',
-            value: String(counts.needsReview),
-            tone: counts.needsReview > 0 ? 'warn' : 'neutral',
-          },
           {
             label: 'Chưa có nhóm con',
             value: counts.noSub.toLocaleString('vi-VN'),
@@ -219,13 +206,6 @@ export function VatTuScreen({
           width={230}
         />
         <Chip
-          on={filters.ra}
-          count={counts.needsReview}
-          onClick={() => doiLoc({ ra: filters.ra ? '' : '1', trang: '1' })}
-        >
-          Chờ Kho rà
-        </Chip>
-        <Chip
           on={filters.kn}
           count={counts.noSub}
           onClick={() => doiLoc({ kn: filters.kn ? '' : '1', trang: '1' })}
@@ -243,9 +223,7 @@ export function VatTuScreen({
         {dangLoc && (
           <Btn
             icon="boLoc"
-            onClick={() =>
-              doiLoc({ q: '', nhom: '', ra: '', kn: '', ng: '', trang: '1' })
-            }
+            onClick={() => doiLoc({ q: '', nhom: '', kn: '', ng: '', trang: '1' })}
           >
             Bỏ lọc
           </Btn>
@@ -256,7 +234,7 @@ export function VatTuScreen({
         <Empty
           headline="Chưa có mã nào ngừng dùng"
           reason={
-            dangLoc && (filters.q || filters.nhom || filters.ra || filters.kn)
+            dangLoc && (filters.q || filters.nhom || filters.kn)
               ? 'Không mã ngừng dùng nào khớp các điều kiện lọc còn lại.'
               : 'Mã ngừng dùng từ panel Sửa vật tư (mã đã dùng ở đâu đó thì không xoá, chỉ ngừng dùng) sẽ hiện ở đây.'
           }
@@ -278,9 +256,7 @@ export function VatTuScreen({
             <Btn
               icon="boLoc"
               primary
-              onClick={() =>
-                doiLoc({ q: '', nhom: '', ra: '', kn: '', ng: '', trang: '1' })
-              }
+              onClick={() => doiLoc({ q: '', nhom: '', kn: '', ng: '', trang: '1' })}
             >
               Bỏ lọc, về trang 1
             </Btn>
@@ -353,7 +329,6 @@ export function VatTuScreen({
                     >
                       {r.name}
                     </a>
-                    {r.needs_review && <Tag tone="warn">Chờ rà</Tag>}
                   </span>
                 </Cell>
                 {/*

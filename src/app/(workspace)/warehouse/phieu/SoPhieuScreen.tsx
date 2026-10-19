@@ -1,31 +1,26 @@
 'use client'
 
-import { useRef, useState, type CSSProperties } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
+import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { ArrowDownToLine, ArrowUpFromLine, FileText, Printer } from 'lucide-react'
 import { useBeRong } from '@/lib/use-be-rong'
-import { cn } from '@/lib/utils'
 import { isoToVn } from '@/lib/date-vn'
 import { MA_LY_DO_KHO, nhanLyDo } from '@/lib/kho-ma-ly-do'
 import {
-  Ico,
-  Btn,
-  Cell,
-  Chip,
-  Code,
-  Empty,
-  FilterBar,
-  NoticeBar,
-  Pick,
-  Row,
-  ScreenFrame,
-  ScreenHeader,
-  StatusBar,
-  THead,
-  Table,
-  Tag,
-} from '@/components/kit'
+  ApNhom,
+  ApNut,
+  DauTrang,
+  KhoKhung,
+  PhanTrang,
+  Rong,
+  TabNgang,
+  ThanhLoc,
+  ThanhTT,
+  type TabMuc,
+} from '../_erp/khung'
 import { RO_PHIEU, RO_PHIEU_NHAN, type RoPhieu } from './ro-phieu'
-import { GhiSoNccSheet } from './ghi-so-ncc'
+import { OSoNcc } from './ghi-so-ncc'
 
 export type PhieuRow = {
   id: string
@@ -50,25 +45,39 @@ export type PhieuRow = {
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 
-/** Mã lý do đeo màu theo HƯỚNG, không theo vòng đời — vào xanh, ra lam, chuyển xám. */
+/** Màu ô vuông theo LOẠI phiếu (bảng màu Kho: nhập xanh ngọc · xuất hồng · kiểm kê xám). */
+const MAU_LOAI: Record<PhieuRow['kind'], string> = {
+  receipt: 'c-nhap',
+  issue: 'c-xuat',
+  transfer: 'c-kiem',
+  stocktake: 'c-kiem',
+}
+const TAB_MAU: Record<RoPhieu, { mau: string; tone?: TabMuc['tone'] }> = {
+  all: { mau: 'c-mut' },
+  receipt: { mau: 'c-nhap' },
+  issue: { mau: 'c-xuat' },
+  stocktake: { mau: 'c-kiem' },
+  thieu_ncc: { mau: 'c-warn', tone: 'warn' },
+  reversed: { mau: 'c-stop' },
+}
+
+/** Mã lý do đeo màu theo HƯỚNG — vào xanh, ra / chuyển xám. */
 function MaLyDo({ ma }: { ma: string }) {
   const huong = MA_LY_DO_KHO.find((x) => x.ma === ma)?.huong
-  return (
-    <Tag tone={huong === 'in' ? 'done' : 'neutral'}>
-      <span className="num font-bold">{ma}</span>
-    </Tag>
-  )
+  return <span className={huong === 'in' ? 'kh-tag done' : 'kh-tag'}>{ma}</span>
 }
 
 /**
- * SỔ PHIẾU KHO — Khuôn C. Artboard 6:
- * https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf
+ * SỔ PHIẾU KHO — Kho lối ERP · B4 (bản vẽ K-4
+ * https://claude.ai/artifact/F2uVKzc4tb28FhHZY6BDiR), viết tay không kit.
  *
- * BỘ LỌC CHÍNH LÀ MÃ LÝ DO, không phải ngày: người đi soát hỏi "tháng này có
- * bao nhiêu phiếu huỷ", không hỏi "phiếu ngày 12/09".
+ * Tab theo LOẠI PHIẾU + việc dở (Thiếu số phiếu NCC, Đã bị đảo); bộ lọc chính là
+ * MÃ LÝ DO, không phải ngày — người soát hỏi "tháng này bao nhiêu phiếu huỷ". Số
+ * phiếu NCC còn thiếu GÕ NGAY TRONG Ô của dòng (Enter lưu, con trỏ xuống phiếu
+ * sau). K1: chọn dòng rồi Mở / In ở Action Pane; Enter / bấm đúp = mở phiếu.
  *
- * Phiếu đảo và phiếu gốc nằm cạnh nhau trong sổ, phiếu gốc gạch ngang — sổ
- * phải cộng lại đúng bằng những gì đã xảy ra, kể cả cái sai.
+ * Phiếu đảo và phiếu gốc nằm cạnh nhau, phiếu gốc gạch ngang — sổ phải cộng lại
+ * đúng bằng những gì đã xảy ra, kể cả cái sai.
  */
 export function SoPhieuScreen({
   rows,
@@ -103,10 +112,14 @@ export function SoPhieuScreen({
   const pathname = usePathname()
   const params = useSearchParams()
   const khung = useRef<HTMLDivElement>(null)
-  // Khung hẹp (< 960px: 1024 có sidebar mở) thì ẩn cột Lệnh SX + Người lập + nhãn chữ
-  // của mã lý do — luật màn hẹp: ẩn cột bậc thấp thay vì cuộn ngang (12/10/2026).
-  const hep = useBeRong(khung) < 960
-  const [ghiSo, setGhiSo] = useState<PhieuRow | null>(null)
+  const beRong = useBeRong(khung)
+  // < 1120px (laptop 125%: khung ~985): mã lý do không kèm nhãn chữ + ẩn Người lập —
+  // đo 15/10: tổng cột cố định 1020 > 985, cột Đối ứng còn 0px và lưới cuộn ngang.
+  // < 960px: ẩn thêm Lệnh SX; < 600px: danh sách phẳng.
+  const gon = beRong > 0 && beRong < 1120
+  const hep = beRong > 0 && beRong < 960
+  const dien = beRong > 0 && beRong < 600
+  const [chon, setChon] = useState<string | null>(null)
 
   const dat = (p: Record<string, string | null>) => {
     const s = new URLSearchParams(params.toString())
@@ -115,309 +128,365 @@ export function SoPhieuScreen({
       else s.delete(k)
     }
     if (!('trang' in p)) s.delete('trang')
+    setChon(null)
     const qs = s.toString()
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
+  const mo = (id: string) => router.push(`/warehouse/phieu/${id}`)
+  const phim = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'INPUT') {
+      e.preventDefault()
+      mo(id)
+    }
+  }
+  /** Ghi xong số NCC ở một dòng → con trỏ sang ô của phiếu thiếu kế tiếp. */
+  const sangO = (id: string) => {
+    const ds = rows.filter((r) => r.thieu_ncc && !r.supplier_doc_no?.trim())
+    const i = ds.findIndex((r) => r.id === id)
+    const sau = ds[i + 1]
+    if (sau)
+      setTimeout(
+        () => (document.querySelector(`[data-so-ncc="${sau.id}"]`) as HTMLInputElement | null)?.focus(), // prettier-ignore
+        0,
+      )
+  }
+
+  const sel = rows.find((r) => r.id === chon) ?? null
+  const dangLoc = !!lyDo || !!nguoi
+  const canChon = 'Chọn một phiếu trong bảng trước'
+  const soCot = hep ? 6 : gon ? 7 : 8
+
+  const tabs: TabMuc[] = RO_PHIEU.map((id) => ({
+    key: id,
+    label: RO_PHIEU_NHAN[id],
+    on: ro === id,
+    onClick: () => dat({ ro: id === 'all' ? null : id }),
+    n: dem[id],
+    tone: dem[id] > 0 ? (TAB_MAU[id].tone ?? 'mut') : undefined,
+    mau: TAB_MAU[id].mau,
+    note:
+      id === 'thieu_ncc' && thieuGanDay > 0
+        ? `${fmt(thieuGanDay)} trong 14 ngày`
+        : undefined,
+  }))
+
+  const soNcc = (d: PhieuRow) =>
+    d.supplier_doc_no?.trim() ? (
+      <span className="kh-num">{d.supplier_doc_no}</span>
+    ) : d.thieu_ncc ? (
+      canEdit && !d.da_bi_dao ? (
+        <OSoNcc doc={{ id: d.id, code: d.code }} onXong={() => sangO(d.id)} />
+      ) : (
+        <span className="kh-warn">chưa ghi</span>
+      )
+    ) : (
+      <span className="kh-empty">—</span>
+    )
+
+  const soPhieu = (d: PhieuRow) => (
+    <span
+      style={d.da_bi_dao ? { textDecoration: 'line-through', textDecorationColor: 'var(--kh-ink3)' } : undefined} // prettier-ignore
+      title={d.reversal_of_code ? `Đảo của ${d.reversal_of_code}` : undefined}
+    >
+      <span className={`kh-sq ${MAU_LOAI[d.kind]}`} aria-hidden />
+      <Link
+        href={`/warehouse/phieu/${d.id}`}
+        className="kh-lnk"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {d.code}
+      </Link>
+      {d.da_bi_dao && (
+        <span className="kh-tag" style={{ marginLeft: 6, color: 'var(--kh-stop)' }}>
+          đã đảo
+        </span>
+      )}
+      {d.reversal_of_code && <span className="kh-mut"> · đảo</span>}
+      {d.status === 'pending' && (
+        <span className="kh-tag warn" style={{ marginLeft: 6 }}>
+          chờ duyệt
+        </span>
+      )}
+      {d.status === 'rejected' && (
+        <span className="kh-tag" style={{ marginLeft: 6, color: 'var(--kh-stop)' }}>
+          từ chối
+        </span>
+      )}
+    </span>
+  )
 
   return (
-    <div
-      className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
-      // Đối ứng co tới 140px (kit mặc định 200): đo 12/10 bảng 1110px trong khung
-      // 1053px (1280, sidebar mở). Tên đầy đủ ở `title`.
-      style={{ '--col-grow': '140px' } as CSSProperties}
-    >
-      <ScreenFrame>
-        <ScreenHeader
-          compact
-          eyebrow="Kho"
-          title="Sổ phiếu"
-          facts={[
-            { label: 'Tất cả', value: fmt(dem.all) },
-            { label: 'Phiếu nhập', value: fmt(dem.receipt) },
-            { label: 'Phiếu xuất', value: fmt(dem.issue) },
-            {
-              label: 'Thiếu số phiếu NCC',
-              value: `${fmt(dem.thieu_ncc)} · ${fmt(thieuGanDay)} trong 14 ngày`,
-              tone: dem.thieu_ncc > 0 ? 'warn' : undefined,
-              on: ro === 'thieu_ncc',
-              onClick: () => dat({ ro: ro === 'thieu_ncc' ? null : 'thieu_ncc' }),
-            },
-          ]}
-          actions={
-            canEdit ? (
-              <>
-                <Btn icon="nhanHang" href="/warehouse/nhap">
+    <KhoKhung label="Sổ phiếu">
+      <DauTrang
+        title="Sổ phiếu"
+        ctx={
+          <>
+            <b>{fmt(dem.all)}</b> phiếu · sổ chỉ cộng thêm, sai thì lập phiếu đảo
+          </>
+        }
+        actions={
+          <>
+            {!dien && (
+              <ApNhom>
+                <ApNut
+                  primary
+                  icon={<FileText size={15} aria-hidden />}
+                  href={sel ? `/warehouse/phieu/${sel.id}` : undefined}
+                  why={sel ? null : canChon}
+                >
+                  {sel ? `Mở ${sel.code}` : 'Mở phiếu'}
+                </ApNut>
+                <ApNut
+                  icon={<Printer size={15} aria-hidden />}
+                  href={sel ? `/print/warehouse/${sel.id}` : undefined}
+                  why={sel ? null : canChon}
+                >
+                  In phiếu
+                </ApNut>
+              </ApNhom>
+            )}
+            {canEdit && (
+              <ApNhom>
+                <ApNut
+                  icon={<ArrowDownToLine size={15} aria-hidden />}
+                  href="/warehouse/nhap"
+                >
                   Nhận hàng
-                </Btn>
-                <Btn icon="xuatKho" href="/warehouse/xuat">
+                </ApNut>
+                <ApNut
+                  icon={<ArrowUpFromLine size={15} aria-hidden />}
+                  href="/warehouse/xuat"
+                >
                   Xuất kho
-                </Btn>
-              </>
-            ) : undefined
+                </ApNut>
+              </ApNhom>
+            )}
+          </>
+        }
+      />
+
+      <TabNgang label="Loại phiếu" tabs={tabs} />
+
+      <ThanhLoc>
+        <select
+          value={lyDo}
+          className={lyDo ? 'on' : undefined}
+          onChange={(e) => dat({ ly_do: e.target.value || null })}
+          aria-label="Mã lý do"
+          style={{ maxWidth: 280 }}
+        >
+          <option value="">Mọi lý do</option>
+          {MA_LY_DO_KHO.map((x) => (
+            <option key={x.ma} value={x.ma}>
+              {x.ma} · {x.nhan}
+            </option>
+          ))}
+        </select>
+        <select
+          value={nguoi}
+          className={nguoi ? 'on' : undefined}
+          onChange={(e) => dat({ nguoi: e.target.value || null })}
+          aria-label="Người lập"
+          style={{ maxWidth: 240 }}
+        >
+          <option value="">Mọi người lập</option>
+          <option value="toi">
+            Tôi lập ({fmt(nguoiLap.find((x) => x.id === meId)?.n ?? 0)})
+          </option>
+          {nguoiLap
+            .filter((x) => x.id !== meId)
+            .map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name} ({fmt(x.n)})
+              </option>
+            ))}
+        </select>
+        {dangLoc && (
+          <button
+            type="button"
+            className="clr"
+            onClick={() => dat({ ly_do: null, nguoi: null })}
+          >
+            Bỏ lọc
+          </button>
+        )}
+      </ThanhLoc>
+
+      {/* Chỉ hiện khi ĐANG LỌC — treo thường trực thì vàng thành hình nền. */}
+      {dangLoc && (
+        <div className="kh-note">
+          <span className="tag">Đang lọc</span>
+          <span>
+            Thu lại còn {lyDo && `mã lý do ${lyDo} · ${nhanLyDo(lyDo)}`}
+            {lyDo && nguoi && ' · '}
+            {nguoi &&
+              `người lập: ${nguoi === 'toi' ? 'tôi' : (nguoiLap.find((x) => x.id === nguoi)?.name ?? '—')}`}
+            . Số trên tab vẫn là số của CẢ SỔ, không phải của phần đang lọc.
+          </span>
+        </div>
+      )}
+
+      <div ref={khung} style={{ height: 0, width: '100%' }} aria-hidden />
+      {rows.length === 0 ? (
+        <Rong
+          tieuDe={`Không có phiếu nào trong “${RO_PHIEU_NHAN[ro]}”`}
+          lyDo={
+            lyDo
+              ? `Chưa phiếu nào mang mã lý do “${lyDo} · ${nhanLyDo(lyDo)}”. Mã lý do bật từ 15/09/2026; phiếu cũ hơn được suy mã từ loại chứng từ.`
+              : `Sổ đang có ${fmt(dem.all)} phiếu, tab này trống.`
+          }
+          tiep={
+            <button
+              type="button"
+              className="kh-btn"
+              onClick={() => dat({ ro: null, ly_do: null, nguoi: null })}
+            >
+              Xem cả {fmt(dem.all)} phiếu
+            </button>
           }
         />
-
-        <FilterBar>
-          <Pick
-            value={lyDo}
-            onChange={(v) => dat({ ly_do: v || null })}
-            options={[
-              { value: '', label: 'Mọi lý do' },
-              ...MA_LY_DO_KHO.map((x) => ({ value: x.ma, label: `${x.ma} · ${x.nhan}` })),
-            ]}
-            label="Mã lý do"
-            width={hep ? 170 : 240}
-          />
-          <Pick
-            value={nguoi}
-            onChange={(v) => dat({ nguoi: v || null })}
-            options={[
-              { value: '', label: 'Mọi người lập' },
-              {
-                value: 'toi',
-                label: `Tôi lập (${fmt(nguoiLap.find((x) => x.id === meId)?.n ?? 0)})`,
-              },
-              ...nguoiLap
-                .filter((x) => x.id !== meId)
-                .map((x) => ({ value: x.id, label: `${x.name} (${fmt(x.n)})` })),
-            ]}
-            label="Người lập"
-            width={hep ? 150 : 190}
-          />
-          {RO_PHIEU.map((id) => (
-            <Chip
-              key={id}
-              on={ro === id}
-              count={dem[id]}
-              onClick={() => dat({ ro: id === 'all' ? null : id })}
-            >
-              {RO_PHIEU_NHAN[id]}
-            </Chip>
+      ) : dien ? (
+        <div className="kh-pl" aria-label="Sổ phiếu">
+          {rows.map((d) => (
+            <div key={d.id} className="kh-pl-row" style={{ cursor: 'default' }}>
+              <span style={{ minWidth: 0 }}>
+                {soPhieu(d)}
+                <span className="s" style={{ display: 'block' }}>
+                  {d.ma_ly_do[0] ? `${d.ma_ly_do[0]} · ${nhanLyDo(d.ma_ly_do[0])}` : '—'}
+                  {d.don && ` · ${d.don.po_code}`}
+                </span>
+                <span className="s" style={{ display: 'block' }}>
+                  {d.counterparty ?? d.reason ?? '—'}
+                </span>
+                {d.thieu_ncc && (
+                  <span style={{ display: 'block', marginTop: 4 }}>{soNcc(d)}</span>
+                )}
+              </span>
+              <span className="r kh-num kh-mut">{isoToVn(d.doc_date).slice(0, 5)}</span>
+            </div>
           ))}
-          {(lyDo || nguoi) && (
-            <Btn
-              icon="boLoc"
-              onClick={() => dat({ ly_do: null, nguoi: null })}
-              className="text-k-sm h-[26px] px-2"
-            >
-              Bỏ lọc
-            </Btn>
-          )}
-        </FilterBar>
-        <div ref={khung} className="h-0 w-full" aria-hidden />
-
-        {/*
-          DẢI NÀY CHỈ HIỆN KHI ĐANG LỌC. Bản đầu để nó hiện thường trực như một
-          lời giải thích — sai luật màu: vàng mã hoá VÒNG ĐỜI DỮ LIỆU, treo
-          vĩnh viễn thì nó thành hình nền và lần có cảnh báo thật không ai
-          thấy. Câu giải thích chuyển xuống chân màn, chỗ của luật nền.
-        */}
-        {(lyDo || nguoi || ro !== 'all') && (
-          <NoticeBar
-            tone="warn"
-            tag="Đang lọc"
-            action={{
-              label: 'Xem cả sổ',
-              onClick: () => dat({ ro: null, ly_do: null, nguoi: null }),
-            }}
-          >
-            Sổ đang thu lại còn rổ “{RO_PHIEU_NHAN[ro]}”
-            {lyDo && ` và mã lý do ${lyDo} · ${nhanLyDo(lyDo)}`}
-            {nguoi &&
-              ` · người lập: ${nguoi === 'toi' ? 'tôi' : (nguoiLap.find((x) => x.id === nguoi)?.name ?? '—')}`}
-            . Tổng ở đầu trang vẫn là số của CẢ SỔ, không phải của phần đang lọc.
-          </NoticeBar>
-        )}
-
-        {rows.length === 0 ? (
-          <Empty
-            headline="Không có phiếu nào trong rổ này"
-            reason={
-              lyDo
-                ? `Chưa phiếu nào mang mã lý do “${lyDo} · ${nhanLyDo(lyDo)}”. Mã lý do bật từ 15/09/2026; phiếu cũ hơn được suy mã từ loại chứng từ.`
-                : `Rổ “${RO_PHIEU_NHAN[ro]}” đang trống. Sổ đang có ${fmt(dem.all)} phiếu.`
-            }
-            next={
-              <Btn
-                icon="boLoc"
-                primary
-                onClick={() => dat({ ro: null, ly_do: null, nguoi: null })}
-              >
-                Xem cả {fmt(dem.all)} phiếu
-              </Btn>
-            }
-          />
-        ) : (
-          <Table minWidth={hep ? 640 : 900}>
-            <THead pinFirst>
-              <th style={{ width: 58 }}>Ngày</th>
-              <th style={{ width: 150 }}>Số phiếu</th>
-              <th style={{ width: hep ? 64 : 120 }}>Lý do</th>
-              <th style={{ width: 112 }}>Đơn</th>
-              {!hep && <th style={{ width: 132 }}>Lệnh SX</th>}
-              <th>Đối ứng</th>
-              <th style={{ width: 130 }}>Số phiếu NCC</th>
-              {!hep && <th style={{ width: 110 }}>Người lập</th>}
-              <th style={{ width: 64 }} />
-            </THead>
+        </div>
+      ) : (
+        <div className="kh-grid">
+          <table className="kh-tb" aria-label="Sổ phiếu kho">
+            <colgroup>
+              <col style={{ width: 62 }} />
+              <col style={{ width: 186 }} />
+              <col style={{ width: gon ? 64 : 178 }} />
+              <col style={{ width: 120 }} />
+              {!hep && <col style={{ width: 152 }} />}
+              <col />
+              <col style={{ width: 172 }} />
+              {!gon && <col style={{ width: 150 }} />}
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Số phiếu</th>
+                <th>Lý do</th>
+                <th>Đơn</th>
+                {!hep && <th>Lệnh SX</th>}
+                <th>Đối ứng</th>
+                <th>Số phiếu NCC</th>
+                {!gon && <th>Người lập</th>}
+              </tr>
+            </thead>
             <tbody>
-              {rows.map((d) => (
-                <Row key={d.id} onClick={() => router.push(`/warehouse/phieu/${d.id}`)}>
-                  <Cell pin muted>
-                    <span className="num">{isoToVn(d.doc_date).slice(0, 5)}</span>
-                  </Cell>
-                  <Cell>
-                    <span
-                      className={cn(
-                        'flex items-center gap-2',
-                        // Gạch ngang chứ KHÔNG ẩn: phiếu sai vẫn là một dòng
-                        // lịch sử, giấu đi là sổ không cộng lại đúng.
-                        d.da_bi_dao && 'line-through decoration-[var(--ink-3)]',
-                      )}
-                      title={
-                        d.reversal_of_code ? `Đảo của ${d.reversal_of_code}` : undefined
-                      }
-                    >
-                      <Code>{d.code}</Code>
-                      {d.da_bi_dao && <Tag tone="stop">đã đảo</Tag>}
-                      {d.reversal_of_code && (
-                        <span className="text-k-label text-[var(--ink-3)]">đảo</span>
-                      )}
-                      {d.status === 'pending' && <Tag tone="warn">chờ duyệt</Tag>}
-                      {d.status === 'rejected' && <Tag tone="stop">từ chối</Tag>}
-                    </span>
-                  </Cell>
-                  <Cell title={d.ma_ly_do.map((m) => `${m} · ${nhanLyDo(m)}`).join(', ')}>
-                    <span className="flex items-center gap-2">
+              {rows.map((d) => {
+                const on = d.id === chon
+                return (
+                  <tr
+                    key={d.id}
+                    className={on ? 'd on' : 'd'}
+                    tabIndex={0}
+                    aria-selected={on}
+                    onClick={() => setChon(d.id)}
+                    onDoubleClick={() => mo(d.id)}
+                    onKeyDown={(e) => phim(e, d.id)}
+                  >
+                    <td className="kh-num kh-mut">{isoToVn(d.doc_date).slice(0, 5)}</td>
+                    <td>{soPhieu(d)}</td>
+                    <td title={d.ma_ly_do.map((m) => `${m} · ${nhanLyDo(m)}`).join(', ')}>
                       {d.ma_ly_do.length === 0 ? (
-                        <span className="text-[var(--ink-empty)]">—</span>
+                        <span className="kh-empty">—</span>
                       ) : (
                         <>
                           <MaLyDo ma={d.ma_ly_do[0]} />
-                          {!hep && (
-                            <span className="text-k-sm truncate text-[var(--ink-2)]">
-                              {nhanLyDo(d.ma_ly_do[0])}
-                            </span>
+                          {!gon && (
+                            <span className="kh-mut">{nhanLyDo(d.ma_ly_do[0])}</span>
                           )}
                           {d.ma_ly_do.length > 1 && (
-                            <span className="num text-k-label text-[var(--ink-3)]">
+                            <span className="kh-mut kh-num">
+                              {' '}
                               +{d.ma_ly_do.length - 1}
                             </span>
                           )}
                         </>
                       )}
-                    </span>
-                  </Cell>
-                  <Cell title={d.don?.lsx.join(', ') || undefined}>
-                    {d.don ? (
-                      <span className="num">{d.don.po_code}</span>
-                    ) : (
-                      <span className="text-[var(--ink-empty)]">—</span>
-                    )}
-                  </Cell>
-                  {!hep && (
-                    <Cell muted title={d.don?.lsx.join(', ') || undefined}>
-                      {d.don && d.don.lsx.length > 0 ? (
-                        <span className="num">
-                          {d.don.lsx[0]}
-                          {d.don.lsx.length > 1 && (
-                            <span className="text-k-label ml-1">
-                              +{d.don.lsx.length - 1}
-                            </span>
-                          )}
-                        </span>
-                      ) : d.don ? (
-                        'ngoài lệnh'
-                      ) : (
-                        ''
-                      )}
-                    </Cell>
-                  )}
-                  <Cell grow muted title={d.counterparty ?? d.reason ?? ''}>
-                    {d.counterparty ?? d.reason ?? '—'}
-                  </Cell>
-                  <Cell>
-                    {d.supplier_doc_no?.trim() ? (
-                      <span className="num">{d.supplier_doc_no}</span>
-                    ) : d.thieu_ncc ? (
-                      <span className="flex items-center gap-2">
-                        <span className="font-semibold text-[var(--warn)]">chưa ghi</span>
-                        {canEdit && (
-                          <button
-                            type="button"
-                            className="text-k-sm text-[var(--act-text)] underline underline-offset-2"
-                            aria-label={`Ghi số phiếu NCC cho ${d.code}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setGhiSo(d)
-                            }}
-                          >
-                            ghi
-                          </button>
+                    </td>
+                    <td className="kh-num" title={d.don?.lsx.join(', ') || undefined}>
+                      {d.don ? d.don.po_code : <span className="kh-empty">—</span>}
+                    </td>
+                    {!hep && (
+                      <td className="kh-mut" title={d.don?.lsx.join(', ') || undefined}>
+                        {d.don && d.don.lsx.length > 0 ? (
+                          <span className="kh-num">
+                            {d.don.lsx[0]}
+                            {d.don.lsx.length > 1 && ` +${d.don.lsx.length - 1}`}
+                          </span>
+                        ) : d.don ? (
+                          'ngoài lệnh'
+                        ) : (
+                          ''
                         )}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--ink-empty)]">—</span>
+                      </td>
                     )}
-                  </Cell>
-                  {!hep && <Cell muted>{d.created_by_name ?? '—'}</Cell>}
-                  <Cell>
-                    <span className="flex justify-end">
-                      <Btn
-                        icon="mo"
-                        href={`/warehouse/phieu/${d.id}`}
-                        className="text-k-sm h-6 px-2"
-                      >
-                        Mở
-                      </Btn>
-                    </span>
-                  </Cell>
-                </Row>
-              ))}
+                    <td className="kh-mut" title={d.counterparty ?? d.reason ?? ''}>
+                      {d.counterparty ?? d.reason ?? '—'}
+                    </td>
+                    <td
+                      className={
+                        d.thieu_ncc && !d.supplier_doc_no?.trim() ? 'go' : undefined
+                      }
+                    >
+                      {soNcc(d)}
+                    </td>
+                    {!gon && <td className="kh-mut">{d.created_by_name ?? '—'}</td>}
+                  </tr>
+                )
+              })}
             </tbody>
-          </Table>
-        )}
-
-        {soTrang > 1 && (
-          <div className="text-k-sm flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
-            <span className="text-[var(--ink-3)]">Trang</span>
-            <Btn
-              icon="truoc"
-              disabled={trang <= 1}
-              onClick={() => dat({ trang: String(trang - 1) })}
-              className="text-k-sm h-6 px-2"
-            >
-              Trước
-            </Btn>
-            <span className="num">
-              {trang} / {soTrang}
-            </span>
-            <Btn
-              disabled={trang >= soTrang}
-              onClick={() => dat({ trang: String(trang + 1) })}
-              className="text-k-sm h-6 px-2"
-            >
-              Sau
-              <Ico name="sau" />
-            </Btn>
-            <span className="ml-auto text-[var(--ink-3)]">50 phiếu mỗi trang</span>
-          </div>
-        )}
-
-        <StatusBar
-          left={[
-            'Sổ chỉ cộng thêm — phiếu đã ghi không sửa, không xoá; sai thì lập phiếu đảo',
-            'Mã lý do bật từ 15/09/2026; phiếu cũ hơn suy mã từ loại chứng từ',
-          ]}
-          right={`${rows.length} / ${fmt(total)} phiếu`}
-        />
-      </ScreenFrame>
-      {ghiSo && (
-        <GhiSoNccSheet
-          doc={{ id: ghiSo.id, code: ghiSo.code, po_code: ghiSo.don?.po_code ?? null }}
-          onClose={() => setGhiSo(null)}
-        />
+            <tfoot>
+              <tr>
+                <td colSpan={soCot}>
+                  {rows.length} phiếu trang này · ô vuông:{' '}
+                  <span className="kh-sq c-nhap" />
+                  nhập <span className="kh-sq c-xuat" style={{ marginLeft: 6 }} />
+                  xuất <span className="kh-sq c-kiem" style={{ marginLeft: 6 }} />
+                  kiểm kê / chuyển · gạch ngang = đã bị đảo
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
-    </div>
+
+      <ThanhTT
+        left="Enter / bấm đúp mở phiếu · số phiếu NCC: gõ trong ô rồi Enter (không đổi tồn) · mã lý do bật từ 15/09/2026"
+        right={
+          <>
+            <PhanTrang
+              trang={trang}
+              soTrang={soTrang}
+              onDoi={(t) => dat({ trang: t > 1 ? String(t) : null })}
+            />
+            <b>
+              {rows.length} / {fmt(total)}
+            </b>{' '}
+            phiếu
+          </>
+        }
+      />
+    </KhoKhung>
   )
 }

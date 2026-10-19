@@ -2,6 +2,7 @@ import { db } from '@/server/db'
 import { searchTokens } from '@/lib/search-text'
 import { summariseDoc, type DocSummary } from '@/lib/warehouse-doc-summary'
 import { dieuChinhCua } from '@/lib/da-ve'
+import { theoLo } from '@/server/theo-lo'
 
 export type StockRow = {
   material_id: string
@@ -49,6 +50,19 @@ export type Bin = {
   name: string | null
   kind: BinKind
   is_active: boolean
+}
+
+/** Một dòng biến động gần nhất của một mã (`movementsRepo.ganDay`). */
+export type BienDongGanDay = {
+  id: string
+  created_at: string
+  direction: Direction
+  qty: number
+  stock_status: string | null
+  reason_code: string | null
+  doc_id: string | null
+  doc_code: string | null
+  lenh_code: string | null
 }
 
 export type Movement = {
@@ -301,6 +315,38 @@ export const movementsRepo = {
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert movement failed')
     return data as { id: string }
+  },
+
+  /**
+   * Biến động GẦN NHẤT của một mã kèm số phiếu + lệnh — ô chi tiết dưới dòng của
+   * màn Tồn kho (Kho lối ERP · B1, 14/10/2026). `ref_no` thường trống từ khi có
+   * phiếu nhiều dòng, nên số phiếu lấy qua `doc_id`.
+   */
+  async ganDay(material_id: string, limit: number): Promise<BienDongGanDay[]> {
+    const { data, error } = await db()
+      .from('warehouse_movements')
+      .select(
+        'id, created_at, direction, qty, stock_status, reason_code, doc_id, doc:warehouse_docs(code), lenh:production_orders(code)',
+      )
+      .eq('material_id', material_id)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw new Error(error.message)
+    return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      const one = (v: unknown) =>
+        (Array.isArray(v) ? v[0] : v) as { code?: string } | null
+      return {
+        id: r.id as string,
+        created_at: r.created_at as string,
+        direction: r.direction as Direction,
+        qty: num(r.qty),
+        stock_status: (r.stock_status as string | null) ?? null,
+        reason_code: (r.reason_code as string | null) ?? null,
+        doc_id: (r.doc_id as string | null) ?? null,
+        doc_code: one(r.doc)?.code ?? null,
+        lenh_code: one(r.lenh)?.code ?? null,
+      }
+    })
   },
 
   async list(filter: {
@@ -806,22 +852,58 @@ export const docsRepo = {
     if (filter.ids && filter.ids.length === 0) return { rows: [], total: 0 }
     let docIds: string[] | null = filter.ids ?? null
     if (filter.reason_code) {
-      const { data } = await db()
-        .from('warehouse_movements')
-        .select('doc_id')
-        .eq('reason_code', filter.reason_code)
-        .not('doc_id', 'is', null)
-        .limit(20000)
-      const theoMa = new Set(
-        ((data as { doc_id: string | null }[] | null) ?? [])
-          .map((r) => r.doc_id)
-          .filter((v): v is string => !!v),
-      )
+      // Đọc HẾT các trang: `.limit(20000)` cũ bị PostgREST cắt ở 1000 dòng sổ,
+      // mã N1 vượt mốc đó là phiếu cũ rơi khỏi bộ lọc mà không ai biết.
+      const theoMa = new Set<string>()
+      for (let tu = 0; ; tu += 1000) {
+        const { data, error } = await db()
+          .from('warehouse_movements')
+          .select('doc_id')
+          .eq('reason_code', filter.reason_code)
+          .not('doc_id', 'is', null)
+          .order('id')
+          .range(tu, tu + 999)
+        if (error) throw new Error(error.message)
+        const rows = (data as { doc_id: string | null }[] | null) ?? []
+        for (const r of rows) if (r.doc_id) theoMa.add(r.doc_id)
+        if (rows.length < 1000) break
+      }
       // Có cả tập id (rổ) lẫn mã lý do → GIAO hai tập.
       docIds = docIds ? docIds.filter((id) => theoMa.has(id)) : [...theoMa]
       // Không phiếu nào mang mã này → trả rỗng NGAY. Bỏ qua bước này thì `.in`
       // với mảng rỗng và PostgREST trả về TOÀN BỘ sổ — đúng ngược ý người lọc.
       if (docIds.length === 0) return { rows: [], total: 0 }
+    }
+
+    const from = (filter.page - 1) * filter.page_size
+    if (docIds) {
+      /*
+       * Lọc theo TẬP PHIẾU: không nhét cả tập vào một `.in()` — quá ~350 uuid là
+       * URL vượt trần và fetch sập (đúng lỗi màn Đã về 12/10, `server/theo-lo`).
+       * Đọc id + mốc sắp xếp theo lô, chọn trang trong bộ nhớ, rồi chỉ trang đang
+       * xem (≤ page_size id) mới đi lấy đủ cột.
+       */
+      const nhe = await theoLo<{ id: string; created_at: string }>(docIds, (lo) => {
+        let q = db().from('warehouse_docs').select('id, created_at').in('id', lo)
+        if (filter.kind) q = q.eq('kind', filter.kind)
+        if (filter.created_by) q = q.eq('created_by', filter.created_by)
+        return q.order('id')
+      })
+      nhe.sort((a, b) =>
+        a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
+      )
+      const trang = nhe.slice(from, from + filter.page_size).map((r) => r.id)
+      if (trang.length === 0) return { rows: [], total: nhe.length }
+      const { data, error } = await db()
+        .from('warehouse_docs')
+        .select(`${DOC_COLS}, ${DOC_JOINS}`)
+        .in('id', trang)
+        .order('created_at', { ascending: false })
+      if (error) throw new Error(error.message)
+      const rows = await fillReversalCodes(
+        ((data as Record<string, unknown>[] | null) ?? []).map(toDoc),
+      )
+      return { rows, total: nhe.length }
     }
 
     let q = db()
@@ -830,8 +912,6 @@ export const docsRepo = {
       .order('created_at', { ascending: false })
     if (filter.kind) q = q.eq('kind', filter.kind)
     if (filter.created_by) q = q.eq('created_by', filter.created_by)
-    if (docIds) q = q.in('id', docIds)
-    const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     const rows = await fillReversalCodes(
@@ -1453,21 +1533,20 @@ export async function issuedByLsxIds(
   productionOrderIds: string[],
 ): Promise<{ production_order_id: string; material_id: string; qty: number }[]> {
   if (productionOrderIds.length === 0) return []
-  const { data } = await db()
-    .from('warehouse_movements')
-    .select('production_order_id, material_id, direction, qty')
-    .in('production_order_id', productionOrderIds)
-    .limit(10000)
-  return (
-    (data as
-      | {
-          production_order_id: string
-          material_id: string
-          direction: 'in' | 'out'
-          qty: unknown
-        }[]
-      | null) ?? []
-  ).map((r) => ({
+  // Theo lô + đọc hết trang: `.limit(10000)` cũ bị PostgREST cắt ở 1000 dòng sổ.
+  const data = await theoLo<{
+    production_order_id: string
+    material_id: string
+    direction: 'in' | 'out'
+    qty: unknown
+  }>(productionOrderIds, (lo) =>
+    db()
+      .from('warehouse_movements')
+      .select('production_order_id, material_id, direction, qty')
+      .in('production_order_id', lo)
+      .order('id'),
+  )
+  return data.map((r) => ({
     production_order_id: r.production_order_id,
     material_id: r.material_id,
     qty: r.direction === 'out' ? num(r.qty) : -num(r.qty),

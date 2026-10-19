@@ -4,35 +4,23 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { dongThieuKg, kgDuKienDong } from '@/lib/da-ve'
-import {
-  Code,
-  Consequence,
-  NumInput,
-  Sheet,
-  SheetActions,
-  TextArea,
-  useToast,
-} from '@/components/kit'
 import type { DaVeRow } from '@/modules/dept/supply/da-ve.repo'
+import { HopThoai, OSo, docSoVn } from '../../_erp/o-nhap'
 
 const so = (n: number) => n.toLocaleString('vi-VN')
-/** BẢN CỦA KHO (12/10/2026) — chép từ hộp Ghi kg của Cung ứng; cùng route `docs/[id]/kg-can`. */
-/** Số kiểu VN: "1.390" = 1390 · "108,40" = 108,4. */
-const docSo = (v: string) => Number(v.replace(/\./g, '').replace(',', '.')) || 0
 
-/** BẢN CỦA KHO (12/10/2026) — chép từ hộp Ghi kg của Cung ứng; cùng route `docs/[id]/kg-can`. */
 /**
- * HỘP GHI KG CÂN BỔ SUNG (01/10/2026) — cho phiếu nhập đã ghi sổ mà dòng nhôm /
- * thép chưa có kg cân. Kg là số đo, không đổi tồn; bắt lý do, vết vào Trao đổi
- * của đơn (server: `stockService.ghiKgCanBoSung`).
+ * HỘP GHI KG CÂN BỔ SUNG (01/10/2026) — BẢN CỦA KHO, cùng route `docs/[id]/kg-can`.
+ * Cho phiếu nhập đã ghi sổ mà dòng nhôm / thép chưa có kg cân. Kg là số đo,
+ * không đổi tồn; bắt lý do, vết vào Trao đổi của đơn. Không kit (B6).
  */
 export function KgCanSheet({ row, onClose }: { row: DaVeRow; onClose: () => void }) {
   const router = useRouter()
-  const toast = useToast()
   const dong = dongThieuKg(row.phieu)
   const [kg, setKg] = useState<Record<string, number>>({})
   const [lyDo, setLyDo] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loi, setLoi] = useState<string | null>(null)
 
   const thieu = dong.filter((l) => !(kg[l.movement_id] > 0)).length
   const why =
@@ -45,6 +33,7 @@ export function KgCanSheet({ row, onClose }: { row: DaVeRow; onClose: () => void
   async function luu() {
     if (why) return
     setBusy(true)
+    setLoi(null)
     try {
       await api(`/api/dept/warehouse/docs/${row.doc_id}/kg-can`, {
         method: 'POST',
@@ -56,82 +45,100 @@ export function KgCanSheet({ row, onClose }: { row: DaVeRow; onClose: () => void
           reason: lyDo.trim(),
         },
       })
-      toast.success(
-        `Đã ghi kg cân cho ${row.code}`,
-        `${dong.length} dòng — vết ghi vào Trao đổi của ${row.po_code}`,
-      )
       onClose()
       router.refresh()
     } catch (e) {
-      toast.error('Chưa ghi được kg cân', apiErrorText(e))
+      setLoi(`Chưa ghi được kg cân: ${apiErrorText(e)}`)
       setBusy(false)
     }
   }
 
   return (
-    <Sheet
-      open
-      onClose={onClose}
-      stakes="vua"
+    <HopThoai
       title={`Ghi kg cân · ${row.code}`}
       subtitle={`${row.po_code} · ${row.supplier_name} — đơn trả tiền theo kg cân thực, lúc nhận chưa ghi kg.`}
+      onClose={onClose}
+      width={600}
       footer={
         <>
-          {why && <div className="text-k-sm mb-2 text-[var(--warn)]">{why}</div>}
-          <SheetActions
-            onCancel={onClose}
-            onConfirm={() => void luu()}
-            confirmLabel="Ghi kg cân"
-            busy={busy}
-            disabled={!!why}
-          />
+          {why && (
+            <span
+              className="kh-warn"
+              style={{ marginRight: 'auto', alignSelf: 'center', fontSize: 12 }}
+            >
+              {why}
+            </span>
+          )}
+          <button type="button" className="kh-btn" onClick={onClose}>
+            Thôi
+          </button>
+          <button
+            type="button"
+            className="kh-btn p"
+            disabled={!!why || busy}
+            onClick={() => void luu()}
+          >
+            {busy ? 'Đang ghi…' : 'Ghi kg cân'}
+          </button>
         </>
       }
     >
-      <div className="flex flex-col">
+      <div className="kh-ds">
         {dong.map((l) => {
           const du = kgDuKienDong(l)
           return (
             <div
               key={l.movement_id}
-              className="grid grid-cols-[96px_minmax(0,1fr)_140px] items-center gap-3 border-b border-[var(--line)] py-2"
+              style={{
+                gridTemplateColumns: '96px minmax(0,1fr) 130px',
+                alignItems: 'center',
+              }}
             >
-              <Code>{l.material_code}</Code>
-              <span className="text-k-sm min-w-0">
-                <span className="block truncate">
+              <span className="kh-ma">{l.material_code}</span>
+              <span style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    display: 'block',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {row.lines.find((x) => x.movement_id === l.movement_id)?.material_name}
                 </span>
-                <span className="num text-[var(--ink-3)]">
+                <span className="kh-mut kh-num" style={{ fontSize: 12 }}>
                   nhận {so(l.qty)} {l.unit}
                   {du != null ? ` · theo đơn ~${so(du)} kg` : ''}
                 </span>
               </span>
-              <NumInput
+              <OSo
                 value={kg[l.movement_id] ? String(kg[l.movement_id]) : ''}
                 placeholder="kg cân"
-                onCommit={(v) => setKg((m) => ({ ...m, [l.movement_id]: docSo(v) }))}
-                aria-label={`Kg cân thực ${l.material_code}`}
+                onCommit={(v) => setKg((m) => ({ ...m, [l.movement_id]: docSoVn(v) }))}
+                label={`Kg cân thực ${l.material_code}`}
               />
             </div>
           )
         })}
       </div>
-      <div className="mt-3">
-        <div className="text-k-label mb-1 font-bold tracking-[.09em] text-[var(--ink-label)] uppercase">
-          Lý do · bắt buộc
-        </div>
-        <TextArea
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="kh-mut" style={{ fontSize: 11, fontWeight: 700 }}>
+          LÝ DO · BẮT BUỘC
+        </span>
+        <textarea
+          className="kh-o"
           value={lyDo}
-          onChange={setLyDo}
+          onChange={(e) => setLyDo(e.target.value)}
           rows={2}
           placeholder="ví dụ: lúc nhận chưa cân, cân lại tại xưởng ngày 01/10"
           aria-label="Lý do ghi kg cân bổ sung"
         />
-      </div>
-      <Consequence>
+      </label>
+      <p className="kh-mut" style={{ fontSize: 12 }}>
         Kg chỉ là số đo — tồn kho không đổi. Kế toán đối chiếu hoá đơn theo kg này; ai
         ghi, lúc nào, trước → sau và lý do hiện ở Trao đổi của đơn.
-      </Consequence>
-    </Sheet>
+      </p>
+      {loi && <span className="kh-stop">{loi}</span>}
+    </HopThoai>
   )
 }
