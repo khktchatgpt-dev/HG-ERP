@@ -204,6 +204,59 @@ describe('dungNxt — Q1 bình quân gia quyền cả kỳ', () => {
     expect(r.gt_cuoi).toBe(120)
   })
 
+  it('NK-0093 thật: đảo phiếu nạp nền kỳ trước làm SL ròng âm → bình quân theo lần nhập dương, không dùng kỳ trước', () => {
+    const [r] = dungNxt(
+      [
+        mua(2142.4, 160, '2026-09-11'),
+        d({
+          qty: 2142.4,
+          direction: 'out',
+          doc_kind: 'stocktake',
+          ref_type: 'adjust',
+          ngay: '2026-09-15',
+        }),
+        d({ qty: 2142.4, doc_kind: 'stocktake', ref_type: 'adjust', ngay: '2026-10-01' }),
+        d({
+          qty: 2142.4,
+          direction: 'out',
+          la_dao: true,
+          doc_kind: 'issue',
+          po_line_id: 'pl',
+          ref_type: 'adjust',
+          unit_cost: 160,
+          ngay: '2026-10-01',
+        }),
+        mua(2142, 160, '2026-10-02'),
+        cap(2142, '2026-10-02'),
+      ],
+      '2026-10-01',
+      '2026-10-31',
+    )
+    expect(r.bq).toMatchObject({ kieu: 'duong', mau: 2142 })
+    expect(r.don_gia).toBe(160)
+    expect(r.ton_cuoi).toBe(0)
+    expect(r.gt_cuoi).toBeCloseTo(0)
+  })
+
+  it('ròng dương nhưng tiền âm cũng không dùng bậc ròng (tránh đơn giá âm)', () => {
+    const [r] = dungNxt(
+      [
+        mua(10, 100),
+        d({
+          qty: 9.6,
+          direction: 'out',
+          reason_code: 'N1',
+          la_dao: true,
+          unit_cost: 200,
+        }),
+      ],
+      '2026-10-01',
+      '2026-10-31',
+    )
+    expect(r.bq?.kieu).toBe('duong')
+    expect(r.don_gia).toBe(100)
+  })
+
   it('dòng USD thiếu tỷ giá: không vào bình quân, đếm riêng', () => {
     const [r] = dungNxt([mua(10, 2, undefined, { currency: 'USD' }), mua(10, 100)], '2026-10-01', '2026-10-31') // prettier-ignore
     expect(r.don_gia).toBe(100)
@@ -231,6 +284,12 @@ describe('kỳ', () => {
   it('kyThang ra đủ ngày cuối tháng', () => {
     expect(kyThang('2026-02-10')).toEqual({ tu: '2026-02-01', den: '2026-02-28' })
     expect(kyThang('2026-10-19')).toEqual({ tu: '2026-10-01', den: '2026-10-31' })
+  })
+  it('docKy: ngày không có thật → mặc định', () => {
+    expect(docKy('2026-13-45', '2026-02-30', '2026-10-19')).toEqual({
+      tu: '2026-10-01',
+      den: '2026-10-31',
+    })
   })
   it('docKy: sai → tháng hiện tại; ngược → đảo', () => {
     expect(docKy('x', undefined, '2026-10-19')).toEqual({

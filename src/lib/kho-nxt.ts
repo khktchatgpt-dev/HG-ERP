@@ -146,7 +146,10 @@ const EPS = 1e-9
 /** Làm tròn 3 lẻ cho SỐ LƯỢNG bày ra — cộng số thực để lại đuôi kiểu 2142,4 − 2142,4 = −4e-13. */
 const r3 = (n: number) => Math.round(n * 1000) / 1000 + 0
 const r3Ban = <T extends string>(o: Record<T, number>) =>
-  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, r3(v as number)])) as Record<T, number>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, r3(v as number)])) as Record<
+    T,
+    number
+  >
 const thangCua = (ngay: string) => ngay.slice(0, 7)
 
 /** Dòng mua (N1/N2, kể cả dòng đảo của chúng) — dòng duy nhất mang giá vào bình quân. */
@@ -168,7 +171,7 @@ type KetQuaKy = {
   vOut: number | null
   vOpen: number | null
   /** Phép tính bình quân nguyên văn; null = kỳ này không có gì để tính (dùng lại kỳ trước). */
-  bq: { tu: number; mau: number } | null
+  bq: { tu: number; mau: number; kieu: 'rong' | 'duong' } | null
 }
 
 /**
@@ -181,6 +184,9 @@ type KetQuaKy = {
 export function tinhGia(k: KyTinh): KetQuaKy {
   let qGia = 0
   let vGia = 0
+  // Chỉ các lần nhập mua DƯƠNG có giá — đường lùi khi phần ròng không dùng được.
+  let qDuong = 0
+  let vDuong = 0
   let qIn = 0
   let qOut = 0
   for (const { c, gia } of k.dong) {
@@ -190,13 +196,33 @@ export function tinhGia(k: KyTinh): KetQuaKy {
       if (laMua(c) && gia != null) {
         qGia += c.sl
         vGia += c.sl * gia
+        if (c.sl > 0) {
+          qDuong += c.sl
+          vDuong += c.sl * gia
+        }
       }
     } else qOut += c.sl
   }
   const biet = k.qOpen > EPS && k.vOpen != null
   const mau = (biet ? k.qOpen : 0) + qGia
   const tu = (biet ? (k.vOpen as number) : 0) + vGia
-  const avg = mau > EPS ? tu / mau : k.avgTruoc
+  /*
+   * Ba bậc, dừng ở bậc đầu dùng được:
+   *  1. RÒNG (chuẩn): tồn đầu + mọi dòng mua có giá kể cả dòng đảo — khi cả tử
+   *     lẫn mẫu dương.
+   *  2. CHỈ LẦN NHẬP DƯƠNG: kỳ có đảo phiếu nhập của kỳ trước làm SL ròng ≤ 0
+   *     hoặc tiền ròng âm (đo 19/10: NK-0093 tháng 10 nhập 2.142 cái giá 160 +
+   *     đảo phiếu nạp nền 2.142,4 → ròng −0,4; bậc 1 cho mẫu âm, hoặc dương rất
+   *     nhỏ thì ra đơn giá âm / vô lý).
+   *  3. Bình quân KỲ TRƯỚC.
+   */
+  const bq: KetQuaKy['bq'] =
+    mau > EPS && tu >= 0
+      ? { tu, mau, kieu: 'rong' }
+      : qDuong > EPS
+        ? { tu: vDuong, mau: qDuong, kieu: 'duong' }
+        : null
+  const avg = bq ? bq.tu / bq.mau : k.avgTruoc
   const qClose = k.qOpen + qIn - qOut
   if (avg == null) {
     return {
@@ -213,7 +239,6 @@ export function tinhGia(k: KyTinh): KetQuaKy {
   // Nhập có giá theo giá thật; nhập không giá (hoàn SX, kiểm kê thừa) theo bình quân.
   const vIn = vGia + (qIn - qGia) * avg
   const vOut = qOut * avg
-  const bq = mau > EPS ? { tu, mau } : null
   return { avg, qClose, vClose: vOpen + vIn - vOut, vIn, vOut, vOpen, bq }
 }
 
@@ -236,7 +261,7 @@ export type DongNxt = {
    * Phép tính đơn giá nguyên văn: tử = giá trị tồn đầu (nếu biết) + giá trị nhập có
    * giá; mẫu = SL tương ứng. Null khi đơn giá lấy lại từ kỳ trước.
    */
-  bq: { tu: number; mau: number } | null
+  bq: { tu: number; mau: number; kieu: 'rong' | 'duong' } | null
   /** Lần nhập mua trong kỳ chưa có giá / tổng lần nhập mua trong kỳ. */
   thieu_gia: number
   lan_mua: number
@@ -369,6 +394,13 @@ export function kyThang(homNay: string): { tu: string; den: string } {
 
 const NGAY_RE = /^\d{4}-\d{2}-\d{2}$/
 
+/** `YYYY-MM-DD` và là ngày CÓ THẬT (2026-13-45, 2026-02-30 bị loại). */
+function laNgay(v: string | undefined): v is string {
+  if (!v || !NGAY_RE.test(v)) return false
+  const d = new Date(`${v}T00:00:00Z`)
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v
+}
+
 /** Đọc kỳ từ URL; sai hoặc thiếu → tháng hiện tại. Đảo hai đầu nếu ngược. */
 export function docKy(
   tu: string | undefined,
@@ -376,7 +408,7 @@ export function docKy(
   homNay: string,
 ): { tu: string; den: string } {
   const mac = kyThang(homNay)
-  const a = tu && NGAY_RE.test(tu) ? tu : mac.tu
-  const b = den && NGAY_RE.test(den) ? den : mac.den
+  const a = laNgay(tu) ? tu : mac.tu
+  const b = laNgay(den) ? den : mac.den
   return a <= b ? { tu: a, den: b } : { tu: b, den: a }
 }

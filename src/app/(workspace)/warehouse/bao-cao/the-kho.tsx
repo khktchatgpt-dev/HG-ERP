@@ -169,6 +169,16 @@ function CongThuc({ r }: { r: NxtDong }) {
       </div>
     )
   }
+  if (r.bq.kieu === 'duong') {
+    return (
+      <div className="nx-why">
+        Kỳ có đảo phiếu nhập làm số nhập có giá tính ròng không dương → đơn giá tính theo
+        các lần nhập dương trong kỳ = {fmtTien(r.bq.tu)} ÷{' '}
+        {fmtSl(Math.round(r.bq.mau * 1000) / 1000)} = <b>{fmtTien(r.don_gia)}</b> ₫/
+        {r.unit}
+      </div>
+    )
+  }
   return (
     <div className="nx-why">
       Đơn giá BQ = (giá trị tồn đầu + giá trị nhập có giá) ÷ (SL tồn đầu + SL nhập có giá)

@@ -3,6 +3,7 @@
 import './bao-cao.css'
 import {
   Fragment,
+  useTransition,
   useMemo,
   useRef,
   useState,
@@ -45,6 +46,8 @@ const KHONG_NHOM = '(chưa phân nhóm)'
  */
 export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const router = useRouter()
+  // Đổi kỳ = server tính lại cả sổ (~1–1,5 s đo 19/10) — phải báo đang tính, không thì người dùng bấm lại.
+  const [dangTinh, batDau] = useTransition()
   const pathname = usePathname()
   const [q, setQ] = useState('')
   const [nhom, setNhom] = useState('')
@@ -61,7 +64,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const canDu =
     28 +
     96 +
-    54 +
+    62 +
     220 +
     dungCot({ tien, chiTietCot: true, coNhapKhac }).reduce((t, c) => t + c.w, 0)
   const hep = beRong > 0 && beRong < 760
@@ -105,7 +108,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const dat = (p: { tu: string; den: string }) => {
     setChon(null)
     setMo(null)
-    router.push(`${pathname}?tu=${p.tu}&den=${p.den}`, { scroll: false })
+    batDau(() => router.push(`${pathname}?tu=${p.tu}&den=${p.den}`, { scroll: false }))
   }
   const thang = kyThang(bc.tu)
   const laThang = thang.tu === bc.tu && thang.den === bc.den ? bc.tu.slice(0, 7) : ''
@@ -142,7 +145,13 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
     <KhoKhung label="Báo cáo nhập xuất tồn">
       <DauTrang
         title="Nhập–Xuất–Tồn"
-        ctx={laThang ? nhanThang(laThang) : `${dmy(bc.tu)} – ${dmy(bc.den)}`}
+        ctx={
+          dangTinh
+            ? 'Đang tính lại kỳ…'
+            : laThang
+              ? nhanThang(laThang)
+              : `${dmy(bc.tu)} – ${dmy(bc.den)}`
+        }
         actions={
           <>
             <ApNhom>
@@ -301,13 +310,13 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
           />
         )
       ) : (
-        <div className="kh-grid">
+        <div className={dangTinh ? 'kh-grid nx-dang' : 'kh-grid'} aria-busy={dangTinh}>
           <table className="kh-tb" aria-label="Báo cáo nhập xuất tồn">
             <colgroup>
               <col style={{ width: 28 }} />
               {!hep && <col style={{ width: 96 }} />}
               <col />
-              {!hep && <col style={{ width: 54 }} />}
+              {!hep && <col style={{ width: 62 }} />}
               {cotHien.map((c) => (
                 <col key={c.key} style={{ width: c.w }} />
               ))}

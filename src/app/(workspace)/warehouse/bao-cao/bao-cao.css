@@ -177,3 +177,22 @@
 .kh.kh .nx-ky .kh-o {
   width: 96px;
 }
+
+/* Đang tính lại kỳ (đổi kỳ ~1–1,5 s): mờ lưới cũ để không ai đọc nhầm số kỳ trước. */
+.kh.kh .kh-grid.nx-dang {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kh.kh .kh-grid.nx-dang {
+    transition: none;
+  }
+}
+
+/* Tab xuống dòng: trình duyệt cuộn dòng có focus tới mép — chừa chỗ để đầu cột hai
+   tầng dính (~48px) và chân tổng dính (~30px) không che vòng focus (luật kiểm 15). */
+.kh.kh .kh-tb.kh-tb > tbody > tr {
+  scroll-margin-top: 56px;
+  scroll-margin-bottom: 36px;
+}
