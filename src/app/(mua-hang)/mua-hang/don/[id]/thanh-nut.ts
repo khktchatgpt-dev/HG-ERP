@@ -20,7 +20,6 @@ export type BarKey =
   | 'transit'
   | 'receive'
   | 'closeShort'
-  | 'acceptByHand'
   | 'cost'
   | 'print'
   | 'excel'
@@ -142,7 +141,6 @@ const MOVES: Partial<Record<BarKey, MoveGroup>> = {
   transit: 'Đi tiếp',
   receive: 'Đi tiếp',
   closeShort: 'Đi tiếp',
-  acceptByHand: 'Đi tiếp',
   'doc:withdraw': 'Quay lại',
   'doc:reject': 'Quay lại',
   'doc:reopen': 'Quay lại',

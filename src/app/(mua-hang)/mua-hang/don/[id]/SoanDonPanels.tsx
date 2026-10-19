@@ -386,15 +386,14 @@ export function ChiaDotSoanGrid({
           </span>
         )}
         {/*
-          ĐỢT CỦA DÒNG TỰ DO CHỈ ĐỂ IN, không đối chiếu phiếu nhập được (hàng
-          gỗ/gia công nghiệm thu ngoài sổ kho). Nói ra ngay đây, nếu không người
-          soạn xếp lịch rồi chờ hệ thống tự tick "đã về" — thứ sẽ không bao giờ
-          tới. Đơn chốt bằng "Nghiệm thu ngoài sổ" như trước.
+          DÒNG TỰ GÕ chưa có mã lúc soạn: đợt của nó chưa nối được phiếu nhập.
+          Từ 19/10/2026 server cấp mã vật tư khi LƯU đơn — lưu xong dòng thành dòng
+          kho, xếp đợt và nhận hàng như mọi dòng (nút "Nghiệm thu ngoài sổ" đã gỡ).
         */}
         {soTuDo > 0 && (
           <span className="text-[var(--ink-3)]">
             {soTuDo === lines.length ? 'Đơn hàng gỗ/gia công' : `${soTuDo} dòng tự do`}:
-            đợt chỉ in lên phiếu, không tự đối chiếu phiếu nhập kho.
+            lưu đơn để hệ thống cấp mã vật tư, rồi mới nhận hàng theo đợt được.
           </span>
         )}
         <span className="ml-auto">

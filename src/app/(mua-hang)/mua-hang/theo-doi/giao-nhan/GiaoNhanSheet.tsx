@@ -259,11 +259,6 @@ export function GiaoNhanSheet({
                   onClick: () => setHoi({ title: 'Hàng đang trên đường', consequence: 'NCC báo đã xuất hàng. Đơn chuyển sang "Đang giao" — hẹn giao và số lượng không đổi.', confirmLabel: 'Ghi đang giao', done: 'Đã chuyển sang đang giao', ...advance('in_transit') }), // prettier-ignore
                 },
                 {
-                  label: 'Nghiệm thu ngoài sổ',
-                  why: recv.acceptByHand.ok ? undefined : recv.acceptByHand.why,
-                  onClick: () => setHoi({ title: 'Nghiệm thu ngoài sổ', consequence: 'Đóng đơn KHÔNG qua phiếu kho — chỉ cho đơn toàn dòng tự gõ (gỗ, gia công). Đơn sang "Đã nhận đủ".', confirmLabel: 'Nghiệm thu', done: 'Đã nghiệm thu', ...advance('received') }), // prettier-ignore
-                },
-                {
                   label: 'Ghi sự cố giao hàng',
                   why: data.canIssue ? undefined : 'Chỉ Cung ứng hoặc Kho ghi sự cố được',
                   onClick: () => setSuCoOpen(true),

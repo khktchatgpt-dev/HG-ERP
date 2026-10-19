@@ -183,6 +183,8 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   unit2_label?: string | null
   /** Tổng gõ tay — deriveLine áp vào `qty2`; bản thân nó không phải cột DB. */
   qty2_override?: number | null
+  /** Ô "Giá theo" (pos.schema) — deriveLine đọc; không phải cột DB. */
+  price_per?: 'unit' | 'unit2' | null
   note?: string | null
   /** Mã SP khách của dòng — mang theo khi ghi lại dòng (xem pos.schema). */
   product_code?: string | null

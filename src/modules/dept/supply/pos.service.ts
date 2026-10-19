@@ -22,6 +22,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import {
   buildCatalogSuggestions,
@@ -133,6 +134,44 @@ type PoInput = {
  */
 function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] {
   return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
+}
+
+/**
+ * DÒNG TỰ GÕ → CẤP MÃ VẬT TƯ (19/10/2026, chủ dự án: "dòng tự do vẫn phải nhập
+ * kho; chưa có vật tư thì tự tạo khi lên đơn"). Dòng hàng không mã (gỗ / gia
+ * công theo mã SP, 0134) được tìm-hoặc-tạo mã trong nhóm gỗ rồi gắn vào dòng —
+ * từ đó dòng có mặt trên phiếu nhập, tồn kho và trạng thái về đủ như mọi dòng.
+ *
+ * GIỮ TIỀN: mẫu gỗ tính dòng KHÔNG mã theo m³, dòng CÓ mã theo ĐVT mua
+ * (`deriveByTemplate` case 'wood'). Gắn mã mà không chốt `price_per` là lặng lẽ
+ * đổi thành tiền của dòng — nên chốt cơ sở đang dùng TRƯỚC khi gắn mã, đúng như
+ * form chốt `price_per` = `price_basis` đã lưu khi mở lại đơn.
+ */
+async function ganMaDongTuGo(
+  user: User,
+  template: PoTemplate,
+  lines: PoLineInput[],
+  poCode?: string,
+): Promise<PoLineInput[]> {
+  const daCap = new Map<string, string>()
+  const out: PoLineInput[] = []
+  // Tuần tự, không Promise.all: hai dòng cùng tên phải ra CÙNG một mã, và mã
+  // kế tiếp đọc từ số lớn nhất đang dùng.
+  for (const l of lines) {
+    const name = l.line_name?.trim()
+    if (l.material_id || l.line_kind === 'phi' || !name) {
+      out.push(l)
+      continue
+    }
+    const k = `${name.toLowerCase()}|${(l.line_unit ?? '').toLowerCase()}`
+    const id =
+      daCap.get(k) ??
+      (await materialsService.ensureForFreeLine(user, { name, unit: l.line_unit ?? null }, poCode)) // prettier-ignore
+    daCap.set(k, id)
+    const giaTheo = l.price_per ?? deriveLine(template, l).price_basis
+    out.push({ ...l, material_id: id, price_per: giaTheo })
+  }
+  return out
 }
 
 /**
@@ -477,6 +516,7 @@ export const posService = {
     assertFreeLinesAllowed(template, input.lines)
     assertSplits(input.lines, [lsxId, ...extraLsxIds])
     const code = await posRepo.nextCode()
+    input.lines = await ganMaDongTuGo(user, template, input.lines, code)
     const po = await posRepo.insert(
       {
         code,
@@ -712,6 +752,7 @@ export const posService = {
     // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
     input.lines = dongKhongMaLaPhi(template, input.lines)
     assertFreeLinesAllowed(template, input.lines)
+    input.lines = await ganMaDongTuGo(user, template, input.lines, before.code)
     // Đổi sang NCC khác lúc sửa nháp — NCC mới cũng phải đặt được.
     if (input.supplier_id !== before.supplier_id)
       await assertSupplierCanOrder(input.supplier_id)
@@ -1475,6 +1516,11 @@ export const posService = {
     assertFreeLinesAllowed(template, input.lines)
     const extra = await posRepo.listExtraLsx(id)
     assertSplits(input.lines, [before.production_order_id, ...extra.map((x) => x.id)])
+    // Chỉ dòng MỚI: dòng cũ còn trống mã do script gắn bù, đổi vật tư của dòng
+    // đã có là việc của luật điều chỉnh, không phải của bước cấp mã.
+    const moi = await ganMaDongTuGo(user, template, input.lines.filter((l) => !l.id), before.code) // prettier-ignore
+    let iMoi = 0
+    input.lines = input.lines.map((l) => (l.id ? l : moi[iMoi++]))
 
     const [lines, status, shipments] = await Promise.all([
       posRepo.listLines(id),

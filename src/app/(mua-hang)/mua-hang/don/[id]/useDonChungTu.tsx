@@ -848,8 +848,6 @@ export function useDonChungTu(p: Props) {
         return { label: 'Xử lý giao nhận', icon: 'nhanHang', run: () => router.push(`/mua-hang/theo-doi?don=${poId}`), blocked: lyDo(recv.receive) } // prettier-ignore
       case 'closeShort':
         return { label: 'Chốt phần thiếu', run: () => start(CLOSE_SHORT), blocked: lyDo(recv.closeShort) } // prettier-ignore
-      case 'acceptByHand':
-        return { label: 'Nghiệm thu ngoài sổ', run: () => start(ACCEPT), blocked: lyDo(recv.acceptByHand) } // prettier-ignore
       case 'cost':
         return { label: 'Ghi phí vận chuyển', icon: 'tien', run: () => setPhiOpen(true), blocked: costWhy } // prettier-ignore
       case 'print':
@@ -944,7 +942,6 @@ export function useDonChungTu(p: Props) {
   // prettier-ignore
   const TRANSIT: DocAction = { id: 'transit', label: 'Hàng đang trên đường', ui: 'sheet', stakes: 'vua', consequence: 'NCC báo đã xuất hàng. Đơn chuyển sang "Đang giao" để Kho biết mà chờ nhận — hẹn giao và số lượng không đổi.', done: 'Đã chuyển sang đang giao', build: () => [ADV('in_transit')] }
   // prettier-ignore
-  const ACCEPT: DocAction = { id: 'accept', label: 'Nghiệm thu ngoài sổ', ui: 'sheet', stakes: 'nang', consequence: 'Đóng đơn KHÔNG qua phiếu kho — chỉ cho đơn toàn dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ kho. Đơn sang "Đã nhận đủ".', done: 'Đã nghiệm thu', build: () => [ADV('received')] }
   // prettier-ignore
   /**
    * CHỐT PHẦN THIẾU — cả đơn (`target` trống) hoặc ĐÚNG MỘT DÒNG.
@@ -1525,7 +1522,6 @@ export function useDonChungTu(p: Props) {
     call,
     ADV,
     TRANSIT,
-    ACCEPT,
     closeShortAct,
     reopenAct,
     CLOSE_SHORT,
