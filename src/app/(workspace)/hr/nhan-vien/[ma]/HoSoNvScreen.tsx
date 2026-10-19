@@ -78,7 +78,7 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
         eyebrow="Nhân viên"
         title={
           <span className="flex items-center gap-3">
-            <Avatar ten={n.hoTen} lon />
+            <Avatar ten={n.hoTen} boPhan={n.boPhan} lon />
             <span>
               <span className="num mr-2 text-[var(--ink-3)]">{n.code}</span>
               {n.hoTen}

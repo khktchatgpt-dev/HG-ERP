@@ -34,7 +34,7 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
   const [hop, setHop] = useState<HopBd>(null)
   const [busy, setBusy] = useState(false)
   // ‹ ›: tập người xem vừa lọc ở danh sách; không có người này thì danh sách mặc định.
-  const [tapRaw] = useLocalPref(KHOA_TAP, '[]')
+  const [tapRaw] = useLocalPref(KHOA_TAP, '[]', 'session')
   const tap = useMemo(() => {
     try {
       const t = JSON.parse(tapRaw) as string[]

@@ -31,15 +31,22 @@ function subscribe(cb: () => void) {
   }
 }
 
+/**
+ * `kho: 'session'` — chỉ nhớ trong tab này: bộ lọc danh sách giữ khi quay lại từ trang con,
+ * nhưng mở tab mới / hôm sau thì về mặc định (bản vẽ màu Hồ sơ NV 19/10/2026, Q3 — lọc nhớ
+ * mãi làm người mở màn thấy 5 dòng mà tưởng lọc sai).
+ */
 export function useLocalPref(
   key: string,
   fallback: string,
+  kho: 'local' | 'session' = 'local',
 ): [string, (v: string) => void] {
+  const st = () => (kho === 'session' ? sessionStorage : localStorage)
   const value = useSyncExternalStore(
     subscribe,
     () => {
       try {
-        return localStorage.getItem(key) ?? fallback
+        return st().getItem(key) ?? fallback
       } catch {
         // Trình duyệt chặn lưu (cửa sổ ẩn danh) — dùng mặc định, không phải lỗi.
         return fallback
@@ -49,7 +56,7 @@ export function useLocalPref(
   )
   const set = (v: string) => {
     try {
-      localStorage.setItem(key, v)
+      st().setItem(key, v)
     } catch {
       // Chặn lưu thì bỏ qua — vẫn phát sự kiện để lần vẽ này đổi theo.
     }

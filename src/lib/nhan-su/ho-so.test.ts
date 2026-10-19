@@ -3,6 +3,9 @@ import {
   chuDau,
   conThieu,
   demLocNv,
+  khoiCua,
+  nhanTinhTrang,
+  tinhVang,
   khopTimNv,
   soSanhMa,
   SO_MUC_HO_SO,
@@ -24,6 +27,7 @@ const nv = (p: Partial<NvTom> = {}): NvTom => ({
   ma: [{}],
   coRieng: DU,
   hd: { tuNgay: '2021-03-02', denNgay: null, huy: false },
+  vang: null,
   ...p,
 })
 const H = '2026-10-19'
@@ -73,33 +77,81 @@ describe('còn thiếu', () => {
 describe('chip danh sách', () => {
   const ds = [
     nv(),
-    nv({ code: '5', boPhan: null }),
+    nv({ code: '5', boPhan: null, tenTuMay: true }),
     nv({
       code: 'KCC-007',
       khongChamCong: true,
       chucDanh: 'Tài xế',
       ngayVao: '2026-10-01',
     }),
-    nv({ code: '7', active: false, ngayCuoi: '2026-10-10' }),
+    nv({ code: '7', active: false, ngayCuoi: '2026-10-10', boPhan: null }),
     nv({
       code: '8',
       ngayCuoi: '2026-10-30',
       hd: { tuNgay: '2026-01-01', denNgay: '2026-11-01', huy: false },
+      vang: { ngay: 9, quetCuoi: '2026-10-08' },
     }),
+    nv({ code: '9', hd: { tuNgay: '2025-01-01', denNgay: '2026-09-30', huy: false } }),
   ]
-  it('đếm bằng đúng hàm lọc', () => {
+  it('đếm bằng đúng hàm lọc; người đã nghỉ không lọt vào chip việc', () => {
     expect(demLocNv(ds, H)).toEqual({
-      dang_lam: 4,
-      thieu: 3,
-      chua_to: 1,
-      hd_sap_het: 1,
-      hd_qua_han: 0,
+      dang_lam: 5,
       moi_vao: 1,
-      co_ngay_nghi: 1,
       khong_cham: 1,
       da_nghi: 1,
+      ten_may: 1,
+      chua_to: 1,
+      vang: 1,
+      hd: 2,
+      sap_nghi: 1,
     })
-    expect(thuocLoc(ds[3], 'thieu', H)).toBe(false)
+  })
+})
+
+describe('vắng', () => {
+  const ngay = ['2026-10-08', '2026-10-09', '2026-10-10', '2026-10-12', '2026-10-13']
+  const du = [...ngay, '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17']
+  it('đếm ngày CÓ DỮ LIỆU sau lần quẹt cuối, từ ngày vào', () => {
+    expect(tinhVang(du, '2026-10-09', null)).toEqual({ ngay: 7, quetCuoi: '2026-10-09' })
+    expect(tinhVang(du, '2026-10-10', null)).toBeNull()
+    expect(tinhVang(ngay, null, null)).toBeNull()
+    expect(tinhVang(du, null, null)).toEqual({ ngay: 9, quetCuoi: null })
+    // Mới vào 13/10 — chỉ đếm từ ngày vào: 5 ngày, chưa đủ.
+    expect(tinhVang(du, null, '2026-10-13')).toBeNull()
+  })
+})
+
+describe('nhãn tình trạng + khối', () => {
+  it('ưu tiên nghỉ › sắp nghỉ › chưa vào › vắng › mới', () => {
+    expect(nhanTinhTrang(nv({ active: false, ngayCuoi: '2026-09-25' }), H)).toEqual({
+      kieu: 'da_nghi',
+      ngay: '2026-09-25',
+    })
+    expect(
+      nhanTinhTrang(nv({ ngayCuoi: '2026-10-31', vang: { ngay: 8, quetCuoi: null } }), H)
+        .kieu,
+    ).toBe('sap_nghi')
+    expect(nhanTinhTrang(nv({ ngayVao: '2026-11-02' }), H).kieu).toBe('chua_vao')
+    expect(
+      nhanTinhTrang(nv({ ngayVao: '2026-10-07', vang: { ngay: 7, quetCuoi: null } }), H)
+        .kieu,
+    ).toBe('vang')
+    expect(nhanTinhTrang(nv({ ngayVao: '2026-10-07' }), H)).toEqual({
+      kieu: 'moi',
+      ngay: 12,
+    })
+    expect(nhanTinhTrang(nv({ ngayVao: '2017-09-07' }), H).kieu).toBe('dang_lam')
+  })
+  it('chia khối theo tên tổ', () => {
+    expect(khoiCua('Phòng Kế Hoạch')).toBe('van_phong')
+    expect(khoiCua('Thống Kê')).toBe('van_phong')
+    expect(khoiCua('Khoán Bốc Xếp')).toBe('phuc_vu')
+    expect(khoiCua('Bảo Vệ')).toBe('phuc_vu')
+    expect(khoiCua('Tài Xế')).toBe('phuc_vu')
+    expect(khoiCua('Tạp Vụ')).toBe('phuc_vu')
+    expect(khoiCua('Tổ Hàn Nhôm')).toBe('xuong')
+    expect(khoiCua('Kiểm Hàng')).toBe('xuong')
+    expect(khoiCua(null)).toBeNull()
   })
 })
 

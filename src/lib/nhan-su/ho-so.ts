@@ -23,6 +23,8 @@ export type NvTom = {
   coRieng: CoRieng
   /** HĐ đang áp (hoặc gần nhất chưa huỷ) — `hdHienHanh` ở service; null = chưa có HĐ nào. */
   hd: HdNgay | null
+  /** Vắng ≥ 7 ngày có dữ liệu liên tiếp (`tinhVang`); null = không vắng / không áp. */
+  vang: VangNv | null
 }
 
 /** Mã xếp theo số khi là số (5 < 31 < 105), mã chữ (KCC-…) sau. */
@@ -114,16 +116,53 @@ const congNgay = (iso: string, n: number) => {
   return t.toISOString().slice(0, 10)
 }
 
+/** Vắng (bản vẽ màu sắc 19/10/2026, Q5): bao nhiêu ngày CÓ DỮ LIỆU liên tiếp không quẹt. */
+export type VangNv = { ngay: number; quetCuoi: string | null }
+/** Ngưỡng "vắng" — đếm ngày cả công ty có lượt, không đếm ngày lịch (ngày chưa lấy về ≠ vắng). */
+export const VANG_TU = 7
+
+/**
+ * `ngayCoDuLieu`: các ngày (giờ VN, tăng dần, ≤ hôm nay) cả công ty có ít nhất một lượt.
+ * Đếm những ngày đó SAU lần quẹt cuối và từ ngày vào làm — đủ `VANG_TU` thì là vắng.
+ * `quetCuoi` null = không quẹt trong cả khung đã đọc.
+ */
+export function tinhVang(
+  ngayCoDuLieu: string[],
+  quetCuoi: string | null,
+  ngayVao: string | null,
+): VangNv | null {
+  const n = ngayCoDuLieu.filter(
+    (d) => (!quetCuoi || d > quetCuoi) && (!ngayVao || d >= ngayVao),
+  ).length
+  return n >= VANG_TU ? { ngay: n, quetCuoi } : null
+}
+
+/** Khối — chỉ để tô ô chữ cái (Q2), KHÔNG mang nghĩa vòng đời. */
+export type KhoiNv = 'van_phong' | 'xuong' | 'phuc_vu'
+export const TEN_KHOI: Record<KhoiNv, string> = {
+  van_phong: 'Văn phòng',
+  xuong: 'Xưởng',
+  phuc_vu: 'Phục vụ & khoán',
+}
+export function khoiCua(boPhan: string | null): KhoiNv | null {
+  if (!boPhan) return null
+  const t = khongDau(boPhan)
+  if (/^PHONG\b/.test(t) || t === 'THONG KE') return 'van_phong'
+  if (/^(KHOAN|BAO VE|TAI XE|TAP VU)\b/.test(t)) return 'phuc_vu'
+  return 'xuong'
+}
+
+/** Chip lọc, hai nhóm (Q3): "Xem" là tập người, "Cần xử lý" là việc của Nhân sự. */
 export const LOC_NV = [
-  { id: 'dang_lam', ten: 'Đang làm' },
-  { id: 'thieu', ten: 'Hồ sơ thiếu', bao: true },
-  { id: 'chua_to', ten: 'Chưa có tổ', bao: true },
-  { id: 'hd_sap_het', ten: 'HĐ hết hạn 30 ngày', bao: true },
-  { id: 'hd_qua_han', ten: 'HĐ đã hết hạn', bao: true },
-  { id: 'moi_vao', ten: 'Mới vào 30 ngày' },
-  { id: 'co_ngay_nghi', ten: 'Có ngày nghỉ' },
-  { id: 'khong_cham', ten: 'Không chấm công' },
-  { id: 'da_nghi', ten: 'Đã nghỉ' },
+  { id: 'dang_lam', ten: 'Đang làm', nhom: 'xem' },
+  { id: 'moi_vao', ten: 'Mới vào 30 ngày', nhom: 'xem' },
+  { id: 'khong_cham', ten: 'Không chấm công', nhom: 'xem' },
+  { id: 'da_nghi', ten: 'Đã nghỉ', nhom: 'xem' },
+  { id: 'ten_may', ten: 'Tên máy', nhom: 'xu_ly' },
+  { id: 'chua_to', ten: 'Chưa có tổ', nhom: 'xu_ly' },
+  { id: 'vang', ten: `Vắng ≥ ${VANG_TU} ngày`, nhom: 'xu_ly' },
+  { id: 'hd', ten: 'HĐ sắp / đã hết hạn', nhom: 'xu_ly' },
+  { id: 'sap_nghi', ten: 'Sắp nghỉ', nhom: 'xu_ly' },
 ] as const
 export type LocNv = (typeof LOC_NV)[number]['id']
 
@@ -131,22 +170,24 @@ export function thuocLoc(n: NvTom, loc: LocNv, homNay: string): boolean {
   switch (loc) {
     case 'dang_lam':
       return n.active
-    case 'thieu':
-      return n.active && conThieu(n).length > 0
-    case 'chua_to':
-      return n.active && !n.boPhan
-    case 'hd_sap_het':
-      return n.active && !!n.hd && tinhTrangHd(n.hd, homNay) === 'sap_het'
-    case 'hd_qua_han':
-      return n.active && !!n.hd && tinhTrangHd(n.hd, homNay) === 'het_han'
     case 'moi_vao':
       return n.active && !!n.ngayVao && n.ngayVao > congNgay(homNay, -30)
-    case 'co_ngay_nghi':
-      return n.active && !!n.ngayCuoi
     case 'khong_cham':
       return n.active && n.khongChamCong
     case 'da_nghi':
       return !n.active
+    case 'ten_may':
+      return n.active && n.tenTuMay
+    case 'chua_to':
+      return n.active && !n.boPhan
+    case 'vang':
+      return n.active && !!n.vang
+    case 'hd':
+      return (
+        n.active && !!n.hd && ['sap_het', 'het_han'].includes(tinhTrangHd(n.hd, homNay))
+      )
+    case 'sap_nghi':
+      return n.active && !!n.ngayCuoi && n.ngayCuoi >= homNay
   }
 }
 
@@ -154,6 +195,28 @@ export function demLocNv(ds: NvTom[], homNay: string): Record<LocNv, number> {
   return Object.fromEntries(
     LOC_NV.map((l) => [l.id, ds.filter((n) => thuocLoc(n, l.id, homNay)).length]),
   ) as Record<LocNv, number>
+}
+
+/** Một nhãn tình trạng cho ô bảng — thứ tự ưu tiên: nghỉ › sắp nghỉ › chưa vào › vắng › mới. */
+export type NhanTinhTrang =
+  | { kieu: 'da_nghi'; ngay: string | null }
+  | { kieu: 'sap_nghi'; ngay: string }
+  | { kieu: 'chua_vao'; ngay: string }
+  | { kieu: 'vang'; ngay: number; quetCuoi: string | null }
+  | { kieu: 'moi'; ngay: number }
+  | { kieu: 'dang_lam' }
+export function nhanTinhTrang(n: NvTom, homNay: string): NhanTinhTrang {
+  if (!n.active || (n.ngayCuoi && n.ngayCuoi < homNay))
+    return { kieu: 'da_nghi', ngay: n.ngayCuoi }
+  if (n.ngayCuoi) return { kieu: 'sap_nghi', ngay: n.ngayCuoi }
+  if (n.ngayVao && n.ngayVao > homNay) return { kieu: 'chua_vao', ngay: n.ngayVao }
+  if (n.vang) return { kieu: 'vang', ...n.vang }
+  if (n.ngayVao && n.ngayVao > congNgay(homNay, -30))
+    return {
+      kieu: 'moi',
+      ngay: Math.round((Date.parse(homNay) - Date.parse(n.ngayVao)) / 86400_000),
+    }
+  return { kieu: 'dang_lam' }
 }
 
 /** Tìm không dấu theo mã, họ tên, tổ, chức danh. */

@@ -5,14 +5,21 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { useLocalPref } from '@/lib/use-local-pref'
-import { demLocNv, khopTimNv, soSanhMa, thuocLoc, type LocNv } from '@/lib/nhan-su/ho-so'
+import {
+  demLocNv,
+  khopTimNv,
+  LOC_NV,
+  soSanhMa,
+  thuocLoc,
+  type LocNv,
+} from '@/lib/nhan-su/ho-so'
 import type { DsNhanVien } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 
 export type TrangDs = { nv: DsNhanVien; sua: boolean; homNay: string }
 
-/** Tập đang lọc (localStorage) — trang hồ sơ đọc để ‹ › đi đúng thứ tự người xem đang thấy. */
+/** Tập đang lọc (sessionStorage) — trang hồ sơ đọc để ‹ › đi đúng thứ tự người xem đang thấy. */
 export const KHOA_TAP = 'hr-nv-tap'
-/** Bộ lọc của danh sách — quay lại từ hồ sơ thì giữ nguyên. */
+/** Bộ lọc của danh sách — quay lại từ hồ sơ thì giữ nguyên; tab mới thì về "Đang làm". */
 const KHOA_LOC = 'hr-nv-loc'
 
 type Loc = { loc: LocNv; tim: string; to: string }
@@ -20,7 +27,9 @@ const LOC_MAC_DINH: Loc = { loc: 'dang_lam', tim: '', to: '' }
 
 function docLoc(s: string): Loc {
   try {
-    return { ...LOC_MAC_DINH, ...(JSON.parse(s) as Partial<Loc>) }
+    const v = { ...LOC_MAC_DINH, ...(JSON.parse(s) as Partial<Loc>) }
+    // Chip cũ đã bỏ (vd. 'thieu') thì về mặc định, không để bảng rỗng không lý do.
+    return LOC_NV.some((l) => l.id === v.loc) ? v : { ...v, loc: LOC_MAC_DINH.loc }
   } catch {
     return LOC_MAC_DINH
   }
@@ -30,29 +39,33 @@ function docLoc(s: string): Loc {
 export function useNhanVienDs(h: TrangDs) {
   const router = useRouter()
   const toast = useToast()
-  // Bộ lọc nhớ theo máy (useLocalPref = useSyncExternalStore): quay lại từ hồ sơ thì
-  // giữ nguyên, không cần effect + setState.
-  const [locRaw, ghiLoc] = useLocalPref(KHOA_LOC, JSON.stringify(LOC_MAC_DINH))
+  // Bộ lọc nhớ trong PHIÊN (useLocalPref 'session' = useSyncExternalStore): quay lại từ
+  // hồ sơ thì giữ nguyên, không cần effect + setState.
+  const [locRaw, ghiLoc] = useLocalPref(KHOA_LOC, JSON.stringify(LOC_MAC_DINH), 'session')
   const { loc, tim, to } = useMemo(() => docLoc(locRaw), [locRaw])
   const doiLoc = (p: Partial<Loc>) => ghiLoc(JSON.stringify({ loc, tim, to, ...p }))
-  const [, ghiTap] = useLocalPref(KHOA_TAP, '[]')
+  const [, ghiTap] = useLocalPref(KHOA_TAP, '[]', 'session')
   const [chon, setChon] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [moTuyen, setMoTuyen] = useState(false)
   const [moNap, setMoNap] = useState(false)
 
-  const dem = useMemo(() => demLocNv(h.nv.ds, h.homNay), [h.nv.ds, h.homNay])
+  // Chip đếm TRONG tổ + ô tìm đang chọn (Q3): số trên chip = số dòng bấm vào sẽ thấy.
+  const pham = useMemo(
+    () =>
+      h.nv.ds.filter(
+        (n) =>
+          khopTimNv(n, tim) && (!to || (to === '__trong' ? !n.boPhan : n.boPhan === to)),
+      ),
+    [h.nv.ds, tim, to],
+  )
+  const dem = useMemo(() => demLocNv(pham, h.homNay), [pham, h.homNay])
   const ds = useMemo(
     () =>
-      h.nv.ds
-        .filter(
-          (n) =>
-            thuocLoc(n, loc, h.homNay) &&
-            khopTimNv(n, tim) &&
-            (!to || (to === '__trong' ? !n.boPhan : n.boPhan === to)),
-        )
+      pham
+        .filter((n) => thuocLoc(n, loc, h.homNay))
         .sort((a, b) => soSanhMa(a.code, b.code)),
-    [h.nv.ds, h.homNay, loc, tim, to],
+    [pham, h.homNay, loc],
   )
 
   function moHoSo(code: string) {

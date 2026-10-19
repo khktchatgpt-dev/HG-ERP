@@ -13,7 +13,7 @@ import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { congNgay, kyCuaThang, thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
-import { soSanhMa } from '@/lib/nhan-su/ho-so'
+import { soSanhMa, tinhVang, VANG_TU, type VangNv } from '@/lib/nhan-su/ho-so'
 import {
   cheCccd,
   chuanCccd,
@@ -43,7 +43,7 @@ const XEM_RIENG = 'hr.employee.private'
 const XEM_LUONG = 'hr.payroll.profile'
 
 /** Một dòng hồ sơ: dòng Chấm công + cờ cá nhân + ngày HĐ đang áp (không lương, không số HĐ). */
-export type NvHoSo = NvDong & { coRieng: CoRieng; hd: HdNgay | null }
+export type NvHoSo = NvDong & { coRieng: CoRieng; hd: HdNgay | null; vang: VangNv | null }
 
 export type DsNhanVien = Omit<NhanVienData, 'ds'> & { ds: NvHoSo[] }
 
@@ -184,15 +184,66 @@ async function quetGanNhat(n: NvDong, homNay: string): Promise<string | null> {
   return cuoi
 }
 
+/**
+ * Ai đang vắng ≥ 7 ngày CÓ DỮ LIỆU (bản vẽ màu sắc 19/10/2026, Q5). Hai lượt đọc nhỏ thay
+ * vì kéo 45 ngày lượt quẹt cả công ty: ① lượt từ mốc "ngày có dữ liệu thứ 7 gần nhất" tới nay
+ * → ai có quẹt là không vắng; ② chỉ người còn lại mới đọc 45 ngày để biết quẹt cuối.
+ * Hôm nay không tính (sáng sớm chưa ai quẹt không có nghĩa là vắng).
+ */
+async function vangCuaDs(ds: NvDong[], homNay: string): Promise<Map<string, VangNv>> {
+  const out = new Map<string, VangNv>()
+  const tu = congNgay(homNay, -NV_NHIN_LAI_NGAY + 1)
+  const den = `${congNgay(homNay, 1)}T00:00:00+07:00`
+  const [ngayRaw, dus] = await Promise.all([
+    chamCongRepo.ngayCoLuot(`${tu}T00:00:00+07:00`, den),
+    chamCongRepo.deviceUsers(),
+  ])
+  const ngay = [...new Set(ngayRaw)].filter((d) => d < homNay).sort()
+  if (ngay.length < VANG_TU) return out
+  const moc = ngay[ngay.length - VANG_TU]
+  const capCua = new Map<string, string>() // device_users.id → "máy|mã"
+  for (const u of dus) capCua.set(u.id, `${u.device_id}|${u.device_user_id}`)
+  const ung = ds.filter(
+    (n) =>
+      n.active && !n.khongChamCong && n.ma.length > 0 && (!n.ngayVao || n.ngayVao <= moc),
+  )
+  if (!ung.length) return out
+  const gan = await chamCongRepo.logsBetween(`${moc}T00:00:00+07:00`, den)
+  const coQuet = new Set(gan.map((l) => `${l.device_id}|${l.device_user_id}`))
+  const vang = ung.filter((n) => !n.ma.some((m) => coQuet.has(capCua.get(m.id) ?? '')))
+  if (!vang.length) return out
+  const cu = await chamCongRepo.logsOfCodes(
+    [...new Set(vang.flatMap((n) => n.ma.map((m) => m.ma)))],
+    `${tu}T00:00:00+07:00`,
+    den,
+  )
+  const cuoiTheoCap = new Map<string, string>()
+  for (const l of cu) {
+    const k = `${l.device_id}|${l.device_user_id}`
+    const d = toVn(l.punched_at).slice(0, 10)
+    if (d > (cuoiTheoCap.get(k) ?? '')) cuoiTheoCap.set(k, d)
+  }
+  for (const n of vang) {
+    const cuoi = n.ma.reduce<string | null>((c, m) => {
+      const d = cuoiTheoCap.get(capCua.get(m.id) ?? '')
+      return d && (!c || d > c) ? d : c
+    }, null)
+    const v = tinhVang(ngay, cuoi, n.ngayVao)
+    if (v) out.set(n.id, v)
+  }
+  return out
+}
+
 export const hoSoNvService = {
   async danhSach(user: User, homNay: string): Promise<DsNhanVien> {
     await assertAction(user, 'hr.attendance.view')
     const [nv, co, hds] = await Promise.all([
-      // Không đọc lượt quẹt cả công ty — danh sách hồ sơ không bày quẹt gần nhất.
+      // Không đọc lượt quẹt 45 ngày cả công ty — "vắng" đọc riêng, gọn hơn (vangCuaDs).
       chamCongService.nhanVien(user, homNay, { luot: false }),
       caNhanRepo.coTatCa(),
       hopDongRepo.ngayTatCa(),
     ])
+    const vang = await vangCuaDs(nv.ds, homNay)
     const hdCua = new Map<string, HdNgay[]>()
     for (const h of hds)
       hdCua.set(h.employeeId, [...(hdCua.get(h.employeeId) ?? []), h.hd])
@@ -202,6 +253,7 @@ export const hoSoNvService = {
         ...n,
         coRieng: co.get(n.id) ?? KHONG_CO_RIENG,
         hd: hdHienHanh(hdCua.get(n.id) ?? [], homNay),
+        vang: vang.get(n.id) ?? null,
       })),
     }
   },

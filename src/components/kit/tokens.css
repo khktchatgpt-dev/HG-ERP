@@ -139,6 +139,18 @@
   --viz-1: #008c9e;
   --viz-2: #d884c6;
 
+  /* ── SẮC NHẬN DIỆN NHÓM (19/10/2026, Hồ sơ nhân viên Q2) ─────────────
+     Chỉ tô ô chữ cái đại diện để mắt gom người theo KHỐI (Văn phòng · Xưởng ·
+     Phục vụ & khoán). Không mang nghĩa vòng đời, không bao giờ lên nút: tránh
+     xanh lá (`--done`), cam (`--warn`), đỏ (`--stop`), lam (`--act`). Chữ trên
+     nền đạt ≥ 7:1. */
+  --grp-1-wash: #e3eef0;
+  --grp-1-ink: #0b5f6b;
+  --grp-2-wash: #ece7f3;
+  --grp-2-ink: #4f3a78;
+  --grp-3-wash: #f4e6ef;
+  --grp-3-ink: #7a2f62;
+
   /* ── MẬT ĐỘ ──────────────────────────────────────────────────────────
      ERP mặc định DÀY. Người quen Excel bật `.kit-dense` để dày hơn nữa. */
   --row-h: 30px;
