@@ -1,10 +1,11 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { hoSoNvService } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 import { HoSoNvScreen } from './HoSoNvScreen'
+import { MUC, type Muc } from './muc'
 
 export const metadata = { title: 'Hồ sơ nhân viên' }
 
-/** /hr/nhan-vien/[mã]?muc=lich-su — link gửi được, mở đúng mục (B2a). */
+/** /hr/nhan-vien/[mã]?muc=ca-nhan|luong|lich-su — link gửi được, mở đúng mục (B2a/B2b). */
 export default async function HoSoNvPage({
   params,
   searchParams,
@@ -19,7 +20,7 @@ export default async function HoSoNvPage({
     <HoSoNvScreen
       key={h.n.id}
       h={h}
-      muc={sp.muc === 'lich-su' ? 'lich-su' : 'tong-quan'}
+      muc={MUC.includes(sp.muc as Muc) ? (sp.muc as Muc) : 'tong-quan'}
     />
   )
 }

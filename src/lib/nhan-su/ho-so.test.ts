@@ -5,6 +5,7 @@ import {
   demLocNv,
   khopTimNv,
   soSanhMa,
+  SO_MUC_HO_SO,
   thamNien,
   thuocLoc,
   type NvTom,
@@ -21,9 +22,18 @@ const nv = (p: Partial<NvTom> = {}): NvTom => ({
   khongChamCong: false,
   tenTuMay: false,
   ma: [{}],
+  coRieng: DU,
   ...p,
 })
 const H = '2026-10-19'
+const DU = {
+  ngaySinh: true,
+  cccd: true,
+  diaChi: true,
+  dienThoai: true,
+  trinhDo: true,
+  khanCap: true,
+}
 
 describe('thâm niên', () => {
   it('năm + tháng, tháng, ngày; chưa có ngày vào → null', () => {
@@ -46,6 +56,13 @@ describe('còn thiếu', () => {
       'ngay_vao',
       'ma_may',
     ])
+    expect(conThieu(nv({ coRieng: { ...DU, cccd: false, khanCap: false } }))).toEqual([
+      'chuc_danh',
+      'ngay_vao',
+      'cccd',
+      'khan_cap',
+    ])
+    expect(SO_MUC_HO_SO).toBe(11)
     // Không chấm công thì không đòi mã máy.
     expect(conThieu(nv({ khongChamCong: true, ma: [] }))).not.toContain('ma_may')
   })

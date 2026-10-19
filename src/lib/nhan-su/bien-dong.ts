@@ -22,12 +22,14 @@ export const TEN_LY_DO_NGHI: Record<LyDoNghi, string> = {
   other: 'Khác',
 }
 
-export type LoaiBienDong = 'hire' | 'leave' | 'rehire' | 'transfer'
+/** `edit` (0249): lần sửa tại chỗ một khối hồ sơ — chỉ ghi TÊN ô đổi, không ghi giá trị. */
+export type LoaiBienDong = 'hire' | 'leave' | 'rehire' | 'transfer' | 'edit'
 export const TEN_BIEN_DONG: Record<LoaiBienDong, string> = {
   hire: 'Tuyển vào',
   leave: 'Nghỉ việc',
   rehire: 'Đi làm lại',
   transfer: 'Chuyển tổ / chức danh',
+  edit: 'Sửa hồ sơ',
 }
 
 export type DoanLam = { hireDate: string | null; leaveDate: string | null }

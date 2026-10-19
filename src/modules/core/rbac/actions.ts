@@ -645,6 +645,13 @@ export const ACTIONS: Action[] = [
     rule: perm('hr.period.reopen_decide'),
   },
   {
+    // Thông tin cá nhân trên hồ sơ nhân viên B2b (0249): Nhân sự có sẵn; director seed (Q5).
+    key: 'hr.employee.private',
+    label: 'Xem và sửa thông tin cá nhân nhân viên',
+    domain: 'hr',
+    rule: anyOf(perm('hr.member'), perm('hr.employee.private')),
+  },
+  {
     // Hồ sơ lương B4 (0245): Kế toán có sẵn; director seed; admin gán TP Nhân sự.
     key: 'hr.payroll.profile',
     label: 'Xem và sửa hồ sơ lương nhân viên',

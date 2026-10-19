@@ -24,6 +24,7 @@ const seedSql = [
   'supabase/migrations/0244_hr_time_periods.sql',
   'supabase/migrations/0245_hr_pay_profiles.sql',
   'supabase/migrations/0246_hr_payrolls.sql',
+  'supabase/migrations/0249_hr_employee_personal.sql',
 ]
   .map((p) => readFileSync(resolve(process.cwd(), p), 'utf8'))
   .join('\n')

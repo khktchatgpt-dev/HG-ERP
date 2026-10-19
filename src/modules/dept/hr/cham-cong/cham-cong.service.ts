@@ -7,6 +7,7 @@ import { gopLap, type LuotQuet } from '@/lib/cham-cong/luot'
 import { chamCongRepo, type DeviceRow, type DeviceUserRow } from './cham-cong.repo'
 import { infoDevice, readDevice } from './zk'
 import { dieuChinhRepo } from './dieu-chinh.repo'
+import { bienDongRepo } from './bien-dong.repo'
 import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
 import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
 
@@ -409,7 +410,9 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
     ),
     chamCongRepo.taiKhoanGan(),
   ])
-  const tkTheoNv = new Map(tks.map((t) => [t.employee_id, { email: t.email, mo: t.is_active }]))
+  const tkTheoNv = new Map(
+    tks.map((t) => [t.employee_id, { email: t.email, mo: t.is_active }]),
+  )
   const devById = new Map(devices.map((d) => [d.id, d]))
   const dem = new Map<string, { n: number; cuoi: string }>()
   for (const l of logs) {
@@ -604,6 +607,22 @@ export const chamCongService = {
     if (!e) throw NotFound('Không tìm thấy nhân viên')
     // Lưu hồ sơ = có người đã nhìn ca → bỏ dấu "ca mặc định".
     await chamCongRepo.updateEmployee(id, { ...v, note: boDuoiCa(e.note) })
+    const doi = [
+      v.full_name !== e.full_name && 'Họ tên',
+      (v.team ?? null) !== e.team && 'Tổ',
+      v.job_title !== undefined && (v.job_title ?? null) !== e.job_title && 'Chức danh',
+      v.shift_id !== e.shift_id && 'Ca thường làm',
+      v.attendance_exempt !== e.attendance_exempt && 'Chấm công',
+    ].filter((x): x is string => !!x)
+    if (doi.length)
+      await bienDongRepo.ghi({
+        employeeId: id,
+        loai: 'edit',
+        ngay: todayVn(),
+        ghiChu: `Công việc: ${doi.join(', ')}`,
+        truoc: { doi },
+        userId: user.id,
+      })
   },
 
   // Thêm nhân viên → bienDongService.tuyenVao (0248: có ngày vào, nhận người không chấm công).
@@ -622,6 +641,19 @@ export const chamCongService = {
         ...(v.shift_id !== undefined && { shift_id: v.shift_id, note: boDuoiCa(e.note) }),
         ...(v.team !== undefined && { team: v.team }),
       })
+      const doi = [
+        v.team !== undefined && v.team !== e.team && 'Tổ',
+        v.shift_id !== undefined && v.shift_id !== e.shift_id && 'Ca thường làm',
+      ].filter((x): x is string => !!x)
+      if (doi.length)
+        await bienDongRepo.ghi({
+          employeeId: id,
+          loai: 'edit',
+          ngay: todayVn(),
+          ghiChu: `Đổi hàng loạt: ${doi.join(', ')}`,
+          truoc: { doi },
+          userId: user.id,
+        })
       so++
     }
     return { so }

@@ -159,7 +159,9 @@ export const chamCongRepo = {
   },
 
   /** Tài khoản ERP gắn với nhân viên (0247) — cột chỉ-xem ở Hồ sơ nhân viên. */
-  async taiKhoanGan(): Promise<{ employee_id: string; email: string; is_active: boolean }[]> {
+  async taiKhoanGan(): Promise<
+    { employee_id: string; email: string; is_active: boolean }[]
+  > {
     const { data, error } = await db()
       .from('users')
       .select('employee_id, email, is_active')
@@ -172,11 +174,7 @@ export const chamCongRepo = {
   async employees(): Promise<EmployeeRow[]> {
     await latNghiDenHan()
     return docHet((a, b) =>
-      db()
-        .from('hr_employees')
-        .select(COT_NV)
-        .order('code')
-        .range(a, b),
+      db().from('hr_employees').select(COT_NV).order('code').range(a, b),
     )
   },
 
@@ -190,9 +188,7 @@ export const chamCongRepo = {
           await db()
             .from('hr_employees')
             .insert(rows.slice(i, i + LO_GHI))
-            .select(
-              COT_NV,
-            ),
+            .select(COT_NV),
         ),
       )
     }
@@ -218,12 +214,7 @@ export const chamCongRepo = {
     >,
   ): Promise<EmployeeRow> {
     return must(
-      await db()
-        .from('hr_employees')
-        .update(patch)
-        .eq('id', id)
-        .select(COT_NV)
-        .single(),
+      await db().from('hr_employees').update(patch).eq('id', id).select(COT_NV).single(),
     )
   },
 
@@ -237,13 +228,7 @@ export const chamCongRepo = {
     hire_date?: string | null
     job_title?: string | null
   }): Promise<EmployeeRow> {
-    return must(
-      await db()
-        .from('hr_employees')
-        .insert(row)
-        .select(COT_NV)
-        .single(),
-    )
+    return must(await db().from('hr_employees').insert(row).select(COT_NV).single())
   },
 
   async updateDeviceUser(

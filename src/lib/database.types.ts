@@ -1475,9 +1475,22 @@ export type Database = {
         Row: {
           bank_account: string | null
           bank_name: string | null
+          birth_date: string | null
+          current_address: string | null
+          education: string | null
+          emergency_name: string | null
+          emergency_phone: string | null
+          emergency_relation: string | null
           employee_id: string
+          gender: string | null
+          hometown: string | null
+          id_issue_date: string | null
+          id_issue_place: string | null
           join_date: string | null
           national_id: string | null
+          nationality: string | null
+          permanent_address: string | null
+          phone: string | null
           tax_code: string | null
           updated_at: string
           updated_by: string | null
@@ -1485,9 +1498,22 @@ export type Database = {
         Insert: {
           bank_account?: string | null
           bank_name?: string | null
+          birth_date?: string | null
+          current_address?: string | null
+          education?: string | null
+          emergency_name?: string | null
+          emergency_phone?: string | null
+          emergency_relation?: string | null
           employee_id: string
+          gender?: string | null
+          hometown?: string | null
+          id_issue_date?: string | null
+          id_issue_place?: string | null
           join_date?: string | null
           national_id?: string | null
+          nationality?: string | null
+          permanent_address?: string | null
+          phone?: string | null
           tax_code?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -1495,9 +1521,22 @@ export type Database = {
         Update: {
           bank_account?: string | null
           bank_name?: string | null
+          birth_date?: string | null
+          current_address?: string | null
+          education?: string | null
+          emergency_name?: string | null
+          emergency_phone?: string | null
+          emergency_relation?: string | null
           employee_id?: string
+          gender?: string | null
+          hometown?: string | null
+          id_issue_date?: string | null
+          id_issue_place?: string | null
           join_date?: string | null
           national_id?: string | null
+          nationality?: string | null
+          permanent_address?: string | null
+          phone?: string | null
           tax_code?: string | null
           updated_at?: string
           updated_by?: string | null

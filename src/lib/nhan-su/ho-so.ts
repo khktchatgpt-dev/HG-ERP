@@ -4,6 +4,7 @@
  * nguồn, để con số ở hai màn không bao giờ lệch nhau.
  */
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
+import type { CoRieng } from './ca-nhan'
 
 /** Phần của một dòng nhân viên mà các hàm dưới cần (khớp `NvDong` của Chấm công). */
 export type NvTom = {
@@ -17,6 +18,8 @@ export type NvTom = {
   khongChamCong: boolean
   tenTuMay: boolean
   ma: unknown[]
+  /** Cờ có / chưa có thông tin cá nhân (0249) — không mang giá trị. */
+  coRieng: CoRieng
 }
 
 /** Mã xếp theo số khi là số (5 < 31 < 105), mã chữ (KCC-…) sau. */
@@ -44,16 +47,43 @@ export function thamNien(ngayVao: string | null, homNay: string): string | null 
   return nam ? (du ? `${nam} năm ${du} th` : `${nam} năm`) : `${du} th`
 }
 
-export type MucThieu = 'ho_ten' | 'to' | 'chuc_danh' | 'ngay_vao' | 'ma_may'
+export type MucThieu =
+  | 'ho_ten'
+  | 'to'
+  | 'chuc_danh'
+  | 'ngay_vao'
+  | 'ma_may'
+  | 'ngay_sinh'
+  | 'cccd'
+  | 'dia_chi'
+  | 'dien_thoai'
+  | 'trinh_do'
+  | 'khan_cap'
 export const TEN_THIEU: Record<MucThieu, string> = {
   ho_ten: 'Họ tên đầy đủ (đang là tên máy)',
   to: 'Tổ',
   chuc_danh: 'Chức danh',
   ngay_vao: 'Ngày vào làm',
   ma_may: 'Mã trên máy chấm công',
+  ngay_sinh: 'Ngày sinh · giới tính',
+  cccd: 'CCCD · ngày cấp · nơi cấp',
+  dia_chi: 'Địa chỉ thường trú',
+  dien_thoai: 'Điện thoại',
+  trinh_do: 'Trình độ',
+  khan_cap: 'Liên hệ khẩn cấp',
 }
 
-/** Mục còn thiếu trên những trường ĐANG CÓ (B2b thêm trường cá nhân → thêm mục). */
+/** Mục nằm ở tab Cá nhân (còn lại ở khối Công việc / Chấm công). */
+export const MUC_CA_NHAN: MucThieu[] = [
+  'ngay_sinh',
+  'cccd',
+  'dia_chi',
+  'dien_thoai',
+  'trinh_do',
+  'khan_cap',
+]
+
+/** Mục còn thiếu theo sổ quản lý lao động (B3 thêm hợp đồng). */
 export function conThieu(n: NvTom): MucThieu[] {
   const out: MucThieu[] = []
   if (n.tenTuMay) out.push('ho_ten')
@@ -61,6 +91,13 @@ export function conThieu(n: NvTom): MucThieu[] {
   if (!n.chucDanh) out.push('chuc_danh')
   if (!n.ngayVao) out.push('ngay_vao')
   if (!n.khongChamCong && n.ma.length === 0) out.push('ma_may')
+  const r = n.coRieng
+  if (!r.ngaySinh) out.push('ngay_sinh')
+  if (!r.cccd) out.push('cccd')
+  if (!r.diaChi) out.push('dia_chi')
+  if (!r.dienThoai) out.push('dien_thoai')
+  if (!r.trinhDo) out.push('trinh_do')
+  if (!r.khanCap) out.push('khan_cap')
   return out
 }
 export const SO_MUC_HO_SO = Object.keys(TEN_THIEU).length

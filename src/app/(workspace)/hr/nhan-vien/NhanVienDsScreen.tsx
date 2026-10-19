@@ -182,7 +182,7 @@ function Bang({ d }: { d: DsCtx }) {
             <th className={TH}>Tình trạng</th>
             <th
               className={TH}
-              title={`Số mục còn thiếu trên ${SO_MUC_HO_SO} mục đang theo dõi`}
+              title={`Số mục đã có trên ${SO_MUC_HO_SO} mục sổ quản lý lao động`}
             >
               Hồ sơ
             </th>
@@ -290,8 +290,8 @@ function Bang({ d }: { d: DsCtx }) {
             >
               <b className="text-[var(--ink)]">{d.ds.length} người</b> · {coNgayVao} có
               ngày vào · {thieu} hồ sơ còn thiếu. &quot;Hồ sơ&quot; đếm {SO_MUC_HO_SO} mục
-              đang theo dõi (họ tên, tổ, chức danh, ngày vào, mã máy); thông tin cá nhân
-              thêm ở bước sau.
+              theo sổ quản lý lao động (công việc, chấm công, cá nhân, định danh, liên
+              hệ); chưa gồm hợp đồng.
             </td>
           </tr>
         </tfoot>

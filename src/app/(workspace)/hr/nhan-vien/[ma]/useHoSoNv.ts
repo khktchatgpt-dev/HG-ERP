@@ -5,10 +5,15 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { useLocalPref } from '@/lib/use-local-pref'
-import type { HoSoNvTrang } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
+import type {
+  HoSoNvTrang,
+  KhoiCaNhan,
+} from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 import { KHOA_TAP } from '../useNhanVienDs'
+import type { Muc } from './muc'
 
-export type Muc = 'tong-quan' | 'lich-su'
+export type { Muc }
+
 export type HopBd = null | 'nghi' | 'lam_lai' | 'chuyen'
 
 /** State + thao tác của trang hồ sơ một người (B2a). */
@@ -18,6 +23,9 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
   const n = h.n
   const [muc, setMucState] = useState<Muc>(mucDau)
   const [suaCv, setSuaCv] = useState(false)
+  // Khối của tab Cá nhân đang sửa — mỗi lúc một khối (sửa theo khối, Q2 lượt 2).
+  const [suaCn, setSuaCn] = useState<KhoiCaNhan | null>(null)
+  const [cccd, setCccd] = useState<string | null>(null)
   const [hop, setHop] = useState<HopBd>(null)
   const [busy, setBusy] = useState(false)
   // ‹ ›: tập người xem vừa lọc ở danh sách; không có người này thì danh sách mặc định.
@@ -93,6 +101,47 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     return ok
   }
 
+  /** Lưu một khối của tab Cá nhân; chỉ gửi ô của khối đó. */
+  async function luuCaNhan(khoi: KhoiCaNhan, gia: Record<string, string | null>) {
+    const ok = await chay(
+      () =>
+        api(`/api/dept/hr/cham-cong/nhan-vien/${n.id}/ca-nhan`, {
+          method: 'POST',
+          body: { viec: 'luu', khoi, gia },
+        }),
+      'Đã lưu',
+    )
+    if (ok) {
+      setSuaCn(null)
+      setCccd(null)
+    }
+    return ok
+  }
+
+  /** Hiện số CCCD thật — server ghi nhật ký người xem. */
+  async function hienCccd() {
+    try {
+      const r = await api<{ gia: string | null }>(
+        `/api/dept/hr/cham-cong/nhan-vien/${n.id}/ca-nhan`,
+        { method: 'POST', body: { viec: 'hien' } },
+      )
+      setCccd(r.gia ?? '')
+    } catch (e) {
+      toast.error('Không hiện được', apiErrorText(e))
+    }
+  }
+
+  /** Bấm một mục "Còn thiếu": mở đúng tab + khối ở chế độ sửa. */
+  function moSua(khoi: 'cong_viec' | KhoiCaNhan) {
+    if (khoi === 'cong_viec') {
+      setMuc('tong-quan')
+      setSuaCv(true)
+    } else {
+      setMuc('ca-nhan')
+      setSuaCn(khoi)
+    }
+  }
+
   const bienDong = (id: string, body: Record<string, unknown>, xong: string) =>
     chay(
       () =>
@@ -107,6 +156,12 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     setMuc,
     suaCv,
     setSuaCv,
+    suaCn,
+    setSuaCn,
+    luuCaNhan,
+    cccd,
+    hienCccd,
+    moSua,
     hop,
     setHop,
     busy,

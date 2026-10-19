@@ -42,10 +42,15 @@ describe('tuyển vào (0248)', () => {
     expect(v.code).toBe('604')
   })
   it('không chấm công thì không cần mã; quẹt máy mà thiếu mã thì chặn', () => {
-    expect(nhanVienTuyenSchema.safeParse({ ...base, khong_cham: true }).success).toBe(true)
-    expect(nhanVienTuyenSchema.safeParse({ ...base, khong_cham: false }).success).toBe(false)
+    expect(nhanVienTuyenSchema.safeParse({ ...base, khong_cham: true }).success).toBe(
+      true,
+    )
+    expect(nhanVienTuyenSchema.safeParse({ ...base, khong_cham: false }).success).toBe(
+      false,
+    )
     expect(
-      nhanVienTuyenSchema.safeParse({ ...base, khong_cham: false, code: 'KCC-1' }).success,
+      nhanVienTuyenSchema.safeParse({ ...base, khong_cham: false, code: 'KCC-1' })
+        .success,
     ).toBe(false)
   })
 })

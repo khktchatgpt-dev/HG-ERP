@@ -6,9 +6,9 @@ import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { useLocalPref } from '@/lib/use-local-pref'
 import { demLocNv, khopTimNv, soSanhMa, thuocLoc, type LocNv } from '@/lib/nhan-su/ho-so'
-import type { NhanVienData } from '@/modules/dept/hr/cham-cong/cham-cong.service'
+import type { DsNhanVien } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 
-export type TrangDs = { nv: NhanVienData; sua: boolean; homNay: string }
+export type TrangDs = { nv: DsNhanVien; sua: boolean; homNay: string }
 
 /** Tập đang lọc (localStorage) — trang hồ sơ đọc để ‹ › đi đúng thứ tự người xem đang thấy. */
 export const KHOA_TAP = 'hr-nv-tap'

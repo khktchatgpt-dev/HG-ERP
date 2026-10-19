@@ -401,3 +401,13 @@ export const bangLuongViecSchema = z.discriminatedUnion('viec', [
   }),
   z.object({ viec: z.literal('xoa_khoan'), id: z.string().uuid() }),
 ])
+
+/** Tab Cá nhân trên hồ sơ (0249): lưu một khối, hoặc xin số CCCD thật (ghi nhật ký). */
+export const caNhanSchema = z.discriminatedUnion('viec', [
+  z.object({
+    viec: z.literal('luu'),
+    khoi: z.enum(['ca_nhan', 'dinh_danh', 'lien_he']),
+    gia: z.record(z.string(), z.string().trim().max(300).nullable()),
+  }),
+  z.object({ viec: z.literal('hien') }),
+])

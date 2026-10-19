@@ -23,20 +23,34 @@ import {
   ScreenHeader,
 } from '@/components/kit'
 import { ngayVn, TEN_BIEN_DONG } from '@/lib/nhan-su/bien-dong'
-import { conThieu, SO_MUC_HO_SO, TEN_THIEU, thamNien } from '@/lib/nhan-su/ho-so'
-import type { HoSoNvTrang } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
+import {
+  conThieu,
+  MUC_CA_NHAN,
+  SO_MUC_HO_SO,
+  TEN_THIEU,
+  thamNien,
+  type MucThieu,
+} from '@/lib/nhan-su/ho-so'
+import { hienSdt } from '@/lib/nhan-su/ca-nhan'
+import type {
+  HoSoNvTrang,
+  KhoiCaNhan,
+} from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 import { HopChuyen, HopLamLai, HopNghi } from '../../cham-cong/bien-dong-nv'
 import { dm } from '../../cham-cong/ky-cong.shared'
 import { Avatar, TagTinhTrang } from '../nv.shared'
 import { useHoSoNv, type HoSoCtx, type Muc } from './useHoSoNv'
-import { KhoiChamCong, KhoiCongViec } from './khoi-cong-viec'
+import { Dong, Khoi, KhoiChamCong, KhoiCongViec, LUOI } from './khoi-cong-viec'
 import { TabLichSu } from './tab-lich-su'
+import { TabCaNhan } from './tab-ca-nhan'
+import { TabLuong } from './tab-luong'
 
 export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
   const d = useHoSoNv(h, muc)
   const { n } = d
   const ca = h.cas.find((c) => c.id === n.shiftId)
   const huy = h.bienDong.filter((b) => !b.huyLuc).length
+  const thieuCn = conThieu(n).filter((t) => MUC_CA_NHAN.includes(t)).length
   return (
     <ScreenFrame tableMin={0}>
       <Crumb
@@ -87,6 +101,14 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
         items={[
           { id: 'tong-quan', label: 'Tổng quan' },
           {
+            id: 'ca-nhan',
+            label: 'Cá nhân',
+            ...(thieuCn
+              ? { signal: { text: `thiếu ${thieuCn}`, tone: 'warn' as const } }
+              : {}),
+          },
+          { id: 'luong', label: 'Lương & ngân hàng' },
+          {
             id: 'lich-su',
             label: 'Lịch sử',
             ...(huy ? { signal: { text: String(huy) } } : {}),
@@ -95,6 +117,12 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
       >
         <DocMenuPanel value="tong-quan">
           <TongQuan d={d} />
+        </DocMenuPanel>
+        <DocMenuPanel value="ca-nhan">
+          <TabCaNhan d={d} />
+        </DocMenuPanel>
+        <DocMenuPanel value="luong">
+          <TabLuong d={d} />
         </DocMenuPanel>
         <DocMenuPanel value="lich-su">
           <TabLichSu d={d} />
@@ -197,10 +225,13 @@ function TongQuan({ d }: { d: HoSoCtx }) {
   const { n, h } = d
   const thieu = conThieu(n)
   const ganDay = h.bienDong.slice(0, 3)
+  const duocSua = (t: MucThieu) =>
+    KHOI_CUA[t] === 'cong_viec' ? h.quyen.sua && n.active : h.quyen.rieng
   return (
     <div className="flex min-h-0">
       <div className="min-w-0 flex-1">
         <KhoiCongViec d={d} />
+        <KhoiLienHe d={d} />
         <KhoiChamCong d={d} />
       </div>
       <aside
@@ -221,11 +252,11 @@ function TongQuan({ d }: { d: HoSoCtx }) {
                   >
                     {TEN_THIEU[t]}
                   </a>
-                ) : h.quyen.sua && n.active ? (
+                ) : duocSua(t) ? (
                   <button
                     type="button"
                     className="text-left text-[var(--act-text)] underline"
-                    onClick={() => d.setSuaCv(true)}
+                    onClick={() => d.moSua(KHOI_CUA[t])}
                   >
                     {TEN_THIEU[t]}
                   </button>
@@ -239,7 +270,7 @@ function TongQuan({ d }: { d: HoSoCtx }) {
           <p>Đủ {SO_MUC_HO_SO} mục đang theo dõi.</p>
         )}
         <p className="text-k-label mt-1.5 text-[var(--ink-3)]">
-          Thông tin cá nhân, hợp đồng, giấy tờ thêm ở bước sau.
+          Hợp đồng, giấy tờ thêm ở bước sau. Bấm một mục để mở đúng khối.
         </p>
 
         <h2 className="text-k-label mt-4 mb-1.5 border-t border-[var(--line-faint)] pt-3 font-semibold tracking-[.05em] text-[var(--ink-3)] uppercase">
@@ -280,5 +311,62 @@ function TongQuan({ d }: { d: HoSoCtx }) {
         )}
       </aside>
     </div>
+  )
+}
+
+/** Mục thiếu → khối mở để sửa. */
+const KHOI_CUA: Record<Exclude<MucThieu, 'ma_may'>, 'cong_viec' | KhoiCaNhan> & {
+  ma_may: 'cong_viec'
+} = {
+  ho_ten: 'cong_viec',
+  to: 'cong_viec',
+  chuc_danh: 'cong_viec',
+  ngay_vao: 'cong_viec',
+  ma_may: 'cong_viec',
+  ngay_sinh: 'ca_nhan',
+  trinh_do: 'ca_nhan',
+  cccd: 'dinh_danh',
+  dia_chi: 'dinh_danh',
+  dien_thoai: 'lien_he',
+  khan_cap: 'lien_he',
+}
+
+/** Liên hệ trên Tổng quan — chỉ xem; sửa ở tab Cá nhân. Không có quyền thì không hiện số. */
+function KhoiLienHe({ d }: { d: HoSoCtx }) {
+  const c = d.h.caNhan
+  return (
+    <Khoi ten="Liên hệ" sua={!!c && d.h.quyen.rieng} onSua={() => d.moSua('lien_he')}>
+      {c ? (
+        <div className={LUOI}>
+          <Dong nhan="Điện thoại">
+            {c.dienThoai ? (
+              <span className="num">{hienSdt(c.dienThoai)}</span>
+            ) : (
+              <span className="text-[var(--warn)]">chưa có</span>
+            )}
+          </Dong>
+          <Dong nhan="Thường trú">
+            {c.thuongTru ?? <span className="text-[var(--warn)]">chưa có</span>}
+          </Dong>
+          <Dong nhan="Liên hệ khẩn cấp">
+            {c.khanCapTen ? (
+              <span>
+                {c.khanCapTen}
+                {c.khanCapQuanHe ? ` (${c.khanCapQuanHe})` : ''}
+                {c.khanCapSdt && (
+                  <span className="num ml-1.5">{hienSdt(c.khanCapSdt)}</span>
+                )}
+              </span>
+            ) : (
+              <span className="text-[var(--warn)]">chưa có</span>
+            )}
+          </Dong>
+        </div>
+      ) : (
+        <p className="text-k-sm text-[var(--ink-3)]">
+          Chỉ Phòng Nhân sự và Ban Giám đốc xem được số điện thoại, địa chỉ.
+        </p>
+      )}
+    </Khoi>
   )
 }

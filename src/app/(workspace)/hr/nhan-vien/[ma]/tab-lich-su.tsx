@@ -87,8 +87,9 @@ export function TabLichSu({ d }: { d: HoSoCtx }) {
                 'sticky bottom-0 bg-[var(--surface-raised)] whitespace-normal text-[var(--ink-2)]',
               )}
             >
-              {ds.length} biến động · {ds.filter((b) => b.huyLuc).length} đã huỷ. Chưa gồm
-              các lần sửa họ tên / tổ / ca tại chỗ (ghi vết những lần đó làm ở bước sau).
+              {ds.length} biến động · {ds.filter((b) => b.huyLuc).length} đã huỷ. Sửa tại
+              chỗ chỉ ghi TÊN ô đã đổi, không ghi giá trị (CCCD, địa chỉ không nằm trong
+              vết).
             </td>
           </tr>
         </tfoot>
