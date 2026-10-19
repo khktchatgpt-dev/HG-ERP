@@ -1,4 +1,5 @@
 import type { User } from '@/modules/core/users/users.repo'
+import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
@@ -110,6 +111,13 @@ async function dung(user: User, thang: string) {
   return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams }
 }
 
+/** Có làm ngày nào trong kỳ [tu, den] — theo ngày vào / ngày làm cuối, không theo cờ active. */
+const lamTrongKy = (
+  e: { hire_date: string | null; leave_date: string | null },
+  tu: string,
+  den: string,
+) => !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, tu, den)
+
 function kiemErp(thang: string) {
   if (thang < KY_DAU_ERP) throw Conflict(HET_ERP(thang))
 }
@@ -134,7 +142,7 @@ export const kyCongService = {
       chuaCoTo: d.chuaCoTo,
       choDuyet: d.choDuyet,
       khongCham: d.emps
-        .filter((e) => e.active && e.attendance_exempt)
+        .filter((e) => e.attendance_exempt && lamTrongKy(e, d.g.tu, d.g.den))
         .map((e) => ({ ma: e.code, ten: e.full_name, to: e.team })),
       dieuKien: dieuKienChot(d.bc, {
         choDuyet: d.choDuyet,
@@ -221,7 +229,8 @@ export const kyCongService = {
     const dong: (DongChot & { employeeId: string })[] = [
       ...banChotTu(d.g.nguoi),
       ...d.emps
-        .filter((e) => e.active && e.attendance_exempt)
+        // Người nghỉ / vào giữa kỳ vẫn có dòng; số công tính theo phần kỳ họ còn làm (0248).
+        .filter((e) => e.attendance_exempt && lamTrongKy(e, d.g.tu, d.g.den))
         .map((e): DongChot => ({
           ma: e.code,
           ten: e.full_name,

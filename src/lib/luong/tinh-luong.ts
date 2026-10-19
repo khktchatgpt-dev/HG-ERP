@@ -140,8 +140,14 @@ export function tinhPhieu(
   ngays: NgayTinh[],
   khoan: { loai: LoaiKhoan; tien: number }[],
   b: BoiCanhTinh,
-  khongChamCong = false,
+  /**
+   * Người không chấm công: `true` = đủ công chuẩn; một SỐ = số công được hưởng khi chỉ làm
+   * một phần kỳ (vào / nghỉ giữa kỳ, 0248).
+   */
+  mien: boolean | number = false,
 ): Phieu {
+  const khongChamCong = mien !== false
+  const congMien = typeof mien === 'number' ? Math.min(mien, b.congChuan) : b.congChuan
   const why: string[] = []
   const dong: DongTien[] = []
   const thieuHeSo = new Set<string>()
@@ -176,15 +182,24 @@ export function tinhPhieu(
   let congNghi = 0
   for (const [ma, so_] of nghi) congNghi += (so_ * (b.heSoNghi(ma) ?? 0)) / 100
   const congLe = (le * (b.heSoNghi('holiday') ?? 0)) / 100
-  const congThuc = khongChamCong ? b.congChuan : congHc + congNghi + congLe
+  const congThuc = khongChamCong ? congMien : congHc + congNghi + congLe
 
   // ── Lương công + nghỉ có lương.
   let luongCong = 0
   let nghiCoLuong = 0
   if (khongChamCong) {
-    luongCong = r0(theoCong ? donGiaNgay * b.congChuan : (hs.luongThang ?? 0))
+    const du = congMien >= b.congChuan
+    luongCong = r0(
+      theoCong
+        ? donGiaNgay * congMien
+        : du
+          ? (hs.luongThang ?? 0)
+          : ((hs.luongThang ?? 0) * congMien) / b.congChuan,
+    )
     why.push(
-      `Lương       không chấm công — đủ ${b.congChuan} công chuẩn = ${so(luongCong)}`,
+      du
+        ? `Lương       không chấm công — đủ ${b.congChuan} công chuẩn = ${so(luongCong)}`
+        : `Lương       không chấm công — làm ${so(congMien, 2)}/${b.congChuan} công chuẩn (vào / nghỉ giữa kỳ) = ${so(luongCong)}`,
     )
   } else if (theoCong) {
     const hsHc = b.heSoKhung(hc, 'thuong')

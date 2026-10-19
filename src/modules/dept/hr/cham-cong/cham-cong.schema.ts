@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LY_DO_NGHI } from '@/lib/nhan-su/bien-dong'
 
 /** Tháng của bảng công: 'YYYY-MM'. */
 export const bangCongQuerySchema = z.object({
@@ -37,24 +38,75 @@ export const nhanVienSuaSchema = z.object({
   full_name: hoTen,
   team: boPhan,
   shift_id: uuid,
-  active: z.boolean(),
   /** Không chấm công — không quẹt máy, không bị tính thiếu công. */
   attendance_exempt: z.boolean(),
-})
-
-/** Thêm nhân viên — mã NV là số trên máy chấm công (bỏ số 0 đầu). */
-export const nhanVienThemSchema = z.object({
-  code: z
+  /** Sửa chức danh tại chỗ (điền dữ liệu); đổi chức danh thật thì dùng biến động Chuyển. */
+  job_title: z
     .string()
     .trim()
-    .regex(/^\d{1,9}$/, 'Mã NV là số trên máy chấm công')
-    .transform((v) => v.replace(/^0+(?=\d)/, '')),
-  full_name: hoTen,
-  team: boPhan,
-  shift_id: uuid,
-  /** Ghép luôn mã trên máy này (dòng `hr_device_users`) — khi tạo từ "mã chưa ghép". */
-  device_user_id: uuid.optional(),
+    .max(80)
+    .transform((v) => v || null)
+    .nullable()
+    .optional(),
 })
+
+const chucDanh = z
+  .string()
+  .trim()
+  .max(80, 'Chức danh tối đa 80 ký tự')
+  .transform((v) => v || null)
+const ghiChu = z
+  .string()
+  .trim()
+  .max(300)
+  .transform((v) => v || null)
+  .optional()
+
+/**
+ * Tuyển vào (0248) — mã là số trên máy chấm công (bỏ số 0 đầu), hoặc tự cấp KCC-NNN khi
+ * người này không chấm công (Q3).
+ */
+export const nhanVienTuyenSchema = z
+  .object({
+    khong_cham: z.boolean(),
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{1,9}$/, 'Mã NV là số trên máy chấm công')
+      .transform((v) => v.replace(/^0+(?=\d)/, ''))
+      .optional(),
+    full_name: hoTen,
+    hire_date: ngay,
+    team: boPhan,
+    shift_id: uuid,
+    job_title: chucDanh.optional(),
+    /** Ghép luôn mã trên máy này (dòng `hr_device_users`) — khi tạo từ "mã chưa ghép". */
+    device_user_id: uuid.optional(),
+  })
+  .refine((v) => v.khong_cham || !!v.code, {
+    message: 'Nhập mã trên máy chấm công, hoặc chọn "Không chấm công"',
+    path: ['code'],
+  })
+
+/** Một biến động trên hồ sơ một người (0248). */
+export const bienDongSchema = z.discriminatedUnion('viec', [
+  z.object({ viec: z.literal('ngay_vao'), ngay: ngay.nullable() }),
+  z.object({
+    viec: z.literal('nghi'),
+    leave_date: ngay,
+    reason: z.enum(LY_DO_NGHI),
+    note: ghiChu,
+  }),
+  z.object({ viec: z.literal('huy_nghi') }),
+  z.object({ viec: z.literal('lam_lai'), hire_date: ngay, note: ghiChu }),
+  z.object({
+    viec: z.literal('chuyen'),
+    effective_date: ngay,
+    team: boPhan,
+    job_title: chucDanh,
+    note: ghiChu,
+  }),
+])
 
 /** Đổi ca và/hoặc bộ phận cho nhiều người một lần. */
 export const nhanVienHangLoatSchema = z

@@ -79,8 +79,17 @@ export type BanNhap = {
   phuCap: Record<string, number>
 }
 
+/**
+ * Người có thể còn lương phải tính: đang làm, hoặc đã nghỉ mà ngày làm cuối nằm sau kỳ chốt
+ * gần nhất (kỳ đó chưa chốt → bảng lương kỳ đó còn có họ, 0248).
+ */
 async function nhanVien() {
-  return (await chamCongRepo.employees()).filter((e) => e.active)
+  const [emps, kyChot] = await Promise.all([
+    chamCongRepo.employees(),
+    hoSoLuongRepo.kyChotCuoi(),
+  ])
+  const tuKyMo = kyChot ? `${kyChot}-25` : ''
+  return emps.filter((e) => e.active || (!!e.leave_date && e.leave_date > tuKyMo))
 }
 
 function kiemKy(tuKy: string, kyChot: string | null) {
@@ -171,7 +180,9 @@ export const hoSoLuongService = {
         stk: che(r?.stk),
         cccd: che(r?.cccd),
         mst: che(r?.mst),
-        ngayVao: r?.ngayVao ?? null,
+        // Ngày vào: nguồn duy nhất là hồ sơ nhân viên (0248) — ở đây chỉ đọc.
+        ngayVao:
+          (await chamCongRepo.employees()).find((e) => e.id === employeeId)?.hire_date ?? null,
       },
       lanXem,
     }
@@ -207,7 +218,6 @@ export const hoSoLuongService = {
       mst?: string | null
       nganHang?: string | null
       stk?: string | null
-      ngayVao?: string | null
     },
   ): Promise<void> {
     await assertAction(user, QUYEN)

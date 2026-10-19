@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import {
   Btn,
-  DateInput,
   Loading,
   NumInput,
   Pick,
@@ -11,6 +10,7 @@ import {
   Tick,
 } from '@/components/kit'
 import { TEN_CACH_TRA, type CachTra } from '@/lib/luong/ho-so-luong'
+import { ngayVn } from '@/lib/nhan-su/bien-dong'
 import type { HoSoLuongCtx } from './useHoSoLuong'
 import { congKy, docTien, kyVn, lucVn, so, tienVn } from './luong.shared'
 
@@ -274,7 +274,6 @@ function ChiTra({ d }: { d: HoSoLuongCtx }) {
   const [stk, setStk] = useState('')
   const [cccd, setCccd] = useState('')
   const [mst, setMst] = useState('')
-  const [ngayVao, setNgayVao] = useState(r.ngayVao ?? '')
   const [hien, setHien] = useState<
     Partial<Record<keyof typeof TEN_TRUONG, string | null>>
   >({})
@@ -297,7 +296,6 @@ function ChiTra({ d }: { d: HoSoLuongCtx }) {
         ...(stk.trim() && { stk: stk.replace(/[\s.-]/g, '') }),
         ...(cccd.trim() && { cccd: cccd.replace(/\D/g, '') }),
         ...(mst.trim() && { mst: mst.replace(/\D/g, '') }),
-        ngayVao,
       },
       `Đã lưu chi trả & định danh ${x.ma}`,
     )
@@ -349,7 +347,10 @@ function ChiTra({ d }: { d: HoSoLuongCtx }) {
         {o('national_id', r.cccd, cccd, setCccd)}
         {o('tax_code', r.mst, mst, setMst)}
         <span className="text-[var(--ink-3)]">Ngày vào làm</span>
-        <DateInput label="Ngày vào làm" value={ngayVao} onChange={setNgayVao} />
+        <span className="num">
+          {r.ngayVao ? ngayVn(r.ngayVao) : '—'}{' '}
+          <span className="text-k-label text-[var(--ink-3)]">sửa ở Hồ sơ nhân viên</span>
+        </span>
       </div>
       <div className="mt-2">
         <Btn icon="luuNhap" busy={d.busy === 'rieng'} onClick={luu}>

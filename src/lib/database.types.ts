@@ -1404,6 +1404,73 @@ export type Database = {
           },
         ]
       }
+      hr_employee_events: {
+        Row: {
+          after: Json | null
+          before: Json | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string | null
+          effective_date: string
+          employee_id: string
+          id: string
+          kind: string
+          note: string | null
+          reason: string | null
+        }
+        Insert: {
+          after?: Json | null
+          before?: Json | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_date: string
+          employee_id: string
+          id?: string
+          kind: string
+          note?: string | null
+          reason?: string | null
+        }
+        Update: {
+          after?: Json | null
+          before?: Json | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          employee_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_employee_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employee_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employee_events_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_employee_private: {
         Row: {
           bank_account: string | null
@@ -1459,7 +1526,11 @@ export type Database = {
           code: string
           created_at: string
           full_name: string
+          hire_date: string | null
           id: string
+          job_title: string | null
+          leave_date: string | null
+          leave_reason: string | null
           note: string | null
           shift_id: string
           team: string | null
@@ -1472,7 +1543,11 @@ export type Database = {
           code: string
           created_at?: string
           full_name: string
+          hire_date?: string | null
           id?: string
+          job_title?: string | null
+          leave_date?: string | null
+          leave_reason?: string | null
           note?: string | null
           shift_id: string
           team?: string | null
@@ -1485,7 +1560,11 @@ export type Database = {
           code?: string
           created_at?: string
           full_name?: string
+          hire_date?: string | null
           id?: string
+          job_title?: string | null
+          leave_date?: string | null
+          leave_reason?: string | null
           note?: string | null
           shift_id?: string
           team?: string | null
@@ -9600,6 +9679,7 @@ export type Database = {
       }
     }
     Functions: {
+      hr_apply_due_leaves: { Args: { p_today: string }; Returns: number }
 
       hr_attendance_days: {
         Args: { p_from: string; p_to: string }

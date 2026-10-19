@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { todayVn } from '@/lib/date-vn'
 
 /**
  * Truy cập DB của chấm công. Mọi danh sách có thể vượt 1000 dòng (người trên máy
@@ -19,6 +20,22 @@ async function docHet<T>(q: (from: number, to: number) => Trang<T>): Promise<T[]
     out.push(...(data ?? []))
     if (!data || data.length < CO_TRANG) return out
   }
+}
+
+/** Cột đọc của hr_employees — một chỗ, để thêm cột không sót nơi nào. */
+const COT_NV =
+  'id, code, full_name, shift_id, active, team, note, attendance_exempt, hire_date, leave_date, leave_reason, job_title'
+
+/**
+ * Lật active=false cho người đã qua ngày làm cuối (0248) — trigger 0247 khoá tài khoản ERP
+ * lúc đó. Gọi trước mỗi lần đọc danh sách, nhưng mỗi tiến trình tối đa một lần / phút.
+ */
+let lanLatCuoi = 0
+async function latNghiDenHan() {
+  if (Date.now() - lanLatCuoi < 60_000) return
+  lanLatCuoi = Date.now()
+  const { error } = await db().rpc('hr_apply_due_leaves', { p_today: todayVn() })
+  if (error) console.error('hr_apply_due_leaves:', error.message)
 }
 
 function must<T>(r: { data: T | null; error: { message: string } | null }): T {
@@ -60,6 +77,12 @@ export type EmployeeRow = {
   note: string | null
   /** Không chấm công (Kinh Doanh, Tài Xế…): không quẹt máy, không bị tính thiếu công. */
   attendance_exempt: boolean
+  /** Ngày vào làm của đoạn làm việc hiện tại (0248). */
+  hire_date: string | null
+  /** Ngày làm việc CUỐI — còn trong kỳ công / lương tới hết ngày này. */
+  leave_date: string | null
+  leave_reason: string | null
+  job_title: string | null
 }
 
 export type ShiftRow = {
@@ -147,10 +170,11 @@ export const chamCongRepo = {
   },
 
   async employees(): Promise<EmployeeRow[]> {
+    await latNghiDenHan()
     return docHet((a, b) =>
       db()
         .from('hr_employees')
-        .select('id, code, full_name, shift_id, active, team, note, attendance_exempt')
+        .select(COT_NV)
         .order('code')
         .range(a, b),
     )
@@ -167,7 +191,7 @@ export const chamCongRepo = {
             .from('hr_employees')
             .insert(rows.slice(i, i + LO_GHI))
             .select(
-              'id, code, full_name, shift_id, active, team, note, attendance_exempt',
+              COT_NV,
             ),
         ),
       )
@@ -180,7 +204,16 @@ export const chamCongRepo = {
     patch: Partial<
       Pick<
         EmployeeRow,
-        'full_name' | 'team' | 'shift_id' | 'active' | 'note' | 'attendance_exempt'
+        | 'full_name'
+        | 'team'
+        | 'shift_id'
+        | 'active'
+        | 'note'
+        | 'attendance_exempt'
+        | 'hire_date'
+        | 'leave_date'
+        | 'leave_reason'
+        | 'job_title'
       >
     >,
   ): Promise<EmployeeRow> {
@@ -189,7 +222,7 @@ export const chamCongRepo = {
         .from('hr_employees')
         .update(patch)
         .eq('id', id)
-        .select('id, code, full_name, shift_id, active, team, note, attendance_exempt')
+        .select(COT_NV)
         .single(),
     )
   },
@@ -201,12 +234,14 @@ export const chamCongRepo = {
     team: string | null
     note: string | null
     attendance_exempt?: boolean
+    hire_date?: string | null
+    job_title?: string | null
   }): Promise<EmployeeRow> {
     return must(
       await db()
         .from('hr_employees')
         .insert(row)
-        .select('id, code, full_name, shift_id, active, team, note, attendance_exempt')
+        .select(COT_NV)
         .single(),
     )
   },

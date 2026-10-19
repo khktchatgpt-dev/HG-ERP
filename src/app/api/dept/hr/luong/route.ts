@@ -53,7 +53,6 @@ export const POST = handle(async (req: Request) => {
         mst: rong(v.mst),
         nganHang: rong(v.nganHang),
         stk: rong(v.stk),
-        ngayVao: rong(v.ngayVao),
       })
       return NextResponse.json({ ok: true })
     case 'hien':

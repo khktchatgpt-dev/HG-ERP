@@ -122,6 +122,21 @@ describe('các trường hợp khác', () => {
     }
     expect(tinhPhieu(hs, [], [], bc(), true).luongCong).toBe(9_500_000)
   })
+  it('không chấm công, nghỉ giữa kỳ: theo phần công chuẩn còn làm (0248)', () => {
+    const hs: HoSoTinh = {
+      ...KIEU,
+      cachTra: 'monthly',
+      donGia: null,
+      luongThang: 9_500_000,
+      phuCap: [{ ten: 'Chuyên cần', muc: 500_000, chiuThue: true, theoNgay: false }],
+    }
+    const p = tinhPhieu(hs, [], [], bc(), 10)
+    expect(p.luongCong).toBe(3_800_000)
+    expect(p.phuCap).toBe(200_000)
+    expect(tinhPhieu({ ...KIEU, phuCap: [] }, [], [], bc(), 10).luongCong).toBe(6_570_000)
+    // Số công lớn hơn công chuẩn bị chặn ở công chuẩn.
+    expect(tinhPhieu(hs, [], [], bc(), 30).luongCong).toBe(9_500_000)
+  })
   it('khấu trừ 10 % (Q4); trần BH 50,6 triệu từ kỳ 07/2026', () => {
     const hs: HoSoTinh = { ...KIEU, khauTru10: true, luongBh: 80_000_000, phuCap: [] }
     const p = tinhPhieu(

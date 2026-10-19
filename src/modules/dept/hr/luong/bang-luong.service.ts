@@ -2,6 +2,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden } from '@/server/http'
 import { banHieuLuc } from '@/lib/luong/ho-so-luong'
+import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 import {
   congChuan,
   tinhPhieu,
@@ -138,8 +139,13 @@ export const bangLuongService = {
       congChuan: d.ky ? congChuan(d.ky.tu, d.ky.den, le) : null,
       canTinhLai: d.canTinhLai,
       dieuKien: dieuKienGui(d.phieu, d.canTinhLai),
+      // Ai có làm trong kỳ (kể cả đã nghỉ giữa kỳ) thì thêm khoản được.
       nhanVien: emps
-        .filter((e) => e.active)
+        .filter((e) =>
+          d.ky
+            ? !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, d.ky.tu, d.ky.den)
+            : e.active,
+        )
         .map((e) => ({ id: e.id, ma: e.code, ten: e.full_name })),
       quyen: { chay, duyet },
     }
@@ -209,7 +215,13 @@ export const bangLuongService = {
       const r = riengCua.get(e.id)
       if (!hs) van.push('Chưa có hồ sơ lương')
       if (!r?.stk) van.push('Thiếu STK')
+      // Không chấm công: số công = công chuẩn của PHẦN kỳ còn làm (vào / nghỉ giữa kỳ, 0248).
+      const khoang = khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, ky.tu, ky.den)
       const mien = ds.some((x) => x.miem)
+        ? khoang
+          ? congChuan(khoang.tu, khoang.den, ngayLe)
+          : 0
+        : false
       const p = tinhPhieu(
         hs
           ? {

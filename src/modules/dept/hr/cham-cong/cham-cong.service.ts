@@ -373,6 +373,11 @@ export type NvDong = {
   /** Không chấm công (Kinh Doanh, Tài Xế, Bốc xếp, Bảo Vệ…): không bị tính thiếu công. */
   khongChamCong: boolean
   lanCuoi: string | null
+  /** Ngày vào / ngày làm cuối / lý do / chức danh (0248). */
+  ngayVao: string | null
+  ngayCuoi: string | null
+  lyDoNghi: string | null
+  chucDanh: string | null
   /** Tài khoản ERP gắn với người này (Admin cấp, 0247). Chỉ để xem ở Nhân sự. */
   taiKhoan: { email: string; mo: boolean } | null
 }
@@ -404,9 +409,7 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
     ),
     chamCongRepo.taiKhoanGan(),
   ])
-  const tkTheoNv = new Map(
-    tks.map((t) => [t.employee_id, { email: t.email, mo: t.is_active }]),
-  )
+  const tkTheoNv = new Map(tks.map((t) => [t.employee_id, { email: t.email, mo: t.is_active }]))
   const devById = new Map(devices.map((d) => [d.id, d]))
   const dem = new Map<string, { n: number; cuoi: string }>()
   for (const l of logs) {
@@ -452,6 +455,10 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
         null,
       ),
       taiKhoan: tkTheoNv.get(e.id) ?? null,
+      ngayVao: e.hire_date,
+      ngayCuoi: e.leave_date,
+      lyDoNghi: e.leave_reason,
+      chucDanh: e.job_title,
     }
   })
   return {
@@ -588,8 +595,8 @@ export const chamCongService = {
       full_name: string
       team: string | null
       shift_id: string
-      active: boolean
       attendance_exempt: boolean
+      job_title?: string | null
     },
   ): Promise<void> {
     await assertAction(user, 'hr.attendance.employee_edit')
@@ -599,34 +606,7 @@ export const chamCongService = {
     await chamCongRepo.updateEmployee(id, { ...v, note: boDuoiCa(e.note) })
   },
 
-  async themNhanVien(
-    user: User,
-    v: {
-      code: string
-      full_name: string
-      team: string | null
-      shift_id: string
-      device_user_id?: string
-    },
-  ): Promise<{ id: string }> {
-    await assertAction(user, 'hr.attendance.employee_edit')
-    const emps = await chamCongRepo.employees()
-    const trung = emps.find((e) => boSo0(e.code) === v.code)
-    if (trung) throw Conflict(`Mã ${v.code} đã là của ${trung.full_name}`)
-    const e = await chamCongRepo.addEmployee({
-      code: v.code,
-      full_name: v.full_name,
-      team: v.team,
-      shift_id: v.shift_id,
-      note: null,
-    })
-    if (v.device_user_id)
-      await chamCongRepo.updateDeviceUser(v.device_user_id, {
-        employee_id: e.id,
-        needs_review: false,
-      })
-    return { id: e.id }
-  },
+  // Thêm nhân viên → bienDongService.tuyenVao (0248: có ngày vào, nhận người không chấm công).
 
   async doiHangLoat(
     user: User,

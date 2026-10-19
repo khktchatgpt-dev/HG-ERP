@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Btn } from '@/components/kit'
+import { Btn, DateInput } from '@/components/kit'
+import { BienDongNv, TinhTrang } from './bien-dong-nv'
 import { cn } from '@/lib/utils'
 import type { NvDong } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import type { NhanVienCtx } from './useNhanVien'
@@ -19,6 +20,11 @@ export function HoSoNv({ v }: { v: NhanVienCtx }) {
       aria-label="Hồ sơ nhân viên"
       className="w-[300px] shrink-0 overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)]"
     >
+      <datalist id="hr-chuc-danh">
+        {v.chucDanhGoiY.map((b) => (
+          <option key={b} value={b} />
+        ))}
+      </datalist>
       <datalist id="hr-bo-phan">
         {v.nv.boPhan.map((b) => (
           <option key={b} value={b} />
@@ -47,15 +53,18 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
   const [hoTen, setHoTen] = useState(n && !n.tenTuMay ? n.hoTen : '')
   const [boPhan, setBoPhan] = useState(n?.boPhan ?? '')
   const [ca, setCa] = useState(n?.shiftId ?? caXuong)
-  const [active, setActive] = useState(n?.active ?? true)
+  const [chucDanh, setChucDanh] = useState(n?.chucDanh ?? '')
+  const [ngayVao, setNgayVao] = useState(n?.ngayVao ?? '')
   const [khongCham, setKhongCham] = useState(n?.khongChamCong ?? false)
   const [ghepThem, setGhepThem] = useState('')
 
   const tenGoiY = n?.tenTuMay ? n.hoTen : (hs?.tenMay ?? '')
   const loi =
-    !n && !/^\d{1,9}$/.test(code.trim())
-      ? 'Mã NV là số trên máy chấm công'
-      : hoTen.trim().length < 2
+    !n && !khongCham && !/^\d{1,9}$/.test(code.trim())
+      ? 'Mã NV là số trên máy chấm công — hoặc tích Không chấm công'
+      : !n && !ngayVao
+        ? 'Nhập ngày vào làm'
+        : hoTen.trim().length < 2
         ? n?.tenTuMay
           ? `Gõ họ tên đầy đủ — máy chỉ ghi "${n.hoTen}"`
           : 'Gõ họ tên đầy đủ'
@@ -63,20 +72,25 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
 
   async function luu() {
     if (loi) return
-    if (n)
-      await v.luu(n.id, {
+    if (n) {
+      const ok = await v.luu(n.id, {
         full_name: hoTen.trim(),
         team: boPhan.trim() || null,
         shift_id: ca,
-        active,
         attendance_exempt: khongCham,
+        job_title: chucDanh.trim() || null,
       })
-    else {
-      const ok = await v.them({
-        code: code.trim(),
+      if (ok && ngayVao !== (n.ngayVao ?? ''))
+        await v.bienDong(n.id, { viec: 'ngay_vao', ngay: ngayVao || null }, 'Đã ghi ngày vào')
+    } else {
+      const ok = await v.tuyen({
+        khong_cham: khongCham,
+        ...(!khongCham && { code: code.trim() }),
         full_name: hoTen.trim(),
+        hire_date: ngayVao,
         team: boPhan.trim() || null,
         shift_id: ca,
+        job_title: chucDanh.trim() || null,
         ...(hs?.duId && { device_user_id: hs.duId }),
       })
       if (ok) v.setHoSo(null)
@@ -86,7 +100,7 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
   return (
     <>
       <div className="border-b border-[var(--line)] px-3.5 py-2.5">
-        <div className={nhan}>{n ? 'Hồ sơ' : 'Thêm nhân viên'}</div>
+        <div className={nhan}>{n ? 'Hồ sơ' : 'Tuyển vào'}</div>
         <div className="text-k-lg font-semibold">
           {n ? (
             <>
@@ -96,6 +110,7 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
             hoTen || 'Nhân viên mới'
           )}
         </div>
+        {n && <TinhTrang n={n} homNay={v.homNay} />}
         {n?.tenTuMay && (
           <div className="text-k-label text-[var(--warn)]">
             Tên lấy từ máy — gõ họ tên đầy đủ
@@ -115,13 +130,22 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
             <label className={nhan} htmlFor="nv-ma">
               Mã NV
             </label>
-            <input
-              id="nv-ma"
-              className={cn(o, 'num')}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="số trên máy, vd 604"
-            />
+            {khongCham ? (
+              <span className="text-k-sm">
+                tự cấp <b className="num">{v.kccTiep}</b>
+                <span className="text-k-label block text-[var(--ink-3)]">
+                  người không quẹt máy
+                </span>
+              </span>
+            ) : (
+              <input
+                id="nv-ma"
+                className={cn(o, 'num')}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="số trên máy, vd 604"
+              />
+            )}
           </>
         )}
         <label className={nhan} htmlFor="nv-ten">
@@ -165,26 +189,28 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
             Chỉ là gợi ý — ngày làm nhiều đoạn thì từng đoạn tự nhận ca theo giờ
           </span>
         </span>
+        <label className={nhan} htmlFor="nv-cd">
+          Chức danh
+        </label>
+        <input
+          id="nv-cd"
+          className={o}
+          list="hr-chuc-danh"
+          value={chucDanh}
+          onChange={(e) => setChucDanh(e.target.value)}
+          placeholder="gõ hoặc chọn"
+        />
+        <span className={nhan}>Ngày vào làm</span>
+        <span>
+          <DateInput label="Ngày vào làm" value={ngayVao} onChange={setNgayVao} />
+          {n && !n.ngayVao && (
+            <span className="text-k-label mt-0.5 block text-[var(--ink-3)]">
+              chưa có — nhập theo hồ sơ giấy
+            </span>
+          )}
+        </span>
         {n && (
           <>
-            <label className={nhan} htmlFor="nv-tt">
-              Tình trạng
-            </label>
-            <select
-              id="nv-tt"
-              className={o}
-              value={active ? '1' : '0'}
-              onChange={(e) => setActive(e.target.value === '1')}
-            >
-              <option value="1">Đang làm</option>
-              <option value="0">Không còn làm</option>
-            </select>
-            {!active && n.active && n.taiKhoan?.mo && (
-              <p className="text-k-label col-span-full border-l-2 border-[var(--warn)] bg-[var(--warn-wash)] py-1 pl-2 text-[var(--ink-2)]">
-                Lưu xong, tài khoản ERP <span className="num">{n.taiKhoan.email}</span> sẽ bị
-                khoá — người này không đăng nhập được nữa.
-              </p>
-            )}
             <span className={nhan}>Tài khoản ERP</span>
             <span className="text-k-sm">
               {n.taiKhoan ? (
@@ -196,6 +222,9 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
                 <span className="text-[var(--ink-3)]">chưa có — Admin cấp nếu cần</span>
               )}
             </span>
+          </>
+        )}
+        <>
             <span className={nhan}>Chấm công</span>
             <label className="text-k-sm flex items-start gap-1.5">
               <input
@@ -211,9 +240,10 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
                 </span>
               </span>
             </label>
-          </>
-        )}
+        </>
       </div>
+
+      {n && <BienDongNv key={n.id} v={v} n={n} />}
 
       {n && (
         <div className="border-b border-[var(--line)] px-3.5 py-2">

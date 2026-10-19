@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
+import { maKccTiep } from '@/lib/nhan-su/bien-dong'
+import { todayVn } from '@/lib/date-vn'
 import type { NhanVienData, NvDong } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 
 /**
@@ -26,7 +28,8 @@ export const LOC = [
   { id: 'ca-mac-dinh', ten: 'Ca mặc định, chưa xem' },
   { id: 'chua-ghep', ten: 'Mã có quẹt, chưa ghép người' },
   { id: 'khong-cham', ten: 'Không chấm công' },
-  { id: 'nghi', ten: 'Không còn làm' },
+  { id: 'sap-nghi', ten: 'Có ngày nghỉ, còn làm' },
+  { id: 'nghi', ten: 'Đã nghỉ' },
 ] as const
 export type LocId = (typeof LOC)[number]['id']
 
@@ -34,6 +37,7 @@ export function khopLoc(n: NvDong, loc: LocId): boolean {
   if (loc === 'dang-lam') return n.active
   if (loc === 'ten-may') return n.active && n.tenTuMay
   if (loc === 'ca-mac-dinh') return n.active && n.caMacDinh
+  if (loc === 'sap-nghi') return n.active && !!n.ngayCuoi
   if (loc === 'nghi') return !n.active
   if (loc === 'khong-cham') return n.active && n.khongChamCong
   return false
@@ -135,8 +139,8 @@ export function useNhanVien(nv: NhanVienData) {
       full_name: string
       team: string | null
       shift_id: string
-      active: boolean
       attendance_exempt: boolean
+      job_title: string | null
     },
   ) =>
     chay(
@@ -144,17 +148,37 @@ export function useNhanVien(nv: NhanVienData) {
       `Đã lưu ${v.full_name}`,
     )
 
-  const them = (v: {
-    code: string
+  /** Tuyển vào (0248): có ngày vào; người không chấm công được tự cấp mã KCC. */
+  const tuyen = (v: {
+    khong_cham: boolean
+    code?: string
     full_name: string
+    hire_date: string
     team: string | null
     shift_id: string
+    job_title: string | null
     device_user_id?: string
   }) =>
     chay(
       () => api('/api/dept/hr/cham-cong/nhan-vien', { method: 'POST', body: v }),
-      `Đã thêm ${v.full_name}`,
+      `Đã tuyển ${v.full_name}`,
     )
+
+  /** Ghi một biến động: ngày vào · cho nghỉ · huỷ cho nghỉ · đi làm lại · chuyển. */
+  const bienDong = (id: string, body: Record<string, unknown>, xong: string) =>
+    chay(
+      () => api(`/api/dept/hr/cham-cong/nhan-vien/${id}/bien-dong`, { method: 'POST', body }),
+      xong,
+    )
+
+  const kccTiep = useMemo(() => maKccTiep(nv.ds.map((n) => n.code)), [nv.ds])
+  const chucDanhGoiY = useMemo(
+    () =>
+      [...new Set(nv.ds.map((n) => n.chucDanh).filter((t): t is string => !!t))].sort(
+        (a, b) => a.localeCompare(b, 'vi'),
+      ),
+    [nv.ds],
+  )
 
   /** Đổi ca nhanh ngay trên dòng lưới. */
   const doiCa = (n: NvDong, shiftId: string) =>
@@ -162,8 +186,8 @@ export function useNhanVien(nv: NhanVienData) {
       full_name: n.hoTen,
       team: n.boPhan,
       shift_id: shiftId,
-      active: n.active,
       attendance_exempt: n.khongChamCong,
+      job_title: n.chucDanh,
     })
 
   async function hangLoat(v: { shift_id?: string; team?: string }) {
@@ -207,7 +231,11 @@ export function useNhanVien(nv: NhanVienData) {
     chonHet,
     busy,
     luu,
-    them,
+    tuyen,
+    bienDong,
+    kccTiep,
+    chucDanhGoiY,
+    homNay: todayVn(),
     doiCa,
     hangLoat,
     ghep,
