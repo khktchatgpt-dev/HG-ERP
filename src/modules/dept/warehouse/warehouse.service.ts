@@ -198,7 +198,81 @@ async function nextCode(
   return `${prefix}-${String(no + 1).padStart(4, '0')}`
 }
 
+/** Nhóm nhận mã tự cấp cho dòng tự gõ của đơn mua gỗ (19/10/2026). */
+export const NHOM_DONG_TU_GO = 'Gỗ - ván - chi tiết gỗ mua ngoài'
+
 export const materialsService = {
+  /**
+   * MÃ VẬT TƯ CHO DÒNG TỰ GÕ của đơn mua (gỗ / gia công theo mã SP — 0134).
+   *
+   * Vì sao (19/10/2026, chủ dự án): dòng tự gõ không có mã nên không lên phiếu
+   * nhập — ĐH02HGTĐ (400 + 400 ghế gỗ, trễ hẹn) mở form nhận hàng ra lưới
+   * trống, người phụ trách không ghi nhận được hàng về. Luật mới: hàng nào đặt
+   * mua cũng phải nhập kho; chưa có mã thì hệ thống TỰ CẤP lúc lưu đơn.
+   *
+   * Tìm trước, tạo sau — cùng khoá trùng tên "chắc chắn" với `create`, nên đặt
+   * lại cùng một mã SP không đẻ mã thứ hai. Mã mới gắn cờ "chờ Kho rà" (0136).
+   * Không hỏi quyền `warehouse.material.create`: đây là hệ quả của việc lưu đơn,
+   * người lưu đơn đã qua cửa quyền của đơn.
+   */
+  async ensureForFreeLine(
+    user: User,
+    line: { name: string; unit: string | null },
+    poCode?: string,
+  ): Promise<string> {
+    const name = line.name.trim().slice(0, 200)
+    const group = NHOM_DONG_TU_GO
+    const siblings = await materialsRepo.namesInGroup(group)
+    const key = sureKey(name)
+    const same = siblings.find((m) =>
+      key.length >= MIN_KEY_LEN
+        ? sureKey(m.name) === key
+        : m.name.trim().toLowerCase() === name.toLowerCase(),
+    )
+    if (same) {
+      const m = await materialsRepo.findByCode(same.code)
+      if (m) return m.id
+    }
+    const created = await materialsRepo.insert({
+      code: await nextCode(group, siblings),
+      name,
+      unit: normalizeUnit(line.unit?.trim() || 'Cái'),
+      barcode: null,
+      spec: null,
+      price_unit: null,
+      unit2_factor: null,
+      group_name: group,
+      sub_group: null,
+      min_stock: 0,
+      max_stock: null,
+      over_tolerance_pct: 0,
+      reorder_point: null,
+      reorder_qty: null,
+      shelf_location: null,
+      vat_rate: null,
+      default_supplier_id: null,
+      last_purchase_price: null,
+      po_template: 'wood',
+      kg_per_m: null,
+      kg_per_unit: null,
+      default_bar_length_m: null,
+      pack_size: null,
+      pack_unit: null,
+      material_grade: null,
+      open_style: null,
+      pcs_per_ctn: null,
+      finish: null,
+      m3_per_unit: null,
+      warranty_text: null,
+      note: `Tự cấp mã từ dòng tự gõ của đơn mua${poCode ? ` ${poCode}` : ''}`,
+      needs_review: true,
+      needs_review_fields: [],
+      created_by: user.id,
+    })
+    invalidateTaxonomy()
+    return created.id
+  },
+
   async list(
     user: User,
     opts: {
