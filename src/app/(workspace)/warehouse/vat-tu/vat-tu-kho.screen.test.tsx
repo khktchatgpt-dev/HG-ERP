@@ -179,6 +179,9 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
     const hop = await screen.findByRole('dialog', { name: 'Thêm mã vật tư' })
     expect(within(hop).queryByText(/Cung ứng giữ · chỉ xem/)).toBeNull()
+    // Chờ danh mục nhóm tải xong: chọn trước khi có <option> thì lượt chọn rơi mất
+    // (chập chờn khi cả bộ test chạy song song, 19/10/2026).
+    await within(hop).findByRole('option', { name: NHOM }, { timeout: 5000 })
     fireEvent.change(within(hop).getByLabelText('Nhóm'), { target: { value: NHOM } })
     expect(
       await within(hop).findByText('SAT1238 · tự cấp', {}, { timeout: 5000 }),
