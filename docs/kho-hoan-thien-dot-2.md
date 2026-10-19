@@ -175,6 +175,13 @@ nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 0
 hàng chờ xuất · lệnh xong còn hàng · mã dưới mức · kiểm kê đang mở. Kho nhận thông
 báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.
 
+> **B8a XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/PvUSfGoMDrT7nMjGz4yezC, duyệt Q1–Q6 theo đề xuất):
+> `/warehouse` Bàn làm việc là trang đầu khu Kho (home + mục đầu menu, exact). 11 ô việc 3 nhóm — mỗi ô đếm bằng
+> đúng hàm màn đích, đã đối chiếu từng ô với màn đích ngày 19/10 (Hàng về 5/2/9 · Sổ phiếu 95 · Theo lệnh 12/2/3 ·
+> Tồn 5/73 · Kiểm kê 0 · Đề nghị 0). Lệch bản vẽ có lý do: "quá hạn" + "≤ 7 ngày" gộp một ô vì Theo lệnh là một rổ;
+> "thiếu số NCC" đếm cả sổ như tab Sổ phiếu. Hai bảng việc gấp (Nhận → form đúng đợt kế tiếp; Ghi xuất → Xuất kho
+> đã chọn lệnh). Hàng về nhận `?hen=` để ô mở đúng tab. Còn B8b thông báo cho Kho.
+
 ## Giai đoạn 2 — Chuyển giao
 
 **C1 · Chạy song song (~2 tuần).** Mở tài khoản wh1/wh2 (đặt mật khẩu tạm, bắt đổi

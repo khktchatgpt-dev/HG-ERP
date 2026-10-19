@@ -128,12 +128,16 @@ export function HangVeScreen({
     })
 
   const [q, setQ] = useState('')
+  // `?hen=` từ ô việc của Bàn làm việc Kho (B8a) mở thẳng đúng tab mốc hẹn.
+  const henUrl = params.get('hen')
   const [hen, setHen] = useState<Hen>(() =>
-    rows.some((r) => r.bucket === 'overdue')
-      ? 'overdue'
-      : rows.some((r) => r.bucket === 'today')
-        ? 'today'
-        : MOI,
+    henUrl && rows.some((r) => r.bucket === henUrl)
+      ? (henUrl as Hen)
+      : rows.some((r) => r.bucket === 'overdue')
+        ? 'overdue'
+        : rows.some((r) => r.bucket === 'today')
+          ? 'today'
+          : MOI,
   )
   const [lsx, setLsx] = useState<string>(MOI)
   const [ncc, setNcc] = useState('')

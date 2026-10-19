@@ -333,11 +333,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
      * người dùng vào 404.
      */
     ready: true,
-    home: '/warehouse/nhap',
+    // B8a (19/10/2026): vào khu Kho là Bàn làm việc — Hàng về lùi xuống mục thứ hai.
+    home: '/warehouse',
     sections: [
       {
         heading: 'Nghiệp vụ',
         items: [
+          // B8a: trang đầu — exact để mục này không sáng ở mọi trang con /warehouse/*.
+          { href: '/warehouse', label: 'Bàn làm việc', icon: 'home', exact: true },
           { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
           // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
           { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
