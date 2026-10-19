@@ -8198,12 +8198,14 @@ export type Database = {
       }
       users: {
         Row: {
+          account_kind: string
           avatar_url: string | null
           created_at: string
           deleted_at: string | null
           department_id: string | null
           email: string
           employee_code: string | null
+          employee_id: string | null
           id: string
           is_active: boolean
           last_login_at: string | null
@@ -8213,16 +8215,19 @@ export type Database = {
           password_hash: string
           phone: string | null
           role: string
+          shared_holder: string | null
           title: string | null
           updated_at: string
         }
         Insert: {
+          account_kind?: string
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           department_id?: string | null
           email: string
           employee_code?: string | null
+          employee_id?: string | null
           id?: string
           is_active?: boolean
           last_login_at?: string | null
@@ -8232,16 +8237,19 @@ export type Database = {
           password_hash: string
           phone?: string | null
           role?: string
+          shared_holder?: string | null
           title?: string | null
           updated_at?: string
         }
         Update: {
+          account_kind?: string
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           department_id?: string | null
           email?: string
           employee_code?: string | null
+          employee_id?: string | null
           id?: string
           is_active?: boolean
           last_login_at?: string | null
@@ -8251,10 +8259,18 @@ export type Database = {
           password_hash?: string
           phone?: string | null
           role?: string
+          shared_holder?: string | null
           title?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "users_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "users_department_id_fkey"
             columns: ["department_id"]
@@ -9584,6 +9600,7 @@ export type Database = {
       }
     }
     Functions: {
+
       hr_attendance_days: {
         Args: { p_from: string; p_to: string }
         Returns: string[]

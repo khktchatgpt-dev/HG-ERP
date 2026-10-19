@@ -237,6 +237,9 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
             <th className={h}>Mã NV</th>
             <th className={h}>Họ tên</th>
             <th className={h}>Bộ phận / Tổ</th>
+            <th className={h} title="Admin cấp ở Admin › Nhân viên & tài khoản — ở đây chỉ để xem">
+              Tài khoản ERP
+            </th>
             <th
               className={h}
               title="Chỉ là gợi ý — ngày làm nhiều đoạn thì từng đoạn tự nhận ca"
@@ -276,6 +279,18 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
               <td className={cn(c, dangMo === n.id && 'font-semibold')}>{n.hoTen}</td>
               <td className={cn(c, !n.boPhan && 'text-[var(--ink-3)]')}>
                 {n.boPhan ?? '—'}
+              </td>
+              <td className={cn(c, !n.taiKhoan && 'text-[var(--ink-3)]')}>
+                {n.taiKhoan ? (
+                  <>
+                    <span className="num">{n.taiKhoan.email}</span>
+                    {!n.taiKhoan.mo && (
+                      <span className="ml-1.5 text-[11px] text-[var(--stop)]">đã khoá</span>
+                    )}
+                  </>
+                ) : (
+                  '—'
+                )}
               </td>
               <td className={c} onClick={(e) => e.stopPropagation()}>
                 <select
@@ -319,7 +334,7 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
         <tfoot>
           <tr>
             <td
-              colSpan={7}
+              colSpan={9}
               className={cn(
                 c,
                 'sticky bottom-0 border-t border-[var(--line)] bg-[var(--surface-raised)] font-semibold',

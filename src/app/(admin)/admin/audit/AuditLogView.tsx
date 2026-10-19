@@ -30,6 +30,8 @@ const ACTION_LABEL: Record<string, string> = {
   soft_delete: 'Xoá',
   restore: 'Khôi phục',
   bulk_import: 'Import',
+  link: 'Gắn nhân viên',
+  auto_lock: 'Tự khoá (nghỉ việc)',
 }
 
 const ACTIONS = Object.keys(ACTION_LABEL)

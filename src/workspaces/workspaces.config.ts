@@ -798,7 +798,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Quản trị',
         items: [
           { href: '/admin', label: 'Tổng quan', icon: 'home', roles: ['admin'] },
-          { href: '/admin/users', label: 'Người dùng', icon: 'users', roles: ['admin'] },
+          { href: '/admin/users', label: 'Nhân viên & tài khoản', icon: 'users', roles: ['admin'] },
           {
             href: '/admin/departments',
             label: 'Phòng ban',

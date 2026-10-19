@@ -373,6 +373,8 @@ export type NvDong = {
   /** Không chấm công (Kinh Doanh, Tài Xế, Bốc xếp, Bảo Vệ…): không bị tính thiếu công. */
   khongChamCong: boolean
   lanCuoi: string | null
+  /** Tài khoản ERP gắn với người này (Admin cấp, 0247). Chỉ để xem ở Nhân sự. */
+  taiKhoan: { email: string; mo: boolean } | null
 }
 
 export type NhanVienData = {
@@ -391,7 +393,7 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
   const tu = new Date(`${homNay}T00:00:00Z`)
   tu.setUTCDate(tu.getUTCDate() - NV_NHIN_LAI_NGAY + 1)
   const nhinLaiTu = tu.toISOString().slice(0, 10)
-  const [devices, dus, emps, shifts, logs] = await Promise.all([
+  const [devices, dus, emps, shifts, logs, tks] = await Promise.all([
     chamCongRepo.devices(),
     chamCongRepo.deviceUsers(),
     chamCongRepo.employees(),
@@ -400,7 +402,11 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
       `${nhinLaiTu}T00:00:00+07:00`,
       `${sauNgay(homNay)}T00:00:00+07:00`,
     ),
+    chamCongRepo.taiKhoanGan(),
   ])
+  const tkTheoNv = new Map(
+    tks.map((t) => [t.employee_id, { email: t.email, mo: t.is_active }]),
+  )
   const devById = new Map(devices.map((d) => [d.id, d]))
   const dem = new Map<string, { n: number; cuoi: string }>()
   for (const l of logs) {
@@ -445,6 +451,7 @@ async function taiNhanVien(homNay: string): Promise<NhanVienData> {
         (c, m) => (m.lanCuoi && (!c || m.lanCuoi > c) ? m.lanCuoi : c),
         null,
       ),
+      taiKhoan: tkTheoNv.get(e.id) ?? null,
     }
   })
   return {

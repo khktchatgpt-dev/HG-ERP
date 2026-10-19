@@ -135,6 +135,17 @@ export const chamCongRepo = {
     )
   },
 
+  /** Tài khoản ERP gắn với nhân viên (0247) — cột chỉ-xem ở Hồ sơ nhân viên. */
+  async taiKhoanGan(): Promise<{ employee_id: string; email: string; is_active: boolean }[]> {
+    const { data, error } = await db()
+      .from('users')
+      .select('employee_id, email, is_active')
+      .not('employee_id', 'is', null)
+      .is('deleted_at', null)
+    if (error) throw new Error(error.message)
+    return (data ?? []) as { employee_id: string; email: string; is_active: boolean }[]
+  },
+
   async employees(): Promise<EmployeeRow[]> {
     return docHet((a, b) =>
       db()

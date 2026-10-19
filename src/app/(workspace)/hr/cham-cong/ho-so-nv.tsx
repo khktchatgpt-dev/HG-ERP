@@ -179,6 +179,23 @@ function FormNv({ v, n }: { v: NhanVienCtx; n?: NvDong }) {
               <option value="1">Đang làm</option>
               <option value="0">Không còn làm</option>
             </select>
+            {!active && n.active && n.taiKhoan?.mo && (
+              <p className="text-k-label col-span-full border-l-2 border-[var(--warn)] bg-[var(--warn-wash)] py-1 pl-2 text-[var(--ink-2)]">
+                Lưu xong, tài khoản ERP <span className="num">{n.taiKhoan.email}</span> sẽ bị
+                khoá — người này không đăng nhập được nữa.
+              </p>
+            )}
+            <span className={nhan}>Tài khoản ERP</span>
+            <span className="text-k-sm">
+              {n.taiKhoan ? (
+                <span className="num">
+                  {n.taiKhoan.email}
+                  {!n.taiKhoan.mo && <span className="text-[var(--stop)]"> · đã khoá</span>}
+                </span>
+              ) : (
+                <span className="text-[var(--ink-3)]">chưa có — Admin cấp nếu cần</span>
+              )}
+            </span>
             <span className={nhan}>Chấm công</span>
             <label className="text-k-sm flex items-start gap-1.5">
               <input
