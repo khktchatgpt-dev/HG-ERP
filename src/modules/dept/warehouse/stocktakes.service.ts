@@ -280,6 +280,43 @@ export const stocktakesService = {
     return { saved }
   },
 
+  /**
+   * THÊM TAY MỘT MÃ vào đợt đang đếm (B7b, Q1): người đếm thấy hàng ngoài kệ mà
+   * danh sách không có (sổ ghi 0, lâu không có phiếu). Số sổ của dòng mới lấy
+   * TẠI `freeze_at` của đợt — cùng mốc với mọi dòng khác, để chênh lệch của nó
+   * không ăn phiếu phát sinh sau lúc chốt.
+   */
+  async themDong(
+    user: User,
+    id: string,
+    materialId: string,
+  ): Promise<{ line_id: string }> {
+    await assertWrite(user)
+    const take = await stocktakesRepo.findById(id)
+    if (!take) throw NotFound('Đợt kiểm kê không tồn tại')
+    if (take.status !== 'counting' || !take.freeze_at) {
+      throw Conflict('Chỉ thêm mã khi đợt đang đếm')
+    }
+    const lines = await stocktakesRepo.listLines(id)
+    const co = lines.find((l) => l.material_id === materialId)
+    if (co) return { line_id: co.id }
+    const book = await bookQtyAt(take.freeze_at, [materialId])
+    const qty = book.get(materialId) ?? 0
+    await stocktakesRepo.insertLines([
+      {
+        stocktake_id: id,
+        material_id: materialId,
+        system_qty: qty,
+        book_qty_frozen: qty,
+      },
+    ])
+    const moi = (await stocktakesRepo.listLines(id)).find(
+      (l) => l.material_id === materialId,
+    )
+    if (!moi) throw new Error('Thêm dòng không thành công')
+    return { line_id: moi.id }
+  },
+
   /** Gửi ĐỐI CHIẾU — chốt việc đếm, mở số sổ ra cho người duyệt xem. */
   async submitReview(user: User, id: string): Promise<void> {
     await assertWrite(user)

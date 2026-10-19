@@ -73,3 +73,8 @@ export const stocktakeListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(50),
 })
+
+/** Thêm tay một mã vào đợt đang đếm (B7b). */
+export const stocktakeAddLineSchema = z.object({
+  material_id: z.string().uuid('Mã vật tư không hợp lệ'),
+})

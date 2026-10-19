@@ -80,3 +80,83 @@
     display: none;
   }
 }
+
+/* ── Phiếu đếm (B7b) ── */
+.kh.kh .kk-track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  border-bottom: 1px solid var(--kh-line);
+  padding: 0 14px;
+  font-size: 12.5px;
+}
+.kh.kh .kk-track > span {
+  padding: 6px 12px;
+  color: var(--kh-ink3);
+  border-right: 1px solid var(--kh-hair);
+}
+.kh.kh .kk-track > span.on {
+  background: var(--kh-act-wash);
+  color: var(--kh-act);
+  font-weight: 600;
+}
+.kh.kh .kk-track > span.xong {
+  color: var(--kh-done);
+}
+.kh.kh .kk-track > span.kk-moc {
+  margin-left: auto;
+  border-right: 0;
+  font-family: var(--kh-mono);
+}
+.kh.kh .kk-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.kh.kh .kk-chk input:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: 1px;
+}
+/* Ô cần chú ý: viền + nền vàng nhạt (chưa đếm sau khi bấm gửi / gõ sai). */
+.kh.kh .kh-o.need {
+  border-color: var(--kh-warn);
+  background: var(--kh-warn-wash);
+}
+.kh.kh .kk-luoi > tbody > tr > td {
+  vertical-align: middle;
+}
+.kh.kh .kk-luoi > tbody > tr.kk-can > td {
+  background: var(--kh-warn-wash);
+}
+.kh.kh .kk-luoi > tbody > tr {
+  scroll-margin-top: 40px;
+  scroll-margin-bottom: 36px;
+}
+/* Danh sách điện thoại: dòng thẻ phẳng ngăn bằng vạch, ô số to. */
+.kh.kh .kk-ds {
+  display: block;
+}
+.kh.kh .kk-it {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--kh-hair);
+}
+.kh.kh .kk-it.kk-can {
+  background: var(--kh-warn-wash);
+}
+.kh.kh .kk-ten {
+  overflow-wrap: anywhere;
+}
+.kh.kh .kk-goi {
+  font-size: 12px;
+  margin-top: 2px;
+}
+.kh.kh .kk-to {
+  height: 40px;
+  font-size: 18px;
+  text-align: right;
+}

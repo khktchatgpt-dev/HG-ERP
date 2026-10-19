@@ -157,6 +157,12 @@ nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 0
 > đếm: Nhôm 50, Bao bì 74 — khớp). Vá: hàm xem đợt gọi quyền `warehouse.stock.read` không tồn tại → 500 cho
 > mọi tài khoản không phải admin. KK-2026-0005 đã huỷ. Còn B7b phiếu đếm, B7c đối chiếu + duyệt (Q2 chặn tự duyệt).
 
+> **B7b XONG 19/10/2026**: phiếu đếm `/warehouse/kiem-ke/[id]` — Bắt đầu đếm (chốt sổ giờ server) · lưới
+> đếm mù (số sổ `null` trong dữ liệu gửi xuống, đã kiểm) · tự lưu sau 2 s + Ctrl+S · Enter xuống dòng · lọc
+> tìm / kệ / chưa đếm · thêm tay mã ngoài kệ (số sổ lấy tại mốc chốt) · Gửi đối chiếu chặn tại chỗ khi còn
+> trống hoặc gõ sai, câu chặn bấm được · bản điện thoại < 700px ô số to. Sổ đợt: Enter / bấm đúp mở phiếu.
+> Thử thật cả vòng trên đợt thử rồi xoá + trả số KK về 6. Còn B7c đối chiếu + duyệt.
+
 **B8 · Bàn làm việc Kho + thông báo.** Trang đầu khu Kho: hàng về hôm nay · lệnh có
 hàng chờ xuất · lệnh xong còn hàng · mã dưới mức · kiểm kê đang mở. Kho nhận thông
 báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.

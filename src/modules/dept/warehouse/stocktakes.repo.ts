@@ -45,6 +45,8 @@ export type TakeLine = {
   material_code: string | null
   material_name: string | null
   material_unit: string | null
+  /** Kệ gợi ý trên danh mục (lọc phiếu đếm theo kệ). */
+  material_shelf: string | null
   /** Tồn sổ TẠI freeze_at. Null = đợt chưa chốt sổ. */
   book_qty_frozen: number | null
   /** Null = CHƯA ĐẾM (khác hẳn đếm được 0). */
@@ -204,7 +206,7 @@ export const stocktakesRepo = {
       const { data } = await db()
         .from('warehouse_stocktake_lines')
         .select(
-          'id, material_id, book_qty_frozen, counted_qty, counted_by, counted_at, note, material:warehouse_materials(code, name, unit)',
+          'id, material_id, book_qty_frozen, counted_qty, counted_by, counted_at, note, material:warehouse_materials(code, name, unit, shelf_location)',
         )
         .eq('stocktake_id', stocktakeId)
         .order('material_id')
@@ -215,6 +217,7 @@ export const stocktakesRepo = {
           code?: string
           name?: string
           unit?: string
+          shelf_location?: string | null
         }
         out.push({
           id: r.id as string,
@@ -222,6 +225,7 @@ export const stocktakesRepo = {
           material_code: mat.code ?? null,
           material_name: mat.name ?? null,
           material_unit: mat.unit ?? null,
+          material_shelf: mat.shelf_location ?? null,
           book_qty_frozen: r.book_qty_frozen == null ? null : Number(r.book_qty_frozen),
           // KHÔNG dùng num(): nó biến null thành 0, và "chưa đếm" sẽ thành
           // "đếm được 0" — mất đúng thông tin đợt này cần nhất.

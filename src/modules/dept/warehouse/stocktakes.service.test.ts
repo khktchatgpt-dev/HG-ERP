@@ -67,6 +67,7 @@ function line(over: Partial<TakeLine> = {}): TakeLine {
     material_code: 'NH-01',
     material_name: 'Nhôm hộp',
     material_unit: 'cây',
+    material_shelf: null,
     book_qty_frozen: 100,
     counted_qty: null,
     counted_by: null,
@@ -320,5 +321,46 @@ describe('từ chối và huỷ', () => {
     await expect(stocktakesService.cancel(admin, 'dot1', 'nhầm')).rejects.toMatchObject({
       status: 409,
     })
+  })
+})
+
+describe('thêm tay một mã vào đợt đang đếm (B7b, Q1)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('chỉ khi đợt đang đếm', async () => {
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(
+      take({ status: 'open', freeze_at: null }),
+    )
+    await expect(stocktakesService.themDong(admin, 'dot1', 'm9')).rejects.toThrow(
+      /đang đếm/,
+    )
+    expect(stocktakesRepo.insertLines).not.toHaveBeenCalled()
+  })
+
+  it('mã đã có trong phiếu thì trả dòng cũ, không thêm trùng', async () => {
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(take({ status: 'counting', freeze_at: '2026-10-31T09:05:00.000Z' })) // prettier-ignore
+    vi.mocked(stocktakesRepo.listLines).mockResolvedValue([
+      line({ id: 'l7', material_id: 'm9' }),
+    ])
+    expect(await stocktakesService.themDong(admin, 'dot1', 'm9')).toEqual({
+      line_id: 'l7',
+    })
+    expect(stocktakesRepo.insertLines).not.toHaveBeenCalled()
+  })
+
+  it('số sổ của dòng mới lấy TẠI freeze_at của đợt, không phải bây giờ', async () => {
+    const freeze = '2026-10-31T09:05:00.000Z'
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(take({ status: 'counting', freeze_at: freeze })) // prettier-ignore
+    vi.mocked(stocktakesRepo.listLines)
+      .mockResolvedValueOnce([line()])
+      .mockResolvedValueOnce([line(), line({ id: 'l9', material_id: 'm9' })])
+    vi.mocked(bookQtyAt).mockResolvedValue(new Map([['m9', 12]]))
+    expect(await stocktakesService.themDong(admin, 'dot1', 'm9')).toEqual({
+      line_id: 'l9',
+    })
+    expect(bookQtyAt).toHaveBeenCalledWith(freeze, ['m9'])
+    expect(stocktakesRepo.insertLines).toHaveBeenCalledWith([
+      { stocktake_id: 'dot1', material_id: 'm9', system_qty: 12, book_qty_frozen: 12 },
+    ])
   })
 })

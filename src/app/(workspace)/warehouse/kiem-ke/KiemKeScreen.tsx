@@ -3,7 +3,7 @@
 import './kiem-ke.css'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardCheck, XCircle } from 'lucide-react'
+import { BookOpen, ClipboardCheck, ListChecks, XCircle } from 'lucide-react'
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -98,8 +98,12 @@ export function KiemKeScreen({
     setChon(null)
     router.push(x === macDinh ? pathname : `${pathname}?ro=${x}`, { scroll: false })
   }
+  /** Enter mở phiếu đếm; Space chỉ chọn dòng (để bấm nút ở Action Pane). */
   const phim = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      router.push(`/warehouse/kiem-ke/${id}`)
+    } else if (e.key === ' ') {
       e.preventDefault()
       setChon(id)
     }
@@ -136,6 +140,13 @@ export function KiemKeScreen({
               </ApNut>
             </ApNhom>
             <ApNhom>
+              <ApNut
+                icon={<ListChecks size={15} aria-hidden />}
+                href={sel ? `/warehouse/kiem-ke/${sel.id}` : undefined}
+                why={sel ? null : 'Chọn một đợt trong bảng trước'}
+              >
+                {sel?.status === 'counting' ? 'Đếm tiếp' : 'Mở phiếu đếm'}
+              </ApNut>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
                 Sổ phiếu
               </ApNut>
@@ -253,6 +264,7 @@ export function KiemKeScreen({
                     tabIndex={0}
                     aria-selected={on}
                     onClick={() => setChon(r.id)}
+                    onDoubleClick={() => router.push(`/warehouse/kiem-ke/${r.id}`)}
                     onKeyDown={(e) => phim(e, r.id)}
                   >
                     <td className="kh-ma">
@@ -328,7 +340,7 @@ export function KiemKeScreen({
       )}
 
       <ThanhTT
-        left="Số lệch và tiền chỉ hiện sau khi người đếm gửi đối chiếu (đếm mù, giấu ở server)"
+        left="Enter / bấm đúp mở phiếu đếm · số lệch và tiền chỉ hiện sau khi gửi đối chiếu (đếm mù)"
         right={
           <>
             <b>{fmt(hien.length)}</b> / {fmt(rows.length)} đợt
