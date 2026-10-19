@@ -11,6 +11,25 @@ export type DotDem = {
   nguoi_dem: string | null
   note: string | null
   reject_reason: string | null
+  /** Phiếu KK sinh khi duyệt (in biên bản 05-VT). */
+  doc_id: string | null
+  doc_code: string | null
+  approved_at: string | null
+}
+
+/** Chênh của một dòng khi đối chiếu (Q4: đơn giá bình quân kỳ chứa ngày chốt). */
+export type ChenhDong = {
+  chenh: number
+  don_gia: number | null
+  chenh_tien: number | null
+}
+
+export type DoiChieuDl = {
+  tu: string
+  den: string
+  theoDong: Record<string, ChenhDong>
+  /** Q2: null = được duyệt; có chữ = lý do bạn không tự duyệt. */
+  lyDoTuDuyet: string | null
 }
 
 export type DongDem = {

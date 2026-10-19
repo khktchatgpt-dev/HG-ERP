@@ -78,3 +78,25 @@ export function kiemCuoiTheoNhom(
   }
   return out
 }
+
+/**
+ * Q2 — NGƯỜI ĐẾM KHÔNG TỰ DUYỆT. Trả lý do chặn (câu người dùng đọc), hoặc null
+ * khi được duyệt. Dùng CHUNG cho server (chặn thật) và màn (nút khoá + nói lý do
+ * tại chỗ), để hai nơi không nói hai luật.
+ *
+ * "Người đếm" = người được phân đếm HOẶC bất kỳ ai đã ghi một số đếm của đợt.
+ * Quản trị viên cũng theo luật này: duyệt thay thì không được là người đếm.
+ */
+export function lyDoKhongTuDuyet(
+  userId: string,
+  dot: { assigned_to: string | null },
+  demBoi: readonly (string | null)[],
+): string | null {
+  if (dot.assigned_to === userId) {
+    return 'Bạn được phân đếm đợt này nên không tự duyệt. Nhờ Thủ kho hoặc quản trị viên duyệt.'
+  }
+  if (demBoi.includes(userId)) {
+    return 'Bạn đã ghi số đếm trong đợt này nên không tự duyệt. Nhờ Thủ kho hoặc quản trị viên duyệt.'
+  }
+  return null
+}

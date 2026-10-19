@@ -218,6 +218,7 @@ export function usePhieuDem(dot: DotDem, dong: DongDem[]) {
     gui,
     themMa,
     toiChuaDem,
+    refresh: () => router.refresh(),
   } as const
 }
 

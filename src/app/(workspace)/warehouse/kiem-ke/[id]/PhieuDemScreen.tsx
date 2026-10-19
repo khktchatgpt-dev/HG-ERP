@@ -1,9 +1,18 @@
 'use client'
 
 import '../kiem-ke.css'
-import { useRef, type KeyboardEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Play, Save, Send } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCheck,
+  FileText,
+  Play,
+  Printer,
+  Save,
+  Send,
+  Undo2,
+} from 'lucide-react'
 import { api } from '@/lib/api'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -17,11 +26,15 @@ import {
 } from '../../_erp/khung'
 import { OTim } from '../../_erp/o-tim'
 import { TRANG_THAI } from '../kiem-ke.shared'
+import { HopLyDo } from '../../de-nghi/huy-phieu'
+import { DoiChieu, HopDuyet, useDoiChieu } from './doi-chieu'
 import { DsDemDienThoai, LuoiDem } from './luoi-dem'
-import { gioVn, type DongDem, type DotDem } from './phieu-dem.shared'
+import { gioVn, type DoiChieuDl, type DongDem, type DotDem } from './phieu-dem.shared'
 import { usePhieuDem } from './usePhieuDem'
 
 type VatTu = { id: string; code: string; name: string; unit: string }
+
+const DC_RONG: DoiChieuDl = { tu: '', den: '', theoDong: {}, lyDoTuDuyet: null }
 
 const BUOC = [
   { key: 'open', nhan: 'Mở đợt' },
@@ -36,18 +49,29 @@ const BUOC = [
  *
  * Mới mở → "Bắt đầu đếm" chốt sổ tại giờ server. Đang đếm → gõ số, tự lưu,
  * "Gửi đối chiếu" bị chặn tới khi mọi dòng có số (trống không phải là 0).
- * Chờ duyệt / đã duyệt → chỉ xem; màn đối chiếu + duyệt là B7c.
+ * Chờ duyệt / đã duyệt → khối ĐỐI CHIẾU (B7c, bản vẽ KK-4): số sổ, chênh, tiền;
+ * Duyệt (người đếm không tự duyệt — Q2) / Trả về đếm lại; đã duyệt thì in 05-VT.
  */
 export function PhieuDemScreen({
   dot,
   dong,
   canWrite,
+  canApprove,
+  doiChieu,
 }: {
   dot: DotDem
   dong: DongDem[]
   canWrite: boolean
+  canApprove: boolean
+  /** Có khi đợt đã gửi đối chiếu (chờ duyệt / đã duyệt). */
+  doiChieu: DoiChieuDl | null
 }) {
   const d = usePhieuDem(dot, dong)
+  const t = useDoiChieu(dong, doiChieu ?? DC_RONG)
+  const [mo, setMo] = useState<'duyet' | 'tra' | null>(null)
+  const lyDoDuyet = !canApprove
+    ? 'Chỉ Thủ kho / người có quyền duyệt kiểm kê'
+    : (doiChieu?.lyDoTuDuyet ?? null)
   const khung = useRef<HTMLDivElement>(null)
   const beRong = useBeRong(khung)
   const hep = beRong > 0 && beRong < 700
@@ -61,7 +85,9 @@ export function PhieuDemScreen({
       : d.chuaDem.length > 0
         ? `Còn ${d.chuaDem.length} dòng chưa có số đếm`
         : null
-  const iBuoc = BUOC.findIndex((b) => b.key === dot.status)
+  // Đã duyệt = mọi bước xong (không còn bước nào "đang đứng").
+  const iBuoc =
+    dot.status === 'approved' ? BUOC.length : BUOC.findIndex((b) => b.key === dot.status)
 
   async function timVatTu(q: string): Promise<VatTu[]> {
     const res = await api<{ rows: VatTu[] }>(
@@ -122,6 +148,42 @@ export function PhieuDemScreen({
                     why={khongQuyen ?? (d.busy === 'submit' ? 'Đang gửi…' : null)}
                   >
                     Gửi đối chiếu
+                  </ApNut>
+                </>
+              )}
+              {dot.status === 'review' && (
+                <>
+                  <ApNut
+                    primary
+                    icon={<CheckCheck size={15} aria-hidden />}
+                    onClick={() => setMo('duyet')}
+                    why={lyDoDuyet}
+                  >
+                    {`Duyệt · ghi ${t.thua.length + t.thieu.length} dòng chênh`}
+                  </ApNut>
+                  <ApNut
+                    icon={<Undo2 size={15} aria-hidden />}
+                    onClick={() => setMo('tra')}
+                    why={canApprove ? null : 'Chỉ Thủ kho / người có quyền duyệt kiểm kê'}
+                  >
+                    Trả về đếm lại
+                  </ApNut>
+                </>
+              )}
+              {dot.status === 'approved' && dot.doc_id && (
+                <>
+                  <ApNut
+                    primary
+                    icon={<Printer size={15} aria-hidden />}
+                    href={`/print/warehouse/${dot.doc_id}`}
+                  >
+                    In biên bản 05-VT
+                  </ApNut>
+                  <ApNut
+                    icon={<FileText size={15} aria-hidden />}
+                    href={`/warehouse/phieu/${dot.doc_id}`}
+                  >
+                    Phiếu {dot.doc_code}
                   </ApNut>
                 </>
               )}
@@ -191,12 +253,28 @@ export function PhieuDemScreen({
           </span>
         </div>
       )}
-      {dot.status === 'review' && (
+      {d.dangDem && dot.reject_reason && (
         <div className="kh-note">
-          <span className="tag">Chờ duyệt</span>
+          <span className="tag">Bị trả về</span>
           <span>
-            Người đếm đã gửi đối chiếu. Thủ kho xem chênh lệch và duyệt — số đếm không sửa
-            được nữa trừ khi bị trả về.
+            Thủ kho trả về để đếm lại: “{dot.reject_reason}”. Sửa số rồi gửi đối chiếu
+            lại.
+          </span>
+        </div>
+      )}
+      {dot.status === 'review' && lyDoDuyet && canApprove && (
+        <div className="kh-note mut">
+          <span className="tag">Không tự duyệt</span>
+          <span>{lyDoDuyet}</span>
+        </div>
+      )}
+      {dot.status === 'approved' && (
+        <div className="kh-note ok">
+          <span className="tag">Đã duyệt</span>
+          <span>
+            Duyệt {gioVn(dot.approved_at)} · sinh phiếu{' '}
+            <b className="kh-num">{dot.doc_code}</b> ({t.thua.length} N4, {t.thieu.length}{' '}
+            X5). Sai thì đảo phiếu KK ở Sổ phiếu, không huỷ đợt.
           </span>
         </div>
       )}
@@ -207,7 +285,7 @@ export function PhieuDemScreen({
         </div>
       )}
 
-      {dong.length > 0 && (
+      {dong.length > 0 && !doiChieu && (
         <ThanhLoc>
           <input
             type="search"
@@ -280,7 +358,9 @@ export function PhieuDemScreen({
       )}
 
       <div ref={khung} style={{ height: 0, width: '100%' }} aria-hidden />
-      {dong.length === 0 ? (
+      {doiChieu ? (
+        <DoiChieu t={t} dc={doiChieu} hep={hep} />
+      ) : dong.length === 0 ? (
         <Rong
           tieuDe={dot.status === 'open' ? 'Chưa có dòng đếm' : 'Đợt không có dòng nào'}
           lyDo={
@@ -317,7 +397,9 @@ export function PhieuDemScreen({
         left={
           d.dangDem
             ? `Đếm mù: số sổ không gửi về trình duyệt khi đợt đang đếm${d.dirty ? ' · có số chưa lưu' : ''}`
-            : 'Phiếu đếm chỉ xem'
+            : doiChieu
+              ? 'Số sổ là tồn tại mốc chốt · chênh = đếm − sổ · tiền theo đơn giá bình quân kỳ'
+              : 'Phiếu đếm chỉ xem'
         }
         right={
           <>
@@ -326,6 +408,34 @@ export function PhieuDemScreen({
           </>
         }
       />
+      {mo === 'duyet' && (
+        <HopDuyet
+          dot={dot}
+          t={t}
+          onClose={() => setMo(null)}
+          onDone={(bao) => {
+            setMo(null)
+            d.setBao(bao)
+            d.refresh()
+          }}
+        />
+      )}
+      {mo === 'tra' && (
+        <HopLyDo
+          title={`Trả về đếm lại · ${dot.code}`}
+          subtitle="Đợt quay về Đang đếm — số đã đếm giữ nguyên, người đếm sửa chỗ cần sửa."
+          route={`/api/dept/warehouse/stocktakes/${dot.id}/reject`}
+          nhanNut="Trả về"
+          nhanO="Đếm lại chỗ nào, vì sao"
+          placeholder="VD: NH-0003 lệch 100% — kiểm lại kệ NHOM-A và hàng đã cấp cho lệnh 06-MX"
+          onClose={() => setMo(null)}
+          onDone={() => {
+            setMo(null)
+            d.setBao(`Đã trả ${dot.code} về đếm lại.`)
+            d.refresh()
+          }}
+        />
+      )}
     </KhoKhung>
   )
 }

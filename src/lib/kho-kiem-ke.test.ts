@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { danhSachDem, kiemCuoiTheoNhom, mocPhatSinh } from './kho-kiem-ke'
+import { danhSachDem, kiemCuoiTheoNhom, lyDoKhongTuDuyet, mocPhatSinh } from './kho-kiem-ke'
 
 const nhom = new Map([
   ['a1', 'Nhôm'],
@@ -63,5 +63,17 @@ describe('kiemCuoiTheoNhom', () => {
 describe('mocPhatSinh', () => {
   it('lùi 180 ngày', () => {
     expect(mocPhatSinh(new Date('2026-10-19T00:00:00Z'))).toBe('2026-04-22T00:00:00.000Z')
+  })
+})
+
+describe('lyDoKhongTuDuyet — Q2', () => {
+  it('người được phân đếm bị chặn', () => {
+    expect(lyDoKhongTuDuyet('nu', { assigned_to: 'nu' }, [])).toMatch(/phân đếm/)
+  })
+  it('ai đã ghi một số đếm cũng bị chặn', () => {
+    expect(lyDoKhongTuDuyet('hao', { assigned_to: 'nu' }, ['nu', 'hao'])).toMatch(/ghi số đếm/)
+  })
+  it('người khác thì duyệt được', () => {
+    expect(lyDoKhongTuDuyet('hao', { assigned_to: 'nu' }, ['nu', null])).toBeNull()
   })
 })

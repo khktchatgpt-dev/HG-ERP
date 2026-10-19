@@ -2,7 +2,10 @@ import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { canEnterWorkspace } from '@/workspaces/access'
-import { kiemCuoiTheoNhom } from '@/lib/kho-kiem-ke'
+import { kiemCuoiTheoNhom, lyDoKhongTuDuyet } from '@/lib/kho-kiem-ke'
+import { dungNxt, kyThang } from '@/lib/kho-nxt'
+import { todayVn } from '@/lib/date-vn'
+import { nxtRepo } from './nxt.repo'
 import { tomTatLenh } from '@/lib/kho-ton-lenh'
 import { hangLenhService } from './hang-lenh.service'
 import { docsRepo, insertMovements, warehousesRepo } from './stock.repo'
@@ -281,6 +284,49 @@ export const stocktakesService = {
   },
 
   /**
+   * ĐỐI CHIẾU (B7c) — chênh số lượng + chênh TIỀN của từng dòng, chỉ khi đợt đã
+   * qua bước đếm (đang đếm mù thì không có gì để đối chiếu, và trả số sổ ra là
+   * phá đếm mù).
+   *
+   * Q4: đơn giá = bình quân gia quyền của kỳ chứa ngày chốt sổ (đầu tháng → ngày
+   * chốt), cùng hàm `dungNxt` của Báo cáo Nhập–Xuất–Tồn — hai màn ra cùng số.
+   * Mã chưa lần nhập nào có giá thì chênh tiền `null` (không coi là 0).
+   */
+  async doiChieu(user: User, id: string) {
+    await assertRead(user)
+    const take = await stocktakesRepo.findById(id)
+    if (!take) throw NotFound('Đợt kiểm kê không tồn tại')
+    if (take.status !== 'review' && take.status !== 'approved') {
+      throw Conflict('Chỉ đối chiếu được khi người đếm đã gửi đối chiếu')
+    }
+    const lines = await stocktakesRepo.listLines(id)
+    const ngayChot = take.freeze_at ? todayVn(new Date(take.freeze_at)) : todayVn()
+    const ky = kyThang(ngayChot)
+    const dong = await nxtRepo.dongSoDen(ngayChot)
+    const ids = new Set(lines.map((l) => l.material_id))
+    const gia = new Map(
+      dungNxt(
+        dong.filter((d) => ids.has(d.material_id)),
+        ky.tu,
+        ngayChot,
+      ).map((r) => [r.material_id, r.don_gia]),
+    )
+    return {
+      tu: ky.tu,
+      den: ngayChot,
+      demBoi: [
+        ...new Set(lines.map((l) => l.counted_by).filter((v): v is string => !!v)),
+      ],
+      dong: lines.map((l) => {
+        const chenh =
+          Math.round(((l.counted_qty ?? 0) - (l.book_qty_frozen ?? 0)) * 1000) / 1000
+        const g = gia.get(l.material_id) ?? null
+        return { id: l.id, chenh, don_gia: g, chenh_tien: g == null ? null : chenh * g }
+      }),
+    }
+  },
+
+  /**
    * THÊM TAY MỘT MÃ vào đợt đang đếm (B7b, Q1): người đếm thấy hàng ngoài kệ mà
    * danh sách không có (sổ ghi 0, lâu không có phiếu). Số sổ của dòng mới lấy
    * TẠI `freeze_at` của đợt — cùng mốc với mọi dòng khác, để chênh lệch của nó
@@ -359,7 +405,7 @@ export const stocktakesService = {
    * tồn hiện 120. Áp delta −5 → 115, đúng. Đặt tồn = 95 → mất 20 cây vừa nhập.
    */
   async approve(user: User, id: string): Promise<{ doc_code: string; applied: number }> {
-    await assertWrite(user)
+    await assertAction(user, 'warehouse.stocktake.approve')
     const take = await stocktakesRepo.findById(id)
     if (!take) throw NotFound('Đợt kiểm kê không tồn tại')
     if (take.status !== 'review') {
@@ -367,6 +413,13 @@ export const stocktakesService = {
     }
 
     const lines = await stocktakesRepo.listLines(id)
+    // Q2 (B7c, 19/10/2026): người đếm không tự duyệt — luật chung với màn.
+    const tuDuyet = lyDoKhongTuDuyet(
+      user.id,
+      take,
+      lines.map((l) => l.counted_by),
+    )
+    if (tuDuyet) throw Forbidden(tuDuyet)
     const adjusts = lines
       .map((l) => ({ l, delta: (l.counted_qty ?? 0) - (l.book_qty_frozen ?? 0) }))
       .filter((x) => Math.abs(x.delta) > 1e-9)
@@ -411,7 +464,7 @@ export const stocktakesService = {
   },
 
   async reject(user: User, id: string, reason: string): Promise<void> {
-    await assertWrite(user)
+    await assertAction(user, 'warehouse.stocktake.approve')
     if (!reason.trim()) throw BadRequest('Từ chối phải kèm lý do')
     const take = await stocktakesRepo.findById(id)
     if (!take) throw NotFound('Đợt kiểm kê không tồn tại')

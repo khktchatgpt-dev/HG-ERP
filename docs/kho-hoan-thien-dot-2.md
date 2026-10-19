@@ -163,6 +163,14 @@ nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 0
 > trống hoặc gõ sai, câu chặn bấm được · bản điện thoại < 700px ô số to. Sổ đợt: Enter / bấm đúp mở phiếu.
 > Thử thật cả vòng trên đợt thử rồi xoá + trả số KK về 6. Còn B7c đối chiếu + duyệt.
 
+> **B7c XONG 19/10/2026 — B7 Kiểm kê đủ vòng**: đối chiếu trên cùng màn `/warehouse/kiem-ke/[id]` khi đợt chờ
+> duyệt / đã duyệt: dải tóm tắt (khớp · thừa N4 · thiếu X5 · chênh ròng tiền) · "Đáng soát" cho mã sổ còn hàng mà
+> đếm 0 · bảng chỉ dòng lệch với đơn giá BQ kỳ chứa ngày chốt (Q4, cùng `dungNxt`) · Duyệt qua hộp xác nhận ·
+> Trả về đếm lại bắt lý do · đã duyệt thì In 05-VT + mở phiếu KK. Q2: người được phân đếm / đã ghi số đếm không
+> tự duyệt (`lyDoKhongTuDuyet`, chặn ở service + nút khoá nói lý do); duyệt/trả về theo quyền
+> `warehouse.stocktake.approve`. Thử thật duyệt một đợt thử (sinh KK-2026-0008 · 1 N4, in 05-VT) rồi xoá phiếu,
+> dòng sổ, đợt và trả số KK về 6 — tồn trước/sau như nhau.
+
 **B8 · Bàn làm việc Kho + thông báo.** Trang đầu khu Kho: hàng về hôm nay · lệnh có
 hàng chờ xuất · lệnh xong còn hàng · mã dưới mức · kiểm kê đang mở. Kho nhận thông
 báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.

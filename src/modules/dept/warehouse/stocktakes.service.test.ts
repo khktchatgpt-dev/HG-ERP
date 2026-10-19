@@ -364,3 +364,23 @@ describe('thêm tay một mã vào đợt đang đếm (B7b, Q1)', () => {
     ])
   })
 })
+
+describe('Q2 — người đếm không tự duyệt (B7c)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('người đã ghi số đếm bị chặn, không sinh phiếu', async () => {
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(take({ status: 'review' }))
+    vi.mocked(stocktakesRepo.listLines).mockResolvedValue([line({ counted_qty: 90, counted_by: 'u1' })]) // prettier-ignore
+    await expect(stocktakesService.approve(admin, 'dot1')).rejects.toThrow(
+      /không tự duyệt/,
+    )
+    expect(docsRepo.insert).not.toHaveBeenCalled()
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('người được phân đếm cũng bị chặn', async () => {
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(take({ status: 'review', assigned_to: 'u1' })) // prettier-ignore
+    vi.mocked(stocktakesRepo.listLines).mockResolvedValue([line({ counted_qty: 100, counted_by: 'u2' })]) // prettier-ignore
+    await expect(stocktakesService.approve(admin, 'dot1')).rejects.toThrow(/phân đếm/)
+  })
+})
