@@ -214,7 +214,7 @@ function DaiSo({ d }: { d: HoSoCtx }) {
       <Metric
         label="Hồ sơ"
         value={`${SO_MUC_HO_SO - thieu.length}/${SO_MUC_HO_SO}`}
-        basis="mục đang theo dõi"
+        basis="mục sổ quản lý lao động"
         tone={thieu.length ? 'warn' : 'done'}
       />
     </MetricStrip>

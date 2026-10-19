@@ -1,14 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  Btn,
-  Loading,
-  NumInput,
-  Pick,
-  TextInput,
-  Tick,
-} from '@/components/kit'
+import { Btn, Loading, NumInput, Pick, TextInput, Tick } from '@/components/kit'
 import { TEN_CACH_TRA, type CachTra } from '@/lib/luong/ho-so-luong'
 import { ngayVn } from '@/lib/nhan-su/bien-dong'
 import type { HoSoLuongCtx } from './useHoSoLuong'

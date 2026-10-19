@@ -237,7 +237,7 @@ function Dong({ d, x }: { d: NvTkCtx; x: DongNvTk }) {
         nv && !nv.dangLam && 'text-[var(--ink-3)]',
       )}
     >
-      <td className={TD}>
+      <td className={cn(TD, 'min-w-[200px] whitespace-normal')}>
         {nv ? (
           <>
             <span className="num mr-1.5 text-[var(--ink-3)]">{nv.ma}</span>
@@ -264,7 +264,7 @@ function Dong({ d, x }: { d: NvTkCtx; x: DongNvTk }) {
           </>
         )}
       </td>
-      <td className={cn(TD, 'text-[var(--ink-2)]')}>
+      <td className={cn(TD, 'min-w-[150px] whitespace-normal text-[var(--ink-2)]')}>
         {nv ? (
           (nv.to ?? '(chưa có tổ)')
         ) : x.kieu === 'dung_chung' ? (
@@ -277,39 +277,42 @@ function Dong({ d, x }: { d: NvTkCtx; x: DongNvTk }) {
           <span className="text-[var(--ink-3)]">không có trong danh sách Nhân sự</span>
         )}
       </td>
-      <td className={TD}>
+      <td className={cn(TD, 'max-w-[220px] whitespace-normal')}>
         {tk ? (
-          <span className="flex items-center gap-1.5">
-            <span className={cn('num', tk.xoaLuc && 'line-through')}>{tk.email}</span>
+          <span className="flex flex-col items-start gap-0.5">
+            <span className={cn('num break-all', tk.xoaLuc && 'line-through')}>
+              {tk.email}
+            </span>
             <TrangThaiTk tk={tk} />
           </span>
         ) : (
           <span className="text-[var(--ink-3)]">— chưa có</span>
         )}
       </td>
-      <td className={cn(TD, 'text-[var(--ink-2)]')}>
+      <td className={cn(TD, 'min-w-[150px] whitespace-normal text-[var(--ink-2)]')}>
         {tk ? `${ROLE_LABEL[tk.role] ?? tk.role} · ${d.tenPhong(tk.phongId)}` : ''}
       </td>
       <td className={cn(TD, 'num text-[var(--ink-2)]')}>
         {tk ? ngayVn(tk.dangNhap) : ''}
       </td>
-      <td className={cn(TD, 'text-right')} onClick={(e) => e.stopPropagation()}>
-        {x.kieu === 'chua_gan' && !tk!.xoaLuc && (
-          <Btn onClick={() => d.setHop({ kieu: 'gan', tk: tk! })}>
-            Gắn nhân viên
-          </Btn>
-        )}{' '}
-        {tk ? (
-          <Btn onClick={mo}>
-            Sửa
-          </Btn>
-        ) : (
-          nv?.dangLam && (
-            <Btn primary onClick={mo}>
-              Cấp tài khoản
-            </Btn>
-          )
-        )}
+      <td
+        className={cn(TD, 'text-right whitespace-normal')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="flex flex-wrap justify-end gap-1">
+          {x.kieu === 'chua_gan' && !tk!.xoaLuc && (
+            <Btn onClick={() => d.setHop({ kieu: 'gan', tk: tk! })}>Gắn nhân viên</Btn>
+          )}
+          {tk ? (
+            <Btn onClick={mo}>Sửa</Btn>
+          ) : (
+            nv?.dangLam && (
+              <Btn primary onClick={mo}>
+                Cấp tài khoản
+              </Btn>
+            )
+          )}
+        </span>
       </td>
     </tr>
   )

@@ -32,8 +32,14 @@ const congKy = (t: string, n: number) => {
 }
 const R = { textAlign: 'right' as const }
 
-export function HoSoLuongScreen({ h }: { h: HoSoTrang }) {
-  const d = useHoSoLuong(h)
+export function HoSoLuongScreen({
+  h,
+  moNv = null,
+}: {
+  h: HoSoTrang
+  moNv?: string | null
+}) {
+  const d = useHoSoLuong(h, moNv)
   return (
     <ScreenFrame tableMin={0}>
       <ScreenHeader

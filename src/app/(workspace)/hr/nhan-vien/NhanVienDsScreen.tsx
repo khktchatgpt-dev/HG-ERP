@@ -209,7 +209,7 @@ function Bang({ d }: { d: DsCtx }) {
                     label={`Chọn ${n.code} ${n.hoTen}`}
                   />
                 </td>
-                <td className={TD}>
+                <td className={cn(TD, 'min-w-[200px] whitespace-normal')}>
                   <span className="flex items-center gap-2">
                     <Avatar ten={n.hoTen} />
                     <a
@@ -242,7 +242,7 @@ function Bang({ d }: { d: DsCtx }) {
                   {tn ?? '—'}
                 </td>
                 <td className={TD}>
-                  <span className="flex items-center gap-1">
+                  <span className="flex flex-col items-start gap-0.5">
                     <TagTinhTrang n={n} homNay={homNay} />
                     {n.khongChamCong && (
                       <span className="text-k-label text-[var(--ink-3)]">

@@ -422,8 +422,8 @@ function HopGoiYMo({ d }: { d: NvTkCtx }) {
       </table>
       <Consequence>
         Khớp theo họ tên bỏ dấu, chỉ khi đúng MỘT nhân viên đang làm chưa có tài khoản
-        mang tên đó. Gắn xong, Nhân sự cho người đó nghỉ việc thì tài khoản tự khoá; gỡ lại
-        được ở từng tài khoản.
+        mang tên đó. Gắn xong, Nhân sự cho người đó nghỉ việc thì tài khoản tự khoá; gỡ
+        lại được ở từng tài khoản.
       </Consequence>
     </Sheet>
   )

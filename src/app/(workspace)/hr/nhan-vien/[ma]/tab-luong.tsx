@@ -18,7 +18,9 @@ export function TabLuong({ d }: { d: HoSoCtx }) {
     return (
       <KhoaRieng viec="Chỉ người phụ trách lương (Nhân sự được giao) và Kế toán xem được mục này." />
     )
-  const sua = <Btn href={`/ho-so-luong?thang=${l.thang}`}>Sửa ở Hồ sơ lương</Btn>
+  const sua = (
+    <Btn href={`/ho-so-luong?thang=${l.thang}&nv=${d.n.id}`}>Sửa ở Hồ sơ lương</Btn>
+  )
   const b = l.ban
   return (
     <div className="min-h-0 overflow-auto">

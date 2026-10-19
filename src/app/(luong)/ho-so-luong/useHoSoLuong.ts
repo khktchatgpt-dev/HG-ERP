@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, ApiError } from '@/lib/api'
@@ -41,14 +41,25 @@ export type Sheet = null | 'nap' | 'to' | 'phu_cap'
 const API = '/api/dept/hr/luong'
 
 /** State + thao tác của màn Hồ sơ lương. Số trên chip đếm bằng đúng hàm lọc của bảng. */
-export function useHoSoLuong(h: HoSoTrang) {
+export function useHoSoLuong(h: HoSoTrang, moNv: string | null = null) {
   const router = useRouter()
   const path = usePathname()
   const toast = useToast()
   const [loc, setLoc] = useState<Loc>('tat_ca')
   const [tim, setTim] = useState('')
-  const [chon, setChon] = useState<string | null>(null)
+  const [chon, setChon] = useState<string | null>(moNv)
   const [chiTiet, setChiTiet] = useState<ChiTiet | null>(null)
+  // Mở sẵn một người (?nv=): tải chi tiết một lần — setState trong callback, không đồng bộ.
+  useEffect(() => {
+    if (!moNv) return
+    let huy = false
+    api<ChiTiet>(`/api/dept/hr/luong?nv=${moNv}`)
+      .then((r) => !huy && setChiTiet(r))
+      .catch(() => undefined)
+    return () => {
+      huy = true
+    }
+  }, [moNv])
   const [sheet, setSheet] = useState<Sheet>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
