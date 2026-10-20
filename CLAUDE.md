@@ -514,6 +514,12 @@ tắt tuần, xuất Markdown cho AI.
 - **BẪY event bus**: handler chỉ được đăng ký khi có chỗ `import '@/events/register'`
   (bus không tự nạp). `feedback.service.ts` import nó ở đầu file; lúc test lần
   đầu (21/10/2026) thiếu dòng này nên mọi luồng chạy mà 0 thông báo, không log lỗi.
+- **BẪY toast bị dialog che** (21/10/2026): khay toast `ui/Toast.tsx` từng `z-50`
+  bằng Dialog Radix và đứng TRƯỚC portal trong DOM, nên hộp góp ý trượt từ phải
+  che kín "Nội dung quá ngắn" — người dùng bấm Gửi thấy "không có gì xảy ra". Khay
+  nay `z-[80]` (= `--z-toast` của kit). Và lỗi chặn gửi (quá ngắn, ảnh đang tải,
+  máy chủ từ chối) phải bày TẠI CHỖ cạnh nút (`blocked` ở hộp ghi nhanh và ô
+  trao đổi), toast chỉ là lớp phụ.
 - **Chưa làm** (đừng tự thêm): trợ lý phòng ban đọc góp ý, tạo góp ý từ đề
   xuất cuộc họp, đếm góp ý theo người — mục 9 README gói nói là tích hợp phụ.
 
