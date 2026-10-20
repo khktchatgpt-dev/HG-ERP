@@ -115,7 +115,14 @@ function Viewport({
       ref={ref}
       role="region"
       aria-label="Thông báo"
-      className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col-reverse gap-2"
+      /*
+        z-[80] = `--z-toast` của kit, TRÊN Dialog/AlertDialog (z-50) và `--z-modal`
+        (60). Trước 21/10/2026 khay này cũng z-50: hộp góp ý trượt từ phải (portal
+        Radix, đứng SAU khay trong DOM) che kín góc dưới phải, nên "Nội dung quá
+        ngắn" / "Chưa gửi được" bay lên mà không ai thấy — người dùng tưởng nút
+        Gửi chết. Toast là lời đáp cho hành động vừa bấm, phải nổi trên mọi lớp.
+      */
+      className="pointer-events-none fixed right-4 bottom-4 z-[80] flex w-80 max-w-[calc(100vw-2rem)] flex-col-reverse gap-2"
     >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onClose={() => dismiss(t.id)} />

@@ -123,8 +123,14 @@ export function FeedbackImages({
   return (
     <>
       <div className={cn('flex flex-wrap gap-1.5', className)}>
-        {ids.map((id) => (
-          <Thumb key={id} id={id} alt="ảnh kèm" size={size} onClick={() => setOpen(id)} />
+        {ids.map((id, i) => (
+          <Thumb
+            key={id}
+            id={id}
+            alt={`kèm ${i + 1}/${ids.length}`}
+            size={size}
+            onClick={() => setOpen(id)}
+          />
         ))}
       </div>
       <Lightbox id={open} onClose={() => setOpen(null)} />

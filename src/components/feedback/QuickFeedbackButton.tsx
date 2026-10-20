@@ -78,6 +78,12 @@ export function QuickFeedbackDialog({
   const [isPrivate, setIsPrivate] = useState(false)
   const [topic, setTopic] = useState<string>('')
   const [busy, setBusy] = useState(false)
+  /**
+   * Lý do CHƯA GỬI ĐƯỢC, hiện ngay cạnh nút Gửi (luật kiểm: hành động bị chặn
+   * phải nói vướng gì và cách gỡ tại chỗ). Toast vẫn bắn, nhưng từng bị chính
+   * hộp này che (21/10/2026) — người dùng bấm Gửi mà "không có gì xảy ra".
+   */
+  const [blocked, setBlocked] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const parent = useMemo(() => ({ kind: 'none' as const }), [])
   const paste = useImagePaste(parent)
@@ -98,13 +104,16 @@ export function QuickFeedbackDialog({
 
   async function submit() {
     if (content.trim().length < 5) {
+      setBlocked('Nội dung quá ngắn — viết ít nhất 5 ký tự để người xử lý hiểu được.')
       toast.error('Nội dung quá ngắn', 'Viết ít nhất 5 ký tự để người xử lý hiểu được.')
       return
     }
     if (paste.uploading) {
+      setBlocked('Ảnh đang tải lên — chờ một chút rồi bấm Gửi lại.')
       toast.info('Ảnh đang tải lên', 'Chờ một chút rồi gửi lại.')
       return
     }
+    setBlocked(null)
     setBusy(true)
     try {
       const r = await api<{ feedback: { id: string; title: string } }>('/api/feedback', {
@@ -127,6 +136,7 @@ export function QuickFeedbackDialog({
       onCreated?.(r.feedback.id)
       if (!onCreated && pathname === '/gop-y') router.refresh()
     } catch (e) {
+      setBlocked(`Chưa gửi được: ${apiErrorText(e)}`)
       toast.error('Chưa gửi được', apiErrorText(e))
     } finally {
       setBusy(false)
@@ -228,7 +238,11 @@ export function QuickFeedbackDialog({
             <Textarea
               autoFocus
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value)
+                if (blocked) setBlocked(null)
+              }}
+              aria-invalid={blocked ? true : undefined}
               rows={6}
               placeholder="Đang làm gì, bấm gì, thấy gì, mong muốn gì… Dán ảnh chụp màn hình ngay vào đây."
               className="bg-card min-h-32"
@@ -271,6 +285,11 @@ export function QuickFeedbackDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
+          {blocked && (
+            <p role="alert" className="mr-auto text-xs text-[var(--stop)]">
+              {blocked}
+            </p>
+          )}
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
             Huỷ
           </Button>

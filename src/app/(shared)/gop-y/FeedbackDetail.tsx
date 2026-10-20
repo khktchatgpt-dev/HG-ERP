@@ -99,7 +99,13 @@ export function FeedbackDetail({
     onChanged()
   }, [load, onChanged])
 
-  async function run(label: string, fn: () => Promise<unknown>, ok?: string) {
+  async function run(
+    label: string,
+    fn: () => Promise<unknown>,
+    ok?: string,
+    /** Nơi muốn bày lỗi TẠI CHỖ (ngoài toast) nhận câu lỗi đã dịch. */
+    onError?: (msg: string) => void,
+  ) {
     setBusy(true)
     try {
       await fn()
@@ -108,6 +114,7 @@ export function FeedbackDetail({
       return true
     } catch (e) {
       toast.error(label, apiErrorText(e))
+      onError?.(apiErrorText(e))
       return false
     } finally {
       setBusy(false)
@@ -126,8 +133,19 @@ export function FeedbackDetail({
       tone: 'danger',
     })
     if (!ok) return
-    const done = await run('Chưa xoá được', () => api(`/api/feedback/${fb.id}`, { method: 'DELETE' }), 'Đã xoá góp ý')
-    if (done) onClose()
+    // KHÔNG đi qua run(): run() tải lại chính góp ý sau khi xong, mà bản ghi đã
+    // mất → "Góp ý không tồn tại" nổi lên ngay sau "Đã xoá" (dính 21/10/2026).
+    setBusy(true)
+    try {
+      await api(`/api/feedback/${fb.id}`, { method: 'DELETE' })
+      toast.success('Đã xoá góp ý')
+      onChanged()
+      onClose()
+    } catch (e) {
+      toast.error('Chưa xoá được', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -337,9 +355,17 @@ export function FeedbackDetail({
               busy={busy}
               textareaRef={composerRef}
               onSend={async (body) => {
-                const ok = await run('Chưa gửi được', () => api(`/api/feedback/${fb.id}/comments`, { method: 'POST', body }), body.needs_more ? 'Đã mở lại góp ý' : undefined)
+                let err: string | null = null
+                const ok = await run(
+                  'Chưa gửi được',
+                  () => api(`/api/feedback/${fb.id}/comments`, { method: 'POST', body }),
+                  body.needs_more ? 'Đã mở lại góp ý' : undefined,
+                  (m) => {
+                    err = m
+                  },
+                )
                 if (ok) setNeedsMore(false)
-                return ok
+                return ok ? null : (err ?? 'Chưa gửi được')
               }}
             />
           </>
@@ -513,9 +539,12 @@ function Composer({
   onToggleNeedsMore?: (v: boolean) => void
   busy: boolean
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
-  onSend: (body: { content: string; needs_more: boolean; file_ids: string[] }) => Promise<boolean>
+  /** Trả `null` khi gửi xong, hoặc câu lỗi để bày ngay dưới ô viết. */
+  onSend: (body: { content: string; needs_more: boolean; file_ids: string[] }) => Promise<string | null>
 }) {
   const [text, setText] = useState('')
+  /** Lý do chưa gửi được — hiện tại chỗ, không chỉ trông vào toast. */
+  const [blocked, setBlocked] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const parent = useMemo(() => ({ kind: 'feedback' as const, id: feedbackId }), [feedbackId])
   const paste = useImagePaste(parent)
@@ -538,12 +567,22 @@ function Composer({
 
   async function send() {
     if (!text.trim() && paste.ids.length === 0) return
-    if (paste.uploading) return
-    const ok = await onSend({ content: text.trim(), needs_more: needsMore, file_ids: paste.ids })
-    if (ok) {
-      setText('')
-      paste.reset()
+    if (paste.uploading) {
+      setBlocked('Ảnh đang tải lên — chờ một chút rồi bấm Gửi lại.')
+      return
     }
+    if (needsMore && text.trim().length < 5) {
+      setBlocked('Nói rõ còn cần chỉnh gì — ít nhất 5 ký tự.')
+      return
+    }
+    setBlocked(null)
+    const err = await onSend({ content: text.trim(), needs_more: needsMore, file_ids: paste.ids })
+    if (err) {
+      setBlocked(err)
+      return
+    }
+    setText('')
+    paste.reset()
   }
 
   return (
@@ -563,13 +602,17 @@ function Composer({
         <Textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            if (blocked) setBlocked(null)
+          }}
           onKeyDown={(e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
               e.preventDefault()
               void send()
             }
           }}
+          aria-invalid={blocked ? true : undefined}
           rows={2}
           placeholder={needsMore ? 'Còn cần chỉnh gì? (ít nhất 5 ký tự)' : 'Viết trao đổi… @tên để nhắc ai đó, Ctrl+V dán ảnh, Ctrl+Enter gửi'}
           className="bg-card min-h-16"
@@ -587,6 +630,11 @@ function Composer({
         )}
       </div>
       <PendingImages images={paste.images} onRemove={paste.remove} />
+      {blocked && (
+        <p role="alert" className="mt-1 text-xs text-[var(--stop)]">
+          {blocked}
+        </p>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => fileInput.current?.click()} disabled={busy}>
           <ImagePlus aria-hidden /> Ảnh
