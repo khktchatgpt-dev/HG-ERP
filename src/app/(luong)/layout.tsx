@@ -25,10 +25,12 @@ export default async function LuongLayout({ children }: { children: React.ReactN
         {duoc ? (
           children
         ) : (
+          // Lương là quyền MẬT (0253): chỉ người có vai "Quản lý lương" — quản trị viên,
+          // Kế toán, Nhân sự, Giám đốc đều không xem được; màn Phân quyền không cấp được.
           <Empty
-            headline="Hồ sơ lương chỉ Kế toán, Trưởng phòng Nhân sự và Giám đốc xem được"
-            reason="Lương và số tài khoản là thông tin riêng của từng người."
-            next="Cần xem thì nhờ Kế toán, hoặc xin quyền ở màn Phân quyền."
+            headline="Lương chỉ người quản lý lương xem được"
+            reason="Lương và số tài khoản là thông tin mật: chỉ một người phụ trách lương ở Phòng Kế toán xem và tính, kể cả quản trị viên cũng không xem được."
+            next="Có thắc mắc về lương của mình thì hỏi trực tiếp người quản lý lương."
           />
         )}
       </div>

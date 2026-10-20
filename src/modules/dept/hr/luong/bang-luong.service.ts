@@ -116,8 +116,16 @@ async function nap(thang: string) {
 }
 
 export const bangLuongService = {
+  /** Dữ liệu cho file Excel lương — như `trang`, ghi thêm nhật ký "xuất Excel". */
+  async xuatExcel(user: User, thang: string): Promise<BangLuongTrang> {
+    const b = await this.trang(user, thang)
+    await hoSoLuongRepo.ghiXemLuong('payroll_excel', user.id, { ghiChu: `kỳ ${thang}` })
+    return b
+  },
+
   async trang(user: User, thang: string): Promise<BangLuongTrang> {
     await assertAction(user, XEM)
+    await hoSoLuongRepo.ghiXemLuong('payroll_sheet', user.id, { ghiChu: `kỳ ${thang}` })
     const [d, chay, duyet, emps] = await Promise.all([
       nap(thang),
       canAction(user, CHAY),

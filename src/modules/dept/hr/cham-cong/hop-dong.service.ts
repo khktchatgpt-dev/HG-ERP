@@ -1,14 +1,15 @@
 /**
  * HỢP ĐỒNG LAO ĐỘNG + GIẤY TỜ trên hồ sơ nhân viên (B3, bản vẽ lượt 2 duyệt 19/10/2026; Q2
  * lượt 1: không lập mẫu in, chỉ lưu bản đã ký). Cùng ranh giới quyền với thông tin cá nhân
- * (hr.employee.private) vì HĐ ghi mức lương, giấy tờ có CCCD.
+ * (hr.employee.private) vì giấy tờ có CCCD. Riêng Ô LƯƠNG ghi trên HĐ theo quyền lương mật
+ * (hr.payroll.profile, 20/10/2026): Nhân sự vẫn làm HĐ nhưng không thấy, không ghi đè mức lương.
  *
  * Không xoá HĐ: ghi nhầm thì huỷ kèm lý do. Hai HĐ chưa huỷ không được chồng thời gian.
  * Luật lao động (thử việc ≤ 60 ngày, xác định thời hạn ≤ 36 tháng) chỉ cảnh báo — trả về
  * cho màn bày, không chặn.
  */
 import type { User } from '@/modules/core/users/users.repo'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { canhBaoHd, chongNhau, TEN_LOAI_HD, type LoaiHd } from '@/lib/nhan-su/hop-dong'
@@ -18,6 +19,8 @@ import { hopDongRepo } from './hop-dong.repo'
 import { bienDongRepo } from './bien-dong.repo'
 
 const QUYEN = 'hr.employee.private'
+/** Quyền lương mật — chỉ người có quyền này thấy / ghi ô lương trên HĐ. */
+export const QUYEN_LUONG_HD = 'hr.payroll.profile'
 
 export type HdNhap = {
   so: string | null
@@ -75,7 +78,8 @@ export const hopDongService = {
     kiemNgay(v)
     await kiemChong(employeeId, v)
     await kiemFile(employeeId, v.fileId)
-    await hopDongRepo.them({ ...v, employeeId, userId: user.id })
+    const luong = (await canAction(user, QUYEN_LUONG_HD)) ? v.luong : null
+    await hopDongRepo.them({ ...v, luong, employeeId, userId: user.id })
     await ghiVet(
       user,
       employeeId,
@@ -98,7 +102,8 @@ export const hopDongService = {
       start_date: v.tuNgay,
       end_date: v.denNgay,
       job_title: v.chucDanh,
-      salary: v.luong,
+      // Không có quyền lương: giữ nguyên mức lương đang ghi (form của họ không có ô này).
+      salary: (await canAction(user, QUYEN_LUONG_HD)) ? v.luong : cu.luong,
       note: v.ghiChu,
       file_id: v.fileId,
     })

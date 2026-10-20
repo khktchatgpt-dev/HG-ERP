@@ -51,6 +51,10 @@ export type Rieng = {
 
 const n = (v: unknown) => (v == null ? null : Number(v))
 
+/** Loại lần xem lương ghi nhật ký (cột `field` của hr_private_access_log, 0253). */
+export type LoaiXemLuong =
+  'payroll_list' | 'payroll_profile' | 'payroll_sheet' | 'payroll_excel' | 'salary_tab'
+
 export const hoSoLuongRepo = {
   async banTatCa(): Promise<BanLuong[]> {
     const out: BanLuong[] = []
@@ -179,6 +183,27 @@ export const hoSoLuongRepo = {
     )
   },
 
+  /**
+   * Nhật ký XEM LƯƠNG (0253, 20/10/2026 — lương chỉ một người quản lý): mỗi lần mở danh
+   * sách / hồ sơ lương một người / bảng lương / Excel lương / tab Lương của hồ sơ NV.
+   * Lỗi ghi nhật ký KHÔNG chặn người xem (đã qua cổng quyền) nhưng được log ra server.
+   */
+  async ghiXemLuong(
+    loai: LoaiXemLuong,
+    userId: string,
+    o: { employeeId?: string | null; ghiChu?: string | null } = {},
+  ) {
+    const { error } = await db()
+      .from('hr_private_access_log')
+      .insert({
+        field: loai,
+        viewer_id: userId,
+        employee_id: o.employeeId ?? null,
+        note: o.ghiChu ?? null,
+      })
+    if (error) console.error('[nhật ký xem lương]', loai, error.message)
+  },
+
   async lanXem(
     employeeId: string,
   ): Promise<{ truong: string; boi: string | null; luc: string }[]> {
@@ -187,6 +212,8 @@ export const hoSoLuongRepo = {
         .from('hr_private_access_log')
         .select('field, viewed_at, boi:users!hr_private_access_log_viewer_id_fkey(name)')
         .eq('employee_id', employeeId)
+        // Chỉ ba loại "Hiện" số giấy tờ — nhật ký xem lương (0253) xem ở chỗ khác.
+        .in('field', ['bank_account', 'national_id', 'tax_code'])
         .order('viewed_at', { ascending: false })
         .limit(10),
     )

@@ -118,6 +118,7 @@ export const hoSoLuongService = {
   async trang(user: User, thang?: string): Promise<HoSoTrang> {
     await assertAction(user, QUYEN)
     const ky = thang ?? thangCuaNgay(todayVn())
+    await hoSoLuongRepo.ghiXemLuong('payroll_list', user.id, { ghiChu: `kỳ ${ky}` })
     const [emps, ban, rieng, loai, kyChot] = await Promise.all([
       nhanVien(),
       hoSoLuongRepo.banTatCa(),
@@ -162,6 +163,7 @@ export const hoSoLuongService = {
 
   async chiTiet(user: User, employeeId: string): Promise<ChiTiet> {
     await assertAction(user, QUYEN)
+    await hoSoLuongRepo.ghiXemLuong('payroll_profile', user.id, { employeeId })
     const [ban, rieng, lanXem, kyChot] = await Promise.all([
       hoSoLuongRepo.banTatCa(),
       hoSoLuongRepo.riengTatCa(),

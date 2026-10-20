@@ -2344,23 +2344,26 @@ export type Database = {
       }
       hr_private_access_log: {
         Row: {
-          employee_id: string
+          employee_id: string | null
           field: string
           id: number
+          note: string | null
           viewed_at: string
           viewer_id: string | null
         }
         Insert: {
-          employee_id: string
+          employee_id?: string | null
           field: string
           id?: number
+          note?: string | null
           viewed_at?: string
           viewer_id?: string | null
         }
         Update: {
-          employee_id?: string
+          employee_id?: string | null
           field?: string
           id?: number
+          note?: string | null
           viewed_at?: string
           viewer_id?: string | null
         }

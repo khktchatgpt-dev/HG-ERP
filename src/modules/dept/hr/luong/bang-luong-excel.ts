@@ -13,7 +13,11 @@ const TEN_TT = {
  * Excel bảng lương (B5): tờ "Bảng lương" (mỗi người một dòng, đủ khoản) + tờ "Chuyển khoản"
  * đúng các cột của "DS chuyển lương" Kế toán đang dùng (Q7). Cùng nguồn số với màn.
  */
-export async function buildBangLuongExcel(b: BangLuongTrang): Promise<Buffer> {
+export async function buildBangLuongExcel(
+  b: BangLuongTrang,
+  /** Người tải — in lên dòng "TÀI LIỆU MẬT" đầu mỗi tờ (0253, lương chỉ một người quản lý). */
+  nguoiTai?: string,
+): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   const ky = `${b.thang.slice(5)}/${b.thang.slice(0, 4)}`
   const tt = b.bang ? TEN_TT[b.bang.trangThai] : 'CHƯA TÍNH'
@@ -124,5 +128,12 @@ export async function buildBangLuongExcel(b: BangLuongTrang): Promise<Buffer> {
   ck.getColumn(3).numFmt = '@'
   ck.getColumn(4).numFmt = '#,##0'
   ck.columns.forEach((c, i) => (c.width = [6, 28, 20, 14, 16, 32, 22][i] ?? 12))
+  if (nguoiTai) {
+    const luc = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ')
+    for (const ws of wb.worksheets) {
+      ws.insertRow(1, [`TÀI LIỆU MẬT — chỉ người quản lý lương · tải bởi ${nguoiTai} lúc ${luc}`])
+      ws.getRow(1).font = { bold: true, color: { argb: 'FFB0241A' } }
+    }
+  }
   return Buffer.from(await wb.xlsx.writeBuffer())
 }

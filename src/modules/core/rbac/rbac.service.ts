@@ -53,8 +53,15 @@ export async function permissionsOf(user: User): Promise<ReadonlySet<string>> {
   return loadPermissionKeys(user.id)
 }
 
+/** Permission của các thao tác MẬT (lương) — quản trị viên không được bỏ qua. */
+export const QUYEN_MAT: ReadonlySet<string> = new Set(
+  ACTIONS.filter((a) => a.mat).map((a) => a.key),
+)
+/** Vai duy nhất được mang quyền mật (0253). */
+export const VAI_QUAN_LY_LUONG = 'payroll_officer'
+
 export async function hasPermission(user: User, key: string): Promise<boolean> {
-  if (user.role === 'admin') return true
+  if (user.role === 'admin' && !QUYEN_MAT.has(key)) return true
   return (await loadPermissionKeys(user.id)).has(key)
 }
 
@@ -70,9 +77,10 @@ export async function assertPermission(user: User, key: string): Promise<void> {
  * admin bypass. Điều kiện ROW-LEVEL (chủ sở hữu/tổ) service tự kiểm thêm.
  */
 export async function canAction(user: User, actionKey: string): Promise<boolean> {
-  if (user.role === 'admin') return true
   const action = ACTION_BY_KEY.get(actionKey)
   if (!action) throw new Error(`Unknown action: ${actionKey}`)
+  // Quyền mật (lương): admin không bypass — phải có permission qua vai như mọi người.
+  if (user.role === 'admin' && !action.mat) return true
   const keys = await loadPermissionKeys(user.id)
   return evalRule(action.rule, { role: user.role, has: (k) => keys.has(k) })
 }
@@ -404,6 +412,11 @@ export const rbacService = {
     const added = uniq.filter((k) => !beforeSet.has(k))
     const removed = beforeKeys.filter((k) => !afterSet.has(k))
     if (added.length === 0 && removed.length === 0) return
+    const mat = [...added, ...removed].filter((k) => QUYEN_MAT.has(k))
+    if (mat.length)
+      throw Forbidden(
+        `Quyền lương là quyền mật (${mat.join(', ')}) — chỉ nằm trên vai "Quản lý lương", không thêm / bớt ở màn phân quyền`,
+      )
 
     await rbacRepo.setRolePermissions(roleId, uniq)
     await emit({
@@ -439,6 +452,10 @@ export const rbacService = {
     const toAdd = uniq.filter((id) => !current.has(id))
     const toRemove = [...current].filter((id) => !next.has(id))
     if (toAdd.length === 0 && toRemove.length === 0) return
+    if ([...toAdd, ...toRemove].some((id) => roleById.get(id)?.key === VAI_QUAN_LY_LUONG))
+      throw Forbidden(
+        'Vai "Quản lý lương" không cấp hay thu ở màn phân quyền — lương chỉ một người quản lý, việc cấp làm theo quy trình riêng có nhật ký',
+      )
 
     await rbacRepo.addManualRoles(targetUserId, toAdd, user.id)
     await rbacRepo.removeManualRoles(targetUserId, toRemove)

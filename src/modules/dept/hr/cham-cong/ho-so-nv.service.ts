@@ -278,9 +278,18 @@ export const hoSoNvService = {
         ? null
         : chamCongService.motNguoi(user, ma, { tu: k.tu, den }),
       rieng ? caNhanRepo.cua(n.id) : null,
-      luong ? tomLuong(n.id, thang) : null,
+      luong
+        ? hoSoLuongRepo
+            .ghiXemLuong('salary_tab', user.id, { employeeId: n.id })
+            .then(() => tomLuong(n.id, thang))
+        : null,
       quetGanNhat(n, homNay),
-      rieng ? hopDongRepo.cuaNguoi(n.id) : null,
+      rieng
+        ? hopDongRepo
+            .cuaNguoi(n.id)
+            // Lương trên HĐ là số mật: không có quyền lương thì không gửi xuống trình duyệt.
+            .then((ds) => (luong ? ds : ds.map((h) => ({ ...h, luong: null }))))
+        : null,
       rieng ? hopDongService.giayTo(user, n.id) : null,
     ])
     n.lanCuoi = lanCuoi

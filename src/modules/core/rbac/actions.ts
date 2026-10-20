@@ -29,6 +29,13 @@ export type Action = {
   rule: Rule
   /** Ràng buộc dữ liệu bổ sung ngoài permission (chủ sở hữu, tổ, đơn của mình…). */
   rowLevel?: string
+  /**
+   * QUYỀN MẬT (lương, 20/10/2026: "lương chỉ một người là Phụng quản lý, trong phòng kế
+   * toán cũng như nhân sự lương là bảo mật"). Quản trị viên KHÔNG tự có — phải được cấp
+   * như mọi người; quyền chỉ nằm trên vai `payroll_officer`, không thêm được vào vai khác
+   * và vai này không gán qua màn phân quyền (rbac.service).
+   */
+  mat?: boolean
 }
 
 // Builder gọn cho dễ đọc.
@@ -652,18 +659,21 @@ export const ACTIONS: Action[] = [
     rule: anyOf(perm('hr.member'), perm('hr.employee.private')),
   },
   {
-    // Hồ sơ lương B4 (0245): Kế toán có sẵn; director seed; admin gán TP Nhân sự.
+    // Hồ sơ lương B4 (0245). MẬT từ 0253: không còn đi kèm phòng Kế toán / Giám đốc,
+    // chỉ vai "Quản lý lương". Gồm cả số tài khoản ngân hàng, lương trong hợp đồng.
     key: 'hr.payroll.profile',
     label: 'Xem và sửa hồ sơ lương nhân viên',
     domain: 'hr',
-    rule: anyOf(perm('accounting.member'), perm('hr.payroll.profile')),
+    rule: perm('hr.payroll.profile'),
+    mat: true,
   },
   {
-    // Bảng lương B5 (0246): Kế toán tính · gửi · chi.
+    // Bảng lương B5 (0246): tính · gửi · chi. MẬT từ 0253 (như hồ sơ lương).
     key: 'hr.payroll.run',
     label: 'Tính, gửi duyệt và chi bảng lương',
     domain: 'hr',
-    rule: anyOf(perm('accounting.member'), perm('hr.payroll.run')),
+    rule: perm('hr.payroll.run'),
+    mat: true,
   },
   {
     key: 'hr.payroll.approve',

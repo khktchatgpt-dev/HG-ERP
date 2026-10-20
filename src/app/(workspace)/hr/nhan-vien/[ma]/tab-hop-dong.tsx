@@ -103,9 +103,11 @@ export function TabHopDong({ d }: { d: HoSoCtx }) {
                 Còn lại
               </th>
               <th className={TH}>Chức danh</th>
-              <th className={TH} style={{ textAlign: 'right' }}>
-                Lương ghi trên HĐ
-              </th>
+              {d.h.quyen.luong && (
+                <th className={TH} style={{ textAlign: 'right' }}>
+                  Lương ghi trên HĐ
+                </th>
+              )}
               <th className={TH}>Bản ký</th>
               <th className={TH}>Tình trạng</th>
               <th className={TH} />
@@ -134,9 +136,11 @@ export function TabHopDong({ d }: { d: HoSoCtx }) {
                       : ''}
                   </td>
                   <td className={TD}>{h.chucDanh ?? ''}</td>
-                  <td className={cn(TD, 'num')} style={{ textAlign: 'right' }}>
-                    {tien(h.luong)}
-                  </td>
+                  {d.h.quyen.luong && (
+                    <td className={cn(TD, 'num')} style={{ textAlign: 'right' }}>
+                      {tien(h.luong)}
+                    </td>
+                  )}
                   <td className={TD}>
                     {h.fileId ? (
                       <button
@@ -175,7 +179,7 @@ export function TabHopDong({ d }: { d: HoSoCtx }) {
           <tfoot>
             <tr>
               <td
-                colSpan={10}
+                colSpan={d.h.quyen.luong ? 10 : 9}
                 className={cn(
                   TD,
                   'sticky bottom-0 bg-[var(--surface-raised)] whitespace-normal text-[var(--ink-2)]',
@@ -318,15 +322,20 @@ function HopHd({ d, cu }: { d: HoSoCtx; cu: HdDong | null }) {
           className={O}
           list="hr-chuc-danh"
         />
-        <span className="text-[var(--ink-3)]">Lương ghi trên HĐ</span>
-        <TextInput
-          label="Lương ghi trên HĐ"
-          value={luong}
-          onCommit={setLuong}
-          className={O}
-          mono
-          placeholder="vd 8.500.000 (bỏ trống được)"
-        />
+        {/* Ô lương: chỉ người quản lý lương (quyền mật) — Nhân sự làm HĐ không thấy ô này. */}
+        {d.h.quyen.luong && (
+          <>
+            <span className="text-[var(--ink-3)]">Lương ghi trên HĐ</span>
+            <TextInput
+              label="Lương ghi trên HĐ"
+              value={luong}
+              onCommit={setLuong}
+              className={O}
+              mono
+              placeholder="vd 8.500.000 (bỏ trống được)"
+            />
+          </>
+        )}
         <span className="text-[var(--ink-3)]">Ghi chú</span>
         <TextInput label="Ghi chú" value={ghi} onCommit={setGhi} className={O} />
         <span className="text-[var(--ink-3)]">Bản ký (scan)</span>
