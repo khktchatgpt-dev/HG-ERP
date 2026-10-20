@@ -170,6 +170,8 @@ export const SHARED_SECTION: NavSection = {
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
   items: [
     { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
+    // Góp ý hệ thống (0253) — mọi người viết / xem được, nên ở khu dùng chung.
+    { href: '/gop-y', label: 'Góp ý hệ thống', icon: 'messages-square' },
     // "Thư viện SP (mới)" + "Lệnh SX · hồ sơ SP" (/thu-vien) KHÔNG ở đây nữa —
     // chủ dự án chốt 13/10/2026: đó là phần riêng của Kỹ thuật. Xem nav
     // workspace `technical` + cửa chặn ở `(shared)/thu-vien/layout.tsx`.

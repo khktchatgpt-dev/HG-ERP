@@ -19,6 +19,7 @@ const seedSql = [
   'supabase/migrations/0128_po_owner_and_supply_lead.sql',
   'supabase/migrations/0149_sales_quote_approval.sql',
   'supabase/migrations/0175_tach_vai_thong_ke_to_truong.sql',
+  'supabase/migrations/0253_feedback.sql',
   'supabase/migrations/0240_hr_attendance_adjustments.sql',
   'supabase/migrations/0243_hr_calc_versions.sql',
   'supabase/migrations/0244_hr_time_periods.sql',

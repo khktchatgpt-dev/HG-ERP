@@ -42,6 +42,7 @@ export const PARENT_KINDS = [
   'production_order',
   'purchase_order', // hồ sơ mua hàng gắn PO (FR-SUP-07)
   'sample', // ảnh 4 góc của từng mẫu showroom (0061)
+  'feedback', // ảnh chụp màn hình kèm góp ý hệ thống / dòng trao đổi (0253)
   'hr_employee', // giấy tờ nhân viên (0250) — quyền hr.employee.private
   'none',
 ] as const
@@ -74,6 +75,7 @@ export const initUploadSchema = z
       z.object({ kind: z.literal('production_order'), id: z.uuid() }),
       z.object({ kind: z.literal('purchase_order'), id: z.uuid() }),
       z.object({ kind: z.literal('sample'), id: z.uuid() }),
+      z.object({ kind: z.literal('feedback'), id: z.uuid() }),
       // Ảnh mặt cắt khuôn nhôm (0190) — danh mục dùng chung ở /khuon.
       z.object({ kind: z.literal('die'), id: z.uuid() }),
       // Giấy tờ nhân viên (0250): CCCD, bằng cấp, hợp đồng — riêng tư.

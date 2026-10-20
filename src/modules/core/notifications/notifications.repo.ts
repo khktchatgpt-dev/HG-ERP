@@ -56,6 +56,13 @@ export type NotificationType =
   | 'stage_handoff'
   | 'incident_reported'
   | 'incident_resolved'
+  /** Góp ý hệ thống (0253) — payload có `href` để chuông mở đúng góp ý. */
+  | 'feedback_new'
+  | 'feedback_reviewed'
+  | 'feedback_processed'
+  | 'feedback_commented'
+  | 'feedback_mentioned'
+  | 'feedback_confirmed'
 
 export type Notification = {
   id: string

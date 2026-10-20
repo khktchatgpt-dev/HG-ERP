@@ -9,6 +9,7 @@ import { registerProductionNotificationHandlers } from './handlers/production.no
 import { registerApprovalAuditHandlers } from './handlers/approval.audit'
 import { registerRbacAuditHandlers } from './handlers/rbac.audit'
 import { registerMaterialAuditHandlers } from './handlers/material.audit'
+import { registerFeedbackNotificationHandlers } from './handlers/feedback.notifications'
 import { registerWarehouseAuditHandlers } from './handlers/warehouse.audit'
 import { registerDeNghiNotificationHandlers } from './handlers/de-nghi.notifications'
 import { registerKhoHangVeNotificationHandlers } from './handlers/kho-hang-ve.notifications'
@@ -33,6 +34,7 @@ export function registerEventHandlers(): void {
   registerApprovalAuditHandlers()
   registerRbacAuditHandlers()
   registerMaterialAuditHandlers()
+  registerFeedbackNotificationHandlers()
   registerWarehouseAuditHandlers()
   registerDeNghiNotificationHandlers()
   registerKhoHangVeNotificationHandlers()

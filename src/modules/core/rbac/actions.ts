@@ -43,6 +43,26 @@ const memberEdit = (member: string, edit: string) => allOf(perm(member), perm(ed
 
 export const ACTIONS: Action[] = [
   /*
+   * ── Góp ý hệ thống (0253) ───────────────────────────────────────────────
+   *
+   * Viết / xem / trao đổi là PUBLIC (mọi người đăng nhập — luật riêng tư và
+   * luật tự sửa kiểm ở feedback.rules). Xử lý (đổi trạng thái, trả lời, tóm
+   * tắt tuần, xuất cho AI) = admin hoặc ai có `feedback.manage` (seed: director).
+   * Đổi người xác nhận chỉ admin hệ thống.
+   */
+  {
+    key: 'feedback.manage',
+    label: 'Xử lý góp ý hệ thống (trạng thái, trả lời, tóm tắt tuần, xuất cho AI)',
+    domain: 'feedback',
+    rule: anyOf(role('admin'), perm('feedback.manage')),
+  },
+  {
+    key: 'feedback.reviewers.manage',
+    label: 'Đổi người xác nhận góp ý',
+    domain: 'feedback',
+    rule: role('admin'),
+  },
+  /*
    * ── Kỹ thuật (thư viện SP + BOM) ────────────────────────────────────────
    *
    * HỒ SƠ SẢN PHẨM LÀ KHU DÙNG CHUNG (user chốt 07/08/2026): trang ở `/products`

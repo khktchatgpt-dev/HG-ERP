@@ -64,6 +64,12 @@ const TYPE_LABEL: Record<string, string> = {
   stage_handoff: 'bàn giao công đoạn',
   incident_reported: 'báo sự cố xưởng',
   incident_resolved: 'đã xử lý sự cố',
+  feedback_new: 'góp ý mới',
+  feedback_reviewed: 'xác nhận góp ý',
+  feedback_processed: 'cập nhật góp ý',
+  feedback_commented: 'trao đổi góp ý',
+  feedback_mentioned: 'nhắc bạn',
+  feedback_confirmed: 'góp ý đã ổn',
 }
 
 function timeAgo(iso: string): string {
