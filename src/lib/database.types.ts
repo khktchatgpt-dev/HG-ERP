@@ -760,7 +760,36 @@ export type Database = {
           type?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feedback_admin_reply_by_fkey"
+            columns: ["admin_reply_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       feedback_comments: {
         Row: {
@@ -808,7 +837,22 @@ export type Database = {
           round?: number
           to_status?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feedback_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_comments_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedback"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       feedback_votes: {
         Row: {
@@ -826,7 +870,22 @@ export type Database = {
           feedback_id?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feedback_votes_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedback"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       feedback_weekly_updates: {
         Row: {
@@ -856,7 +915,15 @@ export type Database = {
           updated_at?: string
           week_start?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feedback_weekly_updates_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       files: {
         Row: {
@@ -868,8 +935,8 @@ export type Database = {
           deleted_at: string | null
           die_id: string | null
           doc_type: string | null
-          filename: string
           feedback_id: string | null
+          filename: string
           finalized_at: string | null
           hr_employee_id: string | null
           id: string
@@ -898,8 +965,8 @@ export type Database = {
           deleted_at?: string | null
           die_id?: string | null
           doc_type?: string | null
-          filename: string
           feedback_id?: string | null
+          filename: string
           finalized_at?: string | null
           hr_employee_id?: string | null
           id?: string
@@ -928,8 +995,8 @@ export type Database = {
           deleted_at?: string | null
           die_id?: string | null
           doc_type?: string | null
-          filename?: string
           feedback_id?: string | null
+          filename?: string
           finalized_at?: string | null
           hr_employee_id?: string | null
           id?: string
@@ -969,6 +1036,20 @@ export type Database = {
             columns: ["die_id"]
             isOneToOne: false
             referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedback"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_hr_employee_id_fkey"
+            columns: ["hr_employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
             referencedColumns: ["id"]
           },
           {
@@ -1107,38 +1188,36 @@ export type Database = {
       }
       hr_allowance_types: {
         Row: {
-          per_workday: boolean
           active: boolean
           created_at: string
           id: string
           insurable: boolean
           name: string
+          per_workday: boolean
           sort_order: number
           taxable: boolean
         }
         Insert: {
-          per_workday?: boolean
           active?: boolean
           created_at?: string
           id?: string
           insurable?: boolean
           name: string
+          per_workday?: boolean
           sort_order?: number
           taxable?: boolean
         }
         Update: {
-          per_workday?: boolean
           active?: boolean
           created_at?: string
           id?: string
           insurable?: boolean
           name?: string
+          per_workday?: boolean
           sort_order?: number
           taxable?: boolean
         }
-        Relationships: [
-
-        ]
+        Relationships: []
       }
       hr_attendance_adjustments: {
         Row: {
@@ -1470,16 +1549,19 @@ export type Database = {
           lunch_default_minutes: number
           lunch_factor: number
           lunch_from: number
+          lunch_pay_percent: number | null
           lunch_to: number
           minutes_per_cong: number
           night_before: number
           note: string | null
           round_in_afternoon: boolean
           round_out_mode: string
+          standard_days: number | null
           status: string
           updated_at: string
           updated_by: string | null
           version_no: number
+          withhold_tax: boolean
         }
         Insert: {
           applied_at?: string | null
@@ -1496,16 +1578,19 @@ export type Database = {
           lunch_default_minutes: number
           lunch_factor: number
           lunch_from: number
+          lunch_pay_percent?: number | null
           lunch_to: number
           minutes_per_cong: number
           night_before: number
           note?: string | null
           round_in_afternoon?: boolean
           round_out_mode?: string
+          standard_days?: number | null
           status?: string
           updated_at?: string
           updated_by?: string | null
           version_no: number
+          withhold_tax?: boolean
         }
         Update: {
           applied_at?: string | null
@@ -1522,16 +1607,19 @@ export type Database = {
           lunch_default_minutes?: number
           lunch_factor?: number
           lunch_from?: number
+          lunch_pay_percent?: number | null
           lunch_to?: number
           minutes_per_cong?: number
           night_before?: number
           note?: string | null
           round_in_afternoon?: boolean
           round_out_mode?: string
+          standard_days?: number | null
           status?: string
           updated_at?: string
           updated_by?: string | null
           version_no?: number
+          withhold_tax?: boolean
         }
         Relationships: [
           {
@@ -1614,6 +1702,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "hr_contracts_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_contracts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "hr_contracts_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
@@ -1625,13 +1727,6 @@ export type Database = {
             columns: ["file_id"]
             isOneToOne: false
             referencedRelation: "files"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "hr_contracts_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1729,10 +1824,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "hr_employee_events_employee_id_fkey"
-            columns: ["employee_id"]
+            foreignKeyName: "hr_employee_events_cancelled_by_fkey"
+            columns: ["cancelled_by"]
             isOneToOne: false
-            referencedRelation: "hr_employees"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -1743,10 +1838,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "hr_employee_events_cancelled_by_fkey"
-            columns: ["cancelled_by"]
+            foreignKeyName: "hr_employee_events_employee_id_fkey"
+            columns: ["employee_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "hr_employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1825,7 +1920,7 @@ export type Database = {
           {
             foreignKeyName: "hr_employee_private_employee_id_fkey"
             columns: ["employee_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "hr_employees"
             referencedColumns: ["id"]
           },
@@ -2037,16 +2132,25 @@ export type Database = {
         Row: {
           allowance_type_id: string
           amount: number
+          calc: string
+          divisor: number | null
+          incl_overtime: boolean
           profile_id: string
         }
         Insert: {
           allowance_type_id: string
           amount: number
+          calc?: string
+          divisor?: number | null
+          incl_overtime?: boolean
           profile_id: string
         }
         Update: {
           allowance_type_id?: string
           amount?: number
+          calc?: string
+          divisor?: number | null
+          incl_overtime?: boolean
           profile_id?: string
         }
         Relationships: [
@@ -2068,56 +2172,62 @@ export type Database = {
       }
       hr_pay_profiles: {
         Row: {
-          flat_tax: boolean
           created_at: string
           created_by: string | null
           daily_rate: number | null
           dependents: number
           employee_id: string
+          flat_tax: boolean
           from_period: string
           id: string
           insurance_salary: number | null
           insured: boolean
           monthly_salary: number | null
           note: string | null
+          ot_rate_per_hour: number | null
           pay_type: string
           source: string | null
+          union_member: boolean
           updated_at: string
           updated_by: string | null
         }
         Insert: {
-          flat_tax?: boolean
           created_at?: string
           created_by?: string | null
           daily_rate?: number | null
           dependents?: number
           employee_id: string
+          flat_tax?: boolean
           from_period: string
           id?: string
           insurance_salary?: number | null
           insured?: boolean
           monthly_salary?: number | null
           note?: string | null
+          ot_rate_per_hour?: number | null
           pay_type: string
           source?: string | null
+          union_member?: boolean
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
-          flat_tax?: boolean
           created_at?: string
           created_by?: string | null
           daily_rate?: number | null
           dependents?: number
           employee_id?: string
+          flat_tax?: boolean
           from_period?: string
           id?: string
           insurance_salary?: number | null
           insured?: boolean
           monthly_salary?: number | null
           note?: string | null
+          ot_rate_per_hour?: number | null
           pay_type?: string
           source?: string | null
+          union_member?: boolean
           updated_at?: string
           updated_by?: string | null
         }
@@ -2159,7 +2269,7 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           data?: Json
-          id?: number
+          id?: never
           kind: string
           note?: string | null
           payroll_id: string
@@ -2168,7 +2278,7 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           data?: Json
-          id?: number
+          id?: never
           kind?: string
           note?: string | null
           payroll_id?: string
@@ -2336,88 +2446,94 @@ export type Database = {
       }
       hr_payslips: {
         Row: {
+          allowance_pay: number
           bank_account: string | null
           bank_name: string | null
+          base_pay: number
           calc_no: number
           code: string
           employee_id: string
           full_name: string
+          gross: number
           id: number
+          insurance_company: number
+          insurance_employee: number
+          item_minus: number
+          item_plus: number
+          leave_pay: number
           lines: Json
+          net: number
+          overtime_pay: number
           pay_type: string
           payroll_id: string
           problems: Json
+          tax: number
+          tax_withheld: boolean
           team: string | null
+          union_fee: number
+          union_fee_employee: number
           why: Json
           work_units: number
-          base_pay: number
-          overtime_pay: number
-          leave_pay: number
-          allowance_pay: number
-          item_plus: number
-          gross: number
-          insurance_employee: number
-          insurance_company: number
-          union_fee: number
-          tax: number
-          item_minus: number
-          net: number
         }
         Insert: {
+          allowance_pay?: number
           bank_account?: string | null
           bank_name?: string | null
+          base_pay?: number
           calc_no: number
           code: string
           employee_id: string
           full_name: string
-          id?: number
+          gross?: number
+          id?: never
+          insurance_company?: number
+          insurance_employee?: number
+          item_minus?: number
+          item_plus?: number
+          leave_pay?: number
           lines?: Json
+          net?: number
+          overtime_pay?: number
           pay_type: string
           payroll_id: string
           problems?: Json
+          tax?: number
+          tax_withheld?: boolean
           team?: string | null
+          union_fee?: number
+          union_fee_employee?: number
           why?: Json
           work_units?: number
-          base_pay?: number
-          overtime_pay?: number
-          leave_pay?: number
-          allowance_pay?: number
-          item_plus?: number
-          gross?: number
-          insurance_employee?: number
-          insurance_company?: number
-          union_fee?: number
-          tax?: number
-          item_minus?: number
-          net?: number
         }
         Update: {
+          allowance_pay?: number
           bank_account?: string | null
           bank_name?: string | null
+          base_pay?: number
           calc_no?: number
           code?: string
           employee_id?: string
           full_name?: string
-          id?: number
+          gross?: number
+          id?: never
+          insurance_company?: number
+          insurance_employee?: number
+          item_minus?: number
+          item_plus?: number
+          leave_pay?: number
           lines?: Json
+          net?: number
+          overtime_pay?: number
           pay_type?: string
           payroll_id?: string
           problems?: Json
+          tax?: number
+          tax_withheld?: boolean
           team?: string | null
+          union_fee?: number
+          union_fee_employee?: number
           why?: Json
           work_units?: number
-          base_pay?: number
-          overtime_pay?: number
-          leave_pay?: number
-          allowance_pay?: number
-          item_plus?: number
-          gross?: number
-          insurance_employee?: number
-          insurance_company?: number
-          union_fee?: number
-          tax?: number
-          item_minus?: number
-          net?: number
         }
         Relationships: [
           {
@@ -2451,7 +2567,7 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           data?: Json
-          id?: number
+          id?: never
           kind: string
           note?: string | null
           period_id: string
@@ -2461,7 +2577,7 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           data?: Json
-          id?: number
+          id?: never
           kind?: string
           note?: string | null
           period_id?: string
@@ -2542,23 +2658,26 @@ export type Database = {
       }
       hr_private_access_log: {
         Row: {
-          employee_id: string
+          employee_id: string | null
           field: string
           id: number
+          note: string | null
           viewed_at: string
           viewer_id: string | null
         }
         Insert: {
-          employee_id: string
+          employee_id?: string | null
           field: string
-          id?: number
+          id?: never
+          note?: string | null
           viewed_at?: string
           viewer_id?: string | null
         }
         Update: {
-          employee_id?: string
+          employee_id?: string | null
           field?: string
-          id?: number
+          id?: never
+          note?: string | null
           viewed_at?: string
           viewer_id?: string | null
         }
@@ -2678,72 +2797,6 @@ export type Database = {
           },
         ]
       }
-      hr_time_results: {
-        Row: {
-          close_no: number
-          code: string
-          employee_id: string
-          exempt: boolean
-          frame_minutes: Json
-          full_name: string
-          id: number
-          leave_type: string | null
-          lunch_minutes: number
-          period_id: string
-          team: string | null
-          total_minutes: number
-          work_date: string | null
-          zero_day: boolean
-        }
-        Insert: {
-          close_no: number
-          code: string
-          employee_id: string
-          exempt?: boolean
-          frame_minutes?: Json
-          full_name: string
-          id?: number
-          leave_type?: string | null
-          lunch_minutes?: number
-          period_id: string
-          team?: string | null
-          total_minutes?: number
-          work_date?: string | null
-          zero_day?: boolean
-        }
-        Update: {
-          close_no?: number
-          code?: string
-          employee_id?: string
-          exempt?: boolean
-          frame_minutes?: Json
-          full_name?: string
-          id?: number
-          leave_type?: string | null
-          lunch_minutes?: number
-          period_id?: string
-          team?: string | null
-          total_minutes?: number
-          work_date?: string | null
-          zero_day?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "hr_time_results_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "hr_employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "hr_time_results_period_id_fkey"
-            columns: ["period_id"]
-            isOneToOne: false
-            referencedRelation: "hr_time_periods"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       hr_time_periods: {
         Row: {
           calc_version_id: string | null
@@ -2813,6 +2866,72 @@ export type Database = {
             columns: ["reopen_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_time_results: {
+        Row: {
+          close_no: number
+          code: string
+          employee_id: string
+          exempt: boolean
+          frame_minutes: Json
+          full_name: string
+          id: number
+          leave_type: string | null
+          lunch_minutes: number
+          period_id: string
+          team: string | null
+          total_minutes: number
+          work_date: string | null
+          zero_day: boolean
+        }
+        Insert: {
+          close_no: number
+          code: string
+          employee_id: string
+          exempt?: boolean
+          frame_minutes?: Json
+          full_name: string
+          id?: never
+          leave_type?: string | null
+          lunch_minutes?: number
+          period_id: string
+          team?: string | null
+          total_minutes?: number
+          work_date?: string | null
+          zero_day?: boolean
+        }
+        Update: {
+          close_no?: number
+          code?: string
+          employee_id?: string
+          exempt?: boolean
+          frame_minutes?: Json
+          full_name?: string
+          id?: never
+          leave_type?: string | null
+          lunch_minutes?: number
+          period_id?: string
+          team?: string | null
+          total_minutes?: number
+          work_date?: string | null
+          zero_day?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_results_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_results_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
             referencedColumns: ["id"]
           },
         ]
@@ -8663,17 +8782,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "users_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "hr_employees"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "users_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
             referencedColumns: ["id"]
           },
         ]
@@ -8791,13 +8910,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "warehouse_docs_purchase_request_id_fkey"
-            columns: ["purchase_request_id"]
-            isOneToOne: false
-            referencedRelation: "warehouse_purchase_requests"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "warehouse_docs_approved_by_fkey"
             columns: ["approved_by"]
             isOneToOne: false
@@ -8809,6 +8921,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_docs_purchase_request_id_fkey"
+            columns: ["purchase_request_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_requests"
             referencedColumns: ["id"]
           },
           {
@@ -8920,6 +9039,9 @@ export type Database = {
           finish: string | null
           group_name: string | null
           id: string
+          inner_h_mm: number | null
+          inner_l_mm: number | null
+          inner_w_mm: number | null
           is_active: boolean
           kg_per_m: number | null
           kg_per_unit: number | null
@@ -8961,6 +9083,9 @@ export type Database = {
           finish?: string | null
           group_name?: string | null
           id?: string
+          inner_h_mm?: number | null
+          inner_l_mm?: number | null
+          inner_w_mm?: number | null
           is_active?: boolean
           kg_per_m?: number | null
           kg_per_unit?: number | null
@@ -9002,6 +9127,9 @@ export type Database = {
           finish?: string | null
           group_name?: string | null
           id?: string
+          inner_h_mm?: number | null
+          inner_l_mm?: number | null
+          inner_w_mm?: number | null
           is_active?: boolean
           kg_per_m?: number | null
           kg_per_unit?: number | null
@@ -9128,13 +9256,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "warehouse_movements_purchase_request_line_id_fkey"
-            columns: ["purchase_request_line_id"]
-            isOneToOne: false
-            referencedRelation: "warehouse_purchase_request_lines"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "warehouse_movements_bin_id_fkey"
             columns: ["bin_id"]
             isOneToOne: false
@@ -9210,6 +9331,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_purchase_request_line_id_fkey"
+            columns: ["purchase_request_line_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_request_lines"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "warehouse_movements_reason_code_fkey"
@@ -9411,13 +9539,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "warehouse_purchase_requests_closed_by_fkey"
-            columns: ["closed_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "warehouse_purchase_requests_approved_by_fkey"
             columns: ["approved_by"]
             isOneToOne: false
@@ -9427,6 +9548,13 @@ export type Database = {
           {
             foreignKeyName: "warehouse_purchase_requests_cancelled_by_fkey"
             columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_closed_by_fkey"
+            columns: ["closed_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -9999,7 +10127,6 @@ export type Database = {
     }
     Functions: {
       hr_apply_due_leaves: { Args: { p_today: string }; Returns: number }
-
       hr_attendance_days: {
         Args: { p_from: string; p_to: string }
         Returns: string[]
