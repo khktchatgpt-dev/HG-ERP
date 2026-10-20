@@ -86,6 +86,11 @@ export function FeedbackScreen({
     }
   }, [toast])
 
+  // Callback ổn định cho hộp chi tiết: nó nạp lại dữ liệu khi callback đổi,
+  // truyền arrow mới mỗi render là mỗi lần cha render hộp gọi API thêm một lần.
+  const closeDetail = useCallback(() => setOpenId(null), [])
+  const detailChanged = useCallback(() => void reload(), [reload])
+
   // ?id= theo hộp đang mở để copy link / Back hoạt động như mong đợi.
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -388,12 +393,7 @@ export function FeedbackScreen({
       </Tabs>
 
       {openId && (
-        <FeedbackDetail
-          id={openId}
-          meta={meta}
-          onClose={() => setOpenId(null)}
-          onChanged={() => void reload()}
-        />
+        <FeedbackDetail id={openId} meta={meta} onClose={closeDetail} onChanged={detailChanged} />
       )}
       {writing && (
         <QuickFeedbackDialog

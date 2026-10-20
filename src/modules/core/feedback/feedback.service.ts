@@ -1,4 +1,8 @@
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
+// Handler thông báo chỉ được đăng ký khi module `register` được import — bus
+// không tự nạp. Thiếu dòng này thì emit() chạy vào chỗ trống, không ai được báo
+// (dính lúc test 21/10/2026: 0 thông báo dù mọi luồng đều chạy).
+import '@/events/register'
 import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
