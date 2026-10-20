@@ -511,6 +511,9 @@ tắt tuần, xuất Markdown cho AI.
 - **Client không import `src/modules/*`**: hình dữ liệu API chép tay ở
   `src/lib/feedback-types.ts`; từ vựng (nhãn, trạng thái, cột kanban) ở
   `src/lib/feedback-labels.ts` dùng chung hai bên.
+- **BẪY event bus**: handler chỉ được đăng ký khi có chỗ `import '@/events/register'`
+  (bus không tự nạp). `feedback.service.ts` import nó ở đầu file; lúc test lần
+  đầu (21/10/2026) thiếu dòng này nên mọi luồng chạy mà 0 thông báo, không log lỗi.
 - **Chưa làm** (đừng tự thêm): trợ lý phòng ban đọc góp ý, tạo góp ý từ đề
   xuất cuộc họp, đếm góp ý theo người — mục 9 README gói nói là tích hợp phụ.
 
