@@ -117,7 +117,10 @@ export const feedbackRepo = {
   async list(opts: { since?: string; limit?: number } = {}): Promise<FeedbackRow[]> {
     let q = db().from('feedback').select(COLS).order('created_at', { ascending: false })
     if (opts.since) q = q.gte('created_at', opts.since)
-    const { data } = await q.limit(opts.limit ?? 2000)
+    const { data, error } = await q.limit(opts.limit ?? 2000)
+    // KHÔNG nuốt lỗi đọc: thiếu bảng (chưa apply 0253) mà trả [] thì trang hiện
+    // "0 góp ý" như thật — đã dính đúng bẫy này lúc test lần đầu (20/10/2026).
+    if (error) throw new Error(`feedback list failed: ${error.message}`)
     return (data ?? []) as FeedbackRow[]
   },
 
@@ -164,11 +167,12 @@ export const feedbackRepo = {
   // ── Trao đổi ─────────────────────────────────────────────────────────────
 
   async commentsFor(feedbackId: string): Promise<FeedbackCommentRow[]> {
-    const { data } = await db()
+    const { data, error } = await db()
       .from('feedback_comments')
       .select('*')
       .eq('feedback_id', feedbackId)
       .order('created_at', { ascending: true })
+    if (error) throw new Error(`feedback comments failed: ${error.message}`)
     return (data ?? []) as FeedbackCommentRow[]
   },
 
@@ -176,12 +180,13 @@ export const feedbackRepo = {
   async commentsForMany(ids: string[]): Promise<Map<string, FeedbackCommentRow[]>> {
     const m = new Map<string, FeedbackCommentRow[]>()
     if (ids.length === 0) return m
-    const { data } = await db()
+    const { data, error } = await db()
       .from('feedback_comments')
       .select('id, feedback_id, kind, author_id, created_at, is_admin, round, content, from_status, to_status, file_ids, mention_ids, edited_at')
       .in('feedback_id', ids)
       .order('created_at', { ascending: true })
       .limit(20000)
+    if (error) throw new Error(`feedback comments failed: ${error.message}`)
     for (const r of (data ?? []) as FeedbackCommentRow[]) {
       const arr = m.get(r.feedback_id) ?? []
       arr.push(r)
