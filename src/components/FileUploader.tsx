@@ -18,6 +18,7 @@ type Parent =
   | { kind: 'sales_order'; id: string }
   | { kind: 'production_order'; id: string }
   | { kind: 'purchase_order'; id: string } // hồ sơ mua hàng (FR-SUP-07)
+  | { kind: 'feedback'; id: string } // ảnh kèm góp ý hệ thống (0186)
   | { kind: 'none' }
 
 type Bucket = 'private' | 'attachments' | 'public'

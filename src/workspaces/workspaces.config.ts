@@ -136,7 +136,11 @@ export const PERSONAL_SECTION: NavSection = {
 export const SHARED_SECTION: NavSection = {
   heading: 'Dùng chung',
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
-  items: [{ href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' }],
+  items: [
+    { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
+    // Góp ý hệ thống (0186) — mọi người viết / xem được, nên ở khu dùng chung.
+    { href: '/gop-y', label: 'Góp ý hệ thống', icon: 'messages-square' },
+  ],
 } as const
 
 // ── Config từng workspace ─────────────────────────────────────────────────

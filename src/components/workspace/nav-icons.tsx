@@ -27,6 +27,7 @@ import {
   Home,
   KeyRound,
   Library,
+  MessagesSquare,
   ListTodo,
   NotebookPen,
   Package,
@@ -101,6 +102,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   'building-2': Building2,
   'key-round': KeyRound,
   library: Library,
+  // Góp ý hệ thống — hai bong bóng thoại: trao đổi qua lại, không phải "báo lỗi".
+  'messages-square': MessagesSquare,
   'scroll-text': ScrollText,
   'heart-pulse': HeartPulse,
   settings: Settings,

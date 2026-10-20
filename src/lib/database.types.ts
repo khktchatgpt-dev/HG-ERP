@@ -387,6 +387,201 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          admin_replied_at: string | null
+          admin_reply: string | null
+          admin_reply_by: string | null
+          confirmed_ok_at: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          department_id: string | null
+          done_at: string | null
+          edited_at: string | null
+          file_ids: string[]
+          gate_passed_at: string | null
+          id: string
+          is_private: boolean
+          kind: string
+          page_title: string | null
+          page_url: string | null
+          reopen_count: number
+          reopened_at: string | null
+          returned_at: string | null
+          returned_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          severity: string
+          status: string
+          submitted_at: string
+          title: string
+          topic: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          admin_replied_at?: string | null
+          admin_reply?: string | null
+          admin_reply_by?: string | null
+          confirmed_ok_at?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          done_at?: string | null
+          edited_at?: string | null
+          file_ids?: string[]
+          gate_passed_at?: string | null
+          id?: string
+          is_private?: boolean
+          kind: string
+          page_title?: string | null
+          page_url?: string | null
+          reopen_count?: number
+          reopened_at?: string | null
+          returned_at?: string | null
+          returned_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+          submitted_at?: string
+          title: string
+          topic?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          admin_replied_at?: string | null
+          admin_reply?: string | null
+          admin_reply_by?: string | null
+          confirmed_ok_at?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          done_at?: string | null
+          edited_at?: string | null
+          file_ids?: string[]
+          gate_passed_at?: string | null
+          id?: string
+          is_private?: boolean
+          kind?: string
+          page_title?: string | null
+          page_url?: string | null
+          reopen_count?: number
+          reopened_at?: string | null
+          returned_at?: string | null
+          returned_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+          submitted_at?: string
+          title?: string
+          topic?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      feedback_comments: {
+        Row: {
+          author_id: string | null
+          content: string | null
+          created_at: string
+          edited_at: string | null
+          feedback_id: string
+          file_ids: string[]
+          from_status: string | null
+          id: string
+          is_admin: boolean
+          kind: string
+          mention_ids: string[]
+          round: number
+          to_status: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          content?: string | null
+          created_at?: string
+          edited_at?: string | null
+          feedback_id: string
+          file_ids?: string[]
+          from_status?: string | null
+          id?: string
+          is_admin?: boolean
+          kind: string
+          mention_ids?: string[]
+          round?: number
+          to_status?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          content?: string | null
+          created_at?: string
+          edited_at?: string | null
+          feedback_id?: string
+          file_ids?: string[]
+          from_status?: string | null
+          id?: string
+          is_admin?: boolean
+          kind?: string
+          mention_ids?: string[]
+          round?: number
+          to_status?: string | null
+        }
+        Relationships: []
+      }
+      feedback_votes: {
+        Row: {
+          created_at: string
+          feedback_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          feedback_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      feedback_weekly_updates: {
+        Row: {
+          author_id: string | null
+          content: string
+          created_at: string
+          id: string
+          title: string | null
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          author_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          title?: string | null
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          title?: string | null
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       files: {
         Row: {
           bucket: string
@@ -397,6 +592,7 @@ export type Database = {
           deleted_at: string | null
           doc_type: string | null
           filename: string
+          feedback_id: string | null
           finalized_at: string | null
           is_current: boolean
           rev: string | null
@@ -424,6 +620,7 @@ export type Database = {
           deleted_at?: string | null
           doc_type?: string | null
           filename: string
+          feedback_id?: string | null
           finalized_at?: string | null
           is_current?: boolean
           rev?: string | null
@@ -451,6 +648,7 @@ export type Database = {
           deleted_at?: string | null
           doc_type?: string | null
           filename?: string
+          feedback_id?: string | null
           finalized_at?: string | null
           is_current?: boolean
           rev?: string | null

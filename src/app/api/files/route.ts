@@ -23,6 +23,7 @@ const PARENT_QUERY_KEYS = [
   'production_order_id',
   'purchase_order_id',
   'sample_id',
+  'feedback_id',
 ] as const
 
 const listQuerySchema = z
@@ -33,6 +34,7 @@ const listQuerySchema = z
     production_order_id: z.string().uuid().optional(),
     purchase_order_id: z.string().uuid().optional(),
     sample_id: z.string().uuid().optional(),
+    feedback_id: z.string().uuid().optional(),
   })
   .refine(
     (q) => PARENT_QUERY_KEYS.filter((k) => q[k]).length === 1,

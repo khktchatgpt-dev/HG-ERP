@@ -367,6 +367,66 @@ export type DomainEvent =
       changes: { field: string; before: string | null; after: string | null }[]
     }
 
+  /**
+   * GÓP Ý HỆ THỐNG (0186). Service tính sẵn DANH SÁCH NGƯỜI NHẬN (admin, người
+   * xác nhận, người viết, người đã trao đổi) rồi phát; handler chỉ còn việc
+   * viết thông báo — luật "ai được báo" nằm một chỗ ở feedback.service và được
+   * test, không rải sang handler.
+   */
+  | {
+      name: 'feedback.created'
+      feedback_id: string
+      title: string
+      actor_id: string
+      severity: string
+      /** true = đang chờ người xác nhận (cửa bật), recipient là người xác nhận. */
+      gate: boolean
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.reviewed'
+      feedback_id: string
+      title: string
+      actor_id: string
+      approved: boolean
+      reason: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.resubmitted'
+      feedback_id: string
+      title: string
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.processed'
+      feedback_id: string
+      title: string
+      actor_id: string
+      status: string
+      round: number
+      replied: boolean
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.commented'
+      feedback_id: string
+      title: string
+      actor_id: string
+      is_admin: boolean
+      needs_more: boolean
+      recipient_ids: string[]
+      mention_ids: string[]
+    }
+  | {
+      name: 'feedback.confirmed'
+      feedback_id: string
+      title: string
+      actor_id: string
+      recipient_ids: string[]
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

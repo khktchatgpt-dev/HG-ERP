@@ -36,6 +36,12 @@ const TYPE_LABEL: Record<string, string> = {
   commented: 'đã bình luận',
   due_soon: 'công việc sắp đến hạn',
   overdue: 'công việc đã quá hạn',
+  feedback_new: 'góp ý hệ thống mới',
+  feedback_reviewed: 'xác nhận góp ý',
+  feedback_processed: 'cập nhật góp ý của bạn',
+  feedback_commented: 'trao đổi mới trong góp ý',
+  feedback_mentioned: 'nhắc bạn trong góp ý',
+  feedback_confirmed: 'người viết xác nhận góp ý đã ổn',
 }
 
 export default async function NotificationsPage() {
@@ -54,7 +60,9 @@ export default async function NotificationsPage() {
         ) : (
           <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
             {items.map((n) => {
-              const title = (n.payload as { title?: string })?.title
+              const payload = n.payload as { title?: string; href?: string }
+              const title = payload?.title
+              const href = payload?.href ?? (n.task_id ? `/tasks/${n.task_id}` : null)
               return (
                 <li
                   key={n.id}
@@ -67,8 +75,8 @@ export default async function NotificationsPage() {
                       <span className="font-medium">{TYPE_LABEL[n.type] ?? n.type}</span>
                       {title && <span className="text-zinc-500"> — {title}</span>}
                     </div>
-                    {n.task_id && (
-                      <Link href={`/tasks/${n.task_id}`} className="text-xs underline">
+                    {href && (
+                      <Link href={href} className="text-xs underline">
                         Mở
                       </Link>
                     )}

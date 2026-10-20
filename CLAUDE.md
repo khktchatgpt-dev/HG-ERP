@@ -319,6 +319,33 @@ SX, Tổ SX (không vào `SHARED_SECTION`).
   cầm đi đặt cây) + một sheet MỖI quy cách (`sheetName`: bỏ ký tự cấm, 31 ký
   tự, không trùng); in cả `errors` lẫn `skipped` thành cảnh báo. Chưa lưu DB.
 
+## Góp ý hệ thống (`modules/core/feedback`, `/gop-y`, nút "Góp ý" trên topbar)
+
+Mang từ Nam An ERP v2 (gói `goi-system-feedback`, 20/10/2026), viết lại theo
+stack dự án. Hành vi phải giữ (người dùng thật đã chốt bên kia): ghi nhanh từ
+MỌI trang (dán ảnh Ctrl+V, gửi Ctrl+Enter, tự ghi trang đang mở), một luồng
+trao đổi trong từng góp ý, "Vẫn cần chỉnh thêm" mở lại CÙNG góp ý (vòng +1),
+người viết bấm "Đã ổn" mới là xong, cửa xác nhận tuỳ chọn, "tôi cũng gặp",
+riêng tư, luật tự sửa / xoá, kanban mặc định xếp theo hoạt động gần nhất, tóm
+tắt tuần, xuất Markdown cho AI.
+
+- **Ánh xạ phụ thuộc** (README gói mục 9): người dùng = `usersRepo`; admin/BOD =
+  action `feedback.manage` (admin bypass + permission seed cho `director`,
+  0186); thông báo = event bus → `handlers/feedback.notifications.ts` (6 loại
+  `feedback_*`, payload mang `href=/gop-y?id=` để chuông mở đúng chỗ); tệp =
+  `files.feedback_id` (parent kind `feedback`), ảnh dán ở hộp ghi nhanh tải với
+  parent `none` rồi `filesRepo.claimForFeedback` nhận về lúc lưu; cấu hình người
+  xác nhận = `settings` key `feedback_reviewers` (trống = tắt cửa). Chủ đề =
+  khu làm việc HG-ERP (`FEEDBACK_TOPICS`), đoán theo URL (`guessTopic`).
+- **Luật nằm ở `feedback.rules.ts`** (thuần, có test theo 4 test gốc): cửa,
+  sửa/xoá, vòng mở lại, riêng tư. Service chỉ nạp dữ liệu + gọi luật + emit.
+  Quyền kiểm ở máy chủ; UI chỉ ẩn nút theo cờ `can_*` service trả về.
+- **Client không import `src/modules/*`**: hình dữ liệu API chép tay ở
+  `src/lib/feedback-types.ts`; từ vựng (nhãn, trạng thái, cột kanban) ở
+  `src/lib/feedback-labels.ts` dùng chung hai bên.
+- **Chưa làm** (đừng tự thêm): trợ lý phòng ban đọc góp ý, tạo góp ý từ đề
+  xuất cuộc họp, đếm góp ý theo người — mục 9 README gói nói là tích hợp phụ.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

@@ -10,7 +10,8 @@ type Notif = {
   id: string
   type: string
   task_id: string | null
-  payload: { title?: string } | null
+  /** `href`: đích mở khi thông báo không gắn task (góp ý hệ thống 0186). */
+  payload: { title?: string; href?: string } | null
   read_at: string | null
   created_at: string
 }
@@ -52,6 +53,12 @@ const TYPE_LABEL: Record<string, string> = {
   stage_handoff: 'bàn giao công đoạn',
   incident_reported: 'báo sự cố xưởng',
   incident_resolved: 'đã xử lý sự cố',
+  feedback_new: 'góp ý mới',
+  feedback_reviewed: 'xác nhận góp ý',
+  feedback_processed: 'cập nhật góp ý',
+  feedback_commented: 'trao đổi góp ý',
+  feedback_mentioned: 'nhắc bạn',
+  feedback_confirmed: 'góp ý đã ổn',
 }
 
 function timeAgo(iso: string): string {
@@ -160,7 +167,9 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
                     className={n.read_at ? 'opacity-60' : 'bg-[var(--accent)]/40'}
                   >
                     <Link
-                      href={n.task_id ? `/tasks/${n.task_id}` : '/notifications'}
+                      href={
+                        n.payload?.href ?? (n.task_id ? `/tasks/${n.task_id}` : '/notifications')
+                      }
                       onClick={() => setOpen(false)}
                       className="hover:bg-accent block px-3 py-2 transition-colors"
                     >
