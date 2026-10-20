@@ -95,7 +95,7 @@ function veChiTiet(ws: ExcelJS.Worksheet, b: BangXuat, ds: NguoiXuat[]): void {
     o(
       r,
       1,
-      `Mã nhân viên: ${n.ma}   Tên nhân viên: ${n.ten}   Bộ phận: ${n.boPhan}   Kỳ: ${dmy(b.tu)} → ${dmy(b.den)}`,
+      `Mã nhân viên: ${maSo(n.ma)}   Tên nhân viên: ${n.ten}   Bộ phận: ${n.boPhan}   Kỳ: ${dmy(b.tu)} → ${dmy(b.den)}`,
       true,
     ).fill = nen(VANG)
     gop(r, 1, COT_CT)
@@ -306,7 +306,49 @@ function veChiTiet(ws: ExcelJS.Worksheet, b: BangXuat, ds: NguoiXuat[]): void {
 
 // ───────────────────────────── TỔNG HỢP ─────────────────────────────
 
-/** Vẽ tờ "Xuất tổng" cho `ds` (nhãn nhóm `tenNhom` ở dòng kỳ) vào tờ `ws`. */
+/**
+ * Mã như sổ NS / KT: mã máy 1–3 chữ số đệm 0 thành 5 ký tự (494 → "00494"), mã 4 chữ số
+ * giữ nguyên ("1058", "6049"). Bảng lương KT VLOOKUP theo đúng chuỗi này.
+ */
+export const maSo = (ma: string) => (/^\d{1,3}$/.test(ma) ? ma.padStart(5, '0') : ma)
+
+/**
+ * Cột của tờ "Xuất tổng" — ĐÚNG VỊ TRÍ file TH tháng 9 Nhân sự chốt (user 20/10/2026):
+ * bảng lương KT tra `VLOOKUP(mã, B8:AE…, 6)` = G ngày công và cột 27 / 28 / 29 = AB / AC /
+ * AD tăng ca quy đổi. Đổi thứ tự cột là KT lấy sai số — có test canh.
+ */
+const COT_TH = 31 // A … AE
+const TIEU_DE_TH: { cot: number; den?: number; ten: string; con?: string[] }[] = [
+  { cot: 1, ten: 'STT' },
+  { cot: 2, ten: 'Mã nhân viên' },
+  { cot: 3, ten: 'Tên nhân viên' },
+  { cot: 4, ten: 'Phòng ban' },
+  { cot: 5, ten: 'Chức vụ' },
+  { cot: 6, ten: 'Ngày vào làm' },
+  { cot: 7, den: 9, ten: 'Ngày công', con: ['Thường', 'C.Tuần', 'Q.Đêm'] },
+  { cot: 10, den: 12, ten: 'Giờ công', con: ['Thường', 'Q.Đêm', 'C.Tuần'] },
+  { cot: 13, den: 14, ten: 'Vào trễ', con: ['Lần', 'Phút'] },
+  { cot: 15, den: 16, ten: 'Ra sớm', con: ['Lần', 'Phút'] },
+  { cot: 17, den: 19, ten: 'Tăng ca', con: ['TC1', 'TC2', 'TC3'] },
+  { cot: 20, ten: 'Vắng KP' },
+  { cot: 21, den: 27, ten: 'Ngày nghỉ', con: ['OM', 'TS', 'R', 'Ro', 'F', 'CO', 'CT'] },
+  { cot: 28, ten: 'TCA 16h-19h' },
+  { cot: 29, ten: 'TCA 19h-22h' },
+  { cot: 30, ten: 'TC 22h-6h' },
+  { cot: 31, ten: 'TỔNG CÔNG' },
+]
+/** Độ rộng cột như file TH tổ Phôi. */
+const RONG_TH = [
+  4.4, 12.4, 27.1, 16, 11.6, 11, 8, 8, 8, 7.6, 7.4, 7.4, 7.4, 7.4, 7.4, 6.1, 6.1, 6.1,
+  6.1, 6.1, 6.1, 3.9, 3.9, 3.9, 3.9, 3.9, 3.9, 6.1, 6.1, 6.1, 7.3,
+]
+const ARIAL = (o: Partial<ExcelJS.Font> = {}): Partial<ExcelJS.Font> => ({
+  name: 'Arial',
+  size: 10,
+  ...o,
+})
+
+/** Vẽ tờ "Xuất tổng" cho `ds` vào tờ `ws` — bố cục file TH tháng 9 (A–AE). */
 function veTongHop(
   ws: ExcelJS.Worksheet,
   b: BangXuat,
@@ -314,124 +356,127 @@ function veTongHop(
   tenNhom: string,
 ): void {
   const p1 = b.phutMotCong
-  const nhom: [string, string[]][] = [
-    [
-      '',
-      ['STT', 'Mã nhân viên', 'Tên nhân viên', 'Phòng ban', 'Chức vụ', 'Ngày vào làm'],
-    ],
-    ['Ngày công', ['Thường', 'C.Nhật', 'Lễ']],
-    ['Giờ công', ['Thường', 'C.Nhật', 'Lễ']],
-    ['Vào trễ', ['Lần', 'Phút']],
-    ['Ra sớm', ['Lần', 'Phút']],
-    ['Tăng ca (giờ)', ['TC1', 'TC2', 'TC3']],
-    ['', ['Vắng KP', 'Thiếu lượt']],
-    ['Ngày nghỉ', LOAI_NGHI.map((k) => KY_NGHI[k])],
-  ]
-  const cot = nhom.reduce((s, [, c]) => s + c.length, 0)
-  const tieuDe = (row: number, text: string, size = 11) => {
-    ws.mergeCells(row, 1, row, cot)
+  const dong = (
+    row: number,
+    text: string,
+    o: Partial<ExcelJS.Font> = {},
+    giua = false,
+  ) => {
+    ws.mergeCells(row, 1, row, COT_TH)
     const c = ws.getCell(row, 1)
     c.value = text
-    c.font = { bold: true, size }
-    return c
+    c.font = ARIAL({ bold: true, ...o })
+    if (giua) c.alignment = { horizontal: 'center' }
   }
-  tieuDe(1, `Đơn vị: ${b.congTy.ten}`)
-  tieuDe(2, `Địa chỉ: ${b.congTy.diaChi}`)
-  tieuDe(3, 'TỔNG HỢP CHẤM CÔNG', 14).alignment = { horizontal: 'center' }
-  ws.getRow(3).height = 20
-  tieuDe(
-    4,
-    `Từ ngày ${dmy(b.tu)} đến ngày ${dmy(b.den)} · ${tenNhom} · ${b.tinhTrang}`,
-  ).alignment = { horizontal: 'center' }
+  dong(1, `Đơn vị: ${b.congTy.ten}`)
+  dong(2, `Địa chỉ: ${b.congTy.diaChi}`)
+  dong(3, 'TỔNG HỢP CHẤM CÔNG', { size: 14 }, true)
+  dong(4, `Từ ngày ${dmy(b.tu)} đến ngày ${dmy(b.den)}`, {}, true)
 
-  // Đầu bảng 2 dòng (dòng 6–7)
-  let c = 1
-  for (const [ten, cs] of nhom) {
-    if (!ten) {
-      cs.forEach((x, i) => {
-        ws.getCell(6, c + i).value = x
-        ws.mergeCells(6, c + i, 7, c + i)
-      })
-    } else {
-      ws.getCell(6, c).value = ten
-      ws.mergeCells(6, c, 6, c + cs.length - 1)
-      cs.forEach((x, i) => (ws.getCell(7, c + i).value = x))
-    }
-    c += cs.length
+  // Đầu bảng hai dòng 6–7
+  for (const h of TIEU_DE_TH) {
+    ws.getCell(6, h.cot).value = h.ten
+    if (h.con) {
+      ws.mergeCells(6, h.cot, 6, h.den!)
+      h.con.forEach((t, i) => (ws.getCell(7, h.cot + i).value = t))
+    } else ws.mergeCells(6, h.cot, 7, h.cot)
   }
-  for (const row of [6, 7]) {
-    ws.getRow(row).height = row === 7 ? 25.5 : 18
-    for (let i = 1; i <= cot; i++) {
-      const cell = ws.getCell(row, i)
-      cell.font = { bold: true }
+  for (const row of [6, 7])
+    for (let c = 1; c <= COT_TH; c++) {
+      const cell = ws.getCell(row, c)
+      cell.font = ARIAL({ bold: true })
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-      cell.fill = nen('FFF3F5F8')
       cell.border = vien
     }
-  }
+  ws.getRow(6).height = 30
+  ws.getRow(7).height = 25.5
 
   let r = 8
   for (const [i, n] of ds.entries()) {
     const t = n.tong
-    const row = ws.getRow(r++)
+    // Ngày công gồm cả chủ nhật, lễ có đi làm — đúng như sổ NS chốt (C.Tuần, Q.Đêm để trống).
+    // Cộng công TỪNG NGÀY đã làm tròn 2 số như file Chi tiết, không chia tổng phút.
+    const cong = r2(n.ngay.reduce((s, d) => s + (d.tinhDuoc ? r2(d.hc / p1) : 0), 0))
+    const gioHc = r2((t.hcThuong + t.hcCn + t.hcLe) / 60)
+    const so = (x: number) => (x ? x : null)
+    const row = ws.getRow(r)
     row.values = [
       i + 1,
-      n.ma,
+      maSo(n.ma),
       n.ten,
       n.boPhan,
       n.chucVu ?? '',
-      n.ngayVao ? dmy(n.ngayVao) : '',
-      r2(t.hcThuong / p1),
-      r2(t.hcCn / p1),
-      r2(t.hcLe / p1),
-      r2(t.hcThuong / 60),
-      r2(t.hcCn / 60),
-      r2(t.hcLe / 60),
+      n.ngayVao ? new Date(`${n.ngayVao}T00:00:00Z`) : '',
+      cong,
+      null,
+      null,
+      gioHc,
+      null,
+      null,
       t.lanTre,
       t.phutTre,
       t.lanSom,
       t.phutSom,
-      r2(t.tc1 / 60),
-      r2(t.tc2 / 60),
-      r2(t.tc3 / 60),
+      so(r2(t.tc1 / 60)),
+      so(r2(t.tc2 / 60)),
+      so(r2(t.tc3 / 60)),
       t.vang,
-      t.thieu,
-      ...LOAI_NGHI.map((k) => t.nghi[k] ?? 0),
+      t.nghi.sick ?? 0,
+      0,
+      t.nghi.personal ?? 0,
+      t.nghi.unpaid ?? 0,
+      t.nghi.annual ?? 0,
+      0,
+      t.nghi.business_trip ?? 0,
     ]
-    for (let k = 1; k <= cot; k++) row.getCell(k).border = vien
-    if (t.thieu) row.getCell(21).font = { bold: true, color: { argb: 'FFB0241A' } }
+    // Bốn cột quy đổi — CÔNG THỨC như file TH (KT đọc được cách ra số), kèm kết quả sẵn.
+    const tc1 = r2(t.tc1 / 60),
+      tc2 = r2(t.tc2 / 60),
+      tc3 = r2(t.tc3 / 60)
+    const ab = r2((tc1 * 0.5) / 3),
+      ac = r2((tc2 * 0.5) / 3),
+      ad = r2((tc3 / 8) * 2.1)
+    row.getCell(28).value = { formula: `ROUND((Q${r}*0.5/3),2)`, result: ab }
+    row.getCell(29).value = { formula: `ROUND((R${r}*0.5/3),2)`, result: ac }
+    row.getCell(30).value = { formula: `ROUND(S${r}/8*2.1,2)`, result: ad }
+    row.getCell(31).value = {
+      formula: `ROUND(G${r}+H${r}+I${r}+AB${r}+AC${r}+AD${r},2)`,
+      result: r2(cong + ab + ac + ad),
+    }
+    for (let c = 1; c <= COT_TH; c++) {
+      const cell = row.getCell(c)
+      cell.border = vien
+      cell.font = ARIAL(c === 31 ? { bold: true } : {})
+    }
+    row.getCell(6).font = ARIAL({ size: 8 })
+    row.getCell(6).numFmt = 'dd/mm/yyyy'
+    row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' }
+    for (const c of [28, 29, 30, 31]) row.getCell(c).numFmt = '0.00'
+    r++
   }
 
-  // Dòng cộng
-  const tong = ws.getRow(r)
-  tong.getCell(3).value = `Cộng ${ds.length} người`
-  for (let k = 7; k <= cot; k++) {
-    const col = ws.getColumn(k).letter
-    tong.getCell(k).value = { formula: `SUM(${col}8:${col}${r - 1})` }
-  }
-  tong.font = { bold: true }
-  for (let k = 1; k <= cot; k++) {
-    tong.getCell(k).border = vien
-    tong.getCell(k).fill = nen('FFF3F5F8')
-  }
-  r += 2
-
-  // Ghi chú ký hiệu (như tờ cũ)
+  // Ghi chú như file TH, thêm cách ra số và người còn thiếu lượt chưa bổ sung.
+  r++
+  ws.getCell(r, 2).value = 'Ghi chú:'
+  ws.getCell(r, 2).font = ARIAL({ bold: true })
+  const thieu = ds.filter((n) => n.tong.thieu > 0)
   const ghi = [
-    'Ghi chú:',
-    `Ngày công = giờ ca hành chính ÷ ${p1 / 60}; Thường: ngày thường, C.Nhật: chủ nhật, Lễ: ngày lễ`,
-    `TC1: tăng ca ${b.nhanTc.tc1}, TC2: tăng ca ${b.nhanTc.tc2}, TC3: tăng ca ${b.nhanTc.tc3}`,
-    `Vắng KP: ngày thường không quẹt, không nghỉ có lý do; Thiếu lượt: có 1 lượt, chưa bổ sung (0 giờ)`,
-    LOAI_NGHI.map((k) => `${KY_NGHI[k]}: ${TEN_NGHI[k]}`).join('; '),
+    'Thường: Ngày thường, CTuần: Cuối tuần, Q.Đêm: Ca làm việc có qua đêm',
+    `TC1: Tăng ca ${b.nhanTc.tc1}, TC2: Tăng ca ${b.nhanTc.tc2}, TC3: Tăng ca ${b.nhanTc.tc3}`,
+    'OM:Nghỉ ốm; TS:Nghỉ Thai Sản; R:Việc riêng có lương; Ro:Việc riêng không lương; F:Nghỉ phép năm; CO:Con ốm; CT:Nghỉ công tác;',
+    `Ngày công gồm cả chủ nhật và ngày lễ có đi làm; công = giờ ca hành chính ÷ ${p1 / 60}. TCA = giờ × 0,5 ÷ 3; TC 22h-6h = giờ ÷ 8 × 2,1.`,
+    `Xuất từ ERP · ${tenNhom} · ${b.tinhTrang}.`,
+    thieu.length
+      ? `Còn thiếu lượt chưa bổ sung (0 công những ngày đó): ${thieu.map((n) => `${maSo(n.ma)} ${n.ten} ${n.tong.thieu} ngày`).join('; ')}`
+      : 'Không còn ngày thiếu lượt chưa bổ sung.',
   ]
-  for (const [i, g] of ghi.entries()) ws.getCell(r + i, i === 0 ? 2 : 3).value = g
-  ws.getCell(r, 2).font = { bold: true }
-
-  ws.columns.forEach((col, i) => {
-    col.width = [5, 11, 26, 18, 14, 12][i] ?? 7.5
-    if (i >= 6) col.numFmt = '#,##0.##'
+  ghi.forEach((g, i) => {
+    const c = ws.getCell(r + 1 + i, 3)
+    c.value = g
+    c.font = ARIAL(i >= 5 && thieu.length ? { color: { argb: 'FFB0241A' } } : {})
   })
-  ws.views = [{ state: 'frozen', ySplit: 7, xSplit: 3 }]
+
+  RONG_TH.forEach((w, i) => (ws.getColumn(i + 1).width = w))
 }
 
 // ───────────────────────────── CHIA THEO TỔ ─────────────────────────────
@@ -489,6 +534,8 @@ export async function buildChiTietExcel(b: BangXuat): Promise<Buffer> {
  */
 export async function buildTongHopExcel(b: BangXuat): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
+  // Cột AB–AE là công thức; ô có kết quả 0 không được lưu sẵn → bắt Excel tính lại khi mở.
+  wb.calcProperties.fullCalcOnLoad = true
   const nhom = theoTo(b.nguoi)
   const daDung = new Set<string>()
   veTongHop(

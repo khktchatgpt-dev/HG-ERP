@@ -80,7 +80,7 @@ describe('Excel chi tiết chấm công (mẫu "tổ X.xlsx")', () => {
       .filter((i) => i > 0)
     expect(khoi).toHaveLength(2)
     expect(String(rows[khoi[0] + 1][0])).toMatch(
-      /^Mã nhân viên: 132 {3}Tên nhân viên: Lê Văn Bảy {3}Bộ phận: Tổ Phôi/,
+      /^Mã nhân viên: 00132 {3}Tên nhân viên: Lê Văn Bảy {3}Bộ phận: Tổ Phôi/,
     )
     const ngay5 = rows.find((r) => r?.[0] === '05/10/2026')!
     // Ngày, Thứ, Vào1, Ra1, Vào2, Ra2, Vào3, Ra3, Trễ, Sớm, Công, T.Giờ, TC1, TC2, TC3, Máy
@@ -111,24 +111,84 @@ describe('Excel chi tiết chấm công (mẫu "tổ X.xlsx")', () => {
   })
 })
 
-describe('Excel tổng hợp (mẫu "tổng hợp tổ X.xlsx")', () => {
-  it('đầu tờ đơn vị + kỳ, mỗi người một dòng, dòng Cộng bằng công thức', async () => {
+describe('Excel tổng hợp — đúng cột file TH tháng 9 (KT VLOOKUP theo vị trí)', () => {
+  it('tiêu đề, cột A–AE, mã đệm số 0, 4 cột quy đổi bằng công thức', async () => {
     const { rows, ws } = await doc(await buildTongHopExcel(bang()))
     expect(ws.name).toBe('Xuất tổng')
     expect(rows[1][0]).toBe('Đơn vị: CÔNG TY TNHH SX-TM HOÀNG GIA')
+    expect(rows[2][0]).toBe('Địa chỉ: Lô C3 CCN Cát Nhơn')
     expect(rows[3][0]).toBe('TỔNG HỢP CHẤM CÔNG')
-    expect(String(rows[4][0])).toMatch(/^Từ ngày 04\/10\/2026 đến ngày 07\/10\/2026/)
-    expect(rows[7].slice(6, 9)).toEqual(['Thường', 'C.Nhật', 'Lễ'])
-    // 132: thường 1 công (05/10), CN 1 công (04/10), TC1 3 · TC2 2, thiếu 1, vắng 1 (07/10)
-    expect(rows[8].slice(0, 4)).toEqual([1, '132', 'Lê Văn Bảy', 'Tổ Phôi'])
-    expect(rows[8][5]).toBe('28/07/2017')
-    expect(rows[8].slice(6, 9)).toEqual([1, 1, 0])
-    expect(rows[8].slice(16, 21)).toEqual([3, 2, 0, 1, 1])
-    // 59: trễ 1 lần 45 phút
-    expect(rows[9].slice(12, 14)).toEqual([1, 45])
-    const cong = ws.getRow(10)
-    expect(cong.getCell(3).value).toBe('Cộng 2 người')
-    expect(cong.getCell(7).value).toEqual({ formula: 'SUM(G8:G9)' })
+    expect(rows[4][0]).toBe('Từ ngày 04/10/2026 đến ngày 07/10/2026')
+    const c = (a: string) => ws.getCell(a).value
+    // Dòng 6–7 đúng chữ, đúng cột như file TH tổ Phôi
+    expect([c('A6'), c('B6'), c('C6'), c('D6'), c('E6'), c('F6')]).toEqual([
+      'STT',
+      'Mã nhân viên',
+      'Tên nhân viên',
+      'Phòng ban',
+      'Chức vụ',
+      'Ngày vào làm',
+    ])
+    expect([c('G6'), c('J6'), c('M6'), c('O6'), c('Q6'), c('T6'), c('U6')]).toEqual([
+      'Ngày công',
+      'Giờ công',
+      'Vào trễ',
+      'Ra sớm',
+      'Tăng ca',
+      'Vắng KP',
+      'Ngày nghỉ',
+    ])
+    expect([c('G7'), c('H7'), c('I7'), c('Q7'), c('R7'), c('S7')]).toEqual([
+      'Thường',
+      'C.Tuần',
+      'Q.Đêm',
+      'TC1',
+      'TC2',
+      'TC3',
+    ])
+    expect([c('U7'), c('V7'), c('W7'), c('X7'), c('Y7'), c('Z7'), c('AA7')]).toEqual([
+      'OM',
+      'TS',
+      'R',
+      'Ro',
+      'F',
+      'CO',
+      'CT',
+    ])
+    expect([c('AB6'), c('AC6'), c('AD6'), c('AE6')]).toEqual([
+      'TCA 16h-19h',
+      'TCA 19h-22h',
+      'TC 22h-6h',
+      'TỔNG CÔNG',
+    ])
+    // Lê Văn Bảy (mã 132 → "00132"): 04/10 CN 1 công + 05/10 1 công (TC1 3, TC2 2);
+    // 06/10 thiếu lượt; 07/10 vắng.
+    expect([c('A8'), c('B8'), c('C8'), c('D8')]).toEqual([
+      1,
+      '00132',
+      'Lê Văn Bảy',
+      'Tổ Phôi',
+    ])
+    expect(c('G8')).toBe(2) // cột 6 của VLOOKUP B:AE — ngày công gồm cả CN
+    expect([c('H8'), c('I8')]).toEqual([null, null])
+    expect(c('J8')).toBe(16)
+    expect([c('Q8'), c('R8'), c('T8')]).toEqual([3, 2, 1])
+    expect(c('AB8')).toEqual({ formula: 'ROUND((Q8*0.5/3),2)', result: 0.5 }) // cột 27
+    expect(c('AC8')).toEqual({ formula: 'ROUND((R8*0.5/3),2)', result: 0.33 }) // cột 28
+    // cột 29 — kết quả 0 không được lưu sẵn, Excel tự tính khi mở (fullCalcOnLoad)
+    expect(c('AD8')).toMatchObject({ formula: 'ROUND(S8/8*2.1,2)' })
+    expect(c('AE8')).toEqual({
+      formula: 'ROUND(G8+H8+I8+AB8+AC8+AD8,2)',
+      result: 2.83,
+    })
+    // Lê Thị Phúc (59 → "00059"): vào 07:45 → trễ 1 lần 45 phút
+    expect([c('B9'), c('M9'), c('N9')]).toEqual(['00059', 1, 45])
+    // Không có dòng cộng (file TH không có); ghi chú sau một dòng trống, nêu người thiếu lượt
+    expect(c('B11')).toBe('Ghi chú:')
+    const ghi = [12, 13, 14, 15, 16, 17]
+      .map((r) => String(ws.getCell(r, 3).value))
+      .join(' ')
+    expect(ghi).toContain('00132 Lê Văn Bảy 1 ngày')
   })
 })
 
@@ -156,9 +216,12 @@ describe('chia theo tổ — một file, mỗi tổ một tờ', () => {
       'Khoán Nguội A B',
     ])
     const [ca, phoi] = wb.worksheets
-    expect(ca.getRow(10).getCell(3).value).toBe('Cộng 2 người')
-    expect(phoi.getRow(8).getCell(3).value).toBe('Lê Văn Bảy')
-    expect(phoi.getRow(9).getCell(3).value).toBe('Cộng 1 người')
-    expect(String(phoi.getCell('A4').value)).toContain('· Tổ Phôi ·')
+    expect([ca.getCell('C8').value, ca.getCell('C9').value]).toEqual([
+      'Lê Văn Bảy',
+      'Lê Thị Phúc',
+    ])
+    expect(phoi.getCell('C8').value).toBe('Lê Văn Bảy')
+    expect(phoi.getCell('C9').value).toBeNull()
+    expect(String(phoi.getCell(15, 3).value)).toContain('Tổ Phôi')
   })
 })
