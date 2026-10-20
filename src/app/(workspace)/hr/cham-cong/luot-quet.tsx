@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Btn, Empty, Pick, SearchInput, Tick } from '@/components/kit'
+import { Btn, Empty, Menu, Pick, SearchInput, Tick } from '@/components/kit'
+import { kyCuaThang } from '@/lib/cham-cong/ky-gio-cong'
 import { cn } from '@/lib/utils'
 import type { DongLuot } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
@@ -61,6 +62,8 @@ export function LuotQuetScreen({
   }, [k.du.dong, tim, ngay, boPhan, soLuot, chuaGhep])
 
   const soChuaGhep = k.du.dong.filter((r) => !r.daGhep).length
+  // Trang này theo tháng dương lịch; file chi tiết theo KỲ công (26 → 25) như Bảng công.
+  const kyXuat = kyCuaThang(k.thang)
   const demLuot = (n: string) => k.du.dong.filter((r) => nhomLuot(r) === n).length
 
   return (
@@ -70,18 +73,26 @@ export function LuotQuetScreen({
       onThang={d.xemThang}
       facts={[{ label: 'Dòng người-ngày', value: so(k.du.dong.length) }]}
       actions={
-        <Btn
-          icon="excel"
-          aria-disabled={k.du.dong.length === 0}
-          onClick={() => {
-            if (k.du.dong.length)
+        <Menu
+          label="Xuất Excel ▾"
+          // Hai file như máy / phần mềm cũ xuất (user 20/10/2026, thay mục "lượt quẹt thô"):
+          // "tổ X.xlsx" (chi tiết) và "tổng hợp tổ X.xlsx" — theo bộ phận đang lọc, KỲ công
+          // 26 → 25; mọi bộ phận thì mỗi tổ một tờ.
+          items={(['chi-tiet', 'tong-hop'] as const).map((loai) => ({
+            label: `${loai === 'chi-tiet' ? 'Chi tiết chấm công' : 'Tổng hợp chấm công'} · ${
+              boPhan === BO_PHAN_TRONG
+                ? '(chưa có bộ phận)'
+                : boPhan || 'mọi bộ phận, mỗi tổ một tờ'
+            } · kỳ ${dm(kyXuat.tu)} → ${dm(kyXuat.den)}`,
+            why: k.du.dong.length ? undefined : 'Tháng này chưa có lượt nào',
+            onClick: () =>
               window.location.assign(
-                `/api/dept/hr/cham-cong/du-lieu/excel?tu=${k.tu}&den=${k.den}`,
-              )
-          }}
-        >
-          Xuất Excel
-        </Btn>
+                `/api/dept/hr/cham-cong/bang-cong/excel?loai=${loai}&thang=${k.thang}&bp=${encodeURIComponent(
+                  boPhan === BO_PHAN_TRONG ? '(chưa có bộ phận)' : boPhan || 'all',
+                )}`,
+              ),
+          }))}
+        />
       }
     >
       <div className="flex flex-wrap items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">

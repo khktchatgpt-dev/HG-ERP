@@ -84,12 +84,34 @@ export function GioCongScreen({ b, bpDau }: { b: GioCong; bpDau?: string }) {
           },
         ]}
         actions={
-          <Btn
-            icon="lamMoi"
-            href={`/hr/cham-cong/lay-du-lieu?thang=${b.den.slice(0, 7)}`}
-          >
-            Lấy dữ liệu từ máy
-          </Btn>
+          <>
+            <Btn
+              icon="lamMoi"
+              href={`/hr/cham-cong/lay-du-lieu?thang=${b.den.slice(0, 7)}`}
+            >
+              Lấy dữ liệu từ máy
+            </Btn>
+            {/* File "tổng hợp tổ X.xlsx" như phần mềm cũ — theo nhóm đang xem. File chi
+                tiết (dữ liệu chấm công từng người) xuất ở trang Lượt quẹt. */}
+            <Btn
+              icon="excel"
+              aria-disabled={d.dong.length === 0}
+              onClick={() => {
+                if (!d.dong.length) return
+                const bp = d.nhom.kieu === 'bp' ? d.nhom.ten : d.nhom.kieu
+                window.location.assign(
+                  `/api/dept/hr/cham-cong/bang-cong/excel?loai=tong-hop&thang=${b.thang}&bp=${encodeURIComponent(bp)}`,
+                )
+              }}
+              title={
+                d.nhom.kieu === 'bp'
+                  ? `Tổng hợp chấm công ${d.nhom.ten}`
+                  : 'Một file: tờ đầu là cả nhóm, sau đó mỗi tổ một tờ'
+              }
+            >
+              {d.nhom.kieu === 'bp' ? 'Xuất tổng hợp' : 'Xuất tổng hợp (mỗi tổ một tờ)'}
+            </Btn>
+          </>
         }
       />
       <ThanhNhom d={d} />

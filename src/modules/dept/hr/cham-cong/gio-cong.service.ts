@@ -12,9 +12,13 @@ import {
 import {
   chiTietNgay,
   nhanTc,
+  tongCong,
   type CongNgay,
   type NhomTc,
 } from '@/lib/cham-cong/chi-tiet-cong'
+import { tenMay } from '@/lib/cham-cong/mot-nguoi'
+import { settingsService } from '@/modules/core/settings/settings.service'
+import type { BangXuat } from './bang-cong-excel'
 import { chamCongRepo } from './cham-cong.repo'
 import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
 import { chamCongService, type MotNguoi } from './cham-cong.service'
@@ -227,6 +231,81 @@ export const gioCongService = {
       ban: cuoi.ban,
       daChot: kys.map((b) => b.ky?.trangThai ?? 'open').some((s) => s !== 'open'),
       ngay,
+    }
+  },
+
+  /**
+   * Dữ liệu cho hai file Excel theo mẫu phần mềm cũ (Chi tiết + Tổng hợp) của một nhóm
+   * trên Bảng công: tên tổ, 'vp' (khối văn phòng) hoặc 'all'. Cùng nguồn số với lưới:
+   * `bang()` → `chiTietNgay` → `tongCong`, ngày đã lấy dữ liệu tính y như màn.
+   */
+  async duLieuXuat(
+    user: User,
+    thang: string,
+    homNay: string,
+    bp: string,
+  ): Promise<BangXuat> {
+    const [b, emps, st] = await Promise.all([
+      this.bang(user, thang, homNay),
+      chamCongRepo.employees(),
+      settingsService.getAll(),
+    ])
+    const vp = new Set(b.boPhan.filter((x) => x.cachTinh === 'ngay').map((x) => x.ten))
+    // Cùng thứ tự Bảng công: tổ đông người trước, "(chưa có bộ phận)" cuối — file chia
+    // mỗi tổ một tờ thì tờ theo đúng thứ tự này.
+    const thuTu = new Map(b.boPhan.map((x, i) => [x.ten, i]))
+    const chon = b.nguoi
+      .filter((n) =>
+        bp === 'all' ? true : bp === 'vp' ? vp.has(n.boPhan ?? '') : n.boPhan === bp,
+      )
+      .sort(
+        (x, y) =>
+          (thuTu.get(x.boPhan ?? '') ?? 999) - (thuTu.get(y.boPhan ?? '') ?? 999) ||
+          x.ma.localeCompare(y.ma, 'vi', { numeric: true }),
+      )
+    if (!chon.length) throw BadRequest('Nhóm này không có ai để xuất')
+    const nv = new Map(emps.map((e) => [e.code, e]))
+    const ngays: string[] = []
+    for (let d = b.tu; d <= b.den && d < homNay; d = congNgay(d, 1)) ngays.push(d)
+    const coLuot = new Set(
+      b.nguoi.flatMap((n) => n.ngay.filter((x) => x.luot.length).map((x) => x.ngay)),
+    )
+    const moc = b.ngayLay && b.ngayLay < homNay ? b.ngayLay : homNay
+    const daLay = (iso: string) => coLuot.has(iso) && iso < moc
+    const trangThai = b.ky?.trangThai ?? 'open'
+    return {
+      tu: b.tu,
+      den: b.den,
+      nhom: bp === 'all' ? 'Cả công ty' : bp === 'vp' ? 'Khối văn phòng' : bp,
+      congTy: { ten: st.company_name, diaChi: st.company_address },
+      nhanTc: nhanTc(b.thamSo),
+      phutMotCong: b.phutMotCong,
+      tinhTrang:
+        trangThai === 'open'
+          ? 'kỳ đang mở — số tạm tính'
+          : `đã chốt (bản chốt lần ${b.ky!.lanChot})`,
+      nguoi: chon.map((n) => {
+        const theo = new Map(n.ngay.map((x) => [x.ngay, x]))
+        const ds = ngays.map((d) =>
+          chiTietNgay(d, theo.get(d), b.thamSo, n.cachTinh, b.le),
+        )
+        const e = nv.get(n.ma)
+        const may: Record<string, string[]> = {}
+        for (const d of ngays) {
+          const l = b.luotMay[`${n.ma}|${d}`]
+          if (l?.length) may[d] = [...new Set(l.map((x) => tenMay(x.may)))]
+        }
+        return {
+          ma: n.ma,
+          ten: n.ten,
+          boPhan: n.boPhan ?? CHUA_CO,
+          chucVu: e?.job_title ?? null,
+          ngayVao: e?.hire_date ?? null,
+          ngay: ds,
+          may,
+          tong: tongCong(ds, daLay),
+        }
+      }),
     }
   },
 
