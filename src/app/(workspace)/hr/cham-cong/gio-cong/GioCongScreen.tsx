@@ -24,7 +24,8 @@ import {
 import { cn } from '@/lib/utils'
 import { DieuChinhSheet } from '../dieu-chinh-sheet'
 import { LuoiGio } from './luoi-gio'
-import { NganNguoi, NganTrua } from './ngan-gio'
+import { TongHop } from './tong-hop'
+import { NganTrua } from './ngan-gio'
 import { OGio } from './o-gio'
 import { useGioCong, type GioCongCtx } from './useGioCong'
 import { dm, so, type GioCong } from './gio-cong.shared'
@@ -112,7 +113,7 @@ export function GioCongScreen({ b, bpDau }: { b: GioCong; bpDau?: string }) {
           action={{ label: 'Tick theo ngày…', onClick: () => d.setMoTrua(true) }}
         >
           {so(truaCho)} ngày có mặt xuyên trưa (đã trừ 1 giờ nghỉ trưa) chưa tick làm trưa
-          — ô có chữ “t”.
+          — tick theo ngày, hoặc bấm từng ô.
         </NoticeBar>
       )}
       {!ngayCo.size && (
@@ -127,9 +128,8 @@ export function GioCongScreen({ b, bpDau }: { b: GioCong; bpDau?: string }) {
           Kỳ {dm(b.tu)} → {dm(b.den)} chưa có lượt quẹt nào trong ERP.
         </NoticeBar>
       )}
-      <LuoiGio d={d} />
+      {d.xem === 'tong' ? <TongHop d={d} /> : <LuoiGio d={d} />}
       <OGio d={d} />
-      <NganNguoi d={d} />
       <NganTrua key={String(d.moTrua)} d={d} />
       <DieuChinhSheet
         mo={d.moDc}
@@ -210,37 +210,63 @@ function ThanhNhom({ d }: { d: GioCongCtx }) {
         width={170}
         label="Tìm mã hoặc tên"
       />
-      <span className="text-k-label ml-auto flex flex-wrap items-center gap-2.5 text-[var(--ink-3)]">
-        <span>
-          <i className="mr-1 inline-block w-5 bg-[color-mix(in_srgb,var(--done)_8%,white)] text-center font-mono not-italic">
-            1
-          </i>
-          công (8 giờ)
-        </span>
-        <span>
-          <i className="mr-1 inline-block bg-[color-mix(in_srgb,var(--done)_26%,white)] px-0.5 text-center font-mono not-italic">
-            1,63
-          </i>
-          làm 13 giờ
-        </span>
-        <span>
-          <i className="mr-1 inline-block w-5 bg-[var(--stop-wash)] text-center font-mono text-[var(--stop)] not-italic">
-            ?
-          </i>
-          1 lượt
-        </span>
-        <span>
-          <i className="mr-1 inline-block w-5 bg-[var(--warn-wash)] text-center font-mono text-[var(--warn)] not-italic">
-            P
-          </i>
-          nghỉ
-        </span>
-        <span>
-          <b className="text-[var(--warn)]">t</b> trưa chưa tick ·{' '}
-          <b className="text-[var(--act-text)]">đ</b> qua đêm ·{' '}
-          <b className="text-[var(--act-text)]">s</b> đã điều chỉnh
-        </span>
+      <span
+        role="group"
+        aria-label="Cách xem"
+        className="inline-flex border border-[var(--line)]"
+      >
+        {(
+          [
+            ['luoi', 'Lưới ngày'],
+            ['tong', 'Tổng hợp'],
+          ] as const
+        ).map(([k, ten]) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={d.xem === k}
+            onClick={() => {
+              d.setO(null)
+              d.setXem(k)
+            }}
+            className={cn(
+              'text-k-sm border-r border-[var(--line)] px-2.5 py-0.5 last:border-r-0',
+              d.xem === k
+                ? 'bg-[var(--act-wash)] font-semibold text-[var(--act-text)]'
+                : 'text-[var(--ink-2)] hover:bg-[var(--surface-hover)]',
+            )}
+          >
+            {ten}
+          </button>
+        ))}
       </span>
+      {d.xem === 'luoi' && (
+        <span className="text-k-label ml-auto flex flex-wrap items-center gap-2.5 text-[var(--ink-3)]">
+          <Ky c="text-[var(--done)]">✓</Ky> đủ công
+          <Ky c="text-[var(--warn)]">✓</Ky> có làm, chưa đủ 8 giờ
+          <Ky c="bg-[var(--stop-wash)] text-[var(--stop)]">?</Ky> thiếu lượt
+          <Ky c="text-[var(--stop)]">V</Ky> vắng
+          <Ky c="bg-[var(--warn-wash)] text-[var(--warn)]">P</Ky> nghỉ có lý do
+          <Ky c="bg-[var(--warn-wash)] text-[var(--warn)]">L</Ky> lễ
+          <span className="inline-block h-3.5 w-5 border-[1.5px] border-dashed border-[var(--act)] align-middle" />{' '}
+          chờ duyệt điều chỉnh
+          <span>· bấm ô để xem giờ, công, tăng ca</span>
+        </span>
+      )}
     </div>
+  )
+}
+
+/** Ô mẫu của chú giải — cùng cỡ chữ và nền với ô lưới. */
+function Ky({ c, children }: { c: string; children: string }) {
+  return (
+    <i
+      className={cn(
+        'inline-block w-5 text-center font-mono text-[12px] font-bold not-italic',
+        c,
+      )}
+    >
+      {children}
+    </i>
   )
 }

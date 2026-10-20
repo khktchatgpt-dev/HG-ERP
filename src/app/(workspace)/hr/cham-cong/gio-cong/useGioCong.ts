@@ -6,7 +6,19 @@ import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 import type { MoDieuChinh } from '../dieu-chinh-sheet'
-import type { GioCong, NgayGio, Nhom, NguoiGio } from './gio-cong.shared'
+import {
+  chiTietNgay,
+  tongCong,
+  type CongNgay,
+  type TongCong,
+} from '@/lib/cham-cong/chi-tiet-cong'
+import {
+  ngayKy,
+  type GioCong,
+  type NgayGio,
+  type Nhom,
+  type NguoiGio,
+} from './gio-cong.shared'
 
 /** State + xử lý của màn Bảng giờ công. */
 export function useGioCong(b: GioCong, bpDau: string | undefined) {
@@ -30,7 +42,6 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
   const [o, setO] = useState<{ ma: string; ngay: string; x: number; y: number } | null>(
     null,
   )
-  const [nguoiMo, setNguoiMo] = useState<string | null>(null)
   const [moDc, setMoDc] = useState<MoDieuChinh | null>(null)
   const [moTrua, setMoTrua] = useState(false)
   const [dangGhi, setDangGhi] = useState(false)
@@ -39,6 +50,34 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
     () => new Set(b.boPhan.filter((x) => x.cachTinh === 'ngay').map((x) => x.ten)),
     [b.boPhan],
   )
+  /** Ngăn đang xem: lưới trạng thái từng ngày, hay bảng tổng hợp theo người. */
+  const [xem, setXem] = useState<'luoi' | 'tong'>('luoi')
+
+  /**
+   * Công từng ô, chia bằng CHÍNH hàm trang Chấm công một người dùng (`chiTietNgay`) —
+   * số trong khung nổi, cột tổng và ngăn Tổng hợp khớp trang một người.
+   * Ngày đã lấy dữ liệu = cả công ty có lượt và trước ngày đang dở (chưa lấy thì không vắng).
+   */
+  const cong = useMemo(() => {
+    const ngays = ngayKy(b.tu, b.den)
+    const coLuot = new Set(
+      b.nguoi.flatMap((n) => n.ngay.filter((x) => x.luot.length).map((x) => x.ngay)),
+    )
+    const moc = b.ngayLay && b.ngayLay < b.homNay ? b.ngayLay : b.homNay
+    const daLay = (iso: string) => coLuot.has(iso) && iso < moc
+    const out = new Map<string, { ngay: Map<string, CongNgay>; tong: TongCong }>()
+    for (const n of b.nguoi) {
+      const theo = new Map(n.ngay.map((x) => [x.ngay, x]))
+      const ds = ngays
+        .filter((iso) => iso < b.homNay)
+        .map((iso) => chiTietNgay(iso, theo.get(iso), b.thamSo, n.cachTinh, b.le))
+      out.set(n.ma, {
+        ngay: new Map(ds.map((x) => [x.ngay, x])),
+        tong: tongCong(ds, daLay),
+      })
+    }
+    return { cua: out, daLay }
+  }, [b])
 
   const dong = useMemo(() => {
     const q = tim.trim().toLowerCase()
@@ -135,6 +174,10 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
 
   return {
     b,
+    xem,
+    setXem,
+    congCua: (ma: string) => cong.cua.get(ma),
+    daLay: cong.daLay,
     nhom,
     chonNhom,
     vp,
@@ -143,8 +186,6 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
     dong,
     o,
     setO,
-    nguoiMo,
-    setNguoiMo,
     nguoiCua,
     ngayCua,
     moDc,

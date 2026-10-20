@@ -1,8 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Btn, NumInput, Tick } from '@/components/kit'
 import { TEN_NGHI } from '@/lib/cham-cong/dieu-chinh'
+import { nhanTc } from '@/lib/cham-cong/chi-tiet-cong'
+import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { tenMay } from '@/lib/cham-cong/mot-nguoi'
 import type { GioCongCtx } from './useGioCong'
 import { THU, dm, gio, hm, so, thu } from './gio-cong.shared'
 
@@ -39,8 +43,20 @@ export function OGio({ d }: { d: GioCongCtx }) {
   const n = d.nguoiCua(o.ma)
   const x = n && d.ngayCua(n, o.ngay)
   if (!n || !x) return null
+  const c = d.congCua(o.ma)?.ngay.get(o.ngay)
+  const nhan = nhanTc(d.b.thamSo)
+  // Lượt quẹt ở máy nào (user 20/10/2026): tra giờ máy ghi → máy; giờ '(+1)' là lượt
+  // rạng sáng hôm sau của ca qua đêm. Lượt bổ sung bằng điều chỉnh không có máy.
+  const mayCua = (g: string) => {
+    const sau = /\(\+1\)$/.test(g)
+    const ngay = sau ? congNgay(o.ngay, 1) : o.ngay
+    const l = (d.b.luotMay[`${o.ma}|${ngay}`] ?? []).find(
+      (x) => x.gio.slice(0, 5) === g.slice(0, 5),
+    )
+    return l ? tenMay(l.may) : 'bổ sung'
+  }
 
-  const W = 340
+  const W = 380
   const left = Math.min(o.x, window.innerWidth - W - 12)
   const top = o.y + 4 + 330 > window.innerHeight ? Math.max(8, o.y - 360) : o.y + 4
 
@@ -57,29 +73,20 @@ export function OGio({ d }: { d: GioCongCtx }) {
         <span className="num text-[var(--ink-3)]" style={{ textAlign: 'left' }}>
           {THU[thu(o.ngay)]} {dm(o.ngay)}
         </span>
-        <button
-          type="button"
+        <Link
+          href={`/hr/cham-cong/nguoi/${encodeURIComponent(n.ma)}?thang=${d.b.thang}`}
           className="ml-auto text-[var(--act-text)] underline"
-          onClick={() => {
-            d.setO(null)
-            d.setNguoiMo(n.ma)
-          }}
         >
           Xem cả kỳ
-        </button>
+        </Link>
       </header>
       <div className="grid gap-2 px-2.5 py-2">
-        <div className="font-mono text-[11.5px] leading-relaxed text-[var(--ink-2)]">
-          Máy ghi:{' '}
-          <b className="text-[var(--ink)]">
-            {x.luot.length ? x.luot.map(hm).join(' · ') : 'không có lượt'}
-          </b>
-          {x.daSua && (
-            <span className="ml-1 text-[var(--act-text)]">
-              (đã gồm điều chỉnh đã duyệt)
-            </span>
-          )}
-        </div>
+        {!x.luot.length && <div className="text-[var(--ink-2)]">Không có lượt máy.</div>}
+        {x.daSua && (
+          <div className="text-[var(--act-text)]">
+            Giờ vào/ra đã gồm điều chỉnh đã duyệt.
+          </div>
+        )}
         {!x.k && x.doDang && (
           <div className="text-[var(--ink-2)]">
             Ngày đang dở: dữ liệu lấy về giữa ngày nên mới có lượt vào. Lấy lại dữ liệu
@@ -100,24 +107,70 @@ export function OGio({ d }: { d: GioCongCtx }) {
             {n.boPhan} không tính theo khung giờ: có quẹt trong ngày = 1 công.
           </div>
         )}
-        {n.cachTinh === 'khung' && x.doan && (
-          <div className="font-mono text-[11.5px] leading-relaxed text-[var(--ink-2)]">
-            {x.doan.map((s, i) => (
-              <div key={i}>
-                {hm(s.vao)}→{hm(s.ra)} <span className="text-[var(--ink-3)]">tính</span>{' '}
-                {hm(s.vaoTinh)}→{hm(s.raTinh)}
-              </div>
-            ))}
-            <div className="text-[var(--ink-3)]">
-              (vào 5:00–7:30 tính từ 7:00 · giờ ra làm tròn nửa giờ · trừ 1 giờ nghỉ trưa)
-            </div>
+        {c && c.cap.length > 0 && (
+          <table className="w-full border-separate border-spacing-0 font-mono text-[11.5px]">
+            <tbody>
+              {c.cap.map((p, i) => (
+                <tr key={i}>
+                  <td className="py-0.5 pr-2 font-sans text-[var(--ink-3)]">
+                    Vào {i + 1} · Ra {i + 1}
+                  </td>
+                  <td className="py-0.5" style={{ textAlign: 'left' }}>
+                    <b>{p.vao}</b>{' '}
+                    <span className="font-sans text-[10.5px] text-[var(--ink-3)]">
+                      {mayCua(p.vao)}
+                    </span>{' '}
+                    → <b>{p.ra ?? '?'}</b>{' '}
+                    {p.ra && (
+                      <span className="font-sans text-[10.5px] text-[var(--ink-3)]">
+                        {mayCua(p.ra)}
+                      </span>
+                    )}
+                  </td>
+                  <td
+                    className="py-0.5 text-[var(--ink-3)]"
+                    style={{ textAlign: 'right' }}
+                  >
+                    {p.vaoTinh ? `tính ${p.vaoTinh}→${p.raTinh}` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {c && c.luotLe.length > 0 && (
+          <div className="text-[var(--ink-3)]">
+            Lượt giữa {c.luotLe.join(', ')} không tính (3 lượt: tính lượt đầu → lượt
+            cuối).
           </div>
         )}
         {x.xuyenTrua && <Trua d={d} ma={n.ma} ngay={o.ngay} phut={x.trua} />}
-        {x.k && (
-          <div className="font-mono text-[12px]">
-            Giờ có mặt <b>{gio(x.tong)} giờ</b> ÷ 8 = <b>{so(x.tong / 480, 2)} công</b>
-          </div>
+        {c?.tinhDuoc && (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-t border-[var(--line-faint)]/50 pt-1.5">
+            <dt className="text-[var(--ink-2)]">Hành chính</dt>
+            <dd className="num font-semibold">
+              {gio(c.hc)} giờ ÷ {gio(d.b.phutMotCong)} = {so(c.hc / d.b.phutMotCong, 2)}{' '}
+              công
+            </dd>
+            {(['tc1', 'tc2', 'tc3'] as const).map((k) => (
+              <Fragment key={k}>
+                <dt className="text-[var(--grp-1-ink)]">
+                  {k.toUpperCase()} {nhan[k]}
+                </dt>
+                <dd className="num text-[var(--grp-1-ink)]">
+                  {c[k] ? `${gio(c[k])} giờ` : '—'}
+                </dd>
+              </Fragment>
+            ))}
+            {(c.tre > 0 || c.som > 0) && (
+              <>
+                <dt className="text-[var(--warn)]">Trễ · sớm</dt>
+                <dd className="num text-[var(--warn)]">
+                  {c.tre} · {c.som} phút
+                </dd>
+              </>
+            )}
+          </dl>
         )}
         {x.choDuyet > 0 && (
           <div className="text-[var(--act-text)]">

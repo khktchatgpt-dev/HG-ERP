@@ -23,6 +23,7 @@ import { gioCongRepo } from './gio-cong.repo'
 import { cachTinhService } from './cach-tinh.service'
 import { kyCongRepo, type KyDong } from './ky-cong.repo'
 import { apBanChot } from '@/lib/cham-cong/ky-cong'
+import type { ThamSoKhung } from '@/lib/cham-cong/gio-khung'
 import { kiemKhoaKy } from './ky-khoa'
 
 /**
@@ -51,6 +52,10 @@ export type GioCong = {
   /** Phút một công của bản cách tính kỳ này. */
   phutMotCong: number
   phutTruaMacDinh: number
+  /** Tham số khung của bản kỳ này — ô lưới chia công / TC1–3 / trễ / sớm bằng `chiTietNgay`. */
+  thamSo: ThamSoKhung
+  /** Ngày lễ trong kỳ: 'YYYY-MM-DD' → tên (bảng hr_holidays). */
+  le: Record<string, string>
   khongCham: number
   /** Điều chỉnh của kỳ (mọi tình trạng) — ngăn điều chỉnh tự lọc. */
   dieuChinh: DieuChinh[]
@@ -94,7 +99,7 @@ export const gioCongService = {
     const k = kyCuaThang(thang)
     // Lấy dư một ngày hai đầu: ca đêm ngày cuối kỳ cần lượt rạng sáng hôm sau; lượt rạng
     // sáng ngày đầu kỳ có thể thuộc ca đêm hôm trước (không được tính vào kỳ này).
-    const [du, trua, cachTinh, quyen, quyenSua, ct, ky] = await Promise.all([
+    const [du, trua, cachTinh, quyen, quyenSua, ct, ky, le] = await Promise.all([
       chamCongService.duLieu(user, { tu: congNgay(k.tu, -1), den: congNgay(k.den, 1) }),
       gioCongRepo.trua(k.tu, k.den),
       gioCongRepo.cachTinh(),
@@ -102,6 +107,7 @@ export const gioCongService = {
       canAction(user, 'hr.attendance.employee_edit'),
       cachTinhService.thamSoChoKy(thang),
       kyCongRepo.ky(thang),
+      chamCongRepo.holidays(k.tu, congNgay(k.den, 1)),
     ])
     const t = ct.thamSo
     // Ngày lấy dữ liệu lần cuối (giờ VN) trở đi là ngày đang dở: lấy giữa ngày thì chưa có
@@ -159,11 +165,13 @@ export const gioCongService = {
       heSoTrua: t.heSoTrua,
       phutMotCong: t.phutMotCong,
       phutTruaMacDinh: t.phutTruaMacDinh,
+      thamSo: t,
+      le: Object.fromEntries(le.map((x) => [x.holiday_date, x.name])),
       khongCham: du.khongCham,
       dieuChinh: du.dieuChinh.filter((d) => d.ngay >= k.tu && d.ngay <= k.den),
       luotMay: Object.fromEntries(
         du.dong
-          .filter((r) => r.daGhep && r.ngay >= k.tu && r.ngay <= k.den)
+          .filter((r) => r.daGhep && r.ngay >= k.tu && r.ngay <= congNgay(k.den, 1))
           .map((r) => [
             `${r.ma}|${r.ngay}`,
             r.luot.map((l) => ({ gio: l.gio, may: l.may })),
@@ -191,16 +199,12 @@ export const gioCongService = {
       return {
         loi: `Tính công tối đa ${KY_TOI_DA} kỳ một lần — khoảng này chạm ${thangs.length} kỳ. Thu hẹp khoảng ngày để xem công.`,
       }
-    const [kys, ts, le] = await Promise.all([
-      Promise.all(thangs.map((t) => this.bang(user, t, homNay))),
-      Promise.all(thangs.map((t) => cachTinhService.thamSoChoKy(t))),
-      chamCongRepo.holidays(k.tu, congNgay(k.den, 1)),
-    ])
-    const tenLe = Object.fromEntries(le.map((x) => [x.holiday_date, x.name]))
+    const kys = await Promise.all(thangs.map((t) => this.bang(user, t, homNay)))
+    const tenLe = Object.assign({}, ...kys.map((b) => b.le)) as Record<string, string>
     const ngay: CongNgay[] = []
     let cachTinh: CachTinh | null = null
     let co = false
-    kys.forEach((b, i) => {
+    kys.forEach((b) => {
       const n = b.nguoi.find((x) => x.ma === ma)
       if (!n) return
       co = true
@@ -209,18 +213,18 @@ export const gioCongService = {
       const tu = b.tu > k.tu ? b.tu : k.tu
       const den = b.den < k.den ? b.den : k.den
       for (let d = tu; d <= den && d <= homNay; d = congNgay(d, 1))
-        ngay.push(chiTietNgay(d, theoNgay.get(d), ts[i].thamSo, n.cachTinh, tenLe))
+        ngay.push(chiTietNgay(d, theoNgay.get(d), b.thamSo, n.cachTinh, tenLe))
     })
     if (!co)
       return {
         loi: 'Người này không có trong Bảng công (không chấm công, đã nghỉ, hoặc chưa ghép mã máy) — chỉ bày lượt quẹt.',
       }
-    const t = ts[ts.length - 1].thamSo
+    const cuoi = kys[kys.length - 1]
     return {
       cachTinh: cachTinh ?? 'khung',
-      nhanTc: nhanTc(t),
-      phutMotCong: t.phutMotCong,
-      ban: ts[ts.length - 1].ban,
+      nhanTc: nhanTc(cuoi.thamSo),
+      phutMotCong: cuoi.phutMotCong,
+      ban: cuoi.ban,
       daChot: kys.map((b) => b.ky?.trangThai ?? 'open').some((s) => s !== 'open'),
       ngay,
     }

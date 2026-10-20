@@ -1,32 +1,26 @@
 'use client'
 
+import Link from 'next/link'
 import { Btn, Empty } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { KY_NGHI, TEN_NGHI } from '@/lib/cham-cong/dieu-chinh'
+import type { CongNgay } from '@/lib/cham-cong/chi-tiet-cong'
 import type { GioCongCtx } from './useGioCong'
-import { THU, dm, gio, hm, ngayKy, so, thu, type NgayGio } from './gio-cong.shared'
+import { THU, dm, hm, ngayKy, so, thu, type NgayGio } from './gio-cong.shared'
 
 /**
- * LƯỚI CÔNG — người × ngày của kỳ (26 → 25). Ô ghi CÔNG = giờ có mặt ÷ 8 (chủ dự án chọn
- * 18/10/2026, tạm gác chia khung giờ): 1 · 1,38 · 1,63. Giờ có mặt vẫn tính theo luật file
- * Nhân sự (ân hạn, làm tròn bậc thang, trừ trưa). Tên ghim trái, 3 cột tổng ghim phải.
- * Kit không có ma trận người × ngày có ô bấm mở khung nổi, nên viết thẳng (CLAUDE.md 06/10).
+ * LƯỚI CÔNG — người × ngày của kỳ (26 → 25). Ô CHỈ nói trạng thái ngày đó (user 20/10/2026:
+ * "các ô chỉ cần hiển thị trạng thái làm việc ngày hôm đó, muốn xem công thì nhấn vào"):
+ * ✓ đủ 8 giờ hành chính · ✓ cam có làm mà chưa đủ · ? thiếu lượt · V vắng · P/Ô/R/CT/KL
+ * nghỉ có lý do · L lễ. Số giờ, công, tăng ca nằm trong khung nổi khi bấm ô (`o-gio.tsx`).
+ * Tên ghim trái, 4 cột tổng ghim phải. Kit không có ma trận người × ngày có ô bấm mở khung
+ * nổi, nên viết thẳng (CLAUDE.md 06/10).
  */
 
-const W_TEN = 152
-const W_O = 26
-const W_T = 50
-const TONG = ['Tổng giờ', 'Công', 'Thiếu lượt'] as const
-
-/** Phút → công 2 lẻ kiểu VN, bỏ số 0 thừa: 480 → "1", 660 → "1,38". */
-const congGon = (phut: number) => so(phut / 480, 2)
-
-const nen = (phut: number) =>
-  phut >= 660
-    ? 'bg-[color-mix(in_srgb,var(--done)_26%,white)]'
-    : phut >= 540
-      ? 'bg-[color-mix(in_srgb,var(--done)_16%,white)]'
-      : 'bg-[color-mix(in_srgb,var(--done)_8%,white)]'
+const W_TEN = 140
+const W_O = 24
+const W_T = 44
+const TONG = ['Công', 'TC giờ', 'Thiếu lượt', 'Vắng'] as const
 
 export function LuoiGio({ d }: { d: GioCongCtx }) {
   const { b, dong } = d
@@ -56,7 +50,20 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
   }
 
   const th = 'border-r border-b border-[var(--line-faint)]/40 whitespace-nowrap'
-  const coLuot = (ng: string) => dong.filter((n) => d.ngayCua(n, ng)?.luot.length).length
+  const p1 = b.phutMotCong
+  const diLam = (ng: string) =>
+    dong.filter((n) => d.congCua(n.ma)?.ngay.get(ng)?.tinhDuoc).length
+  /** Bốn số tổng của một người — cùng `tongCong` với trang một người và ngăn Tổng hợp. */
+  const tongCua = (ma: string) => {
+    const t = d.congCua(ma)?.tong
+    if (!t) return { cong: 0, tc: 0, thieu: 0, vang: 0 }
+    return {
+      cong: (t.hcThuong + t.hcCn + t.hcLe) / p1,
+      tc: (t.tc1 + t.tc2 + t.tc3) / 60,
+      thieu: t.thieu,
+      vang: t.vang,
+    }
+  }
 
   return (
     <div
@@ -174,16 +181,16 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                 >
                   {/* Một nút phủ cả ô, tự cắt "…": nút trong `.kit` không cho cắt nửa chừng
                       khi đứng cạnh mã (đo 17/10: tên dài chỉ còn "1043…"). */}
-                  <button
-                    type="button"
-                    className="block h-full w-full truncate px-1.5 text-left hover:text-[var(--act-text)] hover:underline"
-                    onClick={() => d.setNguoiMo(n.ma)}
+                  <Link
+                    href={`/hr/cham-cong/nguoi/${encodeURIComponent(n.ma)}?thang=${b.thang}`}
+                    className="block h-full w-full truncate px-1.5 leading-[24px] text-left hover:text-[var(--act-text)] hover:underline"
+                    title={`Mở chấm công từng ngày của ${n.ten}`}
                   >
                     <span className="mr-1 font-mono text-[11px] text-[var(--ink-3)]">
                       {n.ma}
                     </span>
                     {n.ten}
-                  </button>
+                  </Link>
                 </td>
                 {ngays.map((ng) => (
                   <O
@@ -193,20 +200,25 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                     ten={n.ten}
                     ngay={ng}
                     x={d.ngayCua(n, ng)}
+                    c={d.congCua(n.ma)?.ngay.get(ng)}
                   />
                 ))}
-                {[
-                  gio(n.tong.tong),
-                  so(n.tong.cong, 2),
-                  n.tong.thieu ? String(n.tong.thieu) : '',
-                ].map((v, i) => (
+                {(() => {
+                  const t = tongCua(n.ma)
+                  return [
+                    t.cong ? so(t.cong, 2) : '',
+                    t.tc ? so(t.tc, 1) : '',
+                    t.thieu ? String(t.thieu) : '',
+                    t.vang ? String(t.vang) : '',
+                  ]
+                })().map((v, i) => (
                   <td
                     key={i}
                     className={cn(
                       th,
                       'num sticky z-[2] bg-[var(--surface-card)] px-1 text-[11px] group-hover:bg-[var(--surface-hover)]',
-                      i === 0 && 'border-l-2 border-l-[var(--line)]',
-                      i === 1 && 'font-semibold',
+                      i === 0 && 'border-l-2 border-l-[var(--line)] font-semibold',
+                      i === 1 && 'text-[var(--grp-1-ink)]',
                       i === 2 && v && 'font-semibold text-[var(--stop)]',
                     )}
                     style={{ right: right(i) }}
@@ -227,7 +239,7 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
               )}
               style={{ zIndex: 7 }}
             >
-              Số người có lượt
+              Số người đi làm
             </td>
             {ngays.map((ng) => (
               <td
@@ -238,19 +250,21 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                 )}
                 style={{ textAlign: 'center', zIndex: 6 }}
               >
-                {ng < b.homNay ? coLuot(ng) || '' : ''}
+                {ng < b.homNay ? diLam(ng) || '' : ''}
               </td>
             ))}
             {TONG.map((t, i) => {
+              const ts = dong.map((n) => tongCua(n.ma))
+              const cong = (f: (x: (typeof ts)[number]) => number) =>
+                ts.reduce((s, x) => s + f(x), 0)
               const v =
                 i === 0
-                  ? gio(dong.reduce((s, n) => s + n.tong.tong, 0))
+                  ? so(cong((x) => x.cong), 2)
                   : i === 1
-                    ? so(
-                        dong.reduce((s, n) => s + n.tong.cong, 0),
-                        2,
-                      )
-                    : String(dong.reduce((s, n) => s + n.tong.thieu, 0) || '')
+                    ? so(cong((x) => x.tc), 1)
+                    : i === 2
+                      ? String(cong((x) => x.thieu) || '')
+                      : String(cong((x) => x.vang) || '')
               return (
                 <td
                   key={t}
@@ -278,18 +292,23 @@ function O({
   ten,
   ngay,
   x,
+  c,
 }: {
   d: GioCongCtx
   ma: string
   ten: string
   ngay: string
   x: NgayGio | undefined
+  c: CongNgay | undefined
 }) {
   const tuongLai = ngay >= d.b.homNay
+  const le = d.b.le[ngay]
   const cn0 = thu(ngay) === 0
   const base = cn(
-    'relative h-[24px] border-r border-b border-[var(--line-faint)]/40 p-0 text-center font-mono text-[10.5px] font-semibold tracking-tighter',
-    cn0 && 'bg-[color-mix(in_srgb,var(--act)_4%,white)]',
+    'relative h-[24px] border-r border-b border-[var(--line-faint)]/40 p-0 text-center font-mono text-[12px] font-bold',
+    le
+      ? 'bg-[var(--warn-wash)]'
+      : cn0 && 'bg-[color-mix(in_srgb,var(--act)_6%,white)]',
     ngay.slice(8) === '01' && 'border-l-2 border-l-[var(--line-faint)]/60',
   )
   if (tuongLai)
@@ -301,14 +320,33 @@ function O({
         )}
       />
     )
-  if (!x) return <td className={base} />
+  if (!x) {
+    // Không quẹt, không điều chỉnh: lễ → L; chủ nhật → trống; ngày thường đã lấy dữ liệu → V.
+    const nhan = le ? 'L' : !cn0 && d.daLay(ngay) ? 'V' : ''
+    return (
+      <td
+        className={cn(base, le ? 'text-[var(--warn)]' : 'text-[var(--stop)]')}
+        style={{ textAlign: 'center' }}
+        title={
+          le
+            ? `${dm(ngay)}: ${le}`
+            : nhan
+              ? `${ten} ${dm(ngay)}: không quẹt (vắng)`
+              : undefined
+        }
+      >
+        {nhan}
+      </td>
+    )
+  }
   const dang = d.o?.ma === ma && d.o.ngay === ngay
+  const du = !!c?.tinhDuoc && c.hc >= d.b.phutMotCong
   const nhan = x.nghi
     ? KY_NGHI[x.nghi]
     : x.thieu
       ? '?'
-      : x.k
-        ? congGon(x.tong)
+      : c?.tinhDuoc
+        ? '✓'
         : x.doDang
           ? '…'
           : ''
@@ -317,8 +355,8 @@ function O({
     : x.thieu
       ? `${ten} ${dm(ngay)}: chỉ 1 lượt ${x.luot.map(hm).join(' ')} — cần bổ sung`
       : !x.k && x.doDang
-        ? `${ten} ${dm(ngay)}: ngày đang dở — mới có ${x.luot.map(hm).join(' ')}, lấy lại dữ liệu sau giờ tan ca`
-        : `${ten} ${dm(ngay)}: ${gio(x.tong)} giờ = ${congGon(x.tong)} công · ${x.luot.map(hm).join(' · ')}`
+        ? `${ten} ${dm(ngay)}: ngày đang dở — mới có ${x.luot.map(hm).join(' ')}`
+        : `${ten} ${dm(ngay)}: ${du ? 'đủ công' : 'có làm, chưa đủ 8 giờ'} — bấm để xem giờ`
   return (
     <td
       tabIndex={0}
@@ -328,10 +366,12 @@ function O({
         base,
         'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-[var(--act-line)]',
         x.nghi
-          ? 'bg-[var(--warn-wash)] text-[var(--warn)]'
+          ? 'bg-[var(--warn-wash)] text-[11px] text-[var(--warn)]'
           : x.thieu
             ? 'bg-[var(--stop-wash)] text-[var(--stop)] shadow-[inset_0_0_0_1px_var(--stop-line)]'
-            : x.k && nen(x.tong),
+            : du
+              ? 'text-[var(--done)]'
+              : 'text-[var(--warn)]',
         dang && 'outline outline-2 -outline-offset-2 outline-[var(--act)]',
       )}
       style={{ textAlign: 'center' }}
@@ -347,35 +387,12 @@ function O({
         }
       }}
     >
-      {x.xuyenTrua && !x.trua && (
-        <span
-          aria-hidden
-          className="absolute top-0 left-px text-[8px] leading-none text-[var(--warn)]"
-        >
-          t
-        </span>
-      )}
-      {x.quaDem && (
-        <span
-          aria-hidden
-          className="absolute top-0 right-px text-[8px] leading-none text-[var(--act-text)]"
-        >
-          đ
-        </span>
-      )}
+      {/* Điều chỉnh đang chờ duyệt: viền nét đứt — trạng thái của ô, không phải chữ thêm. */}
       {x.choDuyet > 0 && (
         <span
           aria-hidden
           className="pointer-events-none absolute inset-[2px] border-[1.5px] border-dashed border-[var(--act)]"
         />
-      )}
-      {x.daSua && !x.choDuyet && (
-        <span
-          aria-hidden
-          className="absolute bottom-0 left-px text-[8px] leading-none text-[var(--act-text)]"
-        >
-          s
-        </span>
       )}
       {nhan}
     </td>
