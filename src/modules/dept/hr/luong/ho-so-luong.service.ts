@@ -9,20 +9,21 @@ import {
   chuanNganHang,
   docDan,
   docSo,
-  khopTen,
+  khopNguoi,
   thieu,
   type CachTra,
   type CotNap,
   type KetQuaKhop,
   type ThieuThongTin,
 } from '@/lib/luong/ho-so-luong'
+import { TY_LE_BH_NLD } from '@/lib/luong/tinh-luong'
 import { chamCongRepo } from '../cham-cong/cham-cong.repo'
 import { hoSoLuongRepo, type BanLuong, type LoaiPhuCap } from './ho-so-luong.repo'
 
 /**
  * HỒ SƠ LƯƠNG (B4, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất). Danh mục có hiệu lực theo
- * kỳ — chép Odoo Contract / SAP infotype 0008. Mọi hàm gác `hr.payroll.profile` (Kế toán,
- * Trưởng phòng Nhân sự, Giám đốc); người khác không đọc được lương lẫn định danh.
+ * kỳ — chép Odoo Contract / SAP infotype 0008. Mọi hàm gác `hr.payroll.profile` — quyền MẬT
+ * (0253), chỉ vai "Quản lý lương"; người khác không đọc được lương lẫn định danh.
  *
  * Bản có từ-kỳ ≤ kỳ đã chốt gần nhất (B3) là đã dùng để tính → chỉ xem; đổi thì thêm bản
  * từ kỳ sau. Số tài khoản, CCCD, MST trả về đã CHE; "Hiện" ghi vết rồi mới trả số thật.
@@ -108,6 +109,8 @@ function kiemBan(v: BanNhap) {
 
 export type DongXemNap = {
   dong: number
+  /** Mã NV ghi trong file (sổ lương) — để người soi đối chiếu với người được khớp. */
+  ma: string | null
   ten: string
   to: string | null
   khop: KetQuaKhop
@@ -184,7 +187,8 @@ export const hoSoLuongService = {
         mst: che(r?.mst),
         // Ngày vào: nguồn duy nhất là hồ sơ nhân viên (0248) — ở đây chỉ đọc.
         ngayVao:
-          (await chamCongRepo.employees()).find((e) => e.id === employeeId)?.hire_date ?? null,
+          (await chamCongRepo.employees()).find((e) => e.id === employeeId)?.hire_date ??
+          null,
       },
       lanXem,
     }
@@ -285,12 +289,13 @@ export const hoSoLuongService = {
     return {
       cot,
       dong: dong.map((d) => {
-        const { dong: so, ten, to, ...giaTri } = d
+        const { dong: so, ma, ten, to, ...giaTri } = d
         return {
           dong: so,
+          ma: ma ?? null,
           ten: ten!,
           to: to ?? null,
-          khop: khopTen(ten!, to ?? null, ds),
+          khop: khopNguoi(ma, ten!, to ?? null, ds),
           giaTri,
         }
       }),
@@ -305,7 +310,12 @@ export const hoSoLuongService = {
   ): Promise<{ hoSo: number; rieng: number }> {
     await assertAction(user, QUYEN)
     const coLuong = dong.some(
-      (d) => d.giaTri.donGia || d.giaTri.luongThang || d.giaTri.luongBh || d.giaTri.npt,
+      (d) =>
+        d.giaTri.donGia ||
+        d.giaTri.luongThang ||
+        d.giaTri.luongBh ||
+        d.giaTri.truBh ||
+        d.giaTri.npt,
     )
     if (coLuong) kiemKy(tuKy, await hoSoLuongRepo.kyChotCuoi())
     const ban = coLuong ? await hoSoLuongRepo.banTatCa() : []
@@ -329,9 +339,21 @@ export const hoSoLuongService = {
       }
       const donGia = docSo(g.donGia)
       const luongThang = docSo(g.luongThang)
-      const luongBh = docSo(g.luongBh)
+      // Sổ lương ghi số TIỀN trừ BH, không ghi mức đóng: 415.800 ÷ 10,5 % = 3.960.000; trừ 0 = không đóng.
+      const truBh = docSo(g.truBh)
+      const luongBh =
+        docSo(g.luongBh) ??
+        (truBh != null && truBh > 0 ? Math.round(truBh / TY_LE_BH_NLD) : null)
+      const coBh = truBh != null ? truBh > 0 : null
       const npt = docSo(g.npt)
-      if (donGia == null && luongThang == null && luongBh == null && npt == null) continue
+      if (
+        donGia == null &&
+        luongThang == null &&
+        luongBh == null &&
+        npt == null &&
+        coBh == null
+      )
+        continue
       const cu = banHieuLuc(
         ban.filter((b) => b.employeeId === d.employeeId),
         tuKy,
@@ -349,7 +371,7 @@ export const hoSoLuongService = {
         donGia: donGia ?? cu?.donGia ?? null,
         luongThang: luongThang ?? cu?.luongThang ?? null,
         luongBh: luongBh ?? cu?.luongBh ?? null,
-        coBh: cu?.coBh ?? true,
+        coBh: coBh ?? cu?.coBh ?? true,
         npt: npt ?? cu?.npt ?? 0,
         khauTru10: cu?.khauTru10 ?? false,
         ghiChu: cu?.ghiChu ?? null,

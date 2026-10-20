@@ -29,7 +29,7 @@ export type NavCapability =
   | 'production.team'
   /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
   | 'supply.approve'
-  /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — Kế toán, TP Nhân sự, Giám đốc. */
+  /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — quyền mật, chỉ vai "Quản lý lương" (0253). */
   | 'hr.payroll'
 
 export type NavItem = {
