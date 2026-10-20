@@ -12,6 +12,7 @@ import { KhungTrang } from './khung-trang'
 import { TinhTrang } from './dieu-chinh-sheet'
 import { THU, dmy, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
+import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * ĐIỀU CHỈNH CÔNG — hộp duyệt của trưởng phòng Nhân sự (câu 22). Hai ngăn: CHỜ DUYỆT
@@ -210,7 +211,7 @@ export function DieuChinhScreen({
                     <td className={td}>
                       <span className="num mr-1.5 text-[var(--ink-3)]">{x.ma}</span>
                       <Link
-                        href={`/hr/cham-cong/nguoi/${encodeURIComponent(x.ma)}?thang=${x.ngay.slice(0, 7)}`}
+                        href={`/hr/cham-cong/nguoi/${encodeURIComponent(x.ma)}?thang=${thangCuaNgay(x.ngay)}`}
                         className="text-[var(--act-text)] hover:underline"
                       >
                         {n?.ten ?? '—'}

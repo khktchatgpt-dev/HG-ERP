@@ -4,12 +4,20 @@ import { BadRequest } from '@/server/http'
 import {
   congNgay,
   kyCuaThang,
+  thangCuaNgay,
   tinhKyGioCong,
   type CachTinh,
   type NguoiGio,
 } from '@/lib/cham-cong/ky-gio-cong'
+import {
+  chiTietNgay,
+  nhanTc,
+  type CongNgay,
+  type NhomTc,
+} from '@/lib/cham-cong/chi-tiet-cong'
+import { chamCongRepo } from './cham-cong.repo'
 import type { DieuChinh } from '@/lib/cham-cong/dieu-chinh'
-import { chamCongService } from './cham-cong.service'
+import { chamCongService, type MotNguoi } from './cham-cong.service'
 import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
 import { gioCongRepo } from './gio-cong.repo'
 import { cachTinhService } from './cach-tinh.service'
@@ -52,6 +60,31 @@ export type GioCong = {
 }
 
 const CHUA_CO = '(chưa có bộ phận)'
+
+/** Mỗi kỳ là một lượt tính cả công ty — trang một người tính tối đa ngần này kỳ. */
+const KY_TOI_DA = 3
+
+const sauThang = (t: string) => {
+  const [y, m] = t.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7)
+}
+
+/** Công từng ngày của một người — hoặc lý do không tính (chỉ bày lượt). */
+export type ChiTietNguoi =
+  | {
+      cachTinh: CachTinh
+      /** Khoảng giờ của TC1/TC2/TC3 theo bản cách tính, vd. '16–19h'. */
+      nhanTc: Record<NhomTc, string>
+      phutMotCong: number
+      ban: number | null
+      /** Có kỳ trong khoảng đã chốt (giờ lấy từ bản chốt). */
+      daChot: boolean
+      ngay: CongNgay[]
+    }
+  | { loi: string }
+
+/** Dữ liệu trang Chấm công một người: lượt quẹt + công từng ngày (route `nguoi`). */
+export type MotNguoiCong = MotNguoi & { tinh: ChiTietNguoi }
 
 export const gioCongService = {
   async bang(user: User, thang: string, homNay: string): Promise<GioCong> {
@@ -137,6 +170,59 @@ export const gioCongService = {
           ]),
       ),
       quyen: { ...quyen, trua: quyen.gui, cachTinh: quyenSua },
+    }
+  },
+
+  /**
+   * CÔNG TỪNG NGÀY CỦA MỘT NGƯỜI (trang Chấm công một người, bản vẽ 20/10/2026). Giờ lấy
+   * từ CHÍNH `bang()` của từng kỳ mà khoảng chạm tới — kể cả bản chốt — nên số khớp
+   * Bảng công; `chiTietNgay` chỉ chia ra công / TC1–3 / trễ / sớm.
+   */
+  async chiTietNguoi(
+    user: User,
+    ma: string,
+    k: { tu: string; den: string },
+    homNay: string,
+  ): Promise<ChiTietNguoi> {
+    const thangs: string[] = []
+    for (let t = thangCuaNgay(k.tu); t <= thangCuaNgay(k.den); t = sauThang(t))
+      thangs.push(t)
+    if (thangs.length > KY_TOI_DA)
+      return {
+        loi: `Tính công tối đa ${KY_TOI_DA} kỳ một lần — khoảng này chạm ${thangs.length} kỳ. Thu hẹp khoảng ngày để xem công.`,
+      }
+    const [kys, ts, le] = await Promise.all([
+      Promise.all(thangs.map((t) => this.bang(user, t, homNay))),
+      Promise.all(thangs.map((t) => cachTinhService.thamSoChoKy(t))),
+      chamCongRepo.holidays(k.tu, congNgay(k.den, 1)),
+    ])
+    const tenLe = Object.fromEntries(le.map((x) => [x.holiday_date, x.name]))
+    const ngay: CongNgay[] = []
+    let cachTinh: CachTinh | null = null
+    let co = false
+    kys.forEach((b, i) => {
+      const n = b.nguoi.find((x) => x.ma === ma)
+      if (!n) return
+      co = true
+      cachTinh = n.cachTinh
+      const theoNgay = new Map(n.ngay.map((x) => [x.ngay, x]))
+      const tu = b.tu > k.tu ? b.tu : k.tu
+      const den = b.den < k.den ? b.den : k.den
+      for (let d = tu; d <= den && d <= homNay; d = congNgay(d, 1))
+        ngay.push(chiTietNgay(d, theoNgay.get(d), ts[i].thamSo, n.cachTinh, tenLe))
+    })
+    if (!co)
+      return {
+        loi: 'Người này không có trong Bảng công (không chấm công, đã nghỉ, hoặc chưa ghép mã máy) — chỉ bày lượt quẹt.',
+      }
+    const t = ts[ts.length - 1].thamSo
+    return {
+      cachTinh: cachTinh ?? 'khung',
+      nhanTc: nhanTc(t),
+      phutMotCong: t.phutMotCong,
+      ban: ts[ts.length - 1].ban,
+      daChot: kys.map((b) => b.ky?.trangThai ?? 'open').some((s) => s !== 'open'),
+      ngay,
     }
   },
 
