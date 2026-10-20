@@ -106,14 +106,18 @@ export function canDelete(fb: FeedbackCore, actor: Actor): boolean {
   return fb.created_by === actor.id && isPendingIntake(fb)
 }
 
-/** Sửa / xoá một dòng trao đổi: chỉ người viết dòng, khi chưa ai khác viết sau nó. */
+/**
+ * Sửa / xoá một dòng trao đổi: chỉ người viết dòng, khi chưa ai khác viết sau
+ * nó. Chỉ dòng BÌNH LUẬN / TRẢ LỜI — mốc trạng thái, "vẫn cần chỉnh thêm",
+ * "đã ổn" là vết của luồng, không sửa được (UI ẩn nút theo cùng cờ này).
+ */
 export function canEditComment(
   comment: CommentCore,
   comments: readonly CommentCore[],
   actorId: string,
 ): boolean {
   if (comment.author_id !== actorId) return false
-  if (comment.kind === 'status') return false
+  if (comment.kind !== 'comment' && comment.kind !== 'reply') return false
   return !comments.some(
     (c) =>
       c.kind !== 'status' &&

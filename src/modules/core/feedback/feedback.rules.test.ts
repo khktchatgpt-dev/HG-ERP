@@ -156,6 +156,12 @@ describe('luật tự sửa / xoá (GopYSuaTest)', () => {
     expect(canEditComment(mine, [mine, later], 'u1')).toBe(false)
     expect(canEditComment(mine, [mine], 'u2')).toBe(false)
   })
+  it('"vẫn cần chỉnh thêm" / "đã ổn" / mốc trạng thái là vết của luồng — không sửa được', () => {
+    const more = cm({ id: 'n', kind: 'needs_more', author_id: 'u1', created_at: T1 })
+    const ok = cm({ id: 'o', kind: 'confirmed', author_id: 'u1', created_at: T1 })
+    expect(canEditComment(more, [more], 'u1')).toBe(false)
+    expect(canEditComment(ok, [ok], 'u1')).toBe(false)
+  })
 })
 
 describe('riêng tư', () => {

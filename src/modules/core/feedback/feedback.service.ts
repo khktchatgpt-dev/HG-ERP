@@ -149,6 +149,47 @@ async function claimFiles(fileIds: string[], feedbackId: string, ownerId: string
   return filesRepo.claimForFeedback(fileIds, feedbackId, ownerId)
 }
 
+/**
+ * Khoác thêm số đếm, tên người, cờ `can_*` cho một nhóm góp ý — dùng chung cho
+ * danh sách và hộp chi tiết (chi tiết chỉ đưa MỘT dòng vào, không kéo cả bảng).
+ */
+async function decorate(user: User, ctx: Ctx, rows: FeedbackRow[]): Promise<FeedbackListItem[]> {
+  const ids = rows.map((r) => r.id)
+  const [votes, comments, depts, names] = await Promise.all([
+    feedbackRepo.votesFor(ids),
+    feedbackRepo.commentsForMany(ids),
+    departmentsRepo.list(),
+    usersRepo.displayNamesByIds(rows.map((r) => r.created_by).filter((x): x is string => !!x)),
+  ])
+  const deptName = new Map(depts.map((d) => [d.id, d.name]))
+  return rows.map((fb) => {
+    const cs = comments.get(fb.id) ?? []
+    const real = cs.filter((c) => c.kind !== 'status')
+    const voters = votes.get(fb.id) ?? []
+    return {
+      ...fb,
+      author_name: (fb.created_by && names.get(fb.created_by)) || 'Ẩn danh',
+      department_name: fb.department_id ? (deptName.get(fb.department_id) ?? null) : null,
+      vote_count: voters.length,
+      voted: voters.includes(user.id),
+      comment_count: real.length,
+      participated: real.some((c) => c.author_id === user.id),
+      last_activity_at: lastActivity({
+        created_at: fb.created_at,
+        edited_at: fb.edited_at,
+        updated_at: fb.updated_at,
+        last_comment_at: cs.at(-1)?.created_at ?? null,
+      }),
+      can_edit: canEditContent(fb, cs, ctx.actor),
+      can_delete: canDelete(fb, ctx.actor),
+      can_confirm_ok: canConfirmOk(fb, ctx.actor),
+      can_ask_more: canAskMore(fb, ctx.actor),
+      can_review: canReview(fb, ctx.actor),
+      can_resubmit: canResubmit(fb, ctx.actor),
+    }
+  })
+}
+
 export const feedbackService = {
   // ── Đọc ──────────────────────────────────────────────────────────────────
 
@@ -159,44 +200,10 @@ export const feedbackService = {
     const ctx = await ctxOf(user)
     const all = (await feedbackRepo.list()).filter((fb) => canView(fb, ctx.actor))
     const rows = scope === 'mine' ? all.filter((fb) => fb.created_by === user.id) : all
-    const ids = rows.map((r) => r.id)
-    const [votes, comments, depts, names] = await Promise.all([
-      feedbackRepo.votesFor(ids),
-      feedbackRepo.commentsForMany(ids),
-      departmentsRepo.list(),
-      usersRepo.displayNamesByIds([
-        ...rows.map((r) => r.created_by).filter((x): x is string => !!x),
-        ...ctx.reviewers,
-      ]),
+    const [items, names] = await Promise.all([
+      decorate(user, ctx, rows),
+      usersRepo.displayNamesByIds(ctx.reviewers),
     ])
-    const deptName = new Map(depts.map((d) => [d.id, d.name]))
-
-    const items: FeedbackListItem[] = rows.map((fb) => {
-      const cs = comments.get(fb.id) ?? []
-      const real = cs.filter((c) => c.kind !== 'status')
-      const voters = votes.get(fb.id) ?? []
-      return {
-        ...fb,
-        author_name: (fb.created_by && names.get(fb.created_by)) || 'Ẩn danh',
-        department_name: fb.department_id ? (deptName.get(fb.department_id) ?? null) : null,
-        vote_count: voters.length,
-        voted: voters.includes(user.id),
-        comment_count: real.length,
-        participated: real.some((c) => c.author_id === user.id),
-        last_activity_at: lastActivity({
-          created_at: fb.created_at,
-          edited_at: fb.edited_at,
-          updated_at: fb.updated_at,
-          last_comment_at: cs.at(-1)?.created_at ?? null,
-        }),
-        can_edit: canEditContent(fb, cs, ctx.actor),
-        can_delete: canDelete(fb, ctx.actor),
-        can_confirm_ok: canConfirmOk(fb, ctx.actor),
-        can_ask_more: canAskMore(fb, ctx.actor),
-        can_review: canReview(fb, ctx.actor),
-        can_resubmit: canResubmit(fb, ctx.actor),
-      }
-    })
 
     const weekStart = new Date(weekStartOf(new Date()) + 'T00:00:00')
     const counts: Record<string, number> = {}
@@ -230,10 +237,10 @@ export const feedbackService = {
     const ctx = await ctxOf(user)
     const fb = await load(id)
     assertView(fb, ctx)
-    const { items } = await this.list(user, 'all')
-    const item = items.find((x) => x.id === id)
-    if (!item) throw NotFound('Góp ý không tồn tại')
-    const cs = await feedbackRepo.commentsFor(id)
+    const [[item], cs] = await Promise.all([
+      decorate(user, ctx, [fb]),
+      feedbackRepo.commentsFor(id),
+    ])
     const names = await usersRepo.displayNamesByIds(
       cs.map((c) => c.author_id).filter((x): x is string => !!x),
     )
