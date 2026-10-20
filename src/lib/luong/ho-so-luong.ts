@@ -7,6 +7,8 @@
  * tổ để gỡ trùng — không khớp chắc thì để người chọn, không đoán.
  */
 
+import type { CachPhuCap } from './tinh-luong'
+
 export type CachTra = 'daily' | 'monthly'
 export const TEN_CACH_TRA: Record<CachTra, string> = {
   daily: 'Theo công',
@@ -194,6 +196,8 @@ export type CotNap =
   | 'npt'
   /** "Trừ tiền BHXH + BHYT + BHTN" của sổ lương: > 0 → lương đóng BH = số này ÷ 10,5 %. */
   | 'truBh'
+  /** Ô "Công đoàn" của sổ lương: 0 ở người có đóng BH = không trừ đoàn phí. */
+  | 'doanPhi'
 
 /** Cột "M/ Lương Ngày" của sổ lương: một ô cho cả hai cách trả — tách theo độ lớn. */
 const MUC_LUONG = /^m\/ ?luong|^muc luong/
@@ -208,6 +212,7 @@ const NHAN_COT: [CotNap, RegExp][] = [
   // Khớp NGUYÊN Ô: "Thưởng hỗ trợ phòng ban khác" là cột tiền, không phải cột tổ.
   ['to', /^(phong ban|bo phan|to)$/],
   ['truBh', /^tru (tien )?bh/],
+  ['doanPhi', /^cong doan/],
   ['donGia', /don gia/],
   ['luongBh', /luong (dong )?bh|luong bhxh|muc dong/],
   ['luongThang', /luong thang|luong co ban|luong chinh/],
@@ -333,3 +338,48 @@ export function tachTsv(text: string): string[][] {
 /** Che số định danh: chỉ chừa 4 số cuối. */
 export const che = (s: string | null | undefined) =>
   s ? `${'•'.repeat(Math.max(0, s.length - 4))}${s.slice(-4)}` : null
+
+/** Cách tính một dòng phụ cấp trên hồ sơ (0254) — sổ KT T9 mỗi người một kiểu. */
+export type CachPhuCapDong = { cach: CachPhuCap; chia: number | null; coTangCa: boolean }
+
+export const CACH_PC_MAC_DINH: CachPhuCapDong = {
+  cach: 'chia',
+  chia: null,
+  coTangCa: false,
+}
+
+/** Lựa chọn trên form, theo đúng các kiểu đo được trong 4 sổ T9. */
+export const LUA_CHON_CACH_PC: { ma: string; ten: string; v: CachPhuCapDong }[] = [
+  { ma: 'chia26', ten: '÷ 26 × công', v: { cach: 'chia', chia: 26, coTangCa: false } },
+  { ma: 'chia32', ten: '÷ 32 × công', v: { cach: 'chia', chia: 32, coTangCa: false } },
+  { ma: 'chia', ten: '÷ công chuẩn × công', v: CACH_PC_MAC_DINH },
+  { ma: 'nhan', ten: 'mức × công', v: { cach: 'nhan', chia: null, coTangCa: false } },
+  {
+    ma: 'nhanTc',
+    ten: 'mức × (công + công TC)',
+    v: { cach: 'nhan', chia: null, coTangCa: true },
+  },
+  {
+    ma: 'co_dinh',
+    ten: 'cố định cả tháng',
+    v: { cach: 'co_dinh', chia: null, coTangCa: false },
+  },
+]
+
+/** Cách tính → mã lựa chọn ("chia26"…); số chia lạ (vd 30) thì "chia:30". */
+export function maCachPc(v: CachPhuCapDong | undefined): string {
+  const c = v ?? CACH_PC_MAC_DINH
+  const thay = LUA_CHON_CACH_PC.find(
+    (o) => o.v.cach === c.cach && o.v.chia === c.chia && o.v.coTangCa === c.coTangCa,
+  )
+  return thay?.ma ?? `chia:${c.chia}`
+}
+
+export function cachPcTuMa(ma: string): CachPhuCapDong {
+  const thay = LUA_CHON_CACH_PC.find((o) => o.ma === ma)
+  if (thay) return thay.v
+  const n = Number(ma.replace(/^chia:/, ''))
+  return Number.isFinite(n) && n > 0
+    ? { cach: 'chia', chia: n, coTangCa: false }
+    : CACH_PC_MAC_DINH
+}

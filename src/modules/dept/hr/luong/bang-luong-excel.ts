@@ -41,11 +41,13 @@ export async function buildBangLuongExcel(
     'Khoản cộng',
     'Tổng thu nhập',
     'BH NLĐ 10,5%',
-    'Thuế TNCN',
+    'Đoàn phí 0,5%',
+    'Thuế TNCN đã trừ',
     'Tạm ứng / khoản trừ',
     'Thực lĩnh',
     'BH DN 21,5%',
     'KPCĐ 2%',
+    'Thuế TNCN tính được (chưa trừ)',
   ])
   head.font = { bold: true }
   head.eachCell((c) => (c.fill = NEN))
@@ -68,11 +70,13 @@ export async function buildBangLuongExcel(
       p.khoanCong,
       p.tong,
       p.bhNld,
-      p.thue,
+      p.doanPhi,
+      p.truThue ? p.thue : 0,
       p.khoanTru,
       p.thucLinh,
       p.bhDn,
       p.kpcd,
+      p.truThue ? 0 : p.thue,
     ])
   const sum = (f: (x: (typeof ds)[number]) => number) => ds.reduce((s, x) => s + f(x), 0)
   const t = ws.addRow([
@@ -88,16 +92,18 @@ export async function buildBangLuongExcel(
     sum((x) => x.khoanCong),
     sum((x) => x.tong),
     sum((x) => x.bhNld),
-    sum((x) => x.thue),
+    sum((x) => x.doanPhi),
+    sum((x) => (x.truThue ? x.thue : 0)),
     sum((x) => x.khoanTru),
     sum((x) => x.thucLinh),
     sum((x) => x.bhDn),
     sum((x) => x.kpcd),
+    sum((x) => (x.truThue ? 0 : x.thue)),
   ])
   t.font = { bold: true }
   t.eachCell((c) => (c.fill = NEN))
   ws.columns.forEach((c, i) => (c.width = i === 2 ? 26 : i === 0 ? 22 : 13))
-  for (let i = 5; i <= 17; i++) ws.getColumn(i).numFmt = '#,##0'
+  for (let i = 5; i <= 19; i++) ws.getColumn(i).numFmt = '#,##0'
   ws.views = [{ state: 'frozen', ySplit: 4, xSplit: 3 }]
 
   const ck = wb.addWorksheet('Chuyển khoản')
@@ -129,9 +135,14 @@ export async function buildBangLuongExcel(
   ck.getColumn(4).numFmt = '#,##0'
   ck.columns.forEach((c, i) => (c.width = [6, 28, 20, 14, 16, 32, 22][i] ?? 12))
   if (nguoiTai) {
-    const luc = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ')
+    const luc = new Date(Date.now() + 7 * 3600_000)
+      .toISOString()
+      .slice(0, 16)
+      .replace('T', ' ')
     for (const ws of wb.worksheets) {
-      ws.insertRow(1, [`TÀI LIỆU MẬT — chỉ người quản lý lương · tải bởi ${nguoiTai} lúc ${luc}`])
+      ws.insertRow(1, [
+        `TÀI LIỆU MẬT — chỉ người quản lý lương · tải bởi ${nguoiTai} lúc ${luc}`,
+      ])
       ws.getRow(1).font = { bold: true, color: { argb: 'FFB0241A' } }
     }
   }

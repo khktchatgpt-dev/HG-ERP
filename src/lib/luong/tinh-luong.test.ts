@@ -29,6 +29,9 @@ const bc = (p: Partial<BoiCanhTinh> = {}): BoiCanhTinh => ({
   loaiNgay: (d) => (new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong'),
   heSoKhung: (ma, n) => HE_SO[`${ma}|${n}`] ?? null,
   heSoNghi: (ma) => (ma === 'unpaid' || ma === 'sick' ? 0 : 100),
+  heSoTrua: 2,
+  ptTrua: null,
+  truThue: true,
   ...p,
 })
 const ngay = (
@@ -51,6 +54,8 @@ const NGAY23 = Array.from(
   .filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() !== 0)
   .slice(0, 23)
 
+const CHIA = { cach: 'chia' as const, chia: null, coTangCa: false }
+
 const KIEU: HoSoTinh = {
   cachTra: 'daily',
   donGia: 657_000,
@@ -59,9 +64,11 @@ const KIEU: HoSoTinh = {
   coBh: true,
   npt: 1,
   khauTru10: false,
+  tangCaGio: null,
+  doanPhi: false,
   phuCap: [
-    { ten: 'Ăn ca', muc: 400_000, chiuThue: false, theoNgay: true },
-    { ten: 'Chuyên cần', muc: 300_000, chiuThue: true, theoNgay: false },
+    { ten: 'Ăn ca', muc: 400_000, chiuThue: false, theoNgay: true, ...CHIA },
+    { ten: 'Chuyên cần', muc: 300_000, chiuThue: true, theoNgay: false, ...CHIA },
   ],
 }
 
@@ -96,7 +103,9 @@ describe('các trường hợp khác', () => {
     const p = tinhPhieu(KIEU, [ngay('2026-10-04', { K1: 480, K2: 60 })], [], bc())
     // 04/10/2026 là chủ nhật: K1 CN có hệ số 200, K2 CN chưa có
     expect(p.thieuHeSo).toEqual(['K2 CN'])
-    expect(p.dong.find((d) => d.ten.startsWith('K1'))?.tien).toBe(r(8 * 82_125 * 2))
+    // Chủ nhật làm hành chính = ngày công (sổ KT), không thành dòng tăng ca
+    expect(p.luongCong).toBe(r(657_000 * 2))
+    expect(p.dong.some((d) => d.ten.startsWith('K1'))).toBe(false)
   })
   it('theo tháng: lương tháng × công thực ÷ công chuẩn, nghỉ phép tính như ngày làm', () => {
     const hs: HoSoTinh = {
@@ -128,7 +137,9 @@ describe('các trường hợp khác', () => {
       cachTra: 'monthly',
       donGia: null,
       luongThang: 9_500_000,
-      phuCap: [{ ten: 'Chuyên cần', muc: 500_000, chiuThue: true, theoNgay: false }],
+      phuCap: [
+        { ten: 'Chuyên cần', muc: 500_000, chiuThue: true, theoNgay: false, ...CHIA },
+      ],
     }
     const p = tinhPhieu(hs, [], [], bc(), 10)
     expect(p.luongCong).toBe(3_800_000)
@@ -179,3 +190,189 @@ describe('công chuẩn', () => {
 function r(n: number) {
   return Math.round(n)
 }
+
+// ── Khớp sổ lương Kế toán T9/2026 (kỳ 26/08 → 25/09). Số kỳ vọng là số TRONG SỔ; ERP làm tròn
+// đến đồng từng dòng nên thực lĩnh lệch sổ dưới 1 đồng.
+describe('khớp sổ lương T9 của Kế toán', () => {
+  const TC = 400 / 3 // KT: công tăng ca = giờ × 0,5 ÷ 3 → 133,33 %
+  const HS_T9: Record<string, number> = {
+    'K1|thuong': 100,
+    'K1|cn': 100,
+    'K2|thuong': TC,
+    'K3|thuong': TC,
+    'K2|cn': TC,
+    'K3|cn': TC,
+    'K4|thuong': 210,
+  }
+  const t9 = bc({
+    thang: '2026-09',
+    congChuan: 26,
+    heSoKhung: (ma, n) => HS_T9[`${ma}|${n}`] ?? null,
+    ptTrua: 210,
+    truThue: false,
+  })
+  /** `n` ngày liền từ 26/08, mỗi ngày 8 giờ hành chính (gồm cả chủ nhật — KT đếm vào công). */
+  const ngayCong = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      new Date(Date.UTC(2026, 7, 26 + i)).toISOString().slice(0, 10),
+    ).map((d) => ngay(d, { K1: 480 }))
+  /** Công tăng ca trong sổ → phút thật của khung (công × 6 giờ ở 133 %). */
+  const phutTc = (cong: number) => cong * 6 * 60
+  const chia = (muc: number, so: number, ten = 'PC') => ({
+    ten,
+    muc,
+    chiuThue: true,
+    theoNgay: false,
+    cach: 'chia' as const,
+    chia: so,
+    coTangCa: false,
+  })
+  const BH = { coBh: true, luongBh: 3_960_000, npt: 0, khauTru10: false, doanPhi: true }
+
+  it('TTSX · Lương Đức Hậu (00441): 350.000/công, 25 công, TC 10,61 + 1,42 công', () => {
+    const ds = ngayCong(25)
+    ds[0] = ngay(ds[0].ngay, { K1: 480, K2: phutTc(10.61), K3: phutTc(1.42) })
+    const p = tinhPhieu(
+      {
+        ...BH,
+        cachTra: 'daily',
+        donGia: 350_000,
+        luongThang: null,
+        tangCaGio: null,
+        phuCap: [],
+      },
+      ds,
+      [],
+      t9,
+    )
+    expect(p.luongCong).toBe(8_750_000) // M = 25 × 350.000
+    expect(p.tangCa).toBe(4_210_500) // N = 12,03 × 350.000
+    expect(p.bhNld).toBe(415_800)
+    expect(p.doanPhi).toBe(19_800)
+    expect(p.thucLinh).toBe(12_524_900) // AF
+  })
+
+  it('GTSX · Lê Khắc Hào (00010): lương tháng 7,7 tr ÷ 26, 31 công, phụ cấp ÷ 32', () => {
+    const ds = ngayCong(31)
+    ds[0] = ngay(ds[0].ngay, { K1: 480, K2: phutTc(12.58), K3: phutTc(0.58) })
+    const p = tinhPhieu(
+      {
+        ...BH,
+        cachTra: 'monthly',
+        donGia: null,
+        luongThang: 7_700_000,
+        tangCaGio: null,
+        phuCap: [chia(1_000_000, 32, 'Trách nhiệm'), chia(300_000, 32, 'Điện thoại')],
+      },
+      ds,
+      [],
+      t9,
+    )
+    expect(p.luongCong).toBe(9_180_769) // J = 7,7 tr ÷ 26 × 31
+    expect(p.tangCa).toBe(3_897_384) // K = 7,7 tr ÷ 26 × 13,16 (sổ 3.897.384,6)
+    expect(p.phuCap).toBe(968_750 + 290_625) // O, R
+    expect(p.thucLinh).toBe(13_901_928) // AA = 13.901.928,85
+  })
+
+  it('QC · Võ Văn Cương (00146): tăng ca khoán 20.000 đ/giờ, cơm 25.000 × công, khoản cố định', () => {
+    const ds = ngayCong(31)
+    ds[0] = ngay(ds[0].ngay, { K1: 480, K2: 35 * 60 })
+    const p = tinhPhieu(
+      {
+        ...BH,
+        luongBh: 4_328_000,
+        cachTra: 'monthly',
+        donGia: null,
+        luongThang: 8_000_000,
+        tangCaGio: 20_000,
+        phuCap: [
+          chia(2_000_000, 32, 'Trách nhiệm'),
+          { ...chia(25_000, 0, 'Cơm'), cach: 'nhan' as const, chia: null },
+          { ...chia(885_516, 0, 'Xăng'), cach: 'co_dinh' as const, chia: null },
+          chia(300_000, 32, 'Điện thoại'),
+          { ...chia(500_000, 0, 'Khác'), cach: 'co_dinh' as const, chia: null },
+        ],
+      },
+      ds,
+      [],
+      t9,
+    )
+    expect(p.tangCa).toBe(700_000) // H = 35 giờ × 20.000
+    expect(p.phuCap).toBe(1_937_500 + 775_000 + 885_516 + 290_625 + 500_000)
+    expect(p.bhNld).toBe(454_440)
+    expect(p.doanPhi).toBe(21_640)
+    expect(p.thucLinh).toBe(14_151_023) // T = 14.151.022,54
+  })
+
+  it('VP · Trương Văn Hùng (6011): 27 công > 26 — lương và phụ cấp không có trần', () => {
+    const p = tinhPhieu(
+      {
+        ...BH,
+        luongBh: 1_127_518 / 0.105,
+        cachTra: 'monthly',
+        donGia: null,
+        luongThang: 15_000_000,
+        tangCaGio: null,
+        phuCap: [chia(1_500_000, 26, 'Trách nhiệm'), chia(300_000, 26, 'Điện thoại')],
+      },
+      ngayCong(27),
+      [],
+      t9,
+    )
+    expect(p.luongCong).toBe(15_576_923) // J = 15 tr ÷ 26 × 27
+    expect(p.phuCap).toBe(1_557_692 + 311_538)
+    expect(p.bhNld).toBe(1_127_518)
+    expect(p.doanPhi).toBe(53_691)
+    expect(p.thucLinh).toBe(16_264_944) // W = 16.264.944,85
+  })
+
+  it('độc hại nhân theo (công + công tăng ca) — sổ TTSX "(F+L) × mức"', () => {
+    const ds = ngayCong(20)
+    ds[0] = ngay(ds[0].ngay, { K1: 480, K2: phutTc(4) })
+    const p = tinhPhieu(
+      {
+        ...BH,
+        cachTra: 'daily',
+        donGia: 300_000,
+        luongThang: null,
+        tangCaGio: null,
+        phuCap: [
+          {
+            ...chia(10_000, 0, 'Độc hại'),
+            cach: 'nhan' as const,
+            chia: null,
+            coTangCa: true,
+          },
+        ],
+      },
+      ds,
+      [],
+      t9,
+    )
+    expect(p.phuCap).toBe(240_000) // (20 + 4) × 10.000
+  })
+
+  it('giờ giải lao trả 210 %; thuế chỉ tính, không trừ (Q5)', () => {
+    const ds = ngayCong(1)
+    // chốt công lưu phút trưa đã × 2 → 60 phút thật
+    ds[0] = { ...ds[0], trua: 120 }
+    const p = tinhPhieu(
+      {
+        ...BH,
+        cachTra: 'daily',
+        donGia: 400_000,
+        luongThang: null,
+        tangCaGio: null,
+        phuCap: [],
+      },
+      ds,
+      [{ loai: 'bonus', tien: 40_000_000 }],
+      t9,
+    )
+    expect(p.dong.find((d) => d.ten === 'Giờ giải lao')?.tien).toBe(105_000) // 1 giờ × 50.000 × 210 %
+    expect(p.luongCong).toBe(400_000)
+    expect(p.thue).toBeGreaterThan(0)
+    expect(p.truThue).toBe(false)
+    expect(p.thucLinh).toBe(p.tong - p.bhNld - p.doanPhi)
+  })
+})

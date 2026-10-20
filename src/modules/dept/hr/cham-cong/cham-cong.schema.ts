@@ -314,6 +314,19 @@ export const luongViecSchema = z.discriminatedUnion('viec', [
     khauTru10: z.boolean().default(false),
     ghiChu: z.string().trim().max(300).nullable(),
     phuCap: z.record(z.string().uuid(), z.number().min(0).max(1_000_000_000)),
+    // 0254 — khớp sổ KT: tăng ca khoán đ/giờ, trừ đoàn phí, cách tính từng dòng phụ cấp
+    tangCaGio: z.number().min(0).max(10_000_000).nullable().optional(),
+    doanPhi: z.boolean().optional(),
+    phuCapCach: z
+      .record(
+        z.string().uuid(),
+        z.object({
+          cach: z.enum(['chia', 'nhan', 'co_dinh']),
+          chia: z.number().positive().max(366).nullable(),
+          coTangCa: z.boolean(),
+        }),
+      )
+      .optional(),
   }),
   z.object({
     viec: z.literal('rieng'),

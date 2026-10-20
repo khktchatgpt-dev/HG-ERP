@@ -32,6 +32,9 @@ export const POST = handle(async (req: Request) => {
         khauTru10,
         ghiChu,
         phuCap,
+        tangCaGio,
+        doanPhi,
+        phuCapCach,
       } = v
       await hoSoLuongService.luuBan(user, employeeId, {
         tuKy,
@@ -44,6 +47,9 @@ export const POST = handle(async (req: Request) => {
         khauTru10,
         ghiChu,
         phuCap,
+        tangCaGio,
+        doanPhi,
+        phuCapCach,
       })
       return NextResponse.json({ ok: true })
     }

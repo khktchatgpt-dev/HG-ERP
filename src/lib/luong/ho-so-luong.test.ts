@@ -149,7 +149,11 @@ describe('dán sổ lương T9 (TTSX · GTSX · VP)', () => {
     const r = docDan(so)
     expect(r.cot.sort()).toEqual(['donGia', 'luongThang', 'ma', 'ten', 'truBh'])
     expect(r.dong).toHaveLength(3)
-    expect(r.dong[0]).toMatchObject({ ma: '6011', luongThang: '15000000', truBh: '1127518' })
+    expect(r.dong[0]).toMatchObject({
+      ma: '6011',
+      luongThang: '15000000',
+      truBh: '1127518',
+    })
     expect(r.dong[1]).toMatchObject({ ma: '00441', donGia: '350000', truBh: '415800' })
     // "phòng ban khác" là cột tiền, không bị hiểu thành cột tổ
     expect(r.dong[1].to).toBeUndefined()

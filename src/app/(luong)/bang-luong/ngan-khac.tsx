@@ -17,8 +17,10 @@ export function NganBhThue({ d }: { d: BangLuongCtx }) {
       tl: '21,5 %',
       tien: tong(ps, (p) => p.bhDn),
     },
+    { ten: 'Đoàn phí người lao động', tl: '0,5 %', tien: tong(ps, (p) => p.doanPhi) },
     { ten: 'Kinh phí công đoàn', tl: '2 %', tien: tong(ps, (p) => p.kpcd) },
   ]
+  const chuaTru = ps.some((p) => !p.truThue && p.thue > 0)
   const nopThue = ps.filter((p) => p.thue > 0)
   return (
     <div className="min-h-0 overflow-auto bg-[var(--surface-card)]">
@@ -53,7 +55,13 @@ export function NganBhThue({ d }: { d: BangLuongCtx }) {
             </tr>
           ))}
           <tr>
-            <td className={TD}>Thuế TNCN khấu trừ ({nopThue.length} người phải nộp)</td>
+            <td className={TD}>
+              Thuế TNCN{' '}
+              {chuaTru
+                ? 'tính được — CHƯA trừ trên bảng (Kế toán chưa khấu trừ)'
+                : 'khấu trừ'}{' '}
+              ({nopThue.length} người)
+            </td>
             <td className={TD} />
             <td className={TD} />
             <td className={cn(TD, 'num')} style={R}>

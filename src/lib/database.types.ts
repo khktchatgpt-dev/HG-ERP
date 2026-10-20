@@ -1258,6 +1258,9 @@ export type Database = {
       }
       hr_calc_versions: {
         Row: {
+          standard_days: number | null
+          lunch_pay_percent: number | null
+          withhold_tax: boolean
           applied_at: string | null
           applied_by: string | null
           count_early: boolean
@@ -1284,6 +1287,9 @@ export type Database = {
           version_no: number
         }
         Insert: {
+          standard_days?: number | null
+          lunch_pay_percent?: number | null
+          withhold_tax?: boolean
           applied_at?: string | null
           applied_by?: string | null
           count_early?: boolean
@@ -1310,6 +1316,9 @@ export type Database = {
           version_no: number
         }
         Update: {
+          standard_days?: number | null
+          lunch_pay_percent?: number | null
+          withhold_tax?: boolean
           applied_at?: string | null
           applied_by?: string | null
           count_early?: boolean
@@ -1837,16 +1846,25 @@ export type Database = {
       }
       hr_pay_profile_allowances: {
         Row: {
+          calc: string
+          divisor: number | null
+          incl_overtime: boolean
           allowance_type_id: string
           amount: number
           profile_id: string
         }
         Insert: {
+          calc?: string
+          divisor?: number | null
+          incl_overtime?: boolean
           allowance_type_id: string
           amount: number
           profile_id: string
         }
         Update: {
+          calc?: string
+          divisor?: number | null
+          incl_overtime?: boolean
           allowance_type_id?: string
           amount?: number
           profile_id?: string
@@ -1870,6 +1888,8 @@ export type Database = {
       }
       hr_pay_profiles: {
         Row: {
+          ot_rate_per_hour: number | null
+          union_member: boolean
           flat_tax: boolean
           created_at: string
           created_by: string | null
@@ -1888,6 +1908,8 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          ot_rate_per_hour?: number | null
+          union_member?: boolean
           flat_tax?: boolean
           created_at?: string
           created_by?: string | null
@@ -1906,6 +1928,8 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          ot_rate_per_hour?: number | null
+          union_member?: boolean
           flat_tax?: boolean
           created_at?: string
           created_by?: string | null
@@ -2138,6 +2162,8 @@ export type Database = {
       }
       hr_payslips: {
         Row: {
+          union_fee_employee: number
+          tax_withheld: boolean
           bank_account: string | null
           bank_name: string | null
           calc_no: number
@@ -2166,6 +2192,8 @@ export type Database = {
           net: number
         }
         Insert: {
+          union_fee_employee?: number
+          tax_withheld?: boolean
           bank_account?: string | null
           bank_name?: string | null
           calc_no: number
@@ -2194,6 +2222,8 @@ export type Database = {
           net?: number
         }
         Update: {
+          union_fee_employee?: number
+          tax_withheld?: boolean
           bank_account?: string | null
           bank_name?: string | null
           calc_no?: number

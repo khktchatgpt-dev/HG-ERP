@@ -1,7 +1,7 @@
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden } from '@/server/http'
-import { banHieuLuc } from '@/lib/luong/ho-so-luong'
+import { banHieuLuc, CACH_PC_MAC_DINH } from '@/lib/luong/ho-so-luong'
 import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 import {
   congChuan,
@@ -144,14 +144,22 @@ export const bangLuongService = {
       phieu: d.phieu,
       khoan: d.khoan,
       suKien: d.bang ? await bangLuongRepo.suKien(d.bang.id) : [],
-      congChuan: d.ky ? congChuan(d.ky.tu, d.ky.den, le) : null,
+      congChuan: d.ky
+        ? ((d.ky.banCachTinhId
+            ? (await cachTinhRepo.thamSoLuong(d.ky.banCachTinhId)).congChuan
+            : null) ?? congChuan(d.ky.tu, d.ky.den, le))
+        : null,
       canTinhLai: d.canTinhLai,
       dieuKien: dieuKienGui(d.phieu, d.canTinhLai),
       // Ai có làm trong kỳ (kể cả đã nghỉ giữa kỳ) thì thêm khoản được.
       nhanVien: emps
         .filter((e) =>
           d.ky
-            ? !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, d.ky.tu, d.ky.den)
+            ? !!khoangTrongKy(
+                { hireDate: e.hire_date, leaveDate: e.leave_date },
+                d.ky.tu,
+                d.ky.den,
+              )
             : e.active,
         )
         .map((e) => ({ id: e.id, ma: e.code, ten: e.full_name })),
@@ -173,7 +181,7 @@ export const bangLuongService = {
     if (!ky.banCachTinhId)
       throw Conflict('Kỳ công chốt không ghi bản cách tính — chốt lại kỳ công')
 
-    const [chot, emps, ban, rieng, loaiPc, khung, heSo, quyTacBan, leRows, khoan] =
+    const [chot, emps, ban, rieng, loaiPc, khung, heSo, quyTacBan, leRows, khoan, ts] =
       await Promise.all([
         kyCongRepo.banChot(ky.id, ky.lanChot),
         chamCongRepo.employees(),
@@ -185,6 +193,7 @@ export const bangLuongService = {
         cachTinhRepo.dsBan(),
         chamCongRepo.holidays(ky.tu, congNgay(ky.den, 1)),
         bangLuongRepo.khoan(thang),
+        cachTinhRepo.thamSoLuong(ky.banCachTinhId),
       ])
     const quyTac = quyTacBan.find((b) => b.id === ky.banCachTinhId)?.quyTac
     if (!quyTac) throw Conflict('Không tìm thấy bản cách tính kỳ công đã dùng')
@@ -192,7 +201,8 @@ export const bangLuongService = {
       .map((h) => h.holiday_date)
       .filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() !== 0)
     const le = new Set(ngayLe)
-    const cc = congChuan(ky.tu, ky.den, ngayLe)
+    // KT luôn chia 26 (0254); bản không đặt thì đếm ngày kỳ trừ CN, lễ như trước.
+    const cc = ts.congChuan ?? congChuan(ky.tu, ky.den, ngayLe)
     const rate = new Map(heSo.map((h) => [`${h.loai}|${h.ma}|${h.ngay}`, h.pt]))
     const boiCanh = {
       thang,
@@ -204,6 +214,9 @@ export const bangLuongService = {
         le.has(d) ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong',
       heSoKhung: (ma: string, n: LoaiNgayLuong) => rate.get(`frame|${ma}|${n}`) ?? null,
       heSoNghi: (ma: MaNghi) => rate.get(`leave|${ma}|any`) ?? null,
+      heSoTrua: quyTac.heSoTrua,
+      ptTrua: ts.ptTrua,
+      truThue: ts.truThue,
     }
     const empByCode = new Map(emps.map((e) => [e.code, e]))
     const riengCua = new Map(rieng.map((r) => [r.employeeId, r]))
@@ -224,10 +237,18 @@ export const bangLuongService = {
       if (!hs) van.push('Chưa có hồ sơ lương')
       if (!r?.stk) van.push('Thiếu STK')
       // Không chấm công: số công = công chuẩn của PHẦN kỳ còn làm (vào / nghỉ giữa kỳ, 0248).
-      const khoang = khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, ky.tu, ky.den)
+      const khoang = khoangTrongKy(
+        { hireDate: e.hire_date, leaveDate: e.leave_date },
+        ky.tu,
+        ky.den,
+      )
+      // Làm trọn kỳ = đủ công chuẩn (`true`): công chuẩn cố định 26 mà kỳ chỉ 25 ngày làm thì
+      // đếm ngày sẽ trả thiếu 1/26.
       const mien = ds.some((x) => x.miem)
         ? khoang
-          ? congChuan(khoang.tu, khoang.den, ngayLe)
+          ? khoang.tu === ky.tu && khoang.den === ky.den
+            ? true
+            : congChuan(khoang.tu, khoang.den, ngayLe)
           : 0
         : false
       const p = tinhPhieu(
@@ -240,14 +261,17 @@ export const bangLuongService = {
               coBh: hs.coBh,
               npt: hs.npt,
               khauTru10: hs.khauTru10,
+              tangCaGio: hs.tangCaGio,
+              doanPhi: hs.doanPhi,
               phuCap: Object.entries(hs.phuCap)
-                .map(([id, muc]) => ({ l: loaiCua.get(id), muc }))
+                .map(([id, muc]) => ({ id, l: loaiCua.get(id), muc }))
                 .filter((x) => x.l)
-                .map(({ l, muc }) => ({
+                .map(({ id, l, muc }) => ({
                   ten: l!.ten,
                   muc,
                   chiuThue: l!.chiuThue,
                   theoNgay: l!.theoNgay,
+                  ...(hs.phuCapCach[id] ?? CACH_PC_MAC_DINH),
                 })),
             }
           : {
@@ -258,6 +282,8 @@ export const bangLuongService = {
               coBh: false,
               npt: 0,
               khauTru10: false,
+              tangCaGio: null,
+              doanPhi: false,
               phuCap: [],
             },
         ds
@@ -292,7 +318,9 @@ export const bangLuongService = {
         bhNld: p.bhNld,
         bhDn: p.bhDn,
         kpcd: p.kpcd,
+        doanPhi: p.doanPhi,
         thue: p.thue,
+        truThue: p.truThue,
         khoanTru: p.khoanTru,
         thucLinh: p.thucLinh,
         nganHang: r?.nganHang ?? null,

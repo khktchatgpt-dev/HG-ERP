@@ -48,7 +48,11 @@ export type PhieuDong = {
   bhNld: number
   bhDn: number
   kpcd: number
+  /** Đoàn phí NLĐ 0,5 % lương BH (0254). */
+  doanPhi: number
   thue: number
+  /** Thuế có trừ vào thực lĩnh không — Q5: chưa trừ, chỉ bày. */
+  truThue: boolean
   khoanTru: number
   thucLinh: number
   nganHang: string | null
@@ -182,7 +186,9 @@ export const bangLuongRepo = {
               insurance_employee: p.bhNld,
               insurance_company: p.bhDn,
               union_fee: p.kpcd,
+              union_fee_employee: p.doanPhi,
               tax: p.thue,
+              tax_withheld: p.truThue,
               item_minus: p.khoanTru,
               net: p.thucLinh,
               bank_name: p.nganHang,
@@ -224,7 +230,9 @@ export const bangLuongRepo = {
           bhNld: so(r.insurance_employee),
           bhDn: so(r.insurance_company),
           kpcd: so(r.union_fee),
+          doanPhi: so(r.union_fee_employee),
           thue: so(r.tax),
+          truThue: r.tax_withheld,
           khoanTru: so(r.item_minus),
           thucLinh: so(r.net),
           nganHang: r.bank_name,

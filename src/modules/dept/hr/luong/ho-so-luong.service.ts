@@ -14,6 +14,7 @@ import {
   type CachTra,
   type CotNap,
   type KetQuaKhop,
+  type CachPhuCapDong,
   type ThieuThongTin,
 } from '@/lib/luong/ho-so-luong'
 import { TY_LE_BH_NLD } from '@/lib/luong/tinh-luong'
@@ -78,6 +79,10 @@ export type BanNhap = {
   khauTru10: boolean
   ghiChu: string | null
   phuCap: Record<string, number>
+  /** 0254 — thiếu thì giữ mặc định: theo hệ số khung, có trừ đoàn phí, phụ cấp chia công chuẩn. */
+  tangCaGio?: number | null
+  doanPhi?: boolean
+  phuCapCach?: Record<string, CachPhuCapDong>
 }
 
 /**
@@ -213,7 +218,17 @@ export const hoSoLuongService = {
     kiemKy(v.tuKy, await hoSoLuongRepo.kyChotCuoi())
     if (!(await nhanVien()).some((e) => e.id === employeeId))
       throw NotFound('Không có nhân viên này')
-    await hoSoLuongRepo.luuBan({ ...v, employeeId, nguon: 'nhập tay' }, user.id)
+    await hoSoLuongRepo.luuBan(
+      {
+        ...v,
+        tangCaGio: v.tangCaGio ?? null,
+        doanPhi: v.doanPhi ?? true,
+        phuCapCach: v.phuCapCach ?? {},
+        employeeId,
+        nguon: 'nhập tay',
+      },
+      user.id,
+    )
   },
 
   async luuRieng(
@@ -264,6 +279,9 @@ export const hoSoLuongService = {
           ghiChu: cu?.ghiChu ?? null,
           nguon: `đơn giá cả tổ ${v.to}`,
           phuCap: cu?.phuCap ?? {},
+          tangCaGio: cu?.tangCaGio ?? null,
+          doanPhi: cu?.doanPhi ?? true,
+          phuCapCach: cu?.phuCapCach ?? {},
         },
         user.id,
       )
@@ -345,6 +363,9 @@ export const hoSoLuongService = {
         docSo(g.luongBh) ??
         (truBh != null && truBh > 0 ? Math.round(truBh / TY_LE_BH_NLD) : null)
       const coBh = truBh != null ? truBh > 0 : null
+      // Sổ lương: người đóng BH mà ô "Công đoàn" = 0 là không trừ đoàn phí (T9: 2 người).
+      const dp = docSo(g.doanPhi)
+      const doanPhi = dp != null && coBh ? dp > 0 : null
       const npt = docSo(g.npt)
       if (
         donGia == null &&
@@ -377,6 +398,9 @@ export const hoSoLuongService = {
         ghiChu: cu?.ghiChu ?? null,
         nguon: 'nạp Excel',
         phuCap: cu?.phuCap ?? {},
+        tangCaGio: cu?.tangCaGio ?? null,
+        doanPhi: doanPhi ?? cu?.doanPhi ?? true,
+        phuCapCach: cu?.phuCapCach ?? {},
       }
       // Chỉ có lương BH / NPT mà chưa có đơn giá hay lương tháng thì chưa thành bản được.
       if (

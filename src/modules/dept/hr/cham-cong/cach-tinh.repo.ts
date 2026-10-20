@@ -58,6 +58,15 @@ export type BanDong = {
   nguoiApDung: string | null
 }
 
+export type ThamSoLuong = {
+  /** Công chuẩn cố định (KT: 26); null = đếm ngày kỳ trừ CN, lễ. */
+  congChuan: number | null
+  /** % trả giờ giải lao; null = cộng vào hành chính như chốt công. */
+  ptTrua: number | null
+  /** Trừ thuế TNCN trên bảng lương. */
+  truThue: boolean
+}
+
 export type HeSoDong = {
   loai: 'frame' | 'leave'
   ma: string
@@ -154,6 +163,30 @@ export const cachTinhRepo = {
     }))
   },
 
+  /**
+   * Tham số LƯƠNG của bản (0254) — đọc riêng, không thuộc quy tắc chấm công nên màn Cách tính
+   * công không phải biết tới. Sửa trên giao diện: bước sau (cần bản vẽ).
+   */
+  async thamSoLuong(banId: string): Promise<ThamSoLuong> {
+    const r = must(
+      await db()
+        .from('hr_calc_versions')
+        .select('standard_days, lunch_pay_percent, withhold_tax')
+        .eq('id', banId)
+        .single<{
+          standard_days: number | null
+          lunch_pay_percent: number | null
+          withhold_tax: boolean
+        }>(),
+    )
+    if (!r) throw new Error('Không thấy bản cách tính')
+    return {
+      congChuan: r.standard_days,
+      ptTrua: r.lunch_pay_percent == null ? null : Number(r.lunch_pay_percent),
+      truThue: r.withhold_tax,
+    }
+  },
+
   /** Bản mới (nháp) chép từ `goc`: quy tắc + khung + hệ số. */
   async taoTu(goc: BanDong, khung: KhungBan[], heSo: HeSoDong[], userId: string) {
     const so = (await this.dsBan()).reduce((m, b) => Math.max(m, b.so), 0) + 1
@@ -172,6 +205,18 @@ export const cachTinhRepo = {
         .single<{ id: string }>(),
     )
     if (!ban) throw new Error('Không tạo được bản cách tính')
+    // Tham số lương đi theo bản gốc — bỏ sót là bản mới mất công chuẩn 26 / giải lao 210 %.
+    const ts = await this.thamSoLuong(goc.id)
+    must(
+      await db()
+        .from('hr_calc_versions')
+        .update({
+          standard_days: ts.congChuan,
+          lunch_pay_percent: ts.ptTrua,
+          withhold_tax: ts.truThue,
+        })
+        .eq('id', ban.id),
+    )
     await this.ghiKhung(ban.id, khung)
     await this.ghiHeSo(ban.id, heSo, userId)
     return { id: ban.id, so }

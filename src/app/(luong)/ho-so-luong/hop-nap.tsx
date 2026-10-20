@@ -27,6 +27,7 @@ const TEN_COT: Record<CotNap, string> = {
   mst: 'Mã số thuế',
   npt: 'Người phụ thuộc',
   truBh: 'Trừ BH → lương đóng BH',
+  doanPhi: 'Công đoàn → có trừ đoàn phí',
 }
 
 /**
