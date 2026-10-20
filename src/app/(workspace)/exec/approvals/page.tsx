@@ -1,6 +1,9 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { execService } from '@/modules/core/exec/exec.service'
 import { ApprovalCenterScreen, type ApprovalKind } from './ApprovalCenterScreen'
+import { ExecKitFrame } from '../_shell/KitFrame'
+
+export const metadata = { title: 'Ban Giám đốc · Hộp ký duyệt' }
 
 /**
  * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — 15/08/2026.
@@ -22,6 +25,12 @@ export default async function ApprovalCenterPage({
   ])
   const box = await execService.signBox(user)
   const initialKind: ApprovalKind =
-    loai === 'lsx' || loai === 'po' || loai === 'quote' ? loai : 'all'
-  return <ApprovalCenterScreen box={box} initialKind={initialKind} />
+    loai === 'lsx' || loai === 'po' || loai === 'quote' || loai === 'dnm' ? loai : 'all'
+  // screen: huỷ đệm của <main> — thiếu nó Hộp ký nằm lọt trong viền xám 16–24px
+  // và <main> tràn đúng phần đệm đáy thành thanh cuộn thứ hai (14/10/2026).
+  return (
+    <ExecKitFrame screen>
+      <ApprovalCenterScreen box={box} initialKind={initialKind} />
+    </ExecKitFrame>
+  )
 }

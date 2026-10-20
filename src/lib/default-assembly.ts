@@ -25,6 +25,7 @@
  */
 
 import { resolveComponentRoute } from './stage-route'
+import { isFinishRow } from './finish-stages'
 
 /**
  * Công đoạn GHÉP: từ đây trở đi chi tiết đã hàn thành cụm, đơn vị đếm đổi.
@@ -56,6 +57,8 @@ export type CountingComponent = {
   group_code: string | null
   /** Người đã khai công đoạn cuối thì tôn trọng — không gộp vào cụm mặc nhiên. */
   final_stage: string | null
+  /** Phân biệt cụm khung (bắt đầu ở hàn) với dòng thành phẩm (bắt đầu ở lắp ráp). */
+  first_stage?: string | null
 }
 
 export type CountingPlan = {
@@ -84,7 +87,12 @@ export function resolveCountingPlan(
   comps: CountingComponent[],
   plannedRoute: string[] | null | undefined,
 ): CountingPlan {
-  if (comps.some((c) => c.kind === 'assembly')) return EMPTY_PLAN
+  // Dòng THÀNH PHẨM (lắp ráp→hoàn thiện, lib/finish-stages) cũng là
+  // kind='assembly' nhưng nó KHÔNG phải cụm khung do người khai — nó nằm ở
+  // chặng sau sơn và luôn có mặt trên mọi dòng SP. Coi nó là "lệnh đã có cụm
+  // thật" thì cụm mặc nhiên tắt ngay khi ai đó ghi sổ đóng gói, và sổ hàn của
+  // BOM phẳng mất trắng.
+  if (comps.some((c) => c.kind === 'assembly' && !isFinishRow(c))) return EMPTY_PLAN
   const own = new Map<string, string[]>()
   const virtual: string[] = []
   for (const c of comps) {

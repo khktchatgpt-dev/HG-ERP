@@ -97,7 +97,10 @@ export const settingsService = {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       return DEFAULT_APPROVAL_THRESHOLDS
     }
-    return raw as ApprovalThresholds
+    // Ngưỡng Giám đốc đã lưu THẮNG theo từng loại tiền; loại tiền chưa lưu thì
+    // lấy mặc định (27/09/2026). Trước đó bản lưu {VND} che mất mọi mặc định
+    // khác → USD rơi về "luôn là giá trị lớn".
+    return { ...DEFAULT_APPROVAL_THRESHOLDS, ...(raw as ApprovalThresholds) }
   },
 
   /**

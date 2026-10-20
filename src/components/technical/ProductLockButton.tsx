@@ -91,7 +91,7 @@ export function ProductLockButton({
           'Nhớ khoá lại sau khi sửa xong',
         )
       }}
-      className="bg-card inline-flex items-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-800 shadow-xs hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+      className="bg-card inline-flex items-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-800 shadow-xs hover:bg-emerald-50 disabled:opacity-50"
     >
       {busy ? <Spinner size={14} /> : <LockOpen className="size-4" aria-hidden />}
       Mở khoá để sửa

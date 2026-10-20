@@ -16,7 +16,7 @@ import {
   resolveLsxTemplate,
   specColumnsOf,
   type LsxTemplate,
-} from '@/modules/dept/sales/lsx-template'
+} from '@/lib/lsx-template'
 import {
   productsRepo,
   type Product,
@@ -24,7 +24,7 @@ import {
   type ProductTechSpec,
 } from '@/modules/dept/technical/technical.repo'
 import { productsService } from '@/modules/dept/technical/technical.service'
-import { valueState } from './lsx-sheet-cells'
+import { valueState } from '@/lib/lsx-sheet-cells'
 import {
   GAP_TAB,
   packingText,
@@ -34,12 +34,12 @@ import {
   type ProfileGapKey,
   type ProfileMap,
   type ProfileSnapshot,
-} from './lsx-line-fill'
+} from '@/lib/lsx-line-fill'
 import { lsxAudienceIds } from './notify-targets'
 import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { canMutateOwned } from '@/lib/record-ownership'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 /**
@@ -155,7 +155,62 @@ async function templateOfLsx(customerId: string): Promise<LsxTemplate> {
   return resolveLsxTemplate(customer?.lsx_template)
 }
 
+/**
+ * Điền ảnh từ hồ sơ SP cho các dòng CHƯA có ảnh — xem lý do đầy đủ ở `sheet()`.
+ * Một truy vấn gộp, và chỉ chạy khi thật sự có dòng thiếu.
+ *
+ * XUẤT RA NGOÀI vì không phải ai cũng đi qua `sheet()`: màn GĐ duyệt lệnh và
+ * bảng việc của tổ đọc thẳng `lsxLinesRepo.listLines`. Trang thống kê thì đã
+ * tự chép tay đúng phép này từ trước — ba bản chép tay là ba chỗ để quên, nên
+ * gom về một hàm.
+ */
+export async function withProductImage<
+  T extends Pick<LsxLine, 'product_id' | 'image_file_id'>,
+>(lines: T[]): Promise<T[]> {
+  const thieu = lines.filter((l) => !l.image_file_id && l.product_id)
+  if (thieu.length === 0) return lines
+  const products = await productsRepo.listByIds([
+    ...new Set(thieu.map((l) => l.product_id as string)),
+  ])
+  const anh = new Map(
+    products.filter((p) => p.image_file_id).map((p) => [p.id, p.image_file_id]),
+  )
+  if (anh.size === 0) return lines
+  return lines.map((l) =>
+    !l.image_file_id && l.product_id && anh.has(l.product_id)
+      ? { ...l, image_file_id: anh.get(l.product_id) ?? null }
+      : l,
+  )
+}
+
 /** So dòng cũ ↔ mới, trả id các dòng đổi nội dung (bỏ qua sort_order). */
+/**
+ * Payload sắp lưu CÓ làm đổi dòng nào không — kiểm trước khi ghi để bắt lý do
+ * (changedLineIds chỉ so được sau khi đã ghi). Dòng mới, dòng bị bỏ, hay dòng
+ * đổi trường nào trong khoá so sánh đều tính là đổi.
+ */
+function wouldChangeLines(
+  before: LsxLine[],
+  groups: (LsxGroupInput & { lines: LsxLineInput[] })[],
+): boolean {
+  const byId = new Map(before.map((l) => [l.id, l]))
+  const seen = new Set<string>()
+  for (const g of groups) {
+    for (const l of g.lines) {
+      if (!l.id || !byId.has(l.id)) return true
+      seen.add(l.id)
+      const b = byId.get(l.id)!
+      // Chỉ trường payload GỬI (khác undefined) mới được so — thiếu trường = giữ.
+      const patch = Object.fromEntries(
+        Object.entries(l).filter(([k, v]) => v !== undefined && k !== 'id'),
+      )
+      const merged = { ...b, ...patch } as LsxLine
+      if (changedLineIds([b], [merged]).length) return true
+    }
+  }
+  return before.some((b) => !seen.has(b.id))
+}
+
 function changedLineIds(before: LsxLine[], after: LsxLine[]): string[] {
   const key = (l: LsxLine) =>
     JSON.stringify([
@@ -183,6 +238,25 @@ function changedLineIds(before: LsxLine[], after: LsxLine[]): string[] {
 
 export const lsxLinesService = {
   /** Đọc phiếu (nhóm + dòng + mẫu cột) — mọi NV đã đăng nhập xem được. */
+  /**
+   * ẢNH SP: DÒNG LỆNH CHỈ GIỮ BẢN CHỤP, NÊN PHẢI CÓ ĐƯỜNG LÙI VỀ HỒ SƠ.
+   *
+   * `draftFromOrders` chép `image_file_id` vào dòng lệnh ngay lúc phát lệnh.
+   * Hồ sơ SP lúc đó chưa có ảnh thì dòng giữ `null` VĨNH VIỄN — Kỹ thuật tải
+   * ảnh lên hôm sau cũng không tới được phiếu, vì không ai đi chép lại.
+   *
+   * Đo 15/09/2026: 18 dòng trên 5 lệnh đúng cảnh đó — hồ sơ SP ĐÃ có ảnh mà
+   * màn Bán hàng vẫn hiện ô "—" (chủ dự án báo đúng chỗ này). Còn 185 dòng
+   * khác trống vì hồ sơ SP thật sự chưa có ảnh; hai việc khác nhau, chỉ việc
+   * thứ nhất là lỗi.
+   *
+   * ĐIỀN BÙ, KHÔNG GHI ĐÈ: dòng đã có ảnh riêng thì giữ nguyên — ảnh trên dòng
+   * là lựa chọn của người soạn phiếu. `null` không phải một lựa chọn, nó là
+   * chỗ chưa ai điền.
+   *
+   * Không backfill xuống DB: bản chụp còn dùng để so "khác hồ sơ" ở màn soạn
+   * dòng, ghi đè là đổi nghĩa cột. Ở đây chỉ vá tầng ĐỌC.
+   */
   async sheet(_user: User, lsxId: string): Promise<LsxSheet> {
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')
@@ -191,7 +265,8 @@ export const lsxLinesService = {
       lsxLinesRepo.listLines(lsxId),
       templateOfLsx(lsx.customer_id),
     ])
-    return { template, groups: groupWithLines(groups, lines), totals: sumTotals(lines) }
+    const shown = await withProductImage(lines)
+    return { template, groups: groupWithLines(groups, shown), totals: sumTotals(lines) }
   },
 
   /**
@@ -240,7 +315,10 @@ export const lsxLinesService = {
             qty: l.qty,
             packing: snap?.packing ?? null,
             cbm: snap?.cbm ?? null,
-            ship_date: o.due_date,
+            // Tuần giao CỦA DÒNG ĐƠN trước, hạn giao của đơn sau (13/10/2026): trước
+            // đây mọi dòng nhận `o.due_date` nên đơn giao nhiều tuần bị gộp về một
+            // ngày trên tờ lệnh. Chia lô (0222) vẫn thắng khi in — xem applyLotsToGroups.
+            ship_date: l.ship_date ?? o.due_date,
             ship_label: null,
             specs: snap?.specs ?? {},
             checks: {},
@@ -277,6 +355,28 @@ export const lsxLinesService = {
   },
 
   /**
+   * Nút "Nạp dòng từ đơn" trên màn soạn — cùng cửa với `save` (quyền phát lệnh,
+   * của ai người đó sửa, lệnh chưa kết thúc). Route từng gọi thẳng
+   * `seedFromOrders` chỉ với điều kiện đã đăng nhập (07/10/2026): ai cũng nạp
+   * được, kể cả vào lệnh đã hoàn thành.
+   */
+  async reseed(user: User, lsxId: string): Promise<LsxSheet> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await productionRepo.findById(lsxId)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    if (!canMutateOwned(user, lsx.created_by)) {
+      throw Forbidden(
+        'Lệnh này do người khác lập — chỉ người lập hoặc quản lý mới nạp dòng được',
+      )
+    }
+    if (lsx.status === 'completed' || lsx.status === 'cancelled') {
+      throw BadRequest('Lệnh đã kết thúc — không nạp dòng được')
+    }
+    await lsxLinesService.seedFromOrders(lsxId)
+    return lsxLinesService.sheet(user, lsxId)
+  },
+
+  /**
    * LƯU nhóm + dòng do Sales soạn. Chặn xoá dòng đã vào sản xuất; lệnh đã duyệt
    * thì mỗi lần lưu là một bản chỉnh sửa (revision +1, đánh dấu dòng đổi).
    */
@@ -286,11 +386,23 @@ export const lsxLinesService = {
     input: {
       groups: (LsxGroupInput & { lines: LsxLineInput[] })[]
       revision_note?: string | null
+      expected_updated_at?: string | null
     },
   ): Promise<LsxSheet> {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')
+    // Khoá phiên bản lạc quan (07/10/2026): hai người cùng mở màn soạn, người
+    // sau lưu sẽ đè sạch người trước nếu không kiểm.
+    if (
+      input.expected_updated_at &&
+      new Date(input.expected_updated_at).getTime() !== new Date(lsx.updated_at).getTime()
+    ) {
+      throw Conflict(
+        'Lệnh đã được người khác lưu sau khi bạn mở màn — tải lại trang rồi soạn tiếp',
+        'LSX_STALE',
+      )
+    }
     // Soạn dòng CŨNG LÀ sửa lệnh — của ai người đó sửa (chốt 07/08/2026).
     if (!canMutateOwned(user, lsx.created_by)) {
       throw Forbidden(
@@ -323,11 +435,20 @@ export const lsxLinesService = {
       throw BadRequest('Lệnh phải có ít nhất một dòng sản phẩm')
     }
 
-    await lsxLinesRepo.replaceAll(lsxId, input.groups)
-    const after = await lsxLinesRepo.listLines(lsxId)
-
     // Bản chỉnh sửa: chỉ tính khi lệnh ĐÃ QUA DUYỆT — trước đó Sales còn đang soạn.
     const published = lsx.status === 'approved' || lsx.status === 'in_progress'
+    if (
+      published &&
+      !input.revision_note?.trim() &&
+      wouldChangeLines(before, input.groups)
+    ) {
+      // Lệnh đã phát hành: mỗi bản sửa là phiếu in lại cho xưởng — không có lý do
+      // thì xưởng không biết vì sao (07/10/2026). Kiểm TRƯỚC khi ghi.
+      throw BadRequest('Lệnh đã duyệt — ghi lý do chỉnh sửa rồi mới lưu')
+    }
+
+    await lsxLinesRepo.replaceAll(lsxId, input.groups)
+    const after = await lsxLinesRepo.listLines(lsxId)
 
     /*
      * Chụp bù ĐỊNH MỨC cho SP vừa được thêm/gán vào lệnh đã phát (0142) — SP
@@ -351,6 +472,12 @@ export const lsxLinesService = {
         revision_note: input.revision_note ?? null,
       })
       await lsxLinesRepo.markChanged(changed, revision)
+      await productionRepo.insertChange({
+        production_order_id: lsxId,
+        changed_by: user.id,
+        change: { type: 'revised', revision, changed_lines: changed.length },
+        note: input.revision_note ?? null,
+      })
       await emit({
         name: 'lsx.revised',
         production_order_id: lsxId,

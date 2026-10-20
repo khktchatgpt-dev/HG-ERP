@@ -25,7 +25,7 @@ export default async function HRHomePage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Link
             href="/hr/leave"
-            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
           >
             <div className="font-medium">Duyệt nghỉ phép</div>
             <div className="mt-1 text-xs text-zinc-500">
@@ -34,7 +34,7 @@ export default async function HRHomePage() {
           </Link>
           <Link
             href="/hr/leave/mine"
-            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
           >
             <div className="font-medium">Đơn nghỉ phép của tôi</div>
             <div className="mt-1 text-xs text-zinc-500">Gửi và theo dõi đơn của bạn</div>

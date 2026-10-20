@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import type { Json } from '@/lib/database.types'
 import type { LsxStatus } from './production.schema'
 
 /**
@@ -47,6 +48,16 @@ export type ProductionOrder = {
  * Lệnh + các ĐƠN nó đang chạy. Từ 0113 một lệnh gộp NHIỀU đơn (cùng khách),
  * nên chỗ nào trước đây đọc `order_code` nay đọc `order_codes` (đã sắp theo mã).
  */
+export type ProductionOrderChange = {
+  id: string
+  production_order_id: string
+  changed_by: string | null
+  changed_by_name: string | null
+  change: Record<string, unknown>
+  note: string | null
+  created_at: string
+}
+
 export type ProductionOrderWithOrders = ProductionOrder & {
   order_ids: string[]
   order_codes: string[]
@@ -341,6 +352,49 @@ export const productionRepo = {
     return ((data as { id: string }[] | null) ?? []).map((r) => r.id)
   },
 
+  /** Vết thay đổi của lệnh (0224) — append-only, cùng mẫu sales_order_changes. */
+  async insertChange(row: {
+    production_order_id: string
+    changed_by: string | null
+    change: Record<string, unknown>
+    note?: string | null
+  }): Promise<void> {
+    const { error } = await db()
+      .from('production_order_changes')
+      .insert({ ...row, note: row.note ?? null, change: row.change as unknown as Json })
+    // Vết là PHỤ: bảng chưa áp (0224) hay lỗi ghi không được chặn nghiệp vụ.
+    if (error) console.error('[production_order_changes] ghi vết lỗi:', error.message)
+  },
+
+  async listChanges(lsxId: string): Promise<ProductionOrderChange[]> {
+    const { data, error } = await db()
+      .from('production_order_changes')
+      .select(
+        'id, production_order_id, changed_by, change, note, created_at, user:users(name)',
+      )
+      .eq('production_order_id', lsxId)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) {
+      // Chưa áp 0224 → màn vẫn mở được, lịch sử tạm rỗng.
+      console.error('[production_order_changes] đọc vết lỗi:', error.message)
+      return []
+    }
+    type Raw = Omit<ProductionOrderChange, 'changed_by_name'> & {
+      user: { name: string | null } | { name: string | null }[] | null
+    }
+    return ((data ?? []) as unknown as Raw[]).map(({ user, ...r }) => ({
+      ...r,
+      changed_by_name: (Array.isArray(user) ? user[0] : user)?.name ?? null,
+    }))
+  },
+
+  /** Xoá hẳn lệnh NHÁP / bị từ chối — cascade nhóm, dòng, lô, job, vết (chỉ service gọi sau khi kiểm). */
+  async deleteLsx(id: string): Promise<void> {
+    const { error } = await db().from('production_orders').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
   async patch(id: string, patch: Partial<ProductionOrder>): Promise<ProductionOrder> {
     const { data, error } = await db()
       .from('production_orders')
@@ -420,20 +474,33 @@ export const productionRepo = {
  * gom về từng lệnh. Màn "Vật tư theo lệnh" cần SP của mọi lệnh đang chạy; gọi
  * hàm dưới theo từng lệnh là 30 truy vấn cho một lần mở trang.
  */
+export type OrderLineProduct = {
+  order_id: string
+  /** Id hồ sơ SP — để màn dẫn thẳng sang thư viện sản phẩm. */
+  product_id: string
+  code: string
+  name: string
+  qty: number
+  /** Ảnh SP (nếu hồ sơ có) — người đọc nhận ra món hàng nhanh hơn mọi mã. */
+  image_file_id: string | null
+}
+
 export async function listOrderLineProducts(
   salesOrderIds: string[],
-): Promise<{ order_id: string; code: string; name: string; qty: number }[]> {
+): Promise<OrderLineProduct[]> {
   if (!salesOrderIds.length) return []
   const { data } = await db()
     .from('sales_order_lines')
-    .select('order_id, qty, sort_order, product:technical_products(code, name)')
+    .select(
+      'order_id, qty, sort_order, product:technical_products(id, code, name, image_file_id)',
+    )
     .in('order_id', salesOrderIds.slice(0, 500))
     .order('sort_order')
     .limit(3000)
 
-  type P = { code: string; name: string }
+  type P = { id: string; code: string; name: string; image_file_id: string | null }
   type Row = { order_id: string; qty: unknown; product: P | P[] | null }
-  const out: { order_id: string; code: string; name: string; qty: number }[] = []
+  const out: OrderLineProduct[] = []
   for (const r of (data as Row[] | null) ?? []) {
     const p = Array.isArray(r.product) ? r.product[0] : r.product
     if (!p?.code) continue
@@ -443,9 +510,11 @@ export async function listOrderLineProducts(
     else
       out.push({
         order_id: r.order_id,
+        product_id: p.id,
         code: p.code,
         name: p.name,
         qty: Number(r.qty ?? 0),
+        image_file_id: p.image_file_id ?? null,
       })
   }
   return out

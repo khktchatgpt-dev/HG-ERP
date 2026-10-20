@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { shipmentWaitingReceipt } from '@/lib/po-shipments'
 
 /**
  * ĐỢT GIAO của đơn đặt vật tư (0152 — plan-po-giao-nhan GĐ1).
@@ -13,6 +14,8 @@ export type PoShipmentStatus = 'planned' | 'arrived' | 'received' | 'cancelled'
 export type PoShipment = {
   id: string
   po_id: string
+  /** Mã chứng từ GH-YYYY-NNNN. Null = đợt cũ tạo trước 0193. */
+  code: string | null
   seq: number
   expected_date: string
   method: string | null
@@ -25,6 +28,8 @@ export type PoShipment = {
 
 export type PoShipmentInsert = {
   seq: number
+  /** Mặc định 'planned'. Tách đợt theo phiếu nhập (07/10/2026) chèn thẳng 'received'. */
+  status?: PoShipmentStatus
   expected_date: string
   method?: string | null
   place?: string | null
@@ -32,9 +37,46 @@ export type PoShipmentInsert = {
   lines: { po_line_id: string; qty: number }[]
 }
 
-const COLS = 'id, po_id, seq, expected_date, method, place, note, status, created_at'
+const COLS =
+  'id, po_id, code, seq, expected_date, method, place, note, status, created_at'
 
 export const poShipmentsRepo = {
+  /**
+   * MÃ VẬT TƯ của từng đợt — cho hàng đợi Hàng về của Kho (Bước 1 việc 6):
+   * dòng đợt nói "3 dòng · 96" mà không nói MÃ NÀO thì thủ kho phải mở phiếu
+   * mới biết xe chở gì. Một truy vấn cho cả tập đợt đang mở, thứ tự theo dòng
+   * đơn. Dòng tự do (không mã) bị bỏ — không nhận qua kho.
+   */
+  async codesByShipmentIds(ids: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_shipment_lines')
+      .select(
+        'shipment_id, po_line:supply_purchase_order_lines(sort_order, material:warehouse_materials(code))',
+      )
+      .in('shipment_id', ids.slice(0, 300))
+      .limit(5000)
+    type Raw = {
+      shipment_id: string
+      po_line: {
+        sort_order: number | null
+        material: { code: string } | { code: string }[] | null
+      } | null
+    }
+    const rows = ((data ?? []) as unknown as Raw[])
+      .map((r) => {
+        const m = r.po_line?.material
+        const code = Array.isArray(m) ? m[0]?.code : m?.code
+        return { shipment_id: r.shipment_id, sort: r.po_line?.sort_order ?? 0, code }
+      })
+      .filter((r): r is { shipment_id: string; sort: number; code: string } => !!r.code)
+      .sort((a, b) => a.sort - b.sort)
+    for (const r of rows)
+      out.set(r.shipment_id, [...(out.get(r.shipment_id) ?? []), r.code])
+    return out
+  },
+
   async listByPo(poId: string): Promise<PoShipment[]> {
     const { data } = await db()
       .from('supply_po_shipments')
@@ -84,23 +126,40 @@ export const poShipmentsRepo = {
     }
   },
 
-  /** Ghi một bộ đợt (xác nhận lần đầu / thêm đợt bổ sung). */
+  /** Ghi một bộ đợt (xác nhận lần đầu / thêm đợt bổ sung). Trả id theo `seq`. */
   async insertMany(
     poId: string,
     shipments: PoShipmentInsert[],
     createdBy: string,
-  ): Promise<void> {
-    if (shipments.length === 0) return
+  ): Promise<Map<number, string>> {
+    if (shipments.length === 0) return new Map()
+    /*
+      CẤP MÃ TRƯỚC KHI CHÈN (0193). Đợt giao là chứng từ Kho mở ra làm việc, nên
+      phải có danh tính riêng — `seq` chỉ đánh số trong phạm vi một đơn, "đợt 2"
+      không nói được là đợt 2 của đơn nào.
+
+      Gọi `next_doc_code` từng cái một chứ không sinh hàng loạt: hàm đó đếm
+      NGUYÊN TỬ trong `doc_counters`, hai người cùng khai đợt một lúc vẫn ra hai
+      mã khác nhau. Tốn vài lượt gọi cho một thao tác hiếm — đổi lấy việc không
+      bao giờ có hai đợt trùng mã.
+    */
+    const codes: (string | null)[] = []
+    for (let i = 0; i < shipments.length; i++) {
+      const { data: c } = await db().rpc('next_doc_code', { p_kind: 'GH' })
+      codes.push(typeof c === 'string' ? c : null)
+    }
     const { data, error } = await db()
       .from('supply_po_shipments')
       .insert(
-        shipments.map((s) => ({
+        shipments.map((s, i) => ({
           po_id: poId,
+          code: codes[i],
           seq: s.seq,
           expected_date: s.expected_date,
           method: s.method ?? null,
           place: s.place ?? null,
           note: s.note ?? null,
+          ...(s.status ? { status: s.status } : {}),
           created_by: createdBy,
         })),
       )
@@ -116,9 +175,34 @@ export const poShipmentsRepo = {
         qty: l.qty,
       })),
     )
-    if (lineRows.length === 0) return
+    if (lineRows.length === 0) return idBySeq
     const { error: e2 } = await db().from('supply_po_shipment_lines').insert(lineRows)
     if (e2) throw new Error(e2.message)
+    return idBySeq
+  },
+
+  /** Phiếu kho → đợt đang nối (0153); phiếu không nối thì không có khoá. */
+  async shipmentOfDocs(docIds: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    if (docIds.length === 0) return out
+    const { data, error } = await db()
+      .from('warehouse_docs')
+      .select('id, shipment_id')
+      .in('id', docIds)
+    if (error) throw new Error(error.message)
+    for (const r of (data ?? []) as { id: string; shipment_id: string | null }[]) {
+      if (r.shipment_id) out.set(r.id, r.shipment_id)
+    }
+    return out
+  },
+
+  /** Nối một phiếu nhập vào đợt — chỉ đổi khoá nối, không đụng số trong sổ kho. */
+  async linkDoc(docId: string, shipmentId: string): Promise<void> {
+    const { error } = await db()
+      .from('warehouse_docs')
+      .update({ shipment_id: shipmentId })
+      .eq('id', docId)
+    if (error) throw new Error(error.message)
   },
 
   /**
@@ -129,6 +213,29 @@ export const poShipmentsRepo = {
   async deleteByPo(poId: string): Promise<void> {
     const { error } = await db().from('supply_po_shipments').delete().eq('po_id', poId)
     if (error) throw new Error(error.message)
+  },
+
+  /** Ghi lại SL từng dòng của MỘT đợt (sửa đợt / lấy trước) — xoá rồi chèn. */
+  async replaceLines(
+    shipmentId: string,
+    lines: { po_line_id: string; qty: number }[],
+  ): Promise<void> {
+    const { error } = await db()
+      .from('supply_po_shipment_lines')
+      .delete()
+      .eq('shipment_id', shipmentId)
+    if (error) throw new Error(error.message)
+    if (lines.length === 0) return
+    const { error: e2 } = await db()
+      .from('supply_po_shipment_lines')
+      .insert(
+        lines.map((l) => ({
+          shipment_id: shipmentId,
+          po_line_id: l.po_line_id,
+          qty: l.qty,
+        })),
+      )
+    if (e2) throw new Error(e2.message)
   },
 
   async patch(
@@ -168,8 +275,16 @@ export const poShipmentsRepo = {
         supplier: { name: string } | { name: string }[] | null
       } | null
     }
+    /*
+      LỌC BẰNG LUẬT DÙNG CHUNG (`shipmentWaitingReceipt`), không tự chế.
+
+      Bản cũ chỉ loại đơn ĐÃ HUỶ, trong khi form lập phiếu lại chỉ nạp đơn CHƯA
+      VỀ ĐỦ — hai luật khác nhau cho cùng một câu hỏi. Hệ quả đo được: đơn
+      02/26HG/BT đã VỀ ĐỦ mà 4 đợt `planned` bỏ quên vẫn nằm trong danh sách, ba
+      lô còn bị tô "quá hẹn", và bấm Lập phiếu nhập từ đó là vào ngõ cụt.
+    */
     const heads = ((data ?? []) as unknown as Raw[]).filter(
-      (r) => r.po && r.po.status !== 'cancelled',
+      (r) => r.po && shipmentWaitingReceipt(r.po.status, r.status),
     )
     const counts = new Map<string, { line_count: number; total_qty: number }>()
     if (heads.length > 0) {
@@ -193,6 +308,7 @@ export const poShipmentsRepo = {
       return {
         id: r.id,
         po_id: r.po_id,
+        code: r.code,
         seq: r.seq,
         expected_date: r.expected_date,
         method: r.method,

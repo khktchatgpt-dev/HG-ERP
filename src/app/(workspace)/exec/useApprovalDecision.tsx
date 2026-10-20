@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
@@ -32,19 +33,37 @@ import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
  * (/exec/approvals/{lsx,po}/[id]). API giữ nguyên.
  */
 export type DecideTarget = {
-  kind: 'lsx' | 'po' | 'quote'
+  kind: 'lsx' | 'po' | 'quote' | 'dnm'
   id: string
   code: string
   label: string
 }
 
 /** Tên loại phiếu trong tiêu đề dialog. */
-const KIND_NOUN = { lsx: 'LSX', po: 'đơn đặt', quote: 'báo giá' } as const
+const KIND_NOUN = {
+  lsx: 'LSX',
+  po: 'đơn đặt',
+  quote: 'báo giá',
+  dnm: 'đề nghị mua',
+} as const
+/**
+ * Trả lại thì phiếu đi đâu — mỗi loại một đường, đừng nói chung "về NHÁP" (13/10/2026:
+ * LSX bị trả sang "Bị từ chối" và người lập phải bấm "Trình duyệt lại", không phải
+ * "Gửi GĐ duyệt"; câu cũ dẫn người soạn đi tìm nút không có).
+ */
+const REJECT_THEN = {
+  lsx: 'Lệnh sang "Bị từ chối", các đơn của lệnh về "Đã xác nhận" — người lập sửa theo lý do rồi bấm "Trình duyệt lại".',
+  po: 'Đơn đặt quay về NHÁP, giữ nguyên số và lịch sử — người soạn sửa theo lý do rồi gửi duyệt lại.',
+  quote:
+    'Báo giá sang "Bị từ chối", giữ nguyên số và lịch sử — Sale sửa theo lý do rồi gửi duyệt lại.',
+  dnm: 'Đề nghị quay về NHÁP, giữ nguyên số và lịch sử — Kho sửa theo lý do rồi gửi duyệt lại.',
+} as const
 /** Duyệt xong thì chuyện gì được mở khoá — câu nhắc trong dialog duyệt. */
 const APPROVE_UNLOCKS = {
   lsx: 'Duyệt xong Cung ứng mới đặt được vật tư.',
   po: 'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).',
   quote: 'Duyệt xong Sale mới chốt & gửi khách được.',
+  dnm: 'Duyệt xong Kho tự đi mua theo đúng số đề nghị — muốn sửa số thì bấm Xem kỹ.',
 } as const
 
 export function targetLsx(
@@ -83,6 +102,11 @@ async function callDecide(
       method: 'POST',
       body: decision === 'reject' ? { reason } : {},
     })
+  } else if (t.kind === 'dnm') {
+    await api(`/api/dept/warehouse/de-nghi/${t.id}/duyet`, {
+      method: 'POST',
+      body: { decision, reason },
+    })
   } else if (t.kind === 'quote') {
     await api(`/api/dept/sales/quotes/${t.id}/decide`, {
       method: 'POST',
@@ -96,10 +120,63 @@ async function callDecide(
   }
 }
 
+/**
+ * VIỆC SAU CHỮ KÝ (0218) — thu hồi chữ ký, hỏi lại / yêu cầu xem lại, ký bù.
+ * Một hộp thoại chung: tiêu đề + hệ quả + (tuỳ) ô chữ bắt buộc + một nút. Mỗi
+ * chỗ gọi tự nói gửi gì đi đâu, hook chỉ lo bận / toast / làm mới.
+ */
+export type FollowUpAsk = {
+  title: string
+  /** Chuyện gì xảy ra sau khi bấm — nói trước, không để người ký đoán. */
+  consequence: string
+  /** Có = bắt nhập chữ; giá trị đi vào `body[field]`. */
+  text?: { label: string; placeholder: string; field: 'reason' | 'body'; min: number }
+  confirm: string
+  path: string
+  done: string
+}
+
 export function useApprovalDecision(onSettled?: () => void) {
   const toast = useToast()
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const [follow, setFollow] = useState<FollowUpAsk | null>(null)
+  const [followText, setFollowText] = useState('')
+
+  async function submitFollow() {
+    if (!follow) return
+    const text = followText.trim()
+    if (follow.text && text.length < follow.text.min) return
+    setBusy(true)
+    try {
+      await api(follow.path, {
+        method: 'POST',
+        body: follow.text ? { [follow.text.field]: text } : {},
+      })
+      toast.success(follow.done)
+      setFollow(null)
+      setFollowText('')
+      // Đơn vẫn ở màn này (chỉ đổi dải đầu) — làm mới tại chỗ, không đá về hộp.
+      router.refresh()
+    } catch (e) {
+      toast.error('Thao tác thất bại', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
   const [approveTarget, setApproveTarget] = useState<DecideTarget | null>(null)
+  /*
+    ĐÍCH ĐẾN SAU KHI KÝ — chỉ màn thẩm định dùng, cho nút "Ký & sang phiếu sau".
+
+    Người ký đi hết một chồng 15 tờ; ký xong mà bị đá về danh sách thì phải tìm
+    lại chỗ mình dừng — với 15 phiếu là 15 lần quay đầu. Có đích thì nhảy thẳng
+    sang phiếu kế tiếp; không có thì giữ nguyên hành vi cũ, tức `onSettled` của
+    chỗ gọi.
+
+    Dọn sau mỗi lượt ký: đích là của MỘT lần bấm, giữ lại thì lần ký sau bằng
+    nút "Phê duyệt" thường cũng bị đẩy đi đâu đó.
+  */
+  const [thenHref, setThenHref] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<DecideTarget | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [manyTargets, setManyTargets] = useState<DecideTarget[] | null>(null)
@@ -138,7 +215,12 @@ export function useApprovalDecision(onSettled?: () => void) {
       await callDecide(approveTarget, 'approve')
       toast.success('Đã duyệt', approveTarget.code)
       setApproveTarget(null)
-      onSettled?.()
+      if (thenHref) {
+        const h = thenHref
+        setThenHref(null)
+        router.push(h)
+        router.refresh()
+      } else onSettled?.()
     } catch (e) {
       toast.error('Thao tác thất bại', apiErrorText(e))
     } finally {
@@ -153,7 +235,7 @@ export function useApprovalDecision(onSettled?: () => void) {
     setBusy(true)
     try {
       await callDecide(rejectTarget, 'reject', reason)
-      toast.success('Đã từ chối', rejectTarget.code)
+      toast.success('Đã trả lại để sửa', rejectTarget.code)
       setRejectTarget(null)
       setRejectReason('')
       onSettled?.()
@@ -223,17 +305,18 @@ export function useApprovalDecision(onSettled?: () => void) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Từ chối {rejectTarget ? KIND_NOUN[rejectTarget.kind] : ''}{' '}
+              Trả lại để sửa — {rejectTarget ? KIND_NOUN[rejectTarget.kind] : ''}{' '}
               {rejectTarget?.code}
             </DialogTitle>
             <DialogDescription>
-              {rejectTarget?.label}. Ghi lý do để bộ phận liên quan biết cần sửa gì.
+              {rejectTarget?.label}. {rejectTarget ? REJECT_THEN[rejectTarget.kind] : ''}{' '}
+              Ghi rõ cần sửa gì.
             </DialogDescription>
           </DialogHeader>
           <Textarea
             autoFocus
             rows={3}
-            placeholder="Lý do từ chối…"
+            placeholder="Cần sửa gì…"
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
           />
@@ -248,12 +331,73 @@ export function useApprovalDecision(onSettled?: () => void) {
             >
               Huỷ
             </Button>
+            {/*
+              KHÔNG CÒN NÚT ĐỎ. Trả lại để sửa không phá gì: phiếu về nháp,
+              giữ số, người soạn sửa rồi gửi lại. Đỏ dành cho việc không lùi
+              được — để ở đây thì người duyệt ngần ngại bấm đúng cái nút họ
+              nên bấm, và quay ra ký bừa hoặc để phiếu nằm im.
+            */}
             <Button
-              variant="destructive"
+              variant="secondary"
               disabled={busy || !rejectReason.trim()}
               onClick={() => void submitReject()}
             >
-              {busy && <Loader2 className="animate-spin" />} Từ chối
+              {busy && <Loader2 className="animate-spin" />} Trả lại để sửa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!follow}
+        onOpenChange={(o) => {
+          if (!o) {
+            setFollow(null)
+            setFollowText('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{follow?.title}</DialogTitle>
+            <DialogDescription>{follow?.consequence}</DialogDescription>
+          </DialogHeader>
+          {follow?.text && (
+            <label className="grid gap-1.5 text-sm">
+              <span className="font-medium">{follow.text.label}</span>
+              <Textarea
+                autoFocus
+                rows={3}
+                placeholder={follow.text.placeholder}
+                value={followText}
+                onChange={(e) => setFollowText(e.target.value)}
+              />
+              {followText.trim().length > 0 &&
+                followText.trim().length < follow.text.min && (
+                  <span className="text-xs text-[var(--warn)]">
+                    Ghi rõ hơn — ít nhất {follow.text.min} ký tự.
+                  </span>
+                )}
+            </label>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setFollow(null)
+                setFollowText('')
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              disabled={
+                busy || (!!follow?.text && followText.trim().length < follow.text.min)
+              }
+              onClick={() => void submitFollow()}
+            >
+              {busy && <Loader2 className="animate-spin" />} {follow?.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -263,7 +407,14 @@ export function useApprovalDecision(onSettled?: () => void) {
 
   return {
     busy,
-    askApprove: setApproveTarget,
+    askFollowUp: (a: FollowUpAsk) => {
+      setFollowText('')
+      setFollow(a)
+    },
+    askApprove: (t: DecideTarget, next?: string) => {
+      setThenHref(next ?? null)
+      setApproveTarget(t)
+    },
     askReject: setRejectTarget,
     askApproveMany: setManyTargets,
     dialogs,

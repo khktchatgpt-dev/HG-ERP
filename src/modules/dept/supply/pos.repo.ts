@@ -1,6 +1,9 @@
+import { chuanThue, khoaThue, type KieuThue, type ThueNcc } from '@/lib/po-thue'
 import { db } from '@/server/db'
 import type { LsxSplit } from '@/lib/po-lsx-split'
 import { poLineAmount, type PoLineAmountInput } from '@/lib/po-line'
+import { poLsxRefs } from '@/lib/po-lsx-refs'
+import type { CascadePo } from '@/lib/po-cancel-cascade'
 import type { PoTemplate } from '@/lib/po-template'
 import type { PoStatus } from './pos.schema'
 
@@ -25,29 +28,65 @@ export type Po = {
   terms_payment: string | null
   terms_invoice: string | null
   terms_lead_time: string | null
+  /** Số đơn trên giấy / số chứng từ phía NCC (đơn nạp từ file mang số cũ). */
+  supplier_doc_no?: string | null
   signer_role: string | null
   approved_by: string | null
   approved_at: string | null
   ordered_at: string | null
+  /** Đơn BỔ SUNG trỏ về đơn gốc giao thiếu (0213). */
+  source_po_id?: string | null
   /** Mốc NV cung ứng ghi nhận NCC xác nhận đơn (0152) — NCC không đăng nhập. */
   confirmed_at: string | null
   /** "Chị Hoa bên Nam Kim xác nhận qua Zalo 15/08" — ai hứa, kênh nào. */
   confirmed_note: string | null
+  /**
+   * Tỷ giá CHỐT lúc GĐ duyệt (0219): 1 ngoại tệ = ? VND. null = đơn VND, hoặc
+   * đơn ngoại tệ duyệt lúc bảng tỷ giá chưa có dòng nào ≤ ngày duyệt. Không
+   * đổi theo bảng `fx_rates` sau đó; hạ về nháp thì xoá cùng `approved_at`.
+   */
+  fx_rate: number | null
+  /** Ngày đã tra bảng tỷ giá (= ngày duyệt). */
+  fx_date: string | null
   note: string | null
   created_by: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền ghi xét theo cột này, bàn giao được. */
   assigned_to: string | null
   created_at: string
   updated_at: string
+  /**
+   * GỬI GẤP, KÝ BÙ SAU (0218): đơn đi NCC trước khi có chữ ký — trưởng phòng
+   * Cung ứng bấm, lý do bắt buộc. Chờ ký bù = có `urgent_sent_at`, chưa có
+   * `approved_at` (lib/po-signature `isAwaitingLateSign`).
+   */
+  urgent_sent_at?: string | null
+  urgent_sent_by?: string | null
+  urgent_reason?: string | null
+  /** Đơn ngoài lệnh (0229): loại việc + ghi rõ cho ai. Null với đơn theo lệnh. */
+  standalone_purpose?: string | null
+  standalone_ref?: string | null
+  /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh thuộc về đây. Null với đơn theo lệnh. */
+  project_id?: string | null
 }
 
 export type PoWithRefs = Po & {
   supplier_name: string
   /** null = PO ngoài LSX. */
   lsx_code: string | null
+  /** Trạng thái lệnh chính — "đơn còn mở của lệnh đã hoàn thành" (lib/po-lsx-done). */
+  lsx_status: string | null
   order_code: string | null
   /** Tên người phụ trách (0128) — cột "Phụ trách" trên danh sách. */
   assignee_name: string | null
+  /**
+   * Tên người DUYỆT (`approved_by`). Mốc "Giám đốc duyệt" trên dòng thời gian
+   * từng chỉ có giờ, không có tên — đơn duyệt rồi mà không đọc ra được AI duyệt.
+   */
+  approver_name: string | null
+  /** Hạng mục ngoài sản xuất (0230) — null với đơn theo lệnh. */
+  project_code: string | null
+  project_name: string | null
+  project_kind: string | null
 }
 
 /** Ô nhập riêng của từng mẫu đơn (0106) — mẫu nào dùng ô nấy, còn lại null. */
@@ -66,6 +105,7 @@ export type PoLineTemplateFields = {
   m3_per_unit: number | null
   /** 0139 — cột riêng: mro bảo hành (trước mượn finish). */
   warranty_text: string | null
+  print_spec: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -104,10 +144,17 @@ export type PoLine = PoLineTemplateFields & {
   qty2: number | null
   unit2: string | null
   note: string | null
+  /**
+   * Mã SP khách của dòng (đơn chia theo SP: tem, bao bì). CHỈ ĐỌC — form sửa đơn
+   * không gửi lại cột này; phiếu nhập dùng để phân biệt dòng cùng mã vật tư.
+   */
+  product_code?: string | null
   sort_order: number
   /** Tên/ĐVT tự gõ của dòng tự do — material_* bên dưới fallback về cặp này. */
   line_name: string | null
   line_unit: string | null
+  /** 0234 — `'phi'` = dòng phí / dịch vụ (không gắn vật tư); null = dòng hàng. */
+  line_kind: string | null
   material_code: string
   material_name: string
   material_unit: string
@@ -118,6 +165,7 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   material_id?: string | null
   line_name?: string | null
   line_unit?: string | null
+  line_kind?: 'phi' | null
   qty_ordered: number
   /**
    * CHIA SL CỦA DÒNG cho nhiều lệnh (0185) — rỗng = 100% thuộc LSX chính của
@@ -133,10 +181,16 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   /** 0182 — NHÃN đơn-vị-giá client gửi kèm unit2_per_unit; deriveLine chuyển
    *  vào `unit2`, bản thân nó không phải cột DB. */
   unit2_label?: string | null
+  /** Tổng gõ tay — deriveLine áp vào `qty2`; bản thân nó không phải cột DB. */
+  qty2_override?: number | null
+  /** Ô "Giá theo" (pos.schema) — deriveLine đọc; không phải cột DB. */
+  price_per?: 'unit' | 'unit2' | null
   note?: string | null
+  /** Mã SP khách của dòng — mang theo khi ghi lại dòng (xem pos.schema). */
+  product_code?: string | null
 }
 
-const TEMPLATE_LINE_COLS = [
+export const TEMPLATE_LINE_COLS = [
   'material_grade',
   'dm_per_sp',
   'qty_demand',
@@ -149,6 +203,7 @@ const TEMPLATE_LINE_COLS = [
   'weight_per_unit',
   'm3_per_unit',
   'warranty_text',
+  'print_spec',
   'open_style',
   'pcs_per_ctn',
   'inner_l_mm',
@@ -165,7 +220,15 @@ const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, note, created_by, assigned_to, created_at, updated_at'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref, project_id'
+
+/** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
+const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
+
+/** Lỗi 'cột chưa có' (42703) — DB chưa áp migration mới hơn code. */
+function isMissingColumn(e: { code?: string; message?: string }): boolean {
+  return e.code === '42703' || /does not exist/.test(e.message ?? '')
+}
 
 /** Cột `numeric` của dòng — PostgREST trả về CHUỖI ("0.2480"), ép lại về number. */
 const NUMERIC_LINE_COLS = [
@@ -199,14 +262,28 @@ function numericLineFields(row: Record<string, unknown>): Record<string, number 
 type Raw = Po & {
   supplier: { name: string } | { name: string }[] | null
   lsx:
-    | { code: string; order: { code: string } | { code: string }[] | null }
-    | { code: string; order: { code: string } | { code: string }[] | null }[]
+    | {
+        code: string
+        status?: string
+        order: { code: string } | { code: string }[] | null
+      }
+    | {
+        code: string
+        status?: string
+        order: { code: string } | { code: string }[] | null
+      }[]
     | null
   assignee:
     | { name: string | null; email: string }
     | { name: string | null; email: string }[]
     | null
+  approver?:
+    | { name: string | null; email: string }
+    | { name: string | null; email: string }[]
+    | null
+  project?: ProjectRef | ProjectRef[] | null
 }
+type ProjectRef = { code: string; name: string; kind: string }
 
 function unwrap(rows: Raw[] | null): PoWithRefs[] {
   return (rows ?? []).map((r) => {
@@ -214,11 +291,18 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
     const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
     const ord = lx ? (Array.isArray(lx.order) ? lx.order[0] : lx.order) : null
     const asg = Array.isArray(r.assignee) ? r.assignee[0] : r.assignee
+    const apv = Array.isArray(r.approver) ? r.approver[0] : r.approver
+    const pj = Array.isArray(r.project) ? r.project[0] : r.project
     return {
       ...r,
+      project_code: pj?.code ?? null,
+      project_name: pj?.name ?? null,
+      project_kind: pj?.kind ?? null,
+      approver_name: apv ? (apv.name ?? apv.email) : null,
       supplier_name: sp?.name ?? '?',
       // production_order_id null (PO ngoài LSX) → join rỗng → lsx_code null.
       lsx_code: lx?.code ?? null,
+      lsx_status: lx?.status ?? null,
       order_code: ord?.code ?? null,
       assignee_name: asg ? (asg.name ?? asg.email) : null,
     }
@@ -235,7 +319,7 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
  * Embed `users` cũng phải CHỈ ĐÍCH DANH FK: bảng có 3 FK sang users
  * (created_by / approved_by / assigned_to) — để PostgREST tự đoán là mơ hồ.
  */
-const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email)`
+const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, status, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email), approver:users!supply_purchase_orders_approved_by_fkey(name, email), project:supply_projects!supply_purchase_orders_project_id_fkey(code, name, kind)`
 
 /** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
 export type PurchasedMaterial = {
@@ -275,6 +359,23 @@ export type MaterialPricePoint = {
 }
 
 export const posRepo = {
+  /** Đơn bổ sung của một đơn (0213) + mã đơn gốc nếu chính nó là đơn bổ sung. */
+  async supplementLinks(po: { id: string; source_po_id?: string | null }): Promise<{
+    source: { id: string; code: string } | null
+    supplements: { id: string; code: string; status: string }[]
+  }> {
+    const [{ data: kids }, src] = await Promise.all([
+      db().from('supply_purchase_orders').select('id, code, status').eq('source_po_id', po.id).order('created_at'), // prettier-ignore
+      po.source_po_id
+        ? db().from('supply_purchase_orders').select('id, code').eq('id', po.source_po_id).maybeSingle() // prettier-ignore
+        : Promise.resolve({ data: null }),
+    ])
+    return {
+      source: (src.data as { id: string; code: string } | null) ?? null,
+      supplements: (kids ?? []) as { id: string; code: string; status: string }[],
+    }
+  },
+
   async nextCode(): Promise<string> {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'PO' })
     if (error || !data) throw new Error(error?.message ?? 'next_doc_code failed')
@@ -287,6 +388,8 @@ export const posRepo = {
     supplier_id?: string
     production_order_id?: string
     scope?: 'lsx' | 'standalone'
+    /** Đơn của các hạng mục này (0230). */
+    project_ids?: string[]
     page: number
     page_size: number
   }): Promise<{ rows: PoWithRefs[]; total: number }> {
@@ -315,11 +418,39 @@ export const posRepo = {
     }
     if (filter.scope === 'lsx') q = q.not('production_order_id', 'is', null)
     if (filter.scope === 'standalone') q = q.is('production_order_id', null)
+    if (filter.project_ids) q = q.in('project_id', filter.project_ids.length ? filter.project_ids : ['00000000-0000-0000-0000-000000000000']) // prettier-ignore
     if (filter.q) q = q.ilike('code', `%${filter.q}%`)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     return { rows: unwrap(data as Raw[] | null), total: count ?? 0 }
+  },
+
+  /**
+   * CỘT NHẸ cho badge "Vấn đề cần xử lý" (13/09/2026) — đủ để chạy
+   * `groupPosByLsx` + `assessMeetingRisk` mà không join gì. Khác
+   * `listWatchFields`: GIỮ đơn `received`, vì mức "Đủ vật tư" của lệnh cần
+   * biết mọi đơn đã nhận xong; chỉ bỏ đơn huỷ.
+   */
+  async listMeetingFields(): Promise<
+    {
+      id: string
+      status: string
+      expected_at: string | null
+      production_order_id: string | null
+    }[]
+  > {
+    const { data } = await db()
+      .from('supply_purchase_orders')
+      .select('id, status, expected_at, production_order_id')
+      .neq('status', 'cancelled')
+      .limit(2000)
+    return (data ?? []) as {
+      id: string
+      status: string
+      expected_at: string | null
+      production_order_id: string | null
+    }[]
   },
 
   /**
@@ -331,17 +462,27 @@ export const posRepo = {
    * không bao giờ đếm vào việc phải làm hay lịch hàng về.
    */
   async listWatchFields(): Promise<
-    { status: PoStatus; expected_at: string | null; assigned_to: string | null }[]
+    {
+      status: PoStatus
+      expected_at: string | null
+      assigned_to: string | null
+      ordered_at: string | null
+      confirmed_at: string | null
+    }[]
   > {
     const { data } = await db()
       .from('supply_purchase_orders')
-      .select('status, expected_at, assigned_to')
+      // ordered_at/confirmed_at: thiếu thì badge không bắt được đơn 'NCC chưa
+      // xác nhận' (isUnconfirmed) trong khi Hộp thư có — hai con số lệch (27/09).
+      .select('status, expected_at, assigned_to, ordered_at, confirmed_at')
       .not('status', 'in', '("received","cancelled")')
       .limit(2000)
     return (data ?? []) as {
       status: PoStatus
       expected_at: string | null
       assigned_to: string | null
+      ordered_at: string | null
+      confirmed_at: string | null
     }[]
   },
 
@@ -384,7 +525,9 @@ export const posRepo = {
     if (poIds.length === 0) return out
     const { data } = await db()
       .from('supply_po_line_lsx')
-      .select('line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)')
+      .select(
+        'line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)',
+      )
       .in('line.po_id', poIds)
     for (const r of (data ?? []) as {
       line_id: string
@@ -398,24 +541,135 @@ export const posRepo = {
     return out
   },
 
-  async extraLsxByPoIds(
-    ids: string[],
-  ): Promise<Map<string, { id: string; code: string }[]>> {
-    const out = new Map<string, { id: string; code: string }[]>()
-    if (ids.length === 0) return out
+  /**
+   * TOÀN BỘ liên kết đơn ↔ lệnh phụ (0125), không lọc theo id — để badge
+   * sidebar chạy song song với hai truy vấn kia thay vì đợi danh sách đơn về
+   * rồi mới hỏi (đo 13/09/2026: nối tiếp 706ms, bảng nhỏ nên lấy cả rẻ hơn).
+   * Không join mã lệnh: badge chỉ cần id.
+   */
+  /**
+   * AI CẦM ĐƠN NÀO — cột nhẹ cho "của tôi" (lib/supply-scope): lệnh của tôi,
+   * NCC của tôi. Gồm mọi trạng thái (NCC tôi từng đặt tính cả đơn đã nhận) và
+   * lệnh gộp (0125). Đọc đủ mọi trang — trần 1000 dòng của PostgREST từng giấu
+   * đúng dữ liệu cần (bẫy đã ghi ở kho-ton-view-cung-ung).
+   */
+  async listOwnership(): Promise<
+    {
+      id: string
+      status: string
+      assigned_to: string | null
+      created_by: string | null
+      production_order_id: string | null
+      supplier_id: string
+      created_at: string
+      extra_lsx_ids: string[]
+    }[]
+  > {
+    type R = {
+      id: string
+      status: string
+      assigned_to: string | null
+      created_by: string | null
+      production_order_id: string | null
+      supplier_id: string
+      created_at: string
+    }
+    const rows: R[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from('supply_purchase_orders')
+        .select(
+          'id, status, assigned_to, created_by, production_order_id, supplier_id, created_at',
+        )
+        .order('created_at')
+        .range(from, from + 999)
+      if (error) throw new Error(error.message)
+      rows.push(...((data ?? []) as R[]))
+      if ((data ?? []).length < 1000) break
+    }
+    const extra = await this.listAllExtraLsx()
+    return rows.map((r) => ({
+      ...r,
+      extra_lsx_ids: (extra.get(r.id) ?? []).map((x) => x.id),
+    }))
+  },
+
+  async listAllExtraLsx(): Promise<Map<string, { id: string; status: string | null }[]>> {
+    const out = new Map<string, { id: string; status: string | null }[]>()
     const { data } = await db()
       .from('supply_po_extra_lsx')
-      .select('po_id, production_order_id, lsx:production_orders(code)')
-      .in('po_id', ids)
+      .select('po_id, production_order_id, lsx:production_orders(status)')
+      .limit(5000)
     type Row = {
       po_id: string
       production_order_id: string
-      lsx: { code: string } | { code: string }[] | null
+      lsx: { status: string } | { status: string }[] | null
     }
     for (const r of (data ?? []) as Row[]) {
       const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
       const list = out.get(r.po_id) ?? []
-      list.push({ id: r.production_order_id, code: lx?.code ?? '?' })
+      list.push({ id: r.production_order_id, status: lx?.status ?? null })
+      out.set(r.po_id, list)
+    }
+    return out
+  },
+
+  /**
+   * TÊN VẬT TƯ theo đơn, theo thứ tự dòng — cho cột "Loại · vật tư" của danh
+   * sách Đơn mua (27/09/2026): màn phải nói đơn mua CÁI GÌ mà không phải mở
+   * từng đơn. Dòng có mã lấy tên danh mục; dòng tự do (gỗ, dòng gõ tay) lấy
+   * `line_name`.
+   *
+   * Chia lô 150 đơn: danh sách id đi trên URL của PostgREST, 1.000 uuid là
+   * ~37 KB — quá trần độ dài URL của máy chủ.
+   */
+  async materialNamesByPoIds(ids: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await db()
+        .from('supply_purchase_order_lines')
+        .select('po_id, sort_order, line_name, mat:warehouse_materials(name)')
+        .in('po_id', ids.slice(i, i + 150))
+        .order('sort_order', { ascending: true })
+        .limit(10000)
+      if (error) throw error
+      type Row = {
+        po_id: string
+        line_name: string | null
+        mat: { name: string } | { name: string }[] | null
+      }
+      for (const r of (data ?? []) as Row[]) {
+        const m = Array.isArray(r.mat) ? r.mat[0] : r.mat
+        const name = m?.name ?? r.line_name
+        if (!name) continue
+        out.set(r.po_id, [...(out.get(r.po_id) ?? []), name])
+      }
+    }
+    return out
+  },
+
+  async extraLsxByPoIds(
+    ids: string[],
+  ): Promise<Map<string, { id: string; code: string; status: string | null }[]>> {
+    const out = new Map<string, { id: string; code: string; status: string | null }[]>()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_extra_lsx')
+      .select('po_id, production_order_id, lsx:production_orders(code, status)')
+      .in('po_id', ids)
+    type Row = {
+      po_id: string
+      production_order_id: string
+      lsx: { code: string; status?: string } | { code: string; status?: string }[] | null
+    }
+    for (const r of (data ?? []) as Row[]) {
+      const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
+      const list = out.get(r.po_id) ?? []
+      list.push({
+        id: r.production_order_id,
+        code: lx?.code ?? '?',
+        status: lx?.status ?? null,
+      })
       out.set(r.po_id, list)
     }
     return out
@@ -427,7 +681,10 @@ export const posRepo = {
    * Chỉ tính đơn từ 'ordered' trở đi: giá trên đơn nháp/chờ duyệt chưa phải giá
    * chốt (cùng ranh giới với lúc ghi `last_purchase_price`). Đơn huỷ bị loại.
    */
-  async priceHistoryByMaterial(materialId: string, limit = 50): Promise<MaterialPricePoint[]> {
+  async priceHistoryByMaterial(
+    materialId: string,
+    limit = 50,
+  ): Promise<MaterialPricePoint[]> {
     const { data } = await db()
       .from('supply_purchase_order_lines')
       .select(
@@ -540,7 +797,134 @@ export const posRepo = {
     return unwrap([data as Raw])[0]
   },
 
+  /**
+   * Đơn GỬI GẤP còn chờ chữ ký bù (0218) — cho hộp ký của Giám đốc. Cùng định
+   * nghĩa với `isAwaitingLateSign` (lib/po-signature); index một phần ở DB.
+   */
+  async listAwaitingLateSign(): Promise<PoWithRefs[]> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select(`${SELECT}, ${URGENT_COLS}`)
+      .not('urgent_sent_at', 'is', null)
+      .is('approved_at', null)
+      .neq('status', 'cancelled')
+      .order('urgent_sent_at', { ascending: true })
+    // DB chưa áp 0218 → chưa có đơn gửi gấp nào, không phải lỗi của hộp ký.
+    if (error) {
+      if (isMissingColumn(error)) return []
+      throw new Error(error.message)
+    }
+    return unwrap((data ?? []) as unknown as Raw[])
+  },
+
+  /**
+   * Ba cột GỬI GẤP (0218) của một nhóm đơn — đọc RIÊNG, không nằm trong `COLS`
+   * chung: thêm cột vào câu SELECT dùng chung khi migration chưa áp là làm gãy
+   * MỌI màn đơn mua (đã xảy ra 01/10/2026 — sổ Đơn mua ra rỗng). Chưa có cột
+   * thì trả map rỗng = "không đơn nào gửi gấp", đúng sự thật trước 0218.
+   */
+  async urgentByIds(
+    ids: string[],
+  ): Promise<
+    Map<string, Pick<Po, 'urgent_sent_at' | 'urgent_sent_by' | 'urgent_reason'>>
+  > {
+    const out = new Map<string, Pick<Po, 'urgent_sent_at' | 'urgent_sent_by' | 'urgent_reason'>>() // prettier-ignore
+    if (ids.length === 0) return out
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select(`id, ${URGENT_COLS}`)
+      .in('id', ids)
+    if (error) {
+      if (isMissingColumn(error)) return out
+      throw new Error(error.message)
+    }
+    for (const r of (data ?? []) as unknown as ({ id: string } & Pick<
+      Po,
+      'urgent_sent_at' | 'urgent_sent_by' | 'urgent_reason'
+    >)[]) {
+      // prettier-ignore
+      if (r.urgent_sent_at) out.set(r.id, r)
+    }
+    return out
+  },
+
+  /** Trạng thái + dấu ký của nhiều đơn một lượt — cột "Hiện ở đâu" ở Lịch sử ký. */
+  async briefByIds(
+    ids: string[],
+  ): Promise<
+    Map<
+      string,
+      { status: string; approved_at: string | null; urgent_sent_at: string | null }
+    >
+  > {
+    const out = new Map<string, { status: string; approved_at: string | null; urgent_sent_at: string | null }>() // prettier-ignore
+    if (ids.length === 0) return out
+    const [{ data, error }, urgent] = await Promise.all([
+      db().from('supply_purchase_orders').select('id, status, approved_at').in('id', ids),
+      this.urgentByIds(ids),
+    ])
+    if (error) throw new Error(error.message)
+    for (const r of data ?? [])
+      out.set(r.id, { ...r, urgent_sent_at: urgent.get(r.id)?.urgent_sent_at ?? null })
+    return out
+  },
+
   /** LSX PHỤ gộp vào đơn (0125) — kèm mã để hiện lên chi tiết + phiếu in. */
+  /**
+   * Mẫu của đơn GẦN NHẤT theo từng NCC — soạn đơn mới, chọn NCC là mẫu tự theo
+   * (26/09/2026: 17/19 NCC có ≥ 2 đơn luôn dùng một mẫu). Đơn huỷ không tính.
+   */
+  async lastTemplateBySupplier(): Promise<Record<string, PoTemplate>> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select('supplier_id, template, created_at')
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    const out: Record<string, PoTemplate> = {}
+    for (const r of (data ?? []) as { supplier_id: string; template: string }[]) {
+      if (!(r.supplier_id in out)) out[r.supplier_id] = r.template as PoTemplate
+    }
+    return out
+  },
+
+  /**
+   * THUẾ THEO NCC (B1 bản vẽ Đầu đơn, 11/10/2026) — kiểu thuế của đơn gần nhất,
+   * số đơn mang đúng kiểu đó, và số kiểu khác nhau NCC từng dùng. Đơn mới chọn
+   * NCC thì ô Thuế lấy theo đây (lib/po-thue `thueMacDinh`).
+   */
+  async taxBySupplier(): Promise<{
+    ncc: Record<string, ThueNcc>
+    dem: Record<string, number>
+  }> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select('supplier_id, vat_rate, price_includes_vat, created_at')
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    const by = new Map<string, { first: KieuThue; dem: Map<string, number> }>()
+    for (const r of data ?? []) {
+      const k = chuanThue(
+        r.vat_rate == null ? null : Number(r.vat_rate),
+        r.price_includes_vat,
+      )
+      const cur = by.get(r.supplier_id) ?? { first: k, dem: new Map<string, number>() }
+      cur.dem.set(khoaThue(k), (cur.dem.get(khoaThue(k)) ?? 0) + 1)
+      by.set(r.supplier_id, cur)
+    }
+    const out: Record<string, ThueNcc> = {}
+    // Số đơn theo từng kiểu, cả công ty — ô Thuế bày "18 đơn" cạnh mỗi kiểu (bản vẽ).
+    const dem: Record<string, number> = {}
+    for (const [id, x] of by) {
+      out[id] = { ...x.first, n: x.dem.get(khoaThue(x.first)) ?? 1, kieu: x.dem.size }
+      for (const [k, c] of x.dem) dem[k] = (dem[k] ?? 0) + c
+    }
+    return { ncc: out, dem }
+  },
+
   async listExtraLsx(poId: string): Promise<{ id: string; code: string }[]> {
     const { data } = await db()
       .from('supply_po_extra_lsx')
@@ -554,6 +938,136 @@ export const posRepo = {
       const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
       return { id: r.production_order_id, code: lx?.code ?? '?' }
     })
+  },
+
+  /**
+   * "LSX" + "Đơn hàng" cho phiếu in / Excel — gồm CẢ lệnh gộp (0125) và mọi
+   * đơn khách của từng lệnh. `order_code` trên `PoWithRefs` chỉ là đơn đầu của
+   * lệnh chính, thiếu cho đơn gộp (xem lib/po-lsx-refs).
+   */
+  async printRefs(po: { id: string; production_order_id: string | null }) {
+    const extras = await this.listExtraLsx(po.id)
+    return this.printRefsByIds(
+      po.production_order_id,
+      extras.map((e) => ({ id: e.id, code: e.code })),
+    )
+  },
+
+  /**
+   * Khung LSX của phiếu theo BỘ LỆNH truyền vào — dùng cho cả đơn đã lưu lẫn bản
+   * xem trước từ nháp (lệnh gộp đang gõ chưa vào DB). 10/10/2026.
+   */
+  async printRefsByIds(
+    mainId: string | null,
+    extras: { id: string; code?: string }[],
+  ): Promise<{
+    lsx_code: string | null
+    order_code: string | null
+    /** Bộ lệnh của đơn (lệnh chính đầu) — cột "Chia lệnh" của phiếu đơn gộp. */
+    lsx_set: { id: string; code: string }[]
+  }> {
+    const ids = [mainId, ...extras.map((e) => e.id)].filter((x): x is string => !!x)
+    if (ids.length === 0) return { ...poLsxRefs(null, []), lsx_set: [] }
+    const { data, error } = await db()
+      .from('production_orders')
+      .select('id, code, order:sales_orders(code)')
+      .in('id', ids)
+    if (error) throw new Error(error.message)
+    type Row = {
+      id: string
+      code: string
+      order: { code: string } | { code: string }[] | null
+    }
+    const byId = new Map(
+      ((data ?? []) as Row[]).map((r) => [
+        r.id,
+        {
+          code: r.code,
+          order_codes: (Array.isArray(r.order) ? r.order : r.order ? [r.order] : []).map((o) => o.code), // prettier-ignore
+        },
+      ]),
+    )
+    const main = mainId ? (byId.get(mainId) ?? null) : null
+    return {
+      ...poLsxRefs(
+        main,
+        extras.map((e) => byId.get(e.id) ?? { code: e.code ?? '?', order_codes: [] }),
+      ),
+      lsx_set: ids.map((id) => ({ id, code: byId.get(id)?.code ?? '?' })),
+    }
+  },
+
+  /**
+   * Mọi đơn mua DÍNH một lệnh — là lệnh chính HOẶC lệnh gộp (0125) — kèm đủ
+   * bộ lệnh của từng đơn và mã lệnh. Cho luồng huỷ đơn khách (lib/po-cancel-
+   * cascade): bản cũ chỉ lọc `production_order_id` nên bỏ sót đơn gộp.
+   */
+  async listTouchingLsx(lsxId: string): Promise<{
+    pos: CascadePo[]
+    lsxCodes: Map<string, string>
+  }> {
+    const [main, viaExtra] = await Promise.all([
+      db()
+        .from('supply_purchase_orders')
+        .select('id, code, status, production_order_id')
+        .eq('production_order_id', lsxId),
+      db().from('supply_po_extra_lsx').select('po_id').eq('production_order_id', lsxId),
+    ])
+    if (main.error) throw new Error(main.error.message)
+    if (viaExtra.error) throw new Error(viaExtra.error.message)
+    type P = {
+      id: string
+      code: string
+      status: string
+      production_order_id: string | null
+    }
+    const byId = new Map(((main.data ?? []) as P[]).map((p) => [p.id, p]))
+    const missing = ((viaExtra.data ?? []) as { po_id: string }[])
+      .map((r) => r.po_id)
+      .filter((id) => !byId.has(id))
+    if (missing.length) {
+      const { data, error } = await db()
+        .from('supply_purchase_orders')
+        .select('id, code, status, production_order_id')
+        .in('id', missing)
+      if (error) throw new Error(error.message)
+      for (const p of (data ?? []) as P[]) byId.set(p.id, p)
+    }
+    const ids = [...byId.keys()]
+    const lsxCodes = new Map<string, string>()
+    const extras = new Map<string, string[]>()
+    if (ids.length) {
+      const { data, error } = await db()
+        .from('supply_po_extra_lsx')
+        .select('po_id, production_order_id')
+        .in('po_id', ids)
+      if (error) throw new Error(error.message)
+      for (const r of (data ?? []) as { po_id: string; production_order_id: string }[])
+        extras.set(r.po_id, [...(extras.get(r.po_id) ?? []), r.production_order_id])
+      const allLsx = [
+        ...new Set(
+          [
+            lsxId,
+            ...[...byId.values()].map((p) => p.production_order_id),
+            ...[...extras.values()].flat(),
+          ].filter((x): x is string => !!x),
+        ),
+      ]
+      const { data: lx, error: le } = await db()
+        .from('production_orders')
+        .select('id, code')
+        .in('id', allLsx)
+      if (le) throw new Error(le.message)
+      for (const l of (lx ?? []) as { id: string; code: string }[])
+        lsxCodes.set(l.id, l.code)
+    }
+    return {
+      pos: [...byId.values()].map((p) => ({
+        ...p,
+        extra_lsx_ids: extras.get(p.id) ?? [],
+      })),
+      lsxCodes,
+    }
   },
 
   /** Ghi lại bộ LSX phụ của đơn — xoá sạch rồi chèn, như replaceLines. */
@@ -574,7 +1088,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, product_code, sort_order, line_name, line_unit, line_kind, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, print_spec, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -645,6 +1159,11 @@ export const posRepo = {
       created_by: string
       /** Người phụ trách (0128) — lúc tạo luôn = created_by. */
       assigned_to: string
+      /** Đơn bổ sung cho phần giao thiếu của đơn này (0213). */
+      source_po_id?: string | null
+      standalone_purpose?: string | null
+      standalone_ref?: string | null
+      project_id?: string | null
     },
     lines: PoLineInput[],
   ): Promise<Po> {
@@ -696,6 +1215,7 @@ export const posRepo = {
             material_id: l.material_id ?? null,
             line_name: l.line_name ?? null,
             line_unit: l.line_unit ?? null,
+            line_kind: l.line_kind ?? null,
             qty_ordered: l.qty_ordered,
             unit_price: l.unit_price ?? null,
             price_basis: l.price_basis ?? 'unit',
@@ -703,6 +1223,7 @@ export const posRepo = {
             qty2: l.qty2 ?? null,
             unit2: l.unit2 ?? null,
             note: l.note ?? null,
+            product_code: l.product_code ?? null,
             sort_order: i,
             ...tpl,
           }
@@ -731,6 +1252,38 @@ export const posRepo = {
       const { error: e2 } = await db().from('supply_po_line_lsx').insert(splitRows)
       if (e2) throw new Error(e2.message)
     }
+  },
+
+  /**
+   * THAY phần chia theo lệnh của các dòng đã cho (Sửa chia lệnh, 10/10/2026) —
+   * xoá bản ghi cũ của đúng các dòng đó rồi ghi bản mới. Dòng không nằm trong
+   * danh sách giữ nguyên. Service đã kiểm tổng chia = SL đặt và lệnh thuộc đơn.
+   */
+  async replaceLineSplits(
+    items: {
+      line_id: string
+      lsx_split: { production_order_id: string; qty: number }[]
+    }[],
+  ): Promise<void> {
+    if (items.length === 0) return
+    const { error: e1 } = await db()
+      .from('supply_po_line_lsx')
+      .delete()
+      .in(
+        'line_id',
+        items.map((i) => i.line_id),
+      )
+    if (e1) throw new Error(e1.message)
+    const rows = items.flatMap((i) =>
+      i.lsx_split.map((sp) => ({
+        line_id: i.line_id,
+        production_order_id: sp.production_order_id,
+        qty: sp.qty,
+      })),
+    )
+    if (rows.length === 0) return
+    const { error: e2 } = await db().from('supply_po_line_lsx').insert(rows)
+    if (e2) throw new Error(e2.message)
   },
 
   /** Lý do chốt thiếu theo dòng (0154) — cho tooltip trang chi tiết. */
@@ -782,4 +1335,92 @@ export const posRepo = {
     const { error } = await db().from('supply_purchase_orders').delete().eq('id', id)
     if (error) throw new Error(error.message)
   },
+}
+
+/* ── SỔ GIÁ MUA — gom từ LỊCH SỬ ĐƠN, không phải bảng giá khai tay ──────────
+   `supply_supplier_prices` mới có 10 dòng (đo 15/09/2026) trong khi dòng đơn đã
+   gửi NCC có giá là 192 — sổ giá dựng trên bảng khai tay sẽ là một trang gần
+   như trống, còn giá THẬT thì nằm ngay trong đơn. Cùng ranh giới với
+   `priceHistoryByMaterial`: chỉ đơn từ 'ordered' trở đi, giá trên đơn nháp
+   chưa phải giá chốt. */
+export type PriceBookRow = {
+  material_id: string
+  code: string
+  name: string
+  unit: string
+  group_name: string | null
+  supplier_id: string
+  supplier_name: string
+  currency: string
+  /** Giá của lần mua GẦN NHẤT. */
+  price: number
+  price_unit: string | null
+  at: string
+  po_code: string
+  /** Số lần đã mua mã này của NCC này. */
+  times: number
+  /** Giá lần mua trước đó — null khi mới mua một lần. */
+  prev: number | null
+}
+
+export async function loadPriceBook(limit = 5000): Promise<PriceBookRow[]> {
+  const { data, error } = await db()
+    .from('supply_purchase_order_lines')
+    .select(
+      'material_id, unit_price, price_basis, unit2, po:supply_purchase_orders!inner(code, currency, status, ordered_at, created_at, supplier_id, supplier:supply_suppliers(name)), mat:warehouse_materials!inner(code, name, unit, group_name)',
+    )
+    .not('material_id', 'is', null)
+    .gt('unit_price', 0)
+    .in('po.status', ['ordered', 'confirmed', 'in_transit', 'partial', 'received'])
+    .limit(limit)
+  if (error) throw new Error(error.message)
+
+  type One<T> = T | T[] | null
+  const first = <T>(v: One<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v)
+  const acc = new Map<string, PriceBookRow & { _all: { at: string; price: number }[] }>()
+
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const po = first(r.po as One<Record<string, unknown>>)
+    const mat = first(r.mat as One<Record<string, unknown>>)
+    if (!po || !mat) continue
+    const sup = first(po.supplier as One<{ name: string }>)
+    const at = String(po.ordered_at ?? po.created_at).slice(0, 10)
+    const price = Number(r.unit_price)
+    const key = `${r.material_id}|${po.supplier_id}`
+    const cur = acc.get(key)
+    if (!cur) {
+      acc.set(key, {
+        material_id: String(r.material_id),
+        code: String(mat.code),
+        name: String(mat.name),
+        unit: String(mat.unit),
+        group_name: (mat.group_name as string) ?? null,
+        supplier_id: String(po.supplier_id),
+        supplier_name: sup?.name ?? '—',
+        currency: String(po.currency),
+        price,
+        price_unit: r.price_basis === 'unit2' ? ((r.unit2 as string) ?? null) : null,
+        at,
+        po_code: String(po.code),
+        times: 1,
+        prev: null,
+        _all: [{ at, price }],
+      })
+      continue
+    }
+    cur.times++
+    cur._all.push({ at, price })
+    if (at > cur.at) {
+      cur.at = at
+      cur.price = price
+      cur.po_code = String(po.code)
+      cur.price_unit = r.price_basis === 'unit2' ? ((r.unit2 as string) ?? null) : null
+    }
+  }
+
+  return [...acc.values()].map(({ _all, ...row }) => {
+    // Giá LẦN TRƯỚC = mốc mới thứ hai. Có nó thì màn nói được "8.200 → 8.500".
+    const sorted = _all.sort((a, b) => (a.at < b.at ? 1 : -1))
+    return { ...row, prev: sorted.length > 1 ? sorted[1].price : null }
+  })
 }

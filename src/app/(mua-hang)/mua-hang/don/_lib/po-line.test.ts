@@ -1,0 +1,1505 @@
+import { describe, expect, it } from 'vitest'
+import { packCount, poLineAmount, roundUpToPack } from '@/lib/po-line'
+import { deriveLine, type PoTemplate } from '@/lib/po-template'
+import {
+  baremFor,
+  cartonPriceSuggest,
+  draftOf,
+  lineAmount,
+  lineFromPo,
+  lineProblem,
+  lineReady,
+  mergeLineInto,
+  migrateDraftLine,
+  newFeeLine,
+  newFreeLine,
+  newLine,
+  lineQty2,
+  lineQty2Auto,
+  remapLinesForTemplate,
+  overridesCatalog,
+  recallBasis,
+  refreshLineFromMaterial,
+  laM3MotTam,
+  tongM3,
+  tongLechBac,
+  docTongGo,
+  foamBasisMacDinh,
+  withSpecDims,
+  haiGia,
+  tongDv2,
+  haiGiaPatch,
+  dv2MotDv,
+  xopM3MoiTam,
+  lsxOf,
+  withLsxDemand,
+  lsxFromNeed,
+} from './po-line'
+import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
+import type { PoField } from '@/lib/po-fields'
+import type { PoMaterial } from '@/components/supply/MaterialPicker'
+
+/**
+ * MỞ ĐƠN ĐỂ SỬA KHÔNG ĐƯỢC LÀM ĐỔI SỐ TIỀN.
+ *
+ * Đây là hồi quy cho một bug thật: form sửa cũ trong PosManager không biết mẫu đơn
+ * nên khi lưu lại đã bỏ hết thông số quy đổi (kg/m, dài cây, kg/đv, m²). Mất chúng
+ * thì `deriveLine` rơi về price_basis 'unit' và thành tiền dòng nhôm tụt từ
+ * (tổng kg × giá/kg) xuống (số cây × giá/kg) — sai ~6 lần, không cảnh báo gì.
+ */
+
+const base: PoLineDto = {
+  material_id: 'm1',
+  material_code: 'VT-001',
+  material_name: 'Thanh nhôm',
+  material_unit: 'cây',
+  qty_ordered: 273,
+  unit_price: 102_000,
+  spec: null,
+  note: 'Dọc ngồi',
+  material_grade: null,
+  dm_per_sp: null,
+  qty_demand: null,
+  qty_on_hand: null,
+  die_code: null,
+  weight_per_m: null,
+  bar_length_m: null,
+  dimension_text: null,
+  finish: null,
+  weight_per_unit: null,
+  m3_per_unit: null,
+  warranty_text: null,
+  print_spec: null,
+  open_style: null,
+  pcs_per_ctn: null,
+  inner_l_mm: null,
+  inner_w_mm: null,
+  inner_h_mm: null,
+  area_m2: null,
+  price_per_m2: null,
+  print_fee: null,
+  carton_basis: null,
+  pack_size: null,
+  pack_unit: null,
+  unit2_per_unit: null,
+  unit2: null,
+}
+
+/** Tiền của dòng ĐÃ LƯU, tính đúng cách server tính. */
+function storedAmount(t: PoTemplate, dto: PoLineDto): number {
+  const d = deriveLine(t, {
+    qty_ordered: dto.qty_ordered,
+    weight_per_m: dto.weight_per_m,
+    bar_length_m: dto.bar_length_m,
+    weight_per_unit: dto.weight_per_unit,
+    area_m2: dto.area_m2,
+    carton_basis: dto.carton_basis,
+  })
+  return poLineAmount({
+    qty_ordered: dto.qty_ordered,
+    unit_price: dto.unit_price,
+    price_basis: d.price_basis,
+    qty2: d.qty2,
+  })
+}
+
+describe('mở đơn để sửa — thành tiền phải y nguyên', () => {
+  const cases: [string, PoTemplate, PoLineDto][] = [
+    [
+      'nhôm (kg/m × dài cây × số cây)',
+      'aluminium',
+      { ...base, weight_per_m: 0.248, bar_length_m: 5.65 },
+    ],
+    [
+      'inox theo kg/cây',
+      'metal_kg',
+      { ...base, qty_ordered: 20, unit_price: 73_200, weight_per_unit: 9.325 },
+    ],
+    [
+      'bao bì tính theo m²',
+      'carton',
+      {
+        ...base,
+        qty_ordered: 300,
+        unit_price: 5_000,
+        area_m2: 1.6564,
+        carton_basis: 'm2',
+      },
+    ],
+    [
+      'bao bì tính theo thùng',
+      'carton',
+      { ...base, qty_ordered: 300, unit_price: 8_282, carton_basis: 'ctn' },
+    ],
+    ['phụ kiện', 'accessory', { ...base, qty_ordered: 206, unit_price: 2_000 }],
+  ]
+
+  for (const [ten, template, dto] of cases) {
+    it(ten, () => {
+      const before = storedAmount(template, dto)
+      const after = lineAmount(template, lineFromPo(dto))
+      expect(after).toBeCloseTo(before, 6)
+      expect(before).toBeGreaterThan(0)
+    })
+  }
+
+  it('nhôm: giữ nguyên kg/m và dài cây chứ không rơi về SL × giá', () => {
+    const dto = { ...base, weight_per_m: 0.248, bar_length_m: 5.65 }
+    const d = draftOf(lineFromPo(dto))
+    expect(d.weight_per_m).toBe(0.248)
+    expect(d.bar_length_m).toBe(5.65)
+    expect(deriveLine('aluminium', d).price_basis).toBe('unit2')
+    // Bug cũ: mất thông số → 273 × 102.000 = 27.846.000 thay vì 39.017.815.
+    expect(lineAmount('aluminium', lineFromPo(dto))).not.toBeCloseTo(27_846_000, 0)
+  })
+
+  it('dòng nạp lại từ đơn đã lưu là hợp lệ, không bắt nhập lại gì', () => {
+    for (const [, template, dto] of cases) {
+      const l = lineFromPo(dto)
+      expect(lineProblem(template, l)).toBeNull()
+      expect(lineReady(template, l)).toBe(true)
+    }
+  })
+
+  it('ô trống về "" chứ không về 0 — phân biệt chưa nhập với nhập số 0', () => {
+    const l = lineFromPo(base)
+    expect(l.weight_per_m).toBe('')
+    expect(l.qty_demand).toBe('')
+    expect(l.material_grade).toBe('')
+    expect(l.carton_basis).toBe('ctn') // mặc định, không phải null
+  })
+
+  it('đơn giá 0 vẫn giữ là 0, không biến thành ô trống', () => {
+    // NCC cho hàng khuyến mãi / hàng bù — giá 0 là số thật, không phải chưa nhập.
+    const l = lineFromPo({ ...base, unit_price: 0 })
+    expect(l.price).toBe(0)
+  })
+})
+
+describe('đơn đã phát hành — giữ tổng kg đã chốt, không dẫn xuất lại', () => {
+  // Đơn anh Truyền 18/09/2026: NCC ghi 300 kg làm tròn, còn 0,385 × 5,53 × 141 = 300,16.
+  const dto: PoLineDto = {
+    ...base,
+    qty_ordered: 141,
+    unit_price: 50_000,
+    weight_per_m: 0.385,
+    bar_length_m: 5.53,
+    price_basis: 'unit2',
+    qty2: 300,
+  }
+
+  it('mở đơn đã phát hành: tổng kg và thành tiền đúng số trên tờ', () => {
+    const l = lineFromPo(dto, null, true)
+    expect(l.qty2_saved).toBe(300)
+    expect(lineQty2('aluminium', l)).toBe(300)
+    expect(lineAmount('aluminium', l)).toBe(300 * 50_000)
+  })
+
+  it('đơn nháp: vẫn dẫn xuất từ kg/m × dài × SL', () => {
+    const l = lineFromPo(dto)
+    expect(l.qty2_saved).toBeNull()
+    expect(lineQty2('aluminium', l)).toBeCloseTo(300.16, 1)
+  })
+
+  it('sửa ô (điều chỉnh) hay đổi mẫu thì số đã chốt hết hiệu lực', () => {
+    const l = { ...lineFromPo(dto, null, true), qty2_saved: null }
+    expect(lineQty2('aluminium', l)).toBeCloseTo(300.16, 1)
+    const [r] = remapLinesForTemplate('aluminium', 'metal_kg', [
+      lineFromPo(dto, null, true),
+    ])
+    expect(r.qty2_saved).toBeNull()
+  })
+})
+
+/*
+ * DÒNG MỚI PHẢI MANG SẴN BAREM CỦA VẬT TƯ.
+ *
+ * `lineReady` CHẶN gửi khi mẫu metal_kg thiếu kg/đơn-vị. Trước đây newLine luôn
+ * để ô đó trống kể cả khi vật tư đã có barem trong danh mục, nên người soạn đơn
+ * bị chặn rồi gõ đại một số cho qua — số đó đi thẳng vào (SL × kg/đv) × giá/kg
+ * và lên bàn duyệt Giám đốc mà không ai đối chiếu.
+ */
+describe('newLine — tự điền barem, nhưng không đoán', () => {
+  const inox: PoMaterial = {
+    id: 'm-inox',
+    code: 'IN-0001',
+    name: 'Inox hộp 25x50x1',
+    unit: 'cây',
+    group_name: 'Inox',
+    sub_group: null,
+    spec: null,
+    kg_per_unit: null,
+    kg_per_m: 1.5542,
+    default_bar_length_m: 6,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('metal_kg: kg/đơn-vị = kg/m × dài cây, không phải kg/m', () => {
+    // Đơn thật Kim Vĩnh Phú: 9,325 kg/cây. Chép thẳng kg/m là đơn hụt 6 lần.
+    const l = newLine('metal_kg', inox)
+    expect(l.weight_per_unit).toBeCloseTo(9.3252, 4)
+    expect(lineProblem('metal_kg', { ...l, qty: 20, price: 73_200 })).toBeNull()
+  })
+
+  it('chưa khai dài cây → để trống, KHÔNG mặc định 6m', () => {
+    const l = newLine('metal_kg', { ...inox, default_bar_length_m: null })
+    expect(l.weight_per_unit).toBe('')
+    expect(lineProblem('metal_kg', { ...l, qty: 20, price: 73_200 })).toBe(
+      'thiếu kg/đơn vị',
+    )
+  })
+
+  it('chưa có barem → để trống, nhập theo phiếu cân NCC', () => {
+    const l = newLine('metal_kg', { ...inox, kg_per_m: null })
+    expect(l.weight_per_unit).toBe('')
+  })
+
+  /*
+   * HÀNG TẤM / CUỘN (0112). Tấm inox không có barem theo mét — cân theo TẤM, đúng
+   * như cột "Trọng lượng tấm (kg)" trên đơn Thông Đạt / Hào Tư Hùng. Trước 0112
+   * chúng luôn để trống ô kg/đơn-vị nên phải gõ tay mỗi lần đặt.
+   */
+  const tam: PoMaterial = {
+    ...inox,
+    id: 'm-tam',
+    code: 'IN-0002',
+    name: 'Inox tấm 304 khổ 1220x2440 dày 1.0',
+    unit: 'tấm',
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    kg_per_unit: 23.94,
+  }
+
+  it('hàng tấm: lấy thẳng kg/đơn-vị đã khai ở danh mục', () => {
+    const l = newLine('metal_kg', tam)
+    expect(l.weight_per_unit).toBe(23.94)
+    expect(lineProblem('metal_kg', { ...l, qty: 10, price: 73_200 })).toBeNull()
+  })
+
+  it('kg/đơn-vị khai tay THẮNG số suy từ kg/m × dài cây', () => {
+    // Số cân thật luôn đúng hơn số suy ra — kể cả khi vật tư có đủ cả hai.
+    const l = newLine('metal_kg', { ...inox, kg_per_unit: 9.41 })
+    expect(l.weight_per_unit).toBe(9.41)
+  })
+
+  it('hàng tấm chưa khai kg/đơn-vị → vẫn để trống, không suy bừa', () => {
+    const l = newLine('metal_kg', { ...tam, kg_per_unit: null })
+    expect(l.weight_per_unit).toBe('')
+  })
+
+  it('aluminium vẫn lấy thẳng kg/m + dài cây của vật tư', () => {
+    const l = newLine('aluminium', {
+      ...inox,
+      kg_per_m: 0.248,
+      default_bar_length_m: 5.65,
+      price_unit: null,
+      unit2_factor: null,
+    })
+    expect(l.weight_per_m).toBe(0.248)
+    expect(l.bar_length_m).toBe(5.65)
+  })
+})
+
+/*
+ * TRA BAREM (0128) — lối thoát ĐÚNG khi vật tư chưa khai kg/m hay kg/đơn-vị.
+ * Danh mục mới có 634/13.168 mã khai kg/m và 5 mã khai kg/đơn-vị, nên nếu không
+ * có nút này thì người soạn bị chặn gửi và gõ đại một số.
+ */
+describe('baremFor — suy kg từ quy cách trong tên vật tư', () => {
+  const line = (over: Partial<Line>): Line => ({
+    ...newLine('metal_kg', {
+      id: 'm1',
+      code: 'IN-9',
+      name: 'Inox hộp 25x50x1',
+      unit: 'cây',
+      group_name: 'Inox',
+      sub_group: null,
+      spec: null,
+      kg_per_unit: null,
+      kg_per_m: null,
+      default_bar_length_m: null,
+      price_unit: null,
+      unit2_factor: null,
+      vat_rate: null,
+      default_supplier_id: null,
+      last_purchase_price: null,
+      pack_size: null,
+      pack_unit: null,
+      material_grade: null,
+      on_hand: null,
+      last_line: null,
+    }),
+    ...over,
+  })
+  const F_KGM = { key: 'kgm' } as PoField
+  const F_KGUNIT = { key: 'kgunit' } as PoField
+
+  it('ô kg/m: đọc tiết diện trong tên → barem tính được', () => {
+    const r = baremFor(F_KGM, line({}))
+    // Hộp 25×50 dày 1, tỷ trọng inox: (2(25+50) − 4×1) × 1 = 146 mm².
+    expect(r.kg).toBeCloseTo(1.158, 3)
+    expect(r.why).toBeNull()
+  })
+
+  it('ô kg/đơn-vị: kg/m × dài cây khi đã biết dài cây', () => {
+    const r = baremFor(F_KGUNIT, line({ weight_per_m: 1.5542, bar_length_m: 6 }))
+    expect(r.kg).toBeCloseTo(9.3252, 4)
+  })
+
+  it('chưa khai dài cây → KHÔNG đoán 6m, nói rõ lý do', () => {
+    const r = baremFor(F_KGUNIT, line({ weight_per_m: 1.5542, bar_length_m: '' }))
+    expect(r.kg).toBeNull()
+    expect(r.why).toBe('chưa khai dài cây')
+  })
+
+  it('hàng tấm/cuộn: không có barem theo mét, trả lý do thay vì số bừa', () => {
+    const r = baremFor(F_KGM, line({ name: 'Inox tấm 304 khổ 1220x2440 dày 1.0' }))
+    expect(r.kg).toBeNull()
+    expect(r.why).toBe('hàng tấm/cuộn — không tính theo mét')
+  })
+})
+
+/*
+ * GHI NGƯỢC VỀ DANH MỤC (0128) — chỉ mời khi số trên ô khác số danh mục đang
+ * giữ. Người mua cầm phiếu cân NCC lúc lập đơn; trước đây con số ấy chết theo
+ * dòng đơn và lần sau lại gõ lại.
+ */
+describe('overridesCatalog — khi nào mời lưu về danh mục', () => {
+  const F_KGUNIT = { key: 'kgunit', field: 'weight_per_unit' } as PoField
+  const l = (over: Partial<Line>) =>
+    ({ ...({} as Line), catalog_kg_m: null, catalog_kg_unit: null, ...over }) as Line
+
+  it('gõ đè khác số danh mục → mời lưu', () => {
+    expect(
+      overridesCatalog(F_KGUNIT, l({ weight_per_unit: 9.41, catalog_kg_unit: 9.3252 })),
+    ).toBe(true)
+  })
+
+  it('đúng bằng số danh mục → không mời (khỏi rác màn hình)', () => {
+    expect(
+      overridesCatalog(F_KGUNIT, l({ weight_per_unit: 9.3252, catalog_kg_unit: 9.3252 })),
+    ).toBe(false)
+  })
+
+  it('ô trống → không mời', () => {
+    expect(overridesCatalog(F_KGUNIT, l({ weight_per_unit: '' }))).toBe(false)
+  })
+
+  it('mở từ đơn đã lưu (không biết danh mục để gì) → vẫn mời', () => {
+    expect(overridesCatalog(F_KGUNIT, l({ weight_per_unit: 23.94 }))).toBe(true)
+  })
+})
+
+/*
+ * MẪU CARTON: quy cách vật tư ("900×605×115 mm") chính là LỌT LÒNG — phải tách
+ * vào ba ô D×R×C, không thì người soạn nhìn quy cách gõ lại từng số (phản hồi
+ * 08/08/2026: "vật tư có quy cách mà không tự điền vào được").
+ */
+describe('newLine carton — tách quy cách vào lọt lòng', () => {
+  const bb: PoMaterial = {
+    id: 'm-bb',
+    code: 'BB-0015',
+    name: 'BB Bàn Samos',
+    unit: 'Thùng',
+    group_name: 'Bao bì - đóng gói - tem nhãn',
+    sub_group: null,
+    spec: '900×605×115 mm',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('900×605×115 mm → D/R/C điền sẵn, m² đợi chọn cách mở', () => {
+    const l = newLine('carton', bb)
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([900, 605, 115])
+    // m² chưa tính được vì chưa biết AD hay MR — chọn cách mở mới tính.
+    expect(l.area_m2).toBe('')
+  })
+
+  it('dấu * hay x thường cũng đọc được (sổ Excel gõ đủ kiểu)', () => {
+    const l = newLine('carton', { ...bb, spec: '940*940*90' })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([940, 940, 90])
+    const l2 = newLine('carton', { ...bb, spec: 'KT 1125x1125x105 thùng âm dương' })
+    expect([l2.inner_l_mm, l2.inner_w_mm, l2.inner_h_mm]).toEqual([1125, 1125, 105])
+  })
+
+  it('quy cách ống "25×50×1li" KHÔNG phải lọt lòng → không điền', () => {
+    const l = newLine('carton', { ...bb, spec: '25×50×1li' })
+    expect(l.inner_l_mm).toBe('')
+  })
+
+  it('không có quy cách → ba ô trống như cũ', () => {
+    const l = newLine('carton', { ...bb, spec: null })
+    expect(l.inner_l_mm).toBe('')
+  })
+
+  it('mẫu KHÁC carton không đụng tới lọt lòng', () => {
+    const l = newLine('accessory', bb)
+    expect(l.inner_l_mm).toBe('')
+  })
+
+  /*
+   * ĐIỀN SẴN TỪ LẦN ĐẶT GẦN NHẤT (08/08/2026 — "hạn chế nhân viên phải gõ"):
+   * Vật liệu / Màu / Kích thước / Cách mở / Pcs-thùng / Đm-sp của một vật tư
+   * gần như không đổi giữa các đơn — gõ lại mỗi lần chỉ tổ lệch chính tả.
+   */
+  it('carton có lịch sử: cách mở + pcs/thùng điền sẵn, m² tính được NGAY', () => {
+    const l = newLine('carton', {
+      ...bb,
+      last_line: {
+        material_grade: null,
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: 1,
+        open_style: 'AD',
+        dm_per_sp: null,
+      },
+    })
+    expect(l.open_style).toBe('AD')
+    expect(l.pcs_per_ctn).toBe(1)
+    // Đủ lọt lòng (từ quy cách) + cách mở (từ đơn trước) → m² không phải đợi.
+    expect(l.area_m2).toBeCloseTo(1.9268, 4)
+  })
+
+  it('phụ kiện/inox có lịch sử: Vật liệu, Màu, Đm/sp điền sẵn', () => {
+    const withLast = {
+      ...bb,
+      spec: null,
+      last_line: {
+        material_grade: 'Sắt xi trắng',
+        dimension_text: 'phi 10 x655mm',
+        finish: 'inox bóng',
+        pcs_per_ctn: null,
+        open_style: null,
+        dm_per_sp: 4,
+      },
+    }
+    const l = newLine('accessory', withLast)
+    expect(l.material_grade).toBe('Sắt xi trắng')
+    expect(l.dm_per_sp).toBe(4)
+    const l2 = newLine('metal_kg', withLast)
+    expect(l2.finish).toBe('inox bóng')
+    // Danh mục chưa khai quy cách → Kích thước lấy theo đơn trước.
+    expect(l2.dimension_text).toBe('phi 10 x655mm')
+    // Danh mục CÓ quy cách thì quy cách danh mục thắng (nguồn chốt).
+    expect(
+      newLine('metal_kg', { ...withLast, spec: 'Inox hộp 25x50x1.2' }).dimension_text,
+    ).toBe('Inox hộp 25x50x1.2')
+  })
+
+  it('không có lịch sử → các ô để trống như cũ', () => {
+    const l = newLine('carton', bb)
+    expect(l.open_style).toBe('')
+    expect(l.pcs_per_ctn).toBe('')
+    expect(l.material_grade).toBe('')
+  })
+
+  /*
+   * VẬT LIỆU TỪ DANH MỤC (0124): lần đặt gần nhất vẫn là nguồn tươi nhất, nhưng
+   * vật tư CHƯA TỪNG lên đơn thì lấy số khai ở danh mục — trước đây ô này trống
+   * và nhân viên phải gõ tay ở từng dòng.
+   */
+  it('vật liệu: chưa có lịch sử → lấy từ danh mục; có lịch sử → lịch sử thắng', () => {
+    const l = newLine('accessory', { ...bb, material_grade: 'Nhựa đen' })
+    expect(l.material_grade).toBe('Nhựa đen')
+    const l2 = newLine('accessory', {
+      ...bb,
+      material_grade: 'Nhựa đen',
+      last_line: {
+        material_grade: 'Nhựa đỏ',
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: null,
+        open_style: null,
+        dm_per_sp: null,
+      },
+    })
+    expect(l2.material_grade).toBe('Nhựa đỏ')
+  })
+
+  it('đóng gói mua chép từ danh mục vào dòng', () => {
+    const l = newLine('accessory', { ...bb, pack_size: 500, pack_unit: 'bì' })
+    expect(l.pack_size).toBe(500)
+    expect(l.pack_unit).toBe('bì')
+  })
+
+  it('mở SỬA/NHÂN BẢN giữ đúng đóng gói ĐÃ CHỐT trên đơn (0128)', () => {
+    // Trước 0128 dòng đơn không lưu đóng gói nên mở sửa là mất quy đổi. Giờ đọc
+    // lại từ chính dòng đã lưu — không lấy đóng gói hiện tại của danh mục, vì
+    // NCC có thể đã đổi bì 500 → bì 1.000 sau khi đơn được ký.
+    const l = lineFromPo({ ...base, pack_size: 500, pack_unit: 'bì' })
+    expect(l.pack_size).toBe(500)
+    expect(l.pack_unit).toBe('bì')
+    // Đơn cũ (null) thì quy đổi tự ẩn như trước, không vỡ.
+    expect(lineFromPo(base).pack_size).toBeNull()
+    expect(lineFromPo(base).pack_unit).toBe('')
+  })
+})
+
+/*
+ * QUY ĐỔI ĐÓNG GÓI (0124) — ca thật từ đơn Tân Hiệp Phát (LSX 01): cần 13.596
+ * con nút bịt, NCC bán bì 500 con. Nhân viên phải tự chia 27,192 trong Excel
+ * rồi làm tròn; giờ form gợi ý thẳng 14.000 con (= 28 bì).
+ */
+describe('packCount / roundUpToPack — quy đổi bao gói', () => {
+  it('13.596 con, bì 500 → 27,19 bì; gợi ý tròn 14.000 con', () => {
+    expect(packCount(13_596, 500)).toBeCloseTo(27.19, 2)
+    expect(roundUpToPack(13_596, 500)).toBe(14_000)
+  })
+
+  it('vừa chẵn bao thì giữ nguyên, không cộng thêm một bao', () => {
+    expect(roundUpToPack(14_000, 500)).toBe(14_000)
+    expect(packCount(14_000, 500)).toBe(28)
+  })
+
+  it('không khai đóng gói → trả nguyên số, không quy đổi', () => {
+    expect(roundUpToPack(700, null)).toBe(700)
+    expect(packCount(700, null)).toBeNull()
+    expect(roundUpToPack(700, 0)).toBe(700)
+  })
+
+  it('SL 0/âm không quy đổi bậy', () => {
+    expect(packCount(0, 500)).toBeNull()
+    expect(roundUpToPack(0, 500)).toBe(0)
+  })
+})
+
+/*
+ * KÍNH + XỐP (0134): quy cách danh mục tự bóc vào ô kích thước như carton —
+ * "vật tư có quy cách mà không tự điền vào được" là đúng cái lỗi cũ, chỉ khác
+ * mẫu. Kính lấy m²/tấm = D×R/10⁶ (số thứ ba là ĐỘ DÀY, không tham gia); xốp
+ * lấy đủ D×R×Dày cho công thức khối.
+ */
+describe('newLine glass/foam — tự bóc quy cách (0134)', () => {
+  const kinh: PoMaterial = {
+    id: 'm-k',
+    code: 'KI-0001',
+    name: 'Kính trắng phun mờ cường lực',
+    unit: 'Tấm',
+    group_name: 'Kính - mặt đá',
+    sub_group: null,
+    spec: '605x539x5mm',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('kính "605x539x5mm" → m²/tấm = 0,3261 điền sẵn (đúng đơn Mai Trang ~0,33)', () => {
+    const l = newLine('glass', kinh)
+    expect(l.area_m2).toBeCloseTo(0.3261, 4)
+    // basis mặc định theo TẤM — m² chỉ hiện tổng, không đổi cách tính tiền.
+    expect(l.carton_basis).toBe('ctn')
+  })
+
+  it('kính không quy cách đọc được → m² để trống, nhập tay', () => {
+    expect(newLine('glass', { ...kinh, spec: 'Φ600 dày 5mm' }).area_m2).toBe('')
+    expect(newLine('glass', { ...kinh, spec: null }).area_m2).toBe('')
+  })
+
+  it('xốp "1520x920x10" → D×R×Dày điền sẵn, chọn m³ là tổng khối tự nhảy', () => {
+    const l = newLine('foam', { ...kinh, spec: '1520x920x10' })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([1520, 920, 10])
+    // m² không dính gì tới xốp — chỉ carton/glass dùng.
+    expect(l.area_m2).toBe('')
+  })
+
+  it('mút cuộn "8mm x 1.05m x 150m" KHÔNG bị đọc nhầm thành kích thước tấm', () => {
+    const l = newLine('foam', { ...kinh, spec: '8mm x 1.05m x 150m' })
+    expect(l.inner_l_mm).toBe('')
+  })
+})
+
+/*
+ * SỬA VẬT TƯ TẠI DÒNG ĐƠN (0136 — giai đoạn hoàn thiện data): lưu danh mục
+ * xong, dòng đang mở hút lại số mới. Luật: KHÔNG đè số người dùng đã gõ —
+ * số gõ tay có thể là phiếu cân NCC, danh mục chỉ lấp ô trống.
+ */
+describe('refreshLineFromMaterial — hút lại danh mục, không đè số đã gõ', () => {
+  const refreshed: MaterialRefresh = {
+    name: 'Kính trắng phun mờ CL (đã sửa)',
+    unit: 'Tấm',
+    spec: '605x539x5mm',
+    kg_per_m: null,
+    kg_per_unit: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    pack_size: 10,
+    pack_unit: 'kiện',
+    material_grade: 'Kính cường lực',
+  }
+  const goc = (): Line => ({
+    ...newFreeLine(),
+    is_free: undefined,
+    material_id: 'm-k',
+    code: 'KI-0001',
+    name: 'Kính trắng (tên cũ)',
+    unit: 'tấm',
+  })
+
+  it('tên/ĐVT/quy cách/đóng gói luôn theo danh mục; ô trống được lấp', () => {
+    const l = refreshLineFromMaterial('glass', goc(), refreshed)
+    expect(l.name).toBe('Kính trắng phun mờ CL (đã sửa)')
+    expect(l.pack_size).toBe(10)
+    expect(l.material_grade).toBe('Kính cường lực')
+    // Quy cách vừa bổ sung → m²/tấm tự bóc ngay (605×539/10⁶).
+    expect(l.area_m2).toBeCloseTo(0.3261, 4)
+  })
+
+  it('số đã gõ tay KHÔNG bị đè', () => {
+    const l = refreshLineFromMaterial(
+      'glass',
+      { ...goc(), area_m2: 0.5, material_grade: 'gõ tay' },
+      refreshed,
+    )
+    expect(l.area_m2).toBe(0.5)
+    expect(l.material_grade).toBe('gõ tay')
+  })
+
+  it('foam: quy cách mới bổ sung → D×R×Dày lấp vào ô trống', () => {
+    const l = refreshLineFromMaterial('foam', goc(), {
+      ...refreshed,
+      spec: '1520x920x10',
+    })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([1520, 920, 10])
+  })
+
+  it('metal_kg: kg/tấm vừa khai lấp vào ô trống, catalog_* cập nhật mốc so lệch', () => {
+    const l = refreshLineFromMaterial('metal_kg', goc(), {
+      ...refreshed,
+      kg_per_unit: 23.94,
+    })
+    expect(l.weight_per_unit).toBe(23.94)
+    expect(l.catalog_kg_unit).toBe(23.94)
+  })
+})
+
+/*
+ * NHỚ LẦN ĐẶT GẦN NHẤT cho bộ ô mẫu tính theo kích thước (0136) — đơn lặp lại
+ * chỉ còn gõ SL + giá. Quy cách DANH MỤC vẫn thắng; lần trước chỉ lấp khi danh
+ * mục không nói được gì.
+ */
+describe('newLine — recall lần đặt gần nhất (m²/dims/giá m²/basis)', () => {
+  const goc: PoMaterial = {
+    id: 'm-r',
+    code: 'BB-0099',
+    name: 'Thùng test recall',
+    unit: 'Thùng',
+    group_name: 'Bao bì',
+    sub_group: null,
+    spec: null,
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: {
+      material_grade: null,
+      dimension_text: null,
+      finish: null,
+      pcs_per_ctn: null,
+      open_style: null,
+      dm_per_sp: null,
+      area_m2: 3.591,
+      inner_l_mm: 750,
+      inner_w_mm: 625,
+      inner_h_mm: 605,
+      price_per_m2: 18_770,
+      print_fee: 3_278,
+      carton_basis: 'ctn',
+    },
+  }
+
+  it('carton không quy cách danh mục: dims + giá/m² + bản in từ lần trước', () => {
+    const l = newLine('carton', goc)
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([750, 625, 605])
+    expect(l.price_per_m2).toBe(18_770)
+    expect(l.print_fee).toBe(3_278)
+    // Đủ m² + giá/m² + bản in → gợi ý giá/thùng sống lại ngay từ dòng vừa thêm.
+    expect(l.area_m2).toBe(3.591)
+    expect(cartonPriceSuggest('carton', l)).toBeCloseTo(70_681.07, 1)
+  })
+
+  it('quy cách DANH MỤC thắng kích thước lần trước', () => {
+    const l = newLine('carton', { ...goc, spec: '900x605x115' })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([900, 605, 115])
+  })
+
+  it('kính: m²/tấm lần trước lấp khi danh mục không có quy cách', () => {
+    const l = newLine('glass', {
+      ...goc,
+      last_line: { ...goc.last_line!, area_m2: 0.33, carton_basis: 'm2' },
+    })
+    expect(l.area_m2).toBe(0.33)
+    expect(l.carton_basis).toBe('m2')
+  })
+
+  it('xốp: basis m³ lần trước được nhớ; dims từ lần trước', () => {
+    const l = newLine('foam', {
+      ...goc,
+      last_line: {
+        ...goc.last_line!,
+        inner_l_mm: 1520,
+        inner_w_mm: 920,
+        inner_h_mm: 10,
+        carton_basis: 'm3',
+      },
+    })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([1520, 920, 10])
+    expect(l.carton_basis).toBe('m3')
+  })
+
+  it("basis KHÔNG hợp mẫu thì về 'ctn' — đơn xốp m³ cũ không rót vào dòng carton", () => {
+    expect(recallBasis('carton', 'm3')).toBe('ctn')
+    expect(recallBasis('glass', 'kg')).toBe('ctn')
+    // 'kg' là giá trị chết của mẫu gia công đã gỡ — không mẫu nào nhận lại.
+    expect(recallBasis('foam', 'kg')).toBe('ctn')
+    // Mẫu không dùng basis (phụ kiện…) luôn 'ctn'.
+    expect(recallBasis('accessory', 'm2')).toBe('ctn')
+    // Giá/m² + bản in chỉ thuộc carton — mẫu khác không nhớ.
+    const l = newLine('accessory', goc)
+    expect(l.price_per_m2).toBe('')
+    expect(l.print_fee).toBe('')
+  })
+})
+
+/*
+ * THÔNG SỐ THEO NHÓM ở DANH MỤC (0137): vật tư CHƯA TỪNG lên đơn giờ vẫn mang
+ * đủ cách mở / pcs / bề mặt nếu đã khai — trước chỉ nhớ từ lần đặt gần nhất.
+ * Lần đặt gần nhất (tươi hơn) vẫn thắng danh mục.
+ */
+describe('newLine — thông số theo nhóm từ danh mục (0137)', () => {
+  const thung: PoMaterial = {
+    id: 'm-th',
+    code: 'CN9999',
+    name: 'Thùng test 0137',
+    unit: 'Thùng',
+    group_name: 'Bao bì - đóng gói - tem nhãn',
+    sub_group: null,
+    spec: '900x605x115',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    open_style: 'AD',
+    pcs_per_ctn: 2,
+    finish: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('carton chưa từng lên đơn: cách mở + pcs từ danh mục → m² TỰ TÍNH ngay', () => {
+    const l = newLine('carton', thung)
+    expect(l.open_style).toBe('AD')
+    expect(l.pcs_per_ctn).toBe(2)
+    // Đủ lọt lòng (spec) + cách mở (danh mục) → m²/thùng có ngay từ dòng đầu.
+    expect(l.area_m2).toBeCloseTo(1.9268, 4)
+  })
+
+  it('lần đặt gần nhất THẮNG danh mục (nguồn tươi hơn)', () => {
+    const l = newLine('carton', {
+      ...thung,
+      last_line: {
+        material_grade: null,
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: 4,
+        open_style: 'MR',
+        dm_per_sp: null,
+      },
+    })
+    expect(l.open_style).toBe('MR')
+    expect(l.pcs_per_ctn).toBe(4)
+  })
+
+  it('kim loại: màu/bề mặt từ danh mục khi chưa có lịch sử đặt', () => {
+    const l = newLine('metal_kg', {
+      ...thung,
+      group_name: 'Sắt thép',
+      finish: 'inox bóng',
+    })
+    expect(l.finish).toBe('inox bóng')
+  })
+
+  it('refreshLineFromMaterial: bổ sung cách mở ở danh mục → m² dòng đang mở tính lại', () => {
+    const before = {
+      ...newLine('carton', { ...thung, open_style: null }),
+      area_m2: '' as const,
+    }
+    expect(before.open_style).toBe('')
+    const after = refreshLineFromMaterial('carton', before, {
+      name: thung.name,
+      unit: thung.unit,
+      spec: thung.spec,
+      kg_per_m: null,
+      kg_per_unit: null,
+      default_bar_length_m: null,
+      price_unit: null,
+      unit2_factor: null,
+      pack_size: null,
+      pack_unit: null,
+      material_grade: null,
+      open_style: 'AD',
+      pcs_per_ctn: 2,
+      finish: null,
+    })
+    expect(after.open_style).toBe('AD')
+    expect(after.area_m2).toBeCloseTo(1.9268, 4)
+  })
+})
+
+/*
+ * CỘT MƯỢN ĐỔI NGHĨA THEO MẪU (03/09/2026). Lỗi thật: thêm thùng carton
+ * BB-0025 (quy cách "950×620×135 mm") vào đơn GỖ → chuỗi ấy hiện dưới cột "KH
+ * GIAO HÀNG", vì cột đó mượn `dimension_text` mà `newLine` đổ quy cách danh mục
+ * vào đó cho MỌI mẫu. Một ô trống người ta sẽ điền; một ô sai người ta ký luôn.
+ */
+describe('newLine — không đổ số danh mục vào cột mượn đã đổi nghĩa', () => {
+  const carton: PoMaterial = {
+    id: 'm-carton',
+    code: 'BB-0025',
+    name: 'BB ghế 5 bậc Athos',
+    unit: 'Thùng',
+    group_name: 'Bao bì - đóng gói - tem nhãn',
+    sub_group: null,
+    spec: '950x620x135 mm',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: 'Carton 5 lớp',
+    finish: 'Màu 142',
+    on_hand: 0,
+    last_line: {
+      material_grade: 'Carton 5 lớp',
+      dimension_text: '950x620x135 mm',
+      finish: 'Màu 142',
+      pcs_per_ctn: null,
+      open_style: null,
+      dm_per_sp: null,
+    },
+  }
+
+  it('gỗ: quy cách đổ vào ô QUY CÁCH thật; cột mượn dimension_text không mang gì', () => {
+    const l = newLine('wood', carton)
+    // 03/09: "KH giao hàng" bỏ khỏi form, thay bằng Quy cách (ô `spec` của danh mục).
+    expect(l.spec).toBe('950x620x135 mm')
+    expect(l.dimension_text).toBe('')
+    expect(l.material_grade).toBe('Carton 5 lớp')
+    expect(l.finish).toBe('Màu 142')
+  })
+
+  it('mro: "Dùng cho máy" và "Model" để trống — cả từ danh mục lẫn đơn trước', () => {
+    const l = newLine('mro', carton)
+    expect(l.dimension_text).toBe('')
+    expect(l.material_grade).toBe('')
+  })
+
+  it('mây: "Định mức" không nhận vật liệu', () => {
+    expect(newLine('rattan', carton).material_grade).toBe('')
+  })
+
+  it('inox: cùng nghĩa nên vẫn điền như trước — không đổi hành vi đang đúng', () => {
+    const l = newLine('metal_kg', carton)
+    expect(l.dimension_text).toBe('950x620x135 mm')
+    expect(l.material_grade).toBe('Carton 5 lớp')
+    expect(l.finish).toBe('Màu 142')
+  })
+
+  it('mẫu KHÔNG có ô cho cột mượn thì không mang giá trị vô hình', () => {
+    // Phụ kiện không có ô dimension_text/finish — mang theo là lộ ra khi đổi mẫu.
+    const l = newLine('accessory', carton)
+    expect(l.dimension_text).toBe('')
+    expect(l.finish).toBe('')
+  })
+})
+
+describe('remapLinesForTemplate — đổi mẫu thì dọn cột mượn đã đổi nghĩa', () => {
+  const inox: PoMaterial = {
+    id: 'm-inox',
+    code: 'IN-0001',
+    name: 'Inox hộp',
+    unit: 'cây',
+    group_name: 'Inox',
+    sub_group: null,
+    spec: 'Inox phi 15.9x1.5li',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: 'Inox 304',
+    finish: 'inox bóng',
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('inox → gỗ: gỗ không có ô "Kích thước" → xoá; Vật liệu→Loại gỗ khác nhãn → xoá', () => {
+    const [l] = remapLinesForTemplate('metal_kg', 'wood', [newLine('metal_kg', inox)])
+    expect(l.dimension_text).toBe('')
+    expect(l.material_grade).toBe('')
+    // Màu/bề mặt → Màu gỗ: khác nhãn → cũng xoá, người soạn gõ lại cho đúng.
+    expect(l.finish).toBe('')
+  })
+
+  it('phụ kiện ↔ inox cùng gọi "Vật liệu" → giữ chữ đã gõ', () => {
+    const src = { ...newLine('accessory', inox), material_grade: 'Sắt xi trắng' }
+    const [l] = remapLinesForTemplate('accessory', 'metal_kg', [src])
+    expect(l.material_grade).toBe('Sắt xi trắng')
+  })
+
+  it('cùng mẫu → không đụng gì', () => {
+    const src = [newLine('wood', inox)]
+    expect(remapLinesForTemplate('wood', 'wood', src)).toBe(src)
+  })
+})
+
+describe('mergeLineInto — gộp dòng trùng', () => {
+  const base = {
+    ...newFreeLine(),
+    qty: 10 as const,
+    price: 108000 as const,
+    note: 'Ghế 1',
+    qty_demand: '' as const,
+    lsx_split: { L1: 4 },
+  }
+  it('cộng SL, SL đơn hàng, phần chia lệnh; nối ghi chú khác nhau', () => {
+    const m = mergeLineInto(base, {
+      ...base,
+      qty: 5,
+      qty_demand: 3,
+      note: 'Ghế 3',
+      lsx_split: { L1: 1, L2: 2 },
+    })
+    expect(m).not.toBeNull()
+    expect(m!.qty).toBe(15)
+    expect(m!.qty_demand).toBe(3)
+    expect(m!.lsx_split).toEqual({ L1: 5, L2: 2 })
+    expect(m!.note).toBe('Ghế 1 · Ghế 3')
+    expect(m!.price).toBe(108000)
+  })
+  it('ghi chú giống nhau thì không lặp', () => {
+    expect(mergeLineInto(base, { ...base })!.note).toBe('Ghế 1')
+  })
+  it('KHÁC GIÁ → không gộp (người mua chọn giá, không phải máy)', () => {
+    expect(mergeLineInto(base, { ...base, price: 113000 })).toBeNull()
+    expect(mergeLineInto(base, { ...base, price_per: 'unit' })).toBeNull()
+  })
+})
+
+describe('tổng gõ tay — mở lại đơn đã lưu (02/10/2026)', () => {
+  const dto: PoLineDto = {
+    ...base,
+    qty_ordered: 141,
+    unit_price: 50_000,
+    weight_per_m: 0.385,
+    bar_length_m: 5.53,
+    price_basis: 'unit2',
+  }
+
+  it('tổng đã lưu LỆCH tổng tự tính → nhận là số gõ tay, tiền theo số đó', () => {
+    const l = lineFromPo({ ...dto, qty2: 300 }, null, false, 'aluminium')
+    expect(l.qty2_manual).toBe(300)
+    expect(lineQty2('aluminium', l)).toBe(300)
+    expect(lineAmount('aluminium', l)).toBe(15_000_000)
+    expect(lineQty2Auto('aluminium', l)).toBeCloseTo(300.16, 1)
+  })
+
+  it('tổng đã lưu KHỚP tổng tự tính → không phải gõ tay', () => {
+    const auto = deriveLine('aluminium', {
+      qty_ordered: 141,
+      weight_per_m: 0.385,
+      bar_length_m: 5.53,
+    }).qty2
+    const l = lineFromPo({ ...dto, qty2: auto }, null, false, 'aluminium')
+    expect(l.qty2_manual).toBe('')
+  })
+
+  it('sửa SL thì tổng gõ tay vẫn giữ; đổi mẫu thì về tự tính', () => {
+    const l = lineFromPo({ ...dto, qty2: 300 }, null, true, 'aluminium')
+    const sua = { ...l, qty: 150 as Num, qty2_saved: null }
+    expect(lineQty2('aluminium', sua)).toBe(300)
+    const [r] = remapLinesForTemplate('aluminium', 'metal_kg', [l])
+    expect(r.qty2_manual).toBe('')
+  })
+
+  it('có tổng gõ tay thì không đòi kg/m, dài cây', () => {
+    const l = lineFromPo(
+      { ...dto, weight_per_m: null, bar_length_m: null, qty2: 300 },
+      null,
+      false,
+      'aluminium',
+    )
+    expect(lineProblem('aluminium', l)).toBeNull()
+    expect(lineProblem('aluminium', { ...l, qty2_manual: '' })).toBe('thiếu kg/m')
+  })
+})
+
+describe('xốp — quy cách gõ trên lưới tính theo khối (đơn Tân Hoàng Long, 05/10/2026)', () => {
+  const xop = (over: Partial<Line> = {}): Line => ({
+    ...newFreeLine(),
+    name: 'Xốp 8kg',
+    qty: 4480,
+    price: 520_000,
+    carton_basis: 'ctn',
+    ...over,
+  })
+  it('gõ quy cách 1000*800*50 → D×R×Dày + tính theo m³ → 93.184.000đ như tờ', () => {
+    const prev = xop()
+    const next = withSpecDims('foam', prev, { ...prev, spec: '1000*800*50' })
+    expect([next.inner_l_mm, next.inner_w_mm, next.inner_h_mm, next.carton_basis]).toEqual([1000, 800, 50, 'm3']) // prettier-ignore
+    expect(lineQty2('foam', next)).toBe(179.2)
+    expect(lineAmount('foam', next)).toBe(93_184_000)
+  })
+  it('đã gõ 0,04 (m³ MỘT tấm) vào ô tổng: nhận ra; điền kích thước thì xoá số đó', () => {
+    const prev = xop({
+      qty2_manual: 0.04,
+      inner_l_mm: 1000,
+      inner_w_mm: 800,
+      inner_h_mm: 50,
+    })
+    expect(laM3MotTam(prev)).toBe(true)
+    expect(tongM3(prev)).toBe(179.2)
+    const tu = withSpecDims('foam', xop({ qty2_manual: 0.04 }), xop({ qty2_manual: 0.04, spec: '1000x800x50' })) // prettier-ignore
+    expect(tu.qty2_manual).toBe('')
+    expect(lineAmount('foam', tu)).toBe(93_184_000)
+  })
+  it('sửa quy cách gõ nhầm thì kích thước chạy theo; kích thước tự khai thì giữ, không lật cơ sở giá', () => {
+    const a = withSpecDims('foam', xop(), xop({ spec: '1000*800*5' }))
+    const b = withSpecDims('foam', a, { ...a, spec: '1000*800*50', carton_basis: 'ctn' })
+    expect([b.inner_h_mm, b.carton_basis]).toEqual([50, 'ctn'])
+    const tay = xop({ inner_l_mm: 1520, inner_w_mm: 920, inner_h_mm: 10 })
+    expect(withSpecDims('foam', tay, { ...tay, spec: '1000*800*50' }).inner_l_mm).toBe(
+      1520,
+    )
+  })
+  it('đơn ĐÃ LƯU (Giá theo = ĐVT mua) đổi Tính theo sang m³ thì tiền theo m³ — không bị lựa chọn cũ đè', () => {
+    const luu = xop({
+      price_per: 'unit',
+      inner_l_mm: 1000,
+      inner_w_mm: 800,
+      inner_h_mm: 50,
+    })
+    const doi = withSpecDims('foam', luu, { ...luu, carton_basis: 'm3' })
+    expect(doi.price_per).toBe('')
+    expect(lineAmount('foam', doi)).toBe(93_184_000)
+    const tuQuyCach = withSpecDims('foam', xop({ price_per: 'unit' }), xop({ price_per: 'unit', spec: '1000*800*50' })) // prettier-ignore
+    expect(lineAmount('foam', tuQuyCach)).toBe(93_184_000)
+  })
+  it('mút cuộn có đơn vị trong quy cách và mẫu khác: không đụng', () => {
+    const p = xop()
+    expect(
+      withSpecDims('foam', p, { ...p, spec: '8mm x 1.05m x 50m' }).carton_basis,
+    ).toBe('ctn')
+    expect(withSpecDims('carton', p, { ...p, spec: '1000*800*50' }).inner_l_mm).toBe('')
+  })
+})
+
+describe('tongLechBac — tổng gõ tay lệch hàng nghìn lần (đơn xốp WA 05/10/2026)', () => {
+  const xop = (qty2_manual: Num) =>
+    ({ ...newLine('foam', { id: 'x', code: 'XM-0105', name: 'Xốp D8 - 8kg', unit: 'Tấm', spec: '1000*800*50mm' } as never), qty: 4480 as Num, price: 520000 as Num, carton_basis: 'm3' as const, qty2_manual }) // prettier-ignore
+  it('gõ 179200 cho 179,2 m³ → gấp 1.000 lần, chặn lưu', () => {
+    expect(tongLechBac('foam', xop(179200))).toEqual({ auto: 179.2, factor: 1000 })
+    expect(lineProblem('foam', xop(179200))).toMatch(/gấp 1\.000 lần/)
+  })
+  it('gõ đè lệch vài phần trăm cho khớp tờ NCC → hợp lệ', () => {
+    expect(tongLechBac('foam', xop(180.5))).toBeNull()
+    expect(lineProblem('foam', xop(180.5))).toBeNull()
+  })
+  it('gõ nhỏ hơn hàng nghìn lần cũng bắt', () => {
+    expect(tongLechBac('foam', xop(0.1792))?.factor).toBe(-1000)
+  })
+})
+
+describe('docTongGo — gõ số khối kiểu tiền (172900 = 172,9 m³), 05/10/2026', () => {
+  const xop = { ...newLine('foam', { id: 'x', code: 'XM-0105', name: 'Xốp D8 - 8kg', unit: 'Tấm', spec: '1000*800*50mm' } as never), qty: 4480 as Num, carton_basis: 'm3' as const } // prettier-ignore
+  it('179200 / 172900 gần số tự tính ×1.000 → hiểu là 179,2 / 172,9', () => {
+    expect(docTongGo('foam', xop, '179200')).toBe(179.2)
+    expect(docTongGo('foam', xop, '172900')).toBe(172.9)
+  })
+  it('gõ có dấu thập phân giữ nguyên; số không gần ×1.000 giữ nguyên', () => {
+    expect(docTongGo('foam', xop, '172,9')).toBe(172.9)
+    expect(docTongGo('foam', xop, '180')).toBe(180)
+    expect(docTongGo('foam', xop, '5000')).toBe(5000)
+    expect(docTongGo('foam', xop, '')).toBe('')
+  })
+  it('mẫu không phải m³ (nhôm kg) không đổi', () => {
+    expect(docTongGo('aluminium', xop, '179200')).toBe(179200)
+  })
+})
+
+/* ── CÙNG MÃ NHIỀU DÒNG (07/10/2026) ─────────────────────────────────────── */
+describe('cùng vật tư nhiều dòng — giữ thứ phân biệt các dòng', () => {
+  it('mở đơn đã lưu MANG THEO mã SP khách (trước đó lưu lại là mất)', () => {
+    expect(lineFromPo({ ...base, product_code: '21610-217' }).product_code).toBe(
+      '21610-217',
+    )
+    expect(lineFromPo({ ...base, product_code: null }).product_code).toBe('')
+  })
+
+  it('gộp: tổng gõ tay cũng cộng; không ai gõ tay thì vẫn tự tính', () => {
+    const l = {
+      ...newFreeLine(),
+      qty: 10 as const,
+      price: 1 as const,
+      qty2_manual: 300 as const,
+    }
+    expect(mergeLineInto(l, { ...l, qty: 5, qty2_manual: 150 })!.qty2_manual).toBe(450)
+    const tu = { ...l, qty2_manual: '' as const }
+    expect(mergeLineInto(tu, { ...tu })!.qty2_manual).toBe('')
+  })
+
+  it('sửa danh mục: mã nằm nhiều dòng thì giữ quy cách riêng của dòng', () => {
+    const m: MaterialRefresh = { name: 'Bulon', unit: 'Con', spec: 'M8', kg_per_m: null, kg_per_unit: null, default_bar_length_m: null, price_unit: null, unit2_factor: null, pack_size: null, pack_unit: null, material_grade: null } // prettier-ignore
+    const l = { ...newFreeLine(), is_free: undefined, material_id: 'm1', spec: '8x20' }
+    expect(refreshLineFromMaterial('accessory', l, m, true).spec).toBe('8x20')
+    expect(refreshLineFromMaterial('accessory', l, m).spec).toBe('M8')
+    expect(refreshLineFromMaterial('accessory', { ...l, spec: '' }, m, true).spec).toBe(
+      'M8',
+    )
+  })
+
+  it('nháp đời trước thiếu uid → khôi phục cấp uid riêng từng dòng', () => {
+    const cu = { ...newFreeLine(), material_id: 'm1', uid: undefined }
+    const a = migrateDraftLine('accessory', cu)
+    const b = migrateDraftLine('accessory', { ...cu })
+    expect(a.uid).toBeTruthy()
+    expect(a.uid).not.toBe(b.uid)
+    expect(migrateDraftLine('accessory', { ...cu, uid: 'giu' }).uid).toBe('giu')
+  })
+})
+
+/*
+ * XỐP CHỌN TỪ DANH MỤC → "TÍNH THEO" MẶC ĐỊNH m³ (08/10/2026). Vật tư "Mouse Mê
+ * Relax" 580x540x60 chọn vào đơn: Tổng m³ bày 4,698 nhưng tiền vẫn 250 tấm × giá
+ * (NCC báo giá/m³ → lệch 53 lần). Dòng tự gõ quy cách đã sang m³ từ 05/10, dòng
+ * danh mục đi đường `newLine` nên lọt.
+ */
+describe('newLine foam — có D×R×Dày thì mặc định tính theo m³', () => {
+  const mut: PoMaterial = {
+    id: 'm-xm',
+    code: 'XM-0108',
+    name: 'Mouse Mê Relax',
+    unit: 'Tấm',
+    group_name: 'Mút - xốp - nệm - gòn',
+    sub_group: null,
+    spec: '580x540x60',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('580x540x60 · Tấm · chưa từng đặt → m³, 250 tấm = 4,698 m³, tiền = m³ × giá', () => {
+    const l = { ...newLine('foam', mut), qty: 250 as Num, price: 1_000_000 as Num }
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([580, 540, 60])
+    expect(l.carton_basis).toBe('m3')
+    expect(lineQty2('foam', l)).toBe(4.698)
+    expect(lineAmount('foam', l)).toBe(4_698_000)
+  })
+
+  it('320x540x40 · 250 tấm → 1,728 m³', () => {
+    const l = { ...newLine('foam', { ...mut, spec: '320x540x40' }), qty: 250 as Num }
+    expect(lineQty2('foam', l)).toBe(1.728)
+  })
+
+  it('lần đặt trước chốt theo TẤM thì giữ tấm (NCC này bán theo tấm)', () => {
+    const l = newLine('foam', {
+      ...mut,
+      last_line: {
+        material_grade: null,
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: null,
+        open_style: null,
+        dm_per_sp: null,
+        carton_basis: 'ctn',
+      } as PoMaterial['last_line'],
+    })
+    expect(l.carton_basis).toBe('ctn')
+  })
+
+  it('mút CUỘN "300*1.05*1" · Cuộn → vẫn theo ĐVT, không phải tấm', () => {
+    const l = newLine('foam', {
+      ...mut,
+      name: 'Mousse dai 1mm',
+      unit: 'Cuộn',
+      spec: '300*1.05*1',
+    })
+    expect(l.carton_basis).toBe('ctn')
+  })
+
+  it('không có quy cách → theo ĐVT như cũ', () => {
+    const l = newLine('foam', { ...mut, spec: null })
+    expect(l.carton_basis).toBe('ctn')
+    expect(lineQty2('foam', l)).toBeNull()
+  })
+
+  it('foamBasisMacDinh: ĐVT tấm/thanh/miếng → m³; mét/kg → ĐVT', () => {
+    const d: [number, number, number] = [580, 540, 60]
+    expect(foamBasisMacDinh(null, 'Thanh', d)).toBe('m3')
+    expect(foamBasisMacDinh(null, 'Miếng', d)).toBe('m3')
+    expect(foamBasisMacDinh(null, 'Mét', d)).toBe('ctn')
+    expect(foamBasisMacDinh(null, 'Kg', d)).toBe('ctn')
+    expect(foamBasisMacDinh('m3', 'Cuộn', d)).toBe('m3')
+  })
+})
+
+/*
+ * HAI CỘT GIÁ XỐP (09/10/2026 — chị Nga): "Đơn giá" theo tấm và "Đơn giá m³" đứng cạnh
+ * nhau; dòng lưu một giá theo cơ sở tiền, cột kia quy đổi qua m³/tấm.
+ * Mouse mê Relax 580×540×60 → 0,018792 m³/tấm; 240 tấm = 4,51008 m³.
+ */
+describe('haiGia xốp — Đơn giá / Đơn giá m³', () => {
+  const relax = (part: Partial<Line>): Line => ({
+    ...lineFromPo(base),
+    inner_l_mm: 580,
+    inner_w_mm: 540,
+    inner_h_mm: 60,
+    qty: 240,
+    qty2_manual: '',
+    price_per: '',
+    ...part,
+  })
+
+  it('tính theo m³: giá lưu là giá/m³, giá tấm = giá/m³ × m³/tấm', () => {
+    const l = relax({ carton_basis: 'm3', price: 1_300_000 })
+    const g = haiGia('foam', l)
+    expect(g.theo).toBe('dv2')
+    expect(g.gia2).toBe(1_300_000)
+    expect(g.donGia).toBeCloseTo(1_300_000 * 0.018792, 6)
+    expect(lineAmount('foam', l)).toBeCloseTo(4.51008 * 1_300_000, 2)
+  })
+
+  it('tính theo tấm: giá lưu là giá tấm (24.524), giá/m³ quy đổi ngược; tiền = SL × giá tấm', () => {
+    const l = relax({ carton_basis: 'ctn', price: 24_524 })
+    const g = haiGia('foam', l)
+    expect(g.theo).toBe('dvt')
+    expect(g.donGia).toBe(24_524)
+    expect(g.gia2).toBeCloseTo(24_524 / 0.018792, 4)
+    expect(lineAmount('foam', l)).toBe(240 * 24_524)
+  })
+
+  it('m³/tấm theo tổng gõ đè của tờ NCC; chưa có kích thước + chưa gõ tổng thì không quy đổi', () => {
+    expect(xopM3MoiTam(relax({ qty2_manual: 4.8 }))).toBeCloseTo(0.02, 9)
+    const tron = relax({ inner_l_mm: '', inner_w_mm: '', inner_h_mm: '', carton_basis: 'ctn', price: 24_524 }) // prettier-ignore
+    expect(xopM3MoiTam(tron)).toBeNull()
+    expect(haiGia('foam', tron).gia2).toBeNull()
+  })
+})
+
+/*
+ * HAI CỘT GIÁ mở rộng (10/10/2026 — sếp: nhôm, sắt/inox, gỗ, kính "ngoài giá theo
+ * ĐVT cần có giá theo kg hoặc m³"). Gõ cột nào thì tiền tính theo cột đó, cột kia
+ * là số quy đổi — và tiền hai cách phải bằng nhau khi giá quy đổi đúng.
+ */
+describe('dòng ĐVT Kg trong mẫu nhôm / sắt — không đòi barem', () => {
+  const kg = (part: Partial<Line>): Line => ({ ...lineFromPo(base), qty: 63, price: 113_000, qty2_manual: '', price_per: '', weight_per_m: '', bar_length_m: '', weight_per_unit: '', ...part }) // prettier-ignore
+  it('NHO0090 ĐVT Kg: lưu được, tiền = SL × giá, Tổng kg = SL', () => {
+    for (const t of ['aluminium', 'metal_kg'] as const) {
+      const l = kg({ unit: 'Kg' })
+      expect(lineProblem(t, l)).toBeNull()
+      expect(lineAmount(t, l)).toBe(63 * 113_000)
+      expect(tongDv2(t, l)).toBe(63)
+    }
+  })
+  it('dòng ĐVT Cây vẫn phải có kg/m + dài cây', () => {
+    expect(lineProblem('aluminium', kg({ unit: 'Cây' }))).toBe('thiếu kg/m')
+    expect(lineProblem('metal_kg', kg({ unit: 'Cây' }))).toBe('thiếu kg/đơn vị')
+  })
+})
+
+describe('haiGia — nhôm · sắt · gỗ · kính', () => {
+  const dong = (part: Partial<Line>): Line => ({
+    ...lineFromPo(base),
+    qty: 100,
+    qty2_manual: '',
+    price_per: '',
+    ...part,
+  })
+
+  it('nhôm: mặc định theo kg; giá cây = giá/kg × kg/m × dài cây', () => {
+    const l = dong({ weight_per_m: 0.5, bar_length_m: 6, price: 80_000 })
+    const g = haiGia('aluminium', l)
+    expect(g.theo).toBe('dv2')
+    expect(g.gia2).toBe(80_000)
+    expect(g.donGia).toBeCloseTo(240_000, 6)
+    expect(lineAmount('aluminium', l)).toBeCloseTo(100 * 3 * 80_000, 2)
+  })
+
+  it('nhôm: gõ giá vào cột Đơn giá (cây) → tiền = SL × giá cây, cột kg quy đổi ngược', () => {
+    const l = dong({ weight_per_m: 0.5, bar_length_m: 6, ...haiGiaPatch('aluminium', 'dvt', 240_000) }) // prettier-ignore
+    const g = haiGia('aluminium', l)
+    expect(g.theo).toBe('dvt')
+    expect(g.gia2).toBeCloseTo(80_000, 6)
+    expect(lineAmount('aluminium', l)).toBe(100 * 240_000)
+  })
+
+  it('sắt / inox: kg / đơn vị là số quy đổi; gõ cột kg thì về lại theo kg', () => {
+    const tayCay = dong({ weight_per_unit: 2.5, ...haiGiaPatch('metal_kg', 'dvt', 100_000) }) // prettier-ignore
+    expect(haiGia('metal_kg', tayCay).gia2).toBeCloseTo(40_000, 6)
+    expect(lineAmount('metal_kg', tayCay)).toBe(100 * 100_000)
+    const theoKg = { ...tayCay, ...haiGiaPatch('metal_kg', 'dv2', 40_000) }
+    expect(haiGia('metal_kg', theoKg).theo).toBe('dv2')
+    expect(lineAmount('metal_kg', theoKg)).toBeCloseTo(100 * 100_000, 2)
+  })
+
+  it('gỗ: ván danh mục theo tấm, gõ giá m³ thì tính theo m³', () => {
+    const van = dong({ material_id: 'go-0001', m3_per_unit: 0.0072, price: 81_000 })
+    const g = haiGia('wood', van)
+    expect(g.theo).toBe('dvt')
+    expect(g.gia2).toBeCloseTo(81_000 / 0.0072, 4)
+    const m3 = { ...van, ...haiGiaPatch('wood', 'dv2', 11_250_000) }
+    expect(haiGia('wood', m3).theo).toBe('dv2')
+    expect(lineAmount('wood', m3)).toBeCloseTo(100 * 0.0072 * 11_250_000, 0)
+  })
+
+  it('kính: theo tấm vẫn ra giá/m²; gõ giá m² thì đổi cơ sở sang m² (bỏ "Giá theo" cũ)', () => {
+    const tam = dong({
+      area_m2: 0.3261,
+      carton_basis: 'ctn',
+      price_per: 'unit',
+      price: 65_220,
+    })
+    expect(haiGia('glass', tam).gia2).toBeCloseTo(200_000, 6)
+    const m2 = { ...tam, ...haiGiaPatch('glass', 'dv2', 200_000) }
+    expect(m2.carton_basis).toBe('m2')
+    expect(m2.price_per).toBe('')
+    expect(lineAmount('glass', m2)).toBeCloseTo(100 * 0.3261 * 200_000, 0)
+  })
+
+  it('tổng gõ đè theo tờ NCC thắng công thức; thiếu số quy đổi thì không bày giá thứ hai', () => {
+    expect(dv2MotDv('aluminium', dong({ weight_per_m: 0.5, bar_length_m: 6, qty2_manual: 290 }))).toBeCloseTo(2.9, 9) // prettier-ignore
+    const tron = dong({ price: 240_000, price_per: 'unit' })
+    expect(dv2MotDv('aluminium', tron)).toBeNull()
+    expect(haiGia('aluminium', tron).gia2).toBeNull()
+  })
+})
+
+/*
+ * MẪU MÂY: SL theo LSX × Định mức SP = SL đơn hàng (09/10/2026 — PO-2026-0154:
+ * 200 ghế relax xám × 5,1 kg = 1.020 kg). SL theo LSX không lưu, tính ngược.
+ */
+describe('mây — SL theo LSX × Định mức SP = SL đơn hàng', () => {
+  const may = (part: Partial<Line>): Line => ({ ...lineFromPo(base), qty_lsx: '', dm_per_sp: '', qty_demand: '', ...part }) // prettier-ignore
+
+  it('mở đơn: SL theo LSX = SL đơn hàng ÷ Định mức SP; thiếu một số thì trống', () => {
+    expect(lsxOf({ qty_demand: 1020, dm_per_sp: 5.1 })).toBe(200)
+    expect(lsxOf({ qty_demand: 1020, dm_per_sp: '' })).toBe('')
+    expect(lineFromPo({ ...base, qty_demand: 100, dm_per_sp: 2.5 }).qty_lsx).toBe(40)
+  })
+
+  it('gõ SL theo LSX rồi Định mức → SL đơn hàng tự nhân; sửa thẳng SL đơn hàng → SL theo LSX tính lại', () => {
+    const a = withLsxDemand('rattan', may({}), may({ qty_lsx: 200 }))
+    expect(a.qty_demand).toBe('')
+    const b = withLsxDemand('rattan', a, { ...a, dm_per_sp: 5.1 })
+    expect(b.qty_demand).toBe(1020)
+    const c = withLsxDemand('rattan', b, { ...b, qty_demand: 1530 })
+    expect(c.qty_lsx).toBe(300)
+    // Mẫu khác giữ nguyên nghĩa cũ (phụ kiện: SL đơn hàng là số SP).
+    expect(
+      withLsxDemand('accessory', may({}), may({ qty_lsx: 200, dm_per_sp: 4 })).qty_demand,
+    ).toBe('')
+  })
+
+  it('thêm từ nhu cầu lệnh: SL theo LSX = tổng SP, Định mức = định mức chung hoặc SL cần ÷ SP', () => {
+    expect(lsxFromNeed('rattan', { qty_needed: 1020, breakdown: [{ qty: 200, per_unit: 5.1 }] })).toEqual({ qty_lsx: 200, dm_per_sp: 5.1 }) // prettier-ignore
+    expect(lsxFromNeed('rattan', { qty_needed: 1120, breakdown: [{ qty: 200, per_unit: 5.1 }, { qty: 40, per_unit: 2.5 }] })).toEqual({ qty_lsx: 240, dm_per_sp: 4.6667 }) // prettier-ignore
+    expect(lsxFromNeed('rattan', { qty_needed: 10, breakdown: [] })).toEqual({})
+    expect(lsxFromNeed('accessory', { qty_needed: 10, breakdown: [{ qty: 2, per_unit: 5 }] })).toEqual({}) // prettier-ignore
+  })
+})
+
+describe('dòng phí / dịch vụ trên lưới (0234)', () => {
+  it('chỉ đòi tên + SL + giá — không đòi kg/m, lọt lòng, m³ của mẫu', () => {
+    const l = {
+      ...newFeeLine('Công dán + keo bồi'),
+      qty: 557 as Num,
+      price: 3_000 as Num,
+    }
+    for (const t of ['aluminium', 'metal_kg', 'carton', 'glass', 'wood', 'foam'] as const)
+      expect(lineProblem(t, l), t).toBeNull()
+    expect(lineProblem('carton', { ...l, name: ' ' })).toBe('thiếu tên phí / dịch vụ')
+  })
+
+  it('dòng phí là dòng tự do mang cờ phí; payload deriveLine nhận line_kind', () => {
+    const l = newFeeLine()
+    expect(l.is_free && l.fee).toBe(true)
+    expect(l.material_id.startsWith('free-')).toBe(true)
+  })
+})
+
+describe('khôi phục nháp cũ có dòng phí (13/10/2026)', () => {
+  it('nháp từ bản trước 0234: dòng tự do ở mẫu khác gỗ nhận lại cờ phí; mẫu gỗ thì không', () => {
+    const { fee: _bo, ...cu } = { ...newFeeLine('Công dán + keo bồi'), qty: 557 as Num, price: 3_000 as Num } // prettier-ignore
+    void _bo
+    expect(migrateDraftLine('carton', cu as Line).fee).toBe(true)
+    expect(migrateDraftLine('wood', cu as Line).fee).toBe(false)
+    expect(migrateDraftLine('wood', { ...cu, fee: true } as Line).fee).toBe(true)
+  })
+})

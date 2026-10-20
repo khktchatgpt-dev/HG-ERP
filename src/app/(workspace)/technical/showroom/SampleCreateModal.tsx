@@ -209,9 +209,9 @@ export function SampleCreateModal({
 }
 
 export const INPUT =
-  'w-full rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900'
+  'w-full rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm'
 export const BTN_GHOST =
-  'rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900'
+  'rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50'
 export const BTN_PRIMARY =
   'inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-700 disabled:opacity-50'
 

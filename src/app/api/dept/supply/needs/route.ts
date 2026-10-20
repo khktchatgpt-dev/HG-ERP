@@ -83,13 +83,20 @@ export const GET = handle(async (req: Request) => {
    * mua chung của lệnh NGOÀI bộ (mua hộ lệnh trong bộ) trước đây bị bỏ sót —
    * cả hai đều làm số "đã đặt" sai và đề xuất mua sai theo.
    */
-  const [stock, reserved, orderedPending, allocLists, maxStocks] = await Promise.all([
-    stockInfoMany(matIds),
-    reservedByOtherLsx(lsxIds, matIds),
-    supplyRepo.orderedPendingByLsxSet(lsxIds, exclude_po_id),
-    Promise.all(lsxIds.map((id) => lsxAllocationByCode(id))),
-    materialsRepo.maxStockMany(matIds), // trần tồn — cảnh báo mua vượt (P3.1)
-  ])
+  const [stock, reserved, orderedPending, allocLists, maxStocks, orderedEach] =
+    await Promise.all([
+      stockInfoMany(matIds),
+      reservedByOtherLsx(lsxIds, matIds),
+      supplyRepo.orderedPendingByLsxSet(lsxIds, exclude_po_id),
+      Promise.all(lsxIds.map((id) => lsxAllocationByCode(id))),
+      materialsRepo.maxStockMany(matIds), // trần tồn — cảnh báo mua vượt (P3.1)
+      // "Đã đặt" RIÊNG từng lệnh (theo phần chia) — chỉ cần khi đơn gộp nhiều lệnh.
+      lsxIds.length > 1
+        ? Promise.all(
+            lsxIds.map((id) => supplyRepo.orderedPendingByLsxSet([id], exclude_po_id)),
+          )
+        : Promise.resolve([]),
+    ])
   const onHand = new Map(stock.map((s) => [s.material_id, s.on_hand]))
 
   // Phân bổ theo SP, gộp cả bộ lệnh (cùng SP + cùng đm thì cộng SL).
@@ -123,6 +130,25 @@ export const GET = handle(async (req: Request) => {
         has_pending: s.has_pending,
         max_stock: maxStocks.get(n.material_id) ?? null,
         breakdown: alloc.get(n.material_code) ?? [],
+        /*
+          NHU CẦU TỪNG LỆNH (10/10/2026) — để màn soạn tự chia SL đặt của đơn gộp
+          cho từng lệnh. `need` = còn phải đặt của RIÊNG lệnh đó (cần − đã xuất −
+          đã đặt ở đơn khác, theo phần chia); `needed` = cần − đã xuất, dùng khi
+          mọi lệnh đều đã đặt đủ mà người mua vẫn đặt thêm.
+        */
+        by_lsx:
+          lsxIds.length > 1
+            ? lsxIds.map((id, i) => {
+                const own = needLists[i].find((x) => x.material_id === n.material_id)
+                const needed = Math.max(own?.qty_remaining ?? 0, 0)
+                const done = orderedEach[i]?.get(n.material_id)?.ordered ?? 0
+                return {
+                  production_order_id: id,
+                  need: Math.max(needed - done, 0),
+                  needed,
+                }
+              })
+            : undefined,
       }
     }),
   })

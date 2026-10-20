@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
 import { buildLsxExcel } from '@/modules/dept/production/lsx-excel'
-import { resolveLsxTemplate } from '@/modules/dept/sales/lsx-template'
+import { resolveLsxTemplate } from '@/lib/lsx-template'
 import type { LsxLine } from '@/modules/dept/production/lsx-lines.repo'
 
 const line = (over: Partial<LsxLine>): LsxLine => ({

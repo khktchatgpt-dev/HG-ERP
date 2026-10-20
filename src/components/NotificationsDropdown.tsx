@@ -10,7 +10,6 @@ type Notif = {
   id: string
   type: string
   task_id: string | null
-  /** `href`: đích mở khi thông báo không gắn task (góp ý hệ thống 0186). */
   payload: { title?: string; href?: string } | null
   read_at: string | null
   created_at: string
@@ -39,6 +38,18 @@ const TYPE_LABEL: Record<string, string> = {
   wh_stocktake_approved: 'đã duyệt biên bản kiểm kê',
   wh_stocktake_rejected: 'đã từ chối biên bản kiểm kê',
   po_withdrawn: 'đã rút đơn đặt về nháp',
+  po_reopened: 'đã mở lại đơn đã duyệt để sửa',
+  po_adjusted: 'đã điều chỉnh đơn đã gửi NCC',
+  po_unapproved: 'đã thu hồi chữ ký trên đơn đặt',
+  po_question: 'hỏi về đơn đặt bạn phụ trách',
+  po_answered: 'đã trả lời câu hỏi về đơn đặt',
+  po_issue: 'báo sự cố giao hàng',
+  po_inbound_soon: 'NCC xác nhận — hàng sắp về kho',
+  po_inbound_moved: 'đã dời hẹn giao hàng về kho',
+  dnm_submitted: 'gửi đề nghị mua chờ duyệt',
+  dnm_approved: 'đã duyệt đề nghị mua',
+  dnm_rejected: 'đã từ chối đề nghị mua',
+  po_urgent_sent: 'đã gửi gấp đơn đặt, chờ ký bù',
   po_reassigned: 'đã bàn giao đơn đặt',
   po_closed_short: 'đã chốt phần thiếu đơn đặt',
   po_late: 'đơn đặt quá hẹn giao',
@@ -168,7 +179,11 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
                   >
                     <Link
                       href={
-                        n.payload?.href ?? (n.task_id ? `/tasks/${n.task_id}` : '/notifications')
+                        n.task_id
+                          ? `/tasks/${n.task_id}`
+                          : n.payload?.href?.startsWith('/')
+                            ? n.payload.href
+                            : '/notifications'
                       }
                       onClick={() => setOpen(false)}
                       className="hover:bg-accent block px-3 py-2 transition-colors"

@@ -1,6 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDownToLine,
+  Calculator,
+  WalletCards,
+  LockKeyhole,
   ArrowLeftRight,
   ArrowRightToLine,
   ArrowUpFromLine,
@@ -21,6 +24,8 @@ import {
   Factory,
   Gavel,
   FileText,
+  Fingerprint,
+  Grid3x3,
   Hammer,
   HeartPulse,
   History,
@@ -30,6 +35,7 @@ import {
   MessagesSquare,
   ListTodo,
   NotebookPen,
+  BookOpenText,
   Package,
   Receipt,
   ReceiptText,
@@ -47,6 +53,7 @@ import {
   Truck,
   Users,
   UsersRound,
+  FolderKanban,
 } from 'lucide-react'
 
 /**
@@ -64,13 +71,17 @@ const REGISTRY: Record<string, LucideIcon> = {
   'list-todo': ListTodo,
   'calendar-off': CalendarOff,
   'calendar-check': CalendarCheck,
+  fingerprint: Fingerprint,
   bell: Bell,
   armchair: Armchair,
   users: Users,
   'users-round': UsersRound,
   'file-text': FileText,
   'circle-dollar-sign': CircleDollarSign,
+  // Sơ đồ kệ (0193) — ô lưới là hình gần nhất với "khu trong kho".
+  'grid-3x3': Grid3x3,
   'clipboard-list': ClipboardList,
+  'folder-kanban': FolderKanban,
   'clipboard-check': ClipboardCheck,
   factory: Factory,
   'chart-column': ChartColumn,
@@ -91,6 +102,14 @@ const REGISTRY: Record<string, LucideIcon> = {
   hammer: Hammer,
   history: History,
   'notebook-pen': NotebookPen,
+  // Cách tính công (B2) — hệ số + quy tắc tính giờ.
+  calculator: Calculator,
+  // Kỳ công & chốt (B3).
+  lock: LockKeyhole,
+  // Hồ sơ lương (B4).
+  wallet: WalletCards,
+  // Sổ phiếu kho — sổ đã ghi, chỉ đọc; khác 'notebook-pen' là sổ đang viết.
+  'book-open': BookOpenText,
   'arrow-right-to-line': ArrowRightToLine,
   'arrow-left-right': ArrowLeftRight,
   'arrow-down-to-line': ArrowDownToLine,

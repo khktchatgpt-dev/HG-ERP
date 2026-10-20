@@ -9,6 +9,7 @@ import {
 import { assertCan } from '@/server/permissions'
 import { safeSyncUserRoles } from '@/modules/core/rbac/rbac.sync'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { dichLoiGan } from './nhan-vien-tai-khoan.service'
 
 type CreateInput = {
   email: string
@@ -17,6 +18,9 @@ type CreateInput = {
   role: UserRole
   department_id?: string | null
   title?: string | null
+  /** Màn mới chỉ tạo tự do tài khoản DÙNG CHUNG; cá nhân thì cấp từ dòng nhân viên. */
+  account_kind?: 'person' | 'shared'
+  shared_holder?: string | null
 }
 
 type UpdateInput = Partial<{
@@ -57,6 +61,8 @@ export const usersService = {
       role: input.role,
       department_id: input.department_id ?? null,
       title: input.title ?? null,
+      account_kind: input.account_kind ?? 'person',
+      shared_holder: input.account_kind === 'shared' ? (input.shared_holder ?? null) : null,
     })
     await userAuditRepo.insert({
       target_user_id: user.id,
@@ -85,7 +91,7 @@ export const usersService = {
       throw Forbidden('Cannot change your own role or active state')
     }
     const changed = diffPatch<User>(before, patch)
-    const user = await usersRepo.update(id, patch)
+    const user = await dichLoiGan(() => usersRepo.update(id, patch))
     // Đổi vai/phòng → đồng bộ lại role RBAC dẫn-xuất.
     if (patch.role !== undefined || patch.department_id !== undefined) {
       await safeSyncUserRoles(id)
@@ -153,7 +159,7 @@ export const usersService = {
     const before = await usersRepo.findById(id)
     if (!before) throw NotFound('User not found')
     if (!before.deleted_at) throw BadRequest('User is not deleted')
-    const user = await usersRepo.restore(id)
+    const user = await dichLoiGan(() => usersRepo.restore(id))
     await userAuditRepo.insert({
       target_user_id: id,
       actor_id: actor.id,

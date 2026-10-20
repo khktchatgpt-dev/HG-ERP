@@ -29,6 +29,5 @@ export const PUT = handle(async (req: Request, { params }: Params) => {
 export const POST = handle(async (_req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  await lsxLinesService.seedFromOrders(id)
-  return NextResponse.json(await lsxLinesService.sheet(user, id))
+  return NextResponse.json(await lsxLinesService.reseed(user, id))
 })

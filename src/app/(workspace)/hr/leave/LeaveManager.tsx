@@ -93,15 +93,13 @@ export function LeaveManager({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between gap-2">
-        <div className="flex gap-1 border-b border-zinc-200 text-sm dark:border-zinc-800">
+        <div className="flex gap-1 border-b border-zinc-200 text-sm">
           {SCOPES.filter((s) => s.id === 'mine' || canApprove).map((s) => (
             <Link
               key={s.id}
               href={`?scope=${s.id}`}
               className={`-mb-px border-b-2 px-3 py-2 ${
-                scope === s.id
-                  ? 'border-black dark:border-white'
-                  : 'border-transparent text-zinc-500'
+                scope === s.id ? 'border-black' : 'border-transparent text-zinc-500'
               }`}
             >
               {s.label}
@@ -124,7 +122,7 @@ export function LeaveManager({
           }
         />
       ) : (
-        <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+        <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white">
           {rows.map((r) => (
             <li key={r.id} className="p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">

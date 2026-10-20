@@ -12,13 +12,19 @@
  * giữ bóng — người mua mở màn này để biết hôm nay gọi cho ai.
  */
 
+import { assessPoLate } from './late-risk'
+
 export type LsxSupplyGateKey = 'none' | 'unsent' | 'late' | 'inflight' | 'done'
 
 export type LsxSupplyOwner = 'Cung ứng' | 'Nhà cung cấp' | 'Kho' | '—'
 
 export type LsxSupplyInput = {
-  /** Kho xác nhận vật tư của lệnh về đủ — mốc dứt khoát, không phải suy từ PO. */
-  materials_received_at: string | null
+  /**
+   * Mốc "đã nhận vật tư" của lệnh. TẠM KHÔNG DÙNG (03/10/2026, user chốt): chưa
+   * xác định được ai chốt đủ vật tư, bảng kê chưa hoàn thiện, và hai mốc đang có
+   * đều do tài khoản quản trị bấm. Giữ trường để caller không phải đổi.
+   */
+  materials_received_at?: string | null
   /** Đơn mua CÒN SỐNG của lệnh (trừ đơn đã huỷ). */
   posTotal: number
   /** Đơn còn nháp / chờ Giám đốc ký — chưa ra khỏi nhà. */
@@ -74,7 +80,7 @@ const GATES: Record<LsxSupplyGateKey, Omit<LsxSupplyGate, 'detail'>> = {
     mine: false,
     step: 4,
   },
-  done: { key: 'done', label: 'Vật tư đã về đủ', owner: '—', mine: false, step: 5 },
+  done: { key: 'done', label: 'Đơn mua đã về hết', owner: '—', mine: false, step: 5 },
 }
 
 export const LSX_SUPPLY_GATES = (Object.keys(GATES) as LsxSupplyGateKey[]).sort(
@@ -91,9 +97,10 @@ export const LSX_SUPPLY_GATES = (Object.keys(GATES) as LsxSupplyGateKey[]).sort(
  * tình trạng mua hàng thật — tệ hơn hẳn việc không có nó. Thêm lại khi BOM có
  * dữ liệu thật.
  *
- * `materials_received_at` xét trước mọi phép đếm PO: đó là chữ ký của Kho, dứt
- * khoát hơn suy diễn. Có lệnh mua thêm đơn lặt vặt sau khi Kho đã chốt đủ —
- * đếm PO sẽ kéo lệnh đã xong ngược về bậc "đang về".
+ * TẠM BỎ PHẦN "ĐỦ VẬT TƯ" (03/10/2026, user chốt): màn này chỉ nói đơn mua đi
+ * tới đâu. Chưa có nhu cầu vật tư đáng tin (định mức 0 SP xác nhận, bảng kê
+ * chưa xong) thì "đủ" hay "thiếu" đều là nói đoán. Mốc `materials_received_at`
+ * từng đè mọi phép đếm PO — JAWOLL báo "đủ" trong khi còn đơn trễ — nay bỏ qua.
  */
 export function lsxSupplyGate(r: LsxSupplyInput): LsxSupplyGate {
   const g = (key: LsxSupplyGateKey, detail: string): LsxSupplyGate => ({
@@ -101,7 +108,6 @@ export function lsxSupplyGate(r: LsxSupplyInput): LsxSupplyGate {
     detail,
   })
 
-  if (r.materials_received_at) return g('done', 'Kho đã xác nhận vật tư về đủ')
   if (r.posTotal === 0) return g('none', 'Chưa có đơn mua nào cho lệnh này')
   if (r.posUnsent > 0) {
     return g('unsent', `${r.posUnsent} đơn còn nháp hoặc chờ ký — chưa ra khỏi nhà`)
@@ -111,12 +117,9 @@ export function lsxSupplyGate(r: LsxSupplyInput): LsxSupplyGate {
   }
   if (r.posOpen > 0)
     return g('inflight', `${r.posOpen} đơn đã gửi, chờ nhà cung cấp giao`)
-  /*
-   * Còn sống mà không mở, không chưa-gửi ⇒ mọi đơn đã nhận xong, chỉ là Kho
-   * chưa bấm xác nhận cho lệnh. Nói đúng thực tế thay vì vẽ ra một bậc giả:
-   * chính cái mốc còn thiếu kia mới là việc cần ai đó làm nốt.
-   */
-  return g('done', 'Đơn mua đã nhận xong — chờ Kho xác nhận đủ cho lệnh')
+  // Còn sống mà không mở, không chưa-gửi ⇒ mọi đơn đã nhận xong. KHÔNG nói "đủ
+  // vật tư": đơn về hết chưa chắc đã đặt đủ cho lệnh.
+  return g('done', 'Mọi đơn mua của lệnh đã nhận xong')
 }
 
 // ── Mức khẩn theo HẠN VẬT TƯ PHẢI VỀ ──────────────────────────────────
@@ -222,6 +225,65 @@ export function suggestMaterialsDue(
   if (Number.isNaN(d.getTime())) return null
   d.setUTCDate(d.getUTCDate() - leadDays)
   const iso = d.toISOString().slice(0, 10)
-  if (todayIso && iso < todayIso) return shipDateIso.slice(0, 10) < todayIso ? null : todayIso
+  if (todayIso && iso < todayIso)
+    return shipDateIso.slice(0, 10) < todayIso ? null : todayIso
   return iso
+}
+
+// ── Gom đơn mua theo lệnh ────────────────────────────────────────────
+
+/** Trường tối thiểu của một đơn để gom theo lệnh và tính bốn số đếm. */
+export type PoForLsx = {
+  id: string
+  status: string
+  expected_at: string | null
+  production_order_id: string | null
+}
+
+/**
+ * Gom đơn mua theo LỆNH — đơn mua chung (0125) gắn vào CẢ các lệnh nó phục vụ,
+ * cờ `shared` đánh dấu lệnh phụ; `late` = đã qua hẹn giao (assessPoLate — cố ý
+ * tính cả đơn nháp, xem lsx-supply.service về nhãn "NCC trễ").
+ *
+ * Thuần và dùng chung cho màn Vật tư theo lệnh, file họp và badge sidebar
+ * (13/09/2026): trước đó phần gom nằm trong service, thêm một chỗ đếm là thêm
+ * một chỗ lệch.
+ */
+export function groupPosByLsx<T extends PoForLsx>(
+  pos: T[],
+  extraLsx: Map<string, { id: string }[]>,
+  todayIso: string,
+): Map<string, (T & { shared: boolean; late: boolean })[]> {
+  const out = new Map<string, (T & { shared: boolean; late: boolean })[]>()
+  const attach = (lsxId: string, p: T, shared: boolean) => {
+    const list = out.get(lsxId) ?? []
+    list.push({ ...p, shared, late: assessPoLate(p, todayIso) === 'overdue' })
+    out.set(lsxId, list)
+  }
+  for (const p of pos) {
+    if (p.production_order_id) attach(p.production_order_id, p, false)
+    for (const ex of extraLsx.get(p.id) ?? []) {
+      if (ex.id !== p.production_order_id) attach(ex.id, p, true)
+    }
+  }
+  return out
+}
+
+/** Bốn số đếm của lệnh từ danh sách đơn đã gom — đơn huỷ không tính. */
+export function summarizePos(
+  list: { status: string; late: boolean }[],
+): Pick<LsxSupplyInput, 'posTotal' | 'posUnsent' | 'posOpen' | 'posLate'> {
+  const live = list.filter((p) => p.status !== 'cancelled')
+  return {
+    posTotal: live.length,
+    posUnsent: live.filter((p) => p.status === 'draft' || p.status === 'pending_approval')
+      .length,
+    posOpen: live.filter(
+      (p) =>
+        p.status !== 'draft' &&
+        p.status !== 'pending_approval' &&
+        p.status !== 'received',
+    ).length,
+    posLate: live.filter((p) => p.late).length,
+  }
 }

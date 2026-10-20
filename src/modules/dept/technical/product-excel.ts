@@ -275,8 +275,7 @@ const orDash = (v: unknown) =>
   v == null || v === '' ? '—' : (v as string | number | boolean)
 
 /** "bom" → "File BOM / định mức" — cùng chữ với ngăn tài liệu trên màn hình. */
-const docTypeLabel = (t: string | null) =>
-  t ? (DOC_TYPE_LABEL[t as DocType] ?? t) : '—'
+const docTypeLabel = (t: string | null) => (t ? (DOC_TYPE_LABEL[t as DocType] ?? t) : '—')
 
 const labelOf = (
   list: readonly { code: string; label: string }[],

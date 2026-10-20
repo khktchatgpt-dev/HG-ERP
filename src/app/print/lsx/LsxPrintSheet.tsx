@@ -1,13 +1,7 @@
 import { Fragment } from 'react'
-import type { LsxSheetColumn, LsxTemplate } from '@/modules/dept/sales/lsx-template'
+import type { LsxSheetColumn, LsxTemplate } from '@/lib/lsx-template'
 import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
-import {
-  fmtN,
-  groupCell,
-  isReady,
-  lineCell,
-  valueState,
-} from '@/modules/dept/production/lsx-sheet-cells'
+import { fmtN, groupCell, isReady, lineCell, valueState } from '@/lib/lsx-sheet-cells'
 import {
   PrintLetterhead,
   PrintPage,

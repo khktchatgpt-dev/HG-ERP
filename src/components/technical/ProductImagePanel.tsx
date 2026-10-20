@@ -49,7 +49,7 @@ export function ProductImagePanel({
         onClick={() => setOpen(true)}
         aria-label={imageUrl ? 'Xem ảnh sản phẩm' : 'Thêm ảnh sản phẩm'}
         className={cn(
-          'group relative flex h-48 w-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition hover:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-sky-500',
+          'group relative flex h-48 w-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition hover:border-sky-400',
           className,
         )}
       >
@@ -68,7 +68,7 @@ export function ProductImagePanel({
             </span>
           </>
         ) : (
-          <span className="px-2 text-center text-xs text-amber-600 dark:text-amber-500">
+          <span className="px-2 text-center text-xs text-amber-600">
             Chưa có ảnh đại diện
             {canEdit && (
               <span className="mt-0.5 block text-zinc-400">Bấm để thêm ảnh</span>
@@ -263,11 +263,11 @@ function ImageViewer({
       maxWidth="sm:max-w-3xl"
     >
       <div className="flex flex-col gap-3">
-        <div className="flex min-h-[18rem] items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex min-h-[18rem] items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
           {loading ? (
             <Spinner size={20} />
           ) : loadError ? (
-            <p className="px-4 py-10 text-center text-sm text-red-600 dark:text-red-400">
+            <p className="px-4 py-10 text-center text-sm text-red-600">
               Không tải được ảnh — {loadError}
             </p>
           ) : !activeId ? (
@@ -310,7 +310,7 @@ function ImageViewer({
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="shrink-0 text-sky-600 hover:underline dark:text-sky-400"
+                className="shrink-0 text-sky-600 hover:underline"
               >
                 Mở ảnh gốc ↗
               </a>
@@ -319,21 +319,21 @@ function ImageViewer({
         )}
 
         {removableIds.length > 1 && (
-          <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+          <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
             SP này còn {removableIds.length - 1} ảnh cũ từ trước. Tải ảnh mới lên sẽ dọn
             hết.
           </p>
         )}
 
         {canEdit && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-3">
             {busy && <Spinner size={14} />}
             {activeId && (
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void onRemove()}
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950"
+                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 Xoá ảnh
               </button>

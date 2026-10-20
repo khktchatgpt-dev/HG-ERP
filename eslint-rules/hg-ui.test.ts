@@ -1,18 +1,17 @@
 /*
- * Test cho hai luật giao diện.
+ * Test cho luật client-server-boundary.
  *
- * Vì sao luật lint cần test: nó hỏng IM LẶNG. Bản đầu tiên của
- * `no-hardcoded-color` viết regex bằng template literal thường, `\b` bị nuốt
- * thành ký tự backspace nên regex không khớp gì — lint vẫn chạy, vẫn báo "0
- * lỗi", và cả hàng rào là đồ giả. Không có test thì không ai phát hiện.
+ * Vì sao luật lint cần test: nó hỏng IM LẶNG. Một regex viết sai thì lint vẫn
+ * chạy, vẫn báo "0 lỗi", và cả hàng rào là đồ giả. Không có test thì không ai
+ * phát hiện. Nên phần quan trọng nhất là các ca INVALID: chúng canh việc luật
+ * vẫn BẮT được.
  *
- * Nên phần quan trọng nhất ở đây là các ca VALID: chúng canh việc luật vẫn
- * BẮT được, chứ không phải im vì hỏng.
+ * (30/09/2026: các luật canh giao diện đã gỡ cùng test của chúng.)
  */
 import { RuleTester } from 'eslint'
 import tsParser from '@typescript-eslint/parser'
 import { describe, it } from 'vitest'
-import hgUi from './hg-ui.mjs'
+import hg from './hg-ui.mjs'
 
 // RuleTester của ESLint 9 tự dò `describe`/`it` toàn cục; vitest chạy với
 // `globals: false` nên phải đưa vào tay.
@@ -26,61 +25,52 @@ const ruleTester = new RuleTester({
   },
 })
 
-const wrap = (jsx: string) => `const C = () => (${jsx})`
+const client = (body: string) => `'use client'\n${body}`
 
-ruleTester.run('no-hardcoded-color', hgUi.rules['no-hardcoded-color'], {
+ruleTester.run('client-server-boundary', hg.rules['client-server-boundary'], {
   valid: [
-    wrap('<div className="bg-card text-muted-foreground border" />'),
-    wrap('<div className="text-[var(--warn)] bg-accent" />'),
-    // Tiền tố biến thể trên token thì vẫn hợp lệ.
-    wrap('<div className="hover:bg-accent dark:text-foreground" />'),
-    // Không phải class màu: đừng bắt nhầm chữ có tên màu.
-    wrap('<div className="rounded-xl p-4 shadow-sm" />'),
-    wrap('<div title="Đơn hàng màu đỏ" />'),
-    // `bg-red` thiếu bậc số không phải class Tailwind hợp lệ.
-    wrap('<div className="bg-red" />'),
+    // Chỉ lấy KIỂU — bị xoá sạch lúc biên dịch.
+    client(`import type { Po } from '@/modules/dept/supply/pos.repo'`),
+    client(`import { type Po, type PoLine } from '@/modules/dept/supply/pos.repo'`),
+    client(`export type { Po } from '@/modules/dept/supply/pos.repo'`),
+    // Module thuần được phép: zod schema, danh mục quyền.
+    client(`import { CERT_TYPES } from '@/modules/dept/supply/certs.schema'`),
+    client(`import { ACTIONS } from '@/modules/core/rbac/actions'`),
+    // Vùng client bình thường.
+    client(`import { api } from '@/lib/api'`),
+    client(`import { Btn } from '@/components/kit'`),
+    // File SERVER (không có 'use client') thì lấy gì cũng được.
+    `import { posService } from '@/modules/dept/supply/pos.service'`,
+    `import { db } from '@/server/db'`,
+    // Chuỗi 'use client' không đứng thành directive thì không tính.
+    `const s = 'use client'\nimport { db } from '@/server/db'`,
   ],
   invalid: [
     {
-      code: wrap('<div className="bg-zinc-50" />'),
-      errors: [{ messageId: 'palette' }],
+      code: client(`import { posService } from '@/modules/dept/supply/pos.service'`),
+      errors: [{ messageId: 'value' }],
     },
-    // Biến thể dark: — chính là kiểu hay gặp nhất trong nợ cũ.
     {
-      code: wrap('<div className="dark:bg-zinc-950" />'),
-      errors: [{ messageId: 'palette' }],
+      code: client(`import { db } from '@/server/db'`),
+      errors: [{ messageId: 'value' }],
     },
-    // Trong template literal (clsx/cn), không chỉ literal thường.
+    // Trộn: một specifier giá trị là đủ kéo cả module vào bundle.
     {
-      code: 'const c = `px-2 ${x} text-emerald-600`',
-      errors: [{ messageId: 'palette' }],
+      code: client(`import { type Po, posRepo } from '@/modules/dept/supply/pos.repo'`),
+      errors: [{ messageId: 'value' }],
     },
-    // Hex gõ thẳng trong class.
+    // Import chỉ để chạy tác dụng phụ cũng kéo module vào.
+    { code: client(`import '@/server/db'`), errors: [{ messageId: 'value' }] },
+    // Re-export giá trị.
     {
-      code: wrap('<div className="text-[#2743c4]" />'),
-      errors: [{ messageId: 'hex' }],
+      code: client(`export { posRepo } from '@/modules/dept/supply/pos.repo'`),
+      errors: [{ messageId: 'value' }],
     },
-    // Bậc 2 chữ số (50) và 3 chữ số đều phải bắt.
+    { code: client(`export * from '@/server/http'`), errors: [{ messageId: 'value' }] },
+    // Directive "use client" bằng nháy kép.
     {
-      code: wrap('<div className="border-amber-300 bg-sky-50" />'),
-      errors: [{ messageId: 'palette' }],
+      code: `"use client"\nimport { handle } from '@/server/http'`,
+      errors: [{ messageId: 'value' }],
     },
-  ],
-})
-
-ruleTester.run('no-raw-control', hgUi.rules['no-raw-control'], {
-  valid: [
-    wrap('<Button>Lưu</Button>'),
-    wrap('<DataTable rows={rows} />'),
-    wrap('<Input value={v} />'),
-    // Thẻ thường khác không bị đụng tới.
-    wrap('<div><span>x</span></div>'),
-  ],
-  invalid: [
-    { code: wrap('<button>Lưu</button>'), errors: [{ messageId: 'raw' }] },
-    { code: wrap('<input value={v} />'), errors: [{ messageId: 'raw' }] },
-    { code: wrap('<select><option>a</option></select>'), errors: [{ messageId: 'raw' }] },
-    { code: wrap('<table><tbody /></table>'), errors: [{ messageId: 'raw' }] },
-    { code: wrap('<textarea />'), errors: [{ messageId: 'raw' }] },
   ],
 })

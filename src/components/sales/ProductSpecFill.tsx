@@ -76,7 +76,7 @@ export function ProductSpecFill({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-1.5 rounded-md border border-dashed border-amber-300 px-2.5 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-500 dark:hover:bg-amber-950/30"
+        className="mt-1.5 rounded-md border border-dashed border-amber-300 px-2.5 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
       >
         ✎ Bổ sung quy cách cho {product.code} ({missing.pack.length} ô trống)
       </button>
@@ -121,8 +121,8 @@ export function ProductSpecFill({
   }
 
   return (
-    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50/40 p-2.5 dark:border-amber-800 dark:bg-amber-950/20">
-      <div className="mb-2 text-[11px] font-semibold text-amber-700 uppercase dark:text-amber-500">
+    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50/40 p-2.5">
+      <div className="mb-2 text-[11px] font-semibold text-amber-700 uppercase">
         Bổ sung quy cách {product.code} — lưu vào thư viện SP, in ngay lên báo giá
       </div>
       {missing.pack.length > 0 && (
@@ -170,7 +170,7 @@ export function ProductSpecFill({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+          className="text-xs text-zinc-500 hover:text-zinc-800"
         >
           Huỷ
         </button>

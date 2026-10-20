@@ -10,6 +10,23 @@
 import { parseInnerDims } from './dims'
 import { cartonAreaM2, foamM3PerSheet } from './po-template'
 
+/**
+ * Quy cách HAI chiều của hàng phẳng ("63x140", "75 x 190 cm", "630×1400mm") — cả
+ * chuỗi phải đúng cặp số đó (đơn vị tuỳ chọn), không thì null.
+ */
+export function parseFlatDims(
+  spec: string,
+): { d: number; r: number; unit: string | null } | null {
+  const m = spec
+    .trim()
+    .match(/^(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(mm|cm|m)?$/i)
+  if (!m) return null
+  const d = Number(m[1].replace(',', '.'))
+  const r = Number(m[2].replace(',', '.'))
+  if (!(d > 0) || !(r > 0)) return null
+  return { d, r, unit: m[3]?.toLowerCase() ?? null }
+}
+
 const nod = (s: string): string =>
   s
     .toLowerCase()
@@ -97,9 +114,18 @@ export function specPreview(
   if (g.includes('bao bi')) {
     const dims = parseInnerDims(s)
     if (!dims) {
+      // Hàng PHẲNG cùng nhóm (bì / túi nilon, tấm lót) chỉ có dài × rộng — chị Nga
+      // 09/10/2026: "Bì nhựa ghế Atrani = 63x140 cm". Không phải lỗi, chỉ không có m².
+      const flat = parseFlatDims(s)
+      if (flat) {
+        return {
+          ok: true,
+          text: `Máy hiểu: hàng phẳng ${flat.d}×${flat.r}${flat.unit ? ` ${flat.unit}` : ''} (dài × rộng — bì / túi / tấm lót, không có chiều cao) · giá theo ĐVT, không tính m²/thùng`,
+        }
+      }
       return {
         ok: false,
-        warn: 'Không đọc được lọt lòng dạng D×R×C (vd "900x605x115") — form đơn sẽ KHÔNG tự tách kích thước và không tính được m²/thùng.',
+        warn: 'Không đọc được lọt lòng dạng D×R×C (vd "900x605x115") — form đơn sẽ KHÔNG tự tách kích thước và không tính được m²/thùng. Bì / túi chỉ cần dài × rộng (vd "63x140 cm").',
       }
     }
     const m2 = cartonAreaM2(openStyle, dims[0], dims[1], dims[2])
@@ -224,7 +250,8 @@ export function baremGate(f: {
       ? Math.abs(typed - f.derivedKg) / f.derivedKg
       : 0
   const unitOff = kgUnitVsBar(f.kg_per_unit, f.kg_per_m, f.default_bar_length_m)
-  const blocked = kgOff > BAREM_OFF_LIMIT || (unitOff != null && unitOff > BAREM_OFF_LIMIT)
+  const blocked =
+    kgOff > BAREM_OFF_LIMIT || (unitOff != null && unitOff > BAREM_OFF_LIMIT)
   return { blocked, key }
 }
 

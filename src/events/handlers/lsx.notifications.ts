@@ -60,6 +60,49 @@ export function registerLsxNotificationHandlers(): void {
     )
   })
 
+  on('lsx.cancelled', async (e) => {
+    await Promise.all(
+      e.notify_ids
+        .filter((id) => id !== e.cancelled_by)
+        .map((rid) =>
+          notificationsService.notify({
+            recipientId: rid,
+            actorId: e.cancelled_by,
+            type: 'lsx_cancelled',
+            payload: {
+              title: `${e.code} — ĐÃ HUỶ (${e.order_codes.join(', ')}) — dừng sản xuất, soát đơn mua của lệnh`,
+              reason: e.reason,
+            },
+          }),
+        ),
+    )
+  })
+
+  on('lsx.header.changed', async (e) => {
+    const LABEL: Record<string, string> = {
+      code: 'số lệnh',
+      ship_date: 'hạn xuất',
+      container_summary: 'container',
+      received_date: 'ngày nhận',
+      priority: 'ưu tiên',
+    }
+    const parts = Object.entries(e.fields).map(
+      ([f, v]) => `${LABEL[f] ?? f}: ${String(v.from ?? '—')} → ${String(v.to ?? '—')}`,
+    )
+    await Promise.all(
+      e.notify_ids
+        .filter((id) => id !== e.changed_by)
+        .map((rid) =>
+          notificationsService.notify({
+            recipientId: rid,
+            actorId: e.changed_by,
+            type: 'lsx_header_changed',
+            payload: { title: `${e.code} — ${parts.join(' · ')}` },
+          }),
+        ),
+    )
+  })
+
   on('lsx.orders.changed', async (e) => {
     const parts = [
       e.added.length ? `gộp thêm ${e.added.join(', ')}` : '',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { poLineAmount } from './po-line'
+import { poLineAmount, roundMoney } from './po-line'
 import {
   FREE_LINE_TEMPLATES,
   PO_TEMPLATES,
@@ -126,6 +126,15 @@ describe('mẫu bao bì — chọn giá theo thùng hoặc theo m² từng dòng
  * Gợi ý nay là phép trừ trần trụi: nhu cầu − tồn.
  */
 describe('SL cần đặt gợi ý — chỉ trừ tồn, KHÔNG cộng hao hụt', () => {
+  it('có Đm/sp: SL đơn hàng là số SẢN PHẨM → nhân định mức rồi mới trừ tồn', () => {
+    // PO-2026-0091 (An Thành Phát, 26/09): 2126 bàn × 4 tăng đơ/bàn = 8504.
+    expect(suggestOrderQty(2126, 0, 4)).toBe(8504)
+    expect(suggestOrderQty(2126, 500, 4)).toBe(8004)
+    // Đm/sp trống / 0 → như cũ (SL đơn hàng đã là số vật tư).
+    expect(suggestOrderQty(2126, 0, null)).toBe(2126)
+    expect(suggestOrderQty(2126, 0, 0)).toBe(2126)
+  })
+
   it('nhu cầu trừ tồn, không nhân thêm gì', () => {
     expect(suggestOrderQty(200, 0)).toBe(200)
     expect(suggestOrderQty(400, 0)).toBe(400)
@@ -200,6 +209,27 @@ describe('deriveLine — gỗ theo m³ (ĐH gỗ Minh Đạt, USD)', () => {
       price_basis: 'unit',
     })
   })
+
+  /*
+   * ĐƠN THẬT 05 HG/ĐT (Đức Toàn Phú Tài, LSX 05/26-27 - MX, ngày 03/08/2026).
+   * Đây là ca đã lộ ra lỗi tròn 4 lẻ: 0,0063988 × 100 = 0,63988 m³, tròn 4 lẻ
+   * thành 0,6399 rồi × $1.500 ra $959,85 trong khi đơn NCC ghi $959,82.
+   */
+  it('05 HG/ĐT: 100 ghế × 0,0063988 m³ × $1.500/m³ = $959,82 đúng như đơn NCC', () => {
+    const d = deriveLine('wood', { qty_ordered: 100, m3_per_unit: 0.0063988 })
+    expect(d).toEqual({ qty2: 0.63988, unit2: 'm³', price_basis: 'unit2' })
+    const amount = poLineAmount({ qty_ordered: 100, unit_price: 1500, ...d })
+    expect(roundMoney(amount, 'USD')).toBe(959.82)
+  })
+
+  it('giữ 6 số lẻ cho m³ — tròn 4 lẻ là lệch cent với hoá đơn', () => {
+    // 50 bàn × 0,044221 m³ = 2,211050 m³; tròn 4 lẻ thành 2,2111 → lệch $0,07.
+    const d = deriveLine('wood', { qty_ordered: 50, m3_per_unit: 0.044221 })
+    expect(d.qty2).toBe(2.21105)
+    expect(
+      roundMoney(poLineAmount({ qty_ordered: 50, unit_price: 1400, ...d }), 'USD'),
+    ).toBe(3095.47)
+  })
 })
 
 /*
@@ -239,6 +269,20 @@ describe('deriveLine — xốp theo m³ (DDH Tân Hoàng Long, "Xốp Casual")',
     expect(Math.round(poLineAmount({ qty_ordered: 1, unit_price: 556_200, ...d }))).toBe(
       7778,
     )
+  })
+
+  /*
+    Đơn xốp Danh Sơn 1/2026- HG/DS (25/09/2026): tờ đơn tính khối CHÍNH XÁC rồi
+    nhân giá/m³. Bản cũ làm tròn m³ của TỪNG TẤM về 6 lẻ trước khi nhân SL — thanh
+    485×60×25 = 0,0007275 m³ thành 0,000728 (+0,07%), nhân 17.008 thanh là lệch
+    11.480 đ so với hoá đơn; tấm 555×555×20 lệch 1.435 đ. Làm tròn một lần, ở TỔNG.
+  */
+  it('SL lớn × tấm mỏng: khối tính chính xác rồi mới làm tròn — khớp tờ đơn Danh Sơn', () => {
+    const hong = deriveLine('foam', { qty_ordered: 17_008, inner_l_mm: 485, inner_w_mm: 60, inner_h_mm: 25, carton_basis: 'm3' }) // prettier-ignore
+    expect(hong.qty2).toBe(12.37332)
+    expect(Math.round(poLineAmount({ qty_ordered: 17_008, unit_price: 1_350_000, ...hong }))).toBe(16_703_982) // prettier-ignore
+    const mat = deriveLine('foam', { qty_ordered: 2_126, inner_l_mm: 555, inner_w_mm: 555, inner_h_mm: 20, carton_basis: 'm3' }) // prettier-ignore
+    expect(Math.round(poLineAmount({ qty_ordered: 2_126, unit_price: 1_350_000, ...mat }))).toBe(17_681_251) // prettier-ignore
   })
 
   it('mút cuộn giữ nguyên SL × giá (basis mặc định)', () => {
@@ -329,5 +373,90 @@ describe('deriveLine · chọn đơn vị tính giá', () => {
     const d = deriveLine('metal_kg', { qty_ordered: 10, price_per: 'unit2' })
     expect(d.qty2).toBeNull()
     expect(d.price_basis).toBe('unit')
+  })
+})
+
+describe('tổng gõ tay — ghi đè tổng kg / m³ / m² (02/10/2026)', () => {
+  // Đơn anh Truyền 18/09: NCC ghi 300 kg làm tròn, còn 0,385 × 5,53 × 141 = 300,16.
+  const nhom = { qty_ordered: 141, weight_per_m: 0.385, bar_length_m: 5.53 }
+
+  it('nhôm: tổng = số gõ tay, tiền theo kg', () => {
+    expect(deriveLine('aluminium', { ...nhom, qty2_override: 300 })).toEqual({
+      qty2: 300,
+      unit2: 'kg',
+      price_basis: 'unit2',
+    })
+  })
+
+  it('gõ tay mà chưa có kg/m, dài cây vẫn ra tổng', () => {
+    expect(deriveLine('aluminium', { qty_ordered: 10, qty2_override: 52.5 }).qty2).toBe(
+      52.5,
+    )
+    expect(deriveLine('metal_kg', { qty_ordered: 10, qty2_override: 80 }).unit2).toBe(
+      'kg',
+    )
+    expect(deriveLine('wood', { qty_ordered: 100, qty2_override: 0.63982 }).qty2).toBe(
+      0.63982,
+    )
+  })
+
+  it('trống / 0 = tự tính như cũ', () => {
+    expect(deriveLine('aluminium', { ...nhom, qty2_override: null }).qty2).toBeCloseTo(
+      300.16,
+      1,
+    )
+    expect(deriveLine('aluminium', { ...nhom, qty2_override: 0 }).qty2).toBeCloseTo(
+      300.16,
+      1,
+    )
+  })
+
+  it('vẫn theo luật cơ sở tính tiền: chọn giá theo cây / theo tấm thì tiền SL × giá', () => {
+    expect(
+      deriveLine('aluminium', { ...nhom, qty2_override: 300, price_per: 'unit' })
+        .price_basis,
+    ).toBe('unit')
+    const kinh = deriveLine('glass', {
+      qty_ordered: 10,
+      carton_basis: 'ctn',
+      qty2_override: 12,
+    })
+    expect([kinh.qty2, kinh.price_basis]).toEqual([12, 'unit'])
+    expect(
+      deriveLine('glass', { qty_ordered: 10, carton_basis: 'm2', qty2_override: 12 })
+        .price_basis,
+    ).toBe('unit2')
+    expect(
+      deriveLine('foam', { qty_ordered: 10, carton_basis: 'm3', qty2_override: 1.5 })
+        .price_basis,
+    ).toBe('unit2')
+  })
+
+  it('mẫu không có cột tổng thì bỏ qua số gõ đè', () => {
+    expect(
+      deriveLine('accessory', { qty_ordered: 10, qty2_override: 300 }).qty2,
+    ).toBeNull()
+    expect(deriveLine('carton', { qty_ordered: 10, qty2_override: 300 }).qty2).toBeNull()
+  })
+
+  it('tiền dòng theo đúng tổng gõ tay', () => {
+    const d = deriveLine('aluminium', { ...nhom, qty2_override: 300 })
+    expect(poLineAmount({ qty_ordered: 141, unit_price: 50_000, ...d })).toBe(15_000_000)
+  })
+})
+
+describe('mẫu gỗ — ván mua theo TẤM (PO-2026-0133, 03/10/2026)', () => {
+  const van = { qty_ordered: 152, m3_per_unit: 0.0072, material_id: 'go-0001' }
+  it('dòng vật tư danh mục: giá theo ĐVT mua, vẫn giữ tổng m³ để in', () => {
+    const d = deriveLine('wood', van)
+    expect(d).toEqual({ qty2: 1.0944, unit2: 'm³', price_basis: 'unit' })
+    expect(poLineAmount({ qty_ordered: 152, unit_price: 81_000, ...d })).toBe(12_312_000)
+  })
+  it('dòng mã SP tự do vẫn theo m³ tinh như cũ', () => {
+    expect(deriveLine('wood', { ...van, material_id: null }).price_basis).toBe('unit2')
+  })
+  it('người dùng chọn "Giá theo" m³ thì theo m³; tổng gõ tay không lật cơ sở giá', () => {
+    expect(deriveLine('wood', { ...van, price_per: 'unit2' }).price_basis).toBe('unit2')
+    expect(deriveLine('wood', { ...van, qty2_override: 1.1 }).price_basis).toBe('unit')
   })
 })

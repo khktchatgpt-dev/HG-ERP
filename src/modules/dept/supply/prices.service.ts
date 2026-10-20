@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import {
   pricesRepo,
   type LastPurchase,
@@ -68,7 +69,7 @@ export const pricesService = {
       material_id: input.material_id,
       price: input.price,
       currency: input.currency,
-      valid_from: input.valid_from ?? new Date().toISOString().slice(0, 10),
+      valid_from: input.valid_from ?? todayVn(),
       note: input.note ?? null,
       created_by: user.id,
     })
@@ -99,7 +100,7 @@ export const pricesService = {
     if (!supplier) throw NotFound('NCC không tồn tại')
     if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
 
-    const valid_from = input.valid_from ?? new Date().toISOString().slice(0, 10)
+    const valid_from = input.valid_from ?? todayVn()
     const count = await pricesRepo.bulkUpsert(
       input.lines.map((l) => ({
         supplier_id: input.supplier_id,
@@ -143,7 +144,7 @@ export const pricesService = {
    * mua gần nhất từ PO thật.
    */
   async compare(_user: User, materialIds: string[]): Promise<PriceCompareEntry[]> {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayVn()
     const [effective, purchases] = await Promise.all([
       pricesRepo.listEffective(materialIds, today),
       pricesRepo.lastPurchases(materialIds),

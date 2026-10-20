@@ -1,0 +1,322 @@
+import { assessPoLate, isMissingEta } from '@/lib/late-risk'
+import type { PoStatus } from '@/lib/po-status'
+import { isMyPo, poOwner } from '@/lib/supply-scope'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
+import { classifyTodo } from '@/lib/supply-watch'
+import type { Po } from './po-types'
+
+/**
+ * BỘ LỌC CỦA MÀN ĐƠN ĐẶT HÀNG — phần thuần, không dính React.
+ *
+ * Thiết kế lại quanh một quan sát: người mua không nghĩ theo 9 trạng thái, họ
+ * nghĩ theo SÁU CHỖ ĐƠN CÓ THỂ ĐANG NẰM, mà bốn trong số đó ứng với một việc
+ * phải làm:
+ *
+ *   Nháp                 → của tôi, chưa gửi ai      → soạn nốt rồi gửi
+ *   Chờ duyệt            → đang nằm bàn Giám đốc     → chờ, hoặc rút về sửa
+ *   Đã duyệt · chưa gửi  → ký rồi mà chưa ra khỏi cửa → GỬI NCC (dễ quên nhất)
+ *   Đang về              → NCC đang lo               → giục khi trễ
+ *   Về đủ / Đã huỷ       → đóng sổ                   → chỉ tra cứu
+ *
+ * `approved` được tách riêng khỏi bốn trạng thái "đang về" chính vì nó là chỗ
+ * đơn hay nằm im: duyệt xong ai cũng tưởng xong. Bảng điều phối Cung ứng đã có
+ * ô "Đã duyệt · chưa gửi NCC" theo đúng cách chia này.
+ *
+ * BA CÔNG TẮC riêng — của tôi / quá hẹn / chưa hẹn giao — nhân VỚI nhóm ở trên
+ * chứ không thay nó. Bản cũ nhét "quá hẹn" và "chưa hẹn giao" vào chung ô với 9
+ * trạng thái, nên câu hỏi thường gặp nhất của trưởng phòng — "đơn CHỜ DUYỆT nào
+ * đang quá hẹn" — không hỏi được.
+ */
+
+/**
+ * `open` (27/09/2026) là rổ GỘP, không phải một ngăn của PO_BUCKETS: mọi đơn
+ * chưa đóng sổ (không phải Về đủ / Đã huỷ). Màn Đơn mua mở ở rổ này — sổ của
+ * một người mua có ~một nửa là đơn đã về đủ, chỉ để tra cứu.
+ */
+export type PoBucket =
+  'all' | 'open' | 'draft' | 'pending' | 'ready' | 'inflight' | 'received' | 'cancelled'
+
+export const PO_BUCKETS: {
+  key: Exclude<PoBucket, 'all' | 'open'>
+  label: string
+  statuses: readonly PoStatus[]
+  /** Nhóm cần người dùng động tay — tô màu nhắc, không để lẫn với nhóm đã xong. */
+  actionable?: boolean
+}[] = [
+  { key: 'draft', label: 'Nháp', statuses: ['draft'], actionable: true },
+  {
+    key: 'pending',
+    label: 'Chờ duyệt',
+    statuses: ['pending_approval'],
+    actionable: true,
+  },
+  /*
+    06/10/2026 — bỏ bước "Gửi NCC": duyệt xong là CHỜ NCC XÁC NHẬN, xác nhận xong
+    là CHỜ GIAO. Đơn "Đã gửi NCC" (gửi gấp, đơn cũ) cũng đang chờ NCC xác nhận
+    nên về chung ngăn — tên ngăn khớp đúng nhãn trạng thái ở trang đơn và màn
+    Giám đốc, một việc một tên.
+  */
+  {
+    key: 'ready',
+    label: 'Chờ NCC xác nhận',
+    statuses: ['approved', 'ordered'],
+    actionable: true,
+  },
+  {
+    key: 'inflight',
+    label: 'Chờ giao · đang về',
+    statuses: ['confirmed', 'in_transit', 'partial'],
+  },
+  { key: 'received', label: 'Về đủ', statuses: ['received'] },
+  { key: 'cancelled', label: 'Đã huỷ', statuses: ['cancelled'] },
+]
+
+const BUCKET_OF = new Map<PoStatus, Exclude<PoBucket, 'all' | 'open'>>(
+  PO_BUCKETS.flatMap((b) => b.statuses.map((s) => [s, b.key] as const)),
+)
+
+export function bucketOf(status: PoStatus) {
+  return BUCKET_OF.get(status) ?? null
+}
+
+export type PoFilterState = {
+  q: string
+  bucket: PoBucket
+  supplierId: string
+  /**
+   * LỌC THEO MỘT LỆNH SẢN XUẤT. 'all' = không lọc.
+   *
+   * Thêm 14/09/2026: trước đó lệnh chỉ GOM được (`groupBy: 'lsx'`) chứ không
+   * lọc được — nhiều lệnh thì màn thành một dải nhóm dài và muốn xem riêng một
+   * lệnh phải cuộn đi tìm. Gom trả lời "đơn nào thuộc lệnh nào", lọc trả lời
+   * "CHỈ lệnh này thôi"; hai câu hỏi khác nhau.
+   */
+  lsxId: string
+  type: 'all' | 'lsx' | 'standalone'
+  /**
+   * KHOẢNG NGÀY LẬP ĐƠN (yyyy-mm-dd, rỗng = không chặn đầu đó).
+   *
+   * Thêm 15/09/2026. Trước đó màn không hỏi được câu dùng nhiều nhất khi sổ
+   * dài: "đơn tháng này", "đơn quý 3", "đơn từ lúc đổi giá thép". Chip trạng
+   * thái lọc theo VÒNG ĐỜI, không thay được trục thời gian — 69 đơn thì cuộn
+   * qua được, vài trăm đơn một năm thì không.
+   *
+   * Lọc theo NGÀY LẬP chứ không phải hẹn giao: người mua tra lại việc mình đã
+   * làm ("tháng trước tôi đặt những gì"), còn hẹn giao đã có màn Nhận hàng lo,
+   * và ở đó trục thời gian là hẹn giao. Hai màn hai câu hỏi.
+   */
+  fromDate: string
+  toDate: string
+  /** Ba công tắc dưới đây CỘNG DỒN với nhau và với `bucket`. */
+  mine: boolean
+  late: boolean
+  /**
+   * QUÁ HẸN VỀ PHÍA AI — chỉ có nghĩa khi `late` đang bật.
+   *
+   * `countPos` đã tách `late` (đơn ĐÃ ra khỏi nhà mà nhà cung cấp chưa giao)
+   * khỏi `lateUnsent` (quá hẹn mà đơn còn nằm ở mình: nháp / chờ ký / đã duyệt
+   * chưa gửi) — vì hai bên là hai việc khác nhau, một bên đi giục, một bên tự
+   * mình phải gửi đơn đi. Nhưng `poMatches` thì không tách, nên một con số hai
+   * cách đếm: thẻ "NCC trễ hẹn" nói 6, bấm vào ra 9.
+   *
+   * Trục này để chỗ hiển thị lọc được ĐÚNG cái nó vừa đếm. Không khai thì là
+   * `'any'` — hành vi y như trước, nên màn `/planning/pos` không đổi gì.
+   */
+  lateSide: 'any' | 'sent' | 'unsent'
+  noEta: boolean
+  /**
+   * NCC CHƯA XÁC NHẬN (06/10/2026 — chủ dự án: màn Giám đốc báo 18 đơn mà trang Đơn
+   * mua không lọc ra được). Đúng hàm `classifyTodo` của Bàn làm việc / Giám sát mua
+   * hàng: gửi quá 2 ngày chưa xác nhận, đơn đã QUÁ HẸN thì nằm ở "NCC trễ hẹn".
+   */
+  unconfirmed: boolean
+  /**
+   * NGƯỜI CẦM ĐƠN (id; 'all' = không lọc) — cùng nghĩa "chủ đơn" của
+   * lib/supply-scope (phụ trách, chưa giao ai thì người lập). Thêm 27/09/2026
+   * cho hàng chip "Người phụ trách" ở màn Đơn mua: 3 người mua, trưởng phòng
+   * hỏi "Huy đang cầm gì" mà trước chỉ có Của tôi | Cả phòng.
+   */
+  ownerId: string
+  /** LOẠI ĐƠN (mẫu đơn: accessory, wood…; 'all' = không lọc). 87/87 đơn có. */
+  template: string
+  /**
+   * CHỈ ĐƠN CÒN MỞ CỦA LỆNH ĐÃ HOÀN THÀNH (28/09/2026) — đơn không ai cập nhật
+   * sau khi sản xuất xong (lib/po-lsx-done). Ô việc ở Bàn làm việc / Giám sát
+   * mua hàng dẫn về đây.
+   */
+  lsxDone: boolean
+}
+
+const mine = (p: Po, meId: string | null) =>
+  isMyPo({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }, meId)
+
+/** Trạng thái mà đơn còn nằm ở phía mình — chưa gửi nhà cung cấp. */
+const UNSENT = new Set<string>(['draft', 'pending_approval', 'approved'])
+
+export const EMPTY_FILTER: PoFilterState = {
+  q: '',
+  bucket: 'all',
+  supplierId: 'all',
+  lsxId: 'all',
+  type: 'all',
+  fromDate: '',
+  toDate: '',
+  mine: false,
+  late: false,
+  lateSide: 'any',
+  noEta: false,
+  unconfirmed: false,
+  ownerId: 'all',
+  template: 'all',
+  lsxDone: false,
+}
+
+export function isFilterActive(f: PoFilterState): boolean {
+  return (
+    f.q.trim() !== '' ||
+    f.bucket !== 'all' ||
+    f.supplierId !== 'all' ||
+    f.lsxId !== 'all' ||
+    f.type !== 'all' ||
+    f.fromDate !== '' ||
+    f.toDate !== '' ||
+    f.mine ||
+    f.late ||
+    f.noEta ||
+    f.unconfirmed ||
+    f.ownerId !== 'all' ||
+    f.template !== 'all' ||
+    f.lsxDone
+  )
+}
+
+/** Đơn của danh sách → dạng hàm phân loại việc của Bàn làm việc hiểu. */
+const watchOf = (p: Po) => ({
+  status: p.status,
+  expected_at: p.expected_at,
+  assigned_to: p.assigned_to ?? null,
+  ordered_at: p.ordered_at ?? null,
+  confirmed_at: p.confirmed_at ?? null,
+})
+
+export function poMatches(
+  p: Po,
+  f: PoFilterState,
+  ctx: { meId: string | null; today: string },
+): boolean {
+  if (f.bucket === 'open') {
+    if (p.status === 'received' || p.status === 'cancelled') return false
+  } else if (f.bucket !== 'all' && bucketOf(p.status) !== f.bucket) return false
+  // "Của tôi" theo nghĩa CHUNG của phòng (lib/supply-scope): người phụ trách,
+  // chưa giao ai thì người lập — cùng luật với quyền sửa đơn ở server.
+  if (f.mine && !mine(p, ctx.meId)) return false
+  if (f.late) {
+    if (assessPoLate(p, ctx.today) !== 'overdue') return false
+    if (f.lateSide === 'unsent' && !UNSENT.has(p.status)) return false
+    if (f.lateSide === 'sent' && UNSENT.has(p.status)) return false
+  }
+  if (f.noEta && !isMissingEta(p)) return false
+  if (f.unconfirmed && classifyTodo(watchOf(p), ctx.today) !== 'unconfirmed') return false
+  if (
+    f.ownerId !== 'all' &&
+    poOwner({ assigned_to: p.assigned_to ?? null, created_by: p.created_by }) !==
+      f.ownerId
+  )
+    return false
+  if (f.template !== 'all' && (p.template ?? '') !== f.template) return false
+  if (f.lsxDone && !isPoOfDoneLsx(p)) return false
+  if (f.supplierId !== 'all' && p.supplier_id !== f.supplierId) return false
+  /*
+    Đơn GỘP nhiều lệnh (0125) phải lọt khi lọc đúng một lệnh PHỤ của nó — chỉ
+    so `production_order_id` thì đơn mua chung biến mất khỏi lệnh mà nó đang
+    phục vụ, và người mua kết luận nhầm là lệnh đó chưa đặt gì.
+  */
+  if (
+    f.lsxId !== 'all' &&
+    p.production_order_id !== f.lsxId &&
+    !(p.extra_lsx ?? []).some((x) => x.id === f.lsxId)
+  )
+    return false
+  /*
+    KHOẢNG NGÀY LẬP — so CHUỖI yyyy-mm-dd, không parse Date.
+
+    `created_at` là timestamptz ("2026-09-15T03:12:44.123+00:00"), cắt 10 ký tự
+    đầu là ngày theo UTC. Ở đây so chuỗi với chuỗi nên hai đầu cùng một hệ quy
+    chiếu; parse thành Date rồi so mốc thì lại đẻ đúng lỗi lệch múi giờ vừa vá
+    hôm nay. Hai đầu BAO GỒM cả ngày biên — người dùng gõ "từ 01/09 đến 30/09"
+    thì mong có cả đơn ngày 30.
+  */
+  const at = p.created_at?.slice(0, 10) ?? ''
+  if (f.fromDate && at < f.fromDate) return false
+  if (f.toDate && at > f.toDate) return false
+  if (f.type === 'lsx' && !p.lsx_code) return false
+  if (f.type === 'standalone' && p.lsx_code) return false
+  const ql = f.q.trim().toLowerCase()
+  // Có cả MÃ ĐƠN HÀNG của khách: người mua hay được hỏi ngược từ phía Sale
+  // ("đơn 17984 đã đặt nhôm chưa"), mà bản cũ tìm mã đó không ra gì.
+  if (
+    ql &&
+    !`${p.code} ${p.supplier_name} ${p.lsx_code ?? 'ngoài lệnh'} ${p.standalone_purpose ?? ''} ${p.standalone_ref ?? ''} ${p.project_code ?? ''} ${p.project_name ?? ''} ${p.project_kind ?? ''} ${p.order_code ?? ''} ${p.assignee_name ?? ''} ${(p.material_names ?? []).join(' ')}`
+      .toLowerCase()
+      .includes(ql)
+  )
+    return false
+  return true
+}
+
+export type PoCounts = Record<Exclude<PoBucket, 'all' | 'open'>, number> & {
+  /** Chưa đóng sổ = all − Về đủ − Đã huỷ. */
+  open: number
+  all: number
+  mine: number
+  late: number
+  lateUnsent: number
+  noEta: number
+  /** NCC chưa xác nhận — cùng tập làn "NCC chưa xác nhận" của Bàn làm việc. */
+  unconfirmed: number
+  /** Đơn còn mở của lệnh đã hoàn thành. */
+  lsxDone: number
+}
+
+/**
+ * Số trên chip. Đếm trên TOÀN BỘ đơn, không phải trên kết quả đã lọc: chip là
+ * lối đi, mà lối đi thì phải nói có bao nhiêu thứ ở đầu kia — kể cả khi bộ lọc
+ * hiện tại đang giấu chúng đi.
+ */
+export function countPos(pos: Po[], meId: string | null, today: string): PoCounts {
+  const c: PoCounts = {
+    all: pos.length,
+    open: 0,
+    draft: 0,
+    pending: 0,
+    ready: 0,
+    inflight: 0,
+    received: 0,
+    cancelled: 0,
+    mine: 0,
+    late: 0,
+    /**
+     * Quá hẹn mà ĐƠN CHƯA RA KHỎI NHÀ (nháp / chờ ký / đã duyệt chưa gửi).
+     * Tách khỏi `late` vì gộp chung thì thẻ đọc thành "NCC trễ" trong khi lỗi
+     * nằm ở phía mình — đo 05/09/2026: cả 6 đơn "quá hẹn" đều còn nháp.
+     */
+    lateUnsent: 0,
+    noEta: 0,
+    unconfirmed: 0,
+    lsxDone: 0,
+  }
+  for (const p of pos) {
+    const b = bucketOf(p.status)
+    if (b) c[b]++
+    if (p.status !== 'received' && p.status !== 'cancelled') c.open++
+    if (mine(p, meId)) c.mine++
+    if (assessPoLate(p, today) === 'overdue') {
+      if (UNSENT.has(p.status)) c.lateUnsent++
+      else c.late++
+    }
+    if (isMissingEta(p)) c.noEta++
+    if (classifyTodo(watchOf(p), today) === 'unconfirmed') c.unconfirmed++
+    if (isPoOfDoneLsx(p)) c.lsxDone++
+  }
+  return c
+}

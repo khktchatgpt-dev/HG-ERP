@@ -16,6 +16,7 @@ export function ProductPartsTab({
   parts,
   partGroups,
   clusters,
+  stages,
   setItems,
   paintCoverage,
   actualWeightKg,
@@ -26,6 +27,8 @@ export function ProductPartsTab({
   parts: PartView[]
   partGroups: PartGroupView[]
   clusters: ClusterView[]
+  /** Danh mục công đoạn — nguồn cho ô khai lộ trình của cụm. */
+  stages: { code: string; label: string }[]
   setItems: SetItemView[]
   /** m² sơn phủ được trên 1 kg sơn — biểu mẫu hard-code 5. */
   paintCoverage: number | null
@@ -42,6 +45,7 @@ export function ProductPartsTab({
         parts={parts}
         partGroups={partGroups}
         clusters={clusters}
+        stages={stages}
         productId={productId}
         baseMaterial={baseMaterial}
         canEdit={canEdit}

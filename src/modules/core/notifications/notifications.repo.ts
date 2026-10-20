@@ -25,6 +25,21 @@ export type NotificationType =
   | 'po_approved'
   | 'po_rejected'
   | 'po_withdrawn'
+  | 'po_reopened'
+  | 'po_adjusted'
+  // 0218 — đơn mua sau chữ ký.
+  | 'po_unapproved'
+  | 'po_question'
+  | 'po_answered'
+  | 'po_urgent_sent'
+  | 'po_issue'
+  // 0251 — hàng sắp về cho Kho (B8b): NCC xác nhận hẹn ≤ 3 ngày · dời hẹn.
+  | 'po_inbound_soon'
+  | 'po_inbound_moved'
+  // 0237 — đề nghị mua vật tư của Kho (0236).
+  | 'dnm_submitted'
+  | 'dnm_approved'
+  | 'dnm_rejected'
   | 'po_reassigned'
   | 'po_closed_short'
   /** Quét sáng pg_cron (0159) — insert thẳng từ SQL, không qua event bus. */
@@ -34,12 +49,14 @@ export type NotificationType =
   | 'lsx_rejected'
   | 'lsx_orders_changed'
   | 'lsx_revised'
+  | 'lsx_cancelled'
+  | 'lsx_header_changed'
   | 'order_changed'
   | 'order_cancelled'
   | 'stage_handoff'
   | 'incident_reported'
   | 'incident_resolved'
-  /** Góp ý hệ thống (0186) — payload có `href` để chuông mở đúng góp ý. */
+  /** Góp ý hệ thống (0253) — payload có `href` để chuông mở đúng góp ý. */
   | 'feedback_new'
   | 'feedback_reviewed'
   | 'feedback_processed'

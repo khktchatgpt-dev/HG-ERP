@@ -32,7 +32,11 @@ export type ProductPick = {
   bom_status: 'none' | 'drawing' | 'done'
   description_en: string | null
   has_image: boolean
+  /** Đường dẫn ảnh ký sẵn (server dựng) — có thể thiếu ở payload cũ. */
+  image_url?: string | null
   packing: Packing
+  /** SP của khách đang chọn — theo customer_id HOẶC nhãn chữ (server tính, 13/10/2026). */
+  is_own?: boolean
 }
 
 const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
@@ -303,9 +307,13 @@ export function ProductPicker({
                     } ${used ? 'cursor-not-allowed opacity-40' : 'hover:bg-accent'}`}
                   >
                     <span className="flex w-full items-center gap-2">
-                      <span className="text-muted-foreground font-mono text-xs">{p.code}</span>
+                      <span className="text-muted-foreground font-mono text-xs">
+                        {p.code}
+                      </span>
                       <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                      {used && <span className="text-muted-foreground text-[10px]">đã dùng</span>}
+                      {used && (
+                        <span className="text-muted-foreground text-[10px]">đã dùng</span>
+                      )}
                     </span>
                     <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
                       <Badge tone={BOM_TONE[p.bom_status]}>
@@ -315,9 +323,7 @@ export function ProductPicker({
                         <span className="font-mono">KH: {p.customer_item_code}</span>
                       )}
                       {!p.has_image && (
-                        <span className="text-[var(--warn)]">
-                          chưa có ảnh
-                        </span>
+                        <span className="text-[var(--warn)]">chưa có ảnh</span>
                       )}
                     </span>
                   </button>

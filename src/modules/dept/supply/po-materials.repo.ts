@@ -283,10 +283,12 @@ export const poMaterialsRepo = {
       return CODE_TOKEN.test(n) ? n : ''
     }
     const codes = [
-      ...new Set(items.flatMap((i) => {
-        const k = codeKeyOf(i)
-        return k ? [k, k.toUpperCase()] : []
-      })),
+      ...new Set(
+        items.flatMap((i) => {
+          const k = codeKeyOf(i)
+          return k ? [k, k.toUpperCase()] : []
+        }),
+      ),
     ]
     const byCode = new Map<string, PoMaterial>()
     if (codes.length > 0) {

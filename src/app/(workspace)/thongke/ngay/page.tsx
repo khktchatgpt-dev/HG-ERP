@@ -32,12 +32,13 @@ export default async function NgayPage({
   const teamName = new Map(depts.map((d) => [d.id, d.name]))
 
   // Σ đạt/phế per phiếu từ dòng sổ của ngày.
-  const sums = new Map<string, { qty: number; defect: number; lines: number }>()
+  const sums = new Map<string, { qty: number; defect: number; rework: number; lines: number }>()
   for (const e of day.entries) {
     if (!e.doc_id) continue
-    const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, lines: 0 }
+    const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, rework: 0, lines: 0 }
     s.qty += Number(e.qty)
     s.defect += Number(e.defect_qty)
+    s.rework += Number(e.rework_qty ?? 0)
     s.lines++
     sums.set(e.doc_id, s)
   }
@@ -64,6 +65,7 @@ export default async function NgayPage({
           created_by_name: d.created_by_name,
           total_qty: Math.round((s?.qty ?? 0) * 100) / 100,
           total_defect: Math.round((s?.defect ?? 0) * 100) / 100,
+          total_rework: Math.round((s?.rework ?? 0) * 100) / 100,
           line_count: s?.lines ?? 0,
         }
       })}

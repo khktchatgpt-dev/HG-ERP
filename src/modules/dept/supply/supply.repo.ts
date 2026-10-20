@@ -1,4 +1,8 @@
 import { db } from '@/server/db'
+import { tiLeChoBo, type LsxSplit } from '@/lib/po-lsx-split'
+import { poLineAmount, type PriceBasis } from '@/lib/po-line'
+import { docEventAt } from '@/lib/date-vn'
+import { DAU_SUA_PHIEU, dieuChinhCua, suaLaiTu } from '@/lib/da-ve'
 
 /**
  * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
@@ -228,15 +232,28 @@ export const supplyRepo = {
    * với logic tự chuyển đợt sang 'received' ở stock.service.
    */
   async receiptsByShipment(poId: string): Promise<Map<string, Map<string, number>>> {
-    const { data } = await db()
+    /*
+      Lọc theo ĐỢT CỦA ĐƠN NÀY ngay trong truy vấn (27/09/2026). Bản cũ lấy mọi
+      phiếu nhập nối đợt của CẢ HỆ THỐNG với `.limit(2000)` rồi mới lọc theo đơn
+      — khi tổng số dòng vượt 2000, đợt của đơn mới hơn rơi khỏi cửa sổ IM LẶNG
+      và "đợt này về mấy" ra 0.
+    */
+    const { data: ships } = await db()
+      .from('supply_po_shipments')
+      .select('id')
+      .eq('po_id', poId)
+    const shipIds = new Set(((ships ?? []) as { id: string }[]).map((r) => r.id))
+    const out = new Map<string, Map<string, number>>()
+    if (shipIds.size === 0) return out
+    const { data, error } = await db()
       .from('warehouse_movements')
       .select(
         'po_line_id, qty, qty_rejected, direction, doc:warehouse_docs!inner(shipment_id, kind)',
       )
       .eq('doc.kind', 'receipt')
-      .not('doc.shipment_id', 'is', null)
+      .in('doc.shipment_id', [...shipIds])
       .not('po_line_id', 'is', null)
-      .limit(2000)
+    if (error) throw new Error(error.message)
     type R = {
       po_line_id: string
       qty: number
@@ -244,13 +261,6 @@ export const supplyRepo = {
       direction: 'in' | 'out'
       doc: { shipment_id: string | null } | { shipment_id: string | null }[] | null
     }
-    // Lọc theo PO qua bảng đợt — movement không mang po_id, còn shipment thì có.
-    const { data: ships } = await db()
-      .from('supply_po_shipments')
-      .select('id')
-      .eq('po_id', poId)
-    const shipIds = new Set(((ships ?? []) as { id: string }[]).map((r) => r.id))
-    const out = new Map<string, Map<string, number>>()
     for (const r of (data ?? []) as R[]) {
       if (r.direction !== 'in') continue
       const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc
@@ -266,13 +276,31 @@ export const supplyRepo = {
     return out
   },
 
+  /**
+   * Phiếu kho của một đơn. `at` = NGÀY CHỨNG TỪ (`doc_date` — ngày hàng về thật),
+   * `entered_at` = lúc ghi vào máy. Kho hay nhập máy trễ ("hàng về chiều tối,
+   * sáng sau mới nhập"; đơn Visa/Kim Phát về 27/09 nhập 30/09) — trước đây chip
+   * "Về đủ" và dòng thời gian lấy giờ ghi sổ nên báo sai ngày hàng về.
+   */
   async docsByPo(poId: string): Promise<
     {
       doc_id: string
       code: string
-      kind: 'receipt' | 'return'
+      /** `reversal` = phiếu ĐẢO một phiếu khác (xuất ngược) — KHÔNG phải trả NCC. */
+      kind: 'receipt' | 'return' | 'reversal' | 'adjustment'
       qty_total: number
       at: string
+      entered_at: string
+      /** Phiếu đảo: mã phiếu bị nó đảo. */
+      reversal_of: string | null
+      /** Phiếu đã bị đảo: mã phiếu đảo nó — số trên phiếu này không còn hiệu lực. */
+      reversed_by: string | null
+      /** Phiếu nhập lập lại để sửa phiếu nào ("Sửa lại PNK-…"). */
+      fix_of: string | null
+      /** `adjustment`: điều chỉnh chênh lệch của phiếu nào (C). `qty_total` CÓ DẤU (− = trừ). */
+      adjust_of: string | null
+      /** Phiếu ĐẢO trong hộp "Sửa phiếu" (A) — chờ lập lại phiếu nhập mới thay nó. */
+      for_fix: boolean
     }[]
   > {
     const { data: lineRows } = await db()
@@ -284,47 +312,87 @@ export const supplyRepo = {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code)',
+        'doc_id, direction, qty, qty_rejected, created_at, doc:warehouse_docs(code, doc_date, note, reason, reversal_of_doc_id)',
       )
       .in('po_line_id', lineIds)
       .not('doc_id', 'is', null)
       .limit(2000)
+    type Doc = {
+      code: string
+      doc_date: string | null
+      note: string | null
+      reason: string | null
+      reversal_of_doc_id: string | null
+    }
     type R = {
       doc_id: string
       direction: 'in' | 'out'
       qty: unknown
       qty_rejected: unknown
       created_at: string
-      doc: { code: string } | { code: string }[] | null
+      doc: Doc | Doc[] | null
     }
     const byDoc = new Map<
       string,
       {
         doc_id: string
         code: string
-        kind: 'receipt' | 'return'
+        kind: 'receipt' | 'return' | 'reversal' | 'adjustment'
         qty_total: number
-        at: string
+        doc_date: string | null
+        entered_at: string
+        reversal_of_id: string | null
+        fix_of: string | null
+        adjust_of: string | null
+        for_fix: boolean
       }
     >()
     for (const r of (data ?? []) as unknown as R[]) {
       const d = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      const adjustOf = dieuChinhCua(d?.note)
       const cur = byDoc.get(r.doc_id) ?? {
         doc_id: r.doc_id,
         code: d?.code ?? '?',
-        kind: r.direction === 'in' ? ('receipt' as const) : ('return' as const),
+        kind: d?.reversal_of_doc_id
+          ? ('reversal' as const)
+          : adjustOf
+            ? ('adjustment' as const)
+            : r.direction === 'in'
+              ? ('receipt' as const)
+              : ('return' as const),
         qty_total: 0,
-        at: r.created_at,
+        doc_date: d?.doc_date ?? null,
+        entered_at: r.created_at,
+        reversal_of_id: d?.reversal_of_doc_id ?? null,
+        fix_of: suaLaiTu(d?.note),
+        adjust_of: adjustOf,
+        for_fix: !!d?.reversal_of_doc_id && !!d?.reason?.includes(DAU_SUA_PHIEU),
       }
       // "Đã nhận" cùng công thức BR-08: đạt + QC loại (NCC đã giao số đó).
+      // Phiếu điều chỉnh mang DẤU — "−270" mới nói đúng là trừ bớt số đã nhận.
       cur.qty_total +=
         r.direction === 'in'
           ? Number(r.qty ?? 0) + Number(r.qty_rejected ?? 0)
-          : Number(r.qty ?? 0)
-      if (r.created_at < cur.at) cur.at = r.created_at
+          : adjustOf
+            ? -Number(r.qty ?? 0)
+            : Number(r.qty ?? 0)
+      if (r.created_at < cur.entered_at) cur.entered_at = r.created_at
       byDoc.set(r.doc_id, cur)
     }
-    return [...byDoc.values()].sort((a, b) => a.at.localeCompare(b.at))
+    // Phiếu đảo nằm cùng dòng đơn với phiếu gốc nên có sẵn trong `byDoc` — nối hai chiều.
+    const reversedBy = new Map<string, string>()
+    for (const x of byDoc.values())
+      if (x.reversal_of_id) reversedBy.set(x.reversal_of_id, x.code)
+    return [...byDoc.values()]
+      .map(({ doc_date, reversal_of_id, ...x }) => ({
+        ...x,
+        at: docEventAt(doc_date, x.entered_at),
+        reversal_of: reversal_of_id ? (byDoc.get(reversal_of_id)?.code ?? null) : null,
+        reversed_by: reversedBy.get(x.doc_id) ?? null,
+      }))
+      .sort(
+        (a, b) => a.at.localeCompare(b.at) || a.entered_at.localeCompare(b.entered_at),
+      )
   },
 
   /**
@@ -460,11 +528,10 @@ export const supplyRepo = {
    *  2. Gọi từng lệnh rồi CỘNG các map (cách cũ của route needs) sẽ đếm đơn gộp
    *     HAI lần khi cả A lẫn B cùng nằm trong bộ đang tính.
    *
-   * Giới hạn nói thẳng: dòng đơn không tách được "phần của lệnh nào", nên đơn
-   * phục vụ nhiều lệnh được đếm TRỌN phần chưa về vào "đã đặt" của bộ này. Lệnh
-   * phụ đứng một mình vì thế có thể thấy "đã đặt" cao hơn phần thật của nó —
-   * nghiêng về KHÔNG giục mua trùng; cột "đã đặt" hiển thị trên form nên người
-   * mua vẫn thấy số mà tự quyết (suggest chỉ là đề xuất, không phải lệnh).
+   * ĐƠN GỘP NHIỀU LỆNH (10/10/2026): mỗi dòng chỉ đếm PHẦN của bộ đang tính
+   * (`tiLeChoBo` — theo phần chia 0185; dòng chưa chia thuộc lệnh chính). Bản
+   * trước đếm TRỌN dòng cho mọi lệnh của đơn: bảng kê lệnh 09 thấy "đã đặt
+   * 1.350" trong khi 800 trong đó là của lệnh 08 — lệnh 09 bị báo đủ mà thiếu.
    */
   async orderedPendingByLsxSet(
     productionOrderIds: string[],
@@ -472,57 +539,92 @@ export const supplyRepo = {
   ): Promise<Map<string, { ordered: number; pending: number }>> {
     const out = new Map<string, { ordered: number; pending: number }>()
     if (productionOrderIds.length === 0) return out
+    type P = { id: string; status: string; production_order_id: string | null }
     const [main, extra] = await Promise.all([
       db()
         .from('supply_purchase_orders')
-        .select('id, status')
+        .select('id, status, production_order_id')
         .in('production_order_id', productionOrderIds),
       db()
         .from('supply_po_extra_lsx')
-        .select('po:supply_purchase_orders!inner(id, status)')
+        .select('po:supply_purchase_orders!inner(id, status, production_order_id)')
         .in('production_order_id', productionOrderIds),
     ])
-    type P = { id: string; status: string }
-    const seen = new Set<string>()
-    const committed: string[] = []
-    const pending: string[] = []
+    const pos = new Map<string, P>()
     const take = (p: P | null | undefined) => {
-      if (!p || seen.has(p.id)) return
-      seen.add(p.id)
+      if (!p || pos.has(p.id)) return
       if (excludePoId && p.id === excludePoId) return
-      if ((RECEIVABLE as readonly string[]).includes(p.status)) committed.push(p.id)
-      else if (p.status === 'pending_approval') pending.push(p.id)
+      pos.set(p.id, p)
     }
     for (const p of (main.data as P[] | null) ?? []) take(p)
     for (const r of (extra.data as { po: P | P[] | null }[] | null) ?? []) {
       take(Array.isArray(r.po) ? r.po[0] : r.po)
     }
+    const committed = [...pos.values()].filter((p) => (RECEIVABLE as readonly string[]).includes(p.status)).map((p) => p.id) // prettier-ignore
+    const pending = [...pos.values()].filter((p) => p.status === 'pending_approval').map((p) => p.id) // prettier-ignore
+    const ids = [...committed, ...pending]
+    if (ids.length === 0) return out
+
+    // Bộ lệnh ĐẦY ĐỦ của từng đơn + phần chia từng dòng — để biết bao nhiêu
+    // của dòng thuộc về bộ đang tính.
+    const [allExtra, splitRes, statusRes, pendRes] = await Promise.all([
+      db()
+        .from('supply_po_extra_lsx')
+        .select('po_id, production_order_id')
+        .in('po_id', ids),
+      db()
+        .from('supply_po_line_lsx')
+        .select(
+          'line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)',
+        )
+        .in('line.po_id', ids),
+      committed.length
+        ? db().from('supply_po_line_status').select('id, po_id, material_id, qty_ordered, qty_open').in('po_id', committed) // prettier-ignore
+        : Promise.resolve({ data: [] }),
+      pending.length
+        ? db().from('supply_purchase_order_lines').select('id, po_id, material_id, qty_ordered').in('po_id', pending) // prettier-ignore
+        : Promise.resolve({ data: [] }),
+    ])
+    const lsxOfPo = new Map<string, string[]>()
+    for (const p of pos.values()) lsxOfPo.set(p.id, p.production_order_id ? [p.production_order_id] : []) // prettier-ignore
+    for (const e of (allExtra.data as
+      { po_id: string; production_order_id: string }[] | null) ?? []) {
+      lsxOfPo.get(e.po_id)?.push(e.production_order_id)
+    }
+    const splits = new Map<string, LsxSplit[]>()
+    for (const r of (splitRes.data as
+      { line_id: string; production_order_id: string; qty: number }[] | null) ?? []) {
+      const cur = splits.get(r.line_id) ?? []
+      cur.push({ production_order_id: r.production_order_id, qty: Number(r.qty) || 0 })
+      splits.set(r.line_id, cur)
+    }
+    const share = (lineId: string, poId: string, qtyOrdered: number) =>
+      tiLeChoBo(
+        { qty_ordered: qtyOrdered, main_lsx_id: pos.get(poId)?.production_order_id ?? null, allocations: splits.get(lineId) }, // prettier-ignore
+        lsxOfPo.get(poId) ?? [],
+        productionOrderIds,
+      )
     const bump = (mid: string, k: 'ordered' | 'pending', v: number) => {
+      if (!(v > 0)) return
       const e = out.get(mid) ?? { ordered: 0, pending: 0 }
       e[k] += v
       out.set(mid, e)
     }
-    if (committed.length > 0) {
-      // qty_open (0154): dòng đã CHỐT THIẾU không còn "đang đặt" — phần NCC bỏ
-      // phải được đề xuất mua lại chỗ khác, không để số ảo đè lên suggest.
-      const { data } = await db()
-        .from('supply_po_line_status')
-        .select('material_id, qty_open')
-        .in('po_id', committed)
-      for (const r of (data as { material_id: string; qty_open: number }[] | null) ??
-        []) {
-        bump(r.material_id, 'ordered', Math.max(Number(r.qty_open) || 0, 0))
-      }
+    // qty_open (0154): dòng đã CHỐT THIẾU không còn "đang đặt" — phần NCC bỏ phải
+    // được đề xuất mua lại chỗ khác, không để số ảo đè lên suggest.
+    type St = { id: string; po_id: string; material_id: string; qty_ordered: number; qty_open: number } // prettier-ignore
+    for (const r of (statusRes.data as St[] | null) ?? []) {
+      const open = Math.max(Number(r.qty_open) || 0, 0)
+      bump(
+        r.material_id,
+        'ordered',
+        open * share(r.id, r.po_id, Number(r.qty_ordered) || 0),
+      )
     }
-    if (pending.length > 0) {
-      const { data } = await db()
-        .from('supply_purchase_order_lines')
-        .select('material_id, qty_ordered')
-        .in('po_id', pending)
-      for (const r of (data as { material_id: string; qty_ordered: number }[] | null) ??
-        []) {
-        bump(r.material_id, 'pending', Number(r.qty_ordered) || 0)
-      }
+    type Pl = { id: string; po_id: string; material_id: string; qty_ordered: number }
+    for (const r of (pendRes.data as Pl[] | null) ?? []) {
+      const q = Number(r.qty_ordered) || 0
+      bump(r.material_id, 'pending', q * share(r.id, r.po_id, q))
     }
     return out
   },
@@ -726,6 +828,30 @@ export const supplyRepo = {
    * RECEIVABLE) và để báo hàng về cho đúng người (0128: chủ đơn là
    * `assigned_to`, đơn cũ chưa backfill thì rơi về `created_by`).
    */
+  /**
+   * Đầu vào của luật "dòng nào phải ghi kg cân" (`lib/can-kg`): mẫu đơn + cách
+   * tính giá / đơn vị 2 của từng dòng. Server dùng để CHẶN thật — form chỉ nói trước.
+   */
+  async kgRuleInputs(poId: string): Promise<{
+    template: string | null
+    lines: { id: string; price_basis: string | null; unit2: string | null }[]
+  }> {
+    const [{ data: po }, { data: lines }] = await Promise.all([
+      db().from('supply_purchase_orders').select('template').eq('id', poId).maybeSingle(),
+      db()
+        .from('supply_purchase_order_lines')
+        .select('id, price_basis, unit2')
+        .eq('po_id', poId),
+    ])
+    return {
+      template: (po as { template: string | null } | null)?.template ?? null,
+      lines:
+        (lines as
+          { id: string; price_basis: string | null; unit2: string | null }[] | null) ??
+        [],
+    }
+  },
+
   async poStatus(poId: string): Promise<{
     code: string
     status: string
@@ -766,6 +892,8 @@ export type Supplier = {
   country: string | null
   registered_address: string | null
   // Liên hệ
+  contact_name: string | null
+  contact_phone: string | null
   email: string | null
   phone: string | null
   address: string | null
@@ -779,9 +907,13 @@ export type Supplier = {
   bank_account: string | null
   swift_code: string | null
   invoice_terms: string | null
+  /** Thue suat VAT thoa thuan voi NCC (0192) — don mua moi ke thua xuong. */
+  vat_rate: number | null
   // Mua hàng
   moq: string | null
   lead_time_days: number | null
+  /** SỐ NGÀY công nợ — dạng máy dùng được (0189), khác chữ tự do ở payment_terms. */
+  payment_net_days: number | null
   incoterms: string | null
   delivery_method: string | null
   return_policy: string | null
@@ -801,6 +933,10 @@ export type Supplier = {
   // Admin
   buyer_id: string | null
   can_order: boolean
+  /** Đơn vị vận chuyển (0215) — cùng bảng, nhưng KHÔNG hiện ở sổ NCC / ô chọn NCC. */
+  is_carrier: boolean
+  carrier_kind: string | null
+  pay_method: string | null
   lock_reason: string | null
   is_active: boolean
   note: string | null
@@ -811,13 +947,26 @@ export type Supplier = {
 }
 
 const SUPPLIER_COLS =
-  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
+  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, contact_name, contact_phone, email, phone, address, trading_address, warehouse_address, website, payment_terms, payment_net_days, currency, bank_name, bank_account, swift_code, invoice_terms, vat_rate, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, is_carrier, carrier_kind, pay_method, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
 
 export const suppliersRepo = {
   /**
    * Mọi mã NCC đang dùng — để tự cấp mã không đụng mã sẵn có. Danh mục 157 dòng
    * nên lấy hết một lượt là đủ; cột `code` unique nên đây là nguồn duy nhất.
    */
+  /** NCC đã khai MST — nguồn so trùng MST khi thêm/sửa (lib/supplier-dup). */
+  async withTaxNo(): Promise<
+    { id: string; code: string | null; name: string; tax_no: string | null }[]
+  > {
+    const { data, error } = await db()
+      .from('supply_suppliers')
+      .select('id, code, name, tax_no')
+      .not('tax_no', 'is', null)
+      .limit(5000)
+    if (error) throw error
+    return data ?? []
+  },
+
   async allCodes(): Promise<string[]> {
     const { data } = await db()
       .from('supply_suppliers')
@@ -837,6 +986,9 @@ export const suppliersRepo = {
     let q = db()
       .from('supply_suppliers')
       .select(SUPPLIER_COLS, { count: 'exact' })
+      // Đơn vị vận chuyển có danh mục riêng (/mua-hang/van-chuyen) — không lẫn
+      // vào sổ NCC (chủ dự án chốt 28/09/2026).
+      .eq('is_carrier', false)
       .order('name')
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.q) q = q.or(`name.ilike.%${filter.q}%,code.ilike.%${filter.q}%`)
@@ -991,4 +1143,44 @@ export const materialGroupsRepo = {
       .insert(groupIds.map((group_id) => ({ supplier_id: supplierId, group_id })))
     if (error) throw new Error(error.message)
   },
+}
+
+/**
+ * ĐƠN GIÁ VỐN của từng dòng đơn mua, quy về ĐVT ĐẶT HÀNG.
+ *
+ * Dùng khi lập phiếu nhập kho: `warehouse_movements.unit_cost` phải mang giá,
+ * nếu không thì giá trị tồn kho bằng 0 và công nợ tính theo phiếu nhập cũng
+ * bằng 0. Đo 11/09/2026: 139/142 movement gắn dòng PO đang KHÔNG có giá — không
+ * phải Kho quên nhập, mà là chưa nơi nào từng ghi cột này.
+ *
+ * `tiền dòng ÷ SL đặt`, KHÔNG lấy thẳng `unit_price`: dòng tính theo tổng kg
+ * (`price_basis: 'unit2'`) có tiền dòng khác hẳn `qty × đơn giá`. `poLineAmount`
+ * là nơi duy nhất biết luật đó — nhân lại tại chỗ là dựng nguồn số thứ hai.
+ *
+ * Dòng chưa có giá thì KHÔNG có khoá trong map, để movement giữ `unit_cost`
+ * NULL. NULL nghĩa là "chưa biết giá", khác hẳn 0 ("hàng cho không") — màn công
+ * nợ đếm "phiếu chưa có giá" dựa đúng vào phân biệt này.
+ */
+export async function poLineUnitCosts(lineIds: string[]): Promise<Map<string, number>> {
+  const ids = [...new Set(lineIds)]
+  if (ids.length === 0) return new Map()
+  const { data } = await db()
+    .from('supply_purchase_order_lines')
+    .select('id, qty_ordered, unit_price, price_basis, qty2')
+    .in('id', ids)
+  type L = { id: string; qty_ordered: unknown; unit_price: unknown; price_basis: PriceBasis | null; qty2: unknown } // prettier-ignore
+  const out = new Map<string, number>()
+  for (const l of (data ?? []) as L[]) {
+    const qty = Number(l.qty_ordered ?? 0)
+    if (!(qty > 0) || l.unit_price == null) continue
+    const amount = poLineAmount({
+      qty_ordered: qty,
+      unit_price: Number(l.unit_price),
+      price_basis: l.price_basis,
+      qty2: l.qty2 == null ? null : Number(l.qty2),
+    })
+    if (!(amount > 0)) continue
+    out.set(l.id, Math.round((amount / qty) * 100) / 100)
+  }
+  return out
 }

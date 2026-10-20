@@ -43,7 +43,7 @@ const memberEdit = (member: string, edit: string) => allOf(perm(member), perm(ed
 
 export const ACTIONS: Action[] = [
   /*
-   * ── Góp ý hệ thống (0186) ───────────────────────────────────────────────
+   * ── Góp ý hệ thống (0253) ───────────────────────────────────────────────
    *
    * Viết / xem / trao đổi là PUBLIC (mọi người đăng nhập — luật riêng tư và
    * luật tự sửa kiểm ở feedback.rules). Xử lý (đổi trạng thái, trả lời, tóm
@@ -121,6 +121,24 @@ export const ACTIONS: Action[] = [
     // thiếu quy cách và phải chờ Kỹ thuật. KHÔNG bao gồm mã/tên/BOM.
     rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
+  /*
+   * GIÁ THÀNH KẾ HOẠCH (0220) là SỐ RIÊNG của Bán hàng — bí mật công ty (chủ dự
+   * án 02/10/2026). KHÔNG đi theo quyền xem SP: chỉ Bán hàng, Kỹ thuật (người
+   * lập bảng tính) và Ban Giám đốc (đọc ở Tiền theo lệnh) thấy; các cột plan_*
+   * không nằm trong `Product` của hồ sơ dùng chung nên API hồ sơ không trả ra.
+   */
+  {
+    key: 'technical.plan_cost.view',
+    label: 'Xem giá thành kế hoạch của SP',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit'), perm('exec.tower.view')),
+  },
+  {
+    key: 'technical.plan_cost.manage',
+    label: 'Nạp / sửa giá thành kế hoạch của SP',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
+  },
   {
     key: 'technical.product.update',
     label: 'Sửa sản phẩm',
@@ -139,6 +157,50 @@ export const ACTIONS: Action[] = [
     domain: 'technical',
     rule: perm('technical.edit'),
     rowLevel: 'Chặn nếu SP đang nằm trong báo giá/đơn/mẫu — dùng "Ngừng dùng".',
+  },
+
+  /*
+   * KHUÔN NHÔM (0190) — danh mục DÙNG CHUNG ở `/khuon`.
+   *
+   * XEM mở cho mọi người đã đăng nhập, không gắn `technical.member`: Cung ứng
+   * tra để đặt hàng, Sản xuất tra để nhận dạng cây nhôm. Nhốt quyền xem vào
+   * phòng Kỹ thuật là hai phòng kia quay lại hỏi qua Zalo — đúng thứ danh mục
+   * này sinh ra để thay.
+   *
+   * THÊM / SỬA (kể cả ảnh mặt cắt, nhật ký): Kỹ thuật + Giám đốc (qua
+   * `technical.edit`) VÀ Cung ứng (`supply.member`, user chốt 29/09/2026).
+   * Khuôn nằm ở xưởng đùn của NCC — Cung ứng là người mở khuôn mới, trả tiền
+   * khuôn, biết khuôn đang ở nhà nào và hư lúc nào; bắt họ nhắn Kỹ thuật sửa hộ
+   * là danh mục chậm hơn thực tế đúng một vòng Zalo.
+   *
+   * XOÁ vẫn chỉ Kỹ thuật: xoá mất cả nhật ký đời khuôn, còn Cung ứng cần gỡ một
+   * khuôn thì đổi tình trạng sang "Đã bỏ" là đủ.
+   */
+  {
+    key: 'technical.die.view',
+    label: 'Xem danh mục khuôn nhôm',
+    domain: 'technical',
+    rule: role('admin', 'manager', 'employee'),
+  },
+  {
+    key: 'technical.die.create',
+    label: 'Thêm khuôn nhôm',
+    domain: 'technical',
+    rule: anyOf(perm('technical.edit'), perm('supply.member')),
+  },
+  {
+    key: 'technical.die.update',
+    label: 'Sửa hồ sơ khuôn nhôm (thông số, ảnh mặt cắt, nhật ký)',
+    domain: 'technical',
+    rule: anyOf(perm('technical.edit'), perm('supply.member')),
+  },
+  {
+    key: 'technical.die.remove',
+    label: 'Xoá khuôn nhôm',
+    domain: 'technical',
+    rule: perm('technical.edit'),
+    rowLevel:
+      'Chặn nếu còn dòng đơn mua / dòng định mức ghi mã này — dùng tình trạng "Đã bỏ".',
   },
   {
     key: 'technical.product.attach_file',
@@ -248,6 +310,18 @@ export const ACTIONS: Action[] = [
     domain: 'sales',
     rule: anyOf(role('admin', 'manager'), perm('sales.member')),
   },
+  {
+    /*
+     * GHI / GỠ ĐỢT XUẤT (0120). Tách khỏi `sales.order.manage` + chủ đơn
+     * (07/10/2026): trước đó chỉ NGƯỜI TẠO đơn ghi được, đơn nạp bằng script
+     * (created_by null) thì không nhân viên nào ghi → 0 đợt xuất dù 5 lệnh đã
+     * xong. Xuất hàng là việc của phòng, không của riêng người lập đơn.
+     */
+    key: 'sales.order.ship',
+    label: 'Ghi xuất hàng theo đơn',
+    domain: 'sales',
+    rule: anyOf(role('admin', 'manager'), perm('sales.member')),
+  },
 
   // ── Cung ứng (NCC, bảng giá, PO) ─────────────────────────────────────────
   {
@@ -300,6 +374,23 @@ export const ACTIONS: Action[] = [
     domain: 'supply',
     rule: perm('supply.po.approve'),
   },
+  {
+    // 0211 — phí vận chuyển / bốc xếp của đơn mua. Mở cho cả Kế toán như hoá
+    // đơn NCC: hoá đơn nhà xe hay tới tay Kế toán trước.
+    key: 'supply.po_cost.manage',
+    label: 'Ghi / huỷ phiếu chi phí mua hàng (vận chuyển, bốc xếp)',
+    domain: 'supply',
+    rule: anyOf(perm('supply.member'), perm('accounting.member')),
+  },
+
+  {
+    // 0213 — sổ sự cố giao hàng của đơn mua. Kho thấy hàng sai trước, Cung
+    // ứng là người đi nói với NCC — cả hai ghi / đóng được.
+    key: 'supply.po_issue.manage',
+    label: 'Ghi / đóng sự cố giao hàng của đơn mua',
+    domain: 'supply',
+    rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
+  },
 
   // ── Kho (vật tư, tồn, nhập/xuất) ─────────────────────────────────────────
   {
@@ -312,11 +403,13 @@ export const ACTIONS: Action[] = [
     key: 'warehouse.material.create',
     label: 'Tạo vật tư mới',
     domain: 'warehouse',
-    rule: perm('warehouse.material.create'),
+    // Cả phòng Cung ứng thêm được mã (05/10/2026, chủ dự án duyệt) — không chỉ
+    // người được gán lẻ quyền `warehouse.material.create` như trước.
+    rule: anyOf(perm('warehouse.material.create'), perm('supply.member')),
   },
   {
     key: 'warehouse.material.update',
-    label: 'Sửa / xoá danh mục vật tư',
+    label: 'Sửa mọi trường danh mục vật tư (kể cả trường của Kho)',
     domain: 'warehouse',
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
@@ -326,6 +419,16 @@ export const ACTIONS: Action[] = [
     // trường TỒN TRỮ (min/max, kệ, barcode, ngừng dùng) vẫn của Kho — service enforce.
     key: 'warehouse.material.update_purchasing',
     label: 'Sửa trường mua hàng của vật tư (Cung ứng)',
+    domain: 'warehouse',
+    rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
+  },
+  {
+    // NGỪNG DÙNG / DÙNG LẠI / XOÁ MÃ CHƯA DÙNG (05/10/2026, chủ dự án duyệt bản
+    // vẽ Bản 11): mở cho cả phòng Cung ứng cạnh Kho. Trước đó Cung ứng xoá được
+    // chỉ nhờ vai Kho gán TẠM 01/10 — gỡ vai là mất quyền. Mã ĐÃ dùng thì không
+    // ai xoá được (service chặn theo `materialsRepo.usage`), chỉ ngừng dùng.
+    key: 'warehouse.material.retire',
+    label: 'Ngừng dùng / dùng lại / xoá mã vật tư chưa dùng',
     domain: 'warehouse',
     rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
   },
@@ -355,6 +458,23 @@ export const ACTIONS: Action[] = [
     label: 'Duyệt biên bản kiểm kê (áp chênh lệch vào tồn)',
     domain: 'warehouse',
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
+  },
+  {
+    // 0236 — "Giấy đề nghị mua vật tư" của Kho: lập, sửa nháp, gửi / rút / huỷ.
+    // Duyệt là việc của lãnh đạo (Đ2, action riêng).
+    key: 'warehouse.request.manage',
+    label: 'Lập / gửi đề nghị mua vật tư',
+    domain: 'warehouse',
+    rule: memberEdit('warehouse.member', 'warehouse.edit'),
+  },
+  {
+    // 0236 · Đ2 (Q1 duyệt 13/10/2026): người duyệt đề nghị mua = người đang duyệt
+    // ĐƠN MUA (ban giám đốc) — một người duyệt là đủ. Service còn chặn tự duyệt
+    // phiếu mình đề nghị (trừ admin).
+    key: 'warehouse.request.approve',
+    label: 'Duyệt / từ chối đề nghị mua vật tư',
+    domain: 'warehouse',
+    rule: perm('supply.po.approve'),
   },
 
   // ── Sản xuất (thiết kế lại theo VAI 0084: KH / thống kê / tổ trưởng / QĐ) ─
@@ -412,17 +532,6 @@ export const ACTIONS: Action[] = [
     domain: 'production',
     rule: perm('production.output.record'),
     rowLevel: 'Xoá dòng đã ghi: người tạo hoặc GĐ/QL; sổ đã chốt ngày thì khoá.',
-  },
-  {
-    key: 'production.jobs.confirm',
-    label: 'Tổ xác nhận Bắt đầu / Xong công đoạn',
-    domain: 'production',
-    // 0175: trước đây mở cho MỌI `production.member` nên THỐNG KÊ tự xác nhận
-    // được số của chính mình — phạm vi 26/08 cấm điều đó. Nay chỉ tổ trưởng
-    // (quyền riêng) + GĐ/QL.
-    rule: anyOf(role('admin', 'manager'), perm('production.jobs.confirm')),
-    rowLevel:
-      'Tổ trưởng chỉ thao tác việc tổ mình; CHẶN xong khi số chưa đủ — GĐ/QL ép kèm lý do.',
   },
   {
     key: 'production.progress.track',
@@ -498,6 +607,91 @@ export const ACTIONS: Action[] = [
     rowLevel: 'Chỉ huỷ đơn của mình (admin huỷ mọi đơn).',
   },
 
+  // ── Nhân sự (chấm công) ──────────────────────────────────────────────────
+  {
+    key: 'hr.attendance.view',
+    label: 'Xem bảng công',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.pull',
+    label: 'Kéo lượt quẹt từ máy chấm công',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.employee_edit',
+    label: 'Sửa danh sách nhân viên chấm công (họ tên, bộ phận, ca, ghép mã máy)',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.adjust',
+    label: 'Gửi điều chỉnh chấm công (bổ sung lượt, nghỉ có lý do, bỏ qua lượt)',
+    domain: 'hr',
+    rule: perm('hr.member'),
+  },
+  {
+    key: 'hr.attendance.adjust_decide',
+    label: 'Duyệt / từ chối điều chỉnh chấm công',
+    domain: 'hr',
+    rule: perm('hr.attendance.adjust_decide'),
+  },
+  {
+    // Cách tính công B2 (0243): Kế toán sửa hệ số lương; director được seed thêm.
+    key: 'hr.calc.rates_edit',
+    label: 'Sửa hệ số lương trong Cách tính công',
+    domain: 'hr',
+    rule: anyOf(perm('accounting.member'), perm('hr.calc.rates_edit')),
+  },
+  {
+    key: 'hr.calc.rules_edit',
+    label: 'Sửa khung giờ và quy tắc tính công',
+    domain: 'hr',
+    rule: anyOf(perm('hr.member'), perm('hr.calc.rules_edit')),
+  },
+  {
+    // Kỳ công B3 (0244): chốt kỳ — director seed; admin gán thêm cho Trưởng phòng Nhân sự.
+    key: 'hr.period.close',
+    label: 'Chốt kỳ công',
+    domain: 'hr',
+    rule: perm('hr.period.close'),
+  },
+  {
+    key: 'hr.period.reopen_decide',
+    label: 'Duyệt mở lại kỳ công đã chốt',
+    domain: 'hr',
+    rule: perm('hr.period.reopen_decide'),
+  },
+  {
+    // Thông tin cá nhân trên hồ sơ nhân viên B2b (0249): Nhân sự có sẵn; director seed (Q5).
+    key: 'hr.employee.private',
+    label: 'Xem và sửa thông tin cá nhân nhân viên',
+    domain: 'hr',
+    rule: anyOf(perm('hr.member'), perm('hr.employee.private')),
+  },
+  {
+    // Hồ sơ lương B4 (0245): Kế toán có sẵn; director seed; admin gán TP Nhân sự.
+    key: 'hr.payroll.profile',
+    label: 'Xem và sửa hồ sơ lương nhân viên',
+    domain: 'hr',
+    rule: anyOf(perm('accounting.member'), perm('hr.payroll.profile')),
+  },
+  {
+    // Bảng lương B5 (0246): Kế toán tính · gửi · chi.
+    key: 'hr.payroll.run',
+    label: 'Tính, gửi duyệt và chi bảng lương',
+    domain: 'hr',
+    rule: anyOf(perm('accounting.member'), perm('hr.payroll.run')),
+  },
+  {
+    key: 'hr.payroll.approve',
+    label: 'Duyệt bảng lương',
+    domain: 'hr',
+    rule: perm('hr.payroll.approve'),
+  },
+
   // ── Kế toán (hoá đơn) ────────────────────────────────────────────────────
   {
     key: 'accounting.invoice.view',
@@ -511,6 +705,30 @@ export const ACTIONS: Action[] = [
     domain: 'accounting',
     rule: perm('accounting.member'),
   },
+  /*
+   * HOÁ ĐƠN NCC (0188) mở cho CẢ HAI PHÒNG, khác `accounting.invoice.*` ở trên.
+   *
+   * Hoá đơn GTGT đi kèm hàng (điều khoản mặc định trên đơn mua ghi vậy), nên
+   * Cung ứng là người CẦM tờ giấy trước; còn sổ công nợ là sổ của Kế toán. Bắt
+   * một bên chờ bên kia thì tờ hoá đơn nằm trên bàn không ai nhập.
+   *
+   * Mở trước, siết sau: nới quyền thì dễ, thu quyền đã phát ra thì phải đi giải
+   * thích với người đang dùng. Muốn chỉ Kế toán nhập thì bỏ `supply.member`
+   * khỏi `manage` — một dòng, không migration.
+   */
+  {
+    key: 'accounting.supplier_invoice.view',
+    label: 'Xem hoá đơn nhà cung cấp',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+  },
+  {
+    key: 'accounting.supplier_invoice.manage',
+    label: 'Nhập / sửa hoá đơn nhà cung cấp',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+    rowLevel: 'Hoá đơn đã vào sổ (posted) chỉ sửa được sau khi mở lại.',
+  },
   {
     key: 'accounting.payable.view',
     label: 'Xem công nợ NCC',
@@ -523,6 +741,23 @@ export const ACTIONS: Action[] = [
     domain: 'accounting',
     rule: perm('accounting.member'),
     rowLevel: 'Xoá: người ghi hoặc Ban quản lý.',
+  },
+  /*
+   * TỶ GIÁ (0219): bảng của Kế toán. Cung ứng xem được (đơn USD của họ quy VND
+   * theo bảng này), nhưng chỉ Kế toán nhập — một nguồn tỷ giá, một người chịu.
+   */
+  {
+    key: 'accounting.fx.view',
+    label: 'Xem bảng tỷ giá',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+  },
+  {
+    key: 'accounting.fx.manage',
+    label: 'Nhập / sửa tỷ giá, gán tỷ giá cho chứng từ',
+    domain: 'accounting',
+    rule: perm('accounting.member'),
+    rowLevel: 'Dòng đã có chứng từ dùng thì khoá sửa — thêm ngày mới.',
   },
 
   // ── Ban Giám Đốc ─────────────────────────────────────────────────────────

@@ -1,0 +1,224 @@
+# Kho — hoàn thiện đợt 2 để nhận lại việc từ Cung ứng (12/10/2026)
+
+Đọc sau [`kho-hoan-thien.md`](kho-hoan-thien.md) (đợt 1, 16/09).
+
+**Mục tiêu chủ dự án chốt 12/10:** từ 01/10 Cung ứng đang ghi phiếu thay Kho (gán
+tạm vai `warehouse_staff`). Muốn chuyển dần việc về cho Kho, nhưng **khu Kho phải
+đủ tính năng trước** — không bắt thủ kho dùng một khu kém hơn thứ Cung ứng đang có.
+
+Nguyên tắc phân vai sau chuyển giao:
+
+| Việc | Ai |
+| --- | --- |
+| Đặt hàng, NCC xác nhận, hẹn/dời đợt giao, chốt thiếu, đòi bù | **Cung ứng** (việc với NCC) |
+| Nhận hàng, cân, kiểm, ghi phiếu nhập, ghi sự cố lúc nhận | **Kho** |
+| Ghi xuất khi tổ lấy, hoàn kho, kiểm kê, báo cáo tồn | **Kho** |
+| Xem hàng đã về / phiếu nhập / tồn để quyết mua | Cung ứng **chỉ xem** |
+
+---
+
+## Số đo 12/10/2026 (DB thật)
+
+| Phép đo | Số |
+| --- | ---: |
+| Tài khoản Kho | **2** — Lê Khắc Hào (Thủ kho, wh1), Hà Nguyễn Nữ (Kho NVL, wh2) — **chưa đăng nhập lần nào** |
+| Cung ứng gán tạm vai Kho | 4 — Nga, Đình Huy, Truyền, Anh Thi |
+| Phiếu nhập từ 16/09 | 72, ~5/ngày — Nga 50, Truyền 17, Kho 1 |
+| Phiếu xuất từ 16/09 | 28, chỉ 01–02/10; **từ 03/10: 0** |
+| Lệnh đã nhận hàng / đã có xuất | **15 / 2** — 13 lệnh nhận mà chưa xuất mã nào, 3 trong số đó đã `completed` |
+| Mã tồn âm | **4** (NH-0199 −3.467 cây · ACQ0001 · 0002 · 0005) — dòng KK-2026-0004 mồ côi sau khi xoá phiếu nạp nền |
+| Đợt kiểm kê treo | KK-2026-0005 `counting` từ 15/09, 254 dòng |
+| Báo cáo Nhập–Xuất–Tồn theo kỳ | không có |
+| Màn kiểm kê trong khu Kho | không có (service + bảng 0157/0199/0200 còn nguyên) |
+
+**Đọc số:** xuất đứng không phải vì thiếu người bấm — Cung ứng **không đứng ở kho**
+nên không thấy tổ lấy hàng. Xuất là việc chỉ Kho làm được, nên chuyển giao cũng là
+cách duy nhất để sổ xuất sống lại. Hiện tồn trên máy là **tồn ảo** (hàng đã vào sản
+phẩm vẫn nằm trong kho).
+
+---
+
+## Đối chiếu: Cung ứng đang có gì mà khu Kho chưa có
+
+Bên Cung ứng được làm liền 01/10–05/10 khi dùng thật; khu Kho dựng 16/09 rồi đứng.
+
+| Việc | Bên Cung ứng (đang dùng) | Khu Kho | Khoảng trống |
+| --- | --- | --- | --- |
+| Danh sách hàng sắp về | **Theo dõi đơn hàng**: Quá hẹn · Hôm nay · 7 ngày · Chưa hẹn, lọc người / lệnh / mẫu đơn / ngoài lệnh, gom, badge menu | **Hàng về** (16/09): 4 làn + ô tìm | lọc theo lệnh & ngày về, badge, gom theo **chuyến hàng** (một xe nhiều đơn) |
+| Form phiếu nhập | `PhieuNhapScreen` | **dùng chung** | ✅ ngang nhau (kg cân, lùi ngày, số phiếu NCC, nhắc) |
+| Hàng đã về | **Đã về**: rổ *Cần xử lý* (còn thiếu, chưa ghi số NCC, thiếu kg cân), Phiếu tôi lập, mọi ngày | Sổ phiếu (lọc mã lý do) | rổ **Cần xử lý**, lọc người lập |
+| Chi tiết phiếu nhập | Sửa phiếu **3 kiểu** (bổ sung thông tin · sửa số lượng · chênh lệch), **Ghi kg cân bổ sung**, lịch sử phiếu | chỉ **Đảo phiếu** + In | Sửa phiếu, Ghi kg, lịch sử |
+| Sự cố lúc nhận (lỗi, sai quy cách, thiếu) | "Ghi sự cố giao hàng" trong hộp Giao nhận | không có | người phát hiện là người nhận → Kho phải ghi được, Cung ứng xử lý |
+| Kho được báo khi hàng sắp về | — | không có | NCC xác nhận / ghi chuyến hàng → báo Kho |
+| Xuất cho lệnh | — | form có, nhưng **tìm tay từng mã** | "điền từ hàng đã về cho lệnh" |
+| Tồn theo lệnh · Báo cáo kỳ · Kiểm kê | — | không có | dựng mới |
+
+Phần với NCC (NCC xác nhận, hẹn giao bù, chốt thiếu, dời/tách/huỷ đợt, nghiệm thu
+ngoài sổ) **ở lại Cung ứng** — không chép sang Kho.
+
+---
+
+## Giai đoạn 1 — Khu Kho đủ tính năng
+
+Mỗi bước dừng nghiệm thu. Tái dùng khối có sẵn của Cung ứng (dời vào chỗ dùng
+chung), không viết bản thứ hai.
+
+**B0 · Dọn sổ** (dữ liệu, cần Q1–Q2): phiếu điều chỉnh bù 4 mã âm về 0; huỷ
+KK-2026-0005. Nghiệm thu: 0 mã âm, 0 đợt kiểm kê mở.
+
+**B1 · Hàng về của Kho ngang Theo dõi đơn hàng.** Lọc lệnh / ngày về / NCC, gom
+theo chuyến hàng, badge "quá hẹn + hôm nay" trên menu Kho — đếm bằng đúng hàm của
+Theo dõi (`incomingBucket`) để hai phòng thấy cùng một số. Chỉ có nút **Nhận hàng**,
+không có nút việc với NCC.
+
+> **B1 DỰNG XONG 12/10/2026** (bản vẽ https://claude.ai/artifact/AVjPo69BkZc9N9NNydvWER,
+> duyệt theo đề xuất Q1–Q6; màn Theo dõi bên Cung ứng GIỮ NGUYÊN theo lệnh chủ dự án).
+> Một dòng = một đơn, nguồn `loadWatchPos` + `incomingBucket` (29 đơn: quá hẹn 9 · hôm nay 1 ·
+> 7 ngày 8 · sau 11 — khớp Theo dõi); badge menu Kho = 10 (`nav-badges.warehouseBadges`);
+> cột Đợt từ `hangVeRepo` + `dotKeTiep` (PO-0100 "đợt 1 đã nhập trước · Đợt 2/2 · 22/10");
+> Nhận hàng mở `?dot=` đợt kế tiếp; mã đơn mở hộp `?don=` chỉ xem (`tai-hang-cua-don.ts`
+> + `hang-cua-don.tsx`). Bỏ nhãn "cân kg" của bản vẽ: từ 02/10 kg cân không bắt buộc và
+> xét theo từng dòng (`lib/can-kg`), nhãn theo mẫu đơn sẽ báo sai.
+
+> **B0 XONG 12/10** — 4 mã âm: mỗi mã chỉ còn 1 dòng KK-2026-0004 mồ côi (phiếu vào đã bị
+> xoá cứng) → xoá 4 dòng đó, tồn 0. Kèm: 44 phiếu đứng tên admin@hg.com chuyển về người phụ
+> trách đơn (chủ dự án: "đơn thật chuyển về đúng người"), xoá 2 phiếu E2E test PNK/PXK-2026-0001
+> (+ trừ 45 ở dòng KK-0004 của VT-NK-001 để khỏi âm). Backup ở `backups/kho-*-2026-10-12.json`.
+> KK-2026-0005 (treo counting từ 15/09) CHƯA xử lý.
+>
+> **B2 + luật màn hẹp XONG 12/10** (bản vẽ https://claude.ai/artifact/Me6k3W7JPPX3AHMyPzQ2Wt):
+> 2a chi tiết phiếu `6e48e17` · 2b Sổ phiếu `3bd8683` · 2c Hàng về + form nhận `6c4d35a`.
+> Luật: đo KHUNG bằng `lib/use-be-rong` (không đo cửa sổ — sidebar mở/thu đổi 212px), ẩn cột
+> bậc thấp thay vì cuộn ngang, một vùng cuộn mỗi màn. Nghiệm thu 1536×730 / 1280×800 / 1024×700
+> sidebar mở: 4 màn Kho 0 cuộn ngang, đúng 1 vùng cuộn. B3 (ghi sự cố lúc nhận) là bước kế.
+
+**B2 · Phiếu đã nhập: sửa được tại Kho.** Chi tiết phiếu `/warehouse/phieu/[id]`
+thêm Sửa phiếu 3 kiểu + Ghi kg cân bổ sung + lịch sử (dùng lại `sua-phieu.tsx`,
+`kg-can-sheet.tsx`, `lib/phieu-nhap-lich-su.ts`). Sổ phiếu thêm rổ **Cần xử lý**
+và lọc "Tôi lập". Hiện có 3 phiếu thiếu kg cân (PNK-0054/0057/0058) — Kho xử được
+ngay ở khu mình.
+
+**B3 · Ghi sự cố lúc nhận.** Trên form nhận hàng / chi tiết phiếu: nút "Ghi sự
+cố" dùng chung đường ghi `GhiSuCoSheet` hiện có → hiện ở hộp Giao nhận của Cung
+ứng để họ xử lý với NCC.
+
+> **B3 (bản gọn) XONG 12/10** `f05d848` (bản vẽ https://claude.ai/artifact/WLinMQm3FQ1T7NVufZQHjS):
+> ⋯ trên dòng Hàng về + hộp Báo sự cố RIÊNG của Kho (nhận / từ chối nhận cả lô → "[Từ chối nhận]"
+> đầu mô tả), nhãn "N sự cố", mục Sự cố trong hộp Hàng của đơn; server phát `po.issue_recorded` →
+> thông báo `po_issue` cho người phụ trách đơn. **Migration 0231 CHƯA ÁP** — áp xong mới có thông
+> báo (trước đó sự cố vẫn ghi vào sổ). Đo trước khi dựng: sổ sự cố 0 dòng, nên chỉ làm bản gọn.
+
+**B4 · Xuất cho lệnh: điền từ hàng đã về cho lệnh.** Chọn lệnh → khối "Hàng về cho
+lệnh này còn trong kho" (nhận qua đơn của lệnh, cả đơn gộp lệnh − đã xuất cho
+lệnh, ≤ tồn thực) → tích / Lấy tất cả → sửa số thực lấy → Ghi sổ. **Không dùng định
+mức** (chốt 16/09). `XuatScreen.tsx` 805 dòng → khối là file riêng.
+
+> **B4 XONG 12/10** `ef7e2fe` (bản vẽ https://claude.ai/artifact/4x4FTaGvwxx1xqF6ozFZLA):
+> chọn lệnh → dải "Kho còn N mã đã mua cho lệnh, chưa ghi xuất" + nút **Lấy hàng của lệnh (N)** →
+> hộp tích chọn, số điền sẵn = min(còn của lệnh, tồn dùng được) (Q1); đã về chia theo tỉ lệ khi
+> dòng có chia 0185 (Q2); lệnh quá hạn xuất hàng thì nhắc ghi bù (Q3); mã đã về mà kho hết bày mờ,
+> không tích được (Q4). Luật thuần `lib/kho-hang-lenh.ts` (7 ca test), đã xuất = `issuedByLsx`
+> (ròng) như bảng kê lệnh. Số thật: 09-MX 49 còn / 0 hết · YOTRIO 28 / 13 · 06-MX 22 / 4 · 08-MX
+> 0 / 12. Hộp không cuộn ngang ở 1280 và 1024 (một vùng cuộn dọc). `XuatScreen` 772 dòng (tách
+> `Buoc`/`Seg` sang `xuat-khoi.tsx`). Lệnh đã hoàn thành chưa có trong ô chọn → để B5.
+> Còn treo (có từ trước, không do B4): lưới phiếu xuất ở 1024 cuộn ngang 797/900px.
+
+**B5 · Tồn theo lệnh.** Công tắc "Theo lệnh" ở Tồn kho: mỗi lệnh đã nhận · đã xuất
+· còn trong kho; rổ **Lệnh xong còn hàng** với hai nút Xuất bổ sung / Về tồn chung (Q4).
+
+> **B5 XONG 12/10** `8c21864` (bản vẽ https://claude.ai/artifact/L2FFuzCdLzMPzQJ7ULUprF,
+> duyệt theo đề xuất Q1–Q5): `/warehouse/ton?xem=lenh` — 15 lệnh có hàng về, rổ Kho còn hàng 10 ·
+> Quá hạn/≤ 7 ngày 2 · Lệnh xong chưa ghi xuất 3; 161 mã còn trong kho cho lệnh; ngăn chi tiết
+> Còn trong kho / Kho hết (nói vì sao) / Đã xuất đủ. Theo mã thêm cột "Của lệnh" + rổ "Tồn chung"
+> (10 mã). **Chia tồn** (`lib/kho-ton-lenh` `chiaTon`): 12 mã thuộc nhiều lệnh, B4 từng đếm trùng
+> (PKN0390 kho 9.880 hiện ở cả 05-MX và 02-ROSCO) — nay lệnh đang SX hạn xuất sớm trước, lệnh xong
+> sau cùng; B4 dùng cùng phần chia (09-MX 48 mã, mã bị chia hết ghi "giữ cho …"). Đổi so với kế hoạch
+> gốc: **không** có nút Xuất bổ sung / Về tồn chung — đo ra 3 lệnh đã xong đều kho hết (kiểm kê 15/09
+> đã trừ), ghi bù sẽ âm tồn. Tải mọi lệnh một lượt ~2 s → Tồn kho mở chậm hơn ~1–2 s.
+
+**B6 · Báo cáo Nhập–Xuất–Tồn theo kỳ** `/warehouse/bao-cao`: tồn đầu (RPC 0200) ·
+nhập theo N1/N2/N3/N4 · xuất theo X1/X3/X5/khác · tồn cuối · giá trị; lọc nhóm /
+lệnh; Excel. Nghiệm thu: tổng kỳ 10/2026 khớp Sổ phiếu cùng kỳ.
+
+> **B6 XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/XCqeNa92MkBZ5oGGwcGrjS, duyệt Q1–Q6 theo đề xuất,
+> nhánh feat/kho-erp-1014, chưa commit): `/warehouse/bao-cao` + Excel 2 tờ (`api/dept/warehouse/bao-cao/excel`).
+> Luật thuần `lib/kho-nxt.ts` (20 test): kỳ theo ngày chứng từ, bình quân gia quyền cả kỳ nối từng tháng,
+> đảo phiếu trừ vào cột gốc (phiếu đảo mang LOẠI ngược phiếu gốc → suy mã theo CHIỀU dòng), USD quy theo
+> `po.fx_rate`. Số thật 10/2026: 277 mã, đối chiếu sổ khớp (638 dòng), giá trị tồn cuối 2.499.400.088 ₫,
+> 2 mã thiếu giá. Không ghi giá vào phiếu xuất, chưa khoá kỳ. **0247 (Kế toán xem khu Kho) ĐÃ ÁP 19/10** (4 tài khoản ketoan*@).
+
+**B7 · Kiểm kê định kỳ** `/warehouse/kiem-ke` trên service có sẵn: lập đợt theo
+nhóm / toàn kho → đếm mù → gửi duyệt → áp chênh N4/X5 → in 05-VT.
+
+> **B7a XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/ACMarfdaHqyud9RrdYMyzX, duyệt Q1–Q6 theo đề xuất):
+> `/warehouse/kiem-ke` sổ đợt (tab theo trạng thái, huỷ đợt có lý do) + hộp Mở đợt (cảnh báo hàng của lệnh chưa
+> ghi xuất đứng đầu — 12 lệnh / 205 mã đo 19/10; nhóm · có tồn · sẽ đếm · kiểm lần cuối; người đếm; đếm mù).
+> Q1: danh sách đếm theo nhóm = có tồn ∪ có phiếu 180 ngày (`lib/kho-kiem-ke.ts`, dùng chung cho hộp và dòng
+> đếm: Nhôm 50, Bao bì 74 — khớp). Vá: hàm xem đợt gọi quyền `warehouse.stock.read` không tồn tại → 500 cho
+> mọi tài khoản không phải admin. KK-2026-0005 đã huỷ. Còn B7b phiếu đếm, B7c đối chiếu + duyệt (Q2 chặn tự duyệt).
+
+> **B7b XONG 19/10/2026**: phiếu đếm `/warehouse/kiem-ke/[id]` — Bắt đầu đếm (chốt sổ giờ server) · lưới
+> đếm mù (số sổ `null` trong dữ liệu gửi xuống, đã kiểm) · tự lưu sau 2 s + Ctrl+S · Enter xuống dòng · lọc
+> tìm / kệ / chưa đếm · thêm tay mã ngoài kệ (số sổ lấy tại mốc chốt) · Gửi đối chiếu chặn tại chỗ khi còn
+> trống hoặc gõ sai, câu chặn bấm được · bản điện thoại < 700px ô số to. Sổ đợt: Enter / bấm đúp mở phiếu.
+> Thử thật cả vòng trên đợt thử rồi xoá + trả số KK về 6. Còn B7c đối chiếu + duyệt.
+
+> **B7c XONG 19/10/2026 — B7 Kiểm kê đủ vòng**: đối chiếu trên cùng màn `/warehouse/kiem-ke/[id]` khi đợt chờ
+> duyệt / đã duyệt: dải tóm tắt (khớp · thừa N4 · thiếu X5 · chênh ròng tiền) · "Đáng soát" cho mã sổ còn hàng mà
+> đếm 0 · bảng chỉ dòng lệch với đơn giá BQ kỳ chứa ngày chốt (Q4, cùng `dungNxt`) · Duyệt qua hộp xác nhận ·
+> Trả về đếm lại bắt lý do · đã duyệt thì In 05-VT + mở phiếu KK. Q2: người được phân đếm / đã ghi số đếm không
+> tự duyệt (`lyDoKhongTuDuyet`, chặn ở service + nút khoá nói lý do); duyệt/trả về theo quyền
+> `warehouse.stocktake.approve`. Thử thật duyệt một đợt thử (sinh KK-2026-0008 · 1 N4, in 05-VT) rồi xoá phiếu,
+> dòng sổ, đợt và trả số KK về 6 — tồn trước/sau như nhau.
+
+**B8 · Bàn làm việc Kho + thông báo.** Trang đầu khu Kho: hàng về hôm nay · lệnh có
+hàng chờ xuất · lệnh xong còn hàng · mã dưới mức · kiểm kê đang mở. Kho nhận thông
+báo khi NCC xác nhận ngày giao / có chuyến hàng ghi về.
+
+> **B8a XONG 19/10/2026** (bản vẽ https://claude.ai/artifact/PvUSfGoMDrT7nMjGz4yezC, duyệt Q1–Q6 theo đề xuất):
+> `/warehouse` Bàn làm việc là trang đầu khu Kho (home + mục đầu menu, exact). 11 ô việc 3 nhóm — mỗi ô đếm bằng
+> đúng hàm màn đích, đã đối chiếu từng ô với màn đích ngày 19/10 (Hàng về 5/2/9 · Sổ phiếu 95 · Theo lệnh 12/2/3 ·
+> Tồn 5/73 · Kiểm kê 0 · Đề nghị 0). Lệch bản vẽ có lý do: "quá hạn" + "≤ 7 ngày" gộp một ô vì Theo lệnh là một rổ;
+> "thiếu số NCC" đếm cả sổ như tab Sổ phiếu. Hai bảng việc gấp (Nhận → form đúng đợt kế tiếp; Ghi xuất → Xuất kho
+> đã chọn lệnh). Hàng về nhận `?hen=` để ô mở đúng tab. Còn B8b thông báo cho Kho.
+
+> **B8b XONG (mã) 19/10/2026 — giai đoạn 1 của Kho đợt 2 đã đủ B0–B8**: sự kiện `po.confirmed` (NCC xác nhận)
+> và `po.rescheduled` (dời một đợt · sửa đợt đổi ngày · dời cả đơn) → handler `kho-hang-ve.notifications` báo
+> mọi người có vai Kho trừ người bấm: xác nhận chỉ khi hẹn ≤ 3 ngày tới / đã quá (Q4), dời hẹn khi ngày thật sự đổi
+> (`lib/kho-bao-hang-ve.ts`, test). Bấm thông báo mở Hàng về đúng tab. **Migration 0251 (2 loại thông báo
+> po_inbound_soon / po_inbound_moved) CHƯA ÁP** — chưa áp thì đơn vẫn xác nhận / dời bình thường, chỉ Kho chưa
+> nhận thông báo. Số 0251 vì nhánh chấm công đã dùng 0247–0250.
+
+## Giai đoạn 2 — Chuyển giao
+
+**C1 · Chạy song song (~2 tuần).** Mở tài khoản wh1/wh2 (đặt mật khẩu tạm, bắt đổi
+khi vào lần đầu — đã có), hướng dẫn một buổi. Kho ghi phiếu; Cung ứng vẫn giữ quyền
+để đỡ khi Kho vắng. Đo hằng tuần: % phiếu nhập/xuất do Kho lập, số phiếu phải sửa.
+
+**C2 · Cắt.** Khi Kho lập ≥ 90% phiếu trong một tuần: gỡ vai `warehouse_staff` gán tay
+của 4 NV Cung ứng (trang phân quyền, có nhật ký). Ở Theo dõi đơn hàng, nút "Nhận
+hàng" đổi thành **xem phiếu** + trạng thái "Kho đã nhận / chưa". (Q7: có giữ quyền
+dự phòng hẹp cho Cung ứng không.)
+
+---
+
+## Vẫn CHƯA làm — có lý do
+
+| Việc | Vì sao |
+| --- | --- |
+| So định mức khi xuất | chốt 16/09; định mức chưa gắn mã VT đủ |
+| Cất hàng vào kệ | 5/13.229 mã có kệ; ~5 phiếu/ngày |
+| Trả hàng NCC (X3) | 0 lô hàng khoá |
+| Lô / mã vạch / nhiều kho | backlog đã bỏ; 0 mã có mã vạch |
+
+## Câu cần chủ dự án chốt
+
+| # | Câu | Đề xuất |
+| --- | --- | --- |
+| Q1 | 4 mã tồn âm? | Phiếu điều chỉnh bù về 0, giữ dòng cũ |
+| Q2 | KK-2026-0005? | Huỷ |
+| Q4 | Hàng dư của lệnh đã xong? | Về tồn chung bằng thao tác có lý do, không tự động |
+| Q5 | Kiểm kê định kỳ? | Cuối tháng luân phiên theo nhóm, cuối quý toàn kho |
+| Q6 | Báo cáo kỳ có tiền? | Có, đơn giá nhập; ghi rõ 19 dòng chưa có giá |
+| Q7 | Sau khi cắt, Cung ứng còn được ghi phiếu nhập dự phòng? | Có, quyền hẹp mới chỉ "nhập theo đơn mua" — không xuất, không kiểm kê |
+| Q8 | Ai trong Kho duyệt kiểm kê (người đếm không tự duyệt)? | Thủ kho Hào duyệt, chị Nữ đếm |

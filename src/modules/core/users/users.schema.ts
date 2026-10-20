@@ -11,6 +11,8 @@ export const userCreateSchema = z.object({
   role: z.enum(USER_ROLES).default('employee'),
   department_id: uuidSchema.optional().nullable(),
   title: z.string().trim().max(100).optional().nullable(),
+  account_kind: z.enum(['person', 'shared']).optional(),
+  shared_holder: z.string().trim().max(100).optional().nullable(),
 })
 
 export const userUpdateSchema = z
@@ -61,4 +63,32 @@ export const userBulkImportSchema = z.object({
 export const userAuditListSchema = z.object({
   target_user_id: uuidSchema.optional(),
   limit: z.coerce.number().int().positive().max(200).default(50),
+})
+
+// ─── Nhân viên ↔ tài khoản (0252) ────────────────────────────────────────────
+
+/** Cấp tài khoản cá nhân từ dòng nhân viên — họ tên lấy từ hồ sơ nhân viên. */
+export const userFromEmployeeSchema = z.object({
+  employee_id: uuidSchema,
+  email: emailSchema,
+  password: passwordSchema,
+  role: z.enum(USER_ROLES).default('employee'),
+  department_id: uuidSchema.nullable(),
+  title: z.string().trim().max(100).optional().nullable(),
+})
+
+/** Gắn / gỡ nhân viên, hoặc đánh dấu dùng chung + người đang cầm. */
+export const userLinkSchema = z.union([
+  z.object({ employee_id: uuidSchema.nullable() }),
+  z.object({
+    shared: z.literal(true),
+    holder: z.string().trim().max(100).nullable(),
+  }),
+])
+
+export const userLinkBulkSchema = z.object({
+  pairs: z
+    .array(z.object({ user_id: uuidSchema, employee_id: uuidSchema }))
+    .min(1)
+    .max(200),
 })

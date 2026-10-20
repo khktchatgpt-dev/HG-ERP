@@ -1,89 +1,202 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import './hop-ky.css'
 import Link from 'next/link'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check, ExternalLink, History, Info, Undo2 } from 'lucide-react'
+import { useBeRong } from '@/lib/use-be-rong'
 import {
-  AlertTriangle,
-  Check,
-  Clock,
-  FileSearch,
-  FileText,
-  Inbox,
-  ShoppingCart,
-  Factory,
-  X,
-} from 'lucide-react'
-import { PageHeader } from '@/components/erp/PageHeader'
-import { DataTable, type Column } from '@/components/erp/DataTable'
-import { Badge } from '@/components/Badge'
-import { Button } from '@/components/shadcn/button'
-import { Checkbox } from '@/components/shadcn/checkbox'
-import { TopProgressBar } from '@/components/erp/Spinner'
-import { cn } from '@/lib/utils'
+  LOAI_PHIEU,
+  PHONG_MAC_DINH,
+  PHONG_NHAN,
+  PHONG_TRINH,
+  gomTheoLoai,
+  kyNhanhDuoc,
+  loaiCuaPhong,
+  vungGap,
+  xepGap,
+  type LoaiPhieu,
+  type PhongTrinh,
+} from '@/lib/loai-phieu-duyet'
+import { searchMatcher } from '@/lib/search-text'
 // `money` dùng CHUNG với trang chi tiết duyệt — hai màn nói cùng một con số.
 import { money } from '../approval-helpers'
 import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
 import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
+import {
+  LOP_MAU,
+  LOP_PHONG,
+  itemKey,
+  moneyShort,
+  moneyText,
+  sumByCurrency,
+} from './hop-ky.shared'
+import { KhoiDauCot, SignRow, cotHopKy } from './sign-row'
+import { HopKyHep } from './hop-ky-hep'
 
 /**
- * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — thiết kế lại 15/08/2026
- * (docs/exec-v3-approval-center.md): MỌI loại phiếu chờ Giám đốc gom một chỗ,
- * KHÔNG chia theo phòng ban — chip lọc mới phân loại. Ký / trả lại ngay tại
- * dòng; "Xem kỹ" mở màn thẩm định đầy đủ của từng phiếu.
+ * TRUNG TÂM PHÊ DUYỆT (/exec/approvals, cũng là "Chờ tôi ký" bên Mua hàng) —
+ * MỌI loại phiếu chờ ký gom một chỗ. Ký / trả lại ngay tại dòng; "Xem kỹ" mở
+ * màn thẩm định đầy đủ của từng phiếu.
  *
- * Hai bố cục cho hai tình huống thật:
- *   · máy tính  — bảng (Loại | Mã | Nội dung | Giá trị | Chờ | thao tác)
- *   · điện thoại — thẻ dọc, nút Ký to trong tầm ngón cái
+ * VIẾT TAY, KHÔNG KIT (14/10/2026). Chủ dự án: "không có màu sắc phân biệt các
+ * thành phần gây khó nhìn" · "không dùng kit nữa" (chỉ màn này) · "thiết kế
+ * thiên hướng ERP không làm như web thường được". Bản vẽ v2 lối ERP
+ * https://claude.ai/artifact/Ar4nCXv8ruVNkwHpc3NYJ4 (Q29–Q32):
+ *  · phẳng, sát mép, MỘT lưới cuộn liền; tiêu đề cột nền sẫm dính, chân tổng dính;
+ *  · thanh hành động gom nhóm ở góc trên phải (Action Pane);
+ *  · TAB NGANG THEO PHÒNG (14/10 tối, chủ dự án chốt): Cung ứng · Kho · Sản xuất ·
+ *    Bán hàng · Tất cả phòng, số cảnh báo trên tab (đỏ khi có phiếu gấp), mặc định
+ *    Cung ứng; phòng có ≥ 2 loại thì thêm hàng loại; lưới một loại = cột thật của loại;
+ *  · màu loại (đơn mua xanh ngọc · đề nghị tím · lệnh hồng sẫm · báo giá xám đá)
+ *    chỉ ở vạch ô đếm, vạch + nền nhạt dòng nhóm, ô vuông cột "Loại".
+ * Kiểu ở `hop-ky.css` — luật `.hk.hk` để thắng CSS kit ngoài @layer (layout Mua
+ * hàng vẫn gắn `.kit`).
  *
- * Luật giữ nguyên từ Hộp ký cũ: phiếu GIÁ TRỊ LỚN không được ký hàng loạt,
- * phải mở ra đọc; ký nhiều phiếu gọi tuần tự, phiếu lỗi nằm lại trong hộp.
+ * Phân loại (H1–H3, bản vẽ https://claude.ai/artifact/XDy5RfHWzAfAAoULJpobBB):
+ * khối "Cần ký trước" (ký bù · quá hẹn · chờ ≥ 3 ngày), mỗi loại một `<tbody>`
+ * theo thứ tự phòng, gom theo loại / người trình, ký nhanh chỉ trong một loại.
+ * Thêm loại phiếu: khai ở `LOAI_PHIEU`, màn tự có ô đếm + khối.
+ *
+ * BA LUẬT GIỮ NGUYÊN:
+ *  · phiếu GIÁ TRỊ LỚN / lệnh SX / chờ ký bù không có ô tích — mở ra đọc, ký riêng;
+ *  · ký nhiều phiếu gọi tuần tự, phiếu lỗi nằm lại trong hộp;
+ *  · màn rỗng phải nói THẬT vì sao rỗng (đã ký hết ↔ chưa ai lập phiếu).
  */
 
-const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá' } as const
-const KIND_TONE = { lsx: 'blue', po: 'amber', quote: 'green' } as const
-const KIND_ICON = { lsx: Factory, po: ShoppingCart, quote: FileText } as const
+export type ApprovalKind = 'all' | LoaiPhieu
+/** Tab đang mở: một phòng trình, hoặc "Tất cả phòng". */
+type Tab = PhongTrinh | 'all'
 
-export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote'
-
-function waitLabel(days: number): string {
-  return days <= 0 ? 'hôm nay' : `${days} ngày`
-}
-
-/** Cộng tiền theo TỪNG tiền tệ — USD và VND không bao giờ cộng chung. */
-function sumByCurrency(items: SignItem[]): [string, number][] {
-  const m = new Map<string, number>()
-  for (const i of items) m.set(i.currency, (m.get(i.currency) ?? 0) + i.value)
-  return [...m.entries()]
-}
+/** Phòng có khai ít nhất một loại phiếu — chỉ phòng đó mới có tab. */
+const PHONG_CO_TAB = PHONG_TRINH.filter((p) => loaiCuaPhong(p).length > 0)
+const cuaPhong = (i: SignItem, p: PhongTrinh) => LOAI_PHIEU[i.kind].phong === p
 
 export function ApprovalCenterScreen({
   box,
   initialKind,
+  eyebrow = 'Ban Giám đốc',
+  historyHref = '/exec/approvals/history',
+  ruleHref = '/exec/luat-ky',
 }: {
   box: SignBox
+  /** `?loai=` từ thẻ ở Tổng quan — bật sẵn ô đếm của loại đó. */
   initialKind: ApprovalKind
+  /** Mẩu đường dẫn trên tiêu đề — "Mua hàng" khi mở ở khu Cung ứng. */
+  eyebrow?: string
+  /** Lịch sử ký — null khi người xem không vào được khu Giám đốc. */
+  historyHref?: string | null
+  /** Luật ký (ngưỡng giá trị lớn) — null khi người xem không chỉnh được. */
+  ruleHref?: string | null
 }) {
   const router = useRouter()
-  const [kind, setKind] = useState<ApprovalKind>(initialKind)
+  const today = new Date().toISOString().slice(0, 10)
+  /* TAB NGANG THEO PHÒNG (chủ dự án 14/10/2026): mặc định Cung ứng; `?loai=` từ
+     Tổng quan mở thẳng tab phòng của loại đó. */
+  const [tab, setTab] = useState<Tab>(
+    initialKind === 'all' ? PHONG_MAC_DINH : LOAI_PHIEU[initialKind].phong,
+  )
+  /* Hàng LOẠI trong phòng — chỉ có khi phòng khai từ 2 loại trở lên. */
+  const [loaiChon, setLoaiChon] = useState<LoaiPhieu | null>(
+    initialKind === 'all' ? null : initialKind,
+  )
+  const [gom, setGom] = useState<'loai' | 'nguoi'>('loai')
+  const [who, setWho] = useState<string>('all')
+  const [q, setQ] = useState('')
   const [picked, setPicked] = useState<SignItem[]>([])
+  const [pick, setPick] = useState<string | null>(null)
+  // Khung < 900px (điện thoại — giám đốc mở từ thông báo): danh sách nhóm (HK-4).
+  const khung = useRef<HTMLDivElement>(null)
+  const beRong = useBeRong(khung)
+  // Dưới 840px (điện thoại, máy tính bảng dọc): danh sách nhóm — bộ cột vừa cần ~820px.
+  const hep = beRong < 840
+  /* Bộ cột theo bề rộng KHUNG (sign-row · cotHopKy): ≥ 1440 đủ 10 cột, vừa thì
+     gộp lệnh + người trình xuống dòng hai của ô Nội dung. */
+  const rong = beRong >= 1440
+  /* CHỐT CHIỀU CAO = 100dvh − đỉnh của màn (cách `ScreenFrame` của kit làm) —
+     để chỉ LƯỚI cuộn, tiêu đề + ô đếm + thanh trạng thái đứng yên. */
+  const goc = useRef<HTMLDivElement>(null)
+  const [cao, setCao] = useState('calc(100dvh - 60px)')
+  useLayoutEffect(() => {
+    const el = goc.current
+    if (!el) return
+    const doi = () =>
+      setCao(`calc(100dvh - ${Math.round(el.getBoundingClientRect().top)}px)`)
+    doi()
+    window.addEventListener('resize', doi)
+    return () => window.removeEventListener('resize', doi)
+  }, [])
   const { busy, askApprove, askReject, askApproveMany, dialogs } = useApprovalDecision(
     () => {
       setPicked([])
+      setPick(null)
       router.refresh()
     },
   )
 
-  const counts = useMemo(
-    () => ({
-      all: box.items.length,
-      lsx: box.items.filter((i) => i.kind === 'lsx').length,
-      po: box.items.filter((i) => i.kind === 'po').length,
-      quote: box.items.filter((i) => i.kind === 'quote').length,
-    }),
-    [box.items],
-  )
-  const items = kind === 'all' ? box.items : box.items.filter((i) => i.kind === kind)
+  const khop = searchMatcher(q)
+  const base = q.trim()
+    ? box.items.filter((i) => khop([i.code, i.party, i.owner_name ?? '']))
+    : box.items
+  const gap = xepGap(base)
+  const loaiTrongTab = tab === 'all' ? [] : loaiCuaPhong(tab)
+  const loaiLoc =
+    loaiTrongTab.length > 1 && loaiChon && loaiTrongTab.includes(loaiChon)
+      ? loaiChon
+      : null
+  const shown =
+    tab === 'all'
+      ? base
+      : base.filter((i) => cuaPhong(i, tab) && (!loaiLoc || i.kind === loaiLoc))
+
+  const ownerKey = (i: SignItem) => i.owner_id ?? '@none'
+  const owners = useMemo(() => {
+    const m = new Map<string, { name: string; n: number }>()
+    for (const i of shown) {
+      const k = ownerKey(i)
+      const cur = m.get(k) ?? { name: i.owner_name ?? 'Chưa rõ người trình', n: 0 }
+      cur.n++
+      m.set(k, cur)
+    }
+    return [...m.entries()].sort((a, b) => b[1].n - a[1].n)
+  }, [shown])
+  const items =
+    gom === 'nguoi' && who !== 'all' ? shown.filter((i) => ownerKey(i) === who) : shown
+
+  /* Khối hiển thị: khối gấp (khi xem Tất cả, gom theo loại) + mỗi loại một khối;
+     hoặc mỗi người trình một khối. */
+  const lane = tab === 'all' && gom === 'loai' ? gap : []
+  /* Trong khối: phiếu gấp lên đầu (cùng luật khối "Cần ký trước"), rồi thứ tự cũ. */
+  const gapTruoc = (rows: SignItem[]) => [
+    ...xepGap(rows),
+    ...rows.filter((i) => !vungGap(i)),
+  ]
+  const khoi =
+    gom === 'loai'
+      ? gomTheoLoai(items).map((g) => ({
+          key: g.loai as string,
+          loai: g.loai as LoaiPhieu | null,
+          lop: LOP_MAU[g.loai],
+          ten: tab === 'all' ? `${PHONG_NHAN[g.khai.phong]} · ${g.khai.ten}` : g.khai.ten,
+          so: g.khai.so,
+          rows: gapTruoc(g.items),
+        }))
+      : owners
+          .map(([k, o]) => ({
+            key: k,
+            loai: null as LoaiPhieu | null,
+            lop: 'lp-all',
+            ten: o.name,
+            so: null as string | null,
+            rows: gapTruoc(items.filter((i) => ownerKey(i) === k)),
+          }))
+          .filter((g) => g.rows.length > 0)
+
+  /* Lưới chỉ có ĐÚNG MỘT loại → cột thật của loại đó (sign-row · cotHopKy). */
+  const cacLoai = [...new Set(items.map((i) => i.kind))]
+  const loaiDon = cacLoai.length === 1 ? cacLoai[0] : null
+  const cot = cotHopKy(rong, loaiDon)
 
   const target = (i: SignItem): DecideTarget => ({
     kind: i.kind,
@@ -91,375 +204,403 @@ export function ApprovalCenterScreen({
     code: i.code,
     label: `${i.party} · ${i.facts[0] ?? ''}`,
   })
-
-  const key = (i: SignItem) => `${i.kind}-${i.id}`
-  /** Phiếu giá trị lớn KHÔNG được ký hàng loạt — phải mở ra đọc rồi ký riêng. */
-  const bulkable = items.filter((i) => !i.big)
-  const pickedKeys = new Set(picked.map(key))
-
-  const columns: Column<SignItem>[] = [
-    {
-      key: 'kind',
-      header: 'Loại',
-      width: '100px',
-      cell: (i) => {
-        const Icon = KIND_ICON[i.kind]
-        return (
-          <Badge tone={KIND_TONE[i.kind]}>
-            <Icon className="me-1 size-3" aria-hidden />
-            {KIND_LABEL[i.kind]}
-          </Badge>
-        )
-      },
-      sortValue: (i) => i.kind,
-    },
-    {
-      key: 'code',
-      header: 'Mã',
-      width: '150px',
-      cell: (i) => (
-        // `whitespace-nowrap`: mã chứng từ KHÔNG được gãy dòng — "PO-TEST-SHIP4"
-        // xuống hàng thành "PO-TEST-" / "SHIP4" đọc ra một mã không tồn tại.
-        <Link
-          href={i.href}
-          className="font-mono font-semibold whitespace-nowrap hover:underline"
-        >
-          {i.code}
-        </Link>
-      ),
-      sortValue: (i) => i.code,
-    },
-    {
-      key: 'content',
-      header: 'Nội dung',
-      cell: (i) => (
-        <div className="min-w-0">
-          <div className="truncate">{i.party}</div>
-          <div className="text-muted-foreground truncate text-xs">
-            {[...i.facts, i.submitted_by ? `lập bởi ${i.submitted_by}` : null]
-              .filter(Boolean)
-              .join(' · ')}
-          </div>
-          {i.warnings.map((w) => (
-            <div
-              key={w}
-              className="mt-0.5 flex items-start gap-1 text-xs text-[var(--warn)]"
-            >
-              <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden />
-              {w}
-            </div>
-          ))}
-        </div>
-      ),
-    },
-    {
-      key: 'value',
-      header: 'Giá trị',
-      width: '132px',
-      align: 'right',
-      cell: (i) => (
-        <div>
-          <span className="font-semibold tabular-nums">
-            {i.value > 0 ? money(i.value, i.currency) : '—'}
-          </span>
-          {i.big && (
-            <div className="mt-0.5">
-              <Badge tone="purple">Giá trị lớn</Badge>
-            </div>
-          )}
-        </div>
-      ),
-      sortValue: (i) => i.value,
-    },
-    {
-      key: 'wait',
-      header: 'Chờ',
-      width: '100px',
-      align: 'right',
-      cell: (i) => (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 text-xs whitespace-nowrap tabular-nums',
-            i.waiting_days >= 3
-              ? 'font-medium text-[var(--warn)]'
-              : 'text-muted-foreground',
-          )}
-        >
-          <Clock className="size-3" aria-hidden />
-          {waitLabel(i.waiting_days)}
-        </span>
-      ),
-      sortValue: (i) => i.waiting_days,
-    },
-    {
-      key: 'actions',
-      header: '',
-      // Đủ chỗ cho trạng thái RỘNG NHẤT (≥1536px, nút "Xem kỹ" có chữ). Khai
-      // hụt thì ô thao tác tràn sang trái, đè lên cột "Chờ" — cột width là số
-      // cố định, bảng `table-fixed` không tự nới.
-      width: '244px',
-      align: 'right',
-      cell: (i) => (
-        <div className="flex justify-end gap-1.5 whitespace-nowrap">
-          {/* Dưới 1536px chỉ còn ICON: ba nút có chữ ăn 240px, ép cột "Nội dung"
- xuống còn một mẩu và đè cả sang cột "Chờ". Mã phiếu vẫn là link
- tới đúng trang này nên bỏ chữ không mất lối vào. */}
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={i.href} aria-label={`Xem kỹ ${i.code}`} title="Xem kỹ">
-              <FileSearch className="size-4" aria-hidden />
-              <span className="hidden 2xl:inline">Xem kỹ</span>
-            </Link>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => askReject(target(i))}
-          >
-            <X className="size-4" aria-hidden />
-            Trả lại
-          </Button>
-          <Button size="sm" disabled={busy} onClick={() => askApprove(target(i))}>
-            <Check className="size-4" aria-hidden />
-            Ký
-          </Button>
-        </div>
-      ),
-    },
+  const pickedKeys = new Set(picked.map(itemKey))
+  const sel = items.find((i) => itemKey(i) === pick) ?? null
+  const bigCount = items.filter((i) => i.big).length
+  /* Tiền tệ chưa có ngưỡng → mọi phiếu tệ đó đều "giá trị lớn". Nói ra. */
+  const noRule = [
+    ...new Set(
+      box.items
+        .filter((i) => i.kind === 'po' && !Object.hasOwn(box.thresholds, i.currency))
+        .map((i) => i.currency),
+    ),
   ]
 
-  return (
-    <div className="space-y-4">
-      <TopProgressBar active={busy} />
+  /** Ký nhanh CHỈ trong một loại (Q26): tích phiếu khác loại thì bỏ chọn cũ. */
+  function toggle(i: SignItem) {
+    setPicked((s) => {
+      if (s.length > 0 && s[0].kind !== i.kind) return [i]
+      return pickedKeys.has(itemKey(i))
+        ? s.filter((x) => itemKey(x) !== itemKey(i))
+        : [...s, i]
+    })
+  }
+  const nhieu = picked.length > 0
+  const chuaChon = !nhieu && !sel
+  const lyDo = chuaChon ? 'Chọn một phiếu trong bảng trước' : undefined
+  const lateSel =
+    !nhieu && sel?.late_sign
+      ? 'Đơn đã gửi gấp — bấm "Xem kỹ" đọc lý do rồi ký bù'
+      : undefined
+  const chonTab = (t: Tab) => {
+    setTab(t)
+    setLoaiChon(null)
+    setWho('all')
+    setPicked([])
+    setPick(null)
+  }
+  const lau = (rows: SignItem[]) =>
+    rows.length ? Math.max(...rows.map((r) => r.waiting_days)) : 0
 
-      <PageHeader
-        title="Chờ tôi phê duyệt"
-        description={
-          box.stats.total > 0
-            ? `${box.stats.total} phiếu chờ bạn ký · lâu nhất ${box.stats.oldest_days} ngày · ${box.stats.value.map((v) => money(v.value, v.currency)).join(' · ')}`
-            : 'Không có phiếu nào chờ chữ ký của bạn.'
-        }
-        actions={
-          <Button variant="outline" asChild>
-            <Link href="/exec/approvals/history">Đã xử lý →</Link>
-          </Button>
-        }
-        meta={
-          box.decided_today.approved + box.decided_today.rejected > 0 ? (
-            <span className="text-muted-foreground text-sm">
-              Hôm nay bạn đã duyệt {box.decided_today.approved} phiếu
-              {box.decided_today.rejected > 0 &&
-                `, trả lại ${box.decided_today.rejected} phiếu`}
-              .
-            </span>
-          ) : undefined
-        }
-      />
+  return (
+    <div className="hk" ref={goc} style={{ height: cao }}>
+      {/* Tiêu đề + Action Pane góc phải */}
+      <div className="hk-ph">
+        <span className="hk-crumb">{eyebrow} ›</span>
+        <h1>Chờ tôi phê duyệt</h1>
+        {box.decided_today.approved + box.decided_today.rejected > 0 && (
+          <span className="hk-crumb">
+            hôm nay đã ký <b className="hk-num">{box.decided_today.approved}</b>
+            {box.decided_today.rejected > 0 && (
+              <>
+                , trả lại <b className="hk-num">{box.decided_today.rejected}</b>
+              </>
+            )}
+          </span>
+        )}
+        <div className="hk-ap" role="toolbar" aria-label="Ký phiếu">
+          {!hep && (
+            <div>
+              <button
+                type="button"
+                className="hk-btn p"
+                disabled={busy || chuaChon || !!lateSel}
+                title={lyDo ?? lateSel}
+                onClick={() =>
+                  nhieu
+                    ? askApproveMany(picked.map(target))
+                    : sel && askApprove(target(sel))
+                }
+              >
+                <Check size={15} aria-hidden />
+                {nhieu ? `Ký ${picked.length} phiếu` : 'Ký duyệt'}
+              </button>
+              <button
+                type="button"
+                className="hk-btn"
+                disabled={busy || !sel || !!lateSel}
+                title={
+                  nhieu
+                    ? 'Trả lại phải ghi lý do cho từng phiếu — chọn một phiếu'
+                    : (lyDo ?? lateSel)
+                }
+                onClick={() => sel && askReject(target(sel))}
+              >
+                <Undo2 size={15} aria-hidden />
+                Trả lại để sửa
+              </button>
+              {sel ? (
+                <Link href={sel.href} className="hk-btn">
+                  <ExternalLink size={15} aria-hidden />
+                  Xem kỹ
+                </Link>
+              ) : (
+                <button type="button" className="hk-btn" disabled title={lyDo}>
+                  <ExternalLink size={15} aria-hidden />
+                  Xem kỹ
+                </button>
+              )}
+            </div>
+          )}
+          {(historyHref || ruleHref) && (
+            <div>
+              {historyHref && (
+                <Link href={historyHref} className="hk-btn">
+                  <History size={15} aria-hidden />
+                  Lịch sử ký
+                </Link>
+              )}
+              {ruleHref && (
+                <Link href={ruleHref} className="hk-btn">
+                  <Info size={15} aria-hidden />
+                  Luật ký
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div ref={khung} style={{ height: 0, width: '100%' }} aria-hidden />
 
       {box.stats.total > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {(['all', 'lsx', 'po', 'quote'] as const).map((k) => (
-            <Button
-              key={k}
-              size="sm"
-              variant={kind === k ? 'default' : 'outline'}
-              onClick={() => setKind(k)}
-            >
-              {k === 'all' ? 'Tất cả' : KIND_LABEL[k]}
-              <span className="ms-1.5 tabular-nums opacity-70">{counts[k]}</span>
-            </Button>
+        <div className="hk-ptabs" role="tablist" aria-label="Phòng trình phiếu">
+          {PHONG_CO_TAB.map((p) => (
+            <TabPhong
+              key={p}
+              ten={PHONG_NHAN[p]}
+              lop={LOP_PHONG[p]}
+              rows={base.filter((i) => cuaPhong(i, p))}
+              on={tab === p}
+              onClick={() => chonTab(p)}
+            />
           ))}
-          {/* Ký nhanh nhiều phiếu chỉ có ở BẢNG (chọn theo dòng) — thẻ không có
-              ô tick, nên nhãn này đi cùng ngưỡng hiển thị của bảng. */}
-          {bulkable.length > 1 && (
-            <label className="text-muted-foreground ms-auto hidden cursor-pointer items-center gap-2 text-sm xl:flex">
-              <Checkbox
-                checked={
-                  bulkable.length > 0 && bulkable.every((i) => pickedKeys.has(key(i)))
-                }
-                onCheckedChange={(v) => setPicked(v ? bulkable : [])}
-              />
-              Chọn {bulkable.length} phiếu ký nhanh được
-            </label>
+          <TabPhong
+            ten="Tất cả phòng"
+            lop="lp-all"
+            rows={base}
+            on={tab === 'all'}
+            onClick={() => chonTab('all')}
+          />
+        </div>
+      )}
+
+      {!hep && tab !== 'all' && loaiTrongTab.length > 1 && (
+        <div className="hk-ltabs" role="group" aria-label="Loại phiếu trong phòng">
+          <button type="button" aria-pressed={!loaiLoc} onClick={() => setLoaiChon(null)}>
+            Mọi loại{' '}
+            <b className="hk-num">{base.filter((i) => cuaPhong(i, tab)).length}</b>
+          </button>
+          {loaiTrongTab.map((l) => (
+            <button
+              key={l}
+              type="button"
+              className={LOP_MAU[l]}
+              aria-pressed={loaiLoc === l}
+              onClick={() => {
+                setLoaiChon(loaiLoc === l ? null : l)
+                setPicked([])
+              }}
+            >
+              <i aria-hidden />
+              {LOAI_PHIEU[l].ten}{' '}
+              <b className="hk-num">{base.filter((i) => i.kind === l).length}</b>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {box.stats.total > 0 && !hep && (
+        <div className="hk-fb">
+          <span className={nhieu || sel ? 'hk-sel' : undefined}>
+            {nhieu
+              ? `${picked.length} ${LOAI_PHIEU[picked[0].kind].nhan.toLowerCase()} đã chọn · ${moneyText(picked)}`
+              : sel
+                ? `Đã chọn: ${sel.code} · ${sel.po?.supplier_short ?? sel.party} · ${money(sel.value, sel.currency)}`
+                : 'Chưa chọn phiếu nào'}
+          </span>
+          {nhieu && (
+            <button type="button" className="hk-who" onClick={() => setPicked([])}>
+              Bỏ chọn
+            </button>
+          )}
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tìm mã phiếu, NCC, người trình…"
+            aria-label="Tìm phiếu chờ ký"
+          />
+          {bigCount > 0 && (
+            <span>{bigCount} phiếu giá trị lớn — mở ra đọc, ký riêng</span>
+          )}
+          <span className="hk-seg" role="group" aria-label="Cách gom">
+            <button
+              type="button"
+              aria-pressed={gom === 'loai'}
+              onClick={() => setGom('loai')}
+            >
+              Theo loại phiếu
+            </button>
+            <button
+              type="button"
+              aria-pressed={gom === 'nguoi'}
+              onClick={() => {
+                setGom('nguoi')
+                setWho('all')
+              }}
+            >
+              Theo người trình
+            </button>
+          </span>
+          {gom === 'nguoi' && owners.length > 1 && (
+            <span
+              style={{ display: 'flex', gap: 6, flexBasis: '100%', flexWrap: 'wrap' }}
+            >
+              {owners.map(([k, o]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="hk-who"
+                  aria-pressed={who === k}
+                  onClick={() => {
+                    setWho(who === k ? 'all' : k)
+                    setPicked([])
+                  }}
+                >
+                  {o.name} · {o.n}
+                </button>
+              ))}
+            </span>
           )}
         </div>
       )}
 
-      {items.length === 0 ? (
-        <EmptyCenter box={box} filtered={kind !== 'all' && box.stats.total > 0} />
-      ) : (
-        <>
-          {/*
-            Bảng chỉ bày từ 1280px trở lên (trước là 768px). Sáu cột — loại · mã
-            · nội dung · giá trị · chờ · ba nút — cần ~700px chỉ riêng phần cột
- cố định; ở khung 900px cột "Nội dung" bị bóp còn một mẩu, tên khách
- cụt thành "MERXX HANDEL…" và mã phiếu gãy đôi. Dưới ngưỡng này dùng
-            THẺ: cùng nội dung mà đọc trọn, hợp cả cửa sổ chia đôi màn hình.
-          */}
-          <div className="hidden xl:block">
-            <DataTable
-              rows={items}
-              columns={columns}
-              keyFn={key}
-              pagination={false}
-              selection={{
-                selected: picked,
-                onChange: (rows) => setPicked(rows.filter((r) => !r.big)),
-                keyFn: key,
-              }}
-              rowClassName={(i) =>
-                i.waiting_days >= 3
-                  ? 'bg-[color-mix(in_srgb,var(--warn)_5%,transparent)]'
-                  : undefined
-              }
-            />
-          </div>
-
-          {/* Điện thoại + cửa sổ hẹp: thẻ dọc, nút Ký trong tầm ngón cái. */}
-          <ul className="space-y-3 xl:hidden">
-            {items.map((i) => {
-              const Icon = KIND_ICON[i.kind]
-              return (
-                <li
-                  key={key(i)}
-                  className={cn(
-                    // @container: thẻ này chạy từ điện thoại 375px tới cửa sổ
-                    // 1200px. Ba nút TRÀN NGANG là đúng cho ngón cái ở 375px,
-                    // nhưng ở 1200px thì ăn 150px chiều cao mỗi thẻ cho ba dải
-                    // xanh dài ngoẵng — nên từ 30rem trở lên gom về một hàng.
-                    'bg-card @container rounded-xl border p-4',
-                    i.waiting_days >= 3 &&
-                      'border-[color-mix(in_srgb,var(--warn)_35%,transparent)]',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium tracking-wide uppercase">
-                          <Icon className="size-3.5" aria-hidden />
-                          {KIND_LABEL[i.kind]}
-                        </span>
-                        <span className="font-semibold">{i.code}</span>
-                        {i.big && <Badge tone="purple">Giá trị lớn</Badge>}
-                      </div>
-                      <div className="mt-0.5 text-sm">{i.party}</div>
-                      <div className="text-muted-foreground mt-0.5 text-xs">
-                        {[...i.facts, i.submitted_by ? `lập bởi ${i.submitted_by}` : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </div>
-                    </div>
-                    {/* Tiền và "chờ N ngày" KHÔNG được ngắt dòng: ở 375px
-                        "12.500 USD" gãy làm hai và cái đồng hồ bị bỏ lại một
- mình trên dòng trống. */}
-                    <div className="shrink-0 text-end whitespace-nowrap">
-                      <div className="font-semibold tabular-nums">
-                        {i.value > 0 ? money(i.value, i.currency) : '—'}
-                      </div>
-                      <div
-                        className={cn(
-                          'mt-0.5 inline-flex items-center gap-1 text-xs',
-                          i.waiting_days >= 3
-                            ? 'text-[var(--warn)]'
-                            : 'text-muted-foreground',
-                        )}
-                      >
-                        <Clock className="size-3.5" aria-hidden />
-                        {i.waiting_days <= 0
-                          ? 'gửi hôm nay'
-                          : `chờ ${i.waiting_days} ngày`}
-                      </div>
-                    </div>
-                  </div>
-
-                  {i.warnings.length > 0 && (
-                    <ul className="mt-2.5 space-y-1">
-                      {i.warnings.map((w) => (
-                        <li
-                          key={w}
-                          className="flex items-start gap-1.5 text-xs text-[var(--warn)]"
-                        >
-                          <AlertTriangle
-                            className="mt-0.5 size-3.5 shrink-0"
-                            aria-hidden
-                          />
-                          {w}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/*
-                    Thứ tự DOM là Xem kỹ → Trả lại → Ký duyệt, nên:
-                    · hẹp  — `flex-col-reverse` lật lại: Ký duyệt nằm trên cùng,
- trong tầm ngón cái (luật /design-lab mục 12);
-                    · rộng — `flex-row` giữ nguyên trình tự đọc trái→phải, Xem
- kỹ đẩy về mép trái, hai nút quyết định dồn bên phải.
-                  */}
-                  <div className="mt-3 flex flex-col-reverse gap-2 border-t pt-3 @[30rem]:flex-row @[30rem]:items-center @[30rem]:justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      asChild
-                      className="@[30rem]:me-auto @[30rem]:w-auto"
-                    >
-                      <Link href={i.href}>
-                        <FileSearch className="size-4" aria-hidden />
-                        Xem kỹ
-                      </Link>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      className="@[30rem]:w-28"
-                      onClick={() => askReject(target(i))}
-                    >
-                      <X className="size-4" aria-hidden />
-                      Trả lại
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={busy}
-                      className="@[30rem]:w-32"
-                      onClick={() => askApprove(target(i))}
-                    >
-                      <Check className="size-4" aria-hidden />
-                      Ký duyệt
-                    </Button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-
-      {/* Dải ký nhanh — nổi ở chân màn khi đã chọn ít nhất một phiếu. */}
-      {picked.length > 0 && (
-        <div className="bg-card fixed inset-x-0 bottom-0 z-20 border-t shadow-lg">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
-            <div className="text-sm">
-              Đã chọn <b className="tabular-nums">{picked.length}</b> phiếu
-              <span className="text-muted-foreground">
-                {' · '}
-                {sumByCurrency(picked)
-                  .map(([cur, v]) => money(v, cur))
-                  .join(' · ')}
-              </span>
-            </div>
-            <div className="ms-auto flex gap-2">
-              <Button variant="ghost" onClick={() => setPicked([])} disabled={busy}>
-                Bỏ chọn
-              </Button>
-              <Button disabled={busy} onClick={() => askApproveMany(picked.map(target))}>
-                <Check className="size-4" aria-hidden />
-                Ký {picked.length} phiếu
-              </Button>
-            </div>
-          </div>
+      {noRule.length > 0 && (
+        <div className="hk-note">
+          Chưa đặt ngưỡng cho <b>{noRule.join(', ')}</b> — mọi đơn tính bằng tiền đó bị
+          coi là giá trị lớn, phải mở ra ký từng phiếu.
+          {ruleHref && (
+            <>
+              {' '}
+              <Link
+                href={ruleHref}
+                style={{ color: 'var(--hk-act)', textDecoration: 'underline' }}
+              >
+                Đặt ngưỡng
+              </Link>
+            </>
+          )}
         </div>
       )}
+
+      {hep ? (
+        box.stats.total === 0 || shown.length === 0 ? (
+          <EmptyCenter
+            box={box}
+            filtered={box.stats.total > 0}
+            historyHref={historyHref}
+            tabTen={tab === 'all' ? null : PHONG_NHAN[tab]}
+            timKiem={q.trim() !== ''}
+            conLai={base.length}
+          />
+        ) : (
+          // Điện thoại: tab phòng ở trên (xuống hàng), danh sách nhóm của phòng đang mở.
+          <HopKyHep
+            key={tab}
+            items={shown}
+            gap={xepGap(shown)}
+            loais={tab === 'all' ? undefined : loaiTrongTab}
+          />
+        )
+      ) : items.length === 0 ? (
+        <EmptyCenter
+          box={box}
+          filtered={box.stats.total > 0}
+          historyHref={historyHref}
+          tabTen={tab === 'all' ? null : PHONG_NHAN[tab]}
+          timKiem={q.trim() !== ''}
+          conLai={base.length}
+        />
+      ) : (
+        <div className="hk-grid">
+          <table className="hk-tb" aria-label="Phiếu chờ ký">
+            <colgroup>
+              {cot.map((c) => (
+                <col key={c.key} style={c.w ? { width: c.w } : undefined} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {cot.map((c) => (
+                  <th
+                    key={c.key}
+                    className={c.r ? 'r' : undefined}
+                    aria-label={c.key === 'chon' ? 'Chọn' : undefined}
+                  >
+                    {c.nhan}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {lane.length > 0 && (
+              <tbody>
+                <tr className="grp lp-gap">
+                  <th scope="rowgroup" colSpan={cot.length}>
+                    <span className="ten">Cần ký trước</span> ·{' '}
+                    <b className="hk-num">{lane.length}</b> phiếu · mọi loại · ký bù, hẹn
+                    giao đã qua, chờ từ 3 ngày
+                  </th>
+                </tr>
+                {lane.map((i) => (
+                  <SignRow
+                    cot={cot}
+                    key={`gap-${itemKey(i)}`}
+                    i={i}
+                    today={today}
+                    trongGap
+                    selected={itemKey(i) === pick}
+                    checked={false}
+                    onPick={() => setPick(itemKey(i))}
+                    onToggle={() => toggle(i)}
+                  />
+                ))}
+              </tbody>
+            )}
+            {khoi.map((g) => {
+              const nhanh = g.loai ? g.rows.filter(kyNhanhDuoc) : []
+              const daChon =
+                nhanh.length > 0 && nhanh.every((i) => pickedKeys.has(itemKey(i)))
+              return (
+                <tbody key={g.key}>
+                  <tr className={`grp ${g.lop}`}>
+                    <th scope="rowgroup" colSpan={cot.length}>
+                      <span className="ten">{g.ten}</span> ·{' '}
+                      <b className="hk-num">{g.rows.length}</b> phiếu ·{' '}
+                      {moneyText(g.rows)} · lâu nhất {lau(g.rows)} ngày
+                      <span className="rr">
+                        {nhanh.length > 1 && (
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={daChon}
+                              onChange={(e) => setPicked(e.target.checked ? nhanh : [])}
+                              aria-label={`Chọn ${nhanh.length} phiếu ký nhanh trong khối ${g.ten}`}
+                            />
+                            Chọn {nhanh.length} phiếu ký nhanh
+                          </label>
+                        )}
+                        {g.so && <Link href={g.so}>Sổ tra cứu ›</Link>}
+                      </span>
+                    </th>
+                  </tr>
+                  {g.loai && !loaiDon && <KhoiDauCot loai={g.loai} cot={cot} />}
+                  {g.rows.map((i) => (
+                    <SignRow
+                      cot={cot}
+                      key={itemKey(i)}
+                      i={i}
+                      today={today}
+                      trongGap={g.key === 'gap'}
+                      selected={itemKey(i) === pick}
+                      checked={pickedKeys.has(itemKey(i))}
+                      onPick={() => setPick(itemKey(i))}
+                      onToggle={() => toggle(i)}
+                    />
+                  ))}
+                </tbody>
+              )
+            })}
+            {/* Phiếu ở khối "Cần ký trước" cũng nằm trong khối loại của nó — chỉ cộng một lần. */}
+            <tfoot>
+              <tr>
+                <td colSpan={cot.length - 2}>
+                  Cộng {items.length} phiếu · cộng riêng từng loại tiền, không quy đổi
+                </td>
+                <td className="r hk-num" colSpan={2}>
+                  {sumByCurrency(items).map(([cur, v]) => (
+                    <div key={cur}>{money(v, cur)}</div>
+                  ))}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      <div className="hk-sb">
+        <span>
+          {tab === 'all'
+            ? 'Mọi phòng'
+            : `Phòng ${PHONG_NHAN[tab]}${loaiLoc ? ` · ${LOAI_PHIEU[loaiLoc].ten.toLowerCase()}` : ''}`}
+          {' · '}
+          {gom === 'loai' ? 'gom theo loại phiếu' : 'gom theo người trình'}
+        </span>
+        <span>khoá = giá trị lớn / lệnh SX / ký bù — mở ra đọc, ký riêng</span>
+        <span style={{ marginLeft: 'auto' }}>
+          {items.length} / {box.stats.total} phiếu
+        </span>
+      </div>
 
       {dialogs}
     </div>
@@ -470,44 +611,96 @@ export function ApprovalCenterScreen({
  * Màn rỗng phải NÓI THẬT vì sao rỗng. "0 phiếu chờ" có hai nghĩa trái ngược:
  * đã ký hết (tốt) hoặc chưa ai từng lập phiếu trên hệ thống (dữ liệu chưa lên).
  */
-function EmptyCenter({ box, filtered }: { box: SignBox; filtered: boolean }) {
+function EmptyCenter({
+  box,
+  filtered,
+  historyHref,
+  tabTen = null,
+  timKiem = false,
+  conLai = 0,
+}: {
+  box: SignBox
+  filtered: boolean
+  historyHref: string | null
+  /** Tab phòng đang mở — rỗng vì phòng này không có phiếu, không phải hộp rỗng. */
+  tabTen?: string | null
+  timKiem?: boolean
+  /** Số phiếu khớp ô tìm ở MỌI phòng. */
+  conLai?: number
+}) {
   const neverUsed = box.emptiness.pos_total === 0 && box.emptiness.lsx_total === 0
   const noPo = box.emptiness.pos_total === 0
-
   return (
-    <div className="bg-card rounded-xl border px-6 py-12 text-center">
-      <Inbox className="text-muted-foreground mx-auto size-8" aria-hidden />
-      <p className="mt-3 font-medium">
-        {filtered ? 'Không có phiếu loại này' : 'Không có phiếu chờ duyệt'}
+    <div className="hk-empty" style={{ flex: 1 }}>
+      <b>
+        {filtered && tabTen && !timKiem
+          ? `Phòng ${tabTen} không có phiếu chờ bạn ký`
+          : filtered
+            ? 'Không có phiếu nào khớp'
+            : 'Không có phiếu chờ duyệt'}
+      </b>
+      <p style={{ margin: '0 auto 12px', maxWidth: '60ch' }}>
+        {filtered && tabTen && conLai > 0
+          ? `Còn ${conLai} phiếu ở phòng khác${timKiem ? ' khớp ô tìm' : ''} — bấm tab có số để xem.`
+          : filtered
+            ? `Ô tìm đang bật không khớp phiếu nào trong ${box.stats.total} phiếu của hộp.`
+            : neverUsed
+              ? 'Hệ thống chưa từng có phiếu nào được lập — không phải bạn đã ký hết.'
+              : noPo
+                ? `Mọi phiếu đã được xử lý. Riêng đơn mua thì chưa có đơn nào trên hệ thống (${box.emptiness.lsx_total} lệnh sản xuất đã có).`
+                : 'Mọi phiếu đã được xử lý.'}
       </p>
-
-      {!filtered && (
-        <div className="text-muted-foreground mx-auto mt-2 max-w-lg space-y-2 text-sm">
-          {neverUsed ? (
-            <p>
-              Hệ thống <b>chưa từng có phiếu nào</b> được lập — không phải bạn đã ký hết.
-              Cần Kinh doanh phát lệnh sản xuất và Cung ứng lập đơn mua trên hệ thống thì
-              phiếu mới chảy về đây.
-            </p>
-          ) : (
-            <>
-              <p>Mọi phiếu đã được xử lý.</p>
-              {noPo && (
-                <p>
-                  Riêng <b>đơn mua thì chưa có đơn nào trên hệ thống</b> (
-                  {box.emptiness.lsx_total} lệnh sản xuất đã có). Phòng Cung ứng còn đang
-                  làm ngoài Excel.
-                </p>
-              )}
-            </>
-          )}
-          <p className="text-xs">
-            <Link href="/exec/approvals/history" className="underline">
-              Xem lịch sử ký
-            </Link>
-          </p>
-        </div>
+      {historyHref && (
+        <Link
+          href={historyHref}
+          className="hk-btn"
+          style={{ border: '1px solid var(--hk-line)' }}
+        >
+          <History size={15} aria-hidden />
+          Xem lịch sử ký
+        </Link>
       )}
     </div>
+  )
+}
+
+/**
+ * Một tab phòng: tên + SỐ CẢNH BÁO (nền đặc khi có phiếu chờ, nền đỏ khi có phiếu
+ * gấp, viền mờ khi 0) + "x cần ký trước". Đếm trên đúng tập lưới bày khi bấm.
+ */
+function TabPhong({
+  ten,
+  lop,
+  rows,
+  on,
+  onClick,
+}: {
+  ten: string
+  lop: string
+  rows: SignItem[]
+  on: boolean
+  onClick: () => void
+}) {
+  const nGap = rows.filter((i) => vungGap(i)).length
+  const tien = moneyShort(rows)
+  const badge =
+    rows.length === 0 ? 'hk-badge zero' : nGap > 0 ? 'hk-badge gap' : 'hk-badge'
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={on}
+      className={`hk-pt ${lop}`}
+      onClick={onClick}
+      title={[`${rows.length} phiếu chờ ký`, nGap > 0 && `${nGap} cần ký trước`, tien]
+        .filter(Boolean)
+        .join(' · ')}
+    >
+      <span className="ten">{ten}</span>
+      <span className={badge} aria-label={`${rows.length} phiếu chờ ký`}>
+        {rows.length}
+      </span>
+      {nGap > 0 && <span className="hk-pt-gap">{nGap} cần ký trước</span>}
+    </button>
   )
 }

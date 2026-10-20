@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast'
 import type {
   CurrencyTotal,
   PayablePoRow,
+  PayableFeeRow,
   PayableSupplierRow,
 } from '@/modules/dept/accounting/payables.service'
 import type { SupplierPayment } from '@/modules/dept/accounting/payables.repo'
@@ -52,10 +53,16 @@ export function PayablesManager({
   rows,
   grand,
   canManage,
+  awaiting,
 }: {
   rows: PayableSupplierRow[]
   grand: CurrencyTotal[]
   canManage: boolean
+  /**
+   * Phần công nợ ĐANG THIẾU CHỨNG TỪ (GR/IR) — đã nhận hàng, NCC chưa xuất hoá
+   * đơn. KHÔNG phải khoản cộng thêm: sổ này tính theo phiếu nhập nên đã gồm rồi.
+   */
+  awaiting: { by_currency: { currency: string; amount: number; line_count: number }[]; supplier_count: number } // prettier-ignore
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -64,6 +71,7 @@ export function PayablesManager({
   const [selected, setSelected] = useState<PayableSupplierRow | null>(null)
   const [detail, setDetail] = useState<{
     pos: PayablePoRow[]
+    fees?: PayableFeeRow[]
     payments: SupplierPayment[]
   } | null>(null)
   const [payOpen, setPayOpen] = useState(false)
@@ -88,9 +96,11 @@ export function PayablesManager({
     setSelected(row)
     setDetail(null)
     try {
-      const d = await api<{ pos: PayablePoRow[]; payments: SupplierPayment[] }>(
-        `/api/dept/accounting/payables/${row.supplier_id}`,
-      )
+      const d = await api<{
+        pos: PayablePoRow[]
+        payments: SupplierPayment[]
+        fees: PayableFeeRow[]
+      }>(`/api/dept/accounting/payables/${row.supplier_id}`)
       setDetail(d)
     } catch (e) {
       toast.error('Không tải được chi tiết', e instanceof ApiError ? e.message : 'Lỗi')
@@ -240,6 +250,72 @@ export function PayablesManager({
         ]}
       />
 
+      {/*
+        TUỔI NỢ là BÁO CÁO CỦA CHÍNH SỔ NÀY, không phải một chủ đề khác — nên nó
+        vào từ đây chứ không đứng riêng một mục nav. Hai mục cùng nói về công nợ
+        trong một phòng là đúng thứ dự án vẫn chống.
+      */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <a
+          href="/finance/tuoi-no"
+          className="font-medium text-[var(--primary)] underline"
+        >
+          Bảng tuổi nợ →
+        </a>
+        <span className="text-muted-foreground">
+          chia theo hạn thanh toán (0–30 / 31–60 / 61–90 / &gt;90) — biết nên trả ai trước
+        </span>
+      </div>
+
+      {/*
+        ĐƯỜNG VỀ SỔ CHÍNH. Màn này tính theo PHIẾU NHẬP nên ra con số KHÁC sổ TK
+        331 (tính theo hoá đơn) — chênh nhau đúng bằng phần GR/IR và phần VAT.
+        Không nói ra thì hai màn cùng tên "công nợ" cho hai số, và người đọc
+        không biết tin cái nào. Số lên báo cáo tài chính là số của TK 331.
+      */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <a
+          href="/finance/so-cong-no"
+          className="font-medium text-[var(--primary)] underline"
+        >
+          Sổ công nợ TK 331 →
+        </a>
+        <span className="text-muted-foreground">
+          sổ theo KỲ (dư đầu → phát sinh → dư cuối), tính theo HOÁ ĐƠN nên gồm VAT — đó
+          mới là số lên báo cáo tài chính. Màn này là bản ghi nhận theo phiếu nhập và là
+          nơi ghi thanh toán.
+        </span>
+      </div>
+
+      {/*
+        DÒNG NÀY KHÔNG ĐỔI CON SỐ NÀO ở trên. Sổ công nợ đang tính theo phiếu
+        nhập, nên phần "chưa có hoá đơn" vốn đã nằm trong số đó rồi — đây chỉ
+        nói ra phần nào đang thiếu chứng từ, để kế toán biết đi đòi NCC xuất.
+        Cộng nó vào tổng là đếm hai lần.
+      */}
+      {awaiting.by_currency.length > 0 && (
+        <div className="border-input bg-muted/40 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2 text-sm">
+          <Badge tone="amber">Thiếu chứng từ</Badge>
+          <span className="text-foreground font-semibold">
+            {awaiting.by_currency
+              .map((c) => `${fmtM(c.amount)} ${c.currency}`)
+              .join(' · ')}
+          </span>
+          <span className="text-muted-foreground">
+            đã nhận hàng nhưng NCC chưa xuất hoá đơn —{' '}
+            {awaiting.by_currency.reduce((n, c) => n + c.line_count, 0)} dòng ·{' '}
+            {awaiting.supplier_count} NCC. Số này ĐÃ nằm trong công nợ ở trên, không cộng
+            thêm.
+          </span>
+          <a
+            href="/finance/theo-lenh"
+            className="font-medium text-[var(--primary)] underline"
+          >
+            Xem đối chiếu →
+          </a>
+        </div>
+      )}
+
       <Toolbar
         left={
           <ToolbarInput
@@ -305,7 +381,9 @@ export function PayablesManager({
                 </h3>
                 {detail.pos.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
-                    Chưa có phiếu nhập có giá.
+                    {(detail.fees?.length ?? 0) > 0
+                      ? 'Không có phiếu nhập — nợ của bên này là phí mua hàng bên dưới.'
+                      : 'Chưa có phiếu nhập có giá.'}
                   </p>
                 ) : (
                   <ul className="flex flex-col gap-2 text-sm">
@@ -338,6 +416,34 @@ export function PayablesManager({
                   </ul>
                 )}
               </div>
+              {(detail.fees?.length ?? 0) > 0 && (
+                <div className="lg:col-span-2">
+                  <h3 className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
+                    Phí mua hàng · {detail.fees!.length} phiếu
+                  </h3>
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {detail.fees!.map((f) => (
+                      <li key={f.id} className="rounded-md border px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="t-data text-xs font-semibold">{f.label}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {fmtD(f.cost_date)}
+                          </span>
+                          <span className="t-data ml-auto tabular-nums">
+                            {fmtM(f.amount)} {f.currency}
+                          </span>
+                        </div>
+                        <div className="text-muted-foreground mt-1 text-xs">
+                          Đơn: {f.po_codes.join(' · ')} ·{' '}
+                          {f.role === 'carrier'
+                            ? 'trả nhà xe — tổng gồm VAT, đã vào sổ 331'
+                            : 'NCC tính trên hoá đơn — chưa VAT, vào sổ 331 khi hoá đơn NCC vào sổ'}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div>
                 <h3 className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
                   Lịch sử thanh toán

@@ -71,13 +71,13 @@ export function WeeklyReportView({
             type="date"
             defaultValue={report.week.start}
             onChange={(e) => setParam('week_start', e.target.value)}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm"
           />
           {canPickDept && (
             <select
               defaultValue={report.department_id ?? ''}
               onChange={(e) => setParam('dept', e.target.value)}
-              className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
             >
               <option value="">Tất cả phòng ban</option>
               {departments.map((d) => (
@@ -99,10 +99,7 @@ export function WeeklyReportView({
           { label: 'Quá hạn', value: totals.overdue },
           { label: 'Tỷ lệ HT', value: `${completionRate}%` },
         ].map((c) => (
-          <div
-            key={c.label}
-            className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-          >
+          <div key={c.label} className="rounded-lg border border-zinc-200 p-4">
             <div className="text-2xl font-semibold tabular-nums">{c.value}</div>
             <div className="mt-1 text-xs text-zinc-500">{c.label}</div>
           </div>
@@ -110,9 +107,9 @@ export function WeeklyReportView({
       </section>
 
       {/* Per-member table */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="overflow-x-auto rounded-lg border border-zinc-200">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase">
             <tr>
               <th className="px-4 py-2.5">Nhân viên</th>
               <th className="px-4 py-2.5 text-right">Giao trong tuần</th>
@@ -122,7 +119,7 @@ export function WeeklyReportView({
               <th className="px-4 py-2.5 text-right">Đến hạn tuần tới</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {report.rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-sm text-zinc-500">

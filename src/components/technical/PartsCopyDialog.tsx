@@ -90,11 +90,11 @@ export function PartsCopyDialog({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Gõ mã hoặc tên, tối thiểu 2 ký tự…"
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
           />
         </label>
 
-        <div className="max-h-60 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+        <div className="max-h-60 overflow-y-auto rounded-md border border-zinc-200">
           {searching && (
             <p className="text-muted-foreground px-3 py-2 text-sm">Đang tìm…</p>
           )}
@@ -107,9 +107,7 @@ export function PartsCopyDialog({
               type="button"
               onClick={() => setPicked(r)}
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
-                picked?.id === r.id
-                  ? 'bg-sky-100 dark:bg-sky-950/50'
-                  : 'hover:bg-muted/60'
+                picked?.id === r.id ? 'bg-sky-100' : 'hover:bg-muted/60'
               }`}
             >
               <span className="font-mono text-xs">{r.code}</span>
@@ -154,7 +152,7 @@ export function PartsCopyDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-50"
           >
             Huỷ
           </button>

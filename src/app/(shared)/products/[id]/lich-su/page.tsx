@@ -74,7 +74,7 @@ export default async function ProductHistoryPage({
               <div className="flex flex-wrap items-center gap-2">
                 {r.action === 'status' ? (
                   /* Chuyển trạng thái (0145) — đọc từ ảnh chụp {from,to}. */
-                  <Badge variant="outline" className="text-sky-700 dark:text-sky-300">
+                  <Badge variant="outline" className="text-sky-700">
                     <ArrowRight />
                     {statusText(r.fields_snapshot)}
                   </Badge>
@@ -83,7 +83,7 @@ export default async function ProductHistoryPage({
                     <Lock /> Chốt bản #{r.rev}
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
+                  <Badge variant="outline" className="text-amber-700">
                     <LockOpen /> Mở bản #{r.rev} để sửa
                   </Badge>
                 )}

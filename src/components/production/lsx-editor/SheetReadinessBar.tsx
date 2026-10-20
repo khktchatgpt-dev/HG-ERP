@@ -2,7 +2,7 @@
 
 import { Clock3, CircleAlert, TriangleAlert } from 'lucide-react'
 import { Checkbox } from '@/components/shadcn/checkbox'
-import type { SheetReadiness } from '@/modules/dept/production/lsx-line-fill'
+import type { SheetReadiness } from '@/lib/lsx-line-fill'
 
 /**
  * Tổng quan độ đầy đủ của cả phiếu + lối tắt "chỉ hiện dòng còn thiếu".
@@ -39,13 +39,13 @@ export function SheetReadinessBar({
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         {blocked.length > 0 && (
-          <span className="inline-flex items-center gap-1 font-medium text-red-600 dark:text-red-400">
+          <span className="inline-flex items-center gap-1 font-medium text-red-600">
             <TriangleAlert className="size-3.5" aria-hidden />
             {blocked.length} dòng thiếu bắt buộc
           </span>
         )}
         {warned.length > 0 && (
-          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+          <span className="inline-flex items-center gap-1 text-amber-700">
             <CircleAlert className="size-3.5" aria-hidden />
             {warned.length} dòng thiếu mục nên có
           </span>
@@ -57,9 +57,7 @@ export function SheetReadinessBar({
           </span>
         )}
         {!incomplete && !pending && (
-          <span className="text-emerald-700 dark:text-emerald-400">
-            Mọi dòng đã đủ thông tin
-          </span>
+          <span className="text-emerald-700">Mọi dòng đã đủ thông tin</span>
         )}
       </div>
 

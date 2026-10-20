@@ -200,16 +200,16 @@ export default async function AdminHealthPage() {
         ]}
       />
 
-      <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase">
             <tr>
               <th className="px-4 py-2.5">Kiểm tra</th>
               <th className="px-4 py-2.5">Trạng thái</th>
               <th className="px-4 py-2.5">Chi tiết</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {allChecks.map((c) => (
               <tr key={c.name}>
                 <td className="px-4 py-3 font-medium">{c.name}</td>
@@ -230,15 +230,15 @@ function StatusBadge({ status }: { status: CheckStatus }) {
   const map = {
     ok: {
       label: 'OK',
-      cls: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
+      cls: 'bg-green-100 text-green-700',
     },
     warn: {
       label: 'CẢNH BÁO',
-      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      cls: 'bg-amber-100 text-amber-700',
     },
     fail: {
       label: 'LỖI',
-      cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+      cls: 'bg-red-100 text-red-700',
     },
   }
   const it = map[status]

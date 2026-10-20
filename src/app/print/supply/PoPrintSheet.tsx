@@ -1,4 +1,7 @@
+import { CanhBaoChuaChia, PhanTheoLenhIn } from './phan-theo-lenh-in'
+import { chiaLenhDong } from '@/lib/po-lsx-split'
 import {
+  feeLast,
   fmtMoney,
   packCount,
   poLineAmount,
@@ -7,13 +10,15 @@ import {
   roundMoney,
 } from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import { poPdfName } from '@/lib/print-file-name'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
-  PO_PRINT_ORDER,
+  poPrintFieldText,
+  poPrintKeys,
   PO_PRINT_QTY_LABEL,
   poField,
   poPriceSuffix,
-  type PoField,
+  poPriceUnitPerLine,
 } from '@/lib/po-fields'
 import {
   PrintLetterhead,
@@ -45,6 +50,8 @@ import {
 /** Dòng hàng ở dạng phiếu in cần — khớp `PoLine` của repo, và dựng được từ nháp. */
 export type PoPrintLine = {
   id: string
+  /** Phần chia theo lệnh (0185) — chỉ đơn gộp mới dùng. */
+  lsx_split?: { production_order_id: string; qty: number }[] | null
   material_code: string
   material_name: string
   material_unit: string
@@ -70,6 +77,9 @@ export type PoPrintLine = {
   /** 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành. */
   m3_per_unit: number | null
   warranty_text: string | null
+  print_spec: string | null
+  /** 0234 — 'phi' = dòng phí / dịch vụ (đứng cuối bảng, không vào "Tổng số …"). */
+  line_kind?: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -105,6 +115,10 @@ export type PoPrintHeader = {
   signer_role: string | null
   lsx_code: string | null
   order_code: string | null
+  /** Bộ lệnh (lệnh chính đầu) — ≥ 2 lệnh thì phiếu có cột "Chia lệnh". */
+  lsx_set?: { id: string; code: string }[]
+  /** "lần 2 · 26/09/2026" — đơn đã điều chỉnh sau khi gửi (0210); null = bản gốc. */
+  revision_label?: string | null
   supplier_name: string
   created_at: string
   /** Tên người soạn đơn — in dưới nét ký cột "Người lập". */
@@ -116,6 +130,8 @@ export type PoPrintSupplier = {
   address?: string | null
   tax_no?: string | null
   phone?: string | null
+  contact_name?: string | null
+  contact_phone?: string | null
 } | null
 
 const fmt = (n: number | null | undefined) =>
@@ -167,37 +183,6 @@ const priceCol = (currency: string, unit: string | null): Col => ({
   align: 'right',
   cell: (l) => (l.unit_price == null ? '' : fmtMoney(l.unit_price, currency)),
 })
-/** Giá trị in của một cột khai báo — chuyển `kind` thành chữ trên giấy. */
-function printCell(f: PoField): (l: PoPrintLine) => React.ReactNode {
-  const get = (l: PoPrintLine) =>
-    f.field ? (l as unknown as Record<string, unknown>)[f.field] : null
-  switch (f.kind) {
-    case 'text':
-    case 'die':
-    case 'openStyle':
-      return (l) => (get(l) as string | null) ?? ''
-    case 'number':
-    case 'area':
-      return (l) => fmt(get(l) as number | null)
-    case 'calc':
-      return (l) => fmt(l.qty2)
-    case 'unit2':
-      // "17,5 Lít/Thùng". 02/09: user quyết KHÔNG in cột này — PO_PRINT_ORDER
-      // không mẫu nào còn khai 'unit2' nên case này đang là đường chờ; giữ lại
-      // để lúc muốn in chỉ cần thêm key vào order, không phải dựng lại cell.
-      return (l) =>
-        l.unit2_per_unit != null && l.unit2
-          ? `${fmt(l.unit2_per_unit)} ${l.unit2}/${l.material_unit}`
-          : ''
-    case 'inner':
-      return (l) =>
-        l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
-          ? `${fmt(l.inner_l_mm)}×${fmt(l.inner_w_mm)}×${fmt(l.inner_h_mm)}`
-          : ''
-    default:
-      return () => ''
-  }
-}
 
 /**
  * Bộ cột của phiếu in theo MẪU ĐƠN — thứ tự và nhãn đọc từ `PO_PRINT_ORDER`
@@ -211,12 +196,21 @@ function columnsFor(
   t: PoTemplate,
   currency: string,
   /** Giá trị đầu đơn lặp xuống từng dòng (khung chuẩn 08/2026). */
-  ctx: { orderDate: Date; expectedAt: string | null },
+  ctx: {
+    orderDate: Date
+    expectedAt: string | null
+    /** Mẫu tính theo kg mà có dòng giá theo ĐVT — xem `poPriceUnitPerLine`. */
+    priceUnitOf?: ReturnType<typeof poPriceUnitPerLine>
+    /** Dòng của đơn — cột khai báo trống ở mọi dòng thì không in (`poPrintKeys`). */
+    lines: readonly PoPrintLine[]
+  },
 ): Col[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
   const fixed: Record<string, Col> = {
     '@stt': colStt,
+    // Mã vật tư danh mục — mẫu nào khai '@code' thì NCC đặt hàng theo mã (mây S.H.T).
+    '@code': { label: 'Mã sản phẩm', cell: (l) => l.material_code },
     '@name': colName,
     '@unit': colUnit,
     '@orderdate': { label: 'Ngày đặt hàng', cell: () => dmy(ctx.orderDate) },
@@ -258,26 +252,33 @@ function columnsFor(
           align: 'right',
           cell: (l) =>
             l.unit_price != null
-              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis)}`
+              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis, l.material_unit)}`
               : '',
         }
-      : priceCol(currency, meta.priceUnit),
+      : ctx.priceUnitOf
+        ? {
+            // Đơn trộn giá/kg với giá/cây: đơn vị rời nhãn cột, xuống từng ô.
+            label: `Đơn giá (${currency})`,
+            align: 'right',
+            cell: (l) =>
+              l.unit_price != null
+                ? `${fmtMoney(l.unit_price, currency)}${ctx.priceUnitOf!(l)}`
+                : '',
+          }
+        : priceCol(currency, meta.priceUnit),
     '@amount': amountCol(currency),
     '@note': colNote,
   }
 
-  return PO_PRINT_ORDER[t].map((key) => {
+  // Cột trắng ở mọi dòng không in (12/10/2026) — xem `poPrintKeys`.
+  return poPrintKeys(t, ctx.lines).map((key) => {
     const hit = fixed[key]
     if (hit) return hit
     const f = poField(t, key)!
     return {
       label: f.printLabel ?? f.label,
       align: f.align === 'right' ? 'right' : 'left',
-      // "Kích thước" của mẫu inox/sắt: chưa nhập thì lấy tạm quy cách chung.
-      cell:
-        f.key === 'dim'
-          ? (l: PoPrintLine) => l.dimension_text ?? l.spec ?? ''
-          : printCell(f),
+      cell: (l: PoPrintLine) => poPrintFieldText(f, l),
     } satisfies Col
   })
 }
@@ -294,7 +295,7 @@ export function PoPrintSheet({
   tpl = DEFAULT_DOC_TEMPLATES.PO,
   po,
   supplier,
-  lines,
+  lines: linesIn,
   exportHref,
   shipments,
 }: {
@@ -321,6 +322,8 @@ export function PoPrintSheet({
     lines: { name: string; qty: number; unit: string; amount: number | null }[]
   }[]
 }) {
+  // Dòng phí / dịch vụ (0234) xuống cuối bảng — hàng hoá trước, khoản phí sau.
+  const lines = feeLast(linesIn)
   const template = po.template ?? 'simple'
   const meta = poTemplateMeta(template)
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`
@@ -330,7 +333,23 @@ export function PoPrintSheet({
   const cols = columnsFor(template, po.currency, {
     orderDate: d,
     expectedAt: po.expected_at,
+    priceUnitOf: poPriceUnitPerLine(meta.priceUnit, lines),
+    lines,
   })
+  /*
+    CỘT "CHIA LỆNH" — chỉ đơn gộp từ 2 lệnh (10/10/2026, user chọn): mỗi lệnh một
+    dòng nhỏ trong ô, đứng ngay trước Ghi chú. NCC chia kiện / dán nhãn theo lệnh
+    được; đơn một lệnh giữ nguyên mẫu.
+  */
+  const lsxSet = po.lsx_set ?? []
+  if (lsxSet.length > 1) {
+    const at = cols.findIndex((c) => c.label === 'Ghi chú')
+    const col: Col = {
+      label: 'Chia lệnh',
+      cell: (l) => chiaLenhDong(l, lsxSet).map((t) => <div key={t} className="whitespace-nowrap">{t}</div>), // prettier-ignore
+    }
+    cols.splice(at < 0 ? cols.length : at, 0, col)
+  }
   const amountIdx = cols.findIndex((c) => c.isAmount)
 
   /*
@@ -371,8 +390,19 @@ export function PoPrintSheet({
   ]
   const hasTerms = terms.some(([, v]) => v)
   return (
-    <PrintPage exportHref={exportHref}>
-      <PrintLetterhead company={company} date={d} nationalHeading={tpl.national_heading} />
+    <PrintPage
+      exportHref={exportHref}
+      fitOnePage
+      pdfName={
+        exportHref ? poPdfName(po.code, supplier?.name ?? po.supplier_name) : undefined
+      }
+    >
+      <CanhBaoChuaChia lines={lines} lsxSet={lsxSet} />
+      <PrintLetterhead
+        company={company}
+        date={d}
+        nationalHeading={tpl.national_heading}
+      />
       <PrintTitle vi={tpl.title_vi} en={tpl.title_en ?? undefined} />
 
       <PrintMeta
@@ -380,20 +410,31 @@ export function PoPrintSheet({
           ['Kính gửi:', <b key="n">{supplier?.name ?? po.supplier_name}</b>],
           ['Địa chỉ:', supplier?.address],
           ['MST:', supplier?.tax_no],
-          ['Người liên hệ:', supplier?.phone],
+          ['Điện thoại:', supplier?.phone],
+          // NGƯỜI NHẬN đơn ở phía NCC (08/10/2026, phản hồi phòng Cung ứng): tên +
+          // số của người liên hệ trong hồ sơ NCC — trước đây dòng "Người liên hệ"
+          // lại in số tổng đài, NCC không biết đơn gửi cho ai.
+          [
+            'Người nhận:',
+            [supplier?.contact_name, supplier?.contact_phone]
+              .filter(Boolean)
+              .join(' · ') || undefined,
+          ],
         ]}
         refsBoxed
         refs={[
           ['Số ĐH :', <b key="c">{po.code}</b>],
+          // Dòng "Điều chỉnh: lần N · ngày" BỎ 09/10/2026 (user chốt) — phiếu NCC chỉ
+          // cần bản hiện hành; lịch sử điều chỉnh xem trên đơn.
           // Trong KHUNG chỉ giữ dòng có giá trị — ô "Theo HD số:" trống mà vẫn
           // đóng khung thì thành một ngăn rỗng vô nghĩa trên phiếu.
           ...(po.contract_no
             ? ([['Theo HD số:', po.contract_no]] as [string, string][])
             : []),
-          ...(po.lsx_code ? ([['LSX', po.lsx_code]] as [string, string][]) : []),
-          ...(po.order_code
-            ? ([['Đơn hàng:', po.order_code]] as [string, string][])
-            : []),
+          // Mã lệnh IN ĐẬM như Số ĐH (02/10/2026, user chốt) — hai số NCC đối chiếu.
+          ...(po.lsx_code ? ([['LSX', <b key="l">{po.lsx_code}</b>]] as [string, React.ReactNode][]) : []), // prettier-ignore
+          // Dòng "Đơn hàng" BỎ 02/10/2026 (user chốt): đơn gộp cả lệnh nối 11 mã
+          // "LAURA 01/26-27 g.…" — NCC không dùng tới, LSX đã đủ để đối chiếu.
         ]}
       />
 
@@ -518,20 +559,28 @@ export function PoPrintSheet({
         </tbody>
       </table>
 
+      <PhanTheoLenhIn lines={lines} lsxSet={lsxSet} currency={po.currency} />
+
       <PrintTerms items={terms} />
 
       <div className="mt-1 flex flex-col gap-0.5 text-[12px]">
-        <div>
-          <b>
-            Đơn giá trên {po.price_includes_vat ? 'ĐÃ bao gồm' : 'CHƯA bao gồm'} thuế VAT
-            {po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.
-          </b>
-        </div>
+        {/* Đơn không tính thuế (VAT 0) thì bỏ hẳn câu này — "CHƯA bao gồm thuế
+            VAT 0%" đọc như lỗi; dòng "Thuế GTGT: 0" trong khối tổng đã đủ nói. */}
+        {(po.vat_rate == null || Number(po.vat_rate) !== 0) && (
+          <div>
+            <b>
+              Đơn giá trên {po.price_includes_vat ? 'ĐÃ bao gồm' : 'CHƯA bao gồm'} thuế
+              VAT
+              {po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.
+            </b>
+          </div>
+        )}
         {/* Có lịch đợt thì lịch là cam kết — dòng "Hẹn giao" đơn lẻ chỉ in khi
             KHÔNG có đợt, in cả hai là hai nguồn ngày trên một tờ giấy. */}
         {(!shipments || shipments.length === 0) && po.expected_at && (
           <div>
-            Hẹn giao: <b>{new Date(po.expected_at).toLocaleDateString('vi-VN')}</b>
+            Dự kiến giao hàng:{' '}
+            <b>{new Date(po.expected_at).toLocaleDateString('vi-VN')}</b>
           </div>
         )}
         {shipments && shipments.length > 0 && (
@@ -593,7 +642,11 @@ export function PoPrintSheet({
                         {fmt(l.qty)}
                       </td>
                       <td className="border border-black px-1.5 py-0.5 text-right">
-                        {l.amount != null && l.amount > 0 ? fmt(Math.round(l.amount)) : ''}
+                        {/* Theo tiền tệ của đơn: USD giữ hai số lẻ (08/10/2026, phòng
+                            Cung ứng: "các mục tạm tính thêm số thập phân"); VND nguyên. */}
+                        {l.amount != null && l.amount > 0
+                          ? fmtMoney(roundMoney(l.amount, po.currency), po.currency)
+                          : ''}
                       </td>
                     </tr>
                   )),
@@ -610,8 +663,8 @@ export function PoPrintSheet({
         {po.note && <div className="italic">{po.note}</div>}
         {/* Câu chốt lấy nguyên văn đơn ĐH chuẩn của phòng Cung ứng. */}
         <div className="italic">
-          Đề nghị Quý công ty fax lại xác nhận thông tin cho công ty chúng tôi. Xin cảm
-          ơn!
+          Đề nghị Quý Công ty fax lại xác nhận thông tin cho Công ty chúng tôi. Trân trọng
+          cảm ơn!
         </div>
       </div>
 

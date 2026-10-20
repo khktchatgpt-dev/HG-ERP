@@ -19,7 +19,13 @@ const seedSql = [
   'supabase/migrations/0128_po_owner_and_supply_lead.sql',
   'supabase/migrations/0149_sales_quote_approval.sql',
   'supabase/migrations/0175_tach_vai_thong_ke_to_truong.sql',
-  'supabase/migrations/0186_feedback.sql',
+  'supabase/migrations/0253_feedback.sql',
+  'supabase/migrations/0240_hr_attendance_adjustments.sql',
+  'supabase/migrations/0243_hr_calc_versions.sql',
+  'supabase/migrations/0244_hr_time_periods.sql',
+  'supabase/migrations/0245_hr_pay_profiles.sql',
+  'supabase/migrations/0246_hr_payrolls.sql',
+  'supabase/migrations/0249_hr_employee_personal.sql',
 ]
   .map((p) => readFileSync(resolve(process.cwd(), p), 'utf8'))
   .join('\n')
@@ -178,5 +184,73 @@ describe('canDo — quản lý nhóm vật tư: Cung ứng + Kho, không cần a
 
   it('phòng khác không đổi được cấu trúc nhóm', () => {
     expect(canDo(byKey(KEY), sales)).toBe(false)
+  })
+})
+
+/**
+ * Khuôn nhôm (29/09/2026): user chốt Cung ứng được THÊM / SỬA khuôn (kể cả ảnh
+ * mặt cắt + nhật ký) cạnh Kỹ thuật và Giám đốc. XOÁ vẫn chỉ Kỹ thuật — Cung ứng
+ * gỡ khuôn bằng tình trạng "Đã bỏ", không xoá mất nhật ký.
+ */
+describe('canDo — khuôn nhôm: Kỹ thuật + GĐ + Cung ứng sửa, chỉ Kỹ thuật xoá', () => {
+  const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
+  const technical = ctxOf(['technical.member', 'technical.edit', 'technical.bom.edit'])
+  const director = ctxOf(['technical.edit', 'technical.bom.edit'])
+  const supply = ctxOf(['supply.member', 'warehouse.material.create'])
+  const supplyLead = ctxOf(['supply.member', 'supply.lead'])
+  const production = ctxOf(['production.member', 'production.progress.track'])
+  const warehouse = ctxOf(['warehouse.member', 'warehouse.edit'])
+  const WRITE = ['technical.die.create', 'technical.die.update']
+
+  it('Kỹ thuật, Giám đốc, NV + trưởng phòng Cung ứng thêm/sửa được khuôn', () => {
+    for (const c of [technical, director, supply, supplyLead]) {
+      expect(WRITE.filter((k) => !canDo(byKey(k), c))).toEqual([])
+    }
+  })
+
+  it('Sản xuất, Kho chỉ xem', () => {
+    for (const c of [production, warehouse]) {
+      expect(canDo(byKey('technical.die.view'), c)).toBe(true)
+      expect(WRITE.filter((k) => canDo(byKey(k), c))).toEqual([])
+    }
+  })
+
+  it('XOÁ chỉ Kỹ thuật (+ GĐ) — Cung ứng không xoá', () => {
+    expect(canDo(byKey('technical.die.remove'), technical)).toBe(true)
+    expect(canDo(byKey('technical.die.remove'), director)).toBe(true)
+    expect(canDo(byKey('technical.die.remove'), supply)).toBe(false)
+    expect(canDo(byKey('technical.die.remove'), supplyLead)).toBe(false)
+  })
+})
+
+/**
+ * Vật tư (05/10/2026, Bản 11): CẢ phòng Cung ứng thêm mã + ngừng dùng / xoá mã
+ * chưa dùng — không phụ thuộc vai Kho gán tạm, cũng không phụ thuộc quyền lẻ
+ * `warehouse.material.create`. Trường của Kho (kệ, ngưỡng tồn) vẫn của Kho.
+ */
+describe('canDo — vật tư: Cung ứng thêm + ngừng dùng/xoá, trường Kho vẫn của Kho', () => {
+  const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
+  const supplyBare = ctxOf(['supply.member'])
+  const warehouse = ctxOf(['warehouse.member', 'warehouse.edit'])
+  const production = ctxOf(['production.member'])
+  const SUPPLY_OK = [
+    'warehouse.material.create',
+    'warehouse.material.update_purchasing',
+    'warehouse.material.retire',
+    'warehouse.material.group_manage',
+  ]
+
+  it('NV Cung ứng chỉ có supply.member vẫn thêm / sửa trường mua / ngừng dùng được', () => {
+    expect(SUPPLY_OK.filter((k) => !canDo(byKey(k), supplyBare))).toEqual([])
+  })
+  it('Cung ứng KHÔNG có quyền sửa đủ trường (kệ, ngưỡng tồn của Kho)', () => {
+    expect(canDo(byKey('warehouse.material.update'), supplyBare)).toBe(false)
+  })
+  it('Kho ngừng dùng / xoá được; phòng khác thì không', () => {
+    expect(canDo(byKey('warehouse.material.retire'), warehouse)).toBe(true)
+    expect(canDo(byKey('warehouse.material.retire'), production)).toBe(false)
+    expect(canDo(byKey('warehouse.material.create'), production)).toBe(false)
   })
 })

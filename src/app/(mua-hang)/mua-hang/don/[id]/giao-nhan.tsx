@@ -1,0 +1,280 @@
+'use client'
+
+import Link from 'next/link'
+import { FastTab, GridBtn } from '@/components/kit'
+import { earliestExpectedDate } from '@/lib/po-shipments'
+import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { ChungTuKhoGrid } from './chung-tu-kho'
+import { DotGiaoGrid, NhanTheoDotGrid } from './NhanHangPanel'
+import { ChiaDotSoanGrid } from './SoanDonPanels'
+import { SoHenGiaoGrid, SuCoGrid, XacNhanTheoDongGrid } from './TheoDoiPanel'
+import { fmtNum } from './don-chung-tu.shared'
+import { shipmentEmptyHint } from './nhan-hang'
+import { columnsToShipments } from './soan-don'
+import type { DonCtx } from './useDonChungTu'
+
+/** Khối `blkGiao` của màn chứng từ đơn mua. */
+export function GiaoNhan({ d }: { d: DonCtx }) {
+  const {
+    po,
+    drafting,
+    viewMode,
+    shipCols,
+    sentToSupplier,
+    liveShipments,
+    shipmentsDone,
+    p,
+    busy,
+    router,
+    lines,
+    setShipCols,
+    trackLines,
+    shipLinesById,
+    shipLines,
+    perms,
+    today,
+    start,
+    closeShortAct,
+    reopenAct,
+    trackById,
+    openIssues,
+    setSuCoClose,
+    openShortLines,
+    missingTotal,
+  } = d
+  // Lịch giao CHỈ XEM ở trang đơn, kể cả lúc bấm Sửa (07/10/2026, "một nơi"):
+  // lưới sửa đợt tại chỗ (B2) đã gỡ — đợt sửa ở hộp Giao nhận của Theo dõi.
+  const giaoNhanHref = po ? `/mua-hang/theo-doi?don=${po.id}` : '#'
+  const coLichGiao = !!po && ['approved', 'ordered', 'confirmed', 'in_transit', 'partial', 'received'].includes(po.status) // prettier-ignore
+  return (
+    <>
+      {/* ══ 1b. GIAO & NHẬN HÀNG — hai sổ: NCC hẹn gì, Kho thực nhận gì ═══
+            Mở sẵn khi đơn đã gửi NCC (từ đó trở đi đây là câu hỏi hằng ngày);
+            trước đó gấp lại, chỉ tiêu đề nói "chưa có đợt". */}
+      {(po || drafting) && (
+        <FastTab
+          fixed={viewMode}
+          id="dot-giao"
+          title={drafting ? 'Chia đợt giao' : 'Giao & nhận hàng'}
+          flush
+          defaultOpen={
+            drafting ? shipCols.length > 0 || d.dotMo : viewMode || sentToSupplier
+          }
+          summary={
+            drafting
+              ? [
+                  [
+                    'Đợt',
+                    <span key="a" className="num">
+                      {columnsToShipments(shipCols).length || '—'}
+                    </span>,
+                  ],
+                ]
+              : [
+                  // prettier-ignore
+                  ['Đợt giao', <span key="a" className="num">{liveShipments.length}</span>], // prettier-ignore
+                  ['Đã nhận', <span key="b" className="num">{liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'}</span>], // prettier-ignore
+                  ['Phiếu kho', <span key="c" className="num">{p.warehouseDocs.length}</span>], // prettier-ignore
+                ]
+          }
+          actions={
+            /*
+              TRANG ĐƠN CHỈ CÒN XEM GIAO NHẬN (01/10/2026, chủ dự án duyệt bản vẽ
+              H2): nhận hàng, đợt giao, giao bù, chốt thiếu, sự cố ghi ở hộp
+              Giao nhận trên Theo dõi đơn hàng — một nút dẫn sang đó.
+            */
+            /*
+              07/10/2026: mở được từ lúc ĐÃ DUYỆT (trước khoá theo "nhận hàng"
+              — đơn chưa gửi NCC không vào được hộp để ghi lịch giao).
+            */
+            !drafting ? (
+              <GridBtn
+                disabled={!coLichGiao}
+                title={coLichGiao ? 'Ghi nhận hàng, thêm / sửa / tách đợt giao, chốt thiếu, sự cố' : 'Đơn chưa duyệt — lịch giao chia ở lưới soạn đơn'} // prettier-ignore
+                onClick={() => po && router.push(giaoNhanHref)}
+              >
+                Xử lý giao nhận →
+              </GridBtn>
+            ) : undefined
+          }
+        >
+          {drafting ? (
+            <ChiaDotSoanGrid lines={lines} columns={shipCols} onChange={setShipCols} />
+          ) : !po ? null : po.status === 'cancelled' ? (
+            <div className="text-k-sm px-[var(--gutter)] py-3 text-[var(--ink-2)]">
+              Đơn đã huỷ — kế hoạch giao và chứng từ kho không còn áp dụng.
+            </div>
+          ) : (
+            <>
+              {coLichGiao && (
+                <div className="text-k-sm mx-[var(--gutter)] mt-2 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[var(--act-line)] bg-[var(--act-wash)] px-3 py-2 text-[var(--act-text)]">
+                  <span>
+                    Mục này chỉ để <b>xem</b>. Nhận hàng, thêm / sửa / tách đợt giao, chốt
+                    thiếu, sự cố — ghi ở <b>Theo dõi đơn hàng</b>.
+                  </span>
+                  <Link
+                    href={giaoNhanHref}
+                    className="ml-auto font-semibold text-[var(--act)] hover:underline"
+                  >
+                    Sửa lịch giao ở Giao nhận →
+                  </Link>
+                </div>
+              )}
+              {sentToSupplier && (
+                <>
+                  <div className="px-[var(--gutter)] pt-2">
+                    <h3 className="k-fgrp-h">
+                      Xác nhận theo dòng · đặt / NCC hẹn / đã về
+                    </h3>
+                    {/* Phân biệt với bảng "Theo dòng · Kho" phía dưới (29/09/2026):
+                        đây là PHÍA NCC — họ nói gì, không phải Kho đã nhận gì. */}
+                    <p className="text-k-sm mb-1 text-[var(--ink-3)]">
+                      Phía NCC nói gì — đã nhận đơn chưa, hẹn ngày nào.
+                    </p>
+                  </div>
+                  <XacNhanTheoDongGrid
+                    lines={trackLines}
+                    status={p.statusLines}
+                    shipments={p.shipments}
+                    po={po}
+                  />
+                </>
+              )}
+              <div className="px-[var(--gutter)] pt-3">
+                <h3 className="k-fgrp-h">Kế hoạch giao · NCC hẹn</h3>
+              </div>
+              <DotGiaoGrid
+                shipments={p.shipments}
+                linesById={shipLinesById}
+                currency={po.currency}
+                receivedByLine={new Map(p.statusLines.map((s) => [s.id, s.qty_received ?? 0]))} // prettier-ignore
+                linkedReceipts={new Map(Object.entries(p.shipmentReceipts).map(([sid, per]) => [sid, new Map(Object.entries(per))]))} // prettier-ignore
+                confirmedNote={po.confirmed_note}
+                emptyHint={shipmentEmptyHint(po.status, shipLines.length > 0, true)}
+                canAct={false}
+                busy={busy}
+                today={today}
+                // Chỉ xem (canAct=false): mọi thao tác đợt ở hộp Giao nhận.
+                onArrived={() => {}}
+                onReschedule={() => {}}
+                onCancel={() => {}}
+                onEdit={() => {}}
+                onSplit={() => {}}
+              />
+              {/* Bày sổ theo DÒNG từ lúc đơn rời tay mình, không đợi Kho lập
+                    phiếu đầu tiên. Bản trước gác bằng `receiptBatches.length > 0`
+                    nên đúng lúc cần nhất — NCC báo hết một mã mà chưa về gì —
+                    thì bảng không hiện, và người mua chỉ còn nút chốt CẢ ĐƠN. */}
+              {(p.receiptBatches.length > 0 || sentToSupplier) && (
+                <>
+                  <div className="px-[var(--gutter)] pt-3">
+                    <h3 className="k-fgrp-h">
+                      {p.receiptBatches.length > 0
+                        ? 'Nhận theo đợt · sổ thực nhận của Kho'
+                        : 'Theo dòng · Kho chưa lập phiếu nhập nào'}
+                    </h3>
+                    {/* Phân biệt với bảng "Xác nhận theo dòng" phía trên: đây
+                        là PHÍA KHO — đã lập phiếu gì, còn thiếu bao nhiêu, và
+                        là nơi bấm "Chốt thiếu" khi NCC không giao nữa. */}
+                    <p className="text-k-sm mb-1 text-[var(--ink-3)]">
+                      Phía Kho đã nhận gì — số thật trên phiếu nhập. Chốt thiếu ở Theo dõi
+                      đơn hàng.
+                    </p>
+                  </div>
+                  <NhanTheoDotGrid
+                    batches={p.receiptBatches}
+                    lines={p.lines.flatMap((l) => (l.id ? [{ id: l.id, code: l.material_code, name: l.material_name, unit: l.material_unit, qty_ordered: l.qty_ordered }] : []))} // prettier-ignore
+                    status={p.statusLines}
+                    poStatus={po?.status ?? 'draft'}
+                    canEdit={false}
+                    readOnly
+                    busy={busy}
+                    onCloseShort={(l) => start(closeShortAct(l))}
+                    onReopen={(l) => start(reopenAct(l))}
+                  />
+                </>
+              )}
+              <div className="px-[var(--gutter)] pt-3">
+                <h3 className="k-fgrp-h">
+                  Lịch sử hẹn giao · đề nghị → NCC cam kết → dời → thực nhận
+                </h3>
+              </div>
+              <SoHenGiaoGrid
+                commits={p.tracking?.commits ?? []}
+                receipts={p.warehouseDocs.filter((d) => d.kind === 'receipt' && !d.reversed_by).map((d) => ({ code: d.code, at: d.at, entered_at: d.entered_at, qty_total: d.qty_total }))} // prettier-ignore
+                linesById={trackById}
+                currentEarliest={earliestExpectedDate(p.shipments)}
+              />
+              <div className="flex items-center gap-2 px-[var(--gutter)] pt-3" id="su-co">
+                <h3 className="k-fgrp-h grow">
+                  Sự cố giao hàng · {openIssues} đang mở /{' '}
+                  {(p.tracking?.issues ?? []).length}
+                </h3>
+              </div>
+              <SuCoGrid
+                issues={p.tracking?.issues ?? []}
+                linesById={trackById}
+                canEdit={false}
+                onResolve={(i) => setSuCoClose(i)}
+              />
+              {openShortLines > 0 && missingTotal <= 1e-6 && (
+                <div className="text-k-sm px-[var(--gutter)] pt-2 text-[var(--ink-2)]">
+                  {openShortLines} dòng đã về thiếu. NCC không giao nữa thì chốt thiếu ở
+                  Theo dõi đơn hàng, rồi tạo đơn bổ sung (cùng hoặc khác NCC) cho phần đã
+                  chốt.
+                </div>
+              )}
+              {(missingTotal > 1e-6 || (p.links?.supplements.length ?? 0) > 0) && (
+                <>
+                  <div className="flex items-center gap-2 px-[var(--gutter)] pt-3">
+                    <h3 className="k-fgrp-h grow">
+                      Đơn bổ sung phần thiếu · {p.links?.supplements.length ?? 0}
+                    </h3>
+                    {missingTotal > 1e-6 && (
+                      <GridBtn
+                        disabled={!perms.canEdit}
+                        title={perms.canEdit ? 'Mồi sẵn đơn mới = phần còn thiếu của từng dòng; đổi NCC khác được ngay trên màn' : 'Chỉ người phụ trách đơn tạo đơn bổ sung được'} // prettier-ignore
+                        onClick={() => router.push(`/mua-hang/don/moi?bo-sung=${po.id}`)}
+                      >
+                        + Tạo đơn bổ sung phần đã chốt thiếu
+                      </GridBtn>
+                    )}
+                  </div>
+                  <div className="text-k-sm flex flex-wrap gap-2 px-[var(--gutter)] pb-2">
+                    {(p.links?.supplements ?? []).length === 0 ? (
+                      <span className="text-[var(--ink-2)]">
+                        Đã chốt thiếu {fmtNum(missingTotal)} (cộng các dòng) — chưa có đơn
+                        bổ sung nào.
+                      </span>
+                    ) : (
+                      (p.links?.supplements ?? []).map((x) => (
+                        <GridBtn
+                          key={x.id}
+                          onClick={() => router.push(`/mua-hang/don/${x.id}`)}
+                        >
+                          {x.code} · {PO_STATUS_LABEL[x.status as PoStatus] ?? x.status}
+                        </GridBtn>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+              <div className="px-[var(--gutter)] pt-3" id="kho">
+                <h3 className="k-fgrp-h">
+                  Chứng từ kho · {p.warehouseDocs.length} phiếu
+                </h3>
+              </div>
+              {p.warehouseDocs.length > 0 ? (
+                <ChungTuKhoGrid docs={p.warehouseDocs} poId={po.id} />
+              ) : (
+                <div className="text-k-sm px-[var(--gutter)] pb-3 text-[var(--ink-2)]">
+                  Chưa có phiếu nhập hay xuất trả nào ghi vào đơn này.
+                </div>
+              )}
+            </>
+          )}
+        </FastTab>
+      )}
+    </>
+  )
+}

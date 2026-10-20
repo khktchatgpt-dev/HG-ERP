@@ -2,24 +2,10 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  Printer,
-  ShieldCheck,
-  StickyNote,
-  Truck,
-} from 'lucide-react'
-import { Button } from '@/components/shadcn/button'
+import { Btn, DocChain, Ico, ScreenFrame, Timeline } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { money, moneyByCurrency, waitingDays } from './approval-helpers'
-import {
-  useApprovalDecision,
-  targetLsx,
-  targetPo,
-  targetQuote,
-} from './useApprovalDecision'
+import { useApprovalDecision, targetLsx, targetQuote } from './useApprovalDecision'
 import {
   daysUntil,
   dueBadge,
@@ -28,12 +14,12 @@ import {
   fmtD,
   LsxProductTable,
   OrderInfo,
-  PoLineTable,
   SectionLabel,
   Signal,
   type DueTone,
 } from './approval-parts'
-import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
+import type { ApprovalNav, PendingLsx, PendingPo, PendingQuote } from './approval-types'
+import { PoApprovalBody } from './po-approval'
 
 /**
  * TRANG CHI TIẾT đơn duyệt — KHÁC buồng lái: bố cục 2 cột, cột phải là thẻ
@@ -44,7 +30,7 @@ import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
 export function ApprovalDetailScreen(
   props:
     | { kind: 'lsx'; item: PendingLsx; nowIso: string }
-    | { kind: 'po'; item: PendingPo; nowIso: string }
+    | { kind: 'po'; item: PendingPo; nowIso: string; nav?: ApprovalNav }
     | { kind: 'quote'; item: PendingQuote; nowIso: string },
 ) {
   const router = useRouter()
@@ -55,13 +41,32 @@ export function ApprovalDetailScreen(
     router.refresh()
   })
 
+  /*
+    ĐƠN MUA tự quản cả bố cục — kể cả khay phải và thanh trạng thái — vì nó
+    thiết kế lại theo khuôn màn chứng từ: dải quyết định NGANG trên đầu, lưới
+    chiếm phần còn lại. Bọc nó trong lưới 2 cột của bản cũ là ép một bố cục vào
+    trong một bố cục khác.
+
+    LSX và Báo giá giữ nguyên khung cũ (cột hồ sơ + thẻ quyết định 340px): hai
+    loại đó hiện 0 phiếu chờ nên không kiểm được trên dữ liệu thật, và đổi mù
+    một màn không ai mở là cách chắc chắn để làm hỏng nó trong im lặng.
+  */
+  if (props.kind === 'po') {
+    return (
+      <ScreenFrame>
+        <PoApprovalBody p={props.item} nowIso={props.nowIso} dec={dec} nav={props.nav} />
+        {dec.dialogs}
+      </ScreenFrame>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <Link
         href="/exec/approvals"
-        className="text-muted-foreground hover:text-foreground -ml-1 inline-flex w-fit items-center gap-1 text-sm"
+        className="text-k-sm -ml-1 inline-flex w-fit items-center gap-1 text-[var(--ink-3)] hover:text-[var(--ink)]"
       >
-        <ChevronLeft className="size-4" /> Chờ tôi phê duyệt
+        <Ico name="quayLai" /> Chờ tôi phê duyệt
       </Link>
 
       {/*
@@ -78,9 +83,7 @@ export function ApprovalDetailScreen(
           <LsxBody l={props.item} nowIso={props.nowIso} dec={dec} />
         ) : props.kind === 'quote' ? (
           <QuoteBody q={props.item} nowIso={props.nowIso} dec={dec} />
-        ) : (
-          <PoBody p={props.item} nowIso={props.nowIso} dec={dec} />
-        )}
+        ) : null}
       </div>
 
       {dec.dialogs}
@@ -91,62 +94,71 @@ export function ApprovalDetailScreen(
 type Dec = ReturnType<typeof useApprovalDecision>
 
 // ── Mảnh dùng chung cho trang ────────────────────────────────────────────────
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="bg-card rounded-xl border p-5">{children}</div>
-}
 
-function Chain({ nodes }: { nodes: { label: string; value: string }[] }) {
+/**
+ * KHỐI PHẲNG, không phải thẻ nổi (chuyển kit 17/09/2026).
+ *
+ * Bản cũ là `rounded-xl border p-5` — một tờ giấy trắng nổi trên nền xám, lặp
+ * ba lần trên một màn. Luật kit: khối ngăn nhau bằng MỘT VẠCH MẢNH, lưới sát
+ * mép. Đổi đi thì màn cao hơn được ~40px và mắt hết phải nhảy qua ba cái viền
+ * để đọc một hồ sơ liền mạch.
+ */
+function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-      {nodes.map((n, i) => (
-        <span key={i} className="inline-flex items-center gap-1.5">
-          {i > 0 && <ChevronRight className="text-muted-foreground/50 size-3" />}
-          <span className="text-muted-foreground">{n.label}</span>
-          <span className="font-mono font-medium">{n.value}</span>
-        </span>
-      ))}
-    </div>
+    <section className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-3">
+      {children}
+    </section>
   )
 }
 
 /**
- * LUỒNG DUYỆT — ai tạo → đang chờ ai → bước kế tiếp là gì. Bước `future` (sau
- * chữ ký) vẽ mờ + chấm rỗng: Giám đốc thấy chữ ký của mình mở khoá việc gì.
+ * LUỒNG DUYỆT — ai tạo → đang chờ ai → bước kế tiếp là gì.
+ *
+ * Dùng `Timeline` của kit thay vì tự vẽ (17/09/2026): kit đã có đúng thứ này
+ * cho mọi chứng từ, và mốc CHƯA xảy ra khai `at: null` thì nó tự bày mờ với
+ * chấm rỗng — Giám đốc thấy chữ ký của mình mở khoá việc gì. Bản cũ vẽ lại
+ * cùng một dải bằng 35 dòng và một bộ màu riêng.
  */
-function Timeline({
+function FlowSteps({
   steps,
+  nowIso,
 }: {
-  steps: { label: string; date: string; now?: boolean; future?: boolean }[]
+  steps: {
+    label: string
+    /** Chữ hiện dưới nhãn: "1/9/2026 · Lệ Hằng", "Hiện tại", "Sau khi ký". */
+    date: string
+    /** ISO THẬT của mốc, nếu có. Thiếu thì mốc vẫn tính là đã xảy ra. */
+    iso?: string | null
+    now?: boolean
+    future?: boolean
+  }[]
+  /** Mốc "bây giờ" — dùng cho bước đang đứng. Truyền từ server, không `new Date()`. */
+  nowIso: string
 }) {
   return (
-    <div>
+    <>
       <SectionLabel>Luồng duyệt</SectionLabel>
-      <ol className="mt-2.5 space-y-3">
-        {steps.map((s, i) => (
-          <li key={i} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <span
-                className={cn(
-                  'mt-0.5 size-2.5 shrink-0 rounded-full',
-                  s.now
-                    ? 'bg-[var(--warn)] ring-4 ring-[color-mix(in_srgb,var(--warn)_25%,transparent)]'
-                    : s.future
-                      ? 'border-muted-foreground/40 border bg-transparent'
-                      : 'bg-muted-foreground/40',
-                )}
-              />
-              {i < steps.length - 1 && <span className="bg-border/70 mt-1 w-px flex-1" />}
-            </div>
-            <div className={cn('-mt-0.5 pb-1', s.future && 'opacity-60')}>
-              <div className={cn('text-sm', s.now ? 'font-semibold' : 'font-medium')}>
-                {s.label}
-              </div>
-              <div className="text-muted-foreground text-xs">{s.date}</div>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </div>
+      <div className="mt-2">
+        <Timeline
+          marks={steps.map((s, i) => ({
+            key: String(i),
+            /*
+              `at` PHẢI là ISO thật, không phải cờ đánh dấu.
+
+              Bản đầu tiên nhét một hằng số ('2000-01-01') vào đây chỉ để kit
+              hiểu "mốc đã xảy ra", vì ngày người-đọc-được đã nằm ở `detail`.
+              Kit in `at` ra thật, nên khay hiện "01/01 07:00" ngay cạnh
+              "1/9/2026" — một cái ngày không có thật trên màn duyệt chi tiền.
+              Mốc tương lai để null; kit tự bày mờ và ghi "chưa tới".
+            */
+            at: s.future ? null : (s.iso ?? nowIso),
+            label: s.label,
+            detail: s.date,
+            tone: s.now ? ('warn' as const) : undefined,
+          }))}
+        />
+      </div>
+    </>
   )
 }
 
@@ -182,7 +194,19 @@ function DecisionCard({
     // @container: thẻ này sống ở hai bề rộng rất khác nhau — 340px khi làm cột
     // phải, gần 1200px khi xếp chồng ở cửa sổ hẹp. Số liệu và nút bám theo bề
     // rộng THỰC của thẻ, khỏi kéo dài thượt một cột khi nằm ngang.
-    <aside className="bg-card @container order-1 rounded-xl border xl:sticky xl:top-4 xl:order-2">
+    /*
+      KHAY PHẲNG, dính bên phải (chuyển kit 17/09/2026).
+
+      KHÔNG dùng `InspectPanel` của kit dù nó đúng vai: khay đó khai
+      `hidden xl:flex` và rộng cố định 316px, hợp cho màn DANH SÁCH nơi bảng
+      chiếm phần còn lại. Ở màn ĐỌC ĐỂ KÝ thì dưới 1280px khay phải xếp chồng
+      lên TRÊN (order-1) — mở phiếu là thấy ngay số tiền, cảnh báo và hai nút;
+      ẩn nó đi thì trên laptop 13" Giám đốc không ký được.
+
+      Bỏ `rounded-xl` và đổ bóng: ngăn với cột hồ sơ bằng một vạch dọc khi nằm
+      cạnh, một vạch ngang khi xếp chồng.
+    */
+    <aside className="@container order-1 border-b border-[var(--line)] bg-[var(--surface-card)] xl:sticky xl:top-0 xl:order-2 xl:border-b-0 xl:border-l">
       {/*
         MỘT bộ đánh dấu, HAI hình dạng theo bề rộng thật của thẻ:
 
@@ -194,8 +218,8 @@ function DecisionCard({
  chữ thì thưa thớt — mở phiếu ra chưa thấy sản phẩm đâu.
       */}
       <div className="@xl:grid @xl:grid-cols-[minmax(0,1fr)_auto] @xl:items-start @xl:gap-x-5 @xl:gap-y-3 @xl:p-4">
-        <div className="border-border/60 border-b p-4 @xl:col-start-1 @xl:row-start-1 @xl:border-b-0 @xl:p-0">
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+        <div className="border-b border-[var(--line)] p-4 @xl:col-start-1 @xl:row-start-1 @xl:border-b-0 @xl:p-0">
+          <div className="text-k-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-3)]">
             <span className="font-medium tracking-wide uppercase">
               {kind === 'lsx'
                 ? 'Lệnh sản xuất'
@@ -204,7 +228,7 @@ function DecisionCard({
                   : 'Đơn đặt vật tư'}
             </span>
             <span className="font-mono">{code}</span>
-            <span className="text-foreground truncate font-semibold @xl:before:mx-1 @xl:before:content-['·']">
+            <span className="truncate font-semibold text-[var(--ink)] @xl:before:mx-1 @xl:before:content-['·']">
               {title}
             </span>
           </div>
@@ -219,7 +243,7 @@ function DecisionCard({
             >
               {metric}
             </span>
-            <span className="text-muted-foreground text-[11px]">{metricLabel}</span>
+            <span className="text-k-label text-[var(--ink-3)]">{metricLabel}</span>
           </div>
         </div>
 
@@ -233,7 +257,7 @@ function DecisionCard({
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 @xl:col-start-1 @xl:row-start-3 @xl:flex @xl:flex-wrap @xl:items-baseline @xl:gap-x-5 @xl:gap-y-1.5">
             {stats.map((s, i) => (
               <div key={i} className="min-w-0 @xl:flex @xl:items-baseline @xl:gap-1.5">
-                <dt className="text-muted-foreground text-[11px]">{s.label}</dt>
+                <dt className="text-k-label text-[var(--ink-3)]">{s.label}</dt>
                 <dd
                   className={cn(
                     'mt-0.5 text-sm font-semibold @xl:mt-0',
@@ -250,20 +274,31 @@ function DecisionCard({
  chính, link là lối rẽ). Nằm ngang thì lưới xếp lại: nút lên hàng 1
  cạnh số tiền, link xuống hàng 3 cùng dòng với số liệu. */}
           <div className="flex flex-col gap-2 pt-1 @xl:col-start-2 @xl:row-start-1 @xl:flex-row-reverse @xl:justify-self-end @xl:pt-0">
-            <Button className="w-full @xl:w-36" disabled={busy} onClick={onApprove}>
-              <ShieldCheck /> Phê duyệt
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full @xl:w-28"
+            <Btn
+              primary
+              className="w-full justify-center @xl:w-36"
+              disabled={busy}
+              onClick={onApprove}
+              icon="duyet"
+            >
+              Phê duyệt
+            </Btn>
+            {/*
+              "TRẢ LẠI ĐỂ SỬA" — cùng một tên với Trung tâm phê duyệt và sổ
+              lịch sử ký. Phiếu quay về nháp, giữ số và lịch sử, người soạn sửa
+              rồi gửi lại; đây là nơi CUỐI cùng còn gọi nó là "Từ chối".
+            */}
+            <Btn
+              className="w-full justify-center @xl:w-36"
               disabled={busy}
               onClick={onReject}
+              icon="traLai"
             >
-              Từ chối
-            </Button>
+              Trả lại để sửa
+            </Btn>
           </div>
 
-          <div className="border-border/60 flex flex-col gap-1.5 border-t pt-3 text-sm @xl:col-start-2 @xl:row-start-3 @xl:flex-row @xl:justify-end @xl:gap-4 @xl:border-t-0 @xl:pt-0">
+          <div className="text-k-sm flex flex-col gap-1.5 border-t border-[var(--line)] pt-3 @xl:col-start-2 @xl:row-start-3 @xl:flex-row @xl:justify-end @xl:gap-4 @xl:border-t-0 @xl:pt-0">
             {links}
           </div>
         </div>
@@ -320,17 +355,19 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
     <>
       <div className="order-2 flex flex-col gap-4 xl:order-1">
         <Card>
-          <Chain
-            nodes={[
+          <DocChain
+            links={[
               {
                 label: l.order_codes.length > 1 ? 'Đơn hàng (gộp)' : 'Đơn hàng',
-                value: l.order_codes.join(', ') || '—',
+                code: l.order_codes.join(', ') || '—',
               },
-              { label: 'LSX', value: l.code },
+              { label: 'LSX', code: l.code },
             ]}
           />
-          <h1 className="mt-2 text-xl font-bold">{l.customer_name}</h1>
-          <div className="text-muted-foreground mt-0.5 text-sm">
+          <h1 className="text-k-title mt-1.5 font-semibold tracking-[-.01em]">
+            {l.customer_name}
+          </h1>
+          <div className="text-k-sm mt-0.5 text-[var(--ink-3)]">
             Lệnh sản xuất chờ Giám đốc duyệt
           </div>
 
@@ -344,7 +381,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
                 {/* Ngày và "còn N ngày" tách hai dòng: gộp một dòng thì ở cột
  hẹp nó ngắt bừa giữa cụm, bỏ icon lại trơ một mình. */}
                 <span className="flex items-center gap-1 whitespace-nowrap">
-                  <Truck className="size-3.5 shrink-0" />
+                  <Ico name="hen" size={14} className="shrink-0" />
                   {fmtD(l.ship_date)}
                 </span>
                 <span className="block text-xs font-normal">{due.text}</span>
@@ -368,7 +405,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
               <div>
                 <SectionLabel>
                   <span className="inline-flex items-center gap-1">
-                    <StickyNote className="size-3.5" /> Ghi chú
+                    <Ico name="ghiChu" size={14} /> Ghi chú
                   </span>
                 </SectionLabel>
                 <p className="mt-1 text-sm whitespace-pre-wrap">{l.note}</p>
@@ -378,7 +415,8 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
         </Card>
 
         <Card>
-          <Timeline
+          <FlowSteps
+            nowIso={nowIso}
             steps={[
               ...(l.order
                 ? [{ label: 'Khách đặt đơn', date: fmtD(l.order.order_created_at) }]
@@ -429,13 +467,14 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
         links={
           <>
             <QuickLink href={`/print/lsx/${l.id}`}>
-              <Printer className="mr-1 inline size-3.5" /> Bản in LSX
+              <Ico name="in" size={14} className="mr-1 inline" /> Bản in LSX
             </QuickLink>
             <Link
               href={`/exec/lsx/${l.id}`}
               className="text-[var(--primary)] hover:underline"
             >
-              <FileText className="mr-1 inline size-3.5" /> Hồ sơ sản xuất đầy đủ →
+              <Ico name="lenh" size={14} className="mr-1 inline" /> Hồ sơ sản xuất đầy đủ
+              →
             </Link>
           </>
         }
@@ -480,9 +519,11 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
     <>
       <div className="order-2 flex flex-col gap-4 xl:order-1">
         <Card>
-          <Chain nodes={[{ label: 'Báo giá', value: q.code }]} />
-          <h1 className="mt-2 text-xl font-bold">{q.customer_name}</h1>
-          <div className="text-muted-foreground mt-0.5 text-sm">
+          <DocChain links={[{ label: 'Báo giá', code: q.code }]} />
+          <h1 className="text-k-title mt-1.5 font-semibold tracking-[-.01em]">
+            {q.customer_name}
+          </h1>
+          <div className="text-k-sm mt-0.5 text-[var(--ink-3)]">
             Báo giá chờ Giám đốc duyệt — duyệt xong Sale mới chốt &amp; gửi khách
           </div>
 
@@ -551,7 +592,7 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
               <div>
                 <SectionLabel>
                   <span className="inline-flex items-center gap-1">
-                    <StickyNote className="size-3.5" /> Ghi chú
+                    <Ico name="ghiChu" size={14} /> Ghi chú
                   </span>
                 </SectionLabel>
                 <p className="mt-1 text-sm whitespace-pre-wrap">{q.note}</p>
@@ -561,7 +602,8 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
         </Card>
 
         <Card>
-          <Timeline
+          <FlowSteps
+            nowIso={nowIso}
             steps={[
               { label: 'Sale lập báo giá', date: fmtD(q.created_at) },
               {
@@ -611,150 +653,7 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
         onReject={() => dec.askReject(targetQuote(q))}
         links={
           <QuickLink href={`/print/quotes/${q.id}`}>
-            <Printer className="mr-1 inline size-3.5" /> Bản in báo giá
-          </QuickLink>
-        }
-      />
-    </>
-  )
-}
-
-// ── Thân PO ──────────────────────────────────────────────────────────────────
-function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) {
-  // `big` tính ở server theo TIỀN TỆ của đơn (approvals/data.ts). Trước
-  // 17/08/2026 chỗ này gọi isBigApproval(p.total) — so mọi tiền tệ với ngưỡng
-  // 50tr VND, nên đơn 3.000 USD hiện ra "sẵn sàng ký" đúng như bẫy mà ngưỡng
-  // sinh ra để chặn. Danh sách phê duyệt đã đúng từ trước; chỉ trang này sót.
-  const big = p.big ?? false
-  const noThreshold = p.threshold == null
-  const days = waitingDays(p.created_at, nowIso)
-  const due = dueBadge(daysUntil(p.expected_at, nowIso))
-  const lines = p.lines ?? []
-  const missingPrice = lines.filter((ln) => ln.unit_price == null).length
-  const waitTone: DueTone = days >= 4 ? 'red' : days >= 2 ? 'amber' : 'muted'
-
-  const verdict: { tone: 'ok' | 'warn' | 'alert'; node: React.ReactNode } = big
-    ? {
-        tone: 'alert',
-        node: noThreshold ? (
-          <span>
-            <b>Chưa đặt ngưỡng cho {p.currency}.</b> Mặc định coi là đơn lớn — đặt ngưỡng
-            ở Luật ký nếu muốn ký nhanh.
-          </span>
-        ) : (
-          <span>
-            <b>Giá trị lớn (≥ {money(p.threshold!, p.currency)}).</b> Cần xem kỹ từng dòng
-            trước khi duyệt chi.
-          </span>
-        ),
-      }
-    : missingPrice > 0
-      ? {
-          tone: 'warn',
-          node: <span>{missingPrice} dòng chưa có đơn giá — tổng có thể chưa đủ.</span>,
-        }
-      : due.tone === 'red'
-        ? {
-            tone: 'alert',
-            node: <span>Hàng hẹn về {due.text} — duyệt để kịp gửi NCC.</span>,
-          }
-        : days >= 2
-          ? { tone: 'warn', node: <span>Đã chờ {days} ngày.</span> }
-          : {
-              tone: 'ok',
-              node: <span>Sẵn sàng — duyệt để Cung ứng gửi NCC (BR-05).</span>,
-            }
-
-  return (
-    <>
-      <div className="order-2 flex flex-col gap-4 xl:order-1">
-        <Card>
-          <Chain
-            nodes={[
-              ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
-              ...(p.lsx_code ? [{ label: 'LSX', value: p.lsx_code }] : []),
-              { label: 'Đơn vật tư', value: p.code },
-            ]}
-          />
-          <h1 className="mt-2 text-xl font-bold">{p.supplier_name}</h1>
-          <div className="text-muted-foreground mt-0.5 text-sm">
-            Đơn đặt vật tư chờ Giám đốc duyệt (BR-05)
-          </div>
-
-          <div className="mt-4 flex flex-col gap-4">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-              <Fact label="Hàng hẹn về" tone={due.tone} wrap>
-                <span className="flex items-center gap-1 whitespace-nowrap">
-                  <Truck className="size-3.5 shrink-0" />
-                  {fmtD(p.expected_at)}
-                </span>
-                <span className="block text-xs font-normal">{due.text}</span>
-              </Fact>
-              <Fact label="Người lập đơn">{p.created_by_name ?? '—'}</Fact>
-              <Fact label="Lập ngày">{fmtD(p.created_at)}</Fact>
-            </dl>
-
-            <PoLineTable lines={lines} total={p.total} currency={p.currency} />
-
-            {p.note && p.note.trim() && (
-              <div>
-                <SectionLabel>
-                  <span className="inline-flex items-center gap-1">
-                    <StickyNote className="size-3.5" /> Ghi chú đơn đặt
-                  </span>
-                </SectionLabel>
-                <p className="mt-1 text-sm whitespace-pre-wrap">{p.note}</p>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <Timeline
-            steps={[
-              {
-                label: 'Cung ứng lập đơn đặt',
-                date: [fmtD(p.created_at), p.created_by_name].filter(Boolean).join(' · '),
-              },
-              {
-                label: `Chờ Giám đốc duyệt${days >= 1 ? ` · ${days} ngày` : ''}`,
-                date: 'Hiện tại',
-                now: true,
-              },
-              {
-                label: 'Cung ứng gửi đơn cho NCC (BR-05)',
-                date: 'Sau khi ký',
-                future: true,
-              },
-            ]}
-          />
-        </Card>
-      </div>
-
-      <DecisionCard
-        kind="po"
-        code={p.code}
-        title={p.supplier_name}
-        metric={money(p.total, p.currency)}
-        metricLabel="Tổng cam kết chi"
-        metricTone={big ? 'red' : undefined}
-        verdict={verdict}
-        stats={[
-          { label: 'Hàng hẹn về', value: due.text, tone: due.tone },
-          {
-            label: 'Chờ duyệt',
-            value: days >= 1 ? `${days} ngày` : 'mới',
-            tone: waitTone,
-          },
-          { label: 'Cho LSX', value: p.lsx_code ?? 'Ngoài LSX' },
-          { label: 'Số dòng', value: `${lines.length}` },
-        ]}
-        busy={dec.busy}
-        onApprove={() => dec.askApprove(targetPo(p))}
-        onReject={() => dec.askReject(targetPo(p))}
-        links={
-          <QuickLink href={`/print/supply/${p.id}`}>
-            <Printer className="mr-1 inline size-3.5" /> Bản in đơn đặt
+            <Ico name="in" size={14} className="mr-1 inline" /> Bản in báo giá
           </QuickLink>
         }
       />

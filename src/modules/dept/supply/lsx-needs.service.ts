@@ -32,7 +32,10 @@ export const lsxNeedsService = {
     await assertLsx(input.production_order_id)
     // Cùng một mã lặp trong payload (dán Excel hay có) → lấy dòng cuối, không
     // để upsert ném lỗi "ON CONFLICT cannot affect row a second time".
-    const byMat = new Map<string, { material_id: string; qty_needed: number; note: string | null }>()
+    const byMat = new Map<
+      string,
+      { material_id: string; qty_needed: number; note: string | null }
+    >()
     for (const r of input.rows) {
       byMat.set(r.material_id, {
         material_id: r.material_id,

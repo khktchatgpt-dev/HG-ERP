@@ -241,7 +241,11 @@ export function allocateReceiptsToShipments(
  * chặn cả lượt lưu đơn. Đợt rỗng sau khi lọc cũng bỏ luôn.
  */
 export function mapDraftShipments(
-  drafts: { expected_date: string; note?: string | null; lines: { line_index: number; qty: number }[] }[],
+  drafts: {
+    expected_date: string
+    note?: string | null
+    lines: { line_index: number; qty: number }[]
+  }[],
   lineIds: string[],
 ): ShipmentInput[] {
   const out: ShipmentInput[] = []
@@ -256,7 +260,263 @@ export function mapDraftShipments(
       if (cur) cur.qty += l.qty
       else lines.push({ po_line_id: id, qty: l.qty })
     }
-    if (lines.length > 0) out.push({ expected_date: d.expected_date, note: d.note ?? null, lines })
+    if (lines.length > 0)
+      out.push({ expected_date: d.expected_date, note: d.note ?? null, lines })
   }
   return out
+}
+
+/**
+ * ĐỢT NÀY CÒN CHỜ KHO NHẬN KHÔNG — luật DÙNG CHUNG cho danh sách và cho form.
+ *
+ * Lỗi tìm ra 15/09/2026: màn "Nhập kho — chờ nhận" lọc đợt bằng cách LOẠI ĐƠN
+ * ĐÃ HUỶ, còn form lập phiếu lại chỉ nạp đơn CHƯA VỀ ĐỦ. Hai luật khác nhau cho
+ * cùng một câu hỏi, nên đơn `02/26HG/BT` đã VỀ ĐỦ mà 4 đợt `planned` bỏ quên
+ * của nó vẫn nằm chình ình trong danh sách, ba lô còn bị tô "quá hẹn".
+ *
+ * Người dùng bấm "Lập phiếu nhập" từ đó thì rơi vào NGÕ CỤT im lặng: đơn không
+ * có trong ô "Nguồn nhập" nên trình duyệt đá ô đó về rỗng, form trông vẫn bình
+ * thường — điền xong bấm Lưu mới ăn lỗi "Đợt giao không thuộc đơn đặt đang
+ * chọn", nói về một ô họ không hề động vào.
+ *
+ * Nên gom về MỘT hàm: đợt còn sống VÀ đơn còn nhận được. Hai chỗ gọi cùng một
+ * luật thì không lệch lại được nữa.
+ */
+export function shipmentWaitingReceipt(
+  poStatus: string,
+  shipmentStatus: string,
+): boolean {
+  // Giống `RECEIVABLE` ở supply.repo — đã đặt trở đi, chưa về đủ, chưa huỷ.
+  const NHAN_DUOC = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']
+  const DOT_SONG = ['planned', 'arrived']
+  return NHAN_DUOC.includes(poStatus) && DOT_SONG.includes(shipmentStatus)
+}
+
+/**
+ * NCC XÁC NHẬN THAY LỊCH ĐỀ NGHỊ — nhưng KHÔNG xoá lịch cũ (P1, 27/09/2026).
+ *
+ * Trước đây `confirm` xoá sạch mọi đợt rồi chèn cam kết mới: mất lịch ĐỀ NGHỊ
+ * lúc soạn (tức ngày mình cần hàng) — đúng thứ tình huống "cam kết ban đầu →
+ * thay đổi → thực tế" cần giữ; và phiếu nhập đã gắn một đợt (Kho nhận được từ
+ * lúc đơn đã gửi) bị cắt liên kết (`on delete set null`), mã GH-… cũng mất.
+ *
+ * Nay: đợt đề nghị CHƯA có hàng (`planned`) chuyển thành "đã thay" (cancelled,
+ * có ghi chú) — vẫn nằm trong sổ để đối chiếu; đợt đã có hàng (`arrived` /
+ * `received`) giữ nguyên và tính vào SL đã hẹn; cam kết mới đánh số NỐI TIẾP.
+ */
+export function confirmReplacePlan(
+  current: {
+    id: string
+    seq: number
+    status: string
+    lines: { po_line_id: string; qty: number }[]
+  }[],
+): { cancelIds: string[]; keptQty: Map<string, number>; startSeq: number } {
+  const cancelIds: string[] = []
+  const keptQty = new Map<string, number>()
+  for (const s of current) {
+    if (s.status === 'planned') cancelIds.push(s.id)
+    else if (s.status === 'arrived' || s.status === 'received') {
+      for (const l of s.lines)
+        keptQty.set(l.po_line_id, (keptQty.get(l.po_line_id) ?? 0) + l.qty)
+    }
+  }
+  return { cancelIds, keptQty, startSeq: nextSeq(current) }
+}
+
+/**
+ * TRẠNG THÁI ĐỢT THEO SỐ ĐÃ NHẬN CỘNG DỒN (27/09/2026).
+ *
+ * Bản cũ chốt đợt lúc ghi MỘT phiếu: phiếu đó phủ đủ mọi dòng của đợt thì
+ * 'received', không thì 'arrived'. Hai lỗi đo được trên mã:
+ *   · đợt nhận bằng HAI phiếu (sáng một nửa, chiều một nửa) không bao giờ
+ *     'received' — mỗi phiếu riêng lẻ đều thiếu, đợt kẹt 'arrived' mãi;
+ *   · nhận DƯ ở đợt 1 (hàng gấp, NCC chở luôn) không trừ đợt 2 — đợt 2 vẫn
+ *     'planned' chờ đủ số cũ, lịch Hàng về + cảnh báo trễ kêu oan.
+ *
+ * Nay tính lại TỪ SỔ mỗi lần có phiếu nhập / trả / đảo: `receivedByLine` là số
+ * thực nhận NET của dòng (cột qty_received, gồm cả QC loại — cùng cách đếm
+ * BR-08). Rót vào đợt:
+ *   1. phần CÓ CHỨNG TỪ nối đợt (`linked`) — trần = SL đợt, phần dư trả về bể;
+ *   2. bể còn lại rót theo độ chắc (received → arrived → planned), cùng hạng
+ *      thì hẹn sớm trước — nên dư đợt 1 tự lấp đợt 2.
+ * Đợt phủ đủ mọi dòng → 'received'; có hàng mà chưa đủ → 'arrived'; không có
+ * gì → giữ 'arrived' nếu đang là (xe đã tới / bị đảo phiếu) còn lại 'planned'.
+ * Chỉ trả những đợt ĐỔI trạng thái; đợt huỷ không đụng.
+ */
+export function shipmentStatusesFromReceipts(
+  shipments: {
+    id: string
+    seq: number
+    status: string
+    expected_date: string
+    lines: ShipmentLineInput[]
+  }[],
+  receivedByLine: Map<string, number>,
+  linked: Map<string, Map<string, number>> = new Map(),
+): Map<string, 'planned' | 'arrived' | 'received'> {
+  const EPS = 1e-4
+  const alive = shipments.filter((s) => s.status !== 'cancelled')
+  const pool = new Map(receivedByLine)
+  const got = new Map<string, Map<string, number>>()
+  const take = (sid: string, lineId: string, want: number) => {
+    const have = pool.get(lineId) ?? 0
+    const q = Math.max(Math.min(have, want), 0)
+    if (q <= 0) return
+    pool.set(lineId, have - q)
+    const per = got.get(sid) ?? new Map<string, number>()
+    per.set(lineId, (per.get(lineId) ?? 0) + q)
+    got.set(sid, per)
+  }
+  for (const s of alive)
+    for (const l of s.lines) take(s.id, l.po_line_id, Math.min(linked.get(s.id)?.get(l.po_line_id) ?? 0, l.qty)) // prettier-ignore
+  const order = [...alive].sort(
+    (a, b) =>
+      (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) ||
+      a.expected_date.localeCompare(b.expected_date) ||
+      a.seq - b.seq,
+  )
+  for (const s of order)
+    for (const l of s.lines) take(s.id, l.po_line_id, l.qty - (got.get(s.id)?.get(l.po_line_id) ?? 0)) // prettier-ignore
+
+  const out = new Map<string, 'planned' | 'arrived' | 'received'>()
+  for (const s of alive) {
+    const per = got.get(s.id)
+    const full = s.lines.length > 0 && s.lines.every((l) => (per?.get(l.po_line_id) ?? 0) >= l.qty - EPS) // prettier-ignore
+    const some = s.lines.some((l) => (per?.get(l.po_line_id) ?? 0) > EPS)
+    const next = full ? 'received' : some ? 'arrived' : s.status === 'arrived' || s.status === 'received' ? 'arrived' : 'planned' // prettier-ignore
+    if (next !== s.status) out.set(s.id, next)
+  }
+  return out
+}
+
+/**
+ * "LẤY TRƯỚC" — TÁCH MỘT ĐỢT THÀNH PHẦN GẤP + PHẦN CÒN LẠI (27/09/2026).
+ *
+ * Thực tế xưởng: hàng cần gấp, NV cung ứng gọi NCC lấy trước một phần của đợt
+ * đã hẹn (hoặc tự đi lấy). Trước đây chỉ có đường huỷ đợt rồi khai lại hai đợt
+ * — mất mã GH, mất vết "đợt này từng hẹn ngày nào". Nay tách tại chỗ: đợt gốc
+ * giữ mã + ngày, bớt đúng phần kéo lên; phần kéo lên thành đợt MỚI ngày sớm hơn.
+ *
+ * Lấy hết mọi dòng của đợt = thực chất là dời ngày → báo lỗi chỉ sang "Dời".
+ */
+export function splitShipmentLines(
+  current: ShipmentLineInput[],
+  pull: ShipmentLineInput[],
+  names: Map<string, string> = new Map(),
+): { remain: ShipmentLineInput[]; pulled: ShipmentLineInput[]; errors: string[] } {
+  const errors: string[] = []
+  const have = new Map(current.map((l) => [l.po_line_id, l.qty]))
+  const pulled: ShipmentLineInput[] = []
+  for (const p of pull) {
+    if (!(p.qty > 0)) continue
+    const name = names.get(p.po_line_id) ?? 'Dòng'
+    const cur = have.get(p.po_line_id)
+    if (cur == null) {
+      errors.push(`"${name}" không nằm trong đợt này`)
+      continue
+    }
+    if (p.qty > cur + 1e-4) errors.push(`"${name}": lấy trước ${fmt(p.qty)} vượt số của đợt ${fmt(cur)}`) // prettier-ignore
+    pulled.push({ po_line_id: p.po_line_id, qty: Math.min(p.qty, cur) })
+    have.set(p.po_line_id, cur - Math.min(p.qty, cur))
+  }
+  if (pulled.length === 0) errors.push('Chưa nhập số lượng lấy trước cho dòng nào')
+  const remain = current
+    .map((l) => ({
+      po_line_id: l.po_line_id,
+      qty: Math.round((have.get(l.po_line_id) ?? 0) * 10000) / 10000,
+    })) // prettier-ignore
+    .filter((l) => l.qty > 1e-4)
+  if (errors.length === 0 && remain.length === 0)
+    errors.push('Lấy trước toàn bộ đợt = dời ngày cả đợt — dùng "Dời đợt"')
+  return { remain, pulled, errors }
+}
+
+/**
+ * TÁCH ĐỢT THEO PHIẾU NHẬP (07/10/2026 — PO-2026-0084).
+ *
+ * Ca thật: lúc NCC xác nhận chỉ khai MỘT đợt ôm 100% số đặt; NCC giao lẻ nhiều
+ * chuyến; Kho nhập hai phiếu không nối đợt. Đợt đó đã "xe tới" nên Sửa / Lấy
+ * trước bị chặn, Thêm đợt thì "vượt SL đặt" — không còn đường nào ghi đúng.
+ *
+ * Luật (chủ dự án chốt 07/10): MỖI PHIẾU NHẬP MỘT ĐỢT "Đã nhận". Phiếu SỚM
+ * NHẤT ở lại đợt gốc (giữ mã GH + ngày hẹn cũ — đo NCC trễ so với cam kết
+ * đầu); các phiếu sau thành đợt mới, ngày = ngày phiếu. Phần còn chờ = số của
+ * đợt gốc trừ số đã về, chia thành một hay nhiều đợt hẹn mới.
+ *
+ * Số "đã về" của phiếu tính cả phần loại QC (BR-08 — NCC đã giao), cùng nghĩa
+ * với `loadReceiptBatches` / `receiptsByShipment`.
+ */
+export type ReceiptForSplit = {
+  doc_id: string
+  doc_code: string
+  /** yyyy-mm-dd — ngày chứng từ (ngày hàng về thật). */
+  date: string
+  lines: ShipmentLineInput[]
+}
+
+export type SplitPlan = {
+  /** Phiếu theo thứ tự ngày — phiếu [0] ở lại đợt gốc. */
+  receipts: ReceiptForSplit[]
+  /** Phần còn chờ theo dòng (> 0) — mặc định gom một đợt hẹn mới. */
+  rest: ShipmentLineInput[]
+}
+
+const r4 = (n: number) => Math.round(n * 10000) / 10000
+
+export function planSplitByReceipts(
+  shipment: { lines: ShipmentLineInput[] },
+  receipts: ReceiptForSplit[],
+): SplitPlan | null {
+  const used = receipts.filter((r) => r.lines.some((l) => l.qty > 1e-4))
+  if (used.length === 0) return null
+  const sorted = [...used].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.doc_code.localeCompare(b.doc_code),
+  )
+  const came = new Map<string, number>()
+  for (const r of sorted)
+    for (const l of r.lines) came.set(l.po_line_id, (came.get(l.po_line_id) ?? 0) + l.qty)
+  const rest = shipment.lines
+    .map((l) => ({
+      po_line_id: l.po_line_id,
+      qty: r4(Math.max(0, l.qty - (came.get(l.po_line_id) ?? 0))),
+    })) // prettier-ignore
+    .filter((l) => l.qty > 1e-4)
+  return { receipts: sorted, rest }
+}
+
+/**
+ * Kiểm phần còn chờ người dùng chia: mỗi dòng cộng các đợt hẹn mới phải ĐÚNG
+ * bằng phần còn chờ (bớt đi là việc của "Chốt thiếu", thêm vào là vượt cam
+ * kết), mỗi đợt có ngày, không ngày nào trước hôm nay.
+ */
+export function validateSplitRest(
+  plan: SplitPlan,
+  restShipments: ShipmentInput[],
+  today: string,
+  names: Map<string, string> = new Map(),
+): string[] {
+  const errors: string[] = []
+  if (plan.rest.length > 0 && restShipments.length === 0) {
+    errors.push('Phần còn chờ chưa xếp vào đợt nào')
+  }
+  const sum = new Map<string, number>()
+  for (const [i, s] of restShipments.entries()) {
+    const label = `Đợt hẹn ${i + 1}`
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s.expected_date))
+      errors.push(`${label}: chưa chọn ngày`)
+    else if (s.expected_date < today) errors.push(`${label}: ngày hẹn đã qua`)
+    const lines = s.lines.filter((l) => l.qty > 1e-4)
+    if (lines.length === 0) errors.push(`${label}: chưa có số lượng dòng nào`)
+    for (const l of lines) sum.set(l.po_line_id, (sum.get(l.po_line_id) ?? 0) + l.qty)
+  }
+  const want = new Map(plan.rest.map((l) => [l.po_line_id, l.qty]))
+  for (const id of new Set([...want.keys(), ...sum.keys()])) {
+    const w = want.get(id) ?? 0
+    const g = sum.get(id) ?? 0
+    if (Math.abs(w - g) > 1e-4) {
+      errors.push(`"${names.get(id) ?? 'Dòng'}": các đợt hẹn cộng ${fmt(g)}, phần còn chờ là ${fmt(w)}`) // prettier-ignore
+    }
+  }
+  return errors
 }

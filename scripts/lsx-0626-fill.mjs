@@ -4,7 +4,7 @@
 //   node scripts/lsx-0626-fill.mjs --apply   # ghi
 //
 // Rà theo ĐÚNG bộ trường app coi là "đủ" cho phiếu lệnh (`productGaps` trong
-// src/modules/dept/production/lsx-line-fill.ts): tên nước ngoài · barcode ·
+// src/lib/lsx-line-fill.ts): tên nước ngoài · barcode ·
 // mây/nệm/sơn/kính/gỗ · đóng gói · CBM. Ghi vào HỒ SƠ SP chứ không vào dòng
 // lệnh, vì dòng lệnh lấy số từ hồ sơ (`profileSnapshot`) — sửa dòng là sửa cái
 // bóng, lần phát lệnh sau lại trống.

@@ -109,7 +109,7 @@ const toEdit = (r: Partial<ApiRow> & { production_order_line_id: string }): Edit
 })
 
 const inp =
-  'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none'
 
 export function LsxComponentsPanel({
   lsxId,
@@ -342,12 +342,12 @@ export function LsxComponentsPanel({
       return (
         <tr
           key={i}
-          className={`border-b border-zinc-100 dark:border-zinc-900 ${isAsm ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : ''}`}
+          className={`border-b border-zinc-100 ${isAsm ? 'bg-indigo-50/60' : ''}`}
         >
           <td className="py-1.5 pr-1">{r.cluster || '—'}</td>
           <td className="py-1.5 pr-1 font-medium">
             {isAsm && (
-              <span className="mr-1 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+              <span className="mr-1 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700">
                 CỤM
               </span>
             )}
@@ -387,7 +387,7 @@ export function LsxComponentsPanel({
     return (
       <tr
         key={i}
-        className={`border-b border-zinc-100 dark:border-zinc-900 ${isAsm ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : ''}`}
+        className={`border-b border-zinc-100 ${isAsm ? 'bg-indigo-50/60' : ''}`}
       >
         <td className="py-1 pr-1">
           <input
@@ -401,7 +401,7 @@ export function LsxComponentsPanel({
           <div className="flex items-center gap-1">
             {isAsm && (
               <span
-                className="shrink-0 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300"
+                className="shrink-0 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700"
                 title="Cụm — đếm từ hàn trở đi"
               >
                 CỤM
@@ -491,7 +491,7 @@ export function LsxComponentsPanel({
                     [k]: e.target.value === '' ? '' : Number(e.target.value),
                   } as Partial<EditRow>)
                 }
-                className={`${inp} ${k === 'qty_per_assembly' && isAsm ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
+                className={`${inp} ${k === 'qty_per_assembly' && isAsm ? 'bg-zinc-100' : ''}`}
               />
             </td>
           ),
@@ -568,7 +568,7 @@ export function LsxComponentsPanel({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1280px] text-xs">
           <thead>
-            <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
+            <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase">
               <th className="py-1.5 pr-1" title="Cụm lắp ráp: CỤM TỰA, CỤM KHUNG…">
                 Cụm
               </th>
@@ -657,8 +657,8 @@ export function LsxComponentsPanel({
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
+    <section className="rounded-lg border border-zinc-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5">
         <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
           {title} ({rows.length})
         </h2>
@@ -667,7 +667,7 @@ export function LsxComponentsPanel({
             <button
               disabled={busy}
               onClick={() => setImportOpen(true)}
-              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50"
               title="Import file BOM (.xlsx/.csv) hoặc dán vùng bảng copy từ Excel"
             >
               ⇪ Import file BOM
@@ -675,7 +675,7 @@ export function LsxComponentsPanel({
             <button
               disabled={busy}
               onClick={() => void suggest('previous')}
-              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50"
               title="Chép bảng chi tiết từ LSX gần nhất có cùng SP"
             >
               ⧉ Chép từ lệnh trước
@@ -683,13 +683,13 @@ export function LsxComponentsPanel({
             <button
               disabled={busy}
               onClick={() => void suggest('bom')}
-              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50"
               title="Điền khung từ BOM kỹ thuật — BOM có thể chưa có hoặc sai, kiểm tra lại"
             >
               ⇣ Gợi ý từ BOM
             </button>
             <label
-              className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300"
+              className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600"
               title="SP trong lệnh CHƯA có định mức thì lấy bảng này làm bản khởi tạo hồ sơ SP (đánh dấu 'đang vẽ' — Kỹ thuật rà lại). SP đã có định mức không bị đụng."
             >
               <input
@@ -714,7 +714,7 @@ export function LsxComponentsPanel({
 
       <div className="p-4">
         {canEdit && !locked && lockedByEntries && (
-          <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             🔒 Lệnh đã có sổ số liệu — bảng chi tiết khoá để bảo vệ sổ (ghi đè sẽ xoá sạch
             sổ). Thật sự cần sửa thì xoá hết bản ghi sổ trước.
           </p>
@@ -725,7 +725,7 @@ export function LsxComponentsPanel({
               Kế hoạch nhập tay theo file BOM (BOM chỉ để đối chiếu — có thể chưa có hoặc
               sai). Số liệu là bản riêng của lệnh này; sửa BOM sau không ảnh hưởng.
               {noMaterialCount > 0 && (
-                <span className="ml-1 text-amber-600 dark:text-amber-400">
+                <span className="ml-1 text-amber-600">
                   ⚠ {noMaterialCount} dòng chưa gắn vật tư — sẽ không vào nhu cầu mua.
                 </span>
               )}
@@ -742,7 +742,7 @@ export function LsxComponentsPanel({
         ) : (
           <div className="flex flex-col gap-4">
             {orderLines.length === 0 && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 ⚠ Đơn hàng của lệnh này không có dòng sản phẩm nào — bảng chi tiết bám
                 theo SP nên không có chỗ nhập. Kiểm tra lại đơn hàng gốc.
               </p>
@@ -772,9 +772,9 @@ export function LsxComponentsPanel({
               return (
                 <div
                   key={line.id}
-                  className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800"
+                  className="overflow-hidden rounded-md border border-zinc-200"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                       <span className="font-mono text-xs text-zinc-400">
                         {line.product_code}
@@ -786,7 +786,7 @@ export function LsxComponentsPanel({
                         · SL {line.qty.toLocaleString('vi-VN')} · {items.length} chi tiết
                         {blockKg > 0 && (
                           <span
-                            className="ml-1 text-emerald-600 dark:text-emerald-400"
+                            className="ml-1 text-emerald-600"
                             title="Tổng khối lượng vật tư cần cho SP này (Σ ĐM × tổng cần)"
                           >
                             · ~{blockKg.toLocaleString('vi-VN')} kg
@@ -803,7 +803,7 @@ export function LsxComponentsPanel({
                         <button
                           disabled={busy}
                           onClick={() => addRow(line.id, 'part')}
-                          className="rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                          className="rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50"
                         >
                           + Thêm chi tiết
                         </button>
@@ -811,7 +811,7 @@ export function LsxComponentsPanel({
                           disabled={busy}
                           onClick={() => addRow(line.id, 'assembly')}
                           title="Cụm lắp ráp — đếm từ công đoạn hàn trở đi (0088)"
-                          className="rounded-md border border-dashed border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-white disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-zinc-900"
+                          className="rounded-md border border-dashed border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-white disabled:opacity-50"
                         >
                           + Thêm cụm
                         </button>
@@ -832,8 +832,8 @@ export function LsxComponentsPanel({
 
             {/* Dòng mồ côi (đơn đổi dòng SP sau khi nhập) — hiện để không mất dấu. */}
             {orphans.length > 0 && (
-              <div className="overflow-hidden rounded-md border border-amber-300 dark:border-amber-800">
-                <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              <div className="overflow-hidden rounded-md border border-amber-300">
+                <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
                   ⚠ {orphans.length} dòng gắn vào SP không còn trong đơn — kiểm tra lại
                 </div>
                 <div className="px-3 pb-2">{renderTable(orphans)}</div>
@@ -844,13 +844,13 @@ export function LsxComponentsPanel({
 
         {loaded && rows.length > 0 && (
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
-            Chú giải: dòng <b className="text-indigo-600 dark:text-indigo-400">CỤM</b>{' '}
-            (badge, nền tím — tạo bằng “+ Thêm cụm”, đếm từ hàn) vs chi tiết (đếm ở phôi)
-            · <b>SL/SP</b> số chi tiết hoặc cụm cho 1 sản phẩm · <b>CT/cụm</b> số chi tiết
-            dùng cho 1 cụm (cảnh báo khi hàn cụm vượt số chi tiết đã xong) ·{' '}
-            <b>CĐ đầu/cuối</b> khoảng công đoạn dòng đi qua · <b>ĐM kg</b> kg vật tư cho 1
-            chi tiết · <b>CT/cây</b> số chi tiết cắt từ 1 cây · <b>Tổng cần / Kg / Cây</b>{' '}
-            hệ thống tự tính. Di chuột lên tiêu đề cột để xem giải thích.
+            Chú giải: dòng <b className="text-indigo-600">CỤM</b> (badge, nền tím — tạo
+            bằng “+ Thêm cụm”, đếm từ hàn) vs chi tiết (đếm ở phôi) · <b>SL/SP</b> số chi
+            tiết hoặc cụm cho 1 sản phẩm · <b>CT/cụm</b> số chi tiết dùng cho 1 cụm (cảnh
+            báo khi hàn cụm vượt số chi tiết đã xong) · <b>CĐ đầu/cuối</b> khoảng công
+            đoạn dòng đi qua · <b>ĐM kg</b> kg vật tư cho 1 chi tiết · <b>CT/cây</b> số
+            chi tiết cắt từ 1 cây · <b>Tổng cần / Kg / Cây</b> hệ thống tự tính. Di chuột
+            lên tiêu đề cột để xem giải thích.
           </p>
         )}
 

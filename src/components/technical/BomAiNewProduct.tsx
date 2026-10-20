@@ -219,7 +219,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
             name: p.name.trim(),
             customer_item_code: p.customer_item_code,
             customer_name: p.customer_name,
-            unit: p.unit || 'cai',
+            unit: p.unit || 'cái',
             product_type: p.product_type,
             frame_material: p.frame_material,
             tech_spec: {
@@ -545,7 +545,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                   value={p.unit ?? ''}
                   onChange={(e) => patch({ unit: e.target.value || null })}
                   className={head}
-                  placeholder="cai"
+                  placeholder="cái"
                 />
               </label>
             </div>

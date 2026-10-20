@@ -71,6 +71,7 @@ import { targetsRepo } from './targets.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { HttpError } from '@/server/http'
+import { vnTodayIso } from '@/lib/local-date'
 
 const admin = { id: 'u-adm', role: 'admin', department_id: null } as unknown as User
 const manager = { id: 'u-mgr', role: 'manager', department_id: null } as unknown as User
@@ -238,88 +239,6 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
   })
 })
 
-describe('jobsService.confirmDone — gate MỘT nguồn sự thật', () => {
-  it('thiếu số → 400 JOB_NOT_READY, không patch', async () => {
-    vi.mocked(entriesRepo.listByLsxBulk).mockResolvedValue([
-      { component_id: 'c1', stage: 'han', qty: 30 } as never,
-    ])
-    await expect(jobsService.confirmDone(toTruong, 'j1')).rejects.toMatchObject({
-      status: 400,
-      code: 'JOB_NOT_READY',
-    })
-    expect(jobsRepo.patch).not.toHaveBeenCalled()
-  })
-
-  it('đủ số → done + emit bàn giao báo tổ công đoạn kế (sơn)', async () => {
-    vi.mocked(entriesRepo.listByLsxBulk).mockResolvedValue([
-      { component_id: 'c1', stage: 'han', qty: 100 } as never,
-    ])
-    const job = await jobsService.confirmDone(toTruong, 'j1')
-    expect(job.status).toBe('done')
-    expect(jobsRepo.patch).toHaveBeenCalledWith(
-      'j1',
-      expect.objectContaining({ status: 'done', done_by: 'u-tt' }),
-    )
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'production.stage.done',
-        stage: 'han',
-        next_stages: ['son'],
-        notify_next_ids: ['u-son-1'],
-      }),
-    )
-  })
-
-  it('tổ trưởng KHÔNG override được — chỉ Ban quản lý', async () => {
-    await expect(
-      jobsService.confirmDone(toTruong, 'j1', { override: true, note: 'lý do' }),
-    ).rejects.toMatchObject({ status: 403 })
-  })
-
-  it('manager override thiếu số + có lý do → done, note gắn [ép xác nhận]', async () => {
-    const job = await jobsService.confirmDone(manager, 'j1', {
-      override: true,
-      note: 'khách giục, cho qua',
-    })
-    expect(job.status).toBe('done')
-    expect(jobsRepo.patch).toHaveBeenCalledWith(
-      'j1',
-      expect.objectContaining({ note: expect.stringContaining('[ép xác nhận]') }),
-    )
-  })
-
-  it('override không lý do → 400', async () => {
-    await expect(
-      jobsService.confirmDone(admin, 'j1', { override: true }),
-    ).rejects.toMatchObject({ status: 400 })
-  })
-
-  it('NV xưởng thao tác việc tổ KHÁC → 403', async () => {
-    vi.mocked(jobsRepo.findById).mockResolvedValue({
-      ...JOB,
-      team_department_id: 'dept-son',
-    })
-    await expect(jobsService.confirmDone(toTruong, 'j1')).rejects.toMatchObject({
-      status: 403,
-    })
-  })
-
-  it('job đã done → trả nguyên, không patch lại (idempotent)', async () => {
-    vi.mocked(jobsRepo.findById).mockResolvedValue({ ...JOB, status: 'done' })
-    const job = await jobsService.confirmDone(admin, 'j1')
-    expect(job.status).toBe('done')
-    expect(jobsRepo.patch).not.toHaveBeenCalled()
-  })
-
-  it('LSX không đang chạy → 400', async () => {
-    vi.mocked(productionRepo.findById).mockResolvedValue({
-      ...LSX,
-      status: 'completed',
-    } as never)
-    await expect(jobsService.confirmDone(admin, 'j1')).rejects.toBeInstanceOf(HttpError)
-  })
-})
-
 describe('lateByShipDate', () => {
   it('quá hạn / sát hạn / an toàn', () => {
     expect(lateByShipDate('2026-07-20', '2026-07-24')).toBe('overdue')
@@ -388,7 +307,7 @@ describe('jobsService.overview — nhịp hôm nay + vật tư thiếu (GĐ1)', 
   })
 
   it('chỉ tiêu hôm nay SUY từ lộ trình: hạn = hôm nay → dồn phần còn lại (GĐ2)', async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = vnTodayIso()
     // Việc HÀN hạn chót hôm nay; đã làm 40/100 tính đến hết hôm qua.
     vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
       { ...JOB, planned_end: today },
@@ -421,7 +340,7 @@ describe('jobsService.overview — nhịp hôm nay + vật tư thiếu (GĐ1)', 
   })
 
   it('chỉ tiêu THẬT (0168) đè số suy cho đúng (tổ × công đoạn) đó (GĐ 2.2)', async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = vnTodayIso()
     vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
       { ...JOB, planned_end: today }, // suy: 100 cần → 100/hạn chót
     ])

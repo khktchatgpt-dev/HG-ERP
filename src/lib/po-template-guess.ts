@@ -78,8 +78,14 @@ export function guessTemplate(
     }
   if (/^thùng\b|carton/.test(n))
     return { template: 'carton', reason: 'thùng carton — tính theo thùng hoặc m²' }
-  if (/\btem\b|nhãn|thẻ treo|logo|mạc |góc nhựa|góc giấy/.test(n))
-    return { template: 'accessory', reason: 'tem / nhãn — tiêu hao theo sản phẩm' }
+  // Tem nhãn in ấn → mẫu riêng (12/10/2026); logo / mạc kim loại, góc nhựa vẫn là phụ kiện.
+  if (/\btem\b|nhãn|thẻ treo|decal|barcode|mã vạch|hướng dẫn|hdlr/.test(n))
+    return {
+      template: 'label',
+      reason: 'tem / nhãn / in ấn — chất liệu + kích thước + kiểu in',
+    }
+  if (/logo|mạc |góc nhựa|góc giấy/.test(n))
+    return { template: 'accessory', reason: 'logo / mạc / góc — tiêu hao theo sản phẩm' }
   if (/nút nhựa|bánh xe|gót chân|bịt chân|nắp bịt|tay nắm|bản lề|khoá |khóa /.test(n))
     return { template: 'accessory', reason: 'phụ kiện nội thất — đặt theo cái' }
 
@@ -119,7 +125,9 @@ export function guessTemplate(
     }
   if (/bulon|vít|đinh|lông đền|kẹp|chốt/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }
-  if (/tem|nhãn|thẻ|logo|mạc/.test(s))
+  if (/tem|nhãn|thẻ|decal/.test(s))
+    return { template: 'label', reason: `theo nhóm phụ "${subGroup}"` }
+  if (/logo|mạc/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }
   if (/nút nhựa|bánh xe|gót chân|lót ghế|nắp|tay nắm/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }

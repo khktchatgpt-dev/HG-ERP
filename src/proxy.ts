@@ -1,16 +1,13 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { verifySessionToken } from '@/modules/core/auth/session'
 
-// `/design-lab`: trang styleguide TĨNH (dữ liệu giả, không gọi API) để duyệt
-// bộ UI mới — mở public cho dễ xem/chia sẻ nội bộ; xoá khỏi danh sách nếu muốn
-// bắt đăng nhập.
+// `/design-lab` (sổ thiết kế public) đã XOÁ 07/10/2026 — không còn đường public nào ngoài đăng nhập.
 const PUBLIC_PATHS = [
   '/login',
   '/register',
   '/api/login',
   '/api/register',
   '/api/logout',
-  '/design-lab',
 ]
 
 /**
@@ -38,6 +35,37 @@ const IMAGE_PATH = /^\/api\/files\/[0-9a-f-]{36}\/img$/i
  */
 const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   ['/technical/products', '/products'],
+  // Hoá đơn NCC không phải việc của Cung ứng — trang bên khu Mua hàng đã bỏ
+  // 17/09/2026, ai còn giữ link cũ thì đẩy thẳng sang sổ của Kế toán.
+  ['/mua-hang/hoa-don', '/finance/hoa-don-ncc'],
+  // Trang lãi/lỗ theo lệnh gỡ 03/10/2026 (chủ dự án: "bỏ trang lãi lỗ, xem chi tiết
+  // sẽ phân tích bên trong") — phân tích nằm trong ngăn soi của bảng kê giá trị đơn.
+  ['/exec/lai-lo', '/exec/gia-tri-don'],
+  /*
+    KHU CUNG ỨNG CŨ `/planning/*` ĐÃ XOÁ HẲN (29/09/2026, chủ dự án chốt "xoá
+    hết"). Link/bookmark cũ đẩy sang màn mới tương ứng. Khớp theo TIỀN TỐ và
+    lấy dòng ĐẦU khớp được — nên đường cụ thể phải đứng trước đường chung.
+    Id giữ nguyên (cùng bảng): /planning/pos/<id> → /mua-hang/don/<id>.
+  */
+  ['/planning/pos/new', '/mua-hang/don/moi'],
+  ['/planning/pos', '/mua-hang/don'],
+  ['/planning/suppliers', '/mua-hang/ncc'],
+  ['/planning/materials/nhom', '/mua-hang/vat-tu'],
+  ['/planning/materials', '/mua-hang/vat-tu'],
+  ['/planning/stock', '/mua-hang/ton'],
+  ['/planning/lsx', '/mua-hang/yeu-cau'],
+  ['/planning/viec-cua-toi', '/mua-hang/hop-thu'],
+  ['/planning/hang-sap-ve', '/mua-hang/theo-doi'],
+  // Mục 'Nhận hàng' gộp vào Đơn mua thành cách xem 'Đang về' (01/10/2026).
+  ['/mua-hang/nhan-hang', '/mua-hang/theo-doi'],
+  // Cách xem 'Đang về' trong Đơn mua tách thành mục riêng 'Theo dõi đơn hàng' (01/10/2026 chiều).
+  ['/mua-hang/don/dang-ve', '/mua-hang/theo-doi'],
+  ['/planning/docs', '/warehouse/phieu'],
+  ['/planning/board', '/production'],
+  ['/planning/tracking', '/mua-hang'],
+  ['/planning/van-de', '/mua-hang'],
+  ['/planning/hop', '/mua-hang'],
+  ['/planning', '/mua-hang'],
 ]
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   DEFAULT_MAX_BYTES,
@@ -62,11 +62,21 @@ describe('DOC_TYPES ↔ check constraint dưới DB', () => {
    * files_doc_type_valid), sau khi đã PUT xong file lên storage. Đọc thẳng
    * migration mới nhất động tới constraint — cùng lối với actions.test.ts.
    */
-  it('mọi doc_type đều nằm trong files_doc_type_valid (0180)', () => {
-    const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/0180_files_doc_type_mo_rong.sql'),
-      'utf8',
-    )
+  it('DOC_TYPES khớp ĐÚNG ràng buộc files_doc_type_valid của migration MỚI NHẤT', () => {
+    /*
+      Tìm migration mới nhất động tới ràng buộc, KHÔNG đọc cứng một số: 27/09/2026
+      bản 0213 thêm loại chứng từ NCC nhưng chép danh sách từ 0150 cũ, làm rơi 5
+      loại của 0180 — test đọc cứng 0180 nên không bắt được (0214 khôi phục).
+    */
+    const dir = resolve(process.cwd(), 'supabase/migrations')
+    const latest = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .filter((f) =>
+        readFileSync(resolve(dir, f), 'utf8').includes('files_doc_type_valid'),
+      )
+      .at(-1)!
+    const sql = readFileSync(resolve(dir, latest), 'utf8')
     const inList = sql.match(/doc_type in \(([^)]+)\)/)?.[1] ?? ''
     const allowed = new Set([...inList.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]))
     expect([...DOC_TYPES].filter((t) => !allowed.has(t))).toEqual([])

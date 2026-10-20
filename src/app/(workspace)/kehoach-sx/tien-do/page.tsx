@@ -4,6 +4,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
+import { vnTodayIso } from '@/lib/local-date'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +46,7 @@ export default async function TienDoPage() {
   ])
   const jobs = await jobsRepo.listByLsxBulk(active.map((l) => l.id))
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = vnTodayIso()
   const windowStart = addDays(today, -DAYS_BACK)
   const n = DAYS_BACK + DAYS_AHEAD + 1
   const days = Array.from({ length: n }, (_, i) => addDays(windowStart, i))

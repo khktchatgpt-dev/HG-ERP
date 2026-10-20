@@ -38,7 +38,7 @@ export function ProductCard({
       // `isolate`: nút ⋯ bên trong dùng z-10, không đóng khung lại thì nó tranh
       // z-index với cả trang — và `-translate-y` lúc hover còn đổi luôn ngữ cảnh
       // xếp lớp, thành ra thẻ cư xử khác nhau giữa lúc rê chuột và lúc không.
-      className={`group bg-card relative isolate flex flex-col overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:border-sky-300 hover:shadow-lg motion-safe:hover:-translate-y-0.5 dark:hover:border-sky-800 ${
+      className={`group bg-card relative isolate flex flex-col overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:border-sky-300 hover:shadow-lg motion-safe:hover:-translate-y-0.5 ${
         !p.is_active ? 'opacity-65' : ''
       }`}
     >

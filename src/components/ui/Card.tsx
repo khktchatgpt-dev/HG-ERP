@@ -17,13 +17,11 @@ export function Card({
   padded = true,
 }: Props) {
   return (
-    <section
-      className={`rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 ${className}`}
-    >
+    <section className={`rounded-lg border border-zinc-200 bg-white ${className}`}>
       {(title || actions) && (
         <header
           className={`flex items-center justify-between gap-3 ${
-            padded ? 'border-b border-zinc-200 px-5 py-3 dark:border-zinc-800' : ''
+            padded ? 'border-b border-zinc-200 px-5 py-3' : ''
           }`}
         >
           <div className="min-w-0">

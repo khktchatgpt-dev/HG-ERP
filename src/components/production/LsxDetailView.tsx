@@ -428,7 +428,7 @@ export function LsxDetailView({
               {lsx.priority > 0 && (
                 <Badge
                   variant="outline"
-                  className="border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-400"
+                  className="border-purple-200 bg-purple-50 text-purple-700"
                 >
                   Ưu tiên {lsx.priority}
                 </Badge>
@@ -436,7 +436,7 @@ export function LsxDetailView({
               {lsx.materials_received_at ? (
                 <Badge
                   variant="outline"
-                  className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400"
+                  className="border-emerald-200 bg-emerald-50 text-emerald-700"
                 >
                   Đã nhận vật tư {fmtD(lsx.materials_received_at)}
                 </Badge>
@@ -554,12 +554,12 @@ export function LsxDetailView({
       </div>
 
       {lsx.rejected_reason && lsx.status === 'rejected' && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <b>GĐ từ chối:</b> {lsx.rejected_reason}
         </div>
       )}
       {lsx.status === 'completed' && (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           Xưởng đã hoàn thành {fmtD(lsx.completed_at)} — chờ Sales xác nhận giao hàng để
           khép chuỗi{' '}
           {lsx.orders.length > 1
@@ -794,9 +794,9 @@ export function LsxDetailView({
                               <span
                                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${
                                   j.status === 'done'
-                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                                     : j.status === 'doing'
-                                      ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                                      ? 'border-amber-300 bg-amber-50 text-amber-700'
                                       : 'text-muted-foreground'
                                 }`}
                                 title={`${JOB_LABEL[j.status]}${j.team_name ? ` · ${j.team_name}` : ''}${j.planned_end ? ` · hạn ${fmtD(j.planned_end)}` : ''}${j.note ? ` · ${j.note}` : ''}`}
@@ -940,7 +940,7 @@ export function LsxDetailView({
               <section className={sectionCls}>
                 <h2 className="mb-2 text-sm font-semibold">Vật tư & cung ứng</h2>
                 {!supply.hasBom && (
-                  <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mb-2 text-xs text-amber-600">
                     ⚠ Chưa có bảng chi tiết — nhu cầu vật tư chưa bóc được.
                   </p>
                 )}
@@ -956,7 +956,7 @@ export function LsxDetailView({
                       KHÔNG làm đổi nhu cầu của lệnh.
                     </p>
                   ) : (
-                    <p className="text-amber-600 dark:text-amber-400">
+                    <p className="text-amber-600">
                       Định mức chưa chốt — nhu cầu đang đọc bản hiện hành của hồ sơ SP, Kỹ
                       thuật sửa BOM là số của lệnh đổi theo. Chốt khi duyệt lệnh.
                     </p>
@@ -1074,9 +1074,9 @@ export function LsxDetailView({
                               key={s.stage}
                               className={`rounded border px-1.5 py-0.5 text-[11px] ${
                                 s.pct >= 1
-                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                                   : s.done > 0
-                                    ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                                    ? 'border-amber-300 bg-amber-50 text-amber-700'
                                     : 'text-muted-foreground'
                               }`}
                               title={`${labelOf(s.stage)}: ${fmtN(s.done)} / thiếu ${fmtN(Math.max(0, s.missing))}${s.defect ? ` / phế ${fmtN(s.defect)}` : ''}`}

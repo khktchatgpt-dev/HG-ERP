@@ -24,13 +24,13 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 }
 
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  todo: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
-  in_progress: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  submitted: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-  done: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
-  rejected: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
-  cancelled: 'bg-zinc-100 text-zinc-500 line-through dark:bg-zinc-800',
-  on_hold: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  todo: 'bg-zinc-100 text-zinc-700',
+  in_progress: 'bg-blue-100 text-blue-700',
+  submitted: 'bg-amber-100 text-amber-800',
+  done: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+  cancelled: 'bg-zinc-100 text-zinc-500 line-through',
+  on_hold: 'bg-purple-100 text-purple-700',
 }
 
 export default async function TasksPage({
@@ -75,7 +75,7 @@ export default async function TasksPage({
         canCreate && (
           <Link
             href="/tasks/new"
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900"
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
           >
             + Giao việc
           </Link>
@@ -83,15 +83,13 @@ export default async function TasksPage({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="flex gap-2 border-b border-zinc-200 text-sm dark:border-zinc-800">
+        <div className="flex gap-2 border-b border-zinc-200 text-sm">
           {SCOPES.map((s) => (
             <Link
               key={s.id}
               href={qs({ scope: s.id, page: undefined })}
               className={`-mb-px border-b-2 px-3 py-2 ${
-                scope === s.id
-                  ? 'border-black dark:border-white'
-                  : 'border-transparent text-zinc-500'
+                scope === s.id ? 'border-black' : 'border-transparent text-zinc-500'
               }`}
             >
               {s.label}
@@ -105,12 +103,12 @@ export default async function TasksPage({
             name="q"
             defaultValue={q ?? ''}
             placeholder="Tìm theo tiêu đề hoặc mã CV…"
-            className="flex-1 rounded border border-zinc-300 px-3 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
+            className="flex-1 rounded border border-zinc-300 px-3 py-1.5"
           />
           <select
             name="status"
             defaultValue={status ?? ''}
-            className="rounded border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-2 py-1.5"
           >
             <option value="">Mọi trạng thái</option>
             {TASK_STATUSES.map((s) => (
@@ -119,22 +117,20 @@ export default async function TasksPage({
               </option>
             ))}
           </select>
-          <button className="rounded border border-zinc-300 px-3 dark:border-zinc-700">
-            Lọc
-          </button>
+          <button className="rounded border border-zinc-300 px-3">Lọc</button>
         </form>
 
         {rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
+          <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500">
             Không có công việc nào.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             {rows.map((t) => (
               <li key={t.id}>
                 <Link
                   href={`/tasks/${t.id}`}
-                  className="block px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                  className="block px-4 py-3 hover:bg-zinc-50"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">

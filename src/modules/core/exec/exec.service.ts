@@ -1,13 +1,25 @@
 import { posService } from '@/modules/dept/supply/pos.service'
+import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
+import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
+import { tongDuKien } from '@/lib/de-nghi'
+import { choToiDuyet } from '@/lib/de-nghi-duyet'
+import type { LoaiPhieu } from '@/lib/loai-phieu-duyet'
 import { assessPoLate } from '@/lib/late-risk'
 import { isBigApprovalWith, type ApprovalThresholds } from '@/lib/exec-ops'
 import { settingsService } from '@/modules/core/settings/settings.service'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { Forbidden } from '@/server/http'
+import { poTemplateShort } from '@/lib/po-template'
+import { poMoneyOf } from '@/lib/po-line'
+import { isAwaitingLateSign } from '@/lib/po-signature'
+import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
+import { properName, supplierShortName } from '@/lib/po-list-labels'
+import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 
@@ -19,7 +31,7 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
  *     Giám đốc quyết và thứ đang trục trặc đứng trước mọi con số đẹp.
  *   · `signBox()`    — Trung tâm phê duyệt (/exec/approvals): mọi phiếu chờ
  *     chữ ký gom một danh sách, ký được tại chỗ.
- *   · `purchasing()` — màn theo dõi vế MUA. Chỉ đọc.
+ *   · (vế MUA của Giám đốc: /exec/purchasing tính bằng lib/purchasing-watch, 27/09/2026)
  *
  * Guard: `exec.tower.view` (dashboard/purchasing), `exec.approvals.view` (ký).
  */
@@ -40,7 +52,9 @@ const OPEN_ORDER_STATUSES = [
   'confirmed',
   'lsx_pending',
   'lsx_issued',
-  'in_production',
+  'completed',
+  'partially_shipped',
+  'shipped',
 ] as const
 
 /** Đơn mua ĐANG MỞ: đã duyệt và còn đang chạy tới lúc về đủ. */
@@ -147,34 +161,6 @@ export type ExecDashboard = {
   gaps: ExecDataGaps
 }
 
-/** Một đơn mua trên màn Mua hàng & NCC của Giám đốc — chỉ đọc. */
-export type ExecPoRow = {
-  id: string
-  code: string
-  supplier_name: string
-  lsx_code: string | null
-  status: string
-  currency: string
-  total: number
-  expected_at: string | null
-  assignee_name: string | null
-  created_at: string
-  /** >0 = quá hẹn giao bấy nhiêu ngày. */
-  days_late: number
-  /** Đã duyệt mà nằm im chưa gửi NCC bấy nhiêu ngày (0 nếu không thuộc diện). */
-  days_idle: number
-}
-
-export type ExecPurchasing = {
-  rows: ExecPoRow[]
-  by_status: { status: string; count: number }[]
-  open_value: { currency: string; value: number }[]
-  pending_value: { currency: string; value: number }[]
-  late_count: number
-  stuck_count: number
-  suppliers: { name: string; currency: string; value: number; pos: number }[]
-}
-
 /** Cộng tiền theo tiền tệ — đơn USD và đơn VND KHÔNG được cộng chung. */
 function sumByCurrency(rows: { currency: string; value: number }[]) {
   const m = new Map<string, number>()
@@ -186,7 +172,8 @@ function sumByCurrency(rows: { currency: string; value: number }[]) {
 
 /** Một phiếu đang nằm chờ chữ ký ở Trung tâm phê duyệt (/exec/approvals). */
 export type SignItem = {
-  kind: 'lsx' | 'po' | 'quote'
+  /** `dnm` = đề nghị mua vật tư của Kho (0236 · Đ2). */
+  kind: LoaiPhieu
   id: string
   code: string
   /** Đối tác: khách hàng (LSX) hoặc nhà cung cấp (PO). */
@@ -208,6 +195,47 @@ export type SignItem = {
   big: boolean
   /** Trang thẩm định đầy đủ. */
   href: string
+  /**
+   * Ngày của cột "Hẹn" — nghĩa theo loại (`LOAI_PHIEU[kind].cot.hen`): lệnh =
+   * ngày giao, đề nghị = cần trước, báo giá = hiệu lực đến. Đơn mua đọc
+   * `po.expected_at` (kèm số ngày quá hẹn). YYYY-MM-DD.
+   */
+  hen?: string | null
+  /** Cột ngữ cảnh ngoài đơn mua — đề nghị mua: lệnh SX gắn kèm. */
+  boi_canh?: string | null
+  /** Đề nghị mua (Đ5 · Hộp ký H2): số dòng + lưu ý để khối của nó có cột riêng. */
+  dnm?: { so_dong: number; chua_ma: number; thieu_gia: number }
+  /**
+   * 0218 — đơn GỬI GẤP trước khi ký, đang chờ ký bù. Không ký hàng loạt được:
+   * phải mở ra đọc lý do gấp rồi ký bù (hoặc không đồng ý).
+   */
+  late_sign?: { at: string; by_name: string | null; reason: string | null } | null
+  /** 0218 — câu hỏi của Giám đốc còn mở từ lúc này (bóng đang ở Cung ứng). */
+  question_since?: string | null
+  /**
+   * NGƯỜI TRÌNH — hộp ký gom nhóm theo đây (27/09/2026). Đơn mua: người CẦM
+   * đơn (phụ trách, chưa giao thì người lập — lib/supply-scope); lệnh/báo giá:
+   * người gửi duyệt.
+   */
+  owner_id: string | null
+  owner_name: string | null
+  /** Chi tiết riêng của đơn mua — người ký cần biết MUA GÌ, HẸN KHI NÀO. */
+  po?: {
+    supplier_short: string
+    loai: string | null
+    materials: string[]
+    lsx_code: string | null
+    expected_at: string | null
+    /** Hẹn giao đã qua bao nhiêu ngày (0 = chưa qua / chưa hẹn). */
+    eta_late_days: number
+    /**
+     * Mọi lệnh của đơn đã HOÀN THÀNH (28/09/2026) — sản xuất xong tức hàng đã
+     * về, đơn chỉ chưa được cập nhật. Người ký cần biết trước khi ký.
+     */
+    lsx_done: boolean
+    /** Đơn ngoài lệnh (0229): "Ngoài lệnh · Khuôn mẫu · QM-5858"; đơn theo lệnh: null. */
+    ngoai_lenh?: string | null
+  }
 }
 
 export type SignBox = {
@@ -244,8 +272,19 @@ export const execService = {
    * đầy đủ để lại cho trang "Xem kỹ" của từng phiếu.
    */
   async signBox(user: User): Promise<SignBox> {
-    await assertAction(user, 'exec.approvals.view')
+    /*
+      MỘT HỘP KÝ CHO MỌI NGƯỜI KÝ (27/09/2026, chủ dự án chốt): chị Thảo chỉ có
+      quyền DUYỆT ĐƠN MUA (`supply.po.approve`), không có `exec.approvals.view`
+      — trước đây chị ký ở màn Mua hàng, theo luật khác (ký hàng loạt cả đơn
+      giá trị lớn). Nay người chỉ có quyền duyệt đơn mua vẫn vào hộp này và chỉ
+      thấy ĐƠN MUA; "Xem kỹ" dẫn về trang đơn bên Mua hàng (khu /exec chị
+      không vào được).
+    */
+    const full = user.role === 'admin' || (await canAction(user, 'exec.approvals.view'))
+    const poOnly = !full && (await canAction(user, 'supply.po.approve'))
+    if (!full && !poOnly) throw Forbidden('Không có quyền xem hộp ký')
     const today = new Date().toISOString().slice(0, 10)
+    const none = Promise.resolve({ rows: [], total: 0 })
 
     const [
       pendingPos,
@@ -255,62 +294,126 @@ export const execService = {
       allLsx,
       recentEvents,
       thresholds,
+      lateRows,
     ] = await Promise.all([
       posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-      lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-      quotesRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }),
+      poOnly ? none : lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }), // prettier-ignore
+      poOnly ? none : quotesRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }), // prettier-ignore
       posService.list(user, { page: 1, page_size: 1 }),
-      lsxService.list(user, { page: 1, page_size: 1 }),
+      poOnly ? none : lsxService.list(user, { page: 1, page_size: 1 }),
       approvalEventsRepo.listRecent({ limit: 100 }),
       settingsService.approvalThresholds(),
+      // 0218 — đơn GỬI GẤP còn chờ chữ ký bù: cũng là việc chờ chữ ký.
+      posRepo.listAwaitingLateSign(),
     ])
+    // Đơn chờ duyệt + đơn chờ ký bù — cùng một cách làm giàu, cùng một bảng.
+    const poRows = [...pendingPos.rows, ...lateRows]
+    const poIds = poRows.map((p) => p.id)
 
     // Tiền tệ nằm ở ĐƠN HÀNG, không ở dòng đơn và cũng không ở lệnh — nên phải
     // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
-    const [poTotals, orderLines, orderList, creatorNames, quoteLineCounts] =
-      await Promise.all([
-        posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
-        ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
-        pendingLsx.rows.length
-          ? ordersRepo.list({ page: 1, page_size: 1000 })
-          : Promise.resolve({ rows: [], total: 0 }),
-        usersRepo.displayNamesByIds(
-          [
-            ...pendingPos.rows.map((p) => p.created_by),
-            ...pendingLsx.rows.map((l) => l.issued_by),
-            ...pendingQuotes.rows.map((q) => q.submitted_by),
-          ].filter((x): x is string => !!x),
-        ),
-        quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
-      ])
+    const poOwnerOf = (p: { assigned_to?: string | null; created_by?: string | null }) =>
+      p.assigned_to ?? p.created_by ?? null
+    const [
+      poTotals,
+      orderLines,
+      orderList,
+      creatorNames,
+      quoteLineCounts,
+      poSubmitted,
+      poMaterials,
+      poExtraLsx,
+      openQuestions,
+    ] = await Promise.all([
+      posRepo.totalsByPoIds(poIds),
+      ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
+      pendingLsx.rows.length
+        ? ordersRepo.list({ page: 1, page_size: 1000 })
+        : Promise.resolve({ rows: [], total: 0 }),
+      usersRepo.displayNamesByIds(
+        [
+          ...poRows.map((p) => p.created_by),
+          ...poRows.map((p) => poOwnerOf(p)),
+          ...lateRows.map((p) => p.urgent_sent_by),
+          ...pendingLsx.rows.map((l) => l.issued_by),
+          ...pendingQuotes.rows.map((q) => q.submitted_by),
+        ].filter((x): x is string => !!x),
+      ),
+      quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
+      approvalEventsRepo.lastSubmittedAt('po', poIds),
+      posRepo.materialNamesByPoIds(poIds),
+      posRepo.extraLsxByPoIds(poIds),
+      docNotesRepo.openQuestionsByDocs('po', poIds),
+    ])
 
     const items: SignItem[] = []
 
-    for (const p of pendingPos.rows) {
-      const value = poTotals[p.id] ?? 0
+    for (const p of poRows) {
+      const lateSign = isAwaitingLateSign(p)
+      /*
+        GIÁ TRỊ = TỔNG THANH TOÁN ĐÃ GỒM VAT (01/10/2026, chủ dự án chốt). Trước
+        đó là Σ tiền dòng — số TRƯỚC thuế, trong khi 83/97 đơn có VAT 8–10%:
+        đơn 3,54 tỷ tiền hàng thật ra là 3,90 tỷ phải chi. Ngưỡng "giá trị lớn"
+        cũng so trên số này, cho khớp với con số to người ký đang nhìn.
+      */
+      const value = poMoneyOf(p, poTotals[p.id] ?? 0).grandTotal
       const warnings: string[] = []
       if (value <= 0) warnings.push('Đơn chưa có tiền — dòng vật tư thiếu đơn giá')
+      // Chỉ cảnh báo, không chặn ký: 48/97 đơn chưa ghi, chặn cứng là kẹt cả hộp.
+      if (!p.terms_payment?.trim()) warnings.push('Chưa ghi điều khoản thanh toán')
       const lateDays = daysSince(p.expected_at, today)
-      if (lateDays != null && lateDays > 0) {
+      if (lateDays != null && lateDays > 0 && !lateSign) {
         warnings.push(`Ngày hàng về đã qua ${lateDays} ngày`)
       }
+      if (lateSign) warnings.unshift('Đã gửi NCC trước khi ký — cần ký bù')
       items.push({
         kind: 'po',
         id: p.id,
         code: p.code,
         party: p.supplier_name,
         facts: [
-          p.lsx_code ? `lệnh ${p.lsx_code}` : 'ngoài lệnh',
+          p.lsx_code ? `lệnh ${p.lsx_code}` : nhanNgoaiLenh(p).replace(/^N/, 'n'),
           p.expected_at ? `hàng về ${p.expected_at}` : 'chưa hẹn ngày về',
         ],
         currency: p.currency,
         value,
-        waiting_days: daysSince(p.created_at, today) ?? 0,
-        submitted_at: p.created_at,
+        // Đã chờ tính từ lần GỬI DUYỆT cuối, không từ ngày lập (27/09/2026).
+        // Chờ ký bù thì tính từ lúc gửi gấp — chữ ký bị nợ từ đó.
+        waiting_days:
+          daysSince(
+            (lateSign ? p.urgent_sent_at : null) ?? poSubmitted.get(p.id) ?? p.created_at,
+            today,
+          ) ?? 0,
+        submitted_at:
+          (lateSign ? p.urgent_sent_at : null) ?? poSubmitted.get(p.id) ?? p.created_at,
+        late_sign: lateSign
+          ? {
+              at: p.urgent_sent_at!,
+              by_name: p.urgent_sent_by
+                ? properName(creatorNames.get(p.urgent_sent_by)) || null
+                : null,
+              reason: p.urgent_reason ?? null,
+            }
+          : null,
+        question_since: openQuestions.get(p.id)?.created_at ?? null,
         submitted_by: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
         warnings,
         big: isBigApprovalWith(value, p.currency, thresholds),
-        href: `/exec/approvals/po/${p.id}`,
+        href: full ? `/exec/approvals/po/${p.id}` : `/mua-hang/don/${p.id}`,
+        owner_id: poOwnerOf(p),
+        owner_name: poOwnerOf(p)
+          ? properName(creatorNames.get(poOwnerOf(p)!)) || null
+          : null,
+        po: {
+          supplier_short: supplierShortName(p.supplier_name),
+          loai: poTemplateShort((p as { template?: string | null }).template),
+          materials: [...new Set(poMaterials.get(p.id) ?? [])],
+          lsx_code: p.lsx_code ?? null,
+          expected_at: p.expected_at ?? null,
+          eta_late_days: lateDays != null && lateDays > 0 ? lateDays : 0,
+          lsx_done: isPoOfDoneLsx({ ...p, extra_lsx: poExtraLsx.get(p.id) ?? [] }),
+          ngoai_lenh: p.lsx_code ? null : nhanNgoaiLenh(p),
+        },
       })
     }
 
@@ -348,6 +451,10 @@ export const execService = {
         waiting_days: daysSince(l.created_at, today) ?? 0,
         submitted_at: l.created_at,
         submitted_by: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
+        owner_id: l.issued_by ?? null,
+        owner_name: l.issued_by
+          ? properName(creatorNames.get(l.issued_by)) || null
+          : null,
         warnings,
         // Lệnh SX KHÔNG bao giờ mang cờ "giá trị lớn" dù số tiền to. Ngưỡng đó
         // canh CAM KẾT CHI TIỀN (đơn mua): ký là công ty mất tiền. Tiền của lệnh
@@ -355,6 +462,7 @@ export const execService = {
         // vào đây thì mọi lệnh đều đỏ và cái cờ mất nghĩa.
         big: false,
         href: `/exec/approvals/lsx/${l.id}`,
+        hen: l.ship_date ?? null,
       })
     }
 
@@ -376,14 +484,66 @@ export const execService = {
         waiting_days: daysSince(q.submitted_at ?? q.created_at, today) ?? 0,
         submitted_at: q.submitted_at ?? q.created_at,
         submitted_by: q.submitted_by ? (creatorNames.get(q.submitted_by) ?? null) : null,
+        owner_id: q.submitted_by ?? null,
+        owner_name: q.submitted_by
+          ? properName(creatorNames.get(q.submitted_by)) || null
+          : null,
         warnings: [],
         // Không có tiền cam kết chi — không bao giờ mang cờ "giá trị lớn".
         big: false,
         href: `/exec/approvals/quote/${q.id}`,
+        hen: q.valid_to ?? null,
       })
     }
 
-    items.sort((a, b) => b.waiting_days - a.waiting_days || b.value - a.value)
+    /*
+      ĐỀ NGHỊ MUA VẬT TƯ (0236 · Đ2) — người duyệt = người duyệt đơn mua, nên cả
+      người "chỉ duyệt đơn mua" cũng thấy. Không tự duyệt phiếu mình đề nghị.
+      Tiền là DỰ KIẾN của Kho (gồm VAT + vận chuyển) — không gắn cờ giá trị lớn: hàng tiêu hao
+      lặt vặt, Kho tự mua theo số duyệt (từ 13/10, không qua Cung ứng). Luật "chờ
+      tôi duyệt" dùng chung với danh sách /duyet/de-nghi + số đếm menu.
+    */
+    if (await canAction(user, 'warehouse.request.approve')) {
+      const dn = (await deNghiRepo.list()).filter((r) => choToiDuyet(r, user))
+      for (const r of dn) {
+        const t = tongDuKien(r.lines, r.shipping_fee)
+        const chuaMa = r.lines.filter((l) => !l.material_id).length
+        items.push({
+          kind: 'dnm',
+          id: r.id,
+          code: r.code,
+          party: r.department,
+          facts: [
+            `${r.lines.length} dòng${chuaMa > 0 ? ` · ${chuaMa} chưa có mã` : ''}`,
+            ...(r.need_by ? [`cần trước ${r.need_by}`] : []),
+            ...(r.lsx_code ? [`lệnh ${r.lsx_code}`] : []),
+          ],
+          currency: 'VND',
+          value: t.tong,
+          waiting_days: daysSince(r.submitted_at ?? r.created_at, today) ?? 0,
+          submitted_at: r.submitted_at ?? r.created_at,
+          submitted_by: r.requested_by_name,
+          owner_id: r.requested_by,
+          owner_name: r.requested_by_name
+            ? properName(r.requested_by_name) || null
+            : null,
+          warnings: t.thieuGia > 0 ? [`${t.thieuGia} dòng chưa có giá dự kiến`] : [],
+          big: false,
+          href: `/duyet/de-nghi/${r.id}`,
+          hen: r.need_by,
+          boi_canh: r.lsx_code,
+          dnm: { so_dong: r.lines.length, chua_ma: chuaMa, thieu_gia: t.thieuGia },
+        })
+      }
+    }
+
+    // Đơn CHỜ KÝ BÙ lên đầu: hàng đã đi, chữ ký đang nợ — việc đó không chờ được.
+    items.sort(
+      (a, b) =>
+        Number(!!b.late_sign) - Number(!!a.late_sign) ||
+        b.waiting_days - a.waiting_days ||
+        b.value - a.value,
+    )
 
     const mineToday = recentEvents.filter(
       (e) => e.actor_id === user.id && e.created_at.slice(0, 10) === today,
@@ -424,11 +584,18 @@ export const execService = {
 
     // Tiền của đơn mua: Σ dòng — 1 truy vấn gộp cho mọi đơn đang xét.
     const poIds = [...new Set([...pendingPos.rows, ...allPos.rows].map((p) => p.id))]
-    const poTotals = await posRepo.totalsByPoIds(poIds)
+    const [poTotals, poSubmitted] = await Promise.all([
+      posRepo.totalsByPoIds(poIds),
+      approvalEventsRepo.lastSubmittedAt(
+        'po',
+        pendingPos.rows.map((p) => p.id),
+      ),
+    ])
 
     // ── Cần Giám đốc quyết ──────────────────────────────────────────────────
+    // Đơn mua: đã chờ tính từ lần GỬI DUYỆT cuối — cùng số với hộp ký.
     const poWaitDays = pendingPos.rows
-      .map((p) => daysSince(p.created_at, today))
+      .map((p) => daysSince(poSubmitted.get(p.id) ?? p.created_at, today))
       .filter((d): d is number => d != null)
     const lsxWaitDays = pendingLsx.rows
       .map((l) => daysSince(l.created_at, today))
@@ -443,9 +610,10 @@ export const execService = {
       po_pending: pendingPos.rows.length,
       po_oldest_days: poWaitDays.length ? Math.max(...poWaitDays) : null,
       po_pending_value: sumByCurrency(
+        // Cùng số với hộp ký (signBox): tổng thanh toán đã gồm VAT.
         pendingPos.rows.map((p) => ({
           currency: p.currency,
-          value: poTotals[p.id] ?? 0,
+          value: poMoneyOf(p, poTotals[p.id] ?? 0).grandTotal,
         })),
       ),
       quote_pending: pendingQuotes.rows.length,
@@ -613,77 +781,5 @@ export const execService = {
     }
 
     return { todo, issues, sales, supply, production, gaps }
-  },
-
-  /**
-   * Màn MUA HÀNG & NCC (/exec/purchasing) — vế mua đầy đủ cho Giám đốc: mọi đơn
-   * mua còn sống kèm cờ quá hẹn / đọng chưa gửi, và tổng chi theo NCC. Chỉ đọc;
-   * thao tác vẫn ở màn của phòng Cung ứng.
-   */
-  async purchasing(user: User): Promise<ExecPurchasing> {
-    await assertAction(user, 'exec.tower.view')
-    const today = new Date().toISOString().slice(0, 10)
-
-    const all = await posService.list(user, { page: 1, page_size: 1000 })
-    const totals = await posRepo.totalsByPoIds(all.rows.map((p) => p.id))
-
-    const rows: ExecPoRow[] = all.rows
-      .filter((p) => p.status !== 'cancelled')
-      .map((p) => {
-        const late = assessPoLate(p, today) === 'overdue'
-        const idle = p.status === 'approved' ? (daysSince(p.approved_at, today) ?? 0) : 0
-        return {
-          id: p.id,
-          code: p.code,
-          supplier_name: p.supplier_name,
-          lsx_code: p.lsx_code,
-          status: p.status,
-          currency: p.currency,
-          total: totals[p.id] ?? 0,
-          expected_at: p.expected_at,
-          assignee_name: p.assignee_name,
-          created_at: p.created_at,
-          days_late: late ? (daysSince(p.expected_at, today) ?? 0) : 0,
-          days_idle: idle >= STUCK_AFTER_DAYS ? idle : 0,
-        }
-      })
-
-    const statusAgg = new Map<string, number>()
-    for (const r of rows) statusAgg.set(r.status, (statusAgg.get(r.status) ?? 0) + 1)
-
-    const openRows = rows.filter((r) =>
-      (OPEN_PO_STATUSES as readonly string[]).includes(r.status),
-    )
-    const supAgg = new Map<string, { value: number; pos: number }>()
-    for (const r of openRows) {
-      const key = `${r.supplier_name}|${r.currency}`
-      const cur = supAgg.get(key) ?? { value: 0, pos: 0 }
-      cur.value += r.total
-      cur.pos += 1
-      supAgg.set(key, cur)
-    }
-
-    return {
-      rows,
-      by_status: [...statusAgg.entries()]
-        .map(([status, count]) => ({ status, count }))
-        .sort((a, b) => b.count - a.count),
-      open_value: sumByCurrency(
-        openRows.map((r) => ({ currency: r.currency, value: r.total })),
-      ),
-      pending_value: sumByCurrency(
-        rows
-          .filter((r) => r.status === 'pending_approval')
-          .map((r) => ({ currency: r.currency, value: r.total })),
-      ),
-      late_count: rows.filter((r) => r.days_late > 0).length,
-      stuck_count: rows.filter((r) => r.days_idle > 0).length,
-      suppliers: [...supAgg.entries()]
-        .map(([key, v]) => {
-          const [name, currency] = key.split('|')
-          return { name, currency, value: v.value, pos: v.pos }
-        })
-        .sort((a, b) => b.value - a.value),
-    }
   },
 }

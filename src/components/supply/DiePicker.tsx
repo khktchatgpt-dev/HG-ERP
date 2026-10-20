@@ -145,7 +145,7 @@ export function DiePicker({
         aria-label={ariaLabel}
         className={
           inputClassName ??
-          'h-[30px] w-full rounded-md border border-zinc-300 px-2 font-mono text-[12px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+          'h-[30px] w-full rounded-md border border-zinc-300 px-2 font-mono text-[12px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none'
         }
       />
       {open && anchor && rows.length > 0 && (
@@ -165,15 +165,13 @@ export function DiePicker({
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(d)}
                 className={`flex w-full flex-col items-start px-3 py-1.5 text-left ${
-                  i === active
-                    ? 'bg-sky-50 dark:bg-sky-950/40'
-                    : 'hover:bg-sky-50 dark:hover:bg-sky-950/40'
+                  i === active ? 'bg-sky-50' : 'hover:bg-sky-50'
                 }`}
               >
                 <span className="flex w-full items-center gap-2 text-[12px]">
                   <span className="font-mono">{d.code}</span>
                   {d.weight_per_m != null && (
-                    <span className="ml-auto font-semibold text-violet-600 dark:text-violet-400">
+                    <span className="ml-auto font-semibold text-violet-600">
                       {d.weight_per_m} kg/m
                     </span>
                   )}

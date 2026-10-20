@@ -13,7 +13,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -76,12 +76,167 @@ export type Database = {
           },
         ]
       }
-      accounting_supplier_payments: {
+      accounting_supplier_invoice_lines: {
         Row: {
           amount: number
           created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          po_cost_allocation_id: string | null
+          po_line_id: string | null
+          qty: number
+          sort_order: number
+          unit: string | null
+          unit_price: number
+          vat_rate: number | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          po_cost_allocation_id?: string | null
+          po_line_id?: string | null
+          qty: number
+          sort_order?: number
+          unit?: string | null
+          unit_price: number
+          vat_rate?: number | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          po_cost_allocation_id?: string | null
+          po_line_id?: string | null
+          qty?: number
+          sort_order?: number
+          unit?: string | null
+          unit_price?: number
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_supplier_invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_supplier_invoice_lines_po_cost_allocation_id_fkey"
+            columns: ["po_cost_allocation_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_cost_allocations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_supplier_invoice_lines_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_supplier_invoice_lines_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_supplier_invoices: {
+        Row: {
+          amount_base: number | null
+          created_at: string
           created_by: string | null
           currency: string
+          due_date: string | null
+          fx_date: string | null
+          fx_rate: number | null
+          id: string
+          invoice_date: string
+          invoice_no: string
+          net_days: number | null
+          note: string | null
+          status: string
+          subtotal: number
+          supplier_id: string
+          total: number
+          updated_at: string
+          vat_amount: number
+        }
+        Insert: {
+          amount_base?: number | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          due_date?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
+          id?: string
+          invoice_date: string
+          invoice_no: string
+          net_days?: number | null
+          note?: string | null
+          status?: string
+          subtotal?: number
+          supplier_id: string
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+        }
+        Update: {
+          amount_base?: number | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          due_date?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
+          id?: string
+          invoice_date?: string
+          invoice_no?: string
+          net_days?: number | null
+          note?: string | null
+          status?: string
+          subtotal?: number
+          supplier_id?: string
+          total?: number
+          updated_at?: string
+          vat_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_supplier_invoices_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_supplier_invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_supplier_payments: {
+        Row: {
+          amount: number
+          amount_base: number | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          fx_date: string | null
+          fx_rate: number | null
           id: string
           method: string | null
           note: string | null
@@ -93,9 +248,12 @@ export type Database = {
         }
         Insert: {
           amount: number
+          amount_base?: number | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           method?: string | null
           note?: string | null
@@ -107,9 +265,12 @@ export type Database = {
         }
         Update: {
           amount?: number
+          amount_base?: number | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           method?: string | null
           note?: string | null
@@ -327,6 +488,121 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      doc_followers: {
+        Row: {
+          created_at: string
+          doc_id: string
+          doc_type: string
+          muted_at: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_id: string
+          doc_type: string
+          muted_at?: string | null
+          source?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          doc_id?: string
+          doc_type?: string
+          muted_at?: string | null
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_followers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doc_notes: {
+        Row: {
+          audience: string
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          doc_id: string
+          doc_type: string
+          id: string
+          kind: string
+          reply_to: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_how: string | null
+        }
+        Insert: {
+          audience?: string
+          author_id: string
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          doc_id: string
+          doc_type: string
+          id?: string
+          kind?: string
+          reply_to?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_how?: string | null
+        }
+        Update: {
+          audience?: string
+          author_id?: string
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          doc_id?: string
+          doc_type?: string
+          id?: string
+          kind?: string
+          reply_to?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_how?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doc_notes_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doc_notes_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "doc_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doc_notes_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       doc_templates: {
         Row: {
@@ -590,22 +866,24 @@ export type Database = {
           created_at: string
           customer_id: string | null
           deleted_at: string | null
+          die_id: string | null
           doc_type: string | null
           filename: string
           feedback_id: string | null
           finalized_at: string | null
-          is_current: boolean
-          rev: string | null
-          note: string | null
+          hr_employee_id: string | null
           id: string
           invoice_id: string | null
+          is_current: boolean
           mime_type: string
+          note: string | null
           owner_id: string | null
           path: string
           product_id: string | null
           production_order_id: string | null
           purchase_order_id: string | null
           quote_id: string | null
+          rev: string | null
           sales_order_id: string | null
           sample_id: string | null
           size_bytes: number
@@ -618,22 +896,24 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          die_id?: string | null
           doc_type?: string | null
           filename: string
           feedback_id?: string | null
           finalized_at?: string | null
-          is_current?: boolean
-          rev?: string | null
-          note?: string | null
+          hr_employee_id?: string | null
           id?: string
           invoice_id?: string | null
+          is_current?: boolean
           mime_type: string
+          note?: string | null
           owner_id?: string | null
           path: string
           product_id?: string | null
           production_order_id?: string | null
           purchase_order_id?: string | null
           quote_id?: string | null
+          rev?: string | null
           sales_order_id?: string | null
           sample_id?: string | null
           size_bytes: number
@@ -646,22 +926,24 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          die_id?: string | null
           doc_type?: string | null
           filename?: string
           feedback_id?: string | null
           finalized_at?: string | null
-          is_current?: boolean
-          rev?: string | null
-          note?: string | null
+          hr_employee_id?: string | null
           id?: string
           invoice_id?: string | null
+          is_current?: boolean
           mime_type?: string
+          note?: string | null
           owner_id?: string | null
           path?: string
           product_id?: string | null
           production_order_id?: string | null
           purchase_order_id?: string | null
           quote_id?: string | null
+          rev?: string | null
           sales_order_id?: string | null
           sample_id?: string | null
           size_bytes?: number
@@ -680,6 +962,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_die_id_fkey"
+            columns: ["die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
             referencedColumns: ["id"]
           },
           {
@@ -715,6 +1004,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "files_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
           {
@@ -767,6 +1063,867 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fx_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          note: string | null
+          rate: number
+          rate_date: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          id?: string
+          note?: string | null
+          rate: number
+          rate_date: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          note?: string | null
+          rate?: number
+          rate_date?: string
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fx_rates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_allowance_types: {
+        Row: {
+          per_workday: boolean
+          active: boolean
+          created_at: string
+          id: string
+          insurable: boolean
+          name: string
+          sort_order: number
+          taxable: boolean
+        }
+        Insert: {
+          per_workday?: boolean
+          active?: boolean
+          created_at?: string
+          id?: string
+          insurable?: boolean
+          name: string
+          sort_order?: number
+          taxable?: boolean
+        }
+        Update: {
+          per_workday?: boolean
+          active?: boolean
+          created_at?: string
+          id?: string
+          insurable?: boolean
+          name?: string
+          sort_order?: number
+          taxable?: boolean
+        }
+        Relationships: [
+
+        ]
+      }
+      hr_attendance_adjustments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decide_note: string | null
+          decided_at: string | null
+          decided_by: string | null
+          employee_id: string
+          evidence: string | null
+          id: string
+          kind: string
+          leave_type: string | null
+          punch_dir: string | null
+          punch_time: string | null
+          reason: string
+          status: string
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decide_note?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          employee_id: string
+          evidence?: string | null
+          id?: string
+          kind: string
+          leave_type?: string | null
+          punch_dir?: string | null
+          punch_time?: string | null
+          reason: string
+          status?: string
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decide_note?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          employee_id?: string
+          evidence?: string | null
+          id?: string
+          kind?: string
+          leave_type?: string | null
+          punch_dir?: string | null
+          punch_time?: string | null
+          reason?: string
+          status?: string
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_adjustments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_adjustments_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_adjustments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_attendance_devices: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          ip: string
+          last_error: string | null
+          last_log_count: number | null
+          last_pulled_at: string | null
+          last_user_count: number | null
+          log_capacity: number | null
+          name: string
+          port: number
+          serial: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          ip: string
+          last_error?: string | null
+          last_log_count?: number | null
+          last_pulled_at?: string | null
+          last_user_count?: number | null
+          log_capacity?: number | null
+          name: string
+          port?: number
+          serial?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          ip?: string
+          last_error?: string | null
+          last_log_count?: number | null
+          last_pulled_at?: string | null
+          last_user_count?: number | null
+          log_capacity?: number | null
+          name?: string
+          port?: number
+          serial?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hr_attendance_logs: {
+        Row: {
+          created_at: string
+          device_id: string
+          device_user_id: string
+          id: number
+          punched_at: string
+          state: number | null
+          verify_type: number | null
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          device_user_id: string
+          id?: never
+          punched_at: string
+          state?: number | null
+          verify_type?: number | null
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          device_user_id?: string
+          id?: never
+          punched_at?: string
+          state?: number | null
+          verify_type?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_logs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hr_attendance_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_attendance_pulls: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date_from: string
+          date_to: string
+          device_id: string
+          device_log_count: number | null
+          error: string | null
+          finished_at: string
+          id: string
+          logs_in_range: number | null
+          logs_new: number | null
+          ok: boolean
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date_from: string
+          date_to: string
+          device_id: string
+          device_log_count?: number | null
+          error?: string | null
+          finished_at?: string
+          id?: string
+          logs_in_range?: number | null
+          logs_new?: number | null
+          ok: boolean
+          started_at: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date_from?: string
+          date_to?: string
+          device_id?: string
+          device_log_count?: number | null
+          error?: string | null
+          finished_at?: string
+          id?: string
+          logs_in_range?: number | null
+          logs_new?: number | null
+          ok?: boolean
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_pulls_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_pulls_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hr_attendance_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_calc_frames: {
+        Row: {
+          code: string
+          drop_remainder: boolean
+          from_minute: number
+          is_office: boolean
+          name: string
+          to_minute: number
+          version_id: string
+        }
+        Insert: {
+          code: string
+          drop_remainder?: boolean
+          from_minute: number
+          is_office?: boolean
+          name: string
+          to_minute: number
+          version_id: string
+        }
+        Update: {
+          code?: string
+          drop_remainder?: boolean
+          from_minute?: number
+          is_office?: boolean
+          name?: string
+          to_minute?: number
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_calc_frames_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_calc_rates: {
+        Row: {
+          below_law_reason: string | null
+          code: string
+          day_kind: string
+          kind: string
+          percent: number | null
+          updated_at: string
+          updated_by: string | null
+          version_id: string
+        }
+        Insert: {
+          below_law_reason?: string | null
+          code: string
+          day_kind: string
+          kind: string
+          percent?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version_id: string
+        }
+        Update: {
+          below_law_reason?: string | null
+          code?: string
+          day_kind?: string
+          kind?: string
+          percent?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_calc_rates_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_calc_rates_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_calc_versions: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          count_early: boolean
+          created_at: string
+          created_by: string | null
+          early_from: number
+          from_period: string | null
+          full_threshold: number
+          grace_minutes: number
+          half_threshold: number
+          id: string
+          lunch_default_minutes: number
+          lunch_factor: number
+          lunch_from: number
+          lunch_to: number
+          minutes_per_cong: number
+          night_before: number
+          note: string | null
+          round_in_afternoon: boolean
+          round_out_mode: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+          version_no: number
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          count_early?: boolean
+          created_at?: string
+          created_by?: string | null
+          early_from: number
+          from_period?: string | null
+          full_threshold: number
+          grace_minutes: number
+          half_threshold: number
+          id?: string
+          lunch_default_minutes: number
+          lunch_factor: number
+          lunch_from: number
+          lunch_to: number
+          minutes_per_cong: number
+          night_before: number
+          note?: string | null
+          round_in_afternoon?: boolean
+          round_out_mode?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          version_no: number
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          count_early?: boolean
+          created_at?: string
+          created_by?: string | null
+          early_from?: number
+          from_period?: string | null
+          full_threshold?: number
+          grace_minutes?: number
+          half_threshold?: number
+          id?: string
+          lunch_default_minutes?: number
+          lunch_factor?: number
+          lunch_from?: number
+          lunch_to?: number
+          minutes_per_cong?: number
+          night_before?: number
+          note?: string | null
+          round_in_afternoon?: boolean
+          round_out_mode?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_calc_versions_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_calc_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_calc_versions_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_contracts: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          contract_no: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          end_date: string | null
+          file_id: string | null
+          id: string
+          job_title: string | null
+          kind: string
+          note: string | null
+          salary: number | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          contract_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          end_date?: string | null
+          file_id?: string | null
+          id?: string
+          job_title?: string | null
+          kind: string
+          note?: string | null
+          salary?: number | null
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          contract_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          end_date?: string | null
+          file_id?: string | null
+          id?: string
+          job_title?: string | null
+          kind?: string
+          note?: string | null
+          salary?: number | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_contracts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_contracts_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_contracts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_device_users: {
+        Row: {
+          created_at: string
+          device_id: string
+          device_user_id: string
+          employee_id: string | null
+          id: string
+          name_on_device: string | null
+          needs_review: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          device_user_id: string
+          employee_id?: string | null
+          id?: string
+          name_on_device?: string | null
+          needs_review?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          device_user_id?: string
+          employee_id?: string | null
+          id?: string
+          name_on_device?: string | null
+          needs_review?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_device_users_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hr_attendance_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_device_users_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_employee_events: {
+        Row: {
+          after: Json | null
+          before: Json | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string | null
+          effective_date: string
+          employee_id: string
+          id: string
+          kind: string
+          note: string | null
+          reason: string | null
+        }
+        Insert: {
+          after?: Json | null
+          before?: Json | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_date: string
+          employee_id: string
+          id?: string
+          kind: string
+          note?: string | null
+          reason?: string | null
+        }
+        Update: {
+          after?: Json | null
+          before?: Json | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          employee_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_employee_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employee_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employee_events_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_employee_private: {
+        Row: {
+          bank_account: string | null
+          bank_name: string | null
+          birth_date: string | null
+          current_address: string | null
+          education: string | null
+          emergency_name: string | null
+          emergency_phone: string | null
+          emergency_relation: string | null
+          employee_id: string
+          gender: string | null
+          hometown: string | null
+          id_issue_date: string | null
+          id_issue_place: string | null
+          join_date: string | null
+          national_id: string | null
+          nationality: string | null
+          permanent_address: string | null
+          phone: string | null
+          tax_code: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bank_account?: string | null
+          bank_name?: string | null
+          birth_date?: string | null
+          current_address?: string | null
+          education?: string | null
+          emergency_name?: string | null
+          emergency_phone?: string | null
+          emergency_relation?: string | null
+          employee_id: string
+          gender?: string | null
+          hometown?: string | null
+          id_issue_date?: string | null
+          id_issue_place?: string | null
+          join_date?: string | null
+          national_id?: string | null
+          nationality?: string | null
+          permanent_address?: string | null
+          phone?: string | null
+          tax_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bank_account?: string | null
+          bank_name?: string | null
+          birth_date?: string | null
+          current_address?: string | null
+          education?: string | null
+          emergency_name?: string | null
+          emergency_phone?: string | null
+          emergency_relation?: string | null
+          employee_id?: string
+          gender?: string | null
+          hometown?: string | null
+          id_issue_date?: string | null
+          id_issue_place?: string | null
+          join_date?: string | null
+          national_id?: string | null
+          nationality?: string | null
+          permanent_address?: string | null
+          phone?: string | null
+          tax_code?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_employee_private_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employee_private_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_employees: {
+        Row: {
+          active: boolean
+          attendance_exempt: boolean
+          code: string
+          created_at: string
+          full_name: string
+          hire_date: string | null
+          id: string
+          job_title: string | null
+          leave_date: string | null
+          leave_reason: string | null
+          note: string | null
+          shift_id: string
+          team: string | null
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          attendance_exempt?: boolean
+          code: string
+          created_at?: string
+          full_name: string
+          hire_date?: string | null
+          id?: string
+          job_title?: string | null
+          leave_date?: string | null
+          leave_reason?: string | null
+          note?: string | null
+          shift_id: string
+          team?: string | null
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          attendance_exempt?: boolean
+          code?: string
+          created_at?: string
+          full_name?: string
+          hire_date?: string | null
+          id?: string
+          job_title?: string | null
+          leave_date?: string | null
+          leave_reason?: string | null
+          note?: string | null
+          shift_id?: string
+          team?: string | null
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_employees_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "hr_shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_employees_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "hr_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_holidays: {
+        Row: {
+          created_at: string
+          holiday_date: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          holiday_date: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          holiday_date?: string
+          name?: string
+        }
+        Relationships: []
       }
       hr_leave_requests: {
         Row: {
@@ -825,6 +1982,835 @@ export type Database = {
           {
             foreignKeyName: "hr_leave_requests_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_lunch_ticks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          minutes: number
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          minutes: number
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          minutes?: number
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_lunch_ticks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_lunch_ticks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_pay_profile_allowances: {
+        Row: {
+          allowance_type_id: string
+          amount: number
+          profile_id: string
+        }
+        Insert: {
+          allowance_type_id: string
+          amount: number
+          profile_id: string
+        }
+        Update: {
+          allowance_type_id?: string
+          amount?: number
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_pay_profile_allowances_allowance_type_id_fkey"
+            columns: ["allowance_type_id"]
+            isOneToOne: false
+            referencedRelation: "hr_allowance_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_pay_profile_allowances_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "hr_pay_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_pay_profiles: {
+        Row: {
+          flat_tax: boolean
+          created_at: string
+          created_by: string | null
+          daily_rate: number | null
+          dependents: number
+          employee_id: string
+          from_period: string
+          id: string
+          insurance_salary: number | null
+          insured: boolean
+          monthly_salary: number | null
+          note: string | null
+          pay_type: string
+          source: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          flat_tax?: boolean
+          created_at?: string
+          created_by?: string | null
+          daily_rate?: number | null
+          dependents?: number
+          employee_id: string
+          from_period: string
+          id?: string
+          insurance_salary?: number | null
+          insured?: boolean
+          monthly_salary?: number | null
+          note?: string | null
+          pay_type: string
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          flat_tax?: boolean
+          created_at?: string
+          created_by?: string | null
+          daily_rate?: number | null
+          dependents?: number
+          employee_id?: string
+          from_period?: string
+          id?: string
+          insurance_salary?: number | null
+          insured?: boolean
+          monthly_salary?: number | null
+          note?: string | null
+          pay_type?: string
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_pay_profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_pay_profiles_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_pay_profiles_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payroll_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          id: number
+          kind: string
+          note: string | null
+          payroll_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind: string
+          note?: string | null
+          payroll_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind?: string
+          note?: string | null
+          payroll_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payroll_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payroll_events_payroll_id_fkey"
+            columns: ["payroll_id"]
+            isOneToOne: false
+            referencedRelation: "hr_payrolls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payroll_items: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          kind: string
+          note: string | null
+          period: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          kind: string
+          note?: string | null
+          period: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          period?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payroll_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payroll_items_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payrolls: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          calc_count: number
+          calc_version_id: string | null
+          calculated_at: string | null
+          calculated_by: string | null
+          created_at: string
+          id: string
+          paid_at: string | null
+          paid_by: string | null
+          period: string
+          return_reason: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          time_close_no: number | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calc_count?: number
+          calc_version_id?: string | null
+          calculated_at?: string | null
+          calculated_by?: string | null
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          period: string
+          return_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          time_close_no?: number | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calc_count?: number
+          calc_version_id?: string | null
+          calculated_at?: string | null
+          calculated_by?: string | null
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          period?: string
+          return_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          time_close_no?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payrolls_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_calc_version_id_fkey"
+            columns: ["calc_version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_calculated_by_fkey"
+            columns: ["calculated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payrolls_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_payslips: {
+        Row: {
+          bank_account: string | null
+          bank_name: string | null
+          calc_no: number
+          code: string
+          employee_id: string
+          full_name: string
+          id: number
+          lines: Json
+          pay_type: string
+          payroll_id: string
+          problems: Json
+          team: string | null
+          why: Json
+          work_units: number
+          base_pay: number
+          overtime_pay: number
+          leave_pay: number
+          allowance_pay: number
+          item_plus: number
+          gross: number
+          insurance_employee: number
+          insurance_company: number
+          union_fee: number
+          tax: number
+          item_minus: number
+          net: number
+        }
+        Insert: {
+          bank_account?: string | null
+          bank_name?: string | null
+          calc_no: number
+          code: string
+          employee_id: string
+          full_name: string
+          id?: number
+          lines?: Json
+          pay_type: string
+          payroll_id: string
+          problems?: Json
+          team?: string | null
+          why?: Json
+          work_units?: number
+          base_pay?: number
+          overtime_pay?: number
+          leave_pay?: number
+          allowance_pay?: number
+          item_plus?: number
+          gross?: number
+          insurance_employee?: number
+          insurance_company?: number
+          union_fee?: number
+          tax?: number
+          item_minus?: number
+          net?: number
+        }
+        Update: {
+          bank_account?: string | null
+          bank_name?: string | null
+          calc_no?: number
+          code?: string
+          employee_id?: string
+          full_name?: string
+          id?: number
+          lines?: Json
+          pay_type?: string
+          payroll_id?: string
+          problems?: Json
+          team?: string | null
+          why?: Json
+          work_units?: number
+          base_pay?: number
+          overtime_pay?: number
+          leave_pay?: number
+          allowance_pay?: number
+          item_plus?: number
+          gross?: number
+          insurance_employee?: number
+          insurance_company?: number
+          union_fee?: number
+          tax?: number
+          item_minus?: number
+          net?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_payslips_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_payslips_payroll_id_fkey"
+            columns: ["payroll_id"]
+            isOneToOne: false
+            referencedRelation: "hr_payrolls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_period_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          id: number
+          kind: string
+          note: string | null
+          period_id: string
+          team_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind: string
+          note?: string | null
+          period_id: string
+          team_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: number
+          kind?: string
+          note?: string | null
+          period_id?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_period_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_events_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "hr_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_period_team_confirms: {
+        Row: {
+          confirmed_at: string
+          confirmed_by: string | null
+          paper_signed: boolean
+          period_id: string
+          team_id: string
+          zero_days: number
+        }
+        Insert: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          paper_signed?: boolean
+          period_id: string
+          team_id: string
+          zero_days?: number
+        }
+        Update: {
+          confirmed_at?: string
+          confirmed_by?: string | null
+          paper_signed?: boolean
+          period_id?: string
+          team_id?: string
+          zero_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_period_team_confirms_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_team_confirms_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_period_team_confirms_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "hr_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_private_access_log: {
+        Row: {
+          employee_id: string
+          field: string
+          id: number
+          viewed_at: string
+          viewer_id: string | null
+        }
+        Insert: {
+          employee_id: string
+          field: string
+          id?: number
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Update: {
+          employee_id?: string
+          field?: string
+          id?: number
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_private_access_log_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_private_access_log_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_shifts: {
+        Row: {
+          active: boolean
+          break_minutes: number
+          code: string
+          created_at: string
+          end_time: string
+          id: string
+          late_grace_minutes: number
+          name: string
+          ot_from: string
+          ot_round_minutes: number
+          required_punches: number
+          sort_order: number
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          break_minutes?: number
+          code: string
+          created_at?: string
+          end_time: string
+          id?: string
+          late_grace_minutes?: number
+          name: string
+          ot_from: string
+          ot_round_minutes?: number
+          required_punches?: number
+          sort_order?: number
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          break_minutes?: number
+          code?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          late_grace_minutes?: number
+          name?: string
+          ot_from?: string
+          ot_round_minutes?: number
+          required_punches?: number
+          sort_order?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hr_teams: {
+        Row: {
+          active: boolean
+          calc_mode: string
+          created_at: string
+          department_id: string | null
+          id: string
+          name: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          calc_mode?: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          calc_mode?: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_teams_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_teams_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_time_results: {
+        Row: {
+          close_no: number
+          code: string
+          employee_id: string
+          exempt: boolean
+          frame_minutes: Json
+          full_name: string
+          id: number
+          leave_type: string | null
+          lunch_minutes: number
+          period_id: string
+          team: string | null
+          total_minutes: number
+          work_date: string | null
+          zero_day: boolean
+        }
+        Insert: {
+          close_no: number
+          code: string
+          employee_id: string
+          exempt?: boolean
+          frame_minutes?: Json
+          full_name: string
+          id?: number
+          leave_type?: string | null
+          lunch_minutes?: number
+          period_id: string
+          team?: string | null
+          total_minutes?: number
+          work_date?: string | null
+          zero_day?: boolean
+        }
+        Update: {
+          close_no?: number
+          code?: string
+          employee_id?: string
+          exempt?: boolean
+          frame_minutes?: Json
+          full_name?: string
+          id?: number
+          leave_type?: string | null
+          lunch_minutes?: number
+          period_id?: string
+          team?: string | null
+          total_minutes?: number
+          work_date?: string | null
+          zero_day?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_results_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_results_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_time_periods: {
+        Row: {
+          calc_version_id: string | null
+          close_count: number
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          date_from: string
+          date_to: string
+          id: string
+          period: string
+          reopen_at: string | null
+          reopen_by: string | null
+          reopen_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          calc_version_id?: string | null
+          close_count?: number
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          date_from: string
+          date_to: string
+          id?: string
+          period: string
+          reopen_at?: string | null
+          reopen_by?: string | null
+          reopen_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          calc_version_id?: string | null
+          close_count?: number
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          date_from?: string
+          date_to?: string
+          id?: string
+          period?: string
+          reopen_at?: string | null
+          reopen_by?: string | null
+          reopen_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_periods_calc_version_id_fkey"
+            columns: ["calc_version_id"]
+            isOneToOne: false
+            referencedRelation: "hr_calc_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_periods_reopen_by_fkey"
+            columns: ["reopen_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -1001,6 +2987,13 @@ export type Database = {
             foreignKeyName: "production_components_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "production_components_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
             referencedRelation: "warehouse_materials"
             referencedColumns: ["id"]
           },
@@ -1023,6 +3016,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_components_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
           {
@@ -1124,11 +3124,45 @@ export type Database = {
           },
         ]
       }
+      production_defect_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          stage_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       production_entries: {
         Row: {
           component_id: string
           created_at: string
           created_by: string | null
+          defect_code: string | null
           defect_qty: number
           defect_reason: string | null
           doc_id: string | null
@@ -1140,7 +3174,9 @@ export type Database = {
           note: string | null
           production_order_id: string
           qty: number
+          rework_qty: number
           stage: string
+          stage_meta: Json | null
           team_department_id: string | null
           worker_name: string | null
         }
@@ -1148,6 +3184,7 @@ export type Database = {
           component_id: string
           created_at?: string
           created_by?: string | null
+          defect_code?: string | null
           defect_qty?: number
           defect_reason?: string | null
           doc_id?: string | null
@@ -1159,7 +3196,9 @@ export type Database = {
           note?: string | null
           production_order_id: string
           qty: number
+          rework_qty?: number
           stage: string
+          stage_meta?: Json | null
           team_department_id?: string | null
           worker_name?: string | null
         }
@@ -1167,6 +3206,7 @@ export type Database = {
           component_id?: string
           created_at?: string
           created_by?: string | null
+          defect_code?: string | null
           defect_qty?: number
           defect_reason?: string | null
           doc_id?: string | null
@@ -1178,7 +3218,9 @@ export type Database = {
           note?: string | null
           production_order_id?: string
           qty?: number
+          rework_qty?: number
           stage?: string
+          stage_meta?: Json | null
           team_department_id?: string | null
           worker_name?: string | null
         }
@@ -1216,6 +3258,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_entries_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
           {
@@ -1303,6 +3352,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "production_entry_docs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "production_entry_docs_team_department_id_fkey"
             columns: ["team_department_id"]
             isOneToOne: false
@@ -1383,6 +3439,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "production_jobs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "production_jobs_production_order_line_id_fkey"
             columns: ["production_order_line_id"]
             isOneToOne: false
@@ -1449,11 +3512,74 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "production_order_boms_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "production_order_boms_snapped_by_fkey"
             columns: ["snapped_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_order_changes: {
+        Row: {
+          change: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          production_order_id: string
+        }
+        Insert: {
+          change: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id: string
+        }
+        Update: {
+          change?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          production_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_changes_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_order_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
           },
         ]
       }
@@ -1513,6 +3639,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_order_groups_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
           {
@@ -1653,6 +3786,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_order_lines_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
           {
@@ -1867,6 +4007,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "production_outsource_entries_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "production_outsource_entries_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -1926,6 +4073,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "production_plan_changes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "production_plan_changes_production_order_line_id_fkey"
             columns: ["production_order_line_id"]
             isOneToOne: false
@@ -1933,6 +4087,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      production_stage_fields: {
+        Row: {
+          created_at: string
+          field_key: string
+          id: string
+          is_active: boolean
+          kind: string
+          label: string
+          max_value: number | null
+          min_value: number | null
+          options: Json | null
+          required: boolean
+          sort_order: number
+          stage_code: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          field_key: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          label: string
+          max_value?: number | null
+          min_value?: number | null
+          options?: Json | null
+          required?: boolean
+          sort_order?: number
+          stage_code: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          label?: string
+          max_value?: number | null
+          min_value?: number | null
+          options?: Json | null
+          required?: boolean
+          sort_order?: number
+          stage_code?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       production_transfers: {
         Row: {
@@ -2004,6 +4206,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_transfers_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
           {
@@ -2391,6 +4600,8 @@ export type Database = {
           customer_po_no: string | null
           deposit_percent: number | null
           due_date: string | null
+          fx_date: string | null
+          fx_rate: number | null
           id: string
           note: string | null
           partial_shipment: boolean | null
@@ -2417,6 +4628,8 @@ export type Database = {
           customer_po_no?: string | null
           deposit_percent?: number | null
           due_date?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           partial_shipment?: boolean | null
@@ -2443,6 +4656,8 @@ export type Database = {
           customer_po_no?: string | null
           deposit_percent?: number | null
           due_date?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           partial_shipment?: boolean | null
@@ -2489,6 +4704,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "sales_orders_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "sales_orders_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: false
@@ -2502,6 +4724,10 @@ export type Database = {
           discount_pct: number | null
           id: string
           note: string | null
+          plan_at: string | null
+          plan_cost_snapshot: number | null
+          plan_currency_snapshot: string | null
+          plan_price_snapshot: number | null
           product_id: string
           qty: number | null
           quote_id: string
@@ -2512,6 +4738,10 @@ export type Database = {
           discount_pct?: number | null
           id?: string
           note?: string | null
+          plan_at?: string | null
+          plan_cost_snapshot?: number | null
+          plan_currency_snapshot?: string | null
+          plan_price_snapshot?: number | null
           product_id: string
           qty?: number | null
           quote_id: string
@@ -2522,6 +4752,10 @@ export type Database = {
           discount_pct?: number | null
           id?: string
           note?: string | null
+          plan_at?: string | null
+          plan_cost_snapshot?: number | null
+          plan_currency_snapshot?: string | null
+          plan_price_snapshot?: number | null
           product_id?: string
           qty?: number | null
           quote_id?: string
@@ -2555,10 +4789,13 @@ export type Database = {
           currency: string
           customer_id: string
           id: string
+          lost_reason: string | null
           note: string | null
           payment_terms: string | null
           price_term: string | null
           rejected_reason: string | null
+          revision_no: number
+          revision_of: string | null
           status: string
           submitted_at: string | null
           submitted_by: string | null
@@ -2575,10 +4812,13 @@ export type Database = {
           currency?: string
           customer_id: string
           id?: string
+          lost_reason?: string | null
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
           rejected_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           status?: string
           submitted_at?: string | null
           submitted_by?: string | null
@@ -2595,10 +4835,13 @@ export type Database = {
           currency?: string
           customer_id?: string
           id?: string
+          lost_reason?: string | null
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
           rejected_reason?: string | null
+          revision_no?: number
+          revision_of?: string | null
           status?: string
           submitted_at?: string | null
           submitted_by?: string | null
@@ -2629,8 +4872,138 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sales_quotes_revision_of_fkey"
+            columns: ["revision_of"]
+            isOneToOne: false
+            referencedRelation: "sales_quotes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sales_quotes_submitted_by_fkey"
             columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_ship_lot_lines: {
+        Row: {
+          created_at: string
+          id: string
+          lot_id: string
+          product_id: string | null
+          product_key: string
+          qty: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lot_id: string
+          product_id?: string | null
+          product_key: string
+          qty: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lot_id?: string
+          product_id?: string | null
+          product_key?: string
+          qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_ship_lot_lines_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "sales_ship_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lot_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "technical_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_ship_lots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          order_no: string | null
+          po_no: string | null
+          po_ref: string | null
+          production_order_id: string
+          seq: number
+          ship_date: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_no?: string | null
+          po_no?: string | null
+          po_ref?: string | null
+          production_order_id: string
+          seq?: number
+          ship_date?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_no?: string | null
+          po_no?: string | null
+          po_ref?: string | null
+          production_order_id?: string
+          seq?: number
+          ship_date?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_ship_lots_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "sales_ship_lots_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -2830,6 +5203,13 @@ export type Database = {
             foreignKeyName: "supply_lsx_material_plan_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
             referencedRelation: "warehouse_materials"
             referencedColumns: ["id"]
           },
@@ -2876,6 +5256,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "supply_lsx_material_plan_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
             foreignKeyName: "supply_lsx_material_plan_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -2893,46 +5280,39 @@ export type Database = {
       }
       supply_lsx_needs: {
         Row: {
-          id: string
-          production_order_id: string
-          material_id: string
-          qty_needed: number
-          note: string | null
-          created_by: string | null
-          updated_by: string | null
           created_at: string
+          created_by: string | null
+          id: string
+          material_id: string
+          note: string | null
+          production_order_id: string
+          qty_needed: number
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
-          id?: string
-          production_order_id: string
-          material_id: string
-          qty_needed: number
-          note?: string | null
-          created_by?: string | null
-          updated_by?: string | null
           created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id: string
+          note?: string | null
+          production_order_id: string
+          qty_needed: number
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
-          id?: string
-          production_order_id?: string
-          material_id?: string
-          qty_needed?: number
-          note?: string | null
-          created_by?: string | null
-          updated_by?: string | null
           created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id?: string
+          note?: string | null
+          production_order_id?: string
+          qty_needed?: number
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "supply_lsx_needs_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "supply_lsx_needs_created_by_fkey"
             columns: ["created_by"]
@@ -2944,8 +5324,22 @@ export type Database = {
             foreignKeyName: "supply_lsx_needs_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_needs_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
             referencedRelation: "warehouse_materials"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_needs_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
           },
           {
             foreignKeyName: "supply_lsx_needs_production_order_id_fkey"
@@ -2954,44 +5348,395 @@ export type Database = {
             referencedRelation: "production_orders"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "supply_lsx_needs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_needs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_needs_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      supply_po_line_lsx: {
+      supply_po_adjustment_lsx: {
         Row: {
-          line_id: string
+          adjustment_id: string
           production_order_id: string
-          qty: number
         }
         Insert: {
-          line_id: string
+          adjustment_id: string
           production_order_id: string
-          qty: number
         }
         Update: {
-          line_id?: string
+          adjustment_id?: string
           production_order_id?: string
-          qty?: number
         }
         Relationships: [
           {
-            foreignKeyName: "supply_po_line_lsx_line_id_fkey"
-            columns: ["line_id"]
+            foreignKeyName: "supply_po_adjustment_lsx_adjustment_id_fkey"
+            columns: ["adjustment_id"]
             isOneToOne: false
-            referencedRelation: "supply_purchase_order_lines"
+            referencedRelation: "supply_po_adjustments"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "supply_po_line_lsx_line_id_fkey"
-            columns: ["line_id"]
-            isOneToOne: false
-            referencedRelation: "supply_po_line_status"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "supply_po_line_lsx_production_order_id_fkey"
+            foreignKeyName: "supply_po_adjustment_lsx_production_order_id_fkey"
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustment_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustment_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+        ]
+      }
+      supply_po_adjustments: {
+        Row: {
+          cause: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          delta_by_price: number
+          delta_by_qty: number
+          discount_after: number
+          discount_before: number
+          header_changes: Json | null
+          id: string
+          lines: Json
+          po_id: string
+          po_status: string
+          reason: string
+          sent_at: string | null
+          sent_by: string | null
+          sent_note: string | null
+          seq: number
+          subtotal_after: number
+          subtotal_before: number
+          total_after: number
+          total_before: number
+          vat_after: number
+          vat_before: number
+        }
+        Insert: {
+          cause?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          delta_by_price?: number
+          delta_by_qty?: number
+          discount_after?: number
+          discount_before?: number
+          header_changes?: Json | null
+          id?: string
+          lines?: Json
+          po_id: string
+          po_status: string
+          reason: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_note?: string | null
+          seq: number
+          subtotal_after: number
+          subtotal_before: number
+          total_after: number
+          total_before: number
+          vat_after: number
+          vat_before: number
+        }
+        Update: {
+          cause?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          delta_by_price?: number
+          delta_by_qty?: number
+          discount_after?: number
+          discount_before?: number
+          header_changes?: Json | null
+          id?: string
+          lines?: Json
+          po_id?: string
+          po_status?: string
+          reason?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_note?: string | null
+          seq?: number
+          subtotal_after?: number
+          subtotal_before?: number
+          total_after?: number
+          total_before?: number
+          vat_after?: number
+          vat_before?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_adjustments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustments_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_adjustments_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_commit_log: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date_after: string | null
+          date_before: string | null
+          id: string
+          kind: string
+          lines: Json
+          po_id: string
+          reason: string | null
+          shipment_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date_after?: string | null
+          date_before?: string | null
+          id?: string
+          kind: string
+          lines?: Json
+          po_id: string
+          reason?: string | null
+          shipment_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date_after?: string | null
+          date_before?: string | null
+          id?: string
+          kind?: string
+          lines?: Json
+          po_id?: string
+          reason?: string | null
+          shipment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_commit_log_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_commit_log_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_commit_log_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_cost_allocations: {
+        Row: {
+          amount: number
+          base: number
+          cost_id: string
+          id: string
+          po_id: string
+        }
+        Insert: {
+          amount: number
+          base: number
+          cost_id: string
+          id?: string
+          po_id: string
+        }
+        Update: {
+          amount?: number
+          base?: number
+          cost_id?: string
+          id?: string
+          po_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_cost_allocations_cost_id_fkey"
+            columns: ["cost_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_costs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_cost_allocations_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_costs: {
+        Row: {
+          amount: number
+          cost_date: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          doc_no: string | null
+          id: string
+          kind: string
+          note: string | null
+          paid_by: string | null
+          paid_method: string | null
+          paid_on: string | null
+          payee_name: string | null
+          payee_phone: string | null
+          payee_supplier_id: string | null
+          reimburse_note: string | null
+          reimbursed_at: string | null
+          reimbursed_by: string | null
+          total: number
+          transport_mode: string
+          updated_at: string
+          vat_amount: number
+          vat_rate: number | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount: number
+          cost_date: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          doc_no?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          paid_by?: string | null
+          paid_method?: string | null
+          paid_on?: string | null
+          payee_name?: string | null
+          payee_phone?: string | null
+          payee_supplier_id?: string | null
+          reimburse_note?: string | null
+          reimbursed_at?: string | null
+          reimbursed_by?: string | null
+          total: number
+          transport_mode?: string
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number
+          cost_date?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          doc_no?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          paid_by?: string | null
+          paid_method?: string | null
+          paid_on?: string | null
+          payee_name?: string | null
+          payee_phone?: string | null
+          payee_supplier_id?: string | null
+          reimburse_note?: string | null
+          reimbursed_at?: string | null
+          reimbursed_by?: string | null
+          total?: number
+          transport_mode?: string
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_costs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_payee_supplier_id_fkey"
+            columns: ["payee_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_reimbursed_by_fkey"
+            columns: ["reimbursed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_costs_voided_by_fkey"
+            columns: ["voided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -3029,6 +5774,148 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_po_extra_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+        ]
+      }
+      supply_po_issues: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          kind: string
+          po_id: string
+          po_line_id: string | null
+          qty: number | null
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          kind: string
+          po_id: string
+          po_line_id?: string | null
+          qty?: number | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          kind?: string
+          po_id?: string
+          po_line_id?: string | null
+          qty?: number | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_issues_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_issues_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_line_lsx: {
+        Row: {
+          line_id: string
+          production_order_id: string
+          qty: number
+        }
+        Insert: {
+          line_id: string
+          production_order_id: string
+          qty: number
+        }
+        Update: {
+          line_id?: string
+          production_order_id?: string
+          qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_line_lsx_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_line_lsx_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_line_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_line_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_po_line_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
             referencedColumns: ["production_order_id"]
           },
         ]
@@ -3078,6 +5965,7 @@ export type Database = {
       }
       supply_po_shipments: {
         Row: {
+          code: string | null
           created_at: string
           created_by: string | null
           expected_date: string
@@ -3091,6 +5979,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date: string
@@ -3104,6 +5993,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date?: string
@@ -3133,6 +6023,79 @@ export type Database = {
           },
         ]
       }
+      supply_projects: {
+        Row: {
+          budget: number | null
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          kind: string
+          name: string
+          note: string | null
+          owner_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          budget?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          kind: string
+          name: string
+          note?: string | null
+          owner_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          budget?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          kind?: string
+          name?: string
+          note?: string | null
+          owner_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_projects_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_projects_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_purchase_order_lines: {
         Row: {
           area_m2: number | null
@@ -3157,6 +6120,7 @@ export type Database = {
           inner_l_mm: number | null
           inner_w_mm: number | null
           kg_per_m: number | null
+          line_kind: string | null
           line_name: string | null
           line_unit: string | null
           m3_per_unit: number | null
@@ -3166,12 +6130,12 @@ export type Database = {
           open_style: string | null
           pack_size: number | null
           pack_unit: string | null
-          unit2_per_unit: number | null
           pcs_per_ctn: number | null
           po_id: string
           price_basis: string
           price_per_m2: number | null
           print_fee: number | null
+          print_spec: string | null
           product_code: string | null
           qty_basis: string
           qty_demand: number | null
@@ -3183,6 +6147,7 @@ export type Database = {
           spec: string | null
           unit_price: number | null
           unit2: string | null
+          unit2_per_unit: number | null
           warranty_text: string | null
           waste_pct: number | null
           weight_per_m: number | null
@@ -3211,6 +6176,7 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_kind?: string | null
           line_name?: string | null
           line_unit?: string | null
           m3_per_unit?: number | null
@@ -3220,12 +6186,12 @@ export type Database = {
           open_style?: string | null
           pack_size?: number | null
           pack_unit?: string | null
-          unit2_per_unit?: number | null
           pcs_per_ctn?: number | null
           po_id: string
           price_basis?: string
           price_per_m2?: number | null
           print_fee?: number | null
+          print_spec?: string | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null
@@ -3237,6 +6203,7 @@ export type Database = {
           spec?: string | null
           unit_price?: number | null
           unit2?: string | null
+          unit2_per_unit?: number | null
           warranty_text?: string | null
           waste_pct?: number | null
           weight_per_m?: number | null
@@ -3265,6 +6232,7 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_kind?: string | null
           line_name?: string | null
           line_unit?: string | null
           m3_per_unit?: number | null
@@ -3274,12 +6242,12 @@ export type Database = {
           open_style?: string | null
           pack_size?: number | null
           pack_unit?: string | null
-          unit2_per_unit?: number | null
           pcs_per_ctn?: number | null
           po_id?: string
           price_basis?: string
           price_per_m2?: number | null
           print_fee?: number | null
+          print_spec?: string | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null
@@ -3291,6 +6259,7 @@ export type Database = {
           spec?: string | null
           unit_price?: number | null
           unit2?: string | null
+          unit2_per_unit?: number | null
           warranty_text?: string | null
           waste_pct?: number | null
           weight_per_m?: number | null
@@ -3303,6 +6272,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_order_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
           },
           {
             foreignKeyName: "supply_purchase_order_lines_material_id_fkey"
@@ -3342,12 +6318,18 @@ export type Database = {
           delivery_place: string | null
           discount_amount: number | null
           expected_at: string | null
+          fx_date: string | null
+          fx_rate: number | null
           id: string
           note: string | null
           ordered_at: string | null
           price_includes_vat: boolean
           production_order_id: string | null
+          project_id: string | null
           signer_role: string | null
+          source_po_id: string | null
+          standalone_purpose: string | null
+          standalone_ref: string | null
           status: string
           supplier_doc_no: string | null
           supplier_id: string
@@ -3359,6 +6341,9 @@ export type Database = {
           terms_payment: string | null
           terms_quality: string | null
           updated_at: string
+          urgent_reason: string | null
+          urgent_sent_at: string | null
+          urgent_sent_by: string | null
           vat_rate: number | null
           weigh_on_receipt: boolean
         }
@@ -3376,12 +6361,18 @@ export type Database = {
           delivery_place?: string | null
           discount_amount?: number | null
           expected_at?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           ordered_at?: string | null
           price_includes_vat?: boolean
           production_order_id?: string | null
+          project_id?: string | null
           signer_role?: string | null
+          source_po_id?: string | null
+          standalone_purpose?: string | null
+          standalone_ref?: string | null
           status?: string
           supplier_doc_no?: string | null
           supplier_id: string
@@ -3393,6 +6384,9 @@ export type Database = {
           terms_payment?: string | null
           terms_quality?: string | null
           updated_at?: string
+          urgent_reason?: string | null
+          urgent_sent_at?: string | null
+          urgent_sent_by?: string | null
           vat_rate?: number | null
           weigh_on_receipt?: boolean
         }
@@ -3410,12 +6404,18 @@ export type Database = {
           delivery_place?: string | null
           discount_amount?: number | null
           expected_at?: string | null
+          fx_date?: string | null
+          fx_rate?: number | null
           id?: string
           note?: string | null
           ordered_at?: string | null
           price_includes_vat?: boolean
           production_order_id?: string | null
+          project_id?: string | null
           signer_role?: string | null
+          source_po_id?: string | null
+          standalone_purpose?: string | null
+          standalone_ref?: string | null
           status?: string
           supplier_doc_no?: string | null
           supplier_id?: string
@@ -3427,6 +6427,9 @@ export type Database = {
           terms_payment?: string | null
           terms_quality?: string | null
           updated_at?: string
+          urgent_reason?: string | null
+          urgent_sent_at?: string | null
+          urgent_sent_by?: string | null
           vat_rate?: number | null
           weigh_on_receipt?: boolean
         }
@@ -3467,10 +6470,38 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "supply_purchase_orders_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "supply_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_orders_source_po_id_fkey"
+            columns: ["source_po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "supply_purchase_orders_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_orders_urgent_sent_by_fkey"
+            columns: ["urgent_sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -3524,6 +6555,13 @@ export type Database = {
             foreignKeyName: "supply_supplier_prices_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "supply_supplier_prices_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
             referencedRelation: "warehouse_materials"
             referencedColumns: ["id"]
           },
@@ -3551,6 +6589,7 @@ export type Database = {
           business_license: string | null
           buyer_id: string | null
           can_order: boolean
+          carrier_kind: string | null
           code: string | null
           company_name: string | null
           complaint_count: number
@@ -3570,12 +6609,15 @@ export type Database = {
           incoterms: string | null
           invoice_terms: string | null
           is_active: boolean
+          is_carrier: boolean
           lead_time_days: number | null
           legal_rep: string | null
           lock_reason: string | null
           moq: string | null
           name: string
           note: string | null
+          pay_method: string | null
+          payment_net_days: number | null
           payment_terms: string | null
           phone: string | null
           price_score: number | null
@@ -3594,6 +6636,7 @@ export type Database = {
           type: string | null
           updated_at: string
           updated_by: string | null
+          vat_rate: number | null
           warehouse_address: string | null
           warranty_policy: string | null
           website: string | null
@@ -3605,6 +6648,7 @@ export type Database = {
           business_license?: string | null
           buyer_id?: string | null
           can_order?: boolean
+          carrier_kind?: string | null
           code?: string | null
           company_name?: string | null
           complaint_count?: number
@@ -3624,12 +6668,15 @@ export type Database = {
           incoterms?: string | null
           invoice_terms?: string | null
           is_active?: boolean
+          is_carrier?: boolean
           lead_time_days?: number | null
           legal_rep?: string | null
           lock_reason?: string | null
           moq?: string | null
           name: string
           note?: string | null
+          pay_method?: string | null
+          payment_net_days?: number | null
           payment_terms?: string | null
           phone?: string | null
           price_score?: number | null
@@ -3648,6 +6695,7 @@ export type Database = {
           type?: string | null
           updated_at?: string
           updated_by?: string | null
+          vat_rate?: number | null
           warehouse_address?: string | null
           warranty_policy?: string | null
           website?: string | null
@@ -3659,6 +6707,7 @@ export type Database = {
           business_license?: string | null
           buyer_id?: string | null
           can_order?: boolean
+          carrier_kind?: string | null
           code?: string | null
           company_name?: string | null
           complaint_count?: number
@@ -3678,12 +6727,15 @@ export type Database = {
           incoterms?: string | null
           invoice_terms?: string | null
           is_active?: boolean
+          is_carrier?: boolean
           lead_time_days?: number | null
           legal_rep?: string | null
           lock_reason?: string | null
           moq?: string | null
           name?: string
           note?: string | null
+          pay_method?: string | null
+          payment_net_days?: number | null
           payment_terms?: string | null
           phone?: string | null
           price_score?: number | null
@@ -3702,6 +6754,7 @@ export type Database = {
           type?: string | null
           updated_at?: string
           updated_by?: string | null
+          vat_rate?: number | null
           warehouse_address?: string | null
           warranty_policy?: string | null
           website?: string | null
@@ -3731,6 +6784,146 @@ export type Database = {
           {
             foreignKeyName: "supply_suppliers_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_trip_pos: {
+        Row: {
+          created_at: string
+          po_id: string
+          trip_id: string
+        }
+        Insert: {
+          created_at?: string
+          po_id: string
+          trip_id: string
+        }
+        Update: {
+          created_at?: string
+          po_id?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_trip_pos_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trip_pos_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "supply_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_trips: {
+        Row: {
+          arrived_at: string | null
+          arrived_by: string | null
+          arrived_check: string | null
+          arrived_note: string | null
+          arrived_packages: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          carrier_id: string | null
+          carrier_name: string
+          code: string
+          created_at: string
+          created_by: string | null
+          eta: string | null
+          id: string
+          mode: string
+          note: string | null
+          package_unit: string | null
+          packages: number | null
+          receipt_no: string | null
+          sent_on: string
+          updated_at: string
+          weight_kg: number | null
+        }
+        Insert: {
+          arrived_at?: string | null
+          arrived_by?: string | null
+          arrived_check?: string | null
+          arrived_note?: string | null
+          arrived_packages?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          carrier_id?: string | null
+          carrier_name: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          eta?: string | null
+          id?: string
+          mode: string
+          note?: string | null
+          package_unit?: string | null
+          packages?: number | null
+          receipt_no?: string | null
+          sent_on: string
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Update: {
+          arrived_at?: string | null
+          arrived_by?: string | null
+          arrived_check?: string | null
+          arrived_note?: string | null
+          arrived_packages?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          carrier_id?: string | null
+          carrier_name?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          eta?: string | null
+          id?: string
+          mode?: string
+          note?: string | null
+          package_unit?: string | null
+          packages?: number | null
+          receipt_no?: string | null
+          sent_on?: string
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_trips_arrived_by_fkey"
+            columns: ["arrived_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trips_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trips_carrier_id_fkey"
+            columns: ["carrier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_trips_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -3942,6 +7135,13 @@ export type Database = {
             foreignKeyName: "technical_bom_lines_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "technical_bom_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
             referencedRelation: "warehouse_materials"
             referencedColumns: ["id"]
           },
@@ -3961,59 +7161,287 @@ export type Database = {
           },
         ]
       }
+      technical_die_events: {
+        Row: {
+          content: string | null
+          cost: number | null
+          created_at: string
+          created_by: string | null
+          die_id: string
+          event_date: string | null
+          event_type: string
+          from_holder: string | null
+          id: string
+          related_die_id: string | null
+          source: string | null
+          to_holder: string | null
+          updated_at: string
+          weight_after: number | null
+          weight_before: number | null
+        }
+        Insert: {
+          content?: string | null
+          cost?: number | null
+          created_at?: string
+          created_by?: string | null
+          die_id: string
+          event_date?: string | null
+          event_type: string
+          from_holder?: string | null
+          id?: string
+          related_die_id?: string | null
+          source?: string | null
+          to_holder?: string | null
+          updated_at?: string
+          weight_after?: number | null
+          weight_before?: number | null
+        }
+        Update: {
+          content?: string | null
+          cost?: number | null
+          created_at?: string
+          created_by?: string | null
+          die_id?: string
+          event_date?: string | null
+          event_type?: string
+          from_holder?: string | null
+          id?: string
+          related_die_id?: string | null
+          source?: string | null
+          to_holder?: string | null
+          updated_at?: string
+          weight_after?: number | null
+          weight_before?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_die_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_events_die_id_fkey"
+            columns: ["die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_events_related_die_id_fkey"
+            columns: ["related_die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_die_materials: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          die_id: string
+          id: string
+          is_primary: boolean
+          match_source: string
+          material_id: string
+          note: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          die_id: string
+          id?: string
+          is_primary?: boolean
+          match_source?: string
+          material_id: string
+          note?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          die_id?: string
+          id?: string
+          is_primary?: boolean
+          match_source?: string
+          material_id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_die_materials_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_die_id_fkey"
+            columns: ["die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       technical_dies: {
         Row: {
+          alloy: string | null
+          bar_length_m: number | null
           code: string
           created_at: string
+          data_confidence: string
           die_price: number | null
+          duplicate_group: string | null
           effective_date: string | null
+          end_trim_mm: number | null
+          holder_name: string | null
+          holder_supplier_id: string | null
           id: string
+          image_file_id: string | null
           is_current: boolean
+          legacy_codes: string[]
+          marking: string | null
           name: string | null
           note: string | null
+          outer_diameter_mm: number | null
+          part_group: string | null
+          pcs_per_bundle: number | null
+          profile_shape: string | null
           profile_spec: string | null
+          review_note: string | null
+          rib_count: number | null
+          saw_kerf_mm: number | null
+          section_a_mm: number | null
+          section_b_mm: number | null
+          source_note: string | null
           status: string
           supplier_id: string | null
           supplier_name: string | null
+          surface_finish: string | null
           unit: string | null
           updated_at: string
+          wall_thickness_mm: number | null
           weight_per_m: number | null
+          weight_tolerance_pct: number | null
         }
         Insert: {
+          alloy?: string | null
+          bar_length_m?: number | null
           code: string
           created_at?: string
+          data_confidence?: string
           die_price?: number | null
+          duplicate_group?: string | null
           effective_date?: string | null
+          end_trim_mm?: number | null
+          holder_name?: string | null
+          holder_supplier_id?: string | null
           id?: string
+          image_file_id?: string | null
           is_current?: boolean
+          legacy_codes?: string[]
+          marking?: string | null
           name?: string | null
           note?: string | null
+          outer_diameter_mm?: number | null
+          part_group?: string | null
+          pcs_per_bundle?: number | null
+          profile_shape?: string | null
           profile_spec?: string | null
+          review_note?: string | null
+          rib_count?: number | null
+          saw_kerf_mm?: number | null
+          section_a_mm?: number | null
+          section_b_mm?: number | null
+          source_note?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string | null
+          surface_finish?: string | null
           unit?: string | null
           updated_at?: string
+          wall_thickness_mm?: number | null
           weight_per_m?: number | null
+          weight_tolerance_pct?: number | null
         }
         Update: {
+          alloy?: string | null
+          bar_length_m?: number | null
           code?: string
           created_at?: string
+          data_confidence?: string
           die_price?: number | null
+          duplicate_group?: string | null
           effective_date?: string | null
+          end_trim_mm?: number | null
+          holder_name?: string | null
+          holder_supplier_id?: string | null
           id?: string
+          image_file_id?: string | null
           is_current?: boolean
+          legacy_codes?: string[]
+          marking?: string | null
           name?: string | null
           note?: string | null
+          outer_diameter_mm?: number | null
+          part_group?: string | null
+          pcs_per_bundle?: number | null
+          profile_shape?: string | null
           profile_spec?: string | null
+          review_note?: string | null
+          rib_count?: number | null
+          saw_kerf_mm?: number | null
+          section_a_mm?: number | null
+          section_b_mm?: number | null
+          source_note?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string | null
+          surface_finish?: string | null
           unit?: string | null
           updated_at?: string
+          wall_thickness_mm?: number | null
           weight_per_m?: number | null
+          weight_tolerance_pct?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "technical_dies_holder_supplier_id_fkey"
+            columns: ["holder_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_dies_image_file_id_fkey"
+            columns: ["image_file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "technical_dies_supplier_id_fkey"
             columns: ["supplier_id"]
@@ -4533,6 +7961,7 @@ export type Database = {
           code: string
           code_legacy: string | null
           created_at: string
+          created_by: string | null
           customer_id: string | null
           customer_item_code: string | null
           customer_name: string | null
@@ -4566,11 +7995,20 @@ export type Database = {
           notes: string | null
           origin_country: string | null
           owner_id: string | null
-          created_by: string | null
           packing: Json
           paint_area_m2: number | null
           paint_coverage_m2_per_kg: number | null
           part_count: number | null
+          plan_at: string | null
+          plan_breakdown: Json | null
+          plan_by: string | null
+          plan_currency: string | null
+          plan_direct_cost: number | null
+          plan_fx_rate: number | null
+          plan_overhead: number | null
+          plan_price: number | null
+          plan_profit: number | null
+          plan_source: string | null
           product_type: string | null
           reference_price: number | null
           sample_confirmed_at: string | null
@@ -4610,6 +8048,7 @@ export type Database = {
           code: string
           code_legacy?: string | null
           created_at?: string
+          created_by?: string | null
           customer_id?: string | null
           customer_item_code?: string | null
           customer_name?: string | null
@@ -4643,11 +8082,20 @@ export type Database = {
           notes?: string | null
           origin_country?: string | null
           owner_id?: string | null
-          created_by?: string | null
           packing?: Json
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
           part_count?: number | null
+          plan_at?: string | null
+          plan_breakdown?: Json | null
+          plan_by?: string | null
+          plan_currency?: string | null
+          plan_direct_cost?: number | null
+          plan_fx_rate?: number | null
+          plan_overhead?: number | null
+          plan_price?: number | null
+          plan_profit?: number | null
+          plan_source?: string | null
           product_type?: string | null
           reference_price?: number | null
           sample_confirmed_at?: string | null
@@ -4687,6 +8135,7 @@ export type Database = {
           code?: string
           code_legacy?: string | null
           created_at?: string
+          created_by?: string | null
           customer_id?: string | null
           customer_item_code?: string | null
           customer_name?: string | null
@@ -4720,11 +8169,20 @@ export type Database = {
           notes?: string | null
           origin_country?: string | null
           owner_id?: string | null
-          created_by?: string | null
           packing?: Json
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
           part_count?: number | null
+          plan_at?: string | null
+          plan_breakdown?: Json | null
+          plan_by?: string | null
+          plan_currency?: string | null
+          plan_direct_cost?: number | null
+          plan_fx_rate?: number | null
+          plan_overhead?: number | null
+          plan_price?: number | null
+          plan_profit?: number | null
+          plan_source?: string | null
           product_type?: string | null
           reference_price?: number | null
           sample_confirmed_at?: string | null
@@ -4762,6 +8220,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "technical_products_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "technical_products_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
@@ -4792,6 +8257,13 @@ export type Database = {
           {
             foreignKeyName: "technical_products_owner_id_fkey"
             columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_products_plan_by_fkey"
+            columns: ["plan_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -5124,12 +8596,14 @@ export type Database = {
       }
       users: {
         Row: {
+          account_kind: string
           avatar_url: string | null
           created_at: string
           deleted_at: string | null
           department_id: string | null
           email: string
           employee_code: string | null
+          employee_id: string | null
           id: string
           is_active: boolean
           last_login_at: string | null
@@ -5139,16 +8613,19 @@ export type Database = {
           password_hash: string
           phone: string | null
           role: string
+          shared_holder: string | null
           title: string | null
           updated_at: string
         }
         Insert: {
+          account_kind?: string
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           department_id?: string | null
           email: string
           employee_code?: string | null
+          employee_id?: string | null
           id?: string
           is_active?: boolean
           last_login_at?: string | null
@@ -5158,16 +8635,19 @@ export type Database = {
           password_hash: string
           phone?: string | null
           role?: string
+          shared_holder?: string | null
           title?: string | null
           updated_at?: string
         }
         Update: {
+          account_kind?: string
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           department_id?: string | null
           email?: string
           employee_code?: string | null
+          employee_id?: string | null
           id?: string
           is_active?: boolean
           last_login_at?: string | null
@@ -5177,15 +8657,64 @@ export type Database = {
           password_hash?: string
           phone?: string | null
           role?: string
+          shared_holder?: string | null
           title?: string | null
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "users_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "users_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_bins: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string | null
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string | null
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string | null
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_bins_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -5202,12 +8731,16 @@ export type Database = {
           id: string
           kind: string
           note: string | null
+          purchase_request_id: string | null
           reason: string | null
+          reason_code: string | null
           reject_reason: string | null
           reversal_of_doc_id: string | null
           shipment_id: string | null
           status: string
           supplier_doc_no: string | null
+          team_department_id: string | null
+          trip_id: string | null
           updated_at: string
         }
         Insert: {
@@ -5221,12 +8754,16 @@ export type Database = {
           id?: string
           kind: string
           note?: string | null
+          purchase_request_id?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
+          trip_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -5240,15 +8777,26 @@ export type Database = {
           id?: string
           kind?: string
           note?: string | null
+          purchase_request_id?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
+          trip_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_docs_purchase_request_id_fkey"
+            columns: ["purchase_request_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_requests"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_docs_approved_by_fkey"
             columns: ["approved_by"]
@@ -5277,6 +8825,20 @@ export type Database = {
             referencedRelation: "supply_po_shipments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "warehouse_docs_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_docs_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "supply_trips"
+            referencedColumns: ["id"]
+          },
         ]
       }
       warehouse_material_changes: {
@@ -5288,7 +8850,7 @@ export type Database = {
           field: string
           id: string
           material_code: string | null
-          material_id: string
+          material_id: string | null
           source: string
           source_ref: string | null
         }
@@ -5300,7 +8862,7 @@ export type Database = {
           field: string
           id?: string
           material_code?: string | null
-          material_id: string
+          material_id?: string | null
           source?: string
           source_ref?: string | null
         }
@@ -5312,7 +8874,7 @@ export type Database = {
           field?: string
           id?: string
           material_code?: string | null
-          material_id?: string
+          material_id?: string | null
           source?: string
           source_ref?: string | null
         }
@@ -5323,6 +8885,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_material_changes_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
           },
           {
             foreignKeyName: "warehouse_material_changes_material_id_fkey"
@@ -5483,6 +9052,7 @@ export type Database = {
       }
       warehouse_movements: {
         Row: {
+          bin_id: string | null
           created_at: string
           created_by: string | null
           direction: string
@@ -5492,18 +9062,22 @@ export type Database = {
           note: string | null
           po_line_id: string | null
           production_order_id: string | null
+          purchase_request_line_id: string | null
           qc_status: string | null
           qty: number
           qty_rejected: number
           qty2_actual: number | null
+          reason_code: string | null
           ref_no: string | null
           ref_type: string
           shelf_location: string | null
+          stock_status: string
           transfer_group: string | null
           unit_cost: number | null
           warehouse_id: string | null
         }
         Insert: {
+          bin_id?: string | null
           created_at?: string
           created_by?: string | null
           direction: string
@@ -5513,18 +9087,22 @@ export type Database = {
           note?: string | null
           po_line_id?: string | null
           production_order_id?: string | null
+          purchase_request_line_id?: string | null
           qc_status?: string | null
           qty: number
           qty_rejected?: number
           qty2_actual?: number | null
+          reason_code?: string | null
           ref_no?: string | null
           ref_type: string
           shelf_location?: string | null
+          stock_status?: string
           transfer_group?: string | null
           unit_cost?: number | null
           warehouse_id?: string | null
         }
         Update: {
+          bin_id?: string | null
           created_at?: string
           created_by?: string | null
           direction?: string
@@ -5534,18 +9112,35 @@ export type Database = {
           note?: string | null
           po_line_id?: string | null
           production_order_id?: string | null
+          purchase_request_line_id?: string | null
           qc_status?: string | null
           qty?: number
           qty_rejected?: number
           qty2_actual?: number | null
+          reason_code?: string | null
           ref_no?: string | null
           ref_type?: string
           shelf_location?: string | null
+          stock_status?: string
           transfer_group?: string | null
           unit_cost?: number | null
           warehouse_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_purchase_request_line_id_fkey"
+            columns: ["purchase_request_line_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_request_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_bin_id_fkey"
+            columns: ["bin_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_movements_created_by_fkey"
             columns: ["created_by"]
@@ -5559,6 +9154,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "warehouse_docs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
           },
           {
             foreignKeyName: "warehouse_movements_material_id_fkey"
@@ -5603,6 +9205,20 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "warehouse_movements_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_reason_code_fkey"
+            columns: ["reason_code"]
+            isOneToOne: false
+            referencedRelation: "warehouse_reason_codes"
+            referencedColumns: ["code"]
+          },
+          {
             foreignKeyName: "warehouse_movements_warehouse_id_fkey"
             columns: ["warehouse_id"]
             isOneToOne: false
@@ -5611,44 +9227,364 @@ export type Database = {
           },
         ]
       }
+      warehouse_purchase_request_lines: {
+        Row: {
+          approved_qty: number | null
+          created_at: string
+          id: string
+          line_no: number
+          material_id: string | null
+          name: string
+          note: string | null
+          po_line_id: string | null
+          purpose: string | null
+          qty: number
+          request_id: string
+          unit: string
+          unit_price: number | null
+          updated_at: string
+          vat_rate: number
+        }
+        Insert: {
+          approved_qty?: number | null
+          created_at?: string
+          id?: string
+          line_no: number
+          material_id?: string | null
+          name: string
+          note?: string | null
+          po_line_id?: string | null
+          purpose?: string | null
+          qty: number
+          request_id: string
+          unit: string
+          unit_price?: number | null
+          updated_at?: string
+          vat_rate?: number
+        }
+        Update: {
+          approved_qty?: number | null
+          created_at?: string
+          id?: string
+          line_no?: number
+          material_id?: string | null
+          name?: string
+          note?: string | null
+          po_line_id?: string | null
+          purpose?: string | null
+          qty?: number
+          request_id?: string
+          unit?: string
+          unit_price?: number | null
+          updated_at?: string
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_request_lines_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_purchase_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_purchase_requests: {
+        Row: {
+          approve_note: string | null
+          approved_at: string | null
+          approved_by: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          closed_at: string | null
+          closed_by: string | null
+          closed_reason: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          department: string
+          id: string
+          need_by: string | null
+          note: string | null
+          production_order_id: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejected_reason: string | null
+          requested_by: string | null
+          shipping_fee: number
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          approve_note?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_reason?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          department?: string
+          id?: string
+          need_by?: string | null
+          note?: string | null
+          production_order_id?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejected_reason?: string | null
+          requested_by?: string | null
+          shipping_fee?: number
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approve_note?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_reason?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          department?: string
+          id?: string
+          need_by?: string | null
+          note?: string | null
+          production_order_id?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejected_reason?: string | null
+          requested_by?: string | null
+          shipping_fee?: number
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_purchase_requests_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_purchase_requests_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_reason_codes: {
+        Row: {
+          active: boolean
+          affects_cost: boolean
+          code: string
+          created_at: string
+          direction: string
+          name: string
+          needs_approval: boolean
+          requires: string[]
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          affects_cost?: boolean
+          code: string
+          created_at?: string
+          direction: string
+          name: string
+          needs_approval?: boolean
+          requires?: string[]
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          affects_cost?: boolean
+          code?: string
+          created_at?: string
+          direction?: string
+          name?: string
+          needs_approval?: boolean
+          requires?: string[]
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       warehouse_stocktake_lines: {
         Row: {
-          counted_qty: number
+          book_qty_frozen: number | null
+          counted_at: string | null
+          counted_by: string | null
+          counted_qty: number | null
           created_at: string
-          diff: number
-          doc_id: string
+          diff: number | null
+          doc_id: string | null
           id: string
           material_id: string
           note: string | null
+          stocktake_id: string | null
           system_qty: number
         }
         Insert: {
-          counted_qty: number
+          book_qty_frozen?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_qty?: number | null
           created_at?: string
-          diff: number
-          doc_id: string
+          diff?: number | null
+          doc_id?: string | null
           id?: string
           material_id: string
           note?: string | null
+          stocktake_id?: string | null
           system_qty: number
         }
         Update: {
-          counted_qty?: number
+          book_qty_frozen?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_qty?: number | null
           created_at?: string
-          diff?: number
-          doc_id?: string
+          diff?: number | null
+          doc_id?: string | null
           id?: string
           material_id?: string
           note?: string | null
+          stocktake_id?: string | null
           system_qty?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktake_lines_counted_by_fkey"
+            columns: ["counted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_stocktake_lines_doc_id_fkey"
             columns: ["doc_id"]
             isOneToOne: false
             referencedRelation: "warehouse_docs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
           },
           {
             foreignKeyName: "warehouse_stocktake_lines_material_id_fkey"
@@ -5663,6 +9599,102 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "warehouse_stock"
             referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_stocktake_id_fkey"
+            columns: ["stocktake_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stocktakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_stocktakes: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          assigned_to: string | null
+          blind_count: boolean
+          code: string
+          created_at: string
+          created_by: string
+          doc_id: string | null
+          freeze_at: string | null
+          id: string
+          note: string | null
+          reject_reason: string | null
+          scope_count: number
+          scope_kind: string
+          scope_ref: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          assigned_to?: string | null
+          blind_count?: boolean
+          code: string
+          created_at?: string
+          created_by: string
+          doc_id?: string | null
+          freeze_at?: string | null
+          id?: string
+          note?: string | null
+          reject_reason?: string | null
+          scope_count?: number
+          scope_kind: string
+          scope_ref?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          assigned_to?: string | null
+          blind_count?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string
+          doc_id?: string | null
+          freeze_at?: string | null
+          id?: string
+          note?: string | null
+          reject_reason?: string | null
+          scope_count?: number
+          scope_kind?: string
+          scope_ref?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktakes_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_docs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5719,6 +9751,13 @@ export type Database = {
           unit2: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_purchase_order_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
           {
             foreignKeyName: "supply_purchase_order_lines_material_id_fkey"
             columns: ["material_id"]
@@ -5795,6 +9834,37 @@ export type Database = {
           },
         ]
       }
+      v_supply_balance: {
+        Row: {
+          lsx_codes: string[] | null
+          lsx_count: number | null
+          material_code: string | null
+          material_id: string | null
+          material_name: string | null
+          need_by: string | null
+          qty_drafted: number | null
+          qty_incoming: number | null
+          qty_needed: number | null
+          qty_on_hand: number | null
+          qty_short: number | null
+          unit: string | null
+        }
+        Relationships: []
+      }
+      v_supply_demand: {
+        Row: {
+          lsx_code: string | null
+          lsx_status: string | null
+          material_code: string | null
+          material_id: string | null
+          material_name: string | null
+          need_by: string | null
+          production_order_id: string | null
+          qty_needed: number | null
+          unit: string | null
+        }
+        Relationships: []
+      }
       v_task_summary: {
         Row: {
           actual_hours: number | null
@@ -5866,6 +9936,47 @@ export type Database = {
           },
         ]
       }
+      v_warehouse_stock_by_bin: {
+        Row: {
+          bin_code: string | null
+          bin_id: string | null
+          bin_kind: string | null
+          bin_name: string | null
+          material_id: string | null
+          qty: number | null
+          stock_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_bin_id_fkey"
+            columns: ["bin_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       warehouse_stock: {
         Row: {
           code: string | null
@@ -5876,6 +9987,10 @@ export type Database = {
           min_stock: number | null
           name: string | null
           on_hand: number | null
+          qty_blocked: number | null
+          qty_ok: number | null
+          qty_qc: number | null
+          search_text: string | null
           shelf_location: string | null
           unit: string | null
         }
@@ -5883,10 +9998,52 @@ export type Database = {
       }
     }
     Functions: {
+      hr_apply_due_leaves: { Args: { p_today: string }; Returns: number }
+
+      hr_attendance_days: {
+        Args: { p_from: string; p_to: string }
+        Returns: string[]
+      }
       immutable_unaccent: { Args: { "": string }; Returns: string }
       next_doc_code: { Args: { p_kind: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      supply_po_apply_adjustment: {
+        Args: {
+          p_actor: string
+          p_base_seq: number
+          p_delete_ids: string[]
+          p_header: Json
+          p_inserts: Json
+          p_po_id: string
+          p_reason: string
+          p_record: Json
+          p_splits: Json
+          p_updates: Json
+        }
+        Returns: number
+      }
+      supply_po_apply_adjustment_v2: {
+        Args: {
+          p_actor: string
+          p_base_seq: number
+          p_cause: string
+          p_delete_ids: string[]
+          p_header: Json
+          p_inserts: Json
+          p_lsx_ids: string[]
+          p_po_id: string
+          p_reason: string
+          p_record: Json
+          p_splits: Json
+          p_updates: Json
+        }
+        Returns: number
+      }
+      supply_po_cost_create: {
+        Args: { p_actor: string; p_allocs: Json; p_cost: Json }
+        Returns: string
+      }
       sweep_supply_alerts: { Args: never; Returns: undefined }
       technical_product_counts: {
         Args: never
@@ -5914,6 +10071,13 @@ export type Database = {
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
+      warehouse_book_qty_at: {
+        Args: { p_at: string; p_material_ids: string[] }
+        Returns: {
+          material_id: string
+          qty: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -5932,12 +10096,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5961,11 +10125,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5986,11 +10150,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6011,11 +10175,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6028,11 +10192,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

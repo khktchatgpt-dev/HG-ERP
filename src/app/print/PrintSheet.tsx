@@ -57,20 +57,37 @@ export function PrintPage({
   orientation = 'landscape',
   maxWidth = 'max-w-4xl',
   exportHref,
+  pdfName,
+  fitOnePage = false,
   children,
 }: {
   orientation?: 'landscape' | 'portrait'
   maxWidth?: string
   /** Có = thanh nút thêm "Xuất Excel" tải phiếu dạng .xlsx. */
   exportHref?: string
+  /** Có = thanh nút thêm "Lưu PDF", tên file gợi ý này (không kèm đuôi). */
+  pdfName?: string
+  /**
+   * Thu nhỏ thân phiếu cho VỪA MỘT TỜ khi in (đơn đặt hàng dài). Chỉ phiếu bật
+   * cờ này mới có `data-print-body`; phiếu khác giữ nguyên DOM.
+   */
+  fitOnePage?: boolean
   children: React.ReactNode
 }) {
-  const margin = orientation === 'portrait' ? '12mm' : '10mm'
+  // `orientation` nay chỉ là khổ MẶC ĐỊNH — người dùng đổi Dọc/Ngang ở thanh nút,
+  // và luật `@page` (lề 0 để trình duyệt khỏi in URL + ngày) do thanh nút phát.
   return (
-    <div className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}>
-      <style>{`@page { size: A4 ${orientation}; margin: ${margin}; }`}</style>
-      <PrintToolbar exportHref={exportHref} />
-      {children}
+    <div
+      data-print-sheet
+      className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}
+    >
+      <PrintToolbar
+        exportHref={exportHref}
+        defaultKho={orientation}
+        pdfName={pdfName}
+        fitOnePage={fitOnePage}
+      />
+      {fitOnePage ? <div data-print-body>{children}</div> : children}
     </div>
   )
 }
@@ -169,8 +186,15 @@ export function PrintMeta({
   refsBoxed?: boolean
 }) {
   return (
+    /*
+      HAI CỘT CÓ TRẦN (vá 02/10/2026). Khối số hiệu từng là `shrink-0` không bề rộng
+      tối đa: đơn gộp nhiều đơn hàng in "Đơn hàng: LAURA 01/26-27 g.30/12/26 +
+      LAURA … + …" thành MỘT dòng dài hơn cả tờ giấy — khung tràn mép phải, cột
+      "Kính gửi" bị bóp còn một chữ mỗi dòng, "Số ĐH"/"LSX" căn giữa trôi ra ngoài.
+      Nay khung tối đa 45% bề ngang và xuống dòng; cột NCC nhận phần còn lại.
+    */
     <div className="mt-2 flex items-start justify-between gap-4">
-      <table className="text-[12px]">
+      <table className="min-w-0 flex-1 text-[12px]">
         <tbody>
           {rows
             .filter(([, v]) => v !== null && v !== undefined && v !== '')
@@ -182,14 +206,16 @@ export function PrintMeta({
                 <td className="pr-2 align-top font-semibold whitespace-nowrap">
                   {label}
                 </td>
-                <td>{v}</td>
+                {/* Cột giá trị ôm hết phần dư (08/10/2026): bảng auto-layout chia bề
+                    ngang đều hai cột nên nhãn "Kính gửi" từng cách giá trị cả gang tay. */}
+                <td className="w-full">{v}</td>
               </tr>
             ))}
         </tbody>
       </table>
       {refs && refs.length > 0 && (
         <div
-          className={`shrink-0 text-[12px] ${
+          className={`max-w-[45%] min-w-[180px] text-[12px] break-words ${
             refsBoxed
               ? 'divide-y divide-black border border-black text-center [&>div]:px-3 [&>div]:py-0.5'
               : ''
@@ -226,10 +252,10 @@ export function PrintTerms({
               {/* Nhãn ĐẬM (28/08): nhãn và nội dung cùng một sắc chữ thì mắt
                   không tách được đâu là mục, đâu là điều khoản — nhất là khi
                   in đen trắng, thứ duy nhất phân biệt được là nét chữ. */}
-              <td className="pr-3 align-top font-semibold whitespace-nowrap">
-                {label}:
-              </td>
-              <td>{v}</td>
+              <td className="pr-3 align-top font-semibold whitespace-nowrap">{label}:</td>
+              {/* Giữ XUỐNG DÒNG của điều khoản nhiều ý (Quy cách / Bề mặt / Đóng
+                  gói… mỗi ý một dòng) — không thì in dồn thành một đoạn dài. */}
+              <td className="whitespace-pre-line">{v}</td>
             </tr>
           ))}
         </tbody>

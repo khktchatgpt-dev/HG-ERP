@@ -1,16 +1,20 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { isProductionStaff } from '@/modules/dept/production/perms'
 import { jobsService } from '@/modules/dept/production/jobs.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { filesService } from '@/modules/core/files/files.service'
-import { TeamScreen } from './TeamScreen'
+import { ViecCuaToScreen } from './ViecCuaToScreen'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * VIỆC CỦA TỔ — trang chính workspace Tổ sản xuất (0084/0087): chỉ thẻ việc
- * (ảnh SP + thông số + tiến độ + nút Xong). Lệnh đang chạy và Quá trình tổ
- * tách trang riêng trên menu.
+ * M5 — VIỆC CỦA TỔ. Trang chính của bề mặt XƯỞNG.
+ *
+ * CHỈ ĐỌC (chủ dự án chốt 18/09/2026: "tổ trưởng chỉ xem để biết tình hình").
+ * Mọi đường GHI đã bỏ khỏi màn này — sổ sản lượng chỉ có một cửa vào, là màn
+ * Ghi sản lượng của thống kê.
+ *
+ * KHÔNG ký URL ảnh SP nữa: bản cũ ký từng ảnh một cho mỗi thẻ việc, tức mỗi
+ * lần mở màn là một loạt vòng gọi Storage chỉ để trang trí. Màn mới là bảng,
+ * và bảng không cần ảnh.
  */
 export default async function TeamHomePage({
   searchParams,
@@ -21,45 +25,19 @@ export default async function TeamHomePage({
   const { team } = await searchParams
   const board = await jobsService.teamBoard(user, { team })
 
-  // Ảnh SP: ký URL 1 lượt (lỗi ảnh không chặn màn).
-  const imageUrls = new Map<string, string>()
-  await Promise.all(
-    [...new Set(board.cards.map((c) => c.image_file_id).filter(Boolean))].map(
-      async (fid) => {
-        try {
-          imageUrls.set(
-            fid as string,
-            await filesService.getDownloadUrl(user, fid as string),
-          )
-        } catch {
-          /* ignore */
-        }
-      },
-    ),
-  )
-
+  // Tổ viên chỉ thấy tổ mình; quản đốc/GĐ soi được tổ khác.
   const canPick = user.role !== 'employee'
-  const teams = canPick
-    ? (await departmentsRepo.list())
-        .filter((d) => d.workspace_id === 'production')
-        .map((d) => ({ id: d.id, name: d.name }))
-    : []
+  const teams = (await departmentsRepo.list())
+    .filter((d) => d.workspace_id === 'production')
+    .map((d) => ({ id: d.id, name: d.name }))
 
   return (
-    <TeamScreen
+    <ViecCuaToScreen
       teamId={board.team_id}
-      cards={board.cards.map((c) => ({
-        ...c,
-        image_url: c.image_file_id ? (imageUrls.get(c.image_file_id) ?? null) : null,
-      }))}
-      teams={teams}
+      teamName={teams.find((t) => t.id === board.team_id)?.name ?? null}
+      cards={board.cards.map((c) => ({ ...c, image_url: null }))}
+      teams={canPick ? teams : []}
       canPick={canPick}
-      canConfirm={
-        user.role === 'admin' ||
-        user.role === 'manager' ||
-        (await isProductionStaff(user))
-      }
-      isManager={user.role === 'admin' || user.role === 'manager'}
     />
   )
 }

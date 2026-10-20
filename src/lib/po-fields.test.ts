@@ -8,6 +8,9 @@ import {
   PO_SHARED_FIELD_PREFILL,
   prefillsFromCatalog,
   poField,
+  poFieldText,
+  poPriceSuffix,
+  poPriceUnitPerLine,
 } from './po-fields'
 
 /**
@@ -43,6 +46,9 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Vật liệu',
     'Quy cách',
     'SL đơn hàng',
+    // "Đm/sp" thêm 26/09/2026 — đúng cột trên đơn giấy PO An Thành Phát (3/2026-HG/ATP):
+    // SL đơn hàng là số SP, Đm/sp nói mỗi SP mấy cái, NCC tự đối chiếu ra SL đặt.
+    'Đm/sp',
     // "Tồn kho" bỏ 12/08/2026 (duyệt cột từng mẫu) — số nội bộ, không in cho NCC.
     'ĐVT',
     'SL đặt',
@@ -102,13 +108,16 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   // mây theo form Vipora (Định mức đứng sau tiền), sơn theo form Green Coatings.
   rattan: [
     'STT',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
+    'SL theo LSX',
+    'Định mức SP',
+    'SL đơn hàng',
     'ĐVT',
-    'Số lượng',
+    'SL đặt',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
-    'Định mức',
     'Ghi chú',
   ],
   paint: [
@@ -136,10 +145,12 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'STT',
     'Tên sản phẩm / vật tư',
     'Quy cách',
-    // "D×R×Dày" + "Tổng m³" bỏ khỏi phiếu in 12/08/2026 — vẫn là ô trên form
-    // để tính m³ và gợi ý giá, không in cho NCC.
+    // 09/10/2026: in lại m³/tấm + Tổng m³ — đúng bộ cột bảng NCC xốp (chị Nga).
+    // D×R×Dày vẫn chỉ là ô trên form (Quy cách đã ghi đủ ba số).
+    'm³/tấm',
     'ĐVT',
     'Số lượng',
+    'Tổng m³',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
@@ -191,6 +202,22 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Bảo hành',
     'Ghi chú',
   ],
+  // Tem nhãn (12/10/2026) — bộ cột user duyệt: thông số in cạnh tên, SL đơn hàng ·
+  // Đm/sp trước ĐVT như tờ PQ (PO-2026-0123).
+  label: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'Chất liệu',
+    'Kích thước',
+    'Kiểu in / gia công',
+    'SL đơn hàng',
+    'Đm/sp',
+    'ĐVT',
+    'SL đặt',
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Ghi chú',
+  ],
   simple: [
     'STT',
     'Tên sản phẩm / vật tư',
@@ -208,6 +235,7 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
 function nhanCot(t: PoTemplate): string[] {
   const CO_DINH: Record<string, string> = {
     '@stt': 'STT',
+    '@code': 'Mã sản phẩm',
     '@name': 'Tên sản phẩm / vật tư',
     '@unit': 'ĐVT',
     '@price': 'Đơn giá (VND)',
@@ -367,10 +395,10 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
     accessory: ['unit2'],
     aluminium: ['demand'],
     carton: ['demand', 'onhand', 'basis'],
-    rattan: ['demand', 'onhand', 'unit2'],
+    rattan: ['dinhmuc', 'onhand', 'unit2'],
     paint: ['demand', 'onhand', 'unit2'],
     chemical: ['demand', 'onhand', 'unit2'],
-    foam: ['dims', 'm3total', 'basis', 'demand', 'onhand'],
+    foam: ['dims', 'basis', 'demand', 'dm', 'onhand'],
     glass: ['m2total', 'basis'],
     mro: ['unit2'],
     simple: ['unit2'],
@@ -390,5 +418,108 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
           `${t}.${k} đã in — bỏ khỏi NOT_PRINTED`,
         ).toBe(false)
     }
+  })
+})
+
+describe('poPriceUnitPerLine — đơn vị đơn giá của mẫu tính theo kg', () => {
+  it('mọi dòng tính theo kg → null (nhãn cột "/kg" giữ nguyên, phiếu cũ không đổi)', () => {
+    expect(
+      poPriceUnitPerLine('kg', [{ price_basis: 'unit2' }, { price_basis: 'unit2' }]),
+    ).toBeNull()
+  })
+
+  it('mẫu không có đơn vị giá riêng → null', () => {
+    expect(poPriceUnitPerLine(null, [{ price_basis: 'unit' }])).toBeNull()
+  })
+
+  it('có dòng giá theo CÂY (Thép Visa PO-2026-0116) → hậu tố từng ô', () => {
+    const suffix = poPriceUnitPerLine('kg', [
+      { price_basis: 'unit' },
+      { price_basis: 'unit2' },
+    ])
+    expect(suffix).not.toBeNull()
+    expect(suffix!({ price_basis: 'unit', material_unit: 'Cây' })).toBe('/cây')
+    expect(suffix!({ price_basis: 'unit2', material_unit: 'Cây' })).toBe('/kg')
+    expect(suffix!({ price_basis: 'unit', material_unit: null })).toBe('')
+  })
+})
+
+/*
+ * CƠ SỞ `ctn` = GIÁ THEO ĐVT ĐẶT (06/10/2026). PO-2026-0137 mua ván ép ĐVT Tấm
+ * theo mẫu bao bì, phiếu in "46.000/thùng" — NCC đọc sai giá.
+ */
+describe('poPriceSuffix — hậu tố đơn giá theo ĐVT dòng', () => {
+  it('bao bì tính theo ĐVT: lấy đúng ĐVT dòng, không in cứng "/thùng"', () => {
+    expect(poPriceSuffix('carton', 'ctn', 'Tấm')).toBe('/tấm')
+    expect(poPriceSuffix('carton', 'ctn', 'Cái')).toBe('/cái')
+    expect(poPriceSuffix('carton', 'ctn', 'Thùng')).toBe('/thùng')
+  })
+  it('tính theo m² vẫn là /m²; dòng không ĐVT thì lùi về chữ cũ', () => {
+    expect(poPriceSuffix('carton', 'm2', 'Tấm')).toBe('/m²')
+    expect(poPriceSuffix('carton', 'ctn', null)).toBe('/thùng')
+    expect(poPriceSuffix('carton', null, '  ')).toBe('/thùng')
+  })
+  it('kính: theo ĐVT dòng, m² giữ nguyên; xốp không đổi', () => {
+    expect(poPriceSuffix('glass', 'ctn', 'Tấm')).toBe('/tấm')
+    expect(poPriceSuffix('glass', 'ctn', 'Cái')).toBe('/cái')
+    expect(poPriceSuffix('glass', 'm2', 'Tấm')).toBe('/m²')
+    expect(poPriceSuffix('foam', 'm3', 'Tấm')).toBe('/m³')
+    expect(poPriceSuffix('foam', 'ctn', 'Tấm')).toBe('')
+  })
+})
+
+describe('phiếu in xốp — m³/tấm + Tổng m³ (09/10/2026)', () => {
+  const relax = { material_unit: 'Tấm', inner_l_mm: 580, inner_w_mm: 540, inner_h_mm: 60, qty_ordered: 250 } // prettier-ignore
+  it('m³/tấm đọc từ D×R×Dày; Tổng m³ của dòng theo tấm (qty2 null) = SL × m³/tấm', () => {
+    expect(poFieldText(poField('foam', 'm3tam')!, { ...relax, qty2: null })).toBe(
+      '0,018792',
+    )
+    expect(poFieldText(poField('foam', 'm3total')!, { ...relax, qty2: null })).toBe(
+      '4,698',
+    )
+    // Dòng theo m³ có qty2 đã lưu (kể cả số gõ đè theo tờ NCC) — in đúng số đó.
+    expect(poFieldText(poField('foam', 'm3total')!, { ...relax, qty2: 4.7 })).toBe('4,7')
+  })
+})
+
+describe('phiếu in mây — SL theo LSX · Định mức SP · SL đơn hàng (09/10/2026)', () => {
+  // PO-2026-0154: 200 ghế relax xám × 5,9 kg = 1.180 kg; đặt thật 1.000 kg.
+  const may = { material_unit: 'Kg', qty_ordered: 1000, qty_demand: 1180, dm_per_sp: 5.9 }
+  it('SL theo LSX không lưu DB — tính ngược SL đơn hàng ÷ Định mức SP', () => {
+    expect(poFieldText(poField('rattan', 'lsx')!, may)).toBe('200')
+    expect(poFieldText(poField('rattan', 'dm')!, may)).toBe('5,9')
+    expect(poFieldText(poField('rattan', 'demand')!, may)).toBe('1.180')
+  })
+  it('thiếu định mức thì ô SL theo LSX trống, không chia cho 0', () => {
+    expect(poFieldText(poField('rattan', 'lsx')!, { ...may, dm_per_sp: null })).toBe('')
+    expect(poFieldText(poField('rattan', 'lsx')!, { ...may, qty_demand: null })).toBe('')
+  })
+})
+
+import {
+  fmtSoVn,
+  poField as poFieldSoLe,
+  poFieldText as poFieldTextSoLe,
+} from './po-fields'
+
+/*
+ * m³/SP NHỎ HIỆN "0" (12/10/2026, PO-2026-0177 của Huy): tay vịn gỗ 0,000487 m³/SP,
+ * `toLocaleString('vi-VN')` trơn chỉ giữ 3 số lẻ. Tiền vẫn đúng — chỉ chữ hiển thị sai.
+ */
+describe('fmtSoVn — giữ tới 6 số lẻ', () => {
+  it('m³/SP của PO-2026-0177 không còn thành 0', () => {
+    expect(fmtSoVn(0.000487)).toBe('0,000487')
+    expect(fmtSoVn(0.020646)).toBe('0,020646')
+    expect(fmtSoVn(0.753876)).toBe('0,753876')
+  })
+  it('số nguyên và số ít lẻ in y như cũ; trống thì chuỗi rỗng', () => {
+    expect(fmtSoVn(1548)).toBe('1.548')
+    expect(fmtSoVn(2.97)).toBe('2,97')
+    expect(fmtSoVn(0.1 + 0.2)).toBe('0,3')
+    expect(fmtSoVn(null)).toBe('')
+  })
+  it('phiếu in mẫu gỗ: ô m³ / SP đọc ra đủ số', () => {
+    const f = poFieldSoLe('wood', 'm3sp')!
+    expect(poFieldTextSoLe(f, { material_unit: 'Cái', m3_per_unit: 0.000487 } as never)).toBe('0,000487') // prettier-ignore
   })
 })

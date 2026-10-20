@@ -1,10 +1,11 @@
 import { assessPoLate } from '@/lib/late-risk'
+import { groupPosByLsx, summarizePos } from '@/lib/lsx-supply'
+import { buildMeeting } from '@/lib/supply-meeting'
 import { db } from '@/server/db'
 import type { User } from '@/modules/core/users/users.repo'
-import {
-  productionRepo,
-  listOrderLineProducts,
-} from '@/modules/dept/production/production.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
+import { withProductImage } from '@/modules/dept/production/lsx-lines.service'
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
 import { supplyRepo } from './supply.repo'
@@ -224,7 +225,29 @@ export type LsxSupplyDetail = {
   ship_date: string | null
   materials_due_at: string | null
   materials_received_at: string | null
-  products: { code: string; name: string; qty: number }[]
+  /** Tóm tắt container của lệnh — mốc thứ tư người mua hỏi tới. */
+  container_summary: string | null
+  /**
+   * SẢN PHẨM PHẢI LÀM — mang theo id + ảnh (15/09/2026). Bản trước chỉ có
+   * mã/tên/số lượng, nên màn chi tiết lệnh chỉ đếm được "17 SP" mà không bày
+   * ra được cái gì; chủ dự án báo thiếu ảnh đúng chỗ này.
+   */
+  products: {
+    product_id: string | null
+    code: string
+    name: string
+    qty: number
+    image_file_id: string | null
+    /** ĐVT của dòng lệnh — "22.854 SP" và "22.854 Bộ" là hai chuyện khác nhau. */
+    unit: string | null
+    /**
+     * THÔNG SỐ KỸ THUẬT khai trên DÒNG LỆNH (son · go · kinh · nem · may).
+     * Người mua chép chúng sang đơn khi đặt sơn, kính, vải; trước 16/09/2026
+     * khu Mua hàng không bày ở đâu nên phải mở màn của phòng khác để tra.
+     * Gom lại để đọc bằng `lib/lsx-spec-summary`.
+     */
+    specs: Record<string, string>
+  }[]
   pos: {
     id: string
     code: string
@@ -326,7 +349,16 @@ export async function buildLsxSupplyDetail(
 
   const [{ rows: pos }, productLines, coverage] = await Promise.all([
     posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
-    listOrderLineProducts(lsx.order_ids),
+    /*
+      SẢN PHẨM LẤY TỪ DÒNG LỆNH, KHÔNG TỪ DÒNG ĐƠN HÀNG (15/09/2026).
+
+      Dòng lệnh là thứ Bán hàng soạn ra và là thứ Sale / Sản xuất / phiếu in
+      đều đọc. Lấy từ đơn hàng thì hai màn nói khác nhau về CÙNG một lệnh: đo
+      được 5 lệnh đang chạy chưa gắn đơn khách nào — Sale bày 6 sản phẩm, còn
+      màn này bày 0 và đổ lỗi cho Bán hàng. `withProductImage` cũng chỉ có
+      nghĩa trên dòng lệnh.
+    */
+    lsxLinesRepo.listLines(lsxId).then(withProductImage),
     buildCoverage(lsxId),
   ])
 
@@ -337,9 +369,25 @@ export async function buildLsxSupplyDetail(
 
   const products: LsxSupplyDetail['products'] = []
   for (const pl of productLines) {
-    const hit = products.find((x) => x.code === pl.code)
+    // Một mã SP nằm nhiều dòng (tách đợt xuất) — cộng dồn, như màn cũ vẫn làm.
+    const hit = products.find((x) => x.code === pl.product_code)
     if (hit) hit.qty += pl.qty
-    else products.push({ code: pl.code, name: pl.name, qty: pl.qty })
+    else
+      products.push({
+        product_id: pl.product_id,
+        code: pl.product_code,
+        name: pl.name_vi ?? pl.product_code,
+        qty: pl.qty,
+        image_file_id: pl.image_file_id,
+        unit: pl.unit ?? null,
+        /*
+          Thông số lấy từ DÒNG ĐẦU của mã SP. Một mã nằm nhiều dòng là do tách
+          đợt xuất (cộng dồn số lượng ngay trên), mà các đợt của cùng một mã
+          thì cùng sơn cùng gỗ — khai khác nhau là lỗi nhập liệu, và
+          `gomThongSo` ở màn sẽ bày ra chỗ khác nhau đó chứ không im lặng.
+        */
+        specs: pl.specs ?? {},
+      })
   }
 
   return {
@@ -352,6 +400,7 @@ export async function buildLsxSupplyDetail(
     ship_date: lsx.ship_date,
     materials_due_at: lsx.materials_due_at,
     materials_received_at: lsx.materials_received_at,
+    container_summary: lsx.container_summary ?? null,
     coverage,
     products,
     pos: pos.map((p) => {
@@ -404,22 +453,25 @@ export async function buildLsxSupplyRows(
   ])
 
   const [productLines, extraLsx] = await Promise.all([
-    listOrderLineProducts(lsxs.flatMap((l) => l.order_ids)),
+    // Cùng nguồn với màn chi tiết — DÒNG LỆNH, không phải dòng đơn hàng. Hai
+    // nơi đếm "lệnh này làm mấy mã" mà đọc hai bảng là sớm muộn lệch nhau.
+    lsxLinesRepo.listLinesBulk(lsxs.map((l) => l.id)),
     posRepo.extraLsxByPoIds(pos.map((p) => p.id)),
   ])
 
   // Sản phẩm về theo LỆNH: một lệnh gộp nhiều đơn (0113) nên cộng dồn cùng mã.
-  const lsxIdByOrderId = new Map<string, string>()
-  for (const l of lsxs) for (const oid of l.order_ids) lsxIdByOrderId.set(oid, l.id)
   const productsByLsx = new Map<string, { code: string; name: string; qty: number }[]>()
   for (const pl of productLines) {
-    const lsxId = lsxIdByOrderId.get(pl.order_id)
-    if (!lsxId) continue
-    const list = productsByLsx.get(lsxId) ?? []
-    const hit = list.find((x) => x.code === pl.code)
+    const list = productsByLsx.get(pl.production_order_id) ?? []
+    const hit = list.find((x) => x.code === pl.product_code)
     if (hit) hit.qty += pl.qty
-    else list.push({ code: pl.code, name: pl.name, qty: pl.qty })
-    productsByLsx.set(lsxId, list)
+    else
+      list.push({
+        code: pl.product_code,
+        name: pl.name_vi ?? pl.product_code,
+        qty: pl.qty,
+      })
+    productsByLsx.set(pl.production_order_id, list)
   }
 
   /*
@@ -427,35 +479,31 @@ export async function buildLsxSupplyRows(
    * ĐƠN HÀNG một dòng nên lệnh gộp nhiều đơn bị cộng trùng, và view chỉ nhìn
    * cột `production_order_id` nên bỏ sót đơn mua chung nhiều lệnh (0125).
    */
-  type PoBrief = LsxSupplyRow['pos'][number]
-  const posByLsx = new Map<string, PoBrief[]>()
-  const attach = (lsxId: string, p: (typeof pos)[number], shared: boolean) => {
-    const list = posByLsx.get(lsxId) ?? []
-    list.push({
-      id: p.id,
-      code: p.code,
-      supplier_name: p.supplier_name,
-      status: p.status,
-      expected_at: p.expected_at,
-      currency: p.currency,
-      ordered_at: p.ordered_at,
-      note: p.note,
-      assignee_name: p.assignee_name,
-      shared,
-      late: assessPoLate(p, today) === 'overdue',
-    })
-    posByLsx.set(lsxId, list)
-  }
-  for (const p of pos) {
-    if (p.production_order_id) attach(p.production_order_id, p, false)
-    for (const ex of extraLsx.get(p.id) ?? []) {
-      if (ex.id !== p.production_order_id) attach(ex.id, p, true)
-    }
+  // Gom đơn theo LỆNH bằng helper thuần (dùng chung với badge sidebar) rồi
+  // rút về bộ cột màn hình cần.
+  const grouped = groupPosByLsx(pos, extraLsx, today)
+  const posByLsx = new Map<string, LsxSupplyRow['pos'][number][]>()
+  for (const [lsxId, list] of grouped) {
+    posByLsx.set(
+      lsxId,
+      list.map((p) => ({
+        id: p.id,
+        code: p.code,
+        supplier_name: p.supplier_name,
+        status: p.status,
+        expected_at: p.expected_at,
+        currency: p.currency,
+        ordered_at: p.ordered_at,
+        note: p.note,
+        assignee_name: p.assignee_name,
+        shared: p.shared,
+        late: p.late,
+      })),
+    )
   }
 
   return lsxs.map((l) => {
     const list = posByLsx.get(l.id) ?? []
-    const live = list.filter((p) => p.status !== 'cancelled')
     return {
       id: l.id,
       code: l.code,
@@ -467,17 +515,43 @@ export async function buildLsxSupplyRows(
       priority: l.priority,
       products: productsByLsx.get(l.id) ?? [],
       pos: list,
-      posTotal: live.length,
-      posUnsent: live.filter(
-        (p) => p.status === 'draft' || p.status === 'pending_approval',
-      ).length,
-      posOpen: live.filter(
-        (p) =>
-          p.status !== 'draft' &&
-          p.status !== 'pending_approval' &&
-          p.status !== 'received',
-      ).length,
-      posLate: live.filter((p) => p.late).length,
+      ...summarizePos(list),
     }
   })
+}
+
+/**
+ * SỐ LỆNH CẦN NÊU TRONG HỌP — cho badge sidebar "Vấn đề cần xử lý" (13/09/2026).
+ *
+ * Cùng phép tính với ba trang họp (`buildMeeting`.issues: mọi mức trừ Đang về
+ * và Đủ) nhưng đi đường NHẸ: không join NCC/người phụ trách, không nạp dòng
+ * sản phẩm — badge chạy trên mọi lần mở trang của khu Cung ứng. Không nhận
+ * `user` vì sidebar chỉ hiện trong khu này và số đếm không tuỳ người xem.
+ */
+export async function countMeetingIssues(
+  today: string,
+  /** Chỉ đếm các lệnh này (lệnh của tôi — lib/supply-scope). Bỏ trống = cả phòng. */
+  onlyLsx?: Set<string>,
+): Promise<number> {
+  // Ba truy vấn SONG SONG (không đợi id đơn rồi mới hỏi lệnh phụ) — badge
+  // trả về trong một vòng mạng thay vì hai.
+  const [lsxs, pos, extraLsx] = await Promise.all([
+    productionRepo.listActive(),
+    posRepo.listMeetingFields(),
+    posRepo.listAllExtraLsx(),
+  ])
+  const grouped = groupPosByLsx(pos, extraLsx, today)
+  // Mỗi lệnh chấm rủi ro độc lập, nên lọc TRƯỚC khi chấm cho ra đúng số lọc sau.
+  const inputs = lsxs.filter((l) => !onlyLsx || onlyLsx.has(l.id)).map((l) => {
+    const list = grouped.get(l.id) ?? []
+    return {
+      code: l.code,
+      materials_received_at: l.materials_received_at,
+      materials_due_at: l.materials_due_at,
+      ship_date: l.ship_date,
+      pos: list.map((p) => ({ status: p.status, expected_at: p.expected_at })),
+      ...summarizePos(list),
+    }
+  })
+  return buildMeeting(inputs, today).issues.length
 }

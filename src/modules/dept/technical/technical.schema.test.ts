@@ -9,6 +9,7 @@ import {
   productFillSpecsSchema,
   productLockSchema,
   productUnlockSchema,
+  productClusterUpdateSchema,
 } from './technical.schema'
 
 describe('packingSchema', () => {
@@ -89,9 +90,9 @@ describe('productCreateSchema', () => {
     expect(p.packing?.carton_l_cm).toBe(75)
   })
 
-  it('unit mặc định "cai"; customer_name nullable (mẫu chung)', () => {
+  it('unit mặc định "cái" (cách viết của 799/807 SP); customer_name nullable (mẫu chung)', () => {
     const p = productCreateSchema.parse({ code: 'X', name: 'Y', customer_name: null })
-    expect(p.unit).toBe('cai')
+    expect(p.unit).toBe('cái')
     expect(p.customer_name).toBeNull()
   })
 
@@ -155,9 +156,9 @@ describe('productListQuerySchema', () => {
 
   it('lọc "mẫu chung" không bị viết hoa thành nhãn khách', () => {
     // '__common' là mã sentinel, không phải tên khách — chuẩn hoá nó là hỏng lọc.
-    expect(productListQuerySchema.parse({ customer_name: '__common' }).customer_name).toBe(
-      '__common',
-    )
+    expect(
+      productListQuerySchema.parse({ customer_name: '__common' }).customer_name,
+    ).toBe('__common')
   })
 
   it('từ chối bom_status lạ', () => {
@@ -226,5 +227,85 @@ describe('schema kiểm soát bản BOM', () => {
     expect(productLockSchema.parse({ note: ' chốt bản 13/08 ' }).note).toBe(
       'chốt bản 13/08',
     )
+  })
+})
+
+/**
+ * KHAI CỤM (`ProductPartsCard` → PATCH clusters/[clusterId]).
+ *
+ * Hợp đồng này mới trở thành load-bearing 23/09/2026: `components.service.suggest`
+ * đọc đúng ba trường dưới đây để sinh dòng CỤM lúc định hình, và trước đó chưa
+ * màn nào gửi chúng đi (đo 22/09: 0/136 cụm có SL, 2/136 có lộ trình). Sai một
+ * trường ở biên là tầng cụm im lặng rỗng lại.
+ */
+describe('productClusterUpdateSchema — ba trường khai cụm', () => {
+  it('nhận đúng payload của hộp khai, ép số từ chuỗi (form gửi string)', () => {
+    const p = productClusterUpdateSchema.parse({
+      qty_per_product: '2',
+      first_stage: 'han',
+      final_stage: 'son',
+    })
+    expect(p.qty_per_product).toBe(2)
+    expect(p.first_stage).toBe('han')
+    expect(p.final_stage).toBe('son')
+  })
+
+  it('null là hợp lệ — bỏ trống nghĩa là "suy theo nhóm vật tư", không phải lỗi', () => {
+    const p = productClusterUpdateSchema.parse({
+      qty_per_product: null,
+      first_stage: null,
+      final_stage: null,
+    })
+    expect(p.qty_per_product).toBeNull()
+    expect(p.first_stage).toBeNull()
+  })
+
+  it('SL cụm/SP phải dương — 0 hay âm là số vô nghĩa, chặn ở biên', () => {
+    expect(productClusterUpdateSchema.safeParse({ qty_per_product: 0 }).success).toBe(
+      false,
+    )
+    expect(productClusterUpdateSchema.safeParse({ qty_per_product: -1 }).success).toBe(
+      false,
+    )
+  })
+
+  it('partial — đổi tên không kéo theo hai trường kia', () => {
+    expect(productClusterUpdateSchema.safeParse({ name: 'Cụm chân trước' }).success).toBe(
+      true,
+    )
+  })
+})
+
+describe('productUpdateSchema — sửa một phần không đụng ô khác (07/10/2026)', () => {
+  it('PATCH chỉ có packing / ảnh KHÔNG chèn unit mặc định', () => {
+    expect(
+      productUpdateSchema.parse({ packing: { qty_per_carton: 2 } }),
+    ).not.toHaveProperty('unit')
+    expect(productUpdateSchema.parse({ image_file_id: null })).not.toHaveProperty('unit')
+  })
+  it('giữ đủ khoá thông số + KL cân thực tế của trang chi tiết', () => {
+    const p = productUpdateSchema.parse({
+      tech_spec: {
+        paint: 'RAL 7016',
+        fabric: 'Olefin',
+        hardware: 'Inox 304',
+        finish: 'Matt',
+      },
+      actual_weight_kg: 12.5,
+    })
+    expect(p.tech_spec).toEqual({
+      paint: 'RAL 7016',
+      fabric: 'Olefin',
+      hardware: 'Inox 304',
+      finish: 'Matt',
+    })
+    expect(p.actual_weight_kg).toBe(12.5)
+  })
+})
+
+describe('packingSchema — giữ CBM khai tay (08/10/2026)', () => {
+  it('PATCH đóng gói không lột khoá cbm', () => {
+    const p = productUpdateSchema.parse({ packing: { qty_per_carton: 2, cbm: 0.42 } })
+    expect(p.packing).toEqual({ qty_per_carton: 2, cbm: 0.42 })
   })
 })

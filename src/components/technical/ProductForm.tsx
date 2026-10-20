@@ -11,9 +11,11 @@ import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 
 const cls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none'
 
-const UNITS = ['cai', 'bo', 'set', 'pcs']
+// Đúng hai cách viết đang có trong thư viện (07/10/2026: "cái" 799 · "bộ" 8) — gợi ý
+// "cai" không dấu là đẻ lại cách viết đã dọn.
+const UNITS = ['cái', 'bộ']
 
 /**
  * Tạo sản phẩm — CHỈ những gì phải có ngay để SP tồn tại và tìm được.
@@ -98,7 +100,7 @@ export function ProductForm({
       name_foreign: str('name_foreign') || null,
       customer_name: str('customer_name') || null,
       category: str('category') || null,
-      unit: str('unit') || 'cai',
+      unit: str('unit') || 'cái',
       // Gửi tường minh chứ không để server suy từ mã: nhập mã tay (SP mã cũ)
       // thì mã không parse được, mà hai ô này người dùng vừa chọn hẳn hoi.
       product_type: type,
@@ -143,14 +145,14 @@ export function ProductForm({
         actions={
           <Link
             href="/products"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
           >
             ← Huỷ
           </Link>
         }
       />
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <section className="rounded-lg border border-zinc-200 bg-white p-4">
         <form onSubmit={submit} className="grid max-w-3xl gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm">
             Loại sản phẩm <span className="text-red-500">*</span>
@@ -212,11 +214,11 @@ export function ProductForm({
               required
               maxLength={100}
               placeholder={manualCode ? 'Nhập mã tay' : 'Đang cấp mã…'}
-              className={`${cls} font-mono ${!manualCode ? 'bg-zinc-50 dark:bg-zinc-900/60' : ''}`}
+              className={`${cls} font-mono ${!manualCode ? 'bg-zinc-50' : ''}`}
             />
             <p className="text-muted-foreground text-xs">
               {codeError ? (
-                <span className="text-red-600 dark:text-red-400">
+                <span className="text-red-600">
                   {codeError} — bấm “Sửa tay” để tự nhập.
                 </span>
               ) : manualCode ? (
@@ -283,7 +285,7 @@ export function ProductForm({
               name="unit"
               list="product-units"
               maxLength={30}
-              defaultValue="cai"
+              defaultValue="cái"
               className={cls}
             />
             <datalist id="product-units">
@@ -299,7 +301,7 @@ export function ProductForm({
             </p>
             <Link
               href="/products"
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-50"
             >
               Huỷ
             </Link>

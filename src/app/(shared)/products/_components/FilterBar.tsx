@@ -50,7 +50,7 @@ function ImageToggle({
       className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors ${
         on
           ? 'border-sky-600 bg-sky-600 text-white'
-          : 'text-muted-foreground hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-300'
+          : 'text-muted-foreground hover:bg-sky-50 hover:text-sky-700'
       }`}
     >
       {on ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
@@ -71,7 +71,7 @@ function ViewToggle({
     `grid size-7 place-items-center rounded transition-colors ${
       on
         ? 'bg-sky-600 text-white shadow-sm'
-        : 'text-muted-foreground hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-300'
+        : 'text-muted-foreground hover:bg-sky-50 hover:text-sky-700'
     }`
   return (
     <div className="inline-flex gap-0.5 rounded-md border p-0.5">

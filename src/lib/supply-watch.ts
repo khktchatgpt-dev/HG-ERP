@@ -12,6 +12,8 @@
  * ngay lần đầu họ ngồi đếm tay.
  */
 
+import type { IcoName } from '@/components/kit'
+
 import { assessPoLate, isMissingEta } from './late-risk'
 
 /** Trường tối thiểu để phân loại — mọi màn đều có sẵn từ `posService.list`. */
@@ -22,11 +24,18 @@ export type SupplyWatchInput = {
   /** Tiến độ về kho theo DÒNG (0126) — thiếu thì coi như chưa biết. */
   lines_done?: number
   lines_total?: number
+  /** Mốc gửi NCC / NCC xác nhận — để bắt đơn NCC chậm xác nhận (0213). */
+  ordered_at?: string | null
+  confirmed_at?: string | null
 }
+
+/** Gửi NCC quá bấy nhiêu ngày mà chưa xác nhận thì lên hộp thư (27/09/2026). */
+export const CONFIRM_DUE_DAYS = 2
 
 // ── 1. Việc cần xử lý ─────────────────────────────────────────────────
 
-export type SupplyTodoKind = 'overdue' | 'unsent' | 'no_eta' | 'partial' | 'draft'
+export type SupplyTodoKind =
+  'overdue' | 'unconfirmed' | 'unsent' | 'no_eta' | 'partial' | 'draft'
 
 export const SUPPLY_TODO: Record<
   SupplyTodoKind,
@@ -37,25 +46,44 @@ export const SUPPLY_TODO: Record<
     /** Vì sao đơn này lọt vào đây (một câu, hiện dưới nhóm). */
     why: string
     tone: 'stop' | 'warn' | 'primary' | 'muted'
+    /**
+     * Icon của làn — khai Ở ĐÂY, cạnh nhãn, để hộp thư và trang Vào việc
+     * không mỗi nơi chọn một hình cho cùng một loại việc. Từ vựng khái niệm
+     * ở `kit/Icon.tsx`; chỉ là kiểu chữ, không kéo mã chạy nào vào lib.
+     */
+    icon: IcoName
     /** Thứ tự khẩn — nhóm nhỏ số hiện trên trước. */
     order: number
   }
 > = {
   overdue: {
+    icon: 'quaHen',
     label: 'Quá hẹn giao',
     action: 'Giục nhà cung cấp',
     why: 'NCC đã nhận đơn nhưng qua ngày hẹn vẫn chưa giao đủ.',
     tone: 'stop',
     order: 1,
   },
+  unconfirmed: {
+    icon: 'cho',
+    label: 'NCC chưa xác nhận',
+    action: 'Gọi NCC chốt đơn + ngày giao',
+    why: `Đơn đã gửi quá ${CONFIRM_DUE_DAYS} ngày mà NCC chưa xác nhận — chưa biết NCC có nhận đơn, giao ngày nào.`,
+    tone: 'warn',
+    order: 1.5,
+  },
+  // Khoá giữ là 'unsent' (URL ?viec=unsent, số đếm màn GĐ đang trỏ); nghĩa đổi
+  // 06/10/2026 khi bỏ bước "Gửi NCC": đã duyệt mà chưa ghi NCC xác nhận.
   unsent: {
-    label: 'Đã duyệt · chưa gửi NCC',
-    action: 'Gửi nhà cung cấp',
-    why: 'Giám đốc ký rồi mà đơn chưa ra khỏi cửa — chỗ đơn nằm im lâu nhất.',
+    icon: 'gui',
+    label: 'Đã duyệt · chờ NCC xác nhận',
+    action: 'Gọi NCC chốt đơn rồi ghi xác nhận',
+    why: 'Giám đốc ký rồi mà chưa ghi NCC xác nhận — chưa biết NCC có nhận đơn, giao ngày nào. Chỗ đơn nằm im lâu nhất.',
     tone: 'warn',
     order: 2,
   },
   no_eta: {
+    icon: 'hen',
     label: 'Chưa có hẹn giao',
     action: 'Chốt ngày giao với NCC',
     why: 'Không có ngày hẹn thì mọi cảnh báo trễ đều bỏ qua đơn này.',
@@ -63,6 +91,7 @@ export const SUPPLY_TODO: Record<
     order: 3,
   },
   partial: {
+    icon: 'nhanHang',
     label: 'Về một phần',
     action: 'Theo dõi phần còn thiếu',
     why: 'Đã nhận được một số dòng, phần còn lại chưa về.',
@@ -70,6 +99,7 @@ export const SUPPLY_TODO: Record<
     order: 4,
   },
   draft: {
+    icon: 'banNhap',
     label: 'Nháp chưa gửi duyệt',
     action: 'Hoàn tất rồi gửi Giám đốc',
     why: 'Đơn soạn dở, chưa ai nhìn thấy ngoài bạn.',
@@ -103,6 +133,7 @@ export function classifyTodo(
   if (po.status === 'approved') return 'unsent'
   // Còn lại là đơn ĐÃ ra khỏi cửa: ordered / confirmed / in_transit / partial.
   if (assessPoLate(po, todayIso) === 'overdue') return 'overdue'
+  if (isUnconfirmed(po, todayIso)) return 'unconfirmed'
   if (isMissingEta(po)) return 'no_eta'
   if (po.status === 'partial') return 'partial'
   return null
@@ -133,13 +164,19 @@ export type IncomingBucket = 'overdue' | 'today' | 'week' | 'later' | 'no_eta'
 
 export const INCOMING_BUCKET: Record<
   IncomingBucket,
-  { label: string; tone: 'stop' | 'warn' | 'primary' | 'muted'; order: number }
+  {
+    label: string
+    tone: 'stop' | 'warn' | 'primary' | 'muted'
+    order: number
+    /** Icon của rổ — khai cạnh nhãn, cùng luật với `SUPPLY_TODO`. */
+    icon: IcoName
+  }
 > = {
-  overdue: { label: 'Quá hẹn', tone: 'stop', order: 1 },
-  today: { label: 'Đến hẹn hôm nay', tone: 'warn', order: 2 },
-  week: { label: 'Trong 7 ngày tới', tone: 'primary', order: 3 },
-  later: { label: 'Sau đó', tone: 'muted', order: 4 },
-  no_eta: { label: 'Chưa hẹn ngày', tone: 'warn', order: 5 },
+  overdue: { label: 'Quá hẹn', tone: 'stop', order: 1, icon: 'quaHen' },
+  today: { label: 'Đến hẹn hôm nay', tone: 'warn', order: 2, icon: 'hen' },
+  week: { label: 'Trong 7 ngày tới', tone: 'primary', order: 3, icon: 'lich' },
+  later: { label: 'Sau đó', tone: 'muted', order: 4, icon: 'lich' },
+  no_eta: { label: 'Chưa hẹn ngày', tone: 'warn', order: 5, icon: 'cho' },
 }
 
 export const INCOMING_BUCKETS = (Object.keys(INCOMING_BUCKET) as IncomingBucket[]).sort(
@@ -236,4 +273,15 @@ function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
+}
+
+/**
+ * NCC CHẬM XÁC NHẬN (P2, 27/09/2026): đơn "Đã gửi NCC" quá `CONFIRM_DUE_DAYS`
+ * ngày mà chưa có mốc xác nhận. Không có `ordered_at` (đơn nạp tay) thì không
+ * kết luận — thiếu số liệu không phải là trễ.
+ */
+export function isUnconfirmed(po: SupplyWatchInput, todayIso: string): boolean {
+  if (po.status !== 'ordered' || po.confirmed_at || !po.ordered_at) return false
+  const days = Math.floor((Date.parse(`${todayIso}T00:00:00Z`) - Date.parse(`${po.ordered_at.slice(0, 10)}T00:00:00Z`)) / 86_400_000) // prettier-ignore
+  return days >= CONFIRM_DUE_DAYS
 }

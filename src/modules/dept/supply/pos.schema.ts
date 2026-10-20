@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADJ_CAUSE_KEYS, causeNeedsLsx } from '@/lib/po-adjust-cause'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const PO_STATUSES = [
@@ -38,6 +39,12 @@ export const poLineInputSchema = z.object({
   material_id: z.string().uuid().nullable().optional(),
   line_name: z.string().trim().max(300).optional().nullable(),
   line_unit: z.string().trim().max(30).optional().nullable(),
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234): 'phi' = không gắn vật tư (material_id null, tên +
+   * ĐVT gõ tay), dùng được ở MỌI mẫu, luôn SL × giá, không vào phiếu nhập kho.
+   * null = dòng hàng.
+   */
+  line_kind: z.enum(['phi']).nullable().optional(),
   /** SL đặt cuối cùng, luôn theo ĐVT mua (cây / con / tấm / thùng) — trục tồn kho. */
   qty_ordered: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0).optional().nullable(),
@@ -45,9 +52,11 @@ export const poLineInputSchema = z.object({
   note: optText(500), // truy vết: "50 bàn santorin (4c/sp)" / vị trí chi tiết
   // Dùng chung nhiều mẫu
   material_grade: optText(100), // vật liệu: "Nhựa đen", "Sắt xi trắng", "inox 201"
-  // Không còn `product_code`: ô "Mã SP" đã bỏ khỏi form soạn đơn và phiếu in
-  // (yêu cầu phòng Cung ứng). Cột DB giữ nguyên cho dữ liệu cũ — lúc bỏ thì
-  // 11/11 dòng đang để trống nên không mất gì.
+  // Mã SP khách: ô "Mã SP" đã bỏ khỏi form soạn đơn và phiếu in (yêu cầu phòng
+  // Cung ứng), nhưng đơn nạp từ file có cột này và nó phân biệt các dòng cùng
+  // mã vật tư (tem PQ 45 dòng / 2 mã). Màn soạn MANG THEO để lưu không xoá mất
+  // (07/10/2026 — trước đó replaceLines ghi lại dòng không có cột này).
+  product_code: optText(100),
   dm_per_sp: optNum(1e6), // định mức / sản phẩm
   qty_demand: optNum(1e9), // SL đơn hàng (nhu cầu gộp)
   qty_on_hand: optNum(1e9), // tồn kho lúc lập đơn
@@ -67,6 +76,8 @@ export const poLineInputSchema = z.object({
   // 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành.
   m3_per_unit: optNum(1e4),
   warranty_text: optText(100),
+  // Mẫu tem nhãn — kiểu in / gia công (0233)
+  print_spec: optText(200),
   // Mẫu carton
   open_style: optText(20),
   pcs_per_ctn: optNum(1e6),
@@ -100,6 +111,12 @@ export const poLineInputSchema = z.object({
    */
   price_per: z.enum(['unit', 'unit2']).nullish(),
   /*
+   * TỔNG GÕ TAY (02/10/2026): thay tổng kg / m³ / m² dẫn xuất bằng số trên tờ
+   * NCC. Service vẫn chạy `deriveLine` — hàm đó áp số này, chỉ cho mẫu có cột
+   * tổng; mẫu khác bỏ qua. Không phải cột DB: kết quả nằm ở `qty2`.
+   */
+  qty2_override: optNum(1e9),
+  /*
    * CHIA SL CỦA DÒNG cho nhiều lệnh (0185). Rỗng = 100% thuộc LSX chính của
    * đơn — mọi đơn một-lệnh không gửi gì thêm. Service kiểm tổng phần chia phải
    * bằng qty_ordered (xem lib/po-lsx-split), DB không ràng buộc vì người soạn
@@ -127,6 +144,8 @@ export const poCreateSchema = z.object({
    */
   extra_lsx_ids: z.array(z.string().uuid()).max(10).optional(),
   supplier_id: z.string().uuid(), // BR-06: đúng 1 NCC
+  /** Đơn BỔ SUNG cho phần giao thiếu của đơn này (0213) — chỉ có nghĩa lúc tạo. */
+  source_po_id: z.string().uuid().nullable().optional(),
   /** Mẫu đơn theo loại hàng — quyết định cột nhập, công thức tiền và mẫu phiếu in. */
   template: z.enum(PO_TEMPLATES).default('simple'),
   currency: z.string().trim().toUpperCase().length(3).default('VND'),
@@ -134,6 +153,14 @@ export const poCreateSchema = z.object({
   price_includes_vat: z.coerce.boolean().default(true),
   discount_amount: z.coerce.number().min(0).optional().nullable(),
   contract_no: optText(100), // "Theo HD số:"
+  /**
+   * Đơn NGOÀI LỆNH (0229): mục đích (loại việc) + ghi rõ cho ai. Gõ tự do kèm
+   * gợi ý (lib/po-muc-dich). Đơn theo lệnh: service bỏ qua, ghi null.
+   */
+  standalone_purpose: optText(120),
+  standalone_ref: optText(200),
+  /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh bắt có ở cửa gửi duyệt. */
+  project_id: z.string().uuid().nullable().optional(),
   expected_at: z.string().date().optional().nullable(), // thời gian giao hàng
   terms: optText(1000), // bảo hành, điều kiện (cột cũ, giữ cho đơn đã tạo)
   // 5 điều khoản in thành 5 dòng riêng trên phiếu
@@ -171,12 +198,11 @@ export const poCreateSchema = z.object({
     .array(poLineInputSchema)
     .min(1, 'Đơn đặt phải có ít nhất 1 dòng vật tư')
     .max(200)
-    // Trùng dòng chỉ xét dòng có VẬT TƯ — dòng tự do (material_id null) được
-    // nhiều dòng trong một đơn (mỗi dòng một SP gia công khác nhau).
-    .refine((lines) => {
-      const ids = lines.map((l) => l.material_id).filter((id): id is string => !!id)
-      return new Set(ids).size === ids.length
-    }, 'Vật tư bị trùng dòng')
+    // KHÔNG chặn cùng vật tư nhiều dòng (30/09/2026). Trước đây chặn mọi cặp
+    // cùng material_id → đơn nhôm cắt nhiều chiều dài (GIGA anh Truyền) và đơn
+    // chia một tem cho nhiều SP không lưu được. Theo thông lệ ERP, dòng định
+    // danh bằng số dòng; trùng THẬT (`lib/po-line-dup`) chỉ cảnh báo ở màn soạn
+    // + bảng kiểm trước khi gửi duyệt.
     .refine(
       (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
       'Dòng không gắn vật tư phải có tên hàng',
@@ -223,6 +249,21 @@ export const poAdvanceSchema = z.object({
   // ngoài sổ kho vật tư nên không có phiếu nhập nào tự chốt đơn; service chặn
   // khi đơn còn dòng vật tư kho.
   to: z.enum(['ordered', 'confirmed', 'in_transit', 'received']),
+})
+
+/**
+ * MỞ LẠI ĐƠN ĐÃ DUYỆT ĐỂ SỬA (16/09/2026) — LÝ DO BẮT BUỘC, tối thiểu 5 ký tự.
+ *
+ * Dài hơn mức 1 ký tự của `poCancelSchema` là cố ý: lý do này đi thẳng vào
+ * thông báo gửi Giám đốc ("đơn ông vừa duyệt bị mở lại vì …"). Một dấu chấm cho
+ * qua cửa thì thông báo ấy không nói được gì, và người duyệt phải đi hỏi lại.
+ */
+export const poReopenSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, 'Mở lại đơn đã duyệt phải nói rõ vì sao — Giám đốc đọc câu này')
+    .max(1000),
 })
 
 export const poCancelSchema = z.object({
@@ -274,22 +315,51 @@ export const poTermsPatchSchema = z.object({
   note: optText(2000),
 })
 
-/** Thao tác trên MỘT đợt giao: dời ngày (bắt lý do) / xe tới / huỷ (bắt lý do). */
+/**
+ * Thao tác trên MỘT đợt giao: dời ngày / xe tới / huỷ, và (27/09/2026) SỬA đợt
+ * (đổi SL từng dòng + ngày) / LẤY TRƯỚC (tách một phần thành đợt mới sớm hơn).
+ * Mọi thao tác đổi cam kết đều bắt lý do.
+ */
 export const poShipmentActionSchema = z
   .object({
-    action: z.enum(['reschedule', 'arrived', 'cancel']),
+    action: z.enum(['reschedule', 'arrived', 'cancel', 'edit', 'split']),
     expected_date: z.string().date().optional(),
     reason: z.string().trim().max(1000).optional(),
-  })
-  .refine((d) => d.action !== 'reschedule' || !!d.expected_date, {
-    message: 'Dời đợt giao phải chọn ngày mới',
+    lines: z
+      .array(z.object({ po_line_id: z.string().uuid(), qty: z.coerce.number().min(0) }))
+      .max(500)
+      .optional(),
   })
   .refine(
-    (d) =>
-      (d.action !== 'reschedule' && d.action !== 'cancel') ||
-      (d.reason && d.reason.length > 0),
-    { message: 'Dời / huỷ đợt giao phải kèm lý do' },
+    (d) => !['reschedule', 'edit', 'split'].includes(d.action) || !!d.expected_date,
+    {
+      message: 'Phải chọn ngày giao',
+    },
   )
+  .refine((d) => d.action === 'arrived' || (d.reason && d.reason.length > 0), {
+    message: 'Dời / huỷ / sửa / lấy trước đợt giao phải kèm lý do',
+  })
+  .refine((d) => !['edit', 'split'].includes(d.action) || (d.lines?.length ?? 0) > 0, {
+    message: 'Chưa có dòng hàng nào',
+  })
+
+/** Tách đợt theo phiếu nhập (07/10/2026) — phần còn chờ chia lại thành đợt hẹn mới. */
+export const poShipmentTachSchema = z.object({
+  reason: z.string().trim().min(1, 'Ghi lý do tách đợt').max(1000),
+  rest: z
+    .array(
+      z.object({
+        expected_date: z.string().date(),
+        note: z.string().trim().max(500).nullish(),
+        lines: z
+          .array(
+            z.object({ po_line_id: z.string().uuid(), qty: z.coerce.number().min(0) }),
+          )
+          .max(500),
+      }),
+    )
+    .max(20),
+})
 
 /** Bàn giao đơn cho NV cung ứng khác (0128) — trưởng phòng/GĐ/admin. */
 export const poReassignSchema = z.object({
@@ -321,7 +391,86 @@ export const poCloseShortSchema = z
  * Bắt buộc lý do: đây là thay đổi trên đơn đã có chữ ký duyệt, phải trả lời được
  * "vì sao" khi đối chiếu về sau.
  */
+/**
+ * Lý do dời hẹn KHÔNG bắt buộc (chốt 28/09/2026): máy tự ghi vết "cũ → mới · ai ·
+ * lúc nào". Bắt lý do là thứ khiến 0/85 đơn có vết đổi hẹn dù 53/85 đơn đã gửi
+ * trống hạn giao.
+ */
 export const poRescheduleSchema = z.object({
   expected_at: z.string().trim().min(1, 'Chọn ngày giao mới').max(30),
-  reason: z.string().trim().min(1, 'Dời hẹn giao phải kèm lý do').max(1000),
+  reason: z.string().trim().max(1000).optional().default(''),
 })
+
+/**
+ * ĐIỀU CHỈNH ĐƠN ĐÃ GỬI (0210, chốt 25/09/2026) — gửi CẢ bộ dòng của bản mới.
+ * Dòng có `id` = sửa dòng đang chạy (giữ nguyên mã dòng để phiếu nhập, đợt
+ * giao, hoá đơn NCC vẫn trỏ đúng); không `id` = dòng thêm; dòng cũ vắng mặt =
+ * bỏ. Không chặn trùng vật tư ở đây như lúc soạn: đơn nạp từ file có sẵn hai
+ * dòng cùng mã (chia hai lệnh) — `planAdjustment` chỉ chặn DÒNG MỚI trùng.
+ *
+ * `base_seq` = số lần điều chỉnh client đã thấy (0 nếu chưa lần nào) — hàm DB
+ * so với sổ để chặn hai người áp dụng chen nhau.
+ * `vat_rate` / `discount_amount` vắng mặt = giữ nguyên.
+ */
+export const poAdjustLineSchema = poLineInputSchema.extend({
+  id: z.string().uuid().nullish(),
+})
+export const poAdjustSchema = z
+  .object({
+    base_seq: z.coerce.number().int().min(0),
+    // Nguyên nhân cố định + lệnh mà lần sửa theo (0227, chốt 07/10/2026).
+    cause: z.enum(ADJ_CAUSE_KEYS, { error: 'Chọn nguyên nhân điều chỉnh' }),
+    lsx_ids: z.array(z.string().uuid()).max(20).default([]),
+    reason: z
+      .string()
+      .trim()
+      .min(
+        5,
+        'Ghi rõ vì sao điều chỉnh (ít nhất 5 ký tự) — lý do vào sổ phát sinh và thông báo',
+      )
+      .max(1000),
+    vat_rate: z.coerce.number().min(0).max(100).nullish(),
+    discount_amount: z.coerce.number().min(0).nullish(),
+    lines: z
+      .array(poAdjustLineSchema)
+      .max(200)
+      .refine(
+        (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
+        'Dòng không gắn vật tư phải có tên hàng',
+      ),
+  })
+  .refine((v) => !causeNeedsLsx(v.cause) || v.lsx_ids.length > 0, {
+    message: 'Khách đổi đơn — chọn lệnh / đơn khách mà lần điều chỉnh này theo',
+    path: ['lsx_ids'],
+  })
+
+/** Ghi mốc "đã gửi NCC bản điều chỉnh lần N" (chốt Q4 25/09). */
+export const poAdjustmentSentSchema = z.object({
+  seq: z.coerce.number().int().min(1),
+  note: optText(500),
+})
+
+/**
+ * SỬA CHIA LỆNH của đơn đã duyệt / đã gửi (10/10/2026, bản vẽ Chia lệnh Q5): chỉ
+ * phần chia SL theo lệnh của từng dòng — không đổi SL, giá, tiền, NCC, nên không
+ * đi luồng điều chỉnh và không phải ký lại. Mảng rỗng = trả dòng về "chưa chia".
+ */
+export const poLsxSplitPatchSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        line_id: z.string().uuid(),
+        lsx_split: z
+          .array(
+            z.object({
+              production_order_id: z.string().uuid(),
+              qty: z.coerce.number().positive(),
+            }),
+          )
+          .max(10),
+      }),
+    )
+    .min(1)
+    .max(1000),
+})
+export type PoLsxSplitPatch = z.infer<typeof poLsxSplitPatchSchema>

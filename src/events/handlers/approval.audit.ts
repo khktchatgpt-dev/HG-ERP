@@ -29,6 +29,22 @@ export function registerApprovalAuditHandlers(): void {
     })
   })
 
+  /*
+    MỞ LẠI ĐỂ SỬA — ghi vào cùng sổ phê duyệt, vì nó là một mốc của vòng duyệt:
+    sau nó, chữ ký duyệt cũ không còn giá trị. Nhìn dòng thời gian của đơn phải
+    thấy được "duyệt lúc 9h, mở lại lúc 14h, duyệt lại lúc 15h".
+  */
+  on('po.reopened', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'po',
+      entity_id: e.po_id,
+      entity_code: e.code,
+      action: 'reopened',
+      actor_id: e.reopened_by,
+      reason: e.reason,
+    })
+  })
+
   on('po.reassigned', async (e) => {
     await approvalEventsRepo.log({
       entity_type: 'po',
@@ -46,6 +62,29 @@ export function registerApprovalAuditHandlers(): void {
       entity_code: e.code,
       action: e.decision,
       actor_id: e.decided_by,
+      reason: e.reason,
+    })
+  })
+
+  // 0218 — hai mốc mới của vòng duyệt: gỡ chữ ký và đi tắt qua chữ ký.
+  on('po.unapproved', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'po',
+      entity_id: e.po_id,
+      entity_code: e.code,
+      action: 'unapproved',
+      actor_id: e.unapproved_by,
+      reason: e.reason,
+    })
+  })
+
+  on('po.urgent_sent', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'po',
+      entity_id: e.po_id,
+      entity_code: e.code,
+      action: 'urgent_sent',
+      actor_id: e.sent_by,
       reason: e.reason,
     })
   })

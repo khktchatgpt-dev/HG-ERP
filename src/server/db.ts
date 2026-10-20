@@ -1,3 +1,7 @@
+// Hàng rào MÁY (28/09/2026): Client Component nào kéo file này vào — trực tiếp hay
+// qua đường vòng — thì BUILD đỏ, thay vì vỡ lúc chạy trên trình duyệt. Trước đó
+// lời cấm chỉ là dòng chú thích dưới đây. Lớp thứ nhất: luật hg/client-server-boundary.
+import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 

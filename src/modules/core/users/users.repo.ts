@@ -19,10 +19,15 @@ export type User = {
   password_changed_at: string | null
   last_login_at: string | null
   created_at: string
+  /** Nhân viên mà tài khoản CÁ NHÂN này thuộc về (0252). Trống = chưa gắn người. */
+  employee_id: string | null
+  /** person | shared — tài khoản dùng chung không gắn nhân viên, ghi ai cầm ở shared_holder. */
+  account_kind: 'person' | 'shared'
+  shared_holder: string | null
 }
 
 const SELECT_PUBLIC =
-  'id, email, name, role, department_id, title, employee_code, phone, avatar_url, is_active, deleted_at, must_change_password, password_changed_at, last_login_at, created_at'
+  'id, email, name, role, department_id, title, employee_code, phone, avatar_url, is_active, deleted_at, must_change_password, password_changed_at, last_login_at, created_at, employee_id, account_kind, shared_holder'
 
 export type UserInsert = {
   email: string
@@ -31,6 +36,10 @@ export type UserInsert = {
   role?: UserRole
   department_id?: string | null
   title?: string | null
+  employee_id?: string | null
+  employee_code?: string | null
+  account_kind?: 'person' | 'shared'
+  shared_holder?: string | null
   /**
    * Mặc định TRUE ở `insert`/`bulkInsert`: mật khẩu của tài khoản mới do admin
    * gõ rồi đọc/nhắn cho người ta — tức là ít nhất hai người biết. Bắt đổi ở lần
@@ -46,6 +55,10 @@ export type UserPatch = Partial<{
   department_id: string | null
   title: string | null
   is_active: boolean
+  employee_id: string | null
+  employee_code: string | null
+  account_kind: 'person' | 'shared'
+  shared_holder: string | null
 }>
 
 /**
@@ -253,6 +266,9 @@ export type UserAuditAction =
   // user_audit_log.action, lệch thì insert bị chặn và mất vết trong im lặng.
   | 'password_change'
   | 'profile_update'
+  // Nhân viên ↔ tài khoản (0252): gắn/gỡ/dùng chung; trigger tự khoá khi nhân viên nghỉ (actor null).
+  | 'link'
+  | 'auto_lock'
 
 export type UserAuditEntry = {
   id: string

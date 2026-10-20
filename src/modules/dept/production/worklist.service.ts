@@ -1,4 +1,6 @@
 import { componentsRepo } from './components.repo'
+import { codesForStage, defectCodesRepo, type DefectCode } from './defect-codes.repo'
+import { fieldsForStage, stageFieldsRepo, type StageField } from './stage-fields.repo'
 import { entriesRepo } from './entries.repo'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
@@ -11,10 +13,20 @@ import {
   defaultAssemblyId,
   resolveCountingPlan,
 } from '@/lib/default-assembly'
+import {
+  FINISH_ROW_NAME,
+  FINISH_STAGES,
+  finishRouteOverride,
+  finishRowId,
+  isFinishRow,
+  isFinishStage,
+  lineUnit,
+} from '@/lib/finish-stages'
 import { countsAsOfficial, countsAsPending } from '@/lib/entry-doc-flow'
 import type { EntryDocStatus } from '@/lib/entry-doc-flow'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { transfersRepo } from './transfers.repo'
+import { dayLocksRepo } from './day-locks.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { fileImageSrc } from '@/server/file-image'
@@ -56,6 +68,28 @@ export type WorklistRow = {
   remaining: number
   pct: number
   status: 'not_started' | 'in_progress' | 'done'
+  /** Số chi tiết của dòng SP có việc ở công đoạn này. */
+  parts_total: number
+  /**
+   * Số chi tiết ĐÃ CÓ SỐ ở công đoạn này (đạt hoặc chờ duyệt).
+   *
+   * Vì sao cần: `done` đếm theo BỘ nên nó là MIN qua mọi chi tiết — ghi 150 cái
+   * chân mà chưa ghi tựa thì `done` vẫn 0. Không có số này thì màn báo "Chưa
+   * bắt đầu · 0%" ngay sau khi thống kê vừa ghi 150 (lỗi L3 đo 22/09/2026):
+   * số đúng, nhưng nói dối về việc đã có ai làm hay chưa.
+   */
+  parts_started: number
+  /**
+   * TIẾN ĐỘ THEO MẢNH (B6, 24/09/2026 — docs/thong-ke-thiet-ke-tu-excel.md §3b).
+   *
+   * `done`/`planned` đếm theo BỘ (MIN qua chi tiết): trả lời "giao được bao
+   * nhiêu bộ". Còn "xưởng có làm việc không" thì phải đếm theo MẢNH: tổng số
+   * cái đã làm ÷ tổng số cái cần, cộng qua mọi chi tiết của công đoạn — file
+   * Excel `TONG_HOP.G12` bày chính số này. Mỗi chi tiết kẹp ở mức cần của
+   * nó: làm dư chân không bù được cho thiếu tựa.
+   */
+  pieces_needed: number
+  pieces_done: number
 }
 
 /**
@@ -174,11 +208,13 @@ export const worklistService = {
           // Cắt về khoảng [first..final] của chính nó (0088): chi tiết đã gộp
           // vào cụm dừng trước hàn; cụm (kể cả cụm vật chất hoá từ cụm mặc
           // nhiên) chỉ đếm từ công đoạn đầu của nó trở đi.
-          const r = clipRoute(
-            resolveComponentRoute(plannedRoute.get(line.id), c.group_code),
-            c.first_stage,
-            c.final_stage,
-          )
+          const r =
+            finishRouteOverride(c) ??
+            clipRoute(
+              resolveComponentRoute(plannedRoute.get(line.id), c.group_code),
+              c.first_stage,
+              c.final_stage,
+            )
           // Đếm CHƯA BIẾT lộ trình — KHÔNG gồm hàng mua. Ngũ kim (vít, bulong)
           // cũng có lộ trình rỗng nhưng đó là ĐÚNG: tổ không gia công chúng.
           // Gộp hai thứ này lại là bảo người đi vá thứ không hỏng. Cụm cũng
@@ -189,11 +225,59 @@ export const worklistService = {
           routeOf.set(c.id, r)
           for (const s of r) stagesOfLine.add(s)
         }
+        // CHẶNG THÀNH PHẨM (18/09): mọi dòng SP đều đi qua bốn bước sau sơn,
+        // kể cả khi chưa ai ghi sổ bước nào — đó chính là việc còn phải làm.
+        for (const s of FINISH_STAGES) stagesOfLine.add(s)
 
         for (const stage of [...stagesOfLine].sort(
           (a, b) => (stageOrder.get(a) ?? 99) - (stageOrder.get(b) ?? 99),
         )) {
           if (filter.stage && stage !== filter.stage) continue
+
+          // Bốn bước sau sơn đếm thẳng theo BỘ trên MỘT dòng thành phẩm, không
+          // suy từ chi tiết nào — chưa ai ghi thì dòng thật chưa tồn tại và số
+          // đạt là 0, phần còn lại đúng bằng cả lệnh.
+          if (isFinishStage(stage)) {
+            const fr = mine.find(isFinishRow)
+            const t = fr ? tally.get(`${fr.id}|${stage}`) : undefined
+            const done = Math.min(t?.confirmed.qty ?? 0, line.qty)
+            const withPending = Math.min(
+              (t?.confirmed.qty ?? 0) + (t?.pending.qty ?? 0),
+              line.qty,
+            )
+            const fp = stageProgress(line.qty, {
+              confirmed: { qty: done, defect: 0 },
+              pending: { qty: Math.max(0, withPending - done), defect: 0 },
+            })
+            rows.push({
+              lsx_id: lsx.id,
+              lsx_code: lsx.code,
+              customer_name: lsx.customer_name,
+              ship_date: lsx.ship_date,
+              order_line_id: line.id,
+              product_code: line.product_code,
+              product_name: line.name_vi ?? line.product_code,
+              stage,
+              stage_label: stageLabel.get(stage) ?? stage,
+              planned: fp.planned,
+              done: fp.done,
+              pending: fp.pending_qty,
+              remaining: fp.remaining,
+              pct: fp.pct,
+              status: fp.status,
+              // Chặng thành phẩm đếm THẲNG theo bộ trên một dòng duy nhất, nên
+              // không có cảnh "đã ghi mà `done` vẫn 0" như các công đoạn suy
+              // theo chi tiết — `parts_started` bám đúng `done` để màn không
+              // bày một câu giải thích không có gì để giải thích.
+              parts_total: 1,
+              parts_started: fp.done > 0 ? 1 : 0,
+              // Chặng thành phẩm: một mảnh = một bộ.
+              pieces_needed: fp.planned,
+              pieces_done: fp.done,
+            })
+            continue
+          }
+
           // Chỉ chi tiết THỰC SỰ đi qua công đoạn này mới tính vào bộ.
           const inStage = mine.filter((c) => routeOf.get(c.id)?.includes(stage))
           if (inStage.length === 0) continue
@@ -228,6 +312,11 @@ export const worklistService = {
             pending: { qty: Math.max(0, pending - done), defect: 0 },
           })
 
+          // Đã có người động vào chưa — hỏi ở tầng CHI TIẾT, không hỏi số bộ.
+          // `done` là MIN nên nó im lặng suốt từ lúc ghi chi tiết đầu tiên cho
+          // tới lúc đủ một bộ; lấy nó làm căn cứ "chưa bắt đầu" là sai.
+          const partsStarted = measured.filter((m) => m.done > 0 || m.pending > 0).length
+
           rows.push({
             lsx_id: lsx.id,
             lsx_code: lsx.code,
@@ -243,7 +332,18 @@ export const worklistService = {
             pending: p.pending_qty,
             remaining: p.remaining,
             pct: p.pct,
-            status: p.status,
+            // `stageProgress` suy trạng thái từ SỐ BỘ; ở đây bổ sung vế "đã có
+            // chi tiết nào có số chưa" để không gọi một dòng đang làm dở là
+            // "chưa bắt đầu".
+            status:
+              p.status === 'not_started' && partsStarted > 0 ? 'in_progress' : p.status,
+            parts_total: measured.length,
+            parts_started: partsStarted,
+            pieces_needed: measured.reduce((a, m) => a + m.total_needed, 0),
+            pieces_done: measured.reduce(
+              (a, m) => a + Math.min(m.done, m.total_needed),
+              0,
+            ),
           })
         }
       }
@@ -347,30 +447,54 @@ export type EntrySheetLine = {
   remaining: number
   /** Đã ghi HÔM NAY (mọi trạng thái phiếu, kể cả nháp) — chống gõ đúp. */
   today_qty: number
+  /** Nhịp 14 ngày gần nhất (mọi phiếu đã ghi), cũ → mới; rỗng ở dòng ảo. */
+  days: EntrySheetDay[]
 }
+
+export type EntrySheetDay = { date: string; qty: number; docs: number }
+
+/** Số ngày của dải nhịp ở màn ghi — hai tuần làm việc, như khối 14 ngày của file Excel. */
+export const DAY_STRIP_DAYS = 14
 
 export type EntrySheetGroup = {
   order_line_id: string
+  /** Lệnh chứa dòng SP này — lưới gom theo LỆNH rồi mới tới SP (21/09). */
+  lsx_id: string
+  lsx_code: string
+  customer_name: string
   product_code: string
   product_name: string
-  /** SL đặt của dòng — đơn vị BỘ. */
+  /** SL đặt của dòng. Đơn vị nằm ở `unit` — KHÔNG mặc định "bộ" nữa (19/09). */
   qty: number
+  /**
+   * Đơn vị của dòng lệnh. Chủ dự án chốt 19/09: mọi SP tính theo CÁI trong sản
+   * xuất, đóng gói mới tuỳ khách — và 88% dòng lệnh thật vốn đã là "cái".
+   */
+  unit: string
   /** Ảnh SP (URL ký HMAC ổn định) — thống kê đối chiếu với sổ giấy bằng mắt. */
   image_src: string | null
   lines: EntrySheetLine[]
 }
 
 export type EntrySheet = {
+  /**
+   * Lệnh đang mở. Từ 22/09/2026 màn ghi LUÔN ở phạm vi MỘT lệnh (gộp nhiều
+   * lệnh vào một lưới bị chê rối — 208 dòng/8 lệnh ở Phôi), nên thực tế trường
+   * này chỉ null khi không có lệnh nào đang chạy.
+   *
+   * Tầng ghi vẫn tách phiếu theo lệnh như cũ, nên nếu sau này mở lại chế độ
+   * nhiều lệnh thì đường ghi không phải sửa.
+   */
   lsx: {
     id: string
     code: string
     customer_name: string
     ship_date: string | null
     status: string
-  }
+  } | null
   stage: string
   stage_label: string
-  /** Công đoạn CÓ VIỆC của lệnh, đúng thứ tự danh mục — dải chip chuyển tab. */
+  /** Công đoạn CÓ VIỆC trong phạm vi, đúng thứ tự danh mục — dải chip đổi tab. */
   stages: { code: string; label: string }[]
   /** Tổ xưởng + công đoạn phụ trách — mặc định chọn tổ khớp công đoạn. */
   teams: { id: string; name: string; stage_code: string | null }[]
@@ -379,31 +503,79 @@ export type EntrySheet = {
   suggested: { component_id: string; team_id: string }[]
   /** Lý do phế dùng 30 ngày gần đây — gợi ý gõ nhanh. */
   recent_defect_reasons: string[]
+  /** Mã lý do dùng được ở CÔNG ĐOẠN ĐANG MỞ (riêng + dùng chung), đã xếp. */
+  defect_codes: DefectCode[]
+  /**
+   * Số dòng bị CẮT vì vượt trần hiển thị. > 0 = lưới chưa bày hết, người dùng
+   * phải lọc hẹp lại (chọn một lệnh). 0 = đang thấy đủ.
+   */
+  truncated: number
+  /** Ô nhập RIÊNG của công đoạn đang mở (0207) — khai ở production_stage_fields. */
+  stage_fields: StageField[]
   today: string
   /** false = lệnh chưa duyệt / đã kết thúc → màn chỉ xem. */
   can_record: boolean
+  /**
+   * Sổ ngày ĐÃ CHỐT trong 30 ngày gần đây, để màn báo TRƯỚC thay vì để người
+   * ta gõ xong cả lưới rồi mới bị service chặn (lỗi L1 đo 22/09/2026).
+   *
+   * Cửa sổ 30 ngày, không phải mọi ngày: ghi hồi tố xa hơn thế là chuyện hiếm,
+   * và hàng rào thật vẫn nằm ở `entriesService.record`. Đây chỉ là lớp báo sớm.
+   */
+  locks: { team_id: string; entry_date: string; locked_by_name: string | null }[]
 }
 
 /**
  * Tải dữ liệu màn lập phiếu. `stage` bỏ trống / không có việc → công đoạn đầu
  * tiên có việc của lệnh. Trả null khi lệnh không tồn tại hoặc không có việc.
  */
+/**
+ * PHẠM VI MỞ MÀN — đổi 21/09/2026 từ "một LỆNH" sang "mọi lệnh đang chạy".
+ *
+ * Vì sao: đối chiếu bốn hệ ERP cho thấy **không hệ hiện đại nào lấy LỆNH làm
+ * phạm vi bắt buộc của màn ghi sản lượng** — SAP Fiori "Confirm Production
+ * Operations" mở theo work center của người dùng và lệnh chỉ là ô tìm; D365
+ * Production floor execution mở thẳng "All jobs" với LỆNH LÀ MỘT CỘT; chỉ
+ * NetSuite còn bắt chọn một lệnh. Sổ Excel thật của thống kê cũng tổ chức theo
+ * "tổ/công đoạn/ngày trước, LSX sau".
+ *
+ * Số lệnh một tổ đụng trong một ngày là KHÔNG CỐ ĐỊNH (chủ dự án 21/09). Bắt
+ * chọn lệnh trước nghĩa là hôm nào tổ làm 3 lệnh thì phải mở màn 3 lần.
+ *
+ * `lsxId` giữ lại nhưng thành TUỲ CHỌN: ai muốn hẹp về một lệnh vẫn hẹp được.
+ */
 export async function loadEntrySheet(
-  lsxId: string,
-  stageWanted?: string | null,
+  filter: { stage?: string | null; lsxId?: string | null } = {},
 ): Promise<EntrySheet | null> {
-  const [lsx, components, lines, jobs, entries, stagesCat, depts, transfers] =
-    await Promise.all([
-      productionRepo.findById(lsxId),
-      componentsRepo.listByLsx(lsxId),
-      lsxLinesRepo.listLines(lsxId),
-      jobsRepo.listByLsx(lsxId),
-      entriesRepo.listByLsxWithStatus(lsxId),
-      productionRepo.listStages(),
-      departmentsRepo.list(),
-      transfersRepo.listRawByLsx(lsxId),
-    ])
-  if (!lsx || lines.length === 0) return null
+  const activeLsx = await productionRepo.listActive()
+  const scope = filter.lsxId ? activeLsx.filter((l) => l.id === filter.lsxId) : activeLsx
+  const ids = scope.map((l) => l.id)
+  if (ids.length === 0) return null
+  const stageWanted = filter.stage
+
+  const [
+    components,
+    lines,
+    jobs,
+    entries,
+    stagesCat,
+    depts,
+    transfers,
+    allDefectCodes,
+    allStageFields,
+  ] = await Promise.all([
+    componentsRepo.listByLsxBulk(ids),
+    lsxLinesRepo.listLinesBulk(ids),
+    jobsRepo.listByLsxBulk(ids),
+    entriesRepo.listByLsxWithStatusBulk(ids),
+    productionRepo.listStages(),
+    departmentsRepo.list(),
+    transfersRepo.listRawByLsxBulk(ids),
+    defectCodesRepo.listActive(),
+    stageFieldsRepo.listActive(),
+  ])
+  if (lines.length === 0) return null
+  const lsxById = new Map(scope.map((l) => [l.id, l]))
 
   const plannedByLine = new Map<string, string[]>()
   for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
@@ -423,6 +595,7 @@ export async function loadEntrySheet(
     planByLine.set(line.id, plan)
     for (const c of lineComps) {
       const r =
+        finishRouteOverride(c) ??
         plan.own_route.get(c.id) ??
         clipRoute(
           resolveComponentRoute(plannedByLine.get(line.id), c.group_code),
@@ -433,6 +606,9 @@ export async function loadEntrySheet(
       for (const s of r) worked.add(s)
     }
     for (const s of plan.virtual_stages) worked.add(s)
+    // Chặng thành phẩm có mặt trên mọi dòng SP đã định hình — tab bốn bước sau
+    // sơn phải mở được ngay cả khi chưa ai ghi số nào.
+    if (lineComps.length > 0) for (const s of FINISH_STAGES) worked.add(s)
   }
   const stages = stagesCat.filter((s) => worked.has(s.code))
   if (stages.length === 0) return null
@@ -462,8 +638,24 @@ export async function loadEntrySheet(
   const todayIso = vnTodayIso()
   const tally = new Map<string, EntryTally>()
   const todayQty = new Map<string, number>()
+  /*
+    NHỊP 14 NGÀY của từng chi tiết ở công đoạn này (B6 — T4, dải `DayStrip`).
+    Lấy từ CHÍNH lượt đọc sổ ở trên, không thêm truy vấn. Đếm mọi phiếu đã ghi
+    (kể cả nháp): dải trả lời "ngày nào có người ghi bao nhiêu", đúng như cột
+    ngày của sheet `CD_*` — còn "đạt chính thức" đã có ở cột Đạt.
+  */
+  const from14 = shiftIso(todayIso, -(DAY_STRIP_DAYS - 1))
+  const dayMap = new Map<string, Map<string, { qty: number; docs: Set<string> }>>()
   for (const e of entries) {
     if (e.stage !== stage) continue
+    if (e.entry_date >= from14 && e.entry_date <= todayIso) {
+      const m = dayMap.get(e.component_id) ?? new Map()
+      const x = m.get(e.entry_date) ?? { qty: 0, docs: new Set<string>() }
+      x.qty += Number(e.qty)
+      if (e.doc_id) x.docs.add(e.doc_id)
+      m.set(e.entry_date, x)
+      dayMap.set(e.component_id, m)
+    }
     const t = tally.get(e.component_id) ?? {
       confirmed: { qty: 0, defect: 0 },
       pending: { qty: 0, defect: 0 },
@@ -476,6 +668,14 @@ export async function loadEntrySheet(
       todayQty.set(e.component_id, (todayQty.get(e.component_id) ?? 0) + Number(e.qty))
     }
   }
+
+  /** 14 ngày liền, ngày không ai ghi vẫn có mặt với số 0 — dải không được co lại. */
+  const daysOf = (componentId: string): EntrySheetDay[] =>
+    Array.from({ length: DAY_STRIP_DAYS }, (_, i) => {
+      const date = shiftIso(from14, i)
+      const x = dayMap.get(componentId)?.get(date)
+      return { date, qty: x?.qty ?? 0, docs: x?.docs.size ?? 0 }
+    })
 
   const groups: EntrySheetGroup[] = []
   for (const line of lines) {
@@ -503,6 +703,7 @@ export async function loadEntrySheet(
           pending: t?.pending.qty ?? 0,
           remaining: Math.max(0, needed - done),
           today_qty: todayQty.get(c.id) ?? 0,
+          days: daysOf(c.id),
         }
       })
 
@@ -536,22 +737,50 @@ export async function loadEntrySheet(
         is_virtual: true,
         cluster: null,
         name: DEFAULT_ASSEMBLY_NAME,
-        unit: 'bộ',
+        unit: lineUnit(line.unit),
         dm_kg: null,
         needed: line.qty,
         done: vDone,
         pending: Math.max(0, vAll - vDone),
         remaining: Math.max(0, line.qty - vDone),
         today_qty: 0,
+        // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
+        days: [],
+      })
+    }
+
+    // Dòng BỘ THÀNH PHẨM: chỉ hiện khi chưa vật chất hoá — ghi rồi thì nó là
+    // component thật và đã nằm trong `out` qua đường chung ở trên.
+    if (isFinishStage(stage) && !lineComps.some(isFinishRow)) {
+      out.push({
+        component_id: finishRowId(line.id),
+        kind: 'assembly',
+        is_virtual: true,
+        cluster: null,
+        name: FINISH_ROW_NAME,
+        unit: lineUnit(line.unit),
+        dm_kg: null,
+        needed: line.qty,
+        done: 0,
+        pending: 0,
+        remaining: line.qty,
+        today_qty: 0,
+        // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
+        days: [],
       })
     }
 
     if (out.length > 0) {
+      const own = lsxById.get(line.production_order_id)
       groups.push({
         order_line_id: line.id,
+        lsx_id: line.production_order_id,
+        lsx_code: own?.code ?? '',
+        customer_name: own?.customer_name ?? '',
         product_code: line.product_code,
         product_name: line.name_vi ?? line.product_code,
         qty: line.qty,
+        unit: lineUnit(line.unit),
         image_src: imageOf(line),
         lines: out,
       })
@@ -586,6 +815,7 @@ export async function loadEntrySheet(
   }
   const from7 = shiftIso(todayIso, -7)
   const from30 = shiftIso(todayIso, -30)
+  const dayLocks = await dayLocksRepo.listRange(from30, todayIso)
   const reasonSeen = new Set<string>()
   const reasons: { reason: string; at: string }[] = []
   for (const e of entries) {
@@ -602,14 +832,46 @@ export async function loadEntrySheet(
   }
   reasons.sort((a, b) => b.at.localeCompare(a.at))
 
+  // Lệnh đang lọc hẹp (nếu có). Mở toàn phạm vi thì null — lệnh nằm ở từng
+  // nhóm của lưới, không phải một thuộc tính của cả phiếu nữa.
+  const only = filter.lsxId ? scope[0] : null
+
+  /*
+    TRẦN HIỂN THỊ. Mở mọi lệnh ở công đoạn Phôi ra 414 dòng nhập (đo
+    21/09/2026) — quá dài để gõ, và đúng nỗi lo "đừng đổ hết mọi lệnh vào một
+    bảng" đã nêu 27/08.
+
+    SAPUI5 khuyến cáo không quá 200 mục một lượt trong responsive table và
+    "hãy chắc rằng người dùng lọc được dữ liệu"; D365 khi vượt trần thì BÁO
+    NGƯỜI DÙNG LỌC HẸP LẠI chứ không im lặng cắt. Làm đúng vậy: cắt ở mốc
+    tròn, trả về số bị cắt để màn nói ra và chỉ đường lọc.
+
+    Cắt theo NHÓM nguyên vẹn, không cắt giữa một dòng SP — nửa bảng chi tiết
+    của một SP là thứ không ai đối chiếu được với sổ giấy.
+  */
+  const MAX_LINES = 200
+  let shown = 0
+  let truncated = 0
+  const capped: EntrySheetGroup[] = []
+  for (const g of groups) {
+    if (shown >= MAX_LINES) {
+      truncated += g.lines.length
+      continue
+    }
+    capped.push(g)
+    shown += g.lines.length
+  }
+
   return {
-    lsx: {
-      id: lsx.id,
-      code: lsx.code,
-      customer_name: lsx.customer_name,
-      ship_date: lsx.ship_date,
-      status: lsx.status,
-    },
+    lsx: only
+      ? {
+          id: only.id,
+          code: only.code,
+          customer_name: only.customer_name,
+          ship_date: only.ship_date,
+          status: only.status,
+        }
+      : null,
     stage,
     stage_label: stagesCat.find((s) => s.code === stage)?.label ?? stage,
     stages,
@@ -620,10 +882,22 @@ export async function loadEntrySheet(
         name: d.name,
         stage_code: resolveTeamStage(d, stagesCat),
       })),
-    groups,
+    groups: capped,
     suggested,
     recent_defect_reasons: reasons.slice(0, 15).map((r) => r.reason),
+    defect_codes: codesForStage(allDefectCodes, stage),
+    truncated,
+    stage_fields: fieldsForStage(allStageFields, stage),
     today: todayIso,
-    can_record: lsx.status === 'approved' || lsx.status === 'in_progress',
+    // `listActive` vốn chỉ trả lệnh approved/in_progress, nên mọi lệnh trong
+    // phạm vi đều ghi được. Lọc hẹp về một lệnh thì vẫn kiểm lại cho chắc.
+    can_record: only
+      ? only.status === 'approved' || only.status === 'in_progress'
+      : scope.length > 0,
+    locks: dayLocks.map((l) => ({
+      team_id: l.team_department_id,
+      entry_date: l.entry_date,
+      locked_by_name: l.locked_by_name,
+    })),
   }
 }

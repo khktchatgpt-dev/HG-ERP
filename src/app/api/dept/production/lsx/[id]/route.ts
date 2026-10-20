@@ -56,6 +56,13 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
  * Sửa THÔNG TIN ĐẦU LỆNH (0117): số lệnh, ưu tiên, ngày nhận/hạn xuất,
  * container, ghi chú — xem lsxService.updateHeader.
  */
+/** Xoá lệnh NHÁP / bị từ chối — đơn về Xác nhận để phát lại. */
+export const DELETE = handle(async (_req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  return NextResponse.json(await lsxService.deleteDraft(user, id))
+})
+
 export const PATCH = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params

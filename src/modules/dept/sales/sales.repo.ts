@@ -49,9 +49,12 @@ export type ListFilter = {
   /** Chỉ KH CHƯA gán phụ trách. Loại trừ với `owner_id`. */
   unassigned?: boolean
   status: CustomerStatusFilter
+  /** Sắp theo cột — mặc định mới tạo trước. */
+  sort?: CustomerSort
   page: number
   page_size: number
 }
+export type CustomerSort = 'new' | 'old' | 'name' | 'country'
 
 /** Số dùng cho StatsBar của danh sách KH. */
 export type CustomerCounts = {
@@ -103,7 +106,12 @@ export const customersRepo = {
       .select(`${COLS}, owner:users!sales_customers_owner_id_fkey(name, email)`, {
         count: 'exact',
       })
-      .order('created_at', { ascending: false })
+    q =
+      filter.sort === 'name'
+        ? q.order('name', { ascending: true })
+        : filter.sort === 'country'
+          ? q.order('country', { ascending: true, nullsFirst: false }).order('name')
+          : q.order('created_at', { ascending: filter.sort === 'old' })
 
     if (filter.status !== 'all') q = q.eq('is_active', filter.status === 'active')
     if (filter.unassigned) q = q.is('owner_id', null)

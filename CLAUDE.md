@@ -96,17 +96,157 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 - **Identifiers**: `uuid primary key default gen_random_uuid()`. FKs use explicit `on delete` policy — never leave it implicit.
 - **After applying** (`supabase db push` or SQL editor): ask Claude to **"sync types"** to regen `src/lib/database.types.ts`. See `.claude/skills/sync-types/`.
 
+## Cấu trúc code React (28/09/2026)
+
+Mỗi điều dưới đây có MÁY canh — quy định chỉ nằm trên giấy thì sớm muộn bị vi phạm
+(lời cấm "client không import modules" từng chỉ là một dòng chú thích).
+
+**1. Ranh giới client / server** — hai lớp:
+
+- Luật `hg/client-server-boundary` (mọi `src/**/*.{ts,tsx}`): file `'use client'` chỉ
+  được `import type` từ `@/modules/*` và `@/server/*`. Ngoại lệ: `*.schema` (zod thuần)
+  và `@/modules/core/rbac/actions` (hằng số). Có test trong `eslint-rules/hg-ui.test.ts`.
+- `src/server/db.ts` gắn `import 'server-only'`: lỡ kéo DB vào client qua đường vòng thì
+  BUILD đỏ. Test chạy được nhờ alias sang bản rỗng ở `vitest.config.ts`; script chạy bằng
+  `tsx` phải thêm `--conditions=react-server`.
+- **Logic thuần (không chạm DB) mà client cần → `src/lib/`, không để trong `src/modules/`.**
+  Khi bật luật đã dời ba file như thế: `lsx-template`, `lsx-line-fill`, `lsx-sheet-cells`.
+
+**2. Cỡ file** — `.tsx` tối đa **800 dòng** (`max-lines`, mức error). 32 file cũ đã dài hơn
+giữ trần riêng trong `size-baseline.json` = số dòng lúc chốt: **không được dài thêm**. Ngắn
+đi thì `npm run size:baseline` hạ trần; script thoát mã 1 nếu có file MỚI vượt 800 — đừng
+nhét file vào baseline, hãy tách. Không đập lại 32 file cũ; màn nào có việc chạm vào thì
+tách theo khuôn dưới, giống luật chuyển màn cũ sang kit.
+
+**3. Khuôn chia một màn** — mẫu: `src/app/(mua-hang)/mua-hang/don/[id]/`:
+
+| File                 | Việc                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `page.tsx` (server)  | Gác quyền + tải dữ liệu **song song** (`Promise.all`, thứ không cần nhau không chờ nhau); chỉ truyền xuống thứ client cần |
+| `XxxScreen.tsx`      | Ghép bố cục: đầu trang, menu, gọi các khối                                                                                |
+| `useXxx.tsx`         | Toàn bộ state + xử lý của màn; trả `{ … } as const`                                                                       |
+| `<khoi>.tsx` (kebab) | Mỗi mục menu / khối lớn một file, component nhận `{ d }: { d: XxxCtx }`                                                   |
+| `xxx.shared.tsx`     | Kiểu, hằng, ô nhỏ dùng chung giữa các file trên                                                                           |
+
+Màn nhỏ (dưới ~400 dòng) để một file là được — chia khi nó bắt đầu phình, không chia sẵn.
+Khối nhận `d` thì KHÔNG ghi thẳng vào ref của hook (`react-hooks/immutability` chặn) — hook
+xuất hàm (`markDirty(k)`).
+
+**4. Đặt tên file**: component `PascalCase.tsx`; hook `useXxx.ts(x)`; còn lại (khối, lib,
+helper) `kebab-case`. Không đổi tên file cũ cho đều — rủi ro, không đáng.
+
 ## Frontend & UI conventions (admin/workspace)
 
-### Theme v3 "HG Ledger" (áp toàn app 15/08/2026)
+> **30/09/2026 — bộ luật lint canh giao diện đã GỠ** (xem mục "Luật lint riêng" bên
+> dưới). Mọi quy ước màu / cỡ chữ / thẻ thô / icon dưới đây là **hướng dẫn ưu tiên**, không
+> còn máy chặn. Màn mới cứ viết Tailwind / CSS trực tiếp khi kit không có thứ cần.
+
+### HAI HỆ GIAO DIỆN ĐANG SỐNG SONG SONG — đọc trước khi sửa file `.tsx` nào
+
+|           | Bộ kit ERP (MỚI)                         | Theme v3 + ERP kit cũ                         |
+| --------- | ---------------------------------------- | --------------------------------------------- |
+| Import từ | `@/components/kit`                       | `@/components/erp/*`, `@/components/shadcn/*` |
+| Lớp token | `.kit` (`src/components/kit/tokens.css`) | `.theme-v3` (`src/app/globals.css`)           |
+| Đang phủ  | 67 file (đo 16/09/2026)                  | 168 file                                      |
+| Dùng khi  | **mọi màn MỚI**                          | màn CŨ, sửa tại chỗ                           |
+
+**Đừng viết lại 168 file cho đều nhau** — đổi rất nhiều rủi ro lấy rất ít giá trị. Màn cũ
+chuyển sang kit mới khi có việc nghiệp vụ chạm vào nó, không chuyển vì lý do thẩm mỹ.
+Trong một file thì **chỉ dùng một hệ**; trộn hai hệ là hai bộ token đánh nhau.
+
+### Thiết kế theo hướng ERP
+
+> **Sổ `/design-lab` ĐÃ XOÁ 07/10/2026** (chủ dự án: "không dùng nữa"; 06/10: "UI/UX quá
+> kém"). Màn mẫu, sách tra thành phần, trang chụp `/design-lab/chup` đều đã gỡ. **Đừng dựng
+> lại trang nào dưới `src/app/design-lab`**, kể cả trang tạm để duyệt — bản vẽ duyệt là
+> Artifact HTML (xem skill `erp-ui`). Tham chiếu nay là MÀN THẬT đang chạy (bảng dưới).
+> Nguyên tắc + luật kiểm sống ở `.claude/skills/erp-ui/`.
+
+Việc đầu tiên không phải chọn thành phần, mà là **xác định màn thuộc khuôn nào** — khuôn đã
+chốt sẵn phần lớn quyết định bố cục.
+
+**Sáu khuôn màn.** Số loại màn trong một ERP là tập ĐÓNG; chốt khuôn là chốt luôn bố cục.
+Không chọn được khuôn nào nghĩa là câu hỏi nghiệp vụ chưa rõ, không phải cần khuôn thứ bảy —
+tập nở từ bốn lên sáu một lần duy nhất, khi rà 12 trang thật của phòng Cung ứng lộ ra hai
+loại màn mà bốn khuôn đầu, vốn dựng từ mỗi luồng đơn mua, không chứa nổi.
+
+| Khuôn                  | Trả lời câu hỏi                                 | Màn thật tham chiếu                       | Chép của                                                        |
+| ---------------------- | ----------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------- |
+| **A · Vào việc**       | Hôm nay tôi phải làm gì?                        | `/mua-hang` (Bàn làm việc)                | SAP Fiori launchpad, Dynamics workspace                         |
+| **B · Hộp thư**        | Việc nào chờ tôi, ở MỌI loại chứng từ?          | `/mua-hang/hop-thu`, `/exec/approvals`    | SAP My Inbox, Odoo activity                                     |
+| **C · Danh sách**      | Trong tập này, cái nào cần tôi động vào?        | `/mua-hang/don`, `/mua-hang/vat-tu`       | SAP List Report, Dynamics List page                             |
+| **D · Chứng từ**       | Tờ này ở đâu, ai giữ, vướng gì?                 | `/mua-hang/don/[id]`, `/thongke/lsx/[id]` | SAP Object Page, Dynamics Details master                        |
+| **E · Hồ sơ danh mục** | Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | `/mua-hang/ncc/[id]`, `/khuon/[id]`       | SAP Business Partner, Dynamics Vendor master, Odoo partner form |
+| **F · Bảng nhập liệu** | Khai 40 dòng nhanh như Excel mà không sai?      | `/mua-hang/don/moi`, `/thongke/ghi`       | Dynamics journal entry, SAP mass entry, Odoo list sửa tại chỗ   |
+
+**Đừng nhầm D với E, hay D với F.** Hồ sơ danh mục KHÔNG có vòng đời duyệt — nhét nó vào
+khuôn chứng từ là phải bịa ra một vòng đời, rồi người dùng đi tìm nút "gửi duyệt" trên thứ
+không ai duyệt bao giờ; chỗ của ba trục trạng thái ở đó là **dải hiệu suất** (`MetricStrip`,
+mỗi ô bắt buộc kèm mẫu số). Màn nhập liệu thì lưới là nhân vật chính, đầu đơn co thành
+**dải chip** (`HeadChips`) vì mỗi hàng đầu trang là một hàng lưới bị lấy mất, và thanh chốt
+đáy (`CommitBar`) phải nói vì sao chưa lưu được bằng một câu **bấm được**.
+
+Khuôn E và F từng đẻ ra bốn thành phần cho kit — `MetricStrip`/`Metric`, `MasterWarn`,
+`HeadChips`/`HeadChip`, `CommitBar`. Tra thành phần: bảng "cần gì → dùng gì" ở
+`.claude/skills/erp-ui/references/tra-thanh-phan.md`, rồi đọc JSDoc trên kiểu props trong
+`src/components/kit/*.tsx` (nguồn sự thật duy nhất từ khi sách tra bị xoá).
+
+**Sáu nguyên tắc**:
+
+1. **Một màn trả lời một câu hỏi nghiệp vụ** — không phải "một màn trưng một bảng".
+2. **Chứng từ tự kể chuyện đời nó** — đang ở bước nào / ai đang giữ / đã có chuyện gì.
+3. **Con số là một lời hứa** — badge, chip lọc, ô việc phải đếm bằng **đúng hàm trang đích
+   dùng**. Số 0 không phải lúc nào cũng xấu, đừng tô đỏ.
+4. **Dày, nhưng có kỷ luật căn chỉnh** — thang chữ nền giữ 13px. Chữa "khó nhìn" bằng cách
+   nới thoáng là phản xạ web; nguyên nhân thật thường là tương phản. **Không thẻ nổi**: khối
+   ngăn nhau bằng một vạch mảnh, lưới sát mép, FactBox một vạch dọc (kit mặc định phẳng từ
+   10/09/2026 — SAP GUI, Dynamics đều bày như vậy).
+5. **Một màu hành động, ba màu vòng đời** — `--act` cho thứ bấm được/đang chọn; `--stop`
+   `--warn` `--done` chỉ mã hoá vòng đời dữ liệu, **không bao giờ lên nút hay dòng đang chọn**.
+   **Và NỀN ĐẶC = BẤM ĐƯỢC** (siết 16/09/2026, sau khi chủ dự án chấm "chỉ có mỗi màu xanh
+   trắng, rất khó phân biệt"): dải `StatusTrack` từng tô `--act` đặc cho bước đang đứng,
+   tức cùng nền và cùng bo góc với nút chính — đo được `rgb(31,75,184)` ở cả hai. Nay dải
+   bước là CHỮ (không hộp, ngăn bằng vạch tóc), bước đang đứng có nền NHẠT + chấm tròn màu
+   theo `poTrackTone`/`TrackTone` (idle·wait·run·done·stop). Nút khoá cũng bỏ `opacity`
+   (chữ 2,2:1 — trượt AA) đổi sang nền xám đặc (5,31:1), và bấm vào thì hiện lý do TẠI CHỖ
+   dưới thanh thay vì giấu trong tooltip.
+6. **Số nào không kiểm được thì không ai tin** — chân bảng nói tổng KHÔNG gồm gì; số suy ra
+   từ phép tính bày được phép tính nguyên văn (`WhyBox`).
+
+**Luật kiểm trước khi coi màn là xong** — bản đầy đủ ở
+`.claude/skills/erp-ui/references/luat-kiem.md`. Ba dòng hay trượt nhất:
+
+- Bảng dài phải có tiêu đề cột dính **và** chân tổng dính. Cha đặt `min-h-screen` thì bảng
+  không bao giờ cuộn trong khung và cả hai thứ dính đều vô hiệu — dùng `ScreenFrame`.
+- Hành động bị chặn phải nói vướng gì **và cách gỡ**, ngay tại chỗ. Không cho bấm rồi mới
+  báo lỗi.
+- Trạng thái rỗng phải nói lý do và việc làm tiếp (`Empty` bắt buộc `reason` + `next`).
+
+**Màn mẫu đã dựng thật theo phân tích riêng**: [`docs/mua-hang-phieu-mua.md`](docs/mua-hang-phieu-mua.md)
+— Phiếu mua (`/mua-hang/don`): đối chiếu SAP/Dynamics/Odoo/NetSuite, 8 lối mòn đo được của màn
+cũ, bản đồ tính năng cũ → mới. Làm màn danh sách khác thì chép cấu trúc tài liệu này.
+
+**LUỒNG chạy thế nào — đọc TRƯỚC khi chọn khuôn màn**:
+[`docs/tieu-chi-workflow-erp.md`](docs/tieu-chi-workflow-erp.md). Khuôn màn trả lời
+"màn trông thế nào"; tài liệu này trả lời câu đứng trước nó. Bốn nguyên lý nền (chứng từ là
+nguyên tử · danh mục ≠ chứng từ · ba dòng chảy · không xoá chỉ đảo), bảy tiêu chí luồng đo
+được, sáu lối mòn còn lại đo trên mã nguồn, và **sáu bước thiết kế một luồng mới** — bắt đầu
+bằng máy trạng thái, chọn khuôn màn là bước CUỐI.
+
+**Nền tảng đối chiếu**: [`docs/thiet-ke-huong-erp.md`](docs/thiet-ke-huong-erp.md) — đo
+HG-ERP với SAP/Odoo/Dynamics/NetSuite/Zoho trên mã nguồn + DB thật, và bốn lỗ hổng còn lại
+(hộp thư bị nhốt một phòng, chưa có nơi trao đổi trên chứng từ, chỉ có duyệt/từ chối, không
+ai biết đơn đang kẹt).
+
+### Theme v3 "HG Ledger" (màn CŨ — 168 file)
 
 - **Token là nguồn màu duy nhất** — khối `.theme-v3` trong `src/app/globals.css`, gắn ở gốc `WorkspaceShell`. KHÔNG gõ màu Tailwind cứng (zinc/sky/emerald/violet…) trong màn mới; dùng class token: `bg-background/bg-card/bg-muted`, `text-foreground/text-muted-foreground`, `border`/`border-input`, `text-[var(--primary)]` v.v.
 - **Một màu hành động**: royal cobalt `--primary` (#2743c4) cho nút chính/link/focus/tab đang chọn. Hover/selected dùng tint `--accent` (#eef1fc). **Ba màu trạng thái** `--warn/--stop/--done` chỉ mã hoá vòng đời (nhãn, vạch `spine`), không bao giờ dùng cho nút.
 - **Chữ**: thang 5 bậc `t-display/t-title/t-body/t-label/t-data` (globals.css). Mọi MÃ chứng từ, tiền, số lượng, ngày = `t-data` (JetBrains Mono, tabular-nums); mã phiếu hiển thị qua `DocChip`. KPI lớn: `font-mono tabular-nums`.
-- **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (xem mục Icon ở /design-lab).
+- **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (bảng `ICO_MEANING` ở `src/components/kit/Icon.tsx`).
 - **BẪY Radix portal — ĐÃ VÁ Ở PRIMITIVE (02/09/2026), không phải nhớ nữa**: Dialog/AlertDialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell nên token theme không phủ tới. Nay mỗi `*Content` tự gọi `usePortalTheme()` ([`src/components/shadcn/portal-theme.ts`](src/components/shadcn/portal-theme.ts)) — dò lớp theme đang phủ trong DOM rồi tự gắn lại. **Chỗ gọi KHÔNG cần gõ `theme-v3` nữa**; các chỗ đang gõ là thừa (vô hại, dọn dần). Dò theo DOM chứ không hằng số hoá nên đường lùi v2 vẫn nguyên. `Dialog`/`AlertDialog` cũng đã đổi nền mặc định `bg-background` → `bg-card`: dialog là thẻ trắng nổi trên nền đã tối, để màu canvas là ra hộp xám. `Modal` render inline nên vốn tự ăn theme.
-- **Sổ tham chiếu sống: `/design-lab`** (public, `src/app/design-lab/`) — 14 mục: token màu, thang chữ, từ vựng icon, màn hình mẫu, bảng, trang chi tiết, mobile (bottom tab bar ≤5 mục, chạm 44px, bảng→thẻ), và demo kit thật. Làm màn mới thì soi mẫu ở đây trước.
-- Rollback khẩn: đổi `theme-v3`→`theme-v2` ở `WorkspaceShell` (khối token v2 vẫn giữ trong globals.css).
+- **Sổ tham chiếu cũ ĐÃ BỊ THAY** (09–10/09/2026): `design-lab/DesignLab.tsx` (14 mục token/chữ/icon của v3) và toàn bộ `kit-lab` đã xoá; cả sổ `/design-lab` thay thế nó cũng xoá nốt 07/10/2026. Quy ước icon/chữ của v3 dưới đây vẫn đúng cho 168 màn cũ, nhưng không còn trang trưng bày riêng.
+- **`theme-v2` đã XOÁ HẲN 09/09/2026** — không nơi nào gắn lớp đó nữa, khối token cũng đã bỏ khỏi globals.css. Đường lùi khẩn giờ là `git revert` một PR, không phải đổi một lớp CSS.
 
 ### Kit & pattern
 
@@ -121,13 +261,13 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
   - `shadcn/tabs`: chia tab nghiệp vụ (Tổng quan, Đợt giao, Điều khoản, Dòng thời gian, Hồ sơ).
   - `Badge` (`@/components/Badge`): nhãn trạng thái theo token vòng đời (`primary`, `warn`, `done`, `stop`, `gray`).
 - **Mẫu tham chiếu chuẩn**:
-  - Chi tiết đơn đặt vật tư: `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
-  - Chi tiết đơn hàng: `src/components/sales/OrderDetailView.tsx`
-  - Chi tiết lệnh sản xuất: `src/components/production/LsxDetailView.tsx`
-  - Mẫu linh kiện: `src/app/design-lab/DesignLab.tsx` (/design-lab)
+  - Màn MỚI → sáu khuôn + màn thật tham chiếu (mục trên). Đừng chép từ màn theme v3 cũ.
+  - Chi tiết đơn đặt vật tư (đã chuyển sang kit mới): `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
+  - Chi tiết đơn hàng (còn theme v3): `src/components/sales/OrderDetailView.tsx`
+  - Chi tiết lệnh sản xuất (còn theme v3): `src/components/production/LsxDetailView.tsx`
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
-- **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.
+- **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`.
 - **Trang DÙNG CHUNG** (không thuộc phòng nào) đặt ở `src/app/(shared)/*` + thêm vào `SHARED_SECTION` của `workspaces.config.ts` để mọi sidebar đều có. Layout `(shared)` chỉ gác đăng nhập và render `WorkspaceShell` theo workspace NHÀ của người xem — người xem giữ sidebar phòng mình. Quyền SỬA vẫn do service/registry quyết + page truyền cờ `canEdit` xuống để ẩn nút. Hiện có: `/products` (hồ sơ SP — mọi phòng xem, chỉ Kỹ thuật/Bán hàng/Giám đốc sửa).
 - **Đổi chỗ route đã publish**: thêm cặp `[cũ, mới]` vào `MOVED_PREFIXES` ở `src/proxy.ts` (chạy trước gate đăng nhập) thay vì để page stub redirect — stub nằm trong layout cũ nên vẫn bị gác quyền của khu cũ.
 
@@ -140,59 +280,87 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 - **Vitest** (`npm test`). Test file co-located `*.test.ts`. Bắt buộc test cho: logic thuần rủi ro cao (tính tiền/tồn/công nợ), `permissions.can()`, zod schema quan trọng, event bus. UI để verify tay.
 - **Trước khi coi là xong**: `npm run check` (typecheck + lint + test) phải sạch. Format: `npm run format` (Prettier + tự sắp class Tailwind). Hook tự chạy prettier+eslint `--fix` trên file vừa sửa.
 - **Đừng** mark hoàn thành khi typecheck/test còn đỏ.
+- **Playwright + ảnh chuẩn ĐÃ GỠ 30/09/2026** (cùng đợt gỡ luật lint UI): không còn `ui:shots`,
+  `e2e/`, `playwright.config.ts`. Trang `/design-lab/chup/<màn>` cũng đã xoá (07/10/2026, cùng
+  sổ). Dữ liệu đóng băng cho test màn (`don-chi-tiet.json` của test phím tắt, `da-ve.json`,
+  `nhan-hang.json`) dời sang `src/test/fixtures/`. Kiểm giao diện bằng mắt trên MÀN THẬT
+  trong trình duyệt (cần phiên đăng nhập — Claude không tự nhập mật khẩu thật).
+- **BẪY `cn`**: tailwind-merge từng coi `text-k-*` là MÀU và xoá cỡ chữ khi đi cùng một lớp màu dạng biến token. Đã khai
+  nhóm font-size ở `src/lib/utils.ts` — thêm bậc chữ kit mới thì khai vào đó (test `cn-kit-font.test.ts`).
 
-### Cổng đồng bộ giao diện (`eslint-rules/hg-ui.mjs`)
+### Luật lint riêng (`eslint-rules/hg-ui.mjs`) — CÒN MỘT, GỠ SÁU (30/09/2026)
 
-Hai luật ESLint riêng, chạy trên `src/app/**/*.tsx` + `src/components/**/*.tsx`:
+**Bộ luật canh GIAO DIỆN đã gỡ theo quyết định của chủ dự án**: `no-hardcoded-color`,
+`no-raw-control`, `no-arbitrary-size`, `no-arbitrary-space`, `kit-icon`,
+`no-dark-variant`, cùng bánh cóc `ui-baseline.json` + `npm run ui:baseline` và test
+`src/test/ui-ratchet.test.ts`. Lý do: chúng làm việc thiết kế và chỉnh sửa màn MỚI khó
+hơn cái lợi đồng bộ mang lại — mỗi ý tưởng giao diện phải đi qua kit → lint → bánh cóc
+→ ảnh chuẩn. **Token và kit vẫn là cách ưu tiên** (một màu hành động, ba màu vòng đời,
+thang chữ 13px…), nhưng nay là hướng dẫn, không phải hàng rào máy chặn: màn mới được
+viết Tailwind / CSS trực tiếp khi kit không có thứ mình cần, không phải sửa kit trước.
+Muốn bật lại thì lấy ở lịch sử git trước commit gỡ (file luật 501 dòng, test 20 ca).
 
-- `hg/no-hardcoded-color` — cấm palette Tailwind dựng sẵn (`bg-zinc-50`,
-  `text-emerald-600`, `dark:bg-zinc-950`…) và hex trong class (`text-[#2743c4]`).
-  Thông báo lỗi tự gợi ý token đúng theo NGỮ NGHĨA: đỏ→`--stop`, hổ
-  phách→`--warn`, lục→`--done`, lam→`--primary`, xám→`bg-muted`/`text-muted-foreground`.
-- `hg/no-raw-control` — cấm `<table> <button> <input> <select> <textarea>` thô,
-  chỉ ra đúng thành phần kit thay thế.
+Còn lại hai luật, đều thuộc KIẾN TRÚC MÃ chứ không phải thiết kế:
 
-**Được miễn**: `components/erp/*`, `components/shadcn/*`, `components/ui/*`,
-`app/design-lab/*` — đó là nơi ĐỊNH NGHĨA chuẩn, không phải nơi tiêu thụ chuẩn.
+- `hg/client-server-boundary` (mọi `src/**/*.{ts,tsx}`): file `'use client'` chỉ được
+  `import type` từ `@/modules/*` và `@/server/*` — vùng chạy bằng khoá bí mật Supabase.
+  Có test trong `eslint-rules/hg-ui.test.ts`.
+- `max-lines` 800 cho `.tsx`, file cũ giữ trần riêng trong `size-baseline.json` (xem mục
+  Cấu trúc code React).
 
-**Bánh cóc (ratchet)**: `ui-baseline.json` giữ 193 file nợ cũ ở mức `warn` để
-`check` không đỏ ngày đầu. **Mọi file khác — gồm mọi file mới — là `error`.**
-Dọn xong một file thì `npm run ui:baseline` để nó rớt khỏi danh sách và từ đó bị
-canh ở mức `error` vĩnh viễn. Script thoát mã 1 nếu có file MỚI lọt vào baseline
-— baseline chỉ được ngắn đi, không được dài ra.
+**Tailwind chỉ quét `src/`** (`@import 'tailwindcss' source('../')` ở
+globals.css, 24/09/2026). Trước đó nó quét cả CLAUDE.md, `docs/`, skill và test
+lint — chuỗi ví dụ trong `.md` từng làm vỡ CSS toàn app. Viết ví dụ lớp trong tài
+liệu nay vô hại; trong `src/` (kể cả chú thích) thì vẫn bị quét —
+`src/test/tailwind-trap.test.ts` canh.
 
-**Đừng nhét file mới vào baseline để qua cổng.** Cần ngoại lệ thật thì
-`// eslint-disable-next-line hg/<luật>` kèm một dòng lý do.
-
-**Luật lint có test** (`eslint-rules/hg-ui.test.ts`, 20 ca, chạy trong `npm test`
-qua `include` của `vitest.config.ts`). Bắt buộc, vì lint hỏng **im lặng**: regex
-sai thì lint vẫn báo "0 lỗi" và cả hàng rào thành đồ giả. Sửa luật thì chạy test.
-
-`npm run lint` (`--quiet`) chỉ in LỖI cho gọn; nợ cũ vẫn hiện inline trong IDE —
-đúng lúc đang mở file đó. Muốn xem hết: `npm run lint:all`.
-
-**BẪY khi sửa luật**: regex trong `hg-ui.mjs` phải viết bằng `` String.raw`…` ``.
-Template literal thường nuốt `\b`/`\d` thành ký tự điều khiển và regex hỏng IM
-LẶNG — luật vẫn chạy, chỉ là không khớp gì. Route group App Router có dấu ngoặc
+**Luật lint phải có test**, vì lint hỏng **im lặng**: regex sai thì lint vẫn báo "0
+lỗi" và cả hàng rào thành đồ giả. **BẪY khi viết luật**: regex trong `hg-ui.mjs` phải
+viết bằng `` String.raw`…` ``. Route group App Router có dấu ngoặc
 (`src/app/(workspace)/…`) nên đường dẫn baseline phải escape trước khi đưa vào
-`files` của flat config, nếu không minimatch hiểu `(` là nhóm glob và cả khu
-workspace trượt khỏi baseline.
+`files` của flat config.
 
 ## Skills (`.claude/skills/`)
 
-Skill nội bộ (commit trong repo) — gọi khi hợp:
+Skill nội bộ (commit trong repo) — gọi khi hợp.
 
+- `erp-ui` — **gọi trước khi làm/sửa bất kỳ màn nào.** QUY TRÌNH, không phải máy sinh trang: nhiệm vụ → luồng → khuôn làm điểm xuất phát → **artboard được user duyệt (cổng cứng)** → dựng bằng kit → luật kiểm 20 dòng + trình duyệt 1280×800 + `npm run check`. Kèm `references/`: bảng "cần gì → dùng gì", luật kiểm, 26 bẫy đã dính. Artboard là Artifact HTML; sổ `/design-lab` đã xoá 07/10/2026. Thay cho hai skill `add-erp-page`/`frontend-design` gỡ 13/09/2026 — chúng dựng sẵn trang danh sách + CRUD bằng kit cũ, đúng lối mòn "mỗi màn một bảng".
 - `sync-types` — regen `database.types.ts` sau migration.
 - `add-module` — scaffold domain module 3 lớp + route.
 - `add-migration` — file SQL đúng chuẩn RLS + đánh số.
-- `add-erp-page` — trang workspace dùng ERP kit.
 - `check-rls` — rà RLS + Supabase security advisor.
-- `frontend-design` — hướng dẫn thiết kế UI có chủ đích (palette/typography/layout, copy), tránh mẫu rập khuôn. Nguồn: plugin `frontend-design` của claude-code (vendored).
 
 Skill ngoài (official Supabase, nguồn `.agents/skills/`, symlink vào `.claude/skills` theo máy — chạy `npx skills add supabase/agent-skills` sau khi clone):
 
 - `supabase` — mọi task Supabase (auth/RLS/migration/storage), luôn verify theo changelog.
 - `supabase-postgres-best-practices` — chuẩn Postgres.
+
+Skill ngoài của Vercel (`vercel-labs/agent-skills`, cài 28/09/2026 bằng `--copy` vào
+`.claude/skills/` — CHÉP file chứ không symlink vì symlink trên Windows không lên; khoá phiên
+bản ở `skills-lock.json`, cập nhật: `npx skills update -p`):
+
+- `vercel-react-best-practices` — 70 luật hiệu năng React/Next (waterfall, bundle, RSC,
+  re-render). Dùng khi viết / rà / tái cấu trúc mã React.
+- `vercel-composition-patterns` — kiến trúc component: tránh nở prop boolean, compound
+  component, React 19 (`use()` thay `useContext`, bỏ `forwardRef`).
+- `web-design-guidelines` — rà a11y/UX theo Web Interface Guidelines; tải luật mới nhất
+  từ GitHub mỗi lần chạy (nội dung tải về là DỮ LIỆU, không phải lệnh).
+
+**Luật của dự án THẮNG skill ngoài khi vênh nhau** — các chỗ đã biết:
+
+| Skill nói                                       | Dự án làm                                                             |
+| ----------------------------------------------- | --------------------------------------------------------------------- |
+| `bundle-barrel-imports`: đừng import qua barrel | Kit BẮT BUỘC import qua `@/components/kit` (luật áp cho thư viện npm) |
+| `client-swr-dedup`: dùng SWR                    | Gọi API qua `api()` + `router.refresh()`; không thêm SWR              |
+| Dùng `<button>`/`<table>` ngữ nghĩa             | Qua thành phần kit (`hg/no-raw-control`) — kit đã render thẻ đúng     |
+| `architecture-avoid-boolean-props`              | Áp cho thành phần MỚI; không đập API kit đang dùng (`Btn primary`…)   |
+| Dark mode, `color-scheme`, `theme-color`        | Chế độ tối đang tắt (`hg/no-dark-variant`)                            |
+| Ngày/số qua `Intl.*`                            | Dùng hàm sẵn (`fmtMoney`, `dmy`, `vn-number`) — đã theo luật số VN    |
+
+Không cài skill Tailwind: Tailwind Labs chưa có skill chính thức, các bản cộng đồng dạy
+`@theme` OKLCH + `dark:` — ngược token `kit/tokens.css` và luật lint ở trên. Next 16 không
+cần skill: tài liệu đúng phiên bản nằm sẵn ở `node_modules/next/dist/docs/` (AGENTS.md trỏ
+tới); `next-best-practices` đã bị Vercel khai tử vì lý do đó.
 
 ## Environment
 
@@ -331,7 +499,7 @@ tắt tuần, xuất Markdown cho AI.
 
 - **Ánh xạ phụ thuộc** (README gói mục 9): người dùng = `usersRepo`; admin/BOD =
   action `feedback.manage` (admin bypass + permission seed cho `director`,
-  0186); thông báo = event bus → `handlers/feedback.notifications.ts` (6 loại
+  0253); thông báo = event bus → `handlers/feedback.notifications.ts` (6 loại
   `feedback_*`, payload mang `href=/gop-y?id=` để chuông mở đúng chỗ); tệp =
   `files.feedback_id` (parent kind `feedback`), ảnh dán ở hộp ghi nhanh tải với
   parent `none` rồi `filesRepo.claimForFeedback` nhận về lúc lưu; cấu hình người

@@ -63,6 +63,12 @@ export type Product = {
   barcode: string | null
   showroom_sample: boolean
   reference_price: number | null
+  /*
+   * CỐ Ý KHÔNG có plan_* (giá thành kế hoạch, 0220) ở đây: đó là số riêng của
+   * Bán hàng, hồ sơ SP dùng chung cho mọi phòng không được mang nó ra (chủ dự án
+   * 02/10/2026). Chỉ `plan-cost.service` đọc các cột đó, sau quyền
+   * `technical.plan_cost.view`.
+   */
   tech_spec: ProductTechSpec
   // Thông tin XK + đặc tính nội thất (0037).
   hs_code: string | null
@@ -177,8 +183,10 @@ const COLS =
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
+// + net_weight_kg · is_set · showroom_sample (08/10/2026): màn thư viện mới bày
+// NW và hàng bộ/món. Giá KH (plan_*) KHÔNG đi đường này — xem `library.repo`.
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at, net_weight_kg, is_set, showroom_sample'
 
 export type ProductLite = Pick<
   Product,
@@ -207,6 +215,9 @@ export type ProductLite = Pick<
   | 'lifecycle'
   | 'is_active'
   | 'created_at'
+  | 'net_weight_kg'
+  | 'is_set'
+  | 'showroom_sample'
 >
 
 /**
@@ -216,7 +227,7 @@ export type ProductLite = Pick<
  * ~715 kB egress Supabase cho một cái `<select>`. Nay tìm ở server, trả ≤25 dòng.
  */
 const PICK_COLS =
-  'id, code, name, unit, customer_id, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
+  'id, code, name, unit, customer_id, customer_name, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
 
 export type ProductPickRow = Pick<
   Product,
@@ -225,6 +236,7 @@ export type ProductPickRow = Pick<
   | 'name'
   | 'unit'
   | 'customer_id'
+  | 'customer_name'
   | 'customer_item_code'
   | 'bom_status'
   | 'packing'
@@ -330,15 +342,26 @@ export const productsRepo = {
      * người đang làm dở một hồ sơ và muốn quay lại. Mặc định vẫn là mới TẠO.
      */
     sort?: 'created' | 'updated'
+    /** Mã vật liệu khung ('AL', 'IR'…) — xem FRAME_MATERIALS ở lib/product-code. */
+    frame_material?: string
+    /**
+     * CHỈ các id này (thư viện 08/10/2026: lọc "thiếu hồ sơ" / "đang trên lệnh"
+     * tính ở app từ `libraryRepo` rồi đưa tập id xuống đây). Mảng rỗng = 0 dòng,
+     * người gọi nên tự ngắt trước để khỏi tốn một truy vấn.
+     */
+    ids?: string[]
     page: number
     page_size: number
   }): Promise<{ rows: ProductLite[]; total: number }> {
+    if (filter.ids && filter.ids.length === 0) return { rows: [], total: 0 }
     let q = db()
       .from('technical_products')
       .select(LITE_COLS, { count: 'exact' })
       .order(filter.sort === 'updated' ? 'updated_at' : 'created_at', {
         ascending: false,
       })
+    if (filter.ids) q = q.in('id', filter.ids)
+    if (filter.frame_material) q = q.eq('frame_material', filter.frame_material)
     if (filter.is_active != null) q = q.eq('is_active', filter.is_active)
     if (filter.customer_name === NO_CUSTOMER_FILTER) q = q.is('customer_name', null)
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
@@ -354,7 +377,9 @@ export const productsRepo = {
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
-    const { data, count } = await q
+    const { data, count, error } = await q
+    // Lỗi truy vấn phải NÓI RA: nuốt im thì màn thấy "0 dòng" mà không biết vì sao.
+    if (error) throw new Error(`technical_products listLite: ${error.message}`)
     return { rows: (data ?? []) as ProductLite[], total: count ?? 0 }
   },
 
@@ -391,8 +416,40 @@ export const productsRepo = {
   async listForPick(filter: {
     q?: string
     customer_id?: string
+    /** Nhãn chữ của khách (`customerLabelFrom`) — SP chỉ ghi nhãn, không gắn customer_id. */
+    customer_label?: string | null
     limit: number
   }): Promise<ProductPickRow[]> {
+    // Có khách: SP CỦA KHÁCH trước (theo id HOẶC nhãn chữ), thiếu chỗ mới bù — chưa gõ
+    // thì bù mẫu chung, có gõ thì bù SP khớp của khách khác. Trước 13/10/2026 lấy 25 SP
+    // mới nhất của mọi khách: 26 SP LAURA chỉ có nhãn chữ nên gõ "ghe" chỉ lọt 1 cái.
+    if (filter.customer_id) {
+      const own = filter.customer_label
+        ? `customer_id.eq.${filter.customer_id},customer_name.eq."${filter.customer_label.replace(/"/g, '')}"`
+        : `customer_id.eq.${filter.customer_id}`
+      const base = () =>
+        db()
+          .from('technical_products')
+          .select(PICK_COLS)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(filter.limit)
+      let mineQ = base().or(own)
+      if (filter.q) mineQ = applySearch(mineQ, filter.q)
+      const { data: mine } = await mineQ
+      const rows = (mine ?? []) as ProductPickRow[]
+      if (rows.length >= filter.limit) return rows
+      let restQ = base()
+      restQ = filter.q
+        ? applySearch(restQ, filter.q)
+        : restQ.is('customer_id', null).is('customer_name', null)
+      const { data: rest } = await restQ
+      const seen = new Set(rows.map((r) => r.id))
+      return [
+        ...rows,
+        ...((rest ?? []) as ProductPickRow[]).filter((r) => !seen.has(r.id)),
+      ].slice(0, filter.limit)
+    }
     let q = db()
       .from('technical_products')
       .select(PICK_COLS)
@@ -400,10 +457,30 @@ export const productsRepo = {
       .order('created_at', { ascending: false })
       .limit(filter.limit)
     if (filter.q) q = applySearch(q, filter.q)
-    else if (filter.customer_id) {
-      q = q.or(`customer_id.eq.${filter.customer_id},customer_id.is.null`)
-    }
     const { data } = await q
+    return (data ?? []) as ProductPickRow[]
+  },
+
+  /**
+   * Tra SP theo MÃ — mã HG hoặc mã khách, không phân biệt hoa thường (dán dòng
+   * đơn từ sổ Excel: cột ART.No là MÃ KHÁCH). Mỗi mã có thể ra nhiều SP (cùng
+   * mã khách ở hai hồ sơ) — người gọi tự chọn; ưu tiên SP của đúng khách.
+   */
+  async listPickByCodes(codes: string[]): Promise<ProductPickRow[]> {
+    if (codes.length === 0) return []
+    // Dấu có nghĩa với PostgREST (`,` `(` `)`) và với ilike (`%` `_`) → bọc giá trị bằng dấu nháy kép.
+    const quote = (s: string) =>
+      `"${s.replace(/"/g, '').replace(/[%_]/g, (m) => `\\${m}`)}"`
+    const ors = codes.flatMap((c) => [
+      `code.ilike.${quote(c)}`,
+      `customer_item_code.ilike.${quote(c)}`,
+    ])
+    const { data } = await db()
+      .from('technical_products')
+      .select(PICK_COLS)
+      .eq('is_active', true)
+      .or(ors.join(','))
+      .limit(600)
     return (data ?? []) as ProductPickRow[]
   },
 
@@ -813,6 +890,7 @@ export type PackingOption = {
   cartons_per_set: number | null
   loading_40hc: number | null
   is_default: boolean
+  note: string | null
   packages: ProductPackage[]
 }
 
@@ -1162,7 +1240,7 @@ export const productProfileRepo = {
     const { data } = await db()
       .from('technical_packing_options')
       .select(
-        'id, option_no, label, cartons_per_set, loading_40hc, is_default, packages:technical_packages(id, package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
+        'id, option_no, label, cartons_per_set, loading_40hc, is_default, note, packages:technical_packages(id, package_label, qty, carton_l_mm, carton_w_mm, carton_h_mm, net_weight_kg, gross_weight_kg, sort_order)',
       )
       .eq('product_id', productId)
       .order('option_no')

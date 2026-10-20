@@ -4,16 +4,13 @@ type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success'
 type Size = 'sm' | 'md' | 'lg'
 
 const BASE =
-  'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50 dark:focus-visible:ring-offset-zinc-950'
+  'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50'
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-zinc-200',
-  secondary:
-    'border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800',
-  danger:
-    'border border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/30',
-  ghost: 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800',
+  primary: 'bg-slate-900 text-white hover:bg-slate-800',
+  secondary: 'border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50',
+  danger: 'border border-red-300 bg-white text-red-700 hover:bg-red-50',
+  ghost: 'text-zinc-700 hover:bg-zinc-100',
   success: 'bg-green-600 text-white hover:bg-green-700',
 }
 

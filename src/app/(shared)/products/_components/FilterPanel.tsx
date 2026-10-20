@@ -232,7 +232,7 @@ function Chip({
       className={`focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-2 text-xs font-medium transition-colors focus-visible:ring-[3px] focus-visible:outline-none ${
         active
           ? `border-transparent shadow-sm ${ACCENT_SOLID}`
-          : 'bg-card text-muted-foreground hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:hover:border-sky-800 dark:hover:bg-sky-950/40 dark:hover:text-sky-300'
+          : 'bg-card text-muted-foreground hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700'
       }`}
     >
       <Icon className={`size-3.5 ${active ? 'text-white' : iconClass}`} aria-hidden />

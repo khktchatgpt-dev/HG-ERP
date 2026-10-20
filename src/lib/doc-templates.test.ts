@@ -70,6 +70,12 @@ describe('DEFAULT_DOC_TEMPLATES', () => {
     expect(DEFAULT_DOC_TEMPLATES.PO.signatures.length).toBe(3)
   })
 
+  it('báo giá là tờ CHÀO — khách không ký lên đó (07/10/2026)', () => {
+    const roles = DEFAULT_DOC_TEMPLATES.BG.signatures.map((c) => c.role)
+    expect(roles).toEqual(['NGƯỜI LẬP / PREPARED BY', 'GIÁM ĐỐC / DIRECTOR'])
+    expect(roles.join(' ')).not.toMatch(/CUSTOMER|KHÁCH/i)
+  })
+
   it('phiếu đặt vật tư in TÊN người lập dưới nét ký', () => {
     // Tờ gửi NCC phải nói rõ ai bên mình đứng ra đặt hàng.
     expect(DEFAULT_DOC_TEMPLATES.PO.signatures[1].slot).toBe('creator')

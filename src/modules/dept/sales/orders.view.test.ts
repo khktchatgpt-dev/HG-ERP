@@ -2,12 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { toQuotePickPayload } from './orders.view'
 import type { ProductPickRow } from '@/modules/dept/technical/technical.repo'
 
+// fileImageSrc ký HMAC bằng SESSION_SECRET — test không có .env.local.
+process.env.SESSION_SECRET ??= 'test-secret-'.repeat(4)
+
 const base: ProductPickRow = {
   id: 'p1',
   code: 'ST000049HG-AL',
   name: 'Ghế xếp Florenz',
   unit: 'cai',
   customer_id: null,
+  customer_name: null,
   customer_item_code: null,
   bom_status: 'none',
   description_en: null,
@@ -70,5 +74,6 @@ describe('toQuotePickPayload — bù kích thước từ cột mm', () => {
     expect(p.packing.qty_per_carton).toBe(2)
     expect(p.packing.loading_40hc).toBe(112)
     expect(p.has_image).toBe(true)
+    expect(p.image_url).toContain('/api/files/f1/img?s=')
   })
 })

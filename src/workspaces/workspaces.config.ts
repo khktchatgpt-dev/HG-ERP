@@ -27,11 +27,20 @@ export type NavCapability =
   | 'production.record'
   /** Thành viên tổ xưởng — thấy màn "Việc của tổ" (tổ trưởng, mobile). */
   | 'production.team'
+  /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
+  | 'supply.approve'
+  /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — Kế toán, TP Nhân sự, Giám đốc. */
+  | 'hr.payroll'
 
 export type NavItem = {
   href: string
   label: string
   icon: string
+  /**
+   * Chỉ sáng khi pathname KHỚP ĐÚNG href — cho trang gốc của một nhóm có trang con
+   * cùng tiền tố ('/hr/cham-cong' Tổng quan vs '/hr/cham-cong/luot').
+   */
+  exact?: boolean
   /** Visible cho role nào. Bỏ trống = mọi role trong workspace này thấy. */
   roles?: readonly Role[]
   /** Ngoài role, còn cần là head của dept? Chỉ có ý nghĩa nếu roles không loại. */
@@ -58,10 +67,12 @@ export type WorkspaceId =
   | 'planning'
   | 'qc'
   | 'production'
-  // Gia đình Sản xuất tách theo VAI (user chốt 07/2026): mỗi vai một workspace.
+  // HAI BỀ MẶT (chốt 18/09/2026, thay cách tách theo VAI của 07/2026):
+  // `production` = bề mặt VĂN PHÒNG (điều hành + ghi sổ + kế hoạch, nav lọc
+  // theo vai), `team` = bề mặt XƯỞNG (tablet, một việc mỗi lần). Xem
+  // docs/san-xuat-thiet-ke-giao-dien.md §4 — bốn hệ ERP lớn đều chia theo TƯ
+  // THẾ LÀM VIỆC chứ không theo phòng ban.
   | 'team'
-  | 'stat'
-  | 'prodplan'
   | 'hr'
   | 'exec'
   | 'system'
@@ -72,6 +83,27 @@ export type WorkspaceConfig = {
   short: string
   /** Route base. Home dashboard = `${route}/`. */
   route: string
+  /**
+   * CỬA VÀO — nơi người dùng rơi xuống khi BƯỚC VÀO workspace (đăng nhập, bấm
+   * ở ô chuyển phòng). Mặc định là `route`.
+   *
+   * Tách khỏi `route` vì `route` còn là DẤU NHẬN DẠNG: `resolveWorkspaceFromPath`
+   * dựa vào nó để biết một đường dẫn thuộc phòng nào (tô màu, sáng mục menu).
+   * Đổi `route` để dời cửa vào là làm cả khu cũ mất danh tính. Cung ứng đang
+   * cần đúng việc này: cửa vào đã sang khu Mua hàng mới, nhưng `/planning` vẫn
+   * phải là Cung ứng vì nó còn phục vụ.
+   */
+  home?: string
+  /**
+   * Đường dẫn PHỤ mà workspace này cũng sở hữu — `resolveWorkspaceFromPath`
+   * nhận diện chúng y như `route`.
+   *
+   * Sinh ra khi gộp ba khu Sản xuất làm một (18/09/2026): `/thongke/*` và
+   * `/kehoach-sx/*` vẫn là địa chỉ thật của hàng chục trang đã chạy, nhưng
+   * chúng thuộc về khu `production`. Khai ở đây RẺ hơn nhiều so với dời thư
+   * mục + `MOVED_PREFIXES`, và giữ nguyên mọi link đã phát ra ngoài.
+   */
+  altRoutes?: readonly string[]
   /** Tailwind color name — dùng để tô accent bar, badge, hover. */
   accent:
     | 'orange'
@@ -138,8 +170,14 @@ export const SHARED_SECTION: NavSection = {
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
   items: [
     { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
-    // Góp ý hệ thống (0186) — mọi người viết / xem được, nên ở khu dùng chung.
+    // Góp ý hệ thống (0253) — mọi người viết / xem được, nên ở khu dùng chung.
     { href: '/gop-y', label: 'Góp ý hệ thống', icon: 'messages-square' },
+    // "Thư viện SP (mới)" + "Lệnh SX · hồ sơ SP" (/thu-vien) KHÔNG ở đây nữa —
+    // chủ dự án chốt 13/10/2026: đó là phần riêng của Kỹ thuật. Xem nav
+    // workspace `technical` + cửa chặn ở `(shared)/thu-vien/layout.tsx`.
+    // Khuôn nhôm: Kỹ thuật giữ, nhưng Cung ứng tra để đặt hàng và Sản xuất tra
+    // để nhận dạng cây nhôm — nên nó ở khu dùng chung, không nhốt trong /technical.
+    { href: '/khuon', label: 'Khuôn nhôm', icon: 'shapes' },
   ],
 } as const
 
@@ -171,7 +209,20 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Điền đơn giá',
             icon: 'circle-dollar-sign',
           },
+          /*
+           * Giá thành kế hoạch (0220): bốn số từ bảng tính giá của Sale, theo
+           * SP. Giám đốc đọc nó ở Tiền theo lệnh; Sale nạp ở đây.
+           */
+          { href: '/sales/gia-thanh', label: 'Tính giá SP', icon: 'chart-column' },
           { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
+          // Kế hoạch xuất hàng (06/10/2026): khách × tháng theo ĐỢT (nhóm lệnh).
+          {
+            href: '/sales/ke-hoach-xuat',
+            label: 'Kế hoạch xuất hàng',
+            icon: 'container',
+          },
+          // Phân tích doanh số (06/10/2026): khách / loại / khung / SP / tháng + lãi KH.
+          { href: '/sales/phan-tich', label: 'Phân tích doanh số', icon: 'chart-gantt' },
         ],
       },
       {
@@ -204,12 +255,63 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế toán',
         items: [
           { href: '/finance', label: 'Trang chủ', icon: 'home' },
+          /*
+           * CỬA VÀO công nợ là SỔ THEO KỲ, không phải ảnh chụp "tại thời điểm
+           * này": chỉ sổ theo kỳ mới chốt được và lên được báo cáo tài chính.
+           * Màn ghi thanh toán (`/finance/cong-no-ncc`) vào TỪ đây — cho nó một
+           * mục ngang hàng là dựng hai chỗ cùng nói "công nợ" trong một phòng,
+           * rồi hai chỗ ra hai con số.
+           */
           {
-            href: '/finance/cong-no-ncc',
+            href: '/finance/so-cong-no',
             label: 'Công nợ NCC',
             icon: 'circle-dollar-sign',
           },
           { href: '/finance/invoices', label: 'Hoá đơn', icon: 'receipt' },
+          {
+            href: '/ho-so-luong',
+            label: 'Hồ sơ lương',
+            icon: 'wallet',
+            capability: 'hr.payroll',
+          },
+          {
+            href: '/bang-luong',
+            label: 'Bảng lương',
+            icon: 'receipt',
+            capability: 'hr.payroll',
+          },
+          /*
+           * Điều khoản thanh toán là DANH MỤC, không phải chứng từ — nhưng nó
+           * đứng riêng ở nav vì đang là chốt chặn: 0/164 NCC khai số ngày, nên
+           * 6,578 tỷ công nợ không khoản nào có hạn. Khai xong hết thì mục này
+           * gập vào hồ sơ NCC được.
+           */
+          {
+            href: '/finance/dieu-khoan-ncc',
+            label: 'Hạn thanh toán',
+            icon: 'calendar-check',
+          },
+          /*
+           * Tỷ giá (0219) cũng là DANH MỤC — đứng riêng vì Kế toán là người
+           * nhập và vì mọi màn cộng tiền đa tiền tệ (Tiền theo lệnh, Công nợ)
+           * đều tựa vào bảng này.
+           */
+          { href: '/finance/ty-gia', label: 'Tỷ giá', icon: 'arrow-left-right' },
+          /*
+           * Đối chiếu hoá đơn ↔ đơn mua KHÔNG đứng riêng ở nav: nó là bước soi
+           * chi tiết, vào từ một lệnh hoặc một đơn cụ thể. Cho nó một mục ngang
+           * hàng "Hoá đơn" là dựng hai chỗ cùng nói về hoá đơn trong một phòng.
+           */
+          {
+            href: '/finance/theo-lenh',
+            label: 'Tiền theo lệnh',
+            icon: 'chart-column',
+          },
+          {
+            href: '/finance/bao-cao',
+            label: 'Báo cáo mua hàng',
+            icon: 'chart-pie',
+          },
         ],
       },
       {
@@ -235,29 +337,47 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/warehouse',
     accent: 'amber',
     logoText: 'KH',
+    /*
+     * DỰNG LẠI TỪNG MÀN MỘT (từ 16/09/2026, `docs/kho-buoc-1-nhap-kho.md`).
+     * Khu Kho bị gỡ sạch màn ngày 16/09 (commit 20033fb) sau đợt dựng 31 màn
+     * trong 10 giờ mà không ai nghiệm thu giữa chừng. Lần này mỗi bước một
+     * màn, chạy thật xong mới thêm mục kế: Nhập → Xuất → Tồn → Danh mục.
+     *
+     * `home` trỏ thẳng vào màn đầu tiên: KHÔNG dựng trang chủ khu Kho ở bước
+     * này — bàn làm việc là màn phụ, dựng sau khi bốn màn chính chạy thật.
+     * Mục nav chỉ có thứ ĐÃ CÓ route; để mục trỏ vào route chưa dựng là dẫn
+     * người dùng vào 404.
+     */
     ready: true,
-    // Chia theo NGHIỆP VỤ (plan-kho-redesign GĐ1): nhập / cấp SX là hai luồng
-    // riêng thay vì một màn "Phiếu nhập / xuất" gộp. Sổ chứng từ vẫn giữ —
-    // nơi tra mọi phiếu đã lập + form gốc (các màn nghiệp vụ deep-link vào).
+    // B8a (19/10/2026): vào khu Kho là Bàn làm việc — Hàng về lùi xuống mục thứ hai.
+    home: '/warehouse',
     sections: [
       {
         heading: 'Nghiệp vụ',
         items: [
-          { href: '/warehouse', label: 'Tổng quan', icon: 'home' },
-          { href: '/warehouse/nhap', label: 'Nhập kho', icon: 'arrow-down-to-line' },
-          // Đơn NCC góc nhìn Kho (16/08): tra tiến độ về hàng theo ĐƠN/LSX +
-          // nhập nhanh — /nhap là "hôm nay nhận gì", đây là "đơn này tới đâu".
-          { href: '/warehouse/don-ncc', label: 'Đơn đặt NCC', icon: 'truck' },
-          { href: '/warehouse/xuat', label: 'Cấp vật tư SX', icon: 'arrow-up-from-line' },
-          { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: 'clipboard-check' },
-        ],
-      },
-      {
-        heading: 'Sổ sách',
-        items: [
-          { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
-          { href: '/warehouse/docs', label: 'Sổ chứng từ', icon: 'receipt-text' },
-          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: 'package' },
+          // B8a: trang đầu — exact để mục này không sáng ở mọi trang con /warehouse/*.
+          { href: '/warehouse', label: 'Bàn làm việc', icon: 'home', exact: true },
+          { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
+          // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
+          { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
+          // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
+          { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
+          // 0236 (13/10/2026): "Giấy đề nghị mua vật tư" — Kho lập thay tờ giấy
+          // chụp gửi Zalo; lãnh đạo duyệt, Cung ứng lập đơn mua từ phiếu.
+          { href: '/warehouse/de-nghi', label: 'Đề nghị mua', icon: 'clipboard-list' },
+          // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO. Ba màn trên từng
+          // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
+          // và đảo phiếu ghi sai chỉ làm được ở màn cũ.
+          { href: '/warehouse/phieu', label: 'Sổ phiếu', icon: 'book-open' },
+          // Kho đợt 2 · B6 (19/10/2026): báo cáo nhập–xuất–tồn theo kỳ, có giá trị
+          // (bình quân gia quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
+          { href: '/warehouse/bao-cao', label: 'Nhập–Xuất–Tồn', icon: 'chart-column' },
+          // Kho đợt 2 · B7 (19/10/2026): đợt kiểm kê — đếm mù, sổ chốt lúc bắt đầu đếm.
+          { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
+          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
+          // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
+          // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.
+          { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
     ],
@@ -278,6 +398,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/technical', label: 'Trang chủ', icon: 'home' },
           // "Thư viện sản phẩm" đã chuyển sang SHARED_SECTION (/products) —
           // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
+          // Hai màn RIÊNG của Kỹ thuật (13/10/2026 — trước nằm ở Dùng chung):
+          // thư viện SP mới (khuôn C, checklist hồ sơ 6 ô, 08/10) và lệnh đang
+          // chạy thiếu hồ sơ SP (09/10). URL giữ /thu-vien; cửa chặn ở layout.
+          { href: '/thu-vien', label: 'Thư viện SP (mới)', icon: 'armchair' },
+          { href: '/thu-vien/lenh', label: 'Lệnh SX · hồ sơ SP', icon: 'clipboard-list' },
           { href: '/technical/showroom', label: 'Mẫu showroom', icon: 'store' },
           { href: '/technical/load-cont', label: 'Tính load cont', icon: 'container' },
           // Trang DÙNG CHUNG (/cat-phoi, khu (shared)) — Kỹ thuật lập quy cắt,
@@ -302,48 +427,111 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     label: 'Cung ứng',
     short: 'Cung ứng',
     route: '/planning',
+    /*
+      CỬA VÀO ĐÃ DỜI SANG KHU MUA HÀNG MỚI (15/09/2026).
+
+      Đăng nhập hay bấm ô chuyển phòng giờ rơi vào `/mua-hang` — màn "Bàn làm
+      việc" dựng bằng kit mới theo Khuôn A của sổ `/design-lab`. Nó là bản GỘP
+      của bốn trang cũ (Tổng quan, Chờ tôi xử lý, Vấn đề, Việc cần quyết định),
+      đúng như chủ dự án chốt 10/09: bốn trang cho một vai là dashboard kiểu
+      web, không hệ ERP nào làm thế.
+
+      VÌ SAO GIỜ MỚI DỜI. Ghi chú 14/09 bên dưới hoãn việc này với lý do "bảy
+      trên chín mục còn là trang tạm". Đo lại 15/09: chỉ còn HAI — Yêu cầu mua
+      và Hoá đơn NCC — và cả hai đều là trang nói thẳng chưa dựng cùng lý do,
+      không phải trang trắng. Chủ dự án chốt tạm bỏ qua, dựng sau.
+
+      `route` GIỮ NGUYÊN `/planning`: nó là dấu nhận dạng, không phải cửa vào.
+      Khu cũ đã xoá hẳn 29/09/2026; `route` giữ lại chỉ làm dấu nhận dạng phòng.
+    */
+    home: '/mua-hang',
     accent: 'violet',
     logoText: 'CƯ',
     ready: true,
-    // Bố cục sidebar theo thiết kế v3 (/design-lab mục 02): MỘT nhóm Nghiệp vụ,
-    // bỏ nhóm "Theo dõi" (chốt 15/08/2026). "Kho & tồn" và "Lệnh sản xuất" là
-    // view tái dùng render trong shell Cung ứng (xem /planning/stock, /planning/lsx).
-    // Route /planning/tracking và /planning/docs VẪN SỐNG (link cũ vào được),
-    // chỉ rút khỏi nav.
     sections: [
+      /*
+        MỘT SIDEBAR CHO CẢ PHÒNG (16/09/2026 — chủ dự án chốt).
+
+        Từ 14/09 phòng Cung ứng sống với HAI thanh điều hướng: sidebar này
+        (240px, theme v3) khi ở `/planning/*`, và một rail 52px riêng khi ở
+        `/mua-hang/*`. Hai cây menu khác nhau, hai nếp bấm khác nhau, và mục
+        nào nằm ở thanh nào thì phải nhớ — chủ dự án gọi đúng tên: "lẫn lộn".
+
+        Chốt: giữ GIAO DIỆN sidebar cũ (được chấm đẹp hơn), đổi RUỘT sang các
+        màn mới. Rail 52px xoá hẳn — đường lùi là `git revert`, không phải nuôi
+        song song thêm một tháng nữa.
+
+        Trang cũ `/planning/*` ĐÃ XOÁ HẲN 29/09/2026 — link cũ chuyển hướng ở
+        proxy.ts (`MOVED_PREFIXES`). Bản đồ mục cũ →
+        màn mới có test canh ở `workspaces.config.test.ts`: gỡ một màn mới mà
+        quên đường thay thế thì test đỏ, chứ không phải người dùng phát hiện.
+      */
       {
         heading: 'Nghiệp vụ',
         items: [
-          { href: '/planning', label: 'Tổng quan', icon: 'home' },
-          { href: '/planning/pos', label: 'Phiếu mua', icon: 'shopping-cart' },
-          { href: '/planning/materials', label: 'Vật tư & giá mua', icon: 'package' },
-          // building-2 chứ không phải truck: từ vựng icon (/design-lab mục 05)
-          // để truck cho GIAO NHẬN — "Hàng sắp về" bên dưới mới là xe hàng.
-          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: 'building-2' },
-          { href: '/planning/stock', label: 'Kho & tồn', icon: 'boxes' },
-          // "Vật tư theo lệnh", không phải "Lệnh sản xuất": màn này trả lời câu
-          // của người MUA (lệnh nào còn thiếu đồ), không phải tiến độ xưởng.
-          { href: '/planning/lsx', label: 'Vật tư theo lệnh', icon: 'factory' },
+          { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home' },
+          /*
+            CHỜ TÔI KÝ (27/09/2026) — MỘT hộp ký chung với Ban Giám đốc
+            (execService.signBox), chỉ hiện cho người có quyền duyệt đơn mua
+            (chị Thảo). Trước đó chị ký ở màn Đơn mua bằng nút duyệt hàng loạt
+            — lách luật "giá trị lớn phải mở ra đọc" của hộp ký Giám đốc.
+          */
+          {
+            href: '/mua-hang/cho-ky',
+            label: 'Chờ tôi ký',
+            icon: 'stamp',
+            capability: 'supply.approve',
+          },
+          // SỔ đề nghị mua của Kho (Hộp ký H3 · Q27) — tra cứu, KHÔNG đếm: phiếu chờ
+          // duyệt chỉ đếm ở "Chờ tôi ký" (một phiếu một con số).
+          {
+            href: '/duyet/de-nghi',
+            label: 'Sổ đề nghị mua',
+            icon: 'receipt-text',
+            capability: 'supply.approve',
+          },
+          // Hộp thư việc: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
+          // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
+          { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
+          { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
+          // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
+          // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
+          { href: '/mua-hang/bang-ke', label: 'Bảng kê vật tư', icon: 'clipboard-list' },
+          { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
+          // Việc ngoài sản xuất gom nhiều đơn mua (0230) — Xây dựng văn phòng, Dự trữ kho…
+          { href: '/mua-hang/hang-muc', label: 'Hạng mục', icon: 'folder-kanban' },
+          // THEO DÕI ĐƠN HÀNG (01/10/2026, chủ dự án): đơn đã gửi NCC → tới khi
+          // hàng về kho, gồm cả chuyến hàng. Thay mục 'Nhận hàng' / cách xem
+          // 'Đang về' trong Đơn mua — link cũ do proxy chuyển. Đơn chưa gửi ở Đơn mua.
+          { href: '/mua-hang/theo-doi', label: 'Theo dõi đơn hàng', icon: 'truck' },
+          // Đơn vị vận chuyển + phiếu phí theo chuyến — TÁCH khỏi Nhà cung cấp
+          // (chủ dự án chốt 28/09/2026: "nhà xe không chung với nhà cung cấp").
+          { href: '/mua-hang/van-chuyen', label: 'Vận chuyển', icon: 'route' },
+          /*
+            HOÁ ĐƠN NCC ĐÃ RỜI KHU CUNG ỨNG (17/09/2026, chủ dự án: "cung ứng
+            không quản lí về hoá đơn").
+
+            Mục này vốn chỉ dẫn tới một trang nói "chưa dựng" rồi trỏ tiếp sang
+            Kế toán — một dòng nav chiếm chỗ trong sáu dòng nghiệp vụ mà không
+            làm được việc gì. Hoá đơn và công nợ là sổ của Kế toán; ai cần thì
+            vào khu Tài chính. Đường cũ chuyển hướng ở proxy.ts.
+          */
         ],
       },
       {
-        // Hai màn THEO DÕI (15/08/2026) — số đếm sống gắn ở `nav-badges.ts`,
-        // cùng nguồn logic với trang (`lib/supply-watch`) nên badge và nội dung
-        // không bao giờ lệch nhau.
-        heading: 'Theo dõi',
+        heading: 'Danh mục & tra cứu',
         items: [
-          {
-            href: '/planning/viec-cua-toi',
-            label: 'Chờ tôi xử lý',
-            icon: 'clipboard-check',
-          },
-          { href: '/planning/hang-sap-ve', label: 'Hàng sắp về', icon: 'truck' },
-          // Hai trang HỌP (05/09/2026) — tách khỏi Tổng quan vì nhiều lệnh, mỗi
-          // trang một câu hỏi: lệnh nào có nguy cơ / họp cần quyết gì.
-          { href: '/planning/van-de', label: 'Vấn đề cần xử lý', icon: 'triangle-alert' },
-          { href: '/planning/hop', label: 'Việc cần quyết định', icon: 'gavel' },
+          { href: '/mua-hang/ncc', label: 'Nhà cung cấp', icon: 'building-2' },
+          { href: '/mua-hang/vat-tu', label: 'Vật tư', icon: 'package' },
+          { href: '/mua-hang/bang-gia', label: 'Bảng giá', icon: 'circle-dollar-sign' },
+          { href: '/mua-hang/ton', label: 'Tồn & cân đối', icon: 'boxes' },
         ],
       },
+      /*
+        Mục "Khu Cung ứng cũ" (cầu tạm về `/planning`) đã gỡ 29/09/2026 cùng
+        lúc XOÁ HẲN khu cũ — chủ dự án chốt "xoá hết". Link cũ do `MOVED_PREFIXES`
+        ở proxy.ts chuyển sang màn mới.
+      */
     ],
   },
 
@@ -368,19 +556,76 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     label: 'Sản xuất',
     short: 'Điều hành SX',
     route: '/production',
+    altRoutes: ['/thongke', '/kehoach-sx'],
     accent: 'red',
     logoText: 'SX',
     ready: true,
-    // Workspace ĐIỀU HÀNH của quản đốc/GĐ — gia đình SX tách theo VAI (07/2026):
-    // tổ ở /to, kế hoạch ở /kehoach-sx. Từ đây quản đốc nhảy sang các
-    // workspace kia qua switcher. (Khu thống kê /thongke đã xoá 26/08/2026.)
+    // BỀ MẶT VĂN PHÒNG của Sản xuất — gộp ba khu cũ (điều hành `/production`,
+    // thống kê `/thongke`, kế hoạch `/kehoach-sx`) làm một, 18/09/2026.
+    //
+    // Vì sao gộp: bốn hệ ERP sản xuất lớn (SAP PP, Dynamics SCM, Odoo MRP,
+    // NetSuite) đều KHÔNG chia module theo phòng ban — họ chia theo TƯ THẾ làm
+    // việc: văn phòng (màn rộng, nhiều bộ lọc) vs mặt xưởng (tablet, nút to,
+    // một việc mỗi lần). Người kiêm nhiệm — thống kê ôm nhiều tổ, quản đốc
+    // kiêm kế hoạch — trước phải nhảy ba khu và tự nhớ mình còn nợ gì bên kia.
+    // Vai xử bằng `capability` ngay dưới đây, không bằng workspace riêng.
+    // Bề mặt XƯỞNG vẫn tách: workspace `team` (/to).
+    //
+    // NAV ĐÃ VỀ ĐÍCH 6 MỤC + 1 công cụ (18/09/2026, sau khi M1–M5 dựng xong).
+    // "Kế hoạch tuần" và "Theo tổ" rút khỏi nav nhưng KHÔNG xoá: chúng là hai
+    // LĂNG KÍNH của cùng bộ số, nên đứng làm đường dẫn ngay cạnh khối tương
+    // ứng ở màn Tình hình xưởng — đúng chỗ người ta nảy ra nhu cầu xem sâu
+    // hơn. Bỏ khỏi nav mà không để đường vào thì là xoá chức năng.
     sections: [
       {
         heading: 'Điều hành xưởng',
         items: [
-          { href: '/production', label: 'Toàn cảnh xưởng', icon: 'factory' },
-          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+          {
+            href: '/production',
+            label: 'Tình hình xưởng',
+            icon: 'factory',
+            capability: 'production.overview',
+          },
+          { href: '/thongke/lenh', label: 'Lệnh sản xuất', icon: 'factory' },
         ],
+      },
+      {
+        heading: 'Ghi sổ',
+        items: [
+          {
+            href: '/thongke/ghi',
+            label: 'Ghi sản lượng',
+            icon: 'notebook-pen',
+            capability: 'production.record',
+          },
+          {
+            href: '/thongke/ngay',
+            label: 'Sổ ngày & chốt sổ',
+            icon: 'calendar-check',
+            capability: 'production.record',
+          },
+        ],
+      },
+      {
+        heading: 'Kế hoạch',
+        items: [
+          {
+            href: '/kehoach-sx',
+            label: 'Kế hoạch sản xuất',
+            icon: 'calendar-range',
+            capability: 'production.plan',
+          },
+          {
+            href: '/kehoach-sx/chi-tieu',
+            label: 'Chỉ tiêu ngày',
+            icon: 'list-todo',
+            capability: 'production.plan',
+          },
+        ],
+      },
+      {
+        heading: 'Công cụ',
+        items: [{ href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' }],
       },
     ],
   },
@@ -407,54 +652,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     ],
   },
 
-  stat: {
-    id: 'stat',
-    label: 'Thống kê xưởng',
-    short: 'Thống kê',
-    route: '/thongke',
-    accent: 'purple',
-    logoText: 'TK',
-    ready: true,
-    // Dựng lại 26/08/2026 theo khung 5 bước. "Sổ sản lượng" (/thongke) đã XOÁ
-    // 27/08/2026 theo yêu cầu — trang gốc nay redirect sang /thongke/lenh, nên
-    // `route` vẫn để '/thongke' (đích redirect sau đăng nhập vẫn đúng chỗ).
-    sections: [
-      {
-        heading: 'Thống kê',
-        items: [
-          { href: '/thongke/ghi', label: 'Ghi sản lượng', icon: 'notebook-pen' },
-          { href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' },
-          { href: '/thongke/ngay', label: 'Sổ ngày & chốt sổ', icon: 'calendar-check' },
-        ],
-      },
-    ],
-  },
-
-  prodplan: {
-    id: 'prodplan',
-    label: 'Kế hoạch sản xuất',
-    short: 'Kế hoạch SX',
-    route: '/kehoach-sx',
-    accent: 'violet',
-    logoText: 'KS',
-    ready: true,
-    // Workspace của TRƯỞNG PHÒNG KẾ HOẠCH (planner): lộ trình + giao tổ + hạn.
-    sections: [
-      {
-        heading: 'Kế hoạch',
-        items: [
-          { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: 'calendar-range' },
-          { href: '/kehoach-sx/tuan', label: 'Kế hoạch tuần', icon: 'calendar-check' },
-          { href: '/kehoach-sx/tien-do', label: 'Tiến độ', icon: 'chart-gantt' },
-          { href: '/kehoach-sx/chi-tieu', label: 'Chỉ tiêu ngày', icon: 'list-todo' },
-          { href: '/kehoach-sx/theo-to', label: 'Theo tổ', icon: 'users-round' },
-          { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
-          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
-        ],
-      },
-    ],
-  },
-
   hr: {
     id: 'hr',
     label: 'Nhân sự',
@@ -464,12 +661,75 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     logoText: 'HR',
     // Đã migrate sang (workspace)/hr.
     ready: true,
+    // Menu 3 nhóm cha theo LOẠI DỮ LIỆU (chủ dự án duyệt 17/10/2026): Nhân sự = danh
+    // mục người; Chấm công = sự thật thô máy ghi, không tính gì; Tính công = kết quả
+    // có luật + duyệt + chốt — ẨN tới khi chốt luật tính công (câu 21).
     sections: [
       {
         heading: 'Nhân sự',
         items: [
           { href: '/hr', label: 'Trang chủ', icon: 'home' },
+          { href: '/hr/nhan-vien', label: 'Hồ sơ nhân viên', icon: 'users' },
+          // Trang DÙNG CHUNG (khu (luong)) — Kế toán vào từ menu Tài chính (B4).
+          {
+            href: '/ho-so-luong',
+            label: 'Hồ sơ lương',
+            icon: 'wallet',
+            capability: 'hr.payroll',
+          },
+          {
+            href: '/bang-luong',
+            label: 'Bảng lương',
+            icon: 'receipt',
+            capability: 'hr.payroll',
+          },
           { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },
+        ],
+      },
+      {
+        heading: 'Chấm công',
+        items: [
+          { href: '/hr/cham-cong', label: 'Tổng quan', icon: 'fingerprint', exact: true },
+          {
+            href: '/hr/cham-cong/lay-du-lieu',
+            label: 'Lấy dữ liệu từ máy',
+            icon: 'arrow-down-to-line',
+          },
+          { href: '/hr/cham-cong/luot', label: 'Lượt quẹt', icon: 'table' },
+          {
+            // Dọn mã máy: tên lấy từ máy, ca mặc định, mã chưa ghép (dời khỏi Hồ sơ nhân viên).
+            href: '/hr/cham-cong/ma-may',
+            label: 'Mã trên máy & ca',
+            icon: 'key-round',
+          },
+          {
+            href: '/hr/cham-cong/co-mat',
+            label: 'Có mặt theo tổ',
+            icon: 'calendar-range',
+          },
+          {
+            // Giờ theo khung — luật thật của Nhân sự (17/10/2026), thay bảng tổ theo ca.
+            href: '/hr/cham-cong/gio-cong',
+            label: 'Bảng công',
+            icon: 'users-round',
+          },
+          {
+            // B3 (0244): kỳ công — tổ xác nhận, chốt kỳ, mở lại.
+            href: '/hr/cham-cong/ky',
+            label: 'Kỳ công & chốt',
+            icon: 'lock',
+          },
+          {
+            // B2 (0243): bản cách tính theo kỳ — hệ số lương, khung giờ, cách tính theo tổ.
+            href: '/hr/cham-cong/cach-tinh',
+            label: 'Cách tính công',
+            icon: 'calculator',
+          },
+          {
+            href: '/hr/cham-cong/dieu-chinh',
+            label: 'Điều chỉnh công',
+            icon: 'notebook-pen',
+          },
         ],
       },
     ],
@@ -500,6 +760,16 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/exec', label: 'Tổng quan', icon: 'home' },
           // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
           { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
+          // SỔ đề nghị mua (Hộp ký H3 · Q27) — tra cứu tiến độ mua, KHÔNG đếm: phiếu
+          // chờ duyệt chỉ đếm ở "Chờ tôi phê duyệt" (một phiếu một con số).
+          { href: '/duyet/de-nghi', label: 'Sổ đề nghị mua', icon: 'receipt-text' },
+          // Đơn bán của lệnh đặt cạnh đơn mua cho lệnh, cộng thẳng từ chứng từ (02/10/2026); lãi/lỗ là bước sau.
+          {
+            href: '/exec/gia-tri-don',
+            label: 'Giá trị đơn theo lệnh',
+            icon: 'circle-dollar-sign',
+          },
+          // Trang Lãi/lỗ theo lệnh GỠ 03/10/2026 (chủ dự án) — phân tích nằm trong ngăn soi của bảng kê trên.
         ],
       },
       {
@@ -544,7 +814,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Quản trị',
         items: [
           { href: '/admin', label: 'Tổng quan', icon: 'home', roles: ['admin'] },
-          { href: '/admin/users', label: 'Người dùng', icon: 'users', roles: ['admin'] },
+          { href: '/admin/users', label: 'Nhân viên & tài khoản', icon: 'users', roles: ['admin'] },
           {
             href: '/admin/departments',
             label: 'Phòng ban',
@@ -661,71 +931,71 @@ export const ACCENT_CLASSES: Record<
 > = {
   orange: {
     bg: 'bg-orange-500',
-    bgSoft: 'bg-orange-50 dark:bg-orange-950/40',
-    text: 'text-orange-600 dark:text-orange-400',
+    bgSoft: 'bg-orange-50',
+    text: 'text-orange-600',
     border: 'border-orange-500',
     ring: 'ring-orange-500',
   },
   emerald: {
     bg: 'bg-emerald-500',
-    bgSoft: 'bg-emerald-50 dark:bg-emerald-950/40',
-    text: 'text-emerald-600 dark:text-emerald-400',
+    bgSoft: 'bg-emerald-50',
+    text: 'text-emerald-600',
     border: 'border-emerald-500',
     ring: 'ring-emerald-500',
   },
   amber: {
     bg: 'bg-amber-500',
-    bgSoft: 'bg-amber-50 dark:bg-amber-950/40',
-    text: 'text-amber-700 dark:text-amber-400',
+    bgSoft: 'bg-amber-50',
+    text: 'text-amber-700',
     border: 'border-amber-500',
     ring: 'ring-amber-500',
   },
   sky: {
     bg: 'bg-sky-500',
-    bgSoft: 'bg-sky-50 dark:bg-sky-950/40',
-    text: 'text-sky-600 dark:text-sky-400',
+    bgSoft: 'bg-sky-50',
+    text: 'text-sky-600',
     border: 'border-sky-500',
     ring: 'ring-sky-500',
   },
   violet: {
     bg: 'bg-violet-500',
-    bgSoft: 'bg-violet-50 dark:bg-violet-950/40',
-    text: 'text-violet-600 dark:text-violet-400',
+    bgSoft: 'bg-violet-50',
+    text: 'text-violet-600',
     border: 'border-violet-500',
     ring: 'ring-violet-500',
   },
   slate: {
     bg: 'bg-slate-500',
-    bgSoft: 'bg-slate-100 dark:bg-slate-800/60',
-    text: 'text-slate-600 dark:text-slate-300',
+    bgSoft: 'bg-slate-100',
+    text: 'text-slate-600',
     border: 'border-slate-500',
     ring: 'ring-slate-500',
   },
   red: {
     bg: 'bg-red-600',
-    bgSoft: 'bg-red-50 dark:bg-red-950/40',
-    text: 'text-red-600 dark:text-red-400',
+    bgSoft: 'bg-red-50',
+    text: 'text-red-600',
     border: 'border-red-600',
     ring: 'ring-red-600',
   },
   yellow: {
     bg: 'bg-yellow-500',
-    bgSoft: 'bg-yellow-50 dark:bg-yellow-950/40',
-    text: 'text-yellow-700 dark:text-yellow-400',
+    bgSoft: 'bg-yellow-50',
+    text: 'text-yellow-700',
     border: 'border-yellow-500',
     ring: 'ring-yellow-500',
   },
   zinc: {
     bg: 'bg-zinc-800',
-    bgSoft: 'bg-zinc-100 dark:bg-zinc-800/60',
-    text: 'text-zinc-800 dark:text-zinc-300',
+    bgSoft: 'bg-zinc-100',
+    text: 'text-zinc-800',
     border: 'border-zinc-800',
     ring: 'ring-zinc-800',
   },
   purple: {
     bg: 'bg-purple-600',
-    bgSoft: 'bg-purple-50 dark:bg-purple-950/40',
-    text: 'text-purple-600 dark:text-purple-400',
+    bgSoft: 'bg-purple-50',
+    text: 'text-purple-600',
     border: 'border-purple-600',
     ring: 'ring-purple-600',
   },

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
-import { buildPoExcel, poExcelFilename } from '@/modules/dept/supply/po-excel'
+import { buildPoExcel, numFmtOf, poExcelFilename } from '@/modules/dept/supply/po-excel'
 import type { PoPrintHeader, PoPrintLine } from '@/app/print/supply/PoPrintSheet'
+import { DEFAULT_DOC_TEMPLATES } from '@/lib/doc-templates'
 
 /**
  * XUẤT EXCEL ĐƠN ĐẶT HÀNG phải GIỐNG PHIẾU IN — cùng nhãn cột (đọc chung
@@ -65,6 +66,7 @@ const line = (over: Partial<PoPrintLine> = {}): PoPrintLine => ({
   weight_per_unit: null,
   m3_per_unit: null,
   warranty_text: null,
+  print_spec: null,
   open_style: null,
   pcs_per_ctn: null,
   inner_l_mm: null,
@@ -139,7 +141,7 @@ describe('buildPoExcel — khung giống phiếu in', () => {
     expect(
       findCell(
         ws,
-        'Đề nghị Quý công ty fax lại xác nhận thông tin cho công ty chúng tôi. Xin cảm ơn!',
+        'Đề nghị Quý Công ty fax lại xác nhận thông tin cho Công ty chúng tôi. Trân trọng cảm ơn!',
       ),
     ).toBeTruthy()
   })
@@ -214,5 +216,124 @@ describe('buildPoExcel — khung giống phiếu in', () => {
 
   it('tên file làm sạch ký tự cấm của Windows', () => {
     expect(poExcelFilename('01/26 HG/MĐ')).toBe('DH 01-26 HG-MĐ.xlsx')
+  })
+})
+
+/*
+ * FILE EXCEL = TỜ IN WEB (05/10/2026). Người dùng in từ Excel ra một tờ khác tờ
+ * web: Excel gõ cứng tiêu đề + chữ ký, thiếu tên người lập, hẹn giao, lịch đợt.
+ * Nay đọc cùng mẫu chứng từ + cùng dữ liệu (`loadPoPrint`).
+ */
+describe('buildPoExcel — khớp phiếu in', () => {
+  const allText = (ws: ExcelJS.Worksheet) => {
+    const out: string[] = []
+    ws.eachRow((row) => row.eachCell((c) => out.push(String(c.value ?? ''))))
+    return out
+  }
+  const tpl = {
+    ...DEFAULT_DOC_TEMPLATES.PO,
+    title_vi: 'ĐƠN ĐẶT HÀNG',
+    title_en: 'PURCHASE ORDER',
+    signatures: [
+      { role: 'XÁC NHẬN CỦA NHÀ CUNG CẤP', hint: 'Ký, ghi rõ họ tên' },
+      { role: '{signer_role}', hint: 'Ký, ghi rõ họ tên', slot: 'creator' as const },
+      { role: '{company}', hint: 'Ký tên, đóng dấu' },
+    ],
+  }
+
+  it('đơn gộp 2 lệnh: cột "Chia lệnh" cùng chữ với phiếu in; đơn một lệnh không có cột', async () => {
+    const SET = [{ id: 'L08', code: '08/26-27 - MX' }, { id: 'L09', code: '09/26-27 - MX' }] // prettier-ignore
+    const chia = line({ qty_ordered: 288, lsx_split: [{ production_order_id: 'L08', qty: 200 }, { production_order_id: 'L09', qty: 88 }] }) // prettier-ignore
+    const gop = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header({ lsx_set: SET }), supplier: null, lines: [chia] }))) // prettier-ignore
+    expect(gop).toContain('Chia lệnh')
+    expect(gop).toContain('08 MX: 200; 09 MX: 88')
+    expect(gop).toContain('PHÂN THEO LỆNH SẢN XUẤT')
+    const mot = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header({ lsx_set: [SET[0]] }), supplier: null, lines: [chia] }))) // prettier-ignore
+    expect(mot).not.toContain('Chia lệnh')
+    expect(mot).not.toContain('PHÂN THEO LỆNH SẢN XUẤT')
+  })
+
+  it('tiêu đề + khối chữ ký theo MẪU CHỨNG TỪ, có tên người lập dưới nét ký', async () => {
+    const ws = await load(
+      await buildPoExcel({
+        company: COMPANY,
+        tpl: { ...tpl, title_vi: 'ĐƠN MUA HÀNG' },
+        po: header({ creator_name: 'Đặng Thị Thanh Nga' }),
+        supplier: null,
+        lines: [line()],
+      }),
+    )
+    const t = allText(ws)
+    expect(t).toContain('ĐƠN MUA HÀNG')
+    expect(t).toContain('NGƯỜI LẬP')
+    expect(t).toContain('(Ký, ghi rõ họ tên)')
+    expect(t).toContain('Đặng Thị Thanh Nga')
+    expect(t).toContain('CÔNG TY TNHH SX-TM HOÀNG GIA')
+  })
+
+  it('không có đợt → dòng "Dự kiến giao hàng"; có đợt → bảng lịch giao, KHÔNG in cả hai', async () => {
+    const one = allText(await load(await buildPoExcel({ company: COMPANY, tpl, po: header(), supplier: null, lines: [line()] }))) // prettier-ignore
+    expect(one.some((x) => x.startsWith('Dự kiến giao hàng: '))).toBe(true)
+    const two = allText(
+      await load(
+        await buildPoExcel({
+          company: COMPANY,
+          tpl,
+          po: header(),
+          supplier: null,
+          lines: [line()],
+          shipments: [
+            { seq: 1, expected_date: '2026-08-10', lines: [{ name: 'Sơn xám', qty: 30, unit: 'KG', amount: 2_400_000 }] },
+            { seq: 2, expected_date: '2026-08-20', lines: [{ name: 'Sơn xám', qty: 30, unit: 'KG', amount: 2_400_000 }] },
+          ], // prettier-ignore
+        }),
+      ),
+    )
+    expect(two).toContain('Lịch giao hàng (2 đợt):')
+    expect(two.some((x) => x.startsWith('Dự kiến giao hàng: '))).toBe(false)
+  })
+
+  it('khổ giấy theo lựa chọn, co một trang ngang, không đầu/chân trang, có vùng in', async () => {
+    const ws = await load(
+      await buildPoExcel({ company: COMPANY, tpl, po: header(), supplier: null, lines: [line()], orientation: 'portrait' }), // prettier-ignore
+    )
+    expect(ws.pageSetup.orientation).toBe('portrait')
+    expect(ws.pageSetup.fitToWidth).toBe(1)
+    expect(ws.pageSetup.margins?.header).toBe(0)
+    expect(ws.headerFooter?.oddHeader ?? '').toBe('')
+    expect(ws.pageSetup.printArea).toMatch(/^A1:[A-Z]+\d+$/)
+  })
+})
+
+describe('numFmtOf — số trên file giống số trên phiếu in', () => {
+  it('số lẻ giữ tới 6 chữ số (m³/SP 0,000487 của PO-2026-0177 không thành 0); số nguyên không dấu chấm thừa', () => {
+    expect(numFmtOf(0.000487)).toBe('#,##0.######')
+    expect(numFmtOf(0.00629)).toBe('#,##0.######')
+    expect(numFmtOf(0.629)).toBe('#,##0.######')
+    expect(numFmtOf(100)).toBe('#,##0')
+    expect(numFmtOf('')).toBe('#,##0')
+  })
+})
+
+describe('buildPoExcel — cột trắng ở mọi dòng không xuất (12/10/2026, cùng luật phiếu in)', () => {
+  const texts = async (lines: PoPrintLine[]) => {
+    const ws = await load(await buildPoExcel({ company: COMPANY, po: header({ template: 'carton' }), supplier: null, lines })) // prettier-ignore
+    const out: string[] = []
+    ws.eachRow((row) => row.eachCell((c) => out.push(String(c.value ?? ''))))
+    return out
+  }
+  const thung = { spec: '78.5x75.5x76.5 cm', pcs_per_ctn: 1, qty_demand: 200, inner_l_mm: 785, inner_w_mm: 755, inner_h_mm: 765 } // prettier-ignore
+
+  it('bao bì chưa ghi Cách mở / Bản in ở dòng nào → hai cột đó không có trên file', async () => {
+    const t = await texts([line(thung), line({ ...thung, id: 'l2' })])
+    expect(t).not.toContain('Cách mở')
+    expect(t).not.toContain('Bản in + công')
+    expect(t).toContain('Pcs/thùng')
+    expect(t).toContain('Lọt lòng D×R×C (mm)')
+  })
+
+  it('một dòng có Bản in là cột còn', async () => {
+    const t = await texts([line(thung), line({ ...thung, id: 'l2', print_fee: 3_278 })])
+    expect(t).toContain('Bản in + công')
   })
 })

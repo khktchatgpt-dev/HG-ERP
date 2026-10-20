@@ -34,6 +34,7 @@ export const customerListQuerySchema = z.object({
   /** Chỉ KH chưa gán phụ trách — thắng `owner_id` nếu gửi cả hai. */
   unassigned: z.coerce.boolean().optional(),
   status: z.enum(CUSTOMER_STATUS_FILTERS).default('active'),
+  sort: z.enum(['new', 'old', 'name', 'country']).optional(),
   page: z.coerce.number().int().positive().default(1),
-  page_size: z.coerce.number().int().min(1).max(100).default(20),
+  page_size: z.coerce.number().int().min(1).max(1000).default(20),
 })

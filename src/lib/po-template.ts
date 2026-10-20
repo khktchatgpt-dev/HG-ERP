@@ -26,6 +26,7 @@ export const PO_TEMPLATES = [
   'glass',
   'wood',
   'mro',
+  'label',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
@@ -43,6 +44,23 @@ export type PoTemplate = (typeof PO_TEMPLATES)[number]
  * vẫn bắt buộc chọn từ danh mục để tồn kho/giá có chỗ bám.
  */
 export const FREE_LINE_TEMPLATES: readonly PoTemplate[] = ['wood']
+
+/**
+ * DÒNG KHÔNG MÃ Ở MẪU KHÁC GỖ = DÒNG PHÍ / DỊCH VỤ (0234, 13/10/2026).
+ *
+ * Ngoài mẫu gỗ, dòng không gắn vật tư CHỈ có thể là dòng phí. Nhưng tab mở từ trước
+ * khi có 0234 (JS cũ không biết `line_kind`) hoặc bản gõ dở tự lưu từ bản cũ gửi dòng
+ * phí lên thiếu cờ → server chặn "chỉ mẫu gỗ" (chị Nga sửa PO-2026-0176). Server và
+ * khôi phục nháp tự gắn lại cờ thay vì chặn; mẫu gỗ giữ nguyên (dòng mã SP tự do).
+ */
+export function dongKhongMaLaPhi<
+  T extends { material_id?: string | null; line_kind?: string | null },
+>(t: PoTemplate, lines: readonly T[]): T[] {
+  if (FREE_LINE_TEMPLATES.includes(t)) return [...lines]
+  return lines.map((l) =>
+    !l.material_id && l.line_kind == null ? { ...l, line_kind: 'phi' } : l,
+  )
+}
 
 export type PoTerms = {
   quality: string
@@ -68,7 +86,9 @@ export type PoTemplateMeta = {
   terms: PoTerms
 }
 
-const DELIVERY_HG = 'Xưởng SX Cty TNHH Hoàng Gia - Cụm CN Cát Nhơn, Gia Lai'
+// Tên công ty VIẾT HOA đúng đăng ký + địa chỉ xưởng (08/10/2026, phòng Cung ứng: "địa điểm giao hàng như này: CÔNG TY TNHH SX-TM HOÀNG GIA").
+const DELIVERY_HG =
+  'CÔNG TY TNHH SX-TM HOÀNG GIA - Lô C3, Cụm CN Cát Nhơn, Xã Xuân An, Gia Lai'
 const INVOICE_VAT = 'Hóa đơn GTGT'
 
 /**
@@ -311,6 +331,33 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       lead_time: 'Theo thời gian NCC xác nhận trên báo giá',
     },
   },
+  /*
+   * TEM NHÃN / IN ẤN (12/10/2026). Trước đó tem nhãn đi mẫu Phụ kiện (PQ, HLH)
+   * hoặc RƠI vào mẫu carton vì chung nhóm "Bao bì - đóng gói - tem nhãn" — ra
+   * cột Cách mở / Lọt lòng vô nghĩa, còn thứ xưởng in cần nhất là KIỂU IN thì
+   * không có chỗ: Hiệp Hưng nhét "in offset, cán màng mờ 2 mặt, đục lỗ" vào tên
+   * (PO-2026-0089/0106), Tân Vinh để quy cách in sổ HDLR trong ghi chú
+   * (PO-2026-0158). Thuế theo 6/6 đơn tem nhãn thật: 8%, giá chưa gồm VAT.
+   * Điều khoản là BẢN NHÁP TRUNG TÍNH như MRO — 6 đơn đó đều để trống, dùng mặc
+   * định của mẫu nên chưa có câu chữ thật để chép.
+   */
+  label: {
+    key: 'label',
+    label: 'Tem nhãn / in ấn',
+    hint: 'Tem, nhãn, thẻ treo, decal, barcode, sổ HDLR — chất liệu + kích thước + kiểu in. PQ, HLH, Hiệp Hưng, Tân Vinh',
+    priceUnit: null,
+    vatRate: 8,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'NGƯỜI LẬP',
+    terms: {
+      quality: 'In đúng mẫu đã duyệt — đúng màu, kích thước, chất liệu giấy',
+      delivery_place: DELIVERY_HG,
+      payment: 'Thanh toán công nợ cuối tháng',
+      invoice: INVOICE_VAT,
+      lead_time: 'Từ 5 đến 7 ngày kể từ ngày duyệt mẫu in',
+    },
+  },
   simple: {
     key: 'simple',
     label: 'Đơn giản',
@@ -342,6 +389,11 @@ export function poTemplateMeta(t: PoTemplate | null | undefined): PoTemplateMeta
 export type PoLineDraft = {
   /** SL đặt cuối cùng — luôn theo ĐVT mua (cây / con / tấm / thùng). */
   qty_ordered: number
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234): luôn SL × đơn giá — không dẫn xuất kg / m² / m³ theo
+   * mẫu (dòng "Công dán + keo bồi" trên đơn bao bì không có lọt lòng để tính).
+   */
+  line_kind?: string | null
   /** aluminium */
   weight_per_m?: number | null
   bar_length_m?: number | null
@@ -380,6 +432,35 @@ export type PoLineDraft = {
    * 'unit' như cũ.
    */
   price_per?: 'unit' | 'unit2' | null
+  /**
+   * TỔNG GÕ TAY (02/10/2026 — user chốt "cho ghi đè tổng thật"). Có số thì
+   * thay cho tổng kg / m³ / m² dẫn xuất từ thông số: NCC ghi tổng LÀM TRÒN trên
+   * tờ (300 kg, không phải 300,16 = 0,385 × 5,53 × 141) và tiền phải theo đúng
+   * số trên tờ. Chỉ có tác dụng ở mẫu có cột tổng (`QTY2_OVERRIDE_UNIT`);
+   * trống / 0 = tự tính như cũ. Cơ sở tính tiền (theo cây hay theo kg, theo
+   * tấm hay theo m²) vẫn theo luật của mẫu — ghi đè chỉ thay CON SỐ tổng.
+   */
+  qty2_override?: number | null
+  /**
+   * Dòng trỏ VẬT TƯ DANH MỤC (null / bỏ trống = dòng tự do gõ tên). Chỉ mẫu gỗ
+   * đọc: dòng mã SP tự do giá theo m³ tinh, dòng vật tư danh mục (ván MDF mua
+   * theo TẤM) giá theo ĐVT mua — xem `deriveByTemplate` case 'wood'.
+   */
+  material_id?: string | null
+}
+
+/** Mẫu có cột tổng gõ đè được → đơn vị của tổng đó. */
+export const QTY2_OVERRIDE_UNIT: Partial<Record<PoTemplate, string>> = {
+  aluminium: 'kg',
+  metal_kg: 'kg',
+  wood: 'm³',
+  foam: 'm³',
+  glass: 'm²',
+}
+
+/** Dòng này có đang dùng tổng gõ tay không (đúng mẫu + số dương). */
+export function hasQty2Override(t: PoTemplate, l: PoLineDraft): boolean {
+  return QTY2_OVERRIDE_UNIT[t] != null && Number(l.qty2_override) > 0
 }
 
 export type PoLineDerived = {
@@ -394,6 +475,17 @@ function round4(n: number): number {
 }
 
 /**
+ * Sáu số lẻ cho MỌI tổng tính bằng m³ (gỗ, xốp). m³ là đại lượng bé mà đơn giá
+ * lại lớn — ghế gỗ 0,0063988 m³/cái × 100 cái = 0,63988 m³; tròn 4 lẻ thành
+ * 0,6399 rồi nhân $1.500/m³ ra $959,85 trong khi đơn NCC ghi $959,82. Lệch vài
+ * cent nhưng là lệch với hoá đơn, đối chiếu ba bên sẽ kêu. Đo 15/09/2026: 25
+ * dòng đơn mua đang lệch từ −$0,07 đến +$0,07 vì đúng chỗ này.
+ */
+function round6(n: number): number {
+  return Math.round(n * 1e6) / 1e6
+}
+
+/**
  * Dịch ô nhập của mẫu → (qty2, unit2, price_basis) cho `poLineAmount`.
  *
  * Thiếu thông số quy đổi (chưa khai kg/m, chưa nhập dài cây) thì trả 'unit' chứ
@@ -401,12 +493,36 @@ function round4(n: number): number {
  * ngay, hơn là im lặng ra thành tiền 0 rồi lọt qua duyệt.
  */
 export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
-  const d = deriveByTemplate(t, l)
+  if (l.line_kind === 'phi') return { qty2: null, unit2: null, price_basis: 'unit' }
+  const d = withOverride(t, l, deriveByTemplate(t, l))
   // Người dùng chọn đơn vị tính giá thì theo họ — nhưng chỉ cho chọn 'unit2'
   // khi dòng thật sự có số quy đổi, không thì tiền thành 0 mà không ai hiểu vì sao.
   if (l.price_per === 'unit') return { ...d, price_basis: 'unit' }
   if (l.price_per === 'unit2' && d.qty2 != null) return { ...d, price_basis: 'unit2' }
   return d
+}
+
+/**
+ * Áp tổng gõ tay lên kết quả dẫn xuất. Cơ sở tính tiền theo đúng luật của mẫu:
+ * nhôm / inox / gỗ luôn theo tổng; kính, xốp chỉ theo tổng khi dòng chọn giá
+ * theo m² / m³ (chọn theo tấm thì tổng chỉ để in, tiền vẫn SL × giá).
+ */
+function withOverride(t: PoTemplate, l: PoLineDraft, d: PoLineDerived): PoLineDerived {
+  if (!hasQty2Override(t, l)) return d
+  const v = Number(l.qty2_override)
+  const byTotal =
+    t === 'glass'
+      ? l.carton_basis === 'm2'
+      : t === 'foam'
+        ? l.carton_basis === 'm3'
+        : t === 'wood'
+          ? !l.material_id // gỗ: chỉ dòng mã SP tự do giá theo m³ (xem case 'wood')
+          : true
+  return {
+    qty2: t === 'wood' || t === 'foam' ? round6(v) : round4(v),
+    unit2: QTY2_OVERRIDE_UNIT[t]!,
+    price_basis: byTotal ? 'unit2' : 'unit',
+  }
 }
 
 function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
@@ -437,7 +553,19 @@ function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       // tinh. Cột riêng từ 0139, hết mượn weight_per_unit của mẫu inox.
       const m3 = Number(l.m3_per_unit) || 0
       if (m3 <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
-      return { qty2: round4(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
+      // round6 chứ không round4 — xem chú thích ở `round6`, tròn 4 lẻ là lệch
+      // cent với hoá đơn NCC.
+      //
+      // Giá theo m³ chỉ là mặc định của dòng MÃ SP tự do (cả 39 dòng gỗ cũ đều
+      // vậy). Dòng VẬT TƯ DANH MỤC — ván MDF đặt theo TẤM — NCC báo giá theo
+      // tấm: PO-2026-0133 (03/10/2026) ghi 81.000đ/tấm × 152 tấm mà bị tính
+      // 1,094 m³ × 81.000 = 88.614đ thay vì 12.312.000đ. Tổng m³ vẫn giữ để
+      // in/đối chiếu; muốn giá theo m³ thì chọn "Giá theo" ở chi tiết dòng.
+      return {
+        qty2: round6(m3 * qty),
+        unit2: 'm³',
+        price_basis: l.material_id ? 'unit' : 'unit2',
+      }
     }
     case 'foam': {
       // Xốp tấm theo KHỐI: D×R×Dày (mm) → m³/tấm × SL tấm × đơn giá/m³.
@@ -446,18 +574,15 @@ function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       if (l.carton_basis !== 'm3') return { qty2: null, unit2: null, price_basis: 'unit' }
       const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
       if (m3 == null) return { qty2: null, unit2: null, price_basis: 'unit' }
-      return {
-        qty2: Math.round(m3 * qty * 1e6) / 1e6,
-        unit2: 'm³',
-        price_basis: 'unit2',
-      }
+      return { qty2: round6(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
     }
     default: {
       // Quy đổi tổng quát: 1 ĐVT = per × đơn-vị-giá. Thiếu một nửa cặp thì rơi
       // về SL × giá — cùng triết lý "sai rõ ràng hơn im lặng ra 0" ở trên.
       const per = Number(l.unit2_per_unit) || 0
       const label = (l.unit2_label ?? '').trim()
-      if (per <= 0 || label === '') return { qty2: null, unit2: null, price_basis: 'unit' }
+      if (per <= 0 || label === '')
+        return { qty2: null, unit2: null, price_basis: 'unit' }
       return { qty2: round4(per * qty), unit2: label, price_basis: 'unit2' }
     }
   }
@@ -477,8 +602,14 @@ export function foamM3PerSheet(
   const R = Number(w) || 0
   const T = Number(t) || 0
   if (D <= 0 || R <= 0 || T <= 0) return null
-  // round6 chứ không round4: tấm xốp mỏng ~0,004 m³ — 4 số lẻ là mất sạch số.
-  return Math.round(((D * R * T) / 1e9) * 1e6) / 1e6
+  /*
+    KHÔNG làm tròn khối của TỪNG TẤM (25/09/2026). Bản trước tròn 6 lẻ ở đây rồi
+    `deriveLine` mới nhân SL: thanh 485×60×25 = 0,0007275 m³ thành 0,000728, nhân
+    17.008 thanh lệch 11.480 đ so với tờ đơn Danh Sơn (tờ tính khối chính xác).
+    Kích thước là mm nguyên nên 9 số lẻ là CHÍNH XÁC — chỉ để gột sai số dấu phẩy
+    động; làm tròn thật (round6) chỉ một lần, ở tổng m³ của dòng.
+  */
+  return Math.round(((D * R * T) / 1e9) * 1e9) / 1e9
 }
 
 /**
@@ -521,8 +652,40 @@ export function cartonAreaM2(
 export function suggestOrderQty(
   demand: number | null | undefined,
   onHand: number | null | undefined,
+  /**
+   * Định mức / SP (26/09/2026). Có giá trị thì "SL đơn hàng" là số SẢN PHẨM
+   * (2126 bàn) và nhu cầu vật tư = SL đơn hàng × Đm (× 4 tăng đơ/bàn = 8504).
+   * Trống / 0 → như cũ: SL đơn hàng đã là số vật tư.
+   */
+  dmPerSp?: number | null,
 ): number {
-  const short = (Number(demand) || 0) - (Number(onHand) || 0)
+  const perSp = Number(dmPerSp) > 0 ? Number(dmPerSp) : 1
+  const short = (Number(demand) || 0) * perSp - (Number(onHand) || 0)
   if (short <= 0) return 0
   return Math.ceil(short)
+}
+
+/**
+ * NHÃN NGẮN của loại đơn — cho chip lọc và cột "Loại · vật tư" của danh sách
+ * Đơn mua (27/09/2026). `label` ở `PO_TEMPLATE_META` là nhãn của FORM soạn đơn
+ * ("Inox / sắt / tấm theo kg"), quá dài cho một chip.
+ */
+export const PO_TEMPLATE_SHORT: Record<PoTemplate, string> = {
+  accessory: 'Phụ kiện',
+  aluminium: 'Nhôm',
+  metal_kg: 'Sắt / inox',
+  carton: 'Carton',
+  rattan: 'Dây mây',
+  paint: 'Sơn',
+  chemical: 'Hoá chất',
+  foam: 'Mút xốp',
+  glass: 'Kính',
+  wood: 'Gỗ',
+  mro: 'Phụ tùng',
+  label: 'Tem nhãn',
+  simple: 'Đơn giản',
+}
+
+export function poTemplateShort(t: string | null | undefined): string | null {
+  return t && isPoTemplate(t) ? PO_TEMPLATE_SHORT[t] : null
 }

@@ -21,6 +21,14 @@ export const packingSchema = z.object({
   pack_unit_label: z.string().trim().max(30).optional(), // 'ctn' | 'pallet' — mẫu ghi "20 pcs/pallet"
   nw_kg: z.coerce.number().positive().optional(), // Net weight / carton
   gw_kg: z.coerce.number().positive().optional(), // Gross weight / carton
+  /**
+   * CBM/thùng khai tay (khi chưa đo đủ 3 chiều) — LSX đọc (`productCbm`), 20 SP có.
+   * Trước 08/10 schema thiếu khoá này: khung sửa đóng gói trộn giữ `cbm` nhưng zod
+   * lột mất, nên mỗi lần sửa đóng gói trên trang chi tiết là CBM khai tay biến mất.
+   */
+  cbm: z.coerce.number().positive().optional(),
+  /** Ghi chú đóng gói của ô tóm tắt (09/10/2026) — chỉ chữ, không tính. */
+  note: z.string().trim().max(500).optional(),
 })
 
 /** Kiểu lắp ráp — hàng nội thất XK: nguyên chiếc hoặc tháo rời (knock-down). */
@@ -33,6 +41,13 @@ export const techSpecSchema = z.object({
   paint: z.string().trim().max(200).optional(), // Sơn (mã màu)
   glass: z.string().trim().max(200).optional(), // Kính
   wood: z.string().trim().max(200).optional(), // Gỗ (loại + FSC + mã màu)
+  /*
+   * Ba ô trang chi tiết có từ 14/08/2026 (khối "Vật liệu & màu") mà schema chưa
+   * từng nhận — zod lột khoá lạ nên bấm Lưu là mất, DB 0/807 SP có (đo 07/10).
+   */
+  fabric: z.string().trim().max(200).optional(), // Vải
+  hardware: z.string().trim().max(200).optional(), // Phụ kiện ngũ kim
+  finish: z.string().trim().max(200).optional(), // Màu hoàn thiện
 })
 
 export const BOM_STATUSES = ['none', 'drawing', 'done'] as const
@@ -68,7 +83,7 @@ export const productCreateSchema = z.object({
     .transform((v) => normalizeCustomerLabel(v)),
   customer_item_code: z.string().trim().max(100).optional().nullable(),
   description_en: z.string().trim().max(2000).optional().nullable(),
-  unit: z.string().trim().min(1).max(30).default('cai'),
+  unit: z.string().trim().min(1).max(30).default('cái'),
   packing: packingSchema.optional(),
   notes: z.string().trim().max(2000).optional().nullable(),
   // Thông số kỹ thuật phục vụ LSX / hợp đồng (0026).
@@ -77,6 +92,8 @@ export const productCreateSchema = z.object({
   barcode: z.string().trim().max(50).optional().nullable(),
   showroom_sample: z.boolean().optional(), // mẫu tại showroom
   reference_price: z.coerce.number().min(0).optional().nullable(), // giá tham khảo nội bộ
+  // Giá thành kế hoạch (plan_*, 0220) CỐ Ý không nằm ở đây: hồ sơ SP dùng chung
+  // không được sửa/đọc số riêng của Bán hàng — chỉ qua `plan-cost.schema`.
   tech_spec: techSpecSchema.optional(),
   // Thông tin XK + đặc tính nội thất (0037).
   hs_code: z.string().trim().max(20).optional().nullable(), // mã HS khai hải quan
@@ -94,6 +111,8 @@ export const productCreateSchema = z.object({
   code_legacy: z.string().trim().max(100).optional().nullable(),
   /** Khối lượng tịnh CÂN THẬT — khác `frame_weight_kg` (Σ tính từ định mức). */
   net_weight_kg: z.coerce.number().min(0).optional().nullable(),
+  /** KL cân thực tế (ô "KL cân thực tế" trang chi tiết) — trước 07/10 schema không nhận, lưu là mất. */
+  actual_weight_kg: z.coerce.number().min(0).optional().nullable(),
   /**
    * Kích thước tổng thể (mm). Trước chỉ import BOM ghi được, giao diện không có
    * lối sửa — nên 5 SP có KTSP nhập nhằng (lẫn cm, hoặc chỉ chiều cao gập/mở)
@@ -127,6 +146,13 @@ export const productCreateSchema = z.object({
 })
 
 export const productUpdateSchema = productCreateSchema.partial().extend({
+  /*
+   * KHÔNG mặc định khi SỬA (07/10/2026). `.partial()` giữ `.default('cái')` của
+   * schema tạo, nên PATCH chỉ gửi `{ packing }` (khung đóng gói) hay
+   * `{ image_file_id }` (thay ảnh) cũng bị chèn `unit` mặc định — ĐVT "bộ" bị
+   * đặt lại, và "cai" cứ quay lại sau mỗi đợt dọn.
+   */
+  unit: z.string().trim().min(1).max(30).optional(),
   is_active: z.boolean().optional(),
   bom_status: z.enum(BOM_STATUSES).optional(), // FR-ENG-05: chưa có / đang vẽ / đã vẽ
   image_file_id: z.string().uuid().optional().nullable(), // ảnh đại diện (in BG/LSX)
@@ -192,7 +218,7 @@ export const productListQuerySchema = z.object({
 export const quickProductCreateSchema = z.object({
   code: z.string().trim().min(1).max(100),
   name: z.string().trim().min(1).max(200),
-  unit: z.string().trim().min(1).max(30).default('cai'),
+  unit: z.string().trim().min(1).max(30).default('cái'),
   customer_id: z.string().uuid().optional().nullable(),
   customer_item_code: z.string().trim().max(100).optional().nullable(),
   description_en: z.string().trim().max(2000).optional().nullable(),
@@ -236,6 +262,24 @@ export const productPickQuerySchema = z.object({
       if (!s) return undefined
       const ids = s.split(',').filter((x) => UUID_RE.test(x))
       return ids.length > 0 ? ids.slice(0, 200) : undefined
+    }),
+  /** Tra theo MÃ (mã HG hoặc mã khách), nhiều mã cách dấu phẩy — dán dòng đơn từ Excel (07/10/2026). */
+  codes: z
+    .string()
+    .trim()
+    .max(8000)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined
+      const codes = [
+        ...new Set(
+          s
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean),
+        ),
+      ]
+      return codes.length > 0 ? codes.slice(0, 300) : undefined
     }),
   limit: z.coerce.number().int().min(1).max(50).default(25),
 })

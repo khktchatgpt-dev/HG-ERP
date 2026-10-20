@@ -1,0 +1,819 @@
+{
+ "taken_at": "2026-09-15T03:48:25.824Z",
+ "why": "Tồn kho TRƯỚC khi lập phiếu kiểm kê đưa về 0 (15/09/2026).",
+ "restore": "Lập một phiếu kiểm kê ngược: mỗi vật tư một dòng NHẬP đúng số on_hand dưới đây.",
+ "ton": [
+  {
+   "material_id": "006d5e90-fd87-4a39-92d0-cce9653e7e28",
+   "code": "PKN0396",
+   "name": "Nệm tựa Ghế xoay",
+   "unit": "cái",
+   "on_hand": 8816
+  },
+  {
+   "material_id": "01817095-df7b-4e9c-8b5d-79f917b3e9e9",
+   "code": "SON0339",
+   "name": "Bột sơn tĩnh điện PT-3373 màu đỏ",
+   "unit": "Kg",
+   "on_hand": 52
+  },
+  {
+   "material_id": "04a780a0-e8e6-4110-8950-1bf8671d690d",
+   "code": "MA-0019",
+   "name": "Dây dù tròn 6mm, màu xanh",
+   "unit": "Kg",
+   "on_hand": 2800
+  },
+  {
+   "material_id": "08a4aa20-e572-4855-8c38-f5ca0eda5732",
+   "code": "CKH0001",
+   "name": "Mâm xoay 2 vòng bi 360 độ 160x160x2mm (swivel base)",
+   "unit": "Cái",
+   "on_hand": 8600
+  },
+  {
+   "material_id": "09e3890d-5430-4005-bd04-02205d12da93",
+   "code": "NK-0018",
+   "name": "Mạc đồng dán",
+   "unit": "Cái",
+   "on_hand": 3450.5
+  },
+  {
+   "material_id": "0ce3f9f2-c404-48e4-a929-1aae64545676",
+   "code": "NK-0030",
+   "name": "Bulon 4",
+   "unit": "Con",
+   "on_hand": 1648
+  },
+  {
+   "material_id": "0e397a74-39cf-4128-b5c6-1be428941d38",
+   "code": "PKN0397",
+   "name": "Nệm Mê giữa bank 3",
+   "unit": "cái",
+   "on_hand": 1864
+  },
+  {
+   "material_id": "112b2059-f255-4d75-a300-0769731798e0",
+   "code": "BAO0691",
+   "name": "BB Võng sắt",
+   "unit": "Cái",
+   "on_hand": 100
+  },
+  {
+   "material_id": "12fc594d-91c1-45ad-b7ff-58654feee202",
+   "code": "BAO0692",
+   "name": "Tấm lớp 3L 2 đầu",
+   "unit": "Cái",
+   "on_hand": 800
+  },
+  {
+   "material_id": "13d0a14f-d0ab-46d9-b08a-a10e84bb5b42",
+   "code": "ACQ0002",
+   "name": "Banh điện ắc quy N150 GLOBE",
+   "unit": "Cái",
+   "on_hand": 20
+  },
+  {
+   "material_id": "1432c238-602f-479d-acb0-64b13696164d",
+   "code": "PKN0393",
+   "name": "Mâm xoay 2 vòng bi BM 16V08 - Xoay 360 độ",
+   "unit": "cái",
+   "on_hand": 9079.45
+  },
+  {
+   "material_id": "1887b827-8e7b-4873-ac2a-a3e64fc137d0",
+   "code": "BUL0230",
+   "name": "Tán dù 6x55x15 màu",
+   "unit": "Con",
+   "on_hand": 824
+  },
+  {
+   "material_id": "1b572865-14b9-49ca-a2e1-8b78e407010d",
+   "code": "BAO0689",
+   "name": "BB bàn NK 65",
+   "unit": "Cái",
+   "on_hand": 380
+  },
+  {
+   "material_id": "1c678990-0f33-41b6-baac-be66d6445634",
+   "code": "VAI0261",
+   "name": "Vải W031 -K152 UV1000h",
+   "unit": "Mét",
+   "on_hand": 1000
+  },
+  {
+   "material_id": "1d4aeeac-12a8-4ca4-a99b-e8bff0f0393b",
+   "code": "SON0031",
+   "name": "Bột sơn tĩnh điện P-SM 9760",
+   "unit": "Kg",
+   "on_hand": 450
+  },
+  {
+   "material_id": "1d501de2-b2a5-44c6-8b23-b89b86f8eb1d",
+   "code": "NK-0053",
+   "name": "LĐN 12x20x10, màu đen",
+   "unit": "Con",
+   "on_hand": 10
+  },
+  {
+   "material_id": "1d776711-3ebf-4970-88a4-6fd2f8535c6d",
+   "code": "PKN0388",
+   "name": "Ắc 10x143, taro 2 đầu, ren trong",
+   "unit": "Cái",
+   "on_hand": 412
+  },
+  {
+   "material_id": "1fafbd4c-d8af-4c24-90b2-013adfb7f66c",
+   "code": "VAI0084",
+   "name": "Vải Spun điểm trắng M1278 (96hr)",
+   "unit": "Mét",
+   "on_hand": 2620
+  },
+  {
+   "material_id": "27acf0df-8da7-4553-834f-901ed00a808b",
+   "code": "NK-0042",
+   "name": "LĐN 6x16x5, đen",
+   "unit": "Con",
+   "on_hand": 5
+  },
+  {
+   "material_id": "29f1783b-9e06-4796-b374-29130729cbae",
+   "code": "PKN0400",
+   "name": "Nút chân Siena (B477)",
+   "unit": "cái",
+   "on_hand": 1648
+  },
+  {
+   "material_id": "2b68905a-961b-462a-8b64-cfad8d6389bb",
+   "code": "PKN0398",
+   "name": "Nệm Mê traí bank 3",
+   "unit": "cái",
+   "on_hand": 1864
+  },
+  {
+   "material_id": "2f2c3144-4dff-4af2-ad6c-28e27efa2644",
+   "code": "KIM0170",
+   "name": "Kính sơn màu 1034x1198x5mm — Dolphin grey",
+   "unit": "Tấm",
+   "on_hand": 120
+  },
+  {
+   "material_id": "313be296-624e-405e-84e6-e540696d2cb4",
+   "code": "PKN0386",
+   "name": "Ắc 8x31, Ren 6 cần gấp",
+   "unit": "Cái",
+   "on_hand": 1318.4
+  },
+  {
+   "material_id": "32387118-39ce-43dd-a684-d574939c12a3",
+   "code": "BUL0214",
+   "name": "Tán dù 6x30x15",
+   "unit": "Con",
+   "on_hand": 1648
+  },
+  {
+   "material_id": "32810b96-e0db-4fe2-8d85-f7e7969c63cc",
+   "code": "LON0019",
+   "name": "LĐS 8X20X1 Ly trắng",
+   "unit": "Con",
+   "on_hand": 840
+  },
+  {
+   "material_id": "34ac6133-cf90-4a3b-98fa-66cf984ddd4b",
+   "code": "VT-GO-001",
+   "name": "Gỗ MDF phủ melamine 18mm",
+   "unit": "Tấm",
+   "on_hand": 70
+  },
+  {
+   "material_id": "363e99d4-eb52-4e6e-88c6-b4a607b9fa17",
+   "code": "PKN0390",
+   "name": "Nắp tăng đơ phi 25 tán M8",
+   "unit": "Cái",
+   "on_hand": 35264
+  },
+  {
+   "material_id": "380eae4c-579c-4627-956f-32a221d5684f",
+   "code": "PKN0384",
+   "name": "Nút 20x40x5 ( hàng trần)",
+   "unit": "Cái",
+   "on_hand": 3708
+  },
+  {
+   "material_id": "3a13a601-2600-4601-b95e-59768416c540",
+   "code": "KIM0165",
+   "name": "Kính sơn màu 748x833x5mm — Dolphin grey",
+   "unit": "Tấm",
+   "on_hand": 200
+  },
+  {
+   "material_id": "3c6e9b47-55fb-43d1-822e-e48fad30ee36",
+   "code": "PKN0289",
+   "name": "Tăng đơ răn phuy 35x8 ly bulong (8x25) STP10ĐH",
+   "unit": "Đôi",
+   "on_hand": 741.6
+  },
+  {
+   "material_id": "400cd205-78c3-4982-bde9-41cb9bfbe06e",
+   "code": "ST-0206",
+   "name": "Thép hộp vuông 20x40x1.0",
+   "unit": "Cây",
+   "on_hand": 393
+  },
+  {
+   "material_id": "409f873e-0e0b-4ff6-ad38-bb5cbf4e690e",
+   "code": "PKN0387",
+   "name": "Móc phi 8 inox 304 gai 15",
+   "unit": "Cái",
+   "on_hand": 206
+  },
+  {
+   "material_id": "412e4e51-a436-468d-9367-e7c6c8f623de",
+   "code": "SON0330",
+   "name": "Sơn xám cát ngoài trời T67443C (C679-ASA)",
+   "unit": "Kg",
+   "on_hand": 179.91
+  },
+  {
+   "material_id": "45578d68-ba2e-4f15-a9a4-e6d4fe4d3b05",
+   "code": "BAO0693",
+   "name": "Nẹp V5 giấy cứng theo mẫu",
+   "unit": "Cái",
+   "on_hand": 720
+  },
+  {
+   "material_id": "46c5c726-f697-4d15-b425-b5b3b25bd80f",
+   "code": "SON0341",
+   "name": "Bột sơn tĩnh điện SALO 7317 màu xám cát ngoài trời",
+   "unit": "Kg",
+   "on_hand": 2000
+  },
+  {
+   "material_id": "49d38d4f-e176-4a3f-80b7-3cd49e9a5712",
+   "code": "NK-0125",
+   "name": "Eru 10,XT",
+   "unit": "Con",
+   "on_hand": 7457.2
+  },
+  {
+   "material_id": "4f50180a-2958-4f35-84db-b7553dbc3e2e",
+   "code": "BAO0688",
+   "name": "BB ghế Thasos",
+   "unit": "Cái",
+   "on_hand": 400
+  },
+  {
+   "material_id": "4f63a874-b469-4ff6-ab82-e30c9b83b66e",
+   "code": "NK-0093",
+   "name": "Bulon 6x20x13, xi trắng",
+   "unit": "Con",
+   "on_hand": 2142.4
+  },
+  {
+   "material_id": "527e2907-7346-47f3-9089-19d7024ab02f",
+   "code": "SAT0773",
+   "name": "Ắc sắt đặc phi 10x32",
+   "unit": "Cái",
+   "on_hand": 412
+  },
+  {
+   "material_id": "588ca401-14c9-4244-bbca-a453806ffb02",
+   "code": "SON0020",
+   "name": "Bột sơn tĩnh điện HT-7238",
+   "unit": "Kg",
+   "on_hand": 100
+  },
+  {
+   "material_id": "59f6dd10-70e1-4e26-8063-bf3ac0cfc050",
+   "code": "PKN0392",
+   "name": "Chân đế phi 37.5mm",
+   "unit": "Cái",
+   "on_hand": 16272
+  },
+  {
+   "material_id": "5a0dd7b7-3ebe-4543-8de5-8822146acc4b",
+   "code": "KIM0162",
+   "name": "Kính sơn màu 625x399x5mm — Dolphin grey",
+   "unit": "Tấm",
+   "on_hand": 600
+  },
+  {
+   "material_id": "5ae87bc9-72e7-4dce-a0ca-68602c15b8b0",
+   "code": "BUL0092",
+   "name": "Bulon 8x30x15 màu",
+   "unit": "Con",
+   "on_hand": 840
+  },
+  {
+   "material_id": "5b30c209-ddf2-4fe4-9125-d82ea27c6704",
+   "code": "MUT0550",
+   "name": "Mút cao su xốp EVA 1 mặt có keo dán (cuộn)",
+   "unit": "Cuộn",
+   "on_hand": 43
+  },
+  {
+   "material_id": "5bfde0ce-2bc1-4f97-bcdc-36ea105c3b23",
+   "code": "KIM0167",
+   "name": "Kính sơn màu 1034x998x5mm — Dark grey",
+   "unit": "Tấm",
+   "on_hand": 510
+  },
+  {
+   "material_id": "5c0c1645-ec54-40d6-beb9-7a1000a68fb5",
+   "code": "BUL0049",
+   "name": "Bulon 6x25x13 màu",
+   "unit": "Con",
+   "on_hand": 7333.6
+  },
+  {
+   "material_id": "5d461c94-b301-4cfb-a88c-4a404ffa7fd2",
+   "code": "VIT0082",
+   "name": "Vít 6x40x13",
+   "unit": "Con",
+   "on_hand": 1854
+  },
+  {
+   "material_id": "641cff69-5f01-4ff9-9017-1d52639766df",
+   "code": "VIT0069",
+   "name": "Vít 6x25x13",
+   "unit": "Con",
+   "on_hand": 1680
+  },
+  {
+   "material_id": "67ad4746-075d-477a-84cc-c7d8e057eed0",
+   "code": "KIM0161",
+   "name": "Kính sơn màu 625x399x5mm — Dark grey",
+   "unit": "Tấm",
+   "on_hand": 1350
+  },
+  {
+   "material_id": "67e0f1b2-35dd-4ed6-9ea8-6cf6e63fa2ca",
+   "code": "CN1552",
+   "name": "Pát góc đóng thùng",
+   "unit": "Cái",
+   "on_hand": 7340
+  },
+  {
+   "material_id": "695f370c-8138-4d14-a9ae-a7dcf272d1dc",
+   "code": "NK-0044",
+   "name": "Pát thỏ Athos",
+   "unit": "Cái",
+   "on_hand": 1664
+  },
+  {
+   "material_id": "6af9f4c7-f39f-4d1d-9083-6bff3f02f4d7",
+   "code": "BUL0605",
+   "name": "Vít 4x15 đầu lum inox 201",
+   "unit": "con",
+   "on_hand": 4944
+  },
+  {
+   "material_id": "6d5ff3a4-4b58-4907-a748-9431597d34d2",
+   "code": "ST-0204",
+   "name": "Thép vuông kẽm 20x20x0.8",
+   "unit": "Cây",
+   "on_hand": 491
+  },
+  {
+   "material_id": "6f600e9e-d0c3-4039-97e7-9ceac3b9e592",
+   "code": "BUL0237",
+   "name": "Tán dù 6x65x15 xi trắng",
+   "unit": "Con",
+   "on_hand": 267.8
+  },
+  {
+   "material_id": "706f441e-58df-44b8-b5e1-cccc2273d883",
+   "code": "ST-0203",
+   "name": "Thép vuông kẽm 16x16x0.8",
+   "unit": "Cây",
+   "on_hand": 18
+  },
+  {
+   "material_id": "72efe149-fcb8-44b9-8db9-c98ddfdc93ab",
+   "code": "KIM0166",
+   "name": "Kính sơn màu 698x833x5mm — Dolphin grey",
+   "unit": "Tấm",
+   "on_hand": 100
+  },
+  {
+   "material_id": "78f136d6-3a35-4879-8ed3-939c8b74c9f8",
+   "code": "SON0337",
+   "name": "Bột sơn PT-7476 màu xám cát",
+   "unit": "Kg",
+   "on_hand": 99
+  },
+  {
+   "material_id": "7b01fde1-c4af-4ae6-b1ac-d42d4b31006e",
+   "code": "PKN0385",
+   "name": "Nút 15x35x5, (hàng trần)",
+   "unit": "Cái",
+   "on_hand": 824
+  },
+  {
+   "material_id": "7c45a735-b971-4bca-ac48-ab46da1f2860",
+   "code": "BAO0690",
+   "name": "BB GTN navarra",
+   "unit": "Cái",
+   "on_hand": 130
+  },
+  {
+   "material_id": "7ef349e6-b5ef-4804-bda4-b56885d1b346",
+   "code": "MA-0020",
+   "name": "Dây dù tròn 6mm, màu hồng",
+   "unit": "Kg",
+   "on_hand": 630
+  },
+  {
+   "material_id": "81126fa5-7b7d-4c76-9336-71acbeefb91d",
+   "code": "SON0329",
+   "name": "Bột sơn ATD2164 màu đen cát",
+   "unit": "Kg",
+   "on_hand": 1050
+  },
+  {
+   "material_id": "83256c73-6b23-4966-b7be-41d413f611ec",
+   "code": "BUL0212",
+   "name": "Tán dù 6x20x15",
+   "unit": "Con",
+   "on_hand": 2060
+  },
+  {
+   "material_id": "853fd87a-b21c-4676-af23-0b2be5732817",
+   "code": "VT-SON-001",
+   "name": "Sơn PU 2K (bộ base+cứng)",
+   "unit": "Bộ",
+   "on_hand": 30
+  },
+  {
+   "material_id": "8ac83bdc-3054-4b72-94cd-d0523a2f8d8b",
+   "code": "NH-0199",
+   "name": "B628 : Nhôm CN 22*60*1",
+   "unit": "Cây",
+   "on_hand": 3467
+  },
+  {
+   "material_id": "8bba9154-5e5a-463a-baf2-9abbc134f017",
+   "code": "VAI0262",
+   "name": "Vải VPR-F258",
+   "unit": "Mét",
+   "on_hand": 28841.4
+  },
+  {
+   "material_id": "8e27b184-2bae-46eb-bd93-52935f707dd3",
+   "code": "PKN0389",
+   "name": "Ắc 10x35, ren trong 6",
+   "unit": "Cái",
+   "on_hand": 412
+  },
+  {
+   "material_id": "8f6467ef-89f4-47ea-a419-abbdc4a113b9",
+   "code": "BUL0032",
+   "name": "Bulon 6x15x13",
+   "unit": "Con",
+   "on_hand": 1030
+  },
+  {
+   "material_id": "90eaacf4-847d-4ef4-b1d9-59e466d159c4",
+   "code": "KIM0163",
+   "name": "Kính sơn màu 748x833x5mm — Dark grey",
+   "unit": "Tấm",
+   "on_hand": 100
+  },
+  {
+   "material_id": "91b8a21e-becc-4e6b-a6cb-5928f2a1071f",
+   "code": "BUL0335",
+   "name": "LDN 10x20x13 ly, đen",
+   "unit": "Kg",
+   "on_hand": 3
+  },
+  {
+   "material_id": "91bdf693-ac07-484f-8ba6-15410d0920c1",
+   "code": "VT-NK-001",
+   "name": "Bản lề giảm chấn Blum",
+   "unit": "Cái",
+   "on_hand": 545
+  },
+  {
+   "material_id": "94a156eb-30da-4c59-b4cf-009f2e5ee9d5",
+   "code": "PKN0383",
+   "name": "Nút chân 30x60, xám",
+   "unit": "Cái",
+   "on_hand": 412
+  },
+  {
+   "material_id": "9719da28-dfdf-4155-be13-aaf507aa1bec",
+   "code": "VIT0114",
+   "name": "Vít dù 4x20",
+   "unit": "Con",
+   "on_hand": 32239
+  },
+  {
+   "material_id": "9b155567-4e48-49ad-b7e8-8caf6e87e22e",
+   "code": "CN1647",
+   "name": "Pát trượt mỏng màu đen",
+   "unit": "Cái",
+   "on_hand": 2000
+  },
+  {
+   "material_id": "9ce84342-1530-4af5-9a6b-fc089c2fdce7",
+   "code": "PKN0395",
+   "name": "Nệm mê Ghế xoay",
+   "unit": "cái",
+   "on_hand": 8816
+  },
+  {
+   "material_id": "9d1ce8d9-aac6-4ee3-b72c-240110c43611",
+   "code": "NK-0069",
+   "name": "LĐN 10x20x2",
+   "unit": "Con",
+   "on_hand": 1.03
+  },
+  {
+   "material_id": "9f675cca-75da-4fbf-bc58-cea7599b79fb",
+   "code": "ST-0207",
+   "name": "Thép vuông kẽm 75x75x1.1",
+   "unit": "Cây",
+   "on_hand": 426
+  },
+  {
+   "material_id": "a1599855-59c0-4e5f-b8b7-c190b757ca69",
+   "code": "PKN0401",
+   "name": "Ắc Phi 9.5, Ren trong 8 x11mm",
+   "unit": "con",
+   "on_hand": 1000
+  },
+  {
+   "material_id": "a5dd2b97-7fec-4b01-a393-bd145c98cf75",
+   "code": "CN1526",
+   "name": "Vít ĐC ĐB 4x15, XT",
+   "unit": "Con",
+   "on_hand": 19364
+  },
+  {
+   "material_id": "a687c0a2-05cf-400f-a647-378a29251d4b",
+   "code": "DCC0078",
+   "name": "Lục giác 4x80 màu",
+   "unit": "Cái",
+   "on_hand": 189
+  },
+  {
+   "material_id": "ab0d38f7-91b9-4b4d-9592-e239c3080509",
+   "code": "LKT0021",
+   "name": "Tấm lót mặt bàn bộ sofa love seat",
+   "unit": "Tấm",
+   "on_hand": 180
+  },
+  {
+   "material_id": "abc9760f-2b49-4aed-8877-8a4e742dd550",
+   "code": "KIM0168",
+   "name": "Kính sơn màu 1034x998x5mm — Dolphin grey",
+   "unit": "Tấm",
+   "on_hand": 240
+  },
+  {
+   "material_id": "ae3d8682-aa1d-4a41-8f0e-b84bf0dc4826",
+   "code": "SON0028",
+   "name": "Bột sơn tĩnh điện P-SG 9643",
+   "unit": "Kg",
+   "on_hand": 685
+  },
+  {
+   "material_id": "b304b4fd-2b7d-4691-bc0b-650173d26c31",
+   "code": "ACQ0005",
+   "name": "Bình ắc quy 120 AP",
+   "unit": "Cái",
+   "on_hand": 10
+  },
+  {
+   "material_id": "b4b6f845-ca26-4668-97cc-ef5eb904eb4b",
+   "code": "VIT0094",
+   "name": "Vít 6x70x13 màu",
+   "unit": "Con",
+   "on_hand": 824
+  },
+  {
+   "material_id": "b596cf28-ee80-484d-9082-6f4d0e672955",
+   "code": "KIM0160",
+   "name": "Kính mờ cường lực 605x539x5 mài cạnh bo góc R5",
+   "unit": "Tấm",
+   "on_hand": 760
+  },
+  {
+   "material_id": "b626fc67-92b0-45b3-b804-2f9dcfbb1fbc",
+   "code": "BUL0338",
+   "name": "LDS6x16x1",
+   "unit": "Con",
+   "on_hand": 2646
+  },
+  {
+   "material_id": "ba6c0a46-d018-4a35-9fa8-7bbbfb1b52ba",
+   "code": "NUT0009",
+   "name": "Nút 22x40",
+   "unit": "Cái",
+   "on_hand": 1648
+  },
+  {
+   "material_id": "bad37fa6-3d44-44c6-93c5-09c2c2ad321c",
+   "code": "PKN0391",
+   "name": "Chân đế phi 25 ( M8x20)",
+   "unit": "Cái",
+   "on_hand": 35264
+  },
+  {
+   "material_id": "bcd1d844-1de0-4590-9943-005fd9e981d9",
+   "code": "BAO0081",
+   "name": "Thùng carton 5 lớp KT: 665*309*80mm - Hộp Chân 3L",
+   "unit": "Thùng",
+   "on_hand": 560
+  },
+  {
+   "material_id": "bd5ab178-f2d4-4d5a-9300-13951dfcd2a0",
+   "code": "BAO0687",
+   "name": "BB Ghế XC deLos",
+   "unit": "Cái",
+   "on_hand": 150
+  },
+  {
+   "material_id": "be474ad5-fd72-4c2f-a2ca-68f5654f87e0",
+   "code": "PKN0381",
+   "name": "Pát trượt 25x65",
+   "unit": "Cái",
+   "on_hand": 400
+  },
+  {
+   "material_id": "c00b6a2f-2bfc-4c17-9479-6f062c6eefc9",
+   "code": "PKN0011",
+   "name": "Bộ phi 27 có eru + tăng đơ phi 25",
+   "unit": "Bộ",
+   "on_hand": 2232
+  },
+  {
+   "material_id": "c093a11d-4a3e-42ed-a90b-79e42e76d10a",
+   "code": "KIM0164",
+   "name": "Kính sơn màu 698x833x5mm — Dark grey",
+   "unit": "Tấm",
+   "on_hand": 50
+  },
+  {
+   "material_id": "c2ab70d6-0851-4462-b4f6-5d05b955d956",
+   "code": "CN1556",
+   "name": "Vuông 60x10 đen",
+   "unit": "Cái",
+   "on_hand": 1977.6
+  },
+  {
+   "material_id": "c43fb08c-5c00-44e8-8e3f-f97b5fba9ccb",
+   "code": "SAT0112",
+   "name": "Eru vành inox 201",
+   "unit": "Con",
+   "on_hand": 206
+  },
+  {
+   "material_id": "c9cdf00b-668f-43d1-a1e2-4e63791a6063",
+   "code": "ST-0205",
+   "name": "Thép vuông kẽm 20x20x1.0",
+   "unit": "Cây",
+   "on_hand": 464
+  },
+  {
+   "material_id": "cb70ed4d-2c2c-4011-bae1-dbe867cef8a7",
+   "code": "SON0336",
+   "name": "Bột sơn màu grafit H-SM 9608",
+   "unit": "Kg",
+   "on_hand": 4825
+  },
+  {
+   "material_id": "cf858ac3-e49b-41a3-80c8-ddb90946228c",
+   "code": "ST-0208",
+   "name": "Thép vuông kẽm 60x60x1.2",
+   "unit": "Cây",
+   "on_hand": 160
+  },
+  {
+   "material_id": "d1a4e7cf-dd40-49f0-bd04-bbf2048ef2cd",
+   "code": "BUL0055",
+   "name": "Bulon 6x30x13",
+   "unit": "Con",
+   "on_hand": 1339
+  },
+  {
+   "material_id": "d36d3a52-1e01-42e9-b2a9-88827ea1937f",
+   "code": "BUL0023",
+   "name": "Bulon 6X35X13 Màu",
+   "unit": "Con",
+   "on_hand": 2698.6
+  },
+  {
+   "material_id": "d729f0fa-ccd7-4ade-ade8-2805e3fcc293",
+   "code": "PKN0379",
+   "name": "Nút Phi 49 đầu bằng nâu",
+   "unit": "Cái",
+   "on_hand": 600
+  },
+  {
+   "material_id": "d93763a9-308a-4f5f-b199-06d34cae72bb",
+   "code": "BUL0604",
+   "name": "Vít 4x20 ĐB ĐC",
+   "unit": "con",
+   "on_hand": 14111
+  },
+  {
+   "material_id": "da2c28e0-f7ec-4511-ab3a-61f0df2706f3",
+   "code": "PKN0399",
+   "name": "Nệm mê phải Bank 3",
+   "unit": "cái",
+   "on_hand": 1864
+  },
+  {
+   "material_id": "e3d562a2-bd08-4543-9496-9dc675080dd7",
+   "code": "BUL0606",
+   "name": "LĐS 8x20x2",
+   "unit": "cái",
+   "on_hand": 1512
+  },
+  {
+   "material_id": "e43c8061-dcb1-437c-b1e5-7ecc199dd131",
+   "code": "PKN0382",
+   "name": "Nút chân 30x60, đen",
+   "unit": "Cái",
+   "on_hand": 2266
+  },
+  {
+   "material_id": "e7e11056-6625-446b-ab14-a518664e733e",
+   "code": "KIM0169",
+   "name": "Kính sơn màu 1034x1098x5mm — Dolphin grey",
+   "unit": "Tấm",
+   "on_hand": 240
+  },
+  {
+   "material_id": "ed5b5b39-8c45-408a-a70e-629d9e9f33c7",
+   "code": "PKN0394",
+   "name": "Chân côn phi 40 -->25 dài 342/357mm - (Như mẫu đã gỡi hoàn thiện )",
+   "unit": "cái",
+   "on_hand": 8600
+  },
+  {
+   "material_id": "edb7d141-b592-4d90-b0fe-9f76dacac137",
+   "code": "DCC0080",
+   "name": "Lục giác 5",
+   "unit": "Cái",
+   "on_hand": 103
+  },
+  {
+   "material_id": "f1622c64-9aa7-4543-855f-fe97195e03af",
+   "code": "PKN0380",
+   "name": "Nút Phi 49 đầu lồi nâu",
+   "unit": "Cái",
+   "on_hand": 600
+  },
+  {
+   "material_id": "f772e6aa-6016-433f-848b-208d1134a6ab",
+   "code": "ACQ0001",
+   "name": "Axit châm bình ắc quy",
+   "unit": "Lít",
+   "on_hand": 100
+  },
+  {
+   "material_id": "f832068f-67ea-41ca-bdac-977446477518",
+   "code": "SON0340",
+   "name": "Bột sơn tĩnh điện C679-DJX1 màu mix đen cát điểm vàng",
+   "unit": "Kg",
+   "on_hand": 100
+  },
+  {
+   "material_id": "f8c3e97e-9625-4094-9408-18d29b07b8b6",
+   "code": "CN1521",
+   "name": "Bulon 8x70 tai lục giác 5",
+   "unit": "Con",
+   "on_hand": 412
+  },
+  {
+   "material_id": "f8d29497-8e9f-4d67-a271-f18e099125c5",
+   "code": "BUL0041",
+   "name": "Bulon 6x20x13",
+   "unit": "Con",
+   "on_hand": 4239
+  },
+  {
+   "material_id": "fcd7e0a9-b3fa-4ac2-b445-4c903cdee271",
+   "code": "BUL0019",
+   "name": "Bulon 6X20X15 màu",
+   "unit": "Con",
+   "on_hand": 2142.4
+  },
+  {
+   "material_id": "fd583aa7-42aa-4e86-8401-86c54dc44f0f",
+   "code": "NK-0193",
+   "name": "Nút nhựa phi 25 đầu trứng",
+   "unit": "Cái",
+   "on_hand": 399
+  },
+  {
+   "material_id": "ffae6ec1-7922-47b2-87d5-19403788c2f1",
+   "code": "NK-0029",
+   "name": "tán rút 4",
+   "unit": "Con",
+   "on_hand": 1648
+  }
+ ]
+}

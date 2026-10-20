@@ -15,10 +15,12 @@ import { useState } from 'react'
  * trí nhớ. Hook này dò lấy lớp theme đang phủ rồi các primitive tự gắn lại, nên
  * chỗ gọi KHÔNG phải biết gì.
  *
- * Dò theo DOM (chứ không hằng số hoá `'theme-v3'`) để đường lùi khẩn vẫn nguyên:
- * đổi `theme-v3`→`theme-v2` ở `WorkspaceShell` là portal đi theo, không sót.
+ * Dò theo DOM chứ không hằng số hoá, để đổi lớp theme ở `WorkspaceShell` là
+ * portal đi theo, không sót.
+ *
+ * `theme-v2` đã XOÁ 09/09/2026 — không nơi nào gắn lớp đó nữa.
  */
-const THEMES = ['theme-v3', 'theme-v2'] as const
+const THEMES = ['theme-v3', 'kit'] as const
 
 /**
  * Bản KHÔNG-hook, cho vùng nổi sống dai hơn một lượt mở/đóng — cụ thể là khay
@@ -35,8 +37,15 @@ function resolveTheme(): string | undefined {
   // SSR: chưa có DOM. Dialog mặc định đóng nên gần như không render ở server;
   // nếu có (defaultOpen) thì lượt hydrate ngay sau đó gắn đúng lớp.
   if (typeof document === 'undefined') return undefined
-  for (const t of THEMES) if (document.querySelector(`.${t}`)) return t
-  return undefined
+  /*
+    Trả về ĐỦ mọi lớp theme đang phủ, không phải lớp đầu tiên tìm thấy.
+
+    Màn chứng từ mới bọc CẢ HAI: `theme-v3` (token cho shadcn) và `kit` (token
+    cho khung ERP). Trả một lớp thì hộp thoại mở từ màn đó mất nửa bảng màu —
+    đúng loại lỗi câm đã dính một lần ở chính màn chi tiết đơn.
+  */
+  const found = THEMES.filter((t) => document.querySelector(`.${t}`))
+  return found.length > 0 ? found.join(' ') : undefined
 }
 
 /**

@@ -240,6 +240,10 @@ function ClusterHead({
   onStartRename,
   onRename,
   onDrop,
+  stages,
+  declaring,
+  onStartDeclare,
+  onDeclare,
 }: {
   block: ClusterBlock
   colSpan: number
@@ -250,9 +254,13 @@ function ClusterHead({
   onStartRename: (id: string | null) => void
   onRename: (c: ClusterView, name: string) => void
   onDrop: (c: ClusterView) => void
+  stages: { code: string; label: string }[]
+  declaring: boolean
+  onStartDeclare: (id: string | null) => void
+  onDeclare: (c: ClusterView, patch: ClusterDeclaration) => void
 }) {
   const c = block.cluster
-  const route = [c?.first_stage, c?.final_stage].filter(Boolean).join(' → ')
+  const route = clusterRouteText(c, stages)
   return (
     <tr className={cn(c ? 'bg-accent/60' : 'bg-muted/20')}>
       <td colSpan={colSpan} className="border-b px-1 py-1.5">
@@ -296,18 +304,37 @@ function ClusterHead({
             {block.totals.kg > 0 && ` · ${block.totals.kg.toFixed(3)} kg`}
             {block.totals.m3 > 0 && ` · ${block.totals.m3.toFixed(4)} m³`}
           </span>
-          {route && (
-            <span className="bg-muted rounded px-1.5 py-px text-[10px] font-medium">
-              {route}
+          {c && (
+            <span
+              className={cn(
+                'rounded px-1.5 py-px text-[10px] font-medium tabular-nums',
+                c.qty_per_product != null ? 'bg-muted' : 'text-[var(--warn)]',
+              )}
+            >
+              {c.qty_per_product != null
+                ? `${c.qty_per_product} cụm/SP`
+                : 'chưa khai SL cụm/SP'}
             </span>
           )}
-          {c?.qty_per_product != null && (
-            <span className="bg-muted rounded px-1.5 py-px text-[10px] font-medium tabular-nums">
-              {c.qty_per_product} cụm/SP
+          {c && (
+            <span
+              className={cn(
+                'rounded px-1.5 py-px text-[10px] font-medium',
+                route ? 'bg-muted' : 'text-[var(--warn)]',
+              )}
+            >
+              {route || 'chưa khai lộ trình'}
             </span>
           )}
           {canEdit && c && (
             <span className="ml-auto flex gap-2">
+              <button
+                type="button"
+                onClick={() => onStartDeclare(declaring ? null : c.id)}
+                className="text-[11px] font-medium text-[var(--primary)] hover:underline"
+              >
+                {declaring ? 'Đóng' : 'Khai cụm'}
+              </button>
               <button
                 type="button"
                 onClick={() => onStartRename(c.id)}
@@ -325,8 +352,161 @@ function ClusterHead({
             </span>
           )}
         </div>
+        {canEdit && c && declaring && (
+          <ClusterDeclareForm
+            cluster={c}
+            stages={stages}
+            memberCount={block.rows.length}
+            onCancel={() => onStartDeclare(null)}
+            onSave={(patch) => onDeclare(c, patch)}
+          />
+        )}
       </td>
     </tr>
+  )
+}
+
+/** Ba trường khai của cụm — gửi một lượt, xem `declareCluster`. */
+type ClusterDeclaration = {
+  qty_per_product: number | null
+  first_stage: string | null
+  final_stage: string | null
+}
+
+/** Lộ trình đọc được: mã → nhãn danh mục. Chưa khai đủ hai đầu thì trả ''. */
+function clusterRouteText(
+  c: ClusterView | null,
+  stages: { code: string; label: string }[],
+): string {
+  if (!c) return ''
+  const label = (code: string | null) =>
+    code ? (stages.find((s) => s.code === code)?.label ?? code) : null
+  return [label(c.first_stage), label(c.final_stage)].filter(Boolean).join(' → ')
+}
+
+/**
+ * Hộp khai cụm — SL cụm/SP + công đoạn đầu/cuối.
+ *
+ * Mở TẠI CHỖ dưới dải cụm chứ không phải hộp thoại: người khai đang nhìn danh
+ * sách chi tiết của cụm, và chính danh sách đó là căn cứ để biết cụm này ghép
+ * ở công đoạn nào. Kéo họ sang hộp thoại là cắt mất căn cứ.
+ */
+function ClusterDeclareForm({
+  cluster,
+  stages,
+  memberCount,
+  onCancel,
+  onSave,
+}: {
+  cluster: ClusterView
+  stages: { code: string; label: string }[]
+  memberCount: number
+  onCancel: () => void
+  onSave: (patch: ClusterDeclaration) => void
+}) {
+  const [qty, setQty] = useState(
+    cluster.qty_per_product != null ? String(cluster.qty_per_product) : '',
+  )
+  const [first, setFirst] = useState(cluster.first_stage ?? '')
+  const [last, setLast] = useState(cluster.final_stage ?? '')
+
+  const firstIdx = stages.findIndex((s) => s.code === first)
+  const lastIdx = stages.findIndex((s) => s.code === last)
+  const qtyNum = qty.trim() === '' ? null : Number(qty)
+  // Chặn TRƯỚC khi bấm, và nói vướng gì — không cho bấm rồi mới báo lỗi.
+  const snag =
+    qtyNum != null && (!Number.isFinite(qtyNum) || qtyNum <= 0)
+      ? 'SL cụm/SP phải là số lớn hơn 0.'
+      : first && last && lastIdx < firstIdx
+        ? 'Công đoạn cuối đứng TRƯỚC công đoạn đầu trong danh mục.'
+        : !first && last
+          ? 'Khai công đoạn cuối thì phải khai cả công đoạn đầu.'
+          : null
+
+  return (
+    <div className="border-input bg-background mt-1.5 flex flex-wrap items-end gap-3 rounded border p-2">
+      <label className="flex flex-col gap-1">
+        <span className="text-muted-foreground text-[10px] font-medium">
+          SL cụm / 1 SP
+        </span>
+        <input
+          autoFocus
+          inputMode="decimal"
+          value={qty}
+          onChange={(e) => setQty(e.target.value)}
+          placeholder="vd 2"
+          className="border-input bg-background w-24 rounded border px-1.5 py-1 text-right text-xs tabular-nums focus:border-[var(--primary)] focus:outline-none"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-muted-foreground text-[10px] font-medium">
+          Công đoạn ĐẦU của cụm
+        </span>
+        <select
+          value={first}
+          onChange={(e) => setFirst(e.target.value)}
+          className="border-input bg-background rounded border px-1.5 py-1 text-xs focus:border-[var(--primary)] focus:outline-none"
+        >
+          <option value="">— suy theo nhóm vật tư —</option>
+          {stages.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-muted-foreground text-[10px] font-medium">
+          Công đoạn CUỐI
+        </span>
+        <select
+          value={last}
+          onChange={(e) => setLast(e.target.value)}
+          className="border-input bg-background rounded border px-1.5 py-1 text-xs focus:border-[var(--primary)] focus:outline-none"
+        >
+          <option value="">— tới hết lộ trình —</option>
+          {stages.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!!snag}
+          onClick={() =>
+            onSave({
+              qty_per_product: qtyNum,
+              first_stage: first || null,
+              final_stage: last || null,
+            })
+          }
+          className="rounded bg-[var(--primary)] px-2.5 py-1 text-xs font-medium text-white disabled:bg-[var(--muted-foreground)]"
+        >
+          Lưu
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-muted-foreground text-[11px] hover:underline"
+        >
+          Huỷ
+        </button>
+      </div>
+      <p className="text-muted-foreground w-full text-[10px] leading-relaxed">
+        {snag ? (
+          <span className="font-medium text-[var(--stop)]">{snag}</span>
+        ) : (
+          <>
+            {memberCount} chi tiết của cụm sẽ DỪNG ở công đoạn ngay trước “
+            {stages.find((s) => s.code === first)?.label ?? 'công đoạn ghép'}”; từ đó trở
+            đi xưởng đếm theo CỤM. Bỏ trống SL cụm/SP thì lúc định hình hiểu là 1.
+          </>
+        )}
+      </p>
+    </div>
   )
 }
 
@@ -387,6 +567,7 @@ export function ProductPartsCard({
   parts,
   partGroups,
   clusters,
+  stages,
   productId,
   baseMaterial,
   canEdit,
@@ -394,6 +575,8 @@ export function ProductPartsCard({
   parts: PartView[]
   partGroups: PartGroupView[]
   clusters: ClusterView[]
+  /** Danh mục công đoạn — nguồn cho ô khai lộ trình của cụm. */
+  stages: { code: string; label: string }[]
   productId: string
   /** Ô "Nhiên Liệu" của sản phẩm — mặc định vật liệu cho khối mới. */
   baseMaterial: string | null
@@ -422,6 +605,16 @@ export function ProductPartsCard({
   const [newCluster, setNewCluster] = useState('')
   /** Cụm đang đổi tên tại chỗ (id) — không dùng hộp thoại. */
   const [renaming, setRenaming] = useState<string | null>(null)
+  /**
+   * Cụm đang mở hộp KHAI (id): SL cụm/SP + lộ trình công đoạn.
+   *
+   * Vì sao phải có ô này: 0097 đã cho cụm chỗ lưu `qty_per_product` +
+   * `first_stage`/`final_stage`, và `components.service.suggest` đã đọc đủ ba
+   * trường để sinh dòng CỤM lúc định hình. Nhưng chưa màn nào cho GÕ vào —
+   * nên đo 22/09/2026: 0/136 cụm có SL, 2/136 có lộ trình, và cả DB chỉ nổi
+   * đúng 1 dòng `kind='assembly'`. Thiếu hai ô này thì tầng cụm là bảng rỗng.
+   */
+  const [declaring, setDeclaring] = useState<string | null>(null)
   /**
    * Khối đang tạo mới. Cần riêng vì dòng nhập nằm TRONG khối, mà khối lại suy từ
    * các dòng đã có — sản phẩm chưa có định mức thì không có chỗ nào để gõ.
@@ -570,6 +763,24 @@ export function ProductPartsCard({
       toast.success('Đã đổi tên cụm', name.trim())
     } catch (err) {
       toast.error('Đổi tên thất bại', apiErrorText(err))
+    }
+  }
+
+  /**
+   * Khai SL cụm/SP + lộ trình. Gửi cả ba trường một lượt (PATCH nhận partial)
+   * để không có nhịp nào cụm mang nửa lộ trình.
+   */
+  async function declareCluster(c: ClusterView, patch: ClusterDeclaration) {
+    try {
+      await api(`/api/dept/technical/products/${productId}/clusters/${c.id}`, {
+        method: 'PATCH',
+        body: patch,
+      })
+      setDeclaring(null)
+      router.refresh()
+      toast.success('Đã khai cụm', c.name)
+    } catch (err) {
+      toast.error('Khai cụm thất bại', apiErrorText(err))
     }
   }
 
@@ -983,10 +1194,7 @@ export function ProductPartsCard({
                     {
                       <div>
                         <div
-                          className={cn(
-                            'overflow-x-auto',
-                            inline && 'rounded-md border',
-                          )}
+                          className={cn('overflow-x-auto', inline && 'rounded-md border')}
                         >
                           {/* Chế độ NHẬP phải `w-max`, chế độ XEM thì `w-full`.
                               Lưới nhập của khối khung có 20 cột: để `w-full` thì
@@ -1099,6 +1307,10 @@ export function ProductPartsCard({
                                         onStartRename={setRenaming}
                                         onRename={renameCluster}
                                         onDrop={dropCluster}
+                                        stages={stages}
+                                        declaring={declaring === blk.cluster?.id}
+                                        onStartDeclare={setDeclaring}
+                                        onDeclare={declareCluster}
                                       />
 
                                       {seqLabels(blk.rows).map((seq, pi) => {
@@ -1134,9 +1346,7 @@ export function ProductPartsCard({
                                               <div className="overflow-x-auto border-y border-[var(--primary)]/40">
                                                 <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
                                                   <thead>
-                                                    <InlineHead
-                                                      groupCode={g.code}
-                                                    />
+                                                    <InlineHead groupCode={g.code} />
                                                   </thead>
                                                   <tbody>
                                                     <PartRowInline

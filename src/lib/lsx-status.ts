@@ -22,3 +22,24 @@ export const LSX_STATUS: Record<LsxStatus, { label: string; tone: LsxBadgeTone }
 export function lsxStatusLabel(status: string): string {
   return LSX_STATUS[status as LsxStatus]?.label ?? status
 }
+
+/**
+ * Dòng cảnh báo in chéo lên phiếu / file Excel khi lệnh CHƯA CÓ HIỆU LỰC. Trước
+ * 07/10/2026 chỉ trang xem trước có watermark; `/print/lsx/[id]` in lệnh nháp,
+ * chờ duyệt, bị từ chối hay đã huỷ y hệt bản chính thức — xưởng không phân biệt
+ * được. Trả null khi lệnh đã duyệt / đang SX / hoàn thành.
+ */
+export function lsxPrintWatermark(status: string): string | null {
+  switch (status as LsxStatus) {
+    case 'draft':
+      return 'BẢN NHÁP — chưa gửi Giám đốc duyệt, chưa có hiệu lực'
+    case 'pending_approval':
+      return 'CHỜ GIÁM ĐỐC DUYỆT — chưa có hiệu lực sản xuất'
+    case 'rejected':
+      return 'BỊ TỪ CHỐI — không có hiệu lực'
+    case 'cancelled':
+      return 'ĐÃ HUỶ THEO ĐƠN — không sản xuất'
+    default:
+      return null
+  }
+}

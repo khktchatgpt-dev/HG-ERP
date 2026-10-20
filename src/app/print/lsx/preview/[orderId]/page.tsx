@@ -5,7 +5,7 @@ import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
-import { resolveLsxTemplate } from '@/modules/dept/sales/lsx-template'
+import { resolveLsxTemplate } from '@/lib/lsx-template'
 import { filesService } from '@/modules/core/files/files.service'
 import { LsxPrintSheet, type LsxSheetGroup } from '../../LsxPrintSheet'
 import type { LsxLine } from '@/modules/dept/production/lsx-lines.repo'

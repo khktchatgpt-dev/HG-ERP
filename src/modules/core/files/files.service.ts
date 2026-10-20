@@ -70,6 +70,10 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
       return { sample_id: input.parent.id }
     case 'feedback':
       return { feedback_id: input.parent.id }
+    case 'die':
+      return { die_id: input.parent.id }
+    case 'hr_employee':
+      return { hr_employee_id: input.parent.id }
     case 'none':
       return {}
   }
@@ -110,9 +114,22 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     return
   }
   if (input.parent.kind === 'feedback') {
-    // Ảnh kèm dòng trao đổi góp ý (0186): ai xem được góp ý thì đính được.
+    // Ảnh kèm dòng trao đổi góp ý (0253): ai xem được góp ý thì đính được.
     // Góp ý riêng tư → người ngoài bị chặn ngay ở đây, không chỉ ở nút.
     await feedbackService.assertCanAttach(user, input.parent.id)
+    return
+  }
+  if (input.parent.kind === 'die') {
+    // Ảnh mặt cắt khuôn (0190). Danh mục khuôn ở khu DÙNG CHUNG nên MỌI phòng
+    // XEM được — nhánh này phải gác đúng quyền SỬA, không thì rơi xuống 'any
+    // signed-in user' ở dưới và ai đăng nhập cũng thay được ảnh khuôn.
+    await assertAction(user, 'technical.die.update')
+    return
+  }
+  if (input.parent.kind === 'hr_employee') {
+    // Giấy tờ nhân viên (0250): CCCD, bằng cấp, hợp đồng — cùng ranh giới với thông tin
+    // cá nhân (Nhân sự + BGĐ). Rơi xuống "any signed-in user" ở dưới là lộ giấy tờ.
+    await assertAction(user, 'hr.employee.private')
     return
   }
   if (input.parent.kind === 'product') {
@@ -129,6 +146,12 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
 
 async function assertCanReadFile(user: User, file: FileRow): Promise<void> {
   if (user.role === 'admin') return
+  if (file.hr_employee_id) {
+    // Giấy tờ nhân viên (0250) — xét TRƯỚC nhánh người tải lên: kể cả người tải lên
+    // cũng phải còn quyền hr.employee.private (chuyển phòng là mất quyền xem CCCD).
+    await assertAction(user, 'hr.employee.private')
+    return
+  }
   if (file.owner_id === user.id) return
   if (file.task_id) {
     const task = await tasksRepo.findById(file.task_id)
@@ -149,7 +172,7 @@ async function assertCanReadFile(user: User, file: FileRow): Promise<void> {
     return
   }
   if (file.feedback_id) {
-    // Góp ý riêng tư: ảnh chụp màn hình cũng riêng tư theo (0186).
+    // Góp ý riêng tư: ảnh chụp màn hình cũng riêng tư theo (0253).
     await feedbackService.assertCanViewFile(user, file.feedback_id)
     return
   }
@@ -489,6 +512,23 @@ export const filesService = {
    * Chỉ áp cho file gắn SẢN PHẨM: ba cột này vô nghĩa với file của báo giá/đơn
    * hàng, và mở rộng bừa là mở luôn quyền cho parent chưa có ai nghĩ tới.
    */
+  /**
+   * Gắn file "mồ côi" (parent none) do CHÍNH người này tải lên vào một chứng từ
+   * vừa tạo — đường của nhập báo giá từ Excel. Không cho gắn file của người khác.
+   */
+  async attachOrphanToDocument(
+    user: User,
+    fileId: string,
+    column: FileParentColumn,
+    parentId: string,
+  ): Promise<void> {
+    const file = await filesRepo.getById(fileId)
+    if (!file || file.deleted_at) throw NotFound('File not found')
+    if (file.owner_id !== user.id)
+      throw Forbidden('Chỉ gắn được file do chính mình tải lên')
+    await filesRepo.attachToParent(fileId, column, parentId)
+  },
+
   async setProductFileMeta(
     user: User,
     fileId: string,
@@ -520,7 +560,11 @@ export const filesService = {
   async delete(user: User, fileId: string): Promise<void> {
     const file = await filesRepo.getById(fileId)
     if (!file) throw NotFound('File not found')
-    if (file.owner_id !== user.id && user.role !== 'admin')
+    if (file.hr_employee_id) {
+      // Giấy tờ nhân viên (0250): ai giữ quyền hr.employee.private gỡ được, kể cả file người
+      // khác tải — Nhân sự làm chung một hồ sơ. Mất quyền thì kể cả người tải cũng không gỡ.
+      await assertAction(user, 'hr.employee.private')
+    } else if (file.owner_id !== user.id && user.role !== 'admin')
       throw Forbidden('Only uploader or admin can delete')
     await storage.remove(file.bucket, [file.path])
     storage.invalidateSignedUrl(file.bucket, file.path)

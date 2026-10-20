@@ -215,19 +215,25 @@ export const lsxLinesRepo = {
           important_note: l.important_note ?? null,
           image_file_id: l.image_file_id ?? null,
           sort_order: li,
-          changed_in_rev: l.changed_in_rev ?? null,
         }
         if (l.id) {
+          // Dấu "đổi ở bản N" chỉ do `markChanged` đặt. Màn soạn KHÔNG gửi trường
+          // này, nên payload thiếu nó = GIỮ NGUYÊN dấu cũ; trước đây ghi null →
+          // Lưu lại không đổi gì cũng mất hết tô vàng trên phiếu in (07/10/2026).
           const { error } = await db()
             .from('production_order_lines')
-            .update(lineRow)
+            .update(
+              l.changed_in_rev === undefined
+                ? lineRow
+                : { ...lineRow, changed_in_rev: l.changed_in_rev },
+            )
             .eq('id', l.id)
           if (error) throw new Error(error.message)
           keepLineIds.push(l.id)
         } else {
           const { data, error } = await db()
             .from('production_order_lines')
-            .insert(lineRow)
+            .insert({ ...lineRow, changed_in_rev: l.changed_in_rev ?? null })
             .select('id')
             .single()
           if (error || !data) throw new Error(error?.message ?? 'Insert dòng lệnh lỗi')

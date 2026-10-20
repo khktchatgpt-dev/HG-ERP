@@ -47,13 +47,18 @@ export default async function TechnicalProductsPage({
   const recent = str(spRaw.recent) === '1'
 
   /*
-   * MÀN MỞ ĐẦU KHÔNG TRUY VẤN DANH SÁCH.
+   * VÀO LÀ THẤY TRANG ĐẦU — KHÔNG THẤY HẾT (chủ dự án chốt 13/09/2026).
    *
-   * Thư viện có 779 hồ sơ và hầu hết lần vào đây là để TÌM một mã cụ thể, chứ
-   * không phải để ngắm 24 SP mới nhất. Nạp sẵn một trang nghĩa là mỗi lượt mở
-   * đều tốn: 1 query danh sách + 1 query cờ tài liệu + 1 query xếp cont + tối
-   * đa 24 vòng gọi Supabase Storage cho ảnh (~1–1,5s mỗi tấm, đo 31/08/2026).
-   * Chưa gõ/chưa lọc thì để trống, bày ô tìm và mấy lối tắt.
+   * Trước đó màn mở đầu CỐ Ý không truy vấn gì: lý do là mỗi lượt mở tốn 1 query
+   * danh sách + 2 query phụ + tối đa 24 vòng gọi Storage cho ảnh (~1–1,5s mỗi
+   * tấm, đo 31/08/2026), mà hầu hết lần vào đây là để TÌM một mã. Lý do đó vẫn
+   * đúng về CHI PHÍ, nhưng sai về CÁCH DÙNG: mở một thư viện ra mà không thấy
+   * thứ gì trong thư viện thì người dùng phải đoán trong đó có gì, và mất luôn
+   * cảm giác "kho này lớn cỡ nào".
+   *
+   * Cách hoà: vẫn chỉ nạp ĐÚNG MỘT TRANG (`PAGE_SIZE`), không bao giờ nạp cả
+   * 779 hồ sơ. Chi phí một lượt mở nay bằng đúng chi phí một lượt tìm — thứ
+   * người dùng vẫn trả mỗi ngày.
    */
   const filtering =
     !!q ||
@@ -65,25 +70,25 @@ export default async function TechnicalProductsPage({
     lifecycle !== 'all' ||
     type !== 'all' ||
     category !== 'all'
+  // `idle` nay chỉ còn nghĩa "chưa thu hẹp gì" — dùng để bày hàng lối tắt phía
+  // trên lưới, KHÔNG còn dùng để chặn truy vấn.
   const idle = !filtering && !recent
 
   // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
-  const { rows, total, fuzzy } = idle
-    ? { rows: [], total: 0, fuzzy: false }
-    : await productsService.listLite(user, {
-        q,
-        customer_name: customer === 'all' ? undefined : customer,
-        bom_status: bom === 'all' ? undefined : (bom as BomStatus),
-        is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
-        has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
-        locked: locked === 'yes' ? true : locked === 'no' ? false : undefined,
-        lifecycle: lifecycle === 'all' ? undefined : lifecycle,
-        product_type: type === 'all' ? undefined : type,
-        category: category === 'all' ? undefined : category,
-        sort: recent ? 'updated' : 'created',
-        page,
-        page_size: PAGE_SIZE,
-      })
+  const { rows, total, fuzzy } = await productsService.listLite(user, {
+    q,
+    customer_name: customer === 'all' ? undefined : customer,
+    bom_status: bom === 'all' ? undefined : (bom as BomStatus),
+    is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
+    has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
+    locked: locked === 'yes' ? true : locked === 'no' ? false : undefined,
+    lifecycle: lifecycle === 'all' ? undefined : lifecycle,
+    product_type: type === 'all' ? undefined : type,
+    category: category === 'all' ? undefined : category,
+    sort: recent ? 'updated' : 'created',
+    page,
+    page_size: PAGE_SIZE,
+  })
 
   // Nhãn khách/nhóm cho bộ lọc + đếm cho StatsBar + cờ "đã có bản vẽ / BOM"
   // suy từ FILE đã upload (chỉ cho SP của trang này). Vật tư cho BOM editor

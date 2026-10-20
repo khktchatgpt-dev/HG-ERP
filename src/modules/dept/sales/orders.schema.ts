@@ -1,17 +1,31 @@
 import { z } from 'zod'
 
+/**
+ * Máy trạng thái đơn bán (0223, 07/10/2026 — chốt D4): bỏ `in_production`
+ * (chưa bao giờ xảy ra thật), thêm hai trạng thái SUY từ Σ đợt xuất:
+ *   confirmed → lsx_pending → lsx_issued → completed → partially_shipped → shipped → delivered
+ * `partially_shipped` đi được từ lsx_issued (lệnh gộp xuất từng đợt trước khi
+ * cả lệnh xong). Logic suy: `src/lib/order-ship-status.ts`.
+ */
 export const ORDER_STATUSES = [
   'confirmed',
   'lsx_pending',
   'lsx_issued',
-  'in_production',
   'completed',
+  'partially_shipped',
+  'shipped',
   'delivered',
   'cancelled',
 ] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 
 export const orderLineInputSchema = z.object({
+  /**
+   * id dòng đang có — form sửa gửi kèm để server KHỚP THEO DÒNG (chốt D2,
+   * 07/10/2026: một SP được nhiều dòng, mỗi dòng một tuần giao). Thiếu id =
+   * dòng mới. Form cũ không gửi id thì repo khớp theo product_id như trước.
+   */
+  id: z.string().uuid().optional().nullable(),
   product_id: z.string().uuid(),
   qty: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
@@ -36,16 +50,12 @@ export const orderCreateSchema = z
     currency: z.string().trim().toUpperCase().length(3).optional(),
     price_term: z.string().trim().max(100).optional().nullable(),
     payment_terms: z.string().trim().max(500).optional().nullable(),
-    lines: z
-      .array(orderLineInputSchema)
-      .max(200)
-      .refine(
-        (lines) => new Set(lines.map((l) => l.product_id)).size === lines.length,
-        'Sản phẩm bị trùng dòng',
-      )
-      .optional(),
+    // D2: KHÔNG còn chặn trùng SP — ART giao hai tuần là hai dòng cùng mã.
+    lines: z.array(orderLineInputSchema).max(200).optional(),
     // Header dùng chung cho cả 2 cách:
     customer_po_no: z.string().trim().max(100).optional().nullable(), // PO# của khách — in trên LSX
+    /** Khách không có số PO (tick xác nhận) — không tick thì PO là BẮT BUỘC (07/10/2026). */
+    no_customer_po: z.boolean().optional(),
     due_date: z.string().date().optional().nullable(),
     deposit_percent: z.coerce.number().min(0).max(100).optional().nullable(),
     container_summary: z.string().trim().max(100).optional().nullable(), // "1 x 40'HC"
@@ -68,10 +78,16 @@ export const orderCreateSchema = z
     message: 'Đơn phải có ít nhất 1 dòng sản phẩm',
     path: ['lines'],
   })
+  .refine((o) => !!o.customer_po_no?.trim() || o.no_customer_po === true, {
+    // 19/53 đơn thật thiếu PO khách (07/10/2026) — PO in lên LSX và hợp đồng.
+    message: 'Nhập số PO của khách, hoặc tick "Khách không có số PO"',
+    path: ['customer_po_no'],
+  })
 
 /** Cập nhật khi khách thay đổi (FR-SAL-05) — mọi thay đổi được ghi lịch sử. */
 export const orderUpdateSchema = z.object({
   customer_po_no: z.string().trim().max(100).optional().nullable(),
+  no_customer_po: z.boolean().optional(),
   due_date: z.string().date().optional().nullable(),
   deposit_percent: z.coerce.number().min(0).max(100).optional().nullable(),
   price_term: z.string().trim().max(100).optional().nullable(),
@@ -90,10 +106,6 @@ export const orderUpdateSchema = z.object({
     .array(orderLineInputSchema)
     .min(1, 'Đơn hàng phải còn ít nhất 1 dòng sản phẩm')
     .max(200)
-    .refine(
-      (lines) => new Set(lines.map((l) => l.product_id)).size === lines.length,
-      'Sản phẩm bị trùng dòng',
-    )
     .optional(), // không gửi lines = chỉ sửa header
 })
 
@@ -143,6 +155,29 @@ export const shipmentCreateSchema = z.object({
   shipped_at: z.string().date().optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(), // số cont / booking
 })
+
+/**
+ * Ghi MỘT ĐỢT XUẤT cho nhiều dòng một lượt (một container = nhiều dòng, 07/10/2026).
+ * Cùng ngày + cùng ghi chú (số cont / booking) cho cả đợt.
+ */
+export const shipmentsCreateSchema = z.object({
+  shipped_at: z.string().date().optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+  lines: z
+    .array(
+      z.object({
+        order_line_id: z.string().uuid(),
+        qty: z.coerce.number().positive('Số lượng xuất phải > 0'),
+      }),
+    )
+    .min(1, 'Chọn ít nhất một dòng để ghi xuất')
+    .max(200)
+    .refine(
+      (ls) => new Set(ls.map((l) => l.order_line_id)).size === ls.length,
+      'Một dòng xuất hiện hai lần trong cùng đợt',
+    ),
+})
+export type ShipmentsCreateInput = z.infer<typeof shipmentsCreateSchema>
 
 export const orderDeliverSchema = z.object({
   note: z.string().trim().max(1000).optional().nullable(),

@@ -100,8 +100,14 @@ function Viewport({
    */
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
+    /*
+      `classList.add` KHÔNG nhận chuỗi có dấu cách — nó ném InvalidCharacterError
+      và làm sập cả cây React. Từ 09/09/2026 bộ dò trả về ĐỦ lớp theme đang phủ
+      (màn chứng từ mới bọc cả `theme-v3` lẫn `kit`), nên phải tách trước khi
+      thêm. Đã dính đúng lỗi này ngay lượt đổi.
+    */
     const theme = resolvePortalTheme()
-    if (theme) ref.current?.classList.add(theme)
+    if (theme) ref.current?.classList.add(...theme.split(' '))
   }, [])
 
   return (

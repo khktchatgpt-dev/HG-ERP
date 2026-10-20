@@ -56,7 +56,7 @@ export function NewTaskForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+      className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm"
     >
       <label className="flex flex-col gap-1 text-sm">
         Tiêu đề
@@ -64,7 +64,7 @@ export function NewTaskForm({
           name="title"
           required
           maxLength={200}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded border border-zinc-300 px-3 py-2"
         />
       </label>
 
@@ -73,7 +73,7 @@ export function NewTaskForm({
         <textarea
           name="description"
           rows={4}
-          className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded border border-zinc-300 px-3 py-2"
         />
       </label>
 
@@ -83,7 +83,7 @@ export function NewTaskForm({
           <select
             name="assignee_id"
             required
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           >
             <option value="">— Chọn nhân viên —</option>
             {candidates.map((c) => (
@@ -99,7 +99,7 @@ export function NewTaskForm({
           <select
             name="priority"
             defaultValue="normal"
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           >
             <option value="low">Thấp</option>
             <option value="normal">Bình thường</option>
@@ -115,7 +115,7 @@ export function NewTaskForm({
           <input
             name="planned_date"
             type="date"
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -123,7 +123,7 @@ export function NewTaskForm({
           <input
             name="due_date"
             type="datetime-local"
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
       </div>
@@ -135,7 +135,7 @@ export function NewTaskForm({
             name="category"
             maxLength={50}
             placeholder="vd: Sản xuất"
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -145,7 +145,7 @@ export function NewTaskForm({
             type="number"
             min="0"
             step="0.5"
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -154,7 +154,7 @@ export function NewTaskForm({
             name="tags"
             maxLength={500}
             placeholder="vd: gấp, sales"
-            className="rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
       </div>
@@ -163,7 +163,7 @@ export function NewTaskForm({
 
       <button
         disabled={loading}
-        className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+        className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
         {loading ? 'Đang tạo…' : 'Giao việc'}
       </button>

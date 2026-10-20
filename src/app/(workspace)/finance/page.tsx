@@ -25,7 +25,7 @@ export default async function FinanceHomePage() {
       subtitle={`Chào ${user.name ?? user.email}`}
     >
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-lg border border-zinc-200 bg-white p-4">
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${accent.bg}`} />
             <span className="text-xs font-medium text-zinc-500 uppercase">Hoá đơn</span>
@@ -42,7 +42,7 @@ export default async function FinanceHomePage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Link
             href="/finance/invoices"
-            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
           >
             <div className="font-medium">Hoá đơn</div>
             <div className="mt-1 text-xs text-zinc-500">
@@ -51,7 +51,7 @@ export default async function FinanceHomePage() {
           </Link>
           <Link
             href="/tasks"
-            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+            className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
           >
             <div className="font-medium">Công việc của tôi</div>
             <div className="mt-1 text-xs text-zinc-500">Task được giao cho bạn</div>

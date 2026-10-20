@@ -72,7 +72,7 @@ export default async function ProductDetailLayout({
             {categoryLabel && <Badge variant="outline">{categoryLabel}</Badge>}
             <Badge variant="outline">{product.customer_name ?? 'Mẫu chung'}</Badge>
             {product.showroom_sample && (
-              <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+              <Badge className="border-transparent bg-emerald-100 text-emerald-700">
                 Có mẫu showroom
               </Badge>
             )}

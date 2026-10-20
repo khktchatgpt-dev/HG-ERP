@@ -48,12 +48,12 @@ export function RunningLsxList({
             return (
               <div
                 key={r.lsx.id}
-                className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <Link
                     href={`${lsxBase}/${r.lsx.id}`}
-                    className="font-mono text-sm font-semibold hover:text-red-600 dark:hover:text-red-400"
+                    className="font-mono text-sm font-semibold hover:text-red-600"
                   >
                     {r.lsx.code}
                   </Link>
@@ -93,11 +93,11 @@ export function RunningLsxList({
                           key={ch.stage}
                           className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${
                             doneAll
-                              ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300'
+                              ? 'border-green-300 bg-green-50 text-green-700'
                               : ch.doing > 0 || ch.done > 0
-                                ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                : 'border-zinc-200 text-zinc-500 dark:border-zinc-700'
-                          } ${isMine ? 'ring-2 ring-sky-400 dark:ring-sky-600' : ''}`}
+                                ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                : 'border-zinc-200 text-zinc-500'
+                          } ${isMine ? 'ring-2 ring-sky-400' : ''}`}
                           title={
                             isMine
                               ? `Công đoạn tổ mình — ${ch.done}/${ch.total} dòng SP xong`

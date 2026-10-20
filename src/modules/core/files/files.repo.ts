@@ -20,8 +20,10 @@ export type FileRow = {
   production_order_id: string | null
   purchase_order_id: string | null
   sample_id: string | null
-  /** Góp ý hệ thống (0186) — ảnh chụp màn hình kèm góp ý / dòng trao đổi. */
+  /** Góp ý hệ thống (0253) — ảnh chụp màn hình kèm góp ý / dòng trao đổi. */
   feedback_id: string | null
+  /** Giấy tờ nhân viên (0250). */
+  hr_employee_id: string | null
   created_at: string
   doc_type: string | null
   finalized_at: string | null
@@ -50,9 +52,11 @@ export type FileParentColumns = {
   purchase_order_id?: string | null
   sample_id?: string | null
   feedback_id?: string | null
+  die_id?: string | null
+  hr_employee_id?: string | null
 }
 
-/** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061) + góp ý (0186). */
+/** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061) + góp ý (0253). */
 export type FileParentColumn =
   | 'product_id'
   | 'quote_id'
@@ -61,6 +65,7 @@ export type FileParentColumn =
   | 'purchase_order_id'
   | 'sample_id'
   | 'feedback_id'
+  | 'hr_employee_id'
 
 export const filesRepo = {
   async insert(row: {
@@ -113,7 +118,7 @@ export const filesRepo = {
   },
 
   /**
-   * Nhận file "mồ côi có chủ" về một góp ý (0186): ảnh dán vào hộp ghi nhanh
+   * Nhận file "mồ côi có chủ" về một góp ý (0253): ảnh dán vào hộp ghi nhanh
    * được tải lên với parent `none` TRƯỚC khi góp ý tồn tại; lúc lưu góp ý mới
    * gắn lại. Chỉ nhận file của CHÍNH người gửi, đã finalize, chưa thuộc góp ý
    * nào — id lạ gửi kèm bị bỏ qua. Trả danh sách id đã nhận (giữ thứ tự gửi).
@@ -191,6 +196,23 @@ export const filesRepo = {
         checksum,
         ...(sizeBytes === undefined ? {} : { size_bytes: sizeBytes }),
       })
+      .eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Gắn file đã có vào một chứng từ cha (07/10/2026): file Excel nguồn của nhập
+   * báo giá được tải lên TRƯỚC khi báo giá tồn tại (parent none), tạo xong mới
+   * trỏ về. Chỉ đặt một cột parent; các cột khác giữ nguyên.
+   */
+  async attachToParent(
+    id: string,
+    column: FileParentColumn,
+    parentId: string,
+  ): Promise<void> {
+    const { error } = await db()
+      .from('files')
+      .update({ [column]: parentId } as Partial<Record<FileParentColumn, string>>)
       .eq('id', id)
     if (error) throw new Error(error.message)
   },

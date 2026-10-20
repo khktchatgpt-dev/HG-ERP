@@ -72,10 +72,12 @@ export const MEETING_LEVEL: Record<
   { label: string; tone: 'stop' | 'warn' | 'muted' | 'primary' | 'done'; order: number }
 > = {
   stop: { label: 'Nguy cơ dừng SX', tone: 'stop', order: 0 },
-  warn: { label: 'Thiếu / chưa mua', tone: 'warn', order: 1 },
+  // Nhãn theo ĐƠN MUA, không nói "thiếu/đủ vật tư" (03/10/2026, user chốt — chưa
+  // có nhu cầu vật tư đáng tin để so).
+  warn: { label: 'Cung ứng cần xử lý', tone: 'warn', order: 1 },
   watch: { label: 'Chưa có mốc', tone: 'muted', order: 2 },
   inflight: { label: 'Đang về', tone: 'primary', order: 3 },
-  ready: { label: 'Đủ vật tư', tone: 'done', order: 4 },
+  ready: { label: 'Đơn đã về hết', tone: 'done', order: 4 },
 }
 
 export const MEETING_LEVELS = (Object.keys(MEETING_LEVEL) as MeetingRiskLevel[]).sort(
@@ -102,7 +104,7 @@ const PO_ALIVE_NOT_DONE = new Set([
 ])
 
 /** Đơn ĐÃ RA KHỎI NHÀ — chỉ những đơn này mới đòi hẹn giao được. */
-const PO_SENT = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
+export const PO_SENT = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
 
 /** dd/mm từ yyyy-mm-dd — để câu lý do đọc như người Việt đọc. */
 function dmy(iso: string): string {
@@ -184,8 +186,8 @@ export function assessMeetingRisk(r: MeetingRiskInput, todayIso: string): Meetin
         }
         return {
           text: nextExpected
-            ? `vật tư chưa về đủ, hẹn gần nhất ${dmy(nextExpected)}`
-            : 'vật tư chưa về đủ, chưa có hẹn giao',
+            ? `đơn mua chưa về hết, hẹn gần nhất ${dmy(nextExpected)}`
+            : 'đơn mua chưa về hết, chưa có hẹn giao',
           action: 'Giục nhà cung cấp giao sớm',
         }
     }
@@ -348,4 +350,22 @@ export function buildAgenda<T extends MeetingRiskInput>(
   return [...map.values()].sort(
     (a, b) => a.rank - b.rank || b.rows.length - a.rows.length,
   )
+}
+
+/**
+ * Thứ tự đọc bộ phận trong họp: người QUYẾT trước, người LÀM sau. Dùng chung
+ * cho trang Việc cần quyết định và sheet cùng tên trong file họp — hai nơi mà
+ * xếp khác nhau thì biên bản chép từ file không khớp màn hình.
+ */
+export const AGENDA_DEPT_ORDER = [
+  'Sản xuất',
+  'Giám đốc',
+  'Cung ứng',
+  'Nhà cung cấp',
+  'Kho',
+]
+
+export function agendaDeptRank(dept: string): number {
+  const i = AGENDA_DEPT_ORDER.indexOf(dept)
+  return i === -1 ? AGENDA_DEPT_ORDER.length : i
 }

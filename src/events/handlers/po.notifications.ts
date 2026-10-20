@@ -1,4 +1,6 @@
 import { on } from '../bus'
+import { causeLabel } from '@/lib/po-adjust-cause'
+import { fmtMoney } from '@/lib/po-line'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
 
 /**
@@ -47,6 +49,88 @@ export function registerPoNotificationHandlers(): void {
     )
   })
 
+  // Mở lại đơn ĐÃ DUYỆT (16/09/2026): người duyệt phải biết chữ ký của mình
+  // vừa bị gỡ, và đơn sẽ quay lại bàn họ một lần nữa.
+  on('po.reopened', async (e) => {
+    await Promise.all(
+      e.approver_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.reopened_by,
+          type: 'po_reopened',
+          payload: { title: e.code, reason: e.reason },
+        }),
+      ),
+    )
+  })
+
+  // Điều chỉnh đơn đã gửi (0210): không chặn gì, chỉ để người ký biết đơn
+  // mình duyệt vừa đổi bao nhiêu tiền và vì sao.
+  on('po.adjusted', async (e) => {
+    const sign = e.delta_total > 0 ? '+' : ''
+    const money = `${sign}${fmtMoney(e.delta_total, e.currency)} ${e.currency}`
+    await Promise.all(
+      e.notify_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.adjusted_by,
+          type: 'po_adjusted',
+          payload: {
+            title: `${e.code} · điều chỉnh lần ${e.seq} · ${causeLabel(e.cause)} · phát sinh ${money}`,
+            reason: e.reason,
+          },
+        }),
+      ),
+    )
+  })
+
+  // ── 0218 · đơn mua sau chữ ký ────────────────────────────────────────────
+  // Thu hồi chữ ký: người phụ trách phải biết nút "Gửi NCC" vừa khoá, và vì sao.
+  on('po.unapproved', async (e) => {
+    if (!e.owner_id || e.owner_id === e.unapproved_by) return
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.unapproved_by,
+      type: 'po_unapproved',
+      payload: { title: e.code, reason: e.reason },
+    })
+  })
+
+  // Gửi gấp chưa ký: mọi người có quyền duyệt — một trong ba người sẽ ký bù.
+  on('po.urgent_sent', async (e) => {
+    await Promise.all(
+      e.approver_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.sent_by,
+          type: 'po_urgent_sent',
+          payload: { title: e.code, reason: e.reason },
+        }),
+      ),
+    )
+  })
+
+  // Câu hỏi của Giám đốc → người phụ trách; câu trả lời → người đã hỏi.
+  on('po.question', async (e) => {
+    if (!e.owner_id || e.owner_id === e.asked_by) return
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.asked_by,
+      type: 'po_question',
+      payload: { title: e.code, reason: e.body },
+    })
+  })
+
+  on('po.answered', async (e) => {
+    if (e.asker_id === e.answered_by) return
+    await notificationsService.notify({
+      recipientId: e.asker_id,
+      actorId: e.answered_by,
+      type: 'po_answered',
+      payload: { title: e.code, reason: e.body },
+    })
+  })
+
   // Bàn giao đơn (0128): báo người NHẬN phụ trách.
   on('po.reassigned', async (e) => {
     await notificationsService.notify({
@@ -58,6 +142,19 @@ export function registerPoNotificationHandlers(): void {
   })
 
   // Chốt PHẦN THIẾU (0154): báo Kho ngừng chờ lô này + GĐ/QL nắm.
+  // Sự cố giao hàng (0213 + 0231): báo người phụ trách đơn — Kho thấy hàng sai
+  // trước, Cung ứng là người đi nói với NCC. Chính người phụ trách ghi thì khỏi báo.
+  on('po.issue_recorded', async (e) => {
+    if (!e.owner_id || e.owner_id === e.reported_by) return
+    const mo = e.description.length > 140 ? `${e.description.slice(0, 139)}…` : e.description
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.reported_by,
+      type: 'po_issue',
+      payload: { title: `${e.code} — ${e.supplier_name} · ${e.kind_label}: ${mo}` },
+    })
+  })
+
   on('po.closed_short', async (e) => {
     await Promise.all(
       e.notify_ids.map((rid) =>

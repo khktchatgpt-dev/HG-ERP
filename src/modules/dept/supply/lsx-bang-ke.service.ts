@@ -51,6 +51,8 @@ export type LsxBangKe = {
     unit: string
     part_name: string
     reason: string
+    /** Id vật tư danh mục — màn bảng kê dẫn thẳng tới hồ sơ vật tư để khai dài cây (08/10/2026). */
+    material_id: string
   }[]
   /** SP của lệnh kèm trạng thái chốt định mức — nói rõ ai cần làm nốt. */
   products: {
@@ -286,8 +288,7 @@ export async function loadLsxBangKe(
     })
     // Tỉ lệ dùng chung cho SL đã nhận: hàng về của một dòng chia cho các lệnh
     // theo đúng tỉ lệ đã chia, không thể chia kiểu khác mà vẫn cộng đủ.
-    const tyLe =
-      Number(l.qty_ordered) > 0 ? qtyOrdered / (Number(l.qty_ordered) || 1) : 0
+    const tyLe = Number(l.qty_ordered) > 0 ? qtyOrdered / (Number(l.qty_ordered) || 1) : 0
     const qtyReceived = (Number(l.qty_received) || 0) * tyLe
     if (
       phan.length === 0 &&
@@ -347,6 +348,7 @@ export async function loadLsxBangKe(
       unit: b.unit,
       part_name: b.part_name,
       reason: b.reason,
+      material_id: b.material_id,
     })),
     products: bom.products,
     manual_error: manualRes.error,

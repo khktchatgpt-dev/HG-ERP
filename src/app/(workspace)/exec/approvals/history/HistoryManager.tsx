@@ -11,7 +11,18 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
 
-type EvAction = 'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned'
+type EvAction =
+  | 'approved'
+  | 'rejected'
+  | 'submitted'
+  | 'withdrawn'
+  | 'reassigned'
+  | 'reopened'
+  | 'unapproved'
+  | 'urgent_sent'
+
+/** Đơn mua hiện đang ở đâu (0218) — nhãn đã dịch sẵn ở server. */
+export type PoNow = Record<string, string>
 
 type Ev = {
   id: string
@@ -26,16 +37,42 @@ type Ev = {
 }
 
 // 0128 — ngoài duyệt/từ chối còn các mốc vòng đời PO: gửi duyệt / rút về nháp /
-// bàn giao người phụ trách.
+// bàn giao người phụ trách. 16/09/2026 thêm "mở lại": đơn ĐÃ DUYỆT được đưa
+// về nháp để sửa, tức chữ ký duyệt trước đó không còn giá trị — mốc này phải
+// đọc được ở sổ duyệt, không thì dòng thời gian nhảy cóc từ "đã duyệt" sang
+// "gửi duyệt" lần hai mà không giải thích gì.
 const ACTION_META: Record<
   EvAction,
   { label: string; tone: 'green' | 'red' | 'blue' | 'amber' | 'gray' }
 > = {
   approved: { label: 'Đã duyệt', tone: 'green' },
-  rejected: { label: 'Từ chối', tone: 'red' },
+  /*
+    "TRẢ LẠI ĐỂ SỬA", không phải "Từ chối" — gọi đúng việc đã xảy ra.
+
+    `decide('reject')` đưa đơn về NHÁP, giữ nguyên số phiếu và cả lịch sử, để
+    người soạn sửa theo lý do rồi gửi lại (`pos.service.ts:603`). Đó là
+    *Request change* của Dynamics, không phải từ chối: từ chối là đóng cửa,
+    còn cái này mở đường đi tiếp.
+
+    Ba chỗ từng gọi ba tên cho cùng một việc — nút ghi "Trả lại", sổ này ghi
+    "Từ chối", trạng thái đơn thành "Nháp" — nên không ai chắc mình vừa làm gì
+    với tờ phiếu. Đây là lối mòn #1 của `docs/tieu-chi-workflow-erp.md`: một bộ
+    từ vựng cho cả hệ thống.
+
+    MÃ TRONG DB GIỮ NGUYÊN `rejected`. Đổi nhãn là việc của tầng nhìn; đổi giá
+    trị đã ghi vào sổ là viết lại lịch sử, và không đáng để chữa một cái tên.
+
+    Tone chuyển đỏ → hổ phách cho khớp `withdrawn`: cả hai đều là "quay về
+    nháp", và đỏ ở đây đọc thành hỏng việc trong khi phiếu vẫn đang sống.
+  */
+  rejected: { label: 'Trả lại để sửa', tone: 'amber' },
   submitted: { label: 'Gửi duyệt', tone: 'blue' },
   withdrawn: { label: 'Rút về nháp', tone: 'amber' },
   reassigned: { label: 'Bàn giao', tone: 'gray' },
+  reopened: { label: 'Mở lại để sửa', tone: 'amber' },
+  // 0218 — gỡ chữ ký (đơn chưa gửi NCC) và đi tắt qua chữ ký (gửi gấp).
+  unapproved: { label: 'Thu hồi chữ ký', tone: 'amber' },
+  urgent_sent: { label: 'Gửi gấp chưa ký', tone: 'red' },
 }
 
 const fmtDateTime = (d: string) =>
@@ -54,7 +91,7 @@ const TYPE_TONE = {
   quote: 'green',
 } as const satisfies Record<Ev['entity_type'], string>
 
-export function HistoryManager({ events }: { events: Ev[] }) {
+export function HistoryManager({ events, poNow = {} }: { events: Ev[]; poNow?: PoNow }) {
   const [type, setType] = useState<'all' | 'lsx' | 'po' | 'quote'>('all')
   const [action, setAction] = useState<'all' | EvAction>('all')
 
@@ -105,9 +142,27 @@ export function HistoryManager({ events }: { events: Ev[] }) {
           >
             {e.entity_code}
           </Link>
+        ) : e.entity_type === 'po' ? (
+          // 0218 — mở lại màn ký ở chế độ chỉ đọc: chữ ký, đơn đang ở đâu, thu hồi / yêu cầu xem lại.
+          <Link
+            href={`/exec/approvals/po/${e.entity_id}`}
+            className="font-mono text-xs text-[var(--primary)] hover:underline"
+          >
+            {e.entity_code}
+          </Link>
         ) : (
           <span className="font-mono text-xs">{e.entity_code}</span>
         ),
+    },
+    {
+      key: 'now',
+      header: 'Hiện ở đâu',
+      width: '190px',
+      cell: (e) => (
+        <span className="text-muted-foreground text-xs">
+          {e.entity_type === 'po' ? (poNow[e.entity_id] ?? '—') : '—'}
+        </span>
+      ),
     },
     {
       key: 'action',
@@ -161,7 +216,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
         stats={[
           { label: 'Tổng quyết định', value: events.length, tone: 'default' },
           { label: 'Đã duyệt', value: approved, tone: 'green' },
-          { label: 'Từ chối', value: rejected, tone: rejected ? 'red' : 'gray' },
+          { label: 'Trả lại để sửa', value: rejected, tone: rejected ? 'amber' : 'gray' }, // prettier-ignore
         ]}
       />
 

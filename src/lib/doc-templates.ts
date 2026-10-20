@@ -30,6 +30,7 @@ export const DOC_KINDS = [
   'MS',
   'PM',
   'PBS',
+  'DNM',
 ] as const
 export type DocKind = (typeof DOC_KINDS)[number]
 
@@ -108,8 +109,9 @@ export const DEFAULT_DOC_TEMPLATES: Record<DocKind, DocTemplate> = {
     // MERXX HANDELS GMBH là sai đối tượng đọc.
     national_heading: false,
     form_no: null,
+    // Báo giá là tờ CHÀO — khách không ký lên đó (chủ dự án 07/10/2026); khách
+    // ký ở hợp đồng / PO của họ. Hàng BG trong doc_templates sửa theo ở 0226.
     signatures: [
-      { role: 'KHÁCH HÀNG / CUSTOMER', hint: KY_DONG_DAU },
       { role: 'NGƯỜI LẬP / PREPARED BY', hint: KY },
       { role: 'GIÁM ĐỐC / DIRECTOR', hint: KY_DONG_DAU },
     ],
@@ -303,6 +305,26 @@ export const DEFAULT_DOC_TEMPLATES: Record<DocKind, DocTemplate> = {
       { role: 'Người lập phiếu', hint: KY, slot: 'creator' },
       { role: 'Tổ trưởng', hint: KY },
       { role: 'Quản đốc', hint: KY },
+    ],
+    default_terms: '',
+    printable: true,
+  },
+  // 0236 (13/10/2026) — chép tờ giấy Kho vật tư đang dùng: quốc hiệu, hai ô ký
+  // "Duyệt của lãnh đạo" (trái) · "Người đề nghị" (phải). Phải khớp seed 0236.
+  DNM: {
+    kind: 'DNM',
+    label: 'Đề nghị mua vật tư',
+    prefix: 'DNM',
+    pattern: '{prefix}-{yyyy}-{seq}',
+    seq_pad: 4,
+    reset_scope: 'year',
+    title_vi: 'GIẤY ĐỀ NGHỊ MUA VẬT TƯ',
+    title_en: 'PURCHASE REQUISITION',
+    national_heading: true,
+    form_no: null,
+    signatures: [
+      { role: 'Duyệt của lãnh đạo', hint: KY, slot: 'approver' },
+      { role: 'Người đề nghị', hint: KY, slot: 'creator' },
     ],
     default_terms: '',
     printable: true,

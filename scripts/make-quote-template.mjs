@@ -64,7 +64,14 @@ export const COLUMNS = [
     width: 9,
     hint: 'cai / bo / set — bỏ trống thì lấy "cai".',
   },
+  {
+    key: 'qty',
+    label: 'SL / MOQ',
+    width: 10,
+    hint: 'Số lượng dự kiến hoặc MOQ — bỏ trống nếu chỉ chào đơn giá. In lên tờ báo giá.',
+  },
   { key: 'unit_price', label: 'Đơn giá (FOB)', width: 14, required: true },
+  { key: 'discount_pct', label: 'CK %', width: 8, hint: 'Chiết khấu dòng 0–100, bỏ trống = 0.' },
   { key: 'note', label: 'Ghi chú', width: 26 },
 ]
 
@@ -144,7 +151,9 @@ ex.addRow([
   14,
   910,
   'cai',
+  100,
   45.9,
+  '',
   'SP mới — chưa có mã HG',
 ])
 ex.addRow([
@@ -166,7 +175,9 @@ ex.addRow([
   '',
   '',
   'cai',
+  '',
   47.5,
+  5,
   'SP đã có — chỉ báo giá mới',
 ])
 COLUMNS.forEach((c, i) => (ex.getColumn(i + 1).width = c.width))
@@ -179,6 +190,7 @@ const lines = [
   ['', false],
   ['1. Mỗi dòng là MỘT sản phẩm. Điền từ dòng 4 của sheet "Báo giá".', false],
   ['2. Cột có dấu * là bắt buộc: Tên SP, ba số kích thước, Đơn giá.', false],
+  ['   SL / MOQ và CK % là tuỳ chọn (07/10/2026): có SL thì tờ in thêm cột Qty + Amount.', false],
   ['', false],
   ['3. KÍCH THƯỚC — theo đúng bảng kê quy cách của công ty:', true],
   ['      KTTT: 548 x 565 x 876   (L/D x W x H) mm', false],

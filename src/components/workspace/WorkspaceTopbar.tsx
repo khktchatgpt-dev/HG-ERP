@@ -16,11 +16,14 @@ export async function WorkspaceTopbar({
   title,
   subtitle,
   actions,
+  compact = false,
 }: {
   workspace: WorkspaceConfig
   title?: string
   subtitle?: string
   actions?: React.ReactNode
+  /** Thanh 40px thay 56px — khu dựng bằng kit ở mật độ dày (Cung ứng, 01/10/2026). */
+  compact?: boolean
 }) {
   const user = await authService.currentUser()
   if (!user) return null
@@ -35,8 +38,8 @@ export async function WorkspaceTopbar({
   // Cung ứng định hình trong Sản xuất) cũng không phải "chỉ xem".
   const accent = ACCENT_CLASSES[workspace.accent]
   const homeId = await userHomeWorkspaceId(user)
-  // Gia đình SX (0087): NV xưởng coi team/stat/prodplan/production đều là nhà.
-  const PRODUCTION_FAMILY = ['production', 'team', 'stat', 'prodplan']
+  // Gia đình SX: NV xưởng coi cả hai bề mặt (văn phòng + tổ) đều là nhà.
+  const PRODUCTION_FAMILY = ['production', 'team']
   const isHome =
     homeId === workspace.id ||
     (homeId === 'production' && PRODUCTION_FAMILY.includes(workspace.id))
@@ -49,12 +52,14 @@ export async function WorkspaceTopbar({
     // nên đây là dấu hiệu "đang ở khu nào" duy nhất luôn trong tầm mắt.
     <header className="bg-card/85 sticky top-0 z-10 border-b backdrop-blur">
       <div className={`h-0.5 ${accent.bg}`} />
-      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+      <div
+        className={`flex ${compact ? 'h-10' : 'h-14'} items-center justify-between gap-3 px-4 sm:px-6`}
+      >
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <MobileNav workspace={workspace} />
           <nav className="flex min-w-0 items-center gap-1.5 text-[12.5px]">
             <Link
-              href={`${workspace.route}/`}
+              href={`${workspace.home ?? workspace.route}/`}
               className={`text-muted-foreground hover:text-foreground hidden transition-colors sm:inline ${
                 title ? '' : 'text-foreground font-medium'
               }`}
@@ -84,7 +89,7 @@ export async function WorkspaceTopbar({
         </div>
         <div className="flex items-center gap-2">
           {actions}
-          {/* Góp ý hệ thống (0186) — có ở MỌI màn, ghi ngay không chuyển trang. */}
+          {/* Góp ý hệ thống (0253) — có ở MỌI màn, ghi ngay không chuyển trang. */}
           <QuickFeedbackButton />
           <TopbarSearch />
           <NotificationsDropdown initialUnread={unread} />

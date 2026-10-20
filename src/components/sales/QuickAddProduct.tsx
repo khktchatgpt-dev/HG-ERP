@@ -74,7 +74,7 @@ export function QuickAddProduct({
   const [busy, setBusy] = useState(false)
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [unit, setUnit] = useState('cai')
+  const [unit, setUnit] = useState('cái')
   const [itemCode, setItemCode] = useState('')
   const [price, setPrice] = useState('')
   const [descEn, setDescEn] = useState('')
@@ -111,7 +111,7 @@ export function QuickAddProduct({
   function reset() {
     setCode('')
     setName('')
-    setUnit('cai')
+    setUnit('cái')
     setItemCode('')
     setPrice('')
     setDescEn('')
@@ -164,12 +164,13 @@ export function QuickAddProduct({
           body: {
             code: code.trim(),
             name: name.trim(),
-            unit: unit.trim() || 'cai',
+            unit: unit.trim() || 'cái',
             customer_id: customerId ?? null,
             customer_item_code: itemCode.trim() || null,
             description_en: descEn.trim() || null,
             notes: notes.trim() || null,
-            reference_price: unitPrice,
+            // KHÔNG ghi giá bán vào reference_price (13/10/2026): ô "Giá tham khảo" của
+            // hồ sơ SP dùng chung đã gỡ — giá bán là bí mật Bán hàng, sống ở dòng báo giá.
             packing: buildPacking(),
             material: material.trim() || null,
             hs_code: hsCode.trim() || null,
@@ -217,7 +218,7 @@ export function QuickAddProduct({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-dashed border-emerald-300 px-3 py-1.5 text-sm text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+        className="rounded-md border border-dashed border-emerald-300 px-3 py-1.5 text-sm text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50"
       >
         + SP mới (tạo nhanh vào thư viện)
       </button>
@@ -225,8 +226,8 @@ export function QuickAddProduct({
   }
 
   return (
-    <div className="w-full rounded-md border border-emerald-300 bg-emerald-50/40 p-3 dark:border-emerald-800 dark:bg-emerald-950/20">
-      <div className="mb-2 text-xs font-semibold text-emerald-700 uppercase dark:text-emerald-400">
+    <div className="w-full rounded-md border border-emerald-300 bg-emerald-50/40 p-3">
+      <div className="mb-2 text-xs font-semibold text-emerald-700 uppercase">
         Tạo nhanh sản phẩm mới — điền đủ để in ngay lên báo giá; Kỹ thuật bổ sung BOM sau
       </div>
 
@@ -270,7 +271,7 @@ export function QuickAddProduct({
             placeholder="Đơn giá"
             className={cls}
           />
-          <label className="col-span-1 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-zinc-300 px-2 py-1.5 text-xs text-zinc-500 hover:border-emerald-400 hover:text-emerald-600 dark:border-zinc-700">
+          <label className="col-span-1 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-zinc-300 px-2 py-1.5 text-xs text-zinc-500 hover:border-emerald-400 hover:text-emerald-600">
             {image ? '🖼 Đổi ảnh' : '🖼 Chọn ảnh'}
             <input
               ref={fileRef}
@@ -403,9 +404,7 @@ export function QuickAddProduct({
 
       <div className="mt-2 flex items-center gap-3">
         {image && (
-          <span className="truncate text-xs text-emerald-700 dark:text-emerald-400">
-            Ảnh: {image.name}
-          </span>
+          <span className="truncate text-xs text-emerald-700">Ảnh: {image.name}</span>
         )}
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -414,7 +413,7 @@ export function QuickAddProduct({
               reset()
               setOpen(false)
             }}
-            className="text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+            className="text-sm text-zinc-500 hover:text-zinc-800"
           >
             Huỷ
           </button>
@@ -447,16 +446,16 @@ function Section({
   onToggle?: () => void
 }) {
   return (
-    <div className="mt-2 border-t border-emerald-200/60 pt-2 first:mt-0 first:border-t-0 first:pt-0 dark:border-emerald-800/60">
+    <div className="mt-2 border-t border-emerald-200/60 pt-2 first:mt-0 first:border-t-0 first:pt-0">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[10px] font-semibold tracking-wider text-emerald-700/80 uppercase dark:text-emerald-400/80">
+        <span className="text-[10px] font-semibold tracking-wider text-emerald-700/80 uppercase">
           {label}
         </span>
         {toggle && (
           <button
             type="button"
             onClick={onToggle}
-            className="text-[11px] font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            className="text-[11px] font-medium text-emerald-700 hover:underline"
           >
             {open ? 'Thu gọn ▲' : 'Mở rộng ▼'}
           </button>

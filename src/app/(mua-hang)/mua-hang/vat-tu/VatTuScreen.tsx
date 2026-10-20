@@ -1,0 +1,473 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
+import { useUrlSearch } from '@/lib/use-url-search'
+import {
+  Ico,
+  Btn,
+  Cell,
+  Chip,
+  Code,
+  Empty,
+  FilterBar,
+  Num,
+  Pick,
+  Row,
+  ScreenFrame,
+  ScreenHeader,
+  SearchInput,
+  StatusBar,
+  TFoot,
+  THead,
+  Table,
+  Tick,
+  showMoney,
+} from '@/components/kit'
+import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
+import { SuaVatTuSheet, ThemVatTuSheet } from './sua-vat-tu'
+import { ChuyenNhomSheet } from './chuyen-nhom'
+import { TagNgung, type LanNgung } from './bo-ma'
+
+export type VatTuRow = {
+  id: string
+  code: string
+  name: string
+  unit: string
+  group_name: string | null
+  sub_group: string | null
+  spec: string | null
+  last_purchase_price: number | null
+  price_unit: string | null
+  /** Lần ngừng dùng gần nhất — chỉ nạp khi đang xem chip "Ngừng dùng". */
+  ngung?: LanNgung | null
+}
+
+export function VatTuScreen({
+  rows,
+  counts,
+  groups,
+  page,
+  filters,
+  canEdit,
+  canRetire,
+  canCreate,
+  tax,
+  suppliers,
+}: {
+  rows: VatTuRow[]
+  counts: {
+    total: number
+    active: number
+    noShelf: number
+    noSub: number
+    /** Mã ngừng dùng trong bộ lọc — số trên chip. */
+    inactive: number
+  }
+  groups: string[]
+  page: number
+  /** `ng` = chip "Ngừng dùng": chỉ xem mã đã ngừng (mặc định ẩn chúng). */
+  filters: { q: string; nhom: string; kn: boolean; ng: boolean }
+  /** Quyền `warehouse.material.update_purchasing` — đúng quyền service kiểm khi lưu. */
+  canEdit: boolean
+  /** Quyền `warehouse.material.retire` — ngừng dùng / dùng lại / xoá mã chưa dùng. */
+  canRetire: boolean
+  /** Quyền `warehouse.material.create` — nút "+ Thêm vật tư". */
+  canCreate: boolean
+  tax: MaterialTaxonomy
+  /** NCC cho ô "NCC mặc định". */
+  suppliers: { value: string; label: string }[]
+}) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const [dangChay, batDau] = useTransition()
+
+  /*
+    Ô TÌM GÕ Ở CLIENT, TRUY VẤN Ở SERVER — nên phải có bản nháp cục bộ.
+
+    Đẩy thẳng mỗi phím lên URL thì mỗi ký tự là một vòng server trên bảng
+    13.226 dòng, và con trỏ nhảy về đầu ô giữa chừng. Chờ 350ms không gõ nữa
+    mới đi hỏi. `useTransition` giữ danh sách CŨ trên màn trong lúc chờ thay vì
+    chớp sang trống — trống một nhịp đọc thành "không có kết quả".
+  */
+  // URL đổi từ NƠI KHÁC (Bỏ lọc, Back, link) thì ô theo URL; trang về sau lần
+  // đẩy của chính ô thì KHÔNG đè chữ đang gõ dở (lỗi nuốt chữ 06/10/2026).
+  const [nhap, setNhap] = useUrlSearch(filters.q, (q) => doiLoc({ q, trang: '1' }))
+
+  function doiLoc(patch: Record<string, string>) {
+    const p = new URLSearchParams(params.toString())
+    for (const [k, v] of Object.entries(patch)) {
+      if (!v || v === '0') p.delete(k)
+      else p.set(k, v)
+    }
+    batDau(() => router.push(`${pathname}?${p.toString()}`, { scroll: false }))
+  }
+
+  /*
+    PANEL SỬA nằm trên URL (`?sua=<id>`) — màn khác (soạn đơn, hồ sơ NCC) dẫn
+    thẳng tới được, và Back của trình duyệt đóng panel như người dùng chờ đợi.
+  */
+  // Đóng NGAY ở client: đợi router.push chạy lại trang 13k mã mới đóng thì
+  // panel treo cả giây sau khi bấm Thôi (đo 29/09).
+  const [dong, setDong] = useState<string | null>(null)
+  const suaUrl = canEdit ? params.get('sua') : null
+  const sua = suaUrl && suaUrl !== dong ? suaUrl : null
+  // URL đã bỏ `sua` → quên mốc đóng, để bấm lại đúng mã đó vẫn mở được.
+  if (!suaUrl && dong) setDong(null)
+  const dongPanel = () => {
+    setDong(suaUrl)
+    doiLoc({ sua: '' })
+  }
+  const suaHref = (id: string) => {
+    const p = new URLSearchParams(params.toString())
+    p.set('sua', id)
+    return `${pathname}?${p.toString()}`
+  }
+
+  /*
+    CHỌN NHIỀU MÃ ĐỂ CHUYỂN NHÓM (29/09/2026) — chỉ trong trang đang xem: đổi
+    trang / đổi lọc là bỏ chọn, để không chuyển nhầm mã mình không còn thấy.
+  */
+  const [chon, setChon] = useState<Set<string>>(new Set())
+  const [rowsTruoc, setRowsTruoc] = useState(rows)
+  if (rows !== rowsTruoc) {
+    setRowsTruoc(rows)
+    setChon(new Set())
+  }
+  const [chuyen, setChuyen] = useState(false)
+  const lat = (id: string, on: boolean) =>
+    setChon((s) => {
+      const n = new Set(s)
+      if (on) n.add(id)
+      else n.delete(id)
+      return n
+    })
+  const tatCa = rows.length > 0 && rows.every((r) => chon.has(r.id))
+
+  const dangLoc = !!filters.q || !!filters.nhom || filters.kn || filters.ng
+  const soTrang = Math.max(1, Math.ceil(counts.total / PAGE_SIZE))
+  const tu = counts.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const den = Math.min(page * PAGE_SIZE, counts.total)
+  const coGia = rows.filter((r) => (r.last_purchase_price ?? 0) > 0).length
+
+  return (
+    <ScreenFrame>
+      <ScreenHeader
+        compact
+        eyebrow="Mua hàng"
+        title="Vật tư"
+        facts={[
+          { label: 'Mã trong danh mục', value: counts.total.toLocaleString('vi-VN') },
+          {
+            label: 'Chưa có nhóm con',
+            value: counts.noSub.toLocaleString('vi-VN'),
+            tone: counts.noSub > 0 ? 'warn' : 'neutral',
+          },
+          { label: 'Đang hiện', value: `${tu}–${den}` },
+        ]}
+        actions={
+          <>
+            <Btn href="/mua-hang/vat-tu/nhom">Nhóm vật tư</Btn>
+            {canCreate && (
+              <Btn
+                icon="them"
+                primary={chon.size === 0}
+                onClick={() => doiLoc({ them: '1' })}
+              >
+                Thêm vật tư
+              </Btn>
+            )}
+            {canEdit && chon.size > 0 && (
+              <Btn icon="sau" primary onClick={() => setChuyen(true)}>
+                Chuyển {chon.size} mã đã chọn…
+              </Btn>
+            )}
+          </>
+        }
+      />
+
+      <FilterBar>
+        <SearchInput
+          value={nhap}
+          onChange={setNhap}
+          placeholder="Tìm mã hoặc tên vật tư…"
+          width={320}
+        />
+        <Pick
+          label="Nhóm vật tư"
+          value={filters.nhom}
+          onChange={(v) => doiLoc({ nhom: v, trang: '1' })}
+          options={[
+            { value: '', label: 'Mọi nhóm' },
+            ...groups.map((g) => ({ value: g, label: g })),
+          ]}
+          width={230}
+        />
+        <Chip
+          on={filters.kn}
+          count={counts.noSub}
+          onClick={() => doiLoc({ kn: filters.kn ? '' : '1', trang: '1' })}
+        >
+          Chưa có nhóm con
+        </Chip>
+        {/* Mã ngừng dùng ẨN khỏi danh sách mặc định — chip này mở riêng tập đó. */}
+        <Chip
+          on={filters.ng}
+          count={counts.inactive}
+          onClick={() => doiLoc({ ng: filters.ng ? '' : '1', trang: '1' })}
+        >
+          Ngừng dùng
+        </Chip>
+        {dangLoc && (
+          <Btn
+            icon="boLoc"
+            onClick={() => doiLoc({ q: '', nhom: '', kn: '', ng: '', trang: '1' })}
+          >
+            Bỏ lọc
+          </Btn>
+        )}
+      </FilterBar>
+
+      {rows.length === 0 && filters.ng && counts.total === 0 ? (
+        <Empty
+          headline="Chưa có mã nào ngừng dùng"
+          reason={
+            dangLoc && (filters.q || filters.nhom || filters.kn)
+              ? 'Không mã ngừng dùng nào khớp các điều kiện lọc còn lại.'
+              : 'Mã ngừng dùng từ panel Sửa vật tư (mã đã dùng ở đâu đó thì không xoá, chỉ ngừng dùng) sẽ hiện ở đây.'
+          }
+          next={
+            <Btn primary onClick={() => doiLoc({ ng: '', trang: '1' })}>
+              Về danh sách mã đang dùng
+            </Btn>
+          }
+        />
+      ) : rows.length === 0 ? (
+        <Empty
+          headline="Không có vật tư nào khớp"
+          reason={
+            dangLoc
+              ? `Danh mục có ${counts.total.toLocaleString('vi-VN')} mã khớp bộ lọc hiện tại — trang ${page} thì đã hết dòng. Thử bỏ bớt điều kiện hoặc quay về trang 1.`
+              : 'Danh mục vật tư đang trống. Kiểm lại kết nối dữ liệu — đây không phải trạng thái bình thường.'
+          }
+          next={
+            <Btn
+              icon="boLoc"
+              primary
+              onClick={() => doiLoc({ q: '', nhom: '', kn: '', ng: '', trang: '1' })}
+            >
+              Bỏ lọc, về trang 1
+            </Btn>
+          }
+        />
+      ) : (
+        <Table>
+          <THead pinFirst>
+            {canEdit && (
+              <th style={{ width: 36 }}>
+                <Tick
+                  checked={tatCa}
+                  label={`Chọn cả ${rows.length} mã trên trang`}
+                  onChange={(on) =>
+                    setChon(on ? new Set(rows.map((r) => r.id)) : new Set())
+                  }
+                />
+              </th>
+            )}
+            <th>Mã</th>
+            <th>Tên vật tư</th>
+            <th>Nhóm con</th>
+            <th>Quy cách</th>
+            <th>ĐVT</th>
+            {filters.ng ? (
+              <th>Ngừng dùng</th>
+            ) : (
+              <th style={{ textAlign: 'right' }}>Giá mua gần nhất</th>
+            )}
+          </THead>
+          <tbody>
+            {rows.map((r) => (
+              <Row key={r.id} selected={chon.has(r.id)}>
+                {canEdit && (
+                  <Cell>
+                    <Tick
+                      checked={chon.has(r.id)}
+                      label={`Chọn ${r.code}`}
+                      onChange={(on) => lat(r.id, on)}
+                    />
+                  </Cell>
+                )}
+                <Cell pin>
+                  {canEdit ? (
+                    <Code
+                      as="a"
+                      href={suaHref(r.id)}
+                      title={`Sửa ${r.code}`}
+                      // Bấm lại ngay mã vừa đóng: URL chưa kịp bỏ `sua` nên mốc
+                      // "đã đóng" phải xoá ở đây, không chờ URL.
+                      onClick={() => setDong(null)}
+                    >
+                      {r.code}
+                    </Code>
+                  ) : (
+                    <Code>{r.code}</Code>
+                  )}
+                </Cell>
+                {/*
+                  TÊN VẬT TƯ LÀ CỘT NGƯỜI TA TÌM, nên nó ăn phần dư và có sàn
+                  rộng hơn mặc định — tên ở đây dài ("Ắc quy Delkor 95D 26L").
+                */}
+                <Cell grow className="min-w-[260px]">
+                  <span className="flex items-center gap-2">
+                    {/* Tên → HỒ SƠ VẬT TƯ (06/10/2026): NCC đã bán, giá, lịch sử mua. */}
+                    <a
+                      href={`/mua-hang/vat-tu/${r.id}`}
+                      className="truncate text-[var(--act)] hover:underline"
+                      title={`Hồ sơ ${r.code} — NCC đã bán, giá, lịch sử mua`}
+                    >
+                      {r.name}
+                    </a>
+                  </span>
+                </Cell>
+                {/*
+                  NHÓM CON BỊ CHẶN BỀ RỘNG. Không chặn thì chuỗi dài nhất của
+                  cột ("Ắc – tăng đơ – đầu nối lắp ráp") kéo cột lên 221px —
+                  RỘNG HƠN cả cột tên (đo 17/09/2026). Nhóm là thứ đọc lướt để
+                  định vị, không phải thứ đọc từng chữ.
+                */}
+                <Cell
+                  muted
+                  className="max-w-[150px]"
+                  title={r.sub_group ?? r.group_name ?? ''}
+                >
+                  {r.sub_group ?? r.group_name ?? ''}
+                </Cell>
+                <Cell muted>{r.spec ?? ''}</Cell>
+                <Cell muted>{r.unit}</Cell>
+                {filters.ng ? (
+                  <Cell>
+                    <TagNgung lan={r.ngung} />
+                  </Cell>
+                ) : (
+                  <Cell num>
+                    {/*
+                    Ô TRỐNG Ở ĐÂY CÓ NGHĨA: "chưa từng mua qua hệ thống", không
+                    phải nhập thiếu. 955/13.226 mã có giá — hệ thống mới chạy 69
+                    đơn, nên trống là đúng chứ không phải hỏng.
+                  */}
+                    <Num
+                      value={showMoney(r.last_purchase_price)}
+                      strong={(r.last_purchase_price ?? 0) > 0}
+                    />
+                    {(r.last_purchase_price ?? 0) > 0 && r.price_unit && (
+                      <span className="text-k-label ml-1 text-[var(--ink-3)]">
+                        /{r.price_unit}
+                      </span>
+                    )}
+                  </Cell>
+                )}
+              </Row>
+            ))}
+          </tbody>
+          <TFoot
+            label={
+              <td colSpan={canEdit ? 5 : 4}>
+                Trang {page}/{soTrang} · {tu}–{den} trong{' '}
+                {counts.total.toLocaleString('vi-VN')} mã
+              </td>
+            }
+            /* 6 cột = label(4) + caveat(2); không còn ô số nào để cộng —
+               "giá mua gần nhất" là giá của MỘT lần mua, cộng lại vô nghĩa. */
+            cells={null}
+            caveat={`${coGia}/${rows.length} dòng trên trang này có giá mua. Ô trống = chưa từng mua qua hệ thống, KHÔNG phải giá bằng 0.`}
+          />
+        </Table>
+      )}
+
+      <StatusBar
+        left={[
+          <span key="p" className="flex items-center gap-2">
+            <Btn
+              icon="truoc"
+              disabled={page <= 1 || dangChay}
+              onClick={() => doiLoc({ trang: String(page - 1) })}
+            >
+              Trước
+            </Btn>
+            <Btn
+              disabled={page >= soTrang || dangChay}
+              onClick={() => doiLoc({ trang: String(page + 1) })}
+            >
+              Sau
+              <Ico name="sau" />
+            </Btn>
+          </span>,
+          dangChay
+            ? 'Đang tải…'
+            : dangLoc
+              ? 'Khung nhìn: đang lọc'
+              : 'Khung nhìn: tất cả',
+          canEdit
+            ? 'Bấm mã để sửa vật tư'
+            : 'Chỉ xem — sửa vật tư do phòng Cung ứng / Kho',
+        ]}
+        right={`${tu}–${den} / ${counts.total.toLocaleString('vi-VN')}`}
+      />
+      {chuyen && (
+        <ChuyenNhomSheet
+          items={rows.filter((r) => chon.has(r.id))}
+          groups={tax.groups.map((g) => g.name)}
+          onClose={() => setChuyen(false)}
+          onDone={() => {
+            setChuyen(false)
+            setChon(new Set())
+            router.refresh()
+          }}
+        />
+      )}
+      {/*
+        THÊM VẬT TƯ (Bản 11 · V1) — panel trên URL (`?them=1`) như panel Sửa:
+        Back đóng được. Thêm xong lọc danh sách về đúng mã vừa tạo cho thấy ngay.
+      */}
+      {canCreate && params.get('them') === '1' && (
+        <ThemVatTuSheet
+          tax={tax}
+          suppliers={suppliers}
+          group={filters.nhom || undefined}
+          onClose={() => doiLoc({ them: '' })}
+          onCreated={(m) => {
+            doiLoc({ them: '', q: m.code, ng: '', trang: '1' })
+            router.refresh()
+          }}
+          onOpenCode={(code) => doiLoc({ them: '', q: code, ng: '', trang: '1' })}
+        />
+      )}
+      {sua && (
+        <SuaVatTuSheet
+          key={sua}
+          id={sua}
+          tax={tax}
+          suppliers={suppliers}
+          onClose={dongPanel}
+          onSaved={() => {
+            dongPanel()
+            router.refresh()
+          }}
+          boMa={{
+            canRetire,
+            onRemoved: () => {
+              dongPanel()
+              router.refresh()
+            },
+            onActiveChanged: () => {
+              dongPanel()
+              router.refresh()
+            },
+          }}
+        />
+      )}
+    </ScreenFrame>
+  )
+}

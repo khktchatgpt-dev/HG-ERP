@@ -2,36 +2,32 @@ import { readFileSync } from 'node:fs'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
 import nextTs from 'eslint-config-next/typescript'
-import hgUi from './eslint-rules/hg-ui.mjs'
+import hg from './eslint-rules/hg-ui.mjs'
 
 /*
- * BÁNH CÓC (ratchet) cho giao diện.
+ * 30/09/2026 — GỠ bộ luật canh GIAO DIỆN (no-hardcoded-color, no-raw-control,
+ * no-arbitrary-size/space, kit-icon, no-dark-variant) cùng bánh cóc
+ * `ui-baseline.json` và test `ui-ratchet`. Chủ dự án chốt: chúng làm việc thiết
+ * kế và chỉnh sửa màn mới khó hơn cái lợi đồng bộ mang lại. Token và kit vẫn là
+ * cách ƯU TIÊN, nhưng là lựa chọn, không phải hàng rào máy chặn.
  *
- * `ui-baseline.json` liệt kê những file ĐANG bẩn tính đến lúc bật luật. Chúng
- * bị hạ xuống `warn` để `npm run check` không đỏ ngay ngày đầu; mọi file khác —
- * gồm TẤT CẢ file mới — là `error`, tức không lọt qua được.
- *
- * Dọn xong một file thì chạy `npm run ui:baseline` để nó rớt khỏi danh sách và
- * từ đó được canh ở mức `error` vĩnh viễn. Danh sách chỉ được phép NGẮN ĐI.
+ * Còn lại hai luật thuộc KIẾN TRÚC MÃ, không phải thiết kế:
+ *   · hg/client-server-boundary — file 'use client' không được kéo vùng chạy
+ *     bằng khoá bí mật Supabase vào trình duyệt;
+ *   · max-lines — trần 800 dòng cho .tsx, file cũ giữ trần riêng (size-baseline).
  */
-const baseline = JSON.parse(
-  readFileSync(new URL('./ui-baseline.json', import.meta.url), 'utf8'),
+
+/* BÁNH CÓC CỠ FILE (28/09/2026): .tsx tối đa `max` dòng; file CŨ đã dài hơn giữ
+ * trần riêng = số dòng lúc chốt — không được dài thêm, ngắn đi thì
+ * `npm run size:baseline` hạ trần. Xem scripts/size-baseline.mjs. */
+const sizeBaseline = JSON.parse(
+  readFileSync(new URL('./size-baseline.json', import.meta.url), 'utf8'),
 )
 
 /* BẪY: route group của App Router có dấu ngoặc — `src/app/(workspace)/...`. Với
  * minimatch, `(` `)` là ký tự NHÓM, nên để nguyên thì baseline không khớp file
- * nào trong route group và ~200 lỗi cũ vẫn nổ. Phải escape trước khi đưa vào
- * `files`. Giữ danh sách trong JSON ở dạng thô cho người đọc/diff. */
+ * nào trong route group. Phải escape trước khi đưa vào `files`. */
 const escapeGlob = (p) => p.replace(/[()[\]{}]/g, (ch) => `\\${ch}`)
-
-/* Kit và trang mẫu ĐƯỢC PHÉP dùng thẻ thô + màu thật: chúng là nơi định nghĩa
- * ra chuẩn, không phải nơi tiêu thụ chuẩn. */
-const KIT = [
-  'src/components/erp/**',
-  'src/components/shadcn/**',
-  'src/components/ui/**',
-  'src/app/design-lab/**',
-]
 
 export default defineConfig([
   ...nextVitals,
@@ -45,22 +41,25 @@ export default defineConfig([
     // Worktree phiên Claude (chứa .next/build artifact riêng) — không lint.
     '.claude/**',
   ]),
+  /* Ranh giới client/server (28/09/2026): file 'use client' chỉ `import type` từ
+   * @/modules, @/server. Hàng rào thứ hai: `import 'server-only'` ở server/db.ts. */
   {
-    name: 'hg/ui-consistency',
-    files: ['src/app/**/*.tsx', 'src/components/**/*.tsx'],
-    ignores: KIT,
-    plugins: { hg: hgUi },
+    name: 'hg/client-server-boundary',
+    files: ['src/**/*.tsx', 'src/**/*.ts'],
+    plugins: { hg },
     rules: {
-      'hg/no-hardcoded-color': 'error',
-      'hg/no-raw-control': 'error',
+      'hg/client-server-boundary': 'error',
     },
   },
   {
-    name: 'hg/ui-consistency-legacy',
-    files: baseline.files.map(escapeGlob),
-    rules: {
-      'hg/no-hardcoded-color': 'warn',
-      'hg/no-raw-control': 'warn',
-    },
+    name: 'hg/file-size',
+    files: ['src/**/*.tsx'],
+    rules: { 'max-lines': ['error', { max: sizeBaseline.max }] },
   },
+  // Trần riêng từng file nợ cũ — đặt SAU khối trên để đè `max`.
+  ...Object.entries(sizeBaseline.files).map(([file, cap]) => ({
+    name: `hg/file-size-legacy:${file}`,
+    files: [escapeGlob(file)],
+    rules: { 'max-lines': ['error', { max: cap }] },
+  })),
 ])

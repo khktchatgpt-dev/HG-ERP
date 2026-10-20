@@ -1,0 +1,218 @@
+import type { ShipmentInput } from '@/lib/po-shipments'
+
+/**
+ * LOGIC THUẦN CỦA PHẦN GIAO & NHẬN HÀNG trên màn chứng từ đơn mua — không React,
+ * có test. Ba câu hỏi của người mua sau khi gửi đơn: NCC hẹn giao khi nào, hàng
+ * về được bao nhiêu, còn thiếu thì làm gì. UI ở `NhanHangPanel.tsx` chỉ bày.
+ *
+ * KHÔNG MỞ ĐƯỜNG GHI MỚI: mọi route ở đây là route bản cũ `/planning/pos/[id]`
+ * đang gọi (`usePoActions.ts`); màn mới chỉ đổi cách bày.
+ */
+
+export type ShipmentLite = {
+  id: string
+  /** Mã chứng từ đợt GH-YYYY-NNNN (0193). Null = đợt tạo trước khi có mã. */
+  code?: string | null
+  seq: number
+  expected_date: string
+  status: string
+  note: string | null
+  lines: { po_line_id: string; qty: number }[]
+}
+
+export type ShipmentLineRef = {
+  id: string
+  name: string
+  unit: string
+  qty_ordered: number
+  /** Thành tiền cả dòng — null khi chưa có giá. */
+  amount: number | null
+  /** Giá theo đơn vị 2 (đ/kg…) — tiền đợt là ước theo tỷ lệ. */
+  price_approx: boolean
+}
+
+/** Nhãn + tone vòng đời của một đợt. `overdue` = còn sống mà đã qua ngày hẹn. */
+export function shipmentBadge(
+  status: string,
+  overdue: boolean,
+): { label: string; tone: 'neutral' | 'warn' | 'done' | 'stop' } {
+  if (status === 'cancelled') return { label: 'Đã huỷ', tone: 'neutral' }
+  if (status === 'received') return { label: 'Đã nhận', tone: 'done' }
+  if (overdue) return { label: 'Quá hẹn', tone: 'stop' }
+  if (status === 'arrived') return { label: 'Xe tới', tone: 'warn' }
+  return { label: 'Đang hẹn', tone: 'neutral' }
+}
+
+/**
+ * KẾT LUẬN của một dòng trong ma trận nhận: Đủ / Thiếu / Chưa về / Dư / Chốt thiếu.
+ * `kind` ánh xạ thẳng sang `LineStatus` của kit.
+ */
+export function receiptVerdict(
+  qtyOrdered: number,
+  st:
+    | { qty_received: number; qty_missing: number; closed_short_at: string | null }
+    | undefined,
+): {
+  label: string
+  kind: 'idle' | 'part' | 'done' | 'short'
+  received: number
+  missing: number
+} {
+  const received = st?.qty_received ?? 0
+  const missing = st?.qty_missing ?? qtyOrdered - received
+  if (st?.closed_short_at) return { label: `Chốt thiếu ${fmt(missing)}`, kind: 'short', received, missing } // prettier-ignore
+  if (missing > 0.000001) {
+    return received > 0
+      ? { label: `Thiếu ${fmt(missing)}`, kind: 'part', received, missing }
+      : { label: 'Chưa về', kind: 'idle', received, missing }
+  }
+  if (missing < -0.000001) return { label: `Dư ${fmt(-missing)}`, kind: 'done', received, missing } // prettier-ignore
+  return { label: 'Đủ', kind: 'done', received, missing }
+}
+
+/**
+ * Từng vật tư đã HẸN bao nhiêu / đặt bao nhiêu — trả lời "còn bao nhiêu chưa có
+ * đợt" mà không phải cộng nhẩm. Đợt đã huỷ không tính.
+ */
+export function scheduleRows(
+  lines: { id: string; name: string; unit: string; qty_ordered: number }[],
+  shipments: { status: string; lines: { po_line_id: string; qty: number }[] }[],
+): {
+  id: string
+  name: string
+  unit: string
+  qty_ordered: number
+  done: number
+  left: number
+}[] {
+  const scheduled = new Map<string, number>()
+  for (const s of shipments) {
+    if (s.status === 'cancelled') continue
+    for (const l of s.lines) scheduled.set(l.po_line_id, (scheduled.get(l.po_line_id) ?? 0) + l.qty) // prettier-ignore
+  }
+  return lines.map((l) => {
+    const done = scheduled.get(l.id) ?? 0
+    return { ...l, done, left: Math.max(l.qty_ordered - done, 0) }
+  })
+}
+
+export type Batch = { date: string; qty: number | '' }
+
+/**
+ * Bảng khai "từng dòng, từng mảnh" của hộp NCC xác nhận → danh sách đợt gửi
+ * server. Các mảnh CÙNG NGÀY gộp thành một đợt (đó là cách NCC giao: một chuyến
+ * mang nhiều mã), mảnh SL ≤ 0 bỏ. Sắp theo ngày để đợt 1 là đợt sớm nhất.
+ */
+export function batchesToShipments(
+  lineIds: string[],
+  batches: Record<string, Batch[]>,
+): ShipmentInput[] {
+  const byDate = new Map<string, { po_line_id: string; qty: number }[]>()
+  for (const id of lineIds) {
+    for (const b of batches[id] ?? []) {
+      const qty = typeof b.qty === 'number' ? b.qty : 0
+      if (qty <= 0) continue
+      const list = byDate.get(b.date) ?? []
+      list.push({ po_line_id: id, qty })
+      byDate.set(b.date, list)
+    }
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, lines]) => ({ expected_date: date, lines }))
+}
+
+/**
+ * Đơn chưa có đợt nào thì nói bước kế tiếp — theo đúng trạng thái đơn. Câu đứng
+ * SAU "Chưa chia đợt — hiểu là giao một lần vào hạn giao của đơn." nên không nhắc lại.
+ *
+ * `xemThoi` = trang đơn (chỉ xem từ 01/10/2026): không có nút "NCC xác nhận" /
+ * "+ Thêm đợt giao" để bấm — chỉ sang hộp Giao nhận ở Theo dõi đơn hàng.
+ */
+export function shipmentEmptyHint(
+  status: string,
+  hasStockLines: boolean,
+  xemThoi = false,
+): string {
+  if (xemThoi && (status === 'approved' || status === 'ordered'))
+    return 'Lịch NCC hẹn ghi ở hộp Giao nhận trên Theo dõi đơn hàng.'
+  switch (status) {
+    case 'draft':
+      return 'Chia đợt trong lúc sửa đơn; lịch đó in lên phiếu gửi nhà cung cấp.'
+    case 'pending_approval':
+      return 'Đơn đang chờ duyệt nên khoá sửa — rút về nháp rồi chia đợt.'
+    case 'approved':
+      return 'Chốt lịch với NCC xong thì bấm "+ Thêm đợt giao" — không cần đợi bước NCC xác nhận.'
+    case 'ordered':
+      return 'Bấm "NCC xác nhận" để ghi lịch NCC hẹn (mỗi dòng tách được nhiều đợt), hoặc "+ Thêm đợt giao" nếu đã chốt lịch qua điện thoại.'
+    default:
+      return hasStockLines
+        ? ''
+        : 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt.'
+  }
+}
+
+/** Bước mà sổ kho còn ghi tiếp được — cùng tập service `closeShort` nhận. */
+const SENT = ['ordered', 'confirmed', 'in_transit', 'partial']
+
+/**
+ * VIỆC CHỐT THIẾU CỦA MỘT DÒNG — `close`, `reopen`, hay không có gì.
+ *
+ * Vì sao theo DÒNG chứ không chỉ cả đơn: một đơn 12 mã mà NCC báo hết đúng 1
+ * mã thì chốt cả đơn là nói dối sổ — 11 mã kia vẫn đang chờ về thật. Route
+ * `close-short` nhận `line_id` từ 0154, nhưng màn mới vẫn gửi `null` nên người
+ * mua chỉ có lựa chọn "được ăn cả", và KHÔNG có đường nào mở lại dòng đã chốt
+ * khi NCC đổi ý giao bù.
+ *
+ * Trả kèm `blocked` thay vì giấu nút: người dùng học vị trí nút, nút lúc có
+ * lúc không thì họ không học được.
+ */
+export function lineShortAction(
+  st: { qty_open: number; closed_short_at: string | null } | undefined,
+  ctx: { poStatus: string; canEdit: boolean },
+): { kind: 'close' | 'reopen' | 'none'; blocked?: string } {
+  if (!st) return { kind: 'none' }
+  const notOwn = ctx.canEdit ? undefined : 'Chỉ người phụ trách đơn mới làm được'
+  if (st.closed_short_at) {
+    // Mở lại là quay về hiện trạng thật nên không bắt lý do; đơn đã huỷ thì thôi.
+    return { kind: 'reopen', blocked: notOwn ?? (ctx.poStatus === 'cancelled' ? 'Đơn đã huỷ — không mở lại dòng được' : undefined) } // prettier-ignore
+  }
+  if (st.qty_open > 0.000001) {
+    return { kind: 'close', blocked: notOwn ?? (SENT.includes(ctx.poStatus) ? undefined : 'Chỉ chốt thiếu cho đơn đã gửi NCC và chưa kết thúc') } // prettier-ignore
+  }
+  // Về đủ (hoặc dư) thì không còn gì để chốt — bày nút ở đây là bày nút chết.
+  return { kind: 'none' }
+}
+
+/**
+ * NÚT CỦA TAB NHẬN HÀNG — bày đủ, khoá kèm lý do (Dynamics Action Pane).
+ * Mỗi cờ là một cặp [được không, vì sao không].
+ */
+export function receiveActions(i: {
+  status: string
+  canEdit: boolean
+  hasStockLines: boolean
+  openStockLines: number
+}): Record<
+  'confirm' | 'addShipment' | 'transit' | 'receive' | 'closeShort',
+  { ok: boolean; why?: string }
+> {
+  const sent = ['ordered', 'confirmed', 'in_transit', 'partial'].includes(i.status)
+  const notOwn = i.canEdit ? undefined : 'Chỉ người phụ trách đơn mới làm được'
+  const gate = (ok: boolean, why: string) =>
+    notOwn ? { ok: false, why: notOwn } : ok ? { ok: true } : { ok: false, why }
+  return {
+    // Từ 06/10/2026 xác nhận được ngay từ "Đã duyệt" (bỏ bước gửi — khớp service).
+    confirm: gate(i.status === 'approved' || i.status === 'ordered', i.status === 'confirmed' || i.status === 'in_transit' || i.status === 'partial' ? 'NCC đã xác nhận rồi — thêm đợt nếu NCC hẹn giao bù' : 'Chỉ ghi được sau khi Giám đốc duyệt đơn'), // prettier-ignore
+    // Từ 27/09/2026 mở từ lúc đã duyệt — không phải chờ NCC xác nhận (khớp service).
+    addShipment: gate(['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(i.status) && i.hasStockLines, !i.hasStockLines ? 'Đơn không có dòng vật tư kho để chia đợt' : 'Chỉ thêm đợt cho đơn đã duyệt và chưa về đủ'), // prettier-ignore
+    transit: gate(
+      i.status === 'confirmed',
+      'Chỉ dùng khi đơn ở bước "Chờ giao" (NCC đã xác nhận)',
+    ),
+    receive: { ok: sent, why: sent ? undefined : 'Chỉ nhận hàng được sau khi đơn đã gửi nhà cung cấp' }, // prettier-ignore
+    closeShort: gate(sent && i.openStockLines > 0, i.openStockLines === 0 ? 'Không còn dòng nào đang chờ về' : 'Chỉ chốt thiếu trên đơn đã gửi NCC'), // prettier-ignore
+  }
+}
+
+const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })

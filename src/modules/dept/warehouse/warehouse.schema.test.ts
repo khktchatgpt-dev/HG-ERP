@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { todayVn } from '@/lib/date-vn'
 import {
   materialCreateSchema,
   materialUpdateSchema,
+  materialActiveSchema,
   materialListQuerySchema,
   receiptSchema,
   issueSchema,
@@ -34,11 +36,17 @@ describe('materialCreateSchema', () => {
     expect(p.unit).toBe('cái')
   })
 
-  it('min_stock mặc định 0 và ép kiểu từ chuỗi', () => {
+  it('min_stock ép kiểu từ chuỗi, KHÔNG mặc định 0', () => {
+    /*
+     * Bỏ `.default(0)` ngày 10/08/2026. Zod sinh khoá cho cả trường không gửi,
+     * nên chốt chặn chủ quyền (min_stock là của Kho) sẽ tưởng Cung ứng đang cố
+     * ghi trường của Kho ở MỌI lần khai vật tư. Không gửi thì để undefined —
+     * service ghi 0 xuống repo, DB cũng default 0, số cuối cùng không đổi.
+     */
     const p = materialCreateSchema.parse({ code: 'X', name: 'Y', min_stock: '5' })
     expect(p.min_stock).toBe(5)
     const p2 = materialCreateSchema.parse({ code: 'X', name: 'Y' })
-    expect(p2.min_stock).toBe(0)
+    expect(p2.min_stock).toBeUndefined()
   })
 
   /*
@@ -256,5 +264,51 @@ describe('issueDocSchema — BR-09 ở tầng schema', () => {
       lines: [{ material_id: UUID, qty: 2 }],
     })
     expect(p.kind).toBe('daily')
+  })
+})
+
+describe('receiptDocSchema — lùi ngày chứng từ (05/10/2026)', () => {
+  // Ngày tương đối theo lịch VN của hôm nay — test không gãy theo ngày chạy.
+  const lui = (n: number) => {
+    const t = todayVn()
+    return new Date(Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8, 10) - n))
+      .toISOString()
+      .slice(0, 10)
+  }
+  const phieu = (o: Record<string, unknown>) => ({
+    po_id: UUID,
+    lines: [{ material_id: UUID, qty: 1, po_line_id: UUID }],
+    ...o,
+  })
+  const loi = (o: Record<string, unknown>) =>
+    receiptDocSchema.safeParse(phieu(o)).error?.issues.map((i) => i.path.join('.'))
+
+  it('lùi ≤ 7 ngày: không cần lý do', () => {
+    expect(loi({ doc_date: lui(7) })).toBeUndefined()
+  })
+  it('lùi 8–60 ngày: thiếu lý do → lỗi ở backdate_reason; có lý do → qua', () => {
+    expect(loi({ doc_date: lui(15) })).toEqual(['backdate_reason'])
+    expect(
+      loi({ doc_date: lui(60), backdate_reason: 'nhập bù hàng về trước' }),
+    ).toBeUndefined()
+  })
+  it('lùi > 60 ngày hoặc tương lai → lỗi ở doc_date', () => {
+    expect(loi({ doc_date: lui(61), backdate_reason: 'nhập bù' })).toEqual(['doc_date'])
+    expect(loi({ doc_date: lui(-1) })).toEqual(['doc_date'])
+  })
+  it('phiếu lập lại (fix_of_doc_id) giữ ngày cũ — không giới hạn ở schema, service kiểm', () => {
+    expect(loi({ doc_date: lui(120), fix_of_doc_id: UUID })).toBeUndefined()
+  })
+})
+
+describe('materialActiveSchema — ngừng dùng bắt lý do', () => {
+  it('ngừng dùng không lý do → lỗi ở ô reason', () => {
+    const r = materialActiveSchema.safeParse({ active: false, reason: '  ' })
+    expect(r.success).toBe(false)
+    expect(r.error?.issues[0].path).toEqual(['reason'])
+  })
+  it('ngừng dùng có lý do / dùng lại không lý do → hợp lệ', () => {
+    expect(materialActiveSchema.safeParse({ active: false, reason: 'NCC ngừng SX' }).success).toBe(true)
+    expect(materialActiveSchema.safeParse({ active: true }).success).toBe(true)
   })
 })

@@ -24,7 +24,7 @@ describe('resolveCountingPlan — thang ưu tiên', () => {
     const plan = resolveCountingPlan([part('a', 'FRAME'), part('b', 'FRAME')], null)
     expect(plan.own_route.get('a')).toEqual(['phoi'])
     expect(plan.own_route.get('b')).toEqual(['phoi'])
-    expect(plan.virtual_stages).toEqual(['han', 'nguoi', 'mai', 'son'])
+    expect(plan.virtual_stages).toEqual(['han', 'nguoi', 'son'])
   })
 
   it('lệnh có CỤM THẬT (0088) → máy không chen, kế hoạch rỗng', () => {
@@ -54,7 +54,7 @@ describe('resolveCountingPlan — thang ưu tiên', () => {
   it('lệnh hỗn hợp: chỉ chi tiết qua hàn bị gộp, gỗ đi tiếp đường của nó', () => {
     const plan = resolveCountingPlan([part('fe', 'FRAME'), part('go', 'WOOD')], null)
     expect([...plan.own_route.keys()]).toEqual(['fe'])
-    expect(plan.virtual_stages).toEqual(['han', 'nguoi', 'mai', 'son'])
+    expect(plan.virtual_stages).toEqual(['han', 'nguoi', 'son'])
   })
 
   it('kế hoạch SX thắng lộ trình suy theo nhóm', () => {

@@ -52,9 +52,11 @@ describe('isBigApprovalWith — ngưỡng theo từng tiền tệ', () => {
     expect(isBigApprovalWith(1, 'USD', { USD: NaN })).toBe(true)
   })
 
-  it('mặc định của hệ thống chỉ đặt ngưỡng cho VND', () => {
-    expect(DEFAULT_APPROVAL_THRESHOLDS).toEqual({ VND: 50_000_000 })
-    expect(isBigApprovalWith(1, 'USD', DEFAULT_APPROVAL_THRESHOLDS)).toBe(true)
+  it('mặc định: VND 50 triệu, USD 2.000 (27/09/2026); tiền tệ khác vẫn luôn là giá trị lớn', () => {
+    expect(DEFAULT_APPROVAL_THRESHOLDS).toEqual({ VND: 50_000_000, USD: 2_000 })
+    expect(isBigApprovalWith(1_999, 'USD', DEFAULT_APPROVAL_THRESHOLDS)).toBe(false)
+    expect(isBigApprovalWith(2_000, 'USD', DEFAULT_APPROVAL_THRESHOLDS)).toBe(true)
+    expect(isBigApprovalWith(1, 'EUR', DEFAULT_APPROVAL_THRESHOLDS)).toBe(true)
   })
 })
 

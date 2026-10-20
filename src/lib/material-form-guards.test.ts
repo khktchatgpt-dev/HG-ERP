@@ -151,7 +151,12 @@ describe('specFromName — bóc quy cách từ tên khi ô Quy cách trống', (
 })
 
 describe('baremGate — barem tiền lệch phải xác nhận mới lưu (02/09)', () => {
-  const base = { kg_per_m: '', kg_per_unit: '', default_bar_length_m: '', derivedKg: null }
+  const base = {
+    kg_per_m: '',
+    kg_per_unit: '',
+    default_bar_length_m: '',
+    derivedKg: null,
+  }
 
   it('trống hết → không chặn (vật tư không phải hàng cân)', () => {
     expect(baremGate(base).blocked).toBe(false)
@@ -170,12 +175,22 @@ describe('baremGate — barem tiền lệch phải xác nhận mới lưu (02/09
   })
 
   it('kg/đơn-vị lệch kg/m × dài cây quá ngưỡng → CHẶN', () => {
-    const f = { ...base, kg_per_m: '0.26', default_bar_length_m: '6', kg_per_unit: '15.6' }
+    const f = {
+      ...base,
+      kg_per_m: '0.26',
+      default_bar_length_m: '6',
+      kg_per_unit: '15.6',
+    }
     expect(baremGate(f).blocked).toBe(true) // đúng phải ~1.56
   })
 
   it('kg/đơn-vị khớp tích kg/m × dài cây → không chặn', () => {
-    const f = { ...base, kg_per_m: '0.26', default_bar_length_m: '6', kg_per_unit: '1.56' }
+    const f = {
+      ...base,
+      kg_per_m: '0.26',
+      default_bar_length_m: '6',
+      kg_per_unit: '1.56',
+    }
     expect(baremGate(f).blocked).toBe(false)
   })
 
@@ -183,5 +198,21 @@ describe('baremGate — barem tiền lệch phải xác nhận mới lưu (02/09
     const a = baremGate({ ...base, kg_per_m: '2.48', derivedKg: 0.248 })
     const b = baremGate({ ...base, kg_per_m: '2.49', derivedKg: 0.248 })
     expect(a.key).not.toBe(b.key)
+  })
+})
+
+describe('specPreview — bì / túi bao bì chỉ có dài × rộng (09/10/2026)', () => {
+  const BAO_BI = 'Bao bì - đóng gói - tem nhãn'
+  it('63x140 · 75x190cm → hàng phẳng, không cảnh báo', () => {
+    const a = specPreview(BAO_BI, '63x140', '')
+    expect(a).toMatchObject({ ok: true })
+    expect(a && a.ok && a.text).toContain('hàng phẳng 63×140')
+    const b = specPreview(BAO_BI, '75 x 190 cm', '')
+    expect(b && b.ok && b.text).toContain('75×190 cm')
+  })
+  it('chuỗi lạ vẫn cảnh báo, kèm gợi ý dạng của bì / túi', () => {
+    const p = specPreview(BAO_BI, 'túi to', '')
+    expect(p).toMatchObject({ ok: false })
+    expect(p && !p.ok && p.warn).toContain('63x140 cm')
   })
 })

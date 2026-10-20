@@ -204,7 +204,7 @@ export function AccountManager({
           </div>
         </form>
 
-        <dl className="mt-5 grid gap-x-6 gap-y-3 border-t border-zinc-200 pt-4 text-sm sm:grid-cols-2 dark:border-zinc-800">
+        <dl className="mt-5 grid gap-x-6 gap-y-3 border-t border-zinc-200 pt-4 text-sm sm:grid-cols-2">
           <Row label="Email đăng nhập" value={user.email} />
           <Row label="Vai trò" value={readonly.role_label} />
           <Row label="Phòng ban" value={readonly.department_name} />

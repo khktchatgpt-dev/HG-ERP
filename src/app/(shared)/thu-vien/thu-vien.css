@@ -1,0 +1,2800 @@
+/*
+ * CSS của khu Thư viện SP — chép từ 4 artboard trên canvas Claude Design
+ * (Main · LuoiAnh · HoSo · DongGoi), gom lại, đặt dưới phạm vi `.tv` để không
+ * đụng theme-v3 của shell và không bị `.kit` đè (mọi luật đều ≥ 2 lớp).
+ * Màu dùng chung một bộ biến; giá trị trùng với kit/tokens.css.
+ */
+.tv {
+  --bg: #eef0f4;
+  --card: #ffffff;
+  --raised: #f3f5f8;
+  --hover: #f6f8fc;
+  /* 09/10/2026 chủ dự án: "chữ màu đen vì nền trắng khó nhìn" — ink về đen, chữ phụ cũng đậm hơn (≥ 7:1). */
+  --ink: #000000;
+  --ink2: #1f2937;
+  --ink3: #374151;
+  --line: #c9d0db;
+  --hair: #e3e7ee;
+  --act: #1f4bb8;
+  --act-ink: #ffffff;
+  --act-wash: #e8eefb;
+  --act-line: #b3c5ee;
+  --act-text: #173b91;
+  --stop: #b0241a;
+  --stop-wash: #fceceb;
+  --stop-line: #eec9c6;
+  --warn: #8a5200;
+  --warn-wash: #fbf2e2;
+  --warn-line: #e8d5b0;
+  --done: #15653d;
+  --done-wash: #e5f3ea;
+  --done-line: #bcdcc9;
+  --rev: #fff6cc;
+  --mono: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
+  font:
+    13px/1.45 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  /*
+   * LẤP ĐẦY <main> của shell và tự huỷ padding của nó (p-4, sm:p-6) bằng lề âm —
+   * cùng thủ pháp ScreenFrame: bảng cuộn TRONG khung, tiêu đề cột và chân bảng
+   * dính mới có tác dụng; màn hồ sơ dài hơn khung thì cả `.tv` cuộn.
+   */
+  margin: -16px;
+  height: calc(100% + 32px);
+  overflow: auto;
+}
+@media (min-width: 640px) {
+  .tv {
+    margin: -24px;
+    height: calc(100% + 48px);
+  }
+}
+/*
+ * Khung cao cố định + cột flex: mọi khối con mặc định CO (flex-shrink) khi nội
+ * dung dài hơn khung — thanh tab (overflow:auto) từng bị bóp còn 0,8px (đo
+ * 08/10/2026). Khoá co cho mọi khối; chỉ vùng bảng `.scroll` được giãn/co.
+ */
+.tv > * {
+  flex: 0 0 auto;
+}
+.tv > .scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.tv a {
+  color: var(--act);
+  text-decoration: none;
+}
+.tv a:hover {
+  color: var(--act-text);
+  text-decoration: underline;
+}
+.tv h1,
+.tv h2 {
+  margin: 0;
+}
+.tv .num {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.tv .code {
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--act);
+}
+.tv .muted {
+  color: var(--ink3);
+}
+.tv .sr {
+  position: absolute;
+  left: -9999px;
+}
+
+/* ── đầu trang ── */
+.tv .head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+/* Dữ kiện tự xuống dòng TRONG khối trái; nút góc phải giữ nguyên hàng (SAP List Report). */
+.tv .head-l {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.tv .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  font-weight: 600;
+}
+.tv .head h1 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.tv .head-r {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+.tv .fact {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 0 6px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tv .fact b {
+  font-weight: 600;
+}
+.tv .fact:hover {
+  background: var(--hover);
+}
+.tv .fact.on {
+  background: var(--act-wash);
+  color: var(--act-text);
+  font-weight: 600;
+}
+.tv .fact .w {
+  color: var(--warn);
+}
+
+/* ── nút, ô chọn, chip ── */
+.tv .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.tv .btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+  text-decoration: none;
+}
+.tv .btn.pri {
+  background: var(--act);
+  color: var(--act-ink);
+  border-color: var(--act);
+}
+.tv .btn.pri:hover {
+  background: var(--act-text);
+  color: var(--act-ink);
+}
+.tv .btn.sq {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.tv .btn.sm {
+  height: 24px;
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+}
+.tv .btn[aria-disabled='true'],
+.tv .btn:disabled {
+  background: var(--raised);
+  color: var(--ink3);
+  border-color: var(--hair);
+  cursor: not-allowed;
+}
+.tv .pick {
+  height: 28px;
+  padding: 0 24px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--card);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+}
+.tv input.pick {
+  padding-right: 8px;
+}
+.tv .pick:focus {
+  outline: none;
+  border-color: var(--act);
+}
+.tv .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--card);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tv .chip .n {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ink3);
+}
+.tv .chip.on {
+  background: var(--act-wash);
+  border-color: var(--act-line);
+  color: var(--act-text);
+  font-weight: 600;
+}
+.tv .chip.on .n {
+  color: var(--act-text);
+}
+.tv .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.tv .notice {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--warn-line);
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+
+/* ── bảng ── */
+.tv .scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+.tv table {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--card);
+}
+.tv table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--raised);
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  padding: 0 8px;
+  height: 30px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.tv table th.num,
+.tv table td.num {
+  text-align: right;
+}
+.tv table td {
+  padding: 0 8px;
+  height: 30px;
+  border-bottom: 1px solid var(--hair);
+  vertical-align: middle;
+  white-space: nowrap;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tv table tr:hover > td {
+  background: var(--hover);
+}
+.tv table tr.sel > td {
+  background: var(--act-wash);
+}
+.tv table tr.child td:nth-child(3) {
+  padding-left: 26px;
+  color: var(--ink2);
+}
+.tv table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  height: 36px;
+  background: var(--raised);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink2);
+  white-space: normal;
+}
+.tv table td.red,
+.tv .red {
+  background: var(--stop-wash);
+  color: var(--stop);
+}
+.tv table .grp td,
+.tv table .grp th {
+  position: static;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+  font-weight: 500;
+  height: 28px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.tv .grp .n {
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--ink3);
+  font-size: 12px;
+  margin-left: 8px;
+}
+.tv .grp .ok {
+  float: right;
+  font-size: 11px;
+  color: var(--done);
+  font-weight: 400;
+}
+.tv .grp .pend {
+  float: right;
+  font-size: 11px;
+  color: var(--warn);
+  font-weight: 400;
+}
+.tv table td.sub {
+  color: var(--ink3);
+  font-style: italic;
+}
+.tv .thumb {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--hair);
+  background: var(--raised);
+  display: inline-block;
+  vertical-align: middle;
+  border-radius: 2px;
+  object-fit: contain;
+}
+.tv .thumb.none {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--raised),
+    var(--raised) 4px,
+    var(--hair) 4px,
+    var(--hair) 6px
+  );
+}
+.tv button.thumbbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  cursor: zoom-in;
+}
+
+/* ── checklist hồ sơ 6 ô ── */
+.tv .ck {
+  display: inline-flex;
+  gap: 2px;
+}
+.tv .ck.wide {
+  display: flex;
+  width: 100%;
+}
+.tv .ck span {
+  width: 27px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--done-line);
+  background: var(--done-wash);
+  color: var(--done);
+  border-radius: 2px;
+}
+.tv .ck.wide span {
+  width: auto;
+  flex: 1;
+}
+.tv .ck span.no {
+  border-color: var(--stop-line);
+  background: var(--stop-wash);
+  color: var(--stop);
+  text-decoration: line-through;
+}
+.tv .ck span.na {
+  border-color: var(--hair);
+  background: var(--card);
+  color: var(--ink3);
+}
+
+/* ── nhãn ── */
+.tv .tag {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  background: var(--raised);
+  color: var(--ink2);
+  white-space: nowrap;
+}
+.tv .tag.done {
+  background: var(--done-wash);
+  color: var(--done);
+}
+.tv .tag.warn {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.tv .tag.stop {
+  background: var(--stop-wash);
+  color: var(--stop);
+}
+.tv .tag.run {
+  background: var(--act-wash);
+  color: var(--act-text);
+}
+.tv .tagb {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--ink2);
+  background: var(--card);
+  white-space: nowrap;
+}
+.tv .st {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.tv .st::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5a6577;
+  flex-shrink: 0;
+}
+.tv .st.run::before {
+  background: var(--act);
+}
+.tv .st.done::before {
+  background: var(--done);
+}
+.tv .st.warn::before {
+  background: var(--warn);
+}
+.tv .st.stop::before {
+  background: var(--stop);
+}
+
+/* ── thanh trạng thái đáy ── */
+.tv .foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 14px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink2);
+  flex-wrap: wrap;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+}
+
+/* ── lưới ảnh ── */
+.tv .gridv {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--hair);
+  border-bottom: 1px solid var(--line);
+  align-content: start;
+}
+@media (max-width: 1100px) {
+  .tv .gridv {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.tv .card {
+  background: var(--card);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.tv .img {
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  background: var(--raised);
+  border: 1px solid var(--hair);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink3);
+  font-size: 12px;
+  overflow: hidden;
+  padding: 0;
+  cursor: zoom-in;
+}
+.tv .img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tv .img.none {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--raised),
+    var(--raised) 6px,
+    var(--hair) 6px,
+    var(--hair) 9px
+  );
+  cursor: default;
+}
+.tv .nm {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+/* ── rỗng ── */
+.tv .empty {
+  padding: 28px 16px;
+  text-align: center;
+  background: var(--card);
+  border-bottom: 1px solid var(--hair);
+}
+.tv .empty b {
+  display: block;
+  font-weight: 500;
+}
+.tv .empty .why {
+  color: var(--ink3);
+  margin-top: 2px;
+  max-width: 560px;
+  margin-inline: auto;
+}
+.tv .empty .next {
+  margin-top: 8px;
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* ── hồ sơ: đầu trang lớn, dải hiệu suất, dải chặn ── */
+.tv .head2 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px 8px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.tv .crumb {
+  font-size: 11px;
+  color: var(--ink3);
+  margin-bottom: 2px;
+}
+.tv .head2 h1 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.tv .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+  align-items: center;
+}
+.tv .strip {
+  display: flex;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.tv .metric {
+  padding: 6px 14px;
+  border: 0;
+  border-right: 1px solid var(--hair);
+  min-width: 120px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tv .metric:hover {
+  background: var(--hover);
+}
+.tv .metric .l {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  font-weight: 500;
+}
+.tv .metric b {
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 500;
+  display: block;
+  line-height: 1.2;
+}
+.tv .metric small {
+  color: var(--ink3);
+  font-size: 11px;
+  display: block;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tv .metric.warn b {
+  color: var(--warn);
+}
+.tv .metric.stop b {
+  color: var(--stop);
+}
+.tv .metric.done b {
+  color: var(--done);
+}
+.tv .metric.none b {
+  color: var(--ink3);
+  font-size: 13px;
+  font-family: inherit;
+  font-style: italic;
+  line-height: 1.6;
+}
+.tv .strip .hint {
+  margin-left: auto;
+  align-self: center;
+  padding: 0 14px;
+  color: var(--ink3);
+  font-size: 11px;
+}
+.tv .blocked {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  margin: 8px 14px 0;
+  background: var(--warn-wash);
+  border: 1px solid var(--warn-line);
+  border-left: 3px solid var(--warn);
+}
+.tv .blocked b {
+  font-weight: 500;
+  color: var(--warn);
+}
+
+/* ── khối phiếu ── */
+.tv .two {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  margin-top: 8px;
+}
+.tv .photo {
+  flex: 0 0 300px;
+  min-width: 240px;
+  border-right: 1px solid var(--hair);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tv .photo .big {
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  background: var(--raised);
+  border: 1px solid var(--hair);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink3);
+  font-size: 12px;
+  overflow: hidden;
+  padding: 0;
+  cursor: zoom-in;
+}
+.tv .photo .big img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tv .photo .thumbs {
+  display: flex;
+  gap: 4px;
+}
+.tv .photo .thumbs button {
+  width: 42px;
+  height: 42px;
+  background: var(--raised);
+  border: 1px solid var(--hair);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+.tv .photo .thumbs button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tv .photo .thumbs button.on {
+  outline: 2px solid var(--act);
+  outline-offset: -2px;
+}
+.tv .sheet {
+  flex: 999 1 560px;
+  min-width: 0;
+  padding: 10px 14px;
+}
+.tv .lbl {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.tv .lbl .sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink3);
+}
+.tv .lbl .sub.warn {
+  color: var(--warn);
+}
+.tv .kv {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  border: 1px solid var(--line);
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .tv .kv {
+    grid-template-columns: 110px 1fr;
+  }
+}
+.tv .kv > dt,
+.tv .kv > dd {
+  margin: 0;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--hair);
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.tv .kv > dt {
+  background: var(--raised);
+  color: var(--ink2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-right: 1px solid var(--hair);
+}
+.tv .kv > dd.v1 {
+  border-right: 1px solid var(--hair);
+}
+.tv .kv .miss {
+  color: var(--stop);
+  font-style: italic;
+}
+.tv .kv .fill {
+  color: var(--ink3);
+  font-style: italic;
+}
+.tv .kv button.cell {
+  all: unset;
+  display: block;
+  width: 100%;
+  min-height: 20px;
+  padding: 0 2px;
+  border-radius: 3px;
+  cursor: text;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv .kv button.cell:hover,
+.tv .kv button.cell:focus-visible {
+  background: var(--act-wash);
+  outline: none;
+}
+.tv .kv input.cell {
+  font: inherit;
+  height: 22px;
+  width: 100%;
+  border: 1px solid var(--act);
+  border-radius: 3px;
+  padding: 0 4px;
+  background: var(--card);
+  box-sizing: border-box;
+}
+.tv .kv input.cell:focus {
+  outline: none;
+}
+.tv .kv .dims {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.tv .kv .dims button.cell {
+  width: auto;
+  min-width: 48px;
+  text-align: left;
+}
+.tv .kv .dims input.cell {
+  width: 72px;
+}
+
+/* ── tab ── */
+.tv .tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  height: 37px;
+  align-items: flex-end;
+  overflow-x: auto;
+}
+.tv .tabs a {
+  padding: 0 10px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--ink2);
+  border-bottom: 2px solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tv .tabs a:hover {
+  color: var(--act);
+  text-decoration: none;
+}
+.tv .tabs a.on {
+  color: var(--act-text);
+  border-bottom-color: var(--act);
+}
+.tv .tabs .n {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ink3);
+  background: var(--raised);
+  padding: 0 5px;
+  border-radius: 3px;
+}
+.tv .tabs .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--stop);
+}
+.tv .bar {
+  display: flex;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--hair);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tv .bar .r {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* ── WhyBox ── */
+.tv .why {
+  background: var(--rev);
+  border: 1px solid var(--warn-line);
+  padding: 6px 10px;
+  font-size: 12px;
+  margin: 8px 14px;
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+.tv .why b {
+  font-family: inherit;
+  font-weight: 500;
+}
+
+/* ── khối tiêu đề mục (Dùng ở đâu) ── */
+.tv .sec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 28px;
+  background: var(--raised);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-weight: 500;
+}
+.tv .sec .n {
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--ink3);
+  font-size: 12px;
+}
+.tv .sec .r {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+.tv .pad {
+  padding: 10px 14px;
+  color: var(--ink3);
+  font-size: 12px;
+  background: var(--card);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TƯƠNG PHẢN GIỮA CÁC KHỐI (08/10/2026, chủ dự án: "trùng màu khó nhìn").
+   Chữa bằng TƯƠNG PHẢN, không bằng nới thoáng: nền trang tối hơn một bậc để
+   khối trắng nổi; tiêu đề mục / tiêu đề cột / nhãn phiếu đậm nền hơn và có
+   vạch trái; nhóm dòng và dòng tổng tách bằng nền. Vẫn không thẻ bo, không bóng.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv {
+  --bg: #dfe3ea;
+  --raised: #eceff4;
+  --band: #e3e7ee;
+  --line: #b9c2d0;
+}
+.tv .block {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-right: 0;
+  margin-top: 12px;
+}
+.tv .head,
+.tv .head2,
+.tv .filters,
+.tv .strip,
+.tv .two,
+.tv .tabs {
+  border-color: var(--line);
+}
+.tv .sec {
+  background: var(--band);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: 4px solid var(--ink2);
+  padding-left: 10px;
+  height: 32px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tv .sec .n {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 12px;
+}
+.tv table th {
+  background: var(--band);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+.tv table .grp td,
+.tv table .grp th {
+  background: var(--raised);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--ink3);
+  padding-left: 12px;
+}
+.tv table tfoot td {
+  background: var(--band);
+  border-top: 2px solid var(--line);
+}
+.tv .kv {
+  border-color: var(--line);
+}
+.tv .kv > dt {
+  background: var(--band);
+  color: var(--ink);
+  border-right-color: var(--line);
+}
+.tv .kv > dt,
+.tv .kv > dd {
+  border-bottom-color: var(--line);
+}
+.tv .strip {
+  border-bottom: 2px solid var(--line);
+}
+.tv .metric {
+  border-right: 1px solid var(--line);
+}
+.tv .metric .l {
+  color: var(--ink);
+}
+.tv .tabs {
+  background: var(--raised);
+}
+.tv .tabs a.on {
+  background: var(--card);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-top: 2px solid var(--act);
+  border-bottom-color: var(--card);
+  margin-bottom: -1px;
+}
+.tv .bar {
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+.tv .photo {
+  background: var(--raised);
+  border-right: 1px solid var(--line);
+}
+.tv .lbl {
+  color: var(--ink);
+}
+.tv .blocked {
+  margin-top: 12px;
+}
+.tv .pad {
+  background: var(--card);
+}
+
+/* ── form phương án đóng gói ── */
+.tv .form {
+  background: var(--raised);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tv .form-h {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.tv .form-h b {
+  font-weight: 600;
+}
+.tv .form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: flex-end;
+}
+.tv .form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.tv .form table {
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.tv .form table th {
+  position: static;
+}
+.tv .form input.pick {
+  height: 26px;
+}
+.tv .form-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tv .loi {
+  color: var(--stop);
+  font-size: 12px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MÀU THEO KHỐI — bản DỊU (08/10/2026 tối, chủ dự án: "màu đừng quá loè
+   loẹt"). Mỗi mục một sắc, nhưng sắc chỉ nằm ở: vạch trái + chữ của dải tiêu
+   đề mục, ô vuông trên tab, vạch trên ô dải hiệu suất, viền trên khối phiếu.
+   Nền tiêu đề cột, chân bảng, nhóm dòng, thanh công cụ, nhãn phiếu đều về
+   XÁM TRUNG TÍNH — tương phản bằng đậm/nhạt, không bằng màu.
+   ══════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   NHIỀU CỠ MÀN HÌNH — KHÔNG CUỘN NGANG (08/10/2026). `.tv` là container
+   đo bề rộng (sidebar ăn mất một phần cửa sổ nên không đo viewport). Cột
+   phụ mang lớp `.c-lg` / `.c-md` tự ẩn khi hẹp; chữ trong nút (`.t`) ẩn,
+   còn icon + title. Riêng lưới định mức tự đo bằng ResizeObserver vì
+   colSpan của dòng tổng phải đúng số cột đang hiện.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv {
+  container-type: inline-size;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.tv table {
+  table-layout: auto;
+}
+.tv .btn .t {
+  white-space: nowrap;
+}
+.tv .btn kbd {
+  font-size: 10px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+@container (max-width: 1199px) {
+  .tv .c-lg {
+    display: none;
+  }
+}
+@container (max-width: 899px) {
+  .tv .c-md {
+    display: none;
+  }
+  .tv .btn .t,
+  .tv .btn kbd,
+  .tv .hint-k,
+  .tv .strip .hint {
+    display: none;
+  }
+  .tv .btn {
+    padding: 0 7px;
+  }
+  .tv .btn.pri .t {
+    display: inline;
+  }
+}
+@container (max-width: 639px) {
+  .tv .photo {
+    flex: 1 1 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .tv .head2 h1 {
+    font-size: 16px;
+  }
+  .tv table td {
+    max-width: 220px;
+  }
+}
+
+/* ── lưới định mức kiểu Excel (lớp `luoi`, KHÔNG đặt `grid` — trùng utility display:grid của Tailwind, bảng vỡ 08/10) ── */
+.tv table.luoi {
+  table-layout: fixed;
+  width: 100%;
+}
+.tv table.luoi th,
+.tv table.luoi td {
+  border-right: 1px solid var(--hair);
+}
+.tv table.luoi th:last-child,
+.tv table.luoi td:last-child {
+  border-right: 0;
+}
+.tv table.luoi th {
+  padding: 0 6px;
+}
+.tv table.luoi td {
+  padding: 2px 6px;
+  height: auto;
+  max-width: none;
+  white-space: normal;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.tv table.luoi td.calc {
+  color: var(--ink2);
+  background: var(--raised);
+}
+.tv table.luoi .ro {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 22px;
+}
+.tv table.luoi .sub2 {
+  font-size: 11px;
+  color: var(--ink3);
+}
+.tv table.luoi .sub2 .ro {
+  line-height: 18px;
+}
+.tv table.luoi input.cell,
+.tv table.luoi select.cell {
+  display: block;
+  width: 100%;
+  height: 22px;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0 4px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+.tv table.luoi .sub2 input.cell {
+  height: 18px;
+  font-size: 11px;
+}
+.tv table.luoi select.cell {
+  padding-right: 14px;
+}
+.tv table.luoi input.cell.num {
+  text-align: right;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.tv table.luoi input.cell::placeholder {
+  color: var(--ink3);
+  font-style: italic;
+  font-family: inherit;
+  opacity: 0.9;
+}
+.tv table.luoi td.red input.cell::placeholder {
+  color: var(--stop);
+}
+.tv table.luoi.sua input.cell:hover,
+.tv table.luoi.sua select.cell:hover {
+  border-color: var(--line);
+}
+.tv table.luoi input.cell:focus,
+.tv table.luoi select.cell:focus {
+  outline: none;
+  border-color: var(--act);
+  box-shadow: 0 0 0 2px var(--act-wash);
+  background: var(--card);
+  position: relative;
+  z-index: 1;
+}
+.tv table.luoi td.dirty {
+  background: var(--rev);
+}
+.tv table.luoi td.bad {
+  background: var(--stop-wash);
+}
+.tv table.luoi td.bad input.cell {
+  color: var(--stop);
+}
+.tv table.luoi tr.moi > td:first-child {
+  box-shadow: inset 3px 0 0 var(--act);
+}
+.tv table.luoi .qc {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tv table.luoi .qc select.cell {
+  flex: 0 0 84px;
+}
+.tv table.luoi .qc input.cell {
+  flex: 1 1 0;
+}
+.tv table.luoi .qc .x {
+  color: var(--ink3);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+.tv table.luoi tr.sum td {
+  background: var(--raised);
+  font-style: italic;
+  font-size: 12px;
+  height: 26px;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tv table.luoi tr.sum td.num {
+  font-style: normal;
+}
+.tv table.luoi tfoot tr.sum td {
+  background: var(--band);
+  font-style: normal;
+  height: 32px;
+}
+.tv table.luoi td.red {
+  background: var(--stop-wash);
+}
+.tv table.luoi .grp th {
+  height: 28px;
+}
+.tv .grp .btn.sm {
+  margin-left: 8px;
+  vertical-align: middle;
+  height: 20px;
+  width: 20px;
+}
+.tv .btn.del {
+  color: var(--stop);
+  border-color: transparent;
+  background: transparent;
+}
+.tv .btn.del:hover {
+  background: var(--stop-wash);
+  border-color: var(--stop-line);
+  color: var(--stop);
+}
+.tv .hint-k {
+  font-size: 11px;
+  align-self: center;
+}
+.tv .savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: var(--card);
+  border-top: 2px solid var(--act);
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+}
+.tv .savebar .r {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+.tv .savebar .loi {
+  color: var(--stop);
+}
+/* Bảng phẳng: nút hành động trong bảng gọn, chỉ icon */
+.tv table .btn.sm {
+  height: 22px;
+  width: 22px;
+}
+/* Bảng phẳng thư viện: bề rộng cố định theo tiêu đề cột, tên SP co bằng ellipsis — KHÔNG cuộn ngang */
+.tv table.bang {
+  table-layout: fixed;
+}
+.tv table.bang td {
+  max-width: none;
+}
+.tv .scroll {
+  overflow-x: hidden;
+}
+/* Ô trống của lưới định mức: gợi ý chỉ hiện khi rê/đứng vào ô (như ô Excel trống), trừ ô báo THIẾU */
+.tv table.luoi input.cell::placeholder {
+  opacity: 0;
+}
+.tv table.luoi input.cell:hover::placeholder,
+.tv table.luoi input.cell:focus::placeholder,
+.tv table.luoi td.red input.cell::placeholder {
+  opacity: 0.9;
+}
+.tv table.luoi .qc .x {
+  opacity: 0.5;
+}
+/* Máy tính bảng dọc / cửa sổ hẹp: bảng thường (không phải lưới) cho tiêu đề xuống dòng, ô co bằng ellipsis, cột `.c-sm` ẩn */
+@container (max-width: 759px) {
+  .tv .c-sm {
+    display: none;
+  }
+  .tv table:not(.luoi) th {
+    white-space: normal;
+    line-height: 1.2;
+  }
+  .tv table:not(.luoi) td {
+    max-width: 150px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BẢN THEO APP CŨ (08/10/2026 khuya) — chủ dự án: "trường thông tin không in
+   đậm, chuyển hết về chữ hệ thống; chưa phân biệt được sửa hay xem; màu trùng
+   nhau". Mục phân biệt bằng ICON (không màu). XEM = chữ thường, vạch ngang.
+   SỬA = dải vàng đầu trang + ô nhập có viền + lưới kẻ ô như Excel.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv table th {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  background: var(--band);
+}
+.tv .sec {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--band);
+  border-left: 0;
+  padding-left: 14px;
+  gap: 8px;
+}
+.tv .sec > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ink2);
+  flex-shrink: 0;
+}
+.tv .sec .n {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--ink3);
+}
+.tv .sec .r .btn {
+  height: 24px;
+  font-size: 12px;
+}
+.tv .tabs a svg {
+  width: 14px;
+  height: 14px;
+  color: var(--ink3);
+}
+.tv .tabs a.on svg {
+  color: var(--act);
+}
+.tv .kv > dd,
+.tv .kv > dd .num,
+.tv .kv > dd .code,
+.tv .metric b,
+.tv .tagb {
+  font-weight: 400;
+}
+.tv .two {
+  border-top: 1px solid var(--line);
+}
+.tv .lbl {
+  font-weight: 600;
+  color: var(--ink);
+}
+.tv .why {
+  font-family: inherit;
+}
+/* nút "Xong" khi đang sửa */
+.tv .btn.on {
+  background: #fff3c4;
+  border-color: #e6c874;
+  color: #6b4f00;
+}
+/* dải "Đang sửa" */
+.tv .editbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: #fff8e1;
+  border-bottom: 1px solid #e6c874;
+  color: #6b4f00;
+  font-size: 12px;
+}
+.tv .editbar b {
+  font-weight: 600;
+}
+.tv .editbar a {
+  color: var(--act);
+  text-decoration: underline;
+}
+.tv .editbar .r {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+/* phiếu thông số ở chế độ sửa: ô nhập có viền, nền trắng */
+.tv .kv input.cell {
+  border: 1px solid var(--line);
+  background: #fff;
+  height: 22px;
+  border-radius: 2px;
+}
+.tv .kv input.cell::placeholder {
+  color: var(--ink3);
+  font-style: italic;
+}
+.tv .kv input.cell:hover {
+  border-color: var(--act-line);
+}
+.tv .kv input.cell:focus {
+  border-color: var(--act);
+  box-shadow: 0 0 0 2px var(--act-wash);
+  outline: none;
+}
+.tv .two.sua .kv > dd {
+  padding: 3px 6px;
+}
+.tv .two.sua .kv .dims input.cell {
+  width: 64px;
+}
+/* lưới định mức: xem = vạch ngang; sửa = kẻ ô */
+.tv table.luoi th,
+.tv table.luoi td {
+  border-right: 0;
+}
+.tv table.luoi th {
+  height: 26px;
+  text-align: center;
+  padding: 0 4px;
+  white-space: normal;
+  line-height: 1.15;
+  border-right: 1px solid var(--line);
+}
+.tv table.luoi th:last-child {
+  border-right: 0;
+}
+.tv table.luoi thead tr:nth-child(2) th {
+  top: 26px;
+}
+.tv table.luoi th.grp-h {
+  font-weight: 600;
+}
+.tv table.luoi th.fx {
+  background: var(--raised);
+  color: var(--ink2);
+  font-weight: 500;
+}
+.tv table.luoi th.fx small {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink3);
+}
+.tv table.luoi td {
+  padding: 0 6px;
+  height: 28px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.tv table.luoi .ro {
+  line-height: 27px;
+}
+.tv table.luoi td.calc {
+  background: var(--raised);
+  color: var(--ink2);
+}
+.tv table.luoi input.cell,
+.tv table.luoi select.cell {
+  height: 26px;
+  border-radius: 0;
+}
+.tv table.luoi input.cell::placeholder {
+  opacity: 0;
+}
+.tv table.luoi td.red input.cell::placeholder {
+  opacity: 0.9;
+}
+.tv table.luoi .loai {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.tv table.luoi .loai select.cell {
+  flex: 0 0 72px;
+}
+.tv table.luoi .loai input.cell {
+  flex: 1 1 0;
+}
+.tv table.luoi tr.sum td {
+  font-style: normal;
+  padding: 0 6px;
+}
+.tv table.luoi.sua {
+  border-top: 2px solid #e6c874;
+}
+.tv table.luoi.sua th,
+.tv table.luoi.sua td {
+  border: 1px solid var(--line);
+}
+.tv table.luoi.sua td {
+  padding: 0 2px;
+}
+.tv table.luoi.sua .grp th {
+  border-left: 1px solid var(--line);
+}
+.tv table.luoi .grp th {
+  height: 26px;
+  text-align: left;
+  padding-left: 10px;
+  box-shadow: none;
+  border-left: 3px solid var(--ink3);
+}
+.tv .hint-k {
+  display: none;
+}
+
+/* ── form gọn trong hộp thoại (tạo SP) ── */
+.tv .tv-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: min(460px, 90vw);
+}
+.tv .tv-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--ink2);
+}
+.tv .tv-form .row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tv .tv-form .req {
+  color: var(--stop);
+}
+.tv .tv-form input.pick,
+.tv .tv-form select.pick {
+  height: 30px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.tv .tv-form .form-foot {
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.tv .btn.del.btn {
+  color: var(--stop);
+}
+
+/* ── màn nhập Excel: 3 bước + bảng soi ── */
+.tv .steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.tv .step {
+  padding: 10px 14px;
+  border-right: 1px solid var(--hair);
+  min-width: 0;
+}
+.tv .step:last-child {
+  border-right: 0;
+}
+.tv .step .n {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink2);
+  color: var(--card);
+  font-size: 11px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+.tv .step.on .n {
+  background: var(--act);
+}
+.tv .step b {
+  font-weight: 600;
+}
+.tv .step p {
+  margin: 4px 0 6px;
+  color: var(--ink3);
+  font-size: 12px;
+}
+.tv .step .row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.tv .strip button.metric {
+  font: inherit;
+}
+.tv .strip .metric.act b {
+  color: var(--act);
+}
+.tv table.soi td {
+  white-space: nowrap;
+}
+.tv .diff {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tv .diff span {
+  background: var(--rev);
+  border: 1px solid var(--hair);
+  padding: 0 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tv .diff span.img {
+  background: var(--act-wash);
+}
+.tv .warn-t {
+  color: var(--warn);
+  font-size: 11px;
+}
+.tv .thumb {
+  width: 28px;
+  height: 28px;
+  vertical-align: middle;
+}
+/* nút Excel ▾ ở đầu thư viện */
+.tv details.dd {
+  position: relative;
+}
+.tv details.dd > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.tv details.dd > summary::-webkit-details-marker {
+  display: none;
+}
+.tv details.dd .dd-m {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  z-index: 20;
+  min-width: 220px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+.tv details.dd .dd-m a {
+  padding: 7px 12px;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hair);
+  font-size: 12px;
+}
+.tv details.dd .dd-m a:last-child {
+  border-bottom: 0;
+}
+.tv details.dd .dd-m a:hover {
+  background: var(--hover);
+}
+@container (max-width: 759px) {
+  .tv .steps {
+    grid-template-columns: 1fr;
+  }
+  .tv .step {
+    border-right: 0;
+    border-bottom: 1px solid var(--hair);
+  }
+}
+/* ══════════════════════════════════════════════════════════════════════
+   HỒ SƠ SP — BẢN THẺ (09/10/2026, bản vẽ 2aJmfRiWs29AnByCZDsux6 đã duyệt):
+   thẻ trắng bo 10px + bóng mờ trên nền xám · tiêu đề mục icon màu · dải chỉ số
+   icon tròn · thông số = lưới kẻ ô · tab thật · bảng BOM kẻ ô Excel. Mỗi phần
+   một màu nhưng chỉ ở icon và vạch: ts indigo · dm xanh ngọc · dg hổ phách ·
+   tl xanh biển · ls xám đá. Đỏ/vàng/xanh lá vẫn là tình trạng.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv .hs {
+  --pg: #f1f5f9;
+  --hd: #f8fafc;
+  --xl: #94a3b8;
+  --c-ts: #4f46e5;
+  --w-ts: #eef2ff;
+  --c-dm: #0f766e;
+  --w-dm: #ccfbf1;
+  --c-dg: #b45309;
+  --w-dg: #fef3c7;
+  --c-tl: #0369a1;
+  --w-tl: #e0f2fe;
+  --c-ls: #475569;
+  --w-ls: #f1f5f9;
+  --ok: #15803d;
+  --ok-wash: #dcfce7;
+  --bad: #b91c1c;
+  --bad-wash: #fee2e2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 24px;
+  background: var(--pg);
+  min-height: 100%;
+}
+.tv .hs > * {
+  flex: 0 0 auto;
+}
+.tv .hs .card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  min-width: 0;
+  overflow: hidden;
+}
+.tv .hs .card-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--hair);
+  flex-wrap: wrap;
+}
+.tv .hs .card-h h2,
+.tv .hs .ph {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tv .hs .card-h .sub,
+.tv .hs .ph .n {
+  color: var(--ink3);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tv .hs .card-h .r,
+.tv .hs .ph .r {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.tv .hs .ph {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hair);
+  background: var(--card);
+  flex-wrap: wrap;
+  height: auto;
+  border-left: 0;
+  border-top: 0;
+}
+.tv .hs .ic-sec {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.tv .hs .ic-sec svg {
+  width: 13px;
+  height: 13px;
+}
+.tv .hs .sec-ts .ic-sec {
+  background: var(--w-ts);
+  color: var(--c-ts);
+}
+.tv .hs .sec-dm .ic-sec {
+  background: var(--w-dm);
+  color: var(--c-dm);
+}
+.tv .hs .sec-dg .ic-sec {
+  background: var(--w-dg);
+  color: var(--c-dg);
+}
+.tv .hs .sec-tl .ic-sec {
+  background: var(--w-tl);
+  color: var(--c-tl);
+}
+.tv .hs .sec-ls .ic-sec {
+  background: var(--w-ls);
+  color: var(--c-ls);
+}
+/* nút */
+.tv .hs .btn {
+  border-radius: 6px;
+}
+.tv .hs .btn.xs {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.tv .hs .btn.out {
+  color: var(--c-ts);
+  border-color: #c7d2fe;
+  background: var(--w-ts);
+}
+.tv .hs .btn.pri {
+  background: var(--c-ts);
+  border-color: var(--c-ts);
+  color: #fff;
+}
+.tv .hs .btn.pri:hover {
+  background: #4338ca;
+}
+.tv .hs .btn.del {
+  color: var(--bad);
+}
+.tv .hs .lnk {
+  all: unset;
+  cursor: pointer;
+  color: var(--act);
+  text-decoration: underline;
+}
+/* đầu trang */
+.tv .hs .head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border-bottom: 0;
+}
+.tv .hs .head .r {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tv .hs .crumb {
+  font-size: 11px;
+  color: var(--ink3);
+  margin-bottom: 2px;
+}
+.tv .hs h1 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+}
+.tv .hs .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+  align-items: center;
+}
+.tv .hs .chip {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink2);
+  background: var(--hd);
+  font-weight: 400;
+  cursor: default;
+}
+.tv .hs .chip.code {
+  font-weight: 600;
+  color: var(--c-ts);
+  background: var(--w-ts);
+  border-color: #c7d2fe;
+}
+.tv .hs .pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.tv .hs .pill.ok {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+.tv .hs .pill.warn {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.tv .hs .pill.bad {
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.tv .hs .pill.gray {
+  background: var(--hd);
+  color: var(--ink3);
+  border: 1px solid var(--hair);
+}
+/* dải chỉ số */
+.tv .hs .stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  border-top: 1px solid var(--hair);
+}
+.tv .hs .stat {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  border-right: 1px solid var(--hair);
+  background: transparent;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  min-width: 0;
+}
+.tv .hs .stat:last-child {
+  border-right: 0;
+}
+.tv .hs button.stat {
+  cursor: pointer;
+}
+.tv .hs button.stat:hover {
+  background: var(--hd);
+}
+.tv .hs .stat .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.tv .hs .stat .ic svg {
+  width: 17px;
+  height: 17px;
+}
+.tv .hs .stat .ic.ok {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+.tv .hs .stat .ic.warn {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.tv .hs .stat .ic.bad {
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.tv .hs .stat .ic.act {
+  background: var(--w-ts);
+  color: var(--c-ts);
+}
+.tv .hs .stat .ic.gray {
+  background: var(--hd);
+  color: var(--ink3);
+}
+.tv .hs .stat .l {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink3);
+  font-weight: 600;
+}
+.tv .hs .stat b {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  line-height: 1.2;
+}
+.tv .hs .stat small {
+  color: var(--ink3);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+.tv .hs .warnbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--warn-wash);
+  color: var(--warn);
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+  font-size: 12px;
+}
+.tv .hs .warnbar svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.tv .hs .warnbar b {
+  font-weight: 700;
+}
+.tv .hs .editbar {
+  border-radius: 8px;
+  border: 1px solid #e6c874;
+  position: sticky;
+  top: 0;
+}
+/* ảnh + thông số */
+.tv .hs .two {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+}
+.tv .hs .photo {
+  flex: none;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-right: 1px solid var(--line);
+  background: var(--card);
+  min-width: 0;
+}
+.tv .hs .photo .big {
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--hd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink3);
+  font-size: 12px;
+  overflow: hidden;
+  padding: 0;
+  cursor: zoom-in;
+  width: 100%;
+}
+.tv .hs .photo .big img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tv .hs .photo .big.none {
+  cursor: default;
+}
+.tv .hs .thumbs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tv .hs .thumbs button,
+.tv .hs .thumbs .add {
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  background: var(--hd);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--ink3);
+}
+.tv .hs .thumbs button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tv .hs .thumbs button.on {
+  outline: 2px solid var(--c-ts);
+  outline-offset: -2px;
+}
+.tv .hs .thumbs .add {
+  border-style: dashed;
+}
+.tv .hs .thumbs .add:hover {
+  color: var(--c-ts);
+  border-color: var(--c-ts);
+}
+.tv .hs .thumbs .add.busy {
+  opacity: 0.5;
+  cursor: progress;
+}
+.tv .hs .pad {
+  padding: 10px 12px;
+  background: var(--card);
+}
+.tv .hs table.xl {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  table-layout: fixed;
+  background: var(--card);
+}
+.tv .hs table.xl td {
+  border: 1px solid var(--xl);
+  padding: 5px 8px;
+  height: 30px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: none;
+}
+.tv .hs table.xl td.l {
+  background: var(--hd);
+  color: var(--ink2);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  width: 118px;
+}
+.tv .hs table.xl td.v {
+  font-weight: 400;
+}
+.tv .hs table.xl td.v .miss {
+  color: var(--bad);
+  font-style: italic;
+}
+.tv .hs table.xl td.v .dot {
+  color: var(--ink3);
+  margin: 0 6px;
+}
+.tv .hs table.xl td.kt {
+  font-variant-numeric: tabular-nums;
+}
+.tv .hs table.xl input.cell {
+  display: inline-block;
+  width: auto;
+  min-width: 60px;
+  max-width: 100%;
+  height: 24px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0 6px;
+  font: inherit;
+}
+.tv .hs table.xl td.v[colspan] input.cell {
+  width: 100%;
+}
+.tv .hs table.xl input.cell:focus {
+  outline: none;
+  border-color: var(--c-ts);
+  box-shadow: 0 0 0 2px var(--w-ts);
+}
+.tv .hs .dims {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* tab thật */
+.tv .hs .tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 2px solid var(--line);
+  background: var(--hd);
+  height: auto;
+  overflow-x: auto;
+  align-items: flex-end;
+}
+.tv .hs .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tv .hs .tab .n {
+  font-size: 11px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  color: var(--ink3);
+}
+.tv .hs .tab .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bad);
+}
+.tv .hs .tab.on {
+  background: var(--card);
+  border-color: var(--line) var(--line) var(--card);
+  border-top: 3px solid var(--c-ts);
+  margin-bottom: -2px;
+  color: var(--c-ts);
+}
+.tv .hs .tab.sec-dm.on {
+  color: var(--c-dm);
+  border-top-color: var(--c-dm);
+}
+.tv .hs .tab.sec-dg.on {
+  color: var(--c-dg);
+  border-top-color: var(--c-dg);
+}
+.tv .hs .tab.sec-tl.on {
+  color: var(--c-tl);
+  border-top-color: var(--c-tl);
+}
+.tv .hs .tab.sec-ls.on {
+  color: var(--c-ls);
+  border-top-color: var(--c-ls);
+}
+.tv .hs .panel {
+  background: var(--card);
+  border: 0;
+  margin: 0;
+}
+.tv .hs .panel .pad {
+  color: var(--ink3);
+  font-size: 12px;
+}
+/* thanh chip nhóm + bảng BOM kẻ ô */
+.tv .hs .bar {
+  background: var(--card);
+  border-bottom: 0;
+  padding: 10px 14px 6px;
+}
+.tv .hs .bar .chip {
+  border-radius: 999px;
+  height: 26px;
+  padding: 0 12px;
+  font-weight: 600;
+  color: var(--ink3);
+  cursor: pointer;
+}
+.tv .hs .bar .chip.on {
+  background: var(--c-dm);
+  color: #fff;
+  border-color: var(--c-dm);
+}
+.tv .hs .bar .chip.on .n {
+  color: #fff;
+}
+.tv .hs table.luoi {
+  margin: 0 14px 10px;
+  width: calc(100% - 28px);
+  border: 1px solid var(--xl);
+}
+.tv .hs table.luoi th,
+.tv .hs table.luoi td {
+  border: 1px solid var(--xl);
+}
+.tv .hs table.luoi th {
+  background: var(--hd);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 12px;
+  text-align: center;
+}
+.tv .hs table.luoi th.grp-h {
+  background: var(--w-dm);
+  color: var(--c-dm);
+}
+.tv .hs table.luoi th.fx {
+  background: var(--hd);
+  color: var(--ink3);
+  font-weight: 500;
+}
+.tv .hs table.luoi td.calc {
+  background: var(--hd);
+  color: var(--ink2);
+}
+.tv .hs table.luoi td.red {
+  background: var(--bad-wash);
+  color: var(--bad);
+  font-weight: 600;
+}
+.tv .hs table.luoi .grp th {
+  background: var(--hd);
+  border-left: 4px solid var(--c-dm);
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+}
+.tv .hs table.luoi .grp .ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+.tv .hs table.luoi tr.sum td {
+  background: var(--hd);
+  font-weight: 600;
+  font-style: normal;
+}
+.tv .hs table.luoi tfoot tr.sum td {
+  background: var(--hd);
+}
+.tv .hs table.luoi tbody tr:hover > td:not(.calc):not(.red):not(.dirty) {
+  background: #f0fdf4;
+}
+.tv .hs table.luoi.sua {
+  border-top: 1px solid var(--xl);
+}
+.tv .hs .why {
+  margin: 0 14px 12px;
+  background: var(--hd);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-family: inherit;
+}
+.tv .hs .savebar {
+  border-top: 2px solid var(--c-dm);
+}
+/* bảng thường trong panel (đóng gói, tài liệu, lịch sử) */
+.tv .hs .panel table:not(.luoi) {
+  margin: 0;
+  width: 100%;
+  border: 0;
+}
+.tv .hs .panel table:not(.luoi) th {
+  background: var(--hd);
+}
+.tv .hs .panel .form {
+  margin: 0;
+}
+@container (max-width: 900px) {
+  .tv .hs .two {
+    grid-template-columns: 1fr;
+  }
+  .tv .hs table.xl td.l {
+    width: 96px;
+  }
+}
+
+/* ghi chú + ô sửa tại chỗ trong các bảng của hồ sơ (09/10) */
+.tv .hs .tabs .hint {
+  order: 99;
+  margin-left: auto;
+  align-self: center;
+  font-size: 11px;
+  color: var(--ink3);
+  padding: 0 4px 8px;
+  white-space: nowrap;
+}
+.tv .hs .panel table input.cell {
+  display: inline-block;
+  width: auto;
+  min-width: 52px;
+  max-width: 100%;
+  height: 24px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0 6px;
+  font: inherit;
+}
+.tv .hs .panel table input.cell.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tv .hs .panel table input.cell:focus {
+  outline: none;
+  border-color: var(--c-ts);
+  box-shadow: 0 0 0 2px var(--w-ts);
+}
+.tv .hs .panel table td > input.cell:only-child {
+  width: 100%;
+}
+
+/* chữ đen trên nền trắng (09/10): mọi chữ phụ cũng tối, không còn xám nhạt */
+.tv,
+.tv table td,
+.tv table th,
+.tv .hs,
+.tv .hs table.xl td.v {
+  color: #000;
+}
+.tv .muted,
+.tv .sub,
+.tv .crumb,
+.tv .chip .n,
+.tv .tabs .n,
+.tv .grp .n,
+.tv .sec .n,
+.tv .hs .card-h .sub,
+.tv .hs .ph .n,
+.tv .hs .stat small,
+.tv .hs .stat .l,
+.tv .hs .tab,
+.tv .hs .tab .n,
+.tv table.luoi .ro.muted,
+.tv .foot,
+.tv .why {
+  color: #374151;
+}
+.tv table th,
+.tv .hs table.luoi th,
+.tv .hs table.xl td.l,
+.tv .kv > dt {
+  color: #111827;
+}
+.tv input.cell::placeholder,
+.tv .hs table.xl input.cell::placeholder {
+  color: #6b7280;
+}
+/* ══════════════════════════════════════════════════════════════════════
+   HỒ SƠ SP — KHUÔN ERP PHẲNG (09/10/2026, chủ dự án: "cho hồ sơ sản phẩm cũng
+   theo khuôn ERP phẳng luôn"): cùng hệ với /thu-vien và /thu-vien/lenh — không
+   thẻ bo góc, không bóng; khối ngăn nhau bằng vạch mảnh, sát mép; ô đếm vuông;
+   tab gạch chân; nút và nhãn góc vuông. Giữ nguyên cấu trúc và màu icon theo phần.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv .hs {
+  padding: 0;
+  gap: 0;
+  background: var(--card);
+}
+.tv .hs .card {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.tv .hs .head {
+  padding: 8px 14px 8px;
+}
+.tv .hs h1 {
+  font-size: 16px;
+}
+.tv .hs .crumb {
+  margin-bottom: 1px;
+}
+.tv .hs .chip {
+  border-radius: 3px;
+  height: 20px;
+  font-size: 11px;
+}
+.tv .hs .chip.code {
+  border-radius: 3px;
+}
+.tv .hs .pill {
+  border-radius: 3px;
+  height: 20px;
+  font-size: 10.5px;
+}
+.tv .hs .btn {
+  border-radius: 3px;
+  height: 26px;
+}
+.tv .hs .btn.pri {
+  background: var(--act);
+  border-color: var(--act);
+}
+.tv .hs .btn.pri:hover {
+  background: var(--act-text);
+}
+.tv .hs .btn.out {
+  background: var(--card);
+  color: var(--act);
+  border-color: var(--act-line);
+}
+/* ô đếm vuông, ngăn bằng vạch, nhãn trên số dưới */
+.tv .hs .stats {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  border-top: 1px solid var(--line);
+  background: var(--raised);
+}
+.tv .hs .stat {
+  padding: 6px 14px;
+  border-right: 1px solid var(--line);
+  gap: 8px;
+}
+.tv .hs .stat .ic {
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+}
+.tv .hs .stat .ic svg {
+  width: 15px;
+  height: 15px;
+}
+.tv .hs .stat b {
+  font-size: 16px;
+}
+.tv .hs .warnbar {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  margin: 0;
+  padding: 6px 14px;
+}
+.tv .hs .editbar {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+/* ảnh + thông số: hai khối cạnh nhau, ngăn bằng vạch dọc */
+.tv .hs .two {
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.tv .hs .two .card {
+  border-bottom: 0;
+}
+.tv .hs .two .photo {
+  border-right: 1px solid var(--line);
+  padding: 10px 14px;
+}
+.tv .hs .photo .big {
+  border-radius: 0;
+}
+.tv .hs .thumbs button,
+.tv .hs .thumbs .add {
+  border-radius: 0;
+}
+.tv .hs .card-h {
+  padding: 6px 14px;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs .ic-sec {
+  border-radius: 2px;
+  width: 20px;
+  height: 20px;
+}
+.tv .hs .pad {
+  padding: 0;
+}
+.tv .hs table.xl {
+  border-collapse: collapse;
+}
+.tv .hs table.xl td {
+  border-left: 0;
+}
+.tv .hs table.xl td:last-child {
+  border-right: 0;
+}
+.tv .hs table.xl tr:last-child td {
+  border-bottom: 0;
+}
+.tv .hs table.xl input.cell {
+  border-radius: 2px;
+}
+/* tab gạch chân, phẳng */
+.tv .hs .tabs {
+  padding: 0 8px;
+  gap: 0;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs .tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 8px 12px;
+  background: transparent;
+}
+.tv .hs .tab .n {
+  border-radius: 2px;
+}
+.tv .hs .tab.on {
+  background: var(--card);
+  border: 0;
+  border-bottom: 2px solid var(--c-ts);
+  margin-bottom: -1px;
+}
+.tv .hs .tab.sec-dm.on {
+  border-bottom-color: var(--c-dm);
+}
+.tv .hs .tab.sec-dg.on {
+  border-bottom-color: var(--c-dg);
+}
+.tv .hs .tab.sec-tl.on {
+  border-bottom-color: var(--c-tl);
+}
+.tv .hs .tab.sec-ls.on {
+  border-bottom-color: var(--c-ls);
+}
+.tv .hs .tabs .hint {
+  padding: 0 6px;
+}
+.tv .hs .ph {
+  padding: 6px 14px;
+  background: var(--raised);
+}
+.tv .hs .bar {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.tv .hs .bar .chip {
+  border-radius: 3px;
+  height: 24px;
+}
+/* lưới định mức sát mép, kẻ ô */
+.tv .hs table.luoi {
+  margin: 0;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs table.luoi th:first-child,
+.tv .hs table.luoi td:first-child {
+  border-left: 0;
+}
+.tv .hs table.luoi th:last-child,
+.tv .hs table.luoi td:last-child {
+  border-right: 0;
+}
+.tv .hs .why {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--hair);
+  border-radius: 0;
+  background: var(--raised);
+  padding: 6px 14px;
+}
+.tv .hs .savebar {
+  border-radius: 0;
+}
+.tv .hs .form {
+  border-radius: 0;
+}
+.tv .hs .panel table:not(.luoi) th {
+  border-bottom: 1px solid var(--line);
+}
+.tv .hs .panel .pad {
+  padding: 10px 14px;
+}

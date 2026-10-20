@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('./production.repo', () => ({
-  productionRepo: { findById: vi.fn(), patch: vi.fn() },
+  productionRepo: { findById: vi.fn(), patch: vi.fn(), insertChange: vi.fn() },
 }))
 vi.mock('./lsx-lines.repo', () => ({
   lsxLinesRepo: {
@@ -112,16 +112,48 @@ describe('lsxLinesService.save — bản chỉnh sửa (0114)', () => {
       .mockResolvedValueOnce([line({ qty: 100 })] as never) // trước khi lưu
       .mockResolvedValue([line({ qty: 80 })] as never) // sau khi lưu
 
-    await lsxLinesService.save(sales, 'lsx1', payload(80))
+    await lsxLinesService.save(sales, 'lsx1', {
+      ...payload(80),
+      revision_note: 'Khách giảm SL',
+    })
 
     expect(productionRepo.patch).toHaveBeenCalledWith(
       'lsx1',
       expect.objectContaining({ revision: 2 }),
     )
     expect(lsxLinesRepo.markChanged).toHaveBeenCalledWith(['l1'], 2)
+    expect(productionRepo.insertChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        change: expect.objectContaining({ type: 'revised', revision: 2 }),
+        note: 'Khách giảm SL',
+      }),
+    )
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'lsx.revised', changed_lines: 1 }),
     )
+  })
+
+  // 07/10/2026: bản sửa của lệnh đã duyệt là phiếu in lại cho xưởng — lý do bắt buộc.
+  it('lệnh ĐÃ DUYỆT + dòng đổi mà KHÔNG ghi lý do → 400, không ghi gì', async () => {
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([line({ qty: 100 })] as never)
+    await expect(lsxLinesService.save(sales, 'lsx1', payload(80))).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
+  })
+
+  it('khoá phiên bản: expected_updated_at lệch updated_at → 409 LSX_STALE', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      updated_at: '2026-10-07T03:00:00.000Z',
+    } as never)
+    await expect(
+      lsxLinesService.save(sales, 'lsx1', {
+        ...payload(80),
+        expected_updated_at: '2026-10-07T02:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'LSX_STALE' })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
   })
 
   it('không có gì đổi → KHÔNG tăng revision, không báo', async () => {
@@ -177,6 +209,48 @@ describe('lsxLinesService.save — bản chỉnh sửa (0114)', () => {
     await expect(lsxLinesService.save(sales, 'lsx1', payload(10))).rejects.toMatchObject({
       status: 400,
     })
+  })
+})
+
+/**
+ * Nút "Nạp dòng từ đơn" (route POST lines) đi qua `reseed` — cùng cửa với
+ * `save`. Trước 07/10/2026 route gọi thẳng seedFromOrders chỉ cần đăng nhập.
+ */
+describe('lsxLinesService.reseed — cửa của nút Nạp dòng', () => {
+  beforeEach(() => {
+    vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([])
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([])
+    vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([])
+    vi.mocked(customersRepo.findById).mockResolvedValue({ lsx_template: null } as never)
+  })
+
+  it('người lập lệnh → nạp rồi trả sheet', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+    } as never)
+    const sheet = await lsxLinesService.reseed(sales, 'lsx1')
+    expect(sheet).toHaveProperty('groups')
+  })
+
+  it('lệnh của người khác lập → 403', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+      created_by: 'u-khac',
+    } as never)
+    await expect(lsxLinesService.reseed(sales, 'lsx1')).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
+  })
+
+  it.each(['completed', 'cancelled'])('lệnh %s → 400, không nạp', async (status) => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({ ...LSX, status } as never)
+    await expect(lsxLinesService.reseed(sales, 'lsx1')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
   })
 })
 
@@ -285,6 +359,34 @@ describe('profileSnapshot ≡ dữ liệu draftFromOrders nạp vào dòng', () 
     expect(line.name_foreign).toBe(snap.name_foreign)
     expect(line.barcode).toBe(snap.barcode)
     expect(line.customer_item_code).toBe(snap.customer_item_code)
+  })
+
+  it('ngày xuất dòng lệnh = tuần giao của DÒNG ĐƠN; dòng trống mới lấy hạn đơn', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      id: 'o1',
+      code: 'DH-01',
+      customer_po_no: 'PO-1',
+      due_date: '2026-11-20',
+    } as never)
+    const base = {
+      order_id: 'o1',
+      product_id: 'p1',
+      product_code: 'SP1',
+      product_name: 'Ghế Alicante',
+      product_unit: 'cái',
+      qty: 10,
+      note: null,
+      image_file_id: null,
+    }
+    vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([
+      { ...base, id: 'ol1', ship_date: '2026-12-30' },
+      { ...base, id: 'ol2', ship_date: null },
+    ] as never)
+    vi.mocked(productsRepo.listByIds).mockResolvedValue([PRODUCT] as never)
+
+    const [group] = await lsxLinesService.draftFromOrders(['o1'])
+    expect(group.lines.map((l) => l.ship_date)).toEqual(['2026-12-30', '2026-11-20'])
+    expect(group.ship_date).toBe('2026-11-20')
   })
 
   it('gap mang đúng tab hồ sơ để dẫn Sales tới chỗ sửa', () => {

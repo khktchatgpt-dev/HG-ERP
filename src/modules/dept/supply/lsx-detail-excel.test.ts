@@ -46,6 +46,7 @@ const lsx = (over: Partial<LsxSupplyDetail> = {}): LsxSupplyDetail => ({
   code: '02/26-27 - ROSCO',
   customer_name: 'ROSCO',
   order_codes: ['HG-ROSCO'],
+  container_summary: null,
   status: 'in_progress',
   priority: 0,
   ship_date: '2026-10-17',
@@ -57,7 +58,17 @@ const lsx = (over: Partial<LsxSupplyDetail> = {}): LsxSupplyDetail => ({
     missing: 1,
     missing_top: [{ code: 'T-VUO-20X0.7', name: 'Vuông 20x0.7', unit: 'cây', qty: 15 }],
   },
-  products: [{ code: '2722875', name: 'IBIZA Ghế xoay', qty: 8816 }],
+  products: [
+    {
+      product_id: 'p1',
+      unit: 'SP',
+      specs: { son: 'PT-7476' },
+      code: '2722875',
+      name: 'IBIZA Ghế xoay',
+      qty: 8816,
+      image_file_id: null,
+    },
+  ],
   pos: [po()],
   ...over,
 })

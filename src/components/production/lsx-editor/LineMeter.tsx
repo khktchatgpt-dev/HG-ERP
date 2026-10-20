@@ -1,6 +1,6 @@
 import { Boxes, CalendarClock, ClipboardCheck, Package } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { Meter, MeterState } from '@/modules/dept/production/lsx-line-fill'
+import type { Meter, MeterState } from '@/lib/lsx-line-fill'
 
 /**
  * Dải 4 ô "dòng này đủ thông tin chưa" — thay nút "Chi tiết N/11" cũ (phân số

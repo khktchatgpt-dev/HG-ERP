@@ -6,12 +6,19 @@ import { z } from 'zod'
 //   draft ─"Trình GĐ"─► pending_approval ─► approved ─► sent
 //                                  └──────► rejected ─(sửa, trình lại)─► pending_approval
 // draft/rejected: sửa được · pending_approval trở đi: bất biến · sent: tạo được đơn.
+// 0225 (07/10/2026): thêm KẾT CỤC + BẢN SỬA ĐỔI —
+//   sent ─"Tạo đơn"─► won · sent ─"Thua"─► lost · sent/approved ─"Bản sửa đổi"─► superseded
+//   draft/rejected/sent ─"Huỷ"─► cancelled. won/lost/superseded/cancelled: bất biến.
 export const QUOTE_STATUSES = [
   'draft',
   'pending_approval',
   'approved',
   'rejected',
   'sent',
+  'superseded',
+  'won',
+  'lost',
+  'cancelled',
 ] as const
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 
@@ -30,6 +37,8 @@ export const quoteDecideSchema = z
 // Số lượng thuộc về Đơn hàng, nhập ở bước tạo đơn.
 export const quoteLineInputSchema = z.object({
   product_id: z.string().uuid(),
+  /** SL dự kiến / MOQ (tuỳ chọn, 0225) — để in và nạp sẵn sang đơn; không bắt buộc. */
+  qty: z.coerce.number().positive().optional().nullable(),
   unit_price: z.coerce.number().min(0),
   discount_pct: z.coerce.number().min(0).max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
@@ -60,6 +69,16 @@ export const quoteCreateSchema = quoteBaseSchema.refine(
 
 /** Chỉ báo giá `draft` được sửa (service chặn) — payload giống create. */
 export const quoteUpdateSchema = quoteCreateSchema
+
+/** Đánh dấu THUA — lý do bắt buộc (học được vì sao mất đơn). */
+export const quoteLostSchema = z.object({
+  reason: z.string().trim().min(1, 'Nhập lý do thua').max(1000),
+})
+
+/** Nhân bản sang khách khác (hoặc cùng khách, mùa sau) — thành nháp mới bản 1. */
+export const quoteCopySchema = z.object({
+  customer_id: z.string().uuid().optional().nullable(),
+})
 
 export const quoteListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),

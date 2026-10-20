@@ -19,8 +19,14 @@ export type ProductionEntry = {
   qty: number
   kg: number | null
   defect_qty: number
+  /** Hỏng nhưng cứu được (0206) — không trừ tổng cần, sửa xong ghi lại vào qty. */
+  rework_qty: number
+  /** Mã lý do (production_defect_codes.code) — dùng chung cho phế và sửa lại. */
+  defect_code: string | null
   defect_reason: string | null
   machine_note: string | null
+  /** Ô riêng theo công đoạn (0207): {field_key: value}. */
+  stage_meta: Record<string, string | number> | null
   /** "Người làm" trực tiếp (0090) — text tự do như sổ giấy. */
   worker_name: string | null
   /** 'tran' (hàng trần) | 'dang_may' (hàng đang mây) — 0090. */
@@ -40,7 +46,7 @@ export type ProductionEntryJoined = ProductionEntry & {
 }
 
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, defect_reason, machine_note, worker_name, finish_state, note, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, rework_qty, defect_code, defect_reason, machine_note, stage_meta, worker_name, finish_state, note, created_by, created_at'
 const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, cluster, production_order_line_id), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
@@ -69,6 +75,7 @@ function unwrap(rows: Raw[] | null): ProductionEntryJoined[] {
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
       defect_qty: Number(r.defect_qty),
+      rework_qty: Number(r.rework_qty ?? 0),
       team_name: first(r.team)?.name ?? null,
       created_by_name: first(r.actor)?.name ?? null,
       component_name: comp?.name ?? null,
@@ -114,6 +121,38 @@ export const entriesRepo = {
         qty: Number(r.qty),
         kg: r.kg == null ? null : Number(r.kg),
         defect_qty: Number(r.defect_qty),
+        rework_qty: Number(r.rework_qty ?? 0),
+        doc_status: doc?.status ?? 'da_xac_nhan',
+      } as unknown as ProductionEntry & { doc_status: string }
+    })
+  },
+
+  /**
+   * Như trên nhưng cho NHIỀU lệnh — màn ghi sản lượng mở theo TỔ chứ không
+   * theo lệnh (21/09), nên một lượt tải phải trải qua mọi lệnh đang chạy.
+   * Gọi vòng lặp từng lệnh ở đó là 8 truy vấn cho 8 lệnh.
+   */
+  async listByLsxWithStatusBulk(
+    ids: string[],
+  ): Promise<(ProductionEntry & { doc_status: string })[]> {
+    if (!ids.length) return []
+    const { data } = await db()
+      .from('production_entries')
+      .select(`${COLS}, doc:production_entry_docs(status)`)
+      .in('production_order_id', ids)
+      .limit(50000)
+    type Row = ProductionEntry & {
+      doc: { status: string } | { status: string }[] | null
+    }
+    return ((data ?? []) as unknown as Row[]).map((r) => {
+      const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      return {
+        ...r,
+        doc: undefined,
+        qty: Number(r.qty),
+        kg: r.kg == null ? null : Number(r.kg),
+        defect_qty: Number(r.defect_qty),
+        rework_qty: Number(r.rework_qty ?? 0),
         doc_status: doc?.status ?? 'da_xac_nhan',
       } as unknown as ProductionEntry & { doc_status: string }
     })
@@ -131,6 +170,7 @@ export const entriesRepo = {
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
       defect_qty: Number(r.defect_qty),
+      rework_qty: Number(r.rework_qty ?? 0),
     }))
   },
 
@@ -147,6 +187,7 @@ export const entriesRepo = {
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
       defect_qty: Number(r.defect_qty),
+      rework_qty: Number(r.rework_qty ?? 0),
     }))
   },
 
@@ -163,6 +204,7 @@ export const entriesRepo = {
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
       defect_qty: Number(r.defect_qty),
+      rework_qty: Number(r.rework_qty ?? 0),
     }))
   },
 

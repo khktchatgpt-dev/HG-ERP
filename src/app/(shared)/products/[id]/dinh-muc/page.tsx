@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
+import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { canEditBom, productsService } from '@/modules/dept/technical/technical.service'
 import { HttpError } from '@/server/http'
 import { ProductPartsTab } from '@/components/technical/ProductPartsTab'
@@ -23,12 +24,20 @@ export default async function ProductPartsPage({
     throw e
   }
 
+  // Danh mục công đoạn — để Kỹ thuật KHAI lộ trình của cụm (0097 đã có chỗ lưu
+  // `first_stage`/`final_stage`, nhưng chưa màn nào cho gõ vào). Không hằng số
+  // hoá 12 mã ở client: danh mục sửa được ở /admin, hằng số hoá là drift.
+  const stages = (await catalogsService.list(user, 'production_stage'))
+    .filter((s) => s.is_active)
+    .map((s) => ({ code: s.code, label: s.label }))
+
   return (
     <ProductPartsTab
       productId={id}
       parts={data.parts}
       partGroups={data.groups}
       clusters={data.clusters}
+      stages={stages}
       setItems={data.setItems}
       paintCoverage={data.product.paint_coverage_m2_per_kg ?? null}
       actualWeightKg={data.product.actual_weight_kg ?? null}

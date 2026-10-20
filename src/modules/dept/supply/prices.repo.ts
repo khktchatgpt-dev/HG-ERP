@@ -159,16 +159,30 @@ export const pricesRepo = {
   },
 
   /** Giá mua gần nhất per vật tư từ PO (bỏ PO huỷ / dòng không giá). */
-  async lastPurchases(materialIds: string[]): Promise<LastPurchase[]> {
+  /**
+   * Giá mua GẦN NHẤT của từng mã vật tư.
+   *
+   * `excludePoId` — BỎ QUA một đơn, và màn duyệt bắt buộc phải truyền nó vào.
+   * Đơn đang chờ chữ ký cũng nằm trong `supply_purchase_order_lines` và chỉ
+   * đơn `cancelled` mới bị loại, nên không loại chính nó thì nó là dòng mới
+   * nhất và "giá lần trước" trả về đúng bằng giá lần này — một cột luôn hiện
+   * "không đổi" dù giá vừa tăng 12%. Con số sai một cách trơn tru là thứ tệ
+   * hơn không có con số nào, vì người ký tin vào nó.
+   */
+  async lastPurchases(
+    materialIds: string[],
+    excludePoId?: string,
+  ): Promise<LastPurchase[]> {
     if (materialIds.length === 0) return []
-    const { data } = await db()
+    let q = db()
       .from('supply_purchase_order_lines')
       .select(
-        'material_id, unit_price, po:supply_purchase_orders!inner(code, currency, status, created_at, supplier_id, supplier:supply_suppliers(name))',
+        'material_id, unit_price, po_id, po:supply_purchase_orders!inner(code, currency, status, created_at, supplier_id, supplier:supply_suppliers(name))',
       )
       .in('material_id', materialIds)
       .not('unit_price', 'is', null)
-      .limit(1000)
+    if (excludePoId) q = q.neq('po_id', excludePoId)
+    const { data } = await q.limit(1000)
     type RawLine = {
       material_id: string
       unit_price: number

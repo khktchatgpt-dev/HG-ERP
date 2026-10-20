@@ -1,0 +1,198 @@
+/*
+ * BÁO CÁO NHẬP–XUẤT–TỒN (Kho B6) — phần riêng của màn, trên khung `../_erp/kho.css`.
+ * Bản vẽ duyệt 19/10/2026: https://claude.ai/artifact/XCqeNa92MkBZ5oGGwcGrjS
+ */
+
+/* Tiêu đề hai tầng: vạch màu khối Nhập (teal) / Xuất (hồng) trên đầu nhóm. */
+.kh.kh .kh-tb.kh-tb > thead > tr > th.k-n {
+  box-shadow: inset 0 3px 0 var(--kh-nhap);
+}
+.kh.kh .kh-tb.kh-tb > thead > tr > th.k-x {
+  box-shadow: inset 0 3px 0 var(--kh-xuat);
+}
+.kh.kh .kh-tb.kh-tb th.sep,
+.kh.kh .kh-tb.kh-tb td.sep {
+  border-left: 1px solid var(--kh-line);
+}
+.kh.kh .kh-tb.kh-tb > thead > tr > th.sep {
+  border-left-color: var(--kh-head2);
+}
+
+/* Dòng nhóm: nền nâng, chữ đậm, bấm để thu/mở. */
+.kh.kh .kh-tb.kh-tb > tbody > tr.nx-g > td {
+  background: var(--kh-raised);
+  border-bottom: 1px solid var(--kh-line);
+  font-weight: 600;
+  cursor: pointer;
+}
+.kh.kh .kh-tb.kh-tb > tbody > tr.nx-g:focus-visible > td {
+  outline: 2px solid var(--kh-act);
+  outline-offset: -2px;
+}
+.kh.kh .nx-g .nx-n {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--kh-ink3);
+  font-size: 12px;
+}
+
+/* Cờ trên dòng: thiếu giá (vàng) · tồn âm (đỏ). Chữ, không nền đặc. */
+.kh.kh .nx-co {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--kh-warn-wash);
+  color: var(--kh-warn);
+}
+.kh.kh .nx-co.stop {
+  background: var(--kh-stop-wash);
+  color: var(--kh-stop);
+}
+
+/* Phần mở dưới dòng: thẻ kho của mã trong kỳ. */
+.kh.kh .nx-the {
+  display: grid;
+  gap: 8px;
+  padding: 8px 14px 12px 34px;
+  box-shadow: inset 3px 0 0 var(--kh-act);
+}
+.kh.kh .nx-the .dau {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+}
+.kh.kh .nx-the .bang {
+  overflow-x: auto;
+}
+.kh.kh .nx-the table {
+  border-collapse: collapse;
+  min-width: 720px;
+  width: 100%;
+  table-layout: auto;
+}
+.kh.kh .nx-the th {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--kh-line);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+  text-align: left;
+  white-space: nowrap;
+}
+.kh.kh .nx-the td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--kh-hair);
+  font-size: 12px;
+  vertical-align: top;
+}
+.kh.kh .nx-the td.dg {
+  white-space: normal;
+  color: var(--kh-ink2);
+  max-width: 520px;
+}
+.kh.kh .nx-the tr.mut td {
+  color: var(--kh-ink3);
+  background: var(--kh-raised);
+}
+.kh.kh .nx-the th.r,
+.kh.kh .nx-the td.r {
+  text-align: right;
+}
+.kh.kh .nx-ma {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--kh-line);
+  font-family: var(--kh-mono);
+  font-size: 11px;
+}
+.kh.kh .nx-ma.n {
+  color: var(--kh-nhap);
+  border-color: var(--kh-nhap);
+}
+.kh.kh .nx-ma.x {
+  color: var(--kh-xuat);
+  border-color: var(--kh-xuat);
+}
+.kh.kh .nx-ma.suy {
+  border-style: dashed;
+}
+.kh.kh .nx-am {
+  color: var(--kh-stop);
+}
+.kh.kh .nx-why {
+  padding: 5px 8px;
+  border: 1px dashed var(--kh-line);
+  background: var(--kh-card);
+  font-family: var(--kh-mono);
+  font-size: 12px;
+  color: var(--kh-ink2);
+  white-space: normal;
+}
+
+/* Chọn chế độ bày (SL + tiền / Chỉ SL). */
+.kh.kh .nx-seg {
+  display: inline-flex;
+  border: 1px solid var(--kh-line);
+}
+.kh.kh .nx-seg button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  background: var(--kh-card);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--kh-ink2);
+  cursor: pointer;
+}
+.kh.kh .nx-seg button + button {
+  border-left: 1px solid var(--kh-line);
+}
+.kh.kh .nx-seg button[aria-pressed='true'] {
+  background: var(--kh-act-wash);
+  color: var(--kh-act);
+  font-weight: 600;
+}
+.kh.kh .nx-seg button:focus-visible,
+.kh.kh .nx-chk input:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: -1px;
+}
+.kh.kh .nx-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.kh.kh .nx-ky {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.kh.kh .nx-ky .kh-o {
+  width: 96px;
+}
+
+/* Đang tính lại kỳ (đổi kỳ ~1–1,5 s): mờ lưới cũ để không ai đọc nhầm số kỳ trước. */
+.kh.kh .kh-grid.nx-dang {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kh.kh .kh-grid.nx-dang {
+    transition: none;
+  }
+}
+
+/* Tab xuống dòng: trình duyệt cuộn dòng có focus tới mép — chừa chỗ để đầu cột hai
+   tầng dính (~48px) và chân tổng dính (~30px) không che vòng focus (luật kiểm 15). */
+.kh.kh .kh-tb.kh-tb > tbody > tr {
+  scroll-margin-top: 56px;
+  scroll-margin-bottom: 36px;
+}

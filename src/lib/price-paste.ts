@@ -164,7 +164,18 @@ export function parsePricePaste(text: string, decimalSep: DecimalSep): ParsePric
 export type MatchTarget = {
   line_id: string
   order_code: string
+  /** Mã HG — mã của MÌNH. */
   product_code: string
+  /**
+   * MÃ CỦA KHÁCH cho chính sản phẩm này (`technical_products.customer_item_code`).
+   *
+   * Bắt buộc phải khớp được theo mã này, không phải tuỳ chọn cho đẹp: file dán
+   * vào đây là **báo giá của khách**, và khách ghi mã của họ chứ không ghi mã
+   * HG. Đo 11/09/2026: 78/101 sản phẩm đang có mã khách — chỉ khớp theo mã HG
+   * thì dán file MERXX vào trượt gần hết, và người dùng kết luận "chức năng dán
+   * hỏng" trong khi dữ liệu vẫn đúng.
+   */
+  customer_code?: string | null
 }
 
 export type PriceMatch = {
@@ -195,6 +206,12 @@ export type MatchResult = {
  * MỘT MÃ SP TRÙNG Ở NHIỀU ĐƠN mà dòng dán không ghi mã đơn → xếp vào
  * `ambiguous`, KHÔNG đoán bừa. Áp giá của đơn A sang đơn B là sai âm thầm, tệ
  * hơn hẳn việc bắt người dán bôi thêm một cột.
+ *
+ * KHỚP HAI LOẠI MÃ: mã HG trước, mã khách sau. Thứ tự này cố định chứ không
+ * "thử cái nào ra thì lấy": một chuỗi có thể vừa là mã HG của SP này vừa là mã
+ * khách của SP khác, và khi đó mã CỦA MÌNH thắng — luật một câu, giải thích được
+ * cho người dùng. Dò song song rồi lấy cái nào khớp trước là hành vi đổi theo
+ * thứ tự dữ liệu, tức là không giải thích được.
  */
 export function matchPasteRows(
   targets: readonly MatchTarget[],
@@ -204,12 +221,24 @@ export function matchPasteRows(
 
   const byProduct = new Map<string, MatchTarget[]>()
   const byOrderProduct = new Map<string, MatchTarget>()
+  const byCustomer = new Map<string, MatchTarget[]>()
+  const byOrderCustomer = new Map<string, MatchTarget[]>()
   for (const t of targets) {
     const p = key(t.product_code)
     const list = byProduct.get(p)
     if (list) list.push(t)
     else byProduct.set(p, [t])
     byOrderProduct.set(`${key(t.order_code)}|${p}`, t)
+
+    const c = t.customer_code ? key(t.customer_code) : ''
+    if (!c) continue
+    const cl = byCustomer.get(c)
+    if (cl) cl.push(t)
+    else byCustomer.set(c, [t])
+    const ock = `${key(t.order_code)}|${c}`
+    const ol = byOrderCustomer.get(ock)
+    if (ol) ol.push(t)
+    else byOrderCustomer.set(ock, [t])
   }
 
   const matched: PriceMatch[] = []
@@ -221,6 +250,22 @@ export function matchPasteRows(
       const hit = byOrderProduct.get(`${key(r.order_code)}|${key(r.product_code)}`)
       if (hit) {
         matched.push({ line_id: hit.line_id, price: r.price, from_line: r.line })
+        continue
+      }
+      /*
+       * Cùng một mã khách có thể nằm trên NHIỀU dòng của cùng một đơn (hai SP
+       * HG khác nhau gộp về một mã của khách). Có mã đơn rồi vẫn không gỡ được
+       * chỗ đó, nên vẫn phải xếp vào `ambiguous` chứ không lấy dòng đầu.
+       */
+      const cHits = byOrderCustomer.get(`${key(r.order_code)}|${key(r.product_code)}`) ?? [] // prettier-ignore
+      if (cHits.length === 1) {
+        matched.push({ line_id: cHits[0].line_id, price: r.price, from_line: r.line })
+      } else if (cHits.length > 1) {
+        ambiguous.push({
+          line: r.line,
+          product_code: r.product_code,
+          order_codes: [...new Set(cHits.map((h) => h.order_code))].sort(),
+        })
       } else {
         unmatched.push({
           line: r.line,
@@ -231,7 +276,7 @@ export function matchPasteRows(
       continue
     }
 
-    const hits = byProduct.get(key(r.product_code)) ?? []
+    const hits = byProduct.get(key(r.product_code)) ?? byCustomer.get(key(r.product_code)) ?? [] // prettier-ignore
     if (hits.length === 1) {
       matched.push({ line_id: hits[0].line_id, price: r.price, from_line: r.line })
     } else if (hits.length === 0) {

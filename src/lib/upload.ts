@@ -37,6 +37,8 @@ export type UploadParent =
   | { kind: 'purchase_order'; id: string }
   | { kind: 'sample'; id: string }
   | { kind: 'feedback'; id: string }
+  | { kind: 'die'; id: string }
+  | { kind: 'hr_employee'; id: string }
   | { kind: 'none' }
 
 export { MAX_UPLOAD_BYTES } from '@/lib/file-limits'

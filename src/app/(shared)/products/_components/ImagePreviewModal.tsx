@@ -17,7 +17,11 @@ export function ImagePreviewModal({
   preview,
   onClose,
 }: {
-  preview: { product: ProductRow; url: string } | null
+  /** Chỉ cần mấy trường để đặt tên hộp và dẫn về hồ sơ — nhận cả dòng thư viện mới lẫn ProductRow cũ. */
+  preview: {
+    product: Pick<ProductRow, 'id' | 'code' | 'name' | 'customer_item_code'>
+    url: string
+  } | null
   onClose: () => void
 }) {
   return (

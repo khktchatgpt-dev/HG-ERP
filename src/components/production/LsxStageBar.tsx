@@ -27,10 +27,10 @@ const STAGE_BAR: Record<string, string> = {
 }
 const STAGE_TEXT: Record<string, string> = {
   draft: 'text-muted-foreground',
-  pending_approval: 'text-amber-700 dark:text-amber-400',
-  approved: 'text-blue-700 dark:text-blue-400',
-  in_progress: 'text-amber-700 dark:text-amber-400',
-  completed: 'text-emerald-700 dark:text-emerald-400',
+  pending_approval: 'text-amber-700',
+  approved: 'text-blue-700',
+  in_progress: 'text-amber-700',
+  completed: 'text-emerald-700',
 }
 
 export function StageBar({
@@ -44,10 +44,7 @@ export function StageBar({
   if (stage === undefined) {
     // Ngoài trục: từ chối (đỏ) / huỷ theo đơn (xám).
     return status === 'rejected' ? (
-      <Badge
-        variant="outline"
-        className="border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
-      >
+      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
         Bị từ chối
       </Badge>
     ) : (

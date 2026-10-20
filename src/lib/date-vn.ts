@@ -51,11 +51,62 @@ export function maskVnDate(raw: string): string {
   const s = raw.trim()
   const seg = s.split(/[^0-9]+/)
   if (seg.length > 1) {
-    const parts = [seg[0].slice(0, 2), (seg[1] ?? '').slice(0, 2), (seg[2] ?? '').slice(0, 4)]
-    return parts.slice(0, Math.min(seg.length, 3)).join('/')
+    // Đoạn nào dài quá bề rộng của nó thì phần TRÀN sang đoạn kế — không cắt
+    // bỏ. Gõ tay từng phím, ô đã tự chèn "/" ở lượt trước nên lượt sau nhận
+    // "03/082": chữ "2" là đầu của NĂM, không phải số thừa của tháng.
+    const W = [2, 2, 4]
+    const parts: string[] = []
+    for (let s of seg) {
+      while (parts.length < 3) {
+        const w = W[parts.length]
+        if (s.length <= w) {
+          parts.push(s)
+          break
+        }
+        parts.push(s.slice(0, w))
+        s = s.slice(w)
+      }
+    }
+    return parts.join('/')
   }
   const digits = s.replace(/\D/g, '').slice(0, 8)
   if (digits.length <= 2) return digits
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+}
+
+/**
+ * HÔM NAY THEO GIỜ VIỆT NAM (yyyy-mm-dd).
+ *
+ * `new Date().toISOString().slice(0, 10)` là hôm nay theo **UTC**, tức từ
+ * 00:00 đến 07:00 giờ Việt Nam nó trả về NGÀY HÔM QUA. Mọi so sánh hạn dựng
+ * trên mốc đó đều lệch một ngày trong khung giờ ấy: "quá hẹn" đếm thiếu, "còn
+ * N ngày" dư một, "đến hẹn hôm nay" bày đơn của hôm qua. Đo 15/09/2026 lúc
+ * 00:45 giờ VN: Bàn làm việc ghi "Hôm nay 14/09/2026".
+ *
+ * Xưởng bắt đầu ca lúc 7h30 nên khung giờ hỏng đúng vào lúc người ta mở máy.
+ *
+ * Dùng `en-CA` vì nó cho sẵn dạng yyyy-mm-dd; `timeZone` để Intl tự lo lệch
+ * giờ thay vì cộng tay 7 tiếng (cộng tay thì sai khi máy chủ đổi múi).
+ */
+export const TZ_VN = 'Asia/Ho_Chi_Minh'
+
+export function todayVn(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ_VN,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
+/**
+ * MỐC SỰ VIỆC của một chứng từ có cả NGÀY CHỨNG TỪ (người dùng khai) và GIỜ GHI
+ * MÁY (`created_at`). Cùng một ngày (giờ VN) thì giữ giờ ghi máy — chính xác
+ * hơn và y như trước; KHÁC ngày (nhập máy trễ: hàng về 27/09, Kho ghi 30/09)
+ * thì ngày chứng từ mới là lúc việc xảy ra — trả chuỗi ngày thuần `yyyy-mm-dd`.
+ */
+export function docEventAt(docDate: string | null | undefined, enteredAt: string): string {
+  if (!docDate) return enteredAt
+  return docDate.slice(0, 10) === todayVn(new Date(enteredAt)) ? enteredAt : docDate.slice(0, 10)
 }

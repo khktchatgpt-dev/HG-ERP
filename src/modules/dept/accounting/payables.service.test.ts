@@ -99,6 +99,30 @@ describe('summarizePayables — cấn trừ, tách tiền tệ, trừ đã trả
   })
 })
 
+describe('summarizePayables — phí mua hàng (0211, bước 3)', () => {
+  it('nhà xe KHÔNG có phiếu nhập vẫn hiện: phí là khoản nợ, trả đủ thì về 0', () => {
+    const rows = summarizePayables(
+      [receipt({})],
+      [{ supplier_id: 'xe', amount: 3_888_000, currency: 'VND' }],
+      [],
+      [{ supplier_id: 'xe', supplier_name: 'Nhà xe Hùng Vịnh', currency: 'VND', amount: 3_888_000 }],
+    )
+    const xe = rows.find((r) => r.supplier_id === 'xe')!
+    expect(xe.supplier_name).toBe('Nhà xe Hùng Vịnh')
+    expect(xe.totals).toEqual([{ currency: 'VND', incurred: 3_888_000, paid: 3_888_000, balance: 0 }])
+  })
+
+  it('phí NCC tính cộng vào nợ của chính NCC đó', () => {
+    const rows = summarizePayables(
+      [receipt({})],
+      [],
+      [],
+      [{ supplier_id: 's1', supplier_name: 'Thép Việt', currency: 'VND', amount: 150 }],
+    )
+    expect(rows[0].totals[0]).toMatchObject({ incurred: 1_150, balance: 1_150 })
+  })
+})
+
 describe('payablesService — guard ghi/xoá thanh toán', () => {
   it('gắn PO của NCC KHÁC → 400', async () => {
     vi.mocked(payablesRepo.poSupplier).mockResolvedValue('s-khac')

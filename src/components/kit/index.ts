@@ -1,0 +1,26 @@
+/**
+ * KIT v4 — cửa vào duy nhất.
+ *
+ * Import từ '@/components/kit', không import thẳng file con: đổi cấu trúc
+ * bên trong thì nơi dùng không phải sửa.
+ */
+export * from './kit-core'
+export * from './Primitives'
+export * from './Erp'
+export * from './Metric'
+export * from './HeadChips'
+export * from './Icon'
+export * from './Nav'
+export * from './Flow'
+export * from './flow-core'
+export * from './Notes'
+export * from './Popover'
+export * from './Sheet'
+export * from './Shell'
+export * from './Table'
+export * from './Toast'
+export * from './Combobox'
+export * from './DateInput'
+export * from './TableEngine'
+export * from './Viz'
+export * from './MatrixTable'

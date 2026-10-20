@@ -20,6 +20,20 @@ const TYPE_LABEL: Record<string, string> = {
   po_approved: 'đã duyệt đơn đặt vật tư',
   po_rejected: 'đã từ chối đơn đặt vật tư — đơn về nháp',
   po_withdrawn: 'đã rút đơn đặt vật tư về nháp (bỏ khỏi bàn duyệt)',
+  po_reopened: 'đã mở lại đơn đặt vật tư ĐÃ DUYỆT để sửa — đơn sẽ quay lại bàn duyệt',
+  po_adjusted:
+    'đã điều chỉnh đơn đặt vật tư đã gửi NCC — xem phần phát sinh và lý do trên đơn',
+  po_unapproved:
+    'đã thu hồi chữ ký trên đơn đặt vật tư — đơn quay về chờ duyệt, chưa gửi NCC được',
+  po_question: 'hỏi về đơn đặt vật tư bạn phụ trách — trả lời ngay trên đơn',
+  po_answered: 'đã trả lời câu hỏi của bạn về đơn đặt vật tư',
+  po_issue: 'báo sự cố giao hàng',
+  po_inbound_soon: 'NCC xác nhận đơn — hàng sắp về kho, chuẩn bị nhận',
+  po_inbound_moved: 'đã dời hẹn giao một lô đang chờ về kho',
+  dnm_submitted: 'gửi đề nghị mua vật tư chờ bạn duyệt',
+  dnm_approved: 'đã duyệt đề nghị mua vật tư',
+  dnm_rejected: 'đã từ chối đề nghị mua vật tư — phiếu về nháp',
+  po_urgent_sent: 'đã gửi gấp đơn đặt vật tư cho NCC trước khi ký — cần ký bù',
   po_reassigned: 'đã bàn giao đơn đặt vật tư cho bạn phụ trách',
   lsx_submitted: 'gửi LSX chờ bạn duyệt',
   lsx_approved: 'đã duyệt LSX',
@@ -54,29 +68,32 @@ export default async function NotificationsPage() {
     <AppShell title="Thông báo" actions={<MarkAllRead />}>
       <div className="mx-auto max-w-3xl">
         {items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
+          <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500">
             Chưa có thông báo nào.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             {items.map((n) => {
-              const payload = n.payload as { title?: string; href?: string }
-              const title = payload?.title
-              const href = payload?.href ?? (n.task_id ? `/tasks/${n.task_id}` : null)
+              const title = (n.payload as { title?: string })?.title
+              // Đường dẫn chứng từ trong payload (đề nghị mua 0237) — chỉ nhận đường nội bộ.
+              const href = (n.payload as { href?: string })?.href
+              const moTai = n.task_id
+                ? `/tasks/${n.task_id}`
+                : href?.startsWith('/')
+                  ? href
+                  : null
               return (
                 <li
                   key={n.id}
-                  className={`px-4 py-3 ${
-                    n.read_at ? 'opacity-60' : 'bg-zinc-50 dark:bg-zinc-900/30'
-                  }`}
+                  className={`px-4 py-3 ${n.read_at ? 'opacity-60' : 'bg-zinc-50'}`}
                 >
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <div>
                       <span className="font-medium">{TYPE_LABEL[n.type] ?? n.type}</span>
                       {title && <span className="text-zinc-500"> — {title}</span>}
                     </div>
-                    {href && (
-                      <Link href={href} className="text-xs underline">
+                    {moTai && (
+                      <Link href={moTai} className="text-xs underline">
                         Mở
                       </Link>
                     )}

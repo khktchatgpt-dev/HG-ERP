@@ -35,7 +35,7 @@ const TYPE_LABEL: Record<CatalogType, string> = {
 }
 
 const inputCls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none'
 
 export function CatalogsManager({ items }: { items: Item[] }) {
   const router = useRouter()

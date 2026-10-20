@@ -193,4 +193,21 @@ export const storage = {
     const { error } = await db().storage.from(bucket).remove(paths)
     if (error) throw new Error(error.message)
   },
+
+  /** Tải object về bộ nhớ server (file Excel tạm, ảnh gốc để nhúng vào file xuất). */
+  async downloadBuffer(bucket: FileBucket, path: string): Promise<Buffer | null> {
+    const { data, error } = await db().storage.from(bucket).download(path)
+    if (error || !data) return null
+    return Buffer.from(await data.arrayBuffer())
+  },
+
+  /** Liệt kê object trong một "thư mục" — để dọn file tạm cũ. */
+  async listFolder(
+    bucket: FileBucket,
+    folder: string,
+  ): Promise<{ name: string; created_at: string | null }[]> {
+    const { data, error } = await db().storage.from(bucket).list(folder, { limit: 1000 })
+    if (error) return []
+    return (data ?? []).map((o) => ({ name: o.name, created_at: o.created_at ?? null }))
+  },
 }

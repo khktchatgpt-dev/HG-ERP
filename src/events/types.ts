@@ -87,7 +87,12 @@ export type DomainEvent =
       material_id: string
       material_code: string
       material_name: string
-      on_hand: number
+      /**
+       * DÙNG ĐƯỢC, không phải tổng (0198). Thông báo phải bày CHÍNH con số đã
+       * quyết có cảnh báo hay không — nói "còn 50" trong khi quyết theo 3 thì
+       * người đọc tưởng hệ thống lỗi.
+       */
+      qty_ok: number
       min_stock: number
       caused_by: string
       notify_ids: string[]
@@ -102,6 +107,59 @@ export type DomainEvent =
       reason: string
       reversed_by: string
       notify_ids: string[]
+    }
+  /**
+   * SỬA THÔNG TIN PHIẾU NHẬP ĐÃ GHI SỔ (02/10/2026, phương án B): số phiếu giao
+   * NCC, người giao, ghi chú — không đổi tồn. Vết (trước → sau, lý do) vào Trao
+   * đổi của đơn mua (handler `warehouse.audit`).
+   */
+  | {
+      name: 'warehouse.doc.info_edited'
+      doc_id: string
+      doc_code: string
+      po_id: string
+      actor_id: string
+      actor_name: string | null
+      reason: string
+      changes: { label: string; before: string | null; after: string | null }[]
+    }
+  /**
+   * ĐIỀU CHỈNH CHÊNH LỆCH phiếu nhập đã ghi sổ (C, 02/10/2026): hàng đã dùng nên
+   * không đảo được — ghi PNK bổ sung / PXK điều chỉnh đúng phần lệch. Vết vào
+   * Trao đổi của đơn mua (handler `warehouse.audit`).
+   */
+  | {
+      name: 'warehouse.doc.adjusted'
+      doc_id: string
+      doc_code: string
+      po_id: string
+      adjust_codes: string[]
+      actor_id: string
+      actor_name: string | null
+      reason: string
+      changes: { label: string; before: number; after: number }[]
+    }
+  /**
+   * GHI KG CÂN BỔ SUNG vào phiếu nhập ĐÃ GHI SỔ (01/10/2026, chủ dự án duyệt):
+   * nhôm/thép trả tiền theo kg cân mà lúc nhận quên cân. Kg chỉ là số đo, không
+   * đổi tồn — nên cho ghi sau, bắt lý do; vết đi vào Trao đổi của ĐƠN MUA để
+   * người mua và Kế toán cùng thấy (handler `warehouse.audit`).
+   */
+  | {
+      name: 'warehouse.kg.recorded'
+      doc_id: string
+      doc_code: string
+      po_id: string
+      actor_id: string
+      actor_name: string | null
+      reason: string
+      lines: {
+        code: string
+        unit: string
+        qty: number
+        before: number | null
+        after: number
+      }[]
     }
 
   // ── Kho — vòng duyệt kiểm kê (0157) ──────────────────────────────────
@@ -153,6 +211,159 @@ export type DomainEvent =
       code: string
       withdrawn_by: string
       approver_ids: string[]
+    }
+  /**
+   * MỞ LẠI ĐƠN ĐÃ DUYỆT để sửa (16/09/2026): dấu duyệt bị xoá, đơn về nháp.
+   * Báo người duyệt — họ vừa ký lên một bản sắp không còn tồn tại.
+   */
+  | {
+      name: 'po.reopened'
+      po_id: string
+      code: string
+      /** Bước đơn đang đứng lúc bị mở lại — vào thông báo để GĐ biết đã đi xa tới đâu. */
+      from_status: string
+      reopened_by: string
+      reason: string
+      approver_ids: string[]
+    }
+  /**
+   * ĐIỀU CHỈNH ĐƠN ĐÃ GỬI (0210, 25/09/2026): áp dụng ngay, không duyệt lại —
+   * người đã ký duyệt nhận thông báo kèm phần phát sinh và lý do.
+   */
+  | {
+      name: 'po.adjusted'
+      po_id: string
+      code: string
+      seq: number
+      adjusted_by: string
+      reason: string
+      /** Nguyên nhân cố định (0227) — nhãn qua causeLabel. */
+      cause?: string | null
+      currency: string
+      /** Phát sinh tổng thanh toán của lần này (âm = giảm). */
+      delta_total: number
+      total_after: number
+      notify_ids: string[]
+    }
+  /**
+   * THU HỒI CHỮ KÝ (0218, 01/10/2026): Giám đốc gỡ chữ ký trên đơn ĐÃ DUYỆT,
+   * CHƯA GỬI NCC — đơn quay về chờ duyệt. Báo người phụ trách (nút "Gửi NCC"
+   * của họ vừa khoá) kèm lý do.
+   */
+  | {
+      name: 'po.unapproved'
+      po_id: string
+      code: string
+      unapproved_by: string
+      /** Người đã ký trước đó — có thể khác người thu hồi (ba người chung hộp ký). */
+      signed_by: string | null
+      reason: string
+      owner_id: string | null
+    }
+  /**
+   * GỬI GẤP, KÝ BÙ SAU (0218): trưởng phòng Cung ứng gửi NCC trước khi có chữ
+   * ký. Báo MỌI người có quyền duyệt — đơn vào mục "Chờ ký bù" của hộp ký.
+   */
+  /**
+   * SỰ CỐ GIAO HÀNG vừa ghi vào sổ 0213 (Kho đợt 2 · Bước 3, 12/10/2026) — thường
+   * do Kho báo lúc nhận (kể cả từ chối nhận cả lô). Báo NGƯỜI PHỤ TRÁCH đơn để đi
+   * làm việc với NCC; không đổi tồn, không đổi đơn.
+   */
+  /**
+   * 0236/0237 — ĐỀ NGHỊ MUA VẬT TƯ của Kho. Gửi duyệt → báo người duyệt (quyền
+   * supply.po.approve + admin, trừ người gửi). Quyết → báo người đề nghị. KHO tự
+   * đi mua + nhập kho theo phiếu đã duyệt (chủ dự án 13/10) — không qua Cung ứng.
+   */
+  | {
+      name: 'de_nghi.submitted'
+      request_id: string
+      code: string
+      department: string
+      submitted_by: string
+      approver_ids: string[]
+      so_dong: number
+      /** Tổng dự kiến (VND, chưa VAT). */
+      tong: number
+    }
+  | {
+      name: 'de_nghi.decided'
+      request_id: string
+      code: string
+      decision: 'approved' | 'rejected'
+      reason: string | null
+      decided_by: string
+      requester_id: string | null
+    }
+  /**
+   * NCC XÁC NHẬN đơn (B8b, 0251) — Kho được báo khi hẹn giao trong 3 ngày tới
+   * (luật `baoKhoKhiXacNhan`). Bắn sau khi đơn đã sang "Chờ giao".
+   */
+  | {
+      name: 'po.confirmed'
+      po_id: string
+      code: string
+      supplier_name: string
+      /** Hẹn giao sớm nhất (YYYY-MM-DD); null = NCC chưa chốt ngày. */
+      expected: string | null
+      confirmed_by: string
+    }
+  /** DỜI HẸN một đợt / cả đơn đang chờ giao (B8b, 0251) — báo Kho. */
+  | {
+      name: 'po.rescheduled'
+      po_id: string
+      code: string
+      supplier_name: string
+      /** Hẹn cũ / hẹn mới (YYYY-MM-DD). */
+      from: string | null
+      to: string
+      /** "đợt 2" khi dời một đợt; null khi dời cả đơn. */
+      dot: string | null
+      reason: string | null
+      moved_by: string
+    }
+  | {
+      name: 'po.issue_recorded'
+      po_id: string
+      code: string
+      supplier_name: string
+      /** Người phụ trách đơn (chưa giao ai thì người lập) — người nhận thông báo. */
+      owner_id: string | null
+      reported_by: string
+      /** Nhãn loại, đã dịch ("Hàng hỏng / lỗi"). */
+      kind_label: string
+      description: string
+    }
+  | {
+      name: 'po.urgent_sent'
+      po_id: string
+      code: string
+      sent_by: string
+      reason: string
+      approver_ids: string[]
+    }
+  /**
+   * CÂU HỎI CỦA GIÁM ĐỐC (0218) — "Hỏi lại" (chưa quyết) hoặc "Yêu cầu xem
+   * lại" (đã ký / đã gửi). Không đổi trạng thái đơn; báo người phụ trách.
+   */
+  | {
+      name: 'po.question'
+      po_id: string
+      code: string
+      question_id: string
+      asked_by: string
+      kind: 'ask' | 'review'
+      body: string
+      owner_id: string | null
+    }
+  /** Người phụ trách trả lời câu hỏi (0218) — báo người đã hỏi. */
+  | {
+      name: 'po.answered'
+      po_id: string
+      code: string
+      question_id: string
+      answered_by: string
+      asker_id: string
+      body: string
     }
   // Bàn giao đơn giữa nhân viên cung ứng (0128): đổi người phụ trách.
   | {
@@ -238,7 +449,7 @@ export type DomainEvent =
       decided_by: string
       issued_by: string | null
       reason?: string
-      // approved → báo Cung ứng + Kỹ thuật; rejected → báo người phát.
+      // approved → báo Kế hoạch + Cung ứng + Kỹ thuật + xưởng + người phát; rejected → báo người phát.
       notify_ids: string[]
     }
   | {
@@ -251,6 +462,27 @@ export type DomainEvent =
       changed_lines: number
       note: string | null
       revised_by: string
+      notify_ids: string[]
+    }
+  | {
+      // HUỶ lệnh đã phát hành (07/10/2026): đơn về Xác nhận, xưởng dừng, Cung
+      // ứng soát lại đơn mua đã đặt cho lệnh (không tự huỷ đơn mua).
+      name: 'lsx.cancelled'
+      production_order_id: string
+      code: string
+      reason: string
+      order_codes: string[]
+      cancelled_by: string
+      notify_ids: string[]
+    }
+  | {
+      // Đổi ĐẦU LỆNH sau khi GĐ duyệt (hạn xuất / số lệnh / container): xưởng
+      // và Cung ứng đang chạy theo số cũ — phải biết.
+      name: 'lsx.header.changed'
+      production_order_id: string
+      code: string
+      fields: Record<string, { from: unknown; to: unknown }>
+      changed_by: string
       notify_ids: string[]
     }
   | {
@@ -285,7 +517,9 @@ export type DomainEvent =
       lsx_code: string | null
       lsx_cancelled: boolean
       pos_cancelled: string[] // mã PO chưa gửi NCC — đã tự huỷ theo
-      pos_manual: string[] // mã PO đã gửi NCC — Cung ứng phải xử lý tay
+      // PO Cung ứng phải xử lý tay, dạng "PO-… (việc cần làm)": đã gửi NCC, đơn
+      // GỘP nhiều lệnh (còn phục vụ lệnh khác), hoặc đơn nháp (lib/po-cancel-cascade).
+      pos_manual: string[]
       cancelled_by: string
       notify_ids: string[]
     }
@@ -361,14 +595,15 @@ export type DomainEvent =
       material_code: string | null
       /** NULL = máy tự ghi (event giá chạy ngoài phiên người dùng). */
       actor_id: string | null
-      source: 'manual' | 'po_enrich' | 'po_price' | 'import' | 'system'
+      /** `retire` = ngừng dùng / dùng lại / xoá mã (05/10/2026); lý do nằm ở source_ref. */
+      source: 'manual' | 'po_enrich' | 'po_price' | 'import' | 'system' | 'retire'
       /** Mã chứng từ gây ra thay đổi — PO-2026-0024, tên file nạp… */
       source_ref: string | null
       changes: { field: string; before: string | null; after: string | null }[]
     }
 
   /**
-   * GÓP Ý HỆ THỐNG (0186). Service tính sẵn DANH SÁCH NGƯỜI NHẬN (admin, người
+   * GÓP Ý HỆ THỐNG (0253). Service tính sẵn DANH SÁCH NGƯỜI NHẬN (admin, người
    * xác nhận, người viết, người đã trao đổi) rồi phát; handler chỉ còn việc
    * viết thông báo — luật "ai được báo" nằm một chỗ ở feedback.service và được
    * test, không rải sang handler.

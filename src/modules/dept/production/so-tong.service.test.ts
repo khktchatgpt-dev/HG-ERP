@@ -19,8 +19,8 @@ const view = (over: Partial<ComponentOutputView>): ComponentOutputView => ({
   allowed_stages: null,
   summary: {
     stages: [
-      { stage: 'phoi', done: 500, defect: 5, missing: 300, pct: 0.625 },
-      { stage: 'han', done: 200, defect: 0, missing: 600, pct: 0.25, gc: 120 },
+      { stage: 'phoi', done: 500, defect: 5, rework: 0, missing: 300, pct: 0.625 },
+      { stage: 'han', done: 200, defect: 0, rework: 0, missing: 600, pct: 0.25, gc: 120 },
     ],
     done_final: 200,
     pct_total: 0.25,
@@ -47,7 +47,7 @@ const INPUT: SoTongLsxInput = {
       material_type: 'Sắt hộp',
       total_needed: 400,
       summary: {
-        stages: [{ stage: 'phoi', done: 0, defect: 0, missing: 400, pct: 0 }],
+        stages: [{ stage: 'phoi', done: 0, defect: 0, rework: 0, missing: 400, pct: 0 }],
         done_final: 0,
         pct_total: 0,
         status: 'not_started',

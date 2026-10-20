@@ -18,7 +18,7 @@ type Parent =
   | { kind: 'sales_order'; id: string }
   | { kind: 'production_order'; id: string }
   | { kind: 'purchase_order'; id: string } // hồ sơ mua hàng (FR-SUP-07)
-  | { kind: 'feedback'; id: string } // ảnh kèm góp ý hệ thống (0186)
+  | { kind: 'feedback'; id: string } // ảnh kèm góp ý hệ thống (0253)
   | { kind: 'none' }
 
 type Bucket = 'private' | 'attachments' | 'public'
@@ -131,7 +131,7 @@ export function FileUploader({
       />
       <label
         htmlFor={`file-upload-${parent.kind}-${'id' in parent ? parent.id : 'none'}`}
-        className={`cursor-pointer rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900 ${
+        className={`cursor-pointer rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 ${
           busy ? 'pointer-events-none opacity-50' : ''
         }`}
       >

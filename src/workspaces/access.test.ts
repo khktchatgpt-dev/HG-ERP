@@ -32,11 +32,12 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
       for (const id of [
         'sales',
         'technical',
+        // 'warehouse' trở lại danh sách 16/09/2026 (Bước 1 Kho): khu đã
+        // `ready: true` với một màn. Ca "ready:false" dùng `qc` bên dưới.
         'warehouse',
         'planning',
         'production',
         'team',
-        'prodplan',
         'exec',
       ] as const) {
         expect(canEnterWorkspaceSync(who, id, 'hr'), `${who.role}:${id}`).toBe(
@@ -46,8 +47,22 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
     }
   })
 
-  it('nhà xưởng (homeId=production) mở cửa CẢ gia đình SX', () => {
-    for (const id of ['production', 'team', 'prodplan'] as const) {
+  /**
+   * Khu CHƯA SẴN SÀNG chặn trước cả bước hỏi quyền — kể cả người nhà.
+   *
+   * Nếu không, người có home = khu đó đăng nhập xong rơi vào một khu không
+   * còn màn nào và nhận 404, thay vì được đưa về chỗ dùng được. Canh trên
+   * `qc` (còn `ready: false`); Kho đã mở lại ngày 16/09/2026.
+   */
+  it('workspace ready:false → false cho mọi vai, kể cả người nhà', () => {
+    for (const who of [employee, manager]) {
+      expect(canEnterWorkspaceSync(who, 'qc', 'qc')).toBe(false)
+      expect(canEnterWorkspaceSync(who, 'qc', 'hr')).toBe(false)
+    }
+  })
+
+  it('nhà xưởng (homeId=production) mở cửa CẢ HAI bề mặt SX', () => {
+    for (const id of ['production', 'team'] as const) {
       expect(canEnterWorkspaceSync(employee, id, 'production'), id).toBe(true)
     }
   })
@@ -63,9 +78,8 @@ describe('workspaceViewPermission', () => {
   it('exec dùng exec.tower.view; còn lại workspace.view.<id>', () => {
     expect(workspaceViewPermission('exec')).toBe('exec.tower.view')
     expect(workspaceViewPermission('production')).toBe('workspace.view.production')
-    // Cả gia đình SX dùng chung 1 quyền xem.
+    // Cả hai bề mặt SX dùng chung 1 quyền xem.
     expect(workspaceViewPermission('team')).toBe('workspace.view.production')
-    expect(workspaceViewPermission('prodplan')).toBe('workspace.view.production')
     expect(workspaceViewPermission('warehouse')).toBe('workspace.view.warehouse')
   })
 })

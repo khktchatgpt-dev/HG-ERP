@@ -1,4 +1,8 @@
 import { db } from '@/server/db'
+import { searchTokens } from '@/lib/search-text'
+import { summariseDoc, type DocSummary } from '@/lib/warehouse-doc-summary'
+import { dieuChinhCua } from '@/lib/da-ve'
+import { theoLo } from '@/server/theo-lo'
 
 export type StockRow = {
   material_id: string
@@ -9,12 +13,57 @@ export type StockRow = {
   min_stock: number
   shelf_location: string | null
   is_active: boolean
+  /** TỔNG mọi trạng thái — giữ nghĩa cũ, mọi nơi đang đọc không gãy. */
   on_hand: number
   /** on_hand < min_stock (FR-WMS-08). */
   is_low: boolean
+  /**
+   * DÙNG ĐƯỢC (0194) — số DUY NHẤT được phép dùng để tính đủ/thiếu.
+   *
+   * Lấy `on_hand` để tính là hứa hộ nhà kho một thứ nó không giao nổi: 2.400
+   * con bulon đang chờ kiểm vẫn nằm trong `on_hand` nhưng cấp đi không được.
+   */
+  qty_ok: number
+  /** Đã nhận, chưa được phép dùng — chờ người kiểm hàng. */
+  qty_qc: number
+  /** Hỏng / sai quy cách, chờ quyết trả NCC hay huỷ. */
+  qty_blocked: number
 }
 
 export type Direction = 'in' | 'out'
+
+/** Trạng thái của LƯỢNG (0194) — xem chú ở `StockRow.qty_ok`. */
+export type StockStatus = 'ok' | 'qc' | 'blocked'
+
+/**
+ * Loại khu (0193). Ba loại sau là KHU ẢO — không phải chỗ thật nào cả:
+ *   receiving  hàng vừa nhận, chưa cất → chính là hàng đợi "Chờ cất"
+ *   blocked    đã vào sổ nhưng chưa được dùng
+ *   scrap      chờ thanh lý
+ * Nhờ chúng, mọi lượng luôn ở một chỗ CÓ TÊN — không lượng nào "biến mất".
+ */
+export type BinKind = 'store' | 'receiving' | 'blocked' | 'scrap'
+
+export type Bin = {
+  id: string
+  code: string
+  name: string | null
+  kind: BinKind
+  is_active: boolean
+}
+
+/** Một dòng biến động gần nhất của một mã (`movementsRepo.ganDay`). */
+export type BienDongGanDay = {
+  id: string
+  created_at: string
+  direction: Direction
+  qty: number
+  stock_status: string | null
+  reason_code: string | null
+  doc_id: string | null
+  doc_code: string | null
+  lenh_code: string | null
+}
 
 export type Movement = {
   id: string
@@ -24,6 +73,12 @@ export type Movement = {
   qty_rejected: number
   qc_status: string | null
   ref_type: string
+  /**
+   * Mã lý do của dòng (0197). Null = dòng ghi trước Đợt 3, HOẶC đường ghi chưa
+   * suy được mã chắc chắn. Chỗ hiển thị/lọc gọi `suyMaTuLichSu(ref_type,
+   * direction)` để lấp, đừng coi null là "không có lý do".
+   */
+  reason_code: string | null
   ref_no: string | null
   shelf_location: string | null
   note: string | null
@@ -35,13 +90,46 @@ export type Movement = {
 }
 
 const STOCK_COLS =
-  'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand, is_low'
+  'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand, is_low, qty_ok, qty_qc, qty_blocked'
 
 const MV_COLS =
-  'id, material_id, direction, qty, qty_rejected, qc_status, ref_type, ref_no, shelf_location, note, created_by, created_at'
+  'id, material_id, direction, qty, qty_rejected, qc_status, ref_type, reason_code, ref_no, shelf_location, note, created_by, created_at'
 
 function num(v: unknown): number {
   return Number(v ?? 0)
+}
+
+/**
+ * RỔ của màn Tồn kho (Đợt 1 — `docs/thiet-ke-kho.md` §6).
+ *
+ * `has` là MẶC ĐỊNH, không phải `all`: danh mục 13.229 mã nhưng tập làm việc
+ * thật là số mã đang có tồn. Mặc định `all` thì mỗi lần mở màn là kéo cả danh
+ * mục xuống trình duyệt để lọc bằng tay — đúng lối mòn "màn hình = một cái
+ * bảng" mà bản thiết kế chỉ ra.
+ *
+ * `short` KHÔNG lọc được bằng SQL: nó cần `reserved` (nhu cầu LSX đã cam kết),
+ * không nằm trong view. Service xử riêng — xem `listStockPage`.
+ */
+export type StockBucket = 'has' | 'low' | 'out' | 'qc' | 'blocked' | 'short' | 'all'
+
+function rowOf(r: Record<string, unknown>): StockRow {
+  return {
+    material_id: r.material_id as string,
+    code: r.code as string,
+    name: r.name as string,
+    unit: r.unit as string,
+    group_name: (r.group_name as string | null) ?? null,
+    min_stock: num(r.min_stock),
+    shelf_location: (r.shelf_location as string | null) ?? null,
+    is_active: r.is_active as boolean,
+    on_hand: num(r.on_hand),
+    // Cột view (0160): min_stock > 0 && on_hand < min — đồng nhất với sweep
+    // quét sáng + notifyLowStock, và là cột SQL lọc được.
+    is_low: Boolean(r.is_low),
+    qty_ok: num(r.qty_ok),
+    qty_qc: num(r.qty_qc),
+    qty_blocked: num(r.qty_blocked),
+  }
 }
 
 export const stockRepo = {
@@ -58,7 +146,10 @@ export const stockRepo = {
         .order('code', { ascending: true })
 
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
-      if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+      // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
+      // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+      // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       // is_low (0160) lọc Ở SQL: PostgREST trần 1000 dòng/lượt — lọc client thì
       // vật tư dưới min ngoài 1000 mã đầu không bao giờ về tới nơi.
       if (filter.low_only) q = q.eq('is_low', true)
@@ -74,25 +165,123 @@ export const stockRepo = {
       data.push(...rows)
       if (rows.length < 1000) break
     }
-    const rows = data.map((r) => {
-      const on_hand = num(r.on_hand)
-      const min_stock = num(r.min_stock)
-      return {
-        material_id: r.material_id as string,
-        code: r.code as string,
-        name: r.name as string,
-        unit: r.unit as string,
-        group_name: (r.group_name as string | null) ?? null,
-        min_stock,
-        shelf_location: (r.shelf_location as string | null) ?? null,
-        is_active: r.is_active as boolean,
-        on_hand,
-        // Cột view (0160): min_stock > 0 && on_hand < min — đồng nhất với
-        // sweep quét sáng + notifyLowStock, và là cột SQL đã lọc ở trên.
-        is_low: Boolean(r.is_low),
-      } satisfies StockRow
-    })
-    return rows
+    return data.map(rowOf)
+  },
+
+  /**
+   * MỘT TRANG tồn kho — lọc, xếp và ĐẾM Ở SERVER (Đợt 1).
+   *
+   * Thay `list()` cho màn Tồn kho. `list()` giữ nguyên cho các nơi thật sự cần
+   * quét hết (mua bù tồn, bảng tổng hợp, xuất Excel) — chúng chạy nền, không
+   * phải là màn người dùng mở 20 lần/ngày.
+   *
+   * TÌM theo `code`/`name` CÓ DẤU: view `warehouse_stock` không có cột
+   * `search_text` không dấu như bảng `warehouse_materials`. Gõ "vit" không ra
+   * "vít". Vá được bằng cách thêm cột vào view — để Đợt 2 cùng lượt sửa view
+   * chứ không đẻ một migration chỉ cho một cột.
+   */
+  async page(filter: {
+    q?: string
+    group_name?: string
+    bucket: Exclude<StockBucket, 'short'>
+    ids?: string[]
+    page: number
+    page_size: number
+  }): Promise<{ rows: StockRow[]; total: number }> {
+    let q = db()
+      .from('warehouse_stock')
+      .select(STOCK_COLS, { count: 'exact' })
+      .eq('is_active', true)
+      .order('code', { ascending: true })
+
+    if (filter.group_name) q = q.eq('group_name', filter.group_name)
+    // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
+    // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+    // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+    for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
+    if (filter.ids) q = q.in('material_id', filter.ids)
+    if (filter.bucket === 'has') q = q.gt('on_hand', 0)
+    else if (filter.bucket === 'low') q = q.eq('is_low', true)
+    // "Hết hàng" đo trên DÙNG ĐƯỢC, không trên tổng: mã còn 2.400 con đang chờ
+    // kiểm thì với người đi cấp hàng nó vẫn là hết — và đó là câu hỏi của rổ này.
+    else if (filter.bucket === 'out') q = q.eq('qty_ok', 0)
+    else if (filter.bucket === 'qc') q = q.gt('qty_qc', 0)
+    else if (filter.bucket === 'blocked') q = q.gt('qty_blocked', 0)
+
+    const from = (filter.page - 1) * filter.page_size
+    const { data, count } = await q.range(from, from + filter.page_size - 1)
+    return {
+      rows: ((data as Record<string, unknown>[] | null) ?? []).map(rowOf),
+      total: count ?? 0,
+    }
+  },
+
+  /**
+   * Đếm từng rổ — CÙNG bộ lọc q/group với `page`.
+   *
+   * Hai nơi lệch nhau là chip nói 5 mà mở ra thấy 7, và nguyên tắc "con số là
+   * một lời hứa" hỏng ngay ở màn hay mở nhất của Kho.
+   */
+  async counts(filter: { q?: string; group_name?: string }): Promise<{
+    all: number
+    has: number
+    low: number
+    out: number
+    qc: number
+    blocked: number
+  }> {
+    const base = () => {
+      let q = db()
+        .from('warehouse_stock')
+        .select('material_id', { count: 'exact', head: true })
+        .eq('is_active', true)
+      if (filter.group_name) q = q.eq('group_name', filter.group_name)
+      // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
+      // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+      // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
+      return q
+    }
+    const [all, has, low, out, qc, blocked] = await Promise.all([
+      base(),
+      base().gt('on_hand', 0),
+      base().eq('is_low', true),
+      base().eq('qty_ok', 0),
+      base().gt('qty_qc', 0),
+      base().gt('qty_blocked', 0),
+    ])
+    return {
+      all: all.count ?? 0,
+      has: has.count ?? 0,
+      low: low.count ?? 0,
+      out: out.count ?? 0,
+      qc: qc.count ?? 0,
+      blocked: blocked.count ?? 0,
+    }
+  },
+
+  /**
+   * Tồn theo BA RỔ của một tập mã — cho form phiếu xuất (Bước 2 Kho): tra
+   * `qty_ok` ngay lúc thêm dòng để ô Lần này nói được "tồn 120, xuất 150".
+   * Mã không có dòng sổ nào vẫn có trong view (0 hết) nên thiếu = 0, không
+   * phải "không tìm thấy".
+   */
+  async byIds(
+    ids: string[],
+  ): Promise<
+    { material_id: string; on_hand: number; qty_ok: number; qty_blocked: number }[]
+  > {
+    if (ids.length === 0) return []
+    const { data } = await db()
+      .from('warehouse_stock')
+      .select('material_id, on_hand, qty_ok, qty_blocked')
+      .in('material_id', ids.slice(0, 500))
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      material_id: String(r.material_id),
+      on_hand: num(r.on_hand),
+      qty_ok: num(r.qty_ok),
+      qty_blocked: num(r.qty_blocked),
+    }))
   },
 
   /** Tồn hiện tại của 1 vật tư (để kiểm khi xuất). */
@@ -128,6 +317,38 @@ export const movementsRepo = {
     return data as { id: string }
   },
 
+  /**
+   * Biến động GẦN NHẤT của một mã kèm số phiếu + lệnh — ô chi tiết dưới dòng của
+   * màn Tồn kho (Kho lối ERP · B1, 14/10/2026). `ref_no` thường trống từ khi có
+   * phiếu nhiều dòng, nên số phiếu lấy qua `doc_id`.
+   */
+  async ganDay(material_id: string, limit: number): Promise<BienDongGanDay[]> {
+    const { data, error } = await db()
+      .from('warehouse_movements')
+      .select(
+        'id, created_at, direction, qty, stock_status, reason_code, doc_id, doc:warehouse_docs(code), lenh:production_orders(code)',
+      )
+      .eq('material_id', material_id)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw new Error(error.message)
+    return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      const one = (v: unknown) =>
+        (Array.isArray(v) ? v[0] : v) as { code?: string } | null
+      return {
+        id: r.id as string,
+        created_at: r.created_at as string,
+        direction: r.direction as Direction,
+        qty: num(r.qty),
+        stock_status: (r.stock_status as string | null) ?? null,
+        reason_code: (r.reason_code as string | null) ?? null,
+        doc_id: (r.doc_id as string | null) ?? null,
+        doc_code: one(r.doc)?.code ?? null,
+        lenh_code: one(r.lenh)?.code ?? null,
+      }
+    })
+  },
+
   async list(filter: {
     material_id?: string
     direction?: Direction
@@ -160,6 +381,7 @@ export const movementsRepo = {
         qty_rejected: num(r.qty_rejected),
         qc_status: (r.qc_status as string | null) ?? null,
         ref_type: r.ref_type as string,
+        reason_code: (r.reason_code as string | null) ?? null,
         ref_no: (r.ref_no as string | null) ?? null,
         shelf_location: (r.shelf_location as string | null) ?? null,
         note: (r.note as string | null) ?? null,
@@ -184,6 +406,11 @@ export type WarehouseDoc = {
   kind: DocKind
   doc_date: string
   counterparty: string | null
+  /** Tổ NHẬN vật tư (0194) — null = phiếu không xuất cho tổ nào. */
+  team_department_id: string | null
+  team_name: string | null
+  /** Mã lý do xuất (0195) — nhãn tra bằng `nhanLyDo`. */
+  reason_code: string | null
   reason: string | null
   note: string | null
   /**
@@ -210,10 +437,14 @@ export type DocLine = Movement & {
   po_line_id: string | null
   production_order_id: string | null
   qty_ordered: number | null // SL theo chứng từ (dòng PO) — mẫu 01-VT
+  /** Giá vốn dòng — phiếu đảo / điều chỉnh chép lại để công nợ trừ đúng. */
+  unit_cost?: number | null
+  /** Dòng đề nghị mua (0238) — phiếu đảo chép lại để "đã nhập" của dòng tự trừ. */
+  purchase_request_line_id?: string | null
 }
 
 const DOC_COLS =
-  'id, code, kind, doc_date, counterparty, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
+  'id, code, kind, doc_date, counterparty, team_department_id, reason_code, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
 /*
  * warehouse_docs nay có HAI FK sang users (created_by + approved_by 0157) —
  * embed `users(name)` trần là mơ hồ, PostgREST trả lỗi. Hint đích danh.
@@ -222,7 +453,110 @@ const DOC_COLS =
  * tra bằng truy vấn phụ (fillReversalCodes), không embed.
  */
 const DOC_JOINS =
-  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name)'
+  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name), team:departments(name)'
+
+/**
+ * TÓM TẮT + NGUỒN của một loạt phiếu — hai truy vấn phụ cho cả trang.
+ *
+ * Sổ chứng từ trước đây chỉ có số phiếu, loại, ngày, người lập. Người giữ kho
+ * nhìn 46 phiếu nhập mà không biết phiếu nào chứa gì — phải mở từng cái.
+ *
+ * Gom theo LÔ (`in(doc_id, …)`) chứ không hỏi từng phiếu: một trang 50 phiếu mà
+ * hỏi riêng từng cái là 50 lượt đi về, đúng cái bẫy N+1 mà repo này tránh ở mọi
+ * chỗ khác.
+ */
+export async function docSummaries(
+  docIds: string[],
+): Promise<
+  Map<
+    string,
+    DocSummary & { po_codes: string[]; lsx_codes: string[]; ten_dau: string | null }
+  >
+> {
+  const out = new Map<
+    string,
+    DocSummary & { po_codes: string[]; lsx_codes: string[]; ten_dau: string | null }
+  >()
+  if (docIds.length === 0) return out
+
+  const { data: mvRows } = await db()
+    .from('warehouse_movements')
+    .select(
+      'doc_id, material_id, direction, qty, qty_rejected, unit_cost, po_line_id, production_order_id',
+    )
+    .in('doc_id', docIds)
+    .limit(5000)
+  type Mv = {
+    doc_id: string
+    material_id: string
+    direction: 'in' | 'out'
+    qty: unknown
+    qty_rejected: unknown
+    unit_cost: unknown
+    po_line_id: string | null
+    production_order_id: string | null
+  }
+  const mvs = (mvRows ?? []) as Mv[]
+  if (mvs.length === 0) return out
+
+  // Tên vật tư + mã đơn + mã lệnh: mỗi thứ MỘT truy vấn cho cả trang.
+  const matIds = [...new Set(mvs.map((m) => m.material_id))]
+  const lineIds = [...new Set(mvs.map((m) => m.po_line_id).filter((x): x is string => !!x))] // prettier-ignore
+  const lsxIds = [...new Set(mvs.map((m) => m.production_order_id).filter((x): x is string => !!x))] // prettier-ignore
+
+  const [mats, poLines, lsxs] = await Promise.all([
+    matIds.length
+      ? db().from('warehouse_materials').select('id, name').in('id', matIds)
+      : Promise.resolve({ data: [] }),
+    lineIds.length
+      ? db()
+          .from('supply_purchase_order_lines')
+          .select('id, po:supply_purchase_orders(code)')
+          .in('id', lineIds)
+      : Promise.resolve({ data: [] }),
+    lsxIds.length
+      ? db().from('production_orders').select('id, code').in('id', lsxIds)
+      : Promise.resolve({ data: [] }),
+  ])
+  const tenVt = new Map(
+    ((mats.data ?? []) as { id: string; name: string }[]).map((r) => [r.id, r.name]),
+  )
+  const maDon = new Map<string, string>()
+  for (const r of (poLines.data ?? []) as {
+    id: string
+    po: { code: string } | { code: string }[] | null
+  }[]) {
+    const po = Array.isArray(r.po) ? r.po[0] : r.po
+    if (po?.code) maDon.set(r.id, po.code)
+  }
+  const maLenh = new Map(
+    ((lsxs.data ?? []) as { id: string; code: string }[]).map((r) => [r.id, r.code]),
+  )
+
+  const theoDoc = new Map<string, Mv[]>()
+  for (const m of mvs) {
+    if (!theoDoc.has(m.doc_id)) theoDoc.set(m.doc_id, [])
+    theoDoc.get(m.doc_id)!.push(m)
+  }
+  for (const [docId, rows] of theoDoc) {
+    const tt = summariseDoc(
+      rows.map((r) => ({
+        direction: r.direction,
+        material_id: r.material_id,
+        qty: num(r.qty),
+        qty_rejected: num(r.qty_rejected),
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+      })),
+    )
+    out.set(docId, {
+      ...tt,
+      po_codes: [...new Set(rows.map((r) => (r.po_line_id ? maDon.get(r.po_line_id) : null)).filter((x): x is string => !!x))], // prettier-ignore
+      lsx_codes: [...new Set(rows.map((r) => (r.production_order_id ? maLenh.get(r.production_order_id) : null)).filter((x): x is string => !!x))], // prettier-ignore
+      ten_dau: tenVt.get(rows[0].material_id) ?? null,
+    })
+  }
+  return out
+}
 
 /** Điền reversal_of_code cho các phiếu đảo trong danh sách — 1 truy vấn phụ. */
 async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> {
@@ -247,6 +581,7 @@ async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> 
 function toDoc(r: Record<string, unknown>): WarehouseDoc {
   const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
   const ap = Array.isArray(r.approver) ? r.approver[0] : r.approver
+  const tm = Array.isArray(r.team) ? r.team[0] : r.team
   const rev = null as { code?: string } | null
   return {
     id: r.id,
@@ -254,6 +589,9 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
     kind: r.kind,
     doc_date: r.doc_date,
     counterparty: r.counterparty ?? null,
+    team_department_id: (r.team_department_id as string | null) ?? null,
+    team_name: (tm as { name?: string } | null)?.name ?? null,
+    reason_code: (r.reason_code as string | null) ?? null,
     reason: r.reason ?? null,
     note: r.note ?? null,
     status: (r.status as WarehouseDoc['status']) ?? 'posted',
@@ -268,6 +606,46 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
     created_by_name: (a as { name?: string } | null)?.name ?? null,
     created_at: r.created_at,
   } as WarehouseDoc
+}
+
+/**
+ * MỌI LẦN NHẬP CÓ SỐ LƯỢNG, gom theo vật tư — nuôi cột đơn giá bình quân.
+ *
+ * QUÉT CẢ BẢNG, KHÔNG LỌC THEO DANH SÁCH MÃ. Bản đầu lọc theo "mã đang có tồn"
+ * cho rẻ, nhưng sai hai đường:
+ *
+ *   · mất đơn giá của mã tồn 0 — mà đó vẫn là con số có nghĩa ("lần mua gần
+ *     đây bình quân bao nhiêu"), và ngay sau đợt kiểm kê đưa tồn về 0 thì CẢ
+ *     danh mục rơi vào diện này;
+ *   · `in(...)` với hàng nghìn id làm URL vượt mức PostgREST nhận, và lỗi đó
+ *     IM LẶNG — trả rỗng chứ không báo.
+ *
+ * Bảng chuyển động bị chặn bởi số phiếu kho thật, không theo kích thước danh
+ * mục: đo 15/09/2026 là 265 dòng cho 13.229 mã. Khi nào nó lên hàng chục nghìn
+ * thì mới đáng gom sẵn theo vật tư ở tầng DB.
+ */
+export async function giaVonNhap(): Promise<
+  Map<string, { qty: number; unit_cost: number | null }[]>
+> {
+  const out = new Map<string, { qty: number; unit_cost: number | null }[]>()
+  for (let from = 0; ; from += 1000) {
+    const { data } = await db()
+      .from('warehouse_movements')
+      .select('material_id, qty, unit_cost')
+      .eq('direction', 'in')
+      .range(from, from + 999)
+    const rows = (data as Record<string, unknown>[] | null) ?? []
+    for (const r of rows) {
+      const id = r.material_id as string
+      if (!out.has(id)) out.set(id, [])
+      out.get(id)!.push({
+        qty: num(r.qty),
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+      })
+    }
+    if (rows.length < 1000) break
+  }
+  return out
 }
 
 export const docsRepo = {
@@ -296,6 +674,10 @@ export const docsRepo = {
     code: string
     kind: DocKind
     counterparty?: string | null
+    /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
+    team_department_id?: string | null
+    /** Mã lý do xuất (0195). */
+    reason_code?: string | null
     reason?: string | null
     note?: string | null
     /** PNK nhận cho đợt giao nào (0153) — null = không theo đợt. */
@@ -308,6 +690,8 @@ export const docsRepo = {
     supplier_doc_no?: string | null
     /** Phiếu ĐẢO (K1) — trỏ phiếu gốc. */
     reversal_of_doc_id?: string
+    /** PNK nhập hàng Kho tự mua theo đề nghị nào (0238). */
+    purchase_request_id?: string | null
     created_by: string
   }): Promise<{ id: string; code: string }> {
     const { data, error } = await db()
@@ -346,6 +730,53 @@ export const docsRepo = {
   },
 
   /** Phiếu ĐẢO của một phiếu (K1) — null = chưa bị đảo. Mỗi phiếu tối đa một. */
+  /**
+   * MÃ LÝ DO của từng phiếu — cho Sổ phiếu kho. Mã nằm trên DÒNG (0197) nên
+   * một phiếu có thể mang nhiều mã (kiểm kê sinh cả N4 lẫn X5); trả về danh
+   * sách mã DUY NHẤT theo thứ tự gặp, màn bày mã đầu + "+n".
+   *
+   * Dòng trước 0197 để `reason_code` null — người gọi suy lại bằng
+   * `suyMaTuLichSu(ref_type, direction)`, nếu không sổ sẽ nói "tháng 8 không
+   * có phiếu nào" khi lọc theo mã.
+   */
+  async reasonsByDocIds(
+    ids: string[],
+  ): Promise<
+    Map<string, { code: string | null; ref_type: string; direction: Direction }[]>
+  > {
+    const out = new Map<
+      string,
+      { code: string | null; ref_type: string; direction: Direction }[]
+    >()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('warehouse_movements')
+      .select('doc_id, reason_code, ref_type, direction')
+      .in('doc_id', ids.slice(0, 200))
+      .limit(20000)
+    type Raw = {
+      doc_id: string
+      reason_code: string | null
+      ref_type: string
+      direction: Direction
+    }
+    for (const r of (data ?? []) as Raw[]) {
+      const cur = out.get(r.doc_id) ?? []
+      if (
+        !cur.some(
+          (x) =>
+            x.code === r.reason_code &&
+            x.ref_type === r.ref_type &&
+            x.direction === r.direction,
+        )
+      ) {
+        cur.push({ code: r.reason_code, ref_type: r.ref_type, direction: r.direction })
+      }
+      out.set(r.doc_id, cur)
+    }
+    return out
+  },
+
   async findReversalOf(docId: string): Promise<{ id: string; code: string } | null> {
     const { data } = await db()
       .from('warehouse_docs')
@@ -353,6 +784,27 @@ export const docsRepo = {
       .eq('reversal_of_doc_id', docId)
       .maybeSingle()
     return (data as { id: string; code: string } | null) ?? null
+  },
+
+  /**
+   * Tập phiếu ĐÃ BỊ ĐẢO — đọc ngược cột `reversal_of_doc_id`.
+   *
+   * Cột đó nói phiếu NÀY LÀ phiếu đảo; câu hỏi của sổ là ngược lại ("tờ này
+   * còn hiệu lực không"). Không có cột nào trả lời trực tiếp, nhưng tập phiếu
+   * đảo trên toàn sổ rất nhỏ (đo 16/09/2026: 1) nên lấy hết một lượt rẻ hơn
+   * thêm cột hay dựng view.
+   */
+  async reversedDocIds(): Promise<Set<string>> {
+    const { data } = await db()
+      .from('warehouse_docs')
+      .select('reversal_of_doc_id')
+      .not('reversal_of_doc_id', 'is', null)
+      .limit(5000)
+    return new Set(
+      ((data as { reversal_of_doc_id: string | null }[] | null) ?? [])
+        .map((r) => r.reversal_of_doc_id)
+        .filter((v): v is string => !!v),
+    )
   },
 
   /** Đếm phiếu theo loại trên TOÀN SỔ — stats của Sổ chứng từ khi đã phân trang. */
@@ -377,15 +829,89 @@ export const docsRepo = {
 
   async list(filter: {
     kind?: DocKind
+    /**
+     * Lọc theo MÃ LÝ DO (0197) — bộ lọc CHÍNH của sổ phiếu: người đi soát hỏi
+     * "tháng này có bao nhiêu phiếu huỷ", không hỏi "phiếu ngày 12/09".
+     *
+     * Mã nằm trên DÒNG, danh sách là PHIẾU, nên phải lấy tập doc_id trước rồi
+     * mới lọc phiếu — PostgREST không lọc ngược qua quan hệ một-nhiều được.
+     * Hai lượt truy vấn, chấp nhận: sổ phiếu là màn tra cứu, không phải màn
+     * mở 20 lần/ngày, và tập doc_id của một mã trong một kỳ là nhỏ.
+     */
+    reason_code?: string
+    /**
+     * Thu về đúng tập phiếu này (rổ "Thiếu số phiếu NCC" của Sổ phiếu, 12/10/2026).
+     * Mảng rỗng = không phiếu nào — trả rỗng ngay, không để `.in([])` trả cả sổ.
+     */
+    ids?: string[]
+    /** Lọc theo người lập phiếu (ô "Người lập" của Sổ phiếu). */
+    created_by?: string
     page: number
     page_size: number
   }): Promise<{ rows: WarehouseDoc[]; total: number }> {
+    if (filter.ids && filter.ids.length === 0) return { rows: [], total: 0 }
+    let docIds: string[] | null = filter.ids ?? null
+    if (filter.reason_code) {
+      // Đọc HẾT các trang: `.limit(20000)` cũ bị PostgREST cắt ở 1000 dòng sổ,
+      // mã N1 vượt mốc đó là phiếu cũ rơi khỏi bộ lọc mà không ai biết.
+      const theoMa = new Set<string>()
+      for (let tu = 0; ; tu += 1000) {
+        const { data, error } = await db()
+          .from('warehouse_movements')
+          .select('doc_id')
+          .eq('reason_code', filter.reason_code)
+          .not('doc_id', 'is', null)
+          .order('id')
+          .range(tu, tu + 999)
+        if (error) throw new Error(error.message)
+        const rows = (data as { doc_id: string | null }[] | null) ?? []
+        for (const r of rows) if (r.doc_id) theoMa.add(r.doc_id)
+        if (rows.length < 1000) break
+      }
+      // Có cả tập id (rổ) lẫn mã lý do → GIAO hai tập.
+      docIds = docIds ? docIds.filter((id) => theoMa.has(id)) : [...theoMa]
+      // Không phiếu nào mang mã này → trả rỗng NGAY. Bỏ qua bước này thì `.in`
+      // với mảng rỗng và PostgREST trả về TOÀN BỘ sổ — đúng ngược ý người lọc.
+      if (docIds.length === 0) return { rows: [], total: 0 }
+    }
+
+    const from = (filter.page - 1) * filter.page_size
+    if (docIds) {
+      /*
+       * Lọc theo TẬP PHIẾU: không nhét cả tập vào một `.in()` — quá ~350 uuid là
+       * URL vượt trần và fetch sập (đúng lỗi màn Đã về 12/10, `server/theo-lo`).
+       * Đọc id + mốc sắp xếp theo lô, chọn trang trong bộ nhớ, rồi chỉ trang đang
+       * xem (≤ page_size id) mới đi lấy đủ cột.
+       */
+      const nhe = await theoLo<{ id: string; created_at: string }>(docIds, (lo) => {
+        let q = db().from('warehouse_docs').select('id, created_at').in('id', lo)
+        if (filter.kind) q = q.eq('kind', filter.kind)
+        if (filter.created_by) q = q.eq('created_by', filter.created_by)
+        return q.order('id')
+      })
+      nhe.sort((a, b) =>
+        a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
+      )
+      const trang = nhe.slice(from, from + filter.page_size).map((r) => r.id)
+      if (trang.length === 0) return { rows: [], total: nhe.length }
+      const { data, error } = await db()
+        .from('warehouse_docs')
+        .select(`${DOC_COLS}, ${DOC_JOINS}`)
+        .in('id', trang)
+        .order('created_at', { ascending: false })
+      if (error) throw new Error(error.message)
+      const rows = await fillReversalCodes(
+        ((data as Record<string, unknown>[] | null) ?? []).map(toDoc),
+      )
+      return { rows, total: nhe.length }
+    }
+
     let q = db()
       .from('warehouse_docs')
       .select(`${DOC_COLS}, ${DOC_JOINS}`, { count: 'exact' })
       .order('created_at', { ascending: false })
     if (filter.kind) q = q.eq('kind', filter.kind)
-    const from = (filter.page - 1) * filter.page_size
+    if (filter.created_by) q = q.eq('created_by', filter.created_by)
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     const rows = await fillReversalCodes(
@@ -406,11 +932,104 @@ export const docsRepo = {
   },
 
   /** Dòng của 1 phiếu + SL đặt trên dòng PO (in "theo chứng từ" của mẫu 01-VT). */
+  /** Sửa thông tin KHÔNG ảnh hưởng tồn của phiếu (B, 02/10/2026). */
+  /**
+   * Các phiếu ĐIỀU CHỈNH CHÊNH LỆCH của một phiếu nhập (C, 02/10/2026) — nối
+   * bằng dấu trong ghi chú (`DAU_DIEU_CHINH`), cùng lối dấu "Sửa lại PNK-…" của A.
+   * Trả kèm dòng sổ của chúng VÀ của phiếu đảo chúng (đảo phiếu điều chỉnh là
+   * huỷ lần điều chỉnh đó) — cộng có dấu ra đúng số đang ghi.
+   */
+  async adjustmentsOf(code: string): Promise<{
+    docs: { id: string; code: string; reversed: boolean }[]
+    lines: { po_line_id: string; direction: Direction; qty: number }[]
+  }> {
+    const { data: adj, error } = await db()
+      .from('warehouse_docs')
+      .select('id, code, note')
+      .eq('status', 'posted')
+      .like('note', `Điều chỉnh phiếu ${code}%`)
+    if (error) throw new Error(error.message)
+    // `like` lọc thô ở DB; khớp ĐÚNG mã ở đây (PNK-2026-0053 không được bắt cả …00531).
+    const docs = ((adj ?? []) as { id: string; code: string; note: string | null }[])
+      .filter((d) => dieuChinhCua(d.note) === code)
+      .map(({ id, code }) => ({ id, code }))
+    if (docs.length === 0) return { docs: [], lines: [] }
+    const { data: rev, error: e2 } = await db()
+      .from('warehouse_docs')
+      .select('id, reversal_of_doc_id')
+      .in(
+        'reversal_of_doc_id',
+        docs.map((d) => d.id),
+      )
+    if (e2) throw new Error(e2.message)
+    const revRows = (rev ?? []) as { id: string; reversal_of_doc_id: string }[]
+    const reversed = new Set(revRows.map((r) => r.reversal_of_doc_id))
+    const { data: mv, error: e3 } = await db()
+      .from('warehouse_movements')
+      .select('po_line_id, direction, qty')
+      .in('doc_id', [...docs.map((d) => d.id), ...revRows.map((r) => r.id)])
+      .not('po_line_id', 'is', null)
+    if (e3) throw new Error(e3.message)
+    return {
+      docs: docs.map((d) => ({ ...d, reversed: reversed.has(d.id) })),
+      lines: (
+        (mv ?? []) as { po_line_id: string; direction: Direction; qty: unknown }[]
+      ).map((r) => ({
+        po_line_id: r.po_line_id,
+        direction: r.direction,
+        qty: num(r.qty),
+      })),
+    }
+  },
+
+  async patchInfo(
+    id: string,
+    p: {
+      supplier_doc_no?: string | null
+      counterparty?: string | null
+      note?: string | null
+    },
+  ): Promise<void> {
+    const { error } = await db().from('warehouse_docs').update(p).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Dòng NHẬP của một phiếu, gom theo dòng đơn — để "Sửa phiếu nhập" (02/10/2026)
+   * điền sẵn phiếu mới bằng đúng số của phiếu cũ (đã đảo).
+   */
+  async redoLines(docId: string): Promise<
+    Map<string, { qty: number; stock_status: string; note: string | null; qty2_actual: number | null }> // prettier-ignore
+  > {
+    const { data, error } = await db()
+      .from('warehouse_movements')
+      .select('po_line_id, qty, stock_status, note, qty2_actual')
+      .eq('doc_id', docId)
+      .eq('direction', 'in')
+      .not('po_line_id', 'is', null)
+    if (error) throw new Error(error.message)
+    const out = new Map<string, { qty: number; stock_status: string; note: string | null; qty2_actual: number | null }>() // prettier-ignore
+    for (const r of (data ?? []) as Record<string, unknown>[]) {
+      const k = r.po_line_id as string
+      const cur = out.get(k)
+      const kg = r.qty2_actual == null ? null : Number(r.qty2_actual)
+      out.set(k, {
+        qty: (cur?.qty ?? 0) + Number(r.qty),
+        stock_status:
+          cur?.stock_status === 'blocked' ? 'blocked' : String(r.stock_status ?? 'ok'),
+        note: cur?.note ?? (r.note as string | null),
+        qty2_actual:
+          kg == null ? (cur?.qty2_actual ?? null) : (cur?.qty2_actual ?? 0) + kg,
+      })
+    }
+    return out
+  },
+
   async listLines(docId: string): Promise<DocLine[]> {
     const { data } = await db()
       .from('warehouse_movements')
       .select(
-        `${MV_COLS}, po_line_id, production_order_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
+        `${MV_COLS}, unit_cost, po_line_id, production_order_id, purchase_request_line_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
       )
       .eq('doc_id', docId)
       .order('created_at')
@@ -426,6 +1045,7 @@ export const docsRepo = {
         qty_rejected: num(r.qty_rejected),
         qc_status: (r.qc_status as string | null) ?? null,
         ref_type: r.ref_type as string,
+        reason_code: (r.reason_code as string | null) ?? null,
         ref_no: (r.ref_no as string | null) ?? null,
         shelf_location: (r.shelf_location as string | null) ?? null,
         note: (r.note as string | null) ?? null,
@@ -437,6 +1057,8 @@ export const docsRepo = {
         po_line_id: (r.po_line_id as string | null) ?? null,
         production_order_id: (r.production_order_id as string | null) ?? null,
         qty_ordered: pl ? num((pl as { qty_ordered: unknown }).qty_ordered) : null,
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+        purchase_request_line_id: (r.purchase_request_line_id as string | null) ?? null,
       } satisfies DocLine
     })
   },
@@ -456,6 +1078,41 @@ export type StocktakeLine = {
   material_code: string | null
   material_name: string | null
   material_unit: string | null
+}
+
+/**
+ * LSX HOÀN KHO ĐƯỢC — approved | in_progress | **completed**.
+ *
+ * Ở ĐÂY CHỨ KHÔNG Ở `productionRepo` là có chủ ý: tập này phải khớp ĐÚNG
+ * guard trạng thái của `stockService.createReceiptDoc`, và guard đó nằm ngay
+ * cạnh. Lệch nhau thì màn bày một lệnh rồi server từ chối — đúng lối mòn "cho
+ * bấm rồi mới báo" mà luật kiểm cấm. `productionRepo.listActive` KHÔNG dùng
+ * được: nó bỏ 'completed', mà SX xong mới gom vật tư thừa mang trả mới là
+ * trường hợp hay gặp nhất của việc này.
+ */
+export const lsxReturnRepo = {
+  async list(): Promise<
+    { id: string; code: string; customer_name: string | null; status: string }[]
+  > {
+    // Tên khách nằm ở `sales_customers`, không phải cột của lệnh — embed
+    // đích danh, cùng cách `productionRepo` làm.
+    const { data } = await db()
+      .from('production_orders')
+      .select('id, code, status, customer:sales_customers(name)')
+      .in('status', ['approved', 'in_progress', 'completed'])
+      .order('created_at', { ascending: false })
+      .limit(500)
+    type Raw = {
+      id: string
+      code: string
+      status: string
+      customer: { name: string } | { name: string }[] | null
+    }
+    return ((data as Raw[] | null) ?? []).map((r) => {
+      const c = Array.isArray(r.customer) ? r.customer[0] : r.customer
+      return { id: r.id, code: r.code, status: r.status, customer_name: c?.name ?? null }
+    })
+  },
 }
 
 export const stocktakeRepo = {
@@ -515,6 +1172,125 @@ export const warehousesRepo = {
   },
 }
 
+const BIN_COLS = 'id, code, name, kind, is_active'
+
+export const binsRepo = {
+  /** Mọi khu của kho, kể cả đã ngừng dùng — màn Sơ đồ kệ cần thấy cả hai. */
+  async list(warehouseId: string, opts: { active_only?: boolean } = {}): Promise<Bin[]> {
+    let q = db()
+      .from('warehouse_bins')
+      .select(BIN_COLS)
+      .eq('warehouse_id', warehouseId)
+      .order('kind', { ascending: true })
+      .order('code', { ascending: true })
+    if (opts.active_only) q = q.eq('is_active', true)
+    const { data } = await q
+    return ((data as Bin[] | null) ?? []).map((b) => ({ ...b, kind: b.kind as BinKind }))
+  },
+
+  /**
+   * Khu ảo theo LOẠI — `receiving` cho hàng vừa nhận, `blocked` cho hàng khoá.
+   *
+   * Tra theo `kind` chứ KHÔNG hằng số hoá mã 'TIEP-NHAN' / 'KHOA-01': mã là
+   * nhãn người đọc, đổi được; loại là hợp đồng của hệ thống. Hằng số hoá mã thì
+   * ai đó đổi tên khu cho dễ đọc là luồng nhận hàng gãy im lặng.
+   */
+  async byKind(warehouseId: string, kind: BinKind): Promise<Bin | null> {
+    const { data } = await db()
+      .from('warehouse_bins')
+      .select(BIN_COLS)
+      .eq('warehouse_id', warehouseId)
+      .eq('kind', kind)
+      .eq('is_active', true)
+      .order('code', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    return data ? { ...(data as Bin), kind: (data as Bin).kind as BinKind } : null
+  },
+
+  async findById(id: string): Promise<Bin | null> {
+    const { data } = await db()
+      .from('warehouse_bins')
+      .select(BIN_COLS)
+      .eq('id', id)
+      .maybeSingle()
+    return data ? { ...(data as Bin), kind: (data as Bin).kind as BinKind } : null
+  },
+
+  async insert(row: {
+    warehouse_id: string
+    code: string
+    name: string | null
+    kind: BinKind
+  }): Promise<Bin> {
+    const { data, error } = await db()
+      .from('warehouse_bins')
+      .insert(row)
+      .select(BIN_COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Tạo khu thất bại')
+    return { ...(data as Bin), kind: (data as Bin).kind as BinKind }
+  },
+
+  async patch(
+    id: string,
+    patch: { name?: string | null; is_active?: boolean },
+  ): Promise<void> {
+    const { error } = await db().from('warehouse_bins').update(patch).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Số mã đang nằm ở từng khu — nuôi cột "Mã đang nằm" của Sơ đồ kệ. */
+  async materialCountByBin(): Promise<Map<string, number>> {
+    const { data } = await db()
+      .from('v_warehouse_stock_by_bin')
+      .select('bin_id, material_id')
+      .limit(20000)
+    const out = new Map<string, Set<string>>()
+    for (const r of (data as { bin_id: string | null; material_id: string }[] | null) ??
+      []) {
+      if (!r.bin_id) continue
+      const set = out.get(r.bin_id) ?? new Set<string>()
+      set.add(r.material_id)
+      out.set(r.bin_id, set)
+    }
+    return new Map([...out].map(([k, v]) => [k, v.size]))
+  },
+}
+
+export type StockByBin = {
+  material_id: string
+  bin_id: string | null
+  bin_code: string | null
+  bin_name: string | null
+  bin_kind: BinKind | null
+  stock_status: StockStatus
+  qty: number
+}
+
+/**
+ * Tồn theo (vật tư × khu × trạng thái) — nguồn của màn Chờ cất và tab "Tồn
+ * theo kệ" trên hồ sơ vật tư. View đã bỏ các cặp tổng bằng 0.
+ */
+export async function stockByBin(filter: {
+  bin_kind?: BinKind
+  material_ids?: string[]
+}): Promise<StockByBin[]> {
+  let q = db().from('v_warehouse_stock_by_bin').select('*').limit(5000)
+  if (filter.bin_kind) q = q.eq('bin_kind', filter.bin_kind)
+  if (filter.material_ids) q = q.in('material_id', filter.material_ids)
+  const { data } = await q
+  return ((data as Record<string, unknown>[] | null) ?? []).map((r) => ({
+    material_id: r.material_id as string,
+    bin_id: (r.bin_id as string | null) ?? null,
+    bin_code: (r.bin_code as string | null) ?? null,
+    bin_name: (r.bin_name as string | null) ?? null,
+    bin_kind: (r.bin_kind as BinKind | null) ?? null,
+    stock_status: r.stock_status as StockStatus,
+    qty: num(r.qty),
+  }))
+}
+
 /** Insert nhiều movement 1 lần (các dòng của 1 phiếu). */
 export async function insertMovements(
   rows: {
@@ -532,10 +1308,72 @@ export async function insertMovements(
     warehouse_id: string
     po_line_id?: string | null
     production_order_id?: string | null
+    /**
+     * Giá vốn một đơn vị (0015). NULL = CHƯA BIẾT GIÁ, khác hẳn 0 = "cho không"
+     * — màn công nợ đếm "phiếu chưa có giá" dựa đúng vào phân biệt này.
+     */
+    unit_cost?: number | null
+    /**
+     * Mã lý do của DÒNG (0197, `lib/kho-ma-ly-do.ts`). Bỏ trống khi không suy
+     * được chắc chắn từ dữ liệu đã có — để null giống 265 dòng cũ, đừng dán
+     * một mã "khác" lên rồi báo cáo kế toán đếm phải con số bịa. Bắt buộc là
+     * việc của UI soạn phiếu khi màn đó có ô chọn.
+     */
+    reason_code?: string | null
+    /** Khu/kệ lượng này nằm (0193). Dòng mới luôn có — service ép. */
+    bin_id?: string | null
+    /** Trạng thái của lượng (0194): dùng được / chờ kiểm / khoá. */
+    stock_status?: StockStatus
+    /**
+     * Nối HAI CHÂN của một lần điều chuyển (0015). Ràng buộc DB:
+     * `ref_type = 'transfer'` thì cột này BẮT BUỘC có.
+     *
+     * Chuyển kệ và đổi trạng thái đều là "ra khỏi chỗ cũ, vào chỗ mới" — hai
+     * dòng sổ, không phải một UPDATE tại chỗ. Sổ chỉ cộng thêm, không sửa lùi.
+     */
+    transfer_group?: string | null
+    /** Kg cân thực của dòng nhập (nhôm / thép trả tiền theo kg). */
+    qty2_actual?: number | null
+    /** Dòng đề nghị mua mà dòng sổ này nhập cho (0238). */
+    purchase_request_line_id?: string | null
   }[],
 ): Promise<void> {
   const { error } = await db().from('warehouse_movements').insert(rows)
   if (error) throw new Error(error.message)
+}
+
+/** Kg cân thực hiện có của các dòng sổ — số TRƯỚC khi ghi bổ sung (để ghi vết). */
+export async function qty2ActualByIds(
+  ids: string[],
+): Promise<Map<string, number | null>> {
+  if (ids.length === 0) return new Map()
+  const { data, error } = await db()
+    .from('warehouse_movements')
+    .select('id, qty2_actual')
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  return new Map(
+    ((data ?? []) as { id: string; qty2_actual: unknown }[]).map((r) => [
+      r.id,
+      r.qty2_actual == null ? null : Number(r.qty2_actual),
+    ]),
+  )
+}
+
+/**
+ * Ghi kg cân thực vào dòng sổ ĐÃ CÓ. Ngoại lệ DUY NHẤT của luật "sổ chỉ cộng
+ * thêm": `qty2_actual` là số đo, không tham gia tồn / giá vốn (01/10/2026).
+ */
+export async function setQty2Actual(
+  rows: { id: string; qty2_actual: number }[],
+): Promise<void> {
+  for (const r of rows) {
+    const { error } = await db()
+      .from('warehouse_movements')
+      .update({ qty2_actual: r.qty2_actual })
+      .eq('id', r.id)
+    if (error) throw new Error(error.message)
+  }
 }
 
 /** Tồn hiện tại của nhiều vật tư (guard xuất nhiều dòng). */
@@ -553,11 +1391,58 @@ export async function onHandMany(materialIds: string[]): Promise<Map<string, num
 }
 
 /** Tồn + min_stock (check cảnh báo sau xuất — FR-WMS-08). */
+/**
+ * Mô tả gọn của nhiều vật tư — mã, tên, ĐVT, kệ gợi ý. Cho màn Chờ cất.
+ *
+ * Không dùng `stockInfoMany`: bản kia đọc view TỒN và trả về số tồn, còn ở đây
+ * chỉ cần nhãn để hiện dòng. Nhét thêm cột vào bản kia là bắt mọi nơi gọi nó
+ * kéo theo hai cột không dùng.
+ *
+ * `shelf_location` sau 0193 mang nghĩa "KỆ GỢI Ý MẶC ĐỊNH" — điền sẵn lúc cất,
+ * sửa được. Nó không còn là nơi hàng đang nằm; nơi thật là `bin_id` trên sổ.
+ */
+export async function materialLabels(
+  materialIds: string[],
+): Promise<
+  Map<string, { code: string; name: string; unit: string; shelf: string | null }>
+> {
+  if (materialIds.length === 0) return new Map()
+  const { data } = await db()
+    .from('warehouse_materials')
+    .select('id, code, name, unit, shelf_location')
+    .in('id', materialIds)
+  const out = new Map<
+    string,
+    { code: string; name: string; unit: string; shelf: string | null }
+  >()
+  for (const r of (data as
+    | {
+        id: string
+        code: string
+        name: string
+        unit: string
+        shelf_location: string | null
+      }[]
+    | null) ?? []) {
+    out.set(r.id, {
+      code: r.code,
+      name: r.name,
+      unit: r.unit,
+      shelf: r.shelf_location ?? null,
+    })
+  }
+  return out
+}
+
 export async function stockInfoMany(materialIds: string[]): Promise<
   {
     material_id: string
     code: string
     name: string
+    /** DÙNG ĐƯỢC — nền tính "dưới mức" từ 0198, xem header migration. */
+    qty_ok: number
+    /** ĐVT — để chỗ gọi in "còn 2.400 Cái" mà không phải tra thêm bảng vật tư. */
+    unit: string
     on_hand: number
     min_stock: number
   }[]
@@ -565,14 +1450,16 @@ export async function stockInfoMany(materialIds: string[]): Promise<
   if (materialIds.length === 0) return []
   const { data } = await db()
     .from('warehouse_stock')
-    .select('material_id, code, name, on_hand, min_stock')
+    .select('material_id, code, name, unit, qty_ok, on_hand, min_stock')
     .in('material_id', materialIds)
   return (
     (data as
       | {
           material_id: string
           code: string
+          unit: string
           name: string
+          qty_ok: unknown
           on_hand: unknown
           min_stock: unknown
         }[]
@@ -581,6 +1468,8 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     material_id: r.material_id,
     code: r.code,
     name: r.name,
+    qty_ok: num(r.qty_ok),
+    unit: r.unit ?? '',
     on_hand: num(r.on_hand),
     min_stock: num(r.min_stock),
   }))
@@ -603,6 +1492,12 @@ export type LsxNeed = {
   source?: 'components' | 'bom'
   /** Có phần định mức từ SP chưa xác nhận BOM — màn hình phải cảnh báo. */
   unconfirmed?: boolean
+  /**
+   * TỒN HIỆN CÓ của vật tư (0194) — người lập phiếu xuất phải thấy kho còn bao
+   * nhiêu NGAY TẠI DÒNG. Không có nó thì họ gõ số mù rồi bấm Lưu mới biết
+   * không đủ, đúng lỗi "không cho bấm rồi mới báo" mà sổ thiết kế cấm.
+   */
+  on_hand?: number
 }
 
 /** Đã xuất theo LSX gộp theo vật tư — cho nhánh nhu cầu từ bảng chi tiết (P3). */
@@ -638,21 +1533,20 @@ export async function issuedByLsxIds(
   productionOrderIds: string[],
 ): Promise<{ production_order_id: string; material_id: string; qty: number }[]> {
   if (productionOrderIds.length === 0) return []
-  const { data } = await db()
-    .from('warehouse_movements')
-    .select('production_order_id, material_id, direction, qty')
-    .in('production_order_id', productionOrderIds)
-    .limit(10000)
-  return (
-    (data as
-      | {
-          production_order_id: string
-          material_id: string
-          direction: 'in' | 'out'
-          qty: unknown
-        }[]
-      | null) ?? []
-  ).map((r) => ({
+  // Theo lô + đọc hết trang: `.limit(10000)` cũ bị PostgREST cắt ở 1000 dòng sổ.
+  const data = await theoLo<{
+    production_order_id: string
+    material_id: string
+    direction: 'in' | 'out'
+    qty: unknown
+  }>(productionOrderIds, (lo) =>
+    db()
+      .from('warehouse_movements')
+      .select('production_order_id, material_id, direction, qty')
+      .in('production_order_id', lo)
+      .order('id'),
+  )
+  return data.map((r) => ({
     production_order_id: r.production_order_id,
     material_id: r.material_id,
     qty: r.direction === 'out' ? num(r.qty) : -num(r.qty),
@@ -782,6 +1676,32 @@ export async function bomAllocationByCode(
       })
       out.set(materialCode, list)
     }
+  }
+  return out
+}
+
+/**
+ * Nhóm vật tư có bật "cần kiểm hàng" — `catalog_items.meta->>'needs_inspection'`
+ * (khai ở 0194, type `material_group`). Trả về tập TÊN NHÓM để so thẳng với
+ * `warehouse_materials.group_name`, vốn giữ nhãn chứ không giữ mã.
+ *
+ * 0194 khai cờ này rồi để đó — sổ §4.4 gọi đúng tên nó là "một lời hứa treo".
+ * Đây là chỗ đọc nó. Mặc định KHÔNG nhóm nào bật: chủ dự án chốt 15/09/2026
+ * rằng thủ kho vừa nhận vừa kiểm, nên tập này rỗng và hệ thống hành xử y hệt
+ * phương án hai trạng thái. Bật một nhóm là sửa một dòng dữ liệu, không phải
+ * sửa mã — đó là lý do cờ đáng giữ dù hôm nay không ai dùng.
+ */
+export async function inspectionGroups(): Promise<Set<string>> {
+  const { data } = await db()
+    .from('catalog_items')
+    .select('label, meta')
+    .eq('type', 'material_group')
+    .eq('is_active', true)
+  const out = new Set<string>()
+  for (const r of (data as { label: string; meta: unknown }[] | null) ?? []) {
+    const meta = (r.meta ?? {}) as Record<string, unknown>
+    const v = meta.needs_inspection
+    if (v === true || v === 'true') out.add(r.label)
   }
   return out
 }

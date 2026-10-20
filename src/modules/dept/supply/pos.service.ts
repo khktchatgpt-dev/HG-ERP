@@ -1,18 +1,28 @@
-import { splitProblem } from '@/lib/po-lsx-split'
-import { posRepo, type Po, type PoLineInput } from './pos.repo'
+import { chiaLenhDong, splitProblem, type LsxSplit } from '@/lib/po-lsx-split'
+import { projectsRepo } from './projects.repo'
+import { loiHangMuc, thieuViec } from '@/lib/hang-muc'
+import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.repo'
+import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
+import { canAdjust, planAdjustment } from '@/lib/po-adjust'
 import {
+  dongKhongMaLaPhi,
   FREE_LINE_TEMPLATES,
   deriveLine,
   poTemplateMeta,
   type PoTemplate,
 } from '@/lib/po-template'
 import { suppliersRepo, supplyRepo } from './supply.repo'
+import { cancelBlock, supplierOrderBlock } from '@/lib/po-guards'
+import { poTrackingRepo } from './po-tracking.repo'
+import { todayVn } from '@/lib/date-vn'
+import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import {
   buildCatalogSuggestions,
@@ -22,18 +32,67 @@ import {
   type CatalogSuggestion,
 } from '@/lib/po-catalog-backfill'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
-import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { canReschedule, rescheduleNote, shiftPlannedShipments } from '@/lib/po-reschedule'
+import { canReopenForEdit, reopenNote } from '@/lib/po-reopen'
+import { reasonLine } from '@/lib/po-note'
+import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
+import type { PoLsxSplitPatch } from './pos.schema'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
+import { syncPoExpectedAt } from './po-shipments.sync'
+import { SPLIT_REASON_PREFIX } from '@/lib/po-tracking'
 import {
   earliestExpectedDate,
   mapDraftShipments,
   nextSeq,
   validateShipments,
   type ShipmentInput,
+  confirmReplacePlan,
+  splitShipmentLines,
 } from '@/lib/po-shipments'
 
+/**
+ * Trạng thái ĐƠN cho phép thao tác trên đợt giao (27/09/2026): từ lúc đã duyệt
+ * — không phải chờ NCC xác nhận. Thực tế NV cung ứng chốt/sửa lịch giao ngay khi
+ * gọi NCC; nháp thì sửa đợt trong form soạn đơn.
+ */
+const SHIPMENT_PO_STATUSES = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']
+
+/**
+ * HẠNG MỤC CỦA ĐƠN NGOÀI LỆNH (0230, thay ô chữ "Mục đích" của 0229). Đơn có
+ * lệnh luôn ghi null; đơn ngoài lệnh trỏ tới một hạng mục CÓ THẬT và ĐANG MỞ —
+ * trừ khi giữ nguyên hạng mục cũ của đơn (đóng hạng mục không làm hỏng nháp cũ).
+ */
+async function hangMucCua(
+  lsxId: string | null,
+  projectId: string | null | undefined,
+  hienCo?: string | null,
+): Promise<{ project_id: string | null }> {
+  if (lsxId || !projectId) return { project_id: null }
+  const loi = loiHangMuc(await projectsRepo.findById(projectId), projectId, hienCo)
+  if (loi) throw BadRequest(loi)
+  return { project_id: projectId }
+}
+
+/**
+ * Đơn ngoài lệnh lên bàn Giám đốc / đi NCC phải nói mua cho việc gì — tức thuộc
+ * một hạng mục. Chặn ở cửa gửi (không phải lúc lưu nháp) — cùng chỗ với luật
+ * bắt hẹn giao.
+ */
+export function assertCoViec(po: {
+  production_order_id: string | null
+  project_id?: string | null
+}): void {
+  if (thieuViec(po)) {
+    throw BadRequest(
+      'Đơn ngoài lệnh chưa chọn hạng mục — bấm Sửa, chọn ở ô "Cho việc" (vd. Dự trữ kho, Xây dựng văn phòng) rồi mới gửi được',
+    )
+  }
+}
+
 type PoInput = {
+  /** Đơn bổ sung cho phần giao thiếu của đơn này (0213) — chỉ đọc lúc tạo. */
+  source_po_id?: string | null
   /** LSX gắn với đơn; null/bỏ trống = PO ngoài LSX (0076). */
   production_order_id?: string | null
   /** LSX PHỤ gộp thêm (0125) — "LSX 01+2+3/26-27". Chỉ khi có LSX chính. */
@@ -54,6 +113,9 @@ type PoInput = {
   terms_lead_time?: string | null
   signer_role?: string | null
   note?: string | null
+  /** Đơn ngoài lệnh (0229) — bỏ qua khi đơn có lệnh. */
+  /** Hạng mục của đơn ngoài lệnh (0230) — bỏ qua khi đơn có lệnh. */
+  project_id?: string | null
   lines: PoLineInput[]
   /** Kế hoạch chia đợt khai ngay lúc soạn (28/08) — trỏ dòng theo line_index. */
   shipments?: {
@@ -75,6 +137,44 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
 }
 
 /**
+ * DÒNG TỰ GÕ → CẤP MÃ VẬT TƯ (19/10/2026, chủ dự án: "dòng tự do vẫn phải nhập
+ * kho; chưa có vật tư thì tự tạo khi lên đơn"). Dòng hàng không mã (gỗ / gia
+ * công theo mã SP, 0134) được tìm-hoặc-tạo mã trong nhóm gỗ rồi gắn vào dòng —
+ * từ đó dòng có mặt trên phiếu nhập, tồn kho và trạng thái về đủ như mọi dòng.
+ *
+ * GIỮ TIỀN: mẫu gỗ tính dòng KHÔNG mã theo m³, dòng CÓ mã theo ĐVT mua
+ * (`deriveByTemplate` case 'wood'). Gắn mã mà không chốt `price_per` là lặng lẽ
+ * đổi thành tiền của dòng — nên chốt cơ sở đang dùng TRƯỚC khi gắn mã, đúng như
+ * form chốt `price_per` = `price_basis` đã lưu khi mở lại đơn.
+ */
+async function ganMaDongTuGo(
+  user: User,
+  template: PoTemplate,
+  lines: PoLineInput[],
+  poCode?: string,
+): Promise<PoLineInput[]> {
+  const daCap = new Map<string, string>()
+  const out: PoLineInput[] = []
+  // Tuần tự, không Promise.all: hai dòng cùng tên phải ra CÙNG một mã, và mã
+  // kế tiếp đọc từ số lớn nhất đang dùng.
+  for (const l of lines) {
+    const name = l.line_name?.trim()
+    if (l.material_id || l.line_kind === 'phi' || !name) {
+      out.push(l)
+      continue
+    }
+    const k = `${name.toLowerCase()}|${(l.line_unit ?? '').toLowerCase()}`
+    const id =
+      daCap.get(k) ??
+      (await materialsService.ensureForFreeLine(user, { name, unit: l.line_unit ?? null }, poCode)) // prettier-ignore
+    daCap.set(k, id)
+    const giaTheo = l.price_per ?? deriveLine(template, l).price_basis
+    out.push({ ...l, material_id: id, price_per: giaTheo })
+  }
+  return out
+}
+
+/**
  * TỔNG PHẦN CHIA PHẢI BẰNG SL ĐẶT (0185) — kiểm ở đây chứ không ở DB.
  *
  * Ràng buộc cứng ở DB sẽ chặn ngay giữa chừng một thao tác bình thường: người
@@ -84,10 +184,7 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
  *
  * Kèm chặn lệnh lạ: chỉ được chia cho LSX chính hoặc LSX phụ CỦA CHÍNH ĐƠN NÀY.
  */
-function assertSplits(
-  lines: PoLineInput[],
-  lsxIds: (string | null | undefined)[],
-): void {
+function assertSplits(lines: PoLineInput[], lsxIds: (string | null | undefined)[]): void {
   const hopLe = new Set(lsxIds.filter(Boolean) as string[])
   lines.forEach((l, i) => {
     const sp = l.lsx_split ?? []
@@ -132,9 +229,18 @@ function catalogLines(lines: PoLineInput[]) {
  * biết template sau khi update fallback về mẫu cũ của đơn).
  */
 function assertFreeLinesAllowed(template: PoTemplate, lines: PoLineInput[]): void {
+  // Dòng PHÍ / DỊCH VỤ (0234) không bao giờ gắn vật tư — DB check cũng chặn.
+  if (lines.some((l) => l.line_kind === 'phi' && l.material_id)) {
+    throw BadRequest(
+      'Dòng phí / dịch vụ không gắn mã vật tư — bỏ mã hoặc đổi thành dòng hàng',
+    )
+  }
   if (FREE_LINE_TEMPLATES.includes(template)) return
-  if (lines.some((l) => !l.material_id)) {
-    throw BadRequest('Dòng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³"')
+  // Mẫu khác: dòng HÀNG phải gắn vật tư; dòng phí / dịch vụ thì được mọi mẫu (0234).
+  if (lines.some((l) => !l.material_id && l.line_kind !== 'phi')) {
+    throw BadRequest(
+      'Dòng hàng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³" — khoản phí / dịch vụ thì thêm bằng "+ Phí / dịch vụ"',
+    )
   }
 }
 
@@ -169,7 +275,7 @@ async function checkedExtraLsxIds(
  * Gọi SAU `assertAction('supply.po.manage')` — cổng "là nhân sự cung ứng" vẫn
  * đứng trước, đây là lớp "đúng người" bên trong phòng.
  */
-async function assertPoOwner(
+export async function assertPoOwner(
   user: User,
   po: { assigned_to: string | null; created_by: string | null },
 ): Promise<void> {
@@ -189,7 +295,7 @@ async function assertPoOwner(
  * director/…) ∪ admin (bypass không nằm trong role_permissions) — thay cho lọc
  * `role ∈ {admin, manager}` cũ vốn bắn cho mọi manager toàn công ty (G3).
  */
-async function approverIds(excludeUserId: string): Promise<string[]> {
+export async function approverIds(excludeUserId: string): Promise<string[]> {
   const [withPerm, users] = await Promise.all([
     rbacRepo.userIdsWithPermission('supply.po.approve'),
     usersRepo.list(),
@@ -265,6 +371,41 @@ async function saveDraftShipments(
   )
 }
 
+/**
+ * VẾT LÝ DO (trả lại · dời hẹn · hạ về nháp · huỷ) → ghi chú Trao đổi NỘI BỘ.
+ *
+ * Trước 27/09/2026 vết này đóng lên `note` của đơn — mà `note` in NGUYÊN VĂN lên
+ * phiếu gửi NCC, nên "[Trả lại để sửa] Giá cao hơn NCC khác" tới tay chính NCC
+ * đó. Ghi thẳng repo (không qua docNotesService): đây là một phần của thao tác,
+ * người làm thao tác là tác giả, không phát thông báo riêng — sự kiện của chính
+ * thao tác đã báo người cần biết. Không nuốt lỗi: với huỷ đơn, đây là nơi DUY
+ * NHẤT còn giữ lý do.
+ */
+async function traceReason(user: User, poId: string, body: string | null): Promise<void> {
+  if (!body) return
+  await docNotesRepo.create(
+    { doc_type: 'po', doc_id: poId, author_id: user.id, audience: 'internal', body },
+    user.name ?? null,
+  )
+}
+
+/**
+ * ĐƠN ĐÃ RA KHỎI CỬA = giá đã chốt thật → cập nhật "giá mua gần nhất" của danh
+ * mục (handler po.catalog — chỉ đơn VND, xem po-catalog-backfill). Bắn ở bước
+ * gửi NCC, hoặc ở bước NCC xác nhận khi đơn đi thẳng từ "Đã duyệt".
+ */
+async function emitOrdered(user: User, before: Po) {
+  const lines = await posRepo.listLines(before.id)
+  await emit({
+    name: 'po.ordered',
+    po_id: before.id,
+    code: before.code,
+    currency: before.currency ?? 'VND',
+    ordered_by: user.id,
+    lines: lines.map((l) => ({ material_id: l.material_id, unit_price: l.unit_price })),
+  })
+}
+
 export const posService = {
   /** Đọc: mọi NV đã đăng nhập (Kho nhận hàng, Kế toán xem phải trả…). */
   async list(_user: User, opts: Parameters<typeof posRepo.list>[0]) {
@@ -320,14 +461,17 @@ export const posService = {
   },
 
   async detail(_user: User, id: string) {
-    const po = await posRepo.findById(id)
-    if (!po) throw NotFound('Đơn đặt không tồn tại')
-    const [lines, rawStatus, extra_lsx, warehouse_docs] = await Promise.all([
+    // Bốn truy vấn dưới chỉ cần MÃ đơn, không cần đầu đơn — chạy CÙNG LÚC với
+    // findById thay vì chờ nó (bớt một lượt đi–về Supabase, ~150 ms, 28/09/2026).
+    // Đơn không tồn tại thì chúng trả rỗng, vô hại.
+    const [po, lines, rawStatus, extra_lsx, warehouse_docs] = await Promise.all([
+      posRepo.findById(id),
       posRepo.listLines(id),
       supplyRepo.lineStatus(id), // đặt / đã nhận / còn thiếu (BR-08, FR-SUP-05)
       posRepo.listExtraLsx(id), // LSX phụ gộp vào đơn (0125)
       supplyRepo.docsByPo(id), // PNK/phiếu trả — mốc timeline (GĐ3)
     ])
+    if (!po) throw NotFound('Đơn đặt không tồn tại')
     // Lý do chốt thiếu (0154) — view đối chiếu không mang cột này; chỉ trang
     // chi tiết cần (tooltip trên badge) nên tra thêm một lượt, đúng các dòng chốt.
     const reasons = rawStatus.some((l) => l.closed_short_at != null)
@@ -350,9 +494,7 @@ export const posService = {
    */
   async create(user: User, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
-    const supplier = await suppliersRepo.findById(input.supplier_id)
-    if (!supplier) throw NotFound('NCC không tồn tại')
-    if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
+    await assertSupplierCanOrder(input.supplier_id)
     const lsxId = input.production_order_id ?? null
     let lsx: Awaited<ReturnType<typeof productionRepo.findById>> = null
     if (lsxId) {
@@ -364,11 +506,17 @@ export const posService = {
     }
 
     const extraLsxIds = await checkedExtraLsxIds(lsxId, input.extra_lsx_ids)
+    if (input.source_po_id && !(await posRepo.findById(input.source_po_id))) {
+      throw BadRequest('Đơn gốc của đơn bổ sung không tồn tại')
+    }
 
     const template = input.template ?? 'simple'
+    // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
+    input.lines = dongKhongMaLaPhi(template, input.lines)
     assertFreeLinesAllowed(template, input.lines)
     assertSplits(input.lines, [lsxId, ...extraLsxIds])
     const code = await posRepo.nextCode()
+    input.lines = await ganMaDongTuGo(user, template, input.lines, code)
     const po = await posRepo.insert(
       {
         code,
@@ -387,6 +535,8 @@ export const posService = {
         note: input.note ?? null,
         created_by: user.id,
         assigned_to: user.id,
+        source_po_id: input.source_po_id ?? null,
+        ...(await hangMucCua(lsxId, input.project_id)),
       },
       withDerived(template, input.lines),
     )
@@ -420,6 +570,9 @@ export const posService = {
     if ((await posRepo.listLines(id)).length === 0) {
       throw BadRequest('Đơn chưa có dòng vật tư nào — thêm hàng rồi hãy gửi duyệt')
     }
+    // NCC bị khoá SAU khi đơn đã soạn: chặn ở cửa gửi duyệt, không để lên bàn GĐ.
+    await assertSupplierCanOrder(before.supplier_id)
+    assertCoViec(before)
     /**
      * BẮT BUỘC HẸN GIAO. Không có `expected_at` thì `assessPoLate` và
      * `assessPoFit` đều trả null: đơn không bao giờ đỏ "quá hẹn", không lên đèn
@@ -519,6 +672,62 @@ export const posService = {
     })
   },
 
+  /**
+   * SỬA CHIA LỆNH (10/10/2026, bản vẽ Chia lệnh Q5) — đơn ở MỌI trạng thái trừ
+   * huỷ: chỉ thay phần chia SL theo lệnh của dòng. Không đổi SL, giá, tiền hay
+   * thứ NCC cam kết (ngoài cột "Chia lệnh" trên phiếu), nên không qua điều chỉnh
+   * đơn và không phải ký lại. Vết: một ghi chú NỘI BỘ "[Sửa chia lệnh] …" ở Trao
+   * đổi của đơn — ai sửa, lúc nào, dòng nào đổi từ gì sang gì.
+   */
+  async updateLsxSplits(user: User, id: string, input: PoLsxSplitPatch) {
+    await assertAction(user, 'supply.po.manage')
+    const po = await posRepo.findById(id)
+    if (!po) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, po)
+    if (po.status === 'cancelled')
+      throw BadRequest('Đơn đã huỷ — hồ sơ đóng, không sửa nữa')
+    const [lines, extras] = await Promise.all([
+      posRepo.listLines(id),
+      posRepo.listExtraLsx(id),
+    ])
+    const { lsx_set: lsxSet } = await posRepo.printRefsByIds(
+      po.production_order_id,
+      extras,
+    )
+    if (lsxSet.length < 2)
+      throw BadRequest('Đơn chỉ thuộc một lệnh — không có gì để chia')
+    const hopLe = new Set(lsxSet.map((x) => x.id))
+    const byId = new Map(lines.map((l, i) => [l.id, { l, i }]))
+    const doi: string[] = []
+    for (const it of input.lines) {
+      const hit = byId.get(it.line_id)
+      if (!hit) throw BadRequest('Có dòng không thuộc đơn này')
+      const ten = hit.l.material_code || hit.l.material_name
+      for (const sp of it.lsx_split) {
+        if (!hopLe.has(sp.production_order_id))
+          throw BadRequest(
+            `Dòng ${hit.i + 1} (${ten}): chia cho một lệnh không thuộc đơn này`,
+          )
+      }
+      const loi = splitProblem(Number(hit.l.qty_ordered), it.lsx_split)
+      if (loi) throw BadRequest(`Dòng ${hit.i + 1} (${ten}): ${loi}`)
+      const truoc = chiaLenhDong({ qty_ordered: Number(hit.l.qty_ordered), lsx_split: (hit.l as { lsx_split?: LsxSplit[] | null }).lsx_split ?? null }, lsxSet).join(' · ') // prettier-ignore
+      const sau = chiaLenhDong({ qty_ordered: Number(hit.l.qty_ordered), lsx_split: it.lsx_split }, lsxSet).join(' · ') // prettier-ignore
+      const chuaChiaTruoc = !(
+        (hit.l as { lsx_split?: LsxSplit[] | null }).lsx_split ?? []
+      ).length
+      if (truoc !== sau || chuaChiaTruoc !== (it.lsx_split.length === 0))
+        doi.push(
+          `${ten}: ${chuaChiaTruoc ? 'chưa chia' : truoc} → ${it.lsx_split.length ? sau : 'chưa chia'}`,
+        )
+    }
+    await posRepo.replaceLineSplits(input.lines)
+    if (doi.length > 0) {
+      await traceReason(user, id, `[Sửa chia lệnh] ${doi.join('; ')}`.slice(0, 4000))
+    }
+    return { changed: doi.length }
+  },
+
   async update(user: User, id: string, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
@@ -527,7 +736,7 @@ export const posService = {
     if (before.status !== 'draft') {
       throw BadRequest(
         before.status === 'pending_approval'
-          ? 'Đơn đang chờ duyệt — bấm "Rút về nháp" rồi mới sửa được'
+          ? 'Đơn đang chờ duyệt — bấm "Rút về nháp để sửa" rồi mới sửa được'
           : 'Chỉ đơn nháp mới sửa được',
       )
     }
@@ -540,7 +749,13 @@ export const posService = {
     // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
     // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
     const template = input.template ?? before.template ?? 'simple'
+    // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
+    input.lines = dongKhongMaLaPhi(template, input.lines)
     assertFreeLinesAllowed(template, input.lines)
+    input.lines = await ganMaDongTuGo(user, template, input.lines, before.code)
+    // Đổi sang NCC khác lúc sửa nháp — NCC mới cũng phải đặt được.
+    if (input.supplier_id !== before.supplier_id)
+      await assertSupplierCanOrder(input.supplier_id)
     const po = await posRepo.patch(id, {
       supplier_id: input.supplier_id,
       template,
@@ -553,6 +768,11 @@ export const posService = {
       terms: input.terms ?? null,
       ...withTemplateDefaults(input, template),
       note: input.note ?? null,
+      ...(await hangMucCua(
+        before.production_order_id,
+        input.project_id,
+        before.project_id,
+      )),
     })
     assertSplits(input.lines, [before.production_order_id, ...extraLsxIds])
     await posRepo.replaceLines(id, withDerived(template, input.lines))
@@ -590,6 +810,15 @@ export const posService = {
     if (before.status !== 'pending_approval') {
       throw BadRequest('Chỉ duyệt được đơn đang chờ duyệt')
     }
+    /*
+     * TỶ GIÁ CHỐT LÚC DUYỆT (0219): đơn ngoại tệ lấy dòng tỷ giá mới nhất ≤ hôm
+     * nay và ghi cứng lên đơn. Bảng chưa có dòng nào thì vẫn duyệt — cột để
+     * null, màn Tỷ giá của Kế toán bày đơn này ở "thiếu tỷ giá" + nút gán lại.
+     * Chặn duyệt vì Kế toán chưa nhập tỷ giá là bắt Cung ứng chờ một việc
+     * không phải của họ.
+     */
+    const fxDate = todayVn()
+    const fxRate = decision === 'approve' ? await fxRatesRepo.rateAt(before.currency, fxDate) : null // prettier-ignore
     const po = await posRepo.patch(
       id,
       decision === 'approve'
@@ -597,9 +826,17 @@ export const posService = {
             status: 'approved',
             approved_by: user.id,
             approved_at: new Date().toISOString(),
+            fx_rate: fxRate,
+            fx_date: fxRate == null ? null : fxDate,
           }
-        : { status: 'draft', note: reason ? `[Từ chối] ${reason}` : before.note },
+        : // KHÔNG đụng `note`: ô đó in lên phiếu gửi NCC. Lý do trả lại vào
+          // Trao đổi nội bộ (traceReason) — ghi chú người soạn giữ nguyên.
+          { status: 'draft' },
     )
+    if (decision === 'reject')
+      await traceReason(user, id, reasonLine('Trả lại để sửa', reason))
+    // 0218 — đơn đã được quyết: câu hỏi của Giám đốc trên nó hết đối tượng.
+    await docNotesRepo.resolveQuestions('po', id, user.id, 'decided')
     await emit({
       name: 'po.decided',
       po_id: id,
@@ -614,7 +851,8 @@ export const posService = {
 
   /**
    * ⭐ BR-05 nửa sau: CHƯA DUYỆT THÌ KHÔNG GỬI ĐƯỢC CHO NCC.
-   * approved → ordered (gửi NCC, đóng dấu ordered_at) → confirmed → in_transit.
+   * approved → confirmed (NCC xác nhận, 06/10/2026 — bỏ qua bước gửi) → in_transit.
+   * approved → ordered (gửi NCC) vẫn còn cho đường gửi gấp và đơn cũ.
    * partial/received do Kho tự cập nhật khi nhập hàng (BR-08).
    */
   async advance(
@@ -629,7 +867,8 @@ export const posService = {
 
     const allowed: Record<string, string[]> = {
       ordered: ['approved'], // ⭐ BR-05: chỉ từ approved
-      confirmed: ['ordered'],
+      // Từ 06/10/2026 xác nhận được thẳng từ "Đã duyệt" — xem `confirm`.
+      confirmed: ['approved', 'ordered'],
       in_transit: ['confirmed', 'ordered'],
       received: ['ordered', 'confirmed', 'in_transit', 'partial'],
     }
@@ -638,6 +877,26 @@ export const posService = {
         to === 'ordered'
           ? 'BR-05: đơn phải được Giám đốc duyệt mới gửi được cho NCC'
           : `Không chuyển được từ "${before.status}" sang "${to}"`,
+      )
+    }
+    // NCC XÁC NHẬN đi một cửa duy nhất (`confirm`): mốc confirmed_at, sổ hẹn
+    // giao và — khi bỏ qua bước gửi — các hàng rào + sự kiện của bước gửi.
+    if (to === 'confirmed') return posService.confirm(user, id, { shipments: [] })
+    /*
+      GỬI NCC PHẢI CÓ HẸN GIAO (17/09/2026).
+
+      Hàng rào ở đây chứ không chỉ ở nút: màn cũ, file nạp liệu và mọi đường
+      gọi API khác đều đi qua hàm này. Đo được 44/63 đơn trống `expected_at` —
+      số đó tích lại vì không tầng nào hỏi.
+
+      Chỉ chặn ở bước GỬI: nháp chưa cần ngày. Sửa bằng nút "Sửa" (mở hẹn
+      giao tại chỗ, gọi `/reschedule`) rồi gửi lại — một bước, không phải
+      làm lại đơn.
+    */
+    if (to === 'ordered') await assertSupplierCanOrder(before.supplier_id)
+    if (to === 'ordered' && !before.expected_at) {
+      throw BadRequest(
+        'Đơn chưa có hẹn giao — bấm "Sửa" khai ngày dự kiến trước khi gửi NCC. Không có ngày thì không đo được trễ, và đơn không lên được lịch hàng về.',
       )
     }
     /**
@@ -664,22 +923,7 @@ export const posService = {
       status: to,
       ...(to === 'ordered' ? { ordered_at: new Date().toISOString() } : {}),
     })
-    // GỬI NCC = giá đã chốt thật → cập nhật "giá mua gần nhất" của danh mục
-    // (handler po.catalog — chỉ đơn VND, xem po-catalog-backfill).
-    if (to === 'ordered') {
-      const lines = await posRepo.listLines(id)
-      await emit({
-        name: 'po.ordered',
-        po_id: id,
-        code: before.code,
-        currency: before.currency ?? 'VND',
-        ordered_by: user.id,
-        lines: lines.map((l) => ({
-          material_id: l.material_id,
-          unit_price: l.unit_price,
-        })),
-      })
-    }
+    if (to === 'ordered') await emitOrdered(user, before)
     return po
   },
 
@@ -709,8 +953,30 @@ export const posService = {
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     await assertPoOwner(user, before)
-    if (before.status !== 'ordered') {
-      throw BadRequest('Chỉ xác nhận được đơn ĐÃ GỬI NCC (đang ở "Đã gửi NCC")')
+    /*
+      BỎ BƯỚC "GỬI NCC" (06/10/2026, chủ dự án chốt): sau khi Giám đốc duyệt,
+      nút chính là "NCC xác nhận" — đơn đi thẳng approved → confirmed ("Chờ
+      giao"). Ngoài đời người mua gửi đơn qua Zalo/điện thoại rồi chờ NCC ừ; bấm
+      "Gửi NCC" chỉ để rồi lại phải bấm "NCC xác nhận" là một bước không ai làm
+      đúng lúc (đo 05/10: 23 đơn nằm "Đã gửi NCC" quá 2 ngày).
+
+      Bỏ bước KHÔNG bỏ hàng rào của nó: NCC khoá đặt hàng thì chặn, chưa có hẹn
+      giao (và cũng không khai đợt nào) thì chặn, `ordered_at` vẫn đóng dấu (mọi
+      báo cáo "ngày đặt" đọc cột này) và sự kiện `po.ordered` vẫn bắn để danh
+      mục cập nhật giá mua gần nhất. `ordered` vẫn sống cho đơn gửi gấp ký bù
+      và đơn cũ đã gửi — xác nhận chúng như trước.
+    */
+    if (before.status !== 'ordered' && before.status !== 'approved') {
+      throw BadRequest('Chỉ ghi NCC xác nhận cho đơn đã được Giám đốc duyệt')
+    }
+    const skipSend = before.status === 'approved'
+    if (skipSend) {
+      await assertSupplierCanOrder(before.supplier_id)
+      if (!before.expected_at && input.shipments.length === 0) {
+        throw BadRequest(
+          'Đơn chưa có hẹn giao — bấm "Sửa" khai ngày NCC hứa giao trước khi ghi xác nhận. Không có ngày thì không đo được trễ, và đơn không lên được lịch hàng về.',
+        )
+      }
     }
 
     /*
@@ -726,7 +992,10 @@ export const posService = {
      * Xoá trước rồi chèn — cùng cách `saveDraftShipments` làm khi sửa đơn nháp.
      */
     if (input.shipments.length > 0) {
-      const lines = await posRepo.listLines(id)
+      const [lines, current] = await Promise.all([posRepo.listLines(id), poShipmentsRepo.listByPo(id)]) // prettier-ignore
+      // KHÔNG xoá lịch cũ (P1, 27/09/2026) — xem `confirmReplacePlan`: đợt đề nghị
+      // thành "đã thay" (giữ vết ngày mình cần), đợt đã có hàng giữ nguyên.
+      const plan = confirmReplacePlan(current)
       const v = validateShipments(
         input.shipments,
         lines.map((l) => ({
@@ -734,13 +1003,25 @@ export const posService = {
           qty_ordered: l.qty_ordered,
           name: l.material_name,
         })),
+        plan.keptQty,
       )
       if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
-      await poShipmentsRepo.deleteByPo(id)
+      const stamp = `[Thay bằng cam kết NCC ${todayVn().split('-').reverse().join('/')}]`
+      // SỔ HẸN GIAO (0213): lịch mình đề nghị bị thay — giữ ngày mình cần hàng.
+      await poTrackingRepo.logCommits(
+        plan.cancelIds.flatMap((sid) => {
+          const old = current.find((x) => x.id === sid)
+          return old ? [{ po_id: id, shipment_id: sid, kind: 'de_nghi' as const, date_before: old.expected_date, lines: old.lines, reason: 'Lịch đề nghị lúc soạn — thay bằng cam kết NCC', created_by: user.id }] : [] // prettier-ignore
+        }),
+      )
+      for (const sid of plan.cancelIds) {
+        const old = current.find((x) => x.id === sid)
+        await poShipmentsRepo.patch(sid, { status: 'cancelled', note: [stamp, old?.note].filter(Boolean).join(' ') }) // prettier-ignore
+      }
       await poShipmentsRepo.insertMany(
         id,
         input.shipments.map((s, i) => ({
-          seq: i + 1,
+          seq: plan.startSeq + i,
           expected_date: s.expected_date,
           method: input.method ?? null,
           place: input.place ?? null,
@@ -750,17 +1031,37 @@ export const posService = {
         user.id,
       )
     }
+    await poTrackingRepo.logCommits(
+      input.shipments.length > 0
+        ? input.shipments.map((s) => ({ po_id: id, kind: 'ncc_xac_nhan' as const, date_after: s.expected_date, lines: s.lines, reason: input.confirmed_note ?? null, created_by: user.id })) // prettier-ignore
+        : [{ po_id: id, kind: 'ncc_xac_nhan' as const, date_after: before.expected_at?.slice(0, 10) ?? null, reason: input.confirmed_note ?? 'NCC xác nhận cả đơn, không chia đợt', created_by: user.id }], // prettier-ignore
+    )
 
     const minDate = earliestExpectedDate(
       input.shipments.map((s) => ({ expected_date: s.expected_date, status: 'planned' })),
     )
-    return posRepo.patch(id, {
+    const now = new Date().toISOString()
+    const po = await posRepo.patch(id, {
       status: 'confirmed',
-      confirmed_at: new Date().toISOString(),
+      confirmed_at: now,
       confirmed_note: input.confirmed_note ?? null,
+      // Bỏ qua bước gửi: ordered_at = CÙNG mốc với confirmed_at — dòng thời gian
+      // nhận ra dấu này để không bày thêm bước "Gửi NCC" chưa từng xảy ra.
+      ...(skipSend ? { ordered_at: now } : {}),
       // Không có đợt thì giữ nguyên hẹn giao cũ — đừng xoá mốc của đơn.
       ...(minDate ? { expected_at: minDate } : {}),
     })
+    if (skipSend) await emitOrdered(user, before)
+    // B8b: Kho được báo khi hẹn giao gần (handler lọc ≤ 3 ngày) — 0251.
+    await emit({
+      name: 'po.confirmed',
+      po_id: id,
+      code: before.code,
+      supplier_name: before.supplier_name,
+      expected: (minDate ?? before.expected_at)?.slice(0, 10) ?? null,
+      confirmed_by: user.id,
+    })
+    return po
   },
 
   /** Kế hoạch giao của đơn — cho trang chi tiết + form nhập kho (GĐ2). */
@@ -783,8 +1084,10 @@ export const posService = {
     const before = await posRepo.findById(poId)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     await assertPoOwner(user, before)
-    if (!['confirmed', 'in_transit', 'partial'].includes(before.status)) {
-      throw BadRequest('Chỉ thêm đợt cho đơn đã NCC xác nhận và chưa về đủ')
+    // Mở từ 'approved' (27/09/2026): lịch giao chốt với NCC qua điện thoại ngay
+    // khi đơn duyệt xong, không phải đợi bước "NCC xác nhận" mới được ghi.
+    if (!SHIPMENT_PO_STATUSES.includes(before.status)) {
+      throw BadRequest('Chỉ thêm đợt cho đơn đã duyệt và chưa về đủ')
     }
     const [lines, existing, current] = await Promise.all([
       posRepo.listLines(poId),
@@ -808,6 +1111,9 @@ export const posService = {
       })),
       user.id,
     )
+    await poTrackingRepo.logCommits(
+      shipments.map((s) => ({ po_id: poId, kind: 'them_dot' as const, date_after: s.expected_date, lines: s.lines, reason: s.note ?? null, created_by: user.id })), // prettier-ignore
+    )
     await this.syncExpectedAt(poId)
   },
 
@@ -820,9 +1126,10 @@ export const posService = {
     user: User,
     shipmentId: string,
     input: {
-      action: 'reschedule' | 'arrived' | 'cancel'
+      action: 'reschedule' | 'arrived' | 'cancel' | 'edit' | 'split'
       expected_date?: string
       reason?: string
+      lines?: { po_line_id: string; qty: number }[]
     },
   ): Promise<void> {
     await assertAction(user, 'supply.po.manage')
@@ -831,6 +1138,59 @@ export const posService = {
     const po = await posRepo.findById(shipment.po_id)
     if (!po) throw NotFound('Đơn đặt không tồn tại')
     await assertPoOwner(user, po)
+    // Đơn đã về đủ / huỷ / còn nháp-chờ duyệt thì lịch giao không còn gì để sửa
+    // (nháp sửa đợt ngay trong form soạn đơn).
+    if (!SHIPMENT_PO_STATUSES.includes(po.status)) {
+      throw BadRequest('Chỉ sửa đợt giao của đơn đã duyệt và chưa về đủ')
+    }
+
+    if (input.action === 'edit' || input.action === 'split') {
+      if (shipment.status !== 'planned') {
+        throw BadRequest('Chỉ sửa / lấy trước được đợt đang hẹn (chưa có xe tới)')
+      }
+      const lines = await posRepo.listLines(po.id)
+      const names = new Map(
+        lines.map((l) => [l.id, l.material_name ?? l.line_name ?? 'Dòng']),
+      )
+      const dmy = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
+      const want = (input.lines ?? []).filter((l) => l.qty > 0)
+      if (input.action === 'edit') {
+        // Tổng các đợt SỐNG khác + bản mới của đợt này không vượt SL đặt.
+        const others = await poShipmentsRepo.qtyByLine(po.id, shipmentId)
+        const v = validateShipments(
+          [{ expected_date: input.expected_date!, lines: want }],
+          lines.map((l) => ({
+            id: l.id,
+            qty_ordered: l.qty_ordered,
+            name: names.get(l.id)!,
+          })),
+          others,
+        )
+        if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+        await poShipmentsRepo.replaceLines(shipmentId, want)
+        await poShipmentsRepo.patch(shipmentId, {
+          expected_date: input.expected_date!,
+          note: `[Sửa đợt ${dmy(input.expected_date!)}] ${input.reason}${shipment.note ? ` · ${shipment.note}` : ''}`, // prettier-ignore
+        })
+        await poTrackingRepo.logCommits([{ po_id: po.id, shipment_id: shipmentId, kind: 'doi_hen', date_before: shipment.expected_date, date_after: input.expected_date!, lines: want, reason: `Sửa đợt: ${input.reason}`, created_by: user.id }]) // prettier-ignore
+        if (input.expected_date!.slice(0, 10) !== shipment.expected_date.slice(0, 10)) {
+          await emit({ name: 'po.rescheduled', po_id: po.id, code: po.code, supplier_name: po.supplier_name, from: shipment.expected_date.slice(0, 10), to: input.expected_date!.slice(0, 10), dot: `đợt ${shipment.seq}`, reason: input.reason ?? null, moved_by: user.id }) // prettier-ignore
+        }
+      } else {
+        const s = splitShipmentLines(shipment.lines, want, names)
+        if (s.errors.length > 0) throw BadRequest(s.errors.join(' · '))
+        const seq = nextSeq(await poShipmentsRepo.listByPo(po.id))
+        await poShipmentsRepo.replaceLines(shipmentId, s.remain)
+        await poShipmentsRepo.insertMany(
+          po.id,
+          [{ seq, expected_date: input.expected_date!, note: `[Lấy trước từ đợt ${shipment.seq}] ${input.reason}`, lines: s.pulled }], // prettier-ignore
+          user.id,
+        )
+        await poTrackingRepo.logCommits([{ po_id: po.id, kind: 'them_dot', date_after: input.expected_date!, lines: s.pulled, reason: `${SPLIT_REASON_PREFIX} ${shipment.seq}: ${input.reason}`, created_by: user.id }]) // prettier-ignore
+      }
+      await this.syncExpectedAt(po.id)
+      return
+    }
 
     if (input.action === 'arrived') {
       if (shipment.status !== 'planned') {
@@ -842,6 +1202,11 @@ export const posService = {
     if (shipment.status !== 'planned' && shipment.status !== 'arrived') {
       throw BadRequest('Đợt đã nhận xong / đã huỷ — không sửa được')
     }
+    await poTrackingRepo.logCommits([
+      input.action === 'reschedule'
+        ? { po_id: po.id, shipment_id: shipmentId, kind: 'doi_hen', date_before: shipment.expected_date, date_after: input.expected_date ?? null, lines: shipment.lines, reason: input.reason ?? null, created_by: user.id } // prettier-ignore
+        : { po_id: po.id, shipment_id: shipmentId, kind: 'huy_dot', date_before: shipment.expected_date, lines: shipment.lines, reason: input.reason ?? null, created_by: user.id }, // prettier-ignore
+    ])
     if (input.action === 'reschedule') {
       const dmy = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
       await poShipmentsRepo.patch(shipmentId, {
@@ -850,6 +1215,7 @@ export const posService = {
           shipment.note ? ` · ${shipment.note}` : ''
         }`,
       })
+      await emit({ name: 'po.rescheduled', po_id: po.id, code: po.code, supplier_name: po.supplier_name, from: shipment.expected_date.slice(0, 10), to: input.expected_date!.slice(0, 10), dot: `đợt ${shipment.seq}`, reason: input.reason ?? null, moved_by: user.id }) // prettier-ignore
     } else {
       await poShipmentsRepo.patch(shipmentId, {
         status: 'cancelled',
@@ -861,9 +1227,7 @@ export const posService = {
 
   /** `expected_at` của đơn = ngày đợt CÒN SỐNG sớm nhất; hết đợt sống thì giữ mốc cũ. */
   async syncExpectedAt(poId: string): Promise<void> {
-    const shipments = await poShipmentsRepo.listByPo(poId)
-    const minDate = earliestExpectedDate(shipments)
-    if (minDate) await posRepo.patch(poId, { expected_at: minDate })
+    await syncPoExpectedAt(poId)
   },
 
   /**
@@ -1027,15 +1391,325 @@ export const posService = {
     const guard = canReschedule(before.status)
     if (!guard.ok) throw BadRequest(guard.reason)
 
-    return posRepo.patch(id, {
-      expected_at: input.expected_at,
-      note: rescheduleNote(
-        before.expected_at,
-        input.expected_at,
-        input.reason,
-        before.note,
-      ),
+    const reason = input.reason.trim()
+    await poTrackingRepo.logCommits([{ po_id: id, kind: 'doi_hen_don', date_before: before.expected_at?.slice(0, 10) ?? null, date_after: input.expected_at.slice(0, 10), reason: reason || null, created_by: user.id }]) // prettier-ignore
+    const po = await posRepo.patch(id, { expected_at: input.expected_at })
+    // Đợt chưa giao trượt theo cùng số ngày — không thì thao tác đợt kế tiếp
+    // (syncExpectedAt) kéo mốc về ngày cũ, lần dời mất im lặng.
+    const moves = shiftPlannedShipments(await poShipmentsRepo.listByPo(id), before.expected_at?.slice(0, 10) ?? null, input.expected_at.slice(0, 10)) // prettier-ignore
+    for (const m of moves) await poShipmentsRepo.patch(m.id, { expected_date: m.to })
+    if (moves.length)
+      await poTrackingRepo.logCommits(moves.map((m) => ({ po_id: id, shipment_id: m.id, kind: 'doi_hen' as const, date_before: m.from, date_after: m.to, reason: reason ? `Dời theo cả đơn: ${reason}` : 'Dời theo cả đơn', created_by: user.id }))) // prettier-ignore
+    await traceReason(user, id, rescheduleNote(before.expected_at, input.expected_at, reason)) // prettier-ignore
+    await emit({ name: 'po.rescheduled', po_id: id, code: before.code, supplier_name: before.supplier_name, from: before.expected_at?.slice(0, 10) ?? null, to: input.expected_at.slice(0, 10), dot: null, reason: reason || null, moved_by: user.id }) // prettier-ignore
+    return po
+  },
+
+  /**
+   * HẠ ĐƠN ĐÃ GỬI VỀ NHÁP ĐỂ SỬA — đường sửa sai dữ liệu, không phải đường tắt.
+   *
+   * Luật gốc (`update` chỉ mở ở nháp) giả định mọi đơn sinh ra trong hệ thống và
+   * đi tuần tự từ nháp. Đợt nhập lại dữ liệu 09/2026 phá giả định đó: 19 đơn của
+   * tháng 6–9 vào thẳng trạng thái "đã gửi" vì ngoài đời đã gửi rồi, và khi đối
+   * chiếu tìm ra số gõ sai thì không còn đường nào sửa ngoài huỷ đơn tạo lại —
+   * mất số PO thật đã gửi NCC.
+   *
+   * Bốn hàng rào ở `lib/po-reopen.ts` (thuần, 14 test). Cứng nhất: ĐÃ CÓ PHIẾU
+   * NHẬP KHO THÌ KHÔNG, vì `update` xoá rồi ghi lại dòng nên phiếu nhập trỏ
+   * `po_line_id` sẽ mồ côi.
+   *
+   * Dùng lại event `po.withdrawn`: với người duyệt thì hai việc này giống nhau —
+   * bản họ đã gật không còn hiệu lực, đừng xử lý thông báo cũ nữa.
+   */
+  async reopenForEdit(user: User, id: string, reason: string): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    if (!reason.trim()) throw BadRequest('Phải ghi lý do hạ đơn về nháp')
+
+    const privileged =
+      user.role === 'admin' ||
+      (await canAction(user, 'supply.po.manage_any')) ||
+      (await canAction(user, 'supply.po.approve'))
+    const [status, docs] = await Promise.all([
+      supplyRepo.lineStatus(id),
+      supplyRepo.docsByPo(id),
+    ])
+    const guard = canReopenForEdit({
+      status: before.status,
+      receivedQty: status.reduce((a, l) => a + Number(l.qty_received ?? 0), 0),
+      warehouseDocs: docs.length,
+      privileged,
     })
+    if (!guard.ok) throw BadRequest(guard.reason)
+
+    const po = await posRepo.patch(id, {
+      status: 'draft',
+      approved_by: null,
+      approved_at: null,
+      // Tỷ giá đi cùng lượt duyệt (0219): duyệt lại là chốt lại theo ngày mới.
+      fx_rate: null,
+      fx_date: null,
+      ordered_at: null,
+      confirmed_at: null,
+      /*
+        XOÁ LUÔN GHI CHÚ XÁC NHẬN của NCC (bổ sung 16/09/2026): đơn hạ về nháp
+        rồi sẽ phải đi lại cửa "NCC xác nhận", mà lượt xác nhận cũ nói về một
+        bản dòng hàng sắp bị sửa. Để lại là đơn nháp vẫn đeo câu "NCC đã xác
+        nhận ngày …" của bản không còn tồn tại.
+      */
+      confirmed_note: null,
+    })
+    await traceReason(user, id, reopenNote(before.status, reason))
+    /*
+      SỰ KIỆN RIÊNG, không mượn `po.withdrawn` (sửa 16/09/2026).
+
+      Hai việc khác nghĩa: rút về nháp là người soạn tự rút bản CHƯA ai duyệt;
+      hạ về nháp là gỡ chữ ký của một bản ĐÃ duyệt. Mượn chung một sự kiện thì
+      dòng thời gian của đơn ghi "Rút về nháp" cho cả hai, và người duyệt đọc
+      thông báo tưởng mình chưa từng ký. 0201 nới hai check constraint để vết
+      `reopened` và thông báo `po_reopened` ghi được — thiếu nó thì handler
+      nuốt lỗi IM LẶNG và dòng thời gian trống trơn.
+    */
+    await emit({
+      name: 'po.reopened',
+      po_id: po.id,
+      code: po.code,
+      from_status: before.status,
+      reopened_by: user.id,
+      reason: reason.trim(),
+      approver_ids: await approverIds(user.id),
+    })
+    return po
+  },
+
+  /**
+   * ĐIỀU CHỈNH ĐƠN ĐÃ GỬI (0210, chốt 25/09/2026) — sửa tại chỗ, không hạ về
+   * nháp, không duyệt lại. Phần chênh vào sổ phát sinh (lần N, tách vì giá /
+   * vì lượng) cho kế toán; người duyệt nhận thông báo.
+   *
+   * Khác `update` (đơn nháp) ở chỗ sống còn: dòng giữ nguyên id. `update` xoá
+   * rồi chèn lại dòng — trên đơn đang chạy nó xoá đợt giao, phần chia lệnh và
+   * làm phiếu nhập / hoá đơn NCC mồ côi. Ghi qua hàm DB một giao dịch, hàm đó
+   * kiểm lại ràng buộc cứng dưới khoá (Kho có thể vừa nhập thêm).
+   */
+  async adjust(
+    user: User,
+    id: string,
+    input: {
+      base_seq: number
+      reason: string
+      cause: string
+      lsx_ids?: string[]
+      vat_rate?: number | null
+      discount_amount?: number | null
+      lines: (PoLineInput & { id?: string | null })[]
+    },
+  ): Promise<{ po: Po; seq: number; delta_total: number }> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    const gate = canAdjust(before.status)
+    if (!gate.ok) throw BadRequest(gate.reason)
+    /*
+      Bản client đang cầm đã cũ (có người vừa điều chỉnh) → báo tải lại TRƯỚC:
+      lỗi theo dòng tính trên bản cũ là lỗi ma. Hàm DB vẫn kiểm lại dưới khoá.
+    */
+    const last = await poAdjustmentsRepo.lastSeq(id)
+    if (last !== input.base_seq) {
+      throw Conflict(
+        `Đơn vừa được điều chỉnh (lần ${last}) trong lúc bạn đang sửa — tải lại đơn rồi sửa tiếp`,
+        'PO_ADJUST_STALE',
+      )
+    }
+
+    const template = (before.template ?? 'simple') as PoTemplate
+    // Dòng không mã ngoài mẫu gỗ = dòng phí — tab / nháp cũ gửi thiếu cờ (13/10/2026).
+    input.lines = dongKhongMaLaPhi(template, input.lines)
+    assertFreeLinesAllowed(template, input.lines)
+    const extra = await posRepo.listExtraLsx(id)
+    assertSplits(input.lines, [before.production_order_id, ...extra.map((x) => x.id)])
+    // Chỉ dòng MỚI: dòng cũ còn trống mã do script gắn bù, đổi vật tư của dòng
+    // đã có là việc của luật điều chỉnh, không phải của bước cấp mã.
+    const moi = await ganMaDongTuGo(user, template, input.lines.filter((l) => !l.id), before.code) // prettier-ignore
+    let iMoi = 0
+    input.lines = input.lines.map((l) => (l.id ? l : moi[iMoi++]))
+
+    const [lines, status, shipments] = await Promise.all([
+      posRepo.listLines(id),
+      supplyRepo.lineStatus(id),
+      poShipmentsRepo.listByPo(id),
+    ])
+    const receivedBy = new Map(status.map((s) => [s.id, Number(s.qty_received ?? 0)]))
+    const plannedBy = new Map<string, number>()
+    for (const s of shipments) {
+      if (s.status !== 'planned' && s.status !== 'arrived') continue
+      for (const l of s.lines)
+        plannedBy.set(l.po_line_id, (plannedBy.get(l.po_line_id) ?? 0) + l.qty)
+    }
+    const invoiced = await poAdjustmentsRepo.invoicedLineIds(lines.map((l) => l.id))
+    const derived = input.lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
+    const newMatIds = derived
+      .filter((l) => !l.id && l.material_id)
+      .map((l) => l.material_id!)
+    const labels = await poAdjustmentsRepo.materialLabels(newMatIds)
+    const beforeById = new Map(lines.map((l) => [l.id, l]))
+
+    const plan = planAdjustment({
+      currency: before.currency,
+      priceIncludesVat: !!before.price_includes_vat,
+      before: {
+        header: { vatRate: before.vat_rate, discount: before.discount_amount },
+        lines: lines.map((l) => ({
+          ...l,
+          code: l.material_id ? l.material_code : null,
+          name: l.material_name ?? l.line_name ?? '?',
+          unit: l.material_unit ?? l.line_unit ?? null,
+          received: receivedBy.get(l.id) ?? 0,
+          planned: plannedBy.get(l.id) ?? 0,
+          invoiced: invoiced.has(l.id),
+        })),
+      },
+      after: {
+        header: {
+          vatRate: input.vat_rate === undefined ? before.vat_rate : input.vat_rate,
+          discount:
+            input.discount_amount === undefined
+              ? before.discount_amount
+              : input.discount_amount,
+        },
+        lines: derived.map((l) => {
+          const cu = l.id ? beforeById.get(l.id) : undefined
+          const m = l.material_id ? labels.get(l.material_id) : undefined
+          return {
+            ...l,
+            price_basis: l.price_basis ?? 'unit',
+            qty2: l.qty2 ?? null,
+            unit_price: l.unit_price ?? null,
+            material_id: l.material_id ?? null,
+            code: cu ? (cu.material_id ? cu.material_code : null) : (m?.code ?? null),
+            name: cu
+              ? (cu.material_name ?? cu.line_name ?? '?')
+              : (m?.name ?? l.line_name ?? '?'),
+            unit: cu
+              ? (cu.material_unit ?? cu.line_unit ?? null)
+              : (m?.unit ?? l.line_unit ?? null),
+          }
+        }),
+      },
+    })
+    if (plan.errors.length > 0)
+      throw BadRequest(plan.errors.join(' · '), 'PO_ADJUST_INVALID')
+
+    const row = (l: PoLineInput & { sort_order: number }) => {
+      const tpl: Record<string, unknown> = {}
+      for (const k of TEMPLATE_LINE_COLS) tpl[k] = l[k] ?? null
+      return {
+        material_id: l.material_id ?? null,
+        line_name: l.line_name ?? null,
+        line_unit: l.line_unit ?? null,
+        line_kind: l.line_kind ?? null,
+        qty_ordered: l.qty_ordered,
+        unit_price: l.unit_price ?? null,
+        price_basis: l.price_basis ?? 'unit',
+        spec: l.spec ?? null,
+        qty2: l.qty2 ?? null,
+        unit2: l.unit2 ?? null,
+        note: l.note ?? null,
+        sort_order: l.sort_order,
+        ...tpl,
+      }
+    }
+    const splits = [
+      ...plan.updates.flatMap(
+        (l) =>
+        (l.lsx_split ?? []).map((s) => ({ line_id: l.id, production_order_id: s.production_order_id, qty: s.qty })), // prettier-ignore
+      ),
+      ...plan.inserts.flatMap(
+        (l) =>
+        (l.lsx_split ?? []).map((s) => ({ sort_order: l.sort_order, production_order_id: s.production_order_id, qty: s.qty })), // prettier-ignore
+      ),
+    ]
+    const header: Record<string, unknown> = {}
+    if (plan.headerChanges?.vat_rate) header.vat_rate = plan.headerChanges.vat_rate[1]
+    if (plan.headerChanges?.discount_amount)
+      header.discount_amount = plan.headerChanges.discount_amount[1]
+
+    let seq: number
+    try {
+      seq = await poAdjustmentsRepo.apply({
+        poId: id,
+        baseSeq: input.base_seq,
+        actorId: user.id,
+        reason: input.reason.trim(),
+        cause: input.cause,
+        lsxIds: [...new Set(input.lsx_ids ?? [])],
+        updates: plan.updates.map((l) => ({ id: l.id, ...row(l as PoLineInput & { sort_order: number }) })), // prettier-ignore
+        inserts: plan.inserts.map((l) => row(l as PoLineInput & { sort_order: number })),
+        deleteIds: plan.deleteIds,
+        splits,
+        header,
+        record: {
+          currency: before.currency ?? 'VND',
+          subtotal_before: plan.money.before.subtotal,
+          subtotal_after: plan.money.after.subtotal,
+          discount_before: plan.money.before.discountAmount,
+          discount_after: plan.money.after.discountAmount,
+          vat_before: plan.money.before.vatAmount,
+          vat_after: plan.money.after.vatAmount,
+          total_before: plan.money.before.grandTotal,
+          total_after: plan.money.after.grandTotal,
+          delta_by_price: plan.delta.byPrice,
+          delta_by_qty: plan.delta.byQty,
+          lines: plan.changes,
+          header_changes: plan.headerChanges,
+        },
+      })
+    } catch (e) {
+      if (e instanceof PoAdjustDbError) {
+        throw e.stale ? Conflict(e.message, 'PO_ADJUST_STALE') : BadRequest(e.message, 'PO_ADJUST_INVALID') // prettier-ignore
+      }
+      throw e
+    }
+
+    // Đơn đang về một phần mà bớt SL xuống đúng phần đã nhận → về đủ.
+    if (before.status === 'partial') await supplyRepo.refreshStatusFromReceipts(id)
+    const po = (await posRepo.findById(id)) ?? before
+    await emit({
+      name: 'po.adjusted',
+      po_id: id,
+      code: before.code,
+      seq,
+      adjusted_by: user.id,
+      reason: input.reason.trim(),
+      cause: input.cause,
+      currency: before.currency ?? 'VND',
+      delta_total: plan.delta.total,
+      total_after: plan.money.after.grandTotal,
+      // Báo người đã ký duyệt đơn này; đơn nạp tay không có người ký thì báo
+      // mọi người có quyền duyệt.
+      notify_ids: before.approved_by
+        ? [before.approved_by].filter((x) => x !== user.id)
+        : await approverIds(user.id),
+    })
+    return { po, seq, delta_total: plan.delta.total }
+  },
+
+  /** Sổ điều chỉnh của đơn — mọi NV đăng nhập đọc được (Kế toán đối chiếu). */
+  async listAdjustments(_user: User, id: string) {
+    return poAdjustmentsRepo.listByPo(id)
+  },
+
+  /** Đóng dấu "đã gửi NCC bản điều chỉnh lần N" (chốt Q4 25/09). */
+  async markAdjustmentSent(user: User, id: string, seq: number, note?: string | null) {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    const ok = await poAdjustmentsRepo.markSent(id, seq, user.id, note?.trim() || null)
+    if (!ok) throw BadRequest(`Lần điều chỉnh ${seq} không có hoặc đã ghi gửi NCC rồi`)
+    return poAdjustmentsRepo.listByPo(id)
   },
 
   /** Huỷ (trước khi nhận hàng) — kèm lý do. Nháp thì dùng `remove` (xoá hẳn). */
@@ -1044,13 +1718,14 @@ export const posService = {
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     await assertPoOwner(user, before)
-    if (before.status === 'received' || before.status === 'cancelled') {
-      throw BadRequest('Đơn đã về đủ / đã huỷ — không huỷ được')
-    }
-    return posRepo.patch(id, {
-      status: 'cancelled',
-      note: `[Huỷ] ${reason}${before.note ? ` · ${before.note}` : ''}`,
-    })
+    const received = (await supplyRepo.lineStatus(id)).reduce((t, l) => t + Number(l.qty_received ?? 0), 0) // prettier-ignore
+    const block = cancelBlock(before.status, received)
+    if (block) throw BadRequest(block)
+    const po = await posRepo.patch(id, { status: 'cancelled' })
+    // Trao đổi là nơi DUY NHẤT giữ lý do huỷ (không có sự kiện dòng thời gian).
+    await traceReason(user, id, reasonLine('Huỷ', reason))
+    await docNotesRepo.resolveQuestions('po', id, user.id, 'closed') // 0218
+    return po
   },
 
   /**
@@ -1104,4 +1779,16 @@ export const posService = {
     })
     return po
   },
+}
+
+/**
+ * NCC PHẢI ĐẶT ĐƯỢC — ngừng giao dịch hoặc khoá đặt hàng (`can_order`) đều
+ * chặn. Gọi ở tạo / sửa (đổi NCC) / gửi duyệt / gửi NCC: NCC có thể bị khoá
+ * giữa chừng, sau khi đơn đã soạn xong (P1, 27/09/2026).
+ */
+export async function assertSupplierCanOrder(supplierId: string): Promise<void> {
+  const supplier = await suppliersRepo.findById(supplierId)
+  if (!supplier) throw NotFound('NCC không tồn tại')
+  const block = supplierOrderBlock(supplier)
+  if (block) throw BadRequest(block)
 }

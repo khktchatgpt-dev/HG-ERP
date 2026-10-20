@@ -25,6 +25,13 @@ export type Order = {
   required_docs: string | null
   /** Lệnh sản xuất đang chạy đơn này — NULL = chưa phát lệnh (0113). */
   production_order_id: string | null
+  /**
+   * Tỷ giá CHỐT lúc xác nhận đơn (0219): 1 ngoại tệ = ? VND. null = chưa có
+   * dòng tỷ giá nào ≤ ngày đơn. Không đổi theo bảng `fx_rates` sau đó.
+   */
+  fx_rate: number | null
+  /** Ngày đã tra bảng tỷ giá (= ngày xác nhận đơn). */
+  fx_date: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -60,6 +67,8 @@ export type OrderLine = {
 export type OrderLineSummary = { lines: number; qty: number; total: number }
 
 export type OrderLineInput = {
+  /** id dòng đang có (form sửa gửi kèm) — thiếu = dòng mới / form cũ khớp theo SP. */
+  id?: string | null
   product_id: string
   qty: number
   unit_price: number
@@ -91,7 +100,7 @@ export type OrderChange = {
 }
 
 const COLS =
-  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, production_order_id, created_by, created_at, updated_at'
+  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, production_order_id, fx_rate, fx_date, created_by, created_at, updated_at'
 
 type RawOrder = Order & {
   customer: { name: string } | { name: string }[] | null
@@ -106,7 +115,57 @@ function unwrap(rows: RawOrder[] | null): OrderWithCustomer[] {
   })
 }
 
+/** Đơn giá gần nhất đã bán cho một khách, theo SP (gợi ý giá ở form đơn — 13/10/2026). */
+export type LastOrderPrice = {
+  product_id: string
+  unit_price: number
+  order_code: string
+  ordered_at: string
+}
+
 export const ordersRepo = {
+  /**
+   * Đơn giá > 0 gần nhất của từng SP trong các đơn CÒN SỐNG (không huỷ) của khách,
+   * CÙNG tiền tệ — giá USD không được gợi vào đơn EUR. Trần 1000 dòng: sổ cả năm
+   * của một khách ~ vài trăm dòng (đo 13/10: LAURA 17 đơn).
+   */
+  async lastPricesForCustomer(
+    customerId: string,
+    currency: string,
+  ): Promise<LastOrderPrice[]> {
+    const { data, error } = await db()
+      .from('sales_order_lines')
+      .select(
+        'product_id, unit_price, order:sales_orders!inner(code, customer_id, currency, status, created_at)',
+      )
+      .eq('order.customer_id', customerId)
+      .eq('order.currency', currency)
+      .neq('order.status', 'cancelled')
+      .gt('unit_price', 0)
+      .order('created_at', { ascending: false, referencedTable: 'order' })
+      .limit(1000)
+    if (error) throw new Error(error.message)
+    type Raw = {
+      product_id: string
+      unit_price: number
+      order: { code: string; created_at: string } | { code: string; created_at: string }[]
+    }
+    const seen = new Map<string, LastOrderPrice>()
+    for (const r of (data ?? []) as Raw[]) {
+      const o = Array.isArray(r.order) ? r.order[0] : r.order
+      if (!o) continue
+      const cur = seen.get(r.product_id)
+      if (cur && cur.ordered_at >= o.created_at) continue
+      seen.set(r.product_id, {
+        product_id: r.product_id,
+        unit_price: Number(r.unit_price),
+        order_code: o.code,
+        ordered_at: o.created_at,
+      })
+    }
+    return [...seen.values()]
+  },
+
   async nextCode(): Promise<string> {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'DH' })
     if (error || !data) throw new Error(error?.message ?? 'next_doc_code failed')
@@ -323,6 +382,8 @@ export const ordersRepo = {
       port_of_discharge?: string | null
       payment_method?: string | null
       required_docs?: string | null
+      fx_rate?: number | null
+      fx_date?: string | null
       created_by: string
     },
     lines: OrderLineInput[],
@@ -350,12 +411,21 @@ export const ordersRepo = {
       .select('id, product_id')
       .eq('order_id', orderId)
     if (exErr) throw new Error(exErr.message)
-    const byProduct = new Map(
-      ((existing ?? []) as { id: string; product_id: string }[]).map((r) => [
-        r.product_id,
-        r.id,
-      ]),
-    )
+    /*
+     * D2 (07/10/2026): một SP được nhiều dòng → khớp theo ID DÒNG khi payload gửi
+     * kèm; dòng không có id thì khớp theo product_id vào dòng cũ CHƯA được khớp
+     * (form cũ / script). Giữ id dòng để FK (đợt xuất 0120, job) không đứt.
+     */
+    const rows = (existing ?? []) as { id: string; product_id: string }[]
+    const existingIds = new Set(rows.map((r) => r.id))
+    const freeByProduct = new Map<string, string[]>()
+    for (const r of rows) {
+      if (!lines.some((l) => l.id === r.id)) {
+        const arr = freeByProduct.get(r.product_id) ?? []
+        arr.push(r.id)
+        freeByProduct.set(r.product_id, arr)
+      }
+    }
 
     type LineRow = {
       order_id: string
@@ -377,7 +447,8 @@ export const ordersRepo = {
         note: l.note ?? null,
         sort_order: i,
       }
-      const id = byProduct.get(l.product_id)
+      const id =
+        l.id && existingIds.has(l.id) ? l.id : freeByProduct.get(l.product_id)?.shift()
       if (id) {
         const { error } = await db().from('sales_order_lines').update(row).eq('id', id)
         if (error) throw new Error(error.message)
@@ -393,7 +464,7 @@ export const ordersRepo = {
     // Xoá dòng bị bỏ = dòng CŨ không nằm trong danh sách giữ (không đụng dòng
     // vừa chèn — chỉ nhắm vào id đã tồn tại trước khi sync).
     const keep = new Set(keepIds)
-    const removeIds = [...byProduct.values()].filter((id) => !keep.has(id))
+    const removeIds = [...existingIds].filter((id) => !keep.has(id))
     if (removeIds.length > 0) {
       const { error: delErr } = await db()
         .from('sales_order_lines')
@@ -483,6 +554,45 @@ export const ordersRepo = {
         created_at: r.created_at,
       }
     })
+  },
+
+  /**
+   * LẦN ĐỔI DÒNG SP GẦN NHẤT của đơn khách, theo LỆNH (0227, 07/10/2026) — hộp
+   * "Nguyên nhân" khi điều chỉnh đơn mua bày nó cạnh từng lệnh để người mua đối
+   * chiếu "khách đổi gì". Chỉ lấy lần SỬA DÒNG trên app (`change.lines` dạng
+   * `{before, after}`); bỏ dạng mảng `{from, to}` của script điền giá FOB (05/10)
+   * — đó không phải khách đổi đơn. Lệnh không có lần sửa dòng nào thì vắng mặt.
+   */
+  async lastLineChangeByLsx(
+    lsxIds: string[],
+  ): Promise<Record<string, { order_code: string; at: string; note: string | null }>> {
+    if (lsxIds.length === 0) return {}
+    const { data, error } = await db()
+      .from('sales_order_changes')
+      .select(
+        'change, note, created_at, order:sales_orders!inner(code, production_order_id)',
+      )
+      .in('order.production_order_id', lsxIds)
+      .not('change->lines->after', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) throw new Error(error.message)
+    type Raw = {
+      note: string | null
+      created_at: string
+      order:
+        | { code: string; production_order_id: string | null }
+        | { code: string; production_order_id: string | null }[]
+        | null
+    }
+    const out: Record<string, { order_code: string; at: string; note: string | null }> =
+      {}
+    for (const r of (data ?? []) as Raw[]) {
+      const o = Array.isArray(r.order) ? r.order[0] : r.order
+      if (!o?.production_order_id || out[o.production_order_id]) continue
+      out[o.production_order_id] = { order_code: o.code, at: r.created_at, note: r.note }
+    }
+    return out
   },
 
   /** Thay đổi đơn của 1 KHÁCH (mọi đơn) — tab Hoạt động ở hồ sơ khách (P4). */

@@ -22,6 +22,18 @@ export const supplierCreateSchema = z.object({
   country: optText(100),
   registered_address: optText(500),
   // 3. Liên hệ
+  /**
+   * NGƯỜI LIÊN HỆ — tên người nhấc máy bên NCC (nối lại 17/09/2026).
+   *
+   * Cột `contact_name` có sẵn trong bảng từ lâu nhưng không tầng nào đọc:
+   * không có trong `SUPPLIER_COLS`, không có trong zod, không có ô trên form.
+   * Hệ quả đo được khi nhập NCC "Công ty cổ phần HLC Việt Nam": người nhập
+   * phải nhét tên người liên hệ vào ô Ghi chú, tức là dữ liệu có chỗ đứng
+   * đàng hoàng mà vẫn đi lạc.
+   */
+  contact_name: optText(150),
+  /** SỐ MÁY TRỰC TIẾP của người đó — khác số tổng đài ở `phone`. */
+  contact_phone: optText(30),
   email: z.string().trim().email().optional().or(z.literal('')).nullable(),
   phone: optText(30),
   address: optText(500), // địa chỉ giao dịch chính (tương thích cũ)
@@ -29,8 +41,24 @@ export const supplierCreateSchema = z.object({
   warehouse_address: optText(500),
   website: optText(200),
   // 4. Thanh toán
-  payment_terms: optText(100), // COD / NET30 / NET45 / NET60
+  payment_terms: optText(100), // COD / NET30 / NET45 / NET60 — chữ để IN lên phiếu
+  /**
+   * SỐ NGÀY công nợ, dạng MÁY DÙNG ĐƯỢC (0189). Tách khỏi `payment_terms` vì
+   * chữ tự do không suy ra hạn được — mà không có hạn thì không có tuổi nợ,
+   * không biết trả ai trước, không dự báo dòng tiền. 0 = trả ngay (COD),
+   * null = CHƯA KHAI (khác hẳn 0).
+   */
+  payment_net_days: z.coerce.number().int().min(0).max(365).optional().nullable(),
   currency: z.string().trim().toUpperCase().length(3).optional().nullable(),
+  /**
+   * THUẾ SUẤT VAT thoả thuận với NCC này (0192). Đơn mua mới kế thừa xuống, y
+   * như `currency` — trước đó thuế do MẪU ĐƠN quyết bằng hằng số trong mã, mà
+   * thuế là thoả thuận với từng NCC chứ không phải thuộc tính của loại hàng.
+   * Ô thuế trên form đơn vẫn sửa được từng đơn.
+   *
+   * null = CHƯA KHAI (rơi về mức của mẫu đơn), khác hẳn 0 = không chịu thuế.
+   */
+  vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
   bank_name: optText(200),
   bank_account: optText(50),
   swift_code: optText(30),

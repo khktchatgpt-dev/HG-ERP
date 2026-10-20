@@ -1,0 +1,1255 @@
+import { laDvtKg } from '@/lib/dvt-kg'
+import { poLineAmount } from '@/lib/po-line'
+import {
+  cartonAreaM2,
+  deriveLine,
+  foamM3PerSheet,
+  FREE_LINE_TEMPLATES,
+  hasQty2Override,
+  PO_TEMPLATE_META,
+  QTY2_OVERRIDE_UNIT,
+  type PoTemplate,
+} from '@/lib/po-template'
+import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
+import { parseInnerDims } from '@/lib/dims'
+import { nod } from '@/lib/material-key'
+import { allocationNote, type MaterialAllocation } from '@/lib/po-allocation'
+import {
+  PO_SHARED_FIELD_MEANING,
+  prefillsFromCatalog,
+  type PoField,
+} from '@/lib/po-fields'
+import type { PoMaterial } from '@/components/supply/MaterialPicker'
+
+/**
+ * Dòng đang soạn trên form. Là HỢP các ô của 5 mẫu đơn — mẫu nào hiện cột nấy,
+ * ô của mẫu khác vẫn nằm trong state để đổi mẫu qua lại không mất số đã gõ.
+ *
+ * Ô số dùng `number | ''` chứ không phải `number | null`: input type=number khi
+ * xoá trắng trả '' , ép về 0 sẽ biến ô trống thành số 0 thật và nhân viên không
+ * phân biệt được "chưa nhập" với "nhập 0".
+ */
+export type Num = number | ''
+
+export type Line = {
+  /**
+   * Mã DÒNG trong DB — có khi dòng mở từ đơn đã lưu, trống ở dòng vừa thêm.
+   * Điều chỉnh đơn đã gửi (0210) sửa dòng THEO MÃ NÀY để phiếu nhập, đợt giao,
+   * hoá đơn NCC vẫn trỏ đúng; lưới cũng định danh dòng bằng nó vì một đơn có
+   * thể có hai dòng CÙNG vật tư (chia hai lệnh) — định danh theo material_id
+   * thì bấm xoá một dòng là mất cả hai.
+   */
+  po_line_id?: string
+  /**
+   * KHOÁ CỤC BỘ của dòng trên lưới (React key, tick chọn, xoá) — sống trong
+   * phiên màn, không gửi server. Dòng chưa lưu không có `po_line_id`; trước đây
+   * rơi về material_id nên hai dòng CÙNG mã (nhôm đặt cùng cây, khác chiều dài
+   * cắt — đơn GIGA anh Truyền 30/09) tick một thành tick cả hai, xoá một mất cả hai.
+   */
+  uid?: string
+  /**
+   * DÒNG TỰ DO (0134): `is_free` = true thì material_id chỉ là KHÓA CỤC BỘ của
+   * form (`free-…`), payload gửi material_id null + line_name/line_unit. Đơn
+   * gỗ/gia công đặt theo MÃ SP — tên và ĐVT gõ thẳng trên dòng.
+   */
+  is_free?: boolean
+  /**
+   * DÒNG PHÍ / DỊCH VỤ (0234) — luôn kèm `is_free`: không gắn vật tư, tên + ĐVT gõ
+   * tay, SL × giá, dùng được ở mọi mẫu, không vào phiếu nhập kho.
+   */
+  fee?: boolean
+  material_id: string
+  code: string
+  name: string
+  unit: string
+  /**
+   * MÃ SP KHÁCH của dòng (tem, bao bì chia theo SP) — ô đã bỏ khỏi form theo yêu
+   * cầu Cung ứng nhưng dữ liệu nạp từ file vẫn có, và là thứ phân biệt hai dòng
+   * cùng mã vật tư. Trước 07/10/2026 lưu đơn từ màn soạn XOÁ MẤT cột này
+   * (payload không mang) — nay chỉ mang theo, không bày ô sửa.
+   */
+  product_code?: string
+  /** Tồn hiện tại — NULL = chưa có sổ kho, hiện "kho ?" thay vì tồn 0 giả. */
+  on_hand: number | null
+  spec: string
+  note: string
+  /** SL đặt cuối cùng — luôn theo ĐVT mua. Cột duy nhất mọi mẫu đều có. */
+  qty: Num
+  price: Num
+  /**
+   * Giá mua LẦN TRƯỚC của vật tư, chụp lúc thêm dòng (P3, 27/09/2026) — để nhắc
+   * "lệch ≥ 5%" khi NCC báo giá khác. Chỉ dùng ở màn soạn, không gửi server.
+   */
+  last_price?: number | null
+  // accessory / chung
+  material_grade: string
+  dm_per_sp: Num
+  qty_demand: Num
+  /**
+   * SL THEO LSX (số sản phẩm) — CHỈ Ở TRÌNH DUYỆT, không lưu (09/10/2026, mẫu mây).
+   * Đơn lưu Định mức SP (`dm_per_sp`) + SL đơn hàng (`qty_demand` = SL theo LSX × Đm);
+   * mở đơn thì tính ngược = qty_demand ÷ dm_per_sp (`lsxOf`). Không thêm cột DB: hàm
+   * điều chỉnh 0210 chép CỐ ĐỊNH danh sách cột dòng — cột mới rơi mất khi sửa đơn
+   * đã duyệt. Thiếu key (nháp cũ, dòng dựng ở chỗ khác) = trống.
+   */
+  qty_lsx?: Num
+  qty_on_hand: Num
+  // aluminium
+  die_code: string
+  weight_per_m: Num
+  bar_length_m: Num
+  // metal_kg
+  dimension_text: string
+  finish: string
+  weight_per_unit: Num
+  // wood: m³/SP — cột riêng từ 0139 (trước mượn weight_per_unit của inox).
+  m3_per_unit: Num
+  // mro: bảo hành — cột riêng từ 0139 (trước mượn finish).
+  warranty_text: string
+  // label: kiểu in / gia công — cột riêng 0233.
+  print_spec: string
+  // carton
+  open_style: string
+  pcs_per_ctn: Num
+  inner_l_mm: Num
+  inner_w_mm: Num
+  inner_h_mm: Num
+  area_m2: Num
+  /** Bao bì (0134): giá NCC chào theo m² + phí bản in — nuôi gợi ý giá/thùng. */
+  price_per_m2: Num
+  print_fee: Num
+  /** Cơ sở tính tiền dòng: thùng/SP/tấm · m² · m³ (xốp) · kg (gia công). */
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg'
+  /**
+   * Đóng gói mua từ danh mục (0124): 1 pack_unit = pack_size ĐVT. Chỉ để hiện
+   * quy đổi + làm tròn gợi ý ngay dưới ô SL đặt — không đi vào payload (SL đặt
+   * vẫn luôn theo ĐVT gốc). Mở đơn cũ không có (null) thì đơn giản là không
+   * hiện quy đổi, mọi số đã lưu không đổi.
+   */
+  pack_size: number | null
+  pack_unit: string
+  /** 0182 — quy đổi giá tổng quát: 1 ĐVT = unit2_per_unit × đơn-vị-giá. */
+  unit2_per_unit: Num
+  unit2_label: string
+  /**
+   * Đơn giá theo ĐVT mua hay theo đơn vị quy đổi — rỗng = theo mặc định của
+   * mẫu. Xem PoLineDraft.price_per.
+   */
+  price_per: '' | 'unit' | 'unit2'
+  /**
+   * Tổng kg/m² ĐÃ CHỐT trong DB, chỉ đặt khi mở một đơn ĐÃ PHÁT HÀNH. Khi có,
+   * `lineQty2`/`lineAmount` lấy thẳng số này thay vì để `deriveLine` dẫn xuất
+   * lại từ kg/m × dài × SL.
+   *
+   * Vì sao cần (đơn anh Truyền 18/09/2026): NCC ghi tổng kg LÀM TRÒN trên tờ
+   * (300 kg, không phải 300,16 = 0,385 × 5,53 × 141). Tính lại thì màn chi tiết
+   * hiện số khác màn danh sách và khác cả phiếu in gửi NCC — cùng một đơn, ba
+   * con số. Đơn đã ký thì tiền đã chốt, không phải thứ để dẫn xuất lại.
+   *
+   * Đơn NHÁP không đặt trường này, và `patch` xoá nó ngay khi người dùng sửa
+   * bất kỳ ô nào của dòng (điều chỉnh đơn đã gửi): lúc đó số phải chạy theo ô
+   * nhập, và server tính lại qty2 khi lưu.
+   */
+  qty2_saved?: number | null
+  /**
+   * TỔNG GÕ TAY (02/10/2026) — kg / m³ / m² người dùng gõ đè lên cột tổng, theo
+   * số NCC ghi trên tờ. '' (hoặc thiếu key, nháp cũ) = tự tính. Gửi lên server
+   * dưới tên `qty2_override`; `deriveLine` áp ở cả hai đầu. Khác `qty2_saved`:
+   * số này là Ý NGƯỜI DÙNG, sửa ô khác của dòng KHÔNG xoá nó.
+   */
+  qty2_manual?: Num
+  /**
+   * CHIA SL CỦA DÒNG cho các lệnh của đơn (0185) — lệnh id → SL, để dạng chuỗi
+   * cho ô nhập gõ dở được. Rỗng hoặc dồn vào một lệnh = 100% thuộc lệnh chính,
+   * không gửi gì lên server.
+   */
+  lsx_split: Record<string, Num>
+  /**
+   * Số DANH MỤC đưa ra lúc chọn vật tư, để biết người mua đã gõ đè hay chưa —
+   * gõ đè thì mời lưu ngược về danh mục (0128). null = mở từ đơn đã lưu, không
+   * biết danh mục đang để gì nên cứ mời lưu khi ô có số.
+   */
+  catalog_kg_m: number | null
+  catalog_kg_unit: number | null
+}
+
+/** Gợi ý từ nhu cầu BOM của LSX — chỉ để hiện, không tự ghi vào ô SL. */
+export type LineSuggestion = { suggest: number | null }
+
+const n = (v: Num): number | null => (v === '' ? null : Number(v))
+
+/** Ô nhập của dòng → dạng `deriveLine` hiểu (kg/m, dài cây, kg/đv, m²…). */
+export function draftOf(l: Line) {
+  return {
+    // Dòng phí / dịch vụ (0234): deriveLine trả thẳng SL × giá.
+    line_kind: l.fee ? ('phi' as const) : null,
+    qty_ordered: Number(l.qty) || 0,
+    weight_per_m: n(l.weight_per_m),
+    bar_length_m: n(l.bar_length_m),
+    weight_per_unit: n(l.weight_per_unit),
+    m3_per_unit: n(l.m3_per_unit),
+    area_m2: n(l.area_m2),
+    // Xốp theo m³ (0134): D×R×Dày của mẫu foam đi cùng bộ ô lọt lòng.
+    inner_l_mm: n(l.inner_l_mm),
+    inner_w_mm: n(l.inner_w_mm),
+    inner_h_mm: n(l.inner_h_mm),
+    carton_basis: l.carton_basis,
+    unit2_per_unit: n(l.unit2_per_unit),
+    unit2_label: l.unit2_label || null,
+    price_per: l.price_per || null,
+    qty2_override: n(l.qty2_manual ?? ''),
+    // Mẫu gỗ: dòng vật tư danh mục giá theo ĐVT mua, dòng tự do theo m³ (deriveLine).
+    material_id: l.is_free ? null : l.material_id || null,
+    lsx_split: splitPayload(l),
+  }
+}
+
+/** Tổng TỰ TÍNH của dòng, bỏ qua tổng gõ tay — để bày "tự tính: …" cạnh số gõ đè. */
+export function lineQty2Auto(t: PoTemplate, l: Line): number | null {
+  return deriveLine(t, { ...draftOf(l), qty2_override: null }).qty2
+}
+
+/** Tổng kg / tổng m² của dòng — cột tính sẵn, hiện read-only trên bảng. */
+export function lineQty2(t: PoTemplate, l: Line): number | null {
+  if (l.qty2_saved != null) return l.qty2_saved
+  return deriveLine(t, draftOf(l)).qty2
+}
+
+/** Cơ sở tiền THẬT của dòng sau mọi luật mẫu + ô "Giá theo" — 'unit2' là tiền theo kg/m²/m³. */
+export function lineBasis(t: PoTemplate, l: Line): 'unit' | 'unit2' {
+  return deriveLine(t, draftOf(l)).price_basis
+}
+
+/** Nhãn đơn vị quy đổi của dòng: ô gõ tay → đơn vị mẫu dẫn xuất (m³ xốp, m² kính) → đơn vị giá của mẫu. */
+export function lineUnit2Label(t: PoTemplate, l: Line): string {
+  return (
+    l.unit2_label ||
+    deriveLine(t, draftOf(l)).unit2 ||
+    PO_TEMPLATE_META[t].priceUnit ||
+    'đv quy đổi'
+  )
+}
+
+/** Thành tiền dòng — đi đúng đường server dùng (deriveLine → poLineAmount). */
+export function lineAmount(t: PoTemplate, l: Line): number {
+  const d = deriveLine(t, draftOf(l))
+  return poLineAmount({
+    qty_ordered: Number(l.qty) || 0,
+    unit_price: n(l.price),
+    price_basis: d.price_basis,
+    qty2: l.qty2_saved ?? d.qty2,
+  })
+}
+
+/**
+ * Dòng đã đủ số để gửi duyệt chưa. Chỉ đòi SL và đơn giá — mọi cột khác đều là
+ * thông tin dẫn xuất hoặc mô tả. Riêng mẫu nhôm phải có kg/m và dài cây, vì
+ * thiếu thì tiền rơi về "SL × giá" (sai hẳn bậc: cây thay vì kg).
+ */
+export function lineReady(t: PoTemplate, l: Line): boolean {
+  return lineProblem(t, l) == null
+}
+
+/** Lý do dòng chưa gửi được — hiện ngay cạnh nút, không bắt người dùng đoán. */
+/**
+ * TỔNG GÕ TAY LỆCH HÀNG TRĂM / NGHÌN LẦN số tự tính (05/10/2026, đơn xốp WA: gõ
+ * "179200" vào ô Tổng m³ với ý 179,200 m³ — kiểu viết của Excel — nên tiền
+ * ra 93,18 TỶ thay vì 93,18 triệu). Gõ đè tổng chỉ để khớp tờ NCC lệch vài phần
+ * trăm; lệch từ 50 lần trở lên là gõ nhầm đơn vị / dấu thập phân, không phải số
+ * thật. Trả hệ số lệch (làm tròn) + số tự tính để ô nói ra và chặn lưu.
+ */
+export function tongLechBac(
+  t: PoTemplate,
+  l: Line,
+): { auto: number; factor: number } | null {
+  const manual = l.qty2_manual ?? ''
+  if (manual === '' || !(Number(manual) > 0)) return null
+  const auto = lineQty2Auto(t, l)
+  if (auto == null || !(auto > 0)) return null
+  const ratio = Number(manual) / auto
+  if (ratio >= 50) return { auto, factor: Math.round(ratio) }
+  if (ratio <= 1 / 50) return { auto, factor: -Math.round(1 / ratio) }
+  return null
+}
+
+/**
+ * ĐỌC SỐ GÕ VÀO Ô TỔNG m³ THEO THÓI QUEN CỦA PHÒNG (05/10/2026 — chủ dự án: "thường
+ * khi thao tác vẫn nhập kiểu 172900"): số khối gõ BỎ DẤU PHẨY, ba số lẻ — 172900
+ * nghĩa là 172,900 m³. Nên số nguyên ≥ 1.000 gõ vào ô m³ mà CHIA 1.000 ra gần số tự
+ * tính (trong ±30 %) thì hiểu là đã chia. Số gõ có dấu phẩy / chấm thập phân thì
+ * giữ nguyên — người gõ đã nói rõ. Không có số tự tính (thiếu kích thước) thì không
+ * đoán, `tongLechBac` vẫn chặn khi lệch hàng nghìn lần.
+ */
+export function docTongGo(t: PoTemplate, l: Line, raw: string): Num {
+  const s = raw.trim()
+  if (s === '') return ''
+  const v = Number(s.replace(',', '.'))
+  if (!Number.isFinite(v)) return ''
+  if (QTY2_OVERRIDE_UNIT[t] !== 'm³' || !/^\d{4,}$/.test(s)) return v
+  const auto = lineQty2Auto(t, { ...l, qty2_manual: '' })
+  if (auto == null || !(auto > 0)) return v
+  const chia = v / 1000
+  return Math.abs(chia - auto) / auto <= 0.3 ? chia : v
+}
+
+export function lineProblem(t: PoTemplate, l: Line): string | null {
+  // Dòng tự do (0134): tên hàng là danh tính duy nhất — trống thì phiếu in rỗng.
+  if (l.is_free && !l.name.trim())
+    return l.fee ? 'thiếu tên phí / dịch vụ' : 'thiếu tên hàng'
+  if (l.qty === '' || Number(l.qty) <= 0) return 'thiếu SL đặt'
+  if (l.price === '') return 'thiếu đơn giá'
+  // Dòng phí / dịch vụ (0234): SL × giá — không đòi thông số dẫn xuất của mẫu.
+  if (l.fee) return null
+  const lech = tongLechBac(t, l)
+  if (lech)
+    return `tổng gõ tay ${lech.factor > 0 ? 'gấp ' : 'chỉ bằng 1/'}${Math.abs(lech.factor).toLocaleString('vi-VN')} lần số tự tính ${lech.auto.toLocaleString('vi-VN')} — gõ nhầm dấu thập phân?`
+  // Tổng gõ tay (02/10/2026) đã là số tính tiền — không đòi thông số để dẫn xuất nó nữa.
+  if (hasQty2Override(t, draftOf(l))) return null
+  // Dòng ĐVT Kg (NHO0090 "Nhôm 20x40" bán theo kg): SL đặt đã là số kg, tiền = SL ×
+  // giá — không cần barem (10/10/2026, trước bị chặn lưu "thiếu kg/m").
+  const kg = laDvtKg(l.unit)
+  if (t === 'aluminium' && !kg && !(Number(l.weight_per_m) > 0)) return 'thiếu kg/m'
+  if (t === 'aluminium' && !kg && !(Number(l.bar_length_m) > 0)) return 'thiếu dài cây'
+  if (t === 'metal_kg' && !kg && !(Number(l.weight_per_unit) > 0))
+    return 'thiếu kg/đơn vị'
+  if (t === 'carton' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
+    return 'thiếu m²/thùng'
+  }
+  // Kính giá theo m² phải có m²/tấm; gỗ luôn cần m³/SP (giá là giá/m³ tinh);
+  // gia công theo kg cần ĐM kg/SP; xốp theo m³ cần đủ quy cách D×R×Dày —
+  // thiếu thì tiền rơi về SL × giá, sai hẳn bậc mà không ai thấy.
+  if (t === 'glass' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
+    return 'thiếu m²/tấm'
+  }
+  // Gỗ: chỉ dòng giá theo m³ (mã SP tự do, hoặc vật tư chọn "Giá theo" m³) mới cần m³/SP.
+  if (
+    t === 'wood' &&
+    (l.is_free || l.price_per === 'unit2') &&
+    !(Number(l.m3_per_unit) > 0)
+  )
+    return 'thiếu m³/SP'
+  if (
+    t === 'foam' &&
+    l.carton_basis === 'm3' &&
+    !(Number(l.inner_l_mm) > 0 && Number(l.inner_w_mm) > 0 && Number(l.inner_h_mm) > 0)
+  ) {
+    return 'thiếu quy cách D×R×Dày'
+  }
+  return null
+}
+
+/**
+ * GỢI Ý ĐƠN GIÁ/THÙNG của bao bì (0134): đơn thật báo giá/m² + "bản in + công"
+ * rồi mới ra giá/thùng = m² × giá/m² + bản in (Hồng Đào Chu Lai: 3,591 × 18.770
+ * + 3.278 = 70.681). Chỉ là gợi ý bấm-để-dùng dưới ô Đơn giá — tính tiền vẫn
+ * SL × đơn giá.
+ */
+export function cartonPriceSuggest(t: PoTemplate, l: Line): number | null {
+  if (t !== 'carton' || l.carton_basis !== 'ctn') return null
+  const area = Number(l.area_m2) || 0
+  const perM2 = Number(l.price_per_m2) || 0
+  if (area <= 0 || perM2 <= 0) return null
+  const fee = Number(l.print_fee) || 0
+  return Math.round((area * perM2 + fee) * 100) / 100
+}
+
+/**
+ * Đọc quy cách "900×605×115 mm" / "940*940*90" / "900x605x115" → [D, R, C].
+ *
+ * Bao bì trong danh mục ghi lọt lòng ngay trong ô Quy cách, còn mẫu carton lại
+ * nhập theo BA Ô SỐ riêng — không tách ra thì người soạn phải nhìn quy cách gõ
+ * lại từng số (phản hồi 08/08/2026). Chỉ nhận đúng dạng số×số×số; quy cách kiểu
+ * "25×50×1li" (ống, li = độ dày) có chữ dính liền số thứ ba nên KHÔNG khớp — và
+ * đúng ra là không được khớp, đó không phải lọt lòng thùng.
+ */
+// Dời về `@/lib/dims` (13/08/2026) để form KHAI VẬT TƯ dùng làm preview sống
+// mà không import ngược vào thư mục form đơn — re-export giữ chỗ gọi cũ.
+export { parseInnerDims }
+
+/**
+ * Dựng dòng mới từ vật tư vừa chọn. TỰ ĐIỀN mọi thứ suy được — quy cách, kg/m và
+ * chiều dài cây mặc định của vật tư, giá mua lần trước, và các Ô MÔ TẢ của LẦN
+ * ĐẶT GẦN NHẤT (Vật liệu, Màu/bề mặt, Cách mở, Pcs/thùng, Đm/sp — 08/08/2026).
+ * Còn lại nhân viên chỉ gõ SL và đơn giá, đúng như yêu cầu.
+ */
+/**
+ * Cơ sở tính tiền TỪ LẦN ĐẶT TRƯỚC chỉ được nhận khi HỢP LỆ với mẫu đang soạn
+ * (0136): đơn xốp cũ basis 'm3' mà rót vào dòng carton là deriveLine trả về
+ * unit nhưng ô chọn hiện giá trị không có trong options — rác lặng lẽ.
+ */
+const BASIS_DOMAIN: Partial<Record<PoTemplate, string[]>> = {
+  carton: ['ctn', 'm2'],
+  glass: ['ctn', 'm2'],
+  foam: ['ctn', 'm3'],
+}
+export function recallBasis(
+  t: PoTemplate,
+  basis: string | null | undefined,
+): Line['carton_basis'] {
+  const ok = BASIS_DOMAIN[t]
+  return ok && basis && ok.includes(basis) ? (basis as Line['carton_basis']) : 'ctn'
+}
+
+/** ĐVT mà "tấm" xốp KHÔNG thể là: cuộn / mét / kg / lít — hàng theo chiều dài hay cân. */
+const DVT_KHONG_PHAI_TAM = new Set(['cuon', 'met', 'm', 'kg', 'lit', 'l'])
+
+/**
+ * "TÍNH THEO" MẶC ĐỊNH CỦA DÒNG XỐP CHỌN TỪ DANH MỤC (08/10/2026).
+ *
+ * Vật tư "Mouse Mê Relax" khai quy cách 580x540x60, chọn vào đơn xốp: ba ô D×R×Dày
+ * bóc đúng, cột Tổng m³ bày đúng 4,698 — nhưng "Tính theo" vẫn ĐVT (tấm) nên tiền =
+ * 250 tấm × đơn giá, trong khi NCC xốp báo giá theo m³ (đơn giá 1 triệu/m³ ra 250
+ * triệu thay vì 4,698 triệu — lệch 53 lần). Dòng TỰ GÕ quy cách thì `withSpecDims`
+ * đã chuyển sang m³ từ 05/10; dòng chọn danh mục đi đường `newLine` nên lọt.
+ *
+ * Luật: lần đặt trước đã chốt cách tính thì theo lần trước (NCC này bán theo tấm thì
+ * cứ tấm). Chưa từng đặt mà đủ ba kích thước và ĐVT là tấm/thanh/miếng → m³. Mút
+ * CUỘN ("300*1.05*1", ĐVT Cuộn) vẫn theo ĐVT — ba số đó không phải tấm.
+ */
+export function foamBasisMacDinh(
+  lastBasis: string | null | undefined,
+  unit: string,
+  dims: [number, number, number] | null,
+): Line['carton_basis'] {
+  if (lastBasis) return recallBasis('foam', lastBasis)
+  if (!dims) return 'ctn'
+  return DVT_KHONG_PHAI_TAM.has(nod(unit).trim()) ? 'ctn' : 'm3'
+}
+
+/** m³ của MỘT tấm xốp theo D×R×Dày của dòng — null khi chưa đủ ba số. */
+export function m3MotTam(l: Line): number | null {
+  return foamM3PerSheet(n(l.inner_l_mm), n(l.inner_w_mm), n(l.inner_h_mm))
+}
+
+/**
+ * XỐP: QUY CÁCH GÕ TRÊN LƯỚI → D×R×Dày + TÍNH THEO m³ (05/10/2026).
+ *
+ * Đơn Tân Hoàng Long "Xốp 8kg 1000*800*50 · 4.480 tấm · 520.000đ/m³": dòng tự gõ
+ * (không qua danh mục nên `newLine` không bóc quy cách), ba ô D×R×Dày nằm ở chi
+ * tiết dòng còn trống, "Tính theo" để tấm/cuộn, người soạn gõ 0,04 (m³ MỘT tấm)
+ * vào ô Tổng m³ → tiền ra 4.480 × 520.000 = 2,33 TỶ thay vì 179,2 m³ × 520.000 =
+ * 93.184.000đ.
+ *
+ * Luật (chỉ mẫu xốp; gọi mỗi lần sửa dòng):
+ *  · quy cách đổi và là ba số mm (`parseInnerDims` — mút cuộn "8mm x 1.05m x 50m"
+ *    có đơn vị nên KHÔNG khớp) → điền D×R×Dày, nếu ba ô đang trống hoặc đang là số
+ *    bóc từ quy cách cũ (sửa gõ nhầm quy cách thì kích thước chạy theo);
+ *  · lần điền đầu (ba ô trống) → "Tính theo" sang m³ — xốp tấm có kích thước là
+ *    loại NCC báo giá theo khối; người soạn đổi lại tấm được;
+ *  · Tổng m³ gõ tay đúng bằng m³ MỘT tấm (SL > 1) → xoá, về tự tính.
+ */
+export function withSpecDims(t: PoTemplate, prev: Line, next: Line): Line {
+  let out = next
+  /*
+   * ĐỔI "TÍNH THEO" THÌ BỎ "GIÁ THEO" CŨ (05/10/2026, soi trên app). Dòng ĐÃ LƯU
+   * mở lại mang `price_per` = cơ sở giá đã chốt ('unit' cho dòng theo tấm), và
+   * `deriveLine` để `price_per` THẮNG `carton_basis` — đổi sang m³ trên màn mà
+   * tiền đứng yên. Ở mẫu có ô "Tính theo" (bao bì, kính, xốp), người dùng vừa
+   * chọn lại ô đó là đã nói rõ ý; lựa chọn "Giá theo" cũ hết nghĩa.
+   */
+  if (BASIS_DOMAIN[t] && next.carton_basis !== prev.carton_basis)
+    out = { ...out, price_per: '' }
+  // Mẫu mây: giữ SL theo LSX × Định mức SP = SL đơn hàng (09/10/2026).
+  if (t !== 'foam') return withLsxDemand(t, prev, out)
+  if (next.spec !== prev.spec) {
+    const d = parseInnerDims(next.spec)
+    const trong =
+      prev.inner_l_mm === '' && prev.inner_w_mm === '' && prev.inner_h_mm === ''
+    const cu = parseInnerDims(prev.spec)
+    const theoQuyCachCu = !!cu && cu[0] === prev.inner_l_mm && cu[1] === prev.inner_w_mm && cu[2] === prev.inner_h_mm // prettier-ignore
+    if (d && (trong || theoQuyCachCu)) {
+      out = { ...out, inner_l_mm: d[0], inner_w_mm: d[1], inner_h_mm: d[2] }
+      if (trong) out = { ...out, carton_basis: 'm3', price_per: '' }
+      if (laM3MotTam(out)) out = { ...out, qty2_manual: '' }
+    }
+  }
+  return out
+}
+
+/** Tổng m³ của dòng xốp theo D×R×Dày × SL — bất kể đang tính tiền theo tấm hay m³. */
+export function tongM3(l: Line): number | null {
+  const mot = m3MotTam(l)
+  return mot == null ? null : Math.round(mot * (Number(l.qty) || 0) * 1e6) / 1e6
+}
+
+/**
+ * MẪU TÍNH "SL theo LSX × Định mức SP = SL đơn hàng" (09/10/2026 — PO-2026-0154 mây:
+ * 200 ghế relax × 5,1 kg = 1.020 kg; SL đặt là số đặt thật, dư ra). Khác mẫu phụ
+ * kiện, nơi "SL đơn hàng" vẫn là SỐ SP và gợi ý SL đặt = SL đơn hàng × Đm − tồn.
+ */
+export const LSX_DEMAND_TEMPLATES: ReadonlySet<PoTemplate> = new Set(['rattan'])
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000
+
+/** SL theo LSX tính ngược từ hai cột đã lưu: SL đơn hàng ÷ Định mức SP. */
+export function lsxOf(l: Pick<Line, 'qty_demand' | 'dm_per_sp'>): Num {
+  const m = Number(l.dm_per_sp)
+  if (l.qty_demand === '' || l.dm_per_sp === '' || !(m > 0)) return ''
+  return round3(Number(l.qty_demand) / m)
+}
+
+/**
+ * Giữ ba ô SL theo LSX · Định mức SP · SL đơn hàng khớp nhau khi sửa dòng (mẫu
+ * LSX_DEMAND_TEMPLATES): sửa SL theo LSX hoặc Định mức → SL đơn hàng = tích; sửa
+ * thẳng SL đơn hàng → SL theo LSX tính lại. Mẫu khác trả nguyên.
+ */
+export function withLsxDemand(t: PoTemplate, prev: Line, next: Line): Line {
+  if (!LSX_DEMAND_TEMPLATES.has(t)) return next
+  const lsx = next.qty_lsx ?? ''
+  const lsxDoi = lsx !== (prev.qty_lsx ?? '')
+  const dmDoi = next.dm_per_sp !== prev.dm_per_sp
+  const demandDoi = next.qty_demand !== prev.qty_demand
+  if (demandDoi && !lsxDoi) return { ...next, qty_lsx: lsxOf(next) }
+  if ((lsxDoi || dmDoi) && !demandDoi) {
+    if (lsx !== '' && next.dm_per_sp !== '')
+      return { ...next, qty_demand: round3(Number(lsx) * Number(next.dm_per_sp)) }
+    // Chưa biết SL theo LSX mà có SL đơn hàng: đổi Định mức thì tính ngược số SP.
+    if (lsx === '') return { ...next, qty_lsx: lsxOf(next) }
+  }
+  return next
+}
+
+/**
+ * TỰ ĐIỀN từ nhu cầu lệnh (nút "Thêm mã lệnh còn thiếu") cho mẫu LSX_DEMAND_TEMPLATES:
+ * SL theo LSX = tổng số SP dùng vật tư; Định mức SP = định mức chung nếu mọi SP cùng
+ * một số, không thì SL cần ÷ tổng SP. Thiếu phân bổ theo SP → không điền gì.
+ */
+export function lsxFromNeed(
+  t: PoTemplate,
+  n: { qty_needed: number; breakdown?: { qty: number; per_unit: number | null }[] },
+): Partial<Line> {
+  if (!LSX_DEMAND_TEMPLATES.has(t)) return {}
+  const items = (n.breakdown ?? []).filter((b) => b.qty > 0)
+  const sp = items.reduce((s, b) => s + b.qty, 0)
+  if (!(sp > 0) || !(n.qty_needed > 0)) return {}
+  const dm = items.every((b) => b.per_unit != null && b.per_unit === items[0].per_unit)
+    ? items[0].per_unit!
+    : Math.round((n.qty_needed / sp) * 10000) / 10000
+  return { qty_lsx: sp, dm_per_sp: dm }
+}
+
+/**
+ * DÒNG MỚI TỪ NHU CẦU LỆNH (nút "Thêm mã lệnh còn thiếu"): SL đặt để trống cho người
+ * mua quyết; nhu cầu, phân bổ theo SP (ghi chú) và — mẫu mây — SL theo LSX + Định
+ * mức SP đổ sẵn.
+ */
+export function lineFromNeed(
+  t: PoTemplate,
+  m: PoMaterial,
+  n: { qty_needed: number; breakdown?: MaterialAllocation[] },
+): Line {
+  return {
+    ...newLine(t, m),
+    qty_demand: n.qty_needed,
+    ...lsxFromNeed(t, n),
+    note: allocationNote(n.breakdown ?? []).slice(0, 500),
+  }
+}
+
+/**
+ * m³ của MỘT tấm dùng để QUY ĐỔI GIÁ xốp: tổng m³ đang dùng (kể cả số gõ đè theo
+ * tờ NCC) ÷ SL; chưa có SL thì theo D×R×Dày. Không có số nào → null.
+ */
+export function xopM3MoiTam(l: Line): number | null {
+  const q = Number(l.qty) || 0
+  const tong = (l.qty2_manual ?? '') !== '' ? Number(l.qty2_manual) : tongM3(l)
+  if (q > 0 && tong != null && tong > 0) return tong / q
+  return m3MotTam(l)
+}
+
+/** Hai cột giá (ĐVT + kg/m³/m²) — cấu hình chung với màn ký, xem `@/lib/po-hai-gia`. */
+export { HAI_GIA } from '@/lib/po-hai-gia'
+
+/**
+ * Lượng quy đổi của MỘT ĐVT đặt (kg/cây, kg/đơn vị, m³/SP, m²/tấm, m³/tấm). Tổng
+ * đã chốt / gõ đè theo tờ NCC thắng công thức — chia cho SL. Không đủ số → null.
+ */
+export function dv2MotDv(t: PoTemplate, l: Line): number | null {
+  if (t === 'foam') return xopM3MoiTam(l)
+  const q = Number(l.qty) || 0
+  const tong =
+    l.qty2_saved ?? ((l.qty2_manual ?? '') !== '' ? Number(l.qty2_manual) : null)
+  if (q > 0 && tong != null && tong > 0) return tong / q
+  const per =
+    t === 'aluminium'
+      ? (Number(l.weight_per_m) || 0) * (Number(l.bar_length_m) || 0)
+      : t === 'metal_kg'
+        ? Number(l.weight_per_unit) || 0
+        : t === 'wood'
+          ? Number(l.m3_per_unit) || 0
+          : t === 'glass'
+            ? Number(l.area_m2) || 0
+            : 0
+  return per > 0 ? per : null
+}
+
+/** Hai giá của dòng: `theo` là cột đang tính tiền, cột kia quy đổi (null khi thiếu số). */
+export function haiGia(
+  t: PoTemplate,
+  l: Line,
+): { theo: 'dvt' | 'dv2'; donGia: number | null; gia2: number | null } {
+  const theo = lineBasis(t, l) === 'unit2' ? 'dv2' : 'dvt'
+  const p = n(l.price)
+  const per = dv2MotDv(t, l)
+  if (p == null) return { theo, donGia: null, gia2: null }
+  if (theo === 'dv2') return { theo, gia2: p, donGia: per == null ? null : p * per }
+  return { theo, donGia: p, gia2: per == null || per <= 0 ? null : p / per }
+}
+
+/**
+ * Gõ giá vào một cột → dòng tính tiền theo cột đó. Kính / xốp chốt cơ sở bằng
+ * `carton_basis` (bỏ "Giá theo" cũ vì `deriveLine` để nó thắng); nhôm, sắt, gỗ
+ * chốt bằng `price_per`.
+ */
+export function haiGiaPatch(
+  t: PoTemplate,
+  theo: 'dvt' | 'dv2',
+  price: Num,
+): Partial<Line> {
+  if (t === 'foam') return { price, carton_basis: theo === 'dv2' ? 'm3' : 'ctn', price_per: '' } // prettier-ignore
+  if (t === 'glass') return { price, carton_basis: theo === 'dv2' ? 'm2' : 'ctn', price_per: '' } // prettier-ignore
+  return { price, price_per: theo === 'dv2' ? 'unit2' : 'unit' }
+}
+
+/**
+ * Tổng quy đổi để BÀY ở cột tổng khi dòng tính theo ĐVT (kính/xốp theo tấm thì
+ * `lineQty2` rỗng) — vẫn phải thấy tổng m² / m³ để đối chiếu tờ NCC.
+ */
+export function tongDv2(t: PoTemplate, l: Line): number | null {
+  if (t === 'foam') return tongM3(l)
+  if ((t === 'aluminium' || t === 'metal_kg') && laDvtKg(l.unit)) {
+    const q = Number(l.qty) || 0
+    return q > 0 ? q : null
+  }
+  if (t !== 'glass') return null
+  const a = Number(l.area_m2) || 0
+  const q = Number(l.qty) || 0
+  return a > 0 && q > 0 ? Math.round(a * q * 1e4) / 1e4 : null
+}
+
+/**
+ * Tổng m³ GÕ TAY đúng bằng m³ của MỘT tấm mà SL > 1 — gần như chắc là gõ nhầm
+ * nghĩa ô (đơn THL: gõ 0,04 cho 4.480 tấm). Lưới hiện gợi ý tại ô để đổi.
+ */
+export function laM3MotTam(l: Line): boolean {
+  const mot = m3MotTam(l)
+  return (
+    mot != null &&
+    Number(l.qty) > 1 &&
+    (l.qty2_manual ?? '') !== '' &&
+    Math.abs(Number(l.qty2_manual) - mot) < 1e-9
+  )
+}
+
+/** Cặp quy đổi giá từ danh mục — rỗng khi không khai hoặc trùng ĐVT đặt. */
+function dualPriceOf(m: {
+  unit: string
+  price_unit: string | null
+  unit2_factor: number | null
+}): Pick<Line, 'unit2_per_unit' | 'unit2_label'> {
+  const label = (m.price_unit ?? '').trim()
+  const same = label.toLowerCase() === m.unit.trim().toLowerCase()
+  if (!label || same || !(Number(m.unit2_factor) > 0)) {
+    return { unit2_per_unit: '', unit2_label: '' }
+  }
+  return { unit2_per_unit: Number(m.unit2_factor), unit2_label: label }
+}
+
+export function newLine(t: PoTemplate, m: PoMaterial): Line {
+  /*
+   * Quy cách danh mục TỰ BÓC vào ba ô số cho các mẫu tính theo kích thước —
+   * người soạn không phải nhìn quy cách gõ lại từng số:
+   *   carton: lọt lòng D×R×C ("900x605x115") — có cách mở là ra m² ngay.
+   *   foam  : quy cách tấm D×R×Dày ("1520x920x10") — chọn "tính theo m³" là
+   *           tổng khối tự nhảy (0134).
+   *   glass : "605x539x5mm" — hai số đầu là kích thước tấm → m²/tấm = D×R/10⁶,
+   *           đúng cột "m2/tấm" của đơn kính thật (0134).
+   * QUY CÁCH DANH MỤC THẮNG; danh mục chưa khai thì lấy KÍCH THƯỚC CỦA LẦN ĐẶT
+   * GẦN NHẤT (0136) — đơn lặp lại chỉ còn gõ SL + giá.
+   */
+  const last = m.last_line
+  const lastDims: [number, number, number] | null =
+    last && last.inner_l_mm && last.inner_w_mm && last.inner_h_mm
+      ? [last.inner_l_mm, last.inner_w_mm, last.inner_h_mm]
+      : null
+  const inner =
+    t === 'carton' || t === 'foam' ? (parseInnerDims(m.spec) ?? lastDims) : null
+  const glassDims = t === 'glass' ? parseInnerDims(m.spec) : null
+  // Cách mở: lần đặt gần nhất → danh mục (0137) — vật tư chưa từng lên đơn giờ
+  // vẫn có cách mở nếu Kho/CƯ đã khai, m² tự tính được ngay từ dòng đầu tiên.
+  const openStyle = t === 'carton' ? (last?.open_style ?? m.open_style ?? '') : ''
+  // Vật liệu: lần đặt gần nhất là nguồn tươi nhất; vật tư CHƯA TỪNG lên đơn thì
+  // lấy số khai ở danh mục (0124) — trước đây ô này trống và phải gõ tay.
+  // …nhưng CHỈ ở mẫu mà cột này thật sự nghĩa là vật liệu (xem
+  // PO_SHARED_FIELD_PREFILL): mẫu mây gọi cột này là "Định mức", mẫu MRO gọi là
+  // "Model" — đổ vật liệu vào là bày một ô SAI thay vì một ô trống.
+  const grade = prefillsFromCatalog(t, 'material_grade')
+    ? (last?.material_grade ?? m.material_grade ?? '')
+    : ''
+  const area =
+    (t === 'glass'
+      ? glassDims
+        ? Math.round(((glassDims[0] * glassDims[1]) / 1e6) * 10000) / 10000
+        : null
+      : inner && openStyle
+        ? cartonAreaM2(openStyle, inner[0], inner[1], inner[2])
+        : null) ??
+    // Công thức không ra (kính không quy cách, carton cách mở lạ/ĐK) → m² đã
+    // chốt ở lần đặt trước, chỉ với mẫu dùng ô này.
+    (t === 'glass' || t === 'carton' ? (last?.area_m2 ?? null) : null)
+  return {
+    uid: crypto.randomUUID(),
+    price_per: '',
+    lsx_split: {},
+    material_id: m.id,
+    code: m.code,
+    name: m.name,
+    unit: m.unit,
+    on_hand: m.on_hand,
+    spec: m.spec ?? '',
+    note: '',
+    qty: '',
+    // Giá mua lần trước là GỢI Ý, điền sẵn để đơn lặp lại hàng tháng khỏi gõ lại.
+    price: m.last_purchase_price ?? '',
+    last_price: m.last_purchase_price ?? null,
+    material_grade: grade,
+    dm_per_sp: last?.dm_per_sp ?? '',
+    qty_demand: '',
+    // Chưa có sổ kho (null) → ô tồn ĐỂ TRỐNG, không chụp số 0 giả vào phiếu in.
+    qty_on_hand: m.on_hand ?? '',
+    die_code: '',
+    weight_per_m: m.kg_per_m ?? '',
+    bar_length_m: m.default_bar_length_m ?? '',
+    // Quy cách danh mục là nguồn CHỐT; chưa khai thì lấy kích thước ghi ở đơn trước.
+    // Lỗi 03/09/2026: thùng carton thêm vào đơn GỖ thì "950×620×135 mm" chui vào
+    // cột "KH GIAO HÀNG" — mẫu gỗ mượn dimension_text cho một nghĩa khác hẳn.
+    dimension_text: prefillsFromCatalog(t, 'dimension_text')
+      ? (m.spec ?? last?.dimension_text ?? '')
+      : '',
+    // Màu/bề mặt: lần đặt gần nhất → danh mục (0137).
+    finish: prefillsFromCatalog(t, 'finish') ? (last?.finish ?? m.finish ?? '') : '',
+    /*
+     * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt — ba nguồn xếp theo độ tin, xem
+     * `kgPerUnitOf`. Ô này mà trống thì `lineReady` CHẶN gửi, người soạn kẹt và
+     * gõ đại một số cho qua; số gõ đại đi thẳng vào (SL × kg/đv) × giá/kg rồi
+     * lên bàn duyệt Giám đốc, không ai đối chiếu. Không suy được thì vẫn để
+     * trống — nhân viên nhập theo phiếu cân NCC, không đoán hộ.
+     */
+    weight_per_unit: kgPerUnitOf(m).kg ?? '',
+    // Gỗ đặt theo dòng tự do là chính; chọn từ danh mục thì m³/SP vẫn gõ tay.
+    m3_per_unit: '',
+    warranty_text: '',
+    print_spec: '',
+    open_style: openStyle,
+    pcs_per_ctn: last?.pcs_per_ctn ?? m.pcs_per_ctn ?? '',
+    inner_l_mm: inner?.[0] ?? '',
+    inner_w_mm: inner?.[1] ?? '',
+    inner_h_mm: inner?.[2] ?? '',
+    area_m2: area ?? '',
+    // Giá/m² + bản in của bao bì gần như không đổi giữa các đơn — nhớ từ lần
+    // đặt trước (0136), chỉ ở mẫu carton (mẫu khác không có ô, gửi lên là rác).
+    price_per_m2: t === 'carton' ? (last?.price_per_m2 ?? '') : '',
+    print_fee: t === 'carton' ? (last?.print_fee ?? '') : '',
+    carton_basis:
+      t === 'foam'
+        ? foamBasisMacDinh(last?.carton_basis, m.unit, inner)
+        : recallBasis(t, last?.carton_basis),
+    pack_size: m.pack_size ?? null,
+    pack_unit: m.pack_unit ?? '',
+    // 0182: danh mục khai "giá theo đv khác" (sơn lít/thùng…) thì điền sẵn cặp
+    // quy đổi. Trùng ĐVT đặt thì thôi — hệ số 1 chỉ là nhiễu trên phiếu.
+    ...dualPriceOf(m),
+    catalog_kg_m: m.kg_per_m ?? null,
+    catalog_kg_unit: kgPerUnitOf(m).kg,
+  }
+}
+
+/** Bản vật tư TỐI THIỂU mà modal "Sửa vật tư" trả về sau khi lưu. */
+export type MaterialRefresh = {
+  name: string
+  unit: string
+  spec: string | null
+  kg_per_m: number | null
+  kg_per_unit: number | null
+  default_bar_length_m: number | null
+  price_unit: string | null
+  unit2_factor: number | null
+  pack_size: number | null
+  pack_unit: string | null
+  material_grade: string | null
+  /** Thông số theo nhóm (0137) — optional cho fixture cũ, thiếu coi như null. */
+  open_style?: string | null
+  pcs_per_ctn?: number | null
+  finish?: string | null
+}
+
+/**
+ * SỬA VẬT TƯ NGAY TRÊN DÒNG ĐƠN → dòng hút lại số mới của danh mục.
+ *
+ * Luật cập nhật giữ đúng nguyên tắc "không đè số người dùng đã gõ":
+ *   · LUÔN theo danh mục: tên, ĐVT, quy cách, đóng gói, catalog_* (mốc so lệch).
+ *   · CHỈ KHI Ô TRỐNG: barem (kg/m, dài cây, kg/đơn-vị), vật liệu — người soạn
+ *     đã gõ tay thì số đó thắng (có thể là phiếu cân NCC).
+ *   · Kích thước bóc từ quy cách (carton/foam dims, glass m²/tấm) cũng chỉ khi
+ *     đang trống — cùng đường parse với `newLine`.
+ */
+export function refreshLineFromMaterial(
+  t: PoTemplate,
+  l: Line,
+  m: MaterialRefresh,
+  /**
+   * Giữ quy cách đang có của DÒNG (07/10/2026): mã nằm nhiều dòng thì mỗi dòng
+   * một quy cách riêng — sửa danh mục không được đè cả loạt về một quy cách.
+   */
+  keepSpec = false,
+): Line {
+  const kgUnit = kgPerUnitOf(m)
+  const next: Line = {
+    ...l,
+    name: m.name,
+    unit: m.unit,
+    spec: keepSpec && l.spec.trim() ? l.spec : (m.spec ?? ''),
+    pack_size: m.pack_size ?? null,
+    pack_unit: m.pack_unit ?? '',
+    catalog_kg_m: m.kg_per_m ?? null,
+    catalog_kg_unit: kgUnit.kg,
+    weight_per_m: l.weight_per_m === '' ? (m.kg_per_m ?? '') : l.weight_per_m,
+    bar_length_m: l.bar_length_m === '' ? (m.default_bar_length_m ?? '') : l.bar_length_m,
+    weight_per_unit: l.weight_per_unit === '' ? (kgUnit.kg ?? '') : l.weight_per_unit,
+    // Lấp ô trống CHỈ khi cột ở mẫu này cùng nghĩa với danh mục (PO_SHARED_FIELD_PREFILL).
+    material_grade:
+      l.material_grade === '' && prefillsFromCatalog(t, 'material_grade')
+        ? (m.material_grade ?? '')
+        : l.material_grade,
+    // Thông số theo nhóm (0137) — cùng luật lấp-ô-trống.
+    finish:
+      l.finish === '' && prefillsFromCatalog(t, 'finish') ? (m.finish ?? '') : l.finish,
+    open_style: l.open_style === '' ? (m.open_style ?? '') : l.open_style,
+    pcs_per_ctn: l.pcs_per_ctn === '' ? (m.pcs_per_ctn ?? '') : l.pcs_per_ctn,
+  }
+
+  // Kích thước từ quy cách — cùng luật với newLine, nhưng chỉ lấp ô trống.
+  if ((t === 'carton' || t === 'foam') && next.inner_l_mm === '') {
+    const dims = parseInnerDims(m.spec)
+    if (dims) {
+      next.inner_l_mm = dims[0]
+      next.inner_w_mm = dims[1]
+      next.inner_h_mm = dims[2]
+    }
+  }
+  // Carton: vừa bổ sung cách mở/quy cách ở danh mục mà m² đang trống → tính
+  // ngay, không đợi người soạn đổi cách mở lần nữa.
+  if (t === 'carton' && next.area_m2 === '' && next.inner_l_mm !== '') {
+    next.area_m2 = recalcCartonArea(next)
+  }
+  if (t === 'glass' && next.area_m2 === '') {
+    const dims = parseInnerDims(m.spec)
+    if (dims) next.area_m2 = Math.round(((dims[0] * dims[1]) / 1e6) * 10000) / 10000
+  }
+  return next
+}
+
+/**
+ * DÒNG TỰ DO cho mẫu gỗ/gia công (0134): không gắn vật tư kho — tên/ĐVT gõ ngay
+ * trên dòng, material_id chỉ là khóa cục bộ để React/focus/xoá dòng hoạt động.
+ */
+export function newFreeLine(): Line {
+  return {
+    is_free: true,
+    material_id: `free-${crypto.randomUUID()}`,
+    code: '',
+    name: '',
+    unit: 'cái',
+    on_hand: null,
+    spec: '',
+    note: '',
+    qty: '',
+    price: '',
+    material_grade: '',
+    dm_per_sp: '',
+    qty_demand: '',
+    qty_on_hand: '',
+    die_code: '',
+    weight_per_m: '',
+    bar_length_m: '',
+    dimension_text: '',
+    finish: '',
+    weight_per_unit: '',
+    m3_per_unit: '',
+    warranty_text: '',
+    print_spec: '',
+    open_style: '',
+    pcs_per_ctn: '',
+    inner_l_mm: '',
+    inner_w_mm: '',
+    inner_h_mm: '',
+    area_m2: '',
+    price_per_m2: '',
+    print_fee: '',
+    carton_basis: 'ctn',
+    unit2_per_unit: '',
+    price_per: '',
+    lsx_split: {},
+    unit2_label: '',
+    pack_size: null,
+    pack_unit: '',
+    catalog_kg_m: null,
+    catalog_kg_unit: null,
+  }
+}
+
+/**
+ * DÒNG PHÍ / DỊCH VỤ (0234) — công dán, phí in bản, phí giao hàng NCC thu chung
+ * hoá đơn, gia công… Không khai "vật tư" cho từng khoản phí: danh mục đã có 239
+ * mã dịch vụ chưa đơn nào dùng, vì dòng gắn vật tư bắt Kho lập phiếu nhập.
+ */
+export function newFeeLine(name = ''): Line {
+  return { ...newFreeLine(), fee: true, name, unit: 'Lần' }
+}
+
+/** Dòng đơn như repo trả về — chỉ những trường form cần. */
+export type PoLineDto = {
+  id?: string
+  /** Tổng kg/m² ĐÃ CHỐT lúc lập đơn (0053). Chỉ dùng lại cho đơn đã phát hành — xem `keepQty2` của `lineFromPo`. */
+  qty2?: number | null
+  /** null = dòng tự do (0134) — material_name/unit đã fallback từ line_name. */
+  material_id: string | null
+  material_code: string
+  material_name: string
+  material_unit: string
+  qty_ordered: number
+  unit_price: number | null
+  /** 0234 — 'phi' = dòng phí / dịch vụ. */
+  line_kind?: string | null
+  spec: string | null
+  note: string | null
+  /** Mã SP khách (tem/bao bì chia theo SP) — mang theo, không có ô sửa. */
+  product_code?: string | null
+  material_grade: string | null
+  dm_per_sp: number | null
+  qty_demand: number | null
+  qty_on_hand: number | null
+  die_code: string | null
+  weight_per_m: number | null
+  bar_length_m: number | null
+  dimension_text: string | null
+  finish: string | null
+  weight_per_unit: number | null
+  m3_per_unit: number | null
+  warranty_text: string | null
+  print_spec: string | null
+  open_style: string | null
+  pcs_per_ctn: number | null
+  inner_l_mm: number | null
+  inner_w_mm: number | null
+  inner_h_mm: number | null
+  area_m2: number | null
+  price_per_m2: number | null
+  print_fee: number | null
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
+  /** Đơn vị tính giá đã chốt lúc lập đơn — mở lại thì giữ nguyên. */
+  price_basis?: 'unit' | 'unit2' | null
+  /** Phần chia SL theo lệnh đã lưu (0185). */
+  lsx_split?: { production_order_id: string; qty: number }[] | null
+  pack_size: number | null
+  pack_unit: string | null
+  /** 0182 — quy đổi giá tổng quát; unit2 mang NHÃN đơn-vị-giá server đã chốt. */
+  unit2_per_unit: number | null
+  unit2: string | null
+}
+
+const n2 = (v: number | null | undefined): Num => (v == null ? '' : Number(v))
+const s2 = (v: string | null | undefined): string => v ?? ''
+
+/**
+ * Dựng dòng form từ dòng đơn đã lưu — dùng khi mở SỬA hoặc NHÂN BẢN đơn.
+ *
+ * Phải giữ TRỌN thông số quy đổi của mẫu (kg/m, dài cây, kg/đv, m²): mất chúng
+ * thì `deriveLine` rơi về 'unit' và thành tiền dòng nhôm tụt từ (tổng kg × giá/kg)
+ * xuống (số cây × giá/kg) — sai khoảng 6 lần mà không báo gì.
+ *
+ * `on_hand` lấy tồn HIỆN TẠI (server page nạp kèm), không phải `qty_on_hand` đã
+ * chốt lúc lập đơn — hai số khác nghĩa: một là tồn bây giờ, một là ảnh chụp để in.
+ */
+export function lineFromPo(
+  l: PoLineDto,
+  onHand: number | null = null,
+  /** Đơn đã phát hành: giữ tổng kg/m² đã chốt (`qty2_saved`), không dẫn xuất lại. */
+  keepQty2 = false,
+  /** Mẫu của đơn — có thì nhận ra dòng đã lưu bằng TỔNG GÕ TAY (`qty2_manual`). */
+  template?: PoTemplate,
+): Line {
+  const line = lineFromPoRaw(l, onHand, keepQty2)
+  return template ? { ...line, qty2_manual: manualQty2Of(template, l, line) } : line
+}
+
+/**
+ * DB không có cờ "tổng gõ tay": server luôn ghi `qty2` = kết quả `deriveLine`,
+ * nên tổng đã lưu LỆCH tổng tự tính từ chính thông số của dòng nghĩa là người
+ * dùng đã gõ đè. Ngưỡng 1e-4: tổng m³ đời trước làm tròn 4 lẻ (nay 6 lẻ) lệch
+ * dưới mức đó — không được coi là gõ tay.
+ */
+function manualQty2Of(t: PoTemplate, dto: PoLineDto, l: Line): Num {
+  if (!QTY2_OVERRIDE_UNIT[t] || dto.qty2 == null) return ''
+  const auto = lineQty2Auto(t, l)
+  if (auto != null && Math.abs(Number(dto.qty2) - auto) <= 1e-4) return ''
+  return Number(dto.qty2)
+}
+
+function lineFromPoRaw(l: PoLineDto, onHand: number | null, keepQty2: boolean): Line {
+  // Dòng tự do (0134): material_id null trong DB — khóa cục bộ dựng từ id dòng
+  // (mở SỬA/NHÂN BẢN không đổi khóa giữa hai lần render).
+  const isFree = l.material_id == null
+  return {
+    // Mở lại đơn cũ: giữ nguyên đơn vị tính giá đã chốt lúc lập, không để
+    // deriveLine đoán lại theo mẫu rồi đổi tiền của một đơn đã ký.
+    price_per: l.price_basis ?? '',
+    qty2_saved: keepQty2 ? (l.qty2 ?? null) : null,
+    lsx_split: Object.fromEntries(
+      (l.lsx_split ?? []).map((sp) => [sp.production_order_id, sp.qty as Num]),
+    ),
+    po_line_id: l.id,
+    uid: l.id ?? crypto.randomUUID(),
+    is_free: isFree,
+    fee: l.line_kind === 'phi',
+    material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
+    code: l.material_code,
+    name: l.material_name,
+    unit: l.material_unit,
+    product_code: s2(l.product_code),
+    on_hand: onHand,
+    spec: s2(l.spec),
+    note: s2(l.note),
+    qty: n2(l.qty_ordered),
+    price: n2(l.unit_price),
+    material_grade: s2(l.material_grade),
+    dm_per_sp: n2(l.dm_per_sp),
+    qty_demand: n2(l.qty_demand),
+    qty_lsx: lsxOf({ qty_demand: n2(l.qty_demand), dm_per_sp: n2(l.dm_per_sp) }),
+    qty_on_hand: n2(l.qty_on_hand),
+    die_code: s2(l.die_code),
+    weight_per_m: n2(l.weight_per_m),
+    bar_length_m: n2(l.bar_length_m),
+    dimension_text: s2(l.dimension_text),
+    finish: s2(l.finish),
+    weight_per_unit: n2(l.weight_per_unit),
+    m3_per_unit: n2(l.m3_per_unit),
+    warranty_text: s2(l.warranty_text),
+    print_spec: s2(l.print_spec),
+    open_style: s2(l.open_style),
+    pcs_per_ctn: n2(l.pcs_per_ctn),
+    inner_l_mm: n2(l.inner_l_mm),
+    inner_w_mm: n2(l.inner_w_mm),
+    inner_h_mm: n2(l.inner_h_mm),
+    area_m2: n2(l.area_m2),
+    price_per_m2: n2(l.price_per_m2),
+    print_fee: n2(l.print_fee),
+    carton_basis: l.carton_basis ?? 'ctn',
+    // Đóng gói đã chụp trên dòng đơn (0128) — mở SỬA/NHÂN BẢN giữ đúng con số
+    // hai bên chốt lúc đặt, không lấy lại đóng gói hiện tại của danh mục. Đơn
+    // cũ trước 0128 để null thì quy đổi tự ẩn như trước.
+    pack_size: l.pack_size,
+    pack_unit: s2(l.pack_unit),
+    // 0182: hệ số từ cột riêng; NHÃN đọc lại từ unit2 đã lưu — chỉ khi dòng
+    // thật sự tính theo unit2 (mẫu kim loại cũng ghi unit2='kg', nhưng ở đó
+    // nhãn là SẢN PHẨM của công thức, không phải ô người dùng gõ).
+    unit2_per_unit: n2(l.unit2_per_unit),
+    unit2_label: l.unit2_per_unit != null ? s2(l.unit2) : '',
+    // Mở đơn đã lưu thì không biết danh mục đang để số gì — để null, nút "lưu
+    // vào danh mục" cứ hiện khi ô có số (ghi đè bằng chính số đã chốt trên đơn
+    // là việc đúng, không phải việc thừa).
+    catalog_kg_m: null,
+    catalog_kg_unit: null,
+  }
+}
+
+/**
+ * ĐỔI MẪU ĐƠN → dọn các cột mượn đã ĐỔI NGHĨA (03/09/2026).
+ *
+ * Dòng thêm ở mẫu inox mang `dimension_text = "Inox phi 15.9x1.5li"` (cột
+ * "Kích thước"); đổi sang mẫu gỗ, cùng ô đó hiện dưới nhãn "KH GIAO HÀNG" và
+ * chẳng ai nhận ra đấy là đồ cũ. Nhãn ở hai mẫu KHÁC nhau → xoá; nhãn giống
+ * (phụ kiện ↔ inox cùng gọi "Vật liệu") → giữ, người soạn không mất chữ đã gõ.
+ * Số/ô khác của dòng không đụng — `deriveLine` tự bỏ qua ô không thuộc mẫu.
+ */
+export function remapLinesForTemplate(
+  from: PoTemplate,
+  to: PoTemplate,
+  lines: Line[],
+): Line[] {
+  if (from === to) return lines
+  const fields = Object.keys(PO_SHARED_FIELD_MEANING) as (keyof Line & string)[]
+  return lines.map((l) => {
+    // Đổi mẫu là đổi cách tính — tổng kg đã chốt không còn đúng nghĩa.
+    const next = { ...l, qty2_saved: null, qty2_manual: '' as Num }
+    for (const f of fields) {
+      const before = PO_SHARED_FIELD_MEANING[f]?.[from]
+      const after = PO_SHARED_FIELD_MEANING[f]?.[to]
+      if (before !== after) (next as Record<string, unknown>)[f] = ''
+    }
+    return next
+  })
+}
+
+/**
+ * NHÁP localStorage lưu trước 0139: dòng thiếu hai key mới, và gỗ/mro còn ghi
+ * m³/SP vào `weight_per_unit`, bảo hành vào `finish` (thời mượn cột). Khôi phục
+ * nháp phải dọn về cột đúng — không thì dòng gỗ cũ mất m³/SP ("thiếu m³/SP"
+ * chặn gửi) mà người dùng không hiểu vì sao.
+ */
+export function migrateDraftLine(t: PoTemplate, l: Line): Line {
+  // JSON nháp cũ thiếu key mới → `undefined` lọt vào state; ?? '' đưa về ô trống.
+  const next: Line = {
+    ...l,
+    // Nháp lưu trước khi có khoá cục bộ: thiếu `uid` thì rowKey rơi về
+    // material_id — hai dòng cùng mã tick một thành tick cả hai (07/10/2026).
+    uid: l.uid ?? l.po_line_id ?? crypto.randomUUID(),
+    m3_per_unit: l.m3_per_unit ?? '',
+    warranty_text: l.warranty_text ?? '',
+    print_spec: l.print_spec ?? '',
+    // Nháp lưu từ bản trước 0234: dòng phí thiếu cờ — ngoài mẫu gỗ, dòng tự do CHỈ là phí.
+    fee: l.fee ?? (l.is_free === true && !FREE_LINE_TEMPLATES.includes(t)),
+    // 0182 — nháp lưu trước khi có cặp quy đổi giá.
+    unit2_per_unit: l.unit2_per_unit ?? '',
+    unit2_label: l.unit2_label ?? '',
+  }
+  if (t === 'wood' && next.m3_per_unit === '' && next.weight_per_unit !== '') {
+    next.m3_per_unit = next.weight_per_unit
+    next.weight_per_unit = ''
+  }
+  if (t === 'mro' && next.warranty_text === '' && next.finish !== '') {
+    next.warranty_text = next.finish
+    next.finish = ''
+  }
+  return next
+}
+
+/*
+ * `packCount` / `roundUpToPack` đã dời sang `@/lib/po-line` (0128) — phiếu in
+ * cần đúng phép chia đó, mà trang in không được import từ thư mục form.
+ */
+
+/**
+ * TRA BAREM cho hai ô mà thiếu là KHÔNG GỬI ĐƯỢC ĐƠN: kg/m (mẫu nhôm) và
+ * kg/đơn-vị (mẫu inox/sắt) — xem `lineReady`.
+ *
+ * Vì sao cần: danh mục mới có 634/13.168 mã khai kg/m và 5 mã khai kg/đơn-vị.
+ * Gặp mã chưa khai thì form chặn gửi, và lối thoát duy nhất của người soạn là
+ * gõ đại một số — số đó đi thẳng vào (SL × kg/đv) × giá/kg rồi lên bàn duyệt
+ * Giám đốc, không ai đối chiếu. Nới chặn còn tệ hơn: dòng rơi về "SL × giá" và
+ * ra tiền sai mà im lặng.
+ *
+ * Nên giữ nguyên chốt chặn, chỉ mở thêm lối ra ĐÚNG: barem suy từ QUY CÁCH
+ * TRONG TÊN vật tư bằng công thức xưởng (`@/lib/metal-weight` — cùng bản mà
+ * script backfill danh mục dùng). Không tính ra thì trả lý do để hiện thẳng
+ * ("hàng tấm/cuộn — không tính theo mét", "chưa khai dài cây"), tuyệt đối không
+ * gợi ý một con số đoán.
+ */
+export function baremFor(f: PoField, l: Line): { kg: number | null; why: string | null } {
+  const perM = kgPerM(l.name, rhoFor(l.name))
+  if (f.key === 'kgm') return { kg: perM.kg, why: perM.reason ?? null }
+  // kg/ĐƠN-VỊ: ưu tiên kg/m đã có sẵn trên dòng, không có thì suy từ tên.
+  const perMetre = l.weight_per_m === '' ? perM.kg : Number(l.weight_per_m)
+  const kg = kgPerOrderUnit(
+    perMetre,
+    l.unit,
+    l.bar_length_m === '' ? null : Number(l.bar_length_m),
+  )
+  if (kg != null) return { kg, why: null }
+  if (!(Number(perMetre) > 0)) {
+    return { kg: null, why: perM.reason ?? 'chưa có barem kg/m' }
+  }
+  return { kg: null, why: 'chưa khai dài cây' }
+}
+
+/**
+ * Số trên ô có KHÁC số danh mục đang giữ không — tức người mua vừa gõ đè, hoặc
+ * bấm barem, hoặc đọc phiếu cân NCC. Đó là lúc mời ghi ngược về danh mục (0128)
+ * để lần đặt sau khỏi gõ lại.
+ *
+ * Dòng mở từ ĐƠN ĐÃ LƯU không biết danh mục đang để gì (`catalog_*` = null) nên
+ * coi như khác: ghi lại đúng con số hai bên đã chốt trên đơn là việc đúng, và
+ * ghi đè bằng chính nó thì cũng vô hại.
+ */
+export function overridesCatalog(f: PoField, l: Line): boolean {
+  const filled = Number(f.field ? l[f.field as keyof Line] : null)
+  if (!(filled > 0)) return false
+  const cat = f.key === 'kgm' ? l.catalog_kg_m : l.catalog_kg_unit
+  if (cat == null) return true
+  return Math.abs(cat - filled) / filled > 0.0001
+}
+
+/** Kích thước lọt lòng đổi → tính lại m²/thùng theo cách mở (AD/MR). */
+export function recalcCartonArea(l: Line): Num {
+  const a = cartonAreaM2(l.open_style, n(l.inner_l_mm), n(l.inner_w_mm), n(l.inner_h_mm))
+  return a ?? l.area_m2
+}
+
+/**
+ * Phần chia SL theo lệnh gửi lên server — null khi không có gì để chia.
+ *
+ * Bỏ ô trống và ô ≤ 0. MỘT lệnh nhận trọn vẫn GIỮ (10/10/2026): bản trước trả
+ * null khi chỉ còn một lệnh, nên vật tư chỉ lệnh PHỤ cần bị lưu thành "thuộc lệnh
+ * chính". Đơn một lệnh thì lưới không bày ô chia nên `lsx_split` luôn rỗng.
+ */
+export function splitPayload(
+  l: Pick<Line, 'lsx_split'>,
+): { production_order_id: string; qty: number }[] | null {
+  const out = Object.entries(l.lsx_split ?? {})
+    .map(([id, v]) => ({ production_order_id: id, qty: v === '' ? 0 : Number(v) }))
+    .filter((x) => x.qty > 0)
+  return out.length > 0 ? out : null
+}
+
+/**
+ * GỘP dòng `from` vào dòng `into` — nút "Gộp vào dòng X" của cảnh báo trùng dòng
+ * (`trung-dong.tsx`). Cộng SL đặt, SL đơn hàng và phần chia theo lệnh; nối ghi
+ * chú khác nhau. Giữ mọi ô khác của `into` (giá, kg/m, chiều dài — hai dòng đã
+ * trùng các ô đó mới bị báo).
+ *
+ * KHÁC GIÁ hoặc khác cách tính giá thì trả null: gộp là phải bỏ một giá, mà chọn
+ * giá nào là việc của người mua, không phải của máy.
+ */
+export function mergeLineInto(into: Line, from: Line): Line | null {
+  if (into.price !== from.price || (into.price_per || '') !== (from.price_per || ''))
+    return null
+  const add = (a: Num, b: Num): Num =>
+    a === '' && b === '' ? '' : Number(a || 0) + Number(b || 0)
+  // Phần chia theo lệnh: hai dòng đều đã chia thì cộng; MỘT dòng chưa chia thì
+  // bỏ chia của dòng gộp — cộng nửa vời là tổng chia lệch SL đặt, và dòng chưa
+  // chia không nói được nó thuộc lệnh nào (10/10/2026). Bấm "Chia theo nhu cầu".
+  const coChia = (l: Line) => Object.values(l.lsx_split ?? {}).some((v) => Number(v) > 0)
+  const split: Record<string, Num> =
+    coChia(into) && coChia(from) ? { ...into.lsx_split } : {}
+  if (coChia(into) && coChia(from))
+    for (const [k, v] of Object.entries(from.lsx_split ?? {}))
+      split[k] = add(split[k] ?? '', v)
+  const notes = [into.note, from.note].map((s) => s.trim()).filter(Boolean)
+  const manual = (l: Line): Num => l.qty2_manual ?? ''
+  return {
+    ...into,
+    qty: add(into.qty, from.qty),
+    qty_demand: add(into.qty_demand, from.qty_demand),
+    qty_lsx: add(into.qty_lsx ?? '', from.qty_lsx ?? ''),
+    // Tổng gõ tay (kg/m³ theo tờ NCC) cũng cộng — giữ số của dòng đầu là sai
+    // ngay khi SL đã cộng (07/10/2026).
+    qty2_manual:
+      manual(into) === '' && manual(from) === '' ? '' : add(manual(into), manual(from)),
+    lsx_split: split,
+    note: [...new Set(notes)].join(' · '),
+  }
+}
+
+/**
+ * TỔNG SL ĐẶT theo mã trên mọi dòng (07/10/2026) — mã nằm nhiều dòng thì gợi ý
+ * "dùng N" theo nhu cầu lệnh và trần tồn phải tính trên TỔNG, không từng dòng
+ * một (bấm "dùng N" ở hai dòng là đặt gấp đôi).
+ */
+export function qtyTheoMa(
+  lines: readonly Pick<Line, 'material_id' | 'qty'>[],
+): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const l of lines)
+    if (l.qty !== '') m.set(l.material_id, (m.get(l.material_id) ?? 0) + Number(l.qty))
+  return m
+}

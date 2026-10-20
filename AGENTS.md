@@ -6,6 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 <!-- BEGIN:hg-erp-ui-rules -->
+
 # HG-ERP UI/UX Design System Rules (BẮT BUỘC CHO MỌI AGENT & CLAUDE CODE)
 
 Dự án này là hệ thống **Phần mềm Quản trị Doanh nghiệp Sản xuất (Enterprise ERP)** phục vụ công nhân viên, kế toán, cung ứng, quản đốc xưởng và ban giám đốc.
@@ -14,15 +15,23 @@ Dự án này là hệ thống **Phần mềm Quản trị Doanh nghiệp Sản 
 ---
 
 ### 1. TUYỆT ĐỐI CẤM (Anti-Patterns):
+
 - ❌ **CẤM giả lập vật thể thực (Skeuomorphism)**: Tuyệt đối không dựng màn hình thành "tờ phiếu in", "tờ giấy A4", "con dấu mộc xoay nghiêng `-rotate-3`", hay chia lề giấy kỳ dị. Đây là giao diện ứng dụng web SaaS ERP trên màn hình máy tính.
 - ❌ **CẤM chia layout bất đối xứng hẹp**: Không tạo sidebar ghim dính 200px chèn ép bảng dữ liệu. Bảng dữ liệu lớn phải được ưu tiên không gian hiển thị rộng rãi, rõ ràng.
 - ❌ **CẤM đặt thanh hành động nổi dính đáy màn hình (Sticky floating bottom bar)** một cách đơn độc. Action Toolbar phải luôn đặt ở **Góc trên bên phải của Header** theo chuẩn ERP (nút chính nổi bật + dropdown menu ⋯ cho tác vụ phụ).
-- ❌ **CẤM tự viết CSS/HTML thô**: Bắt buộc tái sử dụng các component có sẵn trong thư viện UI của dự án.
-- ❌ **CẤM hardcode màu Tailwind / Hex**: Không dùng `bg-zinc-100`, `text-blue-600`, `text-[#...]`. Luôn dùng CSS variables hệ thống: `var(--primary)`, `var(--warn)`, `var(--done)`, `var(--stop)`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`.
+- ⚠️ **Ưu tiên component có sẵn** trong thư viện UI của dự án; kit không có thứ cần thì viết Tailwind / CSS trực tiếp (bộ luật lint chặn thẻ thô đã gỡ 30/09/2026).
+- ⚠️ **Ưu tiên token hệ thống** cho màu: `var(--primary)`, `var(--warn)`, `var(--done)`, `var(--stop)`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground` — để một màu hành động, ba màu vòng đời còn có nghĩa. Không còn lint chặn màu cứng (gỡ 30/09/2026), nên đây là kỷ luật, không phải hàng rào.
 
 ---
 
-### 2. BẮT BUỘC TÁI SỬ DỤNG BỘ KIT UI (`src/components/erp/*` & `src/components/shadcn/*`):
+### 2. BẮT BUỘC TÁI SỬ DỤNG BỘ KIT UI
+
+> **Màn MỚI dùng `@/components/kit`** (bộ kit ERP mới; tra ở `.claude/skills/erp-ui/references/tra-thanh-phan.md` + JSDoc trong `src/components/kit/*.tsx`).
+> Danh sách dưới đây là bộ CŨ, còn phủ 168 file — dùng khi sửa tại chỗ những màn đó.
+> Trong một file chỉ dùng MỘT hệ; trộn hai hệ là hai bộ token đánh nhau.
+
+Bộ cũ (`src/components/erp/*` & `src/components/shadcn/*`):
+
 - **Chuỗi liên kết chứng từ cha → con**: Dùng `@/components/erp/RefChain` (ví dụ: Đơn hàng khách → Lệnh sản xuất → Đơn đặt vật tư).
 - **Mã chứng từ & mã vật tư**: Dùng `@/components/erp/DocChip` (font mono trên nền tint accent).
 - **Dải chỉ số KPI đầu trang**: Dùng `@/components/erp/StatTile` & `StatTiles` (4 thẻ tóm tắt trạng thái, hạn giao, tiến độ nhập kho, tổng tiền).
@@ -37,8 +46,32 @@ Dự án này là hệ thống **Phần mềm Quản trị Doanh nghiệp Sản 
 ---
 
 ### 3. MÀN HÌNH MẪU ĐỂ THAM KHẢO & BẮT CHƯỚC (Gold Standard References):
-- **Trang Chi tiết Đơn đặt hàng (PO)**: `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
+
+**MÀN MỚI → theo sáu khuôn màn.** Sổ `/design-lab` (màn mẫu, sách tra, trang chụp) ĐÃ XOÁ
+07/10/2026 — đừng dựng lại trang nào dưới `src/app/design-lab`, kể cả trang tạm để duyệt.
+Việc đầu tiên là xác định màn thuộc khuôn nào, rồi mở MÀN THẬT cùng khuôn làm tham chiếu:
+
+| Khuôn              | Trả lời câu hỏi                                 | Màn thật tham chiếu                       |
+| ------------------ | ----------------------------------------------- | ----------------------------------------- |
+| A · Vào việc       | Hôm nay tôi phải làm gì?                        | `/mua-hang` (Bàn làm việc)                |
+| B · Hộp thư        | Việc nào chờ tôi, ở MỌI loại chứng từ?          | `/mua-hang/hop-thu`, `/exec/approvals`    |
+| C · Danh sách      | Trong tập này, cái nào cần tôi động vào?        | `/mua-hang/don`, `/mua-hang/vat-tu`       |
+| D · Chứng từ       | Tờ này ở đâu, ai giữ, vướng gì?                 | `/mua-hang/don/[id]`, `/thongke/lsx/[id]` |
+| E · Hồ sơ danh mục | Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | `/mua-hang/ncc/[id]`, `/khuon/[id]`       |
+| F · Bảng nhập liệu | Khai 40 dòng nhanh như Excel mà không sai?      | `/mua-hang/don/moi`, `/thongke/ghi`       |
+
+Quy trình (nhiệm vụ → luồng → artboard Artifact HTML được duyệt → dựng → kiểm), nguyên tắc và
+luật kiểm: skill `erp-ui` (`.claude/skills/erp-ui/`). Xem thêm mục "Thiết kế theo hướng ERP"
+trong CLAUDE.md.
+
+**Hai nhầm lẫn hay gặp**: hồ sơ danh mục (E) KHÔNG có vòng đời duyệt — chỗ của ba trục trạng
+thái ở đó là dải hiệu suất; màn nhập liệu (F) thì lưới là nhân vật chính, đầu đơn co thành
+dải chip chứ không phải lưới nhãn–giá trị.
+
+**Màn CŨ (168 file, còn theme v3 + `@/components/erp`)** — sửa tại chỗ thì bám các mẫu này:
+
+- **Trang Chi tiết Đơn đặt hàng (PO)** (đã chuyển sang kit mới): `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
 - **Trang Chi tiết Đơn hàng (Sales Order)**: `src/components/sales/OrderDetailView.tsx`
 - **Trang Chi tiết Lệnh sản xuất (LSX)**: `src/components/production/LsxDetailView.tsx`
-- **Thư viện mẫu sống**: `src/app/design-lab/DesignLab.tsx` (truy cập route `/design-lab`)
+
 <!-- END:hg-erp-ui-rules -->

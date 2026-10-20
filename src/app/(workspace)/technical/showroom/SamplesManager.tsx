@@ -157,7 +157,7 @@ export function SamplesManager({
       cell: (s) => (
         <Link
           href={`/technical/showroom/${s.id}`}
-          className="font-mono text-sky-600 hover:underline dark:text-sky-400"
+          className="font-mono text-sky-600 hover:underline"
         >
           {s.code}
         </Link>
@@ -175,10 +175,10 @@ export function SamplesManager({
               width={40}
               height={32}
               unoptimized={isSvgUrl(imageUrls[s.id])}
-              className="h-8 w-10 shrink-0 rounded border border-zinc-200 object-contain dark:border-zinc-800"
+              className="h-8 w-10 shrink-0 rounded border border-zinc-200 object-contain"
             />
           ) : (
-            <span className="h-8 w-10 shrink-0 rounded border border-dashed border-zinc-300 dark:border-zinc-700" />
+            <span className="h-8 w-10 shrink-0 rounded border border-dashed border-zinc-300" />
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
@@ -227,9 +227,7 @@ export function SamplesManager({
                   ? `hẹn trả ${s.open_loan.due_at}`
                   : 'không hẹn ngày trả'}
                 {late > 0 && (
-                  <span className="ml-1 font-medium text-red-600 dark:text-red-400">
-                    · quá {late} ngày
-                  </span>
+                  <span className="ml-1 font-medium text-red-600">· quá {late} ngày</span>
                 )}
               </div>
             </div>
@@ -382,7 +380,7 @@ export function SamplesManager({
           <button
             disabled={page <= 1}
             onClick={() => setParam({ page: String(page - 1) })}
-            className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40 dark:border-zinc-700"
+            className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40"
           >
             ‹ Trước
           </button>
@@ -392,7 +390,7 @@ export function SamplesManager({
           <button
             disabled={page >= totalPages}
             onClick={() => setParam({ page: String(page + 1) })}
-            className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40 dark:border-zinc-700"
+            className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40"
           >
             Sau ›
           </button>

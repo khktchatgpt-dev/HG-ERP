@@ -42,7 +42,7 @@ export default async function TeamPage({
     if (e instanceof Error && e.message.includes('Trưởng phòng ban')) {
       return (
         <AppShell title="Đội nhóm">
-          <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             Trang này chỉ dành cho <strong>Trưởng phòng ban</strong> và quản trị viên.
             Admin có thể gán bạn làm trưởng BP từ{' '}
             <Link href="/admin/departments" className="underline">
@@ -65,7 +65,7 @@ export default async function TeamPage({
       actions={
         <Link
           href="/tasks/new"
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900"
+          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
         >
           + Giao việc
         </Link>
@@ -80,10 +80,7 @@ export default async function TeamPage({
             { label: 'Chờ duyệt', value: totals.submitted, tone: 'amber' as const },
             { label: 'Quá hạn', value: totals.overdue, tone: 'red' as const },
           ].map((c) => (
-            <div
-              key={c.label}
-              className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-            >
+            <div key={c.label} className="rounded-lg border border-zinc-200 p-4">
               <div className="text-3xl font-semibold tabular-nums">{c.value}</div>
               <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
                 <Badge tone={c.tone}>•</Badge>
@@ -98,9 +95,9 @@ export default async function TeamPage({
           <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">
             Khối lượng công việc theo thành viên
           </h2>
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-lg border border-zinc-200">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase">
                 <tr>
                   <th className="px-4 py-2.5">Thành viên</th>
                   <th className="px-4 py-2.5 text-right">Chưa làm</th>
@@ -109,7 +106,7 @@ export default async function TeamPage({
                   <th className="px-4 py-2.5 text-right">Quá hạn</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-zinc-200">
                 {members.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
@@ -159,16 +156,16 @@ export default async function TeamPage({
             10 công việc gần nhất của phòng ban
           </h2>
           {recent.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+            <p className="rounded-lg border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
               Chưa có công việc nào.
             </p>
           ) : (
-            <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200">
               {recent.map((t) => (
                 <li key={t.id}>
                   <Link
                     href={`/tasks/${t.id}`}
-                    className="block px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                    className="block px-4 py-3 hover:bg-zinc-50"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">

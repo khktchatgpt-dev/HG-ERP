@@ -19,6 +19,9 @@ function u(overrides: Partial<User> = {}): User {
     password_changed_at: null,
     last_login_at: null,
     created_at: '2026-01-01',
+    employee_id: null,
+    account_kind: 'person',
+    shared_holder: null,
     ...overrides,
   }
 }

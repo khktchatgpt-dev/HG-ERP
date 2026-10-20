@@ -82,6 +82,8 @@ function nextSupplierCode(name, taken) {
 
 const FILE = process.argv[2]
 const APPLY = process.argv.includes('--apply')
+// In từng dòng đã khớp mã nào — soát trước khi --apply.
+const VERBOSE = process.argv.includes('--verbose')
 if (!FILE) {
   console.error('Thiếu đường dẫn file .xls')
   process.exit(1)
@@ -539,6 +541,12 @@ for (const o of orders) {
     console.log(
       `            ⚠ "${r.name}" (SL ${r.qty}) → ${r.match.cands.map((c) => c.code).join(' / ')}`,
     )
+  if (VERBOSE)
+    for (const r of rows)
+      console.log(
+        `            · ${String(r.name).padEnd(28)} SL ${String(r.qty).padStart(9)} × ${String(r.price ?? '').padStart(6)} ${r.unit ?? ''}` +
+          ` → ${r.match.hit ? `${r.match.hit.code} ${r.match.hit.name}` : r.match.how}`,
+      )
 }
 
 const totalNew = plan.flatMap((o) => o.rows).filter((r) => r.match.how === 'chưa có')

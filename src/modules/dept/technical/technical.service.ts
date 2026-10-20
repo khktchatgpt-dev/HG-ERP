@@ -316,6 +316,10 @@ export const productsService = {
       category?: string
       /** 'updated' = xếp theo lần sửa gần nhất (lối tắt "Vừa sửa gần đây"). */
       sort?: 'created' | 'updated'
+      /** Mã vật liệu khung ('AL', 'IR'…) — thư viện 08/10/2026. */
+      frame_material?: string
+      /** Chỉ các id này (lọc tập tính ở `library.service`); mảng rỗng = 0 dòng. */
+      ids?: string[]
       page: number
       page_size: number
     },
@@ -327,10 +331,13 @@ export const productsService = {
     if (ids.length === 0) return strict
 
     const rows = await productsRepo.listLiteByIds(ids)
+    const idSet = opts.ids ? new Set(opts.ids) : null
     // Bộ lọc đang bật vẫn phải được tôn trọng — người dùng lọc "khách A" thì kết
     // quả gần đúng cũng chỉ được nằm trong khách A.
     const kept = rows.filter(
       (r) =>
+        (idSet == null || idSet.has(r.id)) &&
+        (opts.frame_material == null || r.frame_material === opts.frame_material) &&
         (opts.is_active == null || r.is_active === opts.is_active) &&
         (opts.customer_name == null ||
           (opts.customer_name === NO_CUSTOMER_FILTER
@@ -359,9 +366,17 @@ export const productsService = {
    */
   async pick(
     _user: User,
-    opts: { q?: string; customer_id?: string; ids?: string[]; limit: number },
+    opts: {
+      q?: string
+      customer_id?: string
+      customer_label?: string | null
+      ids?: string[]
+      codes?: string[]
+      limit: number
+    },
   ): Promise<{ rows: ProductPickRow[]; fuzzy?: boolean }> {
     if (opts.ids) return { rows: await productsRepo.listPickByIds(opts.ids) }
+    if (opts.codes) return { rows: await productsRepo.listPickByCodes(opts.codes) }
 
     const rows = await productsRepo.listForPick(opts)
     if (rows.length > 0 || !opts.q || !worthFuzzy(opts.q)) return { rows }
@@ -526,7 +541,7 @@ export const productsService = {
       customer_name: input.customer_name || null,
       customer_item_code: input.customer_item_code ?? null,
       description_en: input.description_en ?? null,
-      unit: input.unit ?? 'cai',
+      unit: input.unit ?? 'cái',
       packing: input.packing ?? {},
       notes: input.notes ?? null,
       name_foreign: input.name_foreign ?? null,
@@ -589,7 +604,7 @@ export const productsService = {
       name: input.name,
       // Kinh doanh tạo nhanh thì không chọn loại/vật liệu — suy từ mã là đủ.
       ...classify(input),
-      unit: input.unit ?? 'cai',
+      unit: input.unit ?? 'cái',
       customer_id: input.customer_id ?? null,
       customer_name,
       customer_item_code: input.customer_item_code ?? null,

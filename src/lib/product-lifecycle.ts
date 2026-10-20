@@ -40,10 +40,10 @@ export const LIFECYCLE_HINT: Record<Lifecycle, string> = {
 
 export const LIFECYCLE_TONE: Record<Lifecycle, string> = {
   draft: 'bg-muted text-muted-foreground',
-  review: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
-  approved: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+  review: 'bg-amber-100 text-amber-700',
+  approved: 'bg-sky-100 text-sky-700',
   production: 'bg-emerald-600 text-white',
-  discontinued: 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+  discontinued: 'bg-zinc-200 text-zinc-600',
 }
 
 export function isLifecycle(v: unknown): v is Lifecycle {

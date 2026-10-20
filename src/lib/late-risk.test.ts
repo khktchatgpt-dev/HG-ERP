@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { assessLateRisk, assessPoLate, isMissingEta } from './late-risk'
 
 const base = {
-  status: 'in_production',
+  status: 'lsx_issued',
   due_date: '2026-07-15',
   lines_bom_pending: 0,
   pos_open: 0,

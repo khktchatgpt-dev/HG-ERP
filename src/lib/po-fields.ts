@@ -1,4 +1,5 @@
-import type { PoTemplate } from './po-template'
+import { laDvtKg } from './dvt-kg'
+import { foamM3PerSheet, type PoTemplate } from './po-template'
 
 /**
  * KHAI BÁO Ô NHẬP CỦA DÒNG ĐƠN THEO MẪU — một nguồn cho cả form nhập lẫn phiếu in.
@@ -23,6 +24,7 @@ export type PoFieldKind =
   | 'area' // m²/thùng·m²/tấm: tự tính (carton) hoặc gõ tay (kính)
   | 'cartonBasis' // cơ sở tính tiền từng dòng — nhãn lấy từ `options` của mẫu
   | 'unit2' // 0182: MỘT ô "17.5 Lít" ghi cặp unit2_per_unit + unit2_label — quy đổi giá tổng quát
+  | 'm3sheet' // 09/10/2026: m³ MỘT tấm xốp = D×R×Dày — chỉ đọc, như cột "m3/tấm" trên bảng NCC
 
 export type PoField = {
   key: string
@@ -39,7 +41,11 @@ export type PoField = {
   max?: string
   /** Nhãn trên PHIẾU IN khi khác nhãn trong form (giấy in hẹp hơn). */
   printLabel?: string
-  /** Riêng kind 'cartonBasis': bộ lựa chọn của mẫu (thùng/m², tấm/m³, SP/kg…). */
+  /**
+   * Riêng kind 'cartonBasis': bộ lựa chọn của mẫu (ĐVT/m², ĐVT/m³…). `ctn` gọi là
+   * "ĐVT" — giá theo ĐVT đặt của dòng. Từng gọi "thùng"/"tấm" nên đơn mua ván ép
+   * ĐVT Tấm theo mẫu bao bì đọc thành "tính theo thùng" (PO-2026-0137, 06/10).
+   */
   options?: { value: 'ctn' | 'm2' | 'm3' | 'kg'; label: string }[]
   /**
    * Có mặt trên PHIẾU IN nhưng KHÔNG bày ô nhập trong form.
@@ -50,6 +56,18 @@ export type PoField = {
    * `on_hand`) nên gợi ý "SL đặt = nhu cầu − tồn" và cột in không đổi.
    */
   editHidden?: boolean
+  /**
+   * Ô CHỈ Ở TRÌNH DUYỆT — `field` là khoá của dòng trên form nhưng không có cột DB
+   * (vd "SL theo LSX" của mẫu mây, tính ngược từ SL đơn hàng ÷ Định mức). Không gửi
+   * lên server; phiếu in tính lại bằng `poLsxQty`.
+   */
+  clientOnly?: boolean
+  /**
+   * Ô số HẸP (≤ 64px) — không tính vào trần 3 ô của lưới soạn đơn; đứng ngay sau
+   * ô trước nó trên lưới (`splitLineFields`). Dùng cho ô đi đôi với ô bên cạnh
+   * như Đm/sp cạnh SL đơn hàng.
+   */
+  compact?: boolean
 }
 
 const t = (
@@ -105,6 +123,10 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('grade', 'Vật liệu', 'w-[110px]', 'material_grade', 'Sắt xi trắng…'),
     t('spec', 'Quy cách', 'w-[110px]', 'spec', '25×50×1li…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    // ĐỊNH MỨC / SP (26/09/2026) — cột có sẵn trên đơn giấy ("Đm /sp") và trong DB
+    // (`dm_per_sp`), nhưng form không có ô gõ: chỉ chép từ lần đặt trước. Có Đm
+    // thì SL đơn hàng là số SẢN PHẨM, gợi ý SL đặt = SL đơn hàng × Đm − tồn.
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
     // "Tồn kho" bỏ hẳn khỏi phiếu phụ kiện (user chốt 12/08/2026 khi duyệt cột
     // từng mẫu): tồn là số nội bộ, NCC chỉ cần SL đơn hàng để hiểu con số đặt.
     // `qty_on_hand` vẫn được chụp lúc chọn vật tư nên gợi ý "đặt = nhu cầu − tồn"
@@ -166,7 +188,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       kind: 'cartonBasis',
       field: 'carton_basis',
       options: [
-        { value: 'ctn', label: 'thùng' },
+        { value: 'ctn', label: 'ĐVT' },
         { value: 'm2', label: 'm²' },
       ],
     },
@@ -180,9 +202,25 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
    *   foam  : quy cách cuộn/tấm ("8mm x 1.05m x 50m") nằm ngay trong tên/spec.
    */
   rattan: [
-    t('spec', 'Quy cách', 'w-[120px]', 'spec', 'Mây dẹp 8mm…'),
-    t('dinhmuc', 'Định mức', 'w-[110px]', 'material_grade', '5m/g = 32-34g'),
+    // SL theo LSX × Định mức SP = SL đơn hàng (09/10/2026 — PO-2026-0154: 200 ghế ×
+    // 5,1 kg = 1.020 kg); SL đặt là số đặt thật, dư ra. "SL theo LSX" không lưu —
+    // tính ngược từ hai cột kia (xem `qty_lsx` ở po-line).
+    { ...n('lsx', 'SL theo LSX', 'w-[92px]', 'qty_lsx'), clientOnly: true },
+    { ...n('dm', 'Định mức SP', 'w-[80px]', 'dm_per_sp', '0.0001'), compact: true },
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    t('spec', 'Quy cách', 'w-[120px]', 'spec', 'Mây dẹp 8mm…'),
+    // Ô chữ "Định mức" cũ ("5m/g = 32-34g") giữ lại thành ô quy cách — phiếu in vẫn
+    // ghi nhãn cũ để bộ cột NCC đang nhận không đổi.
+    {
+      ...t(
+        'dinhmuc',
+        'Quy cách định mức',
+        'w-[130px]',
+        'material_grade',
+        '5m/g = 32-34g',
+      ),
+      printLabel: 'Định mức',
+    },
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
     UNIT2_FIELD,
   ],
@@ -202,6 +240,16 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   ],
   foam: [
     t('spec', 'Quy cách', 'w-[140px]', 'spec', '8mm x 1.05m x 50m…'),
+    // m³/tấm (09/10/2026 — chị Nga đưa bảng NCC "Quy cách · m3/tấm · SL · Tổng m3 ·
+    // Đơn giá"): đọc từ D×R×Dày, đứng ngay sau Quy cách để soi số NCC tính.
+    {
+      key: 'm3tam',
+      label: 'm³/tấm',
+      width: 'w-[68px]',
+      kind: 'm3sheet',
+      align: 'right',
+      compact: true,
+    },
     // Xốp TẤM theo KHỐI (0134 — DDH Tân Hoàng Long): D×R×Dày → m³/tấm, đơn
     // giá/m³, chốt "Tính theo m³" từng dòng. Mút cuộn để basis "tấm/cuộn" như cũ.
     {
@@ -219,11 +267,14 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       kind: 'cartonBasis',
       field: 'carton_basis',
       options: [
-        { value: 'ctn', label: 'tấm/cuộn' },
+        { value: 'ctn', label: 'ĐVT' },
         { value: 'm3', label: 'm³' },
       ],
     },
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    // Đm/sp (09/10/2026 — chị Nga): xốp nệm ghế cũng đặt theo SỐ SẢN PHẨM × tấm/SP
+    // như phụ kiện — có Đm thì gợi ý SL đặt = SL đơn hàng × Đm − tồn.
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
   ],
   // Kính (0134 — DDH Mai Trang): loại kính + quy cách mm + m²/tấm; giá theo TẤM
@@ -249,7 +300,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       kind: 'cartonBasis',
       field: 'carton_basis',
       options: [
-        { value: 'ctn', label: 'tấm' },
+        { value: 'ctn', label: 'ĐVT' },
         { value: 'm2', label: 'm²' },
       ],
     },
@@ -286,6 +337,25 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     // Bảo hành có CỘT RIÊNG từ 0139 — trước mượn finish (màu/bề mặt).
     t('baohanh', 'Bảo hành', 'w-[90px]', 'warranty_text', '12 tháng'),
     UNIT2_FIELD,
+  ],
+  /*
+   * TEM NHÃN (12/10/2026) — bộ cột user chốt: Chất liệu · Kích thước · Kiểu in /
+   * gia công · SL đơn hàng · Đm/sp. Kiểu in có CỘT RIÊNG `print_spec` (0233),
+   * không mượn `finish`. Lưới soạn đơn giữ 3 ô đầu; SL đơn hàng + Đm/sp xuống
+   * khay chi tiết dòng — phiếu in vẫn đủ cả năm cột (`PO_PRINT_ORDER`).
+   */
+  label: [
+    t('grade', 'Chất liệu', 'w-[110px]', 'material_grade', 'Decal 80gr…'),
+    t('spec', 'Kích thước', 'w-[100px]', 'spec', '19.5x7.5cm'),
+    t(
+      'inan',
+      'Kiểu in / gia công',
+      'w-[170px]',
+      'print_spec',
+      'Offset 4 màu 2 mặt, cán mờ…',
+    ),
+    n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
   ],
   simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…'), UNIT2_FIELD],
 }
@@ -324,6 +394,7 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'grade',
     'spec',
     'demand',
+    'dm',
     // ĐVT đứng TRƯỚC cột số lượng như tám mẫu còn lại (10/08/2026). Trước đây
     // riêng mẫu này in sau, nên NCC nhận hai kiểu bố cục từ cùng một công ty.
     '@unit',
@@ -384,15 +455,23 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@note',
   ],
   // Mây theo form Vipora: … Mã số · ĐVT · SL · giá · tiền · ĐỊNH MỨC · ghi chú.
+  // 09/10/2026 (PO-2026-0154): in cả SL theo LSX · Định mức SP · SL đơn hàng trước
+  // SL đặt — NCC đọc được vì sao đặt từng ấy kg (200 ghế × 5,9 = 1.180).
   rattan: [
     '@stt',
+    // Mã hàng của NCC (S.H.T đặt theo mã SHT 96/97 — mã vật tư đã đổi theo, 09/10/2026).
+    '@code',
     '@name',
     'spec',
+    'lsx',
+    'dm',
+    'demand',
     '@unit',
     '@qty',
     '@price',
     '@amount',
-    'dinhmuc',
+    // Cột "Định mức" chữ (barem g/5m) BỎ khỏi phiếu 09/10/2026 — đứng cạnh "Định mức SP"
+    // thành hai cột cùng tên; ô vẫn còn trên form ("Quy cách định mức").
     '@note',
   ],
   // Sơn theo form Dosa/Việt Sapa: mã màu NCC đứng cạnh tên. Hai cột "Ngày đặt ·
@@ -403,7 +482,20 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   chemical: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
   // Xốp: phiếu in CHỈ giữ Quy cách (user chốt 12/08/2026) — D×R×Dày và Tổng m³
   // vẫn là ô trên form để tính m³/gợi ý giá, nhưng không in cho NCC.
-  foam: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+  // 09/10/2026: thêm m³/tấm + Tổng m³ — đúng bộ cột bảng NCC xốp gửi (Quy cách ·
+  // m3/tấm · SL · Tổng m3 · Đơn giá · Thành tiền), thay chốt 12/08 "chỉ in Quy cách".
+  foam: [
+    '@stt',
+    '@name',
+    'spec',
+    'm3tam',
+    '@unit',
+    '@qty',
+    'm3total',
+    '@price',
+    '@amount',
+    '@note',
+  ],
   // Kính theo form Mai Trang: Loại kính · Quy cách · ĐVT · SL · m²/tấm. "Tổng m²"
   // bỏ khỏi phiếu in 12/08/2026 (duyệt cột từng mẫu) — vẫn tự tính trên form.
   glass: [
@@ -455,9 +547,55 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'baohanh',
     '@note',
   ],
+  // Tem nhãn: thông số in đứng cạnh tên, SL đơn hàng · Đm/sp ngay trước ĐVT như
+  // mẫu phụ kiện (tờ PQ, PO-2026-0123) — NCC đọc được vì sao đặt từng ấy nhãn.
+  label: [
+    '@stt',
+    '@name',
+    'grade',
+    'spec',
+    'inan',
+    'demand',
+    'dm',
+    '@unit',
+    '@qty',
+    '@price',
+    '@amount',
+    '@note',
+  ],
   // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 cùng nhịp với mẫu sơn — hai ngày
   // nằm ở đầu phiếu, 12 mẫu không còn mẫu nào lặp ngày xuống dòng.
   simple: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+}
+
+/** Dòng tối thiểu để đọc chữ một cột in — thêm hai trường của nhánh 'dim'. */
+export type PoPrintTextLine = PoFieldLine & {
+  spec?: string | null
+  dimension_text?: string | null
+}
+
+/** Chữ in của một cột khai báo — 'dim' (inox/sắt) chưa nhập thì lấy tạm quy cách chung. */
+export function poPrintFieldText(f: PoField, l: PoPrintTextLine): string {
+  return f.key === 'dim' ? (l.dimension_text ?? l.spec ?? '') : poFieldText(f, l)
+}
+
+/**
+ * CỘT TRẮNG KHÔNG IN (12/10/2026, phòng Cung ứng: "nhiều đơn phải để quá nhiều ô
+ * trống"). Đo 142 đơn thật: Mã khuôn trống ở 10/10 đơn nhôm, Vật liệu 15/15 đơn
+ * inox/sắt, Bản in + công 9/9 đơn bao bì, Quy cách 18/19 đơn gỗ — tờ gửi NCC kẻ
+ * cả cột trắng nguyên.
+ *
+ * Cột khai báo của mẫu TRỐNG Ở MỌI DÒNG của đơn thì bỏ; cột cố định (`@…`: STT,
+ * tên, ĐVT, SL, giá, tiền, ghi chú) luôn giữ. Cột còn lại GIỮ THỨ TỰ của
+ * `PO_PRINT_ORDER` — NCC không phải dò lại bố cục. Một hàm cho phiếu in, Excel
+ * và màn ký (`po-approval-cols`) để ba nơi không lệch nhau.
+ */
+export function poPrintKeys(t: PoTemplate, lines: readonly PoPrintTextLine[]): string[] {
+  return PO_PRINT_ORDER[t].filter((key) => {
+    if (key.startsWith('@')) return true
+    const f = poField(t, key)
+    return !!f && lines.some((l) => poPrintFieldText(f, l) !== '')
+  })
 }
 
 /** Nhãn cột số lượng trên phiếu in — mỗi mẫu gọi một kiểu theo đơn vị mua. */
@@ -470,13 +608,16 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   // "Số thùng" → "Số lượng" (12/08/2026) — bao bì có 24 ĐVT (Tấm/Cuộn/Kg…),
   // đơn vị thật nói ở cột ĐVT ngay trước.
   carton: 'Số lượng',
-  rattan: 'Số lượng',
+  // Đứng cạnh "SL đơn hàng" (09/10/2026) — gọi "Số lượng" thì hai cột cùng nghĩa.
+  rattan: 'SL đặt',
   paint: 'Số lượng',
   chemical: 'Số lượng',
   foam: 'Số lượng',
   glass: 'Số lượng',
   wood: 'Số lượng',
   mro: 'Số lượng',
+  // Đứng cạnh "SL đơn hàng" như phụ kiện/mây.
+  label: 'SL đặt',
   simple: 'Số lượng',
 }
 
@@ -485,13 +626,28 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
  * — NCC phải thấy "70.681/thùng" hay "18.770/m²" mới đối chiếu được báo giá của
  * chính họ. Mẫu tính theo đơn vị cố định (nhôm, inox, gỗ) dùng nhãn cột
  * "Đơn giá (VND/kg)" sẵn có, không đi qua đây.
+ *
+ * CƠ SỞ `ctn` = GIÁ THEO ĐVT ĐẶT của dòng, không phải "theo thùng" (06/10/2026).
+ * Bản cũ in cứng "/thùng" (bao bì) và "/tấm" (kính): PO-2026-0137 mua ván ép
+ * lót thùng, ĐVT Tấm, in ra "46.000/thùng" — NCC đọc sai giá. Đo lúc vá: 72/93
+ * dòng bao bì cơ sở `ctn` có ĐVT khác Thùng (Cái, Tấm, Thanh, Thẻ, Quyển). Nay
+ * hậu tố lấy đúng ĐVT dòng; chỉ khi dòng không có ĐVT mới lùi về chữ cũ.
  */
-export function poPriceSuffix(t: PoTemplate, basis: string | null | undefined): string {
+export function poPriceSuffix(
+  t: PoTemplate,
+  basis: string | null | undefined,
+  /** ĐVT đặt của dòng ("Tấm", "Cái"…) — hậu tố khi tính theo ĐVT. */
+  unit?: string | null,
+): string {
+  const perUnit = (fallback: string) => {
+    const u = unit?.trim().toLowerCase()
+    return u ? `/${u}` : fallback
+  }
   switch (t) {
     case 'carton':
-      return basis === 'm2' ? '/m²' : '/thùng'
+      return basis === 'm2' ? '/m²' : perUnit('/thùng')
     case 'glass':
-      return basis === 'm2' ? '/m²' : '/tấm'
+      return basis === 'm2' ? '/m²' : perUnit('/tấm')
     case 'foam':
       return basis === 'm3' ? '/m³' : ''
     default:
@@ -505,6 +661,33 @@ export const PO_PRICE_SUFFIX_TEMPLATES: readonly PoTemplate[] = [
   'glass',
   'foam',
 ]
+
+/**
+ * ĐƠN VỊ CỦA ĐƠN GIÁ xuống TỪNG Ô — cho mẫu tính tiền theo khối lượng (nhôm,
+ * inox/sắt: `priceUnit` 'kg').
+ *
+ * Nhãn cột "Đơn giá (VND/kg)" chỉ đúng khi MỌI dòng tính theo kg. Dòng chọn giá
+ * theo ĐVT (price_basis 'unit' — Thép Visa báo 106.500 đ/CÂY, PO-2026-0073/0116)
+ * mà vẫn đứng dưới nhãn đó thì NCC đọc thành 106.500 đ/kg. Có ít nhất một dòng
+ * như vậy thì trả hàm hậu tố ("/kg", "/cây") để phiếu in/Excel đưa đơn vị vào
+ * từng ô; không thì null — nhãn cột giữ nguyên, phiếu các đơn cũ không đổi chữ nào.
+ */
+export function poPriceUnitPerLine(
+  priceUnit: string | null,
+  lines: readonly { price_basis: string | null | undefined }[],
+):
+  | ((l: {
+      price_basis: string | null | undefined
+      material_unit: string | null | undefined
+    }) => string)
+  | null {
+  if (!priceUnit || lines.every((l) => l.price_basis === 'unit2')) return null
+  return (l) => {
+    if (l.price_basis === 'unit2') return `/${priceUnit}`
+    const u = (l.material_unit ?? '').trim().toLowerCase()
+    return u ? `/${u}` : ''
+  }
+}
 
 /** Tra khai báo một cột theo key, trong phạm vi mẫu đơn. */
 export function poField(template: PoTemplate, key: string): PoField | undefined {
@@ -537,11 +720,12 @@ export const PO_SHARED_FIELD_MEANING: Record<
   material_grade: {
     accessory: 'Vật liệu',
     metal_kg: 'Vật liệu',
-    rattan: 'Định mức',
+    rattan: 'Quy cách định mức',
     paint: 'Mã màu NCC',
     glass: 'Loại kính',
     wood: 'Loại gỗ',
     mro: 'Model / Mã hãng',
+    label: 'Chất liệu',
   },
   dimension_text: {
     metal_kg: 'Kích thước',
@@ -585,6 +769,7 @@ export const PO_SHARED_FIELD_PREFILL: Record<
     glass: true,
     wood: true,
     mro: false, // "Model / Mã hãng"
+    label: true, // "Chất liệu" — giấy/decal, đúng nghĩa "vật liệu" của danh mục
   },
   dimension_text: {
     metal_kg: true,
@@ -600,4 +785,94 @@ export const PO_SHARED_FIELD_PREFILL: Record<
 /** Ô mượn ở mẫu này có nhận số danh mục / lần đặt trước không. */
 export function prefillsFromCatalog(t: PoTemplate, field: string): boolean {
   return PO_SHARED_FIELD_PREFILL[field]?.[t] ?? false
+}
+
+/** Dòng đơn ở dạng tối thiểu để đọc giá trị một cột khai báo. */
+export type PoFieldLine = {
+  qty2?: number | null
+  unit2?: string | null
+  unit2_per_unit?: number | null
+  material_unit: string
+  inner_l_mm?: number | null
+  inner_w_mm?: number | null
+  inner_h_mm?: number | null
+  /** SL đặt — để tính Tổng m³ xốp khi dòng theo tấm (đơn không lưu qty2). */
+  qty_ordered?: number | null
+  /** Mẫu mây: SL theo LSX = SL đơn hàng ÷ Định mức SP (`poLsxQty`). */
+  qty_demand?: number | null
+  dm_per_sp?: number | null
+}
+
+/** SL theo LSX của mẫu mây — không lưu DB, tính ngược SL đơn hàng ÷ Định mức SP. */
+export function poLsxQty(
+  l: Pick<PoFieldLine, 'qty_demand' | 'dm_per_sp'>,
+): number | null {
+  const d = Number(l.qty_demand)
+  const m = Number(l.dm_per_sp)
+  if (l.qty_demand == null || !(m > 0)) return null
+  return Math.round((d / m) * 1000) / 1000
+}
+
+/**
+ * SỐ KIỂU VN, GIỮ TỚI 6 SỐ LẺ — cho ô thông số của dòng đơn (m³/SP, kg/m, m²…).
+ *
+ * `toLocaleString('vi-VN')` trơn chỉ giữ 3 số lẻ: m³/SP 0,000487 của tay vịn gỗ
+ * (PO-2026-0177, 12/10/2026) hiện thành "0" trên màn đơn, phiếu in lẫn màn ký —
+ * trong khi tiền vẫn tính đúng 0,753876 m³. 6 lẻ = cùng độ chính xác mọi tổng m³
+ * đang làm tròn (`round6`, po-template). Số nguyên và số ít lẻ in y như cũ.
+ */
+export const fmtSoVn = (n: number | null | undefined) =>
+  n == null ? '' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 6 })
+
+const fmtVi = fmtSoVn
+
+/**
+ * CHỮ của một ô khai báo trên một dòng đơn — '' khi trống, KHÔNG trả '0'.
+ *
+ * Một hàm cho phiếu in gửi NCC lẫn màn ký của Giám đốc (07/10/2026): người ký
+ * phải thấy đúng chữ NCC sẽ nhận, hai bản dựng riêng thì sớm muộn lệch nhau.
+ */
+export function poFieldText(f: PoField, l: PoFieldLine): string {
+  const v = f.field ? (l as unknown as Record<string, unknown>)[f.field] : null
+  switch (f.kind) {
+    case 'text':
+    case 'die':
+    case 'openStyle':
+      return (v as string | null) ?? ''
+    case 'number':
+    case 'area':
+      if (f.field === 'qty_lsx') return fmtVi(poLsxQty(l))
+      return fmtVi(v as number | null)
+    case 'calc': {
+      // Xốp tính tiền theo TẤM thì đơn không lưu tổng quy đổi — Tổng m³ trên phiếu
+      // vẫn phải có (bảng NCC luôn ghi): SL × m³/tấm (09/10/2026).
+      if (l.qty2 == null && f.key === 'm3total') {
+        const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
+        const q = Number(l.qty_ordered) || 0
+        if (m3 != null && q > 0) return fmtVi(Math.round(m3 * q * 1e6) / 1e6)
+      }
+      // Dòng ĐVT Kg của mẫu nhôm / sắt: Tổng kg = SL đặt (không barem).
+      if (l.qty2 == null && f.key === 'kgtotal' && laDvtKg(l.material_unit)) {
+        return fmtVi(Number(l.qty_ordered) || null)
+      }
+      return fmtVi(l.qty2)
+    }
+    case 'unit2':
+      // "17,5 Lít/Thùng". 02/09: user quyết KHÔNG in cột này — PO_PRINT_ORDER
+      // không mẫu nào còn khai 'unit2' nên case này đang là đường chờ; giữ lại
+      // để lúc muốn in chỉ cần thêm key vào order, không phải dựng lại cell.
+      return l.unit2_per_unit != null && l.unit2
+        ? `${fmtVi(l.unit2_per_unit)} ${l.unit2}/${l.material_unit}`
+        : ''
+    case 'inner':
+      return l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
+        ? `${fmtVi(l.inner_l_mm)}×${fmtVi(l.inner_w_mm)}×${fmtVi(l.inner_h_mm)}`
+        : ''
+    case 'm3sheet': {
+      const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
+      return m3 == null ? '' : m3.toLocaleString('vi-VN', { maximumFractionDigits: 6 })
+    }
+    default:
+      return ''
+  }
 }

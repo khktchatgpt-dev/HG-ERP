@@ -43,3 +43,29 @@ export function searchTokens(input: string, max = 5): string[] {
 
 /** Từ khoá quá ngắn thì tìm gần đúng chỉ tổ ra nhiễu — "gh" khớp mọi thứ. */
 export const worthFuzzy = (input: string): boolean => normalizeSearch(input).length >= 3
+
+/**
+ * LỌC TẠI CHỖ (client) theo cùng luật với ô tìm ở server — 06/10/2026.
+ *
+ * Trước đó các màn danh sách lọc ở trình duyệt bằng `toLowerCase().includes()`:
+ * gõ "tan phat" không ra "TÂN PHÁT", gõ "tân phát" bằng bộ gõ ra chữ tổ hợp
+ * (NFD) cũng trượt dù trông giống hệt, và hai từ phải liền nhau đúng thứ tự.
+ * Người dùng đọc thành "ô tìm bị lỗi gõ". Nay: bỏ dấu, tách từ, MỌI từ phải có
+ * mặt ở đâu đó trong các trường của dòng — đúng như `ilike` từng từ trên
+ * `search_text` ở server.
+ *
+ * Trả về một hàm để dựng từ khoá MỘT lần cho cả danh sách, không mỗi dòng một lần.
+ */
+export function searchMatcher(input: string): (fields: readonly unknown[]) => boolean {
+  const toks = searchTokens(input, 8)
+  if (toks.length === 0) return () => true
+  return (fields) => {
+    const hay = normalizeSearch(
+      fields
+        .filter((v) => v != null && v !== '')
+        .map(String)
+        .join(' '),
+    )
+    return toks.every((t) => hay.includes(t))
+  }
+}

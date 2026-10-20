@@ -185,7 +185,7 @@ export function PackingEditor({
             <span
               className={cn(
                 'text-xs',
-                contWarn ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground',
+                contWarn ? 'text-amber-700' : 'text-muted-foreground',
               )}
             >
               {contWarn ? '⚠ ' : ''}
@@ -227,7 +227,7 @@ export function PackingEditor({
             warn={weightWarn}
           />
           {weightWarn && (
-            <span className="text-xs text-amber-700 dark:text-amber-500">
+            <span className="text-xs text-amber-700">
               ⚠ Cả bì đang NHẸ hơn tịnh — cả bì gồm cả vỏ thùng nên phải lớn hơn.
             </span>
           )}
@@ -253,7 +253,7 @@ export function PackingEditor({
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="rounded-md border px-4 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-900"
+          className="rounded-md border px-4 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50"
         >
           Huỷ
         </button>
@@ -304,11 +304,7 @@ function Num({
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
-          className={cn(
-            inputCls,
-            'pe-10',
-            warn && 'border-amber-400 dark:border-amber-600',
-          )}
+          className={cn(inputCls, 'pe-10', warn && 'border-amber-400')}
         />
         <span className="text-muted-foreground pointer-events-none absolute inset-y-0 end-2.5 flex items-center text-xs font-medium">
           {unit}

@@ -166,7 +166,7 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
         activeCount++
         bookByCur.set(r.currency, (bookByCur.get(r.currency) ?? 0) + r.order_value)
       }
-      if (r.status === 'in_production') inProd++
+      if (r.status === 'lsx_issued' && r.lsx_status === 'in_progress') inProd++
       if (r.lsx_status === 'pending_approval') pending++
       const risk = riskOf(r)
       if (risk?.level === 'overdue') overdue++

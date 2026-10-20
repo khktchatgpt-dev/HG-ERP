@@ -70,8 +70,11 @@ const ABBR = new Set([
   'group',
   // KHÔNG có 'co': "cổ phần" đã bỏ theo cụm, còn "cơ khí" thì "cơ" là tên riêng.
 ])
-/** Mã gợi ý cho tên này, CHƯA xét trùng. '' nếu tên không có chữ nào dùng được. */
-export function supplierCodeFrom(name: string): string {
+/**
+ * PHẦN TÊN RIÊNG của tên NCC — bỏ dấu, bỏ cụm pháp lý/ngành nghề và từ viết tắt.
+ * Toàn từ pháp lý (vd "Công ty TNHH") thì đành trả nguyên tên — thà xấu còn hơn rỗng.
+ */
+function nameCoreWords(name: string): string[] {
   const flat = normalizeSearch(name)
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -79,11 +82,22 @@ export function supplierCodeFrom(name: string): string {
   // Bỏ CỤM trước, rồi mới tới từ viết tắt đứng lẻ.
   let rest = flat
   for (const ph of PHRASES) rest = rest.replaceAll(ph, ' ')
-  const words = flat.split(/\s+/).filter(Boolean)
   const core = rest.split(/\s+/).filter((w) => w && !ABBR.has(w))
-  // Toàn từ pháp lý (vd "Công ty TNHH") thì đành lấy nguyên tên — thà mã xấu
-  // còn hơn không có mã.
-  const use = core.length > 0 ? core : words
+  return core.length > 0 ? core : flat.split(/\s+/).filter(Boolean)
+}
+
+/**
+ * KHOÁ SO TRÙNG TÊN (29/09/2026): "CÔNG TY TNHH TM TỔNG HỢP PHÚC THỊNH" và
+ * "Công ty TNHH Thương mại Tổng hợp Phúc Thịnh" cùng ra `phuc thinh`. Đo 29/09:
+ * danh mục có 2 cặp trùng tên y hệt nhau mà không ai biết lúc thêm.
+ */
+export function supplierNameKey(name: string): string {
+  return nameCoreWords(name).join(' ')
+}
+
+/** Mã gợi ý cho tên này, CHƯA xét trùng. '' nếu tên không có chữ nào dùng được. */
+export function supplierCodeFrom(name: string): string {
+  const use = nameCoreWords(name)
   if (use.length === 0) return ''
   if (use.length === 1) return use[0].slice(0, 3).toUpperCase()
   // Nhiều từ: chữ cái đầu, tối đa 4 — "Đức Toàn Phú Tài" → DTPT, dài hơn thì cắt.
