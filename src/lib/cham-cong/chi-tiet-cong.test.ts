@@ -61,9 +61,9 @@ describe('chiTietNgay', () => {
       som: 0,
     })
   })
-  it('chủ nhật 06:42 → 15:10: 7 giờ hành chính, về sớm 50 phút theo giờ máy', () => {
+  it('chủ nhật 06:42 → 15:10: 7 giờ hành chính, ra tính 15:00 → về sớm 60 phút', () => {
     const d = motNgay('2026-09-06', '06:42', '15:10')
-    expect(d).toMatchObject({ loai: 'cn', hc: 420, som: 50, tre: 0 })
+    expect(d).toMatchObject({ loai: 'cn', hc: 420, som: 60, tre: 0 })
   })
   it('vào 07:20 trong ân hạn: không trễ; vào 07:45: trễ 45 phút', () => {
     expect(motNgay('2026-09-07', '07:20', '16:05').tre).toBe(0)
@@ -169,11 +169,20 @@ describe('tongCong', () => {
       thieu: 1,
       vang: 1, // 03/09; 02/09 là lễ, 14/09 thiếu lượt, 15/09 chưa lấy dữ liệu
       lanSom: 1,
-      phutSom: 50,
+      phutSom: 60,
       ngayThuong: 3,
       chuNhat: 1,
       cnCoLam: 1,
       ngayLe: 1,
     })
+  })
+})
+
+describe('về sớm theo giờ ra đã làm tròn (đối chiếu phần mềm cũ 20/10/2026)', () => {
+  it('ra 15:53 → tính 16:00: đủ công, KHÔNG ghi sớm', () => {
+    expect(motNgay('2026-09-07', '06:42', '15:53')).toMatchObject({ hc: 480, som: 0 })
+  })
+  it('ra 15:49 → tính 15:30: sớm 30 phút, khớp số giờ bị trừ', () => {
+    expect(motNgay('2026-09-07', '06:39', '15:49')).toMatchObject({ hc: 450, som: 30 })
   })
 })

@@ -102,7 +102,11 @@ export type NguoiGio = {
 export type KyGioVao = {
   tu: string
   den: string
-  nhanSu: { ma: string; ten: string; boPhan: string | null }[]
+  /**
+   * `caVao` (tuỳ chọn) = giờ vào ca thường làm, phút từ 0h. Ca bắt đầu trước mốc ca đêm
+   * (Bếp 03:30) thì lượt sáng sớm là giờ VÀO ca hôm đó, không gắn sang ca đêm hôm trước.
+   */
+  nhanSu: { ma: string; ten: string; boPhan: string | null; caVao?: number | null }[]
   /** Lượt máy theo người-ngày (giờ VN 'HH:mm:ss') — nên gồm cả ngày trước kỳ và sau kỳ để ghép ca đêm. */
   dong: {
     ngay: string
@@ -162,7 +166,14 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
     }
 
     const ngay: NgayGio[] = []
-    const lam = new Map(ghepNgayLam(tho, t).map((x) => [x.ngay, x]))
+    // Ca bắt đầu trước mốc ca đêm (Bếp 03:30): chỉ lượt sớm hơn giờ vào ca 1 tiếng mới
+    // thuộc ca đêm hôm trước. Đối chiếu phần mềm cũ 20/10/2026: không có chặn này thì một
+    // ngày quên quẹt kéo lệch dây chuyền 24 ngày (lượt 03:48 bị gắn vào ca 16:44 hôm trước).
+    const tn =
+      n.caVao != null && n.caVao < t.caDemDen
+        ? { ...t, caDemDen: Math.max(0, n.caVao - 60) }
+        : t
+    const lam = new Map(ghepNgayLam(tho, tn).map((x) => [x.ngay, x]))
     const tatCa = new Set([...lam.keys(), ...nghiCua.keys(), ...suaCua.keys()])
     for (const d of [...tatCa].sort()) {
       if (d < v.tu || d > v.den) continue

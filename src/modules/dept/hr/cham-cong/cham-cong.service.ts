@@ -292,7 +292,8 @@ export type DuLieu = {
   /** Mã trên máy có quẹt trong khoảng mà cùng số ở máy kia là người khác (`needs_review`). */
   maCanXem: number
   /** Nhân viên đang làm CẦN chấm công — mẫu số của bảng có mặt theo tổ. */
-  nhanSu: { ma: string; ten: string; boPhan: string | null }[]
+  /** `caVao` = giờ vào ca thường làm (phút từ 0h) — ca bắt đầu trước 5:00 (Bếp) cần để ghép lượt. */
+  nhanSu: { ma: string; ten: string; boPhan: string | null; caVao: number | null }[]
   /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
   khongCham: number
   /** Điều chỉnh trong khoảng (mọi tình trạng) — chỉ bản đã duyệt đổi kết quả. */
@@ -692,7 +693,7 @@ export const chamCongService = {
     if (k.den < k.tu) throw BadRequest('"Đến ngày" phải sau hoặc bằng "Từ ngày"')
     if (soNgay(k) > XEM_TOI_DA_NGAY)
       throw BadRequest(`Mỗi lần xem tối đa ${XEM_TOI_DA_NGAY} ngày`)
-    const [devices, dus, emps, logs, pulls, dieuChinh] = await Promise.all([
+    const [devices, dus, emps, logs, pulls, dieuChinh, shifts] = await Promise.all([
       chamCongRepo.devices(),
       chamCongRepo.deviceUsers(),
       chamCongRepo.employees(),
@@ -702,7 +703,11 @@ export const chamCongService = {
       ),
       chamCongRepo.recentPulls(5),
       dieuChinhRepo.trongKhoang(k.tu, k.den),
+      chamCongRepo.shifts(),
     ])
+    const caVaoCua = new Map(
+      shifts.map((s) => [s.id, Number(s.start_time.slice(0, 2)) * 60 + Number(s.start_time.slice(3, 5))]),
+    )
     const devById = new Map(devices.map((d) => [d.id, d]))
     const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
     const empById = new Map(emps.map((e) => [e.id, e]))
@@ -776,7 +781,12 @@ export const chamCongService = {
       ).size,
       nhanSu: emps
         .filter((e) => e.active && !e.attendance_exempt)
-        .map((e) => ({ ma: e.code, ten: e.full_name, boPhan: e.team })),
+        .map((e) => ({
+          ma: e.code,
+          ten: e.full_name,
+          boPhan: e.team,
+          caVao: caVaoCua.get(e.shift_id) ?? null,
+        })),
       khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
       dieuChinh,
     }

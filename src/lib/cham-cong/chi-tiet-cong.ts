@@ -8,7 +8,7 @@
  *   - Tăng ca theo thứ tự khung sau khung hành chính: khung đầu = TC1 (16–19h), khung
  *     thứ hai = TC2 (19–22h), mọi khung còn lại = TC3 (22–24h, 0–5h, 5–7h). (Q2)
  *   - Trễ / sớm = phút theo GIỜ MÁY, chỉ để xem và đếm, không trừ thêm (Q1): trễ khi lượt
- *     vào sau giờ vào ca + ân hạn, đếm từ giờ vào ca; sớm khi lượt ra trước giờ tan ca.
+ *     vào sau giờ vào ca + ân hạn, đếm từ giờ vào ca. Sớm theo giờ ra ĐÃ LÀM TRÒN (20/10).
  *     Bộ phận tính "có quẹt = 1 công" (văn phòng) không có trễ/sớm.
  *   - Loại ngày thường / chủ nhật / lễ để tách công CN và công lễ (Q4).
  */
@@ -107,9 +107,11 @@ export function chiTietNgay(
   let som = 0
   if (doan?.length && hc && x?.k) {
     const vao = doan[0].vao
-    const ra = doan[doan.length - 1].ra
+    const cuoi = doan[doan.length - 1]
     if (vao > hc.tu + t.anHanPhut && vao < hc.den) tre = vao - hc.tu
-    if (ra < hc.den && ra > hc.tu) som = hc.den - ra
+    // Sớm theo giờ ra ĐÃ LÀM TRÒN — cùng mốc công dùng (user 20/10/2026 sau đối chiếu:
+    // ra 15:53 vẫn đủ công mà bị ghi "sớm 7 phút"). Ra 15:49 → tính 15:30 → sớm 30.
+    if (cuoi.ra > hc.tu && cuoi.raTinh < hc.den) som = hc.den - cuoi.raTinh
   }
   const luot = x?.luot ?? []
   let cap: CongNgay['cap'] = []

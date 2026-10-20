@@ -129,3 +129,33 @@ describe('ngày đang dở', () => {
     expect(a.tong.thieu).toBe(1)
   })
 })
+
+describe('ca bắt đầu trước 5:00 (Bếp) — đối chiếu phần mềm cũ 20/10/2026', () => {
+  // Số thật mã 264 kỳ 09: 15/09 chỉ quẹt 16:44 (quên một lượt), các ngày sau 03:4x → 15:3x.
+  const dong = [
+    { ngay: '2026-09-15', ma: 'A', daGhep: true, luot: l('16:44') },
+    { ngay: '2026-09-16', ma: 'A', daGhep: true, luot: l('03:48', '15:36') },
+    { ngay: '2026-09-17', ma: 'A', daGhep: true, luot: l('03:38', '15:38') },
+  ]
+  const cap = (a: ReturnType<typeof tinhKyGioCong>[number], ngay: string) =>
+    a.ngay.find((x) => x.ngay === ngay)?.luot
+  it('có ca Bếp 03:30: lượt 03:48 là giờ vào hôm đó, không kéo lệch các ngày sau', () => {
+    const [a] = tinhKyGioCong(
+      vao({
+        tu: '2026-09-15',
+        den: '2026-09-17',
+        nhanSu: [{ ma: 'A', ten: 'Bếp', boPhan: 'Bếp', caVao: 210 }],
+        dong,
+      }),
+    )
+    expect(a.ngay.find((x) => x.ngay === '2026-09-15')).toMatchObject({ thieu: true })
+    expect(cap(a, '2026-09-16')).toEqual([228, 936])
+    expect(cap(a, '2026-09-17')).toEqual([218, 938])
+  })
+  it('không có ca riêng: vẫn theo luật ca đêm cũ (lượt trước 5:00 gắn ca hôm trước)', () => {
+    const [a] = tinhKyGioCong(
+      vao({ tu: '2026-09-15', den: '2026-09-17', nhanSu: [{ ma: 'A', ten: 'X', boPhan: null }], dong }),
+    )
+    expect(cap(a, '2026-09-15')).toEqual([1004, 1440 + 228])
+  })
+})
