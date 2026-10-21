@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { xemLuong } from '@/modules/dept/hr/luong/quyen-luong'
-import { resolveDefaultWorkspace } from '@/workspaces/resolveWorkspace'
+import { khuChoTrangChung } from '@/workspaces/resolveWorkspace'
+import { khuCoMuc } from '@/workspaces/khu-dang-dung'
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
 import { Empty } from '@/components/kit'
@@ -17,7 +18,9 @@ import { Empty } from '@/components/kit'
 export default async function LuongLayout({ children }: { children: React.ReactNode }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
-  const workspace = (await resolveDefaultWorkspace(user)) ?? WORKSPACES.hr
+  // Giữ khu đang đứng nếu sidebar khu đó có mục lương (Tài chính, Nhân sự, Quản trị).
+  const workspace =
+    (await khuChoTrangChung(user, (ws) => khuCoMuc(ws, '/ho-so-luong'))) ?? WORKSPACES.hr
   const duoc = await xemLuong(user)
   return (
     <WorkspaceShell workspace={workspace} bare compactTop>

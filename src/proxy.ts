@@ -1,14 +1,9 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { verifySessionToken } from '@/modules/core/auth/session'
+import { COOKIE_KHU, khuTheoDuongDan } from '@/workspaces/khu-dang-dung'
 
 // `/design-lab` (sổ thiết kế public) đã XOÁ 07/10/2026 — không còn đường public nào ngoài đăng nhập.
-const PUBLIC_PATHS = [
-  '/login',
-  '/register',
-  '/api/login',
-  '/api/register',
-  '/api/logout',
-]
+const PUBLIC_PATHS = ['/login', '/register', '/api/login', '/api/register', '/api/logout']
 
 /**
  * ẢNH `/api/files/<id>/img` — ra khỏi gác phiên, tự gác bằng CHỮ KÝ trong URL.
@@ -136,7 +131,32 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return NextResponse.next()
+  return ghiKhuDangDung(request, NextResponse.next())
+}
+
+/**
+ * Nhớ workspace người dùng vừa MỞ (không tính prefetch — sidebar prefetch ô chuyển phòng
+ * sẽ ghi nhầm) để trang dùng chung giữ đúng sidebar. Xem `workspaces/khu-dang-dung.ts`.
+ */
+function ghiKhuDangDung(request: NextRequest, res: NextResponse): NextResponse {
+  const { pathname } = request.nextUrl
+  if (pathname.startsWith('/api/')) return res
+  const h = request.headers
+  if (
+    h.get('next-router-prefetch') ||
+    h.get('purpose') === 'prefetch' ||
+    h.get('sec-purpose')?.includes('prefetch')
+  )
+    return res
+  const ws = khuTheoDuongDan(pathname)
+  if (ws && request.cookies.get(COOKIE_KHU)?.value !== ws.id)
+    res.cookies.set(COOKIE_KHU, ws.id, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+    })
+  return res
 }
 
 export const config = {

@@ -1,7 +1,10 @@
 import { db } from '@/server/db'
 import { hasRoleTag } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
+import { cookies } from 'next/headers'
 import { WORKSPACES, type WorkspaceConfig, type WorkspaceId } from './workspaces.config'
+import { COOKIE_KHU, khuTheoDuongDan, khuTuCookie } from './khu-dang-dung'
+import { canEnterWorkspace } from './access'
 
 /**
  * Resolve default workspace của user.
@@ -63,12 +66,19 @@ export async function resolveDefaultRoute(user: User): Promise<string> {
  * Dùng cho highlight sidebar item + xác định theme màu.
  */
 export function resolveWorkspaceFromPath(pathname: string): WorkspaceConfig | null {
-  for (const ws of Object.values(WORKSPACES)) {
-    // `altRoutes` cho một workspace sở hữu nhiều gốc đường dẫn — khu Sản xuất
-    // gộp ba khu cũ nên còn giữ `/thongke` và `/kehoach-sx` (18/09/2026).
-    for (const base of [ws.route, ...(ws.altRoutes ?? [])]) {
-      if (pathname === base || pathname.startsWith(base + '/')) return ws
-    }
-  }
-  return null
+  return khuTheoDuongDan(pathname)
+}
+
+/**
+ * Sidebar cho trang DÙNG CHUNG: khu người dùng vừa đứng (cookie proxy ghi) nếu họ vào được
+ * khu đó và khu đó thoả `hop`; không thì khu NHÀ. Quản trị viên đang ở Tài chính mở
+ * "Hồ sơ lương" thì vẫn ở sidebar Tài chính (21/10/2026).
+ */
+export async function khuChoTrangChung(
+  user: User,
+  hop: (ws: WorkspaceConfig) => boolean = () => true,
+): Promise<WorkspaceConfig | null> {
+  const dang = khuTuCookie((await cookies()).get(COOKIE_KHU)?.value)
+  if (dang && hop(dang) && (await canEnterWorkspace(user, dang.id))) return dang
+  return resolveDefaultWorkspace(user)
 }
