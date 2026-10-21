@@ -659,7 +659,7 @@ export const ACTIONS: Action[] = [
     rule: anyOf(perm('hr.member'), perm('hr.employee.private')),
   },
   {
-    // Hồ sơ lương B4 (0245). MẬT từ 0253: không còn đi kèm phòng Kế toán / Giám đốc,
+    // Hồ sơ lương B4 (0245). MẬT từ 0255: không còn đi kèm phòng Kế toán / Giám đốc,
     // chỉ vai "Quản lý lương". Gồm cả số tài khoản ngân hàng, lương trong hợp đồng.
     key: 'hr.payroll.profile',
     label: 'Xem và sửa hồ sơ lương nhân viên',
@@ -668,7 +668,7 @@ export const ACTIONS: Action[] = [
     mat: true,
   },
   {
-    // Bảng lương B5 (0246): tính · gửi · chi. MẬT từ 0253 (như hồ sơ lương).
+    // Bảng lương B5 (0246): tính · gửi · chi. MẬT từ 0255 (như hồ sơ lương).
     key: 'hr.payroll.run',
     label: 'Tính, gửi duyệt và chi bảng lương',
     domain: 'hr',

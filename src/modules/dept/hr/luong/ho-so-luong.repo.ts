@@ -57,7 +57,7 @@ export type Rieng = {
 
 const n = (v: unknown) => (v == null ? null : Number(v))
 
-/** Loại lần xem lương ghi nhật ký (cột `field` của hr_private_access_log, 0253). */
+/** Loại lần xem lương ghi nhật ký (cột `field` của hr_private_access_log, 0255). */
 export type LoaiXemLuong =
   'payroll_list' | 'payroll_profile' | 'payroll_sheet' | 'payroll_excel' | 'salary_tab'
 
@@ -203,7 +203,7 @@ export const hoSoLuongRepo = {
   },
 
   /**
-   * Nhật ký XEM LƯƠNG (0253, 20/10/2026 — lương chỉ một người quản lý): mỗi lần mở danh
+   * Nhật ký XEM LƯƠNG (0255, 20/10/2026 — lương chỉ một người quản lý): mỗi lần mở danh
    * sách / hồ sơ lương một người / bảng lương / Excel lương / tab Lương của hồ sơ NV.
    * Lỗi ghi nhật ký KHÔNG chặn người xem (đã qua cổng quyền) nhưng được log ra server.
    */
@@ -231,7 +231,7 @@ export const hoSoLuongRepo = {
         .from('hr_private_access_log')
         .select('field, viewed_at, boi:users!hr_private_access_log_viewer_id_fkey(name)')
         .eq('employee_id', employeeId)
-        // Chỉ ba loại "Hiện" số giấy tờ — nhật ký xem lương (0253) xem ở chỗ khác.
+        // Chỉ ba loại "Hiện" số giấy tờ — nhật ký xem lương (0255) xem ở chỗ khác.
         .in('field', ['bank_account', 'national_id', 'tax_code'])
         .order('viewed_at', { ascending: false })
         .limit(10),

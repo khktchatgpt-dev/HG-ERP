@@ -3,7 +3,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { Forbidden } from '@/server/http'
 
 /**
- * Ai thấy LƯƠNG (20/10/2026). Quyền lương là quyền MẬT (0253): chỉ vai "Quản lý lương" (chị
+ * Ai thấy LƯƠNG (20/10/2026). Quyền lương là quyền MẬT (0255): chỉ vai "Quản lý lương" (chị
  * Phụng) SỬA, tính, chi. Cùng ngày chủ dự án mở thêm: QUẢN TRỊ VIÊN được XEM — chỉ đọc (hồ sơ
  * lương, bảng lương, Excel, số tài khoản, lương trên HĐ), không sửa / tính / gửi / chi. Mọi lần
  * xem vẫn ghi nhật ký `hr_private_access_log` như người quản lý lương.

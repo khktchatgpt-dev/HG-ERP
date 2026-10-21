@@ -41,7 +41,7 @@ beforeEach(() => {
   vi.mocked(hopDongRepo.cuaNguoi).mockResolvedValue([])
 })
 
-// Lương là bí mật (0253, 20/10/2026): Nhân sự làm hợp đồng nhưng không thấy / ghi ô lương.
+// Lương là bí mật (0255, 20/10/2026): Nhân sự làm hợp đồng nhưng không thấy / ghi ô lương.
 describe('lương ghi trên hợp đồng theo quyền lương mật', () => {
   it('Nhân sự thêm HĐ: mức lương gửi lên bị bỏ (không ghi)', async () => {
     quyen.add('hr.employee.private')

@@ -1,4 +1,6 @@
--- 0253_luong_bao_mat.sql
+-- 0255_luong_bao_mat.sql
+-- (Đánh số lại 21/10/2026: viết với tên 0253 — trùng 0253_feedback đã lên main. Nội dung
+-- không đổi, đã áp lên DB ngày 20/10 dưới tên cũ.)
 -- LƯƠNG LÀ BÍ MẬT — chỉ MỘT người quản lý (yêu cầu 20/10/2026: "lương ở phòng kế toán chỉ
 -- duy nhất 1 người là Phụng quản lí, không ai khác được biết, trong phòng kế toán cũng như
 -- nhân sự lương là bảo mật"; Q8–Q13 duyệt theo đề xuất).

@@ -126,7 +126,7 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   // (vào bằng URL vẫn xem được — chỉ tách giao diện, không chặn quyền).
   // Duyệt đơn mua — mục "Chờ tôi ký" bên Mua hàng (27/09/2026).
   if (await hasPermission(user, 'supply.po.approve')) caps.add('supply.approve')
-  // Hồ sơ lương (B4) — vai "Quản lý lương" (quyền mật 0253) + quản trị viên CHỈ XEM (20/10).
+  // Hồ sơ lương (B4) — vai "Quản lý lương" (quyền mật 0255) + quản trị viên CHỈ XEM (20/10).
   if (await xemLuong(user)) caps.add('hr.payroll')
   if (
     user.role === 'admin' ||

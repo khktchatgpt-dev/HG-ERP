@@ -25,7 +25,7 @@ import { assertXemLuong, suaLuong } from './quyen-luong'
 /**
  * HỒ SƠ LƯƠNG (B4, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất). Danh mục có hiệu lực theo
  * kỳ — chép Odoo Contract / SAP infotype 0008. Mọi hàm gác `hr.payroll.profile` — quyền MẬT
- * (0253), chỉ vai "Quản lý lương"; người khác không đọc được lương lẫn định danh.
+ * (0255), chỉ vai "Quản lý lương"; người khác không đọc được lương lẫn định danh.
  *
  * Bản có từ-kỳ ≤ kỳ đã chốt gần nhất (B3) là đã dùng để tính → chỉ xem; đổi thì thêm bản
  * từ kỳ sau. Số tài khoản, CCCD, MST trả về đã CHE; "Hiện" ghi vết rồi mới trả số thật.

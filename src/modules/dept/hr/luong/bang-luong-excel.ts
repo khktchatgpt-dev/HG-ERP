@@ -15,7 +15,7 @@ const TEN_TT = {
  */
 export async function buildBangLuongExcel(
   b: BangLuongTrang,
-  /** Người tải — in lên dòng "TÀI LIỆU MẬT" đầu mỗi tờ (0253, lương chỉ một người quản lý). */
+  /** Người tải — in lên dòng "TÀI LIỆU MẬT" đầu mỗi tờ (0255, lương chỉ một người quản lý). */
   nguoiTai?: string,
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()

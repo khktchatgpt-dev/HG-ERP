@@ -228,7 +228,7 @@ describe('rbacService — ghi (Phase 3): authz + self-lock', () => {
   })
 })
 
-// ── Lương là quyền MẬT (0253, 20/10/2026: "chỉ một người là Phụng quản lý") ──────────
+// ── Lương là quyền MẬT (0255, 20/10/2026: "chỉ một người là Phụng quản lý") ──────────
 describe('quyền lương mật — quản trị viên không tự có', () => {
   it('QUYEN_MAT gồm đúng hai quyền lương', () => {
     expect([...QUYEN_MAT].sort()).toEqual(['hr.payroll.profile', 'hr.payroll.run'])

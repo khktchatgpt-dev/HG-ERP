@@ -28,7 +28,7 @@ export default async function LuongLayout({ children }: { children: React.ReactN
         {duoc ? (
           children
         ) : (
-          // Lương là quyền MẬT (0253): người có vai "Quản lý lương" làm; quản trị viên chỉ
+          // Lương là quyền MẬT (0255): người có vai "Quản lý lương" làm; quản trị viên chỉ
           // xem (20/10). Kế toán, Nhân sự, Giám đốc không xem được; màn Phân quyền không cấp được.
           <Empty
             headline="Lương chỉ người quản lý lương xem được"

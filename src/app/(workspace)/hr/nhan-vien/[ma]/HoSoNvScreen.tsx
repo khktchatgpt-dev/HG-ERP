@@ -129,7 +129,7 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
             label: 'Giấy tờ',
             ...(h.giayTo?.length ? { signal: { text: String(h.giayTo.length) } } : {}),
           },
-          // Lương là mật (0253): người không có quyền lương không thấy cả tên mục.
+          // Lương là mật (0255): người không có quyền lương không thấy cả tên mục.
           ...(h.quyen.luong ? [{ id: 'luong', label: 'Lương & ngân hàng' }] : []),
           {
             id: 'lich-su',

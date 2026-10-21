@@ -57,7 +57,7 @@ export async function permissionsOf(user: User): Promise<ReadonlySet<string>> {
 export const QUYEN_MAT: ReadonlySet<string> = new Set(
   ACTIONS.filter((a) => a.mat).map((a) => a.key),
 )
-/** Vai duy nhất được mang quyền mật (0253). */
+/** Vai duy nhất được mang quyền mật (0255). */
 export const VAI_QUAN_LY_LUONG = 'payroll_officer'
 
 export async function hasPermission(user: User, key: string): Promise<boolean> {
