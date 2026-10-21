@@ -812,7 +812,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Quản trị',
         items: [
           { href: '/admin', label: 'Tổng quan', icon: 'home', roles: ['admin'] },
-          { href: '/admin/users', label: 'Nhân viên & tài khoản', icon: 'users', roles: ['admin'] },
+          {
+            href: '/admin/users',
+            label: 'Nhân viên & tài khoản',
+            icon: 'users',
+            roles: ['admin'],
+          },
           {
             href: '/admin/departments',
             label: 'Phòng ban',
@@ -857,6 +862,25 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Cấu hình',
             icon: 'settings',
             roles: ['admin'],
+          },
+        ],
+      },
+      // Quản trị viên XEM lương (chỉ đọc, 21/10/2026). Khu (luong) bày sidebar theo
+      // workspace nhà — với quản trị là khu này, nên phải có mục ở đây mới đi lại được.
+      {
+        heading: 'Lương (chỉ xem)',
+        items: [
+          {
+            href: '/ho-so-luong',
+            label: 'Hồ sơ lương',
+            icon: 'wallet',
+            capability: 'hr.payroll',
+          },
+          {
+            href: '/bang-luong',
+            label: 'Bảng lương',
+            icon: 'receipt',
+            capability: 'hr.payroll',
           },
         ],
       },
