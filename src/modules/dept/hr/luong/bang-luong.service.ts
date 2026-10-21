@@ -165,7 +165,6 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
     phutMotCong: quyTac.phutMotCong,
     khung: khung.map((k) => ({ ma: k.ma, ten: k.ten, hanhChinh: k.hanhChinh })),
     congChuan: cc,
-    ngayLe,
     loaiNgay: (d: string): LoaiNgayLuong =>
       le.has(d) ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong',
     heSoKhung: (ma: string, n: LoaiNgayLuong) => rate.get(`frame|${ma}|${n}`) ?? null,

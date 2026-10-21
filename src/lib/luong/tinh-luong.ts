@@ -5,11 +5,14 @@
  *
  *   giá giờ    = đơn giá ÷ giờ một công   (theo tháng: lương tháng ÷ công chuẩn ÷ giờ một công)
  *   lương công = giờ hành chính ngày thường VÀ chủ nhật × giá giờ × hệ số K1 của loại ngày
- *                (theo tháng: lương tháng × công thực ÷ công chuẩn — gồm CN, nghỉ có lương, lễ)
+ *                (theo tháng: lương tháng × công thực ÷ công chuẩn — gồm CN, nghỉ có lương)
  *   tăng ca    = mọi giờ còn lại (khung ngoài hành chính, mọi khung ngày lễ) × giá giờ × hệ số;
  *                giờ giải lao trả % riêng (`ptTrua`, KT: 210 %); hồ sơ khoán đ/giờ (QC) thì
  *                tổng giờ tăng ca × đ/giờ
- *   nghỉ có lương (theo công) = số ngày × đơn giá × hệ số loại nghỉ; lễ không đi làm cũng vậy
+ *   nghỉ có lương (theo công) = số ngày × đơn giá × hệ số loại nghỉ
+ *   ngày lễ KHÔNG đi làm: KHÔNG tự trả (chủ dự án 21/10/2026, theo sổ T9: công ngày 02/09 = 0;
+ *                ai được thưởng lễ thì Kế toán ghi khoản thưởng riêng). Đi làm ngày lễ vẫn
+ *                tính tăng ca theo hệ số khung ngày lễ
  *   phụ cấp    = theo TỪNG dòng: chia (mức ÷ 26 / 32 / công chuẩn × công thực, không trần) ·
  *                nhân (mức × công, có thể cộng công tăng ca) · cố định; khoản "theo ngày đi
  *                làm" (Ăn ca) kiểu cũ = mức ÷ công chuẩn × số ngày có đi làm (Q2)
@@ -118,8 +121,6 @@ export type BoiCanhTinh = {
   phutMotCong: number
   khung: { ma: string; ten: string; hanhChinh: boolean }[]
   congChuan: number
-  /** Ngày lễ trong kỳ (không phải chủ nhật) — mọi người được trả lương ngày lễ. */
-  ngayLe: string[]
   loaiNgay: (ngay: string) => LoaiNgayLuong
   /** % hệ số; null = ô trống. */
   heSoKhung: (ma: string, ngay: LoaiNgayLuong) => number | null
@@ -220,7 +221,6 @@ export function tinhPhieu(
     }
     if (co) ngayDiLam++
   }
-  const le = b.ngayLe.length
 
   // ── Công thực (dùng cho theo tháng + phụ cấp). Chủ nhật làm giờ hành chính = ngày công
   // (sổ KT cộng CN vào "C.thời gian"), không phải tăng ca.
@@ -229,8 +229,7 @@ export function tinhPhieu(
   const congHc = congHcThuong + congHcCn
   let congNghi = 0
   for (const [ma, so_] of nghi) congNghi += (so_ * (b.heSoNghi(ma) ?? 0)) / 100
-  const congLe = (le * (b.heSoNghi('holiday') ?? 0)) / 100
-  const congThuc = khongChamCong ? congMien : congHc + congNghi + congLe
+  const congThuc = khongChamCong ? congMien : congHc + congNghi
 
   // ── Lương công + nghỉ có lương.
   let luongCong = 0
@@ -272,23 +271,12 @@ export function tinhPhieu(
         why.push(`${TEN_NGHI[ma]}  ${n} ngày × ${so(donGiaNgay)} × ${tl} % = ${so(tien)}`)
       }
     }
-    if (le) {
-      const tl = b.heSoNghi('holiday')
-      if (tl == null) thieuHeSo.add('Nghỉ lễ')
-      const tien = r0(le * donGiaNgay * ((tl ?? 0) / 100))
-      if (tien) {
-        nghiCoLuong += tien
-        dong.push({ nhom: 'nghi', ten: `Lương ngày lễ ${le} ngày`, tien })
-        why.push(`Ngày lễ     ${le} ngày × ${so(donGiaNgay)} × ${tl} % = ${so(tien)}`)
-      }
-    }
   } else {
     luongCong = r0(((hs.luongThang ?? 0) * congThuc) / b.congChuan)
     why.push(
       `Lương tháng ${so(hs.luongThang ?? 0)} × ${so(congThuc, 2)} công ÷ ${b.congChuan} = ${so(luongCong)}`,
     )
     for (const [ma] of nghi) if (b.heSoNghi(ma) == null) thieuHeSo.add(TEN_NGHI[ma])
-    if (le && b.heSoNghi('holiday') == null) thieuHeSo.add('Nghỉ lễ')
   }
   dong.unshift({ nhom: 'cong', ten: 'Lương công', tien: luongCong })
 

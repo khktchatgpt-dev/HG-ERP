@@ -25,7 +25,6 @@ const bc = (p: Partial<BoiCanhTinh> = {}): BoiCanhTinh => ({
     { ma: 'K4', ten: '22h – 24h', hanhChinh: false },
   ],
   congChuan: 25,
-  ngayLe: [],
   loaiNgay: (d) => (new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong'),
   heSoKhung: (ma, n) => HE_SO[`${ma}|${n}`] ?? null,
   heSoNghi: (ma) => (ma === 'unpaid' || ma === 'sick' ? 0 : 100),
@@ -374,5 +373,36 @@ describe('khớp sổ lương T9 của Kế toán', () => {
     expect(p.thue).toBeGreaterThan(0)
     expect(p.truThue).toBe(false)
     expect(p.thucLinh).toBe(p.tong - p.bhNld - p.doanPhi)
+  })
+})
+
+describe('ngày lễ KHÔNG tự trả (chủ dự án 21/10/2026, theo sổ T9)', () => {
+  const LE = '2026-09-02'
+  const b = bc({
+    thang: '2026-09',
+    congChuan: 26,
+    loaiNgay: (d) => (d === LE ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong'),
+    heSoKhung: (ma, n) =>
+      n === 'le' ? (ma === 'K1' ? 300 : null) : n === 'cn' && ma === 'K1' ? 100 : (HE_SO[`${ma}|${n}`] ?? null),
+    heSoNghi: (ma) => (ma === 'holiday' ? 100 : ma === 'unpaid' || ma === 'sick' ? 0 : 100),
+  })
+  // 24 ngày làm từ 03/09, không gồm ngày lễ 02/09
+  const ngay24 = Array.from({ length: 24 }, (_, i) => ngay(`2026-09-${String(3 + i).padStart(2, '0')}`, { K1: 480 }))
+  const KHONG_PC = { phuCap: [] }
+  it('theo công: 24 công × 350.000, không có dòng "lương ngày lễ"', () => {
+    const p = tinhPhieu({ ...KIEU, ...KHONG_PC, donGia: 350_000 }, ngay24, [], b)
+    expect(p.luongCong).toBe(24 * 350_000)
+    expect(p.nghiCoLuong).toBe(0)
+    expect(p.dong.some((d) => /lễ/i.test(d.ten))).toBe(false)
+  })
+  it('theo tháng: công thực 24 (không cộng ngày lễ) → 8,5 tr × 24 ÷ 26', () => {
+    const hs: HoSoTinh = { ...KIEU, ...KHONG_PC, cachTra: 'monthly', donGia: null, luongThang: 8_500_000 }
+    const p = tinhPhieu(hs, ngay24, [], b)
+    expect(p.congThuc).toBe(24)
+    expect(p.luongCong).toBe(r((8_500_000 * 24) / 26))
+  })
+  it('đi làm ngày lễ vẫn được trả theo hệ số khung ngày lễ (300 %)', () => {
+    const p = tinhPhieu({ ...KIEU, ...KHONG_PC, donGia: 350_000 }, [ngay(LE, { K1: 480 })], [], b)
+    expect(p.tangCa).toBe(350_000 * 3)
   })
 })
