@@ -12,6 +12,12 @@ import type {
 
 /** Truy cập dữ liệu khu Máy móc (0270). Lỗi đọc được NÉM, không nuốt thành rỗng. */
 
+/**
+ * Id từ URL không phải uuid (vd. `/plans/abc/done`) thì Postgres ném "invalid input
+ * syntax for type uuid" → route trả 500. Coi như không tìm thấy để service trả 404.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export type GroupTemplate = {
   task: string
   every: number
@@ -185,6 +191,7 @@ export const assetsRepo = {
     return (data ?? []).map((r) => asAsset(r as Record<string, unknown>))
   },
   async findAsset(id: string): Promise<AssetRow | null> {
+    if (!UUID.test(id)) return null
     const { data, error } = await db()
       .from('assets')
       .select('*')
@@ -250,6 +257,7 @@ export const assetsRepo = {
     return (data ?? []).map((r) => asPlan(r as Record<string, unknown>))
   },
   async findPlan(id: string): Promise<PlanRow | null> {
+    if (!UUID.test(id)) return null
     const { data, error } = await db()
       .from('asset_plans')
       .select('*')
@@ -315,6 +323,7 @@ export const assetsRepo = {
     return (data ?? []).map((r) => asIssue(r as Record<string, unknown>))
   },
   async findIssue(id: string): Promise<IssueRow | null> {
+    if (!UUID.test(id)) return null
     const { data, error } = await db()
       .from('asset_issues')
       .select('*')

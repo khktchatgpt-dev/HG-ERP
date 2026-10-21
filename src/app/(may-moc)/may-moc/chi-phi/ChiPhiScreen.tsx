@@ -102,7 +102,7 @@ export function ChiPhiScreen({
   }
 
   return (
-    <ScreenFrame tableMin={1080}>
+    <ScreenFrame tableMin={960}>
       <ScreenHeader
         compact
         eyebrow="Máy móc & bảo trì"
@@ -145,51 +145,62 @@ export function ChiPhiScreen({
           </>
         }
       />
-      <MetricStrip size="lg">
-        <Metric
-          label="Tổng chi phí"
-          value={shortMoney(total)}
-          basis={`${vnd(total)} đ · ${rows.length} phiếu · tháng trước ${shortMoney(prevTotal)}`}
-        />
-        <Metric
-          label="Bảo dưỡng định kỳ"
-          value={shortMoney(sum(by('BD')))}
-          basis={`${by('BD').length} phiếu PBD`}
-        />
-        <Metric
-          label="Sửa chữa"
-          value={shortMoney(sum(by('SC')))}
-          basis={`${by('SC').length} phiếu PSC${total ? ` · ${Math.round((sum(by('SC')) / total) * 100)}% tổng` : ''}`}
-          tone={total && sum(by('SC')) / total > 0.6 ? 'warn' : undefined}
-        />
-        <Metric
-          label="Kiểm định"
-          value={shortMoney(sum(by('KD')))}
-          basis={`${by('KD').length} phiếu PKD`}
-        />
-        <Metric
-          label="Giờ dừng máy"
-          value={`${down.toLocaleString('vi-VN')} h`}
-          basis="cộng từ mọi phiếu trong tháng"
-        />
-      </MetricStrip>
+      {/* ScreenFrame là cột flex cao đúng bằng cửa sổ: dải số không `shrink-0`
+          thì bị biểu đồ 12 tháng bên dưới ép bẹp còn một vệt chữ (21/10/2026). */}
+      <div className="shrink-0">
+        <MetricStrip size="lg">
+          <Metric
+            label="Tổng chi phí"
+            value={shortMoney(total)}
+            basis={`${vnd(total)} đ · ${rows.length} phiếu · tháng trước ${shortMoney(prevTotal)}`}
+          />
+          <Metric
+            label="Bảo dưỡng định kỳ"
+            value={shortMoney(sum(by('BD')))}
+            basis={`${by('BD').length} phiếu PBD`}
+          />
+          <Metric
+            label="Sửa chữa"
+            value={shortMoney(sum(by('SC')))}
+            basis={`${by('SC').length} phiếu PSC${total ? ` · ${Math.round((sum(by('SC')) / total) * 100)}% tổng` : ''}`}
+            tone={total && sum(by('SC')) / total > 0.6 ? 'warn' : undefined}
+          />
+          <Metric
+            label="Kiểm định"
+            value={shortMoney(sum(by('KD')))}
+            basis={`${by('KD').length} phiếu PKD`}
+          />
+          <Metric
+            label="Giờ dừng máy"
+            value={`${down.toLocaleString('vi-VN')} h`}
+            basis="cộng từ mọi phiếu trong tháng"
+          />
+        </MetricStrip>
+      </div>
       <div className="grid shrink-0 gap-4 border-b border-[var(--line)] px-[var(--gutter)] py-3 md:grid-cols-2">
         <div className="grid gap-2">
           <span className="text-k-label font-semibold tracking-wider text-[var(--ink-label)] uppercase">
             12 tháng gần nhất
           </span>
-          <MiniBars
-            label="Chi phí bảo trì 12 tháng"
-            max={maxMonth}
-            series={['Bảo dưỡng, kiểm định', 'Sửa chữa']}
-            rows={series.map((s) => ({
-              id: s.ym,
-              label: ymTxt(s.ym),
-              value: s.bd,
-              value2: s.sc,
-              text: shortMoney(s.bd + s.sc),
-            }))}
-          />
+          {series.some((s) => s.bd + s.sc > 0) ? (
+            <MiniBars
+              label="Chi phí bảo trì 12 tháng"
+              max={maxMonth}
+              series={['Bảo dưỡng, kiểm định', 'Sửa chữa']}
+              rows={series.map((s) => ({
+                id: s.ym,
+                label: ymTxt(s.ym),
+                value: s.bd,
+                value2: s.sc,
+                text: shortMoney(s.bd + s.sc),
+              }))}
+            />
+          ) : (
+            // 12 dòng toàn số 0 chiếm ~300px của bảng phiếu mà không nói thêm gì.
+            <span className="text-k-sm text-[var(--ink-3)]">
+              Chưa có chi phí nào trong 12 tháng gần nhất.
+            </span>
+          )}
         </div>
         <div className="grid content-start gap-2">
           <span className="text-k-label font-semibold tracking-wider text-[var(--ink-label)] uppercase">
@@ -263,9 +274,17 @@ export function ChiPhiScreen({
             ))}
           </tbody>
           <TFoot
-            label={<td colSpan={5}>Tổng {rows.length} phiếu</td>}
-            caveatSpan={2}
-            caveat="không gồm vật tư xuất kho lý do “Sửa chữa · bảo trì” chưa ghi vào phiếu"
+            // Ô tổng phải đứng dưới hai cột CUỐI (Giờ dừng, Chi phí), mà `caveat` của
+            // TFoot luôn vẽ SAU ô tổng — nên ghi chú đi cùng nhãn, chiếm cột Nội dung +
+            // Vật tư. Để `caveat` thì số "6" rơi vào cột Vật tư, tiền vào cột Giờ dừng.
+            label={
+              <>
+                <td colSpan={5}>Tổng {rows.length} phiếu</td>
+                <td colSpan={2} className="text-k-sm font-normal text-[var(--ink-3)]">
+                  không gồm vật tư xuất kho lý do “Sửa chữa · bảo trì” chưa ghi vào phiếu
+                </td>
+              </>
+            }
             cells={
               <>
                 <td className="num">{down.toLocaleString('vi-VN')}</td>
