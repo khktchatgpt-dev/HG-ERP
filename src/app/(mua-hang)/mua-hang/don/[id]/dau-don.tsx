@@ -414,27 +414,46 @@ export function DauDon({ d }: { d: DonCtx }) {
               "Thanh toán") — chữ "điều khoản" không xuất hiện ở đâu, nên người
               soạn không tìm ra chỗ ghi (chủ dự án 10/09/2026). */}
         <FieldGroup title="Điều khoản — in lên phiếu gửi NCC">
+          {/* MỖI ĐIỀU KHOẢN MỘT HÀNG TRỌN BỀ NGANG (21/10/2026, phòng Cung ứng: "khó
+              nhập, không cho xuống hàng"). Trước đây mỗi ô là một ô của lưới 3 cột
+              — còn ~200px, cao 2 dòng, câu điều khoản dài bị bẻ vụn, dòng mới chìm
+              dưới đáy ô. Điều khoản là ĐOẠN VĂN in nguyên lên phiếu, không phải trị
+              số, nên được cả bề ngang. Enter = xuống dòng; chặn lan lên trên để
+              không phím tắt nào của màn (Enter đi tiếp ở lưới…) nuốt mất. */}
           {TERM_FIELDS.map(([k, label, hint]) => (
-            <Field
+            <div
               key={k}
-              label={label}
-              inherited={termsEditing && header.terms[k] === tplTerms[k]}
+              className="k-f"
+              style={{
+                gridColumn: '1 / -1',
+                gridTemplateColumns: 'minmax(120px, 170px) 1fr',
+                // `.k-f` canh baseline — với ô nhiều dòng nhãn tụt xuống đáy ô.
+                alignItems: 'start',
+              }}
             >
-              {' '}
-              {/* prettier-ignore */}
-              {termsEditing ? (
-                <TextArea
-                  aria-label={label}
-                  rows={2}
-                  maxRows={12}
-                  placeholder={hint}
-                  value={header.terms[k]}
-                  onChange={(v) => setHeader((h) => ({ ...h, terms: { ...h.terms, [k]: v } }))} // prettier-ignore
-                />
-              ) : (
-                <span className="whitespace-pre-line">{header.terms[k] || '—'}</span>
-              )}
-            </Field>
+              <dt style={termsEditing ? { paddingTop: 7 } : undefined}>{label}</dt>
+              <dd
+                className={
+                  termsEditing && header.terms[k] === tplTerms[k]
+                    ? 'k-inherit'
+                    : undefined
+                }
+              >
+                {termsEditing ? (
+                  <TextArea
+                    aria-label={label}
+                    rows={k === 'quality' ? 3 : 2}
+                    maxRows={12}
+                    placeholder={hint}
+                    value={header.terms[k]}
+                    onKeyDown={(e) => e.key === 'Enter' && e.stopPropagation()}
+                    onChange={(v) => setHeader((h) => ({ ...h, terms: { ...h.terms, [k]: v } }))} // prettier-ignore
+                  />
+                ) : (
+                  <span className="whitespace-pre-line">{header.terms[k] || '—'}</span>
+                )}
+              </dd>
+            </div>
           ))}
           <Field
             label="Người ký"
@@ -466,7 +485,7 @@ export function DauDon({ d }: { d: DonCtx }) {
               </GridBtn>
               <span>
                 Ô nền nhạt là mặc định của mẫu <b>{meta.label}</b> — sửa ở đây chỉ đổi cho
-                đơn này.
+                đơn này. <b>Enter</b> để xuống dòng — phiếu in giữ đúng từng dòng.
               </span>
             </div>
           )}
