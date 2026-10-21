@@ -8,8 +8,9 @@
  *
  * Quy tắc (mọi con số là THAM SỐ, đổi được — `ThamSoKhung`):
  *   1. Lượt bấm lặp trong 2 phút gộp làm một; giờ cắt về PHÚT (Excel không giữ giây).
- *   2. Ca đêm: lượt trước 5:00 mà hôm trước còn lẻ lượt → thuộc ca hôm trước; ca ghi
- *      vào NGÀY BẮT ĐẦU, giờ qua 0h tính tiếp (24:00 = 1440 phút).
+ *   2. Ca đêm: lượt trước 5:00 mà hôm trước còn lẻ lượt → thuộc ca hôm trước (cùng hai
+ *      trường hợp mở rộng ở `laLuotRaQuaDem`); ca ghi vào NGÀY BẮT ĐẦU, giờ qua 0h tính
+ *      tiếp (24:00 = 1440 phút).
  *   3. 1 lượt → không tính được (0 giờ, cần bổ sung). 2–3 lượt → lượt đầu đến lượt
  *      cuối. 4+ lượt → từng cặp, bỏ khoảng ra ngoài giữa chừng.
  *   4. Giờ vào: 5:00–7:00 kéo về 7:00 (không tính đến sớm); 7:00–7:30 (ân hạn) → 7:00;
@@ -59,6 +60,8 @@ export type ThamSoKhung = {
   denSomTu: number
   /** Lượt sớm hơn mốc này mà hôm trước còn lẻ lượt → thuộc ca đêm hôm trước. */
   caDemDen: number
+  /** Giờ vào ca thường làm của người đang ghép (phút); thiếu = đầu khung hành chính. */
+  gioVaoCa?: number
   phutMotCong: number
   heSoTrua: number
   /** Ô tick làm trưa chỉ ghi "x" thì lấy ngần này phút. */
@@ -223,6 +226,48 @@ const ngayPhut = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 60000
 const isoNgay = (phutTuyetDoi: number) =>
   new Date(phutTuyetDoi * 60000).toISOString().slice(0, 10)
 
+/** Ca dài (vào sáng, ra sáng hôm sau) phải kéo ít nhất ngần này phút mới được ghép. */
+export const CA_DAI_TU_PHUT = 20 * 60
+
+/**
+ * Lượt đầu hôm nay (`hom[0]`) có phải lượt RA của ca hôm trước (`truoc`, đang lẻ lượt)?
+ * Ba trường hợp — đối chiếu sổ Nhân sự T9/2026 (21/10/2026, 6 người Tổ Phôi / Cơ Điện):
+ *   1. Trước `caDemDen` (5:00): luật gốc, luôn ghép.
+ *   2. CA ĐÊM — lượt cuối hôm trước từ hết giờ hành chính (16:00) trở đi, lượt hôm nay sớm
+ *      hơn giờ vào ca 1 tiếng (6:00). Mã 105 vào 20:43 ra 05:08 / 05:26: mốc 5:00 cứng làm
+ *      lượt ra thành lượt vào hôm sau rồi kéo lệch cả tuần. Chặn ở 6:00 vì người làm ngày
+ *      gần như không quẹt trước giờ đó — quên quẹt vào một tối không kéo dây chuyền.
+ *   3. CA DÀI — lượt cuối hôm trước là lượt vào buổi sáng, lượt hôm nay trước giờ vào ca và
+ *      cách nó ≥ 20 giờ (mã 529: 07:05 → 06:20 hôm sau). Bỏ lượt đó đi thì hôm nay phải còn
+ *      CHẴN lượt, ít nhất 2 — không thì đó là người quên quẹt ra hôm qua, lượt sáng nay
+ *      là lượt vào (hai ngày liền chỉ một lượt 06:55 KHÔNG thành ca 24 giờ). Lượt vào phải
+ *      là lượt sáng thường (từ 6:00) và ca không quá 24 giờ: lượt RA ca đêm đứng lẻ (05:03,
+ *      05:32 — thiếu lượt vào tối trước) không được hiểu thành lượt vào một ca 25 giờ.
+ */
+function laLuotRaQuaDem(
+  truoc: number[],
+  hom: number[],
+  goc: number,
+  t: ThamSoKhung,
+): boolean {
+  const p = hom[0] - goc
+  if (p < t.caDemDen) return true
+  const hc = t.khung.find((k) => k.ma === t.khungHanhChinh)
+  if (!hc) return false
+  const vaoCa = t.gioVaoCa ?? hc.tu
+  const cuoi = truoc[truoc.length - 1] - (goc - 1440)
+  if (cuoi >= hc.den && p < vaoCa - 60) return true
+  return (
+    cuoi >= vaoCa - 60 &&
+    cuoi < t.truaTu &&
+    p < vaoCa &&
+    p < cuoi &&
+    p + 1440 - cuoi >= CA_DAI_TU_PHUT &&
+    hom.length >= 3 &&
+    (hom.length - 1) % 2 === 0
+  )
+}
+
 /**
  * Lượt thô của MỘT người ('YYYY-MM-DD HH:mm[:ss]', giờ tường VN, mọi máy) → ngày làm.
  * Gộp lặp < 2 phút, gắn lượt sáng sớm vào ca đêm hôm trước, cắt đoạn làm.
@@ -250,7 +295,12 @@ export function ghepNgayLam(
     const truoc = theoNgay.get(ngays[i - 1])!
     const goc = ngayPhut(ngays[i])
     const lienNgay = ngayPhut(ngays[i - 1]) === goc - 1440
-    if (lienNgay && truoc.length % 2 === 1 && hom.length && hom[0] - goc < t.caDemDen) {
+    if (
+      lienNgay &&
+      truoc.length % 2 === 1 &&
+      hom.length &&
+      laLuotRaQuaDem(truoc, hom, goc, t)
+    ) {
       truoc.push(hom.shift()!)
       quaDem.add(ngays[i - 1])
     }

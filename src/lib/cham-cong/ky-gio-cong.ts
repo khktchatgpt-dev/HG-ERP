@@ -191,9 +191,11 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
     // thuộc ca đêm hôm trước. Đối chiếu phần mềm cũ 20/10/2026: không có chặn này thì một
     // ngày quên quẹt kéo lệch dây chuyền 24 ngày (lượt 03:48 bị gắn vào ca 16:44 hôm trước).
     const tn =
-      n.caVao != null && n.caVao < t.caDemDen
-        ? { ...t, caDemDen: Math.max(0, n.caVao - 60) }
-        : t
+      n.caVao == null
+        ? t
+        : n.caVao < t.caDemDen
+          ? { ...t, caDemDen: Math.max(0, n.caVao - 60), gioVaoCa: n.caVao }
+          : { ...t, gioVaoCa: n.caVao }
     const lam = new Map(ghepNgayLam(tho, tn).map((x) => [x.ngay, x]))
     const tatCa = new Set([...lam.keys(), ...nghiCua.keys(), ...suaCua.keys()])
     for (const d of [...tatCa].sort()) {
