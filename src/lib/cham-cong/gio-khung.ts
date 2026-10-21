@@ -238,7 +238,8 @@ export const CA_DAI_TU_PHUT = 20 * 60
 /**
  * Lượt đầu hôm nay (`hom[0]`) có phải lượt RA của ca hôm trước (`truoc`, đang lẻ lượt)?
  * Ba trường hợp — đối chiếu sổ Nhân sự T9/2026 (21/10/2026, 6 người Tổ Phôi / Cơ Điện):
- *   1. Trước `caDemDen` (5:00): luật gốc, luôn ghép.
+ *   1. Tới `caDemDen` (5:00), GỒM đúng mốc: luật gốc, luôn ghép. Sổ Nhân sự gõ giờ ra ca
+ *      đêm là 05:00 tròn (625 ngày 10/09); để "< 5:00" thì lượt đó thành ca 05:00 → 06:38.
  *   2. CA ĐÊM — lượt cuối hôm trước từ hết giờ hành chính (16:00) trở đi, lượt hôm nay sớm
  *      hơn giờ vào ca 1 tiếng (6:00). Mã 105 vào 20:43 ra 05:08 / 05:26: mốc 5:00 cứng làm
  *      lượt ra thành lượt vào hôm sau rồi kéo lệch cả tuần. Chặn ở 6:00 vì người làm ngày
@@ -257,7 +258,7 @@ function laLuotRaQuaDem(
   t: ThamSoKhung,
 ): boolean {
   const p = hom[0] - goc
-  if (p < t.caDemDen) return true
+  if (p <= t.caDemDen) return true
   const hc = t.khung.find((k) => k.ma === t.khungHanhChinh)
   if (!hc) return false
   const vaoCa = t.gioVaoCa ?? hc.tu
