@@ -304,26 +304,26 @@ describe('khớp sổ lương T9 của Kế toán', () => {
     expect(p.thucLinh).toBe(14_151_023) // T = 14.151.022,54
   })
 
-  it('VP · Trương Văn Hùng (6011): 27 công > 26 — lương và phụ cấp không có trần', () => {
+  // Tờ "BangLuong" của sổ VP (kỳ 25/08–25/09). Tờ "NGÂN HÀNG" cùng file là tờ CŨ kỳ 6 — đừng lấy số ở đó.
+  it('VP · Huỳnh Thị Thanh Thư (5052): 28 công > 26 — lương và phụ cấp không có trần', () => {
     const p = tinhPhieu(
       {
         ...BH,
-        luongBh: 1_127_518 / 0.105,
         cachTra: 'monthly',
         donGia: null,
-        luongThang: 15_000_000,
+        luongThang: 8_500_000,
         tangCaGio: null,
-        phuCap: [chia(1_500_000, 26, 'Trách nhiệm'), chia(300_000, 26, 'Điện thoại')],
+        phuCap: [chia(300_000, 26, 'Điện thoại')],
       },
-      ngayCong(27),
+      ngayCong(28),
       [],
       t9,
     )
-    expect(p.luongCong).toBe(15_576_923) // J = 15 tr ÷ 26 × 27
-    expect(p.phuCap).toBe(1_557_692 + 311_538)
-    expect(p.bhNld).toBe(1_127_518)
-    expect(p.doanPhi).toBe(53_691)
-    expect(p.thucLinh).toBe(16_264_944) // W = 16.264.944,85
+    expect(p.luongCong).toBe(9_153_846) // J = 8,5 tr ÷ 26 × 28 = 9.153.846,15
+    expect(p.phuCap).toBe(323_077) // N = 300.000 ÷ 26 × 28
+    expect(p.bhNld).toBe(415_800)
+    expect(p.doanPhi).toBe(19_800)
+    expect(p.thucLinh).toBe(9_041_323) // V = 9.041.323,08
   })
 
   it('độc hại nhân theo (công + công tăng ca) — sổ TTSX "(F+L) × mức"', () => {
