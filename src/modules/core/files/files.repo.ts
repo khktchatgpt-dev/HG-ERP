@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import type { FileBucket } from './files.schema'
+import { storage } from './storage'
 
 export type FileRow = {
   id: string
@@ -144,6 +145,52 @@ export const filesRepo = {
       .is('deleted_at', null)
     for (const r of (own ?? []) as { id: string }[]) claimed.add(r.id)
     return ids.filter((id) => claimed.has(id))
+  },
+
+  /**
+   * Mọi file đang gắn một góp ý (kể cả chưa finalize). Đọc TRƯỚC khi xoá góp
+   * ý: `files.feedback_id` là `on delete set null`, xoá xong là mất dấu.
+   * `ids` = chỉ lấy các id này (ảnh của một dòng trao đổi).
+   */
+  async listForFeedback(
+    feedbackId: string,
+    ids?: readonly string[],
+  ): Promise<Pick<FileRow, 'id' | 'bucket' | 'path'>[]> {
+    if (ids && ids.length === 0) return []
+    let q = db()
+      .from('files')
+      .select('id, bucket, path')
+      .eq('feedback_id', feedbackId)
+      .is('deleted_at', null)
+    if (ids) q = q.in('id', [...ids])
+    const { data, error } = await q
+    if (error) throw new Error(`files of feedback failed: ${error.message}`)
+    return (data ?? []) as Pick<FileRow, 'id' | 'bucket' | 'path'>[]
+  },
+
+  /**
+   * Xoá hẳn object trên Storage rồi đánh dấu xoá dòng — cùng cách
+   * `filesService.delete` làm, nhưng cho NHIỀU file và không kiểm quyền (người
+   * gọi là service đã kiểm quyền trên chứng từ cha). Gom theo bucket: một lệnh
+   * remove mỗi bucket. Trả số file đã dọn.
+   */
+  async purge(rows: readonly Pick<FileRow, 'id' | 'bucket' | 'path'>[]): Promise<number> {
+    if (rows.length === 0) return 0
+    const byBucket = new Map<FileBucket, string[]>()
+    for (const r of rows) byBucket.set(r.bucket, [...(byBucket.get(r.bucket) ?? []), r.path])
+    for (const [bucket, paths] of byBucket) {
+      await storage.remove(bucket, paths)
+      for (const p of paths) storage.invalidateSignedUrl(bucket, p)
+    }
+    const { error } = await db()
+      .from('files')
+      .update({ deleted_at: new Date().toISOString() })
+      .in(
+        'id',
+        rows.map((r) => r.id),
+      )
+    if (error) throw new Error(error.message)
+    return rows.length
   },
 
   /** File đã finalize của 1 SP, mới nhất trước — nhiều file cùng parent = lịch sử phiên bản (NFR-03 GĐ1). */

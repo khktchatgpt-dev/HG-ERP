@@ -35,6 +35,7 @@ import {
   canResubmit,
   canReview,
   canView,
+  droppedFileIds,
   initialStatus,
   type Actor,
 } from './feedback.rules'
@@ -147,6 +148,25 @@ async function statusMarker(
 async function claimFiles(fileIds: string[], feedbackId: string, ownerId: string) {
   if (fileIds.length === 0) return [] as string[]
   return filesRepo.claimForFeedback(fileIds, feedbackId, ownerId)
+}
+
+/**
+ * Xoá khỏi Storage những ảnh góp ý đã bỏ. Chạy SAU khi DB đã ghi xong và NUỐT
+ * LỖI có chủ ý: việc người dùng bấm (xoá / sửa) đã thành, báo thất bại vì
+ * Storage thì họ bấm lại vào thứ không còn. Ảnh sót lại chỉ tốn chỗ, có log.
+ * `ids` = chỉ các ảnh này, và chỉ khi chúng thuộc đúng góp ý `feedbackId`.
+ */
+async function purgeFiles(
+  feedbackId: string,
+  ids: readonly string[],
+  rows?: Awaited<ReturnType<typeof filesRepo.listForFeedback>>,
+): Promise<void> {
+  try {
+    const list = rows ?? (await filesRepo.listForFeedback(feedbackId, ids))
+    await filesRepo.purge(list)
+  } catch (err) {
+    console.error(`[feedback ${feedbackId}] dọn ảnh thất bại:`, err)
+  }
 }
 
 /**
@@ -318,7 +338,16 @@ export const feedbackService = {
       const fresh = input.file_ids.filter((f) => !fb.file_ids.includes(f))
       patch.file_ids = [...kept, ...(await claimFiles(fresh, fb.id, user.id))]
     }
-    return feedbackRepo.update(id, patch)
+    const saved = await feedbackRepo.update(id, patch)
+    if (patch.file_ids) {
+      // "Bỏ ảnh cũ" khi sửa: ảnh gỡ ra không còn ai trỏ tới thì xoá hẳn.
+      const gone = droppedFileIds(
+        fb.file_ids.filter((f) => !patch.file_ids!.includes(f)),
+        [patch.file_ids, ...cs.map((c) => c.file_ids)],
+      )
+      await purgeFiles(fb.id, gone)
+    }
+    return saved
   },
 
   async remove(user: User, id: string): Promise<void> {
@@ -328,7 +357,11 @@ export const feedbackService = {
     if (!canDelete(fb, ctx.actor)) {
       throw Forbidden('Góp ý đã được tiếp nhận — chỉ admin xoá được')
     }
+    // Đọc ảnh TRƯỚC khi xoá: `files.feedback_id` là `on delete set null`, xoá
+    // xong là mất dấu ảnh nào của góp ý này (ảnh góp ý + ảnh mọi dòng trao đổi).
+    const files = await filesRepo.listForFeedback(id)
     await feedbackRepo.delete(id)
+    await purgeFiles(id, [], files)
   },
 
   async toggleVote(user: User, id: string): Promise<{ voted: boolean; count: number }> {
@@ -558,12 +591,18 @@ export const feedbackService = {
       const fresh = input.file_ids.filter((f) => !c.file_ids.includes(f))
       fileIds = [...kept, ...(await claimFiles(fresh, fb.id, user.id))]
     }
-    return feedbackRepo.updateComment(commentId, {
+    const saved = await feedbackRepo.updateComment(commentId, {
       content: input.content,
       file_ids: fileIds,
       mention_ids: mentionIds,
       edited_at: new Date().toISOString(),
     })
+    const gone = droppedFileIds(
+      c.file_ids.filter((f) => !fileIds.includes(f)),
+      [fb.file_ids, fileIds, ...cs.filter((x) => x.id !== c.id).map((x) => x.file_ids)],
+    )
+    await purgeFiles(fb.id, gone)
+    return saved
   },
 
   async deleteComment(user: User, id: string, commentId: string): Promise<void> {
@@ -580,6 +619,11 @@ export const feedbackService = {
       throw BadRequest('Mốc trạng thái / xác nhận không xoá được')
     }
     await feedbackRepo.deleteComment(commentId)
+    const gone = droppedFileIds(c.file_ids, [
+      fb.file_ids,
+      ...cs.filter((x) => x.id !== c.id).map((x) => x.file_ids),
+    ])
+    await purgeFiles(fb.id, gone)
   },
 
   // ── Người xác nhận ───────────────────────────────────────────────────────
