@@ -63,6 +63,45 @@ export const ACTIONS: Action[] = [
     rule: role('admin'),
   },
   /*
+   * ── Máy móc & bảo trì (0270) ────────────────────────────────────────────
+   *
+   * Xem mọi trang /may-moc và BÁO HỎNG là PUBLIC: tem QR dán trên máy, ai quét
+   * cũng phải mở được hồ sơ và báo được. Làm việc của thợ (nhận việc, ghi bảo
+   * trì, giờ chạy, hạng mục) = Tổ Cơ điện. Thêm / sửa danh mục máy = Cơ điện
+   * hoặc Giám đốc (như bản demo MOCA). Seed: vai `maintenance` (manage, cost),
+   * director (approve, cost, tools), warehouse_staff (tools), accounting_staff (cost).
+   */
+  {
+    key: 'assets.asset.edit',
+    label: 'Thêm / sửa máy, dụng cụ, nhập từ Excel',
+    domain: 'assets',
+    rule: anyOf(role('admin'), perm('assets.manage'), perm('assets.approve')),
+  },
+  {
+    key: 'assets.work',
+    label: 'Nhận việc sửa, ghi bảo trì, cập nhật giờ chạy, sửa lịch bảo trì',
+    domain: 'assets',
+    rule: anyOf(role('admin'), perm('assets.manage')),
+  },
+  {
+    key: 'assets.approve',
+    label: 'Duyệt sửa chữa vượt hạn mức',
+    domain: 'assets',
+    rule: anyOf(role('admin'), perm('assets.approve')),
+  },
+  {
+    key: 'assets.tools',
+    label: 'Giao / thu hồi dụng cụ cầm tay',
+    domain: 'assets',
+    rule: anyOf(role('admin'), perm('assets.tools')),
+  },
+  {
+    key: 'assets.cost.view',
+    label: 'Xem chi phí bảo trì theo tháng',
+    domain: 'assets',
+    rule: anyOf(role('admin'), perm('assets.cost')),
+  },
+  /*
    * ── Kỹ thuật (thư viện SP + BOM) ────────────────────────────────────────
    *
    * HỒ SƠ SẢN PHẨM LÀ KHU DÙNG CHUNG (user chốt 07/08/2026): trang ở `/products`
