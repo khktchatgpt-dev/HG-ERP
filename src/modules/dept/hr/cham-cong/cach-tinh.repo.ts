@@ -10,7 +10,7 @@ function must<T>(r: { data: T | null; error: { message: string } | null }): T {
 }
 
 const COT_BAN = `id, version_no, from_period, status, lunch_from, lunch_to, grace_minutes,
-  round_out_mode, half_threshold, full_threshold, round_in_afternoon, count_early, early_from,
+  round_out_mode, half_threshold, full_threshold, round_in_afternoon, round_in_evening, count_early, early_from,
   night_before, minutes_per_cong, lunch_factor, lunch_default_minutes, note, created_at,
   updated_at, applied_at,
   tao:users!hr_calc_versions_created_by_fkey(name),
@@ -29,6 +29,7 @@ type DongBan = {
   half_threshold: number
   full_threshold: number
   round_in_afternoon: boolean
+  round_in_evening: boolean
   count_early: boolean
   early_from: number
   night_before: number
@@ -88,6 +89,7 @@ function doiBan(r: DongBan): BanDong {
       nguongNuaGio: r.half_threshold,
       nguongDuGio: r.full_threshold,
       lamTronVaoChieu: r.round_in_afternoon,
+      lamTronVaoToi: r.round_in_evening,
       tinhDenSom: r.count_early,
       denSomTu: r.early_from,
       caDemDen: r.night_before,
@@ -113,6 +115,7 @@ const cotQuyTac = (q: QuyTac) => ({
   half_threshold: q.nguongNuaGio,
   full_threshold: q.nguongDuGio,
   round_in_afternoon: q.lamTronVaoChieu,
+  round_in_evening: q.lamTronVaoToi,
   count_early: q.tinhDenSom,
   early_from: q.denSomTu,
   night_before: q.caDemDen,

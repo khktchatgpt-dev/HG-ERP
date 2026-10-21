@@ -1280,6 +1280,7 @@ export type Database = {
           night_before: number
           note: string | null
           round_in_afternoon: boolean
+          round_in_evening: boolean
           round_out_mode: string
           status: string
           updated_at: string
@@ -1309,6 +1310,7 @@ export type Database = {
           night_before: number
           note?: string | null
           round_in_afternoon?: boolean
+          round_in_evening?: boolean
           round_out_mode?: string
           status?: string
           updated_at?: string
@@ -1338,6 +1340,7 @@ export type Database = {
           night_before?: number
           note?: string | null
           round_in_afternoon?: boolean
+          round_in_evening?: boolean
           round_out_mode?: string
           status?: string
           updated_at?: string

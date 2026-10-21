@@ -227,6 +227,7 @@ export const banLuuSchema = z
         nguongNuaGio: z.number().int().min(0).max(59),
         nguongDuGio: z.number().int().min(0).max(59),
         lamTronVaoChieu: z.boolean(),
+        lamTronVaoToi: z.boolean(),
         tinhDenSom: z.boolean(),
         denSomTu: phutTrongNgay,
         caDemDen: phutTrongNgay,

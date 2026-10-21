@@ -93,6 +93,7 @@ export const THAM_SO_MAC_DINH: ThamSoKhung = {
   nguongDuGio: 50,
   lamTronRaKieu: 'bac_thang',
   lamTronVaoChieu: true,
+  lamTronVaoToi: false,
   tinhDenSom: false,
   denSomTu: h(5),
   caDemDen: h(5),

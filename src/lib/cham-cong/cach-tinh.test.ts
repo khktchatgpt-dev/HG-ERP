@@ -31,6 +31,7 @@ const QUY_TAC: QuyTac = {
   nguongNuaGio: 20,
   nguongDuGio: 50,
   lamTronVaoChieu: true,
+  lamTronVaoToi: false,
   tinhDenSom: false,
   denSomTu: h(5),
   caDemDen: h(5),
