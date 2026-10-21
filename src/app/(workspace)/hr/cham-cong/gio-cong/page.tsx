@@ -1,6 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { gioCongService } from '@/modules/dept/hr/cham-cong/gio-cong.service'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { todayVn } from '@/lib/date-vn'
 import { GioCongScreen } from './GioCongScreen'
 
@@ -17,7 +17,7 @@ export default async function GioCongPage({
   const user = await authService.requirePageUser()
   const homNay = todayVn()
   const thang =
-    sp.thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.thang) ? sp.thang : thangCuaNgay(homNay)
+    sp.thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.thang) ? sp.thang : await khoangKyService.thangCua(homNay)
   const b = await gioCongService.bang(user, thang, homNay)
   return <GioCongScreen key={`${thang}|${sp.bp ?? ''}`} b={b} bpDau={sp.bp} />
 }

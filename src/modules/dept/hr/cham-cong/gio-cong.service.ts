@@ -1,10 +1,10 @@
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest } from '@/server/http'
+import { thangCua } from '@/lib/cham-cong/khoang-ky'
+import { khoangKyService } from './khoang-ky.service'
 import {
   congNgay,
-  kyCuaThang,
-  thangCuaNgay,
   tinhKyGioCong,
   trongThoiGianLam,
   type CachTinh,
@@ -32,7 +32,7 @@ import type { ThamSoKhung } from '@/lib/cham-cong/gio-khung'
 import { kiemKhoaKy } from './ky-khoa'
 
 /**
- * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (26 → 25) cho từng người, theo luật thật của
+ * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (khoảng Nhân sự đặt — khoang-ky.service) cho từng người, theo luật thật của
  * Nhân sự (`lib/cham-cong/gio-khung.ts`, khớp 241/241 ngày file Tổ sơn sắt T9). Tham số
  * lấy từ BẢN cách tính áp dụng cho kỳ (B2, 0243) — đổi bản không đổi số kỳ trước.
  */
@@ -101,7 +101,8 @@ export const gioCongService = {
     await assertAction(user, 'hr.attendance.view')
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
       throw BadRequest('Tháng phải dạng YYYY-MM')
-    const k = kyCuaThang(thang)
+    // Khoảng kỳ Nhân sự đặt (chưa đặt = gợi ý nối tiếp kỳ bên cạnh, mặc định 26 → 25).
+    const k = await khoangKyService.cua(thang)
     // Lấy dư một ngày hai đầu: ca đêm ngày cuối kỳ cần lượt rạng sáng hôm sau; lượt rạng
     // sáng ngày đầu kỳ có thể thuộc ca đêm hôm trước (không được tính vào kỳ này).
     const [du, trua, cachTinh, quyen, quyenSua, ct, ky, le] = await Promise.all([
@@ -199,7 +200,8 @@ export const gioCongService = {
     homNay: string,
   ): Promise<ChiTietNguoi> {
     const thangs: string[] = []
-    for (let t = thangCuaNgay(k.tu); t <= thangCuaNgay(k.den); t = sauThang(t))
+    const dsKy = await khoangKyService.ds()
+    for (let t = thangCua(k.tu, dsKy); t <= thangCua(k.den, dsKy); t = sauThang(t))
       thangs.push(t)
     if (thangs.length > KY_TOI_DA)
       return {

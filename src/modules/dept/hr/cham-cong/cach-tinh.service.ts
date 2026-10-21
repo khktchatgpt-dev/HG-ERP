@@ -17,7 +17,7 @@ import {
   type TinhTrangBan,
 } from '@/lib/cham-cong/cach-tinh'
 import { THAM_SO_MAC_DINH, type ThamSoKhung } from '@/lib/cham-cong/gio-khung'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from './khoang-ky.service'
 import { todayVn } from '@/lib/date-vn'
 import { cachTinhRepo, type BanDong, type HeSoDong } from './cach-tinh.repo'
 
@@ -38,6 +38,8 @@ export type BanXem = BanDong & { tinhTrang: TinhTrangBan }
 
 export type CachTinhTrang = {
   kyHienTai: string
+  /** Khoảng kỳ hiện tại (Nhân sự đặt / gợi ý). */
+  khoangHienTai: { tu: string; den: string }
   ban: BanXem[]
   /** Bản đang mở trên màn. */
   xem: BanXem
@@ -108,7 +110,7 @@ async function lay(banId: string) {
 export const cachTinhService = {
   async trang(user: User, banId?: string): Promise<CachTinhTrang> {
     await assertAction(user, 'hr.attendance.view')
-    const kyHienTai = thangCuaNgay(todayVn())
+    const kyHienTai = await khoangKyService.thangCua(todayVn())
     const [ds, to, chuaCoTo, q] = await Promise.all([
       cachTinhRepo.dsBan(),
       cachTinhRepo.to(),
@@ -128,6 +130,7 @@ export const cachTinhService = {
     const heSo = duO(khung, heSoGoc)
     return {
       kyHienTai,
+      khoangHienTai: await khoangKyService.cua(kyHienTai),
       ban,
       xem,
       khung,
@@ -191,7 +194,7 @@ export const cachTinhService = {
       throw Forbidden('Kế toán hoặc Nhân sự mới áp dụng được bản cách tính')
     const { ds, b } = await lay(banId)
     if (b.tuKy) throw Conflict(`Bản ${b.so} đã áp dụng từ kỳ ${b.tuKy}`)
-    const kyHienTai = thangCuaNgay(todayVn())
+    const kyHienTai = await khoangKyService.thangCua(todayVn())
     if (tuKy < kyHienTai)
       throw BadRequest(
         `Chỉ áp dụng từ kỳ đang mở (${kyHienTai}) trở đi — kỳ trước đã tính xong`,
@@ -224,7 +227,7 @@ export const cachTinhService = {
     if (!q.heSo && !q.quyTac) throw Forbidden('Kế toán hoặc Nhân sự mới rút được bản')
     const { b } = await lay(banId)
     if (!b.tuKy) throw Conflict(`Bản ${b.so} đang là nháp`)
-    const kyHienTai = thangCuaNgay(todayVn())
+    const kyHienTai = await khoangKyService.thangCua(todayVn())
     if (b.tuKy < kyHienTai)
       throw Conflict(
         `Bản ${b.so} đã dùng cho kỳ ${b.tuKy} — không rút được; chép thành bản mới rồi áp dụng từ kỳ sau`,

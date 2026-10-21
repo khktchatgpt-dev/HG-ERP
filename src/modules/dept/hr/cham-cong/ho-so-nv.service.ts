@@ -12,7 +12,8 @@ import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
-import { congNgay, kyCuaThang, thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from './khoang-ky.service'
 import { soSanhMa, tinhVang, VANG_TU, type VangNv } from '@/lib/nhan-su/ho-so'
 import {
   cheCccd,
@@ -271,8 +272,8 @@ export const hoSoNvService = {
     ])
     const n = nv.ds.find((x) => x.code === ma)
     if (!n) throw NotFound(`Không có nhân viên mã ${ma}`)
-    const thang = thangCuaNgay(homNay)
-    const k = kyCuaThang(thang)
+    const thang = await khoangKyService.thangCua(homNay)
+    const k = await khoangKyService.cua(thang)
     const den = k.den < homNay ? k.den : homNay
     const [bienDong, mot, caNhan, tl, lanCuoi, hopDong, giayTo] = await Promise.all([
       bienDongRepo.cuaNguoi(n.id),

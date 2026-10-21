@@ -114,7 +114,10 @@ const TEN_VIEC: Record<string, { label: string; tone: Mark['tone'] }> = {
   reopen_withdraw: { label: 'Rút yêu cầu mở lại', tone: 'act' },
   reopen_approve: { label: 'Giám đốc duyệt mở lại', tone: 'warn' },
   reopen_reject: { label: 'Giám đốc từ chối mở lại', tone: 'stop' },
+  set_range: { label: 'Đặt khoảng kỳ', tone: 'act' },
 }
+
+const dmTl = (iso?: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '')
 
 export function NganThoiGian({ d }: { d: KyCongCtx }) {
   const { k } = d
@@ -128,8 +131,20 @@ export function NganThoiGian({ d }: { d: KyCongCtx }) {
     )
   const marks: Mark[] = k.suKien.map((e, i) => {
     const v = TEN_VIEC[e.viec] ?? { label: e.viec, tone: 'act' as const }
-    const data = e.data as { cong?: number; nguoi?: number; ngay0?: number; lan?: number }
+    const data = e.data as {
+      cong?: number
+      nguoi?: number
+      ngay0?: number
+      lan?: number
+      tu?: string
+      den?: string
+      tu_cu?: string
+      den_cu?: string
+    }
     const chiTiet = [
+      data.tu && data.den
+        ? `${dmTl(data.tu_cu)} → ${dmTl(data.den_cu)} thành ${dmTl(data.tu)} → ${dmTl(data.den)}`
+        : '',
       e.ghiChu,
       data.lan ? `lần ${data.lan}` : '',
       data.nguoi != null ? `${data.nguoi} người` : '',

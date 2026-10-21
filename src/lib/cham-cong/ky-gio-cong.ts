@@ -30,7 +30,7 @@ export const NGAY_DAU_KY = 26
 const isoUtc = (y: number, m0: number, d: number) =>
   new Date(Date.UTC(y, m0, d)).toISOString().slice(0, 10)
 
-/** Kỳ công của tháng 'YYYY-MM' → { tu, den } ('YYYY-MM-DD', tính cả hai đầu). */
+/** Kỳ MẶC ĐỊNH 26 → 25 của tháng 'YYYY-MM' — chỉ dùng khi Nhân sự chưa đặt; mọi nơi khác gọi `khoang-ky.ts` / `khoangKyService`. */
 export function kyCuaThang(thang: string): { tu: string; den: string } {
   const [y, m] = thang.split('-').map(Number)
   return { tu: isoUtc(y, m - 2, NGAY_DAU_KY), den: isoUtc(y, m - 1, NGAY_DAU_KY - 1) }

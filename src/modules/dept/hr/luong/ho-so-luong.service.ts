@@ -2,7 +2,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from '../cham-cong/khoang-ky.service'
 import {
   banHieuLuc,
   che,
@@ -128,7 +128,7 @@ export type DongXemNap = {
 export const hoSoLuongService = {
   async trang(user: User, thang?: string): Promise<HoSoTrang> {
     await assertXemLuong(user)
-    const ky = thang ?? thangCuaNgay(todayVn())
+    const ky = thang ?? (await khoangKyService.thangCua(todayVn()))
     await hoSoLuongRepo.ghiXemLuong('payroll_list', user.id, { ghiChu: `kỳ ${ky}` })
     const [emps, ban, rieng, loai, kyChot] = await Promise.all([
       nhanVien(),

@@ -7,7 +7,7 @@ import {
   buildTongHopExcel,
 } from '@/modules/dept/hr/cham-cong/bang-cong-excel'
 import { kyThangSchema } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { todayVn } from '@/lib/date-vn'
 
 /**
@@ -18,7 +18,7 @@ export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
   const sp = new URL(req.url).searchParams
   const homNay = todayVn()
-  const t = kyThangSchema.safeParse(sp.get('thang') ?? thangCuaNgay(homNay))
+  const t = kyThangSchema.safeParse(sp.get('thang') ?? (await khoangKyService.thangCua(homNay)))
   if (!t.success) throw BadRequest('Kỳ phải dạng YYYY-MM')
   const bp = sp.get('bp')?.trim()
   if (!bp) throw BadRequest('Chọn tổ / bộ phận trước khi xuất')

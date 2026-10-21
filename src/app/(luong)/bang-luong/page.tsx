@@ -1,6 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { bangLuongService } from '@/modules/dept/hr/luong/bang-luong.service'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { todayVn } from '@/lib/date-vn'
 import { BangLuongScreen } from './BangLuongScreen'
 import { MUC_BL, type MucBl } from './bang-luong.shared'
@@ -18,7 +18,7 @@ export default async function BangLuongPage({
   const thang =
     sp.thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.thang)
       ? sp.thang
-      : thangCuaNgay(todayVn())
+      : await khoangKyService.thangCua(todayVn())
   const b = await bangLuongService.trang(user, thang)
   const muc: MucBl = (MUC_BL as readonly string[]).includes(sp.muc ?? '')
     ? (sp.muc as MucBl)

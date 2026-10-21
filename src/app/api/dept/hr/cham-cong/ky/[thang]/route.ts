@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { BadRequest, handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { kyCongService } from '@/modules/dept/hr/cham-cong/ky-cong.service'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { kyThangSchema, kyViecSchema } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
 
 /** Chuyển tiếp của kỳ công: xác nhận / bỏ xác nhận tổ, chốt, xin · rút · duyệt mở lại. */
@@ -30,6 +31,10 @@ export const POST = handle(
       case 'quyet_mo':
         await kyCongService.quyetMoLai(user, thang, v.dongY, v.ghiChu)
         break
+      case 'dat_khoang':
+        return NextResponse.json(
+          await khoangKyService.dat(user, thang, { tu: v.tu, den: v.den, lyDo: v.lyDo }),
+        )
     }
     return NextResponse.json({ ok: true })
   },

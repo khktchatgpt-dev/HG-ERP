@@ -10,7 +10,7 @@ import { THU, dm, hm, ngayKy, so, thu, type NgayGio } from './gio-cong.shared'
 import { trongThoiGianLam } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
- * LƯỚI CÔNG — người × ngày của kỳ (26 → 25). Ô CHỈ nói trạng thái ngày đó (user 20/10/2026:
+ * LƯỚI CÔNG — người × ngày của kỳ (khoảng Nhân sự đặt). Ô CHỈ nói trạng thái ngày đó (user 20/10/2026:
  * "các ô chỉ cần hiển thị trạng thái làm việc ngày hôm đó, muốn xem công thì nhấn vào"):
  * ✓ đủ 8 giờ hành chính · ✓ cam có làm mà chưa đủ · ? thiếu lượt · V vắng · P/Ô/R/CT/KL
  * nghỉ có lý do · L lễ. Số giờ, công, tăng ca nằm trong khung nổi khi bấm ô (`o-gio.tsx`).

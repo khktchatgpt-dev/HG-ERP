@@ -1,5 +1,6 @@
 import { todayVn } from '@/lib/date-vn'
-import { kyCuaThang, thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { doiThang, khoangKy, thangCua } from '@/lib/cham-cong/khoang-ky'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { MotNguoiScreen } from '../../mot-nguoi'
 
 /**
@@ -17,9 +18,15 @@ export default async function MotNguoiPage({
 }) {
   const [{ ma }, sp] = await Promise.all([params, searchParams])
   const homNay = todayVn()
+  const ds = await khoangKyService.ds()
   const thang =
-    sp.thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.thang) ? sp.thang : thangCuaNgay(homNay)
+    sp.thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.thang) ? sp.thang : thangCua(homNay, ds)
+  const k = khoangKy(thang, ds)
+  const truoc = khoangKy(doiThang(thang, -1), ds)
   return (
-    <MotNguoiScreen ky={{ thang, ...kyCuaThang(thang), homNay }} ma={decodeURIComponent(ma)} />
+    <MotNguoiScreen
+      ky={{ thang, tu: k.tu, den: k.den, homNay, truoc: { tu: truoc.tu, den: truoc.den } }}
+      ma={decodeURIComponent(ma)}
+    />
   )
 }

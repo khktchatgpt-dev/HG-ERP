@@ -293,6 +293,12 @@ export const kyViecSchema = z.discriminatedUnion('viec', [
     dongY: z.boolean(),
     ghiChu: z.string().trim().max(300).optional(),
   }),
+  z.object({
+    viec: z.literal('dat_khoang'),
+    tu: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD'),
+    den: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD'),
+    lyDo: z.string().trim().max(300).optional(),
+  }),
 ])
 
 // ── Hồ sơ lương (B4, 0245) ───────────────────────────────────────────────

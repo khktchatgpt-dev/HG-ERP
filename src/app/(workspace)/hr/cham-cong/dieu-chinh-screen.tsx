@@ -12,7 +12,7 @@ import { KhungTrang } from './khung-trang'
 import { TinhTrang } from './dieu-chinh-sheet'
 import { THU, dmy, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { thangCua, type KhoangDat } from '@/lib/cham-cong/khoang-ky'
 
 /**
  * ĐIỀU CHỈNH CÔNG — hộp duyệt của trưởng phòng Nhân sự (câu 22). Hai ngăn: CHỜ DUYỆT
@@ -22,10 +22,13 @@ import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
  */
 export function DieuChinhScreen({
   d,
+  dsKy,
   thang,
   xem,
 }: {
   d: TrangDieuChinh
+  /** Khoảng các kỳ đã đặt — tra ngày thuộc kỳ nào cho link trang một người. */
+  dsKy: KhoangDat[]
   thang: string
   xem: 'cho' | 'thang'
 }) {
@@ -211,7 +214,7 @@ export function DieuChinhScreen({
                     <td className={td}>
                       <span className="num mr-1.5 text-[var(--ink-3)]">{x.ma}</span>
                       <Link
-                        href={`/hr/cham-cong/nguoi/${encodeURIComponent(x.ma)}?thang=${thangCuaNgay(x.ngay)}`}
+                        href={`/hr/cham-cong/nguoi/${encodeURIComponent(x.ma)}?thang=${thangCua(x.ngay, dsKy)}`}
                         className="text-[var(--act-text)] hover:underline"
                       >
                         {n?.ten ?? '—'}
