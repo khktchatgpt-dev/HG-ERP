@@ -216,3 +216,18 @@ export function applyManagerStatus(
 export function canReview(fb: FeedbackCore, actor: Actor): boolean {
   return fb.status === 'pending_review' && (actor.isReviewer || actor.canManage)
 }
+
+/**
+ * Ảnh nào đã BỊ BỎ hẳn: có trong `dropped` (ảnh của dòng vừa xoá, ảnh gỡ khi
+ * sửa) mà không còn nằm trong `stillUsed` (ảnh góp ý + ảnh các dòng còn lại).
+ * Chỉ những ảnh này mới được xoá khỏi Storage — một id dùng chung hai chỗ thì
+ * giữ. Trước 21/10/2026 không ai xoá ảnh cả: xoá góp ý chỉ gỡ liên kết
+ * (`files.feedback_id on delete set null`), object nằm lại Storage mãi.
+ */
+export function droppedFileIds(
+  dropped: readonly string[],
+  stillUsed: readonly (readonly string[])[],
+): string[] {
+  const used = new Set(stillUsed.flat())
+  return [...new Set(dropped)].filter((id) => !used.has(id))
+}

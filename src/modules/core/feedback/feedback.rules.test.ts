@@ -7,6 +7,7 @@ import {
   canEditComment,
   canEditContent,
   canView,
+  droppedFileIds,
   initialStatus,
   isPendingIntake,
   isPendingReopen,
@@ -172,5 +173,14 @@ describe('riêng tư', () => {
     expect(canView(p, reviewer)).toBe(true)
     expect(canView(p, other)).toBe(false)
     expect(canView(fb(), other)).toBe(true)
+  })
+})
+
+describe('ảnh bị bỏ (dọn Storage)', () => {
+  it('chỉ ảnh không còn ai dùng; trùng id thì một lần; dùng chung thì giữ', () => {
+    expect(droppedFileIds(['a', 'b', 'a'], [])).toEqual(['a', 'b'])
+    expect(droppedFileIds(['a', 'b'], [['b'], ['c']])).toEqual(['a'])
+    expect(droppedFileIds(['a'], [['x'], ['a']])).toEqual([])
+    expect(droppedFileIds([], [['a']])).toEqual([])
   })
 })

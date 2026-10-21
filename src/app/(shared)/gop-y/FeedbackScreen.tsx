@@ -65,6 +65,18 @@ export function FeedbackScreen({
   const toast = useToast()
   const [items, setItems] = useState(initialItems)
   const [meta, setMeta] = useState(initialMeta)
+  /*
+    Máy chủ gửi danh sách MỚI (router.refresh — nút "Góp ý" trên thanh đầu
+    trang gọi sau khi gửi) thì nhận lấy. Thiếu khối này, useState giữ bản đầu
+    mãi: gửi góp ý từ thanh đầu trang khi đang đứng ở /gop-y mà bảng không hiện
+    (dính 21/10/2026). Mẫu "điều chỉnh state theo prop" của React, không dùng effect.
+  */
+  const [seen, setSeen] = useState(initialItems)
+  if (seen !== initialItems) {
+    setSeen(initialItems)
+    setItems(initialItems)
+    setMeta(initialMeta)
+  }
   const [busy, setBusy] = useState(false)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [topic, setTopic] = useState('')

@@ -520,6 +520,19 @@ tắt tuần, xuất Markdown cho AI.
   nay `z-[80]` (= `--z-toast` của kit). Và lỗi chặn gửi (quá ngắn, ảnh đang tải,
   máy chủ từ chối) phải bày TẠI CHỖ cạnh nút (`blocked` ở hộp ghi nhanh và ô
   trao đổi), toast chỉ là lớp phụ.
+- **Ảnh phải được XOÁ, không chỉ gỡ liên kết** (21/10/2026): `files.feedback_id`
+  là `on delete set null`, nên xoá góp ý từng để mọi ảnh nằm lại Storage. Nay
+  service đọc ảnh TRƯỚC khi xoá (`filesRepo.listForFeedback`) rồi `filesRepo.purge`;
+  xoá dòng trao đổi / sửa bỏ ảnh thì xoá ảnh không còn ai trỏ tới
+  (`droppedFileIds`, luật thuần có test). Dọn ảnh chạy SAU khi DB ghi xong và
+  nuốt lỗi (log) — việc người dùng bấm đã thành.
+- **`useToast()` (ui) phải trả object ỔN ĐỊNH** — `ToastProvider` bọc `useMemo`.
+  Trước 21/10/2026 nó tạo object mới mỗi lần có toast hiện/tắt, nên mọi
+  `useCallback`/`useEffect` để `toast` trong deps chạy lại theo toast: hộp chi
+  tiết góp ý tự tải lại, toast cũ hết hạn đúng lúc vừa xoá → "Góp ý không tồn tại".
+- **Màn giữ danh sách trong `useState(initialX)` thì phải nhận lại prop khi
+  `router.refresh()`** (mẫu "điều chỉnh state theo prop", xem `FeedbackScreen`):
+  thiếu nó, gửi góp ý từ nút thanh đầu trang khi đang ở `/gop-y` mà bảng không hiện.
 - **Chưa làm** (đừng tự thêm): trợ lý phòng ban đọc góp ý, tạo góp ý từ đề
   xuất cuộc họp, đếm góp ý theo người — mục 9 README gói nói là tích hợp phụ.
 
