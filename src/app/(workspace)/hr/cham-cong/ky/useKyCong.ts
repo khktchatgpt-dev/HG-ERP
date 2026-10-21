@@ -63,7 +63,7 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
     viec(
       'chot',
       { viec: 'chot' },
-      `Đã chốt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)}`,
+      `Đã chốt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)} — đã báo Kế toán kiểm bảng lương`,
     )
   const xinMo = (lyDo: string) =>
     viec('xin', { viec: 'xin_mo', lyDo }, 'Đã gửi yêu cầu mở lại cho Giám đốc')

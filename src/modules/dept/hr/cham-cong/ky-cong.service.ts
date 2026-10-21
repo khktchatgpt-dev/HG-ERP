@@ -1,4 +1,6 @@
 import type { User } from '@/modules/core/users/users.repo'
+import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
+import { emit } from '@/events/bus'
 import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden } from '@/server/http'
@@ -276,6 +278,10 @@ export const kyCongService = {
         khongCham: dong.filter((x) => x.miem).length,
       },
     })
+    // Hệ thống tự tính bảng lương nháp + báo người quản lý lương (luồng duyệt 21/10/2026).
+    // Chờ xong rồi mới trả lời: chạy kiểu bắn-rồi-quên thì máy chủ serverless có thể tắt
+    // giữa chừng. Lỗi tính bị nuốt ở bus — kỳ công VẪN chốt, chị Phụng bấm Tính tay.
+    await emit({ name: 'hr.period.closed', thang, lan, closed_by: user.id })
     return { cong, nguoi: d.g.nguoi.length }
   },
 

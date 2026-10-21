@@ -179,7 +179,8 @@ export function NganThoiGian({ d }: { d: BangLuongCtx }) {
       key: `${i}-${e.luc}`,
       at: e.luc,
       label: v.ten,
-      actor: e.boi,
+      // Không người bấm = hệ thống tự tính khi Nhân sự chốt công.
+      actor: e.boi ?? (e.viec === 'calculate' ? 'Hệ thống' : null),
       detail:
         [
           e.ghiChu,

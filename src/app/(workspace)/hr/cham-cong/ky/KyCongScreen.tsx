@@ -175,7 +175,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
       <HolderBar
         inline
         who="Tài Chính Kế Toán"
-        what="tính lương kỳ này (bảng lương — bước sau)"
+        what="kiểm tra bảng lương hệ thống đã tính, rồi gửi sếp duyệt"
         age={
           k.ky?.chotLuc
             ? `${ngayTu(k.ky.chotLuc.slice(0, 10), k.homNay)} ngày`

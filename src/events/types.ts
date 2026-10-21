@@ -601,6 +601,28 @@ export type DomainEvent =
       source_ref: string | null
       changes: { field: string; before: string | null; after: string | null }[]
     }
+  /**
+   * LƯƠNG (luồng duyệt 21/10/2026): Nhân sự chốt công → hệ thống tự tính → chị Phụng kiểm,
+   * sửa → gửi sếp duyệt. Handler `luong.notifications` tính bảng nháp + báo người quản lý
+   * lương; sếp quyết → báo lại.
+   */
+  | {
+      name: 'hr.period.closed'
+      /** Kỳ 'YYYY-MM'. */
+      thang: string
+      /** Lần chốt (1 = chốt lần đầu; > 1 = chốt lại sau khi mở). */
+      lan: number
+      closed_by: string
+    }
+  | {
+      name: 'hr.payroll.decided'
+      thang: string
+      approved: boolean
+      reason: string | null
+      decided_by: string
+      /** Người gửi duyệt — nhận báo kết quả. */
+      submitted_by: string | null
+    }
 
 export type EventName = DomainEvent['name']
 

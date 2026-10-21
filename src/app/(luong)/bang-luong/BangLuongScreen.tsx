@@ -256,6 +256,15 @@ function ThanhBao({ d }: { d: BangLuongCtx }) {
         đang bày chưa khớp nguồn.
       </NoticeBar>
     )
+  // Lần tính mới nhất do HỆ THỐNG chạy lúc Nhân sự chốt công (luồng duyệt 21/10/2026).
+  if (d.tt === 'draft' && b.bang?.lanTinh && !b.bang.tinhBoi)
+    return (
+      <NoticeBar tone="neutral" tag="Tính tự động">
+        Hệ thống tính từ kỳ công chốt lúc {lucVn(b.ky?.chotLuc ?? b.bang.tinhLuc)}
+        {b.ky?.nguoiChot ? ` (Nhân sự: ${b.ky.nguoiChot})` : ''}. Kiểm tra, sửa hồ sơ
+        lương hoặc thêm khoản theo kỳ rồi bấm Tính lại trước khi gửi duyệt.
+      </NoticeBar>
+    )
   if (d.tt === 'paid')
     return (
       <NoticeBar tone="neutral" tag="Đã chi">

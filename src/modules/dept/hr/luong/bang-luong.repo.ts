@@ -316,7 +316,8 @@ export const bangLuongRepo = {
   async ghiSuKien(
     bangId: string,
     viec: string,
-    userId: string,
+    /** null = hệ thống tự làm (tự tính khi chốt công). */
+    userId: string | null,
     ghiChu?: string | null,
     data?: Record<string, unknown>,
   ) {

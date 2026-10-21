@@ -1,4 +1,6 @@
 import type { User } from '@/modules/core/users/users.repo'
+import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
+import { emit } from '@/events/bus'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden } from '@/server/http'
 import { banHieuLuc, CACH_PC_MAC_DINH } from '@/lib/luong/ho-so-luong'
@@ -115,6 +117,198 @@ async function nap(thang: string) {
   return { ky, bang, khoan, phieu, canTinhLai }
 }
 
+/**
+ * LÕI tính bảng lương — không kiểm quyền (người gọi đã kiểm, hoặc là HỆ THỐNG tự tính khi
+ * Nhân sự chốt kỳ công, 21/10/2026). `nguoiTinh` null = hệ thống: màn Bảng lương bày "Tính
+ * tự động" thay tên người.
+ */
+/** Kết quả một lần tính: số người, tổng thực lĩnh, số phiếu còn vướng (thiếu hồ sơ / hệ số / STK). */
+export type KetQuaTinh = { nguoi: number; thucLinh: number; vuong: number }
+
+async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaTinh> {
+  const ky = await kyCongRepo.ky(thang)
+  if (!ky || ky.trangThai !== 'closed')
+    throw Conflict(
+      `Kỳ công ${dmy(thang)} chưa chốt — chốt ở màn Kỳ công trước khi tính lương`,
+    )
+  const bang = await bangLuongRepo.damBao(thang)
+  if (bang.trangThai !== 'draft')
+    throw Conflict('Bảng lương đã gửi duyệt — rút về nháp trước khi tính lại')
+  if (!ky.banCachTinhId)
+    throw Conflict('Kỳ công chốt không ghi bản cách tính — chốt lại kỳ công')
+
+  const [chot, emps, ban, rieng, loaiPc, khung, heSo, quyTacBan, leRows, khoan, ts] =
+    await Promise.all([
+      kyCongRepo.banChot(ky.id, ky.lanChot),
+      chamCongRepo.employees(),
+      hoSoLuongRepo.banTatCa(),
+      hoSoLuongRepo.riengTatCa(),
+      hoSoLuongRepo.loaiPhuCap(),
+      cachTinhRepo.khung(ky.banCachTinhId),
+      cachTinhRepo.heSo(ky.banCachTinhId),
+      cachTinhRepo.dsBan(),
+      chamCongRepo.holidays(ky.tu, congNgay(ky.den, 1)),
+      bangLuongRepo.khoan(thang),
+      cachTinhRepo.thamSoLuong(ky.banCachTinhId),
+    ])
+  const quyTac = quyTacBan.find((b) => b.id === ky.banCachTinhId)?.quyTac
+  if (!quyTac) throw Conflict('Không tìm thấy bản cách tính kỳ công đã dùng')
+  const ngayLe = leRows
+    .map((h) => h.holiday_date)
+    .filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() !== 0)
+  const le = new Set(ngayLe)
+  // KT luôn chia 26 (0254); bản không đặt thì đếm ngày kỳ trừ CN, lễ như trước.
+  const cc = ts.congChuan ?? congChuan(ky.tu, ky.den, ngayLe)
+  const rate = new Map(heSo.map((h) => [`${h.loai}|${h.ma}|${h.ngay}`, h.pt]))
+  const boiCanh = {
+    thang,
+    phutMotCong: quyTac.phutMotCong,
+    khung: khung.map((k) => ({ ma: k.ma, ten: k.ten, hanhChinh: k.hanhChinh })),
+    congChuan: cc,
+    ngayLe,
+    loaiNgay: (d: string): LoaiNgayLuong =>
+      le.has(d) ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong',
+    heSoKhung: (ma: string, n: LoaiNgayLuong) => rate.get(`frame|${ma}|${n}`) ?? null,
+    heSoNghi: (ma: MaNghi) => rate.get(`leave|${ma}|any`) ?? null,
+    heSoTrua: quyTac.heSoTrua,
+    ptTrua: ts.ptTrua,
+    truThue: ts.truThue,
+  }
+  const empByCode = new Map(emps.map((e) => [e.code, e]))
+  const riengCua = new Map(rieng.map((r) => [r.employeeId, r]))
+  const loaiCua = new Map(loaiPc.map((l) => [l.id, l]))
+  const theoNguoi = new Map<string, typeof chot>()
+  for (const c of chot) theoNguoi.set(c.ma, [...(theoNguoi.get(c.ma) ?? []), c])
+
+  const phieu: PhieuDong[] = []
+  for (const [ma, ds] of theoNguoi) {
+    const e = empByCode.get(ma)
+    if (!e) continue
+    const van: string[] = []
+    const hs = banHieuLuc(
+      ban.filter((b) => b.employeeId === e.id),
+      thang,
+    )
+    const r = riengCua.get(e.id)
+    if (!hs) van.push('Chưa có hồ sơ lương')
+    if (!r?.stk) van.push('Thiếu STK')
+    // Không chấm công: số công = công chuẩn của PHẦN kỳ còn làm (vào / nghỉ giữa kỳ, 0248).
+    const khoang = khoangTrongKy(
+      { hireDate: e.hire_date, leaveDate: e.leave_date },
+      ky.tu,
+      ky.den,
+    )
+    // Làm trọn kỳ = đủ công chuẩn (`true`): công chuẩn cố định 26 mà kỳ chỉ 25 ngày làm thì
+    // đếm ngày sẽ trả thiếu 1/26.
+    const mien = ds.some((x) => x.miem)
+      ? khoang
+        ? khoang.tu === ky.tu && khoang.den === ky.den
+          ? true
+          : congChuan(khoang.tu, khoang.den, ngayLe)
+        : 0
+      : false
+    const p = tinhPhieu(
+      hs
+        ? {
+            cachTra: hs.cachTra,
+            donGia: hs.donGia,
+            luongThang: hs.luongThang,
+            luongBh: hs.luongBh,
+            coBh: hs.coBh,
+            npt: hs.npt,
+            khauTru10: hs.khauTru10,
+            tangCaGio: hs.tangCaGio,
+            doanPhi: hs.doanPhi,
+            phuCap: Object.entries(hs.phuCap)
+              .map(([id, muc]) => ({ id, l: loaiCua.get(id), muc }))
+              .filter((x) => x.l)
+              .map(({ id, l, muc }) => ({
+                ten: l!.ten,
+                muc,
+                chiuThue: l!.chiuThue,
+                theoNgay: l!.theoNgay,
+                ...(hs.phuCapCach[id] ?? CACH_PC_MAC_DINH),
+              })),
+          }
+        : {
+            cachTra: 'daily',
+            donGia: 0,
+            luongThang: null,
+            luongBh: null,
+            coBh: false,
+            npt: 0,
+            khauTru10: false,
+            tangCaGio: null,
+            doanPhi: false,
+            phuCap: [],
+          },
+      ds
+        .filter((x) => !x.miem && x.ngay)
+        .map((x) => ({
+          ngay: x.ngay!,
+          k: x.k,
+          trua: x.truaCong,
+          nghi: x.nghi as MaNghi | null,
+          khong: x.khong,
+        })),
+      khoan
+        .filter((k) => k.employeeId === e.id)
+        .map((k) => ({ loai: k.loai, tien: k.tien })),
+      boiCanh,
+      mien,
+    )
+    van.push(...p.thieuHeSo.map((t) => `Thiếu hệ số ${t}`), ...p.canhBao)
+    phieu.push({
+      employeeId: e.id,
+      ma,
+      ten: ds[0].ten,
+      to: ds[0].to,
+      cachTra: hs?.cachTra ?? '—',
+      cong: p.congThuc,
+      luongCong: p.luongCong,
+      tangCa: p.tangCa,
+      nghiCoLuong: p.nghiCoLuong,
+      phuCap: p.phuCap,
+      khoanCong: p.khoanCong,
+      tong: p.tong,
+      bhNld: p.bhNld,
+      bhDn: p.bhDn,
+      kpcd: p.kpcd,
+      doanPhi: p.doanPhi,
+      thue: p.thue,
+      truThue: p.truThue,
+      khoanTru: p.khoanTru,
+      thucLinh: p.thucLinh,
+      nganHang: r?.nganHang ?? null,
+      stk: r?.stk ?? null,
+      dong: p.dong,
+      why: p.why,
+      van,
+    })
+  }
+  const lan = bang.lanTinh + 1
+  await bangLuongRepo.ghiPhieu(bang.id, lan, phieu)
+  const ok = await bangLuongRepo.doi(bang.id, 'draft', {
+    calc_count: lan,
+    time_close_no: ky.lanChot,
+    calc_version_id: ky.banCachTinhId,
+    calculated_by: nguoiTinh,
+    calculated_at: new Date().toISOString(),
+  })
+  if (!ok) throw Conflict('Bảng lương vừa đổi trạng thái — tải lại trang')
+  const thucLinh = phieu.reduce((s, p) => s + p.thucLinh, 0)
+  await bangLuongRepo.ghiSuKien(bang.id, 'calculate', nguoiTinh, null, {
+    lan,
+    nguoi: phieu.length,
+    thucLinh,
+  })
+  return {
+    nguoi: phieu.length,
+    thucLinh,
+    vuong: phieu.filter((p) => p.van.length).length,
+  }
+}
+
 export const bangLuongService = {
   /** Dữ liệu cho file Excel lương — như `trang`, ghi thêm nhật ký "xuất Excel". */
   async xuatExcel(user: User, thang: string): Promise<BangLuongTrang> {
@@ -169,185 +363,19 @@ export const bangLuongService = {
   },
 
   /** Tạo / Tính lại toàn bộ phiếu từ ba nguồn. Chỉ khi bảng còn nháp. */
-  async tinh(user: User, thang: string): Promise<{ nguoi: number; thucLinh: number }> {
+  async tinh(user: User, thang: string): Promise<KetQuaTinh> {
     await assertAction(user, CHAY)
-    const ky = await kyCongRepo.ky(thang)
-    if (!ky || ky.trangThai !== 'closed')
-      throw Conflict(
-        `Kỳ công ${dmy(thang)} chưa chốt — chốt ở màn Kỳ công trước khi tính lương`,
-      )
-    const bang = await bangLuongRepo.damBao(thang)
-    if (bang.trangThai !== 'draft')
-      throw Conflict('Bảng lương đã gửi duyệt — rút về nháp trước khi tính lại')
-    if (!ky.banCachTinhId)
-      throw Conflict('Kỳ công chốt không ghi bản cách tính — chốt lại kỳ công')
+    return tinhLoi(thang, user.id)
+  },
 
-    const [chot, emps, ban, rieng, loaiPc, khung, heSo, quyTacBan, leRows, khoan, ts] =
-      await Promise.all([
-        kyCongRepo.banChot(ky.id, ky.lanChot),
-        chamCongRepo.employees(),
-        hoSoLuongRepo.banTatCa(),
-        hoSoLuongRepo.riengTatCa(),
-        hoSoLuongRepo.loaiPhuCap(),
-        cachTinhRepo.khung(ky.banCachTinhId),
-        cachTinhRepo.heSo(ky.banCachTinhId),
-        cachTinhRepo.dsBan(),
-        chamCongRepo.holidays(ky.tu, congNgay(ky.den, 1)),
-        bangLuongRepo.khoan(thang),
-        cachTinhRepo.thamSoLuong(ky.banCachTinhId),
-      ])
-    const quyTac = quyTacBan.find((b) => b.id === ky.banCachTinhId)?.quyTac
-    if (!quyTac) throw Conflict('Không tìm thấy bản cách tính kỳ công đã dùng')
-    const ngayLe = leRows
-      .map((h) => h.holiday_date)
-      .filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() !== 0)
-    const le = new Set(ngayLe)
-    // KT luôn chia 26 (0254); bản không đặt thì đếm ngày kỳ trừ CN, lễ như trước.
-    const cc = ts.congChuan ?? congChuan(ky.tu, ky.den, ngayLe)
-    const rate = new Map(heSo.map((h) => [`${h.loai}|${h.ma}|${h.ngay}`, h.pt]))
-    const boiCanh = {
-      thang,
-      phutMotCong: quyTac.phutMotCong,
-      khung: khung.map((k) => ({ ma: k.ma, ten: k.ten, hanhChinh: k.hanhChinh })),
-      congChuan: cc,
-      ngayLe,
-      loaiNgay: (d: string): LoaiNgayLuong =>
-        le.has(d) ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong',
-      heSoKhung: (ma: string, n: LoaiNgayLuong) => rate.get(`frame|${ma}|${n}`) ?? null,
-      heSoNghi: (ma: MaNghi) => rate.get(`leave|${ma}|any`) ?? null,
-      heSoTrua: quyTac.heSoTrua,
-      ptTrua: ts.ptTrua,
-      truThue: ts.truThue,
-    }
-    const empByCode = new Map(emps.map((e) => [e.code, e]))
-    const riengCua = new Map(rieng.map((r) => [r.employeeId, r]))
-    const loaiCua = new Map(loaiPc.map((l) => [l.id, l]))
-    const theoNguoi = new Map<string, typeof chot>()
-    for (const c of chot) theoNguoi.set(c.ma, [...(theoNguoi.get(c.ma) ?? []), c])
-
-    const phieu: PhieuDong[] = []
-    for (const [ma, ds] of theoNguoi) {
-      const e = empByCode.get(ma)
-      if (!e) continue
-      const van: string[] = []
-      const hs = banHieuLuc(
-        ban.filter((b) => b.employeeId === e.id),
-        thang,
-      )
-      const r = riengCua.get(e.id)
-      if (!hs) van.push('Chưa có hồ sơ lương')
-      if (!r?.stk) van.push('Thiếu STK')
-      // Không chấm công: số công = công chuẩn của PHẦN kỳ còn làm (vào / nghỉ giữa kỳ, 0248).
-      const khoang = khoangTrongKy(
-        { hireDate: e.hire_date, leaveDate: e.leave_date },
-        ky.tu,
-        ky.den,
-      )
-      // Làm trọn kỳ = đủ công chuẩn (`true`): công chuẩn cố định 26 mà kỳ chỉ 25 ngày làm thì
-      // đếm ngày sẽ trả thiếu 1/26.
-      const mien = ds.some((x) => x.miem)
-        ? khoang
-          ? khoang.tu === ky.tu && khoang.den === ky.den
-            ? true
-            : congChuan(khoang.tu, khoang.den, ngayLe)
-          : 0
-        : false
-      const p = tinhPhieu(
-        hs
-          ? {
-              cachTra: hs.cachTra,
-              donGia: hs.donGia,
-              luongThang: hs.luongThang,
-              luongBh: hs.luongBh,
-              coBh: hs.coBh,
-              npt: hs.npt,
-              khauTru10: hs.khauTru10,
-              tangCaGio: hs.tangCaGio,
-              doanPhi: hs.doanPhi,
-              phuCap: Object.entries(hs.phuCap)
-                .map(([id, muc]) => ({ id, l: loaiCua.get(id), muc }))
-                .filter((x) => x.l)
-                .map(({ id, l, muc }) => ({
-                  ten: l!.ten,
-                  muc,
-                  chiuThue: l!.chiuThue,
-                  theoNgay: l!.theoNgay,
-                  ...(hs.phuCapCach[id] ?? CACH_PC_MAC_DINH),
-                })),
-            }
-          : {
-              cachTra: 'daily',
-              donGia: 0,
-              luongThang: null,
-              luongBh: null,
-              coBh: false,
-              npt: 0,
-              khauTru10: false,
-              tangCaGio: null,
-              doanPhi: false,
-              phuCap: [],
-            },
-        ds
-          .filter((x) => !x.miem && x.ngay)
-          .map((x) => ({
-            ngay: x.ngay!,
-            k: x.k,
-            trua: x.truaCong,
-            nghi: x.nghi as MaNghi | null,
-            khong: x.khong,
-          })),
-        khoan
-          .filter((k) => k.employeeId === e.id)
-          .map((k) => ({ loai: k.loai, tien: k.tien })),
-        boiCanh,
-        mien,
-      )
-      van.push(...p.thieuHeSo.map((t) => `Thiếu hệ số ${t}`), ...p.canhBao)
-      phieu.push({
-        employeeId: e.id,
-        ma,
-        ten: ds[0].ten,
-        to: ds[0].to,
-        cachTra: hs?.cachTra ?? '—',
-        cong: p.congThuc,
-        luongCong: p.luongCong,
-        tangCa: p.tangCa,
-        nghiCoLuong: p.nghiCoLuong,
-        phuCap: p.phuCap,
-        khoanCong: p.khoanCong,
-        tong: p.tong,
-        bhNld: p.bhNld,
-        bhDn: p.bhDn,
-        kpcd: p.kpcd,
-        doanPhi: p.doanPhi,
-        thue: p.thue,
-        truThue: p.truThue,
-        khoanTru: p.khoanTru,
-        thucLinh: p.thucLinh,
-        nganHang: r?.nganHang ?? null,
-        stk: r?.stk ?? null,
-        dong: p.dong,
-        why: p.why,
-        van,
-      })
-    }
-    const lan = bang.lanTinh + 1
-    await bangLuongRepo.ghiPhieu(bang.id, lan, phieu)
-    const ok = await bangLuongRepo.doi(bang.id, 'draft', {
-      calc_count: lan,
-      time_close_no: ky.lanChot,
-      calc_version_id: ky.banCachTinhId,
-      calculated_by: user.id,
-      calculated_at: new Date().toISOString(),
-    })
-    if (!ok) throw Conflict('Bảng lương vừa đổi trạng thái — tải lại trang')
-    const thucLinh = phieu.reduce((s, p) => s + p.thucLinh, 0)
-    await bangLuongRepo.ghiSuKien(bang.id, 'calculate', user.id, null, {
-      lan,
-      nguoi: phieu.length,
-      thucLinh,
-    })
-    return { nguoi: phieu.length, thucLinh }
+  /**
+   * Hệ thống tự tính ngay khi Nhân sự chốt kỳ công (luồng duyệt 21/10/2026, Q2). Bảng đã gửi
+   * duyệt trở đi thì bỏ qua (null) — kỳ công không mở lại được khi đó nên hiếm khi xảy ra.
+   */
+  async tinhTuDong(thang: string): Promise<KetQuaTinh | null> {
+    const b = await bangLuongRepo.bang(thang)
+    if (b && b.trangThai !== 'draft') return null
+    return tinhLoi(thang, null)
   },
 
   async gui(user: User, thang: string): Promise<void> {
@@ -406,6 +434,15 @@ export const bangLuongService = {
       user.id,
       lyDo?.trim() || null,
     )
+    // Báo người gửi (chị Phụng) kết quả — handler luong.notifications.
+    await emit({
+      name: 'hr.payroll.decided',
+      thang,
+      approved: dongY,
+      reason: dongY ? null : lyDo!.trim(),
+      decided_by: user.id,
+      submitted_by: b.guiBoiId,
+    })
   },
 
   /** Đã duyệt mà chưa chi → rút về nháp để sửa (bắt lý do). */
