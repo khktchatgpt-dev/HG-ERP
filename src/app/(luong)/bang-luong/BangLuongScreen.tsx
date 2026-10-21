@@ -250,7 +250,7 @@ function ThanhBao({ d }: { d: BangLuongCtx }) {
       <NoticeBar
         tone="warn"
         tag="Cần tính lại"
-        action={{ label: 'Tính lại', onClick: d.tinh }}
+        action={b.quyen.chay ? { label: 'Tính lại', onClick: d.tinh } : undefined}
       >
         Kỳ công được chốt lại hoặc khoản theo kỳ đổi sau lần tính {b.bang?.lanTinh} — số
         đang bày chưa khớp nguồn.

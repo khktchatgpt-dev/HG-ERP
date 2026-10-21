@@ -15,6 +15,7 @@ import { chamCongRepo } from '../cham-cong/cham-cong.repo'
 import { cachTinhRepo } from '../cham-cong/cach-tinh.repo'
 import { kyCongRepo, type KyDong } from '../cham-cong/ky-cong.repo'
 import { hoSoLuongRepo } from './ho-so-luong.repo'
+import { assertXemLuong } from './quyen-luong'
 import {
   bangLuongRepo,
   type BangDong,
@@ -31,7 +32,6 @@ import {
  * Sau khi chi: không sửa; chênh lệch ghi khoản "Truy lĩnh / Truy thu" ở kỳ sau.
  */
 
-const XEM = 'hr.payroll.profile'
 const CHAY = 'hr.payroll.run'
 const DUYET = 'hr.payroll.approve'
 
@@ -124,7 +124,8 @@ export const bangLuongService = {
   },
 
   async trang(user: User, thang: string): Promise<BangLuongTrang> {
-    await assertAction(user, XEM)
+    // Xem: người quản lý lương + quản trị viên (chỉ đọc, 20/10); tính / gửi / chi gác CHAY.
+    await assertXemLuong(user)
     await hoSoLuongRepo.ghiXemLuong('payroll_sheet', user.id, { ghiChu: `kỳ ${thang}` })
     const [d, chay, duyet, emps] = await Promise.all([
       nap(thang),

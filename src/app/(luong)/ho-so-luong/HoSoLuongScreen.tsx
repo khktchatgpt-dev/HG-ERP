@@ -74,22 +74,31 @@ export function HoSoLuongScreen({
             : []),
         ]}
         actions={
-          <>
-            <Btn icon="excel" onClick={() => d.setSheet('nap')}>
-              Nạp từ Excel
-            </Btn>
-            <Btn icon="tien" onClick={() => d.setSheet('to')}>
-              Đặt đơn giá cho cả tổ
-            </Btn>
-            <Menu
-              ariaLabel="Thêm tác vụ"
-              items={[
-                { label: 'Danh mục phụ cấp', onClick: () => d.setSheet('phu_cap') },
-              ]}
-            />
-          </>
+          // Quản trị viên chỉ xem (20/10): không bày nút ghi nào.
+          h.quyen.sua && (
+            <>
+              <Btn icon="excel" onClick={() => d.setSheet('nap')}>
+                Nạp từ Excel
+              </Btn>
+              <Btn icon="tien" onClick={() => d.setSheet('to')}>
+                Đặt đơn giá cho cả tổ
+              </Btn>
+              <Menu
+                ariaLabel="Thêm tác vụ"
+                items={[
+                  { label: 'Danh mục phụ cấp', onClick: () => d.setSheet('phu_cap') },
+                ]}
+              />
+            </>
+          )
         }
       />
+      {!h.quyen.sua && (
+        <NoticeBar tone="neutral" tag="Chỉ xem">
+          Quản trị viên xem được hồ sơ lương nhưng không sửa — người quản lý lương ở Phòng
+          Kế toán nhập và tính. Mỗi lần mở đều ghi nhật ký.
+        </NoticeBar>
+      )}
       {d.thieuAi > 0 && (
         <NoticeBar
           tone="warn"

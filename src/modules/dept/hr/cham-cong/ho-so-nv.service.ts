@@ -38,9 +38,9 @@ import { hopDongRepo, type HdDong } from './hop-dong.repo'
 import { hopDongService, type GiayTo } from './hop-dong.service'
 import { hdHienHanh, type HdNgay } from '@/lib/nhan-su/hop-dong'
 import { hoSoLuongRepo } from '../luong/ho-so-luong.repo'
+import { suaLuong, xemLuong } from '../luong/quyen-luong'
 
 const XEM_RIENG = 'hr.employee.private'
-const XEM_LUONG = 'hr.payroll.profile'
 
 /** Một dòng hồ sơ: dòng Chấm công + cờ cá nhân + ngày HĐ đang áp (không lương, không số HĐ). */
 export type NvHoSo = NvDong & { coRieng: CoRieng; hd: HdNgay | null; vang: VangNv | null }
@@ -84,7 +84,8 @@ export type HoSoNvTrang = {
   /** Hợp đồng + giấy tờ — null khi không có quyền hr.employee.private (HĐ ghi lương, giấy tờ có CCCD). */
   hopDong: HdDong[] | null
   giayTo: GiayTo[] | null
-  quyen: { sua: boolean; rieng: boolean; luong: boolean }
+  /** luong = xem lương (người quản lý lương + quản trị viên); luongSua = ghi lương trên HĐ. */
+  quyen: { sua: boolean; rieng: boolean; luong: boolean; luongSua: boolean }
 }
 
 function doiCaNhan(r: DongCaNhan | null): CaNhan {
@@ -261,11 +262,12 @@ export const hoSoNvService = {
   async trang(user: User, ma: string): Promise<HoSoNvTrang> {
     await assertAction(user, 'hr.attendance.view')
     const homNay = todayVn()
-    const [nv, sua, rieng, luong] = await Promise.all([
+    const [nv, sua, rieng, luong, luongSua] = await Promise.all([
       this.danhSach(user, homNay),
       canAction(user, 'hr.attendance.employee_edit'),
       canAction(user, XEM_RIENG),
-      canAction(user, XEM_LUONG),
+      xemLuong(user),
+      suaLuong(user),
     ])
     const n = nv.ds.find((x) => x.code === ma)
     if (!n) throw NotFound(`Không có nhân viên mã ${ma}`)
@@ -318,7 +320,7 @@ export const hoSoNvService = {
       luong: tl,
       hopDong,
       giayTo,
-      quyen: { sua, rieng, luong },
+      quyen: { sua, rieng, luong, luongSua },
     }
   },
 

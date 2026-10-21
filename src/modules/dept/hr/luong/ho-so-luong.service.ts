@@ -20,6 +20,7 @@ import {
 import { TY_LE_BH_NLD } from '@/lib/luong/tinh-luong'
 import { chamCongRepo } from '../cham-cong/cham-cong.repo'
 import { hoSoLuongRepo, type BanLuong, type LoaiPhuCap } from './ho-so-luong.repo'
+import { assertXemLuong, suaLuong } from './quyen-luong'
 
 /**
  * HỒ SƠ LƯƠNG (B4, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất). Danh mục có hiệu lực theo
@@ -53,6 +54,8 @@ export type HoSoTrang = {
   dong: DongHoSo[]
   loaiPhuCap: LoaiPhuCap[]
   to: string[]
+  /** Quản trị viên chỉ XEM (20/10) — giao diện ẩn / khoá mọi nút ghi. */
+  quyen: { sua: boolean }
 }
 
 export type ChiTiet = {
@@ -124,7 +127,7 @@ export type DongXemNap = {
 
 export const hoSoLuongService = {
   async trang(user: User, thang?: string): Promise<HoSoTrang> {
-    await assertAction(user, QUYEN)
+    await assertXemLuong(user)
     const ky = thang ?? thangCuaNgay(todayVn())
     await hoSoLuongRepo.ghiXemLuong('payroll_list', user.id, { ghiChu: `kỳ ${ky}` })
     const [emps, ban, rieng, loai, kyChot] = await Promise.all([
@@ -162,6 +165,7 @@ export const hoSoLuongService = {
       thang: ky,
       kyChotCuoi: kyChot,
       dong,
+      quyen: { sua: await suaLuong(user) },
       loaiPhuCap: loai,
       to: [...new Set(emps.map((e) => e.team).filter((t): t is string => !!t))].sort(
         (a, b) => a.localeCompare(b, 'vi'),
@@ -170,7 +174,7 @@ export const hoSoLuongService = {
   },
 
   async chiTiet(user: User, employeeId: string): Promise<ChiTiet> {
-    await assertAction(user, QUYEN)
+    await assertXemLuong(user)
     await hoSoLuongRepo.ghiXemLuong('payroll_profile', user.id, { employeeId })
     const [ban, rieng, lanXem, kyChot] = await Promise.all([
       hoSoLuongRepo.banTatCa(),
@@ -205,7 +209,7 @@ export const hoSoLuongService = {
     employeeId: string,
     truong: 'bank_account' | 'national_id' | 'tax_code',
   ): Promise<string | null> {
-    await assertAction(user, QUYEN)
+    await assertXemLuong(user)
     const r = (await hoSoLuongRepo.riengTatCa()).find((x) => x.employeeId === employeeId)
     await hoSoLuongRepo.ghiXem(employeeId, truong, user.id)
     if (!r) return null

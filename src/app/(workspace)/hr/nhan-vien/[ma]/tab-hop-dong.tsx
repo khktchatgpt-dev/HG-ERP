@@ -322,8 +322,9 @@ function HopHd({ d, cu }: { d: HoSoCtx; cu: HdDong | null }) {
           className={O}
           list="hr-chuc-danh"
         />
-        {/* Ô lương: chỉ người quản lý lương (quyền mật) — Nhân sự làm HĐ không thấy ô này. */}
-        {d.h.quyen.luong && (
+        {/* Ô lương: chỉ người quản lý lương (quyền mật) — Nhân sự làm HĐ không thấy ô này;
+            quản trị viên chỉ XEM cột lương ở bảng HĐ, không có ô nhập. */}
+        {d.h.quyen.luongSua && (
           <>
             <span className="text-[var(--ink-3)]">Lương ghi trên HĐ</span>
             <TextInput

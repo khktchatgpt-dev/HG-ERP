@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { canAction } from '@/modules/core/rbac/rbac.service'
+import { xemLuong } from '@/modules/dept/hr/luong/quyen-luong'
 import { resolveDefaultWorkspace } from '@/workspaces/resolveWorkspace'
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
@@ -18,18 +18,18 @@ export default async function LuongLayout({ children }: { children: React.ReactN
   const user = await authService.currentUser()
   if (!user) redirect('/login')
   const workspace = (await resolveDefaultWorkspace(user)) ?? WORKSPACES.hr
-  const duoc = await canAction(user, 'hr.payroll.profile')
+  const duoc = await xemLuong(user)
   return (
     <WorkspaceShell workspace={workspace} bare compactTop>
       <div className="kit kit-dense flex h-full flex-col">
         {duoc ? (
           children
         ) : (
-          // Lương là quyền MẬT (0253): chỉ người có vai "Quản lý lương" — quản trị viên,
-          // Kế toán, Nhân sự, Giám đốc đều không xem được; màn Phân quyền không cấp được.
+          // Lương là quyền MẬT (0253): người có vai "Quản lý lương" làm; quản trị viên chỉ
+          // xem (20/10). Kế toán, Nhân sự, Giám đốc không xem được; màn Phân quyền không cấp được.
           <Empty
             headline="Lương chỉ người quản lý lương xem được"
-            reason="Lương và số tài khoản là thông tin mật: chỉ một người phụ trách lương ở Phòng Kế toán xem và tính, kể cả quản trị viên cũng không xem được."
+            reason="Lương và số tài khoản là thông tin mật: chỉ người phụ trách lương ở Phòng Kế toán xem và tính; quản trị viên chỉ được xem."
             next="Có thắc mắc về lương của mình thì hỏi trực tiếp người quản lý lương."
           />
         )}

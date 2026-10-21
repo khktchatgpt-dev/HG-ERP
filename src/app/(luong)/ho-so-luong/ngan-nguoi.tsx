@@ -247,6 +247,7 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
             icon="luuNhap"
             busy={d.busy === 'ban'}
             aria-disabled={!!loi}
+            blockedBy={d.h.quyen.sua ? undefined : 'Người quản lý lương (Phòng Kế toán)'}
             onClick={luu}
           >
             {b && b.tuKy === tuKy ? 'Lưu bản này' : `Lưu bản từ kỳ ${kyVn(tuKy)}`}
@@ -417,7 +418,12 @@ function ChiTra({ d }: { d: HoSoLuongCtx }) {
         </span>
       </div>
       <div className="mt-2">
-        <Btn icon="luuNhap" busy={d.busy === 'rieng'} onClick={luu}>
+        <Btn
+          icon="luuNhap"
+          busy={d.busy === 'rieng'}
+          blockedBy={d.h.quyen.sua ? undefined : 'Người quản lý lương (Phòng Kế toán)'}
+          onClick={luu}
+        >
           Lưu chi trả & định danh
         </Btn>
       </div>

@@ -31,7 +31,8 @@ export function NganKhoan({ d }: { d: BangLuongCtx }) {
     })
   const danDuoc = dongDan.filter((x) => x.n && x.tien && x.tien > 0)
 
-  const sua = d.nhap
+  // Quản trị viên chỉ xem (20/10): không bày ô thêm / nút xoá khoản.
+  const sua = d.nhap && b.quyen.chay
   return (
     <div className="min-h-0 overflow-auto bg-[var(--surface-card)]">
       {sua && (
