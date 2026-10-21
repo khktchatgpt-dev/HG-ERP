@@ -662,6 +662,49 @@ export type DomainEvent =
       recipient_ids: string[]
     }
 
+  /**
+   * MÁY MÓC & BẢO TRÌ (0270). Service tính sẵn người nhận (Tổ Cơ điện = ai có
+   * assets.manage; Giám đốc = ai có assets.approve; người báo hỏng), handler
+   * chỉ viết thông báo. `label` = "TS-HAN-004 Máy hàn MIG 350A".
+   */
+  | {
+      name: 'asset.issue.reported'
+      issue_id: string
+      no: string
+      label: string
+      stops: boolean
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'asset.issue.approval_needed'
+      issue_id: string
+      no: string
+      label: string
+      estimate: number
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'asset.issue.decided'
+      issue_id: string
+      no: string
+      label: string
+      approved: boolean
+      reason: string | null
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'asset.issue.done'
+      issue_id: string
+      no: string
+      label: string
+      cost: number
+      actor_id: string
+      recipient_ids: string[]
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

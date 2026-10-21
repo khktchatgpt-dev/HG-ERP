@@ -297,6 +297,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
            * đều tựa vào bảng này.
            */
           { href: '/finance/ty-gia', label: 'Tỷ giá', icon: 'arrow-left-right' },
+          { href: '/may-moc/chi-phi', label: 'Chi phí bảo trì', icon: 'wrench' },
           /*
            * Đối chiếu hoá đơn ↔ đơn mua KHÔNG đứng riêng ở nav: nó là bước soi
            * chi tiết, vào từ một lệnh hoặc một đơn cụ thể. Cho nó một mục ngang
@@ -374,6 +375,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse/bao-cao', label: 'Nhập–Xuất–Tồn', icon: 'chart-column' },
           // Kho đợt 2 · B7 (19/10/2026): đợt kiểm kê — đếm mù, sổ chốt lúc bắt đầu đếm.
           { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
+          // Kho giữ kho dụng cụ cầm tay: giao / thu hồi (0270).
+          { href: '/may-moc/dung-cu', label: 'Dụng cụ theo người', icon: 'wrench' },
           // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
           // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
           // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.
@@ -625,7 +628,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       },
       {
         heading: 'Công cụ',
-        items: [{ href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' }],
+        items: [
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+          // Khu (may-moc) — Tổ Cơ Điện nhận báo hỏng, ghi bảo trì (0270).
+          { href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' },
+        ],
       },
     ],
   },
@@ -647,6 +654,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/to/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
           { href: '/to/qua-trinh', label: 'Quá trình tổ', icon: 'history' },
           { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+          { href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' },
         ],
       },
     ],
@@ -758,6 +766,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Điều hành',
         items: [
           { href: '/exec', label: 'Tổng quan', icon: 'home' },
+          { href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' },
           // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
           { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
           // SỔ đề nghị mua (Hộp ký H3 · Q27) — tra cứu tiến độ mua, KHÔNG đếm: phiếu
@@ -814,7 +823,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Quản trị',
         items: [
           { href: '/admin', label: 'Tổng quan', icon: 'home', roles: ['admin'] },
-          { href: '/admin/users', label: 'Nhân viên & tài khoản', icon: 'users', roles: ['admin'] },
+          {
+            href: '/admin/users',
+            label: 'Nhân viên & tài khoản',
+            icon: 'users',
+            roles: ['admin'],
+          },
           {
             href: '/admin/departments',
             label: 'Phòng ban',
@@ -861,6 +875,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             roles: ['admin'],
           },
         ],
+      },
+      {
+        // Admin nhập danh sách máy, gán quyền Tổ Cơ điện — cần lối vào thẳng từ
+        // khu mình thay vì phải chuyển sang khu Sản xuất (0270).
+        heading: 'Vận hành',
+        items: [{ href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' }],
       },
     ],
   },

@@ -536,6 +536,32 @@ tắt tuần, xuất Markdown cho AI.
 - **Chưa làm** (đừng tự thêm): trợ lý phòng ban đọc góp ý, tạo góp ý từ đề
   xuất cuộc họp, đếm góp ý theo người — mục 9 README gói nói là tích hợp phụ.
 
+## Máy móc & bảo trì (`modules/core/assets`, `/may-moc`)
+
+Mang từ bản demo "MOCA Tài sản" (21/10/2026), dựng lại bằng kit. Khu DÙNG CHUNG
+(`src/app/(may-moc)/`, shell theo workspace nhà của người xem): Việc hôm nay · Máy
+móc · Lịch bảo trì · Báo hỏng · Chi phí · Dụng cụ theo người · Tem QR. Nav ở Sản
+xuất, Tổ, BGĐ; Kho thấy `/may-moc/dung-cu`; Kế toán thấy `/may-moc/chi-phi`.
+
+- **DB** (`0270_may_moc_bao_tri.sql`): `asset_groups` (18 nhóm HG + mẫu hạng mục),
+  `assets` (máy + dụng cụ, `kind`), `asset_plans`, `asset_issues` (mỗi máy tối đa
+  MỘT phiếu mở — unique index), `asset_work_orders` (PBD/PSC/PKD), `asset_movements`
+  (`asset_ids` là MẢNG), `asset_counters` + `asset_next_no()`. Ảnh báo hỏng =
+  `files.asset_issue_id`. Hạn mức GĐ duyệt = `settings.asset_approve_over` (10 tr).
+- **Quyền**: `assets.asset.edit` / `assets.work` / `assets.approve` / `assets.tools`
+  / `assets.cost.view`; vai mới `maintenance` (Tổ Cơ điện). Ai đăng nhập cũng báo hỏng được.
+- **Luồng báo hỏng**: moi → (dự toán > hạn mức) cho_duyet → dang_sua → xong; huỷ chỉ
+  khi `moi`, trả máy về trạng thái trước khi báo. "Không duyệt" quay về `moi` và XOÁ
+  thợ/đơn vị/dự toán. Sửa xong tạo PSC và máy chạy lại. Đổi trạng thái dùng update có
+  điều kiện (`fromStatuses`) → bấm trùng là 409, không ghi đè.
+- **Logic thuần** ở `src/lib/may-moc.ts` (hạn theo ngày/giờ chạy, chuyển trạng thái
+  máy, đánh mã, tiền) — client dùng chung, có test. Excel nhập máy + xuất chi phí ở
+  `assets.excel.ts` (có test).
+- **Thông báo** qua event bus (`asset.notifications.ts`), không báo cho chính người bấm.
+- Hộp thoại bày lỗi TẠI CHỖ (`Blocked`); khối form gắn `onInput` để câu tắt khi sửa.
+- **Chưa làm**: đưa phiếu chờ GĐ duyệt vào Trung tâm phê duyệt (`/exec/approvals`) —
+  hiện GĐ duyệt ngay trên phiếu, nhận việc qua chuông.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
