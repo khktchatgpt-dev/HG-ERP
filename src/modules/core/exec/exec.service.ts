@@ -6,6 +6,7 @@ import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
+import { duyetLuongService } from '@/modules/dept/hr/luong/duyet-luong.service'
 import { tongDuKien } from '@/lib/de-nghi'
 import { choToiDuyet } from '@/lib/de-nghi-duyet'
 import type { LoaiPhieu } from '@/lib/loai-phieu-duyet'
@@ -535,6 +536,32 @@ export const execService = {
           dnm: { so_dong: r.lines.length, chua_ma: chuaMa, thieu_gia: t.thieuGia },
         })
       }
+    }
+
+    /*
+      BẢNG LƯƠNG (luồng duyệt 21/10/2026) — quyền `hr.payroll.approve`, không tự duyệt bảng
+      mình gửi. Chỉ đưa TỔNG (số người, thực lĩnh) — sếp không thấy lương từng người.
+    */
+    for (const bl of await duyetLuongService.choToiDuyet(user)) {
+      items.push({
+        kind: 'luong',
+        id: bl.thang,
+        code: `Lương ${bl.thang.slice(5)}/${bl.thang.slice(0, 4)}`,
+        party: bl.guiBoi ?? 'Kế toán',
+        facts: [`${bl.nguoi} người`],
+        currency: 'VND',
+        value: bl.thucLinh,
+        waiting_days: daysSince(bl.guiLuc, today) ?? 0,
+        submitted_at: bl.guiLuc ?? new Date().toISOString(),
+        submitted_by: bl.guiBoi,
+        owner_id: bl.guiBoiId,
+        owner_name: bl.guiBoi ? properName(bl.guiBoi) || null : null,
+        warnings: [],
+        big: false,
+        href: `/exec/approvals/luong/${bl.thang}`,
+        hen: null,
+        boi_canh: null,
+      })
     }
 
     // Đơn CHỜ KÝ BÙ lên đầu: hàng đã đi, chữ ký đang nợ — việc đó không chờ được.

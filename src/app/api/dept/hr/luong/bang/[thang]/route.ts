@@ -19,7 +19,7 @@ export const POST = handle(
       case 'tinh':
         return NextResponse.json(await bangLuongService.tinh(user, thang))
       case 'gui':
-        await bangLuongService.gui(user, thang)
+        await bangLuongService.gui(user, thang, v.ghiChu)
         break
       case 'rut':
         await bangLuongService.rut(user, thang)

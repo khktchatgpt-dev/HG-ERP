@@ -615,6 +615,13 @@ export type DomainEvent =
       closed_by: string
     }
   | {
+      name: 'hr.payroll.submitted'
+      thang: string
+      submitted_by: string
+      nguoi: number
+      thucLinh: number
+    }
+  | {
       name: 'hr.payroll.decided'
       thang: string
       approved: boolean

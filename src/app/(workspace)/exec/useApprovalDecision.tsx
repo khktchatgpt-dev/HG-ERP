@@ -33,7 +33,7 @@ import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
  * (/exec/approvals/{lsx,po}/[id]). API giữ nguyên.
  */
 export type DecideTarget = {
-  kind: 'lsx' | 'po' | 'quote' | 'dnm'
+  kind: 'lsx' | 'po' | 'quote' | 'dnm' | 'luong'
   id: string
   code: string
   label: string
@@ -45,6 +45,7 @@ const KIND_NOUN = {
   po: 'đơn đặt',
   quote: 'báo giá',
   dnm: 'đề nghị mua',
+  luong: 'bảng lương',
 } as const
 /**
  * Trả lại thì phiếu đi đâu — mỗi loại một đường, đừng nói chung "về NHÁP" (13/10/2026:
@@ -57,6 +58,8 @@ const REJECT_THEN = {
   quote:
     'Báo giá sang "Bị từ chối", giữ nguyên số và lịch sử — Sale sửa theo lý do rồi gửi duyệt lại.',
   dnm: 'Đề nghị quay về NHÁP, giữ nguyên số và lịch sử — Kho sửa theo lý do rồi gửi duyệt lại.',
+  luong:
+    'Bảng lương về NHÁP kèm lý do — người quản lý lương sửa ở nguồn, Tính lại rồi gửi lại.',
 } as const
 /** Duyệt xong thì chuyện gì được mở khoá — câu nhắc trong dialog duyệt. */
 const APPROVE_UNLOCKS = {
@@ -64,6 +67,7 @@ const APPROVE_UNLOCKS = {
   po: 'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).',
   quote: 'Duyệt xong Sale mới chốt & gửi khách được.',
   dnm: 'Duyệt xong Kho tự đi mua theo đúng số đề nghị — muốn sửa số thì bấm Xem kỹ.',
+  luong: 'Duyệt xong Kế toán chuyển khoản rồi ghi Đã chi.',
 } as const
 
 export function targetLsx(
@@ -97,7 +101,13 @@ async function callDecide(
   decision: 'approve' | 'reject',
   reason?: string,
 ) {
-  if (t.kind === 'lsx') {
+  if (t.kind === 'luong') {
+    // id = kỳ 'YYYY-MM'
+    await api(`/api/dept/hr/luong/bang/${t.id}`, {
+      method: 'POST',
+      body: { viec: 'quyet', dongY: decision === 'approve', lyDo: reason },
+    })
+  } else if (t.kind === 'lsx') {
     await api(`/api/dept/production/lsx/${t.id}/${decision}`, {
       method: 'POST',
       body: decision === 'reject' ? { reason } : {},

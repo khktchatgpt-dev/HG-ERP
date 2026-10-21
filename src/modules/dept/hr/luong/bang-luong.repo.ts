@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import type { DongTien, LoaiKhoan } from '@/lib/luong/tinh-luong'
+import type { KhoiLuong } from '@/lib/luong/tong-duyet'
 
 /** Bảng lương — bảng 0246. Chỉ `bang-luong.service` gọi (đã gác quyền). */
 
@@ -129,6 +130,24 @@ const doi = (r: Row): BangDong => ({
 const so = (v: unknown) => Number(v ?? 0)
 
 export const bangLuongRepo = {
+  /** Tên tổ → khối bảng lương (0257) — màn duyệt của sếp gom khối → tổ. */
+  async khoiCuaTo(): Promise<Map<string, KhoiLuong | null>> {
+    const rows = must(await db().from('hr_teams').select('name, pay_block'))
+    return new Map(rows.map((r) => [r.name, (r.pay_block as KhoiLuong | null) ?? null]))
+  },
+
+  /** Mọi bảng đang CHỜ DUYỆT (thường một) — Hộp ký của sếp + số đếm menu. */
+  async choDuyet(): Promise<BangDong[]> {
+    const rows = must(
+      await db()
+        .from('hr_payrolls')
+        .select(COT)
+        .eq('status', 'submitted')
+        .order('period'),
+    ) as unknown as Row[]
+    return rows.map(doi)
+  },
+
   async bang(thang: string): Promise<BangDong | null> {
     const r = must(
       await db().from('hr_payrolls').select(COT).eq('period', thang).maybeSingle(),

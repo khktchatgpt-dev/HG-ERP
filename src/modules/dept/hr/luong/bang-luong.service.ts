@@ -56,7 +56,7 @@ export type BangLuongTrang = {
 
 const dmy = (t: string) => `${t.slice(5)}/${t.slice(0, 4)}`
 
-function dieuKienGui(phieu: PhieuDong[], canTinhLai: boolean): DieuKienGui[] {
+export function dieuKienGui(phieu: PhieuDong[], canTinhLai: boolean): DieuKienGui[] {
   const dem = (re: RegExp) => phieu.filter((p) => p.van.some((v) => re.test(v))).length
   const thieuHeSo = [
     ...new Set(phieu.flatMap((p) => p.van.filter((v) => v.startsWith('Thiếu hệ số')))),
@@ -97,7 +97,7 @@ function dieuKienGui(phieu: PhieuDong[], canTinhLai: boolean): DieuKienGui[] {
   ]
 }
 
-async function nap(thang: string) {
+export async function nap(thang: string) {
   const [ky, bang, khoan] = await Promise.all([
     kyCongRepo.ky(thang),
     bangLuongRepo.bang(thang),
@@ -378,7 +378,8 @@ export const bangLuongService = {
     return tinhLoi(thang, null)
   },
 
-  async gui(user: User, thang: string): Promise<void> {
+  /** `ghiChu` — lời chị Phụng gửi kèm cho sếp (bày ở màn duyệt, bản vẽ 21/10). */
+  async gui(user: User, thang: string, ghiChu?: string | null): Promise<void> {
     await assertAction(user, CHAY)
     const d = await nap(thang)
     if (!d.bang || d.bang.trangThai !== 'draft' || !d.bang.lanTinh)
@@ -392,8 +393,17 @@ export const bangLuongService = {
       return_reason: null,
     })
     if (!ok) throw Conflict('Bảng lương vừa đổi trạng thái — tải lại trang')
-    await bangLuongRepo.ghiSuKien(d.bang.id, 'submit', user.id, null, {
-      thucLinh: d.phieu.reduce((s, p) => s + p.thucLinh, 0),
+    const thucLinh = d.phieu.reduce((s, p) => s + p.thucLinh, 0)
+    await bangLuongRepo.ghiSuKien(d.bang.id, 'submit', user.id, ghiChu?.trim() || null, {
+      thucLinh,
+    })
+    // Báo người có quyền duyệt lương (handler luong.notifications).
+    await emit({
+      name: 'hr.payroll.submitted',
+      thang,
+      submitted_by: user.id,
+      nguoi: d.phieu.length,
+      thucLinh,
     })
   },
 

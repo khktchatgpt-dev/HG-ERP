@@ -387,7 +387,7 @@ export const luongViecSchema = z.discriminatedUnion('viec', [
 
 export const bangLuongViecSchema = z.discriminatedUnion('viec', [
   z.object({ viec: z.literal('tinh') }),
-  z.object({ viec: z.literal('gui') }),
+  z.object({ viec: z.literal('gui'), ghiChu: z.string().trim().max(500).nullish() }),
   z.object({ viec: z.literal('rut') }),
   z.object({
     viec: z.literal('quyet'),

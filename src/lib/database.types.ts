@@ -2467,6 +2467,7 @@ export type Database = {
       }
       hr_teams: {
         Row: {
+          pay_block: string | null
           active: boolean
           calc_mode: string
           created_at: string
@@ -2477,6 +2478,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          pay_block?: string | null
           active?: boolean
           calc_mode?: string
           created_at?: string
@@ -2487,6 +2489,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          pay_block?: string | null
           active?: boolean
           calc_mode?: string
           created_at?: string

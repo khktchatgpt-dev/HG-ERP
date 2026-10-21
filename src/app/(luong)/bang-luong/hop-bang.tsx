@@ -19,23 +19,33 @@ export function HopBangLuong({ d }: { d: BangLuongCtx }) {
       <Sheet
         open={d.hop === 'gui'}
         onClose={dong}
-        title={`Gửi bảng lương kỳ ${kyVn(b.thang)} cho Giám đốc?`}
+        title={`Gửi bảng lương kỳ ${kyVn(b.thang)} cho sếp duyệt?`}
         subtitle={`${b.phieu.length} người · thực lĩnh ${tl} đ`}
         stakes="vua"
         footer={
           <SheetActions
             stakes="vua"
             onCancel={dong}
-            onConfirm={d.gui}
+            onConfirm={() => d.gui(lyDo)}
             confirmLabel="Gửi duyệt"
             cancelLabel="Để sau"
             busy={d.busy === 'gui'}
           />
         }
       >
+        <label className="text-k-sm mb-1 block font-semibold" htmlFor="bl-ghi-gui">
+          Ghi chú cho sếp (không bắt buộc)
+        </label>
+        <TextArea
+          id="bl-ghi-gui"
+          aria-label="Ghi chú cho sếp"
+          value={lyDo}
+          onChange={setLyDo}
+          rows={3}
+        />
         <Consequence>
-          Bảng khoá sửa tới khi Giám đốc duyệt hoặc trả lại. Muốn sửa trước đó thì Rút về
-          nháp.
+          Sếp được báo và chỉ thấy tổng theo bộ phận (không thấy lương từng người). Bảng
+          khoá sửa tới khi sếp duyệt hoặc trả lại; muốn sửa trước đó thì Rút về nháp.
         </Consequence>
       </Sheet>
 

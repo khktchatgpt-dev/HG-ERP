@@ -10,6 +10,12 @@ const kyVn = (thang: string) => `${thang.slice(5)}/${thang.slice(0, 4)}`
 const tien = (n: number) => Math.round(n).toLocaleString('vi-VN')
 
 export const hrefBangLuong = (thang: string) => `/bang-luong?thang=${thang}`
+/** Màn duyệt của sếp (Hộp ký › Bảng lương). */
+export const hrefDuyetLuong = (thang: string) => `/exec/approvals/luong/${thang}`
+
+/** Chị Phụng gửi bảng lương — báo sếp. */
+export const tieuDeGui = (thang: string, nguoi: number, thucLinh: number) =>
+  `Bảng lương ${kyVn(thang)} chờ duyệt: ${nguoi} người, thực lĩnh ${tien(thucLinh)}`
 
 /** Nhân sự chốt công, hệ thống đã tính bảng nháp. */
 export function tieuDeDaTinh(

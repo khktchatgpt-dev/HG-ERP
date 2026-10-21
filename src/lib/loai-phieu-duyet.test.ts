@@ -20,7 +20,7 @@ const p = (
 describe('LOAI_PHIEU', () => {
   it('mọi loại thuộc một phòng có trong danh sách phòng; thứ tự khối theo phòng (Q25)', () => {
     for (const l of LOAI_THEO_THU_TU) expect(PHONG_TRINH).toContain(LOAI_PHIEU[l].phong)
-    expect(LOAI_THEO_THU_TU).toEqual(['po', 'dnm', 'lsx', 'quote'])
+    expect(LOAI_THEO_THU_TU).toEqual(['po', 'dnm', 'lsx', 'quote', 'luong'])
   })
 })
 
@@ -51,7 +51,7 @@ describe('gomTheoLoai / demTheoPhong', () => {
     expect(gomTheoLoai(ds).map((g) => [g.loai, g.items.length])).toEqual([['po', 2], ['dnm', 1], ['lsx', 1]]) // prettier-ignore
   })
   it('đếm theo phòng, phòng 0 phiếu vẫn có chip', () => {
-    expect(demTheoPhong(ds).map((x) => [x.phong, x.n])).toEqual([['mua_hang', 2], ['kho', 1], ['san_xuat', 1], ['ban_hang', 0]]) // prettier-ignore
+    expect(demTheoPhong(ds).map((x) => [x.phong, x.n])).toEqual([['mua_hang', 2], ['kho', 1], ['san_xuat', 1], ['ban_hang', 0], ['ke_toan', 0]]) // prettier-ignore
   })
 })
 

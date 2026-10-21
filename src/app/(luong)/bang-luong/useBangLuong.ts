@@ -72,7 +72,12 @@ export function useBangLuong(b: BangLuongTrang, mucDau: MucBl) {
         { viec: 'tinh' },
         `Đã tính bảng lương kỳ ${b.thang.slice(5)}/${b.thang.slice(0, 4)}`,
       ),
-    gui: () => viec('gui', { viec: 'gui' }, 'Đã gửi Giám đốc duyệt'),
+    gui: (ghiChu?: string) =>
+      viec(
+        'gui',
+        { viec: 'gui', ghiChu: ghiChu?.trim() || null },
+        'Đã gửi sếp duyệt — sếp được báo',
+      ),
     rut: () => viec('rut', { viec: 'rut' }, 'Đã rút về nháp'),
     quyet: (dongY: boolean, lyDo?: string) =>
       viec(

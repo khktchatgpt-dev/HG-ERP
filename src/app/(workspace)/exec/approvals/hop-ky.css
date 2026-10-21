@@ -35,6 +35,8 @@
   --hk-lsx-wash: #f9e7ef;
   --hk-quote: #475569;
   --hk-quote-wash: #edf0f4;
+  --hk-luong: #15653d;
+  --hk-luong-wash: #e5f3ea;
   --hk-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
 
   display: flex;
@@ -444,6 +446,10 @@
 .hk.hk .lp-quote {
   --c: var(--hk-quote);
   --w: var(--hk-quote-wash);
+}
+.hk.hk .lp-luong {
+  --c: var(--hk-luong);
+  --w: var(--hk-luong-wash);
 }
 .hk.hk .lp-gap {
   --c: var(--hk-warn);
