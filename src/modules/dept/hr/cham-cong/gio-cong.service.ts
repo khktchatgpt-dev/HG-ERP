@@ -6,6 +6,7 @@ import {
   kyCuaThang,
   thangCuaNgay,
   tinhKyGioCong,
+  trongThoiGianLam,
   type CachTinh,
   type NguoiGio,
 } from '@/lib/cham-cong/ky-gio-cong'
@@ -128,7 +129,8 @@ export const gioCongService = {
       ngayDoDang: ngayLay < homNay ? ngayLay : homNay,
       tu: k.tu,
       den: k.den,
-      nhanSu: du.nhanSu,
+      // Người đã nghỉ còn làm trong kỳ vẫn có dòng (lương những ngày đã làm).
+      nhanSu: [...du.nhanSu, ...du.daNghi],
       dong: du.dong,
       dieuChinh: du.dieuChinh,
       trua,
@@ -146,7 +148,7 @@ export const gioCongService = {
           )
         : song
     const dem = new Map<string, number>()
-    for (const n of du.nhanSu)
+    for (const n of [...du.nhanSu, ...du.daNghi])
       dem.set(n.boPhan ?? CHUA_CO, (dem.get(n.boPhan ?? CHUA_CO) ?? 0) + 1)
     const boPhan = [...dem]
       .map(([ten, so]) => ({ ten, so, cachTinh: cachTinh[ten] ?? ('khung' as CachTinh) }))
@@ -303,7 +305,7 @@ export const gioCongService = {
           ngayVao: e?.hire_date ?? null,
           ngay: ds,
           may,
-          tong: tongCong(ds, daLay),
+          tong: tongCong(ds, (iso) => daLay(iso) && trongThoiGianLam(n, iso)),
         }
       }),
     }

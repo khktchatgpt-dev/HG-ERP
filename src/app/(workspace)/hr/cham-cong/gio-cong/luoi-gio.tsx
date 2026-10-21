@@ -7,6 +7,7 @@ import { KY_NGHI, TEN_NGHI } from '@/lib/cham-cong/dieu-chinh'
 import type { CongNgay } from '@/lib/cham-cong/chi-tiet-cong'
 import type { GioCongCtx } from './useGioCong'
 import { THU, dm, hm, ngayKy, so, thu, type NgayGio } from './gio-cong.shared'
+import { trongThoiGianLam } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * LƯỚI CÔNG — người × ngày của kỳ (26 → 25). Ô CHỈ nói trạng thái ngày đó (user 20/10/2026:
@@ -190,6 +191,11 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                       {n.ma}
                     </span>
                     {n.ten}
+                    {n.ngayCuoi && (
+                      <span className="ml-1 text-[11px] font-normal text-[var(--ink-3)]">
+                        · nghỉ {dm(n.ngayCuoi)}
+                      </span>
+                    )}
                   </Link>
                 </td>
                 {ngays.map((ng) => (
@@ -319,6 +325,21 @@ function O({
           'bg-[repeating-linear-gradient(135deg,var(--surface-card)_0_4px,var(--surface-raised)_4px_8px)]',
         )}
       />
+    )
+  const nv = d.nguoiCua(ma)
+  if (!x && nv && !trongThoiGianLam(nv, ngay))
+    return (
+      <td
+        className={cn(base, 'bg-[var(--surface-raised)] text-[var(--ink-3)]')}
+        style={{ textAlign: 'center' }}
+        title={
+          nv.ngayCuoi && ngay > nv.ngayCuoi
+            ? `${ten} đã nghỉ việc — ngày làm cuối ${dm(nv.ngayCuoi)}`
+            : `${ten} chưa vào làm — ngày vào ${dm(nv.ngayVao ?? ngay)}`
+        }
+      >
+        –
+      </td>
     )
   if (!x) {
     // Không quẹt, không điều chỉnh: lễ → L; chủ nhật → trống; ngày thường đã lấy dữ liệu → V.

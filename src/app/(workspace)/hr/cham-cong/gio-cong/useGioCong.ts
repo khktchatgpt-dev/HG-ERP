@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
-import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
+import { trongThoiGianLam, type CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 import type { MoDieuChinh } from '../dieu-chinh-sheet'
 import {
   chiTietNgay,
@@ -73,7 +73,8 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
         .map((iso) => chiTietNgay(iso, theo.get(iso), b.thamSo, n.cachTinh, b.le))
       out.set(n.ma, {
         ngay: new Map(ds.map((x) => [x.ngay, x])),
-        tong: tongCong(ds, daLay),
+        // Trước ngày vào / sau ngày làm cuối không còn là "vắng".
+        tong: tongCong(ds, (iso) => daLay(iso) && trongThoiGianLam(n, iso)),
       })
     }
     return { cua: out, daLay }

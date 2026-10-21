@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { DieuChinh } from './dieu-chinh'
-import { kyCuaThang, thangCuaNgay, tinhKyGioCong, type KyGioVao } from './ky-gio-cong'
+import {
+  kyCuaThang,
+  thangCuaNgay,
+  tinhKyGioCong,
+  trongThoiGianLam,
+  type KyGioVao,
+} from './ky-gio-cong'
 
 describe('kỳ công 26 → 25', () => {
   it('kỳ tháng 10/2026 = 26/09 → 25/10; tháng 1 lùi sang năm trước', () => {
@@ -157,5 +163,43 @@ describe('ca bắt đầu trước 5:00 (Bếp) — đối chiếu phần mềm 
       vao({ tu: '2026-09-15', den: '2026-09-17', nhanSu: [{ ma: 'A', ten: 'X', boPhan: null }], dong }),
     )
     expect(cap(a, '2026-09-15')).toEqual([1004, 1440 + 228])
+  })
+})
+
+// Đối chiếu T9 (21/10/2026): người nghỉ giữa kỳ từng mất khỏi bảng công → mất lương ngày đã làm.
+describe('người đã nghỉ còn làm trong kỳ', () => {
+  it('giữ các ngày tới ngày làm cuối, ngày sau đó không thuộc kỳ của họ', () => {
+    const [a] = tinhKyGioCong(
+      vao({
+        nhanSu: [{ ma: '88', ten: 'Võ Ngọc Đại', boPhan: 'Tổ Mẫu', ngayCuoi: '2026-10-06' }],
+        dong: [
+          { ngay: '2026-10-05', ma: '88', daGhep: true, luot: l('07:00', '16:00') },
+          { ngay: '2026-10-06', ma: '88', daGhep: true, luot: l('07:00', '16:00') },
+          // lượt lạc sau ngày nghỉ (máy chưa xoá người) — không tính
+          { ngay: '2026-10-08', ma: '88', daGhep: true, luot: l('07:00', '16:00') },
+        ],
+      }),
+    )
+    expect(a.ngayCuoi).toBe('2026-10-06')
+    expect(a.ngay.map((x) => x.ngay)).toEqual(['2026-10-05', '2026-10-06'])
+    expect(a.tong.cong).toBe(2)
+  })
+  it('người đang làm: ngayCuoi null, không cắt ngày nào', () => {
+    const [a] = tinhKyGioCong(
+      vao({ dong: [{ ngay: '2026-10-20', ma: 'A', daGhep: true, luot: l('07:00', '16:00') }] }),
+    )
+    expect(a.ngayCuoi).toBeNull()
+    expect(a.ngay).toHaveLength(1)
+  })
+})
+
+describe('trongThoiGianLam — ngoài khoảng này không đếm vắng', () => {
+  it('trước ngày vào / sau ngày làm cuối là ngoài; thiếu mốc nào thì không chặn phía đó', () => {
+    const n = { ngayVao: '2026-09-16', ngayCuoi: '2026-09-26' }
+    expect(trongThoiGianLam(n, '2026-09-15')).toBe(false)
+    expect(trongThoiGianLam(n, '2026-09-16')).toBe(true)
+    expect(trongThoiGianLam(n, '2026-09-26')).toBe(true)
+    expect(trongThoiGianLam(n, '2026-09-27')).toBe(false)
+    expect(trongThoiGianLam({}, '2020-01-01')).toBe(true)
   })
 })

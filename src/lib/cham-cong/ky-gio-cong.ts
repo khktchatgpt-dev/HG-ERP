@@ -94,6 +94,10 @@ export type NguoiGio = {
   ma: string
   ten: string
   boPhan: string | null
+  /** Ngày làm cuối của người ĐÃ NGHỈ (còn làm trong kỳ); null = đang làm. */
+  ngayCuoi?: string | null
+  /** Ngày vào làm — chỉ để KHÔNG đếm vắng trước đó (không bỏ công: nhiều ngày vào còn sai). */
+  ngayVao?: string | null
   cachTinh: CachTinh
   ngay: NgayGio[]
   tong: TongNguoi
@@ -106,7 +110,18 @@ export type KyGioVao = {
    * `caVao` (tuỳ chọn) = giờ vào ca thường làm, phút từ 0h. Ca bắt đầu trước mốc ca đêm
    * (Bếp 03:30) thì lượt sáng sớm là giờ VÀO ca hôm đó, không gắn sang ca đêm hôm trước.
    */
-  nhanSu: { ma: string; ten: string; boPhan: string | null; caVao?: number | null }[]
+  nhanSu: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    caVao?: number | null
+    /**
+     * Ngày làm cuối của người đã nghỉ mà còn làm trong kỳ (21/10/2026: đối chiếu T9 thấy
+     * người nghỉ bị mất khỏi bảng công → mất lương). Ngày sau mốc này không thuộc kỳ của họ.
+     */
+    ngayCuoi?: string | null
+    ngayVao?: string | null
+  }[]
   /** Lượt máy theo người-ngày (giờ VN 'HH:mm:ss') — nên gồm cả ngày trước kỳ và sau kỳ để ghép ca đêm. */
   dong: {
     ngay: string
@@ -128,6 +143,12 @@ export type KyGioVao = {
 }
 
 const khongKhung = (t: ThamSoKhung) => Object.fromEntries(t.khung.map((k) => [k.ma, 0]))
+
+/** Ngày `iso` nằm trong thời gian người này còn làm (ngoài khoảng đó không đếm vắng). */
+export const trongThoiGianLam = (
+  n: { ngayVao?: string | null; ngayCuoi?: string | null },
+  iso: string,
+) => (!n.ngayVao || iso >= n.ngayVao) && (!n.ngayCuoi || iso <= n.ngayCuoi)
 
 export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
   const t = v.thamSo ?? THAM_SO_MAC_DINH
@@ -177,6 +198,7 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
     const tatCa = new Set([...lam.keys(), ...nghiCua.keys(), ...suaCua.keys()])
     for (const d of [...tatCa].sort()) {
       if (d < v.tu || d > v.den) continue
+      if (n.ngayCuoi && d > n.ngayCuoi) continue
       const x = lam.get(d)
       const nghi = nghiCua.get(d) ?? null
       const sua = suaCua.get(d) ?? { daSua: false, choDuyet: 0 }
@@ -227,6 +249,8 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
       ma: n.ma,
       ten: n.ten,
       boPhan: n.boPhan,
+      ngayCuoi: n.ngayCuoi ?? null,
+      ngayVao: n.ngayVao ?? null,
       cachTinh,
       ngay,
       tong: {

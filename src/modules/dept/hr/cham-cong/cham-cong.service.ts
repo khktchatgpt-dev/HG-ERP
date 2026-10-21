@@ -293,7 +293,22 @@ export type DuLieu = {
   maCanXem: number
   /** Nhân viên đang làm CẦN chấm công — mẫu số của bảng có mặt theo tổ. */
   /** `caVao` = giờ vào ca thường làm (phút từ 0h) — ca bắt đầu trước 5:00 (Bếp) cần để ghép lượt. */
-  nhanSu: { ma: string; ten: string; boPhan: string | null; caVao: number | null }[]
+  nhanSu: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    caVao: number | null
+    ngayVao: string | null
+  }[]
+  /** Người đã nghỉ, ngày làm cuối còn trong khoảng — chỉ Bảng công / bản chốt dùng (21/10/2026). */
+  daNghi: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    caVao: number | null
+    ngayCuoi: string
+    ngayVao: string | null
+  }[]
   /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
   khongCham: number
   /** Điều chỉnh trong khoảng (mọi tình trạng) — chỉ bản đã duyệt đổi kết quả. */
@@ -706,7 +721,10 @@ export const chamCongService = {
       chamCongRepo.shifts(),
     ])
     const caVaoCua = new Map(
-      shifts.map((s) => [s.id, Number(s.start_time.slice(0, 2)) * 60 + Number(s.start_time.slice(3, 5))]),
+      shifts.map((s) => [
+        s.id,
+        Number(s.start_time.slice(0, 2)) * 60 + Number(s.start_time.slice(3, 5)),
+      ]),
     )
     const devById = new Map(devices.map((d) => [d.id, d]))
     const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
@@ -786,6 +804,29 @@ export const chamCongService = {
           ten: e.full_name,
           boPhan: e.team,
           caVao: caVaoCua.get(e.shift_id) ?? null,
+          ngayVao: e.hire_date,
+        })),
+      /**
+       * Người ĐÃ NGHỈ mà ngày làm cuối còn nằm trong khoảng đang xem — Bảng công + bản chốt
+       * cần họ (lương những ngày đã làm), màn Có mặt hôm nay thì không. Không có ngày làm
+       * cuối thì không biết họ nghỉ khi nào → không đưa vào (Nhân sự ghi "Cho nghỉ" có ngày).
+       */
+      daNghi: emps
+        .filter(
+          (e) =>
+            !e.active &&
+            !e.attendance_exempt &&
+            !!e.leave_date &&
+            e.leave_date >= k.tu &&
+            (!e.hire_date || e.hire_date <= k.den),
+        )
+        .map((e) => ({
+          ma: e.code,
+          ten: e.full_name,
+          boPhan: e.team,
+          caVao: caVaoCua.get(e.shift_id) ?? null,
+          ngayCuoi: e.leave_date!,
+          ngayVao: e.hire_date,
         })),
       khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
       dieuChinh,
