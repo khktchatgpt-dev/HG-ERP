@@ -55,6 +55,11 @@ export type ThamSoKhung = {
   lamTronRaKieu?: KieuLamTronRa
   /** true = giờ vào buổi chiều (từ giờ nghỉ trưa tới hết khung hành chính) cũng làm tròn bậc thang. */
   lamTronVaoChieu: boolean
+  /**
+   * true = bậc thang giờ vào kéo tiếp qua buổi tối (vào ca đêm 20:43 → 21:00, 20:35 → 20:30 —
+   * cách sổ Nhân sự T9/2026 tính). Mặc định tắt: chỉ tới hết khung hành chính.
+   */
+  lamTronVaoToi?: boolean
   /** false = vào từ `denSomTu` tới giờ vào ca bị kéo về giờ vào ca (không tính giờ đến sớm). */
   tinhDenSom: boolean
   denSomTu: number
@@ -127,7 +132,7 @@ export function lamTronVao(phut: number, t: ThamSoKhung = THAM_SO_MAC_DINH): num
   if (!hc || phut >= 1440) return phut
   if (!t.tinhDenSom && phut >= t.denSomTu && phut < hc.tu) return hc.tu
   if (phut >= hc.tu && phut <= hc.tu + t.anHanPhut) return hc.tu
-  if (t.lamTronVaoChieu && phut >= t.truaTu && phut < hc.den) {
+  if (t.lamTronVaoChieu && phut >= t.truaTu && phut < (t.lamTronVaoToi ? 1440 : hc.den)) {
     const gio = Math.floor(phut / 60)
     const lam = 60 - (phut - gio * 60)
     if (lam === 60) return phut
