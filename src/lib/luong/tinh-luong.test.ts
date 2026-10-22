@@ -169,6 +169,36 @@ describe('các trường hợp khác', () => {
     expect(p.dong.find((d) => d.nhom === 'tang_ca')?.ten).toMatch(/K2 .*nhập tay/)
     expect(p.thieuHeSo).toEqual([])
   })
+  it('công cộng thêm (khối B): Công ngoài giờ = dòng tăng ca riêng; làm Chủ nhật = công thường', () => {
+    // Sổ T9 Sơn Sắt 1043: đơn giá 195.000, CÔNG NGOÀI GIỜ 5,1 → 994.500 (đúng phần ERP từng thiếu).
+    const p = tinhPhieu(
+      { ...KIEU, donGia: 195_000, phuCap: [] },
+      NGAY23.map((d) => ngay(d, { K1: 480 })),
+      [],
+      bc(),
+      false,
+      [{ ten: 'Công ngoài giờ', cong: 5.1, tangCa: true }],
+    )
+    expect(p.luongCong).toBe(23 * 195_000)
+    expect(p.tangCa).toBe(994_500)
+    expect(p.dong.find((d) => d.nhom === 'tang_ca')).toEqual({
+      nhom: 'tang_ca',
+      ten: 'Công ngoài giờ 5,1 công',
+      tien: 994_500,
+    })
+    // Văn phòng lương tháng, sổ ghi 29 (28 + 1 ngày làm Chủ nhật): công thường.
+    const vp = tinhPhieu(
+      { ...KIEU, cachTra: 'monthly', donGia: null, luongThang: 12_000_000, phuCap: [] },
+      NGAY23.map((d) => ngay(d, { K1: 480 })),
+      [],
+      bc(),
+      false,
+      [{ ten: 'Làm Chủ nhật', cong: 1, tangCa: false }],
+    )
+    expect(vp.congThuc).toBe(24)
+    expect(vp.luongCong).toBe(r((12_000_000 * 24) / 25))
+    expect(vp.tangCa).toBe(0)
+  })
   it('khấu trừ 10 % (Q4); trần BH 50,6 triệu từ kỳ 07/2026', () => {
     const hs: HoSoTinh = { ...KIEU, khauTru10: true, luongBh: 80_000_000, phuCap: [] }
     const p = tinhPhieu(

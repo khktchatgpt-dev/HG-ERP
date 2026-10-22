@@ -27,6 +27,8 @@ describe('kiemNhap', () => {
   const k = { soNgayKy: 32, ngayLamViec: 28 }
   it('sổ T9: 6021 28 công + 80 giờ hợp lệ; KCC-002 32 công là cảnh báo, không chặn', () => {
     expect(kiemNhap({ cong: 28, tcGio: 80 }, k)).toEqual({ loi: null, canhBao: null })
+    // 27,1 × 100 = 2710,0000000000005 trong số thực máy — vẫn là 1 số lẻ.
+    expect(kiemNhap({ cong: 27.1, tcGio: null }, k).loi).toBeNull()
     expect(kiemNhap({ cong: 32, tcGio: null }, k).canhBao).toMatch(/Chủ nhật/)
     expect(kiemNhap({ cong: 32, tcGio: null }, k).loi).toBeNull()
   })
@@ -40,5 +42,27 @@ describe('kiemNhap', () => {
   })
   it('ô trống chưa nhập không phải lỗi dòng (chặn ở điều kiện chốt)', () => {
     expect(kiemNhap({ cong: null, tcGio: null }, k)).toEqual({ loi: null, canhBao: null })
+  })
+})
+
+describe('khối B — công cộng thêm', () => {
+  it('kiemThem: > 0, tối đa số ngày kỳ, 2 số lẻ', async () => {
+    const { kiemThem } = await import('./cong-nhap-tay')
+    expect(kiemThem(5.1, 32)).toBeNull()
+    expect(kiemThem(0, 32)).toMatch(/lớn hơn 0/)
+    expect(kiemThem(null, 32)).toMatch(/Nhập số công/)
+    expect(kiemThem(33, 32)).toMatch(/số ngày của kỳ/)
+    expect(kiemThem(3.375, 32)).toMatch(/2 số lẻ/)
+  })
+  it('docDan: dán cột mã + công từ sổ TH Sơn Sắt (mã có số 0 đầu, dấu phẩy)', async () => {
+    const { docDan } = await import('./cong-nhap-tay')
+    const r = docDan(
+      'Mã nhân viên\tCÔNG NGOÀI GIỜ\n01043\t5,1\n05014\t4,58\tghi chú\n\n00247\tabc\n',
+    )
+    expect(r.dong).toEqual([
+      { ma: '1043', cong: 5.1, ghiChu: null },
+      { ma: '5014', cong: 4.58, ghiChu: 'ghi chú' },
+    ])
+    expect(r.hong).toHaveLength(1)
   })
 })

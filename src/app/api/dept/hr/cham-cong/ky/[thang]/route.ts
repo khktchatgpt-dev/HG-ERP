@@ -40,6 +40,23 @@ export const POST = handle(
           ghiChu: v.ghiChu,
         })
         break
+      case 'them_cong':
+        return NextResponse.json(
+          await congNhapTayService.congThem(user, thang, { kieu: 'them', dong: v.dong }),
+        )
+      case 'sua_cong':
+        await congNhapTayService.congThem(user, thang, {
+          kieu: 'sua',
+          id: v.id,
+          ma: v.ma,
+          cong: v.cong,
+          lyDo: v.lyDo,
+          ghiChu: v.ghiChu,
+        })
+        break
+      case 'xoa_cong':
+        await congNhapTayService.congThem(user, thang, { kieu: 'xoa', id: v.id })
+        break
       case 'dat_khoang':
         return NextResponse.json(
           await khoangKyService.dat(user, thang, { tu: v.tu, den: v.den, lyDo: v.lyDo }),

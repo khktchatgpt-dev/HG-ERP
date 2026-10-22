@@ -4,7 +4,7 @@
  * CÔNG NHẬP TAY — khối A (bản vẽ duyệt 22/10/2026, PYQ1Dw2W…, Q1–Q6 theo đề xuất). Người không
  * chấm công: Nhân sự nhập số công + giờ tăng ca mỗi kỳ; còn người trống thì chưa chốt kỳ được.
  * Rời ô là ghi (mỗi lần ghi một dòng ở Dòng thời gian). Kiểm tại chỗ bằng `kiemNhap` — cùng
- * hàm server dùng. Khối B (công cộng thêm ngoài máy) là bước sau.
+ * hàm server dùng. Khối B (công cộng thêm ngoài máy) ở `ngan-cong-them.tsx`.
  */
 
 import { useState } from 'react'
@@ -14,6 +14,7 @@ import { docSo, kiemNhap, soNgayKy } from '@/lib/cham-cong/cong-nhap-tay'
 import type { KyCongCtx, KyCongTrang } from './useKyCong'
 import { lucVn, so } from './ky.shared'
 import { TD, TH } from './ngan-to'
+import { KhoiCongThem } from './ngan-cong-them'
 
 type Dong = KyCongTrang['khongCham'][number]
 const R = { textAlign: 'right' as const }
@@ -26,14 +27,17 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
   const chua = k.khongCham.filter((x) => x.cong == null).length
   if (!k.khongCham.length)
     return (
-      <Empty
-        headline="Kỳ này không có ai được đánh dấu “không chấm công”"
-        reason="Khối này chỉ dành cho người không quẹt máy (Bảo vệ, Tài xế, Kinh doanh…) — hồ sơ của họ mang dấu “không chấm công”."
-        next="Có người không quẹt máy thì đánh dấu ở Nhân viên › hồ sơ › Công việc, rồi quay lại đây nhập công."
-      />
+      <div className="flex min-h-0 flex-col overflow-auto">
+        <Empty
+          headline="Kỳ này không có ai được đánh dấu “không chấm công”"
+          reason="Khối này chỉ dành cho người không quẹt máy (Bảo vệ, Tài xế, Kinh doanh…) — hồ sơ của họ mang dấu “không chấm công”."
+          next="Có người không quẹt máy thì đánh dấu ở Nhân viên › hồ sơ › Công việc, rồi quay lại đây nhập công."
+        />
+        <KhoiCongThem d={d} />
+      </div>
     )
   return (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex min-h-0 flex-col overflow-auto">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
         <div className="text-k-sm max-w-[80ch] text-[var(--ink-2)]">
           <b className="text-[var(--ink)]">A · Người không chấm công.</b> Công nhập ở đây
@@ -58,7 +62,7 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
           Chỉ xem — nhập công do Phòng Hành Chính Nhân Sự làm.
         </div>
       )}
-      <div className="min-h-0 overflow-auto">
+      <div>
         <table className="text-k-sm w-full border-separate border-spacing-0">
           <thead>
             <tr>
@@ -121,6 +125,7 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
           </tfoot>
         </table>
       </div>
+      <KhoiCongThem d={d} />
     </div>
   )
 }

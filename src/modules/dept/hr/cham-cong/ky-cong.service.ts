@@ -25,7 +25,13 @@ import { bangLuongRepo, type TrangThaiLuong } from '../luong/bang-luong.repo'
 import { bangLuongService } from '../luong/bang-luong.service'
 import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 import { congNhapTayRepo } from './cong-nhap-tay.repo'
-import { dsKhongCham, type DongKhongCham } from './cong-nhap-tay.service'
+import {
+  dsCongThem,
+  dsKhongCham,
+  type DongCongThem,
+  type DongKhongCham,
+} from './cong-nhap-tay.service'
+import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 
 /**
  * KỲ CÔNG (B3, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất) — chứng từ:
@@ -58,6 +64,9 @@ export type KyCongTrang = {
   choDuyet: number
   /** Người không chấm công trong kỳ + công Nhân sự đã nhập (khối A, 0262). */
   khongCham: DongKhongCham[]
+  /** Công cộng thêm ngoài máy (khối B) + người chọn được (có chấm công, làm trong kỳ). */
+  congThem: DongCongThem[]
+  chonThem: { ma: string; ten: string; to: string | null }[]
   dieuKien: DieuKien[]
   nguoi: {
     ma: string
@@ -105,13 +114,15 @@ async function quyen(user: User) {
 async function dung(user: User, thang: string) {
   const homNay = todayVn()
   const g: GioCong = await gioCongService.bang(user, thang, homNay)
-  const [teams, emps, xn, nhap] = await Promise.all([
+  const [teams, emps, xn, nhap, them] = await Promise.all([
     kyCongRepo.toTheoTen(),
     chamCongRepo.employees(),
     g.ky ? kyCongRepo.xacNhan(g.ky.id) : Promise.resolve([] as XacNhanDong[]),
     congNhapTayRepo.ds(thang),
+    congNhapTayRepo.dsThem(thang),
   ])
   const khongCham = dsKhongCham(emps, nhap, g.tu, g.den)
+  const congThem = dsCongThem(emps, them)
   const tong = tongTheoTo(g.nguoi)
   const bc = { homNay, den: g.den, ngayLay: g.ngayLay }
   const xnTheo = new Map(xn.map((x) => [x.teamId, x]))
@@ -135,7 +146,7 @@ async function dung(user: User, thang: string) {
     tong: khongCham.length,
     chuaNhap: khongCham.filter((x) => x.cong == null).length,
   }
-  return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams, khongCham, kc }
+  return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams, khongCham, kc, congThem }
 }
 
 function kiemErp(thang: string) {
@@ -168,6 +179,18 @@ export const kyCongService = {
       chuaCoTo: d.chuaCoTo,
       choDuyet: d.choDuyet,
       khongCham: d.khongCham.map(({ employeeId: _id, ...x }) => x),
+      congThem: d.congThem,
+      chonThem: d.emps
+        .filter(
+          (e) =>
+            !e.attendance_exempt &&
+            !!khoangTrongKy(
+              { hireDate: e.hire_date, leaveDate: e.leave_date },
+              g.tu,
+              g.den,
+            ),
+        )
+        .map((e) => ({ ma: e.code, ten: e.full_name, to: e.team })),
       dieuKien: dieuKienChot(d.bc, {
         choDuyet: d.choDuyet,
         chuaCoTo: d.chuaCoTo,

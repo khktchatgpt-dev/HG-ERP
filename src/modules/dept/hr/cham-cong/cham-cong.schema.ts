@@ -275,6 +275,8 @@ export const kyThangSchema = z
   .string()
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Kỳ phải dạng YYYY-MM')
 
+const lyDoThem = z.enum(['ngoai_gio', 'chu_nhat', 'khac'])
+
 export const kyViecSchema = z.discriminatedUnion('viec', [
   z.object({
     viec: z.literal('xac_nhan'),
@@ -308,6 +310,30 @@ export const kyViecSchema = z.discriminatedUnion('viec', [
     tcGio: z.number().min(0).max(744).nullable(),
     ghiChu: z.string().trim().max(300).nullable().optional(),
   }),
+  // Khối B — công cộng thêm ngoài máy (bước 3). Kiểm chi tiết ở `kiemThem` (service).
+  z.object({
+    viec: z.literal('them_cong'),
+    dong: z
+      .array(
+        z.object({
+          ma: z.string().trim().min(1).max(40),
+          cong: z.number().min(0).max(31).nullable(),
+          lyDo: lyDoThem,
+          ghiChu: z.string().trim().max(300).nullable().optional(),
+        }),
+      )
+      .min(1)
+      .max(300),
+  }),
+  z.object({
+    viec: z.literal('sua_cong'),
+    id: z.string().uuid(),
+    ma: z.string().trim().min(1).max(40),
+    cong: z.number().min(0).max(31).nullable(),
+    lyDo: lyDoThem,
+    ghiChu: z.string().trim().max(300).nullable().optional(),
+  }),
+  z.object({ viec: z.literal('xoa_cong'), id: z.string().uuid() }),
 ])
 
 // ── Hồ sơ lương (B4, 0245) ───────────────────────────────────────────────

@@ -63,8 +63,7 @@ export function kiemNhap(
         loi: `Công ${so(v.cong)} lớn hơn số ngày của kỳ (${k.soNgayKy}) — sửa lại số công`,
         canhBao: null,
       }
-    if (Math.round(v.cong * 100) !== v.cong * 100)
-      return { loi: 'Công lấy tối đa 2 số lẻ', canhBao: null }
+    if (!haiLe(v.cong)) return { loi: 'Công lấy tối đa 2 số lẻ', canhBao: null }
   }
   if (v.tcGio != null) {
     if (Number.isNaN(v.tcGio))
@@ -86,4 +85,61 @@ export function kiemNhap(
   return { loi: null, canhBao: null }
 }
 
+/** Tối đa 2 số lẻ — so có dung sai: 5,1 × 100 = 509,999… trong số thực máy. */
+const haiLe = (x: number) => Math.abs(Math.round(x * 100) - x * 100) < 1e-6
+
 const so = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
+
+// ── Khối B — công cộng thêm ngoài máy (bước 3) ────────────────────────────
+
+/**
+ * Lý do cộng thêm. `ngoai_gio` theo cột "Công ngoài giờ" sổ TH tổ Sơn: Kế toán cộng vào công
+ * TĂNG CA (Q5) → phiếu lương có dòng riêng trong nhóm tăng ca. Còn lại (làm Chủ nhật không
+ * quẹt, khác) là công thường — cộng vào số công của lương công (Q3: 6052, 6067 sổ ghi 29).
+ */
+export type LyDoThem = 'ngoai_gio' | 'chu_nhat' | 'khac'
+export const LY_DO_THEM: LyDoThem[] = ['ngoai_gio', 'chu_nhat', 'khac']
+export const TEN_LY_DO_THEM: Record<LyDoThem, string> = {
+  ngoai_gio: 'Công ngoài giờ',
+  chu_nhat: 'Làm Chủ nhật',
+  khac: 'Khác',
+}
+/** Lý do nào trả như tăng ca (nhóm tăng ca, nền phụ cấp "công + công TC"). */
+export const laTangCa = (l: LyDoThem) => l === 'ngoai_gio'
+export const lyDoCua = (s: string | null | undefined): LyDoThem =>
+  LY_DO_THEM.find((x) => x === s) ?? 'khac'
+
+/** Kiểm một dòng công cộng thêm: công > 0, tối đa số ngày kỳ, 2 số lẻ. */
+export function kiemThem(cong: number | null, soNgayKy: number): string | null {
+  if (cong == null) return 'Nhập số công'
+  if (Number.isNaN(cong)) return 'Công phải là số, vd. 1 hoặc 0,71'
+  if (cong <= 0) return 'Công phải lớn hơn 0 — muốn bỏ thì xoá dòng'
+  if (cong > soNgayKy) return `Công lớn hơn số ngày của kỳ (${soNgayKy})`
+  if (!haiLe(cong)) return 'Công lấy tối đa 2 số lẻ'
+  return null
+}
+
+/**
+ * Dán từ Excel: mỗi dòng "mã ⇥ công" (thêm cột ghi chú tuỳ ý). Bỏ dòng tiêu đề / dòng trống;
+ * mã có số 0 đầu ("01043") bỏ 0 như mã máy. Dòng hỏng trả kèm lý do, không đoán.
+ */
+export function docDan(text: string): {
+  dong: { ma: string; cong: number; ghiChu: string | null }[]
+  hong: string[]
+} {
+  const dong: { ma: string; cong: number; ghiChu: string | null }[] = []
+  const hong: string[] = []
+  for (const raw of text.split(/\r?\n/)) {
+    const cot = raw.split('\t').map((c) => c.trim())
+    if (!cot.join('')) continue
+    const ma = (cot[0] ?? '').replace(/^'/, '').replace(/^0+(?=\d)/, '')
+    const cong = docSo(cot[1] ?? '')
+    if (!ma || cong == null || Number.isNaN(cong)) {
+      if (dong.length || /\d/.test(cot[1] ?? ''))
+        hong.push(`“${raw.slice(0, 40)}” — cần mã ⇥ số công`)
+      continue
+    }
+    dong.push({ ma, cong, ghiChu: cot[2] || null })
+  }
+  return { dong, hong }
+}

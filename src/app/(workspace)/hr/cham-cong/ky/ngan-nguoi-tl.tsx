@@ -155,11 +155,16 @@ export function NganThoiGian({ d }: { d: KyCongCtx }) {
       ten?: string
       cong_cu?: number | null
       tc_gio?: number | null
+      khoi?: string
+      them?: number
+      ly_do?: string
     }
     const nhapTay =
-      e.viec === 'manual_set'
-        ? `${data.ma} ${data.ten}: ${data.cong_cu == null ? 'trống' : so(data.cong_cu, 2)} → ${data.cong == null ? 'xoá' : `${so(data.cong, 2)} công`}${data.tc_gio ? ` + ${so(data.tc_gio, 2)} giờ TC` : ''}`
-        : ''
+      e.viec !== 'manual_set'
+        ? ''
+        : data.them && data.them > 1
+          ? `Công cộng thêm · ${data.ly_do}: thêm ${data.them} dòng, ${so(data.cong ?? 0, 2)} công`
+          : `${data.khoi === 'B' ? `Công cộng thêm · ${data.ly_do} · ` : ''}${data.ma} ${data.ten}: ${data.cong_cu == null ? 'trống' : so(data.cong_cu, 2)} → ${data.cong == null ? 'xoá' : `${so(data.cong, 2)} công`}${data.tc_gio ? ` + ${so(data.tc_gio, 2)} giờ TC` : ''}`
     const chiTiet = [
       nhapTay,
       data.tu && data.den

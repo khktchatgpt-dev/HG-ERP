@@ -15,6 +15,17 @@ export type NhapTayDong = {
   lucSua: string
 }
 
+/** Một dòng công cộng thêm khối B (kind 'extra'); một người có thể nhiều dòng. */
+export type CongThemDong = {
+  id: string
+  employeeId: string
+  cong: number
+  lyDo: string | null
+  ghiChu: string | null
+  nguoiSua: string | null
+  lucSua: string
+}
+
 /** hr_time_manual (0262) — công người không chấm công do Nhân sự nhập, một dòng / người / kỳ. */
 export const congNhapTayRepo = {
   async ds(thang: string): Promise<NhapTayDong[]> {
@@ -83,6 +94,89 @@ export const congNhapTayRepo = {
         .eq('period', thang)
         .eq('kind', 'exempt')
         .eq('employee_id', employeeId),
+    )
+  },
+
+  async dsThem(thang: string): Promise<CongThemDong[]> {
+    const rows = must(
+      await db()
+        .from('hr_time_manual')
+        .select(
+          'id, employee_id, work_days, reason, note, updated_at, nguoi:users!hr_time_manual_updated_by_fkey(name)',
+        )
+        .eq('period', thang)
+        .eq('kind', 'extra')
+        .order('created_at'),
+    )
+    return rows.map((r) => ({
+      id: r.id,
+      employeeId: r.employee_id,
+      cong: Number(r.work_days),
+      lyDo: r.reason,
+      ghiChu: r.note,
+      nguoiSua: r.nguoi?.name ?? null,
+      lucSua: r.updated_at,
+    }))
+  },
+
+  /** Thêm nhiều dòng một lượt (dán từ Excel) hoặc một dòng. */
+  async themNhieu(
+    thang: string,
+    ds: { employeeId: string; cong: number; lyDo: string; ghiChu: string | null }[],
+    userId: string,
+  ): Promise<void> {
+    if (!ds.length) return
+    must(
+      await db()
+        .from('hr_time_manual')
+        .insert(
+          ds.map((x) => ({
+            period: thang,
+            employee_id: x.employeeId,
+            kind: 'extra',
+            work_days: x.cong,
+            ot_minutes: 0,
+            reason: x.lyDo,
+            note: x.ghiChu,
+            created_by: userId,
+            updated_by: userId,
+          })),
+        ),
+    )
+  },
+
+  async suaThem(
+    id: string,
+    thang: string,
+    v: { employeeId: string; cong: number; lyDo: string; ghiChu: string | null },
+    userId: string,
+  ): Promise<boolean> {
+    const rows = must(
+      await db()
+        .from('hr_time_manual')
+        .update({
+          employee_id: v.employeeId,
+          work_days: v.cong,
+          reason: v.lyDo,
+          note: v.ghiChu,
+          updated_by: userId,
+        })
+        .eq('id', id)
+        .eq('period', thang)
+        .eq('kind', 'extra')
+        .select('id'),
+    )
+    return rows.length > 0
+  },
+
+  async xoaThem(id: string, thang: string): Promise<void> {
+    must(
+      await db()
+        .from('hr_time_manual')
+        .delete()
+        .eq('id', id)
+        .eq('period', thang)
+        .eq('kind', 'extra'),
     )
   },
 }

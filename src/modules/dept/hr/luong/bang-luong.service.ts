@@ -16,6 +16,8 @@ import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
 import { chamCongRepo } from '../cham-cong/cham-cong.repo'
 import { cachTinhRepo } from '../cham-cong/cach-tinh.repo'
 import { kyCongRepo, type KyDong } from '../cham-cong/ky-cong.repo'
+import { congNhapTayRepo } from '../cham-cong/cong-nhap-tay.repo'
+import { laTangCa, lyDoCua, TEN_LY_DO_THEM } from '@/lib/cham-cong/cong-nhap-tay'
 import { hoSoLuongRepo } from './ho-so-luong.repo'
 import { assertXemLuong } from './quyen-luong'
 import {
@@ -137,20 +139,34 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
   if (!ky.banCachTinhId)
     throw Conflict('Kỳ công chốt không ghi bản cách tính — chốt lại kỳ công')
 
-  const [chot, emps, ban, rieng, loaiPc, khung, heSo, quyTacBan, leRows, khoan, ts] =
-    await Promise.all([
-      kyCongRepo.banChot(ky.id, ky.lanChot),
-      chamCongRepo.employees(),
-      hoSoLuongRepo.banTatCa(),
-      hoSoLuongRepo.riengTatCa(),
-      hoSoLuongRepo.loaiPhuCap(),
-      cachTinhRepo.khung(ky.banCachTinhId),
-      cachTinhRepo.heSo(ky.banCachTinhId),
-      cachTinhRepo.dsBan(),
-      chamCongRepo.holidays(ky.tu, congNgay(ky.den, 1)),
-      bangLuongRepo.khoan(thang),
-      cachTinhRepo.thamSoLuong(ky.banCachTinhId),
-    ])
+  const [
+    chot,
+    emps,
+    ban,
+    rieng,
+    loaiPc,
+    khung,
+    heSo,
+    quyTacBan,
+    leRows,
+    khoan,
+    ts,
+    them,
+  ] = await Promise.all([
+    kyCongRepo.banChot(ky.id, ky.lanChot),
+    chamCongRepo.employees(),
+    hoSoLuongRepo.banTatCa(),
+    hoSoLuongRepo.riengTatCa(),
+    hoSoLuongRepo.loaiPhuCap(),
+    cachTinhRepo.khung(ky.banCachTinhId),
+    cachTinhRepo.heSo(ky.banCachTinhId),
+    cachTinhRepo.dsBan(),
+    chamCongRepo.holidays(ky.tu, congNgay(ky.den, 1)),
+    bangLuongRepo.khoan(thang),
+    cachTinhRepo.thamSoLuong(ky.banCachTinhId),
+    // Khối B đọc thẳng bảng nhập tay: kỳ đã chốt thì service khoá mọi sửa, mở lại → chốt lại → tính lại.
+    congNhapTayRepo.dsThem(thang),
+  ])
   const quyTac = quyTacBan.find((b) => b.id === ky.banCachTinhId)?.quyTac
   if (!quyTac) throw Conflict('Không tìm thấy bản cách tính kỳ công đã dùng')
   const ngayLe = leRows
@@ -176,6 +192,14 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
   const empByCode = new Map(emps.map((e) => [e.code, e]))
   const riengCua = new Map(rieng.map((r) => [r.employeeId, r]))
   const loaiCua = new Map(loaiPc.map((l) => [l.id, l]))
+  const themCua = new Map<string, { ten: string; cong: number; tangCa: boolean }[]>()
+  for (const t of them) {
+    const l = lyDoCua(t.lyDo)
+    themCua.set(t.employeeId, [
+      ...(themCua.get(t.employeeId) ?? []),
+      { ten: TEN_LY_DO_THEM[l], cong: t.cong, tangCa: laTangCa(l) },
+    ])
+  }
   const theoNguoi = new Map<string, typeof chot>()
   for (const c of chot) theoNguoi.set(c.ma, [...(theoNguoi.get(c.ma) ?? []), c])
 
@@ -265,6 +289,7 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
         .map((k) => ({ loai: k.loai, tien: k.tien })),
       boiCanh,
       mien,
+      themCua.get(e.id) ?? [],
     )
     van.push(...p.thieuHeSo.map((t) => `Thiếu hệ số ${t}`), ...p.canhBao)
     phieu.push({

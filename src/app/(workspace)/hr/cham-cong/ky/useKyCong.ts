@@ -11,7 +11,7 @@ export type { KyCongTrang, ToKy }
 import type { MucKy } from './ky.shared'
 export type { MucKy }
 
-type Sheet = null | 'chot' | 'xin' | 'quyet' | 'khoang' | { xacNhan: string }
+type Sheet = null | 'chot' | 'xin' | 'quyet' | 'khoang' | 'dan' | { xacNhan: string }
 
 /** State + chuyển tiếp của màn Kỳ công. Mọi điều kiện lấy từ server (cùng hàm thuần). */
 export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
@@ -96,6 +96,21 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
       setBusy(null)
     }
   }
+  /** Khối B: thêm / sửa / xoá công cộng thêm. Trả true khi ghi được. */
+  async function congThem(body: Record<string, unknown>, ten: string, xong?: string) {
+    setBusy(ten)
+    try {
+      await api(`/api/dept/hr/cham-cong/ky/${k.thang}`, { method: 'POST', body })
+      if (xong) toast.success(xong)
+      router.refresh()
+      return true
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Không ghi được — thử lại')
+      return false
+    } finally {
+      setBusy(null)
+    }
+  }
   /** Điền ô trống bằng số ngày làm việc gợi ý — không ghi đè số đã nhập. */
   async function dienGoiY() {
     const trong = k.khongCham.filter((x) => x.cong == null)
@@ -151,6 +166,7 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
     datKhoang,
     nhapTay,
     dienGoiY,
+    congThem,
   } as const
 }
 

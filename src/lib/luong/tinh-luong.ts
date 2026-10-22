@@ -116,6 +116,9 @@ export type NgayTinh = {
   khong: boolean
 }
 
+/** Một dòng công cộng thêm khối B (0262) đã quy về lương. */
+export type CongThem = { ten: string; cong: number; tangCa: boolean }
+
 /** Công người không chấm công do Nhân sự nhập (0262): số công + phút tăng ca. */
 export type NhapTay = { cong: number; tcPhut: number }
 
@@ -188,6 +191,11 @@ export function tinhPhieu(
    * không đặt trần công chuẩn (sổ T9 trả 32 công ÷ 26), tăng ca tính ở khung tăng ca đầu tiên.
    */
   mien: boolean | number | NhapTay = false,
+  /**
+   * Công cộng thêm ngoài máy (khối B, 0262): `tangCa` = trả như tăng ca (Công ngoài giờ tổ Sơn —
+   * sổ KT cộng vào công tăng ca), còn lại cộng vào số công của lương công (làm Chủ nhật không quẹt).
+   */
+  them: CongThem[] = [],
 ): Phieu {
   const khongChamCong = mien !== false
   const nhap = typeof mien === 'object' ? mien : null
@@ -238,7 +246,8 @@ export function tinhPhieu(
   const congHc = congHcThuong + congHcCn
   let congNghi = 0
   for (const [ma, so_] of nghi) congNghi += (so_ * (b.heSoNghi(ma) ?? 0)) / 100
-  const congThuc = khongChamCong ? congMien : congHc + congNghi
+  const themCong = them.filter((x) => !x.tangCa).reduce((t, x) => t + x.cong, 0)
+  const congThuc = (khongChamCong ? congMien : congHc + congNghi) + themCong
 
   // ── Lương công + nghỉ có lương.
   let luongCong = 0
@@ -279,6 +288,13 @@ export function tinhPhieu(
     why.push(
       `Lương công  ${so(congHcThuong, 2)} công × ${so(donGiaNgay)}${pt(hsHc)}${congHcCn ? ` + CN ${so(congHcCn, 2)} công × ${so(donGiaNgay)}${pt(hsCn)}` : ''} = ${so(luongCong)}`,
     )
+    for (const x of them.filter((y) => !y.tangCa)) {
+      const tien = r0(x.cong * donGiaNgay)
+      luongCong += tien
+      why.push(
+        `  + ${x.ten} ${so(x.cong, 2)} công × ${so(donGiaNgay)} = ${so(tien)} (nhập tay)`,
+      )
+    }
     for (const [ma, n] of nghi) {
       const tl = b.heSoNghi(ma)
       if (tl == null) thieuHeSo.add(TEN_NGHI[ma])
@@ -291,6 +307,8 @@ export function tinhPhieu(
     }
   } else {
     luongCong = r0(((hs.luongThang ?? 0) * congThuc) / b.congChuan)
+    for (const x of them.filter((y) => !y.tangCa))
+      why.push(`  công gồm ${x.ten} ${so(x.cong, 2)} công (nhập tay)`)
     why.push(
       `Lương tháng ${so(hs.luongThang ?? 0)} × ${so(congThuc, 2)} công ÷ ${b.congChuan} = ${so(luongCong)}`,
     )
@@ -374,6 +392,17 @@ export function tinhPhieu(
         `Tăng ca     nhập tay ${so(gio, 2)} giờ × ${so(giaGio, 2)} × ${tl ?? '—'} % = ${so(tangCa)}`,
       )
     }
+  }
+
+  // Công cộng thêm trả như tăng ca: số công × đơn giá ngày, dòng riêng, nền phụ cấp "công + công TC".
+  for (const x of them.filter((y) => y.tangCa)) {
+    const tien = r0(x.cong * donGiaNgay)
+    tangCa += tien
+    congTc += x.cong
+    dong.push({ nhom: 'tang_ca', ten: `${x.ten} ${so(x.cong, 2)} công`, tien })
+    why.push(
+      `Tăng ca     ${x.ten} ${so(x.cong, 2)} công × ${so(donGiaNgay)} = ${so(tien)} (nhập tay)`,
+    )
   }
 
   // ── Phụ cấp.
