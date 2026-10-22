@@ -380,27 +380,40 @@ export const materialsRepo = {
         throw new Error(`Không đếm được ${table}: ${error?.message}`)
       return count
     }
-    const [po, mv, stocktake, bomLines, dies, prodComp, prices, needs, plan, deNghi] =
-      await Promise.all([
-        n('supply_purchase_order_lines'),
-        n('warehouse_movements'),
-        n('warehouse_stocktake_lines'),
-        n('technical_bom_lines'),
-        n('technical_die_materials'),
-        n('production_components'),
-        n('supply_supplier_prices'),
-        n('supply_lsx_needs'),
-        n('supply_lsx_material_plan'),
-        // 0236 — mã đã nằm trên phiếu đề nghị mua của Kho: xoá mã là dòng phiếu mất
-        // liên kết (FK set null), Cung ứng không lập đơn từ dòng đó được nữa.
-        n('warehouse_purchase_request_lines'),
-      ])
+    const [
+      po,
+      mv,
+      stocktake,
+      bomLines,
+      dies,
+      prodComp,
+      prices,
+      needs,
+      plan,
+      deNghi,
+      chonNcc,
+    ] = await Promise.all([
+      n('supply_purchase_order_lines'),
+      n('warehouse_movements'),
+      n('warehouse_stocktake_lines'),
+      n('technical_bom_lines'),
+      n('technical_die_materials'),
+      n('production_components'),
+      n('supply_supplier_prices'),
+      n('supply_lsx_needs'),
+      n('supply_lsx_material_plan'),
+      // 0236 — mã đã nằm trên phiếu đề nghị mua của Kho: xoá mã là dòng phiếu mất
+      // liên kết (FK set null), Cung ứng không lập đơn từ dòng đó được nữa.
+      n('warehouse_purchase_request_lines'),
+      // 0275 — NCC đã chọn cho mã trong Kế hoạch mua của lệnh (FK restrict).
+      n('supply_lsx_sourcing'),
+    ])
     return {
       po,
       stock: mv + stocktake,
       bom: bomLines + dies + prodComp,
       prices,
-      other: needs + plan,
+      other: needs + plan + chonNcc,
       de_nghi: deNghi,
     }
   },
