@@ -361,7 +361,17 @@ function Form({
             label="ĐVT đặt hàng"
             value={f.unit}
             onChange={set('unit')}
-            options={units.map((u) => ({ value: u, label: u }))}
+            // DÒNG TRỐNG khi chưa có ĐVT (22/10/2026, lỗi "đã chọn nhưng không tạo
+            // được"): thiếu nó thì <select> hiện dòng đầu ("Cái") dù state rỗng;
+            // người dùng chọn đúng dòng đang hiện thì không bắn onChange → vẫn
+            // "thiếu ĐVT đặt hàng". ĐVT đang có mà ngoài danh mục cũng phải có dòng,
+            // không thì ô hiện sai giá trị y như vậy.
+            options={[
+              ...(f.unit && units.includes(f.unit)
+                ? []
+                : [{ value: f.unit, label: f.unit || '— chọn ĐVT —' }]),
+              ...units.map((u) => ({ value: u, label: u })),
+            ]}
           />{' '}
           {/* prettier-ignore */}
         </Field>
