@@ -21,6 +21,7 @@ import { supplyRepo, RECEIVABLE } from './supply.repo'
 import { lsxNeedsRepo } from './lsx-needs.repo'
 import { pricesRepo } from './prices.repo'
 import type { BangKeManual } from '@/lib/lsx-bang-ke'
+import type { ChuaMaCuaLenh } from '@/lib/bom-chua-ma'
 
 export type LsxBangKe = {
   lsx: {
@@ -54,6 +55,11 @@ export type LsxBangKe = {
     /** Id vật tư danh mục — màn bảng kê dẫn thẳng tới hồ sơ vật tư để khai dài cây (08/10/2026). */
     material_id: string
   }[]
+  /**
+   * Vật tư trong định mức CHƯA có mã kho — số của chúng không vào bảng; bày
+   * riêng để người mua biết còn thứ phải mua (có thể là vật tư mới).
+   */
+  chua_ma: ChuaMaCuaLenh
   /** SP của lệnh kèm trạng thái chốt định mức — nói rõ ai cần làm nốt. */
   products: {
     id: string
@@ -350,6 +356,7 @@ export async function loadLsxBangKe(
       reason: b.reason,
       material_id: b.material_id,
     })),
+    chua_ma: bom.chua_ma,
     products: bom.products,
     manual_error: manualRes.error,
     unsplit_pos: chuaChia,

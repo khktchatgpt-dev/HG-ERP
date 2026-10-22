@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { convertPartNeed } from '@/lib/bom-unit'
+import { gomChuaMa, type ChuaMaCuaLenh, type DongChuaMa } from '@/lib/bom-chua-ma'
 
 /**
  * NHU CẦU THEO ĐỊNH MỨC, TÁCH THEO SẢN PHẨM và kèm trạng thái XÁC NHẬN BOM
@@ -70,6 +71,12 @@ export type LsxBomNeeds = {
   lines: BomNeedLine[]
   /** Dòng chưa quy đổi được đơn vị — bảng kê hiện riêng để đi bổ sung dữ liệu. */
   blocked: BomNeedBlocked[]
+  /**
+   * Dòng định mức CHƯA gắn mã kho (hoặc mã không có trong danh mục) — gom theo
+   * vật tư cho cả lệnh. Bảng kê không tính được số của chúng; phải bày ra để
+   * người mua biết còn thứ phải mua mà kho chưa có mã (22/10/2026).
+   */
+  chua_ma: ChuaMaCuaLenh
   /** SP của lệnh, để nói rõ ai chưa chốt định mức. */
   products: {
     id: string
@@ -108,22 +115,37 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
       })
   }
   const productIds = [...qtyByProduct.keys()]
-  if (productIds.length === 0) return { lines: [], blocked: [], products: [] }
+  if (productIds.length === 0)
+    return {
+      lines: [],
+      blocked: [],
+      chua_ma: { items: [], frame_lines: 0 },
+      products: [],
+    }
 
-  const [{ data: prodRows }, { data: partRows }] = await Promise.all([
-    db()
-      .from('technical_products')
-      .select('id, code, name, bom_checked_at, locked_at')
-      .in('id', productIds),
-    db()
-      .from('technical_product_parts')
-      .select(
-        'product_id, material_code, part_name, group_code, qty, unit, total_length_m, weight_kg, paint_area_m2, volume_m3, bar_length_m, waste_pct',
-      )
-      .in('product_id', productIds)
-      .not('material_code', 'is', null)
-      .limit(20000),
-  ])
+  const [{ data: prodRows }, { data: partRows }, { data: uncodedRows }] =
+    await Promise.all([
+      db()
+        .from('technical_products')
+        .select('id, code, name, bom_checked_at, locked_at')
+        .in('id', productIds),
+      db()
+        .from('technical_product_parts')
+        .select(
+          'product_id, material_code, part_name, group_code, qty, unit, total_length_m, weight_kg, paint_area_m2, volume_m3, bar_length_m, waste_pct, material_note, dim_a_mm, dim_b_mm, cut_length_mm',
+        )
+        .in('product_id', productIds)
+        .not('material_code', 'is', null)
+        .limit(20000),
+      db()
+        .from('technical_product_parts')
+        .select(
+          'product_id, part_name, group_code, qty, unit, material_note, dim_a_mm, dim_b_mm, cut_length_mm',
+        )
+        .in('product_id', productIds)
+        .is('material_code', null)
+        .limit(20000),
+    ])
   type P = {
     id: string
     code: string | null
@@ -151,6 +173,10 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
     volume_m3: unknown
     bar_length_m: unknown
     waste_pct: unknown
+    material_note: string | null
+    dim_a_mm: unknown
+    dim_b_mm: unknown
+    cut_length_mm: unknown
   }
   const parts = (partRows ?? []) as Part[]
   // Định mức nối vật tư bằng MÃ TEXT (xem 0096) — tra một lượt, chuẩn hoá hoa/thường.
@@ -192,9 +218,46 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
   // Số lẻ nhị phân (287.80800000000005) làm bảng kê và file Excel trông như số
   // rác — chốt 4 chữ số thập phân, thừa đủ cho mọi đơn vị mua.
   const r4 = (n: number) => Math.round(n * 10_000) / 10_000
+  // Dòng chưa có mã kho + dòng ghi mã mà danh mục không có — trước đây bỏ qua
+  // im lặng (xem lib/bom-chua-ma).
+  const chuaMa: DongChuaMa[] = []
+  const veChuaMa = (
+    r: {
+      product_id: string
+      part_name: string | null
+      group_code: string | null
+      qty: unknown
+      unit: string | null
+      material_note: string | null
+      dim_a_mm: unknown
+      dim_b_mm: unknown
+      cut_length_mm: unknown
+    },
+    code: string | null,
+  ) => {
+    const prod = qtyByProduct.get(r.product_id)
+    if (!prod) return
+    chuaMa.push({
+      product_id: r.product_id,
+      product_code: infoById.get(r.product_id)?.code || prod.code,
+      product_qty: prod.qty,
+      kind: r.group_code,
+      part_name: r.part_name,
+      qty: num(r.qty),
+      unit: r.unit,
+      material_code: code,
+      material_note: r.material_note,
+      dims: [num(r.dim_a_mm), num(r.dim_b_mm), num(r.cut_length_mm)],
+    })
+  }
+  for (const r of (uncodedRows ?? []) as Parameters<typeof veChuaMa>[0][])
+    veChuaMa(r, null)
   for (const part of parts) {
     const mat = matByCode.get(part.material_code.trim().toUpperCase())
-    if (!mat) continue
+    if (!mat) {
+      veChuaMa(part, part.material_code.trim() || null)
+      continue
+    }
     const prod = qtyByProduct.get(part.product_id)
     if (!prod) continue
     codedByProduct.set(part.product_id, (codedByProduct.get(part.product_id) ?? 0) + 1)
@@ -268,6 +331,7 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
   return {
     lines: [...acc.values()],
     blocked,
+    chua_ma: gomChuaMa(chuaMa),
     products: productIds.map((id) => {
       const p = qtyByProduct.get(id)!
       const info = infoById.get(id)

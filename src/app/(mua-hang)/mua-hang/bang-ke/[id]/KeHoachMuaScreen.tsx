@@ -199,6 +199,15 @@ function LocNhuCau({ d }: { d: KeHoachCtx }) {
           {TINH_TRANG_MUA[t].label}
         </ChipLoc>
       ))}
+      {d.bk.chua_ma.items.length > 0 && (
+        <button
+          type="button"
+          onClick={d.toiChuaMa}
+          className="text-[12px] font-semibold text-[var(--warn)] underline-offset-2 hover:underline"
+        >
+          {d.bk.chua_ma.items.length} vật tư chưa có mã kho
+        </button>
+      )}
       {d.bk.blocked.length > 0 && (
         <button
           type="button"

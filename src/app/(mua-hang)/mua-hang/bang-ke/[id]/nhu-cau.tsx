@@ -8,6 +8,7 @@ import type { BangKeRow } from '@/lib/lsx-bang-ke'
 import { NUM, Nhan, Nut, TD, TF, TH } from '../../_erp/ui'
 import { dmy, lechPct, so, so0, type DongKH } from './ke-hoach.shared'
 import type { KeHoachCtx } from './useKeHoachMua'
+import { KhoiChuaMa } from './chua-ma'
 
 const COLS = 8
 const LINK = 'text-[var(--act-text)] underline-offset-2 hover:underline'
@@ -25,6 +26,7 @@ export function NhuCau({ d }: { d: KeHoachCtx }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <NguonTheoSp d={d} />
+      <KhoiChuaMa d={d} />
       <KhoiChan d={d} />
       <LuoiNhuCau d={d} />
     </div>
