@@ -112,8 +112,8 @@ const TEN_VIEC: Record<string, { label: string; tone: Mark['tone'] }> = {
   close: { label: 'Chốt kỳ', tone: 'done' },
   reopen_request: { label: 'Xin mở lại', tone: 'warn' },
   reopen_withdraw: { label: 'Rút yêu cầu mở lại', tone: 'act' },
-  reopen_approve: { label: 'Giám đốc duyệt mở lại', tone: 'warn' },
-  reopen_reject: { label: 'Giám đốc từ chối mở lại', tone: 'stop' },
+  reopen_approve: { label: 'Kế toán trưởng duyệt mở lại', tone: 'warn' },
+  reopen_reject: { label: 'Kế toán trưởng từ chối mở lại', tone: 'stop' },
   set_range: { label: 'Đặt khoảng kỳ', tone: 'act' },
 }
 

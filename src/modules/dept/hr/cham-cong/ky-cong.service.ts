@@ -20,12 +20,14 @@ import {
 import { chamCongRepo } from './cham-cong.repo'
 import { gioCongService, type GioCong } from './gio-cong.service'
 import { kyCongRepo, type KyDong, type SuKien, type XacNhanDong } from './ky-cong.repo'
+import { khoangKyService } from './khoang-ky.service'
+import type { KhoangDat } from '@/lib/cham-cong/khoang-ky'
 import { bangLuongRepo, type TrangThaiLuong } from '../luong/bang-luong.repo'
 import { bangLuongService } from '../luong/bang-luong.service'
 
 /**
  * KỲ CÔNG (B3, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất) — chứng từ:
- *   Đang mở → (mọi tổ xác nhận) → Đã chốt → Chờ mở lại → (Giám đốc duyệt) → Đang mở.
+ *   Đang mở → (mọi tổ xác nhận) → Đã chốt → Chờ mở lại → (Kế toán trưởng duyệt) → Đang mở.
  * Nhân sự xác nhận tổ thay tổ trưởng sau khi thu phiếu giấy có chữ ký (Q2); ngày thiếu
  * lượt được "tính 0 giờ" nếu đồng ý lúc xác nhận (Q1). Chốt lưu BẢN CHỐT
  * (hr_time_results) và khoá mọi ghi cho ngày trong kỳ.
@@ -67,19 +69,31 @@ export type KyCongTrang = {
   phutMotCong: number
   /** Trạng thái bảng lương của kỳ (B5) — dải vòng đời đi tiếp "Đã tính lương" / "Đã trả". */
   bangLuong: TrangThaiLuong | null
-  quyen: { xacNhan: boolean; chot: boolean; xinMo: boolean; duyetMo: boolean }
+  /** Khoảng kỳ này Nhân sự đã đặt chưa (false = gợi ý nối tiếp / mặc định). */
+  khoangDaDat: boolean
+  /** Mọi kỳ đã đặt — hộp Đổi khoảng kỳ kiểm tại chỗ bằng cùng hàm thuần với server. */
+  dsKy: KhoangDat[]
+  quyen: {
+    xacNhan: boolean
+    chot: boolean
+    xinMo: boolean
+    duyetMo: boolean
+    /** Đặt khoảng kỳ = quyền sửa nhân viên chấm công (Q3). */
+    datKhoang: boolean
+  }
 }
 
 const HET_ERP = (t: string) =>
   `Kỳ ${t.slice(5)}/${t.slice(0, 4)} đã trả lương ngoài ERP — kỳ công trong ERP bắt đầu từ kỳ ${KY_DAU_ERP.slice(5)}/${KY_DAU_ERP.slice(0, 4)}`
 
 async function quyen(user: User) {
-  const [xacNhan, chot, duyetMo] = await Promise.all([
+  const [xacNhan, chot, duyetMo, datKhoang] = await Promise.all([
     canAction(user, 'hr.attendance.adjust'),
     canAction(user, 'hr.period.close'),
     canAction(user, 'hr.period.reopen_decide'),
+    canAction(user, 'hr.attendance.employee_edit'),
   ])
-  return { xacNhan, chot, xinMo: xacNhan, duyetMo }
+  return { xacNhan, chot, xinMo: xacNhan, duyetMo, datKhoang }
 }
 
 /** Gom dữ liệu của một kỳ — dùng chung cho trang và cho mọi chuyển tiếp (kiểm lại ở server). */
@@ -127,7 +141,11 @@ function kiemErp(thang: string) {
 export const kyCongService = {
   async trang(user: User, thang: string): Promise<KyCongTrang> {
     await assertAction(user, 'hr.attendance.view')
-    const [d, q] = await Promise.all([dung(user, thang), quyen(user)])
+    const [d, q, dsKy] = await Promise.all([
+      dung(user, thang),
+      quyen(user),
+      khoangKyService.ds(),
+    ])
     const { g, to } = d
     const ky = g.ky
     return {
@@ -137,6 +155,8 @@ export const kyCongService = {
       homNay: d.homNay,
       ngayLay: g.ngayLay,
       ngoaiErp: thang < KY_DAU_ERP,
+      khoangDaDat: dsKy.some((x) => x.thang === thang),
+      dsKy,
       trangThai: ky?.trangThai ?? 'open',
       ky,
       ban: g.ban,

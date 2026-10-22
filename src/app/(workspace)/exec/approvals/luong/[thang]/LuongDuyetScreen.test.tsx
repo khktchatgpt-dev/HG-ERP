@@ -6,7 +6,7 @@ import { tongTheoKhoi } from '@/lib/luong/tong-duyet'
 import type { DuyetLuongTrang } from '@/modules/dept/hr/luong/duyet-luong.service'
 import { LuongDuyetScreen } from './LuongDuyetScreen'
 
-/** Màn duyệt bảng lương của sếp (bản vẽ 21/10/2026) — dựng bằng số tổng kỳ 9 thật. */
+/** Màn duyệt bảng lương của Kế toán trưởng (bản vẽ 21/10/2026) — dựng bằng số tổng kỳ 9 thật. */
 const api = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),

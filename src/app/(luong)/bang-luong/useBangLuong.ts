@@ -76,7 +76,7 @@ export function useBangLuong(b: BangLuongTrang, mucDau: MucBl) {
       viec(
         'gui',
         { viec: 'gui', ghiChu: ghiChu?.trim() || null },
-        'Đã gửi sếp duyệt — sếp được báo',
+        'Đã gửi Kế toán trưởng duyệt — đã báo cho chị',
       ),
     rut: () => viec('rut', { viec: 'rut' }, 'Đã rút về nháp'),
     quyet: (dongY: boolean, lyDo?: string) =>

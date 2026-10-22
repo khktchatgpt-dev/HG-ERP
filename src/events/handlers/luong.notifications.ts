@@ -16,7 +16,7 @@ import {
  * LUỒNG LƯƠNG (bản vẽ duyệt 21/10/2026, Q2 theo đề xuất):
  *   - Nhân sự chốt kỳ công → hệ thống TỰ TÍNH bảng lương nháp (chưa gửi ai) → báo người quản lý
  *     lương (quyền `hr.payroll.run`, hiện là chị Phụng) kèm số người + thực lĩnh vừa tính.
- *   - Sếp duyệt / trả lại → báo người đã gửi.
+ *   - Kế toán trưởng duyệt / trả lại → báo người đã gửi.
  * Người nhận theo QUYỀN, không theo tên — đổi người quản lý lương là đổi vai, không sửa mã.
  */
 export function registerLuongNotificationHandlers(): void {

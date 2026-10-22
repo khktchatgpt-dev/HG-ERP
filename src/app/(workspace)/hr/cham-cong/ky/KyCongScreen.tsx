@@ -28,6 +28,8 @@ import { useKyCong, type KyCongCtx, type KyCongTrang, type MucKy } from './useKy
 import { NganTo } from './ngan-to'
 import { NganNguoi, NganThoiGian } from './ngan-nguoi-tl'
 import { HopChot, HopQuyet, HopXacNhan, HopXin } from './hop-ky'
+import { HopKhoang } from './hop-khoang-ky'
+import { soNgay } from '@/lib/cham-cong/khoang-ky'
 import { lucVn, so } from './ky.shared'
 
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
@@ -71,7 +73,26 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
           )
         }
         facts={[
-          { label: '', value: `${dm(k.tu)} → ${dm(k.den)}/${k.den.slice(0, 4)}` },
+          {
+            label: '',
+            value: (
+              <span className="inline-flex items-baseline gap-2">
+                {dm(k.tu)} → {dm(k.den)}/{k.den.slice(0, 4)}
+                <span className="font-normal text-[var(--ink-3)]">
+                  · {soNgay(k.tu, k.den)} ngày{k.khoangDaDat ? '' : ' · gợi ý'}
+                </span>
+                {k.quyen.datKhoang && !k.ngoaiErp && (
+                  <button
+                    type="button"
+                    onClick={() => d.setSheet('khoang')}
+                    className="font-sans font-normal text-[var(--act-text)] underline underline-offset-2 hover:text-[var(--act)]"
+                  >
+                    {k.trangThai === 'open' ? 'Đổi khoảng kỳ' : 'Khoảng kỳ đã khoá'}
+                  </button>
+                )}
+              </span>
+            ),
+          },
           { label: 'Dữ liệu máy tới', value: k.ngayLay ? dm(k.ngayLay) : '—' },
           { label: 'Người', value: so(k.nguoi.length) },
           ...(k.trangThai === 'open'
@@ -162,6 +183,7 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
       />
       <HopXin d={d} />
       <HopQuyet d={d} />
+      <HopKhoang d={d} />
     </ScreenFrame>
   )
 }
@@ -175,7 +197,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
       <HolderBar
         inline
         who="Tài Chính Kế Toán"
-        what="kiểm tra bảng lương hệ thống đã tính, rồi gửi sếp duyệt"
+        what="kiểm tra bảng lương hệ thống đã tính, rồi gửi Kế toán trưởng duyệt"
         age={
           k.ky?.chotLuc
             ? `${ngayTu(k.ky.chotLuc.slice(0, 10), k.homNay)} ngày`
@@ -252,7 +274,7 @@ function ThanhBao({ d }: { d: KyCongCtx }) {
     return (
       <NoticeBar tone="warn" tag="Chờ mở lại">
         {k.ky?.xinBoi ?? '—'} xin mở lại lúc {lucVn(k.ky?.xinLuc ?? null)}: “
-        {k.ky?.xinLyDo}”. Kỳ vẫn khoá tới khi Giám đốc duyệt.
+        {k.ky?.xinLyDo}”. Kỳ vẫn khoá tới khi Kế toán trưởng duyệt.
       </NoticeBar>
     )
   if (k.trangThai === 'closed')

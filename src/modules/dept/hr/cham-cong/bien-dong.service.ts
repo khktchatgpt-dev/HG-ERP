@@ -34,7 +34,7 @@ async function kiemKhoaKy(ngays: string[]): Promise<void> {
   if (!khoa.length) return
   const k = khoa[0]
   throw Conflict(
-    `Kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)} (${ngayVn(k.tu)} – ${ngayVn(k.den)}) đã chốt — chọn ngày từ ${ngayVn(ngaySau(k.den))}, hoặc nhờ Giám đốc mở lại kỳ`,
+    `Kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)} (${ngayVn(k.tu)} – ${ngayVn(k.den)}) đã chốt — chọn ngày từ ${ngayVn(ngaySau(k.den))}, hoặc nhờ Kế toán trưởng mở lại kỳ`,
   )
 }
 

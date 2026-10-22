@@ -11,9 +11,9 @@ import { hoSoLuongRepo } from './ho-so-luong.repo'
  * Câu hỏi của màn: "kỳ này trả bao nhiêu, ở đâu tăng bất thường, chị Phụng đã kiểm đủ chưa —
  * duyệt hay trả lại?".
  *
- * Sếp KHÔNG thấy lương từng người (Q9 của 20/10): dữ liệu trả về chỉ có TỔNG theo khối → tổ;
+ * Kế toán trưởng KHÔNG thấy lương từng người (Q9 của 20/10): dữ liệu trả về chỉ có TỔNG theo khối → tổ;
  * phiếu từng người đọc ở server rồi bỏ, không gửi xuống trình duyệt. Quyền `hr.payroll.approve`
- * (vai Giám đốc). Duyệt / trả lại đi qua `bangLuongService.quyet` (chặn tự duyệt bảng mình gửi).
+ * (Kế toán trưởng — vai giữ hr.payroll.approve). Duyệt / trả lại đi qua `bangLuongService.quyet` (chặn tự duyệt bảng mình gửi).
  */
 
 const DUYET = 'hr.payroll.approve'
@@ -78,7 +78,7 @@ export const duyetLuongService = {
       bTruoc && bTruoc.lanTinh ? bangLuongRepo.phieu(bTruoc.id, bTruoc.lanTinh) : null,
       d.bang ? bangLuongRepo.suKien(d.bang.id) : [],
     ])
-    // Sếp mở = một lần xem lương (dù chỉ tổng) — vào nhật ký như mọi lần xem khác.
+    // Kế toán trưởng mở = một lần xem lương (dù chỉ tổng) — vào nhật ký như mọi lần xem khác.
     await hoSoLuongRepo.ghiXemLuong('payroll_sheet', user.id, {
       ghiChu: `duyệt kỳ ${thang} (chỉ tổng theo bộ phận)`,
     })

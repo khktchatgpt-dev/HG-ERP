@@ -155,10 +155,10 @@ export function NganChuyenKhoan({ d }: { d: BangLuongCtx }) {
 
 const VIEC: Record<string, { ten: string; tone: Mark['tone'] }> = {
   calculate: { ten: 'Tính bảng lương', tone: 'act' },
-  submit: { ten: 'Gửi Giám đốc duyệt', tone: 'warn' },
+  submit: { ten: 'Gửi Kế toán trưởng duyệt', tone: 'warn' },
   withdraw: { ten: 'Rút về nháp', tone: 'act' },
-  approve: { ten: 'Giám đốc duyệt', tone: 'done' },
-  return: { ten: 'Giám đốc trả lại', tone: 'stop' },
+  approve: { ten: 'Kế toán trưởng duyệt', tone: 'done' },
+  return: { ten: 'Kế toán trưởng trả lại', tone: 'stop' },
   reopen: { ten: 'Rút bảng đã duyệt về nháp', tone: 'warn' },
   paid: { ten: 'Đã chi', tone: 'done' },
 }

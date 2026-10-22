@@ -205,8 +205,8 @@ function NguoiGiu({ d }: { d: BangLuongCtx }) {
       who="Tài Chính Kế Toán"
       what={
         d.vuong.length
-          ? `gỡ ${d.vuong.length} điều kiện rồi gửi Giám đốc`
-          : 'gửi Giám đốc duyệt'
+          ? `gỡ ${d.vuong.length} điều kiện rồi gửi Kế toán trưởng`
+          : 'gửi Kế toán trưởng duyệt'
       }
       age={lucVn(bang.tinhLuc)}
     />
@@ -242,7 +242,7 @@ function ThanhBao({ d }: { d: BangLuongCtx }) {
   if (d.tt === 'draft' && b.bang?.lyDoTraLai)
     return (
       <NoticeBar tone="warn" tag="Bị trả lại">
-        Giám đốc trả lại: “{b.bang.lyDoTraLai}”. Sửa ở nguồn, Tính lại, rồi gửi lại.
+        Kế toán trưởng trả lại: “{b.bang.lyDoTraLai}”. Sửa ở nguồn, Tính lại, rồi gửi lại.
       </NoticeBar>
     )
   if (b.canTinhLai)

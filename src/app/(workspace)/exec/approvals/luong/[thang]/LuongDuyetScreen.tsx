@@ -1,10 +1,10 @@
 'use client'
 
 /**
- * DUYỆT BẢNG LƯƠNG — màn của sếp (bản vẽ duyệt 21/10/2026, https://claude.ai/artifact/8BH9Nam6…,
+ * DUYỆT BẢNG LƯƠNG — màn của Kế toán trưởng (bản vẽ duyệt 21/10/2026, https://claude.ai/artifact/8BH9Nam6…,
  * Q1–Q5 theo đề xuất). Khuôn D (chứng từ) rút gọn: vòng đời + người giữ + bảng tổng + điều kiện.
  * Câu hỏi của màn: "kỳ này trả bao nhiêu, ở đâu tăng bất thường, đã kiểm đủ chưa — duyệt hay
- * trả lại?". Chỉ TỔNG theo khối → tổ (Q9 của 20/10: sếp không thấy lương từng người).
+ * trả lại?". Chỉ TỔNG theo khối → tổ (Q9 của 20/10: Kế toán trưởng không thấy lương từng người).
  */
 
 import { useState } from 'react'
@@ -58,10 +58,10 @@ const TEN_TT = {
 
 const VIEC: Record<string, { ten: string; tone: Mark['tone'] }> = {
   calculate: { ten: 'Tính bảng lương', tone: 'act' },
-  submit: { ten: 'Gửi sếp duyệt', tone: 'warn' },
+  submit: { ten: 'Gửi Kế toán trưởng duyệt', tone: 'warn' },
   withdraw: { ten: 'Rút về nháp', tone: 'act' },
-  approve: { ten: 'Sếp duyệt', tone: 'done' },
-  return: { ten: 'Sếp trả lại', tone: 'stop' },
+  approve: { ten: 'Kế toán trưởng duyệt', tone: 'done' },
+  return: { ten: 'Kế toán trưởng trả lại', tone: 'stop' },
   reopen: { ten: 'Mở lại bảng đã duyệt', tone: 'warn' },
   paid: { ten: 'Đã chi', tone: 'done' },
 }
@@ -133,7 +133,7 @@ export function LuongDuyetScreen({ t }: { t: DuyetLuongTrang }) {
         <div className="flex flex-wrap items-center gap-x-6 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
           <StatusTrack
             label="Vòng đời bảng lương"
-            steps={['Nháp', 'Chờ sếp duyệt', 'Đã duyệt', 'Đã chi']}
+            steps={['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đã chi']}
             at={tt === 'paid' ? 3 : tt === 'approved' ? 2 : tt === 'submitted' ? 1 : 0}
             tone={tt === 'paid' ? 'done' : tt === 'submitted' ? 'wait' : 'run'}
           />
@@ -382,7 +382,7 @@ function BenPhai({ t }: { t: DuyetLuongTrang }) {
         )}
       </section>
       <p className="m-0 text-[var(--ink-3)]">
-        Sếp không thấy lương từng người. Muốn hỏi kỹ thì trả lại kèm câu hỏi.
+        Kế toán trưởng không thấy lương từng người. Muốn hỏi kỹ thì trả lại kèm câu hỏi.
       </p>
     </aside>
   )

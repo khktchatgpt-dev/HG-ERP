@@ -11,7 +11,7 @@ export type { KyCongTrang, ToKy }
 import type { MucKy } from './ky.shared'
 export type { MucKy }
 
-type Sheet = null | 'chot' | 'xin' | 'quyet' | { xacNhan: string }
+type Sheet = null | 'chot' | 'xin' | 'quyet' | 'khoang' | { xacNhan: string }
 
 /** State + chuyển tiếp của màn Kỳ công. Mọi điều kiện lấy từ server (cùng hàm thuần). */
 export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
@@ -66,8 +66,14 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
       `Đã chốt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)} — đã báo Kế toán kiểm bảng lương`,
     )
   const xinMo = (lyDo: string) =>
-    viec('xin', { viec: 'xin_mo', lyDo }, 'Đã gửi yêu cầu mở lại cho Giám đốc')
+    viec('xin', { viec: 'xin_mo', lyDo }, 'Đã gửi yêu cầu mở lại cho Kế toán trưởng')
   const rutXin = () => viec('rut', { viec: 'rut_xin' }, 'Đã rút yêu cầu mở lại')
+  const datKhoang = (tu: string, den: string, lyDo: string) =>
+    viec(
+      'khoang',
+      { viec: 'dat_khoang', tu, den, lyDo: lyDo.trim() || undefined },
+      `Đã đặt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)}: ${tu.slice(8)}/${tu.slice(5, 7)} → ${den.slice(8)}/${den.slice(5, 7)} — Bảng công tính lại theo khoảng mới`,
+    )
   const quyetMo = (dongY: boolean, ghiChu?: string) =>
     viec(
       'quyet',
@@ -94,6 +100,7 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
     xinMo,
     rutXin,
     quyetMo,
+    datKhoang,
   } as const
 }
 

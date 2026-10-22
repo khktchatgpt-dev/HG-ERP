@@ -6,11 +6,11 @@ import { Empty } from '@/components/kit'
 import { ExecKitFrame } from '../../../_shell/KitFrame'
 import { LuongDuyetScreen } from './LuongDuyetScreen'
 
-export const metadata = { title: 'Ban Giám đốc · Duyệt bảng lương' }
+export const metadata = { title: 'Duyệt bảng lương' }
 
 /**
  * Duyệt BẢNG LƯƠNG một kỳ (bản vẽ duyệt 21/10/2026, https://claude.ai/artifact/8BH9Nam6…).
- * Sếp thấy TỔNG theo khối → tổ, không thấy lương từng người. Quyền `hr.payroll.approve`.
+ * Kế toán trưởng thấy TỔNG theo khối → tổ, không thấy lương từng người. Quyền `hr.payroll.approve`.
  */
 export default async function DuyetLuongPage({
   params,
@@ -25,7 +25,7 @@ export default async function DuyetLuongPage({
       <ExecKitFrame>
         <Empty
           headline="Chỉ người duyệt lương xem được màn này"
-          reason="Việc này do Ban Giám đốc quản lý."
+          reason="Việc này do Kế toán trưởng duyệt."
           next="Hỏi bảng lương của mình thì hỏi người quản lý lương ở Phòng Kế toán."
         />
       </ExecKitFrame>

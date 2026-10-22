@@ -18,7 +18,7 @@ vi.mock('@/modules/dept/hr/luong/bang-luong.service', () => ({
 import { emit } from '../bus'
 import { registerLuongNotificationHandlers } from './luong.notifications'
 
-/** Luồng lương 21/10/2026: chốt công → tự tính → báo chị Phụng; sếp quyết → báo người gửi. */
+/** Luồng lương 21/10/2026: chốt công → tự tính → báo chị Phụng; Kế toán trưởng quyết → báo người gửi. */
 registerLuongNotificationHandlers()
 beforeEach(() => {
   notify.mockReset()
@@ -86,7 +86,7 @@ describe('luong.notifications', () => {
     })
   })
 
-  it('sếp trả lại → báo đúng người gửi kèm lý do', async () => {
+  it('Kế toán trưởng trả lại → báo đúng người gửi kèm lý do', async () => {
     await emit({
       name: 'hr.payroll.decided',
       thang: '2026-10',
@@ -100,11 +100,13 @@ describe('luong.notifications', () => {
       recipientId: 'u-phung',
       actorId: 'u-sep',
       type: 'payroll_returned',
-      payload: { title: 'Sếp trả lại bảng lương 10/2026: “Tổ Hoàn Thiện tăng 18 %”' },
+      payload: {
+        title: 'Kế toán trưởng trả lại bảng lương 10/2026: “Tổ Hoàn Thiện tăng 18 %”',
+      },
     })
   })
 
-  it('sếp duyệt → báo người gửi', async () => {
+  it('Kế toán trưởng duyệt → báo người gửi', async () => {
     await emit({
       name: 'hr.payroll.decided',
       thang: '2026-10',
