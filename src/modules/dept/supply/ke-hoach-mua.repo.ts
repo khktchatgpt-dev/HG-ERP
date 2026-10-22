@@ -97,11 +97,18 @@ export const keHoachMuaRepo = {
 
   /** Tên NCC (đang hoạt động hay không — lịch sử cần cả NCC đã ngừng). */
   async tenNcc(): Promise<
-    { id: string; code: string | null; name: string; can_order: boolean }[]
+    {
+      id: string
+      code: string | null
+      name: string
+      can_order: boolean
+      /** VAT khai ở hồ sơ NCC — lùi về khi NCC chưa có đơn nào (lib/po-thue). */
+      vat_rate: number | null
+    }[]
   > {
     const { data, error } = await db()
       .from('supply_suppliers')
-      .select('id, code, name, can_order')
+      .select('id, code, name, can_order, vat_rate')
       .order('name')
       .limit(2000)
     if (error) throw new Error(error.message)
@@ -110,12 +117,34 @@ export const keHoachMuaRepo = {
       code: s.code,
       name: s.name,
       can_order: s.can_order !== false,
+      vat_rate: s.vat_rate == null ? null : Number(s.vat_rate),
     }))
   },
 
-  /** Khối lượng một ĐVT mua: kg/đv khai sẵn, hoặc kg/m × dài cây. */
-  async kgMoiDv(materialIds: string[]): Promise<Map<string, number | null>> {
-    const out = new Map<string, number | null>()
+  /**
+   * Thông số khối lượng của mã (danh mục): kg/ĐVT khai sẵn, kg/m, dài cây mặc
+   * định, và `kg` = khối lượng một ĐVT mua suy ra (kg/đv, hoặc kg/m × dài cây).
+   */
+  async thongSoKg(materialIds: string[]): Promise<
+    Map<
+      string,
+      {
+        kg: number | null
+        kg_per_m: number | null
+        bar_length_m: number | null
+        kg_per_unit: number | null
+      }
+    >
+  > {
+    const out = new Map<
+      string,
+      {
+        kg: number | null
+        kg_per_m: number | null
+        bar_length_m: number | null
+        kg_per_unit: number | null
+      }
+    >()
     for (let i = 0; i < materialIds.length; i += 200) {
       const { data, error } = await db()
         .from('warehouse_materials')
@@ -126,10 +155,21 @@ export const keHoachMuaRepo = {
         const perUnit = m.kg_per_unit != null ? Number(m.kg_per_unit) : null
         const perM = m.kg_per_m != null ? Number(m.kg_per_m) : null
         const bar = m.default_bar_length_m != null ? Number(m.default_bar_length_m) : null
-        out.set(m.id, perUnit && perUnit > 0 ? perUnit : perM && bar ? perM * bar : null)
+        out.set(m.id, {
+          kg: perUnit && perUnit > 0 ? perUnit : perM && bar ? perM * bar : null,
+          kg_per_m: perM,
+          bar_length_m: bar,
+          kg_per_unit: perUnit,
+        })
       }
     }
     return out
+  },
+
+  /** Khối lượng một ĐVT mua (kg/cây…) — null = danh mục chưa khai. */
+  async kgMoiDv(materialIds: string[]): Promise<Map<string, number | null>> {
+    const t = await this.thongSoKg(materialIds)
+    return new Map([...t.entries()].map(([id, v]) => [id, v.kg]))
   },
 
   async chonCuaLenh(lsxId: string): Promise<ChonNccRow[]> {

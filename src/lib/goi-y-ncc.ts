@@ -189,3 +189,41 @@ export function tenNganNcc(name: string): string {
     .trim()
   return t || name
 }
+
+/** Lựa chọn mặc định của một mã (gợi ý của máy) — màn bước 2 và file Excel dùng chung. */
+export type LuaChonNcc = {
+  supplier_id: string
+  supplier_name: string
+  /** Giá theo `co_so`; null = chưa có giá (đi hỏi). */
+  price: number | null
+  co_so: 'unit' | 'kg'
+}
+
+/**
+ * Giá + cơ sở tính khi chọn một ứng viên: hàng kim loại có giá/kg → tính theo kg
+ * (lên đơn là price_basis unit2); còn lại theo ĐVT mua. Giá lần trước tính theo
+ * ĐVT KHÁC ĐVT của mã (LĐS mua theo Kg, mã tính Con) → KHÔNG mang giá sang, để
+ * trống cho người mua gõ, kẻo lệch cả trăm lần. `cungDv` so ĐVT (truyền
+ * `sameUnit` từ po-paste — tránh vòng import).
+ */
+export function giaTuUngVien(
+  u: UngVienNcc | undefined,
+  unit: string,
+  cungDv: (a: string, b: string) => boolean,
+): { price: number | null; co_so: 'unit' | 'kg' } {
+  if (!u) return { price: null, co_so: 'unit' }
+  if (u.giaKg != null) return { price: u.giaKg, co_so: 'kg' }
+  if (u.giaDv != null && cungDv(u.dvGia, unit)) return { price: u.giaDv, co_so: 'unit' }
+  return { price: null, co_so: 'unit' }
+}
+
+/** Gợi ý của máy cho một mã = ứng viên đầu + giá theo `giaTuUngVien`. */
+export function chonMacDinh(
+  ungVien: UngVienNcc[],
+  unit: string,
+  cungDv: (a: string, b: string) => boolean,
+): LuaChonNcc | null {
+  const u = ungVien[0]
+  if (!u) return null
+  return { supplier_id: u.supplier_id, supplier_name: u.supplier_name, ...giaTuUngVien(u, unit, cungDv) } // prettier-ignore
+}

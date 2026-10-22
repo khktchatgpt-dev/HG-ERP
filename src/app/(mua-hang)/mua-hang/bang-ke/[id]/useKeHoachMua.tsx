@@ -12,6 +12,7 @@ import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
 import type { DongKH } from './ke-hoach.shared'
 import { useChonNcc } from './useChonNcc'
+import { useLenDon } from './useLenDon'
 
 export type Buoc = 1 | 2 | 3
 /** Lọc bảng nhu cầu: một tình trạng, "còn phải đặt", hoặc "nhập tay". */
@@ -164,9 +165,11 @@ export function useKeHoachMua({
   }
 
   const ncc = useChonNcc({ lsxId: bk.lsx.id, nguon, conDat })
+  const lenDon = useLenDon({ lsxId: bk.lsx.id, nguon, conDat, ncc })
 
   return {
     ncc,
+    lenDon,
     bk,
     canEdit,
     includeDraft,

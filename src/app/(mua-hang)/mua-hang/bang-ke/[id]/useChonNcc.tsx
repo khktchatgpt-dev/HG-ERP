@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
-import { LY_DO_GOI_Y, type UngVienNcc } from '@/lib/goi-y-ncc'
+import { giaTuUngVien, LY_DO_GOI_Y, type UngVienNcc } from '@/lib/goi-y-ncc'
 import { sameUnit } from '@/lib/po-paste'
 import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
 import type { DongKH } from './ke-hoach.shared'
@@ -20,21 +20,8 @@ export type ChonMa = {
   lyDo: string
 }
 
-/**
- * Giá + cơ sở tính khi chọn một ứng viên: hàng kim loại có giá/kg → tính theo kg
- * (lên đơn là price_basis unit2); còn lại theo ĐVT mua. Giá lần trước tính theo
- * ĐVT KHÁC ĐVT của mã (LĐS mua theo Kg, mã tính Con) → KHÔNG mang giá sang, để
- * trống cho người mua gõ, kẻo lệch cả trăm lần.
- */
-function giaTuUngVien(
-  u: UngVienNcc | undefined,
-  unit: string,
-): Pick<ChonMa, 'price' | 'co_so'> {
-  if (!u) return { price: null, co_so: 'unit' }
-  if (u.giaKg != null) return { price: u.giaKg, co_so: 'kg' }
-  if (u.giaDv != null && sameUnit(u.dvGia, unit)) return { price: u.giaDv, co_so: 'unit' }
-  return { price: null, co_so: 'unit' }
-}
+/** Giá + cơ sở giá của một ứng viên — hàm CHUNG với file Excel (lib/goi-y-ncc). */
+const giaUv = (u: UngVienNcc | undefined, unit: string) => giaTuUngVien(u, unit, sameUnit)
 
 /**
  * BƯỚC 2 · CHỌN NCC — state + việc. Mỗi thay đổi GHI NGAY (PUT lsx-sourcing),
@@ -80,7 +67,7 @@ export function useChonNcc({
       out[r.material_id] = {
         supplier_id: u?.supplier_id ?? null,
         supplier_name: u?.supplier_name ?? '',
-        ...giaTuUngVien(u, r.unit),
+        ...giaUv(u, r.unit),
         luu: false,
         lyDo: u ? LY_DO_GOI_Y[u.nguon] : '',
       }
@@ -175,7 +162,7 @@ export function useChonNcc({
       [materialId]: {
         supplier_id: supplierId,
         supplier_name: u?.supplier_name ?? tenNcc.get(supplierId) ?? '—',
-        ...giaTuUngVien(u, unitCua.get(materialId) ?? ''),
+        ...giaUv(u, unitCua.get(materialId) ?? ''),
         luu: false,
         lyDo: 'người mua chọn',
       },
@@ -214,7 +201,7 @@ export function useChonNcc({
       moi[id] = {
         supplier_id: supplierId,
         supplier_name: u?.supplier_name ?? tenNcc.get(supplierId) ?? '—',
-        ...giaTuUngVien(u, unitCua.get(id) ?? ''),
+        ...giaUv(u, unitCua.get(id) ?? ''),
         luu: false,
         lyDo: 'người mua chọn',
       }
@@ -240,7 +227,7 @@ export function useChonNcc({
         [materialId]: {
           supplier_id: u?.supplier_id ?? null,
           supplier_name: u?.supplier_name ?? '',
-          ...giaTuUngVien(u, unitCua.get(materialId) ?? ''),
+          ...giaUv(u, unitCua.get(materialId) ?? ''),
           luu: false,
           lyDo: u ? LY_DO_GOI_Y[u.nguon] : '',
         },

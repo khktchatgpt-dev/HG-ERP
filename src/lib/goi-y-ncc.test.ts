@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { chenhGia, goiYNcc, tenNganNcc, type DongLichSu } from './goi-y-ncc'
+import {
+  chenhGia,
+  chonMacDinh,
+  giaTuUngVien,
+  goiYNcc,
+  tenNganNcc,
+  type DongLichSu,
+} from './goi-y-ncc'
 
 const ls = (p: Partial<DongLichSu>): DongLichSu => ({
   material_id: 'm1',
@@ -103,5 +110,21 @@ describe('tenNganNcc', () => {
     expect(tenNganNcc('Công Ty TNHH Nhôm Đoàn Gia')).toBe('Nhôm Đoàn Gia')
     expect(tenNganNcc('CÔNG TY CỔ PHẦN THÉP ASIA')).toBe('THÉP ASIA')
     expect(tenNganNcc('CÔNG TY TNHH TM -DV -TH MINH THẮNG')).toBe('MINH THẮNG')
+  })
+})
+
+describe('giaTuUngVien / chonMacDinh', () => {
+  const cung = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+  const u = (p: Partial<import('./goi-y-ncc').UngVienNcc>) =>
+    ({ supplier_id: 's', supplier_name: 'S', nguon: 'ma', giaDv: null, giaKg: null, dvGia: 'Cái', at: null, po_code: null, soLan: 1, ...p }) as import('./goi-y-ncc').UngVienNcc // prettier-ignore
+  it('có giá/kg → tính theo kg', () => {
+    expect(giaTuUngVien(u({ giaKg: 108000, giaDv: 130000 }), 'Cây', cung)).toEqual({ price: 108000, co_so: 'kg' }) // prettier-ignore
+  })
+  it('giá cùng ĐVT → theo ĐVT; khác ĐVT → để trống', () => {
+    expect(giaTuUngVien(u({ giaDv: 47, dvGia: 'cái' }), 'Cái', cung)).toEqual({ price: 47, co_so: 'unit' }) // prettier-ignore
+    expect(giaTuUngVien(u({ giaDv: 40000, dvGia: 'Kg' }), 'Con', cung)).toEqual({ price: null, co_so: 'unit' }) // prettier-ignore
+  })
+  it('không có ứng viên → null', () => {
+    expect(chonMacDinh([], 'Cái', cung)).toBeNull()
   })
 })

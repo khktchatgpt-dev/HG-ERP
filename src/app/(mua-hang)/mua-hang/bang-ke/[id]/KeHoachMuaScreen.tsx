@@ -4,6 +4,7 @@ import { THU_TU_MUA, TINH_TRANG_MUA } from '@/lib/lsx-bang-ke-mua'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
 import { ChonNcc } from './chon-ncc'
+import { LenDon } from './len-don'
 import { ChipLoc, ChonLoc, DauTrang, HangLoc, Nut, ThanhDuoi, Trang } from '../../_erp/ui'
 import { DanBangKe } from './dan-bang-ke'
 import { dmy, so0 } from './ke-hoach.shared'
@@ -79,6 +80,7 @@ export function KeHoachMuaScreen({
         </>
       )}
       {d.buoc === 2 && <ChonNcc d={d} />}
+      {d.buoc === 3 && <LenDon d={d} />}
       <ThanhDuoi
         left={
           <>
@@ -117,7 +119,11 @@ function DaiBuoc({ d }: { d: KeHoachCtx }) {
       t: 'Chọn NCC',
       s: `${d.ncc.dem.coNcc}/${d.conDat.length} mã đã có NCC · ${d.ncc.dem.chuaGia} chưa có giá${d.ncc.dem.chuaLuu ? ` · ${d.ncc.dem.chuaLuu} chưa lưu` : ''}`,
     },
-    { k: 3, t: 'Lên đơn', s: 'Mỗi NCC một đơn nháp', khoa: 'Đang dựng' },
+    {
+      k: 3,
+      t: 'Lên đơn',
+      s: `${d.lenDon.nhom.length} NCC → ${d.lenDon.seTao.length} đơn nháp${d.lenDon.chuaNcc.length ? ` · ${d.lenDon.chuaNcc.length} mã chưa có NCC` : ''}`,
+    },
   ]
   return (
     <div
