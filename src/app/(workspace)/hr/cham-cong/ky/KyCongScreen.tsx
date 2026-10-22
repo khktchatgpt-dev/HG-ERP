@@ -96,7 +96,10 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
             ),
           },
           { label: 'Dữ liệu máy tới', value: k.ngayLay ? dm(k.ngayLay) : '—' },
-          { label: 'Người', value: so(k.nguoi.length) },
+          {
+            label: 'Người trong kỳ',
+            value: `${so(k.nguoi.length)}${k.nghiGiuaKy ? ` · ${k.nghiGiuaKy} nghỉ giữa kỳ` : ''}`,
+          },
           ...(k.trangThai === 'open'
             ? [
                 {
@@ -235,47 +238,102 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
     <HolderBar
       inline
       who="Hành Chính Nhân Sự"
-      what={
-        [
-          thieu ? `xử lý ${so(thieu)} ngày thiếu lượt` : '',
-          chuaNhapCong ? `nhập công ${chuaNhapCong} người không chấm công` : '',
-          chua ? `thu phiếu xác nhận của ${chua} tổ` : '',
-          k.chuaCoTo ? `gán tổ cho ${k.chuaCoTo} người` : '',
-        ]
-          .filter(Boolean)
-          .join(', ') || 'chốt kỳ'
-      }
+      what={viecTiep([
+        thieu ? `xử lý ${so(thieu)} ngày thiếu lượt` : '',
+        chuaNhapCong ? `nhập công ${chuaNhapCong} người không chấm công` : '',
+        chua ? `thu phiếu xác nhận của ${chua} tổ` : '',
+        k.chuaCoTo ? `gán tổ cho ${k.chuaCoTo} người` : '',
+      ])}
       age={`${ngayTu(k.tu, k.homNay)} ngày từ đầu kỳ`}
     />
   )
 }
 
-/** Năm ô điều kiện chốt — chỉ khi kỳ còn mở. Ô đỏ = còn chặn. */
+/** Việc đầu tiên còn lại + "và N việc nữa" — dải người giữ việc chỉ một dòng (22/10/2026). */
+function viecTiep(ds: string[]): string {
+  const con = ds.filter(Boolean)
+  if (!con.length) return 'chốt kỳ'
+  return con.length === 1 ? con[0] : `${con[0]} và ${con.length - 1} việc nữa`
+}
+
+/**
+ * Ô điều kiện chốt — chỉ khi kỳ còn mở. Mỗi ô hai dòng gọn (tên · chi tiết cắt bớt, đủ chữ ở
+ * tooltip); ô còn chặn BẤM ĐƯỢC tới đúng chỗ gỡ. Thay cho dải "Chưa chốt được" trước đây nói
+ * lại y hệt các ô này (22/10/2026: đầu trang chiếm 53 % màn hình).
+ */
 function DaiDieuKien({ d }: { d: KyCongCtx }) {
   const { k } = d
   if (!d.mo) return null
+  const toi = (ma: string): (() => void) | string | null =>
+    ma === 'xac_nhan' || ma === 'chua_co_to'
+      ? () => d.setMuc('theo-to')
+      : ma === 'nhap_tay'
+        ? () => d.setMuc('nhap-tay')
+        : ma === 'cho_duyet'
+          ? '/hr/cham-cong/dieu-chinh'
+          : ma === 'may'
+            ? `/hr/cham-cong/lay-du-lieu?thang=${k.thang}`
+            : null
   return (
     <div
       className="grid border-b border-[var(--line)] bg-[var(--surface-card)]"
       style={{ gridTemplateColumns: `repeat(${k.dieuKien.length}, minmax(0, 1fr))` }}
     >
-      {k.dieuKien.map((x) => (
-        <div
-          key={x.ma}
-          className="text-k-sm border-r border-[var(--line-faint)] px-[var(--gutter)] py-1.5 last:border-r-0"
-        >
-          <span className="text-[var(--ink-2)]">{x.ten}</span>
-          <b
-            className={cn(
-              'text-k-body num block font-semibold',
-              x.ok ? 'text-[var(--done)]' : 'text-[var(--stop)]',
-            )}
-          >
-            {x.ok ? '✓ ' : ''}
-            {x.chiTiet}
-          </b>
-        </div>
-      ))}
+      {k.dieuKien.map((x) => {
+        const di = x.ok ? null : toi(x.ma)
+        const noiDung = (
+          <>
+            <span className="block truncate text-[var(--ink-2)]">
+              <span
+                aria-hidden
+                className={x.ok ? 'text-[var(--done)]' : 'text-[var(--stop)]'}
+              >
+                {x.ok ? '✓' : '●'}
+              </span>{' '}
+              {x.ten}
+            </span>
+            <b
+              className={cn(
+                'num block truncate font-semibold',
+                x.ok ? 'text-[var(--ink-2)]' : 'text-[var(--stop)]',
+                di && 'underline decoration-dotted underline-offset-2',
+              )}
+            >
+              {x.chiTiet}
+            </b>
+          </>
+        )
+        const lop =
+          'text-k-sm min-w-0 border-r border-[var(--line-faint)] px-[var(--gutter)] py-1 text-left last:border-r-0'
+        if (typeof di === 'function')
+          return (
+            <button
+              key={x.ma}
+              type="button"
+              title={`${x.ten}: ${x.chiTiet} — bấm để tới chỗ gỡ`}
+              onClick={di}
+              className={cn(lop, 'hover:bg-[var(--surface-hover)]')}
+            >
+              {noiDung}
+            </button>
+          )
+        if (typeof di === 'string')
+          return (
+            <a
+              key={x.ma}
+              href={di}
+              title={`${x.ten}: ${x.chiTiet} — bấm để tới chỗ gỡ`}
+              className={cn(lop, 'hover:bg-[var(--surface-hover)]')}
+            >
+              {noiDung}
+            </a>
+          )
+        return (
+          <div key={x.ma} title={`${x.ten}: ${x.chiTiet}`} className={lop}>
+            {noiDung}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -301,22 +359,6 @@ function ThanhBao({ d }: { d: KyCongCtx }) {
       <NoticeBar tone="neutral" tag="Đã chốt">
         Số dưới đây là bản chốt lần {k.ky?.lanChot}. Phiếu điều chỉnh, tick làm trưa cho
         ngày {dm(k.tu)} → {dm(k.den)} đều bị khoá; muốn sửa thì xin mở lại.
-      </NoticeBar>
-    )
-  if (d.chuaChot.length)
-    return (
-      <NoticeBar
-        tone="warn"
-        tag="Chưa chốt được"
-        action={
-          d.chuaChot.some((x) => x.ma === 'xac_nhan' || x.ma === 'chua_co_to')
-            ? { label: 'Tới tổ còn vướng', onClick: () => d.setMuc('theo-to') }
-            : d.chuaChot.some((x) => x.ma === 'nhap_tay')
-              ? { label: 'Tới người chưa nhập công', onClick: () => d.setMuc('nhap-tay') }
-              : undefined
-        }
-      >
-        {d.chuaChot.map((x) => `${x.ten.toLowerCase()}: ${x.chiTiet}`).join(' · ')}.
       </NoticeBar>
     )
   return null

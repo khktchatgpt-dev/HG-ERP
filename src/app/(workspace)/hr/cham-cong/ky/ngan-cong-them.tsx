@@ -73,7 +73,10 @@ export function KhoiCongThem({ d }: { d: KyCongCtx }) {
         )}
       </div>
       <div className="overflow-auto">
-        <table className="text-k-sm w-full border-separate border-spacing-0">
+        <table
+          className="text-k-sm w-full border-separate border-spacing-0"
+          style={{ minWidth: 900 }}
+        >
           <thead>
             <tr>
               <th className={TH} style={{ minWidth: 240 }}>

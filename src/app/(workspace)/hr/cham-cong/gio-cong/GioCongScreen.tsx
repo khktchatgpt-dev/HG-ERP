@@ -77,7 +77,10 @@ export function GioCongScreen({ b, bpDau }: { b: GioCong; bpDau?: string }) {
         }
         facts={[
           { label: 'Dữ liệu tới', value: cuoiCo ? dm(cuoiCo) : '—' },
-          { label: 'Người', value: so(b.nguoi.length) },
+          {
+            label: 'Người trong kỳ',
+            value: `${so(b.nguoi.length)}${b.nguoi.some((n) => n.ngayCuoi) ? ` · ${b.nguoi.filter((n) => n.ngayCuoi).length} nghỉ giữa kỳ` : ''}`,
+          },
           {
             label: 'Ngày thiếu lượt',
             value: so(thieu),

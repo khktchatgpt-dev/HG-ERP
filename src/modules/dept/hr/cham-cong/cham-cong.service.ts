@@ -5,6 +5,7 @@ import { todayVn } from '@/lib/date-vn'
 import { boSo0, khopDuoiTen } from '@/lib/cham-cong/ghep-ten'
 import { gopLap, type LuotQuet } from '@/lib/cham-cong/luot'
 import { chamCongRepo, type DeviceRow, type DeviceUserRow } from './cham-cong.repo'
+import { khoangKyService } from './khoang-ky.service'
 import { infoDevice, readDevice } from './zk'
 import { dieuChinhRepo } from './dieu-chinh.repo'
 import { bienDongRepo } from './bien-dong.repo'
@@ -842,9 +843,9 @@ export const chamCongService = {
   ): Promise<KyCong> {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
       throw BadRequest('Tháng phải dạng YYYY-MM')
-    const [y, m] = thang.split('-').map(Number)
-    const tu = `${thang}-01`
-    const den = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+    // Cùng khoảng kỳ Nhân sự đặt như Bảng công / Kỳ công (22/10/2026: trước đó cắt theo
+    // tháng lịch nên "10/2026" ở Có mặt / Lượt quẹt là 01→31/10, ở Bảng công là 26/09→25/10).
+    const { tu, den } = await khoangKyService.cua(thang)
     const [du, may, nv, quyen] = await Promise.all([
       chamCongService.duLieu(user, { tu, den }),
       chamCongService.mayChamCong(user),

@@ -53,8 +53,9 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
       </div>
       {!d.mo && (
         <div className="text-k-sm border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5 text-[var(--ink-2)]">
-          Kỳ đã chốt{k.ky?.lanChot ? ` lần ${k.ky.lanChot}` : ''} — công nhập tay khoá
-          theo bản chốt. Muốn sửa thì xin mở lại kỳ (menu ⋯ ở góc trên).
+          {k.ngoaiErp
+            ? 'Kỳ này trả lương ngoài ERP — công nhập tay chỉ có từ kỳ 10/2026.'
+            : `Kỳ đã chốt${k.ky?.lanChot ? ` lần ${k.ky.lanChot}` : ''} — công nhập tay khoá theo bản chốt. Muốn sửa thì xin mở lại kỳ (menu ⋯ ở góc trên).`}
         </div>
       )}
       {d.mo && !k.quyen.nhapTay && (
@@ -63,7 +64,11 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
         </div>
       )}
       <div>
-        <table className="text-k-sm w-full border-separate border-spacing-0">
+        {/* Bề rộng tối thiểu: khung hẹp thì cuộn ngang, không bóp cột làm hàng cao vọt. */}
+        <table
+          className="text-k-sm w-full border-separate border-spacing-0"
+          style={{ minWidth: 900 }}
+        >
           <thead>
             <tr>
               <th className={TH}>Mã</th>
@@ -189,7 +194,6 @@ function HangNhap({
           <NumInput
             aria-label={`Công của ${x.ten}`}
             value={soO(x.cong)}
-            placeholder={String(x.ngayLamViec)}
             disabled={dangGhi}
             onCommit={(s) => ghi({ cong: docSo(s) })}
             className={cn(loi && 'border-[var(--stop)]')}

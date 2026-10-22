@@ -31,6 +31,11 @@ export const khoangKyService = {
     return thangCua(iso, await kyCongRepo.dsKhoang())
   },
 
+  /** Kỳ trên URL nếu hợp lệ, không thì kỳ đang chứa hôm nay — mặc định chung của mọi màn theo kỳ. */
+  async chon(thang: string | undefined, homNay: string): Promise<string> {
+    return thang && /^d{4}-(0[1-9]|1[0-2])$/.test(thang) ? thang : this.thangCua(homNay)
+  },
+
   async dat(
     user: User,
     thang: string,

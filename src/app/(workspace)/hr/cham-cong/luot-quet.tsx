@@ -71,6 +71,7 @@ export function LuotQuetScreen({
     <KhungTrang
       ten="Lượt quẹt"
       thang={k.thang}
+      khoang={{ tu: k.tu, den: k.den }}
       onThang={d.xemThang}
       facts={[{ label: 'Dòng người-ngày', value: so(k.du.dong.length) }]}
       actions={
@@ -272,7 +273,8 @@ function BangLuot({
         <tbody>
           {dong.map((x) => (
             <tr
-              key={`${x.ngay}|${x.ma}|${x.daGhep}`}
+              // Mã CHƯA ghép gom theo từng máy: cùng số 89 ở .201 và .203 là hai dòng → khoá phải có máy.
+              key={`${x.ngay}|${x.ma}|${x.daGhep}|${x.luot[0]?.may ?? ''}`}
               className="hover:bg-[var(--surface-hover)]"
             >
               <td

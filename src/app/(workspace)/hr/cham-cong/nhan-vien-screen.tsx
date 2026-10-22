@@ -305,7 +305,9 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
                   value={n.shiftId}
                   disabled={v.busy}
                   onChange={(e) => v.doiCa(n, e.target.value)}
-                  className="text-k-sm h-6 border border-[var(--line)] bg-[var(--surface-card)] px-1"
+                  // Inline: CSS .kit cho select nằm ngoài @layer nên thắng lớp h-6 — hàng từng cao ~40px.
+                  style={{ height: 22, minHeight: 0, paddingBlock: 0 }}
+                  className="text-k-sm border border-[var(--line)] bg-[var(--surface-card)] px-1"
                 >
                   {v.nv.cas.map((x) => (
                     <option key={x.id} value={x.id}>
@@ -352,7 +354,8 @@ function LuoiNhanVien({ v }: { v: NhanVienCtx }) {
                 {' '}
                 — đang lọc “{LOC.find((o) => o.id === v.loc)!.ten}” · trên tổng{' '}
                 {so(v.nv.ds.length)} ({so(v.dem('dang-lam'))} đang làm,{' '}
-                {so(v.dem('nghi'))} không còn làm)
+                {so(v.dem('nghi'))} không còn làm) · bấm một dòng để sửa hồ sơ, tích nhiều
+                dòng để đổi ca / bộ phận một lần
               </span>
             </td>
           </tr>

@@ -41,7 +41,7 @@ export function CoMat({
       ...tinhCoMat({
         theoNgay: k.du.theoNgay,
         dong: k.du.dong,
-        nhanSu: k.du.nhanSu,
+        nhanSu: [...k.du.nhanSu, ...k.du.daNghi],
         homNay: k.homNay,
       }),
       // (ngày|mã) → dòng lượt của người đó, cho ngăn chi tiết
@@ -178,7 +178,7 @@ export function CoMat({
                         c,
                         'border-l p-0',
                         thu(d) === 0 && 'bg-[var(--chrome)]/60',
-                        mau(n, t.ds.length, d),
+                        mau(n, t.mau[i], d),
                       )}
                     >
                       {n == null ? (
@@ -187,7 +187,7 @@ export function CoMat({
                         <button
                           type="button"
                           onClick={() => setChon(on ? null : { to: t.to, ngay: d })}
-                          aria-label={`${t.to} ngày ${dm(d)}: ${n}/${t.ds.length} có mặt`}
+                          aria-label={`${t.to} ngày ${dm(d)}: ${n}/${t.mau[i]} có mặt`}
                           aria-pressed={on}
                           className={cn(
                             'num block h-7 w-full text-center hover:bg-[var(--surface-hover)]',
@@ -196,7 +196,7 @@ export function CoMat({
                         >
                           {n}
                           <span className="text-[10px] text-[var(--ink-3)]">
-                            /{t.ds.length}
+                            /{t.mau[i]}
                           </span>
                         </button>
                       )}

@@ -76,6 +76,8 @@ export type KyCongTrang = {
     cong: number
     thieu: number
   }[]
+  /** Người nghỉ việc giữa kỳ — vẫn trong bảng công tới ngày làm cuối. */
+  nghiGiuaKy: number
   khung: { ma: string; ten: string }[]
   suKien: SuKien[]
   phutMotCong: number
@@ -205,6 +207,7 @@ export const kyCongService = {
         cong: n.tong.cong,
         thieu: n.tong.thieu,
       })),
+      nghiGiuaKy: g.nguoi.filter((n) => n.ngayCuoi).length,
       khung: g.khung,
       suKien: ky ? await kyCongRepo.suKien(ky.id) : [],
       phutMotCong: g.phutMotCong,

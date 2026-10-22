@@ -2,7 +2,6 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { chamCongService } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { todayVn } from '@/lib/date-vn'
 import { LuotQuetScreen } from '../luot-quet'
-import { chonThang } from '../ky-cong.shared'
 import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 
 /**
@@ -17,7 +16,7 @@ export default async function LuotPage({
   const sp = await searchParams
   const user = await authService.requirePageUser()
   const homNay = todayVn()
-  const thang = chonThang(sp.thang, homNay)
+  const thang = await khoangKyService.chon(sp.thang, homNay)
   const [k, kyXuat] = await Promise.all([
     chamCongService.kyCong(user, thang, homNay),
     khoangKyService.cua(thang),

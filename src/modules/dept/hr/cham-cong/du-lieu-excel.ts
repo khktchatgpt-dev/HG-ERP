@@ -98,7 +98,12 @@ function luotQuet(wb: ExcelJS.Workbook, d: DuLieu) {
 }
 
 function coMatTheoTo(wb: ExcelJS.Workbook, d: DuLieu, homNay: string) {
-  const m = tinhCoMat({ theoNgay: d.theoNgay, dong: d.dong, nhanSu: d.nhanSu, homNay })
+  const m = tinhCoMat({
+    theoNgay: d.theoNgay,
+    dong: d.dong,
+    nhanSu: [...d.nhanSu, ...d.daNghi],
+    homNay,
+  })
   const ws = wb.addWorksheet('Có mặt theo tổ')
   ws.addRow([
     `Có mặt theo ngày × tổ · ${dmy(d.khoang.tu)} → ${dmy(d.khoang.den)} · ô = số người có ít nhất 1 lượt quẹt`,

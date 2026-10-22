@@ -2,11 +2,6 @@ import type { KyCong } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 
 export type { KyCong }
 
-/** `?thang=YYYY-MM` hợp lệ thì dùng, không thì tháng của hôm nay. */
-export function chonThang(sp: string | undefined, homNay: string): string {
-  return sp && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp) ? sp : homNay.slice(0, 7)
-}
-
 export function doiThang(t: string, buoc: number): string {
   const [y, m] = t.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1 + buoc, 1)).toISOString().slice(0, 7)

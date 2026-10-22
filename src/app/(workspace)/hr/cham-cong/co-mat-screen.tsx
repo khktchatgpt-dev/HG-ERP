@@ -19,8 +19,14 @@ export function CoMatScreen({ k }: { k: KyCong }) {
     <KhungTrang
       ten="Có mặt theo tổ"
       thang={k.thang}
+      khoang={{ tu: k.tu, den: k.den }}
       onThang={d.xemThang}
-      facts={[{ label: 'Cần chấm công', value: `${so(k.du.nhanSu.length)} người` }]}
+      facts={[
+        {
+          label: 'Người trong kỳ',
+          value: `${so(k.du.nhanSu.length + k.du.daNghi.length)}${k.du.daNghi.length ? ` · ${k.du.daNghi.length} nghỉ giữa kỳ` : ''}`,
+        },
+      ]}
       actions={
         <Btn
           icon="excel"

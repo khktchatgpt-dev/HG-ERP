@@ -51,3 +51,29 @@ describe('tinhCoMat', () => {
     expect(m.tbTong).toBeCloseTo((3 + 1) / 2 / 3)
   })
 })
+
+describe('người vào / nghỉ giữa kỳ — mẫu số theo từng ngày (22/10/2026)', () => {
+  it('người nghỉ 02/10 chỉ vào mẫu số tới 02/10; người vào 03/10 chỉ từ 03/10', () => {
+    const m = tinhCoMat({
+      theoNgay: ['2026-10-01', '2026-10-02', '2026-10-03'].map((ngay) => ({
+        ngay,
+        theoMay: { '.201': 5 },
+      })),
+      dong: [
+        { ngay: '2026-10-01', ma: 'A', daGhep: true },
+        { ngay: '2026-10-02', ma: 'B', daGhep: true },
+        { ngay: '2026-10-03', ma: 'C', daGhep: true },
+      ],
+      nhanSu: [
+        { ma: 'A', ten: 'A', boPhan: 'Tổ X' },
+        { ma: 'B', ten: 'B', boPhan: 'Tổ X', ngayCuoi: '2026-10-02' },
+        { ma: 'C', ten: 'C', boPhan: 'Tổ X', ngayVao: '2026-10-03' },
+      ],
+      homNay: '2026-10-03',
+    })
+    expect(m.tongNguoi).toBe(3)
+    expect(m.tos[0].mau).toEqual([2, 2, 2])
+    expect(m.tos[0].ngay).toEqual([1, 1, 1])
+    expect(m.tongMau).toEqual([2, 2, 2])
+  })
+})
