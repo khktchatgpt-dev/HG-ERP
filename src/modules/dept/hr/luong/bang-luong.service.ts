@@ -199,13 +199,23 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
     )
     // Làm trọn kỳ = đủ công chuẩn (`true`): công chuẩn cố định 26 mà kỳ chỉ 25 ngày làm thì
     // đếm ngày sẽ trả thiếu 1/26.
-    const mien = ds.some((x) => x.miem)
-      ? khoang
-        ? khoang.tu === ky.tu && khoang.den === ky.den
-          ? true
-          : congChuan(khoang.tu, khoang.den, ngayLe)
-        : 0
-      : false
+    // Công nhập tay (0262): k = phút hành chính + phút tăng ca — đổi lại thành công + giờ.
+    const nhapRow = ds.find((x) => x.miem && x.nhap)
+    const hcMa = boiCanh.khung.find((k) => k.hanhChinh)?.ma ?? 'K1'
+    const mien = nhapRow
+      ? {
+          cong: Math.round(((nhapRow.k[hcMa] ?? 0) / boiCanh.phutMotCong) * 100) / 100,
+          tcPhut: Object.entries(nhapRow.k)
+            .filter(([m]) => m !== hcMa)
+            .reduce((s, [, p]) => s + p, 0),
+        }
+      : ds.some((x) => x.miem)
+        ? khoang
+          ? khoang.tu === ky.tu && khoang.den === ky.den
+            ? true
+            : congChuan(khoang.tu, khoang.den, ngayLe)
+          : 0
+        : false
     const p = tinhPhieu(
       hs
         ? {

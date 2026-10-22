@@ -147,6 +147,28 @@ describe('các trường hợp khác', () => {
     // Số công lớn hơn công chuẩn bị chặn ở công chuẩn.
     expect(tinhPhieu(hs, [], [], bc(), 30).luongCong).toBe(9_500_000)
   })
+  it('không chấm công, Nhân sự NHẬP TAY (0262): không trần công chuẩn; tăng ca ở khung K2', () => {
+    const hs: HoSoTinh = {
+      ...KIEU,
+      cachTra: 'monthly',
+      donGia: null,
+      luongThang: 9_500_000,
+      phuCap: [],
+    }
+    // Sổ T9 KCC-002: 32 công ÷ công chuẩn — trả hơn lương tháng.
+    expect(tinhPhieu(hs, [], [], bc(), { cong: 30, tcPhut: 0 }).luongCong).toBe(
+      11_400_000,
+    )
+    // Sổ T9 6021: 28 công + 13,3 công tăng ca = 80 giờ; K2 ngày thường 150 % ở bối cảnh thử.
+    const p = tinhPhieu({ ...KIEU, phuCap: [] }, [], [], bc(), {
+      cong: 28,
+      tcPhut: 80 * 60,
+    })
+    expect(p.luongCong).toBe(28 * 657_000)
+    expect(p.tangCa).toBe(r(80 * (657_000 / 8) * 1.5))
+    expect(p.dong.find((d) => d.nhom === 'tang_ca')?.ten).toMatch(/K2 .*nhập tay/)
+    expect(p.thieuHeSo).toEqual([])
+  })
   it('khấu trừ 10 % (Q4); trần BH 50,6 triệu từ kỳ 07/2026', () => {
     const hs: HoSoTinh = { ...KIEU, khauTru10: true, luongBh: 80_000_000, phuCap: [] }
     const p = tinhPhieu(
@@ -381,13 +403,23 @@ describe('ngày lễ KHÔNG tự trả (chủ dự án 21/10/2026, theo sổ T9)
   const b = bc({
     thang: '2026-09',
     congChuan: 26,
-    loaiNgay: (d) => (d === LE ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong'),
+    loaiNgay: (d) =>
+      d === LE ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong',
     heSoKhung: (ma, n) =>
-      n === 'le' ? (ma === 'K1' ? 300 : null) : n === 'cn' && ma === 'K1' ? 100 : (HE_SO[`${ma}|${n}`] ?? null),
-    heSoNghi: (ma) => (ma === 'holiday' ? 100 : ma === 'unpaid' || ma === 'sick' ? 0 : 100),
+      n === 'le'
+        ? ma === 'K1'
+          ? 300
+          : null
+        : n === 'cn' && ma === 'K1'
+          ? 100
+          : (HE_SO[`${ma}|${n}`] ?? null),
+    heSoNghi: (ma) =>
+      ma === 'holiday' ? 100 : ma === 'unpaid' || ma === 'sick' ? 0 : 100,
   })
   // 24 ngày làm từ 03/09, không gồm ngày lễ 02/09
-  const ngay24 = Array.from({ length: 24 }, (_, i) => ngay(`2026-09-${String(3 + i).padStart(2, '0')}`, { K1: 480 }))
+  const ngay24 = Array.from({ length: 24 }, (_, i) =>
+    ngay(`2026-09-${String(3 + i).padStart(2, '0')}`, { K1: 480 }),
+  )
   const KHONG_PC = { phuCap: [] }
   it('theo công: 24 công × 350.000, không có dòng "lương ngày lễ"', () => {
     const p = tinhPhieu({ ...KIEU, ...KHONG_PC, donGia: 350_000 }, ngay24, [], b)
@@ -396,13 +428,24 @@ describe('ngày lễ KHÔNG tự trả (chủ dự án 21/10/2026, theo sổ T9)
     expect(p.dong.some((d) => /lễ/i.test(d.ten))).toBe(false)
   })
   it('theo tháng: công thực 24 (không cộng ngày lễ) → 8,5 tr × 24 ÷ 26', () => {
-    const hs: HoSoTinh = { ...KIEU, ...KHONG_PC, cachTra: 'monthly', donGia: null, luongThang: 8_500_000 }
+    const hs: HoSoTinh = {
+      ...KIEU,
+      ...KHONG_PC,
+      cachTra: 'monthly',
+      donGia: null,
+      luongThang: 8_500_000,
+    }
     const p = tinhPhieu(hs, ngay24, [], b)
     expect(p.congThuc).toBe(24)
     expect(p.luongCong).toBe(r((8_500_000 * 24) / 26))
   })
   it('đi làm ngày lễ vẫn được trả theo hệ số khung ngày lễ (300 %)', () => {
-    const p = tinhPhieu({ ...KIEU, ...KHONG_PC, donGia: 350_000 }, [ngay(LE, { K1: 480 })], [], b)
+    const p = tinhPhieu(
+      { ...KIEU, ...KHONG_PC, donGia: 350_000 },
+      [ngay(LE, { K1: 480 })],
+      [],
+      b,
+    )
     expect(p.tangCa).toBe(350_000 * 3)
   })
 })

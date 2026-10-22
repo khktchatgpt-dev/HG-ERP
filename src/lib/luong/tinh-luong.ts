@@ -116,6 +116,9 @@ export type NgayTinh = {
   khong: boolean
 }
 
+/** Công người không chấm công do Nhân sự nhập (0262): số công + phút tăng ca. */
+export type NhapTay = { cong: number; tcPhut: number }
+
 export type BoiCanhTinh = {
   thang: string
   phutMotCong: number
@@ -181,12 +184,18 @@ export function tinhPhieu(
   b: BoiCanhTinh,
   /**
    * Người không chấm công: `true` = đủ công chuẩn; một SỐ = số công được hưởng khi chỉ làm
-   * một phần kỳ (vào / nghỉ giữa kỳ, 0248).
+   * một phần kỳ (vào / nghỉ giữa kỳ, 0248); `{ cong, tcPhut }` = Nhân sự NHẬP TAY (0262) —
+   * không đặt trần công chuẩn (sổ T9 trả 32 công ÷ 26), tăng ca tính ở khung tăng ca đầu tiên.
    */
-  mien: boolean | number = false,
+  mien: boolean | number | NhapTay = false,
 ): Phieu {
   const khongChamCong = mien !== false
-  const congMien = typeof mien === 'number' ? Math.min(mien, b.congChuan) : b.congChuan
+  const nhap = typeof mien === 'object' ? mien : null
+  const congMien = nhap
+    ? nhap.cong
+    : typeof mien === 'number'
+      ? Math.min(mien, b.congChuan)
+      : b.congChuan
   const why: string[] = []
   const dong: DongTien[] = []
   const thieuHeSo = new Set<string>()
@@ -234,7 +243,16 @@ export function tinhPhieu(
   // ── Lương công + nghỉ có lương.
   let luongCong = 0
   let nghiCoLuong = 0
-  if (khongChamCong) {
+  if (nhap) {
+    luongCong = r0(
+      theoCong ? donGiaNgay * congMien : ((hs.luongThang ?? 0) * congMien) / b.congChuan,
+    )
+    why.push(
+      theoCong
+        ? `Lương       không chấm công — Nhân sự nhập ${so(congMien, 2)} công × ${so(donGiaNgay)} = ${so(luongCong)}`
+        : `Lương       không chấm công — Nhân sự nhập ${so(congMien, 2)} công: ${so(hs.luongThang ?? 0)} × ${so(congMien, 2)} ÷ ${b.congChuan} = ${so(luongCong)}`,
+    )
+  } else if (khongChamCong) {
     const du = congMien >= b.congChuan
     luongCong = r0(
       theoCong
@@ -329,6 +347,32 @@ export function tinhPhieu(
           `  Giải lao  ${so(truaPhut / 60, 2)} giờ × ${so(giaGio, 2)} × ${b.ptTrua} % = ${so(tien)}`,
         )
       }
+    }
+  }
+  // Tăng ca nhập tay (Q4): giờ × giá giờ × hệ số khung tăng ca đầu tiên ngày thường.
+  if (nhap && nhap.tcPhut > 0) {
+    const gio = nhap.tcPhut / 60
+    if (hs.tangCaGio != null) {
+      tangCa = r0(gio * hs.tangCaGio)
+      congTc = gio / gioMotCong
+      dong.push({ nhom: 'tang_ca', ten: 'Tăng ca khoán (nhập tay)', tien: tangCa })
+      why.push(
+        `Tăng ca     khoán ${so(gio, 2)} giờ × ${so(hs.tangCaGio)} = ${so(tangCa)}`,
+      )
+    } else {
+      const k = b.khung.find((x) => !x.hanhChinh)
+      const tl = k ? b.heSoKhung(k.ma, 'thuong') : null
+      if (tl == null) thieuHeSo.add(`${k?.ma ?? 'khung tăng ca'} ngày thường`)
+      tangCa = r0(gio * giaGio * ((tl ?? 0) / 100))
+      congTc = (gio * ((tl ?? 0) / 100)) / gioMotCong
+      dong.push({
+        nhom: 'tang_ca',
+        ten: `${k?.ma ?? ''} ${k?.ten ?? ''} (nhập tay)`.trim(),
+        tien: tangCa,
+      })
+      why.push(
+        `Tăng ca     nhập tay ${so(gio, 2)} giờ × ${so(giaGio, 2)} × ${tl ?? '—'} % = ${so(tangCa)}`,
+      )
     }
   }
 

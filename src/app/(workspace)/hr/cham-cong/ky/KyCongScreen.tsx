@@ -27,6 +27,7 @@ import { TEN_TRANG_THAI } from '@/lib/cham-cong/ky-cong'
 import { useKyCong, type KyCongCtx, type KyCongTrang, type MucKy } from './useKyCong'
 import { NganTo } from './ngan-to'
 import { NganNguoi, NganThoiGian } from './ngan-nguoi-tl'
+import { NganNhapTay } from './ngan-nhap-tay'
 import { HopChot, HopQuyet, HopXacNhan, HopXin } from './hop-ky'
 import { HopKhoang } from './hop-khoang-ky'
 import { soNgay } from '@/lib/cham-cong/khoang-ky'
@@ -43,6 +44,7 @@ const ngayTu = (tu: string, den: string) =>
 export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
   const d = useKyCong(k, muc)
   const thieu = k.nguoi.reduce((s, n) => s + n.thieu, 0)
+  const chuaNhap = k.khongCham.filter((x) => x.cong == null).length
   const tone =
     k.trangThai === 'open' ? 'warn' : k.trangThai === 'closed' ? 'done' : 'warn'
   return (
@@ -163,6 +165,15 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
             icon: 'so',
             signal: { text: so(k.nguoi.length) },
           },
+          {
+            id: 'nhap-tay',
+            label: 'Công nhập tay',
+            icon: 'sua',
+            signal: {
+              text: chuaNhap ? `${chuaNhap} chưa nhập` : so(k.khongCham.length),
+              ...(chuaNhap && d.mo ? { tone: 'stop' as const } : {}),
+            },
+          },
           { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' },
         ]}
       >
@@ -171,6 +182,9 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
         </DocMenuPanel>
         <DocMenuPanel value="theo-nguoi">
           <NganNguoi d={d} />
+        </DocMenuPanel>
+        <DocMenuPanel value="nhap-tay">
+          <NganNhapTay d={d} />
         </DocMenuPanel>
         <DocMenuPanel value="dong-thoi-gian">
           <NganThoiGian d={d} />
@@ -192,6 +206,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
   const { k } = d
   const chua = k.to.filter((t) => !t.xacNhan).length
   const thieu = k.nguoi.reduce((s, n) => s + n.thieu, 0)
+  const chuaNhapCong = k.khongCham.filter((x) => x.cong == null).length
   if (k.trangThai === 'closed')
     return (
       <HolderBar
@@ -209,7 +224,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
     return (
       <HolderBar
         inline
-        who="Ban Giám Đốc"
+        who="Kế toán trưởng"
         what="duyệt hoặc từ chối yêu cầu mở lại"
         age={
           k.ky?.xinLuc ? `${ngayTu(k.ky.xinLuc.slice(0, 10), k.homNay)} ngày` : undefined
@@ -223,6 +238,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
       what={
         [
           thieu ? `xử lý ${so(thieu)} ngày thiếu lượt` : '',
+          chuaNhapCong ? `nhập công ${chuaNhapCong} người không chấm công` : '',
           chua ? `thu phiếu xác nhận của ${chua} tổ` : '',
           k.chuaCoTo ? `gán tổ cho ${k.chuaCoTo} người` : '',
         ]
@@ -239,7 +255,10 @@ function DaiDieuKien({ d }: { d: KyCongCtx }) {
   const { k } = d
   if (!d.mo) return null
   return (
-    <div className="grid grid-cols-5 border-b border-[var(--line)] bg-[var(--surface-card)]">
+    <div
+      className="grid border-b border-[var(--line)] bg-[var(--surface-card)]"
+      style={{ gridTemplateColumns: `repeat(${k.dieuKien.length}, minmax(0, 1fr))` }}
+    >
       {k.dieuKien.map((x) => (
         <div
           key={x.ma}
@@ -292,7 +311,9 @@ function ThanhBao({ d }: { d: KyCongCtx }) {
         action={
           d.chuaChot.some((x) => x.ma === 'xac_nhan' || x.ma === 'chua_co_to')
             ? { label: 'Tới tổ còn vướng', onClick: () => d.setMuc('theo-to') }
-            : undefined
+            : d.chuaChot.some((x) => x.ma === 'nhap_tay')
+              ? { label: 'Tới người chưa nhập công', onClick: () => d.setMuc('nhap-tay') }
+              : undefined
         }
       >
         {d.chuaChot.map((x) => `${x.ten.toLowerCase()}: ${x.chiTiet}`).join(' · ')}.
@@ -320,7 +341,13 @@ function HanhDong({ d }: { d: KyCongCtx }) {
           icon="khoa"
           blockedBy={k.quyen.chot ? undefined : 'Trưởng phòng Hành Chính Nhân Sự'}
           aria-disabled={d.chuaChot.length > 0}
-          onClick={() => (d.chuaChot.length ? d.setMuc('theo-to') : d.setSheet('chot'))}
+          onClick={() =>
+            !d.chuaChot.length
+              ? d.setSheet('chot')
+              : d.setMuc(
+                  d.chuaChot.every((x) => x.ma === 'nhap_tay') ? 'nhap-tay' : 'theo-to',
+                )
+          }
         >
           Chốt kỳ
         </Btn>

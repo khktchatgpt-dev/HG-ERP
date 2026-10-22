@@ -130,9 +130,16 @@ export function dieuKienXacNhanTo(b: BoiCanhKy, to: TongTo): DieuKien[] {
 
 export function dieuKienChot(
   b: BoiCanhKy,
-  v: { choDuyet: number; chuaCoTo: number; to: { ten: string; daXacNhan: boolean }[] },
+  v: {
+    choDuyet: number
+    chuaCoTo: number
+    to: { ten: string; daXacNhan: boolean }[]
+    /** Người không chấm công trong kỳ + số người chưa nhập công (0262). */
+    khongCham?: { tong: number; chuaNhap: number }
+  },
 ): DieuKien[] {
   const chua = v.to.filter((t) => !t.daXacNhan)
+  const kc = v.khongCham
   return [
     kyDaHet(b),
     mayDaLay(b),
@@ -154,6 +161,16 @@ export function dieuKienChot(
       ok: chua.length === 0,
       chiTiet: `${v.to.length - chua.length} / ${v.to.length} tổ`,
     },
+    ...(kc && kc.tong
+      ? [
+          {
+            ma: 'nhap_tay',
+            ten: 'Không chấm công đã nhập công',
+            ok: kc.chuaNhap === 0,
+            chiTiet: `${kc.tong - kc.chuaNhap} / ${kc.tong} người`,
+          },
+        ]
+      : []),
   ]
 }
 
@@ -171,6 +188,11 @@ export type DongChot = {
   /** Ngày thiếu lượt tổ đã đồng ý tính 0 giờ. */
   khong: boolean
   miem: boolean
+  /**
+   * Người không chấm công có công NHẬP TAY (0262): `k` = phút hành chính (công × phút một công)
+   * + phút tăng ca ở khung tăng ca đầu tiên. Không có = cách cũ "đủ công chuẩn".
+   */
+  nhap?: boolean
 }
 
 /** Bảng giờ đang tính → các dòng bản chốt. Ngày chỉ có lượt mà không tính được = 0 giờ. */

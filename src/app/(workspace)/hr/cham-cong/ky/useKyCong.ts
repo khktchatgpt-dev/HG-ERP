@@ -74,6 +74,54 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
       { viec: 'dat_khoang', tu, den, lyDo: lyDo.trim() || undefined },
       `Đã đặt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)}: ${tu.slice(8)}/${tu.slice(5, 7)} → ${den.slice(8)}/${den.slice(5, 7)} — Bảng công tính lại theo khoảng mới`,
     )
+  /** Ghi công nhập tay một người (rời ô là ghi). Không đóng hộp, không toast khi thành công. */
+  async function nhapTay(v: {
+    ma: string
+    cong: number | null
+    tcGio: number | null
+    ghiChu: string | null
+  }) {
+    setBusy(`nhap:${v.ma}`)
+    try {
+      await api(`/api/dept/hr/cham-cong/ky/${k.thang}`, {
+        method: 'POST',
+        body: { viec: 'nhap_tay', ...v },
+      })
+      router.refresh()
+      return true
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Không ghi được — thử lại')
+      return false
+    } finally {
+      setBusy(null)
+    }
+  }
+  /** Điền ô trống bằng số ngày làm việc gợi ý — không ghi đè số đã nhập. */
+  async function dienGoiY() {
+    const trong = k.khongCham.filter((x) => x.cong == null)
+    setBusy('goi-y')
+    try {
+      for (const x of trong)
+        await api(`/api/dept/hr/cham-cong/ky/${k.thang}`, {
+          method: 'POST',
+          body: {
+            viec: 'nhap_tay',
+            ma: x.ma,
+            cong: x.ngayLamViec,
+            tcGio: null,
+            ghiChu: x.ghiChu,
+          },
+        })
+      toast.success(
+        `Đã điền gợi ý cho ${trong.length} người — kiểm lại từng số trước khi chốt`,
+      )
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Không điền được — thử lại')
+    } finally {
+      setBusy(null)
+      router.refresh()
+    }
+  }
   const quyetMo = (dongY: boolean, ghiChu?: string) =>
     viec(
       'quyet',
@@ -101,6 +149,8 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
     rutXin,
     quyetMo,
     datKhoang,
+    nhapTay,
+    dienGoiY,
   } as const
 }
 

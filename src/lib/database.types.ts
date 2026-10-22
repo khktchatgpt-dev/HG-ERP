@@ -2530,6 +2530,7 @@ export type Database = {
           id: number
           leave_type: string | null
           lunch_minutes: number
+          manual: boolean
           period_id: string
           team: string | null
           total_minutes: number
@@ -2546,6 +2547,7 @@ export type Database = {
           id?: number
           leave_type?: string | null
           lunch_minutes?: number
+          manual?: boolean
           period_id: string
           team?: string | null
           total_minutes?: number
@@ -2562,6 +2564,7 @@ export type Database = {
           id?: number
           leave_type?: string | null
           lunch_minutes?: number
+          manual?: boolean
           period_id?: string
           team?: string | null
           total_minutes?: number
@@ -2581,6 +2584,73 @@ export type Database = {
             columns: ["period_id"]
             isOneToOne: false
             referencedRelation: "hr_time_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_time_manual: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          kind: string
+          note: string | null
+          ot_minutes: number
+          period: string
+          reason: string | null
+          updated_at: string
+          updated_by: string | null
+          work_days: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          kind?: string
+          note?: string | null
+          ot_minutes?: number
+          period: string
+          reason?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          work_days: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          ot_minutes?: number
+          period?: string
+          reason?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          work_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_manual_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_manual_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_manual_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

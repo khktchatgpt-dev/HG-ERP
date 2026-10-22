@@ -299,6 +299,15 @@ export const kyViecSchema = z.discriminatedUnion('viec', [
     den: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD'),
     lyDo: z.string().trim().max(300).optional(),
   }),
+  // Công nhập tay khối A (0262): công null = xoá dòng (về "chưa nhập"). Kiểm chi tiết ở
+  // `kiemNhap` (service) — biên zod chỉ chặn kiểu và khoảng thô.
+  z.object({
+    viec: z.literal('nhap_tay'),
+    ma: z.string().trim().min(1).max(40),
+    cong: z.number().min(0).max(31).nullable(),
+    tcGio: z.number().min(0).max(744).nullable(),
+    ghiChu: z.string().trim().max(300).nullable().optional(),
+  }),
 ])
 
 // ── Hồ sơ lương (B4, 0245) ───────────────────────────────────────────────

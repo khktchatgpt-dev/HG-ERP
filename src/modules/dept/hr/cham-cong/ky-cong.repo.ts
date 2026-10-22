@@ -312,6 +312,7 @@ export const kyCongRepo = {
               leave_type: d.nghi,
               zero_day: d.khong,
               exempt: d.miem,
+              manual: !!d.nhap,
             })),
           ),
       )
@@ -324,7 +325,7 @@ export const kyCongRepo = {
         await db()
           .from('hr_time_results')
           .select(
-            'code, full_name, team, work_date, frame_minutes, lunch_minutes, total_minutes, leave_type, zero_day, exempt',
+            'code, full_name, team, work_date, frame_minutes, lunch_minutes, total_minutes, leave_type, zero_day, exempt, manual',
           )
           .eq('period_id', kyId)
           .eq('close_no', lan)
@@ -343,6 +344,7 @@ export const kyCongRepo = {
           nghi: r.leave_type as LoaiNghi | null,
           khong: r.zero_day,
           miem: r.exempt,
+          ...(r.manual ? { nhap: true } : {}),
         })
       if (rows.length < TRANG) return out
     }

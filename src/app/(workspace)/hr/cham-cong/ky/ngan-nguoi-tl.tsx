@@ -94,8 +94,18 @@ export function NganNguoi({ d }: { d: KyCongCtx }) {
                   </td>
                   <td className={TD}>{n.ten}</td>
                   <td className={TD}>{n.to ?? '—'}</td>
-                  <td className={TD} colSpan={3}>
-                    không chấm công — đủ công theo ngày làm việc của kỳ
+                  <td className={TD}>không chấm công · nhập tay</td>
+                  <td className={cn(TD, 'num')} style={R}>
+                    {n.cong == null ? '—' : so(n.cong, 2)}
+                  </td>
+                  <td className={cn(TD, 'whitespace-normal')}>
+                    {n.cong == null ? (
+                      <span className="text-[var(--stop)]">chưa nhập</span>
+                    ) : n.tcGio ? (
+                      `+ ${so(n.tcGio, 2)} giờ TC`
+                    ) : (
+                      ''
+                    )}
                   </td>
                 </tr>
               ))}
@@ -115,6 +125,7 @@ const TEN_VIEC: Record<string, { label: string; tone: Mark['tone'] }> = {
   reopen_approve: { label: 'Kế toán trưởng duyệt mở lại', tone: 'warn' },
   reopen_reject: { label: 'Kế toán trưởng từ chối mở lại', tone: 'stop' },
   set_range: { label: 'Đặt khoảng kỳ', tone: 'act' },
+  manual_set: { label: 'Nhập công tay', tone: 'act' },
 }
 
 const dmTl = (iso?: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '')
@@ -140,15 +151,24 @@ export function NganThoiGian({ d }: { d: KyCongCtx }) {
       den?: string
       tu_cu?: string
       den_cu?: string
+      ma?: string
+      ten?: string
+      cong_cu?: number | null
+      tc_gio?: number | null
     }
+    const nhapTay =
+      e.viec === 'manual_set'
+        ? `${data.ma} ${data.ten}: ${data.cong_cu == null ? 'trống' : so(data.cong_cu, 2)} → ${data.cong == null ? 'xoá' : `${so(data.cong, 2)} công`}${data.tc_gio ? ` + ${so(data.tc_gio, 2)} giờ TC` : ''}`
+        : ''
     const chiTiet = [
+      nhapTay,
       data.tu && data.den
         ? `${dmTl(data.tu_cu)} → ${dmTl(data.den_cu)} thành ${dmTl(data.tu)} → ${dmTl(data.den)}`
         : '',
       e.ghiChu,
       data.lan ? `lần ${data.lan}` : '',
       data.nguoi != null ? `${data.nguoi} người` : '',
-      data.cong != null ? `${so(data.cong, 2)} công` : '',
+      data.cong != null && e.viec !== 'manual_set' ? `${so(data.cong, 2)} công` : '',
       data.ngay0 ? `${data.ngay0} ngày tính 0 giờ` : '',
     ]
       .filter(Boolean)
