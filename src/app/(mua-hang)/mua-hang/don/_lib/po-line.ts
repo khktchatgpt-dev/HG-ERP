@@ -16,6 +16,7 @@ import { nod } from '@/lib/material-key'
 import { allocationNote, type MaterialAllocation } from '@/lib/po-allocation'
 import {
   PO_SHARED_FIELD_MEANING,
+  poField,
   prefillsFromCatalog,
   type PoField,
 } from '@/lib/po-fields'
@@ -529,9 +530,31 @@ export function lsxFromNeed(
 }
 
 /**
+ * SL đơn hàng + Đm/sp của dòng tự điền từ nhu cầu lệnh, mẫu KHÁC mây. Gợi ý và cảnh
+ * báo tính nhu cầu = SL đơn hàng × Đm/sp, nên hai ô phải cùng một nghĩa:
+ *   · mọi SP cùng một định mức (mẫu có cột Đm) → SL đơn hàng = số SP, Đm = định mức đó;
+ *   · còn lại (bộ sofa 7/12/14/17 con mỗi món, định mức theo kg, mẫu không cột Đm)
+ *     → SL đơn hàng = tổng vật tư, Đm TRỐNG.
+ * Lỗi 22/10/2026: SL đơn hàng nhận tổng vật tư (13.100 con) trong khi Đm/sp chép
+ * từ đơn trước của mã này (6 con/ghế Stacking) → cảnh báo "thiếu 65.400" trên một
+ * dòng đã đặt đủ 13.200.
+ */
+export function demandFromNeed(
+  t: PoTemplate,
+  n: { qty_needed: number; breakdown?: { qty: number; per_unit: number | null }[] },
+): Pick<Line, 'qty_demand' | 'dm_per_sp'> {
+  const items = (n.breakdown ?? []).filter((b) => b.qty > 0)
+  const dm = items[0]?.per_unit
+  if (poField(t, 'dm') && dm != null && dm > 0 && items.every((b) => b.per_unit === dm)) {
+    return { qty_demand: items.reduce((s, b) => s + b.qty, 0), dm_per_sp: dm }
+  }
+  return { qty_demand: n.qty_needed, dm_per_sp: '' }
+}
+
+/**
  * DÒNG MỚI TỪ NHU CẦU LỆNH (nút "Thêm mã lệnh còn thiếu"): SL đặt để trống cho người
- * mua quyết; nhu cầu, phân bổ theo SP (ghi chú) và — mẫu mây — SL theo LSX + Định
- * mức SP đổ sẵn.
+ * mua quyết; nhu cầu, phân bổ theo SP (ghi chú) đổ sẵn — mẫu mây thêm SL theo LSX +
+ * Định mức SP, mẫu khác theo `demandFromNeed`.
  */
 export function lineFromNeed(
   t: PoTemplate,
@@ -540,8 +563,9 @@ export function lineFromNeed(
 ): Line {
   return {
     ...newLine(t, m),
-    qty_demand: n.qty_needed,
-    ...lsxFromNeed(t, n),
+    ...(LSX_DEMAND_TEMPLATES.has(t)
+      ? { qty_demand: n.qty_needed, ...lsxFromNeed(t, n) }
+      : demandFromNeed(t, n)),
     note: allocationNote(n.breakdown ?? []).slice(0, 500),
   }
 }

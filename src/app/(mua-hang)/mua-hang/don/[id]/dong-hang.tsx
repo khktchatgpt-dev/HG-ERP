@@ -31,6 +31,7 @@ import {
   TextInput,
   Th,
 } from '@/components/kit'
+import { poField } from '@/lib/po-fields'
 import { underDemand } from '@/lib/po-guards'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
 import { suggestOrderQty, type PoTemplate } from '@/lib/po-template'
@@ -308,16 +309,20 @@ export function DongHang({ d }: { d: DonCtx }) {
                           chặn: giao đợt khác / dùng hàng thay thế là chủ đích hợp lệ.
                         */
                         if (l.qty === '' || l.qty_demand === '') return null
-                        const need = suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, dmNhan(template, l)) // prettier-ignore
+                        const dm = dmNhan(template, l)
+                        const need = suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0, dm) // prettier-ignore
                         const gap = underDemand(Number(l.qty), need)
                         if (gap == null) return null
+                        // Bày PHÉP TÍNH: Đm chép nhầm từ đơn trước lộ ra ngay ở đây (22/10/2026).
+                        const ton = Number(l.qty_on_hand) || 0
+                        const phep = `${fmtNum(Number(l.qty_demand))}${dm != null ? ` × Đm ${fmtNum(dm)}` : ''}${ton > 0 ? ` − tồn ${fmtNum(ton)}` : ''}` // prettier-ignore
                         return (
                           <CellHint
                             tone="warn"
-                            title={`Cần đặt ${fmtNum(need ?? 0)} theo nhu cầu lệnh (đã trừ tồn kho). Đặt ít hơn thì lệnh chưa đủ vật tư — chủ đích (giao đợt khác, hàng thay thế) thì cứ đặt, chỉ nhắc.`} // prettier-ignore
+                            title={`Cần ${fmtNum(need ?? 0)} = ${phep}${dm != null ? ' (SL đơn hàng là số SP)' : ''}. Đặt ít hơn thì lệnh chưa đủ vật tư — chủ đích (giao đợt khác, hàng thay thế) thì cứ đặt, chỉ nhắc. Số này sai thì sửa SL đơn hàng / Đm/sp.`} // prettier-ignore
                           >
                             {' '}
-                            {/* prettier-ignore */}⚠ thiếu {fmtNum(gap)} so với nhu cầu
+                            {/* prettier-ignore */}⚠ thiếu {fmtNum(gap)} so với cần {phep}
                           </CellHint>
                         )
                       })()}
@@ -761,6 +766,7 @@ export function NhuCau({ d }: { d: DonCtx }) {
  * hàng" (mây) đã nhân sẵn trong SL đơn hàng — trả null để không nhân lần hai.
  */
 function dmNhan(template: PoTemplate, l: Line): number | null {
-  if (LSX_DEMAND_TEMPLATES.has(template) || l.dm_per_sp === '') return null
+  // Mẫu không có cột Đm: số chép ngầm từ đơn trước không được nhân vào nhu cầu.
+  if (LSX_DEMAND_TEMPLATES.has(template) || !poField(template, 'dm') || l.dm_per_sp === '') return null // prettier-ignore
   return Number(l.dm_per_sp)
 }

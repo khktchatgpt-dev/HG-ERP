@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { packCount, poLineAmount, roundUpToPack } from '@/lib/po-line'
-import { deriveLine, type PoTemplate } from '@/lib/po-template'
+import { deriveLine, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import {
   baremFor,
   cartonPriceSuggest,
@@ -34,6 +34,8 @@ import {
   lsxOf,
   withLsxDemand,
   lsxFromNeed,
+  lineFromNeed,
+  demandFromNeed,
 } from './po-line'
 import type { Line, MaterialRefresh, Num, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
@@ -1472,6 +1474,53 @@ describe('mây — SL theo LSX × Định mức SP = SL đơn hàng', () => {
     expect(lsxFromNeed('rattan', { qty_needed: 1120, breakdown: [{ qty: 200, per_unit: 5.1 }, { qty: 40, per_unit: 2.5 }] })).toEqual({ qty_lsx: 240, dm_per_sp: 4.6667 }) // prettier-ignore
     expect(lsxFromNeed('rattan', { qty_needed: 10, breakdown: [] })).toEqual({})
     expect(lsxFromNeed('accessory', { qty_needed: 10, breakdown: [{ qty: 2, per_unit: 5 }] })).toEqual({}) // prettier-ignore
+  })
+})
+
+/*
+ * SL đơn hàng × Đm/sp KHÔNG ĐƯỢC NHÂN HAI LẦN (22/10/2026): dòng thêm từ nhu cầu lệnh
+ * nhận SL đơn hàng = tổng vật tư 13.100 con, Đm/sp = 6 chép từ đơn trước (ghế
+ * Stacking) → cảnh báo "thiếu 65.400" trên một dòng đã đặt đủ 13.200.
+ */
+describe('thêm từ nhu cầu lệnh — SL đơn hàng và Đm/sp cùng một nghĩa', () => {
+  const tanRut = {
+    id: 'm-tr',
+    code: 'NK-0001',
+    name: 'Tán rút M6x15',
+    unit: 'Con',
+    on_hand: 0,
+    last_line: { dm_per_sp: 6 },
+  } as unknown as PoMaterial
+  // Bộ sofa GIGA: bàn 7, bank I 12, bank II 14, bank III 17 con mỗi món.
+  const bo = [
+    { product: 'Bàn', qty: 270, per_unit: 7 },
+    { product: 'Bank I', qty: 558, per_unit: 12 },
+    { product: 'Bank II', qty: 115, per_unit: 14 },
+    { product: 'Bank III', qty: 195, per_unit: 17 },
+  ]
+
+  it('định mức khác nhau theo SP → SL đơn hàng = tổng vật tư, Đm TRỐNG (không chép 6 từ đơn trước)', () => {
+    const l = lineFromNeed('accessory', tanRut, { qty_needed: 13_511, breakdown: bo })
+    expect(l.qty_demand).toBe(13_511)
+    expect(l.dm_per_sp).toBe('')
+    expect(suggestOrderQty(Number(l.qty_demand), 0, null)).toBe(13_511)
+  })
+
+  it('mọi SP cùng định mức → SL đơn hàng = số SP, Đm = định mức đó; nhu cầu không đổi', () => {
+    const l = lineFromNeed('accessory', tanRut, { qty_needed: 9_288, breakdown: [{ product: 'Ghế', qty: 1_548, per_unit: 6 }] }) // prettier-ignore
+    expect([l.qty_demand, l.dm_per_sp]).toEqual([1_548, 6])
+    expect(suggestOrderQty(Number(l.qty_demand), 0, Number(l.dm_per_sp))).toBe(9_288)
+  })
+
+  it('không phân bổ / định mức theo kg / mẫu không có cột Đm → tổng vật tư, Đm trống', () => {
+    expect(demandFromNeed('accessory', { qty_needed: 50 })).toEqual({ qty_demand: 50, dm_per_sp: '' }) // prettier-ignore
+    expect(demandFromNeed('accessory', { qty_needed: 50, breakdown: [{ qty: 10, per_unit: null }] })).toEqual({ qty_demand: 50, dm_per_sp: '' }) // prettier-ignore
+    expect(demandFromNeed('aluminium', { qty_needed: 50, breakdown: [{ qty: 10, per_unit: 5 }] })).toEqual({ qty_demand: 50, dm_per_sp: '' }) // prettier-ignore
+  })
+
+  it('mẫu mây giữ cách cũ: SL đơn hàng = tổng vật tư, SL theo LSX + Định mức đổ sẵn', () => {
+    const l = lineFromNeed('rattan', tanRut, { qty_needed: 1_020, breakdown: [{ product: 'Ghế', qty: 200, per_unit: 5.1 }] }) // prettier-ignore
+    expect([l.qty_demand, l.qty_lsx, l.dm_per_sp]).toEqual([1_020, 200, 5.1])
   })
 })
 
