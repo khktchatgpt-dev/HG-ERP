@@ -79,7 +79,7 @@ export function BangKeDanhSachScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng"
-        title="Bảng kê vật tư"
+        title="Kế hoạch mua"
         facts={[
           { label: 'Lệnh đang chạy', value: `${rows.length}` },
           { label: 'Tính được bảng kê', value: `${tinhDuoc.length}`, onClick: () => setLoc(loc === 'tinh_duoc' ? null : 'tinh_duoc'), on: loc === 'tinh_duoc' }, // prettier-ignore

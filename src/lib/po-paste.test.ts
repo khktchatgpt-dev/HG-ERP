@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePasteNumber, parsePoPaste } from './po-paste'
+import { parsePasteNumber, parsePoPaste, sameUnit } from './po-paste'
 
 /*
  * Các vùng dán mô phỏng SỔ THẬT của phòng Cung ứng (bàn giao A Nhân): bảng có
@@ -44,9 +44,21 @@ describe('parsePoPaste — bảng CÓ tiêu đề', () => {
       qty: 13596,
       price: 250,
       note: '28 bì',
+      unit: 'Con',
     })
-    // Cột ĐVT/Thành tiền cố tình bỏ — app tự có ĐVT theo danh mục, tiền tự tính.
+    // Thành tiền cố tình bỏ — tiền tự tính. ĐVT chỉ đọc để cảnh báo lệch.
     expect(r.lines[1].code).toBeNull()
+  })
+
+  it('không có cột ĐVT thì dòng không mang thuộc tính unit', () => {
+    const r = parsePoPaste(
+      tsv([
+        ['Tên vật tư', 'SL'],
+        ['Tán rút 6', '2.300'],
+      ]),
+    )
+    expect(r.lines[0]).toEqual({ name: 'Tán rút 6', code: null, qty: 2300, price: null, note: null }) // prettier-ignore
+    expect('unit' in r.lines[0]).toBe(false)
   })
 
   it('tiêu đề viết kiểu khác vẫn nhận ("SL", "Giá")', () => {
@@ -104,5 +116,23 @@ describe('parsePoPaste — bảng KHÔNG tiêu đề (đoán cột)', () => {
     const r = parsePoPaste(tsv(rows), 3)
     expect(r.lines).toHaveLength(3)
     expect(r.skipped).toBe(2)
+  })
+})
+
+describe('sameUnit — chặn dán số đúng mà đơn vị sai', () => {
+  it('cùng nghĩa thì bằng nhau, bất kể hoa thường / dấu / cách viết', () => {
+    expect(sameUnit('Con', 'cái')).toBe(true)
+    expect(sameUnit('Kg', 'kí')).toBe(true)
+    expect(sameUnit('m³', 'M3')).toBe(true)
+    expect(sameUnit('Cây', 'cay')).toBe(true)
+  })
+  it('khác nghĩa thì khác', () => {
+    expect(sameUnit('kg', 'Cây')).toBe(false)
+    expect(sameUnit('Bộ', 'cái')).toBe(false)
+    expect(sameUnit('Tấm', 'm2')).toBe(false)
+  })
+  it('một bên trống thì không kết luận lệch', () => {
+    expect(sameUnit(null, 'Cây')).toBe(true)
+    expect(sameUnit('', 'Cây')).toBe(true)
   })
 })

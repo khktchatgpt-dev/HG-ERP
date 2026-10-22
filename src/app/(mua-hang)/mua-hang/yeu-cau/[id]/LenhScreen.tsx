@@ -379,7 +379,7 @@ export function LenhScreen({
                 để lên đơn" — Cần · Tồn · Nháp · Còn phải đặt → tích dòng lên đơn.
                 Chế độ "Theo vật tư" ở đây chỉ bày mã đã có đơn, không có số cần. */}
             <Btn icon="vattu" href={`/mua-hang/bang-ke/${lsx.id}`}>
-              Bảng kê vật tư
+              Kế hoạch mua
             </Btn>
             {/*
               IN PHIẾU LỆNH — mẫu chính thức xưởng đang cầm (`/print/lsx/[id]`,

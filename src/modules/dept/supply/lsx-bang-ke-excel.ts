@@ -66,7 +66,7 @@ function kv(ws: ExcelJS.Worksheet, label: string, value: ExcelJS.CellValue): voi
   r.getCell(1).font = { bold: true }
 }
 
-/** Ai gỡ dòng bị chặn — cùng luật với khối cuối màn (`bang-ke-chan.tsx`). */
+/** Ai gỡ dòng bị chặn — cùng luật với khối "chưa quy đổi" của màn Kế hoạch mua (`nhu-cau.tsx`). */
 export function aiGo(reason: string): string {
   return /dài một|chiều dài/i.test(reason)
     ? 'Cung ứng · khai dài cây ở hồ sơ vật tư'

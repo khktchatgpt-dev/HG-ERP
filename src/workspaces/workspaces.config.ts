@@ -499,7 +499,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
           // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
           // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
-          { href: '/mua-hang/bang-ke', label: 'Bảng kê vật tư', icon: 'clipboard-list' },
+          // 22/10/2026 đổi tên KẾ HOẠCH MUA: bảng kê → chọn NCC → lên đơn trên một màn.
+          { href: '/mua-hang/bang-ke', label: 'Kế hoạch mua', icon: 'clipboard-list' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
           // Việc ngoài sản xuất gom nhiều đơn mua (0230) — Xây dựng văn phòng, Dự trữ kho…
           { href: '/mua-hang/hang-muc', label: 'Hạng mục', icon: 'folder-kanban' },
