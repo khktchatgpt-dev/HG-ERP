@@ -277,7 +277,7 @@ function DaiDieuKien({ d }: { d: KyCongCtx }) {
   return (
     <div
       className="grid border-b border-[var(--line)] bg-[var(--surface-card)]"
-      style={{ gridTemplateColumns: `repeat(${k.dieuKien.length}, minmax(0, 1fr))` }}
+      style={{ gridTemplateColumns: `repeat(auto-fit, minmax(170px, 1fr))` }}
     >
       {k.dieuKien.map((x) => {
         const di = x.ok ? null : toi(x.ma)

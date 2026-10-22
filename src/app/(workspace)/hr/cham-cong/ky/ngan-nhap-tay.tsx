@@ -67,7 +67,7 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
         {/* Bề rộng tối thiểu: khung hẹp thì cuộn ngang, không bóp cột làm hàng cao vọt. */}
         <table
           className="text-k-sm w-full border-separate border-spacing-0"
-          style={{ minWidth: 900 }}
+          style={{ minWidth: 1020 }}
         >
           <thead>
             <tr>
@@ -86,7 +86,9 @@ export function NganNhapTay({ d }: { d: KyCongCtx }) {
               <th className={TH} style={{ minWidth: 200 }}>
                 Ghi chú
               </th>
-              <th className={TH}>Kiểm</th>
+              <th className={TH} style={{ minWidth: 220 }}>
+                Kiểm
+              </th>
             </tr>
           </thead>
           <tbody>

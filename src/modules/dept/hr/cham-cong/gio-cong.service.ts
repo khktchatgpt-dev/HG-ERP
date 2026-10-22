@@ -127,12 +127,15 @@ export const gioCongService = {
     const ngayLay = lanOk
       ? new Date(Date.parse(lanOk) + 7 * 3600_000).toISOString().slice(0, 10)
       : homNay
+    // Dữ liệu lấy dư một ngày hai đầu (ca đêm) — người nghỉ TRƯỚC ngày đầu kỳ (6076 nghỉ 25/09,
+    // ngày cuối kỳ 09) không thuộc kỳ này, đừng để họ thành một dòng trống của Bảng công.
+    const daNghi = du.daNghi.filter((n) => n.ngayCuoi >= k.tu)
     const song = tinhKyGioCong({
       ngayDoDang: ngayLay < homNay ? ngayLay : homNay,
       tu: k.tu,
       den: k.den,
       // Người đã nghỉ còn làm trong kỳ vẫn có dòng (lương những ngày đã làm).
-      nhanSu: [...du.nhanSu, ...du.daNghi],
+      nhanSu: [...du.nhanSu, ...daNghi],
       dong: du.dong,
       dieuChinh: du.dieuChinh,
       trua,
@@ -151,7 +154,7 @@ export const gioCongService = {
           )
         : song
     const dem = new Map<string, number>()
-    for (const n of [...du.nhanSu, ...du.daNghi])
+    for (const n of [...du.nhanSu, ...daNghi])
       dem.set(n.boPhan ?? CHUA_CO, (dem.get(n.boPhan ?? CHUA_CO) ?? 0) + 1)
     const boPhan = [...dem]
       .map(([ten, so]) => ({ ten, so, cachTinh: cachTinh[ten] ?? ('khung' as CachTinh) }))

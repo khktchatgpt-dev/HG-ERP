@@ -92,7 +92,9 @@ export function KhoiCongThem({ d }: { d: KyCongCtx }) {
               <th className={TH} style={{ minWidth: 180 }}>
                 Ghi chú
               </th>
-              <th className={TH}>Người sửa</th>
+              <th className={TH} style={{ minWidth: 150 }}>
+                Người sửa
+              </th>
               <th className={TH} aria-label="Xoá" />
             </tr>
           </thead>
