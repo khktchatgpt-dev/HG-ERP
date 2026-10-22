@@ -2,6 +2,8 @@
 
 import { THU_TU_MUA, TINH_TRANG_MUA } from '@/lib/lsx-bang-ke-mua'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
+import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
+import { ChonNcc } from './chon-ncc'
 import { ChipLoc, ChonLoc, DauTrang, HangLoc, Nut, ThanhDuoi, Trang } from '../../_erp/ui'
 import { DanBangKe } from './dan-bang-ke'
 import { dmy, so0 } from './ke-hoach.shared'
@@ -28,13 +30,15 @@ export function KeHoachMuaScreen({
   canEdit,
   includeDraft,
   buocDau,
+  nguon,
 }: {
   bk: LsxBangKe
   canEdit: boolean
   includeDraft: boolean
   buocDau: Buoc
+  nguon: NguonNccLenh
 }) {
-  const d = useKeHoachMua({ bk, canEdit, includeDraft, buocDau })
+  const d = useKeHoachMua({ bk, canEdit, includeDraft, buocDau, nguon })
   const { lsx } = bk
   return (
     <Trang>
@@ -74,6 +78,7 @@ export function KeHoachMuaScreen({
           <NhuCau d={d} />
         </>
       )}
+      {d.buoc === 2 && <ChonNcc d={d} />}
       <ThanhDuoi
         left={
           <>
@@ -107,7 +112,11 @@ function DaiBuoc({ d }: { d: KeHoachCtx }) {
       t: 'Nhu cầu',
       s: `${d.conDat.length} mã còn phải đặt · ${d.soTay} mã nhập tay${d.lechTay ? ` (${d.lechTay} lệch định mức)` : ''}`,
     },
-    { k: 2, t: 'Chọn NCC', s: 'Gợi ý NCC + giá cho từng mã', khoa: 'Đang dựng' },
+    {
+      k: 2,
+      t: 'Chọn NCC',
+      s: `${d.ncc.dem.coNcc}/${d.conDat.length} mã đã có NCC · ${d.ncc.dem.chuaGia} chưa có giá${d.ncc.dem.chuaLuu ? ` · ${d.ncc.dem.chuaLuu} chưa lưu` : ''}`,
+    },
     { k: 3, t: 'Lên đơn', s: 'Mỗi NCC một đơn nháp', khoa: 'Đang dựng' },
   ]
   return (

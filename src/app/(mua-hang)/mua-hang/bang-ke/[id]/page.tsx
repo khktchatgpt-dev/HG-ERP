@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { loadLsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
+import { keHoachMuaService } from '@/modules/dept/supply/ke-hoach-mua.service'
+import { tinhDongMua } from '@/lib/lsx-bang-ke-mua'
 import { todayVn } from '@/lib/date-vn'
 import { KeHoachMuaScreen } from './KeHoachMuaScreen'
 import type { Buoc } from './useKeHoachMua'
@@ -39,15 +41,29 @@ export default async function Page({
     isSupplyStaff(user),
   ])
   if (!bk) notFound()
-  // Bước 2, 3 đang dựng — mọi đường vào tạm mở bước 1.
-  const buocDau: Buoc = 1
-  void sp.buoc
+  // Gợi ý NCC cho đúng các mã còn phải đặt — cùng hàm tính với màn (tinhDongMua).
+  const nguon = await keHoachMuaService.nguonNcc(
+    bk.lsx.id,
+    bk.rows
+      .filter((r) => tinhDongMua(r).conPhaiDat > 0)
+      .map((r) => ({
+        material_id: r.material_id,
+        material_name: r.material_name,
+        unit: r.unit,
+        sub_group: r.sub_group ?? null,
+        group_name: r.group_name,
+        spec: r.spec ?? null,
+      })),
+  )
+  // Bước 3 đang dựng — ?buoc=3 tạm mở bước 2.
+  const buocDau: Buoc = sp.buoc === '2' || sp.buoc === '3' ? 2 : 1
   return (
     <KeHoachMuaScreen
       bk={bk}
       canEdit={user.role === 'admin' || supplyStaff}
       includeDraft={includeDraft}
       buocDau={buocDau}
+      nguon={nguon}
     />
   )
 }

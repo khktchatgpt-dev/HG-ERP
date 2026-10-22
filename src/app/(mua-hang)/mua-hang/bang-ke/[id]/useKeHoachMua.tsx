@@ -9,7 +9,9 @@ import { demTinhTrangMua, tinhDongMua, type TinhTrangMua } from '@/lib/lsx-bang-
 import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
 import { normalizeSearch } from '@/lib/search-text'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
+import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
 import type { DongKH } from './ke-hoach.shared'
+import { useChonNcc } from './useChonNcc'
 
 export type Buoc = 1 | 2 | 3
 /** Lọc bảng nhu cầu: một tình trạng, "còn phải đặt", hoặc "nhập tay". */
@@ -29,11 +31,14 @@ export function useKeHoachMua({
   canEdit,
   includeDraft,
   buocDau,
+  nguon,
 }: {
   bk: LsxBangKe
   canEdit: boolean
   includeDraft: boolean
   buocDau: Buoc
+  /** Gợi ý NCC + lựa chọn đã lưu cho các mã còn phải đặt (bước 2). */
+  nguon: NguonNccLenh
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -158,7 +163,10 @@ export function useKeHoachMua({
     }
   }
 
+  const ncc = useChonNcc({ lsxId: bk.lsx.id, nguon, conDat })
+
   return {
+    ncc,
     bk,
     canEdit,
     includeDraft,

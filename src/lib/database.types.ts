@@ -5906,6 +5906,49 @@ export type Database = {
           },
         ]
       }
+      // 0275 (22/10/2026) — sửa tay, quan hệ FK không khai (service không embed).
+      supply_lsx_sourcing: {
+        Row: {
+          id: string
+          production_order_id: string
+          material_id: string
+          supplier_id: string
+          price: number | null
+          price_basis: string
+          note: string | null
+          created_by: string | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          production_order_id: string
+          material_id: string
+          supplier_id: string
+          price?: number | null
+          price_basis?: string
+          note?: string | null
+          created_by?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          production_order_id?: string
+          material_id?: string
+          supplier_id?: string
+          price?: number | null
+          price_basis?: string
+          note?: string | null
+          created_by?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       supply_lsx_needs: {
         Row: {
           created_at: string
