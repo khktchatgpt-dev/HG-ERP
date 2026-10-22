@@ -24,6 +24,7 @@ import { khoangKyService } from './khoang-ky.service'
 import type { KhoangDat } from '@/lib/cham-cong/khoang-ky'
 import { bangLuongRepo, type TrangThaiLuong } from '../luong/bang-luong.repo'
 import { bangLuongService } from '../luong/bang-luong.service'
+import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * KỲ CÔNG (B3, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất) — chứng từ:
@@ -35,7 +36,7 @@ import { bangLuongService } from '../luong/bang-luong.service'
 
 export type ToKy = TongTo & {
   teamId: string | null
-  cachTinh: 'khung' | 'ngay'
+  cachTinh: CachTinh
   /** Xác nhận còn hiệu lực: có dòng VÀ số ngày đồng ý tính 0 giờ còn đủ phủ số thiếu hiện tại. */
   xacNhan: XacNhanDong | null
   dieuKien: DieuKien[]

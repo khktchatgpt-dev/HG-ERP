@@ -7,9 +7,15 @@
  */
 
 export type LoaiDc = 'add_punch' | 'leave' | 'ignore_punch'
-export type LoaiNghi = 'annual' | 'sick' | 'personal' | 'business_trip' | 'unpaid'
+/**
+ * `holiday` KHÔNG phải loại phiếu (không có trong `LOAI_NGHI`, schema phiếu chặn): chỉ lõi
+ * tính công gán cho ngày lễ của bộ phận "Đủ công" — lương trả theo hệ số "Nghỉ lễ".
+ */
+export type LoaiNghi =
+  'annual' | 'sick' | 'personal' | 'business_trip' | 'unpaid' | 'holiday'
 export type TinhTrangDc = 'pending' | 'approved' | 'rejected' | 'cancelled'
 
+/** Loại nghỉ Nhân sự chọn được trên phiếu điều chỉnh. */
 export const LOAI_NGHI: LoaiNghi[] = [
   'annual',
   'sick',
@@ -23,6 +29,7 @@ export const TEN_NGHI: Record<LoaiNghi, string> = {
   personal: 'Việc riêng có báo',
   business_trip: 'Công tác',
   unpaid: 'Nghỉ không lương',
+  holiday: 'Nghỉ lễ',
 }
 /** Ký hiệu ngắn trên ô bảng tổ. */
 export const KY_NGHI: Record<LoaiNghi, string> = {
@@ -31,6 +38,7 @@ export const KY_NGHI: Record<LoaiNghi, string> = {
   personal: 'R',
   business_trip: 'CT',
   unpaid: 'KL',
+  holiday: 'L',
 }
 export const TEN_TINH_TRANG: Record<TinhTrangDc, string> = {
   pending: 'Chờ duyệt',

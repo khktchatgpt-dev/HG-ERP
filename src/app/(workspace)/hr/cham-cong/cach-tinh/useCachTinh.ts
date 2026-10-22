@@ -20,6 +20,7 @@ import {
   type HeSoDong,
   type Muc,
 } from './cach-tinh.shared'
+import { TEN_CACH_TINH, type CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * Toàn bộ state của màn Cách tính công: bản nháp đang sửa (quy tắc, khung, hệ số) giữ ở
@@ -186,7 +187,7 @@ export function useCachTinh(c: CachTinhTrang, mucDau: Muc) {
     if (ok) router.push(path)
   }
 
-  async function doiCachTinhTo(ten: string, cachTinh: 'khung' | 'ngay') {
+  async function doiCachTinhTo(ten: string, cachTinh: CachTinh) {
     await chay(
       'to:' + ten,
       () =>
@@ -194,7 +195,7 @@ export function useCachTinh(c: CachTinhTrang, mucDau: Muc) {
           method: 'POST',
           body: { boPhan: ten, cachTinh },
         }),
-      `${ten}: ${cachTinh === 'ngay' ? 'có quẹt = 1 công' : 'tính theo khung giờ'}`,
+      `${ten}: ${TEN_CACH_TINH[cachTinh]}`,
     )
   }
 

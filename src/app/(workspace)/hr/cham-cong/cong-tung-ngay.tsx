@@ -10,6 +10,7 @@ import type { MotNguoiCong } from '@/modules/dept/hr/cham-cong/gio-cong.service'
 import { THU, dm, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
 import { DieuChinhSheet, type MoDieuChinh } from './dieu-chinh-sheet'
+import { khongTheoKhung, TEN_CACH_TINH } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * BẢNG CÔNG TỪNG NGÀY CỦA MỘT NGƯỜI — bố cục tờ "Chi tiết" của phần mềm chấm công cũ
@@ -445,7 +446,9 @@ export function CongTungNgay({
             Giờ lấy từ Bảng công
             {tinh.ban != null ? ` · cách tính Bản ${tinh.ban}` : ' · cách tính mặc định'}
             {tinh.daChot ? ' · có kỳ đã chốt (số theo bản chốt)' : ''}
-            {tinh.cachTinh === 'ngay' ? ' · bộ phận tính có quẹt = 1 công' : ''}
+            {khongTheoKhung(tinh.cachTinh)
+              ? ` · bộ phận tính ${TEN_CACH_TINH[tinh.cachTinh].toLowerCase()}`
+              : ''}
           </span>
         )}
       </div>

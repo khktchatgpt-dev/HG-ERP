@@ -107,6 +107,13 @@ export function OGio({ d }: { d: GioCongCtx }) {
             {n.boPhan} không tính theo khung giờ: có quẹt trong ngày = 1 công.
           </div>
         )}
+        {n.cachTinh === 'du' && x.k && (
+          <div className="text-[var(--ink-2)]">
+            {x.khongQuet
+              ? 'Không quẹt, không có đơn nghỉ — vẫn đủ 1 công. Người nghỉ mà chưa nộp đơn thì làm phiếu Nghỉ cho ngày này.'
+              : `${n.boPhan} tính đủ công: ngày làm việc = 1 công, chỉ trừ ngày nghỉ có đơn.`}
+          </div>
+        )}
         {c && c.cap.length > 0 && (
           <table className="w-full border-separate border-spacing-0 font-mono text-[11.5px]">
             <tbody>

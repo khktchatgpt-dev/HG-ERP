@@ -160,7 +160,12 @@ describe('ca bắt đầu trước 5:00 (Bếp) — đối chiếu phần mềm 
   })
   it('không có ca riêng: vẫn theo luật ca đêm cũ (lượt trước 5:00 gắn ca hôm trước)', () => {
     const [a] = tinhKyGioCong(
-      vao({ tu: '2026-09-15', den: '2026-09-17', nhanSu: [{ ma: 'A', ten: 'X', boPhan: null }], dong }),
+      vao({
+        tu: '2026-09-15',
+        den: '2026-09-17',
+        nhanSu: [{ ma: 'A', ten: 'X', boPhan: null }],
+        dong,
+      }),
     )
     expect(cap(a, '2026-09-15')).toEqual([1004, 1440 + 228])
   })
@@ -171,7 +176,9 @@ describe('người đã nghỉ còn làm trong kỳ', () => {
   it('giữ các ngày tới ngày làm cuối, ngày sau đó không thuộc kỳ của họ', () => {
     const [a] = tinhKyGioCong(
       vao({
-        nhanSu: [{ ma: '88', ten: 'Võ Ngọc Đại', boPhan: 'Tổ Mẫu', ngayCuoi: '2026-10-06' }],
+        nhanSu: [
+          { ma: '88', ten: 'Võ Ngọc Đại', boPhan: 'Tổ Mẫu', ngayCuoi: '2026-10-06' },
+        ],
         dong: [
           { ngay: '2026-10-05', ma: '88', daGhep: true, luot: l('07:00', '16:00') },
           { ngay: '2026-10-06', ma: '88', daGhep: true, luot: l('07:00', '16:00') },
@@ -186,7 +193,9 @@ describe('người đã nghỉ còn làm trong kỳ', () => {
   })
   it('người đang làm: ngayCuoi null, không cắt ngày nào', () => {
     const [a] = tinhKyGioCong(
-      vao({ dong: [{ ngay: '2026-10-20', ma: 'A', daGhep: true, luot: l('07:00', '16:00') }] }),
+      vao({
+        dong: [{ ngay: '2026-10-20', ma: 'A', daGhep: true, luot: l('07:00', '16:00') }],
+      }),
     )
     expect(a.ngayCuoi).toBeNull()
     expect(a.ngay).toHaveLength(1)
@@ -201,5 +210,97 @@ describe('trongThoiGianLam — ngoài khoảng này không đếm vắng', () =>
     expect(trongThoiGianLam(n, '2026-09-26')).toBe(true)
     expect(trongThoiGianLam(n, '2026-09-27')).toBe(false)
     expect(trongThoiGianLam({}, '2020-01-01')).toBe(true)
+  })
+})
+
+describe('cách tính "Đủ công" — văn phòng theo sổ T9 (22/10/2026)', () => {
+  // Kỳ 09/2026 thật: 25/08 → 25/09, lễ 02/09. Lượt của 6051 Huỳnh Ngọc Thiệt lấy từ máy:
+  // không quẹt 25/08, 28/08, 02/09, 15/09, 22/09, 25/09 (đánh dấu '-'), Chủ nhật 'CN'.
+  const T9 = '- + + - + CN + + - + + + CN + + + + + + CN + - + + + + CN + - + + -'.split(
+    ' ',
+  )
+  const ngayT9 = T9.map((_, i) =>
+    new Date(Date.UTC(2026, 7, 25 + i)).toISOString().slice(0, 10),
+  )
+  const vp = (p: Partial<KyGioVao> = {}): KyGioVao =>
+    vao({
+      tu: '2026-08-25',
+      den: '2026-09-25',
+      nhanSu: [{ ma: 'A', ten: 'Người A', boPhan: 'Phòng Kế Toán' }],
+      dong: ngayT9
+        .filter((_, i) => T9[i] === '+')
+        .map((ngay) => ({ ngay, ma: 'A', daGhep: true, luot: l('07:20') })),
+      cachTinh: { 'Phòng Kế Toán': 'du' },
+      ngayLe: ['2026-09-02'],
+      ...p,
+    })
+
+  it('6051 T9: 22 ngày quẹt → 27 công + 1 ngày lễ (sổ 28); 5 ngày không quẹt vẫn đủ công', () => {
+    const [a] = tinhKyGioCong(vp())
+    expect(a.cachTinh).toBe('du')
+    expect(a.tong.cong).toBe(27)
+    expect(a.tong.thieu).toBe(0)
+    expect(a.ngay.filter((x) => x.khongQuet).map((x) => x.ngay)).toEqual([
+      '2026-08-25',
+      '2026-08-28',
+      '2026-09-15',
+      '2026-09-22',
+      '2026-09-25',
+    ])
+    const le = a.ngay.find((x) => x.ngay === '2026-09-02')
+    expect(le).toMatchObject({ nghi: 'holiday', k: null, tong: 0 })
+    expect(a.ngay.some((x) => new Date(`${x.ngay}T00:00:00Z`).getUTCDay() === 0)).toBe(
+      false,
+    )
+  })
+
+  it('phiếu Nghỉ đã duyệt thắng: ngày đó không có công, lương tính theo loại nghỉ', () => {
+    const [a] = tinhKyGioCong(
+      vp({
+        dieuChinh: [
+          dc({ ngay: '2026-08-28', loai: 'leave', nghi: 'unpaid' }),
+          dc({ ngay: '2026-09-03', loai: 'leave', nghi: 'annual' }),
+        ],
+      }),
+    )
+    expect(a.tong.cong).toBe(25)
+    expect(a.ngay.find((x) => x.ngay === '2026-08-28')).toMatchObject({
+      nghi: 'unpaid',
+      k: null,
+    })
+    expect(a.ngay.find((x) => x.ngay === '2026-09-03')?.khongQuet).toBeUndefined()
+  })
+
+  it('Chủ nhật có quẹt = 1 công; lễ có quẹt vẫn là nghỉ lễ (không thành tăng ca ngày lễ)', () => {
+    const [a] = tinhKyGioCong(
+      vp({
+        dong: [
+          { ngay: '2026-08-30', ma: 'A', daGhep: true, luot: l('07:30', '16:00') },
+          { ngay: '2026-09-02', ma: 'A', daGhep: true, luot: l('07:30', '16:00') },
+        ],
+      }),
+    )
+    expect(a.ngay.find((x) => x.ngay === '2026-08-30')).toMatchObject({ tong: 480 })
+    expect(a.ngay.find((x) => x.ngay === '2026-09-02')).toMatchObject({
+      nghi: 'holiday',
+      k: null,
+    })
+    expect(a.tong.cong).toBe(28) // 27 ngày làm việc + Chủ nhật 30/08
+  })
+
+  it('vào giữa kỳ: trước ngày vào chỉ tính ngày có quẹt; sau ngày có dữ liệu chưa tính', () => {
+    const [a] = tinhKyGioCong(
+      vp({
+        nhanSu: [
+          { ma: 'A', ten: 'Người A', boPhan: 'Phòng Kế Toán', ngayVao: '2026-09-07' },
+        ],
+        dong: [{ ngay: '2026-09-01', ma: 'A', daGhep: true, luot: l('07:20') }],
+        ngayDoDang: '2026-09-20',
+      }),
+    )
+    expect(a.ngay[0].ngay).toBe('2026-09-01')
+    expect(a.ngay.at(-1)?.ngay).toBe('2026-09-19')
+    // 01/09 + (07/09 → 19/09 là 13 ngày, trừ Chủ nhật 13/09) = 1 + 12
+    expect(a.tong.cong).toBe(13)
   })
 })

@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import type { KhungBan, QuyTac } from '@/lib/cham-cong/cach-tinh'
 import type { KieuLamTronRa } from '@/lib/cham-cong/gio-khung'
+import { cachTinhCua, type CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 
 /** Bản cách tính công — bảng 0243 (hr_calc_versions / frames / rates). */
 
@@ -320,7 +321,7 @@ export const cachTinhRepo = {
 
   /** Danh mục tổ (0242) + số người đang làm + tên tổ sản xuất nối tới. */
   async to(): Promise<
-    { ten: string; cachTinh: 'khung' | 'ngay'; toSx: string | null; soNguoi: number }[]
+    { ten: string; cachTinh: CachTinh; toSx: string | null; soNguoi: number }[]
   > {
     const [teams, emps] = await Promise.all([
       db()
@@ -335,7 +336,7 @@ export const cachTinhRepo = {
       if (e.team_id) dem.set(e.team_id, (dem.get(e.team_id) ?? 0) + 1)
     return must(teams).map((t) => ({
       ten: t.name,
-      cachTinh: t.calc_mode === 'ngay' ? 'ngay' : 'khung',
+      cachTinh: cachTinhCua(t.calc_mode),
       toSx: t.dep?.name ?? null,
       soNguoi: dem.get(t.id) ?? 0,
     }))

@@ -7,7 +7,11 @@ import { KY_NGHI, TEN_NGHI } from '@/lib/cham-cong/dieu-chinh'
 import type { CongNgay } from '@/lib/cham-cong/chi-tiet-cong'
 import type { GioCongCtx } from './useGioCong'
 import { THU, dm, hm, ngayKy, so, thu, type NgayGio } from './gio-cong.shared'
-import { trongThoiGianLam } from '@/lib/cham-cong/ky-gio-cong'
+import {
+  khongTheoKhung,
+  TEN_CACH_TINH,
+  trongThoiGianLam,
+} from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * LƯỚI CÔNG — người × ngày của kỳ (khoảng Nhân sự đặt). Ô CHỈ nói trạng thái ngày đó (user 20/10/2026:
@@ -164,9 +168,9 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                     className="sticky left-0 border-b border-[var(--line-faint)]/40 bg-[var(--surface-raised)] px-1.5 py-0.5 text-[12px] font-semibold text-[var(--ink-2)]"
                   >
                     {n.boPhan}
-                    {n.cachTinh === 'ngay' && (
+                    {khongTheoKhung(n.cachTinh) && (
                       <span className="ml-2 font-normal text-[var(--ink-3)]">
-                        · có quẹt = 1 công
+                        · {TEN_CACH_TINH[n.cachTinh].toLowerCase()}
                       </span>
                     )}
                   </td>
@@ -184,7 +188,7 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                       khi đứng cạnh mã (đo 17/10: tên dài chỉ còn "1043…"). */}
                   <Link
                     href={`/hr/cham-cong/nguoi/${encodeURIComponent(n.ma)}?thang=${b.thang}`}
-                    className="block h-full w-full truncate px-1.5 leading-[24px] text-left hover:text-[var(--act-text)] hover:underline"
+                    className="block h-full w-full truncate px-1.5 text-left leading-[24px] hover:text-[var(--act-text)] hover:underline"
                     title={`Mở chấm công từng ngày của ${n.ten}`}
                   >
                     <span className="mr-1 font-mono text-[11px] text-[var(--ink-3)]">
@@ -265,9 +269,15 @@ export function LuoiGio({ d }: { d: GioCongCtx }) {
                 ts.reduce((s, x) => s + f(x), 0)
               const v =
                 i === 0
-                  ? so(cong((x) => x.cong), 2)
+                  ? so(
+                      cong((x) => x.cong),
+                      2,
+                    )
                   : i === 1
-                    ? so(cong((x) => x.tc), 1)
+                    ? so(
+                        cong((x) => x.tc),
+                        1,
+                      )
                     : i === 2
                       ? String(cong((x) => x.thieu) || '')
                       : String(cong((x) => x.vang) || '')
@@ -312,9 +322,7 @@ function O({
   const cn0 = thu(ngay) === 0
   const base = cn(
     'relative h-[24px] border-r border-b border-[var(--line-faint)]/40 p-0 text-center font-mono text-[12px] font-bold',
-    le
-      ? 'bg-[var(--warn-wash)]'
-      : cn0 && 'bg-[color-mix(in_srgb,var(--act)_6%,white)]',
+    le ? 'bg-[var(--warn-wash)]' : cn0 && 'bg-[color-mix(in_srgb,var(--act)_6%,white)]',
     ngay.slice(8) === '01' && 'border-l-2 border-l-[var(--line-faint)]/60',
   )
   if (tuongLai)

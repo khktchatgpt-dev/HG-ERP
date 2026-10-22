@@ -29,6 +29,7 @@ import { NganTrua } from './ngan-gio'
 import { OGio } from './o-gio'
 import { useGioCong, type GioCongCtx } from './useGioCong'
 import { dm, so, type GioCong } from './gio-cong.shared'
+import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 
 const doiThang = (t: string, b: number) => {
   const [y, m] = t.split('-').map(Number)
@@ -218,10 +219,11 @@ function ThanhNhom({ d }: { d: GioCongCtx }) {
           width={190}
           value={dang.cachTinh}
           disabled={d.dangGhi}
-          onChange={(v) => d.doiCachTinh(dang.ten, v as 'khung' | 'ngay')}
+          onChange={(v) => d.doiCachTinh(dang.ten, v as CachTinh)}
           options={[
             { value: 'khung', label: 'Công = giờ có mặt ÷ 8' },
             { value: 'ngay', label: 'Có quẹt = 1 công' },
+            { value: 'du', label: 'Đủ công, trừ nghỉ có đơn' },
           ]}
         />
       )}

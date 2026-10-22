@@ -4,6 +4,7 @@ import { Btn, Empty, Tag } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import type { KyCongCtx, ToKy } from './useKyCong'
 import { lucVn, so } from './ky.shared'
+import { khongTheoKhung } from '@/lib/cham-cong/ky-gio-cong'
 
 export const TH =
   'sticky top-0 z-[1] border-b border-[var(--line)] bg-[var(--surface-raised)] px-2.5 py-1.5 text-left font-semibold text-[var(--ink-2)] whitespace-nowrap'
@@ -78,9 +79,9 @@ export function NganTo({ d }: { d: KyCongCtx }) {
                   >
                     {t.ten}
                   </button>
-                  {t.cachTinh === 'ngay' && (
+                  {khongTheoKhung(t.cachTinh) && (
                     <span className="text-k-label ml-1.5 text-[var(--ink-3)]">
-                      theo ngày
+                      {t.cachTinh === 'du' ? 'đủ công' : 'theo ngày'}
                     </span>
                   )}
                 </td>

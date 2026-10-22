@@ -206,7 +206,7 @@ export const truaSchema = z.object({
 /** Đổi cách tính giờ công của một bộ phận. */
 export const cachTinhSchema = z.object({
   boPhan: z.string().trim().min(1).max(120),
-  cachTinh: z.enum(['khung', 'ngay']),
+  cachTinh: z.enum(['khung', 'ngay', 'du']),
 })
 
 // ── Cách tính công (B2, 0243) ─────────────────────────────────────────────

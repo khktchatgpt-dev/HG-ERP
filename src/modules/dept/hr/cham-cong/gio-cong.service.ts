@@ -6,6 +6,7 @@ import { khoangKyService } from './khoang-ky.service'
 import {
   congNgay,
   tinhKyGioCong,
+  khongTheoKhung,
   trongThoiGianLam,
   type CachTinh,
   type NguoiGio,
@@ -136,6 +137,7 @@ export const gioCongService = {
       dieuChinh: du.dieuChinh,
       trua,
       cachTinh,
+      ngayLe: le.map((x) => x.holiday_date),
       thamSo: t,
     })
     // Kỳ đã chốt (B3): giờ từng ngày lấy từ BẢN CHỐT; lượt máy vẫn bày để soi.
@@ -254,7 +256,9 @@ export const gioCongService = {
       chamCongRepo.employees(),
       settingsService.getAll(),
     ])
-    const vp = new Set(b.boPhan.filter((x) => x.cachTinh === 'ngay').map((x) => x.ten))
+    const vp = new Set(
+      b.boPhan.filter((x) => khongTheoKhung(x.cachTinh)).map((x) => x.ten),
+    )
     // Cùng thứ tự Bảng công: tổ đông người trước, "(chưa có bộ phận)" cuối — file chia
     // mỗi tổ một tờ thì tờ theo đúng thứ tự này.
     const thuTu = new Map(b.boPhan.map((x, i) => [x.ten, i]))
