@@ -487,6 +487,81 @@ SX, Tổ SX (không vào `SHARED_SECTION`).
   cầm đi đặt cây) + một sheet MỖI quy cách (`sheetName`: bỏ ký tự cấm, 31 ký
   tự, không trùng); in cả `errors` lẫn `skipped` thành cảnh báo. Chưa lưu DB.
 
+## Góp ý hệ thống (`modules/core/feedback`, `/gop-y`, nút "Góp ý" trên topbar)
+
+Mang từ Nam An ERP v2 (gói `goi-system-feedback`, 20/10/2026), viết lại theo
+stack dự án. Hành vi phải giữ (người dùng thật đã chốt bên kia): ghi nhanh từ
+MỌI trang (dán ảnh Ctrl+V, gửi Ctrl+Enter, tự ghi trang đang mở), một luồng
+trao đổi trong từng góp ý, "Vẫn cần chỉnh thêm" mở lại CÙNG góp ý (vòng +1),
+người viết bấm "Đã ổn" mới là xong, cửa xác nhận tuỳ chọn, "tôi cũng gặp",
+riêng tư, luật tự sửa / xoá, kanban mặc định xếp theo hoạt động gần nhất, tóm
+tắt tuần, xuất Markdown cho AI.
+
+- **Ánh xạ phụ thuộc** (README gói mục 9): người dùng = `usersRepo`; admin/BOD =
+  action `feedback.manage` (admin bypass + permission seed cho `director`,
+  0253); thông báo = event bus → `handlers/feedback.notifications.ts` (6 loại
+  `feedback_*`, payload mang `href=/gop-y?id=` để chuông mở đúng chỗ); tệp =
+  `files.feedback_id` (parent kind `feedback`), ảnh dán ở hộp ghi nhanh tải với
+  parent `none` rồi `filesRepo.claimForFeedback` nhận về lúc lưu; cấu hình người
+  xác nhận = `settings` key `feedback_reviewers` (trống = tắt cửa). Chủ đề =
+  khu làm việc HG-ERP (`FEEDBACK_TOPICS`), đoán theo URL (`guessTopic`).
+- **Luật nằm ở `feedback.rules.ts`** (thuần, có test theo 4 test gốc): cửa,
+  sửa/xoá, vòng mở lại, riêng tư. Service chỉ nạp dữ liệu + gọi luật + emit.
+  Quyền kiểm ở máy chủ; UI chỉ ẩn nút theo cờ `can_*` service trả về.
+- **Client không import `src/modules/*`**: hình dữ liệu API chép tay ở
+  `src/lib/feedback-types.ts`; từ vựng (nhãn, trạng thái, cột kanban) ở
+  `src/lib/feedback-labels.ts` dùng chung hai bên.
+- **BẪY event bus**: handler chỉ được đăng ký khi có chỗ `import '@/events/register'`
+  (bus không tự nạp). `feedback.service.ts` import nó ở đầu file; lúc test lần
+  đầu (21/10/2026) thiếu dòng này nên mọi luồng chạy mà 0 thông báo, không log lỗi.
+- **BẪY toast bị dialog che** (21/10/2026): khay toast `ui/Toast.tsx` từng `z-50`
+  bằng Dialog Radix và đứng TRƯỚC portal trong DOM, nên hộp góp ý trượt từ phải
+  che kín "Nội dung quá ngắn" — người dùng bấm Gửi thấy "không có gì xảy ra". Khay
+  nay `z-[80]` (= `--z-toast` của kit). Và lỗi chặn gửi (quá ngắn, ảnh đang tải,
+  máy chủ từ chối) phải bày TẠI CHỖ cạnh nút (`blocked` ở hộp ghi nhanh và ô
+  trao đổi), toast chỉ là lớp phụ.
+- **Ảnh phải được XOÁ, không chỉ gỡ liên kết** (21/10/2026): `files.feedback_id`
+  là `on delete set null`, nên xoá góp ý từng để mọi ảnh nằm lại Storage. Nay
+  service đọc ảnh TRƯỚC khi xoá (`filesRepo.listForFeedback`) rồi `filesRepo.purge`;
+  xoá dòng trao đổi / sửa bỏ ảnh thì xoá ảnh không còn ai trỏ tới
+  (`droppedFileIds`, luật thuần có test). Dọn ảnh chạy SAU khi DB ghi xong và
+  nuốt lỗi (log) — việc người dùng bấm đã thành.
+- **`useToast()` (ui) phải trả object ỔN ĐỊNH** — `ToastProvider` bọc `useMemo`.
+  Trước 21/10/2026 nó tạo object mới mỗi lần có toast hiện/tắt, nên mọi
+  `useCallback`/`useEffect` để `toast` trong deps chạy lại theo toast: hộp chi
+  tiết góp ý tự tải lại, toast cũ hết hạn đúng lúc vừa xoá → "Góp ý không tồn tại".
+- **Màn giữ danh sách trong `useState(initialX)` thì phải nhận lại prop khi
+  `router.refresh()`** (mẫu "điều chỉnh state theo prop", xem `FeedbackScreen`):
+  thiếu nó, gửi góp ý từ nút thanh đầu trang khi đang ở `/gop-y` mà bảng không hiện.
+- **Chưa làm** (đừng tự thêm): trợ lý phòng ban đọc góp ý, tạo góp ý từ đề
+  xuất cuộc họp, đếm góp ý theo người — mục 9 README gói nói là tích hợp phụ.
+
+## Máy móc & bảo trì (`modules/core/assets`, `/may-moc`)
+
+Mang từ bản demo "MOCA Tài sản" (21/10/2026), dựng lại bằng kit. Khu DÙNG CHUNG
+(`src/app/(may-moc)/`, shell theo workspace nhà của người xem): Việc hôm nay · Máy
+móc · Lịch bảo trì · Báo hỏng · Chi phí · Dụng cụ theo người · Tem QR. Nav ở Sản
+xuất, Tổ, BGĐ; Kho thấy `/may-moc/dung-cu`; Kế toán thấy `/may-moc/chi-phi`.
+
+- **DB** (`0270_may_moc_bao_tri.sql`): `asset_groups` (18 nhóm HG + mẫu hạng mục),
+  `assets` (máy + dụng cụ, `kind`), `asset_plans`, `asset_issues` (mỗi máy tối đa
+  MỘT phiếu mở — unique index), `asset_work_orders` (PBD/PSC/PKD), `asset_movements`
+  (`asset_ids` là MẢNG), `asset_counters` + `asset_next_no()`. Ảnh báo hỏng =
+  `files.asset_issue_id`. Hạn mức GĐ duyệt = `settings.asset_approve_over` (10 tr).
+- **Quyền**: `assets.asset.edit` / `assets.work` / `assets.approve` / `assets.tools`
+  / `assets.cost.view`; vai mới `maintenance` (Tổ Cơ điện). Ai đăng nhập cũng báo hỏng được.
+- **Luồng báo hỏng**: moi → (dự toán > hạn mức) cho_duyet → dang_sua → xong; huỷ chỉ
+  khi `moi`, trả máy về trạng thái trước khi báo. "Không duyệt" quay về `moi` và XOÁ
+  thợ/đơn vị/dự toán. Sửa xong tạo PSC và máy chạy lại. Đổi trạng thái dùng update có
+  điều kiện (`fromStatuses`) → bấm trùng là 409, không ghi đè.
+- **Logic thuần** ở `src/lib/may-moc.ts` (hạn theo ngày/giờ chạy, chuyển trạng thái
+  máy, đánh mã, tiền) — client dùng chung, có test. Excel nhập máy + xuất chi phí ở
+  `assets.excel.ts` (có test).
+- **Thông báo** qua event bus (`asset.notifications.ts`), không báo cho chính người bấm.
+- Hộp thoại bày lỗi TẠI CHỖ (`Blocked`); khối form gắn `onInput` để câu tắt khi sửa.
+- **Chưa làm**: đưa phiếu chờ GĐ duyệt vào Trung tâm phê duyệt (`/exec/approvals`) —
+  hiện GĐ duyệt ngay trên phiếu, nhận việc qua chuông.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

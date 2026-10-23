@@ -54,6 +54,16 @@ const TYPE_LABEL: Record<string, string> = {
   commented: 'đã bình luận',
   due_soon: 'công việc sắp đến hạn',
   overdue: 'công việc đã quá hạn',
+  asset_issue_new: 'báo hỏng máy mới',
+  asset_issue_approval: 'sửa chữa chờ duyệt',
+  asset_issue_decided: 'kết quả duyệt sửa chữa',
+  asset_issue_done: 'máy đã sửa xong',
+  feedback_new: 'góp ý hệ thống mới',
+  feedback_reviewed: 'xác nhận góp ý',
+  feedback_processed: 'cập nhật góp ý của bạn',
+  feedback_commented: 'trao đổi mới trong góp ý',
+  feedback_mentioned: 'nhắc bạn trong góp ý',
+  feedback_confirmed: 'người viết xác nhận góp ý đã ổn',
 }
 
 export default async function NotificationsPage() {

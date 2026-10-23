@@ -631,6 +631,109 @@ export type DomainEvent =
       submitted_by: string | null
     }
 
+  /**
+   * GÓP Ý HỆ THỐNG (0253). Service tính sẵn DANH SÁCH NGƯỜI NHẬN (admin, người
+   * xác nhận, người viết, người đã trao đổi) rồi phát; handler chỉ còn việc
+   * viết thông báo — luật "ai được báo" nằm một chỗ ở feedback.service và được
+   * test, không rải sang handler.
+   */
+  | {
+      name: 'feedback.created'
+      feedback_id: string
+      title: string
+      actor_id: string
+      severity: string
+      /** true = đang chờ người xác nhận (cửa bật), recipient là người xác nhận. */
+      gate: boolean
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.reviewed'
+      feedback_id: string
+      title: string
+      actor_id: string
+      approved: boolean
+      reason: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.resubmitted'
+      feedback_id: string
+      title: string
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.processed'
+      feedback_id: string
+      title: string
+      actor_id: string
+      status: string
+      round: number
+      replied: boolean
+      recipient_ids: string[]
+    }
+  | {
+      name: 'feedback.commented'
+      feedback_id: string
+      title: string
+      actor_id: string
+      is_admin: boolean
+      needs_more: boolean
+      recipient_ids: string[]
+      mention_ids: string[]
+    }
+  | {
+      name: 'feedback.confirmed'
+      feedback_id: string
+      title: string
+      actor_id: string
+      recipient_ids: string[]
+    }
+
+  /**
+   * MÁY MÓC & BẢO TRÌ (0270). Service tính sẵn người nhận (Tổ Cơ điện = ai có
+   * assets.manage; Giám đốc = ai có assets.approve; người báo hỏng), handler
+   * chỉ viết thông báo. `label` = "TS-HAN-004 Máy hàn MIG 350A".
+   */
+  | {
+      name: 'asset.issue.reported'
+      issue_id: string
+      no: string
+      label: string
+      stops: boolean
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'asset.issue.approval_needed'
+      issue_id: string
+      no: string
+      label: string
+      estimate: number
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'asset.issue.decided'
+      issue_id: string
+      no: string
+      label: string
+      approved: boolean
+      reason: string | null
+      actor_id: string
+      recipient_ids: string[]
+    }
+  | {
+      name: 'asset.issue.done'
+      issue_id: string
+      no: string
+      label: string
+      cost: number
+      actor_id: string
+      recipient_ids: string[]
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

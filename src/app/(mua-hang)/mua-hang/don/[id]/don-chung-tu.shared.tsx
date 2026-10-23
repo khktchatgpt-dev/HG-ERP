@@ -290,12 +290,15 @@ export function daysBetween(a: string, b: string): number {
  * NĂM ĐIỀU KHOẢN in nguyên văn lên phiếu gửi NCC — theo đúng thứ tự trên tờ
  * đơn thật. Gợi ý chỗ trống lấy từ câu hay dùng nhất của phòng Cung ứng.
  */
+// Nhãn + thứ tự CHÉP ĐÚNG phiếu in (PoPrintSheet) — 21/10/2026: màn gọi "Chất
+// lượng / Nơi giao / Hoá đơn" còn phiếu in "Tiêu chuẩn chất lượng / Địa điểm giao
+// hàng / Chứng từ thanh toán", người soạn phải tự dò ô nào ra dòng nào.
 export const TERM_FIELDS = [
-  ['quality', 'Chất lượng', 'Hàng mới 100%, đúng quy cách đã duyệt'],
-  ['delivery_place', 'Nơi giao', 'Xưởng SX — Cụm CN…'],
-  ['lead_time', 'Thời gian giao', '15 ngày kể từ ngày đặt'],
-  ['payment', 'Thanh toán', 'Chuyển khoản 30 ngày kể từ ngày nhận đủ'],
-  ['invoice', 'Hoá đơn', 'Hoá đơn GTGT giao cùng hàng'],
+  ['quality', 'Tiêu chuẩn chất lượng', 'Hàng mới 100%, đúng quy cách đã duyệt'],
+  ['delivery_place', 'Địa điểm giao hàng', 'Xưởng SX — Cụm CN…'],
+  ['payment', 'Hình thức thanh toán', 'Chuyển khoản 30 ngày kể từ ngày nhận đủ'],
+  ['invoice', 'Chứng từ thanh toán', 'Hoá đơn GTGT giao cùng hàng'],
+  ['lead_time', 'Thời gian giao hàng', '15 ngày kể từ ngày đặt'],
 ] as const
 
 /* ══ MENU NỘI DUNG CỦA ĐƠN (27/09/2026) ════════════════════════════════

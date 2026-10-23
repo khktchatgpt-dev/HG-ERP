@@ -561,7 +561,9 @@ export function PoPrintSheet({
 
       <PhanTheoLenhIn lines={lines} lsxSet={lsxSet} currency={po.currency} />
 
-      <PrintTerms items={terms} />
+      {/* Tiêu chuẩn chất lượng IN TO + ĐẬM (21/10/2026, phòng Cung ứng): là điều
+          khoản NCC hay bỏ qua nhất, chìm giữa năm dòng cùng cỡ 12px. */}
+      <PrintTerms items={terms} emphasize={['Tiêu chuẩn chất lượng']} />
 
       <div className="mt-1 flex flex-col gap-0.5 text-[12px]">
         {/* Đơn không tính thuế (VAT 0) thì bỏ hẳn câu này — "CHƯA bao gồm thuế

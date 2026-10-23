@@ -150,7 +150,7 @@ describe('đơn xốp — gõ quy cách 580x540x60, 250 tấm, 1.000.000đ/m³',
     go('Quy cách', '580x540x60')
     go('SL đơn hàng', '240')
     go('Đm/sp', '2')
-    expect(chu()).toContain('thiếu 230 so với nhu cầu')
+    expect(chu()).toContain('thiếu 230 so với cần 240 × Đm 2')
     go('SL đặt', '480')
     expect(o('Tổng m³').placeholder).toBe('9,02') // 480 × 0,018792 = 9,02016 m³
     expect(chu()).toContain('✓ tự tính')

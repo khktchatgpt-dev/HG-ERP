@@ -5,7 +5,7 @@ import { BangKeDanhSachScreen } from './BangKeDanhSachScreen'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata = { title: 'Mua hàng · Bảng kê vật tư' }
+export const metadata = { title: 'Mua hàng · Kế hoạch mua' }
 
 /**
  * BẢNG KÊ VẬT TƯ — trang menu (08/10/2026): chọn lệnh để mở bảng kê "còn phải

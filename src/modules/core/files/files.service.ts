@@ -13,6 +13,7 @@ import {
   isTechnicalStaff,
 } from '@/modules/dept/technical/technical.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { feedbackService } from '@/modules/core/feedback/feedback.service'
 import { MAX_SAMPLE_PHOTOS } from '@/modules/dept/technical/samples.schema'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
 import { db } from '@/server/db'
@@ -67,6 +68,8 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
       return { purchase_order_id: input.parent.id }
     case 'sample':
       return { sample_id: input.parent.id }
+    case 'feedback':
+      return { feedback_id: input.parent.id }
     case 'die':
       return { die_id: input.parent.id }
     case 'hr_employee':
@@ -108,6 +111,12 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     if (!(await isTechnicalStaff(user))) {
       throw Forbidden('Chỉ phòng Kỹ thuật gắn ảnh mẫu showroom')
     }
+    return
+  }
+  if (input.parent.kind === 'feedback') {
+    // Ảnh kèm dòng trao đổi góp ý (0253): ai xem được góp ý thì đính được.
+    // Góp ý riêng tư → người ngoài bị chặn ngay ở đây, không chỉ ở nút.
+    await feedbackService.assertCanAttach(user, input.parent.id)
     return
   }
   if (input.parent.kind === 'die') {
@@ -160,6 +169,11 @@ async function assertCanReadFile(user: User, file: FileRow): Promise<void> {
     const task = await tasksRepo.findById(data.task_id)
     if (!task) throw NotFound('Parent task missing')
     assertCan(user, 'task.view', { task })
+    return
+  }
+  if (file.feedback_id) {
+    // Góp ý riêng tư: ảnh chụp màn hình cũng riêng tư theo (0253).
+    await feedbackService.assertCanViewFile(user, file.feedback_id)
     return
   }
   // Other parents: any signed-in user may read until per-domain perms exist.

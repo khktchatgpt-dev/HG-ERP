@@ -19,6 +19,12 @@ export type PastedPoLine = {
   qty: number | null
   price: number | null
   note: string | null
+  /**
+   * ĐVT ghi trên sổ — CHỈ đọc khi bảng có hàng tiêu đề (không đoán). Không dùng để
+   * tính: app lấy ĐVT theo danh mục; chỉ để cảnh báo "sổ ghi kg, mã tính theo Cây"
+   * (màn Kế hoạch mua, 22/10/2026). Không có cột thì không có thuộc tính.
+   */
+  unit?: string | null
 }
 
 export type PoPasteResult = {
@@ -59,15 +65,17 @@ type Cols = {
   qty: number | null
   price: number | null
   note: number | null
+  unit: number | null
 }
 
-/** Từ khoá tiêu đề → cột. Thành tiền/ĐVT/tồn… cố tình BỎ — app tự tính/tự có. */
+/** Từ khoá tiêu đề → cột. Thành tiền/tồn… cố tình BỎ — app tự tính/tự có. ĐVT chỉ đọc để cảnh báo lệch. */
 const HEADERS: [keyof Cols, RegExp][] = [
   ['code', /^(ma( vt| vat tu| sp| hang)?|code)$/],
   ['name', /^(ten( hang( hoa)?| vat tu| sp)?|vat tu|hang hoa|chi tiet|dien giai)$/],
   ['qty', /^(sl|so luong|s\.luong|qty|sl dat( hang)?|so luong dat)$/],
   ['price', /^(don gia|gia|d\.gia|price|dg)( \(?vnd\)?| \(?usd\)?)?$/],
   ['note', /^(ghi chu|note|dien giai them)$/],
+  ['unit', /^(dvt|d\.v\.t|don vi( tinh)?|unit|dv)$/],
 ]
 
 function detectHeader(cells: string[]): Cols | null {
@@ -92,6 +100,7 @@ function detectHeader(cells: string[]): Cols | null {
     qty: cols.qty ?? null,
     price: cols.price ?? null,
     note: cols.note ?? null,
+    unit: cols.unit ?? null,
   }
 }
 
@@ -153,6 +162,8 @@ function guessColumns(rows: string[][]): Cols | null {
     qty: numCols[0] ?? null,
     price: numCols[1] ?? null,
     note,
+    // Không tiêu đề thì không đoán cột ĐVT — chữ ngắn "Con" dễ nhầm với mã/ghi chú.
+    unit: null,
   }
 }
 
@@ -191,7 +202,32 @@ export function parsePoPaste(text: string, maxLines = 100): PoPasteResult {
       qty: cols.qty != null ? parsePasteNumber(cell(cols.qty)) : null,
       price: cols.price != null ? parsePasteNumber(cell(cols.price)) : null,
       note: cell(cols.note) || null,
+      ...(cols.unit != null ? { unit: cell(cols.unit) || null } : {}),
     })
   }
   return { lines, skipped, headerDetected: headerCols != null }
+}
+
+/** Gom cách viết ĐVT về một dạng: bỏ dấu, hạ thường, gom từ đồng nghĩa. */
+function unitKey(u: string): string {
+  // "m³" giữ nguyên số mũ khi bỏ dấu (NFD không tách) — đổi tay về m3.
+  const k = nod(u).replace(/³/g, '3').replace(/²/g, '2').replace(/[.\s]/g, '')
+  if (['cai', 'con', 'chiec', 'pcs', 'pc'].includes(k)) return 'cai'
+  if (['kg', 'ki', 'kilogram', 'kgs'].includes(k)) return 'kg'
+  if (['m', 'met'].includes(k)) return 'm'
+  if (['m2', 'met2', 'metvuong'].includes(k)) return 'm2'
+  if (['m3', 'met3', 'khoi', 'metkhoi'].includes(k)) return 'm3'
+  return k
+}
+
+/**
+ * Hai ĐVT có cùng nghĩa không ("Con" ≡ "cái", "Kg" ≡ "kí"). Dùng để chặn dán
+ * "420 kg" vào mã tính theo Cây — số đúng nhưng đơn vị sai thì mua lệch cả chục lần.
+ */
+export function sameUnit(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  if (!a?.trim() || !b?.trim()) return true
+  return unitKey(a) === unitKey(b)
 }

@@ -6,6 +6,7 @@ import { loadLsxDetailReport } from '@/modules/dept/supply/lsx-detail-report.ser
 import { buildLsxDetailExcel } from '@/modules/dept/supply/lsx-detail-excel'
 import { loadLsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import { buildBangKeExcel } from '@/modules/dept/supply/lsx-bang-ke-excel'
+import { keHoachMuaService } from '@/modules/dept/supply/ke-hoach-mua.service'
 import { NotFound } from '@/server/http'
 import { xlsxResponse as xlsx } from '@/server/xlsx'
 
@@ -43,7 +44,9 @@ export const GET = handle(async (req: Request) => {
         url.searchParams.get('nhap') !== '0',
       )
       if (!bk) throw NotFound('Không tìm thấy lệnh sản xuất')
-      const buf = await buildBangKeExcel(bk, today, user.name)
+      // Cột NCC chọn / Giá chào + tờ "Theo NCC" — đúng bước 2 màn Kế hoạch mua.
+      const luaChon = await keHoachMuaService.luaChonChoExcel(bk)
+      const buf = await buildBangKeExcel(bk, today, user.name, luaChon)
       const safe = bk.lsx.code.replace(/[\/:*?"<>|]+/g, '-')
       return xlsx(buf, `bang-ke-vat-tu_${safe}_${today}.xlsx`)
     }

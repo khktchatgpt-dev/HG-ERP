@@ -49,6 +49,19 @@ import {
 
 type Dong = { r: BangKeRow; d: DongMua }
 
+/**
+ * NCC + giá đã chọn ở bước 2 màn Kế hoạch mua (đã lưu, hoặc gợi ý của máy),
+ * giá ĐÃ đổi về đ/ĐVT mua để công thức Thành tiền = SL × giá đúng. Không có map
+ * này (gọi cũ) thì cột NCC chọn / Giá chào để trống như trước.
+ */
+export type LuaChonExcel = {
+  supplier_name: string
+  /** Giá theo ĐVT mua của mã; null = chưa có giá / đổi không được. */
+  gia_dv: number | null
+  /** "đã chọn" / "máy gợi ý" (+ giá gốc đ/kg nếu có) — vào cột Ghi chú. */
+  ghi_chu: string
+}
+
 const FILL: Partial<Record<TinhTrangMua, string>> = {
   chua_dat: 'FFFCECEB',
   nhap_thieu: 'FFFBF2E2',
@@ -66,7 +79,7 @@ function kv(ws: ExcelJS.Worksheet, label: string, value: ExcelJS.CellValue): voi
   r.getCell(1).font = { bold: true }
 }
 
-/** Ai gỡ dòng bị chặn — cùng luật với khối cuối màn (`bang-ke-chan.tsx`). */
+/** Ai gỡ dòng bị chặn — cùng luật với khối "chưa quy đổi" của màn Kế hoạch mua (`nhu-cau.tsx`). */
 export function aiGo(reason: string): string {
   return /dài một|chiều dài/i.test(reason)
     ? 'Cung ứng · khai dài cây ở hồ sơ vật tư'
@@ -90,6 +103,8 @@ export async function buildBangKeExcel(
   bk: LsxBangKe,
   today: string,
   nguoiLap?: string | null,
+  /** Bước 2 màn Kế hoạch mua — theo material_id. */
+  luaChon?: Map<string, LuaChonExcel>,
 ): Promise<Buffer> {
   const { lsx } = bk
   const dong: Dong[] = bk.rows.map((r) => ({ r, d: tinhDongMua(r) }))
@@ -330,10 +345,10 @@ export async function buildBangKeExcel(
           m.conPhaiDat,
           r.last_price?.supplier_name ?? '',
           r.last_price ? r.last_price.unit_price : null,
-          '',
+          luaChon?.get(r.material_id)?.supplier_name ?? '',
+          luaChon?.get(r.material_id)?.gia_dv ?? null,
           null,
-          null,
-          '',
+          luaChon?.get(r.material_id)?.ghi_chu ?? '',
         ])
         const n = row.number
         rows2.push(n)
@@ -370,6 +385,67 @@ export async function buildBangKeExcel(
       autoFilter: true,
       landscape: true,
     })
+  }
+
+  // ── Theo NCC (Kế hoạch mua · bước 3) ──────────────────────────────────────
+  // Mỗi NCC một khối = một đơn sẽ lên: mã, SL, giá, thành tiền (công thức) và
+  // cộng từng NCC — tờ đem đi họp giá / gửi từng NCC xác nhận.
+  if (luaChon && canDat.length > 0) {
+    const sN = wb.addWorksheet('Theo NCC')
+    const COLSN = 8
+    applyWidths(sN, [5, 11, 34, 18, 7, 12, 12, 14])
+    titleRow(sN, `THEO NHÀ CUNG CẤP — LSX ${lsx.code}`)
+    noteRow(
+      sN,
+      'Mỗi NCC một khối = một đơn nháp ở bước 3 màn Kế hoạch mua. Giá theo ĐVT mua; ô giá trống = chưa có giá, cần hỏi NCC.',
+    )
+    sN.addRow([])
+    const headN = headerRow(sN, ['STT', 'Mã VT', 'Vật tư', 'Quy cách', 'ĐVT', 'SL đặt', 'Đơn giá', 'Thành tiền']) // prettier-ignore
+    const theoNcc = new Map<string, Dong[]>()
+    const chuaNcc: Dong[] = []
+    for (const x of canDat) {
+      const c = luaChon.get(x.r.material_id)
+      if (!c) chuaNcc.push(x)
+      else theoNcc.set(c.supplier_name, [...(theoNcc.get(c.supplier_name) ?? []), x])
+    }
+    const cong: number[] = []
+    for (const [ten, ds] of [...theoNcc.entries()].sort(
+      (a, b) => b[1].length - a[1].length,
+    )) {
+      groupRow(sN, `${ten} · ${ds.length} mã`, COLSN)
+      const dau = sN.lastRow!.number + 1
+      ds.forEach((x, i) => {
+        const row = sN.addRow([i + 1, x.r.material_code, x.r.material_name, x.r.spec ?? '', x.r.unit, x.d.conPhaiDat, luaChon.get(x.r.material_id)?.gia_dv ?? null, null]) // prettier-ignore
+        const n = row.number
+        row.getCell(8).value = { formula: `IF(G${n}="","",F${n}*G${n})`, result: '' }
+        numCells(row, [6])
+        numCells(row, [7, 8], MONEY_FMT)
+      })
+      const t = sN.addRow([])
+      t.getCell(3).value = `Cộng ${ten}`
+      t.getCell(8).value = { formula: `SUM(H${dau}:H${t.number - 1})`, result: 0 }
+      numCells(t, [8], MONEY_FMT)
+      t.font = { bold: true }
+      cong.push(t.number)
+    }
+    if (chuaNcc.length > 0) {
+      groupRow(sN, `Chưa chọn NCC · ${chuaNcc.length} mã`, COLSN)
+      chuaNcc.forEach(
+        (x, i) =>
+        sN.addRow([i + 1, x.r.material_code, x.r.material_name, x.r.spec ?? '', x.r.unit, x.d.conPhaiDat, null, null]), // prettier-ignore
+      )
+    }
+    const lastN = sN.lastRow!.number
+    const tN = sN.addRow([])
+    tN.getCell(3).value = `Tổng ${theoNcc.size} NCC (chưa VAT)`
+    tN.getCell(8).value = {
+      formula: cong.map((r) => `H${r}`).join('+') || '0',
+      result: 0,
+    }
+    numCells(tN, [8], MONEY_FMT)
+    tN.font = { bold: true }
+    fillRow(tN, ACCENT, COLSN)
+    finishTable(sN, { head: headN, lastRow: lastN, freezeCols: 3, autoFilter: false, landscape: true }) // prettier-ignore
   }
 
   // ── Theo SP ─────────────────────────────────────────────────────────────

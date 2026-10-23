@@ -77,7 +77,7 @@ export function VatTuScreen({
   canCreate: boolean
   tax: MaterialTaxonomy
   /** NCC cho ô "NCC mặc định". */
-  suppliers: { value: string; label: string }[]
+  suppliers: { value: string; label: string; hint?: string }[]
 }) {
   const router = useRouter()
   const pathname = usePathname()

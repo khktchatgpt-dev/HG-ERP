@@ -623,7 +623,9 @@ export async function buildPoExcel(input: {
         .forEach((part, i) => {
           r++
           ws.mergeCells(r, 1, r, n)
-          set(r, 1, i === 0 ? `${label}: ${part}` : `    ${part}`, { font: { size: 10 } })
+          // Tiêu chuẩn chất lượng to + đậm — cùng luật phiếu in (21/10/2026).
+          const noi = label === 'Tiêu chuẩn chất lượng'
+          set(r, 1, i === 0 ? `${noi ? '★ ' : ''}${label}: ${part}` : `    ${part}`, { font: noi ? { size: 12, bold: true } : { size: 10 } }) // prettier-ignore
         })
     }
   }

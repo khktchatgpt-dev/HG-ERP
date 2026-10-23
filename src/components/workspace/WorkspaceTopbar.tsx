@@ -9,6 +9,7 @@ import { hasCrossRole, userHomeWorkspaceId } from '@/workspaces/access'
 import { ACCENT_CLASSES, type WorkspaceConfig } from '@/workspaces/workspaces.config'
 import { MobileNav } from './MobileNav'
 import { TopbarSearch } from './TopbarSearch'
+import { QuickFeedbackButton } from '@/components/feedback/QuickFeedbackButton'
 
 export async function WorkspaceTopbar({
   workspace,
@@ -88,6 +89,8 @@ export async function WorkspaceTopbar({
         </div>
         <div className="flex items-center gap-2">
           {actions}
+          {/* Góp ý hệ thống (0253) — có ở MỌI màn, ghi ngay không chuyển trang. */}
+          <QuickFeedbackButton />
           <TopbarSearch />
           <NotificationsDropdown initialUnread={unread} />
           <UserMenu

@@ -8,6 +8,7 @@ import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 // → `range(0, NaN)` → danh sách rỗng mà không báo lỗi (bẫy đã ghi trong
 // `warehouse/materials/constants.ts`, dùng lại luôn hằng đó cho khỏi lệch).
 import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
+import { supplierOption } from '@/lib/supplier-option'
 import { VatTuScreen } from './VatTuScreen'
 
 export const metadata = { title: 'Mua hàng · Vật tư' }
@@ -117,12 +118,7 @@ export default async function Page({
       canRetire={canRetire}
       canCreate={canCreate}
       tax={tax}
-      suppliers={sups
-        .filter((x) => !x.is_carrier)
-        .map((x) => ({
-          value: x.id,
-          label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name,
-        }))}
+      suppliers={sups.filter((x) => !x.is_carrier).map(supplierOption)}
       page={page}
       filters={{ q: sp.q ?? '', nhom: sp.nhom ?? '', kn: noSub, ng: ngung }}
     />

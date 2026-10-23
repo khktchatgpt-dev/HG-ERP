@@ -30,6 +30,7 @@ import {
 } from '@/components/warehouse/useMaterialCore'
 import type { Material } from '@/modules/dept/warehouse/warehouse.repo'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
+import { supplierOption } from '@/lib/supplier-option'
 import { VatTuLichSu, type GiaMua, type ThayDoi } from './vat-tu-lich-su'
 import { DaiNgungDung, KhoiBoMa, NutBoMa, useMaHienDung, type BoMaCtx } from './bo-ma'
 import { DoiChieuGanGiong, MaMoiO, useMaMoi } from './them-vat-tu'
@@ -64,7 +65,7 @@ export function SuaVatTuSheet({
   /** Danh mục ĐVT/nhóm — bỏ trống thì panel tự nạp. */
   tax?: MaterialTaxonomy
   /** NCC cho ô "NCC mặc định" — bỏ trống thì panel tự nạp. */
-  suppliers?: { value: string; label: string }[]
+  suppliers?: { value: string; label: string; hint?: string }[]
   onClose: () => void
   /** Bản vật tư SAU khi lưu (từ PATCH). */
   onSaved: (m: Material) => void
@@ -78,7 +79,7 @@ export function SuaVatTuSheet({
   const [nap, setNap] = useState<Nap | null>(null)
   const [nen, setNen] = useState<{
     tax: MaterialTaxonomy
-    suppliers: { value: string; label: string }[]
+    suppliers: { value: string; label: string; hint?: string }[]
   } | null>(tax && suppliers ? { tax, suppliers } : null)
   useEffect(() => {
     let live = true
@@ -95,12 +96,7 @@ export function SuaVatTuSheet({
               is_carrier?: boolean
             }[]
           }>('/api/dept/supply/suppliers?page=1&page_size=500').then((r) =>
-            r.rows
-              .filter((x) => !x.is_carrier)
-              .map((x) => ({
-                value: x.id,
-                label: x.code ? `${x.code} · ${x.short_name ?? x.name}` : x.name,
-              })),
+            r.rows.filter((x) => !x.is_carrier).map(supplierOption),
           ),
       ])
         .then(([t, sp]) => live && setNen({ tax: t, suppliers: sp }))
@@ -164,7 +160,7 @@ export function ThemVatTuSheet({
   onOpenCode,
 }: {
   tax: MaterialTaxonomy
-  suppliers: { value: string; label: string }[]
+  suppliers: { value: string; label: string; hint?: string }[]
   /** Nhóm điền sẵn — bộ lọc nhóm đang chọn ở danh sách. */
   group?: string
   onClose: () => void
@@ -196,7 +192,7 @@ function Form({
 }: {
   nap: Nap
   tax: MaterialTaxonomy
-  suppliers: { value: string; label: string }[]
+  suppliers: { value: string; label: string; hint?: string }[]
   onClose: () => void
   onSaved: (m: Material) => void
   boMa?: BoMaCtx
@@ -365,7 +361,17 @@ function Form({
             label="ĐVT đặt hàng"
             value={f.unit}
             onChange={set('unit')}
-            options={units.map((u) => ({ value: u, label: u }))}
+            // DÒNG TRỐNG khi chưa có ĐVT (22/10/2026, lỗi "đã chọn nhưng không tạo
+            // được"): thiếu nó thì <select> hiện dòng đầu ("Cái") dù state rỗng;
+            // người dùng chọn đúng dòng đang hiện thì không bắn onChange → vẫn
+            // "thiếu ĐVT đặt hàng". ĐVT đang có mà ngoài danh mục cũng phải có dòng,
+            // không thì ô hiện sai giá trị y như vậy.
+            options={[
+              ...(f.unit && units.includes(f.unit)
+                ? []
+                : [{ value: f.unit, label: f.unit || '— chọn ĐVT —' }]),
+              ...units.map((u) => ({ value: u, label: u })),
+            ]}
           />{' '}
           {/* prettier-ignore */}
         </Field>

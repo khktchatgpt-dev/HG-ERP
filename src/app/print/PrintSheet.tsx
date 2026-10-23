@@ -236,9 +236,12 @@ export function PrintMeta({
 export function PrintTerms({
   title = 'ĐIỀU KHOẢN & YÊU CẦU',
   items,
+  emphasize = [],
 }: {
   title?: string
   items: [string, string | null | undefined][]
+  /** Nhãn các dòng cần NỔI BẬT (chữ to + đậm) — NCC phải đọc thấy trước tiên. */
+  emphasize?: string[]
 }) {
   const rows = items.filter(([, v]) => v && v.trim())
   if (rows.length === 0) return null
@@ -248,11 +251,21 @@ export function PrintTerms({
       <table className="mt-1">
         <tbody>
           {rows.map(([label, v]) => (
-            <tr key={label}>
+            <tr
+              key={label}
+              className={emphasize.includes(label) ? 'text-[14px] font-bold' : undefined}
+            >
               {/* Nhãn ĐẬM (28/08): nhãn và nội dung cùng một sắc chữ thì mắt
                   không tách được đâu là mục, đâu là điều khoản — nhất là khi
                   in đen trắng, thứ duy nhất phân biệt được là nét chữ. */}
-              <td className="pr-3 align-top font-semibold whitespace-nowrap">{label}:</td>
+              <td className="pr-3 align-top font-semibold whitespace-nowrap">
+                {/* Dấu ★ đỏ trước dòng nổi bật (21/10/2026, phòng Cung ứng) — in đen
+                    trắng vẫn còn hình sao, chữ to + đậm thôi thì dễ lẫn. */}
+                {emphasize.includes(label) && (
+                  <span className="mr-1 text-red-600 [print-color-adjust:exact]">★</span>
+                )}
+                {label}:
+              </td>
               {/* Giữ XUỐNG DÒNG của điều khoản nhiều ý (Quy cách / Bề mặt / Đóng
                   gói… mỗi ý một dòng) — không thì in dồn thành một đoạn dài. */}
               <td className="whitespace-pre-line">{v}</td>

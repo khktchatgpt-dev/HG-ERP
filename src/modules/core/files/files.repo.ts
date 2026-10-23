@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import type { FileBucket } from './files.schema'
+import { storage } from './storage'
 
 export type FileRow = {
   id: string
@@ -20,6 +21,8 @@ export type FileRow = {
   production_order_id: string | null
   purchase_order_id: string | null
   sample_id: string | null
+  /** Góp ý hệ thống (0253) — ảnh chụp màn hình kèm góp ý / dòng trao đổi. */
+  feedback_id: string | null
   /** Giấy tờ nhân viên (0250). */
   hr_employee_id: string | null
   created_at: string
@@ -49,11 +52,12 @@ export type FileParentColumns = {
   production_order_id?: string | null
   purchase_order_id?: string | null
   sample_id?: string | null
+  feedback_id?: string | null
   die_id?: string | null
   hr_employee_id?: string | null
 }
 
-/** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061). */
+/** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061) + góp ý (0253). */
 export type FileParentColumn =
   | 'product_id'
   | 'quote_id'
@@ -61,6 +65,7 @@ export type FileParentColumn =
   | 'production_order_id'
   | 'purchase_order_id'
   | 'sample_id'
+  | 'feedback_id'
   | 'hr_employee_id'
 
 export const filesRepo = {
@@ -111,6 +116,81 @@ export const filesRepo = {
       .in('id', ids)
       .is('deleted_at', null)
     return (data ?? []) as FileRow[]
+  },
+
+  /**
+   * Nhận file "mồ côi có chủ" về một góp ý (0253): ảnh dán vào hộp ghi nhanh
+   * được tải lên với parent `none` TRƯỚC khi góp ý tồn tại; lúc lưu góp ý mới
+   * gắn lại. Chỉ nhận file của CHÍNH người gửi, đã finalize, chưa thuộc góp ý
+   * nào — id lạ gửi kèm bị bỏ qua. Trả danh sách id đã nhận (giữ thứ tự gửi).
+   */
+  async claimForFeedback(ids: string[], feedbackId: string, ownerId: string): Promise<string[]> {
+    if (ids.length === 0) return []
+    const { data } = await db()
+      .from('files')
+      .update({ feedback_id: feedbackId })
+      .in('id', ids)
+      .eq('owner_id', ownerId)
+      .is('feedback_id', null)
+      .is('deleted_at', null)
+      .not('finalized_at', 'is', null)
+      .select('id')
+    const claimed = new Set((data ?? []).map((r: { id: string }) => r.id))
+    // File đã thuộc góp ý này từ trước (sửa dòng, gửi lại cùng id) vẫn hợp lệ.
+    const { data: own } = await db()
+      .from('files')
+      .select('id')
+      .in('id', ids)
+      .eq('feedback_id', feedbackId)
+      .is('deleted_at', null)
+    for (const r of (own ?? []) as { id: string }[]) claimed.add(r.id)
+    return ids.filter((id) => claimed.has(id))
+  },
+
+  /**
+   * Mọi file đang gắn một góp ý (kể cả chưa finalize). Đọc TRƯỚC khi xoá góp
+   * ý: `files.feedback_id` là `on delete set null`, xoá xong là mất dấu.
+   * `ids` = chỉ lấy các id này (ảnh của một dòng trao đổi).
+   */
+  async listForFeedback(
+    feedbackId: string,
+    ids?: readonly string[],
+  ): Promise<Pick<FileRow, 'id' | 'bucket' | 'path'>[]> {
+    if (ids && ids.length === 0) return []
+    let q = db()
+      .from('files')
+      .select('id, bucket, path')
+      .eq('feedback_id', feedbackId)
+      .is('deleted_at', null)
+    if (ids) q = q.in('id', [...ids])
+    const { data, error } = await q
+    if (error) throw new Error(`files of feedback failed: ${error.message}`)
+    return (data ?? []) as Pick<FileRow, 'id' | 'bucket' | 'path'>[]
+  },
+
+  /**
+   * Xoá hẳn object trên Storage rồi đánh dấu xoá dòng — cùng cách
+   * `filesService.delete` làm, nhưng cho NHIỀU file và không kiểm quyền (người
+   * gọi là service đã kiểm quyền trên chứng từ cha). Gom theo bucket: một lệnh
+   * remove mỗi bucket. Trả số file đã dọn.
+   */
+  async purge(rows: readonly Pick<FileRow, 'id' | 'bucket' | 'path'>[]): Promise<number> {
+    if (rows.length === 0) return 0
+    const byBucket = new Map<FileBucket, string[]>()
+    for (const r of rows) byBucket.set(r.bucket, [...(byBucket.get(r.bucket) ?? []), r.path])
+    for (const [bucket, paths] of byBucket) {
+      await storage.remove(bucket, paths)
+      for (const p of paths) storage.invalidateSignedUrl(bucket, p)
+    }
+    const { error } = await db()
+      .from('files')
+      .update({ deleted_at: new Date().toISOString() })
+      .in(
+        'id',
+        rows.map((r) => r.id),
+      )
+    if (error) throw new Error(error.message)
+    return rows.length
   },
 
   /** File đã finalize của 1 SP, mới nhất trước — nhiều file cùng parent = lịch sử phiên bản (NFR-03 GĐ1). */

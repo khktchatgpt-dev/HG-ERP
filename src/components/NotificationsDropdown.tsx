@@ -68,6 +68,16 @@ const TYPE_LABEL: Record<string, string> = {
   stage_handoff: 'bàn giao công đoạn',
   incident_reported: 'báo sự cố xưởng',
   incident_resolved: 'đã xử lý sự cố',
+  asset_issue_new: 'báo hỏng máy',
+  asset_issue_approval: 'sửa chữa chờ duyệt',
+  asset_issue_decided: 'kết quả duyệt sửa chữa',
+  asset_issue_done: 'máy đã sửa xong',
+  feedback_new: 'góp ý mới',
+  feedback_reviewed: 'xác nhận góp ý',
+  feedback_processed: 'cập nhật góp ý',
+  feedback_commented: 'trao đổi góp ý',
+  feedback_mentioned: 'nhắc bạn',
+  feedback_confirmed: 'góp ý đã ổn',
 }
 
 function timeAgo(iso: string): string {

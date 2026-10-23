@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -55,13 +56,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  const api: Ctx = {
-    show,
-    success: (title, description) => show({ tone: 'success', title, description }),
-    error: (title, description) => show({ tone: 'error', title, description, ttl: 6000 }),
-    info: (title, description) => show({ tone: 'info', title, description }),
-    warning: (title, description) => show({ tone: 'warning', title, description }),
-  }
+  /*
+    PHẢI ổn định (useMemo): object mới mỗi render thì mọi chỗ để `toast` trong
+    deps của useCallback/useEffect chạy lại MỖI KHI một toast hiện hoặc tắt.
+    Dính 21/10/2026: hộp chi tiết góp ý tải lại chính nó mỗi lần có toast —
+    toast cũ hết hạn đúng lúc vừa xoá góp ý → tải lại → "Góp ý không tồn tại".
+  */
+  const api: Ctx = useMemo(
+    () => ({
+      show,
+      success: (title, description) => show({ tone: 'success', title, description }),
+      error: (title, description) => show({ tone: 'error', title, description, ttl: 6000 }),
+      info: (title, description) => show({ tone: 'info', title, description }),
+      warning: (title, description) => show({ tone: 'warning', title, description }),
+    }),
+    [show],
+  )
 
   return (
     <ToastCtx.Provider value={api}>
@@ -115,7 +125,14 @@ function Viewport({
       ref={ref}
       role="region"
       aria-label="Thông báo"
-      className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col-reverse gap-2"
+      /*
+        z-[80] = `--z-toast` của kit, TRÊN Dialog/AlertDialog (z-50) và `--z-modal`
+        (60). Trước 21/10/2026 khay này cũng z-50: hộp góp ý trượt từ phải (portal
+        Radix, đứng SAU khay trong DOM) che kín góc dưới phải, nên "Nội dung quá
+        ngắn" / "Chưa gửi được" bay lên mà không ai thấy — người dùng tưởng nút
+        Gửi chết. Toast là lời đáp cho hành động vừa bấm, phải nổi trên mọi lớp.
+      */
+      className="pointer-events-none fixed right-4 bottom-4 z-[80] flex w-80 max-w-[calc(100vw-2rem)] flex-col-reverse gap-2"
     >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onClose={() => dismiss(t.id)} />
