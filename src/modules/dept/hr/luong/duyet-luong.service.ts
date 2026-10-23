@@ -122,7 +122,7 @@ export const duyetLuongService = {
         truocNguoi: phieuTruoc ? phieuTruoc.length : null,
         truocThucLinh: phieuTruoc ? phieuTruoc.reduce((s, p) => s + p.thucLinh, 0) : null,
       },
-      dieuKien: dieuKienGui(d.phieu, d.canTinhLai),
+      dieuKien: dieuKienGui(d.phieu, d.canTinhLai, d.thieuPhieu),
       ghiChuGui: b?.trangThai === 'submitted' ? (guiCuoi?.ghiChu ?? null) : null,
       suKien: suKien.map((e) => ({
         viec: e.viec,

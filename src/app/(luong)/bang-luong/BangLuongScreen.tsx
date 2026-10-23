@@ -251,7 +251,7 @@ function NguoiGiu({ d }: { d: BangLuongCtx }) {
 
 function DaiDieuKien({ d }: { d: BangLuongCtx }) {
   return (
-    <div className="grid grid-cols-5 border-b border-[var(--line)] bg-[var(--surface-card)]">
+    <div className="grid grid-cols-6 border-b border-[var(--line)] bg-[var(--surface-card)]">
       {d.b.dieuKien.map((x) => (
         <div
           key={x.ma}
@@ -261,6 +261,8 @@ function DaiDieuKien({ d }: { d: BangLuongCtx }) {
           <b
             className={cn(
               'text-k-body num block font-semibold',
+              // Tên người thiếu phiếu dài → xuống dòng trong ô, không cắt.
+              x.ma === 'du_nguoi' && !x.ok && 'text-k-sm whitespace-normal',
               x.ok ? 'text-[var(--done)]' : 'text-[var(--stop)]',
             )}
           >

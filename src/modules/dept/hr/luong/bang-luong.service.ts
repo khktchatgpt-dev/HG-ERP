@@ -26,6 +26,13 @@ import {
   TEN_LY_DO_THEM,
 } from '@/lib/cham-cong/cong-nhap-tay'
 import { hoSoLuongRepo } from './ho-so-luong.repo'
+import {
+  dieuKienGui,
+  nguoiThieuPhieu,
+  type DieuKienGui,
+  type NguoiThieu,
+} from '@/lib/luong/dieu-kien-gui'
+export { dieuKienGui, type DieuKienGui }
 import { assertXemLuong } from './quyen-luong'
 import {
   bangLuongRepo,
@@ -46,8 +53,6 @@ import {
 const CHAY = 'hr.payroll.run'
 const DUYET = 'hr.payroll.approve'
 
-export type DieuKienGui = { ma: string; ten: string; ok: boolean; chiTiet: string }
-
 export type BangLuongTrang = {
   thang: string
   ky: KyDong | null
@@ -59,6 +64,8 @@ export type BangLuongTrang = {
   /** Bảng đã tính nhưng nguồn đổi sau đó (kỳ công chốt lại, khoản theo kỳ thêm / xoá). */
   canTinhLai: boolean
   dieuKien: DieuKienGui[]
+  /** Người làm trong kỳ mà không có phiếu (chưa ghép mã máy, chưa quẹt) — điều kiện gửi duyệt. */
+  thieuPhieu: NguoiThieu[]
   nhanVien: { id: string; ma: string; ten: string }[]
   /**
    * Người không chấm công có làm trong kỳ (chủ dự án 23/10/2026: "trường hợp đặc biệt bên
@@ -71,56 +78,20 @@ export type BangLuongTrang = {
 
 const dmy = (t: string) => `${t.slice(5)}/${t.slice(0, 4)}`
 
-export function dieuKienGui(phieu: PhieuDong[], canTinhLai: boolean): DieuKienGui[] {
-  const dem = (re: RegExp) => phieu.filter((p) => p.van.some((v) => re.test(v))).length
-  const thieuHeSo = [
-    ...new Set(phieu.flatMap((p) => p.van.filter((v) => v.startsWith('Thiếu hệ số')))),
-  ]
-  return [
-    {
-      ma: 'tinh_lai',
-      ten: 'Số đang khớp nguồn',
-      ok: !canTinhLai,
-      chiTiet: canTinhLai ? 'nguồn đã đổi sau lần tính — bấm Tính lại' : 'khớp',
-    },
-    {
-      ma: 'ho_so',
-      ten: 'Ai cũng có hồ sơ lương',
-      ok: dem(/^Chưa có hồ sơ lương/) === 0,
-      chiTiet: `${dem(/^Chưa có hồ sơ lương/)} người chưa có`,
-    },
-    {
-      ma: 'stk',
-      ten: 'Ai cũng có STK',
-      ok: dem(/^Thiếu STK/) === 0,
-      chiTiet: `${dem(/^Thiếu STK/)} người thiếu`,
-    },
-    {
-      ma: 'he_so',
-      ten: 'Hệ số khung có giờ',
-      ok: thieuHeSo.length === 0,
-      chiTiet: thieuHeSo.length
-        ? thieuHeSo.map((v) => v.replace('Thiếu hệ số ', '')).join(', ')
-        : 'đủ',
-    },
-    {
-      ma: 'am',
-      ten: 'Không thực lĩnh âm',
-      ok: dem(/^Thực lĩnh âm/) === 0,
-      chiTiet: `${dem(/^Thực lĩnh âm/)} phiếu`,
-    },
-  ]
-}
-
 export async function nap(thang: string) {
-  const [ky, bang, khoan, nhap] = await Promise.all([
+  const [ky, bang, khoan, nhap, emps, khoiCuaTo] = await Promise.all([
     kyCongRepo.ky(thang),
     bangLuongRepo.bang(thang),
     bangLuongRepo.khoan(thang),
     congNhapTayRepo.ds(thang),
+    chamCongRepo.employees(),
+    bangLuongRepo.khoiCuaTo(),
   ])
   const phieu =
     bang && bang.lanTinh ? await bangLuongRepo.phieu(bang.id, bang.lanTinh) : []
+  // Người có hồ sơ, đang làm trong kỳ, mà không có phiếu — bản chốt bỏ qua người cả kỳ không
+  // tính được ngày nào (chưa ghép mã máy, chưa quẹt) nên phải so ngược từ danh sách nhân viên.
+  const thieuPhieu = ky ? nguoiThieuPhieu(emps, khoiCuaTo, phieu, ky) : []
   // Nguồn đổi sau lần tính: khoản theo kỳ, hoặc công người không chấm công Kế toán vừa nhập.
   const khoanMoi = [...khoan.map((k) => k.luc), ...nhap.map((n) => n.lucSua)].reduce(
     (m, t) => (t > m ? t : m),
@@ -134,7 +105,7 @@ export async function nap(thang: string) {
       ky.trangThai !== 'closed' ||
       ky.lanChot !== bang.lanChotCong ||
       (!!khoanMoi && !!bang.tinhLuc && khoanMoi > bang.tinhLuc))
-  return { ky, bang, khoan, phieu, canTinhLai, nhap }
+  return { ky, bang, khoan, phieu, canTinhLai, nhap, emps, thieuPhieu }
 }
 
 /**
@@ -371,12 +342,12 @@ export const bangLuongService = {
     // Xem: người quản lý lương + quản trị viên (chỉ đọc, 20/10); tính / gửi / chi gác CHAY.
     await assertXemLuong(user)
     await hoSoLuongRepo.ghiXemLuong('payroll_sheet', user.id, { ghiChu: `kỳ ${thang}` })
-    const [d, chay, duyet, emps] = await Promise.all([
+    const [d, chay, duyet] = await Promise.all([
       nap(thang),
       canAction(user, CHAY),
       canAction(user, DUYET),
-      chamCongRepo.employees(),
     ])
+    const emps = d.emps
     const le = d.ky
       ? (await chamCongRepo.holidays(d.ky.tu, congNgay(d.ky.den, 1))).map(
           (h) => h.holiday_date,
@@ -395,7 +366,8 @@ export const bangLuongService = {
             : null) ?? congChuan(d.ky.tu, d.ky.den, le))
         : null,
       canTinhLai: d.canTinhLai,
-      dieuKien: dieuKienGui(d.phieu, d.canTinhLai),
+      dieuKien: dieuKienGui(d.phieu, d.canTinhLai, d.thieuPhieu),
+      thieuPhieu: d.thieuPhieu,
       khongCham: d.ky ? dsKhongCham(emps, d.nhap, d.ky.tu, d.ky.den) : [],
       // Ai có làm trong kỳ (kể cả đã nghỉ giữa kỳ) thì thêm khoản được.
       nhanVien: emps
@@ -435,7 +407,7 @@ export const bangLuongService = {
     const d = await nap(thang)
     if (!d.bang || d.bang.trangThai !== 'draft' || !d.bang.lanTinh)
       throw Conflict('Chỉ gửi duyệt được bảng lương nháp đã tính')
-    const vuong = dieuKienGui(d.phieu, d.canTinhLai).find((x) => !x.ok)
+    const vuong = dieuKienGui(d.phieu, d.canTinhLai, d.thieuPhieu).find((x) => !x.ok)
     if (vuong) throw BadRequest(`Chưa gửi duyệt được — ${vuong.ten}: ${vuong.chiTiet}`)
     const ok = await bangLuongRepo.doi(d.bang.id, 'draft', {
       status: 'submitted',
