@@ -29,7 +29,7 @@ export type NavCapability =
   | 'production.team'
   /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
   | 'supply.approve'
-  /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — Kế toán, TP Nhân sự, Giám đốc. */
+  /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — quyền mật, chỉ vai "Quản lý lương" (0255). */
   | 'hr.payroll'
 
 export type NavItem = {
@@ -874,6 +874,25 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Cấu hình',
             icon: 'settings',
             roles: ['admin'],
+          },
+        ],
+      },
+      // Quản trị viên XEM lương (chỉ đọc, 21/10/2026). Khu (luong) bày sidebar theo
+      // workspace nhà — với quản trị là khu này, nên phải có mục ở đây mới đi lại được.
+      {
+        heading: 'Lương (chỉ xem)',
+        items: [
+          {
+            href: '/ho-so-luong',
+            label: 'Hồ sơ lương',
+            icon: 'wallet',
+            capability: 'hr.payroll',
+          },
+          {
+            href: '/bang-luong',
+            label: 'Bảng lương',
+            icon: 'receipt',
+            capability: 'hr.payroll',
           },
         ],
       },

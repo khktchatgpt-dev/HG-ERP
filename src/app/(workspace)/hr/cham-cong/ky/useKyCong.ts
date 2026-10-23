@@ -11,7 +11,7 @@ export type { KyCongTrang, ToKy }
 import type { MucKy } from './ky.shared'
 export type { MucKy }
 
-type Sheet = null | 'chot' | 'xin' | 'quyet' | { xacNhan: string }
+type Sheet = null | 'chot' | 'xin' | 'quyet' | 'khoang' | 'dan' | { xacNhan: string }
 
 /** State + chuyển tiếp của màn Kỳ công. Mọi điều kiện lấy từ server (cùng hàm thuần). */
 export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
@@ -63,11 +63,32 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
     viec(
       'chot',
       { viec: 'chot' },
-      `Đã chốt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)}`,
+      `Đã chốt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)} — đã báo Kế toán kiểm bảng lương`,
     )
   const xinMo = (lyDo: string) =>
-    viec('xin', { viec: 'xin_mo', lyDo }, 'Đã gửi yêu cầu mở lại cho Giám đốc')
+    viec('xin', { viec: 'xin_mo', lyDo }, 'Đã gửi yêu cầu mở lại cho Kế toán trưởng')
   const rutXin = () => viec('rut', { viec: 'rut_xin' }, 'Đã rút yêu cầu mở lại')
+  const datKhoang = (tu: string, den: string, lyDo: string) =>
+    viec(
+      'khoang',
+      { viec: 'dat_khoang', tu, den, lyDo: lyDo.trim() || undefined },
+      `Đã đặt kỳ ${k.thang.slice(5)}/${k.thang.slice(0, 4)}: ${tu.slice(8)}/${tu.slice(5, 7)} → ${den.slice(8)}/${den.slice(5, 7)} — Bảng công tính lại theo khoảng mới`,
+    )
+  /** Khối B: thêm / sửa / xoá công cộng thêm. Trả true khi ghi được. */
+  async function congThem(body: Record<string, unknown>, ten: string, xong?: string) {
+    setBusy(ten)
+    try {
+      await api(`/api/dept/hr/cham-cong/ky/${k.thang}`, { method: 'POST', body })
+      if (xong) toast.success(xong)
+      router.refresh()
+      return true
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Không ghi được — thử lại')
+      return false
+    } finally {
+      setBusy(null)
+    }
+  }
   const quyetMo = (dongY: boolean, ghiChu?: string) =>
     viec(
       'quyet',
@@ -94,6 +115,8 @@ export function useKyCong(k: KyCongTrang, mucDau: MucKy) {
     xinMo,
     rutXin,
     quyetMo,
+    datKhoang,
+    congThem,
   } as const
 }
 

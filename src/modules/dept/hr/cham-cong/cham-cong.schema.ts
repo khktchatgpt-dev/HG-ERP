@@ -206,7 +206,7 @@ export const truaSchema = z.object({
 /** Đổi cách tính giờ công của một bộ phận. */
 export const cachTinhSchema = z.object({
   boPhan: z.string().trim().min(1).max(120),
-  cachTinh: z.enum(['khung', 'ngay']),
+  cachTinh: z.enum(['khung', 'ngay', 'du']),
 })
 
 // ── Cách tính công (B2, 0243) ─────────────────────────────────────────────
@@ -227,6 +227,7 @@ export const banLuuSchema = z
         nguongNuaGio: z.number().int().min(0).max(59),
         nguongDuGio: z.number().int().min(0).max(59),
         lamTronVaoChieu: z.boolean(),
+        lamTronVaoToi: z.boolean(),
         tinhDenSom: z.boolean(),
         denSomTu: phutTrongNgay,
         caDemDen: phutTrongNgay,
@@ -274,6 +275,8 @@ export const kyThangSchema = z
   .string()
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Kỳ phải dạng YYYY-MM')
 
+const lyDoThem = z.enum(['ngoai_gio', 'chu_nhat', 'khac'])
+
 export const kyViecSchema = z.discriminatedUnion('viec', [
   z.object({
     viec: z.literal('xac_nhan'),
@@ -292,6 +295,38 @@ export const kyViecSchema = z.discriminatedUnion('viec', [
     dongY: z.boolean(),
     ghiChu: z.string().trim().max(300).optional(),
   }),
+  z.object({
+    viec: z.literal('dat_khoang'),
+    tu: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD'),
+    den: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD'),
+    lyDo: z.string().trim().max(300).optional(),
+  }),
+  // Công nhập tay khối A (0262): công null = xoá dòng (về "chưa nhập"). Kiểm chi tiết ở
+  // `kiemNhap` (service) — biên zod chỉ chặn kiểu và khoảng thô.
+  // Khối B — công cộng thêm ngoài máy (bước 3). Kiểm chi tiết ở `kiemThem` (service).
+  z.object({
+    viec: z.literal('them_cong'),
+    dong: z
+      .array(
+        z.object({
+          ma: z.string().trim().min(1).max(40),
+          cong: z.number().min(0).max(31).nullable(),
+          lyDo: lyDoThem,
+          ghiChu: z.string().trim().max(300).nullable().optional(),
+        }),
+      )
+      .min(1)
+      .max(300),
+  }),
+  z.object({
+    viec: z.literal('sua_cong'),
+    id: z.string().uuid(),
+    ma: z.string().trim().min(1).max(40),
+    cong: z.number().min(0).max(31).nullable(),
+    lyDo: lyDoThem,
+    ghiChu: z.string().trim().max(300).nullable().optional(),
+  }),
+  z.object({ viec: z.literal('xoa_cong'), id: z.string().uuid() }),
 ])
 
 // ── Hồ sơ lương (B4, 0245) ───────────────────────────────────────────────
@@ -314,6 +349,19 @@ export const luongViecSchema = z.discriminatedUnion('viec', [
     khauTru10: z.boolean().default(false),
     ghiChu: z.string().trim().max(300).nullable(),
     phuCap: z.record(z.string().uuid(), z.number().min(0).max(1_000_000_000)),
+    // 0254 — khớp sổ KT: tăng ca khoán đ/giờ, trừ đoàn phí, cách tính từng dòng phụ cấp
+    tangCaGio: z.number().min(0).max(10_000_000).nullable().optional(),
+    doanPhi: z.boolean().optional(),
+    phuCapCach: z
+      .record(
+        z.string().uuid(),
+        z.object({
+          cach: z.enum(['chia', 'nhan', 'co_dinh']),
+          chia: z.number().positive().max(366).nullable(),
+          coTangCa: z.boolean(),
+        }),
+      )
+      .optional(),
   }),
   z.object({
     viec: z.literal('rieng'),
@@ -374,7 +422,7 @@ export const luongViecSchema = z.discriminatedUnion('viec', [
 
 export const bangLuongViecSchema = z.discriminatedUnion('viec', [
   z.object({ viec: z.literal('tinh') }),
-  z.object({ viec: z.literal('gui') }),
+  z.object({ viec: z.literal('gui'), ghiChu: z.string().trim().max(500).nullish() }),
   z.object({ viec: z.literal('rut') }),
   z.object({
     viec: z.literal('quyet'),
@@ -401,6 +449,14 @@ export const bangLuongViecSchema = z.discriminatedUnion('viec', [
       .max(1000),
   }),
   z.object({ viec: z.literal('xoa_khoan'), id: z.string().uuid() }),
+  // Công người không chấm công — Kế toán nhập (23/10/2026); cong null = về đủ lương tháng.
+  z.object({
+    viec: z.literal('nhap_cong'),
+    ma: z.string().trim().min(1).max(40),
+    cong: z.number().min(0).max(31).nullable(),
+    tcGio: z.number().min(0).max(744).nullable(),
+    ghiChu: z.string().trim().max(300).nullable().optional(),
+  }),
 ])
 
 /** Tab Cá nhân trên hồ sơ (0249): lưu một khối, hoặc xin số CCCD thật (ghi nhật ký). */

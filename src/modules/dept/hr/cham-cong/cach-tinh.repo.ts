@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import type { KhungBan, QuyTac } from '@/lib/cham-cong/cach-tinh'
 import type { KieuLamTronRa } from '@/lib/cham-cong/gio-khung'
+import { cachTinhCua, type CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 
 /** Bản cách tính công — bảng 0243 (hr_calc_versions / frames / rates). */
 
@@ -10,7 +11,7 @@ function must<T>(r: { data: T | null; error: { message: string } | null }): T {
 }
 
 const COT_BAN = `id, version_no, from_period, status, lunch_from, lunch_to, grace_minutes,
-  round_out_mode, half_threshold, full_threshold, round_in_afternoon, count_early, early_from,
+  round_out_mode, half_threshold, full_threshold, round_in_afternoon, round_in_evening, count_early, early_from,
   night_before, minutes_per_cong, lunch_factor, lunch_default_minutes, note, created_at,
   updated_at, applied_at,
   tao:users!hr_calc_versions_created_by_fkey(name),
@@ -29,6 +30,7 @@ type DongBan = {
   half_threshold: number
   full_threshold: number
   round_in_afternoon: boolean
+  round_in_evening: boolean
   count_early: boolean
   early_from: number
   night_before: number
@@ -58,6 +60,15 @@ export type BanDong = {
   nguoiApDung: string | null
 }
 
+export type ThamSoLuong = {
+  /** Công chuẩn cố định (KT: 26); null = đếm ngày kỳ trừ CN, lễ. */
+  congChuan: number | null
+  /** % trả giờ giải lao; null = cộng vào hành chính như chốt công. */
+  ptTrua: number | null
+  /** Trừ thuế TNCN trên bảng lương. */
+  truThue: boolean
+}
+
 export type HeSoDong = {
   loai: 'frame' | 'leave'
   ma: string
@@ -79,6 +90,7 @@ function doiBan(r: DongBan): BanDong {
       nguongNuaGio: r.half_threshold,
       nguongDuGio: r.full_threshold,
       lamTronVaoChieu: r.round_in_afternoon,
+      lamTronVaoToi: r.round_in_evening,
       tinhDenSom: r.count_early,
       denSomTu: r.early_from,
       caDemDen: r.night_before,
@@ -104,6 +116,7 @@ const cotQuyTac = (q: QuyTac) => ({
   half_threshold: q.nguongNuaGio,
   full_threshold: q.nguongDuGio,
   round_in_afternoon: q.lamTronVaoChieu,
+  round_in_evening: q.lamTronVaoToi,
   count_early: q.tinhDenSom,
   early_from: q.denSomTu,
   night_before: q.caDemDen,
@@ -154,6 +167,30 @@ export const cachTinhRepo = {
     }))
   },
 
+  /**
+   * Tham số LƯƠNG của bản (0254) — đọc riêng, không thuộc quy tắc chấm công nên màn Cách tính
+   * công không phải biết tới. Sửa trên giao diện: bước sau (cần bản vẽ).
+   */
+  async thamSoLuong(banId: string): Promise<ThamSoLuong> {
+    const r = must(
+      await db()
+        .from('hr_calc_versions')
+        .select('standard_days, lunch_pay_percent, withhold_tax')
+        .eq('id', banId)
+        .single<{
+          standard_days: number | null
+          lunch_pay_percent: number | null
+          withhold_tax: boolean
+        }>(),
+    )
+    if (!r) throw new Error('Không thấy bản cách tính')
+    return {
+      congChuan: r.standard_days,
+      ptTrua: r.lunch_pay_percent == null ? null : Number(r.lunch_pay_percent),
+      truThue: r.withhold_tax,
+    }
+  },
+
   /** Bản mới (nháp) chép từ `goc`: quy tắc + khung + hệ số. */
   async taoTu(goc: BanDong, khung: KhungBan[], heSo: HeSoDong[], userId: string) {
     const so = (await this.dsBan()).reduce((m, b) => Math.max(m, b.so), 0) + 1
@@ -172,6 +209,18 @@ export const cachTinhRepo = {
         .single<{ id: string }>(),
     )
     if (!ban) throw new Error('Không tạo được bản cách tính')
+    // Tham số lương đi theo bản gốc — bỏ sót là bản mới mất công chuẩn 26 / giải lao 210 %.
+    const ts = await this.thamSoLuong(goc.id)
+    must(
+      await db()
+        .from('hr_calc_versions')
+        .update({
+          standard_days: ts.congChuan,
+          lunch_pay_percent: ts.ptTrua,
+          withhold_tax: ts.truThue,
+        })
+        .eq('id', ban.id),
+    )
     await this.ghiKhung(ban.id, khung)
     await this.ghiHeSo(ban.id, heSo, userId)
     return { id: ban.id, so }
@@ -272,7 +321,7 @@ export const cachTinhRepo = {
 
   /** Danh mục tổ (0242) + số người đang làm + tên tổ sản xuất nối tới. */
   async to(): Promise<
-    { ten: string; cachTinh: 'khung' | 'ngay'; toSx: string | null; soNguoi: number }[]
+    { ten: string; cachTinh: CachTinh; toSx: string | null; soNguoi: number }[]
   > {
     const [teams, emps] = await Promise.all([
       db()
@@ -287,7 +336,7 @@ export const cachTinhRepo = {
       if (e.team_id) dem.set(e.team_id, (dem.get(e.team_id) ?? 0) + 1)
     return must(teams).map((t) => ({
       ten: t.name,
-      cachTinh: t.calc_mode === 'ngay' ? 'ngay' : 'khung',
+      cachTinh: cachTinhCua(t.calc_mode),
       toSx: t.dep?.name ?? null,
       soNguoi: dem.get(t.id) ?? 0,
     }))

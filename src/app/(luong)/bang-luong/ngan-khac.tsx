@@ -17,8 +17,10 @@ export function NganBhThue({ d }: { d: BangLuongCtx }) {
       tl: '21,5 %',
       tien: tong(ps, (p) => p.bhDn),
     },
+    { ten: 'Đoàn phí người lao động', tl: '0,5 %', tien: tong(ps, (p) => p.doanPhi) },
     { ten: 'Kinh phí công đoàn', tl: '2 %', tien: tong(ps, (p) => p.kpcd) },
   ]
+  const chuaTru = ps.some((p) => !p.truThue && p.thue > 0)
   const nopThue = ps.filter((p) => p.thue > 0)
   return (
     <div className="min-h-0 overflow-auto bg-[var(--surface-card)]">
@@ -53,7 +55,13 @@ export function NganBhThue({ d }: { d: BangLuongCtx }) {
             </tr>
           ))}
           <tr>
-            <td className={TD}>Thuế TNCN khấu trừ ({nopThue.length} người phải nộp)</td>
+            <td className={TD}>
+              Thuế TNCN{' '}
+              {chuaTru
+                ? 'tính được — CHƯA trừ trên bảng (Kế toán chưa khấu trừ)'
+                : 'khấu trừ'}{' '}
+              ({nopThue.length} người)
+            </td>
             <td className={TD} />
             <td className={TD} />
             <td className={cn(TD, 'num')} style={R}>
@@ -147,10 +155,10 @@ export function NganChuyenKhoan({ d }: { d: BangLuongCtx }) {
 
 const VIEC: Record<string, { ten: string; tone: Mark['tone'] }> = {
   calculate: { ten: 'Tính bảng lương', tone: 'act' },
-  submit: { ten: 'Gửi Giám đốc duyệt', tone: 'warn' },
+  submit: { ten: 'Gửi Kế toán trưởng duyệt', tone: 'warn' },
   withdraw: { ten: 'Rút về nháp', tone: 'act' },
-  approve: { ten: 'Giám đốc duyệt', tone: 'done' },
-  return: { ten: 'Giám đốc trả lại', tone: 'stop' },
+  approve: { ten: 'Kế toán trưởng duyệt', tone: 'done' },
+  return: { ten: 'Kế toán trưởng trả lại', tone: 'stop' },
   reopen: { ten: 'Rút bảng đã duyệt về nháp', tone: 'warn' },
   paid: { ten: 'Đã chi', tone: 'done' },
 }
@@ -171,7 +179,8 @@ export function NganThoiGian({ d }: { d: BangLuongCtx }) {
       key: `${i}-${e.luc}`,
       at: e.luc,
       label: v.ten,
-      actor: e.boi,
+      // Không người bấm = hệ thống tự tính khi Nhân sự chốt công.
+      actor: e.boi ?? (e.viec === 'calculate' ? 'Hệ thống' : null),
       detail:
         [
           e.ghiChu,

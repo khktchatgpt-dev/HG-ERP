@@ -1,7 +1,8 @@
 import { db } from '@/server/db'
 import type { User } from '@/modules/core/users/users.repo'
-import { canAction, hasPermission } from '@/modules/core/rbac/rbac.service'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { xemLuong } from '@/modules/dept/hr/luong/quyen-luong'
 import {
   canEditComponents,
   canManagePlan,
@@ -125,8 +126,8 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   // (vào bằng URL vẫn xem được — chỉ tách giao diện, không chặn quyền).
   // Duyệt đơn mua — mục "Chờ tôi ký" bên Mua hàng (27/09/2026).
   if (await hasPermission(user, 'supply.po.approve')) caps.add('supply.approve')
-  // Hồ sơ lương (B4) — Kế toán, Trưởng phòng Nhân sự, Giám đốc; người khác không thấy mục.
-  if (await canAction(user, 'hr.payroll.profile')) caps.add('hr.payroll')
+  // Hồ sơ lương (B4) — vai "Quản lý lương" (quyền mật 0255) + quản trị viên CHỈ XEM (20/10).
+  if (await xemLuong(user)) caps.add('hr.payroll')
   if (
     user.role === 'admin' ||
     user.role === 'manager' ||

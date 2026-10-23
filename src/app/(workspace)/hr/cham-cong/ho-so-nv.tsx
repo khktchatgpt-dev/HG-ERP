@@ -16,11 +16,8 @@ import { dm } from './ky-cong.shared'
 export function HoSoNv({ v }: { v: NhanVienCtx }) {
   const hs = v.hoSo
   const nguoi = hs && 'id' in hs ? v.nv.ds.find((n) => n.id === hs.id) : undefined
-  return (
-    <aside
-      aria-label="Hồ sơ nhân viên"
-      className="w-[300px] shrink-0 overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)]"
-    >
+  const goiY = (
+    <>
       <datalist id="hr-chuc-danh">
         {v.chucDanhGoiY.map((b) => (
           <option key={b} value={b} />
@@ -31,14 +28,21 @@ export function HoSoNv({ v }: { v: NhanVienCtx }) {
           <option key={b} value={b} />
         ))}
       </datalist>
+    </>
+  )
+  // Chưa chọn ai thì không chiếm cột 300px chỉ để một câu hướng dẫn (22/10/2026) — lưới dùng
+  // trọn bề ngang; câu hướng dẫn nằm ở chân lưới.
+  if (!(hs && 'moi' in hs) && !nguoi) return goiY
+  return (
+    <aside
+      aria-label="Hồ sơ nhân viên"
+      className="w-[300px] shrink-0 overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)]"
+    >
+      {goiY}
       {hs && 'moi' in hs ? (
         <FormNv key={`moi|${hs.duId ?? ''}`} v={v} />
-      ) : nguoi ? (
-        <FormNv key={nguoi.id} v={v} n={nguoi} />
       ) : (
-        <p className="text-k-sm px-3.5 py-3 text-[var(--ink-2)]">
-          Bấm một dòng để xem và sửa hồ sơ; chọn nhiều dòng để đổi ca / bộ phận một lần.
-        </p>
+        <FormNv key={nguoi!.id} v={v} n={nguoi} />
       )}
     </aside>
   )

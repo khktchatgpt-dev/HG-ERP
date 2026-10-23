@@ -10,11 +10,12 @@ import {
   Tag,
   TextArea,
 } from '@/components/kit'
-import type { CotNap } from '@/lib/luong/ho-so-luong'
+import { docSo, type CotNap } from '@/lib/luong/ho-so-luong'
 import type { DongXemNap, HoSoLuongCtx } from './useHoSoLuong'
-import { congKy, kyVn, TD, TH } from './luong.shared'
+import { congKy, kyVn, so, TD, TH } from './luong.shared'
 
 const TEN_COT: Record<CotNap, string> = {
+  ma: 'Mã NV (để khớp)',
   ten: 'Họ tên',
   to: 'Tổ (để khớp)',
   stk: 'Số tài khoản',
@@ -25,12 +26,28 @@ const TEN_COT: Record<CotNap, string> = {
   cccd: 'CCCD',
   mst: 'Mã số thuế',
   npt: 'Người phụ thuộc',
+  truBh: 'Trừ BH → lương đóng BH',
+  doanPhi: 'Công đoàn → có trừ đoàn phí',
 }
 
 /**
  * Nạp từ Excel: dán vùng có dòng tiêu đề (cột không nhận ra như "SỐ TIỀN" thực lĩnh thì bỏ),
- * server khớp theo họ tên + tổ. Dòng trùng tên / không thấy thì người chọn — không đoán.
+ * server khớp theo mã NV (sổ lương T9 có cột "Mã số NV"), không có mã thì theo họ tên + tổ.
+ * "M/ Lương Ngày" < 1 triệu là đơn giá công, từ 1 triệu là lương tháng. Dòng trùng tên /
+ * không thấy thì người chọn — không đoán.
  */
+/** Số sẽ ghi của một dòng, gọn một ô: "Lương tháng 15.000.000 · Trừ BH 1.127.518". */
+function seGhi(g: DongXemNap['giaTri']): string {
+  const tien = (v: string | undefined) => {
+    const n = docSo(v)
+    return n == null ? v : so(n)
+  }
+  return (['luongThang', 'donGia', 'luongBh', 'truBh', 'npt', 'stk', 'nganHang'] as const)
+    .filter((k) => g[k])
+    .map((k) => `${TEN_COT[k]} ${k === 'stk' || k === 'nganHang' ? g[k] : tien(g[k])}`)
+    .join(' · ')
+}
+
 export function HopNap({ d }: { d: HoSoLuongCtx }) {
   const [text, setText] = useState('')
   const [xem, setXem] = useState<{ cot: CotNap[]; dong: DongXemNap[] } | null>(null)
@@ -78,7 +95,7 @@ export function HopNap({ d }: { d: HoSoLuongCtx }) {
       open={d.sheet === 'nap'}
       onClose={() => d.setSheet(null)}
       title="Nạp hồ sơ lương từ Excel"
-      subtitle="Dán cả dòng tiêu đề. Khớp theo họ tên (bỏ dấu) và tổ."
+      subtitle="Dán cả dòng tiêu đề. Có cột Mã số NV thì khớp theo mã; không có thì theo họ tên + tổ."
       width={880}
       stakes="vua"
       footer={
@@ -150,6 +167,7 @@ export function HopNap({ d }: { d: HoSoLuongCtx }) {
                 <tr>
                   <th className={TH}>Dòng</th>
                   <th className={TH}>Trong file</th>
+                  <th className={TH}>Sẽ ghi</th>
                   <th className={TH}>Khớp với</th>
                   <th className={TH}>Kết quả</th>
                 </tr>
@@ -159,9 +177,11 @@ export function HopNap({ d }: { d: HoSoLuongCtx }) {
                   <tr key={r.dong}>
                     <td className={TD}>{r.dong}</td>
                     <td className={TD}>
+                      {r.ma && <span className="num">{r.ma} · </span>}
                       {r.ten}
                       {r.to && <span className="text-[var(--ink-3)]"> · {r.to}</span>}
                     </td>
+                    <td className={TD}>{seGhi(r.giaTri)}</td>
                     <td className={TD}>
                       {r.khop.kieu === 'khop' && !chon[r.dong] ? (
                         `${r.khop.nguoi.ma} · ${r.khop.nguoi.ten}`
@@ -187,7 +207,7 @@ export function HopNap({ d }: { d: HoSoLuongCtx }) {
                       {nguoiCua(r) ? (
                         <Tag tone="done">{chon[r.dong] ? 'đã chọn' : 'khớp'}</Tag>
                       ) : r.khop.kieu === 'nhieu' ? (
-                        <Tag tone="warn">nhiều ứng viên</Tag>
+                        <Tag tone="warn">{r.khop.lyDo ?? 'nhiều ứng viên'}</Tag>
                       ) : (
                         <Tag tone="stop">không thấy</Tag>
                       )}

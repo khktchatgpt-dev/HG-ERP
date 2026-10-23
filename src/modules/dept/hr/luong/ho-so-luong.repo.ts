@@ -1,5 +1,5 @@
 import { db } from '@/server/db'
-import type { CachTra } from '@/lib/luong/ho-so-luong'
+import type { CachPhuCapDong, CachTra } from '@/lib/luong/ho-so-luong'
 
 /** Hồ sơ lương — bảng 0245. Chỉ service `ho-so-luong.service` gọi (đã gác quyền). */
 
@@ -22,10 +22,16 @@ export type BanLuong = {
   npt: number
   /** Q4 (B5): khấu trừ thẳng 10 % thay cho biểu luỹ tiến. */
   khauTru10: boolean
+  /** Tăng ca khoán đ/giờ (QC); null = theo hệ số khung (0254). */
+  tangCaGio: number | null
+  /** Trừ đoàn phí NLĐ 0,5 % lương BH (0254). */
+  doanPhi: boolean
   ghiChu: string | null
   nguon: string | null
   /** typeId → số tiền. */
   phuCap: Record<string, number>
+  /** typeId → cách tính dòng phụ cấp đó (0254); thiếu = chia công chuẩn. */
+  phuCapCach: Record<string, CachPhuCapDong>
   taoLuc: string
   nguoiTao: string | null
 }
@@ -51,6 +57,10 @@ export type Rieng = {
 
 const n = (v: unknown) => (v == null ? null : Number(v))
 
+/** Loại lần xem lương ghi nhật ký (cột `field` của hr_private_access_log, 0255). */
+export type LoaiXemLuong =
+  'payroll_list' | 'payroll_profile' | 'payroll_sheet' | 'payroll_excel' | 'salary_tab'
+
 export const hoSoLuongRepo = {
   async banTatCa(): Promise<BanLuong[]> {
     const out: BanLuong[] = []
@@ -60,9 +70,10 @@ export const hoSoLuongRepo = {
           .from('hr_pay_profiles')
           .select(
             `id, employee_id, from_period, pay_type, daily_rate, monthly_salary, insurance_salary,
-             insured, dependents, flat_tax, note, source, created_at,
+             insured, dependents, flat_tax, note, source, created_at, ot_rate_per_hour,
+             union_member,
              tao:users!hr_pay_profiles_created_by_fkey(name),
-             pc:hr_pay_profile_allowances(allowance_type_id, amount)`,
+             pc:hr_pay_profile_allowances(allowance_type_id, amount, calc, divisor, incl_overtime)`,
           )
           .order('from_period')
           .range(a, a + TRANG - 1),
@@ -79,10 +90,22 @@ export const hoSoLuongRepo = {
           coBh: r.insured,
           npt: r.dependents,
           khauTru10: r.flat_tax,
+          tangCaGio: n(r.ot_rate_per_hour),
+          doanPhi: r.union_member,
           ghiChu: r.note,
           nguon: r.source,
           phuCap: Object.fromEntries(
             (r.pc ?? []).map((p) => [p.allowance_type_id, Number(p.amount)]),
+          ),
+          phuCapCach: Object.fromEntries(
+            (r.pc ?? []).map((p) => [
+              p.allowance_type_id,
+              {
+                cach: p.calc as CachPhuCapDong['cach'],
+                chia: n(p.divisor),
+                coTangCa: p.incl_overtime,
+              },
+            ]),
           ),
           taoLuc: r.created_at,
           nguoiTao: r.tao?.name ?? null,
@@ -179,6 +202,27 @@ export const hoSoLuongRepo = {
     )
   },
 
+  /**
+   * Nhật ký XEM LƯƠNG (0255, 20/10/2026 — lương chỉ một người quản lý): mỗi lần mở danh
+   * sách / hồ sơ lương một người / bảng lương / Excel lương / tab Lương của hồ sơ NV.
+   * Lỗi ghi nhật ký KHÔNG chặn người xem (đã qua cổng quyền) nhưng được log ra server.
+   */
+  async ghiXemLuong(
+    loai: LoaiXemLuong,
+    userId: string,
+    o: { employeeId?: string | null; ghiChu?: string | null } = {},
+  ) {
+    const { error } = await db()
+      .from('hr_private_access_log')
+      .insert({
+        field: loai,
+        viewer_id: userId,
+        employee_id: o.employeeId ?? null,
+        note: o.ghiChu ?? null,
+      })
+    if (error) console.error('[nhật ký xem lương]', loai, error.message)
+  },
+
   async lanXem(
     employeeId: string,
   ): Promise<{ truong: string; boi: string | null; luc: string }[]> {
@@ -187,6 +231,8 @@ export const hoSoLuongRepo = {
         .from('hr_private_access_log')
         .select('field, viewed_at, boi:users!hr_private_access_log_viewer_id_fkey(name)')
         .eq('employee_id', employeeId)
+        // Chỉ ba loại "Hiện" số giấy tờ — nhật ký xem lương (0255) xem ở chỗ khác.
+        .in('field', ['bank_account', 'national_id', 'tax_code'])
         .order('viewed_at', { ascending: false })
         .limit(10),
     )
@@ -216,6 +262,8 @@ export const hoSoLuongRepo = {
             insured: v.coBh,
             dependents: v.npt,
             flat_tax: v.khauTru10,
+            ot_rate_per_hour: v.tangCaGio,
+            union_member: v.doanPhi,
             note: v.ghiChu,
             source: v.nguon,
             created_by: userId,
@@ -234,11 +282,17 @@ export const hoSoLuongRepo = {
         await db()
           .from('hr_pay_profile_allowances')
           .insert(
-            pc.map(([t, so]) => ({
-              profile_id: row.id,
-              allowance_type_id: t,
-              amount: so,
-            })),
+            pc.map(([t, so]) => {
+              const c = v.phuCapCach[t]
+              return {
+                profile_id: row.id,
+                allowance_type_id: t,
+                amount: so,
+                calc: c?.cach ?? 'chia',
+                divisor: c?.chia ?? null,
+                incl_overtime: c?.coTangCa ?? false,
+              }
+            }),
           ),
       )
     return row.id

@@ -10,6 +10,7 @@ import type { MotNguoiCong } from '@/modules/dept/hr/cham-cong/gio-cong.service'
 import { THU, dm, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
 import { DieuChinhSheet, type MoDieuChinh } from './dieu-chinh-sheet'
+import { khongTheoKhung, TEN_CACH_TINH } from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * BẢNG CÔNG TỪNG NGÀY CỦA MỘT NGƯỜI — bố cục tờ "Chi tiết" của phần mềm chấm công cũ
@@ -274,7 +275,7 @@ export function CongTungNgay({
                     : ''
               const coGio = !!x?.tinhDuoc
               return (
-                <tr key={n.ngay} className={nen}>
+                <tr key={n.ngay} className={cn('group', nen)}>
                   <td className={cn(c, 'num whitespace-nowrap')} style={l}>
                     {dm(n.ngay)} {THU[thu(n.ngay)]}
                   </td>
@@ -332,8 +333,14 @@ export function CongTungNgay({
                   <td className={cn(c, 'num', tc)} style={r}>
                     {gio(x?.tc3 ?? 0, 2)}
                   </td>
-                  <td className={cn(c, g, 'text-[var(--ink-2)]')} style={l}>
-                    {[...new Set(n.luot.map((y) => tenMay(y.may)))].join(', ')}
+                  <td
+                    className={cn(c, g, 'num whitespace-nowrap text-[var(--ink-2)]')}
+                    style={l}
+                  >
+                    {/* Tiêu đề cột đã là "Máy" — ô chỉ số máy, không xuống dòng (22/10/2026: "Máy / 203" làm mọi hàng cao gấp đôi). */}
+                    {[
+                      ...new Set(n.luot.map((y) => tenMay(y.may).replace(/^Máys*/, ''))),
+                    ].join(', ')}
                   </td>
                   <td className={c} style={l}>
                     {ghi.map((y) => (
@@ -377,9 +384,11 @@ export function CongTungNgay({
                         }
                         className={cn(
                           'text-k-label hover:underline',
+                          // Ngày thiếu lượt luôn hiện "Bổ sung lượt…"; ngày bình thường chỉ hiện "Điều chỉnh…"
+                          // khi rê / Tab tới hàng — trước đó dòng nào cũng có chữ này, nhiễu cả cột.
                           x?.thieu
                             ? 'font-semibold text-[var(--act-text)]'
-                            : 'text-[var(--act-text)]',
+                            : 'text-[var(--act-text)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                         )}
                       >
                         {x?.thieu ? 'Bổ sung lượt…' : 'Điều chỉnh…'}
@@ -445,7 +454,9 @@ export function CongTungNgay({
             Giờ lấy từ Bảng công
             {tinh.ban != null ? ` · cách tính Bản ${tinh.ban}` : ' · cách tính mặc định'}
             {tinh.daChot ? ' · có kỳ đã chốt (số theo bản chốt)' : ''}
-            {tinh.cachTinh === 'ngay' ? ' · bộ phận tính có quẹt = 1 công' : ''}
+            {khongTheoKhung(tinh.cachTinh)
+              ? ` · bộ phận tính ${TEN_CACH_TINH[tinh.cachTinh].toLowerCase()}`
+              : ''}
           </span>
         )}
       </div>

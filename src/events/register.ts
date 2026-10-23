@@ -13,6 +13,7 @@ import { registerFeedbackNotificationHandlers } from './handlers/feedback.notifi
 import { registerWarehouseAuditHandlers } from './handlers/warehouse.audit'
 import { registerDeNghiNotificationHandlers } from './handlers/de-nghi.notifications'
 import { registerKhoHangVeNotificationHandlers } from './handlers/kho-hang-ve.notifications'
+import { registerLuongNotificationHandlers } from './handlers/luong.notifications'
 import { registerAssetNotificationHandlers } from './handlers/asset.notifications'
 
 let registered = false
@@ -39,6 +40,7 @@ export function registerEventHandlers(): void {
   registerWarehouseAuditHandlers()
   registerDeNghiNotificationHandlers()
   registerKhoHangVeNotificationHandlers()
+  registerLuongNotificationHandlers()
   registerAssetNotificationHandlers()
 }
 

@@ -27,7 +27,7 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
       tinhCoMat({
         theoNgay: k.du.theoNgay,
         dong: k.du.dong,
-        nhanSu: k.du.nhanSu,
+        nhanSu: [...k.du.nhanSu, ...k.du.daNghi],
         homNay: k.homNay,
       }),
     [k],
@@ -48,7 +48,11 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
   const toThap = ngayCuoi
     ? m.tos
         .filter((t) => t.ds.length > 0)
-        .map((t) => ({ t, n: t.ngay[iCuoi] ?? 0, r: (t.ngay[iCuoi] ?? 0) / t.ds.length }))
+        .map((t) => ({
+          t,
+          n: t.ngay[iCuoi] ?? 0,
+          r: t.mau[iCuoi] ? (t.ngay[iCuoi] ?? 0) / t.mau[iCuoi] : 1,
+        }))
         .sort((a, b) => a.r - b.r || b.t.ds.length - a.t.ds.length)
     : []
   const q = `?thang=${k.thang}`
@@ -102,6 +106,7 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
     <KhungTrang
       ten="Tổng quan chấm công"
       thang={k.thang}
+      khoang={{ tu: k.tu, den: k.den }}
       onThang={d.xemThang}
       facts={[{ label: 'Hôm nay', value: dm(k.homNay) }]}
       actions={
@@ -126,7 +131,7 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
             {ngayCuoi ? so(m.tong[iCuoi]!) : '—'}
             <span className="text-k-sm font-normal text-[var(--ink-2)]">
               {' '}
-              / {so(m.tongNguoi)}
+              / {so(iCuoi >= 0 ? m.tongMau[iCuoi] : m.tongNguoi)}
             </span>
           </span>
           <span className="text-k-label block text-[var(--ink-2)]">
@@ -253,7 +258,7 @@ export function TongQuanScreen({ k }: { k: KyCong }) {
                       </Link>
                     </td>
                     <td className={cn(c, 'num')} style={{ textAlign: 'right' }}>
-                      {n} / {t.ds.length}
+                      {n} / {t.mau[iCuoi] ?? t.ds.length}
                     </td>
                     <td
                       className={cn(

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Btn, Empty, useToast } from '@/components/kit'
+import { Btn, Empty, Sheet, SheetActions, TextArea, useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { moTaDc } from '@/lib/cham-cong/dieu-chinh'
@@ -12,7 +12,7 @@ import { KhungTrang } from './khung-trang'
 import { TinhTrang } from './dieu-chinh-sheet'
 import { THU, dmy, thu } from './ky-cong.shared'
 import { so } from './cham-cong.shared'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { thangCua, type KhoangDat } from '@/lib/cham-cong/khoang-ky'
 
 /**
  * ĐIỀU CHỈNH CÔNG — hộp duyệt của trưởng phòng Nhân sự (câu 22). Hai ngăn: CHỜ DUYỆT
@@ -22,10 +22,13 @@ import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
  */
 export function DieuChinhScreen({
   d,
+  dsKy,
   thang,
   xem,
 }: {
   d: TrangDieuChinh
+  /** Khoảng các kỳ đã đặt — tra ngày thuộc kỳ nào cho link trang một người. */
+  dsKy: KhoangDat[]
   thang: string
   xem: 'cho' | 'thang'
 }) {
@@ -33,6 +36,9 @@ export function DieuChinhScreen({
   const toast = useToast()
   const [chon, setChon] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  // Hộp lý do từ chối (nhiều dòng một lượt) — thay window.prompt của trình duyệt.
+  const [hopTuChoi, setHopTuChoi] = useState(false)
+  const [lyDoTuChoi, setLyDoTuChoi] = useState('')
   const ds = xem === 'cho' ? d.choDuyet : [...d.trongKy].reverse()
   const coChon = d.quyen.duyet && xem === 'cho'
   // Phiếu mình gửi không tự duyệt được — không cho chọn, nói lý do ngay ở ô chọn.
@@ -51,11 +57,8 @@ export function DieuChinhScreen({
   async function quyet(viec: 'duyet' | 'tu_choi') {
     const ids = [...chon]
     if (!ids.length) return
-    let ghiChu: string | undefined
-    if (viec === 'tu_choi') {
-      ghiChu = window.prompt(`Lý do từ chối ${ids.length} điều chỉnh`)?.trim()
-      if (!ghiChu || ghiChu.length < 2) return
-    }
+    const ghiChu = viec === 'tu_choi' ? lyDoTuChoi.trim() : undefined
+    if (viec === 'tu_choi' && (!ghiChu || ghiChu.length < 2)) return
     setBusy(true)
     try {
       const r = await api<{ so: number }>('/api/dept/hr/cham-cong/dieu-chinh/quyet', {
@@ -64,6 +67,8 @@ export function DieuChinhScreen({
       })
       toast.success(`${viec === 'duyet' ? 'Đã duyệt' : 'Đã từ chối'} ${r.so} điều chỉnh`)
       setChon(new Set())
+      setHopTuChoi(false)
+      setLyDoTuChoi('')
       router.refresh()
     } catch (e) {
       toast.error('Chưa lưu được', apiErrorText(e))
@@ -98,7 +103,7 @@ export function DieuChinhScreen({
       onThang={(t) => di(t, 'thang')}
       facts={[
         { label: 'Chờ duyệt', value: so(d.choDuyet.length) },
-        { label: 'Đã duyệt trong tháng', value: so(demTT.approved) },
+        { label: 'Đã duyệt trong kỳ', value: so(demTT.approved) },
       ]}
       actions={
         coChon ? (
@@ -111,7 +116,7 @@ export function DieuChinhScreen({
             >
               {`Duyệt ${chon.size ? so(chon.size) : ''} đã chọn`}
             </Btn>
-            <Btn aria-disabled={!chon.size || busy} onClick={() => void quyet('tu_choi')}>
+            <Btn aria-disabled={!chon.size || busy} onClick={() => chon.size && setHopTuChoi(true)}>
               Từ chối
             </Btn>
           </>
@@ -120,11 +125,7 @@ export function DieuChinhScreen({
     >
       <div className="text-k-sm flex items-end gap-1 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)]">
         {tab('cho', 'Chờ duyệt', d.choDuyet.length)}
-        {tab(
-          'thang',
-          `Trong tháng ${thang.slice(5)}/${thang.slice(0, 4)}`,
-          d.trongKy.length,
-        )}
+        {tab('thang', `Trong kỳ ${thang.slice(5)}/${thang.slice(0, 4)}`, d.trongKy.length)}
         <span className="text-k-label ml-auto pb-1.5 text-[var(--ink-3)]">
           {d.quyen.duyet
             ? 'Gửi điều chỉnh ở Bảng giờ công — bấm vào ô của ngày cần sửa'
@@ -138,7 +139,7 @@ export function DieuChinhScreen({
             headline={
               xem === 'cho'
                 ? 'Không có điều chỉnh nào chờ duyệt'
-                : 'Tháng này chưa có điều chỉnh'
+                : 'Kỳ này chưa có điều chỉnh'
             }
             reason="Điều chỉnh được gửi từ ô của Bảng giờ công hoặc trang một người."
             next={
@@ -211,7 +212,7 @@ export function DieuChinhScreen({
                     <td className={td}>
                       <span className="num mr-1.5 text-[var(--ink-3)]">{x.ma}</span>
                       <Link
-                        href={`/hr/cham-cong/nguoi/${encodeURIComponent(x.ma)}?thang=${thangCuaNgay(x.ngay)}`}
+                        href={`/hr/cham-cong/nguoi/${encodeURIComponent(x.ma)}?thang=${thangCua(x.ngay, dsKy)}`}
                         className="text-[var(--act-text)] hover:underline"
                       >
                         {n?.ten ?? '—'}
@@ -241,6 +242,35 @@ export function DieuChinhScreen({
           </table>
         </div>
       )}
+      <Sheet
+        open={hopTuChoi}
+        onClose={() => setHopTuChoi(false)}
+        title={`Từ chối ${so(chon.size)} điều chỉnh đã chọn?`}
+        subtitle="Người gửi thấy lý do này trên phiếu; ngày đó vẫn tính theo lượt máy"
+        stakes="vua"
+        footer={
+          <SheetActions
+            stakes="vua"
+            onCancel={() => setHopTuChoi(false)}
+            onConfirm={() => void quyet('tu_choi')}
+            confirmLabel="Từ chối"
+            cancelLabel="Để lại"
+            busy={busy}
+            disabled={lyDoTuChoi.trim().length < 2}
+          />
+        }
+      >
+        <label className="text-k-sm mb-1 block font-semibold" htmlFor="dc-ly-do-tu-choi">
+          Lý do từ chối (bắt buộc)
+        </label>
+        <TextArea
+          id="dc-ly-do-tu-choi"
+          aria-label="Lý do từ chối"
+          value={lyDoTuChoi}
+          onChange={setLyDoTuChoi}
+          rows={3}
+        />
+      </Sheet>
     </KhungTrang>
   )
 }

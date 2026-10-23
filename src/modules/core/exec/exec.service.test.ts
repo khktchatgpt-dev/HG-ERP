@@ -33,6 +33,10 @@ vi.mock('@/modules/dept/warehouse/stock.repo', () => ({ stockRepo: { list: vi.fn
 vi.mock('@/modules/dept/warehouse/de-nghi.repo', () => ({
   deNghiRepo: { list: vi.fn().mockResolvedValue([]) },
 }))
+// Bảng lương chờ duyệt (21/10/2026) — không có bảng nào trong các ca ở đây.
+vi.mock('@/modules/dept/hr/luong/duyet-luong.service', () => ({
+  duyetLuongService: { choToiDuyet: vi.fn().mockResolvedValue([]) },
+}))
 vi.mock('@/modules/core/approvals/approvals.repo', () => ({
   approvalEventsRepo: { listRecent: vi.fn(), lastSubmittedAt: vi.fn() },
 }))

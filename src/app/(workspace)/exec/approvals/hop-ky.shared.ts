@@ -3,6 +3,7 @@ import {
   Factory,
   FileText,
   ShoppingCart,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 import { money } from '../approval-helpers'
@@ -19,6 +20,7 @@ export const KIND_ICON: Record<LoaiPhieu, LucideIcon> = {
   dnm: ClipboardList,
   lsx: Factory,
   quote: FileText,
+  luong: Wallet,
 }
 
 /** Lớp màu của loại (`hop-ky.css`: .lp-po, .lp-dnm…) — đặt `--c` / `--w`. */
@@ -27,6 +29,7 @@ export const LOP_MAU: Record<LoaiPhieu, string> = {
   dnm: 'lp-dnm',
   lsx: 'lp-lsx',
   quote: 'lp-quote',
+  luong: 'lp-luong',
 }
 
 /** Màu tab phòng = màu loại phiếu chính của phòng đó. */
@@ -35,6 +38,7 @@ export const LOP_PHONG: Record<PhongTrinh, string> = {
   kho: 'lp-dnm',
   san_xuat: 'lp-lsx',
   ban_hang: 'lp-quote',
+  ke_toan: 'lp-luong',
 }
 
 /** Cộng tiền theo TỪNG tiền tệ — USD và VND không bao giờ cộng chung. */

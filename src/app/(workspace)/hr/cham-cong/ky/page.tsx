@@ -1,6 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { kyCongService } from '@/modules/dept/hr/cham-cong/ky-cong.service'
-import { thangCuaNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { todayVn } from '@/lib/date-vn'
 import { KyCongScreen } from './KyCongScreen'
 import { MUC_KY, type MucKy } from './ky.shared'
@@ -16,7 +16,7 @@ export default async function KyCongPage({
   const thang =
     sp.thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.thang)
       ? sp.thang
-      : thangCuaNgay(todayVn())
+      : await khoangKyService.thangCua(todayVn())
   const k = await kyCongService.trang(user, thang)
   const muc: MucKy = (MUC_KY as readonly string[]).includes(sp.muc ?? '')
     ? (sp.muc as MucKy)

@@ -32,7 +32,14 @@ import { rbacRepo } from './rbac.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { emit } from '@/events/bus'
-import { hasPermission, assertPermission, rbacService } from './rbac.service'
+import {
+  hasPermission,
+  assertPermission,
+  canAction,
+  rbacService,
+  QUYEN_MAT,
+  VAI_QUAN_LY_LUONG,
+} from './rbac.service'
 
 const admin = { id: 'a1', role: 'admin' } as unknown as User
 const staff = { id: 'u1', role: 'employee' } as unknown as User
@@ -218,5 +225,64 @@ describe('rbacService — ghi (Phase 3): authz + self-lock', () => {
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'rbac.role.revoked', role_id: 'r1' }),
     )
+  })
+})
+
+// ── Lương là quyền MẬT (0255, 20/10/2026: "chỉ một người là Phụng quản lý") ──────────
+describe('quyền lương mật — quản trị viên không tự có', () => {
+  it('QUYEN_MAT gồm đúng hai quyền lương', () => {
+    expect([...QUYEN_MAT].sort()).toEqual(['hr.payroll.profile', 'hr.payroll.run'])
+  })
+
+  it('admin KHÔNG bypass quyền lương (hasPermission + canAction)', async () => {
+    expect(await hasPermission(admin, 'hr.payroll.profile')).toBe(false)
+    expect(await canAction(admin, 'hr.payroll.profile')).toBe(false)
+    expect(await canAction(admin, 'hr.payroll.run')).toBe(false)
+    // Các quyền khác admin vẫn bypass như cũ
+    expect(await canAction(admin, 'hr.payroll.approve')).toBe(true)
+  })
+
+  it('phòng Kế toán (accounting.member) không còn tự có quyền lương', async () => {
+    vi.mocked(rbacRepo.permissionKeysForUser).mockResolvedValue(['accounting.member'])
+    expect(await canAction(staff, 'hr.payroll.profile')).toBe(false)
+    expect(await canAction(staff, 'hr.payroll.run')).toBe(false)
+  })
+
+  it('người được cấp vai Quản lý lương thì vào được — kể cả khi là admin', async () => {
+    vi.mocked(rbacRepo.permissionKeysForUser).mockResolvedValue([
+      'hr.payroll.profile',
+      'hr.payroll.run',
+    ])
+    expect(await canAction(staff, 'hr.payroll.profile')).toBe(true)
+    expect(await canAction(admin, 'hr.payroll.run')).toBe(true)
+  })
+
+  it('màn phân quyền: không thêm / bớt quyền lương vào vai nào', async () => {
+    vi.mocked(rbacRepo.findRoleById).mockResolvedValue(role({ key: 'director' }))
+    vi.mocked(rbacRepo.listPermissions).mockResolvedValue([
+      { key: 'hr.payroll.profile', label: '', domain: 'hr', sort_order: 80 },
+      { key: 'sales.member', label: '', domain: 'sales', sort_order: 1 },
+    ])
+    vi.mocked(rbacRepo.permissionKeysForRole).mockResolvedValue(['sales.member'])
+    await expect(
+      rbacService.setRolePermissions(admin, 'r1', ['sales.member', 'hr.payroll.profile']),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(rbacRepo.setRolePermissions).not.toHaveBeenCalled()
+  })
+
+  it('màn phân quyền: không gán / thu vai "Quản lý lương"', async () => {
+    vi.mocked(usersRepo.findById).mockResolvedValue({ id: 'u1', name: 'A', email: 'a@hg.com' } as never)
+    vi.mocked(rbacRepo.listRoles).mockResolvedValue([
+      role({ id: 'rl', key: VAI_QUAN_LY_LUONG, label: 'Quản lý lương' }),
+      role({ id: 'r2', key: 'k2', label: 'Vai 2' }),
+    ])
+    vi.mocked(rbacRepo.listManualRoleIds).mockResolvedValue([])
+    await expect(rbacService.setUserManualRoles(admin, 'u1', ['rl'])).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(rbacRepo.addManualRoles).not.toHaveBeenCalled()
+    // Gán vai khác vẫn bình thường
+    await rbacService.setUserManualRoles(admin, 'u1', ['r2'])
+    expect(rbacRepo.addManualRoles).toHaveBeenCalledWith('u1', ['r2'], 'a1')
   })
 })

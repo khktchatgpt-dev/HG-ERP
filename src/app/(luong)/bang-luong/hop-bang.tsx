@@ -19,23 +19,34 @@ export function HopBangLuong({ d }: { d: BangLuongCtx }) {
       <Sheet
         open={d.hop === 'gui'}
         onClose={dong}
-        title={`Gửi bảng lương kỳ ${kyVn(b.thang)} cho Giám đốc?`}
+        title={`Gửi bảng lương kỳ ${kyVn(b.thang)} cho Kế toán trưởng duyệt?`}
         subtitle={`${b.phieu.length} người · thực lĩnh ${tl} đ`}
         stakes="vua"
         footer={
           <SheetActions
             stakes="vua"
             onCancel={dong}
-            onConfirm={d.gui}
+            onConfirm={() => d.gui(lyDo)}
             confirmLabel="Gửi duyệt"
             cancelLabel="Để sau"
             busy={d.busy === 'gui'}
           />
         }
       >
+        <label className="text-k-sm mb-1 block font-semibold" htmlFor="bl-ghi-gui">
+          Ghi chú cho Kế toán trưởng (không bắt buộc)
+        </label>
+        <TextArea
+          id="bl-ghi-gui"
+          aria-label="Ghi chú cho Kế toán trưởng"
+          value={lyDo}
+          onChange={setLyDo}
+          rows={3}
+        />
         <Consequence>
-          Bảng khoá sửa tới khi Giám đốc duyệt hoặc trả lại. Muốn sửa trước đó thì Rút về
-          nháp.
+          Kế toán trưởng được báo và chỉ thấy tổng theo bộ phận (không thấy lương từng
+          người). Bảng khoá sửa tới khi Kế toán trưởng duyệt hoặc trả lại; muốn sửa trước
+          đó thì Rút về nháp.
         </Consequence>
       </Sheet>
 
@@ -99,7 +110,9 @@ export function HopBangLuong({ d }: { d: BangLuongCtx }) {
           onChange={setLyDo}
           rows={3}
         />
-        <Consequence>Mất duyệt của Giám đốc — sửa xong phải gửi duyệt lại.</Consequence>
+        <Consequence>
+          Mất duyệt của Kế toán trưởng — sửa xong phải gửi duyệt lại.
+        </Consequence>
       </Sheet>
 
       <Sheet

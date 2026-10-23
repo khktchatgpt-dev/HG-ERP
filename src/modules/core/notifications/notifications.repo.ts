@@ -36,6 +36,11 @@ export type NotificationType =
   // 0251 — hàng sắp về cho Kho (B8b): NCC xác nhận hẹn ≤ 3 ngày · dời hẹn.
   | 'po_inbound_soon'
   | 'po_inbound_moved'
+  // 0256 — luồng lương (21/10/2026): tự tính khi chốt công · gửi sếp duyệt · sếp duyệt / trả lại.
+  | 'payroll_calculated'
+  | 'payroll_submitted'
+  | 'payroll_approved'
+  | 'payroll_returned'
   // 0237 — đề nghị mua vật tư của Kho (0236).
   | 'dnm_submitted'
   | 'dnm_approved'

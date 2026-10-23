@@ -16,7 +16,7 @@ export function TabLuong({ d }: { d: HoSoCtx }) {
   const l = d.h.luong
   if (!l)
     return (
-      <KhoaRieng viec="Chỉ người phụ trách lương (Nhân sự được giao) và Kế toán xem được mục này." />
+      <KhoaRieng viec="Lương là thông tin mật: chỉ người quản lý lương xem được mục này." />
     )
   const sua = (
     <Btn href={`/ho-so-luong?thang=${l.thang}&nv=${d.n.id}`}>Sửa ở Hồ sơ lương</Btn>

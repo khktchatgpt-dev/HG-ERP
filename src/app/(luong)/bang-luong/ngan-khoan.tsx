@@ -31,7 +31,8 @@ export function NganKhoan({ d }: { d: BangLuongCtx }) {
     })
   const danDuoc = dongDan.filter((x) => x.n && x.tien && x.tien > 0)
 
-  const sua = d.nhap
+  // Quản trị viên chỉ xem (20/10): không bày ô thêm / nút xoá khoản.
+  const sua = d.nhap && b.quyen.chay
   return (
     <div className="min-h-0 overflow-auto bg-[var(--surface-card)]">
       {sua && (
@@ -96,7 +97,11 @@ export function NganKhoan({ d }: { d: BangLuongCtx }) {
       {b.khoan.length === 0 ? (
         <Empty
           headline="Kỳ này chưa có khoản nào"
-          reason="Tạm ứng, thưởng, truy lĩnh, truy thu, khấu trừ khác của kỳ nhập ở đây; bảng lương cộng / trừ khi Tính lại."
+          reason={
+            d.daTinh
+              ? 'Tạm ứng, thưởng, truy lĩnh, truy thu, khấu trừ khác của kỳ nhập ở đây; bảng lương cộng / trừ khi Tính lại.'
+              : 'Tạm ứng, thưởng, truy lĩnh, truy thu, khấu trừ khác của kỳ nhập ở đây, trước cả khi Nhân sự chốt công; lần tính đầu cộng / trừ luôn.'
+          }
           next={
             sua
               ? 'Thêm từng khoản ở hàng trên, hoặc dán từ Excel ở dưới.'

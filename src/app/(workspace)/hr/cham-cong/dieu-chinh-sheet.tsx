@@ -10,12 +10,15 @@ import {
   TEN_NGHI,
   TEN_TINH_TRANG,
   apDieuChinh,
+  goiYBoSung,
+  laLuotRangSang,
   moTaDc,
   type DieuChinh,
   type LoaiDc,
   type LoaiNghi,
 } from '@/lib/cham-cong/dieu-chinh'
 import { gioPhut, tachLuot, tenMay } from '@/lib/cham-cong/mot-nguoi'
+import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
 import { THU, dmy, thu } from './ky-cong.shared'
 import type { QuyenDieuChinh } from '@/modules/dept/hr/cham-cong/dieu-chinh.service'
 
@@ -29,6 +32,11 @@ export type MoDieuChinh = {
   luot: { gio: string; may: string }[]
   /** Vì sao ngày này lỗi (nếu có). */
   loi?: string
+  /**
+   * Mốc "lượt rạng sáng" của bản cách tính (phút từ 0h) — một lượt ≤ mốc là giờ RA ca đêm,
+   * ngăn gợi ý bổ sung lượt VÀO tối hôm trước. Thiếu = 05:00.
+   */
+  caDemDen?: number
 }
 
 const LOAI: { v: LoaiDc; ten: string; mo: string }[] = [
@@ -125,17 +133,21 @@ function Than({
 }) {
   const router = useRouter()
   const toast = useToast()
-  const motLuot = mo.luot.length === 1
+  const goiY = goiYBoSung(mo.luot, mo.caDemDen)
+  const rangSang = laLuotRangSang(mo.luot, mo.caDemDen)
+  const homTruoc = congNgay(mo.ngay, -1)
   const [loai, setLoai] = useState<LoaiDc>(mo.luot.length ? 'add_punch' : 'leave')
-  const [gio, setGio] = useState(motLuot && mo.luot[0].gio < '12:00' ? '16:00' : '07:00')
-  const [chieu, setChieu] = useState<'in' | 'out'>(
-    motLuot && mo.luot[0].gio >= '12:00' ? 'in' : 'out',
-  )
+  const [gio, setGio] = useState(goiY.gio)
+  const [chieu, setChieu] = useState<'in' | 'out'>(goiY.chieu)
+  // Lượt bổ sung thuộc ngày hôm trước (ca đêm: lượt rạng sáng hôm nay là giờ ra, thiếu giờ vào tối qua).
+  const [ngayTruoc, setNgayTruoc] = useState(goiY.ngayTruoc)
   const [nghi, setNghi] = useState<LoaiNghi>('annual')
   const [boQua, setBoQua] = useState(mo.luot[0]?.gio ?? '')
   const [lyDo, setLyDo] = useState('')
   const [canCu, setCanCu] = useState('')
   const [busy, setBusy] = useState(false)
+  // Phiếu đang từ chối + lý do gõ tại chỗ (thay window.prompt).
+  const [tuChoi, setTuChoi] = useState<{ id: string; lyDo: string } | null>(null)
 
   const ban = useMemo(
     () => ({
@@ -147,6 +159,14 @@ function Than({
     [loai, gio, chieu, nghi, boQua],
   )
   const sau = useMemo(() => {
+    if (loai === 'add_punch' && ngayTruoc) {
+      // Ca đêm: vào tối hôm trước → ra là lượt rạng sáng hôm nay.
+      const ra = mo.luot[0]?.gio.slice(0, 5)
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(gio)) return 'ghi giờ vào tối hôm trước'
+      const vaoPhut = Number(gio.slice(0, 2)) * 60 + Number(gio.slice(3, 5))
+      const raPhut = ra ? Number(ra.slice(0, 2)) * 60 + Number(ra.slice(3, 5)) : null
+      return `ca đêm ${dmy(homTruoc)}: vào ${gio}${ra ? ` · ra ${ra} (+1)` : ''}${raPhut != null ? ` · tổng thời gian ${gioPhut(1440 - vaoPhut + raPhut)}` : ''}`
+    }
     const x = apDieuChinh(mo.luot, [
       ...dcs.filter((d) => d.tinhTrang === 'approved'),
       { ...ban, tinhTrang: 'approved' as const },
@@ -155,7 +175,7 @@ function Than({
     const t = tachLuot(x.luot)
     if (!t.vao) return 'không còn lượt nào'
     return `vào ${t.vao}${t.ra ? ` · ra ${t.ra}` : ' · chưa có giờ ra'}${t.coMatPhut != null ? ` · tổng thời gian ${gioPhut(t.coMatPhut)}` : ''}`
-  }, [mo.luot, dcs, ban])
+  }, [mo.luot, dcs, ban, loai, ngayTruoc, gio, homTruoc])
 
   const thieu =
     lyDo.trim().length < 2
@@ -186,13 +206,15 @@ function Than({
     if (thieu) return
     const body =
       loai === 'add_punch'
-        ? { loai, ma: mo.ma, ngay: mo.ngay, gio, chieu, lyDo, canCu }
+        ? { loai, ma: mo.ma, ngay: ngayTruoc ? homTruoc : mo.ngay, gio, chieu, lyDo, canCu }
         : loai === 'leave'
           ? { loai, ma: mo.ma, ngay: mo.ngay, nghi, lyDo, canCu }
           : { loai, ma: mo.ma, ngay: mo.ngay, gio: boQua, lyDo, canCu }
     const ok = await chay(
       () => api('/api/dept/hr/cham-cong/dieu-chinh', { method: 'POST', body }),
-      'Đã gửi — chờ người khác duyệt',
+      ngayTruoc
+        ? `Đã gửi lượt vào ${gio} ngày ${dmy(homTruoc)} — chờ người khác duyệt`
+        : 'Đã gửi — chờ người khác duyệt',
     )
     if (ok) onClose()
     if (ok) {
@@ -202,11 +224,9 @@ function Than({
   }
 
   const quyet = (id: string, viec: 'duyet' | 'tu_choi' | 'rut') => {
-    let ghiChu: string | undefined
-    if (viec === 'tu_choi') {
-      ghiChu = window.prompt('Lý do từ chối')?.trim()
-      if (!ghiChu || ghiChu.length < 2) return
-    }
+    const ghiChu = viec === 'tu_choi' ? tuChoi?.lyDo.trim() : undefined
+    if (viec === 'tu_choi' && (!ghiChu || ghiChu.length < 2)) return
+    if (viec === 'tu_choi') setTuChoi(null)
     void chay(
       () =>
         api('/api/dept/hr/cham-cong/dieu-chinh/quyet', {
@@ -247,6 +267,13 @@ function Than({
               {mo.loi}
             </NoticeBar>
           </div>
+        )}
+        {rangSang && (
+          <p className="mt-2 text-[var(--ink-2)]">
+            Lượt rạng sáng thường là giờ <b>ra</b> của ca đêm bắt đầu tối {dmy(homTruoc)} —
+            thiếu lượt <b>vào</b> tối hôm trước. Ngăn đã chọn sẵn ngày đó; đổi lại nếu người này
+            đi làm sáng sớm thật.
+          </p>
         )}
       </div>
 
@@ -290,6 +317,36 @@ function Than({
           <div className="mt-3 grid grid-cols-2 gap-3">
             {loai === 'add_punch' && (
               <>
+                <div className="col-span-2">
+                  <span className={lab}>Thuộc ngày</span>
+                  <div className="flex h-[30px] items-center gap-4">
+                    {(
+                      [
+                        [true, `Tối hôm trước · ${THU[thu(homTruoc)]} ${dmy(homTruoc)}`],
+                        [false, `Hôm nay · ${THU[thu(mo.ngay)]} ${dmy(mo.ngay)}`],
+                      ] as const
+                    ).map(([v, ten]) => (
+                      <label key={String(v)} className="flex items-center gap-1.5">
+                        <input
+                          type="radio"
+                          name="ngay-bo-sung"
+                          checked={ngayTruoc === v}
+                          onChange={() => {
+                            setNgayTruoc(v)
+                            if (v) {
+                              setChieu('in')
+                              setGio('21:00')
+                            } else {
+                              setChieu(goiY.ngayTruoc ? 'out' : goiY.chieu)
+                              setGio(goiY.ngayTruoc ? '16:00' : goiY.gio)
+                            }
+                          }}
+                        />
+                        {ten}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <label>
                   <span className={lab}>Giờ bổ sung</span>
                   <input
@@ -452,14 +509,41 @@ function Than({
                   </td>
                   <td className="py-1.5">
                     <TinhTrang d={d} />
-                    {d.tinhTrang === 'pending' && (
+                    {d.tinhTrang === 'pending' && tuChoi?.id === d.id && (
+                      <span className="mt-1 grid gap-1">
+                        <input
+                          autoFocus
+                          aria-label="Lý do từ chối"
+                          value={tuChoi.lyDo}
+                          maxLength={200}
+                          placeholder="Lý do từ chối (bắt buộc)"
+                          onChange={(e) => setTuChoi({ id: d.id, lyDo: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Enter' && quyet(d.id, 'tu_choi')}
+                          className={cn(o, 'w-full')}
+                        />
+                        <span className="flex gap-1">
+                          <Btn
+                            primary
+                            busy={busy}
+                            aria-disabled={tuChoi.lyDo.trim().length < 2}
+                            onClick={() => quyet(d.id, 'tu_choi')}
+                          >
+                            Xác nhận từ chối
+                          </Btn>
+                          <Btn onClick={() => setTuChoi(null)}>Thôi</Btn>
+                        </span>
+                      </span>
+                    )}
+                    {d.tinhTrang === 'pending' && tuChoi?.id !== d.id && (
                       <span className="mt-1 flex gap-1">
                         {quyen.duyet && d.guiId !== quyen.toi && (
                           <>
                             <Btn primary onClick={() => quyet(d.id, 'duyet')}>
                               Duyệt
                             </Btn>
-                            <Btn onClick={() => quyet(d.id, 'tu_choi')}>Từ chối</Btn>
+                            <Btn onClick={() => setTuChoi({ id: d.id, lyDo: '' })}>
+                              Từ chối
+                            </Btn>
                           </>
                         )}
                         {quyen.duyet && d.guiId === quyen.toi && (

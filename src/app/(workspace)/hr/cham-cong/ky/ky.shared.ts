@@ -8,5 +8,5 @@ export const lucVn = (iso: string | null) => {
 export const so = (n: number, le = 0) =>
   n.toLocaleString('vi-VN', { maximumFractionDigits: le })
 
-export const MUC_KY = ['theo-to', 'theo-nguoi', 'dong-thoi-gian'] as const
+export const MUC_KY = ['theo-to', 'theo-nguoi', 'nhap-tay', 'dong-thoi-gian'] as const
 export type MucKy = (typeof MUC_KY)[number]

@@ -7,7 +7,7 @@ import {
   kyThangSchema,
 } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
 
-/** Chuyển tiếp + khoản theo kỳ của bảng lương (B5). */
+/** Chuyển tiếp + khoản theo kỳ + công người không chấm công của bảng lương (B5). */
 export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ thang: string }> }) => {
     const user = await authService.requireUser()
@@ -19,7 +19,7 @@ export const POST = handle(
       case 'tinh':
         return NextResponse.json(await bangLuongService.tinh(user, thang))
       case 'gui':
-        await bangLuongService.gui(user, thang)
+        await bangLuongService.gui(user, thang, v.ghiChu)
         break
       case 'rut':
         await bangLuongService.rut(user, thang)
@@ -39,6 +39,14 @@ export const POST = handle(
         })
       case 'xoa_khoan':
         await bangLuongService.xoaKhoan(user, thang, v.id)
+        break
+      case 'nhap_cong':
+        await bangLuongService.nhapCong(user, thang, {
+          ma: v.ma,
+          cong: v.cong,
+          tcGio: v.tcGio,
+          ghiChu: v.ghiChu,
+        })
         break
     }
     return NextResponse.json({ ok: true })

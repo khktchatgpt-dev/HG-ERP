@@ -5,6 +5,7 @@ import { todayVn } from '@/lib/date-vn'
 import { boSo0, khopDuoiTen } from '@/lib/cham-cong/ghep-ten'
 import { gopLap, type LuotQuet } from '@/lib/cham-cong/luot'
 import { chamCongRepo, type DeviceRow, type DeviceUserRow } from './cham-cong.repo'
+import { khoangKyService } from './khoang-ky.service'
 import { infoDevice, readDevice } from './zk'
 import { dieuChinhRepo } from './dieu-chinh.repo'
 import { bienDongRepo } from './bien-dong.repo'
@@ -293,7 +294,22 @@ export type DuLieu = {
   maCanXem: number
   /** Nhân viên đang làm CẦN chấm công — mẫu số của bảng có mặt theo tổ. */
   /** `caVao` = giờ vào ca thường làm (phút từ 0h) — ca bắt đầu trước 5:00 (Bếp) cần để ghép lượt. */
-  nhanSu: { ma: string; ten: string; boPhan: string | null; caVao: number | null }[]
+  nhanSu: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    caVao: number | null
+    ngayVao: string | null
+  }[]
+  /** Người đã nghỉ, ngày làm cuối còn trong khoảng — chỉ Bảng công / bản chốt dùng (21/10/2026). */
+  daNghi: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    caVao: number | null
+    ngayCuoi: string
+    ngayVao: string | null
+  }[]
   /** Số người đang làm có cờ Không chấm công (không vào mẫu số). */
   khongCham: number
   /** Điều chỉnh trong khoảng (mọi tình trạng) — chỉ bản đã duyệt đổi kết quả. */
@@ -706,7 +722,10 @@ export const chamCongService = {
       chamCongRepo.shifts(),
     ])
     const caVaoCua = new Map(
-      shifts.map((s) => [s.id, Number(s.start_time.slice(0, 2)) * 60 + Number(s.start_time.slice(3, 5))]),
+      shifts.map((s) => [
+        s.id,
+        Number(s.start_time.slice(0, 2)) * 60 + Number(s.start_time.slice(3, 5)),
+      ]),
     )
     const devById = new Map(devices.map((d) => [d.id, d]))
     const duBy = new Map(dus.map((u) => [`${u.device_id}|${u.device_user_id}`, u]))
@@ -786,6 +805,29 @@ export const chamCongService = {
           ten: e.full_name,
           boPhan: e.team,
           caVao: caVaoCua.get(e.shift_id) ?? null,
+          ngayVao: e.hire_date,
+        })),
+      /**
+       * Người ĐÃ NGHỈ mà ngày làm cuối còn nằm trong khoảng đang xem — Bảng công + bản chốt
+       * cần họ (lương những ngày đã làm), màn Có mặt hôm nay thì không. Không có ngày làm
+       * cuối thì không biết họ nghỉ khi nào → không đưa vào (Nhân sự ghi "Cho nghỉ" có ngày).
+       */
+      daNghi: emps
+        .filter(
+          (e) =>
+            !e.active &&
+            !e.attendance_exempt &&
+            !!e.leave_date &&
+            e.leave_date >= k.tu &&
+            (!e.hire_date || e.hire_date <= k.den),
+        )
+        .map((e) => ({
+          ma: e.code,
+          ten: e.full_name,
+          boPhan: e.team,
+          caVao: caVaoCua.get(e.shift_id) ?? null,
+          ngayCuoi: e.leave_date!,
+          ngayVao: e.hire_date,
         })),
       khongCham: emps.filter((e) => e.active && e.attendance_exempt).length,
       dieuChinh,
@@ -801,9 +843,9 @@ export const chamCongService = {
   ): Promise<KyCong> {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
       throw BadRequest('Tháng phải dạng YYYY-MM')
-    const [y, m] = thang.split('-').map(Number)
-    const tu = `${thang}-01`
-    const den = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+    // Cùng khoảng kỳ Nhân sự đặt như Bảng công / Kỳ công (22/10/2026: trước đó cắt theo
+    // tháng lịch nên "10/2026" ở Có mặt / Lượt quẹt là 01→31/10, ở Bảng công là 26/09→25/10).
+    const { tu, den } = await khoangKyService.cua(thang)
     const [du, may, nv, quyen] = await Promise.all([
       chamCongService.duLieu(user, { tu, den }),
       chamCongService.mayChamCong(user),

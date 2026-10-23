@@ -38,8 +38,9 @@ export function docPt(s: string): number | null | undefined {
   return Number.isFinite(n) && n >= 0 && n <= 1000 ? n : undefined
 }
 
+/** 4 số lẻ: hệ số KT 133,3333 % — làm tròn 2 số lẻ rồi lưu lại là lệch ~90 đ/người/kỳ (0254). */
 export const ptVn = (n: number | null) =>
-  n == null ? '' : n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
+  n == null ? '' : n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 
 /** 'ISO' → 'dd/mm HH:mm' giờ VN. */
 export function lucVn(iso: string | null): string {

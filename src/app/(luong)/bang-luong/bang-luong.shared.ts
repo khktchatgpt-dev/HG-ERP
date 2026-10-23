@@ -6,6 +6,7 @@ export type { BangLuongTrang, PhieuDong, TrangThaiLuong }
 export const MUC_BL = [
   'bang',
   'khoan',
+  'khong-cham',
   'bh-thue',
   'chuyen-khoan',
   'dong-thoi-gian',

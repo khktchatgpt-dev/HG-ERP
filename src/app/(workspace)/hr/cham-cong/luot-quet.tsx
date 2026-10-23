@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Btn, Empty, Menu, Pick, SearchInput, Tick } from '@/components/kit'
-import { kyCuaThang } from '@/lib/cham-cong/ky-gio-cong'
 import { cn } from '@/lib/utils'
 import type { DongLuot } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { khongDau } from '@/lib/cham-cong/ghep-ten'
@@ -26,10 +25,13 @@ const nhomLuot = (r: DongLuot) => (r.luot.length >= 3 ? '3' : String(r.luot.leng
  */
 export function LuotQuetScreen({
   k,
+  kyXuat,
   ngayDau = '',
   boPhanDau = '',
 }: {
   k: KyCong
+  /** Khoảng kỳ công của file chi tiết (Nhân sự đặt) — trang này theo tháng dương lịch. */
+  kyXuat: { tu: string; den: string }
   ngayDau?: string
   boPhanDau?: string
 }) {
@@ -62,14 +64,14 @@ export function LuotQuetScreen({
   }, [k.du.dong, tim, ngay, boPhan, soLuot, chuaGhep])
 
   const soChuaGhep = k.du.dong.filter((r) => !r.daGhep).length
-  // Trang này theo tháng dương lịch; file chi tiết theo KỲ công (26 → 25) như Bảng công.
-  const kyXuat = kyCuaThang(k.thang)
+  // Trang này theo tháng dương lịch; file chi tiết theo KỲ công (khoảng Nhân sự đặt) như Bảng công.
   const demLuot = (n: string) => k.du.dong.filter((r) => nhomLuot(r) === n).length
 
   return (
     <KhungTrang
       ten="Lượt quẹt"
       thang={k.thang}
+      khoang={{ tu: k.tu, den: k.den }}
       onThang={d.xemThang}
       facts={[{ label: 'Dòng người-ngày', value: so(k.du.dong.length) }]}
       actions={
@@ -77,7 +79,7 @@ export function LuotQuetScreen({
           label="Xuất Excel ▾"
           // Hai file như máy / phần mềm cũ xuất (user 20/10/2026, thay mục "lượt quẹt thô"):
           // "tổ X.xlsx" (chi tiết) và "tổng hợp tổ X.xlsx" — theo bộ phận đang lọc, KỲ công
-          // 26 → 25; mọi bộ phận thì mỗi tổ một tờ.
+          // khoảng kỳ Nhân sự đặt; mọi bộ phận thì mỗi tổ một tờ.
           items={(['chi-tiet', 'tong-hop'] as const).map((loai) => ({
             label: `${loai === 'chi-tiet' ? 'Chi tiết chấm công' : 'Tổng hợp chấm công'} · ${
               boPhan === BO_PHAN_TRONG
@@ -271,7 +273,8 @@ function BangLuot({
         <tbody>
           {dong.map((x) => (
             <tr
-              key={`${x.ngay}|${x.ma}|${x.daGhep}`}
+              // Mã CHƯA ghép gom theo từng máy: cùng số 89 ở .201 và .203 là hai dòng → khoá phải có máy.
+              key={`${x.ngay}|${x.ma}|${x.daGhep}|${x.luot[0]?.may ?? ''}`}
               className="hover:bg-[var(--surface-hover)]"
             >
               <td

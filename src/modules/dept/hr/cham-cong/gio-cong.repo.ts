@@ -1,5 +1,5 @@
 import { db } from '@/server/db'
-import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
+import { cachTinhCua, type CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 
 /** Sổ làm trưa + cách tính theo bộ phận (migration 0241). */
 
@@ -67,9 +67,7 @@ export const gioCongRepo = {
   /** Tên tổ → cách tính, từ danh mục hr_teams (0242). Tổ chưa có trong danh mục = khung. */
   async cachTinh(): Promise<Record<string, CachTinh>> {
     const rows = must(await db().from('hr_teams').select('name, calc_mode'))
-    return Object.fromEntries(
-      rows.map((r) => [r.name, r.calc_mode === 'ngay' ? 'ngay' : 'khung']),
-    )
+    return Object.fromEntries(rows.map((r) => [r.name, cachTinhCua(r.calc_mode)]))
   },
 
   async ghiCachTinh(team: string, mode: CachTinh, userId: string): Promise<void> {

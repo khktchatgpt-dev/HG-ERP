@@ -26,7 +26,6 @@ import {
   Tag,
 } from '@/components/kit'
 import { cn } from '@/lib/utils'
-import { kyCuaThang } from '@/lib/cham-cong/ky-gio-cong'
 import { congKy, kyVn, lucVn, type CachTinhTrang, type Muc } from './cach-tinh.shared'
 import { useCachTinh, type CachTinhCtx } from './useCachTinh'
 import { NganHeSo } from './ngan-he-so'
@@ -37,7 +36,7 @@ const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
 export function CachTinhScreen({ c, muc }: { c: CachTinhTrang; muc: Muc }) {
   const d = useCachTinh(c, muc)
-  const k = kyCuaThang(c.kyHienTai)
+  const k = c.khoangHienTai
   const dangDung = c.ban.find(
     (b) => b.tinhTrang === 'ap_dung' && b.tuKy && b.tuKy <= c.kyHienTai,
   )

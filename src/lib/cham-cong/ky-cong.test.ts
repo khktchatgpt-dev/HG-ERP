@@ -99,6 +99,15 @@ describe('điều kiện', () => {
       ['xac_nhan', '1 / 2 tổ'],
     ])
   })
+  it('người không chấm công không còn là điều kiện chốt (23/10/2026 — Kế toán xử lý ở bảng lương)', () => {
+    const d = dieuKienChot(b, {
+      choDuyet: 0,
+      chuaCoTo: 0,
+      to: [{ ten: 'Tổ Phôi', daXacNhan: true }],
+    })
+    expect(d.map((x) => x.ma)).toEqual(['het_ky', 'may', 'cho_duyet', 'chua_co_to', 'xac_nhan'])
+    expect(d.some((x) => x.ma === 'nhap_tay')).toBe(false)
+  })
 })
 
 describe('bản chốt', () => {

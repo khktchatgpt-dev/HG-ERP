@@ -13,7 +13,9 @@ const COT: { ten: string; f: (p: PhieuDong) => number; tru?: boolean; dam?: bool
     { ten: 'Phụ cấp', f: (p) => p.phuCap },
     { ten: 'Khoản +', f: (p) => p.khoanCong },
     { ten: 'BH (10,5 %)', f: (p) => p.bhNld, tru: true },
-    { ten: 'Thuế TNCN', f: (p) => p.thue, tru: true },
+    { ten: 'Đoàn phí (0,5 %)', f: (p) => p.doanPhi, tru: true },
+    // Q5: thuế tính được nhưng chưa trừ thì không nằm ở cột trừ — xem ngăn Bảo hiểm & thuế
+    { ten: 'Thuế TNCN', f: (p) => (p.truThue ? p.thue : 0), tru: true },
     { ten: 'Tạm ứng / khoản −', f: (p) => p.khoanTru, tru: true },
     { ten: 'Thực lĩnh', f: (p) => p.thucLinh, dam: true },
   ]

@@ -5,6 +5,12 @@ import { cn } from '@/lib/utils'
 import { kyVn, lucVn } from './cach-tinh.shared'
 import { SEC, TD, TH } from './ngan-he-so'
 import type { CachTinhCtx } from './useCachTinh'
+import {
+  CACH_TINH,
+  khongTheoKhung,
+  TEN_CACH_TINH,
+  type CachTinh,
+} from '@/lib/cham-cong/ky-gio-cong'
 
 /**
  * Cách tính theo tổ KHÔNG có phiên bản: đổi là áp ngay cho kỳ đang mở (kỳ đã chốt sẽ có
@@ -52,20 +58,19 @@ export function NganTheoTo({ d }: { d: CachTinhCtx }) {
                         width={220}
                         value={t.cachTinh}
                         disabled={d.busy === 'to:' + t.ten}
-                        onChange={(v) => d.doiCachTinhTo(t.ten, v as 'khung' | 'ngay')}
-                        options={[
-                          { value: 'khung', label: 'Theo khung giờ (giờ ÷ 8)' },
-                          { value: 'ngay', label: 'Theo ngày (có quẹt = 1 công)' },
-                        ]}
+                        onChange={(v) => d.doiCachTinhTo(t.ten, v as CachTinh)}
+                        options={CACH_TINH.map((c) => ({
+                          value: c,
+                          label: TEN_CACH_TINH[c],
+                        }))}
                       />
-                    ) : t.cachTinh === 'ngay' ? (
-                      'Theo ngày (có quẹt = 1 công)'
                     ) : (
-                      'Theo khung giờ (giờ ÷ 8)'
+                      TEN_CACH_TINH[t.cachTinh]
                     )}
                   </td>
                   <td className={cn(TD, !t.toSx && 'text-[var(--ink-3)]')}>
-                    {t.toSx ?? (t.cachTinh === 'ngay' ? 'không áp dụng' : '— chưa nối')}
+                    {t.toSx ??
+                      (khongTheoKhung(t.cachTinh) ? 'không áp dụng' : '— chưa nối')}
                   </td>
                 </tr>
               ))}

@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { BadRequest, handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { kyCongService } from '@/modules/dept/hr/cham-cong/ky-cong.service'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
+import { congNhapTayService } from '@/modules/dept/hr/cham-cong/cong-nhap-tay.service'
 import { kyThangSchema, kyViecSchema } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
 
-/** Chuyển tiếp của kỳ công: xác nhận / bỏ xác nhận tổ, chốt, xin · rút · duyệt mở lại. */
+/** Chuyển tiếp của kỳ công: xác nhận / bỏ xác nhận tổ, chốt, xin · rút · duyệt mở lại, đặt khoảng, công cộng thêm (khối B). */
 export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ thang: string }> }) => {
     const user = await authService.requireUser()
@@ -30,6 +32,27 @@ export const POST = handle(
       case 'quyet_mo':
         await kyCongService.quyetMoLai(user, thang, v.dongY, v.ghiChu)
         break
+      case 'them_cong':
+        return NextResponse.json(
+          await congNhapTayService.congThem(user, thang, { kieu: 'them', dong: v.dong }),
+        )
+      case 'sua_cong':
+        await congNhapTayService.congThem(user, thang, {
+          kieu: 'sua',
+          id: v.id,
+          ma: v.ma,
+          cong: v.cong,
+          lyDo: v.lyDo,
+          ghiChu: v.ghiChu,
+        })
+        break
+      case 'xoa_cong':
+        await congNhapTayService.congThem(user, thang, { kieu: 'xoa', id: v.id })
+        break
+      case 'dat_khoang':
+        return NextResponse.json(
+          await khoangKyService.dat(user, thang, { tu: v.tu, den: v.den, lyDo: v.lyDo }),
+        )
     }
     return NextResponse.json({ ok: true })
   },

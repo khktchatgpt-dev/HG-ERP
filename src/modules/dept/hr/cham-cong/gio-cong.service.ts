@@ -1,11 +1,13 @@
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest } from '@/server/http'
+import { thangCua } from '@/lib/cham-cong/khoang-ky'
+import { khoangKyService } from './khoang-ky.service'
 import {
   congNgay,
-  kyCuaThang,
-  thangCuaNgay,
   tinhKyGioCong,
+  khongTheoKhung,
+  trongThoiGianLam,
   type CachTinh,
   type NguoiGio,
 } from '@/lib/cham-cong/ky-gio-cong'
@@ -31,7 +33,7 @@ import type { ThamSoKhung } from '@/lib/cham-cong/gio-khung'
 import { kiemKhoaKy } from './ky-khoa'
 
 /**
- * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (26 → 25) cho từng người, theo luật thật của
+ * BẢNG GIỜ CÔNG — giờ theo khung cả kỳ (khoảng Nhân sự đặt — khoang-ky.service) cho từng người, theo luật thật của
  * Nhân sự (`lib/cham-cong/gio-khung.ts`, khớp 241/241 ngày file Tổ sơn sắt T9). Tham số
  * lấy từ BẢN cách tính áp dụng cho kỳ (B2, 0243) — đổi bản không đổi số kỳ trước.
  */
@@ -100,7 +102,8 @@ export const gioCongService = {
     await assertAction(user, 'hr.attendance.view')
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(thang))
       throw BadRequest('Tháng phải dạng YYYY-MM')
-    const k = kyCuaThang(thang)
+    // Khoảng kỳ Nhân sự đặt (chưa đặt = gợi ý nối tiếp kỳ bên cạnh, mặc định 26 → 25).
+    const k = await khoangKyService.cua(thang)
     // Lấy dư một ngày hai đầu: ca đêm ngày cuối kỳ cần lượt rạng sáng hôm sau; lượt rạng
     // sáng ngày đầu kỳ có thể thuộc ca đêm hôm trước (không được tính vào kỳ này).
     const [du, trua, cachTinh, quyen, quyenSua, ct, ky, le] = await Promise.all([
@@ -124,15 +127,20 @@ export const gioCongService = {
     const ngayLay = lanOk
       ? new Date(Date.parse(lanOk) + 7 * 3600_000).toISOString().slice(0, 10)
       : homNay
+    // Dữ liệu lấy dư một ngày hai đầu (ca đêm) — người nghỉ TRƯỚC ngày đầu kỳ (6076 nghỉ 25/09,
+    // ngày cuối kỳ 09) không thuộc kỳ này, đừng để họ thành một dòng trống của Bảng công.
+    const daNghi = du.daNghi.filter((n) => n.ngayCuoi >= k.tu)
     const song = tinhKyGioCong({
       ngayDoDang: ngayLay < homNay ? ngayLay : homNay,
       tu: k.tu,
       den: k.den,
-      nhanSu: du.nhanSu,
+      // Người đã nghỉ còn làm trong kỳ vẫn có dòng (lương những ngày đã làm).
+      nhanSu: [...du.nhanSu, ...daNghi],
       dong: du.dong,
       dieuChinh: du.dieuChinh,
       trua,
       cachTinh,
+      ngayLe: le.map((x) => x.holiday_date),
       thamSo: t,
     })
     // Kỳ đã chốt (B3): giờ từng ngày lấy từ BẢN CHỐT; lượt máy vẫn bày để soi.
@@ -146,7 +154,7 @@ export const gioCongService = {
           )
         : song
     const dem = new Map<string, number>()
-    for (const n of du.nhanSu)
+    for (const n of [...du.nhanSu, ...daNghi])
       dem.set(n.boPhan ?? CHUA_CO, (dem.get(n.boPhan ?? CHUA_CO) ?? 0) + 1)
     const boPhan = [...dem]
       .map(([ten, so]) => ({ ten, so, cachTinh: cachTinh[ten] ?? ('khung' as CachTinh) }))
@@ -197,7 +205,8 @@ export const gioCongService = {
     homNay: string,
   ): Promise<ChiTietNguoi> {
     const thangs: string[] = []
-    for (let t = thangCuaNgay(k.tu); t <= thangCuaNgay(k.den); t = sauThang(t))
+    const dsKy = await khoangKyService.ds()
+    for (let t = thangCua(k.tu, dsKy); t <= thangCua(k.den, dsKy); t = sauThang(t))
       thangs.push(t)
     if (thangs.length > KY_TOI_DA)
       return {
@@ -250,7 +259,9 @@ export const gioCongService = {
       chamCongRepo.employees(),
       settingsService.getAll(),
     ])
-    const vp = new Set(b.boPhan.filter((x) => x.cachTinh === 'ngay').map((x) => x.ten))
+    const vp = new Set(
+      b.boPhan.filter((x) => khongTheoKhung(x.cachTinh)).map((x) => x.ten),
+    )
     // Cùng thứ tự Bảng công: tổ đông người trước, "(chưa có bộ phận)" cuối — file chia
     // mỗi tổ một tờ thì tờ theo đúng thứ tự này.
     const thuTu = new Map(b.boPhan.map((x, i) => [x.ten, i]))
@@ -303,7 +314,7 @@ export const gioCongService = {
           ngayVao: e?.hire_date ?? null,
           ngay: ds,
           may,
-          tong: tongCong(ds, daLay),
+          tong: tongCong(ds, (iso) => daLay(iso) && trongThoiGianLam(n, iso)),
         }
       }),
     }

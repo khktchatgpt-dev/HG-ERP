@@ -27,7 +27,10 @@ import { TEN_TRANG_THAI } from '@/lib/cham-cong/ky-cong'
 import { useKyCong, type KyCongCtx, type KyCongTrang, type MucKy } from './useKyCong'
 import { NganTo } from './ngan-to'
 import { NganNguoi, NganThoiGian } from './ngan-nguoi-tl'
+import { KhoiCongThem } from './ngan-cong-them'
 import { HopChot, HopQuyet, HopXacNhan, HopXin } from './hop-ky'
+import { HopKhoang } from './hop-khoang-ky'
+import { soNgay } from '@/lib/cham-cong/khoang-ky'
 import { lucVn, so } from './ky.shared'
 
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
@@ -71,9 +74,31 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
           )
         }
         facts={[
-          { label: '', value: `${dm(k.tu)} → ${dm(k.den)}/${k.den.slice(0, 4)}` },
+          {
+            label: '',
+            value: (
+              <span className="inline-flex items-baseline gap-2">
+                {dm(k.tu)} → {dm(k.den)}/{k.den.slice(0, 4)}
+                <span className="font-normal text-[var(--ink-3)]">
+                  · {soNgay(k.tu, k.den)} ngày{k.khoangDaDat ? '' : ' · gợi ý'}
+                </span>
+                {k.quyen.datKhoang && !k.ngoaiErp && (
+                  <button
+                    type="button"
+                    onClick={() => d.setSheet('khoang')}
+                    className="font-sans font-normal text-[var(--act-text)] underline underline-offset-2 hover:text-[var(--act)]"
+                  >
+                    {k.trangThai === 'open' ? 'Đổi khoảng kỳ' : 'Khoảng kỳ đã khoá'}
+                  </button>
+                )}
+              </span>
+            ),
+          },
           { label: 'Dữ liệu máy tới', value: k.ngayLay ? dm(k.ngayLay) : '—' },
-          { label: 'Người', value: so(k.nguoi.length) },
+          {
+            label: 'Người trong kỳ',
+            value: `${so(k.nguoi.length)}${k.nghiGiuaKy ? ` · ${k.nghiGiuaKy} nghỉ giữa kỳ` : ''}`,
+          },
           ...(k.trangThai === 'open'
             ? [
                 {
@@ -142,6 +167,12 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
             icon: 'so',
             signal: { text: so(k.nguoi.length) },
           },
+          {
+            id: 'nhap-tay',
+            label: 'Công cộng thêm',
+            icon: 'sua',
+            signal: k.congThem.length ? { text: so(k.congThem.length) } : undefined,
+          },
           { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' },
         ]}
       >
@@ -150,6 +181,11 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
         </DocMenuPanel>
         <DocMenuPanel value="theo-nguoi">
           <NganNguoi d={d} />
+        </DocMenuPanel>
+        <DocMenuPanel value="nhap-tay">
+          <div className="flex min-h-0 flex-col overflow-auto">
+            <KhoiCongThem d={d} />
+          </div>
         </DocMenuPanel>
         <DocMenuPanel value="dong-thoi-gian">
           <NganThoiGian d={d} />
@@ -162,6 +198,7 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
       />
       <HopXin d={d} />
       <HopQuyet d={d} />
+      <HopKhoang d={d} />
     </ScreenFrame>
   )
 }
@@ -175,7 +212,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
       <HolderBar
         inline
         who="Tài Chính Kế Toán"
-        what="tính lương kỳ này (bảng lương — bước sau)"
+        what="kiểm tra bảng lương hệ thống đã tính, rồi gửi Kế toán trưởng duyệt"
         age={
           k.ky?.chotLuc
             ? `${ngayTu(k.ky.chotLuc.slice(0, 10), k.homNay)} ngày`
@@ -187,7 +224,7 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
     return (
       <HolderBar
         inline
-        who="Ban Giám Đốc"
+        who="Kế toán trưởng"
         what="duyệt hoặc từ chối yêu cầu mở lại"
         age={
           k.ky?.xinLuc ? `${ngayTu(k.ky.xinLuc.slice(0, 10), k.homNay)} ngày` : undefined
@@ -198,43 +235,99 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
     <HolderBar
       inline
       who="Hành Chính Nhân Sự"
-      what={
-        [
-          thieu ? `xử lý ${so(thieu)} ngày thiếu lượt` : '',
-          chua ? `thu phiếu xác nhận của ${chua} tổ` : '',
-          k.chuaCoTo ? `gán tổ cho ${k.chuaCoTo} người` : '',
-        ]
-          .filter(Boolean)
-          .join(', ') || 'chốt kỳ'
-      }
+      what={viecTiep([
+        thieu ? `xử lý ${so(thieu)} ngày thiếu lượt` : '',
+        chua ? `thu phiếu xác nhận của ${chua} tổ` : '',
+        k.chuaCoTo ? `gán tổ cho ${k.chuaCoTo} người` : '',
+      ])}
       age={`${ngayTu(k.tu, k.homNay)} ngày từ đầu kỳ`}
     />
   )
 }
 
-/** Năm ô điều kiện chốt — chỉ khi kỳ còn mở. Ô đỏ = còn chặn. */
+/** Việc đầu tiên còn lại + "và N việc nữa" — dải người giữ việc chỉ một dòng (22/10/2026). */
+function viecTiep(ds: string[]): string {
+  const con = ds.filter(Boolean)
+  if (!con.length) return 'chốt kỳ'
+  return con.length === 1 ? con[0] : `${con[0]} và ${con.length - 1} việc nữa`
+}
+
+/**
+ * Ô điều kiện chốt — chỉ khi kỳ còn mở. Mỗi ô hai dòng gọn (tên · chi tiết cắt bớt, đủ chữ ở
+ * tooltip); ô còn chặn BẤM ĐƯỢC tới đúng chỗ gỡ. Thay cho dải "Chưa chốt được" trước đây nói
+ * lại y hệt các ô này (22/10/2026: đầu trang chiếm 53 % màn hình).
+ */
 function DaiDieuKien({ d }: { d: KyCongCtx }) {
   const { k } = d
   if (!d.mo) return null
+  const toi = (ma: string): (() => void) | string | null =>
+    ma === 'xac_nhan' || ma === 'chua_co_to'
+      ? () => d.setMuc('theo-to')
+      : ma === 'cho_duyet'
+          ? '/hr/cham-cong/dieu-chinh'
+          : ma === 'may'
+            ? `/hr/cham-cong/lay-du-lieu?thang=${k.thang}`
+            : null
   return (
-    <div className="grid grid-cols-5 border-b border-[var(--line)] bg-[var(--surface-card)]">
-      {k.dieuKien.map((x) => (
-        <div
-          key={x.ma}
-          className="text-k-sm border-r border-[var(--line-faint)] px-[var(--gutter)] py-1.5 last:border-r-0"
-        >
-          <span className="text-[var(--ink-2)]">{x.ten}</span>
-          <b
-            className={cn(
-              'text-k-body num block font-semibold',
-              x.ok ? 'text-[var(--done)]' : 'text-[var(--stop)]',
-            )}
-          >
-            {x.ok ? '✓ ' : ''}
-            {x.chiTiet}
-          </b>
-        </div>
-      ))}
+    <div
+      className="grid border-b border-[var(--line)] bg-[var(--surface-card)]"
+      style={{ gridTemplateColumns: `repeat(auto-fit, minmax(170px, 1fr))` }}
+    >
+      {k.dieuKien.map((x) => {
+        const di = x.ok ? null : toi(x.ma)
+        const noiDung = (
+          <>
+            <span className="block truncate text-[var(--ink-2)]">
+              <span
+                aria-hidden
+                className={x.ok ? 'text-[var(--done)]' : 'text-[var(--stop)]'}
+              >
+                {x.ok ? '✓' : '●'}
+              </span>{' '}
+              {x.ten}
+            </span>
+            <b
+              className={cn(
+                'num block truncate font-semibold',
+                x.ok ? 'text-[var(--ink-2)]' : 'text-[var(--stop)]',
+                di && 'underline decoration-dotted underline-offset-2',
+              )}
+            >
+              {x.chiTiet}
+            </b>
+          </>
+        )
+        const lop =
+          'text-k-sm min-w-0 border-r border-[var(--line-faint)] px-[var(--gutter)] py-1 text-left last:border-r-0'
+        if (typeof di === 'function')
+          return (
+            <button
+              key={x.ma}
+              type="button"
+              title={`${x.ten}: ${x.chiTiet} — bấm để tới chỗ gỡ`}
+              onClick={di}
+              className={cn(lop, 'hover:bg-[var(--surface-hover)]')}
+            >
+              {noiDung}
+            </button>
+          )
+        if (typeof di === 'string')
+          return (
+            <a
+              key={x.ma}
+              href={di}
+              title={`${x.ten}: ${x.chiTiet} — bấm để tới chỗ gỡ`}
+              className={cn(lop, 'hover:bg-[var(--surface-hover)]')}
+            >
+              {noiDung}
+            </a>
+          )
+        return (
+          <div key={x.ma} title={`${x.ten}: ${x.chiTiet}`} className={lop}>
+            {noiDung}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -252,7 +345,7 @@ function ThanhBao({ d }: { d: KyCongCtx }) {
     return (
       <NoticeBar tone="warn" tag="Chờ mở lại">
         {k.ky?.xinBoi ?? '—'} xin mở lại lúc {lucVn(k.ky?.xinLuc ?? null)}: “
-        {k.ky?.xinLyDo}”. Kỳ vẫn khoá tới khi Giám đốc duyệt.
+        {k.ky?.xinLyDo}”. Kỳ vẫn khoá tới khi Kế toán trưởng duyệt.
       </NoticeBar>
     )
   if (k.trangThai === 'closed')
@@ -260,20 +353,6 @@ function ThanhBao({ d }: { d: KyCongCtx }) {
       <NoticeBar tone="neutral" tag="Đã chốt">
         Số dưới đây là bản chốt lần {k.ky?.lanChot}. Phiếu điều chỉnh, tick làm trưa cho
         ngày {dm(k.tu)} → {dm(k.den)} đều bị khoá; muốn sửa thì xin mở lại.
-      </NoticeBar>
-    )
-  if (d.chuaChot.length)
-    return (
-      <NoticeBar
-        tone="warn"
-        tag="Chưa chốt được"
-        action={
-          d.chuaChot.some((x) => x.ma === 'xac_nhan' || x.ma === 'chua_co_to')
-            ? { label: 'Tới tổ còn vướng', onClick: () => d.setMuc('theo-to') }
-            : undefined
-        }
-      >
-        {d.chuaChot.map((x) => `${x.ten.toLowerCase()}: ${x.chiTiet}`).join(' · ')}.
       </NoticeBar>
     )
   return null
@@ -298,7 +377,7 @@ function HanhDong({ d }: { d: KyCongCtx }) {
           icon="khoa"
           blockedBy={k.quyen.chot ? undefined : 'Trưởng phòng Hành Chính Nhân Sự'}
           aria-disabled={d.chuaChot.length > 0}
-          onClick={() => (d.chuaChot.length ? d.setMuc('theo-to') : d.setSheet('chot'))}
+          onClick={() => (!d.chuaChot.length ? d.setSheet('chot') : d.setMuc('theo-to'))}
         >
           Chốt kỳ
         </Btn>

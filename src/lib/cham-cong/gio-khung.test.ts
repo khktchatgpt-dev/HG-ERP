@@ -140,3 +140,13 @@ describe('khớp file Excel Tổ sơn sắt T9/2026', () => {
     expect(lech).toEqual([])
   })
 })
+
+describe('làm tròn giờ vào buổi tối (cờ lamTronVaoToi, sổ NS T9)', () => {
+  it('tắt (mặc định): 20:43 giữ nguyên; bật: 20:43 → 21:00, 20:35 → 20:30', () => {
+    expect(lamTronVao(p('20:43'))).toBe(p('20:43'))
+    const t = { ...THAM_SO_MAC_DINH, lamTronVaoToi: true }
+    expect(lamTronVao(p('20:43'), t)).toBe(p('21:00'))
+    expect(lamTronVao(p('20:35'), t)).toBe(p('20:30'))
+    expect(lamTronVao(p('13:05'), t)).toBe(p('13:00'))
+  })
+})

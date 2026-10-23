@@ -108,6 +108,8 @@ export type QuyTac = {
   nguongNuaGio: number
   nguongDuGio: number
   lamTronVaoChieu: boolean
+  /** Bậc thang giờ vào kéo qua buổi tối (vào ca đêm 20:43 → 21:00) — 0258. */
+  lamTronVaoToi: boolean
   tinhDenSom: boolean
   denSomTu: number
   caDemDen: number
@@ -168,6 +170,7 @@ export function thamSoTuBan(khung: KhungBan[], q: QuyTac): ThamSoKhung {
     nguongDuGio: q.nguongDuGio,
     lamTronRaKieu: q.lamTronRaKieu,
     lamTronVaoChieu: q.lamTronVaoChieu,
+    lamTronVaoToi: q.lamTronVaoToi,
     tinhDenSom: q.tinhDenSom,
     denSomTu: q.denSomTu,
     caDemDen: q.caDemDen,

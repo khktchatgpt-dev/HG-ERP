@@ -1,5 +1,6 @@
 import type { User } from '@/modules/core/users/users.repo'
-import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
+import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
+import { emit } from '@/events/bus'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
@@ -18,12 +19,18 @@ import {
 import { chamCongRepo } from './cham-cong.repo'
 import { gioCongService, type GioCong } from './gio-cong.service'
 import { kyCongRepo, type KyDong, type SuKien, type XacNhanDong } from './ky-cong.repo'
+import { khoangKyService } from './khoang-ky.service'
+import type { KhoangDat } from '@/lib/cham-cong/khoang-ky'
 import { bangLuongRepo, type TrangThaiLuong } from '../luong/bang-luong.repo'
 import { bangLuongService } from '../luong/bang-luong.service'
+import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
+import { congNhapTayRepo } from './cong-nhap-tay.repo'
+import { dsCongThem, type DongCongThem } from './cong-nhap-tay.service'
+import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 
 /**
  * KỲ CÔNG (B3, bản vẽ duyệt 18/10/2026, Q1–Q7 theo đề xuất) — chứng từ:
- *   Đang mở → (mọi tổ xác nhận) → Đã chốt → Chờ mở lại → (Giám đốc duyệt) → Đang mở.
+ *   Đang mở → (mọi tổ xác nhận) → Đã chốt → Chờ mở lại → (Kế toán trưởng duyệt) → Đang mở.
  * Nhân sự xác nhận tổ thay tổ trưởng sau khi thu phiếu giấy có chữ ký (Q2); ngày thiếu
  * lượt được "tính 0 giờ" nếu đồng ý lúc xác nhận (Q1). Chốt lưu BẢN CHỐT
  * (hr_time_results) và khoá mọi ghi cho ngày trong kỳ.
@@ -31,7 +38,7 @@ import { bangLuongService } from '../luong/bang-luong.service'
 
 export type ToKy = TongTo & {
   teamId: string | null
-  cachTinh: 'khung' | 'ngay'
+  cachTinh: CachTinh
   /** Xác nhận còn hiệu lực: có dòng VÀ số ngày đồng ý tính 0 giờ còn đủ phủ số thiếu hiện tại. */
   xacNhan: XacNhanDong | null
   dieuKien: DieuKien[]
@@ -50,7 +57,14 @@ export type KyCongTrang = {
   to: ToKy[]
   chuaCoTo: number
   choDuyet: number
-  khongCham: { ma: string; ten: string; to: string | null }[]
+  /**
+   * Số người không chấm công có làm trong kỳ. Họ KHÔNG thuộc việc của Nhân sự (chủ dự án
+   * 23/10/2026): lương tháng / thoả thuận riêng, Kế toán xử lý trên bảng lương.
+   */
+  soKhongCham: number
+  /** Công cộng thêm ngoài máy (khối B) + người chọn được (có chấm công, làm trong kỳ). */
+  congThem: DongCongThem[]
+  chonThem: { ma: string; ten: string; to: string | null }[]
   dieuKien: DieuKien[]
   nguoi: {
     ma: string
@@ -60,35 +74,58 @@ export type KyCongTrang = {
     cong: number
     thieu: number
   }[]
+  /** Người nghỉ việc giữa kỳ — vẫn trong bảng công tới ngày làm cuối. */
+  nghiGiuaKy: number
   khung: { ma: string; ten: string }[]
   suKien: SuKien[]
   phutMotCong: number
   /** Trạng thái bảng lương của kỳ (B5) — dải vòng đời đi tiếp "Đã tính lương" / "Đã trả". */
   bangLuong: TrangThaiLuong | null
-  quyen: { xacNhan: boolean; chot: boolean; xinMo: boolean; duyetMo: boolean }
+  /** Khoảng kỳ này Nhân sự đã đặt chưa (false = gợi ý nối tiếp / mặc định). */
+  khoangDaDat: boolean
+  /** Mọi kỳ đã đặt — hộp Đổi khoảng kỳ kiểm tại chỗ bằng cùng hàm thuần với server. */
+  dsKy: KhoangDat[]
+  quyen: {
+    xacNhan: boolean
+    chot: boolean
+    xinMo: boolean
+    duyetMo: boolean
+    /** Đặt khoảng kỳ = quyền sửa nhân viên chấm công (Q3). */
+    datKhoang: boolean
+    /** Công cộng thêm ngoài máy (khối B) — cùng quyền với đặt khoảng kỳ. */
+    nhapTay: boolean
+  }
 }
 
 const HET_ERP = (t: string) =>
   `Kỳ ${t.slice(5)}/${t.slice(0, 4)} đã trả lương ngoài ERP — kỳ công trong ERP bắt đầu từ kỳ ${KY_DAU_ERP.slice(5)}/${KY_DAU_ERP.slice(0, 4)}`
 
 async function quyen(user: User) {
-  const [xacNhan, chot, duyetMo] = await Promise.all([
+  const [xacNhan, chot, duyetMo, datKhoang] = await Promise.all([
     canAction(user, 'hr.attendance.adjust'),
     canAction(user, 'hr.period.close'),
     canAction(user, 'hr.period.reopen_decide'),
+    canAction(user, 'hr.attendance.employee_edit'),
   ])
-  return { xacNhan, chot, xinMo: xacNhan, duyetMo }
+  return { xacNhan, chot, xinMo: xacNhan, duyetMo, datKhoang, nhapTay: datKhoang }
 }
 
 /** Gom dữ liệu của một kỳ — dùng chung cho trang và cho mọi chuyển tiếp (kiểm lại ở server). */
 async function dung(user: User, thang: string) {
   const homNay = todayVn()
   const g: GioCong = await gioCongService.bang(user, thang, homNay)
-  const [teams, emps, xn] = await Promise.all([
+  const [teams, emps, xn, them] = await Promise.all([
     kyCongRepo.toTheoTen(),
     chamCongRepo.employees(),
     g.ky ? kyCongRepo.xacNhan(g.ky.id) : Promise.resolve([] as XacNhanDong[]),
+    congNhapTayRepo.dsThem(thang),
   ])
+  const khongCham = emps.filter(
+    (e) =>
+      e.attendance_exempt &&
+      !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, g.tu, g.den),
+  )
+  const congThem = dsCongThem(emps, them)
   const tong = tongTheoTo(g.nguoi)
   const bc = { homNay, den: g.den, ngayLay: g.ngayLay }
   const xnTheo = new Map(xn.map((x) => [x.teamId, x]))
@@ -108,15 +145,8 @@ async function dung(user: User, thang: string) {
     })
   const chuaCoTo = tong.find((t) => t.ten === CHUA_CO_TO)?.so ?? 0
   const choDuyet = g.dieuChinh.filter((d) => d.tinhTrang === 'pending').length
-  return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams }
+  return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams, khongCham, congThem }
 }
-
-/** Có làm ngày nào trong kỳ [tu, den] — theo ngày vào / ngày làm cuối, không theo cờ active. */
-const lamTrongKy = (
-  e: { hire_date: string | null; leave_date: string | null },
-  tu: string,
-  den: string,
-) => !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, tu, den)
 
 function kiemErp(thang: string) {
   if (thang < KY_DAU_ERP) throw Conflict(HET_ERP(thang))
@@ -125,7 +155,11 @@ function kiemErp(thang: string) {
 export const kyCongService = {
   async trang(user: User, thang: string): Promise<KyCongTrang> {
     await assertAction(user, 'hr.attendance.view')
-    const [d, q] = await Promise.all([dung(user, thang), quyen(user)])
+    const [d, q, dsKy] = await Promise.all([
+      dung(user, thang),
+      quyen(user),
+      khoangKyService.ds(),
+    ])
     const { g, to } = d
     const ky = g.ky
     return {
@@ -135,14 +169,26 @@ export const kyCongService = {
       homNay: d.homNay,
       ngayLay: g.ngayLay,
       ngoaiErp: thang < KY_DAU_ERP,
+      khoangDaDat: dsKy.some((x) => x.thang === thang),
+      dsKy,
       trangThai: ky?.trangThai ?? 'open',
       ky,
       ban: g.ban,
       to,
       chuaCoTo: d.chuaCoTo,
       choDuyet: d.choDuyet,
-      khongCham: d.emps
-        .filter((e) => e.attendance_exempt && lamTrongKy(e, d.g.tu, d.g.den))
+      soKhongCham: d.khongCham.length,
+      congThem: d.congThem,
+      chonThem: d.emps
+        .filter(
+          (e) =>
+            !e.attendance_exempt &&
+            !!khoangTrongKy(
+              { hireDate: e.hire_date, leaveDate: e.leave_date },
+              g.tu,
+              g.den,
+            ),
+        )
         .map((e) => ({ ma: e.code, ten: e.full_name, to: e.team })),
       dieuKien: dieuKienChot(d.bc, {
         choDuyet: d.choDuyet,
@@ -157,6 +203,7 @@ export const kyCongService = {
         cong: n.tong.cong,
         thieu: n.tong.thieu,
       })),
+      nghiGiuaKy: g.nguoi.filter((n) => n.ngayCuoi).length,
       khung: g.khung,
       suKien: ky ? await kyCongRepo.suKien(ky.id) : [],
       phutMotCong: g.phutMotCong,
@@ -228,10 +275,10 @@ export const kyCongService = {
     const idTheoMa = new Map(d.emps.map((e) => [e.code, e.id]))
     const dong: (DongChot & { employeeId: string })[] = [
       ...banChotTu(d.g.nguoi),
-      ...d.emps
-        // Người nghỉ / vào giữa kỳ vẫn có dòng; số công tính theo phần kỳ họ còn làm (0248).
-        .filter((e) => e.attendance_exempt && lamTrongKy(e, d.g.tu, d.g.den))
-        .map((e): DongChot => ({
+      // Người không chấm công: một dòng không ngày, không giờ — bảng lương trả lương tháng
+      // (hoặc số công Kế toán nhập ở hr_time_manual, đọc thẳng không qua bản chốt).
+      ...d.khongCham.map(
+        (e): DongChot => ({
           ma: e.code,
           ten: e.full_name,
           to: e.team,
@@ -242,7 +289,8 @@ export const kyCongService = {
           nghi: null,
           khong: false,
           miem: true,
-        })),
+        }),
+      ),
     ]
       .filter((x) => idTheoMa.has(x.ma))
       .map((x) => ({ ...x, employeeId: idTheoMa.get(x.ma)! }))
@@ -276,6 +324,10 @@ export const kyCongService = {
         khongCham: dong.filter((x) => x.miem).length,
       },
     })
+    // Hệ thống tự tính bảng lương nháp + báo người quản lý lương (luồng duyệt 21/10/2026).
+    // Chờ xong rồi mới trả lời: chạy kiểu bắn-rồi-quên thì máy chủ serverless có thể tắt
+    // giữa chừng. Lỗi tính bị nuốt ở bus — kỳ công VẪN chốt, chị Phụng bấm Tính tay.
+    await emit({ name: 'hr.period.closed', thang, lan, closed_by: user.id })
     return { cong, nguoi: d.g.nguoi.length }
   },
 

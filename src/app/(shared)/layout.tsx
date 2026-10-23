@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { resolveDefaultWorkspace } from '@/workspaces/resolveWorkspace'
+import { khuChoTrangChung } from '@/workspaces/resolveWorkspace'
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
 
@@ -12,7 +12,8 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
  * đăng nhập — quyền SỬA vẫn do service quyết theo `technical.edit` /
  * `technical.bom.edit`, và mỗi tab đã nhận cờ `canEdit` để ẩn nút.
  *
- * Shell lấy theo workspace NHÀ của người xem, nên NV Kho mở hồ sơ SP vẫn ở
+ * Shell lấy theo workspace người xem VỪA ĐỨNG (cookie `ws_dang` do proxy ghi), không có
+ * thì workspace NHÀ, nên NV Kho mở hồ sơ SP vẫn ở
  * trong sidebar Kho chứ không bị quăng sang shell Kỹ thuật. User không có phòng
  * (chưa gán dept) thì mượn shell Kỹ thuật — chủ quản của thư viện SP.
  */
@@ -20,6 +21,7 @@ export default async function SharedLayout({ children }: { children: React.React
   const user = await authService.currentUser()
   if (!user) redirect('/login')
 
-  const workspace = (await resolveDefaultWorkspace(user)) ?? WORKSPACES.technical
+  // Giữ khu người dùng vừa đứng (21/10/2026); không vào được khu đó thì về khu nhà.
+  const workspace = (await khuChoTrangChung(user)) ?? WORKSPACES.technical
   return <WorkspaceShell workspace={workspace}>{children}</WorkspaceShell>
 }

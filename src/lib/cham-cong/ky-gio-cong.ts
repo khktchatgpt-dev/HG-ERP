@@ -22,7 +22,24 @@ import {
 } from './gio-khung'
 import { apDieuChinh, theoNguoiNgay, type DieuChinh, type LoaiNghi } from './dieu-chinh'
 
-export type CachTinh = 'khung' | 'ngay'
+/**
+ * KHUNG: giờ vào–ra theo khung (xưởng). NGÀY: có quẹt = 1 công. ĐỦ (22/10/2026, văn phòng
+ * theo sổ T9): mỗi ngày làm việc từ ngày vào tới ngày nghỉ việc = 1 công, chỉ trừ ngày có
+ * phiếu Nghỉ; ngày lễ = nghỉ lễ có lương; Chủ nhật chỉ tính khi có quẹt.
+ */
+export type CachTinh = 'khung' | 'ngay' | 'du'
+
+export const CACH_TINH: CachTinh[] = ['khung', 'ngay', 'du']
+export const TEN_CACH_TINH: Record<CachTinh, string> = {
+  khung: 'Theo khung giờ (giờ ÷ 8)',
+  ngay: 'Theo ngày (có quẹt = 1 công)',
+  du: 'Đủ công (trừ ngày nghỉ có đơn)',
+}
+/** calc_mode trong DB → cách tính; giá trị lạ / trống = khung. */
+export const cachTinhCua = (m: string | null | undefined): CachTinh =>
+  CACH_TINH.find((c) => c === m) ?? 'khung'
+/** Cách tính không theo khung giờ (không làm tròn vào–ra, không tăng ca, không làm trưa). */
+export const khongTheoKhung = (c: CachTinh) => c !== 'khung'
 
 /** Ngày bắt đầu kỳ: kỳ tháng M chạy từ ngày này của tháng M−1 tới ngày (này − 1) của tháng M. */
 export const NGAY_DAU_KY = 26
@@ -30,7 +47,7 @@ export const NGAY_DAU_KY = 26
 const isoUtc = (y: number, m0: number, d: number) =>
   new Date(Date.UTC(y, m0, d)).toISOString().slice(0, 10)
 
-/** Kỳ công của tháng 'YYYY-MM' → { tu, den } ('YYYY-MM-DD', tính cả hai đầu). */
+/** Kỳ MẶC ĐỊNH 26 → 25 của tháng 'YYYY-MM' — chỉ dùng khi Nhân sự chưa đặt; mọi nơi khác gọi `khoang-ky.ts` / `khoangKyService`. */
 export function kyCuaThang(thang: string): { tu: string; den: string } {
   const [y, m] = thang.split('-').map(Number)
   return { tu: isoUtc(y, m - 2, NGAY_DAU_KY), den: isoUtc(y, m - 1, NGAY_DAU_KY - 1) }
@@ -73,6 +90,8 @@ export type NgayGio = {
   /** Có điều chỉnh đã duyệt / đang chờ duyệt. */
   daSua: boolean
   choDuyet: number
+  /** Cách tính "Đủ công": ngày làm việc không có lượt nào, không có đơn — vẫn 1 công, bày để soi. */
+  khongQuet?: boolean
 }
 
 export type TongNguoi = {
@@ -94,6 +113,10 @@ export type NguoiGio = {
   ma: string
   ten: string
   boPhan: string | null
+  /** Ngày làm cuối của người ĐÃ NGHỈ (còn làm trong kỳ); null = đang làm. */
+  ngayCuoi?: string | null
+  /** Ngày vào làm — chỉ để KHÔNG đếm vắng trước đó (không bỏ công: nhiều ngày vào còn sai). */
+  ngayVao?: string | null
   cachTinh: CachTinh
   ngay: NgayGio[]
   tong: TongNguoi
@@ -106,7 +129,18 @@ export type KyGioVao = {
    * `caVao` (tuỳ chọn) = giờ vào ca thường làm, phút từ 0h. Ca bắt đầu trước mốc ca đêm
    * (Bếp 03:30) thì lượt sáng sớm là giờ VÀO ca hôm đó, không gắn sang ca đêm hôm trước.
    */
-  nhanSu: { ma: string; ten: string; boPhan: string | null; caVao?: number | null }[]
+  nhanSu: {
+    ma: string
+    ten: string
+    boPhan: string | null
+    caVao?: number | null
+    /**
+     * Ngày làm cuối của người đã nghỉ mà còn làm trong kỳ (21/10/2026: đối chiếu T9 thấy
+     * người nghỉ bị mất khỏi bảng công → mất lương). Ngày sau mốc này không thuộc kỳ của họ.
+     */
+    ngayCuoi?: string | null
+    ngayVao?: string | null
+  }[]
   /** Lượt máy theo người-ngày (giờ VN 'HH:mm:ss') — nên gồm cả ngày trước kỳ và sau kỳ để ghép ca đêm. */
   dong: {
     ngay: string
@@ -124,14 +158,25 @@ export type KyGioVao = {
    * (đo 17/10/2026: lấy lúc trưa 16/10 → cả công ty "thiếu lượt" ngày 16/10). Bỏ trống = mọi ngày trọn.
    */
   ngayDoDang?: string
+  /** Ngày lễ trong kỳ — chỉ cách tính "Đủ công" dùng (ngày lễ = nghỉ lễ có lương). */
+  ngayLe?: readonly string[]
   thamSo?: ThamSoKhung
 }
 
+const laChuNhat = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay() === 0
+
 const khongKhung = (t: ThamSoKhung) => Object.fromEntries(t.khung.map((k) => [k.ma, 0]))
+
+/** Ngày `iso` nằm trong thời gian người này còn làm (ngoài khoảng đó không đếm vắng). */
+export const trongThoiGianLam = (
+  n: { ngayVao?: string | null; ngayCuoi?: string | null },
+  iso: string,
+) => (!n.ngayVao || iso >= n.ngayVao) && (!n.ngayCuoi || iso <= n.ngayCuoi)
 
 export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
   const t = v.thamSo ?? THAM_SO_MAC_DINH
   const dcMap = theoNguoiNgay(v.dieuChinh)
+  const le = new Set(v.ngayLe ?? [])
 
   // Lượt máy theo người → theo ngày
   const luotCua = new Map<string, Map<string, { gio: string; may: string }[]>>()
@@ -170,22 +215,43 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
     // thuộc ca đêm hôm trước. Đối chiếu phần mềm cũ 20/10/2026: không có chặn này thì một
     // ngày quên quẹt kéo lệch dây chuyền 24 ngày (lượt 03:48 bị gắn vào ca 16:44 hôm trước).
     const tn =
-      n.caVao != null && n.caVao < t.caDemDen
-        ? { ...t, caDemDen: Math.max(0, n.caVao - 60) }
-        : t
+      n.caVao == null
+        ? t
+        : n.caVao < t.caDemDen
+          ? { ...t, caDemDen: Math.max(0, n.caVao - 60), gioVaoCa: n.caVao }
+          : { ...t, gioVaoCa: n.caVao }
     const lam = new Map(ghepNgayLam(tho, tn).map((x) => [x.ngay, x]))
     const tatCa = new Set([...lam.keys(), ...nghiCua.keys(), ...suaCua.keys()])
+    if (cachTinh === 'du')
+      // Mọi ngày làm việc trong thời gian còn làm, tới ngày có dữ liệu (ngày sau đó chưa tới).
+      for (let d = v.tu; d <= v.den; d = congNgay(d, 1)) {
+        if (v.ngayDoDang && d > v.ngayDoDang) break
+        if (laChuNhat(d) || !trongThoiGianLam(n, d)) continue
+        tatCa.add(d)
+      }
     for (const d of [...tatCa].sort()) {
       if (d < v.tu || d > v.den) continue
+      if (n.ngayCuoi && d > n.ngayCuoi) continue
       const x = lam.get(d)
-      const nghi = nghiCua.get(d) ?? null
+      let nghi = nghiCua.get(d) ?? null
       const sua = suaCua.get(d) ?? { daSua: false, choDuyet: 0 }
       const luot = x?.luot ?? []
       let k: Record<string, number> | null = null
       let doan = x?.doan ?? null
       let xt = false
       let trua = 0
-      if (cachTinh === 'ngay') {
+      let khongQuet = false
+      if (cachTinh === 'du') {
+        // Đủ công: phiếu Nghỉ thắng; ngày lễ = nghỉ lễ (lương trả theo hệ số "Nghỉ lễ", không
+        // phải tăng ca ngày lễ); còn lại 1 công dù có quẹt hay không. Chủ nhật vào đây chỉ khi có lượt.
+        doan = null
+        if (!nghi && le.has(d)) nghi = 'holiday'
+        if (!nghi) {
+          k = khongKhung(t)
+          k[t.khungHanhChinh] = t.phutMotCong
+          khongQuet = !luot.length
+        }
+      } else if (cachTinh === 'ngay') {
         // Không tính theo khung giờ (chủ dự án 18/10/2026: văn phòng và các vị trí ngoài
         // xưởng): có quẹt trong ngày = đúng một công, không cộng giờ ra muộn.
         if (luot.length) {
@@ -216,6 +282,7 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
         nghi,
         daSua: sua.daSua,
         choDuyet: sua.choDuyet,
+        ...(khongQuet ? { khongQuet } : {}),
       })
     }
 
@@ -227,6 +294,8 @@ export function tinhKyGioCong(v: KyGioVao): NguoiGio[] {
       ma: n.ma,
       ten: n.ten,
       boPhan: n.boPhan,
+      ngayCuoi: n.ngayCuoi ?? null,
+      ngayVao: n.ngayVao ?? null,
       cachTinh,
       ngay,
       tong: {

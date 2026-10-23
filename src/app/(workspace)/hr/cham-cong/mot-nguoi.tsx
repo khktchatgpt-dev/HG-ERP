@@ -6,14 +6,20 @@ import { Btn, DateInput, NoticeBar } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { tenMay } from '@/lib/cham-cong/mot-nguoi'
-import { kyCuaThang } from '@/lib/cham-cong/ky-gio-cong'
 import type { MotNguoiCong } from '@/modules/dept/hr/cham-cong/gio-cong.service'
 import { KhungTrang } from './khung-trang'
 import { doiThang } from './ky-cong.shared'
 import { CongTungNgay } from './cong-tung-ngay'
 
 /** Kỳ đang xem — chỉ cần ngần này để đặt khoảng mặc định và nút nhanh. */
-export type KyXem = { thang: string; tu: string; den: string; homNay: string }
+export type KyXem = {
+  thang: string
+  tu: string
+  den: string
+  homNay: string
+  /** Khoảng kỳ liền trước (theo khoảng Nhân sự đặt) — nút nhanh "Kỳ trước". */
+  truoc: { tu: string; den: string }
+}
 
 /**
  * TRANG "CHẤM CÔNG MỘT NGƯỜI" (bản vẽ MotNguoi.dc.html, duyệt 16/10/2026; thành
@@ -79,8 +85,8 @@ function NoiDung({ ky: k, ma }: { ky: KyXem; ma: string }) {
     }
   }, [q, khoa, sai])
 
-  // Kỳ công 26 → 25 (không phải tháng dương lịch) — cùng kỳ với Bảng công.
-  const kyTruoc = kyCuaThang(doiThang(k.thang, -1))
+  // Kỳ công theo khoảng Nhân sự đặt (không phải tháng dương lịch) — cùng kỳ với Bảng công.
+  const kyTruoc = k.truoc
   const nhanh: { ten: string; tu: string; den: string }[] = [
     { ten: 'Kỳ này', tu: k.tu, den: denKy },
     { ten: 'Kỳ trước', tu: kyTruoc.tu, den: kyTruoc.den },

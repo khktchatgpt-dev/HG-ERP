@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import type { DongTien, LoaiKhoan } from '@/lib/luong/tinh-luong'
+import type { KhoiLuong } from '@/lib/luong/tong-duyet'
 
 /** Bảng lương — bảng 0246. Chỉ `bang-luong.service` gọi (đã gác quyền). */
 
@@ -48,7 +49,11 @@ export type PhieuDong = {
   bhNld: number
   bhDn: number
   kpcd: number
+  /** Đoàn phí NLĐ 0,5 % lương BH (0254). */
+  doanPhi: number
   thue: number
+  /** Thuế có trừ vào thực lĩnh không — Q5: chưa trừ, chỉ bày. */
+  truThue: boolean
   khoanTru: number
   thucLinh: number
   nganHang: string | null
@@ -125,6 +130,24 @@ const doi = (r: Row): BangDong => ({
 const so = (v: unknown) => Number(v ?? 0)
 
 export const bangLuongRepo = {
+  /** Tên tổ → khối bảng lương (0257) — màn duyệt của sếp gom khối → tổ. */
+  async khoiCuaTo(): Promise<Map<string, KhoiLuong | null>> {
+    const rows = must(await db().from('hr_teams').select('name, pay_block'))
+    return new Map(rows.map((r) => [r.name, (r.pay_block as KhoiLuong | null) ?? null]))
+  },
+
+  /** Mọi bảng đang CHỜ DUYỆT (thường một) — Hộp ký của sếp + số đếm menu. */
+  async choDuyet(): Promise<BangDong[]> {
+    const rows = must(
+      await db()
+        .from('hr_payrolls')
+        .select(COT)
+        .eq('status', 'submitted')
+        .order('period'),
+    ) as unknown as Row[]
+    return rows.map(doi)
+  },
+
   async bang(thang: string): Promise<BangDong | null> {
     const r = must(
       await db().from('hr_payrolls').select(COT).eq('period', thang).maybeSingle(),
@@ -182,7 +205,9 @@ export const bangLuongRepo = {
               insurance_employee: p.bhNld,
               insurance_company: p.bhDn,
               union_fee: p.kpcd,
+              union_fee_employee: p.doanPhi,
               tax: p.thue,
+              tax_withheld: p.truThue,
               item_minus: p.khoanTru,
               net: p.thucLinh,
               bank_name: p.nganHang,
@@ -224,7 +249,9 @@ export const bangLuongRepo = {
           bhNld: so(r.insurance_employee),
           bhDn: so(r.insurance_company),
           kpcd: so(r.union_fee),
+          doanPhi: so(r.union_fee_employee),
           thue: so(r.tax),
+          truThue: r.tax_withheld,
           khoanTru: so(r.item_minus),
           thucLinh: so(r.net),
           nganHang: r.bank_name,
@@ -308,7 +335,8 @@ export const bangLuongRepo = {
   async ghiSuKien(
     bangId: string,
     viec: string,
-    userId: string,
+    /** null = hệ thống tự làm (tự tính khi chốt công). */
+    userId: string | null,
     ghiChu?: string | null,
     data?: Record<string, unknown>,
   ) {

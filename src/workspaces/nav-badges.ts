@@ -5,6 +5,7 @@ import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
 import { choToiDuyet } from '@/lib/de-nghi-duyet'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
+import { duyetLuongService } from '@/modules/dept/hr/luong/duyet-luong.service'
 import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
@@ -72,13 +73,14 @@ async function deNghiChoToi(user: User): Promise<number> {
 /** Khu Giám đốc: "Chờ tôi phê duyệt" = PO + LSX + báo giá + đề nghị mua đang chờ ký. */
 async function execBadges(user: User): Promise<Record<string, number>> {
   if (!(await canAction(user, 'exec.approvals.view'))) return {}
-  const [pos, lsx, quotes, dnm] = await Promise.all([
+  const [pos, lsx, quotes, dnm, luong] = await Promise.all([
     posRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
     productionRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
     quotesRepo.list({ status: 'pending_approval', page: 1, page_size: 1 }),
     deNghiChoToi(user),
+    duyetLuongService.demChoToiDuyet(user),
   ])
-  const total = pos.total + lsx.total + quotes.total + dnm
+  const total = pos.total + lsx.total + quotes.total + dnm + luong
   const out: Record<string, number> = {}
   if (total > 0) out['/exec/approvals'] = total
   return out

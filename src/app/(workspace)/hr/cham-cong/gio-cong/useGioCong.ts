@@ -4,8 +4,14 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
-import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
+import {
+  khongTheoKhung,
+  TEN_CACH_TINH,
+  trongThoiGianLam,
+  type CachTinh,
+} from '@/lib/cham-cong/ky-gio-cong'
 import type { MoDieuChinh } from '../dieu-chinh-sheet'
+import { laLuotRangSang } from '@/lib/cham-cong/dieu-chinh'
 import {
   chiTietNgay,
   tongCong,
@@ -47,7 +53,7 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
   const [dangGhi, setDangGhi] = useState(false)
 
   const vp = useMemo(
-    () => new Set(b.boPhan.filter((x) => x.cachTinh === 'ngay').map((x) => x.ten)),
+    () => new Set(b.boPhan.filter((x) => khongTheoKhung(x.cachTinh)).map((x) => x.ten)),
     [b.boPhan],
   )
   /** Ngăn đang xem: lưới trạng thái từng ngày, hay bảng tổng hợp theo người. */
@@ -73,7 +79,8 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
         .map((iso) => chiTietNgay(iso, theo.get(iso), b.thamSo, n.cachTinh, b.le))
       out.set(n.ma, {
         ngay: new Map(ds.map((x) => [x.ngay, x])),
-        tong: tongCong(ds, daLay),
+        // Trước ngày vào / sau ngày làm cuối không còn là "vắng".
+        tong: tongCong(ds, (iso) => daLay(iso) && trongThoiGianLam(n, iso)),
       })
     }
     return { cua: out, daLay }
@@ -120,15 +127,21 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
     const n = nguoiCua(ma)
     if (!n) return
     const x = ngayCua(n, ngay)
+    const luot = b.luotMay[`${ma}|${ngay}`] ?? []
     setO(null)
     setMoDc({
       ma,
       ten: n.ten,
       to: n.boPhan,
-      ca: n.cachTinh === 'ngay' ? 'tính theo ngày' : 'tính theo khung giờ',
+      ca: TEN_CACH_TINH[n.cachTinh].toLowerCase(),
       ngay,
-      luot: b.luotMay[`${ma}|${ngay}`] ?? [],
-      loi: x?.thieu ? 'Chỉ 1 lượt — không tính được giờ' : undefined,
+      luot,
+      loi: x?.thieu
+        ? laLuotRangSang(luot, b.thamSo.caDemDen)
+          ? 'Chỉ 1 lượt rạng sáng — ca đêm thiếu lượt vào tối hôm trước'
+          : 'Chỉ 1 lượt — không tính được giờ'
+        : undefined,
+      caDemDen: b.thamSo.caDemDen,
     })
   }
 
@@ -161,9 +174,7 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
         method: 'POST',
         body: { boPhan, cachTinh },
       })
-      toast.success(
-        `${boPhan}: ${cachTinh === 'ngay' ? 'tính theo ngày' : 'tính theo khung giờ'}`,
-      )
+      toast.success(`${boPhan}: ${TEN_CACH_TINH[cachTinh].toLowerCase()}`)
       router.refresh()
     } catch (e) {
       toast.error('Không đổi được cách tính', apiErrorText(e))

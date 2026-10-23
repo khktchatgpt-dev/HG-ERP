@@ -3306,6 +3306,73 @@ export type Database = {
           },
         ]
       }
+      hr_time_manual: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          kind: string
+          note: string | null
+          ot_minutes: number
+          period: string
+          reason: string | null
+          updated_at: string
+          updated_by: string | null
+          work_days: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          kind?: string
+          note?: string | null
+          ot_minutes?: number
+          period: string
+          reason?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          work_days: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          ot_minutes?: number
+          period?: string
+          reason?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          work_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_time_manual_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_manual_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_time_manual_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_time_periods: {
         Row: {
           calc_version_id: string | null
@@ -3390,6 +3457,7 @@ export type Database = {
           id: number
           leave_type: string | null
           lunch_minutes: number
+          manual: boolean
           period_id: string
           team: string | null
           total_minutes: number
@@ -3406,6 +3474,7 @@ export type Database = {
           id?: never
           leave_type?: string | null
           lunch_minutes?: number
+          manual?: boolean
           period_id: string
           team?: string | null
           total_minutes?: number
@@ -3422,6 +3491,7 @@ export type Database = {
           id?: never
           leave_type?: string | null
           lunch_minutes?: number
+          manual?: boolean
           period_id?: string
           team?: string | null
           total_minutes?: number
@@ -5906,49 +5976,6 @@ export type Database = {
           },
         ]
       }
-      // 0275 (22/10/2026) — sửa tay, quan hệ FK không khai (service không embed).
-      supply_lsx_sourcing: {
-        Row: {
-          id: string
-          production_order_id: string
-          material_id: string
-          supplier_id: string
-          price: number | null
-          price_basis: string
-          note: string | null
-          created_by: string | null
-          updated_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          production_order_id: string
-          material_id: string
-          supplier_id: string
-          price?: number | null
-          price_basis?: string
-          note?: string | null
-          created_by?: string | null
-          updated_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          production_order_id?: string
-          material_id?: string
-          supplier_id?: string
-          price?: number | null
-          price_basis?: string
-          note?: string | null
-          created_by?: string | null
-          updated_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       supply_lsx_needs: {
         Row: {
           created_at: string
@@ -6035,6 +6062,112 @@ export type Database = {
           },
           {
             foreignKeyName: "supply_lsx_needs_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_lsx_sourcing: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          material_id: string
+          note: string | null
+          price: number | null
+          price_basis: string
+          production_order_id: string
+          supplier_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id: string
+          note?: string | null
+          price?: number | null
+          price_basis?: string
+          production_order_id: string
+          supplier_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id?: string
+          note?: string | null
+          price?: number | null
+          price_basis?: string
+          production_order_id?: string
+          supplier_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_lsx_sourcing_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_sourcing_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"

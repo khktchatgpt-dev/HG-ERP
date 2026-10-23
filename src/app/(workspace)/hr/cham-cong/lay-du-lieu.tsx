@@ -29,6 +29,7 @@ export function LayDuLieuScreen({ k }: { k: KyCong }) {
     <KhungTrang
       ten="Lấy dữ liệu từ máy"
       thang={k.thang}
+      khoang={{ tu: k.tu, den: k.den }}
       onThang={d.xemThang}
       facts={[{ label: 'Ngày có lượt', value: `${ngayCo}/${k.du.theoNgay.length}` }]}
       actions={

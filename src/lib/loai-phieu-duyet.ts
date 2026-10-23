@@ -16,7 +16,7 @@
  * vị trí). Chủ dự án 14/10/2026: "làm tab ngang các phòng có cảnh báo số lượng
  * trên tab … mặc định hiển thị là phòng cung ứng" → `PHONG_MAC_DINH`.
  */
-export const PHONG_TRINH = ['mua_hang', 'kho', 'san_xuat', 'ban_hang'] as const
+export const PHONG_TRINH = ['mua_hang', 'kho', 'san_xuat', 'ban_hang', 'ke_toan'] as const
 export type PhongTrinh = (typeof PHONG_TRINH)[number]
 
 export const PHONG_NHAN: Record<PhongTrinh, string> = {
@@ -24,12 +24,13 @@ export const PHONG_NHAN: Record<PhongTrinh, string> = {
   kho: 'Kho',
   san_xuat: 'Sản xuất',
   ban_hang: 'Bán hàng',
+  ke_toan: 'Kế toán',
 }
 
 /** Tab mở sẵn khi vào Hộp ký (chủ dự án 14/10/2026). */
 export const PHONG_MAC_DINH: PhongTrinh = 'mua_hang'
 
-export type LoaiPhieu = 'po' | 'dnm' | 'lsx' | 'quote'
+export type LoaiPhieu = 'po' | 'dnm' | 'lsx' | 'quote' | 'luong'
 
 export type KhaiLoai = {
   /** Nhãn ngắn — chip, tag trong khối "Cần ký trước". */
@@ -95,6 +96,17 @@ export const LOAI_PHIEU: Record<LoaiPhieu, KhaiLoai> = {
       hen: 'Hiệu lực',
       giaTri: '—',
     },
+  },
+  // Bảng lương (luồng duyệt 21/10/2026): người quản lý lương gửi, sếp duyệt trên TỔNG theo bộ
+  // phận — luôn mở ra xem (không ký nhanh), sếp không thấy lương từng người.
+  luong: {
+    nhan: 'Bảng lương',
+    ten: 'Bảng lương',
+    phong: 'ke_toan',
+    thuTu: 50,
+    kyNhanh: false,
+    so: null,
+    cot: { doiTac: 'Người gửi', noiDung: 'Kỳ lương', boiCanh: '—', hen: 'Kỳ', giaTri: 'Thực lĩnh' }, // prettier-ignore
   },
 }
 

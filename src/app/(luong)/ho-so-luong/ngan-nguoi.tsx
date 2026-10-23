@@ -2,7 +2,13 @@
 
 import { useState } from 'react'
 import { Btn, Loading, NumInput, Pick, TextInput, Tick } from '@/components/kit'
-import { TEN_CACH_TRA, type CachTra } from '@/lib/luong/ho-so-luong'
+import {
+  cachPcTuMa,
+  LUA_CHON_CACH_PC,
+  maCachPc,
+  TEN_CACH_TRA,
+  type CachTra,
+} from '@/lib/luong/ho-so-luong'
 import { ngayVn } from '@/lib/nhan-su/bien-dong'
 import type { HoSoLuongCtx } from './useHoSoLuong'
 import { congKy, docTien, kyVn, lucVn, so, tienVn } from './luong.shared'
@@ -56,6 +62,15 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
   const [phuCap, setPhuCap] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(b?.phuCap ?? {}).map(([k, v]) => [k, tienVn(v)])),
   )
+  // 0254 — khớp sổ KT: cách tính từng dòng phụ cấp, tăng ca khoán (QC), đoàn phí.
+  const [phuCapCach, setPhuCapCach] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries(b?.phuCapCach ?? {}).map(([k, v]) => [k, maCachPc(v)]),
+    ),
+  )
+  const [tcKhoan, setTcKhoan] = useState(b?.tangCaGio != null)
+  const [tcGio, setTcGio] = useState(tienVn(b?.tangCaGio))
+  const [doanPhi, setDoanPhi] = useState(b?.doanPhi ?? true)
   const kyChon = [0, 1, 2].map((n) => congKy(kyMoi, n))
   if (b && !x.khoa && !kyChon.includes(b.tuKy)) kyChon.unshift(b.tuKy)
 
@@ -65,11 +80,13 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
       ? 'Nhập đơn giá một công'
       : cachTra === 'monthly' && tien(luongThang) == null
         ? 'Nhập lương tháng'
-        : [donGia, luongThang, luongBh, ...Object.values(phuCap)].some(
-              (s) => tien(s) === undefined,
-            )
-          ? 'Có ô số tiền gõ sai'
-          : null
+        : tcKhoan && tien(tcGio) == null
+          ? 'Nhập số tiền một giờ tăng ca khoán'
+          : [donGia, luongThang, luongBh, tcGio, ...Object.values(phuCap)].some(
+                (s) => tien(s) === undefined,
+              )
+            ? 'Có ô số tiền gõ sai'
+            : null
 
   async function luu() {
     if (loi) return
@@ -91,6 +108,11 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
           Object.entries(phuCap)
             .map(([k, v]) => [k, tien(v) ?? 0] as const)
             .filter(([, v]) => v > 0),
+        ),
+        tangCaGio: tcKhoan ? (tien(tcGio) ?? null) : null,
+        doanPhi: coBh && doanPhi,
+        phuCapCach: Object.fromEntries(
+          Object.keys(phuCap).map((k) => [k, cachPcTuMa(phuCapCach[k] ?? 'chia')]),
         ),
       },
       `Đã lưu hồ sơ lương ${x.ma} từ kỳ ${kyVn(tuKy)}`,
@@ -152,6 +174,28 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
               />
             </>
           )}
+          <span className="text-[var(--ink-3)]">Tăng ca</span>
+          <Pick
+            label="Cách trả tăng ca"
+            width={190}
+            value={tcKhoan ? 'khoan' : 'he_so'}
+            onChange={(v) => setTcKhoan(v === 'khoan')}
+            options={[
+              { value: 'he_so', label: 'Theo hệ số khung giờ' },
+              { value: 'khoan', label: 'Khoán đồng / giờ' },
+            ]}
+          />
+          {tcKhoan && (
+            <>
+              <span className="text-[var(--ink-3)]">Một giờ tăng ca</span>
+              <NumInput
+                aria-label="Tiền một giờ tăng ca khoán"
+                value={tcGio}
+                onCommit={setTcGio}
+                className={OSO}
+              />
+            </>
+          )}
           <span className="text-[var(--ink-3)]">Tham gia BH</span>
           <Tick label="Có đóng BHXH · BHYT · BHTN" checked={coBh} onChange={setCoBh} />
           {coBh && (
@@ -162,6 +206,12 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
                 value={luongBh}
                 onCommit={setLuongBh}
                 className={OSO}
+              />
+              <span className="text-[var(--ink-3)]">Đoàn phí</span>
+              <Tick
+                label="Trừ 0,5 % lương đóng BH"
+                checked={doanPhi}
+                onChange={setDoanPhi}
               />
             </>
           )}
@@ -184,6 +234,8 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
               ten={l.ten}
               value={phuCap[l.id] ?? ''}
               onCommit={(v) => setPhuCap((p) => ({ ...p, [l.id]: v }))}
+              cach={phuCapCach[l.id] ?? 'chia'}
+              onCach={(v) => setPhuCapCach((p) => ({ ...p, [l.id]: v }))}
             />
           ))}
           <span className="text-[var(--ink-3)]">Ghi chú</span>
@@ -195,6 +247,7 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
             icon="luuNhap"
             busy={d.busy === 'ban'}
             aria-disabled={!!loi}
+            blockedBy={d.h.quyen.sua ? undefined : 'Người quản lý lương (Phòng Kế toán)'}
             onClick={luu}
           >
             {b && b.tuKy === tuKy ? 'Lưu bản này' : `Lưu bản từ kỳ ${kyVn(tuKy)}`}
@@ -238,24 +291,43 @@ function NoiDung({ d }: { d: HoSoLuongCtx }) {
 
 const OSO = 'w-36 border border-[var(--line)] px-1.5 py-0.5'
 
+/** Một dòng phụ cấp: mức + cách tính (sổ KT T9: người chia 26, người chia 32, cơm × công…). */
 function PhuCapO({
   ten,
   value,
   onCommit,
+  cach,
+  onCach,
 }: {
   ten: string
   value: string
   onCommit: (v: string) => void
+  cach: string
+  onCach: (v: string) => void
 }) {
+  const luaChon = LUA_CHON_CACH_PC.some((o) => o.ma === cach)
+    ? LUA_CHON_CACH_PC
+    : [...LUA_CHON_CACH_PC, { ma: cach, ten: `÷ ${cach.replace('chia:', '')} × công` }]
   return (
     <>
-      <span className="text-[var(--ink-3)]">{ten}</span>
-      <NumInput
-        aria-label={`Phụ cấp ${ten}`}
-        value={value}
-        onCommit={onCommit}
-        className={OSO}
-      />
+      <span className="self-start pt-0.5 text-[var(--ink-3)]">{ten}</span>
+      <div className="flex flex-col gap-1">
+        <NumInput
+          aria-label={`Phụ cấp ${ten}`}
+          value={value}
+          onCommit={onCommit}
+          className={OSO}
+        />
+        {value && (
+          <Pick
+            label={`Cách tính phụ cấp ${ten}`}
+            width={190}
+            value={cach}
+            onChange={onCach}
+            options={luaChon.map((o) => ({ value: o.ma, label: o.ten }))}
+          />
+        )}
+      </div>
     </>
   )
 }
@@ -346,7 +418,12 @@ function ChiTra({ d }: { d: HoSoLuongCtx }) {
         </span>
       </div>
       <div className="mt-2">
-        <Btn icon="luuNhap" busy={d.busy === 'rieng'} onClick={luu}>
+        <Btn
+          icon="luuNhap"
+          busy={d.busy === 'rieng'}
+          blockedBy={d.h.quyen.sua ? undefined : 'Người quản lý lương (Phòng Kế toán)'}
+          onClick={luu}
+        >
           Lưu chi trả & định danh
         </Btn>
       </div>

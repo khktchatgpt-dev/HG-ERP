@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
+import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { chamCongService } from '@/modules/dept/hr/cham-cong/cham-cong.service'
 import { todayVn } from '@/lib/date-vn'
 import { TongQuanScreen } from './tong-quan'
-import { chonThang } from './ky-cong.shared'
 
 /** Link cũ của trang một-trang-5-bước (12→17/10/2026) → trang mới tương ứng (câu 19). */
 const BUOC_CU: Record<string, string> = {
@@ -29,6 +29,11 @@ export default async function TongQuanPage({
   }
   const user = await authService.requirePageUser()
   const homNay = todayVn()
-  const k = await chamCongService.kyCong(user, chonThang(sp.thang, homNay), homNay, true)
+  const k = await chamCongService.kyCong(
+    user,
+    await khoangKyService.chon(sp.thang, homNay),
+    homNay,
+    true,
+  )
   return <TongQuanScreen k={k} />
 }

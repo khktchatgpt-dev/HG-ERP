@@ -129,7 +129,8 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
             label: 'Giấy tờ',
             ...(h.giayTo?.length ? { signal: { text: String(h.giayTo.length) } } : {}),
           },
-          { id: 'luong', label: 'Lương & ngân hàng' },
+          // Lương là mật (0255): người không có quyền lương không thấy cả tên mục.
+          ...(h.quyen.luong ? [{ id: 'luong', label: 'Lương & ngân hàng' }] : []),
           {
             id: 'lich-su',
             label: 'Lịch sử',
@@ -149,9 +150,11 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
         <DocMenuPanel value="giay-to">
           <TabGiayTo d={d} />
         </DocMenuPanel>
-        <DocMenuPanel value="luong">
-          <TabLuong d={d} />
-        </DocMenuPanel>
+        {h.quyen.luong && (
+          <DocMenuPanel value="luong">
+            <TabLuong d={d} />
+          </DocMenuPanel>
+        )}
         <DocMenuPanel value="lich-su">
           <TabLichSu d={d} />
         </DocMenuPanel>

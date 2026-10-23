@@ -72,7 +72,12 @@ export function useBangLuong(b: BangLuongTrang, mucDau: MucBl) {
         { viec: 'tinh' },
         `Đã tính bảng lương kỳ ${b.thang.slice(5)}/${b.thang.slice(0, 4)}`,
       ),
-    gui: () => viec('gui', { viec: 'gui' }, 'Đã gửi Giám đốc duyệt'),
+    gui: (ghiChu?: string) =>
+      viec(
+        'gui',
+        { viec: 'gui', ghiChu: ghiChu?.trim() || null },
+        'Đã gửi Kế toán trưởng duyệt — đã báo cho chị',
+      ),
     rut: () => viec('rut', { viec: 'rut' }, 'Đã rút về nháp'),
     quyet: (dongY: boolean, lyDo?: string) =>
       viec(
@@ -87,6 +92,28 @@ export function useBangLuong(b: BangLuongTrang, mucDau: MucBl) {
       ds: { employeeId: string; loai: string; tien: number; ghiChu: string | null }[],
     ) => viec('khoan', { viec: 'them_khoan', ds }, `Đã thêm ${ds.length} khoản`),
     xoaKhoan: (id: string) => viec('xoa', { viec: 'xoa_khoan', id }, 'Đã xoá khoản'),
+    /** Công / giờ TC người không chấm công (rời ô là ghi). Không toast khi thành công. */
+    nhapCong: async (v: {
+      ma: string
+      cong: number | null
+      tcGio: number | null
+      ghiChu: string | null
+    }) => {
+      setBusy(`nhap:${v.ma}`)
+      try {
+        await api(`/api/dept/hr/luong/bang/${b.thang}`, {
+          method: 'POST',
+          body: { viec: 'nhap_cong', ...v },
+        })
+        router.refresh()
+        return true
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : 'Không ghi được — thử lại')
+        return false
+      } finally {
+        setBusy(null)
+      }
+    },
   } as const
 }
 

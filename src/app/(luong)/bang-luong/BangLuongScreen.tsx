@@ -36,6 +36,7 @@ import {
 } from './bang-luong.shared'
 import { NganBang } from './ngan-bang'
 import { NganKhoan } from './ngan-khoan'
+import { NganKhongCham } from './ngan-khong-cham'
 import { NganBhThue, NganChuyenKhoan, NganThoiGian } from './ngan-khac'
 import { HopBangLuong } from './hop-bang'
 
@@ -110,23 +111,16 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
       )}
       {d.nhap && d.daTinh && <DaiDieuKien d={d} />}
       <ThanhBao d={d} />
-      {!b.ky || b.ky.trangThai !== 'closed' ? (
+      {!b.ky ? (
         <Empty
-          headline={`Kỳ công ${kyVn(b.thang)} chưa chốt`}
-          reason="Bảng lương tính từ bản chốt của kỳ công — chưa chốt thì chưa có giờ chính thức để tính."
+          headline={`Kỳ ${kyVn(b.thang)} chưa được Nhân sự đặt khoảng ngày`}
+          reason="Bảng lương bám theo kỳ công: chưa có kỳ thì chưa biết ai làm trong kỳ, chưa nhập khoản hay công được."
           next={<Btn href={`/hr/cham-cong/ky?thang=${b.thang}`}>Mở Kỳ công</Btn>}
         />
-      ) : !d.daTinh ? (
-        <Empty
-          headline="Chưa tính bảng lương kỳ này"
-          reason="Kỳ công đã chốt. Bấm Tính để lập phiếu lương từ bản chốt × hồ sơ lương × hệ số."
-          next={
-            <Btn primary icon="lamMoi" busy={d.busy === 'tinh'} onClick={d.tinh}>
-              Tính bảng lương
-            </Btn>
-          }
-        />
       ) : (
+        // Kỳ đã đặt là mở hai ngăn nhập (Khoản theo kỳ, Không chấm công) — Kế toán nhập TRƯỚC khi
+        // Nhân sự chốt / trước khi tính, để lần tính đầu đã đủ số (chủ dự án 23/10/2026). Các ngăn
+        // đọc phiếu (BH & thuế, chuyển khoản, dòng thời gian) chỉ hiện khi đã tính.
         <DocMenu
           label="Nội dung bảng lương"
           value={d.muc}
@@ -136,7 +130,7 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
               id: 'bang',
               label: 'Bảng lương',
               icon: 'tien',
-              signal: { text: so(b.phieu.length) },
+              signal: d.daTinh ? { text: so(b.phieu.length) } : undefined,
             },
             {
               id: 'khoan',
@@ -144,16 +138,58 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
               icon: 'ghiChu',
               signal: b.khoan.length ? { text: String(b.khoan.length) } : undefined,
             },
-            { id: 'bh-thue', label: 'Bảo hiểm & thuế', icon: 'so' },
-            { id: 'chuyen-khoan', label: 'Chuyển khoản', icon: 'gui' },
-            { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' },
+            {
+              id: 'khong-cham',
+              label: 'Không chấm công',
+              icon: 'sua',
+              signal: b.khongCham.length
+                ? {
+                    text: `${b.khongCham.filter((x) => x.cong != null).length}/${b.khongCham.length}`,
+                  }
+                : undefined,
+            },
+            ...(d.daTinh
+              ? [
+                  { id: 'bh-thue', label: 'Bảo hiểm & thuế', icon: 'so' as const },
+                  { id: 'chuyen-khoan', label: 'Chuyển khoản', icon: 'gui' as const },
+                  { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' as const },
+                ]
+              : []),
           ]}
         >
           <DocMenuPanel value="bang">
-            <NganBang d={d} />
+            {b.ky.trangThai !== 'closed' ? (
+              <Empty
+                headline={`Kỳ công ${kyVn(b.thang)} chưa chốt`}
+                reason="Bảng lương tính từ bản chốt của kỳ công — chưa chốt thì chưa có giờ chính thức để tính. Chốt xong hệ thống tự tính bảng nháp."
+                next={
+                  <span className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-[var(--ink-2)]">
+                      Trong lúc chờ: nhập Khoản theo kỳ và công người không chấm công ở hai ngăn bên.
+                    </span>
+                    <Btn href={`/hr/cham-cong/ky?thang=${b.thang}`}>Mở Kỳ công</Btn>
+                  </span>
+                }
+              />
+            ) : !d.daTinh ? (
+              <Empty
+                headline="Chưa tính bảng lương kỳ này"
+                reason="Kỳ công đã chốt. Bấm Tính để lập phiếu lương từ bản chốt × hồ sơ lương × hệ số; khoản theo kỳ và công người không chấm công đã nhập được tính luôn."
+                next={
+                  <Btn primary icon="lamMoi" busy={d.busy === 'tinh'} onClick={d.tinh}>
+                    Tính bảng lương
+                  </Btn>
+                }
+              />
+            ) : (
+              <NganBang d={d} />
+            )}
           </DocMenuPanel>
           <DocMenuPanel value="khoan">
             <NganKhoan d={d} />
+          </DocMenuPanel>
+          <DocMenuPanel value="khong-cham">
+            <NganKhongCham d={d} />
           </DocMenuPanel>
           <DocMenuPanel value="bh-thue">
             <NganBhThue d={d} />
@@ -177,7 +213,7 @@ function NguoiGiu({ d }: { d: BangLuongCtx }) {
     return (
       <HolderBar
         inline
-        who="Ban Giám Đốc"
+        who="Kế toán trưởng"
         what="duyệt hoặc trả lại bảng lương"
         age={lucVn(bang.guiLuc)}
       />
@@ -205,8 +241,8 @@ function NguoiGiu({ d }: { d: BangLuongCtx }) {
       who="Tài Chính Kế Toán"
       what={
         d.vuong.length
-          ? `gỡ ${d.vuong.length} điều kiện rồi gửi Giám đốc`
-          : 'gửi Giám đốc duyệt'
+          ? `gỡ ${d.vuong.length} điều kiện rồi gửi Kế toán trưởng`
+          : 'gửi Kế toán trưởng duyệt'
       }
       age={lucVn(bang.tinhLuc)}
     />
@@ -215,7 +251,7 @@ function NguoiGiu({ d }: { d: BangLuongCtx }) {
 
 function DaiDieuKien({ d }: { d: BangLuongCtx }) {
   return (
-    <div className="grid grid-cols-5 border-b border-[var(--line)] bg-[var(--surface-card)]">
+    <div className="grid grid-cols-6 border-b border-[var(--line)] bg-[var(--surface-card)]">
       {d.b.dieuKien.map((x) => (
         <div
           key={x.ma}
@@ -225,6 +261,8 @@ function DaiDieuKien({ d }: { d: BangLuongCtx }) {
           <b
             className={cn(
               'text-k-body num block font-semibold',
+              // Tên người thiếu phiếu dài → xuống dòng trong ô, không cắt.
+              x.ma === 'du_nguoi' && !x.ok && 'text-k-sm whitespace-normal',
               x.ok ? 'text-[var(--done)]' : 'text-[var(--stop)]',
             )}
           >
@@ -242,7 +280,7 @@ function ThanhBao({ d }: { d: BangLuongCtx }) {
   if (d.tt === 'draft' && b.bang?.lyDoTraLai)
     return (
       <NoticeBar tone="warn" tag="Bị trả lại">
-        Giám đốc trả lại: “{b.bang.lyDoTraLai}”. Sửa ở nguồn, Tính lại, rồi gửi lại.
+        Kế toán trưởng trả lại: “{b.bang.lyDoTraLai}”. Sửa ở nguồn, Tính lại, rồi gửi lại.
       </NoticeBar>
     )
   if (b.canTinhLai)
@@ -250,10 +288,19 @@ function ThanhBao({ d }: { d: BangLuongCtx }) {
       <NoticeBar
         tone="warn"
         tag="Cần tính lại"
-        action={{ label: 'Tính lại', onClick: d.tinh }}
+        action={b.quyen.chay ? { label: 'Tính lại', onClick: d.tinh } : undefined}
       >
         Kỳ công được chốt lại hoặc khoản theo kỳ đổi sau lần tính {b.bang?.lanTinh} — số
         đang bày chưa khớp nguồn.
+      </NoticeBar>
+    )
+  // Lần tính mới nhất do HỆ THỐNG chạy lúc Nhân sự chốt công (luồng duyệt 21/10/2026).
+  if (d.tt === 'draft' && b.bang?.lanTinh && !b.bang.tinhBoi)
+    return (
+      <NoticeBar tone="neutral" tag="Tính tự động">
+        Hệ thống tính từ kỳ công chốt lúc {lucVn(b.ky?.chotLuc ?? b.bang.tinhLuc)}
+        {b.ky?.nguoiChot ? ` (Nhân sự: ${b.ky.nguoiChot})` : ''}. Kiểm tra, sửa hồ sơ
+        lương hoặc thêm khoản theo kỳ rồi bấm Tính lại trước khi gửi duyệt.
       </NoticeBar>
     )
   if (d.tt === 'paid')

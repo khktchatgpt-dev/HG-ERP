@@ -25,7 +25,13 @@ export default async function ApprovalCenterPage({
   ])
   const box = await execService.signBox(user)
   const initialKind: ApprovalKind =
-    loai === 'lsx' || loai === 'po' || loai === 'quote' || loai === 'dnm' ? loai : 'all'
+    loai === 'lsx' ||
+    loai === 'po' ||
+    loai === 'quote' ||
+    loai === 'dnm' ||
+    loai === 'luong'
+      ? loai
+      : 'all'
   // screen: huỷ đệm của <main> — thiếu nó Hộp ký nằm lọt trong viền xám 16–24px
   // và <main> tràn đúng phần đệm đáy thành thanh cuộn thứ hai (14/10/2026).
   return (

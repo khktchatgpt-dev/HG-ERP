@@ -130,9 +130,15 @@ export function dieuKienXacNhanTo(b: BoiCanhKy, to: TongTo): DieuKien[] {
 
 export function dieuKienChot(
   b: BoiCanhKy,
-  v: { choDuyet: number; chuaCoTo: number; to: { ten: string; daXacNhan: boolean }[] },
+  v: {
+    choDuyet: number
+    chuaCoTo: number
+    to: { ten: string; daXacNhan: boolean }[]
+  },
 ): DieuKien[] {
   const chua = v.to.filter((t) => !t.daXacNhan)
+  // Người không chấm công KHÔNG là điều kiện chốt (chủ dự án 23/10/2026): họ lương tháng /
+  // thoả thuận riêng, Kế toán xử lý trên bảng lương — Nhân sự chỉ chốt người có quẹt máy.
   return [
     kyDaHet(b),
     mayDaLay(b),
@@ -170,6 +176,10 @@ export type DongChot = {
   nghi: LoaiNghi | null
   /** Ngày thiếu lượt tổ đã đồng ý tính 0 giờ. */
   khong: boolean
+  /**
+   * Người không chấm công: một dòng không ngày, `k` rỗng. Công thật của họ (nếu Kế toán
+   * nhập) nằm ở hr_time_manual và bảng lương đọc thẳng — không qua bản chốt (23/10/2026).
+   */
   miem: boolean
 }
 

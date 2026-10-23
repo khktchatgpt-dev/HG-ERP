@@ -119,6 +119,40 @@ export const kyCongRepo = {
     return r ? doiKy(r) : null
   },
 
+  /** Mọi kỳ đã có dòng = khoảng kỳ đã đặt (Nhân sự đặt, hoặc sinh lúc chốt). Vài chục dòng. */
+  async dsKhoang(): Promise<{ thang: string; tu: string; den: string }[]> {
+    const rows = must(
+      await db()
+        .from('hr_time_periods')
+        .select('period, date_from, date_to')
+        .order('period'),
+    )
+    return rows.map((r) => ({ thang: r.period, tu: r.date_from, den: r.date_to }))
+  },
+
+  /** Đặt khoảng kỳ: kỳ chưa có dòng thì tạo (status 'open'); có rồi thì chỉ sửa khi còn mở. */
+  async datKhoang(thang: string, tu: string, den: string): Promise<KyDong> {
+    const co = await this.ky(thang)
+    if (!co)
+      must(
+        await db()
+          .from('hr_time_periods')
+          .insert({ period: thang, date_from: tu, date_to: den }),
+      )
+    else {
+      const rows = must(
+        await db()
+          .from('hr_time_periods')
+          .update({ date_from: tu, date_to: den })
+          .eq('id', co.id)
+          .eq('status', 'open')
+          .select('id'),
+      )
+      if (rows.length !== 1) throw new Error('Kỳ vừa đổi trạng thái — tải lại trang')
+    }
+    return (await this.ky(thang))!
+  },
+
   /** Dòng kỳ sinh ở lần chuyển tiếp đầu tiên (kỳ chưa có dòng = đang mở). */
   async damBao(thang: string, tu: string, den: string): Promise<KyDong> {
     const co = await this.ky(thang)
@@ -278,6 +312,7 @@ export const kyCongRepo = {
               leave_type: d.nghi,
               zero_day: d.khong,
               exempt: d.miem,
+              manual: false,
             })),
           ),
       )
@@ -290,7 +325,7 @@ export const kyCongRepo = {
         await db()
           .from('hr_time_results')
           .select(
-            'code, full_name, team, work_date, frame_minutes, lunch_minutes, total_minutes, leave_type, zero_day, exempt',
+            'code, full_name, team, work_date, frame_minutes, lunch_minutes, total_minutes, leave_type, zero_day, exempt, manual',
           )
           .eq('period_id', kyId)
           .eq('close_no', lan)

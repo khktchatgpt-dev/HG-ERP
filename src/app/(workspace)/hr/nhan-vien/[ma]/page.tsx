@@ -20,7 +20,12 @@ export default async function HoSoNvPage({
     <HoSoNvScreen
       key={h.n.id}
       h={h}
-      muc={MUC.includes(sp.muc as Muc) ? (sp.muc as Muc) : 'tong-quan'}
+      muc={
+        // Lương là mật (0255): không có quyền lương thì ?muc=luong rơi về Tổng quan.
+        MUC.includes(sp.muc as Muc) && (sp.muc !== 'luong' || h.quyen.luong)
+          ? (sp.muc as Muc)
+          : 'tong-quan'
+      }
     />
   )
 }

@@ -86,19 +86,6 @@ export function NganNguoi({ d }: { d: KyCongCtx }) {
                 </td>
               </tr>
             ))}
-            {!q &&
-              k.khongCham.map((n) => (
-                <tr key={`kc-${n.ma}`} className="text-[var(--ink-3)]">
-                  <td className={cn(TD, 'num')} style={{ textAlign: 'left' }}>
-                    {n.ma}
-                  </td>
-                  <td className={TD}>{n.ten}</td>
-                  <td className={TD}>{n.to ?? '—'}</td>
-                  <td className={TD} colSpan={3}>
-                    không chấm công — đủ công theo ngày làm việc của kỳ
-                  </td>
-                </tr>
-              ))}
           </tbody>
         </table>
       </div>
@@ -112,9 +99,13 @@ const TEN_VIEC: Record<string, { label: string; tone: Mark['tone'] }> = {
   close: { label: 'Chốt kỳ', tone: 'done' },
   reopen_request: { label: 'Xin mở lại', tone: 'warn' },
   reopen_withdraw: { label: 'Rút yêu cầu mở lại', tone: 'act' },
-  reopen_approve: { label: 'Giám đốc duyệt mở lại', tone: 'warn' },
-  reopen_reject: { label: 'Giám đốc từ chối mở lại', tone: 'stop' },
+  reopen_approve: { label: 'Kế toán trưởng duyệt mở lại', tone: 'warn' },
+  reopen_reject: { label: 'Kế toán trưởng từ chối mở lại', tone: 'stop' },
+  set_range: { label: 'Đặt khoảng kỳ', tone: 'act' },
+  manual_set: { label: 'Nhập công tay', tone: 'act' },
 }
+
+const dmTl = (iso?: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '')
 
 export function NganThoiGian({ d }: { d: KyCongCtx }) {
   const { k } = d
@@ -128,12 +119,38 @@ export function NganThoiGian({ d }: { d: KyCongCtx }) {
     )
   const marks: Mark[] = k.suKien.map((e, i) => {
     const v = TEN_VIEC[e.viec] ?? { label: e.viec, tone: 'act' as const }
-    const data = e.data as { cong?: number; nguoi?: number; ngay0?: number; lan?: number }
+    const data = e.data as {
+      cong?: number
+      nguoi?: number
+      ngay0?: number
+      lan?: number
+      tu?: string
+      den?: string
+      tu_cu?: string
+      den_cu?: string
+      ma?: string
+      ten?: string
+      cong_cu?: number | null
+      tc_gio?: number | null
+      khoi?: string
+      them?: number
+      ly_do?: string
+    }
+    const nhapTay =
+      e.viec !== 'manual_set'
+        ? ''
+        : data.them && data.them > 1
+          ? `Công cộng thêm · ${data.ly_do}: thêm ${data.them} dòng, ${so(data.cong ?? 0, 2)} công`
+          : `${data.khoi === 'B' ? `Công cộng thêm · ${data.ly_do} · ` : ''}${data.ma} ${data.ten}: ${data.cong_cu == null ? 'trống' : so(data.cong_cu, 2)} → ${data.cong == null ? 'xoá' : `${so(data.cong, 2)} công`}${data.tc_gio ? ` + ${so(data.tc_gio, 2)} giờ TC` : ''}`
     const chiTiet = [
+      nhapTay,
+      data.tu && data.den
+        ? `${dmTl(data.tu_cu)} → ${dmTl(data.den_cu)} thành ${dmTl(data.tu)} → ${dmTl(data.den)}`
+        : '',
       e.ghiChu,
       data.lan ? `lần ${data.lan}` : '',
       data.nguoi != null ? `${data.nguoi} người` : '',
-      data.cong != null ? `${so(data.cong, 2)} công` : '',
+      data.cong != null && e.viec !== 'manual_set' ? `${so(data.cong, 2)} công` : '',
       data.ngay0 ? `${data.ngay0} ngày tính 0 giờ` : '',
     ]
       .filter(Boolean)

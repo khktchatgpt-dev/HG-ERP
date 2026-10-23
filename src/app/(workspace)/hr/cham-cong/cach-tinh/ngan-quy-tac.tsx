@@ -148,6 +148,15 @@ export function NganQuyTac({ d }: { d: CachTinhCtx }) {
       vd: `vào 13:12 → ${vd(792)}`,
     },
     {
+      ten: 'Làm tròn giờ vào buổi tối (vào ca đêm) — cùng bậc thang buổi chiều',
+      o: oChon('Làm tròn vào buổi tối', q.lamTronVaoToi ? 'co' : 'khong', coKhong, (v) =>
+        d.doiQuyTac({ lamTronVaoToi: v === 'co' }),
+      ),
+      vd: q.lamTronVaoChieu
+        ? `vào 20:43 → ${vd(1243)} · 20:35 → ${vd(1235)}`
+        : 'cần bật "Làm tròn giờ vào buổi chiều"',
+    },
+    {
       ten: 'Lượt trước giờ này thuộc ca đêm hôm trước',
       o: oGio('Ca đêm đến', q.caDemDen, (p) => d.doiQuyTac({ caDemDen: p })),
       vd: 'vào 22:00, ra 03:10 hôm sau → một ca, ghi vào ngày vào',
