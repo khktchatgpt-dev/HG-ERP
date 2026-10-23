@@ -84,7 +84,7 @@ export function DungCuScreen({
   const storeList: ToolLite[] = store
     .filter((t) => t.status === 'chua_dung' && t.qty === 1)
     .map((t) => ({ id: t.id, code: t.code, name: t.name }))
-  const blocked = meta.can_tools ? undefined : 'Kho / Ban Giám đốc'
+  const blocked = meta.can_tools ? undefined : 'Kho / Nhân sự / Ban Giám đốc'
 
   return (
     <ScreenFrame tableMin={960}>
