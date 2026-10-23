@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Btn, NumInput, Tick } from '@/components/kit'
-import { TEN_NGHI } from '@/lib/cham-cong/dieu-chinh'
+import { TEN_NGHI, laLuotRangSang } from '@/lib/cham-cong/dieu-chinh'
 import { nhanTc } from '@/lib/cham-cong/chi-tiet-cong'
 import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
 import { tenMay } from '@/lib/cham-cong/mot-nguoi'
@@ -98,8 +98,9 @@ export function OGio({ d }: { d: GioCongCtx }) {
         )}
         {x.thieu && (
           <div className="text-[var(--stop)]">
-            Chỉ 1 lượt → không tính được giờ. Bổ sung giờ thật theo phiếu (người lao động
-            ký, tổ trưởng xác nhận).
+            {laLuotRangSang(d.b.luotMay[`${o.ma}|${o.ngay}`] ?? [], d.b.thamSo.caDemDen)
+              ? 'Chỉ 1 lượt rạng sáng → là giờ ra của ca đêm, thiếu lượt vào tối hôm trước. Bổ sung giờ vào theo phiếu (người lao động ký, tổ trưởng xác nhận).'
+              : 'Chỉ 1 lượt → không tính được giờ. Bổ sung giờ thật theo phiếu (người lao động ký, tổ trưởng xác nhận).'}
           </div>
         )}
         {n.cachTinh === 'ngay' && x.k && (

@@ -124,3 +124,44 @@ export function theoNguoiNgay(dcs: readonly DieuChinh[]): Map<string, DieuChinh[
   }
   return m
 }
+
+// ── Gợi ý bổ sung lượt ───────────────────────────────────────────────────────
+
+/** Mốc "lượt rạng sáng" mặc định (05:00, cùng `caDemDen` của gio-khung) khi màn không có bản cách tính. */
+export const CA_DEM_DEN_MAC_DINH = 5 * 60
+
+export type GoiYBoSung = {
+  /** Lượt bổ sung thuộc NGÀY HÔM TRƯỚC: ngày chỉ có một lượt rạng sáng = giờ ra của ca đêm, thiếu lượt vào tối hôm trước. */
+  ngayTruoc: boolean
+  chieu: 'in' | 'out'
+  /** 'HH:MM' */
+  gio: string
+}
+
+const phutCua = (gio: string) => Number(gio.slice(0, 2)) * 60 + Number(gio.slice(3, 5))
+
+/**
+ * Gợi ý mặc định cho ngăn "Bổ sung lượt quẹt" theo lượt máy của ngày (chủ dự án 23/10/2026):
+ *   · một lượt ≤ `caDemDen` (rạng sáng)  → thiếu lượt VÀO tối HÔM TRƯỚC, gợi ý 21:00
+ *   · một lượt buổi sáng                   → thiếu lượt ra, gợi ý 16:00
+ *   · một lượt từ trưa trở đi              → thiếu lượt vào, gợi ý 07:00
+ *   · còn lại (0 hoặc ≥ 2 lượt)            → như cũ: vào 07:00 hôm nay
+ */
+export function goiYBoSung(
+  luot: readonly { gio: string }[],
+  caDemDen = CA_DEM_DEN_MAC_DINH,
+): GoiYBoSung {
+  if (luot.length === 1) {
+    const p = phutCua(luot[0].gio)
+    if (p <= caDemDen) return { ngayTruoc: true, chieu: 'in', gio: '21:00' }
+    if (p < 12 * 60) return { ngayTruoc: false, chieu: 'out', gio: '16:00' }
+    return { ngayTruoc: false, chieu: 'in', gio: '07:00' }
+  }
+  return { ngayTruoc: false, chieu: luot.length ? 'out' : 'in', gio: luot.length ? '16:00' : '07:00' }
+}
+
+/** Một lượt rạng sáng (≤ mốc ca đêm) — ca đêm thiếu lượt vào hôm trước. */
+export const laLuotRangSang = (
+  luot: readonly { gio: string }[],
+  caDemDen = CA_DEM_DEN_MAC_DINH,
+) => luot.length === 1 && phutCua(luot[0].gio) <= caDemDen

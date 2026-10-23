@@ -11,6 +11,7 @@ import {
   type CachTinh,
 } from '@/lib/cham-cong/ky-gio-cong'
 import type { MoDieuChinh } from '../dieu-chinh-sheet'
+import { laLuotRangSang } from '@/lib/cham-cong/dieu-chinh'
 import {
   chiTietNgay,
   tongCong,
@@ -126,6 +127,7 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
     const n = nguoiCua(ma)
     if (!n) return
     const x = ngayCua(n, ngay)
+    const luot = b.luotMay[`${ma}|${ngay}`] ?? []
     setO(null)
     setMoDc({
       ma,
@@ -133,8 +135,13 @@ export function useGioCong(b: GioCong, bpDau: string | undefined) {
       to: n.boPhan,
       ca: TEN_CACH_TINH[n.cachTinh].toLowerCase(),
       ngay,
-      luot: b.luotMay[`${ma}|${ngay}`] ?? [],
-      loi: x?.thieu ? 'Chỉ 1 lượt — không tính được giờ' : undefined,
+      luot,
+      loi: x?.thieu
+        ? laLuotRangSang(luot, b.thamSo.caDemDen)
+          ? 'Chỉ 1 lượt rạng sáng — ca đêm thiếu lượt vào tối hôm trước'
+          : 'Chỉ 1 lượt — không tính được giờ'
+        : undefined,
+      caDemDen: b.thamSo.caDemDen,
     })
   }
 
