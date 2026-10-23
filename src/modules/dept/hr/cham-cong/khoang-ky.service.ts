@@ -33,7 +33,8 @@ export const khoangKyService = {
 
   /** Kỳ trên URL nếu hợp lệ, không thì kỳ đang chứa hôm nay — mặc định chung của mọi màn theo kỳ. */
   async chon(thang: string | undefined, homNay: string): Promise<string> {
-    return thang && /^d{4}-(0[1-9]|1[0-2])$/.test(thang) ? thang : this.thangCua(homNay)
+    // BẪY đã dính: heredoc từng nuốt dấu \ của \d → regex không bao giờ khớp, URL ?thang= bị bỏ qua (23/10/2026).
+    return thang && /^\d{4}-(0[1-9]|1[0-2])$/.test(thang) ? thang : this.thangCua(homNay)
   },
 
   async dat(

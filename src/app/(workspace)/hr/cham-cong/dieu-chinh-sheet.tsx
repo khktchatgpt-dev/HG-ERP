@@ -136,6 +136,8 @@ function Than({
   const [lyDo, setLyDo] = useState('')
   const [canCu, setCanCu] = useState('')
   const [busy, setBusy] = useState(false)
+  // Phiếu đang từ chối + lý do gõ tại chỗ (thay window.prompt).
+  const [tuChoi, setTuChoi] = useState<{ id: string; lyDo: string } | null>(null)
 
   const ban = useMemo(
     () => ({
@@ -202,11 +204,9 @@ function Than({
   }
 
   const quyet = (id: string, viec: 'duyet' | 'tu_choi' | 'rut') => {
-    let ghiChu: string | undefined
-    if (viec === 'tu_choi') {
-      ghiChu = window.prompt('Lý do từ chối')?.trim()
-      if (!ghiChu || ghiChu.length < 2) return
-    }
+    const ghiChu = viec === 'tu_choi' ? tuChoi?.lyDo.trim() : undefined
+    if (viec === 'tu_choi' && (!ghiChu || ghiChu.length < 2)) return
+    if (viec === 'tu_choi') setTuChoi(null)
     void chay(
       () =>
         api('/api/dept/hr/cham-cong/dieu-chinh/quyet', {
@@ -452,14 +452,41 @@ function Than({
                   </td>
                   <td className="py-1.5">
                     <TinhTrang d={d} />
-                    {d.tinhTrang === 'pending' && (
+                    {d.tinhTrang === 'pending' && tuChoi?.id === d.id && (
+                      <span className="mt-1 grid gap-1">
+                        <input
+                          autoFocus
+                          aria-label="Lý do từ chối"
+                          value={tuChoi.lyDo}
+                          maxLength={200}
+                          placeholder="Lý do từ chối (bắt buộc)"
+                          onChange={(e) => setTuChoi({ id: d.id, lyDo: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Enter' && quyet(d.id, 'tu_choi')}
+                          className={cn(o, 'w-full')}
+                        />
+                        <span className="flex gap-1">
+                          <Btn
+                            primary
+                            busy={busy}
+                            aria-disabled={tuChoi.lyDo.trim().length < 2}
+                            onClick={() => quyet(d.id, 'tu_choi')}
+                          >
+                            Xác nhận từ chối
+                          </Btn>
+                          <Btn onClick={() => setTuChoi(null)}>Thôi</Btn>
+                        </span>
+                      </span>
+                    )}
+                    {d.tinhTrang === 'pending' && tuChoi?.id !== d.id && (
                       <span className="mt-1 flex gap-1">
                         {quyen.duyet && d.guiId !== quyen.toi && (
                           <>
                             <Btn primary onClick={() => quyet(d.id, 'duyet')}>
                               Duyệt
                             </Btn>
-                            <Btn onClick={() => quyet(d.id, 'tu_choi')}>Từ chối</Btn>
+                            <Btn onClick={() => setTuChoi({ id: d.id, lyDo: '' })}>
+                              Từ chối
+                            </Btn>
                           </>
                         )}
                         {quyen.duyet && d.guiId === quyen.toi && (

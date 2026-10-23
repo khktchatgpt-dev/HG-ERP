@@ -191,7 +191,7 @@ function NguoiGiu({ d }: { d: BangLuongCtx }) {
     return (
       <HolderBar
         inline
-        who="Ban Giám Đốc"
+        who="Kế toán trưởng"
         what="duyệt hoặc trả lại bảng lương"
         age={lucVn(bang.guiLuc)}
       />

@@ -4,7 +4,7 @@ import { todayVn } from '@/lib/date-vn'
 import { DieuChinhScreen } from '../dieu-chinh-screen'
 import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 
-/** CHẤM CÔNG › ĐIỀU CHỈNH CÔNG — chờ duyệt (mọi kỳ) + lịch sử điều chỉnh trong tháng. */
+/** CHẤM CÔNG › ĐIỀU CHỈNH CÔNG — chờ duyệt (mọi kỳ) + lịch sử điều chỉnh trong kỳ. */
 export default async function DieuChinhPage({
   searchParams,
 }: {
@@ -13,10 +13,10 @@ export default async function DieuChinhPage({
   const sp = await searchParams
   const user = await authService.requirePageUser()
   const thang = await khoangKyService.chon(sp.thang, todayVn())
-  const [y, m] = thang.split('-').map(Number)
-  const den = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+  // Lịch sử lọc theo KHOẢNG KỲ Nhân sự đã đặt (25→25), không theo tháng dương lịch.
+  const k = await khoangKyService.cua(thang)
   const [d, dsKy] = await Promise.all([
-    dieuChinhService.trang(user, `${thang}-01`, den),
+    dieuChinhService.trang(user, k.tu, k.den),
     khoangKyService.ds(),
   ])
   return (
