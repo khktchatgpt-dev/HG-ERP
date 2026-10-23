@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { assetsMeta } from '@/modules/core/assets/assets.service'
+import { assetsMeta, assetsService } from '@/modules/core/assets/assets.service'
 import { resolveDefaultWorkspace } from '@/workspaces/resolveWorkspace'
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
@@ -19,14 +19,26 @@ import { AreaNav } from './may-moc/_ui/area-nav'
 export default async function MayMocLayout({ children }: { children: React.ReactNode }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
-  const [workspace, meta] = await Promise.all([
+  const [workspace, meta, badges] = await Promise.all([
     resolveDefaultWorkspace(user),
     assetsMeta(user),
+    assetsService.navBadges(),
   ])
   return (
     <WorkspaceShell workspace={workspace ?? WORKSPACES.production} bare compactTop>
       <div className="kit kit-dense flex h-full min-h-0 flex-col">
-        <AreaNav showCost={meta.can_cost} />
+        <AreaNav
+          showCost={meta.can_cost}
+          homeLabel={meta.can_approve && !meta.can_work ? 'Tổng quan' : 'Việc hôm nay'}
+          // Như demo: số chờ duyệt chỉ hiện cho người duyệt; dụng cụ của người đã nghỉ
+          // cho người giao/thu hồi dụng cụ.
+          badges={{
+            home: meta.can_approve ? badges.waiting : 0,
+            maint: badges.overdue,
+            issues: badges.new_issues,
+            tools: meta.can_tools ? badges.leavers : 0,
+          }}
+        />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </WorkspaceShell>

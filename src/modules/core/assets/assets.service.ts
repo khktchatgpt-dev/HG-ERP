@@ -4,6 +4,7 @@ import { usersRepo } from '@/modules/core/users/users.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { todayVn } from '@/lib/date-vn'
+import { normalizeSearch } from '@/lib/search-text'
 import {
   addDaysIso,
   addYm,
@@ -26,6 +27,7 @@ import {
   type IssueStatus,
   type PlanState,
   type RepairStats,
+  hoursStale,
 } from '@/lib/may-moc'
 import {
   assetsRepo,
@@ -44,6 +46,7 @@ import type {
   ToolGiveInput,
   ToolRecallInput,
 } from './assets.schema'
+import { issueViews } from './issues.view'
 import {
   buildCostSheet,
   buildTemplate,
@@ -67,6 +70,8 @@ export type AssetsMeta = {
   can_approve: boolean
   can_tools: boolean
   can_cost: boolean
+  /** Nhân viên gắn với tài khoản đang đăng nhập — "Người làm" mặc định như demo (`me()`). */
+  employee_id: string | null
 }
 
 export type PersonLite = {
@@ -74,6 +79,7 @@ export type PersonLite = {
   name: string
   code: string
   team: string | null
+  job_title: string | null
   left_on: string | null
 }
 
@@ -131,7 +137,14 @@ export async function assetsMeta(user: User): Promise<AssetsMeta> {
     canAction(user, 'assets.tools'),
     canAction(user, 'assets.cost.view'),
   ])
-  return { can_edit, can_work, can_approve, can_tools, can_cost }
+  return {
+    can_edit,
+    can_work,
+    can_approve,
+    can_tools,
+    can_cost,
+    employee_id: user.employee_id ?? null,
+  }
 }
 
 type Ctx = {
@@ -163,9 +176,20 @@ const person = (c: Ctx, id: string | null): PersonLite | null => {
         name: e.full_name,
         code: e.code,
         team: e.team,
+        job_title: e.job_title,
         left_on: e.active ? null : (e.leave_date ?? ''),
       }
     : null
+}
+
+/** Kho công cụ nằm ở Tổ Cơ điện — dụng cụ thu hồi về đây (như demo). */
+const STORE_DEPT = 'Tổ Cơ Điện'
+/** Bộ phận có tên trùng (bỏ dấu, hoa thường) — tổ của nhân viên ghi bằng chữ ở Hồ sơ nhân viên. */
+const deptIdByName = (c: Ctx, name: string | null) => {
+  if (!name) return null
+  const k = normalizeSearch(name).trim()
+  for (const [id, n] of c.depts) if (normalizeSearch(n).trim() === k) return id
+  return null
 }
 
 /** Hạng mục còn tính lịch: hạng mục đang bật, máy còn trên sổ và đã đưa vào dùng. */
@@ -345,8 +369,10 @@ export const assetsService = {
       assetsMeta(user),
       assetsRepo.listAssets(),
       assetsRepo.listPlans(),
-      assetsRepo.listWorkOrders({ from: addDaysIso(todayVn(), -30) }),
+      // Không giới hạn ngày: "Chi phí kỳ trước" của hạng mục 1 năm nằm ngoài 30 ngày.
+      assetsRepo.listWorkOrders(),
     ])
+    const since30 = addDaysIso(c.today, -30)
     const byId = new Map(assets.map((a) => [a.id, a]))
     const views = plans
       .filter((p) => planCounts(p, byId.get(p.asset_id)))
@@ -358,29 +384,39 @@ export const assetsService = {
       meta,
       today: c.today,
       plans: views.map((p) => ({ ...p, last_cost: lastCost.get(p.id) ?? null })),
-      done30: wos.map((w) => ({
-        ...w,
-        asset_code: byId.get(w.asset_id)?.code ?? '',
-        asset_name: byId.get(w.asset_id)?.name ?? '',
-        dept_name: (() => {
-          const d = byId.get(w.asset_id)?.department_id
-          return d ? (c.depts.get(d) ?? null) : null
-        })(),
-        tech_name: person(c, w.tech_employee_id)?.name ?? null,
-      })),
+      done30: wos
+        .filter((w) => w.done_on >= since30)
+        .map((w) => ({
+          ...w,
+          asset_code: byId.get(w.asset_id)?.code ?? '',
+          asset_name: byId.get(w.asset_id)?.name ?? '',
+          dept_name: (() => {
+            const d = byId.get(w.asset_id)?.department_id
+            return d ? (c.depts.get(d) ?? null) : null
+          })(),
+          tech_name: person(c, w.tech_employee_id)?.name ?? null,
+        })),
       options: formOptions(c),
     }
   },
 
-  /** Số cho trang "Việc hôm nay" — mỗi số đếm bằng đúng hàm của màn đích. */
+  /**
+   * Trang đầu khu — hai bản như demo MOCA: "Việc hôm nay" (Tổ Cơ điện) và
+   * "Tổng quan" (Giám đốc). Mỗi số đếm bằng đúng hàm của màn đích.
+   */
   async home(user: User) {
-    const [c, meta, assets, plans, issues, approveOver] = await Promise.all([
+    const today = todayVn()
+    const cur = ymOf(today)
+    const [c, meta, assets, plans, issues, approveOver, emps, wos] = await Promise.all([
       ctx(),
       assetsMeta(user),
       assetsRepo.listAssets(),
       assetsRepo.listPlans(),
-      assetsRepo.listIssues({ since: addDaysIso(todayVn(), -30) }),
+      assetsRepo.listIssues({ since: addDaysIso(today, -30) }),
       assetsRepo.approveOver(),
+      assetsRepo.employees(),
+      // 12 tháng cho biểu đồ chi phí; 6 tháng "máy hỏng nhiều nhất" nằm gọn trong đó.
+      assetsRepo.listWorkOrders({ from: `${addYm(cur, -11)}-01` }),
     ])
     const byId = new Map(assets.map((a) => [a.id, a]))
     const views = plans
@@ -389,22 +425,24 @@ export const assetsService = {
       .sort((x, y) => x.due.days - y.due.days)
     const open = issues.filter((i) => isOpenIssue(i.status))
     const machines = assets.filter((a) => a.kind === 'machine' && inBooks(a.status))
-    const label = (id: string) => {
-      const a = byId.get(id)
-      return a
-        ? {
-            code: a.code,
-            name: a.name,
-            dept_name: a.department_id ? (c.depts.get(a.department_id) ?? null) : null,
-          }
-        : null
-    }
-    const stale = machines.filter(
-      (a) =>
-        a.hours_per_day > 0 &&
-        a.status !== 'chua_dung' &&
-        (!a.hours_updated_on || a.hours_updated_on < addDaysIso(c.today, -14)),
-    )
+    const deptOf = (a: AssetRow) =>
+      a.department_id ? (c.depts.get(a.department_id) ?? null) : null
+    const openBy = new Map(open.map((i) => [i.asset_id, i]))
+    const since6 = addDaysIso(c.today, -180)
+    const worst = machines
+      .map((a) => ({
+        a,
+        r: repairStats(
+          wos.filter((w) => w.asset_id === a.id),
+          since6,
+        ),
+      }))
+      .filter((x) => x.r.nSC > 0)
+      .sort((x, y) => y.r.nSC - x.r.nSC || y.r.down - x.r.down)
+      .slice(0, 5)
+    const monthCost = (ym: string) =>
+      wos.filter((w) => ymOf(w.done_on) === ym).reduce((s, w) => s + w.cost, 0)
+    const stale = machines.filter((a) => hoursStale(a, c.today))
     return {
       meta,
       today: c.today,
@@ -420,21 +458,139 @@ export const assetsService = {
           .length,
         stale_hours: stale.length,
       },
-      issues: open.map((i) => ({
-        ...i,
-        asset: label(i.asset_id),
-        tech_name: person(c, i.tech_employee_id)?.name ?? null,
-      })),
+      issues: await issueViews(open, { assets, emps, depts: c.depts, wos }),
       plans: views
+        // Không cắt ở đây: số trên đầu mỗi khối đếm đúng mảng này; màn tự cắt số dòng bày.
         .filter(
           (p) => p.state !== 'ok' || (p.is_inspection && inspectionSoon(p.due.days)),
-        )
-        .slice(0, 30),
+        ),
       options: formOptions(c),
       approve_over: approveOver,
       assets: assets
         .filter((a) => inBooks(a.status))
-        .map((a) => ({ id: a.id, code: a.code, name: a.name })),
+        .map((a) => ({
+          id: a.id,
+          code: a.code,
+          name: a.name,
+          kind: a.kind,
+          dept_name: deptOf(a),
+          hours_per_day: a.hours_per_day,
+          open_no: openBy.get(a.id)?.no ?? null,
+          open_id: openBy.get(a.id)?.id ?? null,
+        })),
+      overview: {
+        down: machines
+          .filter((a) => isDown(a.status))
+          .map((a) => {
+            const i = openBy.get(a.id)
+            return {
+              id: a.id,
+              code: a.code,
+              name: a.name,
+              status: a.status,
+              dept_name: deptOf(a),
+              issue: i
+                ? {
+                    no: i.no,
+                    description: i.description,
+                    status: i.status,
+                    reported_at: i.reported_at,
+                    tech_name: person(c, i.tech_employee_id)?.name ?? i.vendor,
+                  }
+                : null,
+            }
+          }),
+        // Tiền chỉ trả cho ai xem được Chi phí — service gác, không phải màn ẩn.
+        cost: meta.can_cost
+          ? {
+              month: cur,
+              total: monthCost(cur),
+              prev: monthCost(addYm(cur, -1)),
+              series: Array.from({ length: 12 }, (_, k) => {
+                const ym = addYm(cur, k - 11)
+                const ws = wos.filter((w) => ymOf(w.done_on) === ym)
+                return {
+                  ym,
+                  bd: ws.filter((w) => w.kind !== 'SC').reduce((s, w) => s + w.cost, 0),
+                  sc: ws.filter((w) => w.kind === 'SC').reduce((s, w) => s + w.cost, 0),
+                }
+              }),
+            }
+          : null,
+        worst: worst.map(({ a, r }) => ({
+          code: a.code,
+          name: a.name,
+          dept_name: deptOf(a),
+          n_sc: r.nSC,
+          down: r.down,
+          cost_sc: meta.can_cost ? r.costSC : null,
+        })),
+      },
+    }
+  },
+
+  /**
+   * Số trên tab điều hướng khu — như huy hiệu trên menu demo MOCA: Lịch bảo trì =
+   * hạng mục quá hạn, Báo hỏng = phiếu mới báo, Dụng cụ = người đã nghỉ còn giữ,
+   * trang đầu = phiếu chờ duyệt. Đếm bằng ĐÚNG hàm của màn đích (`planCounts` +
+   * `planDue`, trạng thái phiếu, `person().left_on`) — số trên tab là lời hứa.
+   */
+  async navBadges() {
+    const today = todayVn()
+    const [assets, plans, issues, emps] = await Promise.all([
+      assetsRepo.listAssets(),
+      assetsRepo.listPlans(),
+      // `since` hôm nay: chỉ cần phiếu đang mở (repo luôn trả phiếu mở).
+      assetsRepo.listIssues({ since: today }),
+      assetsRepo.employees(),
+    ])
+    const byId = new Map(assets.map((a) => [a.id, a]))
+    const overdue = plans.filter((p) => {
+      const a = byId.get(p.asset_id)
+      return planCounts(p, a) && planState(planDue(p, a!, today).days) === 'od'
+    }).length
+    const gone = new Set(emps.filter((e) => !e.active).map((e) => e.id))
+    const leavers = new Set(
+      assets
+        .filter(
+          (a) =>
+            a.kind === 'tool' &&
+            inBooks(a.status) &&
+            a.holder_employee_id &&
+            gone.has(a.holder_employee_id),
+        )
+        .map((a) => a.holder_employee_id),
+    ).size
+    return {
+      overdue,
+      new_issues: issues.filter((i) => i.status === 'moi').length,
+      waiting: issues.filter((i) => i.status === 'cho_duyet').length,
+      leavers,
+    }
+  },
+
+  /**
+   * Danh sách gọn mọi máy còn trên sổ — cho ô tìm máy và hộp quét tem QR (tìm
+   * theo mã in trên tem, chọn máy theo tổ đang đứng).
+   */
+  async lookup(user: User) {
+    const [c, assets] = await Promise.all([ctx(), assetsRepo.listAssets()])
+    const list = assets
+      .filter((a) => inBooks(a.status))
+      .map((a) => ({
+        code: a.code,
+        name: a.name,
+        kind: a.kind,
+        model: a.model,
+        serial: a.serial,
+        status: a.status,
+        hours_per_day: a.hours_per_day,
+        dept_name: a.department_id ? (c.depts.get(a.department_id) ?? null) : null,
+      }))
+    return {
+      assets: list,
+      /** Tổ của người đang đăng nhập — hộp quét tem mở sẵn tổ này (demo chọn sẵn tổ). */
+      my_dept: user.department_id ? (c.depts.get(user.department_id) ?? null) : null,
     }
   },
 
@@ -500,7 +656,8 @@ export const assetsService = {
       from_department_id: null,
       to_department_id: a.department_id,
       from_employee_id: null,
-      to_employee_id: null,
+      // Như demo: phiếu ghi tăng ghi cả người phụ trách máy.
+      to_employee_id: a.kind === 'machine' ? a.resp_employee_id : null,
       note: g.kind === 'machine' ? 'Thêm máy' : 'Nhập kho dụng cụ',
       created_by: user.id,
     })
@@ -633,7 +790,7 @@ export const assetsService = {
     user: User,
     planId: string,
     input: PlanDoneInput,
-  ): Promise<WorkOrderRow> {
+  ): Promise<WorkOrderRow & { next_due: string }> {
     await assertAction(user, 'assets.work')
     const p = await assetsRepo.findPlan(planId)
     if (!p) throw NotFound('Không có hạng mục này')
@@ -672,7 +829,13 @@ export const assetsService = {
     await assetsRepo.updatePlan(p.id, { last_date: input.done_on, last_hours: hours })
     if (hours !== a.hours)
       await assetsRepo.updateAsset(a.id, { hours, hours_updated_on: todayVn() })
-    return wo
+    // Toast "Kỳ sau: dd/mm/yyyy" như demo — tính bằng đúng hàm lịch dùng.
+    const next = planDue(
+      { ...p, last_date: input.done_on, last_hours: hours },
+      { hours, hours_per_day: a.hours_per_day },
+      todayVn(),
+    )
+    return { ...wo, next_due: next.date }
   },
 
   // ── Nhập từ Excel ────────────────────────────────────────────────────────
@@ -829,17 +992,27 @@ export const assetsService = {
       (a) => a.kind !== 'tool' || a.status !== 'chua_dung' || a.holder_employee_id,
     )
     if (bad) throw BadRequest(`${bad.code} không nằm trong kho — thu hồi trước khi giao`)
+    // Như demo: chỉ giao theo CHIẾC. Dòng nhập gộp (SL > 1) mà giao là trao cả lô cho một người.
+    const lot = list.find((a) => a.qty > 1)
+    if (lot)
+      throw BadRequest(
+        `${lot.code} là dòng gộp ${lot.qty} ${lot.unit} — giao theo chiếc: thêm riêng từng chiếc (mỗi chiếc một tem) rồi giao`,
+      )
+    // Như demo: dụng cụ đi theo người — "đặt tại" đổi sang tổ của người nhận (khớp tên tổ
+    // trong Hồ sơ nhân viên với danh mục bộ phận). Không khớp thì giữ nguyên.
+    const toDept = deptIdByName(c, emp.team)
     await assetsRepo.updateAssets(input.asset_ids, {
       status: 'dang_dung',
       holder_employee_id: emp.id,
+      ...(toDept ? { department_id: toDept } : {}),
     })
     await assetsRepo.insertMovement({
       no: docNo('CP', await assetsRepo.nextNo('CP')),
       type: 'CP',
       moved_on: input.moved_on,
       asset_ids: input.asset_ids,
-      from_department_id: null,
-      to_department_id: null,
+      from_department_id: list[0].department_id,
+      to_department_id: toDept ?? list[0].department_id,
       from_employee_id: null,
       to_employee_id: emp.id,
       note: input.note,
@@ -854,6 +1027,8 @@ export const assetsService = {
     if (list.length !== input.asset_ids.length) throw NotFound('Có dụng cụ không tồn tại')
     const bad = list.find((a) => a.kind !== 'tool' || !a.holder_employee_id)
     if (bad) throw BadRequest(`${bad.code} không có ai đang giữ`)
+    // Như demo: thu hồi là nhập lại kho công cụ Tổ Cơ điện.
+    const store = deptIdByName(await ctx(), STORE_DEPT)
     // Mỗi người một phiếu TH — phiếu nói rõ thu từ ai.
     for (const [empId, l] of groupBy(list, (a) => a.holder_employee_id!)) {
       await assetsRepo.insertMovement({
@@ -861,8 +1036,8 @@ export const assetsService = {
         type: 'TH',
         moved_on: input.moved_on,
         asset_ids: l.map((a) => a.id),
-        from_department_id: null,
-        to_department_id: null,
+        from_department_id: l[0].department_id,
+        to_department_id: store ?? l[0].department_id,
         from_employee_id: empId,
         to_employee_id: null,
         note: input.note,
@@ -872,6 +1047,7 @@ export const assetsService = {
     await assetsRepo.updateAssets(input.asset_ids, {
       status: input.condition === 'hong' ? 'hong' : 'chua_dung',
       holder_employee_id: null,
+      ...(store ? { department_id: store } : {}),
     })
     return { count: list.length }
   },
@@ -911,11 +1087,14 @@ function history(
     })
   }
   for (const m of moves) {
-    const to = m.to_employee_id
-      ? `cho ${person(c, m.to_employee_id)?.name ?? ''}`
-      : m.to_department_id
-        ? `về ${c.depts.get(m.to_department_id) ?? ''}`
-        : ''
+    const to = [
+      m.to_department_id ? `về ${c.depts.get(m.to_department_id) ?? ''}` : '',
+      m.to_employee_id
+        ? `${m.type === 'GT' ? 'phụ trách' : 'cho'} ${person(c, m.to_employee_id)?.name ?? ''}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
     const from = m.from_employee_id
       ? `từ ${person(c, m.from_employee_id)?.name ?? ''}`
       : ''

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Btn,
   Cell,
   Chip,
   Empty,
   FilterBar,
+  NoticeBar,
   Pick,
   Row,
   ScreenFrame,
@@ -113,6 +114,12 @@ export function BaoTriScreen({
           Quá hạn: đỏ · ≤ 7 ngày: cam · bấm “Đã làm” để ghi lại, lịch tự dời kỳ sau
         </span>
       </FilterBar>
+      {tab === 'kd' && (
+        <NoticeBar tone="warn" tag="Kiểm định bắt buộc">
+          Lò hơi, bình khí nén, xe nâng, cân, xe tải, PCCC, trạm biến áp phải kiểm định /
+          đăng kiểm định kỳ — hệ thống nhắc trước 30 ngày.
+        </NoticeBar>
+      )}
 
       {tab === 'done' ? (
         done.length === 0 ? (
@@ -181,14 +188,21 @@ export function BaoTriScreen({
               ? 'Chưa có lịch bảo trì nào'
               : tab === 'todo'
                 ? 'Không có việc quá hạn hay tới hạn trong 7 ngày'
-                : 'Không có hạng mục nào khớp'
+                : dept
+                  ? 'Không có hạng mục nào khớp'
+                  : tab === 'kd'
+                    ? 'Chưa có hạng mục kiểm định nào'
+                    : 'Chưa có hạng mục nào'
           }
           reason={
             plans.length === 0
               ? 'Lịch sinh ra khi thêm máy (theo lịch mẫu của nhóm) hoặc thêm hạng mục ở hồ sơ máy.'
               : tab === 'todo'
                 ? 'Mọi hạng mục đang còn xa hạn — số 0 ở đây là tin tốt.'
-                : 'Bộ lọc tổ hiện tại không để lại dòng nào.'
+                : dept
+                  ? 'Bộ lọc tổ hiện tại không để lại dòng nào.'
+                  : // Trước 23/10/2026 thẻ Kiểm định trống luôn nói "bộ lọc tổ…" dù không lọc.
+                    'Thêm hạng mục ở hồ sơ máy và đánh dấu "Là kiểm định, đăng kiểm bắt buộc".'
           }
           next={
             plans.length === 0 ? (
@@ -219,55 +233,70 @@ export function BaoTriScreen({
             <th />
           </THead>
           <tbody>
-            {rows.map((x) => (
-              <Row key={x.id}>
-                <Cell pin rowHeader>
-                  <AssetCode code={x.asset.code} />
-                  <span
-                    className="text-k-label block max-w-[220px] truncate text-[var(--ink-3)]"
-                    title={`${x.asset.name} · ${x.asset.dept_name ?? ''}`}
-                  >
-                    {x.asset.name}
-                    {x.asset.dept_name ? ` · ${x.asset.dept_name}` : ''}
-                  </span>
-                </Cell>
-                <Cell grow title={x.task}>
-                  {x.is_inspection && (
-                    <>
-                      <Tag tone="warn">Kiểm định</Tag>{' '}
-                    </>
-                  )}
-                  {x.task}
-                </Cell>
-                <Cell muted>{everyTxt(x.every_n, x.unit)}</Cell>
-                <Cell num>
-                  {dmy(x.last_date)}
-                  {x.unit === 'h' && x.last_hours != null
-                    ? ` · ${vnd(x.last_hours)} h`
-                    : ''}
-                </Cell>
-                <Cell>
-                  <DueText due={x.due} />
-                </Cell>
-                <Cell num>
-                  {x.last_cost != null ? (
-                    vnd(x.last_cost)
-                  ) : (
-                    <span className="text-[var(--ink-empty)]">—</span>
-                  )}
-                </Cell>
-                <Cell>
-                  {meta.can_work && (
-                    <Btn
-                      primary={x.state !== 'ok'}
-                      icon="tick"
-                      onClick={() => setDoing(x)}
+            {rows.map((x, k) => (
+              <Fragment key={x.id}>
+                {/* Như demo: "Cần làm" chia hai nhóm, mỗi nhóm một dòng đầu có số. */}
+                {tab === 'todo' && x.state !== rows[k - 1]?.state && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="text-k-sm bg-[var(--surface-raised)] font-semibold"
+                      style={{ color: x.state === 'od' ? 'var(--stop)' : 'var(--warn)' }}
                     >
-                      {x.is_inspection ? 'Đã kiểm định' : 'Đã làm'}
-                    </Btn>
-                  )}
-                </Cell>
-              </Row>
+                      {x.state === 'od' ? 'Quá hạn' : 'Đến hạn trong 7 ngày'} ·{' '}
+                      {rows.filter((r) => r.state === x.state).length}
+                    </td>
+                  </tr>
+                )}
+                <Row>
+                  <Cell pin rowHeader>
+                    <AssetCode code={x.asset.code} />
+                    <span
+                      className="text-k-label block max-w-[220px] truncate text-[var(--ink-3)]"
+                      title={`${x.asset.name} · ${x.asset.dept_name ?? ''}`}
+                    >
+                      {x.asset.name}
+                      {x.asset.dept_name ? ` · ${x.asset.dept_name}` : ''}
+                    </span>
+                  </Cell>
+                  <Cell grow title={x.task}>
+                    {x.is_inspection && (
+                      <>
+                        <Tag tone="warn">Kiểm định</Tag>{' '}
+                      </>
+                    )}
+                    {x.task}
+                  </Cell>
+                  <Cell muted>{everyTxt(x.every_n, x.unit)}</Cell>
+                  <Cell num>
+                    {dmy(x.last_date)}
+                    {x.unit === 'h' && x.last_hours != null
+                      ? ` · ${vnd(x.last_hours)} h`
+                      : ''}
+                  </Cell>
+                  <Cell>
+                    <DueText due={x.due} />
+                  </Cell>
+                  <Cell num>
+                    {x.last_cost != null ? (
+                      vnd(x.last_cost)
+                    ) : (
+                      <span className="text-[var(--ink-empty)]">—</span>
+                    )}
+                  </Cell>
+                  <Cell>
+                    {meta.can_work && (
+                      <Btn
+                        primary={x.state !== 'ok'}
+                        icon="tick"
+                        onClick={() => setDoing(x)}
+                      >
+                        {x.is_inspection ? 'Đã kiểm định' : 'Đã làm'}
+                      </Btn>
+                    )}
+                  </Cell>
+                </Row>
+              </Fragment>
             ))}
           </tbody>
           <TFoot
@@ -275,7 +304,7 @@ export function BaoTriScreen({
               <td colSpan={7}>
                 Cộng {rows.length} hạng mục
                 {tab === 'todo' ? ' quá hạn hoặc tới hạn trong 7 ngày' : ''} · không gồm
-                máy chưa đưa vào dùng, đã thanh lý và hạng mục tạm dừng
+                máy chưa sử dụng, đã thanh lý và hạng mục tạm dừng
               </td>
             }
             cells={null}
@@ -286,6 +315,7 @@ export function BaoTriScreen({
         <PlanDoneSheet
           plan={doing}
           techs={options.techs}
+          me={meta.employee_id}
           onClose={() => setDoing(null)}
         />
       )}

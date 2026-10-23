@@ -425,6 +425,17 @@ export const assetsRepo = {
     if (error) fail('employees', error)
     return (data ?? []) as EmployeeLite[]
   },
+  /** Tài khoản quản trị đang hoạt động — duyệt được theo VAI, không có dòng quyền RBAC. */
+  async activeAdminIds(): Promise<string[]> {
+    const { data, error } = await db()
+      .from('users')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+    if (error) fail('admins', error)
+    return ((data ?? []) as { id: string }[]).map((u) => u.id)
+  },
   async approveOver(): Promise<number> {
     const { data, error } = await db()
       .from('settings')

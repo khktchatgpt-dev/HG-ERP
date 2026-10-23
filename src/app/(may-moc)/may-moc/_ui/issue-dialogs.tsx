@@ -26,7 +26,16 @@ import {
   type PartDraft,
 } from './shared'
 
-export type AssetOption = { id: string; code: string; name: string }
+export type AssetOption = {
+  id: string
+  code: string
+  name: string
+  /** Tổ đặt máy — danh sách xếp theo tổ như demo (optgroup). */
+  dept_name?: string | null
+  /** Số phiếu đang mở của máy — một máy một phiếu mở, nên báo ngay khi chọn. */
+  open_no?: string | null
+  open_id?: string | null
+}
 export type TechOption = { id: string; name: string }
 export type IssueRef = {
   id: string
@@ -61,12 +70,34 @@ export function ReportIssueSheet({
   const parent = useMemo(() => ({ kind: 'none' as const }), [])
   const paste = useImagePaste(parent)
   const options = useMemo(
-    () => assets.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` })),
+    () =>
+      [...assets]
+        .sort(
+          (x, y) =>
+            (x.dept_name ?? '￿').localeCompare(y.dept_name ?? '￿', 'vi') ||
+            x.code.localeCompare(y.code),
+        )
+        .map((a) => ({
+          value: a.id,
+          label: `${a.code} · ${a.name}`,
+          hint: [
+            a.dept_name ?? 'Chưa gán tổ',
+            a.open_no ? `đang có phiếu ${a.open_no} chưa xong` : '',
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        })),
     [assets],
   )
+  const chosen = assets.find((a) => a.id === asset)
+  const busyNo = chosen?.open_no ?? null
 
   async function send() {
     if (!asset) return setErr('chọn máy bị hỏng.')
+    if (busyNo)
+      return setErr(
+        `máy này đang có phiếu ${busyNo} chưa xong — ghi thêm vào phiếu đó ở Báo hỏng.`,
+      )
     if (desc.trim().length < 5)
       return setErr('mô tả hiện tượng (ít nhất 5 ký tự) để Cơ điện biết mang gì đến.')
     if (paste.uploading) return setErr('ảnh đang tải lên — chờ một chút rồi bấm lại.')
@@ -123,6 +154,19 @@ export function ReportIssueSheet({
             emptyLabel="— Chọn máy —"
           />
         </FormRow>
+        {/* Báo ngay lúc chọn, không để người dùng gõ xong mô tả mới bị máy chủ từ chối. */}
+        {busyNo && (
+          <Blocked lead="Không báo thêm được:">
+            máy này đang có phiếu <b className="font-mono">{busyNo}</b> chưa xong — Tổ Cơ
+            điện đã biết.{' '}
+            <a
+              className="text-[var(--act-text)] underline"
+              href={`/may-moc/bao-hong?id=${chosen?.open_id ?? ''}`}
+            >
+              Mở phiếu {busyNo}
+            </a>
+          </Blocked>
+        )}
         <div className="grid gap-1">
           <span className="text-k-sm font-semibold text-[var(--ink-label)]">
             Mức ảnh hưởng
@@ -201,15 +245,20 @@ export function AcceptSheet({
   issue,
   techs,
   approveOver,
+  me,
   onClose,
 }: {
   issue: IssueRef
   techs: TechOption[]
   approveOver: number
+  /** Nhân viên của tài khoản đang đăng nhập — thợ nhận việc thì mặc định chính mình. */
+  me?: string | null
   onClose: () => void
 }) {
   const m = useMutate()
-  const [tech, setTech] = useState(techs[0]?.id ?? '')
+  const [tech, setTech] = useState(
+    techs.some((t) => t.id === me) ? me! : (techs[0]?.id ?? ''),
+  )
   const [vendor, setVendor] = useState('')
   const [est, setEst] = useState('')
   const [note, setNote] = useState('')
@@ -236,7 +285,7 @@ export function AcceptSheet({
         }),
       over
         ? `${issue.no}: dự toán vượt hạn mức, đã chuyển Giám đốc duyệt`
-        : `${issue.no}: đã nhận việc`,
+        : `${issue.no}: đã nhận việc, giao ${techs.find((t) => t.id === tech)?.name ?? vendor.trim()}`,
     )
     if (r.ok) onClose()
     else setErr(r.error)

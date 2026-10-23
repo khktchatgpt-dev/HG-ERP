@@ -31,14 +31,14 @@ export const ASSET_STATUSES = [
 /** Nhãn trạng thái MÁY (TSCĐ). Dụng cụ dùng `TOOL_STATUS` — "Đang dùng / Trong kho". */
 export const MACHINE_STATUS: Record<AssetStatus, { label: string; tone: TagTone }> = {
   dang_dung: { label: 'Đang chạy', tone: 'done' },
-  chua_dung: { label: 'Chưa đưa vào dùng', tone: 'neutral' },
+  chua_dung: { label: 'Chưa sử dụng', tone: 'neutral' },
   hong: { label: 'Hỏng – chờ sửa', tone: 'stop' },
   sua_chua: { label: 'Đang sửa', tone: 'warn' },
   mat: { label: 'Đã báo mất', tone: 'neutral' },
   thanh_ly: { label: 'Đã thanh lý', tone: 'neutral' },
 }
 export const TOOL_STATUS: Record<AssetStatus, { label: string; tone: TagTone }> = {
-  dang_dung: { label: 'Đang giao', tone: 'run' },
+  dang_dung: { label: 'Đang dùng', tone: 'run' },
   chua_dung: { label: 'Trong kho', tone: 'neutral' },
   hong: { label: 'Hỏng', tone: 'stop' },
   sua_chua: { label: 'Đang sửa', tone: 'warn' },
@@ -88,7 +88,7 @@ export const MOVE_LABEL: Record<MoveType, string> = {
 export const ISSUE_CHIPS = [
   'Kêu bất thường',
   'Không khởi động',
-  'Rò dầu, rò khí',
+  'Rò dầu, rò hơi',
   'Lưỡi, dao cùn',
   'Mùi khét',
   'Mất an toàn',
@@ -138,6 +138,25 @@ export type AssetHours = { hours: number; hours_per_day: number }
 export const hoursPerCalendarDay = (a: AssetHours) =>
   Math.max(0.1, (a.hours_per_day * 6) / 7)
 
+/**
+ * Máy có đồng hồ giờ mà 14 ngày chưa ai đọc số — lịch theo giờ của nó đang ĐOÁN
+ * theo giờ/ngày khai báo. Một hàm cho cả ô đếm ở Việc hôm nay lẫn chip lọc ở Máy móc.
+ */
+export const hoursStale = (
+  a: {
+    kind: AssetKind
+    status: AssetStatus
+    hours_per_day: number
+    hours_updated_on: string | null
+  },
+  today: string,
+) =>
+  a.kind === 'machine' &&
+  inBooks(a.status) &&
+  a.status !== 'chua_dung' &&
+  a.hours_per_day > 0 &&
+  (!a.hours_updated_on || a.hours_updated_on < addDaysIso(today, -14))
+
 export type Due = {
   /** Ngày đến hạn (ISO) — với lịch theo giờ chạy là ngày ƯỚC theo giờ/ngày. */
   date: string
@@ -173,23 +192,42 @@ export const inspectionSoon = (days: number) => days >= 0 && days <= 30
 
 export function everyTxt(every: number, unit: PlanUnit): string {
   if (unit === 'h') return `${every.toLocaleString('vi-VN')} giờ chạy`
-  if (unit === 'd')
-    return every % 7 === 0 && every >= 14 ? `${every / 7} tuần` : `${every} ngày`
+  if (unit === 'd') return `${every} ngày`
   return every >= 12 && every % 12 === 0 ? `${every / 12} năm` : `${every} tháng`
 }
+
+/**
+ * Lúc báo kể tương đối như demo: "vừa xong", "25 phút trước", "3 giờ trước", "hôm
+ * qua", "5 ngày trước"; quá 30 ngày thì ngày dd/mm/yyyy. Ngày tính theo giờ VN.
+ */
+export function agoTxt(iso: string, now: Date): string {
+  const t = new Date(iso)
+  const m = Math.floor((now.getTime() - t.getTime()) / 60000)
+  if (m < 1) return 'vừa xong'
+  if (m < 60) return `${m} phút trước`
+  const dd = dayDiff(vnDay(now), vnDay(t))
+  if (dd === 0) return `${Math.round(m / 60)} giờ trước`
+  if (dd === 1) return 'hôm qua'
+  if (dd < 30) return `${dd} ngày trước`
+  return dmy(vnDay(t))
+}
+/** Ngày (yyyy-mm-dd) theo giờ Việt Nam (UTC+7, không đổi giờ mùa hè). */
+const vnDay = (d: Date) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10)
 
 export function dueTxt(d: Due): string {
   const base =
     d.days < 0
-      ? `quá ${-d.days} ngày`
+      ? `quá hạn ${-d.days} ngày`
       : d.days === 0
         ? 'hôm nay'
         : d.days === 1
           ? 'ngày mai'
           : `còn ${d.days} ngày`
   if (d.hoursLeft == null) return base
+  // Như demo: vượt giờ vẫn nói quá bao nhiêu ngày (quy theo giờ chạy/ngày) để xếp
+  // cùng thang với hạng mục theo lịch.
   return d.hoursLeft < 0
-    ? `vượt ${(-d.hoursLeft).toLocaleString('vi-VN')} h`
+    ? `${base} · vượt ${(-d.hoursLeft).toLocaleString('vi-VN')} h`
     : `${base} · còn ${d.hoursLeft.toLocaleString('vi-VN')} h`
 }
 
@@ -294,3 +332,13 @@ export const vnd = (n: number) => Math.round(n).toLocaleString('vi-VN')
 export const ymOf = (iso: string) => iso.slice(0, 7)
 export const addYm = (ym: string, n: number) => addMonthsIso(`${ym}-01`, n).slice(0, 7)
 export const ymTxt = (ym: string) => `${ym.slice(5, 7)}/${ym.slice(0, 4)}`
+
+/**
+ * Chữ đọc được từ tem → mã máy. Tem in đường dẫn tuyệt đối tới hồ sơ máy
+ * (`https://…/may-moc/may/TS-HAN-001`), nhưng người gõ tay thì gõ mã trần.
+ */
+export function codeFromScan(text: string): string {
+  const t = text.trim()
+  const m = /\/may-moc\/may\/([^/?#\s]+)/.exec(t)
+  return (m ? decodeURIComponent(m[1]) : t).toUpperCase()
+}

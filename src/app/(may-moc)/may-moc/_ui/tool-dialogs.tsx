@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import {
   Combobox,
+  DateInput,
   Pick,
   SearchInput,
   Sheet,
@@ -11,6 +12,7 @@ import {
   Tick,
 } from '@/components/kit'
 import { todayVn } from '@/lib/date-vn'
+import { dmy } from '@/lib/may-moc'
 import { normalizeSearch } from '@/lib/search-text'
 import { Blocked, FormRow, useMutate } from './shared'
 
@@ -20,7 +22,12 @@ export type ToolLite = {
   name: string
   holder_name?: string | null
   holder_id?: string | null
+  /** Ngày nghỉ việc của người giữ ( = đã nghỉ, chưa ghi ngày) — null là đang làm. */
+  holder_left_on?: string | null
 }
+
+const leftNote = (on: string | null | undefined) =>
+  on == null ? '' : on ? `Nghỉ việc từ ${dmy(on)}.` : 'Nghỉ việc.'
 
 /** Danh sách tick chọn dụng cụ, có ô lọc. */
 function ToolPicker({
@@ -99,6 +106,7 @@ export function GiveSheet({
   const [emp, setEmp] = useState(employeeId ?? '')
   const [picked, setPicked] = useState(new Set(preselect ?? []))
   const [note, setNote] = useState('')
+  const [date, setDate] = useState(todayVn())
   const [err, setErr] = useState<string | null>(null)
   const opts = useMemo(
     () =>
@@ -111,6 +119,8 @@ export function GiveSheet({
   async function send() {
     if (!emp) return setErr('chọn nhân viên nhận.')
     if (picked.size === 0) return setErr('chọn ít nhất một dụng cụ trong kho.')
+    if (!date) return setErr('chọn ngày giao.')
+    if (date > todayVn()) return setErr('ngày giao không được sau hôm nay.')
     setErr(null)
     const r = await m.run(
       () =>
@@ -119,7 +129,7 @@ export function GiveSheet({
           body: {
             employee_id: emp,
             asset_ids: [...picked],
-            moved_on: todayVn(),
+            moved_on: date,
             note: note.trim() || null,
           },
         }),
@@ -157,6 +167,9 @@ export function GiveSheet({
             emptyLabel="— Chọn nhân viên —"
           />
         </FormRow>
+        <FormRow label="Ngày giao">
+          <DateInput label="Ngày giao" value={date} onChange={setDate} max={todayVn()} />
+        </FormRow>
         {store.length === 0 ? (
           <Blocked>
             kho không còn dụng cụ nào để giao — thêm dụng cụ hoặc thu hồi trước.
@@ -188,19 +201,58 @@ export function GiveSheet({
 
 export function RecallSheet({
   held,
+  holderId,
   preselect,
   note: note0,
   onClose,
 }: {
   held: ToolLite[]
+  /** Mở từ dòng một người: chọn sẵn "Thu hồi từ" người đó. */
+  holderId?: string
   preselect?: string[]
   note?: string
   onClose: () => void
 }) {
   const m = useMutate()
+  const [from, setFrom] = useState(holderId ?? '')
   const [picked, setPicked] = useState(new Set(preselect ?? []))
   const [cond, setCond] = useState<'tot' | 'hong'>('tot')
-  const [note, setNote] = useState(note0 ?? '')
+  const [note, setNote] = useState(
+    note0 ?? leftNote(held.find((t) => t.holder_id === holderId)?.holder_left_on),
+  )
+  // Như demo: ô "Thu hồi từ" — người đã nghỉ lên đầu, kèm số dụng cụ đang giữ.
+  const holders = useMemo(() => {
+    const m = new Map<
+      string,
+      { id: string; name: string; left: string | null; n: number }
+    >()
+    for (const t of held) {
+      if (!t.holder_id) continue
+      const h = m.get(t.holder_id)
+      if (h) h.n++
+      else
+        m.set(t.holder_id, {
+          id: t.holder_id,
+          name: t.holder_name ?? '',
+          left: t.holder_left_on ?? null,
+          n: 1,
+        })
+    }
+    return [...m.values()].sort(
+      (x, y) =>
+        Number(x.left == null) - Number(y.left == null) ||
+        x.name.localeCompare(y.name, 'vi'),
+    )
+  }, [held])
+  const list = from ? held.filter((t) => t.holder_id === from) : held
+  const pickFrom = (id: string) => {
+    setFrom(id)
+    setErr(null)
+    // Chọn người là tick sẵn mọi dụng cụ người đó giữ; nghỉ việc thì ghi sẵn lý do.
+    const theirs = held.filter((t) => t.holder_id === id)
+    setPicked(new Set(id ? theirs.map((t) => t.id) : []))
+    if (id) setNote(leftNote(theirs[0]?.holder_left_on) || note)
+  }
   const [err, setErr] = useState<string | null>(null)
   async function send() {
     if (picked.size === 0) return setErr('chọn dụng cụ thu hồi.')
@@ -238,8 +290,24 @@ export function RecallSheet({
       }
     >
       <div className="grid gap-3" onInput={() => setErr(null)}>
+        {holders.length > 1 && (
+          <FormRow label="Thu hồi từ">
+            <Pick
+              label="Thu hồi từ"
+              value={from}
+              onChange={pickFrom}
+              options={[
+                { value: '', label: '— Mọi người đang giữ —' },
+                ...holders.map((h) => ({
+                  value: h.id,
+                  label: `${h.name}${h.left != null ? ' (đã nghỉ việc)' : ''} – ${h.n} dụng cụ`,
+                })),
+              ]}
+            />
+          </FormRow>
+        )}
         <ToolPicker
-          list={held}
+          list={list}
           picked={picked}
           onChange={(v) => {
             setPicked(v)

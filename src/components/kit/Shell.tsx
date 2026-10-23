@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Ico } from './Icon'
 import { useModKeyLabel } from './Nav'
-import type { Lane, Tone } from './kit-core'
+import { HEAD_ACTS, type Lane, type Tone } from './kit-core'
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -536,7 +536,7 @@ export function ScreenHeader({
             </span>
           )}
           {actions && (
-            <span className="ml-auto flex shrink-0 items-center gap-2">{actions}</span>
+            <span className={cn('ml-auto', HEAD_ACTS)}>{actions}</span>
           )}
         </div>
         {children}
@@ -563,7 +563,7 @@ export function ScreenHeader({
             </div>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && <div className={HEAD_ACTS}>{actions}</div>}
       </div>
       {children}
     </header>
