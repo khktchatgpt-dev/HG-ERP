@@ -51,6 +51,7 @@ import {
   PlanFormSheet,
 } from '../../_ui/asset-dialogs'
 import { DisposeSheet } from '../../_ui/import-dialogs'
+import { GiveSheet, RecallSheet } from '../../_ui/tool-dialogs'
 import {
   AcceptSheet,
   DoneSheet,
@@ -70,6 +71,8 @@ type Dlg =
   | 'plan'
   | 'edit'
   | 'dispose'
+  | 'give'
+  | 'recall'
   | { done: PlanView }
 
 /**
@@ -91,6 +94,7 @@ export function HoSoMayScreen({
   approveOver,
   me,
   initialMuc,
+  openHours = false,
 }: {
   meta: AssetsMeta
   asset: AssetView
@@ -104,13 +108,16 @@ export function HoSoMayScreen({
   approveOver: number
   me: string
   initialMuc: Muc
+  /** `?gio=1` — tới từ "Cập nhật giờ chạy" (quét tem): mở sẵn hộp nhập giờ. */
+  openHours?: boolean
 }) {
   const router = useRouter()
   const isTool = a.kind === 'tool'
   const [muc, setMuc] = useState<Muc>(
     initialMuc === 'bao-tri' && isTool ? 'thong-tin' : initialMuc,
   )
-  const [dlg, setDlg] = useState<Dlg>(null)
+  const canHours = !isTool && meta.can_work && inBooks(a.status) && a.hours_per_day > 0
+  const [dlg, setDlg] = useState<Dlg>(openHours && canHours ? 'hours' : null)
   const [inlineErr, setInlineErr] = useState<string | null>(null)
   const m = useMutate()
   const open = issues.find((i) => i.id === a.open_issue?.id) ?? null
@@ -220,8 +227,22 @@ export function HoSoMayScreen({
         actions={
           <>
             {primary}
-            {!isTool && meta.can_work && live && a.hours_per_day > 0 && (
-              <Btn icon="hen" onClick={() => setDlg('hours')}>
+            {isTool && meta.can_tools && live && a.holder && (
+              <Btn icon="nhapKho" onClick={() => setDlg('recall')}>
+                Thu hồi
+              </Btn>
+            )}
+            {isTool &&
+              meta.can_tools &&
+              live &&
+              !a.holder &&
+              a.status === 'chua_dung' && (
+                <Btn primary icon="xuatKho" onClick={() => setDlg('give')}>
+                  Giao cho nhân viên
+                </Btn>
+              )}
+            {canHours && (
+              <Btn icon="gioChay" onClick={() => setDlg('hours')}>
                 Cập nhật giờ chạy
               </Btn>
             )}
@@ -333,7 +354,7 @@ export function HoSoMayScreen({
               headline="Máy chưa có lịch bảo trì"
               reason={
                 a.status === 'chua_dung'
-                  ? 'Máy chưa đưa vào dùng nên chưa tính lịch.'
+                  ? 'Máy chưa sử dụng nên chưa tính lịch.'
                   : 'Nhóm máy này không có lịch mẫu, hoặc lịch mẫu đã bỏ lúc thêm máy.'
               }
               next={
@@ -440,7 +461,9 @@ export function HoSoMayScreen({
                     [
                       isTool ? 'Người giữ' : 'Người phụ trách',
                       isTool
-                        ? (a.holder?.name ?? 'trong kho')
+                        ? a.holder
+                          ? `${a.holder.name}${a.holder.left_on != null ? ` — đã nghỉ việc${a.holder.left_on ? ` từ ${dmy(a.holder.left_on)}` : ''}, cần thu hồi` : ''}`
+                          : 'trong kho'
                         : (a.resp_name ?? 'chưa giao'),
                     ],
                     ['Ngày đưa vào dùng', dmy(a.use_date)],
@@ -521,6 +544,7 @@ export function HoSoMayScreen({
           issue={ref}
           techs={options.techs}
           approveOver={approveOver}
+          me={meta.employee_id}
           onClose={() => setDlg(null)}
         />
       )}
@@ -551,7 +575,41 @@ export function HoSoMayScreen({
             onClose={() => setDlg(null)}
           />
         ))}
-      {dlg === 'hours' && <HoursSheet asset={a} onClose={() => setDlg(null)} />}
+      {dlg === 'hours' && (
+        <HoursSheet
+          asset={a}
+          onClose={() => {
+            setDlg(null)
+            // Bỏ `?gio=1` để tải lại trang không bật hộp lần nữa.
+            if (openHours) router.replace(`/may-moc/may/${encodeURIComponent(a.code)}`)
+          }}
+        />
+      )}
+      {dlg === 'give' && (
+        <GiveSheet
+          store={[{ id: a.id, code: a.code, name: a.name }]}
+          employees={options.employees}
+          preselect={[a.id]}
+          onClose={() => setDlg(null)}
+        />
+      )}
+      {dlg === 'recall' && a.holder && (
+        <RecallSheet
+          held={[
+            {
+              id: a.id,
+              code: a.code,
+              name: a.name,
+              holder_id: a.holder.id,
+              holder_name: a.holder.name,
+              holder_left_on: a.holder.left_on,
+            },
+          ]}
+          holderId={a.holder.id}
+          preselect={[a.id]}
+          onClose={() => setDlg(null)}
+        />
+      )}
       {dlg === 'plan' && <PlanFormSheet asset={a} onClose={() => setDlg(null)} />}
       {dlg === 'edit' && (
         <AssetFormSheet options={options} asset={a} onClose={() => setDlg(null)} />
@@ -561,6 +619,7 @@ export function HoSoMayScreen({
         <PlanDoneSheet
           plan={{ ...dlg.done, asset: { ...dlg.done.asset } }}
           techs={options.techs}
+          me={meta.employee_id}
           onClose={() => setDlg(null)}
         />
       )}

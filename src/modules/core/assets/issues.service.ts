@@ -24,7 +24,9 @@ import {
   type IssueAction,
 } from '@/lib/may-moc'
 import { assetsRepo, type AssetRow, type IssueLog, type IssueRow } from './assets.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { assetsMeta } from './assets.service'
+import { issueViews } from './issues.view'
 import type { IssueAcceptInput, IssueCreateInput, IssueDoneInput } from './assets.schema'
 
 /**
@@ -71,48 +73,56 @@ async function transition(
 }
 
 const maintenanceIds = () => rbacRepo.userIdsWithPermission('assets.manage')
-const approverIds = () => rbacRepo.userIdsWithPermission('assets.approve')
+/**
+ * Người duyệt = có quyền `assets.approve` + quản trị (duyệt được theo vai). Thiếu quản
+ * trị thì xưởng chưa gán GĐ nào quyền duyệt là phiếu chờ duyệt không báo cho ai.
+ */
+const approverIds = async () => [
+  ...new Set([
+    ...(await rbacRepo.userIdsWithPermission('assets.approve')),
+    ...(await assetsRepo.activeAdminIds()),
+  ]),
+]
 
 export const issuesService = {
-  /** Phiếu báo hỏng: đang mở + 60 ngày gần đây (màn Báo hỏng). */
-  async list(user: User) {
-    const [meta, issues, assets, emps, approveOver] = await Promise.all([
-      assetsMeta(user),
-      assetsRepo.listIssues({ since: addDaysIso(todayVn(), -60) }),
-      assetsRepo.listAssets(),
-      assetsRepo.employees(),
-      assetsRepo.approveOver(),
-    ])
-    const byId = new Map(assets.map((a) => [a.id, a]))
-    const empName = new Map(emps.map((e) => [e.id, e.full_name]))
-    const reporters = await usersRepo.displayNamesByIds([
-      ...new Set(issues.map((i) => i.reporter_user_id).filter((x): x is string => !!x)),
-    ])
+  /**
+   * Phiếu báo hỏng: đang mở + 60 ngày gần đây (màn Báo hỏng). `openId` (chuông, liên
+   * kết `?id=`) trỏ phiếu cũ hơn thì nạp thêm đúng phiếu đó — không thì bấm thông báo
+   * mà không mở được gì.
+   */
+  async list(user: User, openId?: string) {
+    const since = addDaysIso(todayVn(), -60)
+    const [meta, recent, assets, emps, approveOver, depts, wos, extra] =
+      await Promise.all([
+        assetsMeta(user),
+        assetsRepo.listIssues({ since }),
+        assetsRepo.listAssets(),
+        assetsRepo.employees(),
+        assetsRepo.approveOver(),
+        departmentsRepo.list(),
+        assetsRepo.listWorkOrders({ from: since }),
+        openId ? assetsRepo.findIssue(openId) : Promise.resolve(null),
+      ])
+    const issues =
+      extra && !recent.some((i) => i.id === extra.id) ? [...recent, extra] : recent
+    const extraWos =
+      extra?.work_order_id && !wos.some((w) => w.id === extra.work_order_id)
+        ? await assetsRepo.listWorkOrders({ assetId: extra.asset_id })
+        : []
+    const deptMap = new Map(depts.map((d) => [d.id, d.name]))
+    const openBy = new Map(
+      issues.filter((i) => isOpenIssue(i.status)).map((i) => [i.asset_id, i]),
+    )
     return {
       meta,
       me: user.id,
       today: todayVn(),
       approve_over: approveOver,
-      issues: issues.map((i) => {
-        const a = byId.get(i.asset_id)
-        return {
-          ...i,
-          asset: a
-            ? {
-                id: a.id,
-                code: a.code,
-                name: a.name,
-                department_id: a.department_id,
-                status: a.status,
-              }
-            : null,
-          reporter_name: i.reporter_user_id
-            ? (reporters.get(i.reporter_user_id) ?? null)
-            : null,
-          tech_name: i.tech_employee_id
-            ? (empName.get(i.tech_employee_id) ?? null)
-            : null,
-        }
+      issues: await issueViews(issues, {
+        assets,
+        emps,
+        depts: deptMap,
+        wos: [...wos, ...extraWos],
       }),
       assets: assets
         .filter((a) => inBooks(a.status))
@@ -122,6 +132,9 @@ export const issuesService = {
           name: a.name,
           kind: a.kind,
           department_id: a.department_id,
+          dept_name: a.department_id ? (deptMap.get(a.department_id) ?? null) : null,
+          open_no: openBy.get(a.id)?.no ?? null,
+          open_id: openBy.get(a.id)?.id ?? null,
         })),
       techs: emps
         .filter((e) => e.active && e.team === 'Tổ Cơ Điện')

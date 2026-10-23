@@ -4,14 +4,14 @@ import { MayScreen, type Loc } from './MayScreen'
 
 export const metadata = { title: 'Máy móc' }
 
-const LOCS: readonly string[] = ['down', 'od', 'idle'] satisfies Loc[]
+const LOCS: readonly string[] = ['down', 'od', 'idle', 'stale'] satisfies Loc[]
 
 export default async function Page({
   searchParams,
 }: {
   /**
    * `?nhap=1` — nút "Nhập danh sách máy" ở trang Việc hôm nay mở thẳng hộp nhập Excel.
-   * `?loc=down|od|idle` — ô ở Việc hôm nay mở sẵn đúng chip lọc.
+   * `?loc=down|od|idle|stale` — ô ở Việc hôm nay mở sẵn đúng chip lọc.
    */
   searchParams: Promise<{ nhap?: string; loc?: string }>
 }) {
@@ -22,6 +22,7 @@ export default async function Page({
       meta={d.meta}
       assets={d.assets}
       options={d.options}
+      today={d.today}
       openImport={nhap === '1' && d.meta.can_edit}
       initialLoc={loc && LOCS.includes(loc) ? (loc as Loc) : ''}
     />

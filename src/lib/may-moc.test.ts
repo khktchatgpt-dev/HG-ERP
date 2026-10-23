@@ -7,9 +7,12 @@ import {
   assetOnReport,
   assetOnStart,
   canIssue,
+  codeFromScan,
   docNo,
   dueTxt,
   everyTxt,
+  agoTxt,
+  hoursStale,
   inspectionSoon,
   planDue,
   planState,
@@ -30,7 +33,7 @@ describe('hạn bảo trì', () => {
       TODAY,
     )
     expect(d).toEqual({ date: '2026-10-15', days: -6, hoursLeft: null })
-    expect(dueTxt(d)).toBe('quá 6 ngày')
+    expect(dueTxt(d)).toBe('quá hạn 6 ngày')
   })
 
   it('theo ngày', () => {
@@ -52,7 +55,7 @@ describe('hạn bảo trì', () => {
     )
     expect(over.hoursLeft).toBe(-140)
     expect(over.days).toBeLessThan(0)
-    expect(dueTxt(over)).toBe('vượt 140 h')
+    expect(dueTxt(over)).toBe(`quá hạn ${-over.days} ngày · vượt 140 h`)
     // còn 14 h, 14 giờ/ngày → 12 giờ/ngày lịch → 1 ngày
     const soon = planDue(
       { every_n: 40, unit: 'h', last_date: '2026-10-16', last_hours: 6842 },
@@ -76,7 +79,7 @@ describe('hạn bảo trì', () => {
       false,
     ])
     expect(everyTxt(2000, 'h')).toBe('2.000 giờ chạy')
-    expect(everyTxt(14, 'd')).toBe('2 tuần')
+    expect(everyTxt(14, 'd')).toBe('14 ngày')
     expect(everyTxt(5, 'd')).toBe('5 ngày')
     expect(everyTxt(36, 'm')).toBe('3 năm')
     expect(everyTxt(3, 'm')).toBe('3 tháng')
@@ -152,5 +155,63 @@ describe('đánh số + thống kê', () => {
     expect(shortMoney(18_500_000)).toBe('18,5 tr')
     expect(shortMoney(1_200_000_000)).toBe('1,2 tỷ')
     expect(shortMoney(450_000)).toBe('450k')
+  })
+})
+
+describe('codeFromScan — chữ đọc từ tem QR → mã máy', () => {
+  it('tem in đường dẫn tuyệt đối tới hồ sơ máy', () => {
+    expect(codeFromScan('https://erp.hg.vn/may-moc/may/TS-HAN-001')).toBe('TS-HAN-001')
+    expect(codeFromScan('http://localhost:3100/may-moc/may/TS-HAN-001?muc=tem')).toBe(
+      'TS-HAN-001',
+    )
+  })
+  it('mã có ký tự đã mã hoá trong đường dẫn', () => {
+    expect(codeFromScan('https://x/may-moc/may/CC%2DDC%2D002#a')).toBe('CC-DC-002')
+  })
+  it('gõ tay mã trần, chữ thường, thừa khoảng trắng', () => {
+    expect(codeFromScan('  ts-khi-002 ')).toBe('TS-KHI-002')
+  })
+  it('rỗng thì trả rỗng để màn báo "gõ mã"', () => {
+    expect(codeFromScan('   ')).toBe('')
+  })
+})
+
+describe('giờ chạy chưa cập nhật', () => {
+  const m = {
+    kind: 'machine' as const,
+    status: 'dang_dung' as const,
+    hours_per_day: 8,
+    hours_updated_on: '2026-10-07',
+  }
+  it('đúng 14 ngày chưa tính, 15 ngày thì tính', () => {
+    expect(hoursStale(m, TODAY)).toBe(false)
+    expect(hoursStale({ ...m, hours_updated_on: '2026-10-06' }, TODAY)).toBe(true)
+  })
+  it('chưa đọc lần nào thì tính', () => {
+    expect(hoursStale({ ...m, hours_updated_on: null }, TODAY)).toBe(true)
+  })
+  it('máy không có đồng hồ giờ, chưa đưa vào dùng, dụng cụ, đã thanh lý thì không', () => {
+    const old = { ...m, hours_updated_on: null }
+    expect(hoursStale({ ...old, hours_per_day: 0 }, TODAY)).toBe(false)
+    expect(hoursStale({ ...old, status: 'chua_dung' }, TODAY)).toBe(false)
+    expect(hoursStale({ ...old, kind: 'tool' }, TODAY)).toBe(false)
+    expect(hoursStale({ ...old, status: 'thanh_ly' }, TODAY)).toBe(false)
+  })
+})
+
+describe('lúc báo, kể tương đối như demo', () => {
+  // 10:00 ngày 21/10/2026 giờ VN = 03:00Z
+  const now = new Date('2026-10-21T03:00:00Z')
+  it('phút, giờ trong ngày', () => {
+    expect(agoTxt('2026-10-21T02:59:40Z', now)).toBe('vừa xong')
+    expect(agoTxt('2026-10-21T02:35:00Z', now)).toBe('25 phút trước')
+    expect(agoTxt('2026-10-20T18:00:00Z', now)).toBe('9 giờ trước') // 01:00 sáng nay giờ VN
+  })
+  it('qua nửa đêm giờ VN là hôm qua, không theo UTC', () => {
+    expect(agoTxt('2026-10-20T16:30:00Z', now)).toBe('hôm qua') // 23:30 hôm qua giờ VN
+    expect(agoTxt('2026-10-16T03:00:00Z', now)).toBe('5 ngày trước')
+  })
+  it('quá 30 ngày thì ghi ngày', () => {
+    expect(agoTxt('2026-09-01T03:00:00Z', now)).toBe('01/09/2026')
   })
 })

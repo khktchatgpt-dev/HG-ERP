@@ -14,7 +14,7 @@ import {
   Tick,
 } from '@/components/kit'
 import { todayVn } from '@/lib/date-vn'
-import { everyTxt, vnd, type PlanUnit } from '@/lib/may-moc'
+import { dmy, everyTxt, vnd, type PlanUnit } from '@/lib/may-moc'
 import type { AssetFormOptions } from '@/modules/core/assets/assets.service'
 import {
   Blocked,
@@ -465,6 +465,8 @@ export type PlanForDone = {
   task: string
   is_inspection: boolean
   cost: number
+  /** Chu kỳ theo ngày (vệ sinh, tra dầu) dừng máy ngắn hơn — mặc định 0,5 giờ như demo. */
+  unit: PlanUnit
   asset: { id: string; code: string; name: string; hours: number; hours_per_day: number }
 }
 
@@ -472,23 +474,28 @@ export type PlanForDone = {
 export function PlanDoneSheet({
   plan,
   techs,
+  me,
   onClose,
 }: {
   plan: PlanForDone
   techs: { id: string; name: string }[]
+  /** Nhân viên của tài khoản đang đăng nhập — "Người làm" mặc định nếu là thợ Cơ điện. */
+  me?: string | null
   onClose: () => void
 }) {
   const m = useMutate()
   const kd = plan.is_inspection
   const [date, setDate] = useState(todayVn())
-  const [tech, setTech] = useState(kd ? '' : (techs[0]?.id ?? ''))
+  const [tech, setTech] = useState(
+    kd ? '' : techs.some((t) => t.id === me) ? me! : (techs[0]?.id ?? ''),
+  )
   const [vendor, setVendor] = useState(kd ? 'Trung tâm kiểm định an toàn' : '')
   const [hours, setHours] = useState(
     plan.asset.hours_per_day ? String(plan.asset.hours) : '',
   )
   const [parts, setParts] = useState<PartDraft[]>([emptyPart()])
   const [labor, setLabor] = useState(kd ? String(plan.cost || '') : '')
-  const [down, setDown] = useState(kd ? '0' : '1')
+  const [down, setDown] = useState(kd ? '0' : plan.unit === 'd' ? '0,5' : '1')
   const [note, setNote] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const total =
@@ -505,20 +512,23 @@ export function PlanDoneSheet({
     setErr(null)
     const r = await m.run(
       () =>
-        m.api<{ work_order: { no: string } }>(`/api/may-moc/plans/${plan.id}/done`, {
-          method: 'POST',
-          body: {
-            done_on: date,
-            tech_employee_id: tech || null,
-            vendor: tech ? null : vendor.trim(),
-            hours: h,
-            parts: draftParts(parts),
-            labor: readNum(labor) || 0,
-            downtime_hours: readNum(down) || 0,
-            note: note.trim() || null,
+        m.api<{ work_order: { no: string; next_due: string } }>(
+          `/api/may-moc/plans/${plan.id}/done`,
+          {
+            method: 'POST',
+            body: {
+              done_on: date,
+              tech_employee_id: tech || null,
+              vendor: tech ? null : vendor.trim(),
+              hours: h,
+              parts: draftParts(parts),
+              labor: readNum(labor) || 0,
+              downtime_hours: readNum(down) || 0,
+              note: note.trim() || null,
+            },
           },
-        }),
-      (x) => `Đã ghi ${x.work_order.no} — lịch dời sang kỳ sau`,
+        ),
+      (x) => `Đã ghi ${x.work_order.no}. Kỳ sau: ${dmy(x.work_order.next_due)}`,
     )
     if (r.ok) onClose()
     else setErr(r.error)
@@ -604,8 +614,9 @@ export function PlanDoneSheet({
         </FormRow>
         <p className="text-k-sm">
           Phiếu {kd ? 'kiểm định' : 'bảo dưỡng'} sẽ ghi{' '}
-          <b className="font-mono">{vnd(total)} đ</b> vào chi phí tháng này, lịch dời sang
-          kỳ sau.
+          <b className="font-mono">{vnd(total)} đ</b> vào chi phí tháng{' '}
+          {date ? `${date.slice(5, 7)}/${date.slice(0, 4)}` : 'này'}, lịch dời sang kỳ
+          sau.
         </p>
         {err && <Blocked>{err}</Blocked>}
       </div>

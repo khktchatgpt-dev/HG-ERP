@@ -116,3 +116,11 @@ export function toLanes<T>(
     rows: rows.filter(s.test),
   }))
 }
+
+/**
+ * Khung nút góc phải `ScreenHeader`: xuống dòng và không rộng quá khung. Trước
+ * 23/10/2026 là `shrink-0` một hàng — trên điện thoại (375px) nút cuối, thường là
+ * menu ⋯ (sửa, thanh lý…), bị đẩy ra ngoài màn và không bấm được.
+ */
+export const HEAD_ACTS =
+  'flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2'

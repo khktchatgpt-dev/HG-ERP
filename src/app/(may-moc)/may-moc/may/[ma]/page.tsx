@@ -22,10 +22,10 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ ma: string }>
-  searchParams: Promise<{ muc?: string }>
+  searchParams: Promise<{ muc?: string; gio?: string }>
 }) {
   const user = await authService.requirePageUser()
-  const [{ ma }, { muc }, h] = await Promise.all([params, searchParams, headers()])
+  const [{ ma }, { muc, gio }, h] = await Promise.all([params, searchParams, headers()])
   const code = decodeURIComponent(ma)
   let d: Awaited<ReturnType<typeof assetsService.detail>>
   try {
@@ -60,6 +60,7 @@ export default async function Page({
       approveOver={d.approve_over}
       me={user.id}
       initialMuc={initial}
+      openHours={gio === '1'}
     />
   )
 }

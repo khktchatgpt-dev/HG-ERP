@@ -86,7 +86,14 @@ export function FormRow({
  * gắn `onInput={() => setErr(null)}` để câu tắt khi người dùng sửa — câu cũ nằm lại
  * sau khi đã gõ đủ làm người ta tưởng vẫn còn vướng.
  */
-export function Blocked({ children }: { children: ReactNode }) {
+export function Blocked({
+  children,
+  lead = 'Chưa lưu được:',
+}: {
+  children: ReactNode
+  /** Chữ đầu câu — "Chưa mở được:" khi việc bị chặn không phải là lưu (quét tem, tìm máy). */
+  lead?: string
+}) {
   return (
     <p
       role="alert"
@@ -97,7 +104,7 @@ export function Blocked({ children }: { children: ReactNode }) {
         color: 'var(--ink)',
       }}
     >
-      <b style={{ color: 'var(--warn)' }}>Chưa lưu được:</b> {children}
+      <b style={{ color: 'var(--warn)' }}>{lead}</b> {children}
     </p>
   )
 }

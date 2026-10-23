@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   Btn,
   Cell,
@@ -9,6 +10,7 @@ import {
   MiniBars,
   Row,
   ScreenFrame,
+  Sheet,
   ScreenHeader,
   Tag,
   TFoot,
@@ -53,6 +55,8 @@ export function ChiPhiScreen({
   byDept: { name: string; cost: number }[]
 }) {
   const toast = useToast()
+  // Trình duyệt chặn ghi clipboard (khung nhúng, http, quyền) → mở hộp chép tay.
+  const [manual, setManual] = useState<string | null>(null)
   const total = rows.reduce((s, w) => s + w.cost, 0)
   const by = (k: WoKind) => rows.filter((w) => w.kind === k)
   const sum = (l: CostRow[]) => l.reduce((s, w) => s + w.cost, 0)
@@ -97,7 +101,7 @@ export function ChiPhiScreen({
         'Dán vào Excel hoặc MISA.',
       )
     } catch {
-      toast.error('Trình duyệt chặn sao chép', 'Dùng nút "Xuất Excel" thay thế.')
+      setManual(tsv)
     }
   }
 
@@ -160,7 +164,7 @@ export function ChiPhiScreen({
             basis={`${by('BD').length} phiếu PBD`}
           />
           <Metric
-            label="Sửa chữa"
+            label="Sửa chữa đột xuất"
             value={shortMoney(sum(by('SC')))}
             basis={`${by('SC').length} phiếu PSC${total ? ` · ${Math.round((sum(by('SC')) / total) * 100)}% tổng` : ''}`}
             tone={total && sum(by('SC')) / total > 0.6 ? 'warn' : undefined}
@@ -186,7 +190,7 @@ export function ChiPhiScreen({
             <MiniBars
               label="Chi phí bảo trì 12 tháng"
               max={maxMonth}
-              series={['Bảo dưỡng, kiểm định', 'Sửa chữa']}
+              series={['Bảo dưỡng, kiểm định', 'Sửa chữa đột xuất']}
               rows={series.map((s) => ({
                 id: s.ym,
                 label: ymTxt(s.ym),
@@ -293,6 +297,23 @@ export function ChiPhiScreen({
             }
           />
         </Table>
+      )}
+      {manual != null && (
+        <Sheet
+          open
+          onClose={() => setManual(null)}
+          width={720}
+          title="Sao chép thủ công"
+          subtitle="Trình duyệt chặn sao chép tự động. Bảng đã được chọn sẵn — nhấn Ctrl + C rồi dán vào Excel hoặc MISA."
+        >
+          <textarea
+            readOnly
+            aria-label="Bảng chi phí dạng chữ để sao chép"
+            value={manual}
+            ref={(el) => el?.select()}
+            className="text-k-sm min-h-[320px] w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-raised)] p-2 font-mono"
+          />
+        </Sheet>
       )}
     </ScreenFrame>
   )

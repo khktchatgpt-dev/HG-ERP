@@ -559,6 +559,43 @@ xuất, Tổ, BGĐ; Kho thấy `/may-moc/dung-cu`; Kế toán thấy `/may-moc/c
   `assets.excel.ts` (có test).
 - **Thông báo** qua event bus (`asset.notifications.ts`), không báo cho chính người bấm.
 - Hộp thoại bày lỗi TẠI CHỖ (`Blocked`); khối form gắn `onInput` để câu tắt khi sửa.
+- **Trang đầu hai bản như demo** (bổ sung 23/10/2026 sau khi đối chiếu lại artifact theo
+  cả hai vai): "Việc hôm nay" (Cơ điện: nút nhanh quét tem / báo hỏng / giờ chạy, thẻ
+  phiếu) và "Tổng quan" (Giám đốc: chỉ số, phiếu chờ duyệt, máy dừng, chi phí 12 tháng,
+  máy hỏng nhiều nhất 6 tháng). Mặc định theo quyền (`can_approve && !can_work` →
+  Tổng quan), `?xem=` chuyển. Tiền TỔNG HỢP (KPI tháng, biểu đồ 12 tháng, chi phí máy
+  hỏng nhiều, trang Chi phí) chỉ gửi cho `assets.cost.view`; dự toán / chi phí trên TỪNG
+  phiếu thì ai xem phiếu cũng thấy, như demo.
+- **Phiếu bày một hình** `IssueView` (`issues.view.ts`) cho bảng + thẻ; thẻ ở
+  `_ui/issue-card.tsx`, nút trên thẻ qua `useIssueFlow`. Báo hỏng mặc định dạng thẻ 4
+  cột; tới từ ô đếm (`?tab=`) thì dạng bảng đúng chip.
+- **Quét tem QR** (`_ui/scan-sheet.tsx`): camera qua `BarcodeDetector` (Chrome/Edge
+  Android), chọn máy theo tổ, gõ mã; `codeFromScan` (lib, có test) đọc cả URL lẫn mã
+  trần. `?gio=1` ở hồ sơ máy mở sẵn hộp giờ chạy. Ô tìm máy + nút quét ở thanh tab khu
+  (`GET /api/may-moc/assets`).
+- **Số trên tab khu** (`assetsService.navBadges`, tính ở layout): Lịch bảo trì = quá
+  hạn, Báo hỏng = mới báo, Dụng cụ = người đã nghỉ còn giữ, trang đầu = chờ duyệt (chỉ
+  người duyệt). Đếm bằng đúng hàm màn đích; cập nhật khi `router.refresh()`.
+- **Khổ điện thoại** (thợ quét tem bằng điện thoại): dải tab xuống hàng dưới ô tìm; bảng
+  thẻ Báo hỏng xếp dọc dưới `md`. `ScreenHeader` (kit) cho nút xuống dòng — trước
+  23/10/2026 nút cuối (menu ⋯) bị đẩy ra ngoài màn ở 375px.
+- **Rà lần cuối với demo (23/10/2026)** thêm: người làm / thợ nhận việc mặc định là
+  chính người đăng nhập (`meta.employee_id` = `users.employee_id`); "Đã làm" lịch theo
+  ngày dừng 0,5 giờ; toast "Kỳ sau: dd/mm/yyyy" (`planDone` trả `next_due`); giao dụng
+  cụ đổi "đặt tại" sang tổ người nhận (khớp TÊN tổ ở Hồ sơ NV với bộ phận — chỉ ~nửa số
+  tổ khớp, không khớp thì giữ nguyên), thu hồi về "Tổ Cơ Điện"; chỉ giao dụng cụ SL = 1;
+  hộp Thu hồi có ô "Thu hồi từ"; hộp Báo hỏng xếp máy theo tổ và chặn ngay máy đang có
+  phiếu; người duyệt nhận chuông gồm cả quản trị; chữ "quá hạn N ngày", chu kỳ "14
+  ngày" (không đổi ra tuần), "Chưa sử dụng", dụng cụ "Đang dùng", lúc báo kể tương đối
+  (`agoTxt`). Số trên đầu khối trang đầu là TỔNG, bảng chỉ cắt dòng bày.
+- **Đối chiếu demo, CỐ Ý không làm**: đổi vai / dữ liệu mẫu, chọn "người báo" (lấy
+  người đăng nhập), "nhân viên nghỉ việc" (ghi ở Hồ sơ nhân viên), chuông "cần chú ý"
+  tính sẵn (ERP dùng chuông theo sự kiện + ô đếm), thư viện phụ tùng gợi ý theo nhóm
+  (PART_LIB — dữ liệu mẫu, chủ dự án bảo bỏ), thanh tab đáy trên điện thoại (dải tab khu
+  + nút Quét QR đã đủ). CHẶT HƠN demo có chủ ý: "Sửa xong" bắt ghi nguyên nhân ≥ 5 ký tự,
+  thuê ngoài bắt ghi tên đơn vị (demo để trống thành "Thuê ngoài").
+- **Chờ chủ dự án chốt**: demo cho Nhân sự giao / thu hồi dụng cụ; ERP đang cho Kho + GĐ
+  (`assets.tools`, 0270). Muốn thêm Nhân sự thì một migration cấp quyền + nav.
 - **Chưa làm**: đưa phiếu chờ GĐ duyệt vào Trung tâm phê duyệt (`/exec/approvals`) —
   hiện GĐ duyệt ngay trên phiếu, nhận việc qua chuông.
 

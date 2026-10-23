@@ -27,6 +27,7 @@ import {
   FileSpreadsheet,
   FileText,
   FilterX,
+  Gauge,
   History,
   Info,
   Lock,
@@ -36,6 +37,7 @@ import {
   PenLine,
   Plus,
   Printer,
+  QrCode,
   ReceiptText,
   RefreshCw,
   RotateCcw,
@@ -144,6 +146,8 @@ const MAP = {
   in: Printer,
   excel: FileSpreadsheet,
   tim: Search,
+  quetQr: QrCode, // tem QR dán trên máy — quét để mở hồ sơ máy
+  gioChay: Gauge, // đồng hồ giờ chạy máy
   boLoc: FilterX, // bỏ bộ lọc
   lamMoi: RefreshCw,
   toi: User, // của tôi, người phụ trách
@@ -216,6 +220,8 @@ export const ICO_MEANING: Record<
   in: ['Thao tác', 'In, bản in'],
   excel: ['Thao tác', 'Xuất Excel, bảng kê'],
   tim: ['Thao tác', 'Tìm'],
+  quetQr: ['Thao tác', 'Quét / in tem QR trên máy, thiết bị'],
+  gioChay: ['Thao tác', 'Đọc, cập nhật đồng hồ giờ chạy máy'],
   boLoc: ['Thao tác', 'Bỏ bộ lọc, xem tất cả'],
   lamMoi: ['Thao tác', 'Làm mới'],
   toi: ['Thao tác', 'Của tôi, người phụ trách'],

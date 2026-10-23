@@ -20,7 +20,7 @@ import {
   Tag,
 } from '@/components/kit'
 import { normalizeSearch } from '@/lib/search-text'
-import { inBooks, isDown, vnd } from '@/lib/may-moc'
+import { dmy, hoursStale, inBooks, isDown, vnd } from '@/lib/may-moc'
 import type {
   AssetView,
   AssetsMeta,
@@ -32,7 +32,7 @@ import { ImportSheet } from '../_ui/import-dialogs'
 import { ReportIssueSheet } from '../_ui/issue-dialogs'
 
 type Tab = 'machine' | 'tool' | 'out'
-export type Loc = '' | 'down' | 'od' | 'idle'
+export type Loc = '' | 'down' | 'od' | 'idle' | 'stale'
 
 /**
  * MÁY MÓC (khuôn C · Danh sách) — "Trong số máy, máy nào cần tôi động vào?"
@@ -43,12 +43,14 @@ export function MayScreen({
   meta,
   assets,
   options,
+  today,
   openImport = false,
   initialLoc = '',
 }: {
   meta: AssetsMeta
   assets: AssetView[]
   options: AssetFormOptions
+  today: string
   openImport?: boolean
   /** `?loc=down` từ ô "Máy đang dừng" ở Việc hôm nay. */
   initialLoc?: Loc
@@ -85,7 +87,13 @@ export function MayScreen({
   }, [inTab, q, dept, group])
   const match = (a: AssetView, l: Loc) =>
     l === '' ||
-    (l === 'down' ? isDown(a.status) : l === 'od' ? a.overdue : a.status === 'chua_dung')
+    (l === 'down'
+      ? isDown(a.status)
+      : l === 'od'
+        ? a.overdue
+        : l === 'stale'
+          ? hoursStale(a, today)
+          : a.status === 'chua_dung')
   const rows = base.filter((a) => match(a, loc))
   const count = (l: Loc) => base.filter((a) => match(a, l)).length
   const machines = assets.filter((a) => a.kind === 'machine' && inBooks(a.status))
@@ -97,7 +105,14 @@ export function MayScreen({
   )
   const reportable = assets
     .filter((a) => inBooks(a.status))
-    .map((a) => ({ id: a.id, code: a.code, name: a.name }))
+    .map((a) => ({
+      id: a.id,
+      code: a.code,
+      name: a.name,
+      dept_name: a.dept_name,
+      open_no: a.open_issue?.no ?? null,
+      open_id: a.open_issue?.id ?? null,
+    }))
 
   return (
     <ScreenFrame tableMin={1080}>
@@ -176,6 +191,11 @@ export function MayScreen({
         >
           Đã thanh lý, mất
         </Chip>
+        {meta.can_tools && (
+          <span className="ml-auto">
+            <Btn href="/may-moc/dung-cu">Dụng cụ cầm tay theo người →</Btn>
+          </span>
+        )}
       </FilterBar>
       <FilterBar dense label="Lọc máy">
         <SearchInput
@@ -227,8 +247,18 @@ export function MayScreen({
               count={count('idle')}
               onClick={() => setLoc(loc === 'idle' ? '' : 'idle')}
             >
-              Chưa đưa vào dùng
+              Chưa sử dụng
             </Chip>
+            {/* Chỉ bày khi có máy rơi vào: ô "Giờ chạy chưa cập nhật" ở Việc hôm nay mở thẳng chip này. */}
+            {(loc === 'stale' || count('stale') > 0) && (
+              <Chip
+                on={loc === 'stale'}
+                count={count('stale')}
+                onClick={() => setLoc(loc === 'stale' ? '' : 'stale')}
+              >
+                Giờ chạy cũ &gt; 14 ngày
+              </Chip>
+            )}
           </>
         )}
       </FilterBar>
@@ -359,7 +389,7 @@ export function MayScreen({
                 <Cell num>{a.hours_per_day ? vnd(a.hours) : ''}</Cell>
                 <Cell>
                   {tab === 'out' ? (
-                    <span className="text-k-sm font-mono">{a.disposed_on ?? '—'}</span>
+                    <span className="text-k-sm font-mono">{dmy(a.disposed_on)}</span>
                   ) : a.next_plan ? (
                     <span className="flex min-w-0 items-baseline gap-2">
                       <span className="truncate" title={a.next_plan.task}>

@@ -35,7 +35,7 @@ type Tab = 'held' | 'left' | 'store'
 type Dlg =
   | null
   | { give: { emp?: string; ids?: string[] } }
-  | { recall: { ids: string[]; note?: string } }
+  | { recall: { emp?: string; ids: string[]; note?: string } }
   | 'add'
 
 /**
@@ -77,10 +77,12 @@ export function DungCuScreen({
       name: t.name,
       holder_id: h.person?.id,
       holder_name: h.person?.name,
+      holder_left_on: h.person?.left_on ?? null,
     })),
   )
+  // Như demo: giao theo CHIẾC — dòng nhập gộp (SL > 1) không giao được (máy chủ cũng chặn).
   const storeList: ToolLite[] = store
-    .filter((t) => t.status === 'chua_dung')
+    .filter((t) => t.status === 'chua_dung' && t.qty === 1)
     .map((t) => ({ id: t.id, code: t.code, name: t.name }))
   const blocked = meta.can_tools ? undefined : 'Kho / Ban Giám đốc'
 
@@ -148,8 +150,8 @@ export function DungCuScreen({
                   onClick: () =>
                     setDlg({
                       recall: {
+                        emp: h.person!.id,
                         ids: h.tools.map((t) => t.id),
-                        note: `Nghỉ việc từ ${dmy(h.person!.left_on || null)}.`,
                       },
                     }),
                 }
@@ -286,7 +288,10 @@ export function DungCuScreen({
                     mã NV {h.person!.code}
                   </span>
                 </Cell>
-                <Cell muted>{h.person!.team ?? '—'}</Cell>
+                <Cell muted>
+                  {[h.person!.job_title, h.person!.team].filter(Boolean).join(' · ') ||
+                    '—'}
+                </Cell>
                 <Cell grow>
                   <span className="flex flex-wrap gap-x-3 gap-y-1">
                     {h.tools.map((t) => (
@@ -310,7 +315,9 @@ export function DungCuScreen({
                     <Btn
                       blockedBy={blocked}
                       onClick={() =>
-                        setDlg({ recall: { ids: h.tools.map((t) => t.id) } })
+                        setDlg({
+                          recall: { emp: h.person!.id, ids: h.tools.map((t) => t.id) },
+                        })
                       }
                     >
                       Thu hồi
@@ -345,6 +352,7 @@ export function DungCuScreen({
       {dlg && typeof dlg === 'object' && 'recall' in dlg && (
         <RecallSheet
           held={heldList}
+          holderId={dlg.recall.emp}
           preselect={dlg.recall.ids}
           note={dlg.recall.note}
           onClose={() => setDlg(null)}

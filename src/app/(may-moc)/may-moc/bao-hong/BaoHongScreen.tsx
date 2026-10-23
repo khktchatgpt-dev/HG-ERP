@@ -21,10 +21,8 @@ import {
   type TrackTone,
 } from '@/components/kit'
 import { FeedbackImages } from '@/components/feedback/FeedbackImages'
-import { TZ_VN, todayVn } from '@/lib/date-vn'
 import {
   canIssue,
-  dmy,
   ISSUE_STATUS,
   isOpenIssue,
   PRIORITY_LABEL,
@@ -34,8 +32,11 @@ import {
   type IssueStatus,
 } from '@/lib/may-moc'
 import type { AssetsMeta } from '@/modules/core/assets/assets.service'
-import type { IssueRow } from '@/modules/core/assets/assets.repo'
+import type { IssueView } from '@/modules/core/assets/issues.view'
 import { AssetCode, useMutate } from '../_ui/shared'
+import { ago } from '../_ui/issue-card'
+import { useIssueFlow } from '../_ui/issue-flow'
+import { IssueBoard } from './board'
 import {
   AcceptSheet,
   DoneSheet,
@@ -44,17 +45,7 @@ import {
   type IssueRef,
 } from '../_ui/issue-dialogs'
 
-export type IssueItem = IssueRow & {
-  asset: {
-    id: string
-    code: string
-    name: string
-    department_id: string | null
-    status: string
-  } | null
-  reporter_name: string | null
-  tech_name: string | null
-}
+export type IssueItem = IssueView
 type Tab = 'open' | IssueStatus
 type Dlg = null | 'report' | 'accept' | 'done' | 'reject' | 'cancel'
 
@@ -71,17 +62,6 @@ const stepTone = (s: IssueStatus): TrackTone =>
         : s === 'xong'
           ? 'done'
           : 'idle'
-/** Giờ báo theo GIỜ VIỆT NAM — `reported_at` là ISO UTC, cắt chuỗi là lệch 7 tiếng. */
-const ago = (iso: string, today: string) => {
-  const t = new Date(iso)
-  const d = todayVn(t)
-  const hm = t.toLocaleTimeString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: TZ_VN,
-  })
-  return d === today ? `${hm} hôm nay` : `${hm} ${dmy(d)}`
-}
 
 /**
  * BÁO HỎNG (khuôn C) — "Máy nào đang chờ sửa, ai đang giữ phiếu?" Lưới theo
@@ -100,6 +80,7 @@ export function BaoHongScreen({
   techs,
   initialId,
   initialTab = 'open',
+  initialView = 'the',
 }: {
   meta: AssetsMeta
   me: string
@@ -110,9 +91,13 @@ export function BaoHongScreen({
   techs: { id: string; name: string }[]
   initialId: string | null
   initialTab?: Tab
+  /** `?xem=bang` — dạng bảng; mặc định dạng thẻ 4 cột như demo. */
+  initialView?: 'the' | 'bang'
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [view, setView] = useState<'the' | 'bang'>(initialView)
+  const flow = useIssueFlow({ techs, approveOver, me: meta.employee_id })
   const [openId, setOpenId] = useState<string | null>(initialId)
   const [dlg, setDlg] = useState<Dlg>(null)
   const m = useMutate()
@@ -171,21 +156,49 @@ export function BaoHongScreen({
         }
       />
       <FilterBar dense label="Lọc phiếu">
-        <Chip on={tab === 'open'} count={count('open')} onClick={() => setTab('open')}>
-          Chưa xong
-        </Chip>
-        {(['moi', 'cho_duyet', 'dang_sua', 'xong', 'huy'] as const).map((s) => (
-          <Chip key={s} on={tab === s} count={count(s)} onClick={() => setTab(s)}>
-            {ISSUE_STATUS[s].label}
+        <span
+          className="flex gap-1 border-r border-[var(--line)] pr-2"
+          role="group"
+          aria-label="Dạng hiển thị"
+        >
+          <Chip on={view === 'the'} onClick={() => setView('the')}>
+            Thẻ
           </Chip>
-        ))}
+          <Chip on={view === 'bang'} onClick={() => setView('bang')}>
+            Bảng
+          </Chip>
+        </span>
+        {view === 'bang' && (
+          <>
+            <Chip
+              on={tab === 'open'}
+              count={count('open')}
+              onClick={() => setTab('open')}
+            >
+              Chưa xong
+            </Chip>
+            {(['moi', 'cho_duyet', 'dang_sua', 'xong', 'huy'] as const).map((s) => (
+              <Chip key={s} on={tab === s} count={count(s)} onClick={() => setTab(s)}>
+                {ISSUE_STATUS[s].label}
+              </Chip>
+            ))}
+          </>
+        )}
         <span className="text-k-label ml-auto text-[var(--ink-3)]">
           Ai thấy máy hỏng cũng báo được · phiếu đã xong / huỷ giữ 60 ngày ở đây, cũ hơn
           xem ở hồ sơ máy
         </span>
       </FilterBar>
 
-      {rows.length === 0 ? (
+      {view === 'the' && issues.length > 0 ? (
+        <IssueBoard
+          issues={issues}
+          today={today}
+          meta={meta}
+          onOpen={(i) => pick(i.id)}
+          flow={flow}
+        />
+      ) : rows.length === 0 || (view === 'the' && issues.length === 0) ? (
         <Empty
           headline={
             issues.length === 0
@@ -388,6 +401,7 @@ export function BaoHongScreen({
         </Sheet>
       )}
 
+      {flow.sheets}
       {dlg === 'report' && (
         <ReportIssueSheet assets={assets} onClose={() => setDlg(null)} />
       )}
@@ -396,6 +410,7 @@ export function BaoHongScreen({
           issue={ref(cur)}
           techs={techs}
           approveOver={approveOver}
+          me={meta.employee_id}
           onClose={() => setDlg(null)}
         />
       )}
