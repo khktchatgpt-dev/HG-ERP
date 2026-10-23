@@ -99,23 +99,14 @@ describe('điều kiện', () => {
       ['xac_nhan', '1 / 2 tổ'],
     ])
   })
-  it('người không chấm công chưa nhập công chặn chốt (0262); kỳ không có ai thì không thêm ô', () => {
-    const v = { choDuyet: 0, chuaCoTo: 0, to: [{ ten: 'Tổ Phôi', daXacNhan: true }] }
-    const co = dieuKienChot(b, { ...v, khongCham: { tong: 19, chuaNhap: 3 } })
-    expect(co.at(-1)).toEqual({
-      ma: 'nhap_tay',
-      ten: 'Không chấm công đã nhập công',
-      ok: false,
-      chiTiet: '16 / 19 người',
+  it('người không chấm công không còn là điều kiện chốt (23/10/2026 — Kế toán xử lý ở bảng lương)', () => {
+    const d = dieuKienChot(b, {
+      choDuyet: 0,
+      chuaCoTo: 0,
+      to: [{ ten: 'Tổ Phôi', daXacNhan: true }],
     })
-    expect(
-      dieuKienChot(b, { ...v, khongCham: { tong: 19, chuaNhap: 0 } }).at(-1)?.ok,
-    ).toBe(true)
-    expect(
-      dieuKienChot(b, { ...v, khongCham: { tong: 0, chuaNhap: 0 } }).some(
-        (x) => x.ma === 'nhap_tay',
-      ),
-    ).toBe(false)
+    expect(d.map((x) => x.ma)).toEqual(['het_ky', 'may', 'cho_duyet', 'chua_co_to', 'xac_nhan'])
+    expect(d.some((x) => x.ma === 'nhap_tay')).toBe(false)
   })
 })
 

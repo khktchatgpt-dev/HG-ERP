@@ -36,6 +36,7 @@ import {
 } from './bang-luong.shared'
 import { NganBang } from './ngan-bang'
 import { NganKhoan } from './ngan-khoan'
+import { NganKhongCham } from './ngan-khong-cham'
 import { NganBhThue, NganChuyenKhoan, NganThoiGian } from './ngan-khac'
 import { HopBangLuong } from './hop-bang'
 
@@ -144,6 +145,16 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
               icon: 'ghiChu',
               signal: b.khoan.length ? { text: String(b.khoan.length) } : undefined,
             },
+            {
+              id: 'khong-cham',
+              label: 'Không chấm công',
+              icon: 'sua',
+              signal: b.khongCham.length
+                ? {
+                    text: `${b.khongCham.filter((x) => x.cong != null).length}/${b.khongCham.length}`,
+                  }
+                : undefined,
+            },
             { id: 'bh-thue', label: 'Bảo hiểm & thuế', icon: 'so' },
             { id: 'chuyen-khoan', label: 'Chuyển khoản', icon: 'gui' },
             { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' },
@@ -154,6 +165,9 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
           </DocMenuPanel>
           <DocMenuPanel value="khoan">
             <NganKhoan d={d} />
+          </DocMenuPanel>
+          <DocMenuPanel value="khong-cham">
+            <NganKhongCham d={d} />
           </DocMenuPanel>
           <DocMenuPanel value="bh-thue">
             <NganBhThue d={d} />

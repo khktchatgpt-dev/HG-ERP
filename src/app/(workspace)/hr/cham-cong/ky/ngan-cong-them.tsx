@@ -5,6 +5,7 @@
  * Công Nhân sự cộng tay cho người CÓ chấm công: "Công ngoài giờ" của tổ Sơn (sổ TH cột 32,
  * Kế toán cộng vào công tăng ca → dòng riêng nhóm tăng ca trên phiếu lương), ngày làm Chủ nhật
  * không quẹt (công thường). Một người nhiều dòng được. Không bắt buộc, không chặn chốt.
+ * Người KHÔNG chấm công không nhập ở đây: Kế toán xử lý trên bảng lương (23/10/2026).
  */
 
 import { useState } from 'react'

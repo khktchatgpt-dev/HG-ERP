@@ -187,8 +187,8 @@ export function NganTo({ d }: { d: KyCongCtx }) {
                   'sticky bottom-0 bg-[var(--surface-raised)] text-[var(--ink-3)]',
                 )}
               >
-                Không gồm {k.khongCham.length} người không chấm công (bản chốt ghi họ một
-                dòng “đủ công theo ngày làm việc”).{' '}
+                Không gồm {k.soKhongCham} người không chấm công (lương tháng — Kế toán xử lý
+                trên bảng lương).{' '}
                 {k.trangThai === 'open'
                   ? 'Số tính sống, chưa chốt.'
                   : `Bản chốt lần ${k.ky?.lanChot}.`}

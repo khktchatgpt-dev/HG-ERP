@@ -47,7 +47,7 @@ export function HopChot({ d }: { d: KyCongCtx }) {
         Lưu bản chốt{' '}
         {so(Math.round(k.nguoi.reduce((s, n) => s + n.cong, 0) * 100) / 100, 2)} công
         {ngay0 ? ` (gồm ${ngay0} ngày thiếu lượt tính 0 giờ)` : ''} và{' '}
-        {k.khongCham.length} người không chấm công. Từ giờ phiếu điều chỉnh và tick làm
+        {k.soKhongCham} người không chấm công (lương tháng, Kế toán xử lý). Từ giờ phiếu điều chỉnh và tick làm
         trưa cho ngày {dm(k.tu)} → {dm(k.den)} bị chặn; Bảng công kỳ này chỉ đọc bản chốt.
         Mở lại phải được Kế toán trưởng duyệt.
       </Consequence>

@@ -27,7 +27,7 @@ import { TEN_TRANG_THAI } from '@/lib/cham-cong/ky-cong'
 import { useKyCong, type KyCongCtx, type KyCongTrang, type MucKy } from './useKyCong'
 import { NganTo } from './ngan-to'
 import { NganNguoi, NganThoiGian } from './ngan-nguoi-tl'
-import { NganNhapTay } from './ngan-nhap-tay'
+import { KhoiCongThem } from './ngan-cong-them'
 import { HopChot, HopQuyet, HopXacNhan, HopXin } from './hop-ky'
 import { HopKhoang } from './hop-khoang-ky'
 import { soNgay } from '@/lib/cham-cong/khoang-ky'
@@ -44,7 +44,6 @@ const ngayTu = (tu: string, den: string) =>
 export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
   const d = useKyCong(k, muc)
   const thieu = k.nguoi.reduce((s, n) => s + n.thieu, 0)
-  const chuaNhap = k.khongCham.filter((x) => x.cong == null).length
   const tone =
     k.trangThai === 'open' ? 'warn' : k.trangThai === 'closed' ? 'done' : 'warn'
   return (
@@ -170,12 +169,9 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
           },
           {
             id: 'nhap-tay',
-            label: 'Công nhập tay',
+            label: 'Công cộng thêm',
             icon: 'sua',
-            signal: {
-              text: chuaNhap ? `${chuaNhap} chưa nhập` : so(k.khongCham.length),
-              ...(chuaNhap && d.mo ? { tone: 'stop' as const } : {}),
-            },
+            signal: k.congThem.length ? { text: so(k.congThem.length) } : undefined,
           },
           { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' },
         ]}
@@ -187,7 +183,9 @@ export function KyCongScreen({ k, muc }: { k: KyCongTrang; muc: MucKy }) {
           <NganNguoi d={d} />
         </DocMenuPanel>
         <DocMenuPanel value="nhap-tay">
-          <NganNhapTay d={d} />
+          <div className="flex min-h-0 flex-col overflow-auto">
+            <KhoiCongThem d={d} />
+          </div>
         </DocMenuPanel>
         <DocMenuPanel value="dong-thoi-gian">
           <NganThoiGian d={d} />
@@ -209,7 +207,6 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
   const { k } = d
   const chua = k.to.filter((t) => !t.xacNhan).length
   const thieu = k.nguoi.reduce((s, n) => s + n.thieu, 0)
-  const chuaNhapCong = k.khongCham.filter((x) => x.cong == null).length
   if (k.trangThai === 'closed')
     return (
       <HolderBar
@@ -240,7 +237,6 @@ function NguoiGiu({ d }: { d: KyCongCtx }) {
       who="Hành Chính Nhân Sự"
       what={viecTiep([
         thieu ? `xử lý ${so(thieu)} ngày thiếu lượt` : '',
-        chuaNhapCong ? `nhập công ${chuaNhapCong} người không chấm công` : '',
         chua ? `thu phiếu xác nhận của ${chua} tổ` : '',
         k.chuaCoTo ? `gán tổ cho ${k.chuaCoTo} người` : '',
       ])}
@@ -267,9 +263,7 @@ function DaiDieuKien({ d }: { d: KyCongCtx }) {
   const toi = (ma: string): (() => void) | string | null =>
     ma === 'xac_nhan' || ma === 'chua_co_to'
       ? () => d.setMuc('theo-to')
-      : ma === 'nhap_tay'
-        ? () => d.setMuc('nhap-tay')
-        : ma === 'cho_duyet'
+      : ma === 'cho_duyet'
           ? '/hr/cham-cong/dieu-chinh'
           : ma === 'may'
             ? `/hr/cham-cong/lay-du-lieu?thang=${k.thang}`
@@ -383,13 +377,7 @@ function HanhDong({ d }: { d: KyCongCtx }) {
           icon="khoa"
           blockedBy={k.quyen.chot ? undefined : 'Trưởng phòng Hành Chính Nhân Sự'}
           aria-disabled={d.chuaChot.length > 0}
-          onClick={() =>
-            !d.chuaChot.length
-              ? d.setSheet('chot')
-              : d.setMuc(
-                  d.chuaChot.every((x) => x.ma === 'nhap_tay') ? 'nhap-tay' : 'theo-to',
-                )
-          }
+          onClick={() => (!d.chuaChot.length ? d.setSheet('chot') : d.setMuc('theo-to'))}
         >
           Chốt kỳ
         </Btn>

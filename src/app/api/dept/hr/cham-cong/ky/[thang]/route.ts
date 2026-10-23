@@ -6,7 +6,7 @@ import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { congNhapTayService } from '@/modules/dept/hr/cham-cong/cong-nhap-tay.service'
 import { kyThangSchema, kyViecSchema } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
 
-/** Chuyển tiếp của kỳ công: xác nhận / bỏ xác nhận tổ, chốt, xin · rút · duyệt mở lại, đặt khoảng, công nhập tay. */
+/** Chuyển tiếp của kỳ công: xác nhận / bỏ xác nhận tổ, chốt, xin · rút · duyệt mở lại, đặt khoảng, công cộng thêm (khối B). */
 export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ thang: string }> }) => {
     const user = await authService.requireUser()
@@ -31,14 +31,6 @@ export const POST = handle(
         break
       case 'quyet_mo':
         await kyCongService.quyetMoLai(user, thang, v.dongY, v.ghiChu)
-        break
-      case 'nhap_tay':
-        await congNhapTayService.ghi(user, thang, {
-          ma: v.ma,
-          cong: v.cong,
-          tcGio: v.tcGio,
-          ghiChu: v.ghiChu,
-        })
         break
       case 'them_cong':
         return NextResponse.json(

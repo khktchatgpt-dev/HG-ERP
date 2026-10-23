@@ -2,7 +2,6 @@ import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict } from '@/server/http'
 import {
-  kiemNhap,
   kiemThem,
   lyDoCua,
   ngayLamViec,
@@ -21,9 +20,13 @@ import { khoangKyService } from './khoang-ky.service'
 import { kyCongRepo } from './ky-cong.repo'
 
 /**
- * CÔNG NHẬP TAY — khối A (bản vẽ duyệt 22/10/2026, PYQ1Dw2W…): Nhân sự nhập số công + giờ tăng
- * ca cho người không chấm công mỗi kỳ; còn người trống thì chưa chốt kỳ được. Quyền nhập =
- * quyền sửa nhân viên chấm công (như đặt khoảng kỳ); kỳ đã chốt thì khoá. Mỗi lần nhập / sửa /
+ * CÔNG NHẬP TAY (hr_time_manual, 0262).
+ *   · Khối A — người không chấm công: từ 23/10/2026 là việc của KẾ TOÁN, không phải Nhân sự
+ *     (chủ dự án: "trường hợp đặc biệt bên kế toán xử lý; thường lương tháng"). Ô trống =
+ *     lương tháng đủ; người quản lý lương nhập công / giờ TC ở màn Bảng lương
+ *     (`bangLuongService.nhapCong`). Không chặn chốt kỳ. `dsKhongCham` ở đây là hàm gom dùng chung.
+ *   · Khối B — công cộng thêm ngoài máy cho người CÓ chấm công: Nhân sự nhập ở Kỳ công.
+ * Quyền khối B = quyền sửa nhân viên chấm công; kỳ đã chốt thì khoá. Mỗi lần nhập / sửa /
  * xoá ghi một sự kiện 'manual_set' vào dòng thời gian kỳ.
  */
 
@@ -33,7 +36,7 @@ export type DongKhongCham = {
   to: string | null
   /** Gợi ý cho ô trống: ngày trừ Chủ nhật trong phần kỳ người này còn làm. */
   ngayLamViec: number
-  /** null = chưa nhập (chặn chốt). */
+  /** null = chưa nhập → bảng lương trả đủ lương tháng (phần kỳ còn làm). */
   cong: number | null
   tcGio: number | null
   ghiChu: string | null
@@ -41,7 +44,7 @@ export type DongKhongCham = {
   lucSua: string | null
 }
 
-/** Người không chấm công có làm trong kỳ + công đã nhập — dùng chung trang, điều kiện chốt, bản chốt. */
+/** Người không chấm công có làm trong kỳ + công Kế toán đã nhập — màn Bảng lương + bảng lương tính. */
 export function dsKhongCham(
   emps: EmployeeRow[],
   nhap: NhapTayDong[],
@@ -111,7 +114,7 @@ export function dsCongThem(emps: EmployeeRow[], rows: CongThemDong[]): DongCongT
   })
 }
 
-/** Người được cộng thêm: có chấm công (không chấm công nhập ở khối A) và làm trong kỳ. */
+/** Người được cộng thêm: có chấm công (không chấm công do Kế toán xử lý ở bảng lương) và làm trong kỳ. */
 const duocThem = (e: EmployeeRow, tu: string, den: string) =>
   !e.attendance_exempt &&
   !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, tu, den)
@@ -127,60 +130,6 @@ async function moKy(thang: string) {
 }
 
 export const congNhapTayService = {
-  async ghi(
-    user: User,
-    thang: string,
-    v: { ma: string; cong: number | null; tcGio: number | null; ghiChu?: string | null },
-  ): Promise<void> {
-    await assertAction(user, 'hr.attendance.employee_edit')
-    const ky = await kyCongRepo.ky(thang)
-    if (ky && ky.trangThai !== 'open')
-      throw Conflict(
-        `Kỳ ${thang.slice(5)}/${thang.slice(0, 4)} đã chốt — công nhập tay khoá theo bản chốt. Xin mở lại kỳ trước khi sửa.`,
-      )
-    const k = await khoangKyService.cua(thang)
-    const [emps, nhap] = await Promise.all([
-      chamCongRepo.employees(),
-      congNhapTayRepo.ds(thang),
-    ])
-    const dong = dsKhongCham(emps, nhap, k.tu, k.den).find((x) => x.ma === v.ma)
-    if (!dong)
-      throw BadRequest(
-        `${v.ma} không phải người không chấm công có làm trong kỳ này — đánh dấu ở hồ sơ nhân viên trước`,
-      )
-    const kiem = kiemNhap(
-      { cong: v.cong, tcGio: v.tcGio },
-      { soNgayKy: soNgayKy(k.tu, k.den), ngayLamViec: dong.ngayLamViec },
-    )
-    if (kiem.loi) throw BadRequest(`${v.ma}: ${kiem.loi}`)
-    const ghiChu = v.ghiChu?.trim() || null
-    if (v.cong == null) await congNhapTayRepo.xoa(thang, dong.employeeId)
-    else
-      await congNhapTayRepo.ghi({
-        thang,
-        employeeId: dong.employeeId,
-        cong: v.cong,
-        tcPhut: Math.round((v.tcGio ?? 0) * 60),
-        ghiChu,
-        userId: user.id,
-      })
-    const kyDong = ky ?? (await kyCongRepo.damBao(thang, k.tu, k.den))
-    await kyCongRepo.ghiSuKien({
-      kyId: kyDong.id,
-      viec: 'manual_set',
-      userId: user.id,
-      ghiChu,
-      data: {
-        ma: dong.ma,
-        ten: dong.ten,
-        cong: v.cong,
-        tc_gio: v.cong == null ? null : (v.tcGio ?? 0),
-        cong_cu: dong.cong,
-        tc_gio_cu: dong.tcGio,
-      },
-    })
-  },
-
   /** Khối B: thêm một / nhiều dòng (dán Excel), sửa hay xoá một dòng. Thêm nhiều = tất cả hoặc không. */
   async congThem(
     user: User,
@@ -215,7 +164,7 @@ export const congNhapTayService = {
         throw BadRequest(`Mã ${ma} không có trong danh sách nhân viên — chọn đúng người`)
       if (e.attendance_exempt)
         throw BadRequest(
-          `${ma} ${e.full_name} là người không chấm công — nhập công ở khối A`,
+          `${ma} ${e.full_name} là người không chấm công — Kế toán xử lý trên bảng lương, không cộng ở đây`,
         )
       if (!duocThem(e, k.tu, k.den))
         throw BadRequest(

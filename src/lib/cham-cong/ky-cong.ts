@@ -134,12 +134,11 @@ export function dieuKienChot(
     choDuyet: number
     chuaCoTo: number
     to: { ten: string; daXacNhan: boolean }[]
-    /** Người không chấm công trong kỳ + số người chưa nhập công (0262). */
-    khongCham?: { tong: number; chuaNhap: number }
   },
 ): DieuKien[] {
   const chua = v.to.filter((t) => !t.daXacNhan)
-  const kc = v.khongCham
+  // Người không chấm công KHÔNG là điều kiện chốt (chủ dự án 23/10/2026): họ lương tháng /
+  // thoả thuận riêng, Kế toán xử lý trên bảng lương — Nhân sự chỉ chốt người có quẹt máy.
   return [
     kyDaHet(b),
     mayDaLay(b),
@@ -161,16 +160,6 @@ export function dieuKienChot(
       ok: chua.length === 0,
       chiTiet: `${v.to.length - chua.length} / ${v.to.length} tổ`,
     },
-    ...(kc && kc.tong
-      ? [
-          {
-            ma: 'nhap_tay',
-            ten: 'Không chấm công đã nhập công',
-            ok: kc.chuaNhap === 0,
-            chiTiet: `${kc.tong - kc.chuaNhap} / ${kc.tong} người`,
-          },
-        ]
-      : []),
   ]
 }
 
@@ -187,12 +176,11 @@ export type DongChot = {
   nghi: LoaiNghi | null
   /** Ngày thiếu lượt tổ đã đồng ý tính 0 giờ. */
   khong: boolean
-  miem: boolean
   /**
-   * Người không chấm công có công NHẬP TAY (0262): `k` = phút hành chính (công × phút một công)
-   * + phút tăng ca ở khung tăng ca đầu tiên. Không có = cách cũ "đủ công chuẩn".
+   * Người không chấm công: một dòng không ngày, `k` rỗng. Công thật của họ (nếu Kế toán
+   * nhập) nằm ở hr_time_manual và bảng lương đọc thẳng — không qua bản chốt (23/10/2026).
    */
-  nhap?: boolean
+  miem: boolean
 }
 
 /** Bảng giờ đang tính → các dòng bản chốt. Ngày chỉ có lượt mà không tính được = 0 giờ. */

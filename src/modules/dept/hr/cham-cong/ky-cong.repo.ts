@@ -312,7 +312,7 @@ export const kyCongRepo = {
               leave_type: d.nghi,
               zero_day: d.khong,
               exempt: d.miem,
-              manual: !!d.nhap,
+              manual: false,
             })),
           ),
       )
@@ -344,7 +344,6 @@ export const kyCongRepo = {
           nghi: r.leave_type as LoaiNghi | null,
           khong: r.zero_day,
           miem: r.exempt,
-          ...(r.manual ? { nhap: true } : {}),
         })
       if (rows.length < TRANG) return out
     }

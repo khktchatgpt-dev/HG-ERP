@@ -92,6 +92,28 @@ export function useBangLuong(b: BangLuongTrang, mucDau: MucBl) {
       ds: { employeeId: string; loai: string; tien: number; ghiChu: string | null }[],
     ) => viec('khoan', { viec: 'them_khoan', ds }, `Đã thêm ${ds.length} khoản`),
     xoaKhoan: (id: string) => viec('xoa', { viec: 'xoa_khoan', id }, 'Đã xoá khoản'),
+    /** Công / giờ TC người không chấm công (rời ô là ghi). Không toast khi thành công. */
+    nhapCong: async (v: {
+      ma: string
+      cong: number | null
+      tcGio: number | null
+      ghiChu: string | null
+    }) => {
+      setBusy(`nhap:${v.ma}`)
+      try {
+        await api(`/api/dept/hr/luong/bang/${b.thang}`, {
+          method: 'POST',
+          body: { viec: 'nhap_cong', ...v },
+        })
+        router.refresh()
+        return true
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : 'Không ghi được — thử lại')
+        return false
+      } finally {
+        setBusy(null)
+      }
+    },
   } as const
 }
 

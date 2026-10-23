@@ -86,29 +86,6 @@ export function NganNguoi({ d }: { d: KyCongCtx }) {
                 </td>
               </tr>
             ))}
-            {!q &&
-              k.khongCham.map((n) => (
-                <tr key={`kc-${n.ma}`} className="text-[var(--ink-3)]">
-                  <td className={cn(TD, 'num')} style={{ textAlign: 'left' }}>
-                    {n.ma}
-                  </td>
-                  <td className={TD}>{n.ten}</td>
-                  <td className={TD}>{n.to ?? '—'}</td>
-                  <td className={TD}>không chấm công · nhập tay</td>
-                  <td className={cn(TD, 'num')} style={R}>
-                    {n.cong == null ? '—' : so(n.cong, 2)}
-                  </td>
-                  <td className={cn(TD, 'whitespace-normal')}>
-                    {n.cong == null ? (
-                      <span className="text-[var(--stop)]">chưa nhập</span>
-                    ) : n.tcGio ? (
-                      `+ ${so(n.tcGio, 2)} giờ TC`
-                    ) : (
-                      ''
-                    )}
-                  </td>
-                </tr>
-              ))}
           </tbody>
         </table>
       </div>

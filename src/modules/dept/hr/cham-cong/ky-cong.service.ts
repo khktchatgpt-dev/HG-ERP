@@ -25,12 +25,7 @@ import { bangLuongRepo, type TrangThaiLuong } from '../luong/bang-luong.repo'
 import { bangLuongService } from '../luong/bang-luong.service'
 import type { CachTinh } from '@/lib/cham-cong/ky-gio-cong'
 import { congNhapTayRepo } from './cong-nhap-tay.repo'
-import {
-  dsCongThem,
-  dsKhongCham,
-  type DongCongThem,
-  type DongKhongCham,
-} from './cong-nhap-tay.service'
+import { dsCongThem, type DongCongThem } from './cong-nhap-tay.service'
 import { khoangTrongKy } from '@/lib/nhan-su/bien-dong'
 
 /**
@@ -62,8 +57,11 @@ export type KyCongTrang = {
   to: ToKy[]
   chuaCoTo: number
   choDuyet: number
-  /** Người không chấm công trong kỳ + công Nhân sự đã nhập (khối A, 0262). */
-  khongCham: DongKhongCham[]
+  /**
+   * Số người không chấm công có làm trong kỳ. Họ KHÔNG thuộc việc của Nhân sự (chủ dự án
+   * 23/10/2026): lương tháng / thoả thuận riêng, Kế toán xử lý trên bảng lương.
+   */
+  soKhongCham: number
   /** Công cộng thêm ngoài máy (khối B) + người chọn được (có chấm công, làm trong kỳ). */
   congThem: DongCongThem[]
   chonThem: { ma: string; ten: string; to: string | null }[]
@@ -94,7 +92,7 @@ export type KyCongTrang = {
     duyetMo: boolean
     /** Đặt khoảng kỳ = quyền sửa nhân viên chấm công (Q3). */
     datKhoang: boolean
-    /** Nhập công người không chấm công — cùng quyền với đặt khoảng kỳ. */
+    /** Công cộng thêm ngoài máy (khối B) — cùng quyền với đặt khoảng kỳ. */
     nhapTay: boolean
   }
 }
@@ -116,14 +114,17 @@ async function quyen(user: User) {
 async function dung(user: User, thang: string) {
   const homNay = todayVn()
   const g: GioCong = await gioCongService.bang(user, thang, homNay)
-  const [teams, emps, xn, nhap, them] = await Promise.all([
+  const [teams, emps, xn, them] = await Promise.all([
     kyCongRepo.toTheoTen(),
     chamCongRepo.employees(),
     g.ky ? kyCongRepo.xacNhan(g.ky.id) : Promise.resolve([] as XacNhanDong[]),
-    congNhapTayRepo.ds(thang),
     congNhapTayRepo.dsThem(thang),
   ])
-  const khongCham = dsKhongCham(emps, nhap, g.tu, g.den)
+  const khongCham = emps.filter(
+    (e) =>
+      e.attendance_exempt &&
+      !!khoangTrongKy({ hireDate: e.hire_date, leaveDate: e.leave_date }, g.tu, g.den),
+  )
   const congThem = dsCongThem(emps, them)
   const tong = tongTheoTo(g.nguoi)
   const bc = { homNay, den: g.den, ngayLay: g.ngayLay }
@@ -144,11 +145,7 @@ async function dung(user: User, thang: string) {
     })
   const chuaCoTo = tong.find((t) => t.ten === CHUA_CO_TO)?.so ?? 0
   const choDuyet = g.dieuChinh.filter((d) => d.tinhTrang === 'pending').length
-  const kc = {
-    tong: khongCham.length,
-    chuaNhap: khongCham.filter((x) => x.cong == null).length,
-  }
-  return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams, khongCham, kc, congThem }
+  return { g, homNay, bc, to, chuaCoTo, choDuyet, emps, teams, khongCham, congThem }
 }
 
 function kiemErp(thang: string) {
@@ -180,7 +177,7 @@ export const kyCongService = {
       to,
       chuaCoTo: d.chuaCoTo,
       choDuyet: d.choDuyet,
-      khongCham: d.khongCham.map(({ employeeId: _id, ...x }) => x),
+      soKhongCham: d.khongCham.length,
       congThem: d.congThem,
       chonThem: d.emps
         .filter(
@@ -197,7 +194,6 @@ export const kyCongService = {
         choDuyet: d.choDuyet,
         chuaCoTo: d.chuaCoTo,
         to: to.map((t) => ({ ten: t.ten, daXacNhan: !!t.xacNhan })),
-        khongCham: d.kc,
       }),
       nguoi: g.nguoi.map((n) => ({
         ma: n.ma,
@@ -272,7 +268,6 @@ export const kyCongService = {
       choDuyet: d.choDuyet,
       chuaCoTo: d.chuaCoTo,
       to: d.to.map((t) => ({ ten: t.ten, daXacNhan: !!t.xacNhan })),
-      khongCham: d.kc,
     })
     const vuong = dk.find((x) => !x.ok)
     if (vuong) throw BadRequest(`Chưa chốt được — ${vuong.ten}: ${vuong.chiTiet}`)
@@ -280,32 +275,22 @@ export const kyCongService = {
     const idTheoMa = new Map(d.emps.map((e) => [e.code, e.id]))
     const dong: (DongChot & { employeeId: string })[] = [
       ...banChotTu(d.g.nguoi),
-      // Người không chấm công: một dòng không ngày. Có công NHẬP TAY (0262) thì dòng mang phút
-      // hành chính (công × phút một công) + phút tăng ca ở khung tăng ca đầu tiên.
-      ...d.khongCham.map((x): DongChot => {
-        const t = d.g.thamSo
-        const tcMa = t.khung.find((k) => k.ma !== t.khungHanhChinh)?.ma ?? 'K2'
-        const k =
-          x.cong == null
-            ? {}
-            : {
-                [t.khungHanhChinh]: x.cong * t.phutMotCong,
-                ...(x.tcGio ? { [tcMa]: Math.round(x.tcGio * 60) } : {}),
-              }
-        return {
-          ma: x.ma,
-          ten: x.ten,
-          to: x.to,
+      // Người không chấm công: một dòng không ngày, không giờ — bảng lương trả lương tháng
+      // (hoặc số công Kế toán nhập ở hr_time_manual, đọc thẳng không qua bản chốt).
+      ...d.khongCham.map(
+        (e): DongChot => ({
+          ma: e.code,
+          ten: e.full_name,
+          to: e.team,
           ngay: null,
-          k,
+          k: {},
           truaCong: 0,
-          tong: Math.round(Object.values(k).reduce((p, q) => p + q, 0)),
+          tong: 0,
           nghi: null,
           khong: false,
           miem: true,
-          ...(x.cong == null ? {} : { nhap: true }),
-        }
-      }),
+        }),
+      ),
     ]
       .filter((x) => idTheoMa.has(x.ma))
       .map((x) => ({ ...x, employeeId: idTheoMa.get(x.ma)! }))

@@ -17,7 +17,14 @@ import { chamCongRepo } from '../cham-cong/cham-cong.repo'
 import { cachTinhRepo } from '../cham-cong/cach-tinh.repo'
 import { kyCongRepo, type KyDong } from '../cham-cong/ky-cong.repo'
 import { congNhapTayRepo } from '../cham-cong/cong-nhap-tay.repo'
-import { laTangCa, lyDoCua, TEN_LY_DO_THEM } from '@/lib/cham-cong/cong-nhap-tay'
+import { dsKhongCham, type DongKhongCham } from '../cham-cong/cong-nhap-tay.service'
+import {
+  kiemNhap,
+  laTangCa,
+  lyDoCua,
+  soNgayKy,
+  TEN_LY_DO_THEM,
+} from '@/lib/cham-cong/cong-nhap-tay'
 import { hoSoLuongRepo } from './ho-so-luong.repo'
 import { assertXemLuong } from './quyen-luong'
 import {
@@ -53,6 +60,12 @@ export type BangLuongTrang = {
   canTinhLai: boolean
   dieuKien: DieuKienGui[]
   nhanVien: { id: string; ma: string; ten: string }[]
+  /**
+   * Người không chấm công có làm trong kỳ (chủ dự án 23/10/2026: "trường hợp đặc biệt bên
+   * kế toán xử lý, thường lương tháng"). Ô công trống = đủ lương tháng phần kỳ còn làm;
+   * người quản lý lương nhập công / giờ TC khi khác — Nhân sự không nhập, không chặn chốt kỳ.
+   */
+  khongCham: DongKhongCham[]
   quyen: { chay: boolean; duyet: boolean }
 }
 
@@ -100,14 +113,19 @@ export function dieuKienGui(phieu: PhieuDong[], canTinhLai: boolean): DieuKienGu
 }
 
 export async function nap(thang: string) {
-  const [ky, bang, khoan] = await Promise.all([
+  const [ky, bang, khoan, nhap] = await Promise.all([
     kyCongRepo.ky(thang),
     bangLuongRepo.bang(thang),
     bangLuongRepo.khoan(thang),
+    congNhapTayRepo.ds(thang),
   ])
   const phieu =
     bang && bang.lanTinh ? await bangLuongRepo.phieu(bang.id, bang.lanTinh) : []
-  const khoanMoi = khoan.reduce((m, k) => (k.luc > m ? k.luc : m), '')
+  // Nguồn đổi sau lần tính: khoản theo kỳ, hoặc công người không chấm công Kế toán vừa nhập.
+  const khoanMoi = [...khoan.map((k) => k.luc), ...nhap.map((n) => n.lucSua)].reduce(
+    (m, t) => (t > m ? t : m),
+    '',
+  )
   const canTinhLai =
     !!bang &&
     bang.lanTinh > 0 &&
@@ -116,7 +134,7 @@ export async function nap(thang: string) {
       ky.trangThai !== 'closed' ||
       ky.lanChot !== bang.lanChotCong ||
       (!!khoanMoi && !!bang.tinhLuc && khoanMoi > bang.tinhLuc))
-  return { ky, bang, khoan, phieu, canTinhLai }
+  return { ky, bang, khoan, phieu, canTinhLai, nhap }
 }
 
 /**
@@ -152,6 +170,7 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
     khoan,
     ts,
     them,
+    nhapKc,
   ] = await Promise.all([
     kyCongRepo.banChot(ky.id, ky.lanChot),
     chamCongRepo.employees(),
@@ -166,6 +185,8 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
     cachTinhRepo.thamSoLuong(ky.banCachTinhId),
     // Khối B đọc thẳng bảng nhập tay: kỳ đã chốt thì service khoá mọi sửa, mở lại → chốt lại → tính lại.
     congNhapTayRepo.dsThem(thang),
+    // Người không chấm công: công Kế toán nhập (23/10/2026) — không qua bản chốt, Tính lại là thấy.
+    congNhapTayRepo.ds(thang),
   ])
   const quyTac = quyTacBan.find((b) => b.id === ky.banCachTinhId)?.quyTac
   if (!quyTac) throw Conflict('Không tìm thấy bản cách tính kỳ công đã dùng')
@@ -200,6 +221,7 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
       { ten: TEN_LY_DO_THEM[l], cong: t.cong, tangCa: laTangCa(l) },
     ])
   }
+  const nhapCua = new Map(nhapKc.map((n) => [n.employeeId, n]))
   const theoNguoi = new Map<string, typeof chot>()
   for (const c of chot) theoNguoi.set(c.ma, [...(theoNguoi.get(c.ma) ?? []), c])
 
@@ -223,16 +245,10 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
     )
     // Làm trọn kỳ = đủ công chuẩn (`true`): công chuẩn cố định 26 mà kỳ chỉ 25 ngày làm thì
     // đếm ngày sẽ trả thiếu 1/26.
-    // Công nhập tay (0262): k = phút hành chính + phút tăng ca — đổi lại thành công + giờ.
-    const nhapRow = ds.find((x) => x.miem && x.nhap)
-    const hcMa = boiCanh.khung.find((k) => k.hanhChinh)?.ma ?? 'K1'
+    // Kế toán nhập công / giờ TC (hr_time_manual, 23/10/2026) thì theo số nhập, không trần.
+    const nhapRow = ds.some((x) => x.miem) ? nhapCua.get(e.id) : undefined
     const mien = nhapRow
-      ? {
-          cong: Math.round(((nhapRow.k[hcMa] ?? 0) / boiCanh.phutMotCong) * 100) / 100,
-          tcPhut: Object.entries(nhapRow.k)
-            .filter(([m]) => m !== hcMa)
-            .reduce((s, [, p]) => s + p, 0),
-        }
+      ? { cong: nhapRow.cong, tcPhut: nhapRow.tcPhut }
       : ds.some((x) => x.miem)
         ? khoang
           ? khoang.tu === ky.tu && khoang.den === ky.den
@@ -380,6 +396,7 @@ export const bangLuongService = {
         : null,
       canTinhLai: d.canTinhLai,
       dieuKien: dieuKienGui(d.phieu, d.canTinhLai),
+      khongCham: d.ky ? dsKhongCham(emps, d.nhap, d.ky.tu, d.ky.den) : [],
       // Ai có làm trong kỳ (kể cả đã nghỉ giữa kỳ) thì thêm khoản được.
       nhanVien: emps
         .filter((e) =>
@@ -527,6 +544,65 @@ export const bangLuongService = {
       throw Conflict('Bảng lương đã gửi duyệt — rút về nháp trước khi thêm khoản')
     await bangLuongRepo.themKhoan(thang, ds, user.id)
     return ds.length
+  },
+
+  /**
+   * Công / giờ tăng ca của người KHÔNG chấm công — Kế toán nhập (chủ dự án 23/10/2026). Ô trống
+   * (`cong` null) = xoá dòng, bảng lương trả đủ lương tháng phần kỳ còn làm. Chỉ khi bảng còn
+   * nháp; ghi vết 'manual_set' vào dòng thời gian kỳ công (hr_period_events đã có loại này).
+   */
+  async nhapCong(
+    user: User,
+    thang: string,
+    v: { ma: string; cong: number | null; tcGio: number | null; ghiChu?: string | null },
+  ): Promise<void> {
+    await assertAction(user, CHAY)
+    const b = await bangLuongRepo.bang(thang)
+    if (b && b.trangThai !== 'draft')
+      throw Conflict('Bảng lương đã gửi duyệt — rút về nháp trước khi sửa công')
+    const ky = await kyCongRepo.ky(thang)
+    if (!ky)
+      throw Conflict(`Kỳ công ${dmy(thang)} chưa có khoảng ngày — Nhân sự đặt kỳ trước`)
+    const [emps, nhap] = await Promise.all([
+      chamCongRepo.employees(),
+      congNhapTayRepo.ds(thang),
+    ])
+    const dong = dsKhongCham(emps, nhap, ky.tu, ky.den).find((x) => x.ma === v.ma)
+    if (!dong)
+      throw BadRequest(
+        `${v.ma} không phải người không chấm công có làm trong kỳ này — Nhân sự đánh dấu ở hồ sơ nhân viên trước`,
+      )
+    const kiem = kiemNhap(
+      { cong: v.cong, tcGio: v.tcGio },
+      { soNgayKy: soNgayKy(ky.tu, ky.den), ngayLamViec: dong.ngayLamViec },
+    )
+    if (kiem.loi) throw BadRequest(`${v.ma}: ${kiem.loi}`)
+    const ghiChu = v.ghiChu?.trim() || null
+    if (v.cong == null) await congNhapTayRepo.xoa(thang, dong.employeeId)
+    else
+      await congNhapTayRepo.ghi({
+        thang,
+        employeeId: dong.employeeId,
+        cong: v.cong,
+        tcPhut: Math.round((v.tcGio ?? 0) * 60),
+        ghiChu,
+        userId: user.id,
+      })
+    await kyCongRepo.ghiSuKien({
+      kyId: ky.id,
+      viec: 'manual_set',
+      userId: user.id,
+      ghiChu,
+      data: {
+        khoi: 'A',
+        ma: dong.ma,
+        ten: dong.ten,
+        cong: v.cong,
+        tc_gio: v.cong == null ? null : (v.tcGio ?? 0),
+        cong_cu: dong.cong,
+        tc_gio_cu: dong.tcGio,
+      },
+    })
   },
 
   async xoaKhoan(user: User, thang: string, id: string): Promise<void> {

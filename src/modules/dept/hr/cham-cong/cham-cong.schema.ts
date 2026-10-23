@@ -303,13 +303,6 @@ export const kyViecSchema = z.discriminatedUnion('viec', [
   }),
   // Công nhập tay khối A (0262): công null = xoá dòng (về "chưa nhập"). Kiểm chi tiết ở
   // `kiemNhap` (service) — biên zod chỉ chặn kiểu và khoảng thô.
-  z.object({
-    viec: z.literal('nhap_tay'),
-    ma: z.string().trim().min(1).max(40),
-    cong: z.number().min(0).max(31).nullable(),
-    tcGio: z.number().min(0).max(744).nullable(),
-    ghiChu: z.string().trim().max(300).nullable().optional(),
-  }),
   // Khối B — công cộng thêm ngoài máy (bước 3). Kiểm chi tiết ở `kiemThem` (service).
   z.object({
     viec: z.literal('them_cong'),
@@ -456,6 +449,14 @@ export const bangLuongViecSchema = z.discriminatedUnion('viec', [
       .max(1000),
   }),
   z.object({ viec: z.literal('xoa_khoan'), id: z.string().uuid() }),
+  // Công người không chấm công — Kế toán nhập (23/10/2026); cong null = về đủ lương tháng.
+  z.object({
+    viec: z.literal('nhap_cong'),
+    ma: z.string().trim().min(1).max(40),
+    cong: z.number().min(0).max(31).nullable(),
+    tcGio: z.number().min(0).max(744).nullable(),
+    ghiChu: z.string().trim().max(300).nullable().optional(),
+  }),
 ])
 
 /** Tab Cá nhân trên hồ sơ (0249): lưu một khối, hoặc xin số CCCD thật (ghi nhật ký). */
