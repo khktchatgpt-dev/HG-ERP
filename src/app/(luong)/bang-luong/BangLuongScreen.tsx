@@ -111,23 +111,16 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
       )}
       {d.nhap && d.daTinh && <DaiDieuKien d={d} />}
       <ThanhBao d={d} />
-      {!b.ky || b.ky.trangThai !== 'closed' ? (
+      {!b.ky ? (
         <Empty
-          headline={`Kỳ công ${kyVn(b.thang)} chưa chốt`}
-          reason="Bảng lương tính từ bản chốt của kỳ công — chưa chốt thì chưa có giờ chính thức để tính."
+          headline={`Kỳ ${kyVn(b.thang)} chưa được Nhân sự đặt khoảng ngày`}
+          reason="Bảng lương bám theo kỳ công: chưa có kỳ thì chưa biết ai làm trong kỳ, chưa nhập khoản hay công được."
           next={<Btn href={`/hr/cham-cong/ky?thang=${b.thang}`}>Mở Kỳ công</Btn>}
         />
-      ) : !d.daTinh ? (
-        <Empty
-          headline="Chưa tính bảng lương kỳ này"
-          reason="Kỳ công đã chốt. Bấm Tính để lập phiếu lương từ bản chốt × hồ sơ lương × hệ số."
-          next={
-            <Btn primary icon="lamMoi" busy={d.busy === 'tinh'} onClick={d.tinh}>
-              Tính bảng lương
-            </Btn>
-          }
-        />
       ) : (
+        // Kỳ đã đặt là mở hai ngăn nhập (Khoản theo kỳ, Không chấm công) — Kế toán nhập TRƯỚC khi
+        // Nhân sự chốt / trước khi tính, để lần tính đầu đã đủ số (chủ dự án 23/10/2026). Các ngăn
+        // đọc phiếu (BH & thuế, chuyển khoản, dòng thời gian) chỉ hiện khi đã tính.
         <DocMenu
           label="Nội dung bảng lương"
           value={d.muc}
@@ -137,7 +130,7 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
               id: 'bang',
               label: 'Bảng lương',
               icon: 'tien',
-              signal: { text: so(b.phieu.length) },
+              signal: d.daTinh ? { text: so(b.phieu.length) } : undefined,
             },
             {
               id: 'khoan',
@@ -155,13 +148,42 @@ export function BangLuongScreen({ b, muc }: { b: BangLuongTrang; muc: MucBl }) {
                   }
                 : undefined,
             },
-            { id: 'bh-thue', label: 'Bảo hiểm & thuế', icon: 'so' },
-            { id: 'chuyen-khoan', label: 'Chuyển khoản', icon: 'gui' },
-            { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' },
+            ...(d.daTinh
+              ? [
+                  { id: 'bh-thue', label: 'Bảo hiểm & thuế', icon: 'so' as const },
+                  { id: 'chuyen-khoan', label: 'Chuyển khoản', icon: 'gui' as const },
+                  { id: 'dong-thoi-gian', label: 'Dòng thời gian', icon: 'lichSu' as const },
+                ]
+              : []),
           ]}
         >
           <DocMenuPanel value="bang">
-            <NganBang d={d} />
+            {b.ky.trangThai !== 'closed' ? (
+              <Empty
+                headline={`Kỳ công ${kyVn(b.thang)} chưa chốt`}
+                reason="Bảng lương tính từ bản chốt của kỳ công — chưa chốt thì chưa có giờ chính thức để tính. Chốt xong hệ thống tự tính bảng nháp."
+                next={
+                  <span className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-[var(--ink-2)]">
+                      Trong lúc chờ: nhập Khoản theo kỳ và công người không chấm công ở hai ngăn bên.
+                    </span>
+                    <Btn href={`/hr/cham-cong/ky?thang=${b.thang}`}>Mở Kỳ công</Btn>
+                  </span>
+                }
+              />
+            ) : !d.daTinh ? (
+              <Empty
+                headline="Chưa tính bảng lương kỳ này"
+                reason="Kỳ công đã chốt. Bấm Tính để lập phiếu lương từ bản chốt × hồ sơ lương × hệ số; khoản theo kỳ và công người không chấm công đã nhập được tính luôn."
+                next={
+                  <Btn primary icon="lamMoi" busy={d.busy === 'tinh'} onClick={d.tinh}>
+                    Tính bảng lương
+                  </Btn>
+                }
+              />
+            ) : (
+              <NganBang d={d} />
+            )}
           </DocMenuPanel>
           <DocMenuPanel value="khoan">
             <NganKhoan d={d} />

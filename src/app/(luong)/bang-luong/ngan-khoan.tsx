@@ -97,7 +97,11 @@ export function NganKhoan({ d }: { d: BangLuongCtx }) {
       {b.khoan.length === 0 ? (
         <Empty
           headline="Kỳ này chưa có khoản nào"
-          reason="Tạm ứng, thưởng, truy lĩnh, truy thu, khấu trừ khác của kỳ nhập ở đây; bảng lương cộng / trừ khi Tính lại."
+          reason={
+            d.daTinh
+              ? 'Tạm ứng, thưởng, truy lĩnh, truy thu, khấu trừ khác của kỳ nhập ở đây; bảng lương cộng / trừ khi Tính lại.'
+              : 'Tạm ứng, thưởng, truy lĩnh, truy thu, khấu trừ khác của kỳ nhập ở đây, trước cả khi Nhân sự chốt công; lần tính đầu cộng / trừ luôn.'
+          }
           next={
             sua
               ? 'Thêm từng khoản ở hàng trên, hoặc dán từ Excel ở dưới.'

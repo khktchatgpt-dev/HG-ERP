@@ -36,7 +36,14 @@ export function NganKhongCham({ d }: { d: BangLuongCtx }) {
       <div className="text-k-sm border-b border-[var(--line)] px-[var(--gutter)] py-2 text-[var(--ink-2)]">
         <b className="text-[var(--ink)]">Lương tháng, không theo máy.</b> Ô công trống =
         đủ lương tháng cho phần kỳ còn làm. Chỉ nhập khi khác: số công thật, giờ tăng ca
-        (tính hệ số khung 16h–19h). Nhập xong bấm <b>Tính lại</b>.
+        (tính hệ số khung 16h–19h).{' '}
+        {d.daTinh ? (
+          <>
+            Nhập xong bấm <b>Tính lại</b>.
+          </>
+        ) : (
+          'Số nhập ở đây được dùng ngay ở lần tính đầu.'
+        )}
         {!d.nhap && ' Bảng đã gửi duyệt — rút về nháp để sửa.'}
         {d.nhap && !b.quyen.chay && ' Chỉ xem — người quản lý lương nhập.'}
       </div>
