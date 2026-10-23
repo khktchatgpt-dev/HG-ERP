@@ -693,6 +693,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             capability: 'hr.payroll',
           },
           { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },
+          // Nhân sự giao / thu hồi dụng cụ cầm tay cùng Kho — người nghỉ còn giữ đồ (0276).
+          { href: '/may-moc/dung-cu', label: 'Dụng cụ theo người', icon: 'wrench' },
         ],
       },
       {

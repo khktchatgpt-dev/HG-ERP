@@ -594,8 +594,10 @@ xuất, Tổ, BGĐ; Kho thấy `/may-moc/dung-cu`; Kế toán thấy `/may-moc/c
   (PART_LIB — dữ liệu mẫu, chủ dự án bảo bỏ), thanh tab đáy trên điện thoại (dải tab khu
   + nút Quét QR đã đủ). CHẶT HƠN demo có chủ ý: "Sửa xong" bắt ghi nguyên nhân ≥ 5 ký tự,
   thuê ngoài bắt ghi tên đơn vị (demo để trống thành "Thuê ngoài").
-- **Chờ chủ dự án chốt**: demo cho Nhân sự giao / thu hồi dụng cụ; ERP đang cho Kho + GĐ
-  (`assets.tools`, 0270). Muốn thêm Nhân sự thì một migration cấp quyền + nav.
+- **Ai giao / thu hồi dụng cụ** (`assets.tools`): Kho + GĐ (0270) + **Nhân sự**
+  (`hr_staff`, 0276 — chủ dự án chốt 23/10/2026 "thêm Nhân sự, giữ Kho", như demo). Nhân
+  sự biết ai vào / ai nghỉ (ngày nghỉ đọc từ Hồ sơ NV), Kho là người đưa / nhận đồ thật.
+  Nav "Dụng cụ theo người" ở cả sidebar Kho lẫn Nhân sự.
 - **Chưa làm**: đưa phiếu chờ GĐ duyệt vào Trung tâm phê duyệt (`/exec/approvals`) —
   hiện GĐ duyệt ngay trên phiếu, nhận việc qua chuông.
 
