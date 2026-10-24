@@ -27,6 +27,7 @@ import { chamCongService, type MotNguoi } from './cham-cong.service'
 import { quyenDieuChinh, type QuyenDieuChinh } from './dieu-chinh.service'
 import { gioCongRepo } from './gio-cong.repo'
 import { cachTinhService } from './cach-tinh.service'
+import { cachTinhRepo } from './cach-tinh.repo'
 import { kyCongRepo, type KyDong } from './ky-cong.repo'
 import { apBanChot } from '@/lib/cham-cong/ky-cong'
 import type { ThamSoKhung } from '@/lib/cham-cong/gio-khung'
@@ -46,7 +47,8 @@ export type GioCong = {
   nguoi: NguoiGio[]
   /** Mọi bộ phận có người, kèm cách tính. */
   boPhan: { ten: string; so: number; cachTinh: CachTinh }[]
-  khung: { ma: string; ten: string; caDem: boolean }[]
+  /** `heSo`: % ngày thường của khung trong bản cách tính (null = ô trống) — ô giờ in công quy đổi ca đêm. */
+  khung: { ma: string; ten: string; caDem: boolean; heSo: number | null }[]
   /** Bản cách tính kỳ này dùng (null = chưa có bản, đang dùng số mặc định). */
   ban: number | null
   banId: string | null
@@ -117,6 +119,12 @@ export const gioCongService = {
       chamCongRepo.holidays(k.tu, congNgay(k.den, 1)),
     ])
     const t = ct.thamSo
+    const heSo = ct.banId ? await cachTinhRepo.heSo(ct.banId) : []
+    const ptThuong = new Map(
+      heSo
+        .filter((h) => h.loai === 'frame' && h.ngay === 'thuong')
+        .map((h) => [h.ma, h.pt]),
+    )
     // Ngày lấy dữ liệu lần cuối (giờ VN) trở đi là ngày đang dở: lấy giữa ngày thì chưa có
     // lượt ra — 1 lượt hôm đó không phải lỗi chấm công.
     const lanOk = du.lanCuoi
@@ -169,7 +177,12 @@ export const gioCongService = {
       homNay,
       nguoi: nguoi.map((n) => ({ ...n, boPhan: n.boPhan ?? CHUA_CO })),
       boPhan,
-      khung: t.khung.map((x) => ({ ma: x.ma, ten: x.ten, caDem: !!x.caDem })),
+      khung: t.khung.map((x) => ({
+        ma: x.ma,
+        ten: x.ten,
+        caDem: !!x.caDem,
+        heSo: ptThuong.get(x.ma) ?? null,
+      })),
       ban: ct.ban,
       banId: ct.banId,
       ngayLay: lanOk ? ngayLay : null,

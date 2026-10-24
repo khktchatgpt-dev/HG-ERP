@@ -125,7 +125,8 @@ export type NhapTay = { cong: number; tcPhut: number }
 export type BoiCanhTinh = {
   thang: string
   phutMotCong: number
-  khung: { ma: string; ten: string; hanhChinh: boolean }[]
+  /** `caDem`: khung ca đêm (0277) — phiếu in dòng này theo CÔNG để Kế toán đối chiếu bảng công ty. */
+  khung: { ma: string; ten: string; hanhChinh: boolean; caDem?: boolean }[]
   congChuan: number
   loaiNgay: (ngay: string) => LoaiNgayLuong
   /** % hệ số; null = ô trống. */
@@ -349,13 +350,23 @@ export function tinhPhieu(
           const tl = b.heSoKhung(k.ma, ln)
           if (tl == null) thieuHeSo.add(`${k.ma}${TEN_NGAY[ln] || ' ngày thường'}`)
           const tien = r0((p / 60) * giaGio * ((tl ?? 0) / 100))
+          const cong = ((p / 60) * ((tl ?? 0) / 100)) / gioMotCong
           tangCa += tien
-          congTc += ((p / 60) * ((tl ?? 0) / 100)) / gioMotCong
+          congTc += cong
           dong.push({ nhom: 'tang_ca', ten: `${k.ma} ${k.ten}${TEN_NGAY[ln]}`, tien })
+          // Khung ca đêm (0277) in theo CÔNG: bảng công ty nói "18h–6h = 2,1 công", Kế toán
+          // kiểm bằng cách nhân giờ × hệ số ÷ giờ một công rồi × đơn giá ngày — cùng số tiền.
           why.push(
-            `  ${k.ma}${TEN_NGAY[ln]}  ${so(p / 60, 2)} giờ × ${so(giaGio, 2)} × ${tl ?? '—'} % = ${so(tien)}`,
+            k.caDem
+              ? `  ${k.ma} ca đêm${TEN_NGAY[ln]}  ${so(p / 60, 2)} giờ × ${tl ?? '—'} % ÷ ${so(gioMotCong, 2)} = ${so(cong, 2)} công × ${so(donGiaNgay)} = ${so(tien)}`
+              : `  ${k.ma}${TEN_NGAY[ln]}  ${so(p / 60, 2)} giờ × ${so(giaGio, 2)} × ${tl ?? '—'} % = ${so(tien)}`,
           )
         }
+      // Sổ Kế toán có cột "Tổng công tăng ca" — in công quy đổi để đối chiếu thẳng.
+      if (dsTc.length)
+        why.push(
+          `  cộng tăng ca theo khung = ${so(tangCa)} · ${so(congTc, 2)} công quy đổi`,
+        )
       if (truaPhut > 0 && b.ptTrua != null) {
         const tien = r0((truaPhut / 60) * giaGio * (b.ptTrua / 100))
         tangCa += tien

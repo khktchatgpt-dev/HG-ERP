@@ -49,6 +49,9 @@ export function OGio({ d }: { d: GioCongCtx }) {
   const cdPhut = d.b.khung
     .filter((k) => k.caDem)
     .reduce((s, k) => s + (x.k?.[k.ma] ?? 0), 0)
+  // Hệ số ngày thường của khung ca đêm — bảng công ty nói bằng CÔNG (trọn ca 12 giờ = 2,1),
+  // nên in "giờ × % ÷ 8 = công" để Nhân sự / Kế toán đối chiếu không phải nhẩm.
+  const hsCaDem = d.b.khung.find((k) => k.caDem)?.heSo ?? null
   // Lượt quẹt ở máy nào (user 20/10/2026): tra giờ máy ghi → máy; giờ '(+1)' là lượt
   // rạng sáng hôm sau của ca qua đêm. Lượt bổ sung bằng điều chỉnh không có máy.
   const mayCua = (g: string) => {
@@ -178,7 +181,9 @@ export function OGio({ d }: { d: GioCongCtx }) {
               <>
                 <dt className="text-[var(--grp-1-ink)]">trong đó ca đêm</dt>
                 <dd className="num text-[var(--grp-1-ink)]">
-                  {gio(cdPhut)} giờ · hệ số khung ca đêm
+                  {hsCaDem == null
+                    ? `${gio(cdPhut)} giờ · bản cách tính chưa có hệ số khung ca đêm`
+                    : `${gio(cdPhut)} giờ × ${so(hsCaDem)} % ÷ ${gio(d.b.phutMotCong)} = ${so(((cdPhut / 60) * hsCaDem) / 100 / (d.b.phutMotCong / 60), 2)} công`}
                 </dd>
               </>
             )}
