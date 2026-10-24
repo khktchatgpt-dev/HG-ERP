@@ -46,7 +46,7 @@ export type GioCong = {
   nguoi: NguoiGio[]
   /** Mọi bộ phận có người, kèm cách tính. */
   boPhan: { ten: string; so: number; cachTinh: CachTinh }[]
-  khung: { ma: string; ten: string }[]
+  khung: { ma: string; ten: string; caDem: boolean }[]
   /** Bản cách tính kỳ này dùng (null = chưa có bản, đang dùng số mặc định). */
   ban: number | null
   banId: string | null
@@ -169,7 +169,7 @@ export const gioCongService = {
       homNay,
       nguoi: nguoi.map((n) => ({ ...n, boPhan: n.boPhan ?? CHUA_CO })),
       boPhan,
-      khung: t.khung.map((x) => ({ ma: x.ma, ten: x.ten })),
+      khung: t.khung.map((x) => ({ ma: x.ma, ten: x.ten, caDem: !!x.caDem })),
       ban: ct.ban,
       banId: ct.banId,
       ngayLay: lanOk ? ngayLay : null,

@@ -19,6 +19,11 @@
  *   6. Giờ mỗi khung = phần giao của đoạn làm với khung; khung hành chính trừ phần
  *      giao với giờ nghỉ trưa. Công = giờ ÷ 8.
  *   7. Làm trưa (sổ tay tổ trưởng): số phút × hệ số trưa ÷ 60 cộng vào khung hành chính.
+ *   8. CA ĐÊM (bảng "khung giờ → số công" của công ty, 24/10/2026: 18h–6h = 2,1 công trọn ca,
+ *      giờ lẻ tỉ lệ): bản cách tính có thể khai một khung `caDem` chồng lên các khung tối. Đoạn
+ *      làm VÀO từ giờ tan ca hành chính trở đi và kéo QUA 0h là ca đêm — phần giao với khung
+ *      đó đổ vào khung ca đêm (hệ số riêng ở bảng lương), phần thừa trước / sau vẫn về khung
+ *      thường. Ca dài vào sáng ra sáng hôm sau và tăng ca tới 00:01 KHÔNG phải ca đêm.
  */
 
 export type Khung = {
@@ -30,6 +35,11 @@ export type Khung = {
   den: number
   /** Kiểu làm tròn 'xuong_30': phần lố dưới 30 phút của khung này bị bỏ (file Excel cột G). */
   boPhanLo?: boolean
+  /**
+   * Khung CA ĐÊM (quy tắc 8): chồng lên các khung tối, không tham gia chuỗi 24 giờ. Đoạn làm
+   * là ca đêm (`laDoanCaDem`) đổ phần giao vào đây thay vì K2–K6.
+   */
+  caDem?: boolean
 }
 
 /**
@@ -174,6 +184,29 @@ export function catDoan(
   }))
 }
 
+type Doan = [number, number]
+const giaoDoan = (a: Doan, b: Doan) =>
+  Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]))
+
+/** Phần của đoạn `a` nằm ngoài đoạn `b` (tối đa hai mảnh: trước và sau). */
+function truDoan(a: Doan, b: Doan): Doan[] {
+  const out: Doan[] = []
+  if (a[0] < b[0]) out.push([a[0], Math.min(a[1], b[0])])
+  if (a[1] > b[1]) out.push([Math.max(a[0], b[1]), a[1]])
+  return out.filter(([x, y]) => y > x)
+}
+
+/**
+ * Đoạn làm là CA ĐÊM (quy tắc 8)? Chỉ khi bản có khung ca đêm, đoạn VÀO (giờ tính) từ giờ tan
+ * ca hành chính trở đi và RA (giờ tính) sau 0h. Ca dài 07:00 → 05:00 hôm sau (mã 529 T9) và
+ * tăng ca ra 00:01 (Sơn Sắt 16/09) không phải ca đêm — vẫn tính theo khung K2–K6.
+ */
+export function laDoanCaDem(d: DoanLam, t: ThamSoKhung = THAM_SO_MAC_DINH): boolean {
+  const hc = t.khung.find((k) => k.ma === t.khungHanhChinh)
+  if (!hc || !t.khung.some((k) => k.caDem)) return false
+  return d.vaoTinh >= hc.den && d.raTinh > 1440
+}
+
 export type GioNgay = {
   /** Phút theo từng khung (mã khung → phút), CHƯA cộng làm trưa. */
   theoKhung: Record<string, number>
@@ -192,14 +225,22 @@ export function tinhGioNgay(
   const theoKhung: Record<string, number> = Object.fromEntries(
     t.khung.map((k) => [k.ma, 0]),
   )
+  const cd = t.khung.find((k) => k.caDem)
   for (const d of doan) {
     if (d.raTinh <= d.vaoTinh) continue
+    const lam: Doan = [d.vaoTinh, d.raTinh]
+    const dem = !!cd && laDoanCaDem(d, t)
+    // Đoạn ca đêm: phần giao với khung ca đêm đổ vào đó; phần thừa (trước giờ bắt đầu, sau
+    // giờ kết thúc ca đêm) vẫn về các khung thường.
+    const manh: Doan[] = dem && cd ? truDoan(lam, [cd.tu, cd.den]) : [lam]
+    if (dem && cd) theoKhung[cd.ma] += giaoDoan(lam, [cd.tu, cd.den])
     for (const k of t.khung) {
-      let giao = Math.max(0, Math.min(d.raTinh, k.den) - Math.max(d.vaoTinh, k.tu))
-      if (k.ma === t.khungHanhChinh) {
-        giao -= Math.max(0, Math.min(d.raTinh, t.truaDen) - Math.max(d.vaoTinh, t.truaTu))
+      if (k.caDem) continue
+      for (const m of manh) {
+        let giao = giaoDoan(m, [k.tu, k.den])
+        if (k.ma === t.khungHanhChinh) giao -= giaoDoan(m, [t.truaTu, t.truaDen])
+        theoKhung[k.ma] += Math.max(0, giao)
       }
-      theoKhung[k.ma] += Math.max(0, giao)
     }
   }
   if (t.lamTronRaKieu === 'xuong_30')

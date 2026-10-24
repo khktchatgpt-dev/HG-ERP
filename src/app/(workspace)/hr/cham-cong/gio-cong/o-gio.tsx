@@ -45,6 +45,10 @@ export function OGio({ d }: { d: GioCongCtx }) {
   if (!n || !x) return null
   const c = d.congCua(o.ma)?.ngay.get(o.ngay)
   const nhan = nhanTc(d.b.thamSo)
+  // Giờ đổ vào khung ca đêm (nằm chung cột TC3) — nói rõ để người đọc hiểu vì sao TC3 to.
+  const cdPhut = d.b.khung
+    .filter((k) => k.caDem)
+    .reduce((s, k) => s + (x.k?.[k.ma] ?? 0), 0)
   // Lượt quẹt ở máy nào (user 20/10/2026): tra giờ máy ghi → máy; giờ '(+1)' là lượt
   // rạng sáng hôm sau của ca qua đêm. Lượt bổ sung bằng điều chỉnh không có máy.
   const mayCua = (g: string) => {
@@ -170,6 +174,14 @@ export function OGio({ d }: { d: GioCongCtx }) {
                 </dd>
               </Fragment>
             ))}
+            {cdPhut > 0 && (
+              <>
+                <dt className="text-[var(--grp-1-ink)]">trong đó ca đêm</dt>
+                <dd className="num text-[var(--grp-1-ink)]">
+                  {gio(cdPhut)} giờ · hệ số khung ca đêm
+                </dd>
+              </>
+            )}
             {(c.tre > 0 || c.som > 0) && (
               <>
                 <dt className="text-[var(--warn)]">Trễ · sớm</dt>

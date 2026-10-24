@@ -43,6 +43,17 @@ describe('nhóm khung', () => {
     })
     expect(nhanTc(T)).toEqual({ tc1: '16–19h', tc2: '19–22h', tc3: 'sau 22h' })
   })
+  it('khung ca đêm (24/10/2026) đứng ngoài thứ tự TC1–TC2, bày chung TC3 và nhãn ghi rõ', () => {
+    const T7 = {
+      ...T,
+      khung: [
+        ...T.khung,
+        { ma: 'K7', ten: 'Ca đêm', tu: 18 * 60, den: 30 * 60, caDem: true },
+      ],
+    }
+    expect(nhomKhung(T7)).toMatchObject({ K2: 'tc1', K3: 'tc2', K4: 'tc3', K7: 'tc3' })
+    expect(nhanTc(T7)).toEqual({ tc1: '16–19h', tc2: '19–22h', tc3: 'sau 22h · ca đêm' })
+  })
 })
 
 // Số thật tổ Phôi kỳ 09/2026 (bản vẽ 20/10/2026) — đối chiếu tờ "Chi tiết" phần mềm cũ.
