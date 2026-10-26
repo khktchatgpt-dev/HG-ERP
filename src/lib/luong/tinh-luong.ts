@@ -125,7 +125,7 @@ export type NhapTay = { cong: number; tcPhut: number }
 export type BoiCanhTinh = {
   thang: string
   phutMotCong: number
-  /** `caDem`: khung ca đêm (0277) — phiếu in dòng này theo CÔNG để Kế toán đối chiếu bảng công ty. */
+  /** `caDem`: khung ca đêm (0278) — phiếu in dòng này theo CÔNG để Kế toán đối chiếu bảng công ty. */
   khung: { ma: string; ten: string; hanhChinh: boolean; caDem?: boolean }[]
   congChuan: number
   loaiNgay: (ngay: string) => LoaiNgayLuong
@@ -354,7 +354,7 @@ export function tinhPhieu(
           tangCa += tien
           congTc += cong
           dong.push({ nhom: 'tang_ca', ten: `${k.ma} ${k.ten}${TEN_NGAY[ln]}`, tien })
-          // Khung ca đêm (0277) in theo CÔNG: bảng công ty nói "18h–6h = 2,1 công", Kế toán
+          // Khung ca đêm (0278) in theo CÔNG: bảng công ty nói "18h–6h = 2,1 công", Kế toán
           // kiểm bằng cách nhân giờ × hệ số ÷ giờ một công rồi × đơn giá ngày — cùng số tiền.
           why.push(
             k.caDem

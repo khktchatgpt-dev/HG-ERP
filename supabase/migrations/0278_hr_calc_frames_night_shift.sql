@@ -1,4 +1,4 @@
--- 0277 — Khung CA ĐÊM trong bản cách tính (bảng "khung giờ → số công" của công ty, 24/10/2026:
+-- 0278 (từng là 0277, đổi số 26/10 vì main đã có 0277_po_template_fabric) — Khung CA ĐÊM trong bản cách tính (bảng "khung giờ → số công" của công ty, 24/10/2026:
 -- "ca qua đêm 18h–6h sáng = 2,1 công", giờ lẻ tính tỉ lệ; chủ dự án chốt "18h–6h là ca đêm luôn").
 --
 -- Cách mô hình: thêm cờ hr_calc_frames.night_shift. Khung có cờ này CHỒNG lên các khung tối
