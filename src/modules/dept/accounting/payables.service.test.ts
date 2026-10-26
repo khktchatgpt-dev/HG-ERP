@@ -8,6 +8,7 @@ vi.mock('./payables.repo', () => ({
     findPayment: vi.fn(),
     insertPayment: vi.fn(),
     deletePayment: vi.fn(),
+    markReimbursed: vi.fn(async () => true),
     poSupplier: vi.fn(),
   },
 }))
@@ -196,5 +197,20 @@ describe('mua trên sàn (0278) — phiếu hoàn tiền & nhân viên ứng', (
     expect(payablesRepo.insertPayment).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'refund', paid_by_user_id: 'u-nga' }),
     )
+  })
+})
+
+describe('payablesService.markReimbursed — hoàn ứng cho nhân viên (0278)', () => {
+  it('phiếu công ty trả / đã hoàn / phiếu hoàn tiền → 400; phiếu ứng chưa hoàn → đóng dấu', async () => {
+    const find = vi.mocked(payablesRepo.findPayment)
+    find.mockResolvedValueOnce({ id: 'p1', paid_by_user_id: null } as never)
+    await expect(payablesService.markReimbursed(keToan, 'p1')).rejects.toMatchObject({ status: 400 })
+    find.mockResolvedValueOnce({ id: 'p2', paid_by_user_id: 'u-nga', reimbursed_at: '2026-10-20T00:00:00Z' } as never) // prettier-ignore
+    await expect(payablesService.markReimbursed(keToan, 'p2')).rejects.toMatchObject({ status: 400 })
+    find.mockResolvedValueOnce({ id: 'p3', paid_by_user_id: 'u-nga', reimbursed_at: null, kind: 'refund' } as never) // prettier-ignore
+    await expect(payablesService.markReimbursed(keToan, 'p3')).rejects.toMatchObject({ status: 400 })
+    find.mockResolvedValueOnce({ id: 'p4', paid_by_user_id: 'u-nga', reimbursed_at: null, kind: 'payment' } as never) // prettier-ignore
+    await payablesService.markReimbursed(keToan, 'p4')
+    expect(payablesRepo.markReimbursed).toHaveBeenCalledWith('p4', expect.any(String))
   })
 })

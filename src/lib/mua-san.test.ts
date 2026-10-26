@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hoaDonDon, noHoanUng, soTienDaTra, truongSan } from './mua-san'
+import { datTrenSanLoi, guiDuyetSanLoi, hoaDonDon, noHoanUng, soTienDaTra, truongSan } from './mua-san'
 
 describe('soTienDaTra — phiếu hoàn tiền trừ vào đã trả', () => {
   it('trả tiền dương, hoàn tiền âm, thiếu kind = trả tiền', () => {
@@ -62,5 +62,21 @@ describe('noHoanUng — công ty còn nợ nhân viên đã ứng tiền', () =>
 
   it('đã hết nợ (hoàn bằng hoặc hơn số ứng) thì không hiện', () => {
     expect(noHoanUng([{ paid_by_user_id: A, amount: 100, kind: 'payment' }, { paid_by_user_id: A, amount: 100, kind: 'refund' }])).toEqual([]) // prettier-ignore
+  })
+})
+
+describe('guiDuyetSanLoi / datTrenSanLoi — hàng rào luồng đơn sàn', () => {
+  it('gửi duyệt: thiếu tên shop thì chặn, có thì qua', () => {
+    expect(guiDuyetSanLoi({ marketplace_shop: '  ' })).toMatch(/tên shop/)
+    expect(guiDuyetSanLoi({ marketplace_shop: 'Shop Vít Rẻ' })).toBeNull()
+  })
+
+  it('đặt trên sàn: bắt mã đơn, cách trả, số tiền (trừ COD)', () => {
+    expect(datTrenSanLoi(undefined)).toMatch(/mã đơn sàn/)
+    expect(datTrenSanLoi({ order_no: ' ', method: 'ck', amount: 1 })).toMatch(/mã đơn sàn/)
+    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'ck' })).toMatch(/số tiền/)
+    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'ung', amount: 0 })).toMatch(/số tiền/)
+    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'cod' })).toBeNull()
+    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'the', amount: 385_000 })).toBeNull()
   })
 })

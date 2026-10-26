@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ADJ_CAUSE_KEYS, causeNeedsLsx } from '@/lib/po-adjust-cause'
 import { PO_TEMPLATES } from '@/lib/po-template'
+import { PREPAY_METHODS } from '@/lib/mua-san'
 
 export const PO_STATUSES = [
   // NHÁP (0116): tạo đơn = lưu nháp, sửa/xoá tự do; bấm "Gửi GĐ duyệt" mới sang
@@ -305,6 +306,21 @@ export const poConfirmSchema = z.object({
   method: optText(100), // 'NCC giao' | 'Mình lấy' | tự do
   place: optText(200), // mặc định "Kho nguyên vật liệu"
   shipments: z.array(poShipmentInputSchema).max(20).default([]),
+  /**
+   * ĐẶT TRÊN SÀN (0278) — bắt buộc khi NCC của đơn là sàn: với đơn sàn, bước
+   * "NCC xác nhận" chính là lúc bấm đặt trong app, và sàn trừ tiền ngay lúc đó.
+   * Service kiểm bằng `datTrenSanLoi`; đơn NCC thường gửi kèm thì bị bỏ qua.
+   */
+  san: z
+    .object({
+      order_no: z.string().trim().min(1, 'Chưa có mã đơn sàn').max(100),
+      tracking_no: optText(100),
+      method: z.enum(PREPAY_METHODS),
+      amount: z.coerce.number().positive().optional().nullable(),
+      /** Chỉ đọc khi method = 'ung'; trống = chính người bấm đã ứng. */
+      paid_by_user_id: z.string().uuid().optional().nullable(),
+    })
+    .optional(),
 })
 
 /**
@@ -322,6 +338,12 @@ export const poTermsPatchSchema = z.object({
   terms_lead_time: optText(500),
   signer_role: optText(100),
   note: optText(2000),
+  /**
+   * Hai ô biết được SAU khi đặt (0278): mã vận đơn (sàn cấp khi shop giao cho bên
+   * ship) và "đơn này không có hoá đơn" (shop báo sau). Không gửi = giữ nguyên.
+   */
+  marketplace_tracking_no: optText(100),
+  invoice_waived_reason: optText(500),
 })
 
 /**

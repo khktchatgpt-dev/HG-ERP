@@ -102,3 +102,50 @@ export function noHoanUng(
   }
   return [...by.values()].filter((r) => r.amount > 0).sort((a, b) => b.amount - a.amount)
 }
+
+/**
+ * CÁCH TRẢ TIỀN lúc đặt trên sàn (user chốt 26/10/2026: cho chọn cả). Ghi vào
+ * `accounting_supplier_payments.method` — cột chữ tự do sẵn có, đây là bộ giá trị
+ * mà bước "Đặt trên sàn" sinh ra.
+ */
+export const PREPAY_METHODS = ['ck', 'the', 'ung', 'cod'] as const
+export type PrepayMethod = (typeof PREPAY_METHODS)[number]
+
+export const PREPAY_METHOD_LABEL: Record<PrepayMethod, string> = {
+  ck: 'Chuyển khoản công ty',
+  the: 'Thẻ công ty',
+  ung: 'Nhân viên ứng tiền',
+  cod: 'COD — trả khi nhận hàng',
+}
+
+/**
+ * Gửi duyệt đơn sàn phải nói MUA CỦA SHOP NÀO — Giám đốc duyệt một đơn "Shopee"
+ * không tên shop là duyệt mù. Trả lý do chặn (kèm cách gỡ) hoặc null.
+ */
+export function guiDuyetSanLoi(po: { marketplace_shop?: string | null }): string | null {
+  return po.marketplace_shop?.trim()
+    ? null
+    : 'Đơn mua trên sàn chưa có tên shop — bấm "Sửa" điền tên shop bán rồi mới gửi duyệt được'
+}
+
+export type DatTrenSan = {
+  order_no: string
+  tracking_no?: string | null
+  method: PrepayMethod
+  amount?: number | null
+  paid_by_user_id?: string | null
+}
+
+/**
+ * Kiểm bước "ĐẶT TRÊN SÀN" — sàn bắt trả tiền lúc đặt, nên bước này ghi luôn số
+ * đã trả. COD là ngoại lệ duy nhất được để trống tiền: trả khi nhận, Kế toán ghi
+ * phiếu chi lúc đó. Trả lý do chặn hoặc null.
+ */
+export function datTrenSanLoi(s: Partial<DatTrenSan> | null | undefined): string | null {
+  if (!s) return 'Đơn mua trên sàn: ghi mã đơn sàn và số tiền đã trả ở bước "Đặt trên sàn"'
+  if (!s.order_no?.trim()) return 'Chưa có mã đơn sàn — chép mã đơn trong app Shopee/Lazada vào'
+  if (!s.method || !PREPAY_METHODS.includes(s.method)) return 'Chọn cách trả tiền'
+  if (s.method !== 'cod' && !(Number(s.amount) > 0))
+    return 'Chưa có số tiền đã trả — ghi đúng số app trừ (gồm phí ship, đã trừ voucher)'
+  return null
+}

@@ -97,6 +97,11 @@ import { poAdjustmentsRepo } from './po-adjustments.repo'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
+// Đặt trên sàn (0278) ghi phiếu chi trả trước thẳng qua repo công nợ.
+vi.mock('@/modules/dept/accounting/payables.repo', () => ({
+  payablesRepo: { insertPayment: vi.fn(async () => undefined) },
+}))
+import { payablesRepo } from '@/modules/dept/accounting/payables.repo'
 import { emit } from '@/events/bus'
 import { fxRatesRepo } from '@/modules/dept/accounting/fx-rates.repo'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
@@ -1226,5 +1231,81 @@ describe('posService — mua trên sàn (0278): tên shop chỉ dính đơn củ
       marketplace_shop: null,
       marketplace_tracking_no: null,
     })
+  })
+})
+
+describe('posService — luồng đơn mua trên sàn (0278)', () => {
+  const SAN = { id: 'shopee', is_active: true, can_order: true, is_marketplace: true }
+  const approved = { ...PO, status: 'approved', currency: 'VND', marketplace_shop: 'Shop Vít Rẻ' }
+  beforeEach(() => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue(SAN as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([{ material_id: 'm1', unit_price: 1000 }] as never) // prettier-ignore
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...approved, status: 'confirmed' } as never)
+  })
+
+  it('gửi duyệt đơn sàn thiếu tên shop → chặn', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft', marketplace_shop: null } as never) // prettier-ignore
+    await expect(posService.submit(staff, 'po1')).rejects.toThrow(/tên shop/)
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('đơn sàn không đi đường "Gửi NCC"', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    await expect(posService.advance(staff, 'po1', 'ordered')).rejects.toThrow(/Đặt trên sàn/)
+  })
+
+  it('đặt trên sàn thiếu mã đơn / tiền → chặn, không ghi gì', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    await expect(posService.confirm(staff, 'po1', { shipments: [] })).rejects.toThrow(/mã đơn sàn/)
+    await expect(
+      posService.confirm(staff, 'po1', { shipments: [], san: { order_no: '2410AB', method: 'ck' } }),
+    ).rejects.toThrow(/số tiền/)
+    expect(posRepo.patch).not.toHaveBeenCalled()
+    expect(payablesRepo.insertPayment).not.toHaveBeenCalled()
+  })
+
+  it('trả bằng thẻ công ty → mã đơn sàn vào số tờ, ghi phiếu chi trả trước gắn đơn', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    await posService.confirm(staff, 'po1', {
+      shipments: [],
+      san: { order_no: ' 2410AB ', tracking_no: 'SPXVN1', method: 'the', amount: 385_000 },
+    })
+    expect(vi.mocked(posRepo.patch).mock.calls[0][1]).toMatchObject({
+      status: 'confirmed',
+      supplier_doc_no: '2410AB',
+      marketplace_tracking_no: 'SPXVN1',
+    })
+    expect(payablesRepo.insertPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supplier_id: 's1',
+        po_id: 'po1',
+        amount: 385_000,
+        method: 'the',
+        ref_no: '2410AB',
+        kind: 'payment',
+        paid_by_user_id: null,
+      }),
+    )
+  })
+
+  it('nhân viên ứng, không chọn ai → người bấm là người ứng', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    await posService.confirm(staff, 'po1', { shipments: [], san: { order_no: 'X1', method: 'ung', amount: 90_000 } }) // prettier-ignore
+    expect(payablesRepo.insertPayment).toHaveBeenCalledWith(expect.objectContaining({ paid_by_user_id: 'u-sup' })) // prettier-ignore
+  })
+
+  it('COD → chưa có phiếu chi (trả khi nhận)', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    await posService.confirm(staff, 'po1', { shipments: [], san: { order_no: 'X2', method: 'cod' } })
+    expect(posRepo.patch).toHaveBeenCalled()
+    expect(payablesRepo.insertPayment).not.toHaveBeenCalled()
+  })
+
+  it('NCC thường gửi kèm khối san → bỏ qua, không ghi phiếu chi', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1', is_active: true, can_order: true, is_marketplace: false } as never) // prettier-ignore
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    await posService.confirm(staff, 'po1', { shipments: [], san: { order_no: 'X3', method: 'ck', amount: 1 } }) // prettier-ignore
+    expect('supplier_doc_no' in vi.mocked(posRepo.patch).mock.calls[0][1]).toBe(false)
+    expect(payablesRepo.insertPayment).not.toHaveBeenCalled()
   })
 })

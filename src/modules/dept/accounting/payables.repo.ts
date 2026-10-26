@@ -282,6 +282,19 @@ export const payablesRepo = {
     if (error) throw new Error(error.message)
   },
 
+  /** Đóng dấu đã hoàn ứng (0278) — chỉ phiếu có người ứng và chưa hoàn. */
+  async markReimbursed(id: string, at: string): Promise<boolean> {
+    const { data, error } = await db()
+      .from('accounting_supplier_payments')
+      .update({ reimbursed_at: at })
+      .eq('id', id)
+      .not('paid_by_user_id', 'is', null)
+      .is('reimbursed_at', null)
+      .select('id')
+    if (error) throw new Error(error.message)
+    return (data ?? []).length > 0
+  },
+
   async deletePayment(id: string): Promise<void> {
     const { error } = await db()
       .from('accounting_supplier_payments')

@@ -50,7 +50,8 @@ import {
   confirmReplacePlan,
   splitShipmentLines,
 } from '@/lib/po-shipments'
-import { truongSan } from '@/lib/mua-san'
+import { datTrenSanLoi, guiDuyetSanLoi, truongSan, type DatTrenSan } from '@/lib/mua-san'
+import { payablesRepo } from '@/modules/dept/accounting/payables.repo'
 
 /** Ô client KHÔNG gửi (undefined) thì giữ giá trị cũ; gửi null/chuỗi thì ghi theo. */
 const keep = <T>(next: T | undefined, before: T | null | undefined): T | null =>
@@ -583,7 +584,12 @@ export const posService = {
       throw BadRequest('Đơn chưa có dòng vật tư nào — thêm hàng rồi hãy gửi duyệt')
     }
     // NCC bị khoá SAU khi đơn đã soạn: chặn ở cửa gửi duyệt, không để lên bàn GĐ.
-    await assertSupplierCanOrder(before.supplier_id)
+    const sup = await assertSupplierCanOrder(before.supplier_id)
+    // Đơn sàn (0278): GĐ phải biết mua của shop nào.
+    if (sup.is_marketplace) {
+      const why = guiDuyetSanLoi(before)
+      if (why) throw BadRequest(why)
+    }
     assertCoViec(before)
     /**
      * BẮT BUỘC HẸN GIAO. Không có `expected_at` thì `assessPoLate` và
@@ -663,6 +669,8 @@ export const posService = {
       terms_lead_time?: string | null
       signer_role?: string | null
       note?: string | null
+      marketplace_tracking_no?: string | null
+      invoice_waived_reason?: string | null
     },
   ): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
@@ -681,6 +689,16 @@ export const posService = {
       terms_lead_time: input.terms_lead_time ?? null,
       signer_role: input.signer_role ?? null,
       note: input.note ?? null,
+      // 0278: không gửi = giữ; mã vận đơn chỉ sống trên đơn sàn (`truongSan`).
+      invoice_waived_reason: keep(input.invoice_waived_reason, before.invoice_waived_reason),
+      ...(input.marketplace_tracking_no !== undefined
+        ? {
+            marketplace_tracking_no: truongSan(
+              !!(await suppliersRepo.findById(before.supplier_id))?.is_marketplace,
+              { marketplace_tracking_no: input.marketplace_tracking_no },
+            ).marketplace_tracking_no,
+          }
+        : {}),
     })
   },
 
@@ -917,7 +935,13 @@ export const posService = {
       giao tại chỗ, gọi `/reschedule`) rồi gửi lại — một bước, không phải
       làm lại đơn.
     */
-    if (to === 'ordered') await assertSupplierCanOrder(before.supplier_id)
+    if (to === 'ordered') {
+      const sup = await assertSupplierCanOrder(before.supplier_id)
+      // Đơn sàn (0278) không có bước "gửi NCC" — đặt trong app là trả tiền luôn,
+      // nên phải qua `confirm` để ghi mã đơn sàn + phiếu chi trả trước.
+      if (sup.is_marketplace)
+        throw BadRequest('Đơn mua trên sàn: dùng nút "Đặt trên sàn" để ghi mã đơn và số tiền đã trả')
+    }
     if (to === 'ordered' && !before.expected_at) {
       throw BadRequest(
         'Đơn chưa có hẹn giao — bấm "Sửa" khai ngày dự kiến trước khi gửi NCC. Không có ngày thì không đo được trễ, và đơn không lên được lịch hàng về.',
@@ -971,6 +995,8 @@ export const posService = {
       method?: string | null
       place?: string | null
       shipments: ShipmentInput[]
+      /** Đặt trên sàn (0278) — bắt buộc khi NCC là sàn. */
+      san?: DatTrenSan
     },
   ): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
@@ -994,6 +1020,17 @@ export const posService = {
       throw BadRequest('Chỉ ghi NCC xác nhận cho đơn đã được Giám đốc duyệt')
     }
     const skipSend = before.status === 'approved'
+    /*
+     * ĐƠN SÀN (0278): bước này = bấm đặt trong app Shopee/Lazada. Sàn trừ tiền
+     * ngay, nên ghi luôn mã đơn sàn + phiếu chi trả trước (trừ COD). Kiểm TRƯỚC
+     * mọi thao tác ghi để thiếu thông tin thì không để lại gì dở dang.
+     */
+    const supplier = await suppliersRepo.findById(before.supplier_id)
+    const san = supplier?.is_marketplace ? input.san : undefined
+    if (supplier?.is_marketplace) {
+      const why = datTrenSanLoi(input.san)
+      if (why) throw BadRequest(why)
+    }
     if (skipSend) {
       await assertSupplierCanOrder(before.supplier_id)
       if (!before.expected_at && input.shipments.length === 0) {
@@ -1074,7 +1111,30 @@ export const posService = {
       ...(skipSend ? { ordered_at: now } : {}),
       // Không có đợt thì giữ nguyên hẹn giao cũ — đừng xoá mốc của đơn.
       ...(minDate ? { expected_at: minDate } : {}),
+      // Đơn sàn: mã đơn sàn vào ô số tờ NCC — mọi màn đang đọc cột này.
+      ...(san
+        ? {
+            supplier_doc_no: san.order_no.trim(),
+            marketplace_tracking_no: san.tracking_no?.trim() || before.marketplace_tracking_no || null, // prettier-ignore
+          }
+        : {}),
     })
+    if (san && san.method !== 'cod') {
+      await payablesRepo.insertPayment({
+        supplier_id: before.supplier_id,
+        po_id: id,
+        amount: Number(san.amount),
+        currency: before.currency ?? 'VND',
+        paid_on: todayVn(),
+        method: san.method,
+        ref_no: san.order_no.trim(),
+        note: `Trả trước khi đặt trên sàn${before.marketplace_shop ? ` — ${before.marketplace_shop}` : ''}`,
+        kind: 'payment',
+        // Nhân viên ứng: mặc định chính người bấm — họ là người cầm điện thoại đặt.
+        paid_by_user_id: san.method === 'ung' ? (san.paid_by_user_id ?? user.id) : null,
+        created_by: user.id,
+      })
+    }
     if (skipSend) await emitOrdered(user, before)
     // B8b: Kho được báo khi hẹn giao gần (handler lọc ≤ 3 ngày) — 0251.
     await emit({

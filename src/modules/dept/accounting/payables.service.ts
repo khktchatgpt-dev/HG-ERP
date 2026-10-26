@@ -329,6 +329,22 @@ export const payablesService = {
     })
   },
 
+  /**
+   * ĐÃ HOÀN ỨNG (0278) — công ty trả lại nhân viên đã ứng tiền riêng mua trên sàn.
+   * Một chiều: hoàn nhầm thì xoá phiếu ghi lại, không có nút "bỏ hoàn".
+   */
+  async markReimbursed(user: User, id: string): Promise<void> {
+    await assertAction(user, 'accounting.payable.manage')
+    const pay = await payablesRepo.findPayment(id)
+    if (!pay) throw NotFound('Bút toán không tồn tại')
+    if (!pay.paid_by_user_id) throw BadRequest('Phiếu này công ty trả — không có ai ứng tiền để hoàn')
+    if (pay.reimbursed_at) throw BadRequest('Phiếu này đã hoàn ứng rồi')
+    if (pay.kind === 'refund')
+      throw BadRequest('Phiếu hoàn tiền của sàn không phải khoản ứng — nó đã trừ vào số nợ nhân viên')
+    const ok = await payablesRepo.markReimbursed(id, new Date().toISOString())
+    if (!ok) throw BadRequest('Phiếu vừa được người khác hoàn ứng — tải lại trang')
+  },
+
   /** Xoá bút toán ghi nhầm — người ghi hoặc Ban quản lý (pattern sổ SX). */
   async deletePayment(user: User, id: string): Promise<void> {
     await assertAction(user, 'accounting.payable.manage')
