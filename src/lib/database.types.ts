@@ -1957,6 +1957,7 @@ export type Database = {
           from_minute: number
           is_office: boolean
           name: string
+          night_shift: boolean
           to_minute: number
           version_id: string
         }
@@ -1966,6 +1967,7 @@ export type Database = {
           from_minute: number
           is_office?: boolean
           name: string
+          night_shift?: boolean
           to_minute: number
           version_id: string
         }
@@ -1975,6 +1977,7 @@ export type Database = {
           from_minute?: number
           is_office?: boolean
           name?: string
+          night_shift?: boolean
           to_minute?: number
           version_id?: string
         }

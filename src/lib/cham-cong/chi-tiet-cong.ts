@@ -22,9 +22,13 @@ export type NhomTc = 'tc1' | 'tc2' | 'tc3'
 
 /** Mã khung → nhóm: khung hành chính là 'hc', các khung sau xếp theo giờ bắt đầu. */
 export function nhomKhung(t: ThamSoKhung): Record<string, 'hc' | NhomTc> {
-  const sau = t.khung.filter((k) => k.ma !== t.khungHanhChinh).sort((a, b) => a.tu - b.tu)
+  const sau = t.khung
+    .filter((k) => k.ma !== t.khungHanhChinh && !k.caDem)
+    .sort((a, b) => a.tu - b.tu)
   const out: Record<string, 'hc' | NhomTc> = { [t.khungHanhChinh]: 'hc' }
   sau.forEach((k, i) => (out[k.ma] = i === 0 ? 'tc1' : i === 1 ? 'tc2' : 'tc3'))
+  // Khung ca đêm (24/10/2026) bày chung cột TC3; nhãn TC3 ghi thêm "· ca đêm" (`nhanTc`).
+  for (const k of t.khung) if (k.caDem) out[k.ma] = 'tc3'
   return out
 }
 
@@ -38,13 +42,16 @@ export function nhanTc(t: ThamSoKhung): Record<NhomTc, string> {
   const nhom = nhomKhung(t)
   const out = { tc1: '', tc2: '', tc3: '' }
   for (const g of ['tc1', 'tc2', 'tc3'] as const) {
-    const ks = t.khung.filter((k) => nhom[k.ma] === g).sort((a, b) => a.tu - b.tu)
+    const ks = t.khung
+      .filter((k) => nhom[k.ma] === g && !k.caDem)
+      .sort((a, b) => a.tu - b.tu)
     if (!ks.length) continue
     out[g] =
       g === 'tc3'
         ? `sau ${gioTron(ks[0].tu)}`
         : `${gioTron(ks[0].tu).replace('h', '')}–${gioTron(ks[ks.length - 1].den)}`
   }
+  if (t.khung.some((k) => k.caDem)) out.tc3 = out.tc3 ? `${out.tc3} · ca đêm` : 'ca đêm'
   return out
 }
 
@@ -254,7 +261,8 @@ export function ghiChuNgay(n: NgayLuotGon, c: CongNgay | undefined): GhiChu[] {
         : { text: 'không quẹt', tone: 'stop' },
     )
   for (const [i, p] of (c?.cap ?? []).entries())
-    if (i >= SO_CAP) out.push({ text: `đoạn ${i + 1}: ${p.vao} → ${p.ra ?? '?'}`, tone: 'warn' })
+    if (i >= SO_CAP)
+      out.push({ text: `đoạn ${i + 1}: ${p.vao} → ${p.ra ?? '?'}`, tone: 'warn' })
   if (c?.luotLe.length)
     out.push({ text: `lượt giữa ${c.luotLe.join(', ')} không tính`, tone: 'mute' })
   if (n.soLuotTho > nl) out.push({ text: `bấm lặp ${n.soLuotTho - nl}`, tone: 'mute' })

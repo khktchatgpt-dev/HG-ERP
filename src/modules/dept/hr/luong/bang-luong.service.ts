@@ -171,7 +171,12 @@ async function tinhLoi(thang: string, nguoiTinh: string | null): Promise<KetQuaT
   const boiCanh = {
     thang,
     phutMotCong: quyTac.phutMotCong,
-    khung: khung.map((k) => ({ ma: k.ma, ten: k.ten, hanhChinh: k.hanhChinh })),
+    khung: khung.map((k) => ({
+      ma: k.ma,
+      ten: k.ten,
+      hanhChinh: k.hanhChinh,
+      caDem: k.caDem,
+    })),
     congChuan: cc,
     loaiNgay: (d: string): LoaiNgayLuong =>
       le.has(d) ? 'le' : new Date(`${d}T00:00:00Z`).getUTCDay() === 0 ? 'cn' : 'thuong',

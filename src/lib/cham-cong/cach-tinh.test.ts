@@ -22,6 +22,7 @@ const KHUNG: KhungBan[] = THAM_SO_MAC_DINH.khung.map((k) => ({
   den: k.den,
   boPhanLo: !!k.boPhanLo,
   hanhChinh: k.ma === 'K1',
+  caDem: false,
 }))
 const QUY_TAC: QuyTac = {
   truaTu: h(11),
@@ -103,6 +104,24 @@ describe('kiemKhung', () => {
     expect(kiemKhung(KHUNG.map((x) => ({ ...x, hanhChinh: false })))[0].loi).toMatch(
       /đúng một khung hành chính/,
     )
+  })
+  it('khung ca đêm chồng lên khung tối là chủ ý — đứng ngoài chuỗi 24 giờ (24/10/2026)', () => {
+    const cd: KhungBan = {
+      ma: 'K7',
+      ten: 'Ca đêm',
+      tu: h(18),
+      den: h(30),
+      boPhanLo: false,
+      hanhChinh: false,
+      caDem: true,
+    }
+    expect(kiemKhung([...KHUNG, cd])).toEqual([])
+    expect(kiemKhung([...KHUNG, { ...cd, hanhChinh: true }]).map((x) => x.loi)).toContain(
+      'Khung ca đêm không thể là khung hành chính',
+    )
+    expect(
+      thamSoTuBan([...KHUNG, cd], QUY_TAC).khung.find((k) => k.ma === 'K7')?.caDem,
+    ).toBe(true)
   })
 })
 

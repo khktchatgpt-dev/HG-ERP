@@ -137,18 +137,26 @@ export const cachTinhRepo = {
     const rows = must(
       await db()
         .from('hr_calc_frames')
-        .select('code, name, from_minute, to_minute, drop_remainder, is_office')
+        .select(
+          'code, name, from_minute, to_minute, drop_remainder, is_office, night_shift',
+        )
         .eq('version_id', banId)
         .order('from_minute'),
     )
-    return rows.map((r) => ({
-      ma: r.code,
-      ten: r.name,
-      tu: r.from_minute,
-      den: r.to_minute,
-      boPhanLo: r.drop_remainder,
-      hanhChinh: r.is_office,
-    }))
+    return (
+      rows
+        .map((r) => ({
+          ma: r.code,
+          ten: r.name,
+          tu: r.from_minute,
+          den: r.to_minute,
+          boPhanLo: r.drop_remainder,
+          hanhChinh: r.is_office,
+          caDem: r.night_shift,
+        }))
+        // Khung ca đêm đứng cuối danh sách (ngoài chuỗi 24 giờ) dù giờ bắt đầu nằm giữa.
+        .sort((a, b) => Number(a.caDem) - Number(b.caDem))
+    )
   },
 
   async heSo(banId: string): Promise<HeSoDong[]> {
@@ -250,6 +258,7 @@ export const cachTinhRepo = {
             to_minute: k.den,
             drop_remainder: k.boPhanLo,
             is_office: k.hanhChinh,
+            night_shift: k.caDem,
           })),
         ),
     )

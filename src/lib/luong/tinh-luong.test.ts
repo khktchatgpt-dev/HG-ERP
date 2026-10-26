@@ -479,3 +479,38 @@ describe('ngày lễ KHÔNG tự trả (chủ dự án 21/10/2026, theo sổ T9)
     expect(p.tangCa).toBe(350_000 * 3)
   })
 })
+
+describe('khung ca đêm K7 (bảng công ty 24/10/2026: 18h–6h = 2,1 công trọn ca, giờ lẻ tỉ lệ)', () => {
+  const b = bc({
+    khung: [
+      { ma: 'K1', ten: 'Ca hành chính', hanhChinh: true },
+      { ma: 'K2', ten: '16h – 19h', hanhChinh: false },
+      { ma: 'K3', ten: '19h – 22h', hanhChinh: false },
+      { ma: 'K7', ten: 'Ca đêm', hanhChinh: false, caDem: true },
+    ],
+    heSoKhung: (ma) => ({ K1: 100, K2: 133.3333, K3: 120, K7: 140 })[ma] ?? null,
+    truThue: false,
+  })
+  const hs: HoSoTinh = { ...KIEU, donGia: 320_000, phuCap: [], coBh: false }
+  it('trọn ca 12 giờ → 2,1 công × đơn giá; ca 21h–5h 8 giờ → 1,4 công', () => {
+    const tron = tinhPhieu(hs, [ngay('2026-10-01', { K7: 720 })], [], b)
+    expect(tron.luongCong).toBe(0)
+    expect(tron.tangCa).toBe(672_000)
+    // Phiếu in dòng ca đêm theo CÔNG (bước 3, 24/10/2026) — Kế toán đối chiếu thẳng bảng công ty.
+    expect(tron.why).toContain(
+      '  K7 ca đêm  12 giờ × 140 % ÷ 8 = 2,1 công × 320.000 = 672.000',
+    )
+    expect(tron.why).toContain('  cộng tăng ca theo khung = 672.000 · 2,1 công quy đổi')
+    const tam = tinhPhieu(hs, [ngay('2026-10-02', { K7: 480 })], [], b)
+    expect(tam.tangCa).toBe(448_000)
+    expect(tam.why).toContain(
+      '  K7 ca đêm  8 giờ × 140 % ÷ 8 = 1,4 công × 320.000 = 448.000',
+    )
+  })
+  it('sáng làm 4 giờ + ca đêm 8 giờ cùng ngày: 0,5 công + 1,4 công tăng ca', () => {
+    const p = tinhPhieu(hs, [ngay('2026-10-05', { K1: 240, K7: 480 })], [], b)
+    expect(p.luongCong).toBe(160_000)
+    expect(p.tangCa).toBe(448_000)
+    expect(p.congThuc).toBe(0.5)
+  })
+})
