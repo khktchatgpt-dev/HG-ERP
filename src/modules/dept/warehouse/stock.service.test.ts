@@ -640,6 +640,7 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
         },
       ],
       blocked: [],
+      chua_ma: { items: [], frame_lines: 0 },
       products: [],
     })
     vi.mocked(issuedByLsx).mockResolvedValue(new Map())
@@ -714,6 +715,7 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
         },
       ],
       blocked: [],
+      chua_ma: { items: [], frame_lines: 0 },
       products: [],
     })
     // Đã xuất kho cho lệnh thì trừ ra — nhánh BOM trước đây bỏ qua phần này.
