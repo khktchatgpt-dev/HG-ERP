@@ -133,6 +133,15 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     // không đổi.
     UNIT2_FIELD,
   ],
+  // Vải/da đặt theo MÉT: SL đơn hàng là số SẢN PHẨM, Đm/sp nhân ra mét cần đặt
+  // (gợi ý SL đặt = SL đơn hàng × Đm). Cùng bộ ô với phụ kiện, khác điều khoản.
+  fabric: [
+    t('grade', 'Vật liệu', 'w-[130px]', 'material_grade', 'POLY CD 230GR (UKFR)…'),
+    t('spec', 'Quy cách', 'w-[110px]', 'spec', 'Khổ 1,5m…'),
+    n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
+    UNIT2_FIELD,
+  ],
   aluminium: [
     { key: 'die', label: 'Mã khuôn', width: 'w-[120px]', kind: 'die', field: 'die_code' },
     n('kgm', 'kg/m', 'w-[80px]', 'weight_per_m', '0.0001'),
@@ -403,6 +412,19 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@amount',
     '@note',
   ],
+  fabric: [
+    '@stt',
+    '@name',
+    'grade',
+    'spec',
+    'demand',
+    'dm',
+    '@unit',
+    '@qty',
+    '@price',
+    '@amount',
+    '@note',
+  ],
   aluminium: [
     '@stt',
     '@name',
@@ -601,6 +623,7 @@ export function poPrintKeys(t: PoTemplate, lines: readonly PoPrintTextLine[]): s
 /** Nhãn cột số lượng trên phiếu in — mỗi mẫu gọi một kiểu theo đơn vị mua. */
 export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   accessory: 'SL đặt',
+  fabric: 'SL đặt',
   // "Số cây" → "Số lượng" (user chốt 12/08/2026 khi duyệt cột từng mẫu) — đồng
   // bộ nhãn với các mẫu khác; đơn vị cây đã nói ở cột ĐVT đứng ngay trước.
   aluminium: 'Số lượng',
@@ -719,6 +742,7 @@ export const PO_SHARED_FIELD_MEANING: Record<
 > = {
   material_grade: {
     accessory: 'Vật liệu',
+    fabric: 'Vật liệu',
     metal_kg: 'Vật liệu',
     rattan: 'Quy cách định mức',
     paint: 'Mã màu NCC',
@@ -763,6 +787,7 @@ export const PO_SHARED_FIELD_PREFILL: Record<
 > = {
   material_grade: {
     accessory: true,
+    fabric: true, // "Vật liệu" — POLY CD 230GR, đúng nghĩa vật liệu của danh mục
     metal_kg: true,
     rattan: false, // "Định mức" — barem g/5m, không phải vật liệu
     paint: true, // "Mã màu NCC" — danh mục khai "vật liệu / MÀU", cùng nghĩa

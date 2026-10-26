@@ -30,7 +30,7 @@ const MAP = {
   'Vật tư hàn - cắt': 'mro',
   'Bao bì - đóng gói - tem nhãn': 'carton',
   'Mút - xốp - nệm - gòn': 'foam',
-  'Vải - da - chỉ - phụ liệu may': 'accessory',
+  'Vải - da - chỉ - phụ liệu may': 'fabric',
   'Dây mây - vật liệu đan': 'rattan',
   'Sơn - keo - hoá chất': 'paint',
   'Dầu - nhớt - mỡ bôi trơn': 'chemical',

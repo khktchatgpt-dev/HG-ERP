@@ -56,6 +56,19 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Thành tiền (VND)',
     'Ghi chú',
   ],
+  fabric: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'Vật liệu',
+    'Quy cách',
+    'SL đơn hàng',
+    'Đm/sp',
+    'ĐVT',
+    'SL đặt',
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Ghi chú',
+  ],
   aluminium: [
     'STT',
     'Tên sản phẩm / vật tư',
@@ -393,6 +406,7 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
    */
   const NOT_PRINTED: Partial<Record<PoTemplate, string[]>> = {
     accessory: ['unit2'],
+    fabric: ['unit2'],
     aluminium: ['demand'],
     carton: ['demand', 'onhand', 'basis'],
     rattan: ['dinhmuc', 'onhand', 'unit2'],

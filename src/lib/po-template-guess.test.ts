@@ -110,3 +110,23 @@ describe('resolveTemplate — người chọn thắng máy đoán', () => {
     expect(resolveTemplate('linh tinh', g)).toBe('label')
   })
 })
+
+describe('guessTemplate — vải / da / chỉ may đặt theo mét', () => {
+  it.each([
+    ['Vải POLY CD 230GR (UKFR)', 'fabric'],
+    ['Vải bọc simili đen', 'fabric'],
+    ['Da bò thật màu nâu', 'fabric'],
+    ['Chỉ may số 40', 'fabric'],
+  ])('%s → %s', (name, tpl) => {
+    expect(guessTemplate(name).template).toBe(tpl)
+  })
+
+  it('nhóm "Vải - da - chỉ" đoán ra mẫu vải khi tên không nói lên gì', () => {
+    expect(guessTemplate('Mút vàng 10mm', 'Vải - da - chỉ - phụ liệu may').template).toBe(
+      'foam',
+    )
+    expect(guessTemplate('Phụ kiện khác', 'Vải - da - chỉ - phụ liệu may').template).toBe(
+      'fabric',
+    )
+  })
+})

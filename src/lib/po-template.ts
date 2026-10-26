@@ -16,6 +16,7 @@
 
 export const PO_TEMPLATES = [
   'accessory',
+  'fabric',
   'aluminium',
   'metal_kg',
   'carton',
@@ -107,6 +108,25 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Hàng đúng mẫu, đúng chuẩn loại theo yêu cầu',
+      delivery_place: DELIVERY_HG,
+      payment: 'Thanh toán công nợ cuối tháng',
+      invoice: INVOICE_VAT,
+      lead_time: 'Từ 7 đến 10 ngày kể từ ngày xác nhận đơn',
+    },
+  },
+  fabric: {
+    key: 'fabric',
+    label: 'Vải / da / chỉ may',
+    // Đặt theo MÉT (ĐVT mua), không theo cái: SL đơn hàng là số SẢN PHẨM, nhân Đm/sp
+    // ra số mét cần đặt. Đơn thật: vải POLY CD 230GR (UKFR) của Tiêu Điểm Sáng, 98.000đ/mét.
+    hint: 'Vải bọc, da, chỉ may — đặt theo mét, SL đơn hàng × Đm/sp = mét cần đặt',
+    priceUnit: null,
+    vatRate: 8,
+    priceIncludesVat: false,
+    hasDiscount: true,
+    signerRole: 'NGƯỜI LẬP',
+    terms: {
+      quality: 'Hàng đúng mẫu, đúng khổ và định lượng theo yêu cầu',
       delivery_place: DELIVERY_HG,
       payment: 'Thanh toán công nợ cuối tháng',
       invoice: INVOICE_VAT,
@@ -672,6 +692,7 @@ export function suggestOrderQty(
  */
 export const PO_TEMPLATE_SHORT: Record<PoTemplate, string> = {
   accessory: 'Phụ kiện',
+  fabric: 'Vải',
   aluminium: 'Nhôm',
   metal_kg: 'Sắt / inox',
   carton: 'Carton',

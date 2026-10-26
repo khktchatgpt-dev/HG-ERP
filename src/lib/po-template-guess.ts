@@ -61,6 +61,12 @@ export function guessTemplate(
   if (/dây hàn|que hàn|đá cắt|đá mài|béc |chụp khí/.test(n))
     return { template: 'simple', reason: 'vật tư hàn — bán theo cuộn/kg, SL × giá' }
 
+  // Vải / da / chỉ may — đặt theo mét, không theo cái. Xét TRƯỚC ngũ kim: "chỉ may"
+  // và "vải bọc" không chứa từ ngũ kim nhưng dễ bị nhánh nội thất (tay nắm, nút…) nuốt.
+  // \b của JS không nhận chữ có dấu ("ò", "ậ"): không dùng \b sau từ tiếng Việt.
+  if (/vải|simili|chỉ may|\bda (bò|thật|pu|nhân tạo)/.test(n))
+    return { template: 'fabric', reason: 'vải / da / chỉ may — đặt theo mét, có Đm/sp' }
+
   /*
    * NGŨ KIM XÉT TRƯỚC VẬT LIỆU. "Bu lông LGC 6x20x15 sắt xi 7 màu" có chữ "sắt"
    * và có tiết diện, nhưng "sắt xi" là lớp mạ chứ không phải mặt hàng sắt cây.
@@ -123,6 +129,8 @@ export function guessTemplate(
       template: 'mro',
       reason: 'phụ tùng / bảo trì / bảo hộ — mua lẻ, ghi model + máy dùng',
     }
+  if (/vải|\bda\b/.test(s))
+    return { template: 'fabric', reason: `theo nhóm phụ "${subGroup}"` }
   if (/bulon|vít|đinh|lông đền|kẹp|chốt/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }
   if (/tem|nhãn|thẻ|decal/.test(s))
