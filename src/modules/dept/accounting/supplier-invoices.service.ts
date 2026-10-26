@@ -23,6 +23,7 @@ import {
 } from './supplier-invoices.repo'
 import type { SupplierInvoiceStatus } from './supplier-invoices.schema'
 import { invoiceLineGross } from '@/lib/po-finance'
+import { soTienDaTra } from '@/lib/mua-san'
 
 /**
  * HOÁ ĐƠN NCC + ĐỐI CHIẾU BA CHIỀU (0188).
@@ -622,16 +623,16 @@ export async function poFinanceForPo(poId: string): Promise<{
       : Promise.resolve({ data: [] as unknown[] }),
     db()
       .from('accounting_supplier_payments')
-      .select('id, paid_on, amount, method, ref_no, note')
+      .select('id, paid_on, amount, method, ref_no, note, kind')
       .eq('po_id', poId)
       .order('paid_on'),
   ])
   type H = { id: string; invoice_no: string; invoice_date: string; due_date: string | null; total: unknown } // prettier-ignore
-  type P = { id: string; paid_on: string; amount: unknown; method: string | null; ref_no: string | null; note: string | null } // prettier-ignore
+  type P = { id: string; paid_on: string; amount: unknown; method: string | null; ref_no: string | null; note: string | null; kind: string | null } // prettier-ignore
   const r2 = (n: number) => Math.round(n * 100) / 100
   const payments = ((pays ?? []) as P[]).map((x) => ({
     ...x,
-    amount: Number(x.amount ?? 0),
+    amount: soTienDaTra(x), // phiếu hoàn (0278) mang dấu âm
   }))
   return {
     currency: m.currency,

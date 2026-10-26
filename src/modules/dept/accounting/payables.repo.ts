@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import type { PaymentKind } from '@/lib/mua-san'
 
 /**
  * CÔNG NỢ NCC (GĐ C.1 — plan-ke-toan-cong-no-ncc): phát sinh KHÔNG lưu cứng —
@@ -38,6 +39,11 @@ export type SupplierPayment = {
   created_at: string
   created_by_name: string | null
   po_code: string | null
+  /** 'refund' trừ vào đã trả — cộng qua `soTienDaTra` (0278). */
+  kind: PaymentKind
+  /** Nhân viên ứng tiền riêng; trống = công ty trả (0278). */
+  paid_by_user_id: string | null
+  reimbursed_at: string | null
 }
 
 const MOVE_SELECT =
@@ -96,7 +102,7 @@ function unwrapMoves(rows: RawMove[] | null): ReceiptValueRow[] {
 }
 
 const PAY_SELECT =
-  'id, supplier_id, po_id, amount, currency, paid_on, method, ref_no, note, created_by, created_at, actor:users(name), po:supply_purchase_orders(code)'
+  'id, supplier_id, po_id, amount, currency, paid_on, method, ref_no, note, kind, paid_by_user_id, reimbursed_at, created_by, created_at, actor:users!accounting_supplier_payments_created_by_fkey(name), po:supply_purchase_orders(code)'
 
 type RawPay = Omit<SupplierPayment, 'created_by_name' | 'po_code'> & {
   actor: One<{ name: string | null }>
@@ -268,6 +274,8 @@ export const payablesRepo = {
     method: string | null
     ref_no: string | null
     note: string | null
+    kind: PaymentKind
+    paid_by_user_id: string | null
     created_by: string
   }): Promise<void> {
     const { error } = await db().from('accounting_supplier_payments').insert(row)

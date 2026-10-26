@@ -15,6 +15,7 @@ import { awaitingInvoiceSummary } from './supplier-invoices.service'
 import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
 import { carrierLedgerEntries } from '@/lib/po-cost'
 import { todayVn } from '@/lib/date-vn'
+import { soTienDaTra } from '@/lib/mua-san'
 
 /**
  * SỔ CHI TIẾT CÔNG NỢ PHẢI TRẢ NGƯỜI BÁN (TK 331) — theo KỲ.
@@ -206,7 +207,7 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       .limit(10000),
     db()
       .from('accounting_supplier_payments')
-      .select('id, supplier_id, currency, amount, paid_on, ref_no, method, note')
+      .select('id, supplier_id, currency, amount, paid_on, ref_no, method, note, kind')
       .limit(10000),
     // Phiếu phí trả NHÀ XE (0211) — chính là chứng từ đòi tiền của nhà xe.
     // Lấy CẢ phiếu đã huỷ: phiếu gốc giữ ở kỳ của nó, dòng đảo vào kỳ huỷ.
@@ -215,7 +216,7 @@ async function loadEntries(): Promise<LedgerEntry[]> {
   const carrierCosts = costs.filter((c) => c.role === 'carrier')
 
   type Inv = { id: string; invoice_no: string; supplier_id: string; currency: string; total: unknown; invoice_date: string; note: string | null } // prettier-ignore
-  type Pay = { id: string; supplier_id: string; currency: string; amount: unknown; paid_on: string; ref_no: string | null; method: string | null; note: string | null } // prettier-ignore
+  type Pay = { id: string; supplier_id: string; currency: string; amount: unknown; paid_on: string; ref_no: string | null; method: string | null; note: string | null; kind: string | null } // prettier-ignore
   const invs = (invRaw ?? []) as Inv[]
   const pays = (payRaw ?? []) as Pay[]
 
@@ -262,8 +263,9 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       kind: 'payment',
       // Phiếu chi không bắt buộc số tham chiếu; rơi về phương thức rồi mới
       // tới gạch ngang, để cột "Số chứng từ" không trống trơn cả sổ.
-      doc_no: p.ref_no || p.method || '—',
-      amount: Number(p.amount ?? 0),
+      doc_no: `${p.kind === 'refund' ? 'Hoàn tiền · ' : ''}${p.ref_no || p.method || '—'}`,
+      // Phiếu hoàn (0278) là phiếu chi mang dấu âm: trả lại phần nợ đã giảm.
+      amount: soTienDaTra(p),
       note: p.note,
     })),
   ]

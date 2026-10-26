@@ -50,6 +50,11 @@ import {
   confirmReplacePlan,
   splitShipmentLines,
 } from '@/lib/po-shipments'
+import { truongSan } from '@/lib/mua-san'
+
+/** Ô client KHÔNG gửi (undefined) thì giữ giá trị cũ; gửi null/chuỗi thì ghi theo. */
+const keep = <T>(next: T | undefined, before: T | null | undefined): T | null =>
+  next !== undefined ? next : (before ?? null)
 
 /**
  * Trạng thái ĐƠN cho phép thao tác trên đợt giao (27/09/2026): từ lúc đã duyệt
@@ -116,6 +121,11 @@ type PoInput = {
   /** Đơn ngoài lệnh (0229) — bỏ qua khi đơn có lệnh. */
   /** Hạng mục của đơn ngoài lệnh (0230) — bỏ qua khi đơn có lệnh. */
   project_id?: string | null
+  /** Mua trên sàn (0278) — chỉ ghi khi NCC là sàn (`truongSan`). */
+  marketplace_shop?: string | null
+  marketplace_tracking_no?: string | null
+  /** Có chữ = đơn không có hoá đơn GTGT (0278). */
+  invoice_waived_reason?: string | null
   lines: PoLineInput[]
   /** Kế hoạch chia đợt khai ngay lúc soạn (28/08) — trỏ dòng theo line_index. */
   shipments?: {
@@ -494,7 +504,7 @@ export const posService = {
    */
   async create(user: User, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
-    await assertSupplierCanOrder(input.supplier_id)
+    const supplier = await assertSupplierCanOrder(input.supplier_id)
     const lsxId = input.production_order_id ?? null
     let lsx: Awaited<ReturnType<typeof productionRepo.findById>> = null
     if (lsxId) {
@@ -537,6 +547,8 @@ export const posService = {
         assigned_to: user.id,
         source_po_id: input.source_po_id ?? null,
         ...(await hangMucCua(lsxId, input.project_id)),
+        ...truongSan(supplier.is_marketplace, input),
+        invoice_waived_reason: input.invoice_waived_reason ?? null,
       },
       withDerived(template, input.lines),
     )
@@ -754,8 +766,10 @@ export const posService = {
     assertFreeLinesAllowed(template, input.lines)
     input.lines = await ganMaDongTuGo(user, template, input.lines, before.code)
     // Đổi sang NCC khác lúc sửa nháp — NCC mới cũng phải đặt được.
-    if (input.supplier_id !== before.supplier_id)
-      await assertSupplierCanOrder(input.supplier_id)
+    const supplier =
+      input.supplier_id !== before.supplier_id
+        ? await assertSupplierCanOrder(input.supplier_id)
+        : await suppliersRepo.findById(input.supplier_id)
     const po = await posRepo.patch(id, {
       supplier_id: input.supplier_id,
       template,
@@ -773,6 +787,16 @@ export const posService = {
         input.project_id,
         before.project_id,
       )),
+      // Đổi NCC từ sàn sang NCC thường lúc sửa nháp → tên shop/mã vận đơn về null.
+      // Client không GỬI ô nào (form cũ chưa có ô) thì giữ giá trị đang có.
+      ...truongSan(!!supplier?.is_marketplace, {
+        marketplace_shop: keep(input.marketplace_shop, before.marketplace_shop),
+        marketplace_tracking_no: keep(input.marketplace_tracking_no, before.marketplace_tracking_no), // prettier-ignore
+      }),
+      invoice_waived_reason: keep(
+        input.invoice_waived_reason,
+        before.invoice_waived_reason,
+      ),
     })
     assertSplits(input.lines, [before.production_order_id, ...extraLsxIds])
     await posRepo.replaceLines(id, withDerived(template, input.lines))
@@ -1786,9 +1810,10 @@ export const posService = {
  * chặn. Gọi ở tạo / sửa (đổi NCC) / gửi duyệt / gửi NCC: NCC có thể bị khoá
  * giữa chừng, sau khi đơn đã soạn xong (P1, 27/09/2026).
  */
-export async function assertSupplierCanOrder(supplierId: string): Promise<void> {
+export async function assertSupplierCanOrder(supplierId: string) {
   const supplier = await suppliersRepo.findById(supplierId)
   if (!supplier) throw NotFound('NCC không tồn tại')
   const block = supplierOrderBlock(supplier)
   if (block) throw BadRequest(block)
+  return supplier
 }

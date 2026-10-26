@@ -162,3 +162,39 @@ describe('payablesService — guard ghi/xoá thanh toán', () => {
     expect(payablesRepo.deletePayment).toHaveBeenCalledWith('pay1')
   })
 })
+
+describe('mua trên sàn (0278) — phiếu hoàn tiền & nhân viên ứng', () => {
+  it('phiếu hoàn TRỪ vào đã trả: trả trước 500, sàn hoàn 120, hàng về 380 → còn nợ 0', () => {
+    const rows = summarizePayables(
+      [receipt({ qty: 38, unit_cost: 10 })], // +380
+      [
+        { supplier_id: 's1', amount: 500, currency: 'VND', kind: 'payment' },
+        { supplier_id: 's1', amount: 120, currency: 'VND', kind: 'refund' },
+      ],
+    )
+    expect(rows[0].totals[0]).toMatchObject({ incurred: 380, paid: 380, balance: 0 })
+  })
+
+  it('ghi phiếu: mặc định kind payment, người ứng null; truyền thì ghi đúng', async () => {
+    await payablesService.recordPayment(keToan, {
+      supplier_id: 's1',
+      amount: 100,
+      currency: 'VND',
+      paid_on: '2026-10-26',
+    })
+    expect(payablesRepo.insertPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'payment', paid_by_user_id: null }),
+    )
+    await payablesService.recordPayment(keToan, {
+      supplier_id: 's1',
+      amount: 40,
+      currency: 'VND',
+      paid_on: '2026-10-26',
+      kind: 'refund',
+      paid_by_user_id: 'u-nga',
+    })
+    expect(payablesRepo.insertPayment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'refund', paid_by_user_id: 'u-nga' }),
+    )
+  })
+})

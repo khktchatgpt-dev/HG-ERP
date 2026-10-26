@@ -936,6 +936,8 @@ export type Supplier = {
   /** Đơn vị vận chuyển (0215) — cùng bảng, nhưng KHÔNG hiện ở sổ NCC / ô chọn NCC. */
   is_carrier: boolean
   carrier_kind: string | null
+  /** Hồ sơ là một SÀN TMĐT (0278) — đơn của NCC này là đơn mua trên sàn. */
+  is_marketplace: boolean
   pay_method: string | null
   lock_reason: string | null
   is_active: boolean
@@ -947,7 +949,7 @@ export type Supplier = {
 }
 
 const SUPPLIER_COLS =
-  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, contact_name, contact_phone, email, phone, address, trading_address, warehouse_address, website, payment_terms, payment_net_days, currency, bank_name, bank_account, swift_code, invoice_terms, vat_rate, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, is_carrier, carrier_kind, pay_method, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
+  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, contact_name, contact_phone, email, phone, address, trading_address, warehouse_address, website, payment_terms, payment_net_days, currency, bank_name, bank_account, swift_code, invoice_terms, vat_rate, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, is_carrier, carrier_kind, is_marketplace, pay_method, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
 
 export const suppliersRepo = {
   /**

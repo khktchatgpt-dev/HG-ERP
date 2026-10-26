@@ -12,6 +12,7 @@ import { supplyRepo } from './supply.repo'
 import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
 import { smartLsxNeeds, reservedByOtherLsx } from '@/modules/dept/warehouse/stock.service'
 import { suggestForMaterial } from '@/lib/po-suggestion'
+import { soTienDaTra } from '@/lib/mua-san'
 
 /**
  * VẬT TƯ THEO LỆNH — một dòng cho mỗi lệnh sản xuất đang chạy, kèm mọi đơn mua
@@ -104,7 +105,7 @@ export async function loadPoReportDetails(poIds: string[]): Promise<PoReportDeta
       .from('supply_purchase_order_lines')
       .select('po_id, material_id, unit_price')
       .in('po_id', poIds),
-    db().from('accounting_supplier_payments').select('po_id, amount').in('po_id', poIds),
+    db().from('accounting_supplier_payments').select('po_id, amount, kind').in('po_id', poIds),
     posRepo.totalsByPoIds(poIds),
   ])
 
@@ -193,8 +194,8 @@ export async function loadPoReportDetails(poIds: string[]): Promise<PoReportDeta
     if (out[poId] && top) out[poId].material_group = top[0]
   }
 
-  for (const p of (payments.data ?? []) as { po_id: string | null; amount: number }[]) {
-    if (p.po_id && out[p.po_id]) out[p.po_id].paid += p.amount ?? 0
+  for (const p of (payments.data ?? []) as { po_id: string | null; amount: number; kind: string | null }[]) {
+    if (p.po_id && out[p.po_id]) out[p.po_id].paid += soTienDaTra(p)
   }
   for (const [poId, amount] of Object.entries(totals)) {
     if (out[poId]) out[poId].amount = amount

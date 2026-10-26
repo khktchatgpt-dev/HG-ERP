@@ -159,6 +159,15 @@ export const poCreateSchema = z.object({
    */
   standalone_purpose: optText(120),
   standalone_ref: optText(200),
+  /**
+   * MUA TRÊN SÀN (0278): tên shop + mã vận đơn — chỉ có nghĩa khi NCC là sàn
+   * (`is_marketplace`); service ghi null cho đơn NCC thường. Mã đơn sàn đi vào
+   * `supplier_doc_no` như số tờ của NCC thường.
+   */
+  marketplace_shop: optText(200),
+  marketplace_tracking_no: optText(100),
+  /** Có chữ = đơn KHÔNG có hoá đơn GTGT, kèm lý do (0278). Trống = cần hoá đơn. */
+  invoice_waived_reason: optText(500),
   /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh bắt có ở cửa gửi duyệt. */
   project_id: z.string().uuid().nullable().optional(),
   expected_at: z.string().date().optional().nullable(), // thời gian giao hàng

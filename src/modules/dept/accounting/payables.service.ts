@@ -4,6 +4,7 @@ import { PO_COST_KIND_LABEL } from '@/lib/po-cost'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { soTienDaTra, type PaymentKind } from '@/lib/mua-san'
 
 /**
  * CÔNG NỢ NCC (GĐ C.1): còn nợ = phát sinh (movements nhận có giá, phiếu đảo
@@ -48,7 +49,9 @@ export type PayablePoRow = {
 /** Gộp thuần — có test: cấn trừ in/out, tách tiền tệ, trừ đã trả, cờ thiếu giá. */
 export function summarizePayables(
   receipts: ReceiptValueRow[],
-  payments: Pick<SupplierPayment, 'supplier_id' | 'amount' | 'currency'>[],
+  payments: (Pick<SupplierPayment, 'supplier_id' | 'amount' | 'currency'> & {
+    kind?: string | null
+  })[],
   missingPrice: { supplier_id: string; supplier_name: string; count: number }[] = [],
   /**
    * PHÍ MUA HÀNG (0211) — phiếu phí còn hiệu lực, gộp theo NGƯỜI NHẬN TIỀN.
@@ -106,7 +109,7 @@ export function summarizePayables(
     // Thanh toán cho NCC chưa có phiếu nhận nào (trả trước) vẫn phải hiện —
     // balance âm là "NCC đang giữ tiền mình", không được nuốt.
     const row = acc ?? ensure(p.supplier_id, '?', null)
-    bucket(row, p.currency).paid += p.amount
+    bucket(row, p.currency).paid += soTienDaTra(p)
   }
   for (const m of missingPrice) {
     const acc = ensure(m.supplier_id, m.supplier_name, null)
@@ -279,7 +282,7 @@ export const payablesService = {
     for (const p of payments) {
       if (!p.po_id) continue
       const row = byPo.get(p.po_id)
-      if (row) row.paid_linked = r2(row.paid_linked + p.amount)
+      if (row) row.paid_linked = r2(row.paid_linked + soTienDaTra(p))
     }
     return {
       pos: [...byPo.values()].sort((a, b) => b.incurred - a.incurred),
@@ -299,6 +302,8 @@ export const payablesService = {
       method?: string | null
       ref_no?: string | null
       note?: string | null
+      kind?: PaymentKind
+      paid_by_user_id?: string | null
     },
   ): Promise<void> {
     await assertAction(user, 'accounting.payable.manage')
@@ -318,6 +323,8 @@ export const payablesService = {
       method: input.method ?? null,
       ref_no: input.ref_no ?? null,
       note: input.note ?? null,
+      kind: input.kind ?? 'payment',
+      paid_by_user_id: input.paid_by_user_id ?? null,
       created_by: user.id,
     })
   },

@@ -67,6 +67,11 @@ export type Po = {
   standalone_ref?: string | null
   /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh thuộc về đây. Null với đơn theo lệnh. */
   project_id?: string | null
+  /** Mua trên sàn (0278): tên shop, mã vận đơn. Null với đơn NCC thường. */
+  marketplace_shop?: string | null
+  marketplace_tracking_no?: string | null
+  /** Có chữ = đơn không có hoá đơn GTGT (0278). */
+  invoice_waived_reason?: string | null
 }
 
 export type PoWithRefs = Po & {
@@ -220,7 +225,7 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref, project_id'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref, project_id, marketplace_shop, marketplace_tracking_no, invoice_waived_reason'
 
 /** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
 const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
@@ -1164,6 +1169,9 @@ export const posRepo = {
       standalone_purpose?: string | null
       standalone_ref?: string | null
       project_id?: string | null
+      marketplace_shop?: string | null
+      marketplace_tracking_no?: string | null
+      invoice_waived_reason?: string | null
     },
     lines: PoLineInput[],
   ): Promise<Po> {

@@ -1193,3 +1193,38 @@ describe('P1 (27/09/2026) — hàng rào thật cho NCC khoá đặt và huỷ �
     ])
   })
 })
+
+describe('posService — mua trên sàn (0278): tên shop chỉ dính đơn của NCC là sàn', () => {
+  const base = {
+    production_order_id: null,
+    currency: 'VND',
+    price_includes_vat: true,
+    lines: [{ material_id: 'm1', qty_ordered: 2, unit_price: 50000 }],
+    marketplace_shop: ' Shop Vít Rẻ ',
+    marketplace_tracking_no: 'SPXVN0123',
+    invoice_waived_reason: 'Shop cá nhân, không xuất hoá đơn',
+  }
+
+  it('NCC là sàn → ghi tên shop (đã gọt), mã vận đơn, lý do không hoá đơn', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 'shopee', is_active: true, can_order: true, is_marketplace: true } as never) // prettier-ignore
+    vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0300')
+    vi.mocked(posRepo.insert).mockResolvedValue(PO as never)
+    await posService.create(staff, { ...base, supplier_id: 'shopee' })
+    expect(vi.mocked(posRepo.insert).mock.calls.at(-1)![0]).toMatchObject({
+      marketplace_shop: 'Shop Vít Rẻ',
+      marketplace_tracking_no: 'SPXVN0123',
+      invoice_waived_reason: 'Shop cá nhân, không xuất hoá đơn',
+    })
+  })
+
+  it('NCC thường → tên shop / mã vận đơn ghi null dù client gửi', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1', is_active: true, can_order: true, is_marketplace: false } as never) // prettier-ignore
+    vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0301')
+    vi.mocked(posRepo.insert).mockResolvedValue(PO as never)
+    await posService.create(staff, { ...base, supplier_id: 's1' })
+    expect(vi.mocked(posRepo.insert).mock.calls.at(-1)![0]).toMatchObject({
+      marketplace_shop: null,
+      marketplace_tracking_no: null,
+    })
+  })
+})

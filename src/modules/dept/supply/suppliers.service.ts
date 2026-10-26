@@ -71,6 +71,7 @@ export const suppliersService = {
       status,
       is_active: status === 'active', // đồng bộ cổng chọn NCC khi tạo PO
       can_order: input.can_order ?? true,
+      is_marketplace: input.is_marketplace ?? false,
       created_by: user.id,
       updated_by: user.id,
     })
@@ -144,7 +145,7 @@ function toRow(
 ): Partial<Supplier> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(input)) {
-    if (k === 'is_active' || k === 'lead_time_days' || k === 'can_order') continue
+    if (k === 'is_active' || k === 'lead_time_days' || k === 'can_order' || k === 'is_marketplace') continue // prettier-ignore
     out[k] = nn(v as string)
   }
   if (input.lead_time_days !== undefined) out.lead_time_days = input.lead_time_days
@@ -152,6 +153,8 @@ function toRow(
   // 27/09/2026 không ghi lại ở đây, nên bật/tắt "khoá đặt hàng" ở hồ sơ NCC chưa
   // bao giờ lưu được: can_order luôn true, chỉ lock_reason đổi.
   if (input.can_order !== undefined) out.can_order = input.can_order
+  // Cùng bẫy với can_order: boolean phải ghi riêng, nn() biến nó thành null.
+  if (input.is_marketplace !== undefined) out.is_marketplace = input.is_marketplace
   return out as Partial<Supplier>
 }
 
