@@ -9,6 +9,7 @@ import {
 import { kyThangSchema } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
 import { khoangKyService } from '@/modules/dept/hr/cham-cong/khoang-ky.service'
 import { todayVn } from '@/lib/date-vn'
+import { khoangNgayTenFile, tenFileXuat } from '@/lib/ten-file-xuat'
 
 /**
  * Excel chấm công theo mẫu phần mềm cũ cho một nhóm của Bảng công:
@@ -18,7 +19,9 @@ export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
   const sp = new URL(req.url).searchParams
   const homNay = todayVn()
-  const t = kyThangSchema.safeParse(sp.get('thang') ?? (await khoangKyService.thangCua(homNay)))
+  const t = kyThangSchema.safeParse(
+    sp.get('thang') ?? (await khoangKyService.thangCua(homNay)),
+  )
   if (!t.success) throw BadRequest('Kỳ phải dạng YYYY-MM')
   const bp = sp.get('bp')?.trim()
   if (!bp) throw BadRequest('Chọn tổ / bộ phận trước khi xuất')
@@ -26,11 +29,14 @@ export const GET = handle(async (req: Request) => {
   if (loai !== 'chi-tiet' && loai !== 'tong-hop')
     throw BadRequest('loai phải là chi-tiet hoặc tong-hop')
   const d = await gioCongService.duLieuXuat(user, t.data, homNay, bp)
-  // Tên như thư mục phần mềm cũ: "Tổ Phôi … .xlsx" và "tổng hợp Tổ Phôi … .xlsx".
-  const ky = `${t.data.slice(5)}-${t.data.slice(0, 4)}`
-  const ten = `${loai === 'tong-hop' ? 'tổng hợp ' : ''}${d.nhom} kỳ ${ky}.xlsx`
+  // "Chi tiết chấm công - Cả công ty - 26.09-25.10.2026.xlsx" (user 27/10/2026: tên file phải nói
+  // rõ file gì, nhóm nào, kỳ nào — trước là "Cả công ty kỳ 10-2026.xlsx").
   return xlsxResponse(
     loai === 'chi-tiet' ? await buildChiTietExcel(d) : await buildTongHopExcel(d),
-    ten,
+    tenFileXuat(
+      loai === 'tong-hop' ? 'Tổng hợp chấm công' : 'Chi tiết chấm công',
+      d.nhom,
+      khoangNgayTenFile(d.tu, d.den),
+    ),
   )
 })

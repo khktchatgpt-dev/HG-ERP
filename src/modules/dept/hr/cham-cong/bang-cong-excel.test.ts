@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { chiTietNgay, nhanTc, tongCong } from '@/lib/cham-cong/chi-tiet-cong'
 import { THAM_SO_MAC_DINH as T } from '@/lib/cham-cong/gio-khung'
 import { tinhKyGioCong } from '@/lib/cham-cong/ky-gio-cong'
+import { NHOM_CHUA_GHEP } from '@/lib/cham-cong/chua-ghep'
 import { buildChiTietExcel, buildTongHopExcel, type BangXuat } from './bang-cong-excel'
 
 const l = (...g: string[]) => g.map((gio) => ({ gio: `${gio}:00`, may: '.201' }))
@@ -223,5 +224,35 @@ describe('chia theo tổ — một file, mỗi tổ một tờ', () => {
     expect(phoi.getCell('C8').value).toBe('Lê Văn Bảy')
     expect(phoi.getCell('C9').value).toBeNull()
     expect(String(phoi.getCell(15, 3).value)).toContain('Tổ Phôi')
+  })
+})
+
+describe('mã quẹt máy chưa có hồ sơ — nhóm cuối + ghi chú đỏ (27/10/2026)', () => {
+  it('tổng hợp "Cả công ty": có dòng người, tờ riêng, và ghi chú liệt kê mã', async () => {
+    const b = bang()
+    b.nhom = 'Cả công ty'
+    b.nguoi[1] = {
+      ...b.nguoi[1],
+      ma: '7007',
+      ten: 'nguyen cong dinh',
+      boPhan: NHOM_CHUA_GHEP,
+    }
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load((await buildTongHopExcel(b)) as unknown as ArrayBuffer)
+    expect(wb.worksheets.map((w) => w.name)).toEqual([
+      'Cả công ty',
+      'Tổ Phôi',
+      NHOM_CHUA_GHEP,
+    ])
+    const ca = wb.worksheets[0]
+    expect([ca.getCell('C9').value, ca.getCell('D9').value]).toEqual([
+      'nguyen cong dinh',
+      NHOM_CHUA_GHEP,
+    ])
+    const ghi = Array.from({ length: 9 }, (_, i) =>
+      String(ca.getCell(12 + i, 3).value),
+    ).join(' ')
+    expect(ghi).toContain('CHƯA CÓ HỒ SƠ')
+    expect(ghi).toContain('7007 nguyen cong dinh')
   })
 })

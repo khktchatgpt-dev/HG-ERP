@@ -6,6 +6,7 @@ import { gioCongService } from '@/modules/dept/hr/cham-cong/gio-cong.service'
 import { motNguoiQuerySchema } from '@/modules/dept/hr/cham-cong/cham-cong.schema'
 import { buildMotNguoiExcel } from '@/modules/dept/hr/cham-cong/mot-nguoi-excel'
 import { todayVn } from '@/lib/date-vn'
+import { khoangNgayTenFile, tenFileXuat } from '@/lib/ten-file-xuat'
 
 /** Excel tờ "Chi tiết" chấm công một người — đúng khoảng và đúng số trang đang bày. */
 export const GET = handle(async (req: Request) => {
@@ -17,6 +18,6 @@ export const GET = handle(async (req: Request) => {
   ])
   return xlsxResponse(
     await buildMotNguoiExcel({ ...mot, tinh }),
-    `cham-cong_${ma}_${tu}_${den}.xlsx`,
+    tenFileXuat('Chấm công', `${ma} ${mot.nguoi.ten}`, khoangNgayTenFile(tu, den)),
   )
 })

@@ -18,6 +18,7 @@ import {
   type CongNgay,
   type NhomTc,
 } from '@/lib/cham-cong/chi-tiet-cong'
+import { dongChuaGhep, nhanSuChuaGhep } from '@/lib/cham-cong/chua-ghep'
 import { tenMay } from '@/lib/cham-cong/mot-nguoi'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import type { BangXuat } from './bang-cong-excel'
@@ -45,6 +46,12 @@ export type GioCong = {
   den: string
   homNay: string
   nguoi: NguoiGio[]
+  /**
+   * Mã quẹt máy trong kỳ mà CHƯA ghép nhân viên nào — tính như người thường (tên như máy ghi,
+   * tổ `NHOM_CHUA_GHEP`) để file xuất không thiếu ai (27/10/2026). Không vào bản chốt, không
+   * vào lưới Bảng công; chỉ file Chi tiết / Tổng hợp "Cả công ty" nối họ vào cuối.
+   */
+  chuaGhep: NguoiGio[]
   /** Mọi bộ phận có người, kèm cách tính. */
   boPhan: { ten: string; so: number; cachTinh: CachTinh }[]
   /** `heSo`: % ngày thường của khung trong bản cách tính (null = ô trống) — ô giờ in công quy đổi ca đêm. */
@@ -161,6 +168,29 @@ export const gioCongService = {
             t.phutMotCong,
           )
         : song
+    // Mã máy chưa có hồ sơ: tính riêng, luôn từ lượt sống (không có trong bản chốt).
+    const nsChuaGhep = nhanSuChuaGhep(
+      du.dong,
+      [...du.nhanSu, ...du.daNghi].map((n) => n.ma),
+    )
+    const chuaGhep = nsChuaGhep.length
+      ? tinhKyGioCong({
+          ngayDoDang: ngayLay < homNay ? ngayLay : homNay,
+          tu: k.tu,
+          den: k.den,
+          nhanSu: nsChuaGhep,
+          dong: dongChuaGhep(
+            du.dong,
+            nsChuaGhep.map((n) => n.ma),
+          ),
+          dieuChinh: [],
+          trua: {},
+          cachTinh,
+          ngayLe: le.map((x) => x.holiday_date),
+          thamSo: t,
+        })
+      : []
+    const maChuaGhep = new Set(nsChuaGhep.map((n) => n.ma))
     const dem = new Map<string, number>()
     for (const n of [...du.nhanSu, ...daNghi])
       dem.set(n.boPhan ?? CHUA_CO, (dem.get(n.boPhan ?? CHUA_CO) ?? 0) + 1)
@@ -176,6 +206,7 @@ export const gioCongService = {
       den: k.den,
       homNay,
       nguoi: nguoi.map((n) => ({ ...n, boPhan: n.boPhan ?? CHUA_CO })),
+      chuaGhep,
       boPhan,
       khung: t.khung.map((x) => ({
         ma: x.ma,
@@ -196,7 +227,12 @@ export const gioCongService = {
       dieuChinh: du.dieuChinh.filter((d) => d.ngay >= k.tu && d.ngay <= k.den),
       luotMay: Object.fromEntries(
         du.dong
-          .filter((r) => r.daGhep && r.ngay >= k.tu && r.ngay <= congNgay(k.den, 1))
+          .filter(
+            (r) =>
+              (r.daGhep || maChuaGhep.has(r.ma)) &&
+              r.ngay >= k.tu &&
+              r.ngay <= congNgay(k.den, 1),
+          )
           .map((r) => [
             `${r.ma}|${r.ngay}`,
             r.luot.map((l) => ({ gio: l.gio, may: l.may })),
@@ -278,7 +314,8 @@ export const gioCongService = {
     // Cùng thứ tự Bảng công: tổ đông người trước, "(chưa có bộ phận)" cuối — file chia
     // mỗi tổ một tờ thì tờ theo đúng thứ tự này.
     const thuTu = new Map(b.boPhan.map((x, i) => [x.ten, i]))
-    const chon = b.nguoi
+    // "Cả công ty" nối thêm mã quẹt máy chưa có hồ sơ (nhóm cuối) — file phải đủ người (27/10/2026).
+    const chon = [...b.nguoi, ...(bp === 'all' ? b.chuaGhep : [])]
       .filter((n) =>
         bp === 'all' ? true : bp === 'vp' ? vp.has(n.boPhan ?? '') : n.boPhan === bp,
       )

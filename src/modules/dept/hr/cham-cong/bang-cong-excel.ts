@@ -6,6 +6,7 @@ import {
   type TongCong,
 } from '@/lib/cham-cong/chi-tiet-cong'
 import { LOAI_NGHI, KY_NGHI, TEN_NGHI } from '@/lib/cham-cong/dieu-chinh'
+import { NHOM_CHUA_GHEP } from '@/lib/cham-cong/chua-ghep'
 import type { NhomTc } from '@/lib/cham-cong/chi-tiet-cong'
 
 /**
@@ -17,7 +18,9 @@ import type { NhomTc } from '@/lib/cham-cong/chi-tiet-cong'
  *   - TỔNG HỢP: tờ "Xuất tổng" — đơn vị, kỳ, mỗi người một dòng, ghi chú ký hiệu.
  * Khác mẫu cũ có chủ đích: cột "Q.Đêm" (ERP không tách ca đêm) thay bằng "Lễ"; ký hiệu
  * nghỉ theo ERP (P/Ô/R/CT/KL); thêm "Thiếu lượt" vì ngày 1 lượt không được tính âm thầm.
- * Số lấy từ Bảng công (`gioCongService.bang` + `chiTietNgay` + `tongCong`).
+ * Số lấy từ Bảng công (`gioCongService.bang` + `chiTietNgay` + `tongCong`). File "Cả công ty"
+ * nối thêm mã quẹt máy chưa có hồ sơ ở nhóm cuối (`NHOM_CHUA_GHEP`, 27/10/2026) + một dòng
+ * ghi chú đỏ liệt kê họ — file phải đủ người, hồ sơ sai thì Nhân sự sửa sau.
  */
 
 export type NguoiXuat = {
@@ -460,6 +463,7 @@ function veTongHop(
   ws.getCell(r, 2).value = 'Ghi chú:'
   ws.getCell(r, 2).font = ARIAL({ bold: true })
   const thieu = ds.filter((n) => n.tong.thieu > 0)
+  const chuaGhep = ds.filter((n) => n.boPhan === NHOM_CHUA_GHEP)
   const ghi = [
     'Thường: Ngày thường, CTuần: Cuối tuần, Q.Đêm: Ca làm việc có qua đêm',
     `TC1: Tăng ca ${b.nhanTc.tc1}, TC2: Tăng ca ${b.nhanTc.tc2}, TC3: Tăng ca ${b.nhanTc.tc3}`,
@@ -469,11 +473,18 @@ function veTongHop(
     thieu.length
       ? `Còn thiếu lượt chưa bổ sung (0 công những ngày đó): ${thieu.map((n) => `${maSo(n.ma)} ${n.ten} ${n.tong.thieu} ngày`).join('; ')}`
       : 'Không còn ngày thiếu lượt chưa bổ sung.',
+    ...(chuaGhep.length
+      ? [
+          `Mã quẹt máy CHƯA CÓ HỒ SƠ nhân viên (tên như máy ghi, chưa vào bản chốt — ghép ở Mã trên máy & ca): ${chuaGhep.map((n) => `${n.ma} ${n.ten}`).join('; ')}`,
+        ]
+      : []),
   ]
   ghi.forEach((g, i) => {
     const c = ws.getCell(r + 1 + i, 3)
     c.value = g
-    c.font = ARIAL(i >= 5 && thieu.length ? { color: { argb: 'FFB0241A' } } : {})
+    c.font = ARIAL(
+      (i === 5 && thieu.length) || i === 6 ? { color: { argb: 'FFB0241A' } } : {},
+    )
   })
 
   RONG_TH.forEach((w, i) => (ws.getColumn(i + 1).width = w))
