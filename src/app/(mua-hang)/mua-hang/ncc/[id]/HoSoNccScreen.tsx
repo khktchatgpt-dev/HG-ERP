@@ -307,7 +307,11 @@ function SuaHoSo({
       <div className="k-sec">Thanh toán &amp; giao hàng</div>
       {/* Cờ SÀN (0279, bản vẽ khung 4) — một hồ sơ mỗi sàn, NCC thật là shop ghi trên đơn. */}
       <div className="mb-2 border border-[var(--hair)] bg-[var(--surface-raised)] px-2.5 py-2">
-        <Tick checked={san} onChange={setSan} label="Đây là sàn thương mại điện tử" />
+        {/* Tick chỉ có nhãn cho trình đọc màn hình — chữ thấy được bọc ngoài bằng <label>. */}
+        <label className="flex cursor-pointer items-center gap-2 font-semibold">
+          <Tick checked={san} onChange={setSan} label="Đây là sàn thương mại điện tử" />
+          Đây là sàn thương mại điện tử
+        </label>
         <p className="text-k-sm mt-0.5 pl-6 text-[var(--ink-3)]">
           Shopee, Lazada, TikTok Shop… Đơn của hồ sơ này hỏi thêm tên shop khi soạn, và
           đặt bằng nút &ldquo;Đặt trên sàn&rdquo; (ghi mã đơn sàn + tiền trả trước) thay
