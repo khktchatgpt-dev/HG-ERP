@@ -8,6 +8,8 @@ export type DotRow = {
   /** Nhóm của đợt theo nhóm; đợt theo khu / danh sách thì rỗng. */
   nhom: string[]
   scope_kind: 'bin' | 'group' | 'list'
+  /** Đợt sinh từ màn Cập nhật số thực tế (27/10/2026), không phải kiểm kê định kỳ. */
+  nhanh: boolean
   scope_count: number
   nguoi_dem: string | null
   freeze_at: string | null

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MA_LY_DO_CAP_NHAT } from '@/lib/kho-cap-nhat-ton'
 
 /**
  * ĐỢT KIỂM KÊ (0199) — hàng rào ở biên API.
@@ -78,3 +79,31 @@ export const stocktakeListQuerySchema = z.object({
 export const stocktakeAddLineSchema = z.object({
   material_id: z.string().uuid('Mã vật tư không hợp lệ'),
 })
+
+/**
+ * CẬP NHẬT SỐ THỰC TẾ (B1 "Kho cho người mới", 27/10/2026) — vài mã một lượt.
+ * Số đếm bắt buộc có và không âm: bỏ trống ở màn là "chưa gõ", không phải 0.
+ * "Khác" bắt ghi chú (dòng hoặc chung) — service kiểm, vì cần nhìn cả hai.
+ */
+export const capNhatNhanhSchema = z
+  .object({
+    ly_do_chung: z.enum(MA_LY_DO_CAP_NHAT),
+    ghi_chu: z.string().trim().max(300).optional().nullable(),
+    lines: z
+      .array(
+        z.object({
+          material_id: z.string().uuid('Mã vật tư không hợp lệ'),
+          counted_qty: z.coerce.number().finite().min(0, 'Số thực tế không âm được'),
+          ly_do: z.enum(MA_LY_DO_CAP_NHAT).optional().nullable(),
+          ghi_chu: z.string().trim().max(300).optional().nullable(),
+          /** Dòng giảm hàng của lệnh mà tổ đã lấy → ghi xuất bù cho lệnh này. */
+          xuat_bu_lsx_id: z.string().uuid().optional().nullable(),
+        }),
+      )
+      .min(1, 'Chưa có mã nào để cập nhật')
+      .max(200, 'Quá nhiều mã một lượt — đếm cả nhóm thì dùng Kiểm kê định kỳ'),
+  })
+  .refine((d) => new Set(d.lines.map((l) => l.material_id)).size === d.lines.length, {
+    message: 'Một mã chỉ một dòng',
+    path: ['lines'],
+  })

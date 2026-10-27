@@ -363,6 +363,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
           // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
           { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
+          // B1 "Kho cho người mới" (27/10/2026): gõ số đếm được của vài mã, máy
+          // ghi phần thừa/thiếu thành một đợt kiểm kê — trưởng kho đổi tồn ngay.
+          {
+            href: '/warehouse/cap-nhat-ton',
+            label: 'Cập nhật số thực tế',
+            icon: 'notebook-pen',
+          },
           // 0236 (13/10/2026): "Giấy đề nghị mua vật tư" — Kho lập thay tờ giấy
           // chụp gửi Zalo; lãnh đạo duyệt, Cung ứng lập đơn mua từ phiếu.
           { href: '/warehouse/de-nghi', label: 'Đề nghị mua', icon: 'clipboard-list' },

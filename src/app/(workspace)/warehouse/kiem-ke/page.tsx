@@ -38,6 +38,7 @@ export default async function KiemKePage({
           ? ((t.scope_ref.groups as string[] | undefined) ?? [])
           : [],
       scope_kind: t.scope_kind,
+      nhanh: t.scope_kind === 'list' && t.scope_ref.nhanh === true,
       scope_count: t.scope_count,
       nguoi_dem: t.assigned_to_name,
       freeze_at: t.freeze_at,
