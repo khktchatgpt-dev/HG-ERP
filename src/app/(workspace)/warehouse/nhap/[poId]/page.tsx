@@ -39,7 +39,7 @@ export default async function Page({
           tiep={
             <span style={{ display: 'flex', gap: 8 }}>
               <Link href="/warehouse/nhap" className="kh-btn">
-                Về Hàng về
+                Về danh sách nhận hàng
               </Link>
               {/* Hộp "Hàng của đơn" trong Kho — NV Kho không vào được khu Mua hàng. */}
               <Link href={`/warehouse/nhap?don=${r.po.id}`} className="kh-btn p">

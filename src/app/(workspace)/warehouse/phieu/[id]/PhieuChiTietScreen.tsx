@@ -318,7 +318,7 @@ export function PhieuChiTietScreen({
   return (
     <KhoKhung label={`${LOAI[doc.kind]} ${doc.code}`}>
       <DauTrang
-        crumb="Kho › Sổ phiếu"
+        crumb="Kho › Phiếu đã ghi"
         title={
           <>
             <span className={`kh-sq ${MAU_LOAI[doc.kind]}`} aria-hidden />
@@ -341,7 +341,7 @@ export function PhieuChiTietScreen({
                 In phiếu
               </ApNut>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Sổ phiếu
+                Phiếu đã ghi
               </ApNut>
             </ApNhom>
           </>

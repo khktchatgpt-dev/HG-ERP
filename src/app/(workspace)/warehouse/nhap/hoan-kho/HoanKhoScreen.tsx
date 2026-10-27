@@ -362,7 +362,7 @@ export function HoanKhoScreen({
   return (
     <KhoKhung label="Hoàn kho từ sản xuất" onKeyDown={phimGhi}>
       <DauTrang
-        crumb="Kho › Hàng về"
+        crumb="Kho › Nhận hàng"
         title={
           <>
             Hoàn kho từ sản xuất

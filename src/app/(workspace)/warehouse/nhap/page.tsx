@@ -8,7 +8,7 @@ import { loadWatchPos, todayIso } from '@/modules/dept/supply/watch-pos'
 import { HangVeScreen } from './HangVeScreen'
 import { taiHangCuaDon } from './tai-hang-cua-don'
 
-export const metadata = { title: 'Kho · Hàng về' }
+export const metadata = { title: 'Kho · Nhận hàng' }
 export const dynamic = 'force-dynamic'
 
 /**

@@ -8,7 +8,7 @@ import { laMaLyDo, suyMaTuLichSu } from '@/lib/kho-ma-ly-do'
 import { SoPhieuScreen } from './SoPhieuScreen'
 import { RO_PHIEU, type RoPhieu } from './ro-phieu'
 
-export const metadata = { title: 'Kho · Sổ phiếu' }
+export const metadata = { title: 'Kho · Phiếu đã ghi' }
 export const dynamic = 'force-dynamic'
 
 const PAGE_SIZE = 50

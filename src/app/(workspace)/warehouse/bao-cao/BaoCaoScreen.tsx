@@ -144,7 +144,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   return (
     <KhoKhung label="Báo cáo nhập xuất tồn">
       <DauTrang
-        title="Nhập–Xuất–Tồn"
+        title="Báo cáo tháng"
         ctx={
           dangTinh
             ? 'Đang tính lại kỳ…'
@@ -167,7 +167,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
             </ApNhom>
             <ApNhom>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Sổ phiếu
+                Phiếu đã ghi
               </ApNut>
             </ApNhom>
           </>

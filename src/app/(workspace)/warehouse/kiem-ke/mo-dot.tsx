@@ -117,7 +117,7 @@ export function MoDotHop({
             </Link>
             {' · '}
             <Link href="/warehouse/xuat" className="kh-lnk">
-              Sang Xuất kho
+              Sang Xuất hàng
             </Link>
           </span>
         </div>

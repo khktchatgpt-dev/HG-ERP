@@ -216,9 +216,9 @@ export function SoPhieuScreen({
   )
 
   return (
-    <KhoKhung label="Sổ phiếu">
+    <KhoKhung label="Phiếu đã ghi">
       <DauTrang
-        title="Sổ phiếu"
+        title="Phiếu đã ghi"
         ctx={
           <>
             <b>{fmt(dem.all)}</b> phiếu · sổ chỉ cộng thêm, sai thì lập phiếu đảo
@@ -257,7 +257,7 @@ export function SoPhieuScreen({
                   icon={<ArrowUpFromLine size={15} aria-hidden />}
                   href="/warehouse/xuat"
                 >
-                  Xuất kho
+                  Xuất hàng
                 </ApNut>
               </ApNhom>
             )}

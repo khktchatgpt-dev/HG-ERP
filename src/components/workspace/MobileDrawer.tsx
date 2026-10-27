@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { NavSection } from '@/workspaces/workspaces.config'
 import { NavLink } from './NavLink'
+import { useNhomGap } from './nav-gap'
 
 /**
  * Điều hướng cho mobile: nút hamburger (chỉ hiện < lg) + drawer trượt từ trái.
@@ -28,6 +29,7 @@ export function MobileDrawer({
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const { mo, lat, dangO, tongSo } = useNhomGap()
 
   // Đóng drawer khi điều hướng sang trang khác.
   useEffect(() => {
@@ -110,27 +112,48 @@ export function MobileDrawer({
               <div className="flex flex-col gap-1">
                 {sections.map((sec) => (
                   <div key={sec.heading} className="mb-2">
-                    <div className="text-muted-foreground/70 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
-                      {sec.heading}
-                    </div>
-                    {sec.items.map((i) => (
-                      <NavLink
-                        key={i.href}
-                        href={i.href}
-                        label={i.label}
-                        icon={i.icon}
-                        accentShadow={accentShadow}
-                        accentSoftBg={accentSoftBg}
-                        accentText={accentText}
-                        exact={
-                          i.exact ||
-                          i.href === workspace.route ||
-                          i.href === `${workspace.route}/` ||
-                          i.href === '/'
-                        }
-                        badge={i.badge}
-                      />
-                    ))}
+                    {sec.gap ? (
+                      <button
+                        type="button"
+                        onClick={() => lat(sec)}
+                        aria-expanded={mo(sec)}
+                        aria-disabled={dangO(sec) || undefined}
+                        className="text-muted-foreground/70 flex w-full items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase"
+                      >
+                        <span aria-hidden className="w-2 text-[9px]">
+                          {mo(sec) ? '▾' : '▸'}
+                        </span>
+                        {sec.heading}
+                        {!mo(sec) && tongSo(sec) > 0 && (
+                          <span className="bg-muted text-foreground ml-auto rounded-[3px] px-1 font-mono text-[10px] tracking-normal">
+                            {tongSo(sec)}
+                          </span>
+                        )}
+                      </button>
+                    ) : (
+                      <div className="text-muted-foreground/70 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
+                        {sec.heading}
+                      </div>
+                    )}
+                    {mo(sec) &&
+                      sec.items.map((i) => (
+                        <NavLink
+                          key={i.href}
+                          href={i.href}
+                          label={i.label}
+                          icon={i.icon}
+                          accentShadow={accentShadow}
+                          accentSoftBg={accentSoftBg}
+                          accentText={accentText}
+                          exact={
+                            i.exact ||
+                            i.href === workspace.route ||
+                            i.href === `${workspace.route}/` ||
+                            i.href === '/'
+                          }
+                          badge={i.badge}
+                        />
+                      ))}
                   </div>
                 ))}
               </div>

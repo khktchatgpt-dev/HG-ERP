@@ -1,59 +1,99 @@
 import { describe, expect, it } from 'vitest'
-import { dungBanLamViec, nhanHen, type SoBan } from './kho-ban-lam-viec'
+import { dungDangDo, dungHomNay, nhanHen, type SoBan } from './kho-ban-lam-viec'
 
+/** Số đo DB thật 27/10/2026. */
 const so: SoBan = {
-  hangVe: { overdue: 5, today: 2, week: 9 },
+  hangVe: { tong: 35, overdue: 16, today: 0, week: 9 },
   thieuNcc: { tong: 95, ganDay: 37 },
   lenh: {
-    con: 12,
-    conMa: 205,
+    con: 14,
+    conMa: 234,
     han: 2,
-    hanTen: ['01/26-27 YOTRIO', '01/26-27 JAWOLL', 'X'],
-    xong: 0,
+    hanTen: ['01/26-27 - YOTRIO', '01/26-27 - JAWOLL', 'X'],
+    xong: 3,
   },
-  ton: { low: 5, short: 73 },
-  kiemKe: { lam: 0, cho: 0 },
+  ton: { has: 240, low: 5, short: 73 },
+  kiemKe: { lam: 0, cho: 1 },
   deNghi: { viec: 0 },
 }
 
 const tim = (k: string) =>
-  dungBanLamViec(so)
-    .flatMap((g) => g.o)
+  dungHomNay(so)
+    .flatMap((g) => g.so)
     .find((o) => o.key === k)!
 
-describe('dungBanLamViec', () => {
-  it('3 nhóm, 11 ô, đúng số đo 19/10', () => {
-    const g = dungBanLamViec(so)
+describe('dungHomNay', () => {
+  it('đúng 4 việc theo bản vẽ A, mỗi việc tối đa một nút', () => {
+    const g = dungHomNay(so)
     expect(g.map((x) => x.ten)).toEqual([
-      'Nhận hàng',
-      'Xuất cho lệnh',
-      'Tồn · kiểm kê · đề nghị',
+      'Nhận hàng NCC',
+      'Xuất cho tổ',
+      'Tra tồn',
+      'Cập nhật số thực tế',
     ])
-    expect(g.flatMap((x) => x.o)).toHaveLength(11)
-    expect(tim('qua-hen')).toMatchObject({
-      n: 5,
-      tone: 'stop',
-      href: '/warehouse/nhap?hen=overdue',
+    expect(g.map((x) => x.nut?.href ?? null)).toEqual([
+      '/warehouse/nhap',
+      '/warehouse/xuat',
+      null,
+      '/warehouse/cap-nhat-ton',
+    ])
+    expect(g[0].phu).toBe('35 đơn đang về')
+    expect(g[2].phu).toBe('240 mã đang có hàng')
+  })
+
+  it('số bấm vào mở đúng rổ của màn đích', () => {
+    expect(tim('qua-hen')).toMatchObject({ n: 16, tone: 'stop', href: '/warehouse/nhap?hen=overdue' }) // prettier-ignore
+    expect(tim('lenh-con')).toMatchObject({
+      n: 14,
+      href: '/warehouse/ton?xem=lenh&ro=con',
     })
-    expect(tim('lenh-con')).toMatchObject({ n: 12, s: '205 mã · Tồn kho › Theo lệnh' })
+    expect(tim('kk-cho')).toMatchObject({ n: 1, href: '/warehouse/kiem-ke?ro=cho' })
   })
 
-  it('ô 0 vẫn có, tông nhạt — không tô đỏ', () => {
-    expect(tim('lenh-xong')).toMatchObject({ n: 0, tone: 'z' })
-    expect(tim('kiem-ke')).toMatchObject({ n: 0, tone: 'z' })
+  it('số 0 vẫn hiện, tông nhạt — không tô đỏ', () => {
+    expect(tim('hom-nay')).toMatchObject({ n: 0, tone: 'z' })
+    expect(tim('kk-lam')).toMatchObject({ n: 0, tone: 'z' })
   })
 
-  it('thiếu số NCC đếm cả sổ như tab Sổ phiếu; 14 ngày ở dòng phụ', () => {
-    expect(tim('thieu-ncc')).toMatchObject({ n: 95, s: '37 trong 14 ngày · Sổ phiếu' })
+  it('câu nhắc: đơn quá hẹn có thể đã về; lệnh gấp nêu tối đa 2 lệnh', () => {
+    const g = dungHomNay(so)
+    expect(g[0].nhac).toBe('16 đơn quá hẹn có thể đã về mà chưa ai ghi phiếu')
+    expect(g[1].nhac).toBe('Gấp: 01/26-27 - YOTRIO · 01/26-27 - JAWOLL')
+    const yen = dungHomNay({ ...so, hangVe: { ...so.hangVe, overdue: 0 }, lenh: { ...so.lenh, hanTen: [] } }) // prettier-ignore
+    expect([yen[0].nhac, yen[1].nhac]).toEqual([null, null])
+  })
+})
+
+describe('dungDangDo', () => {
+  const base = {
+    laTruong: true,
+    choDuyet: [{ id: 'd9', code: 'KK-2026-0009', nguoi: 'Hà Nguyễn Nữ', so_ma: 3 }],
+    dotLam: [{ id: 'd7', code: 'KK-2026-0007', trang_thai: 'đang đếm' }],
+    deNghiNhap: 2,
+    thieuNccGanDay: 37,
+  }
+
+  it('trưởng kho thấy "chờ bạn duyệt"; người khác thấy "chờ trưởng kho duyệt"', () => {
+    expect(dungDangDo(base)[0]).toEqual({
+      key: 'cho-d9',
+      chu: 'KK-2026-0009 · Hà Nguyễn Nữ cập nhật 3 mã — chờ bạn duyệt',
+      href: '/warehouse/kiem-ke/d9',
+    })
+    expect(dungDangDo({ ...base, laTruong: false })[0].chu).toBe(
+      'KK-2026-0009 · cập nhật 3 mã — chờ trưởng kho duyệt',
+    )
   })
 
-  it('rổ hạn xuất gộp quá hạn + ≤ 7 ngày (đúng một rổ của Theo lệnh), nêu tối đa 2 lệnh', () => {
-    expect(tim('lenh-han')).toMatchObject({ n: 2, s: '01/26-27 YOTRIO · 01/26-27 JAWOLL', href: '/warehouse/ton?xem=lenh&ro=han' }) // prettier-ignore
-  })
-
-  it('kiểm kê có đợt chờ duyệt thì dẫn thẳng rổ Chờ duyệt', () => {
-    const g = dungBanLamViec({ ...so, kiemKe: { lam: 1, cho: 2 } })
-    expect(g[2].o.find((o) => o.key === 'kiem-ke')).toMatchObject({ n: 3, href: '/warehouse/kiem-ke?ro=cho' }) // prettier-ignore
+  it('đủ 4 loại việc dở, loại nào 0 thì không hiện', () => {
+    expect(dungDangDo(base).map((x) => x.href)).toEqual([
+      '/warehouse/kiem-ke/d9',
+      '/warehouse/kiem-ke/d7',
+      '/warehouse/de-nghi',
+      '/warehouse/phieu?ro=thieu_ncc',
+    ])
+    expect(
+      dungDangDo({ ...base, choDuyet: [], dotLam: [], deNghiNhap: 0, thieuNccGanDay: 0 }),
+    ).toEqual([])
   })
 })
 

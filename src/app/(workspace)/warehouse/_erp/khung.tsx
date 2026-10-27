@@ -378,7 +378,7 @@ export function DaGhiSo({
         In phiếu
       </Link>
       <Link href={soPhieuHref} className="kh-btn">
-        Xem ở sổ phiếu
+        Xem ở Phiếu đã ghi
       </Link>
       <button type="button" className="kh-btn dong" onClick={onClose}>
         Đóng

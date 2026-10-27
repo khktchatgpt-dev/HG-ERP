@@ -42,6 +42,7 @@ export async function WorkspaceSidebar({ workspace }: { workspace: WorkspaceConf
       switchable={switchable}
       userName={user.name ?? user.email}
       userSub={`${workspace.short} · ${user.title ?? user.role}`}
+      moChuSan={!!workspace.menuChoNguoiMoi}
     />
   )
 }

@@ -20,7 +20,7 @@ export const DUONG: Record<
     home: '/warehouse/nhap',
     crumbs: [
       { label: 'Kho', href: '/warehouse/nhap' },
-      { label: 'Hàng về', href: '/warehouse/nhap' },
+      { label: 'Nhận hàng', href: '/warehouse/nhap' },
     ],
     phieu: (id) => `/warehouse/nhap/${id}`,
     wrap: 'theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col',

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Settings } from 'lucide-react'
 import type { NavSection, WorkspaceId } from '@/workspaces/workspaces.config'
 import { NavRailLink } from './NavRailLink'
+import { useNhomGap } from './nav-gap'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 const STORAGE_KEY = 'hg-sidebar-collapsed'
@@ -40,6 +41,7 @@ export function DesktopSidebar({
   switchable,
   userName,
   userSub,
+  moChuSan = false,
 }: {
   workspaceId: WorkspaceId
   route: string
@@ -47,15 +49,20 @@ export function DesktopSidebar({
   switchable: { id: WorkspaceId; readonly: boolean }[]
   userName: string
   userSub: string
+  /** Khu cho người mới (`menuChoNguoiMoi`): chưa chọn thì mở chữ sẵn. */
+  moChuSan?: boolean
 }) {
   // Mặc định THU GỌN. Người chưa thuộc vị trí bấm » một lần là xong, còn
-  // người dùng hằng ngày (đa số) khỏi phải trả 240px mỗi lần mở app.
-  const [compact, setCompact] = useState(true)
+  // người dùng hằng ngày (đa số) khỏi phải trả 240px mỗi lần mở app. Khu cho
+  // người mới (Kho, 27/10/2026) thì ngược lại: chưa chọn là MỞ CHỮ.
+  const [compact, setCompact] = useState(!moChuSan)
+  const { mo, lat, dangO, tongSo } = useNhomGap()
 
   useEffect(() => {
+    const v = localStorage.getItem(STORAGE_KEY)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCompact(localStorage.getItem(STORAGE_KEY) !== '0')
-  }, [])
+    setCompact(v == null ? !moChuSan : v !== '0')
+  }, [moChuSan])
 
   function toggle() {
     setCompact((c) => {
@@ -100,27 +107,52 @@ export function DesktopSidebar({
               si > 0 && (
                 <div className="border-muted-foreground/25 mx-1.5 my-2 border-t" />
               )
+            ) : sec.gap ? (
+              // Nhóm gập sẵn: tên nhóm là nút. Gập thì số đếm của cả nhóm hiện
+              // cạnh tên — số không được biến mất chỉ vì nhóm đang gập.
+              <button
+                type="button"
+                onClick={() => lat(sec)}
+                aria-expanded={mo(sec)}
+                aria-disabled={dangO(sec) || undefined}
+                title={dangO(sec) ? 'Đang ở trang trong nhóm này' : undefined}
+                className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 px-2.5 pt-1.5 pb-1 text-[10px] font-semibold tracking-[.08em] uppercase"
+              >
+                <span aria-hidden className="w-2 text-[9px]">
+                  {mo(sec) ? '▾' : '▸'}
+                </span>
+                {sec.heading}
+                {!mo(sec) && tongSo(sec) > 0 && (
+                  <span className="bg-muted text-foreground ml-auto rounded-[3px] px-1 font-mono text-[10px] tracking-normal">
+                    {tongSo(sec)}
+                  </span>
+                )}
+              </button>
             ) : (
               <div className="text-muted-foreground px-2.5 pt-1.5 pb-1 text-[10px] font-semibold tracking-[.08em] uppercase">
                 {sec.heading}
               </div>
             )}
-            {sec.items.map((i) => (
-              <NavRailLink
-                key={i.href}
-                href={i.href}
-                label={i.label}
-                icon={i.icon}
-                compact={compact}
-                exact={
-                  i.exact || i.href === route || i.href === `${route}/` || i.href === '/'
-                }
-                badge={i.badge}
-                /* Đỏ chỉ cho việc CHẶN. "Chờ tôi xử lý" là hàng đợi có người
+            {(compact || mo(sec)) &&
+              sec.items.map((i) => (
+                <NavRailLink
+                  key={i.href}
+                  href={i.href}
+                  label={i.label}
+                  icon={i.icon}
+                  compact={compact}
+                  exact={
+                    i.exact ||
+                    i.href === route ||
+                    i.href === `${route}/` ||
+                    i.href === '/'
+                  }
+                  badge={i.badge}
+                  /* Đỏ chỉ cho việc CHẶN. "Chờ tôi xử lý" là hàng đợi có người
                    đang đợi mình; các mục còn lại chỉ là danh sách. */
-                urgent={/chờ|duyệt|ký|xử lý/i.test(i.label)}
-              />
-            ))}
+                  urgent={/chờ|duyệt|ký|xử lý/i.test(i.label)}
+                />
+              ))}
           </div>
         ))}
       </nav>

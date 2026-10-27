@@ -1,0 +1,198 @@
+/*
+ * HÔM NAY (B2 "Kho cho người mới") — phần riêng của màn, trên khung `./_erp/kho.css`.
+ * Bản vẽ A1 duyệt 27/10/2026: https://claude.ai/artifact/QpEkCkMHdMhFhF3WYhEF7z
+ *
+ * Bốn khối PHẲNG, lưới 2×2 ngăn bằng vạch tóc — không thẻ nổi, không bóng, không
+ * bo góc (nguyên tắc 4). Màu số theo tông việc; số 0 chữ nhạt.
+ */
+.kh.kh .hn-cuon {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Dải "Lần đầu dùng?" */
+.kh.kh .hn-huong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--kh-line);
+  background: var(--kh-act-wash);
+}
+.kh.kh .hn-huong ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  padding-left: 18px;
+}
+.kh.kh .hn-huong a {
+  color: var(--kh-act);
+  font-weight: 600;
+}
+.kh.kh .hn-huong button {
+  margin-left: auto;
+}
+
+/* Bốn khối việc */
+.kh.kh .hn-viec {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--kh-line);
+}
+.kh.kh .hn-khoi {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--kh-hair);
+}
+.kh.kh .hn-khoi:nth-child(odd) {
+  border-right: 1px solid var(--kh-hair);
+}
+.kh.kh .hn-khoi h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--kh-ink);
+}
+.kh.kh .hn-khoi h2 span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--kh-ink3);
+}
+.kh.kh .hn-so {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+.kh.kh .hn-so a {
+  display: grid;
+  gap: 1px;
+  min-width: 112px;
+  padding: 4px 10px 6px 0;
+  color: var(--kh-ink);
+  text-decoration: none;
+}
+.kh.kh .hn-so a:hover .t {
+  color: var(--kh-act);
+  text-decoration: underline;
+}
+.kh.kh .hn-so a:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: 2px;
+}
+.kh.kh .hn-so .n {
+  font-family: var(--kh-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.kh.kh .hn-so .n.stop {
+  color: var(--kh-stop);
+}
+.kh.kh .hn-so .n.warn {
+  color: var(--kh-warn);
+}
+.kh.kh .hn-so .n.z {
+  color: var(--kh-empty);
+  font-weight: 400;
+}
+.kh.kh .hn-so .t {
+  font-size: 12px;
+  color: var(--kh-ink3);
+}
+
+/* Ô tra tồn */
+.kh.kh .hn-tim {
+  display: flex;
+  gap: 8px;
+  max-width: 460px;
+}
+.kh.kh .hn-tim input {
+  flex: 1;
+  height: 34px;
+  font-size: 14px;
+}
+
+/* Tối đa 3 dòng gấp dưới khối Nhận / Xuất */
+.kh.kh .hn-gap {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--kh-hair);
+}
+.kh.kh .hn-gap li {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) auto 64px;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--kh-hair);
+  font-size: 12.5px;
+}
+.kh.kh .hn-gap .ten {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--kh-ink2);
+}
+.kh.kh .hn-gap .kh-lnk {
+  justify-self: end;
+}
+
+.kh.kh .hn-cuoi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: auto;
+}
+.kh.kh .hn-cuoi .kh-btn {
+  height: 30px;
+  border: 1px solid var(--kh-line);
+}
+.kh.kh .hn-mo-ta {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--kh-ink3);
+  font-size: 12.5px;
+}
+
+/* Đang dở */
+.kh.kh .hn-do {
+  padding: 12px 16px 16px;
+}
+.kh.kh .hn-do h2 {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+}
+.kh.kh .hn-do ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+.kh.kh .hn-do p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .kh.kh .hn-viec {
+    grid-template-columns: 1fr;
+  }
+  .kh.kh .hn-khoi:nth-child(odd) {
+    border-right: 0;
+  }
+}

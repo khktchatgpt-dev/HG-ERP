@@ -118,7 +118,7 @@ export function DoiChieu({
         </label>
         <span className="sp kh-mut">
           Chênh = số đếm − sổ lúc chốt · tiền = chênh × đơn giá bình quân kỳ (cùng hàm Báo
-          cáo Nhập–Xuất–Tồn)
+          cáo tháng)
         </span>
       </div>
 
@@ -346,7 +346,7 @@ export function HopDuyet({
         </p>
       )}
       <p className="kh-mut" style={{ margin: 0 }}>
-        Duyệt rồi mà sai: đảo phiếu KK ở Sổ phiếu, không huỷ đợt.
+        Duyệt rồi mà sai: đảo phiếu KK ở Phiếu đã ghi, không huỷ đợt.
       </p>
       {loi && (
         <span className="kh-stop" role="alert">

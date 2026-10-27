@@ -272,9 +272,9 @@ export function XuatScreen({
   const trong = rows.length === 0 && !head.to && !head.lsx_id
 
   return (
-    <KhoKhung label="Xuất kho" onKeyDown={phimGhi}>
+    <KhoKhung label="Xuất hàng" onKeyDown={phimGhi}>
       <DauTrang
-        title="Xuất kho"
+        title="Xuất hàng"
         ctx={`${tieuDe} · số PXK cấp khi ghi sổ · người lập ${nguoiLap}`}
         actions={
           <>
@@ -298,7 +298,7 @@ export function XuatScreen({
                 icon={<BookOpen size={15} aria-hidden />}
                 href="/warehouse/phieu?ro=issue"
               >
-                Sổ phiếu xuất
+                Phiếu xuất đã ghi
               </ApNut>
             </ApNhom>
           </>
