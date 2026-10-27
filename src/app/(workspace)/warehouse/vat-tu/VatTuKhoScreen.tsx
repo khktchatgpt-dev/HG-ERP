@@ -187,6 +187,13 @@ export function VatTuKhoScreen({
   const dangLoc = qUrl.trim() !== '' || nhom !== ''
   const viec = RO_VT_VIEC[ro]
   const motMa = chon.size === 1 ? rows.find((r) => chon.has(r.id)) : null
+  /*
+    Ô GÕ TRÊN DÒNG (B4 "Kho cho người mới", 27/10/2026): đo trước 202 ô gõ sẵn ở
+    màn đầu (ĐVT · kệ · ngưỡng × 50 dòng) — người mới không biết sửa ô nào là
+    lưu thật. Nay ô chỉ mở ở DÒNG ĐANG CHỌN; riêng tab việc giữ gõ hàng loạt
+    cho đúng cột của việc đó (Chưa có kệ → ô Kệ, Chưa khai ngưỡng → ô Ngưỡng).
+  */
+  const dangSua = (id: string) => canEdit && motMa?.id === id
 
   /** Dùng lại mã đang ngừng — đảo được nên không hỏi lại, báo tại chỗ. */
   async function dungLai(r: VatTuRow) {
@@ -429,7 +436,12 @@ export function VatTuKhoScreen({
                     key={r.id}
                     className={on ? 'd f on' : 'd f'}
                     aria-selected={on}
-                    title={canEdit ? 'Nhấp đúp để sửa mã' : undefined}
+                    title={canEdit ? 'Bấm để sửa ĐVT · kệ · ngưỡng — nhấp đúp để sửa cả mã' : undefined} // prettier-ignore
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('input, select, a, button'))
+                        return
+                      setChon(new Set([r.id]))
+                    }}
                     onDoubleClick={(e) => {
                       if (!canEdit) return
                       if ((e.target as HTMLElement).closest('input, select, a, button'))
@@ -476,8 +488,8 @@ export function VatTuKhoScreen({
                         </span>
                       )}
                     </td>
-                    <td className={canEdit ? 'go' : undefined}>
-                      {canEdit ? (
+                    <td className={dangSua(r.id) ? 'go' : undefined}>
+                      {dangSua(r.id) ? (
                         <OChu
                           key={`${r.id}-${dvtReset}`}
                           value={r.unit}
@@ -504,8 +516,12 @@ export function VatTuKhoScreen({
                         </span>
                       </td>
                     )}
-                    <td className={canEdit ? 'go' : undefined}>
-                      {canEdit ? (
+                    <td
+                      className={
+                        canEdit && (ro === 'no_shelf' || dangSua(r.id)) ? 'go' : undefined
+                      }
+                    >
+                      {canEdit && (ro === 'no_shelf' || dangSua(r.id)) ? (
                         <>
                           <OChu
                             value={r.shelf_location ?? ''}
@@ -519,11 +535,17 @@ export function VatTuKhoScreen({
                           />
                         </>
                       ) : (
-                        (r.shelf_location ?? <span className="kh-empty">—</span>)
+                        (r.shelf_location ?? <span className="kh-mut">chưa khai</span>)
                       )}
                     </td>
-                    <td className={canEdit ? 'r go' : 'r kh-num'}>
-                      {canEdit ? (
+                    <td
+                      className={
+                        canEdit && (ro === 'no_min' || dangSua(r.id))
+                          ? 'r go'
+                          : 'r kh-num'
+                      }
+                    >
+                      {canEdit && (ro === 'no_min' || dangSua(r.id)) ? (
                         <OSo
                           value={String(r.min_stock)}
                           onCommit={(v) => void ghi(r.id, { min_stock: docSoVn(v) }, 'ngưỡng tối thiểu')} // prettier-ignore
@@ -553,7 +575,7 @@ export function VatTuKhoScreen({
               <tr>
                 <td colSpan={hep ? 6 : 8}>
                   {rows.length} mã trang này{motMa ? ` · đang chọn ${motMa.code}` : ''} ·
-                  rời ô là lưu, mọi lượt sửa vào sổ vết
+                  bấm dòng để sửa ĐVT · kệ · ngưỡng, rời ô là lưu, mọi lượt sửa vào sổ vết
                 </td>
               </tr>
             </tfoot>

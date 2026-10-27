@@ -190,12 +190,14 @@ describe('Kho › Hàng về · khung hẹp', () => {
 })
 
 describe('Kho › Hàng về · sự cố', () => {
-  it('đơn có sự cố mở hiện nhãn "N sự cố"; Báo sự cố ở Action Pane mở ?su_co=', () => {
+  it('đơn có sự cố mở hiện nhãn "N sự cố"; Báo sự cố ở menu Khác mở ?su_co=', () => {
     dung({ rows: ROWS.map((x) => (x.po_code === 'PO-2026-0108' ? { ...x, su_co_mo: 1 } : x)) }) // prettier-ignore
     const tr = dongCua('PO-2026-0108')
     expect(within(tr).getByText('1 sự cố')).toBeTruthy()
     fireEvent.click(tr)
-    fireEvent.click(within(pane()).getByRole('button', { name: /Báo sự cố/ }))
+    // B4 (27/10/2026): việc phụ gom vào "Khác ▾" — một nút chính trên Action Pane.
+    fireEvent.click(within(pane()).getByRole('button', { name: /Khác/ }))
+    fireEvent.click(within(pane()).getByRole('menuitem', { name: /Báo sự cố/ }))
     expect(replace).toHaveBeenCalledWith('/warehouse/nhap?su_co=id-PO-2026-0108', {
       scroll: false,
     })

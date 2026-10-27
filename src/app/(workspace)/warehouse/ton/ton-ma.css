@@ -1,0 +1,122 @@
+/*
+ * TỒN KHO · THEO MÃ (B3 "Kho cho người mới") — phần riêng của màn, trên khung
+ * `../_erp/kho.css`. Bản vẽ B1: https://claude.ai/artifact/QpEkCkMHdMhFhF3WYhEF7z
+ *
+ * Lưới 6 cột bên trái, khung mã đang chọn 300px bên phải — một vạch dọc ngăn,
+ * không thẻ nổi. Lưới tự cuộn trong khung (đầu dính), khung phải cuộn riêng.
+ */
+.kh.kh .tm-than {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: minmax(0, 1fr);
+}
+.kh.kh .tm-than.hep {
+  grid-template-columns: minmax(0, 1fr) 250px;
+}
+.kh.kh .tm-than > .kh-grid,
+.kh.kh .tm-than > .kh-rong {
+  min-height: 0;
+}
+
+/* Ô tìm lớn + ô Lọc có nhãn */
+.kh.kh .kh-fb input.tm-tim {
+  width: 340px;
+  height: 32px;
+  font-size: 14px;
+}
+.kh.kh .tm-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--kh-ink3);
+  font-size: 12px;
+}
+
+/* Chip lệnh trong cột Của lệnh */
+.kh.kh .tm-chip {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--kh-line);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--kh-ink2);
+}
+.kh.kh .tm-chip.chung {
+  border-style: dashed;
+  color: var(--kh-ink3);
+}
+
+/* Khung mã đang chọn */
+.kh.kh .tm-khung {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 16px;
+  border-left: 1px solid var(--kh-line);
+  background: var(--kh-card);
+}
+.kh.kh .tm-khung.rong {
+  justify-content: center;
+  gap: 6px;
+  color: var(--kh-ink3);
+  font-size: 12.5px;
+}
+.kh.kh .tm-khung.rong b {
+  color: var(--kh-ink);
+  font-size: 13px;
+}
+.kh.kh .tm-khung .dau h2 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.kh.kh .tm-kv {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+}
+.kh.kh .tm-kv dt {
+  color: var(--kh-ink3);
+}
+.kh.kh .tm-kv dd {
+  margin: 0;
+}
+.kh.kh .tm-kv .kh-pill {
+  margin-left: 6px;
+}
+.kh.kh .tm-nut {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kh.kh .tm-nut .kh-btn {
+  justify-content: flex-start;
+  height: 30px;
+  border: 1px solid var(--kh-line);
+}
+.kh.kh .tm-khung section h4 {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+}
+.kh.kh .tm-khung .ln {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+  border-bottom: 1px solid var(--kh-hair);
+}
+.kh.kh .tm-khung .ln > :last-child {
+  margin-left: auto;
+  font-family: var(--kh-mono);
+  font-variant-numeric: tabular-nums;
+}

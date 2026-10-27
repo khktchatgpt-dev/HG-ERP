@@ -82,9 +82,19 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     expect(screen.queryByRole('button', { name: /Đã rà xong/ })).toBeNull()
   })
 
+  it('B4: ô ĐVT chỉ mở ở dòng đang chọn; tab "Chưa có kệ" giữ ô Kệ trên mọi dòng', () => {
+    dung()
+    expect(screen.queryByLabelText('Đơn vị tính BAO0687')).toBeNull()
+    expect(screen.getByLabelText('Kệ gợi ý BAO0688')).toBeTruthy()
+    fireEvent.click(screen.getByText('BAO0687'))
+    expect(screen.getByLabelText('Đơn vị tính BAO0687')).toBeTruthy()
+    expect(screen.queryByLabelText('Đơn vị tính BAO0688')).toBeNull()
+  })
+
   it('ĐVT gõ "kg" → lưu đúng chữ trong danh sách "Kg"', async () => {
     api.mockResolvedValue({})
     dung()
+    fireEvent.click(screen.getByText('BAO0687'))
     doi('Đơn vị tính BAO0687', 'kg')
     await waitFor(() => expect(api).toHaveBeenCalled())
     expect(api).toHaveBeenCalledWith('/api/dept/warehouse/materials/a', {
@@ -95,6 +105,7 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
 
   it('ĐVT lạ → hỏi trước khi lưu; "Giữ" thì không gửi gì', () => {
     dung()
+    fireEvent.click(screen.getByText('BAO0687'))
     doi('Đơn vị tính BAO0687', 'Bo')
     const hop = screen.getByRole('dialog')
     expect(within(hop).getByText(/chưa có trong danh sách/)).toBeTruthy()
