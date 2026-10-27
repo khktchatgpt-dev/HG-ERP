@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { todayVn } from '@/lib/date-vn'
@@ -34,12 +35,13 @@ export const dynamic = 'force-dynamic'
  *
  * Trang nạp ba danh mục nhỏ cho dải chip: lệnh xuất được (đã duyệt / đang SX
  * / đã xong để ghi bù — `LSX_XUAT_DUOC`, đúng tập service), tên tổ để gợi ý ô
- * người nhận, và quyền ghi sổ. Vật tư KHÔNG nạp trước (13.229 mã) — tìm từng
- * mã qua API lúc thêm dòng, tồn dùng được tra cùng lúc.
+ * người nhận, và quyền ghi sổ. Cả danh mục vật tư (13.540 mã) KHÔNG nạp — chỉ
+ * nạp MÃ CÒN TỒN (240 mã, đo 27/10/2026) kèm tồn dùng được: ô thêm dòng lọc tại
+ * máy, chọn xong không phải tra tồn. Mã kho hết mới hỏi server (`stock/tim`).
  */
 export default async function WarehouseIssuePage() {
   const user = await authService.requirePageUser()
-  const [lsx, deps, company, tpl, canEdit] = await Promise.all([
+  const [lsx, deps, company, tpl, canEdit, tonSan] = await Promise.all([
     productionRepo.listByStatus(LSX_XUAT_DUOC),
     departmentsRepo.list(),
     // Xem bản in TRƯỚC khi ghi sổ (yêu cầu 16/09): mẫu 02-VT + khối công ty.
@@ -48,6 +50,7 @@ export default async function WarehouseIssuePage() {
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
+    stockRepo.conTon(),
   ])
 
   // Tổ nhận vật tư: các phòng tên "Tổ …" + hai tổ đặt tên khác (Cắt Vải, Xưởng).
@@ -77,6 +80,7 @@ export default async function WarehouseIssuePage() {
         }))}
       to={to}
       phong={deps.map((d) => d.name).sort((a, b) => a.localeCompare(b, 'vi'))}
+      tonSan={tonSan}
       today={todayVn()}
       nguoiLap={user.name ?? user.email}
       canEdit={canEdit}

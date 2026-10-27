@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ToastProvider } from '@/components/kit'
 import type { HangVeRow } from '@/lib/kho-hang-ve'
+import type { SapDatRow } from '@/lib/kho-lich-hang-ve'
 import { HangVeScreen } from './HangVeScreen'
 import type { HangCuaDonData } from './tai-hang-cua-don'
 
@@ -84,6 +85,7 @@ function dung(them: Partial<Parameters<typeof HangVeScreen>[0]> = {}) {
     <ToastProvider>
       <HangVeScreen
         rows={ROWS}
+        sapDat={[]}
         today={TODAY}
         canEdit
         truncatedAt={null}
@@ -95,8 +97,10 @@ function dung(them: Partial<Parameters<typeof HangVeScreen>[0]> = {}) {
   )
 }
 const dongCua = (ma: string) => screen.getByRole('button', { name: ma }).closest('tr')!
+// 27/10/2026: hàng tab mốc hẹn thay bằng dải lịch (mỗi ô một tab, có từng ngày).
+const lich = () => screen.getByRole('tablist', { name: 'Lịch hàng về' })
 const tab = (ten: RegExp) =>
-  fireEvent.click(within(screen.getByRole('tablist', { name: 'Mốc hẹn giao' })).getByRole('tab', { name: ten })) // prettier-ignore
+  fireEvent.click(within(lich()).getByRole('tab', { name: ten }))
 const pane = () => screen.getByRole('toolbar', { name: 'Thao tác' })
 
 describe('Kho › Hàng về (khung Kho lối ERP · B2)', () => {
@@ -151,7 +155,7 @@ describe('Kho › Hàng về (khung Kho lối ERP · B2)', () => {
 
   it('không có quyền ghi sổ kho: Nhận hàng khoá mềm, nói phòng giữ quyền', () => {
     dung({ canEdit: false })
-    tab(/^7 ngày tới/)
+    tab(/^T3 13\/10/)
     fireEvent.click(dongCua('PO-2026-0115'))
     const nut = within(pane()).getByRole('button', { name: /Nhận hàng PO-2026-0115/ })
     expect(nut.getAttribute('aria-disabled')).toBe('true')
@@ -183,6 +187,108 @@ describe('Kho › Hàng về · khung hẹp', () => {
       const tr = dongCua('PO-2026-0100')
       expect(within(tr).getByText('2/2 · 22/10')).toBeTruthy()
       expect(within(tr).getByRole('button', { name: 'PO-2026-0100' }).getAttribute('title')).toContain('Đặng Thị Thanh Nga') // prettier-ignore
+    } finally {
+      if (goc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', goc)
+    }
+  })
+})
+
+/**
+ * KHO NẮM ĐƠN MUA, KHÔNG CAN THIỆP (27/10/2026, bản vẽ 5iNGTXFg… Q4 + Q6): dải
+ * lịch từng ngày, khối Sắp đặt chỉ xem, cột Phụ trách luôn hiện. Đơn sắp đặt theo
+ * mẫu PO-2026-0185 Kimpack (GĐ duyệt 17/10, chờ NCC xác nhận).
+ */
+const SAP: SapDatRow = {
+  po_id: 'id-PO-2026-0185',
+  po_code: 'PO-2026-0185',
+  supplier_name: 'KIMPACK PACKAGING JOINT STOCK COMPANY',
+  lsx_code: '08/26-27 - MX',
+  extra_lsx: [],
+  template: 'carton',
+  expected_at: '2026-10-14',
+  bucket: 'week',
+  lines_total: 10,
+  owner_name: 'Đặng Thị Thanh Nga',
+  approved_at: '2026-10-02',
+}
+
+describe('Kho › Hàng về · lịch 7 ngày + Sắp đặt (chỉ xem)', () => {
+  it('dải lịch: số chính = đơn đang về theo ô, sắp đặt đếm riêng; ô 7 ngày tách từng ngày', () => {
+    dung({ sapDat: [SAP] })
+    const o = within(lich())
+      .getAllByRole('tab')
+      .map((t) => t.getAttribute('aria-label'))
+    expect(o).toEqual([
+      'Quá hẹn — 2 đơn đang về',
+      'Hôm nay 12/10 — 1 đơn đang về',
+      'T3 13/10 — 1 đơn đang về',
+      'T4 14/10 — 0 đơn đang về, 1 đơn sắp đặt',
+      'T5 15/10 — 0 đơn đang về',
+      'T6 16/10 — 0 đơn đang về',
+      'T7 17/10 — 0 đơn đang về',
+      'CN 18/10 — 0 đơn đang về',
+      'T2 19/10 — 0 đơn đang về',
+      'Sau đó — 1 đơn đang về',
+      'Tất cả — 5 đơn đang về, 1 đơn sắp đặt',
+    ])
+    // Quá hẹn đứng sẵn, dòng phụ nói khoảng trễ (bỏ ngày gõ nhầm năm).
+    expect(within(lich()).getByRole('tab', { name: /^Quá hẹn/ }).getAttribute('aria-selected')).toBe('true') // prettier-ignore
+    expect(within(lich()).getByText('trễ 10–37 ngày')).toBeTruthy()
+  })
+
+  it('bấm ô ngày: chỉ đơn hẹn ngày đó, nhóm mang tên ngày', () => {
+    dung()
+    tab(/^T3 13\/10/)
+    expect(screen.getByRole('button', { name: 'PO-2026-0115' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'PO-2026-0108' })).toBeNull()
+    const bang = screen.getByRole('table', { name: 'Đơn đang về' })
+    expect(within(bang).getByText('T3 13/10')).toBeTruthy()
+  })
+
+  it('ô không có đơn đang về chỉ có sắp đặt: bày khối Sắp đặt, không bày "rỗng"', () => {
+    dung({ sapDat: [SAP] })
+    tab(/^T4 14\/10/)
+    expect(screen.getByText('Sắp đặt')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'PO-2026-0185' })).toBeTruthy()
+    expect(
+      screen.getByText(/1 đơn sắp đặt chỉ để xem, không tính vào số trên/),
+    ).toBeTruthy()
+  })
+
+  it('ô rỗng hẳn: nói lý do + nút sang ngày gần nhất có hàng', () => {
+    dung()
+    tab(/^T5 15\/10/)
+    expect(screen.getByText('Không có đơn nào ở ô “T5 15/10”')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Xem Hôm nay 12/10 · 1 đơn' }))
+    expect(screen.getByRole('button', { name: 'PO-2026-0100' })).toBeTruthy()
+  })
+
+  it('chọn đơn sắp đặt: Nhận hàng khoá, lý do nói TẠI CHỖ ai gỡ được; không có nút báo', () => {
+    dung({ sapDat: [SAP] })
+    tab(/^Tất cả/)
+    const tr = dongCua('PO-2026-0185')
+    expect(within(tr).getByText(/chờ NCC xác nhận/)).toBeTruthy()
+    expect(within(tr).getByText(/· 10 ngày/)).toBeTruthy()
+    expect(within(tr).getByText('10 dòng')).toBeTruthy()
+    fireEvent.click(tr)
+    const nut = within(pane()).getByRole('button', { name: /Nhận hàng PO-2026-0185/ })
+    expect(nut.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByText(/Chưa nhận được/).closest('.kh-note')?.textContent).toMatch(
+      /Đặng Thị Thanh Nga \(Cung ứng\) bấm “NCC xác nhận”/,
+    )
+    fireEvent.click(within(pane()).getByRole('button', { name: /Khác/ }))
+    expect(within(pane()).getByRole('menuitem', { name: /Báo sự cố/ }).getAttribute('aria-disabled')).toBe('true') // prettier-ignore
+  })
+
+  it('cột Phụ trách luôn hiện, tên đủ — cả khung 1.068px (laptop 1280 trừ menu)', () => {
+    const goc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 1068 }) // prettier-ignore
+    try {
+      dung()
+      const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
+      expect(heads).toContain('Phụ trách')
+      expect(heads).not.toContain('Loại hàng')
+      expect(within(dongCua('PO-2026-0108')).getByText('Đặng Thị Thanh Nga')).toBeTruthy()
     } finally {
       if (goc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', goc)
     }

@@ -203,8 +203,21 @@ export function incomingBucket(
   horizonDays = 7,
 ): IncomingBucket | null {
   if (!isIncoming(po)) return null
-  if (!po.expected_at) return 'no_eta'
-  const eta = po.expected_at.slice(0, 10)
+  return etaBucket(po.expected_at, todayIso, horizonDays)
+}
+
+/**
+ * Mốc hẹn CHỈ theo ngày, không xét trạng thái — `incomingBucket` dùng nó, và
+ * khối "Sắp đặt" của Kho (đơn GĐ đã duyệt, NCC chưa xác nhận — 27/10/2026) xếp
+ * ngày dự kiến bằng chính nó, để một ngày trên lịch không có hai luật.
+ */
+export function etaBucket(
+  expectedAt: string | null,
+  todayIso: string,
+  horizonDays = 7,
+): IncomingBucket {
+  if (!expectedAt) return 'no_eta'
+  const eta = expectedAt.slice(0, 10)
   if (eta < todayIso) return 'overdue'
   if (eta === todayIso) return 'today'
   return eta <= addDays(todayIso, horizonDays) ? 'week' : 'later'
