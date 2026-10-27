@@ -292,11 +292,19 @@ export function HopDuyet({
     setBusy(true)
     setLoi(null)
     try {
-      const r = await api<{ doc_code: string; applied: number }>(
-        `/api/dept/warehouse/stocktakes/${dot.id}/decide`,
-        { method: 'POST', body: { decision: 'approve' } },
+      const r = await api<{
+        doc_code: string
+        applied: number
+        xuat_bu?: { code: string; lsx_code: string }[]
+      }>(`/api/dept/warehouse/stocktakes/${dot.id}/decide`, {
+        method: 'POST',
+        body: { decision: 'approve' },
+      })
+      // Cập nhật số thực tế: dòng "tổ đã lấy" đi thành phiếu xuất cho lệnh.
+      const bu = (r.xuat_bu ?? []).map((p) => `${p.code} cho ${p.lsx_code}`).join(', ')
+      onDone(
+        `Đã duyệt ${dot.code} · sinh phiếu ${r.doc_code} (${r.applied} dòng chênh)${bu ? ` · xuất bù ${bu}` : ''}.`,
       )
-      onDone(`Đã duyệt ${dot.code} · sinh phiếu ${r.doc_code} (${r.applied} dòng chênh).`)
     } catch (e) {
       setLoi(apiErrorText(e))
       setBusy(false)

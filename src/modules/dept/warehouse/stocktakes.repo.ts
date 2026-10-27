@@ -185,6 +185,12 @@ export const stocktakesRepo = {
       material_id: string
       system_qty: number
       book_qty_frozen: number
+      /** Cập nhật số thực tế: dòng sinh ra đã có số đếm (một bước, không đếm mù). */
+      counted_qty?: number
+      diff?: number
+      counted_by?: string
+      counted_at?: string
+      note?: string | null
     }[],
   ): Promise<void> {
     if (rows.length === 0) return

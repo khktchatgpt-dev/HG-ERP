@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowUpFromLine, BookOpen, Package } from 'lucide-react'
+import { ArrowUpFromLine, BookOpen, NotebookPen, Package } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import { useBeRong } from '@/lib/use-be-rong'
@@ -172,6 +172,14 @@ export function TonKhoScreen({
                 why={sel ? null : canChon}
               >
                 Thông tin vật tư
+              </ApNut>
+              {/* B1 "Kho cho người mới": số trên máy lệch kệ → gõ số đếm được. */}
+              <ApNut
+                icon={<NotebookPen size={15} aria-hidden />}
+                href={sel ? `/warehouse/cap-nhat-ton?ma=${encodeURIComponent(sel.code)}` : undefined} // prettier-ignore
+                why={sel ? null : canChon}
+              >
+                Cập nhật số thực tế
               </ApNut>
             </ApNhom>
             <ApNhom>

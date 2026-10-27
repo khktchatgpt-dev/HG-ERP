@@ -256,7 +256,9 @@ export function KiemKeScreen({
                     ? r.nhom.join(' · ')
                     : r.scope_kind === 'bin'
                       ? 'Theo khu kệ'
-                      : 'Danh sách mã'
+                      : r.nhanh
+                        ? 'Cập nhật số thực tế'
+                        : 'Danh sách mã'
                 return (
                   <tr
                     key={r.id}

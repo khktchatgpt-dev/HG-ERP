@@ -1,0 +1,52 @@
+/*
+ * CẬP NHẬT SỐ THỰC TẾ — phần riêng của màn; khung chung ở `_erp/kho.css`.
+ * Bản vẽ C1 https://claude.ai/artifact/QpEkCkMHdMhFhF3WYhEF7z.
+ */
+
+/* Hàng phụ dưới dòng: hỏi tổ đã lấy / hỏng mất (Q3) và lỗi tại chỗ. */
+.kh.kh .kh-tb.kh-tb > tbody > tr.cn-sub > td {
+  padding: 0 8px 6px;
+  border-top: 0;
+  white-space: normal;
+}
+.kh.kh .cn-hoi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--kh-warn);
+  background: var(--kh-warn-wash);
+  font-size: 12.5px;
+  color: var(--kh-ink);
+}
+.kh.kh .cn-hoi label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.kh.kh .cn-hoi select {
+  height: 26px;
+  width: auto;
+}
+.kh.kh .cn-loi {
+  padding: 5px 10px;
+  border-left: 3px solid var(--kh-stop);
+  background: var(--kh-stop-wash);
+  color: var(--kh-stop);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Ô ghi chú dưới ô lý do khi lý do là "Khác". */
+.kh.kh .cn-gc {
+  margin-top: 4px;
+}
+
+/* Các lần cập nhật chờ duyệt — một dòng, xuống hàng khi nhiều. */
+.kh.kh .cn-cho {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}

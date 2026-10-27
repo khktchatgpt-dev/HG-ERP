@@ -21,8 +21,18 @@ vi.mock('./stock.repo', () => ({
   insertMovements: vi.fn(),
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
+vi.mock('./stock.service', () => ({ stockService: { createIssueDoc: vi.fn() } }))
+vi.mock('@/modules/core/departments/departments.repo', () => ({
+  departmentsRepo: { list: vi.fn() },
+}))
+vi.mock('@/modules/dept/production/production.repo', () => ({
+  productionRepo: { findById: vi.fn() },
+}))
 
 import { stocktakesService } from './stocktakes.service'
+import { stockService } from './stock.service'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
 import {
   stocktakesRepo,
   bookQtyAt,
@@ -382,5 +392,154 @@ describe('Q2 — người đếm không tự duyệt (B7c)', () => {
     vi.mocked(stocktakesRepo.findById).mockResolvedValue(take({ status: 'review', assigned_to: 'u1' })) // prettier-ignore
     vi.mocked(stocktakesRepo.listLines).mockResolvedValue([line({ counted_qty: 100, counted_by: 'u2' })]) // prettier-ignore
     await expect(stocktakesService.approve(admin, 'dot1')).rejects.toThrow(/phân đếm/)
+  })
+})
+
+describe('cập nhật số thực tế (B1 "Kho cho người mới", Q2/Q3)', () => {
+  const hao = { id: 'u-hao', role: 'employee', department_id: 'd-kho' } as unknown as User
+  const nu = { id: 'u-nu', role: 'employee', department_id: 'd-kho' } as unknown as User
+  const lenh9 = { id: 'l-mx9', code: '09/26-27 - MX', status: 'approved' }
+  /** Dữ liệu thật 27/10: NH-0513 753 cây của 09-MX; NH-0606 290 cây tồn chung. */
+  const dongNhanh = [
+    line({ id: 'a', material_id: 'm513', book_qty_frozen: 753, counted_qty: 745, counted_by: 'u-hao' }), // prettier-ignore
+    line({ id: 'b', material_id: 'm606', book_qty_frozen: 290, counted_qty: 300, counted_by: 'u-hao' }), // prettier-ignore
+  ]
+  const input = {
+    ly_do_chung: 'giao_kho' as const,
+    lines: [
+      { material_id: 'm513', counted_qty: 745, xuat_bu_lsx_id: 'l-mx9' },
+      { material_id: 'm606', counted_qty: 300, ly_do: 'hang_cu' as const },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd-kho', workspace_id: 'warehouse', head_user_id: 'u-hao' },
+    ] as never)
+    vi.mocked(bookQtyAt).mockResolvedValue(
+      new Map([
+        ['m513', 753],
+        ['m606', 290],
+      ]),
+    )
+    vi.mocked(productionRepo.findById).mockResolvedValue(lenh9 as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValueOnce('KK-2026-0009').mockResolvedValue('KK-2026-0010') // prettier-ignore
+    vi.mocked(stocktakesRepo.insert).mockResolvedValue({
+      id: 'dot9',
+      code: 'KK-2026-0009',
+    })
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(
+      take({
+        id: 'dot9',
+        code: 'KK-2026-0009',
+        scope_kind: 'list',
+        scope_ref: { nhanh: true, xuat_bu: { m513: 'l-mx9' } },
+        status: 'review',
+        created_by: 'u-hao',
+        assigned_to: 'u-hao',
+      }),
+    )
+    vi.mocked(stocktakesRepo.listLines).mockResolvedValue(dongNhanh)
+    vi.mocked(stockService.createIssueDoc).mockResolvedValue({ id: 'pxk', code: 'PXK-2026-0031' }) // prettier-ignore
+  })
+
+  it('trưởng kho: đổi tồn NGAY — "tổ đã lấy" thành phiếu xuất cho lệnh, phần thừa N4', async () => {
+    const r = await stocktakesService.capNhatNhanh(hao, input)
+    expect(r).toMatchObject({
+      trang_thai: 'da_ghi',
+      code: 'KK-2026-0009',
+      applied: 1,
+      xuat_bu: [{ code: 'PXK-2026-0031', lsx_code: '09/26-27 - MX' }],
+    })
+    // Đợt theo danh sách, không đếm mù, nhớ lệnh xuất bù cho lúc duyệt.
+    expect(vi.mocked(stocktakesRepo.insert).mock.calls[0][0]).toMatchObject({
+      scope_kind: 'list',
+      blind_count: false,
+      scope_ref: { nhanh: true, xuat_bu: { m513: 'l-mx9' } },
+    })
+    const dong = vi.mocked(stocktakesRepo.insertLines).mock.calls[0][0]
+    expect(dong[0]).toMatchObject({ book_qty_frozen: 753, counted_qty: 745, diff: -8, counted_by: 'u-hao' }) // prettier-ignore
+    expect(dong[0].note).toBe(
+      'Đếm lại khi giao kho · tổ đã lấy → xuất bù cho 09/26-27 - MX',
+    )
+    expect(dong[1].note).toBe('Hàng cũ chưa có trên máy')
+    // 8 cây ra bằng PHIẾU XUẤT X1 cho lệnh, không phải X5.
+    expect(vi.mocked(stockService.createIssueDoc).mock.calls[0][1]).toMatchObject({
+      kind: 'lsx',
+      production_order_id: 'l-mx9',
+      override_reserved: true,
+      lines: [{ material_id: 'm513', qty: 8 }],
+    })
+    const mv = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(mv.map((m) => [m.material_id, m.direction, m.qty, m.reason_code])).toEqual([
+      ['m606', 'in', 10, 'N4'],
+    ])
+  })
+
+  it('người khác có vai Kho: chỉ gửi — chờ trưởng kho duyệt, chưa đổi tồn', async () => {
+    const r = await stocktakesService.capNhatNhanh(nu, input)
+    expect(r).toEqual({ trang_thai: 'cho_duyet', id: 'dot9', code: 'KK-2026-0009' })
+    expect(vi.mocked(stocktakesRepo.patch).mock.calls[0][1]).toMatchObject({
+      status: 'review',
+    })
+    expect(stockService.createIssueDoc).not.toHaveBeenCalled()
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('duyệt cập nhật nhanh: chỉ trưởng kho; trưởng kho duyệt thì áp cả phiếu xuất bù', async () => {
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(
+      take({
+        id: 'dot9',
+        scope_kind: 'list',
+        scope_ref: { nhanh: true, xuat_bu: { m513: 'l-mx9' } },
+        status: 'review',
+        created_by: 'u-nu',
+        assigned_to: 'u-nu',
+      }),
+    )
+    vi.mocked(stocktakesRepo.listLines).mockResolvedValue(
+      dongNhanh.map((l) => ({ ...l, counted_by: 'u-nu' })),
+    )
+    await expect(stocktakesService.approve(nu, 'dot9')).rejects.toThrow(
+      /trưởng kho duyệt/,
+    )
+    const r = await stocktakesService.approve(hao, 'dot9')
+    expect(r.xuat_bu).toHaveLength(1)
+    expect(r.applied).toBe(1)
+  })
+
+  it('dòng không GIẢM thì không xuất bù dù client gửi lệnh', async () => {
+    await stocktakesService.capNhatNhanh(hao, {
+      ly_do_chung: 'giao_kho',
+      lines: [{ material_id: 'm513', counted_qty: 760, xuat_bu_lsx_id: 'l-mx9' }],
+    })
+    expect(vi.mocked(stocktakesRepo.insert).mock.calls[0][0].scope_ref).toMatchObject({
+      xuat_bu: {},
+    })
+  })
+
+  it('"Khác" thiếu ghi chú, lệnh đã huỷ → chặn trước khi ghi gì', async () => {
+    await expect(
+      stocktakesService.capNhatNhanh(hao, {
+        ly_do_chung: 'khac',
+        lines: [{ material_id: 'm606', counted_qty: 300 }],
+      }),
+    ).rejects.toThrow(/cần ghi chú/)
+    vi.mocked(productionRepo.findById).mockResolvedValue({ ...lenh9, status: 'cancelled' } as never) // prettier-ignore
+    await expect(stocktakesService.capNhatNhanh(hao, input)).rejects.toThrow(/không ở trạng thái/) // prettier-ignore
+    expect(stocktakesRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('trưởng kho ghi mà áp hỏng → huỷ đợt vừa tạo kèm lý do, không để rác chờ duyệt', async () => {
+    vi.mocked(stockService.createIssueDoc).mockRejectedValue(new Error('Không đủ tồn'))
+    await expect(stocktakesService.capNhatNhanh(hao, input)).rejects.toThrow(
+      /Không đủ tồn/,
+    )
+    const cuoi = vi.mocked(stocktakesRepo.patch).mock.calls.at(-1)!
+    expect(cuoi[1]).toMatchObject({
+      status: 'cancelled',
+      reject_reason: 'Ghi không thành: Không đủ tồn',
+    })
+    expect(insertMovements).not.toHaveBeenCalled()
   })
 })

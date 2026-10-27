@@ -9,6 +9,11 @@ import { nxtRepo } from './nxt.repo'
 import { tomTatLenh } from '@/lib/kho-ton-lenh'
 import { hangLenhService } from './hang-lenh.service'
 import { docsRepo, insertMovements, warehousesRepo } from './stock.repo'
+import { stockService } from './stock.service'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { LSX_XUAT_DUOC } from '@/lib/kho-phieu-xuat'
+import { ghiChuDong, nhanLyDoCapNhat, type MaLyDoCapNhat } from '@/lib/kho-cap-nhat-ton'
 import {
   bookQtyAt,
   danhSachDemNhom,
@@ -74,6 +79,124 @@ function maskBook(t: Stocktake, lines: TakeLine[]): TakeLine[] {
   const hide = t.blind_count && (t.status === 'open' || t.status === 'counting')
   if (!hide) return lines
   return lines.map((l) => ({ ...l, book_qty_frozen: null }))
+}
+
+/**
+ * TRƯỞNG KHO = người đứng đầu phòng thuộc khu Kho (`departments.head_user_id`),
+ * hoặc quản trị. Q2 bản vẽ "Kho cho người mới" (27/10/2026): trưởng kho ghi
+ * "Cập nhật số thực tế" là đổi tồn ngay; người khác có vai Kho chỉ gửi, trưởng
+ * kho duyệt. Đọc cả danh sách phòng chứ không `findHeadedBy` — một người đứng
+ * đầu hai phòng thì `maybeSingle` trả null im lặng.
+ */
+export async function laTruongKho(user: User): Promise<boolean> {
+  if (user.role === 'admin') return true
+  const ds = await departmentsRepo.list()
+  return ds.some((d) => d.workspace_id === 'warehouse' && d.head_user_id === user.id)
+}
+
+/** Đợt sinh từ màn Cập nhật số thực tế (khác đợt kiểm kê định kỳ). */
+function laNhanh(t: Stocktake): boolean {
+  return t.scope_kind === 'list' && t.scope_ref.nhanh === true
+}
+
+export type KetQuaApDung = {
+  doc_id: string
+  doc_code: string
+  /** Số dòng thừa/thiếu ghi vào phiếu KK (N4/X5). */
+  applied: number
+  /** Phiếu xuất bù cho lệnh (dòng "tổ đã lấy"), mỗi lệnh một phiếu. */
+  xuat_bu: { id: string; code: string; lsx_code: string }[]
+}
+
+/**
+ * ÁP CHÊNH của một đợt vào sổ — dùng chung cho Duyệt (kiểm kê định kỳ) và
+ * Cập nhật số thực tế. Chênh là DELTA so với sổ chốt (xem `approve`).
+ *
+ * Dòng giảm hàng mà `scope_ref.xuat_bu` ghi "tổ đã lấy" đi thành PHIẾU XUẤT X1
+ * cho lệnh (vào giá thành), làm TRƯỚC: guard tồn / trạng thái lệnh của phiếu
+ * xuất có thể chặn, và chặn thì chưa có phiếu KK nào được ghi. Lấn phần giữ
+ * cho lệnh khác được xác nhận sẵn kèm lý do — hàng đã rời kệ, đây là ghi bù
+ * chuyện đã xảy ra, không phải xin lấy hàng.
+ */
+async function apDung(
+  user: User,
+  take: Stocktake,
+  lines: TakeLine[],
+): Promise<KetQuaApDung> {
+  const xuatBu = (take.scope_ref.xuat_bu ?? {}) as Record<string, string>
+  const adjusts = lines
+    .map((l) => ({ l, delta: (l.counted_qty ?? 0) - (l.book_qty_frozen ?? 0) }))
+    .filter((x) => Math.abs(x.delta) > 1e-9)
+  const bu = adjusts.filter((x) => x.delta < 0 && xuatBu[x.l.material_id])
+  const kk = adjusts.filter((x) => !bu.includes(x))
+
+  const theoLenh = new Map<string, typeof bu>()
+  for (const x of bu) {
+    const lsx = xuatBu[x.l.material_id]
+    theoLenh.set(lsx, [...(theoLenh.get(lsx) ?? []), x])
+  }
+  const phieuBu: KetQuaApDung['xuat_bu'] = []
+  for (const [lsxId, ds] of theoLenh) {
+    const lsx = await productionRepo.findById(lsxId)
+    const p = await stockService.createIssueDoc(user, {
+      kind: 'lsx',
+      production_order_id: lsxId,
+      counterparty: `Ghi bù · ${take.code}`,
+      note: `Cập nhật số thực tế ${take.code}: tổ đã lấy, chưa ghi sổ`,
+      override_reserved: true,
+      override_reason: `ghi bù khi cập nhật số thực tế ${take.code}`,
+      lines: ds.map(({ l, delta }) => ({
+        material_id: l.material_id,
+        qty: Math.abs(delta),
+        note: `${take.code}: trên máy ${l.book_qty_frozen ?? 0}, thực tế ${l.counted_qty}`,
+      })),
+    })
+    phieuBu.push({ ...p, lsx_code: lsx?.code ?? lsxId })
+  }
+
+  const [code, warehouseId] = await Promise.all([
+    docsRepo.nextCode('KK'),
+    warehousesRepo.mainId(),
+  ])
+  const doc = await docsRepo.insert({
+    code,
+    kind: 'stocktake',
+    reason: laNhanh(take)
+      ? `Cập nhật số thực tế ${take.code}`
+      : `Duyệt đợt kiểm kê ${take.code}`,
+    note: take.note,
+    created_by: user.id,
+  })
+  if (kk.length > 0) {
+    await insertMovements(
+      kk.map(({ l, delta }) => ({
+        material_id: l.material_id,
+        direction: delta > 0 ? ('in' as const) : ('out' as const),
+        qty: Math.abs(delta),
+        ref_type: 'adjust',
+        // N4 thừa / X5 thiếu — hai mã duy nhất của kiểm kê (0197).
+        reason_code: delta > 0 ? 'N4' : 'X5',
+        note: [
+          `Đợt ${take.code}: đếm ${l.counted_qty}, sổ chốt ${l.book_qty_frozen ?? 0}`,
+          laNhanh(take) ? l.note : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        created_by: user.id,
+        doc_id: doc.id,
+        warehouse_id: warehouseId,
+      })),
+    )
+  }
+
+  await stocktakesRepo.attachDoc(take.id, doc.id)
+  await stocktakesRepo.patch(take.id, {
+    status: 'approved',
+    doc_id: doc.id,
+    approved_by: user.id,
+    approved_at: new Date().toISOString(),
+  })
+  return { doc_id: doc.id, doc_code: doc.code, applied: kk.length, xuat_bu: phieuBu }
 }
 
 export type NhomMoDot = {
@@ -404,12 +527,16 @@ export const stocktakesService = {
    * Ví dụ: sổ chốt 100, đếm được 95 (thiếu 5), trong lúc đếm nhập thêm 20 nên
    * tồn hiện 120. Áp delta −5 → 115, đúng. Đặt tồn = 95 → mất 20 cây vừa nhập.
    */
-  async approve(user: User, id: string): Promise<{ doc_code: string; applied: number }> {
+  async approve(user: User, id: string): Promise<KetQuaApDung> {
     await assertAction(user, 'warehouse.stocktake.approve')
     const take = await stocktakesRepo.findById(id)
     if (!take) throw NotFound('Đợt kiểm kê không tồn tại')
     if (take.status !== 'review') {
       throw Conflict(`Đợt đang ở "${take.status}" — chỉ đợt chờ đối chiếu mới duyệt được`)
+    }
+    // Q2 "Kho cho người mới": cập nhật số thực tế của người khác do TRƯỞNG KHO duyệt.
+    if (laNhanh(take) && !(await laTruongKho(user))) {
+      throw Forbidden('Cập nhật số thực tế do trưởng kho duyệt')
     }
 
     const lines = await stocktakesRepo.listLines(id)
@@ -420,47 +547,123 @@ export const stocktakesService = {
       lines.map((l) => l.counted_by),
     )
     if (tuDuyet) throw Forbidden(tuDuyet)
-    const adjusts = lines
-      .map((l) => ({ l, delta: (l.counted_qty ?? 0) - (l.book_qty_frozen ?? 0) }))
-      .filter((x) => Math.abs(x.delta) > 1e-9)
+    return apDung(user, take, lines)
+  },
 
-    const [code, warehouseId] = await Promise.all([
-      docsRepo.nextCode('KK'),
-      warehousesRepo.mainId(),
-    ])
-    const doc = await docsRepo.insert({
-      code,
-      kind: 'stocktake',
-      reason: `Duyệt đợt kiểm kê ${take.code}`,
-      note: take.note,
-      created_by: user.id,
-    })
-
-    if (adjusts.length > 0) {
-      await insertMovements(
-        adjusts.map(({ l, delta }) => ({
-          material_id: l.material_id,
-          direction: delta > 0 ? ('in' as const) : ('out' as const),
-          qty: Math.abs(delta),
-          ref_type: 'adjust',
-          // N4 thừa / X5 thiếu — hai mã duy nhất của kiểm kê (0197).
-          reason_code: delta > 0 ? 'N4' : 'X5',
-          note: `Đợt ${take.code}: đếm ${l.counted_qty}, sổ chốt ${l.book_qty_frozen ?? 0}`,
-          created_by: user.id,
-          doc_id: doc.id,
-          warehouse_id: warehouseId,
-        })),
-      )
+  /**
+   * CẬP NHẬT SỐ THỰC TẾ (B1 "Kho cho người mới", 27/10/2026) — một bước: tạo
+   * đợt kiểm kê THEO DANH SÁCH MÃ, chốt sổ BÂY GIỜ, ghi luôn số đếm, đưa sang
+   * chờ duyệt. Trưởng kho (Q2) thì áp luôn; người khác dừng ở chờ duyệt, trưởng
+   * kho duyệt ở Kiểm kê như đợt thường.
+   *
+   * Chênh tính ở server so với sổ lúc ghi — số "Trên máy" màn đã bày chỉ để
+   * người gõ thấy trước. Dòng "tổ đã lấy" (Q3) lưu lệnh vào `scope_ref.xuat_bu`
+   * để lúc duyệt (có khi là người khác, hôm sau) vẫn biết ghi phiếu xuất cho ai.
+   */
+  async capNhatNhanh(
+    user: User,
+    input: {
+      ly_do_chung: MaLyDoCapNhat
+      ghi_chu?: string | null
+      lines: {
+        material_id: string
+        counted_qty: number
+        ly_do?: MaLyDoCapNhat | null
+        ghi_chu?: string | null
+        xuat_bu_lsx_id?: string | null
+      }[]
+    },
+  ): Promise<
+    | { trang_thai: 'cho_duyet'; id: string; code: string }
+    | ({ trang_thai: 'da_ghi'; id: string; code: string } & KetQuaApDung)
+  > {
+    await assertWrite(user)
+    const ghiChuChung = input.ghi_chu?.trim() || null
+    const ids = input.lines.map((l) => l.material_id)
+    if (new Set(ids).size !== ids.length) throw BadRequest('Một mã chỉ một dòng')
+    for (const l of input.lines) {
+      if (l.counted_qty < 0 || !Number.isFinite(l.counted_qty))
+        throw BadRequest('Số thực tế không âm được')
+      if ((l.ly_do ?? input.ly_do_chung) === 'khac' && !l.ghi_chu?.trim() && !ghiChuChung)
+        throw BadRequest('Lý do "Khác" cần ghi chú')
     }
 
-    await stocktakesRepo.attachDoc(id, doc.id)
-    await stocktakesRepo.patch(id, {
-      status: 'approved',
-      doc_id: doc.id,
-      approved_by: user.id,
-      approved_at: new Date().toISOString(),
+    const freezeAt = new Date().toISOString()
+    const book = await bookQtyAt(freezeAt, ids)
+
+    // Xuất bù chỉ có nghĩa ở dòng GIẢM; lệnh phải còn xuất được (guard phiếu xuất).
+    const xuatBu: Record<string, string> = {}
+    const maLenh = new Map<string, string>()
+    for (const l of input.lines) {
+      if (!l.xuat_bu_lsx_id) continue
+      if (l.counted_qty - (book.get(l.material_id) ?? 0) >= -1e-9) continue
+      if (!maLenh.has(l.xuat_bu_lsx_id)) {
+        const lsx = await productionRepo.findById(l.xuat_bu_lsx_id)
+        if (!lsx) throw NotFound('Lệnh xuất bù không tồn tại')
+        if (!(LSX_XUAT_DUOC as readonly string[]).includes(lsx.status))
+          throw BadRequest(`Lệnh ${lsx.code} không ở trạng thái xuất vật tư được`)
+        maLenh.set(l.xuat_bu_lsx_id, lsx.code)
+      }
+      xuatBu[l.material_id] = l.xuat_bu_lsx_id
+    }
+
+    const code = await docsRepo.nextCode('KK')
+    const { id } = await stocktakesRepo.insert({
+      code,
+      scope_kind: 'list',
+      scope_ref: {
+        material_ids: ids,
+        nhanh: true,
+        ly_do_chung: input.ly_do_chung,
+        xuat_bu: xuatBu,
+      },
+      scope_count: ids.length,
+      blind_count: false,
+      assigned_to: user.id,
+      note: ['Cập nhật số thực tế', nhanLyDoCapNhat(input.ly_do_chung), ghiChuChung]
+        .filter(Boolean)
+        .join(' · '),
+      created_by: user.id,
     })
-    return { doc_code: doc.code, applied: adjusts.length }
+    await stocktakesRepo.insertLines(
+      input.lines.map((l) => {
+        const so = book.get(l.material_id) ?? 0
+        return {
+          stocktake_id: id,
+          material_id: l.material_id,
+          system_qty: so,
+          book_qty_frozen: so,
+          counted_qty: l.counted_qty,
+          diff: l.counted_qty - so,
+          counted_by: user.id,
+          counted_at: freezeAt,
+          note: ghiChuDong({
+            ly_do: l.ly_do ?? input.ly_do_chung,
+            ghi_chu: l.ghi_chu,
+            xuat_bu_code: xuatBu[l.material_id]
+              ? maLenh.get(xuatBu[l.material_id])
+              : null,
+          }),
+        }
+      }),
+    )
+    await stocktakesRepo.patch(id, { status: 'review', freeze_at: freezeAt })
+
+    if (!(await laTruongKho(user))) return { trang_thai: 'cho_duyet', id, code }
+    const take = await stocktakesRepo.findById(id)
+    if (!take) throw new Error('Không đọc lại được đợt vừa ghi')
+    try {
+      const kq = await apDung(user, take, await stocktakesRepo.listLines(id))
+      return { trang_thai: 'da_ghi', id, code, ...kq }
+    } catch (e) {
+      // Áp hỏng thì HUỶ đợt vừa tạo kèm lý do — để lại nó ở "chờ duyệt" thì
+      // chính trưởng kho không duyệt được (người đếm không tự duyệt), thành rác.
+      await stocktakesRepo.patch(id, {
+        status: 'cancelled',
+        reject_reason: `Ghi không thành: ${e instanceof Error ? e.message : String(e)}`,
+      })
+      throw e
+    }
   },
 
   async reject(user: User, id: string, reason: string): Promise<void> {
