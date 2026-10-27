@@ -52,7 +52,7 @@ import type { PoIssue } from '@/modules/dept/supply/po-tracking.repo'
 import { useRouter } from 'next/navigation'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { DENSE_DEFAULT, DENSE_KEY } from '../../../_shell/KitFrame'
-import { actionsFor, type Action as DocAction } from '../actions'
+import { actionsFor, sanCua, type Action as DocAction } from '../actions'
 import { costShareOf, type CostRow } from './ChiPhiPanel'
 import { type PasteConfirm } from './SoanDonPanels'
 import { type TrackLine } from './TheoDoiPanel'
@@ -665,6 +665,7 @@ export function useDonChungTu(p: Props) {
         privileged: perms.privileged,
         hasReceipts,
         noEta: !po.expected_at,
+        san: sanCua(po, p.suppliers),
         lead: perms.lead,
       })
     : []

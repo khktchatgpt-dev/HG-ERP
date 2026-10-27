@@ -106,11 +106,20 @@ describe('summarizePayables — phí mua hàng (0211, bước 3)', () => {
       [receipt({})],
       [{ supplier_id: 'xe', amount: 3_888_000, currency: 'VND' }],
       [],
-      [{ supplier_id: 'xe', supplier_name: 'Nhà xe Hùng Vịnh', currency: 'VND', amount: 3_888_000 }],
+      [
+        {
+          supplier_id: 'xe',
+          supplier_name: 'Nhà xe Hùng Vịnh',
+          currency: 'VND',
+          amount: 3_888_000,
+        },
+      ],
     )
     const xe = rows.find((r) => r.supplier_id === 'xe')!
     expect(xe.supplier_name).toBe('Nhà xe Hùng Vịnh')
-    expect(xe.totals).toEqual([{ currency: 'VND', incurred: 3_888_000, paid: 3_888_000, balance: 0 }])
+    expect(xe.totals).toEqual([
+      { currency: 'VND', incurred: 3_888_000, paid: 3_888_000, balance: 0 },
+    ])
   })
 
   it('phí NCC tính cộng vào nợ của chính NCC đó', () => {
@@ -201,14 +210,19 @@ describe('mua trên sàn (0278) — phiếu hoàn tiền & nhân viên ứng', (
 })
 
 describe('payablesService.markReimbursed — hoàn ứng cho nhân viên (0278)', () => {
-  it('phiếu công ty trả / đã hoàn / phiếu hoàn tiền → 400; phiếu ứng chưa hoàn → đóng dấu', async () => {
+  it('phiếu công ty trả / đã hoàn → 400; phiếu ứng hoặc phiếu sàn hoàn về người ứng → đóng dấu', async () => {
     const find = vi.mocked(payablesRepo.findPayment)
     find.mockResolvedValueOnce({ id: 'p1', paid_by_user_id: null } as never)
-    await expect(payablesService.markReimbursed(keToan, 'p1')).rejects.toMatchObject({ status: 400 })
+    await expect(payablesService.markReimbursed(keToan, 'p1')).rejects.toMatchObject({
+      status: 400,
+    })
     find.mockResolvedValueOnce({ id: 'p2', paid_by_user_id: 'u-nga', reimbursed_at: '2026-10-20T00:00:00Z' } as never) // prettier-ignore
-    await expect(payablesService.markReimbursed(keToan, 'p2')).rejects.toMatchObject({ status: 400 })
+    await expect(payablesService.markReimbursed(keToan, 'p2')).rejects.toMatchObject({
+      status: 400,
+    })
     find.mockResolvedValueOnce({ id: 'p3', paid_by_user_id: 'u-nga', reimbursed_at: null, kind: 'refund' } as never) // prettier-ignore
-    await expect(payablesService.markReimbursed(keToan, 'p3')).rejects.toMatchObject({ status: 400 })
+    await payablesService.markReimbursed(keToan, 'p3')
+    expect(payablesRepo.markReimbursed).toHaveBeenCalledWith('p3', expect.any(String))
     find.mockResolvedValueOnce({ id: 'p4', paid_by_user_id: 'u-nga', reimbursed_at: null, kind: 'payment' } as never) // prettier-ignore
     await payablesService.markReimbursed(keToan, 'p4')
     expect(payablesRepo.markReimbursed).toHaveBeenCalledWith('p4', expect.any(String))

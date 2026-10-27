@@ -30,6 +30,7 @@ import {
   THead,
   Table,
   Tag,
+  Tick,
   TextArea,
   TextInput,
   showMoney,
@@ -52,6 +53,8 @@ type Ncc = {
   is_active: boolean
   can_order: boolean
   lock_reason: string | null
+  /** Hồ sơ là một SÀN TMĐT (0278) — đơn của nó có tên shop, mã đơn sàn, tiền trả trước. */
+  is_marketplace: boolean
   tax_no: string | null
   phone: string | null
   email: string | null
@@ -84,6 +87,10 @@ type Po = {
   expected_at: string | null
   lsx_code: string | null
   total: number
+  /** Đơn sàn (0278): tên shop, mã đơn sàn, tiền đã trả ròng (đã trừ phiếu hoàn). */
+  shop?: string | null
+  doc_no?: string | null
+  paid?: number
 }
 
 type Gia = {
@@ -153,6 +160,7 @@ function SuaHoSo({
     note: ncc.note ?? '',
     buyer_id: ncc.buyer_id ?? '',
   })
+  const [san, setSan] = useState(ncc.is_marketplace)
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }))
   const [legal, setLegal] = useState<PhapLy>(() => emptyPhapLy(ncc))
 
@@ -180,6 +188,7 @@ function SuaHoSo({
           lead_time_days: f.lead_time_days.trim() === '' ? null : Number(f.lead_time_days), // prettier-ignore
           note: s(f.note),
           buyer_id: f.buyer_id || null,
+          is_marketplace: san,
           ...phapLyBody(legal),
         },
       })
@@ -296,6 +305,16 @@ function SuaHoSo({
       </FieldGrid>
 
       <div className="k-sec">Thanh toán &amp; giao hàng</div>
+      {/* Cờ SÀN (0278, bản vẽ khung 4) — một hồ sơ mỗi sàn, NCC thật là shop ghi trên đơn. */}
+      <div className="mb-2 border border-[var(--hair)] bg-[var(--surface-raised)] px-2.5 py-2">
+        <Tick checked={san} onChange={setSan} label="Đây là sàn thương mại điện tử" />
+        <p className="text-k-sm mt-0.5 pl-6 text-[var(--ink-3)]">
+          Shopee, Lazada, TikTok Shop… Đơn của hồ sơ này hỏi thêm tên shop khi soạn, và
+          đặt bằng nút &ldquo;Đặt trên sàn&rdquo; (ghi mã đơn sàn + tiền trả trước) thay
+          cho &ldquo;NCC xác nhận&rdquo;. Tắt cờ thì đơn cũ giữ nguyên tên shop, đơn mới
+          không hỏi nữa.
+        </p>
+      </div>
       <FieldGrid note="Ba ô này là thứ form soạn đơn đọc để MỒI xuống đơn mới. Bỏ trống thì mỗi lần soạn phải gõ lại từ đầu — đo 17/09/2026: 2/170 NCC có điều khoản, 1/170 có lead time.">
         <Field label="Điều khoản thanh toán">
           <TextInput
@@ -403,6 +422,7 @@ export function HoSoNccScreen({
             )}
             {ngung && <Tag tone="warn">Ngừng giao dịch</Tag>}
             {!ncc.can_order && <Tag tone="stop">Khoá đặt hàng</Tag>}
+            {ncc.is_marketplace && <Tag tone="run">Sàn TMĐT</Tag>}
           </span>
         }
         actions={
@@ -520,10 +540,13 @@ export function HoSoNccScreen({
           <Table>
             <THead pinFirst>
               <th>Đơn</th>
+              {ncc.is_marketplace && <th>Shop</th>}
+              {ncc.is_marketplace && <th>Mã đơn sàn</th>}
               <th>Lệnh sản xuất</th>
               <th>Trạng thái</th>
               <th>Ngày lập</th>
               <th>Hẹn giao</th>
+              {ncc.is_marketplace && <th style={{ textAlign: 'right' }}>Đã trả trước</th>}
               <th style={{ textAlign: 'right' }}>Giá trị</th>
             </THead>
             <tbody>
@@ -536,6 +559,18 @@ export function HoSoNccScreen({
                         {p.code}
                       </Code>
                     </Cell>
+                    {ncc.is_marketplace && (
+                      <Cell>
+                        {p.shop ?? (
+                          <span className="text-[var(--warn)]">chưa ghi shop</span>
+                        )}
+                      </Cell>
+                    )}
+                    {ncc.is_marketplace && (
+                      <Cell muted>
+                        <span className="num">{p.doc_no ?? '—'}</span>
+                      </Cell>
+                    )}
                     <Cell grow muted>
                       {p.lsx_code ?? 'Ngoài lệnh'}
                     </Cell>
@@ -562,6 +597,19 @@ export function HoSoNccScreen({
                         <span className="text-[var(--warn)]">chưa hẹn</span>
                       )}
                     </Cell>
+                    {ncc.is_marketplace && (
+                      <Cell num>
+                        {p.paid ? (
+                          <Num
+                            value={showMoney(p.paid, {
+                              digits: p.currency === 'VND' ? 0 : 2,
+                            })}
+                          />
+                        ) : (
+                          <span className="text-[var(--ink-3)]">—</span>
+                        )}
+                      </Cell>
+                    )}
                     <Cell num>
                       <Num
                         value={showMoney(p.total, {
@@ -579,7 +627,7 @@ export function HoSoNccScreen({
             */}
             <TFoot
               label={
-                <td colSpan={5}>
+                <td colSpan={ncc.is_marketplace ? 7 : 5}>
                   Cộng {pos.length} đơn
                   <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
                     ·{' '}
@@ -589,7 +637,19 @@ export function HoSoNccScreen({
                   </span>
                 </td>
               }
-              cells={<td className="num">{tien.join(' · ')}</td>}
+              cells={
+                <>
+                  {ncc.is_marketplace && (
+                    <td className="num" title="Đã trả ròng — đã trừ phiếu sàn hoàn tiền">
+                      {showMoney(
+                        song.reduce((t, p) => t + (p.paid ?? 0), 0),
+                        { digits: 0 },
+                      )}
+                    </td>
+                  )}
+                  <td className="num">{tien.join(' · ')}</td>
+                </>
+              }
             />
           </Table>
         )
@@ -618,10 +678,7 @@ export function HoSoNccScreen({
               .map((g) => (
                 <Row key={g.code}>
                   <Cell pin>
-                    <Code
-                      as="a"
-                      href={`/mua-hang/vat-tu/${g.material_id}`}
-                    >
+                    <Code as="a" href={`/mua-hang/vat-tu/${g.material_id}`}>
                       {g.code}
                     </Code>
                   </Cell>

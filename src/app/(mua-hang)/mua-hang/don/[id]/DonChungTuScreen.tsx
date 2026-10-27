@@ -74,6 +74,7 @@ import { GiaoNhan } from './giao-nhan'
 import { SuaTaiChoNut } from './sua-tai-cho-nut'
 import { DongThoiGian, TaiLieu } from './lich-su'
 import { BanNhap } from './ban-nhap'
+import { HangChipPhu } from './chip-phu'
 import { ChiPhi, PhatSinh } from './tai-chinh-khoi'
 import { TongQuanSo } from './tong-quan'
 import { TraoDoiKhung } from './trao-doi'
@@ -382,25 +383,8 @@ export function DonChungTuScreen(p: Props) {
           />
         )}
       </HeadChips>
-      {/* Hàng chip PHỤ, không khung (28/09/2026) — Thanh toán/Nơi giao đứng
-          lẻ sau 4 chip chính khung đầy một hàng; chip khung thêm ở đây vỡ
-          dòng còn 1-2 ô trống nửa hàng, đo trên PO-2026-0087. */}
-      <HeadChips>
-        <HeadChip
-          label="Thanh toán"
-          value={po.terms_payment}
-          muted
-          plain
-          onClick={chipEdit ? () => startEdit('Thanh toán') : undefined}
-        />
-        <HeadChip
-          label="Nơi giao"
-          value={po.terms_delivery_place}
-          muted
-          plain
-          onClick={chipEdit ? () => startEdit('Nơi giao') : undefined}
-        />
-      </HeadChips>
+      {/* Hàng chip PHỤ — Thanh toán·Nơi giao, hoặc 4 ô của đơn sàn (0278): chip-phu.tsx */}
+      <HangChipPhu d={d} chipEdit={chipEdit} />
       <DocStatus
         status={PO_STATUS_LABEL[po.status as PoStatus] ?? po.status}
         icon={STATUS_ICON[po.status as PoStatus] ?? 'thongTin'}
@@ -883,7 +867,7 @@ export function DonChungTuScreen(p: Props) {
           }
         />
       )}
-      {sheet && po && (
+      {sheet && po && sheet.action.id !== 'place_san' && (
         <Sheet
           open
           onClose={() => setSheet(null)}

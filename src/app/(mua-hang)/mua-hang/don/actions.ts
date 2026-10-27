@@ -1,6 +1,7 @@
 import { canReschedule } from '@/lib/po-reschedule'
 import { cancelBlock } from '@/lib/po-guards'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { guiDuyetSanLoi } from '@/lib/mua-san'
 
 /**
  * HÀNH ĐỘNG THEO BƯỚC — chép Action Pane của Dynamics 365: bày ĐỦ hành động của
@@ -45,6 +46,12 @@ export type Perm = {
   noEta?: boolean
   /** Trưởng phòng Cung ứng / admin — được gửi gấp trước khi ký (0218). */
   lead?: boolean
+  /**
+   * NCC của đơn là SÀN (0278) — `shop` là tên shop đang ghi. Có thì gửi duyệt bắt
+   * tên shop, và nút chính sau duyệt là "Đặt trên sàn" thay cho "NCC xác nhận".
+   * Xem `sanCua`.
+   */
+  san?: { shop: string | null }
 }
 
 export type ActionId =
@@ -70,6 +77,8 @@ export type ActionId =
   | 'transit'
   | 'accept'
   | 'close_short'
+  /** Đơn sàn (0278): ghi mã đơn sàn + tiền đã trả — hộp riêng ở màn chứng từ. */
+  | 'place_san'
 
 export type Action = {
   id: ActionId
@@ -115,6 +124,13 @@ export type Action = {
   /** Chạy được hàng loạt. */
   bulk?: boolean
 }
+
+/**
+ * ĐẶT TRÊN SÀN (0278, bản vẽ khung 2) — thay "NCC xác nhận" làm nút chính của đơn sàn.
+ * `build` không có: hộp riêng (`dat-tren-san.tsx`) gom mã đơn sàn, cách trả, số tiền
+ * rồi mới gọi `confirm`. Không chạy hàng loạt — mỗi đơn một mã, một số tiền.
+ */
+const DAT_TREN_SAN = (blocked?: string): Action => ({ id: 'place_san', label: 'Đặt trên sàn', primary: true, ui: 'sheet', stakes: 'vua', blocked }) // prettier-ignore
 
 const OPEN: Action = { id: 'open', label: 'Mở đơn đầy đủ', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}` } // prettier-ignore
 const EDIT = (blocked?: string): Action => ({ id: 'edit', label: 'Sửa đơn', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}?sua=1`, blocked }) // prettier-ignore
@@ -325,7 +341,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           primary: true,
           ui: 'sheet',
           stakes: 'vua',
-          blocked: notOwn,
+          blocked: notOwn ?? (perm.san ? (guiDuyetSanLoi({ marketplace_shop: perm.san.shop }) ?? undefined) : undefined), // prettier-ignore
           consequence: 'Gửi rồi thì không sửa được cho tới khi Giám đốc quyết, hoặc bạn rút về nháp. Đơn còn thiếu thông tin sẽ bị chặn và báo tên.', // prettier-ignore
           done: 'Đã gửi duyệt',
           bulk: true,
@@ -442,6 +458,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
 
     case 'approved':
       return [
+        // Đơn sàn (0278): đặt trong app là trả tiền luôn — hộp riêng ghi mã đơn + tiền.
+        ...(perm.san ? [DAT_TREN_SAN(notOwn)] : []),
         /*
           NCC XÁC NHẬN thay cho "Gửi nhà cung cấp" (06/10/2026, chủ dự án chốt):
           Giám đốc duyệt xong, người mua gửi đơn ngoài hệ thống rồi chờ NCC ừ —
@@ -454,7 +472,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         {
           id: 'send',
           label: 'NCC xác nhận',
-          primary: true,
+          primary: !perm.san,
           ui: 'sheet',
           stakes: 'vua',
           // Lý do NÓI LUÔN CÁCH GỠ — nút gỡ ("Sửa") đứng ngay đầu thanh (28/09/2026).
@@ -650,4 +668,13 @@ export function bulkActionsFor(
     }
     return { action: a, blocked: a.blocked }
   })
+}
+
+/** `Perm.san` của một đơn: có khi NCC của đơn là sàn (0278). */
+export function sanCua(
+  po: { supplier_id: string; marketplace_shop?: string | null },
+  suppliers: { id: string; is_marketplace?: boolean }[],
+): Perm['san'] {
+  const s = suppliers.find((x) => x.id === po.supplier_id)
+  return s?.is_marketplace ? { shop: po.marketplace_shop ?? null } : undefined
 }

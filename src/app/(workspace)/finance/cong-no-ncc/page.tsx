@@ -5,13 +5,14 @@ import { awaitingInvoiceSummary } from '@/modules/dept/accounting/supplier-invoi
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
 import { PayablesManager } from './PayablesManager'
+import { usersRepo } from '@/modules/core/users/users.repo'
 
 export const dynamic = 'force-dynamic'
 
 /** Sổ công nợ NCC (GĐ C.1) — phát sinh từ phiếu nhập có giá, trừ đã trả. */
 export default async function PayablesPage() {
   const user = await authService.requirePageUser()
-  const [{ rows, grand }, canManage, awaiting] = await Promise.all([
+  const [{ rows, grand }, canManage, awaiting, choHoan, nhanVien] = await Promise.all([
     payablesService.list(user),
     canAction(user, 'accounting.payable.manage'),
     /*
@@ -22,6 +23,9 @@ export default async function PayablesPage() {
      * Nuốt lỗi: màn công nợ không được chết vì một dòng cảnh báo.
      */
     awaitingInvoiceSummary().catch(() => ({ by_currency: [], supplier_count: 0 })),
+    // Nhân viên ứng tiền mua sàn chưa được hoàn (0278) + danh sách người cho ô "trả hộ".
+    payablesService.unreimbursed(user),
+    usersRepo.list({ active_only: true }),
   ])
   /*
    * Bọc WorkspaceShell — trang này TRƯỚC GIỜ THIẾU, nên vào bằng link là mất
@@ -35,6 +39,8 @@ export default async function PayablesPage() {
         grand={grand}
         canManage={canManage}
         awaiting={awaiting}
+        choHoan={choHoan}
+        nhanVien={nhanVien.map((u) => ({ id: u.id, name: u.name ?? u.email }))}
       />
     </WorkspaceShell>
   )

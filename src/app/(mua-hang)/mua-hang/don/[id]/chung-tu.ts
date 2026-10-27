@@ -25,6 +25,8 @@ export type PoForHeader = {
   production_order_id: string | null
   project_id?: string | null
   supplier_id: string
+  /** Tên shop khi NCC là sàn (0278). */
+  marketplace_shop?: string | null
   currency: string
   vat_rate: number | null
   price_includes_vat: boolean
@@ -66,6 +68,7 @@ export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
     supplierId: po.supplier_id,
     expectedAt: po.expected_at ? po.expected_at.slice(0, 10) : '',
     contractNo: po.contract_no ?? '',
+    marketplaceShop: po.marketplace_shop ?? '',
     currency: po.currency,
     note: po.note ?? '',
     discount: po.discount_amount ?? '',

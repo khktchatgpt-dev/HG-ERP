@@ -9,6 +9,7 @@ import { ChonMau } from './chon-mau'
 import { money, numStr, toNum } from './don-chung-tu.shared'
 import { hangMucSauDon, OChoViec } from './o-cho-viec'
 import { OThue } from './o-thue'
+import { OShop, O_SHOP_LABEL, thieuShop } from './o-shop'
 import { moXemTruoc } from './xem-truoc'
 import type { DonCtx } from './useDonChungTu'
 
@@ -236,6 +237,7 @@ export function DauDonSoan({ d }: { d: DonCtx }) {
             nhom={(q) => [{ title: 'Nhà cung cấp', rows: d.supplierOptions.filter((o) => !q || khop(q, o.label)) }]} // prettier-ignore
             onPick={chonNcc}
           />
+          {supplierOpt?.is_marketplace && <OShop d={d} />}
         </Hf>
         <Hf label="Mẫu" need empty={!d.mauDaChon}>
           <ChonMau
@@ -379,6 +381,20 @@ export function ChanDonSoan({ d }: { d: DonCtx }) {
           className="rounded-[3px] border border-[var(--warn-line)] bg-[var(--warn-wash)] px-2 py-[2px] text-[12px] font-semibold text-[var(--warn)] hover:underline"
         >
           Chưa lưu được: {problem} →
+        </button>
+      )}
+      {!problem && thieuShop(d) && (
+        // Lưu nháp vẫn được — chỉ GỬI DUYỆT mới bắt tên shop (server: guiDuyetSanLoi).
+        <button
+          type="button"
+          onClick={() =>
+            document
+              .querySelector<HTMLInputElement>(`[aria-label="${O_SHOP_LABEL}"]`)
+              ?.focus()
+          }
+          className="rounded-[3px] border border-[var(--warn-line)] bg-[var(--warn-wash)] px-2 py-[2px] text-[12px] font-semibold text-[var(--warn)] hover:underline"
+        >
+          Chưa gửi duyệt được: thiếu tên shop →
         </button>
       )}
       <span className="ml-auto font-bold">

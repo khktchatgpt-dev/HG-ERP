@@ -142,10 +142,49 @@ export type DatTrenSan = {
  * phiếu chi lúc đó. Trả lý do chặn hoặc null.
  */
 export function datTrenSanLoi(s: Partial<DatTrenSan> | null | undefined): string | null {
-  if (!s) return 'Đơn mua trên sàn: ghi mã đơn sàn và số tiền đã trả ở bước "Đặt trên sàn"'
-  if (!s.order_no?.trim()) return 'Chưa có mã đơn sàn — chép mã đơn trong app Shopee/Lazada vào'
+  if (!s)
+    return 'Đơn mua trên sàn: ghi mã đơn sàn và số tiền đã trả ở bước "Đặt trên sàn"'
+  if (!s.order_no?.trim())
+    return 'Chưa có mã đơn sàn — chép mã đơn trong app Shopee/Lazada vào'
   if (!s.method || !PREPAY_METHODS.includes(s.method)) return 'Chọn cách trả tiền'
   if (s.method !== 'cod' && !(Number(s.amount) > 0))
     return 'Chưa có số tiền đã trả — ghi đúng số app trừ (gồm phí ship, đã trừ voucher)'
   return null
+}
+
+/** Tên shop đã mua trên một sàn — gợi ý cho ô Shop lúc soạn đơn. */
+export type ShopGoiY = { supplier_id: string; shop: string; n: number; last: string }
+
+/**
+ * Gom đơn sàn thành gợi ý tên shop: theo từng sàn, mỗi tên một dòng (không phân biệt
+ * hoa thường / khoảng trắng thừa — "Shop A" và "shop  a" là một), giữ cách viết của
+ * lần dùng GẦN NHẤT, xếp theo lần mua gần nhất. `rows` phải xếp mới → cũ.
+ */
+export function gomShop(
+  rows: { supplier_id: string; marketplace_shop: string | null; created_at: string }[],
+): ShopGoiY[] {
+  const by = new Map<string, ShopGoiY>()
+  for (const r of rows) {
+    const shop = r.marketplace_shop?.trim().replace(/\s+/g, ' ')
+    if (!shop) continue
+    const key = `${r.supplier_id}|${shop.toLowerCase()}`
+    const cur = by.get(key)
+    if (cur) cur.n += 1
+    else by.set(key, { supplier_id: r.supplier_id, shop, n: 1, last: r.created_at.slice(0, 10) }) // prettier-ignore
+  }
+  return [...by.values()]
+}
+
+/**
+ * Đọc số tiền gõ kiểu Việt Nam: "2.500.000" = 2500000, "2500000" như cũ, "2,5" = 2.5.
+ * Chấm là dấu nghìn, phẩy là dấu thập phân (luật số VN của cả dự án). Không đọc được → null.
+ */
+export function docTien(s: string): number | null {
+  const t = s
+    .replace(/[\s₫đ]/gi, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+  if (!t) return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
 }

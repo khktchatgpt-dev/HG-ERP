@@ -101,7 +101,7 @@ export default async function Page({
   const activeIds = new Set(lsxs.map((l) => l.id))
   // Một lượt song song (không chờ nối tiếp). Hạng mục giữ cả cái của đơn nguồn /
   // `?hm=` dù đã đóng — để ô "Cho việc" đọc ra tên và nói "đã đóng" ngay, không đợi lúc lưu.
-  const [offRaw, lastTemplates, hangMuc, thueNcc] = await Promise.all([
+  const [offRaw, lastTemplates, hangMuc, thueNcc, shops] = await Promise.all([
     src
       ? Promise.all(
           [src.po.production_order_id, ...src.extra_lsx.map((x) => x.id)]
@@ -112,6 +112,7 @@ export default async function Page({
     posRepo.lastTemplateBySupplier(),
     projectsService.options(seedHeader?.projectId || sp.hm || null),
     posRepo.taxBySupplier(),
+    posRepo.marketplaceShops(),
   ])
   const offList = offRaw.filter((l) => l != null)
 
@@ -135,7 +136,8 @@ export default async function Page({
       hangMuc={hangMuc}
       thueNcc={thueNcc.ncc}
       thueDem={thueNcc.dem}
-      suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null, vat_rate: s.vat_rate ?? null }))} // prettier-ignore
+      shopGoiY={shops}
+      suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null, can_order: s.can_order !== false, lock_reason: s.lock_reason ?? null, moq: s.moq ?? null, vat_rate: s.vat_rate ?? null, is_marketplace: !!s.is_marketplace }))} // prettier-ignore
       lsxs={[...lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes })), ...offList.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes, status: l.status }))]} // prettier-ignore
       perms={{ canEdit: true, canApprove, isSupply: true }}
       me={{ id: user.id, name: user.name ?? user.email }}

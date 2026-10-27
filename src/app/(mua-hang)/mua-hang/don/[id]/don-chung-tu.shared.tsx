@@ -31,6 +31,7 @@ import { type CostRow } from './ChiPhiPanel'
 import { type PoFinance } from './TaiChinhPanel'
 import { type ShipmentLite } from './nhan-hang'
 import { OChuNo } from './o-chu-no'
+import type { ShopGoiY } from '@/lib/mua-san'
 
 /**
  * MÀN CHỨNG TỪ ĐƠN MUA HỢP NHẤT — xem / sửa / tạo cùng một bố cục.
@@ -86,6 +87,13 @@ export type PoDoc = {
   terms_payment: string | null
   terms_invoice: string | null
   terms_lead_time: string | null
+  /** Số tờ của NCC — với đơn sàn là MÃ ĐƠN SÀN (0278). */
+  supplier_doc_no?: string | null
+  /** Đơn sàn (0278): tên shop, mã vận đơn. */
+  marketplace_shop?: string | null
+  marketplace_tracking_no?: string | null
+  /** Có chữ = đơn không có hoá đơn GTGT (0278). */
+  invoice_waived_reason?: string | null
   assigned_to: string | null
   assignee_name: string | null
   /** Người duyệt — hiện ở mốc "Giám đốc duyệt" trên dòng thời gian. */
@@ -192,7 +200,7 @@ export type Props = {
   /** Đợt về theo phiếu nhập — ma trận nhận. */
   receiptBatches: ReceiptBatch[]
   /** `can_order` false = NCC đang khoá đặt hàng — không bày trong ô chọn (trừ NCC đơn đang mang). */
-  suppliers: { id: string; name: string; currency: string | null; payment_terms: string | null; lead_time_days: number | null; can_order?: boolean; lock_reason?: string | null; moq?: string | null; vat_rate?: number | null }[] // prettier-ignore
+  suppliers: { id: string; name: string; currency: string | null; payment_terms: string | null; lead_time_days: number | null; can_order?: boolean; lock_reason?: string | null; moq?: string | null; vat_rate?: number | null; is_marketplace?: boolean }[] // prettier-ignore
   lsxs: { id: string; code: string; customer_name: string; order_codes: string[] }[]
   perms: {
     canEdit: boolean
@@ -226,6 +234,8 @@ export type Props = {
   thueNcc?: Record<string, ThueNcc>
   /** Số đơn theo từng kiểu thuế cả công ty (khoá `khoaThue`) — "18 đơn" cạnh mỗi kiểu. */
   thueDem?: Record<string, number>
+  /** Tên shop đã dùng trên từng sàn (0278) — gợi ý ô Shop. Chỉ có khi sửa được. */
+  shopGoiY?: ShopGoiY[]
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */
   costs?: CostRow[]
   /** Người có thể đã trả phí tại chỗ (chi hộ, 0215) — ô "Người trả" của hộp ghi phí. */

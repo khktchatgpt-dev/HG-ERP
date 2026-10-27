@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { datTrenSanLoi, guiDuyetSanLoi, hoaDonDon, noHoanUng, soTienDaTra, truongSan } from './mua-san'
+import {
+  datTrenSanLoi,
+  docTien,
+  gomShop,
+  guiDuyetSanLoi,
+  hoaDonDon,
+  noHoanUng,
+  soTienDaTra,
+  truongSan,
+} from './mua-san'
 
 describe('soTienDaTra — phiếu hoàn tiền trừ vào đã trả', () => {
   it('trả tiền dương, hoàn tiền âm, thiếu kind = trả tiền', () => {
@@ -73,10 +82,47 @@ describe('guiDuyetSanLoi / datTrenSanLoi — hàng rào luồng đơn sàn', () 
 
   it('đặt trên sàn: bắt mã đơn, cách trả, số tiền (trừ COD)', () => {
     expect(datTrenSanLoi(undefined)).toMatch(/mã đơn sàn/)
-    expect(datTrenSanLoi({ order_no: ' ', method: 'ck', amount: 1 })).toMatch(/mã đơn sàn/)
+    expect(datTrenSanLoi({ order_no: ' ', method: 'ck', amount: 1 })).toMatch(
+      /mã đơn sàn/,
+    )
     expect(datTrenSanLoi({ order_no: '2410ABC', method: 'ck' })).toMatch(/số tiền/)
-    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'ung', amount: 0 })).toMatch(/số tiền/)
+    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'ung', amount: 0 })).toMatch(
+      /số tiền/,
+    )
     expect(datTrenSanLoi({ order_no: '2410ABC', method: 'cod' })).toBeNull()
-    expect(datTrenSanLoi({ order_no: '2410ABC', method: 'the', amount: 385_000 })).toBeNull()
+    expect(
+      datTrenSanLoi({ order_no: '2410ABC', method: 'the', amount: 385_000 }),
+    ).toBeNull()
+  })
+})
+
+describe('gomShop — gợi ý tên shop đã dùng', () => {
+  it('gộp tên trùng (hoa thường, khoảng trắng), giữ cách viết gần nhất, đếm số đơn', () => {
+    expect(
+      gomShop([
+        { supplier_id: 'spe', marketplace_shop: 'Kim Khí Phát Đạt Official', created_at: '2026-10-27T03:00:00Z' }, // prettier-ignore
+        { supplier_id: 'spe', marketplace_shop: '  kim khí  phát đạt official ', created_at: '2026-10-18T03:00:00Z' }, // prettier-ignore
+        {
+          supplier_id: 'spe',
+          marketplace_shop: null,
+          created_at: '2026-10-10T03:00:00Z',
+        },
+        { supplier_id: 'lzd', marketplace_shop: 'Kim Khí Phát Đạt Official', created_at: '2026-10-05T03:00:00Z' }, // prettier-ignore
+      ]),
+    ).toEqual([
+      { supplier_id: 'spe', shop: 'Kim Khí Phát Đạt Official', n: 2, last: '2026-10-27' },
+      { supplier_id: 'lzd', shop: 'Kim Khí Phát Đạt Official', n: 1, last: '2026-10-05' },
+    ])
+  })
+})
+
+describe('docTien — số tiền gõ kiểu VN', () => {
+  it('chấm là nghìn, phẩy là thập phân, bỏ khoảng trắng và đơn vị', () => {
+    expect(docTien('2.500.000')).toBe(2_500_000)
+    expect(docTien('2500000')).toBe(2_500_000)
+    expect(docTien(' 385.000 đ')).toBe(385_000)
+    expect(docTien('2,5')).toBe(2.5)
+    expect(docTien('')).toBeNull()
+    expect(docTien('abc')).toBeNull()
   })
 })

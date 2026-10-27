@@ -5,6 +5,7 @@ import { isSupplyStaff, listSupplyBuyers } from '@/modules/dept/supply/suppliers
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { loadPriceBook, posRepo } from '@/modules/dept/supply/pos.repo'
 import { HoSoNccScreen } from './HoSoNccScreen'
+import { payablesRepo } from '@/modules/dept/accounting/payables.repo'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,13 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (ncc.is_carrier) redirect(`/mua-hang/van-chuyen/don-vi/${ncc.id}`)
 
   const poIds = pos.map((p) => p.id)
-  const totals = await posRepo.totalsByPoIds(poIds)
+  // Đơn sàn (0278): tiền đã trả ròng theo đơn — chỉ tải khi hồ sơ là sàn.
+  const [totals, paid] = await Promise.all([
+    posRepo.totalsByPoIds(poIds),
+    ncc.is_marketplace
+      ? payablesRepo.paidByPoIds(poIds)
+      : Promise.resolve({} as Record<string, number>),
+  ])
   // Người phụ trách: gán tay thắng; chưa gán thì suy từ đơn (lib/supply-scope).
   const guess = inferSupplierBuyer(pos).get(ncc.id) ?? null
   const buyerId = ncc.buyer_id ?? guess
@@ -64,6 +71,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         status: ncc.status,
         is_active: ncc.is_active,
         can_order: ncc.can_order,
+        is_marketplace: !!ncc.is_marketplace,
         lock_reason: ncc.lock_reason,
         tax_no: ncc.tax_no,
         phone: ncc.phone,
@@ -97,6 +105,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         expected_at: p.expected_at,
         lsx_code: p.lsx_code,
         total: totals[p.id] ?? 0,
+        shop: p.marketplace_shop ?? null,
+        doc_no: p.supplier_doc_no ?? null,
+        paid: paid[p.id] ?? 0,
       }))}
       gia={giaAll
         .filter((g) => g.supplier_id === id)

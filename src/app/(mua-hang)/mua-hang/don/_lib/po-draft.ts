@@ -39,6 +39,11 @@ export type PoHeader = {
   inclVat: boolean
   terms: PoTerms
   signerRole: string
+  /**
+   * Tên shop khi NCC là SÀN (0278) — gõ tự do, gợi ý tên đã dùng. Bỏ trống được
+   * lúc lưu nháp; gửi duyệt mới bắt. NCC thường thì server ghi null.
+   */
+  marketplaceShop?: string
 }
 
 /** Mặc định theo mẫu đơn: VAT, giá đã gồm VAT chưa, điều khoản, chữ ký giữa phiếu. */
@@ -140,6 +145,7 @@ export function buildPoPayload(
     terms_lead_time: header.terms.lead_time || null,
     signer_role: header.signerRole || null,
     note: header.note.trim() || null,
+    marketplace_shop: header.marketplaceShop?.trim() || null,
     lines: lines.map((l) => {
       const d = draftOf(l)
       return {

@@ -1,5 +1,5 @@
 import { db } from '@/server/db'
-import type { PaymentKind } from '@/lib/mua-san'
+import { soTienDaTra, type PaymentKind } from '@/lib/mua-san'
 
 /**
  * CÔNG NỢ NCC (GĐ C.1 — plan-ke-toan-cong-no-ncc): phát sinh KHÔNG lưu cứng —
@@ -23,6 +23,22 @@ export type ReceiptValueRow = {
   supplier_id: string
   supplier_name: string
   payment_terms: string | null
+}
+
+/** Một phiếu chi chờ hoàn ứng cho nhân viên (0278). */
+export type ChoHoanUngRow = {
+  id: string
+  paid_by_user_id: string
+  payer_name: string
+  kind: PaymentKind
+  amount: number
+  currency: string
+  paid_on: string
+  note: string | null
+  po_id: string | null
+  po_code: string | null
+  shop: string | null
+  doc_no: string | null
 }
 
 export type SupplierPayment = {
@@ -280,6 +296,56 @@ export const payablesRepo = {
   }): Promise<void> {
     const { error } = await db().from('accounting_supplier_payments').insert(row)
     if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Phiếu chi do NHÂN VIÊN ứng tiền riêng mà công ty chưa hoàn (0278) — cả phiếu trả
+   * lẫn phiếu sàn hoàn về người đó. Màn Công nợ NCC gom theo người (`noHoanUng`).
+   */
+  async unreimbursed(): Promise<ChoHoanUngRow[]> {
+    const { data, error } = await db()
+      .from('accounting_supplier_payments')
+      .select(
+        'id, paid_by_user_id, kind, amount, currency, paid_on, note, payer:users!accounting_supplier_payments_paid_by_user_id_fkey(name, email), po:supply_purchase_orders(id, code, marketplace_shop, supplier_doc_no)',
+      ) // prettier-ignore
+      .not('paid_by_user_id', 'is', null)
+      .is('reimbursed_at', null)
+      .order('paid_on')
+      .limit(2000)
+    if (error) throw new Error(error.message)
+    type Raw = { id: string; paid_by_user_id: string; kind: PaymentKind; amount: number; currency: string; paid_on: string; note: string | null; payer: One<{ name: string | null; email: string }>; po: One<{ id: string; code: string; marketplace_shop: string | null; supplier_doc_no: string | null }> } // prettier-ignore
+    return ((data ?? []) as unknown as Raw[]).map((r) => {
+      const u = first(r.payer)
+      const po = first(r.po)
+      return {
+        id: r.id,
+        paid_by_user_id: r.paid_by_user_id,
+        payer_name: u?.name ?? u?.email ?? '—',
+        kind: r.kind,
+        amount: Number(r.amount),
+        currency: r.currency,
+        paid_on: r.paid_on,
+        note: r.note,
+        po_id: po?.id ?? null,
+        po_code: po?.code ?? null,
+        shop: po?.marketplace_shop ?? null,
+        doc_no: po?.supplier_doc_no ?? null,
+      }
+    })
+  },
+
+  /** Tiền đã trả RÒNG theo đơn (phiếu hoàn trừ đi — `soTienDaTra`), 0278. */
+  async paidByPoIds(poIds: string[]): Promise<Record<string, number>> {
+    if (poIds.length === 0) return {}
+    const { data, error } = await db()
+      .from('accounting_supplier_payments')
+      .select('po_id, amount, kind')
+      .in('po_id', poIds)
+    if (error) throw new Error(error.message)
+    const out: Record<string, number> = {}
+    for (const p of (data ?? []) as { po_id: string; amount: number; kind: string }[])
+      out[p.po_id] = (out[p.po_id] ?? 0) + soTienDaTra(p)
+    return out
   },
 
   /** Đóng dấu đã hoàn ứng (0278) — chỉ phiếu có người ứng và chưa hoàn. */

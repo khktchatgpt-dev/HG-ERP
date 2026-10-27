@@ -6,6 +6,7 @@ import { poLsxRefs } from '@/lib/po-lsx-refs'
 import type { CascadePo } from '@/lib/po-cancel-cascade'
 import type { PoTemplate } from '@/lib/po-template'
 import type { PoStatus } from './pos.schema'
+import { gomShop, type ShopGoiY } from '@/lib/mua-san'
 
 export type Po = {
   id: string
@@ -879,6 +880,19 @@ export const posRepo = {
    * Mẫu của đơn GẦN NHẤT theo từng NCC — soạn đơn mới, chọn NCC là mẫu tự theo
    * (26/09/2026: 17/19 NCC có ≥ 2 đơn luôn dùng một mẫu). Đơn huỷ không tính.
    */
+  /** Tên shop đã mua trên sàn (0278) — gợi ý ô Shop lúc soạn đơn, xem `gomShop`. */
+  async marketplaceShops(): Promise<ShopGoiY[]> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .select('supplier_id, marketplace_shop, created_at')
+      .not('marketplace_shop', 'is', null)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(2000)
+    if (error) throw new Error(error.message)
+    return gomShop((data ?? []) as { supplier_id: string; marketplace_shop: string | null; created_at: string }[]) // prettier-ignore
+  },
+
   async lastTemplateBySupplier(): Promise<Record<string, PoTemplate>> {
     const { data, error } = await db()
       .from('supply_purchase_orders')

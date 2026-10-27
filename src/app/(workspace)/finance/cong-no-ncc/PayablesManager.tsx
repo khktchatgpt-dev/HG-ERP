@@ -18,7 +18,12 @@ import type {
   PayableFeeRow,
   PayableSupplierRow,
 } from '@/modules/dept/accounting/payables.service'
-import type { SupplierPayment } from '@/modules/dept/accounting/payables.repo'
+import type {
+  ChoHoanUngRow,
+  SupplierPayment,
+} from '@/modules/dept/accounting/payables.repo'
+import { ChoHoanUng } from './ChoHoanUng'
+import { noHoanUng } from '@/lib/mua-san'
 import { NumberField } from '@/components/erp/NumberField'
 
 /**
@@ -54,7 +59,13 @@ export function PayablesManager({
   grand,
   canManage,
   awaiting,
+  choHoan = [],
+  nhanVien = [],
 }: {
+  /** Phiếu chi nhân viên ứng tiền chưa hoàn (0278) — khối "Chờ hoàn ứng". */
+  choHoan?: ChoHoanUngRow[]
+  /** Người cho ô "Nhân viên trả hộ" của hộp ghi thanh toán (0278). */
+  nhanVien?: { id: string; name: string }[]
   rows: PayableSupplierRow[]
   grand: CurrencyTotal[]
   canManage: boolean
@@ -83,6 +94,8 @@ export function PayablesManager({
     method: 'ck',
     ref_no: '',
     note: '',
+    kind: 'payment' as 'payment' | 'refund',
+    paid_by_user_id: '',
   })
 
   const shown = useMemo(() => {
@@ -118,6 +131,8 @@ export function PayablesManager({
       method: 'ck',
       ref_no: '',
       note: '',
+      kind: 'payment',
+      paid_by_user_id: '',
     })
     setPayOpen(true)
   }
@@ -138,6 +153,8 @@ export function PayablesManager({
           currency: form.currency,
           paid_on: form.paid_on,
           method: form.method || null,
+          kind: form.kind,
+          paid_by_user_id: form.paid_by_user_id || null,
           ref_no: form.ref_no.trim() || null,
           note: form.note.trim() || null,
         },
@@ -247,8 +264,14 @@ export function PayablesManager({
             tone: (missingTotal > 0 ? 'amber' : 'gray') as 'amber' | 'gray',
             hint: missingTotal > 0 ? 'phát sinh đang đếm hụt' : undefined,
           },
+          // Cùng hàm với khối dưới (noHoanUng) — một nguồn số.
+          ...(choHoan.length
+            ? [{ label: 'Chờ hoàn ứng', value: fmtM(noHoanUng(choHoan).reduce((t, n) => t + (n.currency === 'VND' ? n.amount : 0), 0)), tone: 'amber' as const, hint: `${new Set(noHoanUng(choHoan).map((n) => n.user_id)).size} người · VND` }] // prettier-ignore
+            : []),
         ]}
       />
+
+      <ChoHoanUng rows={choHoan} canManage={canManage} />
 
       {/*
         TUỔI NỢ là BÁO CÁO CỦA CHÍNH SỔ NÀY, không phải một chủ đề khác — nên nó
@@ -460,9 +483,13 @@ export function PayablesManager({
                         className="flex items-center gap-2 rounded-md border px-3 py-1.5"
                       >
                         <span className="t-data text-xs">{fmtD(p.paid_on)}</span>
-                        <span className="t-data font-semibold tabular-nums">
-                          {fmtM(p.amount)} {p.currency}
+                        <span
+                          className={`t-data font-semibold tabular-nums ${p.kind === 'refund' ? 'text-[var(--done)]' : ''}`}
+                        >
+                          {p.kind === 'refund' ? `−${fmtM(p.amount)}` : fmtM(p.amount)}{' '}
+                          {p.currency}
                         </span>
+                        {p.kind === 'refund' && <Badge tone="green">Hoàn tiền</Badge>}
                         <span className="text-muted-foreground truncate text-xs">
                           {p.po_code ? `${p.po_code} · ` : ''}
                           {p.method === 'ck'
@@ -500,6 +527,28 @@ export function PayablesManager({
         title={`Ghi thanh toán — ${selected?.supplier_name ?? ''}`}
       >
         <div className="flex flex-col gap-3 text-sm">
+          {/* Loại (0278): sàn / NCC trả lại tiền → phiếu hoàn, trừ vào đã trả. */}
+          <div className="flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs">Loại</span>
+            <div
+              className="inline-flex w-fit overflow-hidden rounded-md border"
+              role="radiogroup"
+              aria-label="Loại phiếu"
+            >
+              {(['payment', 'refund'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.kind === k}
+                  onClick={() => setForm({ ...form, kind: k })}
+                  className={`px-3 py-1.5 text-sm ${form.kind === k ? 'bg-[var(--accent)] font-semibold text-[var(--primary)]' : 'bg-background'}`}
+                >
+                  {k === 'payment' ? 'Trả tiền' : 'Hoàn tiền — sàn / NCC trả lại'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-muted-foreground text-xs">Số tiền</span>
@@ -559,13 +608,37 @@ export function PayablesManager({
             </span>
             <select
               value={form.po_id}
-              onChange={(e) => setForm({ ...form, po_id: e.target.value })}
+              onChange={(e) => {
+                const po_id = e.target.value
+                // Đơn đó do nhân viên ứng tiền → tự điền người trả hộ (phiếu hoàn trừ vào nợ họ).
+                const ung = detail?.payments.find(
+                  (p) => p.po_id === po_id && p.paid_by_user_id,
+                )
+                setForm({ ...form, po_id, paid_by_user_id: ung?.paid_by_user_id ?? form.paid_by_user_id }) // prettier-ignore
+              }}
               className="bg-background rounded-md border px-2 py-1.5"
             >
               <option value="">— Không gắn đơn —</option>
               {(detail?.pos ?? []).map((p) => (
                 <option key={p.po_id} value={p.po_id}>
                   {p.po_code} · {fmtM(p.incurred)} {p.currency}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs">
+              Nhân viên trả hộ (trống = công ty trả)
+            </span>
+            <select
+              value={form.paid_by_user_id}
+              onChange={(e) => setForm({ ...form, paid_by_user_id: e.target.value })}
+              className="bg-background rounded-md border px-2 py-1.5"
+            >
+              <option value="">— Công ty trả —</option>
+              {nhanVien.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
                 </option>
               ))}
             </select>
@@ -598,7 +671,8 @@ export function PayablesManager({
               disabled={busy}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
-              {busy && <Spinner size={14} />} Ghi thanh toán
+              {busy && <Spinner size={14} />}{' '}
+              {form.kind === 'refund' ? 'Ghi hoàn tiền' : 'Ghi thanh toán'}
             </button>
           </div>
         </div>
