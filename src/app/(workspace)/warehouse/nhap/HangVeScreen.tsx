@@ -4,11 +4,18 @@ import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDownToLine } from 'lucide-react'
+import type { IncomingBucket } from '@/lib/supply-watch'
 import {
-  INCOMING_BUCKET,
-  INCOMING_BUCKETS,
-  type IncomingBucket,
-} from '@/lib/supply-watch'
+  docHen,
+  dungLich,
+  khopO,
+  nhanO,
+  oCoHangGanNhat,
+  oCua,
+  thuTuO,
+  type OLichKey,
+  type SapDatRow,
+} from '@/lib/kho-lich-hang-ve'
 import { poTemplateShort } from '@/lib/po-template'
 import { MOI, NGOAI_LENH, demTheo, khopLenh, tenNccGon } from '@/lib/theo-doi-loc'
 import { searchMatcher } from '@/lib/search-text'
@@ -30,30 +37,20 @@ import {
   KhoKhung,
   MenuNut,
   Rong,
-  TabNgang,
   ThanhLoc,
   ThanhTT,
-  type TabMuc,
 } from '../_erp/khung'
 import { HangCuaDonSheet } from './hang-cua-don'
 import { BaoSuCoSheet } from './bao-su-co'
+import { LichHangVe } from './lich-hang-ve'
+import { NhomSapDat, lyDoSapDat } from './sap-dat'
+import { DotCell } from './o-dot'
+import { DsDienThoai } from './ds-dien'
 import type { HangCuaDonData } from './tai-hang-cua-don'
 
-type Hen = typeof MOI | IncomingBucket
 type Gom = 'moc' | 'lsx' | 'ncc'
 const GOM_LABEL: Record<Gom, string> = { moc: 'Mốc hẹn', lsx: 'Lệnh SX', ncc: 'Nhà cung cấp' } // prettier-ignore
 
-/** Tab theo mốc hẹn: tên ngắn + màu + kiểu số (đỏ = trễ). */
-const TAB_HEN: Record<
-  IncomingBucket,
-  { ten: string; mau: string; tone?: TabMuc['tone'] }
-> = {
-  overdue: { ten: 'Quá hẹn', mau: 'c-stop', tone: 'red' },
-  today: { ten: 'Hôm nay', mau: 'c-warn', tone: 'warn' },
-  week: { ten: '7 ngày tới', mau: 'c-nhap', tone: 'mut' },
-  later: { ten: 'Sau đó', mau: 'c-mut', tone: 'mut' },
-  no_eta: { ten: 'Chưa hẹn', mau: 'c-warn', tone: 'warn' },
-}
 const MAU_NHOM: Record<IncomingBucket, string> = {
   overdue: 'c-stop',
   today: 'c-warn',
@@ -81,9 +78,16 @@ const nhanHref = (r: HangVeRow) =>
  * bấm mở hộp "Hàng của đơn" (?don=).
  *
  * Hai hộp (Hàng của đơn, Báo sự cố) là hộp thoại của Kho (B6).
+ *
+ * 27/10/2026 — Kho NẮM THÔNG TIN đơn mua, không can thiệp (bản vẽ
+ * https://claude.ai/artifact/5iNGTXFgVaL9ZLcNJEEpVp, Q4 + Q6): dải lịch thay
+ * hàng tab (`lich-hang-ve.tsx`, từng ngày trong 7 ngày tới), gom theo mốc thì
+ * mỗi ngày một nhóm; khối Sắp đặt cuối lưới (`sap-dat.tsx`, chỉ xem); cột
+ * Phụ trách luôn hiện (khung < 900px thì xuống dòng hai cột NCC).
  */
 export function HangVeScreen({
   rows,
+  sapDat,
   today,
   canEdit,
   truncatedAt,
@@ -91,6 +95,8 @@ export function HangVeScreen({
   suCo,
 }: {
   rows: HangVeRow[]
+  /** Đơn GĐ đã duyệt, NCC chưa xác nhận — chỉ xem, không vào số đang về. */
+  sapDat: SapDatRow[]
   today: string
   /** Ghi phiếu kho được (`warehouse.stock.write`). */
   canEdit: boolean
@@ -129,16 +135,16 @@ export function HangVeScreen({
     })
 
   const [q, setQ] = useState('')
-  // `?hen=` từ ô việc của Bàn làm việc Kho (B8a) mở thẳng đúng tab mốc hẹn.
-  const henUrl = params.get('hen')
-  const [hen, setHen] = useState<Hen>(() =>
-    henUrl && rows.some((r) => r.bucket === henUrl)
-      ? (henUrl as Hen)
+  // `?hen=` từ trang Hôm nay / thông báo hàng sắp về mở thẳng đúng ô của dải lịch.
+  const henUrl = docHen(params.get('hen'))
+  const [hen, setHen] = useState<OLichKey>(() =>
+    henUrl && [...rows, ...sapDat].some((r) => khopO(henUrl, r))
+      ? henUrl
       : rows.some((r) => r.bucket === 'overdue')
         ? 'overdue'
         : rows.some((r) => r.bucket === 'today')
           ? 'today'
-          : MOI,
+          : 'tat_ca',
   )
   const [lsx, setLsx] = useState<string>(MOI)
   const [ncc, setNcc] = useState('')
@@ -156,16 +162,35 @@ export function HangVeScreen({
   const dien = beRong > 0 && beRong < 600
 
   // Một hàm khớp, bỏ được MỘT trục — số trong từng ô chọn đếm trên tập đã lọc các trục khác.
-  const khop = (r: HangVeRow, bo?: 'hen' | 'lsx' | 'ncc' | 'loai') => {
+  // Đơn đang về VÀ đơn sắp đặt đi qua cùng một bộ lọc.
+  const khop = (r: HangVeRow | SapDatRow, bo?: 'hen' | 'lsx' | 'ncc' | 'loai') => {
     if (bo !== 'lsx' && !khopLenh(r.lsx_code, lsx)) return false
     if (bo !== 'ncc' && ncc && r.supplier_name !== ncc) return false
     if (bo !== 'loai' && loai !== MOI && r.template !== loai) return false
-    if (bo !== 'hen' && hen !== MOI && r.bucket !== hen) return false
+    if (bo !== 'hen' && !khopO(hen, r)) return false
     return searchMatcher(q)([r.po_code, r.supplier_name, r.lsx_code, ...r.extra_lsx])
   }
   const kept = rows.filter((r) => khop(r))
   const theoHen = rows.filter((r) => khop(r, 'hen'))
-  const demMoc = (b: IncomingBucket) => theoHen.filter((r) => r.bucket === b).length
+  const sapKept = sapDat
+    .filter((s) => khop(s))
+    .sort((a, b) => (a.expected_at ?? '9999').localeCompare(b.expected_at ?? '9999') || a.po_code.localeCompare(b.po_code)) // prettier-ignore
+  const lich = dungLich(
+    theoHen,
+    sapDat.filter((s) => khop(s, 'hen')),
+    today,
+  )
+  const ganNhat = oCoHangGanNhat(lich, hen)
+  // Dòng phụ ô Quá hẹn: "trễ 1–19 ngày" (bỏ ngày gõ nhầm năm).
+  const soTre = theoHen
+    .filter(
+      (r) =>
+        r.bucket === 'overdue' && r.expected_at && !ngayBatThuong(r.expected_at, today),
+    ) // prettier-ignore
+    .map((r) => -soNgayToi(r.expected_at!, today))
+  const treKhoang = soTre.length
+    ? `trễ ${Math.min(...soTre)}${Math.max(...soTre) > Math.min(...soTre) ? `–${Math.max(...soTre)}` : ''} ngày` // prettier-ignore
+    : null
   const lenh = demTheo(rows.filter((r) => khop(r, 'lsx')), (r) => r.lsx_code) // prettier-ignore
   const ngoaiLenh = rows.filter((r) => khop(r, 'lsx') && r.lsx_code == null).length
   const nccs = demTheo(rows.filter((r) => khop(r, 'ncc')), (r) => r.supplier_name) // prettier-ignore
@@ -179,11 +204,22 @@ export function HangVeScreen({
   }
 
   const nhom = useMemo(() => {
-    if (gom === 'moc')
-      return INCOMING_BUCKETS.map((b) => {
-        const rs = kept.filter((r) => r.bucket === b).sort(xepHangVe)
-        return { key: b, ten: INCOMING_BUCKET[b].label, mau: MAU_NHOM[b], rows: rs }
-      }).filter((g) => g.rows.length > 0)
+    // Gom theo mốc: rổ 7 ngày tách mỗi ngày một nhóm — đúng ô của dải lịch.
+    if (gom === 'moc') {
+      const m = new Map<OLichKey, HangVeRow[]>()
+      for (const r of kept) {
+        const k = oCua(r.bucket, r.expected_at)
+        m.set(k, [...(m.get(k) ?? []), r])
+      }
+      return [...m]
+        .sort(([a], [b]) => thuTuO(a).localeCompare(thuTuO(b)))
+        .map(([k, rs]) => ({
+          key: k,
+          ten: nhanO(k, today),
+          mau: MAU_NHOM[rs[0].bucket],
+          rows: rs.sort(xepHangVe),
+        }))
+    }
     const keyOf =
       gom === 'lsx'
         ? (r: HangVeRow) => r.lsx_code ?? 'Ngoài lệnh SX'
@@ -198,23 +234,28 @@ export function HangVeScreen({
         rows: rs.sort(xepHangVe),
       }))
       .sort((a, b) => b.rows.length - a.rows.length || a.ten.localeCompare(b.ten, 'vi'))
-  }, [kept, gom])
+  }, [kept, gom, today])
 
   // Đúng MỘT lệnh đang lọc thì cột Lệnh SX lặp một giá trị — ẩn.
   const hienLenh = !hep && (lsx === MOI || lsx === NGOAI_LENH)
-  const soCot = 5 + (hep ? 0 : 1) + (hienLenh ? 1 : 0) + (gon ? 0 : 2)
+  // Hẹn · Trễ · Đơn · Lệnh · NCC · Loại · Đợt · Về kho · Phụ trách (< 900px: xuống dòng NCC).
+  const soCot = 4 + (hep ? 0 : 2) + (hienLenh ? 1 : 0) + (gon ? 0 : 1)
   const soGo = kept.filter(chiDongTuDo).length
   const choNhan = kept.reduce((s, r) => s + Math.max(0, r.lines_total - r.lines_done), 0)
 
   const sel = kept.find((r) => r.po_id === chon) ?? null
+  // Đơn sắp đặt đang chọn: Nhận hàng khoá, nói ai gỡ được (chỉ xem — không có nút báo).
+  const selSap = sel ? null : (sapKept.find((s) => s.po_id === chon) ?? null)
   const lyDoNhan = (r: HangVeRow | null) =>
-    !r
-      ? 'Chọn một đơn trong bảng trước'
-      : chiDongTuDo(r)
-        ? 'Đơn chỉ có dòng theo mã SP (gỗ…): không vào tồn kho, Cung ứng nghiệm thu ngoài sổ'
-        : !canEdit
-          ? 'Chỉ phòng Kho ghi phiếu nhập'
-          : null
+    selSap && !r
+      ? lyDoSapDat(selSap)
+      : !r
+        ? 'Chọn một đơn trong bảng trước'
+        : chiDongTuDo(r)
+          ? 'Đơn chỉ có dòng theo mã SP (gỗ…): không vào tồn kho, Cung ứng nghiệm thu ngoài sổ'
+          : !canEdit
+            ? 'Chỉ phòng Kho ghi phiếu nhập'
+            : null
   const nhan = (r: HangVeRow) => {
     if (lyDoNhan(r) == null) router.push(nhanHref(r))
   }
@@ -224,29 +265,6 @@ export function HangVeScreen({
       nhan(r)
     }
   }
-
-  const tabs: TabMuc[] = [
-    {
-      key: 'all',
-      label: 'Tất cả',
-      on: hen === MOI,
-      onClick: () => setHen(MOI),
-      n: theoHen.length,
-      tone: 'mut',
-    },
-    ...INCOMING_BUCKETS.map((b) => {
-      const n = demMoc(b)
-      return {
-        key: b,
-        label: TAB_HEN[b].ten,
-        on: hen === b,
-        onClick: () => setHen(b),
-        n,
-        tone: n > 0 ? TAB_HEN[b].tone : undefined,
-        mau: TAB_HEN[b].mau,
-      }
-    }),
-  ]
 
   const dong = (r: HangVeRow) => {
     const n = r.expected_at ? soNgayToi(r.expected_at, today) : null
@@ -303,7 +321,7 @@ export function HangVeScreen({
             title={[
               'Xem hàng của đơn',
               gon && (poTemplateShort(r.template) ?? r.template),
-              gon && r.owner_name && `phụ trách ${r.owner_name}`,
+              hep && r.owner_name && `phụ trách ${r.owner_name}`,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -340,6 +358,7 @@ export function HangVeScreen({
             <span className="kh-mut" style={{ display: 'block', fontSize: 11.5 }}>
               {r.lsx_code ?? 'ngoài lệnh'}
               {r.extra_lsx.length > 0 && ` +${r.extra_lsx.length}`}
+              {r.owner_name && ` · ${r.owner_name}`}
             </span>
           )}
         </td>
@@ -372,9 +391,9 @@ export function HangVeScreen({
             </>
           )}
         </td>
-        {!gon && (
-          <td className="kh-mut" title={r.owner_name ?? undefined}>
-            {r.owner_name ? r.owner_name.split(' ').slice(-1)[0] : '—'}
+        {!hep && (
+          <td className="kh-mut ten-nguoi" title={r.owner_name ?? undefined}>
+            {r.owner_name ?? '—'}
           </td>
         )}
       </tr>
@@ -388,6 +407,12 @@ export function HangVeScreen({
         ctx={
           <>
             <b>{rows.length}</b> đơn đang về
+            {sapDat.length > 0 && (
+              <>
+                {' '}
+                · <b>{sapDat.length}</b> đơn sắp đặt
+              </>
+            )}
           </>
         }
         actions={
@@ -405,7 +430,11 @@ export function HangVeScreen({
                 href={sel && lyDoNhan(sel) == null ? nhanHref(sel) : undefined}
                 why={lyDoNhan(sel)}
               >
-                {sel ? `Nhận hàng ${sel.po_code}` : 'Nhận hàng'}
+                {sel
+                  ? `Nhận hàng ${sel.po_code}`
+                  : selSap
+                    ? `Nhận hàng ${selSap.po_code}`
+                    : 'Nhận hàng'}
               </ApNut>
             )}
             <MenuNut
@@ -416,17 +445,19 @@ export function HangVeScreen({
                   : [
                       {
                         label: 'Hàng của đơn',
-                        onClick: sel ? () => moDon(sel.po_id) : undefined,
-                        why: sel ? null : 'Chọn một đơn trong bảng trước',
+                        onClick: sel || selSap ? () => moDon((sel ?? selSap)!.po_id) : undefined, // prettier-ignore
+                        why: sel || selSap ? null : 'Chọn một đơn trong bảng trước',
                       },
                       {
                         label: 'Báo sự cố giao hàng',
                         onClick: sel ? () => moSuCo(sel.po_id) : undefined,
-                        why: !sel
-                          ? 'Chọn một đơn trong bảng trước'
-                          : !canEdit
-                            ? 'Chỉ phòng Kho báo sự cố giao hàng'
-                            : null,
+                        why: selSap
+                          ? 'Đơn chưa được NCC xác nhận, chưa có hàng giao'
+                          : !sel
+                            ? 'Chọn một đơn trong bảng trước'
+                            : !canEdit
+                              ? 'Chỉ phòng Kho báo sự cố giao hàng'
+                              : null,
                       },
                     ]),
                 // Hàng về KHÔNG có đơn (N2): có đơn thì vẫn nhận theo đơn.
@@ -449,7 +480,24 @@ export function HangVeScreen({
         />
       )}
 
-      <TabNgang label="Mốc hẹn giao" tabs={tabs} />
+      {/* Đơn sắp đặt đang chọn: lý do khoá Nhận hàng nói TẠI CHỖ, không chỉ trong tooltip. */}
+      {selSap && (
+        <div className="kh-note mut">
+          <span className="tag">Sắp đặt</span>
+          <span>
+            Chưa nhận được <b className="kh-num">{selSap.po_code}</b>:{' '}
+            {lyDoSapDat(selSap)}.
+          </span>
+        </div>
+      )}
+
+      <LichHangVe
+        lich={lich}
+        chon={hen}
+        onChon={setHen}
+        treKhoang={treKhoang}
+        gon={hep}
+      />
 
       <ThanhLoc>
         <input
@@ -535,32 +583,40 @@ export function HangVeScreen({
       )}
 
       <div ref={khung} style={{ height: 0, width: '100%' }} aria-hidden />
-      {kept.length === 0 ? (
+      {kept.length === 0 && sapKept.length === 0 ? (
         <Rong
           tieuDe={
             rows.length === 0
               ? 'Không có hàng nào đang về'
-              : hen !== MOI && !dangLoc
-                ? `Không có đơn nào "${TAB_HEN[hen].ten}"`
+              : hen !== 'tat_ca' && !dangLoc
+                ? `Không có đơn nào ở ô “${nhanO(hen, today)}”`
                 : 'Không có đơn nào khớp'
           }
           lyDo={
             rows.length === 0
               ? 'Chỉ đơn NCC đã xác nhận mới nằm ở đây. Khi Cung ứng ghi NCC xác nhận, đơn tự hiện ở màn này. Hàng tới mà không có đơn thì nhận không theo đơn.'
-              : `Trong ${rows.length} đơn đang về, không đơn nào khớp tab và bộ lọc hiện tại${q.trim() ? ` với từ khoá “${q.trim()}”` : ''}.`
+              : `Trong ${rows.length} đơn đang về, không đơn nào khớp ô lịch và bộ lọc hiện tại${q.trim() ? ` với từ khoá “${q.trim()}”` : ''}.`
           }
           tiep={
             rows.length === 0 ? (
               <Link href="/warehouse/nhap/ngoai-don" className="kh-btn p">
                 Nhận hàng không theo đơn
               </Link>
+            ) : ganNhat && !dangLoc ? (
+              <button
+                type="button"
+                className="kh-btn"
+                onClick={() => setHen(ganNhat.key)}
+              >
+                Xem {ganNhat.nhan} · {ganNhat.n} đơn
+              </button>
             ) : (
               <button
                 type="button"
                 className="kh-btn"
                 onClick={() => {
                   boLoc()
-                  setHen(MOI)
+                  setHen('tat_ca')
                 }}
               >
                 Xem cả {rows.length} đơn
@@ -569,86 +625,27 @@ export function HangVeScreen({
           }
         />
       ) : dien ? (
-        /* ĐIỆN THOẠI (K5): danh sách phẳng — chạm đơn là mở phiếu nhận (hoặc xem
-           hàng của đơn khi không nhận được). Không cuộn ngang. */
-        <div className="kh-pl" aria-label="Đơn đang về">
-          {nhom.map((g) => (
-            <Fragment key={g.key}>
-              <div className={`kh-pl-sec ${g.mau}`}>
-                {g.ten} · {g.rows.length}
-              </div>
-              {g.rows.map((r) => {
-                const n = r.expected_at ? soNgayToi(r.expected_at, today) : null
-                const tre = !ngayBatThuong(r.expected_at, today) && n != null && n < 0 ? -n : 0 // prettier-ignore
-                const nhanDuoc = lyDoNhan(r) == null
-                return (
-                  <button
-                    key={r.po_id}
-                    type="button"
-                    className="kh-pl-row"
-                    onClick={() => (nhanDuoc ? router.push(nhanHref(r)) : moDon(r.po_id))}
-                  >
-                    <span style={{ minWidth: 0 }}>
-                      <span className="kh-ma" style={{ color: 'var(--kh-act)' }}>
-                        {r.po_code}
-                      </span>
-                      {r.su_co_mo > 0 && (
-                        <span className="kh-tag warn" style={{ marginLeft: 6 }}>
-                          {r.su_co_mo} sự cố
-                        </span>
-                      )}
-                      <span
-                        className="s"
-                        style={{
-                          display: 'block',
-                          color: 'var(--kh-ink)',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {tenNccGon(r.supplier_name)}
-                      </span>
-                      <span className="s" style={{ display: 'block' }}>
-                        {r.lsx_code ?? 'ngoài lệnh'} · về {r.lines_done}/{r.lines_total}{' '}
-                        dòng
-                      </span>
-                    </span>
-                    <span className="r">
-                      <span
-                        className={tre ? 'kh-stop kh-num' : 'kh-num'}
-                        style={{ display: 'block' }}
-                      >
-                        {r.expected_at ? ngay(r.expected_at, today) : 'chưa hẹn'}
-                      </span>
-                      {tre > 0 && <span className="kh-stop">trễ {tre} ngày</span>}
-                      <span
-                        style={{
-                          display: 'block',
-                          color: nhanDuoc ? 'var(--kh-act)' : 'var(--kh-ink3)',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {nhanDuoc ? 'Nhận ›' : chiDongTuDo(r) ? 'ngoài sổ ›' : 'xem ›'}
-                      </span>
-                    </span>
-                  </button>
-                )
-              })}
-            </Fragment>
-          ))}
-        </div>
+        <DsDienThoai
+          nhom={nhom}
+          sapKept={sapKept}
+          today={today}
+          nhanDuoc={(r) => lyDoNhan(r) == null}
+          onNhan={(r) => router.push(nhanHref(r))}
+          onXem={moDon}
+        />
       ) : (
         <div className="kh-grid">
           <table className="kh-tb" aria-label="Đơn đang về">
             <colgroup>
               <col style={{ width: hep ? 92 : 78 }} />
-              {!hep && <col style={{ width: 74 }} />}
-              <col style={{ width: 150 }} />
-              {hienLenh && <col style={{ width: 136 }} />}
+              {!hep && <col style={{ width: 72 }} />}
+              <col style={{ width: 124 }} />
+              {hienLenh && <col style={{ width: 158 }} />}
               <col />
               {!gon && <col style={{ width: 96 }} />}
               <col style={{ width: gon ? 130 : 204 }} />
               <col style={{ width: hep ? 64 : 112 }} />
-              {!gon && <col style={{ width: 90 }} />}
+              {!hep && <col style={{ width: 150 }} />}
             </colgroup>
             <thead>
               <tr>
@@ -660,7 +657,7 @@ export function HangVeScreen({
                 {!gon && <th>Loại hàng</th>}
                 <th>{gon ? 'Đợt' : 'Đợt · xe tới'}</th>
                 <th>Về kho</th>
-                {!gon && <th>Phụ trách</th>}
+                {!hep && <th>Phụ trách</th>}
               </tr>
             </thead>
             <tbody>
@@ -685,13 +682,26 @@ export function HangVeScreen({
                   </Fragment>
                 )
               })}
+              <NhomSapDat
+                rows={sapKept}
+                today={today}
+                soCot={soCot}
+                hep={hep}
+                gon={gon}
+                hienLenh={hienLenh}
+                chon={chon}
+                onChon={setChon}
+                onXem={moDon}
+              />
             </tbody>
             <tfoot>
               <tr>
                 <td colSpan={soCot}>
                   Cộng {kept.length} đơn · {choNhan} dòng hàng chờ nhận
-                  {soGo > 0 ? ` · ${soGo} đơn ngoài sổ kho` : ''} · không gồm đơn nháp,
-                  đơn NCC chưa xác nhận
+                  {soGo > 0 ? ` · ${soGo} đơn ngoài sổ kho` : ''} · không gồm đơn nháp
+                  {sapKept.length > 0
+                    ? ` · ${sapKept.length} đơn sắp đặt chỉ để xem, không tính vào số trên`
+                    : ', đơn NCC chưa xác nhận'}
                 </td>
               </tr>
             </tfoot>
@@ -723,40 +733,5 @@ export function HangVeScreen({
         </>
       )}
     </KhoKhung>
-  )
-}
-
-/**
- * Cột "Đợt · xe tới": đợt kế tiếp đứng trước (thứ thủ kho chờ), đợt đã nhập
- * trước hạn đi sau, gọn một dòng — câu đầy đủ ở `title` và trong hộp đơn.
- */
-function DotCell({ r, today, hep }: { r: HangVeRow; today: string; hep: boolean }) {
-  const d = r.dot
-  if (!d) return <span className="kh-mut">chưa chia đợt</span>
-  const truoc = d.da_nhap_truoc.join(', ')
-  const cau = [
-    d.ke_tiep
-      ? `Đợt kế tiếp: đợt ${d.ke_tiep.seq}/${d.so_dot}, hẹn ${ngay(d.ke_tiep.date, today)}${d.ke_tiep.arrived ? ', NCC báo xe đã tới' : ''}.`
-      : 'Không còn đợt nào đang chờ.',
-    truoc ? `Đợt ${truoc} hẹn trước đó nhưng hàng đã nhập đủ — không phải chờ xe.` : '',
-  ].join(' ')
-  return (
-    <span title={cau}>
-      {d.ke_tiep ? (
-        <span className="kh-num">
-          {hep ? '' : 'Đợt '}
-          {d.ke_tiep.seq}/{d.so_dot} · {ngay(d.ke_tiep.date, today)}
-        </span>
-      ) : (
-        !truoc && <span className="kh-mut">hết đợt đã hẹn</span>
-      )}
-      {d.ke_tiep?.arrived && <span className="kh-warn"> · {hep ? 'tới' : 'đã tới'}</span>}
-      {truoc && (
-        <span className="kh-ok">
-          {d.ke_tiep ? ' · ' : ''}
-          {hep ? `✓đ${truoc}` : `đợt ${truoc} đã về`}
-        </span>
-      )}
-    </span>
   )
 }

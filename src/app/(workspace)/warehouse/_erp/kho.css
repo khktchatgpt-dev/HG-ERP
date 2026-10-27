@@ -237,6 +237,100 @@
   font-weight: 600;
   color: var(--kh-stop);
 }
+/* ── 2b · Dải lịch hàng về (Nhận hàng, 27/10/2026) — mỗi ô một tab: số chính =
+      đơn đang về, dòng phụ "+N sắp đặt" chữ mờ. Ô 0 chữ xám; chỉ Quá hẹn đỏ. ── */
+.kh.kh .kh-lich {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  background: var(--kh-raised);
+  border-bottom: 1px solid var(--kh-line);
+}
+.kh.kh .kh-lich .o {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 10px 7px;
+  border: 0;
+  border-right: 1px solid var(--kh-line);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.kh.kh .kh-lich .o:last-child {
+  border-right: 0;
+}
+.kh.kh .kh-lich .o:hover {
+  background: var(--kh-card);
+}
+.kh.kh .kh-lich .o:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: -2px;
+}
+.kh.kh .kh-lich .d,
+.kh.kh .kh-lich .s {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kh.kh .kh-lich .d {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-lich .n {
+  font-family: var(--kh-mono);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--kh-ink);
+}
+.kh.kh .kh-lich .s {
+  font-size: 11px;
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-lich .zero .n {
+  color: var(--kh-empty);
+}
+.kh.kh .kh-lich .tre:not(.zero) .n,
+.kh.kh .kh-lich .tre:not(.zero) .d {
+  color: var(--kh-stop);
+}
+.kh.kh .kh-lich .chua:not(.zero) .n {
+  color: var(--kh-warn);
+}
+.kh.kh .kh-lich .sau,
+.kh.kh .kh-lich .tat {
+  background: var(--kh-hair);
+}
+.kh.kh .kh-lich .o.on {
+  background: var(--kh-card);
+  box-shadow: inset 0 -3px 0 var(--kh-act);
+}
+.kh.kh .kh-lich .o.on .d {
+  color: var(--kh-act);
+}
+.kh.kh .kh-lich.gon .o {
+  padding: 5px 6px;
+}
+/* dòng đơn SẮP ĐẶT trong lưới Nhận hàng — chỉ xem, chữ mờ */
+.kh.kh .kh-tb tr.d.mo td {
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-tb tr.d.mo .kh-lnk {
+  color: var(--kh-ink2);
+}
+.kh.kh .kh-tb td.ten-nguoi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .kh.kh .kh-bd {
   min-width: 22px;
   height: 19px;
@@ -726,6 +820,12 @@
 }
 .kh.kh table.kh-in .r {
   text-align: right;
+}
+/* bảng dài trong hộp thoại: đầu cột dính khi cuộn khung `.than` */
+.kh.kh table.kh-in.dinh th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .kh.kh .kh-in-rong {
   padding: 14px 12px;
@@ -1264,6 +1364,55 @@
   color: var(--kh-ink3);
   cursor: default;
 }
+/* dòng chú cuối gợi ý — dính đáy khung cuộn để luôn đọc được */
+.kh.kh .kh-tim-ds li.cuoi {
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid var(--kh-line);
+  border-bottom: 0;
+  background: var(--kh-raised);
+  font-size: 11.5px;
+}
+/* gợi ý vật tư: mã · tên · tồn · ĐVT */
+/* ô vuông tích nhiều ở đầu dòng gợi ý (Shift+Enter / bấm) */
+.kh.kh .kh-tich {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #9aa3b2;
+  background: var(--kh-card);
+  color: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.kh.kh .kh-tich.on {
+  border-color: var(--kh-act);
+  background: var(--kh-act);
+  color: #fff;
+}
+.kh.kh .kh-tich.co {
+  border-color: transparent;
+  background: none;
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-goi-y-vt {
+  display: grid;
+  grid-template-columns: 14px 84px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+}
+.kh.kh .kh-goi-y-vt .ten {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kh.kh .kh-goi-y-vt .ton {
+  text-align: right;
+  white-space: nowrap;
+}
 /* ── Dải nút chọn một ── */
 .kh.kh .kh-seg {
   display: inline-flex;
@@ -1336,6 +1485,34 @@
 }
 .kh.kh .kh-them .bao {
   font-weight: 600;
+}
+/* nút trên thanh thêm dòng phải RA DÁNG NÚT — kh-btn trần không viền, đọc thành chữ */
+.kh.kh .kh-them .kh-btn {
+  height: 24px;
+  border: 1px solid var(--kh-line);
+  background: var(--kh-card);
+  font-weight: 600;
+  color: var(--kh-act);
+}
+.kh.kh .kh-them .kh-btn:hover {
+  background: var(--kh-act-wash);
+}
+/* dải "Đang tích N mã" — trạng thái tích không được giấu trong danh sách đã đóng */
+.kh.kh .kh-dang-tich {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 520px;
+}
+.kh.kh .kh-dang-tich .ds {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--kh-ink2);
+  font-family: var(--kh-mono);
+  font-size: 12px;
 }
 
 /* nút lọc nhỏ trong hộp (Còn tồn · Kho hết · Tất cả) */

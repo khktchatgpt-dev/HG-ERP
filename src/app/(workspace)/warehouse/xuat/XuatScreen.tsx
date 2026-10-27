@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { BookOpen, Printer, RotateCcw } from 'lucide-react'
+import { BookOpen, ListChecks, Printer, RotateCcw } from 'lucide-react'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import {
   WarehouseDocPrintSheet,
@@ -19,8 +19,8 @@ import {
   tinhTongXuat,
   type DauPhieuXuat,
   type DongXuat,
-  type VatTuChon,
 } from '@/lib/kho-phieu-xuat'
+import { goiYTon, latTich, taoDemTim, type VatTuTon } from '@/lib/kho-chon-vat-tu'
 import { ApNhom, ApNut, DaGhiSo, DauTrang, KhoKhung, ThanhTT } from '../_erp/khung'
 import { HopThoai } from '../_erp/o-nhap'
 import { OTim } from '../_erp/o-tim'
@@ -28,8 +28,11 @@ import { useCtrlEnter } from '../_erp/useCtrlEnter'
 import { DauXuat, type LsxOpt } from './dau-xuat'
 import { LuoiXuat } from './luoi-xuat'
 import { HangLenh, type LayHang } from './hang-lenh'
+import { ChonNhieuHop } from './chon-nhieu'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
+const fmtSo = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
+const KHONG_CO = new Set<string>()
 
 type Bao = { tone: 'ok' | 'warn' | 'stop'; text: string }
 
@@ -41,8 +44,15 @@ type Bao = { tone: 'ok' | 'warn' | 'stop'; text: string }
  *
  * Đầu phiếu đi theo thứ tự câu hỏi thật (xuất cho → lệnh / lý do → tổ → ngày).
  * Thêm dòng bằng ô tìm TRÊN lưới (ngoài khung cuộn — danh sách gợi ý không bị
- * cắt), tồn dùng được tra lúc thêm; chọn lệnh thì có "Lấy hàng của lệnh" đưa cả
- * loạt vào lưới. Một mã một dòng.
+ * cắt); chọn lệnh thì có "Lấy hàng của lệnh" đưa cả loạt vào lưới. Một mã một dòng.
+ *
+ * CHỌN VẬT TƯ (27/10/2026 — "chọn loại vật tư quá chậm"): trang nạp sẵn các mã
+ * CÒN TỒN kèm tồn dùng được (`tonSan`). Ô tìm lọc tại máy — gõ không gọi API,
+ * gợi ý ghi tồn + kệ, mã của lệnh lên đầu; chọn xong không phải tra tồn. Chỉ khi
+ * không mã còn tồn nào khớp mới hỏi `stock/tim` (có đệm theo chữ gõ). Nhiều mã
+ * một lượt: Shift+Enter (hoặc bấm ô vuông) TÍCH ở gợi ý — qua nhiều lần gõ — rồi
+ * một Enter thêm cả loạt; hoặc hộp "Chọn nhiều từ tồn kho". Enter ở ô số → dòng
+ * dưới / về ô tìm.
  *
  * GHI SỔ = một POST `docs/issue` — chỉ ở thanh chốt đáy (màn gõ một chỗ chốt).
  * Server vẫn là người quyết (guard trạng thái lệnh, tồn, giữ chỗ; mã X1 tự gắn).
@@ -54,6 +64,7 @@ export function XuatScreen({
   lsx,
   to,
   phong,
+  tonSan,
   today,
   nguoiLap,
   canEdit,
@@ -65,6 +76,8 @@ export function XuatScreen({
   to: string[]
   /** Mọi phòng ban — ô "Bộ phận nhận" khi xuất lẻ. */
   phong: string[]
+  /** Mã còn tồn dùng được, nạp sẵn — ô thêm dòng + hộp chọn nhiều lọc tại máy. */
+  tonSan: VatTuTon[]
   today: string
   nguoiLap: string
   canEdit: boolean
@@ -83,7 +96,11 @@ export function XuatScreen({
     doc_date: today,
   })
   const [rows, setRows] = useState<DongXuat[]>([])
-  const [dangTra, setDangTra] = useState(false)
+  const [chonNhieu, setChonNhieu] = useState(false)
+  /** Mã đang TÍCH ở ô gợi ý (Shift+Enter) — theo thứ tự tích; Enter thêm cả loạt. */
+  const [tich, setTich] = useState<Map<string, VatTuTon>>(() => new Map())
+  /** Mã đã về cho lệnh — `HangLenh` báo lên; chỉ dùng khi đúng lệnh đang chọn. */
+  const [hangLenhCua, setHangLenhCua] = useState<{ lsx: string; ids: Set<string> } | null>(null) // prettier-ignore
   /** Đã bấm Ghi sổ ít nhất một lần — từ đó ô thiếu mới đỏ. */
   const [daThu, setDaThu] = useState(false)
   const [xemIn, setXemIn] = useState(false)
@@ -106,12 +123,23 @@ export function XuatScreen({
   const lsxChon = lsx.find((l) => l.id === head.lsx_id) ?? null
   const thieu = (o: 'lenh' | 'ly_do' | 'to') => daThu && !kiem.ok && kiem.focus === o
   const lyDoChon = LY_DO_XUAT_LE.find((x) => x.ma === head.ly_do)
+  const cuaLenh =
+    canLenh && hangLenhCua && hangLenhCua.lsx === head.lsx_id ? hangLenhCua.ids : KHONG_CO
+  /** id → số dòng (1-based) — gợi ý và hộp chọn nhiều nói "đã có ở dòng N". */
+  const trongPhieu = useMemo(() => new Map(rows.map((r, i) => [r.id, i + 1])), [rows])
 
-  async function timVatTu(q: string): Promise<VatTuChon[]> {
-    const res = await api<{ rows: VatTuChon[] }>(
-      `/api/dept/warehouse/materials?q=${encodeURIComponent(q)}&active_only=true&page_size=20`,
+  // Đệm câu tìm server theo chữ gõ — làm mới khi trang nạp lại tồn (sau Ghi sổ).
+  const demTim = useMemo(() => taoDemTim<VatTuTon[]>(), [tonSan]) // eslint-disable-line react-hooks/exhaustive-deps -- tonSan đổi = tồn đã đổi, bỏ đệm cũ
+
+  /** Đường lùi: không mã còn tồn nào khớp → tìm cả danh mục, trả luôn tồn. */
+  async function timVatTu(q: string): Promise<VatTuTon[]> {
+    const co = demTim.lay(q)
+    if (co) return co
+    const res = await api<{ rows: VatTuTon[] }>(
+      `/api/dept/warehouse/stock/tim?q=${encodeURIComponent(q)}`,
     )
-    return res.rows.map((m) => ({ id: m.id, code: m.code, name: m.name, unit: m.unit }))
+    demTim.dat(q, res.rows)
+    return res.rows
   }
 
   const focusQty = (i: number) => {
@@ -120,27 +148,82 @@ export function XuatScreen({
     el?.select()
   }
 
-  async function chonVatTu(vt: VatTuChon) {
-    setDangTra(true)
-    let qty_ok: number | null = null
-    try {
-      const res = await api<{ rows: { material_id: string; qty_ok: number }[] }>(
-        `/api/dept/warehouse/stock/ton?ids=${vt.id}`,
-      )
-      qty_ok = res.rows[0]?.qty_ok ?? 0
-    } catch (e) {
-      setBao({ tone: 'warn', text: `Không tra được tồn ${vt.code}: ${apiErrorText(e)}` })
-    } finally {
-      setDangTra(false)
-    }
-    const r = themDong(rows, vt, qty_ok)
+  /*
+    Ô cần đưa con trỏ tới SAU khi lưới vẽ xong dòng mới. Không dùng setTimeout:
+    gõ số nhanh hơn hẹn giờ là số rơi vào ô tìm thay vì ô Lần này (bắt được khi
+    thử bằng bàn phím 27/10). Layout effect chạy ngay sau lượt vẽ, trước phím kế.
+  */
+  const choFocus = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    const id = choFocus.current
+    if (!id) return
+    choFocus.current = null
+    const el = document.getElementById(id) as HTMLInputElement | null
+    el?.focus()
+    el?.select()
+  })
+
+  /** Tồn đã đi kèm mã (nạp sẵn / `stock/tim`) — thêm dòng không phải hỏi server nữa. */
+  function chonVatTu(vt: VatTuTon) {
+    const r = themDong(rows, { id: vt.id, code: vt.code, name: vt.name, unit: vt.unit }, vt.qty_ok) // prettier-ignore
     if (r.trung)
       setBao({
         tone: 'warn',
         text: `${vt.code} đã có ở dòng ${r.index + 1} — một mã một dòng, sửa số ở dòng đó.`,
       })
-    else setRows(r.rows)
-    setTimeout(() => focusQty(r.index), 40)
+    else {
+      setRows(r.rows)
+      if (vt.qty_ok <= 0)
+        setBao({
+          tone: 'warn',
+          text: `${vt.code} kho hết trên máy — ghi sổ sẽ bị chặn. Nhận hàng hoặc Cập nhật số thực tế trước.`,
+        })
+    }
+    choFocus.current = `xuat-qty-${r.index}`
+  }
+
+  /** Shift+Enter / bấm ô vuông ở gợi ý. Mã đã có trong phiếu thì không tích — nói dòng nào. */
+  const lat = (vt: VatTuTon) => {
+    const dong = trongPhieu.get(vt.id)
+    if (dong) {
+      setBao({ tone: 'warn', text: `${vt.code} đã có ở dòng ${dong} — một mã một dòng.` })
+      return
+    }
+    setTich((t) => latTich(t, vt))
+  }
+
+  /**
+   * Enter khi đang tích: thêm CẢ LOẠT theo thứ tự tích, số để 0 — con trỏ vào ô
+   * số dòng mới đầu tiên, Enter đi dọc cột số rồi về ô tìm (`LuoiXuat.sangO`).
+   */
+  const themTich = () => {
+    const ds = [...tich.values()]
+    if (ds.length === 0) return
+    const truoc = rows.length
+    const r = themTuLenh(
+      rows,
+      ds.map((vt) => ({ id: vt.id, code: vt.code, name: vt.name, unit: vt.unit, qty_ok: vt.qty_ok, qty: 0 })), // prettier-ignore
+    )
+    setRows(r.rows)
+    setTich(new Map())
+    const het = ds.filter((vt) => vt.qty_ok <= 0).map((vt) => vt.code)
+    setBao({
+      tone: het.length > 0 ? 'warn' : 'ok',
+      text: `Đã thêm ${r.them} dòng — gõ số Lần này, Enter xuống dòng dưới.${het.length > 0 ? ` ${het.join(', ')} kho hết: ghi sổ sẽ bị chặn.` : ''}`,
+    })
+    choFocus.current = `xuat-qty-${truoc}`
+  }
+
+  // "Chọn nhiều từ tồn kho": đưa cả loạt (đã có số) vào lưới, giữ dòng đã có.
+  const layNhieu = (chon: LayHang[]) => {
+    const r = themTuLenh(rows, chon)
+    setRows(r.rows)
+    setChonNhieu(false)
+    setBao({
+      tone: 'ok',
+      text: `Đã đưa ${r.them} dòng vào phiếu${r.trung > 0 ? ` · ${r.trung} mã đã có, giữ dòng cũ` : ''}.`,
+    })
+    choFocus.current = 'xuat-tim'
   }
 
   // "Lấy hàng của lệnh": đưa cả loạt vào lưới, giữ dòng đã có.
@@ -163,17 +246,24 @@ export function XuatScreen({
     if (!maUrl || daPrefill.current === maUrl) return
     daPrefill.current = maUrl
     void (async () => {
-      const found = await timVatTu(maUrl)
-      const vt = found.find((m) => m.code === maUrl) ?? found[0]
-      if (vt) await chonVatTu(vt)
-      else
-        setBao({ tone: 'warn', text: `Không thấy mã ${maUrl} — gõ lại ở ô Thêm dòng.` })
+      try {
+        // Mã còn tồn có sẵn tại máy; không có mới hỏi server.
+        const vt =
+          tonSan.find((m) => m.code === maUrl) ??
+          (await timVatTu(maUrl).then((f) => f.find((m) => m.code === maUrl) ?? f[0]))
+        if (vt) chonVatTu(vt)
+        else
+          setBao({ tone: 'warn', text: `Không thấy mã ${maUrl} — gõ lại ở ô Thêm dòng.` })
+      } catch (e) {
+        setBao({ tone: 'warn', text: `Không tìm được mã ${maUrl}: ${apiErrorText(e)}` })
+      }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chạy theo mã trên URL, các hàm kia ổn định trong lượt
   }, [maUrl])
 
   const lamMoi = () => {
     setRows([])
+    setTich(new Map())
     setHead({
       loai: 'lsx',
       lsx_id: '',
@@ -327,34 +417,110 @@ export function XuatScreen({
       />
 
       {canLenh && lsxChon && (
-        <HangLenh key={lsxChon.id} lsx={lsxChon} today={today} onLay={layHangLenh} />
+        <HangLenh
+          key={lsxChon.id}
+          lsx={lsxChon}
+          today={today}
+          onLay={layHangLenh}
+          onRows={(ids) => setHangLenhCua({ lsx: lsxChon.id, ids: new Set(ids) })}
+        />
       )}
 
       {/* Ô tìm đứng NGOÀI khung cuộn của lưới — gợi ý rơi xuống lưới, không bị cắt. */}
       <div className="kh-them">
         <span className="lbl">+ Thêm dòng</span>
-        <OTim<VatTuChon>
+        <OTim<VatTuTon>
           id="xuat-tim"
+          loc={(q) => goiYTon(tonSan, q, cuaLenh)}
           search={timVatTu}
-          onPick={(vt) => void chonVatTu(vt)}
+          onPick={chonVatTu}
+          onLat={lat}
+          dangTich={tich.size > 0}
+          onXongTich={themTich}
           keyOf={(m) => m.id}
-          render={(m) => (
-            <span style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-              <b className="kh-ma">{m.code}</b>
-              <span>{m.name}</span>
-              <span className="kh-mut" style={{ marginLeft: 'auto' }}>
-                {m.unit}
+          render={(m) => {
+            const dong = trongPhieu.get(m.id)
+            const on = tich.has(m.id)
+            return (
+              <span className="kh-goi-y-vt">
+                {dong ? (
+                  <span className="kh-tich co" title={`Đã có ở dòng ${dong}`}>
+                    ✓
+                  </span>
+                ) : (
+                  // Bấm ô vuông = tích (giống Shift+Enter), danh sách vẫn mở.
+                  <span
+                    className={on ? 'kh-tich on' : 'kh-tich'}
+                    title={on ? 'Bỏ tích' : 'Tích để thêm cùng lúc (Shift+Enter)'}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      lat(m)
+                    }}
+                  >
+                    ✓
+                  </span>
+                )}
+                <b className="kh-ma">{m.code}</b>
+                <span className="ten">
+                  {cuaLenh.has(m.id) && <span className="kh-tag run">của lệnh</span>}
+                  {m.name}
+                  {m.ke && <span className="kh-mut"> · kệ {m.ke}</span>}
+                </span>
+                <span className="ton">
+                  {dong ? <span className="kh-mut">đã có ở dòng {dong} · </span> : null}
+                  {m.qty_ok > 0 ? (
+                    <>
+                      tồn <b className="kh-num">{fmtSo(m.qty_ok)}</b>{' '}
+                      <span className="kh-mut">{m.unit}</span>
+                    </>
+                  ) : (
+                    <span className="kh-warn">kho hết · {m.unit}</span>
+                  )}
+                </span>
               </span>
-            </span>
-          )}
+            )
+          }}
+          cuoi={(tuServer) =>
+            tich.size > 0
+              ? `Đang tích ${tich.size} mã · Enter thêm ${tich.size} dòng · Shift+Enter / bấm dòng để tích thêm hoặc bỏ · gõ chữ khác vẫn giữ mã đã tích`
+              : tuServer
+                ? 'Không mã còn tồn nào khớp — đây là mã trong cả danh mục. Mã kho hết ghi sổ sẽ bị chặn.'
+                : `Chỉ bày mã còn tồn (${tonSan.length} mã) · Enter thêm 1 dòng · Shift+Enter tích nhiều mã rồi Enter thêm cả loạt`
+          }
           placeholder={
-            dangTra ? 'Đang tra tồn…' : 'Gõ mã hoặc tên vật tư · Enter để thêm dòng'
+            tich.size > 0
+              ? `Đang tích ${tich.size} mã — gõ tìm tiếp, hoặc Enter để thêm`
+              : 'Gõ mã, tên hoặc kệ · Enter thêm · Shift+Enter tích nhiều'
           }
           label="Tìm vật tư để thêm dòng"
-          disabled={dangTra}
           width={420}
-          rong="Không có vật tư nào khớp"
+          rong="Không có vật tư nào khớp trong cả danh mục"
         />
+        {tich.size > 0 ? (
+          <span className="kh-dang-tich" role="status">
+            Đang tích <b className="kh-num">{tich.size}</b> mã:{' '}
+            <span className="ds">
+              {[...tich.values()].map((vt) => vt.code).join(', ')}
+            </span>
+            <button type="button" className="kh-btn" onClick={themTich}>
+              Thêm {tich.size} dòng
+            </button>
+            <button
+              type="button"
+              className="kh-lnk"
+              style={{ fontFamily: 'inherit' }}
+              onClick={() => setTich(new Map())}
+            >
+              bỏ tích
+            </button>
+          </span>
+        ) : (
+          <button type="button" className="kh-btn" onClick={() => setChonNhieu(true)}>
+            <ListChecks size={15} aria-hidden />
+            Chọn nhiều từ tồn kho ({tonSan.length})
+          </button>
+        )}
         {bao && (
           <span
             className={`bao ${bao.tone === 'ok' ? 'kh-ok' : bao.tone === 'warn' ? 'kh-warn' : 'kh-stop'}`}
@@ -364,7 +530,7 @@ export function XuatScreen({
           </span>
         )}
         <span className="kh-mut" style={{ marginLeft: 'auto' }}>
-          Enter chọn · Tab sang số · Ctrl+Enter ghi sổ
+          Shift+Enter tích nhiều · Enter ở ô số xuống dòng · Ctrl+Enter ghi sổ
         </span>
       </div>
 
@@ -434,6 +600,17 @@ export function XuatScreen({
         }
         right={<b>{rows.length} dòng</b>}
       />
+
+      {chonNhieu && (
+        <ChonNhieuHop
+          ds={tonSan}
+          cuaLenh={cuaLenh}
+          lsxCode={canLenh ? (lsxChon?.code ?? null) : null}
+          trongPhieu={trongPhieu}
+          onClose={() => setChonNhieu(false)}
+          onLay={layNhieu}
+        />
+      )}
 
       {lanSheet && (
         <HopThoai

@@ -132,6 +132,32 @@ function rowOf(r: Record<string, unknown>): StockRow {
   }
 }
 
+/** Một mã kèm tồn dùng được — ô chọn vật tư của màn Xuất hàng (`VatTuTon`). */
+export type VatTuTonRow = {
+  id: string
+  code: string
+  name: string
+  unit: string
+  qty_ok: number
+  ke: string | null
+  nhom: string | null
+  /** `search_text` không dấu (mã + tên + quy cách + nhóm con) — lọc tại máy khớp đúng luật server. */
+  tim?: string | null
+}
+
+function tonRowOf(r: Record<string, unknown>): VatTuTonRow {
+  return {
+    id: String(r.material_id),
+    code: String(r.code),
+    name: String(r.name),
+    unit: String(r.unit ?? ''),
+    qty_ok: num(r.qty_ok),
+    ke: (r.shelf_location as string | null) ?? null,
+    nhom: (r.group_name as string | null) ?? null,
+    ...(r.search_text != null ? { tim: String(r.search_text) } : {}),
+  }
+}
+
 export const stockRepo = {
   async list(filter: {
     q?: string
@@ -282,6 +308,49 @@ export const stockRepo = {
       qty_ok: num(r.qty_ok),
       qty_blocked: num(r.qty_blocked),
     }))
+  },
+
+  /**
+   * MÃ CÒN TỒN DÙNG ĐƯỢC — màn Xuất hàng nạp MỘT LẦN lúc mở rồi lọc tại máy
+   * (27/10/2026: 240/13.540 mã đang dùng). Quét theo trang vì PostgREST trần
+   * 1000 dòng/lượt — sau kiểm kê tập này sẽ lớn lên.
+   */
+  async conTon(): Promise<VatTuTonRow[]> {
+    const out: VatTuTonRow[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from('warehouse_stock')
+        .select(
+          'material_id, code, name, unit, group_name, shelf_location, qty_ok, search_text',
+        )
+        .eq('is_active', true)
+        .gt('qty_ok', 0)
+        .order('code', { ascending: true })
+        .range(from, from + 999)
+      if (error) throw new Error(`stockRepo.conTon: ${error.message}`)
+      const rows = (data as Record<string, unknown>[] | null) ?? []
+      out.push(...rows.map(tonRowOf))
+      if (rows.length < 1000) break
+    }
+    return out
+  },
+
+  /**
+   * Tìm trong CẢ danh mục kèm tồn — đường lùi của ô thêm dòng khi không mã còn
+   * tồn nào khớp. Một câu, không đếm: mã còn tồn (nạp sau lúc mở màn) lên trước.
+   */
+  async tim(q: string, limit = 20): Promise<VatTuTonRow[]> {
+    let query = db()
+      .from('warehouse_stock')
+      .select('material_id, code, name, unit, group_name, shelf_location, qty_ok')
+      .eq('is_active', true)
+    for (const t of searchTokens(q)) query = query.ilike('search_text', `%${t}%`)
+    const { data, error } = await query
+      .order('qty_ok', { ascending: false })
+      .order('code', { ascending: true })
+      .limit(limit)
+    if (error) throw new Error(`stockRepo.tim: ${error.message}`)
+    return ((data as Record<string, unknown>[] | null) ?? []).map(tonRowOf)
   },
 
   /** Tồn hiện tại của 1 vật tư (để kiểm khi xuất). */
