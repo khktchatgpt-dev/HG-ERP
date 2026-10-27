@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowDownToLine, BookOpen, ListChecks, TriangleAlert } from 'lucide-react'
+import { ArrowDownToLine } from 'lucide-react'
 import {
   INCOMING_BUCKET,
   INCOMING_BUCKETS,
@@ -28,6 +28,7 @@ import {
   DaGhiSo,
   DauTrang,
   KhoKhung,
+  MenuNut,
   Rong,
   TabNgang,
   ThanhLoc,
@@ -390,49 +391,51 @@ export function HangVeScreen({
           </>
         }
         actions={
-          <>
-            {/* Điện thoại: chạm dòng là nhận — nhóm thao tác theo dòng chọn không cần. */}
+          /*
+            B4 "Kho cho người mới" (27/10/2026): một nút chính — Nhận hàng của đơn
+            đang chọn; năm việc phụ (hàng của đơn, báo sự cố, nhận ngoài đơn, hoàn
+            kho, phiếu đã ghi) vào "Khác ▾". Đo trước: 6 nút ngang hàng nhau.
+            Điện thoại: chạm dòng là nhận — chỉ còn các việc không theo dòng.
+          */
+          <ApNhom>
             {!dien && (
-              <ApNhom>
-                <ApNut
-                  primary
-                  icon={<ArrowDownToLine size={15} aria-hidden />}
-                  href={sel && lyDoNhan(sel) == null ? nhanHref(sel) : undefined}
-                  why={lyDoNhan(sel)}
-                >
-                  {sel ? `Nhận hàng ${sel.po_code}` : 'Nhận hàng'}
-                </ApNut>
-                <ApNut
-                  icon={<ListChecks size={15} aria-hidden />}
-                  onClick={sel ? () => moDon(sel.po_id) : undefined}
-                  why={sel ? null : 'Chọn một đơn trong bảng trước'}
-                >
-                  Hàng của đơn
-                </ApNut>
-                <ApNut
-                  icon={<TriangleAlert size={15} aria-hidden />}
-                  onClick={sel ? () => moSuCo(sel.po_id) : undefined}
-                  why={
-                    !sel
-                      ? 'Chọn một đơn trong bảng trước'
-                      : !canEdit
-                        ? 'Chỉ phòng Kho báo sự cố giao hàng'
-                        : null
-                  }
-                >
-                  Báo sự cố
-                </ApNut>
-              </ApNhom>
-            )}
-            <ApNhom>
-              {/* Hàng về KHÔNG có đơn (N2): có đơn thì vẫn nhận theo đơn. */}
-              <ApNut href="/warehouse/nhap/ngoai-don">Nhận không theo đơn</ApNut>
-              <ApNut href="/warehouse/nhap/hoan-kho">Hoàn kho từ SX</ApNut>
-              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Phiếu đã ghi
+              <ApNut
+                primary
+                icon={<ArrowDownToLine size={15} aria-hidden />}
+                href={sel && lyDoNhan(sel) == null ? nhanHref(sel) : undefined}
+                why={lyDoNhan(sel)}
+              >
+                {sel ? `Nhận hàng ${sel.po_code}` : 'Nhận hàng'}
               </ApNut>
-            </ApNhom>
-          </>
+            )}
+            <MenuNut
+              label="Khác"
+              items={[
+                ...(dien
+                  ? []
+                  : [
+                      {
+                        label: 'Hàng của đơn',
+                        onClick: sel ? () => moDon(sel.po_id) : undefined,
+                        why: sel ? null : 'Chọn một đơn trong bảng trước',
+                      },
+                      {
+                        label: 'Báo sự cố giao hàng',
+                        onClick: sel ? () => moSuCo(sel.po_id) : undefined,
+                        why: !sel
+                          ? 'Chọn một đơn trong bảng trước'
+                          : !canEdit
+                            ? 'Chỉ phòng Kho báo sự cố giao hàng'
+                            : null,
+                      },
+                    ]),
+                // Hàng về KHÔNG có đơn (N2): có đơn thì vẫn nhận theo đơn.
+                { label: 'Nhận không theo đơn', href: '/warehouse/nhap/ngoai-don' },
+                { label: 'Hoàn kho từ sản xuất', href: '/warehouse/nhap/hoan-kho' },
+                { label: 'Phiếu đã ghi', href: '/warehouse/phieu' },
+              ]}
+            />
+          </ApNhom>
         }
       />
 

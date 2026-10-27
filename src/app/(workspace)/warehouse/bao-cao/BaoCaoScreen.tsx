@@ -53,7 +53,13 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const [nhom, setNhom] = useState('')
   const [chiPs, setChiPs] = useState(true)
   const [tien, setTien] = useState(true)
-  const [dong, setDong] = useState<ReadonlySet<string>>(new Set())
+  /*
+    Nhóm GẬP SẴN (B4 "Kho cho người mới", 27/10/2026): đo trước 2.226 con số ở
+    màn đầu. Nay mặc định chỉ dòng tổng của từng nhóm — bấm nhóm mới thấy mã.
+  */
+  const [dong, setDong] = useState<ReadonlySet<string>>(
+    () => new Set(bc.rows.map((r) => r.group_name ?? KHONG_NHOM)),
+  )
   const [chon, setChon] = useState<string | null>(null)
   const [mo, setMo] = useState<string | null>(null)
   const khung = useRef<HTMLDivElement>(null)
@@ -345,7 +351,8 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
             </thead>
             <tbody>
               {nhomDs.map(([ten, ds]) => {
-                const thu = dong.has(ten)
+                // Đang tìm / lọc một nhóm thì mở — kết quả tìm không được nằm trong nhóm gập.
+                const thu = dong.has(ten) && !q.trim() && !nhom
                 return (
                   <Fragment key={ten}>
                     <tr

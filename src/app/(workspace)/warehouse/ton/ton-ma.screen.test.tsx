@@ -5,8 +5,9 @@ import { TonKhoScreen, type TonRow } from './TonKhoScreen'
 import type { RoTon } from './ro-ton'
 
 /**
- * TỒN KHO · THEO MÃ trên khung Kho lối ERP (B1, bản vẽ K-1). Dữ liệu rút từ màn
- * thật 14/10/2026: BAO0205 (của lệnh 02-ROSCO), BAO0326 dưới mức.
+ * TỒN KHO · THEO MÃ — B3 "Kho cho người mới" (bản vẽ B1, 27/10/2026): một ô Lọc
+ * thay tám ô rổ, lưới 6 cột, khung mã đang chọn bên phải. Dữ liệu rút từ màn thật
+ * 14/10/2026: BAO0205 (của lệnh 02-ROSCO), BAO0326 dưới mức.
  */
 const push = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -60,31 +61,40 @@ const dung = () =>
     />,
   )
 
-describe('TonKhoScreen (khung Kho lối ERP)', () => {
-  it('tám rổ là ô đếm, số nói một lần; bấm rổ đổi URL', () => {
+describe('TonKhoScreen (B3 Tồn kho gọn)', () => {
+  it('tám rổ gom vào MỘT ô Lọc kèm số; đổi lọc đổi URL', () => {
     dung()
-    const ro = screen.getByRole('group', { name: 'Rổ tồn kho' })
-    expect(within(ro).getAllByRole('button').length).toBe(8)
-    fireEvent.click(within(ro).getByRole('button', { name: /Dưới mức/ }))
+    expect(screen.queryByRole('group', { name: 'Rổ tồn kho' })).toBeNull()
+    const loc = screen.getByRole('combobox', { name: 'Lọc tồn kho' }) as HTMLSelectElement
+    expect(loc.options).toHaveLength(8)
+    expect(loc.options[0].text).toBe('Đang có tồn (169)')
+    fireEvent.change(loc, { target: { value: 'low' } })
     expect(push).toHaveBeenCalledWith('/warehouse/ton?ro=low', { scroll: false })
   })
 
-  it('không nút trên dòng: chọn dòng rồi "Xuất" ở Action Pane mở phiếu xuất của mã', () => {
+  it('lưới 6 cột, không nút trên dòng; chọn dòng thì nút Xuất / Cập nhật mở đúng mã', () => {
+    api.mockResolvedValue({ ke: [], bienDong: [] })
     dung()
+    const bang = screen.getByRole('table', { name: 'Tồn kho theo mã' })
+    expect(
+      within(bang)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Mã', 'Tên vật tư', 'ĐVT', 'Kệ', 'Dùng được', 'Của lệnh'])
+    expect(within(bang).queryByRole('button')).toBeNull()
     const pane = screen.getByRole('toolbar', { name: 'Thao tác' })
     expect(within(pane).getByRole('button', { name: /Xuất mã này/ }).getAttribute('aria-disabled')).toBe('true') // prettier-ignore
-    const bang = screen.getByRole('table', { name: 'Tồn kho theo mã' })
-    expect(within(bang).queryByRole('link')).toBeNull()
     fireEvent.click(within(bang).getByText('BAO0205'))
     expect(within(pane).getByRole('link', { name: /Xuất BAO0205/ }).getAttribute('href')).toBe('/warehouse/xuat?ma=BAO0205') // prettier-ignore
+    expect(within(pane).getByRole('link', { name: /Cập nhật số thực tế/ }).getAttribute('href')).toBe('/warehouse/cap-nhat-ton?ma=BAO0205') // prettier-ignore
   })
 
-  it('mã dưới mức: Còn dùng đỏ kèm "dưới 30"', () => {
+  it('mã dưới mức: Dùng được đỏ kèm "dưới 30"', () => {
     dung()
     expect(screen.getByText('dưới 30')).toBeTruthy()
   })
 
-  it('▸ mở chi tiết dưới dòng: kệ, của lệnh, biến động gộp theo phiếu', async () => {
+  it('khung phải: chưa chọn thì nói chọn gì; chọn thì bày kệ, của lệnh, biến động gộp theo phiếu', async () => {
     api.mockResolvedValue({
       ke: [{ material_id: 'a', bin_id: 'k', bin_code: 'BB-H', bin_name: null, bin_kind: null, stock_status: 'ok', qty: 200 }], // prettier-ignore
       bienDong: [
@@ -93,13 +103,16 @@ describe('TonKhoScreen (khung Kho lối ERP)', () => {
       ],
     })
     dung()
-    fireEvent.click(screen.getByRole('button', { name: 'Mở chi tiết BAO0205' }))
+    expect(screen.getByText('Chọn một mã trong bảng')).toBeTruthy()
+    fireEvent.click(screen.getByText('BAO0205'))
     expect(api).toHaveBeenCalledWith('/api/dept/warehouse/stock/a')
-    expect(await screen.findByRole('link', { name: 'PNK-2026-0126' })).toBeTruthy()
-    expect(screen.getByText('+200')).toBeTruthy() // 120 + 80 gộp một phiếu
-    expect(screen.getByText('02/26-27 - ROSCO')).toBeTruthy()
-    // 200 − 150 của lệnh = 50 tồn chung (tile "Tồn chung" cũng có chữ này)
-    const exp = document.querySelector('.kh-exp') as HTMLElement
-    expect(within(exp).getByText('Tồn chung').nextSibling?.textContent).toBe('50')
+    const khung = screen.getByRole('complementary', { name: 'Mã đang chọn BAO0205' })
+    expect(await within(khung).findByRole('link', { name: 'PNK-2026-0126' })).toBeTruthy()
+    expect(within(khung).getByText('+200')).toBeTruthy() // 120 + 80 gộp một phiếu
+    expect(within(khung).getByText('02/26-27 - ROSCO')).toBeTruthy()
+    // 200 − 150 của lệnh = 50 tồn chung
+    expect(within(khung).getByText('Tồn chung').nextSibling?.textContent).toBe('50')
+    // Hàng của lệnh → nút xuất mở sẵn lệnh + mã
+    expect(within(khung).getByRole('link', { name: 'Xuất cho lệnh 02-ROSCO' }).getAttribute('href')).toBe('/warehouse/xuat?lsx=l1&ma=BAO0205') // prettier-ignore
   })
 })

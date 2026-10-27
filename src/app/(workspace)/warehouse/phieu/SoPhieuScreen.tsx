@@ -170,11 +170,17 @@ export function SoPhieuScreen({
         : undefined,
   }))
 
+  /*
+    Ô gõ số phiếu NCC (B4 "Kho cho người mới", 27/10/2026): đo trước 40 ô gõ sẵn
+    trên các dòng ở tab Tất cả — sổ trông như một tờ khai. Nay ô chỉ mở ở tab
+    "Thiếu số phiếu NCC" (gõ hàng loạt: Enter sang dòng kế) và ở dòng đang chọn;
+    chỗ khác nói "chưa ghi".
+  */
   const soNcc = (d: PhieuRow) =>
     d.supplier_doc_no?.trim() ? (
       <span className="kh-num">{d.supplier_doc_no}</span>
     ) : d.thieu_ncc ? (
-      canEdit && !d.da_bi_dao ? (
+      canEdit && !d.da_bi_dao && (ro === 'thieu_ncc' || d.id === chon) ? (
         <OSoNcc doc={{ id: d.id, code: d.code }} onXong={() => sangO(d.id)} />
       ) : (
         <span className="kh-warn">chưa ghi</span>
