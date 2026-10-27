@@ -101,12 +101,40 @@ export function todayVn(now: Date = new Date()): string {
 }
 
 /**
+ * "dd/mm/yyyy hh:mm" theo giờ VN — cho bản in dựng ở MÁY CHỦ (26/10/2026).
+ * `toLocaleString('vi-VN')` trên server đọc múi giờ của máy chủ (Vercel = UTC):
+ * biên bản 05-VT lập 08:30 sáng in ra 01:30, lập trước 7 giờ thì lùi cả ngày.
+ * Ghép tay từ `formatToParts` vì `vi-VN` tự xếp giờ lên trước ngày.
+ */
+export function ngayGioVn(at: string | Date): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: TZ_VN,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(typeof at === 'string' ? new Date(at) : at)
+      .map((x) => [x.type, x.value]),
+  )
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`
+}
+
+/**
  * MỐC SỰ VIỆC của một chứng từ có cả NGÀY CHỨNG TỪ (người dùng khai) và GIỜ GHI
  * MÁY (`created_at`). Cùng một ngày (giờ VN) thì giữ giờ ghi máy — chính xác
  * hơn và y như trước; KHÁC ngày (nhập máy trễ: hàng về 27/09, Kho ghi 30/09)
  * thì ngày chứng từ mới là lúc việc xảy ra — trả chuỗi ngày thuần `yyyy-mm-dd`.
  */
-export function docEventAt(docDate: string | null | undefined, enteredAt: string): string {
+export function docEventAt(
+  docDate: string | null | undefined,
+  enteredAt: string,
+): string {
   if (!docDate) return enteredAt
-  return docDate.slice(0, 10) === todayVn(new Date(enteredAt)) ? enteredAt : docDate.slice(0, 10)
+  return docDate.slice(0, 10) === todayVn(new Date(enteredAt))
+    ? enteredAt
+    : docDate.slice(0, 10)
 }

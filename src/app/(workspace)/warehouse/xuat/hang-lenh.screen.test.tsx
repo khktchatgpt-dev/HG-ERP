@@ -46,7 +46,12 @@ const ROWS: HangLenhRow[] = [
   r({ material_id: 'm2', code: 'BUL0606', name: 'LĐS 8x20x2', ve: 2322, con: 2322, ton: 810, goi_y: 810 }), // prettier-ignore
   r({ material_id: 'm3', code: 'PKN0400', name: 'Nút chân Siena (B477)', ve: 1648, con: 1648, ton: 0, goi_y: 0, het: true }), // prettier-ignore
 ]
-const LSX = { id: 'lsx-yotrio', code: '01/26-27 - YOTRIO', ship_date: '2026-10-10' }
+const LSX = {
+  id: 'lsx-yotrio',
+  code: '01/26-27 - YOTRIO',
+  status: 'approved',
+  ship_date: '2026-10-10',
+}
 
 function dung(onLay = vi.fn()) {
   api.mockResolvedValue({ rows: ROWS })
@@ -113,5 +118,20 @@ describe('HangLenh', () => {
     )
     expect(await screen.findByText(/Chưa có hàng nào đã mua cho lệnh/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Lấy hàng của lệnh/ })).toBeNull()
+  })
+
+  it('lệnh đã xong: nói rõ phiếu là GHI BÙ, không nhắc quá hạn xuất hàng', async () => {
+    api.mockResolvedValue({ rows: ROWS })
+    render(
+      <ToastProvider>
+        <HangLenh
+          lsx={{ ...LSX, status: 'completed' }}
+          today="2026-10-12"
+          onLay={vi.fn()}
+        />
+      </ToastProvider>,
+    )
+    expect(await screen.findByText(/phiếu này là GHI BÙ/)).toBeTruthy()
+    expect(screen.queryByText(/quá hạn xuất hàng/)).toBeNull()
   })
 })

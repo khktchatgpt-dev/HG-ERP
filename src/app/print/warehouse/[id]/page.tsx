@@ -7,6 +7,7 @@ import { docsRepo, stocktakeRepo } from '@/modules/dept/warehouse/stock.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { loadNhapCho } from '@/modules/dept/warehouse/nhap-cho.repo'
 import { resolveSignatures } from '@/lib/doc-templates'
+import { ngayGioVn, todayVn } from '@/lib/date-vn'
 import {
   PrintLetterhead,
   PrintMeta,
@@ -30,7 +31,8 @@ export default async function WarehouseDocPrintPage({
   const { id } = await params
 
   const doc = await docsRepo.findById(id)
-  if (!doc) redirect('/warehouse/docs')
+  // `/warehouse/docs` không còn (sổ phiếu Kho là /warehouse/phieu từ 16/09).
+  if (!doc) redirect('/warehouse/phieu')
   if (doc.kind === 'stocktake') {
     const [stLines, company, tpl] = await Promise.all([
       stocktakeRepo.listByDoc(id),
@@ -50,7 +52,9 @@ export default async function WarehouseDocPrintPage({
         .filter((m): m is NonNullable<typeof m> => m != null)
         .map((m) => [m.id, m]),
     )
-    const d = new Date(doc.created_at)
+    // Ngày + giờ theo giờ VN, không theo múi máy chủ (Vercel = UTC — vá 26/10/2026).
+    // Tiêu đề in nhận Date: dựng nửa đêm GIỜ MÁY của ngày VN, như phiếu nhập/xuất.
+    const d = new Date(`${todayVn(new Date(doc.created_at))}T00:00:00`)
     return (
       <PrintPage orientation="portrait" maxWidth="max-w-3xl">
         <PrintLetterhead
@@ -76,7 +80,7 @@ export default async function WarehouseDocPrintPage({
         </div>
         <PrintMeta
           rows={[
-            ['— Thời điểm kiểm kê:', d.toLocaleString('vi-VN')],
+            ['— Thời điểm kiểm kê:', ngayGioVn(doc.created_at)],
             ['— Lý do / đợt kiểm:', doc.reason ?? '……………………………'],
           ]}
         />

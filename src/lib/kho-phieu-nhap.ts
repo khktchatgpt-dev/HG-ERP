@@ -68,6 +68,18 @@ export function chiTietDong(l: {
 
 export type TinhTrang = 'ok' | 'blocked'
 
+/**
+ * TẠM ẨN "Sai quy cách" khi nhận hàng (26/10/2026, chủ dự án chốt trước khi giao
+ * Kho). Lô khoá vào được sổ nhưng KHÔNG có lối ra: chưa có màn mở khoá (C2), huỷ
+ * (X4) hay trả NCC (X3) — service có, route và màn chưa. Hàng sai quy cách nay
+ * đi đường Báo sự cố / Từ chối nhận (sổ sự cố của đơn, Cung ứng xử lý với NCC);
+ * mua ngoài đơn thì không nhập phần sai.
+ *
+ * Bật lại (`true`) khi đã có màn xử lý hàng khoá. Ba lưới đọc cờ này: Kho nhận
+ * theo đơn, Kho nhận ngoài đơn, Cung ứng nhận hàng. Server vẫn nhận 'blocked'.
+ */
+export const CHO_GHI_HANG_KHOA = false
+
 export type DongNhan = {
   po_line_id: string
   material_id: string

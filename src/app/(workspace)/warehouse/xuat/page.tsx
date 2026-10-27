@@ -5,6 +5,7 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { todayVn } from '@/lib/date-vn'
+import { LSX_XUAT_DUOC } from '@/lib/kho-phieu-xuat'
 import { XuatScreen } from './XuatScreen'
 
 const TO_THEO_CONG_DOAN = [
@@ -31,15 +32,15 @@ export const dynamic = 'force-dynamic'
  * `docs/kho-buoc-2-xuat-kho.md`). Chủ dự án chốt 16/09/2026: không so định
  * mức; thủ kho ghi mã, số lượng, lệnh hoặc tổ nhận.
  *
- * Trang nạp ba danh mục nhỏ cho dải chip: lệnh đang chạy (đã duyệt / đang
- * SX — đúng tập service cho xuất), tên tổ để gợi ý ô người nhận, và quyền
- * ghi sổ. Vật tư KHÔNG nạp trước (13.229 mã) — tìm từng mã qua API lúc thêm
- * dòng, tồn dùng được tra cùng lúc.
+ * Trang nạp ba danh mục nhỏ cho dải chip: lệnh xuất được (đã duyệt / đang SX
+ * / đã xong để ghi bù — `LSX_XUAT_DUOC`, đúng tập service), tên tổ để gợi ý ô
+ * người nhận, và quyền ghi sổ. Vật tư KHÔNG nạp trước (13.229 mã) — tìm từng
+ * mã qua API lúc thêm dòng, tồn dùng được tra cùng lúc.
  */
 export default async function WarehouseIssuePage() {
   const user = await authService.requirePageUser()
   const [lsx, deps, company, tpl, canEdit] = await Promise.all([
-    productionRepo.listActive(),
+    productionRepo.listByStatus(LSX_XUAT_DUOC),
     departmentsRepo.list(),
     // Xem bản in TRƯỚC khi ghi sổ (yêu cầu 16/09): mẫu 02-VT + khối công ty.
     settingsService.getAll(),
@@ -61,14 +62,19 @@ export default async function WarehouseIssuePage() {
 
   return (
     <XuatScreen
-      lsx={lsx.map((l) => ({
-        id: l.id,
-        code: l.code,
-        customer_name: l.customer_name,
-        order_codes: l.order_codes,
-        status: l.status,
-        ship_date: l.ship_date ?? null,
-      }))}
+      // Lệnh đã xong (ghi bù) xuống cuối — việc hằng ngày là lệnh đang chạy.
+      lsx={[...lsx]
+        .sort(
+          (a, b) => Number(a.status === 'completed') - Number(b.status === 'completed'),
+        )
+        .map((l) => ({
+          id: l.id,
+          code: l.code,
+          customer_name: l.customer_name,
+          order_codes: l.order_codes,
+          status: l.status,
+          ship_date: l.ship_date ?? null,
+        }))}
       to={to}
       phong={deps.map((d) => d.name).sort((a, b) => a.localeCompare(b, 'vi'))}
       today={todayVn()}

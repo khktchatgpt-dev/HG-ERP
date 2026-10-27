@@ -52,9 +52,9 @@ export function LenhChiTiet({ lenh, rows }: { lenh: LenhDong; rows: MaChiTiet[] 
           {lenh.xuat_cuoi
             ? `xuất gần nhất ${isoToVn(lenh.xuat_cuoi)}`
             : 'chưa ghi xuất lần nào'}
-          {!lenh.xong && con.length > 0 && (
+          {con.length > 0 && (
             <Link href={`/warehouse/xuat?lsx=${lenh.id}`} className="kh-btn p">
-              Xuất cho lệnh này
+              {lenh.xong ? 'Ghi bù xuất cho lệnh này' : 'Xuất cho lệnh này'}
             </Link>
           )}
         </span>
@@ -146,7 +146,7 @@ export function LenhChiTiet({ lenh, rows }: { lenh: LenhDong; rows: MaChiTiet[] 
       )}
       <div className="kh-in-rong" style={{ padding: '6px 12px', fontSize: 11.5 }}>
         {lenh.xong
-          ? 'Lệnh đã xong: kho không còn hàng của lệnh, không ghi xuất bù (sẽ làm âm tồn). '
+          ? 'Lệnh đã xong: tổ đã lấy mà chưa ghi thì ghi bù ở phiếu xuất; mã kho đã hết thì không ghi được (không xuất quá tồn). '
           : 'Ghi xuất ở phiếu xuất — số điền sẵn đúng cột "Kho chia". '}
         Số theo ĐVT từng mã, không cộng dồn.
       </div>

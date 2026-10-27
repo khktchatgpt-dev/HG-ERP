@@ -48,6 +48,33 @@ describe('điều chỉnh chênh lệch phiếu nhập (C)', () => {
     expect(tinhChenhLech(goc, [], [{ po_line_id: 'LX', qty: 5 }]).loi[0]).toMatch(/không thuộc/) // prettier-ignore
   })
 
+  it('trạng thái lượng: dòng đơn có phần dùng được thì lệch vào "ok"; cả dòng khoá thì vào khoá', () => {
+    const coKhoa: DongGoc[] = [
+      // L1: phần khoá đứng TRƯỚC phần dùng được — vẫn phải chọn 'ok'.
+      { po_line_id: 'L1', material_id: 'M1', qty: 20, unit_cost: 1, reason_code: 'N1', stock_status: 'blocked', bin_id: 'KHOA' }, // prettier-ignore
+      { po_line_id: 'L1', material_id: 'M1', qty: 1300, unit_cost: 1, reason_code: 'N1', stock_status: 'ok', bin_id: 'TIEP' }, // prettier-ignore
+      // L2: cả dòng đơn là hàng sai quy cách.
+      { po_line_id: 'L2', material_id: 'M2', qty: 50, unit_cost: 1, reason_code: 'N1', stock_status: 'blocked', bin_id: 'KHOA' }, // prettier-ignore
+    ]
+    const r = tinhChenhLech(
+      coKhoa,
+      [],
+      [
+        { po_line_id: 'L1', qty: 1300 },
+        { po_line_id: 'L2', qty: 40 },
+      ],
+    )
+    expect(r.dong.map((d) => [d.po_line_id, d.stock_status, d.bin_id])).toEqual([
+      ['L1', 'ok', 'TIEP'],
+      ['L2', 'blocked', 'KHOA'],
+    ])
+    // Dòng sổ cũ không mang trạng thái = dùng được.
+    expect(soHienTai(goc, []).get('L2')).toMatchObject({
+      stock_status: 'ok',
+      bin_id: null,
+    })
+  })
+
   it('đọc dấu nối phiếu điều chỉnh → phiếu gốc', () => {
     expect(dieuChinhCua('Điều chỉnh phiếu PNK-2026-0053')).toBe('PNK-2026-0053')
     expect(dieuChinhCua('Sửa lại PNK-2026-0053 (đã đảo bởi PXK-1)')).toBeNull()

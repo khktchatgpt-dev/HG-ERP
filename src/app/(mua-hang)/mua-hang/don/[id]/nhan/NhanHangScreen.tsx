@@ -20,6 +20,7 @@ import {
 import type { PrintCompany } from '@/app/print/PrintSheet'
 import type { DocTemplate } from '@/lib/doc-templates'
 import {
+  CHO_GHI_HANG_KHOA,
   danhGiaVuot,
   kiemTruocGhiSo,
   sauPhieu,
@@ -155,6 +156,10 @@ export function NhanHangScreen({
   const tong = useMemo(() => tinhTong(rows), [rows])
   /** Cột Kg cân chỉ hiện khi đơn có dòng nhôm / thép trả tiền theo kg. */
   const coKg = rows.some((r) => r.can_kg)
+  /* "Sai quy cách" tạm ẩn (`CHO_GHI_HANG_KHOA`, 26/10/2026): lô khoá chưa có lối
+     ra — hàng sai báo sự cố ở Theo dõi đơn hàng. Phiếu lập lại mang sẵn dòng khoá
+     thì vẫn hiện để đổi về Đạt. */
+  const coTinhTrang = CHO_GHI_HANG_KHOA || rows.some((r) => r.status === 'blocked')
   const conCho = rows.reduce((a, r) => a + (r.editable ? r.qty_open : 0), 0)
   const kgCan = rows.reduce(
     (a, r) => a + (r.can_kg && r.qty > 0 ? (r.kg_can ?? 0) : 0),
@@ -420,7 +425,7 @@ export function NhanHangScreen({
                   Kg cân (nếu có)
                 </Th>
               )}
-              <Th width={146}>Tình trạng</Th>
+              {coTinhTrang && <Th width={146}>Tình trạng</Th>}
               <Th width={coKg ? 200 : 300}>Ghi chú</Th>
             </GridHead>
             <GridBody>
@@ -566,20 +571,22 @@ export function NhanHangScreen({
                         )}
                       </td>
                     )}
-                    <td>
-                      {r.editable ? (
-                        <Pick
-                          value={r.status}
-                          onChange={(v) => patch(i, { status: v as TinhTrang })}
-                          options={TINH_TRANG}
-                          label={`Tình trạng ${r.code}`}
-                          width={130}
-                          disabled={busy}
-                        />
-                      ) : (
-                        <span className="text-[var(--ink-empty)]">—</span>
-                      )}
-                    </td>
+                    {coTinhTrang && (
+                      <td>
+                        {r.editable ? (
+                          <Pick
+                            value={r.status}
+                            onChange={(v) => patch(i, { status: v as TinhTrang })}
+                            options={TINH_TRANG}
+                            label={`Tình trạng ${r.code}`}
+                            width={130}
+                            disabled={busy}
+                          />
+                        ) : (
+                          <span className="text-[var(--ink-empty)]">—</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {r.editable ? (
                         <TextInput
@@ -619,9 +626,13 @@ export function NhanHangScreen({
               {coKg && (
                 <td className="k-r num">{kgCan > 0 ? `${fmt(kgCan)} kg` : '—'}</td>
               )}
-              <td colSpan={2} className="font-normal text-[var(--ink-3)]">
-                {tong.so_dong_nhan} dòng nhận · {fmt(tong.vao_khoa)} vào khoá ·{' '}
-                {fmt(tong.dung_duoc)} dùng được
+              <td
+                colSpan={coTinhTrang ? 2 : 1}
+                className="font-normal text-[var(--ink-3)]"
+              >
+                {tong.so_dong_nhan} dòng nhận
+                {coTinhTrang &&
+                  ` · ${fmt(tong.vao_khoa)} vào khoá · ${fmt(tong.dung_duoc)} dùng được`}
               </td>
             </GridFoot>
           </Grid>
@@ -631,7 +642,7 @@ export function NhanHangScreen({
           totals={[
             { label: 'Dòng nhận', value: tong.so_dong_nhan },
             { label: 'Lần này', value: fmt(tong.lan_nay) },
-            { label: 'Vào khoá', value: fmt(tong.vao_khoa) },
+            ...(coTinhTrang ? [{ label: 'Vào khoá', value: fmt(tong.vao_khoa) }] : []),
             // Đang có câu chặn thì câu đó là việc phải làm — bớt một mục để thanh không xuống dòng ở 1280.
             ...(canNhacSoNcc(supplierDocNo) && !blocked
               ? [

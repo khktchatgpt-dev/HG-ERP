@@ -22,6 +22,9 @@ export type DongGoc = {
   qty: number
   unit_cost: number | null
   reason_code: string | null
+  /** Trạng thái lượng (0194) + khu/kệ của dòng sổ — thiếu = 'ok' (dòng cũ). */
+  stock_status?: 'ok' | 'qc' | 'blocked'
+  bin_id?: string | null
 }
 
 /** Một dòng sổ của các phiếu điều chỉnh TRƯỚC (và phiếu đảo của chúng, nếu có). */
@@ -38,6 +41,14 @@ export type DongChenh = {
   chenh: number
   unit_cost: number | null
   reason_code: string | null
+  /**
+   * Phần lệch ghi vào TRẠNG THÁI nào (vá 26/10/2026). Dòng đơn có phần dùng được
+   * thì lệch đi vào phần dùng được; chỉ khi cả dòng đơn là hàng khoá thì lệch mới
+   * vào khoá. Không ghi thì mọi lệch rơi về 'ok' — sửa số một lô khoá làm tồn
+   * dùng được sai.
+   */
+  stock_status: 'ok' | 'qc' | 'blocked'
+  bin_id: string | null
 }
 
 const EPS = 1e-9
@@ -51,12 +62,17 @@ export function soHienTai(
   const out = new Map<string, Omit<DongChenh, 'moi' | 'chenh'>>()
   for (const g of goc) {
     const cur = out.get(g.po_line_id)
+    const tt = g.stock_status ?? 'ok'
+    // Phần dùng được thắng: gặp dòng 'ok' là lệch đi vào 'ok' (và kệ của dòng đó).
+    const lay = !cur || (cur.stock_status !== 'ok' && tt === 'ok')
     out.set(g.po_line_id, {
       po_line_id: g.po_line_id,
       material_id: cur?.material_id ?? g.material_id,
       hien: tron((cur?.hien ?? 0) + g.qty),
       unit_cost: cur?.unit_cost ?? g.unit_cost,
       reason_code: cur?.reason_code ?? g.reason_code,
+      stock_status: lay ? tt : (cur?.stock_status ?? tt),
+      bin_id: lay ? (g.bin_id ?? null) : (cur?.bin_id ?? null),
     })
   }
   for (const d of daChinh) {

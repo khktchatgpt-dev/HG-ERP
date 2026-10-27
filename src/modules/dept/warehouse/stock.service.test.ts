@@ -463,8 +463,8 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
     ).rejects.toMatchObject({ status: 400 })
   })
 
-  it.each(['pending_approval', 'rejected', 'completed', 'cancelled'])(
-    'LSX ở trạng thái %s → chặn xuất (chỉ đã duyệt / đang SX)',
+  it.each(['pending_approval', 'rejected', 'cancelled'])(
+    'LSX ở trạng thái %s → chặn xuất (chỉ đã duyệt / đang SX / đã xong)',
     async (status) => {
       vi.mocked(productionRepo.findById).mockResolvedValue({
         id: 'lsx1',
@@ -481,6 +481,39 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
       expect(insertMovements).not.toHaveBeenCalled()
     },
   )
+
+  it('LSX đã xong vẫn GHI BÙ được (27/10/2026) — mã X1 gắn lệnh, guard tồn vẫn giữ', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      code: 'LSX-2026-01',
+      status: 'completed',
+    } as never)
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 10]]))
+    await expect(
+      stockService.createIssueDoc(admin, {
+        kind: 'lsx',
+        production_order_id: 'lsx1',
+        lines: [{ material_id: 'm1', qty: 5 }],
+      }),
+    ).resolves.toMatchObject({ code: 'PXK-2026-0001' })
+    const mv = vi.mocked(insertMovements).mock.calls[0][0][0]
+    expect(mv).toMatchObject({
+      direction: 'out',
+      reason_code: 'X1',
+      production_order_id: 'lsx1',
+    })
+
+    // Kho đã hết (kiểm kê đã trừ) → không ghi bù quá tồn.
+    vi.mocked(insertMovements).mockClear()
+    await expect(
+      stockService.createIssueDoc(admin, {
+        kind: 'lsx',
+        production_order_id: 'lsx1',
+        lines: [{ material_id: 'm1', qty: 11 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
 
   it('LSX approved (chưa vào SX) vẫn xuất được — xưởng nhận VT trước khi bắt đầu', async () => {
     vi.mocked(productionRepo.findById).mockResolvedValue({
@@ -2063,7 +2096,10 @@ describe('dieuChinhPhieuNhap — điều chỉnh chênh lệch khi hàng đã d�
   })
 
   it('chặn: phiếu đã đảo, chính nó là phiếu điều chỉnh, không đổi số nào', async () => {
-    vi.mocked(docsRepo.findReversalOf).mockResolvedValueOnce({ id: 'r', code: 'PXK-2026-0010' })
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValueOnce({
+      id: 'r',
+      code: 'PXK-2026-0010',
+    })
     await expect(stockService.dieuChinhPhieuNhap(admin, 'doc-53', { lines: [{ po_line_id: 'pl1', qty: 1 }], reason: 'abc' })).rejects.toThrow(/đã bị đảo/) // prettier-ignore
     vi.mocked(docsRepo.findById).mockResolvedValueOnce({ ...DOC, note: 'Điều chỉnh phiếu PNK-2026-0040' } as never) // prettier-ignore
     await expect(stockService.dieuChinhPhieuNhap(admin, 'doc-53', { lines: [{ po_line_id: 'pl1', qty: 1 }], reason: 'abc' })).rejects.toThrow(/phiếu gốc PNK-2026-0040/) // prettier-ignore
@@ -2071,14 +2107,44 @@ describe('dieuChinhPhieuNhap — điều chỉnh chênh lệch khi hàng đã d�
     expect(docsRepo.insert).not.toHaveBeenCalled()
   })
 
+  it('dòng khoá (Sai quy cách): điều chỉnh / đảo ghi vào ĐÚNG trạng thái + kệ của lượng gốc', async () => {
+    const khoa = [
+      { ...LINES[0], qty: 1300, stock_status: 'ok', bin_id: 'b-tiep' },
+      { ...LINES[1], stock_status: 'blocked', bin_id: 'b-khoa' },
+    ]
+    vi.mocked(docsRepo.listLines).mockResolvedValue(khoa as never)
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 5000], ['m2', 5000]])) // prettier-ignore
+    await stockService.dieuChinhPhieuNhap(admin, 'doc-53', {
+      lines: [{ po_line_id: 'pl2', qty: 40 }],
+      reason: 'Đếm lại lô sai quy cách',
+    })
+    expect(vi.mocked(insertMovements).mock.calls[0][0][0]).toMatchObject({
+      direction: 'out',
+      qty: 10,
+      stock_status: 'blocked',
+      bin_id: 'b-khoa',
+    })
+    vi.mocked(insertMovements).mockClear()
+    await stockService.reverseDoc(admin, 'doc-53', 'Nhập nhầm đơn')
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows.map((r) => [r.direction, r.stock_status, r.bin_id])).toEqual([
+      ['out', 'ok', 'b-tiep'],
+      ['out', 'blocked', 'b-khoa'],
+    ])
+  })
+
   it('reverseDoc: phiếu gốc còn phiếu điều chỉnh sống thì không đảo; dòng đảo chép giá vốn', async () => {
     vi.mocked(docsRepo.adjustmentsOf).mockResolvedValueOnce({
       docs: [{ id: 'a1', code: 'PXK-2026-0050', reversed: false }],
       lines: [],
     })
-    await expect(stockService.reverseDoc(admin, 'doc-53', 'Sai')).rejects.toThrow(/PXK-2026-0050/)
+    await expect(stockService.reverseDoc(admin, 'doc-53', 'Sai')).rejects.toThrow(
+      /PXK-2026-0050/,
+    )
     vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 5000], ['m2', 5000]])) // prettier-ignore
     await stockService.reverseDoc(admin, 'doc-53', 'Sai đơn')
-    expect(vi.mocked(insertMovements).mock.calls[0][0][0]).toMatchObject({ unit_cost: 25000 })
+    expect(vi.mocked(insertMovements).mock.calls[0][0][0]).toMatchObject({
+      unit_cost: 25000,
+    })
   })
 })

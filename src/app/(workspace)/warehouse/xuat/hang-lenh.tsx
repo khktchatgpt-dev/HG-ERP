@@ -37,7 +37,7 @@ export function HangLenh({
   today,
   onLay,
 }: {
-  lsx: { id: string; code: string; ship_date: string | null }
+  lsx: { id: string; code: string; status: string; ship_date: string | null }
   today: string
   /** Đưa các mã đã chọn vào lưới phiếu (màn tự gộp, giữ dòng đã có). */
   onLay: (chon: LayHang[]) => void
@@ -60,6 +60,8 @@ export function HangLenh({
   const conTon = rows?.filter((r) => !r.het).length ?? 0
   const het = rows?.filter((r) => r.het).length ?? 0
   const quaHan = !!lsx.ship_date && lsx.ship_date.slice(0, 10) < today
+  // Lệnh đã xong (mở xuất 27/10/2026): phiếu này chỉ để GHI BÙ phần tổ đã lấy.
+  const daXong = lsx.status === 'completed'
 
   if (loi)
     return (
@@ -97,13 +99,19 @@ export function HangLenh({
             >
               Lấy hàng của lệnh{conTon > 0 ? ` (${conTon})` : ''}
             </button>
-            {quaHan && conTon > 0 && (
+            {!daXong && quaHan && conTon > 0 && (
               <span className="kh-warn">
                 Lệnh đã quá hạn xuất hàng {isoToVn(lsx.ship_date!.slice(0, 10))} — xưởng
                 đã dùng thì ghi bù để tồn trên máy đúng kho thật.
               </span>
             )}
           </>
+        )}
+        {daXong && (
+          <span className="kh-warn">
+            Lệnh đã hoàn thành — phiếu này là GHI BÙ: chỉ ghi phần tổ đã lấy thật mà chưa
+            ghi sổ, ngày chứng từ lùi về ngày lấy.
+          </span>
         )}
       </div>
       {mo && rows && (
