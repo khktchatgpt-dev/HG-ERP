@@ -24,7 +24,7 @@ const thuTuTo = (n: string) => {
   return i < 0 ? 99 : i
 }
 
-export const metadata = { title: 'Kho · Xuất kho' }
+export const metadata = { title: 'Kho · Xuất hàng' }
 export const dynamic = 'force-dynamic'
 
 /**

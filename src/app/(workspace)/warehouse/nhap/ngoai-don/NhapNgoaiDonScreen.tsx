@@ -218,7 +218,7 @@ export function NhapNgoaiDonScreen({
   return (
     <KhoKhung label="Nhận hàng không theo đơn" onKeyDown={phimGhi}>
       <DauTrang
-        crumb="Kho › Hàng về"
+        crumb="Kho › Nhận hàng"
         title="Nhận hàng không theo đơn"
         ctx={
           <>

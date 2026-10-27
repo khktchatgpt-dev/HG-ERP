@@ -88,7 +88,7 @@ export function KiemKeScreen({
     ? 'Chọn một đợt trong bảng trước'
     : !huyDuoc(sel.status)
       ? sel.status === 'approved'
-        ? 'Đợt đã duyệt — sai thì đảo phiếu KK ở Sổ phiếu, không huỷ đợt'
+        ? 'Đợt đã duyệt — sai thì đảo phiếu KK ở Phiếu đã ghi, không huỷ đợt'
         : 'Đợt đã huỷ'
       : !laAdmin && sel.created_by !== userId
         ? 'Chỉ người mở đợt hoặc quản trị viên huỷ được'
@@ -118,7 +118,7 @@ export function KiemKeScreen({
   return (
     <KhoKhung label="Kiểm kê">
       <DauTrang
-        title="Kiểm kê"
+        title="Kiểm kê định kỳ"
         ctx="đếm mù · sổ chốt lúc bắt đầu đếm"
         actions={
           <>
@@ -148,7 +148,7 @@ export function KiemKeScreen({
                 {sel?.status === 'counting' ? 'Đếm tiếp' : 'Mở phiếu đếm'}
               </ApNut>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Sổ phiếu
+                Phiếu đã ghi
               </ApNut>
             </ApNhom>
           </>

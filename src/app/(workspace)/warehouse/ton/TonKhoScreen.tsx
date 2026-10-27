@@ -185,7 +185,7 @@ export function TonKhoScreen({
             <ApNhom>
               <ApNut href="/warehouse/xuat">Lập phiếu xuất</ApNut>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Sổ phiếu
+                Phiếu đã ghi
               </ApNut>
             </ApNhom>
           </>
@@ -286,7 +286,7 @@ export function TonKhoScreen({
               </button>
             ) : (
               <Link href="/warehouse/nhap" className="kh-btn p">
-                Sang Hàng về để nhận hàng
+                Sang Nhận hàng
               </Link>
             )
           }

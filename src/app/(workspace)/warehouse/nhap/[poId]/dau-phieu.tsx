@@ -265,7 +265,7 @@ export function NhacSoNccSheet({
         />
       </label>
       <p className="kh-mut" style={{ fontSize: 12 }}>
-        Bổ sung sau vẫn được: Sổ phiếu › mở phiếu › ghi số phiếu NCC (không đổi tồn).
+        Bổ sung sau vẫn được: Phiếu đã ghi › mở phiếu › ghi số phiếu NCC (không đổi tồn).
       </p>
     </HopThoai>
   )

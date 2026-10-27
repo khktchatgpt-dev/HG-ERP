@@ -298,7 +298,7 @@ export function PhieuNhapScreen({
     >
       {/* MỘT HÀNG ĐẦU: Ghi sổ chỉ ở thanh chốt đáy — màn gõ (khuôn F) có một chỗ chốt. */}
       <DauTrang
-        crumb="Kho › Hàng về"
+        crumb="Kho › Nhận hàng"
         title={
           <>
             Nhận hàng{' '}
@@ -344,7 +344,7 @@ export function PhieuNhapScreen({
                 href={duong.home}
                 why={dangGhi}
               >
-                Về Hàng về
+                Về danh sách nhận hàng
               </ApNut>
             </ApNhom>
           </>

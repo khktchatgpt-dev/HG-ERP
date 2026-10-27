@@ -170,7 +170,7 @@ export function TonLenhScreen({
             <ApNhom>
               <ApNut href="/warehouse/xuat">Lập phiếu xuất</ApNut>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Sổ phiếu
+                Phiếu đã ghi
               </ApNut>
             </ApNhom>
           </>

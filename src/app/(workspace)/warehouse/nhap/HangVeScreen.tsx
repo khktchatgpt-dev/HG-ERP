@@ -381,9 +381,9 @@ export function HangVeScreen({
   }
 
   return (
-    <KhoKhung label="Hàng về">
+    <KhoKhung label="Nhận hàng">
       <DauTrang
-        title="Hàng về"
+        title="Nhận hàng"
         ctx={
           <>
             <b>{rows.length}</b> đơn đang về
@@ -429,7 +429,7 @@ export function HangVeScreen({
               <ApNut href="/warehouse/nhap/ngoai-don">Nhận không theo đơn</ApNut>
               <ApNut href="/warehouse/nhap/hoan-kho">Hoàn kho từ SX</ApNut>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Sổ phiếu
+                Phiếu đã ghi
               </ApNut>
             </ApNhom>
           </>

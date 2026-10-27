@@ -5,7 +5,7 @@ import { tienDoDem } from '@/modules/dept/warehouse/stocktakes.repo'
 import { KiemKeScreen } from './KiemKeScreen'
 import { RO_DOT, type DotRow, type RoDot } from './kiem-ke.shared'
 
-export const metadata = { title: 'Kho · Kiểm kê' }
+export const metadata = { title: 'Kho · Kiểm kê định kỳ' }
 export const dynamic = 'force-dynamic'
 
 /**

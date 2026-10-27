@@ -57,6 +57,12 @@ export type NavItem = {
 export type NavSection = {
   heading: string
   items: readonly NavItem[]
+  /**
+   * Nhóm GẬP SẴN (Kho "cho người mới", 27/10/2026): việc hằng ngày để mở, sổ
+   * sách / báo cáo gập lại — người mới chỉ phải nhìn vài dòng. Nhóm chứa trang
+   * đang mở thì tự mở; rail thu gọn (chỉ icon) vẫn bày đủ.
+   */
+  gap?: boolean
 }
 
 export type WorkspaceId =
@@ -130,6 +136,12 @@ export type WorkspaceConfig = {
    * Dùng cho System workspace — IT admin không cần các mục cá nhân trong sidebar quản trị.
    */
   hidePersonalSection?: boolean
+  /**
+   * Menu CHO NGƯỜI MỚI (Kho, 27/10/2026): rail mở chữ sẵn khi người dùng chưa
+   * chọn (rail chỉ icon là bắt người mới đoán hình) và gập nhóm "Dùng chung".
+   * Ai đã chọn thu gọn thì giữ lựa chọn đó (localStorage).
+   */
+  menuChoNguoiMoi?: boolean
   // openView đã BỎ (0086): xem chéo workspace giờ cần permission tường minh
   // 'workspace.view.<id>' — xem workspaces/access.ts.
 }
@@ -352,41 +364,55 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     ready: true,
     // B8a (19/10/2026): vào khu Kho là Bàn làm việc — Hàng về lùi xuống mục thứ hai.
     home: '/warehouse',
+    // B2 "Kho cho người mới" (27/10/2026): rail mở chữ sẵn, "Dùng chung" gập.
+    menuChoNguoiMoi: true,
+    /*
+     * B2 "Kho cho người mới" (bản vẽ A https://claude.ai/artifact/QpEkCkMHdMhFhF3WYhEF7z,
+     * duyệt Q1 27/10/2026): 5 việc hằng ngày ở trên, sổ sách / báo cáo gập lại.
+     * Nhãn theo chữ của thủ kho, đường dẫn giữ nguyên.
+     */
     sections: [
       {
-        heading: 'Nghiệp vụ',
+        heading: 'Việc hằng ngày',
         items: [
-          // B8a: trang đầu — exact để mục này không sáng ở mọi trang con /warehouse/*.
-          { href: '/warehouse', label: 'Bàn làm việc', icon: 'home', exact: true },
-          { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
+          // B8a → B2: trang đầu "Hôm nay" — exact để không sáng ở mọi trang con.
+          { href: '/warehouse', label: 'Hôm nay', icon: 'home', exact: true },
+          { href: '/warehouse/nhap', label: 'Nhận hàng', icon: 'arrow-down-to-line' },
           // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
-          { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
+          { href: '/warehouse/xuat', label: 'Xuất hàng', icon: 'arrow-up-from-line' },
           // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
           { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
-          // B1 "Kho cho người mới" (27/10/2026): gõ số đếm được của vài mã, máy
-          // ghi phần thừa/thiếu thành một đợt kiểm kê — trưởng kho đổi tồn ngay.
+          // B1 (27/10/2026): gõ số đếm được của vài mã, máy ghi phần thừa/thiếu
+          // thành một đợt kiểm kê — trưởng kho đổi tồn ngay.
           {
             href: '/warehouse/cap-nhat-ton',
             label: 'Cập nhật số thực tế',
             icon: 'notebook-pen',
           },
+        ],
+      },
+      {
+        heading: 'Sổ sách',
+        gap: true,
+        items: [
+          // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO, đảo phiếu ghi sai ở đây.
+          { href: '/warehouse/phieu', label: 'Phiếu đã ghi', icon: 'book-open' },
+          // B6 (19/10/2026): nhập–xuất–tồn theo kỳ, có giá trị (bình quân gia
+          // quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
+          { href: '/warehouse/bao-cao', label: 'Báo cáo tháng', icon: 'chart-column' },
+          // B7 (19/10/2026): đợt kiểm kê cả nhóm — đếm mù, sổ chốt lúc bắt đầu đếm.
+          {
+            href: '/warehouse/kiem-ke',
+            label: 'Kiểm kê định kỳ',
+            icon: 'clipboard-check',
+          },
           // 0236 (13/10/2026): "Giấy đề nghị mua vật tư" — Kho lập thay tờ giấy
           // chụp gửi Zalo; lãnh đạo duyệt, Cung ứng lập đơn mua từ phiếu.
           { href: '/warehouse/de-nghi', label: 'Đề nghị mua', icon: 'clipboard-list' },
-          // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO. Ba màn trên từng
-          // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
-          // và đảo phiếu ghi sai chỉ làm được ở màn cũ.
-          { href: '/warehouse/phieu', label: 'Sổ phiếu', icon: 'book-open' },
-          // Kho đợt 2 · B6 (19/10/2026): báo cáo nhập–xuất–tồn theo kỳ, có giá trị
-          // (bình quân gia quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
-          { href: '/warehouse/bao-cao', label: 'Nhập–Xuất–Tồn', icon: 'chart-column' },
-          // Kho đợt 2 · B7 (19/10/2026): đợt kiểm kê — đếm mù, sổ chốt lúc bắt đầu đếm.
-          { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
-          // Kho giữ kho dụng cụ cầm tay: giao / thu hồi (0270).
+          // Kho giữ kho dụng cụ cầm tay: giao / thu hồi (0270). B2 để ở Sổ sách —
+          // "Việc hằng ngày" giữ đúng 5 mục của bản vẽ A.
           { href: '/may-moc/dung-cu', label: 'Dụng cụ theo người', icon: 'wrench' },
-          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
-          // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
-          // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.
+          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — Kho hỏi ĐVT · kệ · ngưỡng.
           { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
@@ -942,9 +968,10 @@ export function resolveNavSections(
       : [PERSONAL_SECTION]),
     ...workspace.sections.map((s) => ({
       heading: s.heading,
+      ...(s.gap ? { gap: true } : {}),
       items: s.items.filter((i) => itemVisible(i, ctx)),
     })),
-    SHARED_SECTION,
+    workspace.menuChoNguoiMoi ? { ...SHARED_SECTION, gap: true } : SHARED_SECTION,
   ].filter((s) => s.items.length > 0)
 }
 
@@ -959,6 +986,7 @@ export function withNavBadges(
   if (Object.keys(badges).length === 0) return sections
   return sections.map((s) => ({
     heading: s.heading,
+    ...(s.gap ? { gap: true } : {}),
     items: s.items.map((i) => (badges[i.href] ? { ...i, badge: badges[i.href] } : i)),
   }))
 }

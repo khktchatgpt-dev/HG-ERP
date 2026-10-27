@@ -4,7 +4,7 @@ import { docKy } from '@/lib/kho-nxt'
 import { todayVn } from '@/lib/date-vn'
 import { BaoCaoScreen } from './BaoCaoScreen'
 
-export const metadata = { title: 'Kho · Nhập–Xuất–Tồn' }
+export const metadata = { title: 'Kho · Báo cáo tháng' }
 export const dynamic = 'force-dynamic'
 
 /**

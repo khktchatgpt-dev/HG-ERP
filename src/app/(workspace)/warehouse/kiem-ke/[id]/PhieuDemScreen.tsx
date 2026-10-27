@@ -110,7 +110,7 @@ export function PhieuDemScreen({
   return (
     <KhoKhung label={`Phiếu đếm ${dot.code}`} onKeyDown={phim}>
       <DauTrang
-        crumb={<Link href="/warehouse/kiem-ke">Kho › Kiểm kê</Link>}
+        crumb={<Link href="/warehouse/kiem-ke">Kho › Kiểm kê định kỳ</Link>}
         title={<span className="kh-num">{dot.code}</span>}
         ctx={
           <>
@@ -274,7 +274,7 @@ export function PhieuDemScreen({
           <span>
             Duyệt {gioVn(dot.approved_at)} · sinh phiếu{' '}
             <b className="kh-num">{dot.doc_code}</b> ({t.thua.length} N4, {t.thieu.length}{' '}
-            X5). Sai thì đảo phiếu KK ở Sổ phiếu, không huỷ đợt.
+            X5). Sai thì đảo phiếu KK ở Phiếu đã ghi, không huỷ đợt.
           </span>
         </div>
       )}
