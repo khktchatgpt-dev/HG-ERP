@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
 import type { HangLenhRow } from '@/lib/kho-hang-lenh'
@@ -36,21 +36,33 @@ export function HangLenh({
   lsx,
   today,
   onLay,
+  onRows,
 }: {
   lsx: { id: string; code: string; status: string; ship_date: string | null }
   today: string
   /** Đưa các mã đã chọn vào lưới phiếu (màn tự gộp, giữ dòng đã có). */
   onLay: (chon: LayHang[]) => void
+  /** Báo tập mã đã về cho lệnh — ô thêm dòng gắn nhãn "của lệnh" và xếp lên đầu. */
+  onRows?: (materialIds: string[]) => void
 }) {
   const [rows, setRows] = useState<HangLenhRow[] | null>(null)
   const [loi, setLoi] = useState<string | null>(null)
   const [mo, setMo] = useState(false)
+  // onRows thường viết tại chỗ — giữ bản mới nhất, effect chỉ chạy theo lệnh.
+  const baoRef = useRef(onRows)
+  useEffect(() => {
+    baoRef.current = onRows
+  })
 
   // Đổi lệnh = màn dựng lại khối này bằng `key={lsx.id}` (state mới, rows null).
   useEffect(() => {
     let huy = false
     api<{ rows: HangLenhRow[] }>(`/api/dept/warehouse/lsx/${lsx.id}/hang-lenh`)
-      .then((r) => !huy && setRows(r.rows))
+      .then((r) => {
+        if (huy) return
+        setRows(r.rows)
+        baoRef.current?.(r.rows.map((x) => x.material_id))
+      })
       .catch((e) => !huy && setLoi(apiErrorText(e)))
     return () => {
       huy = true

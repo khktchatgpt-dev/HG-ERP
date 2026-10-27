@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, type KeyboardEvent } from 'react'
 import { thieuTon, type DongXuat } from '@/lib/kho-phieu-xuat'
 import { useBeRong } from '@/lib/use-be-rong'
 import { GoiY, OChu, OSo, docSoVn } from '../_erp/o-nhap'
@@ -25,6 +25,19 @@ export function LuoiXuat({
 }) {
   const khung = useRef<HTMLDivElement>(null)
   const rong = useBeRong(khung)
+  /*
+    Enter ở ô Lần này: xuống ô số dòng dưới; dòng cuối thì về ô tìm "+ Thêm dòng"
+    (27/10/2026) — cả phiếu đi bằng bàn phím: gõ mã ↵ gõ số ↵ gõ mã ↵ … Ô số tự
+    lưu ở Enter trước (handler của ô chạy trước, sự kiện mới nổi lên tới đây).
+  */
+  const sangO = (i: number) => (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Enter' || e.ctrlKey || e.metaKey) return
+    const ke = document.getElementById(
+      i + 1 < rows.length ? `xuat-qty-${i + 1}` : 'xuat-tim',
+    ) as HTMLInputElement | null
+    ke?.focus()
+    ke?.select()
+  }
 
   if (rong > 0 && rong < 600)
     return (
@@ -50,7 +63,7 @@ export function LuoiXuat({
                   tồn {r.qty_ok == null ? '?' : fmt(r.qty_ok)} {r.unit}
                 </span>
               </span>
-              <span>
+              <span onKeyDown={sangO(i)}>
                 <OSo
                   id={`xuat-qty-${i}`}
                   value={String(r.qty)}
@@ -121,7 +134,7 @@ export function LuoiXuat({
                 <td className="r kh-num">
                   {r.qty_ok == null ? <span className="kh-empty">?</span> : fmt(r.qty_ok)}
                 </td>
-                <td className="r go">
+                <td className="r go" onKeyDown={sangO(i)}>
                   <OSo
                     id={`xuat-qty-${i}`}
                     value={String(r.qty)}
@@ -164,8 +177,8 @@ export function LuoiXuat({
                 className="kh-mut"
                 style={{ textAlign: 'center', padding: 20 }}
               >
-                Chưa có dòng nào — gõ mã hoặc tên vật tư ở ô “Thêm dòng” phía trên, hoặc
-                bấm “Lấy hàng của lệnh”.
+                Chưa có dòng nào — gõ mã hoặc tên vật tư ở ô “Thêm dòng” phía trên, bấm
+                “Chọn nhiều từ tồn kho”, hoặc “Lấy hàng của lệnh”.
               </td>
             </tr>
           )}

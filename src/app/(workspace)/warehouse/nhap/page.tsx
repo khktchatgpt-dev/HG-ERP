@@ -2,8 +2,9 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { hangVeRepo } from '@/modules/dept/warehouse/hang-ve.repo'
-import { incomingBucket, isIncoming } from '@/lib/supply-watch'
+import { etaBucket, incomingBucket, isIncoming } from '@/lib/supply-watch'
 import { dotKeTiep, type HangVeRow } from '@/lib/kho-hang-ve'
+import type { SapDatRow } from '@/lib/kho-lich-hang-ve'
 import { loadWatchPos, todayIso } from '@/modules/dept/supply/watch-pos'
 import { HangVeScreen } from './HangVeScreen'
 import { taiHangCuaDon } from './tai-hang-cua-don'
@@ -26,6 +27,10 @@ export const dynamic = 'force-dynamic'
  *
  * Màn Theo dõi bên Cung ứng giữ nguyên (chủ dự án 12/10: "tạm không xoá bên
  * Cung ứng") — hai cửa cùng sống tới khi chuyển giao xong (Bước C2).
+ *
+ * 27/10/2026 ("Kho chỉ nắm thông tin, không can thiệp"): dải lịch 7 ngày thay
+ * tab + khối Sắp đặt (đơn `approved`, chỉ xem) + cột Phụ trách luôn hiện. Đơn
+ * sắp đặt KHÔNG vào `rows` — chúng không phải hàng đang về, không vào badge.
  */
 export default async function WarehouseInboundPage({
   searchParams,
@@ -52,10 +57,12 @@ export default async function WarehouseInboundPage({
   ])
   const incoming = all.filter(isIncoming)
   const ids = incoming.map((p) => p.id)
+  // SẮP ĐẶT (27/10/2026): đơn GĐ đã duyệt, NCC chưa xác nhận — Kho chỉ xem (Q4).
+  const duyet = all.filter((p) => p.status === 'approved')
   const [dotBy, lineOpen, extraBy, suCoMo] = await Promise.all([
     hangVeRepo.dotMoTheoDon(ids),
     hangVeRepo.lineOpenByPoIds(ids),
-    supplyRepo.extraLsxCodesByPoIds(ids),
+    supplyRepo.extraLsxCodesByPoIds([...ids, ...duyet.map((p) => p.id)]),
     hangVeRepo.suCoMoTheoDon(ids),
   ])
 
@@ -78,9 +85,27 @@ export default async function WarehouseInboundPage({
     }
   })
 
+  const sapDat: SapDatRow[] = duyet.map((p) => {
+    const expected = p.expected_at ? p.expected_at.slice(0, 10) : null
+    return {
+      po_id: p.id,
+      po_code: p.code,
+      supplier_name: p.supplier_name,
+      lsx_code: p.lsx_code,
+      extra_lsx: extraBy.get(p.id) ?? [],
+      template: p.template,
+      expected_at: expected,
+      bucket: etaBucket(expected, today),
+      lines_total: p.lines_total,
+      owner_name: p.assignee_name,
+      approved_at: p.approved_at ? p.approved_at.slice(0, 10) : null,
+    }
+  })
+
   return (
     <HangVeScreen
       rows={rows}
+      sapDat={sapDat}
       today={today}
       canEdit={canEdit}
       truncatedAt={truncatedAt}

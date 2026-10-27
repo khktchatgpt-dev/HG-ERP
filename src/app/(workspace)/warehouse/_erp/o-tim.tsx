@@ -11,12 +11,14 @@ import {
 
 /**
  * Ô TÌM CÓ DANH SÁCH GỢI Ý của khu Kho (lối ERP, không kit — B3, 14/10/2026).
- * Hai cách nạp gợi ý:
+ * Ba cách nạp gợi ý:
  *  · `items` + `khop` — danh sách có sẵn, lọc tại chỗ (chọn lệnh, bộ phận);
- *  · `search` — hỏi server theo chữ gõ, chờ 250ms (thêm dòng vật tư, 13 nghìn mã).
+ *  · `search` — hỏi server theo chữ gõ, chờ 250ms (thêm dòng vật tư, 13 nghìn mã);
+ *  · `loc` (+ `search` làm đường lùi) — lọc tại máy, tự xếp; chỉ khi `loc` không
+ *    ra gì mới hỏi server (màn Xuất hàng: nạp sẵn mã còn tồn, 27/10/2026).
  *
  * Bàn phím theo mẫu combobox của WAI-ARIA: ↓/↑ đi trong danh sách, Enter chọn,
- * Esc đóng. `giuChu=false` (mặc định) = chọn xong ô trống lại để gõ mã kế tiếp;
+ * Esc đóng; có `onLat` thì Shift+Enter tích nhiều. `giuChu=false` (mặc định) = chọn xong ô trống lại để gõ mã kế tiếp;
  * `giuChu` = ô hiện tên mục đã chọn (ô chọn một giá trị).
  *
  * Danh sách gợi ý đặt `position: fixed` theo vị trí ô (đo lại khi cuộn / đổi cỡ):
@@ -27,6 +29,11 @@ export function OTim<T>({
   items,
   khop,
   search,
+  loc: locTaiMay,
+  cuoi,
+  onLat,
+  dangTich = false,
+  onXongTich,
   keyOf,
   render,
   textOf,
@@ -45,6 +52,21 @@ export function OTim<T>({
   /** Lọc `items` theo chữ gõ. */
   khop?: (item: T, q: string) => boolean
   search?: (q: string) => Promise<T[]>
+  /**
+   * Gợi ý TẠI MÁY theo chữ gõ, đã lọc + xếp. Có kết quả thì không hỏi server;
+   * rỗng thì mới gọi `search` (nếu có).
+   */
+  loc?: (q: string) => T[]
+  /** Dòng chú cuối danh sách (không chọn được); `tuServer` = đang bày kết quả của `search`. */
+  cuoi?: (tuServer: boolean) => ReactNode
+  /**
+   * TÍCH NHIỀU: Shift+Enter tích/bỏ mục đang trỏ, danh sách vẫn mở, con trỏ
+   * xuống mục dưới. Đang có mục tích (`dangTich`) thì bấm cả dòng cũng là tích,
+   * và Enter gọi `onXongTich` (thêm cả loạt) thay cho `onPick`.
+   */
+  onLat?: (item: T) => void
+  dangTich?: boolean
+  onXongTich?: () => void
   keyOf: (item: T) => string
   render: (item: T) => ReactNode
   /** Chữ hiện trong ô khi đã chọn (ô `giuChu`). */
@@ -71,6 +93,8 @@ export function OTim<T>({
   const [mo, setMo] = useState(false)
   const [at, setAt] = useState(0)
   const [ketQua, setKetQua] = useState<T[]>([])
+  /** Chữ gõ ứng với `ketQua` — đường `loc` không bày kết quả của câu gõ trước. */
+  const [ketQuaQ, setKetQuaQ] = useState('')
   const [dangTim, setDangTim] = useState(false)
   const goc = useRef<HTMLDivElement>(null)
   // search thường là hàm viết tại chỗ — giữ bản mới nhất, effect chỉ chạy theo chữ gõ.
@@ -80,13 +104,23 @@ export function OTim<T>({
   })
 
   const dangSua = giuChu && value && textOf ? q !== textOf(value) : true
+  const coLoc = !!locTaiMay
+  const taiMay = locTaiMay ? locTaiMay(q) : null
+  // Đường `loc`: tại máy không ra gì thì mới bày kết quả server (của ĐÚNG chữ đang gõ).
+  const tuServer = !!taiMay && taiMay.length === 0
+  const choServer = tuServer && !!search && ketQuaQ !== q.trim()
   const loc = items
     ? (dangSua && q.trim() ? items.filter((i) => (khop ? khop(i, q) : true)) : items).slice(0, 50) // prettier-ignore
-    : ketQua
+    : taiMay && !tuServer
+      ? taiMay
+      : tuServer && choServer
+        ? []
+        : ketQua
 
-  // Hỏi server theo chữ gõ — chờ người dừng tay 250ms.
+  // Hỏi server theo chữ gõ — chờ người dừng tay 250ms. Đường `loc` chỉ hỏi khi tại máy rỗng.
   useEffect(() => {
     if (!timRef.current || !mo) return
+    if (coLoc && !tuServer) return
     const s = q.trim()
     if (s.length < 1) return
     let huy = false
@@ -96,6 +130,7 @@ export function OTim<T>({
         .then((r) => {
           if (!huy) {
             setKetQua(r)
+            setKetQuaQ(s)
             setAt(0)
           }
         })
@@ -106,7 +141,7 @@ export function OTim<T>({
       huy = true
       clearTimeout(t)
     }
-  }, [q, mo])
+  }, [q, mo, coLoc, tuServer])
 
   // Bấm ra ngoài thì đóng.
   useEffect(() => {
@@ -181,6 +216,24 @@ export function OTim<T>({
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
             setAt((a) => Math.max(0, a - 1))
+          } else if (e.key === 'Enter' && e.shiftKey && onLat && hienDs && loc[at]) {
+            // Tích nhiều: danh sách vẫn mở, xuống mục dưới để tích tiếp.
+            e.preventDefault()
+            onLat(loc[at])
+            setAt((a) => Math.min(a + 1, Math.max(0, loc.length - 1)))
+          } else if (
+            e.key === 'Enter' &&
+            dangTich &&
+            onXongTich &&
+            !e.ctrlKey &&
+            !e.metaKey
+          ) {
+            // Đang có mục tích: Enter thêm CẢ LOẠT đã tích (không thêm mục đang trỏ).
+            e.preventDefault()
+            onXongTich()
+            setMo(false)
+            setKetQua([])
+            setQ('')
           } else if (e.key === 'Enter' && hienDs && loc[at] && !e.ctrlKey && !e.metaKey) {
             e.preventDefault()
             chon(loc[at])
@@ -199,7 +252,7 @@ export function OTim<T>({
             viTri ? { top: viTri.top, left: viTri.left, minWidth: viTri.w } : undefined
           }
         >
-          {dangTim && loc.length === 0 ? (
+          {(dangTim || choServer) && loc.length === 0 ? (
             <li className="rong">Đang tìm…</li>
           ) : loc.length === 0 ? (
             <li className="rong">{rong ?? 'Không có gợi ý nào khớp'}</li>
@@ -214,12 +267,18 @@ export function OTim<T>({
                 onMouseEnter={() => setAt(i)}
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  chon(item)
+                  if (dangTich && onLat) onLat(item)
+                  else chon(item)
                 }}
               >
                 {render(item)}
               </li>
             ))
+          )}
+          {cuoi && !((dangTim || choServer) && loc.length === 0) && (
+            <li className="rong cuoi" role="none">
+              {cuoi(tuServer)}
+            </li>
           )}
         </ul>
       )}

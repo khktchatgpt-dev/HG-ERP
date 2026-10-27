@@ -3,6 +3,7 @@ import {
   classifyTodo,
   countIncomingSoon,
   countMyTodos,
+  etaBucket,
   groupIncoming,
   groupTodos,
   incomingBucket,
@@ -121,6 +122,15 @@ describe('incomingBucket', () => {
     expect(incomingBucket(po({ expected_at: '2026-08-15T09:30:00Z' }), TODAY)).toBe(
       'today',
     )
+  })
+
+  it('etaBucket: cùng luật ngày nhưng không xét trạng thái (khối Sắp đặt của Kho)', () => {
+    expect(etaBucket('2026-08-22', TODAY)).toBe('week')
+    expect(etaBucket('2026-08-23', TODAY)).toBe('later')
+    expect(etaBucket(null, TODAY)).toBe('no_eta')
+    // Đơn đã duyệt vẫn có mốc theo ngày — chỉ incomingBucket mới loại nó khỏi lịch.
+    expect(incomingBucket(po({ status: 'approved', expected_at: '2026-08-14' }), TODAY)).toBeNull() // prettier-ignore
+    expect(etaBucket('2026-08-14', TODAY)).toBe('overdue')
   })
 
   it('đang trên đường mà trống ngày thì có nhóm riêng', () => {
