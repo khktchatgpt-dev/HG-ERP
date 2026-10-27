@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import type { DongNhanNgoai, TinhTrangNhan } from '@/lib/kho-nhap-ngoai-don'
+import { CHO_GHI_HANG_KHOA } from '@/lib/kho-phieu-nhap'
 import { useBeRong } from '@/lib/use-be-rong'
 import { GoiY, OChu, OSo, docSoVn } from '../../_erp/o-nhap'
 
@@ -59,6 +60,9 @@ export function LuoiNgoai({
 }) {
   const khung = useRef<HTMLDivElement>(null)
   const rong = useBeRong(khung)
+  /* "Sai quy cách" tạm ẩn (`CHO_GHI_HANG_KHOA`, 26/10/2026): mua ngoài đơn mà hàng
+     sai thì không nhập phần sai — lô khoá chưa có lối ra. */
+  const coTinhTrang = CHO_GHI_HANG_KHOA || rows.some((r) => r.tinh_trang === 'blocked')
   const ghiChuCho = (r: DongNhanNgoai) =>
     r.tinh_trang === 'blocked'
       ? 'bắt buộc: vì sao sai quy cách'
@@ -93,7 +97,9 @@ export function LuoiNgoai({
               />
             </span>
             <span className="full" style={{ display: 'flex', gap: 8 }}>
-              <OTinhTrang r={r} patch={(p) => patch(i, p)} disabled={busy} />
+              {coTinhTrang && (
+                <OTinhTrang r={r} patch={(p) => patch(i, p)} disabled={busy} />
+              )}
               <span style={{ flex: 1 }}>
                 <OChu
                   id={`nhan-note-${i}`}
@@ -129,7 +135,7 @@ export function LuoiNgoai({
           <col style={{ width: 56 }} />
           <col style={{ width: 96 }} />
           <col style={{ width: 120 }} />
-          <col style={{ width: 132 }} />
+          {coTinhTrang && <col style={{ width: 132 }} />}
           <col style={{ width: rong > 0 && rong < 1000 ? 180 : 280 }} />
           <col style={{ width: 52 }} />
         </colgroup>
@@ -143,7 +149,7 @@ export function LuoiNgoai({
               Tồn nay
             </th>
             <th className="r">Nhận</th>
-            <th>Tình trạng</th>
+            {coTinhTrang && <th>Tình trạng</th>}
             <th>Ghi chú</th>
             <th aria-label="Bỏ dòng" />
           </tr>
@@ -172,9 +178,11 @@ export function LuoiNgoai({
                   </GoiY>
                 )}
               </td>
-              <td className="go">
-                <OTinhTrang r={r} patch={(p) => patch(i, p)} disabled={busy} />
-              </td>
+              {coTinhTrang && (
+                <td className="go">
+                  <OTinhTrang r={r} patch={(p) => patch(i, p)} disabled={busy} />
+                </td>
+              )}
               <td className="go">
                 <OChu
                   id={`nhan-note-${i}`}
@@ -202,7 +210,7 @@ export function LuoiNgoai({
           {rows.length === 0 && (
             <tr>
               <td
-                colSpan={9}
+                colSpan={coTinhTrang ? 9 : 8}
                 className="kh-mut"
                 style={{ textAlign: 'center', padding: 20 }}
               >
@@ -225,9 +233,11 @@ export function LuoiNgoai({
           <tr>
             <td colSpan={5}>Tổng · {rows.length} dòng</td>
             <td className="r kh-num">{fmt(tong.tong)}</td>
-            <td colSpan={3} style={{ fontWeight: 400 }}>
-              {tong.so_dong} dòng có số · {fmt(tong.dung_duoc)} dùng được ·{' '}
-              {fmt(tong.vao_khoa)} vào khoá · nhiều ĐVT, tổng chỉ để đếm
+            <td colSpan={coTinhTrang ? 3 : 2} style={{ fontWeight: 400 }}>
+              {tong.so_dong} dòng có số
+              {coTinhTrang &&
+                ` · ${fmt(tong.dung_duoc)} dùng được · ${fmt(tong.vao_khoa)} vào khoá`}{' '}
+              · nhiều ĐVT, tổng chỉ để đếm
             </td>
           </tr>
         </tfoot>

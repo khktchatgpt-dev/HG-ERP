@@ -98,6 +98,8 @@ export type KhungBan = {
   den: number
   boPhanLo: boolean
   hanhChinh: boolean
+  /** Khung ca đêm (24/10/2026): chồng lên khung tối, không tham gia chuỗi 24 giờ — `gio-khung` quy tắc 8. */
+  caDem: boolean
 }
 
 export type QuyTac = {
@@ -161,6 +163,8 @@ export function thamSoTuBan(khung: KhungBan[], q: QuyTac): ThamSoKhung {
       tu: x.tu,
       den: x.den,
       boPhanLo: x.boPhanLo,
+      // Chỉ gắn khi là khung ca đêm — Bản 1 dựng lại phải bằng đúng THAM_SO_MAC_DINH.
+      ...(x.caDem ? { caDem: true } : {}),
     })),
     khungHanhChinh: hc.ma,
     truaTu: q.truaTu,
@@ -195,6 +199,7 @@ export type LoiKhung = { ma: string; loi: string }
 /**
  * Sáu khung phải nối liền từ giờ vào ca hành chính tới đúng 24 giờ sau: không hở, không
  * chồng, đúng một khung hành chính. Lỗi gắn vào khung để màn nhảy tới đúng dòng.
+ * Khung ca đêm đứng ngoài chuỗi (chồng lên khung tối là chủ ý) — chỉ kiểm "đến" sau "từ".
  */
 export function kiemKhung(khung: KhungBan[]): LoiKhung[] {
   const loi: LoiKhung[] = []
@@ -208,7 +213,11 @@ export function kiemKhung(khung: KhungBan[]): LoiKhung[] {
         ma: k.ma,
         loi: `"Đến" phải sau "Từ" (${gioKhung(k.tu)} → ${gioKhung(k.den)})`,
       })
-  const k = [...khung].sort((a, b) => a.tu - b.tu)
+  for (const k of khung)
+    if (k.caDem && k.hanhChinh)
+      loi.push({ ma: k.ma, loi: 'Khung ca đêm không thể là khung hành chính' })
+  const k = khung.filter((x) => !x.caDem).sort((a, b) => a.tu - b.tu)
+  if (!k.length) return [...loi, { ma: khung[0].ma, loi: 'Chưa có khung giờ thường nào' }]
   for (let i = 1; i < k.length; i++) {
     const truoc = k[i - 1]
     const nay = k[i]

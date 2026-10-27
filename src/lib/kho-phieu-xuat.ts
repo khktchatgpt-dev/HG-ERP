@@ -39,6 +39,24 @@ export const LY_DO_XUAT_LE: readonly MaLyDoKho[] = maTheoHuong('out').filter(
     !x.doiUng.includes('stocktake'),
 )
 
+/**
+ * Trạng thái lệnh XUẤT vật tư được — một tập cho cả ô chọn lệnh của màn lẫn
+ * guard của `stockService.createIssueDoc`, lệch nhau là "cho chọn rồi mới báo".
+ *
+ * 'completed' mở 27/10/2026 (chủ dự án: "lệnh đã hoàn thành nhưng chưa có dữ
+ * liệu vẫn cho nhập để hoàn thiện như thực tế"): Kho vào nhịp trễ hơn xưởng, lệnh
+ * đóng rồi mới ghi bù phần tổ đã lấy. Guard tồn + giữ chỗ vẫn chặn như thường —
+ * lệnh đã xong không giữ chỗ, nên lấn hàng của lệnh đang chạy phải ghi lý do.
+ */
+export const LSX_XUAT_DUOC = ['approved', 'in_progress', 'completed'] as const
+
+/** Nhãn trạng thái lệnh trên phiếu xuất. */
+export function nhanTrangThaiLenh(status: string): string {
+  if (status === 'in_progress') return 'đang SX'
+  if (status === 'completed') return 'đã xong · ghi bù'
+  return 'đã duyệt'
+}
+
 /** Mã lý do này có đòi gắn LỆNH không (X2 có, X6/X7 không). */
 export function lyDoCanLenh(ma: string | null): boolean {
   return !!ma && LY_DO_XUAT_LE.some((x) => x.ma === ma && x.doiUng.includes('lsx'))

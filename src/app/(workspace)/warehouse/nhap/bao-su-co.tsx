@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { ISSUE_KINDS, ISSUE_KIND_LABEL, type IssueKind } from '@/lib/po-tracking'
 import { thanSuCo, TU_CHOI_NHAN } from '@/lib/kho-hang-ve'
+import { CHO_GHI_HANG_KHOA } from '@/lib/kho-phieu-nhap'
 import { HopThoai } from '../_erp/o-nhap'
 import type { HangCuaDonData } from './tai-hang-cua-don'
 
@@ -32,7 +33,12 @@ export function BaoSuCoSheet({
   data,
   onClose,
 }: {
-  data: Pick<HangCuaDonData, 'po' | 'lines'>
+  /* Chỉ những trường hộp dùng — để form nhận hàng mở được hộp bằng dữ liệu nó có
+     sẵn, không phải nạp lại cả "Hàng của đơn" (26/10/2026). */
+  data: {
+    po: Pick<HangCuaDonData['po'], 'id' | 'code' | 'supplier_name' | 'lsx_code' | 'assignee_name'> // prettier-ignore
+    lines: Pick<HangCuaDonData['lines'][number], 'id' | 'code' | 'name' | 'unit'>[]
+  }
   onClose: () => void
 }) {
   const router = useRouter()
@@ -96,7 +102,7 @@ export function BaoSuCoSheet({
           <legend style={{ ...NHAN, marginBottom: 4 }}>Lô hàng này</legend>
           {(
             [
-              [false, 'Đã nhận / sẽ nhận phần dùng được', 'Phần đạt nhận bằng form nhận hàng; phần sai chọn “Sai quy cách” ở đó để hàng vào kệ khoá.'], // prettier-ignore
+              [false, 'Đã nhận / sẽ nhận phần dùng được', CHO_GHI_HANG_KHOA ? 'Phần đạt nhận bằng form nhận hàng; phần sai chọn “Sai quy cách” ở đó để hàng vào kệ khoá.' : 'Chỉ nhập phần đạt ở form nhận hàng. Phần sai KHÔNG nhập — ghi loại + số lượng ở đây để Cung ứng làm việc với NCC.'], // prettier-ignore
               [true, 'Từ chối nhận cả lô', 'Xe chở về lại. Không lập phiếu nhập, tồn không đổi. Cung ứng hẹn NCC giao lại.'], // prettier-ignore
             ] as const
           ).map(([v, ten, cau]) => (

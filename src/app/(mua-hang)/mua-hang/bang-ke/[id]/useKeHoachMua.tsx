@@ -49,6 +49,7 @@ export function useKeHoachMua({
   const [q, setQ] = useState('')
   const [moDan, setMoDan] = useState(false)
   const [moChan, setMoChan] = useState(false)
+  const [moChuaMa, setMoChuaMa] = useState(false)
   /** Mã đang sửa số cần tại chỗ. */
   const [dangSua, setDangSua] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -113,6 +114,12 @@ export function useKeHoachMua({
     setLoc(null)
     setNhom(null)
     setQ('')
+  }
+  function toiChuaMa() {
+    setMoChuaMa(true)
+    requestAnimationFrame(() =>
+      document.getElementById('kh-chua-ma')?.scrollIntoView({ block: 'start' }),
+    )
   }
   function toiChan() {
     setMoChan(true)
@@ -197,6 +204,9 @@ export function useKeHoachMua({
     moChan,
     setMoChan,
     toiChan,
+    moChuaMa,
+    setMoChuaMa,
+    toiChuaMa,
     dangSua,
     setDangSua,
     busy,

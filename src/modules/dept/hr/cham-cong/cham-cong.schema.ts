@@ -245,6 +245,8 @@ export const banLuuSchema = z
           den: phutTrongNgay,
           boPhanLo: z.boolean(),
           hanhChinh: z.boolean(),
+          /** Khung ca đêm (0278) — bản cũ không gửi cờ này. */
+          caDem: z.boolean().default(false),
         }),
       )
       .min(1)

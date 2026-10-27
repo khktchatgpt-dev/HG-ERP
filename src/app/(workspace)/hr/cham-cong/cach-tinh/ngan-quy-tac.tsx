@@ -281,7 +281,9 @@ export function NganQuyTac({ d }: { d: CachTinhCtx }) {
                   {loi ??
                     (k.hanhChinh
                       ? 'khung hành chính: trừ nghỉ trưa, nhận giờ làm trưa'
-                      : '')}
+                      : k.caDem
+                        ? 'khung ca đêm: đoạn vào sau giờ tan ca và qua 0h đổ vào đây thay cho các khung tối; đứng ngoài chuỗi 24 giờ'
+                        : '')}
                 </td>
               </tr>
             )
@@ -289,9 +291,10 @@ export function NganQuyTac({ d }: { d: CachTinhCtx }) {
         </tbody>
       </table>
       <p className="text-k-sm border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1.5 text-[var(--ink-2)]">
-        Các khung phải nối liền đủ 24 giờ, không hở, không chồng — hở hoặc chồng thì chưa
-        áp dụng được. &quot;Bỏ phần lố&quot; chỉ có tác dụng khi làm tròn giờ ra theo kiểu
-        xuống 30 phút.
+        Các khung thường phải nối liền đủ 24 giờ, không hở, không chồng — hở hoặc chồng
+        thì chưa áp dụng được; khung ca đêm (nếu có) chồng lên khung tối là chủ ý.
+        &quot;Bỏ phần lố&quot; chỉ có tác dụng khi làm tròn giờ ra theo kiểu xuống 30
+        phút.
       </p>
 
       <div className={SEC}>

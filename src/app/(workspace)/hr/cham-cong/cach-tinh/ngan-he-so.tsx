@@ -98,6 +98,18 @@ export function NganHeSo({ d }: { d: CachTinhCtx }) {
                     {k.hanhChinh &&
                       ` · trừ trưa ${hhmm(d.quyTac.truaTu)}–${hhmm(d.quyTac.truaDen)}`}
                   </span>
+                  {k.caDem && (
+                    <span className="block text-[var(--ink-3)]">
+                      ca đêm: đoạn vào sau giờ tan ca và qua 0h · trọn ca{' '}
+                      {(k.den - k.tu) / 60} giờ
+                      {o('frame', k.ma, 'thuong').pt != null &&
+                        ` × ${o('frame', k.ma, 'thuong').pt} % ÷ ${d.quyTac.phutMotCong / 60} = ${(
+                          (((k.den - k.tu) / 60) * (o('frame', k.ma, 'thuong').pt ?? 0)) /
+                          100 /
+                          (d.quyTac.phutMotCong / 60)
+                        ).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} công`}
+                    </span>
+                  )}
                 </td>
                 {LOAI_NGAY.map((n) => (
                   <td key={n} className={TD} style={{ textAlign: 'right' }}>

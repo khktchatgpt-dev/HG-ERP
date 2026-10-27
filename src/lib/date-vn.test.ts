@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { docEventAt, isoToVn, maskVnDate, todayVn, vnToIso } from './date-vn'
+import { docEventAt, isoToVn, maskVnDate, ngayGioVn, todayVn, vnToIso } from './date-vn'
 
 describe('isoToVn', () => {
   it('đổi ISO sang kiểu VN', () => {
@@ -92,6 +92,18 @@ describe('todayVn — hôm nay theo giờ Việt Nam', () => {
 
   it('luôn ra dạng yyyy-mm-dd để so chuỗi được', () => {
     expect(todayVn(new Date('2026-01-02T00:00:00Z'))).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe('ngayGioVn — giờ VN cho bản in dựng ở máy chủ', () => {
+  it('mốc UTC đổi sang giờ VN, kể cả khi sang ngày hôm sau', () => {
+    expect(ngayGioVn('2026-10-26T01:30:00Z')).toBe('26/10/2026 08:30')
+    expect(ngayGioVn('2026-10-25T23:05:00+00:00')).toBe('26/10/2026 06:05')
+  })
+
+  it('giờ 24h, đủ hai chữ số; nhận cả Date', () => {
+    expect(ngayGioVn(new Date('2026-01-02T12:07:00Z'))).toBe('02/01/2026 19:07')
+    expect(ngayGioVn('2026-01-02T17:00:00Z')).toBe('03/01/2026 00:00')
   })
 })
 

@@ -119,6 +119,7 @@ const bk: LsxBangKe = {
   groups: [],
   need_source: 'bom',
   include_draft: true,
+  chua_ma: { items: [], frame_lines: 0 },
   blocked: [
     {
       product_code: 'CH0291HG-IR',

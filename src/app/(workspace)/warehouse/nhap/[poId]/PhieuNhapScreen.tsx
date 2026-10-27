@@ -20,14 +20,16 @@ import {
 import type { PrintCompany } from '@/app/print/PrintSheet'
 import type { DocTemplate } from '@/lib/doc-templates'
 import {
+  CHO_GHI_HANG_KHOA,
   danhGiaVuot,
   kiemTruocGhiSo,
   tinhTong,
   type DongNhan,
 } from '@/lib/kho-phieu-nhap'
-import { ArrowLeft, ListChecks, Printer } from 'lucide-react'
+import { ArrowLeft, ListChecks, Printer, TriangleAlert } from 'lucide-react'
 import { ApNhom, ApNut, DauTrang, KhoKhung } from '../../_erp/khung'
 import { HopThoai } from '../../_erp/o-nhap'
+import { BaoSuCoSheet } from '../bao-su-co'
 import { DUONG, type NoiNhan } from './duong'
 import { DauPhieu, NhacSoNccSheet, O_LY_DO_LUI, O_SO_NCC } from './dau-phieu'
 import { LuoiNhan } from './luoi-nhan'
@@ -44,7 +46,9 @@ const fmt = (n: number) => n.toLocaleString('vi-VN')
  *
  * Ba cột số Đặt · Đã về · Lần này (SAP MIGO / BC). Tình trạng chỉ HAI giá trị
  * vì thủ kho vừa nhận vừa kiểm (chốt 15/09): Đạt → tồn dùng được; Sai quy
- * cách → vào kệ khoá, bắt ghi chú — lý do đi theo lô suốt đời nó.
+ * cách → vào kệ khoá, bắt ghi chú — lý do đi theo lô suốt đời nó. TẠM ẨN từ
+ * 26/10/2026 (`CHO_GHI_HANG_KHOA`): lô khoá chưa có lối ra — hàng sai đi nút
+ * "Báo sự cố" trên đầu phiếu (có lựa chọn từ chối nhận cả lô).
  *
  * Cảnh báo hiện NGAY DƯỚI Ô khi gõ (CellHint), thanh chốt nói vì sao chưa ghi
  * sổ được bằng câu bấm được (nhảy tới ô phải sửa, hoặc mở hộp lý do nhận
@@ -76,6 +80,8 @@ export function PhieuNhapScreen({
     /** Lệnh chính + lệnh gom (0125) — đơn nhiều lệnh in đủ. */
     lsx_codes: string[]
     expected_at: string | null
+    /** Người phụ trách đơn — người nhận thông báo khi Kho báo sự cố. */
+    assignee_name?: string | null
   }
   dot: { id: string; seq: number; total: number; expected_date: string } | null
   /** Mọi đợt giao của đơn (việc 6) — để nhãn từng dòng và dải lịch giao. */
@@ -110,6 +116,8 @@ export function PhieuNhapScreen({
   const [sheetOpen, setSheetOpen] = useState(false)
   /** Xem bản in TRƯỚC khi ghi sổ — vẽ bằng ĐÚNG component của trang in. */
   const [xemIn, setXemIn] = useState(false)
+  /** Hộp Báo sự cố ngay trên phiếu — đường của hàng sai quy cách khi "Sai quy cách" tạm ẩn. */
+  const [suCo, setSuCo] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const patch = (i: number, p: Partial<DongNhan>) =>
@@ -312,6 +320,13 @@ export function PhieuNhapScreen({
             </ApNhom>
             <ApNhom>
               <ApNut
+                icon={<TriangleAlert size={15} aria-hidden />}
+                onClick={() => setSuCo(true)}
+                why={!canEdit ? 'Chỉ người ghi kho báo được sự cố' : dangGhi}
+              >
+                Báo sự cố
+              </ApNut>
+              <ApNut
                 icon={<Printer size={15} aria-hidden />}
                 onClick={() => setXemIn(true)}
               >
@@ -420,21 +435,26 @@ export function PhieuNhapScreen({
           <span className="k">Lần này</span>
           <span className="v">{fmt(tong.lan_nay)}</span>
         </span>
-        <span className="m">
-          <span className="k">Vào khoá</span>
-          <span
-            className="v"
-            style={tong.vao_khoa > 0 ? { color: 'var(--kh-stop)' } : undefined}
-          >
-            {fmt(tong.vao_khoa)}
-          </span>
-        </span>
-        <span className="m">
-          <span className="k">Dùng được</span>
-          <span className="v" style={{ color: 'var(--kh-done)' }}>
-            {fmt(tong.dung_duoc)}
-          </span>
-        </span>
+        {/* Vào khoá / Dùng được chỉ có nghĩa khi còn cho chọn "Sai quy cách". */}
+        {(CHO_GHI_HANG_KHOA || tong.vao_khoa > 0) && (
+          <>
+            <span className="m">
+              <span className="k">Vào khoá</span>
+              <span
+                className="v"
+                style={tong.vao_khoa > 0 ? { color: 'var(--kh-stop)' } : undefined}
+              >
+                {fmt(tong.vao_khoa)}
+              </span>
+            </span>
+            <span className="m">
+              <span className="k">Dùng được</span>
+              <span className="v" style={{ color: 'var(--kh-done)' }}>
+                {fmt(tong.dung_duoc)}
+              </span>
+            </span>
+          </>
+        )}
         {loiGhi ? (
           <span className="why" role="alert">
             Chưa ghi sổ được: {loiGhi}
@@ -548,6 +568,15 @@ export function PhieuNhapScreen({
             if (so) setSupplierDocNo(so)
             void ghiSo(so)
           }}
+        />
+      )}
+      {suCo && (
+        <BaoSuCoSheet
+          data={{
+            po: { ...po, assignee_name: po.assignee_name ?? null },
+            lines: rows.map((r) => ({ id: r.po_line_id, code: r.code, name: r.name, unit: r.unit })), // prettier-ignore
+          }}
+          onClose={() => setSuCo(false)}
         />
       )}
       {xemIn && (
