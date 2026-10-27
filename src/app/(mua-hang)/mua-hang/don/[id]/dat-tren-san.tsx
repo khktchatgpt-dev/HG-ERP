@@ -27,7 +27,7 @@ import { money } from './don-chung-tu.shared'
 import type { DonCtx } from './useDonChungTu'
 
 /*
-  HỘP "ĐẶT TRÊN SÀN" (0278, bản vẽ "Đơn mua trên sàn" khung 2 + 2b, duyệt 27/10/2026).
+  HỘP "ĐẶT TRÊN SÀN" (0279, bản vẽ "Đơn mua trên sàn" khung 2 + 2b, duyệt 27/10/2026).
 
   Với đơn sàn, bấm đặt trong app Shopee cũng là lúc sàn trừ tiền — nên bước này thay
   "NCC xác nhận" và ghi MỘT LẦN: mã đơn sàn, cách trả, số tiền app đã trừ. Server

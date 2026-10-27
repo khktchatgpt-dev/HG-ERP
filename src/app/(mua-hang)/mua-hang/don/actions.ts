@@ -47,7 +47,7 @@ export type Perm = {
   /** Trưởng phòng Cung ứng / admin — được gửi gấp trước khi ký (0218). */
   lead?: boolean
   /**
-   * NCC của đơn là SÀN (0278) — `shop` là tên shop đang ghi. Có thì gửi duyệt bắt
+   * NCC của đơn là SÀN (0279) — `shop` là tên shop đang ghi. Có thì gửi duyệt bắt
    * tên shop, và nút chính sau duyệt là "Đặt trên sàn" thay cho "NCC xác nhận".
    * Xem `sanCua`.
    */
@@ -77,7 +77,7 @@ export type ActionId =
   | 'transit'
   | 'accept'
   | 'close_short'
-  /** Đơn sàn (0278): ghi mã đơn sàn + tiền đã trả — hộp riêng ở màn chứng từ. */
+  /** Đơn sàn (0279): ghi mã đơn sàn + tiền đã trả — hộp riêng ở màn chứng từ. */
   | 'place_san'
 
 export type Action = {
@@ -126,7 +126,7 @@ export type Action = {
 }
 
 /**
- * ĐẶT TRÊN SÀN (0278, bản vẽ khung 2) — thay "NCC xác nhận" làm nút chính của đơn sàn.
+ * ĐẶT TRÊN SÀN (0279, bản vẽ khung 2) — thay "NCC xác nhận" làm nút chính của đơn sàn.
  * `build` không có: hộp riêng (`dat-tren-san.tsx`) gom mã đơn sàn, cách trả, số tiền
  * rồi mới gọi `confirm`. Không chạy hàng loạt — mỗi đơn một mã, một số tiền.
  */
@@ -458,7 +458,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
 
     case 'approved':
       return [
-        // Đơn sàn (0278): đặt trong app là trả tiền luôn — hộp riêng ghi mã đơn + tiền.
+        // Đơn sàn (0279): đặt trong app là trả tiền luôn — hộp riêng ghi mã đơn + tiền.
         ...(perm.san ? [DAT_TREN_SAN(notOwn)] : []),
         /*
           NCC XÁC NHẬN thay cho "Gửi nhà cung cấp" (06/10/2026, chủ dự án chốt):
@@ -670,7 +670,7 @@ export function bulkActionsFor(
   })
 }
 
-/** `Perm.san` của một đơn: có khi NCC của đơn là sàn (0278). */
+/** `Perm.san` của một đơn: có khi NCC của đơn là sàn (0279). */
 export function sanCua(
   po: { supplier_id: string; marketplace_shop?: string | null },
   suppliers: { id: string; is_marketplace?: boolean }[],

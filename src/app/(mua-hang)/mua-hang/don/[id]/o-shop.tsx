@@ -3,7 +3,7 @@
 import type { DonCtx } from './useDonChungTu'
 
 /*
-  Ô SHOP của đơn mua trên sàn (0278, bản vẽ "Đơn mua trên sàn" khung 1, duyệt 27/10/2026).
+  Ô SHOP của đơn mua trên sàn (0279, bản vẽ "Đơn mua trên sàn" khung 1, duyệt 27/10/2026).
 
   Nằm TRONG chip NCC, chỉ hiện khi NCC là sàn: NCC thật của đơn là shop, Shopee chỉ là
   chỗ mua. Gõ tự do — shop đổi liên tục, lập danh mục shop là việc không ai làm — kèm

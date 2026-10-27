@@ -23,7 +23,7 @@ import type { DonCtx } from './useDonChungTu'
   trần cỡ trong size-baseline).
 
   · Đơn NCC thường: Thanh toán · Nơi giao, chip không khung như trước (28/09/2026).
-  · Đơn SÀN (0278, bản vẽ khung 3): Mã đơn sàn · Mã vận đơn · Đã trả trước · Hoá đơn
+  · Đơn SÀN (0279, bản vẽ khung 3): Mã đơn sàn · Mã vận đơn · Đã trả trước · Hoá đơn
     GTGT. Thanh toán/Nơi giao của đơn sàn luôn là "trả trước khi đặt" / "shop gửi" —
     bày ra là chiếm chỗ của bốn thứ người ta thật sự hỏi.
 

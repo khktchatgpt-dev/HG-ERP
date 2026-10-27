@@ -25,7 +25,7 @@ export type ReceiptValueRow = {
   payment_terms: string | null
 }
 
-/** Một phiếu chi chờ hoàn ứng cho nhân viên (0278). */
+/** Một phiếu chi chờ hoàn ứng cho nhân viên (0279). */
 export type ChoHoanUngRow = {
   id: string
   paid_by_user_id: string
@@ -55,9 +55,9 @@ export type SupplierPayment = {
   created_at: string
   created_by_name: string | null
   po_code: string | null
-  /** 'refund' trừ vào đã trả — cộng qua `soTienDaTra` (0278). */
+  /** 'refund' trừ vào đã trả — cộng qua `soTienDaTra` (0279). */
   kind: PaymentKind
-  /** Nhân viên ứng tiền riêng; trống = công ty trả (0278). */
+  /** Nhân viên ứng tiền riêng; trống = công ty trả (0279). */
   paid_by_user_id: string | null
   reimbursed_at: string | null
 }
@@ -299,7 +299,7 @@ export const payablesRepo = {
   },
 
   /**
-   * Phiếu chi do NHÂN VIÊN ứng tiền riêng mà công ty chưa hoàn (0278) — cả phiếu trả
+   * Phiếu chi do NHÂN VIÊN ứng tiền riêng mà công ty chưa hoàn (0279) — cả phiếu trả
    * lẫn phiếu sàn hoàn về người đó. Màn Công nợ NCC gom theo người (`noHoanUng`).
    */
   async unreimbursed(): Promise<ChoHoanUngRow[]> {
@@ -334,7 +334,7 @@ export const payablesRepo = {
     })
   },
 
-  /** Tiền đã trả RÒNG theo đơn (phiếu hoàn trừ đi — `soTienDaTra`), 0278. */
+  /** Tiền đã trả RÒNG theo đơn (phiếu hoàn trừ đi — `soTienDaTra`), 0279. */
   async paidByPoIds(poIds: string[]): Promise<Record<string, number>> {
     if (poIds.length === 0) return {}
     const { data, error } = await db()
@@ -348,7 +348,7 @@ export const payablesRepo = {
     return out
   },
 
-  /** Đóng dấu đã hoàn ứng (0278) — chỉ phiếu có người ứng và chưa hoàn. */
+  /** Đóng dấu đã hoàn ứng (0279) — chỉ phiếu có người ứng và chưa hoàn. */
   async markReimbursed(id: string, at: string): Promise<boolean> {
     const { data, error } = await db()
       .from('accounting_supplier_payments')

@@ -25,7 +25,7 @@ export type PoForHeader = {
   production_order_id: string | null
   project_id?: string | null
   supplier_id: string
-  /** Tên shop khi NCC là sàn (0278). */
+  /** Tên shop khi NCC là sàn (0279). */
   marketplace_shop?: string | null
   currency: string
   vat_rate: number | null

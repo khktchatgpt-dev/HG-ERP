@@ -383,7 +383,7 @@ export function DonChungTuScreen(p: Props) {
           />
         )}
       </HeadChips>
-      {/* Hàng chip PHỤ — Thanh toán·Nơi giao, hoặc 4 ô của đơn sàn (0278): chip-phu.tsx */}
+      {/* Hàng chip PHỤ — Thanh toán·Nơi giao, hoặc 4 ô của đơn sàn (0279): chip-phu.tsx */}
       <HangChipPhu d={d} chipEdit={chipEdit} />
       <DocStatus
         status={PO_STATUS_LABEL[po.status as PoStatus] ?? po.status}

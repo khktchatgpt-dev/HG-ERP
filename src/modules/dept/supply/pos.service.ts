@@ -122,10 +122,10 @@ type PoInput = {
   /** Đơn ngoài lệnh (0229) — bỏ qua khi đơn có lệnh. */
   /** Hạng mục của đơn ngoài lệnh (0230) — bỏ qua khi đơn có lệnh. */
   project_id?: string | null
-  /** Mua trên sàn (0278) — chỉ ghi khi NCC là sàn (`truongSan`). */
+  /** Mua trên sàn (0279) — chỉ ghi khi NCC là sàn (`truongSan`). */
   marketplace_shop?: string | null
   marketplace_tracking_no?: string | null
-  /** Có chữ = đơn không có hoá đơn GTGT (0278). */
+  /** Có chữ = đơn không có hoá đơn GTGT (0279). */
   invoice_waived_reason?: string | null
   lines: PoLineInput[]
   /** Kế hoạch chia đợt khai ngay lúc soạn (28/08) — trỏ dòng theo line_index. */
@@ -585,7 +585,7 @@ export const posService = {
     }
     // NCC bị khoá SAU khi đơn đã soạn: chặn ở cửa gửi duyệt, không để lên bàn GĐ.
     const sup = await assertSupplierCanOrder(before.supplier_id)
-    // Đơn sàn (0278): GĐ phải biết mua của shop nào.
+    // Đơn sàn (0279): GĐ phải biết mua của shop nào.
     if (sup.is_marketplace) {
       const why = guiDuyetSanLoi(before)
       if (why) throw BadRequest(why)
@@ -689,7 +689,7 @@ export const posService = {
       terms_lead_time: input.terms_lead_time ?? null,
       signer_role: input.signer_role ?? null,
       note: input.note ?? null,
-      // 0278: không gửi = giữ; mã vận đơn chỉ sống trên đơn sàn (`truongSan`).
+      // 0279: không gửi = giữ; mã vận đơn chỉ sống trên đơn sàn (`truongSan`).
       invoice_waived_reason: keep(input.invoice_waived_reason, before.invoice_waived_reason),
       ...(input.marketplace_tracking_no !== undefined
         ? {
@@ -937,7 +937,7 @@ export const posService = {
     */
     if (to === 'ordered') {
       const sup = await assertSupplierCanOrder(before.supplier_id)
-      // Đơn sàn (0278) không có bước "gửi NCC" — đặt trong app là trả tiền luôn,
+      // Đơn sàn (0279) không có bước "gửi NCC" — đặt trong app là trả tiền luôn,
       // nên phải qua `confirm` để ghi mã đơn sàn + phiếu chi trả trước.
       if (sup.is_marketplace)
         throw BadRequest('Đơn mua trên sàn: dùng nút "Đặt trên sàn" để ghi mã đơn và số tiền đã trả')
@@ -995,7 +995,7 @@ export const posService = {
       method?: string | null
       place?: string | null
       shipments: ShipmentInput[]
-      /** Đặt trên sàn (0278) — bắt buộc khi NCC là sàn. */
+      /** Đặt trên sàn (0279) — bắt buộc khi NCC là sàn. */
       san?: DatTrenSan
     },
   ): Promise<Po> {
@@ -1021,7 +1021,7 @@ export const posService = {
     }
     const skipSend = before.status === 'approved'
     /*
-     * ĐƠN SÀN (0278): bước này = bấm đặt trong app Shopee/Lazada. Sàn trừ tiền
+     * ĐƠN SÀN (0279): bước này = bấm đặt trong app Shopee/Lazada. Sàn trừ tiền
      * ngay, nên ghi luôn mã đơn sàn + phiếu chi trả trước (trừ COD). Kiểm TRƯỚC
      * mọi thao tác ghi để thiếu thông tin thì không để lại gì dở dang.
      */

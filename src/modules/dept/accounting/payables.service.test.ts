@@ -173,7 +173,7 @@ describe('payablesService — guard ghi/xoá thanh toán', () => {
   })
 })
 
-describe('mua trên sàn (0278) — phiếu hoàn tiền & nhân viên ứng', () => {
+describe('mua trên sàn (0279) — phiếu hoàn tiền & nhân viên ứng', () => {
   it('phiếu hoàn TRỪ vào đã trả: trả trước 500, sàn hoàn 120, hàng về 380 → còn nợ 0', () => {
     const rows = summarizePayables(
       [receipt({ qty: 38, unit_cost: 10 })], // +380
@@ -209,7 +209,7 @@ describe('mua trên sàn (0278) — phiếu hoàn tiền & nhân viên ứng', (
   })
 })
 
-describe('payablesService.markReimbursed — hoàn ứng cho nhân viên (0278)', () => {
+describe('payablesService.markReimbursed — hoàn ứng cho nhân viên (0279)', () => {
   it('phiếu công ty trả / đã hoàn → 400; phiếu ứng hoặc phiếu sàn hoàn về người ứng → đóng dấu', async () => {
     const find = vi.mocked(payablesRepo.findPayment)
     find.mockResolvedValueOnce({ id: 'p1', paid_by_user_id: null } as never)

@@ -1,4 +1,4 @@
--- 0278: MUA TRÊN SÀN TMĐT (Shopee, Lazada, TikTok Shop…) — dùng lại ĐƠN MUA, không đẻ chứng từ mới.
+-- 0279: MUA TRÊN SÀN TMĐT (Shopee, Lazada, TikTok Shop…) — dùng lại ĐƠN MUA, không đẻ chứng từ mới.
 --
 -- Đo 26/10/2026: 0 NCC / đơn / phiếu nhập / đề nghị mua nào nhắc shopee, lazada,
 -- tiki, online, mua lẻ, tiền mặt — mua sàn đang nằm NGOÀI ERP hoàn toàn. User chốt

@@ -1,5 +1,5 @@
 /**
- * Tạo hồ sơ NCC "Shopee" là SÀN TMĐT (0278, câu chốt 3 của bản vẽ "Đơn mua trên sàn", 27/10/2026).
+ * Tạo hồ sơ NCC "Shopee" là SÀN TMĐT (0279, câu chốt 3 của bản vẽ "Đơn mua trên sàn", 27/10/2026).
  *
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/ncc-tao-shopee-1027.ts           # dò khô
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/ncc-tao-shopee-1027.ts --apply   # ghi
@@ -45,7 +45,7 @@ async function main() {
     payment_terms: 'Trả trước khi đặt',
     payment_net_days: 0,
     is_marketplace: true,
-    note: 'Hồ sơ SÀN (0278) — NCC thật là shop, ghi tên shop trên từng đơn. Đặt bằng nút "Đặt trên sàn".',
+    note: 'Hồ sơ SÀN (0279) — NCC thật là shop, ghi tên shop trên từng đơn. Đặt bằng nút "Đặt trên sàn".',
   }
   console.log('Sẽ tạo:', row)
   if (!APPLY) return console.log('Dò khô — thêm --apply để ghi.')

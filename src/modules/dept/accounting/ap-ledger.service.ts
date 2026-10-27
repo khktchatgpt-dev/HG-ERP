@@ -264,7 +264,7 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       // Phiếu chi không bắt buộc số tham chiếu; rơi về phương thức rồi mới
       // tới gạch ngang, để cột "Số chứng từ" không trống trơn cả sổ.
       doc_no: `${p.kind === 'refund' ? 'Hoàn tiền · ' : ''}${p.ref_no || p.method || '—'}`,
-      // Phiếu hoàn (0278) là phiếu chi mang dấu âm: trả lại phần nợ đã giảm.
+      // Phiếu hoàn (0279) là phiếu chi mang dấu âm: trả lại phần nợ đã giảm.
       amount: soTienDaTra(p),
       note: p.note,
     })),

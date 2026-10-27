@@ -49,8 +49,8 @@ export const supplierPaymentCreateSchema = z.object({
   method: z.string().trim().max(40).optional().nullable(),
   ref_no: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(1000).optional().nullable(),
-  /** 'refund' = NCC / sàn hoàn tiền về (shop huỷ, trả hàng) — trừ vào đã trả (0278). */
+  /** 'refund' = NCC / sàn hoàn tiền về (shop huỷ, trả hàng) — trừ vào đã trả (0279). */
   kind: z.enum(PAYMENT_KINDS).default('payment'),
-  /** Nhân viên ứng tiền riêng trả hộ (mua sàn) — trống = công ty trả (0278). */
+  /** Nhân viên ứng tiền riêng trả hộ (mua sàn) — trống = công ty trả (0279). */
   paid_by_user_id: z.string().uuid().optional().nullable(),
 })

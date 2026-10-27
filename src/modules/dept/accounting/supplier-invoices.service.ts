@@ -632,7 +632,7 @@ export async function poFinanceForPo(poId: string): Promise<{
   const r2 = (n: number) => Math.round(n * 100) / 100
   const payments = ((pays ?? []) as P[]).map((x) => ({
     ...x,
-    amount: soTienDaTra(x), // phiếu hoàn (0278) mang dấu âm
+    amount: soTienDaTra(x), // phiếu hoàn (0279) mang dấu âm
   }))
   return {
     currency: m.currency,

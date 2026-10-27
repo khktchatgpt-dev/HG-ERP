@@ -10,7 +10,7 @@ import { noHoanUng } from '@/lib/mua-san'
 import type { ChoHoanUngRow } from '@/modules/dept/accounting/payables.repo'
 
 /*
-  CHỜ HOÀN ỨNG (0278, bản vẽ "Đơn mua trên sàn" khung 5, duyệt 27/10/2026).
+  CHỜ HOÀN ỨNG (0279, bản vẽ "Đơn mua trên sàn" khung 5, duyệt 27/10/2026).
 
   Nhân viên Cung ứng ứng tiền riêng khi "Đặt trên sàn" → phiếu chi mang người ứng.
   Khối này gom theo người: công ty còn nợ ai bao nhiêu, phiếu nào. Phiếu sàn hoàn về

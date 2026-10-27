@@ -47,7 +47,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (ncc.is_carrier) redirect(`/mua-hang/van-chuyen/don-vi/${ncc.id}`)
 
   const poIds = pos.map((p) => p.id)
-  // Đơn sàn (0278): tiền đã trả ròng theo đơn — chỉ tải khi hồ sơ là sàn.
+  // Đơn sàn (0279): tiền đã trả ròng theo đơn — chỉ tải khi hồ sơ là sàn.
   const [totals, paid] = await Promise.all([
     posRepo.totalsByPoIds(poIds),
     ncc.is_marketplace

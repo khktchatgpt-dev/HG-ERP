@@ -53,7 +53,7 @@ type Ncc = {
   is_active: boolean
   can_order: boolean
   lock_reason: string | null
-  /** Hồ sơ là một SÀN TMĐT (0278) — đơn của nó có tên shop, mã đơn sàn, tiền trả trước. */
+  /** Hồ sơ là một SÀN TMĐT (0279) — đơn của nó có tên shop, mã đơn sàn, tiền trả trước. */
   is_marketplace: boolean
   tax_no: string | null
   phone: string | null
@@ -87,7 +87,7 @@ type Po = {
   expected_at: string | null
   lsx_code: string | null
   total: number
-  /** Đơn sàn (0278): tên shop, mã đơn sàn, tiền đã trả ròng (đã trừ phiếu hoàn). */
+  /** Đơn sàn (0279): tên shop, mã đơn sàn, tiền đã trả ròng (đã trừ phiếu hoàn). */
   shop?: string | null
   doc_no?: string | null
   paid?: number
@@ -305,7 +305,7 @@ function SuaHoSo({
       </FieldGrid>
 
       <div className="k-sec">Thanh toán &amp; giao hàng</div>
-      {/* Cờ SÀN (0278, bản vẽ khung 4) — một hồ sơ mỗi sàn, NCC thật là shop ghi trên đơn. */}
+      {/* Cờ SÀN (0279, bản vẽ khung 4) — một hồ sơ mỗi sàn, NCC thật là shop ghi trên đơn. */}
       <div className="mb-2 border border-[var(--hair)] bg-[var(--surface-raised)] px-2.5 py-2">
         <Tick checked={san} onChange={setSan} label="Đây là sàn thương mại điện tử" />
         <p className="text-k-sm mt-0.5 pl-6 text-[var(--ink-3)]">

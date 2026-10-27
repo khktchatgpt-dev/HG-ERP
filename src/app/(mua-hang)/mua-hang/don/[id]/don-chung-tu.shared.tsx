@@ -87,12 +87,12 @@ export type PoDoc = {
   terms_payment: string | null
   terms_invoice: string | null
   terms_lead_time: string | null
-  /** Số tờ của NCC — với đơn sàn là MÃ ĐƠN SÀN (0278). */
+  /** Số tờ của NCC — với đơn sàn là MÃ ĐƠN SÀN (0279). */
   supplier_doc_no?: string | null
-  /** Đơn sàn (0278): tên shop, mã vận đơn. */
+  /** Đơn sàn (0279): tên shop, mã vận đơn. */
   marketplace_shop?: string | null
   marketplace_tracking_no?: string | null
-  /** Có chữ = đơn không có hoá đơn GTGT (0278). */
+  /** Có chữ = đơn không có hoá đơn GTGT (0279). */
   invoice_waived_reason?: string | null
   assigned_to: string | null
   assignee_name: string | null
@@ -234,7 +234,7 @@ export type Props = {
   thueNcc?: Record<string, ThueNcc>
   /** Số đơn theo từng kiểu thuế cả công ty (khoá `khoaThue`) — "18 đơn" cạnh mỗi kiểu. */
   thueDem?: Record<string, number>
-  /** Tên shop đã dùng trên từng sàn (0278) — gợi ý ô Shop. Chỉ có khi sửa được. */
+  /** Tên shop đã dùng trên từng sàn (0279) — gợi ý ô Shop. Chỉ có khi sửa được. */
   shopGoiY?: ShopGoiY[]
   /** Phiếu chi phí mua hàng gắn đơn này (0211) — gồm cả phiếu đã huỷ. */
   costs?: CostRow[]

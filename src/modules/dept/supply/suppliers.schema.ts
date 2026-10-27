@@ -83,7 +83,7 @@ export const supplierCreateSchema = z.object({
   // Admin
   buyer_id: z.string().uuid().optional().nullable(),
   can_order: z.boolean().optional(),
-  /** Hồ sơ là một SÀN TMĐT (Shopee, Lazada…) — mỗi sàn một hồ sơ, tên shop ghi trên đơn (0278). */
+  /** Hồ sơ là một SÀN TMĐT (Shopee, Lazada…) — mỗi sàn một hồ sơ, tên shop ghi trên đơn (0279). */
   is_marketplace: z.boolean().optional(),
   lock_reason: optText(500),
   note: optText(2000),

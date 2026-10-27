@@ -40,7 +40,7 @@ export type PoHeader = {
   terms: PoTerms
   signerRole: string
   /**
-   * Tên shop khi NCC là SÀN (0278) — gõ tự do, gợi ý tên đã dùng. Bỏ trống được
+   * Tên shop khi NCC là SÀN (0279) — gõ tự do, gợi ý tên đã dùng. Bỏ trống được
    * lúc lưu nháp; gửi duyệt mới bắt. NCC thường thì server ghi null.
    */
   marketplaceShop?: string

@@ -330,7 +330,7 @@ export const payablesService = {
   },
 
   /**
-   * ĐÃ HOÀN ỨNG (0278) — công ty trả lại nhân viên đã ứng tiền riêng mua trên sàn.
+   * ĐÃ HOÀN ỨNG (0279) — công ty trả lại nhân viên đã ứng tiền riêng mua trên sàn.
    * Một chiều: hoàn nhầm thì xoá phiếu ghi lại, không có nút "bỏ hoàn". Phiếu SÀN
    * HOÀN về người ứng cũng đóng dấu cùng lượt: công ty chỉ trả họ phần ròng.
    */
@@ -345,7 +345,7 @@ export const payablesService = {
     if (!ok) throw BadRequest('Phiếu vừa được người khác hoàn ứng — tải lại trang')
   },
 
-  /** Chờ hoàn ứng cho nhân viên (0278) — người xem sổ công nợ đều thấy. */
+  /** Chờ hoàn ứng cho nhân viên (0279) — người xem sổ công nợ đều thấy. */
   async unreimbursed(user: User) {
     await assertAction(user, 'accounting.payable.view')
     return payablesRepo.unreimbursed()

@@ -161,13 +161,13 @@ export const poCreateSchema = z.object({
   standalone_purpose: optText(120),
   standalone_ref: optText(200),
   /**
-   * MUA TRÊN SÀN (0278): tên shop + mã vận đơn — chỉ có nghĩa khi NCC là sàn
+   * MUA TRÊN SÀN (0279): tên shop + mã vận đơn — chỉ có nghĩa khi NCC là sàn
    * (`is_marketplace`); service ghi null cho đơn NCC thường. Mã đơn sàn đi vào
    * `supplier_doc_no` như số tờ của NCC thường.
    */
   marketplace_shop: optText(200),
   marketplace_tracking_no: optText(100),
-  /** Có chữ = đơn KHÔNG có hoá đơn GTGT, kèm lý do (0278). Trống = cần hoá đơn. */
+  /** Có chữ = đơn KHÔNG có hoá đơn GTGT, kèm lý do (0279). Trống = cần hoá đơn. */
   invoice_waived_reason: optText(500),
   /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh bắt có ở cửa gửi duyệt. */
   project_id: z.string().uuid().nullable().optional(),
@@ -307,7 +307,7 @@ export const poConfirmSchema = z.object({
   place: optText(200), // mặc định "Kho nguyên vật liệu"
   shipments: z.array(poShipmentInputSchema).max(20).default([]),
   /**
-   * ĐẶT TRÊN SÀN (0278) — bắt buộc khi NCC của đơn là sàn: với đơn sàn, bước
+   * ĐẶT TRÊN SÀN (0279) — bắt buộc khi NCC của đơn là sàn: với đơn sàn, bước
    * "NCC xác nhận" chính là lúc bấm đặt trong app, và sàn trừ tiền ngay lúc đó.
    * Service kiểm bằng `datTrenSanLoi`; đơn NCC thường gửi kèm thì bị bỏ qua.
    */
@@ -339,7 +339,7 @@ export const poTermsPatchSchema = z.object({
   signer_role: optText(100),
   note: optText(2000),
   /**
-   * Hai ô biết được SAU khi đặt (0278): mã vận đơn (sàn cấp khi shop giao cho bên
+   * Hai ô biết được SAU khi đặt (0279): mã vận đơn (sàn cấp khi shop giao cho bên
    * ship) và "đơn này không có hoá đơn" (shop báo sau). Không gửi = giữ nguyên.
    */
   marketplace_tracking_no: optText(100),

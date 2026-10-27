@@ -1,5 +1,5 @@
 /**
- * MUA TRÊN SÀN TMĐT (0278, 26/10/2026) — logic thuần, dùng chung server + client.
+ * MUA TRÊN SÀN TMĐT (0279, 26/10/2026) — logic thuần, dùng chung server + client.
  *
  * Mua Shopee/Lazada không đẻ chứng từ mới: vẫn là ĐƠN MUA, chỉ khác ở chỗ NCC là
  * một SÀN (`supply_suppliers.is_marketplace`), tiền trả TRƯỚC lúc đặt, và sàn có
@@ -18,7 +18,7 @@ export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
 /**
  * Số tiền của một phiếu chi CÓ DẤU, để cộng vào "đã trả": phiếu hoàn tiền (sàn trả
  * lại khi shop huỷ / trả hàng) TRỪ đi. Thiếu `kind` (đọc từ chỗ chưa select cột) =
- * phiếu trả tiền như trước 0278.
+ * phiếu trả tiền như trước 0279.
  */
 export function soTienDaTra(p: { amount: unknown; kind?: string | null }): number {
   const v = Number(p.amount ?? 0) || 0

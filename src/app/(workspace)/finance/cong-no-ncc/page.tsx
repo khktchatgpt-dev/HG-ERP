@@ -23,7 +23,7 @@ export default async function PayablesPage() {
      * Nuốt lỗi: màn công nợ không được chết vì một dòng cảnh báo.
      */
     awaitingInvoiceSummary().catch(() => ({ by_currency: [], supplier_count: 0 })),
-    // Nhân viên ứng tiền mua sàn chưa được hoàn (0278) + danh sách người cho ô "trả hộ".
+    // Nhân viên ứng tiền mua sàn chưa được hoàn (0279) + danh sách người cho ô "trả hộ".
     payablesService.unreimbursed(user),
     usersRepo.list({ active_only: true }),
   ])

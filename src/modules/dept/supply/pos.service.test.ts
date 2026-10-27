@@ -97,7 +97,7 @@ import { poAdjustmentsRepo } from './po-adjustments.repo'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
-// Đặt trên sàn (0278) ghi phiếu chi trả trước thẳng qua repo công nợ.
+// Đặt trên sàn (0279) ghi phiếu chi trả trước thẳng qua repo công nợ.
 vi.mock('@/modules/dept/accounting/payables.repo', () => ({
   payablesRepo: { insertPayment: vi.fn(async () => undefined) },
 }))
@@ -1199,7 +1199,7 @@ describe('P1 (27/09/2026) — hàng rào thật cho NCC khoá đặt và huỷ �
   })
 })
 
-describe('posService — mua trên sàn (0278): tên shop chỉ dính đơn của NCC là sàn', () => {
+describe('posService — mua trên sàn (0279): tên shop chỉ dính đơn của NCC là sàn', () => {
   const base = {
     production_order_id: null,
     currency: 'VND',
@@ -1234,7 +1234,7 @@ describe('posService — mua trên sàn (0278): tên shop chỉ dính đơn củ
   })
 })
 
-describe('posService — luồng đơn mua trên sàn (0278)', () => {
+describe('posService — luồng đơn mua trên sàn (0279)', () => {
   const SAN = { id: 'shopee', is_active: true, can_order: true, is_marketplace: true }
   const approved = { ...PO, status: 'approved', currency: 'VND', marketplace_shop: 'Shop Vít Rẻ' }
   beforeEach(() => {

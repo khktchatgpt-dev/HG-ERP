@@ -68,10 +68,10 @@ export type Po = {
   standalone_ref?: string | null
   /** Hạng mục ngoài sản xuất (0230) — đơn ngoài lệnh thuộc về đây. Null với đơn theo lệnh. */
   project_id?: string | null
-  /** Mua trên sàn (0278): tên shop, mã vận đơn. Null với đơn NCC thường. */
+  /** Mua trên sàn (0279): tên shop, mã vận đơn. Null với đơn NCC thường. */
   marketplace_shop?: string | null
   marketplace_tracking_no?: string | null
-  /** Có chữ = đơn không có hoá đơn GTGT (0278). */
+  /** Có chữ = đơn không có hoá đơn GTGT (0279). */
   invoice_waived_reason?: string | null
 }
 
@@ -880,7 +880,7 @@ export const posRepo = {
    * Mẫu của đơn GẦN NHẤT theo từng NCC — soạn đơn mới, chọn NCC là mẫu tự theo
    * (26/09/2026: 17/19 NCC có ≥ 2 đơn luôn dùng một mẫu). Đơn huỷ không tính.
    */
-  /** Tên shop đã mua trên sàn (0278) — gợi ý ô Shop lúc soạn đơn, xem `gomShop`. */
+  /** Tên shop đã mua trên sàn (0279) — gợi ý ô Shop lúc soạn đơn, xem `gomShop`. */
   async marketplaceShops(): Promise<ShopGoiY[]> {
     const { data, error } = await db()
       .from('supply_purchase_orders')

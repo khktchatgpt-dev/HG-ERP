@@ -62,9 +62,9 @@ export function PayablesManager({
   choHoan = [],
   nhanVien = [],
 }: {
-  /** Phiếu chi nhân viên ứng tiền chưa hoàn (0278) — khối "Chờ hoàn ứng". */
+  /** Phiếu chi nhân viên ứng tiền chưa hoàn (0279) — khối "Chờ hoàn ứng". */
   choHoan?: ChoHoanUngRow[]
-  /** Người cho ô "Nhân viên trả hộ" của hộp ghi thanh toán (0278). */
+  /** Người cho ô "Nhân viên trả hộ" của hộp ghi thanh toán (0279). */
   nhanVien?: { id: string; name: string }[]
   rows: PayableSupplierRow[]
   grand: CurrencyTotal[]
@@ -527,7 +527,7 @@ export function PayablesManager({
         title={`Ghi thanh toán — ${selected?.supplier_name ?? ''}`}
       >
         <div className="flex flex-col gap-3 text-sm">
-          {/* Loại (0278): sàn / NCC trả lại tiền → phiếu hoàn, trừ vào đã trả. */}
+          {/* Loại (0279): sàn / NCC trả lại tiền → phiếu hoàn, trừ vào đã trả. */}
           <div className="flex flex-col gap-1">
             <span className="text-muted-foreground text-xs">Loại</span>
             <div

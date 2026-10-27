@@ -936,7 +936,7 @@ export type Supplier = {
   /** Đơn vị vận chuyển (0215) — cùng bảng, nhưng KHÔNG hiện ở sổ NCC / ô chọn NCC. */
   is_carrier: boolean
   carrier_kind: string | null
-  /** Hồ sơ là một SÀN TMĐT (0278) — đơn của NCC này là đơn mua trên sàn. */
+  /** Hồ sơ là một SÀN TMĐT (0279) — đơn của NCC này là đơn mua trên sàn. */
   is_marketplace: boolean
   pay_method: string | null
   lock_reason: string | null
