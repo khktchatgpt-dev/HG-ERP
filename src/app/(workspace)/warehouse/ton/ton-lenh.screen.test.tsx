@@ -65,13 +65,14 @@ describe('TonLenhScreen (khung Kho lối ERP)', () => {
     expect(screen.getByRole('button', { name: /Tất cả\s*4/ })).toBeTruthy()
   })
 
-  it('rổ "Lệnh xong chưa ghi xuất": 05-MX, có lời giải thích, Action Pane nói vì sao không xuất', () => {
+  it('rổ "Lệnh xong chưa ghi xuất": 05-MX, có lời giải thích, nút Ghi bù nói vì sao chưa bấm được', () => {
     dung('xong')
     const bang = screen.getByRole('table', { name: 'Tồn kho theo lệnh' })
     fireEvent.click(within(bang).getByText('05/26-27 - MX'))
-    expect(screen.getByText(/Ghi xuất bù bây giờ sẽ làm/)).toBeTruthy()
+    // Lệnh đã xong vẫn ghi bù được (27/10/2026) — chỉ chặn khi kho hết hàng của lệnh.
+    expect(screen.getByText(/Tổ đã lấy thật thì/)).toBeTruthy()
     const pane = screen.getByRole('toolbar', { name: 'Thao tác' })
-    expect(within(pane).getByRole('button', { name: /Xuất cho 05/ }).getAttribute('title')).toMatch(/Lệnh đã xong/) // prettier-ignore
+    expect(within(pane).getByRole('button', { name: /Ghi bù cho 05/ }).getAttribute('title')).toMatch(/Kho không còn hàng/) // prettier-ignore
   })
 
   it('chi tiết 06-MX mở dưới dòng: còn 2 mã (1 thiếu, 1 chung), kho hết nói vì sao, đã xuất đủ 1', () => {

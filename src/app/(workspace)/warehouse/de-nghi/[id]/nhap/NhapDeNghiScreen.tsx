@@ -16,6 +16,7 @@ import { useBeRong } from '@/lib/use-be-rong'
 import { ArrowLeft } from 'lucide-react'
 import { ApNhom, ApNut, DauTrang, KhoKhung, ThanhTT } from '../../../_erp/khung'
 import { GoiY, OChu, ONgay, OSo } from '../../../_erp/o-nhap'
+import { useCtrlEnter } from '../../../_erp/useCtrlEnter'
 import { GanMaSheet, type MaGan } from './gan-ma'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
@@ -166,6 +167,9 @@ export function NhapDeNghiScreen({
   }
 
   async function ghi() {
+    // Nút chỉ `aria-disabled` (giữ tiêu điểm khi đang ghi) — không chặn ở đây thì
+    // bấm đúp gửi hai lượt, ra hai phiếu nhập cho cùng một đề nghị.
+    if (busy) return
     if (chan) return nhayToi()
     setBusy(true)
     setBao(null)
@@ -197,20 +201,12 @@ export function NhapDeNghiScreen({
       setBusy(false)
     }
   }
+  const phimGhi = useCtrlEnter(() => void ghi())
 
   const soCot = hep ? 8 : 10
 
   return (
-    <KhoKhung
-      label={`Nhập hàng đã mua theo ${phieu.code}`}
-      onKeyDown={(e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          e.preventDefault()
-          ;(document.activeElement as HTMLElement | null)?.blur()
-          setTimeout(() => void ghi(), 0)
-        }
-      }}
-    >
+    <KhoKhung label={`Nhập hàng đã mua theo ${phieu.code}`} onKeyDown={phimGhi}>
       <DauTrang
         crumb={`Kho › Đề nghị mua › ${phieu.code}`}
         title="Nhập hàng đã mua"

@@ -24,6 +24,7 @@ import {
 import { ApNhom, ApNut, DaGhiSo, DauTrang, KhoKhung, ThanhTT } from '../_erp/khung'
 import { HopThoai } from '../_erp/o-nhap'
 import { OTim } from '../_erp/o-tim'
+import { useCtrlEnter } from '../_erp/useCtrlEnter'
 import { DauXuat, type LsxOpt } from './dau-xuat'
 import { LuoiXuat } from './luoi-xuat'
 import { HangLenh, type LayHang } from './hang-lenh'
@@ -251,6 +252,7 @@ export function XuatScreen({
     }
     void guiPhieu()
   }
+  const phimGhi = useCtrlEnter(ghiSo)
 
   const tieuDe =
     head.loai === 'lsx'
@@ -270,16 +272,7 @@ export function XuatScreen({
   const trong = rows.length === 0 && !head.to && !head.lsx_id
 
   return (
-    <KhoKhung
-      label="Xuất kho"
-      onKeyDown={(e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          e.preventDefault()
-          ;(document.activeElement as HTMLElement | null)?.blur()
-          setTimeout(ghiSo, 0)
-        }
-      }}
-    >
+    <KhoKhung label="Xuất kho" onKeyDown={phimGhi}>
       <DauTrang
         title="Xuất kho"
         ctx={`${tieuDe} · số PXK cấp khi ghi sổ · người lập ${nguoiLap}`}

@@ -441,6 +441,13 @@ export type DocLine = Movement & {
   unit_cost?: number | null
   /** Dòng đề nghị mua (0238) — phiếu đảo chép lại để "đã nhập" của dòng tự trừ. */
   purchase_request_line_id?: string | null
+  /**
+   * Khu/kệ + trạng thái của lượng (0193/0194). Phiếu đảo / điều chỉnh PHẢI chép
+   * lại (vá 26/10/2026): thiếu thì dòng đảo rơi về mặc định 'ok' — đảo một phiếu
+   * nhập có dòng "Sai quy cách" là trừ vào tồn DÙNG ĐƯỢC, còn phần khoá nằm mãi.
+   */
+  bin_id?: string | null
+  stock_status?: StockStatus
 }
 
 const DOC_COLS =
@@ -1026,13 +1033,15 @@ export const docsRepo = {
   },
 
   async listLines(docId: string): Promise<DocLine[]> {
-    const { data } = await db()
+    const { data, error } = await db()
       .from('warehouse_movements')
       .select(
-        `${MV_COLS}, unit_cost, po_line_id, production_order_id, purchase_request_line_id, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
+        `${MV_COLS}, unit_cost, po_line_id, production_order_id, purchase_request_line_id, bin_id, stock_status, material:warehouse_materials(code, name, unit), po_line:supply_purchase_order_lines(qty_ordered)`,
       )
       .eq('doc_id', docId)
       .order('created_at')
+    // Nuốt lỗi ở đây là đảo / điều chỉnh trên một phiếu "không có dòng".
+    if (error) throw new Error(`docsRepo.listLines: ${error.message}`)
     return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
       const m = Array.isArray(r.material) ? r.material[0] : r.material
       const mat = (m ?? {}) as { code?: string; name?: string; unit?: string }
@@ -1059,6 +1068,8 @@ export const docsRepo = {
         qty_ordered: pl ? num((pl as { qty_ordered: unknown }).qty_ordered) : null,
         unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
         purchase_request_line_id: (r.purchase_request_line_id as string | null) ?? null,
+        bin_id: (r.bin_id as string | null) ?? null,
+        stock_status: (r.stock_status as StockStatus | null) ?? 'ok',
       } satisfies DocLine
     })
   },

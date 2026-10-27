@@ -129,6 +129,8 @@ export async function taiPhieuNhap(
         // Đơn gom nhiều lệnh (0125): đủ mọi lệnh — đầu phiếu + bản in (04/10/2026).
         lsx_codes: gopMa([po.lsx_code, ...extra_lsx.map((x) => x.code)]),
         expected_at: po.expected_at,
+        // Hộp Báo sự cố trên phiếu nói ai sẽ nhận thông báo.
+        assignee_name: po.assignee_name ?? null,
       },
       dot: dot
         ? {

@@ -2,7 +2,12 @@
 
 import { isoToVn } from '@/lib/date-vn'
 import { searchMatcher } from '@/lib/search-text'
-import { LY_DO_XUAT_LE, type DauPhieuXuat, type LoaiXuat } from '@/lib/kho-phieu-xuat'
+import {
+  LY_DO_XUAT_LE,
+  nhanTrangThaiLenh,
+  type DauPhieuXuat,
+  type LoaiXuat,
+} from '@/lib/kho-phieu-xuat'
 import { OChu, ONgay } from '../_erp/o-nhap'
 import { ChonMot, OTim } from '../_erp/o-tim'
 
@@ -100,7 +105,7 @@ export function DauXuat({
                 {lsxChon.customer_name}
                 {lsxChon.order_codes.length > 0 &&
                   ` · ${lsxChon.order_codes.join(', ')}`}{' '}
-                · {lsxChon.status === 'in_progress' ? 'đang SX' : 'đã duyệt'}
+                · {nhanTrangThaiLenh(lsxChon.status)}
               </span>
             )}
           </span>
@@ -118,15 +123,14 @@ export function DauXuat({
                 <b className="kh-ma">{l.code}</b>
                 <span>{l.customer_name}</span>
                 <span className="kh-mut" style={{ marginLeft: 'auto' }}>
-                  {l.order_codes.join(', ')} ·{' '}
-                  {l.status === 'in_progress' ? 'đang SX' : 'đã duyệt'}
+                  {l.order_codes.join(', ')} · {nhanTrangThaiLenh(l.status)}
                 </span>
               </span>
             )}
             label="Lệnh sản xuất"
             placeholder="gõ số lệnh hoặc tên khách…"
             tone={thieu('lenh') ? 'need' : undefined}
-            rong="Không có lệnh đang chạy nào khớp"
+            rong="Không có lệnh nào khớp"
           />
         </div>
       )}

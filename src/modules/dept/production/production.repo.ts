@@ -182,10 +182,15 @@ export const productionRepo = {
 
   /** LSX đang chạy (approved | in_progress) — ưu tiên trước, rồi hạn xuất. */
   async listActive(): Promise<ProductionOrderWithOrders[]> {
+    return productionRepo.listByStatus(['approved', 'in_progress'])
+  },
+
+  /** LSX theo tập trạng thái — cùng cột, cùng thứ tự với `listActive`. */
+  async listByStatus(statuses: readonly string[]): Promise<ProductionOrderWithOrders[]> {
     const { data } = await db()
       .from('production_orders')
       .select(SELECT)
-      .in('status', ['approved', 'in_progress'])
+      .in('status', [...statuses])
       .order('priority', { ascending: false })
       .order('ship_date', { ascending: true, nullsFirst: false })
       .limit(500)

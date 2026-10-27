@@ -20,10 +20,12 @@ import {
   type DongNhanNgoai,
   type VatTuNhan,
 } from '@/lib/kho-nhap-ngoai-don'
+import { CHO_GHI_HANG_KHOA } from '@/lib/kho-phieu-nhap'
 import { ArrowDownToLine, Printer, X } from 'lucide-react'
 import { ApNhom, ApNut, DauTrang, KhoKhung, ThanhTT } from '../../_erp/khung'
 import { HopThoai } from '../../_erp/o-nhap'
 import { OTim } from '../../_erp/o-tim'
+import { useCtrlEnter } from '../../_erp/useCtrlEnter'
 import { DauNgoai } from './dau-ngoai'
 import { LuoiNgoai } from './luoi-ngoai'
 
@@ -165,7 +167,6 @@ export function NhapNgoaiDonScreen({
     if (ghiDuoc) void ghiSo()
     else nhayToi()
   }
-
   async function ghiSo() {
     if (!ghiDuoc || !lyDo) return
     setBusy(true)
@@ -212,18 +213,10 @@ export function NhapNgoaiDonScreen({
       setBusy(false)
     }
   }
+  const phimGhi = useCtrlEnter(bamGhi)
 
   return (
-    <KhoKhung
-      label="Nhận hàng không theo đơn"
-      onKeyDown={(e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          e.preventDefault()
-          ;(document.activeElement as HTMLElement | null)?.blur()
-          setTimeout(bamGhi, 0)
-        }
-      }}
-    >
+    <KhoKhung label="Nhận hàng không theo đơn" onKeyDown={phimGhi}>
       <DauTrang
         crumb="Kho › Hàng về"
         title="Nhận hàng không theo đơn"
@@ -380,7 +373,7 @@ export function NhapNgoaiDonScreen({
       </div>
 
       <ThanhTT
-        left="Mọi dòng mang mã N2 · hàng đạt vào khu tiếp nhận · sai quy cách vào kệ khoá · cất vào kệ thật là bước riêng"
+        left={`Mọi dòng mang mã N2 · hàng đạt vào khu tiếp nhận · ${CHO_GHI_HANG_KHOA ? 'sai quy cách vào kệ khoá' : 'hàng sai quy cách không nhập'} · cất vào kệ thật là bước riêng`} // prettier-ignore
         right={<b>Không gắn đơn mua — Cung ứng KHÔNG đối chiếu công nợ tờ này</b>}
       />
 

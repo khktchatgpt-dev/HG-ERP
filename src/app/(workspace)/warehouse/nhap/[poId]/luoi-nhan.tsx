@@ -4,6 +4,7 @@ import { Fragment, useRef, useState } from 'react'
 import { isoToVn } from '@/lib/date-vn'
 import type { NhanDot } from '@/lib/kho-dot-giao'
 import {
+  CHO_GHI_HANG_KHOA,
   danhGiaVuot,
   sauPhieu,
   type DongNhan,
@@ -27,7 +28,7 @@ const HEP = 900
 /**
  * LƯỚI PHIẾU NHẬP — Kho lối ERP · B2 (bản vẽ K-3), viết tay không kit. Ba cột số
  * Đặt / Đã về / Còn chờ đứng yên, chỉ Lần này · Kg cân · Tình trạng · Ghi chú gõ
- * được. Câu nhắc hiện NGAY DƯỚI Ô (thiếu, vào khoá, vượt dung sai — bấm được để
+ * được (Tình trạng tạm ẩn từ 26/10/2026 — `CHO_GHI_HANG_KHOA`). Câu nhắc hiện NGAY DƯỚI Ô (thiếu, vào khoá, vượt dung sai — bấm được để
  * ghi lý do).
  *
  * Khung < 1150px: Ghi chú thành nút ✎ (● khi đã có chữ) mở DÒNG PHỤ ngay dưới;
@@ -78,7 +79,10 @@ export function LuoiNhan({
 
   const wSo = hep ? 66 : 80
   const wDot = hep ? 48 : hasDots ? 128 : 56
-  const soCot = 11 + (coKg ? 1 : 0)
+  /* Cột Tình trạng tạm ẩn (`CHO_GHI_HANG_KHOA`) — chỉ hiện khi phiếu đang lập lại
+     mang sẵn dòng khoá, để người sửa còn thấy và đổi về Đạt. */
+  const coTinhTrang = CHO_GHI_HANG_KHOA || rows.some((r) => r.status === 'blocked')
+  const soCot = 10 + (coKg ? 1 : 0) + (coTinhTrang ? 1 : 0)
 
   const oGhiChu = (r: DongNhan, i: number) => (
     <OChu
@@ -170,19 +174,21 @@ export function LuoiNhan({
               </span>
               {r.editable && (
                 <>
-                  <select
-                    className="kh-o full"
-                    value={r.status}
-                    onChange={(e) => patch(i, { status: e.target.value as TinhTrang })}
-                    aria-label={`Tình trạng ${r.code}`}
-                    disabled={busy}
-                  >
-                    {TINH_TRANG.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
+                  {coTinhTrang && (
+                    <select
+                      className="kh-o full"
+                      value={r.status}
+                      onChange={(e) => patch(i, { status: e.target.value as TinhTrang })}
+                      aria-label={`Tình trạng ${r.code}`}
+                      disabled={busy}
+                    >
+                      {TINH_TRANG.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {r.can_kg && (
                     <span className="full">
                       <OSo
@@ -225,7 +231,7 @@ export function LuoiNhan({
           <col style={{ width: wSo }} />
           <col style={{ width: hep ? 104 : 120 }} />
           {coKg && <col style={{ width: hep ? 120 : 140 }} />}
-          <col style={{ width: hep ? 112 : 136 }} />
+          {coTinhTrang && <col style={{ width: hep ? 112 : 136 }} />}
           <col style={{ width: gon ? 40 : coKg ? 180 : 210 }} />
         </colgroup>
         <thead>
@@ -240,7 +246,7 @@ export function LuoiNhan({
             <th className="r">Còn chờ</th>
             <th className="r">Lần này</th>
             {coKg && <th className="r">Kg cân (nếu có)</th>}
-            <th>Tình trạng</th>
+            {coTinhTrang && <th>Tình trạng</th>}
             <th aria-label={gon ? 'Ghi chú' : undefined}>{gon ? '' : 'Ghi chú'}</th>
           </tr>
         </thead>
@@ -365,28 +371,30 @@ export function LuoiNhan({
                       )}
                     </td>
                   )}
-                  <td className={r.editable ? 'go' : undefined}>
-                    {r.editable ? (
-                      <select
-                        className="kh-o"
-                        value={r.status}
-                        onChange={(e) =>
-                          patch(i, { status: e.target.value as TinhTrang })
-                        }
-                        aria-label={`Tình trạng ${r.code}`}
-                        disabled={busy}
-                        style={r.status === 'blocked' ? { color: 'var(--kh-stop)', fontWeight: 600 } : undefined} // prettier-ignore
-                      >
-                        {TINH_TRANG.map((t) => (
-                          <option key={t.value} value={t.value}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="kh-empty">—</span>
-                    )}
-                  </td>
+                  {coTinhTrang && (
+                    <td className={r.editable ? 'go' : undefined}>
+                      {r.editable ? (
+                        <select
+                          className="kh-o"
+                          value={r.status}
+                          onChange={(e) =>
+                            patch(i, { status: e.target.value as TinhTrang })
+                          }
+                          aria-label={`Tình trạng ${r.code}`}
+                          disabled={busy}
+                          style={r.status === 'blocked' ? { color: 'var(--kh-stop)', fontWeight: 600 } : undefined} // prettier-ignore
+                        >
+                          {TINH_TRANG.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="kh-empty">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className={r.editable && !gon ? 'go' : undefined}>
                     {!r.editable ? (
                       <span className="kh-empty">—</span>
@@ -447,9 +455,15 @@ export function LuoiNhan({
             <td className="r kh-num">{fmt(conCho)}</td>
             <td className="r kh-num">{fmt(tong.lan_nay)}</td>
             {coKg && <td className="r kh-num">{kgCan > 0 ? `${fmt(kgCan)} kg` : '—'}</td>}
-            <td colSpan={2} style={{ fontWeight: 400 }}>
-              {tong.so_dong_nhan} dòng nhận · {fmt(tong.vao_khoa)} vào khoá
-            </td>
+            {/* Không cột Tình trạng thì ô cuối chỉ còn cột Ghi chú (40px khi gọn) — số
+                dòng nhận đã nằm ở thanh chốt đáy, không nhồi vào ô bị cắt chữ. */}
+            {coTinhTrang ? (
+              <td colSpan={2} style={{ fontWeight: 400 }}>
+                {tong.so_dong_nhan} dòng nhận · {fmt(tong.vao_khoa)} vào khoá
+              </td>
+            ) : (
+              <td />
+            )}
           </tr>
         </tfoot>
       </table>

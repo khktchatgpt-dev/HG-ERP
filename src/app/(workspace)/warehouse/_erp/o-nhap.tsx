@@ -241,6 +241,15 @@ export function HopThoai({
     <div
       className="kh-hop-nen"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      /*
+        Ctrl+Enter gõ TRONG hộp không được nổi lên màn sau lưng (vá 26/10/2026):
+        màn gõ bắt Ctrl+Enter = Ghi sổ, nên gõ mô tả sự cố rồi Ctrl+Enter từng ghi
+        luôn phiếu nhập của lô đang định từ chối. Chỉ chặn đúng tổ hợp đó — Esc
+        đóng hộp đi qua listener trên window, chặn hết phím là hỏng Esc.
+      */
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') e.stopPropagation()
+      }}
     >
       <div
         ref={hop}

@@ -74,6 +74,7 @@ import {
 } from '@/lib/ngay-chung-tu-nhap'
 import { todayVn } from '@/lib/date-vn'
 import { tinhChenhLech } from '@/lib/dieu-chinh-nhap'
+import { LSX_XUAT_DUOC } from '@/lib/kho-phieu-xuat'
 
 type ReceiveInput = {
   material_id: string
@@ -1125,13 +1126,14 @@ export const stockService = {
       if (!input.production_order_id) {
         throw BadRequest('BR-09: xuất theo LSX phải gắn LSX')
       }
-      // Guard trạng thái LSX (vòng đời theo thực tế): chỉ xuất vật tư cho LSX
-      // đã duyệt / đang sản xuất — chặn chưa duyệt, bị từ chối, hoàn thành, đã huỷ.
+      // Guard trạng thái LSX (vòng đời theo thực tế): xuất cho LSX đã duyệt /
+      // đang sản xuất / đã xong (ghi bù — `LSX_XUAT_DUOC`); chặn chưa duyệt, bị
+      // từ chối, đã huỷ.
       const lsx = await productionRepo.findById(input.production_order_id)
       if (!lsx) throw NotFound('LSX không tồn tại')
-      if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
+      if (!(LSX_XUAT_DUOC as readonly string[]).includes(lsx.status)) {
         throw BadRequest(
-          `LSX ${lsx.code} không ở trạng thái xuất vật tư được — chỉ xuất cho LSX đã duyệt hoặc đang sản xuất`,
+          `LSX ${lsx.code} không ở trạng thái xuất vật tư được — chỉ xuất cho LSX đã duyệt, đang sản xuất hoặc đã xong (ghi bù)`,
         )
       }
     }
@@ -1673,7 +1675,7 @@ export const stockService = {
     ])
     const dongGoc = lines.flatMap((l) =>
       l.direction === 'in' && l.po_line_id
-        ? [{ po_line_id: l.po_line_id, material_id: l.material_id, qty: l.qty, unit_cost: l.unit_cost ?? null, reason_code: l.reason_code }] // prettier-ignore
+        ? [{ po_line_id: l.po_line_id, material_id: l.material_id, qty: l.qty, unit_cost: l.unit_cost ?? null, reason_code: l.reason_code, stock_status: l.stock_status, bin_id: l.bin_id }] // prettier-ignore
         : [],
     )
     if (dongGoc.length === 0) throw BadRequest('Phiếu không có dòng nhập theo đơn mua')
@@ -1728,6 +1730,8 @@ export const stockService = {
           unit_cost: d.unit_cost,
           ref_type: 'adjust',
           reason_code: d.reason_code ?? 'N1',
+          bin_id: d.bin_id,
+          stock_status: d.stock_status,
           note: `${dau}: ${d.hien} → ${d.moi}`,
           created_by: user.id,
           doc_id: moi.id,
@@ -1855,6 +1859,9 @@ export const stockService = {
          */
         reason_code: l.reason_code ?? null,
         shelf_location: l.shelf_location ?? null,
+        // Đảo đúng CHỖ và đúng TRẠNG THÁI của lượng gốc (lô khoá đảo ra từ khoá).
+        bin_id: l.bin_id ?? null,
+        stock_status: l.stock_status ?? 'ok',
         note: `Đảo ${doc.code}`,
         created_by: user.id,
         doc_id: rev.id,

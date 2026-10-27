@@ -133,7 +133,8 @@ export function TonLenhScreen({
     return m
   }, [chiTiet])
   const sel = rows.find((l) => l.id === chon) ?? null
-  const xuatDuoc = sel && !sel.xong && sel.con_kho > 0
+  // Lệnh đã xong vẫn xuất được để GHI BÙ (27/10/2026) — chỉ cần kho còn hàng.
+  const xuatDuoc = sel && sel.con_kho > 0
   const soCot = hep ? 5 : gon ? 9 : 11
 
   return (
@@ -156,14 +157,14 @@ export function TonLenhScreen({
                 why={
                   !sel
                     ? 'Chọn một lệnh trong bảng trước'
-                    : sel.xong
-                      ? 'Lệnh đã xong — không ghi xuất bù (sẽ làm âm tồn)'
-                      : sel.con_kho === 0
-                        ? 'Kho không còn hàng nào của lệnh này'
-                        : null
+                    : sel.con_kho === 0
+                      ? 'Kho không còn hàng nào của lệnh này'
+                      : null
                 }
               >
-                {sel ? `Xuất cho ${sel.code}` : 'Xuất cho lệnh'}
+                {sel
+                  ? `${sel.xong ? 'Ghi bù' : 'Xuất'} cho ${sel.code}`
+                  : 'Xuất cho lệnh'}
               </ApNut>
             </ApNhom>
             <ApNhom>
@@ -234,9 +235,9 @@ export function TonLenhScreen({
         <div className="kh-note mut">
           <span className="tag">Lệnh đã xong</span>
           <span>
-            Các lệnh này còn mã sổ chưa ghi xuất, nhưng kho không còn hàng nào của chúng:
-            hàng đã vào sản phẩm và kiểm kê 15/09 đã trừ tồn. Ghi xuất bù bây giờ sẽ làm
-            âm tồn, nên ở đây không có nút ghi.
+            Các lệnh này đã hoàn thành mà sổ còn mã chưa ghi xuất. Tổ đã lấy thật thì chọn
+            lệnh rồi bấm Ghi bù — phiếu xuất lùi ngày về ngày lấy. Mã kho đã hết (thường
+            do kiểm kê 15/09 đã trừ) thì không ghi bù được: không xuất quá tồn.
           </span>
         </div>
       )}

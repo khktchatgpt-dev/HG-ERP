@@ -24,6 +24,7 @@ import {
 import { ApNhom, ApNut, DauTrang, KhoKhung, Rong, ThanhTT } from '../../_erp/khung'
 import { GoiY, HopThoai, OChu, ONgay, OSo, docSoVn } from '../../_erp/o-nhap'
 import { ChonMot, OTim } from '../../_erp/o-tim'
+import { useCtrlEnter } from '../../_erp/useCtrlEnter'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 const tenTo = (n: string) => n.replace(/^tổ\s+/i, '')
@@ -165,6 +166,7 @@ export function HoanKhoScreen({
     if (ghiDuoc) void ghiSo()
     else nhayToi()
   }
+  const phimGhi = useCtrlEnter(bamGhi)
 
   const dauPhieu = (
     <div className="kh-hc" role="group" aria-label="Đầu phiếu hoàn kho">
@@ -358,16 +360,7 @@ export function HoanKhoScreen({
   )
 
   return (
-    <KhoKhung
-      label="Hoàn kho từ sản xuất"
-      onKeyDown={(e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          e.preventDefault()
-          ;(document.activeElement as HTMLElement | null)?.blur()
-          setTimeout(bamGhi, 0)
-        }
-      }}
-    >
+    <KhoKhung label="Hoàn kho từ sản xuất" onKeyDown={phimGhi}>
       <DauTrang
         crumb="Kho › Hàng về"
         title={
