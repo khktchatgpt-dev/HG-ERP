@@ -39,6 +39,10 @@ export type PhieuRow = {
   supplier_doc_no: string | null
   /** Đơn mua + lệnh của phiếu (nhập/trả theo đơn); null = phiếu không nối đơn. */
   don: { po_id: string; po_code: string; lsx: string[] } | null
+  /** Lệnh SX trên DÒNG phiếu — phiếu xuất cho lệnh không nối đơn mua. */
+  lenh_dong: string[]
+  /** Ghi chú / lý do của phiếu — phiếu xuất "ghi hộ" nói nó từ đâu ra ở đây. */
+  dien_giai: string | null
   /** Thuộc rổ "Thiếu số phiếu NCC" — cùng tập với badge menu. */
   thieu_ncc: boolean
 }
@@ -155,7 +159,35 @@ export function SoPhieuScreen({
   const sel = rows.find((r) => r.id === chon) ?? null
   const dangLoc = !!lyDo || !!nguoi
   const canChon = 'Chọn một phiếu trong bảng trước'
-  const soCot = hep ? 6 : gon ? 7 : 8
+  /*
+    TAB PHIẾU XUẤT có bộ cột riêng (28/10/2026 — chủ dự án: "phiếu xuất có PO đâu
+    cần thiết… không biết ở đâu ra, của ai"). Bộ cột chung dựng cho phiếu nhập: Đơn
+    và Số phiếu NCC luôn trống với phiếu xuất, Lệnh SX lấy qua đơn mua nên cũng
+    trống, Người lập ẩn khi khung hẹp. Phiếu xuất: Lệnh (từ dòng) · Người nhận ·
+    Diễn giải (ghi chú — "Ghi hộ 02/10…") · Người lập luôn hiện.
+  */
+  const xuat = ro === 'issue'
+  const soCot = xuat ? (hep ? 6 : 7) : hep ? 6 : gon ? 7 : 8
+  /** Lệnh của phiếu: qua đơn mua (phiếu nhập) hoặc trên dòng (phiếu xuất cho lệnh). */
+  const lenhCua = (d: PhieuRow) =>
+    d.don && d.don.lsx.length > 0 ? d.don.lsx : d.lenh_dong
+  const oLenh = (d: PhieuRow) => {
+    const ds = lenhCua(d)
+    return (
+      <td className="kh-mut" title={ds.join(', ') || undefined}>
+        {ds.length > 0 ? (
+          <span className="kh-num">
+            {ds[0]}
+            {ds.length > 1 && ` +${ds.length - 1}`}
+          </span>
+        ) : d.don ? (
+          'ngoài lệnh'
+        ) : (
+          ''
+        )}
+      </td>
+    )
+  }
 
   const tabs: TabMuc[] = RO_PHIEU.map((id) => ({
     key: id,
@@ -361,9 +393,11 @@ export function SoPhieuScreen({
                 <span className="s" style={{ display: 'block' }}>
                   {d.ma_ly_do[0] ? `${d.ma_ly_do[0]} · ${nhanLyDo(d.ma_ly_do[0])}` : '—'}
                   {d.don && ` · ${d.don.po_code}`}
+                  {!d.don && lenhCua(d)[0] && ` · ${lenhCua(d)[0]}`}
                 </span>
                 <span className="s" style={{ display: 'block' }}>
-                  {d.counterparty ?? d.reason ?? '—'}
+                  {d.counterparty ?? d.reason ?? d.dien_giai ?? '—'}
+                  {d.created_by_name && ` · ${d.created_by_name}`}
                 </span>
                 {d.thieu_ncc && (
                   <span style={{ display: 'block', marginTop: 4 }}>{soNcc(d)}</span>
@@ -376,27 +410,51 @@ export function SoPhieuScreen({
       ) : (
         <div className="kh-grid">
           <table className="kh-tb" aria-label="Sổ phiếu kho">
-            <colgroup>
-              <col style={{ width: 62 }} />
-              <col style={{ width: 186 }} />
-              <col style={{ width: gon ? 64 : 178 }} />
-              <col style={{ width: 120 }} />
-              {!hep && <col style={{ width: 152 }} />}
-              <col />
-              <col style={{ width: 172 }} />
-              {!gon && <col style={{ width: 150 }} />}
-            </colgroup>
+            {xuat ? (
+              <colgroup>
+                <col style={{ width: 62 }} />
+                <col style={{ width: 186 }} />
+                <col style={{ width: gon ? 64 : 178 }} />
+                <col style={{ width: 152 }} />
+                {!hep && <col style={{ width: 170 }} />}
+                <col />
+                <col style={{ width: 150 }} />
+              </colgroup>
+            ) : (
+              <colgroup>
+                <col style={{ width: 62 }} />
+                <col style={{ width: 186 }} />
+                <col style={{ width: gon ? 64 : 178 }} />
+                <col style={{ width: 120 }} />
+                {!hep && <col style={{ width: 152 }} />}
+                <col />
+                <col style={{ width: 172 }} />
+                {!gon && <col style={{ width: 150 }} />}
+              </colgroup>
+            )}
             <thead>
-              <tr>
-                <th>Ngày</th>
-                <th>Số phiếu</th>
-                <th>Lý do</th>
-                <th>Đơn</th>
-                {!hep && <th>Lệnh SX</th>}
-                <th>Đối ứng</th>
-                <th>Số phiếu NCC</th>
-                {!gon && <th>Người lập</th>}
-              </tr>
+              {xuat ? (
+                <tr>
+                  <th>Ngày</th>
+                  <th>Số phiếu</th>
+                  <th>Lý do</th>
+                  <th>Lệnh SX</th>
+                  {!hep && <th>Người nhận</th>}
+                  <th>Diễn giải</th>
+                  <th>Người lập</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th>Ngày</th>
+                  <th>Số phiếu</th>
+                  <th>Lý do</th>
+                  <th>Đơn</th>
+                  {!hep && <th>Lệnh SX</th>}
+                  <th>Đối ứng</th>
+                  <th>Số phiếu NCC</th>
+                  {!gon && <th>Người lập</th>}
+                </tr>
+              )}
             </thead>
             <tbody>
               {rows.map((d) => {
@@ -431,34 +489,41 @@ export function SoPhieuScreen({
                         </>
                       )}
                     </td>
-                    <td className="kh-num" title={d.don?.lsx.join(', ') || undefined}>
-                      {d.don ? d.don.po_code : <span className="kh-empty">—</span>}
-                    </td>
-                    {!hep && (
-                      <td className="kh-mut" title={d.don?.lsx.join(', ') || undefined}>
-                        {d.don && d.don.lsx.length > 0 ? (
-                          <span className="kh-num">
-                            {d.don.lsx[0]}
-                            {d.don.lsx.length > 1 && ` +${d.don.lsx.length - 1}`}
-                          </span>
-                        ) : d.don ? (
-                          'ngoài lệnh'
-                        ) : (
-                          ''
+                    {xuat ? (
+                      <>
+                        {oLenh(d)}
+                        {!hep && (
+                          <td className="kh-mut" title={d.counterparty ?? ''}>
+                            {d.counterparty ?? <span className="kh-empty">—</span>}
+                          </td>
                         )}
-                      </td>
+                        <td className="kh-mut" title={d.dien_giai ?? ''}>
+                          {d.dien_giai ?? <span className="kh-empty">—</span>}
+                        </td>
+                        <td>{d.created_by_name ?? '—'}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="kh-num" title={d.don?.lsx.join(', ') || undefined}>
+                          {d.don ? d.don.po_code : <span className="kh-empty">—</span>}
+                        </td>
+                        {!hep && oLenh(d)}
+                        <td
+                          className="kh-mut"
+                          title={d.counterparty ?? d.reason ?? d.dien_giai ?? ''}
+                        >
+                          {d.counterparty ?? d.reason ?? '—'}
+                        </td>
+                        <td
+                          className={
+                            d.thieu_ncc && !d.supplier_doc_no?.trim() ? 'go' : undefined
+                          }
+                        >
+                          {soNcc(d)}
+                        </td>
+                        {!gon && <td className="kh-mut">{d.created_by_name ?? '—'}</td>}
+                      </>
                     )}
-                    <td className="kh-mut" title={d.counterparty ?? d.reason ?? ''}>
-                      {d.counterparty ?? d.reason ?? '—'}
-                    </td>
-                    <td
-                      className={
-                        d.thieu_ncc && !d.supplier_doc_no?.trim() ? 'go' : undefined
-                      }
-                    >
-                      {soNcc(d)}
-                    </td>
-                    {!gon && <td className="kh-mut">{d.created_by_name ?? '—'}</td>}
                   </tr>
                 )
               })}

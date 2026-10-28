@@ -64,9 +64,11 @@ export default async function SoPhieuPage({
   // không có phiếu nào" khi lọc theo mã.
   const pageIds = res.rows.map((d) => d.id)
   const thieuSet = new Set(thieu.ids)
-  const [reasons, donLenh] = await Promise.all([
+  const [reasons, donLenh, lenhDong] = await Promise.all([
     docsRepo.reasonsByDocIds(pageIds),
     soPhieuRepo.donLenhByDocIds(pageIds),
+    // Phiếu xuất cho lệnh không nối đơn mua — lệnh nằm trên dòng xuất.
+    soPhieuRepo.lenhTheoDongByDocIds(pageIds),
   ])
 
   const rows = res.rows.map((d) => ({
@@ -82,6 +84,8 @@ export default async function SoPhieuPage({
     created_by_name: d.created_by_name,
     supplier_doc_no: d.supplier_doc_no,
     don: donLenh.get(d.id) ?? null,
+    lenh_dong: lenhDong.get(d.id) ?? [],
+    dien_giai: d.note?.trim() || d.reason?.trim() || null,
     thieu_ncc: thieuSet.has(d.id),
     ma_ly_do: [
       ...new Set(
