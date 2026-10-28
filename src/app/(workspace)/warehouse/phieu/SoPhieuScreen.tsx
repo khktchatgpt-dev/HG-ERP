@@ -71,13 +71,14 @@ function MaLyDo({ ma }: { ma: string }) {
  * SỔ PHIẾU KHO — Kho lối ERP · B4 (bản vẽ K-4
  * https://claude.ai/artifact/F2uVKzc4tb28FhHZY6BDiR), viết tay không kit.
  *
- * Tab theo LOẠI PHIẾU + việc dở (Thiếu số phiếu NCC, Đã bị đảo); bộ lọc chính là
+ * Tab theo LOẠI PHIẾU + việc dở (Thiếu số phiếu NCC, Đã đảo); bộ lọc chính là
  * MÃ LÝ DO, không phải ngày — người soát hỏi "tháng này bao nhiêu phiếu huỷ". Số
  * phiếu NCC còn thiếu GÕ NGAY TRONG Ô của dòng (Enter lưu, con trỏ xuống phiếu
  * sau). K1: chọn dòng rồi Mở / In ở Action Pane; Enter / bấm đúp = mở phiếu.
  *
  * Phiếu đảo và phiếu gốc nằm cạnh nhau, phiếu gốc gạch ngang — sổ phải cộng lại
- * đúng bằng những gì đã xảy ra, kể cả cái sai.
+ * đúng bằng những gì đã xảy ra, kể cả cái sai. Tab Nhập / Xuất chỉ phiếu GỐC;
+ * phiếu đảo (đảo phiếu nhập mang mã PXK) chỉ ở Tất cả và Đã đảo (K5, 28/10/2026).
  */
 export function SoPhieuScreen({
   rows,

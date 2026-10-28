@@ -6,7 +6,7 @@ import { soPhieuRepo } from '@/modules/dept/warehouse/so-phieu.repo'
 import { todayVn } from '@/lib/date-vn'
 import { laMaLyDo, suyMaTuLichSu } from '@/lib/kho-ma-ly-do'
 import { SoPhieuScreen } from './SoPhieuScreen'
-import { RO_PHIEU, type RoPhieu } from './ro-phieu'
+import { RO_PHIEU, demRo, locRo, type RoPhieu } from './ro-phieu'
 
 export const metadata = { title: 'Kho · Phiếu đã ghi' }
 export const dynamic = 'force-dynamic'
@@ -41,19 +41,19 @@ export default async function SoPhieuPage({
 
   // Rổ "Thiếu số phiếu NCC" đếm trên TOÀN SỔ (không theo trang) — cùng hàm với
   // badge menu Sổ phiếu (`nav-badges.warehouseBadges`).
-  const [thieu, dem, daDao, canEdit, nguoiLap] = await Promise.all([
+  const [thieu, dem, capDao, canEdit, nguoiLap] = await Promise.all([
     soPhieuRepo.thieuSoNcc(todayVn()),
     docsRepo.countByKind(),
-    docsRepo.reversedDocIds(),
+    docsRepo.reversalPairs(),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
     soPhieuRepo.nguoiLap(),
   ])
+  // Tab Nhập / Xuất chỉ phiếu GỐC; "Đã đảo" = gốc + phiếu đảo trên toàn sổ (K5).
   const res = await stockService.listDocs(user, {
-    kind: ro === 'receipt' || ro === 'issue' || ro === 'stocktake' ? ro : undefined,
+    ...locRo(ro, { thieu: thieu.ids, goc: capDao.goc, dao: capDao.dao }),
     reason_code: lyDo,
-    ids: ro === 'thieu_ncc' ? thieu.ids : undefined,
     created_by: nguoi,
     page: trang,
     page_size: PAGE_SIZE,
@@ -69,46 +69,33 @@ export default async function SoPhieuPage({
     soPhieuRepo.donLenhByDocIds(pageIds),
   ])
 
-  const rows = res.rows
-    .map((d) => ({
-      id: d.id,
-      code: d.code,
-      kind: d.kind,
-      doc_date: d.doc_date,
-      counterparty: d.counterparty,
-      reason: d.reason,
-      status: d.status,
-      reversal_of_code: d.reversal_of_code,
-      da_bi_dao: daDao.has(d.id),
-      created_by_name: d.created_by_name,
-      supplier_doc_no: d.supplier_doc_no,
-      don: donLenh.get(d.id) ?? null,
-      thieu_ncc: thieuSet.has(d.id),
-      ma_ly_do: [
-        ...new Set(
-          (reasons.get(d.id) ?? [])
-            .map((m) => m.code ?? suyMaTuLichSu(m.ref_type, m.direction))
-            .filter((x): x is string => !!x),
-        ),
-      ],
-    }))
-    // Rổ "Đã bị đảo" lọc trong TRANG đang xem. `reversedDocIds` trả tập id trên
-    // toàn sổ nên cờ từng dòng luôn đúng, chỉ phép ĐẾM là theo trang — toàn sổ
-    // mới có 1 phiếu đảo, thêm một vòng truy vấn nữa đắt hơn giá trị. Ghi ra
-    // để người sau biết đây là chỗ cắt, không phải chỗ sót.
-    .filter((d) => (ro === 'reversed' ? d.da_bi_dao : true))
+  const rows = res.rows.map((d) => ({
+    id: d.id,
+    code: d.code,
+    kind: d.kind,
+    doc_date: d.doc_date,
+    counterparty: d.counterparty,
+    reason: d.reason,
+    status: d.status,
+    reversal_of_code: d.reversal_of_code,
+    da_bi_dao: capDao.goc.has(d.id),
+    created_by_name: d.created_by_name,
+    supplier_doc_no: d.supplier_doc_no,
+    don: donLenh.get(d.id) ?? null,
+    thieu_ncc: thieuSet.has(d.id),
+    ma_ly_do: [
+      ...new Set(
+        (reasons.get(d.id) ?? [])
+          .map((m) => m.code ?? suyMaTuLichSu(m.ref_type, m.direction))
+          .filter((x): x is string => !!x),
+      ),
+    ],
+  }))
 
   return (
     <SoPhieuScreen
       rows={rows}
-      dem={{
-        all: dem.total,
-        receipt: dem.receipt,
-        issue: dem.issue,
-        stocktake: dem.total - dem.receipt - dem.issue,
-        thieu_ncc: thieu.ids.length,
-        reversed: daDao.size,
-      }}
+      dem={demRo({ ...dem, goc: capDao.goc.size, thieu: thieu.ids.length })}
       thieuGanDay={thieu.ganDay}
       nguoi={sp.nguoi === 'toi' ? 'toi' : (sp.nguoi ?? '')}
       nguoiLap={nguoiLap}
