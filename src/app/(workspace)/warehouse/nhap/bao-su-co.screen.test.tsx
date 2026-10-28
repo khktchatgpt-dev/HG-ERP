@@ -60,11 +60,27 @@ describe('BaoSuCoSheet', () => {
     dung()
     expect(khoa(nutBao())).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Hàng hỏng / lỗi' }))
-    expect(screen.getByText('Mô tả sự cố ít nhất 5 ký tự')).toBeTruthy()
+    expect(screen.getByText('Chưa báo được: Mô tả sự cố ít nhất 5 ký tự')).toBeTruthy()
     fireEvent.change(screen.getByPlaceholderText(/Thấy gì/), {
       target: { value: 'Thùng ướt' },
     })
     expect(khoa(nutBao())).toBe(false)
+  })
+
+  /* K3 (28/10/2026): mở hộp ra nút Báo xám, bấm không phản hồi, không câu nào nói
+     thiếu gì. Nay câu chặn có ngay từ đầu; bấm thì báo lại + nhảy tới chỗ phải điền. */
+  it('mới mở hộp đã nói thiếu gì; bấm Báo khi còn thiếu → không gửi, con trỏ tới chỗ phải điền', () => {
+    dung()
+    expect(screen.getByText('Chưa báo được: Chọn loại sự cố')).toBeTruthy()
+    expect(nutBao().hasAttribute('disabled')).toBe(false) // bấm được để hỏi "vì sao"
+    fireEvent.click(nutBao())
+    expect(api).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert').textContent).toBe('Chưa báo được: Chọn loại sự cố')
+    expect(document.activeElement?.textContent).toBe('Sai quy cách / sai mã') // nút loại đầu tiên
+    fireEvent.click(screen.getByRole('button', { name: 'Giao thiếu' }))
+    fireEvent.click(nutBao())
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(/Thấy gì/))
+    expect(api).not.toHaveBeenCalled()
   })
 
   it('từ chối nhận cả lô: POST đúng route, mô tả mang [Từ chối nhận], dòng + SL', async () => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { ISSUE_KINDS, ISSUE_KIND_LABEL, type IssueKind } from '@/lib/po-tracking'
@@ -51,9 +51,31 @@ export function BaoSuCoSheet({
   const [busy, setBusy] = useState(false)
   const [loiServer, setLoiServer] = useState<string | null>(null)
 
+  /** Đã bấm Báo mà còn thiếu — câu chặn đổi sang màu cảnh báo. */
+  const [daThu, setDaThu] = useState(false)
+  const oLoai = useRef<HTMLSpanElement>(null)
+  const oSl = useRef<HTMLInputElement>(null)
+  const oMoTa = useRef<HTMLTextAreaElement>(null)
+
   const kq = thanSuCo({ kind, tuChoi, poLineId: lineId || null, qty, moTa })
+  const chan = 'loi' in kq ? kq.loi : null
   const dong = lines.find((l) => l.id === lineId) ?? null
   const nguoi = po.assignee_name ?? 'người phụ trách đơn'
+
+  /*
+    K3 (28/10/2026, chạy kịch bản thử Kho): nút Báo từng khoá cứng (`disabled`) —
+    mở hộp ra là nút xám, bấm không phản hồi, câu "thiếu gì" chỉ hiện SAU khi đã
+    chọn / gõ. Nay câu chặn đứng cạnh nút ngay từ đầu; bấm khi còn thiếu thì câu
+    đổi màu và con trỏ nhảy tới đúng chỗ phải điền (cùng thứ tự với `thanSuCo`).
+  */
+  function bam() {
+    if (busy) return
+    if (!chan) return void bao()
+    setDaThu(true)
+    if (!kind) oLoai.current?.querySelector('button')?.focus()
+    else if (moTa.trim().length < 5) oMoTa.current?.focus()
+    else oSl.current?.focus()
+  }
 
   async function bao() {
     if (!('body' in kq)) return
@@ -77,14 +99,23 @@ export function BaoSuCoSheet({
       width={580}
       footer={
         <>
+          {chan && (
+            <span
+              className={daThu ? 'chua kh-stop' : 'chua kh-mut'}
+              role={daThu ? 'alert' : undefined}
+              style={daThu ? { fontWeight: 600 } : undefined}
+            >
+              Chưa báo được: {chan}
+            </span>
+          )}
           <button type="button" className="kh-btn" onClick={onClose}>
             Thôi
           </button>
           <button
             type="button"
             className="kh-btn p"
-            disabled={!('body' in kq) || busy}
-            onClick={() => void bao()}
+            aria-disabled={!!chan || busy || undefined}
+            onClick={bam}
           >
             {busy ? 'Đang báo…' : 'Báo sự cố'}
           </button>
@@ -95,7 +126,7 @@ export function BaoSuCoSheet({
         style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
         onSubmit={(e) => {
           e.preventDefault()
-          void bao()
+          bam()
         }}
       >
         <fieldset style={{ ...COT, border: 0, margin: 0, padding: 0, gap: 6 }}>
@@ -135,7 +166,7 @@ export function BaoSuCoSheet({
 
         <fieldset style={{ ...COT, border: 0, margin: 0, padding: 0 }}>
           <legend style={{ ...NHAN, marginBottom: 4 }}>Loại sự cố</legend>
-          <span className="kh-loc-nho" style={{ flexWrap: 'wrap' }}>
+          <span ref={oLoai} className="kh-loc-nho" style={{ flexWrap: 'wrap' }}>
             {ISSUE_KINDS.map((k) => (
               <button
                 key={k}
@@ -170,6 +201,7 @@ export function BaoSuCoSheet({
           <label style={COT}>
             <span style={NHAN}>Số lượng{dong ? ` (${dong.unit})` : ''}</span>
             <input
+              ref={oSl}
               className="kh-o num"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
@@ -182,6 +214,7 @@ export function BaoSuCoSheet({
         <label style={COT}>
           <span style={NHAN}>Mô tả · bắt buộc</span>
           <textarea
+            ref={oMoTa}
             className="kh-o"
             value={moTa}
             onChange={(e) => setMoTa(e.target.value)}
@@ -205,7 +238,6 @@ export function BaoSuCoSheet({
           , và <b>báo cho {nguoi}</b> (Cung ứng) để làm việc với NCC. Tồn kho và trạng
           thái đơn không đổi.
         </div>
-        {'loi' in kq && (kind || moTa) && <p className="kh-warn">{kq.loi}</p>}
         {loiServer && <p className="kh-stop">{loiServer}</p>}
       </form>
     </HopThoai>
