@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { ToastProvider } from '@/components/kit'
 import fixtures from '@/test/fixtures/nhan-hang.json'
 import { PhieuNhapScreen } from './PhieuNhapScreen'
@@ -190,5 +197,44 @@ describe('lập lại phiếu cũ để sửa (05/10/2026)', () => {
       fix_of_doc_id: 'phieu-cu',
       backdate_reason: 'ngày cũ ghi nhầm, hàng về 16/09',
     })
+  })
+})
+
+/*
+ * K4 (28/10/2026, kịch bản thử Kho): đầu trang phiếu nhập từng có SÁU nút. Nay
+ * hai nút của việc tại phiếu + "Khác ▾"; quay về danh sách bấm chữ "Nhận hàng".
+ */
+describe('đầu trang gọn (K4)', () => {
+  it('Action Pane: Nhận đủ tất cả · Báo sự cố · Khác ▾ — bốn việc ít dùng nằm trong Khác', () => {
+    dung()
+    const pane = within(screen.getByRole('toolbar', { name: 'Thao tác' }))
+    expect(pane.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Nhận đủ tất cả',
+      'Báo sự cố',
+      'Khác ▾',
+    ])
+    fireEvent.click(pane.getByRole('button', { name: /Khác/ }))
+    expect(pane.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Xoá số đã gõ',
+      'Xem bản in',
+      'Hàng của đơn',
+      'Về danh sách nhận hàng',
+    ])
+    fireEvent.click(pane.getByRole('menuitem', { name: 'Xem bản in' }))
+    expect(screen.getByRole('dialog', { name: /Xem trước phiếu nhập kho/ })).toBeTruthy()
+  })
+
+  it('dòng điều hướng theo cửa vào, mục cuối là đường về danh sách', () => {
+    dung({ noi: 'kho' })
+    expect(screen.getByRole('link', { name: 'Nhận hàng' }).getAttribute('href')).toBe(
+      '/warehouse/nhap',
+    )
+    cleanup()
+    // Cửa Cung ứng (fixture gốc): không được nói "Kho › Nhận hàng" mà dẫn sang khu khác.
+    dung({ noi: 'cung-ung' })
+    expect(screen.queryByRole('link', { name: 'Nhận hàng' })).toBeNull()
+    expect(
+      screen.getByRole('link', { name: 'Theo dõi đơn hàng' }).getAttribute('href'),
+    ).toBe('/mua-hang/theo-doi')
   })
 })
