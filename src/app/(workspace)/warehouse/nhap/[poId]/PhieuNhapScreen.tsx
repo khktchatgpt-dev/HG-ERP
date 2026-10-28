@@ -280,8 +280,11 @@ export function PhieuNhapScreen({
       ? `không theo đợt · hẹn giao ${isoToVn(po.expected_at)}`
       : 'không theo đợt · chưa hẹn ngày'
 
+  /* "Nhận đủ tất cả" = mọi dòng lấy số GỢI Ý — theo đợt khi đang nhận một đợt (trước
+     28/10 nó điền cả phần còn mở của đơn, kể cả dòng ngoài đợt). Ô không tự điền
+     sẵn nữa (K1), nên nút này là lần bấm có chủ ý "đã đếm, đủ cả". */
   const nhanDu = () =>
-    setRows((rs) => rs.map((r) => (r.editable ? { ...r, qty: r.qty_open } : r)))
+    setRows((rs) => rs.map((r) => (r.editable ? { ...r, qty: r.goi_y } : r)))
   const xoaSo = () => setRows((rs) => rs.map((r) => (r.editable ? { ...r, qty: 0 } : r)))
   const chuaGhiSoNcc = canNhacSoNcc(supplierDocNo) && !blocked
   const dangGhi = busy ? 'Đang ghi sổ…' : null

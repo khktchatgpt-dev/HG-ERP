@@ -5,9 +5,14 @@
  * gì màn cần để NÓI TRƯỚC KHI BẤM: điền sẵn, cộng tổng, và vì sao chưa ghi
  * sổ được — câu nào cũng phải chỉ được tới dòng.
  *
- * Ba cột số của SAP GR / Dynamics BC: Đặt · Đã về · Lần này. "Lần này" điền
- * sẵn phần CÒN MỞ (`qty_open`, 0154 — dòng đã chốt thiếu là 0), hoặc phần
- * của ĐỢT nếu đi từ một đợt giao; người nhận không phải nhớ đã về bao nhiêu.
+ * Ba cột số của SAP GR / Dynamics BC: Đặt · Đã về · Lần này. Số GỢI Ý (`goi_y`)
+ * là phần CÒN MỞ (`qty_open`, 0154 — dòng đã chốt thiếu là 0), hoặc phần của
+ * ĐỢT nếu đi từ một đợt giao; người nhận không phải nhớ đã về bao nhiêu.
+ *
+ * Phiếu nhập của Kho KHÔNG điền sẵn gợi ý vào "Lần này" (28/10/2026, K1 khi thử
+ * Kho): điền sẵn đủ thì thủ kho mới bấm Ghi sổ là kho nhận đủ dù xe giao thiếu —
+ * đúng đường sinh tồn ảo. Ô để trống, mỗi dòng một nút "điền đủ" bấm có chủ ý
+ * (kiểu "Item OK" của SAP MIGO). Màn Nhận hàng của Cung ứng giữ điền sẵn.
  */
 
 import { canCanKg } from './can-kg'
@@ -95,6 +100,9 @@ export type DongNhan = {
   /** Còn phần mở → có ô nhập. Đã đủ → chỉ nhãn, không nhập. */
   editable: boolean
   qty: number
+  /** Số nút "điền đủ" điền vào Lần này: phần còn mở, hoặc phần của đợt (chặn trên
+   *  bằng phần còn mở). 0 = không gợi ý (đã đủ / dòng ngoài đợt đang nhận). */
+  goi_y: number
   status: TinhTrang
   note: string
   /** Dòng tính tiền theo kg: có ô kg cân — KHÔNG bắt buộc (lib/can-kg, 02/10/2026). */
@@ -113,6 +121,8 @@ export function dungLuoi(
   shipmentLines?: { po_line_id: string; qty: number }[] | null,
   /** Mẫu đơn (`supply_purchase_orders.template`) — nhôm/thép thì bắt cân. */
   template?: string | null,
+  /** false = để trống "Lần này" (phiếu nhập của Kho, K1 28/10/2026); mặc định điền sẵn gợi ý. */
+  { dienSan = true }: { dienSan?: boolean } = {},
 ): { rows: DongNhan[]; bo_qua_tu_do: number } {
   const theoDot = shipmentLines
     ? new Map(shipmentLines.map((l) => [l.po_line_id, l.qty]))
@@ -125,13 +135,13 @@ export function dungLuoi(
       continue
     }
     const editable = l.qty_open > 0
-    let qty = 0
+    let goi_y = 0
     if (editable) {
       if (theoDot) {
         const cuaDot = theoDot.get(l.id)
-        // Dòng không thuộc đợt: để 0, người nhận tự gõ nếu NCC chở kèm.
-        qty = cuaDot != null ? Math.min(cuaDot, l.qty_open) : 0
-      } else qty = l.qty_open
+        // Dòng không thuộc đợt: không gợi ý, người nhận tự gõ nếu NCC chở kèm.
+        goi_y = cuaDot != null ? Math.min(cuaDot, l.qty_open) : 0
+      } else goi_y = l.qty_open
     }
     rows.push({
       po_line_id: l.id,
@@ -145,7 +155,8 @@ export function dungLuoi(
       over_tolerance_pct: l.over_tolerance_pct ?? 0,
       closed_short: l.closed_short_at != null,
       editable,
-      qty,
+      qty: dienSan ? goi_y : 0,
+      goi_y,
       status: 'ok',
       note: '',
       can_kg: canCanKg(template, l),

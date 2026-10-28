@@ -93,7 +93,8 @@ export async function taiPhieuNhap(
     }
   })
   const dot = dotId ? (shipments.find((s) => s.id === dotId) ?? null) : null
-  const luoi = dungLuoi(dongDon, dot?.lines ?? null, po.template)
+  // Ô "Lần này" để trống — thủ kho gõ số thực nhận hoặc bấm "điền đủ" (K1, 28/10/2026).
+  const luoi = dungLuoi(dongDon, dot?.lines ?? null, po.template, { dienSan: false })
   const { bo_qua_tu_do } = luoi
   /*
     SỬA PHIẾU NHẬP: chỉ nhận phiếu NHẬP của CHÍNH đơn này và ĐÃ ĐẢO (đảo trước,

@@ -180,11 +180,14 @@ export function GoiY({
   tone = 'mut',
   onClick,
   title,
+  label,
 }: {
   children: ReactNode
   tone?: 'mut' | 'warn' | 'stop'
   onClick?: () => void
   title?: string
+  /** Tên đọc màn hình khi chữ hiện không đủ phân biệt giữa các dòng (vd. "điền đủ 80"). */
+  label?: string
 }) {
   return onClick ? (
     <button
@@ -192,6 +195,7 @@ export function GoiY({
       className={`kh-hint ${tone} bam`}
       onClick={onClick}
       title={title}
+      aria-label={label}
     >
       {children}
     </button>

@@ -96,6 +96,20 @@ export function LuoiNhan({
     />
   )
 
+  /* K1 (28/10/2026): "Lần này" KHÔNG điền sẵn — ô trống cho tới khi thủ kho gõ số
+     đếm được hoặc bấm "điền đủ" dưới ô (một dòng một lần bấm, có chủ ý). */
+  const oLanNay = (r: DongNhan) => (r.qty === 0 ? '' : String(r.qty))
+  const nutDienDu = (r: DongNhan, i: number) =>
+    r.qty === 0 && r.goi_y > 0 ? (
+      <GoiY
+        onClick={() => patch(i, { qty: r.goi_y })}
+        title={`Đếm đủ ${fmt(r.goi_y)} ${r.unit} thì bấm để điền — giao thiếu thì gõ số thật`}
+        label={`Điền đủ ${fmt(r.goi_y)} ${r.unit} cho ${r.code}`}
+      >
+        điền đủ {fmt(r.goi_y)}
+      </GoiY>
+    ) : null
+
   const oDot = (r: DongNhan) => {
     const n = nhan.get(r.po_line_id) ?? { kind: 'none' as const }
     if (n.kind === 'this') {
@@ -153,11 +167,13 @@ export function LuoiNhan({
                   <>
                     <OSo
                       id={`lan-nay-${i}`}
-                      value={String(r.qty)}
+                      value={oLanNay(r)}
                       disabled={busy}
+                      placeholder="gõ số"
                       onCommit={(v) => patch(i, { qty: docSoVn(v) })}
                       label={`Lần này ${r.code}`}
                     />
+                    {nutDienDu(r, i)}
                     {sp?.kind === 'thieu' && <GoiY>còn thiếu {fmt(sp.n)}</GoiY>}
                     {vuot && !vuot.trong_dung_sai && (
                       <GoiY tone="warn" onClick={moHopLyDo}>
@@ -296,11 +312,13 @@ export function LuoiNhan({
                       <>
                         <OSo
                           id={`lan-nay-${i}`}
-                          value={String(r.qty)}
+                          value={oLanNay(r)}
                           disabled={busy}
+                          placeholder="gõ số"
                           onCommit={(v) => patch(i, { qty: docSoVn(v) })}
                           label={`Lần này ${r.code}`}
                         />
+                        {nutDienDu(r, i)}
                         {/* Thiếu KHÔNG chặn: đơn thành "Về một phần", người mua quyết giao bù / chốt thiếu. */}
                         {sp?.kind === 'thieu' && (
                           <GoiY>
