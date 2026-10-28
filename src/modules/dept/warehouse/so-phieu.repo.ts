@@ -125,6 +125,33 @@ export const soPhieuRepo = {
     return out
   },
 
+  /**
+   * Lệnh SX trên DÒNG của từng phiếu (`warehouse_movements.production_order_id`)
+   * — phiếu xuất cho lệnh không nối đơn mua nên `donLenhByDocIds` không thấy lệnh
+   * (28/10/2026: tab Phiếu xuất có cột Lệnh SX trống cả 18 phiếu).
+   */
+  async lenhTheoDongByDocIds(docIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    if (docIds.length === 0) return out
+    const mv = await theoLo<{ doc_id: string; lsx: One<{ code: string }> }>(
+      docIds,
+      (lo) =>
+        db()
+          .from('warehouse_movements')
+          .select('doc_id, lsx:production_orders(code)')
+          .in('doc_id', lo)
+          .not('production_order_id', 'is', null),
+    )
+    const one = <T>(v: One<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v)
+    for (const m of mv) {
+      const c = one(m.lsx)?.code
+      if (!c) continue
+      const ds = out.get(m.doc_id) ?? []
+      if (!ds.includes(c)) out.set(m.doc_id, [...ds, c])
+    }
+    return out
+  },
+
   /** Người đã lập phiếu kho + số phiếu — ô lọc "Người lập" (nhiều trước). */
   async nguoiLap(): Promise<{ id: string; name: string; n: number }[]> {
     const rows = ok<{ created_by: string | null; actor: One<{ name: string | null }> }[]>(
