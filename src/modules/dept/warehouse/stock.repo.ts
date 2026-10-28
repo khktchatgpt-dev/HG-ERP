@@ -863,35 +863,54 @@ export const docsRepo = {
   },
 
   /**
-   * Tập phiếu ĐÃ BỊ ĐẢO — đọc ngược cột `reversal_of_doc_id`.
+   * Các CẶP ĐẢO trên toàn sổ — `goc` = tập phiếu ĐÃ BỊ ĐẢO, `dao` = id các phiếu đảo.
    *
-   * Cột đó nói phiếu NÀY LÀ phiếu đảo; câu hỏi của sổ là ngược lại ("tờ này
-   * còn hiệu lực không"). Không có cột nào trả lời trực tiếp, nhưng tập phiếu
-   * đảo trên toàn sổ rất nhỏ (đo 16/09/2026: 1) nên lấy hết một lượt rẻ hơn
-   * thêm cột hay dựng view.
+   * Cột `reversal_of_doc_id` nói phiếu NÀY LÀ phiếu đảo; câu hỏi của sổ thường
+   * ngược lại ("tờ này còn hiệu lực không"). Không có cột nào trả lời trực tiếp,
+   * nhưng phiếu đảo trên toàn sổ ít (đo 28/10/2026: 12) nên lấy hết một lượt rẻ
+   * hơn thêm cột hay dựng view.
    */
-  async reversedDocIds(): Promise<Set<string>> {
+  async reversalPairs(): Promise<{ goc: Set<string>; dao: string[] }> {
     const { data } = await db()
       .from('warehouse_docs')
-      .select('reversal_of_doc_id')
+      .select('id, reversal_of_doc_id')
       .not('reversal_of_doc_id', 'is', null)
       .limit(5000)
-    return new Set(
-      ((data as { reversal_of_doc_id: string | null }[] | null) ?? [])
-        .map((r) => r.reversal_of_doc_id)
-        .filter((v): v is string => !!v),
-    )
+    const rows = (data as { id: string; reversal_of_doc_id: string }[] | null) ?? []
+    return {
+      goc: new Set(rows.map((r) => r.reversal_of_doc_id)),
+      dao: rows.map((r) => r.id),
+    }
   },
 
-  /** Đếm phiếu theo loại trên TOÀN SỔ — stats của Sổ chứng từ khi đã phân trang. */
-  async countByKind(): Promise<{ total: number; receipt: number; issue: number }> {
+  /**
+   * Đếm phiếu theo loại trên TOÀN SỔ — số trên tab của Sổ phiếu khi đã phân trang.
+   * `receipt` / `issue` chỉ đếm phiếu GỐC (K5, 28/10/2026): phiếu đảo của phiếu
+   * nhập lưu `kind: 'issue'` (mã PXK) — đếm theo kind là tab Phiếu xuất lẫn 10
+   * phiếu đảo của phiếu nhập. Phiếu đảo đếm riêng (`dao`).
+   */
+  async countByKind(): Promise<{
+    total: number
+    receipt: number
+    issue: number
+    dao: number
+  }> {
     const head = (kind?: DocKind) => {
       let q = db().from('warehouse_docs').select('id', { count: 'exact', head: true })
-      if (kind) q = q.eq('kind', kind)
+      if (kind) q = q.eq('kind', kind).is('reversal_of_doc_id', null)
       return q
     }
-    const [t, r, i] = await Promise.all([head(), head('receipt'), head('issue')])
-    return { total: t.count ?? 0, receipt: r.count ?? 0, issue: i.count ?? 0 }
+    const dao = db()
+      .from('warehouse_docs')
+      .select('id', { count: 'exact', head: true })
+      .not('reversal_of_doc_id', 'is', null)
+    const [t, r, i, d] = await Promise.all([head(), head('receipt'), head('issue'), dao])
+    return {
+      total: t.count ?? 0,
+      receipt: r.count ?? 0,
+      issue: i.count ?? 0,
+      dao: d.count ?? 0,
+    }
   },
 
   /** Biên bản kiểm kê CHỜ DUYỆT — nuôi màn duyệt + ô dashboard. */
@@ -922,6 +941,8 @@ export const docsRepo = {
     ids?: string[]
     /** Lọc theo người lập phiếu (ô "Người lập" của Sổ phiếu). */
     created_by?: string
+    /** Bỏ phiếu ĐẢO — tab Phiếu nhập / Phiếu xuất của Sổ phiếu (K5, 28/10/2026). */
+    goc_only?: boolean
     page: number
     page_size: number
   }): Promise<{ rows: WarehouseDoc[]; total: number }> {
@@ -963,6 +984,7 @@ export const docsRepo = {
         let q = db().from('warehouse_docs').select('id, created_at').in('id', lo)
         if (filter.kind) q = q.eq('kind', filter.kind)
         if (filter.created_by) q = q.eq('created_by', filter.created_by)
+        if (filter.goc_only) q = q.is('reversal_of_doc_id', null)
         return q.order('id')
       })
       nhe.sort((a, b) =>
@@ -988,6 +1010,7 @@ export const docsRepo = {
       .order('created_at', { ascending: false })
     if (filter.kind) q = q.eq('kind', filter.kind)
     if (filter.created_by) q = q.eq('created_by', filter.created_by)
+    if (filter.goc_only) q = q.is('reversal_of_doc_id', null)
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     const rows = await fillReversalCodes(

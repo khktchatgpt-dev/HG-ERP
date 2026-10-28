@@ -530,6 +530,8 @@ export const stockService = {
       reason_code?: string
       ids?: string[]
       created_by?: string
+      /** Bỏ phiếu đảo (tab Phiếu nhập / Phiếu xuất). */
+      goc_only?: boolean
       page: number
       page_size: number
     },
