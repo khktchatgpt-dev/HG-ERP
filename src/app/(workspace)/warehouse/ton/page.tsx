@@ -1,4 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { laTruongKho } from '@/modules/dept/warehouse/stocktakes.service'
 import { hangLenhService } from '@/modules/dept/warehouse/hang-lenh.service'
 import { stockService } from '@/modules/dept/warehouse/stock.service'
 import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
@@ -64,6 +66,7 @@ export default async function TonKhoPage({
       code: x.lenh.code,
       khach: x.lenh.khach,
       xong: lenhXong(x.lenh),
+      status: x.lenh.status,
       ship_date: x.lenh.ship_date,
       // Mốc UTC → ngày VN (bẫy: cắt chuỗi ISO là lùi một ngày sau 17 giờ).
       xuat_cuoi: x.lenh.xuat_cuoi ? todayVn(new Date(x.lenh.xuat_cuoi)) : null,
@@ -103,7 +106,7 @@ export default async function TonKhoPage({
 
   // Chia tồn cho lệnh chạy SONG SONG với trang tồn; rổ "Tồn chung" chờ nó.
   const tatCa = hangLenhService.tatCa(user)
-  const [res, taxonomy, t] = await Promise.all([
+  const [res, taxonomy, t, laTruong, canEdit] = await Promise.all([
     stockService.listStockPage(user, {
       q,
       group_name: nhom,
@@ -116,6 +119,11 @@ export default async function TonKhoPage({
     }),
     materialTaxonomy(),
     tatCa,
+    // Cập nhật số thực tế ngay trong khung mã (28/10/2026): trưởng kho đổi tồn ngay.
+    laTruongKho(user),
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.stock.write'),
   ])
   const theoMa = cuaLenhTheoMa(t.rows, new Map(t.lenh.map((l) => [l.id, l])))
   const cuaLenh: Record<string, CuaLenh> = {}
@@ -132,6 +140,7 @@ export default async function TonKhoPage({
         name: r.name,
         unit: r.unit,
         qty_ok: r.qty_ok,
+        on_hand: r.on_hand,
         qty_qc: r.qty_qc,
         qty_blocked: r.qty_blocked,
         reserved: r.reserved,
@@ -149,6 +158,8 @@ export default async function TonKhoPage({
       q={sp.q ?? ''}
       nhom={nhom ?? ''}
       nhomOptions={taxonomy.groups.map((g) => g.name)}
+      laTruong={laTruong}
+      canEdit={canEdit}
     />
   )
 }

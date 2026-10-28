@@ -95,6 +95,12 @@ describe('dungDangDo', () => {
       dungDangDo({ ...base, choDuyet: [], dotLam: [], deNghiNhap: 0, thieuNccGanDay: 0 }),
     ).toEqual([])
   })
+
+  it('dòng thiếu số phiếu NCC nói rõ là của CẢ KHO (số khớp tab Phiếu đã ghi, không phải của riêng người xem)', () => {
+    expect(dungDangDo(base).at(-1)?.chu).toBe(
+      '37 phiếu nhập 14 ngày qua (cả kho) chưa ghi số phiếu NCC',
+    )
+  })
 })
 
 describe('nhanHen', () => {

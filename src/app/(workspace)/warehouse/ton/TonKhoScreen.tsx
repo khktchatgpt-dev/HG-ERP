@@ -29,6 +29,8 @@ export type TonRow = {
   name: string
   unit: string
   qty_ok: number
+  /** Tổng trên sổ (mọi trạng thái) — số Cập nhật số thực tế so với. */
+  on_hand: number
   qty_qc: number
   qty_blocked: number
   reserved: number
@@ -64,6 +66,8 @@ export function TonKhoScreen({
   q: qUrl,
   nhom,
   nhomOptions,
+  laTruong,
+  canEdit,
 }: {
   rows: TonRow[]
   /** Lệnh được chia tồn của từng mã trên trang (cột "Của lệnh"). */
@@ -76,12 +80,21 @@ export function TonKhoScreen({
   q: string
   nhom: string
   nhomOptions: string[]
+  /** Trưởng kho — cập nhật số thực tế trong khung mã đổi tồn ngay. */
+  laTruong: boolean
+  canEdit: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
   const [q, setQ] = useState(qUrl)
-  const [chon, setChon] = useState<string | null>(null)
+  const [chon, setChonId] = useState<string | null>(null)
+  /** Khối Cập nhật số thực tế trong khung mã — đổi mã là đóng. */
+  const [moCapNhat, setMoCapNhat] = useState(false)
+  const setChon = (id: string | null) => {
+    if (id !== chon) setMoCapNhat(false)
+    setChonId(id)
+  }
   const khung = useRef<HTMLDivElement>(null)
   const beRong = useBeRong(khung)
   /* Khung hẹp (< 900, laptop phóng to + menu mở): bỏ Kệ, Của lệnh — khung phải
@@ -135,7 +148,8 @@ export function TonKhoScreen({
             <ApNut
               primary
               icon={<NotebookPen size={15} aria-hidden />}
-              href={sel ? `/warehouse/cap-nhat-ton?ma=${ma}` : undefined}
+              // Mở khối cập nhật NGAY trong khung mã (28/10/2026), không sang màn khác.
+              onClick={sel ? () => setMoCapNhat(true) : undefined}
               why={sel ? null : canChon}
             >
               Cập nhật số thực tế
@@ -155,6 +169,8 @@ export function TonKhoScreen({
                   href: sel ? `/warehouse/vat-tu?ro=all&q=${ma}` : undefined,
                   why: sel ? null : canChon,
                 },
+                // Nhiều mã một lượt vẫn ở màn riêng; một mã thì ngay khung bên phải.
+                { label: 'Cập nhật nhiều mã', href: '/warehouse/cap-nhat-ton' },
                 { label: 'Lập phiếu xuất', href: '/warehouse/xuat' },
                 { label: 'Phiếu đã ghi', href: '/warehouse/phieu' },
               ]}
@@ -334,6 +350,10 @@ export function TonKhoScreen({
           key={sel?.material_id ?? 'rong'}
           row={sel}
           cuaLenh={sel ? (cuaLenh[sel.material_id] ?? []) : []}
+          laTruong={laTruong}
+          canEdit={canEdit}
+          moCapNhat={moCapNhat}
+          onMoCapNhat={setMoCapNhat}
         />
       </div>
 

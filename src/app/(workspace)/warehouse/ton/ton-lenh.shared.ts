@@ -11,6 +11,8 @@ export type LenhDong = {
   code: string
   khach: string | null
   xong: boolean
+  /** Trạng thái lệnh — nhãn đúng như ô chọn lệnh của Xuất hàng (`nhanTrangThaiLenh`). */
+  status: string
   ship_date: string | null
   /** Ngày VN (YYYY-MM-DD) của lần ghi xuất gần nhất — page đã đổi từ mốc UTC. */
   xuat_cuoi: string | null

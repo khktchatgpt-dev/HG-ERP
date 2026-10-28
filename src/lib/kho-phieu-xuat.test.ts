@@ -114,6 +114,10 @@ describe('kiemTruocGhiSoXuat — theo thứ tự câu hỏi của đầu phiếu
       reason: 'vuot_ton',
       focus: 1,
     }))
+  it('câu vượt tồn ghi số kiểu VN (chấm nghìn, phẩy lẻ)', () => {
+    const k = kiemTruocGhiSoXuat(head(), [row('b', 999999, 753.5)])
+    expect(k.ok === false && k.message).toMatch(/xuất 999\.999 nhưng tồn dùng được 753,5/)
+  })
   it('đủ → ok', () =>
     expect(kiemTruocGhiSoXuat(head(), [row('a', 5)])).toEqual({ ok: true }))
 })

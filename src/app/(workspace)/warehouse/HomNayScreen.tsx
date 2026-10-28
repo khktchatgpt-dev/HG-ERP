@@ -35,7 +35,7 @@ const AN_HUONG_DAN = 'kho-an-huong-dan'
  * HÔM NAY — khuôn A (B2 "Kho cho người mới", bản vẽ A1, duyệt 27/10/2026). Câu
  * màn trả lời: "hôm nay tôi làm gì trước?". Bốn khối việc phẳng (không thẻ nổi),
  * mỗi khối vài con số bấm được + MỘT nút; dải "Lần đầu dùng?" chỉ bốn việc
- * chính, ẩn được (nhớ trên máy này); "Đang dở của bạn" nói việc đã bắt đầu.
+ * chính, ẩn được (nhớ trên máy này); "Việc còn dở" nói việc đã bắt đầu.
  */
 export function HomNayScreen({
   today,
@@ -227,7 +227,7 @@ export function HomNayScreen({
         </div>
 
         <section className="hn-do" aria-labelledby="hn-do">
-          <h2 id="hn-do">Đang dở của bạn</h2>
+          <h2 id="hn-do">Việc còn dở</h2>
           {dangDo.length === 0 ? (
             <p className="kh-mut">
               Chưa có việc nào đang dở. Đợt kiểm kê đang đếm, lần cập nhật chờ duyệt, đề
