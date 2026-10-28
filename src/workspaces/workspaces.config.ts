@@ -558,6 +558,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Danh mục & tra cứu',
         items: [
+          // Tra giá nhiều món một lượt (28/10/2026) — đứng đầu nhóm: việc hằng ngày khi mua món mới.
+          { href: '/mua-hang/tra-gia', label: 'Tra giá vật tư', icon: 'scale' },
           { href: '/mua-hang/ncc', label: 'Nhà cung cấp', icon: 'building-2' },
           { href: '/mua-hang/vat-tu', label: 'Vật tư', icon: 'package' },
           { href: '/mua-hang/bang-gia', label: 'Bảng giá', icon: 'circle-dollar-sign' },

@@ -41,6 +41,7 @@ import {
   Receipt,
   ReceiptText,
   Route,
+  Scale,
   Scissors,
   ScrollText,
   Settings,
@@ -95,6 +96,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   container: Container,
   // Quy cắt phôi — kéo cắt là hình ảnh gần nhất với "cắt phôi" mà thợ nhận ra ngay.
   scissors: Scissors,
+  // Tra giá vật tư — cái cân: đặt giá các NCC lên so.
+  scale: Scale,
   'shopping-cart': ShoppingCart,
   truck: Truck,
   'triangle-alert': TriangleAlert,
