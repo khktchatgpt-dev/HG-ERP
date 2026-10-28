@@ -42,6 +42,16 @@ vi.mock('./po-adjustments.repo', () => ({
     invoicedLineIds: vi.fn(async () => new Set()),
     materialLabels: vi.fn(async () => new Map()),
     apply: vi.fn(async () => 1),
+    reprice: vi.fn(async () => ({ seq: 2, revalued: 1 })),
+    receiptsOfLines: vi.fn(async () => [
+      {
+        po_line_id: 'l1',
+        doc_code: 'PNK-2026-0117',
+        direction: 'in',
+        qty: 100,
+        unit_cost: 110,
+      },
+    ]),
     listByPo: vi.fn(async () => []),
     markSent: vi.fn(async () => true),
   },
@@ -1100,15 +1110,68 @@ describe('posService.adjust — điều chỉnh đơn đã gửi (0210)', () => 
     expect(poAdjustmentsRepo.apply).not.toHaveBeenCalled()
   })
 
-  it('đơn đã về đủ → khoá, nói đường đi tiếp', async () => {
+  it('đơn đã về đủ (0280): đổi giá đi hàm định giá lại, ảnh chụp phiếu nhập, báo cả Kế toán', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue({
       ...SENT,
       status: 'received',
     } as never)
-    await expect(posService.adjust(staff, 'po1', input())).rejects.toMatchObject({
-      status: 400,
-      message: expect.stringMatching(/đối chiếu hoá đơn/),
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'l1', qty_received: 100 },
+    ] as never)
+    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-ketoan'])
+    const r = await posService.adjust(staff, 'po1', input())
+    expect(r).toMatchObject({ seq: 2, delta_total: 1_080, revalued: 1 })
+    expect(poAdjustmentsRepo.apply).not.toHaveBeenCalled()
+    const call = vi.mocked(poAdjustmentsRepo.reprice).mock.calls[0][0]
+    expect(call).toMatchObject({
+      cause: 'ncc_doi',
+      prices: [{ id: 'l1', unit_price: 120 }],
     })
+    expect(call.record.lines).toEqual([
+      expect.objectContaining({
+        line_id: 'l1',
+        phieu: [
+          {
+            doc_code: 'PNK-2026-0117',
+            direction: 'in',
+            qty: 100,
+            cost_before: 110,
+            cost_after: 120,
+          },
+        ],
+      }),
+    ])
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'po.adjusted',
+        chi_gia: true,
+        phieu_nhap: ['PNK-2026-0117'],
+        notify_ids: ['u-boss', 'u-ketoan'],
+      }),
+    )
+  })
+
+  it('đơn đã về đủ: đổi SL → 400, nói lệch số lượng là việc của Kho, không gọi hàm DB', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...SENT,
+      status: 'received',
+    } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'l1', qty_received: 100 },
+    ] as never)
+    await expect(
+      posService.adjust(
+        staff,
+        'po1',
+        input({
+          lines: [{ id: 'l1', material_id: 'm1', qty_ordered: 120, unit_price: 110 }],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringMatching(/xử lý ở Kho/),
+    })
+    expect(poAdjustmentsRepo.reprice).not.toHaveBeenCalled()
   })
 
   it('NV khác không phụ trách đơn → 403', async () => {

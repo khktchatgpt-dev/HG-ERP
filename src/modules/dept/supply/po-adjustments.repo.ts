@@ -71,24 +71,35 @@ export const poAdjustmentsRepo = {
       `${base}, lsx:supply_po_adjustment_lsx(production_order_id, lenh:production_orders(id, code, orders:sales_orders!sales_orders_production_order_id_fkey(code)))`,
     )
     // DB chưa áp 0227 (code lên trước migration): đọc như cũ, trang đơn vẫn mở được.
-    if (error && /supply_po_adjustment_lsx/.test(error.message)) ({ data, error } = await read(base))
+    if (error && /supply_po_adjustment_lsx/.test(error.message))
+      ({ data, error } = await read(base))
     if (error) throw new Error(error.message)
     type U = { name: string | null; email: string } | null
-    type L = { lenh: { id: string; code: string; orders: { code: string }[] | null } | null }[] | null
-    return ((data ?? []) as unknown as (Record<string, unknown> & { creator: U; sender: U; lsx: L })[]).map(
-      ({ creator, sender, lsx, ...r }) => {
-        const out = { ...r } as Record<string, unknown>
-        out.cause = r.cause ?? null
-        out.lsx = (lsx ?? [])
-          .map((x) => x.lenh)
-          .filter((x) => x != null)
-          .map((x) => ({ id: x.id, code: x.code, orders: (x.orders ?? []).map((o) => o.code) }))
-        for (const k of MONEY) out[k] = Number(r[k] ?? 0)
-        out.created_by_name = creator?.name ?? creator?.email ?? null
-        out.sent_by_name = sender?.name ?? sender?.email ?? null
-        return out as PoAdjustment
-      },
-    )
+    type L =
+      | { lenh: { id: string; code: string; orders: { code: string }[] | null } | null }[]
+      | null
+    return (
+      (data ?? []) as unknown as (Record<string, unknown> & {
+        creator: U
+        sender: U
+        lsx: L
+      })[]
+    ).map(({ creator, sender, lsx, ...r }) => {
+      const out = { ...r } as Record<string, unknown>
+      out.cause = r.cause ?? null
+      out.lsx = (lsx ?? [])
+        .map((x) => x.lenh)
+        .filter((x) => x != null)
+        .map((x) => ({
+          id: x.id,
+          code: x.code,
+          orders: (x.orders ?? []).map((o) => o.code),
+        }))
+      for (const k of MONEY) out[k] = Number(r[k] ?? 0)
+      out.created_by_name = creator?.name ?? creator?.email ?? null
+      out.sent_by_name = sender?.name ?? sender?.email ?? null
+      return out as PoAdjustment
+    })
   },
 
   /** Lần điều chỉnh mới nhất của đơn (0 = chưa lần nào). */
@@ -181,6 +192,75 @@ export const poAdjustmentsRepo = {
       throw new Error(m)
     }
     return Number(data)
+  },
+
+  /**
+   * Dòng phiếu kho (nhập / trả NCC) gắn các dòng đơn — ảnh chụp "trước" khi
+   * định giá lại, để sổ điều chỉnh nói được phiếu nào đổi giá từ bao nhiêu.
+   */
+  async receiptsOfLines(lineIds: string[]): Promise<
+    {
+      po_line_id: string
+      doc_code: string | null
+      direction: string
+      qty: number
+      unit_cost: number | null
+    }[]
+  > {
+    // prettier-ignore
+    if (lineIds.length === 0) return []
+    const { data, error } = await db()
+      .from('warehouse_movements')
+      .select('po_line_id, direction, qty, unit_cost, doc:warehouse_docs(code)')
+      .in('po_line_id', lineIds)
+    if (error) throw new Error(error.message)
+    type R = { po_line_id: string; direction: string; qty: unknown; unit_cost: unknown; doc: { code: string } | { code: string }[] | null } // prettier-ignore
+    return ((data ?? []) as unknown as R[]).map((r) => ({
+      po_line_id: r.po_line_id,
+      doc_code: (Array.isArray(r.doc) ? r.doc[0]?.code : r.doc?.code) ?? null,
+      direction: r.direction,
+      qty: Number(r.qty ?? 0),
+      unit_cost: r.unit_cost == null ? null : Number(r.unit_cost),
+    }))
+  },
+
+  /**
+   * ĐIỀU CHỈNH GIÁ ĐƠN ĐÃ VỀ ĐỦ (0280) — đổi giá + định giá lại phiếu kho của
+   * các dòng đó + ghi sổ điều chỉnh, MỘT giao dịch. Trả lần thứ mấy và số dòng
+   * phiếu kho đã định giá lại.
+   */
+  async reprice(args: {
+    poId: string
+    baseSeq: number
+    actorId: string
+    reason: string
+    cause: string
+    prices: { id: string; unit_price: number }[]
+    header: Record<string, unknown>
+    record: Record<string, unknown>
+  }): Promise<{ seq: number; revalued: number }> {
+    const { data, error } = await db().rpc('supply_po_reprice_received', {
+      p_po_id: args.poId,
+      p_base_seq: args.baseSeq,
+      p_actor: args.actorId,
+      p_reason: args.reason,
+      p_cause: args.cause,
+      p_prices: args.prices,
+      p_header: args.header,
+      p_record: args.record,
+    } as never)
+    if (error) {
+      const m = error.message ?? ''
+      if (m.startsWith('PO_ADJ_STALE:'))
+        throw new PoAdjustDbError(m.slice('PO_ADJ_STALE:'.length).trim(), true)
+      if (m.startsWith('PO_ADJ:'))
+        throw new PoAdjustDbError(m.slice('PO_ADJ:'.length).trim(), false)
+      if (error.code === '23505')
+        throw new PoAdjustDbError('Đơn vừa được điều chỉnh trong lúc bạn đang sửa — tải lại đơn rồi sửa tiếp', true) // prettier-ignore
+      throw new Error(m)
+    }
+    const r = (data ?? {}) as { seq?: unknown; revalued?: unknown }
+    return { seq: Number(r.seq), revalued: Number(r.revalued ?? 0) }
   },
 
   /** Đóng dấu đã gửi NCC — chỉ lần chưa gửi; trả false nếu không có gì để đóng. */

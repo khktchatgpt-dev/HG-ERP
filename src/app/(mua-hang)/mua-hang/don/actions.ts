@@ -542,9 +542,9 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
     case 'received':
       return [
         { ...OPEN, primary: true },
-        ADJUST(
-          'Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn',
-        ),
+        // Về đủ (0280, 28/10/2026): vẫn điều chỉnh được nhưng CHỈ GIÁ — NCC đối
+        // chiếu công nợ báo giá khác; phiếu nhập kho định giá lại theo.
+        ADJUST(notOwn),
         EDIT_TERMS(notOwn),
         DUP,
         DELETE('Đơn đã đóng sổ — không xoá được nữa'),

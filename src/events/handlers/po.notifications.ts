@@ -69,6 +69,10 @@ export function registerPoNotificationHandlers(): void {
   on('po.adjusted', async (e) => {
     const sign = e.delta_total > 0 ? '+' : ''
     const money = `${sign}${fmtMoney(e.delta_total, e.currency)} ${e.currency}`
+    // Chỉnh giá sau nhập kho (0280): Kế toán cũng nhận — nói rõ phiếu nào vừa đổi giá.
+    const sau = e.chi_gia
+      ? ` · sau nhập kho${e.phieu_nhap?.length ? ` · định giá lại ${e.phieu_nhap.join(', ')}` : ''}`
+      : ''
     await Promise.all(
       e.notify_ids.map((rid) =>
         notificationsService.notify({
@@ -76,7 +80,7 @@ export function registerPoNotificationHandlers(): void {
           actorId: e.adjusted_by,
           type: 'po_adjusted',
           payload: {
-            title: `${e.code} · điều chỉnh lần ${e.seq} · ${causeLabel(e.cause)} · phát sinh ${money}`,
+            title: `${e.code} · ${e.chi_gia ? 'điều chỉnh giá' : 'điều chỉnh'} lần ${e.seq}${sau} · ${causeLabel(e.cause)} · phát sinh ${money}`,
             reason: e.reason,
           },
         }),
@@ -146,7 +150,8 @@ export function registerPoNotificationHandlers(): void {
   // trước, Cung ứng là người đi nói với NCC. Chính người phụ trách ghi thì khỏi báo.
   on('po.issue_recorded', async (e) => {
     if (!e.owner_id || e.owner_id === e.reported_by) return
-    const mo = e.description.length > 140 ? `${e.description.slice(0, 139)}…` : e.description
+    const mo =
+      e.description.length > 140 ? `${e.description.slice(0, 139)}…` : e.description
     await notificationsService.notify({
       recipientId: e.owner_id,
       actorId: e.reported_by,

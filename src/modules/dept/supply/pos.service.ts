@@ -3,7 +3,13 @@ import { projectsRepo } from './projects.repo'
 import { loiHangMuc, thieuViec } from '@/lib/hang-muc'
 import { posRepo, TEMPLATE_LINE_COLS, type Po, type PoLineInput } from './pos.repo'
 import { PoAdjustDbError, poAdjustmentsRepo } from './po-adjustments.repo'
-import { canAdjust, planAdjustment } from '@/lib/po-adjust'
+import {
+  canAdjust,
+  giaPhieuNhap,
+  locChiGia,
+  loiChiGia,
+  planAdjustment,
+} from '@/lib/po-adjust'
 import {
   dongKhongMaLaPhi,
   FREE_LINE_TEMPLATES,
@@ -1596,6 +1602,8 @@ export const posService = {
     await assertPoOwner(user, before)
     const gate = canAdjust(before.status)
     if (!gate.ok) throw BadRequest(gate.reason)
+    // Về đủ (0280): chỉ đổi giá, phiếu nhập kho định giá lại theo.
+    const chiGia = gate.chiGia
     /*
       Bản client đang cầm đã cũ (có người vừa điều chỉnh) → báo tải lại TRƯỚC:
       lỗi theo dòng tính trên bản cũ là lỗi ma. Hàm DB vẫn kiểm lại dưới khoá.
@@ -1640,20 +1648,21 @@ export const posService = {
     const labels = await poAdjustmentsRepo.materialLabels(newMatIds)
     const beforeById = new Map(lines.map((l) => [l.id, l]))
 
+    const beforeLines = lines.map((l) => ({
+      ...l,
+      code: l.material_id ? l.material_code : null,
+      name: l.material_name ?? l.line_name ?? '?',
+      unit: l.material_unit ?? l.line_unit ?? null,
+      received: receivedBy.get(l.id) ?? 0,
+      planned: plannedBy.get(l.id) ?? 0,
+      invoiced: invoiced.has(l.id),
+    }))
     const plan = planAdjustment({
       currency: before.currency,
       priceIncludesVat: !!before.price_includes_vat,
       before: {
         header: { vatRate: before.vat_rate, discount: before.discount_amount },
-        lines: lines.map((l) => ({
-          ...l,
-          code: l.material_id ? l.material_code : null,
-          name: l.material_name ?? l.line_name ?? '?',
-          unit: l.material_unit ?? l.line_unit ?? null,
-          received: receivedBy.get(l.id) ?? 0,
-          planned: plannedBy.get(l.id) ?? 0,
-          invoiced: invoiced.has(l.id),
-        })),
+        lines: beforeLines,
       },
       after: {
         header: {
@@ -1685,6 +1694,12 @@ export const posService = {
     })
     if (plan.errors.length > 0)
       throw BadRequest(plan.errors.join(' · '), 'PO_ADJUST_INVALID')
+    if (chiGia) {
+      const loc = locChiGia(plan)
+      const loi = loiChiGia(loc, beforeLines)
+      if (loi.length > 0) throw BadRequest(loi.join(' · '), 'PO_ADJUST_INVALID')
+      return this.adjustGiaVeDu(user, before, input, loc)
+    }
 
     const row = (l: PoLineInput & { sort_order: number }) => {
       const tpl: Record<string, unknown> = {}
@@ -1778,6 +1793,97 @@ export const posService = {
         : await approverIds(user.id),
     })
     return { po, seq, delta_total: plan.delta.total }
+  },
+
+  /**
+   * ĐIỀU CHỈNH GIÁ ĐƠN ĐÃ VỀ ĐỦ (0280, bản vẽ duyệt 28/10/2026) — nhánh của
+   * `adjust` sau khi `loiChiGia` đã chặn mọi thứ ngoài giá. Hàm DB đổi giá, định
+   * giá lại phiếu nhập / trả của đúng các dòng đó và ghi sổ điều chỉnh trong một
+   * giao dịch; ảnh chụp từng phiếu (giá trước → sau) đi vào `lines` của sổ.
+   *
+   * Báo người duyệt đơn VÀ Kế toán (Q3): công nợ theo hàng nhận vừa đổi số.
+   */
+  async adjustGiaVeDu(
+    user: User,
+    before: Po,
+    input: { base_seq: number; reason: string; cause: string },
+    plan: ReturnType<typeof planAdjustment>,
+  ): Promise<{ po: Po; seq: number; delta_total: number; revalued: number }> {
+    const doiGia = plan.changes.filter(
+      (c) => c.kind === 'changed' && c.line_id && c.price_after != null && c.price_after !== c.price_before, // prettier-ignore
+    )
+    const phieu = await poAdjustmentsRepo.receiptsOfLines(doiGia.map((c) => c.line_id!))
+    const afterById = new Map(plan.updates.map((u) => [u.id, u]))
+    const lines = plan.changes.map((c) => {
+      const a = c.line_id ? afterById.get(c.line_id) : undefined
+      const moi = a ? giaPhieuNhap({ qty_ordered: a.qty_ordered, unit_price: a.unit_price, price_basis: a.price_basis, qty2: a.qty2 }) : null // prettier-ignore
+      return {
+        ...c,
+        phieu: phieu
+          .filter((p) => p.po_line_id === c.line_id)
+          .map((p) => ({ doc_code: p.doc_code, direction: p.direction, qty: p.qty, cost_before: p.unit_cost, cost_after: moi })), // prettier-ignore
+      }
+    })
+    const header: Record<string, unknown> = {}
+    if (plan.headerChanges?.vat_rate) header.vat_rate = plan.headerChanges.vat_rate[1]
+    if (plan.headerChanges?.discount_amount)
+      header.discount_amount = plan.headerChanges.discount_amount[1]
+
+    let r: { seq: number; revalued: number }
+    try {
+      r = await poAdjustmentsRepo.reprice({
+        poId: before.id,
+        baseSeq: input.base_seq,
+        actorId: user.id,
+        reason: input.reason.trim(),
+        cause: input.cause,
+        prices: doiGia.map((c) => ({ id: c.line_id!, unit_price: c.price_after! })),
+        header,
+        record: {
+          currency: before.currency ?? 'VND',
+          subtotal_before: plan.money.before.subtotal,
+          subtotal_after: plan.money.after.subtotal,
+          discount_before: plan.money.before.discountAmount,
+          discount_after: plan.money.after.discountAmount,
+          vat_before: plan.money.before.vatAmount,
+          vat_after: plan.money.after.vatAmount,
+          total_before: plan.money.before.grandTotal,
+          total_after: plan.money.after.grandTotal,
+          delta_by_price: plan.delta.byPrice,
+          lines,
+          header_changes: plan.headerChanges,
+        },
+      })
+    } catch (e) {
+      if (e instanceof PoAdjustDbError) {
+        throw e.stale ? Conflict(e.message, 'PO_ADJUST_STALE') : BadRequest(e.message, 'PO_ADJUST_INVALID') // prettier-ignore
+      }
+      throw e
+    }
+
+    const [duyet, keToan] = await Promise.all([
+      before.approved_by ? Promise.resolve([before.approved_by]) : approverIds(user.id),
+      rbacRepo.userIdsWithPermission('accounting.payable.manage'),
+    ])
+    const po = (await posRepo.findById(before.id)) ?? before
+    await emit({
+      name: 'po.adjusted',
+      po_id: before.id,
+      code: before.code,
+      seq: r.seq,
+      adjusted_by: user.id,
+      reason: input.reason.trim(),
+      cause: input.cause,
+      currency: before.currency ?? 'VND',
+      delta_total: plan.delta.total,
+      total_after: plan.money.after.grandTotal,
+      chi_gia: true,
+      phieu_nhap: [
+        ...new Set(phieu.map((p) => p.doc_code).filter((x): x is string => !!x)),
+      ],
+      notify_ids: [...new Set([...duyet, ...keToan])].filter((x) => x !== user.id),
+    })
+    return { po, seq: r.seq, delta_total: plan.delta.total, revalued: r.revalued }
   },
 
   /** Sổ điều chỉnh của đơn — mọi NV đăng nhập đọc được (Kế toán đối chiếu). */

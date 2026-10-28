@@ -10887,6 +10887,19 @@ export type Database = {
         }
         Returns: number
       }
+      supply_po_reprice_received: {
+        Args: {
+          p_actor: string
+          p_base_seq: number
+          p_cause: string
+          p_header: Json
+          p_po_id: string
+          p_prices: Json
+          p_reason: string
+          p_record: Json
+        }
+        Returns: Json
+      }
       supply_po_cost_create: {
         Args: { p_actor: string; p_allocs: Json; p_cost: Json }
         Returns: string

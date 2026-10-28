@@ -37,7 +37,7 @@ import {
   invalidateMaterialPickCache,
 } from '@/components/supply/MaterialPicker'
 import { ApiError, api, apiErrorText } from '@/lib/api'
-import { planAdjustment, type AdjBeforeLine } from '@/lib/po-adjust'
+import { planAdjustment, theoBuocDon, type AdjBeforeLine } from '@/lib/po-adjust'
 import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { canCarryCost } from '@/lib/po-cost'
 import { PO_FIELDS, type PoField } from '@/lib/po-fields'
@@ -375,7 +375,7 @@ export function useDonChungTu(p: Props) {
         ? [{ ...(l as unknown as Record<string, unknown>), id: l.id, material_id: l.material_id, qty_ordered: Number(l.qty_ordered), unit_price: l.unit_price == null ? null : Number(l.unit_price), price_basis: l.price_basis === 'unit2' ? 'unit2' : 'unit', qty2: (l as { qty2?: number | null }).qty2 == null ? null : Number((l as { qty2?: number | null }).qty2), lsx_split: l.lsx_split ?? null, code: l.material_id ? l.material_code : null, name: l.material_name, unit: l.material_unit, received: statusById.get(l.id)?.qty_received ?? 0, planned: plannedLive.get(l.id) ?? 0, invoiced: false }] // prettier-ignore
         : [],
     )
-    return planAdjustment({
+    return theoBuocDon(po.status, before, planAdjustment({
       currency: po.currency,
       priceIncludesVat: po.price_includes_vat,
       before: {
@@ -386,7 +386,7 @@ export function useDonChungTu(p: Props) {
         header: { vatRate: body.vat_rate, discount: body.discount_amount },
         lines: body.lines.map((pl, i) => ({ ...pl, ...deriveLine(template, pl as Parameters<typeof deriveLine>[1]), id: lines[i].po_line_id ?? null, material_id: pl.material_id ?? null, unit_price: pl.unit_price ?? null, code: lines[i].is_free ? null : lines[i].code, name: lines[i].name, unit: lines[i].unit })), // prettier-ignore
       },
-    })
+    })) // Về đủ: chỉ giá (0280)
   }, [adjusting, po, header, lines, p.lines, statusById, plannedLive, template])
 
   /** Chênh theo HÀNG trên lưới (dòng sửa + dòng thêm), khoá bằng chỉ số dòng. */
@@ -571,10 +571,10 @@ export function useDonChungTu(p: Props) {
     /*
       DÒNG HÀNG TRONG CÙNG NÚT SỬA (B3): bước còn điều chỉnh được (đã duyệt →
       đang giao) thì Sửa mở luôn lưới dòng theo luật điều chỉnh (0210) — cùng
-      `adjPlan`, cùng hộp lý do, cùng route. Đơn về đủ chỉ còn điều khoản.
+      `adjPlan`, cùng hộp lý do, cùng route. Đơn về đủ (0280): chỉ đổi giá.
     */
     adjust: {
-      can: !!po && perms.canEdit && ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status), // prettier-ignore
+      can: !!po && perms.canEdit && ['approved', 'ordered', 'confirmed', 'in_transit', 'partial', 'received'].includes(po.status), // prettier-ignore
       start: () => startAdjust(),
       finish: () => { setAdjSheet(false); setAdjusting(false); setEditing(false); nn.reset() }, // prettier-ignore
       pending: !!adjPlan && (adjPlan.changes.length > 0 || !!adjPlan.headerChanges),

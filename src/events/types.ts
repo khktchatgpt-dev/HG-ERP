@@ -243,6 +243,10 @@ export type DomainEvent =
       /** Phát sinh tổng thanh toán của lần này (âm = giảm). */
       delta_total: number
       total_after: number
+      /** Điều chỉnh GIÁ đơn đã về đủ (0280) — phiếu nhập kho đã định giá lại theo. */
+      chi_gia?: boolean
+      /** Mã phiếu kho đã định giá lại (khi `chi_gia`). */
+      phieu_nhap?: string[]
       notify_ids: string[]
     }
   /**

@@ -475,3 +475,12 @@ describe('gửi gấp, ký bù sau (0218)', () => {
     })
   })
 })
+
+describe('Điều chỉnh đơn đã về đủ (0280)', () => {
+  it('người phụ trách: Điều chỉnh đơn mở (chỉ giá — luật ở lib/po-adjust); người khác: khoá, nói ai giữ', () => {
+    expect(
+      actionsFor('received', own).find((a) => a.id === 'adjust')!.blocked,
+    ).toBeUndefined()
+    expect(actionsFor('received', other).find((a) => a.id === 'adjust')!.blocked).toMatch(/người khác phụ trách/) // prettier-ignore
+  })
+})

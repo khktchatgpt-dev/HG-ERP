@@ -354,17 +354,25 @@ export function planAdjustment(input: {
 
 /**
  * Đơn ở bước nào thì điều chỉnh được. Nháp / chờ duyệt: sửa thẳng (hoặc rút
- * về nháp) — chưa ai cầm bản đó. Về đủ / huỷ: khoá (chốt Q3 25/09) — chênh
- * giá với hoá đơn xử lý ở đối chiếu hoá đơn. Lý do khoá NÓI ĐƯỜNG ĐI TIẾP.
+ * về nháp) — chưa ai cầm bản đó. Huỷ: khoá. Lý do khoá NÓI ĐƯỜNG ĐI TIẾP.
+ *
+ * VỀ ĐỦ (28/10/2026, 0280): điều chỉnh được nhưng CHỈ GIÁ (`chiGia`) — NCC đối
+ * chiếu công nợ báo giá khác sau khi hàng đã nhập kho. Chốt 25/09 từng khoá hẳn
+ * và chỉ sang "đối chiếu hoá đơn", nhưng hệ thống chưa có tờ hoá đơn NCC nào nên
+ * Cung ứng bị kẹt (PO-2026-0109). Luật chỉ giá ở `loiChiGia`.
  */
-export function canAdjust(status: string): { ok: true } | { ok: false; reason: string } {
+export function canAdjust(
+  status: string,
+): { ok: true; chiGia: boolean } | { ok: false; reason: string } {
   switch (status) {
     case 'approved':
     case 'ordered':
     case 'confirmed':
     case 'in_transit':
     case 'partial':
-      return { ok: true }
+      return { ok: true, chiGia: false }
+    case 'received':
+      return { ok: true, chiGia: true }
     case 'draft':
       return {
         ok: false,
@@ -372,12 +380,6 @@ export function canAdjust(status: string): { ok: true } | { ok: false; reason: s
       }
     case 'pending_approval':
       return { ok: false, reason: 'Đơn đang chờ duyệt — bấm "Rút về nháp để sửa"' }
-    case 'received':
-      return {
-        ok: false,
-        reason:
-          'Đơn đã về đủ — không điều chỉnh nữa; chênh giá với hoá đơn NCC xử lý ở đối chiếu hoá đơn',
-      }
     case 'cancelled':
       return {
         ok: false,
@@ -386,4 +388,104 @@ export function canAdjust(status: string): { ok: true } | { ok: false; reason: s
     default:
       return { ok: false, reason: `Đơn ở bước "${status}" không điều chỉnh được` }
   }
+}
+
+/**
+ * CHỈ GIÁ ĐƯỢC GHI cho đơn đã VỀ ĐỦ (0280) — gạt khỏi bản điều chỉnh các dòng
+ * chỉ lệch Ô PHỤ (ghi chú, quy cách, cột ẩn của mẫu đơn…). Hàm DB 0280 chỉ ghi
+ * đơn giá + VAT / chiết khấu, nên những lệch đó không bao giờ vào đơn; để lại
+ * thì sổ phát sinh ghi "đổi carton_basis" trên mọi dòng của đơn mẫu kính — đo
+ * thật 28/10 trên PO-2026-0065: cả 10 dòng lệch `carton_basis` dù không ai sửa.
+ */
+export function locChiGia(plan: AdjPlan): AdjPlan {
+  const changes = plan.changes
+    .filter(
+      (c) =>
+        c.kind !== 'changed' ||
+        !same(c.qty_before, c.qty_after) ||
+        !same(c.price_before, c.price_after) ||
+        Math.abs(c.amount_after - c.amount_before) > 0.005,
+    )
+    .map((c) => ({ ...c, fields: [] }))
+  return { ...plan, changes }
+}
+
+/**
+ * LUẬT "CHỈ GIÁ" cho đơn đã VỀ ĐỦ (0280, chốt Q1/Q4 bản vẽ 28/10/2026) — chạy
+ * trên bản đã qua `locChiGia`.
+ *
+ * Được: đơn giá từng dòng, thuế suất, chiết khấu. Không được: SL (hàng đã nhập
+ * kho theo SL đó — lệch số lượng là việc của Kho), thêm / bỏ dòng, đổi cơ sở
+ * tính giá. Dòng đã lên hoá đơn NCC: không đổi giá ở đây — sổ công nợ theo hoá
+ * đơn và theo hàng nhận sẽ lệch nhau.
+ *
+ * Mỗi lỗi nói dòng nào và cách gỡ, như `planAdjustment`.
+ */
+export function loiChiGia(
+  plan: AdjPlan,
+  before: readonly Pick<AdjBeforeLine, 'id' | 'price_basis' | 'qty2' | 'invoiced'>[],
+): string[] {
+  const byId = new Map(before.map((l) => [l.id, l]))
+  const errors: string[] = []
+  const ten = (c: AdjChange) => `Dòng ${c.no} (${c.code ?? c.name})`
+  for (const c of plan.changes) {
+    if (c.kind === 'added') {
+      errors.push(`${ten(c)}: đơn đã về đủ — không thêm dòng; mua thêm thì tạo đơn mới`)
+      continue
+    }
+    if (c.kind === 'removed') {
+      errors.push(
+        `${ten(c)}: đơn đã về đủ — không bỏ dòng; hàng đã nhập kho theo dòng này`,
+      )
+      continue
+    }
+    if (!same(c.qty_before, c.qty_after) || Math.abs(c.by_qty) > 0.005)
+      errors.push(`${ten(c)}: đơn đã về đủ — SL giữ theo phiếu nhập; lệch số lượng xử lý ở Kho (phiếu điều chỉnh / trả hàng)`) // prettier-ignore
+    const after = plan.updates.find((u) => u.id === c.line_id)
+    const b = c.line_id ? byId.get(c.line_id) : undefined
+    if (after && b && (after.price_basis !== b.price_basis || !same(after.qty2, b.qty2)))
+      errors.push(
+        `${ten(c)}: đơn đã về đủ — không đổi cách tính giá (theo ĐVT / theo kg, m²…)`,
+      )
+    if (b?.invoiced && !same(c.price_before, c.price_after))
+      errors.push(`${ten(c)}: đã lên hoá đơn NCC — sửa giá ở hoá đơn trong Tài chính, hoặc nhờ Kế toán huỷ hoá đơn rồi điều chỉnh ở đây`) // prettier-ignore
+  }
+  const doiGia = plan.changes.some(
+    (c) => c.kind === 'changed' && !same(c.price_before, c.price_after),
+  )
+  if (!doiGia && !plan.headerChanges && errors.length === 0)
+    errors.push('Chưa đổi giá dòng nào — gõ giá mới vào ô Đơn giá của dòng NCC tính lại')
+  return errors
+}
+
+/**
+ * Giá phiếu nhập của một dòng đơn — tiền dòng ÷ SL đặt, làm tròn 2 số lẻ. ĐÚNG
+ * công thức `poLineUnitCosts` (lúc ghi phiếu) và hàm DB 0280 (lúc định giá lại).
+ */
+export function giaPhieuNhap(l: {
+  qty_ordered: number
+  unit_price: number | null
+  price_basis: PriceBasis | null
+  qty2: number | null
+}): number | null {
+  if (!(l.qty_ordered > 0) || l.unit_price == null) return null
+  const amount = poLineAmount({ qty_ordered: l.qty_ordered, unit_price: l.unit_price, price_basis: l.price_basis, qty2: l.qty2 }) // prettier-ignore
+  if (!(amount > 0)) return null
+  return Math.round((amount / l.qty_ordered) * 100) / 100
+}
+
+/**
+ * Bản điều chỉnh tính trên MÀN theo bước của đơn: đơn đã về đủ thì chỉ giá được
+ * ghi (`locChiGia`) và vướng gì thì nói tại chỗ (`loiChiGia`) — cùng luật server
+ * 0280. Chưa đổi gì thì không bày lỗi (Lưu khi đó chỉ ghi điều khoản).
+ */
+export function theoBuocDon(
+  status: string,
+  before: readonly Pick<AdjBeforeLine, 'id' | 'price_basis' | 'qty2' | 'invoiced'>[],
+  plan: AdjPlan,
+): AdjPlan {
+  if (status !== 'received') return plan
+  const loc = locChiGia(plan)
+  if (loc.changes.length === 0 && !loc.headerChanges) return loc
+  return { ...loc, errors: [...loc.errors, ...loiChiGia(loc, before)] }
 }
