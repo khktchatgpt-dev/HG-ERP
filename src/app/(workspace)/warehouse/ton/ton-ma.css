@@ -48,6 +48,79 @@
   color: var(--kh-ink3);
 }
 
+/* Cập nhật số thực tế NGAY trong khung mã (28/10/2026) — một vạch trái xanh,
+   không thẻ nổi; ô số to để gõ nhanh. */
+.kh.kh .tm-cn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border-left: 3px solid var(--kh-act);
+  background: var(--kh-raised);
+  font-size: 12.5px;
+}
+.kh.kh .tm-cn .h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kh.kh .tm-cn .h .kh-lnk {
+  font-family: inherit;
+}
+.kh.kh .tm-cn label.o {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kh.kh .tm-cn label.o > span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--kh-ink2);
+}
+.kh.kh .tm-cn input.num {
+  height: 32px;
+  font-size: 15px;
+}
+.kh.kh .tm-cn .hoi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--kh-line);
+  background: var(--kh-card);
+}
+.kh.kh .tm-cn .hoi legend {
+  padding: 0 4px;
+  font-weight: 700;
+  color: var(--kh-stop);
+}
+.kh.kh .tm-cn .hoi label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.kh.kh .tm-cn .hoi select {
+  min-width: 0;
+  max-width: 100%;
+}
+.kh.kh .tm-cn .chan {
+  margin: 0;
+  font-weight: 600;
+}
+.kh.kh .tm-cn > .kh-btn.p {
+  justify-content: center;
+}
+.kh.kh .tm-cn > p.kh-mut {
+  margin: 0;
+  font-size: 11.5px;
+}
+.kh.kh .tm-bao {
+  margin: 0;
+  font-weight: 600;
+}
+
 /* Khung mã đang chọn */
 .kh.kh .tm-khung {
   display: flex;

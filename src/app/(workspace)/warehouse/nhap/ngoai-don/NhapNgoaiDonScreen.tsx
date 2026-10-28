@@ -164,6 +164,8 @@ export function NhapNgoaiDonScreen({
   /** Bấm Ghi sổ: được thì ghi, chưa được thì nhảy tới ô phải sửa. */
   const bamGhi = () => {
     if (!canEdit || busy) return
+    // Lỗi máy chủ lần trước không che câu chặn của lần này (thử 28/10).
+    setLoiGhi(null)
     if (ghiDuoc) void ghiSo()
     else nhayToi()
   }

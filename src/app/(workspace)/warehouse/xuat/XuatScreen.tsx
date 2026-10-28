@@ -333,6 +333,9 @@ export function XuatScreen({
   const ghiSo = () => {
     if (!canEdit || busy) return
     setDaThu(true)
+    // Lỗi máy chủ của lần ghi TRƯỚC không được che câu chặn của lần này (thử 28/10:
+    // đổi sang xuất lẻ chưa chọn lý do mà thanh đáy vẫn "Có lỗi, thử lại").
+    setLoiGhi(null)
     if (!kiem.ok) {
       if (typeof kiem.focus === 'number') {
         if (kiem.focus >= 0) focusQty(kiem.focus)

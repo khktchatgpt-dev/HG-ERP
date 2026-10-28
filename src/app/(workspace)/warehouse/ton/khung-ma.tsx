@@ -7,6 +7,7 @@ import { isoToVn, todayVn } from '@/lib/date-vn'
 import type { BienDongGanDay, StockByBin } from '@/modules/dept/warehouse/stock.repo'
 import { lenhGon, type CuaLenh } from './ton-lenh.shared'
 import type { TonRow } from './TonKhoScreen'
+import { CapNhatNhanh } from './cap-nhat-nhanh'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
 
@@ -43,9 +44,28 @@ const TT_NHAN: Record<string, string> = {
  * dòng (K2) và năm cột tồn phụ: mọi thứ về MỘT mã nằm một chỗ, kèm ba việc làm
  * tiếp. Màn cha dựng lại khối này bằng `key={material_id}` khi đổi mã.
  */
-export function KhungMa({ row, cuaLenh }: { row: TonRow | null; cuaLenh: CuaLenh }) {
+export function KhungMa({
+  row,
+  cuaLenh,
+  laTruong,
+  canEdit,
+  moCapNhat,
+  onMoCapNhat,
+}: {
+  row: TonRow | null
+  cuaLenh: CuaLenh
+  /** Trưởng kho: cập nhật số thực tế đổi tồn ngay; người khác chờ duyệt. */
+  laTruong: boolean
+  canEdit: boolean
+  /** Khối "Cập nhật số thực tế" đang mở — nút chính của màn cũng mở được. */
+  moCapNhat: boolean
+  onMoCapNhat: (mo: boolean) => void
+}) {
   const [d, setD] = useState<ChiTiet | null>(null)
   const [loi, setLoi] = useState<string | null>(null)
+  /** Câu báo sau khi cập nhật xong; `lan` tăng để nạp lại kệ + biến động. */
+  const [bao, setBao] = useState<string | null>(null)
+  const [lan, setLan] = useState(0)
   const id = row?.material_id ?? null
   useEffect(() => {
     if (!id) return
@@ -56,7 +76,7 @@ export function KhungMa({ row, cuaLenh }: { row: TonRow | null; cuaLenh: CuaLenh
     return () => {
       huy = true
     }
-  }, [id])
+  }, [id, lan])
 
   if (!row)
     return (
@@ -127,13 +147,42 @@ export function KhungMa({ row, cuaLenh }: { row: TonRow | null; cuaLenh: CuaLenh
             Xuất mã này
           </Link>
         )}
-        <Link href={`/warehouse/cap-nhat-ton?ma=${ma}`} className="kh-btn">
+        {/* Cập nhật NGAY TẠI ĐÂY (28/10/2026) — không sang màn khác cho một mã. */}
+        <button
+          type="button"
+          className="kh-btn"
+          aria-expanded={moCapNhat}
+          onClick={() => {
+            setBao(null)
+            onMoCapNhat(!moCapNhat)
+          }}
+        >
           Cập nhật số thực tế
-        </Link>
+        </button>
         <Link href={`/warehouse/vat-tu?ro=all&q=${ma}`} className="kh-btn">
           Thông tin vật tư
         </Link>
       </div>
+
+      {bao && (
+        <p className="tm-bao kh-ok" role="status">
+          {bao}
+        </p>
+      )}
+      {moCapNhat && (
+        <CapNhatNhanh
+          row={row}
+          cuaLenh={cuaLenh}
+          laTruong={laTruong}
+          canEdit={canEdit}
+          onDong={() => onMoCapNhat(false)}
+          onXong={(cau) => {
+            setBao(cau)
+            setLan((n) => n + 1)
+            onMoCapNhat(false)
+          }}
+        />
+      )}
 
       <section>
         <h4 title="Hàng đã mua cho lệnh, chia theo hạn xuất (cùng nguồn màn Theo lệnh)">

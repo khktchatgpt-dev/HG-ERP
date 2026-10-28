@@ -184,6 +184,8 @@ export function PhieuNhapScreen({
 
   /** Nút Ghi sổ / Ctrl+Enter: thiếu số phiếu NCC thì nhắc một lần trước (không chặn). */
   const bamGhiSo = () => {
+    // Lỗi máy chủ lần trước không che câu chặn / hộp hỏi của lần này (thử 28/10).
+    setLoiGhi(null)
     if (!ghiDuoc) return nhayToi()
     if (canNhacSoNcc(supplierDocNo)) return setNhacSoNcc(true)
     void ghiSo(supplierDocNo)

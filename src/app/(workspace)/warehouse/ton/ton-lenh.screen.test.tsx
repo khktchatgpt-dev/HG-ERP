@@ -19,10 +19,10 @@ afterEach(cleanup)
 
 const RO = (p: Partial<LenhDong['ro']>) => ({ con: false, han: false, xong: false, all: true, ...p }) // prettier-ignore
 const LENH: LenhDong[] = [
-  { id: 'yo', code: '01/26-27 - YOTRIO', khach: 'YOTRIO GROUP', xong: false, ship_date: '2026-10-10', xuat_cuoi: null, ma_ve: 41, xuat_du: 0, con_kho: 28, thieu: 2, het: 13, ro: RO({ con: true, han: true }) }, // prettier-ignore
-  { id: 'mx6', code: '06/26-27 - MX', khach: 'MERXX HANDELS GMBH', xong: false, ship_date: '2026-11-29', xuat_cuoi: '2026-10-02', ma_ve: 113, xuat_du: 87, con_kho: 21, thieu: 1, het: 5, ro: RO({ con: true }) }, // prettier-ignore
-  { id: 'mx8', code: '08/26-27 - MX', khach: 'MERXX HANDELS GMBH', xong: false, ship_date: '2026-11-29', xuat_cuoi: null, ma_ve: 12, xuat_du: 0, con_kho: 0, thieu: 0, het: 12, ro: RO({}) }, // prettier-ignore
-  { id: 'mx5', code: '05/26-27 - MX', khach: 'MERXX HANDELS GMBH', xong: true, ship_date: '2026-09-13', xuat_cuoi: null, ma_ve: 3, xuat_du: 0, con_kho: 0, thieu: 0, het: 3, ro: RO({ xong: true }) }, // prettier-ignore
+  { id: 'yo', code: '01/26-27 - YOTRIO', khach: 'YOTRIO GROUP', xong: false, status: 'approved', ship_date: '2026-10-10', xuat_cuoi: null, ma_ve: 41, xuat_du: 0, con_kho: 28, thieu: 2, het: 13, ro: RO({ con: true, han: true }) }, // prettier-ignore
+  { id: 'mx6', code: '06/26-27 - MX', khach: 'MERXX HANDELS GMBH', xong: false, status: 'in_progress', ship_date: '2026-11-29', xuat_cuoi: '2026-10-02', ma_ve: 113, xuat_du: 87, con_kho: 21, thieu: 1, het: 5, ro: RO({ con: true }) }, // prettier-ignore
+  { id: 'mx8', code: '08/26-27 - MX', khach: 'MERXX HANDELS GMBH', xong: false, status: 'approved', ship_date: '2026-11-29', xuat_cuoi: null, ma_ve: 12, xuat_du: 0, con_kho: 0, thieu: 0, het: 12, ro: RO({}) }, // prettier-ignore
+  { id: 'mx5', code: '05/26-27 - MX', khach: 'MERXX HANDELS GMBH', xong: true, status: 'completed', ship_date: '2026-09-13', xuat_cuoi: null, ma_ve: 3, xuat_du: 0, con_kho: 0, thieu: 0, het: 3, ro: RO({ xong: true }) }, // prettier-ignore
 ]
 const c = (
   p: Partial<MaChiTiet> & Pick<MaChiTiet, 'material_id' | 'code'>,
@@ -51,6 +51,18 @@ const dung = (ro: 'con' | 'han' | 'xong' | 'all' = 'con', mo: string | null = nu
   )
 
 describe('TonLenhScreen (khung Kho lối ERP)', () => {
+  it('nhãn trạng thái lệnh đúng như ô chọn lệnh của Xuất hàng (lệnh đã duyệt không ghi "Đang SX")', () => {
+    dung('all')
+    const bang = screen.getByRole('table', { name: 'Tồn kho theo lệnh' })
+    const tag = (ma: string) =>
+      within(within(bang).getByText(ma).closest('tr')!).getByText(
+        /^(Đã duyệt|Đang SX|Đã xong)/,
+      )
+    expect(tag('01/26-27 - YOTRIO').textContent).toBe('Đã duyệt')
+    expect(tag('06/26-27 - MX').textContent).toBe('Đang SX')
+    expect(tag('05/26-27 - MX').textContent).toBe('Đã xong')
+  })
+
   it('rổ mặc định "Kho còn hàng của lệnh": 2 lệnh, YOTRIO ghi quá 2 ngày; chọn dòng → Xuất cho lệnh ở Action Pane', () => {
     dung()
     const bang = screen.getByRole('table', { name: 'Tồn kho theo lệnh' })

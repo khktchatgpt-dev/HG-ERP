@@ -10,6 +10,8 @@ import { maTheoHuong, type MaLyDoKho } from './kho-ma-ly-do'
 
 export type LoaiXuat = 'lsx' | 'daily'
 
+const soVn = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
+
 /** Vật tư vừa chọn từ ô tìm — phần tối thiểu màn cần, không kéo cả hồ sơ. */
 export type VatTuChon = {
   id: string
@@ -177,7 +179,8 @@ export function kiemTruocGhiSoXuat(head: DauPhieuXuat, rows: DongXuat[]): KiemXu
     return {
       ok: false,
       reason: 'vuot_ton',
-      message: `${r.code} xuất ${r.qty} nhưng tồn dùng được ${r.qty_ok} — sửa số hoặc bỏ dòng`,
+      // Số kiểu VN như mọi chỗ khác (thử 28/10/2026: "xuất 999999 nhưng tồn 753").
+      message: `${r.code} xuất ${soVn(r.qty)} nhưng tồn dùng được ${soVn(r.qty_ok ?? 0)} — sửa số hoặc bỏ dòng`,
       focus: iVuot,
     }
   }

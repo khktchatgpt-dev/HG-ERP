@@ -4,6 +4,7 @@ import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowUpFromLine, BookOpen } from 'lucide-react'
 import { isoToVn } from '@/lib/date-vn'
 import { RO_LENH, type RoLenh } from '@/lib/kho-ton-lenh'
+import { nhanTrangThaiLenh } from '@/lib/kho-phieu-xuat'
 import { searchMatcher } from '@/lib/search-text'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -20,6 +21,8 @@ import {
 } from '../_erp/khung'
 import { LenhChiTiet } from './lenh-chi-tiet'
 import type { LenhDong, MaChiTiet } from './ton-lenh.shared'
+
+const hoaDau = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 const RO_NHAN: Record<RoLenh, string> = {
   con: 'Kho còn hàng của lệnh',
@@ -362,8 +365,13 @@ export function TonLenhScreen({
                       )}
                       {!hep && (
                         <td>
-                          <span className={`kh-tag ${l.xong ? 'done' : 'run'}`}>
-                            {l.xong ? 'Đã xong' : 'Đang SX'}
+                          {/* Cùng nhãn với ô chọn lệnh của Xuất hàng — lệnh "đã duyệt"
+                              từng hiện "Đang SX" ở đây (thử Kho 28/10/2026). */}
+                          <span
+                            className={`kh-tag ${l.xong ? 'done' : l.status === 'in_progress' ? 'run' : ''}`}
+                          >
+                            {/* Cột 92px: lệnh xong ghi gọn — rổ "Lệnh xong chưa ghi xuất" đã nói việc ghi bù. */}
+                            {l.xong ? 'Đã xong' : hoaDau(nhanTrangThaiLenh(l.status))}
                           </span>
                         </td>
                       )}

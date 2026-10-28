@@ -105,10 +105,14 @@ export function dungHomNay(s: SoBan): KhoiViec[] {
 export type ViecDo = { key: string; chu: string; href: string }
 
 /**
- * "ĐANG DỞ CỦA BẠN" — việc đã bắt đầu mà chưa xong. Kho không lưu phiếu gõ dở
+ * "VIỆC CÒN DỞ" — việc đã bắt đầu mà chưa xong. Kho không lưu phiếu gõ dở
  * trên máy chủ, nên nguồn là thứ CÓ trên sổ: đợt kiểm kê mình mở / được phân
  * đếm, lần cập nhật chờ duyệt (trưởng kho thấy "chờ bạn duyệt"), đề nghị mua
  * nháp, phiếu nhập thiếu số phiếu NCC trong 14 ngày.
+ *
+ * Khối từng tên "Đang dở của bạn" mà dòng thiếu số NCC đếm phiếu của CẢ KHO
+ * (thử 28/10/2026: admin chưa ghi phiếu nào vẫn thấy 14). Giữ số cả kho để khớp
+ * tab "Thiếu số phiếu NCC" của Phiếu đã ghi (trang đích), nói rõ "cả kho".
  */
 export function dungDangDo(input: {
   laTruong: boolean
@@ -141,7 +145,7 @@ export function dungDangDo(input: {
   if (input.thieuNccGanDay > 0)
     out.push({
       key: 'thieu-ncc',
-      chu: `${nf(input.thieuNccGanDay)} phiếu nhập 14 ngày qua chưa ghi số phiếu NCC`,
+      chu: `${nf(input.thieuNccGanDay)} phiếu nhập 14 ngày qua (cả kho) chưa ghi số phiếu NCC`,
       href: '/warehouse/phieu?ro=thieu_ncc',
     })
   return out
