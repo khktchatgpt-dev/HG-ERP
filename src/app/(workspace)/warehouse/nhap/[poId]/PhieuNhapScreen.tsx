@@ -26,8 +26,9 @@ import {
   tinhTong,
   type DongNhan,
 } from '@/lib/kho-phieu-nhap'
-import { ArrowLeft, ListChecks, Printer, TriangleAlert } from 'lucide-react'
-import { ApNhom, ApNut, DauTrang, KhoKhung } from '../../_erp/khung'
+import Link from 'next/link'
+import { ListChecks, TriangleAlert } from 'lucide-react'
+import { ApNhom, ApNut, DauTrang, KhoKhung, MenuNut } from '../../_erp/khung'
 import { HopThoai } from '../../_erp/o-nhap'
 import { BaoSuCoSheet } from '../bao-su-co'
 import { DUONG, type NoiNhan } from './duong'
@@ -301,9 +302,21 @@ export function PhieuNhapScreen({
         }
       }}
     >
-      {/* MỘT HÀNG ĐẦU: Ghi sổ chỉ ở thanh chốt đáy — màn gõ (khuôn F) có một chỗ chốt. */}
+      {/* MỘT HÀNG ĐẦU: Ghi sổ chỉ ở thanh chốt đáy — màn gõ (khuôn F) có một chỗ chốt.
+          K4 (28/10/2026, chạy kịch bản thử Kho): đầu trang từng có SÁU nút — người mới
+          không biết bấm cái nào. Nay hai nút của việc tại phiếu (Nhận đủ tất cả · Báo
+          sự cố) + "Khác ▾" cho việc ít dùng; quay về danh sách bấm chữ "Nhận hàng". */}
       <DauTrang
-        crumb="Kho › Nhận hàng"
+        // Theo cửa vào (Kho › Nhận hàng · Cung ứng › Theo dõi đơn hàng); mục cuối là đường về.
+        crumb={duong.crumbs.map((c, i, ds) =>
+          i < ds.length - 1 ? (
+            <span key={c.label}>{c.label} › </span>
+          ) : (
+            <Link key={c.label} href={c.href} className="kh-lnk">
+              {c.label}
+            </Link>
+          ),
+        )}
         title={
           <>
             Nhận hàng{' '}
@@ -314,45 +327,31 @@ export function PhieuNhapScreen({
         }
         ctx={`phiếu nhập · người nhận ${nguoiNhan} · số PNK cấp khi ghi sổ`}
         actions={
-          <>
-            <ApNhom>
-              <ApNut onClick={nhanDu} why={dangGhi}>
-                Nhận đủ tất cả
-              </ApNut>
-              <ApNut onClick={xoaSo} why={dangGhi}>
-                Xoá số đã gõ
-              </ApNut>
-            </ApNhom>
-            <ApNhom>
-              <ApNut
-                icon={<TriangleAlert size={15} aria-hidden />}
-                onClick={() => setSuCo(true)}
-                why={!canEdit ? 'Chỉ người ghi kho báo được sự cố' : dangGhi}
-              >
-                Báo sự cố
-              </ApNut>
-              <ApNut
-                icon={<Printer size={15} aria-hidden />}
-                onClick={() => setXemIn(true)}
-              >
-                Xem bản in
-              </ApNut>
-              <ApNut
-                icon={<ListChecks size={15} aria-hidden />}
-                href={`/warehouse/nhap?don=${po.id}`}
-                why={dangGhi}
-              >
-                Hàng của đơn
-              </ApNut>
-              <ApNut
-                icon={<ArrowLeft size={15} aria-hidden />}
-                href={duong.home}
-                why={dangGhi}
-              >
-                Về danh sách nhận hàng
-              </ApNut>
-            </ApNhom>
-          </>
+          <ApNhom>
+            <ApNut
+              icon={<ListChecks size={15} aria-hidden />}
+              onClick={nhanDu}
+              why={dangGhi}
+            >
+              Nhận đủ tất cả
+            </ApNut>
+            <ApNut
+              icon={<TriangleAlert size={15} aria-hidden />}
+              onClick={() => setSuCo(true)}
+              why={!canEdit ? 'Chỉ người ghi kho báo được sự cố' : dangGhi}
+            >
+              Báo sự cố
+            </ApNut>
+            <MenuNut
+              label="Khác"
+              items={[
+                { label: 'Xoá số đã gõ', onClick: xoaSo, why: dangGhi },
+                { label: 'Xem bản in', onClick: () => setXemIn(true) },
+                { label: 'Hàng của đơn', href: `/warehouse/nhap?don=${po.id}`, why: dangGhi }, // prettier-ignore
+                { label: 'Về danh sách nhận hàng', href: duong.home, why: dangGhi },
+              ]}
+            />
+          </ApNhom>
         }
       />
 
