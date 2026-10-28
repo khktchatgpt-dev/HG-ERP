@@ -149,7 +149,7 @@ describe('TonKhoScreen · cập nhật số thực tế trong khung mã', () => 
     const f = moKhoi()
     go(f, '150')
     expect(within(f).getByText('−50')).toBeTruthy()
-    expect((within(f).getByLabelText('Lệnh xuất bù BAO0205') as HTMLSelectElement).value).toBe('l1') // prettier-ignore
+    expect((within(f).getByLabelText('Tổ đã lấy BAO0205 cho 02/26-27 - ROSCO') as HTMLInputElement).value).toBe('50') // prettier-ignore
     expect(within(f).getByRole('button', { name: 'Ghi — đổi tồn ngay' })).toBeTruthy()
     fireEvent.submit(f)
     const khung = screen.getByRole('complementary', { name: 'Mã đang chọn BAO0205' })
@@ -159,7 +159,7 @@ describe('TonKhoScreen · cập nhật số thực tế trong khung mã', () => 
       body: {
         ly_do_chung: 'giao_kho',
         ghi_chu: null,
-        lines: [{ material_id: 'a', counted_qty: 150, ly_do: null, ghi_chu: null, xuat_bu_lsx_id: 'l1' }], // prettier-ignore
+        lines: [{ material_id: 'a', counted_qty: 150, ly_do: null, ghi_chu: null, xuat_bu: [{ lsx_id: 'l1', qty: 50 }] }], // prettier-ignore
       },
     })
     expect(screen.queryByRole('form', { name: 'Cập nhật số thực tế BAO0205' })).toBeNull()
@@ -171,7 +171,7 @@ describe('TonKhoScreen · cập nhật số thực tế trong khung mã', () => 
     const f = moKhoi()
     expect(within(f).getByRole('button', { name: 'Gửi trưởng kho duyệt' })).toBeTruthy()
     fireEvent.submit(f)
-    expect(within(f).getByRole('alert').textContent).toBe('Chưa gõ số đếm được')
+    expect(within(f).getByRole('alert').textContent).toBe('Chưa gõ số thực tế')
     go(f, '200')
     fireEvent.submit(f)
     expect(within(f).getByRole('alert').textContent).toBe(

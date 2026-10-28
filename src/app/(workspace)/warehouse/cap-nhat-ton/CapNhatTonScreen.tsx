@@ -24,6 +24,7 @@ import { OChu } from '../_erp/o-nhap'
 import { OTim } from '../_erp/o-tim'
 import { useCtrlEnter } from '../_erp/useCtrlEnter'
 import { LuoiCapNhat } from './luoi-cap-nhat'
+import { BU_LOI } from './hoi-lenh'
 import './cap-nhat-ton.css'
 
 type VatTu = { id: string; code: string; name: string; unit: string }
@@ -143,8 +144,8 @@ export function CapNhatTonScreen({
     focusO(
       l.reason === 'thieu_ghi_chu'
         ? `cn-gc-${l.i}`
-        : l.reason === 'thieu_lenh'
-          ? `cn-lenh-${l.i}`
+        : BU_LOI.includes(l.reason)
+          ? `cn-bu-${l.i}-0`
           : `cn-tt-${l.i}`,
     )
   }

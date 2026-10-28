@@ -96,7 +96,18 @@ export const capNhatNhanhSchema = z
           counted_qty: z.coerce.number().finite().min(0, 'Số thực tế không âm được'),
           ly_do: z.enum(MA_LY_DO_CAP_NHAT).optional().nullable(),
           ghi_chu: z.string().trim().max(300).optional().nullable(),
-          /** Dòng giảm hàng của lệnh mà tổ đã lấy → ghi xuất bù cho lệnh này. */
+          /** Dòng giảm hàng của lệnh mà tổ đã lấy → phần xuất bù cho TỪNG lệnh (K6, 28/10/2026). */
+          xuat_bu: z
+            .array(
+              z.object({
+                lsx_id: z.string().uuid('Lệnh xuất bù không hợp lệ'),
+                qty: z.coerce.number().finite().positive('Số xuất bù phải lớn hơn 0'),
+              }),
+            )
+            .max(20)
+            .optional()
+            .nullable(),
+          /** Bản cũ (trước 28/10): cả phần hụt cho MỘT lệnh — giữ cho tab mở từ trước khi lên bản mới. */
           xuat_bu_lsx_id: z.string().uuid().optional().nullable(),
         }),
       )

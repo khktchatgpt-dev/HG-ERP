@@ -14,6 +14,7 @@ import {
   type DauCapNhat,
   type MaLyDoCapNhat,
 } from '@/lib/kho-cap-nhat-ton'
+import { BU_LOI, HoiLenh } from '../cap-nhat-ton/hoi-lenh'
 import type { CuaLenh } from './ton-lenh.shared'
 import type { TonRow } from './TonKhoScreen'
 
@@ -28,13 +29,10 @@ type KetQua =
       xuat_bu: { code: string; lsx_code: string }[]
     }
 
-/** Câu chặn cho MỘT mã — lib nói "dòng 1 …" vì màn riêng có nhiều dòng. */
-const CAU: Record<string, string> = {
-  chua_go: 'Chưa gõ số đếm được',
-  so_sai: 'Số đếm không đọc được',
-  so_am: 'Số âm — kệ hết thì gõ 0',
-  thieu_lenh: 'Chưa chọn lệnh ghi xuất bù',
-  thieu_ghi_chu: 'Lý do "Khác" cần ghi chú',
+/** Câu chặn cho MỘT mã — bỏ "dòng 1 " của lib (màn riêng có nhiều dòng). */
+const cauMotMa = (m: string) => {
+  const s = m.replace(/^dòng \d+ /, '')
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 /**
@@ -89,7 +87,7 @@ export function CapNhatNhanh({
   const chan = !canEdit
     ? 'Tài khoản này không có quyền ghi kho'
     : loiKiem.length > 0
-      ? CAU[loiKiem[0].reason]
+      ? cauMotMa(loiKiem[0].message)
       : c != null && Math.abs(c) < 1e-9
         ? 'Khớp với máy — không có gì để ghi'
         : null
@@ -147,7 +145,11 @@ export function CapNhatNhanh({
           autoFocus
           className="kh-o num"
           value={chu}
-          onChange={(e) => setChu(e.target.value)}
+          onChange={(e) => {
+            setChu(e.target.value)
+            // Đổi số đếm thì máy chia lại phần xuất bù (bỏ số gõ tay cũ).
+            if (dong.bu_go) setDong({ ...dong, bu_go: null })
+          }}
           inputMode="decimal"
           autoComplete="off"
           placeholder="gõ số"
@@ -163,48 +165,14 @@ export function CapNhatNhanh({
         </b>
       </div>
       {hoiLenh(d) && (
-        <fieldset className="hoi">
-          <legend>
-            Thiếu {fmt(Math.abs(c ?? 0))} {row.unit} — hàng của lệnh, vì sao?
-          </legend>
-          <label>
-            <input
-              type="radio"
-              name={`cn-${row.material_id}`}
-              checked={dong.che_do === 'xuat_bu'}
-              onChange={() => setDong({ ...dong, che_do: 'xuat_bu' })}
-            />
-            Tổ đã lấy → ghi xuất bù cho
-            <select
-              className="kh-o"
-              value={dong.xuat_bu_lsx ?? ''}
-              onChange={(e) =>
-                setDong({
-                  ...dong,
-                  che_do: 'xuat_bu',
-                  xuat_bu_lsx: e.target.value || null,
-                })
-              }
-              aria-label={`Lệnh xuất bù ${row.code}`}
-            >
-              <option value="">— chọn lệnh —</option>
-              {dong.lenh.map((l) => (
-                <option key={l.lsx_id} value={l.lsx_id}>
-                  {l.code}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <input
-              type="radio"
-              name={`cn-${row.material_id}`}
-              checked={dong.che_do === 'thieu'}
-              onChange={() => setDong({ ...dong, che_do: 'thieu' })}
-            />
-            Hỏng / mất thật → ghi thiếu
-          </label>
-        </fieldset>
+        <HoiLenh
+          r={d}
+          onDoi={(p) => setDong({ ...dong, ...p })}
+          ten={`cn-${row.material_id}`}
+          idGoc={`cn-bu-${row.material_id}`}
+          need={daThu && loiKiem.some((l) => BU_LOI.includes(l.reason))}
+          busy={busy}
+        />
       )}
       <label className="o">
         <span>Lý do</span>

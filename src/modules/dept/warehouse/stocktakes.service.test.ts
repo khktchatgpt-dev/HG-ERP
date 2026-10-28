@@ -451,11 +451,12 @@ describe('cập nhật số thực tế (B1 "Kho cho người mới", Q2/Q3)', (
       applied: 1,
       xuat_bu: [{ code: 'PXK-2026-0031', lsx_code: '09/26-27 - MX' }],
     })
-    // Đợt theo danh sách, không đếm mù, nhớ lệnh xuất bù cho lúc duyệt.
+    // Đợt theo danh sách, không đếm mù, nhớ PHẦN của lệnh xuất bù cho lúc duyệt.
+    // (Client cũ gửi `xuat_bu_lsx_id` = cả phần hụt 8 cho một lệnh.)
     expect(vi.mocked(stocktakesRepo.insert).mock.calls[0][0]).toMatchObject({
       scope_kind: 'list',
       blind_count: false,
-      scope_ref: { nhanh: true, xuat_bu: { m513: 'l-mx9' } },
+      scope_ref: { nhanh: true, xuat_bu: { m513: [{ lsx_id: 'l-mx9', qty: 8 }] } },
     })
     const dong = vi.mocked(stocktakesRepo.insertLines).mock.calls[0][0]
     expect(dong[0]).toMatchObject({ book_qty_frozen: 753, counted_qty: 745, diff: -8, counted_by: 'u-hao' }) // prettier-ignore
@@ -506,6 +507,65 @@ describe('cập nhật số thực tế (B1 "Kho cho người mới", Q2/Q3)', (
     const r = await stocktakesService.approve(hao, 'dot9')
     expect(r.xuat_bu).toHaveLength(1)
     expect(r.applied).toBe(1)
+  })
+
+  /* K6 (28/10/2026): phần hụt chia cho NHIỀU lệnh, phần không lệnh nào nhận → X5. */
+  it('phần hụt chia hai lệnh: mỗi lệnh một phiếu xuất bù, phần dư ghi thiếu X5', async () => {
+    const lenh10 = { id: 'l-mx10', code: '10/26-27 - MX', status: 'approved' }
+    vi.mocked(productionRepo.findById).mockImplementation(
+      async (id: string) => (id === 'l-mx10' ? lenh10 : lenh9) as never,
+    )
+    const phan = [
+      { lsx_id: 'l-mx9', qty: 5 },
+      { lsx_id: 'l-mx10', qty: 2 },
+    ]
+    vi.mocked(stocktakesRepo.findById).mockResolvedValue(
+      take({ id: 'dot9', code: 'KK-2026-0009', scope_kind: 'list', scope_ref: { nhanh: true, xuat_bu: { m513: phan } }, status: 'review', created_by: 'u-hao', assigned_to: 'u-hao' }), // prettier-ignore
+    )
+    vi.mocked(stockService.createIssueDoc)
+      .mockResolvedValueOnce({ id: 'p1', code: 'PXK-2026-0031' })
+      .mockResolvedValueOnce({ id: 'p2', code: 'PXK-2026-0032' })
+    const r = await stocktakesService.capNhatNhanh(hao, {
+      ly_do_chung: 'giao_kho',
+      lines: [
+        { material_id: 'm513', counted_qty: 745, xuat_bu: phan },
+        { material_id: 'm606', counted_qty: 300, ly_do: 'hang_cu' },
+      ],
+    })
+    expect(vi.mocked(stocktakesRepo.insert).mock.calls[0][0].scope_ref).toMatchObject({
+      xuat_bu: { m513: phan },
+    })
+    expect(vi.mocked(stocktakesRepo.insertLines).mock.calls[0][0][0].note).toBe(
+      'Đếm lại khi giao kho · tổ đã lấy → xuất bù 5 cho 09/26-27 - MX, 2 cho 10/26-27 - MX; 1 ghi thiếu',
+    )
+    const phieu = vi
+      .mocked(stockService.createIssueDoc)
+      .mock.calls.map((c) => [c[1].production_order_id, c[1].lines.map((l) => l.qty)])
+    expect(phieu).toEqual([
+      ['l-mx9', [5]],
+      ['l-mx10', [2]],
+    ])
+    expect(r).toMatchObject({
+      xuat_bu: [
+        { code: 'PXK-2026-0031', lsx_code: '09/26-27 - MX' },
+        { code: 'PXK-2026-0032', lsx_code: '10/26-27 - MX' },
+      ],
+    })
+    const mv = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(mv.map((m) => [m.material_id, m.direction, m.qty, m.reason_code])).toEqual([
+      ['m513', 'out', 1, 'X5'],
+      ['m606', 'in', 10, 'N4'],
+    ])
+  })
+
+  it('client gửi xuất bù nhiều hơn phần hụt → cắt về phần hụt tính ở server', async () => {
+    await stocktakesService.capNhatNhanh(hao, {
+      ly_do_chung: 'giao_kho',
+      lines: [{ material_id: 'm513', counted_qty: 745, xuat_bu: [{ lsx_id: 'l-mx9', qty: 20 }] }], // prettier-ignore
+    })
+    expect(vi.mocked(stocktakesRepo.insert).mock.calls[0][0].scope_ref).toMatchObject({
+      xuat_bu: { m513: [{ lsx_id: 'l-mx9', qty: 8 }] },
+    })
   })
 
   it('dòng không GIẢM thì không xuất bù dù client gửi lệnh', async () => {

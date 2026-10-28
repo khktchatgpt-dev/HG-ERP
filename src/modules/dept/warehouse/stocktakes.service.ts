@@ -13,7 +13,15 @@ import { stockService } from './stock.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { LSX_XUAT_DUOC } from '@/lib/kho-phieu-xuat'
-import { ghiChuDong, nhanLyDoCapNhat, type MaLyDoCapNhat } from '@/lib/kho-cap-nhat-ton'
+import {
+  catBu,
+  ghiChuDong,
+  nhanLyDoCapNhat,
+  type MaLyDoCapNhat,
+} from '@/lib/kho-cap-nhat-ton'
+
+/** Phần tổ đã lấy cho một lệnh — lưu ở `scope_ref.xuat_bu[material_id]` (K6). */
+type PhanXuatBu = { lsx_id: string; qty: number }
 import {
   bookQtyAt,
   danhSachDemNhom,
@@ -123,17 +131,31 @@ async function apDung(
   take: Stocktake,
   lines: TakeLine[],
 ): Promise<KetQuaApDung> {
-  const xuatBu = (take.scope_ref.xuat_bu ?? {}) as Record<string, string>
+  const xuatBu = (take.scope_ref.xuat_bu ?? {}) as Record<string, string | PhanXuatBu[]>
   const adjusts = lines
     .map((l) => ({ l, delta: (l.counted_qty ?? 0) - (l.book_qty_frozen ?? 0) }))
     .filter((x) => Math.abs(x.delta) > 1e-9)
-  const bu = adjusts.filter((x) => x.delta < 0 && xuatBu[x.l.material_id])
-  const kk = adjusts.filter((x) => !bu.includes(x))
 
-  const theoLenh = new Map<string, typeof bu>()
-  for (const x of bu) {
-    const lsx = xuatBu[x.l.material_id]
-    theoLenh.set(lsx, [...(theoLenh.get(lsx) ?? []), x])
+  /*
+    Dòng giảm có "tổ đã lấy": chia thành phần xuất bù TỪNG lệnh (K6) + phần còn lại
+    ghi thiếu X5. Đợt ghi trước 28/10 lưu MỘT lsx_id (chuỗi) = cả phần hụt.
+  */
+  const theoLenh = new Map<string, { l: TakeLine; qty: number }[]>()
+  const kk: typeof adjusts = []
+  for (const x of adjusts) {
+    const raw = x.delta < 0 ? xuatBu[x.l.material_id] : undefined
+    if (!raw) {
+      kk.push(x)
+      continue
+    }
+    const phan = catBu(
+      typeof raw === 'string' ? [{ lsx_id: raw, qty: Infinity }] : raw,
+      -x.delta,
+    )
+    for (const p of phan)
+      theoLenh.set(p.lsx_id, [...(theoLenh.get(p.lsx_id) ?? []), { l: x.l, qty: p.qty }])
+    const con = -x.delta - phan.reduce((a, p) => a + p.qty, 0)
+    if (con > 1e-9) kk.push({ l: x.l, delta: -con })
   }
   const phieuBu: KetQuaApDung['xuat_bu'] = []
   for (const [lsxId, ds] of theoLenh) {
@@ -145,9 +167,9 @@ async function apDung(
       note: `Cập nhật số thực tế ${take.code}: tổ đã lấy, chưa ghi sổ`,
       override_reserved: true,
       override_reason: `ghi bù khi cập nhật số thực tế ${take.code}`,
-      lines: ds.map(({ l, delta }) => ({
+      lines: ds.map(({ l, qty }) => ({
         material_id: l.material_id,
-        qty: Math.abs(delta),
+        qty,
         note: `${take.code}: trên máy ${l.book_qty_frozen ?? 0}, thực tế ${l.counted_qty}`,
       })),
     })
@@ -557,8 +579,9 @@ export const stocktakesService = {
    * kho duyệt ở Kiểm kê như đợt thường.
    *
    * Chênh tính ở server so với sổ lúc ghi — số "Trên máy" màn đã bày chỉ để
-   * người gõ thấy trước. Dòng "tổ đã lấy" (Q3) lưu lệnh vào `scope_ref.xuat_bu`
-   * để lúc duyệt (có khi là người khác, hôm sau) vẫn biết ghi phiếu xuất cho ai.
+   * người gõ thấy trước. Dòng "tổ đã lấy" (Q3) lưu phần của TỪNG lệnh (K6) vào
+   * `scope_ref.xuat_bu` để lúc duyệt (có khi là người khác, hôm sau) vẫn biết ghi
+   * phiếu xuất cho ai, bao nhiêu.
    */
   async capNhatNhanh(
     user: User,
@@ -570,6 +593,9 @@ export const stocktakesService = {
         counted_qty: number
         ly_do?: MaLyDoCapNhat | null
         ghi_chu?: string | null
+        /** Phần tổ đã lấy theo từng lệnh (K6). */
+        xuat_bu?: { lsx_id: string; qty: number }[] | null
+        /** Bản cũ: cả phần hụt cho một lệnh. */
         xuat_bu_lsx_id?: string | null
       }[]
     },
@@ -591,20 +617,34 @@ export const stocktakesService = {
     const freezeAt = new Date().toISOString()
     const book = await bookQtyAt(freezeAt, ids)
 
-    // Xuất bù chỉ có nghĩa ở dòng GIẢM; lệnh phải còn xuất được (guard phiếu xuất).
-    const xuatBu: Record<string, string> = {}
+    /*
+      Xuất bù chỉ có nghĩa ở dòng GIẢM; lệnh phải còn xuất được (guard phiếu xuất).
+      Phần của từng lệnh (K6) cắt theo phần hụt TÍNH Ở ĐÂY — sổ có thể đã đổi từ lúc
+      màn bày số; phần hụt không lệnh nào nhận thành thiếu (X5) lúc áp.
+    */
+    const xuatBu: Record<string, PhanXuatBu[]> = {}
     const maLenh = new Map<string, string>()
     for (const l of input.lines) {
-      if (!l.xuat_bu_lsx_id) continue
-      if (l.counted_qty - (book.get(l.material_id) ?? 0) >= -1e-9) continue
-      if (!maLenh.has(l.xuat_bu_lsx_id)) {
-        const lsx = await productionRepo.findById(l.xuat_bu_lsx_id)
+      const hut = (book.get(l.material_id) ?? 0) - l.counted_qty
+      if (hut <= 1e-9) continue
+      const phan = catBu(
+        l.xuat_bu?.length
+          ? l.xuat_bu
+          : l.xuat_bu_lsx_id
+            ? [{ lsx_id: l.xuat_bu_lsx_id, qty: hut }]
+            : [],
+        hut,
+      )
+      if (phan.length === 0) continue
+      for (const p of phan) {
+        if (maLenh.has(p.lsx_id)) continue
+        const lsx = await productionRepo.findById(p.lsx_id)
         if (!lsx) throw NotFound('Lệnh xuất bù không tồn tại')
         if (!(LSX_XUAT_DUOC as readonly string[]).includes(lsx.status))
           throw BadRequest(`Lệnh ${lsx.code} không ở trạng thái xuất vật tư được`)
-        maLenh.set(l.xuat_bu_lsx_id, lsx.code)
+        maLenh.set(p.lsx_id, lsx.code)
       }
-      xuatBu[l.material_id] = l.xuat_bu_lsx_id
+      xuatBu[l.material_id] = phan
     }
 
     const code = await docsRepo.nextCode('KK')
@@ -640,9 +680,13 @@ export const stocktakesService = {
           note: ghiChuDong({
             ly_do: l.ly_do ?? input.ly_do_chung,
             ghi_chu: l.ghi_chu,
-            xuat_bu_code: xuatBu[l.material_id]
-              ? maLenh.get(xuatBu[l.material_id])
-              : null,
+            xuat_bu: (xuatBu[l.material_id] ?? []).map((p) => ({
+              code: maLenh.get(p.lsx_id) ?? p.lsx_id,
+              qty: p.qty,
+            })),
+            con_thieu: xuatBu[l.material_id]
+              ? so - l.counted_qty - xuatBu[l.material_id].reduce((a, p) => a + p.qty, 0)
+              : 0,
           }),
         }
       }),

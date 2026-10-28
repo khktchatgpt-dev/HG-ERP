@@ -13,6 +13,12 @@
  *     lệnh 01/02/05-MX bị kiểm kê 15/09 trừ thành X5, rời giá thành lệnh.
  * Server (`stocktakesService.capNhatNhanh`) tính lại chênh — số ở đây để người
  * gõ thấy trước, không phải số được ghi.
+ *
+ * CHIA PHẦN HỤT CHO NHIỀU LỆNH (28/10/2026, K6 khi thử Kho): trước đó cả phần hụt
+ * dồn vào MỘT lệnh, kể cả khi hụt nhiều hơn phần lệnh đó giữ. Nay mỗi lệnh một ô
+ * "tổ đã lấy"; máy chia sẵn theo phần lệnh đang giữ (lệnh giữ nhiều trước, mỗi
+ * lệnh tối đa phần của nó — chia tồn ưu tiên lệnh, nên quá phần đó là hàng chung),
+ * phần còn lại ghi thiếu. Đo 28/10: 221 mã có hàng của lệnh, 13 mã chia ≥ 2 lệnh.
  */
 
 export const LY_DO_CAP_NHAT = [
@@ -54,13 +60,16 @@ export type DongCapNhat = {
   lenh: LenhCuaMa[]
   /** Dòng giảm hàng của lệnh: tổ đã lấy (xuất bù) hay hỏng / mất thật (thiếu). */
   che_do: 'xuat_bu' | 'thieu'
-  xuat_bu_lsx: string | null
+  /** Số "tổ đã lấy" GÕ TAY theo lệnh (lsx_id → chữ trong ô). null = máy chia
+   *  sẵn (`chiaBuMacDinh`); đổi số đếm thì màn trả về null để máy chia lại. */
+  bu_go: Record<string, string> | null
 }
 
 export type DauCapNhat = { ly_do_chung: MaLyDoCapNhat; ghi_chu: string }
 
 const EPS = 1e-9
 const tron = (n: number) => Math.round(n * 10_000) / 10_000
+const soVn = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 
 /** Số kiểu VN ("1.250" = 1250 · "12,5" = 12,5). Trống = null; chữ lạ = NaN. */
 export function docSoThucTe(text: string): number | null {
@@ -70,7 +79,7 @@ export function docSoThucTe(text: string): number | null {
   return Number.isFinite(n) ? n : Number.NaN
 }
 
-/** Một dòng mới — mặc định "tổ đã lấy" cho lệnh có phần lớn nhất (Q3). */
+/** Một dòng mới — mặc định "tổ đã lấy", máy chia phần hụt theo lệnh (Q3, K6). */
 export function taoDong(
   vt: { id: string; code: string; name: string; unit: string },
   tren_may: number,
@@ -88,7 +97,7 @@ export function taoDong(
     ghi_chu: '',
     lenh: ds,
     che_do: 'xuat_bu',
-    xuat_bu_lsx: ds[0]?.lsx_id ?? null,
+    bu_go: null,
   }
 }
 
@@ -114,9 +123,75 @@ export function hoiLenh(r: DongCapNhat): boolean {
   return c != null && c < -EPS && r.lenh.length > 0
 }
 
-/** Dòng này đi thành phiếu XUẤT BÙ cho lệnh (không phải thiếu kiểm kê). */
+/** Phần hụt (số dương) — 0 khi không giảm / chưa gõ. */
+export function hutCua(r: DongCapNhat): number {
+  const c = chenh(r)
+  return c != null && c < -EPS ? -c : 0
+}
+
+/** Phần một lệnh nhận khi ghi xuất bù. `qty` NaN = ô gõ chữ không phải số. */
+export type PhanBu = { lsx_id: string; code: string; chia: number; qty: number }
+
+/**
+ * Máy chia phần hụt cho các lệnh: lệnh giữ nhiều trước, mỗi lệnh tối đa phần nó
+ * giữ. Hụt vượt tổng phần của lệnh thì phần dư là hàng CHUNG — không lệnh nào.
+ */
+export function chiaBuMacDinh(lenh: LenhCuaMa[], hut: number): PhanBu[] {
+  let con = hut
+  return lenh.map((l) => {
+    const qty = tron(Math.max(0, Math.min(l.chia, con)))
+    con -= qty
+    return { lsx_id: l.lsx_id, code: l.code, chia: l.chia, qty }
+  })
+}
+
+/** Phần xuất bù đang áp dụng của dòng: số gõ tay, hoặc máy chia sẵn. */
+export function phanBu(r: DongCapNhat): PhanBu[] {
+  if (!r.bu_go) return chiaBuMacDinh(r.lenh, hutCua(r))
+  const go = r.bu_go
+  return r.lenh.map((l) => ({
+    lsx_id: l.lsx_id,
+    code: l.code,
+    chia: l.chia,
+    qty: docSoThucTe(go[l.lsx_id] ?? '') ?? 0,
+  }))
+}
+
+/** Tổng "tổ đã lấy" (bỏ ô gõ sai). */
+export function tongBu(r: DongCapNhat): number {
+  return tron(phanBu(r).reduce((a, p) => a + (Number.isFinite(p.qty) ? p.qty : 0), 0))
+}
+
+/** Phần hụt không lệnh nào nhận — ghi thiếu (X5). Cả phần hụt khi chọn "hỏng / mất". */
+export function conThieu(r: DongCapNhat): number {
+  if (!hoiLenh(r)) return hutCua(r)
+  return r.che_do === 'thieu' ? hutCua(r) : tron(Math.max(0, hutCua(r) - tongBu(r)))
+}
+
+/** Dòng này có phiếu XUẤT BÙ cho lệnh (có thể kèm một phần ghi thiếu). */
 export function laXuatBu(r: DongCapNhat): boolean {
-  return hoiLenh(r) && r.che_do === 'xuat_bu' && !!r.xuat_bu_lsx
+  return hoiLenh(r) && r.che_do === 'xuat_bu' && tongBu(r) > EPS
+}
+
+/**
+ * Cắt phần xuất bù theo phần hụt THẬT lúc ghi (server tính lại chênh so với sổ):
+ * lần lượt theo thứ tự, phần nào vượt bị cắt. Dùng ở server.
+ */
+export function catBu(
+  phan: readonly { lsx_id: string; qty: number }[],
+  hut: number,
+): { lsx_id: string; qty: number }[] {
+  let con = hut
+  const out: { lsx_id: string; qty: number }[] = []
+  for (const p of phan) {
+    const qty = tron(Math.max(0, Math.min(p.qty, con)))
+    if (qty <= EPS) continue
+    con -= qty
+    const cu = out.find((x) => x.lsx_id === p.lsx_id)
+    if (cu) cu.qty = tron(cu.qty + qty)
+    else out.push({ lsx_id: p.lsx_id, qty })
+  }
+  return out
 }
 
 export function lyDoCua(r: DongCapNhat, dau: DauCapNhat): MaLyDoCapNhat {
@@ -126,7 +201,15 @@ export function lyDoCua(r: DongCapNhat, dau: DauCapNhat): MaLyDoCapNhat {
 export type LoiDong = {
   /** Chỉ số dòng; −1 = lỗi đầu phiếu. */
   i: number
-  reason: 'rong' | 'chua_go' | 'so_sai' | 'so_am' | 'thieu_ghi_chu' | 'thieu_lenh'
+  reason:
+    | 'rong'
+    | 'chua_go'
+    | 'so_sai'
+    | 'so_am'
+    | 'thieu_ghi_chu'
+    | 'thieu_lenh'
+    | 'bu_sai'
+    | 'bu_vuot'
   message: string
 }
 
@@ -147,8 +230,28 @@ export function kiemTruocGhi(dau: DauCapNhat, rows: DongCapNhat[]): LoiDong[] {
       loi.push({ i, reason: 'so_sai', message: `dòng ${so} số thực tế không đọc được` })
     else if (r.thuc_te < 0)
       loi.push({ i, reason: 'so_am', message: `dòng ${so} số âm — kệ hết thì gõ 0` })
-    else if (hoiLenh(r) && r.che_do === 'xuat_bu' && !r.xuat_bu_lsx)
-      loi.push({ i, reason: 'thieu_lenh', message: `dòng ${so} chưa chọn lệnh xuất bù` })
+    else if (hoiLenh(r) && r.che_do === 'xuat_bu') {
+      const phan = phanBu(r)
+      const hut = hutCua(r)
+      if (phan.some((p) => !Number.isFinite(p.qty) || p.qty < 0))
+        loi.push({
+          i,
+          reason: 'bu_sai',
+          message: `dòng ${so} số tổ đã lấy không đọc được`,
+        })
+      else if (tongBu(r) > hut + EPS)
+        loi.push({
+          i,
+          reason: 'bu_vuot',
+          message: `dòng ${so} tổ đã lấy ${soVn(tongBu(r))}, nhiều hơn phần thiếu ${soVn(hut)}`,
+        })
+      else if (tongBu(r) <= EPS)
+        loi.push({
+          i,
+          reason: 'thieu_lenh',
+          message: `dòng ${so} chưa ghi số tổ đã lấy cho lệnh nào — hoặc chọn "Hỏng / mất"`,
+        })
+    }
     if (lyDoCua(r, dau) === 'khac' && !r.ghi_chu.trim() && !dau.ghi_chu.trim())
       loi.push({
         i,
@@ -189,7 +292,7 @@ export function tomTat(rows: DongCapNhat[]): TomTatCapNhat {
   return t
 }
 
-/** Thân POST `cap-nhat-ton` — chỉ gửi lệnh xuất bù cho dòng thật sự xuất bù. */
+/** Thân POST `cap-nhat-ton` — chỉ dòng thật sự xuất bù mang phần của từng lệnh. */
 export function thanGui(dau: DauCapNhat, rows: DongCapNhat[]) {
   return {
     ly_do_chung: dau.ly_do_chung,
@@ -199,7 +302,11 @@ export function thanGui(dau: DauCapNhat, rows: DongCapNhat[]) {
       counted_qty: r.thuc_te ?? 0,
       ly_do: r.ly_do || null,
       ghi_chu: r.ghi_chu.trim() || null,
-      xuat_bu_lsx_id: laXuatBu(r) ? r.xuat_bu_lsx : null,
+      xuat_bu: laXuatBu(r)
+        ? phanBu(r)
+            .filter((p) => p.qty > EPS)
+            .map((p) => ({ lsx_id: p.lsx_id, qty: p.qty }))
+        : [],
     })),
   }
 }
@@ -208,12 +315,21 @@ export function thanGui(dau: DauCapNhat, rows: DongCapNhat[]) {
 export function ghiChuDong(input: {
   ly_do: MaLyDoCapNhat
   ghi_chu?: string | null
-  xuat_bu_code?: string | null
+  /** Phần tổ đã lấy theo lệnh; một lệnh nhận cả phần hụt thì khỏi ghi số. */
+  xuat_bu?: { code: string; qty: number }[] | null
+  /** Phần hụt không lệnh nào nhận — ghi thiếu. */
+  con_thieu?: number
 }): string {
+  const bu = input.xuat_bu ?? []
+  const ca = bu.length === 1 && !(input.con_thieu! > EPS)
   return [
     nhanLyDoCapNhat(input.ly_do),
     input.ghi_chu?.trim() || null,
-    input.xuat_bu_code ? `tổ đã lấy → xuất bù cho ${input.xuat_bu_code}` : null,
+    bu.length === 0
+      ? null
+      : ca
+        ? `tổ đã lấy → xuất bù cho ${bu[0].code}`
+        : `tổ đã lấy → xuất bù ${bu.map((b) => `${soVn(b.qty)} cho ${b.code}`).join(', ')}${input.con_thieu! > EPS ? `; ${soVn(input.con_thieu!)} ghi thiếu` : ''}`,
   ]
     .filter(Boolean)
     .join(' · ')
