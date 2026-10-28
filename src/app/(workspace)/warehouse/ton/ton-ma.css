@@ -81,29 +81,9 @@
   height: 32px;
   font-size: 15px;
 }
-.kh.kh .tm-cn .hoi {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--kh-line);
-  background: var(--kh-card);
-}
-.kh.kh .tm-cn .hoi legend {
-  padding: 0 4px;
-  font-weight: 700;
-  color: var(--kh-stop);
-}
-.kh.kh .tm-cn .hoi label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.kh.kh .tm-cn .hoi select {
-  min-width: 0;
-  max-width: 100%;
+/* Khung hẹp: khối hỏi lệnh (`kho.css` .kh-hoi-lenh) bỏ thụt lề cho ô số đủ chỗ. */
+.kh.kh .tm-cn .kh-hoi-lenh .bu {
+  padding-left: 0;
 }
 .kh.kh .tm-cn .chan {
   margin: 0;

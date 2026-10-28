@@ -17,6 +17,7 @@ import {
 } from '@/lib/kho-cap-nhat-ton'
 import { useBeRong } from '@/lib/use-be-rong'
 import { OChu } from '../_erp/o-nhap'
+import { BU_LOI, HoiLenh } from './hoi-lenh'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 
@@ -161,7 +162,11 @@ export function LuoiCapNhat({
                   <OThucTe
                     id={`cn-tt-${i}`}
                     value={r.thuc_te}
-                    onCommit={(v) => patch(i, { thuc_te: v })}
+                    // Đổi số đếm thì máy chia lại phần xuất bù (bỏ số gõ tay cũ).
+                    onCommit={
+                      (v) =>
+                      patch(i, Object.is(v, r.thuc_te) ? { thuc_te: v } : { thuc_te: v, bu_go: null }) // prettier-ignore
+                    }
                     label={`Thực tế ${r.code}`}
                     need={sai}
                     disabled={busy}
@@ -222,69 +227,14 @@ export function LuoiCapNhat({
                 <tr key={`${r.material_id}-hoi`} className="cn-sub">
                   <td />
                   <td colSpan={8}>
-                    <div
-                      className="cn-hoi"
-                      role="group"
-                      aria-label={`Thiếu ${r.code} vì sao`}
-                    >
-                      <span>
-                        Mã này đang là hàng của{' '}
-                        <b>{r.lenh.map((l) => l.code).join(', ')}</b>, tổ chưa ghi lấy.
-                        Thiếu{' '}
-                        <b className="kh-num">
-                          {fmt(-c)} {r.unit}
-                        </b>
-                        :
-                      </span>
-                      <label>
-                        <input
-                          type="radio"
-                          name={`cn-cd-${i}`}
-                          checked={r.che_do === 'xuat_bu'}
-                          onChange={() => patch(i, { che_do: 'xuat_bu' })}
-                          disabled={busy}
-                        />
-                        Tổ đã lấy → ghi xuất bù cho
-                        {r.lenh.length > 1 ? (
-                          <select
-                            id={`cn-lenh-${i}`}
-                            className={
-                              ls.some((l) => l.reason === 'thieu_lenh')
-                                ? 'kh-o need'
-                                : 'kh-o'
-                            }
-                            value={r.xuat_bu_lsx ?? ''}
-                            onChange={(e) =>
-                              patch(i, {
-                                che_do: 'xuat_bu',
-                                xuat_bu_lsx: e.target.value || null,
-                              })
-                            }
-                            aria-label={`Lệnh xuất bù ${r.code}`}
-                            disabled={busy}
-                          >
-                            <option value="">— chọn lệnh —</option>
-                            {r.lenh.map((l) => (
-                              <option key={l.lsx_id} value={l.lsx_id}>
-                                {l.code}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <b>{r.lenh[0].code}</b>
-                        )}
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          name={`cn-cd-${i}`}
-                          checked={r.che_do === 'thieu'}
-                          onChange={() => patch(i, { che_do: 'thieu' })}
-                          disabled={busy}
-                        />
-                        Hỏng / mất thật → ghi thiếu
-                      </label>
-                    </div>
+                    <HoiLenh
+                      r={r}
+                      onDoi={(p) => patch(i, p)}
+                      ten={`cn-cd-${i}`}
+                      idGoc={`cn-bu-${i}`}
+                      need={ls.some((l) => BU_LOI.includes(l.reason))}
+                      busy={busy}
+                    />
                   </td>
                 </tr>
               ),
