@@ -44,6 +44,37 @@ describe('dungLuoi — điền sẵn phần còn mở', () => {
       ],
     )
     expect(rows.map((r) => r.qty)).toEqual([30, 40, 0])
+    expect(rows.map((r) => r.goi_y)).toEqual([30, 40, 0])
+  })
+  /* K1 (28/10/2026): phiếu nhập của Kho để trống "Lần này" — điền sẵn đủ là bấm Ghi
+     sổ thì kho nhận đủ dù xe giao thiếu. Gợi ý vẫn tính, cho nút "điền đủ". */
+  it('dienSan: false — Lần này = 0, gợi ý vẫn theo phần còn mở / đợt', () => {
+    const khongDot = dungLuoi(
+      [dong({ id: '1', qty_open: 80 }), dong({ id: '2', qty_open: 0 })],
+      null,
+      null,
+      { dienSan: false },
+    )
+    expect(khongDot.rows.map((r) => [r.qty, r.goi_y])).toEqual([
+      [0, 80],
+      [0, 0],
+    ])
+    const coDot = dungLuoi(
+      [dong({ id: '1', qty_open: 30 }), dong({ id: '2' }), dong({ id: '3' })],
+      [
+        { po_line_id: '1', qty: 50 },
+        { po_line_id: '2', qty: 40 },
+      ],
+      null,
+      { dienSan: false },
+    )
+    expect(coDot.rows.map((r) => [r.qty, r.goi_y])).toEqual([
+      [0, 30],
+      [0, 40],
+      [0, 0],
+    ])
+    // Phiếu trống thì chưa ghi sổ được — câu chặn chỉ về ô Lần này đầu tiên.
+    expect(kiemTruocGhiSo(khongDot.rows)).toMatchObject({ ok: false, reason: 'khong_dong', line: 0 }) // prettier-ignore
   })
   it('dòng tự do (không mã vật tư) bị bỏ, có đếm để màn nói ra', () => {
     const { rows, bo_qua_tu_do } = dungLuoi([
@@ -74,6 +105,7 @@ const row = (p: Partial<DongNhan> & { code: string }): DongNhan => ({
   closed_short: false,
   editable: true,
   qty: 0,
+  goi_y: 100,
   status: 'ok',
   note: '',
   can_kg: false,
@@ -242,6 +274,8 @@ describe('chiTietDong — nhôm cùng mã khác chiều dài cây (07/10/2026)',
   it('bày khuôn · quy cách · dài cây để thủ kho phân biệt dòng', () => {
     expect(chiTietDong({ spec: 'Hộp 25x50 mềm', bar_length_m: 5.3, line_note: 'Ghế 3' })).toBe('Hộp 25x50 mềm · dài 5,3 m · Ghế 3') // prettier-ignore
     expect(chiTietDong({ die_code: 'HG-01', bar_length_m: 6 })).toBe('HG-01 · dài 6 m')
-    expect(chiTietDong({ dimension_text: 'phi 15.9x1.5', bar_length_m: 0 })).toBe('phi 15.9x1.5')
+    expect(chiTietDong({ dimension_text: 'phi 15.9x1.5', bar_length_m: 0 })).toBe(
+      'phi 15.9x1.5',
+    )
   })
 })
