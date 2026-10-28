@@ -1206,11 +1206,20 @@
   border-color: var(--kh-act);
   background: var(--kh-act);
 }
-.kh.kh .kh-hop .chan .kh-btn:disabled {
+.kh.kh .kh-hop .chan .kh-btn:disabled,
+.kh.kh .kh-hop .chan .kh-btn[aria-disabled='true'] {
   border-color: var(--kh-line);
 }
-.kh.kh .kh-hop .chan .kh-btn.p:disabled {
+.kh.kh .kh-hop .chan .kh-btn.p:disabled,
+.kh.kh .kh-hop .chan .kh-btn.p[aria-disabled='true'] {
   background: #c6ccd6;
+}
+/* Câu "chưa … được: thiếu gì" đứng trái các nút ở chân hộp (K3, 28/10/2026). */
+.kh.kh .kh-hop .chan .chua {
+  margin-right: auto;
+  align-self: center;
+  min-width: 0;
+  font-size: 12.5px;
 }
 
 /* Dòng của lưới GÕ (form) — không phải dòng để chọn. */
