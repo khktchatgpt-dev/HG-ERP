@@ -50,6 +50,13 @@ const freezeCls = (i: number, cell: InputCell, solidBg: string) =>
  * học được). Bỏ trống thì `calcPartDerived` điền hộ.
  */
 type Draft = Record<InputKey, string>
+/** Bốn ô số dẫn xuất — gõ được, nhưng không gõ thì server tự lo. */
+const DERIVED_INPUTS = [
+  'total_length_m',
+  'weight_kg',
+  'paint_area_m2',
+  'volume_m3',
+] as const
 
 const EMPTY: Draft = {
   part_no: '',
@@ -207,7 +214,10 @@ function Cells({
   return (
     <>
       {cells.map((c, i) => (
-        <td key={c.key} className={cn(cellB, isNew && 'bg-muted', freezeCls(i, c, solidBg))}>
+        <td
+          key={c.key}
+          className={cn(cellB, isNew && 'bg-muted', freezeCls(i, c, solidBg))}
+        >
           <PartField
             cell={
               isNew
@@ -256,13 +266,20 @@ export function InlineHead({ groupCode }: { groupCode: string }) {
   const cells = inputCellsFor(groupCode)
   const preview = derivedPreviewFor(groupCode)
   // Nền th phải ĐẶC (bg-muted): hai ô đầu đóng băng, cột khác trôi bên dưới.
-  const th = 'bg-muted text-muted-foreground py-2 px-1.5 text-left text-[11px] font-medium uppercase'
+  const th =
+    'bg-muted text-muted-foreground py-2 px-1.5 text-left text-[11px] font-medium uppercase'
   return (
     <tr>
       {cells.map((c, i) => (
         <th
           key={c.key}
-          className={cn(th, cellB, c.w, c.kind === 'num' && 'text-right', freezeCls(i, c, 'bg-muted'))}
+          className={cn(
+            th,
+            cellB,
+            c.w,
+            c.kind === 'num' && 'text-right',
+            freezeCls(i, c, 'bg-muted'),
+          )}
         >
           {c.label}
         </th>
@@ -345,9 +362,16 @@ export function PartRowInline({
     setBusy(true)
     try {
       const { _derived, ...rest } = body
+      // Bốn số dẫn xuất chỉ gửi khi người dùng GÕ vào ô đó; ô không đụng tới để
+      // server quyết theo `derivedOnEdit` (giữ / tính lại / co giãn theo chiều
+      // dài) — cùng luật với lưới `/thu-vien/[id]`. Bản trước gửi lại kg cũ nên
+      // đổi dài cắt mà kg đứng nguyên.
+      const init = fromPart(part, clusterName)
+      const patch: Record<string, unknown> = { ...rest }
+      for (const k of DERIVED_INPUTS) if (draft[k] === init[k]) delete patch[k]
       await api(`/api/dept/technical/products/${productId}/parts/${part.id}`, {
         method: 'PATCH',
-        body: { ...rest, weight_kg: part.weight_kg ?? _derived.weight_kg },
+        body: patch,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 1200)

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   barsForQty,
   calcPartDerived,
+  derivedOnEdit,
   crossSectionM2,
   deviation,
   fabricTotalM,
@@ -401,5 +402,125 @@ describe('pcsPerBarFrom — số khúc cắt được trên một cây', () => {
   it('thiếu chiều dài cây hoặc chiều dài cắt → null', () => {
     expect(pcsPerBarFrom(1390, null, null)).toBeNull()
     expect(pcsPerBarFrom(null, null, 6)).toBeNull()
+  })
+})
+
+/**
+ * SỬA MỘT DÒNG ĐÃ LƯU (29/10/2026). Dòng mẫu lấy từ hồ sơ thật lệnh 13/26-27 MX —
+ * đúng các dòng từng mất kg khi sửa một ô trên lưới `/thu-vien/[id]`.
+ */
+describe('derivedOnEdit — sửa một dòng đã lưu', () => {
+  // TB0182HG-AL "Diềm Dài": mã khuôn B252, nạp 17/10 KHÔNG có kg/m lẫn loại vật liệu.
+  const diemDai = {
+    profile_code: 'B252',
+    profile_shape: null,
+    material_kind: null,
+    dim_a_mm: 25,
+    dim_b_mm: 52,
+    cut_length_mm: 1496,
+    qty: 2,
+    total_length_m: 2.992,
+    weight_kg: 1.947792,
+    paint_area_m2: 0.460768,
+  }
+  // CH0119HG-AL "Lưới mê": dạng Lưới — app không có công thức kg lẫn DT sơn.
+  const luoiMe = {
+    profile_shape: 'LUOI',
+    material_kind: 'AL',
+    dim_a_mm: 1.8,
+    dim_b_mm: 443,
+    wall_thickness_mm: 1.8,
+    cut_length_mm: 450,
+    qty: 1,
+    total_length_m: 0.45,
+    weight_kg: 0.645894,
+    paint_area_m2: 0.40032,
+  }
+
+  it('sửa ô KHÔNG phải hình học (ghi chú) → giữ nguyên mọi số đã lưu', () => {
+    const r = derivedOnEdit(diemDai, {})
+    expect(r.weight_kg).toBe(1.947792)
+    expect(r.total_length_m).toBe(2.992)
+    expect(r.paint_area_m2).toBe(0.460768)
+    const l = derivedOnEdit(luoiMe, {})
+    expect(l.weight_kg).toBe(0.645894)
+    expect(l.paint_area_m2).toBe(0.40032)
+  })
+
+  it('patch gửi lại NGUYÊN hình học cũ (đường sửa cũ gửi cả dòng) → coi như không đổi', () => {
+    const r = derivedOnEdit(diemDai, { profile_shape: null, dim_a_mm: 25, qty: 2, cut_length_mm: 1496 })
+    expect(r.weight_kg).toBe(1.947792)
+  })
+
+  it('ô đang TRỐNG mà app tính được → điền số app tính (vá số cũ thiếu)', () => {
+    const r = derivedOnEdit(
+      { profile_shape: 'HOP', material_kind: 'AL', dim_a_mm: 25, dim_b_mm: 50, wall_thickness_mm: 1.2, cut_length_mm: 605, qty: 2, weight_kg: null },
+      {},
+    )
+    near(r.weight_kg, 0.56924208)
+  })
+
+  it('đổi SL ở dòng mã khuôn chưa có kg/m → co giãn kg theo chiều dài, không xoá', () => {
+    const r = derivedOnEdit(diemDai, { qty: 3 })
+    near(r.total_length_m, 4.488)
+    near(r.weight_kg, 2.921688)
+    near(r.paint_area_m2, 0.691152)
+  })
+
+  it('đổi dài cắt ở dòng Lưới → kg + DT sơn co giãn, tổng dài tính lại', () => {
+    const r = derivedOnEdit(luoiMe, { cut_length_mm: 900 })
+    near(r.total_length_m, 0.9)
+    near(r.weight_kg, 1.291788)
+    near(r.paint_area_m2, 0.80064)
+  })
+
+  it('phi hao uốn vào tổng dài + kg, KHÔNG vào DT sơn (cùng luật calcPartDerived)', () => {
+    const r = derivedOnEdit(luoiMe, { bend_waste_mm: 50 })
+    near(r.total_length_m, 0.5)
+    near(r.weight_kg, 0.645894 * (0.5 / 0.45))
+    near(r.paint_area_m2, 0.40032)
+  })
+
+  it('đổi SL giữ kg TRA BẢNG / gõ đè, không đổi sang số hình học', () => {
+    // TB0182HG-AL "Bịt lót chân La": hình học LA 5×73 ra 0,288 kg; file tính theo
+    // khuôn TD-HG25 0,484 kg/m → 0,141328 kg. Đổi SL thì phải giữ hệ số của file.
+    const bitLot = {
+      profile_shape: 'LA',
+      material_kind: 'AL',
+      dim_a_mm: 5,
+      dim_b_mm: 73,
+      wall_thickness_mm: 5,
+      cut_length_mm: 73,
+      qty: 4,
+      total_length_m: 0.292,
+      weight_kg: 0.141328,
+      paint_area_m2: 0.045552,
+    }
+    near(derivedOnEdit(bitLot, { qty: 8 }).weight_kg, 0.282656)
+  })
+
+  it('đổi TIẾT DIỆN mà app không tính được → để trống, không giữ số của tiết diện cũ', () => {
+    const r = derivedOnEdit(luoiMe, { dim_b_mm: 500 })
+    expect(r.weight_kg).toBeNull()
+    expect(r.paint_area_m2).toBeNull()
+    near(r.total_length_m, 0.45)
+  })
+
+  it('đổi tiết diện mà app tính được → số app tính (ống tròn: DT sơn theo π)', () => {
+    // TB0173HG-AL "Ren gai chân bàn": file sửa δ 3,5 → 4 ngày 28/10.
+    const r = derivedOnEdit(
+      { profile_shape: 'TRON', material_kind: 'AL', dim_a_mm: 16, dim_b_mm: 16, wall_thickness_mm: 3.5, cut_length_mm: 25, qty: 4, total_length_m: 0.1, weight_kg: 0.037091, paint_area_m2: 0.0064 },
+      { wall_thickness_mm: 4 },
+    )
+    near(r.weight_kg, 0.040715)
+    near(r.paint_area_m2, 0.005027)
+  })
+
+  it('patch có SỐ dẫn xuất → số người dùng thắng; gửi null → lấy số app tính', () => {
+    expect(derivedOnEdit(diemDai, { weight_kg: 2 }).weight_kg).toBe(2)
+    expect(derivedOnEdit(diemDai, { qty: 3, weight_kg: 2 }).weight_kg).toBe(2)
+    // Xoá tay ô kg ở dòng khuôn chưa có kg/m: app không tính được → trống, đúng ý người xoá.
+    expect(derivedOnEdit(diemDai, { weight_kg: null }).weight_kg).toBeNull()
+    near(derivedOnEdit({ ...diemDai, kg_per_m: 0.651 }, { weight_kg: null }).weight_kg, 1.947792)
   })
 })

@@ -29,7 +29,12 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
-import { calcPartDerived } from '@/lib/bom-calc'
+import {
+  calcPartDerived,
+  derivedOnEdit,
+  PART_GEO_KEYS,
+  type StoredPart,
+} from '@/lib/bom-calc'
 import { normalizeSearch, worthFuzzy } from '@/lib/search-text'
 import { ensureCatalogItem } from '@/modules/core/catalogs/catalogs.service'
 import {
@@ -179,20 +184,6 @@ async function assertProductUnlocked(productId: string): Promise<void> {
   assertUnlocked(p)
 }
 
-/** Các trường hình học — đụng bất kỳ trường nào thì phải tính lại số dẫn xuất. */
-const GEO_KEYS = [
-  'profile_shape',
-  'material_kind',
-  'dim_a_mm',
-  'dim_b_mm',
-  'wall_thickness_mm',
-  'cut_length_mm',
-  'bend_waste_mm',
-  'tenon_mm',
-  'kg_per_m',
-  'qty',
-] as const
-
 /**
  * Chuẩn hoá một dòng định mức trước khi ghi:
  *
@@ -205,7 +196,8 @@ const GEO_KEYS = [
  *     Số người dùng NHẬP TAY thì giữ (profile gân, hợp kim lạ thì hình học sai).
  *
  * `base` là dòng đang có trong DB khi sửa — cần để tính đúng lúc người dùng chỉ
- * đổi một ô (sửa mỗi số lượng mà tính lại từ patch rỗng thì kích thước thành null).
+ * đổi một ô (sửa mỗi số lượng mà tính lại từ patch rỗng thì kích thước thành null),
+ * và để GIỮ số đã lưu khi ô đổi không phải hình học (xem `derivedOnEdit`).
  */
 async function resolveLine<T extends Record<string, unknown>>(
   productId: string,
@@ -222,12 +214,14 @@ async function resolveLine<T extends Record<string, unknown>>(
       : null
   }
 
-  const touchesGeo = GEO_KEYS.some((k) => k in row)
-  if (!touchesGeo && base == null) return row
+  // SỬA dòng đã có: patch chỉ mang ô vừa đổi — luật giữ / tính lại / co giãn số
+  // dẫn xuất nằm ở `derivedOnEdit`, dùng chung với phần xem trước của lưới.
+  if (base) return { ...row, ...derivedOnEdit(base, row as Partial<StoredPart>) }
 
-  const geo = Object.fromEntries(
-    GEO_KEYS.map((k) => [k, (k in row ? row[k] : base?.[k]) ?? null]),
-  )
+  const touchesGeo = PART_GEO_KEYS.some((k) => k in row)
+  if (!touchesGeo) return row
+
+  const geo = Object.fromEntries(PART_GEO_KEYS.map((k) => [k, row[k] ?? null]))
   const d = calcPartDerived(geo)
   // `?? d.x` chứ không phải `d.x ?? ...`: người dùng gửi số thì số của họ thắng.
   row.total_length_m = (row.total_length_m as number | null) ?? d.total_length_m

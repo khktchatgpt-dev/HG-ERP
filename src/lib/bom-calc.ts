@@ -247,6 +247,122 @@ export function calcPartDerived(p: PartGeometry): PartDerived {
   }
 }
 
+/** Ô hình học — đổi ô nào trong số này thì số dẫn xuất phải tính lại. */
+export const PART_GEO_KEYS = [
+  'profile_shape',
+  'material_kind',
+  'dim_a_mm',
+  'dim_b_mm',
+  'wall_thickness_mm',
+  'cut_length_mm',
+  'bend_waste_mm',
+  'tenon_mm',
+  'kg_per_m',
+  'qty',
+] as const satisfies readonly (keyof PartGeometry)[]
+
+/** Ô chỉ đổi CHIỀU DÀI — tiết diện giữ nguyên nên kg/m và m²/m không đổi. */
+const LENGTH_KEYS: ReadonlySet<string> = new Set([
+  'qty',
+  'cut_length_mm',
+  'bend_waste_mm',
+  'tenon_mm',
+])
+
+const DERIVED_KEYS = [
+  'total_length_m',
+  'weight_kg',
+  'paint_area_m2',
+  'volume_m3',
+] as const
+
+/** Một dòng định mức ĐÃ LƯU: hình học + số dẫn xuất đang nằm trong DB. */
+export type StoredPart = PartGeometry & {
+  total_length_m?: number | null
+  weight_kg?: number | null
+  paint_area_m2?: number | null
+  paint_area_box_m2?: number | null
+  volume_m3?: number | null
+}
+
+const sameVal = (a: unknown, b: unknown) =>
+  (a ?? null) === (b ?? null) || (a === '' && b == null) || (a == null && b === '')
+
+/** Chiều dài phôi (dài + phi hao) và chiều dài mặt (dài + mộng) × SL, đơn vị m. */
+function runs(g: PartGeometry) {
+  const len = pos(g.cut_length_mm) ? g.cut_length_mm : null
+  const qty = pos(g.qty) ? g.qty : null
+  if (len == null || qty == null) return { total: null, face: null }
+  const bend = pos(g.bend_waste_mm) ? g.bend_waste_mm : 0
+  const tenon = pos(g.tenon_mm) ? g.tenon_mm : 0
+  return { total: ((len + bend) / 1000) * qty, face: ((len + tenon) / 1000) * qty }
+}
+
+/**
+ * Số dẫn xuất khi SỬA một dòng đã lưu — `patch` chỉ chứa ô người dùng vừa gửi.
+ *
+ * Trước 29/10/2026 server tính lại MỌI số từ hình học mỗi lần sửa, và chỉ giữ kg
+ * khi patch có ô kg. Lưới định mức (`/thu-vien/[id]`) chỉ gửi ô vừa đổi, nên dòng
+ * app không tự tính được kg (thiếu loại vật liệu, mã khuôn chưa có kg/m, dạng
+ * Lưới, ống tròn thiếu Ø) mất sạch kg + DT sơn chỉ vì sửa ô ghi chú. Đo trên 10
+ * hồ sơ lệnh 13/26-27 MX: 57/141 dòng khung dính.
+ *
+ * Luật mỗi số (tổng dài · kg · DT sơn · m³):
+ *  1. Patch có SỐ → số người dùng thắng. Patch gửi `null` → xoá tay, lấy số app tính.
+ *  2. Không đổi ô hình học nào → GIỮ số đã lưu; ô đang trống thì điền số app tính.
+ *  3. Chỉ đổi CHIỀU DÀI (SL, dài cắt, phi hao, mộng) → co giãn số đã lưu theo tỉ
+ *     lệ chiều dài. Tiết diện giữ nguyên thì kg/m và m²/m giữ nguyên, nên phép
+ *     này đúng chứ không phải đoán — và giữ được kg tra bảng cân / gõ đè (profile
+ *     gân), thay vì đổi sang số hình học chỉ vì đổi SL. Chưa có số → số app tính.
+ *  4. Đổi TIẾT DIỆN (dạng, kích thước, δ, vật liệu, kg/m) → số app tính; app
+ *     không tính được thì để trống. Số cũ ứng với tiết diện cũ, giữ lại là một
+ *     con số sai đi thẳng vào giá thành và nhu cầu mua.
+ *  Tổng dài luôn lấy số app tính khi đủ dài cắt + SL — nó chỉ phụ thuộc chiều dài.
+ */
+export function derivedOnEdit(base: StoredPart, patch: Partial<StoredPart>): PartDerived {
+  const geo = Object.fromEntries(
+    PART_GEO_KEYS.map((k) => [k, (k in patch ? patch[k] : base[k]) ?? null]),
+  ) as PartGeometry
+  const changed = PART_GEO_KEYS.filter((k) => k in patch && !sameVal(patch[k], base[k]))
+  const d = calcPartDerived(geo)
+  if (changed.length === 0) {
+    const keep = (k: (typeof DERIVED_KEYS)[number]) =>
+      k in patch && patch[k] == null ? d[k] : (patch[k] ?? base[k] ?? d[k])
+    return {
+      total_length_m: keep('total_length_m'),
+      weight_kg: keep('weight_kg'),
+      paint_area_m2: keep('paint_area_m2'),
+      paint_area_box_m2: base.paint_area_box_m2 ?? d.paint_area_box_m2,
+      volume_m3: keep('volume_m3'),
+    }
+  }
+
+  const onlyLength = changed.every((k) => LENGTH_KEYS.has(k))
+  const before = runs(base)
+  const after = runs(geo)
+  const scale = (old: number | null | undefined, by: 'total' | 'face', digits: number) =>
+    onlyLength && old != null && before[by] && after[by] != null
+      ? round((old * after[by]) / before[by], digits)
+      : null
+  const pick = (
+    k: (typeof DERIVED_KEYS)[number],
+    by: 'total' | 'face',
+    digits: number,
+  ) => {
+    if (patch[k] != null) return patch[k]
+    if (k in patch) return d[k] // xoá tay = lấy số app tính
+    if (k === 'total_length_m') return d[k] ?? scale(base[k], by, digits)
+    return scale(base[k], by, digits) ?? d[k]
+  }
+  return {
+    total_length_m: pick('total_length_m', 'total', 4),
+    weight_kg: pick('weight_kg', 'total', 6),
+    paint_area_m2: pick('paint_area_m2', 'face', 6),
+    paint_area_box_m2: d.paint_area_box_m2 ?? scale(base.paint_area_box_m2, 'face', 6),
+    volume_m3: pick('volume_m3', 'face', 8),
+  }
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * QUY ĐỔI SANG ĐƠN VỊ MUA (0132)
  *

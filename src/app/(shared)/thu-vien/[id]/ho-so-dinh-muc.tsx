@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FileSpreadsheet, Plus, Save, Trash2, Undo2 } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
-import { calcPartDerived, SHAPE_OPTIONS } from '@/lib/bom-calc'
+import { calcPartDerived, derivedOnEdit, SHAPE_OPTIONS } from '@/lib/bom-calc'
 import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { nz, type HoSoView } from './ho-so.shared'
@@ -92,32 +92,34 @@ export function HoSoDinhMuc({
   const num = (r: Row, f: PartField) => parseVn(val(r, f))
   const bad = (r: Row, f: PartField) => SO.has(f) && num(r, f) === undefined
   const dirty = (r: Row, f: PartField) => drafts[r.id]?.[f] !== undefined
-  /** Số dẫn xuất xem trước: đổi hình học thì tính lại tại chỗ, không thì lấy số đã lưu. */
+  /**
+   * Số dẫn xuất xem trước. Dòng ĐÃ LƯU đi đúng luật server (`derivedOnEdit`):
+   * chưa đổi hình học thì giữ số đã lưu, chỉ đổi chiều dài thì co giãn — số hiện
+   * trên lưới là số sẽ được ghi. Dòng mới thì tính từ đầu.
+   */
   const dan = (r: Row) => {
-    const dr = drafts[r.id]
-    const touched = r.moi || (dr && Object.keys(dr).some((k) => GEO.has(k as PartField)))
-    if (!touched)
-      return {
-        total_length_m: r.total_length_m,
-        weight_kg: r.weight_kg,
-        paint_area_m2: r.paint_area_m2,
-      }
     const n = (f: PartField) => {
       const v = num(r, f)
       return v === undefined ? null : v
     }
-    return calcPartDerived({
-      profile_shape: val(r, 'profile_shape') || null,
-      material_kind: r.material_kind,
-      dim_a_mm: n('dim_a_mm'),
-      dim_b_mm: n('dim_b_mm'),
-      wall_thickness_mm: n('wall_thickness_mm'),
-      cut_length_mm: n('cut_length_mm'),
-      bend_waste_mm: n('bend_waste_mm'),
-      tenon_mm: r.tenon_mm,
-      kg_per_m: r.kg_per_m,
-      qty: n('qty'),
-    })
+    if (r.moi)
+      return calcPartDerived({
+        profile_shape: val(r, 'profile_shape') || null,
+        material_kind: r.material_kind,
+        dim_a_mm: n('dim_a_mm'),
+        dim_b_mm: n('dim_b_mm'),
+        wall_thickness_mm: n('wall_thickness_mm'),
+        cut_length_mm: n('cut_length_mm'),
+        bend_waste_mm: n('bend_waste_mm'),
+        tenon_mm: r.tenon_mm,
+        kg_per_m: r.kg_per_m,
+        qty: n('qty'),
+      })
+    const dr = drafts[r.id] ?? {}
+    const patch: Record<string, string | number | null> = {}
+    for (const f of GEO)
+      if (dr[f] !== undefined) patch[f] = f === 'profile_shape' ? val(r, f) || null : n(f)
+    return derivedOnEdit(r, patch)
   }
 
   const nDirty = Object.values(drafts).reduce((a, x) => a + Object.keys(x).length, 0)
