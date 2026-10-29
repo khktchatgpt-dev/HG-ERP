@@ -737,6 +737,36 @@ export type DomainEvent =
       actor_id: string
       recipient_ids: string[]
     }
+  // ── Yêu cầu việc trên chứng từ (0281) ────────────────────────────────
+  /** Giao việc trên một đơn mua / lệnh SX → báo người nhận. */
+  | {
+      name: 'doc.request.created'
+      request_id: string
+      doc_type: 'po' | 'lsx'
+      doc_id: string
+      doc_code: string
+      body: string
+      due_on: string | null
+      actor_id: string
+      recipient_ids: string[]
+    }
+  /**
+   * Một bước trên yêu cầu (báo xong / mở lại / chuyển / huỷ) hoặc máy đóng vì
+   * chứng từ bị huỷ. `recipient_ids` đã trừ người bấm (`requestRecipients`).
+   */
+  | {
+      name: 'doc.request.changed'
+      action: 'done' | 'reopen' | 'reassign' | 'cancel' | 'closed'
+      request_id: string
+      doc_type: 'po' | 'lsx'
+      doc_id: string
+      doc_code: string
+      body: string
+      /** Câu kết quả / lý do / lời nhắn người bấm gõ; null khi máy đóng. */
+      text: string | null
+      actor_id: string
+      recipient_ids: string[]
+    }
 
 export type EventName = DomainEvent['name']
 

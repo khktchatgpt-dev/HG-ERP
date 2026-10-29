@@ -64,6 +64,11 @@ const TYPE_LABEL: Record<string, string> = {
   feedback_commented: 'trao đổi mới trong góp ý',
   feedback_mentioned: 'nhắc bạn trong góp ý',
   feedback_confirmed: 'người viết xác nhận góp ý đã ổn',
+  doc_request: 'giao việc cho bạn trên chứng từ — làm xong thì bấm Báo xong',
+  doc_request_done: 'đã báo xong việc bạn giao — xem câu kết quả',
+  doc_request_reopened: 'mở lại việc đã giao cho bạn — xem lý do',
+  doc_request_reassigned: 'chuyển một yêu cầu việc (cho bạn, hoặc khỏi tay bạn)',
+  doc_request_cancelled: 'không cần làm nữa — yêu cầu việc đã huỷ hoặc chứng từ đã huỷ',
 }
 
 export default async function NotificationsPage() {

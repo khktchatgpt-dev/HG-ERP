@@ -100,7 +100,12 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
   rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
 }))
 
+// 0281 — huỷ chứng từ thì đóng yêu cầu việc còn mở trên nó.
+vi.mock('@/modules/core/doc-notes/doc-requests.service', () => ({
+  docRequestsService: { closeByDoc: vi.fn() },
+}))
 import { posService } from './pos.service'
+import { docRequestsService } from '@/modules/core/doc-notes/doc-requests.service'
 import { posRepo } from './pos.repo'
 import { poShipmentsRepo } from './po-shipments.repo'
 import { poAdjustmentsRepo } from './po-adjustments.repo'
@@ -1235,6 +1240,7 @@ describe('P1 (27/09/2026) — hàng rào thật cho NCC khoá đặt và huỷ �
     // Lý do huỷ CHỈ nằm ở Trao đổi — ô note in lên phiếu gửi NCC.
     expect('note' in patch).toBe(false)
     expect(lastTrace()).toMatchObject({ audience: 'internal', author_id: 'u-sup', body: '[Huỷ] Sản xuất huỷ nhu cầu' }) // prettier-ignore
+    expect(docRequestsService.closeByDoc).toHaveBeenCalledWith('po', 'po1', PO.code, 'u-sup')
   })
 
   it('dời hẹn giao → lý do + ngày cũ→mới vào Trao đổi, note không đổi', async () => {

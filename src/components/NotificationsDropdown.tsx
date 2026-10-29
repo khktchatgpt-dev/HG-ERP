@@ -78,6 +78,11 @@ const TYPE_LABEL: Record<string, string> = {
   feedback_commented: 'trao đổi góp ý',
   feedback_mentioned: 'nhắc bạn',
   feedback_confirmed: 'góp ý đã ổn',
+  doc_request: 'giao việc cho bạn',
+  doc_request_done: 'đã báo xong việc bạn giao',
+  doc_request_reopened: 'mở lại việc giao cho bạn',
+  doc_request_reassigned: 'chuyển một yêu cầu việc',
+  doc_request_cancelled: 'đã huỷ / đóng một yêu cầu việc',
 }
 
 function timeAgo(iso: string): string {

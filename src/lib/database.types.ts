@@ -1038,6 +1038,7 @@ export type Database = {
       }
       doc_notes: {
         Row: {
+          assignee_id: string | null
           audience: string
           author_id: string
           body: string
@@ -1046,6 +1047,7 @@ export type Database = {
           deleted_by: string | null
           doc_id: string
           doc_type: string
+          due_on: string | null
           id: string
           kind: string
           reply_to: string | null
@@ -1054,6 +1056,7 @@ export type Database = {
           resolved_how: string | null
         }
         Insert: {
+          assignee_id?: string | null
           audience?: string
           author_id: string
           body: string
@@ -1062,6 +1065,7 @@ export type Database = {
           deleted_by?: string | null
           doc_id: string
           doc_type: string
+          due_on?: string | null
           id?: string
           kind?: string
           reply_to?: string | null
@@ -1070,6 +1074,7 @@ export type Database = {
           resolved_how?: string | null
         }
         Update: {
+          assignee_id?: string | null
           audience?: string
           author_id?: string
           body?: string
@@ -1078,6 +1083,7 @@ export type Database = {
           deleted_by?: string | null
           doc_id?: string
           doc_type?: string
+          due_on?: string | null
           id?: string
           kind?: string
           reply_to?: string | null
@@ -1086,6 +1092,13 @@ export type Database = {
           resolved_how?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "doc_notes_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "doc_notes_author_id_fkey"
             columns: ["author_id"]

@@ -16,6 +16,7 @@ import { ordersRepo, type OrderWithCustomer } from '@/modules/dept/sales/orders.
 import type { OrderStatus } from '@/modules/dept/sales/orders.schema'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { docRequestsService } from '@/modules/core/doc-notes/doc-requests.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
@@ -559,6 +560,8 @@ export const lsxService = {
       cancelled_by: user.id,
       notify_ids: await lsxAudienceIds(),
     })
+    // Yêu cầu việc còn mở trên lệnh hết đối tượng — đóng + báo người nhận (0281).
+    await docRequestsService.closeByDoc('lsx', id, lsx.code, user.id)
     return updated
   },
 

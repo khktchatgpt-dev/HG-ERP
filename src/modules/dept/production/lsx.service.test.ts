@@ -72,7 +72,12 @@ import { lsxLinesRepo } from './lsx-lines.repo'
 import { lsxLinesService } from './lsx-lines.service'
 import { shipPlanRepo } from '@/modules/dept/sales/ship-plan.repo'
 import { emit } from '@/events/bus'
+// 0281 — huỷ chứng từ thì đóng yêu cầu việc còn mở trên nó.
+vi.mock('@/modules/core/doc-notes/doc-requests.service', () => ({
+  docRequestsService: { closeByDoc: vi.fn() },
+}))
 import { lsxService } from './lsx.service'
+import { docRequestsService } from '@/modules/core/doc-notes/doc-requests.service'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
 import { entriesRepo } from './entries.repo'
@@ -512,6 +517,7 @@ describe('lsxService.deleteDraft / cancel (07/10/2026)', () => {
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'lsx.cancelled', reason: 'Khách huỷ PO' }),
     )
+    expect(docRequestsService.closeByDoc).toHaveBeenCalledWith('lsx', 'lsx1', LSX.code, quanDoc.id)
   })
 
   it('lệnh đã có công đoạn chạy: nhân viên → 400; quản lý → huỷ được', async () => {

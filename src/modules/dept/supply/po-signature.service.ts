@@ -1,6 +1,11 @@
 import { posRepo, type Po } from './pos.repo'
 import { supplyRepo } from './supply.repo'
-import { approverIds, assertCoViec, assertPoOwner, assertSupplierCanOrder } from './pos.service'
+import {
+  approverIds,
+  assertCoViec,
+  assertPoOwner,
+  assertSupplierCanOrder,
+} from './pos.service'
 import {
   canSignLate,
   canUnapprove,
@@ -77,7 +82,12 @@ export function threadsOf(notes: DocNote[]): PoQuestionThread[] {
       author_name: q.author_name,
       created_at: q.created_at,
       resolved_at: q.resolved_at ?? null,
-      resolved_how: q.resolved_how ?? null,
+      // 'done' / 'cancelled' (0281) chỉ thuộc yêu cầu việc, câu hỏi không bao giờ mang —
+      // gặp thì coi như đóng, đừng để kiểu câu hỏi phình theo.
+      resolved_how:
+        q.resolved_how === 'done' || q.resolved_how === 'cancelled'
+          ? ('closed' as const)
+          : (q.resolved_how ?? null),
       answers: live
         .filter((a) => a.reply_to === q.id)
         .sort((a, b) => a.created_at.localeCompare(b.created_at))

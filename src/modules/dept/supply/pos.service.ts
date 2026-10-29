@@ -43,6 +43,7 @@ import { canReschedule, rescheduleNote, shiftPlannedShipments } from '@/lib/po-r
 import { canReopenForEdit, reopenNote } from '@/lib/po-reopen'
 import { reasonLine } from '@/lib/po-note'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
+import { docRequestsService } from '@/modules/core/doc-notes/doc-requests.service'
 import type { PoLsxSplitPatch } from './pos.schema'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import { syncPoExpectedAt } from './po-shipments.sync'
@@ -1915,6 +1916,7 @@ export const posService = {
     // Trao đổi là nơi DUY NHẤT giữ lý do huỷ (không có sự kiện dòng thời gian).
     await traceReason(user, id, reasonLine('Huỷ', reason))
     await docNotesRepo.resolveQuestions('po', id, user.id, 'closed') // 0218
+    await docRequestsService.closeByDoc('po', id, before.code, user.id) // 0281
     return po
   },
 

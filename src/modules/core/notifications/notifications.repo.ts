@@ -73,6 +73,12 @@ export type NotificationType =
   | 'asset_issue_approval'
   | 'asset_issue_decided'
   | 'asset_issue_done'
+  /** Yêu cầu việc trên chứng từ (0281) — payload có `href` tới trang Yêu cầu việc. */
+  | 'doc_request'
+  | 'doc_request_done'
+  | 'doc_request_reopened'
+  | 'doc_request_reassigned'
+  | 'doc_request_cancelled'
 
 export type Notification = {
   id: string

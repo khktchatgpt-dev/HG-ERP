@@ -57,11 +57,18 @@ export type DocNote = {
    * xem lại"), mở cho tới khi có `resolved_at`. Ghi chú thường là 'note'.
    * Tuỳ chọn vì bản ghi tạo trước 0218 chưa có cột (mặc định DB là 'note').
    */
-  kind?: 'note' | 'question'
+  kind?: 'note' | 'question' | 'request'
   resolved_at?: string | null
   resolved_by?: string | null
-  /** answered = người phụ trách trả lời · decided = đơn được ký/trả lại · closed = thu hồi/huỷ. */
-  resolved_how?: 'answered' | 'decided' | 'closed' | null
+  /**
+   * answered = người phụ trách trả lời · decided = đơn được ký/trả lại · closed =
+   * thu hồi/huỷ chứng từ. 0281 thêm cho yêu cầu việc: done = người nhận báo xong ·
+   * cancelled = người giao huỷ.
+   */
+  resolved_how?: 'answered' | 'decided' | 'closed' | 'done' | 'cancelled' | null
+  /** 0281 — người nhận + hạn của yêu cầu việc (`src/lib/doc-requests.ts`). */
+  assignee_id?: string | null
+  due_on?: string | null
 }
 
 /**
