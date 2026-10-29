@@ -6,6 +6,7 @@ import {
   cartonAreaM2,
   deriveLine,
   foamM3PerSheet,
+  poPrintTitle,
   poTemplateMeta,
   suggestOrderQty,
   type PoTemplate,
@@ -233,10 +234,60 @@ describe('deriveLine — gỗ theo m³ (ĐH gỗ Minh Đạt, USD)', () => {
 })
 
 /*
- * Mẫu 'outsourcing' (gia công ngoài) ĐÃ GỠ 12/08/2026 — trả công theo SP là
- * nghiệp vụ ngoài tầm vật tư, không thuộc form đặt vật tư. Mẫu lạ rơi về
- * 'simple' (test "mẫu lạ / null" ở trên đã khoá đường lui này).
+ * Mẫu 'outsourcing' (gia công ngoài): gỡ 12/08/2026, dựng lại 29/10/2026 theo
+ * đơn Phương Vy PO-2026-0054 — may nệm, Công ty cấp vải, nệm có mã kho.
  */
+describe('mẫu gia công ngoài (Phương Vy, PO-2026-0054)', () => {
+  it('mặc định theo tờ thật: VAT 10% chưa gồm, không chiết khấu, người lập ký', () => {
+    const m = poTemplateMeta('outsourcing')
+    expect(m.label).toBe('Gia công ngoài')
+    expect(m.vatRate).toBe(10)
+    expect(m.priceIncludesVat).toBe(false)
+    expect(m.hasDiscount).toBe(false)
+    expect(m.signerRole).toBe('NGƯỜI LẬP')
+    expect(m.terms.payment).toBe('Thanh toán công nợ cuối tháng')
+  })
+
+  it('công theo cái: 8.960 nệm mê × 49.500đ = 443.520.000đ (SL × giá)', () => {
+    const d = deriveLine('outsourcing', { qty_ordered: 8960 })
+    expect(d).toEqual({ qty2: null, unit2: null, price_basis: 'unit' })
+    expect(poLineAmount({ qty_ordered: 8960, unit_price: 49_500, ...d })).toBe(
+      443_520_000,
+    )
+  })
+
+  it('công theo kg: 100 bộ × 18,91 kg/bộ × 28.000đ/kg — qua ô "Giá theo ĐV khác"', () => {
+    const d = deriveLine('outsourcing', {
+      qty_ordered: 100,
+      unit2_per_unit: 18.91,
+      unit2_label: 'kg',
+    })
+    expect(d).toEqual({ qty2: 1891, unit2: 'kg', price_basis: 'unit2' })
+    expect(poLineAmount({ qty_ordered: 100, unit_price: 28_000, ...d })).toBe(52_948_000)
+  })
+})
+
+describe('poPrintTitle — tiêu đề phiếu in / Excel', () => {
+  const base = { title_vi: 'ĐƠN ĐẶT HÀNG', title_en: 'PURCHASE ORDER' }
+
+  it('gia công in tiêu đề riêng', () => {
+    expect(poPrintTitle('outsourcing', base)).toEqual({
+      vi: 'ĐƠN ĐẶT HÀNG GIA CÔNG',
+      en: 'SUBCONTRACT ORDER',
+    })
+  })
+
+  it('mẫu khác / null giữ tiêu đề chung của mẫu chứng từ PO', () => {
+    expect(poPrintTitle('accessory', base)).toEqual({
+      vi: 'ĐƠN ĐẶT HÀNG',
+      en: 'PURCHASE ORDER',
+    })
+    expect(poPrintTitle(null, { title_vi: 'PO', title_en: null })).toEqual({
+      vi: 'PO',
+      en: null,
+    })
+  })
+})
 
 describe('deriveLine — kính theo tấm/m² (DDH Mai Trang)', () => {
   it('giá theo TẤM: 500 tấm × 66.849đ/tấm — basis unit', () => {
@@ -299,7 +350,7 @@ describe('deriveLine — xốp theo m³ (DDH Tân Hoàng Long, "Xốp Casual")',
 })
 
 describe('dòng tự do (0134)', () => {
-  it('chỉ mẫu gỗ được dùng dòng không gắn vật tư (gia công đã gỡ 12/08)', () => {
+  it('chỉ mẫu gỗ được dùng dòng không gắn vật tư (gia công chọn từ danh mục)', () => {
     expect(FREE_LINE_TEMPLATES).toEqual(['wood'])
   })
 })

@@ -24,7 +24,8 @@ import { PO_TEMPLATES } from './po-template'
 const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations')
 
 /** Giá trị chết còn trong check DB nhưng đã gỡ khỏi code — được phép LỆCH THỪA. */
-const LEGACY_DB_ONLY = new Set(['outsourcing']) // mẫu gia công gỡ 12/08/2026
+// 'outsourcing' từng nằm đây (gỡ 12/08/2026) — dựng lại 29/10/2026 nên hết legacy.
+const LEGACY_DB_ONLY = new Set<string>()
 
 /** Bản khai MỚI NHẤT của một constraint trong toàn bộ migrations. */
 function latestConstraint(name: string): { file: string; values: string[] } | null {

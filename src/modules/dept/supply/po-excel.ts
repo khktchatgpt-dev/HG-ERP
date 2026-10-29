@@ -9,7 +9,12 @@ import {
   qtyTotals,
   roundMoney,
 } from '@/lib/po-line'
-import { foamM3PerSheet, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import {
+  foamM3PerSheet,
+  poPrintTitle,
+  poTemplateMeta,
+  type PoTemplate,
+} from '@/lib/po-template'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
   poPrintKeys,
@@ -284,6 +289,7 @@ export async function buildPoExcel(input: {
   const tpl = input.tpl ?? DEFAULT_DOC_TEMPLATES.PO
   const shipments = input.shipments ?? []
   const template = po.template ?? 'simple'
+  const title = poPrintTitle(template, tpl)
   const d = new Date(po.created_at)
   // LSX + Đơn hàng không là cột bảng kê — nằm ở khối tham chiếu đầu file.
   const cols = excelColumns(template, po.currency, {
@@ -409,14 +415,14 @@ export async function buildPoExcel(input: {
   /* ── Tiêu đề + khung số hiệu ────────────────────────────────────────────── */
   r += 2
   ws.mergeCells(r, 1, r, n)
-  set(r, 1, tpl.title_vi, {
+  set(r, 1, title.vi, {
     font: { bold: true, size: 14 },
     alignment: { horizontal: 'center' },
   })
-  if (tpl.title_en) {
+  if (title.en) {
     r++
     ws.mergeCells(r, 1, r, n)
-    set(r, 1, tpl.title_en, {
+    set(r, 1, title.en, {
       font: { size: 10 },
       alignment: { horizontal: 'center' },
     })

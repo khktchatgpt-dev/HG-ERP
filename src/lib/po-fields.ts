@@ -366,6 +366,16 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
   ],
+  // Gia công ngoài (29/10/2026): bộ cột y tờ Phương Vy "1/2026-HG/PV" — Chất liệu
+  // (ruột "Mouse D20/70 Gòn R110"), Quy cách, SL đơn hàng × Đm/sp. Công theo kg
+  // (hàn sắt kg/bộ × giá/kg) đi ô "Giá theo ĐV khác".
+  outsourcing: [
+    t('grade', 'Chất liệu', 'w-[130px]', 'material_grade', 'Mouse D20/70 Gòn R110…'),
+    t('spec', 'Quy cách', 'w-[110px]', 'spec', '490/450x520x50…'),
+    n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
+    { ...n('dm', 'Đm/sp', 'w-[64px]', 'dm_per_sp'), compact: true },
+    UNIT2_FIELD,
+  ],
   simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…'), UNIT2_FIELD],
 }
 
@@ -587,6 +597,19 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 cùng nhịp với mẫu sơn — hai ngày
   // nằm ở đầu phiếu, 12 mẫu không còn mẫu nào lặp ngày xuống dòng.
+  outsourcing: [
+    '@stt',
+    '@name',
+    'grade',
+    'spec',
+    'demand',
+    'dm',
+    '@unit',
+    '@qty',
+    '@price',
+    '@amount',
+    '@note',
+  ],
   simple: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
 }
 
@@ -641,6 +664,7 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   mro: 'Số lượng',
   // Đứng cạnh "SL đơn hàng" như phụ kiện/mây.
   label: 'SL đặt',
+  outsourcing: 'SL đặt',
   simple: 'Số lượng',
 }
 
@@ -750,6 +774,7 @@ export const PO_SHARED_FIELD_MEANING: Record<
     wood: 'Loại gỗ',
     mro: 'Model / Mã hãng',
     label: 'Chất liệu',
+    outsourcing: 'Chất liệu',
   },
   dimension_text: {
     metal_kg: 'Kích thước',
@@ -795,6 +820,7 @@ export const PO_SHARED_FIELD_PREFILL: Record<
     wood: true,
     mro: false, // "Model / Mã hãng"
     label: true, // "Chất liệu" — giấy/decal, đúng nghĩa "vật liệu" của danh mục
+    outsourcing: true, // "Chất liệu" — ruột mút/gòn, đúng nghĩa vật liệu của danh mục
   },
   dimension_text: {
     metal_kg: true,

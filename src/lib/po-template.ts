@@ -28,15 +28,17 @@ export const PO_TEMPLATES = [
   'wood',
   'mro',
   'label',
+  'outsourcing',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
 
 /*
- * Mẫu 'outsourcing' (gia công ngoài) ĐÃ GỠ 12/08/2026 theo yêu cầu: gia công
- * trả công theo SP là nghiệp vụ NGOÀI TẦM VẬT TƯ — không thuộc form đặt vật
- * tư. DB check (0135) vẫn chấp nhận giá trị cũ cho an toàn (lúc gỡ chưa có
- * đơn nào trong DB); `poTemplateMeta` rơi về 'simple' nếu gặp.
+ * Mẫu 'outsourcing' (gia công ngoài): gỡ 12/08/2026 ("ngoài tầm vật tư" — bản đó
+ * trả công theo SP bằng dòng gõ tay, không qua kho), DỰNG LẠI 29/10/2026 theo
+ * đơn thật Phương Vy (PO-2026-0054): nệm có mã PKN…, nhập kho rồi mới xuất cho
+ * SX — nên dòng vẫn chọn từ danh mục như mọi mẫu khác. DB check (0135) chưa
+ * từng bỏ giá trị này nên không cần migration.
  */
 
 /**
@@ -85,6 +87,11 @@ export type PoTemplateMeta = {
   hasDiscount: boolean
   signerRole: string
   terms: PoTerms
+  /**
+   * Tiêu đề riêng trên phiếu in / Excel, thay tiêu đề chung của mẫu chứng từ PO
+   * (0164, "ĐƠN ĐẶT HÀNG"). Bỏ trống = dùng tiêu đề chung.
+   */
+  printTitle?: { vi: string; en: string | null }
 }
 
 // Tên công ty VIẾT HOA đúng đăng ký + địa chỉ xưởng (08/10/2026, phòng Cung ứng: "địa điểm giao hàng như này: CÔNG TY TNHH SX-TM HOÀNG GIA").
@@ -378,6 +385,32 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       lead_time: 'Từ 5 đến 7 ngày kể từ ngày duyệt mẫu in',
     },
   },
+  /*
+   * GIA CÔNG NGOÀI (dựng lại 29/10/2026). Đơn thật: Phương Vy may nệm cho LSX
+   * 02/26-27 ROSCO — Công ty cấp vải ("Đơn giá chưa bao gồm vải"), NCC làm ruột
+   * mút/gòn + công may, giao NỆM có mã PKN… vào kho. Bộ cột y tờ "1/2026-HG/PV":
+   * Chất liệu · Quy cách · SL đơn hàng · Đm/sp. Công tính theo kg (hàn sắt
+   * 18,91 kg/bộ × giá/kg) đi ô "Giá theo ĐV khác" chung, không cần công thức riêng.
+   */
+  outsourcing: {
+    key: 'outsourcing',
+    label: 'Gia công ngoài',
+    hint: 'Thuê ngoài làm bán thành phẩm có mã kho — may nệm, đan, hàn; Công ty cấp một phần vật tư. Phương Vy',
+    priceUnit: null,
+    vatRate: 10,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'NGƯỜI LẬP',
+    terms: {
+      quality:
+        'Gia công đúng mẫu đã duyệt — vật tư do Công ty cung cấp; hàng lỗi yêu cầu chỉnh sửa hoặc gia công lại',
+      delivery_place: DELIVERY_HG,
+      payment: 'Thanh toán công nợ cuối tháng',
+      invoice: INVOICE_VAT,
+      lead_time: 'Theo kế hoạch Công ty Hoàng Gia',
+    },
+    printTitle: { vi: 'ĐƠN ĐẶT HÀNG GIA CÔNG', en: 'SUBCONTRACT ORDER' },
+  },
   simple: {
     key: 'simple',
     label: 'Đơn giản',
@@ -405,6 +438,17 @@ export function poTemplateMeta(t: PoTemplate | null | undefined): PoTemplateMeta
   return PO_TEMPLATE_META[t && isPoTemplate(t) ? t : 'simple']
 }
 
+/**
+ * Tiêu đề phiếu in / Excel của một đơn: mẫu có `printTitle` (gia công) thì dùng
+ * tiêu đề riêng, còn lại theo tiêu đề chung của mẫu chứng từ PO (0164).
+ */
+export function poPrintTitle(
+  t: PoTemplate | null | undefined,
+  base: { title_vi: string; title_en: string | null },
+): { vi: string; en: string | null } {
+  return poTemplateMeta(t).printTitle ?? { vi: base.title_vi, en: base.title_en }
+}
+
 /** Các ô người dùng nhập trên dòng, gộp của mọi mẫu (mẫu nào dùng ô nấy). */
 export type PoLineDraft = {
   /** SL đặt cuối cùng — luôn theo ĐVT mua (cây / con / tấm / thùng). */
@@ -428,7 +472,8 @@ export type PoLineDraft = {
   inner_w_mm?: number | null
   inner_h_mm?: number | null
   /** Cơ sở tính tiền dòng: thùng/tấm · m² · m³ (xốp). 'kg' là giá trị chết
-   *  của mẫu gia công đã gỡ — DB còn nhận (0135) nhưng form không sinh mới. */
+   *  của mẫu gia công bản 12/08 — DB còn nhận (0135) nhưng form không sinh mới
+   *  (bản 29/10 tính công theo kg qua ô "Giá theo ĐV khác"). */
   carton_basis?: 'ctn' | 'm2' | 'm3' | 'kg' | null
   /*
    * ĐƯỜNG QUY ĐỔI TỔNG QUÁT (0182) — cho mẫu KHÔNG có công thức riêng: sơn
@@ -704,6 +749,7 @@ export const PO_TEMPLATE_SHORT: Record<PoTemplate, string> = {
   wood: 'Gỗ',
   mro: 'Phụ tùng',
   label: 'Tem nhãn',
+  outsourcing: 'Gia công',
   simple: 'Đơn giản',
 }
 

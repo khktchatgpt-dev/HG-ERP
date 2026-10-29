@@ -253,6 +253,17 @@ describe('buildPoExcel — khớp phiếu in', () => {
     expect(mot).not.toContain('PHÂN THEO LỆNH SẢN XUẤT')
   })
 
+  it('đơn gia công: tiêu đề riêng thay tiêu đề chung (29/10/2026)', async () => {
+    const t = allText(
+      await load(
+        await buildPoExcel({ company: COMPANY, tpl, po: header({ template: 'outsourcing' }), supplier: null, lines: [line()] }), // prettier-ignore
+      ),
+    )
+    expect(t).toContain('ĐƠN ĐẶT HÀNG GIA CÔNG')
+    expect(t).toContain('SUBCONTRACT ORDER')
+    expect(t).not.toContain('PURCHASE ORDER')
+  })
+
   it('tiêu đề + khối chữ ký theo MẪU CHỨNG TỪ, có tên người lập dưới nét ký', async () => {
     const ws = await load(
       await buildPoExcel({

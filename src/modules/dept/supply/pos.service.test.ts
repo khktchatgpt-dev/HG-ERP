@@ -679,7 +679,7 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
   })
 })
 
-describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', () => {
+describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ', () => {
   const freeLine = { material_id: null, line_name: 'Bàn CN Tilos', qty_ordered: 20 }
 
   it('create mẫu wood: dòng tự gõ được CẤP MÃ vật tư, tiền vẫn theo m³ như cũ', async () => {
@@ -1299,11 +1299,19 @@ describe('posService — mua trên sàn (0279): tên shop chỉ dính đơn củ
 
 describe('posService — luồng đơn mua trên sàn (0279)', () => {
   const SAN = { id: 'shopee', is_active: true, can_order: true, is_marketplace: true }
-  const approved = { ...PO, status: 'approved', currency: 'VND', marketplace_shop: 'Shop Vít Rẻ' }
+  const approved = {
+    ...PO,
+    status: 'approved',
+    currency: 'VND',
+    marketplace_shop: 'Shop Vít Rẻ',
+  }
   beforeEach(() => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue(SAN as never)
     vi.mocked(posRepo.listLines).mockResolvedValue([{ material_id: 'm1', unit_price: 1000 }] as never) // prettier-ignore
-    vi.mocked(posRepo.patch).mockResolvedValue({ ...approved, status: 'confirmed' } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({
+      ...approved,
+      status: 'confirmed',
+    } as never)
   })
 
   it('gửi duyệt đơn sàn thiếu tên shop → chặn', async () => {
@@ -1314,14 +1322,21 @@ describe('posService — luồng đơn mua trên sàn (0279)', () => {
 
   it('đơn sàn không đi đường "Gửi NCC"', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
-    await expect(posService.advance(staff, 'po1', 'ordered')).rejects.toThrow(/Đặt trên sàn/)
+    await expect(posService.advance(staff, 'po1', 'ordered')).rejects.toThrow(
+      /Đặt trên sàn/,
+    )
   })
 
   it('đặt trên sàn thiếu mã đơn / tiền → chặn, không ghi gì', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
-    await expect(posService.confirm(staff, 'po1', { shipments: [] })).rejects.toThrow(/mã đơn sàn/)
+    await expect(posService.confirm(staff, 'po1', { shipments: [] })).rejects.toThrow(
+      /mã đơn sàn/,
+    )
     await expect(
-      posService.confirm(staff, 'po1', { shipments: [], san: { order_no: '2410AB', method: 'ck' } }),
+      posService.confirm(staff, 'po1', {
+        shipments: [],
+        san: { order_no: '2410AB', method: 'ck' },
+      }),
     ).rejects.toThrow(/số tiền/)
     expect(posRepo.patch).not.toHaveBeenCalled()
     expect(payablesRepo.insertPayment).not.toHaveBeenCalled()
@@ -1331,7 +1346,12 @@ describe('posService — luồng đơn mua trên sàn (0279)', () => {
     vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
     await posService.confirm(staff, 'po1', {
       shipments: [],
-      san: { order_no: ' 2410AB ', tracking_no: 'SPXVN1', method: 'the', amount: 385_000 },
+      san: {
+        order_no: ' 2410AB ',
+        tracking_no: 'SPXVN1',
+        method: 'the',
+        amount: 385_000,
+      },
     })
     expect(vi.mocked(posRepo.patch).mock.calls[0][1]).toMatchObject({
       status: 'confirmed',
@@ -1359,7 +1379,10 @@ describe('posService — luồng đơn mua trên sàn (0279)', () => {
 
   it('COD → chưa có phiếu chi (trả khi nhận)', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
-    await posService.confirm(staff, 'po1', { shipments: [], san: { order_no: 'X2', method: 'cod' } })
+    await posService.confirm(staff, 'po1', {
+      shipments: [],
+      san: { order_no: 'X2', method: 'cod' },
+    })
     expect(posRepo.patch).toHaveBeenCalled()
     expect(payablesRepo.insertPayment).not.toHaveBeenCalled()
   })

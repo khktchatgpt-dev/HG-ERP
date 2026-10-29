@@ -199,7 +199,21 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Màu gỗ',
     'Ghi chú',
   ],
-  // Mẫu 'outsourcing' đã gỡ 12/08/2026 — gia công là nghiệp vụ ngoài tầm vật tư.
+  // Gia công ngoài — gỡ 12/08/2026, dựng lại 29/10/2026 theo tờ Phương Vy
+  // "1/2026-HG/PV" (may nệm, Công ty cấp vải).
+  outsourcing: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'Chất liệu',
+    'Quy cách',
+    'SL đơn hàng',
+    'Đm/sp',
+    'ĐVT',
+    'SL đặt',
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Ghi chú',
+  ],
   // MRO (10/08/2026) — chưa có đơn thật để chép; bộ cột dựng theo nhu cầu đã rà:
   // NCC giao đúng nhờ MODEL, phòng đối chiếu về sau nhờ "dùng cho máy" + bảo hành.
   mro: [
@@ -415,6 +429,7 @@ describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên 
     foam: ['dims', 'basis', 'demand', 'dm', 'onhand'],
     glass: ['m2total', 'basis'],
     mro: ['unit2'],
+    outsourcing: ['unit2'],
     simple: ['unit2'],
   }
 

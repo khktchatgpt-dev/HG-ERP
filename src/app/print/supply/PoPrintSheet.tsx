@@ -9,7 +9,7 @@ import {
   qtyTotals,
   roundMoney,
 } from '@/lib/po-line'
-import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import { poPrintTitle, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { poPdfName } from '@/lib/print-file-name'
 import {
   PO_PRICE_SUFFIX_TEMPLATES,
@@ -325,6 +325,7 @@ export function PoPrintSheet({
   // Dòng phí / dịch vụ (0234) xuống cuối bảng — hàng hoá trước, khoản phí sau.
   const lines = feeLast(linesIn)
   const template = po.template ?? 'simple'
+  const title = poPrintTitle(template, tpl)
   const meta = poTemplateMeta(template)
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`
   // dựng — dùng chung với báo giá, lệnh SX và phiếu kho.
@@ -403,7 +404,7 @@ export function PoPrintSheet({
         date={d}
         nationalHeading={tpl.national_heading}
       />
-      <PrintTitle vi={tpl.title_vi} en={tpl.title_en ?? undefined} />
+      <PrintTitle vi={title.vi} en={title.en ?? undefined} />
 
       <PrintMeta
         rows={[

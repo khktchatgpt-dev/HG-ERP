@@ -139,6 +139,24 @@ describe('phiếu in đơn mua — 12 mẫu', () => {
   )
 })
 
+describe('phiếu in đơn mua — tiêu đề theo mẫu', () => {
+  const sup = { name: 'CÔNG TY TNHH SẢN XUẤT THƯƠNG MẠI PHƯƠNG VY' }
+  const title = (t: PoTemplate) =>
+    render(
+      <PoPrintSheet company={company} po={header(t)} supplier={sup} lines={[line(t)]} />,
+    ).container.textContent ?? ''
+
+  it('gia công ngoài in "ĐƠN ĐẶT HÀNG GIA CÔNG"', () => {
+    expect(title('outsourcing')).toContain('ĐƠN ĐẶT HÀNG GIA CÔNG')
+  })
+
+  it('mẫu khác giữ "ĐƠN ĐẶT HÀNG", không có chữ gia công', () => {
+    const t = title('accessory')
+    expect(t).toContain('ĐƠN ĐẶT HÀNG')
+    expect(t).not.toContain('ĐƠN ĐẶT HÀNG GIA CÔNG')
+  })
+})
+
 /*
  * CỘT "CHIA LỆNH" (10/10/2026 — user chọn cột trên phiếu): chỉ đơn gộp từ 2 lệnh,
  * đứng ngay trước Ghi chú, mỗi lệnh một dòng. Dòng chưa chia = trọn lệnh chính.
