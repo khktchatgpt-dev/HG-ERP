@@ -84,6 +84,23 @@ export const docRequestsRepo = {
     return data ? toRequest(data as unknown as Row) : null
   },
 
+  /** Mọi yêu cầu (chưa gỡ) trên một chứng từ — cho khối "Yêu cầu đang mở". */
+  async listByDoc(docType: DocType, docId: string): Promise<DocRequest[]> {
+    const { data, error } = await db()
+      .from('doc_notes')
+      .select(SELECT)
+      .eq('doc_type', docType)
+      .eq('doc_id', docId)
+      .eq('kind', 'request')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+    if (error) {
+      if (isMissingColumn(error)) return []
+      throw error
+    }
+    return ((data ?? []) as unknown as Row[]).map(toRequest)
+  },
+
   /**
    * Yêu cầu của một người: `assigned` = giao cho tôi, `given` = tôi đã giao.
    * Lấy mọi yêu cầu còn mở + yêu cầu đóng từ `closedSince` — phần lọc theo chip

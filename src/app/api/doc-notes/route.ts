@@ -3,6 +3,8 @@ import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { docNotesService } from '@/modules/core/doc-notes/doc-notes.service'
 import { loadDocRef } from '@/modules/core/doc-notes/doc-ref'
+import { docRequestsService } from '@/modules/core/doc-notes/doc-requests.service'
+import { REQUEST_DOC_TYPES, type RequestDocType } from '@/lib/doc-requests'
 import { docNoteCreateSchema, DOC_TYPES, type DocType } from '@/lib/doc-notes'
 
 /**
@@ -35,8 +37,15 @@ export const GET = handle(async (req: Request) => {
     return NextResponse.json({ error: 'Không thấy chứng từ' }, { status: 404 })
   }
 
-  const notes = await docNotesService.list(user, dt, docId)
-  return NextResponse.json({ notes })
+  // Yêu cầu việc (0281) đi chung một lượt tải: khối trao đổi cần cả hai, và tên
+  // người nhận + nút bấm được thì chỉ server biết (quyền admin ở server).
+  const [notes, requests] = await Promise.all([
+    docNotesService.list(user, dt, docId),
+    REQUEST_DOC_TYPES.includes(dt as RequestDocType)
+      ? docRequestsService.listByDoc(user, dt, docId, doc.code)
+      : Promise.resolve([]),
+  ])
+  return NextResponse.json({ notes, requests })
 })
 
 export const POST = handle(async (req: Request) => {

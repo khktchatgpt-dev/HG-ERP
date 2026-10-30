@@ -25,6 +25,7 @@ import {
   type RequestTab,
 } from '@/lib/doc-requests'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { docNotesRepo } from './doc-notes.repo'
 import { docRequestsRepo } from './doc-requests.repo'
 import { docCodesByIds, loadDocRef } from './doc-ref'
@@ -190,6 +191,47 @@ export const docRequestsService = {
         actions: allowedActions(r, actor),
       })),
     }
+  },
+
+  /**
+   * Yêu cầu trên MỘT chứng từ — cho khối "Yêu cầu đang mở" trong trao đổi. Người
+   * gọi đã tra chứng từ (quyền xem = quyền nói, như ghi chú) nên truyền luôn mã.
+   */
+  async listByDoc(
+    user: User,
+    docType: DocType,
+    docId: string,
+    docCode: string,
+  ): Promise<RequestListItem[]> {
+    const today = todayVn()
+    const actor = actorOf(user)
+    const rows = await docRequestsRepo.listByDoc(docType, docId)
+    return sortRequests(rows, today).map((r) => ({
+      ...r,
+      doc_code: docCode,
+      overdue_days: overdueDays(r, today),
+      actions: allowedActions(r, actor),
+    }))
+  },
+
+  /**
+   * Ai giao được cho ai: mọi tài khoản đang hoạt động, mọi phòng (C1). Chỉ tên +
+   * phòng — không email, không số điện thoại: ô chọn người không cần, và danh sách
+   * này mở cho mọi nhân viên đã đăng nhập.
+   */
+  async people(): Promise<{ id: string; name: string; department: string | null }[]> {
+    const [users, depts] = await Promise.all([
+      usersRepo.list({ active_only: true }),
+      departmentsRepo.list(),
+    ])
+    const deptName = new Map(depts.map((d) => [d.id, d.name]))
+    return users
+      .filter((u) => u.name?.trim())
+      .map((u) => ({
+        id: u.id,
+        name: u.name!.trim(),
+        department: u.department_id ? (deptName.get(u.department_id) ?? null) : null,
+      }))
   },
 
   /**

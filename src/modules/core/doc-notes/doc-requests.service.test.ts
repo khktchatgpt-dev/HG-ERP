@@ -3,16 +3,18 @@ import type { DocRequest } from '@/lib/doc-requests'
 import type { User } from '@/modules/core/users/users.repo'
 
 // vi.mock được kéo lên đầu file — đồ giả phải tạo trong vi.hoisted mới tới kịp.
-const { repo, notes, users, ref, emit } = vi.hoisted(() => ({
+const { repo, notes, users, depts, ref, emit } = vi.hoisted(() => ({
   repo: {
     create: vi.fn(),
     findById: vi.fn(),
     applyPatch: vi.fn(),
     listForUser: vi.fn(),
+    listByDoc: vi.fn(),
     closeOpenByDoc: vi.fn(),
   },
   notes: { create: vi.fn(), addFollowers: vi.fn() },
-  users: { findById: vi.fn() },
+  users: { findById: vi.fn(), list: vi.fn() },
+  depts: { list: vi.fn() },
   ref: { loadDocRef: vi.fn(), docCodesByIds: vi.fn() },
   emit: vi.fn(),
 }))
@@ -24,6 +26,7 @@ vi.mock('./doc-ref', () => ({
   docCodesByIds: (...a: unknown[]) => ref.docCodesByIds(...a),
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: users }))
+vi.mock('@/modules/core/departments/departments.repo', () => ({ departmentsRepo: depts }))
 vi.mock('@/events/bus', () => ({ emit: (...a: unknown[]) => emit(...a), on: vi.fn() }))
 vi.mock('@/events/register', () => ({}))
 vi.mock('@/lib/date-vn', async (orig) => ({
@@ -194,5 +197,35 @@ describe('closeByDoc — chứng từ bị huỷ', () => {
     repo.closeOpenByDoc.mockRejectedValue(new Error('mất kết nối'))
     await expect(docRequestsService.closeByDoc('po', LSX, 'PO-2026-0183', 'u-truyen')).resolves.toBeUndefined() // prettier-ignore
     spy.mockRestore()
+  })
+})
+
+describe('listByDoc + people (B2 — khối trên chứng từ)', () => {
+  it('yêu cầu của một chứng từ: xếp quá hạn lên đầu, kèm mã + nút theo quyền NGƯỜI XEM', async () => {
+    repo.listByDoc.mockResolvedValue([
+      REQ({ id: 'mo', due_on: '2026-10-31' }),
+      REQ({ id: 'qua', due_on: '2026-10-27' }),
+    ])
+    const out = await docRequestsService.listByDoc(NGA, 'lsx', LSX, '01/26-27 - LAURA')
+    expect(repo.listByDoc).toHaveBeenCalledWith('lsx', LSX)
+    expect(out.map((r) => [r.id, r.overdue_days, r.doc_code, r.actions])).toEqual([
+      ['qua', 2, '01/26-27 - LAURA', []],
+      ['mo', 0, '01/26-27 - LAURA', []],
+    ])
+    const thao = await docRequestsService.listByDoc(THAO, 'lsx', LSX, 'x')
+    expect(thao[0].actions).toEqual(['done', 'reassign', 'cancel'])
+  })
+  it('người nhận: chỉ tên + phòng (không email / điện thoại), bỏ tài khoản không tên', async () => {
+    users.list.mockResolvedValue([
+      { ...PHUONG, email: 'p@hg.com', phone: '090', department_id: 'd-bh' },
+      { ...HANG, department_id: null },
+      user({ id: 'u-x', name: '  ' }),
+    ])
+    depts.list.mockResolvedValue([{ id: 'd-bh', name: 'Bán Hàng' }])
+    expect(await docRequestsService.people()).toEqual([
+      { id: PHUONG_ID, name: 'Nguyễn Phạm Thanh Phương', department: 'Bán Hàng' },
+      { id: HANG_ID, name: 'Nguyễn T.Minh Hằng', department: null },
+    ])
+    expect(users.list).toHaveBeenCalledWith({ active_only: true })
   })
 })

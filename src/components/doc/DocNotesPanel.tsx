@@ -9,6 +9,9 @@ import {
   type StreamRow,
 } from '@/components/kit'
 import { mergeStream, type DocNote, type DocType } from '@/lib/doc-notes'
+import { REQUEST_DOC_TYPES, type RequestDocType } from '@/lib/doc-requests'
+import type { RequestListItem } from '@/modules/core/doc-notes/doc-requests.service'
+import { DocRequestsArea } from './DocRequestsArea'
 
 /**
  * KHỐI TRAO ĐỔI trên một chứng từ — dùng cho MỌI loại (đơn mua, lệnh SX…).
@@ -55,6 +58,11 @@ export function DocNotesPanel({
 }) {
   const [loc, setLoc] = useState<'notes' | 'marks' | 'all'>(filters ? 'notes' : 'all')
   const [notes, setNotes] = useState<DocNote[] | null>(null)
+  // Yêu cầu việc (0281) — đến cùng lượt tải với ghi chú. `nap` tăng sau mỗi lần ghi
+  // yêu cầu để tải lại cả hai (vết báo xong / chuyển nằm trong ghi chú).
+  const [requests, setRequests] = useState<RequestListItem[]>([])
+  const [nap, setNap] = useState(0)
+  const canRequest = (REQUEST_DOC_TYPES as readonly string[]).includes(docType)
   const [busy, setBusy] = useState(false)
   const [muted, setMuted] = useState(false)
   const [loi, setLoi] = useState<string | null>(null)
@@ -67,8 +75,11 @@ export function DocNotesPanel({
     let huy = false
     fetch(`/api/doc-notes?doc_type=${docType}&doc_id=${docId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: { notes: DocNote[] }) => {
-        if (!huy) setNotes(d.notes)
+      .then((d: { notes: DocNote[]; requests?: RequestListItem[] }) => {
+        if (!huy) {
+          setNotes(d.notes)
+          setRequests(d.requests ?? [])
+        }
       })
       .catch(() => {
         if (!huy) {
@@ -81,7 +92,7 @@ export function DocNotesPanel({
     return () => {
       huy = true
     }
-  }, [docType, docId])
+  }, [docType, docId, nap])
 
   async function ghi(body: string, audience: 'internal' | 'partner') {
     setBusy(true)
@@ -112,16 +123,33 @@ export function DocNotesPanel({
           it.kind === 'note'
             ? {
                 ...it,
-                note: { ...it.note, mine: it.note.author_id === meId },
+                note: {
+                  ...it.note,
+                  body: requestLine(it.note, requests),
+                  mine: it.note.author_id === meId,
+                },
               }
             : it,
       ) as StreamRow[],
-    [marks, notes, meId, loc],
+    [marks, notes, requests, meId, loc],
   )
 
   return (
     <div className="kit flex flex-col gap-3">
-      <NoteComposer onSubmit={ghi} busy={busy} partnerLabel={partnerLabel} />
+      {canRequest ? (
+        <DocRequestsArea
+          docType={docType as RequestDocType}
+          docId={docId}
+          meId={meId}
+          requests={requests}
+          notes={notes ?? []}
+          onChanged={() => setNap((k) => k + 1)}
+        >
+          <NoteComposer onSubmit={ghi} busy={busy} partnerLabel={partnerLabel} />
+        </DocRequestsArea>
+      ) : (
+        <NoteComposer onSubmit={ghi} busy={busy} partnerLabel={partnerLabel} />
+      )}
       {loi && (
         <p className="text-k-sm rounded-[var(--radius)] border border-[var(--stop)] bg-[var(--stop-wash)] px-3 py-2 text-[var(--stop)]">
           {loi}
@@ -178,4 +206,17 @@ export function DocNotesPanel({
       )}
     </div>
   )
+}
+
+/**
+ * Dòng YÊU CẦU VIỆC trong luồng trao đổi đọc như một câu: "Giao việc cho Phương ·
+ * hạn 31/10: …". Thiếu câu này thì yêu cầu trông y hệt một ghi chú thường và
+ * người đọc không biết ai đang phải làm.
+ */
+function requestLine(note: DocNote, requests: RequestListItem[]): string {
+  if (note.kind !== 'request') return note.body
+  const r = requests.find((x) => x.id === note.id)
+  if (!r) return note.body
+  const due = r.due_on ? ` · hạn ${r.due_on.slice(8, 10)}/${r.due_on.slice(5, 7)}` : ''
+  return `Giao việc cho ${r.assignee_name ?? 'người nhận'}${due}: ${note.body}`
 }
