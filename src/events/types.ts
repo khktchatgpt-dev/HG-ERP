@@ -21,6 +21,8 @@ export type DomainEvent =
       title: string
       submitted_by: string
       assigner_id: string
+      /** Câu kết quả người nhận ghi khi báo hoàn thành (bắt buộc từ 30/10/2026). */
+      result?: string
     }
   | {
       name: 'task.approved'

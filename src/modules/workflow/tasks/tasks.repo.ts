@@ -107,6 +107,24 @@ export const tasksRepo = {
     return (data as Task | null) ?? null
   },
 
+  /**
+   * Việc DÍNH TỚI một người cho số đỏ "Phân công việc": tôi giao đang chờ duyệt,
+   * hoặc giao cho tôi đang còn bóng ở tôi và có hạn. Chỉ cột luật cần.
+   */
+  async listForAttention(userId: string): Promise<
+    Pick<Task, 'id' | 'kind' | 'status' | 'assigner_id' | 'assignee_id' | 'due_date'>[]
+  > {
+    const { data, error } = await db()
+      .from('tasks')
+      .select('id, kind, status, assigner_id, assignee_id, due_date')
+      .or(
+        `and(assigner_id.eq.${userId},status.eq.submitted),and(assignee_id.eq.${userId},status.in.(todo,in_progress,rejected,on_hold),due_date.not.is.null)`,
+      )
+      .limit(1000)
+    if (error) throw error
+    return (data ?? []) as Pick<Task, 'id' | 'kind' | 'status' | 'assigner_id' | 'assignee_id' | 'due_date'>[] // prettier-ignore
+  },
+
   async findByIdEnriched(id: string): Promise<TaskRow | null> {
     const { data } = await db()
       .from('v_task_summary')

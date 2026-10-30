@@ -64,8 +64,19 @@ export function TaskActions({ taskId, status, isAssignee, isAssigner }: Props) {
   if (isAssignee && ['todo', 'in_progress', 'rejected'].includes(status)) {
     buttons.push({
       label: 'Báo hoàn thành',
-      onClick: () => call('/submit'),
       variant: 'primary',
+      // Bắt một câu kết quả (30/10/2026) — người giao cần biết đã làm gì mới duyệt được.
+      onClick: async () => {
+        const result = await prompt({
+          title: 'Báo hoàn thành',
+          description: 'Ghi một câu kết quả để người giao biết đã làm gì.',
+          inputLabel: 'Kết quả',
+          placeholder: 'VD: đã tải ảnh 55 SP lên hồ sơ',
+          required: true,
+          confirmLabel: 'Báo hoàn thành',
+        })
+        if (result) call('/submit', { result })
+      },
     })
   }
   if (isAssigner && status === 'submitted') {

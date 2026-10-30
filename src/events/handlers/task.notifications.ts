@@ -23,7 +23,7 @@ export function registerTaskNotificationHandlers(): void {
       actorId: e.submitted_by,
       taskId: e.task_id,
       type: 'submitted',
-      payload: { title: e.title },
+      payload: { title: e.title, reason: e.result ?? null },
     })
   })
 

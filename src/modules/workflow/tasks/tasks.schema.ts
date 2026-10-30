@@ -80,8 +80,27 @@ export const weeklyReportQuerySchema = z.object({
   department_id: z.string().uuid().optional(),
 })
 
+/** Báo hoàn thành — bắt một câu kết quả (Q4, 30/10/2026). */
+export const taskSubmitSchema = z.object({
+  // `error` ở z.string: THIẾU HẲN trường cũng ra câu tiếng Việt, không phải "Invalid input…".
+  result: z
+    .string({ error: 'Ghi một câu kết quả để người giao biết đã làm gì' })
+    .trim()
+    .min(1, 'Ghi một câu kết quả để người giao biết đã làm gì')
+    .max(2000, 'Quá dài'),
+})
+
+/** Duyệt Đạt — lời nhắn tuỳ chọn. */
+export const taskApproveSchema = z.object({
+  note: z.string().trim().max(2000, 'Quá dài').optional().nullable(),
+})
+
 export const taskRejectSchema = z.object({
-  reason: z.string().trim().min(1).max(2000),
+  reason: z
+    .string({ error: 'Ghi lý do trả lại để người nhận biết phải làm thêm gì' })
+    .trim()
+    .min(1, 'Ghi lý do trả lại để người nhận biết phải làm thêm gì')
+    .max(2000, 'Quá dài'),
 })
 
 export const taskListQuerySchema = z.object({
