@@ -23,6 +23,7 @@ import {
   canAssign,
   CLOSED_KEEP_DAYS,
   isTakerOpen,
+  matchesMine,
   nextStatus,
   sortGiven,
   summarizeGiven,
@@ -31,8 +32,10 @@ import {
   taskActions,
   taskAttention,
   taskOverdueDays,
+  summarizeMine,
   summarizeTaker,
   type GivenFilter,
+  type MineFilter,
   type TakerStats,
   type TaskAction,
 } from '@/lib/task-flow'
@@ -55,13 +58,44 @@ export type GivenBoard = {
 
 export type Assignee = { id: string; name: string; department: string | null }
 
-/** Một dòng "Việc được giao" trên Bàn làm việc của người nhận (P3). */
+/**
+ * Một việc nhìn từ phía NGƯỜI NHẬN — dòng ô "Việc được giao" trên Bàn làm việc (P3)
+ * và mục "Việc của tôi" ở trang Phân công việc (P5).
+ */
 export type AssignedItem = TaskRow & {
   overdue_days: number
   /** Chỉ 'start' / 'submit' — và RỖNG khi người xem không phải chủ bàn (chỉ xem). */
   actions: TaskAction[]
+  /** Câu kết quả lần báo hoàn thành gần nhất. */
+  last_result: string | null
   /** Lý do lần trả lại gần nhất — người nhận đọc để làm tiếp. */
   last_reject: string | null
+}
+
+export type MineBoard = {
+  items: AssignedItem[]
+  summary: Record<MineFilter, number>
+}
+
+/** Bước người nhận bấm được trên dòng của mình — duyệt / huỷ là việc của người giao. */
+function takerItem(
+  t: TaskRow,
+  viewer: User,
+  own: boolean,
+  notes: Awaited<ReturnType<typeof commentsRepo.latestByTasks>>,
+  today: string,
+): AssignedItem {
+  return {
+    ...t,
+    overdue_days: taskOverdueDays(t, today),
+    actions: own
+      ? taskActions(t, { id: viewer.id, role: viewer.role }).filter(
+          (a) => a === 'start' || a === 'submit',
+        )
+      : [],
+    last_result: notes.get(t.id)?.progress_report?.body ?? null,
+    last_reject: notes.get(t.id)?.rejection?.body ?? null,
+  }
 }
 
 type CreateInput = {
@@ -669,19 +703,39 @@ export const tasksService = {
     const open = rows.filter((t) => isTakerOpen(t.status))
     const notes = await commentsRepo.latestByTasks(
       open.map((t) => t.id),
-      ['rejection'],
+      ['progress_report', 'rejection'],
     )
     const own = viewer.id === subjectId
-    return sortGiven(open, today).map((t) => ({
-      ...t,
-      overdue_days: taskOverdueDays(t, today),
-      actions: own
-        ? taskActions(t, { id: viewer.id, role: viewer.role }).filter(
-            (a) => a === 'start' || a === 'submit',
-          )
-        : [],
-      last_reject: notes.get(t.id)?.rejection?.body ?? null,
-    }))
+    return sortGiven(open, today).map((t) => takerItem(t, viewer, own, notes, today))
+  },
+
+  /**
+   * "VIỆC CỦA TÔI" ở trang Phân công việc (P5, chốt D2): chỗ người NGOÀI Cung ứng
+   * nhận và báo hoàn thành việc được giao. Như ô trên Bàn làm việc nhưng thêm việc
+   * đang chờ duyệt và việc đã đóng trong 30 ngày, để người nhận biết việc mình đã
+   * báo rồi đi tới đâu. Chỉ việc được GIAO (việc tự ghi không thuộc phân công).
+   */
+  async mineBoard(user: User): Promise<MineBoard> {
+    const today = todayVn()
+    const { rows } = await tasksRepo.list({
+      assignee_id: user.id,
+      kind: 'assigned',
+      page: 1,
+      page_size: 500,
+    })
+    const kept = rows.filter((t) =>
+      (['doing', 'waiting', 'done', 'cancelled'] as const).some((f) =>
+        matchesMine(t, f, today),
+      ),
+    )
+    const notes = await commentsRepo.latestByTasks(
+      kept.map((t) => t.id),
+      ['progress_report', 'rejection'],
+    )
+    return {
+      summary: summarizeMine(kept, today),
+      items: sortGiven(kept, today).map((t) => takerItem(t, user, true, notes, today)),
+    }
   },
 
   /**

@@ -360,3 +360,63 @@ export function summarizeTaker(
   }
   return out
 }
+
+// ---- "Việc của tôi" (P5) + đường dẫn chuông ----------------------------------
+
+export const MINE_FILTERS = ['doing', 'overdue', 'waiting', 'done', 'cancelled'] as const
+export type MineFilter = (typeof MINE_FILTERS)[number]
+
+export const MINE_FILTER_LABEL: Record<MineFilter, string> = {
+  doing: 'Cần làm',
+  overdue: 'Quá hạn',
+  waiting: 'Chờ duyệt',
+  done: `Xong ${CLOSED_KEEP_DAYS} ngày`,
+  cancelled: `Đã huỷ ${CLOSED_KEEP_DAYS} ngày`,
+}
+
+/**
+ * Lọc việc NGƯỜI NHẬN thấy. "Cần làm" = bóng ở tôi — đúng tập ô "Việc được giao"
+ * trên Bàn làm việc; "Chờ duyệt" = đã báo hoàn thành, bóng ở người giao.
+ */
+export function matchesMine(t: ListTask, f: MineFilter, today: string): boolean {
+  switch (f) {
+    case 'doing':
+      return isTakerOpen(t.status)
+    case 'overdue':
+      return taskOverdueDays(t, today) > 0
+    case 'waiting':
+      return t.status === 'submitted'
+    case 'done':
+    case 'cancelled':
+      return matchesGiven(t, f, today)
+  }
+}
+
+export function summarizeMine(
+  list: ListTask[],
+  today: string,
+): Record<MineFilter, number> {
+  const out = { doing: 0, overdue: 0, waiting: 0, done: 0, cancelled: 0 }
+  for (const t of list)
+    for (const f of MINE_FILTERS) if (matchesMine(t, f, today)) out[f]++
+  return out
+}
+
+/**
+ * Chip đầu tiên có chứa việc này — chuông mở trang thì chip này được chọn sẵn,
+ * để dòng việc nằm trong bảng chứ không bị bộ lọc mặc định giấu đi.
+ */
+export function filterHolding<F extends string>(
+  filters: readonly F[],
+  match: (f: F) => boolean,
+): F | null {
+  return filters.find(match) ?? null
+}
+
+/**
+ * Chuông việc mở ĐÂY (P5): trang dùng chung tự chọn mục + chip có việc đó và tô
+ * dòng. Một chỗ cho mọi người — người ngoài Cung ứng không có Bàn làm việc.
+ */
+export function taskHref(taskId: string): string {
+  return `/phan-cong-viec?viec=${encodeURIComponent(taskId)}`
+}

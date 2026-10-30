@@ -2,8 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ApiError } from '@/lib/api'
-import type { GivenBoard, GivenItem } from '@/modules/workflow/tasks/tasks.service'
-import { PhanCongScreen } from './PhanCongScreen'
+import type {
+  AssignedItem,
+  GivenBoard,
+  GivenItem,
+  MineBoard,
+} from '@/modules/workflow/tasks/tasks.service'
+import { PhanCongScreen, type PhanCongFocus } from './PhanCongScreen'
 
 /**
  * Trang Phân công việc (P2) — dựng thật trên happy-dom, API giả. Kiểm: giao việc
@@ -50,13 +55,25 @@ const ITEM = (over: Partial<GivenItem> = {}): GivenItem =>
     ...over,
   }) as GivenItem
 
-function show(items: GivenItem[], summary: GivenBoard['summary']) {
+const NO_MINE: MineBoard = {
+  items: [],
+  summary: { doing: 0, overdue: 0, waiting: 0, done: 0, cancelled: 0 },
+}
+
+function show(
+  items: GivenItem[],
+  summary: GivenBoard['summary'],
+  mine: MineBoard = NO_MINE,
+  focus: PhanCongFocus | null = null,
+) {
   render(
     <PhanCongScreen
       meId="u-thao"
       today={TODAY}
       board={{ items, summary }}
+      mine={mine}
       people={PEOPLE}
+      focus={focus}
     />,
   )
 }
@@ -187,10 +204,114 @@ describe('danh sách Việc tôi giao', () => {
   })
 
   it('nhân viên mở trang: không có hộp giao việc, nói rõ ai giao', () => {
-    render(<PhanCongScreen meId="u-nga" today={TODAY} board={null} people={[]} />)
+    render(<PhanCongScreen meId="u-nga" today={TODAY} board={null} mine={NO_MINE} people={[]} focus={null} />) // prettier-ignore
     expect(screen.queryByRole('form', { name: 'Giao việc' })).toBeNull()
     expect(
       screen.getByText('Sếp và quản lý giao việc. Cần giao thì nhờ quản lý phòng.'),
     ).toBeTruthy()
+  })
+})
+/*
+  P5 — "Việc của tôi": chỗ người NGOÀI Cung ứng (Sales, Kỹ thuật) nhận và báo hoàn
+  thành (chốt D2). Ví dụ theo bản vẽ: chị Thảo giao Phương (Bán hàng) bổ sung ảnh.
+*/
+const MINE = (over: Partial<AssignedItem> = {}): AssignedItem =>
+  ({
+    id: 'm1',
+    task_code: 'CV-000050',
+    title: 'Bổ sung KSX, ảnh, số lượng cho đơn mới của MX',
+    description: 'Gửi cho chị Thảo trước thứ Hai',
+    status: 'todo',
+    priority: 'urgent',
+    kind: 'assigned',
+    assigner_id: 'u-thao',
+    assigner_name: 'Vũ Phương Thảo',
+    assignee_id: 'u-phuong',
+    due_date: '2026-11-01T16:59:59Z',
+    created_at: '2026-10-30T02:00:00Z',
+    submitted_at: null,
+    completed_at: null,
+    cancelled_at: null,
+    overdue_days: 0,
+    actions: ['start', 'submit'],
+    last_result: null,
+    last_reject: null,
+    ...over,
+  }) as AssignedItem
+const MINE_BOARD: MineBoard = {
+  items: [
+    MINE(),
+    MINE({ id: 'm2', title: 'Gửi ảnh mẫu bàn LAURA', priority: 'normal', status: 'submitted', actions: [], last_result: 'Đã gửi 6 ảnh qua Zalo', submitted_at: '2026-10-29T08:00:00Z' }), // prettier-ignore
+    MINE({ id: 'm3', title: 'Xác nhận số lượng lệnh 12', priority: 'normal', status: 'done', actions: [], due_date: '2026-10-28T16:59:59Z', completed_at: '2026-10-28T09:00:00Z' }), // prettier-ignore
+  ],
+  summary: { doing: 1, overdue: 0, waiting: 1, done: 1, cancelled: 0 },
+}
+
+describe('Việc của tôi (P5)', () => {
+  function showStaff(focus: PhanCongFocus | null = null) {
+    render(<PhanCongScreen meId="u-phuong" today={TODAY} board={null} mine={MINE_BOARD} people={[]} focus={focus} />) // prettier-ignore
+  }
+
+  it('nhân viên: chỉ một mục "Việc của tôi", mở sẵn chip Cần làm; số chip = số dòng', () => {
+    showStaff()
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Việc của tôi1',
+    ])
+    expect(screen.getByRole('button', { name: /Cần làm/ }).getAttribute('aria-pressed')).toBe('true') // prettier-ignore
+    const rows = screen.getAllByRole('row').filter((r) => r.closest('tbody'))
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('Vũ Phương Thảo')).toBeTruthy()
+    expect(within(rows[0]).getByText('Gấp')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Chờ duyệt/ }))
+    expect(screen.getByText('Đã báo: “Đã gửi 6 ảnh qua Zalo” · 29/10')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Báo hoàn thành/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Xong 30 ngày/ }))
+    expect(screen.getByText('Xong · đúng hạn')).toBeTruthy()
+  })
+
+  it('người Bán hàng báo hoàn thành ngay trên trang: bắt câu kết quả, gửi đúng bản server nhận', async () => {
+    api.mockResolvedValue({ task: {} })
+    showStaff()
+    fireEvent.click(screen.getByRole('button', { name: /Báo hoàn thành/ }))
+    fireEvent.change(screen.getByLabelText(/Kết quả/), { target: { value: 'Đã gửi đủ KSX + ảnh' } }) // prettier-ignore
+    fireEvent.click(screen.getByRole('button', { name: /Báo hoàn thành/ }))
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalled())
+    expect(api).toHaveBeenCalledWith('/api/tasks/m1/submit', { method: 'POST', body: { result: 'Đã gửi đủ KSX + ảnh' } }) // prettier-ignore
+    expect(screen.getByText('Đã ghi — đang cập nhật…')).toBeTruthy()
+  })
+
+  it('chuông mở trang: vào đúng mục + chip có việc đó, dòng được tô', () => {
+    showStaff({ id: 'm3', muc: 'cua-toi', filter: 'done' })
+    expect(screen.getByRole('button', { name: /Xong 30 ngày/ }).getAttribute('aria-pressed')).toBe('true') // prettier-ignore
+    const hit = screen
+      .getAllByRole('row')
+      .find((r) => r.getAttribute('aria-current') === 'true')
+    expect(hit?.textContent).toContain('Xác nhận số lượng lệnh 12')
+  })
+
+  it('người giao: chuông "báo hoàn thành" vào mục Việc tôi giao, chip Chờ tôi duyệt, dòng được tô', () => {
+    const given = [ITEM({ id: 'cho', status: 'submitted', actions: ['approve', 'reject'] }), ITEM({ id: 'mo' })] // prettier-ignore
+    const sum = { to_approve: 1, overdue: 0, open: 2, done: 0, cancelled: 0 }
+    show(given, sum, MINE_BOARD, {
+      id: 'cho',
+      muc: 'giao',
+      filter: 'to_approve',
+    })
+    expect(screen.getByRole('tab', { name: /Việc tôi giao/ }).getAttribute('aria-selected')).toBe('true') // prettier-ignore
+    const hit = screen
+      .getAllByRole('row')
+      .find((r) => r.getAttribute('aria-current') === 'true')
+    expect(hit).toBeTruthy()
+    // Người giao cũng nhận việc sếp giao: mục thứ hai bấm được.
+    fireEvent.click(screen.getByRole('tab', { name: /Việc của tôi/ }))
+    expect(screen.getByRole('button', { name: /Cần làm/ })).toBeTruthy()
+  })
+
+  it('đang ở "Việc của tôi" bấm Giao việc: về mục giao và con trỏ ở ô người nhận', () => {
+    show([], { to_approve: 0, overdue: 0, open: 0, done: 0, cancelled: 0 }, MINE_BOARD, { id: 'm1', muc: 'cua-toi', filter: 'doing' }) // prettier-ignore
+    expect(screen.queryByRole('form', { name: 'Giao việc' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Giao việc$/ }))
+    expect(screen.getByRole('form', { name: 'Giao việc' })).toBeTruthy()
+    expect(document.activeElement?.id).toBe('pcv-nguoi')
   })
 })

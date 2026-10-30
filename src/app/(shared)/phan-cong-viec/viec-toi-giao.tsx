@@ -23,8 +23,24 @@ import { btn, dmVn, fieldCls, lateDays, StatusTag, Tag } from './phan-cong.share
 
 type Step = { id: string; kind: 'reject' | 'cancel' }
 
-export function ViecToiGiao({ board, today }: { board: GivenBoard; today: string }) {
-  const [filter, setFilter] = useState<GivenFilter>(board.summary.to_approve > 0 ? 'to_approve' : 'open') // prettier-ignore
+/** Cuộn tới dòng chuông vừa mở — hàm cố định nên chỉ chạy một lần lúc dòng hiện ra. */
+const scrollHere = (el: HTMLTableRowElement | null) =>
+  el?.scrollIntoView?.({ block: 'nearest' })
+
+export function ViecToiGiao({
+  board,
+  today,
+  initialFilter,
+  focusId = null,
+}: {
+  board: GivenBoard
+  today: string
+  /** Chip chọn sẵn — chuông mở trang thì là chip có việc đó. */
+  initialFilter?: GivenFilter
+  /** Việc chuông vừa mở — tô dòng và cuộn tới. */
+  focusId?: string | null
+}) {
+  const [filter, setFilter] = useState<GivenFilter>(initialFilter ?? (board.summary.to_approve > 0 ? 'to_approve' : 'open')) // prettier-ignore
   const rows = board.items.filter((t) => matchesGiven(t, filter, today))
 
   return (
@@ -75,6 +91,7 @@ export function ViecToiGiao({ board, today }: { board: GivenBoard; today: string
           {/* Đổi mục lọc = bảng mới: ô trả lại / huỷ đang mở của mục cũ không theo sang. */}
           <BangViecToiGiao
             key={filter}
+            focusId={focusId}
             board={board}
             rows={rows}
             footer={
@@ -100,6 +117,7 @@ export function BangViecToiGiao({
   board,
   rows,
   footer,
+  focusId = null,
 }: {
   /** Cả bảng việc — so CHÍNH đối tượng này để biết trang đã tải lại xong. */
   board: GivenBoard
@@ -107,6 +125,8 @@ export function BangViecToiGiao({
   rows: GivenItem[]
   /** Chân bảng — câu nói bảng gồm gì, không gồm gì. */
   footer: React.ReactNode
+  /** Việc chuông vừa mở — tô dòng và cuộn tới. */
+  focusId?: string | null
 }) {
   const router = useRouter()
   const [step, setStep] = useState<Step | null>(null)
@@ -221,7 +241,9 @@ export function BangViecToiGiao({
           return (
             <Fragment key={t.id}>
               <tr
-                className={`align-top ${t.status === 'submitted' ? 'bg-[var(--warn)]/5' : ''}`}
+                ref={t.id === focusId ? scrollHere : undefined}
+                aria-current={t.id === focusId ? 'true' : undefined}
+                className={`align-top ${t.id === focusId ? 'bg-[var(--accent)]' : t.status === 'submitted' ? 'bg-[var(--warn)]/5' : ''}`}
               >
                 <td className="border-b border-[var(--border)] px-3 py-1.5 font-mono whitespace-nowrap tabular-nums">
                   {t.due_date ? (

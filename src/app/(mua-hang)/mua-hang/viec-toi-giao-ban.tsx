@@ -12,30 +12,15 @@ import type {
 } from '@/modules/workflow/tasks/tasks.service'
 import { GiaoViec, type GiaoViecHandle } from '@/app/(shared)/phan-cong-viec/giao-viec'
 import { BangViecToiGiao } from '@/app/(shared)/phan-cong-viec/viec-toi-giao'
+import { KIT_BRIDGE } from './kit-bridge'
 
 /**
  * PHÂN CÔNG VIỆC trên Bàn làm việc của sếp / quản lý (P4, bản vẽ A 30/10/2026):
  * ô "Việc tôi giao" + nút "Giao việc" góc trên phải mở hộp NGAY BÊN PHẢI bảng.
  *
  * VIẾT KHÔNG KIT (D1) và DÙNG LẠI đúng bảng + hộp đã dựng ở trang Phân công việc
- * (P2): một luật, hai chỗ đặt. Khối P2 gọi màu bằng tên token theme-v3
- * (`--primary`, `--border`…), còn Bàn làm việc nằm trong khung `.kit` có màu hành
- * động riêng (`--act`) — để nguyên là hai màu xanh trên một màn. `KIT_BRIDGE` đặt
- * lại các tên đó theo màu kit cho riêng vùng này.
+ * (P2): một luật, hai chỗ đặt. Màu đi qua `KIT_BRIDGE` (xem `kit-bridge.ts`).
  */
-const KIT_BRIDGE = {
-  '--primary': 'var(--act)',
-  '--primary-foreground': 'var(--act-ink)',
-  '--accent': 'var(--act-wash)',
-  '--accent-foreground': 'var(--act-text)',
-  '--foreground': 'var(--ink)',
-  '--muted-foreground': 'var(--ink-3)',
-  '--placeholder': 'var(--ink-3)',
-  '--card': 'var(--surface-card)',
-  '--muted': 'var(--surface-raised)',
-  '--border': 'var(--hair)',
-  '--input': 'var(--line)',
-} as React.CSSProperties
 
 /** Việc tôi giao còn mở — CÙNG phép lọc "Chưa xong" của trang Phân công việc. */
 export function openGiven(board: GivenBoard, today: string): GivenItem[] {

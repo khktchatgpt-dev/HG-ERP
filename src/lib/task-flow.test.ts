@@ -3,15 +3,21 @@ import {
   actionForStatus,
   canAssign,
   dueEndOfDay,
+  filterHolding,
+  GIVEN_FILTERS,
   isTakerOpen,
   matchesGiven,
+  matchesMine,
+  MINE_FILTERS,
   sortGiven,
   summarizeGiven,
+  summarizeMine,
   summarizeTaker,
   nextStatus,
   taskActionBlock,
   taskActions,
   taskAttention,
+  taskHref,
   taskLateDays,
   taskOverdueDays,
   type FlowTask,
@@ -210,5 +216,31 @@ describe('Theo người mua — ba cột việc được giao (P4)', () => {
   })
   it('chưa có việc nào: toàn 0 (màn vẽ "—" cho cột Đúng hạn)', () => {
     expect(summarizeTaker([], TODAY)).toEqual({ open: 0, overdue: 0, on_time: 0, done_due: 0 })
+  })
+})
+
+describe('Việc của tôi + chuông mở đúng chỗ (P5)', () => {
+  const L = (id: string, over: Partial<FlowTask & { completed_at: string | null; cancelled_at: string | null; created_at: string }> = {}) => ({ id, ...T(), created_at: '2026-10-20T03:00:00Z', completed_at: null, cancelled_at: null, ...over }) // prettier-ignore
+  const list = [
+    L('lam', { status: 'in_progress' }),
+    L('qua', { status: 'rejected', due_date: '2026-10-27T16:59:59Z' }),
+    L('cho', { status: 'submitted' }),
+    L('xong', { status: 'done', completed_at: '2026-10-29T03:00:00Z' }),
+    L('xong-cu', { status: 'done', completed_at: '2026-09-01T03:00:00Z' }),
+    L('huy', { status: 'cancelled', cancelled_at: '2026-10-29T03:00:00Z' }),
+  ]
+  it('"Cần làm" = bóng ở tôi (đúng tập ô Việc được giao); chờ duyệt tách riêng', () => {
+    expect(summarizeMine(list, TODAY)).toEqual({ doing: 2, overdue: 1, waiting: 1, done: 1, cancelled: 1 }) // prettier-ignore
+    expect(list.filter((t) => matchesMine(t, 'doing', TODAY)).map((t) => t.id)).toEqual(['lam', 'qua']) // prettier-ignore
+  })
+  it('chip đầu tiên chứa việc — việc quá hạn mở ở "Cần làm", việc xong ở "Xong"', () => {
+    const at = (id: string) => list.find((t) => t.id === id)!
+    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('qua'), f, TODAY))).toBe('doing')
+    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('xong'), f, TODAY))).toBe('done')
+    expect(filterHolding(GIVEN_FILTERS, (f) => matchesGiven(at('cho'), f, TODAY))).toBe('to_approve') // prettier-ignore
+    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('xong-cu'), f, TODAY))).toBeNull()
+  })
+  it('chuông việc mở trang dùng chung, không còn /tasks/[id] cũ', () => {
+    expect(taskHref('8ecdc87e-b218')).toBe('/phan-cong-viec?viec=8ecdc87e-b218')
   })
 })

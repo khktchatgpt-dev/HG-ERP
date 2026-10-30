@@ -285,3 +285,30 @@ describe('takerStats — ba cột việc ở tab Theo người mua (P4)', () => 
     expect(tasks.listForTakers).not.toHaveBeenCalled()
   })
 })
+
+describe('mineBoard — mục "Việc của tôi" ở trang Phân công việc (P5)', () => {
+  it('việc được giao cho tôi: cần làm + chờ duyệt + đóng trong 30 ngày; chỉ nút của người nhận', async () => {
+    tasks.list.mockResolvedValue({
+      rows: [
+        TASK({ id: 'lam', status: 'todo', created_at: '2026-10-29T03:00:00Z' }),
+        TASK({ id: 'cho', status: 'submitted', created_at: '2026-10-28T03:00:00Z' }),
+        TASK({ id: 'xong', status: 'done', completed_at: '2026-10-29T03:00:00Z' }),
+        TASK({ id: 'cu', status: 'done', completed_at: '2026-08-01T03:00:00Z' }),
+      ],
+      total: 4,
+    })
+    comments.latestByTasks.mockResolvedValue(
+      new Map([['cho', { progress_report: { body: 'Đã gửi 6 ảnh', at: 'x' } }]]),
+    )
+    const out = await tasksService.mineBoard(PHUONG)
+    expect(tasks.list).toHaveBeenCalledWith(
+      expect.objectContaining({ assignee_id: 'u-phuong', kind: 'assigned' }),
+    )
+    expect(out.summary).toEqual({ doing: 1, overdue: 0, waiting: 1, done: 1, cancelled: 0 })
+    expect(out.items.map((t) => [t.id, t.actions, t.last_result])).toEqual([
+      ['cho', [], 'Đã gửi 6 ảnh'],
+      ['lam', ['start', 'submit'], null],
+      ['xong', [], null],
+    ])
+  })
+})
