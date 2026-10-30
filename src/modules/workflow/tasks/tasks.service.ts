@@ -4,6 +4,7 @@ import {
   type TaskKind,
   type TaskPatch,
   type TaskPriority,
+  type TaskRow,
   type TaskStatus,
 } from '@/modules/workflow/tasks/tasks.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -21,10 +22,46 @@ import {
   ASSIGN_BLOCKED,
   canAssign,
   nextStatus,
+  sortGiven,
+  summarizeGiven,
+  matchesGiven,
   taskActionBlock,
+  taskActions,
   taskAttention,
+  taskOverdueDays,
+  type GivenFilter,
   type TaskAction,
 } from '@/lib/task-flow'
+
+/** Một dòng của "Việc tôi giao" — đủ để màn hình vẽ, không phải tự suy luật. */
+export type GivenItem = TaskRow & {
+  overdue_days: number
+  /** Bước NGƯỜI ĐANG XEM bấm được (server tính bằng `taskActions`). */
+  actions: TaskAction[]
+  /** Câu kết quả mới nhất khi báo hoàn thành. */
+  last_result: string | null
+  /** Lý do trả lại mới nhất. */
+  last_reject: string | null
+}
+
+export type GivenBoard = {
+  items: GivenItem[]
+  summary: Record<GivenFilter, number>
+}
+
+export type Assignee = { id: string; name: string; department: string | null }
+
+/** Một dòng "Việc được giao" trên Bàn làm việc của người nhận (P3). */
+export type AssignedItem = TaskRow & {
+  overdue_days: number
+  /** Chỉ 'start' / 'submit' — và RỖNG khi người xem không phải chủ bàn (chỉ xem). */
+  actions: TaskAction[]
+  /** Lý do lần trả lại gần nhất — người nhận đọc để làm tiếp. */
+  last_reject: string | null
+}
+
+/** Trạng thái mà bóng đang ở người nhận — đúng tập việc cần họ động tay. */
+const TAKER_OPEN: TaskStatus[] = ['todo', 'in_progress', 'rejected', 'on_hold']
 
 type CreateInput = {
   title: string
@@ -81,7 +118,8 @@ async function gate(user: User, id: string, action: TaskAction): Promise<Task> {
   const task = await tasksRepo.findById(id)
   if (!task) throw NotFound('Không thấy việc này')
   const block = taskActionBlock(task, action, { id: user.id, role: user.role })
-  if (block) throw block.kind === 'who' ? Forbidden(block.message) : BadRequest(block.message)
+  if (block)
+    throw block.kind === 'who' ? Forbidden(block.message) : BadRequest(block.message)
   return task
 }
 
@@ -95,7 +133,9 @@ export const tasksService = {
 
     const assignee = await usersRepo.findById(input.assignee_id)
     if (!assignee || !assignee.is_active || assignee.deleted_at) {
-      throw BadRequest(`${assignee?.name ?? 'Người nhận'} không còn hoạt động — chọn người khác`)
+      throw BadRequest(
+        `${assignee?.name ?? 'Người nhận'} không còn hoạt động — chọn người khác`,
+      )
     }
     // Q2 (30/10/2026): BỎ luật "quản lý chỉ giao trong phòng mình" — quản lý Cung ứng
     // cần thúc Sales, Kỹ thuật. Việc mang phòng CỦA NGƯỜI NHẬN (department_id bên
@@ -242,7 +282,9 @@ export const tasksService = {
     if (patch.assignee_id && patch.assignee_id !== before.assignee_id) {
       const newAssignee = await usersRepo.findById(patch.assignee_id)
       if (!newAssignee || !newAssignee.is_active || newAssignee.deleted_at) {
-        throw BadRequest(`${newAssignee?.name ?? 'Người nhận'} không còn hoạt động — chọn người khác`)
+        throw BadRequest(
+          `${newAssignee?.name ?? 'Người nhận'} không còn hoạt động — chọn người khác`,
+        )
       }
       // Q2 — chuyển cho người phòng khác cũng được (bỏ luật cùng phòng 30/10/2026).
     }
@@ -295,6 +337,19 @@ export const tasksService = {
       action: 'status_changed',
       payload: { from: task.status, to },
     })
+    // Người giao huỷ / mở lại → báo người nhận: "không phải làm nữa" là tin họ cần
+    // ngay. Bắt đầu / tạm hoãn của người nhận thì không bắn chuông (quá ồn).
+    if (task.kind === 'assigned' && (action === 'cancel' || action === 'restore')) {
+      await emit({
+        name: 'task.status_changed',
+        task_id: id,
+        title: task.title,
+        changed_by: user.id,
+        from_status: task.status,
+        to_status: nextStatus(task, action),
+        notify_ids: [task.assignee_id].filter((x) => x !== user.id),
+      })
+    }
     return next
   },
 
@@ -356,7 +411,8 @@ export const tasksService = {
   },
 
   async reject(user: User, id: string, reason: string): Promise<Task> {
-    if (!reason.trim()) throw BadRequest('Ghi lý do trả lại để người nhận biết phải làm thêm gì')
+    if (!reason.trim())
+      throw BadRequest('Ghi lý do trả lại để người nhận biết phải làm thêm gì')
     const task = await gate(user, id, 'reject')
     const next = await tasksRepo.patch(id, { status: 'rejected' })
     await commentsRepo.insert({
@@ -560,6 +616,92 @@ export const tasksService = {
    * vấn gọn (chỉ cột luật cần); đếm bằng `taskAttention` — đúng phép mà danh
    * sách dùng để tô đỏ, nên số trên sidebar không nói khác danh sách.
    */
+  /**
+   * "VIỆC TÔI GIAO" (P2 phân công việc) — mọi việc người này đã giao, trừ việc đóng
+   * quá 30 ngày. Số trên chip đếm trên CHÍNH tập này bằng `matchesGiven`, nên chip
+   * và danh sách nó mở không thể nói khác nhau. null = người xem không giao được việc.
+   */
+  async givenBoard(user: User): Promise<GivenBoard | null> {
+    if (!canAssign(user)) return null
+    const today = todayVn()
+    const { rows } = await tasksRepo.list({
+      assigner_id: user.id,
+      kind: 'assigned',
+      page: 1,
+      page_size: 500,
+    })
+    const kept = rows.filter((t) =>
+      ['open', 'done', 'cancelled'].some((f) => matchesGiven(t, f as GivenFilter, today)),
+    )
+    const notes = await commentsRepo.latestByTasks(
+      kept.map((t) => t.id),
+      ['progress_report', 'rejection'],
+    )
+    const actor = { id: user.id, role: user.role }
+    return {
+      summary: summarizeGiven(kept, today),
+      items: sortGiven(kept, today).map((t) => ({
+        ...t,
+        overdue_days: taskOverdueDays(t, today),
+        actions: taskActions(t, actor),
+        last_result: notes.get(t.id)?.progress_report?.body ?? null,
+        last_reject: notes.get(t.id)?.rejection?.body ?? null,
+      })),
+    }
+  },
+
+  /**
+   * NGƯỜI NHẬN được việc (Q2 — mọi phòng): tên + phòng của mọi tài khoản đang hoạt
+   * động. Không email / điện thoại: ô chọn người không cần.
+   */
+  /**
+   * VIỆC ĐƯỢC GIAO cho chủ một Bàn làm việc (P3, bản vẽ B — chốt D4: luôn là việc
+   * của chính người đó, ở cả hai phạm vi). Chỉ việc bóng đang ở người nhận; việc đã
+   * báo hoàn thành chờ duyệt thì không nằm đây. Người duyệt xem bàn người khác
+   * (`?nguoi=`) thì nhận danh sách KHÔNG có nút — báo hoàn thành là lời của chính
+   * người làm.
+   */
+  async assignedTo(viewer: User, subjectId: string): Promise<AssignedItem[]> {
+    const today = todayVn()
+    const { rows } = await tasksRepo.list({
+      assignee_id: subjectId,
+      kind: 'assigned',
+      page: 1,
+      page_size: 200,
+    })
+    const open = rows.filter((t) => TAKER_OPEN.includes(t.status))
+    const notes = await commentsRepo.latestByTasks(
+      open.map((t) => t.id),
+      ['rejection'],
+    )
+    const own = viewer.id === subjectId
+    return sortGiven(open, today).map((t) => ({
+      ...t,
+      overdue_days: taskOverdueDays(t, today),
+      actions: own
+        ? taskActions(t, { id: viewer.id, role: viewer.role }).filter(
+            (a) => a === 'start' || a === 'submit',
+          )
+        : [],
+      last_reject: notes.get(t.id)?.rejection?.body ?? null,
+    }))
+  },
+
+  async assignees(): Promise<Assignee[]> {
+    const [users, depts] = await Promise.all([
+      usersRepo.list({ active_only: true }),
+      departmentsRepo.list(),
+    ])
+    const deptName = new Map(depts.map((d) => [d.id, d.name]))
+    return users
+      .filter((u) => u.name?.trim())
+      .map((u) => ({
+        id: u.id,
+        name: u.name!.trim(),
+        department: u.department_id ? (deptName.get(u.department_id) ?? null) : null,
+      }))
+  },
+
   async attention(user: User) {
     const rows = await tasksRepo.listForAttention(user.id)
     return taskAttention(rows, user.id, todayVn())

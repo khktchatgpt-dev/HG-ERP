@@ -3,6 +3,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import {
   loadWatchPos,
   todayIso,
@@ -78,6 +79,9 @@ export default async function Page({
       ? (users.find((u) => u.id === sp.nguoi) ?? null)
       : null
   const subjectId = viewAsUser?.id ?? user.id
+  // Việc được giao cho chủ bàn (phân công việc P3). Khởi động ngay khi biết đang xem
+  // bàn của ai, chạy song song phần tính bàn bên dưới; chỉ chờ ở lúc trả trang.
+  const assignedP = tasksService.assignedTo(user, subjectId)
 
   const withLsx = rows.map((p) => ({
     ...p,
@@ -209,6 +213,7 @@ export default async function Page({
     rank: a.rank,
   }))
 
+  const assigned = await assignedP
   return (
     <BanLamViecScreen
       today={today}
@@ -218,6 +223,7 @@ export default async function Page({
       defaultScope={viewAsUser ? 'toi' : defaultScope({ canApprove })}
       urlScope={viewAsUser ? 'toi' : parseScope(sp.pham_vi)}
       desks={desks}
+      assigned={assigned}
       approver={approver}
       agenda={agenda}
       truncatedAt={truncatedAt}

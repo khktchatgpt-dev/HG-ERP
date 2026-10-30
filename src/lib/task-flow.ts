@@ -208,3 +208,85 @@ export function taskAttention(
   }
   return { to_approve: toApprove, my_overdue: myOverdue, total: toApprove + myOverdue }
 }
+
+// ---- Danh sách "Việc tôi giao" (P2) -----------------------------------------
+
+/** Việc đã đóng (xong / huỷ) chỉ giữ trên danh sách bấy nhiêu ngày. */
+export const CLOSED_KEEP_DAYS = 30
+
+export const GIVEN_FILTERS = ['to_approve', 'overdue', 'open', 'done', 'cancelled'] as const
+export type GivenFilter = (typeof GIVEN_FILTERS)[number]
+
+export const GIVEN_FILTER_LABEL: Record<GivenFilter, string> = {
+  to_approve: 'Chờ tôi duyệt',
+  overdue: 'Quá hạn',
+  open: 'Chưa xong',
+  done: `Xong ${CLOSED_KEEP_DAYS} ngày`,
+  cancelled: `Đã huỷ ${CLOSED_KEEP_DAYS} ngày`,
+}
+
+type ListTask = FlowTask & {
+  created_at: string
+  completed_at: string | null
+  cancelled_at: string | null
+}
+
+function daysSince(iso: string | null, today: string): number {
+  if (!iso) return Infinity
+  const d = todayVn(new Date(iso))
+  const ms = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10))
+  return Math.round((ms(today) - ms(d)) / 86_400_000)
+}
+
+/**
+ * MỘT phép lọc cho cả số trên chip lẫn danh sách chip mở ra — số là lời hứa về
+ * số dòng. "Chưa xong" gồm cả chờ duyệt: với người giao, việc chưa duyệt Đạt là
+ * việc chưa xong.
+ */
+export function matchesGiven(t: ListTask, f: GivenFilter, today: string): boolean {
+  switch (f) {
+    case 'to_approve':
+      return t.status === 'submitted'
+    case 'overdue':
+      return taskOverdueDays(t, today) > 0
+    case 'open':
+      return !['done', 'cancelled'].includes(t.status)
+    case 'done':
+      return t.status === 'done' && daysSince(t.completed_at, today) < CLOSED_KEEP_DAYS
+    case 'cancelled':
+      return t.status === 'cancelled' && daysSince(t.cancelled_at, today) < CLOSED_KEEP_DAYS
+  }
+}
+
+export function summarizeGiven(list: ListTask[], today: string): Record<GivenFilter, number> {
+  const out = { to_approve: 0, overdue: 0, open: 0, done: 0, cancelled: 0 }
+  for (const t of list) for (const f of GIVEN_FILTERS) if (matchesGiven(t, f, today)) out[f]++
+  return out
+}
+
+/**
+ * Thứ tự đọc của người giao: chờ tôi duyệt lên đầu (bóng ở tôi) → quá hạn lâu nhất
+ * → hạn gần nhất → không hạn → đã đóng (mới đóng trước).
+ */
+export function sortGiven<T extends ListTask>(list: T[], today: string): T[] {
+  const rank = (t: T) =>
+    t.status === 'submitted' ? 0 : ['done', 'cancelled'].includes(t.status) ? 2 : 1
+  const closedAt = (t: T) => t.completed_at ?? t.cancelled_at ?? ''
+  return [...list].sort((a, b) => {
+    if (rank(a) !== rank(b)) return rank(a) - rank(b)
+    if (rank(a) === 2) return closedAt(b).localeCompare(closedAt(a))
+    const od = taskOverdueDays(b, today) - taskOverdueDays(a, today)
+    if (od !== 0) return od
+    if (a.due_date !== b.due_date) {
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return a.due_date.localeCompare(b.due_date)
+    }
+    return a.created_at.localeCompare(b.created_at)
+  })
+}
+
+/** Hạn gõ theo ngày (YYYY-MM-DD, giờ VN) → mốc HẾT NGÀY đó để lưu `due_date`. */
+export function dueEndOfDay(isoDate: string): string {
+  return `${isoDate}T23:59:59+07:00`
+}

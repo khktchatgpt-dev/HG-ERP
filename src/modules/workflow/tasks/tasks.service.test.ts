@@ -14,9 +14,10 @@ const { tasks, users, comments, activity, emit } = vi.hoisted(() => ({
     insert: vi.fn(),
     patch: vi.fn(),
     listForAttention: vi.fn(),
+    list: vi.fn(),
   },
   users: { findById: vi.fn() },
-  comments: { insert: vi.fn() },
+  comments: { insert: vi.fn(), latestByTasks: vi.fn() },
   activity: { log: vi.fn() },
   emit: vi.fn(),
 }))
@@ -183,8 +184,12 @@ describe('changeStatus — đường cũ /status đi qua cùng luật', () => {
     tasks.findById.mockResolvedValue(TASK())
     await tasksService.changeStatus(PHUONG, 't1', 'in_progress')
     expect(tasks.patch).toHaveBeenLastCalledWith('t1', { status: 'in_progress' })
+    // Bắt đầu của người nhận: không bắn chuông (quá ồn).
+    expect(emit).not.toHaveBeenCalled()
     await tasksService.changeStatus(THAO, 't1', 'cancelled')
     expect(tasks.patch).toHaveBeenLastCalledWith('t1', { status: 'cancelled' })
+    // Người giao huỷ → người nhận được báo "không phải làm nữa".
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'task.status_changed', to_status: 'cancelled', notify_ids: ['u-phuong'] })) // prettier-ignore
   })
 })
 
@@ -201,5 +206,57 @@ describe('attention — số đỏ', () => {
       total: 3,
     })
     expect(tasks.listForAttention).toHaveBeenCalledWith('u-thao')
+  })
+})
+
+describe('assignedTo — ô Việc được giao trên Bàn làm việc (P3)', () => {
+  beforeEach(() => {
+    tasks.list.mockResolvedValue({
+      rows: [
+        TASK({
+          id: 'mo',
+          status: 'todo',
+          due_date: '2026-11-03T16:59:59Z',
+          created_at: '2026-10-28T03:00:00Z',
+        }),
+        TASK({
+          id: 'qua',
+          status: 'in_progress',
+          due_date: '2026-10-27T16:59:59Z',
+          created_at: '2026-10-27T03:00:00Z',
+        }),
+        TASK({
+          id: 'lai',
+          status: 'rejected',
+          due_date: null,
+          created_at: '2026-10-26T03:00:00Z',
+        }),
+        TASK({ id: 'cho', status: 'submitted' }),
+        TASK({ id: 'xong', status: 'done' }),
+        TASK({ id: 'huy', status: 'cancelled' }),
+      ],
+      total: 6,
+    })
+    comments.latestByTasks.mockResolvedValue(
+      new Map([['lai', { rejection: { body: 'Thiếu NCC ở Bình Dương', at: 'x' } }]]),
+    )
+  })
+
+  it('chỉ việc bóng đang ở người nhận (bỏ chờ duyệt / xong / huỷ), quá hạn lên đầu, kèm lý do trả lại', async () => {
+    const out = await tasksService.assignedTo(PHUONG, 'u-phuong')
+    expect(tasks.list).toHaveBeenCalledWith(
+      expect.objectContaining({ assignee_id: 'u-phuong', kind: 'assigned' }),
+    )
+    expect(out.map((t) => [t.id, t.overdue_days, t.actions, t.last_reject])).toEqual([
+      ['qua', 3, ['submit'], null],
+      ['mo', 0, ['start', 'submit'], null],
+      ['lai', 0, ['start', 'submit'], 'Thiếu NCC ở Bình Dương'],
+    ])
+  })
+
+  it('người duyệt xem bàn người khác: cùng danh sách, KHÔNG có nút (kể cả sếp)', async () => {
+    const out = await tasksService.assignedTo(DIEN, 'u-phuong')
+    expect(out).toHaveLength(3)
+    expect(out.every((t) => t.actions.length === 0)).toBe(true)
   })
 })

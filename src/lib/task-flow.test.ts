@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   actionForStatus,
   canAssign,
+  dueEndOfDay,
+  matchesGiven,
+  sortGiven,
+  summarizeGiven,
   nextStatus,
   taskActionBlock,
   taskActions,
@@ -146,5 +150,31 @@ describe('schema báo hoàn thành / trả lại — câu tiếng Việt kể c�
     }
     expect(taskRejectSchema.safeParse({}).error?.issues[0].message).toBe('Ghi lý do trả lại để người nhận biết phải làm thêm gì') // prettier-ignore
     expect(taskSubmitSchema.parse({ result: ' Đã xong ' }).result).toBe('Đã xong')
+  })
+})
+
+describe('Việc tôi giao — chip đếm đúng danh sách nó mở (P2)', () => {
+  const L = (id: string, over: Partial<FlowTask & { completed_at: string | null; cancelled_at: string | null; created_at: string }> = {}) => ({ id, ...T(), created_at: '2026-10-20T03:00:00Z', completed_at: null, cancelled_at: null, ...over }) // prettier-ignore
+  const list = [
+    L('cho', { status: 'submitted' }),
+    L('qua', { status: 'in_progress', due_date: '2026-10-27T16:59:59Z' }),
+    L('mo', { due_date: '2026-11-03T16:59:59Z' }),
+    L('khong-han', { due_date: null }),
+    L('xong', { status: 'done', completed_at: '2026-10-29T03:00:00Z' }),
+    L('xong-cu', { status: 'done', completed_at: '2026-09-01T03:00:00Z' }),
+    L('huy', { status: 'cancelled', cancelled_at: '2026-10-29T03:00:00Z' }),
+  ]
+  it('đếm', () => {
+    expect(summarizeGiven(list, TODAY)).toEqual({ to_approve: 1, overdue: 1, open: 4, done: 1, cancelled: 1 }) // prettier-ignore
+  })
+  it('"Chưa xong" gồm cả chờ duyệt; xong quá 30 ngày rơi khỏi danh sách', () => {
+    expect(list.filter((t) => matchesGiven(t, 'open', TODAY)).map((t) => t.id)).toEqual(['cho', 'qua', 'mo', 'khong-han']) // prettier-ignore
+    expect(list.filter((t) => matchesGiven(t, 'done', TODAY)).map((t) => t.id)).toEqual(['xong'])
+  })
+  it('thứ tự: chờ tôi duyệt → quá hạn → hạn gần → không hạn → đã đóng', () => {
+    expect(sortGiven(list, TODAY).map((t) => t.id)).toEqual(['cho', 'qua', 'mo', 'khong-han', 'xong', 'huy', 'xong-cu']) // prettier-ignore
+  })
+  it('hạn theo ngày → mốc hết ngày giờ VN', () => {
+    expect(dueEndOfDay('2026-10-31')).toBe('2026-10-31T23:59:59+07:00')
   })
 })

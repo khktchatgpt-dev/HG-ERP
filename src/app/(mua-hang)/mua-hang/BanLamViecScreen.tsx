@@ -24,6 +24,8 @@ import { SUPPLY_TODO, SUPPLY_TODO_KINDS, type SupplyTodoKind } from '@/lib/suppl
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { ViecChoBang } from './viec-cho'
+import { ViecDuocGiao } from './viec-duoc-giao'
+import type { AssignedItem } from '@/modules/workflow/tasks/tasks.service'
 
 /**
  * Phần nhìn của Bàn làm việc. Mọi số đã đếm xong ở server (hai bàn "của tôi" /
@@ -138,6 +140,7 @@ export function BanLamViecScreen({
   defaultScope,
   urlScope,
   desks,
+  assigned,
   approver,
   agenda,
   truncatedAt,
@@ -150,6 +153,11 @@ export function BanLamViecScreen({
   defaultScope: SupplyScope
   urlScope: SupplyScope | null
   desks: Record<SupplyScope, Desk>
+  /**
+   * Việc được giao cho CHỦ BÀN (phân công việc P3) — giống nhau ở cả hai phạm vi
+   * (chốt D4). Khối hiển thị viết không kit: `viec-duoc-giao.tsx`.
+   */
+  assigned: AssignedItem[]
   /** Chỉ có với người có quyền duyệt đơn mua. */
   approver: { pending: PendingRow[]; buyers: BuyerRow[] } | null
   agenda: Agenda[]
@@ -165,7 +173,13 @@ export function BanLamViecScreen({
   const q = `pham_vi=${scope}`
 
   // Tab = các câu hỏi khác nhau, cùng một trang. Số trên tab = số dòng trong tab.
+  const assignedOverdue = assigned.filter((t) => t.overdue_days > 0).length
   const lanes: Lane<unknown>[] = [
+    // Phân công việc (P3): việc sếp / quản lý giao cho chủ bàn — đứng đầu hàng, chỉ
+    // hiện khi có việc (không có việc thì hàng ô lọc giữ như cũ).
+    ...(assigned.length > 0
+      ? [{ id: 'giao', label: `Việc được giao${assignedOverdue > 0 ? ` · ${assignedOverdue} quá hạn` : ''}`, rows: assigned, tone: assignedOverdue > 0 ? ('stop' as const) : undefined }] // prettier-ignore
+      : []),
     ...(approver
       ? [
           { id: 'duyet', label: 'Chờ tôi duyệt', rows: approver.pending, tone: pendingWarn > 0 ? ('warn' as const) : undefined }, // prettier-ignore
@@ -297,6 +311,13 @@ export function BanLamViecScreen({
           </span>
         </FilterBar>
         <div className="min-h-0 flex-1 overflow-auto border-t border-[var(--line)]">
+          {tab === 'giao' && (
+            <ViecDuocGiao
+              items={assigned}
+              readOnly={!!viewAs}
+              who={viewAs ? viewAs.name : 'bạn'}
+            />
+          )}
           {tab === 'duyet' &&
             approver &&
             (approver.pending.length === 0 ? (

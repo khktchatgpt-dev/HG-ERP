@@ -45,6 +45,40 @@ export const commentsRepo = {
     })
   },
 
+  /**
+   * Câu MỚI NHẤT theo loại cho nhiều việc một lượt — "kết quả" (progress_report)
+   * và "lý do trả lại" (rejection) hiện ngay dưới tên việc trên danh sách.
+   */
+  async latestByTasks(
+    taskIds: string[],
+    kinds: CommentKind[],
+  ): Promise<Map<string, Partial<Record<CommentKind, { body: string; at: string }>>>> {
+    const out = new Map<
+      string,
+      Partial<Record<CommentKind, { body: string; at: string }>>
+    >()
+    if (taskIds.length === 0) return out
+    const { data, error } = await db()
+      .from('task_comments')
+      .select('task_id, body, kind, created_at')
+      .in('task_id', taskIds)
+      .in('kind', kinds)
+      .order('created_at', { ascending: false })
+    if (error) throw new Error(error.message)
+    for (const r of (data ?? []) as {
+      task_id: string
+      body: string
+      kind: CommentKind
+      created_at: string
+    }[]) {
+      // prettier-ignore
+      const cur = out.get(r.task_id) ?? {}
+      if (!cur[r.kind]) cur[r.kind] = { body: r.body, at: r.created_at }
+      out.set(r.task_id, cur)
+    }
+    return out
+  },
+
   async insert(row: {
     task_id: string
     user_id: string
