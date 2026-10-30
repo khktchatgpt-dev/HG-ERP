@@ -111,7 +111,9 @@ export const tasksRepo = {
    * Việc DÍNH TỚI một người cho số đỏ "Phân công việc": tôi giao đang chờ duyệt,
    * hoặc giao cho tôi đang còn bóng ở tôi và có hạn. Chỉ cột luật cần.
    */
-  async listForAttention(userId: string): Promise<
+  async listForAttention(
+    userId: string,
+  ): Promise<
     Pick<Task, 'id' | 'kind' | 'status' | 'assigner_id' | 'assignee_id' | 'due_date'>[]
   > {
     const { data, error } = await db()
@@ -123,6 +125,30 @@ export const tasksRepo = {
       .limit(1000)
     if (error) throw error
     return (data ?? []) as Pick<Task, 'id' | 'kind' | 'status' | 'assigner_id' | 'assignee_id' | 'due_date'>[] // prettier-ignore
+  },
+
+  /**
+   * Việc được GIAO cho một nhóm người — đủ cột để đếm ba cột "Theo người mua":
+   * việc còn ở người nhận + việc đã xong từ `doneSince` (YYYY-MM-DD). Chỉ cột số,
+   * không tiêu đề / nội dung.
+   */
+  async listForTakers(
+    ids: string[],
+    doneSince: string,
+  ): Promise<
+    Pick<Task, 'kind' | 'status' | 'assignee_id' | 'due_date' | 'completed_at'>[]
+  > {
+    const { data, error } = await db()
+      .from('tasks')
+      .select('kind, status, assignee_id, due_date, completed_at')
+      .eq('kind', 'assigned')
+      .in('assignee_id', ids)
+      .or(
+        `status.in.(todo,in_progress,rejected,on_hold),and(status.eq.done,completed_at.gte.${doneSince})`,
+      )
+      .limit(5000)
+    if (error) throw error
+    return (data ?? []) as Pick<Task, 'kind' | 'status' | 'assignee_id' | 'due_date' | 'completed_at'>[] // prettier-ignore
   },
 
   async findByIdEnriched(id: string): Promise<TaskRow | null> {

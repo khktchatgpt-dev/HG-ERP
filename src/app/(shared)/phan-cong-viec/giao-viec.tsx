@@ -1,7 +1,7 @@
 'use client'
 
 import { useImperativeHandle, useRef, useState } from 'react'
-import { Flag, Send } from 'lucide-react'
+import { Flag, Send, X } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 import { dueEndOfDay } from '@/lib/task-flow'
@@ -24,6 +24,7 @@ export function GiaoViec({
   meId,
   today,
   onDone,
+  onClose,
   ref,
 }: {
   people: Assignee[]
@@ -31,6 +32,8 @@ export function GiaoViec({
   /** Hôm nay (YYYY-MM-DD, giờ VN) — đọc một lần ở màn cha. */
   today: string
   onDone: (assigneeName: string) => void
+  /** Có thì hiện nút đóng cạnh tiêu đề — hộp mở bên phải Bàn làm việc (P4). */
+  onClose?: () => void
   /** React 19: ref là prop thường — màn cha gọi `focus()` khi bấm "Giao việc" ở đầu trang. */
   ref?: React.Ref<GiaoViecHandle>
 }) {
@@ -121,7 +124,21 @@ export function GiaoViec({
         }
       }}
     >
-      <h2 className="text-[15px] font-semibold text-[var(--foreground)]">Giao việc</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 text-[15px] font-semibold text-[var(--foreground)]">
+          Giao việc
+        </h2>
+        {onClose && (
+          <button
+            type="button"
+            aria-label="Đóng hộp giao việc"
+            className={btn('ghost', false, true)}
+            onClick={onClose}
+          >
+            <X size={14} aria-hidden />
+          </button>
+        )}
+      </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="pcv-nguoi" className={labelCls}>
           Người nhận

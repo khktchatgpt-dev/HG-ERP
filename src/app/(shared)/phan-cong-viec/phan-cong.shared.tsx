@@ -1,5 +1,5 @@
 import { todayVn } from '@/lib/date-vn'
-import { TASK_STATUS_LABEL, type TaskStatus } from '@/lib/task-flow'
+import { TASK_STATUS_LABEL, taskLateDays, type TaskStatus } from '@/lib/task-flow'
 
 /**
  * ĐỒ DÙNG CHUNG trang "Phân công việc" — VIẾT THẲNG Tailwind + token màu của khung
@@ -103,10 +103,8 @@ export function StatusTag({
   return <Tag tone="off">{TASK_STATUS_LABEL[status]}</Tag>
 }
 
-/** Xong trễ mấy ngày so với hạn (theo ngày VN). null = không hạn / chưa xong. */
-export function lateDays(due: string | null, completed: string | null): number | null {
-  if (!due || !completed) return null
-  const ms = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10))
-  const d = ms(todayVn(new Date(completed))) - ms(todayVn(new Date(due)))
-  return Math.max(0, Math.round(d / 86_400_000))
-}
+/**
+ * Xong trễ mấy ngày so với hạn — luật ở `task-flow`: cột "Đúng hạn" ở tab Theo
+ * người mua đếm bằng chính hàm này, nên nhãn "đúng hạn" ở đây và số ở đó không lệch.
+ */
+export const lateDays = taskLateDays

@@ -21,6 +21,8 @@ import {
   actionForStatus,
   ASSIGN_BLOCKED,
   canAssign,
+  CLOSED_KEEP_DAYS,
+  isTakerOpen,
   nextStatus,
   sortGiven,
   summarizeGiven,
@@ -29,7 +31,9 @@ import {
   taskActions,
   taskAttention,
   taskOverdueDays,
+  summarizeTaker,
   type GivenFilter,
+  type TakerStats,
   type TaskAction,
 } from '@/lib/task-flow'
 
@@ -59,9 +63,6 @@ export type AssignedItem = TaskRow & {
   /** Lý do lần trả lại gần nhất — người nhận đọc để làm tiếp. */
   last_reject: string | null
 }
-
-/** Trạng thái mà bóng đang ở người nhận — đúng tập việc cần họ động tay. */
-const TAKER_OPEN: TaskStatus[] = ['todo', 'in_progress', 'rejected', 'on_hold']
 
 type CreateInput = {
   title: string
@@ -651,10 +652,6 @@ export const tasksService = {
   },
 
   /**
-   * NGƯỜI NHẬN được việc (Q2 — mọi phòng): tên + phòng của mọi tài khoản đang hoạt
-   * động. Không email / điện thoại: ô chọn người không cần.
-   */
-  /**
    * VIỆC ĐƯỢC GIAO cho chủ một Bàn làm việc (P3, bản vẽ B — chốt D4: luôn là việc
    * của chính người đó, ở cả hai phạm vi). Chỉ việc bóng đang ở người nhận; việc đã
    * báo hoàn thành chờ duyệt thì không nằm đây. Người duyệt xem bàn người khác
@@ -669,7 +666,7 @@ export const tasksService = {
       page: 1,
       page_size: 200,
     })
-    const open = rows.filter((t) => TAKER_OPEN.includes(t.status))
+    const open = rows.filter((t) => isTakerOpen(t.status))
     const notes = await commentsRepo.latestByTasks(
       open.map((t) => t.id),
       ['rejection'],
@@ -687,6 +684,28 @@ export const tasksService = {
     }))
   },
 
+  /**
+   * BA CỘT VIỆC ở tab "Theo người mua" (P4, bản vẽ C): mỗi người một dòng số, đếm
+   * bằng `summarizeTaker` — cột "Việc được giao" bằng đúng số dòng ô cùng tên trên
+   * bàn người đó. Chỉ trả SỐ, không trả nội dung việc; màn gọi chỉ mở cho người duyệt.
+   */
+  async takerStats(ids: string[]): Promise<Record<string, TakerStats>> {
+    const out: Record<string, TakerStats> = {}
+    if (ids.length === 0) return out
+    const today = todayVn()
+    // Lấy dư một ngày cho việc đã xong — mốc 30 ngày chính xác do summarizeTaker cắt.
+    const since = new Date(Date.now() - (CLOSED_KEEP_DAYS + 1) * 86_400_000)
+    const rows = await tasksRepo.listForTakers(ids, todayVn(since))
+    const byId = new Map<string, typeof rows>()
+    for (const r of rows) byId.set(r.assignee_id, [...(byId.get(r.assignee_id) ?? []), r])
+    for (const id of ids) out[id] = summarizeTaker(byId.get(id) ?? [], today)
+    return out
+  },
+
+  /**
+   * NGƯỜI NHẬN được việc (Q2 — mọi phòng): tên + phòng của mọi tài khoản đang hoạt
+   * động. Không email / điện thoại: ô chọn người không cần.
+   */
   async assignees(): Promise<Assignee[]> {
     const [users, depts] = await Promise.all([
       usersRepo.list({ active_only: true }),

@@ -14,6 +14,7 @@ const { tasks, users, comments, activity, emit } = vi.hoisted(() => ({
     insert: vi.fn(),
     patch: vi.fn(),
     listForAttention: vi.fn(),
+    listForTakers: vi.fn(),
     list: vi.fn(),
   },
   users: { findById: vi.fn() },
@@ -258,5 +259,29 @@ describe('assignedTo — ô Việc được giao trên Bàn làm việc (P3)', (
     const out = await tasksService.assignedTo(DIEN, 'u-phuong')
     expect(out).toHaveLength(3)
     expect(out.every((t) => t.actions.length === 0)).toBe(true)
+  })
+})
+
+describe('takerStats — ba cột việc ở tab Theo người mua (P4)', () => {
+  it('mỗi người một dòng số, kể cả người chưa có việc nào; hỏi repo đúng nhóm + mốc 30 ngày', async () => {
+    tasks.listForTakers.mockResolvedValue([
+      { kind: 'assigned', status: 'in_progress', assignee_id: 'u-nga', due_date: '2026-10-27T16:59:59Z', completed_at: null }, // prettier-ignore
+      { kind: 'assigned', status: 'done', assignee_id: 'u-nga', due_date: '2026-10-28T16:59:59Z', completed_at: '2026-10-28T09:00:00Z' }, // prettier-ignore
+      { kind: 'assigned', status: 'todo', assignee_id: 'u-phuong', due_date: null, completed_at: null }, // prettier-ignore
+    ])
+    const out = await tasksService.takerStats(['u-nga', 'u-phuong', 'u-thao'])
+    // 31 ngày trước 30/10 (giờ VN) — dư một ngày, summarizeTaker cắt đúng mốc.
+    expect(tasks.listForTakers).toHaveBeenCalledWith(['u-nga', 'u-phuong', 'u-thao'], '2026-09-29')
+    expect(out).toEqual({
+      'u-nga': { open: 1, overdue: 1, on_time: 1, done_due: 1 },
+      'u-phuong': { open: 1, overdue: 0, on_time: 0, done_due: 0 },
+      'u-thao': { open: 0, overdue: 0, on_time: 0, done_due: 0 },
+    })
+  })
+
+  it('không có ai thì không hỏi DB', async () => {
+    tasks.listForTakers.mockClear()
+    expect(await tasksService.takerStats([])).toEqual({})
+    expect(tasks.listForTakers).not.toHaveBeenCalled()
   })
 })

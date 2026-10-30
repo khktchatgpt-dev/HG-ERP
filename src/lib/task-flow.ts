@@ -214,7 +214,13 @@ export function taskAttention(
 /** Việc đã đóng (xong / huỷ) chỉ giữ trên danh sách bấy nhiêu ngày. */
 export const CLOSED_KEEP_DAYS = 30
 
-export const GIVEN_FILTERS = ['to_approve', 'overdue', 'open', 'done', 'cancelled'] as const
+export const GIVEN_FILTERS = [
+  'to_approve',
+  'overdue',
+  'open',
+  'done',
+  'cancelled',
+] as const
 export type GivenFilter = (typeof GIVEN_FILTERS)[number]
 
 export const GIVEN_FILTER_LABEL: Record<GivenFilter, string> = {
@@ -254,13 +260,19 @@ export function matchesGiven(t: ListTask, f: GivenFilter, today: string): boolea
     case 'done':
       return t.status === 'done' && daysSince(t.completed_at, today) < CLOSED_KEEP_DAYS
     case 'cancelled':
-      return t.status === 'cancelled' && daysSince(t.cancelled_at, today) < CLOSED_KEEP_DAYS
+      return (
+        t.status === 'cancelled' && daysSince(t.cancelled_at, today) < CLOSED_KEEP_DAYS
+      )
   }
 }
 
-export function summarizeGiven(list: ListTask[], today: string): Record<GivenFilter, number> {
+export function summarizeGiven(
+  list: ListTask[],
+  today: string,
+): Record<GivenFilter, number> {
   const out = { to_approve: 0, overdue: 0, open: 0, done: 0, cancelled: 0 }
-  for (const t of list) for (const f of GIVEN_FILTERS) if (matchesGiven(t, f, today)) out[f]++
+  for (const t of list)
+    for (const f of GIVEN_FILTERS) if (matchesGiven(t, f, today)) out[f]++
   return out
 }
 
@@ -289,4 +301,62 @@ export function sortGiven<T extends ListTask>(list: T[], today: string): T[] {
 /** Hạn gõ theo ngày (YYYY-MM-DD, giờ VN) → mốc HẾT NGÀY đó để lưu `due_date`. */
 export function dueEndOfDay(isoDate: string): string {
   return `${isoDate}T23:59:59+07:00`
+}
+
+// ---- Theo người mua (P4) ---------------------------------------------------
+
+/** Xong trễ mấy ngày so với hạn (theo ngày VN). 0 = đúng hạn; null = không hạn / chưa xong. */
+export function taskLateDays(
+  due: string | null,
+  completed: string | null,
+): number | null {
+  if (!due || !completed) return null
+  const ms = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10))
+  const d = ms(todayVn(new Date(completed))) - ms(todayVn(new Date(due)))
+  return Math.max(0, Math.round(d / 86_400_000))
+}
+
+/** Việc mà bóng đang ở người nhận — đúng tập ô "Việc được giao" trên bàn của họ. */
+export function isTakerOpen(status: TaskStatus): boolean {
+  return TAKER_HOLDS.includes(status)
+}
+
+export type TakerStats = {
+  /** Việc được giao còn ở người đó (= số dòng ô "Việc được giao" trên bàn họ). */
+  open: number
+  /** Trong số đó, đã quá hạn. */
+  overdue: number
+  /** Việc CÓ HẠN được duyệt Đạt trong 30 ngày qua, xong trong / trước ngày hạn… */
+  on_time: number
+  /** …trên tổng việc có hạn được duyệt Đạt trong 30 ngày qua. 0 = chưa có việc nào xong. */
+  done_due: number
+}
+
+/**
+ * Ba cột "Theo người mua" (bản vẽ C): người được giao có hoàn thành được không.
+ * Chỉ đếm việc được GIAO (việc tự ghi không ai duyệt nên không nói gì về chuyện
+ * làm xong việc người khác giao). Đúng hạn = ngày duyệt Đạt ≤ ngày hạn (ngày VN).
+ */
+export function summarizeTaker(
+  list: (Pick<FlowTask, 'kind' | 'status' | 'due_date'> & {
+    completed_at: string | null
+  })[],
+  today: string,
+): TakerStats {
+  const out: TakerStats = { open: 0, overdue: 0, on_time: 0, done_due: 0 }
+  for (const t of list) {
+    if (t.kind !== 'assigned') continue
+    if (isTakerOpen(t.status)) {
+      out.open++
+      if (taskOverdueDays(t, today) > 0) out.overdue++
+    } else if (
+      t.status === 'done' &&
+      t.due_date &&
+      daysSince(t.completed_at, today) < CLOSED_KEEP_DAYS
+    ) {
+      out.done_due++
+      if (taskLateDays(t.due_date, t.completed_at) === 0) out.on_time++
+    }
+  }
+  return out
 }

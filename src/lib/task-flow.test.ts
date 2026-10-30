@@ -3,13 +3,16 @@ import {
   actionForStatus,
   canAssign,
   dueEndOfDay,
+  isTakerOpen,
   matchesGiven,
   sortGiven,
   summarizeGiven,
+  summarizeTaker,
   nextStatus,
   taskActionBlock,
   taskActions,
   taskAttention,
+  taskLateDays,
   taskOverdueDays,
   type FlowTask,
 } from './task-flow'
@@ -176,5 +179,36 @@ describe('Việc tôi giao — chip đếm đúng danh sách nó mở (P2)', () 
   })
   it('hạn theo ngày → mốc hết ngày giờ VN', () => {
     expect(dueEndOfDay('2026-10-31')).toBe('2026-10-31T23:59:59+07:00')
+  })
+})
+
+describe('Theo người mua — ba cột việc được giao (P4)', () => {
+  const R = (over: Partial<FlowTask & { completed_at: string | null }> = {}) => ({ ...T(), completed_at: null, ...over }) // prettier-ignore
+  it('đúng hạn = duyệt Đạt trong / trước NGÀY hạn (giờ VN); trễ đếm theo ngày', () => {
+    // Hạn hết ngày 28/10 (16:59:59Z) — duyệt 23:00 cùng ngày giờ VN vẫn là đúng hạn.
+    expect(taskLateDays('2026-10-28T16:59:59Z', '2026-10-28T16:00:00Z')).toBe(0)
+    expect(taskLateDays('2026-10-28T16:59:59Z', '2026-10-29T17:30:00Z')).toBe(2)
+    expect(taskLateDays(null, '2026-10-29T03:00:00Z')).toBeNull()
+    expect(taskLateDays('2026-10-28T16:59:59Z', null)).toBeNull()
+  })
+  it('việc còn ở người nhận = đúng tập ô "Việc được giao"; chờ duyệt không tính', () => {
+    expect(['todo', 'in_progress', 'rejected', 'on_hold'].every((s) => isTakerOpen(s as FlowTask['status']))).toBe(true) // prettier-ignore
+    expect(isTakerOpen('submitted')).toBe(false)
+  })
+  it('đếm: mở · quá hạn · đúng hạn / có hạn đã xong trong 30 ngày', () => {
+    const list = [
+      R({ status: 'in_progress', due_date: '2026-10-27T16:59:59Z' }), // quá hạn 3 ngày
+      R({ status: 'rejected', due_date: '2026-11-03T16:59:59Z' }),
+      R({ status: 'submitted' }), // bóng ở người giao — không vào cột nào
+      R({ status: 'done', due_date: '2026-10-28T16:59:59Z', completed_at: '2026-10-28T09:00:00Z' }), // đúng hạn
+      R({ status: 'done', due_date: '2026-10-20T16:59:59Z', completed_at: '2026-10-22T03:00:00Z' }), // trễ 2 ngày
+      R({ status: 'done', due_date: null, completed_at: '2026-10-29T03:00:00Z' }), // không hạn — ngoài mẫu số
+      R({ status: 'done', due_date: '2026-09-10T16:59:59Z', completed_at: '2026-09-10T03:00:00Z' }), // quá 30 ngày
+      R({ kind: 'self', status: 'todo', due_date: '2026-10-01T16:59:59Z' }), // tự ghi — không tính
+    ]
+    expect(summarizeTaker(list, TODAY)).toEqual({ open: 2, overdue: 1, on_time: 1, done_due: 2 })
+  })
+  it('chưa có việc nào: toàn 0 (màn vẽ "—" cho cột Đúng hạn)', () => {
+    expect(summarizeTaker([], TODAY)).toEqual({ open: 0, overdue: 0, on_time: 0, done_due: 0 })
   })
 })
