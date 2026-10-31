@@ -124,10 +124,16 @@ export function PrintLetterhead({
 
   return (
     <div className="flex justify-between gap-4 text-[12px]">
-      <div className="max-w-[55%]">
+      {/*
+        Cột công ty lấy PHẦN CÒN LẠI sau khối quốc hiệu, không khoá 55%: khổ dọc có
+        bề ngang vùng in chỉ 186mm, 55% = 387px mà dòng "Địa chỉ: … - Gia Lai" cần
+        390px nên chữ "Lai" rớt xuống dòng (đo 31/10/2026). Địa chỉ dài hơn nữa thì
+        `text-pretty` giữ cho dòng cuối không lẻ loi một chữ.
+      */}
+      <div className="min-w-0 flex-1">
         <div className="font-bold uppercase">{company.company_name}</div>
         {company.company_address && (
-          <div>
+          <div className="text-pretty">
             <span className="font-semibold">Địa chỉ:</span> {company.company_address}
           </div>
         )}
