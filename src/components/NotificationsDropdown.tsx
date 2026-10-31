@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Bell } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
+import { taskHref } from '@/lib/task-flow'
 
 type Notif = {
   id: string
@@ -188,7 +189,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
                     <Link
                       href={
                         n.task_id
-                          ? `/tasks/${n.task_id}`
+                          ? taskHref(n.task_id)
                           : n.payload?.href?.startsWith('/')
                             ? n.payload.href
                             : '/notifications'

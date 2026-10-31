@@ -4,6 +4,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
 import { AppShell } from '@/components/AppShell'
 import { MarkAllRead } from './MarkAllRead'
+import { taskHref } from '@/lib/task-flow'
 
 const TYPE_LABEL: Record<string, string> = {
   assigned: 'đã giao bạn một công việc',
@@ -86,7 +87,7 @@ export default async function NotificationsPage() {
               // Đường dẫn chứng từ trong payload (đề nghị mua 0237) — chỉ nhận đường nội bộ.
               const href = (n.payload as { href?: string })?.href
               const moTai = n.task_id
-                ? `/tasks/${n.task_id}`
+                ? taskHref(n.task_id)
                 : href?.startsWith('/')
                   ? href
                   : null

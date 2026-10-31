@@ -181,6 +181,9 @@ export const SHARED_SECTION: NavSection = {
   heading: 'Dùng chung',
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
   items: [
+    // Phân công việc (30/10/2026) — sếp / quản lý giao, người nhận báo hoàn thành,
+    // người giao duyệt Đạt. Dựng lại module Việc vốn bị ẩn cùng mục "Cá nhân" từ 08/08.
+    { href: '/phan-cong-viec', label: 'Phân công việc', icon: 'list-todo' },
     { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
     // Góp ý hệ thống (0253) — mọi người viết / xem được, nên ở khu dùng chung.
     { href: '/gop-y', label: 'Góp ý hệ thống', icon: 'messages-square' },

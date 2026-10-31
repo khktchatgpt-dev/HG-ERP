@@ -3,6 +3,8 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { tasksService } from '@/modules/workflow/tasks/tasks.service'
+import { canAssign, summarizeTaker } from '@/lib/task-flow'
 import {
   loadWatchPos,
   todayIso,
@@ -78,6 +80,15 @@ export default async function Page({
       ? (users.find((u) => u.id === sp.nguoi) ?? null)
       : null
   const subjectId = viewAsUser?.id ?? user.id
+  // Việc được giao cho chủ bàn (phân công việc P3). Khởi động ngay khi biết đang xem
+  // bàn của ai, chạy song song phần tính bàn bên dưới; chỉ chờ ở lúc trả trang.
+  const assignedP = tasksService.assignedTo(user, subjectId)
+  // Sếp / quản lý trên bàn CỦA MÌNH (P4): ô "Việc tôi giao" + hộp Giao việc. Xem bàn
+  // người khác thì không — bàn đó phải hiện đúng như chủ bàn thấy.
+  const giverP =
+    canAssign(user) && !viewAsUser
+      ? Promise.all([tasksService.givenBoard(user), tasksService.assignees()])
+      : null
 
   const withLsx = rows.map((p) => ({
     ...p,
@@ -153,10 +164,22 @@ export default async function Page({
       chú) đặt lại đồng hồ, 14 đơn gửi 15/09 hiện "chờ từ 27/09".
     */
     const pendingRows = rows.filter((p) => p.status === 'pending_approval')
-    const submitted = await approvalEventsRepo.lastSubmittedAt(
-      'po',
-      pendingRows.map((p) => p.id),
-    )
+    // Theo người mua: người đang cầm ít nhất một đơn còn chạy.
+    const byOwner = new Map<string, WatchPo[]>()
+    for (const p of rows) {
+      if (p.status === 'received' || p.status === 'cancelled') continue
+      const o = poOwner(p)
+      if (!o) continue
+      byOwner.set(o, [...(byOwner.get(o) ?? []), p])
+    }
+    const [submitted, taker] = await Promise.all([
+      approvalEventsRepo.lastSubmittedAt(
+        'po',
+        pendingRows.map((p) => p.id),
+      ),
+      // Ba cột việc được giao (P4) — đếm cùng luật ô "Việc được giao" trên bàn từng người.
+      tasksService.takerStats([...byOwner.keys()]),
+    ])
     const sentAt = (p: WatchPo) => submitted.get(p.id) ?? p.created_at
     const pending: PendingRow[] = pendingRows
       .sort((a, b) => sentAt(a).localeCompare(sentAt(b)))
@@ -170,14 +193,6 @@ export default async function Page({
         currency: p.currency,
         since: sentAt(p).slice(0, 10),
       }))
-    // Theo người mua: người đang cầm ít nhất một đơn còn chạy.
-    const byOwner = new Map<string, WatchPo[]>()
-    for (const p of rows) {
-      if (p.status === 'received' || p.status === 'cancelled') continue
-      const o = poOwner(p)
-      if (!o) continue
-      byOwner.set(o, [...(byOwner.get(o) ?? []), p])
-    }
     const buyers: BuyerRow[] = [...byOwner.entries()]
       .map(([id, list]) => {
         const kinds = list.map((p) => classifyTodo(p, today))
@@ -195,6 +210,7 @@ export default async function Page({
             return b === 'today' || b === 'week'
           }).length,
           lsx: myLsxIds(withLsx, id).size,
+          tasks: taker[id] ?? summarizeTaker([], today),
         }
       })
       .sort((a, b) => b.open - a.open)
@@ -209,6 +225,7 @@ export default async function Page({
     rank: a.rank,
   }))
 
+  const [assigned, given] = await Promise.all([assignedP, giverP])
   return (
     <BanLamViecScreen
       today={today}
@@ -218,6 +235,8 @@ export default async function Page({
       defaultScope={viewAsUser ? 'toi' : defaultScope({ canApprove })}
       urlScope={viewAsUser ? 'toi' : parseScope(sp.pham_vi)}
       desks={desks}
+      assigned={assigned}
+      giver={given?.[0] ? { board: given[0], people: given[1] } : null}
       approver={approver}
       agenda={agenda}
       truncatedAt={truncatedAt}
