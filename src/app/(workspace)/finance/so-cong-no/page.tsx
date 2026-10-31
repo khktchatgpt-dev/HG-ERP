@@ -6,24 +6,32 @@ import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
 import { SoCongNoScreen } from './SoCongNoScreen'
 
-export const metadata = { title: 'Tài chính · Sổ công nợ phải trả (TK 331)' }
+export const metadata = { title: 'Tài chính · Công nợ nhà cung cấp' }
 export const dynamic = 'force-dynamic'
 
 /**
- * SỔ CHI TIẾT CÔNG NỢ PHẢI TRẢ NGƯỜI BÁN — cửa vào chính của phân hệ công nợ.
+ * CÔNG NỢ NHÀ CUNG CẤP THEO THÁNG — cửa vào chính của phân hệ công nợ.
  *
  * Mọi màn công nợ khác là ảnh chụp "tại thời điểm này"; chỉ màn này làm việc
- * theo KỲ, nên chỉ nó chốt sổ và lên báo cáo tài chính được. Xem docstring của
- * `src/lib/ap-ledger.ts` cho hai quyết định nền: phát sinh tăng là HOÁ ĐƠN (không
- * phải phiếu nhập), và tiền tệ không bao giờ cộng lẫn.
+ * theo KỲ, nên chỉ nó chốt sổ và lên báo cáo được. Hai cơ sở: theo hàng đã nhận
+ * (mặc định từ 31/10/2026 — `lib/ap-receipt-ledger.ts`) và theo hoá đơn NCC
+ * (`?co-so=hd` — TK 331, `lib/ap-ledger.ts`). Không bao giờ cộng lẫn hai cơ sở,
+ * cũng như không cộng lẫn tiền tệ.
  *
- * Kỳ + NCC đang soi nằm trên URL (`?ky=&ncc=&tt=`) chứ không trong state: kế
- * toán gửi đường dẫn cho nhau khi đối chiếu, và F5 phải ra đúng trang cũ.
+ * Kỳ · cơ sở · tiền tệ · NCC đang soi nằm trên URL (`?ky=&co-so=&tien=&ncc=&tt=`)
+ * chứ không trong state: kế toán gửi đường dẫn cho nhau khi đối chiếu, và F5
+ * phải ra đúng trang cũ.
  */
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ ky?: string; ncc?: string; tt?: string }>
+  searchParams: Promise<{
+    ky?: string
+    'co-so'?: string
+    tien?: string
+    ncc?: string
+    tt?: string
+  }>
 }) {
   const user = await authService.requirePageUser()
   if (!(await canAction(user, 'accounting.payable.view'))) redirect('/finance')
@@ -32,10 +40,11 @@ export default async function Page({
     month: /^\d{4}-\d{2}$/.test(sp.ky ?? '') ? sp.ky : undefined,
     supplier_id: sp.ncc,
     currency: sp.tt,
+    basis: sp['co-so'] === 'hd' ? 'invoice' : 'receipt',
   })
   return (
-    <WorkspaceShell workspace={WORKSPACES.finance} title="Sổ công nợ phải trả">
-      <SoCongNoScreen {...data} />
+    <WorkspaceShell workspace={WORKSPACES.finance} title="Công nợ nhà cung cấp">
+      <SoCongNoScreen {...data} currency={sp.tien} />
     </WorkspaceShell>
   )
 }

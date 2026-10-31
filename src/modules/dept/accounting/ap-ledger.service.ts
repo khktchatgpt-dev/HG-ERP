@@ -16,6 +16,23 @@ import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
 import { carrierLedgerEntries } from '@/lib/po-cost'
 import { todayVn } from '@/lib/date-vn'
 import { soTienDaTra } from '@/lib/mua-san'
+import {
+  prepayLabel,
+  receiptEntries,
+  rowKey,
+  termsOf,
+  unpricedBy,
+  type ReceiptMove,
+} from '@/lib/ap-receipt-ledger'
+import { parseTermSetting } from '@/lib/payment-terms'
+import { payablesRepo } from './payables.repo'
+
+/**
+ * Sổ tính theo đâu. `receipt` = phiếu nhập kho (mặc định từ 31/10/2026 — nguồn
+ * duy nhất đang có số), `invoice` = hoá đơn NCC đã vào sổ (TK 331 đúng nghĩa).
+ * Hai cơ sở KHÔNG BAO GIỜ cộng vào nhau — xem `lib/ap-receipt-ledger.ts`.
+ */
+export type ApLedgerBasis = 'receipt' | 'invoice'
 
 /**
  * SỔ CHI TIẾT CÔNG NỢ PHẢI TRẢ NGƯỜI BÁN (TK 331) — theo KỲ.
@@ -39,9 +56,27 @@ import { soTienDaTra } from '@/lib/mua-san'
 export type LedgerScreenRow = LedgerRow & {
   /** Dư cuối quy VND theo tỷ giá CUỐI KỲ. `null` = thiếu tỷ giá, không phải 0. */
   closing_base: number | null
+  /** Điều khoản thanh toán trên các đơn có phiếu (chỉ sổ theo hàng nhận): một câu thì bày, nhiều câu thì `null`. */
+  terms: string | null
+  /** Số câu điều khoản KHÁC NHAU — 0 = không đơn nào ghi. */
+  terms_distinct: number
+  /** Nhãn "cọc 30%" / "trả trước" khi điều khoản đòi trả trước mà NCC chưa có phiếu chi nào. */
+  prepay: string | null
+  /** Dòng nhập chưa có giá tới hết kỳ — KHÔNG nằm trong số dư. */
+  unpriced: number
 }
 
 export type ApLedgerResult = {
+  /** Sổ đang tính theo đâu. */
+  basis: ApLedgerBasis
+  /** Số hoá đơn NCC đã vào sổ — nhãn công tắc "Hoá đơn NCC · N tờ". */
+  invoice_count: number
+  /** Số phiếu chi NCC trong ERP — 0 thì dư cuối chưa trừ đồng nào đã trả. */
+  payment_count: number
+  /** NCC có điều khoản cọc / trả trước mà chưa ghi phiếu chi (dư đang cao hơn thật). */
+  prepay_count: number
+  /** Tổng dòng nhập chưa giá tới hết kỳ — chân bảng nói tổng KHÔNG gồm chúng. */
+  unpriced_total: number
   /** Kỳ đang xem, dạng `YYYY-MM`. */
   month: string
   from: string
@@ -90,16 +125,27 @@ export const apLedgerService = {
    */
   async overview(
     user: User,
-    opts: { month?: string; supplier_id?: string; currency?: string } = {},
+    opts: {
+      month?: string
+      supplier_id?: string
+      currency?: string
+      /** Bỏ trống = `receipt` (hàng đã nhận) — cơ sở có số từ 31/10/2026. */
+      basis?: ApLedgerBasis
+    } = {},
   ): Promise<ApLedgerResult> {
     await assertAction(user, 'accounting.payable.view')
+    const basis: ApLedgerBasis = opts.basis ?? 'receipt'
 
-    const [entries, rates, awaiting] = await Promise.all([
-      loadEntries(),
+    const [book, rates, awaiting] = await Promise.all([
+      loadBook(basis),
       fxRates(),
-      // Nuốt lỗi: dải "ngoài sổ" là thông tin thêm, không được làm chết cả sổ.
-      awaitingInvoiceSummary().catch(() => ({ by_currency: [], supplier_count: 0 })),
+      // Dải "ngoài sổ" (GR/IR) chỉ có nghĩa với sổ theo hoá đơn: sổ theo hàng
+      // nhận đã đếm chính phần đó. Nuốt lỗi: thông tin thêm không được làm chết sổ.
+      basis === 'invoice'
+        ? awaitingInvoiceSummary().catch(() => ({ by_currency: [], supplier_count: 0 }))
+        : Promise.resolve({ by_currency: [], supplier_count: 0 }),
     ])
+    const { entries } = book
 
     const months = monthsOf(entries)
     const month =
@@ -113,10 +159,18 @@ export const apLedgerService = {
       return rate == null ? null : r2(amount * rate)
     }
 
-    const screenRows: LedgerScreenRow[] = rows.map((r) => ({
-      ...r,
-      closing_base: baseOf(r.currency, r.closing),
-    }))
+    const meta = rowMeta(book, to)
+    const screenRows: LedgerScreenRow[] = rows.map((r) => {
+      const m = meta.get(rowKey(r.supplier_id, r.currency))
+      return {
+        ...r,
+        closing_base: baseOf(r.currency, r.closing),
+        terms: m?.terms ?? null,
+        terms_distinct: m?.terms_distinct ?? 0,
+        prepay: m?.prepay ?? null,
+        unpriced: m?.unpriced ?? 0,
+      }
+    })
     const totals = ledgerTotals(rows).map((t) => ({
       ...t,
       closing_base: baseOf(t.currency, t.closing),
@@ -127,8 +181,15 @@ export const apLedgerService = {
       : r2(totals.reduce((s, t) => s + (t.closing_base ?? 0), 0))
 
     const detail = detailOf(entries, rows, opts, from, to)
+    const prepayCount = screenRows.filter((r) => r.prepay).length
+    const unpricedTotal = screenRows.reduce((s, r) => s + r.unpriced, 0)
 
     return {
+      basis,
+      invoice_count: book.invoice_count,
+      payment_count: book.payment_count,
+      prepay_count: prepayCount,
+      unpriced_total: unpricedTotal,
       month,
       from,
       to,
@@ -140,7 +201,11 @@ export const apLedgerService = {
       off_book_suppliers: awaiting.supplier_count,
       months,
       detail,
-      gaps: gapsOf(entries, awaiting.by_currency.length > 0),
+      gaps: gapsOf(basis, entries, awaiting.by_currency.length > 0, {
+        payments: book.payment_count,
+        prepay: prepayCount,
+        unpriced: unpricedTotal,
+      }),
     }
   },
 
@@ -154,9 +219,10 @@ export const apLedgerService = {
   async fullBook(
     user: User,
     month?: string,
+    basis: ApLedgerBasis = 'receipt',
   ): Promise<ApLedgerResult & { details: NonNullable<ApLedgerResult['detail']>[] }> {
-    const head = await this.overview(user, { month })
-    const entries = await loadEntries()
+    const head = await this.overview(user, { month, basis })
+    const { entries } = await loadBook(basis)
     const details = head.rows.map((r) => {
       const d = ledgerDetail(entries, r.supplier_id, r.currency, head.from, head.to)
       return {
@@ -191,28 +257,45 @@ function detailOf(
   return { supplier_id: opts.supplier_id, supplier_name: shown, currency: opts.currency, opening: d.opening, lines: d.lines } // prettier-ignore
 }
 
+type Book = {
+  entries: LedgerEntry[]
+  /** Movement của sổ theo hàng nhận (rỗng với sổ theo hoá đơn) — để đếm dòng chưa giá + điều khoản. */
+  moves: ReceiptMove[]
+  invoice_count: number
+  payment_count: number
+  /** NCC × tiền tệ đã có ít nhất một phiếu chi — để biết "cọc chưa ghi". */
+  paid: Set<string>
+}
+
 /**
- * Mọi giao dịch của TK 331, hai chiều.
+ * Mọi giao dịch của sổ, hai chiều, theo cơ sở đã chọn.
+ *
+ * Phần CHUNG cả hai cơ sở: phiếu chi + phiếu phí nhà xe. Phần TĂNG khác nhau:
+ * hoá đơn đã vào sổ (`invoice`) hoặc phiếu nhập kho (`receipt`) — không bao
+ * giờ cả hai, vì một lô hàng sẽ lên sổ hai lần.
  *
  * Hoá đơn lấy `status = 'posted'`: hoá đơn nháp chưa vào sổ thì chưa là nợ. Đây
  * khác hẳn màn ước tính (`/finance/bao-cao`) vốn cố ý đếm cả đơn nháp — sổ kế
  * toán không có chỗ cho "tạm tính".
  */
-async function loadEntries(): Promise<LedgerEntry[]> {
-  const [{ data: invRaw }, { data: payRaw }, costs] = await Promise.all([
-    db()
-      .from('accounting_supplier_invoices')
-      .select('id, invoice_no, supplier_id, currency, total, invoice_date, note')
-      .eq('status', 'posted')
-      .limit(10000),
-    db()
-      .from('accounting_supplier_payments')
-      .select('id, supplier_id, currency, amount, paid_on, ref_no, method, note, kind')
-      .limit(10000),
-    // Phiếu phí trả NHÀ XE (0211) — chính là chứng từ đòi tiền của nhà xe.
-    // Lấy CẢ phiếu đã huỷ: phiếu gốc giữ ở kỳ của nó, dòng đảo vào kỳ huỷ.
-    poCostsRepo.forAccounting({ includeVoided: true }),
-  ])
+async function loadBook(basis: ApLedgerBasis): Promise<Book> {
+  const [{ data: invRaw }, { data: payRaw }, costs, moves, { data: termSetting }] =
+    await Promise.all([
+      db()
+        .from('accounting_supplier_invoices')
+        .select('id, invoice_no, supplier_id, currency, total, invoice_date, note')
+        .eq('status', 'posted')
+        .limit(10000),
+      db()
+        .from('accounting_supplier_payments')
+        .select('id, supplier_id, currency, amount, paid_on, ref_no, method, note, kind')
+        .limit(10000),
+      // Phiếu phí trả NHÀ XE (0211) — chính là chứng từ đòi tiền của nhà xe.
+      // Lấy CẢ phiếu đã huỷ: phiếu gốc giữ ở kỳ của nó, dòng đảo vào kỳ huỷ.
+      poCostsRepo.forAccounting({ includeVoided: true }),
+      basis === 'receipt' ? payablesRepo.receiptMovesForLedger() : Promise.resolve([]),
+      db().from('settings').select('value').eq('key', 'ap_default_payment_term').maybeSingle(), // prettier-ignore
+    ])
   const carrierCosts = costs.filter((c) => c.role === 'carrier')
 
   type Inv = { id: string; invoice_no: string; supplier_id: string; currency: string; total: unknown; invoice_date: string; note: string | null } // prettier-ignore
@@ -227,17 +310,22 @@ async function loadEntries(): Promise<LedgerEntry[]> {
   ])
   const nameOf = (id: string) => names.get(id) ?? '—'
 
-  return [
-    ...invs.map((i): LedgerEntry => ({
-      supplier_id: i.supplier_id,
-      supplier_name: nameOf(i.supplier_id),
-      currency: i.currency || 'VND',
-      date: i.invoice_date,
-      kind: 'invoice',
-      doc_no: i.invoice_no,
-      amount: Number(i.total ?? 0),
-      note: i.note,
-    })),
+  const increases: LedgerEntry[] =
+    basis === 'receipt'
+      ? receiptEntries(moves, parseTermSetting((termSetting as { value?: unknown } | null)?.value)) // prettier-ignore
+      : invs.map((i): LedgerEntry => ({
+          supplier_id: i.supplier_id,
+          supplier_name: nameOf(i.supplier_id),
+          currency: i.currency || 'VND',
+          date: i.invoice_date,
+          kind: 'invoice',
+          doc_no: i.invoice_no,
+          amount: Number(i.total ?? 0),
+          note: i.note,
+        }))
+
+  const entries: LedgerEntry[] = [
+    ...increases,
     /*
       PHIẾU PHÍ TRẢ NHÀ XE = PHÁT SINH TĂNG (chốt 26/09/2026). Tổng GỒM VAT, như
       hoá đơn. Phiếu mà người nhận là NCC của đơn thì KHÔNG vào đây — nó chờ hoá
@@ -269,6 +357,54 @@ async function loadEntries(): Promise<LedgerEntry[]> {
       note: p.note,
     })),
   ]
+
+  return {
+    entries,
+    moves,
+    invoice_count: invs.length,
+    payment_count: pays.length,
+    paid: new Set(pays.map((p) => rowKey(p.supplier_id, p.currency || 'VND'))),
+  }
+}
+
+/**
+ * Thông tin kèm từng dòng NCC × tiền tệ của sổ theo hàng nhận: điều khoản trên
+ * các đơn có phiếu, cờ "cọc chưa ghi", số dòng nhập chưa giá. Sổ theo hoá đơn
+ * không có (Map rỗng) — hoá đơn tự mang hạn của nó.
+ */
+function rowMeta(
+  book: Book,
+  to: string,
+): Map<
+  string,
+  {
+    terms: string | null
+    terms_distinct: number
+    prepay: string | null
+    unpriced: number
+  }
+> {
+  const out = new Map<string, { terms: string | null; terms_distinct: number; prepay: string | null; unpriced: number }>() // prettier-ignore
+  if (book.moves.length === 0) return out
+  const unpriced = unpricedBy(book.moves, to)
+  const termTexts = new Map<string, Map<string, string | null>>()
+  for (const m of book.moves) {
+    if (m.doc_date > to) continue
+    const k = rowKey(m.supplier_id, m.currency)
+    const byPo = termTexts.get(k) ?? new Map<string, string | null>()
+    byPo.set(m.po_id, m.terms_payment)
+    termTexts.set(k, byPo)
+  }
+  for (const [k, byPo] of termTexts) {
+    const texts = [...byPo.values()]
+    const t = termsOf(texts)
+    // Cọc chưa ghi = có đơn đòi trả trước mà NCC chưa có phiếu chi nào.
+    const prepay = book.paid.has(k)
+      ? null
+      : (texts.map(prepayLabel).find((x) => x != null) ?? null)
+    out.set(k, { terms: t.text, terms_distinct: t.distinct, prepay, unpriced: unpriced.get(k) ?? 0 }) // prettier-ignore
+  }
+  return out
 }
 
 /** Kỳ nào CÓ giao dịch — xếp tăng dần, kỳ gần nhất ở cuối. */
@@ -287,8 +423,42 @@ function monthsOf(entries: LedgerEntry[]): { month: string; entry_count: number 
  * Thứ CHẶN sổ này khỏi đúng hoàn toàn — nói ra thay vì để người đọc tự phát
  * hiện (nguyên tắc 6: số nào không kiểm được thì không ai tin).
  */
-function gapsOf(entries: LedgerEntry[], hasOffBook: boolean): ApLedgerResult['gaps'] {
+function gapsOf(
+  basis: ApLedgerBasis,
+  entries: LedgerEntry[],
+  hasOffBook: boolean,
+  n: { payments: number; prepay: number; unpriced: number },
+): ApLedgerResult['gaps'] {
   const gaps: ApLedgerResult['gaps'] = []
+  if (basis === 'receipt') {
+    if (n.payments === 0) {
+      gaps.push({
+        label: 'Chưa có lần thanh toán nào',
+        detail:
+          'ERP chưa có phiếu chi NCC nào, nên dư cuối đang bằng mọi hàng đã nhận — kể cả khoản đã trả ngoài hệ thống.',
+        banner: true,
+      })
+    }
+    if (n.prepay > 0) {
+      gaps.push({
+        label: 'Cọc chưa ghi',
+        detail: `${n.prepay} NCC có điều khoản cọc / trả trước nhưng chưa có phiếu chi nào — dư của họ đang cao hơn thật.`,
+        banner: true,
+      })
+    }
+    if (n.unpriced > 0) {
+      gaps.push({
+        label: 'Dòng nhập chưa có giá',
+        detail: `${n.unpriced} dòng nhập gắn đơn mua chưa có đơn giá — không cộng vào sổ (không thay bằng 0). Cung ứng bổ sung giá trên đơn.`,
+      })
+    }
+    gaps.push({
+      label: 'Chưa có số dư trước ERP',
+      detail:
+        'Sổ chỉ có phiếu nhập từ khi dùng ERP (09/2026); nợ từ trước đó chưa được chuyển sang.',
+    })
+    return gaps
+  }
   if (entries.length === 0) {
     gaps.push({
       label: 'Sổ đang trống',
@@ -321,7 +491,7 @@ async function supplierNames(ids: string[]): Promise<Map<string, string>> {
     .select('id, name, short_name')
     .in('id', uniq)
   type S = { id: string; name: string; short_name: string | null }
-  return new Map(((data ?? []) as S[]).map((s) => [s.id, s.short_name || s.name]))
+  return new Map(((data ?? []) as S[]).map((s) => [s.id, s.name || s.short_name || '—']))
 }
 
 async function fxRates(): Promise<FxRate[]> {

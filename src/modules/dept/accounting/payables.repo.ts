@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { soTienDaTra, type PaymentKind } from '@/lib/mua-san'
+import { itemLabel, type ReceiptMove } from '@/lib/ap-receipt-ledger'
 
 /**
  * CÔNG NỢ NCC (GĐ C.1 — plan-ke-toan-cong-no-ncc): phát sinh KHÔNG lưu cứng —
@@ -136,7 +137,104 @@ function unwrapPays(rows: RawPay[] | null): SupplierPayment[] {
   })) as unknown as SupplierPayment[]
 }
 
+const LEDGER_MOVE_SELECT =
+  'id, qty, unit_cost, direction, doc:warehouse_docs(id, code, doc_date, supplier_doc_no, reversal_of_doc_id), line:supply_purchase_order_lines(spec, line_name, line_unit, material:warehouse_materials(name, unit), po:supply_purchase_orders(id, code, currency, supplier_id, vat_rate, price_includes_vat, terms_payment, lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code), supplier:supply_suppliers(name, short_name, payment_net_days)))'
+
+type RawLedgerMove = {
+  id: string
+  qty: unknown
+  unit_cost: unknown
+  direction: string
+  doc: One<{ id: string; code: string; doc_date: string; supplier_doc_no: string | null; reversal_of_doc_id: string | null }> // prettier-ignore
+  line: One<{
+    spec: string | null
+    line_name: string | null
+    line_unit: string | null
+    material: One<{ name: string | null; unit: string | null }>
+    po: One<{
+      id: string
+      code: string
+      currency: string | null
+      supplier_id: string
+      vat_rate: unknown
+      price_includes_vat: boolean | null
+      terms_payment: string | null
+      lsx: One<{ code: string }>
+      supplier: One<{
+        name: string
+        short_name: string | null
+        payment_net_days: number | null
+      }>
+    }>
+  }>
+}
+
 export const payablesRepo = {
+  /**
+   * Movement gắn dòng đơn mua — nguyên liệu SỔ CÔNG NỢ THEO HÀNG NHẬN
+   * (`lib/ap-receipt-ledger`). Lấy CẢ dòng chưa có giá: sổ không cộng chúng
+   * nhưng phải đếm để nói mình đang thiếu.
+   *
+   * Phân trang 1.000 dòng/lượt: PostgREST cắt mọi truy vấn ở trần 1.000 dòng
+   * BẤT KỂ `.limit()` — sổ cắt cụt thì dư đầu kỳ sai mà không báo lỗi gì.
+   */
+  async receiptMovesForLedger(): Promise<ReceiptMove[]> {
+    const rows: RawLedgerMove[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from('warehouse_movements')
+        .select(LEDGER_MOVE_SELECT)
+        .not('po_line_id', 'is', null)
+        .order('id')
+        .range(from, from + 999)
+      if (error) throw new Error(error.message)
+      rows.push(...((data ?? []) as unknown as RawLedgerMove[]))
+      if ((data ?? []).length < 1000) break
+    }
+    /*
+      TÊN ĐẦY ĐỦ, KHÔNG DÙNG TÊN TẮT. Đo 31/10/2026: tên tắt vừa trùng ("Taiwant"
+      là cả Nhôm Đoàn Gia lẫn Ngô Sơn, "TN" là cả Tường Nguyên lẫn Thiên Nghĩa)
+      vừa khó đọc ("MT", "HP", "BB") — sổ Kế toán gọi NCC theo tên, và tên đầy đủ
+      là tên in trên hoá đơn.
+    */
+    const displayName = (s: { name: string; short_name: string | null } | null) =>
+      s?.name?.trim() || s?.short_name?.trim() || '—'
+
+    const out: ReceiptMove[] = []
+    for (const r of rows) {
+      const doc = first(r.doc)
+      const line = first(r.line)
+      const po = line ? first(line.po) : null
+      if (!doc || !po || !line) continue
+      const sup = first(po.supplier)
+      const mat = first(line.material)
+      out.push({
+        move_id: r.id,
+        item_name: itemLabel(mat?.name || line.line_name || '—', line.spec),
+        item_unit: mat?.unit || line.line_unit || null,
+        lsx_code: first(po.lsx)?.code ?? null,
+        qty: Number(r.qty),
+        unit_cost: r.unit_cost == null ? null : Number(r.unit_cost),
+        direction: r.direction === 'out' ? 'out' : 'in',
+        doc_id: doc.id,
+        doc_code: doc.code,
+        doc_date: doc.doc_date,
+        supplier_doc_no: doc.supplier_doc_no,
+        is_reversal: !!doc.reversal_of_doc_id,
+        po_id: po.id,
+        po_code: po.code,
+        currency: po.currency || 'VND',
+        supplier_id: po.supplier_id,
+        supplier_name: displayName(sup),
+        vat_rate: po.vat_rate == null ? null : Number(po.vat_rate),
+        price_includes_vat: !!po.price_includes_vat,
+        terms_payment: po.terms_payment,
+        supplier_net_days: sup?.payment_net_days ?? null,
+      })
+    }
+    return out
+  },
+
   /** Mọi movement CÓ GIÁ gắn dòng PO — nguyên liệu tính phát sinh. */
   async receiptValues(): Promise<ReceiptValueRow[]> {
     const { data } = await db()

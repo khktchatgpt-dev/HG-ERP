@@ -1,446 +1,258 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Btn,
-  Empty,
-  Grid,
-  GridBody,
-  GridBtn,
-  GridFoot,
-  GridHead,
-  GridRow,
-  NoticeBar,
-  Pick,
-  ScreenFrame,
-  ScreenHeader,
-  Td,
-  Th,
-  WhyBox,
-} from '@/components/kit'
 import type { ApLedgerResult } from '@/modules/dept/accounting/ap-ledger.service'
-import { entryLabel } from '@/lib/ap-ledger'
-
-const digits = (cur: string) => (cur === 'VND' ? 0 : 2)
-const money = (n: number, cur: string) =>
-  n.toLocaleString('vi-VN', { maximumFractionDigits: digits(cur) })
-const dmy = (d: string) => d.split('-').reverse().join('/')
-const monthLabel = (m: string) => {
-  const [y, mm] = m.split('-')
-  return `Tháng ${Number(mm)}/${y}`
-}
+import { CnKhung, Seg, dmy, money, monthLabel } from './cong-no.shared'
+import { LuoiNcc } from './luoi-ncc'
+import { SoChiTiet } from './so-chi-tiet'
 
 /**
- * SỔ CÔNG NỢ PHẢI TRẢ NGƯỜI BÁN (TK 331) — khuôn C, có tầng soi chi tiết.
+ * CÔNG NỢ NHÀ CUNG CẤP THEO THÁNG — khuôn C, có tầng soi chi tiết. KHÔNG dùng kit
+ * (chủ dự án 31/10/2026: "không dùng bộ kit cũng như hiển thị nội dung thừa").
  *
  * Ba câu hỏi của kế toán, ba tầng trên cùng một màn, theo đúng thứ tự họ hỏi:
+ *   1. Tổng công nợ bao nhiêu?   → dải phương trình tháng (dư đầu → dư cuối)
+ *   2. Từng NCC bao nhiêu?       → lưới NCC
+ *   3. Gồm những khoản nào?      → sổ chi tiết theo dòng hàng, nửa dưới màn
  *
- *   1. Tổng công nợ bao nhiêu?     → dải phương trình kỳ (dư đầu → dư cuối)
- *   2. Từng NCC bao nhiêu?         → lưới chính, mỗi dòng một NCC × tiền tệ
- *   3. Gồm những khoản nào?        → sổ chi tiết bên dưới, có số dư luỹ kế
+ * Hai cơ sở (bản vẽ Ht7MpqcutpTUyG4r4DvymN, duyệt 31/10): mặc định theo HÀNG ĐÃ
+ * NHẬN (phiếu nhập, gồm VAT), công tắc "Hoá đơn NCC" giữ sổ TK 331. Không bao giờ
+ * cộng lẫn hai cơ sở hay hai tiền tệ. Kỳ · cơ sở · tiền tệ · NCC đang soi nằm trên
+ * URL (`?ky=&co-so=&tien=&ncc=&tt=`) vì kế toán gửi link cho nhau khi đối chiếu.
  *
- * Không tách ba màn: ba câu này người ta hỏi liền một mạch, tách ra là mỗi lần
- * soi một khoản phải quay lại chọn kỳ từ đầu. Nhưng cũng KHÔNG gộp tầng 3 vào
- * lưới chính — mở sẵn chi tiết mọi NCC là bảng vài nghìn dòng không đọc được.
+ * Bỏ có chủ ý so với bản kit: khối giải thích dài, dải cảnh báo chồng nhau, chú
+ * thích chân bảng, nhãn trang lặp tên — mỗi điều đó đã nói bằng chính con số.
  */
-export function SoCongNoScreen(p: ApLedgerResult) {
+export function SoCongNoScreen(p: ApLedgerResult & { currency?: string }) {
   const router = useRouter()
-  const go = (q: Record<string, string | undefined>) => {
+  const receipt = p.basis === 'receipt'
+  const currencies = p.totals.map((t) => t.currency)
+  const cur =
+    p.currency && currencies.includes(p.currency)
+      ? p.currency
+      : currencies.includes('VND')
+        ? 'VND'
+        : (currencies[0] ?? 'VND')
+
+  const [prepayOnly, setPrepayOnly] = useState(false)
+  const [q, setQ] = useState('')
+
+  const go = (patch: Record<string, string | undefined>) => {
     const sp = new URLSearchParams({ ky: p.month })
-    for (const [k, v] of Object.entries(q)) {
+    if (!receipt) sp.set('co-so', 'hd')
+    if (p.currency) sp.set('tien', p.currency)
+    if (p.detail) {
+      sp.set('ncc', p.detail.supplier_id)
+      sp.set('tt', p.detail.currency)
+    }
+    for (const [k, v] of Object.entries(patch)) {
       if (v) sp.set(k, v)
       else sp.delete(k)
     }
     router.push(`/finance/so-cong-no?${sp}`)
   }
 
+  const inCur = p.rows.filter((r) => r.currency === cur)
+  const needle = q.trim().toLowerCase()
+  const shown = inCur.filter(
+    (r) =>
+      (!prepayOnly || r.prepay) &&
+      (!needle || r.supplier_name.toLowerCase().includes(needle)),
+  )
+  const total = p.totals.find((t) => t.currency === cur)
+  const prepayCount = inCur.filter((r) => r.prepay).length
+  const months = p.months.length ? p.months : [{ month: p.month, entry_count: 0 }]
+
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-      <ScreenFrame>
-        <ScreenHeader
-          compact
-          eyebrow="Tài chính · Kế toán"
-          title="Sổ công nợ phải trả người bán · TK 331"
-          actions={
-            <>
-              <Pick
-                label="Kỳ kế toán"
-                value={p.month}
-                width={168}
-                onChange={(v) => router.push(`/finance/so-cong-no?ky=${v}`)}
-                options={
-                  p.months.length
-                    ? p.months.map((m) => ({
-                        value: m.month,
-                        label: `${monthLabel(m.month)} · ${m.entry_count} CT`,
-                      }))
-                    : [{ value: p.month, label: monthLabel(p.month) }]
-                }
-              />
-              <Btn
-                icon="excel"
-                href={`/api/dept/accounting/so-cong-no/export?ky=${p.month}`}
-              >
-                Xuất Excel
-              </Btn>
-              <Btn icon="tien" href="/finance/cong-no-ncc">
-                Ghi thanh toán
-              </Btn>
-              <Btn icon="so" href="/finance/tuoi-no">
-                Tuổi nợ
-              </Btn>
-            </>
+    <CnKhung>
+      <div className="cn-head">
+        {/* Tên màn đã ở thanh trên của khung — không nhắc lại ở đây. */}
+        <select
+          className="cn-btn"
+          aria-label="Tháng"
+          value={p.month}
+          onChange={(e) => go({ ky: e.target.value, ncc: undefined, tt: undefined })}
+        >
+          {months.map((m) => (
+            <option key={m.month} value={m.month}>
+              Tháng {Number(m.month.slice(5))}/{m.month.slice(0, 4)}
+            </option>
+          ))}
+        </select>
+        <div className="cn-actions">
+          <a className="cn-btn cn-btn-p" href="/finance/cong-no-ncc">
+            Ghi thanh toán
+          </a>
+          <a
+            className="cn-btn"
+            href={`/api/dept/accounting/so-cong-no/export?ky=${p.month}${receipt ? '' : '&co-so=hd'}`}
+          >
+            Xuất Excel
+          </a>
+        </div>
+      </div>
+
+      <div className="cn-bar">
+        <span className="cn-lbl">Tính theo</span>
+        <Seg
+          label="Tính theo"
+          value={receipt ? 'receipt' : 'invoice'}
+          options={[
+            { value: 'receipt', label: 'Hàng đã nhận' },
+            { value: 'invoice', label: 'Hoá đơn NCC', count: p.invoice_count },
+          ]}
+          onChange={
+            (v) =>
+            go({ 'co-so': v === 'invoice' ? 'hd' : undefined, ky: undefined, ncc: undefined, tt: undefined }) // prettier-ignore
           }
         />
-
-        {/*
-          PHƯƠNG TRÌNH SỔ đứng trước cả bảng, có chủ ý: đây là thứ duy nhất trên
-          màn mà kế toán phải đưa lên báo cáo, và nó phải KIỂM ĐƯỢC bằng mắt —
-          bốn số nằm cạnh nhau với dấu +, −, = ở giữa thì sai lệch lộ ra ngay.
-          Bày bốn thẻ KPI rời rạc là giấu mất quan hệ giữa chúng.
-        */}
-        <div className="flex flex-wrap items-stretch gap-x-6 gap-y-2 border-b border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-2.5">
-          {p.totals.length === 0 ? (
-            <span className="text-k-sm text-[var(--ink-3)]">
-              Kỳ {monthLabel(p.month)} không có phát sinh và không có số dư.
-            </span>
-          ) : (
-            p.totals.map((t) => (
-              <div key={t.currency} className="flex items-center gap-3">
-                <span className="num text-k-label rounded-[var(--radius)] border border-[var(--line)] px-2 py-px font-bold text-[var(--ink-2)]">
-                  {t.currency}
-                </span>
-                <Eq label="Dư đầu kỳ" value={money(t.opening, t.currency)} />
-                <Op>+</Op>
-                <Eq label="Phát sinh tăng" value={money(t.increase, t.currency)} />
-                <Op>−</Op>
-                <Eq label="Phát sinh giảm" value={money(t.decrease, t.currency)} />
-                <Op>=</Op>
-                {/*
-                  Cảnh báo thiếu tỷ giá nằm NGAY DƯỚI con số nó ảnh hưởng, không
-                  phải ở một dải riêng trên đầu: dải riêng bắt buộc có nút hành
-                  động, mà việc "khai tỷ giá" hiện chưa có màn nào làm được — một
-                  cái nút không dẫn đi đâu còn tệ hơn không có nút.
-                */}
-                <Eq
-                  label="Dư cuối kỳ"
-                  value={money(t.closing, t.currency)}
-                  strong
-                  sub={`${t.supplier_count} NCC`}
-                  warn={
-                    t.currency === 'VND'
-                      ? undefined
-                      : t.closing_base == null
-                        ? `chưa quy đổi — thiếu tỷ giá ${t.currency} ngày ${dmy(p.to)}`
-                        : undefined
-                  }
-                  note={
-                    t.currency !== 'VND' && t.closing_base != null
-                      ? `≈ ${money(t.closing_base, 'VND')} đ theo tỷ giá cuối kỳ`
-                      : undefined
-                  }
-                />
-              </div>
-            ))
-          )}
-          {p.closing_base_total != null && p.totals.length > 1 && (
-            <div className="flex items-center gap-3 border-l border-[var(--hair)] pl-6">
-              <Eq
-                label="Cộng quy VND"
-                value={money(p.closing_base_total, 'VND')}
-                strong
-                sub="số lên bảng cân đối"
-              />
-            </div>
-          )}
-          {p.closing_base_total == null && p.missing_fx.length > 0 && (
-            <div className="flex items-center gap-3 border-l border-[var(--hair)] pl-6">
-              <Eq
-                label="Cộng quy VND"
-                value="—"
-                strong
-                warn={`thiếu tỷ giá ${p.missing_fx.join(', ')}: cộng thiếu một khoản thì tổng sai mà không ai biết`}
-              />
-            </div>
-          )}
-        </div>
-
-        {p.off_book.length > 0 && (
-          <NoticeBar
-            tone="warn"
-            tag="Ngoài sổ"
-            action={{
-              label: 'Xem đối chiếu',
-              onClick: () => router.push('/finance/hoa-don-ncc'),
-            }}
-          >
-            {p.off_book
-              .map((o) => `${money(o.amount, o.currency)} ${o.currency}`)
-              .join(' · ')}{' '}
-            hàng đã về nhưng NCC chưa xuất hoá đơn ({p.off_book_suppliers} NCC) —{' '}
-            <b>chưa</b> nằm trong số dư trên. Nghĩa vụ có thật nhưng chưa đủ chứng từ ghi
-            TK 331; việc phải làm là đi đòi hoá đơn.
-          </NoticeBar>
-        )}
-
-        <div className="min-h-0 flex-1 overflow-auto">
-          {p.rows.length === 0 ? (
-            <Empty
-              headline={`Kỳ ${monthLabel(p.month)} chưa có số dư và chưa có phát sinh`}
-              reason="Sổ TK 331 ghi theo HOÁ ĐƠN nhà cung cấp đã vào sổ và phiếu chi — không phải theo phiếu nhập kho hay đơn đặt hàng. Chưa có hoá đơn nào vào sổ thì công nợ chưa phát sinh, dù đã cam kết mua."
-              next={
-                <>
-                  <Btn icon="hoaDon" primary href="/finance/hoa-don-ncc">
-                    Lập hoá đơn từ đơn mua
-                  </Btn>
-                  <Btn icon="hoaDon" href="/finance/hoa-don-ncc/so">
-                    Sổ hoá đơn NCC
-                  </Btn>
-                  <Btn icon="don" href="/finance/bao-cao">
-                    Xem cam kết mua hàng
-                  </Btn>
-                </>
-              }
+        {currencies.length > 1 && (
+          <>
+            <span className="cn-lbl">Tiền tệ</span>
+            <Seg
+              label="Tiền tệ"
+              value={cur}
+              options={p.totals.map((t) => ({ value: t.currency, label: t.currency, count: t.supplier_count }))} // prettier-ignore
+              onChange={(v) => go({ tien: v })}
             />
-          ) : (
-            <Grid minWidth={1000}>
-              <GridHead>
-                <Th>Nhà cung cấp</Th>
-                <Th width={62}>TT</Th>
-                <Th num>Dư đầu kỳ</Th>
-                <Th num>Phát sinh tăng</Th>
-                <Th num>Phát sinh giảm</Th>
-                <Th num>Dư cuối kỳ</Th>
-                <Th num width={72}>
-                  CT
-                </Th>
-                <Th num>Quy VND</Th>
-                <Th width={78} />
-              </GridHead>
-              <GridBody>
-                {p.rows.map((r) => {
-                  const on =
-                    p.detail?.supplier_id === r.supplier_id &&
-                    p.detail?.currency === r.currency
-                  return (
-                    <GridRow key={`${r.supplier_id}-${r.currency}`} selected={on}>
-                      <Td>{r.supplier_name}</Td>
-                      <Td>
-                        <span className="num">{r.currency}</span>
-                      </Td>
-                      <Td num>{r.opening ? money(r.opening, r.currency) : '—'}</Td>
-                      <Td num>{r.increase ? money(r.increase, r.currency) : '—'}</Td>
-                      <Td num tone={r.decrease > 0 ? 'done' : undefined}>
-                        {r.decrease ? money(r.decrease, r.currency) : '—'}
-                      </Td>
-                      <Td num tone={r.closing > 0 ? 'warn' : undefined}>
-                        <b>{money(r.closing, r.currency)}</b>
-                      </Td>
-                      <Td num>{r.entry_count || '—'}</Td>
-                      {/*
-                        null = thiếu tỷ giá, KHÔNG phải 0: một khoản 10.000 USD
-                        hiện thành 0 đ đọc ra là "không nợ gì".
-                      */}
-                      <Td num>
-                        {r.closing_base == null ? (
-                          <span className="k-t-stop">chưa quy đổi</span>
-                        ) : (
-                          money(r.closing_base, 'VND')
-                        )}
-                      </Td>
-                      <Td>
-                        <GridBtn
-                          onClick={() =>
-                            go(
-                              on
-                                ? { ncc: undefined, tt: undefined }
-                                : { ncc: r.supplier_id, tt: r.currency },
-                            )
-                          }
-                        >
-                          {on ? 'Đóng' : 'Chi tiết'}
-                        </GridBtn>
-                      </Td>
-                    </GridRow>
-                  )
-                })}
-              </GridBody>
-              <GridFoot>
-                <Td>Cộng toàn sổ</Td>
-                <Td />
-                <Td num>{sumLine(p.totals, 'opening')}</Td>
-                <Td num>{sumLine(p.totals, 'increase')}</Td>
-                <Td num>{sumLine(p.totals, 'decrease')}</Td>
-                <Td num>
-                  <b>{sumLine(p.totals, 'closing')}</b>
-                </Td>
-                <Td num />
-                <Td num>
-                  {p.closing_base_total == null
-                    ? '—'
-                    : money(p.closing_base_total, 'VND')}
-                </Td>
-                <Td />
-              </GridFoot>
-            </Grid>
-          )}
+          </>
+        )}
+        {receipt && prepayCount > 0 && (
+          <span className="cn-seg">
+            <button
+              type="button"
+              aria-pressed={prepayOnly}
+              onClick={() => setPrepayOnly((v) => !v)}
+            >
+              Cọc chưa ghi<span className="cn-n">{prepayCount}</span>
+            </button>
+          </span>
+        )}
+        <input
+          className="cn-search"
+          type="search"
+          placeholder="Tìm nhà cung cấp…"
+          aria-label="Tìm nhà cung cấp"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
 
-          {p.detail && (
+      {total && (
+        <div className="cn-eq">
+          <div>
+            <div className="cn-k">Dư đầu tháng</div>
+            <div className="cn-v">{money(total.opening, cur)}</div>
+          </div>
+          <span className="cn-op">+</span>
+          <div>
+            <div className="cn-k">
+              {receipt ? 'Nhận trong tháng' : 'Hoá đơn trong tháng'}
+            </div>
+            <div className="cn-v">{money(total.increase, cur)}</div>
+          </div>
+          {receipt && (
             <>
-              <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-2">
-                <h3 className="k-fgrp-h">
-                  Sổ chi tiết · {p.detail.supplier_name} ·{' '}
-                  <span className="num">{p.detail.currency}</span>
-                </h3>
-                <span className="text-k-sm text-[var(--ink-3)]">
-                  {dmy(p.from)} → {dmy(p.to)}
-                </span>
-                <GridBtn onClick={() => go({ ncc: undefined, tt: undefined })}>
-                  Đóng
-                </GridBtn>
+              <span className="cn-op">−</span>
+              <div>
+                <div className="cn-k">Trả hàng · đảo phiếu</div>
+                <div className="cn-v">{money(total.returned, cur)}</div>
               </div>
-              <Grid minWidth={900}>
-                <GridHead>
-                  <Th width={92}>Ngày</Th>
-                  <Th width={120}>Số chứng từ</Th>
-                  <Th>Diễn giải</Th>
-                  <Th num>Phát sinh tăng</Th>
-                  <Th num>Phát sinh giảm</Th>
-                  <Th num>Số dư luỹ kế</Th>
-                </GridHead>
-                <GridBody>
-                  <GridRow>
-                    <Td colSpan={5}>
-                      <i>Số dư đầu kỳ</i>
-                    </Td>
-                    <Td num>
-                      <b>{money(p.detail.opening, p.detail.currency)}</b>
-                    </Td>
-                  </GridRow>
-                  {p.detail.lines.map((l, i) => (
-                    <GridRow key={`${l.kind}-${l.doc_no}-${l.date}-${i}`}>
-                      <Td>
-                        <span className="num">{dmy(l.date)}</span>
-                      </Td>
-                      <Td>
-                        <span className="num">{l.doc_no}</span>
-                      </Td>
-                      <Td>
-                        {entryLabel(l)}
-                        {l.note ? (
-                          <span className="ml-1 text-[var(--ink-3)]">· {l.note}</span>
-                        ) : null}
-                      </Td>
-                      <Td num>
-                        {l.kind === 'invoice' ? money(l.amount, p.detail!.currency) : '—'}
-                      </Td>
-                      <Td num tone={l.kind === 'payment' ? 'done' : undefined}>
-                        {l.kind === 'payment' ? money(l.amount, p.detail!.currency) : '—'}
-                      </Td>
-                      <Td num>{money(l.running, p.detail!.currency)}</Td>
-                    </GridRow>
-                  ))}
-                </GridBody>
-                <GridFoot>
-                  <Td colSpan={5}>Số dư cuối kỳ</Td>
-                  <Td num>
-                    <b>
-                      {money(
-                        p.detail.lines.at(-1)?.running ?? p.detail.opening,
-                        p.detail.currency,
-                      )}
-                    </b>
-                  </Td>
-                </GridFoot>
-              </Grid>
-              {p.detail.lines.length === 0 && (
-                <div className="text-k-sm px-[var(--gutter)] py-2 text-[var(--ink-3)]">
-                  Kỳ này không có giao dịch — số dư giữ nguyên từ kỳ trước.
-                </div>
-              )}
             </>
           )}
+          <span className="cn-op">−</span>
+          <div>
+            <div className="cn-k">Đã thanh toán</div>
+            <div className="cn-v">{money(total.decrease, cur)}</div>
+            {p.payment_count === 0 && (
+              <div className="cn-sub cn-warn">chưa có phiếu chi trên ERP</div>
+            )}
+          </div>
+          <span className="cn-op">=</span>
+          <div className="cn-end">
+            <div className="cn-k">Dư cuối tháng</div>
+            <div className="cn-v">{money(total.closing, cur)}</div>
+            <div className="cn-sub">
+              {total.supplier_count} NCC{receipt ? ' · gồm VAT' : ''}
+              {cur !== 'VND' &&
+                (total.closing_base == null
+                  ? ` · chưa quy đổi — thiếu tỷ giá ${dmy(p.to)}`
+                  : ` · ≈ ${money(total.closing_base, 'VND')} đ`)}
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="px-[var(--gutter)] py-3">
-          <WhyBox
-            lines={[
-              `Kỳ ${dmy(p.from)} → ${dmy(p.to)} · Dư đầu kỳ + Phát sinh tăng − Phát sinh giảm = Dư cuối kỳ`,
-              'Dư đầu kỳ CỘNG DỒN mọi giao dịch trước kỳ — không có ô khai tay, nên không bao giờ lệch khỏi tổng giao dịch',
-              'Phát sinh TĂNG = hoá đơn NCC đã vào sổ (gồm VAT). KHÔNG phải phiếu nhập kho: nợ phải trả ra đời khi NCC xuất hoá đơn',
-              'Phát sinh GIẢM = phiếu chi trả NCC trong kỳ',
-              'Tiền tệ KHÔNG cộng lẫn; dư cuối ngoại tệ quy VND theo tỷ giá CUỐI KỲ, thiếu tỷ giá thì để trống',
-              // Bỏ gap đã có dải cảnh báo riêng — nói hai lần là hết trọng lượng.
-              ...p.gaps.filter((g) => !g.banner).map((g) => `${g.label}: ${g.detail}`),
-            ]}
-            result={
-              p.totals.length === 0
-                ? 'không có số dư'
-                : p.totals
-                    .map((t) => `${money(t.closing, t.currency)} ${t.currency}`)
-                    .join(' · ')
-            }
-          />
+      {p.rows.length === 0 ? (
+        <div className="cn-empty">
+          <b>
+            {receipt
+              ? `${monthLabel(p.month)[0].toUpperCase()}${monthLabel(p.month).slice(1)} chưa có phiếu nhập nào gắn đơn mua`
+              : `Chưa có hoá đơn NCC nào vào sổ ${monthLabel(p.month)}`}
+          </b>
+          <span>
+            {receipt
+              ? 'Công nợ theo hàng nhận chỉ phát sinh khi hàng về và có phiếu nhập kho.'
+              : 'Sổ TK 331 chỉ có số khi Kế toán vào sổ hoá đơn NCC.'}
+          </span>
+          {receipt ? (
+            p.months.at(-1) && p.months.at(-1)!.month !== p.month ? (
+              <button
+                type="button"
+                className="cn-btn"
+                onClick={() => go({ ky: p.months.at(-1)!.month })}
+              >
+                Xem {monthLabel(p.months.at(-1)!.month)}
+              </button>
+            ) : null
+          ) : (
+            <button
+              type="button"
+              className="cn-btn"
+              onClick={() => go({ 'co-so': undefined, ky: undefined })}
+            >
+              Xem theo hàng đã nhận
+            </button>
+          )}
         </div>
-      </ScreenFrame>
-    </div>
+      ) : (
+        <div className="cn-split">
+          <div className="cn-scroll">
+            <LuoiNcc
+              rows={shown}
+              all={inCur}
+              total={total}
+              cur={cur}
+              receipt={receipt}
+              selected={p.detail}
+              onPick={(r) =>
+                go(
+                  p.detail?.supplier_id === r.supplier_id &&
+                    p.detail?.currency === r.currency
+                    ? { ncc: undefined, tt: undefined }
+                    : { ncc: r.supplier_id, tt: r.currency },
+                )
+              }
+              onClear={() => {
+                setQ('')
+                setPrepayOnly(false)
+              }}
+            />
+          </div>
+          {p.detail && (
+            <div className="cn-scroll">
+              <SoChiTiet
+                // Đổi NCC thì dựng lại: trạng thái gập/mở theo vị trí dòng của NCC cũ không còn nghĩa.
+                key={`${p.detail.supplier_id}-${p.detail.currency}-${p.month}`}
+                d={p.detail}
+                p={p}
+                onClose={() => go({ ncc: undefined, tt: undefined })}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </CnKhung>
   )
-}
-
-/**
- * Một vế của phương trình sổ: nhãn nhỏ trên, số to dưới.
- *
- * `warn` là chỗ nói CON SỐ NÀY KHÔNG TIN ĐƯỢC và vì sao — nằm ngay dưới nó chứ
- * không đẩy lên một dải cảnh báo chung, để người đọc không phải ghép hai đầu
- * màn lại mới biết cảnh báo đang nói về số nào.
- */
-function Eq({
-  label,
-  value,
-  sub,
-  note,
-  warn,
-  strong,
-}: {
-  label: string
-  value: string
-  sub?: string
-  note?: string
-  warn?: string
-  strong?: boolean
-}) {
-  return (
-    <div className="leading-tight">
-      <div className="text-k-label tracking-[.04em] text-[var(--ink-3)] uppercase">
-        {label}
-      </div>
-      <div
-        className={
-          strong
-            ? 'num text-k-lg font-bold text-[var(--ink)]'
-            : 'num text-k-body text-[var(--ink-2)]'
-        }
-      >
-        {value}
-      </div>
-      {sub && <div className="num text-k-label text-[var(--ink-3)]">{sub}</div>}
-      {note && <div className="num text-k-label text-[var(--ink-3)]">{note}</div>}
-      {warn && <div className="k-t-stop num text-k-label">{warn}</div>}
-    </div>
-  )
-}
-
-function Op({ children }: { children: string }) {
-  return <span className="num text-k-lg font-bold text-[var(--ink-3)]">{children}</span>
-}
-
-/** Chân bảng: mỗi tiền tệ một cụm, không bao giờ cộng lẫn. */
-function sumLine(
-  totals: ApLedgerResult['totals'],
-  key: 'opening' | 'increase' | 'decrease' | 'closing',
-): string {
-  const parts = totals
-    .filter((t) => t[key] !== 0)
-    .map((t) => `${money(t[key], t.currency)} ${t.currency}`)
-  return parts.length ? parts.join(' · ') : '—'
 }

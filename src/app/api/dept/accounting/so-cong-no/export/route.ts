@@ -20,12 +20,15 @@ import {
  */
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const ky = new URL(req.url).searchParams.get('ky')
+  const sp = new URL(req.url).searchParams
+  const ky = sp.get('ky')
   const month = ky && /^\d{4}-\d{2}$/.test(ky) ? ky : undefined
+  // `co-so=hd` = sổ theo hoá đơn; mọi giá trị khác = theo hàng nhận (mặc định của màn).
+  const basis = sp.get('co-so') === 'hd' ? 'invoice' : 'receipt'
 
-  const book = await apLedgerService.fullBook(user, month)
+  const book = await apLedgerService.fullBook(user, month, basis)
   const buf = await buildApLedgerExcel(book)
-  const filename = apLedgerExcelFilename(book.month)
+  const filename = apLedgerExcelFilename(book.month, book.basis)
 
   return new NextResponse(new Uint8Array(buf), {
     headers: {
