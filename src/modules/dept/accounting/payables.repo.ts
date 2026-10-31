@@ -138,7 +138,7 @@ function unwrapPays(rows: RawPay[] | null): SupplierPayment[] {
 }
 
 const LEDGER_MOVE_SELECT =
-  'id, qty, unit_cost, direction, doc:warehouse_docs(id, code, doc_date, supplier_doc_no, reversal_of_doc_id), line:supply_purchase_order_lines(spec, line_name, line_unit, material:warehouse_materials(name, unit), po:supply_purchase_orders(id, code, currency, supplier_id, vat_rate, price_includes_vat, terms_payment, lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code), supplier:supply_suppliers(name, short_name, payment_net_days)))'
+  'id, qty, unit_cost, direction, doc:warehouse_docs(id, code, doc_date, supplier_doc_no, reversal_of_doc_id), line:supply_purchase_order_lines(sort_order, spec, line_name, line_unit, material:warehouse_materials(name, unit), po:supply_purchase_orders(id, code, currency, supplier_id, vat_rate, price_includes_vat, terms_payment, lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code), supplier:supply_suppliers(name, short_name, payment_net_days)))'
 
 type RawLedgerMove = {
   id: string
@@ -147,6 +147,7 @@ type RawLedgerMove = {
   direction: string
   doc: One<{ id: string; code: string; doc_date: string; supplier_doc_no: string | null; reversal_of_doc_id: string | null }> // prettier-ignore
   line: One<{
+    sort_order: number | null
     spec: string | null
     line_name: string | null
     line_unit: string | null
@@ -210,6 +211,7 @@ export const payablesRepo = {
       const mat = first(line.material)
       out.push({
         move_id: r.id,
+        line_order: line.sort_order ?? null,
         item_name: itemLabel(mat?.name || line.line_name || '—', line.spec),
         item_unit: mat?.unit || line.line_unit || null,
         lsx_code: first(po.lsx)?.code ?? null,
@@ -221,6 +223,7 @@ export const payablesRepo = {
         doc_date: doc.doc_date,
         supplier_doc_no: doc.supplier_doc_no,
         is_reversal: !!doc.reversal_of_doc_id,
+        reversal_of_doc_id: doc.reversal_of_doc_id,
         po_id: po.id,
         po_code: po.code,
         currency: po.currency || 'VND',
@@ -231,6 +234,22 @@ export const payablesRepo = {
         terms_payment: po.terms_payment,
         supplier_net_days: sup?.payment_net_days ?? null,
       })
+    }
+    return out
+  },
+
+  /** Mã + ngày của các phiếu GỐC (theo id) — để phiếu đảo nói "đảo phiếu PNK-… nhập ngày …". */
+  async docCodes(ids: string[]): Promise<Map<string, { code: string; date: string }>> {
+    const out = new Map<string, { code: string; date: string }>()
+    const uniq = [...new Set(ids)].filter(Boolean)
+    for (let i = 0; i < uniq.length; i += 200) {
+      const { data, error } = await db()
+        .from('warehouse_docs')
+        .select('id, code, doc_date')
+        .in('id', uniq.slice(i, i + 200))
+      if (error) throw new Error(error.message)
+      for (const d of (data ?? []) as { id: string; code: string; doc_date: string }[])
+        out.set(d.id, { code: d.code, date: d.doc_date })
     }
     return out
   },

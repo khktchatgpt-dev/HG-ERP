@@ -25,6 +25,8 @@ import { dueDate, resolveTerm, type Term } from './payment-terms'
 export type ReceiptMove = {
   /** Id movement — giữ thứ tự dòng hàng ổn định trong một phiếu. */
   move_id?: string
+  /** Thứ tự dòng trên đơn mua — dòng hàng của một phiếu xếp theo đúng thứ tự đơn. */
+  line_order?: number | null
   /** Tên hàng (tên vật tư + quy cách, hoặc tên dòng gõ tay) — cột "Tên SP" của sổ Kế toán. */
   item_name?: string
   /** ĐVT của dòng hàng. */
@@ -42,6 +44,8 @@ export type ReceiptMove = {
   supplier_doc_no: string | null
   /** Phiếu này là phiếu ĐẢO của một phiếu khác. */
   is_reversal: boolean
+  /** Id phiếu gốc mà phiếu này đảo (khi `is_reversal`). */
+  reversal_of_doc_id?: string | null
   po_id: string
   po_code: string
   currency: string
