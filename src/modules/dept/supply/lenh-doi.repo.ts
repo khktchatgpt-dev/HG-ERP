@@ -2,6 +2,7 @@ import { db } from '@/server/db'
 import type { Json } from '@/lib/database.types'
 import type { MocSoat } from '@/lib/lenh-doi'
 import { docAnh, type BanGhiNhatKy } from '@/lib/nhat-ky-dinh-muc'
+import type { BanGhiLenh } from '@/lib/nhat-ky-lenh'
 import { poOwner } from '@/lib/supply-scope'
 import { SUPPLY_DEPT_NAMES } from './suppliers.service'
 
@@ -132,6 +133,53 @@ export const lenhDoiRepo = {
       if ((data ?? []).length < TRANG) break
     }
     return { rows, names: await tenNguoi(rows.map((r) => r.changed_by)) }
+  },
+
+  /** NHẬT KÝ LỆNH (0285) của một lệnh, ghi SAU một mốc — đầu lệnh + dòng lệnh. */
+  async nhatKyLenh(lsxId: string, tu: string): Promise<BanGhiLenh[]> {
+    const rows: BanGhiLenh[] = []
+    for (let from = 0; ; from += TRANG) {
+      const { data, error } = await db()
+        .from('production_order_log')
+        .select('line_id, action, before, after, changed_at')
+        .eq('production_order_id', lsxId)
+        .gt('changed_at', tu)
+        .order('changed_at')
+        .order('id')
+        .range(from, from + TRANG - 1)
+      if (error) throw new Error(error.message)
+      for (const r of data ?? [])
+        rows.push({
+          line_id: r.line_id,
+          action: r.action as BanGhiLenh['action'],
+          before: r.before as Record<string, unknown> | null,
+          after: r.after as Record<string, unknown> | null,
+          changed_at: r.changed_at,
+        })
+      if ((data ?? []).length < TRANG) break
+    }
+    return rows
+  },
+
+  /**
+   * SỰ KIỆN APP của một lệnh có kèm người làm — đổi đầu lệnh, phát lại bản, đồng
+   * bộ theo đơn, huỷ (0224) — để gán người cho nhật ký lệnh (không có cột người).
+   */
+  async suKienLenh(
+    lsxId: string,
+    /** Sự kiện đã biết sẵn (lần phát lại bản gần nhất trên đầu lệnh). */
+    them: { luc: string; boi: string | null }[] = [],
+  ): Promise<{
+    rows: { luc: string; boi: string | null }[]
+    names: Map<string, string>
+  }> {
+    const { data, error } = await db()
+      .from('production_order_changes')
+      .select('changed_by, created_at')
+      .eq('production_order_id', lsxId)
+    if (error) throw new Error(error.message)
+    const rows = [...(data ?? []).map((r) => ({ luc: r.created_at, boi: r.changed_by })), ...them] // prettier-ignore
+    return { rows, names: await tenNguoi(rows.map((r) => r.boi)) }
   },
 
   /**

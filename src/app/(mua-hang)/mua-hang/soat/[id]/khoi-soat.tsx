@@ -2,57 +2,10 @@
 
 import { ngayGioVn } from '@/lib/date-vn'
 import { HopThoai, INPUT, NUM, Nut, O, TD, TH } from '../../_erp/ui'
-import { dmy, so0 } from '../../bang-ke/[id]/ke-hoach.shared'
+import { so0 } from '../../bang-ke/[id]/ke-hoach.shared'
 import type { SoatCtx } from './useSoatLenh'
 
 const NGAY = 'font-mono tabular-nums whitespace-nowrap'
-
-/** TAB "LỆNH SX" (T1) — ngày xuất, mốc vật tư, SL từng SP đổi so với mốc soát. */
-export function TabLenh({ d }: { d: SoatCtx }) {
-  const gt = (v: string | number | null) =>
-    v === null ? '—' : typeof v === 'number' ? so0(v) : dmy(v)
-  const PHAN: Record<string, string> = {
-    ship_date: 'Đầu lệnh',
-    materials_due_at: 'Đầu lệnh',
-    sp_sl: 'Dòng lệnh',
-    sp_them: 'Dòng lệnh',
-    sp_bo: 'Dòng lệnh',
-  }
-  return (
-    <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className={`${TH} w-[120px]`}>Phần</th>
-            <th className={TH}>Thay đổi</th>
-            <th className={`${TH} w-[260px]`}>Cũ → mới</th>
-          </tr>
-        </thead>
-        <tbody>
-          {d.thayDoi.thongTin.map((x) => (
-            <tr key={`${x.k}|${x.nhan}`}>
-              <td className={`${TD} text-[var(--ink-3)]`}>{PHAN[x.k]}</td>
-              <td className={TD}>
-                {x.k === 'sp_them'
-                  ? `Thêm SP ${x.nhan}`
-                  : x.k === 'sp_bo'
-                    ? `Gỡ SP ${x.nhan}`
-                    : x.k === 'sp_sl'
-                      ? `${x.nhan} · SL sản phẩm`
-                      : x.nhan}
-              </td>
-              <td className={`${TD} ${NGAY}`}>
-                {x.truoc !== null && <s className="text-[var(--ink-3)]">{gt(x.truoc)}</s>}
-                {x.truoc !== null && ' → '}
-                <b>{gt(x.nay)}</b>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
 
 /** Hộp "Đã soát" — ghi mốc mới, kèm ghi chú tuỳ chọn. */
 export function HopSoat({ d }: { d: SoatCtx }) {

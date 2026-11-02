@@ -1,5 +1,6 @@
 import { ngayGioVn } from '@/lib/date-vn'
-import type { DongDinhMuc } from '@/lib/lenh-doi'
+import type { DongDinhMuc, DongLenh } from '@/lib/lenh-doi'
+import { doiQuyCach, type TruongDau, type TruongDong } from '@/lib/nhat-ky-lenh'
 import type { AnhDong, AnhHuong, TruongDm } from '@/lib/nhat-ky-dinh-muc'
 import { PART_GROUP_LABEL } from '@/lib/part-groups'
 
@@ -112,4 +113,82 @@ export function AnhHuongO({ d }: { d: DongDinhMuc }) {
       })}
     </span>
   )
+}
+
+/* ── Thay đổi của lệnh (T3) ─────────────────────────────────────────────── */
+
+const NHAN_DAU: Record<TruongDau, string> = {
+  ship_date: 'Ngày xuất',
+  materials_due_at: 'Mốc vật tư',
+  priority: 'Ưu tiên',
+  status: 'Trạng thái',
+}
+const NHAN_DONG: Record<TruongDong, string> = {
+  sp: 'đổi SP',
+  qty: 'SL sản phẩm',
+  unit: 'ĐVT',
+  specs: 'quy cách',
+  ship_date: 'ngày xuất dòng',
+}
+
+const TRANG_THAI: Record<string, string> = {
+  approved: 'Đã duyệt',
+  in_progress: 'Đang sản xuất',
+  cancelled: 'Đã huỷ',
+  completed: 'Hoàn thành',
+}
+
+const dmyNgan = (iso: string | number | null) => {
+  if (iso === null || iso === '') return '—'
+  const [y, m, d] = String(iso).slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+/** Số ngày giữa hai ngày ISO (sau − trước); null nếu thiếu một bên. */
+export function soNgay(truoc: string | number | null, sau: string | number | null) {
+  if (!truoc || !sau) return null
+  return Math.round((Date.parse(String(sau)) - Date.parse(String(truoc))) / 86_400_000)
+}
+
+/** Một thay đổi của lệnh thành hai mẩu chữ: "thay đổi gì" + "cũ → mới". */
+export function moTaLenh(x: DongLenh): { gi: string; cuMoi: string } {
+  if (x.phan === 'dau') {
+    if (x.truong === 'status') {
+      const tt = (v: string | number | null) => TRANG_THAI[String(v)] ?? String(v ?? '—')
+      return {
+        gi: x.sau === 'cancelled' ? 'Huỷ lệnh' : 'Mở lại lệnh đã huỷ',
+        cuMoi: `${tt(x.truoc)} → ${tt(x.sau)}`,
+      }
+    }
+    const gt = x.truong === 'priority' ? (v: typeof x.truoc) => String(v ?? '—') : dmyNgan
+    return { gi: NHAN_DAU[x.truong], cuMoi: `${gt(x.truoc)} → ${gt(x.sau)}` }
+  }
+  const a = x.truoc
+  const b = x.sau
+  const sp = b?.product_code ?? a?.product_code ?? '—'
+  const dv = (b?.unit ?? a?.unit) ? ` ${b?.unit ?? a?.unit}` : ''
+  if (x.loai === 'them')
+    return { gi: `${sp} · thêm SP`, cuMoi: `SL ${soDm(b?.qty ?? 0)}${dv}` }
+  if (x.loai === 'bo')
+    return { gi: `${sp} · bỏ SP`, cuMoi: `SL ${soDm(a?.qty ?? 0)} → 0` }
+  const phan: string[] = []
+  for (const f of x.truong) {
+    if (f === 'qty') phan.push(`${soDm(a?.qty ?? 0)} → ${soDm(b?.qty ?? 0)}${dv}`)
+    if (f === 'sp') phan.push(`${a?.product_code ?? '—'} → ${b?.product_code ?? '—'}`)
+    if (f === 'unit') phan.push(`ĐVT ${a?.unit ?? '—'} → ${b?.unit ?? '—'}`)
+    if (f === 'ship_date') phan.push(`xuất ${dmyNgan(a?.ship_date ?? null)} → ${dmyNgan(b?.ship_date ?? null)}`) // prettier-ignore
+    if (f === 'specs')
+      for (const q of doiQuyCach(a?.specs ?? {}, b?.specs ?? {}))
+        phan.push(`${q.nhan}: ${q.truoc ?? '—'} → ${q.sau ?? '—'}`)
+  }
+  return {
+    gi: `${sp} · ${x.truong.map((f) => NHAN_DONG[f]).join(', ')}`,
+    cuMoi: phan.join(' · '),
+  }
+}
+
+/** "Ai · lúc" của một thay đổi lệnh: người (hoặc "không ghi người"), giờ; thấy từ mốc soát thì nói vậy. */
+export function aiLucLenh(x: DongLenh): { ai: string; luc: string } {
+  if (!x.luc) return { ai: '—', luc: 'so với mốc soát' }
+  return { ai: x.boi ?? 'không ghi người', luc: ngayGio(x.luc) }
 }

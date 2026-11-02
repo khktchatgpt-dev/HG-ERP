@@ -18,6 +18,7 @@
  */
 
 import type { AnhHuong, DongDmDoi } from './nhat-ky-dinh-muc'
+import type { DoiLenh } from './nhat-ky-lenh'
 
 /** Một vật tư trong mốc: số Cần (null = dòng định mức không ghi số) + để bày lại. */
 export type MucMoc = {
@@ -289,7 +290,12 @@ export type DongDoi = DoiSo & {
   suaBoi: string | null
   /** Khoá các dòng định mức (nhật ký 0284) đã gây ra thay đổi này — nút ▸. */
   nguonDm: string[]
+  /** Khoá các dòng lệnh đổi (SL / thêm / bỏ SP dùng vật tư này) — nút ▸. */
+  nguonLenh: string[]
 }
+
+/** Một thay đổi của lệnh (T3) — đầu lệnh hoặc dòng lệnh — kèm TÊN người sửa. */
+export type DongLenh = DoiLenh & { boi: string | null }
 
 /**
  * Một dòng định mức đổi ròng từ mốc (T2) — kèm thứ màn cần: mã SP, SL SP trong
@@ -347,7 +353,15 @@ export type ThayDoiLenh = {
     /** Chưa soát lần nào: mốc là lúc duyệt (lệnh nạp từ file không có ngày duyệt → lúc phát / lúc tạo). */
     | { k: 'duyet'; luc: string; laDuyet: boolean; coAnhChup: boolean }
   dong: DongDoi[]
+  /** So ảnh chụp lúc soát với bây giờ (chỉ có khi mốc là lần soát) — để tính dấu. */
   thongTin: DoiThongTin[]
+  /**
+   * Thay đổi của lệnh để BÀY (T3): nhật ký 0285 + phần mốc soát thấy mà nhật ký
+   * không có. Tab Lệnh SX đọc cái này, không đọc `thongTin`.
+   */
+  lenh: DongLenh[]
+  /** Số cặp dòng lệnh xoá + nạp lại giống hệt đã triệt tiêu. */
+  napLaiLenh: number
   /** Dòng định mức đổi ròng từ mốc, đọc từ nhật ký 0284 (T2). */
   dinhMuc: DongDinhMuc[]
   /** Số cặp xoá + nạp lại giống hệt đã triệt tiêu — để màn nói ra. */
@@ -368,12 +382,15 @@ export function dauThayDoi(t: {
   thongTin: DoiThongTin[]
   /** Dòng định mức đổi — so theo khoá + số bây giờ (sửa đi sửa lại ra cùng số thì cùng dấu). */
   dinhMuc?: Pick<DongDmDoi, 'key' | 'loai' | 'sau'>[]
+  /** Thay đổi của lệnh (nhật ký 0285) — cũng theo khoá + giá trị bây giờ. */
+  lenh?: Pick<DoiLenh, 'key' | 'sau'>[]
   suaSauMoc: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongLenh' | 'lanCuoi'> | null
 }): string {
   const s = JSON.stringify([
     t.dong.map((d) => [d.key, d.truoc, d.nay]).sort(),
     t.thongTin.map((x) => [x.k, x.nhan, x.truoc, x.nay]).sort(),
     (t.dinhMuc ?? []).map((d) => [d.key, d.loai, JSON.stringify(d.sau)]).sort(),
+    (t.lenh ?? []).map((d) => [d.key, JSON.stringify(d.sau)]).sort(),
     t.suaSauMoc
       ? [t.suaSauMoc.dongDinhMuc, t.suaSauMoc.dongLenh, t.suaSauMoc.lanCuoi]
       : null,
@@ -385,12 +402,13 @@ export function dauThayDoi(t: {
 
 /**
  * Số thay đổi người soát nhìn thấy — đếm lên nút và ghi vào `changes`: mã vật
- * tư đổi + thông tin lệnh đổi + dòng định mức đổi (mỗi tab một phần).
+ * tư đổi + thay đổi của lệnh + dòng định mức đổi (mỗi tab một phần). Có `lenh`
+ * (T3) thì đếm nó thay `thongTin` — hai thứ nói cùng một thay đổi.
  */
 export function soThayDoi(
-  t: Pick<ThayDoiLenh, 'dong' | 'thongTin'> & { dinhMuc?: unknown[] },
+  t: Pick<ThayDoiLenh, 'dong' | 'thongTin'> & { dinhMuc?: unknown[]; lenh?: unknown[] },
 ): number {
-  return t.dong.length + t.thongTin.length + (t.dinhMuc?.length ?? 0)
+  return t.dong.length + (t.lenh ?? t.thongTin).length + (t.dinhMuc?.length ?? 0)
 }
 
 /* ── B3 · Chuông (02/11/2026) ─────────────────────────────────────────── */

@@ -15,6 +15,8 @@ export type LenhSoat = {
   code: string
   customer_name: string
   ship_date: string | null
+  /** Mốc vật tư hiện tại — để nói "ngày xuất dời mà mốc vật tư chưa sửa theo". */
+  materials_due_at: string | null
   /** Số SP và tổng SL sản phẩm của lệnh. */
   so_sp: number
   sl_sp: number
@@ -46,7 +48,7 @@ export function useSoatLenh({
       ? 'vat_tu'
       : thayDoi.dinhMuc.length > 0 || thayDoi.suaSauMoc
         ? 'dinh_muc'
-        : thayDoi.thongTin.length > 0
+        : thayDoi.lenh.length > 0
           ? 'lenh'
           : 'vat_tu',
   )
@@ -86,6 +88,10 @@ export function useSoatLenh({
       return tk.every((t) => normalizeSearch(chu).includes(t))
     })
   }, [thayDoi.dinhMuc, locDm, qDm])
+  const lenhTheoKhoa = useMemo(
+    () => new Map(thayDoi.lenh.map((x) => [x.key, x])),
+    [thayDoi.lenh],
+  )
   const dmTheoKhoa = useMemo(
     () => new Map(thayDoi.dinhMuc.map((x) => [x.key, x])),
     [thayDoi.dinhMuc],
@@ -154,6 +160,7 @@ export function useSoatLenh({
     demDm,
     hienDm,
     dmTheoKhoa,
+    lenhTheoKhoa,
     mo,
     batMo,
   } as const

@@ -21,6 +21,7 @@ import {
   type DoiSo,
   type DongDinhMuc,
   type DongDoi,
+  type DongLenh,
   type MocSoat,
   type SuaSauMoc,
   type ThayDoiLenh,
@@ -33,6 +34,13 @@ import {
   NHAT_KY_DINH_MUC_TU,
   type BanGhiNhatKy,
 } from '@/lib/nhat-ky-dinh-muc'
+import {
+  boSungTuMoc,
+  ganNguoi,
+  gopNhatKyLenh,
+  slLucMoc,
+  type BanGhiLenh,
+} from '@/lib/nhat-ky-lenh'
 import { partGroupRank } from '@/lib/part-groups'
 import {
   gopNhuCau,
@@ -67,6 +75,8 @@ export type LenhDoiCuaLenh = {
   lichSu: LanSoat[]
   /** Lúc duyệt lệnh — mốc đầu tiên trong lịch sử soát. */
   duyetLuc: string | null
+  /** Mã SP của lệnh CHƯA có dòng định mức nào — thêm / đổi SL SP đó chưa tính ra vật tư. */
+  spKhongDinhMuc: string[]
   /** Chưa đọc được bảng mốc soát (chưa áp 0282) — màn nói thẳng, nút soát khoá. */
   loi: string | null
 }
@@ -166,7 +176,15 @@ function tomSuaSau(
   }
 }
 
-type LenhGoc = { id: string; approved_at: string | null; issued_at: string | null; created_at: string } // prettier-ignore
+type LenhGoc = {
+  id: string
+  approved_at: string | null
+  issued_at: string | null
+  created_at: string
+  /** Người + lúc phát lại bản gần nhất — một sự kiện để gán người cho nhật ký dòng lệnh. */
+  revised_at: string | null
+  revised_by: string | null
+}
 
 /** Đầu vào chung của phép so — màn chi tiết lấy từ bảng kê đầy đủ, số đếm lấy từ đường nhẹ. */
 type DauVaoSo = {
@@ -186,7 +204,7 @@ async function soLenh(v: DauVaoSo) {
   const { lsx, nay } = v
   const tuDuyet = lsx.approved_at ?? lsx.issued_at ?? lsx.created_at
   const spIds = v.products.map((p) => p.id)
-  const [reviewsRes, song, nk] = await Promise.all([
+  const [reviewsRes, song, nk, nkLenh, suKien] = await Promise.all([
     lenhDoiRepo.listByLsx(lsx.id).then(
       (rows) => ({ rows, loi: null as string | null }),
       (e: unknown) => {
@@ -205,13 +223,27 @@ async function soLenh(v: DauVaoSo) {
       console.error('[lenh-doi] đọc nhật ký định mức lỗi', e)
       return { rows: [] as BanGhiNhatKy[], names: new Map<string, string>() }
     }),
+    lenhDoiRepo.nhatKyLenh(lsx.id, tuDuyet).catch((e: unknown) => {
+      console.error('[lenh-doi] đọc nhật ký lệnh lỗi', e)
+      return [] as BanGhiLenh[]
+    }),
+    lenhDoiRepo
+      .suKienLenh(
+        lsx.id,
+        lsx.revised_at ? [{ luc: lsx.revised_at, boi: lsx.revised_by }] : [],
+      ) // prettier-ignore
+      .catch((e: unknown) => {
+        console.error('[lenh-doi] đọc sự kiện lệnh lỗi', e)
+        return { rows: [], names: new Map<string, string>() }
+      }),
   ])
   const slSp = new Map<string, number>()
   for (const p of v.products) slSp.set(p.id, (slSp.get(p.id) ?? 0) + p.qty)
   const maSp = new Map(v.products.map((p) => [p.id, p.code]))
   const moiNhat = reviewsRes.rows[0]
-  const nkSau = nk.rows.filter((r) => r.changed_at > (moiNhat?.reviewed_at ?? tuDuyet))
-  const dm = gopNhatKy(nkSau)
+  const mocLuc = moiNhat?.reviewed_at ?? tuDuyet
+  const dm = gopNhatKy(nk.rows.filter((r) => r.changed_at > mocLuc))
+  const gl = gopNhatKyLenh(nkLenh.filter((r) => r.changed_at > mocLuc))
 
   let so: DoiSo[]
   let thongTin: ThayDoiLenh['thongTin'] = []
@@ -236,12 +268,15 @@ async function soLenh(v: DauVaoSo) {
       lenhDoiRepo.dongLenhSuaSau(lsx.id, tu),
     ])
     const coAnh = new Set(chup.map((c) => c.product_id))
+    // Định mức lúc duyệt nhân với SL SP LÚC DUYỆT (bỏ phần dòng lệnh đổi theo
+    // nhật ký 0285) — đổi SL / thêm / bỏ SP chảy sang số cần từng mã. Trước khi
+    // có nhật ký lệnh thì coi SL như bây giờ (như cũ).
     const goc = tongGoc(
       [
         ...chup.map((c) => ({ product_id: c.product_id, material_code: c.material_code, qty: Number(c.qty_per_unit) })), // prettier-ignore
         ...song.rows.filter((p) => !coAnh.has(p.product_id) && p.updated_at <= tu),
       ],
-      slSp,
+      slLucMoc(slSp, gl.doi),
     )
     so = soVoiAnhChup({
       chup: goc,
@@ -257,9 +292,17 @@ async function soLenh(v: DauVaoSo) {
       coAnhChup: chup.length > 0,
     }
   }
+  // Thay đổi của lệnh để bày: nhật ký + phần mốc soát thấy mà nhật ký không có.
+  // Người sửa gán theo sự kiện app gần nhất (đổi đầu lệnh, phát lại bản…).
+  const lenh: DongLenh[] = boSungTuMoc(gl.doi, thongTin).map((d) => {
+    const id = ganNguoi(d.luc, suKien.rows)
+    return { ...d, boi: id ? (suKien.names.get(id) ?? null) : null }
+  })
   return {
     so,
     thongTin,
+    lenh,
+    napLaiLenh: gl.napLaiGiong,
     dmDoi: dm.dong,
     napLaiGiong: dm.napLaiGiong,
     nkNames: nk.names,
@@ -297,6 +340,8 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
   const {
     so,
     thongTin,
+    lenh,
+    napLaiLenh,
     dmDoi,
     napLaiGiong,
     nkNames,
@@ -359,15 +404,26 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
       sps,
       ...suaCuoi(lienQuan, song.names),
       nguonDm: dinhMuc.filter((x) => gopVaoVatTu(x, s)).map((x) => x.key),
+      // Dòng lệnh đổi (SL / thêm / bỏ) của một SP dùng vật tư này.
+      nguonLenh: lenh
+        .filter(
+          (x) =>
+            x.phan === 'dong' &&
+            [x.truoc?.product_code, x.sau?.product_code].some(
+              (c) => !!c && sps.includes(c),
+            ),
+        ) // prettier-ignore
+        .map((x) => x.key),
     }
   })
 
-  const base = { dong: sapXepDoi(dong), thongTin, dinhMuc, napLaiGiong, suaSauMoc }
+  const coDinhMuc = new Set(song.rows.map((p) => p.product_id))
+  const base = { dong: sapXepDoi(dong), thongTin, lenh, napLaiLenh, dinhMuc, napLaiGiong, suaSauMoc } // prettier-ignore
   return {
     thayDoi: {
       moc,
       ...base,
-      choSoat: dong.length > 0 || thongTin.length > 0 || dinhMuc.length > 0 || suaSauMoc !== null, // prettier-ignore
+      choSoat: dong.length > 0 || lenh.length > 0 || dinhMuc.length > 0 || suaSauMoc !== null, // prettier-ignore
       dau: dauThayDoi(base),
     },
     lichSu: reviews.map((r) => ({
@@ -378,6 +434,7 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
       ghi_chu: r.note,
     })),
     duyetLuc: lsx.approved_at,
+    spKhongDinhMuc: bk.products.filter((p) => !coDinhMuc.has(p.id)).map((p) => p.code),
     loi,
   }
 }
@@ -391,12 +448,12 @@ export type TrangThaiLenhDoi = {
   choSoat: boolean
   /** Số vật tư đổi số Cần. */
   soMa: number
-  /** Thông tin lệnh đổi (ngày xuất, mốc vật tư, SL từng SP). */
+  /** Thay đổi của lệnh (đầu lệnh + dòng lệnh, nhật ký 0285 + mốc soát). */
   soThongTin: number
   /** Dòng định mức đổi ròng từ mốc (nhật ký 0284). */
   soDongDm: number
-  /** Lần ghi nhật ký cuối trong các dòng đó — cột "Sửa gần nhất" của danh sách. */
-  dmCuoi: { luc: string; boi: string | null } | null
+  /** Lần ghi nhật ký cuối (định mức hoặc lệnh) — cột "Sửa gần nhất" của danh sách. */
+  nkCuoi: { luc: string; boi: string | null } | null
   suaSau: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongChuaMa' | 'lanCuoi' | 'nguoi' | 'khongTen'> | null // prettier-ignore
   moc: ThayDoiLenh['moc']
 }
@@ -426,20 +483,24 @@ async function trangThaiMotLenh(lsxId: string): Promise<TrangThaiLenhDoi | null>
     materials_due_at: lsx.materials_due_at,
     products: nc.bom.products,
   })
-  const { so, thongTin, dmDoi, nkNames, suaSauMoc: s, moc, loi } = await soLenh({ lsx, nay, products: nc.bom.products, ma: maTuDong(rows) }) // prettier-ignore
+  const { so, thongTin, lenh, dmDoi, nkNames, suaSauMoc: s, moc, loi } = await soLenh({ lsx, nay, products: nc.bom.products, ma: maTuDong(rows) }) // prettier-ignore
   if (loi) throw new Error(loi)
+  const ghi = [
+    ...dmDoi.map((x) => ({
+      luc: x.luc,
+      boi: x.boi ? (nkNames.get(x.boi) ?? null) : null,
+    })),
+    ...lenh.flatMap((x) => (x.luc ? [{ luc: x.luc, boi: x.boi }] : [])),
+  ]
   return {
     lsx_id: lsxId,
     code: lsx.code,
-    dau: dauThayDoi({ dong: so, thongTin, dinhMuc: dmDoi, suaSauMoc: s }),
-    choSoat: so.length > 0 || thongTin.length > 0 || dmDoi.length > 0 || s !== null,
+    dau: dauThayDoi({ dong: so, thongTin, lenh, dinhMuc: dmDoi, suaSauMoc: s }),
+    choSoat: so.length > 0 || lenh.length > 0 || dmDoi.length > 0 || s !== null,
     soMa: so.length,
-    soThongTin: thongTin.length,
+    soThongTin: lenh.length,
     soDongDm: dmDoi.length,
-    dmCuoi: dmDoi.reduce<TrangThaiLenhDoi['dmCuoi']>(
-      (m, x) => (m && m.luc >= x.luc ? m : { luc: x.luc, boi: x.boi ? (nkNames.get(x.boi) ?? null) : null }), // prettier-ignore
-      null,
-    ),
+    nkCuoi: ghi.reduce<TrangThaiLenhDoi['nkCuoi']>((m, x) => (m && m.luc >= x.luc ? m : x), null), // prettier-ignore
     suaSau: s && { dongDinhMuc: s.dongDinhMuc, dongChuaMa: s.dongChuaMa, lanCuoi: s.lanCuoi, nguoi: s.nguoi, khongTen: s.khongTen }, // prettier-ignore
     moc,
   }

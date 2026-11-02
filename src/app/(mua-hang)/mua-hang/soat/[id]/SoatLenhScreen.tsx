@@ -4,8 +4,9 @@ import { ngayGioVn } from '@/lib/date-vn'
 import type { LenhDoiCuaLenh } from '@/modules/dept/supply/lenh-doi.service'
 import { DauTrang, MenuBa, Nut, ThanhDuoi, Trang } from '../../_erp/ui'
 import { dmy, so0 } from '../../bang-ke/[id]/ke-hoach.shared'
-import { HopLichSu, HopSoat, TabLenh } from './khoi-soat'
+import { HopLichSu, HopSoat } from './khoi-soat'
 import { TabDinhMuc } from './tab-dinh-muc'
+import { TabLenh } from './tab-lenh'
 import { TabVatTu } from './tab-vat-tu'
 import { useSoatLenh, type LenhSoat, type SoatCtx, type TabSoat } from './useSoatLenh'
 
@@ -104,9 +105,9 @@ function DaiTab({ d }: { d: SoatCtx }) {
     {
       k: 'lenh',
       ten: 'Lệnh SX',
-      so: so0(t.thongTin.length),
-      phu: t.thongTin.length ? 'ngày xuất · SL sản phẩm' : 'không đổi',
-      co: t.thongTin.length > 0,
+      so: so0(t.lenh.length),
+      phu: tomTatLenh(t.lenh) || 'không đổi',
+      co: t.lenh.length > 0,
     },
   ]
   return (
@@ -139,4 +140,24 @@ function DaiTab({ d }: { d: SoatCtx }) {
       })}
     </div>
   )
+}
+
+/** "1 SL · 1 ngày · 1 SP mới" — tóm tắt thay đổi của lệnh cho dải tab. */
+function tomTatLenh(ds: SoatCtx['thayDoi']['lenh']): string {
+  const dem = (f: (x: (typeof ds)[number]) => boolean) => ds.filter(f).length
+  const phan: [number, string][] = [
+    [dem((x) => x.phan === 'dau' && x.truong === 'status'), 'huỷ'],
+    [dem((x) => x.phan === 'dong' && x.loai === 'sua' && x.truong.includes('qty')), 'SL'],
+    [dem((x) => x.phan === 'dau' && (x.truong === 'ship_date' || x.truong === 'materials_due_at')), 'ngày'], // prettier-ignore
+    [dem((x) => x.phan === 'dong' && x.loai === 'them'), 'SP mới'],
+    [dem((x) => x.phan === 'dong' && x.loai === 'bo'), 'SP bỏ'],
+    [
+      dem((x) => x.phan === 'dong' && x.loai === 'sua' && x.truong.includes('specs')),
+      'quy cách',
+    ],
+  ]
+  return phan
+    .filter(([n]) => n > 0)
+    .map(([n, t]) => `${n} ${t}`)
+    .join(' · ')
 }

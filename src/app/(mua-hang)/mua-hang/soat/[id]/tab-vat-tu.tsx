@@ -7,12 +7,21 @@ import {
   NHOM_DOI,
   type DongDinhMuc,
   type DongDoi,
+  type DongLenh,
   type NhomDoi,
   type Viec,
 } from '@/lib/lenh-doi'
 import { ChipLoc, HangLoc, NUM, Nhan, Nut, TD, TF, TH, type Tone } from '../../_erp/ui'
 import { so0 } from '../../bang-ke/[id]/ke-hoach.shared'
-import { moTaAnhHuong, moTaDoi, NHAN_LOAI_DM, ngayGio, tenNhom } from './soat.shared'
+import {
+  aiLucLenh,
+  moTaAnhHuong,
+  moTaDoi,
+  moTaLenh,
+  NHAN_LOAI_DM,
+  ngayGio,
+  tenNhom,
+} from './soat.shared'
 import type { SoatCtx } from './useSoatLenh'
 
 const LINK = 'text-[var(--act-text)] underline-offset-2 hover:underline'
@@ -32,8 +41,9 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
   const m = d.thayDoi.moc
   const nhanTruoc = m.k === 'soat' ? 'Lần soát' : m.laDuyet ? 'Lúc duyệt' : 'Lúc phát'
   const nhoms = THU_TU_NHOM.filter((n) => d.hien.some((r) => r.nhom === n))
-  // Cột ▸ chỉ có khi ít nhất một mã có dòng định mức (nhật ký 0284) gây đổi.
-  const coMo = d.thayDoi.dong.some((r) => r.nguonDm.length > 0)
+  // Cột ▸ chỉ có khi ít nhất một mã có nguồn để mở: dòng định mức (0284) hoặc
+  // dòng lệnh (0285) gây đổi.
+  const coMo = d.thayDoi.dong.some((r) => r.nguonDm.length + r.nguonLenh.length > 0)
   const COLS = coMo ? 11 : 10
   if (d.thayDoi.dong.length === 0)
     return (
@@ -91,7 +101,7 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
             <thead>
               <tr>
                 {coMo && (
-                  <th className={`${TH} w-[30px]`} aria-label="Dòng định mức gây đổi" />
+                  <th className={`${TH} w-[30px]`} aria-label="Thay đổi gây ra số mới" />
                 )}
                 <th className={`${TH} w-[92px]`}>Mã</th>
                 <th className={TH}>Vật tư</th>
@@ -136,9 +146,10 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
                           batMo={() => d.batMo(r.key)}
                         />
                         {d.mo.has(r.key) && (
-                          <NguonDinhMuc
+                          <NguonThayDoi
                             cols={COLS}
                             ds={r.nguonDm.map((k) => d.dmTheoKhoa.get(k)).filter((x): x is DongDinhMuc => !!x)} // prettier-ignore
+                            dl={r.nguonLenh.map((k) => d.lenhTheoKhoa.get(k)).filter((x): x is DongLenh => !!x)} // prettier-ignore
                             code={r.code}
                           />
                         )}
@@ -181,17 +192,23 @@ function DongThayDoi({
   const chuaMa = r.material_id === null && r.code === null
   const so = (v: number | null) => (v === null ? '—' : so0(v))
   const viec = moTaViec(r.viec)
+  const nguon = [
+    r.nguonDm.length && `${r.nguonDm.length} dòng định mức`,
+    r.nguonLenh.length && `${r.nguonLenh.length} dòng lệnh`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const sps = r.sps.join(', ')
   return (
     <tr className="hover:bg-[var(--surface-hover)]">
       {coMo && (
         <td className={`${TD} px-1 text-center`}>
-          {r.nguonDm.length > 0 && (
+          {r.nguonDm.length + r.nguonLenh.length > 0 && (
             <button
               type="button"
               aria-expanded={mo}
-              aria-label={`${mo ? 'Đóng' : 'Xem'} ${r.nguonDm.length} dòng định mức gây đổi ${r.code ?? r.name}`}
-              title={`${r.nguonDm.length} dòng định mức gây đổi`}
+              aria-label={`${mo ? 'Đóng' : 'Xem'} ${nguon} gây đổi ${r.code ?? r.name}`}
+              title={`${nguon} gây đổi`}
               onClick={batMo}
               className="h-5 w-5 rounded-[3px] text-[11px] leading-none text-[var(--act-text)] hover:bg-[var(--act-wash)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--act)]"
             >
@@ -265,17 +282,20 @@ function DongThayDoi({
 }
 
 /**
- * Dòng mở ra dưới một mã: các dòng định mức đã gây ra thay đổi của nó — SP,
- * chi tiết, cũ → mới, × SL SP = số đổi của CHÍNH mã này, ai sửa lúc nào. Người
- * mua cầm số "Đặt …" đi sửa đơn và biết luôn vì sao.
+ * Dòng mở ra dưới một mã: những thay đổi đã gây ra số mới của nó — dòng định
+ * mức (SP, chi tiết, cũ → mới, × SL SP = số đổi của CHÍNH mã này) và dòng lệnh
+ * (SP dùng mã này đổi SL / thêm / bỏ), ai sửa lúc nào. Người mua cầm số
+ * "Đặt …" đi sửa đơn và biết luôn vì sao.
  */
-function NguonDinhMuc({
+function NguonThayDoi({
   cols,
   ds,
+  dl,
   code,
 }: {
   cols: number
   ds: DongDinhMuc[]
+  dl: DongLenh[]
   code: string | null
 }) {
   const ma = code?.trim().toUpperCase() ?? null
@@ -306,6 +326,20 @@ function NguonDinhMuc({
                 )}
                 <span className="text-[var(--ink-3)]">
                   · {x.boi ?? 'không ghi người'} · {ngayGio(x.luc)}
+                </span>
+              </li>
+            )
+          })}
+          {dl.map((x) => {
+            const m = moTaLenh(x)
+            const al = aiLucLenh(x)
+            return (
+              <li key={x.key} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-[var(--ink-3)]">Lệnh ·</span>
+                <span>{m.gi}</span>
+                <span className="font-mono text-[12px]">{m.cuMoi}</span>
+                <span className="text-[var(--ink-3)]">
+                  · {al.ai} · {al.luc}
                 </span>
               </li>
             )

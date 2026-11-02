@@ -25,15 +25,15 @@ const dmy = (iso: string | null) => {
 const ngay = (at: string | null) => (at ? ngayGioVn(at).slice(0, 5) : '')
 
 const coDinhMuc = (t: TrangThaiLenhDoi | undefined) => !!t?.choSoat && (t.soMa > 0 || t.soDongDm > 0 || !!t.suaSau) // prettier-ignore
-/** Lần sửa định mức gần nhất: nhật ký (từ 02/11) hoặc cột "sửa lần cuối" (trước đó). */
+/** Lần sửa gần nhất: nhật ký định mức / lệnh (từ 02/11) hoặc cột "sửa lần cuối" (trước đó). */
 const suaCuoi = (t: TrangThaiLenhDoi | undefined): { luc: string; ai: string } | null => {
   if (!t?.choSoat) return null
   const s = t.suaSau
   const truoc = s?.lanCuoi
     ? { luc: s.lanCuoi, ai: [...s.nguoi, ...(s.khongTen ? [`${s.khongTen} dòng không ghi người`] : [])].join(', ') } // prettier-ignore
     : null
-  const dm = t.dmCuoi
-    ? { luc: t.dmCuoi.luc, ai: t.dmCuoi.boi ?? 'không ghi người' }
+  const dm = t.nkCuoi
+    ? { luc: t.nkCuoi.luc, ai: t.nkCuoi.boi ?? 'không ghi người' }
     : null
   return !truoc ? dm : !dm ? truoc : dm.luc >= truoc.luc ? dm : truoc
 }

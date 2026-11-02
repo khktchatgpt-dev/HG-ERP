@@ -36,6 +36,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         code: bk.lsx.code,
         customer_name: bk.lsx.customer_name,
         ship_date: bk.lsx.ship_date,
+        materials_due_at: bk.lsx.materials_due_at,
         so_sp: bk.products.length,
         sl_sp: bk.products.reduce((s, p) => s + p.qty, 0),
       }}

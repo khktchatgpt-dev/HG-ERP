@@ -242,6 +242,7 @@ const dong = (over: Partial<DongDoi>): DongDoi => ({
   suaLuc: null,
   suaBoi: null,
   nguonDm: [],
+  nguonLenh: [],
   ...over,
 })
 
@@ -288,6 +289,16 @@ describe('sắp xếp, đếm, dấu', () => {
     expect(dau).not.toBe(dauThayDoi(t))
     expect(dauThayDoi({ ...t, dinhMuc: [{ ...dm }] })).toBe(dau)
     expect(soThayDoi({ ...t, dinhMuc: [dm, dm] })).toBe(6)
+  })
+
+  it('T3: thay đổi lệnh vào dấu; có `lenh` thì đếm nó thay `thongTin` (không đếm hai lần)', () => {
+    const tt = { k: 'ship_date' as const, nhan: 'Ngày xuất', truoc: '2027-01-10', nay: '2026-12-20' } // prettier-ignore
+    const t = { dong: rows, thongTin: [tt], suaSauMoc: null }
+    expect(soThayDoi(t)).toBe(5)
+    expect(soThayDoi({ ...t, lenh: [1, 2] })).toBe(6)
+    const l = { key: 'dau:ship_date', sau: '2026-12-20' }
+    expect(dauThayDoi({ ...t, lenh: [l] })).not.toBe(dauThayDoi(t))
+    expect(dauThayDoi({ ...t, lenh: [{ ...l }] })).toBe(dauThayDoi({ ...t, lenh: [l] }))
   })
 })
 

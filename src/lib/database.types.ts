@@ -4524,6 +4524,39 @@ export type Database = {
           },
         ]
       }
+      production_order_log: {
+        Row: {
+          action: string
+          after: Json | null
+          before: Json | null
+          changed_at: string
+          changed_fields: string[]
+          id: string
+          line_id: string | null
+          production_order_id: string
+        }
+        Insert: {
+          action: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_fields?: string[]
+          id?: string
+          line_id?: string | null
+          production_order_id: string
+        }
+        Update: {
+          action?: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_fields?: string[]
+          id?: string
+          line_id?: string | null
+          production_order_id?: string
+        }
+        Relationships: []
+      }
       production_orders: {
         Row: {
           approved_at: string | null
