@@ -1,6 +1,8 @@
 import { db } from '@/server/db'
 import type { Json } from '@/lib/database.types'
 import type { MocSoat } from '@/lib/lenh-doi'
+import { poOwner } from '@/lib/supply-scope'
+import { SUPPLY_DEPT_NAMES } from './suppliers.service'
 
 /**
  * LỆNH ĐỔI — CHỜ SOÁT — data access (0282 + định mức sống + dòng lệnh).
@@ -109,6 +111,90 @@ export const lenhDoiRepo = {
       .limit(1)
     if (error) throw new Error(error.message)
     return `${count ?? 0}|${data?.[0]?.reviewed_at ?? ''}`
+  },
+
+  /** Lệnh ĐANG CHẠY (đã duyệt / đang sản xuất) có SP này — cùng tập `listActive`. */
+  async lenhDangChayCuaSp(productId: string): Promise<string[]> {
+    const { data: dong, error } = await db()
+      .from('production_order_lines')
+      .select('production_order_id')
+      .eq('product_id', productId)
+    if (error) throw new Error(error.message)
+    const ids = [...new Set((dong ?? []).map((d) => d.production_order_id))]
+    if (ids.length === 0) return []
+    const { data: lenh, error: e2 } = await db()
+      .from('production_orders')
+      .select('id')
+      .in('id', ids)
+      .in('status', ['approved', 'in_progress'])
+    if (e2) throw new Error(e2.message)
+    return (lenh ?? []).map((l) => l.id)
+  },
+
+  /**
+   * Người nhận tin chờ soát: trưởng các phòng Cung ứng (`head_user_id`) + người
+   * đang cầm các đơn mua chưa huỷ của từng lệnh (`poOwner`, kể cả đơn mua chung
+   * qua bảng lệnh phụ) + tập người còn làm (đang hoạt động, chưa xoá).
+   */
+  async nguoiNhan(lsxIds: string[]): Promise<{
+    truongPhong: string[]
+    phuTrach: Map<string, string[]>
+    dangLam: Set<string>
+  }> {
+    const [
+      { data: phong, error: e1 },
+      { data: chinh, error: e2 },
+      { data: phu, error: e3 },
+    ] = await Promise.all([
+      db()
+        .from('departments')
+        .select('head_user_id')
+        .in('name', [...SUPPLY_DEPT_NAMES]),
+      db()
+        .from('supply_purchase_orders')
+        .select('id, production_order_id, assigned_to, created_by, status')
+        .in('production_order_id', lsxIds)
+        .neq('status', 'cancelled'),
+      db()
+        .from('supply_po_extra_lsx')
+        .select('po_id, production_order_id')
+        .in('production_order_id', lsxIds),
+    ])
+    if (e1 || e2 || e3) throw new Error((e1 ?? e2 ?? e3)!.message)
+    const extraIds = [...new Set((phu ?? []).map((x) => x.po_id))]
+    const { data: donPhu, error: e4 } = extraIds.length
+      ? await db()
+          .from('supply_purchase_orders')
+          .select('id, assigned_to, created_by, status')
+          .in('id', extraIds)
+          .neq('status', 'cancelled')
+      : { data: [], error: null }
+    if (e4) throw new Error(e4.message)
+    const phuTrach = new Map<string, string[]>()
+    const them = (lsx: string, ai: string | null) => {
+      if (!ai) return
+      const ds = phuTrach.get(lsx) ?? []
+      if (!ds.includes(ai)) ds.push(ai)
+      phuTrach.set(lsx, ds)
+    }
+    for (const d of chinh ?? []) them(d.production_order_id!, poOwner(d))
+    const donPhuById = new Map((donPhu ?? []).map((d) => [d.id, d]))
+    for (const x of phu ?? []) {
+      const d = donPhuById.get(x.po_id)
+      if (d) them(x.production_order_id, poOwner(d))
+    }
+    const truongPhong = (phong ?? []).map((p) => p.head_user_id).filter((x): x is string => !!x) // prettier-ignore
+    const ung = [...new Set([...truongPhong, ...[...phuTrach.values()].flat()])]
+    const { data: con, error: e5 } = ung.length
+      ? await db()
+          .from('users')
+          .select('id')
+          .in('id', ung)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+      : { data: [], error: null }
+    if (e5) throw new Error(e5.message)
+    return { truongPhong, phuTrach, dangLam: new Set((con ?? []).map((u) => u.id)) }
   },
 
   /** Số dòng lệnh sửa sau một mốc (SL, SP, quy cách… trên phiếu lệnh). */

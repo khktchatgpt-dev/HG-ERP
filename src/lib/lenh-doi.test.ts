@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   chupMoc,
   dauThayDoi,
+  nguoiNhanTin,
+  quyetDinhTin,
+  tieuDeTin,
   demNhom,
   sapXepDoi,
   soThayDoi,
@@ -275,5 +278,48 @@ describe('sắp xếp, đếm, dấu', () => {
     expect(dauThayDoi({ ...t, dong: [...rows].reverse() })).toBe(dau)
     expect(dauThayDoi({ ...t, dong: [rows[0], { ...rows[1], nay: 311 }] })).not.toBe(dau)
     expect(soThayDoi(t)).toBe(4)
+  })
+})
+
+describe('B3 · chuông', () => {
+  const t = {
+    code: '01/26-27 - GIGA',
+    soMa: 16,
+    soThongTin: 0,
+    suaSau: { dongDinhMuc: 234 },
+    moc: { k: 'duyet' as const, luc: '2026-10-02', laDuyet: true, coAnhChup: false },
+  }
+
+  it('tiêu đề nói số mã đổi, hoặc phần sửa chưa có số cũ', () => {
+    expect(tieuDeTin(t)).toBe('01/26-27 - GIGA — 16 mã đổi số cần')
+    expect(
+      tieuDeTin({ ...t, soMa: 0, code: '13/26-27 - MX', suaSau: { dongDinhMuc: 185 } }),
+    ).toBe('13/26-27 - MX — định mức sửa 185 dòng sau duyệt')
+    expect(
+      tieuDeTin({ ...t, soMa: 0, moc: { ...t.moc, laDuyet: false }, code: 'JAWOLL' }),
+    ).toBe('JAWOLL — định mức sửa 234 dòng sau phát lệnh')
+    expect(tieuDeTin({ ...t, soMa: 1, soThongTin: 1 })).toBe(
+      '01/26-27 - GIGA — 1 mã đổi số cần · 1 thông tin lệnh đổi',
+    )
+  })
+
+  it('mỗi người mỗi lệnh một tin chưa đọc', () => {
+    expect(quyetDinhTin(null, 'a')).toBe('them')
+    expect(quyetDinhTin({ dau: 'a', daDoc: false }, 'a')).toBe('bo_qua')
+    expect(quyetDinhTin({ dau: 'a', daDoc: true }, 'a')).toBe('bo_qua')
+    expect(quyetDinhTin({ dau: 'a', daDoc: false }, 'b')).toBe('cap_nhat')
+    expect(quyetDinhTin({ dau: 'a', daDoc: true }, 'b')).toBe('them')
+    expect(quyetDinhTin({ dau: null, daDoc: false }, 'b')).toBe('cap_nhat')
+  })
+
+  it('người nhận: trưởng phòng + người cầm đơn, bỏ người sửa và người đã nghỉ', () => {
+    expect(
+      nguoiNhanTin({
+        truongPhong: ['hieu'],
+        phuTrach: ['thi', 'truyen', 'thi', 'da-nghi'],
+        dangLam: new Set(['hieu', 'thi', 'truyen', 'thuc']),
+        nguoiSua: 'truyen',
+      }),
+    ).toEqual(['hieu', 'thi'])
   })
 })

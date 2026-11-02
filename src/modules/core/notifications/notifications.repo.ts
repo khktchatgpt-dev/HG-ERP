@@ -56,6 +56,12 @@ export type NotificationType =
   | 'lsx_revised'
   | 'lsx_cancelled'
   | 'lsx_header_changed'
+  /**
+   * 0283 — lệnh đổi định mức / số cần, chờ Cung ứng soát. Payload: `lsx_id`,
+   * `dau` (dấu tập thay đổi), `title`, `href`. Mỗi người mỗi lệnh MỘT tin
+   * chưa đọc — xem events/handlers/lenh-doi.notifications.ts.
+   */
+  | 'lsx_doi_cho_soat'
   | 'order_changed'
   | 'order_cancelled'
   | 'stage_handoff'
@@ -138,5 +144,66 @@ export const notificationsRepo = {
       .update({ read_at: new Date().toISOString() })
       .eq('user_id', userId)
       .is('read_at', null)
+  },
+
+  /**
+   * Tin gần nhất của từng (người, khoá) cho một loại tin gom theo khoá trong
+   * payload (vd `lsx_id`) — để giữ "mỗi người mỗi khoá một tin chưa đọc".
+   */
+  async latestByPayloadKey(
+    type: NotificationType,
+    key: string,
+    values: string[],
+    userIds: string[],
+  ): Promise<Map<string, Notification>> {
+    const out = new Map<string, Notification>()
+    if (values.length === 0 || userIds.length === 0) return out
+    const { data, error } = await db()
+      .from('notifications')
+      .select('id, user_id, actor_id, task_id, type, payload, read_at, created_at')
+      .eq('type', type)
+      .in('user_id', userIds)
+      .in(`payload->>${key}`, values)
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    for (const n of (data ?? []) as Notification[]) {
+      const k = `${n.user_id}|${String(n.payload?.[key] ?? '')}`
+      if (!out.has(k)) out.set(k, n)
+    }
+    return out
+  },
+
+  /** Thay nội dung một tin chưa đọc và đưa nó lên đầu chuông (không chèn thêm). */
+  async refreshUnread(
+    id: string,
+    payload: Record<string, unknown>,
+    actorId: string | null,
+  ): Promise<void> {
+    const { error } = await db()
+      .from('notifications')
+      .update({
+        payload: payload as Json,
+        actor_id: actorId,
+        created_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .is('read_at', null)
+    if (error) console.error('notification refresh failed:', error.message)
+  },
+
+  /** Tắt (đánh dấu đã đọc) mọi tin chưa đọc của một khoá — vd lệnh vừa được soát. */
+  async markReadByPayloadKey(
+    type: NotificationType,
+    key: string,
+    value: string,
+  ): Promise<void> {
+    const { error } = await db()
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('type', type)
+      .eq(`payload->>${key}`, value)
+      .is('read_at', null)
+    if (error) console.error('notification mark-read failed:', error.message)
   },
 }

@@ -32,7 +32,8 @@ vi.mock('@/modules/dept/technical/technical.repo', () => ({
   productsRepo: { listByIds: vi.fn(async () => []) },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
-vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
+// on: technical.service nay import '@/events/register' (B3 lệnh đổi) → registerEventHandlers gọi on().
+vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
 
 import { lsxLinesService, profileSnapshot } from './lsx-lines.service'
 import { lsxLinesRepo } from './lsx-lines.repo'

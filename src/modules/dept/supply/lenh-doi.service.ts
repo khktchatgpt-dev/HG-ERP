@@ -1,3 +1,6 @@
+import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
+import { after } from 'next/server'
+import { emit } from '@/events/bus'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -8,6 +11,8 @@ import {
   chupMoc,
   dauThayDoi,
   KHOA_CHUA_MA,
+  nguoiNhanTin,
+  tieuDeTin,
   sapXepDoi,
   soThayDoi,
   soVoiAnhChup,
@@ -319,6 +324,9 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
 /** Tình trạng "chờ soát" của một lệnh — đủ cho chip, cột danh sách và số trên menu. */
 export type TrangThaiLenhDoi = {
   lsx_id: string
+  code: string
+  /** Dấu tập thay đổi — CÙNG `dauThayDoi` với tab Thay đổi; chuông dùng để khỏi báo lại. */
+  dau: string
   choSoat: boolean
   /** Số vật tư đổi số Cần. */
   soMa: number
@@ -357,6 +365,8 @@ async function trangThaiMotLenh(lsxId: string): Promise<TrangThaiLenhDoi | null>
   if (loi) throw new Error(loi)
   return {
     lsx_id: lsxId,
+    code: lsx.code,
+    dau: dauThayDoi({ dong: so, thongTin, suaSauMoc: s }),
     choSoat: so.length > 0 || thongTin.length > 0 || s !== null,
     soMa: so.length,
     soThongTin: thongTin.length,
@@ -403,6 +413,9 @@ async function tinhTatCa(ban: string): Promise<Map<string, TrangThaiLenhDoi>> {
     for (const t of nhom) if (t) out.set(t.lsx_id, t)
   }
   kho.boNho = { luc: Date.now(), ban, data: out }
+  // Lần tính nào cũng báo — kể cả lần tính định kỳ, nên sửa bằng script cũng có
+  // tin. Luật "một tin chưa đọc / lệnh" ở handler lo việc không báo lặp.
+  chayNen(() => baoChoSoat([...out.values()], null))
   return out
 }
 
@@ -421,7 +434,7 @@ export async function trangThaiChoSoat(): Promise<Map<string, TrangThaiLenhDoi>>
   const ban = await lenhDoiRepo.phienBan()
   const b = kho.boNho
   if (!b || b.ban !== ban) return tinhLai(ban)
-  if (Date.now() - b.luc >= GIU_MS) void tinhLai(ban).catch(() => undefined)
+  if (Date.now() - b.luc >= GIU_MS) chayNen(() => tinhLai(ban))
   return b.data
 }
 
@@ -442,11 +455,77 @@ export async function demLenhChoSoatKhongCho(): Promise<number | null> {
   const ban = await lenhDoiRepo.phienBan()
   const b = kho.boNho
   if (!b || b.ban !== ban) {
-    void tinhLai(ban).catch(() => undefined)
+    chayNen(() => tinhLai(ban))
     return null
   }
-  if (Date.now() - b.luc >= GIU_MS) void tinhLai(ban).catch(() => undefined)
+  if (Date.now() - b.luc >= GIU_MS) chayNen(() => tinhLai(ban))
   return demCho(b.data)
+}
+
+/**
+ * Việc chạy SAU khi trả response (`after` của Next — Vercel giữ hàm sống tới
+ * khi xong). Ngoài phạm vi một request (test, script) thì chạy thẳng, không chờ.
+ */
+function chayNen(viec: () => Promise<unknown>): void {
+  const an = () =>
+    viec().catch((e: unknown) => console.error('[lenh-doi] việc nền lỗi', e))
+  try {
+    after(an)
+  } catch {
+    void an()
+  }
+}
+
+/**
+ * Phát tin chờ soát cho các lệnh đang chờ: người nhận = trưởng phòng Cung ứng
+ * + người cầm các đơn mua của lệnh, bỏ người vừa sửa. Handler giữ mỗi người
+ * mỗi lệnh một tin chưa đọc.
+ */
+async function baoChoSoat(
+  tts: TrangThaiLenhDoi[],
+  nguoiSua: string | null,
+): Promise<void> {
+  const cho = tts.filter((t) => t.choSoat)
+  if (cho.length === 0) return
+  const nn = await lenhDoiRepo.nguoiNhan(cho.map((t) => t.lsx_id))
+  await emit({
+    name: 'supply.lsx.cho_soat',
+    actor_id: nguoiSua,
+    items: cho.map((t) => ({
+      lsx_id: t.lsx_id,
+      title: tieuDeTin(t),
+      dau: t.dau,
+      recipient_ids: nguoiNhanTin({
+        truongPhong: nn.truongPhong,
+        phuTrach: nn.phuTrach.get(t.lsx_id) ?? [],
+        dangLam: nn.dangLam,
+        nguoiSua,
+      }),
+    })),
+  })
+}
+
+/**
+ * Định mức của một SP / một lệnh vừa đổi trên màn → tính lại NGAY các lệnh
+ * đang chạy liên quan (chạy nền, không làm chậm lượt lưu), vá bộ nhớ của số
+ * trên menu, rồi báo nếu lệnh đang chờ soát.
+ */
+export function capNhatLenhDoi(
+  nguon: { product_id: string } | { lsx_id: string },
+  nguoiSua: string,
+): void {
+  chayNen(async () => {
+    const ids =
+      'lsx_id' in nguon
+        ? [nguon.lsx_id]
+        : await lenhDoiRepo.lenhDangChayCuaSp(nguon.product_id)
+    if (ids.length === 0) return
+    const tts = (await Promise.all(ids.map((id) => trangThaiMotLenh(id)))).filter(
+      (t): t is TrangThaiLenhDoi => t !== null,
+    )
+    for (const t of tts) kho.boNho?.data.set(t.lsx_id, t)
+    await baoChoSoat(tts, nguoiSua)
+  })
 }
 
 export const lenhDoiService = {
@@ -476,6 +555,7 @@ export const lenhDoiService = {
     })
     // Cùng tiến trình thì bỏ bộ nhớ luôn; tiến trình khác tự thấy qua `phienBan`.
     kho.boNho = null
+    await emit({ name: 'supply.lsx.da_soat', lsx_id: input.production_order_id, reviewed_by: user.id }) // prettier-ignore
     return moc
   },
 }

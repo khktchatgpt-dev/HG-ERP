@@ -342,9 +342,12 @@ export type ThayDoiLenh = {
  * Dấu ngắn của tập thay đổi (djb2). Người bấm "Đã soát" gửi dấu của thứ họ đang
  * nhìn; có ai sửa thêm trong lúc đó thì dấu lệch và server từ chối.
  */
-export function dauThayDoi(
-  t: Pick<ThayDoiLenh, 'dong' | 'thongTin' | 'suaSauMoc'>,
-): string {
+export function dauThayDoi(t: {
+  /** Chỉ cần khoá + số trước/nay — dùng được cả `DoiSo` thô lẫn `DongDoi`. */
+  dong: Pick<DoiSo, 'key' | 'truoc' | 'nay'>[]
+  thongTin: DoiThongTin[]
+  suaSauMoc: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongLenh' | 'lanCuoi'> | null
+}): string {
   const s = JSON.stringify([
     t.dong.map((d) => [d.key, d.truoc, d.nay]).sort(),
     t.thongTin.map((x) => [x.k, x.nhan, x.truoc, x.nay]).sort(),
@@ -360,4 +363,64 @@ export function dauThayDoi(
 /** Số thay đổi người soát nhìn thấy — đếm lên nút và ghi vào `changes`. */
 export function soThayDoi(t: Pick<ThayDoiLenh, 'dong' | 'thongTin'>): number {
   return t.dong.length + t.thongTin.length
+}
+
+/* ── B3 · Chuông (02/11/2026) ─────────────────────────────────────────── */
+
+/** Đủ để viết một tin chuông cho một lệnh chờ soát. */
+export type TomTatChoSoat = {
+  code: string
+  soMa: number
+  soThongTin: number
+  suaSau: { dongDinhMuc: number } | null
+  moc: ThayDoiLenh['moc']
+}
+
+/**
+ * Tiêu đề tin: mã lệnh + VIỆC — số mã đổi, hoặc phần sửa chưa có số cũ. Không
+ * kể từng mã: tin bấm vào là mở thẳng tab Thay đổi, ở đó mới đủ chỗ.
+ */
+export function tieuDeTin(t: TomTatChoSoat): string {
+  const phan: string[] = []
+  if (t.soMa > 0) phan.push(`${t.soMa} mã đổi số cần`)
+  if (t.soThongTin > 0) phan.push(`${t.soThongTin} thông tin lệnh đổi`)
+  if (phan.length === 0 && t.suaSau) {
+    const sau = t.moc.k === 'duyet' && !t.moc.laDuyet ? 'phát lệnh' : 'duyệt'
+    phan.push(`định mức sửa ${t.suaSau.dongDinhMuc} dòng sau ${sau}`)
+  }
+  return `${t.code} — ${phan.join(' · ') || 'có thay đổi'}`
+}
+
+export type QuyetDinhTin = 'bo_qua' | 'cap_nhat' | 'them'
+
+/**
+ * MỖI NGƯỜI MỖI LỆNH MỘT TIN CHƯA ĐỌC. So với tin gần nhất của người đó cho
+ * lệnh đó:
+ *  - cùng dấu thay đổi → đã báo đúng thứ này rồi, bỏ qua (kể cả đã đọc);
+ *  - khác dấu mà tin cũ CHƯA ĐỌC → sửa tin cũ (đưa lên đầu), không chèn thêm —
+ *    Kỹ thuật lưu 20 ô liền thì người mua vẫn chỉ thấy một tin;
+ *  - khác dấu mà tin cũ đã đọc (hoặc chưa có tin) → tin mới.
+ */
+export function quyetDinhTin(
+  cu: { dau: string | null; daDoc: boolean } | null,
+  dau: string,
+): QuyetDinhTin {
+  if (cu && cu.dau === dau) return 'bo_qua'
+  if (cu && !cu.daDoc) return 'cap_nhat'
+  return 'them'
+}
+
+/**
+ * Người nhận tin của một lệnh: trưởng phòng Cung ứng + người đang cầm các đơn
+ * mua của lệnh, bỏ người vừa sửa (không tự báo mình) và người đã nghỉ.
+ */
+export function nguoiNhanTin(v: {
+  truongPhong: string[]
+  phuTrach: string[]
+  dangLam: Set<string>
+  nguoiSua: string | null
+}): string[] {
+  return [...new Set([...v.truongPhong, ...v.phuTrach])].filter(
+    (id) => v.dangLam.has(id) && id !== v.nguoiSua,
+  )
 }
