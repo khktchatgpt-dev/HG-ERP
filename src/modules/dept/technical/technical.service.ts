@@ -1075,7 +1075,7 @@ export const productsService = {
   async removePart(user: User, productId: string, partId: string) {
     await assertAction(user, 'technical.bom.save')
     await assertProductUnlocked(productId)
-    const ok = await productProfileRepo.deletePart(productId, partId)
+    const ok = await productProfileRepo.deletePart(productId, partId, user.id)
     if (!ok) throw NotFound('Dòng định mức không tồn tại')
     const left = await productProfileRepo.parts(productId)
     if (left.length === 0) {
@@ -1290,7 +1290,7 @@ export const productsService = {
 
     let removed = 0
     if (input.mode === 'replace')
-      removed = await productProfileRepo.deleteAllParts(targetId)
+      removed = await productProfileRepo.deleteAllParts(targetId, user.id)
 
     // Dựng lại CỤM bên SP đích trước khi chép dòng: cụm là bản ghi riêng của mỗi
     // SP, chép thẳng `cluster_id` sang thì dòng của SP đích trỏ vào cụm SP nguồn.
@@ -1313,7 +1313,7 @@ export const productsService = {
       startOrder,
       groups: input.groups,
       clusterMap,
-    })
+    }).map((r) => ({ ...r, updated_by: user.id })) // nhật ký 0284 ghi đúng người chép
     const added = await productProfileRepo.insertParts(rows)
 
     if (added > 0 && target.bom_status === 'none')

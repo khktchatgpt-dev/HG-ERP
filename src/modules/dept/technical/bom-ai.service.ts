@@ -572,7 +572,7 @@ export const bomAiService = {
     const groups = [...new Set(sections.map((s) => s.group_code))]
     const removed =
       input.mode === 'replace'
-        ? await productProfileRepo.deletePartsByGroups(productId, groups)
+        ? await productProfileRepo.deletePartsByGroups(productId, groups, user.id)
         : 0
 
     let added = 0

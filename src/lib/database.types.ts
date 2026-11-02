@@ -8522,6 +8522,42 @@ export type Database = {
           },
         ]
       }
+      technical_product_part_changes: {
+        Row: {
+          action: string
+          after: Json | null
+          before: Json | null
+          changed_at: string
+          changed_by: string | null
+          changed_fields: string[]
+          id: string
+          part_id: string
+          product_id: string
+        }
+        Insert: {
+          action: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_fields?: string[]
+          id?: string
+          part_id: string
+          product_id: string
+        }
+        Update: {
+          action?: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_fields?: string[]
+          id?: string
+          part_id?: string
+          product_id?: string
+        }
+        Relationships: []
+      }
       technical_product_parts: {
         Row: {
           bar_length_m: number | null
