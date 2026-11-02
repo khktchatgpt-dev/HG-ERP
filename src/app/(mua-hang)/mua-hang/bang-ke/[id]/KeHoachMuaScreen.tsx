@@ -3,12 +3,15 @@
 import { THU_TU_MUA, TINH_TRANG_MUA } from '@/lib/lsx-bang-ke-mua'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
+import type { LenhDoiCuaLenh } from '@/modules/dept/supply/lenh-doi.service'
+import { ngayGioVn } from '@/lib/date-vn'
 import { ChonNcc } from './chon-ncc'
 import { LenDon } from './len-don'
-import { ChipLoc, ChonLoc, DauTrang, HangLoc, Nut, ThanhDuoi, Trang } from '../../_erp/ui'
+import { ChipLoc, ChonLoc, DauTrang, HangLoc, MenuBa, Nut, ThanhDuoi, Trang } from '../../_erp/ui' // prettier-ignore
 import { DanBangKe } from './dan-bang-ke'
 import { dmy, so0 } from './ke-hoach.shared'
 import { NhuCau } from './nhu-cau'
+import { HopLichSu, HopSoat, ThayDoi } from './thay-doi'
 import { useKeHoachMua, type Buoc, type KeHoachCtx } from './useKeHoachMua'
 
 /**
@@ -32,14 +35,22 @@ export function KeHoachMuaScreen({
   includeDraft,
   buocDau,
   nguon,
+  doi,
 }: {
   bk: LsxBangKe
   canEdit: boolean
   includeDraft: boolean
   buocDau: Buoc
   nguon: NguonNccLenh
+  doi: LenhDoiCuaLenh
 }) {
-  const d = useKeHoachMua({ bk, canEdit, includeDraft, buocDau, nguon })
+  const d = useKeHoachMua({ bk, canEdit, includeDraft, buocDau, nguon, doi })
+  const t = doi.thayDoi
+  const khoaSoat = doi.loi
+    ? 'Chưa ghi được mốc soát — bảng 0282 chưa áp vào cơ sở dữ liệu'
+    : canEdit
+      ? undefined
+      : 'Chỉ nhân viên phòng Cung ứng ghi mốc soát'
   const { lsx } = bk
   return (
     <Trang>
@@ -55,24 +66,54 @@ export function KeHoachMuaScreen({
               Xuất Excel
             </Nut>
             {canEdit && (
-              <Nut chinh onClick={() => d.setMoDan(true)}>
+              <Nut chinh={!t.choSoat} onClick={() => d.setMoDan(true)}>
                 Dán bảng kê
               </Nut>
             )}
+            {t.choSoat && (
+              <Nut chinh khoa={khoaSoat} onClick={() => d.doi.setMoSoat(true)}>
+                {d.doi.soDoi > 0 ? `Đã soát ${d.doi.soDoi} thay đổi` : 'Đã soát'}
+              </Nut>
+            )}
+            <MenuBa
+              items={[{ label: 'Lịch sử soát', onClick: () => d.doi.setMoLichSu(true) }]}
+            />
           </>
         }
         facts={[
           { k: 'Khách', v: lsx.customer_name || '—' },
-          { k: 'Đơn khách', v: lsx.order_codes.join(', ') || '—' },
+          {
+            k: 'Đơn khách',
+            // Lệnh gộp nhiều đơn (GIGA: 4 đơn) đẩy cả dải dữ kiện xuống hai dòng.
+            v: (
+              <span
+                className="inline-block max-w-[260px] truncate align-bottom"
+                title={lsx.order_codes.join(', ')}
+              >
+                {lsx.order_codes.join(', ') || '—'}
+              </span>
+            ),
+          },
           { k: 'Ngày xuất', v: dmy(lsx.ship_date) },
           { k: 'Mốc vật tư', v: dmy(lsx.materials_due_at) },
           {
             k: 'Sản phẩm',
             v: `${bk.products.length} · ${so0(bk.products.reduce((s, p) => s + p.qty, 0))} cái`,
           },
+          {
+            k: 'Soát lần cuối',
+            v:
+              t.moc.k === 'soat'
+                ? `${ngayGioVn(t.moc.luc)} · ${t.moc.boi ?? '—'}`
+                : t.choSoat
+                  ? `chưa soát · mốc là lúc ${t.moc.laDuyet ? 'duyệt' : 'phát lệnh'} ${dmy(t.moc.luc)}`
+                  : 'chưa soát',
+            tone: t.choSoat ? 'warn' : undefined,
+          },
         ]}
       />
       <DaiBuoc d={d} />
+      {d.buoc === 0 && <ThayDoi d={d} />}
       {d.buoc === 1 && (
         <>
           <LocNhuCau d={d} />
@@ -93,6 +134,7 @@ export function KeHoachMuaScreen({
                 đang tính 0.
               </span>
             )}
+            {doi.loi && <span className="text-[var(--stop)]">Mốc soát: {doi.loi}</span>}
             {bk.manual_error && (
               <span className="text-[var(--stop)]">
                 Chưa đọc được số nhập tay: {bk.manual_error}
@@ -102,13 +144,35 @@ export function KeHoachMuaScreen({
         }
       />
       {d.moDan && <DanBangKe d={d} />}
+      {d.doi.moSoat && <HopSoat d={d} />}
+      {d.doi.moLichSu && <HopLichSu d={d} />}
     </Trang>
   )
 }
 
-/** Dải 3 bước — mỗi bước một con số nói còn việc gì. */
+/** Tóm tắt tab Thay đổi: số mã đổi + việc gấp nhất, hoặc phần sửa không còn số cũ. */
+function tomThayDoi(d: KeHoachCtx): string {
+  const { thayDoi: t, dem } = d.doi
+  const s = t.suaSauMoc
+  const phan = [
+    t.dong.length ? `${t.dong.length} mã đổi` : '',
+    dem.dat_them ? `${dem.dat_them} phải đặt thêm` : '',
+    dem.thua ? `${dem.thua} thừa / dư` : '',
+    t.thongTin.length ? `${t.thongTin.length} thông tin lệnh đổi` : '',
+    !t.dong.length && s ? `sửa sau duyệt ${s.dongDinhMuc + s.dongLenh} dòng` : '',
+  ]
+  return phan.filter(Boolean).join(' · ')
+}
+
+/**
+ * Dải bước — mỗi bước một con số nói còn việc gì. Tab "Thay đổi chờ soát" (0)
+ * chỉ có khi lệnh đổi từ mốc soát trước, và đứng trước 3 bước.
+ */
 function DaiBuoc({ d }: { d: KeHoachCtx }) {
   const buoc: { k: Buoc; t: string; s: string; khoa?: string }[] = [
+    ...(d.doi.thayDoi.choSoat
+      ? [{ k: 0 as const, t: 'Thay đổi chờ soát', s: tomThayDoi(d) }]
+      : []),
     {
       k: 1,
       t: 'Nhu cầu',
@@ -146,9 +210,9 @@ function DaiBuoc({ d }: { d: KeHoachCtx }) {
           >
             <span className="flex items-center gap-2 font-semibold">
               <span
-                className={`inline-grid size-5 place-items-center rounded-full border font-mono text-[11px] ${on ? 'border-[var(--act)] bg-[var(--act)] text-white' : 'border-[var(--line)] text-[var(--ink-3)]'}`}
+                className={`inline-grid size-5 place-items-center rounded-full border font-mono text-[11px] ${b.k === 0 ? 'border-[var(--warn)] bg-[var(--warn)] text-white' : on ? 'border-[var(--act)] bg-[var(--act)] text-white' : 'border-[var(--line)] text-[var(--ink-3)]'}`}
               >
-                {b.k}
+                {b.k === 0 ? '!' : b.k}
               </span>
               {b.t}
               {b.khoa && (
@@ -157,7 +221,11 @@ function DaiBuoc({ d }: { d: KeHoachCtx }) {
                 </span>
               )}
             </span>
-            <span className="truncate text-[12px] text-[var(--ink-3)]">{b.s}</span>
+            <span
+              className={`truncate text-[12px] ${b.k === 0 ? 'font-semibold text-[var(--warn)]' : 'text-[var(--ink-3)]'}`}
+            >
+              {b.s}
+            </span>
           </button>
         )
       })}

@@ -6091,6 +6091,36 @@ export type Database = {
           },
         ]
       }
+      supply_lsx_reviews: {
+        Row: {
+          changes: number
+          id: string
+          note: string | null
+          production_order_id: string
+          reviewed_at: string
+          reviewed_by: string | null
+          snapshot: Json
+        }
+        Insert: {
+          changes?: number
+          id?: string
+          note?: string | null
+          production_order_id: string
+          reviewed_at?: string
+          reviewed_by?: string | null
+          snapshot?: Json
+        }
+        Update: {
+          changes?: number
+          id?: string
+          note?: string | null
+          production_order_id?: string
+          reviewed_at?: string
+          reviewed_by?: string | null
+          snapshot?: Json
+        }
+        Relationships: []
+      }
       supply_lsx_sourcing: {
         Row: {
           created_at: string

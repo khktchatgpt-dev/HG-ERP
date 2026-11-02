@@ -10,11 +10,14 @@ import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
 import { normalizeSearch } from '@/lib/search-text'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
+import type { LenhDoiCuaLenh } from '@/modules/dept/supply/lenh-doi.service'
 import type { DongKH } from './ke-hoach.shared'
 import { useChonNcc } from './useChonNcc'
 import { useLenDon } from './useLenDon'
+import { useThayDoi } from './useThayDoi'
 
-export type Buoc = 1 | 2 | 3
+/** 0 = tab "Thay đổi chờ soát" (chỉ hiện khi lệnh đang chờ soát). */
+export type Buoc = 0 | 1 | 2 | 3
 /** Lọc bảng nhu cầu: một tình trạng, "còn phải đặt", hoặc "nhập tay". */
 export type LocNhuCau = TinhTrangMua | 'con_dat' | 'tay' | null
 
@@ -33,6 +36,7 @@ export function useKeHoachMua({
   includeDraft,
   buocDau,
   nguon,
+  doi,
 }: {
   bk: LsxBangKe
   canEdit: boolean
@@ -40,6 +44,8 @@ export function useKeHoachMua({
   buocDau: Buoc
   /** Gợi ý NCC + lựa chọn đã lưu cho các mã còn phải đặt (bước 2). */
   nguon: NguonNccLenh
+  /** Thay đổi so với mốc soát trước (0282). */
+  doi: LenhDoiCuaLenh
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -173,14 +179,18 @@ export function useKeHoachMua({
 
   const ncc = useChonNcc({ lsxId: bk.lsx.id, nguon, conDat })
   const lenDon = useLenDon({ lsxId: bk.lsx.id, nguon, conDat, ncc })
+  const thayDoi = useThayDoi({ lsxId: bk.lsx.id, doi })
+  // Soát xong thì tab Thay đổi biến mất — đang đứng ở đó thì về bước 1.
+  const buocHien: Buoc = buoc === 0 && !doi.thayDoi.choSoat ? 1 : buoc
 
   return {
     ncc,
     lenDon,
+    doi: thayDoi,
     bk,
     canEdit,
     includeDraft,
-    buoc,
+    buoc: buocHien,
     setBuoc,
     loc,
     setLoc,
