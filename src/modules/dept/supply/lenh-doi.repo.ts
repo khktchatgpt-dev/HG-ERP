@@ -96,6 +96,21 @@ export const lenhDoiRepo = {
     return { rows, names: await tenNguoi(rows.map((r) => r.updated_by)) }
   },
 
+  /**
+   * "Phiên bản" của bảng mốc soát: số dòng + lần soát mới nhất. Một truy vấn
+   * nhẹ — bộ nhớ tạm của số đếm so cái này để biết vừa có ai soát / xoá mốc,
+   * kể cả khi việc đó chạy ở một tiến trình máy chủ khác.
+   */
+  async phienBan(): Promise<string> {
+    const { data, count, error } = await db()
+      .from('supply_lsx_reviews')
+      .select('reviewed_at', { count: 'exact' })
+      .order('reviewed_at', { ascending: false })
+      .limit(1)
+    if (error) throw new Error(error.message)
+    return `${count ?? 0}|${data?.[0]?.reviewed_at ?? ''}`
+  },
+
   /** Số dòng lệnh sửa sau một mốc (SL, SP, quy cách… trên phiếu lệnh). */
   async dongLenhSuaSau(lsxId: string, tu: string): Promise<number> {
     const { count, error } = await db()

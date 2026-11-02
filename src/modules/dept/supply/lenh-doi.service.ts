@@ -19,7 +19,13 @@ import {
   type SuaSauMoc,
   type ThayDoiLenh,
 } from '@/lib/lenh-doi'
-import { loadLsxBangKe, type LsxBangKe } from './lsx-bang-ke.service'
+import { buildBangKe } from '@/lib/lsx-bang-ke'
+import {
+  gopNhuCau,
+  loadLsxBangKe,
+  loadNhuCauLenh,
+  type LsxBangKe,
+} from './lsx-bang-ke.service'
 import { isSupplyStaff } from './suppliers.service'
 import { lenhDoiRepo, type DongDinhMucSong } from './lenh-doi.repo'
 import type { SoatInput } from './lenh-doi.schema'
@@ -143,16 +149,26 @@ function tomSuaSau(
   }
 }
 
+type LenhGoc = { id: string; approved_at: string | null; issued_at: string | null; created_at: string } // prettier-ignore
+
+/** Đầu vào chung của phép so — màn chi tiết lấy từ bảng kê đầy đủ, số đếm lấy từ đường nhẹ. */
+type DauVaoSo = {
+  lsx: LenhGoc
+  nay: MocSoat
+  products: { id: string; code: string; qty: number }[]
+  /** Mã → id/tên/ĐVT, tra từ các dòng bảng kê. */
+  ma: Map<string, { material_id: string; name: string; unit: string | null }>
+}
+
 /**
- * THAY ĐỔI CỦA LỆNH so với mốc — dựng từ bảng kê đã nạp. Bảng kê phải là bản
- * TÍNH CẢ định mức chưa kiểm (mặc định của màn), vì mốc được ghi bằng số đó.
+ * LÕI SO MỐC — dùng chung cho màn chi tiết (`lenhDoiCua`) và số đếm chờ soát
+ * (`trangThaiChoSoat`). Hai nơi phải ra CÙNG danh sách thay đổi: menu báo 8 mà
+ * mở ra 7 là hỏng niềm tin vào cả con số.
  */
-export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
-  const lsxId = bk.lsx.id
-  const productIds = bk.products.map((p) => p.id)
-  const [lsx, reviewsRes, song] = await Promise.all([
-    productionRepo.findById(lsxId),
-    lenhDoiRepo.listByLsx(lsxId).then(
+async function soLenh(v: DauVaoSo) {
+  const { lsx, nay } = v
+  const [reviewsRes, song] = await Promise.all([
+    lenhDoiRepo.listByLsx(lsx.id).then(
       (rows) => ({ rows, loi: null as string | null }),
       (e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e)
@@ -163,13 +179,11 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
         }
       },
     ),
-    lenhDoiRepo.dinhMucSong(productIds),
+    lenhDoiRepo.dinhMucSong(v.products.map((p) => p.id)),
   ])
-  if (!lsx) throw NotFound('Không tìm thấy lệnh sản xuất')
-
-  const nay = mocHienTai(bk)
-  const slSp = new Map(bk.products.map((p) => [p.id, p.qty]))
-  const maSp = new Map(bk.products.map((p) => [p.id, p.code]))
+  const slSp = new Map<string, number>()
+  for (const p of v.products) slSp.set(p.id, (slSp.get(p.id) ?? 0) + p.qty)
+  const maSp = new Map(v.products.map((p) => [p.id, p.code]))
   const moiNhat = reviewsRes.rows[0]
 
   let so: DoiSo[]
@@ -178,15 +192,19 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
   let moc: ThayDoiLenh['moc']
   if (moiNhat) {
     ;({ so, thongTin } = soVoiMoc(moiNhat.snapshot, nay))
-    moc = { k: 'soat', luc: moiNhat.reviewed_at, boi: moiNhat.reviewed_by_name }
+    moc = {
+      k: 'soat',
+      luc: moiNhat.reviewed_at,
+      boi: moiNhat.reviewed_by_name,
+    }
   } else {
     // Chưa soát lần nào: mốc là lúc duyệt. SP có ảnh chụp (0142) lấy số trong
     // ảnh; SP không có ảnh thì dòng định mức CHƯA sửa từ lúc đó coi như số lúc
     // duyệt — tránh báo "mã mới" cho lệnh duyệt trước khi có ảnh chụp.
     const tu = lsx.approved_at ?? lsx.issued_at ?? lsx.created_at
     const [chup, dongLenh] = await Promise.all([
-      bomSnapshotRepo.listByOrder(lsxId),
-      lenhDoiRepo.dongLenhSuaSau(lsxId, tu),
+      bomSnapshotRepo.listByOrder(lsx.id),
+      lenhDoiRepo.dongLenhSuaSau(lsx.id, tu),
     ])
     const coAnh = new Set(chup.map((c) => c.product_id))
     const goc = tongGoc(
@@ -196,15 +214,60 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
       ],
       slSp,
     )
-    const ma = new Map(
-      bk.rows
-        .filter((r) => r.material_code)
-        .map((r) => [r.material_code, { material_id: r.material_id, name: r.material_name, unit: r.unit || null }]), // prettier-ignore
-    )
-    so = soVoiAnhChup({ chup: goc, song: tongGoc(song.rows, slSp), nay, ma })
+    so = soVoiAnhChup({
+      chup: goc,
+      song: tongGoc(song.rows, slSp),
+      nay,
+      ma: v.ma,
+    })
     suaSauMoc = tomSuaSau(tu, song.rows, song.names, dongLenh, maSp)
-    moc = { k: 'duyet', luc: tu, laDuyet: !!lsx.approved_at, coAnhChup: chup.length > 0 }
+    moc = {
+      k: 'duyet',
+      luc: tu,
+      laDuyet: !!lsx.approved_at,
+      coAnhChup: chup.length > 0,
+    }
   }
+  return {
+    so,
+    thongTin,
+    suaSauMoc,
+    moc,
+    song,
+    reviews: reviewsRes.rows,
+    loi: reviewsRes.loi,
+  }
+}
+
+/** Mã → id/tên/ĐVT từ các dòng bảng kê (kể cả mã chỉ có trên đơn). */
+function maTuDong(
+  rows: {
+    material_id: string
+    material_code: string
+    material_name: string
+    unit: string
+  }[],
+): DauVaoSo['ma'] {
+  return new Map(
+    rows
+      .filter((r) => r.material_code)
+      .map((r) => [r.material_code, { material_id: r.material_id, name: r.material_name, unit: r.unit || null }]), // prettier-ignore
+  )
+}
+
+/**
+ * THAY ĐỔI CỦA LỆNH so với mốc — dựng từ bảng kê đã nạp. Bảng kê phải là bản
+ * TÍNH CẢ định mức chưa kiểm (mặc định của màn), vì mốc được ghi bằng số đó.
+ */
+export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
+  const lsx = await productionRepo.findById(bk.lsx.id)
+  if (!lsx) throw NotFound('Không tìm thấy lệnh sản xuất')
+  const { so, thongTin, suaSauMoc, moc, song, reviews, loi } = await soLenh({
+    lsx,
+    nay: mocHienTai(bk),
+    products: bk.products,
+    ma: maTuDong(bk.rows),
+  })
 
   const rowById = new Map(bk.rows.map((r) => [r.material_id, r]))
   const chuaMaByKey = new Map(bk.chua_ma.items.map((i) => [KHOA_CHUA_MA + i.key, i]))
@@ -241,7 +304,7 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
       choSoat: dong.length > 0 || thongTin.length > 0 || suaSauMoc !== null,
       dau: dauThayDoi(base),
     },
-    lichSu: reviewsRes.rows.map((r) => ({
+    lichSu: reviews.map((r) => ({
       id: r.id,
       luc: r.reviewed_at,
       boi: r.reviewed_by_name,
@@ -249,8 +312,141 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
       ghi_chu: r.note,
     })),
     duyetLuc: lsx.approved_at,
-    loi: reviewsRes.loi,
+    loi,
   }
+}
+
+/** Tình trạng "chờ soát" của một lệnh — đủ cho chip, cột danh sách và số trên menu. */
+export type TrangThaiLenhDoi = {
+  lsx_id: string
+  choSoat: boolean
+  /** Số vật tư đổi số Cần. */
+  soMa: number
+  /** Thông tin lệnh đổi (ngày xuất, mốc vật tư, SL từng SP). */
+  soThongTin: number
+  suaSau: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongChuaMa' | 'lanCuoi' | 'nguoi' | 'khongTen'> | null // prettier-ignore
+  moc: ThayDoiLenh['moc']
+}
+
+/**
+ * Tình trạng của MỘT lệnh qua đường NHẸ: chỉ nạp nguồn số cần (định mức, định
+ * hình, số tay) rồi dựng dòng bằng chính `buildBangKe` — không nạp đơn mua /
+ * tồn / giá. Số Cần không phụ thuộc mấy thứ đó, nên mốc chụp ra TRÙNG KHÍT mốc
+ * của màn chi tiết (cùng `chupMoc`), và danh sách thay đổi cũng vậy.
+ */
+async function trangThaiMotLenh(lsxId: string): Promise<TrangThaiLenhDoi | null> {
+  const [lsx, nc] = await Promise.all([
+    productionRepo.findById(lsxId),
+    loadNhuCauLenh(lsxId),
+  ])
+  if (!lsx) return null
+  const rows = buildBangKe({
+    needs: gopNhuCau(nc.bom.lines, nc.comp),
+    manual: nc.manual,
+    facts: new Map(),
+    includeDraft: true,
+  })
+  const nay = chupMoc({
+    rows,
+    chuaMa: nc.bom.chua_ma.items.map((i) => ({ key: i.key, name: i.name, unit: i.unit, qty_total: i.qty_total })), // prettier-ignore
+    ship_date: lsx.ship_date,
+    materials_due_at: lsx.materials_due_at,
+    products: nc.bom.products,
+  })
+  const { so, thongTin, suaSauMoc: s, moc, loi } = await soLenh({ lsx, nay, products: nc.bom.products, ma: maTuDong(rows) }) // prettier-ignore
+  if (loi) throw new Error(loi)
+  return {
+    lsx_id: lsxId,
+    choSoat: so.length > 0 || thongTin.length > 0 || s !== null,
+    soMa: so.length,
+    soThongTin: thongTin.length,
+    suaSau: s && { dongDinhMuc: s.dongDinhMuc, dongChuaMa: s.dongChuaMa, lanCuoi: s.lanCuoi, nguoi: s.nguoi, khongTen: s.khongTen }, // prettier-ignore
+    moc,
+  }
+}
+
+/** Giữ kết quả 2 phút: số trên menu chạy ở MỌI lần mở trang của khu Cung ứng. */
+const GIU_MS = 120_000
+/**
+ * Số lệnh tính cùng lúc (mỗi lệnh ~10 truy vấn). Đo 02/11/2026 trên 17 lệnh:
+ * nhóm 4 → 6,9 s · nhóm 8 → 3,8–4,4 s · cả 17 → 2,2 s; Supabase chịu được.
+ */
+const SONG_SONG = 20
+/**
+ * Bộ nhớ tạm đặt trên `globalThis`: Next nạp module của route API và của trang
+ * thành HAI bản (đo 02/11: soát xong ở route, danh sách vẫn nói 8). Đặt ở đây
+ * thì mọi bản trong cùng tiến trình dùng chung; còn giữa các tiến trình thì
+ * `phienBan` của bảng mốc soát lo — vừa có ai soát là tính lại ngay.
+ */
+type Kho = {
+  boNho: { luc: number; ban: string; data: Map<string, TrangThaiLenhDoi> } | null
+  dangTinh: Promise<Map<string, TrangThaiLenhDoi>> | null
+}
+const kho: Kho = ((globalThis as { __hgLenhDoi?: Kho }).__hgLenhDoi ??= {
+  boNho: null,
+  dangTinh: null,
+})
+
+async function tinhTatCa(ban: string): Promise<Map<string, TrangThaiLenhDoi>> {
+  const lenh = await productionRepo.listActive()
+  const out = new Map<string, TrangThaiLenhDoi>()
+  // Chia nhóm để lệnh có tăng lên vài chục cũng không bắn hàng trăm truy vấn một lúc.
+  for (let i = 0; i < lenh.length; i += SONG_SONG) {
+    const nhom = await Promise.all(
+      lenh.slice(i, i + SONG_SONG).map((l) =>
+        trangThaiMotLenh(l.id).catch((e: unknown) => {
+          console.error('[lenh-doi] tính trạng thái lỗi', l.code, e)
+          return null
+        }),
+      ),
+    )
+    for (const t of nhom) if (t) out.set(t.lsx_id, t)
+  }
+  kho.boNho = { luc: Date.now(), ban, data: out }
+  return out
+}
+
+function tinhLai(ban: string): Promise<Map<string, TrangThaiLenhDoi>> {
+  kho.dangTinh ??= tinhTatCa(ban).finally(() => (kho.dangTinh = null))
+  return kho.dangTinh
+}
+
+/**
+ * Tình trạng chờ soát của MỌI lệnh đang chạy — nguồn DUY NHẤT cho số trên menu
+ * "Kế hoạch mua" và chip / cột của danh sách lệnh.
+ *  - Vừa có ai soát / xoá mốc (phiên bản đổi) hoặc chưa có bản nào → chờ tính.
+ *  - Quá 2 phút (định mức / lệnh có thể đã đổi) → trả bản cũ, tính lại phía sau.
+ */
+export async function trangThaiChoSoat(): Promise<Map<string, TrangThaiLenhDoi>> {
+  const ban = await lenhDoiRepo.phienBan()
+  const b = kho.boNho
+  if (!b || b.ban !== ban) return tinhLai(ban)
+  if (Date.now() - b.luc >= GIU_MS) void tinhLai(ban).catch(() => undefined)
+  return b.data
+}
+
+const demCho = (m: Map<string, TrangThaiLenhDoi>) =>
+  [...m.values()].filter((t) => t.choSoat).length
+
+/** Số lệnh đang chờ soát — đếm từ cùng nguồn với chip "Chờ soát" của danh sách. */
+export async function demLenhChoSoat(): Promise<number> {
+  return demCho(await trangThaiChoSoat())
+}
+
+/**
+ * Số trên MENU — KHÔNG BAO GIỜ bắt trang chờ phép tính (~2 s cho 17 lệnh), chỉ
+ * chờ truy vấn phiên bản (một dòng). Chưa có bản khớp phiên bản thì trả null
+ * (menu chưa hiện số lần này) và tính phía sau; lần mở trang kế tiếp là có.
+ */
+export async function demLenhChoSoatKhongCho(): Promise<number | null> {
+  const ban = await lenhDoiRepo.phienBan()
+  const b = kho.boNho
+  if (!b || b.ban !== ban) {
+    void tinhLai(ban).catch(() => undefined)
+    return null
+  }
+  if (Date.now() - b.luc >= GIU_MS) void tinhLai(ban).catch(() => undefined)
+  return demCho(b.data)
 }
 
 export const lenhDoiService = {
@@ -271,12 +467,15 @@ export const lenhDoiService = {
         'STALE',
       )
     }
-    return lenhDoiRepo.insert({
+    const moc = await lenhDoiRepo.insert({
       production_order_id: input.production_order_id,
       reviewed_by: user.id,
       changes: soThayDoi(thayDoi),
       note: input.note?.trim() || null,
       snapshot: mocHienTai(bk),
     })
+    // Cùng tiến trình thì bỏ bộ nhớ luôn; tiến trình khác tự thấy qua `phienBan`.
+    kho.boNho = null
+    return moc
   },
 }
