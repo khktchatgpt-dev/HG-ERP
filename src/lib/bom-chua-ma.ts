@@ -87,6 +87,25 @@ export function quyCach(dims: (number | null)[] | undefined): string | null {
   return so.length ? so.map((v) => String(r4(v))).join('×') : null
 }
 
+/**
+ * Khoá gom của một dòng chưa mã: loại + tên chuẩn hoá + quy cách + mã lạ. Null
+ * với dòng KHUNG (chỉ đếm) và dòng không tên (không gom được). Tách riêng để nơi
+ * khác (nhật ký định mức → dòng "chưa mã" của tab soát) tra ĐÚNG khoá bảng kê
+ * dùng, không tự chế một khoá thứ hai lệch đi.
+ */
+export function khoaChuaMa(l: {
+  kind: string | null
+  part_name: string | null
+  dims?: (number | null)[]
+  material_code: string | null
+}): string | null {
+  const kind = l.kind?.trim().toUpperCase() || null
+  if (kind === 'FRAME') return null
+  const name = (l.part_name ?? '').trim()
+  if (!name) return null
+  return `${kind ?? ''}|${chuanTen(name)}|${quyCach(l.dims) ?? ''}|${l.material_code?.trim().toUpperCase() ?? ''}`
+}
+
 export function gomChuaMa(lines: DongChuaMa[]): ChuaMaCuaLenh {
   const byKey = new Map<string, VatTuChuaMa>()
   let frame = 0
@@ -96,10 +115,10 @@ export function gomChuaMa(lines: DongChuaMa[]): ChuaMaCuaLenh {
       frame += 1
       continue
     }
+    const key = khoaChuaMa(l)
+    if (!key) continue
     const name = (l.part_name ?? '').trim()
-    if (!name) continue
     const qc = quyCach(l.dims)
-    const key = `${kind ?? ''}|${chuanTen(name)}|${qc ?? ''}|${l.material_code?.trim().toUpperCase() ?? ''}`
     const per = l.qty != null && Number.isFinite(l.qty) ? l.qty : null
     let cur = byKey.get(key)
     if (!cur) {

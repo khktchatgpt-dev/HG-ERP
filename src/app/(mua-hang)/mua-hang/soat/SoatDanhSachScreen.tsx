@@ -24,7 +24,19 @@ const dmy = (iso: string | null) => {
 }
 const ngay = (at: string | null) => (at ? ngayGioVn(at).slice(0, 5) : '')
 
-const coDinhMuc = (t: TrangThaiLenhDoi | undefined) => !!t?.choSoat && (t.soMa > 0 || !!t.suaSau) // prettier-ignore
+const coDinhMuc = (t: TrangThaiLenhDoi | undefined) => !!t?.choSoat && (t.soMa > 0 || t.soDongDm > 0 || !!t.suaSau) // prettier-ignore
+/** Lần sửa định mức gần nhất: nhật ký (từ 02/11) hoặc cột "sửa lần cuối" (trước đó). */
+const suaCuoi = (t: TrangThaiLenhDoi | undefined): { luc: string; ai: string } | null => {
+  if (!t?.choSoat) return null
+  const s = t.suaSau
+  const truoc = s?.lanCuoi
+    ? { luc: s.lanCuoi, ai: [...s.nguoi, ...(s.khongTen ? [`${s.khongTen} dòng không ghi người`] : [])].join(', ') } // prettier-ignore
+    : null
+  const dm = t.dmCuoi
+    ? { luc: t.dmCuoi.luc, ai: t.dmCuoi.boi ?? 'không ghi người' }
+    : null
+  return !truoc ? dm : !dm ? truoc : dm.luc >= truoc.luc ? dm : truoc
+}
 const coLenh = (t: TrangThaiLenhDoi | undefined) => !!t?.choSoat && t.soThongTin > 0
 
 /**
@@ -63,7 +75,7 @@ export function SoatDanhSachScreen({
   const hien = useMemo(() => {
     const tk = normalizeSearch(q).split(/\s+/).filter(Boolean)
     const goc = loc ? nhom[loc] : rows
-    const moiNhat = (r: BangKeLsxRow) => trangThai[r.id]?.suaSau?.lanCuoi ?? ''
+    const moiNhat = (r: BangKeLsxRow) => suaCuoi(trangThai[r.id])?.luc ?? ''
     return goc
       .filter((r) =>
         tk.every(
@@ -186,9 +198,22 @@ function DongLenh({
   onOpen: () => void
 }) {
   const s = t?.choSoat ? t.suaSau : null
-  const ai = s
-    ? [...s.nguoi, ...(s.khongTen ? [`${s.khongTen} dòng không ghi người`] : [])].join(', ') // prettier-ignore
-    : ''
+  const dm = t?.choSoat ? t.soDongDm : 0
+  const cuoi = suaCuoi(t)
+  const chinh =
+    t?.choSoat && t.soMa > 0
+      ? `${t.soMa} mã vật tư đổi`
+      : dm > 0
+        ? `${dm} dòng định mức đổi`
+        : s
+          ? `${s.dongDinhMuc} dòng sửa`
+          : null
+  const phu = [
+    t?.choSoat && t.soMa > 0 && dm > 0 && `${dm} dòng định mức đổi`,
+    s && (chinh === `${s.dongDinhMuc} dòng sửa` ? 'chưa có số cũ' : `${s.dongDinhMuc} dòng sửa chưa có số cũ`), // prettier-ignore
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <tr className="cursor-pointer hover:bg-[var(--surface-hover)]" onClick={onOpen}>
       <td className={`${TD} ${t?.choSoat ? 'shadow-[inset_3px_0_0_var(--warn)]' : ''}`}>
@@ -207,21 +232,17 @@ function DongLenh({
       </td>
       <td className={`${TD} ${NGAY}`}>{dmy(r.ship_date)}</td>
       <td className={`${TD} max-w-0`}>
-        {t?.choSoat && t.soMa > 0 ? (
+        {chinh ? (
           <>
-            <Nhan tone="warn">{t.soMa} mã vật tư đổi</Nhan>
-            {s && (
-              <span className="block truncate text-[11.5px] text-[var(--ink-3)]">
-                {s.dongDinhMuc} dòng định mức sửa
+            <Nhan tone="warn">{chinh}</Nhan>
+            {phu && (
+              <span
+                className="block truncate text-[11.5px] text-[var(--ink-3)]"
+                title={phu}
+              >
+                {phu}
               </span>
             )}
-          </>
-        ) : s ? (
-          <>
-            <Nhan tone="warn">{s.dongDinhMuc} dòng sửa</Nhan>
-            <span className="block truncate text-[11.5px] text-[var(--ink-3)]">
-              chưa có số cũ
-            </span>
           </>
         ) : (
           <span className="text-[var(--ink-3)]">—</span>
@@ -235,13 +256,13 @@ function DongLenh({
         )}
       </td>
       <td className={`${TD} max-w-0`}>
-        {s ? (
+        {cuoi ? (
           <>
-            <span className="block truncate" title={ai}>
-              {ai || '—'}
+            <span className="block truncate" title={cuoi.ai}>
+              {cuoi.ai || '—'}
             </span>
             <span className="block text-[11.5px] text-[var(--ink-3)]">
-              {ngay(s.lanCuoi)}
+              {ngay(cuoi.luc)}
             </span>
           </>
         ) : (

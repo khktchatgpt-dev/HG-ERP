@@ -4,7 +4,8 @@ import { ngayGioVn } from '@/lib/date-vn'
 import type { LenhDoiCuaLenh } from '@/modules/dept/supply/lenh-doi.service'
 import { DauTrang, MenuBa, Nut, ThanhDuoi, Trang } from '../../_erp/ui'
 import { dmy, so0 } from '../../bang-ke/[id]/ke-hoach.shared'
-import { HopLichSu, HopSoat, TabDinhMuc, TabLenh } from './khoi-soat'
+import { HopLichSu, HopSoat, TabLenh } from './khoi-soat'
+import { TabDinhMuc } from './tab-dinh-muc'
 import { TabVatTu } from './tab-vat-tu'
 import { useSoatLenh, type LenhSoat, type SoatCtx, type TabSoat } from './useSoatLenh'
 
@@ -95,9 +96,10 @@ function DaiTab({ d }: { d: SoatCtx }) {
     {
       k: 'dinh_muc',
       ten: 'Định mức',
-      so: s ? so0(s.dongDinhMuc) : '0',
-      phu: s ? 'chưa có số cũ' : 'không đổi',
-      co: !!s,
+      so: so0(t.dinhMuc.length + (s?.dongDinhMuc ?? 0)),
+      phu:
+        [t.dinhMuc.length && `${t.dinhMuc.length} dòng cũ → mới`, s && `${so0(s.dongDinhMuc)} chưa có số cũ`].filter(Boolean).join(' · ') || 'không đổi', // prettier-ignore
+      co: t.dinhMuc.length > 0 || !!s,
     },
     {
       k: 'lenh',

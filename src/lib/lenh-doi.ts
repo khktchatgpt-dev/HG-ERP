@@ -17,6 +17,8 @@
  *     service chỉ nói được "sửa sau duyệt N dòng, ai, lúc nào" (`SuaSauMoc`).
  */
 
+import type { AnhHuong, DongDmDoi } from './nhat-ky-dinh-muc'
+
 /** Một vật tư trong mốc: số Cần (null = dòng định mức không ghi số) + để bày lại. */
 export type MucMoc = {
   qty: number | null
@@ -285,6 +287,19 @@ export type DongDoi = DoiSo & {
   /** Lần sửa định mức gần nhất của vật tư này trên các SP đó. */
   suaLuc: string | null
   suaBoi: string | null
+  /** Khoá các dòng định mức (nhật ký 0284) đã gây ra thay đổi này — nút ▸. */
+  nguonDm: string[]
+}
+
+/**
+ * Một dòng định mức đổi ròng từ mốc (T2) — kèm thứ màn cần: mã SP, SL SP trong
+ * lệnh, ảnh hưởng số mua, TÊN người sửa (thay cho user id).
+ */
+export type DongDinhMuc = Omit<DongDmDoi, 'boi'> & {
+  boi: string | null
+  sp: string
+  slSp: number
+  anhHuong: AnhHuong[]
 }
 
 /** Nhóm việc trước (đặt thêm → thừa → chưa mã → đủ); trong nhóm số lớn trước. */
@@ -308,8 +323,9 @@ export function demNhom(rows: DongDoi[]): Record<NhomDoi, number> {
 }
 
 /**
- * Chưa soát lần nào mà định mức / dòng lệnh bị sửa SAU lúc duyệt — phần ảnh chụp
- * không phủ nên không còn số cũ để so từng mã; chỉ nói được ai sửa, bao nhiêu.
+ * Chưa soát lần nào mà định mức bị sửa SAU lúc duyệt, TRƯỚC ngày bật nhật ký 0284
+ * — không còn số cũ để so từng dòng; chỉ nói được ai sửa, bao nhiêu. Sửa từ ngày
+ * có nhật ký thì nằm ở `ThayDoiLenh.dinhMuc` với đủ cũ → mới.
  */
 export type SuaSauMoc = {
   /** Mốc tính "sau": lúc duyệt lệnh (không có thì lúc phát / lúc tạo). */
@@ -332,6 +348,10 @@ export type ThayDoiLenh = {
     | { k: 'duyet'; luc: string; laDuyet: boolean; coAnhChup: boolean }
   dong: DongDoi[]
   thongTin: DoiThongTin[]
+  /** Dòng định mức đổi ròng từ mốc, đọc từ nhật ký 0284 (T2). */
+  dinhMuc: DongDinhMuc[]
+  /** Số cặp xoá + nạp lại giống hệt đã triệt tiêu — để màn nói ra. */
+  napLaiGiong: number
   suaSauMoc: SuaSauMoc | null
   choSoat: boolean
   /** Dấu của tập thay đổi — server so lại lúc ghi "Đã soát" để không soát nhầm bản cũ. */
@@ -346,11 +366,14 @@ export function dauThayDoi(t: {
   /** Chỉ cần khoá + số trước/nay — dùng được cả `DoiSo` thô lẫn `DongDoi`. */
   dong: Pick<DoiSo, 'key' | 'truoc' | 'nay'>[]
   thongTin: DoiThongTin[]
+  /** Dòng định mức đổi — so theo khoá + số bây giờ (sửa đi sửa lại ra cùng số thì cùng dấu). */
+  dinhMuc?: Pick<DongDmDoi, 'key' | 'loai' | 'sau'>[]
   suaSauMoc: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongLenh' | 'lanCuoi'> | null
 }): string {
   const s = JSON.stringify([
     t.dong.map((d) => [d.key, d.truoc, d.nay]).sort(),
     t.thongTin.map((x) => [x.k, x.nhan, x.truoc, x.nay]).sort(),
+    (t.dinhMuc ?? []).map((d) => [d.key, d.loai, JSON.stringify(d.sau)]).sort(),
     t.suaSauMoc
       ? [t.suaSauMoc.dongDinhMuc, t.suaSauMoc.dongLenh, t.suaSauMoc.lanCuoi]
       : null,
@@ -360,9 +383,14 @@ export function dauThayDoi(t: {
   return (h >>> 0).toString(36)
 }
 
-/** Số thay đổi người soát nhìn thấy — đếm lên nút và ghi vào `changes`. */
-export function soThayDoi(t: Pick<ThayDoiLenh, 'dong' | 'thongTin'>): number {
-  return t.dong.length + t.thongTin.length
+/**
+ * Số thay đổi người soát nhìn thấy — đếm lên nút và ghi vào `changes`: mã vật
+ * tư đổi + thông tin lệnh đổi + dòng định mức đổi (mỗi tab một phần).
+ */
+export function soThayDoi(
+  t: Pick<ThayDoiLenh, 'dong' | 'thongTin'> & { dinhMuc?: unknown[] },
+): number {
+  return t.dong.length + t.thongTin.length + (t.dinhMuc?.length ?? 0)
 }
 
 /* ── B3 · Chuông (02/11/2026) ─────────────────────────────────────────── */
@@ -372,6 +400,8 @@ export type TomTatChoSoat = {
   code: string
   soMa: number
   soThongTin: number
+  /** Dòng định mức đổi ròng (nhật ký 0284). */
+  soDongDm?: number
   suaSau: { dongDinhMuc: number } | null
   moc: ThayDoiLenh['moc']
 }
@@ -384,6 +414,7 @@ export function tieuDeTin(t: TomTatChoSoat): string {
   const phan: string[] = []
   if (t.soMa > 0) phan.push(`${t.soMa} mã đổi số cần`)
   if (t.soThongTin > 0) phan.push(`${t.soThongTin} thông tin lệnh đổi`)
+  if (t.soDongDm) phan.push(`${t.soDongDm} dòng định mức sửa`)
   if (phan.length === 0 && t.suaSau) {
     const sau = t.moc.k === 'duyet' && !t.moc.laDuyet ? 'phát lệnh' : 'duyệt'
     phan.push(`định mức sửa ${t.suaSau.dongDinhMuc} dòng sau ${sau}`)

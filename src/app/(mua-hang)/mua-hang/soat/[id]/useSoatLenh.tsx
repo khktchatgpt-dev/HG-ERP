@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError, apiErrorText } from '@/lib/api'
 import { demNhom, soThayDoi, type NhomDoi } from '@/lib/lenh-doi'
+import type { LoaiDongDm } from '@/lib/nhat-ky-dinh-muc'
 import { normalizeSearch } from '@/lib/search-text'
 import type { LenhDoiCuaLenh } from '@/modules/dept/supply/lenh-doi.service'
 
@@ -38,12 +39,12 @@ export function useSoatLenh({
   const router = useRouter()
   const toast = useToast()
   const { thayDoi } = doi
-  // Tab mở sẵn là tab CÓ VIỆC: vật tư đổi → Vật tư; chỉ có sửa định mức chưa có
-  // số cũ → Định mức; chỉ có thông tin lệnh đổi → Lệnh SX.
+  // Tab mở sẵn là tab CÓ VIỆC: vật tư đổi → Vật tư; chỉ có dòng định mức đổi
+  // (đổi quy cách, chưa mã…) → Định mức; chỉ có thông tin lệnh đổi → Lệnh SX.
   const [tab, setTab] = useState<TabSoat>(
     thayDoi.dong.length > 0
       ? 'vat_tu'
-      : thayDoi.suaSauMoc
+      : thayDoi.dinhMuc.length > 0 || thayDoi.suaSauMoc
         ? 'dinh_muc'
         : thayDoi.thongTin.length > 0
           ? 'lenh'
@@ -55,6 +56,11 @@ export function useSoatLenh({
   const [moLichSu, setMoLichSu] = useState(false)
   const [ghiChu, setGhiChu] = useState('')
   const [busy, setBusy] = useState(false)
+  // Tab Định mức — lọc theo loại đổi + ô tìm, riêng với tab Vật tư.
+  const [locDm, setLocDm] = useState<LoaiDongDm | null>(null)
+  const [qDm, setQDm] = useState('')
+  // Các mã vật tư đang mở ▸ (xem dòng định mức gây đổi).
+  const [mo, setMo] = useState<ReadonlySet<string>>(new Set())
 
   const dem = useMemo(() => demNhom(thayDoi.dong), [thayDoi.dong])
   const soDoi = soThayDoi(thayDoi)
@@ -66,6 +72,31 @@ export function useSoatLenh({
         tk.every((t) => normalizeSearch(`${r.code ?? ''} ${r.name}`).includes(t)),
     )
   }, [thayDoi.dong, loc, q])
+
+  const demDm = useMemo(() => {
+    const out: Record<LoaiDongDm, number> = { them: 0, sua: 0, bo: 0 }
+    for (const x of thayDoi.dinhMuc) out[x.loai]++
+    return out
+  }, [thayDoi.dinhMuc])
+  const hienDm = useMemo(() => {
+    const tk = normalizeSearch(qDm).split(/s+/).filter(Boolean)
+    return thayDoi.dinhMuc.filter((x) => {
+      if (locDm !== null && x.loai !== locDm) return false
+      const chu = `${x.sp} ${x.truoc?.part_name ?? ''} ${x.sau?.part_name ?? ''} ${x.truoc?.material_code ?? ''} ${x.sau?.material_code ?? ''}` // prettier-ignore
+      return tk.every((t) => normalizeSearch(chu).includes(t))
+    })
+  }, [thayDoi.dinhMuc, locDm, qDm])
+  const dmTheoKhoa = useMemo(
+    () => new Map(thayDoi.dinhMuc.map((x) => [x.key, x])),
+    [thayDoi.dinhMuc],
+  )
+  function batMo(key: string) {
+    setMo((cu) => {
+      const moi = new Set(cu)
+      if (!moi.delete(key)) moi.add(key)
+      return moi
+    })
+  }
 
   /** Ghi mốc soát mới. Có người sửa thêm trong lúc xem thì máy chủ từ chối (409). */
   async function soat(): Promise<boolean> {
@@ -116,6 +147,15 @@ export function useSoatLenh({
     setGhiChu,
     busy,
     soat,
+    locDm,
+    setLocDm,
+    qDm,
+    setQDm,
+    demDm,
+    hienDm,
+    dmTheoKhoa,
+    mo,
+    batMo,
   } as const
 }
 

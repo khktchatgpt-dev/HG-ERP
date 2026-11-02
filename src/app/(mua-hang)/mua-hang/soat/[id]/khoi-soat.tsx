@@ -3,68 +3,9 @@
 import { ngayGioVn } from '@/lib/date-vn'
 import { HopThoai, INPUT, NUM, Nut, O, TD, TH } from '../../_erp/ui'
 import { dmy, so0 } from '../../bang-ke/[id]/ke-hoach.shared'
-import { ngay } from './tab-vat-tu'
 import type { SoatCtx } from './useSoatLenh'
 
 const NGAY = 'font-mono tabular-nums whitespace-nowrap'
-
-/**
- * TAB "ĐỊNH MỨC" (T1) — định mức sửa SAU mốc khi chưa có số cũ: bao nhiêu dòng,
- * SP nào, ai, lúc nào. Từng dòng cũ → mới đọc từ nhật ký 0284 ở bước T2.
- */
-export function TabDinhMuc({ d }: { d: SoatCtx }) {
-  const s = d.thayDoi.suaSauMoc
-  if (!s) return null
-  const moc = d.thayDoi.moc
-  const sau = moc.k === 'duyet' && !moc.laDuyet ? 'phát lệnh' : 'duyệt'
-  const ai = [
-    ...s.nguoi,
-    ...(s.khongTen ? [`${s.khongTen} dòng không ghi người sửa`] : []),
-  ]
-  return (
-    <section
-      aria-label="Định mức sửa sau mốc"
-      className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]"
-    >
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[var(--line)] px-4 py-2 text-[12.5px]">
-        <span className="font-semibold text-[var(--warn)]">
-          Sửa sau {sau} {dmy(s.tu)}: {so0(s.dongDinhMuc)} dòng định mức
-          {s.dongChuaMa ? ` (${so0(s.dongChuaMa)} dòng chưa gắn mã kho)` : ''}
-          {s.dongLenh ? ` · ${so0(s.dongLenh)} dòng lệnh` : ''}
-        </span>
-        <span className="text-[var(--ink-3)]">
-          lần cuối {ngay(s.lanCuoi)}
-          {ai.length > 0 && ` · ${ai.join(', ')}`}
-        </span>
-        <span className="text-[var(--ink-2)]">
-          Chưa có số cũ để so từng dòng — đối chiếu ở Kế hoạch mua bước 1 rồi bấm Đã soát.
-        </span>
-      </div>
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className={`${TH} w-[180px]`}>Sản phẩm</th>
-            <th className={`${TH} w-[120px] text-right`}>Dòng sửa</th>
-            <th className={`${TH} w-[150px]`}>Lần cuối</th>
-            <th className={TH}>Người sửa</th>
-          </tr>
-        </thead>
-        <tbody>
-          {s.sps.map((p) => (
-            <tr key={p.code}>
-              <td className={`${TD} font-mono text-[12px]`}>{p.code}</td>
-              <td className={`${TD} ${NUM}`}>{so0(p.dong)}</td>
-              <td className={`${TD} ${NGAY}`}>{ngayGioVn(p.lanCuoi)}</td>
-              <td className={`${TD} text-[var(--ink-2)]`}>
-                {p.nguoi ?? 'không ghi người sửa'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  )
-}
 
 /** TAB "LỆNH SX" (T1) — ngày xuất, mốc vật tư, SL từng SP đổi so với mốc soát. */
 export function TabLenh({ d }: { d: SoatCtx }) {

@@ -3,12 +3,18 @@
 import { Fragment } from 'react'
 import Link from 'next/link'
 import { ngayGioVn } from '@/lib/date-vn'
-import { NHOM_DOI, type DongDoi, type NhomDoi, type Viec } from '@/lib/lenh-doi'
+import {
+  NHOM_DOI,
+  type DongDinhMuc,
+  type DongDoi,
+  type NhomDoi,
+  type Viec,
+} from '@/lib/lenh-doi'
 import { ChipLoc, HangLoc, NUM, Nhan, Nut, TD, TF, TH, type Tone } from '../../_erp/ui'
 import { so0 } from '../../bang-ke/[id]/ke-hoach.shared'
+import { moTaAnhHuong, moTaDoi, NHAN_LOAI_DM, ngayGio, tenNhom } from './soat.shared'
 import type { SoatCtx } from './useSoatLenh'
 
-const COLS = 10
 const LINK = 'text-[var(--act-text)] underline-offset-2 hover:underline'
 const THU_TU_NHOM: NhomDoi[] = ['dat_them', 'thua', 'chua_ma', 'du']
 
@@ -26,6 +32,9 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
   const m = d.thayDoi.moc
   const nhanTruoc = m.k === 'soat' ? 'Lần soát' : m.laDuyet ? 'Lúc duyệt' : 'Lúc phát'
   const nhoms = THU_TU_NHOM.filter((n) => d.hien.some((r) => r.nhom === n))
+  // Cột ▸ chỉ có khi ít nhất một mã có dòng định mức (nhật ký 0284) gây đổi.
+  const coMo = d.thayDoi.dong.some((r) => r.nguonDm.length > 0)
+  const COLS = coMo ? 11 : 10
   if (d.thayDoi.dong.length === 0)
     return (
       <div className="grid justify-items-start gap-1.5 bg-[var(--surface-card)] px-4 py-6">
@@ -81,6 +90,9 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
           <table className="w-full min-w-[980px] table-fixed border-collapse">
             <thead>
               <tr>
+                {coMo && (
+                  <th className={`${TH} w-[30px]`} aria-label="Dòng định mức gây đổi" />
+                )}
                 <th className={`${TH} w-[92px]`}>Mã</th>
                 <th className={TH}>Vật tư</th>
                 <th className={`${TH} w-[56px]`}>ĐVT</th>
@@ -116,7 +128,21 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
                       </td>
                     </tr>
                     {rows.map((r) => (
-                      <DongThayDoi key={r.key} r={r} />
+                      <Fragment key={r.key}>
+                        <DongThayDoi
+                          r={r}
+                          coMo={coMo}
+                          mo={d.mo.has(r.key)}
+                          batMo={() => d.batMo(r.key)}
+                        />
+                        {d.mo.has(r.key) && (
+                          <NguonDinhMuc
+                            cols={COLS}
+                            ds={r.nguonDm.map((k) => d.dmTheoKhoa.get(k)).filter((x): x is DongDinhMuc => !!x)} // prettier-ignore
+                            code={r.code}
+                          />
+                        )}
+                      </Fragment>
                     ))}
                   </Fragment>
                 )
@@ -141,13 +167,39 @@ export function TabVatTu({ d }: { d: SoatCtx }) {
 
 const NHAN_LOAI = { moi: 'Mã mới', doi_sl: 'Đổi SL', bo: 'Bỏ khỏi định mức' } as const
 
-function DongThayDoi({ r }: { r: DongDoi }) {
+function DongThayDoi({
+  r,
+  coMo,
+  mo,
+  batMo,
+}: {
+  r: DongDoi
+  coMo: boolean
+  mo: boolean
+  batMo: () => void
+}) {
   const chuaMa = r.material_id === null && r.code === null
   const so = (v: number | null) => (v === null ? '—' : so0(v))
   const viec = moTaViec(r.viec)
   const sps = r.sps.join(', ')
   return (
     <tr className="hover:bg-[var(--surface-hover)]">
+      {coMo && (
+        <td className={`${TD} px-1 text-center`}>
+          {r.nguonDm.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={mo}
+              aria-label={`${mo ? 'Đóng' : 'Xem'} ${r.nguonDm.length} dòng định mức gây đổi ${r.code ?? r.name}`}
+              title={`${r.nguonDm.length} dòng định mức gây đổi`}
+              onClick={batMo}
+              className="h-5 w-5 rounded-[3px] text-[11px] leading-none text-[var(--act-text)] hover:bg-[var(--act-wash)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--act)]"
+            >
+              {mo ? '▾' : '▸'}
+            </button>
+          )}
+        </td>
+      )}
       <td className={`${TD} font-mono text-[12px]`}>
         {r.material_id ? (
           <Link href={`/mua-hang/vat-tu/${r.material_id}`} className={LINK}>
@@ -207,6 +259,58 @@ function DongThayDoi({ r }: { r: DongDoi }) {
           {r.suaLuc &&
             ` · ${r.suaBoi ? tenNgan(r.suaBoi) : 'không ghi người'} ${ngay(r.suaLuc)}`}
         </span>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * Dòng mở ra dưới một mã: các dòng định mức đã gây ra thay đổi của nó — SP,
+ * chi tiết, cũ → mới, × SL SP = số đổi của CHÍNH mã này, ai sửa lúc nào. Người
+ * mua cầm số "Đặt …" đi sửa đơn và biết luôn vì sao.
+ */
+function NguonDinhMuc({
+  cols,
+  ds,
+  code,
+}: {
+  cols: number
+  ds: DongDinhMuc[]
+  code: string | null
+}) {
+  const ma = code?.trim().toUpperCase() ?? null
+  return (
+    <tr>
+      <td className="border-b border-[var(--hair)] bg-[var(--surface-raised)]" />
+      <td
+        colSpan={cols - 1}
+        className="border-b border-[var(--hair)] bg-[var(--surface-raised)] px-2.5 py-1.5 text-[12.5px]"
+      >
+        <ul className="m-0 grid list-none gap-1 p-0">
+          {ds.map((x) => {
+            const a = x.sau ?? x.truoc!
+            // Phần ảnh hưởng của đúng mã đang mở (đổi mã thì dòng có hai mục).
+            const ah = x.anhHuong.find((h) => h.code === ma) ?? x.anhHuong[0]
+            const m = ah ? moTaAnhHuong(ah) : null
+            return (
+              <li key={x.key} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-mono text-[12px]">{x.sp}</span>
+                <span className="text-[var(--ink-3)]">· {tenNhom(a.group_code)} ·</span>
+                <span>{a.part_name ?? '—'}</span>
+                <span className="text-[var(--ink-3)]">· {NHAN_LOAI_DM[x.loai]}</span>
+                <span>{moTaDoi(x).join(' · ')}</span>
+                {m && (
+                  <span title={m.phep}>
+                    × {so0(x.slSp)} SP = <b className="font-mono tabular-nums">{m.chu}</b>
+                  </span>
+                )}
+                <span className="text-[var(--ink-3)]">
+                  · {x.boi ?? 'không ghi người'} · {ngayGio(x.luc)}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       </td>
     </tr>
   )

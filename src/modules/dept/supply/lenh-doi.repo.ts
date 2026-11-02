@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import type { Json } from '@/lib/database.types'
 import type { MocSoat } from '@/lib/lenh-doi'
+import { docAnh, type BanGhiNhatKy } from '@/lib/nhat-ky-dinh-muc'
 import { poOwner } from '@/lib/supply-scope'
 import { SUPPLY_DEPT_NAMES } from './suppliers.service'
 
@@ -96,6 +97,41 @@ export const lenhDoiRepo = {
       if ((data ?? []).length < TRANG) break
     }
     return { rows, names: await tenNguoi(rows.map((r) => r.updated_by)) }
+  },
+
+  /**
+   * NHẬT KÝ DÒNG ĐỊNH MỨC (0284) của các SP, ghi SAU một mốc — mọi lần thêm /
+   * sửa / xoá, cũ → mới. Gộp thành thay đổi ròng ở `lib/nhat-ky-dinh-muc`.
+   */
+  async nhatKyDinhMuc(
+    productIds: string[],
+    tu: string,
+  ): Promise<{ rows: BanGhiNhatKy[]; names: Map<string, string> }> {
+    if (productIds.length === 0) return { rows: [], names: new Map() }
+    const rows: BanGhiNhatKy[] = []
+    for (let from = 0; ; from += TRANG) {
+      const { data, error } = await db()
+        .from('technical_product_part_changes')
+        .select('product_id, part_id, action, before, after, changed_by, changed_at')
+        .in('product_id', productIds)
+        .gt('changed_at', tu)
+        .order('changed_at')
+        .order('id')
+        .range(from, from + TRANG - 1)
+      if (error) throw new Error(error.message)
+      for (const r of data ?? [])
+        rows.push({
+          product_id: r.product_id,
+          part_id: r.part_id,
+          action: r.action as BanGhiNhatKy['action'],
+          before: docAnh(r.before),
+          after: docAnh(r.after),
+          changed_by: r.changed_by,
+          changed_at: r.changed_at,
+        })
+      if ((data ?? []).length < TRANG) break
+    }
+    return { rows, names: await tenNguoi(rows.map((r) => r.changed_by)) }
   },
 
   /**

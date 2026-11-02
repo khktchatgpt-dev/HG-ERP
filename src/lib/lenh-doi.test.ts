@@ -241,6 +241,7 @@ const dong = (over: Partial<DongDoi>): DongDoi => ({
   sps: [],
   suaLuc: null,
   suaBoi: null,
+  nguonDm: [],
   ...over,
 })
 
@@ -279,6 +280,15 @@ describe('sắp xếp, đếm, dấu', () => {
     expect(dauThayDoi({ ...t, dong: [rows[0], { ...rows[1], nay: 311 }] })).not.toBe(dau)
     expect(soThayDoi(t)).toBe(4)
   })
+
+  it('T2: dòng định mức đổi vào dấu (theo số bây giờ) và vào số thay đổi', () => {
+    const t = { dong: rows, thongTin: [], suaSauMoc: null }
+    const dm = { key: 'p1', loai: 'sua' as const, sau: null }
+    const dau = dauThayDoi({ ...t, dinhMuc: [dm] })
+    expect(dau).not.toBe(dauThayDoi(t))
+    expect(dauThayDoi({ ...t, dinhMuc: [{ ...dm }] })).toBe(dau)
+    expect(soThayDoi({ ...t, dinhMuc: [dm, dm] })).toBe(6)
+  })
 })
 
 describe('B3 · chuông', () => {
@@ -300,6 +310,9 @@ describe('B3 · chuông', () => {
     ).toBe('JAWOLL — định mức sửa 234 dòng sau phát lệnh')
     expect(tieuDeTin({ ...t, soMa: 1, soThongTin: 1 })).toBe(
       '01/26-27 - GIGA — 1 mã đổi số cần · 1 thông tin lệnh đổi',
+    )
+    expect(tieuDeTin({ ...t, soMa: 2, soDongDm: 6 })).toBe(
+      '01/26-27 - GIGA — 2 mã đổi số cần · 6 dòng định mức sửa',
     )
   })
 

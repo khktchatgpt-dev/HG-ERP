@@ -130,7 +130,8 @@ export function KeHoachMuaScreen({
 function NhacSoat({ lsxId, t }: { lsxId: string; t: TrangThaiLenhDoi }) {
   const phan = [
     t.soMa > 0 ? `định mức đổi ${t.soMa} mã vật tư` : '',
-    t.soMa === 0 && t.suaSau ? `định mức sửa ${t.suaSau.dongDinhMuc} dòng` : '',
+    t.soMa === 0 && t.soDongDm > 0 ? `định mức đổi ${t.soDongDm} dòng` : '',
+    t.soMa === 0 && t.soDongDm === 0 && t.suaSau ? `định mức sửa ${t.suaSau.dongDinhMuc} dòng` : '', // prettier-ignore
     t.soThongTin > 0 ? `lệnh đổi ${t.soThongTin} thông tin` : '',
   ].filter(Boolean)
   const moc =
