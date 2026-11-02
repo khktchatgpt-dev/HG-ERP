@@ -56,11 +56,6 @@ export type LuoiNhanVien = Omit<DsNhanVien, 'ds'> & { ds: NvLuoi[]; rieng: boole
 const bon = (s: string | null | undefined) => (s ? s.slice(-4) : null)
 
 function riengDs(r: (DongCaNhan & { tax_code: string | null }) | undefined): RiengDs {
-  const kc = r?.emergency_name
-    ? r.emergency_relation
-      ? `${r.emergency_name} (${r.emergency_relation})`
-      : r.emergency_name
-    : null
   return {
     gioiTinh: (r?.gender as GioiTinh | null) ?? null,
     ngaySinh: r?.birth_date ?? null,
@@ -71,7 +66,9 @@ function riengDs(r: (DongCaNhan & { tax_code: string | null }) | undefined): Rie
     dienThoai: r?.phone ?? null,
     choO: r?.current_address ?? null,
     thuongTru: r?.permanent_address ?? null,
-    khanCap: kc,
+    trinhDo: r?.education ?? null,
+    khanCapTen: r?.emergency_name ?? null,
+    khanCapQuanHe: r?.emergency_relation ?? null,
     khanCapSdt: r?.emergency_phone ?? null,
   }
 }

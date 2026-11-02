@@ -2,7 +2,7 @@
 
 import './ds.css'
 import { useLayoutEffect, useRef, useState } from 'react'
-import { FileDown, FileUp, Plus, Search } from 'lucide-react'
+import { FileDown, FileUp, PencilLine, Plus, Search } from 'lucide-react'
 import {
   COT_TRONG,
   TAB_DS,
@@ -14,6 +14,7 @@ import { useNhanVienDs, type BoCot, type DsCtx, type TrangDs } from './useNhanVi
 import { LuoiDs, lop } from './luoi-ds'
 import { HopTuyen } from './hop-tuyen'
 import { HopNap } from './hop-nap'
+import { ThanhChot } from './thanh-chot'
 
 /**
  * NHÂN SỰ › HỒ SƠ NHÂN VIÊN — danh sách (B1, bản vẽ 02/11/2026
@@ -24,6 +25,10 @@ import { HopNap } from './hop-nap'
  * chân), SAP Fiori worklist (ô đếm là bộ lọc). Cột theo file DS CNV Nhân sự đang tự giữ, nhóm
  * theo bộ phận như file đó (Q1). Thanh "Hồ sơ x/12" bỏ (Q2) — 170/170 người đều "thiếu" nên nó
  * không chỉ ra ai; thay bằng lọc Ô trống + chân đếm trống mỗi cột.
+ *
+ * B2 "Sửa trên bảng" (Dynamics Edit in grid, SAP mass maintenance): gõ thẳng vào ô, dán vùng
+ * Excel, lưu MỘT lần qua đường nạp hồ sơ — thanh chốt đáy là ngoại lệ duy nhất của luật "nút ở
+ * góc trên" (bảng nhập liệu).
  */
 export function NhanVienDsScreen({ h }: { h: TrangDs }) {
   const d = useNhanVienDs(h)
@@ -40,6 +45,8 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
     return () => window.removeEventListener('resize', doi)
   }, [])
   const khoa = h.sua ? null : 'Phòng Nhân sự giữ quyền sửa hồ sơ'
+  const sua = d.sb.dangSua
+  const khoaSua = khoa ?? (sua ? 'Đang sửa trên bảng — lưu hoặc bỏ thay đổi trước' : null)
   const soBp = new Set(h.nv.ds.filter((n) => n.active).map((n) => n.boPhan)).size
 
   return (
@@ -51,13 +58,19 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
         </span>
         <div className="ns-ap" role="toolbar" aria-label="Thao tác">
           <div>
-            <Nut primary why={khoa} d={d} onClick={() => d.setMoTuyen(true)}>
+            <Nut primary why={khoaSua} d={d} onClick={() => d.setMoTuyen(true)}>
               <Plus className="ico" aria-hidden />
               Tuyển vào
             </Nut>
           </div>
           <div>
-            <Nut why={khoa} d={d} onClick={() => d.setMoNap(true)}>
+            <Nut why={khoa} d={d} nhan={sua} onClick={d.sb.batSua}>
+              <PencilLine className="ico" aria-hidden />
+              {sua ? 'Đang sửa trên bảng' : 'Sửa trên bảng'}
+            </Nut>
+          </div>
+          <div>
+            <Nut why={khoaSua} d={d} onClick={() => d.setMoNap(true)}>
               <FileUp className="ico" aria-hidden />
               Nhập Excel
             </Nut>
@@ -111,24 +124,37 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
         </div>
       )}
 
+      {sua && (
+        <div className="ns-mode">
+          Đang sửa trên bảng
+          <span>
+            Gõ thẳng vào ô · Enter xuống dòng · Esc trả ô về cũ · Ctrl+V dán vùng chép từ
+            Excel
+          </span>
+        </div>
+      )}
       <ThanhLoc d={d} />
-      {d.chon.size > 0 && <ThanhChon d={d} />}
+      {d.chon.size > 0 && !sua && <ThanhChon d={d} />}
 
       <div className="ns-grid">{d.ds.length ? <LuoiDs d={d} /> : <Rong d={d} />}</div>
 
-      <div className="ns-sb" role="status">
-        <span>
-          Đang hiện <b>{d.ds.length}</b> / {d.demTab[d.loc.tab]}
-        </span>
-        <span>
-          Đã chọn <b>{d.chon.size}</b>
-        </span>
-        {d.bao ? (
-          <span className={d.bao.ok ? 'ok' : 'loi'}>{d.bao.text}</span>
-        ) : (
-          <span>Bấm một dòng để mở hồ sơ · bấm số &quot;trống&quot; ở chân để lọc</span>
-        )}
-      </div>
+      {sua ? (
+        <ThanhChot d={d} />
+      ) : (
+        <div className="ns-sb" role="status">
+          <span>
+            Đang hiện <b>{d.ds.length}</b> / {d.demTab[d.loc.tab]}
+          </span>
+          <span>
+            Đã chọn <b>{d.chon.size}</b>
+          </span>
+          {d.bao ? (
+            <span className={d.bao.ok ? 'ok' : 'loi'}>{d.bao.text}</span>
+          ) : (
+            <span>Bấm một dòng để mở hồ sơ · bấm số &quot;trống&quot; ở chân để lọc</span>
+          )}
+        </div>
+      )}
 
       {d.moTuyen && <HopTuyen d={d} />}
       {d.moNap && <HopNap d={d} />}
@@ -140,12 +166,15 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
 function Nut({
   children,
   primary = false,
+  nhan,
   why,
   d,
   onClick,
 }: {
   children: React.ReactNode
   primary?: boolean
+  /** Nút bật / tắt: đang bật thì `aria-pressed`. */
+  nhan?: boolean
   why: string | null
   d: DsCtx
   onClick: () => void
@@ -155,6 +184,7 @@ function Nut({
       type="button"
       className={primary ? 'ns-btn p' : 'ns-btn'}
       aria-disabled={why ? 'true' : undefined}
+      aria-pressed={nhan}
       title={why ?? undefined}
       onClick={() => (why ? d.setBao({ ok: false, text: why }) : onClick())}
     >
@@ -165,7 +195,8 @@ function Nut({
 
 const BO_COT: { id: BoCot; ten: string; rieng?: boolean }[] = [
   { id: 'ds_cnv', ten: 'DS CNV' },
-  { id: 'giay_to', ten: 'Giấy tờ & liên hệ', rieng: true },
+  { id: 'giay_to', ten: 'Giấy tờ', rieng: true },
+  { id: 'lien_he', ten: 'Liên hệ', rieng: true },
   { id: 'cong_viec', ten: 'Công việc' },
 ]
 

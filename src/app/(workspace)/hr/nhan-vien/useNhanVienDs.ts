@@ -18,6 +18,7 @@ import {
   type ViecDs,
 } from '@/lib/nhan-su/danh-sach'
 import type { LuoiNhanVien } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
+import { useSuaBang } from './useSuaBang'
 
 export type TrangDs = { nv: LuoiNhanVien; sua: boolean; homNay: string }
 
@@ -28,7 +29,8 @@ const KHOA_LOC = 'hr-nv-ds'
 /** Bộ cột + nhóm là thói quen của người xem — nhớ lâu (localStorage). */
 const KHOA_XEM = 'hr-nv-xem'
 
-export type BoCot = 'ds_cnv' | 'giay_to' | 'cong_viec'
+export type BoCot = 'ds_cnv' | 'giay_to' | 'lien_he' | 'cong_viec'
+const BO_COT: BoCot[] = ['ds_cnv', 'giay_to', 'lien_he', 'cong_viec']
 type Xem = { cot: BoCot; nhom: boolean }
 
 const LOC_MAC_DINH: BoLocDs = {
@@ -59,7 +61,7 @@ function docXem(s: string): Xem {
   try {
     const v = { ...XEM_MAC_DINH, ...(JSON.parse(s) as Partial<Xem>) }
     return {
-      cot: ['ds_cnv', 'giay_to', 'cong_viec'].includes(v.cot) ? v.cot : 'ds_cnv',
+      cot: BO_COT.includes(v.cot) ? v.cot : 'ds_cnv',
       nhom: v.nhom !== false,
     }
   } catch {
@@ -86,8 +88,9 @@ export function useNhanVienDs(h: TrangDs) {
   }
   const [xemRaw, ghiXem] = useLocalPref(KHOA_XEM, JSON.stringify(XEM_MAC_DINH))
   const xem = useMemo(() => docXem(xemRaw), [xemRaw])
-  // Người không có quyền riêng tư không có bộ cột Giấy tờ & liên hệ.
-  const cot: BoCot = !h.nv.rieng && xem.cot === 'giay_to' ? 'ds_cnv' : xem.cot
+  // Người không có quyền riêng tư không có bộ cột Giấy tờ, Liên hệ.
+  const cot: BoCot =
+    !h.nv.rieng && (xem.cot === 'giay_to' || xem.cot === 'lien_he') ? 'ds_cnv' : xem.cot
   const [, ghiTap] = useLocalPref(KHOA_TAP, '[]', 'session')
   const [dong, setDong] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -109,8 +112,11 @@ export function useNhanVienDs(h: TrangDs) {
     () => thuTuDs(locDs(all, loc, h.homNay), xem.nhom),
     [all, loc, h.homNay, xem.nhom],
   )
+  const sb = useSuaBang(all, ds, setBao)
 
   function moHoSo(code: string) {
+    // Đang sửa trên bảng: bấm dòng là để gõ, không rời trang.
+    if (sb.dangSua) return
     ghiTap(JSON.stringify(ds.map((n) => n.code)))
     router.push(`/hr/nhan-vien/${encodeURIComponent(code)}`)
   }
@@ -177,6 +183,7 @@ export function useNhanVienDs(h: TrangDs) {
     setBao,
     hangLoat,
     moHoSo,
+    sb,
     moTuyen,
     moNap,
     setMoNap,

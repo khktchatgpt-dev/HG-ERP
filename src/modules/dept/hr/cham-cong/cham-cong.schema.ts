@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LY_DO_NGHI } from '@/lib/nhan-su/bien-dong'
 import { LOAI_HD } from '@/lib/nhan-su/hop-dong'
+import { COT_SUA } from '@/lib/nhan-su/sua-bang'
 
 /** Tháng của bảng công: 'YYYY-MM'. */
 export const bangCongQuerySchema = z.object({
@@ -508,3 +509,19 @@ export const napHoSoSchema = z.discriminatedUnion('viec', [
     chon: z.record(z.string().regex(/^\d+$/), uuid),
   }),
 ])
+
+/**
+ * Sửa trên bảng (Hồ sơ nhân viên B2): các ô đã đổi theo MÃ người. Giá trị đã chuẩn hoá ở bảng
+ * nhưng server vẫn kiểm lại bằng chuanO của đường nạp — đây chỉ chặn hình dạng gói.
+ */
+export const suaBangSchema = z.object({
+  dong: z
+    .array(
+      z.object({
+        ma: z.string().trim().min(1).max(40),
+        o: z.partialRecord(z.enum(COT_SUA), z.string().trim().min(1).max(300)),
+      }),
+    )
+    .min(1, 'Chưa có ô nào đổi')
+    .max(500),
+})

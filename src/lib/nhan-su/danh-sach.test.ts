@@ -23,7 +23,9 @@ const R: RiengDs = {
   dienThoai: '0976214558',
   choO: 'Khu phố 2',
   thuongTru: null,
-  khanCap: null,
+  trinhDo: null,
+  khanCapTen: null,
+  khanCapQuanHe: null,
   khanCapSdt: null,
 }
 let id = 0

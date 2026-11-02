@@ -9,7 +9,7 @@
  */
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
-import { BadRequest } from '@/server/http'
+import { BadRequest, Forbidden } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { boSo0 } from '@/lib/cham-cong/ghep-ten'
 import { khopTen, type NguoiKhop } from '@/lib/luong/ho-so-luong'
@@ -88,21 +88,27 @@ function hienTai(
 const che = (o: DoiO): DoiO =>
   CHE.includes(o.cot) ? { ...o, cu: cheCccd(o.cu), moi: cheCccd(o.moi)! } : o
 
-async function nap(
-  user: User,
-  text: string,
-  ghiDe: boolean,
-  chon: Record<number, string> = {},
-) {
-  await assertAction(user, 'hr.attendance.employee_edit')
+type DocNap = ReturnType<typeof docDanNv>
+
+function docText(text: string): DocNap {
   if (text.length > 2_000_000) throw BadRequest('Vùng dán quá lớn — chia thành nhiều lần')
-  const rieng = await canAction(user, 'hr.employee.private')
-  const [emps, ds] = await Promise.all([chamCongRepo.employees(), caNhanRepo.tatCa()])
   const doc = docDanNv(text)
   if (!doc.dong.length)
     throw BadRequest(
       'Không thấy dòng tiêu đề có cột "Mã NV" hoặc "Họ tên" trong 15 dòng đầu',
     )
+  return doc
+}
+
+async function nap(
+  user: User,
+  doc: DocNap,
+  ghiDe: boolean,
+  chon: Record<number, string> = {},
+) {
+  await assertAction(user, 'hr.attendance.employee_edit')
+  const rieng = await canAction(user, 'hr.employee.private')
+  const [emps, ds] = await Promise.all([chamCongRepo.employees(), caNhanRepo.tatCa()])
   const boQua = rieng ? [] : doc.cot.filter((c) => COT_RIENG.includes(c))
   const cot = doc.cot.filter((c) => !boQua.includes(c))
   const theoMa = new Map(emps.map((e) => [boSo0(e.code), e]))
@@ -168,7 +174,7 @@ export const napHoSoService = {
     ghiDe: boolean,
     chon: Record<number, string> = {},
   ): Promise<XemNapNv> {
-    const r = await nap(user, text, ghiDe, chon)
+    const r = await nap(user, docText(text), ghiDe, chon)
     return {
       cot: r.cot,
       boQua: r.boQua,
@@ -186,52 +192,108 @@ export const napHoSoService = {
     text: string,
     ghiDe: boolean,
     chon: Record<number, string>,
-  ): Promise<{ nguoi: number; o: number; loi: { dong: number; loi: string }[] }> {
-    const r = await nap(user, text, ghiDe, chon)
-    let nguoi = 0
-    let o = 0
-    const loi: { dong: number; loi: string }[] = []
-    const daGhi = new Set<string>()
-    for (const d of r.dong) {
-      const e = d.employee
-      if (!e || !d.xem.doi.length) continue
-      if (daGhi.has(e.id)) {
-        loi.push({ dong: d.raw.dong, loi: `${e.code} đã có ở dòng trên — bỏ dòng này` })
-        continue
-      }
-      daGhi.add(e.id)
-      const doi = d.xem.doi
-      const ten: string[] = []
-      try {
-        const coBan: { team?: string | null; job_title?: string | null } = {}
-        const rieng: Record<string, string | null> = {}
-        for (const x of doi) {
-          if (x.cot === 'to') coBan.team = x.moi
-          else if (x.cot === 'chucDanh') coBan.job_title = x.moi
-          else if (x.cot !== 'ngayVao' && COT_DB[x.cot]) rieng[COT_DB[x.cot]!] = x.moi
-        }
-        if (Object.keys(coBan).length) await chamCongRepo.updateEmployee(e.id, coBan)
-        if (Object.keys(rieng).length) await caNhanRepo.luu(e.id, rieng, user.id)
-        const nv = doi.find((x) => x.cot === 'ngayVao')
-        // Ngày vào đi đúng đường biến động (kiểm kỳ đã chốt, dời / tạo mốc Tuyển vào).
-        if (nv) await bienDongService.datNgayVao(user, e.id, nv.moi)
-        ten.push(...doi.map((x) => TEN_COT_NAP[x.cot]))
-        await bienDongRepo.ghi({
-          employeeId: e.id,
-          loai: 'edit',
-          ngay: todayVn(),
-          ghiChu: `Nhập Excel: ${ten.join(', ')}`,
-          userId: user.id,
-        })
-        nguoi++
-        o += doi.length
-      } catch (err) {
-        loi.push({
-          dong: d.raw.dong,
-          loi: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-    return { nguoi, o, loi }
+  ): Promise<KetQuaGhi> {
+    return ghiDoc(user, docText(text), ghiDe, chon, 'Nhập Excel')
   },
+
+  /**
+   * Sửa trên bảng (B2, bản vẽ 02/11/2026 mục B): các ô đã đổi, theo MÃ người. Đi CHUNG đường
+   * so + ghi với nạp Excel (cùng kiểm định dạng, ngày vào qua biến động, vết "Sửa" kèm tên ô),
+   * luôn ghi đè (người dùng sửa chính ô đó). Ô cá nhân khi không có quyền → từ chối cả gói,
+   * không lặng lẽ bỏ qua như vùng dán Excel.
+   */
+  async ghiBang(user: User, dong: GoiSuaBang[]): Promise<KetQuaGhi> {
+    const cot = [...new Set(dong.flatMap((d) => Object.keys(d.o) as CotNapNv[]))]
+    if (!(await canAction(user, 'hr.employee.private'))) {
+      const cam = cot.filter((c) => COT_RIENG.includes(c))
+      if (cam.length)
+        throw Forbidden(
+          `Chỉ Phòng Nhân sự sửa được ${cam.map((c) => TEN_COT_NAP[c]).join(', ')}`,
+        )
+    }
+    const doc: DocNap = {
+      cot: ['ma', ...cot],
+      dong: dong.map((d, i) => ({ dong: i + 1, ma: d.ma, ...d.o })),
+    }
+    const r = await ghiDoc(user, doc, true, {}, 'Sửa trên bảng', true)
+    return r
+  },
+}
+
+export type GoiSuaBang = { ma: string; o: Partial<Record<CotNapNv, string>> }
+export type KetQuaGhi = {
+  nguoi: number
+  o: number
+  loi: { dong: number; ma: string | null; loi: string }[]
+}
+
+/**
+ * Ghi các dòng đã có người. `nguon` vào ghi chú vết ("Nhập Excel: …" / "Sửa trên bảng: …").
+ * `baoKhongKhop` — bảng gửi theo mã nên mã không thấy / ô sai định dạng là lỗi phải báo;
+ * vùng dán Excel đã bày những dòng đó ở bước xem trước.
+ */
+async function ghiDoc(
+  user: User,
+  doc: DocNap,
+  ghiDe: boolean,
+  chon: Record<number, string>,
+  nguon: string,
+  baoKhongKhop = false,
+): Promise<KetQuaGhi> {
+  const r = await nap(user, doc, ghiDe, chon)
+  let nguoi = 0
+  let o = 0
+  const loi: KetQuaGhi['loi'] = []
+  const daGhi = new Set<string>()
+  for (const d of r.dong) {
+    const e = d.employee
+    const ma = d.raw.ma ?? null
+    if (baoKhongKhop) {
+      if (!e) loi.push({ dong: d.raw.dong, ma, loi: `Không có nhân viên mã ${ma}` })
+      for (const l of d.xem.loi) loi.push({ dong: d.raw.dong, ma, loi: l })
+    }
+    if (!e || !d.xem.doi.length) continue
+    if (daGhi.has(e.id)) {
+      loi.push({
+        dong: d.raw.dong,
+        ma,
+        loi: `${e.code} đã có ở dòng trên — bỏ dòng này`,
+      })
+      continue
+    }
+    daGhi.add(e.id)
+    const doi = d.xem.doi
+    const ten: string[] = []
+    try {
+      const coBan: { team?: string | null; job_title?: string | null } = {}
+      const rieng: Record<string, string | null> = {}
+      for (const x of doi) {
+        if (x.cot === 'to') coBan.team = x.moi
+        else if (x.cot === 'chucDanh') coBan.job_title = x.moi
+        else if (x.cot !== 'ngayVao' && COT_DB[x.cot]) rieng[COT_DB[x.cot]!] = x.moi
+      }
+      if (Object.keys(coBan).length) await chamCongRepo.updateEmployee(e.id, coBan)
+      if (Object.keys(rieng).length) await caNhanRepo.luu(e.id, rieng, user.id)
+      const nv = doi.find((x) => x.cot === 'ngayVao')
+      // Ngày vào đi đúng đường biến động (kiểm kỳ đã chốt, dời / tạo mốc Tuyển vào).
+      if (nv) await bienDongService.datNgayVao(user, e.id, nv.moi)
+      ten.push(...doi.map((x) => TEN_COT_NAP[x.cot]))
+      await bienDongRepo.ghi({
+        employeeId: e.id,
+        loai: 'edit',
+        ngay: todayVn(),
+        ghiChu: `${nguon}: ${ten.join(', ')}`,
+        userId: user.id,
+      })
+      nguoi++
+      o += doi.length
+    } catch (err) {
+      loi.push({
+        dong: d.raw.dong,
+        ma,
+        loi: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return { nguoi, o, loi }
 }
