@@ -13,6 +13,7 @@ import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
+import { boSo0 } from '@/lib/cham-cong/ghep-ten'
 import { khoangKyService } from './khoang-ky.service'
 import { soSanhMa, tinhVang, VANG_TU, type VangNv } from '@/lib/nhan-su/ho-so'
 import type { RiengDs } from '@/lib/nhan-su/danh-sach'
@@ -261,6 +262,18 @@ async function vangCuaDs(ds: NvDong[], homNay: string): Promise<Map<string, Vang
   return out
 }
 
+/** Mã đã quẹt máy trong 30 ngày mà chưa thuộc hồ sơ nào — gợi ý cho hộp Tuyển vào (B3). */
+export type MaMoi = {
+  /** id dòng `hr_device_users` — gửi kèm khi tuyển để ghép luôn. */
+  id: string
+  may: string
+  ma: string
+  ten: string | null
+  dau: string
+  cuoi: string
+  luot: number
+}
+
 export const hoSoNvService = {
   async danhSach(user: User, homNay: string): Promise<DsNhanVien> {
     await assertAction(user, 'hr.attendance.view')
@@ -301,6 +314,60 @@ export const hoSoNvService = {
       rieng,
       ds: nv.ds.map((n) => ({ ...n, rieng: gt ? riengDs(gt.get(n.id)) : null })),
     }
+  },
+
+  /**
+   * Gợi ý mã cho hộp Tuyển vào: người mới quẹt máy mà Nhân sự chưa lập hồ sơ thì không có dòng
+   * trên Bảng công (vụ 27/10/2026). Đọc lượt 30 ngày rồi lọc mã chưa ghép; bỏ mã trùng số với một
+   * nhân viên đã có (tuyển sẽ báo "Mã đã là của …"). Mới quẹt gần nhất lên trước.
+   */
+  async maMoi(user: User, homNay: string): Promise<MaMoi[]> {
+    await assertAction(user, 'hr.attendance.view')
+    const [devices, dus, emps, logs] = await Promise.all([
+      chamCongRepo.devices(),
+      chamCongRepo.deviceUsers(),
+      chamCongRepo.employees(),
+      chamCongRepo.logsBetween(
+        `${congNgay(homNay, -29)}T00:00:00+07:00`,
+        `${congNgay(homNay, 1)}T00:00:00+07:00`,
+      ),
+    ])
+    const coMa = new Set(emps.map((e) => boSo0(e.code)))
+    const khoa = (u: { device_id: string; device_user_id: string }) =>
+      `${u.device_id}|${u.device_user_id}`
+    const tu = new Map(
+      dus
+        .filter((u) => !u.employee_id && !coMa.has(boSo0(u.device_user_id)))
+        .map((u) => [khoa(u), u]),
+    )
+    const dem = new Map<string, { dau: string; cuoi: string; luot: number }>()
+    for (const l of logs) {
+      const k = khoa(l)
+      if (!tu.has(k)) continue
+      const d = toVn(l.punched_at).slice(0, 10)
+      const x = dem.get(k) ?? { dau: d, cuoi: d, luot: 0 }
+      x.luot++
+      if (d < x.dau) x.dau = d
+      if (d > x.cuoi) x.cuoi = d
+      dem.set(k, x)
+    }
+    const may = new Map(devices.map((d) => [d.id, '.' + d.ip.split('.').pop()]))
+    return [...dem.entries()]
+      .map(([k, x]) => {
+        const u = tu.get(k)!
+        return {
+          id: u.id,
+          may: may.get(u.device_id) ?? '',
+          ma: u.device_user_id,
+          ten: u.name_on_device,
+          ...x,
+        }
+      })
+      .sort(
+        (a, b) =>
+          b.cuoi.localeCompare(a.cuoi) ||
+          a.ma.localeCompare(b.ma, 'vi', { numeric: true }),
+      )
   },
 
   async trang(user: User, ma: string): Promise<HoSoNvTrang> {

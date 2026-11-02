@@ -8,8 +8,8 @@
  * liệu cũ, sửa ngày là lệch bản chốt.
  */
 import type { User } from '@/modules/core/users/users.repo'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
-import { BadRequest, Conflict, NotFound } from '@/server/http'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { boSo0 } from '@/lib/cham-cong/ghep-ten'
 import {
@@ -22,6 +22,7 @@ import {
 import { chamCongRepo, type EmployeeRow } from './cham-cong.repo'
 import { bienDongRepo, type BienDongDong } from './bien-dong.repo'
 import { kyCongRepo } from './ky-cong.repo'
+import { caNhanRepo } from './ca-nhan.repo'
 
 const SUA = 'hr.attendance.employee_edit'
 
@@ -54,6 +55,15 @@ export type TuyenVao = {
   shift_id: string
   job_title?: string | null
   device_user_id?: string
+  note?: string | null
+  /** Ô cá nhân hỏi lúc tuyển (B3) — tên cột của hr_employee_private. */
+  ca_nhan?: {
+    gender?: 'male' | 'female'
+    birth_date?: string
+    national_id?: string
+    phone?: string
+    current_address?: string
+  }
 }
 
 export const bienDongService = {
@@ -62,8 +72,19 @@ export const bienDongService = {
     return bienDongRepo.cuaNguoi(id)
   },
 
-  async tuyenVao(user: User, v: TuyenVao): Promise<{ id: string; code: string }> {
+  /**
+   * Tuyển vào. Ô cá nhân (B3) ghi SAU CÙNG và NUỐT LỖI có chủ ý: người đã tạo xong mà ném lỗi
+   * thì Nhân sự tưởng chưa tuyển được, bấm lại → "Mã đã là của …". Trả cờ `luuRieng` để hộp
+   * nói thật và bảo điền ở hồ sơ.
+   */
+  async tuyenVao(
+    user: User,
+    v: TuyenVao,
+  ): Promise<{ id: string; code: string; luuRieng: boolean | null }> {
     await assertAction(user, SUA)
+    const rieng = Object.keys(v.ca_nhan ?? {}).length > 0
+    if (rieng && !(await canAction(user, 'hr.employee.private')))
+      throw Forbidden('Chỉ Phòng Nhân sự nhập được thông tin cá nhân')
     await kiemKhoaKy([v.hire_date])
     const emps = await chamCongRepo.employees()
     let code: string
@@ -80,7 +101,7 @@ export const bienDongService = {
       full_name: v.full_name,
       team: v.team,
       shift_id: v.shift_id,
-      note: null,
+      note: v.note ?? null,
       attendance_exempt: v.khong_cham,
       hire_date: v.hire_date,
       job_title: v.job_title ?? null,
@@ -97,7 +118,13 @@ export const bienDongService = {
       sau: { team: v.team, job_title: v.job_title ?? null, code },
       userId: user.id,
     })
-    return { id: e.id, code }
+    let luuRieng: boolean | null = null
+    if (rieng)
+      luuRieng = await caNhanRepo.luu(e.id, v.ca_nhan!, user.id).then(
+        () => true,
+        (err) => (console.error('[tuyenVao] ca_nhan', e.code, err), false),
+      )
+    return { id: e.id, code, luuRieng }
   },
 
   /**

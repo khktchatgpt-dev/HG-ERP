@@ -84,6 +84,26 @@ export const nhanVienTuyenSchema = z
     job_title: chucDanh.optional(),
     /** Ghép luôn mã trên máy này (dòng `hr_device_users`) — khi tạo từ "mã chưa ghép". */
     device_user_id: uuid.optional(),
+    note: ghiChu.optional(),
+    /**
+     * Thông tin cá nhân hỏi ngay lúc tuyển (B3, bản vẽ 02/11/2026 mục C). Bảng đã chuẩn hoá
+     * (ngày ISO, chỉ chữ số); cần quyền hr.employee.private.
+     */
+    ca_nhan: z
+      .object({
+        gender: z.enum(['male', 'female']).optional(),
+        birth_date: ngay.optional(),
+        national_id: z
+          .string()
+          .regex(/^(\d{9}|\d{12})$/, 'Số CCCD 12 chữ số (CMND 9 số)')
+          .optional(),
+        phone: z
+          .string()
+          .regex(/^0\d{9,10}$/, 'Số điện thoại VN 10 chữ số, bắt đầu bằng 0')
+          .optional(),
+        current_address: z.string().trim().min(1).max(300).optional(),
+      })
+      .optional(),
   })
   .refine((v) => v.khong_cham || !!v.code, {
     message: 'Nhập mã trên máy chấm công, hoặc chọn "Không chấm công"',
