@@ -5,7 +5,6 @@ import {
   chuDau,
   khoiCua,
   nhanTinhTrang,
-  SO_MUC_HO_SO,
   TEN_KHOI,
   type KhoiNv,
   type NvTom,
@@ -78,38 +77,4 @@ export function TagTinhTrang({ n, homNay }: { n: NvTom; homNay: string }) {
     case 'dang_lam':
       return <span className="text-k-sm text-[var(--ink-3)]">đang làm</span>
   }
-}
-
-/** Thuộc tính, không phải vấn đề: viền, không nền. */
-export function TagKhongCham() {
-  return (
-    <span className="text-k-label inline-flex h-[19px] items-center rounded-[var(--radius-sm)] border border-[var(--line)] px-1.5 whitespace-nowrap text-[var(--ink-2)]">
-      không chấm công
-    </span>
-  )
-}
-
-/** Thanh hồ sơ (Q4): xám khi còn thiếu, xanh lá chỉ khi đủ. */
-export function ThanhHoSo({ thieu }: { thieu: number }) {
-  const co = SO_MUC_HO_SO - thieu
-  const du = thieu === 0
-  return (
-    <span
-      className="inline-flex items-center gap-1.5"
-      title={du ? 'Đủ các mục đang theo dõi' : `Còn thiếu ${thieu} mục`}
-    >
-      <span className="relative h-[5px] w-12 bg-[var(--track)]">
-        <span
-          className={cn(
-            'absolute inset-y-0 left-0',
-            du ? 'bg-[var(--done)]' : 'bg-[var(--fill)]',
-          )}
-          style={{ width: `${(co / SO_MUC_HO_SO) * 100}%` }}
-        />
-      </span>
-      <span className={cn('num', du && 'text-[var(--done)]')}>
-        {co}/{SO_MUC_HO_SO}
-      </span>
-    </span>
-  )
 }

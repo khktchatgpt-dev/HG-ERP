@@ -1,0 +1,514 @@
+/*
+ * DANH SÁCH HỒ SƠ NHÂN VIÊN — lối ERP, viết tay, KHÔNG kit (chủ dự án 31/10/2026: "không dùng
+ * bộ kit cũng như hiển thị nội dung thừa"). Bản vẽ duyệt 02/11/2026:
+ * https://claude.ai/artifact/FUBArSLUXK9mVu2FSbsS93 (Q1–Q7 theo đề xuất). Cùng ngôn ngữ với khu
+ * Kho (`warehouse/_erp/kho.css`) nhưng là BẢN RIÊNG của Nhân sự — không dùng chung giữa phòng.
+ *
+ * Sáu tầng: đầu trang + Action Pane · tab · ô đếm việc tồn · thanh lọc · MỘT lưới cuộn (đầu sẫm
+ * dính, chân đếm trống dính) · thanh trạng thái. Mọi luật mở đầu bằng `.ns.ns` để thắng CSS kit
+ * ngoài @layer (layout vẫn bọc `.kit` cho hai hộp Tuyển vào / Nhập Excel) và tiện ích Tailwind.
+ */
+.ns.ns {
+  --ns-card: #ffffff;
+  --ns-raised: #f4f6f9;
+  --ns-ink: #12161f;
+  --ns-ink2: #3a4252;
+  --ns-ink3: #5d6675;
+  --ns-empty: #a3abb8;
+  --ns-line: #c9d0db;
+  --ns-hair: #e3e7ee;
+  --ns-zebra: #fafbfc;
+  --ns-act: #1f4bb8;
+  --ns-act-wash: #e3eafa;
+  --ns-head: #25324a;
+  --ns-grp: #edf1f7;
+  --ns-warn: #8a5200;
+  --ns-warn-wash: #fbf0dc;
+  --ns-stop: #b0241a;
+  --ns-done: #1f6b3d;
+  --ns-mono: var(--font-mono), 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ns-card);
+  color: var(--ns-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.ns.ns .num {
+  font-family: var(--ns-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ns.ns .e {
+  color: var(--ns-empty);
+}
+.ns.ns .ico {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* ── 1 · Đầu trang + Action Pane ── */
+.ns.ns .ns-ph {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--ns-line);
+}
+.ns.ns .ns-ph .crumb,
+.ns.ns .ns-ph .ctx {
+  font-size: 12px;
+  color: var(--ns-ink3);
+}
+.ns.ns .ns-ph .ctx b {
+  font-family: var(--ns-mono);
+  color: var(--ns-ink);
+}
+.ns.ns .ns-ph h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.ns.ns .ns-ap {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--ns-line);
+}
+.ns.ns .ns-ap > div {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-right: 1px solid var(--ns-line);
+}
+.ns.ns .ns-ap > div:last-child {
+  border-right: 0;
+}
+.ns.ns .ns-btn {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ns-ink);
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+.ns.ns .ns-btn:hover {
+  background: var(--ns-act-wash);
+}
+.ns.ns .ns-btn.p {
+  background: var(--ns-act);
+  color: #fff;
+  font-weight: 600;
+}
+.ns.ns .ns-btn.p:hover {
+  background: #183d97;
+}
+.ns.ns .ns-btn[aria-disabled='true'] {
+  background: transparent;
+  color: #8f98a7;
+  cursor: not-allowed;
+}
+.ns.ns .ns-btn.p[aria-disabled='true'] {
+  background: #c6ccd6;
+  color: var(--ns-ink2);
+}
+.ns.ns .ns-btn:focus-visible,
+.ns.ns .ns-tab:focus-visible,
+.ns.ns .ns-tile:focus-visible,
+.ns.ns .ns-seg button:focus-visible,
+.ns.ns .ns-lnk:focus-visible {
+  outline: 2px solid var(--ns-act);
+  outline-offset: -2px;
+}
+
+/* ── 2 · Tab ── */
+.ns.ns .ns-tabs {
+  display: flex;
+  background: var(--ns-raised);
+  border-bottom: 1px solid var(--ns-line);
+}
+.ns.ns .ns-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-right: 1px solid var(--ns-line);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ns-ink2);
+  cursor: pointer;
+}
+.ns.ns .ns-tab:hover {
+  background: var(--ns-card);
+}
+.ns.ns .ns-tab[aria-selected='true'] {
+  background: var(--ns-card);
+  color: var(--ns-ink);
+  box-shadow: inset 0 -2px 0 var(--ns-act);
+}
+.ns.ns .ns-tab .n {
+  font-family: var(--ns-mono);
+  color: var(--ns-ink3);
+}
+
+/* ── 3 · Ô đếm việc tồn = bộ lọc ── */
+.ns.ns .ns-tiles {
+  display: flex;
+  border-bottom: 1px solid var(--ns-line);
+  background: var(--ns-raised);
+}
+.ns.ns .ns-tile {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 10px 5px;
+  border: 0;
+  border-right: 1px solid var(--ns-line);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ns.ns .ns-tile:last-child {
+  border-right: 0;
+}
+.ns.ns .ns-tile:hover {
+  background: var(--ns-card);
+}
+.ns.ns .ns-tile .d {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ns-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns.ns .ns-tile .v {
+  font-family: var(--ns-mono);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.ns.ns .ns-tile.w .v {
+  color: var(--ns-warn);
+}
+.ns.ns .ns-tile.z .v {
+  color: var(--ns-empty);
+}
+.ns.ns .ns-tile[aria-pressed='true'] {
+  background: var(--ns-card);
+  box-shadow: inset 0 -3px 0 var(--ns-act);
+}
+.ns.ns .ns-tile[aria-pressed='true'] .d {
+  color: var(--ns-act);
+}
+
+/* ── 4 · Thanh lọc ── */
+.ns.ns .ns-fb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--ns-line);
+  font-size: 12.5px;
+  color: var(--ns-ink2);
+}
+.ns.ns .ns-fb input,
+.ns.ns .ns-fb select,
+.ns.ns .ns-chon select {
+  height: 26px;
+  border: 1px solid var(--ns-line);
+  border-radius: 0;
+  background: var(--ns-card);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ns-ink);
+}
+.ns.ns .ns-fb input {
+  width: 250px;
+  max-width: 100%;
+}
+.ns.ns .ns-fb select.on {
+  border-color: var(--ns-act);
+  background: var(--ns-act-wash);
+  color: var(--ns-act);
+  font-weight: 600;
+}
+.ns.ns .ns-fb input:focus-visible,
+.ns.ns .ns-fb select:focus-visible,
+.ns.ns .ns-chon select:focus-visible {
+  outline: 2px solid var(--ns-act);
+  outline-offset: -1px;
+}
+.ns.ns .ns-fb .sp {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ns.ns .ns-seg {
+  display: inline-flex;
+  border: 1px solid var(--ns-line);
+}
+.ns.ns .ns-seg button {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-right: 1px solid var(--ns-line);
+  background: var(--ns-card);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ns-ink2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ns.ns .ns-seg button:last-child {
+  border-right: 0;
+}
+.ns.ns .ns-seg button[aria-pressed='true'] {
+  background: var(--ns-act-wash);
+  color: var(--ns-act);
+  font-weight: 600;
+}
+.ns.ns .ns-lnk {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ns-act);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* thanh khi chọn nhiều dòng */
+.ns.ns .ns-chon {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--ns-line);
+  background: var(--ns-act-wash);
+  color: var(--ns-act);
+  font-size: 12.5px;
+}
+.ns.ns .ns-chon .ns-btn {
+  border: 1px solid var(--ns-line);
+  background: var(--ns-card);
+  height: 26px;
+}
+.ns.ns .ns-chon .sp {
+  margin-left: auto;
+}
+
+/* ── 5 · Lưới: một vùng cuộn duy nhất ── */
+.ns.ns .ns-grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.ns.ns .ns-tb {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.ns.ns .ns-tb > thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px 8px;
+  background: var(--ns-head);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns.ns .ns-tb th.r,
+.ns.ns .ns-tb td.r {
+  text-align: right;
+}
+.ns.ns .ns-tb > tbody > tr > td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--ns-hair);
+  background: var(--ns-card);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns.ns .ns-tb > tbody > tr.d {
+  cursor: pointer;
+  /* Tab xuống dòng dưới cùng / lên dòng đầu: vòng focus không chui dưới đầu / chân dính. */
+  scroll-margin-block: 30px 32px;
+}
+.ns.ns .ns-tb > tbody > tr.d:nth-child(even) > td {
+  background: var(--ns-zebra);
+}
+.ns.ns .ns-tb > tbody > tr.d:hover > td {
+  background: #f0f4fc;
+}
+.ns.ns .ns-tb > tbody > tr.d.on > td {
+  background: var(--ns-act-wash);
+}
+.ns.ns .ns-tb > tbody > tr.d.on > td:first-child {
+  box-shadow: inset 3px 0 0 var(--ns-act);
+}
+.ns.ns .ns-tb > tbody > tr.d:focus-visible > td {
+  outline: 2px solid var(--ns-act);
+  outline-offset: -2px;
+}
+.ns.ns .ns-tb > tbody > tr.d.nghi > td {
+  color: var(--ns-ink3);
+}
+.ns.ns .ns-tb > tbody > tr.g > td {
+  padding: 3px 8px;
+  background: var(--ns-grp);
+  border-bottom: 1px solid var(--ns-line);
+  font-weight: 700;
+}
+.ns.ns .ns-tb > tbody > tr.g.w > td {
+  background: var(--ns-warn-wash);
+  color: var(--ns-warn);
+}
+.ns.ns .ns-tb tr.g button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ns.ns .ns-tb tr.g .c {
+  margin-left: 8px;
+  font-family: var(--ns-mono);
+  font-weight: 600;
+  color: var(--ns-ink3);
+}
+.ns.ns .ns-tb .ma {
+  font-family: var(--ns-mono);
+  font-weight: 600;
+  color: var(--ns-act);
+  text-decoration: none;
+}
+.ns.ns .ns-tb .ma:hover {
+  text-decoration: underline;
+}
+.ns.ns .ns-tb input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  vertical-align: -2px;
+  accent-color: var(--ns-act);
+  cursor: pointer;
+}
+.ns.ns .ns-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+.ns.ns .ns-pill.w {
+  color: var(--ns-warn);
+}
+.ns.ns .ns-pill.a {
+  color: var(--ns-act);
+}
+.ns.ns .ns-pill.g {
+  color: var(--ns-ink3);
+}
+.ns.ns .ns-tb > tfoot > tr > td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 5px 8px;
+  border-top: 2px solid var(--ns-line);
+  background: var(--ns-raised);
+  color: var(--ns-ink2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns.ns .ns-tb tfoot .ns-lnk {
+  font-family: var(--ns-mono);
+  font-size: 12px;
+}
+.ns.ns .ns-tb tfoot .z {
+  color: var(--ns-empty);
+  font-family: var(--ns-mono);
+}
+
+/* rỗng */
+.ns.ns .ns-rong {
+  padding: 24px 16px;
+  color: var(--ns-ink2);
+  font-size: 13px;
+  white-space: normal;
+}
+.ns.ns .ns-rong b {
+  color: var(--ns-ink);
+}
+.ns.ns .ns-rong .ns-lnk + .ns-lnk {
+  margin-left: 12px;
+}
+
+/* ── 6 · Thanh trạng thái ── */
+.ns.ns .ns-sb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 4px 14px;
+  border-top: 1px solid var(--ns-line);
+  background: var(--ns-raised);
+  font-size: 12px;
+  color: var(--ns-ink3);
+}
+.ns.ns .ns-sb b {
+  font-family: var(--ns-mono);
+  color: var(--ns-ink2);
+}
+.ns.ns .ns-sb .ok {
+  color: var(--ns-done);
+  font-weight: 600;
+}
+.ns.ns .ns-sb .loi {
+  color: var(--ns-stop);
+  font-weight: 600;
+}

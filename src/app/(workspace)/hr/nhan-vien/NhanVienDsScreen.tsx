@@ -1,354 +1,339 @@
 'use client'
 
-/**
- * NHÂN SỰ › HỒ SƠ NHÂN VIÊN — danh sách (B2a, bản vẽ lượt 2 duyệt 19/10/2026, Q1–Q6 theo
- * đề xuất). Khuôn C. Câu hỏi: "Trong 152 người, ai cần tôi động vào?".
- *
- * Cột là thông tin về NGƯỜI. Việc dọn mã máy (tên lấy từ máy, ca mặc định, mã chưa ghép)
- * đã dời sang Chấm công › Mã trên máy & ca. Bấm dòng mở trang hồ sơ riêng (Q1); không còn ô
- * sửa trên dòng — đổi cho nhiều người thì chọn rồi dùng thanh xanh.
- */
-
-import { useState } from 'react'
+import './ds.css'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { FileDown, FileUp, Plus, Search } from 'lucide-react'
 import {
-  Btn,
-  Pick,
-  ScreenFrame,
-  ScreenHeader,
-  SearchInput,
-  Tag,
-  Tick,
-} from '@/components/kit'
-import { cn } from '@/lib/utils'
-import { ngayVn } from '@/lib/nhan-su/bien-dong'
-import { conThieu, LOC_NV, SO_MUC_HO_SO, thamNien } from '@/lib/nhan-su/ho-so'
-import { useNhanVienDs, type DsCtx, type TrangDs } from './useNhanVienDs'
-import { Avatar, TagKhongCham, TagTinhTrang, TD, TH, ThanhHoSo } from './nv.shared'
+  COT_TRONG,
+  TAB_DS,
+  VIEC_DS,
+  type CotTrong,
+  type TabDs,
+} from '@/lib/nhan-su/danh-sach'
+import { useNhanVienDs, type BoCot, type DsCtx, type TrangDs } from './useNhanVienDs'
+import { LuoiDs, lop } from './luoi-ds'
 import { HopTuyen } from './hop-tuyen'
 import { HopNap } from './hop-nap'
 
+/**
+ * NHÂN SỰ › HỒ SƠ NHÂN VIÊN — danh sách (B1, bản vẽ 02/11/2026
+ * https://claude.ai/artifact/FUBArSLUXK9mVu2FSbsS93, Q1–Q7 theo đề xuất). Câu hỏi: "Trong 170
+ * người, ô nào của ai còn trống, ai cần tôi động vào?".
+ *
+ * Viết tay, không kit (31/10/2026). Chép: Dynamics 365 list page (Action Pane, lưới dính đầu /
+ * chân), SAP Fiori worklist (ô đếm là bộ lọc). Cột theo file DS CNV Nhân sự đang tự giữ, nhóm
+ * theo bộ phận như file đó (Q1). Thanh "Hồ sơ x/12" bỏ (Q2) — 170/170 người đều "thiếu" nên nó
+ * không chỉ ra ai; thay bằng lọc Ô trống + chân đếm trống mỗi cột.
+ */
 export function NhanVienDsScreen({ h }: { h: TrangDs }) {
   const d = useNhanVienDs(h)
+  const goc = useRef<HTMLDivElement>(null)
+  const [cao, setCao] = useState('calc(100dvh - 48px)')
+  // Chốt chiều cao = 100dvh − đỉnh màn: chỉ lưới cuộn, đầu cột và chân đếm dính được.
+  useLayoutEffect(() => {
+    const el = goc.current
+    if (!el) return
+    const doi = () =>
+      setCao(`calc(100dvh - ${Math.round(el.getBoundingClientRect().top)}px)`)
+    doi()
+    window.addEventListener('resize', doi)
+    return () => window.removeEventListener('resize', doi)
+  }, [])
+  const khoa = h.sua ? null : 'Phòng Nhân sự giữ quyền sửa hồ sơ'
+  const soBp = new Set(h.nv.ds.filter((n) => n.active).map((n) => n.boPhan)).size
+
   return (
-    <ScreenFrame tableMin={0}>
-      <ScreenHeader
-        compact
-        eyebrow="Nhân sự"
-        title="Hồ sơ nhân viên"
-        facts={[
-          { label: 'Đang làm', value: String(d.dem.dang_lam) },
-          { label: 'Mới vào 30 ngày', value: String(d.dem.moi_vao) },
-          { label: 'Vắng ≥ 7 ngày', value: String(d.dem.vang) },
-        ]}
-        actions={
-          <>
-            <Btn
-              icon="excel"
-              blockedBy={h.sua ? undefined : 'Phòng Nhân sự'}
-              onClick={() => d.setMoNap(true)}
-            >
-              Nhập từ Excel
-            </Btn>
-            <Btn icon="excel" href="/api/dept/hr/cham-cong/nhan-vien/excel">
-              Xuất sổ lao động
-            </Btn>
-            <Btn
-              primary
-              icon="them"
-              blockedBy={h.sua ? undefined : 'Phòng Nhân sự'}
-              onClick={() => d.setMoTuyen(true)}
-            >
+    <div ref={goc} className="ns" style={{ height: cao }}>
+      <div className="ns-ph">
+        <h1>Hồ sơ nhân viên</h1>
+        <span className="ctx">
+          <b>{soBp}</b> bộ phận đang có người
+        </span>
+        <div className="ns-ap" role="toolbar" aria-label="Thao tác">
+          <div>
+            <Nut primary why={khoa} d={d} onClick={() => d.setMoTuyen(true)}>
+              <Plus className="ico" aria-hidden />
               Tuyển vào
-            </Btn>
-          </>
-        }
-      />
+            </Nut>
+          </div>
+          <div>
+            <Nut why={khoa} d={d} onClick={() => d.setMoNap(true)}>
+              <FileUp className="ico" aria-hidden />
+              Nhập Excel
+            </Nut>
+            {/* Tải file: điều hướng thẳng tới route xuất, không qua router của Next. */}
+            <button
+              type="button"
+              className="ns-btn"
+              onClick={() =>
+                window.location.assign('/api/dept/hr/cham-cong/nhan-vien/excel')
+              }
+            >
+              <FileDown className="ico" aria-hidden />
+              Xuất sổ lao động
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="ns-tabs" role="tablist" aria-label="Tình trạng làm việc">
+        {TAB_DS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            className="ns-tab"
+            aria-selected={d.loc.tab === t.id}
+            onClick={() => d.setTab(t.id as TabDs)}
+          >
+            {t.ten} <span className="n">{d.demTab[t.id]}</span>
+          </button>
+        ))}
+      </div>
+
+      {d.loc.tab !== 'da_nghi' && (
+        <div className="ns-tiles" role="group" aria-label="Việc tồn">
+          {VIEC_DS.map((v) => {
+            const n = d.dem[v.id]
+            return (
+              <button
+                key={v.id}
+                type="button"
+                className={lop('ns-tile', !n ? 'z' : v.w && 'w')}
+                aria-pressed={d.loc.viec === v.id}
+                onClick={() => d.setViec(v.id)}
+              >
+                <span className="d">{v.ten}</span>
+                <span className="v">{n}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <ThanhLoc d={d} />
       {d.chon.size > 0 && <ThanhChon d={d} />}
-      <Bang d={d} />
+
+      <div className="ns-grid">{d.ds.length ? <LuoiDs d={d} /> : <Rong d={d} />}</div>
+
+      <div className="ns-sb" role="status">
+        <span>
+          Đang hiện <b>{d.ds.length}</b> / {d.demTab[d.loc.tab]}
+        </span>
+        <span>
+          Đã chọn <b>{d.chon.size}</b>
+        </span>
+        {d.bao ? (
+          <span className={d.bao.ok ? 'ok' : 'loi'}>{d.bao.text}</span>
+        ) : (
+          <span>Bấm một dòng để mở hồ sơ · bấm số &quot;trống&quot; ở chân để lọc</span>
+        )}
+      </div>
+
       {d.moTuyen && <HopTuyen d={d} />}
       {d.moNap && <HopNap d={d} />}
-    </ScreenFrame>
-  )
-}
-
-function ThanhLoc({ d }: { d: DsCtx }) {
-  return (
-    <div className="grid gap-1 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <NhomChip d={d} nhom="xem" ten="Xem" />
-        <span className="ml-auto flex items-center gap-2">
-          <Pick
-            label="Tổ"
-            width={190}
-            value={d.to}
-            onChange={d.setTo}
-            options={[
-              { value: '', label: 'Mọi tổ' },
-              { value: '__trong', label: '(chưa có tổ)' },
-              ...d.h.nv.boPhan.map((b) => ({ value: b, label: b })),
-            ]}
-          />
-          <SearchInput
-            value={d.tim}
-            onChange={d.setTim}
-            placeholder="Mã, tên, tổ, chức danh"
-            width={200}
-            label="Tìm nhân viên"
-          />
-        </span>
-      </div>
-      <NhomChip d={d} nhom="xu_ly" ten="Cần xử lý" />
     </div>
   )
 }
 
-/**
- * Một nhóm chip (bản vẽ màu Q3). "Cần xử lý" có chấm cam + số cam khi > 0; số 0 để xám —
- * không có việc thì không tô. Chip đang chọn dùng màu hành động, không mượn màu vòng đời.
- */
-function NhomChip({ d, nhom, ten }: { d: DsCtx; nhom: 'xem' | 'xu_ly'; ten: string }) {
+/** Nút Action Pane. Bị khoá vẫn nhìn thấy; bấm vào thì nói lý do ở thanh trạng thái. */
+function Nut({
+  children,
+  primary = false,
+  why,
+  d,
+  onClick,
+}: {
+  children: React.ReactNode
+  primary?: boolean
+  why: string | null
+  d: DsCtx
+  onClick: () => void
+}) {
   return (
-    <span role="group" aria-label={ten} className="flex flex-wrap items-center gap-1.5">
-      <span className="text-k-label w-16 text-[var(--ink-3)]">{ten}</span>
-      {LOC_NV.filter((l) => l.nhom === nhom).map((l) => {
-        const bao = nhom === 'xu_ly' && d.dem[l.id] > 0
-        return (
-          <button
-            key={l.id}
-            type="button"
-            aria-pressed={d.loc === l.id}
-            onClick={() => d.setLoc(l.id)}
-            className={cn(
-              'text-k-sm inline-flex items-center gap-1 border px-2 py-0.5 whitespace-nowrap',
-              d.loc === l.id
-                ? 'border-[var(--act-line)] bg-[var(--act-wash)] font-semibold text-[var(--act-text)]'
-                : 'border-[var(--line)] text-[var(--ink-2)] hover:bg-[var(--surface-hover)]',
-            )}
-          >
-            {bao && (
-              <span aria-hidden className="size-1.5 rounded-full bg-[var(--warn)]" />
-            )}
-            {l.ten}
-            <span
-              className={cn(
-                'num',
-                bao ? 'font-semibold text-[var(--warn)]' : 'text-[var(--ink-3)]',
-              )}
-            >
-              {d.dem[l.id]}
-            </span>
-          </button>
-        )
-      })}
-    </span>
+    <button
+      type="button"
+      className={primary ? 'ns-btn p' : 'ns-btn'}
+      aria-disabled={why ? 'true' : undefined}
+      title={why ?? undefined}
+      onClick={() => (why ? d.setBao({ ok: false, text: why }) : onClick())}
+    >
+      {children}
+    </button>
   )
 }
 
-/** Thanh xanh khi chọn nhiều: đổi tổ / ca thường làm một lần. */
-function ThanhChon({ d }: { d: DsCtx }) {
-  const [to, setTo] = useState('')
-  const [ca, setCa] = useState('')
+const BO_COT: { id: BoCot; ten: string; rieng?: boolean }[] = [
+  { id: 'ds_cnv', ten: 'DS CNV' },
+  { id: 'giay_to', ten: 'Giấy tờ & liên hệ', rieng: true },
+  { id: 'cong_viec', ten: 'Công việc' },
+]
+
+function ThanhLoc({ d }: { d: DsCtx }) {
+  const rieng = d.h.nv.rieng
   return (
-    <div className="text-k-sm flex flex-wrap items-center gap-2 border-b border-[var(--act-line)] bg-[var(--act-wash)] px-[var(--gutter)] py-1.5 text-[var(--act-text)]">
-      <b>{d.chon.size} người đã chọn</b>
-      <Pick
-        label="Đổi tổ"
-        width={180}
-        value={to}
-        onChange={setTo}
-        options={[
-          { value: '', label: 'Đổi tổ…' },
-          ...d.h.nv.boPhan.map((b) => ({ value: b, label: b })),
-        ]}
+    <div className="ns-fb">
+      <Search className="ico" aria-hidden />
+      <input
+        id="ns-tim"
+        type="search"
+        value={d.loc.tim}
+        onChange={(e) => d.setTim(e.target.value)}
+        placeholder={rieng ? 'Mã, họ tên, SĐT, 4 số cuối CCCD' : 'Mã, họ tên, chức vụ'}
+        aria-label="Tìm nhân viên"
       />
-      <Btn
-        disabled={!to}
-        busy={d.busy}
-        blockedBy={d.h.sua ? undefined : 'Phòng Nhân sự'}
-        onClick={async () => {
-          if (await d.hangLoat({ team: to })) setTo('')
-        }}
+      <select
+        id="ns-to"
+        className={d.loc.to ? 'on' : undefined}
+        value={d.loc.to}
+        onChange={(e) => d.setTo(e.target.value)}
+        aria-label="Bộ phận"
       >
-        Đổi tổ
-      </Btn>
-      <Pick
-        label="Đổi ca thường làm"
-        width={180}
-        value={ca}
-        onChange={setCa}
-        options={[
-          { value: '', label: 'Đổi ca…' },
-          ...d.h.nv.cas.map((c) => ({ value: c.id, label: `${c.ten} ${c.gio}` })),
-        ]}
-      />
-      <Btn
-        disabled={!ca}
-        busy={d.busy}
-        blockedBy={d.h.sua ? undefined : 'Phòng Nhân sự'}
-        onClick={async () => {
-          if (await d.hangLoat({ shift_id: ca })) setCa('')
-        }}
+        <option value="">Mọi bộ phận</option>
+        <option value="__trong">(Chưa có bộ phận)</option>
+        {d.h.nv.boPhan.map((b) => (
+          <option key={b} value={b}>
+            {b}
+          </option>
+        ))}
+      </select>
+      <select
+        id="ns-trong"
+        className={d.loc.trong ? 'on' : undefined}
+        value={d.loc.trong ?? ''}
+        onChange={(e) => d.setTrong((e.target.value || null) as CotTrong | null)}
+        aria-label="Lọc người còn trống một ô"
       >
-        Đổi ca
-      </Btn>
-      <span className="ml-auto">
-        <Btn onClick={d.boChon}>Bỏ chọn</Btn>
+        <option value="">Ô trống: —</option>
+        {(Object.keys(COT_TRONG) as CotTrong[])
+          .filter((c) => rieng || !COT_TRONG[c].rieng)
+          .map((c) => (
+            <option key={c} value={c}>
+              Ô trống: {COT_TRONG[c].ten}
+            </option>
+          ))}
+      </select>
+      <span className="sp">
+        Bộ cột
+        <span className="ns-seg" role="group" aria-label="Bộ cột">
+          {BO_COT.filter((b) => rieng || !b.rieng).map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              aria-pressed={d.cot === b.id}
+              onClick={() => d.setCot(b.id)}
+            >
+              {b.ten}
+            </button>
+          ))}
+        </span>
+        <span className="ns-seg">
+          <button type="button" aria-pressed={d.nhom} onClick={() => d.setNhom(!d.nhom)}>
+            Nhóm theo bộ phận
+          </button>
+        </span>
       </span>
     </div>
   )
 }
 
-function Bang({ d }: { d: DsCtx }) {
-  const homNay = d.h.homNay
-  const tatCa = d.ds.length > 0 && d.ds.every((n) => d.chon.has(n.id))
-  const coNgayVao = d.ds.filter((n) => n.ngayVao).length
-  const thieu = d.ds.filter((n) => conThieu(n).length > 0).length
+/** Thanh khi chọn nhiều: đổi bộ phận / ca thường làm một lần (đường hàng loạt đang có). */
+function ThanhChon({ d }: { d: DsCtx }) {
+  const [to, setTo] = useState('')
+  const [ca, setCa] = useState('')
+  const khoa = d.h.sua ? null : 'Phòng Nhân sự giữ quyền sửa hồ sơ'
   return (
-    <div className="min-h-0 min-w-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-      <table className="text-k-sm w-full border-separate border-spacing-0">
-        <thead>
-          <tr>
-            <th className={cn(TH, 'w-8')}>
-              <Tick
-                checked={tatCa}
-                onChange={d.chonHet}
-                label="Chọn tất cả dòng đang hiện"
-              />
-            </th>
-            <th className={TH}>Mã · Họ tên</th>
-            <th className={TH}>Tổ</th>
-            <th className={TH}>Chức danh</th>
-            <th className={TH}>Ngày vào</th>
-            <th className={TH} style={{ textAlign: 'right' }}>
-              Thâm niên
-            </th>
-            <th className={TH}>Tình trạng</th>
-            <th
-              className={TH}
-              title={`Số mục đã có trên ${SO_MUC_HO_SO} mục sổ quản lý lao động`}
-            >
-              Hồ sơ
-            </th>
-            <th className={TH}>Tài khoản ERP</th>
-          </tr>
-        </thead>
-        <tbody>
-          {d.ds.map((n) => {
-            const t = conThieu(n)
-            const tn = thamNien(n.ngayVao, homNay)
-            return (
-              <tr
-                key={n.id}
-                onClick={() => d.moHoSo(n.code)}
-                className={cn(
-                  'cursor-pointer hover:bg-[var(--surface-hover)]',
-                  d.chon.has(n.id) && 'bg-[var(--act-wash)]',
-                  !n.active && 'text-[var(--ink-3)]',
-                )}
-              >
-                <td className={TD}>
-                  <Tick
-                    checked={d.chon.has(n.id)}
-                    onChange={() => d.batChon(n.id)}
-                    label={`Chọn ${n.code} ${n.hoTen}`}
-                  />
-                </td>
-                <td className={cn(TD, 'min-w-[200px] whitespace-normal')}>
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <Avatar ten={n.hoTen} boPhan={n.boPhan} />
-                    <a
-                      href={`/hr/nhan-vien/${encodeURIComponent(n.code)}`}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        d.moHoSo(n.code)
-                      }}
-                      className="hover:underline"
-                    >
-                      <span className="num mr-1.5 text-[var(--ink-3)]">{n.code}</span>
-                      <span
-                        className={cn(
-                          !n.active && 'line-through decoration-[var(--line)]',
-                        )}
-                      >
-                        {n.hoTen}
-                      </span>
-                    </a>
-                    {n.tenTuMay && n.active && <Tag tone="warn">tên máy</Tag>}
-                  </span>
-                </td>
-                <td
-                  className={cn(
-                    TD,
-                    'whitespace-normal',
-                    !n.boPhan && n.active && 'bg-[var(--warn-wash)] text-[var(--warn)]',
-                  )}
-                >
-                  {n.boPhan ?? 'chưa có tổ'}
-                </td>
-                <td
-                  className={cn(
-                    TD,
-                    'whitespace-normal',
-                    !n.chucDanh && 'text-[var(--ink-3)]',
-                  )}
-                >
-                  {n.chucDanh ?? '—'}
-                </td>
-                <td className={cn(TD, 'num', !n.ngayVao && 'text-[var(--ink-3)]')}>
-                  {n.ngayVao ? ngayVn(n.ngayVao) : '—'}
-                </td>
-                <td className={cn(TD, 'num')} style={{ textAlign: 'right' }}>
-                  {tn ?? '—'}
-                </td>
-                <td className={cn(TD, 'whitespace-normal')}>
-                  <span className="flex flex-wrap items-center gap-1">
-                    <TagTinhTrang n={n} homNay={homNay} />
-                    {n.khongChamCong && n.active && <TagKhongCham />}
-                  </span>
-                </td>
-                <td className={TD}>
-                  <ThanhHoSo thieu={t.length} />
-                </td>
-                <td className={cn(TD, !n.taiKhoan && 'text-[var(--ink-3)]')}>
-                  {n.taiKhoan ? (
-                    <span className="num">
-                      {n.taiKhoan.email}
-                      {!n.taiKhoan.mo && (
-                        <span className="text-k-label text-[var(--stop)]"> · khoá</span>
-                      )}
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td
-              colSpan={9}
-              className={cn(
-                TD,
-                'sticky bottom-0 bg-[var(--surface-raised)] whitespace-normal text-[var(--ink-2)]',
-              )}
-            >
-              <b className="text-[var(--ink)]">{d.ds.length} người</b> · {coNgayVao} có
-              ngày vào · {thieu} hồ sơ còn thiếu. &quot;Hồ sơ&quot; đếm {SO_MUC_HO_SO} mục
-              theo sổ quản lý lao động (công việc, chấm công, cá nhân, định danh, liên hệ,
-              hợp đồng). Số trên chip đếm trong tổ và ô tìm đang chọn.
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-      {d.ds.length === 0 && (
-        <p className="text-k-sm px-[var(--gutter)] py-6 text-[var(--ink-2)]">
-          Không có ai khớp bộ lọc — chọn chip &quot;Đang làm&quot;, bỏ lọc tổ hoặc xoá ô
-          tìm.
-        </p>
+    <div className="ns-chon">
+      <b>{d.chon.size} người đã chọn</b>
+      <select
+        id="ns-doi-to"
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        aria-label="Đổi sang bộ phận"
+      >
+        <option value="">Đổi bộ phận…</option>
+        {d.h.nv.boPhan.map((b) => (
+          <option key={b} value={b}>
+            {b}
+          </option>
+        ))}
+      </select>
+      <Nut
+        why={khoa ?? (!to ? 'Chọn bộ phận mới trước' : d.busy ? 'Đang lưu…' : null)}
+        d={d}
+        onClick={async () => {
+          if (await d.hangLoat({ team: to }, 'bộ phận')) setTo('')
+        }}
+      >
+        Đổi bộ phận
+      </Nut>
+      <select
+        id="ns-doi-ca"
+        value={ca}
+        onChange={(e) => setCa(e.target.value)}
+        aria-label="Đổi ca thường làm"
+      >
+        <option value="">Đổi ca…</option>
+        {d.h.nv.cas.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.ten} {c.gio}
+          </option>
+        ))}
+      </select>
+      <Nut
+        why={khoa ?? (!ca ? 'Chọn ca mới trước' : d.busy ? 'Đang lưu…' : null)}
+        d={d}
+        onClick={async () => {
+          if (await d.hangLoat({ shift_id: ca }, 'ca')) setCa('')
+        }}
+      >
+        Đổi ca
+      </Nut>
+      <span className="sp">
+        <button type="button" className="ns-lnk" onClick={d.boChon}>
+          Bỏ chọn
+        </button>
+      </span>
+    </div>
+  )
+}
+
+/** Rỗng: nói vì sao (đang lọc gì) và bỏ được từng bộ lọc ngay tại chỗ. */
+function Rong({ d }: { d: DsCtx }) {
+  const l = d.loc
+  const tab = TAB_DS.find((t) => t.id === l.tab)!.ten.toLowerCase()
+  const dk = [
+    l.to && (l.to === '__trong' ? 'chưa có bộ phận' : `ở ${l.to}`),
+    l.viec && VIEC_DS.find((v) => v.id === l.viec)!.ten.toLowerCase(),
+    l.trong && `trống ${COT_TRONG[l.trong].ten}`,
+    l.tim && `khớp "${l.tim}"`,
+  ].filter(Boolean)
+  return (
+    <div className="ns-rong">
+      <b>
+        {dk.length
+          ? `Không có ai ${tab} ${dk.join(', ')}.`
+          : `Chưa có ai trong tab ${tab}.`}
+      </b>{' '}
+      {l.trong && (
+        <button type="button" className="ns-lnk" onClick={() => d.boLoc('trong')}>
+          Bỏ lọc Ô trống
+        </button>
+      )}
+      {l.viec && (
+        <button type="button" className="ns-lnk" onClick={() => d.boLoc('viec')}>
+          Bỏ ô việc tồn
+        </button>
+      )}
+      {l.to && (
+        <button type="button" className="ns-lnk" onClick={() => d.boLoc('to')}>
+          Xem mọi bộ phận
+        </button>
+      )}
+      {l.tim && (
+        <button type="button" className="ns-lnk" onClick={() => d.boLoc('tim')}>
+          Xoá ô tìm
+        </button>
       )}
     </div>
   )

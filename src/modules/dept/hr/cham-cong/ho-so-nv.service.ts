@@ -15,6 +15,7 @@ import { todayVn } from '@/lib/date-vn'
 import { congNgay } from '@/lib/cham-cong/ky-gio-cong'
 import { khoangKyService } from './khoang-ky.service'
 import { soSanhMa, tinhVang, VANG_TU, type VangNv } from '@/lib/nhan-su/ho-so'
+import type { RiengDs } from '@/lib/nhan-su/danh-sach'
 import {
   cheCccd,
   chuanCccd,
@@ -47,6 +48,33 @@ const XEM_RIENG = 'hr.employee.private'
 export type NvHoSo = NvDong & { coRieng: CoRieng; hd: HdNgay | null; vang: VangNv | null }
 
 export type DsNhanVien = Omit<NhanVienData, 'ds'> & { ds: NvHoSo[] }
+
+/** Danh sách cho lưới: thêm giá trị cá nhân (null = người xem không có quyền). */
+export type NvLuoi = NvHoSo & { rieng: RiengDs | null }
+export type LuoiNhanVien = Omit<DsNhanVien, 'ds'> & { ds: NvLuoi[]; rieng: boolean }
+
+const bon = (s: string | null | undefined) => (s ? s.slice(-4) : null)
+
+function riengDs(r: (DongCaNhan & { tax_code: string | null }) | undefined): RiengDs {
+  const kc = r?.emergency_name
+    ? r.emergency_relation
+      ? `${r.emergency_name} (${r.emergency_relation})`
+      : r.emergency_name
+    : null
+  return {
+    gioiTinh: (r?.gender as GioiTinh | null) ?? null,
+    ngaySinh: r?.birth_date ?? null,
+    cccd4: bon(r?.national_id),
+    ngayCap: r?.id_issue_date ?? null,
+    noiCap: r?.id_issue_place ?? null,
+    mst4: bon(r?.tax_code),
+    dienThoai: r?.phone ?? null,
+    choO: r?.current_address ?? null,
+    thuongTru: r?.permanent_address ?? null,
+    khanCap: kc,
+    khanCapSdt: r?.emergency_phone ?? null,
+  }
+}
 
 /** Bản lương đang hiệu lực, tóm tắt cho tab Lương & ngân hàng. */
 export type TomLuong = {
@@ -257,6 +285,24 @@ export const hoSoNvService = {
         hd: hdHienHanh(hdCua.get(n.id) ?? [], homNay),
         vang: vang.get(n.id) ?? null,
       })),
+    }
+  },
+
+  /**
+   * Lưới danh sách (bản vẽ 02/11): danh sách trên + giá trị cá nhân cho người có quyền
+   * hr.employee.private. Không có quyền → `rieng` null, trình duyệt không nhận số nào.
+   * CCCD / MST chỉ đi 4 số cuối. Số tài khoản là thông tin lương (0255) — không đi ở đây.
+   */
+  async luoi(user: User, homNay: string): Promise<LuoiNhanVien> {
+    const [nv, rieng] = await Promise.all([
+      this.danhSach(user, homNay),
+      canAction(user, XEM_RIENG),
+    ])
+    const gt = rieng ? await caNhanRepo.tatCa() : null
+    return {
+      ...nv,
+      rieng,
+      ds: nv.ds.map((n) => ({ ...n, rieng: gt ? riengDs(gt.get(n.id)) : null })),
     }
   },
 

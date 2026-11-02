@@ -396,6 +396,8 @@ export type NvDong = {
   ngayCuoi: string | null
   lyDoNghi: string | null
   chucDanh: string | null
+  /** Ghi chú hồ sơ (cột Ghi chú của DS CNV), đã bỏ đuôi "ca mặc định". */
+  ghiChu: string | null
   /** Tài khoản ERP gắn với người này (Admin cấp, 0252). Chỉ để xem ở Nhân sự. */
   taiKhoan: { email: string; mo: boolean } | null
 }
@@ -486,6 +488,7 @@ async function taiNhanVien(homNay: string, luot = true): Promise<NhanVienData> {
       ngayCuoi: e.leave_date,
       lyDoNghi: e.leave_reason,
       chucDanh: e.job_title,
+      ghiChu: boDuoiCa(e.note),
     }
   })
   return {
