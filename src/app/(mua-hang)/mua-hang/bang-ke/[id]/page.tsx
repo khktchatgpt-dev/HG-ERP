@@ -6,7 +6,7 @@ import {
   keHoachMuaService,
   maCanChonCua,
 } from '@/modules/dept/supply/ke-hoach-mua.service'
-import { lenhDoiCua } from '@/modules/dept/supply/lenh-doi.service'
+import { trangThaiChoSoat } from '@/modules/dept/supply/lenh-doi.service'
 import { todayVn } from '@/lib/date-vn'
 import { KeHoachMuaScreen } from './KeHoachMuaScreen'
 import type { Buoc } from './useKeHoachMua'
@@ -27,8 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
  * Cùng service với chế độ "Theo vật tư" của màn lệnh (`loadLsxBangKe`), nên hai
  * màn không thể nói khác nhau về cùng một lệnh. `?nhap=0` tắt định mức chưa
  * được Kỹ thuật kiểm (mặc định BẬT: 0 SP được kiểm, tắt là bảng trống).
- * `?buoc=1|2|3` mở thẳng một bước. Lệnh đang chờ soát (định mức / lệnh đổi từ
- * mốc soát trước, 0282) mở tab "Thay đổi" đứng trước 3 bước.
+ * `?buoc=1|2|3` mở thẳng một bước.
  */
 export default async function Page({
   params,
@@ -45,18 +44,17 @@ export default async function Page({
     isSupplyStaff(user),
   ])
   if (!bk) notFound()
-  const [nguon, doi] = await Promise.all([
+  const [nguon, tt] = await Promise.all([
     // Gợi ý NCC cho đúng các mã còn phải đặt — cùng hàm tính với màn + file Excel.
     keHoachMuaService.nguonNcc(bk.lsx.id, maCanChonCua(bk)),
-    // Thay đổi so với mốc soát (0282). Mốc ghi bằng số TÍNH CẢ định mức chưa
-    // kiểm, nên tắt công tắc `?nhap=0` thì phải nạp lại bản đó để so cho đúng.
-    (includeDraft ? Promise.resolve(bk) : loadLsxBangKe(user, id, todayVn(), true)).then(
-      (b) => lenhDoiCua(b ?? bk),
+    // Lệnh đang chờ soát → một dòng nhắc trỏ sang trang Soát thay đổi. Cùng nguồn
+    // với số trên menu; hỏng thì thôi không nhắc, màn vẫn mở.
+    trangThaiChoSoat().then(
+      (m) => m.get(bk.lsx.id) ?? null,
+      () => null,
     ),
   ])
-  // Lệnh đang chờ soát thì mở thẳng tab Thay đổi, trừ khi link chỉ đích danh bước.
-  const buocDau: Buoc =
-    sp.buoc === '3' ? 3 : sp.buoc === '2' ? 2 : sp.buoc === '1' ? 1 : doi.thayDoi.choSoat ? 0 : 1 // prettier-ignore
+  const buocDau: Buoc = sp.buoc === '3' ? 3 : sp.buoc === '2' ? 2 : 1
   return (
     <KeHoachMuaScreen
       bk={bk}
@@ -64,7 +62,7 @@ export default async function Page({
       includeDraft={includeDraft}
       buocDau={buocDau}
       nguon={nguon}
-      doi={doi}
+      nhac={tt?.choSoat ? tt : null}
     />
   )
 }

@@ -537,6 +537,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
           // 22/10/2026 đổi tên KẾ HOẠCH MUA: bảng kê → chọn NCC → lên đơn trên một màn.
           { href: '/mua-hang/bang-ke', label: 'Kế hoạch mua', icon: 'clipboard-list' },
+          // 02/11/2026 (T1): trang riêng "lệnh nào đổi từ lần soát" — định mức, lệnh
+          // SX (và đơn hàng Sale ở T4). Mang số chờ soát thay cho Kế hoạch mua.
+          { href: '/mua-hang/soat', label: 'Soát thay đổi', icon: 'arrow-left-right' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
           // Việc ngoài sản xuất gom nhiều đơn mua (0230) — Xây dựng văn phòng, Dự trữ kho…
           { href: '/mua-hang/hang-muc', label: 'Hạng mục', icon: 'folder-kanban' },

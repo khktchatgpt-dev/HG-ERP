@@ -52,7 +52,7 @@ export function registerLenhDoiNotificationHandlers(): void {
           lsx_id: it.lsx_id,
           dau: it.dau,
           title: it.title,
-          href: `/mua-hang/bang-ke/${it.lsx_id}`,
+          href: `/mua-hang/soat/${it.lsx_id}`,
         }
         for (const uid of it.recipient_ids) {
           const n = cu.get(`${uid}|${it.lsx_id}`)

@@ -8,13 +8,47 @@ import { demNhom, soThayDoi, type NhomDoi } from '@/lib/lenh-doi'
 import { normalizeSearch } from '@/lib/search-text'
 import type { LenhDoiCuaLenh } from '@/modules/dept/supply/lenh-doi.service'
 
+/** Đầu lệnh — chỉ thứ màn cần, không gửi cả bảng kê xuống trình duyệt. */
+export type LenhSoat = {
+  id: string
+  code: string
+  customer_name: string
+  ship_date: string | null
+  /** Số SP và tổng SL sản phẩm của lệnh. */
+  so_sp: number
+  sl_sp: number
+}
+
+/** Ba tab của bản vẽ (FgRYhTxe…): Vật tư · Định mức · Lệnh SX. Đơn hàng thêm ở T4. */
+export type TabSoat = 'vat_tu' | 'dinh_muc' | 'lenh'
+
 /**
- * State của tab "Thay đổi chờ soát" (0282). Số trên tab, chip và nút "Đã soát"
- * đều đếm từ `doi.thayDoi` — một lần tính ở máy chủ, cùng hàm lúc ghi mốc.
+ * State của trang SOÁT THAY ĐỔI một lệnh. Mọi con số đọc từ `doi.thayDoi` — một
+ * lần tính ở máy chủ, cùng hàm lúc ghi mốc, cùng hàm số trên menu.
  */
-export function useThayDoi({ lsxId, doi }: { lsxId: string; doi: LenhDoiCuaLenh }) {
+export function useSoatLenh({
+  lsx,
+  doi,
+  canEdit,
+}: {
+  lsx: LenhSoat
+  doi: LenhDoiCuaLenh
+  canEdit: boolean
+}) {
   const router = useRouter()
   const toast = useToast()
+  const { thayDoi } = doi
+  // Tab mở sẵn là tab CÓ VIỆC: vật tư đổi → Vật tư; chỉ có sửa định mức chưa có
+  // số cũ → Định mức; chỉ có thông tin lệnh đổi → Lệnh SX.
+  const [tab, setTab] = useState<TabSoat>(
+    thayDoi.dong.length > 0
+      ? 'vat_tu'
+      : thayDoi.suaSauMoc
+        ? 'dinh_muc'
+        : thayDoi.thongTin.length > 0
+          ? 'lenh'
+          : 'vat_tu',
+  )
   const [loc, setLoc] = useState<NhomDoi | null>(null)
   const [q, setQ] = useState('')
   const [moSoat, setMoSoat] = useState(false)
@@ -22,7 +56,6 @@ export function useThayDoi({ lsxId, doi }: { lsxId: string; doi: LenhDoiCuaLenh 
   const [ghiChu, setGhiChu] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const { thayDoi } = doi
   const dem = useMemo(() => demNhom(thayDoi.dong), [thayDoi.dong])
   const soDoi = soThayDoi(thayDoi)
   const hien = useMemo(() => {
@@ -40,7 +73,7 @@ export function useThayDoi({ lsxId, doi }: { lsxId: string; doi: LenhDoiCuaLenh 
     try {
       await api('/api/dept/supply/lsx-reviews', {
         method: 'POST',
-        body: { production_order_id: lsxId, dau: thayDoi.dau, note: ghiChu || null },
+        body: { production_order_id: lsx.id, dau: thayDoi.dau, note: ghiChu || null },
       })
       setMoSoat(false)
       setGhiChu('')
@@ -64,6 +97,10 @@ export function useThayDoi({ lsxId, doi }: { lsxId: string; doi: LenhDoiCuaLenh 
 
   return {
     ...doi,
+    lsx,
+    canEdit,
+    tab,
+    setTab,
     dem,
     soDoi,
     hien,
@@ -82,4 +119,4 @@ export function useThayDoi({ lsxId, doi }: { lsxId: string; doi: LenhDoiCuaLenh 
   } as const
 }
 
-export type ThayDoiCtx = ReturnType<typeof useThayDoi>
+export type SoatCtx = ReturnType<typeof useSoatLenh>
