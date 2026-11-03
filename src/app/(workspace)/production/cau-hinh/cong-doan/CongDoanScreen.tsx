@@ -7,6 +7,9 @@ import { ApNhom, ApNut, DauTrang, SxKhung, ThanhTT } from '../../_erp/khung'
 import { useCongDoan } from './useCongDoan'
 import { BangCauHinh } from './bang-cau-hinh'
 
+/** Ghép lớp — không template string có khoảng trắng đầu (hook format lột mất, bẫy 03/11). */
+const cx = (...xs: (string | false | null | undefined | 0)[]) => xs.filter(Boolean).join(' ')
+
 /**
  * CẤU HÌNH CÔNG ĐOẠN — màn C1 của bản vẽ 03/11/2026 (không kit).
  *
@@ -123,7 +126,7 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
                 return (
                   <tr
                     key={s.code}
-                    className={`d${on ? 'on' : ''}${s.is_active ? '' : 'off'}`}
+                    className={cx('d', on && 'on', !s.is_active && 'off')}
                     tabIndex={0}
                     aria-selected={on}
                     onClick={() => d.chonCongDoan(s.code)}
@@ -143,10 +146,10 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
                           ? 'chưa tổ nào nhận'
                           : '—'}
                     </td>
-                    <td className={`r num${s.fields.length ? '' : 'empty'}`}>
+                    <td className={cx('r num', !s.fields.length && 'empty')}>
                       {s.fields.length}
                     </td>
-                    <td className={`r num${s.defect_codes.length ? '' : 'empty'}`}>
+                    <td className={cx('r num', !s.defect_codes.length && 'empty')}>
                       {s.defect_codes.length}
                     </td>
                     <td

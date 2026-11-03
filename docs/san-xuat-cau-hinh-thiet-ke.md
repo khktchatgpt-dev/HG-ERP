@@ -221,6 +221,33 @@ Bản vẽ sáu màn C1 · C2 · S3 · S4 · S5 · S6: Artifact HTML (link ở c
 | B5 | ✅ **XONG 03/11** (chưa commit): `/thongke/lsx/[id]` dựng lại KHÔNG kit (`HoSoLenhScreen · useHoSoLenh · bang-dong-bo · tab-ke-hoach · tab-phieu · ho-so-lenh.shared`; ba file kit cũ xoá). Service mới `lsx-dossier.service.ts`: dòng SP → thành phẩm / cụm (thật + mặc nhiên) / chi tiết, mỗi ô = `wipNumbers` (xong từ `entriesService.summary`, đã giao / đã nhận từ `transferTotals`, "đã nhận" khi chưa có phiếu = `receivedOrFallback` — cùng hàm Ghi sản lượng dùng); cột = công đoạn có mặt trong lệnh kèm bậc đếm từ C1. Màn: đầu trang + Action Pane (Ghi sản lượng · Lập phiếu giao · Định hình · Excel · Đóng lệnh kèm vì sao, ép đóng có lý do); 4 tab Đồng bộ · Kế hoạch tổ & hạn (sửa tổ/hạn từng job, việc đã chạy bắt lý do) · Phiếu (PBS + PGT) · Trao đổi; 5 ô số có mẫu số; bảng ba tầng, chi tiết trong cụm gấp mặc định; bấm ô → dải NĂM CON SỐ kèm số phiếu PGT; thanh trạng thái = người giữ (lib/lsx-holder) | Thử thật 06-MX: ghi 100 Phôi (PBS-0023) + PGT-0001 Phôi→Hàn 100 nhận 98 → hồ sơ: ô Phôi "Chân trước + tựa" = 100, dải năm số "Xong 100 · Đã giao 100 (PGT-2026-0001 100) · Tồn 0 · 1 phiếu PBS", nhóm SP phôi 6% (100/1.600 mảnh); Ghi sản lượng Phôi: Đã phôi 100; Giao nhận nguồn: xong 100 · đã giao 100 · tồn 0 — BA MÀN MỘT SỐ. Tab Phiếu bày PBS-0023 + PGT-0001 "nhận 98 · chênh: móp 2"; tab Kế hoạch rỗng nói lý do + link. Dữ liệu thử đã dọn, lệnh về approved. tsc sạch ngoài `.next/`, lint 0 lỗi, 4.379 test xanh (3 đỏ sẵn đơn mua). Chưa thử: sửa job ở tab Kế hoạch (06-MX chưa có job), Đóng lệnh |
 | B6 | ✅ **XONG 03/11** (chưa commit): `bao-cao.service.ts` một payload sáu bảng — sản lượng tổ × công đoạn × ngày (đạt (phế), Σ, chỉ tiêu = Σ `production_daily_targets`, tô < 80%, chốt sổ n/N ngày) · lỗi Pareto theo mã (phế + sửa lại, tích luỹ, lệnh gặp nhiều; lý do gõ tay đứng riêng) · **sửa lại còn treo** (mới: Σ sửa − đạt ghi SAU theo thứ tự `created_at`, lệnh đang chạy) · **tồn công đoạn** (mới: xong chính thức − đã giao, chờ nhận = phiếu da_giao; `wipNumbers` + `transferTotals` — cùng hàm Hồ sơ lệnh / Giao nhận) · năng suất tổ + người (`reportsService.nangSuat`) · định mức vs thực dùng (tải theo lệnh qua API có sẵn). Màn `/thongke/bao-cao` không kit, kỳ + tổ + tab trên URL, Excel cho 4 bảng cũ; nav "Xem › Báo cáo". **Tình hình xưởng** `/production` dựng lại không kit (`SxKhung` thường trong vỏ có đệm): 6 ô việc là LINK sang Lệnh SX đã lọc, nhịp hôm nay, Tổ hôm nay, 5 lệnh cần chú ý | Thử thật 06-MX: ghi 100 Phôi phế 2 sửa 3 mã `phoi_cat_sai` người "Nguyễn Văn Thử" + PGT Phôi→Hàn 60 chưa nhận → Sản lượng tổ: Tổ Phôi · Phôi 100 (2), chưa chỉ tiêu, chốt sổ 0/7; Lỗi: phoi_cat_sai 2 + 3 = 5, 100%, 06-MX; Treo: 3 (bù 0); Tồn: xong 100 · giao 60 · tồn 40 · chờ nhận 60; Năng suất tổ 100/2/3, 1 ngày, 100/ngày, 1 người. Tình hình xưởng: 17 lệnh, nhịp ngày 100 · phế 2 · sửa 3. `/thongke/bao-cao` (kỳ 01/10–03/11, 17 lệnh) 1,15–1,6 s trên dev lần đầu. Dữ liệu thử đã dọn. tsc sạch ngoài `.next/`, lint 0 lỗi, test SX + lib xanh (2 đỏ sẵn đơn mua). Chưa có Excel cho 2 bảng mới; Lệnh SX (`/thongke/lenh`) vẫn kit |
 
+**Bổ sung 03/11 chiều (sau B6, chưa commit)** — ba việc lòi ra khi chủ dự án xem màn thật:
+
+- **Tab Lộ trình hồ sơ SP lệch bản vẽ C2** ("UI rất kỳ"): nhãn dài + cột 58px cắt chữ, ô
+  trống "·" thay gạch chéo, hai thanh cuộn lồng nhau, Huỷ/Lưu lặp "Chưa đổi gì". Sửa:
+  `shortStageLabel` (bỏ ngoặc, "Bao bì", "H.thiện"), cột 250/52/44 + 12×56, ô ngoài lộ trình
+  = gạch chéo bấm được, chi tiết trong cụm = x mờ, Huỷ chỉ khi dirty. Cùng lúc phát hiện hook
+  format lột khoảng trắng trong template-string `className` → dòng chọn ở C1 và đầu bảng Kho
+  không tô: thay bằng `cx()` ở LoTrinhScreen · CongDoanScreen · warehouse BaoCaoScreen.
+- **Kế hoạch cập nhật theo LỆNH, không theo SP** (câu hỏi của chủ dự án → "okee"): thêm
+  tầng hai của lộ trình ở màn Định hình, ghi `production_components.stages` của riêng lệnh.
+  Bug tìm thấy: màn Định hình cũ không gửi `stages` khi Lưu → mỗi lần lưu xoá sạch bản chụp
+  B2. Toggle cụm chỉ sửa chính nó (kéo theo chi tiết = ghi `[]` = xoá khỏi sổ).
+- **Màn Định hình dựng lại KHÔNG kit** (chủ dự án: "trông rất gớm"; bản vẽ
+  https://claude.ai/artifact/DUtMtTWekhhBUUzh54XM9L duyệt "Duyệt, dựng"):
+  `(san-xuat)/thongke/lsx/[id]/dinh-hinh/{page, DinhHinhScreen, useDinhHinh, luoi-chi-tiet,
+  lo-trinh-lenh, dinh-hinh.shared}` — khuôn F: tab **Chi tiết** = lưới nhập liệu 26px đầu/chân
+  dính, cột Lộ trình chỉ đọc (kết quả `componentRoute`), Ctrl+V dán vùng Excel, Enter xuống
+  dòng, ⌫ cột cuối xoá dòng, cột quy cách gập (nhớ localStorage); tab **Lộ trình theo cụm** =
+  ma trận x riêng lệnh; thanh chốt đáy nói đúng dòng hỏng + "Tới dòng"; ô "Khởi tạo hồ sơ SP"
+  chỉ khi có SP chưa định mức; khoá khi đã có PBS (nói cách gỡ) / lệnh kết thúc. Nghiệm thu
+  thật JAWOLL (cổng 3100, 1280×800): Nạp từ BOM → 32 dòng, bảng 1.213px không cuộn ngang,
+  tab "Chi tiết 32 · Lộ trình theo cụm · 3 cụm", chân Σ 108 · 5,8 kg/bộ; xoá tên dòng 1 →
+  ô đỏ + "Chưa lưu được: dòng 1 chưa có tên" + Tới dòng nhảy đúng ô, Lưu khoá; gõ lại + Enter
+  → dòng dưới, hết lỗi; tab Lộ trình bật Mài ở Cụm khung → "1 đã sửa", payload PUT chặn bằng
+  fetch: cụm stages [han,nguoi,mai,son], chi tiết stages null (không ghi DB); lệnh kết thúc
+  04/26-27 - MX: 0 ô gõ, không thanh chốt, pill "lệnh đã kết thúc".
+
 Việc của NGƯỜI, song song, không chặn mã: gán tổ cho 5 công đoạn trống; đặt tên
 thật cho 13 cụm rác; nạp định mức cho 217/268 dòng lệnh còn thiếu (đường AI BOM đã
 có). **Màn nào cũng chỉ có nghĩa khi có số** — B3 cố ý đứng trước B5/B6.

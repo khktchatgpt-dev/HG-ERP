@@ -492,7 +492,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
 
 function ThCot({ c }: { c: CotSo }) {
   return (
-    <th className={`r${c.sep ? 'sep' : ''}`} title={c.title}>
+    <th className={c.sep ? 'r sep' : 'r'} title={c.title}>
       {c.label}
     </th>
   )
@@ -505,7 +505,7 @@ function DauHaiTang({ cot }: { cot: CotSo[] }) {
     const c = cot[i]
     if (!c.khoi) {
       out.push(
-        <th key={c.key} rowSpan={2} className={`r${c.sep ? 'sep' : ''}`} title={c.title}>
+        <th key={c.key} rowSpan={2} className={c.sep ? 'r sep' : 'r'} title={c.title}>
           {c.label}
         </th>,
       )
