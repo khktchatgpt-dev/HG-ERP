@@ -35,3 +35,9 @@ export type Draft = Record<string, string[] | null>
 export const sameStages = (a: string[] | null, b: string[] | null) =>
   a === b ||
   (a !== null && b !== null && a.length === b.length && a.every((s, i) => s === b[i]))
+
+/** Ghép lớp — không template string có khoảng trắng đầu (hook format lột mất). */
+export const cx = (...xs: (string | false | null | undefined | 0)[]) =>
+  xs.filter(Boolean).join(' ')
+
+export { shortStageLabel } from '@/lib/stage-config'

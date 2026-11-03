@@ -194,3 +194,22 @@ export function countLevelOf(cfg: StageConfig[], stage: string): CountLevel {
     defaultStageMeta(stage).count_level
   )
 }
+
+/** Nhãn bậc đếm ngắn cho đầu cột 56px. */
+export const COUNT_LEVEL_SHORT: Record<CountLevel, string> = {
+  part: 'ct',
+  cluster: 'cụm',
+  unit: 'bộ',
+}
+
+/**
+ * Tên công đoạn ngắn để 12 cột hẹp không cắt chữ: bỏ phần trong ngoặc
+ * ("Đan (mây/nhựa)" → "Đan"), rút hai tên dài. Dùng ở ma trận lộ trình (hồ sơ
+ * SP và định hình lệnh) — hai màn một cách gọi.
+ */
+export function shortStageLabel(label: string): string {
+  const base = label.replace(/\s*\(.*?\)\s*/g, '').trim()
+  if (/^bao bì/i.test(base)) return 'Bao bì'
+  if (/^hoàn thiện$/i.test(base)) return 'H.thiện'
+  return base
+}

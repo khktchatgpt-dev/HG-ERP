@@ -180,8 +180,9 @@
 
 /* lưới ma trận */
 .lt.lt .lt-grid {
-  overflow: auto;
-  max-height: 70vh;
+  /* KHÔNG tự cuộn trong khung — trang hồ sơ SP đã là vùng cuộn, hai thanh cuộn
+     lồng nhau là thứ chủ dự án chê 03/11. Chỉ cuộn ngang khi hẹp hơn 1.030px. */
+  overflow-x: auto;
 }
 .lt.lt table.lt-tb {
   width: 100%;
@@ -256,6 +257,10 @@
   padding: 0;
   text-align: center;
 }
+/* ô ngoài lộ trình nhưng BẤM ĐƯỢC (ghi đè): nền gạch chéo, chữ – mờ */
+.lt.lt .lt-tb > tbody > tr > td.x.out {
+  background: repeating-linear-gradient(135deg, #f1f3f6 0 4px, #fff 4px 8px);
+}
 .lt.lt .lt-x {
   width: 100%;
   height: 25px;
@@ -275,6 +280,10 @@
 }
 .lt.lt .lt-x.e {
   color: var(--lt-empty);
+  font-weight: 400;
+}
+.lt.lt .lt-x.e:hover {
+  color: var(--lt-act);
 }
 .lt.lt .lt-x:disabled {
   cursor: default;

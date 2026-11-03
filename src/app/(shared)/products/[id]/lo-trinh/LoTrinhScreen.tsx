@@ -1,21 +1,26 @@
 'use client'
 
 import './lo-trinh.css'
-import { COUNT_LEVEL_LABEL } from '@/lib/stage-config'
-import type { LoTrinhProps, PartRow } from './lo-trinh.shared'
+import { cx, shortStageLabel, type LoTrinhProps, type PartRow } from './lo-trinh.shared'
 import { useLoTrinh, type LoTrinhCtx } from './useLoTrinh'
 
 /**
  * LỘ TRÌNH SẢN PHẨM — màn C2 của bản vẽ 03/11/2026 (không kit).
  *
- * Ma trận: hàng = cụm (đánh x được) · chi tiết rời theo nhóm vật tư (x mờ = suy,
- * bấm là ghi đè) · ngũ kim (hàng mua, không đi qua công đoạn) · thành phẩm
- * (đọc từ cấu hình công đoạn). Cột = công đoạn, dưới tên là bậc đếm.
- * Thứ tự chạy = thứ tự danh mục; không kéo thả.
+ * Ma trận: hàng = cụm (đánh x được) · chi tiết trong cụm (x mờ, đi theo nửa
+ * "chi tiết" của cụm, không bấm) · chi tiết rời theo nhóm vật tư (x mờ = suy,
+ * bấm là ghi đè từng dòng) · ngũ kim (hàng mua, không đi qua công đoạn) ·
+ * thành phẩm (đọc từ cấu hình công đoạn). Cột = công đoạn, dưới tên là bậc
+ * đếm. Ô ngoài lộ trình gạch chéo, bấm vào là thêm. Thứ tự chạy = thứ tự danh
+ * mục; không kéo thả. 12 cột × 56px + 3 cột đầu = 1.030px, vừa màn 1280 không
+ * cuộn ngang (chủ dự án chê bản đầu cắt chữ + hai thanh cuộn, 03/11).
  */
+const LEVEL_SHORT: Record<string, string> = { part: 'ct', cluster: 'cụm', unit: 'bộ' }
+
 export function LoTrinhScreen(p: LoTrinhProps) {
   const d = useLoTrinh(p)
   const { stages } = p
+  const codes = stages.map((s) => s.code)
   const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
 
   const roi = p.parts.filter((x) => !x.cluster_id && !d.isPurchasedGroup(x.group_code))
@@ -47,6 +52,22 @@ export function LoTrinhScreen(p: LoTrinhProps) {
     )
   }
 
+  // Dải "đếm bằng" từ cấu hình, gom theo bậc liền nhau: phôi ct · hàn→sơn cụm · lắp ráp→h.thiện bộ
+  const demBang = (() => {
+    const out: string[] = []
+    let i = 0
+    while (i < stages.length) {
+      const lv = stages[i].meta.count_level
+      let j = i
+      while (j + 1 < stages.length && stages[j + 1].meta.count_level === lv) j++
+      const a = shortStageLabel(stages[i].label)
+      const b = shortStageLabel(stages[j].label)
+      out.push(`${i === j ? a : `${a}→${b}`} ${LEVEL_SHORT[lv]}`)
+      i = j + 1
+    }
+    return out.join(' · ')
+  })()
+
   return (
     <div className="lt" aria-label="Lộ trình sản phẩm">
       <div className="lt-ph">
@@ -63,9 +84,11 @@ export function LoTrinhScreen(p: LoTrinhProps) {
         </span>
         <div className="lt-ap" role="toolbar" aria-label="Thao tác">
           <div>
-            <Nut onClick={d.huy} why={d.dirty ? null : 'Chưa đổi gì'}>
-              Huỷ
-            </Nut>
+            {d.dirty && (
+              <Nut onClick={d.huy} why={null}>
+                Huỷ
+              </Nut>
+            )}
             <Nut primary onClick={d.luu} why={luuWhy} busy={d.busy}>
               Lưu lộ trình
             </Nut>
@@ -87,24 +110,22 @@ export function LoTrinhScreen(p: LoTrinhProps) {
           <i className="s" /> x = đi qua
         </span>
         <span>
-          <i className="o" /> ngoài lộ trình
+          <i className="o" /> ngoài lộ trình — bấm để thêm
         </span>
-        <span>x mờ = suy theo nhóm vật tư — bấm là ghi đè cho đúng dòng đó</span>
         <span>
-          Lệnh đã định hình giữ bản chụp của nó — muốn áp thì &quot;Định hình lại&quot; ở
-          lệnh
+          x mờ = suy theo nhóm vật tư (cụm chưa khai, chi tiết rời) — bấm là ghi đè
         </span>
+        <span>Đếm bằng (từ cấu hình): {demBang}</span>
       </div>
       <div className="lt-grid">
         <table className="lt-tb" aria-label="Ma trận cụm × công đoạn">
           <colgroup>
-            <col style={{ width: 260 }} />
-            <col style={{ width: 54 }} />
+            <col style={{ width: 250 }} />
+            <col style={{ width: 52 }} />
             <col style={{ width: 44 }} />
             {stages.map((s) => (
-              <col key={s.code} style={{ width: 58 }} />
+              <col key={s.code} style={{ width: 56 }} />
             ))}
-            <col style={{ width: 230 }} />
           </colgroup>
           <thead>
             <tr>
@@ -112,14 +133,15 @@ export function LoTrinhScreen(p: LoTrinhProps) {
               <th className="r">SL/SP</th>
               <th className="r">CT</th>
               {stages.map((s) => (
-                <th key={s.code} className="c" title={s.label}>
-                  {s.label}
-                  <span className="u">
-                    {COUNT_LEVEL_LABEL[s.meta.count_level].replace(' (cái)', '')}
-                  </span>
+                <th
+                  key={s.code}
+                  className="c"
+                  title={`${s.label} — đếm bằng ${LEVEL_SHORT[s.meta.count_level]}`}
+                >
+                  {shortStageLabel(s.label)}
+                  <span className="u">{LEVEL_SHORT[s.meta.count_level]}</span>
                 </th>
               ))}
-              <th>Tách theo bậc đếm</th>
             </tr>
           </thead>
           <tbody>
@@ -136,40 +158,36 @@ export function LoTrinhScreen(p: LoTrinhProps) {
                   id={c.id}
                   name={c.name}
                   qty={c.qty_per_product}
-                  ct={members.length}
                   members={members}
                   st={st}
                   khai={khai}
                   suy={suy}
                   rong={rong}
-                  stagesAll={stages.map((s) => s.code)}
-                  tach={
+                  partStages={split.part}
+                  codes={codes}
+                  title={
                     members.length === 0
-                      ? 'cụm chưa có chi tiết nào'
-                      : st.length === 0
-                        ? '—'
-                        : `chi tiết: ${split.part.map(labelOf).join(' → ') || '—'} · cụm: ${
-                            split.cluster.map(labelOf).join(' → ') || '—'
-                          }`
+                      ? `${c.name} — cụm chưa có chi tiết nào`
+                      : `${c.name} — chi tiết: ${split.part.map(labelOf).join(' → ') || '—'} · cụm: ${
+                          split.cluster.map(labelOf).join(' → ') || '—'
+                        }`
                   }
                   canEdit={p.canEdit}
                 />
               )
             })}
 
-            {nhomRoi.map((g) => {
-              const xs = roi.filter((x) => x.group_code === g)
-              return (
-                <GroupRows
-                  key={g}
-                  d={d}
-                  label={`Chi tiết rời — ${p.groupLabels[g] ?? g} (${xs.length}) · suy theo nhóm ${g}`}
-                  parts={xs}
-                  stagesAll={stages.map((s) => s.code)}
-                  canEdit={p.canEdit}
-                />
-              )
-            })}
+            {nhomRoi.map((g) => (
+              <GroupRows
+                key={g}
+                d={d}
+                label={`Chi tiết rời — ${p.groupLabels[g] ?? g} (${roi.filter((x) => x.group_code === g).length}) · suy theo nhóm ${g}`}
+                groupRoute={d.routeForGroup(g)}
+                parts={roi.filter((x) => x.group_code === g)}
+                codes={codes}
+                canEdit={p.canEdit}
+              />
+            ))}
 
             {mua.length > 0 && (
               <tr className="sub">
@@ -178,38 +196,38 @@ export function LoTrinhScreen(p: LoTrinhProps) {
                 </td>
                 <td className="r num"></td>
                 <td className="r num">{mua.length}</td>
-                {stages.map((s) => (
-                  <td key={s.code} className="out">
+                {codes.map((s) => (
+                  <td key={s} className="out">
                     –
                   </td>
                 ))}
-                <td className="mut">không vào sổ sản lượng</td>
               </tr>
             )}
 
             <tr className="grp">
-              <td>Thành phẩm (bộ)</td>
+              <td title="Bốn bước đếm theo bộ lấy từ cấu hình công đoạn — không khai ở đây">
+                Thành phẩm (bộ)
+              </td>
               <td className="r num">1</td>
               <td className="r num">—</td>
-              {stages.map((s) =>
-                d.counting.finish.includes(s.code) ? (
-                  <td key={s.code} className="x">
+              {codes.map((s) =>
+                d.counting.finish.includes(s) ? (
+                  <td key={s} className="x">
                     <button
                       type="button"
                       className="lt-x"
                       disabled
-                      aria-label={`${s.label}: đi qua (theo cấu hình công đoạn)`}
+                      aria-label={`${labelOf(s)}: đi qua (theo cấu hình công đoạn)`}
                     >
                       x
                     </button>
                   </td>
                 ) : (
-                  <td key={s.code} className="out">
+                  <td key={s} className="out">
                     –
                   </td>
                 ),
               )}
-              <td className="mut">từ cấu hình công đoạn — đếm bằng bộ</td>
             </tr>
           </tbody>
           <tfoot>
@@ -220,10 +238,11 @@ export function LoTrinhScreen(p: LoTrinhProps) {
               <td colSpan={2} className={d.cumRong.length ? 'warn' : undefined}>
                 {d.cumRong.length ? `${d.cumRong.length} cụm trống` : ''}
               </td>
-              <td colSpan={stages.length + 1} className="mut" style={{ fontWeight: 400 }}>
+              <td colSpan={stages.length} className="mut" style={{ fontWeight: 400 }}>
                 Ghép ở{' '}
                 <b className="ma">{d.counting.join ? labelOf(d.counting.join) : '—'}</b> ·
-                cụm chưa khai thì chi tiết dừng trước đó, cụm chạy từ đó — như cũ
+                cụm chưa khai thì chi tiết dừng trước đó, cụm chạy từ đó — như cũ · thành
+                phẩm đếm bằng bộ từ cấu hình
               </td>
             </tr>
           </tfoot>
@@ -232,7 +251,8 @@ export function LoTrinhScreen(p: LoTrinhProps) {
       <div className="lt-sb">
         <span>
           Thứ tự chạy = thứ tự danh mục công đoạn · sửa bậc đếm ở Sản xuất › Cấu hình ›
-          Công đoạn
+          Công đoạn · lệnh đã định hình giữ bản chụp, muốn áp thì &quot;Định hình
+          lại&quot; ở lệnh
         </span>
         <span className="r">
           {d.dirty ? (
@@ -276,6 +296,10 @@ function Nut({
   )
 }
 
+/**
+ * Một ô của ma trận. Đang đi qua → "x" (đậm khi người khai, mờ khi suy); ngoài
+ * lộ trình → nền gạch chéo với "–" mờ, bấm vào là thêm. Không sửa được → tĩnh.
+ */
 function XCell({
   on,
   khai,
@@ -286,23 +310,35 @@ function XCell({
   on: boolean
   khai: boolean
   label: string
-  onToggle: () => void
+  onToggle?: () => void
   canEdit: boolean
 }) {
-  if (!on && !khai && !canEdit) return <td className="out">–</td>
-  const cls = `lt-x${on ? (khai ? '' : ' s') : ' e'}`
+  if (!canEdit || !onToggle) {
+    if (!on) return <td className="out">–</td>
+    return (
+      <td className="x">
+        <button
+          type="button"
+          className={cx('lt-x', !khai && 's')}
+          disabled
+          aria-label={`${label}: đi qua${khai ? '' : ' (suy)'}`}
+        >
+          x
+        </button>
+      </td>
+    )
+  }
   return (
-    <td className={on ? 'x' : 'x'}>
+    <td className={cx('x', !on && 'out')}>
       <button
         type="button"
-        className={cls}
-        disabled={!canEdit}
+        className={cx('lt-x', on ? !khai && 's' : 'e')}
         aria-pressed={on}
-        aria-label={`${label}: ${on ? (khai ? 'đi qua' : 'đi qua (suy)') : 'không'}`}
+        aria-label={`${label}: ${on ? (khai ? 'đi qua' : 'đi qua (suy)') : 'ngoài lộ trình — bấm để thêm'}`}
         title={on && !khai ? 'suy theo nhóm vật tư — bấm để ghi đè' : undefined}
         onClick={onToggle}
       >
-        {on ? 'x' : '·'}
+        {on ? 'x' : '–'}
       </button>
     </td>
   )
@@ -313,47 +349,60 @@ function ClusterRows({
   id,
   name,
   qty,
-  ct,
   members,
   st,
   khai,
   suy,
   rong,
-  stagesAll,
-  tach,
+  partStages,
+  codes,
+  title,
   canEdit,
 }: {
   d: LoTrinhCtx
   id: string
   name: string
   qty: number | null
-  ct: number
   members: PartRow[]
   st: string[]
   khai: boolean
   suy: string[]
   rong: boolean
-  stagesAll: string[]
-  tach: string
+  /** Nửa "chi tiết" của lộ trình cụm — chi tiết trong cụm đi qua đúng các bước này. */
+  partStages: string[]
+  codes: string[]
+  title: string
   canEdit: boolean
 }) {
   return (
     <>
-      <tr className={`grp${rong ? 'bad' : ''}`}>
-        <td title={name}>
+      <tr className={cx('grp', rong && 'bad')}>
+        <td title={title}>
           {name}
-          {khai && canEdit && (
+          {khai && (
             <>
               {' '}
-              <button type="button" className="lt-lnk" onClick={() => d.veMacDinh(id)}>
-                về mặc định
-              </button>
+              <span className="mut" style={{ fontWeight: 400 }}>
+                · đã khai
+              </span>
+              {canEdit && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="lt-lnk"
+                    onClick={() => d.veMacDinh(id)}
+                  >
+                    về mặc định
+                  </button>
+                </>
+              )}
             </>
           )}
         </td>
-        <td className={`r num${qty == null ? 'warn' : ''}`}>{qty ?? '—'}</td>
-        <td className="r num">{ct}</td>
-        {stagesAll.map((s) => (
+        <td className={cx('r num', qty == null && 'warn')}>{qty ?? '—'}</td>
+        <td className="r num">{members.length}</td>
+        {codes.map((s) => (
           <XCell
             key={s}
             on={st.includes(s)}
@@ -363,21 +412,24 @@ function ClusterRows({
             onToggle={() => d.toggle(id, suy, s)}
           />
         ))}
-        <td className="mut" title={tach}>
-          {tach}
-        </td>
       </tr>
       {members.length > 0 && (
         <tr className="mem">
           <td
-            title={members.map((m) => `${m.part_name} ×${m.qty}`).join(' · ')}
+            title={`${members.map((m) => `${m.part_name} ×${m.qty}`).join(' · ')} — chi tiết trong cụm đi theo nửa "chi tiết" của lộ trình cụm`}
             colSpan={3}
           >
             &nbsp;&nbsp;{members.map((m) => `${m.part_name} ×${m.qty}`).join(' · ')}
           </td>
-          <td colSpan={stagesAll.length + 1} className="mut">
-            chi tiết trong cụm đi theo nửa &quot;chi tiết&quot; của cụm
-          </td>
+          {codes.map((s) => (
+            <XCell
+              key={s}
+              on={partStages.includes(s)}
+              khai={false}
+              label={`chi tiết ${name} · ${s}`}
+              canEdit={false}
+            />
+          ))}
         </tr>
       )}
     </>
@@ -387,50 +439,66 @@ function ClusterRows({
 function GroupRows({
   d,
   label,
+  groupRoute,
   parts,
-  stagesAll,
+  codes,
   canEdit,
 }: {
   d: LoTrinhCtx
   label: string
+  groupRoute: readonly string[]
   parts: PartRow[]
-  stagesAll: string[]
+  codes: string[]
   canEdit: boolean
 }) {
   return (
     <>
       <tr className="sub">
-        <td title={label}>{label}</td>
+        <td title={`${label} — mỗi dòng tự khai; chưa khai thì suy theo nhóm`}>
+          {label}
+        </td>
         <td className="r num"></td>
         <td className="r num">{parts.length}</td>
-        <td colSpan={stagesAll.length + 1} className="mut">
-          mỗi dòng tự khai; chưa khai thì suy theo nhóm
-        </td>
+        {codes.map((s) => (
+          <XCell
+            key={s}
+            on={groupRoute.includes(s)}
+            khai={false}
+            label={`nhóm · ${s}`}
+            canEdit={false}
+          />
+        ))}
       </tr>
       {parts.map((x) => {
         const suy = [...d.routeForGroup(x.group_code)]
         const { stages: st, khai } = d.hieuLuc(x.id, suy)
         const rong = khai && st.length === 0
         return (
-          <tr key={x.id} className={rong ? 'bad' : undefined}>
-            <td title={x.part_name}>
+          <tr key={x.id} className={cx(rong && 'bad')}>
+            <td title={`${x.part_name}${khai ? ' — khai riêng' : ' — suy theo nhóm'}`}>
               &nbsp;&nbsp;{x.part_name}
-              {khai && canEdit && (
+              {khai && (
                 <>
                   {' '}
-                  <button
-                    type="button"
-                    className="lt-lnk"
-                    onClick={() => d.veMacDinh(x.id)}
-                  >
-                    về mặc định
-                  </button>
+                  <span className="mut">· khai riêng</span>
+                  {canEdit && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        className="lt-lnk"
+                        onClick={() => d.veMacDinh(x.id)}
+                      >
+                        về mặc định
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </td>
             <td className="r num">{x.qty}</td>
             <td className="r num"></td>
-            {stagesAll.map((s) => (
+            {codes.map((s) => (
               <XCell
                 key={s}
                 on={st.includes(s)}
@@ -440,7 +508,6 @@ function GroupRows({
                 onToggle={() => d.toggle(x.id, suy, s)}
               />
             ))}
-            <td className="mut">{khai ? 'khai riêng' : 'suy theo nhóm'}</td>
           </tr>
         )
       })}

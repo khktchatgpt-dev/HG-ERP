@@ -620,6 +620,18 @@ trực tiếp ở mã mới. Màn sửa: `/production/cau-hinh/cong-doan` (khôn
 `src/app/(workspace)/production/_erp/`, quyền `production.stage.configure`).
 Thiết kế đầy đủ: `docs/san-xuat-cau-hinh-thiet-ke.md`.
 
+**Lộ trình hai tầng (B2 + 03/11/2026)**: Kỹ thuật khai MẶC ĐỊNH theo cụm ở tab
+Lộ trình hồ sơ SP; kế hoạch sửa RIÊNG LỆNH ở tab "Lộ trình theo cụm" của màn
+Định hình (`/thongke/lsx/[id]/dinh-hinh`, dựng lại KHÔNG kit 03/11 theo bản vẽ
+`DUtMtTWekhhBUUzh54XM9L`: `DinhHinhScreen · useDinhHinh · luoi-chi-tiet ·
+lo-trinh-lenh · dinh-hinh.shared`; tab Chi tiết là lưới nhập liệu khuôn F như Ghi
+sản lượng, ghi `production_components.stages`).
+Thứ tự ưu tiên: kế hoạch lệnh → bản chụp trên lệnh → khai ở SP → nhóm vật tư.
+Dòng cụm chỉ mang nửa "cụm"; chi tiết trong cụm giữ nửa "chi tiết" của riêng nó
+— toggle cụm KHÔNG kéo theo chi tiết (lần đầu kéo theo đã ghi `[]` = xoá chi tiết
+khỏi sổ). Lưu định hình PHẢI gửi `stages`, không thì xoá sạch bản chụp. BOM phẳng
+(không dòng cụm) không có gì để khai: cụm mặc nhiên lo.
+
 **Ghi sản lượng (B3, 03/11/2026) đọc cấu hình đó**: `/thongke/ghi` không kit
 (`(san-xuat)/thongke/ghi/`, khung `production/_erp` với `SxKhung bare` vì vỏ
 `(san-xuat)` đã `bare` — bare vẫn phải ĐO ĐỈNH chốt chiều cao, `<main>` bare là
