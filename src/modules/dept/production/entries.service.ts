@@ -17,7 +17,7 @@ import {
   teamWipShortageWarning,
   type ComponentSummary,
 } from '@/lib/production-summary'
-import { clipRoute, resolveComponentRoute } from '@/lib/stage-route'
+import { componentRoute } from '@/lib/stage-route'
 import {
   DEFAULT_ASSEMBLY_NAME,
   defaultAssemblyId,
@@ -27,9 +27,9 @@ import {
   resolveCountingPlan,
   type CountingPlan,
 } from '@/lib/default-assembly'
+import { countingOf } from '@/lib/stage-config'
 import {
   FINISH_ROW_NAME,
-  FINISH_STAGES,
   finishRouteOverride,
   finishRowId,
   finishRowLineId,
@@ -168,12 +168,16 @@ export type BoardPayload = {
 async function loadLsxContext(lsxId: string) {
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) throw NotFound('LSX không tồn tại')
-  const [components, orderLines, groups, jobs] = await Promise.all([
+  const [components, orderLines, groups, jobs, stagesCat] = await Promise.all([
     componentsRepo.listByLsx(lsxId),
     lsxLinesRepo.listLines(lsxId),
     lsxLinesRepo.listGroups(lsxId),
     jobsRepo.listByLsx(lsxId),
+    productionRepo.listStages(),
   ])
+  // Mốc đếm (công đoạn ghép + chặng thành phẩm) SUY từ cấu hình công đoạn
+  // (0287) — một lần cho cả lượt, mọi phép tính dưới dùng chung.
+  const counting = countingOf(stagesCat)
   // Dòng lệnh thuộc NHÓM, nhóm mới gắn đơn (0114) → tra đơn qua nhóm.
   const orderIdByGroup = new Map(groups.map((g) => [g.id, g.sales_order_id]))
   const qtyByLine = new Map(orderLines.map((l) => [l.id, l.qty]))
@@ -201,6 +205,8 @@ async function loadLsxContext(lsxId: string) {
     jobs,
     totalByComponent,
     routeByLine,
+    stagesCat,
+    counting,
   }
 }
 
@@ -239,8 +245,15 @@ export const entriesService = {
     input: RecordInput,
   ): Promise<{ warnings: string[]; doc_no: string }> {
     await assertAction(user, 'production.entries.record')
-    const { lsx, components, orderLines, totalByComponent, routeByLine } =
-      await loadLsxContext(lsxId)
+    const {
+      lsx,
+      components,
+      orderLines,
+      totalByComponent,
+      routeByLine,
+      stagesCat,
+      counting,
+    } = await loadLsxContext(lsxId)
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
     }
@@ -277,10 +290,11 @@ export const entriesService = {
       // thật. Loại dòng THÀNH PHẨM ra: nó cũng là assembly/cluster null nhưng
       // bắt đầu ở lắp ráp — vớ nhầm nó thì sổ hàn ghi vào dòng đóng gói.
       let real = lineComps.find(
-        (c) => c.kind === 'assembly' && c.cluster == null && !isFinishRow(c),
+        (c) =>
+          c.kind === 'assembly' && c.cluster == null && !isFinishRow(c, counting.finish),
       )
       if (!real) {
-        const plan = resolveCountingPlan(lineComps, routeByLine.get(lineId))
+        const plan = resolveCountingPlan(lineComps, routeByLine.get(lineId), counting)
         if (plan.virtual_stages.length === 0) {
           throw BadRequest(
             'Dòng SP này không (còn) cụm mặc nhiên — tải lại màn ghi sổ rồi ghi lại',
@@ -316,6 +330,7 @@ export const entriesService = {
         real = {
           ...fields,
           id: newId,
+          stages: null,
           material_id: null,
           material_type: null,
           spec_thickness_mm: null,
@@ -349,7 +364,7 @@ export const entriesService = {
       const line = orderLines.find((l) => l.id === lineId)
       if (!line) throw BadRequest('Có dòng sổ gắn bộ thành phẩm không thuộc lệnh này')
       const lineComps = components.filter((c) => c.production_order_line_id === lineId)
-      let real = lineComps.find(isFinishRow)
+      let real = lineComps.find((c) => isFinishRow(c, counting.finish))
       if (!real) {
         const fields = {
           production_order_id: lsxId,
@@ -360,14 +375,15 @@ export const entriesService = {
           group_code: null,
           unit: lineUnit(line.unit),
           qty_per_unit: 1,
-          first_stage: FINISH_STAGES[0],
-          final_stage: FINISH_STAGES[FINISH_STAGES.length - 1],
+          first_stage: counting.finish[0],
+          final_stage: counting.finish[counting.finish.length - 1],
           note: null,
         }
         const newId = await componentsRepo.insertOne(fields)
         real = {
           ...fields,
           id: newId,
+          stages: null,
           material_id: null,
           material_type: null,
           spec_thickness_mm: null,
@@ -409,7 +425,6 @@ export const entriesService = {
       throw BadRequest('Không ghi sổ cho ngày tương lai — kiểm tra lại ô ngày')
     }
     // Cảnh báo hiện TÊN công đoạn cho người đọc — mã code chỉ dân dev hiểu.
-    const stagesCat = await productionRepo.listStages()
     const stageLabel = (c: string) => stagesCat.find((s) => s.code === c)?.label ?? c
 
     // Chốt sổ khoá THEO TỔ nên bản ghi phải có tổ — không thì ghi "vô chủ" là
@@ -435,7 +450,7 @@ export const entriesService = {
       // Dòng thành phẩm đứng NGOÀI kế hoạch công đoạn: Kế hoạch SX lên lộ
       // trình cho phần gia công (phôi→sơn), còn lắp ráp/đóng gói thì bộ nào
       // cũng phải qua. Bắt nó khớp kế hoạch là chặn đúng thứ luôn hợp lệ.
-      if (isFinishRow(comp)) continue
+      if (isFinishRow(comp, counting.finish)) continue
       const route = routeByLine.get(comp.production_order_line_id)
       if (route && !route.includes(input.stage)) {
         throw BadRequest(
@@ -455,6 +470,7 @@ export const entriesService = {
         p = resolveCountingPlan(
           components.filter((c) => c.production_order_line_id === lineId),
           routeByLine.get(lineId),
+          counting,
         )
         planCache.set(lineId, p)
       }
@@ -463,16 +479,9 @@ export const entriesService = {
     for (const e of recEntries) {
       const comp = byId.get(e.component_id)!
       const eff =
-        finishRouteOverride(comp) ??
+        finishRouteOverride(comp, counting.finish) ??
         planOf(comp.production_order_line_id).own_route.get(comp.id) ??
-        clipRoute(
-          resolveComponentRoute(
-            routeByLine.get(comp.production_order_line_id),
-            comp.group_code,
-          ),
-          comp.first_stage,
-          comp.final_stage,
-        )
+        componentRoute(routeByLine.get(comp.production_order_line_id), comp)
       if (eff.length > 0 && !eff.includes(input.stage)) {
         throw BadRequest(
           `"${comp.name}" không đếm ở công đoạn ${stageLabel(input.stage)} — khoảng ghi của nó là ${eff
@@ -691,12 +700,8 @@ export const entriesService = {
         (c) =>
           c.production_order_line_id === lineId &&
           (
-            finishRouteOverride(c) ??
-            clipRoute(
-              resolveComponentRoute(routeByLine.get(lineId), c.group_code),
-              c.first_stage,
-              c.final_stage,
-            )
+            finishRouteOverride(c, counting.finish) ??
+            componentRoute(routeByLine.get(lineId), c)
           ).includes(input.stage),
       )
       if (mine.length === 0) return false
@@ -731,10 +736,11 @@ export const entriesService = {
       jobs,
       totalByComponent,
       routeByLine,
+      stagesCat: stages,
+      counting,
     } = await loadLsxContext(lsxId)
-    const [entries, stages, outsource] = await Promise.all([
+    const [entries, outsource] = await Promise.all([
       entriesRepo.listByLsx(lsxId),
-      productionRepo.listStages(),
       outsourceRepo.listByLsx(lsxId),
     ])
 
@@ -787,6 +793,7 @@ export const entriesService = {
         resolveCountingPlan(
           components.filter((c) => c.production_order_line_id === l.id),
           routeByLine.get(l.id),
+          counting,
         ),
       )
     }
@@ -813,9 +820,9 @@ export const entriesService = {
       // lộ trình suy-theo-nhóm trả rỗng và dòng sẽ biến mất khỏi mọi tab. Ép
       // lộ trình bốn bước sau sơn cho nó.
       const route =
-        finishRouteOverride(c) ??
+        finishRouteOverride(c, counting.finish) ??
         planByLine.get(c.production_order_line_id)?.own_route.get(c.id) ??
-        resolveComponentRoute(routeByLine.get(c.production_order_line_id), c.group_code)
+        componentRoute(routeByLine.get(c.production_order_line_id), c)
       const summary = summarizeComponent(
         totalByComponent.get(c.id) ?? 0,
         route,
@@ -889,7 +896,11 @@ export const entriesService = {
     // component thật, đi đường chung ở trên.
     for (const l of orderLines) {
       const lineComps = components.filter((c) => c.production_order_line_id === l.id)
-      if (lineComps.length === 0 || lineComps.some(isFinishRow)) continue
+      if (
+        lineComps.length === 0 ||
+        lineComps.some((c) => isFinishRow(c, counting.finish))
+      )
+        continue
       views.push({
         id: finishRowId(l.id),
         order_line_id: l.id,
@@ -902,8 +913,8 @@ export const entriesService = {
         material_type: null,
         material_code: null,
         material_name: null,
-        allowed_stages: [...FINISH_STAGES],
-        summary: summarizeComponent(l.qty, [...FINISH_STAGES], []),
+        allowed_stages: [...counting.finish],
+        summary: summarizeComponent(l.qty, [...counting.finish], []),
         is_virtual: true,
       })
     }
@@ -931,7 +942,7 @@ export const entriesService = {
         // cho bao nhiêu bộ" — tức đầu VÀO của lắp ráp. Cộng cả số đã hoàn
         // thiện vào đó là trộn hai câu hỏi làm một, và đồng bộ sẽ đứng 0 suốt
         // cho tới khi tổ lắp ráp bắt đầu.
-        .filter((c) => !isFinishRow(c))
+        .filter((c) => !isFinishRow(c, counting.finish))
         .map((c) => ({
           qty_per_unit: c.qty_per_unit,
           done_final: views.find((v) => v.id === c.id)?.summary.done_final ?? 0,

@@ -106,13 +106,43 @@ export function clipRoute(
 }
 
 /**
- * Chọn lộ trình cho MỘT chi tiết: kế hoạch của dòng SP thắng, không có thì suy
- * theo nhóm. Gom một chỗ để mọi nơi hỏi cùng một câu trả lời.
+ * Chọn lộ trình cho MỘT chi tiết — gom một chỗ để mọi nơi hỏi cùng một câu
+ * trả lời. Thứ tự ưu tiên (0288, B2):
+ *   1. kế hoạch của dòng SP (production_jobs) — người ở Kế hoạch thắng máy;
+ *   2. `ownStages` — lộ trình KHAI: bản chụp trên lệnh / cụm / dòng định mức;
+ *   3. suy theo nhóm vật tư.
  */
 export function resolveComponentRoute(
   plannedRoute: string[] | null | undefined,
   groupCode: string | null | undefined,
+  ownStages?: readonly string[] | null,
 ): string[] {
   if (plannedRoute && plannedRoute.length > 0) return plannedRoute
+  if (ownStages && ownStages.length > 0) return [...ownStages]
   return routeForGroup(groupCode)
+}
+
+/** Những gì một component cần mang để tự trả lời "tôi đi qua công đoạn nào". */
+export type RoutedComponent = {
+  group_code: string | null
+  /** Lộ trình khai (0288). null/rỗng = suy. */
+  stages?: readonly string[] | null
+  first_stage?: string | null
+  final_stage?: string | null
+}
+
+/**
+ * Lộ trình HIỆU LỰC của một component = chọn (kế hoạch → khai → nhóm) rồi cắt
+ * về khoảng [first..final] (0088). MỌI service dùng hàm này, không tự ghép
+ * `clipRoute(resolveComponentRoute(...))` — hai nơi ghép khác nhau là hai số.
+ */
+export function componentRoute(
+  plannedRoute: string[] | null | undefined,
+  c: RoutedComponent,
+): string[] {
+  return clipRoute(
+    resolveComponentRoute(plannedRoute, c.group_code, c.stages),
+    c.first_stage,
+    c.final_stage,
+  )
 }

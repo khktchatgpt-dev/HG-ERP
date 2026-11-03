@@ -32,6 +32,8 @@ export type ComponentRow = {
   /** Công đoạn đầu của chuỗi (cụm bắt đầu ở hàn); null = từ đầu lộ trình. */
   first_stage: string | null
   final_stage: string | null
+  /** Lộ trình CHỤP lúc định hình (0288) — thắng suy theo nhóm; kế hoạch lệnh vẫn thắng. */
+  stages: string[] | null
   sort_order: number
   note: string | null
   material_code: string | null
@@ -58,11 +60,12 @@ export type ComponentInput = {
   qty_per_assembly?: number | null
   first_stage?: string | null
   final_stage?: string | null
+  stages?: string[] | null
   note?: string | null
 }
 
 const COLS =
-  'id, production_order_id, production_order_line_id, kind, cluster, name, group_code, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, sort_order, note'
+  'id, production_order_id, production_order_line_id, kind, cluster, name, group_code, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, stages, sort_order, note'
 
 type Raw = Omit<ComponentRow, 'material_code' | 'material_name' | 'material_unit'> & {
   material:
@@ -161,6 +164,7 @@ export const componentsRepo = {
           qty_per_assembly: l.qty_per_assembly ?? null,
           first_stage: l.first_stage ?? null,
           final_stage: l.final_stage ?? null,
+          stages: l.stages ?? null,
           note: l.note ?? null,
           sort_order: i,
         })),

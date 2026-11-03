@@ -13,7 +13,7 @@ import {
   type MaterialNeed,
 } from '@/lib/component-needs'
 import { routeForGroup } from '@/lib/stage-route'
-import { JOIN_STAGE } from '@/lib/default-assembly'
+import { countingOf, resolveStageConfigs, splitClusterRoute } from '@/lib/stage-config'
 import type { MaterialAllocation } from '@/lib/po-allocation'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
@@ -196,6 +196,11 @@ export const componentsService = {
   ): Promise<ComponentInput[]> {
     await assertAction(user, 'production.shaping.manage')
     const { orderLines } = await lsxWithLines(lsxId)
+    // Công đoạn ghép theo cấu hình công đoạn (0287) — không còn hằng số; cấu
+    // hình đầy đủ để TÁCH lộ trình khai của cụm theo bậc đếm (0288).
+    const stagesCat = await productionRepo.listStages()
+    const counting = countingOf(stagesCat)
+    const stageCfg = resolveStageConfigs(stagesCat ?? [])
 
     if (source === 'bom') {
       // 0096: đọc ĐỊNH MỨC (technical_product_parts) — bảng duy nhất còn lại.
@@ -232,6 +237,8 @@ export const componentsService = {
           // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
           dm_kg: p.weight_kg ?? null,
           pcs_per_bar: null,
+          // Lộ trình khai ở dòng định mức (0288) — chụp sang lệnh; null = suy.
+          stages: p.stages && p.stages.length > 0 ? [...p.stages] : null,
           note: p.material_code ?? null,
         }))
 
@@ -247,17 +254,42 @@ export const componentsService = {
             .filter((i) => i >= 0)
           if (memberIdx.length === 0) continue
           const group = memberIdx.map((i) => parts[i].group_code).find(Boolean) ?? null
-          // suggest chạy trước khi lệnh lên kế hoạch → định vị theo lộ trình nhóm.
-          const route = routeForGroup(group)
-          const first = c.first_stage ?? (route.includes(JOIN_STAGE) ? JOIN_STAGE : null)
-          if (!first) continue
           const qtyPer = c.qty_per_product != null ? Number(c.qty_per_product) : 1
-          const idx = route.indexOf(first)
-          const partFinal = idx > 0 ? route[idx - 1] : null
+
+          // LỘ TRÌNH KHAI THEO CỤM (0288, B2): Kỹ thuật đánh x từng công đoạn →
+          // tách theo bậc đếm (0287): bước đếm chi tiết thuộc các chi tiết trong
+          // cụm, bước đếm cụm/bộ thuộc dòng cụm. Nhờ vậy "phôi → nguội → sơn"
+          // không cần có hàn ở giữa. Cả hai nửa CHỤP vào `stages` của lệnh.
+          const khai = c.stages && c.stages.length > 0 ? c.stages : null
+          let first: string | null
+          let partFinal: string | null
+          let partStages: string[] | null = null
+          let asmStages: string[] | null = null
+          if (khai) {
+            const split = splitClusterRoute(khai, stageCfg)
+            if (split.cluster.length === 0) continue // cụm không có bước cụm nào → để phẳng
+            partStages = split.part.length ? split.part : null
+            asmStages = split.cluster
+            first = asmStages[0]
+            partFinal = split.part.length ? split.part[split.part.length - 1] : null
+          } else {
+            // Chưa khai: suggest chạy trước khi lệnh lên kế hoạch → định vị theo
+            // lộ trình nhóm, cụm bắt đầu ở công đoạn ghép (cách cũ, 27/08).
+            const route = routeForGroup(group)
+            first =
+              c.first_stage ??
+              (counting.join && route.includes(counting.join) ? counting.join : null)
+            if (!first) continue
+            const idx = route.indexOf(first)
+            partFinal = idx > 0 ? route[idx - 1] : null
+          }
           for (const i of memberIdx) {
             rows[i] = {
               ...rows[i],
               final_stage: partFinal,
+              // Chi tiết trong cụm chưa khai riêng thì mang nửa "chi tiết" của cụm;
+              // khai riêng ở dòng định mức thì tôn trọng (người thắng máy).
+              stages: rows[i].stages ?? partStages,
               qty_per_assembly: qtyPer > 0 ? Number(parts[i].qty) / qtyPer : null,
             }
           }
@@ -273,7 +305,10 @@ export const componentsService = {
             dm_kg: null,
             pcs_per_bar: null,
             first_stage: first,
-            final_stage: c.final_stage ?? null,
+            final_stage: khai
+              ? asmStages![asmStages!.length - 1]
+              : (c.final_stage ?? null),
+            stages: asmStages,
             note: c.note ?? null,
           })
         }

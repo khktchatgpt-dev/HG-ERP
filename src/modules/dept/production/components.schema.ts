@@ -31,6 +31,9 @@ export const componentLineSchema = z.object({
   // Công đoạn cuối của chi tiết/cụm (tuỳ SP — không sơn thì cuối là nguội);
   // null = công đoạn cuối danh mục.
   final_stage: z.string().trim().max(50).optional().nullable(),
+  // Lộ trình CHỤP từ hồ sơ SP lúc định hình (0288) — mã công đoạn đúng thứ tự;
+  // null = suy theo nhóm vật tư như cũ. Kế hoạch lệnh vẫn thắng khi có.
+  stages: z.array(z.string().trim().min(1).max(50)).max(20).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
 })
 

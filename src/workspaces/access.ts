@@ -128,6 +128,14 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   if (await hasPermission(user, 'supply.po.approve')) caps.add('supply.approve')
   // Hồ sơ lương (B4) — vai "Quản lý lương" (quyền mật 0255) + quản trị viên CHỈ XEM (20/10).
   if (await xemLuong(user)) caps.add('hr.payroll')
+  // Cấu hình công đoạn (0287) — cùng luật với action production.stage.configure.
+  if (
+    user.role === 'admin' ||
+    user.role === 'manager' ||
+    (await hasPermission(user, 'production.progress.track'))
+  ) {
+    caps.add('production.configure')
+  }
   if (
     user.role === 'admin' ||
     user.role === 'manager' ||

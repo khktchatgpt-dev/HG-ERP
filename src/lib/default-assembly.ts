@@ -26,12 +26,18 @@
 
 import { resolveComponentRoute } from './stage-route'
 import { isFinishRow } from './finish-stages'
+import { DEFAULT_COUNTING, type Counting } from './stage-config'
 
 /**
- * Công đoạn GHÉP: từ đây trở đi chi tiết đã hàn thành cụm, đơn vị đếm đổi.
- * Khớp catalog `production_stage` ('han') và ROUTE_BY_GROUP.FRAME.
+ * Công đoạn GHÉP MẶC ĐỊNH: từ đây trở đi chi tiết đã hàn thành cụm, đơn vị
+ * đếm đổi. Khớp catalog `production_stage` ('han') và ROUTE_BY_GROUP.FRAME.
+ *
+ * TỪ 0287 (B1 cấu hình công đoạn) đây chỉ còn là MẶC ĐỊNH: mốc thật = công
+ * đoạn đầu tiên khai `count_level = 'cluster'`, suy bởi `countingOf()`
+ * (lib/stage-config) và truyền vào `resolveCountingPlan` qua tham số
+ * `counting`. Không truyền → hành vi cũ.
  */
-export const JOIN_STAGE = 'han'
+export const JOIN_STAGE = DEFAULT_COUNTING.join as string
 
 /** id ảo của cụm mặc nhiên — KHÔNG trỏ vào bảng nào, đừng đem đi ghi sổ. */
 const DEFAULT_ASSEMBLY_ID_PREFIX = 'default-asm:'
@@ -59,6 +65,8 @@ export type CountingComponent = {
   final_stage: string | null
   /** Phân biệt cụm khung (bắt đầu ở hàn) với dòng thành phẩm (bắt đầu ở lắp ráp). */
   first_stage?: string | null
+  /** Lộ trình khai / chụp (0288) — thắng suy theo nhóm. */
+  stages?: readonly string[] | null
 }
 
 export type CountingPlan = {
@@ -86,19 +94,24 @@ const EMPTY_PLAN: CountingPlan = { own_route: new Map(), virtual_stages: [] }
 export function resolveCountingPlan(
   comps: CountingComponent[],
   plannedRoute: string[] | null | undefined,
+  counting: Counting = DEFAULT_COUNTING,
 ): CountingPlan {
+  // Cấu hình nói "không công đoạn nào đếm cụm" → không có gì để ghép, mọi
+  // chi tiết đếm tới cùng.
+  if (!counting.join) return EMPTY_PLAN
   // Dòng THÀNH PHẨM (lắp ráp→hoàn thiện, lib/finish-stages) cũng là
   // kind='assembly' nhưng nó KHÔNG phải cụm khung do người khai — nó nằm ở
   // chặng sau sơn và luôn có mặt trên mọi dòng SP. Coi nó là "lệnh đã có cụm
   // thật" thì cụm mặc nhiên tắt ngay khi ai đó ghi sổ đóng gói, và sổ hàn của
   // BOM phẳng mất trắng.
-  if (comps.some((c) => c.kind === 'assembly' && !isFinishRow(c))) return EMPTY_PLAN
+  if (comps.some((c) => c.kind === 'assembly' && !isFinishRow(c, counting.finish)))
+    return EMPTY_PLAN
   const own = new Map<string, string[]>()
   const virtual: string[] = []
   for (const c of comps) {
     if (c.final_stage != null) continue
-    const route = resolveComponentRoute(plannedRoute, c.group_code)
-    const idx = route.indexOf(JOIN_STAGE)
+    const route = resolveComponentRoute(plannedRoute, c.group_code, c.stages)
+    const idx = route.indexOf(counting.join)
     if (idx <= 0) continue
     own.set(c.id, route.slice(0, idx))
     for (const s of route.slice(idx)) if (!virtual.includes(s)) virtual.push(s)

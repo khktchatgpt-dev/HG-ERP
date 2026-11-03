@@ -3628,6 +3628,7 @@ export type Database = {
       }
       production_components: {
         Row: {
+          stages: string[] | null
           cluster: string | null
           created_at: string
           dm_kg: number | null
@@ -3654,6 +3655,7 @@ export type Database = {
           wall_thickness_mm: number | null
         }
         Insert: {
+          stages?: string[] | null
           cluster?: string | null
           created_at?: string
           dm_kg?: number | null
@@ -3680,6 +3682,7 @@ export type Database = {
           wall_thickness_mm?: number | null
         }
         Update: {
+          stages?: string[] | null
           cluster?: string | null
           created_at?: string
           dm_kg?: number | null
@@ -8522,6 +8525,7 @@ export type Database = {
       }
       technical_product_clusters: {
         Row: {
+          stages: string[] | null
           created_at: string
           final_stage: string | null
           first_stage: string | null
@@ -8534,6 +8538,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          stages?: string[] | null
           created_at?: string
           final_stage?: string | null
           first_stage?: string | null
@@ -8546,6 +8551,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          stages?: string[] | null
           created_at?: string
           final_stage?: string | null
           first_stage?: string | null
@@ -8605,6 +8611,7 @@ export type Database = {
       }
       technical_product_parts: {
         Row: {
+          stages: string[] | null
           bar_length_m: number | null
           bend_waste_mm: number | null
           blank_confirmed_at: string | null
@@ -8651,6 +8658,7 @@ export type Database = {
           wood_species: string | null
         }
         Insert: {
+          stages?: string[] | null
           bar_length_m?: number | null
           bend_waste_mm?: number | null
           blank_confirmed_at?: string | null
@@ -8697,6 +8705,7 @@ export type Database = {
           wood_species?: string | null
         }
         Update: {
+          stages?: string[] | null
           bar_length_m?: number | null
           bend_waste_mm?: number | null
           blank_confirmed_at?: string | null

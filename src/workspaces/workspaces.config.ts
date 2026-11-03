@@ -31,6 +31,8 @@ export type NavCapability =
   | 'supply.approve'
   /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — quyền mật, chỉ vai "Quản lý lương" (0255). */
   | 'hr.payroll'
+  /** Cấu hình công đoạn (0287) — quản đốc / manager / admin. */
+  | 'production.configure'
 
 export type NavItem = {
   href: string
@@ -674,6 +676,19 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
           // Khu (may-moc) — Tổ Cơ Điện nhận báo hỏng, ghi bảo trì (0270).
           { href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' },
+        ],
+      },
+      {
+        // B1 (03/11/2026): một màn cho bốn thứ đang nằm ở bốn bảng — bậc đếm,
+        // tổ, ô riêng, mã lỗi. Chỉ quản đốc/manager/admin thấy.
+        heading: 'Cấu hình',
+        items: [
+          {
+            href: '/production/cau-hinh/cong-doan',
+            label: 'Công đoạn',
+            icon: 'settings',
+            capability: 'production.configure',
+          },
         ],
       },
     ],

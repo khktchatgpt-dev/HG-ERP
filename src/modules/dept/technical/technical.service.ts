@@ -24,6 +24,7 @@ import type {
   ProductPartPatch as PartPatch,
   ProductClusterInput as ClusterInput,
   ProductClusterPatch as ClusterPatch,
+  ProductRoutesInput,
 } from './technical.schema'
 import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
 import { emit } from '@/events/bus'
@@ -38,7 +39,7 @@ import {
   type StoredPart,
 } from '@/lib/bom-calc'
 import { normalizeSearch, worthFuzzy } from '@/lib/search-text'
-import { ensureCatalogItem } from '@/modules/core/catalogs/catalogs.service'
+import { catalogsService, ensureCatalogItem } from '@/modules/core/catalogs/catalogs.service'
 import {
   LIFECYCLE_LABEL,
   flagsFor,
@@ -993,6 +994,59 @@ export const productsService = {
 
   async listClusters(user: User, productId: string) {
     return productProfileRepo.clusters(productId)
+  },
+
+  /**
+   * LƯU LỘ TRÌNH theo cụm / dòng rời (0288, B2) — cùng quyền sửa định mức.
+   *
+   * Mã công đoạn phải có trong danh mục và được SẮP LẠI theo thứ tự danh mục:
+   * "thứ tự chạy = thứ tự danh mục" là bất biến của cả sổ sản lượng, màn khai
+   * chỉ đánh x chứ không kéo thả. Lệnh đã định hình KHÔNG tự đổi theo — bản
+   * chụp trên lệnh là của lệnh (muốn áp thì "Định hình lại" ở lệnh).
+   */
+  async saveRoutes(user: User, productId: string, input: ProductRoutesInput) {
+    await assertAction(user, 'technical.bom.save')
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    if (product.locked_at)
+      throw BadRequest('Hồ sơ đã khoá — mở khoá trước khi sửa lộ trình')
+
+    const cat = (await catalogsService.list(user, 'production_stage')).filter((s) => s.is_active)
+    const order = new Map(cat.map((s, i) => [s.code, i]))
+    const chuan = (stages: string[] | null, what: string): string[] | null => {
+      if (stages === null) return null
+      const la = stages.filter((s) => !order.has(s))
+      if (la.length)
+        throw BadRequest(`${what}: công đoạn "${la[0]}" không có trong danh mục`)
+      return [...new Set(stages)].sort((a, b) => order.get(a)! - order.get(b)!)
+    }
+
+    const [clusters, parts] = await Promise.all([
+      productProfileRepo.clusters(productId),
+      productProfileRepo.parts(productId),
+    ])
+    const clusterIds = new Set(clusters.map((c) => c.id))
+    const partIds = new Set(parts.map((p) => p.id))
+    for (const c of input.clusters) {
+      if (!clusterIds.has(c.id)) throw BadRequest('Có cụm không thuộc sản phẩm này')
+    }
+    for (const p of input.parts) {
+      if (!partIds.has(p.id))
+        throw BadRequest('Có dòng định mức không thuộc sản phẩm này')
+    }
+
+    await productProfileRepo.setClusterStages(
+      productId,
+      input.clusters.map((c) => ({ id: c.id, stages: chuan(c.stages, 'Cụm') })),
+    )
+    await productProfileRepo.setPartStages(
+      productId,
+      input.parts.map((p) => ({ id: p.id, stages: chuan(p.stages, 'Chi tiết') })),
+    )
+    return {
+      clusters: await productProfileRepo.clusters(productId),
+      parts: await productProfileRepo.parts(productId),
+    }
   },
 
   async addCluster(user: User, productId: string, input: ClusterInput) {

@@ -607,6 +607,19 @@ xuất, Tổ, BGĐ; Kho thấy `/may-moc/dung-cu`; Kế toán thấy `/may-moc/c
 - **Chưa làm**: đưa phiếu chờ GĐ duyệt vào Trung tâm phê duyệt (`/exec/approvals`) —
   hiện GĐ duyệt ngay trên phiếu, nhận việc qua chuông.
 
+## Sản xuất — cấu hình công đoạn (0287, 03/11/2026)
+
+Bậc đếm chi tiết / cụm / bộ và ô lõi của phiếu ghi sổ KHÔNG còn là hằng số:
+chúng nằm ở `catalog_items.meta` (type `production_stage`), parse bằng
+`src/lib/stage-config.ts`. `countingOf(stages)` suy công đoạn GHÉP (đầu tiên
+đếm `cluster`) và CHẶNG THÀNH PHẨM (các công đoạn `unit`); service lấy
+`productionRepo.listStages()` (có `meta`) rồi truyền `counting` vào
+`resolveCountingPlan` / `isFinishRow` / `finishRouteOverride`. Không truyền →
+mặc định cũ (hàn · lắp ráp→hoàn thiện) — đừng đọc `JOIN_STAGE` / `FINISH_STAGES`
+trực tiếp ở mã mới. Màn sửa: `/production/cau-hinh/cong-doan` (không kit, khung
+`src/app/(workspace)/production/_erp/`, quyền `production.stage.configure`).
+Thiết kế đầy đủ: `docs/san-xuat-cau-hinh-thiet-ke.md`.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

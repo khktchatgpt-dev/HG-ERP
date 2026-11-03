@@ -10,11 +10,13 @@ export type CatalogItem = {
   label: string
   sort_order: number
   is_active: boolean
+  /** Thuộc tính phụ theo type (0183) — production_stage: bậc đếm (0287). */
+  meta: unknown
   created_at: string
   updated_at: string
 }
 
-const COLS = 'id, type, code, label, sort_order, is_active, created_at, updated_at'
+const COLS = 'id, type, code, label, sort_order, is_active, meta, created_at, updated_at'
 
 /** Danh mục dùng chung là cấu hình hệ thống — chỉ admin sửa (FR-ADM-04). */
 function assertAdmin(user: User): void {
