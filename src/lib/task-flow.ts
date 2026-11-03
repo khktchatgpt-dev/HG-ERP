@@ -454,3 +454,27 @@ export function filterHolding<F extends string>(
 export function taskHref(taskId: string): string {
   return `/phan-cong-viec?viec=${encodeURIComponent(taskId)}`
 }
+
+// ---- Tệp đính kèm (B2, 03/11/2026) -----------------------------------------
+
+/** Tối đa mấy tệp trên MỘT việc (Q5). */
+export const MAX_TASK_FILES = 10
+
+/**
+ * Ai đính tệp vào việc: người giao, người nhận, sếp (Q4 — cả hai bên thêm được sau
+ * khi giao). Quản lý phòng người nhận chỉ XEM (task.view), không thêm. Việc đã đóng
+ * (xong / huỷ) thì khoá — mở lại rồi mới thêm. null = đính được.
+ */
+export function taskAttachBlock(
+  task: Pick<FlowTask, 'assigner_id' | 'assignee_id' | 'status'>,
+  actor: FlowActor,
+): string | null {
+  const ok =
+    actor.role === 'admin' ||
+    actor.id === task.assigner_id ||
+    actor.id === task.assignee_id
+  if (!ok) return 'Chỉ người giao, người nhận hoặc sếp đính tệp vào việc này'
+  if (task.status === 'done' || task.status === 'cancelled')
+    return 'Việc đã đóng — mở lại rồi mới thêm tệp'
+  return null
+}

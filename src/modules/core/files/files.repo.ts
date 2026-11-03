@@ -59,6 +59,7 @@ export type FileParentColumns = {
 
 /** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061) + góp ý (0253). */
 export type FileParentColumn =
+  | 'task_id'
   | 'product_id'
   | 'quote_id'
   | 'sales_order_id'

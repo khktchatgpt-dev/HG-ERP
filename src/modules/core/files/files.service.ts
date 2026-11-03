@@ -16,6 +16,9 @@ import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { feedbackService } from '@/modules/core/feedback/feedback.service'
 import { MAX_SAMPLE_PHOTOS } from '@/modules/dept/technical/samples.schema'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
+import { fileImageSrc } from '@/server/file-image'
+import { MAX_TASK_FILES, taskAttachBlock } from '@/lib/task-flow'
 import { db } from '@/server/db'
 import {
   filesRepo,
@@ -81,9 +84,20 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
 
 async function assertCanWriteParent(user: User, input: InitUploadInput): Promise<void> {
   if (input.parent.kind === 'task') {
+    // Phân công việc (03/11/2026): người giao + người nhận đều đính tệp được (không chỉ
+    // quản lý đã giao như `task.update`), việc đóng thì khoá, tối đa MAX_TASK_FILES tệp.
     const task = await tasksRepo.findById(input.parent.id)
-    if (!task) throw NotFound('Task not found')
-    assertCan(user, 'task.update', { task })
+    if (!task) throw NotFound('Không thấy việc này')
+    const block = taskAttachBlock(task, { id: user.id, role: user.role })
+    if (block) throw Forbidden(block)
+    const { count } = await db()
+      .from('files')
+      .select('id', { count: 'exact', head: true })
+      .eq('task_id', task.id)
+      .is('deleted_at', null)
+      .not('finalized_at', 'is', null)
+    if ((count ?? 0) >= MAX_TASK_FILES)
+      throw BadRequest(`Đã đủ ${MAX_TASK_FILES} tệp — xoá bớt rồi thêm`)
     return
   }
   if (input.parent.kind === 'comment') {
@@ -204,6 +218,23 @@ async function assertSamplePhotoQuota(input: InitUploadInput): Promise<void> {
     throw BadRequest(`Mỗi mẫu chỉ giữ ${MAX_SAMPLE_PHOTOS} ảnh — xoá bớt rồi tải lại`)
   }
 }
+
+/** Một tệp trên việc, nhìn từ người xem. */
+export type TaskFileItem = {
+  id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+  owner_id: string | null
+  owner_name: string | null
+  /** URL ảnh thu nhỏ có chữ ký — null nếu không phải ảnh raster. */
+  thumb: string | null
+  /** Người tải lên (hoặc sếp) xoá được. */
+  can_delete: boolean
+}
+
+const RASTER = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 
 export const filesService = {
   /**
@@ -349,6 +380,39 @@ export const filesService = {
    * File kỹ thuật của 1 SP (FR-ENG-03). Thư viện SP là tài sản chung — mọi NV
    * đã đăng nhập đọc được (xưởng tra bản vẽ, các phòng tham chiếu).
    */
+  /**
+   * Tệp đính kèm một việc — ai XEM được việc (người giao, người nhận, quản lý phòng
+   * người nhận, sếp) thì thấy. `thumb` là URL ảnh có chữ ký (chỉ với ảnh raster).
+   */
+  async listForTask(user: User, taskId: string): Promise<TaskFileItem[]> {
+    const task = await tasksRepo.findById(taskId)
+    if (!task) throw NotFound('Không thấy việc này')
+    if (user.role !== 'admin') assertCan(user, 'task.view', { task })
+    const rows = await filesRepo.listByParent('task_id', taskId)
+    const ownerIds = [
+      ...new Set(rows.map((r) => r.owner_id).filter((x): x is string => !!x)),
+    ]
+    const owners = new Map<string, string>()
+    for (const id of ownerIds) {
+      const u = await usersRepo.findById(id)
+      if (u?.name) owners.set(id, u.name)
+    }
+    return rows
+      .slice()
+      .reverse() // cũ trước, mới sau — đọc như dòng thời gian
+      .map((r) => ({
+        id: r.id,
+        filename: r.filename,
+        mime_type: r.mime_type,
+        size_bytes: Number(r.size_bytes),
+        created_at: r.created_at,
+        owner_id: r.owner_id,
+        owner_name: (r.owner_id && owners.get(r.owner_id)) || null,
+        thumb: RASTER.has(r.mime_type) ? fileImageSrc(r.id) : null,
+        can_delete: r.owner_id === user.id || user.role === 'admin',
+      }))
+  },
+
   async listForProduct(_user: User, productId: string): Promise<FileRow[]> {
     return filesRepo.listByProduct(productId)
   },
