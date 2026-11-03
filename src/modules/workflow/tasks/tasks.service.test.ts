@@ -8,7 +8,7 @@ import type { Task } from './tasks.repo'
  */
 
 // vi.mock được kéo lên đầu file — đồ giả phải tạo trong vi.hoisted mới tới kịp.
-const { tasks, users, comments, activity, emit } = vi.hoisted(() => ({
+const { tasks, users, comments, activity, emit, depts } = vi.hoisted(() => ({
   tasks: {
     findById: vi.fn(),
     insert: vi.fn(),
@@ -17,16 +17,17 @@ const { tasks, users, comments, activity, emit } = vi.hoisted(() => ({
     listForTakers: vi.fn(),
     list: vi.fn(),
   },
-  users: { findById: vi.fn() },
+  users: { findById: vi.fn(), list: vi.fn() },
   comments: { insert: vi.fn(), latestByTasks: vi.fn() },
   activity: { log: vi.fn() },
   emit: vi.fn(),
+  depts: { list: vi.fn() },
 }))
 vi.mock('./tasks.repo', () => ({ tasksRepo: tasks }))
 vi.mock('./comments.repo', () => ({ commentsRepo: comments }))
 vi.mock('./activity.repo', () => ({ activityRepo: activity }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: users }))
-vi.mock('@/modules/core/departments/departments.repo', () => ({ departmentsRepo: {} }))
+vi.mock('@/modules/core/departments/departments.repo', () => ({ departmentsRepo: depts }))
 vi.mock('@/modules/core/notifications/notifications.service', () => ({
   notificationsService: {},
 }))
@@ -56,6 +57,8 @@ const PHUONG = user({
   department_id: 'd-bh',
 })
 const NGA = user({ id: 'u-nga', name: 'Đặng Thị Thanh Nga', department_id: 'd-cu' })
+const KETOAN = user({ id: 'u-ketoan', name: 'Võ Thị Thu Hồng', department_id: 'd-kt' })
+const THUC = user({ id: 'u-thuc', name: 'Lê Tú Thức', department_id: 'd-ky' })
 const DIEN = user({
   id: 'u-dien',
   name: 'Điền Hg',
@@ -77,8 +80,15 @@ const TASK = (over: Partial<Task> = {}): Task =>
   }) as Task
 
 beforeEach(() => {
-  for (const f of [...Object.values(tasks), users.findById, comments.insert, activity.log, emit]) f.mockReset() // prettier-ignore
-  users.findById.mockImplementation(async (id: string) => [PHUONG, NGA, THAO].find((u) => u.id === id) ?? null) // prettier-ignore
+  for (const f of [...Object.values(tasks), users.findById, users.list, comments.insert, activity.log, emit]) f.mockReset() // prettier-ignore
+  users.findById.mockImplementation(async (id: string) => [PHUONG, NGA, THAO, KETOAN, THUC].find((u) => u.id === id) ?? null) // prettier-ignore
+  depts.list.mockReset()
+  depts.list.mockResolvedValue([
+    { id: 'd-cu', workspace_id: 'planning' },
+    { id: 'd-bh', workspace_id: 'sales' },
+    { id: 'd-kt', workspace_id: 'finance' },
+    { id: 'd-ky', workspace_id: 'technical' },
+  ])
   tasks.insert.mockImplementation(async (row: Partial<Task>) => TASK(row))
   tasks.patch.mockImplementation(async (id: string, p: Partial<Task>) =>
     TASK({ id, ...p }),
@@ -98,8 +108,21 @@ describe('create — Q1 + Q2', () => {
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'task.created', assignee_id: 'u-phuong' })) // prettier-ignore
   })
   it('nhân viên giao cho người khác → 403, câu nói cách gỡ', async () => {
-    await expect(tasksService.create(NGA, NEW)).rejects.toMatchObject({ status: 403, message: 'Sếp và quản lý giao việc. Cần giao thì nhờ quản lý phòng.' }) // prettier-ignore
+    await expect(tasksService.create(NGA, NEW)).rejects.toMatchObject({ status: 403, message: 'Giao việc dành cho sếp, quản lý và phòng Bán Hàng. Cần giao thì nhờ quản lý phòng giao hộ.' }) // prettier-ignore
     expect(tasks.insert).not.toHaveBeenCalled()
+  })
+  it('nhân viên Bán Hàng giao được cho Kỹ thuật và Cung ứng (03/11)', async () => {
+    await tasksService.create(PHUONG, { ...NEW, assignee_id: 'u-thuc' })
+    await tasksService.create(PHUONG, { ...NEW, assignee_id: 'u-nga' })
+    expect(tasks.insert).toHaveBeenCalledTimes(2)
+    expect(tasks.insert).toHaveBeenCalledWith(expect.objectContaining({ assigner_id: 'u-phuong', assignee_id: 'u-thuc', department_id: 'd-ky', kind: 'assigned' })) // prettier-ignore
+  })
+  it('Bán Hàng giao cho phòng khác → 403 nói rõ chỉ giao được Kỹ thuật + Cung ứng', async () => {
+    await expect(tasksService.create(PHUONG, { ...NEW, assignee_id: 'u-ketoan' })).rejects.toMatchObject({ status: 403, message: 'Bán Hàng chỉ giao được cho Kỹ thuật và Cung ứng. Việc cho phòng khác nhờ quản lý hoặc sếp giao.' }) // prettier-ignore
+    expect(tasks.insert).not.toHaveBeenCalled()
+  })
+  it('nhân viên Kỹ thuật không giao ngược cho Bán Hàng', async () => {
+    await expect(tasksService.create(THUC, { ...NEW, assignee_id: 'u-phuong' })).rejects.toMatchObject({ status: 403 }) // prettier-ignore
   })
   it('nhân viên tự ghi việc cho mình thì được', async () => {
     await tasksService.create(NGA, { ...NEW, assignee_id: 'u-nga' })
@@ -310,5 +333,22 @@ describe('mineBoard — mục "Việc của tôi" ở trang Phân công việc (
       ['lam', ['start', 'submit'], null],
       ['xong', [], null],
     ])
+  })
+})
+
+describe('assignees + canGive — danh sách người nhận theo quyền', () => {
+  beforeEach(() => {
+    users.list.mockResolvedValue([PHUONG, NGA, THAO, KETOAN, THUC])
+  })
+  it('Bán Hàng chỉ thấy Kỹ thuật + Cung ứng (và chính mình); quản lý thấy tất cả', async () => {
+    const sale = (await tasksService.assignees(PHUONG)).map((p) => p.id).sort()
+    expect(sale).toEqual(['u-nga', 'u-phuong', 'u-thao', 'u-thuc'])
+    expect(await tasksService.assignees(THAO)).toHaveLength(5)
+  })
+  it('canGive: Bán Hàng có, nhân viên Cung ứng/Kế toán không, quản lý có', async () => {
+    expect(await tasksService.canGive(PHUONG)).toBe(true)
+    expect(await tasksService.canGive(NGA)).toBe(false)
+    expect(await tasksService.canGive(KETOAN)).toBe(false)
+    expect(await tasksService.canGive(THAO)).toBe(true)
   })
 })

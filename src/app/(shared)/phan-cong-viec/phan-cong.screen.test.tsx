@@ -26,9 +26,9 @@ vi.mock('@/lib/api', async (orig) => ({
 
 const TODAY = '2026-10-30'
 const PEOPLE = [
-  { id: 'u-phuong', name: 'Nguyễn Phạm Thanh Phương', department: 'Bán Hàng' },
-  { id: 'u-quang', name: 'Dương Thái Quang', department: 'Kỹ Thuật' },
-  { id: 'u-thao', name: 'Vũ Phương Thảo', department: 'Cung Ứng - Mua Hàng' },
+  { id: 'u-phuong', name: 'Nguyễn Phạm Thanh Phương', department: 'Bán Hàng', workspace: 'sales' },
+  { id: 'u-quang', name: 'Dương Thái Quang', department: 'Kỹ Thuật', workspace: 'technical' },
+  { id: 'u-thao', name: 'Vũ Phương Thảo', department: 'Cung Ứng - Mua Hàng', workspace: 'planning' },
 ]
 const ITEM = (over: Partial<GivenItem> = {}): GivenItem =>
   ({
@@ -207,7 +207,7 @@ describe('danh sách Việc tôi giao', () => {
     render(<PhanCongScreen meId="u-nga" today={TODAY} board={null} mine={NO_MINE} people={[]} focus={null} />) // prettier-ignore
     expect(screen.queryByRole('form', { name: 'Giao việc' })).toBeNull()
     expect(
-      screen.getByText('Sếp và quản lý giao việc. Cần giao thì nhờ quản lý phòng.'),
+      screen.getByText('Giao việc dành cho sếp, quản lý và phòng Bán Hàng. Cần giao thì nhờ quản lý phòng giao hộ.'),
     ).toBeTruthy()
   })
 })

@@ -20,7 +20,10 @@ import { todayVn } from '@/lib/date-vn'
 import {
   actionForStatus,
   ASSIGN_BLOCKED,
+  ASSIGN_BLOCKED_TARGET,
   canAssign,
+  canAssignTo,
+  type FlowActor,
   CLOSED_KEEP_DAYS,
   isTakerOpen,
   matchesMine,
@@ -56,7 +59,33 @@ export type GivenBoard = {
   summary: Record<GivenFilter, number>
 }
 
-export type Assignee = { id: string; name: string; department: string | null }
+export type Assignee = {
+  id: string
+  name: string
+  department: string | null
+  /** workspace_id của phòng — để lọc theo quyền giao (Bán Hàng chỉ giao Kỹ thuật + Cung ứng). */
+  workspace: string | null
+}
+
+/** workspace_id của một phòng (null nếu chưa gán phòng / phòng chưa khai workspace). */
+async function workspaceOfDept(departmentId: string | null): Promise<string | null> {
+  if (!departmentId) return null
+  const depts = await departmentsRepo.list()
+  return depts.find((d) => d.id === departmentId)?.workspace_id ?? null
+}
+
+/**
+ * Người xem + phòng của họ, để `canAssign` / `canAssignTo` quyết. Chỉ nhân viên mới cần
+ * tra phòng (sếp / quản lý giao mọi phòng); tra 1 dòng `departments`.
+ */
+async function actorOf(user: User): Promise<FlowActor> {
+  const privileged = user.role === 'admin' || user.role === 'manager'
+  return {
+    id: user.id,
+    role: user.role,
+    workspace: privileged ? null : await workspaceOfDept(user.department_id),
+  }
+}
 
 /**
  * Một việc nhìn từ phía NGƯỜI NHẬN — dòng ô "Việc được giao" trên Bàn làm việc (P3)
@@ -164,13 +193,19 @@ export const tasksService = {
     const kind: TaskKind = isSelf ? 'self' : 'assigned'
 
     // Q1 — sếp + quản lý giao việc cho người khác; ai cũng tự ghi việc cho mình được.
-    if (!isSelf && !canAssign(user)) throw Forbidden(ASSIGN_BLOCKED)
+    const actor = await actorOf(user)
+    if (!isSelf && !canAssign(actor)) throw Forbidden(ASSIGN_BLOCKED)
 
     const assignee = await usersRepo.findById(input.assignee_id)
     if (!assignee || !assignee.is_active || assignee.deleted_at) {
       throw BadRequest(
         `${assignee?.name ?? 'Người nhận'} không còn hoạt động — chọn người khác`,
       )
+    }
+    // Bán Hàng chỉ giao Kỹ thuật + Cung ứng (03/11/2026); sếp + quản lý giao mọi phòng.
+    if (!isSelf) {
+      const toWs = await workspaceOfDept(assignee.department_id)
+      if (!canAssignTo(actor, toWs)) throw Forbidden(ASSIGN_BLOCKED_TARGET)
     }
     // Q2 (30/10/2026): BỎ luật "quản lý chỉ giao trong phòng mình" — quản lý Cung ứng
     // cần thúc Sales, Kỹ thuật. Việc mang phòng CỦA NGƯỜI NHẬN (department_id bên
@@ -657,7 +692,7 @@ export const tasksService = {
    * và danh sách nó mở không thể nói khác nhau. null = người xem không giao được việc.
    */
   async givenBoard(user: User): Promise<GivenBoard | null> {
-    if (!canAssign(user)) return null
+    if (!canAssign(await actorOf(user))) return null
     const today = todayVn()
     const { rows } = await tasksRepo.list({
       assigner_id: user.id,
@@ -760,19 +795,31 @@ export const tasksService = {
    * NGƯỜI NHẬN được việc (Q2 — mọi phòng): tên + phòng của mọi tài khoản đang hoạt
    * động. Không email / điện thoại: ô chọn người không cần.
    */
-  async assignees(): Promise<Assignee[]> {
-    const [users, depts] = await Promise.all([
+  async assignees(viewer?: User): Promise<Assignee[]> {
+    const [users, depts, actor] = await Promise.all([
       usersRepo.list({ active_only: true }),
       departmentsRepo.list(),
+      viewer ? actorOf(viewer) : Promise.resolve(null),
     ])
-    const deptName = new Map(depts.map((d) => [d.id, d.name]))
+    const dept = new Map(depts.map((d) => [d.id, d]))
     return users
       .filter((u) => u.name?.trim())
-      .map((u) => ({
-        id: u.id,
-        name: u.name!.trim(),
-        department: u.department_id ? (deptName.get(u.department_id) ?? null) : null,
-      }))
+      .map((u) => {
+        const d = u.department_id ? dept.get(u.department_id) : undefined
+        return {
+          id: u.id,
+          name: u.name!.trim(),
+          department: d?.name ?? null,
+          workspace: d?.workspace_id ?? null,
+        }
+      })
+      // Có người xem thì chỉ liệt kê người họ GIAO ĐƯỢC (Bán Hàng: Kỹ thuật + Cung ứng).
+      .filter((p) => !actor || p.id === viewer!.id || canAssignTo(actor, p.workspace))
+  },
+
+  /** Người này giao được việc cho ai đó không — một cửa cho nút "Giao việc" ở các trang. */
+  async canGive(user: User): Promise<boolean> {
+    return canAssign(await actorOf(user))
   },
 
   async attention(user: User) {

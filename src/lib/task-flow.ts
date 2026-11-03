@@ -29,7 +29,12 @@ export type FlowTask = {
   due_date: string | null
 }
 
-export type FlowActor = { id: string; role: string }
+export type FlowActor = {
+  id: string
+  role: string
+  /** workspace_id của phòng người này (departments.workspace_id) — chỉ cần với nhân viên. */
+  workspace?: string | null
+}
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   todo: 'Chưa làm',
@@ -41,13 +46,42 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   on_hold: 'Tạm hoãn',
 }
 
-/** Q1 — ai giao được việc cho NGƯỜI KHÁC. Tự ghi việc cho mình thì ai cũng được. */
+/**
+ * Phòng Bán Hàng (workspace 'sales') giao được việc cho hai khối này — kể cả nhân
+ * viên (Bán Hàng 3 người, không có quản lý; chủ dự án chốt 03/11/2026 "sale có thể
+ * phân công cho kỹ thuật và cung ứng"). 'planning' là workspace của Cung ứng - Mua
+ * Hàng (cùng khối Kế hoạch SX, hiện chưa có người).
+ */
+export const SALE_WORKSPACE = 'sales'
+export const SALE_ASSIGN_TO: readonly string[] = ['technical', 'planning']
+
+/** Q1 — ai giao được việc cho NGƯỜI KHÁC (ít nhất cho một khối). Tự ghi cho mình thì ai cũng được. */
 export function canAssign(actor: FlowActor): boolean {
-  return actor.role === 'admin' || actor.role === 'manager'
+  return (
+    actor.role === 'admin' ||
+    actor.role === 'manager' ||
+    actor.workspace === SALE_WORKSPACE
+  )
+}
+
+/**
+ * Giao được cho người thuộc khối `assigneeWorkspace` không? Sếp và quản lý giao mọi
+ * phòng (Q2 30/10); Bán Hàng chỉ giao Kỹ thuật + Cung ứng; người khác không giao.
+ */
+export function canAssignTo(actor: FlowActor, assigneeWorkspace: string | null): boolean {
+  if (actor.role === 'admin' || actor.role === 'manager') return true
+  if (actor.workspace === SALE_WORKSPACE)
+    return assigneeWorkspace !== null && SALE_ASSIGN_TO.includes(assigneeWorkspace)
+  return false
 }
 
 /** Câu nói khi người không có quyền mở nút "Giao việc" — nói cách gỡ, không nói "403". */
-export const ASSIGN_BLOCKED = 'Sếp và quản lý giao việc. Cần giao thì nhờ quản lý phòng.'
+export const ASSIGN_BLOCKED =
+  'Giao việc dành cho sếp, quản lý và phòng Bán Hàng. Cần giao thì nhờ quản lý phòng giao hộ.'
+
+/** Bán Hàng chọn người ngoài Kỹ thuật + Cung ứng. */
+export const ASSIGN_BLOCKED_TARGET =
+  'Bán Hàng chỉ giao được cho Kỹ thuật và Cung ứng. Việc cho phòng khác nhờ quản lý hoặc sếp giao.'
 
 export const TASK_ACTIONS = [
   'start', // bắt đầu / làm tiếp

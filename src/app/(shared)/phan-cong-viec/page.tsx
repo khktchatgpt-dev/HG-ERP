@@ -3,7 +3,6 @@ import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import {
   GIVEN_FILTERS,
   MINE_FILTERS,
-  canAssign,
   filterHolding,
   matchesGiven,
   matchesMine,
@@ -32,11 +31,11 @@ export default async function PhanCongPage({
     searchParams,
     authService.requirePageUser(),
   ])
-  const giver = canAssign(user)
+  const giver = await tasksService.canGive(user)
   const [board, mine, people] = await Promise.all([
     tasksService.givenBoard(user),
     tasksService.mineBoard(user),
-    giver ? tasksService.assignees() : Promise.resolve([]),
+    giver ? tasksService.assignees(user) : Promise.resolve([]),
   ])
   const today = todayVn()
 

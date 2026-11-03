@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   actionForStatus,
   canAssign,
+  canAssignTo,
   dueEndOfDay,
   filterHolding,
   GIVEN_FILTERS,
@@ -43,11 +44,37 @@ const NGA = { id: 'u-nga', role: 'employee' }
 const QUANG = { id: 'u-quang', role: 'manager' } // quản lý phòng khác, không dính
 const DIEN = { id: 'u-dien', role: 'admin' }
 
-describe('canAssign — Q1', () => {
-  it('sếp + quản lý giao được; nhân viên không', () => {
+const VIET_SALE = { id: 'u-viet', role: 'employee', workspace: 'sales' } // Bán Hàng, nhân viên
+const KE_TOAN = { id: 'u-kt', role: 'employee', workspace: 'finance' }
+
+describe('canAssign — Q1 (+ Bán Hàng 03/11)', () => {
+  it('sếp + quản lý giao được; nhân viên phòng khác không', () => {
     expect(canAssign(DIEN)).toBe(true)
     expect(canAssign(THAO)).toBe(true)
     expect(canAssign(PHUONG)).toBe(false)
+    expect(canAssign(KE_TOAN)).toBe(false)
+  })
+  it('nhân viên Bán Hàng giao được (theo phòng, không theo vai trò)', () => {
+    expect(canAssign(VIET_SALE)).toBe(true)
+  })
+})
+
+describe('canAssignTo — giao cho khối nào', () => {
+  it('sếp + quản lý giao mọi phòng, kể cả phòng chưa rõ', () => {
+    for (const ws of ['technical', 'planning', 'finance', 'production', 'sales', null])
+      expect(canAssignTo(THAO, ws) && canAssignTo(DIEN, ws)).toBe(true)
+  })
+  it('Bán Hàng chỉ giao Kỹ thuật + Cung ứng', () => {
+    expect(canAssignTo(VIET_SALE, 'technical')).toBe(true)
+    expect(canAssignTo(VIET_SALE, 'planning')).toBe(true)
+    expect(canAssignTo(VIET_SALE, 'finance')).toBe(false)
+    expect(canAssignTo(VIET_SALE, 'production')).toBe(false)
+    expect(canAssignTo(VIET_SALE, 'sales')).toBe(false)
+    expect(canAssignTo(VIET_SALE, null)).toBe(false)
+  })
+  it('nhân viên phòng khác không giao ai', () => {
+    expect(canAssignTo(KE_TOAN, 'technical')).toBe(false)
+    expect(canAssignTo(PHUONG, 'technical')).toBe(false)
   })
 })
 

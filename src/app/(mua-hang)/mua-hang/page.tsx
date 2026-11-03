@@ -4,7 +4,7 @@ import { usersRepo } from '@/modules/core/users/users.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { tasksService } from '@/modules/workflow/tasks/tasks.service'
-import { canAssign, summarizeTaker } from '@/lib/task-flow'
+import { summarizeTaker } from '@/lib/task-flow'
 import {
   loadWatchPos,
   todayIso,
@@ -86,8 +86,8 @@ export default async function Page({
   // Sếp / quản lý trên bàn CỦA MÌNH (P4): ô "Việc tôi giao" + hộp Giao việc. Xem bàn
   // người khác thì không — bàn đó phải hiện đúng như chủ bàn thấy.
   const giverP =
-    canAssign(user) && !viewAsUser
-      ? Promise.all([tasksService.givenBoard(user), tasksService.assignees()])
+    !viewAsUser && (await tasksService.canGive(user))
+      ? Promise.all([tasksService.givenBoard(user), tasksService.assignees(user)])
       : null
 
   const withLsx = rows.map((p) => ({
