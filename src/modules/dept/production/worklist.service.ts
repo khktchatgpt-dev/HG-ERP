@@ -14,7 +14,7 @@ import {
   resolveCountingPlan,
 } from '@/lib/default-assembly'
 import { countingOf, resolveStageConfigs, type StageMeta } from '@/lib/stage-config'
-import { totalKey, transferTotals, wipNumbers } from '@/lib/wip-numbers'
+import { receivedOrFallback, totalKey, transferTotals, wipNumbers } from '@/lib/wip-numbers'
 import {
   FINISH_ROW_NAME,
   finishRouteOverride,
@@ -741,11 +741,10 @@ export async function loadEntrySheet(
         const wip = wipNumbers({
           done,
           shipped: pg?.shipped ?? 0,
-          received: pg?.has_inbound
-            ? pg.received
-            : prev
-              ? (doneByCompStage.get(`${c.id}|${prev}`) ?? 0)
-              : null,
+          received: receivedOrFallback(
+            pg,
+            prev ? (doneByCompStage.get(`${c.id}|${prev}`) ?? 0) : null,
+          ),
           used: usedHere.get(c.id) ?? 0,
         })
         return {
