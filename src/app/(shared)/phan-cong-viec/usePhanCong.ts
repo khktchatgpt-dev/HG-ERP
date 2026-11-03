@@ -10,7 +10,6 @@ import {
   MINE_FILTERS,
   type GivenFilter,
   type MineFilter,
-  type TaskAction,
 } from '@/lib/task-flow'
 import type { GivenBoard, MineBoard } from '@/modules/workflow/tasks/tasks.service'
 import {
@@ -20,6 +19,7 @@ import {
   nhanNut,
   vuong,
   type Muc,
+  type NutA,
   type Viec,
 } from './pc-viec'
 
@@ -72,7 +72,10 @@ export function usePhanCong({
   const [q, setQ] = useState('')
   const [phong, setPhong] = useState('')
   const [chonId, setChonId] = useState<string | null>(focus?.id ?? null)
-  const [giaoMo, setGiaoMo] = useState(false)
+  // Ngăn phải đang là phiếu: giao việc mới, hoặc sửa việc đang chọn. null = chi tiết.
+  const [phieu, setPhieu] = useState<'giao' | 'sua' | null>(null)
+  const giaoMo = phieu !== null
+  const setGiaoMo = (mo: boolean) => setPhieu(mo ? 'giao' : null)
   const [buoc, setBuoc] = useState<Buoc | null>(null)
   const [cau, setCau] = useState('')
   const [busy, setBusy] = useState(false)
@@ -133,12 +136,16 @@ export function usePhanCong({
   }
 
   /** Bấm một nút Action Pane. Nút khoá vẫn bấm được: nói vướng gì ngay dưới thanh. */
-  function bam(a: TaskAction, label: string) {
+  function bam(a: NutA, label: string) {
     const why = vuong(a, label, chon)
     if (why) return setBao({ text: why })
     setBao(null)
     setGiaoMo(false)
     if (!chon) return
+    if (a === 'edit') {
+      huyBuoc()
+      return setPhieu('sua')
+    }
     const ma = chon.task_code ?? 'việc'
     if (a === 'start')
       return void ghi('status', { status: 'in_progress' }, `Đã bắt đầu ${ma}.`)
@@ -189,7 +196,20 @@ export function usePhanCong({
     chon,
     chonDong,
     giaoMo,
+    phieu,
     moGiao,
+    sauSua: (ma: string, changes: string[]) => {
+      setPhieu(null)
+      setBao(
+        changes.length > 0
+          ? {
+              text: `Đã sửa ${ma}: ${changes.join(' · ')}. Người nhận được báo.`,
+              ok: true,
+            }
+          : { text: 'Không có gì thay đổi.', ok: true },
+      )
+      router.refresh()
+    },
     dongGiao: () => setGiaoMo(false),
     sauGiao: (id: string, ten: string, loiTep: string[]) => {
       setGiaoMo(false)

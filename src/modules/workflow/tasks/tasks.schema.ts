@@ -116,6 +116,20 @@ export const planQuerySchema = z.object({
   range: z.enum(['today', 'week', 'overdue', 'upcoming', 'all']).default('week'),
 })
 
+/**
+ * SỬA VIỆC ĐÃ GIAO (04/11/2026) — chỉ năm trường người giao nói với người nhận. Gửi
+ * trường nào thì xét trường đó; không gửi gì là lỗi.
+ */
+export const taskEditSchema = z
+  .object({
+    title: z.string().trim().min(1, 'Ghi tên việc').max(200).optional(),
+    description: z.string().trim().max(5000).nullable().optional(),
+    due_date: z.string().datetime({ offset: true }).nullable().optional(),
+    priority: z.enum(TASK_PRIORITIES).optional(),
+    assignee_id: uuidSchema.optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'Không có gì để sửa')
+
 export const commentCreateSchema = z.object({
   body: z.string().trim().min(1).max(4000),
   kind: z.enum(['comment', 'progress_report']).default('comment'),

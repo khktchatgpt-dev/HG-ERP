@@ -3,6 +3,8 @@ import {
   actionForStatus,
   canAssign,
   canAssignTo,
+  taskEditBlock,
+  taskEditSummary,
   dueEndOfDay,
   filterHolding,
   GIVEN_FILTERS,
@@ -180,7 +182,8 @@ describe('taskAttention — số đỏ sidebar', () => {
 
 describe('schema báo hoàn thành / trả lại — câu tiếng Việt kể cả khi THIẾU HẲN trường', () => {
   it('thiếu result / reason, hoặc chỉ toàn dấu cách', async () => {
-    const { taskSubmitSchema, taskRejectSchema } = await import('@/modules/workflow/tasks/tasks.schema')
+    const { taskSubmitSchema, taskRejectSchema } =
+      await import('@/modules/workflow/tasks/tasks.schema')
     for (const body of [{}, { result: '   ' }]) {
       expect(taskSubmitSchema.safeParse(body).error?.issues[0].message).toBe('Ghi một câu kết quả để người giao biết đã làm gì') // prettier-ignore
     }
@@ -205,7 +208,9 @@ describe('Việc tôi giao — chip đếm đúng danh sách nó mở (P2)', () 
   })
   it('"Chưa xong" gồm cả chờ duyệt; xong quá 30 ngày rơi khỏi danh sách', () => {
     expect(list.filter((t) => matchesGiven(t, 'open', TODAY)).map((t) => t.id)).toEqual(['cho', 'qua', 'mo', 'khong-han']) // prettier-ignore
-    expect(list.filter((t) => matchesGiven(t, 'done', TODAY)).map((t) => t.id)).toEqual(['xong'])
+    expect(list.filter((t) => matchesGiven(t, 'done', TODAY)).map((t) => t.id)).toEqual([
+      'xong',
+    ])
   })
   it('thứ tự: chờ tôi duyệt → quá hạn → hạn gần → không hạn → đã đóng', () => {
     expect(sortGiven(list, TODAY).map((t) => t.id)).toEqual(['cho', 'qua', 'mo', 'khong-han', 'xong', 'huy', 'xong-cu']) // prettier-ignore
@@ -233,16 +238,38 @@ describe('Theo người mua — ba cột việc được giao (P4)', () => {
       R({ status: 'in_progress', due_date: '2026-10-27T16:59:59Z' }), // quá hạn 3 ngày
       R({ status: 'rejected', due_date: '2026-11-03T16:59:59Z' }),
       R({ status: 'submitted' }), // bóng ở người giao — không vào cột nào
-      R({ status: 'done', due_date: '2026-10-28T16:59:59Z', completed_at: '2026-10-28T09:00:00Z' }), // đúng hạn
-      R({ status: 'done', due_date: '2026-10-20T16:59:59Z', completed_at: '2026-10-22T03:00:00Z' }), // trễ 2 ngày
+      R({
+        status: 'done',
+        due_date: '2026-10-28T16:59:59Z',
+        completed_at: '2026-10-28T09:00:00Z',
+      }), // đúng hạn
+      R({
+        status: 'done',
+        due_date: '2026-10-20T16:59:59Z',
+        completed_at: '2026-10-22T03:00:00Z',
+      }), // trễ 2 ngày
       R({ status: 'done', due_date: null, completed_at: '2026-10-29T03:00:00Z' }), // không hạn — ngoài mẫu số
-      R({ status: 'done', due_date: '2026-09-10T16:59:59Z', completed_at: '2026-09-10T03:00:00Z' }), // quá 30 ngày
+      R({
+        status: 'done',
+        due_date: '2026-09-10T16:59:59Z',
+        completed_at: '2026-09-10T03:00:00Z',
+      }), // quá 30 ngày
       R({ kind: 'self', status: 'todo', due_date: '2026-10-01T16:59:59Z' }), // tự ghi — không tính
     ]
-    expect(summarizeTaker(list, TODAY)).toEqual({ open: 2, overdue: 1, on_time: 1, done_due: 2 })
+    expect(summarizeTaker(list, TODAY)).toEqual({
+      open: 2,
+      overdue: 1,
+      on_time: 1,
+      done_due: 2,
+    })
   })
   it('chưa có việc nào: toàn 0 (màn vẽ "—" cho cột Đúng hạn)', () => {
-    expect(summarizeTaker([], TODAY)).toEqual({ open: 0, overdue: 0, on_time: 0, done_due: 0 })
+    expect(summarizeTaker([], TODAY)).toEqual({
+      open: 0,
+      overdue: 0,
+      on_time: 0,
+      done_due: 0,
+    })
   })
 })
 
@@ -262,12 +289,74 @@ describe('Việc của tôi + chuông mở đúng chỗ (P5)', () => {
   })
   it('chip đầu tiên chứa việc — việc quá hạn mở ở "Cần làm", việc xong ở "Xong"', () => {
     const at = (id: string) => list.find((t) => t.id === id)!
-    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('qua'), f, TODAY))).toBe('doing')
-    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('xong'), f, TODAY))).toBe('done')
+    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('qua'), f, TODAY))).toBe(
+      'doing',
+    )
+    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('xong'), f, TODAY))).toBe(
+      'done',
+    )
     expect(filterHolding(GIVEN_FILTERS, (f) => matchesGiven(at('cho'), f, TODAY))).toBe('to_approve') // prettier-ignore
-    expect(filterHolding(MINE_FILTERS, (f) => matchesMine(at('xong-cu'), f, TODAY))).toBeNull()
+    expect(
+      filterHolding(MINE_FILTERS, (f) => matchesMine(at('xong-cu'), f, TODAY)),
+    ).toBeNull()
   })
   it('chuông việc mở trang dùng chung, không còn /tasks/[id] cũ', () => {
     expect(taskHref('8ecdc87e-b218')).toBe('/phan-cong-viec?viec=8ecdc87e-b218')
+  })
+})
+
+describe('taskEditBlock — ai sửa được việc đã giao', () => {
+  const T0 = {
+    kind: 'assigned' as const,
+    status: 'in_progress' as const,
+    assigner_id: 'u-viet',
+  }
+  it('người giao (kể cả nhân viên Bán Hàng) và sếp sửa được', () => {
+    expect(
+      taskEditBlock(T0, { id: 'u-viet', role: 'employee', workspace: 'sales' }),
+    ).toBeNull()
+    expect(taskEditBlock(T0, { id: 'u-dien', role: 'admin' })).toBeNull()
+  })
+  it('người nhận / quản lý khác không sửa', () => {
+    expect(taskEditBlock(T0, { id: 'u-quang', role: 'employee' })).toBe('Chỉ người giao việc (hoặc sếp) sửa được việc này') // prettier-ignore
+    expect(taskEditBlock(T0, { id: 'u-thao', role: 'manager' })).not.toBeNull()
+  })
+  it('việc đã xong / huỷ thì khoá; chờ duyệt vẫn sửa được', () => {
+    expect(taskEditBlock({ ...T0, status: 'done' }, { id: 'u-viet', role: 'employee' })).toBe('Việc đã đóng — mở lại rồi mới sửa') // prettier-ignore
+    expect(taskEditBlock({ ...T0, status: 'cancelled' }, { id: 'u-viet', role: 'employee' })).not.toBeNull() // prettier-ignore
+    expect(taskEditBlock({ ...T0, status: 'submitted' }, { id: 'u-viet', role: 'employee' })).toBeNull() // prettier-ignore
+  })
+})
+
+describe('taskEditSummary — kể lại đã đổi gì', () => {
+  const B = {
+    title: 'Làm mẫu rập Siena',
+    description: 'Tựa cao 20mm',
+    due_date: '2026-11-10T16:59:59.999Z',
+    priority: 'normal',
+    assignee_id: 'u-quang',
+  }
+  const ten = (id: string) =>
+    ({ 'u-quang': 'Dương Thái Quang', 'u-thuc': 'Lê Tú Thức' })[id] ?? id
+  it('mỗi thay đổi một dòng, ngày theo giờ VN', () => {
+    expect(
+      taskEditSummary(B, { due_date: '2026-11-12T16:59:59.999Z', priority: 'urgent', assignee_id: 'u-thuc' }, ten),
+    ).toEqual(['Đổi hạn: 10/11/2026 → 12/11/2026', 'Đổi mức: Thường → Gấp', 'Chuyển việc: Dương Thái Quang → Lê Tú Thức']) // prettier-ignore
+  })
+  it('gửi lại y nguyên (kể cả khoảng trắng, cùng ngày khác giờ) = không đổi gì', () => {
+    expect(taskEditSummary(B, { ...B, title: ' Làm mẫu rập Siena ', due_date: '2026-11-10T10:00:00Z' }, ten)).toEqual([]) // prettier-ignore
+  })
+  it('tên, mô tả, bỏ hạn', () => {
+    expect(
+      taskEditSummary(
+        B,
+        { title: 'Rập Siena rev.3', description: '', due_date: null },
+        ten,
+      ),
+    ).toEqual([
+      'Đổi tên việc: “Làm mẫu rập Siena” → “Rập Siena rev.3”',
+      'Xoá mô tả',
+      'Đổi hạn: 10/11/2026 → không hạn',
+    ])
   })
 })

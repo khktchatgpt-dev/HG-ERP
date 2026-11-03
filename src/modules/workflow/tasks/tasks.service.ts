@@ -22,6 +22,9 @@ import {
   actionForStatus,
   ASSIGN_BLOCKED,
   ASSIGN_BLOCKED_TARGET,
+  taskEditBlock,
+  taskEditSummary,
+  type TaskEditFields,
   canAssign,
   canAssignTo,
   type FlowActor,
@@ -55,6 +58,8 @@ export type GivenItem = TaskRow & {
   last_reject: string | null
   /** Số tệp đính kèm (đã chốt). */
   file_count: number
+  /** Người xem sửa được nội dung việc (`taskEditBlock`). */
+  can_edit: boolean
 }
 
 export type GivenBoard = {
@@ -350,6 +355,89 @@ export const tasksService = {
     }
     const { rows } = await tasksRepo.list({ ...baseFilter, page_size: 200 })
     return rows
+  },
+
+  /**
+   * SỬA VIỆC ĐÃ GIAO (04/11/2026). Luật ở `taskEditBlock`: người giao (kể cả nhân viên
+   * Bán Hàng) và sếp, việc chưa đóng. Đổi người nhận phải qua `canAssignTo` như lúc
+   * giao. Mỗi lần sửa ghi MỘT dòng hệ thống vào Trao đổi kể lại đã đổi gì
+   * (`taskEditSummary`) và báo người nhận qua đường "trao đổi" sẵn có — không thêm
+   * loại chuông mới (không cần migration). Gửi y nguyên = không ghi gì.
+   */
+  async edit(
+    user: User,
+    id: string,
+    input: Partial<TaskEditFields>,
+  ): Promise<{ task: Task; changes: string[] }> {
+    const before = await tasksRepo.findById(id)
+    if (!before) throw NotFound('Không thấy việc này')
+    const actor = await actorOf(user)
+    const block = taskEditBlock(before, actor)
+    if (block) throw Forbidden(block)
+
+    const doiNguoi = !!input.assignee_id && input.assignee_id !== before.assignee_id
+    const moi = doiNguoi ? await usersRepo.findById(input.assignee_id!) : null
+    if (doiNguoi) {
+      if (!moi || !moi.is_active || moi.deleted_at)
+        throw BadRequest(
+          `${moi?.name ?? 'Người nhận'} không còn hoạt động — chọn người khác`,
+        )
+      if (moi.id === before.assigner_id)
+        throw BadRequest('Không chuyển việc về chính người giao — chọn người khác')
+      if (!canAssignTo(actor, await workspaceOfDept(moi.department_id)))
+        throw Forbidden(ASSIGN_BLOCKED_TARGET)
+    }
+    const cu = await usersRepo.findById(before.assignee_id)
+    const ten = (uid: string) =>
+      (uid === moi?.id ? moi?.name : uid === cu?.id ? cu?.name : null) ?? 'người nhận'
+    const changes = taskEditSummary(before as TaskEditFields, input, ten)
+    if (changes.length === 0) return { task: before, changes }
+
+    const patch: TaskPatch = {}
+    if (input.title !== undefined) patch.title = input.title.trim()
+    if (input.description !== undefined)
+      patch.description = input.description?.trim() || null
+    if (input.due_date !== undefined) patch.due_date = input.due_date
+    if (input.priority !== undefined) patch.priority = input.priority as TaskPriority
+    if (doiNguoi) {
+      patch.assignee_id = moi!.id
+      patch.department_id = moi!.department_id ?? null
+    }
+    const task = await tasksRepo.patch(id, patch)
+    await activityRepo.log({
+      task_id: id,
+      actor_id: user.id,
+      action: doiNguoi ? 'reassigned' : 'updated',
+      payload: input as Record<string, unknown>,
+    })
+    await commentsRepo.insert({
+      task_id: id,
+      user_id: user.id,
+      body: changes.join('\n'),
+      kind: 'system',
+    })
+    // Báo người đang làm (và người vừa bị chuyển đi) đọc dòng thay đổi.
+    const nhan = [before.assignee_id, task.assignee_id].filter(
+      (x, i, a) => x !== user.id && a.indexOf(x) === i,
+    )
+    if (nhan.length > 0)
+      await emit({
+        name: 'task.commented',
+        task_id: id,
+        title: task.title,
+        comment_by: user.id,
+        comment_kind: 'comment',
+        recipient_ids: nhan,
+      })
+    if (doiNguoi && task.assignee_id !== user.id)
+      await emit({
+        name: 'task.reassigned',
+        task_id: id,
+        title: task.title,
+        reassigned_by: user.id,
+        new_assignee_id: task.assignee_id,
+      })
+    return { task, changes }
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Task> {
@@ -699,7 +787,8 @@ export const tasksService = {
    * và danh sách nó mở không thể nói khác nhau. null = người xem không giao được việc.
    */
   async givenBoard(user: User): Promise<GivenBoard | null> {
-    if (!canAssign(await actorOf(user))) return null
+    const flow = await actorOf(user)
+    if (!canAssign(flow)) return null
     const today = todayVn()
     const { rows } = await tasksRepo.list({
       assigner_id: user.id,
@@ -724,6 +813,7 @@ export const tasksService = {
         ...t,
         overdue_days: taskOverdueDays(t, today),
         actions: taskActions(t, actor),
+        can_edit: taskEditBlock(t, flow) === null,
         last_result: notes.get(t.id)?.progress_report?.body ?? null,
         last_reject: notes.get(t.id)?.rejection?.body ?? null,
         file_count: counts.get(t.id) ?? 0,
@@ -823,19 +913,21 @@ export const tasksService = {
       viewer ? actorOf(viewer) : Promise.resolve(null),
     ])
     const dept = new Map(depts.map((d) => [d.id, d]))
-    return users
-      .filter((u) => u.name?.trim())
-      .map((u) => {
-        const d = u.department_id ? dept.get(u.department_id) : undefined
-        return {
-          id: u.id,
-          name: u.name!.trim(),
-          department: d?.name ?? null,
-          workspace: d?.workspace_id ?? null,
-        }
-      })
-      // Có người xem thì chỉ liệt kê người họ GIAO ĐƯỢC (Bán Hàng: Kỹ thuật + Cung ứng).
-      .filter((p) => !actor || p.id === viewer!.id || canAssignTo(actor, p.workspace))
+    return (
+      users
+        .filter((u) => u.name?.trim())
+        .map((u) => {
+          const d = u.department_id ? dept.get(u.department_id) : undefined
+          return {
+            id: u.id,
+            name: u.name!.trim(),
+            department: d?.name ?? null,
+            workspace: d?.workspace_id ?? null,
+          }
+        })
+        // Có người xem thì chỉ liệt kê người họ GIAO ĐƯỢC (Bán Hàng: Kỹ thuật + Cung ứng).
+        .filter((p) => !actor || p.id === viewer!.id || canAssignTo(actor, p.workspace))
+    )
   },
 
   /** Người này giao được việc cho ai đó không — một cửa cho nút "Giao việc" ở các trang. */

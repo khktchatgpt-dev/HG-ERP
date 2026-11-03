@@ -46,8 +46,10 @@ export function khopTim(t: Viec, q: string): boolean {
   ).includes(k)
 }
 
-/** Nút trên Action Pane — mỗi mục chỉ có nút của vai mình. */
-export const NUT: Record<Muc, { a: TaskAction; label: string; chinh?: boolean }[]> = {
+/** Nút Action Pane (mỗi mục chỉ có nút của vai mình): bước của vòng việc, hoặc 'edit' (sửa nội dung — không đổi trạng thái). */
+export type NutA = TaskAction | 'edit'
+
+export const NUT: Record<Muc, { a: NutA; label: string; chinh?: boolean }[]> = {
   'cua-toi': [
     { a: 'start', label: 'Bắt đầu' },
     { a: 'submit', label: 'Báo hoàn thành', chinh: true },
@@ -55,13 +57,14 @@ export const NUT: Record<Muc, { a: TaskAction; label: string; chinh?: boolean }[
   giao: [
     { a: 'approve', label: 'Duyệt Đạt', chinh: true },
     { a: 'reject', label: 'Trả lại' },
+    { a: 'edit', label: 'Sửa việc' },
     { a: 'restore', label: 'Mở lại' },
     { a: 'cancel', label: 'Huỷ việc' },
   ],
 }
 
 /** Nhãn "Bắt đầu" đổi thành "Làm tiếp" khi việc bị trả lại / tạm hoãn. */
-export function nhanNut(a: TaskAction, label: string, t: Viec | null): string {
+export function nhanNut(a: NutA, label: string, t: Viec | null): string {
   if (a === 'start' && t && (t.status === 'rejected' || t.status === 'on_hold'))
     return 'Làm tiếp'
   return label
@@ -71,8 +74,14 @@ export function nhanNut(a: TaskAction, label: string, t: Viec | null): string {
  * Vì sao nút `a` chưa bấm được với dòng đang chọn — null = bấm được. Câu nói việc
  * đang ở đâu và cần gì, hiện ngay dưới Action Pane khi bấm vào nút khoá.
  */
-export function vuong(a: TaskAction, label: string, t: Viec | null): string | null {
+export function vuong(a: NutA, label: string, t: Viec | null): string | null {
   if (!t) return `Chọn một việc trong lưới để ${label.toLowerCase()}.`
+  if (a === 'edit') {
+    if ('can_edit' in t && t.can_edit) return null
+    if (t.status === 'done' || t.status === 'cancelled')
+      return `${t.task_code ?? 'Việc này'} đang “${tinhTrang(t).label}” — mở lại rồi mới sửa.`
+    return 'Chỉ người giao việc (hoặc sếp) sửa được việc này.'
+  }
   if ((t.actions as TaskAction[]).includes(a)) return null
   const dang = `${t.task_code ?? 'Việc này'} đang “${tinhTrang(t).label}”`
   if (a === 'approve' || a === 'reject') return `${dang} — chỉ việc Chờ duyệt mới ${label.toLowerCase()} được.` // prettier-ignore

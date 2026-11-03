@@ -297,7 +297,10 @@ describe('takerStats — ba cột việc ở tab Theo người mua (P4)', () => 
     ])
     const out = await tasksService.takerStats(['u-nga', 'u-phuong', 'u-thao'])
     // 31 ngày trước 30/10 (giờ VN) — dư một ngày, summarizeTaker cắt đúng mốc.
-    expect(tasks.listForTakers).toHaveBeenCalledWith(['u-nga', 'u-phuong', 'u-thao'], '2026-09-29')
+    expect(tasks.listForTakers).toHaveBeenCalledWith(
+      ['u-nga', 'u-phuong', 'u-thao'],
+      '2026-09-29',
+    )
     expect(out).toEqual({
       'u-nga': { open: 1, overdue: 1, on_time: 1, done_due: 1 },
       'u-phuong': { open: 1, overdue: 0, on_time: 0, done_due: 0 },
@@ -330,7 +333,13 @@ describe('mineBoard — mục "Việc của tôi" ở trang Phân công việc (
     expect(tasks.list).toHaveBeenCalledWith(
       expect.objectContaining({ assignee_id: 'u-phuong', kind: 'assigned' }),
     )
-    expect(out.summary).toEqual({ doing: 1, overdue: 0, waiting: 1, done: 1, cancelled: 0 })
+    expect(out.summary).toEqual({
+      doing: 1,
+      overdue: 0,
+      waiting: 1,
+      done: 1,
+      cancelled: 0,
+    })
     expect(out.items.map((t) => [t.id, t.actions, t.last_result])).toEqual([
       ['cho', [], 'Đã gửi 6 ảnh'],
       ['lam', ['start', 'submit'], null],
@@ -353,5 +362,61 @@ describe('assignees + canGive — danh sách người nhận theo quyền', () =
     expect(await tasksService.canGive(NGA)).toBe(false)
     expect(await tasksService.canGive(KETOAN)).toBe(false)
     expect(await tasksService.canGive(THAO)).toBe(true)
+  })
+})
+
+describe('edit — sửa việc đã giao (04/11)', () => {
+  // Phương (nhân viên Bán Hàng) giao cho Thức (Kỹ thuật).
+  const GIAO = () =>
+    TASK({
+      assigner_id: 'u-phuong',
+      assignee_id: 'u-thuc',
+      department_id: 'd-ky',
+      title: 'Làm mẫu rập Siena',
+      description: 'Tựa cao 20mm',
+      priority: 'normal',
+      due_date: '2026-11-10T16:59:59.999Z',
+    })
+
+  it('nhân viên Bán Hàng sửa được việc mình giao: ghi dòng "đã đổi gì" + báo người nhận', async () => {
+    tasks.findById.mockResolvedValue(GIAO())
+    const r = await tasksService.edit(PHUONG, 't1', { due_date: '2026-11-12T16:59:59.999Z', priority: 'urgent' }) // prettier-ignore
+    expect(r.changes).toEqual([
+      'Đổi hạn: 10/11/2026 → 12/11/2026',
+      'Đổi mức: Thường → Gấp',
+    ])
+    expect(tasks.patch).toHaveBeenCalledWith('t1', { due_date: '2026-11-12T16:59:59.999Z', priority: 'urgent' }) // prettier-ignore
+    expect(comments.insert).toHaveBeenCalledWith({ task_id: 't1', user_id: 'u-phuong', body: 'Đổi hạn: 10/11/2026 → 12/11/2026\nĐổi mức: Thường → Gấp', kind: 'system' }) // prettier-ignore
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'task.commented', recipient_ids: ['u-thuc'] })) // prettier-ignore
+  })
+
+  it('gửi y nguyên → không ghi gì, không báo ai', async () => {
+    tasks.findById.mockResolvedValue(GIAO())
+    const r = await tasksService.edit(PHUONG, 't1', { title: ' Làm mẫu rập Siena ' })
+    expect(r.changes).toEqual([])
+    expect(tasks.patch).not.toHaveBeenCalled()
+    expect(comments.insert).not.toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('người nhận không sửa được; việc đã xong khoá', async () => {
+    tasks.findById.mockResolvedValue(GIAO())
+    await expect(tasksService.edit(THUC, 't1', { title: 'x' })).rejects.toMatchObject({ status: 403, message: 'Chỉ người giao việc (hoặc sếp) sửa được việc này' }) // prettier-ignore
+    tasks.findById.mockResolvedValue({ ...GIAO(), status: 'done' })
+    await expect(tasksService.edit(PHUONG, 't1', { title: 'x' })).rejects.toMatchObject({ status: 403, message: 'Việc đã đóng — mở lại rồi mới sửa' }) // prettier-ignore
+    expect(tasks.patch).not.toHaveBeenCalled()
+  })
+
+  it('chuyển việc: Bán Hàng chỉ chuyển trong Kỹ thuật + Cung ứng; chuyển được thì báo cả người cũ lẫn người mới', async () => {
+    tasks.findById.mockResolvedValue(GIAO())
+    await expect(tasksService.edit(PHUONG, 't1', { assignee_id: 'u-ketoan' })).rejects.toMatchObject({ status: 403 }) // prettier-ignore
+    const r = await tasksService.edit(PHUONG, 't1', { assignee_id: 'u-nga' })
+    expect(r.changes).toEqual(['Chuyển việc: Lê Tú Thức → Đặng Thị Thanh Nga'])
+    expect(tasks.patch).toHaveBeenCalledWith('t1', {
+      assignee_id: 'u-nga',
+      department_id: 'd-cu',
+    })
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'task.commented', recipient_ids: ['u-thuc', 'u-nga'] })) // prettier-ignore
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ name: 'task.reassigned', new_assignee_id: 'u-nga' })) // prettier-ignore
   })
 })

@@ -5,9 +5,10 @@ import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 import { formatBytes } from '@/lib/file-limits'
 import { extLabel, isImageMime, pickTaskFiles } from '@/lib/task-files'
+import { todayVn } from '@/lib/date-vn'
 import { dueEndOfDay, MAX_TASK_FILES } from '@/lib/task-flow'
 import { uploadFileTracked } from '@/lib/upload'
-import type { Assignee } from '@/modules/workflow/tasks/tasks.service'
+import type { Assignee, GivenItem } from '@/modules/workflow/tasks/tasks.service'
 import { ONguoi } from './o-nguoi'
 import { addDays, nextMonday } from './phan-cong.shared'
 
@@ -19,6 +20,9 @@ import { addDays, nextMonday } from './phan-cong.shared'
  * Tệp lên SAU khi việc đã tạo (cần id việc). Tệp hỏng không làm mất việc: màn cha
  * nhận danh sách tệp lỗi và báo dưới Action Pane, việc vừa giao được chọn sẵn để thêm
  * lại ở ngăn chi tiết.
+ *
+ * CHẾ ĐỘ SỬA (`sua`, 04/11/2026): cùng phiếu, điền sẵn việc đang chọn, chỉ gửi trường
+ * đã đổi tới `/edit`; tệp thêm / xoá ở ngăn chi tiết nên phiếu sửa không có khối tệp.
  */
 export function PhieuGiao({
   people,
@@ -27,6 +31,8 @@ export function PhieuGiao({
   restricted,
   onClose,
   onDone,
+  sua,
+  onSaved,
 }: {
   people: Assignee[]
   meId: string
@@ -35,12 +41,23 @@ export function PhieuGiao({
   restricted: boolean
   onClose: () => void
   onDone: (taskId: string, assigneeName: string, failedFiles: string[]) => void
+  /** Có = sửa việc này thay vì giao việc mới. */
+  sua?: GivenItem | null
+  /** Sửa xong: các dòng "đã đổi gì" máy chủ trả về. */
+  onSaved?: (ma: string, changes: string[]) => void
 }) {
-  const [assignee, setAssignee] = useState<string | null>(null)
-  const [title, setTitle] = useState('')
-  const [detail, setDetail] = useState('')
-  const [dueText, setDueText] = useState('')
-  const [urgent, setUrgent] = useState(false)
+  const goc = {
+    assignee: sua?.assignee_id ?? null,
+    title: sua?.title ?? '',
+    detail: sua?.description ?? '',
+    due: sua?.due_date ? isoToVn(todayVn(new Date(sua.due_date))) : '',
+    urgent: sua?.priority === 'urgent',
+  }
+  const [assignee, setAssignee] = useState<string | null>(goc.assignee)
+  const [title, setTitle] = useState(goc.title)
+  const [detail, setDetail] = useState(goc.detail)
+  const [dueText, setDueText] = useState(goc.due)
+  const [urgent, setUrgent] = useState(goc.urgent)
   const [picked, setPicked] = useState<File[]>([])
   const [rejected, setRejected] = useState<{ name: string; reason: string }[]>([])
   const [busy, setBusy] = useState(false)
@@ -81,6 +98,30 @@ export function PhieuGiao({
     if (busy) return
     setBusy(true)
     setLoi(null)
+    if (sua) {
+      // Chỉ gửi trường đã đổi — máy chủ kể lại đúng những thứ đó cho người nhận.
+      const body: Record<string, unknown> = {}
+      if (assignee !== goc.assignee) body.assignee_id = assignee
+      if (title.trim() !== goc.title.trim()) body.title = title.trim()
+      if (detail.trim() !== goc.detail.trim()) body.description = detail.trim() || null
+      if (dueText.trim() !== goc.due) body.due_date = dueIso ? dueEndOfDay(dueIso) : null
+      if (urgent !== goc.urgent) body.priority = urgent ? 'urgent' : 'normal'
+      try {
+        const r =
+          Object.keys(body).length === 0
+            ? { changes: [] as string[] }
+            : await api<{ changes: string[] }>(`/api/tasks/${sua.id}/edit`, {
+                method: 'POST',
+                body,
+              })
+        onSaved?.(sua.task_code ?? 'việc', r.changes)
+      } catch (e) {
+        setLoi(apiErrorText(e, 'Chưa lưu được — thử lại'))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     try {
       const { task } = await api<{ task: { id: string } }>('/api/tasks', {
         method: 'POST',
@@ -125,7 +166,7 @@ export function PhieuGiao({
 
   return (
     <form
-      aria-label="Giao việc"
+      aria-label={sua ? 'Sửa việc' : 'Giao việc'}
       className="pc-fx"
       onSubmit={(e) => {
         e.preventDefault()
@@ -140,15 +181,19 @@ export function PhieuGiao({
       }}
     >
       <div className="pc-fx-h">
-        <span className="t">Giao việc mới</span>
+        <span className="t">
+          {sua ? `Sửa ${sua.task_code ?? 'việc'}` : 'Giao việc mới'}
+        </span>
         <div className="pc-ap">
           <div>
             <button type="submit" className="b p" aria-disabled={khoa}>
               {busy
-                ? 'Đang giao…'
-                : who
-                  ? `Giao cho ${who.name.split(' ').at(-1)}`
-                  : 'Giao việc'}
+                ? 'Đang ghi…'
+                : sua
+                  ? 'Lưu thay đổi'
+                  : who
+                    ? `Giao cho ${who.name.split(' ').at(-1)}`
+                    : 'Giao việc'}
             </button>
             <button type="button" className="b" onClick={onClose}>
               Huỷ
@@ -264,66 +309,84 @@ export function PhieuGiao({
             </span>
           </div>
 
-          <span className="l">
-            Tệp{' '}
-            <span className="num">
-              {picked.length}/{MAX_TASK_FILES}
-            </span>
-          </span>
-          <div style={{ padding: 0 }}>
-            {picked.map((f, i) => (
-              <div key={`${f.name}-${i}`} className="fl">
-                <span className="x">{extLabel(f.name)}</span>
-                <span className="ten" title={f.name}>
-                  {f.name}
-                </span>
-                <span className="num mut">{formatBytes(f.size)}</span>
-                <span>
-                  <button
-                    type="button"
-                    className="ic del"
-                    aria-label={`Bỏ tệp ${f.name}`}
-                    onClick={() => setPicked((p) => p.filter((_, j) => j !== i))}
-                  >
-                    Bỏ
-                  </button>
-                </span>
+          {sua ? (
+            <>
+              <span className="l">Tệp</span>
+              <div className="mut" style={{ padding: '7px 8px' }}>
+                Thêm / xoá tệp ở ngăn chi tiết của việc.
               </div>
-            ))}
-            {rejected.map((r) => (
-              <div key={r.name} className="fl bad" role="alert">
-                <span className="x">{extLabel(r.name)}</span>
-                <span className="ten" title={`${r.name} · ${r.reason}`}>
-                  {r.name} · {r.reason}
+            </>
+          ) : (
+            <>
+              <span className="l">
+                Tệp{' '}
+                <span className="num">
+                  {picked.length}/{MAX_TASK_FILES}
                 </span>
-                <span />
-                <span />
-              </div>
-            ))}
-            <input
-              ref={fileRef}
-              id="pcv-tep"
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                const r = pickTaskFiles([...(e.currentTarget.files ?? [])], picked.length)
-                setPicked((p) => [...p, ...r.accepted])
-                setRejected(r.rejected.map((x) => ({ name: x.name, reason: x.reason })))
-                e.currentTarget.value = ''
-              }}
-            />
-            <button
-              type="button"
-              className="add"
-              aria-disabled={picked.length >= MAX_TASK_FILES}
-              onClick={() => picked.length < MAX_TASK_FILES && fileRef.current?.click()}
-            >
-              <span>
-                <b>Chọn tệp</b> · ảnh tối đa 5 MB, tài liệu tối đa 50 MB
               </span>
-            </button>
-          </div>
+              <div style={{ padding: 0 }}>
+                {picked.map((f, i) => (
+                  <div key={`${f.name}-${i}`} className="fl">
+                    <span className="x">{extLabel(f.name)}</span>
+                    <span className="ten" title={f.name}>
+                      {f.name}
+                    </span>
+                    <span className="num mut">{formatBytes(f.size)}</span>
+                    <span>
+                      <button
+                        type="button"
+                        className="ic del"
+                        aria-label={`Bỏ tệp ${f.name}`}
+                        onClick={() => setPicked((p) => p.filter((_, j) => j !== i))}
+                      >
+                        Bỏ
+                      </button>
+                    </span>
+                  </div>
+                ))}
+                {rejected.map((r) => (
+                  <div key={r.name} className="fl bad" role="alert">
+                    <span className="x">{extLabel(r.name)}</span>
+                    <span className="ten" title={`${r.name} · ${r.reason}`}>
+                      {r.name} · {r.reason}
+                    </span>
+                    <span />
+                    <span />
+                  </div>
+                ))}
+                <input
+                  ref={fileRef}
+                  id="pcv-tep"
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const r = pickTaskFiles(
+                      [...(e.currentTarget.files ?? [])],
+                      picked.length,
+                    )
+                    setPicked((p) => [...p, ...r.accepted])
+                    setRejected(
+                      r.rejected.map((x) => ({ name: x.name, reason: x.reason })),
+                    )
+                    e.currentTarget.value = ''
+                  }}
+                />
+                <button
+                  type="button"
+                  className="add"
+                  aria-disabled={picked.length >= MAX_TASK_FILES}
+                  onClick={() =>
+                    picked.length < MAX_TASK_FILES && fileRef.current?.click()
+                  }
+                >
+                  <span>
+                    <b>Chọn tệp</b> · ảnh tối đa 5 MB, tài liệu tối đa 50 MB
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </form>

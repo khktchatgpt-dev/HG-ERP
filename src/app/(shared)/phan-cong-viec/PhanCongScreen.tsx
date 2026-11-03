@@ -206,6 +206,10 @@ export function PhanCongScreen({
             restricted={restricted}
             onClose={d.dongGiao}
             onDone={d.sauGiao}
+            // Sửa: phiếu điền sẵn việc đang chọn; key theo việc để đổi dòng là phiếu mới.
+            key={d.phieu === 'sua' ? `sua-${d.chon?.id}` : 'giao'}
+            sua={d.phieu === 'sua' && d.chon && 'can_edit' in d.chon ? d.chon : null}
+            onSaved={d.sauSua}
           />
         ) : (
           <NganChiTiet key={d.chon?.id ?? 'rong'} d={d} meId={meId} meRole={meRole} />

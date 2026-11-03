@@ -478,3 +478,66 @@ export function taskAttachBlock(
     return 'Việc đã đóng — mở lại rồi mới thêm tệp'
   return null
 }
+
+// ---- Sửa việc sau khi giao (04/11/2026) ------------------------------------
+
+/**
+ * Ai sửa được nội dung việc đã giao (tên, mô tả, hạn, mức, người nhận): NGƯỜI GIAO —
+ * kể cả nhân viên Bán Hàng — và sếp. Luật cũ `task.update` chỉ cho quản lý đã giao,
+ * nên Bán Hàng giao xong không sửa được việc của chính mình. Người nhận không sửa:
+ * nội dung là lời của người giao. Việc đã đóng thì khoá. null = sửa được.
+ */
+export function taskEditBlock(
+  task: Pick<FlowTask, 'kind' | 'status' | 'assigner_id'>,
+  actor: FlowActor,
+): string | null {
+  if (task.kind === 'self') {
+    return task.assigner_id === actor.id ? null : 'Đây là việc tự ghi của người khác'
+  }
+  if (actor.role !== 'admin' && actor.id !== task.assigner_id)
+    return 'Chỉ người giao việc (hoặc sếp) sửa được việc này'
+  if (task.status === 'done' || task.status === 'cancelled')
+    return 'Việc đã đóng — mở lại rồi mới sửa'
+  return null
+}
+
+export type TaskEditFields = {
+  title: string
+  description: string | null
+  /** timestamptz ISO hoặc null = không hạn. */
+  due_date: string | null
+  priority: string
+  assignee_id: string
+}
+
+/**
+ * Câu kể lại thay đổi, mỗi thay đổi một dòng — ghi vào Trao đổi của việc để người
+ * nhận đọc được đã đổi gì (và có chuông). Mảng rỗng = không đổi gì.
+ */
+export function taskEditSummary(
+  before: TaskEditFields,
+  after: Partial<TaskEditFields>,
+  nameOf: (userId: string) => string,
+): string[] {
+  const out: string[] = []
+  const day = (iso: string | null) => {
+    if (!iso) return 'không hạn'
+    const d = todayVn(new Date(iso))
+    return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`
+  }
+  const muc = (p: string) => (p === 'urgent' ? 'Gấp' : 'Thường')
+  if (after.title !== undefined && after.title.trim() !== before.title.trim())
+    out.push(`Đổi tên việc: “${before.title}” → “${after.title.trim()}”`)
+  if (
+    after.description !== undefined &&
+    (after.description ?? '').trim() !== (before.description ?? '').trim()
+  )
+    out.push((after.description ?? '').trim() ? 'Sửa mô tả' : 'Xoá mô tả')
+  if (after.due_date !== undefined && day(after.due_date) !== day(before.due_date))
+    out.push(`Đổi hạn: ${day(before.due_date)} → ${day(after.due_date)}`)
+  if (after.priority !== undefined && muc(after.priority) !== muc(before.priority))
+    out.push(`Đổi mức: ${muc(before.priority)} → ${muc(after.priority)}`)
+  if (after.assignee_id !== undefined && after.assignee_id !== before.assignee_id)
+    out.push(`Chuyển việc: ${nameOf(before.assignee_id)} → ${nameOf(after.assignee_id)}`)
+  return out
+}

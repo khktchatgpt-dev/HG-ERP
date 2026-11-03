@@ -73,6 +73,7 @@ const G = (over: Partial<GivenItem> = {}): GivenItem =>
     last_result: null,
     last_reject: null,
     file_count: 2,
+    can_edit: true,
     ...over,
   }) as GivenItem
 
@@ -305,6 +306,56 @@ describe('phiếu Giao việc ở ngăn phải', () => {
     dien(form, new File(['x'], 'ban-ve.pdf', { type: 'application/pdf' }))
     fireEvent.click(within(form).getByRole('button', { name: 'Giao cho Quang' }))
     expect(await screen.findByText(/1 tệp chưa lên được: ban-ve\.pdf/)).toBeTruthy()
+  })
+})
+
+describe('Sửa việc đã giao', () => {
+  it('mở phiếu điền sẵn việc đang chọn; chỉ gửi trường đã đổi tới /edit; báo đã đổi gì', async () => {
+    api.mockImplementation(async (url: string) => {
+      if (url.endsWith('/files')) return { files: [] }
+      if (url.endsWith('/comments')) return { comments: [] }
+      if (url.endsWith('/edit')) return { changes: ['Đổi tên việc: “a” → “b”'] }
+      return {}
+    })
+    giver([G()])
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Sửa việc' }))
+    const form = screen.getByRole('form', { name: 'Sửa việc' })
+    const ten = within(form).getByLabelText('Việc') as HTMLInputElement
+    expect(ten.value).toBe('Làm mẫu rập ghế Siena theo bản vẽ rev.3')
+    expect((within(form).getByLabelText('Hạn') as HTMLInputElement).value).toBe(
+      '12/11/2026',
+    )
+    expect(document.getElementById('pcv-tep')).toBeNull() // tệp sửa ở ngăn chi tiết
+    fireEvent.change(ten, { target: { value: 'Rập Siena rev.3' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/api/tasks/t1/edit', {
+        method: 'POST',
+        body: { title: 'Rập Siena rev.3' },
+      }),
+    )
+    expect(await screen.findByText(/Đã sửa CV-000031: Đổi tên việc/)).toBeTruthy()
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('không đổi gì: không gọi máy chủ', async () => {
+    giver([G()])
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Sửa việc' }))
+    fireEvent.click(within(screen.getByRole('form', { name: 'Sửa việc' })).getByRole('button', { name: 'Lưu thay đổi' })) // prettier-ignore
+    expect(await screen.findByText('Không có gì thay đổi.')).toBeTruthy()
+    expect(api).not.toHaveBeenCalledWith(
+      expect.stringContaining('/edit'),
+      expect.anything(),
+    )
+  })
+
+  it('việc đã xong: nút Sửa khoá và nói cách gỡ', () => {
+    giver([G({ status: 'done', can_edit: false, actions: [], completed_at: '2026-11-02T03:00:00Z' })], { id: 't1', muc: 'giao', filter: 'done' }) // prettier-ignore
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Sửa việc' }))
+    expect(screen.getByRole('status').textContent).toMatch(
+      /CV-000031 đang “Xong” — mở lại rồi mới sửa/,
+    )
+    expect(screen.queryByRole('form', { name: 'Sửa việc' })).toBeNull()
   })
 })
 
