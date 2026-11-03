@@ -926,3 +926,46 @@
 .sx.sx .sx-drill .x {
   margin-left: auto;
 }
+
+/* ── 9 · Ô việc là LINK (Tình hình xưởng, khuôn A) ── */
+.sx.sx a.sx-tile {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.sx.sx a.sx-tile:hover {
+  background: var(--sx-act-wash);
+}
+.sx.sx a.sx-tile:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+}
+.sx.sx .sx-tile.act .v {
+  color: var(--sx-act);
+}
+.sx.sx .sx-bar {
+  display: inline-block;
+  height: 10px;
+  background: var(--sx-act);
+  vertical-align: middle;
+}
+.sx.sx .sx-sec {
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sx-ink3);
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-raised);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.sx.sx .sx-sec .lnk {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}

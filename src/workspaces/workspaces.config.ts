@@ -631,6 +631,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         ],
       },
       {
+        // B6 (03/11/2026): sáu bảng báo cáo trên một màn, kỳ tự do.
+        heading: 'Xem',
+        items: [{ href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' }],
+      },
+      {
         heading: 'Kế hoạch',
         items: [
           {
