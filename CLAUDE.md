@@ -634,6 +634,19 @@ ghép lớp bằng mảng `.filter(Boolean).join(' ')`, không bằng template. 
 lúc blur và mount lại theo `key={value}`, nên KHÔNG đặt `autoFocus` trên ô (mỗi
 lần chốt là con trỏ giật về ô đầu, Tab không đi đâu) — focus một lần bằng effect.
 
+**Giao nhận bán thành phẩm (B4, 0289, 03/11/2026)**: phiếu giao tổ PGT hai nhịp
+ở `/thongke/giao-nhan` (`(san-xuat)/thongke/giao-nhan/`, module
+`transfer-docs.{schema,repo,service}`, route `api/dept/production/giao-nhan`).
+Header `production_transfer_docs` (da_giao → da_nhan; huỷ chỉ khi chưa nhận; đã
+nhận thì ĐẢO bằng phiếu ngược `reverses_doc_id`, không sửa không xoá); dòng vẫn
+là `production_transfers` (+`doc_id`, `received_qty`, `diff_reason`) với
+`direction='issue'` vào tổ nhận, phiếu đảo ghi `'return'` trên (công đoạn, tổ)
+gốc — cảnh báo WIP cũ (0090) không đổi nghĩa. Năm con số xong · đã giao · đã nhận
+· tồn · khả dụng qua `wipNumbers` + `transferTotals` (lib/wip-numbers): phiếu
+đảo là số ÂM của phiếu gốc. Không bắt lập phiếu; ghi sổ chỉ cảnh báo vượt khả
+dụng. Cụm mặc nhiên chưa ghi sổ thì chưa có id để giao (lượt ghi đầu vật chất
+hoá nó).
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
