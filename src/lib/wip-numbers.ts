@@ -135,3 +135,18 @@ export function transferTotals(
   }
   return out
 }
+
+/**
+ * "ĐÃ NHẬN" tới một (dòng × công đoạn) — QUY TẮC DÙNG CHUNG cho Ghi sản lượng
+ * và Hồ sơ lệnh: có phiếu giao TỚI đây thì lấy số nhận thật của phiếu; chưa
+ * ai lập phiếu thì xấp xỉ bằng số XONG ở công đoạn liền trước của chính dòng
+ * (xưởng tự chuyển, không lập phiếu); đầu lộ trình (không có công đoạn trước)
+ * → null, không có khái niệm nhận.
+ */
+export function receivedOrFallback(
+  total: TransferTotal | undefined,
+  prevDone: number | null,
+): number | null {
+  if (total?.has_inbound) return total.received
+  return prevDone
+}

@@ -647,6 +647,15 @@ gốc — cảnh báo WIP cũ (0090) không đổi nghĩa. Năm con số xong ·
 dụng. Cụm mặc nhiên chưa ghi sổ thì chưa có id để giao (lượt ghi đầu vật chất
 hoá nó).
 
+**Hồ sơ lệnh (B5, 03/11/2026)**: `/thongke/lsx/[id]` không kit, số từ
+`lsx-dossier.service.ts` — ba tầng (SP → thành phẩm / cụm → chi tiết) × công
+đoạn, mỗi ô là `wipNumbers` trên cùng đầu vào với Ghi sản lượng và Giao nhận
+(`entriesService.summary` + `transferTotals` + `receivedOrFallback`). Ba màn
+phải ra MỘT số cho một ô; màn nào tự cộng lại là lỗi. Kế hoạch tổ & hạn là TAB
+(sửa `production_jobs` qua `api/dept/production/jobs/[id]`), không dựng màn
+"KH-xxx". Trao đổi vẫn dùng `DocNotesPanel` (kit) — file riêng, không trộn hệ
+trong một file.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

@@ -803,3 +803,126 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+/* ── 8 · Hồ sơ lệnh (B5): dải ô số · bảng ba tầng · dải năm con số ── */
+.sx.sx .sx-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-raised);
+}
+.sx.sx .sx-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 12px;
+  border-right: 1px solid var(--sx-hair);
+  min-width: 0;
+}
+.sx.sx .sx-tile:last-child {
+  border-right: 0;
+}
+.sx.sx .sx-tile .d {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-tile .v {
+  font-family: var(--sx-mono);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--sx-ink);
+}
+.sx.sx .sx-tile.w .v {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-tile.s .v {
+  color: var(--sx-stop);
+}
+.sx.sx .sx-tile.zero .v {
+  color: var(--sx-empty);
+}
+.sx.sx .sx-tile .s {
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .pill.w {
+  color: var(--sx-warn);
+}
+.sx.sx .pill.d {
+  color: var(--sx-done);
+}
+
+/* ba tầng: SP (grp) → cụm (t2) → chi tiết (t3) */
+.sx.sx .sx-tb.sx-tb > tbody > tr.grp > td {
+  background: var(--sx-raised);
+  font-weight: 600;
+  border-top: 1px solid var(--sx-line);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.t2 > td:first-child {
+  padding-left: 22px;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.t3 > td:first-child {
+  padding-left: 40px;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.out {
+  color: var(--sx-empty);
+  text-align: center;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    rgba(0, 0, 0, 0.025) 6px 7px
+  );
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.cell {
+  cursor: pointer;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.cell:hover {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.cell.sel {
+  box-shadow: inset 0 0 0 2px var(--sx-act);
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-tb .tg {
+  border: 0;
+  background: none;
+  padding: 0 4px 0 0;
+  font: inherit;
+  color: var(--sx-ink3);
+  cursor: pointer;
+}
+
+/* dải năm con số của ô đang chọn */
+.sx.sx .sx-drill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  padding: 6px 14px;
+  border-top: 2px solid var(--sx-act);
+  background: var(--sx-raised);
+  font-size: 12.5px;
+}
+.sx.sx .sx-drill .k {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sx-ink3);
+  margin-right: 4px;
+}
+.sx.sx .sx-drill b {
+  font-family: var(--sx-mono);
+  font-size: 14px;
+}
+.sx.sx .sx-drill .x {
+  margin-left: auto;
+}
