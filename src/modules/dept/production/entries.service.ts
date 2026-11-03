@@ -27,7 +27,7 @@ import {
   resolveCountingPlan,
   type CountingPlan,
 } from '@/lib/default-assembly'
-import { countingOf } from '@/lib/stage-config'
+import { countingOf, defaultStageMeta, resolveStageConfigs } from '@/lib/stage-config'
 import {
   FINISH_ROW_NAME,
   finishRouteOverride,
@@ -261,15 +261,28 @@ export const entriesService = {
     // Ô riêng của công đoạn đang ghi (0207) — dùng để lọc khoá lạ và bắt ô
     // buộc phải khai. Một truy vấn cho cả lượt, bảng chỉ vài chục dòng.
     const metaFields = fieldsForStage(await stageFieldsRepo.listActive(), input.stage)
+    // Ô LÕI theo cấu hình công đoạn (0287, B1): bắt buộc thì phải có, tắt thì
+    // không được mang số — số rơi vào ô đã tắt là số không ai đọc.
+    const core = (
+      resolveStageConfigs(stagesCat ?? []).find((s) => s.code === input.stage)?.meta ??
+      defaultStageMeta(input.stage)
+    ).core
+    const tenDong = (id: string) => `"${byId.get(id)?.name ?? 'Dòng'}"`
     for (const e of input.entries) {
       const meta = cleanStageMeta(e.stage_meta, metaFields)
       const thieu = metaFields
         .filter((f) => f.required && meta?.[f.field_key] == null)
         .map((f) => f.label)
+      if (core.worker === 'required' && !e.worker_name?.trim()) thieu.push('Người làm')
+      if (core.kg === 'required' && e.kg == null) thieu.push('Kg')
       if (thieu.length) {
-        throw BadRequest(
-          `"${byId.get(e.component_id)?.name ?? 'Dòng'}" chưa khai: ${thieu.join(' · ')}`,
-        )
+        throw BadRequest(`${tenDong(e.component_id)} chưa khai: ${thieu.join(' · ')}`)
+      }
+      if (core.defect === 'off' && (e.defect_qty ?? 0) > 0) {
+        throw BadRequest(`${tenDong(e.component_id)}: công đoạn này không ghi phế`)
+      }
+      if (core.rework === 'off' && (e.rework_qty ?? 0) > 0) {
+        throw BadRequest(`${tenDong(e.component_id)}: công đoạn này không ghi sửa lại`)
       }
     }
 

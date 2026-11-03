@@ -500,6 +500,20 @@ trực tiếp ở mã mới. Màn sửa: `/production/cau-hinh/cong-doan` (khôn
 `src/app/(workspace)/production/_erp/`, quyền `production.stage.configure`).
 Thiết kế đầy đủ: `docs/san-xuat-cau-hinh-thiet-ke.md`.
 
+**Ghi sản lượng (B3, 03/11/2026) đọc cấu hình đó**: `/thongke/ghi` không kit
+(`(san-xuat)/thongke/ghi/`, khung `production/_erp` với `SxKhung bare` vì vỏ
+`(san-xuat)` đã `bare` — bare vẫn phải ĐO ĐỈNH chốt chiều cao, `<main>` bare là
+khối overflow chứ không phải cột flex). Cột gõ dựng bằng `buildEditCols(sheet, more)`
+từ `sheet.stage_cfg.core` + `stage_fields` — thêm ô cho một công đoạn là sửa cấu
+hình, không sửa màn; `rowProblems()` là nguồn duy nhất của "ô bắt buộc còn trống"
+(tô đỏ + thanh chốt chỉ tới cùng một ô). Cột **Khả dụng** và mọi số tồn / giao /
+nhận sau này đi qua `src/lib/wip-numbers.ts` (một hàm, có test; trước B4 "đã nhận"
+= xong ở công đoạn liền trước). **BẪY hook format**: plugin sắp lớp Tailwind LỘT
+khoảng trắng đầu trong template string của `className` ("ed" + " r" → "edr") —
+ghép lớp bằng mảng `.filter(Boolean).join(' ')`, không bằng template. Ô gõ chốt
+lúc blur và mount lại theo `key={value}`, nên KHÔNG đặt `autoFocus` trên ô (mỗi
+lần chốt là con trỏ giật về ô đầu, Tab không đi đâu) — focus một lần bằng effect.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

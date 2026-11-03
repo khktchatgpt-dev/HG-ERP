@@ -593,3 +593,213 @@
     width: 100%;
   }
 }
+
+/* ── 7 · Màn nhập liệu (B3 Ghi sản lượng): dải chip · chú giải · ô gõ · thanh chốt ── */
+.sx.sx .sx-hc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-raised);
+  font-size: 12.5px;
+}
+.sx.sx .sx-hc .c {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  color: var(--sx-ink3);
+  white-space: nowrap;
+}
+.sx.sx .sx-hc .c b {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+.sx.sx .sx-hc .c.on {
+  border-color: var(--sx-act);
+  box-shadow: inset 0 0 0 1px var(--sx-act);
+}
+.sx.sx .sx-hc .c input,
+.sx.sx .sx-hc .c select {
+  height: 22px;
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--sx-ink);
+  min-width: 0;
+}
+.sx.sx .sx-hc .c input[type='date'] {
+  font-family: var(--sx-mono);
+  font-weight: 500;
+}
+.sx.sx .sx-hc .c select.warn {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-hc .c input:focus-visible,
+.sx.sx .sx-hc .c select:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -1px;
+}
+.sx.sx .sx-hc .sp {
+  margin-left: auto;
+  font-size: 11.5px;
+}
+
+.sx.sx .sx-leg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--sx-hair);
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-leg b {
+  color: var(--sx-ink);
+}
+.sx.sx .sx-leg i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border: 1px solid var(--sx-line);
+}
+.sx.sx .sx-leg i.w {
+  background: var(--sx-warn-wash);
+  border-color: var(--sx-warn);
+}
+.sx.sx .sx-leg i.r {
+  background: var(--sx-stop-wash);
+  border-color: var(--sx-stop);
+}
+
+.sx.sx .sx-note .lnk {
+  margin-left: 6px;
+}
+.sx.sx .sx-note .lnk.mut {
+  color: var(--sx-ink3);
+  font-weight: 400;
+}
+
+/* ô gõ trong lưới: ăn trọn ô, không viền riêng — viền là của lưới */
+.sx.sx .sx-tb.sx-tb > thead > tr > th .u {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+  line-height: 1.1;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed {
+  padding: 0;
+}
+.sx.sx .sx-cell {
+  display: block;
+  width: 100%;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--sx-ink);
+  min-width: 0;
+}
+.sx.sx .sx-cell.num {
+  text-align: right;
+}
+.sx.sx .sx-cell::placeholder {
+  color: var(--sx-empty);
+  font-family: inherit;
+}
+.sx.sx .sx-cell:disabled {
+  color: var(--sx-ink3);
+  cursor: not-allowed;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed:focus-within {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+  z-index: 1;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed.warn,
+.sx.sx .sx-tb.sx-tb > tbody > tr.d:nth-child(even) > td.ed.warn {
+  background: var(--sx-warn-wash);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed.warn .sx-cell {
+  color: var(--sx-warn);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed.err,
+.sx.sx .sx-tb.sx-tb > tbody > tr.d:nth-child(even) > td.ed.err {
+  background: var(--sx-stop-wash);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed.err .sx-cell::placeholder {
+  color: var(--sx-stop);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.d:hover > td.ed {
+  background: var(--sx-card);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.d:nth-child(even):hover > td.ed {
+  background: var(--sx-zebra);
+}
+.sx.sx .sx-tb .lnk.num {
+  font-family: var(--sx-mono);
+}
+.sx.sx .sx-tb.sx-tb > tfoot > tr > td .mut {
+  font-weight: 400;
+}
+
+/* thanh chốt đáy — ngoại lệ duy nhất cho thanh đáy (khuôn nhập liệu) */
+.sx.sx .sx-cb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 6px 14px;
+  border-top: 2px solid var(--sx-line);
+  background: var(--sx-raised);
+  font-size: 12.5px;
+}
+.sx.sx .sx-cb .sum b {
+  font-family: var(--sx-mono);
+}
+.sx.sx .sx-cb .blk {
+  color: var(--sx-stop);
+  font-weight: 600;
+}
+.sx.sx .sx-cb .blk .lnk {
+  margin-left: 8px;
+}
+.sx.sx .sx-cb .sp {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sx.sx .sx-cb .sx-btn {
+  border: 1px solid var(--sx-line);
+}
+.sx.sx .sx-cb .sx-btn.p {
+  border-color: var(--sx-act);
+}
+.sx.sx .sx-cb .sx-btn.p:disabled {
+  border-color: #c6ccd6;
+}
+.sx.sx .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

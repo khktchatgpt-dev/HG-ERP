@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import {
@@ -6,8 +7,8 @@ import {
   worklistService,
 } from '@/modules/dept/production/worklist.service'
 import { isProductionStaff } from '@/modules/dept/production/perms'
-import { Btn, Empty } from '@/components/kit'
-import { EntrySheetForm } from './EntrySheetForm'
+import { Rong, SxKhung } from '@/app/(workspace)/production/_erp/khung'
+import { GhiScreen } from './GhiScreen'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,20 +19,19 @@ export const dynamic = 'force-dynamic'
  *
  * - Tới 21/09/2026: có màn "Bước 1 chọn lệnh" chặn trước lưới. Chủ dự án chê
  *   "khó dùng và bất tiện" → bỏ.
- * - 21/09: đổi sang mở MỌI lệnh đang chạy, lệnh tụt xuống làm bộ lọc (theo cách
- *   SAP Fiori / D365 mở theo work center, lệnh chỉ là một cột).
- * - 22/09: chủ dự án chê tiếp — gộp nhiều lệnh vào một lưới là rối. Đo lại:
- *   công đoạn Phôi mở mọi lệnh ra **208 dòng của 8 lệnh**, kèm băng "chưa bày
- *   hết". Đúng là không gõ nổi.
+ * - 21/09: đổi sang mở MỌI lệnh đang chạy, lệnh tụt xuống làm bộ lọc.
+ * - 22/09: chủ dự án chê tiếp — gộp nhiều lệnh vào một lưới là rối (208 dòng
+ *   của 8 lệnh ở Phôi).
  *
- * Bản này lấy phần đúng của cả hai: **phạm vi là MỘT lệnh** (hết trộn), nhưng
- * **không có màn chặn** — đổi lệnh bằng ô ngay đầu phiếu, đúng một lượt bấm.
+ * Bản này lấy phần đúng của cả hai: phạm vi là MỘT lệnh, nhưng không có màn
+ * chặn — đổi lệnh bằng chip ngay đầu phiếu.
  *
  * Lệnh mặc định: lệnh dùng lần trước (cookie `sx_ghi_lsx`), không có thì lệnh
- * còn NHIỀU VIỆC NHẤT. Dùng cookie chứ không localStorage vì server đọc được →
- * chọn xong render một lần, không nháy màn rồi nhảy sang lệnh khác.
+ * còn NHIỀU VIỆC NHẤT. Cookie chứ không localStorage vì server đọc được →
+ * render một lần đúng lệnh, không nháy. `?lsx=` ưu tiên cao nhất (link cũ).
  *
- * `?lsx=` vẫn ưu tiên cao nhất nên mọi liên kết cũ không gãy.
+ * 03/11/2026 (B3): dựng lại KHÔNG kit theo cấu hình công đoạn — xem
+ * `GhiScreen.tsx`.
  */
 export const GHI_LSX_COOKIE = 'sx_ghi_lsx'
 
@@ -46,15 +46,13 @@ export default async function GhiSanLuongPage({
   if (!canRecord) redirect('/thongke/lenh')
 
   // Danh sách lệnh phải có TRƯỚC để chọn lệnh mặc định, nên hai lượt tải này
-  // không song song được nữa. Đổi lại lưới không bao giờ mở ra ở trạng thái
-  // trộn 8 lệnh.
+  // không song song được.
   const data = await worklistService.list(user, {})
   const remembered = (await cookies()).get(GHI_LSX_COOKIE)?.value ?? null
   const openable = data.lsx_cards
   const pick =
     openable.find((c) => c.lsx_id === sp.lsx)?.lsx_id ??
     openable.find((c) => c.lsx_id === remembered)?.lsx_id ??
-    // Còn nhiều việc nhất = nơi thống kê nhiều khả năng phải ghi hôm nay.
     [...openable].sort((a, b) => b.open_count - a.open_count)[0]?.lsx_id ??
     null
 
@@ -62,22 +60,22 @@ export default async function GhiSanLuongPage({
 
   if (!sheet) {
     return (
-      <Empty
-        headline="Chưa có việc nào để ghi sản lượng"
-        reason="Lệnh phải được duyệt VÀ định hình chi tiết thì mới sinh ra dòng để ghi."
-        next={
-          <Btn icon="lenh" primary href="/thongke/lenh">
-            Xem lệnh sản xuất
-          </Btn>
-        }
-      />
+      <SxKhung bare label="Ghi sản lượng">
+        <Rong
+          tieuDe="Chưa có việc nào để ghi sản lượng"
+          lyDo="Lệnh phải được duyệt VÀ định hình chi tiết thì mới sinh ra dòng để ghi."
+          tiep={
+            <Link href="/thongke/lenh" className="sx-btn p">
+              Xem lệnh sản xuất
+            </Link>
+          }
+        />
+      </SxKhung>
     )
   }
 
   return (
-    // KHÔNG có PageHeader: khuôn F cấm mọi hàng đầu trang thừa — mỗi hàng là
-    // một hàng lưới bị lấy mất. Lớp token `.kit` do layout khu lo.
-    <EntrySheetForm
+    <GhiScreen
       key={`${sp.lsx ?? 'all'}|${sheet.stage}`}
       sheet={sheet}
       userTeamId={user.department_id ?? null}
