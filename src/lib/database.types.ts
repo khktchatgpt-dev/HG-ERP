@@ -2681,9 +2681,76 @@ export type Database = {
         }
         Relationships: []
       }
+      production_transfer_docs: {
+        Row: {
+          cancel_reason: string | null
+          created_at: string
+          created_by: string | null
+          doc_no: string
+          entry_date: string
+          from_stage: string
+          from_team_id: string | null
+          id: string
+          note: string | null
+          production_order_id: string
+          received_at: string | null
+          received_by: string | null
+          reverses_doc_id: string | null
+          status: string
+          to_stage: string
+          to_team_id: string | null
+        }
+        Insert: {
+          cancel_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_no: string
+          entry_date: string
+          from_stage: string
+          from_team_id?: string | null
+          id?: string
+          note?: string | null
+          production_order_id: string
+          received_at?: string | null
+          received_by?: string | null
+          reverses_doc_id?: string | null
+          status?: string
+          to_stage: string
+          to_team_id?: string | null
+        }
+        Update: {
+          cancel_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_no?: string
+          entry_date?: string
+          from_stage?: string
+          from_team_id?: string | null
+          id?: string
+          note?: string | null
+          production_order_id?: string
+          received_at?: string | null
+          received_by?: string | null
+          reverses_doc_id?: string | null
+          status?: string
+          to_stage?: string
+          to_team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_transfer_docs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_transfers: {
         Row: {
           component_id: string
+          diff_reason: string | null
+          doc_id: string | null
           created_at: string
           created_by: string | null
           direction: string
@@ -2693,11 +2760,14 @@ export type Database = {
           production_order_id: string
           qty: number
           reason: string | null
+          received_qty: number | null
           stage: string
           team_department_id: string
         }
         Insert: {
           component_id: string
+          diff_reason?: string | null
+          doc_id?: string | null
           created_at?: string
           created_by?: string | null
           direction: string
@@ -2707,11 +2777,14 @@ export type Database = {
           production_order_id: string
           qty: number
           reason?: string | null
+          received_qty?: number | null
           stage: string
           team_department_id: string
         }
         Update: {
           component_id?: string
+          diff_reason?: string | null
+          doc_id?: string | null
           created_at?: string
           created_by?: string | null
           direction?: string
@@ -2721,6 +2794,7 @@ export type Database = {
           production_order_id?: string
           qty?: number
           reason?: string | null
+          received_qty?: number | null
           stage?: string
           team_department_id?: string
         }

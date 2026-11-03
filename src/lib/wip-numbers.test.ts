@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { overAvailableWarning, wipNumbers } from './wip-numbers'
+import { overAvailableWarning, totalKey, transferTotals, wipNumbers } from './wip-numbers'
 
 describe('wipNumbers — năm con số của một dòng × công đoạn', () => {
   it('tồn = xong − đã giao; khả dụng = đã nhận − đã ghi (đạt + phế + sửa)', () => {
@@ -45,5 +45,77 @@ describe('overAvailableWarning', () => {
     expect(overAvailableWarning('Cụm khung', 'Hàn', 30, 40)).toBe(
       'Cụm khung @ Hàn: khả dụng 30 mà ghi 40 — vượt 10 so với số đã nhận từ công đoạn trước',
     )
+  })
+})
+
+describe('transferTotals — phiếu giao tổ hai nhịp (0289)', () => {
+  const docs = [
+    {
+      id: 'A',
+      from_stage: 'han',
+      to_stage: 'nguoi',
+      status: 'da_nhan',
+      reverses_doc_id: null,
+    },
+    {
+      id: 'B',
+      from_stage: 'han',
+      to_stage: 'nguoi',
+      status: 'da_giao',
+      reverses_doc_id: null,
+    },
+    {
+      id: 'C',
+      from_stage: 'han',
+      to_stage: 'nguoi',
+      status: 'da_huy',
+      reverses_doc_id: null,
+    },
+  ] as const
+  const lines = [
+    { doc_id: 'A', component_id: 'x', qty: 100, received_qty: 98 },
+    { doc_id: 'B', component_id: 'x', qty: 50, received_qty: null },
+    { doc_id: 'C', component_id: 'x', qty: 999, received_qty: null },
+    { doc_id: null, component_id: 'x', qty: 7, received_qty: null },
+  ]
+
+  it('giao 100 nhận 98 + 50 chờ nhận: đã giao 150 ở hàn, đã nhận 98 ở nguội; huỷ và dòng rời không tính', () => {
+    const t = transferTotals([...docs], lines)
+    expect(t.get(totalKey('x', 'han'))).toEqual({
+      shipped: 150,
+      received: 0,
+      has_inbound: false,
+    })
+    expect(t.get(totalKey('x', 'nguoi'))).toEqual({
+      shipped: 0,
+      received: 98,
+      has_inbound: true,
+    })
+  })
+
+  it('phiếu đảo (nguội → hàn, 2) là số ÂM của phiếu gốc', () => {
+    const dao = {
+      id: 'D',
+      from_stage: 'nguoi',
+      to_stage: 'han',
+      status: 'da_nhan',
+      reverses_doc_id: 'A',
+    } as const
+    const t = transferTotals(
+      [...docs, dao],
+      [...lines, { doc_id: 'D', component_id: 'x', qty: 2, received_qty: 2 }],
+    )
+    expect(t.get(totalKey('x', 'han'))?.shipped).toBe(148)
+    expect(t.get(totalKey('x', 'nguoi'))?.received).toBe(96)
+  })
+
+  it('năm con số khớp tính tay: xong 250 · giao 148 · nhận 96 · dùng 40 → tồn 102, khả dụng 56', () => {
+    expect(wipNumbers({ done: 250, shipped: 148, received: 96, used: 40 })).toEqual({
+      done: 250,
+      shipped: 148,
+      received: 96,
+      on_hand: 102,
+      available: 56,
+    })
   })
 })

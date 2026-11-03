@@ -14,7 +14,7 @@ import {
   resolveCountingPlan,
 } from '@/lib/default-assembly'
 import { countingOf, resolveStageConfigs, type StageMeta } from '@/lib/stage-config'
-import { wipNumbers } from '@/lib/wip-numbers'
+import { totalKey, transferTotals, wipNumbers } from '@/lib/wip-numbers'
 import {
   FINISH_ROW_NAME,
   finishRouteOverride,
@@ -27,6 +27,7 @@ import { countsAsOfficial, countsAsPending } from '@/lib/entry-doc-flow'
 import type { EntryDocStatus } from '@/lib/entry-doc-flow'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { transfersRepo } from './transfers.repo'
+import { transferDocsRepo } from './transfer-docs.repo'
 import { dayLocksRepo } from './day-locks.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
@@ -577,6 +578,7 @@ export async function loadEntrySheet(
     transfers,
     allDefectCodes,
     allStageFields,
+    transferDocs,
   ] = await Promise.all([
     componentsRepo.listByLsxBulk(ids),
     lsxLinesRepo.listLinesBulk(ids),
@@ -587,7 +589,10 @@ export async function loadEntrySheet(
     transfersRepo.listRawByLsxBulk(ids),
     defectCodesRepo.listActive(),
     stageFieldsRepo.listActive(),
+    transferDocsRepo.listByLsxBulk(ids),
   ])
+  // Phiếu giao tổ (0289): "đã giao" / "đã nhận" per (dòng × công đoạn).
+  const pgt = transferTotals(transferDocs, transfers)
   if (lines.length === 0) return null
   const lsxById = new Map(scope.map((l) => [l.id, l]))
   const counting = countingOf(stagesCat)
@@ -730,10 +735,17 @@ export async function loadEntrySheet(
         // đầu lộ trình (đầu vào từ kho / NCC) → không có khái niệm khả dụng.
         const r = routeOf.get(c.id) ?? []
         const prev = r[r.indexOf(stage) - 1] ?? null
+        const pg = pgt.get(totalKey(c.id, stage))
+        // Có phiếu giao TỚI đây → "đã nhận" là số thật của phiếu; chưa ai lập
+        // phiếu → xấp xỉ bằng số xong ở công đoạn liền trước (xưởng tự chuyển).
         const wip = wipNumbers({
           done,
-          shipped: 0,
-          received: prev ? (doneByCompStage.get(`${c.id}|${prev}`) ?? 0) : null,
+          shipped: pg?.shipped ?? 0,
+          received: pg?.has_inbound
+            ? pg.received
+            : prev
+              ? (doneByCompStage.get(`${c.id}|${prev}`) ?? 0)
+              : null,
           used: usedHere.get(c.id) ?? 0,
         })
         return {

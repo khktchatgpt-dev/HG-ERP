@@ -20,6 +20,11 @@ export type Transfer = {
   note: string | null
   created_by: string | null
   created_at: string
+  /** Phiếu giao tổ chứa dòng này (0289) — null = dòng rời kiểu 0090. */
+  doc_id: string | null
+  /** Số tổ nhận xác nhận (0289); null khi chưa nhận hoặc dòng rời. */
+  received_qty: number | null
+  diff_reason: string | null
 }
 
 export type TransferJoined = Transfer & {
@@ -31,7 +36,7 @@ export type TransferJoined = Transfer & {
 }
 
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, direction, entry_date, qty, reason, note, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, direction, entry_date, qty, reason, note, created_by, created_at, doc_id, received_qty, diff_reason'
 const SELECT_JOINED = `${COLS}, team:departments(name), component:production_components(name, cluster), actor:users(name), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
@@ -54,6 +59,7 @@ function unwrap(rows: Raw[] | null): TransferJoined[] {
       actor: undefined,
       lsx: undefined,
       qty: Number(r.qty),
+      received_qty: r.received_qty == null ? null : Number(r.received_qty),
       team_name: first(r.team)?.name ?? null,
       component_name: comp?.name ?? null,
       component_cluster: comp?.cluster ?? null,
@@ -91,7 +97,11 @@ export const transfersRepo = {
       .select(COLS)
       .eq('production_order_id', productionOrderId)
       .limit(20000)
-    return ((data ?? []) as Transfer[]).map((r) => ({ ...r, qty: Number(r.qty) }))
+    return ((data ?? []) as Transfer[]).map((r) => ({
+      ...r,
+      qty: Number(r.qty),
+      received_qty: r.received_qty == null ? null : Number(r.received_qty),
+    }))
   },
 
   /** Bàn giao thô của NHIỀU lệnh — tính WIP/nghẽn ở Toàn cảnh xưởng (GĐ3). */
@@ -102,10 +112,17 @@ export const transfersRepo = {
       .select(COLS)
       .in('production_order_id', ids)
       .limit(50000)
-    return ((data ?? []) as Transfer[]).map((r) => ({ ...r, qty: Number(r.qty) }))
+    return ((data ?? []) as Transfer[]).map((r) => ({
+      ...r,
+      qty: Number(r.qty),
+      received_qty: r.received_qty == null ? null : Number(r.received_qty),
+    }))
   },
 
-  async insert(row: Omit<Transfer, 'id' | 'created_at'>): Promise<void> {
+  async insert(
+    row: Omit<Transfer, 'id' | 'created_at' | 'doc_id' | 'received_qty' | 'diff_reason'> &
+      Partial<Pick<Transfer, 'doc_id' | 'received_qty' | 'diff_reason'>>,
+  ): Promise<void> {
     const { error } = await db().from('production_transfers').insert(row)
     if (error) throw new Error(error.message)
   },

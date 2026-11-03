@@ -617,6 +617,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             capability: 'production.record',
           },
           {
+            href: '/thongke/giao-nhan',
+            label: 'Giao nhận',
+            icon: 'arrow-right-left',
+            capability: 'production.record',
+          },
+          {
             href: '/thongke/ngay',
             label: 'Sổ ngày & chốt sổ',
             icon: 'calendar-check',
