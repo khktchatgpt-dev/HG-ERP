@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { docDanNv, docGioiTinh, docNgay, nhanCot, soKhac } from './nap-ho-so'
+import { chuanO, docDanNv, docGioiTinh, docNgay, nhanCot, soKhac } from './nap-ho-so'
 
 describe('nhận cột theo tiêu đề', () => {
   it('tiêu đề hay gặp, thứ tự đúng', () => {
@@ -74,5 +74,29 @@ describe('đọc giá trị, so khác', () => {
     expect(r.giu).toEqual([{ cot: 'to', cu: 'Tổ Hàn', moi: 'Tổ Phôi' }])
     expect(r.loi).toHaveLength(1)
     expect(soKhac(dong, { to: 'Tổ Hàn' }, ['to'], true).doi).toHaveLength(1)
+  })
+})
+
+describe('Mã số BHXH (B5, 0286)', () => {
+  it('nhận cột "Mã số BHXH" của file đóng BHXH; "Tổng nộp BHXH" không phải mã', () => {
+    expect(nhanCot('Mã số BHXH')).toBe('maBhxh')
+    expect(nhanCot('Mã BHXH')).toBe('maBhxh')
+    expect(nhanCot('Tổng nộp BHXH')).toBeNull()
+    expect(nhanCot('Mã NV')).toBe('ma')
+  })
+  it('đúng 10 chữ số (bỏ cách / chấm); sai thì báo', () => {
+    expect(chuanO('maBhxh', '5212 345 678')).toBe('5212345678')
+    expect(chuanO('maBhxh', '521234567')).toBeUndefined()
+  })
+  it('vùng dán kiểu file BHXH: Họ và tên + CCCD + Mã số BHXH, không có mã NV', () => {
+    const d = docDanNv(
+      'Stt\tHọ và tên\tChức vụ\tMã số BHXH\tNgày sinh\tCCCD\tTổng nộp BHXH\n1\tTrần Thị Mỹ Duyên\tCông nhân\t5212345678\t14/03/2001\t052301004417\t1.234.000\n',
+    )
+    expect(d.cot).toEqual(['ten', 'chucDanh', 'maBhxh', 'ngaySinh', 'cccd'])
+    expect(d.dong[0]).toMatchObject({
+      ten: 'Trần Thị Mỹ Duyên',
+      maBhxh: '5212345678',
+      cccd: '052301004417',
+    })
   })
 })

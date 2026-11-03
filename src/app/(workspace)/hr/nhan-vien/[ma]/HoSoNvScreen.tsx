@@ -249,7 +249,7 @@ function MenuBienDong({ d, why }: { d: HoSoCtx; why: string | null }) {
   ]
   return (
     <span
-      className="hs-menu"
+      className="ns-menu"
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setMo(false)}
     >
       <button

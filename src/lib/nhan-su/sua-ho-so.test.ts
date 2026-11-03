@@ -28,6 +28,7 @@ const c: CaNhan = {
   khanCapTen: null,
   khanCapQuanHe: null,
   khanCapSdt: null,
+  maBhxh: null,
 }
 const H = '2026-11-02'
 const P = { cv: true, rieng: true }
@@ -111,5 +112,17 @@ describe('kiểm ô', () => {
   it('MST 10 hoặc 13 số', () => {
     expect(kiemHoSo({ ...goc, mst: '01234' }, { ...P, homNay: H })[0].o).toBe('mst')
     expect(kiemHoSo({ ...goc, mst: '0123456789' }, { ...P, homNay: H })).toEqual([])
+  })
+})
+
+describe('Mã số BHXH trên hồ sơ (B5)', () => {
+  const goc = formTu(n, { ...c, maBhxh: '5212345678' })
+  it('bày đủ trong form; gõ lại có cách → không đổi; xoá → null; sai → báo', () => {
+    expect(goc.maBhxh).toBe('5212345678')
+    expect(goiHoSo({ ...goc, maBhxh: '5212 345 678' }, goc, P).so).toBe(0)
+    expect(goiHoSo({ ...goc, maBhxh: '' }, goc, P).goi).toEqual({
+      ca_nhan: { social_insurance_no: null },
+    })
+    expect(kiemHoSo({ ...goc, maBhxh: '52123' }, { ...P, homNay: H })[0].o).toBe('maBhxh')
   })
 })

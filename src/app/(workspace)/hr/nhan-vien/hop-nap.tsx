@@ -161,9 +161,9 @@ export function HopNap({ d }: { d: DsCtx }) {
           <p className="text-k-sm text-[var(--ink-2)]">
             Trong Excel: chọn cả vùng (gồm dòng tiêu đề) → Ctrl+C → dán vào ô dưới. Cột
             nhận theo tên: Mã NV, Họ tên, Tổ, Chức danh, Ngày vào làm, Ngày sinh, Giới
-            tính, Số CCCD, Ngày cấp, Nơi cấp, Mã số thuế, Thường trú, Điện thoại, Liên hệ
-            khẩn cấp… Cột lạ (STT, Ký nhận) bỏ qua. Không có Mã NV thì khớp theo họ tên.
-            Cột &quot;Bộ phận&quot; được hiểu là chức danh.
+            tính, Số CCCD, Ngày cấp, Nơi cấp, Mã số thuế, Mã số BHXH, Thường trú, Điện
+            thoại, Liên hệ khẩn cấp… Cột lạ (STT, Ký nhận) bỏ qua. Không có Mã NV thì khớp
+            theo Số CCCD, rồi theo họ tên. Cột &quot;Bộ phận&quot; được hiểu là chức danh.
           </p>
           <div className="mt-2">
             <TextArea
@@ -237,7 +237,12 @@ export function HopNap({ d }: { d: DsCtx }) {
                           <span className="num mr-1.5">{r.khop.nguoi.ma}</span>
                           {r.khop.nguoi.ten}
                           <span className="text-k-label ml-1.5 text-[var(--ink-3)]">
-                            theo {r.khop.theo === 'ma' ? 'mã' : 'tên'}
+                            theo{' '}
+                            {r.khop.theo === 'ma'
+                              ? 'mã'
+                              : r.khop.theo === 'cccd'
+                                ? 'CCCD'
+                                : 'tên'}
                           </span>
                           {r.tenLech && (
                             <span className="text-k-label ml-1.5 text-[var(--warn)]">

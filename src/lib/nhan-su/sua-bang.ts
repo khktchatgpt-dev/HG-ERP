@@ -25,6 +25,7 @@ export const COT_SUA = [
   'khanCapTen',
   'khanCapQuanHe',
   'khanCapSdt',
+  'maBhxh',
 ] as const satisfies readonly CotNapNv[]
 export type CotSua = (typeof COT_SUA)[number]
 
@@ -74,6 +75,8 @@ export function gocO(n: NvDsTom, cot: CotSua): string {
       return r.khanCapTen ?? ''
     case 'khanCapQuanHe':
       return r.khanCapQuanHe ?? ''
+    case 'maBhxh':
+      return r.maBhxh ?? ''
   }
 }
 

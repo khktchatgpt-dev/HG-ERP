@@ -47,6 +47,8 @@ export type CaNhan = {
   khanCapTen: string | null
   khanCapQuanHe: string | null
   khanCapSdt: string | null
+  /** Mã số BHXH (10 chữ số, 0286) — bày đủ cho người có quyền, như SĐT. */
+  maBhxh: string | null
 }
 
 /** Cờ có / chưa có, đủ để đếm hồ sơ thiếu. */

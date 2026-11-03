@@ -25,6 +25,8 @@ export type FormHoSo = {
   ngayCap: string
   noiCap: string
   mst: string
+  /** Mã số BHXH (B5, 0286) — bày đủ, sửa / xoá như ô thường. */
+  maBhxh: string
   thuongTru: string
   choO: string
   dienThoai: string
@@ -67,6 +69,7 @@ export function formTu(n: GocCv, c: CaNhan | null): FormHoSo {
     ngayCap: ngay(c?.ngayCap ?? null),
     noiCap: c?.noiCap ?? '',
     mst: '',
+    maBhxh: c?.maBhxh ?? '',
     thuongTru: c?.thuongTru ?? '',
     choO: c?.choO ?? '',
     dienThoai: hienSdt(c?.dienThoai ?? null),
@@ -81,6 +84,10 @@ export type VanDe = { o: OHoSo; loi: string }
 const chuanMst = (s: string) => {
   const t = s.replace(/[\s.-]/g, '')
   return /^\d{10}(\d{2,3})?$/.test(t) ? t : undefined
+}
+const chuanBhxh = (s: string) => {
+  const t = s.replace(/[\s.-]/g, '')
+  return /^\d{10}$/.test(t) ? t : undefined
 }
 
 /**
@@ -110,6 +117,8 @@ export function kiemHoSo(
     ngayO('ngayCap', 'Ngày cấp')
     if (f.mst.trim() && !chuanMst(f.mst))
       out.push({ o: 'mst', loi: 'Mã số thuế cần 10 hoặc 13 chữ số' })
+    if (f.maBhxh.trim() && !chuanBhxh(f.maBhxh))
+      out.push({ o: 'maBhxh', loi: 'Mã số BHXH cần 10 chữ số' })
     for (const o of ['dienThoai', 'khanCapSdt'] as const)
       if (f[o].trim() && !chuanSdt(f[o]))
         out.push({
@@ -161,6 +170,12 @@ export function goiHoSo(
     so(ca_nhan, 'id_issue_date', iso(f.ngayCap), iso(goc.ngayCap))
     so(ca_nhan, 'id_issue_place', chu(f.noiCap), chu(goc.noiCap))
     if (f.mst.trim()) ca_nhan.tax_code = chuanMst(f.mst)!
+    so(
+      ca_nhan,
+      'social_insurance_no',
+      f.maBhxh.trim() ? chuanBhxh(f.maBhxh)! : null,
+      goc.maBhxh.trim() ? chuanBhxh(goc.maBhxh)! : null,
+    )
     so(ca_nhan, 'permanent_address', chu(f.thuongTru), chu(goc.thuongTru))
     so(ca_nhan, 'current_address', chu(f.choO), chu(goc.choO))
     so(ca_nhan, 'phone', sdt(f.dienThoai), sdt(goc.dienThoai))

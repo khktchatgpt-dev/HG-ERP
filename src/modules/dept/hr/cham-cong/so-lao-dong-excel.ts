@@ -70,6 +70,12 @@ export async function buildSoLaoDong(
       { ten: 'Trình độ', rong: 18, gia: (e) => r(e)?.education ?? '' },
       { ten: 'Mã số thuế', rong: 15, chu: true, gia: (e) => r(e)?.tax_code ?? '' },
       {
+        ten: 'Mã số BHXH',
+        rong: 13,
+        chu: true,
+        gia: (e) => r(e)?.social_insurance_no ?? '',
+      },
+      {
         ten: 'Loại hợp đồng',
         rong: 22,
         gia: (e) => {
@@ -153,5 +159,9 @@ export async function buildSoLaoDong(
   ;[...emps]
     .sort((a, b) => Number(b.active) - Number(a.active) || soSanhMa(a.code, b.code))
     .forEach((e, i) => ws.addRow([i + 1, ...cot.map((c) => c.gia(e))]))
+  // Có CCCD đầy đủ trong file → một dòng nhật ký truy cập (việc treo từ B4 lượt 19/10).
+  const soCccd = rieng ? emps.filter((e) => ds.get(e.id)?.national_id).length : 0
+  if (soCccd)
+    await caNhanRepo.ghiXuat(user.id, `Xuất sổ quản lý lao động: ${soCccd} người có CCCD`)
   return { buf: Buffer.from(await wb.xlsx.writeBuffer()), rieng }
 }

@@ -557,6 +557,7 @@ const COT_CA_NHAN_SUA = [
   'emergency_relation',
   'emergency_phone',
   'tax_code',
+  'social_insurance_no',
 ] as const
 
 /**

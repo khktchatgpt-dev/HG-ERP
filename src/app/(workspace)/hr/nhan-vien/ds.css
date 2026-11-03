@@ -303,6 +303,53 @@
   cursor: pointer;
 }
 
+/* menu thả xuống của Action Pane (Xuất ▾ ở danh sách, Biến động ▾ ở hồ sơ) */
+.ns.ns .ns-menu {
+  position: relative;
+  display: inline-flex;
+}
+.ns.ns .ns-menu .ds {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  border: 1px solid var(--ns-line);
+  background: var(--ns-card);
+  box-shadow: 0 4px 12px rgba(18, 22, 31, 0.12);
+}
+.ns.ns .ns-menu .ds button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ns-hair);
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--ns-ink);
+  cursor: pointer;
+}
+.ns.ns .ns-menu .ds button:last-child {
+  border-bottom: 0;
+}
+.ns.ns .ns-menu .ds button:hover:not([aria-disabled='true']) {
+  background: var(--ns-act-wash);
+}
+.ns.ns .ns-menu .ds button[aria-disabled='true'] {
+  color: #8f98a7;
+  cursor: not-allowed;
+}
+.ns.ns .ns-menu .ds small {
+  font-size: 11.5px;
+  color: var(--ns-ink3);
+}
+
 /* thanh khi chọn nhiều dòng */
 .ns.ns .ns-chon {
   display: flex;

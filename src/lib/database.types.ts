@@ -2394,6 +2394,7 @@ export type Database = {
           nationality: string | null
           permanent_address: string | null
           phone: string | null
+          social_insurance_no: string | null
           tax_code: string | null
           updated_at: string
           updated_by: string | null
@@ -2417,6 +2418,7 @@ export type Database = {
           nationality?: string | null
           permanent_address?: string | null
           phone?: string | null
+          social_insurance_no?: string | null
           tax_code?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -2440,6 +2442,7 @@ export type Database = {
           nationality?: string | null
           permanent_address?: string | null
           phone?: string | null
+          social_insurance_no?: string | null
           tax_code?: string | null
           updated_at?: string
           updated_by?: string | null

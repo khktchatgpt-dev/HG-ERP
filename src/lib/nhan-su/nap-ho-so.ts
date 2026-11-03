@@ -24,6 +24,7 @@ export const COT_NAP = [
   'ngayCap',
   'noiCap',
   'mst',
+  'maBhxh',
   'thuongTru',
   'choO',
   'dienThoai',
@@ -48,6 +49,7 @@ export const TEN_COT_NAP: Record<CotNapNv, string> = {
   ngayCap: 'Ngày cấp',
   noiCap: 'Nơi cấp',
   mst: 'Mã số thuế',
+  maBhxh: 'Mã số BHXH',
   thuongTru: 'Thường trú',
   choO: 'Chỗ ở hiện tại',
   dienThoai: 'Điện thoại',
@@ -67,6 +69,7 @@ export const COT_RIENG: CotNapNv[] = [
   'ngayCap',
   'noiCap',
   'mst',
+  'maBhxh',
   'thuongTru',
   'choO',
   'dienThoai',
@@ -98,6 +101,9 @@ const NHAN: [CotNapNv, RegExp][] = [
   ['ngayVao', /ngay (vao|bat dau)/],
   ['ngaySinh', /(ngay|nam) sinh/],
   ['mst', /(ma so thue|^mst$)/],
+  // File "DANH SÁCH ĐÓNG BHXH" ghi "Mã số BHXH"; trước 'ma' vì "Mã số …".
+  // Hẹp có chủ ý: "Tổng nộp BHXH", "Tham gia BHXH" không phải mã số.
+  ['maBhxh', /(ma (so )?bhxh|so so bhxh|^so bhxh$|^bhxh$)/],
   ['cccd', /(cccd|cmnd|can cuoc|chung minh)/],
   ['ma', /^(ma ?nv|ma nhan vien|ma so|ma)$/],
   ['ten', /(ho (va )?ten|^ten$|ten nhan vien)/],
@@ -195,6 +201,10 @@ export function chuanO(cot: CotNapNv, v: string): string | undefined {
       const t = v.replace(/[\s.-]/g, '')
       return /^\d{10}(\d{2,3})?$/.test(t) ? t : undefined
     }
+    case 'maBhxh': {
+      const t = v.replace(/[\s.-]/g, '')
+      return /^\d{10}$/.test(t) ? t : undefined
+    }
     case 'dienThoai':
     case 'khanCapSdt':
       return chuanSdt(v) ?? undefined
@@ -211,6 +221,7 @@ export const LOI_O: Partial<Record<CotNapNv, string>> = {
   gioiTinh: 'Nam hoặc Nữ',
   cccd: '12 chữ số (CMND 9 số)',
   mst: '10 hoặc 13 chữ số',
+  maBhxh: '10 chữ số',
   dienThoai: 'số VN 10 chữ số, bắt đầu bằng 0',
   khanCapSdt: 'số VN 10 chữ số, bắt đầu bằng 0',
 }

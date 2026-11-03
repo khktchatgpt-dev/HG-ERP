@@ -16,6 +16,7 @@ const R: RiengDs = {
   khanCapTen: null,
   khanCapQuanHe: null,
   khanCapSdt: null,
+  maBhxh: null,
 }
 const nv = (p: Partial<NvDsTom> = {}): NvDsTom => ({
   id: 'a',
@@ -144,5 +145,15 @@ describe('dán vùng Excel', () => {
     expect(laVung('a\tb')).toBe(true)
     expect(laVung('a\nb')).toBe(true)
     expect(laVung('0905123456\r\n')).toBe(false)
+  })
+})
+
+describe('Mã số BHXH trên bảng (B5)', () => {
+  it('giá trị đang có + kiểm 10 số bằng chung chuanO', () => {
+    expect(gocO(nv({ rieng: { ...R, maBhxh: '5212345678' } }), 'maBhxh')).toBe(
+      '5212345678',
+    )
+    expect(xetO('maBhxh', '', '5212 345 678')).toEqual({ kieu: 'doi', moi: '5212345678' })
+    expect(xetO('maBhxh', '', '123').kieu).toBe('loi')
   })
 })

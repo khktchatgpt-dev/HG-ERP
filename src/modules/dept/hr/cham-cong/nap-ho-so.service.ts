@@ -13,7 +13,7 @@ import { BadRequest, Forbidden } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { boSo0 } from '@/lib/cham-cong/ghep-ten'
 import { khopTen, type NguoiKhop } from '@/lib/luong/ho-so-luong'
-import { cheCccd } from '@/lib/nhan-su/ca-nhan'
+import { cheCccd, chuanCccd } from '@/lib/nhan-su/ca-nhan'
 import {
   COT_RIENG,
   docDanNv,
@@ -44,11 +44,12 @@ const COT_DB: Partial<Record<CotNapNv, keyof DongCaNhan | 'tax_code'>> = {
   khanCapTen: 'emergency_name',
   khanCapQuanHe: 'emergency_relation',
   khanCapSdt: 'emergency_phone',
+  maBhxh: 'social_insurance_no',
 }
 const CHE: CotNapNv[] = ['cccd', 'mst']
 
 export type KhopNap =
-  | { kieu: 'khop'; theo: 'ma' | 'ten'; nguoi: NguoiKhop }
+  | { kieu: 'khop'; theo: 'ma' | 'cccd' | 'ten'; nguoi: NguoiKhop }
   | { kieu: 'nhieu'; ungVien: NguoiKhop[] }
   | { kieu: 'khong' }
 
@@ -116,15 +117,31 @@ async function nap(
   const dsTen: NguoiKhop[] = emps
     .filter((e) => e.active)
     .map((e) => ({ id: e.id, ma: e.code, ten: e.full_name, to: e.team }))
+  // CCCD → người (B5): file đóng BHXH không có mã NV mà có CCCD — khớp chắc hơn họ tên. Chỉ
+  // dùng khi người nạp có quyền thông tin riêng (CCCD là ô riêng tư); số trùng hai người thì bỏ.
+  const theoCccd = new Map<string, EmployeeRow | null>()
+  if (rieng)
+    for (const e of emps) {
+      const so = ds.get(e.id)?.national_id
+      if (so) theoCccd.set(so, theoCccd.has(so) ? null : e)
+    }
 
   const dong = doc.dong.map((r) => {
     let khop: KhopNap = { kieu: 'khong' }
     const e0 = r.ma ? theoMa.get(boSo0(r.ma.trim())) : undefined
+    const cc = !r.ma && r.cccd ? chuanCccd(r.cccd) : undefined
+    const eCc = cc ? theoCccd.get(cc) : undefined
     if (e0)
       khop = {
         kieu: 'khop',
         theo: 'ma',
         nguoi: { id: e0.id, ma: e0.code, ten: e0.full_name, to: e0.team },
+      }
+    else if (eCc)
+      khop = {
+        kieu: 'khop',
+        theo: 'cccd',
+        nguoi: { id: eCc.id, ma: eCc.code, ten: eCc.full_name, to: eCc.team },
       }
     else if (!r.ma && r.ten) {
       const k = khopTen(r.ten, r.to ?? null, dsTen)

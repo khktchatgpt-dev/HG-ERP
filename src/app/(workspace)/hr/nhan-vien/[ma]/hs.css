@@ -60,53 +60,6 @@
   color: var(--ns-stop);
 }
 
-/* menu Biến động */
-.ns.ns .hs-menu {
-  position: relative;
-  display: inline-flex;
-}
-.ns.ns .hs-menu .ds {
-  position: absolute;
-  top: calc(100% + 2px);
-  right: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  min-width: 260px;
-  border: 1px solid var(--ns-line);
-  background: var(--ns-card);
-  box-shadow: 0 4px 12px rgba(18, 22, 31, 0.12);
-}
-.ns.ns .hs-menu .ds button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 6px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--ns-hair);
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  color: var(--ns-ink);
-  cursor: pointer;
-}
-.ns.ns .hs-menu .ds button:last-child {
-  border-bottom: 0;
-}
-.ns.ns .hs-menu .ds button:hover:not([aria-disabled='true']) {
-  background: var(--ns-act-wash);
-}
-.ns.ns .hs-menu .ds button[aria-disabled='true'] {
-  color: #8f98a7;
-  cursor: not-allowed;
-}
-.ns.ns .hs-menu .ds small {
-  font-size: 11.5px;
-  color: var(--ns-ink3);
-}
-
 /* thân: vùng cuộn duy nhất */
 .ns.ns .hs-than {
   flex: 1;

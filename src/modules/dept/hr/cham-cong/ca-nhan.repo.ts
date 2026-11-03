@@ -17,6 +17,7 @@ export const COT_CA_NHAN = {
   emergency_name: 'Người liên hệ khẩn cấp',
   emergency_relation: 'Quan hệ',
   emergency_phone: 'SĐT khẩn cấp',
+  social_insurance_no: 'Mã số BHXH',
 } as const
 export type CotCaNhan = keyof typeof COT_CA_NHAN
 export type DongCaNhan = { [K in CotCaNhan]: string | null }
@@ -73,6 +74,20 @@ export const caNhanRepo = {
     })[])
       out.set(r.employee_id, r)
     return out
+  },
+
+  /**
+   * Nhật ký khi xuất file có CCCD đầy đủ (DS CNV, Sổ quản lý lao động) — một dòng cho cả file,
+   * `employee_id` trống (0255 cho phép). Lỗi ghi không chặn tải file nhưng được log ra server.
+   */
+  async ghiXuat(userId: string, ghiChu: string): Promise<void> {
+    const { error } = await db().from('hr_private_access_log').insert({
+      field: 'national_id',
+      viewer_id: userId,
+      employee_id: null,
+      note: ghiChu,
+    })
+    if (error) console.error('[nhật ký xuất CCCD]', error.message)
   },
 
   async luu(

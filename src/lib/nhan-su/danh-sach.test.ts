@@ -27,6 +27,7 @@ const R: RiengDs = {
   khanCapTen: null,
   khanCapQuanHe: null,
   khanCapSdt: null,
+  maBhxh: null,
 }
 let id = 0
 const nv = (p: Partial<NvDsTom> = {}): NvDsTom => ({

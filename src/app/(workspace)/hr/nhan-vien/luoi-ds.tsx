@@ -222,6 +222,15 @@ const NOICAP: Cot = {
   o: (n) => v(n.rieng?.noiCap),
   tt: (n) => n.rieng?.noiCap,
 }
+const MBH: Cot = {
+  k: 'mbh',
+  sua: 'maBhxh',
+  ten: 'Mã số BHXH',
+  w: 104,
+  rieng: true,
+  trong: 'ma_bhxh',
+  o: (n) => so(n.rieng?.maBhxh),
+}
 const MST: Cot = {
   k: 'mst',
   sua: 'mst',
@@ -311,12 +320,13 @@ const TK: Cot = {
 /**
  * Bốn bộ cột (bản vẽ A; "Giấy tờ & liên hệ" tách đôi ở B2 để ô khẩn cấp có chỗ sửa). "DS CNV" theo đúng file Nhân sự đang giữ. Bỏ nhóm thì thêm cột Bộ
  * phận; bộ DS CNV khi đó — hoặc khi khung hẹp — bỏ Ghi chú cho Nơi ở còn chỗ đọc ở 1000px.
+ * Bộ Giấy tờ thêm Mã số BHXH (B5, 0286); khung hẹp bỏ Trình độ cho Thường trú còn chỗ.
  */
 export function cotCua(bo: BoCot, nhom: boolean, rieng: boolean, hep = false): Cot[] {
   const bp = nhom ? [] : [BP]
   const ds: Cot[] =
     bo === 'giay_to'
-      ? [MA, TEN, CC, NCAP, NOICAP, MST, TD, TT]
+      ? [MA, TEN, CC, NCAP, NOICAP, MST, MBH, ...(hep ? [] : [TD]), TT]
       : bo === 'lien_he'
         ? [MA, TEN, DT, NO, KCT, KCQH, KCS]
         : bo === 'cong_viec'
@@ -504,6 +514,7 @@ const GOI_Y: Partial<Record<CotSua, string>> = {
   khanCapQuanHe: 'ns-gy-khanCapQuanHe',
 }
 const SO: readonly CotSua[] = [
+  'maBhxh',
   'ngayVao',
   'ngaySinh',
   'ngayCap',
@@ -519,6 +530,8 @@ function goiY(n: NvLuoi, c: CotSua): string {
       return n.rieng?.cccd4 ? `•••• ${n.rieng.cccd4}` : '12 chữ số'
     case 'mst':
       return n.rieng?.mst4 ? `•••• ${n.rieng.mst4}` : '10 hoặc 13 số'
+    case 'maBhxh':
+      return '10 chữ số'
     case 'ngayVao':
     case 'ngaySinh':
     case 'ngayCap':

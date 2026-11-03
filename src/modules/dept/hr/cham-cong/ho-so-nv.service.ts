@@ -73,6 +73,7 @@ function riengDs(r: (DongCaNhan & { tax_code: string | null }) | undefined): Rie
     khanCapTen: r?.emergency_name ?? null,
     khanCapQuanHe: r?.emergency_relation ?? null,
     khanCapSdt: r?.emergency_phone ?? null,
+    maBhxh: r?.social_insurance_no ?? null,
   }
 }
 
@@ -134,6 +135,7 @@ function doiCaNhan(r: (DongCaNhan & { tax_code?: string | null }) | null): CaNha
     khanCapTen: r?.emergency_name ?? null,
     khanCapQuanHe: r?.emergency_relation ?? null,
     khanCapSdt: r?.emergency_phone ?? null,
+    maBhxh: r?.social_insurance_no ?? null,
   }
 }
 
@@ -483,6 +485,11 @@ export const hoSoNvService = {
               : 'Mã số thuế có 10 hoặc 13 chữ số',
           )
         gia = c
+      }
+      if (cot === 'social_insurance_no' && gia != null) {
+        const t = gia.replace(/[\s.-]/g, '')
+        if (!/^\d{10}$/.test(t)) throw BadRequest('Mã số BHXH có 10 chữ số')
+        gia = t
       }
       if (cot === 'phone' || cot === 'emergency_phone') {
         const s = gia == null ? null : chuanSdt(gia)

@@ -14,6 +14,7 @@ const RONG = <span className="e">—</span>
 const v = (x: ReactNode) => (x == null || x === '' ? RONG : x)
 const so = (x: string | null | undefined) => (x ? <span className="num">{x}</span> : RONG)
 const SO: OHoSo[] = [
+  'maBhxh',
   'ngayVao',
   'ngaySinh',
   'cccd',
@@ -225,6 +226,9 @@ export function TabThongTin({ d }: { d: HoSoCtx }) {
                 goiY={c.mstChe ? `${c.mstChe} — gõ số mới để thay` : '10 hoặc 13 chữ số'}
               >
                 {so(c.mstChe)}
+              </Hang>
+              <Hang ten="Mã số BHXH" d={d} o="maBhxh" sua={cn} goiY="10 chữ số">
+                {so(c.maBhxh)}
               </Hang>
             </dl>
           </section>

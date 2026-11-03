@@ -2,7 +2,7 @@
 
 import './ds.css'
 import { useState } from 'react'
-import { FileDown, FileUp, PencilLine, Plus, Search } from 'lucide-react'
+import { ChevronDown, FileDown, FileUp, PencilLine, Plus, Search } from 'lucide-react'
 import {
   COT_TRONG,
   TAB_DS,
@@ -64,17 +64,7 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
               <FileUp className="ico" aria-hidden />
               Nhập Excel
             </Nut>
-            {/* Tải file: điều hướng thẳng tới route xuất, không qua router của Next. */}
-            <button
-              type="button"
-              className="ns-btn"
-              onClick={() =>
-                window.location.assign('/api/dept/hr/cham-cong/nhan-vien/excel')
-              }
-            >
-              <FileDown className="ico" aria-hidden />
-              Xuất sổ lao động
-            </button>
+            <MenuXuat />
           </div>
         </div>
       </div>
@@ -149,6 +139,57 @@ export function NhanVienDsScreen({ h }: { h: TrangDs }) {
       {d.moTuyen && <HopTuyen d={d} />}
       {d.moNap && <HopNap d={d} />}
     </div>
+  )
+}
+
+/**
+ * Xuất ▾ (B5): DS CNV đúng mẫu file Nhân sự (nhóm bộ phận + sheet Đã nghỉ việc, Q6) và Sổ quản
+ * lý lao động (cũng là mẫu để Nhập Excel). Tải file: điều hướng thẳng tới route xuất, không qua
+ * router của Next.
+ */
+function MenuXuat() {
+  const [mo, setMo] = useState(false)
+  const tai = (url: string) => {
+    setMo(false)
+    window.location.assign(url)
+  }
+  return (
+    <span
+      className="ns-menu"
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setMo(false)}
+    >
+      <button
+        type="button"
+        className="ns-btn"
+        aria-haspopup="menu"
+        aria-expanded={mo}
+        onClick={() => setMo(!mo)}
+      >
+        <FileDown className="ico" aria-hidden />
+        Xuất
+        <ChevronDown className="ico" aria-hidden />
+      </button>
+      {mo && (
+        <span className="ds" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => tai('/api/dept/hr/cham-cong/nhan-vien/ds-cnv')}
+          >
+            Danh sách CNV
+            <small>Như file Nhân sự: nhóm bộ phận, sheet Đã nghỉ việc</small>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => tai('/api/dept/hr/cham-cong/nhan-vien/excel')}
+          >
+            Sổ quản lý lao động
+            <small>Đủ cột theo NĐ 145 — điền thêm rồi dán lại ở Nhập Excel</small>
+          </button>
+        </span>
+      )}
+    </span>
   )
 }
 

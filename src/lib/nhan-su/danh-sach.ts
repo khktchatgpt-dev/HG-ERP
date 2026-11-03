@@ -25,6 +25,7 @@ export type RiengDs = {
   khanCapTen: string | null
   khanCapQuanHe: string | null
   khanCapSdt: string | null
+  maBhxh: string | null
 }
 
 export type NvDsTom = NvTom & { id: string; ghiChu: string | null; rieng: RiengDs | null }
@@ -79,6 +80,7 @@ export const COT_TRONG = {
   thuong_tru: { ten: 'Thường trú', rieng: true },
   trinh_do: { ten: 'Trình độ', rieng: true },
   khan_cap: { ten: 'Liên hệ khẩn cấp', rieng: true },
+  ma_bhxh: { ten: 'Mã số BHXH', rieng: true },
 } as const
 export type CotTrong = keyof typeof COT_TRONG
 
@@ -115,6 +117,8 @@ export function laTrong(n: NvDsTom, c: CotTrong): boolean {
       return !r.thuongTru
     case 'trinh_do':
       return !r.trinhDo
+    case 'ma_bhxh':
+      return !r.maBhxh
     case 'khan_cap':
       return !r.khanCapTen
   }
