@@ -24,6 +24,9 @@ const { tasks, users, comments, activity, emit, depts } = vi.hoisted(() => ({
   depts: { list: vi.fn() },
 }))
 vi.mock('./tasks.repo', () => ({ tasksRepo: tasks }))
+vi.mock('@/modules/core/files/files.repo', () => ({
+  filesRepo: { countByTasks: vi.fn(async () => new Map<string, number>()) },
+}))
 vi.mock('./comments.repo', () => ({ commentsRepo: comments }))
 vi.mock('./activity.repo', () => ({ activityRepo: activity }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: users }))

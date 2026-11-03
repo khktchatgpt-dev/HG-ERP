@@ -220,6 +220,21 @@ export const filesRepo = {
   },
 
   /** File gốc đã finalize theo 1 parent chứng từ (product/quote/order/LSX). */
+  /** Số tệp đã chốt trên từng việc — để dòng danh sách hiện "n tệp". Việc không có tệp thì vắng khỏi map. */
+  async countByTasks(taskIds: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    if (taskIds.length === 0) return out
+    const { data } = await db()
+      .from('files')
+      .select('task_id')
+      .in('task_id', taskIds)
+      .is('deleted_at', null)
+      .not('finalized_at', 'is', null)
+    for (const r of (data ?? []) as { task_id: string }[])
+      out.set(r.task_id, (out.get(r.task_id) ?? 0) + 1)
+    return out
+  },
+
   async listByParent(column: FileParentColumn, id: string): Promise<FileRow[]> {
     const { data } = await db()
       .from('files')

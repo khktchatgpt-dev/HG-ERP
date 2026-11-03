@@ -10,6 +10,7 @@ import type {
   GivenBoard,
   MineBoard,
 } from '@/modules/workflow/tasks/tasks.service'
+import { ChiTietViec } from './chi-tiet-viec'
 import { GiaoViec, type GiaoViecHandle } from './giao-viec'
 import { btn } from './phan-cong.shared'
 import { ViecCuaToi } from './viec-cua-toi'
@@ -37,8 +38,14 @@ export function PhanCongScreen({
   mine,
   people,
   focus,
+  meRole,
+  restricted,
 }: {
   meId: string
+  /** Vai trò người xem — chi tiết việc cần để biết sếp đính tệp được. */
+  meRole: string
+  /** Người giao bị giới hạn phòng nhận (nhân viên Bán Hàng) — hộp Giao việc nói rõ. */
+  restricted: boolean
   today: string
   /** null = người xem không giao được việc (nhân viên). */
   board: GivenBoard | null
@@ -50,6 +57,21 @@ export function PhanCongScreen({
   const formRef = useRef<GiaoViecHandle>(null)
   const router = useRouter()
   const [sent, setSent] = useState<string | null>(null)
+  // Việc đang mở ở ngăn kéo chi tiết (bấm tên việc). Mở chi tiết thay chỗ hộp Giao việc.
+  const [openId, setOpenId] = useState<string | null>(null)
+  const opened = openId
+    ? ([...(board?.items ?? []), ...mine.items].find((t) => t.id === openId) ?? null)
+    : null
+  const drawer = opened && (
+    <ChiTietViec
+      key={opened.id}
+      item={opened}
+      meId={meId}
+      meRole={meRole}
+      onClose={() => setOpenId(null)}
+      onChanged={() => router.refresh()}
+    />
+  )
   // Mở thường: người giao vào thẳng việc mình giao (trang dựng cho họ trước), người
   // nhận vào việc của mình. Chuông thì vào đúng mục có việc đó.
   const [muc, setMuc] = useState<Muc>(focus?.muc ?? (board ? 'giao' : 'cua-toi'))
@@ -57,7 +79,10 @@ export function PhanCongScreen({
 
   function giaoViec() {
     // Hộp chỉ có ở mục "Việc tôi giao": đổi mục rồi vẽ NGAY, mới đặt con trỏ được.
-    if (tab !== 'giao') flushSync(() => setMuc('giao'))
+    flushSync(() => {
+      setOpenId(null)
+      if (tab !== 'giao') setMuc('giao')
+    })
     formRef.current?.focus()
   }
 
@@ -115,42 +140,55 @@ export function PhanCongScreen({
       </div>
 
       {tab === 'cua-toi' && (
-        <ViecCuaToi
-          board={mine}
-          today={today}
-          initialFilter={focus?.muc === 'cua-toi' ? focus.filter : undefined}
-          focusId={focus?.muc === 'cua-toi' ? focus.id : null}
-        />
+        <div
+          className={`grid min-h-0 items-start ${drawer ? 'grid-cols-[minmax(0,1fr)_470px]' : 'grid-cols-1'}`}
+        >
+          <div className="min-w-0 border-r border-[var(--border)]">
+            <ViecCuaToi
+              board={mine}
+              today={today}
+              initialFilter={focus?.muc === 'cua-toi' ? focus.filter : undefined}
+              focusId={focus?.muc === 'cua-toi' ? focus.id : null}
+              onOpen={setOpenId}
+            />
+          </div>
+          {drawer}
+        </div>
       )}
 
       {tab === 'giao' && board && (
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_340px] items-start">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_470px] items-start">
           <div className="min-w-0 border-r border-[var(--border)]">
             <ViecToiGiao
               board={board}
               today={today}
               initialFilter={focus?.muc === 'giao' ? focus.filter : undefined}
               focusId={focus?.muc === 'giao' ? focus.id : null}
+              onOpen={setOpenId}
             />
           </div>
-          <aside className="flex flex-col gap-2 bg-[var(--card)] px-3.5 py-3">
-            <GiaoViec
-              ref={formRef}
-              people={people}
-              meId={meId}
-              today={today}
-              onDone={(name) => {
-                setSent(`Đã giao cho ${name}.`)
-                // Tải lại danh sách: việc vừa giao phải hiện ngay bên trái.
-                router.refresh()
-              }}
-            />
-            {sent && (
-              <p role="status" className="text-[12px] font-medium text-[var(--done)]">
-                {sent}
-              </p>
-            )}
-          </aside>
+          {drawer ?? (
+            <aside className="flex flex-col gap-2 bg-[var(--card)] px-3.5 py-3">
+              <GiaoViec
+                ref={formRef}
+                people={people}
+                meId={meId}
+                today={today}
+                restricted={restricted}
+                onOpenTask={setOpenId}
+                onDone={(name) => {
+                  setSent(`Đã giao cho ${name}.`)
+                  // Tải lại danh sách: việc vừa giao phải hiện ngay bên trái.
+                  router.refresh()
+                }}
+              />
+              {sent && (
+                <p role="status" className="text-[12px] font-medium text-[var(--done)]">
+                  {sent}
+                </p>
+              )}
+            </aside>
+          )}
         </div>
       )}
     </div>

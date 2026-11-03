@@ -7,6 +7,7 @@ import {
   type TaskRow,
   type TaskStatus,
 } from '@/modules/workflow/tasks/tasks.repo'
+import { filesRepo } from '@/modules/core/files/files.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { commentsRepo } from '@/modules/workflow/tasks/comments.repo'
 import { activityRepo } from '@/modules/workflow/tasks/activity.repo'
@@ -52,6 +53,8 @@ export type GivenItem = TaskRow & {
   last_result: string | null
   /** Lý do trả lại mới nhất. */
   last_reject: string | null
+  /** Số tệp đính kèm (đã chốt). */
+  file_count: number
 }
 
 export type GivenBoard = {
@@ -99,6 +102,8 @@ export type AssignedItem = TaskRow & {
   last_result: string | null
   /** Lý do lần trả lại gần nhất — người nhận đọc để làm tiếp. */
   last_reject: string | null
+  /** Số tệp đính kèm (đã chốt). */
+  file_count: number
 }
 
 export type MineBoard = {
@@ -113,6 +118,7 @@ function takerItem(
   own: boolean,
   notes: Awaited<ReturnType<typeof commentsRepo.latestByTasks>>,
   today: string,
+  counts: Map<string, number>,
 ): AssignedItem {
   return {
     ...t,
@@ -124,6 +130,7 @@ function takerItem(
       : [],
     last_result: notes.get(t.id)?.progress_report?.body ?? null,
     last_reject: notes.get(t.id)?.rejection?.body ?? null,
+    file_count: counts.get(t.id) ?? 0,
   }
 }
 
@@ -703,10 +710,13 @@ export const tasksService = {
     const kept = rows.filter((t) =>
       ['open', 'done', 'cancelled'].some((f) => matchesGiven(t, f as GivenFilter, today)),
     )
-    const notes = await commentsRepo.latestByTasks(
-      kept.map((t) => t.id),
-      ['progress_report', 'rejection'],
-    )
+    const [notes, counts] = await Promise.all([
+      commentsRepo.latestByTasks(
+        kept.map((t) => t.id),
+        ['progress_report', 'rejection'],
+      ),
+      filesRepo.countByTasks(kept.map((t) => t.id)),
+    ])
     const actor = { id: user.id, role: user.role }
     return {
       summary: summarizeGiven(kept, today),
@@ -716,6 +726,7 @@ export const tasksService = {
         actions: taskActions(t, actor),
         last_result: notes.get(t.id)?.progress_report?.body ?? null,
         last_reject: notes.get(t.id)?.rejection?.body ?? null,
+        file_count: counts.get(t.id) ?? 0,
       })),
     }
   },
@@ -736,12 +747,17 @@ export const tasksService = {
       page_size: 200,
     })
     const open = rows.filter((t) => isTakerOpen(t.status))
-    const notes = await commentsRepo.latestByTasks(
-      open.map((t) => t.id),
-      ['progress_report', 'rejection'],
-    )
+    const [notes, counts] = await Promise.all([
+      commentsRepo.latestByTasks(
+        open.map((t) => t.id),
+        ['progress_report', 'rejection'],
+      ),
+      filesRepo.countByTasks(open.map((t) => t.id)),
+    ])
     const own = viewer.id === subjectId
-    return sortGiven(open, today).map((t) => takerItem(t, viewer, own, notes, today))
+    return sortGiven(open, today).map((t) =>
+      takerItem(t, viewer, own, notes, today, counts),
+    )
   },
 
   /**
@@ -763,13 +779,18 @@ export const tasksService = {
         matchesMine(t, f, today),
       ),
     )
-    const notes = await commentsRepo.latestByTasks(
-      kept.map((t) => t.id),
-      ['progress_report', 'rejection'],
-    )
+    const [notes, counts] = await Promise.all([
+      commentsRepo.latestByTasks(
+        kept.map((t) => t.id),
+        ['progress_report', 'rejection'],
+      ),
+      filesRepo.countByTasks(kept.map((t) => t.id)),
+    ])
     return {
       summary: summarizeMine(kept, today),
-      items: sortGiven(kept, today).map((t) => takerItem(t, user, true, notes, today)),
+      items: sortGiven(kept, today).map((t) =>
+        takerItem(t, user, true, notes, today, counts),
+      ),
     }
   },
 

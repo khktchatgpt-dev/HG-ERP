@@ -11,7 +11,15 @@ import {
   type GivenFilter,
 } from '@/lib/task-flow'
 import type { GivenBoard, GivenItem } from '@/modules/workflow/tasks/tasks.service'
-import { btn, dmVn, fieldCls, lateDays, StatusTag, Tag } from './phan-cong.shared'
+import {
+  btn,
+  dmVn,
+  fieldCls,
+  lateDays,
+  StatusTag,
+  Tag,
+  TitleLink,
+} from './phan-cong.shared'
 
 /**
  * "VIỆC TÔI GIAO" (bản vẽ 1, P2): cái nào chờ tôi duyệt, cái nào trễ.
@@ -32,6 +40,7 @@ export function ViecToiGiao({
   today,
   initialFilter,
   focusId = null,
+  onOpen,
 }: {
   board: GivenBoard
   today: string
@@ -39,6 +48,8 @@ export function ViecToiGiao({
   initialFilter?: GivenFilter
   /** Việc chuông vừa mở — tô dòng và cuộn tới. */
   focusId?: string | null
+  /** Mở chi tiết việc ở ngăn kéo bên phải (B3). */
+  onOpen?: (id: string) => void
 }) {
   const [filter, setFilter] = useState<GivenFilter>(initialFilter ?? (board.summary.to_approve > 0 ? 'to_approve' : 'open')) // prettier-ignore
   const rows = board.items.filter((t) => matchesGiven(t, filter, today))
@@ -92,6 +103,7 @@ export function ViecToiGiao({
           <BangViecToiGiao
             key={filter}
             focusId={focusId}
+            onOpen={onOpen}
             board={board}
             rows={rows}
             footer={
@@ -118,6 +130,7 @@ export function BangViecToiGiao({
   rows,
   footer,
   focusId = null,
+  onOpen,
 }: {
   /** Cả bảng việc — so CHÍNH đối tượng này để biết trang đã tải lại xong. */
   board: GivenBoard
@@ -127,6 +140,7 @@ export function BangViecToiGiao({
   footer: React.ReactNode
   /** Việc chuông vừa mở — tô dòng và cuộn tới. */
   focusId?: string | null
+  onOpen?: (id: string) => void
 }) {
   const router = useRouter()
   const [step, setStep] = useState<Step | null>(null)
@@ -254,9 +268,11 @@ export function BangViecToiGiao({
                 </td>
                 <td className="min-w-[260px] border-b border-[var(--border)] px-2 py-1.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium text-[var(--foreground)]">
-                      {t.title}
-                    </span>
+                    <TitleLink
+                      title={t.title}
+                      files={t.file_count}
+                      onOpen={onOpen ? () => onOpen(t.id) : undefined}
+                    />
                     {t.priority === 'urgent' && <Tag tone="stop">Gấp</Tag>}
                   </div>
                   {t.status === 'submitted' && t.last_result && (

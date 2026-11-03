@@ -26,9 +26,24 @@ vi.mock('@/lib/api', async (orig) => ({
 
 const TODAY = '2026-10-30'
 const PEOPLE = [
-  { id: 'u-phuong', name: 'Nguyễn Phạm Thanh Phương', department: 'Bán Hàng', workspace: 'sales' },
-  { id: 'u-quang', name: 'Dương Thái Quang', department: 'Kỹ Thuật', workspace: 'technical' },
-  { id: 'u-thao', name: 'Vũ Phương Thảo', department: 'Cung Ứng - Mua Hàng', workspace: 'planning' },
+  {
+    id: 'u-phuong',
+    name: 'Nguyễn Phạm Thanh Phương',
+    department: 'Bán Hàng',
+    workspace: 'sales',
+  },
+  {
+    id: 'u-quang',
+    name: 'Dương Thái Quang',
+    department: 'Kỹ Thuật',
+    workspace: 'technical',
+  },
+  {
+    id: 'u-thao',
+    name: 'Vũ Phương Thảo',
+    department: 'Cung Ứng - Mua Hàng',
+    workspace: 'planning',
+  },
 ]
 const ITEM = (over: Partial<GivenItem> = {}): GivenItem =>
   ({
@@ -52,6 +67,7 @@ const ITEM = (over: Partial<GivenItem> = {}): GivenItem =>
     actions: ['cancel'],
     last_result: null,
     last_reject: null,
+    file_count: 0,
     ...over,
   }) as GivenItem
 
@@ -74,6 +90,8 @@ function show(
       mine={mine}
       people={PEOPLE}
       focus={focus}
+      meRole="manager"
+      restricted={false}
     />,
   )
 }
@@ -204,10 +222,12 @@ describe('danh sách Việc tôi giao', () => {
   })
 
   it('nhân viên mở trang: không có hộp giao việc, nói rõ ai giao', () => {
-    render(<PhanCongScreen meId="u-nga" today={TODAY} board={null} mine={NO_MINE} people={[]} focus={null} />) // prettier-ignore
+    render(<PhanCongScreen meId="u-nga" today={TODAY} board={null} mine={NO_MINE} people={[]} focus={null} meRole="employee" restricted />) // prettier-ignore
     expect(screen.queryByRole('form', { name: 'Giao việc' })).toBeNull()
     expect(
-      screen.getByText('Giao việc dành cho sếp, quản lý và phòng Bán Hàng. Cần giao thì nhờ quản lý phòng giao hộ.'),
+      screen.getByText(
+        'Giao việc dành cho sếp, quản lý và phòng Bán Hàng. Cần giao thì nhờ quản lý phòng giao hộ.',
+      ),
     ).toBeTruthy()
   })
 })
@@ -249,7 +269,7 @@ const MINE_BOARD: MineBoard = {
 
 describe('Việc của tôi (P5)', () => {
   function showStaff(focus: PhanCongFocus | null = null) {
-    render(<PhanCongScreen meId="u-phuong" today={TODAY} board={null} mine={MINE_BOARD} people={[]} focus={focus} />) // prettier-ignore
+    render(<PhanCongScreen meId="u-phuong" today={TODAY} board={null} mine={MINE_BOARD} people={[]} focus={focus} meRole="employee" restricted />) // prettier-ignore
   }
 
   it('nhân viên: chỉ một mục "Việc của tôi", mở sẵn chip Cần làm; số chip = số dòng', () => {

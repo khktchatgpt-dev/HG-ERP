@@ -62,6 +62,8 @@ export default async function PhanCongPage({
       board={board}
       mine={mine}
       people={people}
+      meRole={user.role}
+      restricted={user.role === 'employee'}
       focus={focus}
     />
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useMemo, useRef, useState } from 'react'
+import { Fragment, useId, useMemo, useRef, useState } from 'react'
 import type { Assignee } from '@/modules/workflow/tasks/tasks.service'
 import { fieldCls, fold } from './phan-cong.shared'
 
@@ -19,6 +19,7 @@ export function ChonNguoi({
   meId,
   exclude = [],
   inputRef,
+  emptyHint,
 }: {
   id: string
   people: Assignee[]
@@ -27,6 +28,8 @@ export function ChonNguoi({
   meId: string
   exclude?: string[]
   inputRef?: React.Ref<HTMLInputElement>
+  /** Câu khi không khớp ai — người bị giới hạn phòng nhận được nói rõ vì sao. */
+  emptyHint?: string
 }) {
   const listId = useId()
   const picked = people.find((p) => p.id === value) ?? null
@@ -41,6 +44,11 @@ export function ChonNguoi({
       .filter((p) => !exclude.includes(p.id))
       .filter((p) => !q || fold(`${p.name} ${p.department ?? ''}`).includes(q))
       .slice(0, 40)
+      .sort(
+        (a, b) =>
+          (a.department ?? '~').localeCompare(b.department ?? '~', 'vi') ||
+          a.name.localeCompare(b.name, 'vi'),
+      )
   }, [people, exclude, text])
 
   function choose(p: Assignee) {
@@ -57,7 +65,9 @@ export function ChonNguoi({
         const n = matches.length
         if (n === 0) return 0
         const next = e.key === 'ArrowDown' ? (a + 1) % n : (a - 1 + n) % n
-        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' })
+        document
+          .getElementById(`${listId}-${next}`)
+          ?.scrollIntoView?.({ block: 'nearest' })
         return next
       })
     } else if (e.key === 'Enter' && open && matches[active]) {
@@ -107,32 +117,41 @@ export function ChonNguoi({
         >
           {matches.length === 0 ? (
             <li className="px-2 py-1.5 text-[12px] text-[var(--muted-foreground)]">
-              Không thấy ai khớp — gõ ít chữ hơn, hoặc tên phòng.
+              {emptyHint ?? 'Không thấy ai khớp — gõ ít chữ hơn, hoặc tên phòng.'}
             </li>
           ) : (
             matches.map((p, i) => (
-              <li
-                key={p.id}
-                id={`${listId}-${i}`}
-                role="option"
-                aria-selected={i === active}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  choose(p)
-                }}
-                onMouseEnter={() => setActive(i)}
-                className={`flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1 text-[13px] ${i === active ? 'bg-[var(--accent)] text-[var(--accent-foreground)]' : 'text-[var(--foreground)]'}`}
-              >
-                <span className="truncate">
-                  {p.name}
-                  {p.id === meId && (
-                    <span className="text-[var(--muted-foreground)]"> (bạn)</span>
-                  )}
-                </span>
-                <span className="shrink-0 text-[12px] text-[var(--muted-foreground)]">
-                  {p.department ?? '—'}
-                </span>
-              </li>
+              <Fragment key={p.id}>
+                {(i === 0 || matches[i - 1].department !== p.department) && (
+                  <li
+                    role="presentation"
+                    className="bg-[var(--muted)] px-2 py-0.5 text-[11px] font-semibold tracking-[0.05em] text-[var(--muted-foreground)] uppercase"
+                  >
+                    {p.department ?? 'Chưa gán phòng'}
+                  </li>
+                )}
+                <li
+                  id={`${listId}-${i}`}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    choose(p)
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                  className={`flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1 text-[13px] ${i === active ? 'bg-[var(--accent)] text-[var(--accent-foreground)]' : 'text-[var(--foreground)]'}`}
+                >
+                  <span className="truncate">
+                    {p.name}
+                    {p.id === meId && (
+                      <span className="text-[var(--muted-foreground)]"> (bạn)</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[12px] text-[var(--muted-foreground)]">
+                    {p.department ?? '—'}
+                  </span>
+                </li>
+              </Fragment>
             ))
           )}
         </ul>

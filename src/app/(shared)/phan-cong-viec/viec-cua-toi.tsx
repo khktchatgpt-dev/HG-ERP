@@ -12,7 +12,7 @@ import {
   type MineFilter,
 } from '@/lib/task-flow'
 import type { AssignedItem, MineBoard } from '@/modules/workflow/tasks/tasks.service'
-import { btn, dmVn, fieldCls, lateDays, Tag } from './phan-cong.shared'
+import { btn, dmVn, fieldCls, lateDays, Tag, TitleLink } from './phan-cong.shared'
 
 /**
  * VIỆC CỦA TÔI — việc sếp / quản lý giao cho người đang xem, nhìn từ phía NGƯỜI NHẬN.
@@ -49,6 +49,7 @@ export function BangViecCuaToi({
   rows,
   footer,
   focusId = null,
+  onOpen,
 }: {
   /**
    * Đối tượng server trả, ĐỔI khi trang tải lại xong. Ghi xong thì dòng vừa bấm nói
@@ -61,6 +62,8 @@ export function BangViecCuaToi({
   footer: React.ReactNode
   /** Việc chuông vừa mở — tô dòng và cuộn tới. */
   focusId?: string | null
+  /** Mở chi tiết việc ở ngăn kéo bên phải (B3). */
+  onOpen?: (id: string) => void
 }) {
   const router = useRouter()
   const [open, setOpen] = useState<string | null>(null)
@@ -121,7 +124,11 @@ export function BangViecCuaToi({
                 </td>
                 <td className={`${td} min-w-[280px]`}>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium">{t.title}</span>
+                    <TitleLink
+                      title={t.title}
+                      files={t.file_count}
+                      onOpen={onOpen ? () => onOpen(t.id) : undefined}
+                    />
                     {t.priority === 'urgent' && <Tag tone="stop">Gấp</Tag>}
                   </div>
                   {t.description && (
@@ -278,12 +285,14 @@ export function ViecCuaToi({
   today,
   initialFilter,
   focusId = null,
+  onOpen,
 }: {
   board: MineBoard
   today: string
   /** Chip chọn sẵn — chuông mở trang thì là chip có việc đó. */
   initialFilter?: MineFilter
   focusId?: string | null
+  onOpen?: (id: string) => void
 }) {
   const [filter, setFilter] = useState<MineFilter>(
     initialFilter ??
@@ -342,6 +351,7 @@ export function ViecCuaToi({
             version={board}
             rows={rows}
             focusId={focusId}
+            onOpen={onOpen}
             footer={
               <>
                 {rows.length} việc · {s.doing} cần làm · {s.overdue} quá hạn · {s.waiting}{' '}

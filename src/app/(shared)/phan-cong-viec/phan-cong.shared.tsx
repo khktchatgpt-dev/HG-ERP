@@ -1,3 +1,4 @@
+import { Paperclip } from 'lucide-react'
 import { todayVn } from '@/lib/date-vn'
 import { TASK_STATUS_LABEL, taskLateDays, type TaskStatus } from '@/lib/task-flow'
 
@@ -108,3 +109,42 @@ export function StatusTag({
  * người mua đếm bằng chính hàm này, nên nhãn "đúng hạn" ở đây và số ở đó không lệch.
  */
 export const lateDays = taskLateDays
+
+/**
+ * Tên việc trên dòng danh sách. Có `onOpen` thì là nút mở chi tiết (ngăn kéo bên phải);
+ * không có thì chữ thường (Bàn làm việc Cung ứng chưa có ngăn kéo). Kèm "n tệp" khi có.
+ */
+export function TitleLink({
+  title,
+  files,
+  onOpen,
+}: {
+  title: string
+  files: number
+  onOpen?: () => void
+}) {
+  return (
+    <>
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="text-left font-medium text-[var(--foreground)] hover:text-[var(--primary)] hover:underline"
+        >
+          {title}
+        </button>
+      ) : (
+        <span className="font-medium text-[var(--foreground)]">{title}</span>
+      )}
+      {files > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5 text-[12px] text-[var(--muted-foreground)]"
+          title={`${files} tệp đính kèm`}
+        >
+          <Paperclip size={12} aria-hidden />
+          <span className="font-mono tabular-nums">{files}</span>
+        </span>
+      )}
+    </>
+  )
+}
