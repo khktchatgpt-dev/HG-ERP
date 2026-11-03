@@ -6,7 +6,6 @@
     "src/app/(mua-hang)/mua-hang/don/[id]/NhanHangPanel.tsx": 819,
     "src/app/(mua-hang)/mua-hang/don/[id]/useDonChungTu.tsx": 1582,
     "src/app/(mua-hang)/mua-hang/don/DonScreen.tsx": 1206,
-    "src/app/(san-xuat)/thongke/ghi/EntrySheetForm.tsx": 1229,
     "src/components/kit/Erp.tsx": 1818,
     "src/components/kit/kit.a11y.test.tsx": 879,
     "src/components/kit/Nav.tsx": 982,

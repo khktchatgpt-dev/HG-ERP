@@ -19,7 +19,21 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
  * = 100dvh − đỉnh màn, để chỉ vùng thân cuộn — đầu trang, tab, thanh trạng
  * thái đứng yên.
  */
-export function SxKhung({ children, label }: { children: ReactNode; label?: string }) {
+export function SxKhung({
+  children,
+  label,
+  bare = false,
+}: {
+  children: ReactNode
+  label?: string
+  /**
+   * true = vỏ đã `bare` (nhóm route `(san-xuat)`): `<main>` không đệm nên KHÔNG
+   * trừ lề. Chiều cao vẫn phải tự chốt bằng đo đỉnh — `<main>` bare là khối
+   * `overflow: auto` chứ không phải cột flex, `flex: 1` trong đó vô nghĩa (đo
+   * 03/11: màn cao 3.100px, cuộn cả trang, đầu/chân dính vô hiệu).
+   */
+  bare?: boolean
+}) {
   const goc = useRef<HTMLDivElement>(null)
   const [cao, setCao] = useState('calc(100dvh - 60px)')
   useLayoutEffect(() => {
@@ -34,7 +48,7 @@ export function SxKhung({ children, label }: { children: ReactNode; label?: stri
   return (
     <div
       ref={goc}
-      className="sx -m-4 sm:-mx-6 sm:-my-6"
+      className={bare ? 'sx' : 'sx -m-4 sm:-mx-6 sm:-my-6'}
       style={{ height: cao }}
       aria-label={label}
     >

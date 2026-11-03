@@ -13,7 +13,8 @@ import {
   defaultAssemblyId,
   resolveCountingPlan,
 } from '@/lib/default-assembly'
-import { countingOf } from '@/lib/stage-config'
+import { countingOf, resolveStageConfigs, type StageMeta } from '@/lib/stage-config'
+import { wipNumbers } from '@/lib/wip-numbers'
 import {
   FINISH_ROW_NAME,
   finishRouteOverride,
@@ -447,6 +448,13 @@ export type EntrySheetLine = {
   today_qty: number
   /** Nhịp 14 ngày gần nhất (mọi phiếu đã ghi), cũ → mới; rỗng ở dòng ảo. */
   days: EntrySheetDay[]
+  /**
+   * KHẢ DỤNG = đã nhận từ công đoạn trước − đã ghi ở đây (đạt + phế + sửa, mọi
+   * trạng thái). Trước B4 "đã nhận" = số XONG ở công đoạn liền trước trên lộ
+   * trình của chính dòng này (lib/wip-numbers). null = đầu lộ trình (đầu vào từ
+   * kho) hoặc dòng ảo chưa có sổ.
+   */
+  available: number | null
 }
 
 export type EntrySheetDay = { date: string; qty: number; docs: number }
@@ -492,8 +500,16 @@ export type EntrySheet = {
   } | null
   stage: string
   stage_label: string
-  /** Công đoạn CÓ VIỆC trong phạm vi, đúng thứ tự danh mục — dải chip đổi tab. */
-  stages: { code: string; label: string }[]
+  /**
+   * Công đoạn CÓ VIỆC trong phạm vi, đúng thứ tự danh mục — dải tab. `n` = số
+   * dòng ghi sẽ thấy khi bấm sang tab đó (đếm bằng cùng luật dựng dòng bên dưới).
+   */
+  stages: { code: string; label: string; n: number }[]
+  /**
+   * Cấu hình công đoạn đang mở (0287, B1): đếm bằng gì, ô lõi nào hiện / bắt
+   * buộc. Cột của lưới ghi đổi theo đây, không theo mã.
+   */
+  stage_cfg: StageMeta
   /** Tổ xưởng + công đoạn phụ trách — mặc định chọn tổ khớp công đoạn. */
   teams: { id: string; name: string; stage_code: string | null }[]
   groups: EntrySheetGroup[]
@@ -587,7 +603,11 @@ export async function loadEntrySheet(
   // cho cả việc chọn công đoạn lẫn dựng dòng nhập.
   const planByLine = new Map<string, ReturnType<typeof resolveCountingPlan>>()
   const routeOf = new Map<string, string[]>()
-  const worked = new Set<string>()
+  // Số dòng ghi MỖI công đoạn — số trên tab phải bằng đúng số dòng bấm vào thấy,
+  // nên đếm bằng cùng luật dựng dòng ở dưới: chi tiết có lộ trình qua đó + cụm
+  // mặc nhiên + dòng thành phẩm chưa vật chất hoá.
+  const nByStage = new Map<string, number>()
+  const bump = (s: string) => nByStage.set(s, (nByStage.get(s) ?? 0) + 1)
   for (const line of lines) {
     const lineComps = components.filter((c) => c.production_order_line_id === line.id)
     const plan = resolveCountingPlan(lineComps, plannedByLine.get(line.id), counting)
@@ -598,18 +618,24 @@ export async function loadEntrySheet(
         plan.own_route.get(c.id) ??
         componentRoute(plannedByLine.get(line.id), c)
       routeOf.set(c.id, r)
-      for (const s of r) worked.add(s)
+      for (const s of r) bump(s)
     }
-    for (const s of plan.virtual_stages) worked.add(s)
+    for (const s of plan.virtual_stages) bump(s)
     // Chặng thành phẩm có mặt trên mọi dòng SP đã định hình — tab bốn bước sau
     // sơn phải mở được ngay cả khi chưa ai ghi số nào.
-    if (lineComps.length > 0) for (const s of counting.finish) worked.add(s)
+    if (lineComps.length > 0 && !lineComps.some((c) => isFinishRow(c, counting.finish))) {
+      for (const s of counting.finish) bump(s)
+    }
   }
-  const stages = stagesCat.filter((s) => worked.has(s.code))
+  const stageCfgs = resolveStageConfigs(stagesCat)
+  const stages = stagesCat
+    .filter((s) => (nByStage.get(s.code) ?? 0) > 0)
+    .map((s) => ({ code: s.code, label: s.label, n: nByStage.get(s.code) ?? 0 }))
   if (stages.length === 0) return null
   const stage = stages.some((s) => s.code === stageWanted)
     ? (stageWanted as string)
     : stages[0].code
+  const stageCfg = stageCfgs.find((s) => s.code === stage)!.meta
 
   // Ảnh SP: ảnh dòng lệnh thắng, thiếu thì rơi về ảnh hồ sơ SP.
   const productImgs = new Map(
@@ -641,8 +667,23 @@ export async function loadEntrySheet(
   */
   const from14 = shiftIso(todayIso, -(DAY_STRIP_DAYS - 1))
   const dayMap = new Map<string, Map<string, { qty: number; docs: Set<string> }>>()
+  // Cho cột KHẢ DỤNG: xong (chính thức) ở MỌI công đoạn, và đã ghi (đạt + phế
+  // + sửa, mọi trạng thái) ở công đoạn đang mở — xem lib/wip-numbers.
+  const doneByCompStage = new Map<string, number>()
+  const usedHere = new Map<string, number>()
   for (const e of entries) {
+    if (countsAsOfficial(e.doc_status as EntryDocStatus)) {
+      const k = `${e.component_id}|${e.stage}`
+      doneByCompStage.set(k, (doneByCompStage.get(k) ?? 0) + Number(e.qty))
+    }
     if (e.stage !== stage) continue
+    usedHere.set(
+      e.component_id,
+      (usedHere.get(e.component_id) ?? 0) +
+        Number(e.qty) +
+        Number(e.defect_qty ?? 0) +
+        Number(e.rework_qty ?? 0),
+    )
     if (e.entry_date >= from14 && e.entry_date <= todayIso) {
       const m = dayMap.get(e.component_id) ?? new Map()
       const x = m.get(e.entry_date) ?? { qty: 0, docs: new Set<string>() }
@@ -685,6 +726,16 @@ export async function loadEntrySheet(
         ).total_needed
         const t = tally.get(c.id)
         const done = t?.confirmed.qty ?? 0
+        // Công đoạn liền trước trên lộ trình của CHÍNH dòng này. Không có →
+        // đầu lộ trình (đầu vào từ kho / NCC) → không có khái niệm khả dụng.
+        const r = routeOf.get(c.id) ?? []
+        const prev = r[r.indexOf(stage) - 1] ?? null
+        const wip = wipNumbers({
+          done,
+          shipped: 0,
+          received: prev ? (doneByCompStage.get(`${c.id}|${prev}`) ?? 0) : null,
+          used: usedHere.get(c.id) ?? 0,
+        })
         return {
           component_id: c.id,
           kind: c.kind,
@@ -699,6 +750,7 @@ export async function loadEntrySheet(
           remaining: Math.max(0, needed - done),
           today_qty: todayQty.get(c.id) ?? 0,
           days: daysOf(c.id),
+          available: wip.available,
         }
       })
 
@@ -741,6 +793,7 @@ export async function loadEntrySheet(
         today_qty: 0,
         // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
         days: [],
+        available: null,
       })
     }
 
@@ -765,6 +818,7 @@ export async function loadEntrySheet(
         today_qty: 0,
         // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
         days: [],
+        available: null,
       })
     }
 
@@ -873,6 +927,7 @@ export async function loadEntrySheet(
     stage,
     stage_label: stagesCat.find((s) => s.code === stage)?.label ?? stage,
     stages,
+    stage_cfg: stageCfg,
     teams: depts
       .filter((d) => d.workspace_id === 'production')
       .map((d) => ({
