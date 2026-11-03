@@ -10,6 +10,8 @@ export type BangKeLsxRow = {
   materials_due_at: string | null
   /** Số SP trên lệnh. */
   products: number
+  /** Tổng SL sản phẩm phải làm (cộng mọi dòng lệnh). */
+  product_qty: number
   /** Tổng dòng định mức của các SP. */
   bom_lines: number
   /** Dòng định mức đã gắn mã vật tư — chỉ dòng này mới thành số cần. */
@@ -30,12 +32,17 @@ export async function listLsxForBangKe(): Promise<BangKeLsxRow[]> {
   const ids = lsxs.map((l) => l.id)
   const { data: lines, error: e1 } = await db()
     .from('production_order_lines')
-    .select('production_order_id, product_id')
+    .select('production_order_id, product_id, qty')
     .in('production_order_id', ids)
   if (e1) throw new Error(`production_order_lines: ${e1.message}`)
-  type L = { production_order_id: string; product_id: string | null }
+  type L = { production_order_id: string; product_id: string | null; qty: unknown }
   const pidsByLsx = new Map<string, Set<string>>()
+  const slByLsx = new Map<string, number>()
   for (const l of (lines ?? []) as L[]) {
+    slByLsx.set(
+      l.production_order_id,
+      (slByLsx.get(l.production_order_id) ?? 0) + (Number(l.qty) || 0),
+    )
     if (!l.product_id) continue
     const s = pidsByLsx.get(l.production_order_id) ?? new Set<string>()
     s.add(l.product_id)
@@ -90,6 +97,7 @@ export async function listLsxForBangKe(): Promise<BangKeLsxRow[]> {
       ship_date: l.ship_date,
       materials_due_at: l.materials_due_at,
       products: ps.length,
+      product_qty: slByLsx.get(l.id) ?? 0,
       bom_lines: bom,
       coded_lines: coded,
       confirmed_products: ps.filter((pid) => kiem.has(pid)).length,

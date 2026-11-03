@@ -4527,6 +4527,39 @@ export type Database = {
           },
         ]
       }
+      production_order_log: {
+        Row: {
+          action: string
+          after: Json | null
+          before: Json | null
+          changed_at: string
+          changed_fields: string[]
+          id: string
+          line_id: string | null
+          production_order_id: string
+        }
+        Insert: {
+          action: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_fields?: string[]
+          id?: string
+          line_id?: string | null
+          production_order_id: string
+        }
+        Update: {
+          action?: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_fields?: string[]
+          id?: string
+          line_id?: string | null
+          production_order_id?: string
+        }
+        Relationships: []
+      }
       production_orders: {
         Row: {
           approved_at: string | null
@@ -6093,6 +6126,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      supply_lsx_reviews: {
+        Row: {
+          changes: number
+          id: string
+          note: string | null
+          production_order_id: string
+          reviewed_at: string
+          reviewed_by: string | null
+          snapshot: Json
+        }
+        Insert: {
+          changes?: number
+          id?: string
+          note?: string | null
+          production_order_id: string
+          reviewed_at?: string
+          reviewed_by?: string | null
+          snapshot?: Json
+        }
+        Update: {
+          changes?: number
+          id?: string
+          note?: string | null
+          production_order_id?: string
+          reviewed_at?: string
+          reviewed_by?: string | null
+          snapshot?: Json
+        }
+        Relationships: []
       }
       supply_lsx_sourcing: {
         Row: {
@@ -8494,6 +8557,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      technical_product_part_changes: {
+        Row: {
+          action: string
+          after: Json | null
+          before: Json | null
+          changed_at: string
+          changed_by: string | null
+          changed_fields: string[]
+          id: string
+          part_id: string
+          product_id: string
+        }
+        Insert: {
+          action: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_fields?: string[]
+          id?: string
+          part_id: string
+          product_id: string
+        }
+        Update: {
+          action?: string
+          after?: Json | null
+          before?: Json | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_fields?: string[]
+          id?: string
+          part_id?: string
+          product_id?: string
+        }
+        Relationships: []
       }
       technical_product_parts: {
         Row: {

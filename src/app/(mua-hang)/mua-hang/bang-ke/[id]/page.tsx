@@ -6,6 +6,7 @@ import {
   keHoachMuaService,
   maCanChonCua,
 } from '@/modules/dept/supply/ke-hoach-mua.service'
+import { trangThaiChoSoat } from '@/modules/dept/supply/lenh-doi.service'
 import { todayVn } from '@/lib/date-vn'
 import { KeHoachMuaScreen } from './KeHoachMuaScreen'
 import type { Buoc } from './useKeHoachMua'
@@ -43,8 +44,16 @@ export default async function Page({
     isSupplyStaff(user),
   ])
   if (!bk) notFound()
-  // Gợi ý NCC cho đúng các mã còn phải đặt — cùng hàm tính với màn + file Excel.
-  const nguon = await keHoachMuaService.nguonNcc(bk.lsx.id, maCanChonCua(bk))
+  const [nguon, tt] = await Promise.all([
+    // Gợi ý NCC cho đúng các mã còn phải đặt — cùng hàm tính với màn + file Excel.
+    keHoachMuaService.nguonNcc(bk.lsx.id, maCanChonCua(bk)),
+    // Lệnh đang chờ soát → một dòng nhắc trỏ sang trang Soát thay đổi. Cùng nguồn
+    // với số trên menu; hỏng thì thôi không nhắc, màn vẫn mở.
+    trangThaiChoSoat().then(
+      (m) => m.get(bk.lsx.id) ?? null,
+      () => null,
+    ),
+  ])
   const buocDau: Buoc = sp.buoc === '3' ? 3 : sp.buoc === '2' ? 2 : 1
   return (
     <KeHoachMuaScreen
@@ -53,6 +62,7 @@ export default async function Page({
       includeDraft={includeDraft}
       buocDau={buocDau}
       nguon={nguon}
+      nhac={tt?.choSoat ? tt : null}
     />
   )
 }

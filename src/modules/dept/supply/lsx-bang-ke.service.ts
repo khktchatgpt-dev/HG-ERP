@@ -82,32 +82,23 @@ export type LsxBangKe = {
 }
 
 /**
- * NẠP BẢNG KÊ VẬT TƯ CỦA MỘT LỆNH (B1, 05/09/2026) — nguồn cần đọc qua đúng
- * `smartLsxNeeds` mà form soạn đơn dùng (định hình gắn mã → định mức); tồn, giữ
- * chỗ, đã đặt / chờ ký cũng đúng hàm của form. Thêm hai thứ form không cần mà
- * người mua cần: SL trên đơn NHÁP (kẻo tưởng chưa ai làm gì) và đơn nào đang
- * mua mã nào (kể cả đơn mua chung 0125 — `posService.list` đã gộp sẵn).
- *
- * Dòng nhập tay (B2) hiện chưa có bảng — truyền rỗng, lõi thuần đã sẵn chỗ.
+ * NGUỒN SỐ CẦN của một lệnh — định mức tách theo SP, bảng định hình của xưởng
+ * và số nhập tay (0184). Tách khỏi `loadLsxBangKe` (02/11/2026) để số đếm "lệnh
+ * đổi chờ soát" (menu, danh sách) tính ĐÚNG số Cần của bảng kê mà khỏi nạp đơn
+ * mua / tồn / giá — hai nơi dùng chung một đường, không thể nói khác nhau.
  */
-export async function loadLsxBangKe(
-  user: User,
-  lsxId: string,
-  today: string,
-  /** Bật để tính cả định mức chưa xác nhận (công tắc trên màn hình). */
-  includeDraft = false,
-): Promise<LsxBangKe | null> {
-  const lsx = await productionRepo.findById(lsxId)
-  if (!lsx) return null
-
-  const [bom, comp, issued, { rows: pos }, manualRes] = await Promise.all([
+export async function loadNhuCauLenh(lsxId: string): Promise<{
+  bom: Awaited<ReturnType<typeof lsxBomNeeds>>
+  comp: Awaited<ReturnType<typeof componentMaterialNeeds>>
+  manual: BangKeManual[]
+  manualError: string | null
+}> {
+  const [bom, comp, manualRes] = await Promise.all([
     // ĐỊNH MỨC tách theo SP + trạng thái xác nhận (user chốt 05/09/2026: chỉ
     // BOM đã xác nhận mới được dùng để mua).
     lsxBomNeeds(lsxId),
     // Bảng định hình của Sản xuất — chỉ dùng khi có dòng ĐÃ gắn mã vật tư.
     componentMaterialNeeds(lsxId),
-    issuedByLsx(lsxId),
-    posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
     // Bảng nhập tay (0184). Chưa áp migration thì bảng chưa có — trang vẫn phải
     // mở được với phần định mức, và nói rõ vì sao thiếu phần tay.
     lsxNeedsRepo.listByLsx(lsxId).then(
@@ -126,10 +117,19 @@ export async function loadLsxBangKe(
     edited_by: m.updated_by_name,
     edited_at: m.updated_at,
   }))
+  return { bom, comp, manual, manualError: manualRes.error }
+}
 
-  // Gộp định mức theo VẬT TƯ, giữ riêng phần đã xác nhận và phần còn nháp.
+/**
+ * Gộp định mức theo VẬT TƯ (giữ riêng phần đã xác nhận và phần còn nháp), rồi
+ * cho bảng định hình ĐÈ lên những mã nó nói được. Chưa tính SL đã xuất.
+ */
+export function gopNhuCau(
+  lines: Awaited<ReturnType<typeof lsxBomNeeds>>['lines'],
+  comp: Awaited<ReturnType<typeof componentMaterialNeeds>>,
+): BangKeNeed[] {
   const byMat = new Map<string, BangKeNeed>()
-  for (const l of bom.lines) {
+  for (const l of lines) {
     const cur = byMat.get(l.material_id) ?? {
       material_id: l.material_id,
       material_code: l.material_code,
@@ -188,7 +188,35 @@ export async function loadLsxBangKe(
       from_products: byMat.get(c.material_id)?.from_products ?? [],
     })
   }
-  const needs: BangKeNeed[] = [...byMat.values()].map((n) => {
+  return [...byMat.values()]
+}
+
+/**
+ * NẠP BẢNG KÊ VẬT TƯ CỦA MỘT LỆNH (B1, 05/09/2026) — nguồn cần đọc qua đúng
+ * `smartLsxNeeds` mà form soạn đơn dùng (định hình gắn mã → định mức); tồn, giữ
+ * chỗ, đã đặt / chờ ký cũng đúng hàm của form. Thêm hai thứ form không cần mà
+ * người mua cần: SL trên đơn NHÁP (kẻo tưởng chưa ai làm gì) và đơn nào đang
+ * mua mã nào (kể cả đơn mua chung 0125 — `posService.list` đã gộp sẵn).
+ *
+ * Dòng nhập tay (B2) hiện chưa có bảng — truyền rỗng, lõi thuần đã sẵn chỗ.
+ */
+export async function loadLsxBangKe(
+  user: User,
+  lsxId: string,
+  today: string,
+  /** Bật để tính cả định mức chưa xác nhận (công tắc trên màn hình). */
+  includeDraft = false,
+): Promise<LsxBangKe | null> {
+  const lsx = await productionRepo.findById(lsxId)
+  if (!lsx) return null
+
+  const [nc, issued, { rows: pos }] = await Promise.all([
+    loadNhuCauLenh(lsxId),
+    issuedByLsx(lsxId),
+    posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
+  ])
+  const { bom, manual } = nc
+  const needs: BangKeNeed[] = gopNhuCau(bom.lines, nc.comp).map((n) => {
     const qtyIssued = Math.max(issued.get(n.material_id) ?? 0, 0)
     const total = n.qty_needed + (includeDraft ? (n.qty_needed_draft ?? 0) : 0)
     return { ...n, qty_issued: qtyIssued, qty_remaining: Math.max(total - qtyIssued, 0) }
@@ -358,7 +386,7 @@ export async function loadLsxBangKe(
     })),
     chua_ma: bom.chua_ma,
     products: bom.products,
-    manual_error: manualRes.error,
+    manual_error: nc.manualError,
     unsplit_pos: chuaChia,
     need_source:
       needs.length === 0

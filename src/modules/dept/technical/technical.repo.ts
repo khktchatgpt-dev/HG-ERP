@@ -988,6 +988,21 @@ export type HealthProductRow = {
   bom_status: string
 }
 
+/**
+ * Ghi NGƯỜI XOÁ vào dòng định mức ngay trước khi xoá (0284). Lúc xoá dòng đã mất
+ * nên trigger nhật ký không tự biết ai xoá; nó lấy `updated_by` của dòng nếu
+ * `updated_at` vừa được đẩy trong 10 giây — chính là lượt ghi này.
+ */
+type LocDong = ReturnType<ReturnType<ReturnType<typeof db>['from']>['update']>
+async function ghiNguoiXoa(by: string, loc: (q: LocDong) => LocDong): Promise<void> {
+  const { error } = await loc(
+    db()
+      .from('technical_product_parts')
+      .update({ updated_by: by } as never),
+  )
+  if (error) throw new Error(error.message)
+}
+
 export const productProfileRepo = {
   async parts(productId: string): Promise<ProductPart[]> {
     const { data } = await db()
@@ -1070,7 +1085,8 @@ export const productProfileRepo = {
     return rows.length
   },
 
-  async deleteAllParts(productId: string): Promise<number> {
+  async deleteAllParts(productId: string, by?: string): Promise<number> {
+    if (by) await ghiNguoiXoa(by, (q) => q.eq('product_id', productId))
     const { data, error } = await db()
       .from('technical_product_parts')
       .delete()
@@ -1104,8 +1120,14 @@ export const productProfileRepo = {
    * nên thay phần file đó nói tới. File chỉ có khối khung mà xoá sạch cả hồ sơ
    * là mất luôn mấy dòng bao bì ai đó đã nhập tay.
    */
-  async deletePartsByGroups(productId: string, groups: string[]): Promise<number> {
+  async deletePartsByGroups(
+    productId: string,
+    groups: string[],
+    by?: string,
+  ): Promise<number> {
     if (groups.length === 0) return 0
+    if (by)
+      await ghiNguoiXoa(by, (q) => q.eq('product_id', productId).in('group_code', groups))
     const { data, error } = await db()
       .from('technical_product_parts')
       .delete()
@@ -1116,7 +1138,8 @@ export const productProfileRepo = {
     return (data ?? []).length
   },
 
-  async deletePart(productId: string, partId: string): Promise<boolean> {
+  async deletePart(productId: string, partId: string, by?: string): Promise<boolean> {
+    if (by) await ghiNguoiXoa(by, (q) => q.eq('id', partId).eq('product_id', productId))
     const { data, error } = await db()
       .from('technical_product_parts')
       .delete()

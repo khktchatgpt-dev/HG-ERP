@@ -740,6 +740,36 @@ export type DomainEvent =
       recipient_ids: string[]
     }
 
+  // ── Lệnh đổi — chờ soát (B3, 02/11/2026) ─────────────────────────────
+  | {
+      // Định mức của một SP vừa đổi trên màn (sửa / thêm / xoá dòng, dán nhiều
+      // dòng, chép từ SP khác, đọc BOM bằng AI). Handler tính lại các lệnh đang
+      // chạy có SP này rồi báo Cung ứng nếu số cần thật sự đổi.
+      name: 'product.bom.changed'
+      product_id: string
+      changed_by: string
+    }
+  | {
+      // Các lệnh đang CHỜ SOÁT (số cần / thông tin lệnh đổi từ mốc soát). Phát
+      // từ mọi lần tính lại — kể cả lần tính định kỳ, nên sửa bằng script cũng
+      // có tin. Handler giữ mỗi người mỗi lệnh một tin chưa đọc (theo `dau`).
+      name: 'supply.lsx.cho_soat'
+      items: {
+        lsx_id: string
+        title: string
+        dau: string
+        recipient_ids: string[]
+      }[]
+      /** Người vừa sửa (null = phát hiện qua lần tính định kỳ). */
+      actor_id: string | null
+    }
+  | {
+      // Cung ứng vừa bấm "Đã soát" — tin chờ soát của lệnh tự tắt.
+      name: 'supply.lsx.da_soat'
+      lsx_id: string
+      reviewed_by: string
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

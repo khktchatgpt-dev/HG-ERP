@@ -10,6 +10,7 @@ import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
+import { demLenhChoSoatKhongCho } from '@/modules/dept/supply/lenh-doi.service'
 import type { User } from '@/modules/core/users/users.repo'
 import type { WorkspaceId } from './workspaces.config'
 
@@ -155,5 +156,14 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   if (todo > 0) out['/mua-hang/hop-thu'] = todo
   if (ganVe > 0) out['/mua-hang/theo-doi'] = ganVe
   if (issues > 0) out['/mua-hang'] = issues
+  /*
+    SOÁT THAY ĐỔI = số lệnh ĐỔI CHỜ SOÁT (02/11/2026; B2 đặt ở Kế hoạch mua, T1
+    dời sang trang riêng) — đếm CẢ PHÒNG, cùng nguồn chip "Chờ soát" của trang
+    `/mua-hang/soat` (`trangThaiChoSoat`):
+    định mức / lệnh đổi thì cả phòng phải thấy, không chỉ người có đơn. Không
+    chờ phép tính: lần đầu chưa có số thì menu bỏ trống, lần mở trang sau là có.
+  */
+  const choSoat = await demLenhChoSoatKhongCho()
+  if (choSoat) out['/mua-hang/soat'] = choSoat
   return out
 }

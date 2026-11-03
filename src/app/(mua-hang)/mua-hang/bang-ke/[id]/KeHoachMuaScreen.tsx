@@ -3,6 +3,7 @@
 import { THU_TU_MUA, TINH_TRANG_MUA } from '@/lib/lsx-bang-ke-mua'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import type { NguonNccLenh } from '@/modules/dept/supply/ke-hoach-mua.service'
+import type { TrangThaiLenhDoi } from '@/modules/dept/supply/lenh-doi.service'
 import { ChonNcc } from './chon-ncc'
 import { LenDon } from './len-don'
 import { ChipLoc, ChonLoc, DauTrang, HangLoc, Nut, ThanhDuoi, Trang } from '../../_erp/ui'
@@ -32,12 +33,15 @@ export function KeHoachMuaScreen({
   includeDraft,
   buocDau,
   nguon,
+  nhac,
 }: {
   bk: LsxBangKe
   canEdit: boolean
   includeDraft: boolean
   buocDau: Buoc
   nguon: NguonNccLenh
+  /** Lệnh đang chờ soát thay đổi → một dòng nhắc (trang Soát thay đổi lo phần soát). */
+  nhac: TrangThaiLenhDoi | null
 }) {
   const d = useKeHoachMua({ bk, canEdit, includeDraft, buocDau, nguon })
   const { lsx } = bk
@@ -63,7 +67,18 @@ export function KeHoachMuaScreen({
         }
         facts={[
           { k: 'Khách', v: lsx.customer_name || '—' },
-          { k: 'Đơn khách', v: lsx.order_codes.join(', ') || '—' },
+          {
+            k: 'Đơn khách',
+            // Lệnh gộp nhiều đơn (GIGA: 4 đơn) đẩy cả dải dữ kiện xuống hai dòng.
+            v: (
+              <span
+                className="inline-block max-w-[260px] truncate align-bottom"
+                title={lsx.order_codes.join(', ')}
+              >
+                {lsx.order_codes.join(', ') || '—'}
+              </span>
+            ),
+          },
           { k: 'Ngày xuất', v: dmy(lsx.ship_date) },
           { k: 'Mốc vật tư', v: dmy(lsx.materials_due_at) },
           {
@@ -72,6 +87,7 @@ export function KeHoachMuaScreen({
           },
         ]}
       />
+      {nhac && <NhacSoat lsxId={lsx.id} t={nhac} />}
       <DaiBuoc d={d} />
       {d.buoc === 1 && (
         <>
@@ -103,6 +119,38 @@ export function KeHoachMuaScreen({
       />
       {d.moDan && <DanBangKe d={d} />}
     </Trang>
+  )
+}
+
+/**
+ * Một dòng nhắc khi lệnh đang chờ soát: định mức / lệnh đổi từ mốc nào. Việc
+ * soát nằm ở trang riêng (bản vẽ FgRYhTxe…, chủ dự án: "tránh bị rối") — ở đây
+ * chỉ cho người đang lên đơn biết số vừa đổi.
+ */
+function NhacSoat({ lsxId, t }: { lsxId: string; t: TrangThaiLenhDoi }) {
+  const phan = [
+    t.soMa > 0 ? `định mức đổi ${t.soMa} mã vật tư` : '',
+    t.soMa === 0 && t.soDongDm > 0 ? `định mức đổi ${t.soDongDm} dòng` : '',
+    t.soMa === 0 && t.soDongDm === 0 && t.suaSau ? `định mức sửa ${t.suaSau.dongDinhMuc} dòng` : '', // prettier-ignore
+    t.soThongTin > 0 ? `lệnh đổi ${t.soThongTin} thông tin` : '',
+    t.soDon > 0 ? `đơn ${t.donDoi.join(', ')} đổi` : '',
+  ].filter(Boolean)
+  const moc =
+    t.moc.k === 'soat'
+      ? `lần soát ${dmy(t.moc.luc)}`
+      : `lúc ${t.moc.laDuyet ? 'duyệt' : 'phát lệnh'} ${dmy(t.moc.luc)}`
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--warn-line)] bg-[var(--warn-wash)] px-4 py-1.5 text-[12.5px] text-[var(--warn)]">
+      <span>
+        <b className="font-semibold">
+          Từ {moc}: {phan.join(' · ')}
+        </b>{' '}
+        · chưa soát · số “Còn phải đặt” bên dưới đã tính theo số mới
+      </span>
+      <span className="ml-auto">
+        <Nut href={`/mua-hang/soat/${lsxId}`}>Soát thay đổi</Nut>
+      </span>
+    </div>
   )
 }
 

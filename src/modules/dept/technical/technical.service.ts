@@ -25,6 +25,8 @@ import type {
   ProductClusterInput as ClusterInput,
   ProductClusterPatch as ClusterPatch,
 } from './technical.schema'
+import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
+import { emit } from '@/events/bus'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
@@ -255,6 +257,15 @@ type CreateInput = {
   max_load_kg?: number | null
   assembly?: 'assembled' | 'kd' | null
   set_contents?: string | null
+}
+
+/**
+ * Định mức của SP vừa đổi → báo cho phía Cung ứng tính lại các lệnh đang chạy
+ * có SP này (B3 "lệnh đổi chờ soát", 02/11/2026). Handler chỉ hẹn việc chạy nền
+ * sau response nên lượt lưu không chậm thêm.
+ */
+async function baoBomDoi(productId: string, by: string): Promise<void> {
+  await emit({ name: 'product.bom.changed', product_id: productId, changed_by: by })
 }
 
 export const productsService = {
@@ -959,6 +970,7 @@ export const productsService = {
     if (product.bom_status === 'none') {
       await productsRepo.patch(productId, { bom_status: 'done' })
     }
+    await baoBomDoi(productId, user.id)
     return part
   },
 
@@ -973,6 +985,7 @@ export const productsService = {
       updated_by: user.id,
     })
     if (!part) throw NotFound('Dòng định mức không tồn tại')
+    await baoBomDoi(productId, user.id)
     return part
   },
 
@@ -1062,7 +1075,7 @@ export const productsService = {
   async removePart(user: User, productId: string, partId: string) {
     await assertAction(user, 'technical.bom.save')
     await assertProductUnlocked(productId)
-    const ok = await productProfileRepo.deletePart(productId, partId)
+    const ok = await productProfileRepo.deletePart(productId, partId, user.id)
     if (!ok) throw NotFound('Dòng định mức không tồn tại')
     const left = await productProfileRepo.parts(productId)
     if (left.length === 0) {
@@ -1071,6 +1084,7 @@ export const productsService = {
         await productsRepo.patch(productId, { bom_status: 'none' })
       }
     }
+    await baoBomDoi(productId, user.id)
     return { ok: true }
   },
 
@@ -1148,6 +1162,7 @@ export const productsService = {
     const added = await productProfileRepo.insertParts(rows)
     if (added > 0 && product.bom_status === 'none')
       await productsRepo.patch(productId, { bom_status: 'done' })
+    if (added > 0) await baoBomDoi(productId, user.id)
     return { added }
   },
 
@@ -1243,6 +1258,7 @@ export const productsService = {
     if (added > 0 && product.bom_status === 'none') {
       await productsRepo.patch(productId, { bom_status: 'drawing' })
     }
+    if (added > 0) await baoBomDoi(productId, actorId)
     return { added }
   },
 
@@ -1274,7 +1290,7 @@ export const productsService = {
 
     let removed = 0
     if (input.mode === 'replace')
-      removed = await productProfileRepo.deleteAllParts(targetId)
+      removed = await productProfileRepo.deleteAllParts(targetId, user.id)
 
     // Dựng lại CỤM bên SP đích trước khi chép dòng: cụm là bản ghi riêng của mỗi
     // SP, chép thẳng `cluster_id` sang thì dòng của SP đích trỏ vào cụm SP nguồn.
@@ -1297,12 +1313,13 @@ export const productsService = {
       startOrder,
       groups: input.groups,
       clusterMap,
-    })
+    }).map((r) => ({ ...r, updated_by: user.id })) // nhật ký 0284 ghi đúng người chép
     const added = await productProfileRepo.insertParts(rows)
 
     if (added > 0 && target.bom_status === 'none')
       await productsRepo.patch(targetId, { bom_status: 'done' })
 
+    await baoBomDoi(targetId, user.id)
     return { added, removed, source_code: source.code }
   },
 
