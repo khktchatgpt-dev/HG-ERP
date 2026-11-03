@@ -19,8 +19,9 @@ import {
 import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
 import { emit } from '@/events/bus'
 import { calcComponent } from '@/lib/component-needs'
-import { clipRoute, resolveComponentRoute } from '@/lib/stage-route'
+import { componentRoute } from '@/lib/stage-route'
 import { finishRouteOverride } from '@/lib/finish-stages'
+import { countingOf } from '@/lib/stage-config'
 import { LATE_RISK_HORIZON_DAYS } from '@/lib/late-risk'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -371,21 +372,20 @@ function lineStagesFromComponents(
     | 'kind'
     | 'first_stage'
     | 'final_stage'
+    | 'stages'
   >[],
   planned: Map<string, string[]>,
   stageOrder: Map<string, number>,
+  /** Chặng thành phẩm theo cấu hình công đoạn (0287) — `countingOf(stages).finish`. */
+  finish: readonly string[],
 ): Map<string, string[]> {
   const byLine = new Map<string, Set<string>>()
   for (const c of components) {
     if (!c.production_order_line_id) continue
     const key = `${c.production_order_id}|${c.production_order_line_id}`
     const route =
-      finishRouteOverride(c) ??
-      clipRoute(
-        resolveComponentRoute(planned.get(key), c.group_code),
-        c.first_stage,
-        c.final_stage,
-      )
+      finishRouteOverride(c, finish) ??
+      componentRoute(planned.get(key), c)
     if (route.length === 0) continue
     const set = byLine.get(key) ?? new Set<string>()
     for (const s of route) set.add(s)
@@ -560,6 +560,7 @@ export const jobsService = {
       components,
       lineStagesOf(jobs),
       stageOrder,
+      countingOf(stages).finish,
     )
     const lsxQty = new Map<string, { needed: number; done: number }>()
     /** (lệnh → công đoạn → cần/đạt), đơn vị chi tiết — nguồn của dải chip. */

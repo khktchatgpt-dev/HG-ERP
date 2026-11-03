@@ -799,6 +799,8 @@ export type ProductPart = {
   tenon_mm: number | null
   /** Cụm (`Parts/ Bộ phận`). null = dòng RỜI, trực thuộc sản phẩm. */
   cluster_id: string | null
+  /** Ghi đè lộ trình cho dòng RỜI (0288); null = suy theo group_code. */
+  stages: string[] | null
   part_no: number | null
   part_name: string
   material_code: string | null
@@ -857,6 +859,8 @@ export type ProductCluster = {
   qty_per_product: number | null
   first_stage: string | null
   final_stage: string | null
+  /** Lộ trình cụm (0288): mã công đoạn đúng thứ tự; null = chưa khai, suy theo nhóm. */
+  stages: string[] | null
   note: string | null
   sort_order: number
 }
@@ -899,10 +903,10 @@ export type PackingOption = {
 // ra trống trơn dù nguồn có số. KHÔNG còn `unit_price`/`amount`: định mức trả lời
 // "cần bao nhiêu", giá thuộc bảng giá NCC bên Cung ứng (0097, quyết định D4).
 const PART_COLS =
-  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, wood_species, bar_length_m, pcs_per_bar, roll_width_m, waste_pct, sheet_w_mm, sheet_l_mm, m3_per_sheet, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, note, sort_order'
+  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, wood_species, bar_length_m, pcs_per_bar, roll_width_m, waste_pct, sheet_w_mm, sheet_l_mm, m3_per_sheet, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, stages, note, sort_order'
 
 const CLUSTER_COLS =
-  'id, name, qty_per_product, first_stage, final_stage, note, sort_order'
+  'id, name, qty_per_product, first_stage, final_stage, stages, note, sort_order'
 
 /** Dòng định mức rút gọn cho màn "Sức khoẻ định mức" — chỉ cột đi vào công thức. */
 export type HealthPartRow = {
@@ -1205,6 +1209,39 @@ export const productProfileRepo = {
       .maybeSingle()
     if (error) throw new Error(error.message)
     return !!data
+  },
+
+  /**
+   * Ghi lộ trình (0288) cho nhiều cụm / nhiều dòng rời một lượt. `stages: null`
+   * = về "suy theo nhóm". Mỗi dòng một update — danh sách ngắn (≤ vài chục),
+   * và upsert cần đủ cột not-null nên không rẻ hơn.
+   */
+  async setClusterStages(
+    productId: string,
+    rows: { id: string; stages: string[] | null }[],
+  ): Promise<void> {
+    for (const r of rows) {
+      const { error } = await db()
+        .from('technical_product_clusters')
+        .update({ stages: r.stages })
+        .eq('id', r.id)
+        .eq('product_id', productId)
+      if (error) throw new Error(error.message)
+    }
+  },
+
+  async setPartStages(
+    productId: string,
+    rows: { id: string; stages: string[] | null }[],
+  ): Promise<void> {
+    for (const r of rows) {
+      const { error } = await db()
+        .from('technical_product_parts')
+        .update({ stages: r.stages })
+        .eq('id', r.id)
+        .eq('product_id', productId)
+      if (error) throw new Error(error.message)
+    }
   },
 
   /** Gán nhiều dòng vào một cụm (hoặc `null` để đưa về Rời) trong 1 lượt. */

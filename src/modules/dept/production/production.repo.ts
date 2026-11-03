@@ -8,6 +8,9 @@ import type { LsxStatus } from './production.schema'
  * — thiết kế lại theo vai 07/2026 (0084).
  */
 
+/** Một mục danh mục công đoạn; `meta` parse bằng lib/stage-config (0287). */
+export type StageCatalogRow = { code: string; label: string; meta?: unknown }
+
 export type ProductionOrder = {
   id: string
   code: string
@@ -411,15 +414,19 @@ export const productionRepo = {
     return data as ProductionOrder
   },
 
-  /** Danh mục công đoạn SX (catalog_items type 'production_stage'). */
-  async listStages(): Promise<{ code: string; label: string }[]> {
+  /**
+   * Danh mục công đoạn SX (catalog_items type 'production_stage'), kèm `meta`
+   * (0287: bậc đếm + ô lõi). Service suy mốc đếm bằng `countingOf(stages)`
+   * (lib/stage-config) thay cho hằng số JOIN_STAGE / FINISH_STAGES.
+   */
+  async listStages(): Promise<StageCatalogRow[]> {
     const { data } = await db()
       .from('catalog_items')
-      .select('code, label')
+      .select('code, label, meta')
       .eq('type', 'production_stage')
       .eq('is_active', true)
       .order('sort_order')
-    return (data ?? []) as { code: string; label: string }[]
+    return (data ?? []) as StageCatalogRow[]
   },
 
   /** Số dòng SP per đơn — cho màn kế hoạch/định hình ("x/y SP đã chốt"). */

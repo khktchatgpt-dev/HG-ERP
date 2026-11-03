@@ -553,6 +553,17 @@ export const ACTIONS: Action[] = [
     rule: anyOf(role('admin', 'manager'), perm('production.daylock.unlock')),
   },
   {
+    // CẤU HÌNH CÔNG ĐOẠN (B1, 0287 — docs/san-xuat-cau-hinh-thiet-ke.md): bậc
+    // đếm chi tiết/cụm/bộ, ô lõi, tổ phụ trách, ô riêng, mã lỗi. Là bàn điều
+    // khiển của xưởng nên trao cho quản đốc (production.progress.track) cùng
+    // manager/admin — không mượn system.catalogs.manage (admin-only) kẻo mỗi
+    // lần thêm một ô lại phải gọi quản trị viên.
+    key: 'production.stage.configure',
+    label: 'Cấu hình công đoạn (đếm bằng gì, tổ, ô nhập, mã lỗi)',
+    domain: 'production',
+    rule: anyOf(role('admin', 'manager'), perm('production.progress.track')),
+  },
+  {
     key: 'production.team.board',
     label: 'Xem bảng việc của tổ',
     domain: 'production',

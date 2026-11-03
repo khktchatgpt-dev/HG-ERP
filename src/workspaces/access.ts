@@ -125,6 +125,14 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   // (vào bằng URL vẫn xem được — chỉ tách giao diện, không chặn quyền).
   // Duyệt đơn mua — mục "Chờ tôi ký" bên Mua hàng (27/09/2026).
   if (await hasPermission(user, 'supply.po.approve')) caps.add('supply.approve')
+  // Cấu hình công đoạn (0287) — cùng luật với action production.stage.configure.
+  if (
+    user.role === 'admin' ||
+    user.role === 'manager' ||
+    (await hasPermission(user, 'production.progress.track'))
+  ) {
+    caps.add('production.configure')
+  }
   if (
     user.role === 'admin' ||
     user.role === 'manager' ||

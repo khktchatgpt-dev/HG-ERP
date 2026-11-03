@@ -374,16 +374,37 @@ export const productPartCreateSchema = z.object({
  * CỤM (`Parts/ Bộ phận`). `qty_per_product` và lộ trình để trống là bình thường
  * — biểu mẫu BOM không có 2 ô đó, chỉ sổ `Tổng TĐ SX` của xưởng mới cần.
  */
+const stageListSchema = z.array(z.string().trim().min(1).max(50)).max(20)
+
 export const productClusterCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   qty_per_product: z.coerce.number().positive().optional().nullable(),
   first_stage: z.string().trim().max(30).optional().nullable(),
   final_stage: z.string().trim().max(30).optional().nullable(),
+  /** Lộ trình cụm (0288) — danh sách mã công đoạn; null = chưa khai. */
+  stages: stageListSchema.optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
   sort_order: z.coerce.number().int().optional(),
 })
 
 export const productClusterUpdateSchema = productClusterCreateSchema.partial()
+
+/**
+ * LƯU LỘ TRÌNH cả hồ sơ một lượt (màn Lộ trình, B2). `stages: null` = về "suy
+ * theo nhóm"; mảng RỖNG bị chặn ở biên — cụm không đi qua công đoạn nào là cụm
+ * biến mất khỏi sổ, muốn thế thì bỏ cụm chứ không khai rỗng.
+ */
+export const productRoutesSchema = z.object({
+  clusters: z
+    .array(z.object({ id: z.string().uuid(), stages: stageListSchema.min(1).nullable() }))
+    .max(60)
+    .default([]),
+  parts: z
+    .array(z.object({ id: z.string().uuid(), stages: stageListSchema.min(1).nullable() }))
+    .max(500)
+    .default([]),
+})
+export type ProductRoutesInput = z.infer<typeof productRoutesSchema>
 
 /**
  * Gom nhiều dòng vào một cụm. `cluster_id: null` = đưa các dòng về RỜI.

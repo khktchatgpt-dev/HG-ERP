@@ -31,16 +31,21 @@
  * nhiên đã đi.
  */
 
+import { DEFAULT_FINISH_STAGES } from './stage-config'
+
 /**
  * Bốn công đoạn sau sơn, ĐÚNG THỨ TỰ chạy. Mã khớp catalog `production_stage`
  * (sort_order 9→12).
  */
-export const FINISH_STAGES: readonly string[] = [
-  'lap_rap',
-  'bao_bi',
-  'dong_goi',
-  'hoan_thien',
-]
+export const FINISH_STAGES: readonly string[] = DEFAULT_FINISH_STAGES
+
+/**
+ * TỪ 0287 (B1 cấu hình công đoạn): danh sách bốn bước trên chỉ là MẶC ĐỊNH.
+ * Danh sách THẬT suy từ `catalog_items.meta.count_level = 'unit'` qua
+ * `countingOf()` (lib/stage-config) và được service truyền vào tham số
+ * `finish` của các hàm dưới. Không truyền thì dùng mặc định — hành vi cũ, và
+ * là lý do mọi test cũ vẫn chạy.
+ */
 
 /**
  * Tên dòng thành phẩm hiện trên sổ.
@@ -81,8 +86,11 @@ export function finishRowLineId(id: string): string | null {
   return isFinishRowId(id) ? id.slice(FINISH_ROW_ID_PREFIX.length) : null
 }
 
-export function isFinishStage(stage: string | null | undefined): boolean {
-  return !!stage && FINISH_STAGES.includes(stage)
+export function isFinishStage(
+  stage: string | null | undefined,
+  finish: readonly string[] = FINISH_STAGES,
+): boolean {
+  return !!stage && finish.includes(stage)
 }
 
 /** Dòng component đủ để nhận diện một dòng thành phẩm đã vật chất hoá. */
@@ -100,8 +108,11 @@ export type FinishRowLike = {
  * `cluster=null`, nhưng bắt đầu ở hàn) là điều BẮT BUỘC: hai dòng đó nằm cùng
  * một dòng SP và tra nhầm nhau thì sổ hàn ghi vào thành phẩm.
  */
-export function isFinishRow(c: FinishRowLike): boolean {
-  return c.kind === 'assembly' && isFinishStage(c.first_stage)
+export function isFinishRow(
+  c: FinishRowLike,
+  finish: readonly string[] = FINISH_STAGES,
+): boolean {
+  return c.kind === 'assembly' && isFinishStage(c.first_stage, finish)
 }
 
 /**
@@ -111,6 +122,9 @@ export function isFinishRow(c: FinishRowLike): boolean {
  * cả), mà lộ trình mặc định suy theo nhóm — để nguyên thì nó trả rỗng và dòng
  * biến mất khỏi mọi tab công đoạn.
  */
-export function finishRouteOverride(c: FinishRowLike): string[] | null {
-  return isFinishRow(c) ? [...FINISH_STAGES] : null
+export function finishRouteOverride(
+  c: FinishRowLike,
+  finish: readonly string[] = FINISH_STAGES,
+): string[] | null {
+  return isFinishRow(c, finish) ? [...finish] : null
 }
