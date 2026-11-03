@@ -7,6 +7,7 @@ import { dmy, so0 } from '../../bang-ke/[id]/ke-hoach.shared'
 import { HopLichSu, HopSoat } from './khoi-soat'
 import { TabDinhMuc } from './tab-dinh-muc'
 import { TabLenh } from './tab-lenh'
+import { TabDon } from './tab-don'
 import { TabVatTu } from './tab-vat-tu'
 import { useSoatLenh, type LenhSoat, type SoatCtx, type TabSoat } from './useSoatLenh'
 
@@ -68,6 +69,7 @@ export function SoatLenhScreen({
       {d.tab === 'vat_tu' && <TabVatTu d={d} />}
       {d.tab === 'dinh_muc' && <TabDinhMuc d={d} />}
       {d.tab === 'lenh' && <TabLenh d={d} />}
+      {d.tab === 'don' && <TabDon d={d} />}
       {d.loi && (
         <ThanhDuoi left={<span className="text-[var(--stop)]">Mốc soát: {d.loi}</span>} />
       )}
@@ -109,6 +111,20 @@ function DaiTab({ d }: { d: SoatCtx }) {
       phu: tomTatLenh(t.lenh) || 'không đổi',
       co: t.lenh.length > 0,
     },
+    {
+      k: 'don',
+      ten: 'Đơn hàng',
+      so: so0(t.don.length),
+      phu:
+        t.lechDon.length > 0
+          ? `${t.lechDon.length} dòng lệnh chưa theo đơn`
+          : t.don.length > 0
+            ? [...new Set(t.don.map((x) => x.don))].join(', ')
+            : t.noiDon.tong > 0 && t.noiDon.noi === 0
+              ? 'không nối dòng đơn'
+              : 'không đổi',
+      co: t.don.length > 0 || t.lechDon.length > 0,
+    },
   ]
   return (
     <div
@@ -131,7 +147,8 @@ function DaiTab({ d }: { d: SoatCtx }) {
               {x.ten} <span className="font-mono">· {x.so}</span>
             </span>
             <span
-              className={`text-[11.5px] font-normal whitespace-nowrap ${x.co ? 'text-[var(--warn)]' : 'text-[var(--ink-3)]'}`}
+              title={x.phu}
+              className={`max-w-[260px] truncate text-[11.5px] font-normal whitespace-nowrap ${x.co ? 'text-[var(--warn)]' : 'text-[var(--ink-3)]'}`}
             >
               {x.phu}
             </span>

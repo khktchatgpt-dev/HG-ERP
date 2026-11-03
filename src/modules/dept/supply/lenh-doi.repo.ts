@@ -3,6 +3,7 @@ import type { Json } from '@/lib/database.types'
 import type { MocSoat } from '@/lib/lenh-doi'
 import { docAnh, type BanGhiNhatKy } from '@/lib/nhat-ky-dinh-muc'
 import type { BanGhiLenh } from '@/lib/nhat-ky-lenh'
+import type { DongDonNay, DongLenhNay, SuKienDon } from '@/lib/don-doi'
 import { poOwner } from '@/lib/supply-scope'
 import { SUPPLY_DEPT_NAMES } from './suppliers.service'
 
@@ -159,6 +160,101 @@ export const lenhDoiRepo = {
       if ((data ?? []).length < TRANG) break
     }
     return rows
+  },
+
+  /**
+   * ĐƠN HÀNG CỦA LỆNH (T4): các đơn trỏ vào lệnh, lịch sử đơn (sửa / huỷ) SAU
+   * một mốc, dòng đơn + dòng lệnh hiện tại (để so), mã SP cho phía `after` của
+   * lịch sử (ghi product_id) và tên người sửa.
+   */
+  async donCuaLenh(
+    lsxId: string,
+    tu: string,
+  ): Promise<{
+    don: { id: string; code: string }[]
+    suKien: SuKienDon[]
+    dongDon: (DongDonNay & { don: string })[]
+    dongLenh: DongLenhNay[]
+    maCuaSp: Map<string, string>
+  }> {
+    const { data: don, error } = await db()
+      .from('sales_orders')
+      .select('id, code')
+      .eq('production_order_id', lsxId)
+    if (error) throw new Error(error.message)
+    const ids = (don ?? []).map((d) => d.id)
+    const [ch, dd, dl] = await Promise.all([
+      ids.length
+        ? db()
+            .from('sales_order_changes')
+            .select('order_id, change, note, changed_by, created_at')
+            .in('order_id', ids)
+            .gt('created_at', tu)
+        : Promise.resolve({ data: [], error: null }),
+      ids.length
+        ? db()
+            .from('sales_order_lines')
+            .select('id, order_id, product_id, qty')
+            .in('order_id', ids)
+        : Promise.resolve({ data: [], error: null }),
+      db()
+        .from('production_order_lines')
+        .select('sales_order_line_id, product_id, product_code, qty')
+        .eq('production_order_id', lsxId),
+    ])
+    if (ch.error || dd.error || dl.error)
+      throw new Error((ch.error ?? dd.error ?? dl.error)!.message)
+    // Chỉ loại ảnh hưởng việc mua — lọc ở đây cho nhẹ đường số đếm.
+    const doi = (ch.data ?? []).filter((c) => {
+      const t = (c.change as { type?: string } | null)?.type
+      return t === 'update' || t === 'cancel'
+    })
+    // Mã SP: dòng đơn hiện tại + phía `after` của lịch sử (chỉ ghi product_id).
+    const spIds = new Set<string>()
+    for (const l of dd.data ?? []) if (l.product_id) spIds.add(l.product_id)
+    // Dòng lệnh nạp từ file ghi MÃ KHÁCH ở product_code (ROSCO: "2722875") — mã
+    // HG phải tra theo product_id.
+    for (const l of dl.data ?? []) if (l.product_id) spIds.add(l.product_id)
+    for (const c of doi) {
+      const after = (c.change as { lines?: { after?: { product_id?: string }[] } }).lines
+        ?.after
+      for (const x of after ?? []) if (x.product_id) spIds.add(x.product_id)
+    }
+    const { data: sp, error: e2 } = spIds.size
+      ? await db()
+          .from('technical_products')
+          .select('id, code')
+          .in('id', [...spIds])
+      : { data: [], error: null }
+    if (e2) throw new Error(e2.message)
+    const maCuaSp = new Map((sp ?? []).map((p) => [p.id, p.code]))
+    const maDon = new Map((don ?? []).map((d) => [d.id, d.code]))
+    const names = await tenNguoi(doi.map((c) => c.changed_by))
+    return {
+      don: don ?? [],
+      suKien: doi.map((c) => ({
+        order_id: c.order_id,
+        order_code: maDon.get(c.order_id) ?? '—',
+        change: c.change as Record<string, unknown>,
+        note: c.note,
+        boi: c.changed_by ? (names.get(c.changed_by) ?? null) : null,
+        created_at: c.created_at,
+      })),
+      dongDon: (dd.data ?? []).map((l) => ({
+        id: l.id,
+        order_id: l.order_id,
+        product_id: l.product_id,
+        code: l.product_id ? (maCuaSp.get(l.product_id) ?? null) : null,
+        qty: Number(l.qty ?? 0),
+        don: maDon.get(l.order_id) ?? '—',
+      })),
+      dongLenh: (dl.data ?? []).map((l) => ({
+        sales_order_line_id: l.sales_order_line_id,
+        product_code: (l.product_id ? maCuaSp.get(l.product_id) : null) ?? l.product_code,
+        qty: Number(l.qty ?? 0),
+      })),
+      maCuaSp,
+    }
   },
 
   /**

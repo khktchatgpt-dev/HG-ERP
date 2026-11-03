@@ -9,13 +9,13 @@ import type { BangKeLsxRow } from '@/modules/dept/supply/lsx-bang-ke-list.servic
 import type { TrangThaiLenhDoi } from '@/modules/dept/supply/lenh-doi.service'
 import { ChipLoc, DauTrang, HangLoc, Nhan, Nut, TD, TF, TH, ThanhDuoi, Trang } from '../_erp/ui' // prettier-ignore
 
-const COLS = 7
+const COLS = 8
 const LINK = 'text-[var(--act-text)] font-semibold underline-offset-2 hover:underline'
 const NGAY = 'font-mono tabular-nums whitespace-nowrap'
 /** "Đã soát gần đây" = soát trong 14 ngày (Q4 bản vẽ). */
 const GAN_DAY_MS = 14 * 86_400_000
 
-type Loc = 'cho_soat' | 'dinh_muc' | 'lenh' | 'da_soat' | null
+type Loc = 'cho_soat' | 'dinh_muc' | 'lenh' | 'don' | 'da_soat' | null
 
 const dmy = (iso: string | null) => {
   if (!iso) return '—'
@@ -38,6 +38,9 @@ const suaCuoi = (t: TrangThaiLenhDoi | undefined): { luc: string; ai: string } |
   return !truoc ? dm : !dm ? truoc : dm.luc >= truoc.luc ? dm : truoc
 }
 const coLenh = (t: TrangThaiLenhDoi | undefined) => !!t?.choSoat && t.soThongTin > 0
+/** Đơn hàng đổi sau mốc, HOẶC dòng đơn mà lệnh chưa sửa theo (trạng thái bây giờ). */
+const coDon = (t: TrangThaiLenhDoi | undefined) =>
+  (!!t?.choSoat && t.soDon > 0) || (t?.lechDon ?? 0) > 0
 
 /**
  * DANH SÁCH LỆNH CỦA TRANG SOÁT THAY ĐỔI — KHÔNG KIT. Câu màn trả lời: LỆNH NÀO
@@ -63,6 +66,7 @@ export function SoatDanhSachScreen({
       cho_soat: rows.filter((r) => trangThai[r.id]?.choSoat),
       dinh_muc: rows.filter((r) => coDinhMuc(trangThai[r.id])),
       lenh: rows.filter((r) => coLenh(trangThai[r.id])),
+      don: rows.filter((r) => coDon(trangThai[r.id])),
       da_soat: rows.filter((r) => {
         const m = trangThai[r.id]?.moc
         return m?.k === 'soat' && Date.parse(m.luc) >= moc
@@ -109,6 +113,7 @@ export function SoatDanhSachScreen({
         {chip('cho_soat', 'Chờ soát')}
         {chip('dinh_muc', 'Định mức')}
         {chip('lenh', 'Lệnh SX')}
+        {chip('don', 'Đơn hàng')}
         {chip('da_soat', 'Đã soát 14 ngày')}
         <ChipLoc on={loc === null} count={rows.length} onClick={() => setLoc(null)}>
           Tất cả lệnh
@@ -123,16 +128,17 @@ export function SoatDanhSachScreen({
         />
       </HangLoc>
       <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-        <table className="w-full min-w-[960px] table-fixed border-collapse">
+        <table className="w-full min-w-[1100px] table-fixed border-collapse">
           <thead>
             <tr>
               <th className={`${TH} w-[148px]`}>Lệnh</th>
               <th className={`${TH} w-[170px]`}>Khách</th>
               <th className={`${TH} w-[104px]`}>Xuất</th>
               <th className={`${TH} w-[170px]`}>Định mức</th>
-              <th className={`${TH} w-[150px]`}>Lệnh SX</th>
+              <th className={`${TH} w-[130px]`}>Lệnh SX</th>
+              <th className={`${TH} w-[170px]`}>Đơn hàng</th>
               <th className={TH}>Sửa gần nhất</th>
-              <th className={`${TH} w-[190px]`}>So với</th>
+              <th className={`${TH} w-[170px]`}>So với</th>
             </tr>
           </thead>
           <tbody>
@@ -256,6 +262,9 @@ function DongLenh({
         )}
       </td>
       <td className={`${TD} max-w-0`}>
+        <ODonHang t={t} />
+      </td>
+      <td className={`${TD} max-w-0`}>
         {cuoi ? (
           <>
             <span className="block truncate" title={cuoi.ai}>
@@ -285,6 +294,32 @@ function DongLenh({
   )
 }
 
+/** Ô "Đơn hàng": đơn đổi sau mốc (mã đơn) · lệnh chưa theo đơn · không nối dòng đơn. */
+function ODonHang({ t }: { t: TrangThaiLenhDoi | undefined }) {
+  if (!t) return null
+  const doi = t.choSoat && t.soDon > 0
+  if (!doi && t.lechDon === 0)
+    return t.noiDon.tong > 0 && t.noiDon.noi === 0 ? (
+      <span className="text-[12px] text-[var(--ink-3)]">không nối dòng đơn</span>
+    ) : (
+      <span className="text-[var(--ink-3)]">—</span>
+    )
+  return (
+    <>
+      {doi && <Nhan tone="warn">{t.soDon} thay đổi</Nhan>}
+      {t.lechDon > 0 && <Nhan tone="stop">{t.lechDon} dòng lệnh chưa theo</Nhan>}
+      {doi && (
+        <span
+          className="block truncate text-[11.5px] text-[var(--ink-3)]"
+          title={t.donDoi.join(', ')}
+        >
+          {t.donDoi.join(', ')}
+        </span>
+      )}
+    </>
+  )
+}
+
 function Rong({ loc, tong, boLoc }: { loc: Loc; tong: number; boLoc: () => void }) {
   if (tong === 0)
     return (
@@ -299,6 +334,7 @@ function Rong({ loc, tong, boLoc }: { loc: Loc; tong: number; boLoc: () => void 
     cho_soat: ['Không lệnh nào đổi từ lần soát cuối', `Định mức và lệnh của ${tong} lệnh đang chạy khớp với mốc đã soát.`], // prettier-ignore
     dinh_muc: ['Không lệnh nào đổi định mức', 'Định mức của các lệnh đang chạy khớp với mốc đã soát.'], // prettier-ignore
     lenh: ['Không lệnh nào đổi ngày xuất hay SL sản phẩm', 'Thông tin các lệnh khớp với mốc đã soát.'], // prettier-ignore
+    don: ['Không đơn hàng nào đổi, không lệnh nào lệch đơn', 'Sale không sửa dòng SP / hạn giao / huỷ đơn nào của các lệnh đang chạy sau mốc soát.'], // prettier-ignore
     da_soat: [
       'Chưa ai soát lệnh nào trong 14 ngày',
       'Mốc so của các lệnh vẫn là lúc duyệt.',

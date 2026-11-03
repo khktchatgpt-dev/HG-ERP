@@ -299,6 +299,8 @@ describe('sắp xếp, đếm, dấu', () => {
     const l = { key: 'dau:ship_date', sau: '2026-12-20' }
     expect(dauThayDoi({ ...t, lenh: [l] })).not.toBe(dauThayDoi(t))
     expect(dauThayDoi({ ...t, lenh: [{ ...l }] })).toBe(dauThayDoi({ ...t, lenh: [l] }))
+    expect(soThayDoi({ ...t, lenh: [1, 2], don: [1] })).toBe(7)
+    expect(dauThayDoi({ ...t, don: [{ key: 'o1|t|CH' }] })).not.toBe(dauThayDoi(t))
   })
 })
 
@@ -324,6 +326,20 @@ describe('B3 · chuông', () => {
     )
     expect(tieuDeTin({ ...t, soMa: 2, soDongDm: 6 })).toBe(
       '01/26-27 - GIGA — 2 mã đổi số cần · 6 dòng định mức sửa',
+    )
+    // T4 (Q5): tin nói đủ nguồn — có cả đơn hàng đổi.
+    expect(
+      tieuDeTin({
+        ...t,
+        code: '13/26-27 - MX',
+        soMa: 0,
+        soThongTin: 2,
+        suaSau: null,
+        donDoi: ['18086 HG-MX'],
+      }),
+    ).toBe(
+      // prettier-ignore
+      '13/26-27 - MX — 2 thông tin lệnh đổi · đơn 18086 HG-MX đổi',
     )
   })
 

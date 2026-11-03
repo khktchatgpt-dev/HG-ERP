@@ -39,8 +39,10 @@ import {
   ganNguoi,
   gopNhatKyLenh,
   slLucMoc,
+  type AnhDongLenh,
   type BanGhiLenh,
 } from '@/lib/nhat-ky-lenh'
+import { lechDonLenh, trichDoiDon } from '@/lib/don-doi'
 import { partGroupRank } from '@/lib/part-groups'
 import {
   gopNhuCau,
@@ -181,6 +183,8 @@ type LenhGoc = {
   approved_at: string | null
   issued_at: string | null
   created_at: string
+  /** Ngày xuất lệnh hiện tại — để so với hạn giao đơn đổi. */
+  ship_date: string | null
   /** Người + lúc phát lại bản gần nhất — một sự kiện để gán người cho nhật ký dòng lệnh. */
   revised_at: string | null
   revised_by: string | null
@@ -204,7 +208,7 @@ async function soLenh(v: DauVaoSo) {
   const { lsx, nay } = v
   const tuDuyet = lsx.approved_at ?? lsx.issued_at ?? lsx.created_at
   const spIds = v.products.map((p) => p.id)
-  const [reviewsRes, song, nk, nkLenh, suKien] = await Promise.all([
+  const [reviewsRes, song, nk, nkLenh, suKien, donRes] = await Promise.all([
     lenhDoiRepo.listByLsx(lsx.id).then(
       (rows) => ({ rows, loi: null as string | null }),
       (e: unknown) => {
@@ -236,6 +240,11 @@ async function soLenh(v: DauVaoSo) {
         console.error('[lenh-doi] đọc sự kiện lệnh lỗi', e)
         return { rows: [], names: new Map<string, string>() }
       }),
+    // Đơn hàng Sale của lệnh (T4) — hỏng thì màn vẫn chạy, chỉ thiếu tab Đơn hàng.
+    lenhDoiRepo.donCuaLenh(lsx.id, tuDuyet).catch((e: unknown) => {
+      console.error('[lenh-doi] đọc đơn hàng của lệnh lỗi', e)
+      return null
+    }),
   ])
   const slSp = new Map<string, number>()
   for (const p of v.products) slSp.set(p.id, (slSp.get(p.id) ?? 0) + p.qty)
@@ -244,6 +253,12 @@ async function soLenh(v: DauVaoSo) {
   const mocLuc = moiNhat?.reviewed_at ?? tuDuyet
   const dm = gopNhatKy(nk.rows.filter((r) => r.changed_at > mocLuc))
   const gl = gopNhatKyLenh(nkLenh.filter((r) => r.changed_at > mocLuc))
+  const don = donRes
+    ? trichDoiDon(
+        donRes.suKien.filter((e) => e.created_at > mocLuc),
+        { maCuaSp: donRes.maCuaSp, dongDon: donRes.dongDon, dongLenh: donRes.dongLenh, ngayLenh: lsx.ship_date }, // prettier-ignore
+      )
+    : []
 
   let so: DoiSo[]
   let thongTin: ThayDoiLenh['thongTin'] = []
@@ -294,7 +309,12 @@ async function soLenh(v: DauVaoSo) {
   }
   // Thay đổi của lệnh để bày: nhật ký + phần mốc soát thấy mà nhật ký không có.
   // Người sửa gán theo sự kiện app gần nhất (đổi đầu lệnh, phát lại bản…).
-  const lenh: DongLenh[] = boSungTuMoc(gl.doi, thongTin).map((d) => {
+  // Dòng lệnh nạp từ file ghi MÃ KHÁCH ở product_code ("2722875") — bày và nối
+  // sang tab Vật tư bằng mã HG của product_id khi biết.
+  const maHg = (a: AnhDongLenh | null) =>
+    a && { ...a, product_code: (a.product_id ? maSp.get(a.product_id) : null) ?? a.product_code } // prettier-ignore
+  const doiLenh = gl.doi.map((d) => (d.phan === 'dong' ? { ...d, truoc: maHg(d.truoc), sau: maHg(d.sau) } : d)) // prettier-ignore
+  const lenh: DongLenh[] = boSungTuMoc(doiLenh, thongTin).map((d) => {
     const id = ganNguoi(d.luc, suKien.rows)
     return { ...d, boi: id ? (suKien.names.get(id) ?? null) : null }
   })
@@ -303,6 +323,13 @@ async function soLenh(v: DauVaoSo) {
     thongTin,
     lenh,
     napLaiLenh: gl.napLaiGiong,
+    don,
+    lechDon: donRes ? lechDonLenh(donRes.dongDon, donRes.dongLenh) : [],
+    donCuaLenh: (donRes?.don ?? []).map((d) => d.code),
+    noiDon: {
+      noi: (donRes?.dongLenh ?? []).filter((l) => l.sales_order_line_id).length,
+      tong: donRes?.dongLenh.length ?? 0,
+    },
     dmDoi: dm.dong,
     napLaiGiong: dm.napLaiGiong,
     nkNames: nk.names,
@@ -342,6 +369,10 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
     thongTin,
     lenh,
     napLaiLenh,
+    don,
+    lechDon,
+    donCuaLenh,
+    noiDon,
     dmDoi,
     napLaiGiong,
     nkNames,
@@ -418,12 +449,12 @@ export async function lenhDoiCua(bk: LsxBangKe): Promise<LenhDoiCuaLenh> {
   })
 
   const coDinhMuc = new Set(song.rows.map((p) => p.product_id))
-  const base = { dong: sapXepDoi(dong), thongTin, lenh, napLaiLenh, dinhMuc, napLaiGiong, suaSauMoc } // prettier-ignore
+  const base = { dong: sapXepDoi(dong), thongTin, lenh, napLaiLenh, don, lechDon, donCuaLenh, noiDon, dinhMuc, napLaiGiong, suaSauMoc } // prettier-ignore
   return {
     thayDoi: {
       moc,
       ...base,
-      choSoat: dong.length > 0 || lenh.length > 0 || dinhMuc.length > 0 || suaSauMoc !== null, // prettier-ignore
+      choSoat: dong.length > 0 || lenh.length > 0 || dinhMuc.length > 0 || don.length > 0 || suaSauMoc !== null, // prettier-ignore
       dau: dauThayDoi(base),
     },
     lichSu: reviews.map((r) => ({
@@ -452,7 +483,14 @@ export type TrangThaiLenhDoi = {
   soThongTin: number
   /** Dòng định mức đổi ròng từ mốc (nhật ký 0284). */
   soDongDm: number
-  /** Lần ghi nhật ký cuối (định mức hoặc lệnh) — cột "Sửa gần nhất" của danh sách. */
+  /** Thay đổi đơn hàng sau mốc + mã các đơn đó (T4). */
+  soDon: number
+  donDoi: string[]
+  /** Dòng đơn có nối mà lệnh chưa sửa theo (trạng thái bây giờ). */
+  lechDon: number
+  /** Dòng lệnh nối dòng đơn / tổng dòng lệnh — 0 nối = không so được. */
+  noiDon: { noi: number; tong: number }
+  /** Lần sửa cuối (nhật ký định mức / lệnh, lịch sử đơn) — cột "Sửa gần nhất" của danh sách. */
   nkCuoi: { luc: string; boi: string | null } | null
   suaSau: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongChuaMa' | 'lanCuoi' | 'nguoi' | 'khongTen'> | null // prettier-ignore
   moc: ThayDoiLenh['moc']
@@ -483,7 +521,7 @@ async function trangThaiMotLenh(lsxId: string): Promise<TrangThaiLenhDoi | null>
     materials_due_at: lsx.materials_due_at,
     products: nc.bom.products,
   })
-  const { so, thongTin, lenh, dmDoi, nkNames, suaSauMoc: s, moc, loi } = await soLenh({ lsx, nay, products: nc.bom.products, ma: maTuDong(rows) }) // prettier-ignore
+  const { so, thongTin, lenh, don, lechDon, noiDon, dmDoi, nkNames, suaSauMoc: s, moc, loi } = await soLenh({ lsx, nay, products: nc.bom.products, ma: maTuDong(rows) }) // prettier-ignore
   if (loi) throw new Error(loi)
   const ghi = [
     ...dmDoi.map((x) => ({
@@ -491,15 +529,20 @@ async function trangThaiMotLenh(lsxId: string): Promise<TrangThaiLenhDoi | null>
       boi: x.boi ? (nkNames.get(x.boi) ?? null) : null,
     })),
     ...lenh.flatMap((x) => (x.luc ? [{ luc: x.luc, boi: x.boi }] : [])),
+    ...don.map((x) => ({ luc: x.luc, boi: x.boi })),
   ]
   return {
     lsx_id: lsxId,
     code: lsx.code,
-    dau: dauThayDoi({ dong: so, thongTin, lenh, dinhMuc: dmDoi, suaSauMoc: s }),
-    choSoat: so.length > 0 || lenh.length > 0 || dmDoi.length > 0 || s !== null,
+    dau: dauThayDoi({ dong: so, thongTin, lenh, don, dinhMuc: dmDoi, suaSauMoc: s }),
+    choSoat: so.length > 0 || lenh.length > 0 || dmDoi.length > 0 || don.length > 0 || s !== null, // prettier-ignore
     soMa: so.length,
     soThongTin: lenh.length,
     soDongDm: dmDoi.length,
+    soDon: don.length,
+    donDoi: [...new Set(don.map((x) => x.don))],
+    lechDon: lechDon.length,
+    noiDon,
     nkCuoi: ghi.reduce<TrangThaiLenhDoi['nkCuoi']>((m, x) => (m && m.luc >= x.luc ? m : x), null), // prettier-ignore
     suaSau: s && { dongDinhMuc: s.dongDinhMuc, dongChuaMa: s.dongChuaMa, lanCuoi: s.lanCuoi, nguoi: s.nguoi, khongTen: s.khongTen }, // prettier-ignore
     moc,

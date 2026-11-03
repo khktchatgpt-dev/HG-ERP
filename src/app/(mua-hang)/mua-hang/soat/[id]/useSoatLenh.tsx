@@ -22,8 +22,8 @@ export type LenhSoat = {
   sl_sp: number
 }
 
-/** Ba tab của bản vẽ (FgRYhTxe…): Vật tư · Định mức · Lệnh SX. Đơn hàng thêm ở T4. */
-export type TabSoat = 'vat_tu' | 'dinh_muc' | 'lenh'
+/** Bốn tab của bản vẽ (FgRYhTxe…): Vật tư · Định mức · Lệnh SX · Đơn hàng. */
+export type TabSoat = 'vat_tu' | 'dinh_muc' | 'lenh' | 'don'
 
 /**
  * State của trang SOÁT THAY ĐỔI một lệnh. Mọi con số đọc từ `doi.thayDoi` — một
@@ -42,7 +42,8 @@ export function useSoatLenh({
   const toast = useToast()
   const { thayDoi } = doi
   // Tab mở sẵn là tab CÓ VIỆC: vật tư đổi → Vật tư; chỉ có dòng định mức đổi
-  // (đổi quy cách, chưa mã…) → Định mức; chỉ có thông tin lệnh đổi → Lệnh SX.
+  // (đổi quy cách, chưa mã…) → Định mức; thông tin lệnh đổi → Lệnh SX; chỉ có
+  // đơn hàng đổi → Đơn hàng.
   const [tab, setTab] = useState<TabSoat>(
     thayDoi.dong.length > 0
       ? 'vat_tu'
@@ -50,7 +51,9 @@ export function useSoatLenh({
         ? 'dinh_muc'
         : thayDoi.lenh.length > 0
           ? 'lenh'
-          : 'vat_tu',
+          : thayDoi.don.length > 0 || thayDoi.lechDon.length > 0
+            ? 'don'
+            : 'vat_tu',
   )
   const [loc, setLoc] = useState<NhomDoi | null>(null)
   const [q, setQ] = useState('')

@@ -133,6 +133,7 @@ function NhacSoat({ lsxId, t }: { lsxId: string; t: TrangThaiLenhDoi }) {
     t.soMa === 0 && t.soDongDm > 0 ? `định mức đổi ${t.soDongDm} dòng` : '',
     t.soMa === 0 && t.soDongDm === 0 && t.suaSau ? `định mức sửa ${t.suaSau.dongDinhMuc} dòng` : '', // prettier-ignore
     t.soThongTin > 0 ? `lệnh đổi ${t.soThongTin} thông tin` : '',
+    t.soDon > 0 ? `đơn ${t.donDoi.join(', ')} đổi` : '',
   ].filter(Boolean)
   const moc =
     t.moc.k === 'soat'

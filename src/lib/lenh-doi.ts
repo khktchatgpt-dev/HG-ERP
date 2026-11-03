@@ -19,6 +19,7 @@
 
 import type { AnhHuong, DongDmDoi } from './nhat-ky-dinh-muc'
 import type { DoiLenh } from './nhat-ky-lenh'
+import type { DongDonDoi, LechDonLenh } from './don-doi'
 
 /** Một vật tư trong mốc: số Cần (null = dòng định mức không ghi số) + để bày lại. */
 export type MucMoc = {
@@ -362,6 +363,13 @@ export type ThayDoiLenh = {
   lenh: DongLenh[]
   /** Số cặp dòng lệnh xoá + nạp lại giống hệt đã triệt tiêu. */
   napLaiLenh: number
+  /** Đơn hàng Sale đổi sau mốc (T4): dòng SP / hạn giao / huỷ, kèm lý do + so với lệnh. */
+  don: DongDonDoi[]
+  /** Dòng đơn có nối mà SL lệnh ≠ SL đơn BÂY GIỜ — cờ "lệnh chưa sửa theo đơn". */
+  lechDon: LechDonLenh[]
+  /** Mã các đơn của lệnh + số dòng lệnh nối / tổng (0 nối = lệnh nạp từ file). */
+  donCuaLenh: string[]
+  noiDon: { noi: number; tong: number }
   /** Dòng định mức đổi ròng từ mốc, đọc từ nhật ký 0284 (T2). */
   dinhMuc: DongDinhMuc[]
   /** Số cặp xoá + nạp lại giống hệt đã triệt tiêu — để màn nói ra. */
@@ -384,6 +392,8 @@ export function dauThayDoi(t: {
   dinhMuc?: Pick<DongDmDoi, 'key' | 'loai' | 'sau'>[]
   /** Thay đổi của lệnh (nhật ký 0285) — cũng theo khoá + giá trị bây giờ. */
   lenh?: Pick<DoiLenh, 'key' | 'sau'>[]
+  /** Thay đổi đơn hàng (sự kiện, mỗi cái một khoá riêng). */
+  don?: Pick<DongDonDoi, 'key'>[]
   suaSauMoc: Pick<SuaSauMoc, 'dongDinhMuc' | 'dongLenh' | 'lanCuoi'> | null
 }): string {
   const s = JSON.stringify([
@@ -391,6 +401,7 @@ export function dauThayDoi(t: {
     t.thongTin.map((x) => [x.k, x.nhan, x.truoc, x.nay]).sort(),
     (t.dinhMuc ?? []).map((d) => [d.key, d.loai, JSON.stringify(d.sau)]).sort(),
     (t.lenh ?? []).map((d) => [d.key, JSON.stringify(d.sau)]).sort(),
+    (t.don ?? []).map((d) => d.key).sort(),
     t.suaSauMoc
       ? [t.suaSauMoc.dongDinhMuc, t.suaSauMoc.dongLenh, t.suaSauMoc.lanCuoi]
       : null,
@@ -406,9 +417,18 @@ export function dauThayDoi(t: {
  * (T3) thì đếm nó thay `thongTin` — hai thứ nói cùng một thay đổi.
  */
 export function soThayDoi(
-  t: Pick<ThayDoiLenh, 'dong' | 'thongTin'> & { dinhMuc?: unknown[]; lenh?: unknown[] },
+  t: Pick<ThayDoiLenh, 'dong' | 'thongTin'> & {
+    dinhMuc?: unknown[]
+    lenh?: unknown[]
+    don?: unknown[]
+  },
 ): number {
-  return t.dong.length + (t.lenh ?? t.thongTin).length + (t.dinhMuc?.length ?? 0)
+  return (
+    t.dong.length +
+    (t.lenh ?? t.thongTin).length +
+    (t.dinhMuc?.length ?? 0) +
+    (t.don?.length ?? 0)
+  )
 }
 
 /* ── B3 · Chuông (02/11/2026) ─────────────────────────────────────────── */
@@ -420,6 +440,8 @@ export type TomTatChoSoat = {
   soThongTin: number
   /** Dòng định mức đổi ròng (nhật ký 0284). */
   soDongDm?: number
+  /** Mã các đơn hàng đổi sau mốc. */
+  donDoi?: string[]
   suaSau: { dongDinhMuc: number } | null
   moc: ThayDoiLenh['moc']
 }
@@ -433,6 +455,7 @@ export function tieuDeTin(t: TomTatChoSoat): string {
   if (t.soMa > 0) phan.push(`${t.soMa} mã đổi số cần`)
   if (t.soThongTin > 0) phan.push(`${t.soThongTin} thông tin lệnh đổi`)
   if (t.soDongDm) phan.push(`${t.soDongDm} dòng định mức sửa`)
+  if (t.donDoi?.length) phan.push(`đơn ${t.donDoi.join(', ')} đổi`)
   if (phan.length === 0 && t.suaSau) {
     const sau = t.moc.k === 'duyet' && !t.moc.laDuyet ? 'phát lệnh' : 'duyệt'
     phan.push(`định mức sửa ${t.suaSau.dongDinhMuc} dòng sau ${sau}`)
