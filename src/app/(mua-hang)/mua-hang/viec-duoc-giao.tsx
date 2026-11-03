@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import type { AssignedItem } from '@/modules/workflow/tasks/tasks.service'
 import { BangViecCuaToi } from '@/app/(shared)/phan-cong-viec/viec-cua-toi'
 import { KIT_BRIDGE } from './kit-bridge'
@@ -26,12 +27,16 @@ export function ViecDuocGiao({
   /** "bạn" hoặc tên chủ bàn khi xem bàn người khác. */
   who: string
 }) {
+  const router = useRouter()
   const overdue = items.filter((t) => t.overdue_days > 0).length
   return (
     <div style={KIT_BRIDGE} className="min-h-0 overflow-auto bg-[var(--surface-card)]">
       <BangViecCuaToi
         version={items}
         rows={items}
+        // Bấm tên việc → trang Phân công việc, đúng dòng (bản vẽ 3, Q3). Xem bàn người
+        // khác thì không: việc đó không nằm trong "Việc của tôi" của người xem.
+        onOpen={readOnly ? undefined : (id) => router.push(`/phan-cong-viec?viec=${id}`)}
         footer={
           <>
             {items.length} việc đang giao cho {who}

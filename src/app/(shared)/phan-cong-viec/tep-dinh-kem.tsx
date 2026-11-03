@@ -1,23 +1,20 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Download, Paperclip, Trash2, X } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { formatBytes } from '@/lib/file-limits'
-import { dmVn } from './phan-cong.shared'
 import { extLabel, isImageMime, pickTaskFiles } from '@/lib/task-files'
 import { MAX_TASK_FILES } from '@/lib/task-flow'
 import { uploadFileTracked } from '@/lib/upload'
 import type { TaskFileItem } from '@/modules/core/files/files.service'
+import { dmVn } from './phan-cong.shared'
 
 /**
- * TỆP ĐÍNH KÈM TRÊN VIỆC (bản vẽ 2, B2 — 03/11/2026): ảnh hiện thumbnail, tài liệu
- * hiện dòng (đuôi + tên + dung lượng + ai tải). Chọn tệp, kéo thả hoặc dán ảnh
- * (Ctrl+V) đều vào cùng một đường. Mỗi tệp một kết quả: tệp lỗi báo ngay trên tệp
- * đó, không chặn các tệp còn lại. Xoá chỉ hiện với tệp của chính mình (hoặc sếp).
- *
- * VIẾT THẲNG Tailwind + token theme, không dùng kit. Tải lên đi qua
- * `uploadFileTracked` (init → PUT → finalize) như mọi tệp khác của hệ thống.
+ * TỆP ĐÍNH KÈM TRÊN VIỆC — khối trong ngăn phải (bản vẽ 3, lối ERP không kit; kiểu ở
+ * `phan-cong.css`). Ảnh: ô vuông 4 cột; tài liệu: dòng phẳng (đuôi · tên · dung lượng ·
+ * ai tải). Chọn tệp, kéo thả, dán ảnh (Ctrl+V) đi chung một đường. Mỗi tệp một kết
+ * quả: tệp lỗi báo ngay trên dòng của nó, không chặn tệp khác. Xoá hai bước, chỉ tệp
+ * của chính mình (hoặc sếp). Tải lên qua `uploadFileTracked` (init → PUT → finalize).
  */
 
 type Upload = { key: number; name: string; pct: number; error: string | null }
@@ -44,8 +41,8 @@ export function TepDinhKem({
   const seq = useRef(0)
   const [uploads, setUploads] = useState<Upload[]>([])
   const [over, setOver] = useState(false)
-  const [delErr, setDelErr] = useState<string | null>(null)
-  const [confirmDel, setConfirmDel] = useState<string | null>(null)
+  const [loi, setLoi] = useState<string | null>(null)
+  const [hoiXoa, setHoiXoa] = useState<string | null>(null)
 
   const full = files.length >= MAX_TASK_FILES
   const patch = (key: number, p: Partial<Upload>) =>
@@ -86,33 +83,57 @@ export function TepDinhKem({
   }
 
   async function open(id: string, download: boolean) {
+    setLoi(null)
     try {
       const { url } = await api<{ url: string }>(
         `/api/files/${id}${download ? '?download=1' : ''}`,
       )
       window.open(url, '_blank', 'noopener')
     } catch (e) {
-      setDelErr(apiErrorText(e))
+      setLoi(apiErrorText(e))
     }
   }
 
   async function remove(id: string) {
-    setDelErr(null)
+    setLoi(null)
     try {
       await api(`/api/files/${id}`, { method: 'DELETE' })
-      setConfirmDel(null)
+      setHoiXoa(null)
       onChanged()
     } catch (e) {
-      setDelErr(apiErrorText(e))
+      setLoi(apiErrorText(e))
     }
   }
 
   const images = files.filter((f) => f.thumb)
   const docs = files.filter((f) => !f.thumb)
 
+  const xoa = (f: TaskFileItem) =>
+    f.can_delete &&
+    (hoiXoa === f.id ? (
+      <>
+        <button type="button" className="ic del on" onClick={() => remove(f.id)}>
+          Xoá hẳn
+        </button>
+        <button type="button" className="ic" onClick={() => setHoiXoa(null)}>
+          Giữ
+        </button>
+      </>
+    ) : (
+      <button
+        type="button"
+        className="ic del"
+        aria-label={`Xoá ${f.filename}`}
+        onClick={() => setHoiXoa(f.id)}
+      >
+        Xoá
+      </button>
+    ))
+
   return (
-    <div
-      className="flex flex-col gap-2"
+    <section
+      className="blk"
+      aria-label="Tệp đính kèm"
       onPaste={(e) => {
         if (!canAdd || full) return
         const imgs = [...e.clipboardData.files]
@@ -122,14 +143,84 @@ export function TepDinhKem({
         }
       }}
     >
-      <div className="flex items-baseline gap-2">
-        <span className="text-[12px] font-semibold text-[var(--foreground)]">
-          Tệp đính kèm
-        </span>
-        <span className="font-mono text-[12px] text-[var(--muted-foreground)] tabular-nums">
+      <h2>
+        <span>Tệp đính kèm</span>
+        <span className="num">
           {files.length} / {MAX_TASK_FILES}
         </span>
-      </div>
+      </h2>
+
+      {images.length > 0 && (
+        <div className="files">
+          {images.map((f) => (
+            <div key={f.id} className="th">
+              <button
+                type="button"
+                aria-label={`Xem ảnh ${f.filename}`}
+                onClick={() => open(f.id, false)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- ảnh có chữ ký sẵn, không qua trình tối ưu */}
+                <img src={f.thumb!} alt={f.filename} loading="lazy" />
+              </button>
+              <div
+                className="n"
+                title={`${f.filename} · ${f.owner_name ?? ''} ${dmVn(f.created_at)}`}
+              >
+                <span>{f.filename}</span>
+                {xoa(f)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {docs.map((f) => (
+        <div key={f.id} className="fl">
+          <span className="x">{extLabel(f.filename)}</span>
+          <button
+            type="button"
+            className="ten"
+            title={`${f.filename} · ${f.owner_name ?? 'không rõ'}, ${dmVn(f.created_at)}`}
+            onClick={() => open(f.id, false)}
+          >
+            {f.filename}
+          </button>
+          <span className="num mut">{formatBytes(f.size_bytes)}</span>
+          <span>
+            <button
+              type="button"
+              className="ic"
+              aria-label={`Tải ${f.filename}`}
+              onClick={() => open(f.id, true)}
+            >
+              Tải
+            </button>
+            {xoa(f)}
+          </span>
+        </div>
+      ))}
+
+      {uploads.map((u) => (
+        <div key={u.key} className={u.error ? 'fl bad' : 'fl'}>
+          <span className="x">{extLabel(u.name)}</span>
+          <span className="ten" title={u.error ? `${u.name} · ${u.error}` : u.name}>
+            {u.error ? `${u.name} · ${u.error}` : u.name}
+          </span>
+          <span className="num mut">{u.error ? '' : `${u.pct}%`}</span>
+          <span>
+            {u.error && (
+              <button
+                type="button"
+                className="ic"
+                aria-label={`Bỏ thông báo lỗi của ${u.name}`}
+                onClick={() => setUploads((x) => x.filter((y) => y.key !== u.key))}
+              >
+                Bỏ
+              </button>
+            )}
+          </span>
+        </div>
+      ))}
 
       {canAdd ? (
         <>
@@ -147,8 +238,9 @@ export function TepDinhKem({
           />
           <button
             type="button"
-            disabled={full}
-            onClick={() => inputRef.current?.click()}
+            aria-disabled={full}
+            className={over ? 'add over' : 'add'}
+            onClick={() => !full && inputRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault()
               setOver(true)
@@ -159,218 +251,27 @@ export function TepDinhKem({
               setOver(false)
               if (!full) void add([...e.dataTransfer.files])
             }}
-            className={`flex items-center gap-2 border border-dashed px-3 py-2.5 text-left text-[12px] ${
-              full
-                ? 'cursor-not-allowed border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)]'
-                : over
-                  ? 'border-[var(--primary)] bg-[var(--accent)] text-[var(--foreground)]'
-                  : 'border-[var(--muted-foreground)] bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]'
-            }`}
           >
-            <Paperclip size={16} aria-hidden />
             {full ? (
               <span>Đã đủ {MAX_TASK_FILES} tệp — xoá bớt để thêm</span>
             ) : (
               <span>
-                <b className="text-[var(--primary)]">Chọn tệp</b>, kéo thả vào đây, hoặc
-                dán ảnh bằng Ctrl+V
+                <b>Thêm tệp</b> · kéo thả · Ctrl+V dán ảnh
               </span>
             )}
           </button>
         </>
-      ) : blockReason ? (
-        <p className="text-[12px] text-[var(--muted-foreground)]">{blockReason}</p>
-      ) : null}
-
-      {uploads.length > 0 && (
-        <ul className="flex flex-col border border-[var(--border)] bg-[var(--card)]">
-          {uploads.map((u) => (
-            <li
-              key={u.key}
-              className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-1.5 text-[12px] last:border-b-0"
-            >
-              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                {u.name}
-                {u.error ? (
-                  <span className="block text-[var(--stop)]">{u.error}</span>
-                ) : null}
-              </span>
-              {u.error ? (
-                <button
-                  type="button"
-                  aria-label={`Bỏ thông báo lỗi của ${u.name}`}
-                  className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                  onClick={() => setUploads((x) => x.filter((y) => y.key !== u.key))}
-                >
-                  <X size={14} aria-hidden />
-                </button>
-              ) : (
-                <span className="font-mono text-[var(--muted-foreground)] tabular-nums">
-                  {u.pct}%
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+      ) : (
+        blockReason && <p className="txt mut">{blockReason}</p>
       )}
-
-      {images.length > 0 && (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
-          {images.map((f) => (
-            <li
-              key={f.id}
-              className="flex min-w-0 flex-col border border-[var(--border)] bg-[var(--card)]"
-            >
-              <button
-                type="button"
-                aria-label={`Xem ảnh ${f.filename}`}
-                onClick={() => open(f.id, false)}
-                className="flex h-16 items-center justify-center overflow-hidden bg-[var(--muted)]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element -- ảnh có chữ ký sẵn, không qua trình tối ưu */}
-                <img
-                  src={f.thumb!}
-                  alt={f.filename}
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
-              </button>
-              <span className="px-1.5 pt-1 text-[11.5px] leading-tight [overflow-wrap:anywhere]">
-                {f.filename}
-              </span>
-              <FileMeta
-                f={f}
-                confirm={confirmDel === f.id}
-                onAsk={() => setConfirmDel(f.id)}
-                onCancel={() => setConfirmDel(null)}
-                onDelete={() => remove(f.id)}
-              />
-            </li>
-          ))}
-        </ul>
+      {!canAdd && !blockReason && files.length === 0 && (
+        <p className="txt mut">Chưa có tệp.</p>
       )}
-
-      {docs.length > 0 && (
-        <ul className="flex flex-col border border-[var(--border)] bg-[var(--card)]">
-          {docs.map((f) => (
-            <li
-              key={f.id}
-              className="grid grid-cols-[34px_1fr_auto] items-center gap-2 border-b border-[var(--border)] px-2 py-1.5 last:border-b-0"
-            >
-              <span className="flex h-[22px] items-center justify-center bg-[var(--muted-foreground)] font-mono text-[10px] font-bold text-[var(--card)]">
-                {extLabel(f.filename)}
-              </span>
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  onClick={() => open(f.id, false)}
-                  className="text-left text-[12.5px] [overflow-wrap:anywhere] hover:text-[var(--primary)]"
-                >
-                  {f.filename}
-                </button>
-                <FileMeta
-                  f={f}
-                  inline
-                  confirm={confirmDel === f.id}
-                  onAsk={() => setConfirmDel(f.id)}
-                  onCancel={() => setConfirmDel(null)}
-                  onDelete={() => remove(f.id)}
-                />
-              </div>
-              <button
-                type="button"
-                aria-label={`Tải ${f.filename}`}
-                onClick={() => open(f.id, true)}
-                className="text-[var(--muted-foreground)] hover:text-[var(--primary)]"
-              >
-                <Download size={15} aria-hidden />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {files.length === 0 && uploads.length === 0 && !canAdd && !blockReason && (
-        <p className="text-[12px] text-[var(--muted-foreground)]">
-          Việc này chưa có tệp đính kèm.
+      {loi && (
+        <p role="alert" className="txt bad-t">
+          {loi}
         </p>
       )}
-      {delErr && (
-        <p role="alert" className="text-[12px] text-[var(--stop)]">
-          {delErr}
-        </p>
-      )}
-    </div>
-  )
-}
-
-/** Dung lượng · người tải · ngày — và nút xoá (hai bước, xác nhận ngay dưới tệp). */
-function FileMeta({
-  f,
-  inline,
-  confirm,
-  onAsk,
-  onCancel,
-  onDelete,
-}: {
-  f: TaskFileItem
-  inline?: boolean
-  confirm: boolean
-  onAsk: () => void
-  onCancel: () => void
-  onDelete: () => void
-}) {
-  const who = f.owner_name ?? 'không rõ'
-  return (
-    <span
-      className={`flex items-center gap-1.5 text-[11px] text-[var(--muted-foreground)] ${inline ? '' : 'px-1.5 pb-1'}`}
-    >
-      <span className="font-mono tabular-nums">{formatBytes(f.size_bytes)}</span>
-      <span>
-        · {who}, {dmVn(f.created_at)}
-      </span>
-      {f.can_delete &&
-        (confirm ? (
-          <span className="ml-auto flex items-center gap-1.5">
-            <span
-              role="button"
-              tabIndex={0}
-              className="font-semibold text-[var(--stop)]"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete()
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && onDelete()}
-            >
-              Xoá hẳn
-            </span>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation()
-                onCancel()
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && onCancel()}
-            >
-              Giữ
-            </span>
-          </span>
-        ) : (
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={`Xoá ${f.filename}`}
-            className="ml-auto hover:text-[var(--stop)]"
-            onClick={(e) => {
-              e.stopPropagation()
-              onAsk()
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && onAsk()}
-          >
-            <Trash2 size={13} aria-hidden />
-          </span>
-        ))}
-    </span>
+    </section>
   )
 }

@@ -1,196 +1,253 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
-import { useRouter } from 'next/navigation'
-import { Plus } from 'lucide-react'
-import { ASSIGN_BLOCKED, type GivenFilter, type MineFilter } from '@/lib/task-flow'
+import './phan-cong.css'
+import { useLayoutEffect, useRef, useState } from 'react'
+import {
+  GIVEN_FILTER_LABEL,
+  MINE_FILTER_LABEL,
+  type GivenFilter,
+  type MineFilter,
+} from '@/lib/task-flow'
 import type {
   Assignee,
   GivenBoard,
   MineBoard,
 } from '@/modules/workflow/tasks/tasks.service'
-import { ChiTietViec } from './chi-tiet-viec'
-import { GiaoViec, type GiaoViecHandle } from './giao-viec'
-import { btn } from './phan-cong.shared'
-import { ViecCuaToi } from './viec-cua-toi'
-import { ViecToiGiao } from './viec-toi-giao'
+import { LuoiViec } from './luoi-viec'
+import { NganChiTiet } from './ngan-chi-tiet'
+import { PhieuGiao } from './phieu-giao'
+import { usePhanCong, type PhanCongFocus } from './usePhanCong'
 
-/** Việc chuông vừa mở (`?viec=`): mục + chip đang chứa nó. */
-export type PhanCongFocus =
-  | { id: string; muc: 'cua-toi'; filter: MineFilter }
-  | { id: string; muc: 'giao'; filter: GivenFilter }
-
-type Muc = PhanCongFocus['muc']
+export type { PhanCongFocus }
 
 /**
- * PHÂN CÔNG VIỆC — trang dùng chung (bản vẽ https://claude.ai/artifact/FQxKHGKQnhWt5dBjGA8n5k).
+ * PHÂN CÔNG VIỆC — trang dùng chung, LỐI ERP KHÔNG KIT (docs/erp-khong-kit.md).
+ * Bản vẽ 3 https://claude.ai/artifact/FQ2oJJGcWEMr8r798vrZz5 duyệt 03/11/2026 (Q1 nút
+ * theo dòng chọn ở Action Pane · Q2 ngăn phải luôn mở · Q3 Bàn làm việc Cung ứng để
+ * nguyên · Q4 không cột Phòng).
  *
- * Hai mục: "Việc của tôi" (mọi người — người ngoài Cung ứng nhận và báo hoàn thành ở
- * đây, chốt D2; P5) và "Việc tôi giao" + hộp "Giao việc" bên phải (sếp, quản lý; P2).
- * Người Cung ứng có cùng hai bảng trên Bàn làm việc. Viết không kit theo chỉ đạo chủ
- * dự án.
+ * Tầng: đầu trang + Action Pane · dòng báo · tab có số · thanh lọc · lưới | ngăn phải
+ * · thanh trạng thái. Khung chốt chiều cao nên chỉ lưới và ngăn phải cuộn. State ở
+ * `usePhanCong`; màn này chỉ ghép.
  */
 export function PhanCongScreen({
   meId,
+  meRole,
+  restricted,
   today,
   board,
   mine,
   people,
   focus,
-  meRole,
-  restricted,
 }: {
   meId: string
-  /** Vai trò người xem — chi tiết việc cần để biết sếp đính tệp được. */
+  /** Vai trò người xem — ngăn chi tiết cần để biết sếp đính tệp được. */
   meRole: string
-  /** Người giao bị giới hạn phòng nhận (nhân viên Bán Hàng) — hộp Giao việc nói rõ. */
+  /** Người giao bị giới hạn phòng nhận (nhân viên Bán Hàng). */
   restricted: boolean
   today: string
-  /** null = người xem không giao được việc (nhân viên). */
+  /** null = người xem không giao được việc. */
   board: GivenBoard | null
   mine: MineBoard
   people: Assignee[]
   /** Chuông mở trang thì có; null = mở thường. */
   focus: PhanCongFocus | null
 }) {
-  const formRef = useRef<GiaoViecHandle>(null)
-  const router = useRouter()
-  const [sent, setSent] = useState<string | null>(null)
-  // Việc đang mở ở ngăn kéo chi tiết (bấm tên việc). Mở chi tiết thay chỗ hộp Giao việc.
-  const [openId, setOpenId] = useState<string | null>(null)
-  const opened = openId
-    ? ([...(board?.items ?? []), ...mine.items].find((t) => t.id === openId) ?? null)
-    : null
-  const drawer = opened && (
-    <ChiTietViec
-      key={opened.id}
-      item={opened}
-      meId={meId}
-      meRole={meRole}
-      onClose={() => setOpenId(null)}
-      onChanged={() => router.refresh()}
-    />
-  )
-  // Mở thường: người giao vào thẳng việc mình giao (trang dựng cho họ trước), người
-  // nhận vào việc của mình. Chuông thì vào đúng mục có việc đó.
-  const [muc, setMuc] = useState<Muc>(focus?.muc ?? (board ? 'giao' : 'cua-toi'))
-  const tab: Muc = board ? muc : 'cua-toi'
-
-  function giaoViec() {
-    // Hộp chỉ có ở mục "Việc tôi giao": đổi mục rồi vẽ NGAY, mới đặt con trỏ được.
-    flushSync(() => {
-      setOpenId(null)
-      if (tab !== 'giao') setMuc('giao')
-    })
-    formRef.current?.focus()
-  }
-
-  const tabs: { id: Muc; label: string; n: number; red: boolean }[] = [
-    { id: 'cua-toi', label: 'Việc của tôi', n: mine.summary.doing, red: mine.summary.overdue > 0 }, // prettier-ignore
-    ...(board
-      ? [{ id: 'giao' as const, label: 'Việc tôi giao', n: board.summary.open, red: board.summary.to_approve > 0 }] // prettier-ignore
-      : []),
-  ]
+  const d = usePhanCong({ board, mine, today, focus })
+  const giao = d.tab === 'giao'
 
   return (
-    <div className="flex min-h-0 flex-col">
-      <header className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--card)] px-3.5 py-2">
-        <h1 className="text-[18px] font-semibold text-[var(--foreground)]">
-          Phân công việc
-        </h1>
-        <div className="flex-1" />
-        {board ? (
-          <button type="button" className={btn('primary')} onClick={giaoViec}>
-            <Plus size={14} aria-hidden />
-            Giao việc
-          </button>
-        ) : (
-          <span className="text-[12px] text-[var(--muted-foreground)]">
-            {ASSIGN_BLOCKED}
-          </span>
-        )}
-      </header>
-
-      <div
-        role="tablist"
-        aria-label="Mục"
-        className="flex gap-0.5 border-b border-[var(--input)] bg-[var(--card)] px-3.5 text-[13px]"
-      >
-        {tabs.map((t) => {
-          const on = t.id === tab
-          return (
+    <PcKhung>
+      <div className="pc-ph">
+        <h1>Phân công việc</h1>
+        <div className="pc-ap" role="toolbar" aria-label="Thao tác">
+          <div>
             <button
-              key={t.id}
               type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setMuc(t.id)}
-              className={`border-b-2 px-2.5 pt-2.5 pb-2 ${on ? 'border-[var(--primary)] font-semibold text-[var(--accent-foreground)]' : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+              className="b p"
+              aria-disabled={!d.canGive}
+              onClick={d.moGiao}
             >
-              {t.label}
-              <span
-                className={`ml-1 font-mono text-[11px] ${t.red ? 'font-semibold text-[var(--stop)]' : 'text-[var(--muted-foreground)]'}`}
-              >
-                {t.n}
-              </span>
+              + Giao việc
             </button>
-          )
-        })}
+          </div>
+          <div>
+            {d.nut.map((n) => (
+              <button
+                key={n.a}
+                type="button"
+                className={n.chinh ? 'b p' : 'b'}
+                aria-disabled={n.khoa || d.busy}
+                onClick={() => d.bam(n.a, n.label)}
+              >
+                {n.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {tab === 'cua-toi' && (
-        <div
-          className={`grid min-h-0 items-start ${drawer ? 'grid-cols-[minmax(0,1fr)_470px]' : 'grid-cols-1'}`}
-        >
-          <div className="min-w-0 border-r border-[var(--border)]">
-            <ViecCuaToi
-              board={mine}
-              today={today}
-              initialFilter={focus?.muc === 'cua-toi' ? focus.filter : undefined}
-              focusId={focus?.muc === 'cua-toi' ? focus.id : null}
-              onOpen={setOpenId}
-            />
-          </div>
-          {drawer}
+      {d.bao && (
+        <div className={d.bao.ok ? 'pc-why ok' : 'pc-why'} role="status">
+          <span>{d.bao.text}</span>
+          <button
+            type="button"
+            className="x"
+            aria-label="Tắt thông báo"
+            onClick={d.tatBao}
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {tab === 'giao' && board && (
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_470px] items-start">
-          <div className="min-w-0 border-r border-[var(--border)]">
-            <ViecToiGiao
-              board={board}
-              today={today}
-              initialFilter={focus?.muc === 'giao' ? focus.filter : undefined}
-              focusId={focus?.muc === 'giao' ? focus.id : null}
-              onOpen={setOpenId}
-            />
-          </div>
-          {drawer ?? (
-            <aside className="flex flex-col gap-2 bg-[var(--card)] px-3.5 py-3">
-              <GiaoViec
-                ref={formRef}
-                people={people}
-                meId={meId}
-                today={today}
-                restricted={restricted}
-                onOpenTask={setOpenId}
-                onDone={(name) => {
-                  setSent(`Đã giao cho ${name}.`)
-                  // Tải lại danh sách: việc vừa giao phải hiện ngay bên trái.
-                  router.refresh()
-                }}
-              />
-              {sent && (
-                <p role="status" className="text-[12px] font-medium text-[var(--done)]">
-                  {sent}
-                </p>
-              )}
-            </aside>
-          )}
-        </div>
-      )}
+      <div className="pc-tabs" role="tablist" aria-label="Mục">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={d.tab === 'cua-toi'}
+          className="pc-tab"
+          onClick={() => d.datMuc('cua-toi')}
+        >
+          Việc của tôi <span className="bd">{d.dem.mine.n}</span>
+          {d.dem.mine.tre > 0 && <span className="note">{d.dem.mine.tre} trễ</span>}
+        </button>
+        {d.dem.giao && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={giao}
+            className="pc-tab"
+            onClick={() => d.datMuc('giao')}
+          >
+            Việc tôi giao <span className="bd">{d.dem.giao.n}</span>
+            {d.dem.giao.cho > 0 && (
+              <span className="note">{d.dem.giao.cho} chờ duyệt</span>
+            )}
+          </button>
+        )}
+      </div>
+
+      <div className="pc-fb" role="search">
+        <input
+          type="search"
+          className="in"
+          aria-label="Tìm việc"
+          placeholder="Tìm việc, người, mã CV…"
+          value={d.q}
+          onChange={(e) => d.setQ(e.target.value)}
+        />
+        <label className="sr-only" htmlFor="pc-loc">
+          Tình trạng
+        </label>
+        {giao ? (
+          <select
+            id="pc-loc"
+            className="in on"
+            value={d.locGiao}
+            onChange={(e) => d.setLocGiao(e.target.value as GivenFilter)}
+          >
+            {d.GIVEN_FILTERS.map((f) => (
+              <option key={f} value={f}>
+                Tình trạng: {GIVEN_FILTER_LABEL[f]} ({board?.summary[f] ?? 0})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select
+            id="pc-loc"
+            className="in on"
+            value={d.locMine}
+            onChange={(e) => d.setLocMine(e.target.value as MineFilter)}
+          >
+            {d.MINE_FILTERS.map((f) => (
+              <option key={f} value={f}>
+                Tình trạng: {MINE_FILTER_LABEL[f]} ({mine.summary[f]})
+              </option>
+            ))}
+          </select>
+        )}
+        {giao && d.phongs.length > 1 && (
+          <select
+            aria-label="Phòng người nhận"
+            className={d.phong ? 'in on' : 'in'}
+            value={d.phong}
+            onChange={(e) => d.setPhong(e.target.value)}
+          >
+            <option value="">Phòng: Tất cả</option>
+            {d.phongs.map((p) => (
+              <option key={p} value={p}>
+                Phòng: {p}
+              </option>
+            ))}
+          </select>
+        )}
+        {(d.q || d.phong) && (
+          <button
+            type="button"
+            className="lnk"
+            onClick={() => {
+              d.setQ('')
+              d.setPhong('')
+            }}
+          >
+            Bỏ lọc
+          </button>
+        )}
+      </div>
+
+      <div className="pc-body">
+        <LuoiViec d={d} />
+        {d.giaoMo ? (
+          <PhieuGiao
+            people={people}
+            meId={meId}
+            today={today}
+            restricted={restricted}
+            onClose={d.dongGiao}
+            onDone={d.sauGiao}
+          />
+        ) : (
+          <NganChiTiet key={d.chon?.id ?? 'rong'} d={d} meId={meId} meRole={meRole} />
+        )}
+      </div>
+
+      <div className="pc-sb">
+        <span>
+          <b>{d.rows.length}</b> dòng
+        </span>
+        {d.chon && !d.giaoMo && (
+          <span>
+            Đang chọn <b>{d.chon.task_code}</b>
+          </span>
+        )}
+        {d.giaoMo && restricted && (
+          <span className="r">Bán Hàng giao được cho Kỹ thuật và Cung ứng</span>
+        )}
+      </div>
+    </PcKhung>
+  )
+}
+
+/**
+ * Gốc màn: huỷ đệm của `<main>` và CHỐT CHIỀU CAO = 100dvh − đỉnh màn, để chỉ lưới
+ * và ngăn phải cuộn (cùng cách `KhoKhung` của khu Kho — chép, không import).
+ */
+function PcKhung({ children }: { children: React.ReactNode }) {
+  const goc = useRef<HTMLDivElement>(null)
+  const [cao, setCao] = useState('calc(100dvh - 60px)')
+  useLayoutEffect(() => {
+    const el = goc.current
+    if (!el) return
+    const doi = () =>
+      setCao(`calc(100dvh - ${Math.round(el.getBoundingClientRect().top)}px)`)
+    doi()
+    window.addEventListener('resize', doi)
+    return () => window.removeEventListener('resize', doi)
+  }, [])
+  return (
+    <div ref={goc} className="pc -m-4 sm:-mx-6 sm:-my-6" style={{ height: cao }}>
+      {children}
     </div>
   )
 }

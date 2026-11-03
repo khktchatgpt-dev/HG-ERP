@@ -52,6 +52,7 @@ export function ViecToiGiaoBan({
   /** Mở hộp Giao việc (nút ở trạng thái rỗng). */
   onGive: () => void
 }) {
+  const router = useRouter()
   const rows = openGiven(board, today)
   const s = board.summary
   if (rows.length === 0)
@@ -86,6 +87,7 @@ export function ViecToiGiaoBan({
       <BangViecToiGiao
         board={board}
         rows={rows}
+        onOpen={(id) => router.push(`/phan-cong-viec?viec=${id}`)}
         footer={
           <>
             {s.open} chưa xong · {s.to_approve} chờ tôi duyệt · {s.overdue} quá hạn · việc

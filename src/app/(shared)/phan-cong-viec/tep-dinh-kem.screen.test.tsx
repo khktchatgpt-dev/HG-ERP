@@ -53,7 +53,8 @@ describe('TepDinhKem', () => {
     expect(screen.getByText('2 / 10')).toBeTruthy()
     expect(screen.getByAltText('mau-vai.jpg')).toBeTruthy()
     expect(screen.getByText('PDF')).toBeTruthy()
-    expect(screen.getAllByText(/Nguyễn Võ Nam Việt/).length).toBe(2)
+    // Người tải + ngày nằm ở chú giải khi rê chuột — dòng giữ một hàng.
+    expect(document.querySelectorAll('[title*="Nguyễn Võ Nam Việt"]').length).toBe(2)
   })
 
   it('chỉ tệp của mình có nút xoá; xoá hai bước', () => {
@@ -94,7 +95,7 @@ describe('TepDinhKem', () => {
     ])
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
     expect(upload).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('setup.exe')).toBeTruthy()
+    expect(screen.getByText(/^setup.exe · /)).toBeTruthy()
   })
 
   it('máy chủ từ chối thì hiện câu lỗi trên tệp đó, không gọi tải lại', async () => {
@@ -103,7 +104,7 @@ describe('TepDinhKem', () => {
     render(<TepDinhKem taskId="t1" canAdd files={[]} onChanged={onChanged} />)
     pick([new File(['x'], 'ok.pdf', { type: 'application/pdf' })])
     await waitFor(() =>
-      expect(screen.getByText('Việc đã đóng — mở lại rồi mới thêm tệp')).toBeTruthy(),
+      expect(screen.getByText(/ok.pdf · Việc đã đóng — mở lại rồi mới thêm tệp/)).toBeTruthy(),
     )
     expect(onChanged).not.toHaveBeenCalled()
   })
