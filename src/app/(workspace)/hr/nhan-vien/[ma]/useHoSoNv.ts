@@ -1,14 +1,18 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { useLocalPref } from '@/lib/use-local-pref'
-import type {
-  HoSoNvTrang,
-  KhoiCaNhan,
-} from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
+import {
+  formTu,
+  goiHoSo,
+  kiemHoSo,
+  type FormHoSo,
+  type OHoSo,
+} from '@/lib/nhan-su/sua-ho-so'
+import type { HoSoNvTrang } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 import type { HdDong } from '@/modules/dept/hr/cham-cong/hop-dong.repo'
 import { KHOA_TAP } from '../useNhanVienDs'
 import type { Muc } from './muc'
@@ -16,16 +20,18 @@ import type { Muc } from './muc'
 export type { Muc }
 
 export type HopBd = null | 'nghi' | 'lam_lai' | 'chuyen'
+type Bao = { ok: boolean; text: string } | null
 
-/** State + thao tác của trang hồ sơ một người (B2a). */
+/**
+ * State + thao tác của trang hồ sơ một người. B4 (bản vẽ 02/11/2026 mục D): một nút "Sửa thông
+ * tin" mở cả 4 khối, lưu MỘT lần qua `[id]/thong-tin` (thay sửa theo khối). Tab Hợp đồng,
+ * Giấy tờ, Lương, Lịch sử giữ nguyên — vẫn dùng `toast`, `guiHd`, `moFile`… ở đây.
+ */
 export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
   const router = useRouter()
   const toast = useToast()
   const n = h.n
   const [muc, setMucState] = useState<Muc>(mucDau)
-  const [suaCv, setSuaCv] = useState(false)
-  // Khối của tab Cá nhân đang sửa — mỗi lúc một khối (sửa theo khối, Q2 lượt 2).
-  const [suaCn, setSuaCn] = useState<KhoiCaNhan | null>(null)
   const [cccd, setCccd] = useState<string | null>(null)
   // Hộp hợp đồng: thêm mới / sửa một HĐ / huỷ một HĐ.
   const [hopHd, setHopHd] = useState<
@@ -33,6 +39,26 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
   >(null)
   const [hop, setHop] = useState<HopBd>(null)
   const [busy, setBusy] = useState(false)
+  const [bao, setBao] = useState<Bao>(null)
+
+  // ── Sửa thông tin ──
+  const quyen = { cv: h.quyen.sua && n.active, rieng: h.quyen.rieng }
+  const suaDuoc = quyen.cv || quyen.rieng
+  const goc = useMemo(() => formTu(n, h.caNhan), [n, h.caNhan])
+  const [dangSua, setDangSua] = useState(false)
+  const [f, setF] = useState<FormHoSo>(goc)
+  const [thu, setThu] = useState(false)
+  const loi = dangSua ? kiemHoSo(f, { ...quyen, homNay: h.homNay }) : []
+  const { goi, so } = dangSua ? goiHoSo(f, goc, quyen) : { goi: {}, so: 0 }
+
+  // Rời trang khi còn ô chưa lưu → trình duyệt hỏi lại.
+  useEffect(() => {
+    if (!so) return
+    const hoi = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', hoi)
+    return () => window.removeEventListener('beforeunload', hoi)
+  }, [so])
+
   // ‹ ›: tập người xem vừa lọc ở danh sách; không có người này thì danh sách mặc định.
   const [tapRaw] = useLocalPref(KHOA_TAP, '[]', 'session')
   const tap = useMemo(() => {
@@ -46,18 +72,66 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
 
   const viTri = tap.indexOf(n.code)
   const di = (buoc: number) => {
+    if (so) {
+      setBao({ ok: false, text: `Còn ${so} ô chưa lưu — Lưu hoặc Huỷ trước` })
+      return
+    }
     const ma = tap[viTri + buoc]
     if (ma) router.push(`/hr/nhan-vien/${encodeURIComponent(ma)}`)
   }
 
   function setMuc(m: Muc) {
     setMucState(m)
-    const q = m === 'tong-quan' ? '' : `?muc=${m}`
+    const q = m === 'thong-tin' ? '' : `?muc=${m}`
     window.history.replaceState(
       null,
       '',
       `/hr/nhan-vien/${encodeURIComponent(n.code)}${q}`,
     )
+  }
+
+  /** Mở chế độ sửa (từ nút đầu trang, hoặc nút "Ghi ngày vào làm" ở Lịch sử → nhảy tới ô). */
+  function batSua(o?: OHoSo) {
+    setF(goc)
+    setThu(false)
+    setBao(null)
+    setDangSua(true)
+    setMuc('thong-tin')
+    if (o) setTimeout(() => document.getElementById(`hs-${o}`)?.focus(), 50)
+  }
+
+  const datO =
+    <K extends OHoSo>(o: K) =>
+    (v: FormHoSo[K]) =>
+      setF((x) => ({ ...x, [o]: v }))
+
+  function toi(o: OHoSo) {
+    setThu(true)
+    document.getElementById(`hs-${o}`)?.focus()
+  }
+
+  async function luuThongTin() {
+    if (busy) return
+    if (loi.length) return toi(loi[0].o)
+    if (!so) {
+      setDangSua(false)
+      return
+    }
+    setBusy(true)
+    try {
+      await api(`/api/dept/hr/cham-cong/nhan-vien/${n.id}/thong-tin`, {
+        method: 'POST',
+        body: goi,
+      })
+      setDangSua(false)
+      setCccd(null)
+      setBao({ ok: true, text: `Đã lưu ${so} ô` })
+      router.refresh()
+    } catch (e) {
+      setBao({ ok: false, text: `Chưa lưu được: ${apiErrorText(e)}` })
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function chay(viec: () => Promise<unknown>, xong: string): Promise<boolean> {
@@ -76,53 +150,6 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     }
   }
 
-  /** Lưu khối Công việc: sửa dữ liệu tại chỗ (không phải biến động chuyển tổ). */
-  async function luuCongViec(v: {
-    full_name: string
-    team: string
-    job_title: string
-    shift_id: string
-    attendance_exempt: boolean
-    ngayVao: string
-  }) {
-    const ok = await chay(async () => {
-      await api(`/api/dept/hr/cham-cong/nhan-vien/${n.id}`, {
-        method: 'PATCH',
-        body: {
-          full_name: v.full_name,
-          team: v.team,
-          job_title: v.job_title,
-          shift_id: v.shift_id,
-          attendance_exempt: v.attendance_exempt,
-        },
-      })
-      if (v.ngayVao !== (n.ngayVao ?? ''))
-        await api(`/api/dept/hr/cham-cong/nhan-vien/${n.id}/bien-dong`, {
-          method: 'POST',
-          body: { viec: 'ngay_vao', ngay: v.ngayVao || null },
-        })
-    }, `Đã lưu công việc của ${v.full_name}`)
-    if (ok) setSuaCv(false)
-    return ok
-  }
-
-  /** Lưu một khối của tab Cá nhân; chỉ gửi ô của khối đó. */
-  async function luuCaNhan(khoi: KhoiCaNhan, gia: Record<string, string | null>) {
-    const ok = await chay(
-      () =>
-        api(`/api/dept/hr/cham-cong/nhan-vien/${n.id}/ca-nhan`, {
-          method: 'POST',
-          body: { viec: 'luu', khoi, gia },
-        }),
-      'Đã lưu',
-    )
-    if (ok) {
-      setSuaCn(null)
-      setCccd(null)
-    }
-    return ok
-  }
-
   /** Hiện số CCCD thật — server ghi nhật ký người xem. */
   async function hienCccd() {
     try {
@@ -132,7 +159,7 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
       )
       setCccd(r.gia ?? '')
     } catch (e) {
-      toast.error('Không hiện được', apiErrorText(e))
+      setBao({ ok: false, text: `Không hiện được số CCCD: ${apiErrorText(e)}` })
     }
   }
 
@@ -178,20 +205,6 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     router.refresh()
   }
 
-  /** Bấm một mục "Còn thiếu": mở đúng tab + khối ở chế độ sửa. */
-  function moSua(khoi: 'cong_viec' | 'hop_dong' | KhoiCaNhan) {
-    if (khoi === 'hop_dong') {
-      setMuc('hop-dong')
-      setHopHd({ moi: true })
-    } else if (khoi === 'cong_viec') {
-      setMuc('tong-quan')
-      setSuaCv(true)
-    } else {
-      setMuc('ca-nhan')
-      setSuaCn(khoi)
-    }
-  }
-
   const bienDong = (id: string, body: Record<string, unknown>, xong: string) =>
     chay(
       () =>
@@ -204,14 +217,8 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     n,
     muc,
     setMuc,
-    suaCv,
-    setSuaCv,
-    suaCn,
-    setSuaCn,
-    luuCaNhan,
     cccd,
     hienCccd,
-    moSua,
     hopHd,
     setHopHd,
     guiHd,
@@ -222,9 +229,26 @@ export function useHoSoNv(h: HoSoNvTrang, mucDau: Muc) {
     hop,
     setHop,
     busy,
+    bao,
+    setBao,
     homNay: h.homNay,
-    luuCongViec,
     bienDong,
+    // sửa thông tin
+    quyen,
+    suaDuoc,
+    dangSua,
+    batSua,
+    huySua: () => {
+      setDangSua(false)
+      setBao(null)
+    },
+    f,
+    datO,
+    loi,
+    thu,
+    so,
+    toi,
+    luuThongTin,
     viTri,
     tongTap: tap.length,
     truoc: viTri > 0 ? () => di(-1) : undefined,

@@ -510,7 +510,7 @@ async function taiNhanVien(homNay: string, luot = true): Promise<NhanVienData> {
   }
 }
 
-const boDuoiCa = (note: string | null) =>
+export const boDuoiCa = (note: string | null) =>
   note?.includes(DUOI_CA_MAC_DINH) ? note.replace(DUOI_CA_MAC_DINH, '') || null : note
 
 /** Một lần xem "Chấm công một người" tối đa ngần này ngày (câu 16, duyệt 16/10/2026). */

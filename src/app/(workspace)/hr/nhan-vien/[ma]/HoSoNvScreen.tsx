@@ -1,165 +1,200 @@
 'use client'
 
-/**
- * HỒ SƠ MỘT NHÂN VIÊN — /hr/nhan-vien/[mã] (B2a, bản vẽ lượt 2 duyệt 19/10/2026, Q1–Q6
- * theo đề xuất). Khuôn E (chép /mua-hang/ncc/[id]): đầu trang + dải số, không vòng duyệt.
- * Câu hỏi: "Người này là ai, làm gì từ bao giờ, hồ sơ còn thiếu gì?".
- *
- * Chép: trang riêng có URL (Odoo, SuccessFactors, Dynamics, AMIS); sửa theo từng khối
- * (SuccessFactors); menu "Biến động" tách khỏi nút sửa (SuccessFactors Take Action);
- * ‹ › đi lần lượt trong tập đang lọc (Dynamics). Tab Cá nhân, Hợp đồng, Giấy tờ, Lương
- * thêm ở B2b / B3.
- */
-
-import {
-  Btn,
-  Crumb,
-  DocMenu,
-  DocMenuPanel,
-  Menu,
-  Metric,
-  MetricStrip,
-  ScreenFrame,
-  ScreenHeader,
-} from '@/components/kit'
-import { ngayVn, TEN_BIEN_DONG } from '@/lib/nhan-su/bien-dong'
-import {
-  conThieu,
-  MUC_CA_NHAN,
-  SO_MUC_HO_SO,
-  TEN_THIEU,
-  thamNien,
-  type MucThieu,
-} from '@/lib/nhan-su/ho-so'
-import { hienSdt } from '@/lib/nhan-su/ca-nhan'
-import type {
-  HoSoNvTrang,
-  KhoiCaNhan,
-} from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
+import '../ds.css'
+import './hs.css'
+import Link from 'next/link'
+import { useState } from 'react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, PencilLine } from 'lucide-react'
+import { ngayVn } from '@/lib/nhan-su/bien-dong'
+import { nhanTinhTrang } from '@/lib/nhan-su/ho-so'
+import { tinhTrangHd } from '@/lib/nhan-su/hop-dong'
+import type { HoSoNvTrang } from '@/modules/dept/hr/cham-cong/ho-so-nv.service'
 import { HopChuyen, HopLamLai, HopNghi } from '../../cham-cong/bien-dong-nv'
-import { dm } from '../../cham-cong/ky-cong.shared'
-import { Avatar, TagTinhTrang } from '../nv.shared'
+import { lop } from '../luoi-ds'
+import { useCaoKhung } from '../khung'
 import { useHoSoNv, type HoSoCtx, type Muc } from './useHoSoNv'
-import { Dong, Khoi, KhoiChamCong, KhoiCongViec, LUOI } from './khoi-cong-viec'
+import { TabThongTin } from './tab-thong-tin'
 import { TabLichSu } from './tab-lich-su'
-import { TabCaNhan } from './tab-ca-nhan'
 import { TabLuong } from './tab-luong'
 import { TabHopDong } from './tab-hop-dong'
 import { TabGiayTo } from './tab-giay-to'
-import { soNgay, tinhTrangHd } from '@/lib/nhan-su/hop-dong'
 
+/**
+ * HỒ SƠ MỘT NHÂN VIÊN — /hr/nhan-vien/[mã]. B4 (bản vẽ 02/11/2026 mục D, Q1–Q7 theo đề
+ * xuất): "Người này là ai, làm gì từ bao giờ?" trên MỘT trang Thông tin, sửa bằng MỘT nút.
+ *
+ * Viết tay, không kit (31/10/2026) — đầu trang + tab theo khung danh sách (ds.css). Bỏ dải 5 ô
+ * số (thâm niên, ngày quẹt, hợp đồng, hồ sơ x/12) và khối "Còn thiếu N mục". Tab Hợp đồng,
+ * Giấy tờ, Lương, Lịch sử và các hộp Biến động giữ nguyên (còn kit, chưa có việc chạm tới).
+ * Chép: SuccessFactors / Dynamics Edit (sửa cả trang, Lưu ở Action Pane), menu Biến động tách
+ * khỏi nút sửa (SuccessFactors Take Action), ‹ › trong tập đang lọc (Dynamics).
+ */
 export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
   const d = useHoSoNv(h, muc)
+  const khung = useCaoKhung()
   const { n } = d
-  const ca = h.cas.find((c) => c.id === n.shiftId)
-  const huy = h.bienDong.filter((b) => !b.huyLuc).length
-  const thieuCn = conThieu(n).filter((t) => MUC_CA_NHAN.includes(t)).length
+  const tt = nhanTinhTrang(n, d.homNay)
   const ttHd = n.hd ? tinhTrangHd(n.hd, d.homNay) : null
-  const hdTag =
-    ttHd === 'sap_het'
-      ? { text: 'sắp hết hạn', tone: 'warn' as const }
-      : ttHd === 'het_han'
-        ? { text: 'hết hạn', tone: 'stop' as const }
-        : !n.hd
-          ? { text: 'chưa có', tone: 'warn' as const }
-          : null
-  return (
-    <ScreenFrame tableMin={0}>
-      <Crumb
-        path={[
-          { label: 'Hồ sơ nhân viên', href: '/hr/nhan-vien' },
-          `${n.code} ${n.hoTen}`,
-        ]}
-        position={d.viTri >= 0 ? [d.viTri + 1, d.tongTap] : undefined}
-        onPrev={d.truoc}
-        onNext={d.sau}
-      />
-      <ScreenHeader
-        eyebrow="Nhân viên"
-        title={
-          <span className="flex items-center gap-3">
-            <Avatar ten={n.hoTen} boPhan={n.boPhan} lon />
-            <span>
-              <span className="num mr-2 text-[var(--ink-3)]">{n.code}</span>
-              {n.hoTen}
-            </span>
-          </span>
-        }
-        status={<TagTinhTrang n={n} homNay={d.homNay} />}
-        facts={[
-          {
-            label: 'Tổ',
-            value: n.boPhan ?? 'chưa có',
-            tone: n.boPhan ? undefined : 'warn',
-          },
-          { label: 'Chức danh', value: n.chucDanh ?? 'chưa có' },
-          { label: 'Ca', value: ca ? `${ca.ten} ${ca.gio}` : '—' },
-          { label: 'Tài khoản ERP', value: n.taiKhoan?.email ?? 'chưa có' },
-        ]}
-        actions={
-          <>
-            <Btn href={`/hr/cham-cong/nguoi/${encodeURIComponent(n.code)}`}>
-              Xem chấm công
-            </Btn>
-            <Menu label="Biến động ▾" ariaLabel="Biến động" items={mucBienDong(d)} />
-          </>
-        }
-      />
-      <DaiSo d={d} />
-      <DocMenu
-        label="Nội dung hồ sơ"
-        value={d.muc}
-        onValueChange={(m) => d.setMuc(m as Muc)}
-        items={[
-          { id: 'tong-quan', label: 'Tổng quan' },
-          {
-            id: 'ca-nhan',
-            label: 'Cá nhân',
-            ...(thieuCn
-              ? { signal: { text: `thiếu ${thieuCn}`, tone: 'warn' as const } }
-              : {}),
-          },
-          {
-            id: 'hop-dong',
-            label: 'Hợp đồng',
-            ...(hdTag ? { signal: hdTag } : {}),
-          },
-          {
-            id: 'giay-to',
-            label: 'Giấy tờ',
-            ...(h.giayTo?.length ? { signal: { text: String(h.giayTo.length) } } : {}),
-          },
-          // Lương là mật (0255): người không có quyền lương không thấy cả tên mục.
-          ...(h.quyen.luong ? [{ id: 'luong', label: 'Lương & ngân hàng' }] : []),
-          {
-            id: 'lich-su',
-            label: 'Lịch sử',
-            ...(huy ? { signal: { text: String(huy) } } : {}),
-          },
-        ]}
-      >
-        <DocMenuPanel value="tong-quan">
-          <TongQuan d={d} />
-        </DocMenuPanel>
-        <DocMenuPanel value="ca-nhan">
-          <TabCaNhan d={d} />
-        </DocMenuPanel>
-        <DocMenuPanel value="hop-dong">
-          <TabHopDong d={d} />
-        </DocMenuPanel>
-        <DocMenuPanel value="giay-to">
-          <TabGiayTo d={d} />
-        </DocMenuPanel>
-        {h.quyen.luong && (
-          <DocMenuPanel value="luong">
-            <TabLuong d={d} />
-          </DocMenuPanel>
-        )}
-        <DocMenuPanel value="lich-su">
-          <TabLichSu d={d} />
-        </DocMenuPanel>
-      </DocMenu>
+  const huy = h.bienDong.filter((b) => !b.huyLuc).length
+  const why = d.dangSua ? 'Đang sửa thông tin — Lưu hoặc Huỷ trước' : null
 
+  const tabs: { id: Muc; ten: string; dem?: string; w?: boolean }[] = [
+    { id: 'thong-tin', ten: 'Thông tin' },
+    { id: 'lich-su', ten: 'Lịch sử', dem: huy ? String(huy) : undefined },
+    {
+      id: 'hop-dong',
+      ten: 'Hợp đồng',
+      ...(ttHd === 'sap_het' || ttHd === 'het_han'
+        ? { dem: ttHd === 'het_han' ? 'hết hạn' : 'sắp hết', w: true }
+        : {}),
+    },
+    {
+      id: 'giay-to',
+      ten: 'Giấy tờ',
+      dem: h.giayTo?.length ? String(h.giayTo.length) : undefined,
+    },
+    // Lương là mật (0255): người không có quyền lương không thấy cả tên mục.
+    ...(h.quyen.luong ? [{ id: 'luong' as const, ten: 'Lương & ngân hàng' }] : []),
+  ]
+
+  return (
+    <div {...khung} className="ns">
+      <div className="ns-ph">
+        <span className="crumb">
+          <Link href="/hr/nhan-vien">Hồ sơ nhân viên</Link>
+          {n.boPhan && ` › ${n.boPhan}`} ›
+        </span>
+        <h1>
+          <span className="num ma">{n.code}</span>
+          {n.hoTen}
+        </h1>
+        {tt.kieu !== 'dang_lam' && (
+          <span className={lop('ns-pill', tt.kieu === 'da_nghi' ? 'g' : 'w')}>
+            {tt.kieu === 'da_nghi'
+              ? tt.ngay
+                ? `nghỉ từ ${ngayVn(tt.ngay)}`
+                : 'đã nghỉ'
+              : tt.kieu === 'sap_nghi'
+                ? `làm tới ${ngayVn(tt.ngay)}`
+                : tt.kieu === 'chua_vao'
+                  ? `vào ${ngayVn(tt.ngay)}`
+                  : tt.kieu === 'vang'
+                    ? `vắng ${tt.ngay} ngày`
+                    : `mới · ${tt.ngay} ngày`}
+          </span>
+        )}
+        {d.viTri >= 0 && (
+          <span className="pager" aria-label="Người trước / sau trong danh sách đang lọc">
+            <button
+              type="button"
+              aria-label="Người trước"
+              disabled={!d.truoc}
+              onClick={d.truoc}
+            >
+              <ChevronLeft className="ico" aria-hidden />
+            </button>
+            <span className="num">
+              {d.viTri + 1} / {d.tongTap}
+            </span>
+            <button
+              type="button"
+              aria-label="Người sau"
+              disabled={!d.sau}
+              onClick={d.sau}
+            >
+              <ChevronRight className="ico" aria-hidden />
+            </button>
+          </span>
+        )}
+        <div className="ns-ap" role="toolbar" aria-label="Thao tác">
+          {d.dangSua ? (
+            <div>
+              <button
+                type="button"
+                className="ns-btn p"
+                aria-disabled={d.busy || d.loi.length ? 'true' : undefined}
+                title={d.loi[0]?.loi}
+                onClick={d.luuThongTin}
+              >
+                <Check className="ico" aria-hidden />
+                {d.busy ? 'Đang lưu…' : d.so ? `Lưu ${d.so} ô` : 'Xong'}
+              </button>
+              <button type="button" className="ns-btn" onClick={d.huySua}>
+                Huỷ
+              </button>
+            </div>
+          ) : (
+            <div>
+              <button
+                type="button"
+                className="ns-btn p"
+                aria-disabled={d.suaDuoc ? undefined : 'true'}
+                title={d.suaDuoc ? undefined : 'Phòng Nhân sự giữ quyền sửa hồ sơ'}
+                onClick={() =>
+                  d.suaDuoc
+                    ? d.batSua()
+                    : d.setBao({ ok: false, text: 'Phòng Nhân sự giữ quyền sửa hồ sơ' })
+                }
+              >
+                <PencilLine className="ico" aria-hidden />
+                Sửa thông tin
+              </button>
+            </div>
+          )}
+          <div>
+            <MenuBienDong d={d} why={why} />
+            <Link
+              className="ns-btn"
+              href={`/hr/cham-cong/nguoi/${encodeURIComponent(n.code)}`}
+            >
+              Chấm công
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {(d.bao || (d.dangSua && d.thu && d.loi[0])) && (
+        <div
+          className={lop(
+            'hs-bao',
+            d.dangSua && d.thu && d.loi[0] ? 'loi' : d.bao?.ok ? 'ok' : 'loi',
+          )}
+        >
+          {d.dangSua && d.thu && d.loi[0] ? (
+            <button type="button" className="ns-lnk" onClick={() => d.toi(d.loi[0].o)}>
+              {d.loi.length} ô sai: {d.loi[0].loi} — bấm để tới ô
+            </button>
+          ) : (
+            d.bao?.text
+          )}
+        </div>
+      )}
+
+      <div className="ns-tabs" role="tablist" aria-label="Nội dung hồ sơ">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            className="ns-tab"
+            aria-selected={d.muc === t.id}
+            onClick={() => d.setMuc(t.id)}
+          >
+            {t.ten}
+            {t.dem && <span className={lop('n', t.w && 'w')}>{t.dem}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="hs-than">
+        {d.muc === 'thong-tin' && <TabThongTin d={d} />}
+        {d.muc === 'lich-su' && <TabLichSu d={d} />}
+        {d.muc === 'hop-dong' && <TabHopDong d={d} />}
+        {d.muc === 'giay-to' && <TabGiayTo d={d} />}
+        {d.muc === 'luong' && h.quyen.luong && <TabLuong d={d} />}
+      </div>
+
+      {/* Hộp Chuyển tổ / chức danh gợi ý theo hai danh sách này. */}
       <datalist id="hr-bo-phan">
         {h.boPhan.map((b) => (
           <option key={b} value={b} />
@@ -173,256 +208,82 @@ export function HoSoNvScreen({ h, muc }: { h: HoSoNvTrang; muc: Muc }) {
       {d.hop === 'nghi' && <HopNghi v={d} n={n} dong={() => d.setHop(null)} />}
       {d.hop === 'lam_lai' && <HopLamLai v={d} n={n} dong={() => d.setHop(null)} />}
       {d.hop === 'chuyen' && <HopChuyen v={d} n={n} dong={() => d.setHop(null)} />}
-    </ScreenFrame>
-  )
-}
-
-/** Các mục menu Biến động — mục không áp dụng thì khoá và NÓI vì sao. */
-function mucBienDong(d: HoSoCtx) {
-  const { n } = d
-  const quyen = d.h.quyen.sua ? undefined : 'Phòng Nhân sự'
-  const daNghi = !n.active
-  const coNgay = !!n.ngayCuoi
-  return [
-    {
-      label: 'Chuyển tổ / chức danh',
-      blockedBy: quyen,
-      why: daNghi ? 'Đã nghỉ việc — đi làm lại trước' : undefined,
-      onClick: () => d.setHop('chuyen'),
-    },
-    {
-      label: 'Cho nghỉ việc',
-      blockedBy: quyen,
-      why: daNghi
-        ? 'Đã nghỉ việc'
-        : coNgay
-          ? `Đã có ngày làm cuối ${ngayVn(n.ngayCuoi)} — huỷ trước nếu ghi nhầm`
-          : undefined,
-      onClick: () => d.setHop('nghi'),
-    },
-    {
-      label: 'Huỷ cho nghỉ',
-      blockedBy: quyen,
-      why: coNgay ? undefined : 'Chưa có ngày làm cuối để huỷ',
-      onClick: () => d.bienDong(n.id, { viec: 'huy_nghi' }, `Đã huỷ cho nghỉ ${n.hoTen}`),
-    },
-    {
-      label: 'Đi làm lại',
-      blockedBy: quyen,
-      why: daNghi ? undefined : 'Đang làm — chỉ dùng khi đã nghỉ',
-      onClick: () => d.setHop('lam_lai'),
-    },
-  ]
-}
-
-/** Dải số đầu hồ sơ — mỗi ô có mẫu số; chưa đo được thì nói chưa đo được. */
-function DaiSo({ d }: { d: HoSoCtx }) {
-  const { n, h } = d
-  const thieu = conThieu(n)
-  const tn = thamNien(n.ngayVao, d.homNay)
-  const tt = n.hd ? tinhTrangHd(n.hd, d.homNay) : null
-  const kyVn = `${h.ky.thang.slice(5)}/${h.ky.thang.slice(0, 4)}`
-  return (
-    <MetricStrip>
-      <Metric
-        label="Thâm niên"
-        value={tn}
-        basis={n.ngayVao ? `từ ${ngayVn(n.ngayVao)}` : 'chưa có ngày vào làm'}
-      />
-      <Metric
-        label={`Ngày có quẹt · kỳ ${kyVn}`}
-        value={h.ky.coQuet == null ? null : String(h.ky.coQuet)}
-        basis={
-          n.khongChamCong
-            ? 'không chấm công'
-            : `trên ${h.ky.daLay} ngày đã lấy dữ liệu, ${dm(h.ky.tu)} – ${dm(h.ky.den < d.homNay ? h.ky.den : d.homNay)}`
-        }
-      />
-      <Metric
-        label="Quẹt gần nhất"
-        value={n.lanCuoi ? dm(n.lanCuoi) : null}
-        basis={n.khongChamCong ? 'không chấm công' : 'trong 45 ngày gần nhất'}
-      />
-      <Metric
-        label="Hợp đồng"
-        value={
-          !n.hd
-            ? null
-            : !n.hd.denNgay
-              ? 'không thời hạn'
-              : tt === 'het_han'
-                ? `hết ${ngayVn(n.hd.denNgay)}`
-                : `còn ${soNgay(d.homNay, n.hd.denNgay)} ngày`
-        }
-        basis={
-          !n.hd
-            ? 'chưa có hợp đồng nào'
-            : n.hd.denNgay
-              ? `đến ${ngayVn(n.hd.denNgay)}`
-              : `từ ${ngayVn(n.hd.tuNgay)}`
-        }
-        tone={tt === 'het_han' ? 'stop' : tt === 'sap_het' ? 'warn' : undefined}
-      />
-      <Metric
-        label="Hồ sơ"
-        value={`${SO_MUC_HO_SO - thieu.length}/${SO_MUC_HO_SO}`}
-        basis="mục sổ quản lý lao động"
-        tone={thieu.length ? 'warn' : 'done'}
-      />
-    </MetricStrip>
-  )
-}
-
-function TongQuan({ d }: { d: HoSoCtx }) {
-  const { n, h } = d
-  const thieu = conThieu(n)
-  const ganDay = h.bienDong.slice(0, 3)
-  const duocSua = (t: MucThieu) =>
-    KHOI_CUA[t] === 'cong_viec' ? h.quyen.sua && n.active : h.quyen.rieng
-  return (
-    <div className="flex min-h-0">
-      <div className="min-w-0 flex-1">
-        <KhoiCongViec d={d} />
-        <KhoiLienHe d={d} />
-        <KhoiChamCong d={d} />
-      </div>
-      <aside
-        aria-label="Tóm tắt"
-        className="text-k-sm w-[290px] shrink-0 border-l border-[var(--line)] px-3.5 py-2.5 text-[var(--ink-2)]"
-      >
-        <h2 className="text-k-label mb-1.5 font-semibold tracking-[.05em] text-[var(--ink-3)] uppercase">
-          {thieu.length ? `Còn thiếu ${thieu.length} mục` : 'Hồ sơ đủ'}
-        </h2>
-        {thieu.length ? (
-          <ul className="space-y-1">
-            {thieu.map((t) => (
-              <li key={t}>
-                {t === 'ma_may' ? (
-                  <a
-                    href="/hr/cham-cong/ma-may"
-                    className="text-[var(--act-text)] underline"
-                  >
-                    {TEN_THIEU[t]}
-                  </a>
-                ) : duocSua(t) ? (
-                  <button
-                    type="button"
-                    className="text-left text-[var(--act-text)] underline"
-                    onClick={() => d.moSua(KHOI_CUA[t])}
-                  >
-                    {TEN_THIEU[t]}
-                  </button>
-                ) : (
-                  TEN_THIEU[t]
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>Đủ {SO_MUC_HO_SO} mục đang theo dõi.</p>
-        )}
-        <p className="text-k-label mt-1.5 text-[var(--ink-3)]">
-          Hợp đồng, giấy tờ thêm ở bước sau. Bấm một mục để mở đúng khối.
-        </p>
-
-        <h2 className="text-k-label mt-4 mb-1.5 border-t border-[var(--line-faint)] pt-3 font-semibold tracking-[.05em] text-[var(--ink-3)] uppercase">
-          Biến động gần nhất
-        </h2>
-        {ganDay.length ? (
-          <ul className="space-y-1.5">
-            {ganDay.map((b) => (
-              <li key={b.id} className={b.huyLuc ? 'line-through opacity-70' : ''}>
-                <span className="num mr-1.5">{ngayVn(b.ngay)}</span>
-                {TEN_BIEN_DONG[b.loai]}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[var(--ink-3)]">Chưa có — có từ trước khi ghi biến động.</p>
-        )}
-        {h.bienDong.length > 3 && (
-          <button
-            type="button"
-            className="text-k-label mt-1 text-[var(--act-text)] underline"
-            onClick={() => d.setMuc('lich-su')}
-          >
-            Xem cả {h.bienDong.length}
-          </button>
-        )}
-
-        <h2 className="text-k-label mt-4 mb-1.5 border-t border-[var(--line-faint)] pt-3 font-semibold tracking-[.05em] text-[var(--ink-3)] uppercase">
-          Tài khoản ERP
-        </h2>
-        {n.taiKhoan ? (
-          <p>
-            <span className="num">{n.taiKhoan.email}</span>
-            {!n.taiKhoan.mo && <span className="text-[var(--stop)]"> · đã khoá</span>}
-          </p>
-        ) : (
-          <p>Chưa có. Admin cấp ở Admin › Nhân viên &amp; tài khoản.</p>
-        )}
-      </aside>
     </div>
   )
 }
 
-/** Mục thiếu → khối mở để sửa. */
-const KHOI_CUA: Record<
-  Exclude<MucThieu, 'ma_may'>,
-  'cong_viec' | 'hop_dong' | KhoiCaNhan
-> & {
-  ma_may: 'cong_viec'
-} = {
-  ho_ten: 'cong_viec',
-  to: 'cong_viec',
-  chuc_danh: 'cong_viec',
-  ngay_vao: 'cong_viec',
-  ma_may: 'cong_viec',
-  ngay_sinh: 'ca_nhan',
-  trinh_do: 'ca_nhan',
-  cccd: 'dinh_danh',
-  dia_chi: 'dinh_danh',
-  dien_thoai: 'lien_he',
-  khan_cap: 'lien_he',
-  hop_dong: 'hop_dong',
-}
-
-/** Liên hệ trên Tổng quan — chỉ xem; sửa ở tab Cá nhân. Không có quyền thì không hiện số. */
-function KhoiLienHe({ d }: { d: HoSoCtx }) {
-  const c = d.h.caNhan
+/** Menu Biến động — mục không áp dụng thì khoá và NÓI vì sao ngay trong menu. */
+function MenuBienDong({ d, why }: { d: HoSoCtx; why: string | null }) {
+  const [mo, setMo] = useState(false)
+  const { n } = d
+  const quyen = d.h.quyen.sua ? null : 'Phòng Nhân sự giữ quyền'
+  const daNghi = !n.active
+  const coNgay = !!n.ngayCuoi
+  const muc: { ten: string; why: string | null; lam: () => void }[] = [
+    {
+      ten: 'Chuyển tổ / chức danh',
+      why: quyen ?? (daNghi ? 'Đã nghỉ việc — đi làm lại trước' : null),
+      lam: () => d.setHop('chuyen'),
+    },
+    {
+      ten: 'Cho nghỉ việc',
+      why:
+        quyen ??
+        (daNghi
+          ? 'Đã nghỉ việc'
+          : coNgay
+            ? `Đã có ngày làm cuối ${ngayVn(n.ngayCuoi)} — huỷ trước nếu ghi nhầm`
+            : null),
+      lam: () => d.setHop('nghi'),
+    },
+    {
+      ten: 'Huỷ cho nghỉ',
+      why: quyen ?? (coNgay ? null : 'Chưa có ngày làm cuối để huỷ'),
+      lam: () => d.bienDong(n.id, { viec: 'huy_nghi' }, `Đã huỷ cho nghỉ ${n.hoTen}`),
+    },
+    {
+      ten: 'Đi làm lại',
+      why: quyen ?? (daNghi ? null : 'Đang làm — chỉ dùng khi đã nghỉ'),
+      lam: () => d.setHop('lam_lai'),
+    },
+  ]
   return (
-    <Khoi ten="Liên hệ" sua={!!c && d.h.quyen.rieng} onSua={() => d.moSua('lien_he')}>
-      {c ? (
-        <div className={LUOI}>
-          <Dong nhan="Điện thoại">
-            {c.dienThoai ? (
-              <span className="num">{hienSdt(c.dienThoai)}</span>
-            ) : (
-              <span className="text-[var(--warn)]">chưa có</span>
-            )}
-          </Dong>
-          <Dong nhan="Thường trú">
-            {c.thuongTru ?? <span className="text-[var(--warn)]">chưa có</span>}
-          </Dong>
-          <Dong nhan="Liên hệ khẩn cấp">
-            {c.khanCapTen ? (
-              <span>
-                {c.khanCapTen}
-                {c.khanCapQuanHe ? ` (${c.khanCapQuanHe})` : ''}
-                {c.khanCapSdt && (
-                  <span className="num ml-1.5">{hienSdt(c.khanCapSdt)}</span>
-                )}
-              </span>
-            ) : (
-              <span className="text-[var(--warn)]">chưa có</span>
-            )}
-          </Dong>
-        </div>
-      ) : (
-        <p className="text-k-sm text-[var(--ink-3)]">
-          Chỉ Phòng Nhân sự và Ban Giám đốc xem được số điện thoại, địa chỉ.
-        </p>
+    <span
+      className="hs-menu"
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setMo(false)}
+    >
+      <button
+        type="button"
+        className="ns-btn"
+        aria-haspopup="menu"
+        aria-expanded={mo}
+        aria-disabled={why ? 'true' : undefined}
+        title={why ?? undefined}
+        onClick={() => (why ? d.setBao({ ok: false, text: why }) : setMo(!mo))}
+      >
+        Biến động
+        <ChevronDown className="ico" aria-hidden />
+      </button>
+      {mo && (
+        <span className="ds" role="menu">
+          {muc.map((m) => (
+            <button
+              key={m.ten}
+              type="button"
+              role="menuitem"
+              aria-disabled={m.why ? 'true' : undefined}
+              onClick={() => {
+                if (m.why) return
+                setMo(false)
+                m.lam()
+              }}
+            >
+              {m.ten}
+              {m.why && <small>{m.why}</small>}
+            </button>
+          ))}
+        </span>
       )}
-    </Khoi>
+    </span>
   )
 }

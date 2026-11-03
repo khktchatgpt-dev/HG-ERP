@@ -37,6 +37,8 @@ export type CaNhan = {
   trinhDo: string | null
   /** Số CCCD đã che ("•••• 8123"); số thật chỉ trả khi bấm Hiện (ghi nhật ký). */
   cccdChe: string | null
+  /** Mã số thuế đã che — gõ số mới là thay, như CCCD. */
+  mstChe: string | null
   ngayCap: string | null
   noiCap: string | null
   thuongTru: string | null

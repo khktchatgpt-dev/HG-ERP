@@ -5,7 +5,10 @@ import { MUC, type Muc } from './muc'
 
 export const metadata = { title: 'Hồ sơ nhân viên' }
 
-/** /hr/nhan-vien/[mã]?muc=ca-nhan|luong|lich-su — link gửi được, mở đúng mục (B2a/B2b). */
+/**
+ * /hr/nhan-vien/[mã]?muc=lich-su|hop-dong|giay-to|luong — link gửi được, mở đúng mục. Link cũ
+ * ?muc=tong-quan / ca-nhan (trước B4) rơi về Thông tin.
+ */
 export default async function HoSoNvPage({
   params,
   searchParams,
@@ -21,10 +24,10 @@ export default async function HoSoNvPage({
       key={h.n.id}
       h={h}
       muc={
-        // Lương là mật (0255): không có quyền lương thì ?muc=luong rơi về Tổng quan.
+        // Lương là mật (0255): không có quyền lương thì ?muc=luong rơi về Thông tin.
         MUC.includes(sp.muc as Muc) && (sp.muc !== 'luong' || h.quyen.luong)
           ? (sp.muc as Muc)
-          : 'tong-quan'
+          : 'thong-tin'
       }
     />
   )

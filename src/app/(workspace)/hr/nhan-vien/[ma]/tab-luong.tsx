@@ -1,8 +1,8 @@
 'use client'
 
 import { Btn, Empty } from '@/components/kit'
-import { KhoaRieng } from './tab-ca-nhan'
-import { Dong, Khoi, LUOI } from './khoi-cong-viec'
+import { KhoaRieng } from './khoa-rieng'
+import { Dong, Khoi, LUOI } from './khoi'
 import type { HoSoCtx } from './useHoSoNv'
 
 const tien = (n: number | null) => (n == null ? '—' : n.toLocaleString('vi-VN'))

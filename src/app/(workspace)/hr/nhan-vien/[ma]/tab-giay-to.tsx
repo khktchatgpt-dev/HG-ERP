@@ -13,7 +13,7 @@ import {
 } from '@/lib/file-limits'
 import type { GiayTo } from '@/modules/dept/hr/cham-cong/hop-dong.service'
 import { TD, TH } from '../nv.shared'
-import { KhoaRieng } from './tab-ca-nhan'
+import { KhoaRieng } from './khoa-rieng'
 import type { HoSoCtx } from './useHoSoNv'
 
 type LoaiGt = (typeof HR_DOC_TYPES)[number]

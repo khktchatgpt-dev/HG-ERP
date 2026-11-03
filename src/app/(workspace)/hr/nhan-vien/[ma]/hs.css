@@ -1,0 +1,266 @@
+/*
+ * HỒ SƠ MỘT NHÂN VIÊN (B4, bản vẽ 02/11/2026 mục D) — phần riêng của trang hồ sơ, dựng trên khung
+ * danh sách (`../ds.css`: .ns, .ns-ph, .ns-ap, .ns-btn, .ns-tabs). Không kit. Tab Hợp đồng /
+ * Giấy tờ / Lương / Lịch sử còn kit nên vùng thân không đặt cỡ chữ đè lên chúng.
+ */
+.ns.ns .ns-ph .crumb a {
+  color: var(--ns-ink3);
+  text-decoration: none;
+}
+.ns.ns .ns-ph .crumb a:hover {
+  color: var(--ns-act);
+  text-decoration: underline;
+}
+.ns.ns .ns-ph h1 .ma {
+  margin-right: 6px;
+  color: var(--ns-ink3);
+  font-weight: 600;
+}
+.ns.ns .ns-ph .pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ns-ink3);
+}
+.ns.ns .ns-ph .pager button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ns-line);
+  background: var(--ns-card);
+  color: var(--ns-ink2);
+  cursor: pointer;
+}
+.ns.ns .ns-ph .pager button:disabled {
+  color: var(--ns-empty);
+  cursor: not-allowed;
+}
+.ns.ns .ns-tab .n.w {
+  color: var(--ns-warn);
+}
+
+/* câu báo dưới đầu trang (đã lưu / chưa lưu được / ô sai bấm để tới) */
+.ns.ns .hs-bao {
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--ns-line);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.ns.ns .hs-bao.ok {
+  background: #eef7f1;
+  color: var(--ns-done);
+}
+.ns.ns .hs-bao.loi {
+  background: #fbe9e7;
+  color: var(--ns-stop);
+}
+.ns.ns .hs-bao.loi .ns-lnk {
+  color: var(--ns-stop);
+}
+
+/* menu Biến động */
+.ns.ns .hs-menu {
+  position: relative;
+  display: inline-flex;
+}
+.ns.ns .hs-menu .ds {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  border: 1px solid var(--ns-line);
+  background: var(--ns-card);
+  box-shadow: 0 4px 12px rgba(18, 22, 31, 0.12);
+}
+.ns.ns .hs-menu .ds button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ns-hair);
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--ns-ink);
+  cursor: pointer;
+}
+.ns.ns .hs-menu .ds button:last-child {
+  border-bottom: 0;
+}
+.ns.ns .hs-menu .ds button:hover:not([aria-disabled='true']) {
+  background: var(--ns-act-wash);
+}
+.ns.ns .hs-menu .ds button[aria-disabled='true'] {
+  color: #8f98a7;
+  cursor: not-allowed;
+}
+.ns.ns .hs-menu .ds small {
+  font-size: 11.5px;
+  color: var(--ns-ink3);
+}
+
+/* thân: vùng cuộn duy nhất */
+.ns.ns .hs-than {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ── Tab Thông tin: 4 khối, 2 cột, nhãn – giá trị ── */
+.ns.ns .hs-tt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.ns.ns .hs-tt > section {
+  min-width: 0;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--ns-hair);
+}
+.ns.ns .hs-tt > section:nth-child(odd) {
+  border-right: 1px solid var(--ns-hair);
+}
+.ns.ns .hs-tt h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ns-ink3);
+}
+.ns.ns .hs-tt h4 .note {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ns-ink3);
+}
+.ns.ns .hs-tt dl {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.ns.ns .hs-tt dt {
+  color: var(--ns-ink3);
+}
+.ns.ns .hs-tt dt i {
+  margin-left: 2px;
+  color: var(--ns-stop);
+  font-style: normal;
+}
+.ns.ns .hs-tt dt label {
+  cursor: pointer;
+}
+.ns.ns .hs-tt dd {
+  margin: 0;
+  min-width: 0;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  overflow-wrap: anywhere;
+}
+.ns.ns .hs-tt .mut {
+  color: var(--ns-ink3);
+}
+.ns.ns .hs-tt .warn {
+  color: var(--ns-warn);
+  font-size: 12px;
+}
+.ns.ns .hs-tt .lk {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ns-act);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ns.ns .hs-tt dd.o input,
+.ns.ns .hs-tt dd select {
+  width: 100%;
+  max-width: 320px;
+  height: 26px;
+  border: 1px solid var(--ns-line);
+  border-radius: 0;
+  background: var(--ns-card);
+  padding: 0 7px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ns-ink);
+}
+.ns.ns .hs-tt dd.o input.m {
+  font-family: var(--ns-mono);
+}
+.ns.ns .hs-tt dd.o input::placeholder {
+  color: var(--ns-empty);
+}
+.ns.ns .hs-tt dd.o input:focus-visible,
+.ns.ns .hs-tt dd select:focus-visible,
+.ns.ns .hs-tt button:focus-visible {
+  outline: 2px solid var(--ns-act);
+  outline-offset: -1px;
+}
+.ns.ns .hs-tt dd.sai input {
+  border-color: var(--ns-stop);
+  background: #fbe9e7;
+}
+.ns.ns .hs-tt dd .loi {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ns-stop);
+}
+.ns.ns .hs-tt .seg2 {
+  display: inline-flex;
+  border: 1px solid var(--ns-line);
+}
+.ns.ns .hs-tt .seg2 button {
+  height: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--ns-line);
+  background: var(--ns-card);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ns-ink2);
+  cursor: pointer;
+}
+.ns.ns .hs-tt .seg2 button:last-child {
+  border-right: 0;
+}
+.ns.ns .hs-tt .seg2 button[aria-pressed='true'] {
+  background: var(--ns-act-wash);
+  color: var(--ns-act);
+  font-weight: 600;
+}
+.ns.ns .hs-tt > section.khoa {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ns-ink2);
+  font-size: 12.5px;
+  background: var(--ns-raised);
+}
+@media (max-width: 900px) {
+  .ns.ns .hs-tt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ns.ns .hs-tt > section:nth-child(odd) {
+    border-right: 0;
+  }
+}

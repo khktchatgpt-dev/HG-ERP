@@ -25,14 +25,17 @@ const CHON = Object.keys(COT_CA_NHAN).join(', ')
 
 /** Thông tin cá nhân trong bảng riêng tư (0245 / 0249). Chỉ service có quyền gọi tới. */
 export const caNhanRepo = {
-  async cua(employeeId: string): Promise<DongCaNhan | null> {
+  /** Một người — kèm MST (hồ sơ một người bày MST che, B4 bản vẽ 02/11/2026). */
+  async cua(
+    employeeId: string,
+  ): Promise<(DongCaNhan & { tax_code: string | null }) | null> {
     const { data, error } = await db()
       .from('hr_employee_private')
-      .select(CHON)
+      .select(`tax_code, ${CHON}`)
       .eq('employee_id', employeeId)
       .maybeSingle()
     if (error) throw new Error(error.message)
-    return (data as unknown as DongCaNhan | null) ?? null
+    return (data as unknown as (DongCaNhan & { tax_code: string | null }) | null) ?? null
   },
 
   /** Cờ có / chưa có cho mọi người — không trả giá trị nào ra khỏi hàm. */

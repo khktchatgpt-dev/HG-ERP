@@ -28,6 +28,7 @@ import {
 } from '@/lib/nhan-su/ca-nhan'
 import { banHieuLuc, che, TEN_CACH_TRA, type CachTra } from '@/lib/luong/ho-so-luong'
 import {
+  boDuoiCa,
   chamCongService,
   NV_NHIN_LAI_NGAY,
   toVn,
@@ -35,6 +36,7 @@ import {
   type NvDong,
 } from './cham-cong.service'
 import { chamCongRepo } from './cham-cong.repo'
+import { bienDongService } from './bien-dong.service'
 import { bienDongRepo, type BienDongDong } from './bien-dong.repo'
 import { caNhanRepo, COT_CA_NHAN, type CotCaNhan, type DongCaNhan } from './ca-nhan.repo'
 import { hopDongRepo, type HdDong } from './hop-dong.repo'
@@ -115,7 +117,7 @@ export type HoSoNvTrang = {
   quyen: { sua: boolean; rieng: boolean; luong: boolean; luongSua: boolean }
 }
 
-function doiCaNhan(r: DongCaNhan | null): CaNhan {
+function doiCaNhan(r: (DongCaNhan & { tax_code?: string | null }) | null): CaNhan {
   return {
     ngaySinh: r?.birth_date ?? null,
     gioiTinh: (r?.gender as GioiTinh | null) ?? null,
@@ -123,6 +125,7 @@ function doiCaNhan(r: DongCaNhan | null): CaNhan {
     queQuan: r?.hometown ?? null,
     trinhDo: r?.education ?? null,
     cccdChe: cheCccd(r?.national_id ?? null),
+    mstChe: cheCccd(r?.tax_code ?? null),
     ngayCap: r?.id_issue_date ?? null,
     noiCap: r?.id_issue_place ?? null,
     thuongTru: r?.permanent_address ?? null,
@@ -168,23 +171,28 @@ async function tomLuong(employeeId: string, thang: string): Promise<TomLuong> {
   }
 }
 
-/** Ô thuộc từng khối của tab Cá nhân — lưu khối nào chỉ chạm ô của khối đó. */
-export const KHOI_CA_NHAN = {
-  ca_nhan: ['birth_date', 'gender', 'nationality', 'hometown', 'education'],
-  dinh_danh: [
-    'national_id',
-    'id_issue_date',
-    'id_issue_place',
-    'permanent_address',
-    'current_address',
-  ],
-  lien_he: ['phone', 'emergency_name', 'emergency_relation', 'emergency_phone'],
-} as const satisfies Record<string, readonly CotCaNhan[]>
-export type KhoiCaNhan = keyof typeof KHOI_CA_NHAN
-const TEN_KHOI: Record<KhoiCaNhan, string> = {
-  ca_nhan: 'Cá nhân',
-  dinh_danh: 'Định danh & địa chỉ',
-  lien_he: 'Liên hệ',
+/** Ô công việc sửa được trên trang Thông tin (ngày vào đi riêng qua biến động). */
+const TEN_CV = {
+  full_name: 'Họ tên',
+  team: 'Bộ phận',
+  job_title: 'Chức vụ',
+  shift_id: 'Ca thường làm',
+  attendance_exempt: 'Chấm công',
+  note: 'Ghi chú',
+} as const
+
+/** Gói lưu trang Thông tin (B4): chỉ ô đã đổi; `ca_nhan` theo tên cột hr_employee_private. */
+export type ThongTinSua = {
+  cong_viec?: Partial<{
+    full_name: string
+    team: string | null
+    job_title: string | null
+    shift_id: string
+    attendance_exempt: boolean
+    hire_date: string | null
+    note: string | null
+  }>
+  ca_nhan?: Partial<Record<CotCaNhan | 'tax_code', string | null>>
 }
 
 /** Ngày quẹt gần nhất trong 45 ngày — chỉ đọc lượt của người này (đúng cặp máy · mã). */
@@ -436,25 +444,44 @@ export const hoSoNvService = {
   },
 
   /**
-   * Lưu một khối của tab Cá nhân. Số CCCD bỏ trống = giữ số cũ (ô sửa không hiện số thật).
-   * Ghi biến động 'edit' kèm TÊN ô đổi — không ghi giá trị.
+   * Lưu cả trang Thông tin một lần (B4, bản vẽ 02/11/2026 mục D — thay 3 nút sửa theo khối).
+   * Chỉ nhận ô ĐÃ ĐỔI. Kiểm hết rồi mới ghi; ngày vào ghi trước (kiểm kỳ đã chốt — ném thì
+   * chưa có gì được ghi). Một vết 'edit' "Sửa hồ sơ: <tên ô>" — không ghi giá trị.
+   * Ô che (CCCD, MST) bỏ trống = giữ số cũ, như ô sửa cũ.
    */
-  async luuCaNhan(
-    user: User,
-    employeeId: string,
-    khoi: KhoiCaNhan,
-    v: Partial<Record<CotCaNhan, string | null>>,
-  ): Promise<void> {
-    await assertAction(user, XEM_RIENG)
-    const cu = await caNhanRepo.cua(employeeId)
-    const patch: Partial<DongCaNhan> = {}
-    for (const cot of KHOI_CA_NHAN[khoi] as readonly CotCaNhan[]) {
-      if (!(cot in v)) continue
-      let gia = v[cot]?.trim() || null
-      if (cot === 'national_id') {
+  async luuThongTin(user: User, id: string, v: ThongTinSua): Promise<{ doi: string[] }> {
+    const cv = v.cong_viec ?? {}
+    const cn = v.ca_nhan ?? {}
+    if (Object.keys(cv).length) await assertAction(user, 'hr.attendance.employee_edit')
+    if (Object.keys(cn).length) await assertAction(user, XEM_RIENG)
+    const e = (await chamCongRepo.employees()).find((x) => x.id === id)
+    if (!e) throw NotFound('Không tìm thấy nhân viên')
+    if (Object.keys(cv).length && !e.active)
+      throw BadRequest(
+        'Người này đã nghỉ — Biến động › Đi làm lại trước khi sửa công việc',
+      )
+
+    const cu = Object.keys(cn).length ? await caNhanRepo.cua(id) : null
+    const patchCn: Partial<Record<CotCaNhan | 'tax_code', string | null>> = {}
+    for (const [cot, tho] of Object.entries(cn) as [
+      CotCaNhan | 'tax_code',
+      string | null,
+    ][]) {
+      let gia = tho?.trim() || null
+      if (cot === 'national_id' || cot === 'tax_code') {
         if (gia == null) continue
-        const c = chuanCccd(gia)
-        if (c === undefined) throw BadRequest('Số CCCD có 12 chữ số (CMND cũ 9 chữ số)')
+        const c =
+          cot === 'national_id'
+            ? chuanCccd(gia)
+            : /^\d{10}(\d{2,3})?$/.test(gia.replace(/[\s.-]/g, ''))
+              ? gia.replace(/[\s.-]/g, '')
+              : undefined
+        if (!c)
+          throw BadRequest(
+            cot === 'national_id'
+              ? 'Số CCCD có 12 chữ số (CMND cũ 9 chữ số)'
+              : 'Mã số thuế có 10 hoặc 13 chữ số',
+          )
         gia = c
       }
       if (cot === 'phone' || cot === 'emergency_phone') {
@@ -467,21 +494,48 @@ export const hoSoNvService = {
       }
       if (cot === 'gender' && gia != null && gia !== 'male' && gia !== 'female')
         throw BadRequest('Giới tính không hợp lệ')
-      if (cot === 'birth_date' && gia && gia > todayVn())
-        throw BadRequest('Ngày sinh sau hôm nay')
-      if ((cu?.[cot] ?? null) !== gia) patch[cot] = gia
+      if ((cot === 'birth_date' || cot === 'id_issue_date') && gia) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(gia))
+          throw BadRequest('Ngày phải dạng YYYY-MM-DD')
+        if (gia > todayVn())
+          throw BadRequest(`${COT_CA_NHAN[cot]} sau hôm nay — kiểm lại`)
+      }
+      if ((cu?.[cot] ?? null) !== gia) patchCn[cot] = gia
     }
-    const doi = Object.keys(patch) as CotCaNhan[]
-    if (!doi.length) return
-    await caNhanRepo.luu(employeeId, patch, user.id)
-    await bienDongRepo.ghi({
-      employeeId,
-      loai: 'edit',
-      ngay: todayVn(),
-      ghiChu: `${TEN_KHOI[khoi]}: ${doi.map((c) => COT_CA_NHAN[c]).join(', ')}`,
-      truoc: { doi },
-      userId: user.id,
-    })
+
+    const patchCv: Parameters<typeof chamCongRepo.updateEmployee>[1] = {}
+    const tenCv: string[] = []
+    const so = <K extends keyof typeof TEN_CV>(k: K) => {
+      if (!(k in cv) || (cv[k] ?? null) === (e[k] ?? null)) return
+      Object.assign(patchCv, { [k]: cv[k] ?? null })
+      tenCv.push(TEN_CV[k])
+    }
+    for (const k of Object.keys(TEN_CV) as (keyof typeof TEN_CV)[]) so(k)
+    // Đổi ca = có người đã xem ca → bỏ đuôi "ca mặc định" như khối Công việc cũ.
+    if (patchCv.shift_id && !('note' in patchCv)) patchCv.note = boDuoiCa(e.note)
+    const doiNgayVao =
+      'hire_date' in cv && (cv.hire_date ?? null) !== (e.hire_date ?? null)
+
+    if (doiNgayVao) await bienDongService.datNgayVao(user, id, cv.hire_date ?? null)
+    if (Object.keys(patchCv).length) await chamCongRepo.updateEmployee(id, patchCv)
+    if (Object.keys(patchCn).length) await caNhanRepo.luu(id, patchCn, user.id)
+    const doi = [
+      ...tenCv,
+      ...(doiNgayVao ? ['Ngày vào'] : []),
+      ...(Object.keys(patchCn) as (CotCaNhan | 'tax_code')[]).map((c) =>
+        c === 'tax_code' ? 'Mã số thuế' : COT_CA_NHAN[c],
+      ),
+    ]
+    if (doi.length)
+      await bienDongRepo.ghi({
+        employeeId: id,
+        loai: 'edit',
+        ngay: todayVn(),
+        ghiChu: `Sửa hồ sơ: ${doi.join(', ')}`,
+        truoc: { doi },
+        userId: user.id,
+      })
+    return { doi }
   },
 
   /** Số CCCD thật — sau khi ghi vết người xem (hr_private_access_log). */

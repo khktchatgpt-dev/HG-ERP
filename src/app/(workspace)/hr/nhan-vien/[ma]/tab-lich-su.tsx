@@ -23,14 +23,7 @@ export function TabLichSu({ d }: { d: HoSoCtx }) {
         reason={`${d.n.hoTen} có từ trước khi hệ thống ghi biến động (nạp từ máy chấm công); chưa ai ghi ngày vào, cho nghỉ hay chuyển tổ.`}
         next={
           d.h.quyen.sua ? (
-            <Btn
-              onClick={() => {
-                d.setMuc('tong-quan')
-                d.setSuaCv(true)
-              }}
-            >
-              Ghi ngày vào làm
-            </Btn>
+            <Btn onClick={() => d.batSua('ngayVao')}>Ghi ngày vào làm</Btn>
           ) : (
             <span className="text-k-sm text-[var(--ink-3)]">
               Phòng Nhân sự ghi biến động.

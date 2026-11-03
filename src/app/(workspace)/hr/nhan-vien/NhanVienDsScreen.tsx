@@ -1,7 +1,7 @@
 'use client'
 
 import './ds.css'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { FileDown, FileUp, PencilLine, Plus, Search } from 'lucide-react'
 import {
   COT_TRONG,
@@ -15,6 +15,7 @@ import { LuoiDs, lop } from './luoi-ds'
 import { HopTuyen } from './hop-tuyen'
 import { HopNap } from './hop-nap'
 import { ThanhChot } from './thanh-chot'
+import { useCaoKhung } from './khung'
 
 /**
  * NHÂN SỰ › HỒ SƠ NHÂN VIÊN — danh sách (B1, bản vẽ 02/11/2026
@@ -32,25 +33,14 @@ import { ThanhChot } from './thanh-chot'
  */
 export function NhanVienDsScreen({ h }: { h: TrangDs }) {
   const d = useNhanVienDs(h)
-  const goc = useRef<HTMLDivElement>(null)
-  const [cao, setCao] = useState('calc(100dvh - 48px)')
-  // Chốt chiều cao = 100dvh − đỉnh màn: chỉ lưới cuộn, đầu cột và chân đếm dính được.
-  useLayoutEffect(() => {
-    const el = goc.current
-    if (!el) return
-    const doi = () =>
-      setCao(`calc(100dvh - ${Math.round(el.getBoundingClientRect().top)}px)`)
-    doi()
-    window.addEventListener('resize', doi)
-    return () => window.removeEventListener('resize', doi)
-  }, [])
+  const khung = useCaoKhung()
   const khoa = h.sua ? null : 'Phòng Nhân sự giữ quyền sửa hồ sơ'
   const sua = d.sb.dangSua
   const khoaSua = khoa ?? (sua ? 'Đang sửa trên bảng — lưu hoặc bỏ thay đổi trước' : null)
   const soBp = new Set(h.nv.ds.filter((n) => n.active).map((n) => n.boPhan)).size
 
   return (
-    <div ref={goc} className="ns" style={{ height: cao }}>
+    <div {...khung} className="ns">
       <div className="ns-ph">
         <h1>Hồ sơ nhân viên</h1>
         <span className="ctx">

@@ -483,14 +483,8 @@ export const bangLuongViecSchema = z.discriminatedUnion('viec', [
 ])
 
 /** Tab Cá nhân trên hồ sơ (0249): lưu một khối, hoặc xin số CCCD thật (ghi nhật ký). */
-export const caNhanSchema = z.discriminatedUnion('viec', [
-  z.object({
-    viec: z.literal('luu'),
-    khoi: z.enum(['ca_nhan', 'dinh_danh', 'lien_he']),
-    gia: z.record(z.string(), z.string().trim().max(300).nullable()),
-  }),
-  z.object({ viec: z.literal('hien') }),
-])
+/** Hiện số CCCD thật trên hồ sơ (ghi nhật ký). Lưu cá nhân đi qua `thongTinSchema` (B4). */
+export const caNhanSchema = z.object({ viec: z.literal('hien') })
 
 /** Hợp đồng lao động trên hồ sơ (0250): thêm / sửa / huỷ (ghi nhầm, bắt lý do). */
 const hdNhap = z.object({
@@ -544,4 +538,45 @@ export const suaBangSchema = z.object({
     )
     .min(1, 'Chưa có ô nào đổi')
     .max(500),
+})
+
+/** Cột hr_employee_private sửa được trên trang Thông tin (viết tay — schema không kéo repo/db). */
+const COT_CA_NHAN_SUA = [
+  'birth_date',
+  'gender',
+  'nationality',
+  'hometown',
+  'education',
+  'national_id',
+  'id_issue_date',
+  'id_issue_place',
+  'permanent_address',
+  'current_address',
+  'phone',
+  'emergency_name',
+  'emergency_relation',
+  'emergency_phone',
+  'tax_code',
+] as const
+
+/**
+ * Lưu trang Thông tin hồ sơ một người (B4, bản vẽ 02/11/2026 mục D): chỉ ô đã đổi. Service
+ * chuẩn hoá + kiểm CCCD / SĐT / MST / ngày như ô sửa cũ.
+ */
+export const thongTinSchema = z.object({
+  cong_viec: z
+    .object({
+      full_name: hoTen,
+      team: boPhan,
+      job_title: chucDanh,
+      shift_id: uuid,
+      attendance_exempt: z.boolean(),
+      hire_date: ngay.nullable(),
+      note: ghiChu,
+    })
+    .partial()
+    .optional(),
+  ca_nhan: z
+    .partialRecord(z.enum(COT_CA_NHAN_SUA), z.string().trim().max(300).nullable())
+    .optional(),
 })

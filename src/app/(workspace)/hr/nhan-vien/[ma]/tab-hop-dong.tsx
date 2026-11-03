@@ -28,7 +28,7 @@ import {
 } from '@/lib/nhan-su/hop-dong'
 import type { HdDong } from '@/modules/dept/hr/cham-cong/hop-dong.repo'
 import { TD, TH } from '../nv.shared'
-import { KhoaRieng } from './tab-ca-nhan'
+import { KhoaRieng } from './khoa-rieng'
 import type { HoSoCtx } from './useHoSoNv'
 
 const O = 'w-full border border-[var(--line)] px-1.5 py-0.5'
