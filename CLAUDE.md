@@ -656,6 +656,17 @@ phải ra MỘT số cho một ô; màn nào tự cộng lại là lỗi. Kế h
 "KH-xxx". Trao đổi vẫn dùng `DocNotesPanel` (kit) — file riêng, không trộn hệ
 trong một file.
 
+**Báo cáo + Tình hình xưởng (B6, 03/11/2026)**: `/thongke/bao-cao` không kit,
+sáu bảng từ MỘT payload `bao-cao.service.ts` (kỳ + tổ + tab trên URL, trần 92
+ngày). Không có dòng "tổng toàn xưởng": chi tiết / cụm / bộ là ba đơn vị, cộng
+dọc là số vô nghĩa. "Sửa lại còn treo" = Σ sửa − đạt ghi SAU theo thứ tự
+`created_at` (bù trước, cộng sau); "Tồn công đoạn" = xong chính thức − đã giao
+qua `wipNumbers` + `transferTotals` — đổi công thức thì đổi ở lib, không ở màn.
+Excel vẫn qua `api/dept/production/reports` (4 bảng cũ); hai bảng mới chưa có
+Excel. `/production` (Tình hình xưởng) cũng không kit: ô việc là LINK sang
+`/thongke/lenh?view=` — bấm vào phải ra đúng số dòng ô vừa đếm. Khu Sản xuất
+sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
