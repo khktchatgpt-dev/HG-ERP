@@ -1,13 +1,15 @@
 ---
 name: erp-ui
-description: Quy trình thiết kế + dựng màn giao diện cho HG-ERP — từ nhiệm vụ nghiệp vụ, qua bản thiết kế được duyệt, tới màn dựng bằng kit và kiểm bằng số. Dùng khi user nói "làm màn", "thêm trang", "thiết kế giao diện", "sửa UI/UX", "màn này khó dùng", "dựng lại màn …", hoặc khi sắp tạo/sửa một file .tsx hiển thị cho người dùng.
+description: Quy trình thiết kế + dựng màn giao diện cho HG-ERP — từ nhiệm vụ nghiệp vụ, qua bản thiết kế được duyệt, tới màn dựng theo lối ERP KHÔNG kit (docs/erp-khong-kit.md) và kiểm bằng số. Dùng khi user nói "làm màn", "thêm trang", "thiết kế giao diện", "sửa UI/UX", "màn này khó dùng", "dựng lại màn …", hoặc khi sắp tạo/sửa một file .tsx hiển thị cho người dùng.
 ---
 
 # erp-ui
 
 Skill này là **QUY TRÌNH**, không phải máy sinh trang.
 
-Hai skill UI cũ (`add-erp-page`, `frontend-design`) bị gỡ 13/09/2026 vì chúng dựng sẵn "một trang danh sách + CRUD" bằng bộ kit cũ. Cách đó dẫn tới lối mòn "mỗi màn một bảng". Skill này không có khuôn code để chép. Nó bắt đi đúng thứ tự: **nhiệm vụ → luồng → bản thiết kế được duyệt → dựng bằng kit → kiểm bằng số**.
+Hai skill UI cũ (`add-erp-page`, `frontend-design`) bị gỡ 13/09/2026 vì chúng dựng sẵn "một trang danh sách + CRUD" bằng bộ kit cũ. Cách đó dẫn tới lối mòn "mỗi màn một bảng". Skill này không có khuôn code để chép. Nó bắt đi đúng thứ tự: **nhiệm vụ → luồng → bản thiết kế được duyệt → dựng theo lối ERP không kit → kiểm bằng số**.
+
+> **03/11/2026 — MÀN MỚI KHÔNG DÙNG KIT.** Đọc [`docs/erp-khong-kit.md`](../../../docs/erp-khong-kit.md) trước bước 4. Bước 5 cũ ("dựng bằng kit") chỉ còn áp cho sửa nhỏ tại chỗ màn đang chạy bằng kit.
 
 > **Sổ `/design-lab` ĐÃ XOÁ 07/10/2026** (chủ dự án: "không dùng nữa", trước đó 06/10: "UI/UX quá kém"). Không còn màn mẫu `/design-lab/mau-*`, sách tra `/design-lab/thanh-phan`, trang chụp `/design-lab/chup`. **Đừng dựng lại trang nào dưới `src/app/design-lab`**, kể cả trang tạm để duyệt. Mẫu tham chiếu nay là MÀN THẬT đang chạy (bảng ở bước 3).
 
@@ -22,12 +24,12 @@ Hai luật của chủ dự án đứng trên mọi thứ dưới đây:
 
 | File đang import                              | Hệ                        | Làm gì                                                     |
 | --------------------------------------------- | ------------------------- | ---------------------------------------------------------- |
-| `@/components/kit`                            | Kit ERP mới (`.kit`)      | Theo skill này                                             |
+| `@/components/kit`                            | Kit ERP (`.kit`)          | Sửa nhỏ tại chỗ; dựng lại thì theo lối ERP không kit       |
 | `@/components/erp/*`, `@/components/shadcn/*` | Theme v3 cũ (`.theme-v3`) | Sửa TẠI CHỖ bằng hệ cũ; mẫu ở mục "Theme v3" của CLAUDE.md |
-| Chưa có file (màn mới)                        | —                         | **Luôn** là kit mới                                        |
+| Chưa có file (màn mới)                        | —                         | **Luôn** là lối ERP không kit (`docs/erp-khong-kit.md`)    |
 
 - **Một file chỉ dùng một hệ.** Trộn hai hệ là hai bộ token đánh nhau.
-- **Đừng chuyển màn cũ sang kit vì thẩm mỹ.** Chỉ chuyển khi có việc nghiệp vụ chạm vào nó; khi đó cả màn đi qua đủ quy trình dưới đây.
+- **Đừng dựng lại màn cũ vì thẩm mỹ.** Chỉ chuyển khi có việc nghiệp vụ chạm vào nó; khi đó cả màn đi qua đủ quy trình dưới đây.
 
 ---
 
@@ -81,7 +83,7 @@ Màn tham chiếu là bản ĐÃ CHẠY, không phải chuẩn mực: chép các
 
 Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. User nhận xét: _"giao diện lại gớm rồi, bỏ qua khâu thiết kế hả"_.
 
-- Artboard là một **Artifact HTML riêng cho màn đó**, thiết kế kỹ (token màu của kit, chữ 13px, lưới có cột + chân tổng, bố cục kiểu Dynamics/SAP: thanh công cụ góc phải, không thẻ bo tròn/bóng đổ). Tiền lệ được duyệt: bản vẽ Hồ sơ lệnh (05/10), màn ký đơn mua bày đủ dòng + đợt giao (07/10).
+- Artboard là một **Artifact HTML riêng cho màn đó**, thiết kế kỹ theo `docs/erp-khong-kit.md` (khung sáu tầng, chữ 13px, lưới có cột + chân tổng dính, Action Pane góc phải, không thẻ bo tròn/bóng đổ, không chip tròn, ít chữ). Mã dựng phải theo BẢN VẼ, không theo dáng màn cũ đang có. Tiền lệ được duyệt: bản vẽ Hồ sơ lệnh (05/10), màn ký đơn mua bày đủ dòng + đợt giao (07/10).
   - Sửa vòng sau thì publish lại **cùng file** → cùng URL, để user so được hai bản.
   - Canvas chung cũ (`G9Zso…`) không đọc được nữa; **không** dựng trang tạm trong `src/app` (`/design-lab/tam-*` bị chê "UI/UX quá kém" 06/10 và cả sổ đã xoá 07/10).
 - Mở đầu artboard bằng **số đo** của bước 1 (màn cũ thiếu gì, bao nhiêu dòng/đơn bị ảnh hưởng) và kết bằng **các câu cần chốt**, mỗi câu có một đề xuất.
@@ -92,7 +94,9 @@ Tiền lệ 16/09/2026: code thẳng form Phiếu xuất, bỏ qua khâu này. U
   - dài (có đầu/chân dính không?).
 - **DỪNG ở đây.** Báo link, nêu các quyết định cần user chốt, rồi chờ. Chỉ sang bước 5 khi user đã duyệt.
 
-### 5. Dựng bằng kit
+### 5. Dựng — lối ERP không kit
+
+Màn mới / dựng lại: CSS riêng của khu theo `docs/erp-khong-kit.md`, chép khung từ `warehouse/_erp/` (không import chéo giữa hai phòng). Các gạch đầu dòng về kit dưới đây chỉ áp khi sửa nhỏ màn đang chạy bằng kit.
 
 - Import **chỉ từ `@/components/kit`**, không import thẳng file con.
 - Tra thành phần ở bảng "cần gì → dùng gì" [references/tra-thanh-phan.md](references/tra-thanh-phan.md), rồi đọc **JSDoc trên khai báo kiểu props** trong `src/components/kit/*.tsx` (nguồn sự thật duy nhất từ khi sách tra `/design-lab/thanh-phan` bị xoá 07/10/2026). Danh sách xuất khẩu: `src/components/kit/index.ts`.

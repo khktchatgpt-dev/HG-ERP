@@ -139,20 +139,26 @@ helper) `kebab-case`. Không đổi tên file cũ cho đều — rủi ro, khôn
 
 > **30/09/2026 — bộ luật lint canh giao diện đã GỠ** (xem mục "Luật lint riêng" bên
 > dưới). Mọi quy ước màu / cỡ chữ / thẻ thô / icon dưới đây là **hướng dẫn ưu tiên**, không
-> còn máy chặn. Màn mới cứ viết Tailwind / CSS trực tiếp khi kit không có thứ cần.
+> còn máy chặn. Màn mới viết theo `docs/erp-khong-kit.md` (lối ERP, không kit).
 
-### HAI HỆ GIAO DIỆN ĐANG SỐNG SONG SONG — đọc trước khi sửa file `.tsx` nào
+### MÀN MỚI KHÔNG DÙNG KIT — đọc [`docs/erp-khong-kit.md`](docs/erp-khong-kit.md) trước khi làm màn nào
 
-|           | Bộ kit ERP (MỚI)                         | Theme v3 + ERP kit cũ                         |
-| --------- | ---------------------------------------- | --------------------------------------------- |
-| Import từ | `@/components/kit`                       | `@/components/erp/*`, `@/components/shadcn/*` |
-| Lớp token | `.kit` (`src/components/kit/tokens.css`) | `.theme-v3` (`src/app/globals.css`)           |
-| Đang phủ  | 67 file (đo 16/09/2026)                  | 168 file                                      |
-| Dùng khi  | **mọi màn MỚI**                          | màn CŨ, sửa tại chỗ                           |
+**Chốt 03/11/2026** (lần thứ tư chủ dự án nói cùng ý: Đơn mua 30/09, Kho 14/10, Sổ công
+nợ 31/10, Phân công việc 03/11): mọi màn MỚI và mọi lần DỰNG LẠI một màn viết theo **lối
+ERP không kit** — CSS riêng của khu (lớp gốc lặp đôi `.kh.kh`, `.pc.pc`…), khung sáu
+tầng (đầu trang + Action Pane · tab ngang có số · thanh lọc · lưới dính đầu/chân · thanh
+trạng thái), phẳng, mỗi dòng một hàng, ít chữ. **Không import kit KHÔNG đủ**: viết Tailwind
+với nút bo góc + chip tròn + token `.theme-v3` vẫn ra dáng kit (bài học Phân công việc).
+Mẫu chép: `warehouse/_erp/kho.css` + `khung.tsx`.
 
-**Đừng viết lại 168 file cho đều nhau** — đổi rất nhiều rủi ro lấy rất ít giá trị. Màn cũ
-chuyển sang kit mới khi có việc nghiệp vụ chạm vào nó, không chuyển vì lý do thẩm mỹ.
-Trong một file thì **chỉ dùng một hệ**; trộn hai hệ là hai bộ token đánh nhau.
+|           | Lối ERP không kit (MỚI)              | Bộ kit ERP                                 | Theme v3 + ERP kit cũ                         |
+| --------- | ------------------------------------ | ------------------------------------------ | --------------------------------------------- |
+| Import từ | CSS riêng của khu                    | `@/components/kit`                         | `@/components/erp/*`, `@/components/shadcn/*` |
+| Lớp token | biến trong lớp gốc khu (`.kh.kh`…)   | `.kit` (`src/components/kit/tokens.css`)   | `.theme-v3` (`src/app/globals.css`)           |
+| Dùng khi  | **mọi màn MỚI + màn dựng lại**       | màn đang chạy bằng kit, sửa nhỏ tại chỗ    | màn CŨ, sửa nhỏ tại chỗ                       |
+
+**Đừng viết lại hàng loạt** — màn cũ chuyển sang lối ERP khi có việc nghiệp vụ chạm vào nó.
+Trong một file thì **chỉ dùng một hệ**; trộn hệ là các bộ token đánh nhau.
 
 ### Thiết kế theo hướng ERP
 
@@ -324,7 +330,7 @@ viết bằng `` String.raw`…` ``. Route group App Router có dấu ngoặc
 
 Skill nội bộ (commit trong repo) — gọi khi hợp.
 
-- `erp-ui` — **gọi trước khi làm/sửa bất kỳ màn nào.** QUY TRÌNH, không phải máy sinh trang: nhiệm vụ → luồng → khuôn làm điểm xuất phát → **artboard được user duyệt (cổng cứng)** → dựng bằng kit → luật kiểm 20 dòng + trình duyệt 1280×800 + `npm run check`. Kèm `references/`: bảng "cần gì → dùng gì", luật kiểm, 26 bẫy đã dính. Artboard là Artifact HTML; sổ `/design-lab` đã xoá 07/10/2026. Thay cho hai skill `add-erp-page`/`frontend-design` gỡ 13/09/2026 — chúng dựng sẵn trang danh sách + CRUD bằng kit cũ, đúng lối mòn "mỗi màn một bảng".
+- `erp-ui` — **gọi trước khi làm/sửa bất kỳ màn nào.** QUY TRÌNH, không phải máy sinh trang: nhiệm vụ → luồng → khuôn làm điểm xuất phát → **artboard được user duyệt (cổng cứng)** → dựng theo lối ERP không kit (`docs/erp-khong-kit.md`) → luật kiểm 20 dòng + trình duyệt 1280×800 + `npm run check`. Kèm `references/`: bảng "cần gì → dùng gì", luật kiểm, 26 bẫy đã dính. Artboard là Artifact HTML; sổ `/design-lab` đã xoá 07/10/2026. Thay cho hai skill `add-erp-page`/`frontend-design` gỡ 13/09/2026 — chúng dựng sẵn trang danh sách + CRUD bằng kit cũ, đúng lối mòn "mỗi màn một bảng".
 - `sync-types` — regen `database.types.ts` sau migration.
 - `add-module` — scaffold domain module 3 lớp + route.
 - `add-migration` — file SQL đúng chuẩn RLS + đánh số.

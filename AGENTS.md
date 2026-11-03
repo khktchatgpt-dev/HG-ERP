@@ -19,15 +19,15 @@ Dự án này là hệ thống **Phần mềm Quản trị Doanh nghiệp Sản 
 - ❌ **CẤM giả lập vật thể thực (Skeuomorphism)**: Tuyệt đối không dựng màn hình thành "tờ phiếu in", "tờ giấy A4", "con dấu mộc xoay nghiêng `-rotate-3`", hay chia lề giấy kỳ dị. Đây là giao diện ứng dụng web SaaS ERP trên màn hình máy tính.
 - ❌ **CẤM chia layout bất đối xứng hẹp**: Không tạo sidebar ghim dính 200px chèn ép bảng dữ liệu. Bảng dữ liệu lớn phải được ưu tiên không gian hiển thị rộng rãi, rõ ràng.
 - ❌ **CẤM đặt thanh hành động nổi dính đáy màn hình (Sticky floating bottom bar)** một cách đơn độc. Action Toolbar phải luôn đặt ở **Góc trên bên phải của Header** theo chuẩn ERP (nút chính nổi bật + dropdown menu ⋯ cho tác vụ phụ).
-- ⚠️ **Ưu tiên component có sẵn** trong thư viện UI của dự án; kit không có thứ cần thì viết Tailwind / CSS trực tiếp (bộ luật lint chặn thẻ thô đã gỡ 30/09/2026).
+- ❌ **Màn MỚI và màn DỰNG LẠI không dùng bộ kit** (`@/components/kit`, `@/components/erp/*`, `@/components/shadcn/*`) — chốt 03/11/2026. Viết CSS riêng của khu theo lối ERP ở [`docs/erp-khong-kit.md`](docs/erp-khong-kit.md). Không import kit mà vẫn dùng nút bo góc, chip tròn, thẻ bóng đổ thì vẫn là dáng kit — cũng không được.
 - ⚠️ **Ưu tiên token hệ thống** cho màu: `var(--primary)`, `var(--warn)`, `var(--done)`, `var(--stop)`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground` — để một màu hành động, ba màu vòng đời còn có nghĩa. Không còn lint chặn màu cứng (gỡ 30/09/2026), nên đây là kỷ luật, không phải hàng rào.
 
 ---
 
-### 2. BẮT BUỘC TÁI SỬ DỤNG BỘ KIT UI
+### 2. BỘ KIT UI — CHỈ ĐỂ SỬA TẠI CHỖ MÀN CŨ
 
-> **Màn MỚI dùng `@/components/kit`** (bộ kit ERP mới; tra ở `.claude/skills/erp-ui/references/tra-thanh-phan.md` + JSDoc trong `src/components/kit/*.tsx`).
-> Danh sách dưới đây là bộ CŨ, còn phủ 168 file — dùng khi sửa tại chỗ những màn đó.
+> **Màn MỚI KHÔNG dùng kit** — theo [`docs/erp-khong-kit.md`](docs/erp-khong-kit.md) (chốt 03/11/2026).
+> `@/components/kit` và danh sách bộ CŨ dưới đây chỉ dùng khi sửa nhỏ tại chỗ màn đang chạy bằng chúng.
 > Trong một file chỉ dùng MỘT hệ; trộn hai hệ là hai bộ token đánh nhau.
 
 Bộ cũ (`src/components/erp/*` & `src/components/shadcn/*`):
