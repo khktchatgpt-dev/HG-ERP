@@ -359,6 +359,21 @@ export function ChanDonSoan({ d }: { d: DonCtx }) {
         )
       : null
   const K = 'text-[var(--ink-3)]'
+  // Chiết khấu (0292) đứng đúng chỗ như phiếu: trước VAT thì trước ô VAT, sau VAT thì sau.
+  const ck = totals.discountAmount > 0 && (
+    <span>
+      <span className={K}>
+        Chiết khấu
+        {header.discountUnit === 'pct' && header.discount !== ''
+          ? ` ${header.discount}%`
+          : ''}
+        {header.discountAfterVat ? ' sau VAT' : ''}
+      </span>{' '}
+      <span className="font-mono text-[var(--stop)]">
+        − {money(totals.discountAmount, cur)}
+      </span>
+    </span>
+  )
   return (
     <div className="sticky bottom-0 z-[5] flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-[var(--line)] bg-[var(--surface-card)] px-4 py-2 text-[12.5px] text-[var(--ink)]">
       <span>
@@ -367,12 +382,14 @@ export function ChanDonSoan({ d }: { d: DonCtx }) {
         </span>{' '}
         <span className="font-mono">{money(totals.subtotal, cur)}</span>
       </span>
+      {!header.discountAfterVat && ck}
       <span>
         <span className={K}>
           VAT {header.vat === '' ? 0 : header.vat}%{header.inclVat ? ' (đã gồm)' : ''}
         </span>{' '}
         <span className="font-mono">{money(totals.vatAmount, cur)}</span>
       </span>
+      {header.discountAfterVat && ck}
       {hmSau && <span className={K}>sau đơn này hạng mục lên {hmSau}</span>}
       {problem && (
         <button
