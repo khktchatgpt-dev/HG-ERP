@@ -207,14 +207,20 @@ export const componentsService = {
       componentsRepo.listByLsxBulk(ids),
       jobsRepo.listByLsxBulk(ids),
     ])
-    // Hồ sơ SP đã có định mức chưa (bom_status 'done') — tách "chờ Kỹ thuật"
-    // khỏi "có định mức mà chưa nạp bảng" (lệnh duyệt trước 04/11/2026).
-    const products = await productsRepo.listPickByIds([
+    // Hồ sơ SP đã có định mức chưa — tách "chờ Kỹ thuật" khỏi "có định mức mà
+    // chưa nạp bảng". Đọc "có dòng định mức" HOẶC bom_status 'done' (04/11/2026:
+    // chỉ đọc bom_status thì SP có 55 dòng vẫn bị gọi là chờ Kỹ thuật).
+    const productIds = [
       ...new Set(lines.map((l) => l.product_id).filter((x): x is string => !!x)),
+    ]
+    const [products, coDinhMuc] = await Promise.all([
+      productsRepo.listPickByIds(productIds),
+      productProfileRepo.productsWithParts(productIds),
     ])
-    const bomDone = new Set(
-      products.filter((p) => p.bom_status === 'done').map((p) => p.id),
-    )
+    const bomDone = new Set([
+      ...coDinhMuc,
+      ...products.filter((p) => p.bom_status === 'done').map((p) => p.id),
+    ])
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
     const lineN = new Map<string, number>()
     const missingBomN = new Map<string, number>()

@@ -291,6 +291,16 @@ hiệu ✓ đậm / ✓ mờ / ô trống thay gạch chéo, ô vừa đổi vi�
 (0 khung cuộn con, 0 tiêu đề cắt ở 1280). Bài học: dựng lệch artboard (cột 44 thay 56, cột trái
 200, gạch chéo) là bị chê ngay — số của artboard là số của mã.
 
+**04/11 tối (2) — "cần đổi lệnh và SP liên tục: chọn lệnh → chọn SP → hiện thông tin + số lượng
+phải làm; phần hiển thị hiện tại rất thừa"** → bản vẽ 4 https://claude.ai/artifact/QMcpzoEfCob2J55PKbZdTZ
+(duyệt): thanh chọn hai bậc Lệnh → Sản phẩm (‹ › mỗi bậc), dải thông tin SP sáu ô (tên · phải làm +
+đã đồng bộ · hạn + còn n ngày · cụm · chi tiết · định mức + lộ trình hiệu lực), ma trận chỉ của SP
+đang chọn, chi tiết rời theo nhóm gập một dòng, bỏ dòng Thành phẩm, nút "áp cho n SP khác" chép lộ
+trình cụm sang cụm cùng tên; bản nháp giữ cả lệnh, thanh đáy "n cụm đổi ở m SP". Đổi SP là việc
+client (history.replaceState), không tải lại server. Sửa kèm lỗi "chờ Kỹ thuật" đọc nhầm bom_status
+(đọc hồ sơ có dòng định mức). Đo 1280: thanh chọn một hàng 37px, dải thông tin không tràn, 0 khung
+cuộn con.
+
 Việc của NGƯỜI, song song, không chặn mã: gán tổ cho 5 công đoạn trống; đặt tên
 thật cho 13 cụm rác; nạp định mức cho 217/268 dòng lệnh còn thiếu (đường AI BOM đã
 có). **Màn nào cũng chỉ có nghĩa khi có số** — B3 cố ý đứng trước B5/B6.

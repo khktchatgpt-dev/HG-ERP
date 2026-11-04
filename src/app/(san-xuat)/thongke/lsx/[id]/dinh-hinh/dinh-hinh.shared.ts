@@ -75,6 +75,8 @@ export type DinhHinhProps = {
   pbsCount: number
   lsxClosed: boolean
   canEdit: boolean
+  /** SP mở sẵn (id dòng lệnh) — màn Lộ trình công đoạn bản 4 chọn Lệnh → SP. */
+  initialSp?: string
 }
 
 /** Cột GÕ ĐƯỢC theo thứ tự trên lưới — trục ngang của bàn phím và vùng dán. */

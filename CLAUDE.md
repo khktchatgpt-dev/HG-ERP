@@ -693,15 +693,23 @@ sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
 **Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
 "1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem", tên nhóm nói
 luôn ai làm; "Công cụ & cấu hình" gập sẵn (`gap`). Mục mới **Lộ trình công đoạn**
-(`/thongke/lo-trinh`, bản vẽ 3 `A4U5vgYDeUwYrnDUkzfCq1`, chủ dự án 04/11:
-"gộp lại một phần" rồi "rất khó nhìn, không muốn các thanh cuộn trái phải"):
-KHÔNG cột trái, KHÔNG khung cuộn con. Không `?lsx=` → bảng danh sách khuôn C
-(`bang-lenh.tsx`, chip lọc đếm bằng cùng vị từ); có `?lsx=` → ma trận MỘT lệnh
-trọn chiều ngang (260+50+40+12×56 = 1.022px vừa 1280), đổi lệnh bằng ô chọn +
-‹ › nhảy giữa lệnh còn cụm chưa khai; ký hiệu ✓ đậm / ✓ mờ / ô trống (bỏ gạch
-chéo và chữ x), ô vừa đổi viền xanh TỪNG Ô (so với lộ trình hiệu lực lúc mở).
-`LoTrinhGopScreen` dùng lại `useDinhHinh` + `lo-trinh-lenh`; loader chung
-`dinh-hinh/load.ts`; đánh ✓ rồi Lưu, hồ sơ SP nhận theo. Lệnh cũ có định mức mà
+(`/thongke/lo-trinh`, bản vẽ 4 `QMcpzoEfCob2J55PKbZdTZ`, chủ dự án 04/11 sau
+ba vòng: "gộp một phần" → "khó nhìn, không khung cuộn trái phải" → "chọn lệnh
+rồi chọn SP, hiện thông tin và số lượng phải làm"): KHÔNG cột trái, KHÔNG khung
+cuộn con. Không `?lsx=` → bảng danh sách khuôn C (`bang-lenh.tsx`, chip lọc đếm
+bằng cùng vị từ); `?lsx=&sp=` → thanh chọn hai bậc **Lệnh → Sản phẩm** (mỗi ô
+‹ ›, thiếu `sp` thì mở SP đầu tiên còn cụm chưa khai), **dải thông tin SP**
+(`.sx-fact`: tên, phải làm, hạn, cụm, chi tiết, định mức, lộ trình hiệu lực;
+"đã đồng bộ" lấy từ `lsxDossierService.get`), ma trận chỉ của SP đó trọn chiều
+ngang (260+50+40+12×56 = 1.022px), chi tiết RỜI theo nhóm gập một dòng ("mở
+từng dòng" khi ghi đè), dòng Thành phẩm bỏ, nút "áp cho n SP khác" chép lộ
+trình cụm sang cụm cùng tên (`apChoCumCungTen`). Ký hiệu ✓ đậm / ✓ mờ / ô
+trống, ô vừa đổi viền xanh TỪNG Ô. Đổi SP là việc client (`spLoc` +
+`history.replaceState`, KHÔNG router → không tải lại server); bản nháp giữ cả
+lệnh, thanh đáy đếm "n cụm đổi ở m SP". `LoTrinhGopScreen` dùng lại
+`useDinhHinh` + `lo-trinh-lenh`; loader chung `dinh-hinh/load.ts`. "Chờ Kỹ
+thuật" đọc `productsWithParts` (hồ sơ CÓ dòng định mức) hoặc bom_status done —
+đọc mỗi bom_status thì SP có 55 dòng vẫn bị gọi là chờ Kỹ thuật. Lệnh cũ có định mức mà
 chưa có bảng thì TỰ NẠP khi mở (cùng `autoShapeFromBom`). Màn
 `/thongke/lsx/[id]/dinh-hinh` nay chỉ còn lưới "Bảng chi tiết (BOM Kỹ thuật)"
 cho thống kê; tab Lộ trình ở hồ sơ SP CHỈ ĐỌC (`chiDoc`). Badge sidebar đếm

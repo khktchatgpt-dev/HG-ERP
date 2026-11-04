@@ -4,7 +4,11 @@ import { canEditComponents } from '@/modules/dept/production/perms'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
-import { partGroupsRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
+import {
+  partGroupsRepo,
+  productProfileRepo,
+  productsRepo,
+} from '@/modules/dept/technical/technical.repo'
 import { resolveStageConfigs } from '@/lib/stage-config'
 import { lineUnit } from '@/lib/finish-stages'
 import type { User } from '@/modules/core/users/users.repo'
@@ -33,12 +37,19 @@ export async function loadDinhHinhProps(
     partGroupsRepo.list(),
     entriesService.docsOfLsx(user, lsxId),
   ])
-  // SP đã có định mức ở hồ sơ chưa (bom_status 'done') — quyết định ô "Khởi
-  // tạo hồ sơ SP" và câu "chờ Kỹ thuật".
-  const products = await productsRepo.listPickByIds([
+  // SP đã có định mức ở hồ sơ chưa — quyết định ô "Khởi tạo hồ sơ SP" và câu
+  // "chờ Kỹ thuật". Đọc "có dòng định mức" HOẶC bom_status 'done' (04/11/2026:
+  // chỉ đọc bom_status thì SP có 55 dòng vẫn bị gọi là chờ Kỹ thuật).
+  const productIds = [
     ...new Set(rawLines.map((l) => l.product_id).filter((x): x is string => !!x)),
+  ]
+  const [products, coDinhMuc] = await Promise.all([
+    productsRepo.listPickByIds(productIds),
+    productProfileRepo.productsWithParts(productIds),
   ])
-  const bomStatus = new Map(products.map((p) => [p.id, p.bom_status]))
+  const bomDone = new Set(
+    products.filter((p) => p.bom_status === 'done').map((p) => p.id),
+  )
   const groupTitle = new Map(groups.map((g) => [g.id, g.title ?? '']))
 
   return {
@@ -55,7 +66,8 @@ export async function loadDinhHinhProps(
       qty: l.qty,
       unit: lineUnit(l.unit),
       group_title: groupTitle.get(l.group_id) ?? '',
-      has_profile: l.product_id ? bomStatus.get(l.product_id) === 'done' : false,
+      has_profile:
+        !!l.product_id && (coDinhMuc.has(l.product_id) || bomDone.has(l.product_id)),
     })),
     initialRows: data.lines.map((r) => ({
       production_order_line_id: r.production_order_line_id,
