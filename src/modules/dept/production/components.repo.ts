@@ -291,6 +291,22 @@ export const componentsRepo = {
     })
   },
 
+  /**
+   * Lệnh đã có bảng chi tiết chưa — đếm `head`, KHÔNG dùng `listByLsx`: Next ghi
+   * nhớ (memoize) fetch GET cùng URL trong một lượt render server, nên "đọc →
+   * nạp → đọc lại" bằng cùng một truy vấn trả bản RỖNG cũ (dính 04/11/2026 ở
+   * màn Lộ trình công đoạn tự nạp lúc mở). URL đếm khác URL liệt kê nên lần
+   * liệt kê sau đó mới là lần đầu, đọc được dòng vừa ghi.
+   */
+  async existsForLsx(productionOrderId: string): Promise<boolean> {
+    const { count, error } = await db()
+      .from('production_components')
+      .select('id', { count: 'exact', head: true })
+      .eq('production_order_id', productionOrderId)
+    if (error) throw new Error(error.message)
+    return (count ?? 0) > 0
+  },
+
   /** Số dòng chi tiết theo LSX — cờ "Chưa nhập bảng chi tiết" ở bảng điều phối. */
   async countsByLsx(): Promise<Map<string, number>> {
     const { data } = await db()

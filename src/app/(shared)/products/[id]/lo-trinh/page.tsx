@@ -58,7 +58,16 @@ export default async function ProductRoutesPage({
       }))}
       groupLabels={Object.fromEntries(data.groups.map((g) => [g.code, g.label]))}
       stages={stages}
-      canEdit={canEdit && data.product.locked_at == null}
+      // 04/11/2026 (bản vẽ gộp, câu 2): hồ sơ SP không còn là chỗ sửa lộ trình —
+      // Kế hoạch khai trên lệnh, hồ sơ nhận theo. Tab này để Kỹ thuật tra cứu.
+      canEdit={false}
+      chiDoc={
+        canEdit && data.product.locked_at == null
+          ? 'Lộ trình cụm được khai trên lệnh đang chạy (Sản xuất › Lộ trình công đoạn), hồ sơ SP tự cập nhật theo.'
+          : data.product.locked_at != null
+            ? 'Hồ sơ đã khoá; lộ trình cụm khai trên lệnh đang chạy.'
+            : 'Lộ trình cụm khai trên lệnh đang chạy (Sản xuất › Lộ trình công đoạn).'
+      }
       routeSource={routeSource}
     />
   )

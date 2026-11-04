@@ -5,19 +5,19 @@ import {
   ApNut,
   DauTrang,
   SxKhung,
-  TabNgang,
   ThanhTT,
 } from '@/app/(workspace)/production/_erp/khung'
 import { fmt, type DinhHinhProps } from './dinh-hinh.shared'
 import { LuoiChiTiet } from './luoi-chi-tiet'
-import { LoTrinhLenh } from './lo-trinh-lenh'
 import { useDinhHinh } from './useDinhHinh'
 
 /**
- * ĐỊNH HÌNH CHI TIẾT CỦA LỆNH — dựng lại không kit theo bản vẽ duyệt 03/11/2026
+ * BẢNG CHI TIẾT CỦA LỆNH — dựng lại không kit theo bản vẽ duyệt 03/11/2026
  * (https://claude.ai/artifact/DUtMtTWekhhBUUzh54XM9L). Khuôn F: lưới là nhân
- * vật chính; hai tab (Chi tiết · Lộ trình theo cụm) chung một bản nháp, một nút
- * Lưu ghi đè trọn bộ; thanh chốt đáy nói đúng dòng nào hỏng và bấm tới.
+ * vật chính; một nút Lưu ghi đè trọn bộ; thanh chốt đáy nói đúng dòng nào hỏng
+ * và bấm tới. 04/11/2026: tab Lộ trình theo cụm RỜI sang màn gộp
+ * `/thongke/lo-trinh?lsx=` (việc của Kế hoạch) — màn này là của thống kê, chỉ
+ * còn lưới chi tiết (định mức Kỹ thuật chụp sang lệnh, tự nạp lúc duyệt).
  *
  * Khoá khi lệnh đã có phiếu sản lượng: ô không gõ, không thêm / xoá dòng, thanh
  * chốt ẩn, nút Lưu nói cách gỡ. Định hình lại khi đã có số = xoá phiếu trước,
@@ -32,11 +32,11 @@ export function DinhHinhScreen(props: DinhHinhProps) {
   const khaiRieng = d.rows.filter((r) => r.stages != null).length
 
   return (
-    <SxKhung bare label={`Lộ trình công đoạn ${p.lsx.code}`}>
+    <SxKhung bare label={`Bảng chi tiết ${p.lsx.code}`}>
       <div className="sx-body">
         <DauTrang
           crumb={`Lệnh sản xuất › ${p.lsx.code}`}
-          title="Lộ trình công đoạn"
+          title="Bảng chi tiết (BOM Kỹ thuật)"
           ctx={
             <>
               {p.lsx.customer_name} · <b>{p.orderLines.length}</b> dòng SP ·{' '}
@@ -71,6 +71,9 @@ export function DinhHinhScreen(props: DinhHinhProps) {
                 <ApNut onClick={d.toggleMore}>
                   {d.more ? 'Ẩn cột quy cách' : 'Cột quy cách'}
                 </ApNut>
+                <ApNut href={`/thongke/lo-trinh?lsx=${p.lsx.id}`}>
+                  Khai lộ trình công đoạn
+                </ApNut>
                 <ApNut href={`/thongke/lsx/${p.lsx.id}`}>Hồ sơ lệnh</ApNut>
               </ApNhom>
               <ApNhom>
@@ -80,28 +83,6 @@ export function DinhHinhScreen(props: DinhHinhProps) {
               </ApNhom>
             </>
           }
-        />
-
-        <TabNgang
-          label="Lộ trình và bảng chi tiết"
-          tabs={[
-            {
-              key: 'lo_trinh',
-              label:
-                d.nCum > 0
-                  ? `Lộ trình công đoạn · ${d.nCum} cụm${khaiRieng ? ` · ${khaiRieng} đã khai` : ''}`
-                  : 'Lộ trình công đoạn · BOM phẳng',
-              on: d.tab === 'lo_trinh',
-              onClick: () => d.setTab('lo_trinh'),
-            },
-            {
-              key: 'chi_tiet',
-              label: 'Bảng chi tiết (BOM Kỹ thuật)',
-              n: d.rows.length,
-              on: d.tab === 'chi_tiet',
-              onClick: () => d.setTab('chi_tiet'),
-            },
-          ]}
         />
 
         <div className="sx-hc">
@@ -120,20 +101,17 @@ export function DinhHinhScreen(props: DinhHinhProps) {
               ))}
             </select>
           </label>
-          {d.tab === 'chi_tiet' && (
-            <span className="sx-leg" style={{ padding: 0, border: 0 }}>
-              <span>
-                <i className="r" /> thiếu bắt buộc (chặn)
-              </span>
-              <span>
-                <i className="w" /> ĐM kg trống ở nhóm khung (nghi ngờ)
-              </span>
+          <span className="sx-leg" style={{ padding: 0, border: 0 }}>
+            <span>
+              <i className="r" /> thiếu bắt buộc (chặn)
             </span>
-          )}
+            <span>
+              <i className="w" /> ĐM kg trống ở nhóm khung (nghi ngờ)
+            </span>
+          </span>
           <span className="sp mut">
-            {d.tab === 'chi_tiet'
-              ? 'Ctrl+V dán vùng từ Excel · Enter xuống dòng · ⌫ ở cột cuối xoá dòng'
-              : 'x đậm = khai riêng lệnh · x mờ = theo hồ sơ SP / nhóm · ô gạch chéo bấm để thêm'}
+            Ctrl+V dán vùng từ Excel · Enter xuống dòng · ⌫ ở cột cuối xoá dòng · lộ trình
+            công đoạn khai ở màn riêng
           </span>
         </div>
 
@@ -175,7 +153,7 @@ export function DinhHinhScreen(props: DinhHinhProps) {
           </div>
         )}
 
-        {d.tab === 'chi_tiet' ? <LuoiChiTiet d={d} /> : <LoTrinhLenh d={d} />}
+        <LuoiChiTiet d={d} />
 
         {editable && (
           <div className="sx-cb">
@@ -251,7 +229,7 @@ export function DinhHinhScreen(props: DinhHinhProps) {
                 ? `Khoá vì đã có ${fmt(p.pbsCount)} phiếu PBS`
                 : 'Lệnh chưa có sổ — còn sửa được; có phiếu PBS đầu tiên là bảng khoá'
           }
-          right="production_components · ghi đè trọn bộ mỗi lần Lưu · lộ trình: kế hoạch lệnh → bản chụp → hồ sơ SP → nhóm vật tư"
+          right="production_components · ghi đè trọn bộ mỗi lần Lưu · lộ trình công đoạn: màn Lộ trình công đoạn (Kế hoạch)"
         />
       </div>
     </SxKhung>

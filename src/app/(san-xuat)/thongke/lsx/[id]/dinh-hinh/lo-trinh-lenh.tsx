@@ -32,13 +32,15 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
 
   return (
     <div className="sx-grid">
-      <table className="sx-tb" style={{ minWidth: 250 + 52 + 44 + stageCfg.length * 56 }}>
+      {/* 210 + 48 + 40 + 12×44 = 826px: vừa phần phải của màn gộp ở 1280 (sidebar 240 +
+          danh sách lệnh 200 = còn 840), không cuộn ngang — bản vẽ A4U5vgYDeUwYrnDUkzfCq1. */}
+      <table className="sx-tb" style={{ minWidth: 210 + 48 + 40 + stageCfg.length * 44 }}>
         <colgroup>
-          <col style={{ width: 250 }} />
-          <col style={{ width: 52 }} />
-          <col style={{ width: 44 }} />
+          <col style={{ width: 210 }} />
+          <col style={{ width: 48 }} />
+          <col style={{ width: 40 }} />
           {stageCfg.map((s) => (
-            <col key={s.code} style={{ width: 56 }} />
+            <col key={s.code} style={{ width: 44 }} />
           ))}
         </colgroup>
         <thead>

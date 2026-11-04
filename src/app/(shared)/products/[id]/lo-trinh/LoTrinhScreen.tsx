@@ -29,9 +29,7 @@ export function LoTrinhScreen(p: LoTrinhProps) {
   const trongCum = p.parts.filter((x) => x.cluster_id).length
 
   const luuWhy = !p.canEdit
-    ? p.locked
-      ? 'Hồ sơ đã khoá'
-      : 'Bạn không có quyền sửa định mức'
+    ? (p.chiDoc ?? (p.locked ? 'Hồ sơ đã khoá' : 'Bạn không có quyền sửa định mức'))
     : !d.dirty
       ? 'Chưa đổi gì'
       : d.cumRong.length
@@ -109,6 +107,14 @@ export function LoTrinhScreen(p: LoTrinhProps) {
           </div>
         </div>
       </div>
+      {p.chiDoc && (
+        <div className="lt-note" role="note">
+          <b>Chỉ đọc.</b> {p.chiDoc}{' '}
+          <a href="/thongke/lo-trinh" className="lnk">
+            Mở Lộ trình công đoạn
+          </a>
+        </div>
+      )}
       {d.loi && (
         <div className="lt-note stop" role="alert">
           <b>Chưa lưu được:</b> {d.loi}

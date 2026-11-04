@@ -573,11 +573,19 @@ sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
 **Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
 "1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem", tên nhóm nói
 luôn ai làm; "Công cụ & cấu hình" gập sẵn (`gap`). Mục mới **Lộ trình công đoạn**
-(`/thongke/lo-trinh`, khuôn C, không kit): mọi lệnh đang chạy, lệnh nào còn CỤM
-chưa khai lộ trình, lệnh nào còn chờ Kỹ thuật nạp định mức; bấm là vào thẳng
-`/thongke/lsx/[id]/dinh-hinh` (màn này nay MỞ TAB LỘ TRÌNH TRƯỚC, tab "Bảng chi
-tiết (BOM Kỹ thuật)" đứng sau); badge sidebar đếm bằng CHÍNH
-`componentsService.shapingOverview` + `needsRoute` của trang. **Bảng chi tiết tự
+(`/thongke/lo-trinh?lsx=`, MỘT MÀN gộp theo bản vẽ
+`A4U5vgYDeUwYrnDUkzfCq1`, chủ dự án 04/11: "gộp lại một phần, nhìn vào không
+biết thao tác sao"): trái là lệnh đang chạy (còn cụm chưa khai xếp trước), phải
+là ma trận cụm × công đoạn của lệnh đang chọn (`LoTrinhGopScreen` dùng lại
+`useDinhHinh` + `lo-trinh-lenh` của màn Bảng chi tiết; loader chung
+`dinh-hinh/load.ts`); đánh x rồi Lưu, hồ sơ SP nhận theo. Lệnh cũ có định mức mà
+chưa có bảng thì TỰ NẠP khi mở (cùng `autoShapeFromBom`). Màn
+`/thongke/lsx/[id]/dinh-hinh` nay chỉ còn lưới "Bảng chi tiết (BOM Kỹ thuật)"
+cho thống kê; tab Lộ trình ở hồ sơ SP CHỈ ĐỌC (`chiDoc`). Badge sidebar đếm
+bằng CHÍNH `shapingOverview` + `needsRoute` (`lib/shaping-status`, thuần để
+client dùng). **BẪY Next memoize fetch**: "đọc → ghi → đọc lại" cùng một URL
+GET trong MỘT lượt render server trả bản cũ — `autoShapeFromBom` kiểm "đã có
+bảng" bằng đếm `head` (`componentsRepo.existsForLsx`), không bằng `listByLsx`. **Bảng chi tiết tự
 nạp lúc duyệt lệnh** (`lsx.service.approve` → `componentsService.autoShapeFromBom`,
 nuốt lỗi như ảnh chụp định mức; có bảng rồi không đụng; SP chưa có định mức thì
 trống + báo "chờ Kỹ thuật") — chủ dự án 04/11: "định hình BOM là việc của Kỹ

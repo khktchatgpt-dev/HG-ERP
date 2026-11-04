@@ -349,3 +349,11 @@
   color: var(--lt-ink);
   margin-bottom: 6px;
 }
+
+/* 04/11/2026: tab chỉ đọc — link sang màn Lộ trình công đoạn của lệnh. */
+.lt.lt .lnk {
+  color: var(--lt-act);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
