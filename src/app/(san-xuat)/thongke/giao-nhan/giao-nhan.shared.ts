@@ -1,3 +1,4 @@
+import { choNhan } from '@/lib/pgt-tabs'
 import type {
   GiaoNhanPayload,
   PgtDocView,
@@ -36,7 +37,7 @@ export type NhanDraft = { received: string; reason: string }
 export function docInTab(d: Doc, tab: TabKey, teamId: string | null): boolean {
   switch (tab) {
     case 'cho_nhan':
-      return d.status === 'da_giao' && !d.reverses_doc_id && d.to_team_id === teamId
+      return choNhan(d, teamId)
     case 'da_giao':
       return d.status === 'da_giao' && !d.reverses_doc_id && d.from_team_id === teamId
     case 'da_nhan':

@@ -1,8 +1,9 @@
 import { componentsRepo, type ComponentInput, type ComponentRow } from './components.repo'
 import { entriesRepo } from './entries.repo'
+import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
-import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
+import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
 import { productsService } from '@/modules/dept/technical/technical.service'
 import { canEditComponents } from './perms'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -50,7 +51,262 @@ async function lsxWithLines(lsxId: string) {
   return { lsx, orderLines: lines }
 }
 
+/** Một lệnh đang chạy nhìn từ góc "đã định hình chưa" (trang /thongke/dinh-hinh + badge). */
+export type ShapingRow = {
+  lsx: {
+    id: string
+    code: string
+    customer_name: string
+    ship_date: string | null
+    status: string
+  }
+  line_count: number
+  component_count: number
+  cluster_count: number
+  /** Cụm trên lệnh chưa khai lộ trình (`stages` null → chạy theo mặc định nhóm vật tư). */
+  cluster_unrouted: number
+  /** Dòng SP của lệnh chưa có dòng chi tiết nào (chưa nạp bảng, hoặc chưa có định mức). */
+  lines_without_rows: number
+  /** Dòng SP KHÔNG lấy được bảng từ Kỹ thuật: chưa gắn SP hoặc hồ sơ chưa có định mức (bom_status ≠ done). */
+  lines_missing_bom: number
+  jobs_total: number
+}
+
+/** Lệnh chưa có chi tiết nào — không có gì để ghi sổ. Cùng luật với chip "Chưa định hình" ở Lệnh SX. */
+export function isUnshaped(r: Pick<ShapingRow, 'component_count'>): boolean {
+  return r.component_count === 0
+}
+
+/**
+ * Việc của Kế hoạch còn treo: lệnh có cụm chưa khai lộ trình (04/11/2026). Lệnh
+ * chưa có bảng không tính — đó là việc của Kỹ thuật (định mức), không phải kế hoạch.
+ */
+export function needsRoute(r: Pick<ShapingRow, 'cluster_unrouted'>): boolean {
+  return r.cluster_unrouted > 0
+}
+
+/**
+ * Dựng bảng chi tiết của lệnh từ ĐỊNH MỨC Kỹ thuật — KHÔNG guard: nhịp duyệt
+ * lệnh (`lsx.service.approve`), script nạp bù và `suggest('bom')` cùng gọi.
+ * `missing` = mã SP của dòng lệnh không lấy được gì (chưa gắn SP hoặc hồ sơ
+ * chưa có định mức) — màn Lộ trình nói "chờ Kỹ thuật" bằng danh sách này.
+ */
+async function bomRowsForLsx(
+  lsxId: string,
+): Promise<{ rows: ComponentInput[]; missing: string[] }> {
+  const { orderLines } = await lsxWithLines(lsxId)
+  // Công đoạn ghép theo cấu hình công đoạn (0287) — không còn hằng số; cấu
+  // hình đầy đủ để TÁCH lộ trình khai của cụm theo bậc đếm (0288).
+  const stagesCat = await productionRepo.listStages()
+  const counting = countingOf(stagesCat)
+  const stageCfg = resolveStageConfigs(stagesCat ?? [])
+
+  // 0096: đọc ĐỊNH MỨC (technical_product_parts) — bảng duy nhất còn lại.
+  // Giàu hơn BOM cũ: có sẵn tên chi tiết thật và quy cách phôi, nên điền
+  // thẳng vào cột spec_* thay vì để thống kê gõ lại. KHÔNG có material_id
+  // vì định mức không gắn danh mục kho — người nhập tự chọn vật tư nếu cần.
+  const out: ComponentInput[] = []
+  const missing: string[] = []
+  for (const line of orderLines) {
+    // Dòng lệnh chưa gắn SP (mã "Thông báo sau") thì không có định mức để lấy.
+    if (!line.product_id) {
+      missing.push(line.product_code)
+      continue
+    }
+    const [parts, clusters] = await Promise.all([
+      productProfileRepo.parts(line.product_id),
+      productProfileRepo.clusters(line.product_id),
+    ])
+    if (parts.length === 0) {
+      missing.push(line.product_code)
+      continue
+    }
+    // 0097: CỤM là bản ghi thật (cột `Parts/ Bộ phận` của biểu mẫu BOM mới).
+    // Trước đây chỗ này phải MƯỢN `set_item_label` — nhãn món trong bộ — làm
+    // cụm, vì định mức chưa có cấp cụm nào khác để lấy.
+    const clusterName = new Map(clusters.map((c) => [c.id, c.name]))
+    const rows: ComponentInput[] = parts.map((p) => ({
+      production_order_line_id: line.id,
+      cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
+      name: p.part_name,
+      // 0174: mang nhóm vật tư sang để sổ sản lượng lọc được hàng mua.
+      group_code: p.group_code ?? null,
+      material_id: null,
+      material_type: p.material_kind ?? null,
+      spec_thickness_mm: p.dim_a_mm ?? null,
+      spec_width_mm: p.dim_b_mm ?? null,
+      spec_length_mm: p.cut_length_mm ?? null,
+      wall_thickness_mm: p.wall_thickness_mm ?? null,
+      unit: p.unit ?? null,
+      qty_per_unit: Number(p.qty),
+      // kg/chi tiết lấy theo định mức (user chốt 23/08: BOM là nguồn) —
+      // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
+      dm_kg: p.weight_kg ?? null,
+      pcs_per_bar: null,
+      // Lộ trình khai ở dòng định mức (0288) — chụp sang lệnh; null = suy.
+      stages: p.stages && p.stages.length > 0 ? [...p.stages] : null,
+      note: p.material_code ?? null,
+    }))
+
+    // CỤM CHUẨN của hồ sơ → dòng ASSEMBLY + chốt khoảng cho chi tiết trong
+    // cụm (27/08 — bậc 1 thang đơn vị đếm tự kích hoạt khi BOM đã chuẩn):
+    // cụm đếm từ công đoạn ghép (mặc định hàn), chi tiết dừng ngay trước
+    // đó. Cụm không định vị được công đoạn ghép (nhóm không qua hàn và
+    // không khai first_stage) thì để phẳng — cụm mặc nhiên lo phần còn lại.
+    const asmRows: ComponentInput[] = []
+    for (const c of clusters) {
+      const memberIdx = parts
+        .map((p, i) => (p.cluster_id === c.id ? i : -1))
+        .filter((i) => i >= 0)
+      if (memberIdx.length === 0) continue
+      const group = memberIdx.map((i) => parts[i].group_code).find(Boolean) ?? null
+      const qtyPer = c.qty_per_product != null ? Number(c.qty_per_product) : 1
+
+      // LỘ TRÌNH KHAI THEO CỤM (0288, B2): Kỹ thuật đánh x từng công đoạn →
+      // tách theo bậc đếm (0287): bước đếm chi tiết thuộc các chi tiết trong
+      // cụm, bước đếm cụm/bộ thuộc dòng cụm. Nhờ vậy "phôi → nguội → sơn"
+      // không cần có hàn ở giữa. Cả hai nửa CHỤP vào `stages` của lệnh.
+      const khai = c.stages && c.stages.length > 0 ? c.stages : null
+      let first: string | null
+      let partFinal: string | null
+      let partStages: string[] | null = null
+      let asmStages: string[] | null = null
+      if (khai) {
+        const split = splitClusterRoute(khai, stageCfg)
+        if (split.cluster.length === 0) continue // cụm không có bước cụm nào → để phẳng
+        partStages = split.part.length ? split.part : null
+        asmStages = split.cluster
+        first = asmStages[0]
+        partFinal = split.part.length ? split.part[split.part.length - 1] : null
+      } else {
+        // Chưa khai: suggest chạy trước khi lệnh lên kế hoạch → định vị theo
+        // lộ trình nhóm, cụm bắt đầu ở công đoạn ghép (cách cũ, 27/08).
+        const route = routeForGroup(group)
+        first =
+          c.first_stage ??
+          (counting.join && route.includes(counting.join) ? counting.join : null)
+        if (!first) continue
+        const idx = route.indexOf(first)
+        partFinal = idx > 0 ? route[idx - 1] : null
+      }
+      for (const i of memberIdx) {
+        rows[i] = {
+          ...rows[i],
+          final_stage: partFinal,
+          // Chi tiết trong cụm chưa khai riêng thì mang nửa "chi tiết" của cụm;
+          // khai riêng ở dòng định mức thì tôn trọng (người thắng máy).
+          stages: rows[i].stages ?? partStages,
+          qty_per_assembly: qtyPer > 0 ? Number(parts[i].qty) / qtyPer : null,
+        }
+      }
+      asmRows.push({
+        production_order_line_id: line.id,
+        kind: 'assembly',
+        cluster: c.name,
+        name: c.name,
+        group_code: group,
+        material_id: null,
+        unit: 'cụm',
+        qty_per_unit: qtyPer,
+        dm_kg: null,
+        pcs_per_bar: null,
+        first_stage: first,
+        final_stage: khai ? asmStages![asmStages!.length - 1] : (c.final_stage ?? null),
+        stages: asmStages,
+        note: c.note ?? null,
+      })
+    }
+    out.push(...rows, ...asmRows)
+  }
+  return { rows: out, missing }
+}
+
 export const componentsService = {
+  /**
+   * Mọi lệnh đang chạy + tình trạng bảng chi tiết và lộ trình cụm (04/11/2026,
+   * mục menu "Lộ trình công đoạn"): kế hoạch mở ra là thấy lệnh nào còn cụm
+   * chưa khai, lệnh nào còn chờ Kỹ thuật nạp định mức. Badge sidebar đếm bằng
+   * CHÍNH hàm này + `needsRoute`.
+   */
+  async shapingOverview(): Promise<ShapingRow[]> {
+    const active = await productionRepo.listActive()
+    const ids = active.map((l) => l.id)
+    const [lines, comps, jobs] = await Promise.all([
+      lsxLinesRepo.listLinesBulk(ids),
+      componentsRepo.listByLsxBulk(ids),
+      jobsRepo.listByLsxBulk(ids),
+    ])
+    // Hồ sơ SP đã có định mức chưa (bom_status 'done') — tách "chờ Kỹ thuật"
+    // khỏi "có định mức mà chưa nạp bảng" (lệnh duyệt trước 04/11/2026).
+    const products = await productsRepo.listPickByIds([
+      ...new Set(lines.map((l) => l.product_id).filter((x): x is string => !!x)),
+    ])
+    const bomDone = new Set(
+      products.filter((p) => p.bom_status === 'done').map((p) => p.id),
+    )
+    const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
+    const lineN = new Map<string, number>()
+    const missingBomN = new Map<string, number>()
+    for (const l of lines) {
+      bump(lineN, l.production_order_id)
+      if (!l.product_id || !bomDone.has(l.product_id))
+        bump(missingBomN, l.production_order_id)
+    }
+    const compN = new Map<string, number>()
+    const clusterN = new Map<string, number>()
+    const unroutedN = new Map<string, number>()
+    const linesWithRows = new Set<string>()
+    for (const c of comps) {
+      bump(compN, c.production_order_id)
+      linesWithRows.add(c.production_order_line_id)
+      if (c.kind === 'assembly') {
+        bump(clusterN, c.production_order_id)
+        if (!c.stages || c.stages.length === 0) bump(unroutedN, c.production_order_id)
+      }
+    }
+    const linesNoRows = new Map<string, number>()
+    for (const l of lines)
+      if (!linesWithRows.has(l.id)) bump(linesNoRows, l.production_order_id)
+    const jobN = new Map<string, number>()
+    for (const j of jobs) bump(jobN, j.production_order_id)
+    return active.map((l) => ({
+      lsx: {
+        id: l.id,
+        code: l.code,
+        customer_name: l.customer_name,
+        ship_date: l.ship_date,
+        status: l.status,
+      },
+      line_count: lineN.get(l.id) ?? 0,
+      component_count: compN.get(l.id) ?? 0,
+      cluster_count: clusterN.get(l.id) ?? 0,
+      cluster_unrouted: unroutedN.get(l.id) ?? 0,
+      lines_without_rows: linesNoRows.get(l.id) ?? 0,
+      lines_missing_bom: missingBomN.get(l.id) ?? 0,
+      jobs_total: jobN.get(l.id) ?? 0,
+    }))
+  },
+
+  /**
+   * TỰ NẠP bảng chi tiết từ định mức Kỹ thuật (04/11/2026) — gọi ở nhịp duyệt
+   * lệnh và script nạp bù. Có bảng rồi thì KHÔNG đụng (bản chụp là của lệnh);
+   * không lấy được dòng nào thì để trống và trả `missing` để màn nói "chờ Kỹ
+   * thuật". Không ghi ngược hồ sơ SP (chỉ chép xuống), không guard quyền —
+   * người duyệt lệnh không cần quyền định hình.
+   */
+  async autoShapeFromBom(lsxId: string): Promise<{
+    status: 'added' | 'has_rows' | 'no_bom'
+    added: number
+    missing: string[]
+  }> {
+    const existing = await componentsRepo.listByLsx(lsxId)
+    if (existing.length > 0) return { status: 'has_rows', added: 0, missing: [] }
+    const { rows, missing } = await bomRowsForLsx(lsxId)
+    if (rows.length === 0) return { status: 'no_bom', added: 0, missing }
+    await componentsRepo.replaceAll(lsxId, rows)
+    return { status: 'added', added: rows.length, missing }
+  },
+
   /** Đọc: mọi NV đã đăng nhập (xưởng xem việc phải làm, kho/GĐ tra cứu). */
   async list(_user: User, lsxId: string) {
     const { lsx, orderLines } = await lsxWithLines(lsxId)
@@ -221,127 +477,8 @@ export const componentsService = {
     source: 'bom' | 'previous',
   ): Promise<ComponentInput[]> {
     await assertAction(user, 'production.shaping.manage')
+    if (source === 'bom') return (await bomRowsForLsx(lsxId)).rows
     const { orderLines } = await lsxWithLines(lsxId)
-    // Công đoạn ghép theo cấu hình công đoạn (0287) — không còn hằng số; cấu
-    // hình đầy đủ để TÁCH lộ trình khai của cụm theo bậc đếm (0288).
-    const stagesCat = await productionRepo.listStages()
-    const counting = countingOf(stagesCat)
-    const stageCfg = resolveStageConfigs(stagesCat ?? [])
-
-    if (source === 'bom') {
-      // 0096: đọc ĐỊNH MỨC (technical_product_parts) — bảng duy nhất còn lại.
-      // Giàu hơn BOM cũ: có sẵn tên chi tiết thật và quy cách phôi, nên điền
-      // thẳng vào cột spec_* thay vì để thống kê gõ lại. KHÔNG có material_id
-      // vì định mức không gắn danh mục kho — người nhập tự chọn vật tư nếu cần.
-      const out: ComponentInput[] = []
-      for (const line of orderLines) {
-        // Dòng lệnh chưa gắn SP (mã "Thông báo sau") thì không có định mức để lấy.
-        if (!line.product_id) continue
-        const [parts, clusters] = await Promise.all([
-          productProfileRepo.parts(line.product_id),
-          productProfileRepo.clusters(line.product_id),
-        ])
-        // 0097: CỤM là bản ghi thật (cột `Parts/ Bộ phận` của biểu mẫu BOM mới).
-        // Trước đây chỗ này phải MƯỢN `set_item_label` — nhãn món trong bộ — làm
-        // cụm, vì định mức chưa có cấp cụm nào khác để lấy.
-        const clusterName = new Map(clusters.map((c) => [c.id, c.name]))
-        const rows: ComponentInput[] = parts.map((p) => ({
-          production_order_line_id: line.id,
-          cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
-          name: p.part_name,
-          // 0174: mang nhóm vật tư sang để sổ sản lượng lọc được hàng mua.
-          group_code: p.group_code ?? null,
-          material_id: null,
-          material_type: p.material_kind ?? null,
-          spec_thickness_mm: p.dim_a_mm ?? null,
-          spec_width_mm: p.dim_b_mm ?? null,
-          spec_length_mm: p.cut_length_mm ?? null,
-          wall_thickness_mm: p.wall_thickness_mm ?? null,
-          unit: p.unit ?? null,
-          qty_per_unit: Number(p.qty),
-          // kg/chi tiết lấy theo định mức (user chốt 23/08: BOM là nguồn) —
-          // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
-          dm_kg: p.weight_kg ?? null,
-          pcs_per_bar: null,
-          // Lộ trình khai ở dòng định mức (0288) — chụp sang lệnh; null = suy.
-          stages: p.stages && p.stages.length > 0 ? [...p.stages] : null,
-          note: p.material_code ?? null,
-        }))
-
-        // CỤM CHUẨN của hồ sơ → dòng ASSEMBLY + chốt khoảng cho chi tiết trong
-        // cụm (27/08 — bậc 1 thang đơn vị đếm tự kích hoạt khi BOM đã chuẩn):
-        // cụm đếm từ công đoạn ghép (mặc định hàn), chi tiết dừng ngay trước
-        // đó. Cụm không định vị được công đoạn ghép (nhóm không qua hàn và
-        // không khai first_stage) thì để phẳng — cụm mặc nhiên lo phần còn lại.
-        const asmRows: ComponentInput[] = []
-        for (const c of clusters) {
-          const memberIdx = parts
-            .map((p, i) => (p.cluster_id === c.id ? i : -1))
-            .filter((i) => i >= 0)
-          if (memberIdx.length === 0) continue
-          const group = memberIdx.map((i) => parts[i].group_code).find(Boolean) ?? null
-          const qtyPer = c.qty_per_product != null ? Number(c.qty_per_product) : 1
-
-          // LỘ TRÌNH KHAI THEO CỤM (0288, B2): Kỹ thuật đánh x từng công đoạn →
-          // tách theo bậc đếm (0287): bước đếm chi tiết thuộc các chi tiết trong
-          // cụm, bước đếm cụm/bộ thuộc dòng cụm. Nhờ vậy "phôi → nguội → sơn"
-          // không cần có hàn ở giữa. Cả hai nửa CHỤP vào `stages` của lệnh.
-          const khai = c.stages && c.stages.length > 0 ? c.stages : null
-          let first: string | null
-          let partFinal: string | null
-          let partStages: string[] | null = null
-          let asmStages: string[] | null = null
-          if (khai) {
-            const split = splitClusterRoute(khai, stageCfg)
-            if (split.cluster.length === 0) continue // cụm không có bước cụm nào → để phẳng
-            partStages = split.part.length ? split.part : null
-            asmStages = split.cluster
-            first = asmStages[0]
-            partFinal = split.part.length ? split.part[split.part.length - 1] : null
-          } else {
-            // Chưa khai: suggest chạy trước khi lệnh lên kế hoạch → định vị theo
-            // lộ trình nhóm, cụm bắt đầu ở công đoạn ghép (cách cũ, 27/08).
-            const route = routeForGroup(group)
-            first =
-              c.first_stage ??
-              (counting.join && route.includes(counting.join) ? counting.join : null)
-            if (!first) continue
-            const idx = route.indexOf(first)
-            partFinal = idx > 0 ? route[idx - 1] : null
-          }
-          for (const i of memberIdx) {
-            rows[i] = {
-              ...rows[i],
-              final_stage: partFinal,
-              // Chi tiết trong cụm chưa khai riêng thì mang nửa "chi tiết" của cụm;
-              // khai riêng ở dòng định mức thì tôn trọng (người thắng máy).
-              stages: rows[i].stages ?? partStages,
-              qty_per_assembly: qtyPer > 0 ? Number(parts[i].qty) / qtyPer : null,
-            }
-          }
-          asmRows.push({
-            production_order_line_id: line.id,
-            kind: 'assembly',
-            cluster: c.name,
-            name: c.name,
-            group_code: group,
-            material_id: null,
-            unit: 'cụm',
-            qty_per_unit: qtyPer,
-            dm_kg: null,
-            pcs_per_bar: null,
-            first_stage: first,
-            final_stage: khai
-              ? asmStages![asmStages!.length - 1]
-              : (c.final_stage ?? null),
-            stages: asmStages,
-            note: c.note ?? null,
-          })
-        }
-        out.push(...rows, ...asmRows)
-      }
-      return out
-    }
 
     // 'previous': lấy bảng của LSX MỚI NHẤT có chứa SP tương ứng, remap sang
     // dòng đơn hiện tại theo product_id.
