@@ -969,3 +969,52 @@
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* ── 10. Danh sách bên trái + ma trận bên phải (Lộ trình công đoạn gộp, 04/11/2026) ──
+   Bản vẽ https://claude.ai/artifact/A4U5vgYDeUwYrnDUkzfCq1: cột trái 200px chỉ
+   mã lệnh + nhãn, phần phải nhận trọn ma trận 12 công đoạn ở 1280 (sidebar 240). */
+.sx.sx .sx-two.ds {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+.sx.sx .sx-ls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sx.sx .sx-ls a {
+  display: block;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--sx-hair);
+  color: inherit;
+  text-decoration: none;
+}
+.sx.sx .sx-ls a:hover {
+  background: var(--sx-raised);
+}
+.sx.sx .sx-ls a.on {
+  background: var(--sx-act-wash);
+  box-shadow: inset 3px 0 0 var(--sx-act);
+}
+.sx.sx .sx-ls a .m {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--sx-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sx.sx .sx-ls a .m .d {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-ls a .k {
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-ls a.dim .m {
+  color: var(--sx-ink3);
+}

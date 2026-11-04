@@ -33,6 +33,12 @@ export type LoTrinhProps = {
    * null = chưa có vết (chưa áp 0291 hoặc chưa ai ghi).
    */
   routeSource: { source: string; at: string } | null
+  /**
+   * 04/11/2026: tab này CHỈ ĐỌC — một chỗ sửa duy nhất là màn Lộ trình công
+   * đoạn của lệnh (`/thongke/lo-trinh`), hồ sơ SP nhận theo. Câu này hiện ở đầu
+   * màn và là lý do nút Lưu khoá.
+   */
+  chiDoc?: string
 }
 
 /** Bản nháp: id (cụm hoặc dòng) → danh sách công đoạn; null = suy theo nhóm. */

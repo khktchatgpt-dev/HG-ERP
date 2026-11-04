@@ -275,6 +275,15 @@ ngay cả khi kế hoạch chưa vào); 13 lệnh đang chạy chưa có bảng 
 `scripts/nap-bang-chi-tiet-lenh-1104.ts` 04/11. CÒN TREO: gộp tổ & hạn vào màn Định hình hay giữ hai
 màn — quyết sau khi sếp Điền / Alex đi thử trọn chuỗi trên một lệnh thật.
 
+**04/11 chiều — "nên gộp lại thành một phần, nhìn vào không biết thao tác sao"** → bản vẽ gộp
+https://claude.ai/artifact/A4U5vgYDeUwYrnDUkzfCq1 (A màn gộp · B lệnh vừa duyệt bảng tự nạp · C
+chờ Kỹ thuật / khoá; 4 câu chốt: gộp trang danh sách + màn lệnh, tab Lộ trình hồ sơ SP chỉ đọc,
+lệnh cũ tự nạp khi mở, Giao tổ & hạn giữ riêng) — "Duyệt, dựng". Dựng: `/thongke/lo-trinh?lsx=`
+một màn (trái lệnh đang chạy 200px, phải ma trận 826px, thanh chốt đếm cụm khai riêng / theo
+nhóm); `/thongke/lsx/[id]/dinh-hinh` chỉ còn lưới Bảng chi tiết (thống kê); hồ sơ SP tab Lộ trình
+chỉ đọc. Bẫy Next memoize fetch cùng URL trong một render → `existsForLsx` đếm head. Kiểm thật:
+JAWOLL tự nạp 32 dòng, 3/3 cụm chưa khai, badge 1; 12-MX tự nạp 15 dòng, BOM phẳng.
+
 Việc của NGƯỜI, song song, không chặn mã: gán tổ cho 5 công đoạn trống; đặt tên
 thật cho 13 cụm rác; nạp định mức cho 217/268 dòng lệnh còn thiếu (đường AI BOM đã
 có). **Màn nào cũng chỉ có nghĩa khi có số** — B3 cố ý đứng trước B5/B6.
