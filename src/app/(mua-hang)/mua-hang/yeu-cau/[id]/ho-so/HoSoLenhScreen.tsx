@@ -22,7 +22,9 @@ import {
   Tag,
   showNum,
 } from '@/components/kit'
+import type { TaiLieuRow } from '@/lib/lsx-tai-lieu'
 import { PhieuLenh } from './phieu-lenh'
+import { TaiLieuSp } from './tai-lieu-sp'
 
 const ngay = (iso: string | null) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
@@ -61,6 +63,7 @@ export function HoSoLenhScreen({
   groups,
   today,
   imageUrls,
+  taiLieu,
 }: {
   lsx: LsxSupplyDetail
   dau: {
@@ -74,8 +77,9 @@ export function HoSoLenhScreen({
   groups: (LsxGroup & { lines: LsxLine[] })[]
   today: string
   imageUrls: Record<string, string>
+  taiLieu: TaiLieuRow[]
 }) {
-  const [xem, setXem] = useState<'phieu' | 'thongso'>('phieu')
+  const [xem, setXem] = useState<'phieu' | 'thongso' | 'tailieu'>('phieu')
   const lines = groups.flatMap((g) => g.lines)
   const nhom = gomThongSo(
     lsx.products.map((p) => ({ code: p.code, name: p.name, specs: p.specs })),
@@ -152,6 +156,10 @@ export function HoSoLenhScreen({
         ]}
         actions={
           <>
+            {/* Tài liệu hồ sơ SP của cả lệnh, mỗi SP một thư mục (04/11/2026). */}
+            <Btn primary icon="lenh" href={`/api/dept/supply/lsx-tai-lieu/${lsx.id}`}>
+              Tải file của lệnh (.zip)
+            </Btn>
             <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
               Vật tư của lệnh
             </Btn>
@@ -207,10 +215,19 @@ export function HoSoLenhScreen({
         <Chip on={xem === 'thongso'} onClick={() => setXem('thongso')}>
           Thông số gom
         </Chip>
+        <Chip
+          on={xem === 'tailieu'}
+          count={taiLieu.length}
+          onClick={() => setXem('tailieu')}
+        >
+          Tài liệu SP
+        </Chip>
         <span className="text-k-label ml-auto text-[var(--ink-3)]">
           {xem === 'phieu'
             ? `${groups.length} nhóm · đúng cột của phiếu in, nhóm theo đơn hàng / số PO`
-            : 'cả lệnh có mấy loại sơn, kính, vải — để chép sang đơn mua'}
+            : xem === 'thongso'
+              ? 'cả lệnh có mấy loại sơn, kính, vải — để chép sang đơn mua'
+              : 'file hồ sơ SP — đúng những file nút zip sẽ gom'}
         </span>
       </FilterBar>
       {xem === 'phieu' &&
@@ -292,6 +309,8 @@ export function HoSoLenhScreen({
           )}
         </div>
       )}
+
+      {xem === 'tailieu' && <TaiLieuSp lsxId={lsx.id} rows={taiLieu} />}
 
       <StatusBar
         left={[`Lệnh ${lsx.code}`, lsx.customer_name]}

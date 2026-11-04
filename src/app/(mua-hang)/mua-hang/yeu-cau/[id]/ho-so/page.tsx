@@ -4,6 +4,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { buildLsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
+import { lsxTaiLieuService } from '@/modules/dept/supply/lsx-tai-lieu.service'
 import { todayVn } from '@/lib/date-vn'
 import { HoSoLenhScreen } from './HoSoLenhScreen'
 
@@ -33,10 +34,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const { id } = await params
   const user = await authService.requirePageUser()
   const today = todayVn()
-  const [detail, lsx, sheet] = await Promise.all([
+  const [detail, lsx, sheet, taiLieu] = await Promise.all([
     buildLsxSupplyDetail(user, id, today),
     productionRepo.findById(id),
     lsxLinesService.sheet(user, id),
+    // Tab "Tài liệu SP" (04/11/2026) — cùng luật chọn với nút zip.
+    lsxTaiLieuService.list(user, id),
   ])
   if (!detail || !lsx) notFound()
   // Đường dẫn ảnh CỐ ĐỊNH theo id (HMAC), không phải URL ký đổi mỗi lượt
@@ -58,6 +61,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       groups={sheet.groups}
       today={today}
       imageUrls={imageUrls}
+      taiLieu={taiLieu}
     />
   )
 }

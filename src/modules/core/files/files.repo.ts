@@ -125,7 +125,11 @@ export const filesRepo = {
    * gắn lại. Chỉ nhận file của CHÍNH người gửi, đã finalize, chưa thuộc góp ý
    * nào — id lạ gửi kèm bị bỏ qua. Trả danh sách id đã nhận (giữ thứ tự gửi).
    */
-  async claimForFeedback(ids: string[], feedbackId: string, ownerId: string): Promise<string[]> {
+  async claimForFeedback(
+    ids: string[],
+    feedbackId: string,
+    ownerId: string,
+  ): Promise<string[]> {
     if (ids.length === 0) return []
     const { data } = await db()
       .from('files')
@@ -178,7 +182,8 @@ export const filesRepo = {
   async purge(rows: readonly Pick<FileRow, 'id' | 'bucket' | 'path'>[]): Promise<number> {
     if (rows.length === 0) return 0
     const byBucket = new Map<FileBucket, string[]>()
-    for (const r of rows) byBucket.set(r.bucket, [...(byBucket.get(r.bucket) ?? []), r.path])
+    for (const r of rows)
+      byBucket.set(r.bucket, [...(byBucket.get(r.bucket) ?? []), r.path])
     for (const [bucket, paths] of byBucket) {
       await storage.remove(bucket, paths)
       for (const p of paths) storage.invalidateSignedUrl(bucket, p)
@@ -197,6 +202,24 @@ export const filesRepo = {
   /** File đã finalize của 1 SP, mới nhất trước — nhiều file cùng parent = lịch sử phiên bản (NFR-03 GĐ1). */
   async listByProduct(productId: string): Promise<FileRow[]> {
     return this.listByParent('product_id', productId)
+  },
+
+  /**
+   * File đã finalize của NHIỀU SP một lượt — tài liệu của lệnh (zip). Chỉ cột cần
+   * cho luật chọn + tải; mới nhất trước.
+   */
+  async listByProducts(productIds: string[]): Promise<FileRow[]> {
+    if (productIds.length === 0) return []
+    const { data, error } = await db()
+      .from('files')
+      .select('*')
+      .in('product_id', productIds)
+      .is('deleted_at', null)
+      .not('finalized_at', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (error) throw new Error(error.message)
+    return (data ?? []) as FileRow[]
   },
 
   /**
