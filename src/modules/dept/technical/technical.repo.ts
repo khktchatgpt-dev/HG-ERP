@@ -1002,6 +1002,22 @@ export const productProfileRepo = {
     return (data ?? []) as ProductPart[]
   },
 
+  /**
+   * SP nào trong danh sách ĐÃ CÓ dòng định mức — một truy vấn cho cả lệnh.
+   * 04/11/2026: "chờ Kỹ thuật" phải đọc "hồ sơ có dòng định mức không", không
+   * đọc `bom_status` (3 SP của 08/26-27 - MX có 55 dòng nhưng bom_status chưa
+   * 'done' nên bị gọi là chờ Kỹ thuật).
+   */
+  async productsWithParts(productIds: string[]): Promise<Set<string>> {
+    if (!productIds.length) return new Set()
+    const { data } = await db()
+      .from('technical_product_parts')
+      .select('product_id')
+      .in('product_id', productIds)
+      .limit(20000)
+    return new Set(((data ?? []) as { product_id: string }[]).map((r) => r.product_id))
+  },
+
   /** Đếm dòng định mức — cho nhãn số trên tab, không cần kéo cả bảng. */
   async partsCount(productId: string): Promise<number> {
     const { count } = await db()

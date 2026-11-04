@@ -1046,3 +1046,82 @@
 .sx.sx .sx-dot.b {
   background: var(--sx-act);
 }
+
+/* ── 11. Lộ trình công đoạn bản 4: chọn Lệnh → SP, dải thông tin SP ──────────────
+   Bản vẽ https://claude.ai/artifact/QMcpzoEfCob2J55PKbZdTZ. */
+.sx.sx .sx-hc .sep {
+  width: 1px;
+  height: 22px;
+  background: var(--sx-line);
+  margin: 0 2px;
+}
+.sx.sx .sx-hc .lb {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-fact {
+  display: flex;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-card);
+}
+.sx.sx .sx-fact > div {
+  padding: 7px 14px;
+  border-right: 1px solid var(--sx-hair);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sx.sx .sx-fact > div:last-child {
+  border-right: 0;
+  flex: 1;
+}
+.sx.sx .sx-fact .d {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+}
+.sx.sx .sx-fact .v {
+  font-family: var(--sx-mono);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.sx.sx .sx-fact .v small {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-fact .v.w {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-fact .v.txt {
+  font-family: inherit;
+  font-size: 13px;
+}
+.sx.sx .sx-fact .t {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-fact .s {
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.sum > td {
+  background: var(--sx-raised);
+  color: var(--sx-ink2);
+}

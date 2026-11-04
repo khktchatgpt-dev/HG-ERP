@@ -32,7 +32,7 @@ export function useDinhHinh(p: DinhHinhProps) {
   // `tab` chỉ còn màn gộp Lộ trình công đoạn dùng ngầm (ma trận); màn Bảng chi
   // tiết không có tab nữa (04/11/2026) — giữ để `goFirst` đưa về lưới.
   const [tab, setTab] = useState<TabKey>('chi_tiet')
-  const [spLoc, setSpLoc] = useState('')
+  const [spLoc, setSpLoc] = useState(p.initialSp ?? '')
   const [seedProfile, setSeedProfile] = useState(false)
   // Ghi ngược lộ trình cụm lên hồ sơ SP — mặc định BẬT (chủ dự án 04/11/2026:
   // kế hoạch định hình trên lệnh là đường chính, hồ sơ SP đi theo). Bỏ tick khi
@@ -84,6 +84,42 @@ export function useDinhHinh(p: DinhHinhProps) {
       }),
     )
     setDirty(true)
+  }
+  // Cụm cùng tên ở các SP KHÁC của lệnh (bản vẽ 4, 04/11/2026): khai một lần,
+  // áp cho cả nhóm — lệnh 5 SP nhôm cùng "Cụm khung" không phải đánh 5 lần.
+  const tenCum = (r: Draft) =>
+    (r.cluster || r.name).replace(/\s+/g, ' ').trim().toLocaleLowerCase('vi')
+  const anhEmCum = (k: string) => {
+    const goc = rows.find((r) => r.key === k)
+    if (!goc || goc.kind !== 'assembly') return []
+    const ten = tenCum(goc)
+    return rows.filter(
+      (r) =>
+        r.kind === 'assembly' &&
+        r.key !== k &&
+        r.production_order_line_id !== goc.production_order_line_id &&
+        tenCum(r) === ten,
+    )
+  }
+  const apChoCumCungTen = (k: string) => {
+    const goc = rows.find((r) => r.key === k)
+    if (!goc) return 0
+    const ids = new Set(anhEmCum(k).map((r) => r.key))
+    if (!ids.size) return 0
+    setRows((rs) =>
+      rs.map((r) =>
+        ids.has(r.key)
+          ? {
+              ...r,
+              stages: goc.stages,
+              first_stage: goc.first_stage,
+              final_stage: goc.final_stage,
+            }
+          : r,
+      ),
+    )
+    setDirty(true)
+    return ids.size
   }
 
   // ── Dòng đang bày + thứ tự phẳng cho bàn phím ───────────────────────────
@@ -359,6 +395,8 @@ export function useDinhHinh(p: DinhHinhProps) {
     addRow,
     removeRow,
     setStages,
+    anhEmCum,
+    apChoCumCungTen,
     errCells,
     problems,
     first,
