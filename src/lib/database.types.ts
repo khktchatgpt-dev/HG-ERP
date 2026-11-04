@@ -8600,6 +8600,8 @@ export type Database = {
       technical_product_clusters: {
         Row: {
           stages: string[] | null
+          stages_source: string | null
+          stages_updated_at: string | null
           created_at: string
           final_stage: string | null
           first_stage: string | null
@@ -8613,6 +8615,8 @@ export type Database = {
         }
         Insert: {
           stages?: string[] | null
+          stages_source?: string | null
+          stages_updated_at?: string | null
           created_at?: string
           final_stage?: string | null
           first_stage?: string | null
@@ -8626,6 +8630,8 @@ export type Database = {
         }
         Update: {
           stages?: string[] | null
+          stages_source?: string | null
+          stages_updated_at?: string | null
           created_at?: string
           final_stage?: string | null
           first_stage?: string | null

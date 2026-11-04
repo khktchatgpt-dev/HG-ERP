@@ -42,6 +42,10 @@ export const componentsSaveSchema = z.object({
   /** Khởi tạo định mức hồ sơ SP từ bảng này cho SP CHƯA có BOM (user chốt
    *  23/08/2026) — SP đã có định mức thì tự bỏ qua, không bao giờ đè. */
   seed_profile: z.boolean().default(false),
+  /** Ghi ngược lộ trình CỤM của bảng này lên hồ sơ SP (04/11/2026, chủ dự án:
+   *  kế hoạch định hình trên lệnh là đường chính, hồ sơ SP đi theo). Mặc định
+   *  bật; tắt khi lệnh là ngoại lệ một lần. */
+  sync_profile_routes: z.boolean().default(true),
 })
 
 export const componentsSuggestQuerySchema = z.object({

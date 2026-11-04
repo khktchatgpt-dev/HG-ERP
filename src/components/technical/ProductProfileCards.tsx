@@ -67,6 +67,8 @@ export type ClusterView = {
   qty_per_product: number | null
   first_stage: string | null
   final_stage: string | null
+  /** Lộ trình cụm (0288) — khai ở tab Lộ trình hoặc ghi ngược từ lệnh (04/11). */
+  stages?: string[] | null
   note: string | null
   sort_order: number
 }

@@ -200,6 +200,19 @@ export function DinhHinhScreen(props: DinhHinhProps) {
               </span>
             )}
             <span className="sp">
+              {khaiRieng > 0 && (
+                <label
+                  className="sx-ck"
+                  title="Kế hoạch định hình trên lệnh là đường chính — hồ sơ SP nhận lộ trình cụm theo bản này (khớp tên cụm). Bỏ tick khi lệnh là ngoại lệ một lần."
+                >
+                  <input
+                    type="checkbox"
+                    checked={d.syncProfile}
+                    onChange={(e) => d.setSyncProfile(e.target.checked)}
+                  />
+                  Cập nhật lộ trình cụm vào hồ sơ SP
+                </label>
+              )}
               {d.chuaDinhMuc.length > 0 && (
                 <label
                   className="sx-ck"

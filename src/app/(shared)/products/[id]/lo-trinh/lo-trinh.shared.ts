@@ -27,6 +27,12 @@ export type LoTrinhProps = {
   groupLabels: Record<string, string>
   stages: StageConfig[]
   canEdit: boolean
+  /**
+   * Vết mới nhất "lộ trình cụm ghi từ đâu" (0291): `lsx:<mã lệnh>` khi Kế hoạch
+   * định hình lệnh rồi hồ sơ cập nhật theo, `profile` khi sửa tay ở tab này.
+   * null = chưa có vết (chưa áp 0291 hoặc chưa ai ghi).
+   */
+  routeSource: { source: string; at: string } | null
 }
 
 /** Bản nháp: id (cụm hoặc dòng) → danh sách công đoạn; null = suy theo nhóm. */

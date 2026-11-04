@@ -107,9 +107,14 @@ export function clipRoute(
 
 /**
  * Chọn lộ trình cho MỘT chi tiết — gom một chỗ để mọi nơi hỏi cùng một câu
- * trả lời. Thứ tự ưu tiên (0288, B2):
- *   1. kế hoạch của dòng SP (production_jobs) — người ở Kế hoạch thắng máy;
- *   2. `ownStages` — lộ trình KHAI: bản chụp trên lệnh / cụm / dòng định mức;
+ * trả lời. Thứ tự ưu tiên (đổi 04/11/2026, chủ dự án chốt "kế hoạch tổ & hạn
+ * không phải lộ trình"):
+ *   1. `ownStages` — lộ trình KHAI theo cụm: bản chụp trên lệnh (kế hoạch sửa
+ *      ở màn Định hình) / cụm / dòng định mức ở hồ sơ SP;
+ *   2. kế hoạch của dòng SP (production_jobs) — chỉ là đường lùi khi cụm chưa
+ *      khai: job phẳng theo dòng SP không diễn tả được "cụm nhôm không hàn",
+ *      nên không được đè lên lộ trình cụm (trước 04/11 nó đè — tab Lộ trình
+ *      theo cụm bị vô hiệu ngay khi ai đó bấm Lên kế hoạch);
  *   3. suy theo nhóm vật tư.
  */
 export function resolveComponentRoute(
@@ -117,8 +122,8 @@ export function resolveComponentRoute(
   groupCode: string | null | undefined,
   ownStages?: readonly string[] | null,
 ): string[] {
-  if (plannedRoute && plannedRoute.length > 0) return plannedRoute
   if (ownStages && ownStages.length > 0) return [...ownStages]
+  if (plannedRoute && plannedRoute.length > 0) return plannedRoute
   return routeForGroup(groupCode)
 }
 

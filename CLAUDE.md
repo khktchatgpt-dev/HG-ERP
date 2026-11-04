@@ -626,7 +626,18 @@ Lộ trình hồ sơ SP; kế hoạch sửa RIÊNG LỆNH ở tab "Lộ trình t
 `DUtMtTWekhhBUUzh54XM9L`: `DinhHinhScreen · useDinhHinh · luoi-chi-tiet ·
 lo-trinh-lenh · dinh-hinh.shared`; tab Chi tiết là lưới nhập liệu khuôn F như Ghi
 sản lượng, ghi `production_components.stages`).
-Thứ tự ưu tiên: kế hoạch lệnh → bản chụp trên lệnh → khai ở SP → nhóm vật tư.
+**Thứ tự ưu tiên (đổi 04/11/2026)**: khai theo cụm (bản chụp trên lệnh → khai ở
+SP) → kế hoạch tổ & hạn của dòng SP → nhóm vật tư. Kế hoạch (production_jobs)
+KHÔNG phải lộ trình, chỉ gắn tổ/hạn lên công đoạn có mặt — trước 04/11 nó đè,
+tab Lộ trình theo cụm vô hiệu ngay khi bấm Lên kế hoạch. **Người làm kế hoạch
+định hình trên LỆNH là đường chính, hồ sơ SP đi theo** (chủ dự án chốt 04/11):
+Lưu định hình ghi ngược lộ trình cụm lên hồ sơ SP (`sync_profile_routes`, mặc
+định bật, khớp TÊN cụm, không tạo cụm mới, hồ sơ khoá thì bỏ qua; vết
+`stages_source = lsx:<mã>` + `stages_updated_at`, 0291, ghi bằng update riêng và
+nuốt lỗi). Tab Lộ trình hồ sơ SP vẫn sửa tay được nhưng là đường phụ; hộp "Khai
+cụm" ở tab Định mức chỉ còn SL cụm/SP, lộ trình chỉ đọc. `technical_products.
+stage_route` BỎ hẳn: Kế hoạch SX gợi ý và rải cả lệnh theo HỢP lộ trình đã định
+hình của từng dòng (`plan.service.routesByLineFromShaping`), key theo id dòng lệnh.
 Dòng cụm chỉ mang nửa "cụm"; chi tiết trong cụm giữ nửa "chi tiết" của riêng nó
 — toggle cụm KHÔNG kéo theo chi tiết (lần đầu kéo theo đã ghi `[]` = xoá chi tiết
 khỏi sổ). Lưu định hình PHẢI gửi `stages`, không thì xoá sạch bản chụp. BOM phẳng

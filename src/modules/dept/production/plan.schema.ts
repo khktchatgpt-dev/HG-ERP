@@ -14,8 +14,9 @@ export const planStageSchema = z.object({
 export const linePlanSchema = z.object({
   order_line_id: z.string().uuid(),
   stages: z.array(planStageSchema).max(30),
-  /** Lưu lộ trình này làm mặc định cho SP (technical_products.stage_route). */
-  save_as_default: z.boolean().default(false),
+  // `save_as_default` (technical_products.stage_route) BỎ 04/11/2026 — lộ
+  // trình sống ở cụm, hồ sơ SP cập nhật từ màn Định hình. Client cũ gửi thừa
+  // thì zod lột im lặng.
   /** Lý do điều chỉnh (0169) — BẮT BUỘC khi dòng SP đã có việc chạy. */
   reason: z.string().trim().max(500).optional().nullable(),
 })

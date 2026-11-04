@@ -248,6 +248,24 @@ Bản vẽ sáu màn C1 · C2 · S3 · S4 · S5 · S6: Artifact HTML (link ở c
   fetch: cụm stages [han,nguoi,mai,son], chi tiết stages null (không ghi DB); lệnh kết thúc
   04/26-27 - MX: 0 ô gõ, không thanh chốt, pill "lệnh đã kết thúc".
 
+**04/11 — rà "định hình một luồng cho một SP: ai làm, ở màn nào, có khó không".** Đo trên mã:
+5 màn ở 3 khu nav, 3 vai; **ba nguồn lộ trình ở hồ sơ SP** (hộp cụm đầu/cuối ở Định mức ·
+ma trận x ở tab Lộ trình · `technical_products.stage_route` chỉ ghi được từ màn Kế hoạch) và
+**hai trên lệnh** (Định hình theo cụm · Lên kế hoạch tổ & hạn theo dòng SP), trong đó kế hoạch
+ĐÈ hẳn lộ trình cụm (`resolveComponentRoute` dòng 120) nên tab Lộ trình theo cụm vô hiệu ngay
+khi bấm Lên kế hoạch; quản đốc có `plan.manage` mà không có `components.edit`; danh sách lệnh
+báo "chưa định hình / chưa lên kế hoạch" bằng chữ không bấm được. Chủ dự án chốt: **người làm
+kế hoạch định hình trên LỆNH là đường chính, hồ sơ SP cập nhật theo** để không rối. Đã làm
+(chưa commit): ưu tiên đổi thành khai cụm → kế hoạch → nhóm; bỏ rào "đầu/cuối thuộc kế hoạch";
+Lưu định hình ghi ngược lộ trình cụm lên hồ sơ SP (`sync_profile_routes` mặc định bật, khớp tên
+cụm, không tạo cụm, hồ sơ khoá thì báo); tab Lộ trình SP nói "cập nhật từ lệnh X ngày Y"
+(0291 thêm `stages_source/stages_updated_at`); hộp Khai cụm chỉ còn SL cụm/SP, lộ trình chỉ
+đọc + link; Kế hoạch SX bỏ `stage_route`, gợi ý + rải cả lệnh theo hợp lộ trình đã định hình
+của dòng; 0291 cấp `components.edit` cho quản đốc. Không nâng `bom_rev` khi ghi ngược (chỉ đổi
+lộ trình, không đổi định mức). CÒN TREO: một đường đi trên lệnh (link "việc tiếp theo" ở Hồ sơ
+lệnh / danh sách lệnh, hoặc gộp tổ & hạn vào màn Định hình) — làm sau khi sếp Điền / Alex đi
+thử trọn chuỗi trên một lệnh thật.
+
 Việc của NGƯỜI, song song, không chặn mã: gán tổ cho 5 công đoạn trống; đặt tên
 thật cho 13 cụm rác; nạp định mức cho 217/268 dòng lệnh còn thiếu (đường AI BOM đã
 có). **Màn nào cũng chỉ có nghĩa khi có số** — B3 cố ý đứng trước B5/B6.

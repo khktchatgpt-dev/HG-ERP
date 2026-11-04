@@ -32,6 +32,10 @@ export function useDinhHinh(p: DinhHinhProps) {
   const [tab, setTab] = useState<TabKey>('chi_tiet')
   const [spLoc, setSpLoc] = useState('')
   const [seedProfile, setSeedProfile] = useState(false)
+  // Ghi ngược lộ trình cụm lên hồ sơ SP — mặc định BẬT (chủ dự án 04/11/2026:
+  // kế hoạch định hình trên lệnh là đường chính, hồ sơ SP đi theo). Bỏ tick khi
+  // lệnh này là ngoại lệ một lần.
+  const [syncProfile, setSyncProfile] = useState(true)
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [loi, setLoi] = useState<string | null>(null)
@@ -171,10 +175,14 @@ export function useDinhHinh(p: DinhHinhProps) {
       const res = await api<{
         seeded: { product_code: string; added: number }[]
         seed_skipped: { product_code: string; reason: string }[]
+        routes_synced: { product_code: string; updated: number }[]
+        routes_skipped: { product_code: string; reason: string }[]
+        routes_missing: { product_code: string; cluster: string }[]
       }>(`/api/dept/production/lsx/${p.lsx.id}/components`, {
         method: 'PUT',
         body: {
           seed_profile: seedProfile,
+          sync_profile_routes: syncProfile,
           lines: rows.map((r) => ({
             production_order_line_id: r.production_order_line_id,
             kind: r.kind,
@@ -210,8 +218,21 @@ export function useDinhHinh(p: DinhHinhProps) {
       const skipped = res.seed_skipped.length
         ? ` · không khởi tạo: ${res.seed_skipped.map((x) => `${x.product_code}: ${x.reason}`).join('; ')}`
         : ''
+      const lyDoBoQua: Record<string, string> = {
+        locked: 'hồ sơ đã khoá',
+        not_found: 'không còn hồ sơ',
+      }
+      const synced = (res.routes_synced ?? []).length
+        ? ` · hồ sơ SP nhận lộ trình: ${res.routes_synced.map((x) => `${x.product_code} (${x.updated} cụm)`).join(', ')}`
+        : ''
+      const syncSkipped = (res.routes_skipped ?? []).length
+        ? ` · hồ sơ SP không cập nhật: ${res.routes_skipped.map((x) => `${x.product_code} (${lyDoBoQua[x.reason] ?? x.reason})`).join(', ')}`
+        : ''
+      const syncMissing = (res.routes_missing ?? []).length
+        ? ` · chỉ ghi trên lệnh (hồ sơ SP chưa có cụm): ${res.routes_missing.map((x) => `${x.cluster} của ${x.product_code}`).join(', ')}`
+        : ''
       setThongBao(
-        `Đã lưu bảng định hình ${rows.length} dòng lúc ${gio}${seeded}${skipped}`,
+        `Đã lưu bảng định hình ${rows.length} dòng lúc ${gio}${seeded}${skipped}${synced}${syncSkipped}${syncMissing}`,
       )
       setDirty(false)
       router.refresh()
@@ -323,6 +344,8 @@ export function useDinhHinh(p: DinhHinhProps) {
     editable,
     seedProfile,
     setSeedProfile,
+    syncProfile,
+    setSyncProfile,
     chuaDinhMuc,
     busy,
     dirty,

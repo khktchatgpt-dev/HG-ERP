@@ -75,6 +75,20 @@ export function LoTrinhScreen(p: LoTrinhProps) {
         <span className="ctx">
           <b>{p.productCode}</b> · {p.clusters.length} cụm · {roi.length} chi tiết rời ·{' '}
           {mua.length} ngũ kim
+          {p.routeSource && (
+            <>
+              {' '}
+              ·{' '}
+              {p.routeSource.source.startsWith('lsx:') ? (
+                <>
+                  cập nhật từ lệnh <b>{p.routeSource.source.slice(4)}</b>
+                </>
+              ) : (
+                'khai tay'
+              )}{' '}
+              {new Date(p.routeSource.at).toLocaleDateString('vi-VN')}
+            </>
+          )}
           {p.bomRev != null && (
             <>
               {' '}

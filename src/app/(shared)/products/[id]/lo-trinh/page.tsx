@@ -28,9 +28,10 @@ export default async function ProductRoutesPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const [canEdit, catalog] = await Promise.all([
+  const [canEdit, catalog, routeSource] = await Promise.all([
     canEditBom(user),
     catalogsService.list(user, 'production_stage'),
+    productsService.latestRouteSource(user, id),
   ])
   const stages = resolveStageConfigs(catalog.filter((s) => s.is_active))
 
@@ -58,6 +59,7 @@ export default async function ProductRoutesPage({
       groupLabels={Object.fromEntries(data.groups.map((g) => [g.code, g.label]))}
       stages={stages}
       canEdit={canEdit && data.product.locked_at == null}
+      routeSource={routeSource}
     />
   )
 }
