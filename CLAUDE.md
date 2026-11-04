@@ -693,12 +693,15 @@ sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
 **Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
 "1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem", tên nhóm nói
 luôn ai làm; "Công cụ & cấu hình" gập sẵn (`gap`). Mục mới **Lộ trình công đoạn**
-(`/thongke/lo-trinh?lsx=`, MỘT MÀN gộp theo bản vẽ
-`A4U5vgYDeUwYrnDUkzfCq1`, chủ dự án 04/11: "gộp lại một phần, nhìn vào không
-biết thao tác sao"): trái là lệnh đang chạy (còn cụm chưa khai xếp trước), phải
-là ma trận cụm × công đoạn của lệnh đang chọn (`LoTrinhGopScreen` dùng lại
-`useDinhHinh` + `lo-trinh-lenh` của màn Bảng chi tiết; loader chung
-`dinh-hinh/load.ts`); đánh x rồi Lưu, hồ sơ SP nhận theo. Lệnh cũ có định mức mà
+(`/thongke/lo-trinh`, bản vẽ 3 `A4U5vgYDeUwYrnDUkzfCq1`, chủ dự án 04/11:
+"gộp lại một phần" rồi "rất khó nhìn, không muốn các thanh cuộn trái phải"):
+KHÔNG cột trái, KHÔNG khung cuộn con. Không `?lsx=` → bảng danh sách khuôn C
+(`bang-lenh.tsx`, chip lọc đếm bằng cùng vị từ); có `?lsx=` → ma trận MỘT lệnh
+trọn chiều ngang (260+50+40+12×56 = 1.022px vừa 1280), đổi lệnh bằng ô chọn +
+‹ › nhảy giữa lệnh còn cụm chưa khai; ký hiệu ✓ đậm / ✓ mờ / ô trống (bỏ gạch
+chéo và chữ x), ô vừa đổi viền xanh TỪNG Ô (so với lộ trình hiệu lực lúc mở).
+`LoTrinhGopScreen` dùng lại `useDinhHinh` + `lo-trinh-lenh`; loader chung
+`dinh-hinh/load.ts`; đánh ✓ rồi Lưu, hồ sơ SP nhận theo. Lệnh cũ có định mức mà
 chưa có bảng thì TỰ NẠP khi mở (cùng `autoShapeFromBom`). Màn
 `/thongke/lsx/[id]/dinh-hinh` nay chỉ còn lưới "Bảng chi tiết (BOM Kỹ thuật)"
 cho thống kê; tab Lộ trình ở hồ sơ SP CHỈ ĐỌC (`chiDoc`). Badge sidebar đếm
