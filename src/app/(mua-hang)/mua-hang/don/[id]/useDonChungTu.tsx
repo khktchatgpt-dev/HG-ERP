@@ -87,6 +87,7 @@ import { draftKeyFor, type SavedDraft } from './nhap-an-toan'
 import { useNhapAnToan } from './useNhapAnToan'
 import { barLayout, splitForStatusBar, type BarKey } from './thanh-nut'
 import { phieuNhapCuoi, vuongPhieuKho } from './tong-quan'
+import { adjHeader, chenChietKhau } from './o-chiet-khau'
 
 /**
  * TRẠNG THÁI + XỬ LÝ của màn chứng từ đơn mua — tách khỏi DonChungTuScreen.tsx
@@ -375,15 +376,13 @@ export function useDonChungTu(p: Props) {
         ? [{ ...(l as unknown as Record<string, unknown>), id: l.id, material_id: l.material_id, qty_ordered: Number(l.qty_ordered), unit_price: l.unit_price == null ? null : Number(l.unit_price), price_basis: l.price_basis === 'unit2' ? 'unit2' : 'unit', qty2: (l as { qty2?: number | null }).qty2 == null ? null : Number((l as { qty2?: number | null }).qty2), lsx_split: l.lsx_split ?? null, code: l.material_id ? l.material_code : null, name: l.material_name, unit: l.material_unit, received: statusById.get(l.id)?.qty_received ?? 0, planned: plannedLive.get(l.id) ?? 0, invoiced: false }] // prettier-ignore
         : [],
     )
+    // prettier-ignore
     return theoBuocDon(po.status, before, planAdjustment({
       currency: po.currency,
       priceIncludesVat: po.price_includes_vat,
-      before: {
-        lines: before,
-        header: { vatRate: po.vat_rate, discount: po.discount_amount },
-      },
+      before: { lines: before, header: adjHeader(po.vat_rate, po) },
       after: {
-        header: { vatRate: body.vat_rate, discount: body.discount_amount },
+        header: adjHeader(body.vat_rate, body),
         lines: body.lines.map((pl, i) => ({ ...pl, ...deriveLine(template, pl as Parameters<typeof deriveLine>[1]), id: lines[i].po_line_id ?? null, material_id: pl.material_id ?? null, unit_price: pl.unit_price ?? null, code: lines[i].is_free ? null : lines[i].code, name: lines[i].name, unit: lines[i].unit })), // prettier-ignore
       },
     })) // Về đủ: chỉ giá (0280)
@@ -599,7 +598,7 @@ export function useDonChungTu(p: Props) {
     if (!po) throw new Error('Chưa có đơn')
     const body = buildPoPayload(header, lines)
     try {
-      return await api<{ seq: number; delta_total: number }>(`/api/dept/supply/pos/${po.id}/adjustments`, { method: 'POST', body: { base_seq: adjustments.at(-1)?.seq ?? 0, reason: nn.note.trim(), cause: nn.cause, lsx_ids: nn.pickedLsx(adjLinkedLsx), vat_rate: body.vat_rate, discount_amount: body.discount_amount, lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })) } }) // prettier-ignore
+      return await api<{ seq: number; delta_total: number }>(`/api/dept/supply/pos/${po.id}/adjustments`, { method: 'POST', body: { base_seq: adjustments.at(-1)?.seq ?? 0, reason: nn.note.trim(), cause: nn.cause, lsx_ids: nn.pickedLsx(adjLinkedLsx), vat_rate: body.vat_rate, discount_amount: body.discount_amount, discount_percent: body.discount_percent, discount_after_vat: body.discount_after_vat, discount_note: body.discount_note, lines: body.lines.map((l, i) => ({ ...l, id: lines[i].po_line_id ?? null })) } }) // prettier-ignore
     } catch (e) {
       // 409 = có người vừa điều chỉnh trước — bản đang sửa đã cũ, nói thẳng.
       if (e instanceof ApiError && e.status === 409) throw new Error(`Đơn vừa được điều chỉnh bởi người khác — ${apiErrorText(e)}`) // prettier-ignore
@@ -1244,14 +1243,14 @@ export function useDonChungTu(p: Props) {
      (27/09/2026) Màn ĐỌC chia thân thành menu ngang (`DocMenu`): bấm mục
      nào, thân chỉ hiện mục đó. Màn SOẠN / SỬA giữ nguyên bố cục khối gập +
      cột phải. Hai bố cục dùng CÙNG các khối dưới đây — không chép hai bản. */
-  const moneyRows: [string, React.ReactNode][] = [
+  const moneyRows = chenChietKhau(header, totals.discountAmount, [
     [header.inclVat ? 'Tiền hàng (đã gồm VAT)' : 'Tiền hàng', <span key="a" className="num">{money(totals.subtotal, header.currency)}</span>], // prettier-ignore
     ['VAT', <span key="b" className="num">{header.vat === '' ? 0 : header.vat}%{header.inclVat ? ' (đã gồm)' : ''} · {money(totals.vatAmount, header.currency)}</span>], // prettier-ignore
     ['Tổng thanh toán', <b key="c" className="num">{money(totals.grandTotal, header.currency)}</b>], // prettier-ignore
     ...(!editing && adjustments.length > 0 ? [['Bản duyệt', <span key="e" className="num">{money(adjustments[0].total_before, header.currency)}</span>], ['Phát sinh sau duyệt', <span key="f" className="num" title="Cộng các lần điều chỉnh — chi tiết ở khối Tiền của đơn">{signed(adjustments.at(-1)!.total_after - adjustments[0].total_before, header.currency)}</span>]] as [string, React.ReactNode][] : []), // prettier-ignore
     ...(!editing && costShare > 0 ? [['Chi phí mua · chưa VAT', <span key="g" className="num" title="Phí vận chuyển / bốc xếp chia cho đơn này — trả nhà xe hoặc NCC, chưa vào giá nhập kho">{money(costShare, header.currency)}</span>], ['Giá trị đơn + phí', <span key="h" className="num" title="Tiền hàng sau chiết khấu + chi phí mua, cùng CHƯA VAT">{money(totals.grandTotal - totals.vatAmount + costShare, header.currency)}</span>]] as [string, React.ReactNode][] : []), // prettier-ignore
     ...(issues.length > 0 ? [['Chưa gồm', <span key="d" className="k-t-warn">{issues.length} dòng thiếu số</span>] as [string, React.ReactNode]] : []), // prettier-ignore
-  ]
+  ])
 
   /* ── BỐ CỤC ĐỌC: đầu trang sắp xếp lại (27/09/2026, duyệt theo khuyến nghị) ──
      Mã đơn + việc hay làm CÙNG HÀNG → hàng dữ kiện → thanh trạng thái (bước kế

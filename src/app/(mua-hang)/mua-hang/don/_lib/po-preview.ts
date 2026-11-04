@@ -98,7 +98,16 @@ export function previewHeaderFromDraft(
     currency: header.currency,
     vat_rate: header.vat === '' ? null : Number(header.vat),
     price_includes_vat: header.inclVat,
-    discount_amount: header.discount === '' ? null : Number(header.discount),
+    discount_amount:
+      header.discountUnit === 'vnd' && header.discount !== ''
+        ? Number(header.discount)
+        : null,
+    discount_percent:
+      header.discountUnit === 'pct' && header.discount !== ''
+        ? Number(header.discount)
+        : null,
+    discount_after_vat: header.discountAfterVat,
+    discount_note: header.discountNote.trim() || null,
     contract_no: header.contractNo.trim() || null,
     expected_at: header.expectedAt || null,
     note: header.note.trim() || null,

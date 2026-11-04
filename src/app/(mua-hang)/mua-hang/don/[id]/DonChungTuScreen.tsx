@@ -55,6 +55,7 @@ import { TaiChinhPanel } from './TaiChinhPanel'
 import { NguyenNhanField } from './nguyen-nhan'
 import { DongSuCoSheet, GhiSuCoSheet } from './TheoDoiPanel'
 import { ChanDonSoan, DauDonSoan } from './dau-don-soan'
+import { OChietKhau } from './o-chiet-khau'
 import { nhanNgoaiLenh } from '@/lib/po-muc-dich'
 import { BangKiem, ChuaGuiNcc, DauDon, NhaCungCapTomTat } from './dau-don'
 import {
@@ -282,15 +283,13 @@ export function DonChungTuScreen(p: Props) {
               onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
             />
           </Field>
-          {meta.hasDiscount && (
-            <Field label="Chiết khấu">
-              <NumInput
-                aria-label="Chiết khấu"
-                value={numStr(header.discount)}
-                onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
-              />
-            </Field>
-          )}
+          <Field label="Chiết khấu">
+            <OChietKhau
+              header={header}
+              amount={d.totals.discountAmount}
+              onChange={(p) => setHeader((h) => ({ ...h, ...p }))}
+            />
+          </Field>
         </FieldGroup>
         <div className="text-k-label px-[var(--gutter)] pb-2 text-[var(--ink-3)]">
           Đổi nhà cung cấp thì Huỷ đơn rồi Nhân bản sang NCC mới. Hẹn giao, điều khoản

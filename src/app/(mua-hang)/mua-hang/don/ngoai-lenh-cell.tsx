@@ -37,7 +37,9 @@ export function NgoaiLenhCell({
       ) : (
         <span className="text-k-label truncate text-[var(--ink-2)]">{dong1}</span>
       )}
-      {dong2 && <span className="text-k-label truncate text-[var(--ink-3)]">{dong2}</span>}
+      {dong2 && (
+        <span className="text-k-label truncate text-[var(--ink-3)]">{dong2}</span>
+      )}
     </span>
   )
 }

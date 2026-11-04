@@ -103,6 +103,10 @@ export type PoPrintHeader = {
   vat_rate: number | null
   price_includes_vat: boolean
   discount_amount: number | null
+  /** 0292 — chiết khấu %, trừ sau VAT, lý do (in dòng chiết khấu). */
+  discount_percent?: number | null
+  discount_after_vat?: boolean | null
+  discount_note?: string | null
   contract_no: string | null
   expected_at: string | null
   note: string | null

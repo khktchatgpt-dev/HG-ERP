@@ -34,7 +34,14 @@ export type PoHeader = {
   contractNo: string
   currency: string
   note: string
+  /** Số gõ ở ô chiết khấu — % hay số tiền tuỳ `discountUnit` (0292). */
   discount: Num
+  /** 'pct' = gõ %, tiền tự tính lại theo dòng; 'vnd' = gõ số tiền. */
+  discountUnit: 'pct' | 'vnd'
+  /** Trừ trên tổng thanh toán (sau VAT) — VAT không giảm. */
+  discountAfterVat: boolean
+  /** Lý do chiết khấu, in lên phiếu. */
+  discountNote: string
   vat: Num
   inclVat: boolean
   terms: PoTerms
@@ -70,7 +77,15 @@ export function poTotals(header: PoHeader, lines: Line[]) {
   // này — trước đó chi tiết chỉ hiện Σ dòng, tức số trước chiết khấu và VAT.
   return poMoney({
     subtotalRaw: lines.reduce((s, l) => s + lineAmount(header.template, l), 0),
-    discount: header.discount === '' ? 0 : Number(header.discount),
+    discount:
+      header.discountUnit === 'vnd' && header.discount !== ''
+        ? Number(header.discount)
+        : 0,
+    discountPercent:
+      header.discountUnit === 'pct' && header.discount !== ''
+        ? Number(header.discount)
+        : null,
+    discountAfterVat: header.discountAfterVat,
     vatRate: header.vat === '' ? 0 : Number(header.vat),
     priceIncludesVat: header.inclVat,
     // VND tròn đồng, USD/EUR/CNY tròn cent — cùng mốc với chi tiết/in/Excel.
@@ -136,6 +151,12 @@ export function buildPoPayload(
     vat_rate: header.vat === '' ? null : Number(header.vat),
     price_includes_vat: header.inclVat,
     discount_amount: discountAmount || null,
+    discount_percent:
+      header.discountUnit === 'pct' && header.discount !== ''
+        ? Number(header.discount)
+        : null,
+    discount_after_vat: header.discountAfterVat,
+    discount_note: header.discountNote.trim() || null,
     contract_no: header.contractNo.trim() || null,
     expected_at: header.expectedAt || null,
     terms_quality: header.terms.quality || null,

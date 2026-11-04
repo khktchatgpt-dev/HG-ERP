@@ -83,8 +83,6 @@ export type PoTemplateMeta = {
   vatRate: number | null
   /** Đơn giá đã gồm VAT chưa — nhôm ghi "chưa gồm", inox ghi "đã gồm". */
   priceIncludesVat: boolean
-  /** Chỉ mẫu phụ kiện in dòng Chiết khấu trên phiếu. */
-  hasDiscount: boolean
   signerRole: string
   terms: PoTerms
   /**
@@ -111,7 +109,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 8,
     priceIncludesVat: false,
-    hasDiscount: true,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Hàng đúng mẫu, đúng chuẩn loại theo yêu cầu',
@@ -130,7 +127,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 8,
     priceIncludesVat: false,
-    hasDiscount: true,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Hàng đúng mẫu, đúng khổ và định lượng theo yêu cầu',
@@ -149,7 +145,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: 'kg',
     vatRate: 10,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality:
@@ -167,7 +162,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: 'kg',
     vatRate: 10,
     priceIncludesVat: true,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Bề mặt phẳng đẹp, đúng mác. Dung sai độ dày và quy cách +/- 5%',
@@ -184,7 +178,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 8,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng định lượng, đúng quy cách, thùng không móp rách',
@@ -208,7 +201,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Dây đúng mẫu đã duyệt — bảo hành 24 tháng, UV 1.500h',
@@ -226,7 +218,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 8,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng mã màu, đạt chuẩn ngoài trời theo mẫu đã duyệt',
@@ -249,7 +240,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 8,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng chủng loại, quy cách can/bao như đơn',
@@ -271,7 +261,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng quy cách, màu sắc theo mẫu đã duyệt',
@@ -295,7 +284,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: true,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Làm đúng mẫu đã duyệt — bo góc, mài cạnh theo yêu cầu trên đơn',
@@ -315,7 +303,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: 'm³',
     vatRate: 10,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Bề mặt gỗ không trám trít, không nứt nẻ',
@@ -348,7 +335,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Hàng mới 100%, đúng model / mã hãng đã chào',
@@ -375,7 +361,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 8,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'In đúng mẫu đã duyệt — đúng màu, kích thước, chất liệu giấy',
@@ -399,7 +384,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: false,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality:
@@ -418,7 +402,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: true,
-    hasDiscount: false,
     signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: '',

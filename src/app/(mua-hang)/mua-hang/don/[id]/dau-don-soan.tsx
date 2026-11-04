@@ -6,9 +6,10 @@ import { PO_CURRENCIES } from '@/lib/po-line'
 import { ChonNhom, khop } from '../../_erp/chon-nhom'
 import { MenuBa, Nut } from '../../_erp/ui'
 import { ChonMau } from './chon-mau'
-import { money, numStr, toNum } from './don-chung-tu.shared'
+import { money } from './don-chung-tu.shared'
 import { hangMucSauDon, OChoViec } from './o-cho-viec'
 import { OThue } from './o-thue'
+import { OChietKhau } from './o-chiet-khau'
 import { OShop, O_SHOP_LABEL, thieuShop } from './o-shop'
 import { moXemTruoc } from './xem-truoc'
 import type { DonCtx } from './useDonChungTu'
@@ -115,10 +116,15 @@ function ONgay({
 
 /** Dòng tên + hàng ô + hàng phụ của đơn đang soạn. */
 export function DauDonSoan({ d }: { d: DonCtx }) {
-  const { p, po, header, setHeader, dirty, template, supplierOpt, meta, busy, problem } = d // prettier-ignore
+  const { p, po, header, setHeader, dirty, template, supplierOpt, busy, problem } = d // prettier-ignore
   const [phu, setPhu] = useState<boolean | null>(null)
   const [gopMo, setGopMo] = useState(false)
-  const phuMo = phu ?? (!!header.contractNo || header.currency !== 'VND')
+  // Đơn có chiết khấu thì dải phụ tự mở (bản vẽ 0292 Q3) — chiết khấu không bị giấu.
+  const phuMo =
+    phu ??
+    (!!header.contractNo ||
+      header.currency !== 'VND' ||
+      (header.discount !== '' && Number(header.discount) > 0))
   const gopHien = header.poType === 'lsx' && (gopMo || header.extraLsxIds.length > 0)
   const chonNcc = (v: string) => {
     const s = p.suppliers.find((x) => x.id === v)
@@ -271,7 +277,7 @@ export function DauDonSoan({ d }: { d: DonCtx }) {
         >
           {phuMo
             ? 'Ẩn bớt'
-            : `⋯ Tiền tệ${header.currency !== 'VND' ? ` (${header.currency})` : ''} · Số HĐ${meta.hasDiscount ? ' · Chiết khấu' : ''}`}
+            : `⋯ Tiền tệ${header.currency !== 'VND' ? ` (${header.currency})` : ''} · Số HĐ · Chiết khấu`}
         </ChipNet>
       </div>
 
@@ -314,19 +320,13 @@ export function DauDonSoan({ d }: { d: DonCtx }) {
               }
             />
           </Hf>
-          {meta.hasDiscount && (
-            <Hf label="Chiết khấu">
-              <input
-                aria-label="Chiết khấu"
-                inputMode="decimal"
-                className="w-[100px] bg-transparent text-right font-mono text-[13px] outline-none"
-                defaultValue={numStr(header.discount)}
-                onBlur={(e) =>
-                  setHeader((h) => ({ ...h, discount: toNum(e.target.value) }))
-                }
-              />
-            </Hf>
-          )}
+          <Hf label="Chiết khấu">
+            <OChietKhau
+              header={header}
+              amount={d.totals.discountAmount}
+              onChange={(p) => setHeader((h) => ({ ...h, ...p }))}
+            />
+          </Hf>
           {supplierOpt &&
             (supplierOpt.lead_time_days != null || supplierOpt.payment_terms) && (
               <span className="text-[11.5px] text-[var(--ink-3)]">

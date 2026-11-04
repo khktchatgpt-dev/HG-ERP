@@ -171,11 +171,6 @@ describe('metadata mẫu', () => {
     expect(poTemplateMeta('metal_kg').priceIncludesVat).toBe(true) // "đã gồm VAT"
   })
 
-  it('chỉ mẫu phụ kiện có dòng Chiết khấu', () => {
-    expect(poTemplateMeta('accessory').hasDiscount).toBe(true)
-    expect(poTemplateMeta('aluminium').hasDiscount).toBe(false)
-  })
-
   it('ô ký giữa của MỌI mẫu là "NGƯỜI LẬP" (form mẫu mới 12/08/2026)', () => {
     for (const t of PO_TEMPLATES) expect(poTemplateMeta(t).signerRole).toBe('NGƯỜI LẬP')
   })
@@ -243,7 +238,6 @@ describe('mẫu gia công ngoài (Phương Vy, PO-2026-0054)', () => {
     expect(m.label).toBe('Gia công ngoài')
     expect(m.vatRate).toBe(10)
     expect(m.priceIncludesVat).toBe(false)
-    expect(m.hasDiscount).toBe(false)
     expect(m.signerRole).toBe('NGƯỜI LẬP')
     expect(m.terms.payment).toBe('Thanh toán công nợ cuối tháng')
   })

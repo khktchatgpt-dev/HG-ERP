@@ -64,6 +64,9 @@ const header = (over: Partial<PoHeader> = {}): PoHeader => ({
   currency: 'VND',
   note: '',
   discount: '',
+  discountUnit: 'vnd',
+  discountAfterVat: false,
+  discountNote: '',
   vat: 8,
   inclVat: false,
   terms: poTemplateMeta('accessory').terms,
@@ -230,5 +233,41 @@ describe('buildPoPayload', () => {
     expect(l).not.toHaveProperty('price_basis')
     expect(l.weight_per_m).toBe(0.248)
     expect(l.qty_ordered).toBe(273)
+  })
+})
+
+describe('chiết khấu % · trừ sau VAT (0292, PO-2026-0242)', () => {
+  // 458 kg keo Epoxy × 100.000 đã gồm VAT 8% — NCC trừ 3% tiền vỏ lon trên tổng.
+  const keo = () => [line({ qty: 458, price: 100_000 })]
+  const h = () =>
+    header({
+      template: 'chemical',
+      vat: 8,
+      inclVat: true,
+      discount: 3,
+      discountUnit: 'pct',
+      discountAfterVat: true,
+      discountNote: ' tiền vỏ lon hỗ trợ ',
+    })
+
+  it('tổng khớp phiếu NCC: 45.800.000 − 1.374.000 = 44.426.000', () => {
+    const t = poTotals(h(), keo())
+    expect(t.discountAmount).toBe(1_374_000)
+    expect(t.grandTotal).toBe(44_426_000)
+  })
+
+  it('gửi lên máy chủ đủ %, kiểu trừ, lý do và số tiền đã tính', () => {
+    const p = buildPoPayload(h(), keo())
+    expect(p.discount_percent).toBe(3)
+    expect(p.discount_after_vat).toBe(true)
+    expect(p.discount_note).toBe('tiền vỏ lon hỗ trợ')
+    expect(p.discount_amount).toBe(1_374_000)
+  })
+
+  it('gõ số tiền: không gửi %, cách cũ giữ nguyên', () => {
+    const p = buildPoPayload(header({ discount: 50_000, vat: 10 }), [line({ qty: 10, price: 100_000 })]) // prettier-ignore
+    expect(p.discount_percent).toBeNull()
+    expect(p.discount_after_vat).toBe(false)
+    expect(p.discount_amount).toBe(50_000)
   })
 })

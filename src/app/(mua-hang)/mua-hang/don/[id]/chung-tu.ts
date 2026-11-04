@@ -31,6 +31,9 @@ export type PoForHeader = {
   vat_rate: number | null
   price_includes_vat: boolean
   discount_amount: number | null
+  discount_percent?: number | null
+  discount_after_vat?: boolean | null
+  discount_note?: string | null
   contract_no: string | null
   expected_at: string | null
   note: string | null
@@ -71,7 +74,11 @@ export function headerFromPo(po: PoForHeader, extraLsxIds: string[]): PoHeader {
     marketplaceShop: po.marketplace_shop ?? '',
     currency: po.currency,
     note: po.note ?? '',
-    discount: po.discount_amount ?? '',
+    // % thắng số tiền (0292): đơn gõ % thì ô hiện lại đúng %, không hiện tiền đã tính.
+    discount: po.discount_percent ?? po.discount_amount ?? '',
+    discountUnit: po.discount_percent != null ? 'pct' : 'vnd',
+    discountAfterVat: !!po.discount_after_vat,
+    discountNote: po.discount_note ?? '',
     vat: po.vat_rate ?? '',
     inclVat: po.price_includes_vat,
     terms,
@@ -114,6 +121,9 @@ export function newHeader(opts: {
     currency: opts.currency ?? 'VND',
     note: '',
     discount: '',
+    discountUnit: 'vnd',
+    discountAfterVat: false,
+    discountNote: '',
     vat: d.vat,
     inclVat: d.inclVat,
     terms: d.terms,

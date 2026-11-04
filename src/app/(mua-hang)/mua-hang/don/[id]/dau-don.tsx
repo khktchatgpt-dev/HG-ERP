@@ -12,15 +12,15 @@ import {
   FieldGroup,
   GridBtn,
   NoticeBar,
-  NumInput,
   Pick,
   TextArea,
   TextInput,
 } from '@/components/kit'
 import { PO_CURRENCIES } from '@/lib/po-line'
-import { TERM_FIELDS, dmy, dmyAt, money, numStr, toNum } from './don-chung-tu.shared'
+import { TERM_FIELDS, dmy, dmyAt, money } from './don-chung-tu.shared'
 import type { DonCtx } from './useDonChungTu'
 import { CauHoiGd } from './cau-hoi-gd'
+import { chietKhauNhan, OChietKhau } from './o-chiet-khau'
 
 /** Khối `nccBody` của màn chứng từ đơn mua. */
 export function NhaCungCapTomTat({ d }: { d: DonCtx }) {
@@ -329,15 +329,13 @@ export function DauDon({ d }: { d: DonCtx }) {
                       dem={d.p.thueDem}
                     />
                   </Field>
-                  {meta.hasDiscount && (
-                    <Field label="Chiết khấu">
-                      <NumInput
-                        aria-label="Chiết khấu"
-                        value={numStr(header.discount)}
-                        onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
-                      />
-                    </Field>
-                  )}
+                  <Field label="Chiết khấu">
+                    <OChietKhau
+                      header={header}
+                      amount={d.totals.discountAmount}
+                      onChange={(p) => setHeader((h) => ({ ...h, ...p }))}
+                    />
+                  </Field>
                 </>
               ) : (
                 <>
@@ -353,6 +351,9 @@ export function DauDon({ d }: { d: DonCtx }) {
                     <span className="num">
                       {po?.discount_amount ? money(po.discount_amount, po.currency) : '—'}
                     </span>
+                    {po?.discount_amount ? (
+                      <span className="text-[var(--ink-3)]"> · {chietKhauNhan(po)}</span>
+                    ) : null}
                   </Field>
                   {/*
                     TỶ GIÁ CHỐT (0219) — chỉ đơn ngoại tệ. Quy VND tính lúc đọc
