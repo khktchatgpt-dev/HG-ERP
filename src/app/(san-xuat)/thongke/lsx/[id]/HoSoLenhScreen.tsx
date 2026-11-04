@@ -98,7 +98,9 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
               </ApNhom>
               <ApNhom>
                 {p.canRecord && (
-                  <ApNut href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>Định hình</ApNut>
+                  <ApNut href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>
+                    Lộ trình công đoạn
+                  </ApNut>
                 )}
                 <ApNut href={`/api/dept/production/lsx/${lsx.id}/export`}>Excel</ApNut>
               </ApNhom>

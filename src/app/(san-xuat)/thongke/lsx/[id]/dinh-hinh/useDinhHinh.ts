@@ -29,7 +29,9 @@ export type TabKey = 'chi_tiet' | 'lo_trinh'
 export function useDinhHinh(p: DinhHinhProps) {
   const router = useRouter()
   const [rows, setRows] = useState<Draft[]>(() => p.initialRows.map(toDraft))
-  const [tab, setTab] = useState<TabKey>('chi_tiet')
+  // Mở vào LỘ TRÌNH trước (04/11/2026): bảng chi tiết là định mức của Kỹ thuật,
+  // tự nạp lúc duyệt lệnh; việc của Kế hoạch ở màn này là đánh x công đoạn.
+  const [tab, setTab] = useState<TabKey>('lo_trinh')
   const [spLoc, setSpLoc] = useState('')
   const [seedProfile, setSeedProfile] = useState(false)
   // Ghi ngược lộ trình cụm lên hồ sơ SP — mặc định BẬT (chủ dự án 04/11/2026:

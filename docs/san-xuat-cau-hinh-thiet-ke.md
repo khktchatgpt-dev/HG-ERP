@@ -262,9 +262,18 @@ cụm, không tạo cụm, hồ sơ khoá thì báo); tab Lộ trình SP nói "c
 (0291 thêm `stages_source/stages_updated_at`); hộp Khai cụm chỉ còn SL cụm/SP, lộ trình chỉ
 đọc + link; Kế hoạch SX bỏ `stage_route`, gợi ý + rải cả lệnh theo hợp lộ trình đã định hình
 của dòng; 0291 cấp `components.edit` cho quản đốc. Không nâng `bom_rev` khi ghi ngược (chỉ đổi
-lộ trình, không đổi định mức). CÒN TREO: một đường đi trên lệnh (link "việc tiếp theo" ở Hồ sơ
-lệnh / danh sách lệnh, hoặc gộp tổ & hạn vào màn Định hình) — làm sau khi sếp Điền / Alex đi
-thử trọn chuỗi trên một lệnh thật.
+lộ trình, không đổi định mức). Cùng ngày, chủ dự án chê "nhìn workspace này rối quá" → **menu
+xếp lại theo đường đi của lệnh**: 1 · Lệnh → 2 · Kế hoạch chuẩn bị (mục mới **Định hình chi
+tiết** `/thongke/dinh-hinh` + Giao tổ & hạn + Chỉ tiêu ngày) → 3 · Thống kê ghi sổ → 4 · Xem;
+Công cụ & cấu hình gập sẵn; badge "Giao nhận" = phiếu chờ tổ tôi nhận. **Rồi chủ dự án chỉnh
+lại nghĩa**: "định hình BOM là việc của Kỹ thuật, Kế hoạch chỉ định hình CÔNG ĐOẠN" → mục đổi
+thành **Lộ trình công đoạn** (`/thongke/lo-trinh`): câu hỏi là lệnh nào còn cụm chưa khai lộ
+trình (badge = số lệnh đó, `needsRoute`), lệnh nào còn chờ Kỹ thuật nạp định mức; màn lệnh mở
+tab Lộ trình trước, tab "Bảng chi tiết (BOM Kỹ thuật)" đứng sau; **bảng chi tiết tự nạp lúc
+duyệt lệnh** (`autoShapeFromBom`, chọn "lúc duyệt" thay vì "lúc mở màn" để Ghi sản lượng có dòng
+ngay cả khi kế hoạch chưa vào); 13 lệnh đang chạy chưa có bảng nạp bù bằng
+`scripts/nap-bang-chi-tiet-lenh-1104.ts` 04/11. CÒN TREO: gộp tổ & hạn vào màn Định hình hay giữ hai
+màn — quyết sau khi sếp Điền / Alex đi thử trọn chuỗi trên một lệnh thật.
 
 Việc của NGƯỜI, song song, không chặn mã: gán tổ cho 5 công đoạn trống; đặt tên
 thật cho 13 cụm rác; nạp định mức cho 217/268 dòng lệnh còn thiếu (đường AI BOM đã

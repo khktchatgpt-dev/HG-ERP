@@ -596,7 +596,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     // hơn. Bỏ khỏi nav mà không để đường vào thì là xoá chức năng.
     sections: [
       {
-        heading: 'Điều hành xưởng',
+        heading: '1 · Lệnh',
+        // MENU XẾP THEO ĐƯỜNG ĐI CỦA MỘT LỆNH (04/11/2026, chủ dự án: "nhìn
+        // workspace này rối quá"): bốn nhóm đánh số 1→4 theo thứ tự lệnh chảy
+        // qua tay người, tên nhóm nói luôn AI làm. Trước đó bảy nhóm xếp theo
+        // loại màn (Điều hành / Ghi sổ / Xem / Kế hoạch / Công cụ / Cấu hình),
+        // bước 2 "định hình" không có cửa vào từ menu — phải đi vòng qua Hồ sơ
+        // lệnh. Nhóm ít dùng gập sẵn (cơ chế `gap` của Kho).
         items: [
           {
             href: '/production',
@@ -604,11 +610,38 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'factory',
             capability: 'production.overview',
           },
-          { href: '/thongke/lenh', label: 'Lệnh sản xuất', icon: 'factory' },
+          { href: '/thongke/lenh', label: 'Lệnh sản xuất', icon: 'factory', exact: true },
         ],
       },
       {
-        heading: 'Ghi sổ',
+        // Kế hoạch chuẩn bị lệnh: định hình chi tiết (bảng + lộ trình cụm, hồ sơ
+        // SP cập nhật theo) rồi gắn tổ & hạn. Badge "Định hình chi tiết" = lệnh
+        // chưa có bảng (nav-badges, cùng hàm trang đích).
+        heading: '2 · Kế hoạch chuẩn bị',
+        items: [
+          {
+            href: '/thongke/lo-trinh',
+            label: 'Lộ trình công đoạn',
+            icon: 'shapes',
+            capability: 'production.shaping',
+          },
+          {
+            href: '/kehoach-sx',
+            label: 'Giao tổ & hạn',
+            icon: 'calendar-range',
+            capability: 'production.plan',
+            exact: true,
+          },
+          {
+            href: '/kehoach-sx/chi-tieu',
+            label: 'Chỉ tiêu ngày',
+            icon: 'list-todo',
+            capability: 'production.plan',
+          },
+        ],
+      },
+      {
+        heading: '3 · Thống kê ghi sổ',
         items: [
           {
             href: '/thongke/ghi',
@@ -632,35 +665,17 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       },
       {
         // B6 (03/11/2026): sáu bảng báo cáo trên một màn, kỳ tự do.
-        heading: 'Xem',
+        heading: '4 · Xem',
         items: [{ href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' }],
       },
       {
-        heading: 'Kế hoạch',
+        // Gập sẵn: không nằm trên đường đi của lệnh, mở khi cần.
+        heading: 'Công cụ & cấu hình',
+        gap: true,
         items: [
-          {
-            href: '/kehoach-sx',
-            label: 'Kế hoạch sản xuất',
-            icon: 'calendar-range',
-            capability: 'production.plan',
-          },
-          {
-            href: '/kehoach-sx/chi-tieu',
-            label: 'Chỉ tiêu ngày',
-            icon: 'list-todo',
-            capability: 'production.plan',
-          },
-        ],
-      },
-      {
-        heading: 'Công cụ',
-        items: [{ href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' }],
-      },
-      {
-        // B1 (03/11/2026): một màn cho bốn thứ đang nằm ở bốn bảng — bậc đếm,
-        // tổ, ô riêng, mã lỗi. Chỉ quản đốc/manager/admin thấy.
-        heading: 'Cấu hình',
-        items: [
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+          // B1 (03/11/2026): một màn cho bốn thứ đang nằm ở bốn bảng — bậc
+          // đếm, tổ, ô riêng, mã lỗi. Chỉ quản đốc/manager/admin thấy.
           {
             href: '/production/cau-hinh/cong-doan',
             label: 'Công đoạn',

@@ -4,6 +4,13 @@ import { soPhieuRepo } from '@/modules/dept/warehouse/so-phieu.repo'
 import { deNghiRepo } from '@/modules/dept/warehouse/de-nghi.repo'
 import { choToiDuyet } from '@/lib/de-nghi-duyet'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import {
+  componentsService,
+  needsRoute,
+} from '@/modules/dept/production/components.service'
+import { transferDocsRepo } from '@/modules/dept/production/transfer-docs.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { choNhan } from '@/lib/pgt-tabs'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
@@ -29,10 +36,38 @@ export async function resolveNavBadges(
     if (workspaceId === 'exec') return await execBadges(user)
     if (workspaceId === 'planning') return await supplyBadges(user)
     if (workspaceId === 'warehouse') return await warehouseBadges()
+    if (workspaceId === 'production') return await productionBadges(user)
     return {}
   } catch {
     return {}
   }
+}
+
+/**
+ * Khu Sản xuất (04/11/2026, menu xếp theo đường đi của lệnh):
+ *   "Lộ trình công đoạn" = lệnh đang chạy còn cụm chưa khai lộ trình — đúng hàm trang
+ *   `/thongke/lo-trinh` dùng (`componentsService.shapingOverview` + `needsRoute`);
+ *   "Giao nhận" = phiếu giao tổ chờ TỔ CỦA NGƯỜI XEM nhận — cùng vị từ `choNhan`
+ *   của tab "Chờ tôi nhận". Người không thuộc tổ xưởng thì không có số.
+ */
+async function productionBadges(user: User): Promise<Record<string, number>> {
+  const out: Record<string, number> = {}
+  const rows = await componentsService.shapingOverview()
+  const chuaLoTrinh = rows.filter(needsRoute).length
+  if (chuaLoTrinh > 0) out['/thongke/lo-trinh'] = chuaLoTrinh
+
+  if (user.department_id) {
+    const depts = await departmentsRepo.list()
+    const team = depts.find(
+      (d) => d.id === user.department_id && d.workspace_id === 'production',
+    )
+    if (team) {
+      const docs = await transferDocsRepo.listByLsxBulk(rows.map((r) => r.lsx.id))
+      const n = docs.filter((d) => choNhan(d, team.id)).length
+      if (n > 0) out['/thongke/giao-nhan'] = n
+    }
+  }
+  return out
 }
 
 /**

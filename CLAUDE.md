@@ -570,6 +570,24 @@ Excel. `/production` (Tình hình xưởng) cũng không kit: ô việc là LINK
 `/thongke/lenh?view=` — bấm vào phải ra đúng số dòng ô vừa đếm. Khu Sản xuất
 sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
 
+**Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
+"1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem", tên nhóm nói
+luôn ai làm; "Công cụ & cấu hình" gập sẵn (`gap`). Mục mới **Lộ trình công đoạn**
+(`/thongke/lo-trinh`, khuôn C, không kit): mọi lệnh đang chạy, lệnh nào còn CỤM
+chưa khai lộ trình, lệnh nào còn chờ Kỹ thuật nạp định mức; bấm là vào thẳng
+`/thongke/lsx/[id]/dinh-hinh` (màn này nay MỞ TAB LỘ TRÌNH TRƯỚC, tab "Bảng chi
+tiết (BOM Kỹ thuật)" đứng sau); badge sidebar đếm bằng CHÍNH
+`componentsService.shapingOverview` + `needsRoute` của trang. **Bảng chi tiết tự
+nạp lúc duyệt lệnh** (`lsx.service.approve` → `componentsService.autoShapeFromBom`,
+nuốt lỗi như ảnh chụp định mức; có bảng rồi không đụng; SP chưa có định mức thì
+trống + báo "chờ Kỹ thuật") — chủ dự án 04/11: "định hình BOM là việc của Kỹ
+thuật, Kế hoạch chỉ khai lộ trình công đoạn". Lệnh duyệt trước ngày đó nạp bù
+bằng `scripts/nap-bang-chi-tiet-lenh-1104.ts`. Badge "Giao nhận" =
+phiếu chờ tổ của người xem nhận, cùng vị từ `choNhan` (`lib/pgt-tabs`) với tab
+"Chờ tôi nhận". "Kế hoạch sản xuất" đổi tên thành "Giao tổ & hạn" vì màn đó chỉ
+gắn tổ và hạn. Mục có trang con cùng tiền tố (`/thongke/lenh`, `/kehoach-sx`) đặt
+`exact: true` để không sáng đôi.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

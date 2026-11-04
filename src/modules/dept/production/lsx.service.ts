@@ -7,6 +7,7 @@ import '@/events/register' // Đăng ký handler event ở lần import đầu t
 import { jobsRepo } from './jobs.repo'
 import { entriesRepo } from './entries.repo'
 import { componentsRepo } from './components.repo'
+import { componentsService } from './components.service'
 import { lsxLinesService } from './lsx-lines.service'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { bomSnapshotRepo } from './bom-snapshot.repo'
@@ -345,6 +346,19 @@ export const lsxService = {
       await bomSnapshotRepo.ensureForOrder(id, user.id)
     } catch (e) {
       console.error('[lsx.approve] chụp định mức lỗi', id, e)
+    }
+    /*
+     * BẢNG CHI TIẾT tự nạp từ định mức ngay lúc duyệt (04/11/2026, chủ dự án:
+     * "định hình BOM là việc của Kỹ thuật, Kế hoạch chỉ khai lộ trình công
+     * đoạn"). Kế hoạch mở lệnh là thấy sẵn cụm/chi tiết, chỉ đánh x lộ trình;
+     * Ghi sản lượng có dòng ngay cả khi kế hoạch chưa kịp vào. SP chưa có định
+     * mức thì bỏ qua, màn Lộ trình nói "chờ Kỹ thuật". Cùng luật nuốt lỗi như
+     * ảnh chụp định mức: không làm hỏng lượt duyệt.
+     */
+    try {
+      await componentsService.autoShapeFromBom(id)
+    } catch (e) {
+      console.error('[lsx.approve] nạp bảng chi tiết lỗi', id, e)
     }
     await emit({
       name: 'lsx.decided',

@@ -33,6 +33,14 @@ vi.mock('./bom-snapshot.repo', () => ({
 vi.mock('./components.repo', () => ({
   componentsRepo: { listByLsx: vi.fn(), deleteByLines: vi.fn() },
 }))
+// Bảng chi tiết tự nạp lúc duyệt (04/11/2026) — mock để test duyệt không chạm DB.
+vi.mock('./components.service', () => ({
+  componentsService: {
+    autoShapeFromBom: vi
+      .fn()
+      .mockResolvedValue({ status: 'added', added: 3, missing: [] }),
+  },
+}))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: {
     findById: vi.fn(),
@@ -77,6 +85,7 @@ import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
 import { entriesRepo } from './entries.repo'
 import { componentsRepo } from './components.repo'
+import { componentsService } from './components.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -364,6 +373,23 @@ describe('lsxService.approve — báo cả người phát lệnh (13/10/2026)', 
     const ev = vi.mocked(emit).mock.calls.find(([e]) => e.name === 'lsx.decided')![0]
     expect(ev).toMatchObject({ decision: 'approved' })
     expect((ev as { notify_ids: string[] }).notify_ids.sort()).toEqual(['u-cu', 'u-sale'])
+    // 04/11/2026: duyệt xong là bảng chi tiết tự nạp từ định mức Kỹ thuật.
+    expect(componentsService.autoShapeFromBom).toHaveBeenCalledWith('lsx1')
+  })
+
+  it('nạp bảng chi tiết lỗi KHÔNG làm hỏng lượt duyệt', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'pending_approval',
+    } as never)
+    vi.mocked(productionRepo.patch).mockResolvedValue({
+      ...LSX,
+      status: 'approved',
+    } as never)
+    vi.mocked(componentsService.autoShapeFromBom).mockRejectedValueOnce(new Error('db'))
+    await expect(lsxService.approve(manager, 'lsx1')).resolves.toMatchObject({
+      status: 'approved',
+    })
   })
 })
 

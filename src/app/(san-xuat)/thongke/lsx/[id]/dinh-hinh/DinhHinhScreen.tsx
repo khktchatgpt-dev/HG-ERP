@@ -32,11 +32,11 @@ export function DinhHinhScreen(props: DinhHinhProps) {
   const khaiRieng = d.rows.filter((r) => r.stages != null).length
 
   return (
-    <SxKhung bare label={`Định hình ${p.lsx.code}`}>
+    <SxKhung bare label={`Lộ trình công đoạn ${p.lsx.code}`}>
       <div className="sx-body">
         <DauTrang
           crumb={`Lệnh sản xuất › ${p.lsx.code}`}
-          title="Định hình chi tiết"
+          title="Lộ trình công đoạn"
           ctx={
             <>
               {p.lsx.customer_name} · <b>{p.orderLines.length}</b> dòng SP ·{' '}
@@ -83,23 +83,23 @@ export function DinhHinhScreen(props: DinhHinhProps) {
         />
 
         <TabNgang
-          label="Định hình"
+          label="Lộ trình và bảng chi tiết"
           tabs={[
-            {
-              key: 'chi_tiet',
-              label: 'Chi tiết',
-              n: d.rows.length,
-              on: d.tab === 'chi_tiet',
-              onClick: () => d.setTab('chi_tiet'),
-            },
             {
               key: 'lo_trinh',
               label:
                 d.nCum > 0
-                  ? `Lộ trình theo cụm · ${d.nCum} cụm${khaiRieng ? ` · ${khaiRieng} đã sửa` : ''}`
-                  : 'Lộ trình theo cụm · BOM phẳng',
+                  ? `Lộ trình công đoạn · ${d.nCum} cụm${khaiRieng ? ` · ${khaiRieng} đã khai` : ''}`
+                  : 'Lộ trình công đoạn · BOM phẳng',
               on: d.tab === 'lo_trinh',
               onClick: () => d.setTab('lo_trinh'),
+            },
+            {
+              key: 'chi_tiet',
+              label: 'Bảng chi tiết (BOM Kỹ thuật)',
+              n: d.rows.length,
+              on: d.tab === 'chi_tiet',
+              onClick: () => d.setTab('chi_tiet'),
             },
           ]}
         />
@@ -151,15 +151,18 @@ export function DinhHinhScreen(props: DinhHinhProps) {
         )}
         {editable && d.rows.length === 0 && (
           <div className="sx-note">
-            <b>Lệnh chưa định hình.</b> {coDinhMuc}/{p.orderLines.length} SP đã có định
-            mức ở hồ sơ — Nạp từ BOM kỹ thuật ra dòng ngay
+            <b>Lệnh chưa có bảng chi tiết.</b> Bảng này tự nạp từ định mức Kỹ thuật lúc
+            duyệt lệnh; lệnh này chưa có vì {coDinhMuc}/{p.orderLines.length} SP có định
+            mức
             {thieuDinhMuc.length > 0 && (
               <>
-                ; {thieuDinhMuc.map((l) => l.product_code).join(', ')} Kỹ thuật chưa nạp
-                định mức — gõ tay hoặc chờ
+                {' '}
+                — {thieuDinhMuc.map((l) => l.product_code).join(', ')} Kỹ thuật chưa nạp,
+                chờ họ xong rồi bấm Nạp từ BOM
               </>
             )}
-            . Không có bảng chi tiết thì Ghi sản lượng không có dòng để ghi.
+            {thieuDinhMuc.length === 0 && ' — bấm Nạp từ BOM kỹ thuật để nạp ngay'}. Không
+            có bảng chi tiết thì Ghi sản lượng không có dòng để ghi.
           </div>
         )}
         {d.loi && <div className="sx-err">{d.loi}</div>}
