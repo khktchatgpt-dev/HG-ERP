@@ -7,12 +7,14 @@ import { cx, fmt, num, type Draft } from './dinh-hinh.shared'
 import type { DinhHinhCtx } from './useDinhHinh'
 
 /**
- * TAB LỘ TRÌNH THEO CỤM — kế hoạch sửa RIÊNG LỆNH (bản vẽ B, 03/11/2026).
- * Cùng ma trận x của tab Lộ trình hồ sơ SP, ghi `production_components.stages`
- * của lệnh này; hồ sơ SP và lệnh khác không đổi. Thứ tự ưu tiên khi đếm: kế
- * hoạch lệnh → bản chụp này → khai ở SP → nhóm vật tư. Dòng cụm chỉ mang nửa
- * "cụm"; chi tiết trong cụm đi theo nửa "chi tiết" (x mờ, không bấm). BOM phẳng
- * (không dòng cụm) thì không có gì để khai — cụm mặc nhiên lo.
+ * MA TRẬN LỘ TRÌNH THEO CỤM — kế hoạch sửa RIÊNG LỆNH (bản vẽ 3, 04/11/2026).
+ * Trọn chiều ngang: 260 + 50 + 40 + 12×56 = 1.022px vừa 1280 với sidebar 240,
+ * tiêu đề cột xuống dòng thay vì cắt. Ba ký hiệu: ✓ đậm = khai riêng lệnh, ✓ mờ
+ * = theo hồ sơ SP / nhóm vật tư, ô trống = ngoài lộ trình (rê chuột hiện +, bấm
+ * để thêm); · = bậc chi tiết, cụm không đi qua. Ghi `production_components.
+ * stages`; hồ sơ SP nhận theo khi Lưu. Dòng cụm chỉ mang nửa "cụm"; chi tiết
+ * trong cụm đi theo nửa "chi tiết" (✓ mờ, không bấm). BOM phẳng (không dòng
+ * cụm) thì không có gì để khai — cụm mặc nhiên lo.
  */
 export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
   const { p, lines, byLine, editable } = d
@@ -29,18 +31,27 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
     })
   const nCols = 3 + stageCfg.length
   const finish = stageCfg.filter((s) => s.meta.count_level === 'unit').map((s) => s.code)
+  // Bản chụp lúc mở: Ô nào đổi so với lộ trình hiệu lực lúc mở thì viền xanh cho
+  // tới khi Lưu — từng ô, không phải cả hàng (dòng mới thêm chưa có bản chụp thì
+  // so với lộ trình suy theo nhóm).
+  const goc = new Map(p.initialRows.map((r, i) => [i, r.stages ?? null]))
+  const gocRoute = (r: Draft) =>
+    componentRoute(undefined, {
+      group_code: r.group_code || null,
+      stages: goc.get(Number(r.key.replace(/^r/, '')) - 1) ?? null,
+      first_stage: r.first_stage,
+      final_stage: r.final_stage,
+    })
 
   return (
     <div className="sx-grid">
-      {/* 210 + 48 + 40 + 12×44 = 826px: vừa phần phải của màn gộp ở 1280 (sidebar 240 +
-          danh sách lệnh 200 = còn 840), không cuộn ngang — bản vẽ A4U5vgYDeUwYrnDUkzfCq1. */}
-      <table className="sx-tb" style={{ minWidth: 210 + 48 + 40 + stageCfg.length * 44 }}>
+      <table className="sx-tb" style={{ minWidth: 260 + 50 + 40 + stageCfg.length * 56 }}>
         <colgroup>
-          <col style={{ width: 210 }} />
-          <col style={{ width: 48 }} />
+          <col style={{ width: 260 }} />
+          <col style={{ width: 50 }} />
           <col style={{ width: 40 }} />
           {stageCfg.map((s) => (
-            <col key={s.code} style={{ width: 44 }} />
+            <col key={s.code} style={{ width: 56 }} />
           ))}
         </colgroup>
         <thead>
@@ -51,7 +62,7 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
             {stageCfg.map((s) => (
               <th
                 key={s.code}
-                style={{ textAlign: 'center' }}
+                className="wrap"
                 title={`${s.label} — đếm bằng ${COUNT_LEVEL_SHORT[s.meta.count_level]}`}
               >
                 {shortStageLabel(s.label)}
@@ -84,13 +95,13 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                       <span className="mut" style={{ fontWeight: 400 }}>
                         {' '}
                         — BOM phẳng: từ hàn trở đi đếm bằng cụm mặc nhiên, không có gì để
-                        khai; muốn khai riêng thì thêm dòng CỤM ở tab Chi tiết
+                        khai
                       </span>
                     )}
                     {rs.length === 0 && (
                       <span className="warn" style={{ fontWeight: 400 }}>
                         {' '}
-                        — chưa định hình
+                        — chờ Kỹ thuật nạp định mức, chưa có cụm
                       </span>
                     )}
                   </td>
@@ -104,14 +115,16 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                   )
                   const st = routeOf(r)
                   const khai = r.stages != null
+                  const gocSt = gocRoute(r)
                   return (
                     <Fragment key={r.key}>
                       <tr className="t2">
                         <td title={r.name}>
                           <b>{r.cluster || r.name}</b>
-                          {khai && (
+                          {khai ? (
                             <>
-                              <span className="mut"> · đã khai riêng</span>
+                              <i className="sx-dot b" style={{ marginLeft: 8 }} />
+                              <span className="mut">khai riêng</span>
                               {editable && (
                                 <button
                                   type="button"
@@ -123,6 +136,11 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                                 </button>
                               )}
                             </>
+                          ) : (
+                            <>
+                              <i className="sx-dot w" style={{ marginLeft: 8 }} />
+                              <span className="mut">chưa khai — theo nhóm</span>
+                            </>
                           )}
                         </td>
                         <td className="r num">{num(r.qty_per_unit) ?? '—'}</td>
@@ -133,8 +151,7 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                             return (
                               <td
                                 key={s.code}
-                                className="empty"
-                                style={{ textAlign: 'center' }}
+                                className="c lk"
                                 title="Bậc chi tiết — chi tiết trong cụm tự đi"
                               >
                                 ·
@@ -145,6 +162,7 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                               key={s.code}
                               on={on}
                               khai={khai}
+                              doi={on !== gocSt.includes(s.code)}
                               editable={editable}
                               label={`${r.cluster || r.name} · ${s.label}`}
                               onToggle={() =>
@@ -173,17 +191,9 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                           </td>
                           {stageCfg.map((s) => {
                             const on = members.some((m) => routeOf(m).includes(s.code))
-                            return on ? (
-                              <td
-                                key={s.code}
-                                className="x"
-                                style={{ textAlign: 'center' }}
-                              >
-                                <span className="mut">x</span>
-                              </td>
-                            ) : (
-                              <td key={s.code} className="out">
-                                –
+                            return (
+                              <td key={s.code} className="c">
+                                {on && <span className="sym-ro xs">✓</span>}
                               </td>
                             )
                           })}
@@ -195,14 +205,12 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                 {roi.map((r) => {
                   const st = routeOf(r)
                   const khai = r.stages != null
+                  const gocSt = gocRoute(r)
                   return (
                     <tr key={r.key} className="t2">
                       <td title={r.name}>
                         {r.name}
-                        <span className="mut">
-                          {' '}
-                          · rời{khai ? ' · đã khai riêng' : ''}
-                        </span>
+                        <span className="mut"> · rời{khai ? ' · khai riêng' : ''}</span>
                         {khai && editable && (
                           <button
                             type="button"
@@ -221,6 +229,7 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                           key={s.code}
                           on={st.includes(s.code)}
                           khai={khai}
+                          doi={st.includes(s.code) !== gocSt.includes(s.code)}
                           editable={editable}
                           label={`${r.name} · ${s.label}`}
                           onToggle={() =>
@@ -246,9 +255,7 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                     <td></td>
                     <td className="r num">{mua.length}</td>
                     {stageCfg.map((s) => (
-                      <td key={s.code} className="out">
-                        –
-                      </td>
+                      <td key={s.code} className="c"></td>
                     ))}
                   </tr>
                 )}
@@ -257,21 +264,11 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                     <td>Thành phẩm (bộ)</td>
                     <td className="r num">1</td>
                     <td className="r num">—</td>
-                    {stageCfg.map((s) =>
-                      finish.includes(s.code) ? (
-                        <td
-                          key={s.code}
-                          className="x"
-                          style={{ textAlign: 'center', fontWeight: 700 }}
-                        >
-                          x
-                        </td>
-                      ) : (
-                        <td key={s.code} className="out">
-                          –
-                        </td>
-                      ),
-                    )}
+                    {stageCfg.map((s) => (
+                      <td key={s.code} className="c">
+                        {finish.includes(s.code) && <span className="sym-ro">✓</span>}
+                      </td>
+                    ))}
                   </tr>
                 )}
               </Fragment>
@@ -281,12 +278,15 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
         <tfoot>
           <tr>
             <td colSpan={3}>
-              {d.nCum} cụm · {d.rows.filter((r) => r.stages != null).length} dòng khai
-              riêng lệnh
+              {d.nCum} cụm ·{' '}
+              {d.rows.filter((r) => r.kind === 'assembly' && r.stages != null).length}{' '}
+              khai riêng ·{' '}
+              {d.rows.filter((r) => r.kind === 'assembly' && r.stages == null).length}{' '}
+              theo nhóm
             </td>
             <td colSpan={stageCfg.length} className="mut" style={{ fontWeight: 400 }}>
-              x đậm = khai riêng lệnh · x mờ = theo hồ sơ SP / nhóm vật tư · ô gạch chéo
-              bấm để thêm · · = bậc chi tiết · hồ sơ SP không đổi, lệnh khác không đổi
+              thứ tự chạy = thứ tự danh mục · hồ sơ SP cập nhật theo khi Lưu · lệnh khác
+              không đổi
             </td>
           </tr>
         </tfoot>
@@ -298,47 +298,42 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
 function O({
   on,
   khai,
+  doi,
   editable,
   label,
   onToggle,
 }: {
   on: boolean
   khai: boolean
+  doi: boolean
   editable: boolean
   label: string
   onToggle: () => void
 }) {
   if (!editable) {
-    return on ? (
-      <td className="x" style={{ textAlign: 'center', fontWeight: khai ? 700 : 400 }}>
-        <span className={cx(!khai && 'mut')}>x</span>
+    return (
+      <td className="c">
+        {on && <span className={cx('sym-ro', !khai && 'xs')}>✓</span>}
       </td>
-    ) : (
-      <td className="out">–</td>
     )
   }
   return (
-    <td className={cx('cell', !on && 'out')} style={{ padding: 0, textAlign: 'center' }}>
+    <td className="c">
       <button
         type="button"
-        className="tg"
-        style={{
-          width: '100%',
-          height: 26,
-          padding: 0,
-          fontWeight: on && khai ? 700 : 500,
-          color: on ? (khai ? 'var(--sx-ink)' : 'var(--sx-ink3)') : 'var(--sx-empty)',
-        }}
+        className={cx('tg', 'sym', !on && 'o', on && !khai && 'xs', doi && 'n')}
         aria-pressed={on}
-        aria-label={`${label}: ${on ? (khai ? 'đi qua' : 'đi qua (mặc định)') : 'ngoài lộ trình — bấm để thêm'}`}
+        aria-label={`${label}: ${on ? (khai ? 'đi qua — khai riêng lệnh' : 'đi qua theo mặc định') : 'ngoài lộ trình — bấm để thêm'}`}
         title={
           on && !khai
             ? 'mặc định từ hồ sơ SP / nhóm — bấm để ghi đè cho lệnh này'
-            : undefined
+            : on
+              ? 'khai riêng lệnh — bấm để bỏ'
+              : 'ngoài lộ trình — bấm để thêm'
         }
         onClick={onToggle}
       >
-        {on ? 'x' : '–'}
+        {on ? '✓' : ''}
       </button>
     </td>
   )

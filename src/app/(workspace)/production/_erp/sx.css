@@ -970,51 +970,79 @@
   text-transform: none;
 }
 
-/* ── 10. Danh sách bên trái + ma trận bên phải (Lộ trình công đoạn gộp, 04/11/2026) ──
-   Bản vẽ https://claude.ai/artifact/A4U5vgYDeUwYrnDUkzfCq1: cột trái 200px chỉ
-   mã lệnh + nhãn, phần phải nhận trọn ma trận 12 công đoạn ở 1280 (sidebar 240). */
-.sx.sx .sx-two.ds {
-  grid-template-columns: 200px minmax(0, 1fr);
+/* ── 10. Ma trận lộ trình công đoạn (bản vẽ 3, 04/11/2026) ──────────────────────
+   Trọn chiều ngang, không khung cuộn con: 260 + 50 + 40 + 12×56 = 1.022px vừa
+   1280 với sidebar 240. Tiêu đề cột xuống dòng thay vì cắt; ô chỉ ba ký hiệu:
+   ✓ đậm (khai riêng lệnh) · ✓ mờ (theo hồ sơ SP / nhóm) · trống (ngoài lộ trình,
+   rê chuột hiện +). Bỏ nền gạch chéo. */
+.sx.sx .sx-tb.sx-tb th.wrap {
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
+  padding: 6px 2px;
+  vertical-align: bottom;
 }
-.sx.sx .sx-ls {
-  list-style: none;
-  margin: 0;
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.c {
   padding: 0;
+  text-align: center;
+  height: 30px;
 }
-.sx.sx .sx-ls a {
-  display: block;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--sx-hair);
-  color: inherit;
-  text-decoration: none;
-}
-.sx.sx .sx-ls a:hover {
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.c.lk {
   background: var(--sx-raised);
+  color: var(--sx-empty);
 }
-.sx.sx .sx-ls a.on {
+.sx.sx .sx-tb .tg.sym {
+  display: block;
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sx-ink);
+}
+.sx.sx .sx-tb .tg.sym.xs {
+  font-weight: 500;
+  color: #8d96a5;
+}
+.sx.sx .sx-tb .tg.sym.n {
+  box-shadow: inset 0 0 0 2px var(--sx-act);
   background: var(--sx-act-wash);
-  box-shadow: inset 3px 0 0 var(--sx-act);
+  color: var(--sx-act);
 }
-.sx.sx .sx-ls a .m {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  font-family: var(--sx-mono);
+.sx.sx .sx-tb .tg.sym:hover {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-tb .tg.sym.o:hover::after {
+  content: '+';
+  color: var(--sx-act);
   font-weight: 600;
-  white-space: nowrap;
 }
-.sx.sx .sx-ls a .m .d {
-  font-weight: 400;
-  font-size: 11.5px;
-  color: var(--sx-ink3);
+.sx.sx .sx-tb .sym-ro {
+  font-size: 14px;
+  font-weight: 700;
 }
-.sx.sx .sx-ls a .k {
-  font-size: 11.5px;
-  color: var(--sx-ink3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.sx.sx .sx-tb .sym-ro.xs {
+  font-weight: 500;
+  color: #8d96a5;
 }
-.sx.sx .sx-ls a.dim .m {
-  color: var(--sx-ink3);
+.sx.sx .sx-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 0;
+  background: var(--sx-empty);
+}
+.sx.sx .sx-dot.w {
+  background: var(--sx-warn);
+}
+.sx.sx .sx-dot.g {
+  background: var(--sx-done);
+}
+.sx.sx .sx-dot.r {
+  background: var(--sx-stop);
+}
+.sx.sx .sx-dot.b {
+  background: var(--sx-act);
 }

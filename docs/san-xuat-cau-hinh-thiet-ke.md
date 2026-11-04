@@ -284,6 +284,13 @@ nhóm); `/thongke/lsx/[id]/dinh-hinh` chỉ còn lưới Bảng chi tiết (th�
 chỉ đọc. Bẫy Next memoize fetch cùng URL trong một render → `existsForLsx` đếm head. Kiểm thật:
 JAWOLL tự nạp 32 dòng, 3/3 cụm chưa khai, badge 1; 12-MX tự nạp 15 dòng, BOM phẳng.
 
+**04/11 tối — "rất khó nhìn, không muốn các thanh cuộn trái phải, tham khảo cách ERP"** → bản
+vẽ 3 (cùng link): bỏ cột trái, danh sách là bảng khuôn C có chip lọc, ma trận một lệnh trọn
+chiều ngang (260/50/40 + 12×56 = 1.022px, tiêu đề xuống dòng), đổi lệnh bằng ô chọn + ‹ ›, ký
+hiệu ✓ đậm / ✓ mờ / ô trống thay gạch chéo, ô vừa đổi viền xanh từng ô. Đã dựng theo đúng số đo
+(0 khung cuộn con, 0 tiêu đề cắt ở 1280). Bài học: dựng lệch artboard (cột 44 thay 56, cột trái
+200, gạch chéo) là bị chê ngay — số của artboard là số của mã.
+
 Việc của NGƯỜI, song song, không chặn mã: gán tổ cho 5 công đoạn trống; đặt tên
 thật cho 13 cụm rác; nạp định mức cho 217/268 dòng lệnh còn thiếu (đường AI BOM đã
 có). **Màn nào cũng chỉ có nghĩa khi có số** — B3 cố ý đứng trước B5/B6.
