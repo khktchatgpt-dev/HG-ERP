@@ -331,6 +331,8 @@ export async function buildPoExcel(input: {
   } = poMoney({
     subtotalRaw: lines.reduce((s, l) => s + poLineAmount(l), 0),
     discount: po.discount_amount,
+    discountPercent: po.discount_percent,
+    discountAfterVat: po.discount_after_vat,
     vatRate: po.vat_rate,
     priceIncludesVat: po.price_includes_vat,
     currency: po.currency,
@@ -524,15 +526,33 @@ export async function buildPoExcel(input: {
     }
   }
 
+  // Cùng thứ tự với phiếu in (0292): trừ SAU VAT thì Cộng tiền hàng → Thuế GTGT →
+  // Cộng → Chiết khấu → Tổng; % chiết khấu ở ô tỉ lệ, lý do theo nhãn.
+  const ckNote = po.discount_note?.trim()
+  const ckLabel = ckNote ? `Chiết khấu (${ckNote}):` : 'Chiết khấu:'
+  const ckRow: [string, string | null, number, boolean] = [
+    ckLabel,
+    po.discount_percent != null && discount > 0
+      ? `${Number(po.discount_percent)}%`
+      : null,
+    discount,
+    false,
+  ]
+  const vatRow: [string, string | null, number, boolean] = [
+    'Thuế GTGT:',
+    rate ? `${rate}%${po.price_includes_vat ? ' (đã gồm)' : ''}` : null,
+    vatAmount,
+    false,
+  ]
   const totals: [string, string | null, number, boolean][] = [
     ['Cộng tiền hàng:', null, subtotal, false],
-    ['Chiết khấu:', null, discount, false],
-    [
-      'Thuế GTGT:',
-      rate ? `${rate}%${po.price_includes_vat ? ' (đã gồm)' : ''}` : null,
-      vatAmount,
-      false,
-    ],
+    ...(po.discount_after_vat
+      ? [
+          vatRow,
+          ['Cộng:', null, po.price_includes_vat ? subtotal : subtotal + vatAmount, false] as [string, string | null, number, boolean], // prettier-ignore
+          ckRow,
+        ]
+      : [ckRow, vatRow]),
     ['TỔNG THANH TOÁN:', null, grandTotal, true],
   ]
   for (const [label, rateText, value, isGrand] of totals) {
@@ -548,7 +568,7 @@ export async function buildPoExcel(input: {
       alignment: { horizontal: 'right' },
       border: BORDER,
     })
-    set(r, amountIdx + 1, label === 'Chiết khấu:' && value === 0 ? '-' : value, {
+    set(r, amountIdx + 1, label === ckLabel && value === 0 ? '-' : value, {
       font: { bold: true, size: 9 },
       alignment: { horizontal: 'right' },
       border: BORDER,

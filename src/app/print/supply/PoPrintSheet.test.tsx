@@ -273,3 +273,40 @@ describe('phiếu in đơn mua — cột trắng ở mọi dòng không in', () 
     expect(heads('accessory', [empty])).toEqual(['STT', 'Tên sản phẩm / vật tư', 'ĐVT', 'SL đặt', 'Đơn giá (VND)', 'Thành tiền (VND)', 'Ghi chú']) // prettier-ignore
   })
 })
+
+describe('dòng chiết khấu trên phiếu in (0292, PO-2026-0242)', () => {
+  // 458 kg keo Epoxy × 100.000 đã gồm VAT 8% = 45.800.000; NCC trừ 3% tiền vỏ lon
+  // TRÊN TỔNG — phiếu phải in Cộng 45.800.000 → Chiết khấu 1.374.000 → 44.426.000.
+  const keo = (): PoPrintLine =>
+    ({ ...line('chemical'), qty_ordered: 458, unit_price: 100_000, price_basis: 'unit', qty2: null }) as PoPrintLine // prettier-ignore
+  const rows = (po: Partial<PoPrintHeader>) => {
+    const { container } = render(
+      <PoPrintSheet company={company} po={{ ...header('chemical'), price_includes_vat: true, ...po }} supplier={null} lines={[keo()]} />, // prettier-ignore
+    )
+    return [...container.querySelectorAll('tbody tr')]
+      .map((tr) =>
+        [...tr.querySelectorAll('td')]
+          .map((td) => td.textContent?.trim())
+          .filter(Boolean),
+      ) // prettier-ignore
+      .filter((r) => /^(Cộng|Thuế GTGT|Chiết khấu|TỔNG THANH TOÁN)/.test(r[0] ?? ''))
+  }
+
+  it('trừ SAU VAT: Cộng tiền hàng → Thuế GTGT → Cộng → Chiết khấu (lý do, %) → Tổng', () => {
+    const r = rows({ discount_percent: 3, discount_after_vat: true, discount_note: 'tiền vỏ lon', discount_amount: 1_374_000 }) // prettier-ignore
+    const labels = r.map((x) => x[0])
+    expect(labels).toEqual(['Cộng tiền hàng:', 'Thuế GTGT:', 'Cộng:', 'Chiết khấu (tiền vỏ lon):', 'TỔNG THANH TOÁN:']) // prettier-ignore
+    expect(r[3]).toEqual(['Chiết khấu (tiền vỏ lon):', '3%', '1.374.000'])
+    expect(r[4].at(-1)).toBe('44.426.000')
+  })
+
+  it('trừ TRƯỚC VAT giữ thứ tự cũ: Cộng tiền hàng → Chiết khấu → Thuế GTGT → Tổng', () => {
+    const labels = rows({ discount_amount: 100_000 }).map((x) => x[0])
+    expect(labels).toEqual([
+      'Cộng tiền hàng:',
+      'Chiết khấu:',
+      'Thuế GTGT:',
+      'TỔNG THANH TOÁN:',
+    ])
+  })
+})

@@ -381,10 +381,29 @@ export function PoPrintSheet({
   } = poMoney({
     subtotalRaw: lines.reduce((s, l) => s + poLineAmount(l), 0),
     discount: po.discount_amount,
+    discountPercent: po.discount_percent,
+    discountAfterVat: po.discount_after_vat,
     vatRate: po.vat_rate,
     priceIncludesVat: po.price_includes_vat,
     currency: po.currency,
   })
+  // Dòng chiết khấu (0292): % ở ô tỉ lệ như VAT, lý do theo nhãn — như phiếu NCC
+  // "Chiết khấu 3% tiền vỏ lon". Trừ SAU VAT thì đứng dưới dòng Cộng (tiền hàng + VAT).
+  const ckNote = po.discount_note?.trim()
+  const ckRow: [string, string | null, number, string] = [
+    ckNote ? `Chiết khấu (${ckNote}):` : 'Chiết khấu:',
+    po.discount_percent != null && discount > 0
+      ? `${Number(po.discount_percent)}%`
+      : null,
+    discount,
+    'ck',
+  ]
+  const vatRow: [string, string | null, number, string] = [
+    'Thuế GTGT:',
+    rate ? `${rate}%${po.price_includes_vat ? ' (đã gồm)' : ''}` : null,
+    vatAmount,
+    '',
+  ]
 
   const terms: [string, string | null][] = [
     ['Tiêu chuẩn chất lượng', po.terms_quality],
@@ -525,17 +544,17 @@ export function PoPrintSheet({
           {(
             [
               ['Cộng tiền hàng:', null, subtotal, 'font-semibold'],
-              ['Chiết khấu:', null, discount, ''],
-              [
-                'Thuế GTGT:',
-                rate ? `${rate}%${po.price_includes_vat ? ' (đã gồm)' : ''}` : null,
-                vatAmount,
-                '',
-              ],
+              ...(po.discount_after_vat
+                ? [
+                    vatRow,
+                    ['Cộng:', null, po.price_includes_vat ? subtotal : subtotal + vatAmount, 'font-semibold'], // prettier-ignore
+                    ckRow,
+                  ]
+                : [ckRow, vatRow]),
               ['TỔNG THANH TOÁN:', null, grandTotal, 'font-bold'],
             ] as [string, string | null, number, string][]
           ).map(([label, rateText, value, cls]) => (
-            <tr key={label} className={cls}>
+            <tr key={label} className={cls === 'ck' ? '' : cls}>
               {/* Nhãn dòng tổng in ĐẬM — cột nhãn và cột số nằm hai đầu tờ
                   giấy, nhãn nhạt thì mắt trượt mất hàng khi dò sang phải. */}
               <td
@@ -554,9 +573,7 @@ export function PoPrintSheet({
                   label === 'TỔNG THANH TOÁN:' ? 'bg-yellow-200' : ''
                 }`}
               >
-                {value === 0 && label === 'Chiết khấu:'
-                  ? '-'
-                  : fmtMoney(value, po.currency)}
+                {value === 0 && cls === 'ck' ? '-' : fmtMoney(value, po.currency)}
               </td>
               <td colSpan={cols.length - amountIdx - 1} className="border border-black" />
             </tr>
