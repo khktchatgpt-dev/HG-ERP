@@ -160,6 +160,10 @@ export function HoSoLenhScreen({
             <Btn primary icon="lenh" href={`/api/dept/supply/lsx-tai-lieu/${lsx.id}`}>
               Tải file của lệnh (.zip)
             </Btn>
+            {/* Định mức hồ sơ SP × SL lệnh: Tổng hợp theo mã + mỗi SP một tờ (B2). */}
+            <Btn icon="excel" href={`/api/dept/supply/lsx-tai-lieu/${lsx.id}/dinh-muc`}>
+              Excel định mức theo SP
+            </Btn>
             <Btn icon="vattu" href={`/mua-hang/yeu-cau/${lsx.id}`}>
               Vật tư của lệnh
             </Btn>

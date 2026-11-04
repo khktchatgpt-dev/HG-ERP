@@ -14,6 +14,9 @@ import {
   zipEntries,
   type TaiLieuRow,
 } from '@/lib/lsx-tai-lieu'
+import { lsxBomNeeds } from './lsx-bom-needs.repo'
+import { buildDinhMucExcel, type DmPart } from './lsx-dinh-muc-excel'
+import { MATERIAL_KIND_OPTIONS, SHAPE_OPTIONS } from '@/lib/bom-calc'
 
 const labelOf = (t: string) => DOC_TYPE_LABEL[t as DocType] ?? t
 
@@ -122,6 +125,124 @@ export const lsxTaiLieuService = {
     return {
       buf: zipSync(tree),
       filename: `${safeName(`Tai lieu ${lsx.code}`)}_${today}.zip`,
+    }
+  },
+
+  /**
+   * EXCEL ĐỊNH MỨC THEO SP (B2): định mức đang lưu trên hồ sơ SP × SL lệnh.
+   * Tờ Tổng hợp đi qua `lsxBomNeeds` — cùng hàm bảng kê dùng, một mã một số.
+   */
+  async buildDinhMucExcel(
+    _user: User,
+    lsxId: string,
+    today: string,
+  ): Promise<{ buf: Buffer; filename: string }> {
+    const lsx = await productionRepo.findById(lsxId)
+    if (!lsx) throw NotFound('Không tìm thấy lệnh sản xuất')
+    const [lines, needs] = await Promise.all([
+      lsxLinesRepo.listLines(lsxId),
+      lsxBomNeeds(lsxId),
+    ])
+    const unitOf = new Map<string, string>()
+    for (const l of lines)
+      if (l.product_id && !unitOf.has(l.product_id)) unitOf.set(l.product_id, l.unit)
+    // Từng SP một truy vấn — gom cả lệnh vào một select dính trần 1.000 dòng.
+    type Raw = {
+      product_id: string
+      group_code: string | null
+      part_name: string | null
+      material_code: string | null
+      material_note: string | null
+      dim_a_mm: unknown
+      dim_b_mm: unknown
+      cut_length_mm: unknown
+      unit: string | null
+      qty: unknown
+      material_kind: string | null
+      profile_shape: string | null
+      profile_code: string | null
+      wall_thickness_mm: unknown
+    }
+    const raw = (
+      await Promise.all(
+        needs.products.map(async (p) => {
+          const r = await db()
+            .from('technical_product_parts')
+            .select(
+              'product_id, group_code, part_name, material_code, material_note, dim_a_mm, dim_b_mm, cut_length_mm, unit, qty, material_kind, profile_shape, profile_code, wall_thickness_mm',
+            )
+            .eq('product_id', p.id)
+            .order('sort_order', { ascending: true, nullsFirst: false })
+            .order('part_no', { ascending: true, nullsFirst: false })
+          if (r.error) throw new Error(`technical_product_parts: ${r.error.message}`)
+          return (r.data ?? []) as Raw[]
+        }),
+      )
+    ).flat()
+    const codes = [
+      ...new Set(raw.map((x) => x.material_code?.trim()).filter((x): x is string => !!x)),
+    ]
+    const nameByCode = new Map<string, string>()
+    for (let i = 0; i < codes.length; i += 500) {
+      const r = await db()
+        .from('warehouse_materials')
+        .select('code, name')
+        .in('code', codes.slice(i, i + 500))
+      if (r.error) throw new Error(`warehouse_materials: ${r.error.message}`)
+      for (const m of (r.data ?? []) as { code: string; name: string }[])
+        nameByCode.set(m.code.trim().toUpperCase(), m.name)
+    }
+    const num = (v: unknown) => (v == null || v === '' ? null : Number(v))
+    const lbl = (opts: { code: string; label: string }[], c: string | null) =>
+      c ? (opts.find((o) => o.code === c.trim().toUpperCase())?.label ?? c) : null
+    // "Nhôm hộp dày 1" — dòng khung chưa mã chỉ có chừng này để người mua biết
+    // phải đặt thanh gì (đo 04/11: 87/87 dòng khung lệnh 13 MX chưa mã).
+    const vatLieu = (x: Raw) => {
+      const k = lbl(MATERIAL_KIND_OPTIONS, x.material_kind)
+      const sh = lbl(SHAPE_OPTIONS, x.profile_shape)?.toLowerCase()
+      const t = num(x.wall_thickness_mm)
+      const s = [k, sh, t ? `dày ${String(t).replace('.', ',')}` : null, x.profile_code]
+        .filter(Boolean)
+        .join(' ')
+      return s || null
+    }
+    const parts: DmPart[] = raw.map((x) => ({
+      product_id: x.product_id,
+      group_code: x.group_code,
+      part_name: x.part_name,
+      material_code: x.material_code?.trim() || null,
+      material_name: x.material_code
+        ? (nameByCode.get(x.material_code.trim().toUpperCase()) ?? null)
+        : null,
+      material_note: x.material_note,
+      vat_lieu: vatLieu(x),
+      dims: [num(x.dim_a_mm), num(x.dim_b_mm), num(x.cut_length_mm)],
+      unit: x.unit,
+      qty: num(x.qty),
+    }))
+    const buf = await buildDinhMucExcel(
+      {
+        lsx: {
+          code: lsx.code,
+          customer_name: lsx.customer_name,
+          ship_date: lsx.ship_date,
+        },
+        products: needs.products.map((p) => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          qty: p.qty,
+          unit: unitOf.get(p.id) ?? '',
+          confirmed: p.bom_confirmed,
+        })),
+        parts,
+        needs,
+      },
+      today,
+    )
+    return {
+      buf,
+      filename: `${safeName(`Dinh muc theo SP ${lsx.code}`)}_${today}.xlsx`,
     }
   },
 }
