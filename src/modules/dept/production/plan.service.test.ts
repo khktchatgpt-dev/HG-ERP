@@ -13,11 +13,12 @@ vi.mock('./jobs.repo', () => ({
 }))
 vi.mock('./plan.repo', () => ({
   planRepo: {
-    defaultRoutesByProducts: vi.fn(),
-    saveDefaultRoute: vi.fn(),
     insertChange: vi.fn(),
     listChanges: vi.fn(),
   },
+}))
+vi.mock('./components.repo', () => ({
+  componentsRepo: { listByLsx: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn(), listLinesByOrders: vi.fn() },
@@ -46,6 +47,7 @@ import { planService } from './plan.service'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
 import { planRepo } from './plan.repo'
+import { componentsRepo } from './components.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
@@ -92,14 +94,13 @@ beforeEach(() => {
     { id: 'd-han', name: 'Tổ Hàn', workspace_id: 'production', stage_code: 'han' },
     { id: 'd-kh', name: 'Kế Hoạch Sản Xuất', workspace_id: 'planning', stage_code: null },
   ] as never)
-  vi.mocked(planRepo.defaultRoutesByProducts).mockResolvedValue(new Map())
+  vi.mocked(componentsRepo.listByLsx).mockResolvedValue([])
 })
 
 describe('planService.saveLinePlan', () => {
   const input = (stages: { stage: string; team_department_id?: string | null }[]) => ({
     order_line_id: 'line1',
     stages: stages as never,
-    save_as_default: false,
   })
 
   it('lộ trình hợp lệ → replaceForLine với tổ mặc định theo stage_code', async () => {
@@ -166,15 +167,6 @@ describe('planService.saveLinePlan', () => {
     expect(jobsRepo.replaceForLine).toHaveBeenCalled()
   })
 
-  it('save_as_default → ghi lộ trình mặc định lên SP', async () => {
-    await planService.saveLinePlan(planner, 'lsx1', {
-      order_line_id: 'line1',
-      stages: [{ stage: 'phoi' }, { stage: 'han' }] as never,
-      save_as_default: true,
-    })
-    expect(planRepo.saveDefaultRoute).toHaveBeenCalledWith('p1', ['phoi', 'han'])
-  })
-
   it('LSX chưa duyệt → 400', async () => {
     vi.mocked(productionRepo.findById).mockResolvedValue({
       ...LSX,
@@ -190,7 +182,6 @@ describe('planService.saveLinePlan', () => {
       planService.saveLinePlan(planner, 'lsx1', {
         order_line_id: 'line-la',
         stages: [{ stage: 'phoi' }] as never,
-        save_as_default: false,
       }),
     ).rejects.toMatchObject({ status: 400 })
   })
@@ -220,7 +211,6 @@ describe('saveLinePlan — nhật ký điều chỉnh + lý do (0169)', () => {
     planService.saveLinePlan(planner, 'lsx1', {
       order_line_id: 'line1',
       stages: stages as never,
-      save_as_default: false,
       reason: reason ?? null,
     })
 
@@ -323,10 +313,20 @@ describe('planService.saveLsxPlan — kế hoạch CẢ LỆNH rải xuống dò
     vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([LINE, LINE2] as never)
   })
 
-  it('rải theo lộ trình riêng: p1 chỉ phoi+han, p2 không lộ trình nhận đủ', async () => {
-    vi.mocked(planRepo.defaultRoutesByProducts).mockResolvedValue(
-      new Map([['p1', ['phoi', 'han']]]),
-    )
+  it('rải theo lộ trình định hình: line1 chỉ phoi+han, line2 chưa định hình nhận đủ', async () => {
+    // 04/11/2026: lộ trình gợi ý lấy từ bảng ĐỊNH HÌNH của lệnh (hợp lộ trình
+    // cụm/chi tiết), không còn từ technical_products.stage_route.
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      {
+        id: 'c1',
+        production_order_line_id: 'line1',
+        kind: 'assembly',
+        group_code: 'FRAME',
+        stages: ['phoi', 'han'],
+        first_stage: null,
+        final_stage: null,
+      },
+    ] as never)
     const r = await save([{ stage: 'phoi' }, { stage: 'han' }, { stage: 'son' }])
     expect(r.lines_planned).toBe(2)
     expect(jobsRepo.replaceForLine).toHaveBeenCalledWith('lsx1', 'line1', [

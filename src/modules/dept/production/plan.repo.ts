@@ -1,41 +1,14 @@
 import { db } from '@/server/db'
 
 /**
- * Lộ trình MẶC ĐỊNH per SP (technical_products.stage_route, jsonb mảng code
- * công đoạn — 0063). Kế hoạch dùng làm gợi ý điền sẵn khi lên kế hoạch lệnh;
- * "lưu làm mặc định" ghi ngược lại đây.
+ * Nhật ký điều chỉnh kế hoạch (0169). Lộ trình MẶC ĐỊNH per SP
+ * (`technical_products.stage_route`, 0063) từng đọc/ghi ở đây — BỎ 04/11/2026:
+ * lộ trình sống ở cụm (hồ sơ SP + bản chụp trên lệnh), kế hoạch gợi ý từ bảng
+ * định hình của lệnh (`plan.service.routesByLineFromShaping`). Cột
+ * `stage_route` để nguyên trong DB, không nơi nào đọc nữa.
  */
 
-function toStages(v: unknown): string[] | null {
-  if (!Array.isArray(v)) return null
-  const arr = v.filter((s): s is string => typeof s === 'string')
-  return arr.length ? arr : null
-}
-
 export const planRepo = {
-  /** product_id → lộ trình mặc định (null = SP chưa có). */
-  async defaultRoutesByProducts(productIds: string[]): Promise<Map<string, string[]>> {
-    if (!productIds.length) return new Map()
-    const { data } = await db()
-      .from('technical_products')
-      .select('id, stage_route')
-      .in('id', productIds)
-    const map = new Map<string, string[]>()
-    for (const p of (data ?? []) as { id: string; stage_route: unknown }[]) {
-      const stages = toStages(p.stage_route)
-      if (stages) map.set(p.id, stages)
-    }
-    return map
-  },
-
-  async saveDefaultRoute(productId: string, stages: string[]): Promise<void> {
-    const { error } = await db()
-      .from('technical_products')
-      .update({ stage_route: stages })
-      .eq('id', productId)
-    if (error) throw new Error(error.message)
-  },
-
   /** Ghi 1 bản diff điều chỉnh kế hoạch (0169) — append-only. */
   async insertChange(row: {
     production_order_id: string

@@ -19,9 +19,13 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
 export const PUT = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  const { lines, seed_profile } = await parseJson(req, componentsSaveSchema)
+  const { lines, seed_profile, sync_profile_routes } = await parseJson(
+    req,
+    componentsSaveSchema,
+  )
   const result = await componentsService.save(user, id, lines, {
     seedProfile: seed_profile,
+    syncProfileRoutes: sync_profile_routes,
   })
   return NextResponse.json({ ok: true, ...result })
 })

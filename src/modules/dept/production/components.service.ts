@@ -1,6 +1,5 @@
 import { componentsRepo, type ComponentInput, type ComponentRow } from './components.repo'
 import { entriesRepo } from './entries.repo'
-import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
@@ -51,18 +50,6 @@ async function lsxWithLines(lsxId: string) {
   return { lsx, orderLines: lines }
 }
 
-/** Lộ trình per dòng SP từ kế hoạch (jobs theo seq) — thay bảng routes cũ. */
-async function jobStagesByLine(lsxId: string): Promise<Map<string, string[]>> {
-  const jobs = await jobsRepo.listByLsx(lsxId)
-  const map = new Map<string, string[]>()
-  for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
-    const arr = map.get(j.production_order_line_id) ?? []
-    arr.push(j.stage)
-    map.set(j.production_order_line_id, arr)
-  }
-  return map
-}
-
 export const componentsService = {
   /** Đọc: mọi NV đã đăng nhập (xưởng xem việc phải làm, kho/GĐ tra cứu). */
   async list(_user: User, lsxId: string) {
@@ -91,10 +78,15 @@ export const componentsService = {
     user: User,
     lsxId: string,
     input: ComponentInput[],
-    opts: { seedProfile?: boolean } = {},
+    opts: { seedProfile?: boolean; syncProfileRoutes?: boolean } = {},
   ): Promise<{
     seeded: { product_code: string; added: number }[]
     seed_skipped: { product_code: string; reason: string }[]
+    /** Hồ sơ SP đã nhận lộ trình cụm từ bảng này (04/11/2026). */
+    routes_synced: { product_code: string; updated: number }[]
+    routes_skipped: { product_code: string; reason: string }[]
+    /** Cụm có trên lệnh nhưng hồ sơ SP không có cụm cùng tên — chỉ ghi trên lệnh. */
+    routes_missing: { product_code: string; cluster: string }[]
   }> {
     await assertAction(user, 'production.shaping.manage')
     const { lsx, orderLines } = await lsxWithLines(lsxId)
@@ -114,24 +106,52 @@ export const componentsService = {
         throw BadRequest('Có dòng chi tiết gắn vào dòng SP không thuộc lệnh này')
       }
     }
-    // Công đoạn cuối per chi tiết phải thuộc kế hoạch dòng SP (nếu đã lên KH)
-    // — nếu lọt, %HT của chi tiết không bao giờ đạt vì sổ chặn công đoạn đó.
-    const stagesByLine = await jobStagesByLine(lsxId)
-    for (const l of input) {
-      const allowed = stagesByLine.get(l.production_order_line_id)
-      if (!allowed) continue
-      if (l.final_stage && !allowed.includes(l.final_stage)) {
-        throw BadRequest(
-          `${l.kind === 'assembly' ? 'Cụm' : 'Chi tiết'} "${l.name}": công đoạn cuối không thuộc kế hoạch của SP — đổi công đoạn cuối hoặc sửa kế hoạch trước`,
+    // 04/11/2026: BỎ rào "công đoạn đầu/cuối phải thuộc kế hoạch dòng SP". Lộ
+    // trình là của cụm (tab Lộ trình theo cụm ở chính màn này); kế hoạch tổ &
+    // hạn chỉ gắn tổ/hạn lên công đoạn có mặt, không được chặn cụm khai thêm
+    // bước (lib/stage-route.resolveComponentRoute: khai thắng kế hoạch).
+    await componentsRepo.replaceAll(lsxId, input)
+
+    // ── Ghi ngược LỘ TRÌNH CỤM lên hồ sơ SP (chủ dự án chốt 04/11/2026) ──────
+    // Người làm kế hoạch định hình trên LỆNH là đường chính; hồ sơ SP đi theo
+    // để lần nạp BOM sau mang sẵn lộ trình đã chốt. Khớp theo TÊN cụm trong
+    // cùng SP; cụm chỉ có trên lệnh thì báo, không tự đẻ ở hồ sơ. Dòng cụm
+    // `stages: null` (= theo hồ sơ) không ghi gì. Mặc định bật; bỏ tick khi
+    // lệnh là ngoại lệ một lần.
+    const routesSynced: { product_code: string; updated: number }[] = []
+    const routesSkipped: { product_code: string; reason: string }[] = []
+    const routesMissing: { product_code: string; cluster: string }[] = []
+    if (opts.syncProfileRoutes !== false) {
+      const seenProducts = new Set<string>()
+      for (const line of orderLines) {
+        if (!line.product_id || seenProducts.has(line.product_id)) continue
+        seenProducts.add(line.product_id)
+        const rows = input
+          .filter(
+            (c) =>
+              c.production_order_line_id === line.id &&
+              c.kind === 'assembly' &&
+              c.stages &&
+              c.stages.length > 0,
+          )
+          .map((c) => ({ name: (c.cluster ?? c.name).trim(), stages: c.stages! }))
+        if (!rows.length) continue
+        const r = await productsService.syncClusterRoutesFromShaping(
+          user,
+          line.product_id,
+          lsx.code,
+          rows,
         )
-      }
-      if (l.first_stage && !allowed.includes(l.first_stage)) {
-        throw BadRequest(
-          `${l.kind === 'assembly' ? 'Cụm' : 'Chi tiết'} "${l.name}": công đoạn đầu không thuộc kế hoạch của SP — đổi công đoạn đầu hoặc sửa kế hoạch trước`,
-        )
+        if ('skipped' in r) {
+          routesSkipped.push({ product_code: line.product_code, reason: r.skipped })
+          continue
+        }
+        if (r.updated > 0)
+          routesSynced.push({ product_code: line.product_code, updated: r.updated })
+        for (const name of r.missing)
+          routesMissing.push({ product_code: line.product_code, cluster: name })
       }
     }
-    await componentsRepo.replaceAll(lsxId, input)
 
     // ── Nhập ngược lên hồ sơ SP (chỉ SP chưa có định mức) ──────────────────
     const seeded: { product_code: string; added: number }[] = []
@@ -172,7 +192,13 @@ export const componentsService = {
         }
       }
     }
-    return { seeded, seed_skipped: seedSkipped }
+    return {
+      seeded,
+      seed_skipped: seedSkipped,
+      routes_synced: routesSynced,
+      routes_skipped: routesSkipped,
+      routes_missing: routesMissing,
+    }
   },
 
   // `saveAsBom` (lưu ngược bảng định hình thành BOM kỹ thuật) ĐÃ BỎ ở 0096.

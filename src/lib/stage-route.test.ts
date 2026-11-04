@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { clipRoute, componentRoute, resolveComponentRoute, routeForGroup } from './stage-route'
+import {
+  clipRoute,
+  componentRoute,
+  resolveComponentRoute,
+  routeForGroup,
+} from './stage-route'
 
 const R = ['phoi', 'han', 'nguoi', 'mai', 'son']
 
@@ -45,11 +50,15 @@ describe('resolveComponentRoute/routeForGroup — giữ hợp đồng cũ', () =
 })
 
 describe('resolveComponentRoute / componentRoute — bậc "lộ trình khai" (0288, B2)', () => {
-  it('thứ tự ưu tiên: kế hoạch → khai → nhóm', () => {
-    expect(resolveComponentRoute(['phoi', 'son'], 'FRAME', ['phoi', 'nguoi', 'son'])).toEqual([
-      'phoi',
-      'son',
-    ])
+  it('thứ tự ưu tiên (04/11/2026): khai theo cụm → kế hoạch → nhóm', () => {
+    // Kế hoạch tổ & hạn KHÔNG đè lộ trình cụm đã khai — job phẳng theo dòng SP
+    // không nói được "cụm nhôm không hàn".
+    expect(
+      resolveComponentRoute(['phoi', 'son'], 'FRAME', ['phoi', 'nguoi', 'son']),
+    ).toEqual(['phoi', 'nguoi', 'son'])
+    // Cụm chưa khai → kế hoạch là đường lùi trước khi suy theo nhóm.
+    expect(resolveComponentRoute(['phoi', 'son'], 'FRAME', null)).toEqual(['phoi', 'son'])
+    expect(resolveComponentRoute(['phoi', 'son'], 'FRAME', [])).toEqual(['phoi', 'son'])
     expect(resolveComponentRoute(null, 'FRAME', ['phoi', 'nguoi', 'son'])).toEqual([
       'phoi',
       'nguoi',
@@ -76,8 +85,8 @@ describe('resolveComponentRoute / componentRoute — bậc "lộ trình khai" (0
       }),
     ).toEqual(['nguoi', 'son'])
     // Chưa khai → y hệt cách ghép cũ clipRoute(resolveComponentRoute(...)).
-    expect(
-      componentRoute(null, { group_code: 'FRAME', final_stage: 'phoi' }),
-    ).toEqual(['phoi'])
+    expect(componentRoute(null, { group_code: 'FRAME', final_stage: 'phoi' })).toEqual([
+      'phoi',
+    ])
   })
 })

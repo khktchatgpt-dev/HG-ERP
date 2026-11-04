@@ -19,7 +19,10 @@ vi.mock('@/modules/dept/technical/technical.repo', () => ({
   productProfileRepo: { parts: vi.fn(), clusters: vi.fn() },
 }))
 vi.mock('@/modules/dept/technical/technical.service', () => ({
-  productsService: { seedPartsFromShaping: vi.fn() },
+  productsService: {
+    seedPartsFromShaping: vi.fn(),
+    syncClusterRoutesFromShaping: vi.fn(),
+  },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
@@ -273,6 +276,92 @@ describe('componentsService.save + seed_profile — nhập ngược lên hồ s�
   })
 })
 
+describe('componentsService.save — ghi ngược LỘ TRÌNH CỤM lên hồ sơ SP (04/11/2026)', () => {
+  const cumKhung = {
+    production_order_line_id: 'line1',
+    kind: 'assembly' as const,
+    cluster: 'Cụm khung',
+    name: 'CỤM KHUNG',
+    qty_per_unit: 1,
+    stages: ['han', 'nguoi', 'son'],
+  }
+  const cumTheoHoSo = { ...cumKhung, cluster: 'Cụm tựa', name: 'CỤM TỰA', stages: null }
+  const chiTiet = {
+    production_order_line_id: 'line1',
+    kind: 'part' as const,
+    cluster: 'Cụm khung',
+    name: 'Chân',
+    qty_per_unit: 2,
+    stages: ['phoi'],
+  }
+
+  beforeEach(() => {
+    vi.mocked(entriesRepo.existsForLsx).mockResolvedValue(false)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(productsService.syncClusterRoutesFromShaping).mockReset()
+  })
+
+  it('mặc định BẬT: chỉ dòng CỤM có stages đi lên hồ sơ, khớp theo tên cụm; chi tiết và cụm null không gửi', async () => {
+    vi.mocked(productsService.syncClusterRoutesFromShaping).mockResolvedValue({
+      updated: 1,
+      missing: [],
+    })
+    const r = await componentsService.save(thongKe, 'lsx1', [
+      cumKhung,
+      cumTheoHoSo,
+      chiTiet,
+    ] as never)
+    expect(productsService.syncClusterRoutesFromShaping).toHaveBeenCalledTimes(1)
+    expect(productsService.syncClusterRoutesFromShaping).toHaveBeenCalledWith(
+      thongKe,
+      'p1',
+      'LSX-01',
+      [{ name: 'Cụm khung', stages: ['han', 'nguoi', 'son'] }],
+    )
+    expect(r.routes_synced).toEqual([{ product_code: 'SP1', updated: 1 }])
+    expect(r.routes_missing).toEqual([])
+  })
+
+  it('tắt syncProfileRoutes (lệnh ngoại lệ một lần) → không đụng hồ sơ', async () => {
+    await componentsService.save(thongKe, 'lsx1', [cumKhung] as never, {
+      syncProfileRoutes: false,
+    })
+    expect(productsService.syncClusterRoutesFromShaping).not.toHaveBeenCalled()
+  })
+
+  it('cụm chỉ có trên lệnh → routes_missing; hồ sơ khoá → routes_skipped', async () => {
+    vi.mocked(productsService.syncClusterRoutesFromShaping).mockResolvedValueOnce({
+      updated: 0,
+      missing: ['Cụm khung'],
+    })
+    const r1 = await componentsService.save(thongKe, 'lsx1', [cumKhung] as never)
+    expect(r1.routes_synced).toEqual([])
+    expect(r1.routes_missing).toEqual([{ product_code: 'SP1', cluster: 'Cụm khung' }])
+
+    vi.mocked(productsService.syncClusterRoutesFromShaping).mockResolvedValueOnce({
+      skipped: 'locked',
+    })
+    const r2 = await componentsService.save(thongKe, 'lsx1', [cumKhung] as never)
+    expect(r2.routes_skipped).toEqual([{ product_code: 'SP1', reason: 'locked' }])
+  })
+
+  it('kế hoạch tổ & hạn KHÔNG chặn định hình: công đoạn cuối ngoài kế hoạch vẫn lưu được', async () => {
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+      { production_order_line_id: 'line1', stage: 'phoi', seq: 1 },
+      { production_order_line_id: 'line1', stage: 'han', seq: 2 },
+    ] as never)
+    vi.mocked(productsService.syncClusterRoutesFromShaping).mockResolvedValue({
+      updated: 1,
+      missing: [],
+    })
+    await expect(
+      componentsService.save(thongKe, 'lsx1', [
+        { ...cumKhung, final_stage: 'son' },
+      ] as never),
+    ).resolves.toBeTruthy()
+  })
+})
+
 describe('componentsService.suggest("bom") — lộ trình KHAI theo cụm (0288, B2)', () => {
   it('cụm nhôm khai phôi → nguội → sơn: chi tiết [phôi], cụm [nguội, sơn] — không cần hàn', async () => {
     vi.mocked(productionRepo.listStages).mockResolvedValue([
@@ -294,7 +383,14 @@ describe('componentsService.suggest("bom") — lộ trình KHAI theo cụm (0288
     ] as never)
     vi.mocked(productProfileRepo.parts).mockResolvedValue([
       { part_name: 'Chân', cluster_id: 'cl1', group_code: 'FRAME', qty: 4, unit: 'Cái' },
-      { part_name: 'Pát rời', cluster_id: null, group_code: 'FRAME', qty: 2, unit: 'Cái', stages: ['phoi', 'son'] },
+      {
+        part_name: 'Pát rời',
+        cluster_id: null,
+        group_code: 'FRAME',
+        qty: 2,
+        unit: 'Cái',
+        stages: ['phoi', 'son'],
+      },
     ] as never)
 
     const out = await componentsService.suggest(thongKe, 'lsx1', 'bom')
@@ -313,7 +409,15 @@ describe('componentsService.suggest("bom") — lộ trình KHAI theo cụm (0288
   it('cụm chưa khai (stages null) → y hệt cách cũ: cụm bắt đầu ở hàn, chi tiết dừng ở phôi', async () => {
     vi.mocked(productionRepo.listStages).mockResolvedValue([] as never)
     vi.mocked(productProfileRepo.clusters).mockResolvedValue([
-      { id: 'cl1', name: 'Cụm khung', qty_per_product: 1, first_stage: null, final_stage: null, stages: null, note: null },
+      {
+        id: 'cl1',
+        name: 'Cụm khung',
+        qty_per_product: 1,
+        first_stage: null,
+        final_stage: null,
+        stages: null,
+        note: null,
+      },
     ] as never)
     vi.mocked(productProfileRepo.parts).mockResolvedValue([
       { part_name: 'Chân', cluster_id: 'cl1', group_code: 'FRAME', qty: 4, unit: 'Cái' },

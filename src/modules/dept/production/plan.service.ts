@@ -4,8 +4,10 @@ import { jobsRepo, type Job } from './jobs.repo'
 import { planRepo, type PlanChangeDiff, type PlanChangeRow } from './plan.repo'
 import type { linePlanSchema, lsxPlanSchema } from './plan.schema'
 import { lsxLinesRepo } from './lsx-lines.repo'
+import { componentsRepo } from './components.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
+import { componentRoute } from '@/lib/stage-route'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
@@ -26,7 +28,11 @@ export type PlanLine = {
   product_code: string
   product_name: string
   qty: number
-  /** Lộ trình mặc định của SP (technical_products.stage_route) — gợi ý điền. */
+  /**
+   * Công đoạn dòng SP này đi qua, HỢP từ lộ trình các cụm / chi tiết đã định
+   * hình trên lệnh (04/11/2026 — thay `technical_products.stage_route`, nguồn
+   * thứ ba không ai nhìn thấy). null = lệnh chưa định hình dòng này.
+   */
   default_route: string[] | null
   jobs: Job[]
 }
@@ -55,6 +61,34 @@ async function lsxOrThrow(lsxId: string) {
   return lsx
 }
 
+/**
+ * Lộ trình gợi ý per DÒNG SP = hợp các công đoạn mà chi tiết / cụm đã định hình
+ * của dòng đó đi qua (cùng `componentRoute` sổ sản lượng dùng), sắp theo danh
+ * mục. Kế hoạch tổ & hạn chỉ gắn tổ/hạn lên những công đoạn này; dòng chưa
+ * định hình → null (nhận đủ danh sách lệnh, như trước).
+ */
+async function routesByLineFromShaping(
+  lsxId: string,
+  stages: { code: string }[],
+): Promise<Map<string, string[]>> {
+  const comps = await componentsRepo.listByLsx(lsxId)
+  const order = new Map(stages.map((s, i) => [s.code, i]))
+  const sets = new Map<string, Set<string>>()
+  for (const c of comps) {
+    const set = sets.get(c.production_order_line_id) ?? new Set<string>()
+    for (const s of componentRoute(undefined, c)) set.add(s)
+    sets.set(c.production_order_line_id, set)
+  }
+  const out = new Map<string, string[]>()
+  for (const [lineId, set] of sets) {
+    const arr = [...set]
+      .filter((s) => order.has(s))
+      .sort((a, b) => order.get(a)! - order.get(b)!)
+    if (arr.length) out.set(lineId, arr)
+  }
+  return out
+}
+
 function assertEditable(status: string): void {
   if (status === 'completed' || status === 'cancelled') {
     throw BadRequest('LSX đã kết thúc — kế hoạch chỉ còn để tra cứu')
@@ -75,9 +109,7 @@ export const planService = {
       departmentsRepo.list(),
       planRepo.listChanges(lsxId),
     ])
-    const defaults = await planRepo.defaultRoutesByProducts([
-      ...new Set(orderLines.map((l) => l.product_id).filter((x): x is string => !!x)),
-    ])
+    const defaults = await routesByLineFromShaping(lsxId, stages)
     const groupTitle = new Map(
       (await lsxLinesRepo.listGroups(lsxId)).map((g) => [g.id, g.title ?? '']),
     )
@@ -104,7 +136,7 @@ export const planService = {
         product_code: l.product_code,
         product_name: l.name_vi ?? l.product_code,
         qty: l.qty,
-        default_route: l.product_id ? (defaults.get(l.product_id) ?? null) : null,
+        default_route: defaults.get(l.id) ?? null,
         jobs: jobsByLine.get(l.id) ?? [],
       })),
       stages,
@@ -249,15 +281,9 @@ export const planService = {
         created_by: user.id,
       })
     }
-
-    // Lộ trình mặc định gắn vào SP — dòng lệnh chưa gắn SP (mã "Thông báo sau")
-    // thì không có chỗ để lưu, bỏ qua im lặng.
-    if (input.save_as_default && input.stages.length && line.product_id) {
-      await planRepo.saveDefaultRoute(
-        line.product_id,
-        input.stages.map((s) => s.stage),
-      )
-    }
+    // 04/11/2026: BỎ "lưu làm lộ trình mặc định SP" (technical_products.stage_route)
+    // — lộ trình sống ở cụm (hồ sơ SP + bản chụp trên lệnh), kế hoạch chỉ gắn
+    // tổ & hạn. Hồ sơ SP cập nhật từ màn Định hình, không từ đây.
   },
 
   /**
@@ -300,9 +326,7 @@ export const planService = {
       departmentsRepo.list(),
     ])
     if (!orderLines.length) throw BadRequest('Lệnh không có dòng SP nào')
-    const routes = await planRepo.defaultRoutesByProducts([
-      ...new Set(orderLines.map((l) => l.product_id).filter((x): x is string => !!x)),
-    ])
+    const routes = await routesByLineFromShaping(lsxId, stages)
 
     const teamByStage = new Map<string, string>()
     for (const d of depts) {
@@ -344,7 +368,7 @@ export const planService = {
     let linesKept = 0
 
     for (const line of orderLines) {
-      const route = line.product_id ? (routes.get(line.product_id) ?? null) : null
+      const route = routes.get(line.id) ?? null
       const routeSet = route ? new Set(route) : null
       const target = routeSet
         ? resolvedAll.filter((s) => routeSet.has(s.stage))

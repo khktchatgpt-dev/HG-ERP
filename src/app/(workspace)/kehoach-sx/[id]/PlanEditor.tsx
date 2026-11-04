@@ -50,7 +50,6 @@ function LinePlanBlock({
   const jobByStage = new Map(line.jobs.map((j) => [j.stage, j]))
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [saveDefault, setSaveDefault] = useState(false)
   const [draft, setDraft] = useState<StageDraft[]>([])
   // Dòng SP đã có việc chạy → điều chỉnh phải kèm lý do (0169).
   const lineActive = line.jobs.some((j) => j.status !== 'todo')
@@ -114,7 +113,6 @@ function LinePlanBlock({
             planned_start: s.planned_start || null,
             planned_end: s.planned_end || null,
           })),
-          save_as_default: saveDefault,
           reason: reason.trim() || null,
         },
       })
@@ -148,7 +146,7 @@ function LinePlanBlock({
                 onClick={() => startEdit(true)}
                 className="border-input rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-[var(--accent)]"
               >
-                Lấy lộ trình mặc định SP
+                Lấy công đoạn từ bảng định hình
               </button>
             )}
             <button
@@ -325,15 +323,10 @@ function LinePlanBlock({
             </label>
           )}
           <div className="flex items-center gap-3">
-            <label className="text-muted-foreground flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={saveDefault}
-                onChange={(e) => setSaveDefault(e.target.checked)}
-                className="h-4 w-4"
-              />
-              Lưu làm lộ trình mặc định cho SP này
-            </label>
+            <span className="text-muted-foreground text-xs">
+              Kế hoạch chỉ gắn tổ và hạn — lộ trình của cụm sửa ở màn Định hình của lệnh,
+              hồ sơ SP tự cập nhật theo.
+            </span>
             <div className="ml-auto flex gap-2">
               <button
                 onClick={() => setEditing(false)}

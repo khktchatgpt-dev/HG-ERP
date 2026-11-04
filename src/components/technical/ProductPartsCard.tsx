@@ -244,6 +244,7 @@ function ClusterHead({
   declaring,
   onStartDeclare,
   onDeclare,
+  productId,
 }: {
   block: ClusterBlock
   colSpan: number
@@ -258,6 +259,7 @@ function ClusterHead({
   declaring: boolean
   onStartDeclare: (id: string | null) => void
   onDeclare: (c: ClusterView, patch: ClusterDeclaration) => void
+  productId: string
 }) {
   const c = block.cluster
   const route = clusterRouteText(c, stages)
@@ -357,6 +359,7 @@ function ClusterHead({
             cluster={c}
             stages={stages}
             memberCount={block.rows.length}
+            productId={productId}
             onCancel={() => onStartDeclare(null)}
             onSave={(patch) => onDeclare(c, patch)}
           />
@@ -373,7 +376,11 @@ type ClusterDeclaration = {
   final_stage: string | null
 }
 
-/** Lộ trình đọc được: mã → nhãn danh mục. Chưa khai đủ hai đầu thì trả ''. */
+/**
+ * Lộ trình đọc được: mã → nhãn danh mục. Ưu tiên danh sách `stages` (0288, khai
+ * ở tab Lộ trình hoặc ghi ngược từ lệnh); chưa có thì đầu → cuối đời cũ; chưa
+ * khai gì thì ''.
+ */
 function clusterRouteText(
   c: ClusterView | null,
   stages: { code: string; label: string }[],
@@ -381,11 +388,15 @@ function clusterRouteText(
   if (!c) return ''
   const label = (code: string | null) =>
     code ? (stages.find((s) => s.code === code)?.label ?? code) : null
+  if (c.stages && c.stages.length) return c.stages.map((s) => label(s)).join(' → ')
   return [label(c.first_stage), label(c.final_stage)].filter(Boolean).join(' → ')
 }
 
 /**
- * Hộp khai cụm — SL cụm/SP + công đoạn đầu/cuối.
+ * Hộp khai cụm — SL cụm/SP. Lộ trình CHỈ ĐỌC ở đây từ 04/11/2026: nguồn duy
+ * nhất là tab Lộ trình (ma trận x theo cụm), và thường là kế hoạch định hình
+ * trên lệnh rồi hồ sơ tự cập nhật theo — hai ô "công đoạn đầu / cuối" đời cũ
+ * là nguồn thứ hai không ai nhìn thấy nên gỡ nhập, giữ hiển thị.
  *
  * Mở TẠI CHỖ dưới dải cụm chứ không phải hộp thoại: người khai đang nhìn danh
  * sách chi tiết của cụm, và chính danh sách đó là căn cứ để biết cụm này ghép
@@ -395,33 +406,27 @@ function ClusterDeclareForm({
   cluster,
   stages,
   memberCount,
+  productId,
   onCancel,
   onSave,
 }: {
   cluster: ClusterView
   stages: { code: string; label: string }[]
   memberCount: number
+  productId: string
   onCancel: () => void
   onSave: (patch: ClusterDeclaration) => void
 }) {
   const [qty, setQty] = useState(
     cluster.qty_per_product != null ? String(cluster.qty_per_product) : '',
   )
-  const [first, setFirst] = useState(cluster.first_stage ?? '')
-  const [last, setLast] = useState(cluster.final_stage ?? '')
-
-  const firstIdx = stages.findIndex((s) => s.code === first)
-  const lastIdx = stages.findIndex((s) => s.code === last)
   const qtyNum = qty.trim() === '' ? null : Number(qty)
   // Chặn TRƯỚC khi bấm, và nói vướng gì — không cho bấm rồi mới báo lỗi.
   const snag =
     qtyNum != null && (!Number.isFinite(qtyNum) || qtyNum <= 0)
       ? 'SL cụm/SP phải là số lớn hơn 0.'
-      : first && last && lastIdx < firstIdx
-        ? 'Công đoạn cuối đứng TRƯỚC công đoạn đầu trong danh mục.'
-        : !first && last
-          ? 'Khai công đoạn cuối thì phải khai cả công đoạn đầu.'
-          : null
+      : null
+  const route = clusterRouteText(cluster, stages)
 
   return (
     <div className="border-input bg-background mt-1.5 flex flex-wrap items-end gap-3 rounded border p-2">
@@ -438,40 +443,23 @@ function ClusterDeclareForm({
           className="border-input bg-background w-24 rounded border px-1.5 py-1 text-right text-xs tabular-nums focus:border-[var(--primary)] focus:outline-none"
         />
       </label>
-      <label className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <span className="text-muted-foreground text-[10px] font-medium">
-          Công đoạn ĐẦU của cụm
+          Lộ trình cụm
         </span>
-        <select
-          value={first}
-          onChange={(e) => setFirst(e.target.value)}
-          className="border-input bg-background rounded border px-1.5 py-1 text-xs focus:border-[var(--primary)] focus:outline-none"
-        >
-          <option value="">— suy theo nhóm vật tư —</option>
-          {stages.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-muted-foreground text-[10px] font-medium">
-          Công đoạn CUỐI
+        <span className="text-xs">
+          {route || (
+            <span className="text-[var(--warn)]">chưa khai — suy theo nhóm vật tư</span>
+          )}
+          {' · '}
+          <a
+            href={`/products/${productId}/lo-trinh`}
+            className="font-medium text-[var(--primary)] hover:underline"
+          >
+            sửa ở tab Lộ trình
+          </a>
         </span>
-        <select
-          value={last}
-          onChange={(e) => setLast(e.target.value)}
-          className="border-input bg-background rounded border px-1.5 py-1 text-xs focus:border-[var(--primary)] focus:outline-none"
-        >
-          <option value="">— tới hết lộ trình —</option>
-          {stages.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      </div>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -479,8 +467,8 @@ function ClusterDeclareForm({
           onClick={() =>
             onSave({
               qty_per_product: qtyNum,
-              first_stage: first || null,
-              final_stage: last || null,
+              first_stage: cluster.first_stage,
+              final_stage: cluster.final_stage,
             })
           }
           className="rounded bg-[var(--primary)] px-2.5 py-1 text-xs font-medium text-white disabled:bg-[var(--muted-foreground)]"
@@ -500,9 +488,10 @@ function ClusterDeclareForm({
           <span className="font-medium text-[var(--stop)]">{snag}</span>
         ) : (
           <>
-            {memberCount} chi tiết của cụm sẽ DỪNG ở công đoạn ngay trước “
-            {stages.find((s) => s.code === first)?.label ?? 'công đoạn ghép'}”; từ đó trở
-            đi xưởng đếm theo CỤM. Bỏ trống SL cụm/SP thì lúc định hình hiểu là 1.
+            {memberCount} chi tiết của cụm đi theo nửa “chi tiết” của lộ trình cụm; từ
+            công đoạn ghép trở đi xưởng đếm theo CỤM. Bỏ trống SL cụm/SP thì lúc định hình
+            hiểu là 1. Lộ trình thường do Kế hoạch chốt khi định hình lệnh — hồ sơ tự cập
+            nhật theo.
           </>
         )}
       </p>
@@ -1289,6 +1278,7 @@ export function ProductPartsCard({
                                   {sec.blocks.map((blk) => (
                                     <Fragment key={blk.cluster?.id ?? '__loose'}>
                                       <ClusterHead
+                                        productId={productId}
                                         block={blk}
                                         colSpan={colSpanOf(g.code)}
                                         canEdit={canEdit}

@@ -1230,6 +1230,41 @@ export const productProfileRepo = {
     }
   },
 
+  /**
+   * Vết "lộ trình cụm ghi từ đâu, lúc nào" (0291). Update RIÊNG và NUỐT LỖI có
+   * chủ ý: cột chỉ có sau khi áp 0291 — chưa áp thì lộ trình vẫn ghi được,
+   * chỉ thiếu dòng vết. Không gộp vào `setClusterStages` vì lỗi cột lạ ở đó
+   * sẽ làm cả lượt Lưu đổ.
+   */
+  async markClusterStagesSource(ids: string[], source: string): Promise<boolean> {
+    if (!ids.length) return true
+    const { error } = await db()
+      .from('technical_product_clusters')
+      .update({ stages_source: source, stages_updated_at: new Date().toISOString() })
+      .in('id', ids)
+    return !error
+  },
+
+  /** id cụm → vết nguồn (0291); bảng chưa có cột thì trả rỗng, không ném. */
+  async clusterStagesSources(
+    productId: string,
+  ): Promise<Map<string, { source: string | null; at: string | null }>> {
+    const { data, error } = await db()
+      .from('technical_product_clusters')
+      .select('id, stages_source, stages_updated_at')
+      .eq('product_id', productId)
+    if (error) return new Map()
+    return new Map(
+      (
+        (data ?? []) as {
+          id: string
+          stages_source: string | null
+          stages_updated_at: string | null
+        }[]
+      ).map((r) => [r.id, { source: r.stages_source, at: r.stages_updated_at }]),
+    )
+  },
+
   async setPartStages(
     productId: string,
     rows: { id: string; stages: string[] | null }[],

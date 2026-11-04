@@ -32,7 +32,10 @@ import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
 import { calcPartDerived } from '@/lib/bom-calc'
 import { normalizeSearch, worthFuzzy } from '@/lib/search-text'
-import { catalogsService, ensureCatalogItem } from '@/modules/core/catalogs/catalogs.service'
+import {
+  catalogsService,
+  ensureCatalogItem,
+} from '@/modules/core/catalogs/catalogs.service'
 import {
   LIFECYCLE_LABEL,
   flagsFor,
@@ -1004,7 +1007,9 @@ export const productsService = {
     if (product.locked_at)
       throw BadRequest('Hồ sơ đã khoá — mở khoá trước khi sửa lộ trình')
 
-    const cat = (await catalogsService.list(user, 'production_stage')).filter((s) => s.is_active)
+    const cat = (await catalogsService.list(user, 'production_stage')).filter(
+      (s) => s.is_active,
+    )
     const order = new Map(cat.map((s, i) => [s.code, i]))
     const chuan = (stages: string[] | null, what: string): string[] | null => {
       if (stages === null) return null
@@ -1032,6 +1037,10 @@ export const productsService = {
       productId,
       input.clusters.map((c) => ({ id: c.id, stages: chuan(c.stages, 'Cụm') })),
     )
+    await productProfileRepo.markClusterStagesSource(
+      input.clusters.map((c) => c.id),
+      'profile',
+    )
     await productProfileRepo.setPartStages(
       productId,
       input.parts.map((p) => ({ id: p.id, stages: chuan(p.stages, 'Chi tiết') })),
@@ -1040,6 +1049,78 @@ export const productsService = {
       clusters: await productProfileRepo.clusters(productId),
       parts: await productProfileRepo.parts(productId),
     }
+  },
+
+  /**
+   * GHI NGƯỢC lộ trình cụm từ bảng định hình của một LỆNH (04/11/2026, chủ dự
+   * án: "người đảm nhận là kế hoạch, định hình bên hồ sơ vẫn cập nhật theo").
+   * Khớp theo TÊN cụm (gọn khoảng trắng, không phân biệt hoa thường) trong
+   * cùng SP. Cụm không có ở hồ sơ → trả về `missing`, KHÔNG tự tạo: cụm là của
+   * định mức, đẻ cụm rỗng là đẻ rác. Hồ sơ khoá → `skipped: 'locked'`.
+   *
+   * Không `assertAction`: người gọi là `componentsService.save` đã gác
+   * `production.shaping.manage`; quyền sửa định mức (`technical.bom.save`) KHÔNG
+   * đòi ở đây — đó chính là điểm của quyết định 04/11 (kế hoạch không có quyền
+   * Kỹ thuật nhưng hồ sơ vẫn phải theo lệnh).
+   */
+  /** Vết mới nhất "lộ trình cụm ghi từ đâu" (0291) — tab Lộ trình nói nguồn. */
+  async latestRouteSource(
+    _user: User,
+    productId: string,
+  ): Promise<{ source: string; at: string } | null> {
+    const m = await productProfileRepo.clusterStagesSources(productId)
+    let best: { source: string; at: string } | null = null
+    for (const v of m.values()) {
+      if (!v.source || !v.at) continue
+      if (!best || v.at > best.at) best = { source: v.source, at: v.at }
+    }
+    return best
+  },
+
+  async syncClusterRoutesFromShaping(
+    user: User,
+    productId: string,
+    lsxCode: string,
+    rows: { name: string; stages: string[] }[],
+  ): Promise<
+    { updated: number; missing: string[] } | { skipped: 'locked' | 'not_found' }
+  > {
+    const product = await productsRepo.findById(productId)
+    if (!product) return { skipped: 'not_found' }
+    if (product.locked_at) return { skipped: 'locked' }
+
+    const cat = (await catalogsService.list(user, 'production_stage')).filter(
+      (s) => s.is_active,
+    )
+    const order = new Map(cat.map((s, i) => [s.code, i]))
+    const key = (s: string) => s.replace(/\s+/g, ' ').trim().toLocaleLowerCase('vi')
+    const clusters = await productProfileRepo.clusters(productId)
+    const byName = new Map(clusters.map((c) => [key(c.name), c]))
+
+    const writes: { id: string; stages: string[] }[] = []
+    const missing: string[] = []
+    for (const r of rows) {
+      const c = byName.get(key(r.name))
+      if (!c) {
+        missing.push(r.name)
+        continue
+      }
+      const stages = [...new Set(r.stages.filter((s) => order.has(s)))].sort(
+        (a, b) => order.get(a)! - order.get(b)!,
+      )
+      if (!stages.length) continue
+      const cur = c.stages ?? []
+      if (cur.length === stages.length && cur.every((s, i) => s === stages[i])) continue
+      writes.push({ id: c.id, stages })
+    }
+    if (writes.length) {
+      await productProfileRepo.setClusterStages(productId, writes)
+      await productProfileRepo.markClusterStagesSource(
+        writes.map((w) => w.id),
+        `lsx:${lsxCode}`,
+      )
+    }
+    return { updated: writes.length, missing }
   },
 
   async addCluster(user: User, productId: string, input: ClusterInput) {
