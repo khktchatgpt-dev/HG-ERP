@@ -21,6 +21,12 @@ export type Po = {
   vat_rate: number | null
   price_includes_vat: boolean
   discount_amount: number | null
+  /** 0292 — chiết khấu theo % (thắng discount_amount); null = gõ số tiền. */
+  discount_percent: number | null
+  /** 0292 — true = trừ trên tổng thanh toán (sau VAT). */
+  discount_after_vat: boolean
+  /** 0292 — lý do chiết khấu, in lên phiếu. */
+  discount_note: string | null
   contract_no: string | null
   expected_at: string | null
   terms: string | null
@@ -226,7 +232,7 @@ export const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref, project_id, marketplace_shop, marketplace_tracking_no, invoice_waived_reason'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, discount_percent, discount_after_vat, discount_note, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, supplier_doc_no, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, fx_rate, fx_date, note, created_by, assigned_to, created_at, updated_at, source_po_id, standalone_purpose, standalone_ref, project_id, marketplace_shop, marketplace_tracking_no, invoice_waived_reason'
 
 /** 0218 — ba cột gửi gấp, đọc riêng (xem `urgentByIds`). */
 const URGENT_COLS = 'urgent_sent_at, urgent_sent_by, urgent_reason'
@@ -1165,6 +1171,9 @@ export const posRepo = {
       vat_rate?: number | null
       price_includes_vat: boolean
       discount_amount?: number | null
+      discount_percent?: number | null
+      discount_after_vat?: boolean
+      discount_note?: string | null
       contract_no?: string | null
       expected_at?: string | null
       terms?: string | null

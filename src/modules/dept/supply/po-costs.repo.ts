@@ -119,6 +119,8 @@ export type PoForCost = {
   vat_rate: number | null
   price_includes_vat: boolean
   discount_amount: number | null
+  discount_percent?: number | null
+  discount_after_vat?: boolean
   supplier_id: string
   supplier_name: string | null
   /** Nơi giao ghi trên đơn — điều khoản in phiếu, lùi về cột cũ. */
@@ -127,7 +129,7 @@ export type PoForCost = {
 }
 
 const PO_COLS =
-  'id, code, status, currency, vat_rate, price_includes_vat, discount_amount, supplier_id, terms_delivery_place, delivery_place, supplier:supply_suppliers!supply_purchase_orders_supplier_id_fkey(name, short_name)'
+  'id, code, status, currency, vat_rate, price_includes_vat, discount_amount, discount_percent, discount_after_vat, supplier_id, terms_delivery_place, delivery_place, supplier:supply_suppliers!supply_purchase_orders_supplier_id_fkey(name, short_name)'
 
 type RawPo = {
   id: string
@@ -137,6 +139,8 @@ type RawPo = {
   vat_rate: unknown
   price_includes_vat: boolean | null
   discount_amount: unknown
+  discount_percent: unknown
+  discount_after_vat: boolean | null
   supplier_id: string
   terms_delivery_place: string | null
   delivery_place: string | null
@@ -178,6 +182,8 @@ async function withLines(rows: RawPo[]): Promise<PoForCost[]> {
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
     price_includes_vat: !!r.price_includes_vat,
     discount_amount: r.discount_amount == null ? null : Number(r.discount_amount),
+    discount_percent: r.discount_percent == null ? null : Number(r.discount_percent),
+    discount_after_vat: !!r.discount_after_vat,
     supplier_id: r.supplier_id,
     supplier_name: r.supplier?.short_name || r.supplier?.name || null,
     place: r.terms_delivery_place?.trim() || r.delivery_place?.trim() || null,

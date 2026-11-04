@@ -153,6 +153,12 @@ export const poCreateSchema = z.object({
   vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
   price_includes_vat: z.coerce.boolean().default(true),
   discount_amount: z.coerce.number().min(0).optional().nullable(),
+  /** 0292 — chiết khấu theo % (0–100); có thì thắng discount_amount. */
+  discount_percent: z.coerce.number().min(0).max(100).optional().nullable(),
+  /** 0292 — true = trừ trên tổng thanh toán (sau VAT). */
+  discount_after_vat: z.coerce.boolean().default(false),
+  /** 0292 — lý do chiết khấu, in lên phiếu. */
+  discount_note: z.string().trim().max(200).optional().nullable(),
   contract_no: optText(100), // "Theo HD số:"
   /**
    * Đơn NGOÀI LỆNH (0229): mục đích (loại việc) + ghi rõ cho ai. Gõ tự do kèm
@@ -441,7 +447,7 @@ export const poRescheduleSchema = z.object({
  *
  * `base_seq` = số lần điều chỉnh client đã thấy (0 nếu chưa lần nào) — hàm DB
  * so với sổ để chặn hai người áp dụng chen nhau.
- * `vat_rate` / `discount_amount` vắng mặt = giữ nguyên.
+ * `vat_rate` / `discount_*` vắng mặt = giữ nguyên.
  */
 export const poAdjustLineSchema = poLineInputSchema.extend({
   id: z.string().uuid().nullish(),
@@ -462,6 +468,9 @@ export const poAdjustSchema = z
       .max(1000),
     vat_rate: z.coerce.number().min(0).max(100).nullish(),
     discount_amount: z.coerce.number().min(0).nullish(),
+    discount_percent: z.coerce.number().min(0).max(100).nullish(),
+    discount_after_vat: z.coerce.boolean().nullish(),
+    discount_note: z.string().trim().max(200).nullish(),
     lines: z
       .array(poAdjustLineSchema)
       .max(200)

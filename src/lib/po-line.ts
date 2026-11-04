@@ -151,7 +151,19 @@ export function priceUnitLabel(
 export function poMoney(input: {
   /** Σ tiền từng dòng, chưa làm tròn. */
   subtotalRaw: number
+  /** Chiết khấu SỐ TIỀN — dùng khi không có `discountPercent`. */
   discount?: number | null
+  /**
+   * Chiết khấu THEO % (0292, 04/11/2026). Có thì THẮNG `discount`: số tiền tính lại
+   * từ % mỗi lần, để sửa dòng / VAT không làm chiết khấu đứng yên ở số cũ.
+   */
+  discountPercent?: number | null
+  /**
+   * Trừ SAU VAT — chiết khấu tính trên TỔNG THANH TOÁN và không làm giảm tiền VAT
+   * (NCC ghi "chiết khấu 3% tiền vỏ lon" dưới dòng Cộng, PO-2026-0242). Mặc định
+   * false = trừ vào tiền hàng TRƯỚC khi tính VAT như trước 04/11/2026.
+   */
+  discountAfterVat?: boolean | null
   vatRate?: number | null
   /** Đơn giá ĐÃ gồm VAT chưa — quyết định cộng thêm hay tách ngược ra. */
   priceIncludesVat?: boolean | null
@@ -160,18 +172,38 @@ export function poMoney(input: {
 }) {
   const r = (n: number) => roundMoney(n, input.currency)
   const subtotal = r(input.subtotalRaw)
-  const discountAmount = Number(input.discount ?? 0) || 0
-  const base = Math.max(0, subtotal - discountAmount)
   const vatRate = Number(input.vatRate ?? 0) || 0
+  const pct = input.discountPercent == null ? null : Number(input.discountPercent) || 0
+  const fixed = Number(input.discount ?? 0) || 0
   // Giá đã gồm VAT: tách ngược ra khỏi tiền hàng, KHÔNG cộng thêm lần nữa.
-  const vatAmount = input.priceIncludesVat
-    ? r((base * vatRate) / (100 + vatRate))
-    : r((base * vatRate) / 100)
+  const vatOf = (base: number) =>
+    input.priceIncludesVat
+      ? r((base * vatRate) / (100 + vatRate))
+      : r((base * vatRate) / 100)
+
+  if (input.discountAfterVat) {
+    // Cộng đủ VAT trên tiền hàng trước, rồi mới trừ chiết khấu trên tổng.
+    const vatAmount = vatOf(subtotal)
+    const gross = input.priceIncludesVat ? subtotal : r(subtotal + vatAmount)
+    const discountAmount = pct == null ? fixed : r((gross * pct) / 100)
+    return {
+      subtotal,
+      discountAmount,
+      vatAmount,
+      grandTotal: Math.max(0, r(gross - discountAmount)),
+      discountAfterVat: true,
+    }
+  }
+
+  const discountAmount = pct == null ? fixed : r((subtotal * pct) / 100)
+  const base = Math.max(0, subtotal - discountAmount)
+  const vatAmount = vatOf(base)
   return {
     subtotal,
     discountAmount,
     vatAmount,
     grandTotal: input.priceIncludesVat ? base : r(base + vatAmount),
+    discountAfterVat: false,
   }
 }
 
@@ -187,12 +219,17 @@ export function poMoneyOf(
     vat_rate: number | null
     price_includes_vat: boolean | null
     discount_amount: number | null
+    /** 0292 — vắng (chỗ gọi cũ chưa đọc cột) = chiết khấu số tiền, trừ trước VAT. */
+    discount_percent?: number | null
+    discount_after_vat?: boolean | null
   },
   subtotalRaw: number,
 ) {
   return poMoney({
     subtotalRaw,
     discount: po.discount_amount,
+    discountPercent: po.discount_percent,
+    discountAfterVat: po.discount_after_vat,
     vatRate: po.vat_rate,
     priceIncludesVat: po.price_includes_vat,
     currency: po.currency,

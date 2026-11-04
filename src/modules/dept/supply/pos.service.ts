@@ -115,6 +115,9 @@ type PoInput = {
   vat_rate?: number | null
   price_includes_vat: boolean
   discount_amount?: number | null
+  discount_percent?: number | null
+  discount_after_vat?: boolean
+  discount_note?: string | null
   contract_no?: string | null
   expected_at?: string | null
   terms?: string | null
@@ -545,6 +548,9 @@ export const posService = {
         vat_rate: input.vat_rate ?? null,
         price_includes_vat: input.price_includes_vat,
         discount_amount: input.discount_amount ?? null,
+        discount_percent: input.discount_percent ?? null,
+        discount_after_vat: !!input.discount_after_vat,
+        discount_note: input.discount_note?.trim() || null,
         contract_no: input.contract_no ?? null,
         expected_at: input.expected_at ?? null,
         terms: input.terms ?? null,
@@ -696,7 +702,10 @@ export const posService = {
       signer_role: input.signer_role ?? null,
       note: input.note ?? null,
       // 0279: không gửi = giữ; mã vận đơn chỉ sống trên đơn sàn (`truongSan`).
-      invoice_waived_reason: keep(input.invoice_waived_reason, before.invoice_waived_reason),
+      invoice_waived_reason: keep(
+        input.invoice_waived_reason,
+        before.invoice_waived_reason,
+      ),
       ...(input.marketplace_tracking_no !== undefined
         ? {
             marketplace_tracking_no: truongSan(
@@ -801,6 +810,9 @@ export const posService = {
       vat_rate: input.vat_rate ?? null,
       price_includes_vat: input.price_includes_vat,
       discount_amount: input.discount_amount ?? null,
+      discount_percent: input.discount_percent ?? null,
+      discount_after_vat: !!input.discount_after_vat,
+      discount_note: input.discount_note?.trim() || null,
       contract_no: input.contract_no ?? null,
       expected_at: input.expected_at ?? null,
       terms: input.terms ?? null,
@@ -946,7 +958,9 @@ export const posService = {
       // Đơn sàn (0279) không có bước "gửi NCC" — đặt trong app là trả tiền luôn,
       // nên phải qua `confirm` để ghi mã đơn sàn + phiếu chi trả trước.
       if (sup.is_marketplace)
-        throw BadRequest('Đơn mua trên sàn: dùng nút "Đặt trên sàn" để ghi mã đơn và số tiền đã trả')
+        throw BadRequest(
+          'Đơn mua trên sàn: dùng nút "Đặt trên sàn" để ghi mã đơn và số tiền đã trả',
+        )
     }
     if (to === 'ordered' && !before.expected_at) {
       throw BadRequest(
@@ -1593,6 +1607,9 @@ export const posService = {
       lsx_ids?: string[]
       vat_rate?: number | null
       discount_amount?: number | null
+      discount_percent?: number | null
+      discount_after_vat?: boolean | null
+      discount_note?: string | null
       lines: (PoLineInput & { id?: string | null })[]
     },
   ): Promise<{ po: Po; seq: number; delta_total: number }> {
@@ -1661,7 +1678,12 @@ export const posService = {
       currency: before.currency,
       priceIncludesVat: !!before.price_includes_vat,
       before: {
-        header: { vatRate: before.vat_rate, discount: before.discount_amount },
+        header: {
+          vatRate: before.vat_rate,
+          discount: before.discount_amount,
+          discountPercent: before.discount_percent,
+          discountAfterVat: before.discount_after_vat,
+        },
         lines: beforeLines,
       },
       after: {
@@ -1671,6 +1693,14 @@ export const posService = {
             input.discount_amount === undefined
               ? before.discount_amount
               : input.discount_amount,
+          discountPercent:
+            input.discount_percent === undefined
+              ? before.discount_percent
+              : input.discount_percent,
+          discountAfterVat:
+            input.discount_after_vat == null
+              ? before.discount_after_vat
+              : input.discount_after_vat,
         },
         lines: derived.map((l) => {
           const cu = l.id ? beforeById.get(l.id) : undefined
@@ -1734,6 +1764,15 @@ export const posService = {
     if (plan.headerChanges?.vat_rate) header.vat_rate = plan.headerChanges.vat_rate[1]
     if (plan.headerChanges?.discount_amount)
       header.discount_amount = plan.headerChanges.discount_amount[1]
+    if (plan.headerChanges?.discount_percent)
+      header.discount_percent = plan.headerChanges.discount_percent[1]
+    if (plan.headerChanges?.discount_after_vat)
+      header.discount_after_vat = plan.headerChanges.discount_after_vat[1]
+    // Số tiền đã trừ luôn đi theo phép tính (% đổi theo dòng) — công nợ đọc thẳng cột này.
+    if (plan.money.after.discountAmount !== plan.money.before.discountAmount)
+      header.discount_amount = plan.money.after.discountAmount || null
+    if (input.discount_note !== undefined)
+      header.discount_note = input.discount_note?.trim() || null
 
     let seq: number
     try {
@@ -1828,6 +1867,13 @@ export const posService = {
     if (plan.headerChanges?.vat_rate) header.vat_rate = plan.headerChanges.vat_rate[1]
     if (plan.headerChanges?.discount_amount)
       header.discount_amount = plan.headerChanges.discount_amount[1]
+    if (plan.headerChanges?.discount_percent)
+      header.discount_percent = plan.headerChanges.discount_percent[1]
+    if (plan.headerChanges?.discount_after_vat)
+      header.discount_after_vat = plan.headerChanges.discount_after_vat[1]
+    // Số tiền đã trừ luôn đi theo phép tính (% đổi theo dòng) — công nợ đọc thẳng cột này.
+    if (plan.money.after.discountAmount !== plan.money.before.discountAmount)
+      header.discount_amount = plan.money.after.discountAmount || null
 
     let r: { seq: number; revalued: number }
     try {

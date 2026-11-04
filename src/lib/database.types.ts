@@ -7209,6 +7209,9 @@ export type Database = {
           currency: string
           delivery_place: string | null
           discount_amount: number | null
+          discount_after_vat: boolean
+          discount_note: string | null
+          discount_percent: number | null
           expected_at: string | null
           fx_date: string | null
           fx_rate: number | null
@@ -7255,6 +7258,9 @@ export type Database = {
           currency?: string
           delivery_place?: string | null
           discount_amount?: number | null
+          discount_after_vat?: boolean
+          discount_note?: string | null
+          discount_percent?: number | null
           expected_at?: string | null
           fx_date?: string | null
           fx_rate?: number | null
@@ -7301,6 +7307,9 @@ export type Database = {
           currency?: string
           delivery_place?: string | null
           discount_amount?: number | null
+          discount_after_vat?: boolean
+          discount_note?: string | null
+          discount_percent?: number | null
           expected_at?: string | null
           fx_date?: string | null
           fx_rate?: number | null

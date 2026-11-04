@@ -157,6 +157,7 @@ describe('poMoney — chiết khấu, VAT, tổng thanh toán', () => {
       discountAmount: 0,
       vatAmount: 0,
       grandTotal: 7_000_000,
+      discountAfterVat: false,
     })
   })
 
@@ -294,5 +295,69 @@ describe('dongKhongMaLaPhi — dòng không mã thiếu cờ', () => {
       null,
       'phi',
     ])
+  })
+})
+
+describe('poMoney — chiết khấu % và trừ sau VAT (0292, PO-2026-0242)', () => {
+  // Keo Epoxy AE3000: 458 kg × 100.000 đ đã gồm VAT 8% = 45.800.000; NCC trừ 3% tiền
+  // vỏ lon TRÊN TỔNG THANH TOÁN → phải trả 44.426.000.
+  it('3% sau VAT, giá đã gồm VAT → khớp phiếu NCC từng đồng', () => {
+    const m = poMoney({
+      subtotalRaw: 45_800_000,
+      vatRate: 8,
+      priceIncludesVat: true,
+      discountPercent: 3,
+      discountAfterVat: true,
+    })
+    expect(m.discountAmount).toBe(1_374_000)
+    expect(m.vatAmount).toBe(3_392_593) // VAT KHÔNG giảm theo chiết khấu thanh toán
+    expect(m.grandTotal).toBe(44_426_000)
+  })
+
+  it('3% sau VAT, giá chưa gồm VAT: % tính trên tiền hàng + VAT', () => {
+    const m = poMoney({
+      subtotalRaw: 42_407_407,
+      vatRate: 8,
+      discountPercent: 3,
+      discountAfterVat: true,
+    })
+    expect(m.vatAmount).toBe(3_392_593)
+    expect(m.discountAmount).toBe(1_374_000)
+    expect(m.grandTotal).toBe(44_426_000)
+  })
+
+  it('cách cũ (số tiền, trừ trước VAT) giữ nguyên số — đây là chỗ PO-0242 lệch 109.718 đ', () => {
+    const m = poMoney({ subtotalRaw: 42_407_594, vatRate: 8, discount: 1_374_000 })
+    expect(m.grandTotal).toBe(44_316_282)
+    expect(m.discountAfterVat).toBe(false)
+  })
+
+  it('3% trước VAT: trừ vào tiền hàng rồi mới tính VAT', () => {
+    const m = poMoney({ subtotalRaw: 42_407_407, vatRate: 8, discountPercent: 3 })
+    expect(m.discountAmount).toBe(1_272_222)
+    expect(m.vatAmount).toBe(3_290_815)
+    expect(m.grandTotal).toBe(44_426_000)
+  })
+
+  it('% thắng số tiền đã lưu; số tiền cố định sau VAT cũng được', () => {
+    expect(poMoney({ subtotalRaw: 1_000_000, discount: 999, discountPercent: 10 }).discountAmount).toBe(100_000) // prettier-ignore
+    const m = poMoney({ subtotalRaw: 1_000_000, vatRate: 10, discount: 50_000, discountAfterVat: true }) // prettier-ignore
+    expect(m.vatAmount).toBe(100_000)
+    expect(m.grandTotal).toBe(1_050_000)
+  })
+
+  it('chiết khấu lớn hơn tổng không ra số âm', () => {
+    expect(poMoney({ subtotalRaw: 100, vatRate: 10, discount: 500, discountAfterVat: true }).grandTotal).toBe(0) // prettier-ignore
+  })
+
+  it('poMoneyOf đọc hai cột mới; vắng cột = cách cũ', () => {
+    const po = {
+      currency: 'VND',
+      vat_rate: 8,
+      price_includes_vat: true,
+      discount_amount: 1_374_000,
+    }
+    expect(poMoneyOf({ ...po, discount_percent: 3, discount_after_vat: true }, 45_800_000).grandTotal).toBe(44_426_000) // prettier-ignore
+    expect(poMoneyOf(po, 45_800_000).grandTotal).toBe(44_426_000) // giá gồm VAT: trừ thẳng, cùng số
   })
 })

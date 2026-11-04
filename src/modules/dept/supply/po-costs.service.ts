@@ -62,6 +62,8 @@ function goodsBase(p: PoForCost): number {
   const m = poMoney({
     subtotalRaw: p.lines.reduce((s, l) => s + poLineAmount(l), 0),
     discount: p.discount_amount,
+    discountPercent: p.discount_percent,
+    discountAfterVat: p.discount_after_vat,
     vatRate: p.vat_rate,
     priceIncludesVat: p.price_includes_vat,
     currency: p.currency,

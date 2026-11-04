@@ -85,7 +85,13 @@ export type AdjAfterLine = LineCore & {
   unit: string | null
 }
 
-export type AdjHeader = { vatRate: number | null; discount: number | null }
+export type AdjHeader = {
+  vatRate: number | null
+  discount: number | null
+  /** 0292 — chiết khấu %, trừ sau VAT. Vắng = cách cũ (số tiền, trước VAT). */
+  discountPercent?: number | null
+  discountAfterVat?: boolean | null
+}
 
 export type AdjChangeKind = 'changed' | 'added' | 'removed'
 
@@ -115,6 +121,8 @@ export type AdjPlan = {
   headerChanges: {
     vat_rate?: [number | null, number | null]
     discount_amount?: [number, number]
+    discount_percent?: [number | null, number | null]
+    discount_after_vat?: [boolean, boolean]
   } | null
   updates: (AdjAfterLine & { id: string; sort_order: number })[]
   inserts: (AdjAfterLine & { sort_order: number })[]
@@ -309,6 +317,13 @@ export function planAdjustment(input: {
   if (!same(hA.discount ?? 0, hB.discount ?? 0)) {
     headerChanges.discount_amount = [Number(hB.discount ?? 0), Number(hA.discount ?? 0)]
   }
+  if (!same(hA.discountPercent ?? null, hB.discountPercent ?? null))
+    headerChanges.discount_percent = [
+      hB.discountPercent ?? null,
+      hA.discountPercent ?? null,
+    ]
+  if (!!hA.discountAfterVat !== !!hB.discountAfterVat)
+    headerChanges.discount_after_vat = [!!hB.discountAfterVat, !!hA.discountAfterVat]
   const hasHeader = Object.keys(headerChanges).length > 0
   if (changes.length === 0 && !hasHeader)
     errors.push('Chưa có thay đổi nào so với đơn đang chạy')
@@ -318,6 +333,8 @@ export function planAdjustment(input: {
     before: poMoney({
       subtotalRaw: sum(input.before.lines),
       discount: hB.discount,
+      discountPercent: hB.discountPercent,
+      discountAfterVat: hB.discountAfterVat,
       vatRate: hB.vatRate,
       priceIncludesVat: input.priceIncludesVat,
       currency,
@@ -325,6 +342,8 @@ export function planAdjustment(input: {
     after: poMoney({
       subtotalRaw: sum(input.after.lines),
       discount: hA.discount,
+      discountPercent: hA.discountPercent,
+      discountAfterVat: hA.discountAfterVat,
       vatRate: hA.vatRate,
       priceIncludesVat: input.priceIncludesVat,
       currency,
