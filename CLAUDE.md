@@ -708,6 +708,26 @@ phiếu chờ tổ của người xem nhận, cùng vị từ `choNhan` (`lib/pg
 gắn tổ và hạn. Mục có trang con cùng tiền tố (`/thongke/lenh`, `/kehoach-sx`) đặt
 `exact: true` để không sáng đôi.
 
+## Vercel — Functions Storage (04/11/2026)
+
+Gói Hobby đo **Functions Storage 9,36 / 10 GB** = tổng bundle hàm của MỌI bản
+deploy còn trong 30 ngày, không phải cỡ một hàm. Đo thật bằng `next build` +
+vết `.next/server/**/*.nft.json`: cả app chỉ **34 MB** file truy vết (31,5 MB là
+chunk `.next`, route nặng nhất 5,5 MB) — bundle KHÔNG phải thủ phạm. Thủ phạm là
+SỐ BẢN DEPLOY: 30 ngày có 398 commit lên main + 69 nhánh push, mỗi lần push là một
+bản ~35–60 MB. Vì thế:
+
+- `vercel.json` có `ignoreCommand` **chỉ build nhánh `main`** (exit 0 = bỏ qua);
+  nhánh phiên Claude push thoải mái, không tốn deploy. Muốn xem preview một nhánh
+  thì tạm sửa lệnh này hoặc deploy tay.
+- Đẩy lên main theo ĐỢT, không đẩy từng commit.
+- Đầy thì xoá bản cũ: `npx vercel rm hg-erp --safe --yes` (giữ bản đang gắn domain).
+- Đừng thêm `outputFileTracingExcludes` theo đoán: số đo nói không có gì đáng
+  cắt. `xlsx` chỉ dùng trong `scripts/`, không vào hàm.
+
+Bẫy build cục bộ trên Windows: bước "Running TypeScript" của `next build` sập
+worker (0xC0000409) dù compile xong và vết NFT đã ghi — Vercel build bình thường.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
