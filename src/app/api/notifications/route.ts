@@ -5,7 +5,16 @@ import { notificationsService } from '@/modules/core/notifications/notifications
 
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const unreadOnly = new URL(req.url).searchParams.get('unread') === '1'
+  const sp = new URL(req.url).searchParams
+  const unreadOnly = sp.get('unread') === '1'
+  // `bell=1`: hộp chuông — chỉ loại việc giao (lib/bell-types), số đỏ đếm cùng tập.
+  if (sp.get('bell') === '1') {
+    const [items, unread] = await Promise.all([
+      notificationsService.listBell(user),
+      notificationsService.unreadBellCount(user),
+    ])
+    return NextResponse.json({ notifications: items, unread })
+  }
   const [items, unread] = await Promise.all([
     notificationsService.listMine(user, { unreadOnly }),
     notificationsService.unreadCount(user),
@@ -13,8 +22,12 @@ export const GET = handle(async (req: Request) => {
   return NextResponse.json({ notifications: items, unread })
 })
 
-export const POST = handle(async () => {
+export const POST = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  await notificationsService.markAllRead(user)
+  if (new URL(req.url).searchParams.get('bell') === '1') {
+    await notificationsService.markBellRead(user)
+  } else {
+    await notificationsService.markAllRead(user)
+  }
   return NextResponse.json({ ok: true })
 })

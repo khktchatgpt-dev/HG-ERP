@@ -92,6 +92,12 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)} ngày trước`
 }
 
+/**
+ * CHUÔNG = VIỆC GIAO CHO BẠN (05/11/2026). Số đỏ và danh sách chỉ gồm loại việc
+ * giao (`lib/bell-types`), lấy qua `/api/notifications?bell=1`. Cảnh báo kho /
+ * đơn mua / lệnh… vẫn ở trang Thông báo (link chân hộp). Nhãn loại ở TYPE_LABEL
+ * giữ đủ vì trang Thông báo cũng dùng chung bảng này.
+ */
 export function NotificationsDropdown({ initialUnread }: { initialUnread: number }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -113,7 +119,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
   async function fetchLatest() {
     setLoading(true)
     try {
-      const res = await fetch('/api/notifications')
+      const res = await fetch('/api/notifications?bell=1')
       if (res.ok) {
         const json = await res.json()
         setItems(json.notifications.slice(0, 8))
@@ -131,7 +137,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
   }
 
   async function markAllRead() {
-    await fetch('/api/notifications', { method: 'POST' })
+    await fetch('/api/notifications?bell=1', { method: 'POST' })
     setUnread(0)
     setItems((arr) =>
       arr.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })),
@@ -144,7 +150,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
       {/* Chuông theo thiết kế v3: icon lucide + badge đếm màu --stop (đỏ). */}
       <button
         onClick={toggle}
-        aria-label="Thông báo"
+        aria-label="Việc giao cho bạn"
         aria-expanded={open}
         className="text-muted-foreground hover:bg-accent hover:text-accent-foreground relative grid h-9 w-9 place-items-center rounded-md transition-colors pointer-coarse:h-11 pointer-coarse:w-11"
       >
@@ -159,7 +165,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
       {open && (
         <div className="bg-popover text-popover-foreground absolute top-full right-0 z-50 mt-1.5 w-80 overflow-hidden rounded-lg border shadow-md">
           <header className="flex items-center justify-between border-b px-3 py-2">
-            <h3 className="text-sm font-semibold">Thông báo</h3>
+            <h3 className="text-sm font-semibold">Việc giao cho bạn</h3>
             {unread > 0 && (
               <button
                 onClick={markAllRead}
@@ -176,7 +182,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
             </div>
           ) : items.length === 0 ? (
             <p className="text-muted-foreground px-3 py-8 text-center text-xs">
-              Chưa có thông báo nào.
+              Không có việc mới giao cho bạn.
             </p>
           ) : (
             <ul className="divide-border/60 max-h-96 divide-y overflow-y-auto">
@@ -222,7 +228,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
               onClick={() => setOpen(false)}
               className="text-muted-foreground hover:text-foreground block px-3 py-2 text-center text-xs underline transition-colors"
             >
-              Xem tất cả
+              Xem mọi thông báo (kho, đơn mua, lệnh…)
             </Link>
           </footer>
         </div>

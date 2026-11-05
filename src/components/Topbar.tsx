@@ -14,7 +14,7 @@ export async function Topbar({
 }) {
   const user = await authService.currentUser()
   if (!user) return null
-  const unread = await notificationsService.unreadCount(user)
+  const unread = await notificationsService.unreadBellCount(user)
 
   return (
     <header className="bg-card/85 sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b px-4 backdrop-blur sm:px-6">

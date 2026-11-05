@@ -28,7 +28,7 @@ export async function WorkspaceTopbar({
   const user = await authService.currentUser()
   if (!user) return null
   const [unread, avatarUrl] = await Promise.all([
-    notificationsService.unreadCount(user),
+    notificationsService.unreadBellCount(user),
     accountService.avatarUrl(user),
   ])
   // Đang xem chéo workspace phòng khác → nhắc "chỉ xem" để khỏi bất ngờ khi

@@ -106,9 +106,10 @@ export const notificationsRepo = {
     if (error) console.error('notification insert failed:', error.message)
   },
 
+  /** `types`: chỉ các loại này (chuông chỉ lấy loại việc giao — `lib/bell-types`). */
   async listForUser(
     userId: string,
-    opts: { unreadOnly?: boolean; limit?: number } = {},
+    opts: { unreadOnly?: boolean; limit?: number; types?: readonly string[] } = {},
   ): Promise<Notification[]> {
     let q = db()
       .from('notifications')
@@ -117,16 +118,19 @@ export const notificationsRepo = {
       .order('created_at', { ascending: false })
       .limit(opts.limit ?? 50)
     if (opts.unreadOnly) q = q.is('read_at', null)
+    if (opts.types) q = q.in('type', [...opts.types])
     const { data } = await q
     return (data ?? []) as Notification[]
   },
 
-  async countUnread(userId: string): Promise<number> {
-    const { count } = await db()
+  async countUnread(userId: string, types?: readonly string[]): Promise<number> {
+    let q = db()
       .from('notifications')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .is('read_at', null)
+    if (types) q = q.in('type', [...types])
+    const { count } = await q
     return count ?? 0
   },
 
@@ -138,12 +142,14 @@ export const notificationsRepo = {
       .eq('user_id', userId)
   },
 
-  async markAllRead(userId: string): Promise<void> {
-    await db()
+  async markAllRead(userId: string, types?: readonly string[]): Promise<void> {
+    let q = db()
       .from('notifications')
       .update({ read_at: new Date().toISOString() })
       .eq('user_id', userId)
       .is('read_at', null)
+    if (types) q = q.in('type', [...types])
+    await q
   },
 
   /**
