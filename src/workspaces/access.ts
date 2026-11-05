@@ -146,8 +146,14 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   ) {
     caps.add('production.overview')
   }
-  // "Việc tôi giao" (B2) — cùng luật `canGive` mà trang Phân công việc dùng.
-  if (await tasksService.canGive(user)) caps.add('tasks.give')
+  // Nhóm VIỆC (B2) — cùng luật trang Phân công việc dùng: "Việc tôi giao" = `canGive`;
+  // "Việc của tôi" = `canReceive` (khối BGĐ không nhận việc, 05/11/2026).
+  const [give, receive] = await Promise.all([
+    tasksService.canGive(user),
+    tasksService.canReceive(user),
+  ])
+  if (give) caps.add('tasks.give')
+  if (receive) caps.add('tasks.receive')
   return caps
 }
 

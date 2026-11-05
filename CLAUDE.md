@@ -773,6 +773,9 @@ không nói ai đang có việc. Ba bước, mỗi bước một commit:
 - **B2 · Nhóm VIỆC đứng đầu sidebar mọi khu** (`VIEC_SECTION`, bản vẽ
   `RhpXain2mB7mbatN3kSZuV`): "Việc của tôi · n" = `mineBoard.summary.doing` (+ "k trễ"),
   "Việc tôi giao · m" = `givenBoard.summary.to_approve`, chỉ `tasks.give` (= `canGive`).
+  **Giám đốc không nhận việc** (chủ dự án 05/11): `canReceive(ws)` trong `lib/task-flow`
+  — khối `exec` không là đích giao (ô chọn người, server `ASSIGN_BLOCKED_EXEC`), không có
+  "Việc của tôi" (năng lực `tasks.receive`, tab ẩn, `defaultTab` dồn sang "Việc tôi giao").
   Đếm ở `nav-badges.viecBadges` cho MỌI khu; `withNavBadges` nhận `{ n, note }`; cờ
   `urgent` tường minh thay regex nhãn. Hai mục cùng đường dẫn khác `?muc=` → mục sáng
   theo `lib/nav-active` (có test): URL không có `muc` thì mục `defaultTab` sáng (server

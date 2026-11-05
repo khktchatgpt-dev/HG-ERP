@@ -31,7 +31,10 @@ export default async function PhanCongPage({
     searchParams,
     authService.requirePageUser(),
   ])
-  const giver = await tasksService.canGive(user)
+  const [giver, nhanDuoc] = await Promise.all([
+    tasksService.canGive(user),
+    tasksService.canReceive(user),
+  ])
   const [board, mine, people] = await Promise.all([
     tasksService.givenBoard(user),
     tasksService.mineBoard(user),
@@ -62,6 +65,7 @@ export default async function PhanCongPage({
       // `muc` cũng vào key: bấm dòng menu kia khi đang ở trang là đổi tab ngay.
       key={`${viec ?? ''}|${initialMuc ?? ''}`}
       initialMuc={initialMuc}
+      nhanDuoc={nhanDuoc}
       meId={user.id}
       today={today}
       board={board}

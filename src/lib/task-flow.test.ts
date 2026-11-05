@@ -3,6 +3,7 @@ import {
   actionForStatus,
   canAssign,
   canAssignTo,
+  canReceive,
   taskEditBlock,
   taskEditSummary,
   dueEndOfDay,
@@ -358,5 +359,16 @@ describe('taskEditSummary — kể lại đã đổi gì', () => {
       'Xoá mô tả',
       'Đổi hạn: 10/11/2026 → không hạn',
     ])
+  })
+})
+
+describe('canReceive — Giám đốc không nhận việc (05/11/2026)', () => {
+  it('khối BGĐ không là đích giao, kể cả sếp / quản lý giao', () => {
+    expect(canReceive('exec')).toBe(false)
+    expect(canReceive('planning')).toBe(true)
+    expect(canReceive(null)).toBe(true)
+    expect(canAssignTo({ id: 'a', role: 'admin' }, 'exec')).toBe(false)
+    expect(canAssignTo({ id: 'm', role: 'manager' }, 'exec')).toBe(false)
+    expect(canAssignTo({ id: 'm', role: 'manager' }, 'finance')).toBe(true)
   })
 })

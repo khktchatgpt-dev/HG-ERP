@@ -40,6 +40,7 @@ export function PhanCongScreen({
   people,
   focus,
   initialMuc = null,
+  nhanDuoc = true,
 }: {
   meId: string
   /** Vai trò người xem — ngăn chi tiết cần để biết sếp đính tệp được. */
@@ -55,8 +56,10 @@ export function PhanCongScreen({
   focus: PhanCongFocus | null
   /** `?muc=` từ menu VIỆC (B2) — tab mở sẵn khi không có chuông chỉ việc. */
   initialMuc?: 'cua-toi' | 'giao' | null
+  /** false = khối BGĐ: không nhận việc, không có tab "Việc của tôi" (05/11/2026). */
+  nhanDuoc?: boolean
 }) {
-  const d = usePhanCong({ board, mine, today, focus, initialMuc })
+  const d = usePhanCong({ board, mine, today, focus, initialMuc, nhanDuoc })
   const giao = d.tab === 'giao'
 
   return (
@@ -105,16 +108,18 @@ export function PhanCongScreen({
       )}
 
       <div className="pc-tabs" role="tablist" aria-label="Mục">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={d.tab === 'cua-toi'}
-          className="pc-tab"
-          onClick={() => d.datMuc('cua-toi')}
-        >
-          Việc của tôi <span className="bd">{d.dem.mine.n}</span>
-          {d.dem.mine.tre > 0 && <span className="note">{d.dem.mine.tre} trễ</span>}
-        </button>
+        {nhanDuoc && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={d.tab === 'cua-toi'}
+            className="pc-tab"
+            onClick={() => d.datMuc('cua-toi')}
+          >
+            Việc của tôi <span className="bd">{d.dem.mine.n}</span>
+            {d.dem.mine.tre > 0 && <span className="note">{d.dem.mine.tre} trễ</span>}
+          </button>
+        )}
         {d.dem.giao && (
           <button
             type="button"

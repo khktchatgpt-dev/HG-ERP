@@ -53,6 +53,19 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
  * Hàng (cùng khối Kế hoạch SX, hiện chưa có người).
  */
 export const SALE_WORKSPACE = 'sales'
+export const EXEC_WORKSPACE = 'exec'
+
+/**
+ * GIÁM ĐỐC KHÔNG NHẬN VIỆC (chủ dự án 05/11/2026) — Ban Giám đốc chỉ giao. Người
+ * thuộc khối BGĐ không là đích giao (ô chọn người nhận không liệt kê, server chặn),
+ * và không có "Việc của tôi" trên menu / trang Phân công việc. Một luật, ba chỗ dùng.
+ */
+export function canReceive(deptWorkspace: string | null | undefined): boolean {
+  return deptWorkspace !== EXEC_WORKSPACE
+}
+
+export const ASSIGN_BLOCKED_EXEC =
+  'Giám đốc không nhận việc — Ban Giám đốc chỉ giao. Việc cần Giám đốc quyết thì gửi lên Hộp ký / Trung tâm phê duyệt.'
 export const SALE_ASSIGN_TO: readonly string[] = ['technical', 'planning']
 
 /** Q1 — ai giao được việc cho NGƯỜI KHÁC (ít nhất cho một khối). Tự ghi cho mình thì ai cũng được. */
@@ -69,6 +82,7 @@ export function canAssign(actor: FlowActor): boolean {
  * phòng (Q2 30/10); Bán Hàng chỉ giao Kỹ thuật + Cung ứng; người khác không giao.
  */
 export function canAssignTo(actor: FlowActor, assigneeWorkspace: string | null): boolean {
+  if (!canReceive(assigneeWorkspace)) return false
   if (actor.role === 'admin' || actor.role === 'manager') return true
   if (actor.workspace === SALE_WORKSPACE)
     return assigneeWorkspace !== null && SALE_ASSIGN_TO.includes(assigneeWorkspace)

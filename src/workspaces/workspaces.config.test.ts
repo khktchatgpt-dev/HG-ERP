@@ -83,10 +83,11 @@ describe('mọi workspace bật sẵn đều có cây menu dùng được', () =
  * mọi phòng, không giấu cuối nhóm Dùng chung.
  */
 describe('nhóm VIỆC đứng đầu sidebar mọi khu (B2)', () => {
+  // Mặc định ai cũng NHẬN được việc; khối BGĐ thì không (tasks.receive vắng).
   const ctx = (caps: string[]) => ({
     role: 'employee',
     isHead: false,
-    capabilities: new Set(caps),
+    capabilities: new Set(['tasks.receive', ...caps]),
   })
   const ws = Object.values(WORKSPACES).filter((w) => w.ready)
 
@@ -112,6 +113,17 @@ describe('nhóm VIỆC đứng đầu sidebar mọi khu (B2)', () => {
     const hai = resolveNavSections(WORKSPACES.sales, ctx(['tasks.give']))[0].items
     expect(hai.find((i) => i.defaultTab)?.href).toBe('/phan-cong-viec?muc=giao')
     expect(hai.filter((i) => i.defaultTab)).toHaveLength(1)
+  })
+
+  it('Giám đốc không nhận việc: chỉ "Việc tôi giao", và nó là defaultTab', () => {
+    const s = resolveNavSections(WORKSPACES.exec, {
+      role: 'admin',
+      isHead: false,
+      capabilities: new Set(['tasks.give']),
+    })
+    expect(s[0].heading).toBe('Việc')
+    expect(s[0].items.map((i) => i.label)).toEqual(['Việc tôi giao'])
+    expect(s[0].items[0].defaultTab).toBe(true)
   })
 
   it('"Phân công việc" không còn trong Dùng chung — một đích một dòng', () => {

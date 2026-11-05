@@ -46,6 +46,7 @@ export function usePhanCong({
   today,
   focus,
   initialMuc = null,
+  nhanDuoc = true,
 }: {
   board: GivenBoard | null
   mine: MineBoard
@@ -53,13 +54,15 @@ export function usePhanCong({
   focus: PhanCongFocus | null
   /** `?muc=` từ menu VIỆC (B2); chuông (`focus`) thắng. */
   initialMuc?: Muc | null
+  /** false = khối BGĐ không nhận việc: chỉ còn mục "giao" (05/11/2026). */
+  nhanDuoc?: boolean
 }) {
   const router = useRouter()
   const canGive = board !== null
   const [muc, setMucState] = useState<Muc>(
     focus?.muc ?? initialMuc ?? (canGive ? 'giao' : 'cua-toi'),
   )
-  const tab: Muc = canGive ? muc : 'cua-toi'
+  const tab: Muc = !canGive ? 'cua-toi' : !nhanDuoc ? 'giao' : muc
   const [locMine, setLocMine] = useState<MineFilter>(
     focus?.muc === 'cua-toi'
       ? focus.filter

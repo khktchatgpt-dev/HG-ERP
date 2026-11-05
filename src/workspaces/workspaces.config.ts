@@ -31,6 +31,8 @@ export type NavCapability =
   | 'supply.approve'
   /** Giao được việc (`tasksService.canGive`) — thấy "Việc tôi giao" ở nhóm VIỆC (B2, 05/11/2026). */
   | 'tasks.give'
+  /** Có nhận việc (`tasksService.canReceive`) — khối BGĐ không, nên không có "Việc của tôi". */
+  | 'tasks.receive'
   /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — quyền mật, chỉ vai "Quản lý lương" (0255). */
   | 'hr.payroll'
   /** Cấu hình công đoạn (0287) — quản đốc / manager / admin. */
@@ -203,11 +205,13 @@ export const PERSONAL_SECTION: NavSection = {
 export const VIEC_SECTION: NavSection = {
   heading: 'Việc',
   items: [
+    // Giám đốc không nhận việc (05/11/2026): khối BGĐ không có dòng này.
     {
       href: '/phan-cong-viec?muc=cua-toi',
       label: 'Việc của tôi',
       icon: 'list-todo',
       urgent: true,
+      capability: 'tasks.receive',
     },
     {
       href: '/phan-cong-viec?muc=giao',
@@ -1065,12 +1069,11 @@ export function resolveNavSections(
   // Nhóm VIỆC lọc theo quyền giao; mục `defaultTab` = mục trang mở khi URL không
   // có `muc` (usePhanCong: giao được → "giao", không → "cua-toi").
   const viecItems = VIEC_SECTION.items.filter((i) => itemVisible(i, ctx))
-  const macDinh = viecItems.length > 1 ? '?muc=giao' : '?muc=cua-toi'
+  const macDinh =
+    viecItems.find((i) => i.href.endsWith('?muc=giao'))?.href ?? viecItems[0]?.href
   const viec: NavSection = {
     heading: VIEC_SECTION.heading,
-    items: viecItems.map((i) =>
-      i.href.endsWith(macDinh) ? { ...i, defaultTab: true } : i,
-    ),
+    items: viecItems.map((i) => (i.href === macDinh ? { ...i, defaultTab: true } : i)),
   }
   return [
     viec,

@@ -21,7 +21,9 @@ import { todayVn } from '@/lib/date-vn'
 import {
   actionForStatus,
   ASSIGN_BLOCKED,
+  ASSIGN_BLOCKED_EXEC,
   ASSIGN_BLOCKED_TARGET,
+  canReceive,
   taskEditBlock,
   taskEditSummary,
   type TaskEditFields,
@@ -217,6 +219,7 @@ export const tasksService = {
     // Bán Hàng chỉ giao Kỹ thuật + Cung ứng (03/11/2026); sếp + quản lý giao mọi phòng.
     if (!isSelf) {
       const toWs = await workspaceOfDept(assignee.department_id)
+      if (!canReceive(toWs)) throw Forbidden(ASSIGN_BLOCKED_EXEC)
       if (!canAssignTo(actor, toWs)) throw Forbidden(ASSIGN_BLOCKED_TARGET)
     }
     // Q2 (30/10/2026): BỎ luật "quản lý chỉ giao trong phòng mình" — quản lý Cung ứng
@@ -384,8 +387,9 @@ export const tasksService = {
         )
       if (moi.id === before.assigner_id)
         throw BadRequest('Không chuyển việc về chính người giao — chọn người khác')
-      if (!canAssignTo(actor, await workspaceOfDept(moi.department_id)))
-        throw Forbidden(ASSIGN_BLOCKED_TARGET)
+      const moiWs = await workspaceOfDept(moi.department_id)
+      if (!canReceive(moiWs)) throw Forbidden(ASSIGN_BLOCKED_EXEC)
+      if (!canAssignTo(actor, moiWs)) throw Forbidden(ASSIGN_BLOCKED_TARGET)
     }
     const cu = await usersRepo.findById(before.assignee_id)
     const ten = (uid: string) =>
@@ -925,7 +929,9 @@ export const tasksService = {
             workspace: d?.workspace_id ?? null,
           }
         })
-        // Có người xem thì chỉ liệt kê người họ GIAO ĐƯỢC (Bán Hàng: Kỹ thuật + Cung ứng).
+        // Khối BGĐ không nhận việc (05/11/2026). Có người xem thì chỉ liệt kê người họ
+        // GIAO ĐƯỢC (Bán Hàng: Kỹ thuật + Cung ứng).
+        .filter((p) => canReceive(p.workspace))
         .filter((p) => !actor || p.id === viewer!.id || canAssignTo(actor, p.workspace))
     )
   },
@@ -933,6 +939,15 @@ export const tasksService = {
   /** Người này giao được việc cho ai đó không — một cửa cho nút "Giao việc" ở các trang. */
   async canGive(user: User): Promise<boolean> {
     return canAssign(await actorOf(user))
+  },
+
+  /**
+   * Người này có NHẬN việc không — khối BGĐ thì không (05/11/2026). Tra PHÒNG thật
+   * của người đó (không qua `actorOf`, vốn bỏ phòng của sếp / quản lý). Quyết mục
+   * "Việc của tôi" trên menu (`tasks.receive`) và tab cùng tên ở trang.
+   */
+  async canReceive(user: User): Promise<boolean> {
+    return canReceive(await workspaceOfDept(user.department_id))
   },
 
   async attention(user: User) {
