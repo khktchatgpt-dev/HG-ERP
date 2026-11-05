@@ -65,7 +65,9 @@ describe('nháp đơn mua — nhiều phiên một khoá (02/10/2026)', () => {
   it('removeDraft chỉ xoá đúng phiên', () => {
     upsertDraft(K, 'A', snap('VT-1'), at(1))
     upsertDraft(K, 'B', snap('VT-2'), at(2))
-    removeDraft(K, 'A')
+    // `now` cố định: test từng đỏ sau 02/11/2026 vì removeDraft đọc theo Date.now()
+    // → mọi nháp ghi ngày 02/10 đều quá hạn, bị xoá sạch (bom hẹn giờ).
+    removeDraft(K, 'A', at(3).getTime())
     expect(readDrafts(K, at(3).getTime()).map((d) => d.id)).toEqual(['B'])
   })
 

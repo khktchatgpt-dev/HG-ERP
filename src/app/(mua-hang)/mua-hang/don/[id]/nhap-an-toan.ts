@@ -78,10 +78,11 @@ export function upsertDraft(
   writeAll(key, [mine, ...rest].slice(0, DRAFT_MAX))
 }
 
-export function removeDraft(key: string, id: string): void {
+/** Xoá bản của phiên `id`. `now` đi cùng `readDrafts` — mặc định `Date.now()`. */
+export function removeDraft(key: string, id: string, now = Date.now()): void {
   writeAll(
     key,
-    readDrafts(key).filter((d) => d.id !== id),
+    readDrafts(key, now).filter((d) => d.id !== id),
   )
 }
 
