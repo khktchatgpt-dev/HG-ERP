@@ -254,7 +254,7 @@ export function ViecScreen({
     <ScreenFrame>
       <ScreenHeader
         compact
-        eyebrow="Mua hàng · Hộp thư việc"
+        eyebrow="Mua hàng · Hộp thư đơn mua"
         title={scope === 'toi' ? 'Chờ tôi xử lý' : 'Việc cả phòng'}
         facts={[
           { label: 'Việc đang xem', value: String(inScope.length) },

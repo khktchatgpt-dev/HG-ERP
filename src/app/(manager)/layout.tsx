@@ -3,7 +3,6 @@ import { authService } from '@/modules/core/auth/auth.service'
 
 /**
  * Guard for routes only available to managers + admins:
- *   - /tasks/new   (assign tasks)
  *   - /team        (team dashboard for dept heads)
  *   - /reports/*   (weekly report)
  *
@@ -14,7 +13,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const user = await authService.currentUser()
   if (!user) redirect('/login')
   if (user.role !== 'manager' && user.role !== 'admin') {
-    redirect('/tasks')
+    redirect('/phan-cong-viec')
   }
   return <>{children}</>
 }

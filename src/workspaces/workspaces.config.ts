@@ -179,7 +179,7 @@ export const PERSONAL_SECTION: NavSection = {
   items: [
     { href: '/', label: 'Tổng quan', icon: 'home' },
     { href: '/plan', label: 'Kế hoạch', icon: 'calendar-range' },
-    { href: '/tasks', label: 'Công việc', icon: 'list-todo' },
+    { href: '/phan-cong-viec', label: 'Công việc', icon: 'list-todo' },
     { href: '/hr/leave/mine', label: 'Đơn nghỉ phép', icon: 'calendar-off' },
     { href: '/notifications', label: 'Thông báo', icon: 'bell' },
   ],
@@ -578,9 +578,15 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'receipt-text',
             capability: 'supply.approve',
           },
-          // Hộp thư việc: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
-          // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
-          { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
+          // Hộp thư đơn mua: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
+          // đếm (`countMyTodos`), chỉ đổi href nó bám vào. Đổi tên từ "Hộp thư việc"
+          // 05/11/2026 (B3): đây là việc TRÊN ĐƠN MUA (giục NCC, gửi đơn…), không phải
+          // việc được giao — chữ "việc" trùng với "Phân công việc" làm người dùng nhầm.
+          {
+            href: '/mua-hang/hop-thu',
+            label: 'Hộp thư đơn mua',
+            icon: 'clipboard-check',
+          },
           { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
           // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
           // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.

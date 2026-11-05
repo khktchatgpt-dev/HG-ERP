@@ -191,7 +191,7 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   /*
     HREF BÁM VÀO MÀN MỚI (16/09/2026) — ba con số không đổi, chỉ đổi chỗ đậu:
 
-      Chờ tôi xử lý     → Hộp thư việc  (/mua-hang/hop-thu)
+      Chờ tôi xử lý     → Hộp thư đơn mua  (/mua-hang/hop-thu)
       Hàng sắp về       → Theo dõi đơn hàng (/mua-hang/theo-doi, 01/10/2026):
                           đếm QUÁ HẸN + HÔM NAY trong phạm vi mặc định — đúng
                           hai làn đầu trang đích bày ra, bằng `incomingBucket`.

@@ -64,7 +64,7 @@ export default async function TeamPage({
       subtitle={`${members.length} thành viên đang hoạt động`}
       actions={
         <Link
-          href="/tasks/new"
+          href="/phan-cong-viec?muc=giao"
           className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
         >
           + Giao việc

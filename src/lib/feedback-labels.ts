@@ -19,7 +19,13 @@ export const KIND_LABEL: Record<FeedbackKind, { label: string; hint: string }> =
   },
 }
 
-export const FEEDBACK_TYPES = ['bug', 'idea', 'hard_to_use', 'process', 'question'] as const
+export const FEEDBACK_TYPES = [
+  'bug',
+  'idea',
+  'hard_to_use',
+  'process',
+  'question',
+] as const
 export type FeedbackType = (typeof FEEDBACK_TYPES)[number]
 export const TYPE_LABEL: Record<FeedbackType, string> = {
   bug: 'Lỗi',
@@ -68,7 +74,10 @@ export const STATUS_LABEL: Record<FeedbackStatus, string> = {
   done: 'Đã đẩy online',
   declined: 'Chưa làm lúc này',
 }
-export const STATUS_TONE: Record<FeedbackStatus, 'gray' | 'blue' | 'green' | 'amber' | 'red'> = {
+export const STATUS_TONE: Record<
+  FeedbackStatus,
+  'gray' | 'blue' | 'green' | 'amber' | 'red'
+> = {
   pending_review: 'amber',
   returned: 'red',
   new: 'blue',
@@ -108,11 +117,20 @@ export const COLUMN_LABEL: Record<KanbanColumn, string> = {
   ...STATUS_LABEL,
   done_confirmed: 'Đã xong — người dùng xác nhận',
 }
-export function columnOf(fb: { status: FeedbackStatus; confirmed_ok_at: string | null }): KanbanColumn {
+export function columnOf(fb: {
+  status: FeedbackStatus
+  confirmed_ok_at: string | null
+}): KanbanColumn {
   return fb.status === 'done' && fb.confirmed_ok_at ? 'done_confirmed' : fb.status
 }
 
-export const COMMENT_KINDS = ['comment', 'reply', 'needs_more', 'confirmed', 'status'] as const
+export const COMMENT_KINDS = [
+  'comment',
+  'reply',
+  'needs_more',
+  'confirmed',
+  'status',
+] as const
 export type CommentKind = (typeof COMMENT_KINDS)[number]
 
 /**
@@ -123,22 +141,37 @@ export const FEEDBACK_TOPICS = [
   { id: 'sales', label: 'Bán hàng', prefixes: ['/sales'] },
   { id: 'finance', label: 'Kế toán', prefixes: ['/finance'] },
   { id: 'warehouse', label: 'Kho', prefixes: ['/warehouse'] },
-  { id: 'technical', label: 'Kỹ thuật & Sản phẩm', prefixes: ['/technical', '/products', '/cat-phoi'] },
+  {
+    id: 'technical',
+    label: 'Kỹ thuật & Sản phẩm',
+    prefixes: ['/technical', '/products', '/cat-phoi'],
+  },
   { id: 'planning', label: 'Cung ứng', prefixes: ['/planning'] },
   { id: 'qc', label: 'QC', prefixes: ['/qc'] },
-  { id: 'production', label: 'Sản xuất', prefixes: ['/production', '/to', '/thongke', '/kehoach-sx'] },
+  {
+    id: 'production',
+    label: 'Sản xuất',
+    prefixes: ['/production', '/to', '/thongke', '/kehoach-sx'],
+  },
   { id: 'hr', label: 'Nhân sự', prefixes: ['/hr'] },
   { id: 'exec', label: 'Ban Giám đốc', prefixes: ['/exec'] },
-  { id: 'tasks', label: 'Công việc & Thông báo', prefixes: ['/tasks', '/notifications'] },
-  { id: 'system', label: 'Tài khoản & Quản trị', prefixes: ['/admin', '/tai-khoan', '/login', '/doi-mat-khau'] },
+  {
+    id: 'tasks',
+    label: 'Công việc & Thông báo',
+    prefixes: ['/tasks', '/phan-cong-viec', '/notifications'],
+  },
+  {
+    id: 'system',
+    label: 'Tài khoản & Quản trị',
+    prefixes: ['/admin', '/tai-khoan', '/login', '/doi-mat-khau'],
+  },
   { id: 'other', label: 'Khác', prefixes: [] },
 ] as const
 export type FeedbackTopic = (typeof FEEDBACK_TOPICS)[number]['id']
 export const TOPIC_IDS = FEEDBACK_TOPICS.map((t) => t.id) as readonly FeedbackTopic[]
-export const TOPIC_LABEL = Object.fromEntries(FEEDBACK_TOPICS.map((t) => [t.id, t.label])) as Record<
-  FeedbackTopic,
-  string
->
+export const TOPIC_LABEL = Object.fromEntries(
+  FEEDBACK_TOPICS.map((t) => [t.id, t.label]),
+) as Record<FeedbackTopic, string>
 
 /**
  * Đoán chủ đề từ đường dẫn trang đang mở. `/gop-y` (chính trang góp ý) không
@@ -204,11 +237,7 @@ export function extractMentions(
 ): string[] {
   if (!content.includes('@')) return []
   const norm = (s: string) =>
-    s
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[đĐ]/g, 'd')
-      .toLowerCase()
+    s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').toLowerCase()
   const text = norm(content)
   const found: string[] = []
   for (const p of [...people].sort((a, b) => b.name.length - a.name.length)) {

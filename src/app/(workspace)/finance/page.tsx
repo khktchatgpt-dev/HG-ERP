@@ -50,11 +50,11 @@ export default async function FinanceHomePage() {
             </div>
           </Link>
           <Link
-            href="/tasks"
+            href="/phan-cong-viec"
             className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
           >
-            <div className="font-medium">Công việc của tôi</div>
-            <div className="mt-1 text-xs text-zinc-500">Task được giao cho bạn</div>
+            <div className="font-medium">Việc của tôi</div>
+            <div className="mt-1 text-xs text-zinc-500">Việc được giao cho bạn</div>
           </Link>
         </div>
       </div>

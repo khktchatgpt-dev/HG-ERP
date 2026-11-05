@@ -1,7 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
+import { useState } from 'react'
 import {
   Btn,
   Cell,
@@ -26,15 +25,7 @@ import { SUPPLY_TODO, SUPPLY_TODO_KINDS, type SupplyTodoKind } from '@/lib/suppl
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
 import { ViecChoBang } from './viec-cho'
-import { ViecDuocGiao } from './viec-duoc-giao'
-import { HopGiaoViec, NutGiaoViec, ViecToiGiaoBan, openGiven } from './viec-toi-giao-ban'
 import type { TakerStats } from '@/lib/task-flow'
-import type { GiaoViecHandle } from '@/app/(shared)/phan-cong-viec/giao-viec'
-import type {
-  AssignedItem,
-  Assignee,
-  GivenBoard,
-} from '@/modules/workflow/tasks/tasks.service'
 
 /**
  * Phần nhìn của Bàn làm việc. Mọi số đã đếm xong ở server (hai bàn "của tôi" /
@@ -151,8 +142,7 @@ export function BanLamViecScreen({
   defaultScope,
   urlScope,
   desks,
-  assigned,
-  giver,
+  viec,
   approver,
   agenda,
   truncatedAt,
@@ -166,15 +156,14 @@ export function BanLamViecScreen({
   urlScope: SupplyScope | null
   desks: Record<SupplyScope, Desk>
   /**
-   * Việc được giao cho CHỦ BÀN (phân công việc P3) — giống nhau ở cả hai phạm vi
-   * (chốt D4). Khối hiển thị viết không kit: `viec-duoc-giao.tsx`.
+   * PHÂN CÔNG VIỆC chỉ còn là HAI CON SỐ liên kết sang trang dùng chung (B3,
+   * 05/11/2026). Trước đó bàn này có hai ô "Việc được giao" / "Việc tôi giao" + hộp
+   * Giao việc bắc cầu màu sang kit — trùng với `/phan-cong-viec` (một việc hai chỗ
+   * bấm) và với nhóm VIỆC đứng đầu sidebar (B2). `doing` / `overdue` = việc đang chờ
+   * CHỦ BÀN làm (cùng hàm `assignedTo` cũ); `toApprove` = việc tôi giao chờ tôi
+   * duyệt, null = không giao được việc hoặc đang xem bàn người khác.
    */
-  assigned: AssignedItem[]
-  /**
-   * Sếp / quản lý trên bàn của chính mình (P4): việc mình giao + người nhận được
-   * việc. null = không giao được việc, hoặc đang xem bàn người khác.
-   */
-  giver: { board: GivenBoard; people: Assignee[] } | null
+  viec: { doing: number; overdue: number; toApprove: number | null }
   /** Chỉ có với người có quyền duyệt đơn mua. */
   approver: { pending: PendingRow[]; buyers: BuyerRow[] } | null
   agenda: Agenda[]
@@ -190,20 +179,7 @@ export function BanLamViecScreen({
   const q = `pham_vi=${scope}`
 
   // Tab = các câu hỏi khác nhau, cùng một trang. Số trên tab = số dòng trong tab.
-  const assignedOverdue = assigned.filter((t) => t.overdue_days > 0).length
-  const givenOpen = giver ? openGiven(giver.board, today) : []
-  const givenToApprove = giver?.board.summary.to_approve ?? 0
   const lanes: Lane<unknown>[] = [
-    // Phân công việc (P3): việc sếp / quản lý giao cho chủ bàn — đứng đầu hàng, chỉ
-    // hiện khi có việc (không có việc thì hàng ô lọc giữ như cũ).
-    ...(assigned.length > 0
-      ? [{ id: 'giao', label: `Việc được giao${assignedOverdue > 0 ? ` · ${assignedOverdue} quá hạn` : ''}`, rows: assigned, tone: assignedOverdue > 0 ? ('stop' as const) : undefined }] // prettier-ignore
-      : []),
-    // P4: chỉ sếp / quản lý — luôn hiện (kể cả 0) vì đây là lối vào việc giao. Số đỏ
-    // trong nhãn = việc chờ tôi duyệt (bóng ở tôi).
-    ...(giver
-      ? [{ id: 'toigiao', label: `Việc tôi giao${givenToApprove > 0 ? ` · ${givenToApprove} chờ duyệt` : ''}`, rows: givenOpen, tone: givenToApprove > 0 ? ('stop' as const) : undefined }] // prettier-ignore
-      : []),
     ...(approver
       ? [
           { id: 'duyet', label: 'Chờ tôi duyệt', rows: approver.pending, tone: pendingWarn > 0 ? ('warn' as const) : undefined }, // prettier-ignore
@@ -228,15 +204,6 @@ export function BanLamViecScreen({
     { id: 'hop', label: 'Cần quyết trong họp', rows: agenda, tone: undefined },
   ]
   const [tab, setTab] = useState(() => lanes.find((l) => l.rows.length > 0)?.id ?? 'toi')
-  // Hộp Giao việc (P4): chỉ mở khi bấm, đóng thì bảng chiếm hết bề rộng.
-  const [giaoOpen, setGiaoOpen] = useState(false)
-  const giaoRef = useRef<GiaoViecHandle>(null)
-  const openGiao = () => {
-    // Vẽ hộp NGAY rồi mới đặt con trỏ vào ô người nhận. Không chờ requestAnimationFrame:
-    // trang ở thẻ nền thì nhịp vẽ không chạy và con trỏ không bao giờ tới (đo 30/10).
-    flushSync(() => setGiaoOpen(true))
-    giaoRef.current?.focus()
-  }
 
   const agendaSorted = [...agenda].sort((a, b) => {
     const da = DEPT_ORDER.indexOf(a.dept),
@@ -275,11 +242,9 @@ export function BanLamViecScreen({
             <Btn icon="don" href={`/mua-hang/don?${q}`}>
               {mine ? 'Đơn của tôi' : 'Đơn mua'}
             </Btn>
-            {/* Người giao việc: "Giao việc" là nút chính, soạn đơn lùi về nút thường (bản vẽ A). */}
-            <Btn primary={!giver} icon="them" href="/mua-hang/don/moi">
+            <Btn primary icon="them" href="/mua-hang/don/moi">
               Soạn đơn mua
             </Btn>
-            {giver && <NutGiaoViec onClick={openGiao} />}
           </>
         }
       />
@@ -328,8 +293,29 @@ export function BanLamViecScreen({
               </Chip>
             </span>
           ))}
-          {/* Hai số này mở TRANG KHÁC (không phải lọc bảng dưới) — nên là liên kết có ↗, khác hình chip. */}
+          {/* Các số này mở TRANG KHÁC (không phải lọc bảng dưới) — nên là liên kết có ↗, khác hình chip. */}
           <span className="text-k-sm ml-auto flex shrink-0 items-center gap-4">
+            {/* Phân công việc (B3): chỉ hai con số, trang dùng chung lo phần còn lại. 0 thì không nói. */}
+            {viec.doing > 0 && (
+              <a
+                className={viec.overdue > 0 ? 'text-[var(--stop)] hover:underline' : 'text-[var(--act-text)] hover:underline'} // prettier-ignore
+                href="/phan-cong-viec?muc=cua-toi"
+                title={viewAs ? `Việc giao cho ${viewAs.name} — ${viewAs.name} tự báo hoàn thành trên trang Phân công việc` : 'Mở Phân công việc · Việc của tôi'} // prettier-ignore
+              >
+                {viewAs ? `Việc giao cho ${viewAs.name}` : 'Việc giao cho tôi'}{' '}
+                <b className="num">{viec.doing}</b>
+                {viec.overdue > 0 ? ` (${viec.overdue} trễ)` : ''} ↗
+              </a>
+            )}
+            {viec.toApprove != null && viec.toApprove > 0 && (
+              <a
+                className="text-[var(--stop)] hover:underline"
+                href="/phan-cong-viec?muc=giao"
+                title="Việc tôi giao đã báo xong — mở Phân công việc · Việc tôi giao"
+              >
+                Việc tôi giao chờ duyệt <b className="num">{viec.toApprove}</b> ↗
+              </a>
+            )}
             <a
               className="text-[var(--act-text)] hover:underline"
               href={`/mua-hang/theo-doi?nhom=tuan&${q}`}
@@ -349,16 +335,6 @@ export function BanLamViecScreen({
         </FilterBar>
         <div className="flex min-h-0 flex-1 border-t border-[var(--line)]">
           <div className="min-h-0 min-w-0 flex-1 overflow-auto">
-            {tab === 'toigiao' && giver && (
-              <ViecToiGiaoBan board={giver.board} today={today} onGive={openGiao} />
-            )}
-            {tab === 'giao' && (
-              <ViecDuocGiao
-                items={assigned}
-                readOnly={!!viewAs}
-                who={viewAs ? viewAs.name : 'bạn'}
-              />
-            )}
             {tab === 'duyet' &&
               approver &&
               (approver.pending.length === 0 ? (
@@ -598,16 +574,6 @@ export function BanLamViecScreen({
                 </Table>
               ))}
           </div>
-          {giver && giaoOpen && (
-            <HopGiaoViec
-              ref={giaoRef}
-              people={giver.people}
-              meId={meId}
-              today={today}
-              onClose={() => setGiaoOpen(false)}
-              onDone={() => setTab('toigiao')}
-            />
-          )}
         </div>
       </section>
     </div>

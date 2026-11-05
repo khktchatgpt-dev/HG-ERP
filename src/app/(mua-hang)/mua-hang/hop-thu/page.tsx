@@ -7,7 +7,7 @@ import { defaultScope, parseScope } from '@/lib/supply-scope'
 import { ViecScreen, type Viec } from './ViecScreen'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Mua hàng · Hộp thư việc' }
+export const metadata = { title: 'Mua hàng · Hộp thư đơn mua' }
 
 /**
  * KHUÔN B — HỘP THƯ VIỆC.

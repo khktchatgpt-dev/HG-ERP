@@ -58,7 +58,7 @@ export async function resolveDefaultRoute(user: User): Promise<string> {
   const ws = await resolveDefaultWorkspace(user)
   // `home` chứ không `route`: xem chú thích `home` ở workspaces.config.ts.
   if (ws) return `${ws.home ?? ws.route}/`
-  return '/tasks'
+  return '/phan-cong-viec'
 }
 
 /**

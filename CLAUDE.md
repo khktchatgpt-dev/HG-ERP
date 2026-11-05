@@ -781,8 +781,13 @@ không nói ai đang có việc. Ba bước, mỗi bước một commit:
   `history.replaceState(null, …)` — **state PHẢI null**, Next coi state mang cờ nội bộ
   (`__NA`) là lệnh của chính nó và KHÔNG đồng bộ `useSearchParams`. 18 việc mẫu 26/06
   (CV-000001…022) đã huỷ trước khi bật số đỏ — chúng nằm trên 15 người thật.
-- **B3 (chưa làm)**: Bàn làm việc Cung ứng bỏ hai ô việc → một dòng tóm tắt; "Hộp thư
-  việc" → "Hộp thư đơn mua"; `/tasks` cũ chuyển hướng `/phan-cong-viec` rồi xoá mã cũ.
+- **B3 · Một chỗ duy nhất.** Bàn làm việc Cung ứng bỏ hai ô "Việc được giao" / "Việc
+  tôi giao" + hộp Giao việc (bắc cầu kit, `kit-bridge.ts` xoá); chỉ còn hai LIÊN KẾT số
+  ở dải lọc ("Việc giao cho tôi n (k trễ) ↗", "Việc tôi giao chờ duyệt m ↗", 0 thì không
+  nói) → trang dùng chung. "Hộp thư việc" → **"Hộp thư đơn mua"** (việc trên đơn mua,
+  không phải việc được giao). Module Việc cũ 08/08 (`(app)/tasks`, `(manager)/tasks/new`)
+  XOÁ; `proxy.ts` chuyển `/tasks` → `/phan-cong-viec`, `/tasks/<id>` → `?viec=<id>`,
+  `/tasks/new` → `?muc=giao`; `resolveDefaultRoute` không workspace cũng về đó.
 
 ## MCP (Supabase) — HTTP transport
 

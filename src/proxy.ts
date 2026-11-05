@@ -80,6 +80,16 @@ export async function proxy(request: NextRequest) {
 
   // Đổi chỗ TRƯỚC khi gác đăng nhập, để người chưa đăng nhập bấm link cũ thì
   // `?next=` đã là URL mới (khỏi phải nhảy hai lần sau khi đăng nhập).
+  // Module Việc cũ (08/08/2026, ẩn cùng mục "Cá nhân") đã XOÁ 05/11/2026 (B3) — thay
+  // bằng trang dùng chung Phân công việc. `/tasks/<id>` giữ được việc đang mở qua
+  // `?viec=` (cùng đường chuông dùng); `/tasks/new` về tab "Việc tôi giao".
+  if (pathname === '/tasks' || pathname.startsWith('/tasks/')) {
+    const rest = pathname.slice('/tasks/'.length)
+    const url = request.nextUrl.clone()
+    url.pathname = '/phan-cong-viec'
+    url.search = rest === 'new' ? '?muc=giao' : rest ? `?viec=${rest}` : ''
+    return NextResponse.redirect(url)
+  }
   for (const [from, to] of MOVED_PREFIXES) {
     if (pathname === from || pathname.startsWith(from + '/')) {
       const url = request.nextUrl.clone()

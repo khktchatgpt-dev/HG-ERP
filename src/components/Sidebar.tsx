@@ -15,7 +15,7 @@ const SECTIONS: { heading: string; items: Item[] }[] = [
     items: [
       { href: '/', label: 'Tổng quan', icon: '◧', visible: () => true },
       { href: '/plan', label: 'Kế hoạch', icon: '☷', visible: () => true },
-      { href: '/tasks', label: 'Công việc', icon: '◐', visible: () => true },
+      { href: '/phan-cong-viec', label: 'Công việc', icon: '◐', visible: () => true },
       { href: '/dept/hr/leave', label: 'Đơn nghỉ phép', icon: '☰', visible: () => true },
       { href: '/notifications', label: 'Thông báo', icon: '◔', visible: () => true },
     ],
@@ -24,7 +24,7 @@ const SECTIONS: { heading: string; items: Item[] }[] = [
     heading: 'Quản lý',
     items: [
       {
-        href: '/tasks/new',
+        href: '/phan-cong-viec?muc=giao',
         label: 'Giao việc',
         icon: '+',
         visible: ({ role }) => role === 'manager' || role === 'admin',

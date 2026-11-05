@@ -80,14 +80,14 @@ export default async function Page({
       ? (users.find((u) => u.id === sp.nguoi) ?? null)
       : null
   const subjectId = viewAsUser?.id ?? user.id
-  // Việc được giao cho chủ bàn (phân công việc P3). Khởi động ngay khi biết đang xem
-  // bàn của ai, chạy song song phần tính bàn bên dưới; chỉ chờ ở lúc trả trang.
+  // Phân công việc (B3, 05/11/2026): bàn chỉ còn HAI CON SỐ liên kết sang trang dùng
+  // chung — việc đang chờ chủ bàn làm (cùng hàm `assignedTo` của ô cũ) và việc tôi
+  // giao chờ tôi duyệt (chỉ bàn của mình, chỉ người giao được). Khởi động sớm, chạy
+  // song song phần tính bàn; chỉ chờ ở lúc trả trang.
   const assignedP = tasksService.assignedTo(user, subjectId)
-  // Sếp / quản lý trên bàn CỦA MÌNH (P4): ô "Việc tôi giao" + hộp Giao việc. Xem bàn
-  // người khác thì không — bàn đó phải hiện đúng như chủ bàn thấy.
   const giverP =
     !viewAsUser && (await tasksService.canGive(user))
-      ? Promise.all([tasksService.givenBoard(user), tasksService.assignees(user)])
+      ? tasksService.givenBoard(user)
       : null
 
   const withLsx = rows.map((p) => ({
@@ -226,6 +226,11 @@ export default async function Page({
   }))
 
   const [assigned, given] = await Promise.all([assignedP, giverP])
+  const viec = {
+    doing: assigned.length,
+    overdue: assigned.filter((t) => t.overdue_days > 0).length,
+    toApprove: given ? given.summary.to_approve : null,
+  }
   return (
     <BanLamViecScreen
       today={today}
@@ -235,8 +240,7 @@ export default async function Page({
       defaultScope={viewAsUser ? 'toi' : defaultScope({ canApprove })}
       urlScope={viewAsUser ? 'toi' : parseScope(sp.pham_vi)}
       desks={desks}
-      assigned={assigned}
-      giver={given?.[0] ? { board: given[0], people: given[1] } : null}
+      viec={viec}
       approver={approver}
       agenda={agenda}
       truncatedAt={truncatedAt}

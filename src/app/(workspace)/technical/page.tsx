@@ -125,7 +125,7 @@ export default async function TechnicalHome() {
             {canEdit && (
               <QuickAction href="/products?new=1" title="+ Thêm sản phẩm mới" />
             )}
-            <QuickAction href="/tasks" title="Công việc của tôi" />
+            <QuickAction href="/phan-cong-viec" title="Việc của tôi" />
           </div>
 
           {(noDrawing > 0 || noBom > 0) && (
