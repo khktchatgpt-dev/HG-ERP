@@ -759,6 +759,31 @@ mở thẳng URL sẽ lưu ra `BOM_Gh_5_b_c….xlsx`.
 hoá hai lần). `storage.createSignedDownloadUrl` tự nối `&download=` + một lần
 `encodeURIComponent`. Có test canh trong `storage.test.ts`.
 
+## Giao việc dùng chung — chuông & menu (05/11/2026)
+
+Chủ dự án 05/11: giao việc đã dùng chung cho mọi phòng, chuông báo quá nhiều loại, menu
+không nói ai đang có việc. Ba bước, mỗi bước một commit:
+
+- **B1 · Chuông = việc giao cho bạn.** `src/lib/bell-types.ts` giữ 7 loại của module
+  tasks (assigned · reassigned · submitted · approved · rejected · commented ·
+  status_changed). Hộp chuông gọi `/api/notifications?bell=1`, số đỏ = `unreadBellCount`,
+  "Đánh dấu đã đọc" trên chuông chỉ tắt 7 loại đó. Cảnh báo kho / đơn mua / lệnh / lương
+  vẫn ghi và xem ở `/notifications`. Đo trước khi sửa: 30 ngày > 3.000 thông báo / 60 loại,
+  4.444 chưa đọc, "assigned" chỉ 2.
+- **B2 · Nhóm VIỆC đứng đầu sidebar mọi khu** (`VIEC_SECTION`, bản vẽ
+  `RhpXain2mB7mbatN3kSZuV`): "Việc của tôi · n" = `mineBoard.summary.doing` (+ "k trễ"),
+  "Việc tôi giao · m" = `givenBoard.summary.to_approve`, chỉ `tasks.give` (= `canGive`).
+  Đếm ở `nav-badges.viecBadges` cho MỌI khu; `withNavBadges` nhận `{ n, note }`; cờ
+  `urgent` tường minh thay regex nhãn. Hai mục cùng đường dẫn khác `?muc=` → mục sáng
+  theo `lib/nav-active` (có test): URL không có `muc` thì mục `defaultTab` sáng (server
+  đặt đúng tab trang mở mặc định). Trang `/phan-cong-viec` nhận `?muc=`, `key` gồm
+  `muc` để bấm menu khi đang ở trang là đổi tab; bấm tab trên trang ghi URL bằng
+  `history.replaceState(null, …)` — **state PHẢI null**, Next coi state mang cờ nội bộ
+  (`__NA`) là lệnh của chính nó và KHÔNG đồng bộ `useSearchParams`. 18 việc mẫu 26/06
+  (CV-000001…022) đã huỷ trước khi bật số đỏ — chúng nằm trên 15 người thật.
+- **B3 (chưa làm)**: Bàn làm việc Cung ứng bỏ hai ô việc → một dòng tóm tắt; "Hộp thư
+  việc" → "Hộp thư đơn mua"; `/tasks` cũ chuyển hướng `/phan-cong-viec` rồi xoá mã cũ.
+
 ## MCP (Supabase) — HTTP transport
 
 Copy the exact command from Supabase dashboard → **Connect → MCP → Claude Code**:

@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { navActive } from '@/lib/nav-active'
 import { LinkPending } from '@/components/erp/LinkPending'
 import { Tip } from '@/components/kit'
 import { NavIcon } from './nav-icons'
@@ -32,6 +33,8 @@ export function NavRailLink({
   exact = false,
   badge,
   urgent = false,
+  note,
+  defaultTab = false,
 }: {
   href: string
   label: string
@@ -42,11 +45,14 @@ export function NavRailLink({
   badge?: number
   /** Số đếm này là việc CHẶN (đỏ) hay chỉ là hàng đợi (xám). */
   urgent?: boolean
+  /** Chữ nhỏ cạnh nhãn ("1 trễ") — chỉ khi rail mở; rail gọn đưa vào tooltip. */
+  note?: string
+  /** Href có `?muc=`: sáng khi URL không mang `muc` (xem lib/nav-active). */
+  defaultTab?: boolean
 }) {
   const pathname = usePathname()
-  const active = exact
-    ? pathname === href || pathname === `${href}/`
-    : pathname === href || (href !== '/' && pathname.startsWith(href))
+  const muc = useSearchParams().get('muc')
+  const active = navActive({ pathname, muc, href, exact, defaultTab })
 
   const item = (
     <Link
@@ -78,7 +84,16 @@ export function NavRailLink({
           />
         )}
       </span>
-      {!compact && <span className="min-w-0 flex-1 truncate">{label}</span>}
+      {!compact && (
+        <span className="min-w-0 flex-1 truncate">
+          {label}
+          {note && badge != null && badge > 0 && (
+            <span className="text-k-label text-muted-foreground ml-1.5 font-normal">
+              {note}
+            </span>
+          )}
+        </span>
+      )}
       {!compact && badge != null && badge > 0 && (
         <span
           className={`text-k-label shrink-0 leading-none font-semibold tabular-nums ${
@@ -94,7 +109,11 @@ export function NavRailLink({
   if (!compact) return item
   return (
     <Tip
-      label={badge != null && badge > 0 ? `${label} · ${badge} việc` : label}
+      label={
+        badge != null && badge > 0
+          ? `${label} · ${badge}${note ? ` (${note})` : ''}`
+          : label
+      }
       side="right"
     >
       {item}

@@ -39,6 +39,7 @@ export function PhanCongScreen({
   mine,
   people,
   focus,
+  initialMuc = null,
 }: {
   meId: string
   /** Vai trò người xem — ngăn chi tiết cần để biết sếp đính tệp được. */
@@ -52,8 +53,10 @@ export function PhanCongScreen({
   people: Assignee[]
   /** Chuông mở trang thì có; null = mở thường. */
   focus: PhanCongFocus | null
+  /** `?muc=` từ menu VIỆC (B2) — tab mở sẵn khi không có chuông chỉ việc. */
+  initialMuc?: 'cua-toi' | 'giao' | null
 }) {
-  const d = usePhanCong({ board, mine, today, focus })
+  const d = usePhanCong({ board, mine, today, focus, initialMuc })
   const giao = d.tab === 'giao'
 
   return (

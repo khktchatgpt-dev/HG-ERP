@@ -148,9 +148,12 @@ export function DesktopSidebar({
                     i.href === '/'
                   }
                   badge={i.badge}
+                  note={i.badgeNote}
+                  defaultTab={i.defaultTab}
                   /* Đỏ chỉ cho việc CHẶN. "Chờ tôi xử lý" là hàng đợi có người
-                   đang đợi mình; các mục còn lại chỉ là danh sách. */
-                  urgent={/chờ|duyệt|ký|xử lý/i.test(i.label)}
+                   đang đợi mình; các mục còn lại chỉ là danh sách. Nhóm VIỆC
+                   khai `urgent` tường minh (B2). */
+                  urgent={i.urgent ?? /chờ|duyệt|ký|xử lý/i.test(i.label)}
                 />
               ))}
           </div>

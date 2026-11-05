@@ -152,6 +152,8 @@ export function MobileDrawer({
                             i.href === '/'
                           }
                           badge={i.badge}
+                          note={i.badgeNote}
+                          defaultTab={i.defaultTab}
                         />
                       ))}
                   </div>

@@ -25,9 +25,9 @@ export const dynamic = 'force-dynamic'
 export default async function PhanCongPage({
   searchParams,
 }: {
-  searchParams: Promise<{ viec?: string }>
+  searchParams: Promise<{ viec?: string; muc?: string }>
 }) {
-  const [{ viec }, user] = await Promise.all([
+  const [{ viec, muc }, user] = await Promise.all([
     searchParams,
     authService.requirePageUser(),
   ])
@@ -52,11 +52,16 @@ export default async function PhanCongPage({
     if (f) focus = { id: givenHit.id, muc: 'giao', filter: f }
   }
 
+  // `?muc=` từ hai dòng menu VIỆC (B2): mở đúng tab. Giá trị lạ → như không có.
+  const initialMuc = muc === 'cua-toi' || muc === 'giao' ? muc : null
+
   return (
     <PhanCongScreen
       // Bấm chuông khi ĐANG ở trang này: Next giữ nguyên màn (cùng tuyến) nên mục /
       // chip cũ ở lại. Đổi `key` theo việc chuông chỉ → màn dựng lại đúng chỗ (đo 30/10).
-      key={viec ?? ''}
+      // `muc` cũng vào key: bấm dòng menu kia khi đang ở trang là đổi tab ngay.
+      key={`${viec ?? ''}|${initialMuc ?? ''}`}
+      initialMuc={initialMuc}
       meId={user.id}
       today={today}
       board={board}

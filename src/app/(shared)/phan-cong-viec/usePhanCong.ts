@@ -45,15 +45,20 @@ export function usePhanCong({
   mine,
   today,
   focus,
+  initialMuc = null,
 }: {
   board: GivenBoard | null
   mine: MineBoard
   today: string
   focus: PhanCongFocus | null
+  /** `?muc=` từ menu VIỆC (B2); chuông (`focus`) thắng. */
+  initialMuc?: Muc | null
 }) {
   const router = useRouter()
   const canGive = board !== null
-  const [muc, setMucState] = useState<Muc>(focus?.muc ?? (canGive ? 'giao' : 'cua-toi'))
+  const [muc, setMucState] = useState<Muc>(
+    focus?.muc ?? initialMuc ?? (canGive ? 'giao' : 'cua-toi'),
+  )
   const tab: Muc = canGive ? muc : 'cua-toi'
   const [locMine, setLocMine] = useState<MineFilter>(
     focus?.muc === 'cua-toi'
@@ -95,6 +100,15 @@ export function usePhanCong({
 
   function datMuc(m: Muc) {
     setMucState(m)
+    // Ghi `?muc=` lên URL không qua router (không tải lại server): Next đồng bộ
+    // history API với useSearchParams nên dòng menu VIỆC đang sáng đổi theo tab.
+    if (typeof window !== 'undefined') {
+      const u = new URL(window.location.href)
+      u.searchParams.set('muc', m)
+      u.searchParams.delete('viec')
+      // state PHẢI là null: Next coi state mang cờ nội bộ (__NA) là lệnh của chính nó và không đồng bộ.
+      window.history.replaceState(null, '', u.toString())
+    }
     setChonId(null)
     setPhong('')
     huyBuoc()

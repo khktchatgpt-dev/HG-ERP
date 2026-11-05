@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { navActive } from '@/lib/nav-active'
 import { LinkPending } from '@/components/erp/LinkPending'
 import { NavIcon } from './nav-icons'
 
@@ -22,6 +23,8 @@ export function NavLink({
   collapsed = false,
   exact = false,
   badge,
+  note,
+  defaultTab = false,
 }: {
   href: string
   label: string
@@ -45,11 +48,14 @@ export function NavLink({
   exact?: boolean
   /** Số đếm sống (vd phiếu chờ ký). Thu gọn thì thành chấm đỏ góc icon. */
   badge?: number
+  /** Chữ nhỏ cạnh nhãn ("1 trễ"). */
+  note?: string
+  /** Href có `?muc=`: sáng khi URL không mang `muc` (xem lib/nav-active). */
+  defaultTab?: boolean
 }) {
   const pathname = usePathname()
-  const active = exact
-    ? pathname === href || pathname === `${href}/`
-    : pathname === href || (href !== '/' && pathname.startsWith(href))
+  const muc = useSearchParams().get('muc')
+  const active = navActive({ pathname, muc, href, exact, defaultTab })
 
   return (
     <Link
@@ -79,7 +85,16 @@ export function NavLink({
           />
         )}
       </span>
-      {!collapsed && <span className="flex-1">{label}</span>}
+      {!collapsed && (
+        <span className="flex-1">
+          {label}
+          {note && badge != null && badge > 0 && (
+            <span className="text-muted-foreground ml-1.5 text-[11px] font-normal">
+              {note}
+            </span>
+          )}
+        </span>
+      )}
       {!collapsed && badge != null && badge > 0 && (
         <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white tabular-nums">
           {badge > 99 ? '99+' : badge}

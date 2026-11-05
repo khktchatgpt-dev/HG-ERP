@@ -3,6 +3,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { xemLuong } from '@/modules/dept/hr/luong/quyen-luong'
+import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import {
   canEditComponents,
   canManagePlan,
@@ -145,6 +146,8 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   ) {
     caps.add('production.overview')
   }
+  // "Việc tôi giao" (B2) — cùng luật `canGive` mà trang Phân công việc dùng.
+  if (await tasksService.canGive(user)) caps.add('tasks.give')
   return caps
 }
 

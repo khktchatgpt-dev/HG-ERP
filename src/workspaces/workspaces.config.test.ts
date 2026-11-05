@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { SHARED_SECTION, WORKSPACES } from './workspaces.config'
+import {
+  SHARED_SECTION,
+  WORKSPACES,
+  resolveNavSections,
+  withNavBadges,
+} from './workspaces.config'
 
 /**
  * HÀNG RÀO CỦA CUỘC CHUYỂN NHÀ (dời từ `app/(mua-hang)/_shell/nav.test.ts`
@@ -71,4 +76,62 @@ describe('mọi workspace bật sẵn đều có cây menu dùng được', () =
       }
     })
   }
+})
+
+/**
+ * NHÓM VIỆC ĐỨNG ĐẦU MỌI KHU (B2, 05/11/2026) — menu phải nói "bạn có việc" ở
+ * mọi phòng, không giấu cuối nhóm Dùng chung.
+ */
+describe('nhóm VIỆC đứng đầu sidebar mọi khu (B2)', () => {
+  const ctx = (caps: string[]) => ({
+    role: 'employee',
+    isHead: false,
+    capabilities: new Set(caps),
+  })
+  const ws = Object.values(WORKSPACES).filter((w) => w.ready)
+
+  it('mọi workspace bật sẵn: section đầu tiên là "Việc" với "Việc của tôi"', () => {
+    for (const w of ws) {
+      const s = resolveNavSections(w, ctx([]))
+      expect(s[0].heading, w.id).toBe('Việc')
+      expect(
+        s[0].items.map((i) => i.label),
+        w.id,
+      ).toEqual(['Việc của tôi'])
+    }
+  })
+
+  it('"Việc tôi giao" chỉ hiện cho ai giao được việc (tasks.give)', () => {
+    const s = resolveNavSections(WORKSPACES.planning, ctx(['tasks.give']))
+    expect(s[0].items.map((i) => i.label)).toEqual(['Việc của tôi', 'Việc tôi giao'])
+  })
+
+  it('defaultTab = đúng tab trang mở khi URL không có muc (giao được → giao)', () => {
+    const mot = resolveNavSections(WORKSPACES.sales, ctx([]))[0].items
+    expect(mot.find((i) => i.defaultTab)?.href).toBe('/phan-cong-viec?muc=cua-toi')
+    const hai = resolveNavSections(WORKSPACES.sales, ctx(['tasks.give']))[0].items
+    expect(hai.find((i) => i.defaultTab)?.href).toBe('/phan-cong-viec?muc=giao')
+    expect(hai.filter((i) => i.defaultTab)).toHaveLength(1)
+  })
+
+  it('"Phân công việc" không còn trong Dùng chung — một đích một dòng', () => {
+    expect(SHARED_SECTION.items.some((i) => i.href.startsWith('/phan-cong-viec'))).toBe(
+      false,
+    )
+  })
+
+  it('withNavBadges nhận số kèm ghi chú; 0 thì không gắn gì', () => {
+    const s = resolveNavSections(WORKSPACES.planning, ctx(['tasks.give']))
+    const out = withNavBadges(s, {
+      '/phan-cong-viec?muc=cua-toi': { n: 3, note: '1 trễ' },
+      '/phan-cong-viec?muc=giao': { n: 0 },
+      '/mua-hang/hop-thu': 34,
+    })
+    const viec = out[0].items
+    expect(viec[0]).toMatchObject({ badge: 3, badgeNote: '1 trễ', urgent: true })
+    expect(viec[1].badge).toBeUndefined()
+    expect(
+      out.flatMap((x) => x.items).find((i) => i.href === '/mua-hang/hop-thu')?.badge,
+    ).toBe(34)
+  })
 })

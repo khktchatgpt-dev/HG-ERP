@@ -29,6 +29,8 @@ export type NavCapability =
   | 'production.team'
   /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
   | 'supply.approve'
+  /** Giao được việc (`tasksService.canGive`) — thấy "Việc tôi giao" ở nhóm VIỆC (B2, 05/11/2026). */
+  | 'tasks.give'
   /** Xem / sửa HỒ SƠ LƯƠNG (`hr.payroll.profile`) — quyền mật, chỉ vai "Quản lý lương" (0255). */
   | 'hr.payroll'
   /** Cấu hình công đoạn (0287) — quản đốc / manager / admin. */
@@ -54,6 +56,18 @@ export type NavItem = {
    * tĩnh — server gắn lúc render qua `withNavBadges` (xem workspaces/nav-badges).
    */
   badge?: number
+  /**
+   * Số đếm này là việc CHẶN (đỏ) hay chỉ hàng đợi (xám). Không khai thì sidebar
+   * đoán theo nhãn (`/chờ|duyệt|ký|xử lý/`). Nhóm VIỆC khai tường minh (B2).
+   */
+  urgent?: boolean
+  /** Chữ nhỏ cạnh nhãn, server gắn cùng badge ("1 trễ"). */
+  badgeNote?: string
+  /**
+   * Href có `?muc=`: mục này sáng khi URL KHÔNG mang `muc` (vào từ chuông). Server
+   * đặt đúng mục trang sẽ mở mặc định — xem `resolveNavSections` + `lib/nav-active`.
+   */
+  defaultTab?: boolean
 }
 
 export type NavSection = {
@@ -172,6 +186,40 @@ export const PERSONAL_SECTION: NavSection = {
 } as const
 
 /**
+ * NHÓM VIỆC — đứng ĐẦU sidebar của MỌI khu (B2, 05/11/2026, bản vẽ
+ * https://claude.ai/artifact/RhpXain2mB7mbatN3kSZuV; chủ dự án: "trên menu làm
+ * việc phải có gì đó nổi bật để biết họ có việc được giao").
+ *
+ * Hai dòng cùng đường dẫn, khác `?muc=`:
+ *  - "Việc của tôi · n": n = `mineBoard.summary.doing` (việc bóng ở tôi: chưa làm ·
+ *    đang làm · bị trả lại · tạm dừng), ghi chú "k trễ" = `summary.overdue` — đúng
+ *    số in trên tab của trang Phân công việc. Mọi người.
+ *  - "Việc tôi giao · m": m = `givenBoard.summary.to_approve` (đã báo xong, chờ tôi
+ *    duyệt). Chỉ ai giao được việc (`tasks.give`). Việc chưa ai báo KHÔNG đếm đỏ —
+ *    bóng đang ở người khác.
+ * Đỏ (`urgent`) vì có người đang đợi mình, cùng luật "Chờ tôi xử lý". Số đếm gắn ở
+ * `nav-badges.viecBadges` cho mọi khu. Số 0 → không số, dòng vẫn còn.
+ */
+export const VIEC_SECTION: NavSection = {
+  heading: 'Việc',
+  items: [
+    {
+      href: '/phan-cong-viec?muc=cua-toi',
+      label: 'Việc của tôi',
+      icon: 'list-todo',
+      urgent: true,
+    },
+    {
+      href: '/phan-cong-viec?muc=giao',
+      label: 'Việc tôi giao',
+      icon: 'clipboard-check',
+      urgent: true,
+      capability: 'tasks.give',
+    },
+  ],
+} as const
+
+/**
  * Nav DÙNG CHUNG — trang không thuộc phòng nào, mọi workspace đều thấy (tự thêm
  * vào cuối sidebar như PERSONAL_SECTION). Đặt ở đây để workspace mới có ngay,
  * khỏi phải nhớ copy vào từng config.
@@ -183,9 +231,8 @@ export const SHARED_SECTION: NavSection = {
   heading: 'Dùng chung',
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
   items: [
-    // Phân công việc (30/10/2026) — sếp / quản lý giao, người nhận báo hoàn thành,
-    // người giao duyệt Đạt. Dựng lại module Việc vốn bị ẩn cùng mục "Cá nhân" từ 08/08.
-    { href: '/phan-cong-viec', label: 'Phân công việc', icon: 'list-todo' },
+    // "Phân công việc" KHÔNG còn ở đây (05/11/2026, B2): nó là nhóm VIỆC đứng đầu
+    // mọi sidebar (`VIEC_SECTION`) — một đích một dòng.
     { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
     // Góp ý hệ thống (0253) — mọi người viết / xem được, nên ở khu dùng chung.
     { href: '/gop-y', label: 'Góp ý hệ thống', icon: 'messages-square' },
@@ -1009,7 +1056,18 @@ export function resolveNavSections(
   workspace: WorkspaceConfig,
   ctx: { role: string; isHead: boolean; capabilities?: ReadonlySet<string> },
 ): NavSection[] {
+  // Nhóm VIỆC lọc theo quyền giao; mục `defaultTab` = mục trang mở khi URL không
+  // có `muc` (usePhanCong: giao được → "giao", không → "cua-toi").
+  const viecItems = VIEC_SECTION.items.filter((i) => itemVisible(i, ctx))
+  const macDinh = viecItems.length > 1 ? '?muc=giao' : '?muc=cua-toi'
+  const viec: NavSection = {
+    heading: VIEC_SECTION.heading,
+    items: viecItems.map((i) =>
+      i.href.endsWith(macDinh) ? { ...i, defaultTab: true } : i,
+    ),
+  }
   return [
+    viec,
     ...(HIDE_PERSONAL_SECTION_GLOBALLY || workspace.hidePersonalSection
       ? []
       : [PERSONAL_SECTION]),
@@ -1026,15 +1084,24 @@ export function resolveNavSections(
  * Gắn số đếm sống vào nav item theo href — server tính số (nav-badges.ts) rồi
  * gọi hàm này trước khi đưa sections xuống client. Thuần, không side effect.
  */
+export type NavBadge = number | { n: number; note?: string }
+
 export function withNavBadges(
   sections: NavSection[],
-  badges: Record<string, number>,
+  badges: Record<string, NavBadge>,
 ): NavSection[] {
   if (Object.keys(badges).length === 0) return sections
+  const gan = (i: NavItem): NavItem => {
+    const b = badges[i.href]
+    if (b == null) return i
+    if (typeof b === 'number') return b ? { ...i, badge: b } : i
+    if (!b.n) return i
+    return { ...i, badge: b.n, ...(b.note ? { badgeNote: b.note } : {}) }
+  }
   return sections.map((s) => ({
     heading: s.heading,
     ...(s.gap ? { gap: true } : {}),
-    items: s.items.map((i) => (badges[i.href] ? { ...i, badge: badges[i.href] } : i)),
+    items: s.items.map(gan),
   }))
 }
 

@@ -18,8 +18,9 @@ import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
 import { demLenhChoSoatKhongCho } from '@/modules/dept/supply/lenh-doi.service'
+import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import type { User } from '@/modules/core/users/users.repo'
-import type { WorkspaceId } from './workspaces.config'
+import type { NavBadge, WorkspaceId } from './workspaces.config'
 
 /**
  * Số đếm SỐNG trên sidebar — { href → count }, gắn vào nav qua `withNavBadges`.
@@ -33,16 +34,48 @@ import type { WorkspaceId } from './workspaces.config'
 export async function resolveNavBadges(
   user: User,
   workspaceId: WorkspaceId,
+): Promise<Record<string, NavBadge>> {
+  // Nhóm VIỆC đứng đầu MỌI khu (B2) — đếm riêng, lỗi bên nào bên đó rỗng.
+  const [viec, khu] = await Promise.all([
+    viecBadges(user).catch(() => ({}) as Record<string, NavBadge>),
+    khuBadges(user, workspaceId).catch(() => ({}) as Record<string, number>),
+  ])
+  return { ...viec, ...khu }
+}
+
+async function khuBadges(
+  user: User,
+  workspaceId: WorkspaceId,
 ): Promise<Record<string, number>> {
-  try {
-    if (workspaceId === 'exec') return await execBadges(user)
-    if (workspaceId === 'planning') return await supplyBadges(user)
-    if (workspaceId === 'warehouse') return await warehouseBadges()
-    if (workspaceId === 'production') return await productionBadges(user)
-    return {}
-  } catch {
-    return {}
+  if (workspaceId === 'exec') return await execBadges(user)
+  if (workspaceId === 'planning') return await supplyBadges(user)
+  if (workspaceId === 'warehouse') return await warehouseBadges()
+  if (workspaceId === 'production') return await productionBadges(user)
+  return {}
+}
+
+/**
+ * Nhóm VIỆC (B2, 05/11/2026): số ĐÚNG HÀM trang Phân công việc dùng cho hai tab —
+ * "Việc của tôi" = `mineBoard.summary.doing` (+ ghi chú "k trễ" = `overdue`),
+ * "Việc tôi giao" = `givenBoard.summary.to_approve` (chờ tôi duyệt; `givenBoard`
+ * trả null cho người không giao được). Bảng `tasks` nhỏ, hai truy vấn rẻ.
+ */
+export async function viecBadges(user: User): Promise<Record<string, NavBadge>> {
+  const [mine, given] = await Promise.all([
+    tasksService.mineBoard(user),
+    tasksService.givenBoard(user),
+  ])
+  const out: Record<string, NavBadge> = {}
+  if (mine.summary.doing > 0) {
+    out['/phan-cong-viec?muc=cua-toi'] = {
+      n: mine.summary.doing,
+      ...(mine.summary.overdue > 0 ? { note: `${mine.summary.overdue} trễ` } : {}),
+    }
   }
+  if (given && given.summary.to_approve > 0) {
+    out['/phan-cong-viec?muc=giao'] = { n: given.summary.to_approve }
+  }
+  return out
 }
 
 /**
