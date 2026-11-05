@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ADJ_CAUSE_KEYS, causeNeedsLsx } from '@/lib/po-adjust-cause'
 import { PO_TEMPLATES } from '@/lib/po-template'
 import { PREPAY_METHODS } from '@/lib/mua-san'
+import { LY_DO_TRA_LAI_TOI_THIEU } from '@/lib/po-review'
 
 export const PO_STATUSES = [
   // NHÁP (0116): tạo đơn = lưu nháp, sửa/xoá tự do; bấm "Gửi GĐ duyệt" mới sang
@@ -258,6 +259,26 @@ export const poDecideSchema = z
   .refine((d) => d.decision !== 'reject' || (d.reason && d.reason.length > 0), {
     message: 'Từ chối phải kèm lý do',
   })
+
+/**
+ * TRƯỞNG PHÒNG XEM ĐƠN (05/11/2026): "Đã xem — trình GĐ" kèm ghi chú cho Giám
+ * đốc, KHÔNG bắt buộc (Q3).
+ */
+export const poReviewSchema = z.object({
+  note: z.string().trim().max(500).nullish(),
+  /** Trạng thái màn đang thấy — lệch thì 409, không làm việc khác ý người ta. */
+  tu: z.enum(['draft', 'pending_approval']).optional(),
+})
+
+/** Trưởng phòng TRẢ LẠI ĐỂ SỬA — lý do bắt buộc, ≥ 5 ký tự (Q3): người lập sửa theo câu này. */
+export const poReturnSchema = z.object({
+  tu: z.enum(['draft', 'pending_approval']).optional(),
+  reason: z
+    .string()
+    .trim()
+    .min(LY_DO_TRA_LAI_TOI_THIEU, 'Ghi lý do trả lại ít nhất 5 ký tự')
+    .max(1000),
+})
 
 /** Tiến trạng thái sau duyệt: gửi NCC (BR-05) → NCC xác nhận → đang giao. */
 export const poAdvanceSchema = z.object({

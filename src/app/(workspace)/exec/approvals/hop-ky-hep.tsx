@@ -151,6 +151,17 @@ function Phieu({ i, gap = false }: { i: SignItem; gap?: boolean }) {
             {i.late_sign ? 'chờ ký bù — mở ra đọc lý do' : 'giá trị lớn — mở ra đọc'}
           </span>
         )}
+        {/* Trưởng phòng CƯ (0293 · B3) — một dòng: đã xem / chưa xem. */}
+        {i.po?.tp && (
+          <span
+            className={i.po.tp.da_xem ? 'hk-ok' : 'hk-warn'}
+            style={{ display: 'block', fontSize: 12 }}
+          >
+            {i.po.tp.da_xem
+              ? '✓ trưởng phòng đã xem'
+              : 'trưởng phòng chưa xem — mở ra đọc'}
+          </span>
+        )}
       </span>
       <span style={{ textAlign: 'right', alignSelf: 'center' }}>
         <b className="hk-num">{i.value > 0 ? money(i.value, i.currency) : '—'}</b>

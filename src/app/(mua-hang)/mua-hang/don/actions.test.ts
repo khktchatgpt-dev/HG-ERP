@@ -55,6 +55,39 @@ describe('khoá kèm lý do, không giấu', () => {
   })
 })
 
+describe('trưởng phòng CƯ xem đơn trước GĐ (0293 · B4)', () => {
+  // Anh Hiếu: supply.lead (quản lý mọi đơn) nhưng KHÔNG có quyền duyệt.
+  const hieu = (daXem: boolean) => ({ own: true, approve: false, privileged: true, lead: true, tp: { toi: true, minh: false, daXem } }) // prettier-ignore
+
+  it('chưa xem: nút chính "Đã xem — trình GĐ" (ghi chú không bắt buộc), có "Trả lại để sửa"', () => {
+    const acts = actionsFor('pending_approval', hieu(false))
+    expect(acts[0]).toMatchObject({ id: 'review', label: 'Đã xem — trình GĐ', primary: true, optReason: true }) // prettier-ignore
+    expect(acts.filter((a) => a.primary)).toHaveLength(1)
+    expect(acts[0].build!({ id: 'p', reason: '', date: '' })).toEqual([
+      {
+        path: '/api/dept/supply/pos/p/review',
+        method: 'POST',
+        body: { note: null, tu: 'pending_approval' },
+      },
+    ])
+    const tra = acts.find((a) => a.id === 'return_review')!
+    expect(tra).toMatchObject({ needReason: true, minReason: 5 })
+    expect(tra.build!({ id: 'p', reason: 'Thiếu khổ 670', date: '' })).toEqual([
+      { path: '/api/dept/supply/pos/p/return', method: 'POST', body: { reason: 'Thiếu khổ 670', tu: 'pending_approval' } }, // prettier-ignore
+    ])
+    // Rút về nháp vẫn còn (lùi vào menu), không còn là nút chính.
+    expect(acts.find((a) => a.id === 'withdraw')!.primary).toBeFalsy()
+  })
+
+  it('đã xem rồi: hết hai nút xem; người không phải trưởng phòng không thấy chúng', () => {
+    const ids = (perm: Parameters<typeof actionsFor>[1]) => actionsFor('pending_approval', perm).map((a) => a.id) // prettier-ignore
+    expect(ids(hieu(true))).not.toContain('review')
+    expect(ids(hieu(true))).not.toContain('return_review')
+    expect(ids(boss)).not.toContain('review')
+    expect(ids(own)).not.toContain('review')
+  })
+})
+
 describe('lỗ hổng màn cũ được lấp', () => {
   it('Rút về nháp có mặt ở bước chờ duyệt và gọi đúng route withdraw', () => {
     const w = actionsFor('pending_approval', own).find((a) => a.id === 'withdraw')!
@@ -482,5 +515,37 @@ describe('Điều chỉnh đơn đã về đủ (0280)', () => {
       actionsFor('received', own).find((a) => a.id === 'adjust')!.blocked,
     ).toBeUndefined()
     expect(actionsFor('received', other).find((a) => a.id === 'adjust')!.blocked).toMatch(/người khác phụ trách/) // prettier-ignore
+  })
+})
+
+describe('nháp — trưởng phòng xem rồi trình GĐ, không có mốc gửi (05/11/2026 chiều)', () => {
+  const nv = { own: true, approve: false, tp: { toi: false, minh: true, daXem: false } }
+  const tp = (minh: boolean) => ({ own: true, approve: false, privileged: true, lead: true, tp: { toi: true, minh, daXem: false } }) // prettier-ignore
+  const ids = (perm: Parameters<typeof actionsFor>[1]) => actionsFor('draft', perm).map((a) => a.id) // prettier-ignore
+
+  it('NV: KHÔNG có nút gửi chính; "Gửi thẳng Giám đốc" còn đó, gọi route submit, không gửi hàng loạt', () => {
+    const acts = actionsFor('draft', nv)
+    expect(acts.filter((a) => a.primary)).toHaveLength(0)
+    const gui = acts.find((a) => a.id === 'submit_direct')!
+    expect(gui).toMatchObject({ label: 'Gửi thẳng Giám đốc', bulk: false })
+    expect(gui.build!({ id: 'p', reason: '', date: '' })).toEqual([
+      { path: '/api/dept/supply/pos/p/submit', method: 'POST' },
+    ])
+    expect(ids(nv)).not.toContain('submit')
+    expect(ids(nv)).not.toContain('review')
+  })
+
+  it('trưởng phòng mở nháp của người khác: "Đã xem — trình GĐ" + "Trả lại để sửa", không có nút gửi trùng', () => {
+    const acts = actionsFor('draft', tp(false))
+    expect(acts[0]).toMatchObject({ id: 'review', primary: true })
+    expect(ids(tp(false))).toContain('return_review')
+    expect(ids(tp(false))).not.toContain('submit')
+    expect(ids(tp(false))).not.toContain('submit_direct')
+    expect(acts.filter((a) => a.primary)).toHaveLength(1)
+  })
+
+  it('trưởng phòng tự lập / không áp bước (admin, chưa ai giữ vai): như cũ — "Gửi Giám đốc duyệt"', () => {
+    expect(actionsFor('draft', tp(true))[0]).toMatchObject({ id: 'submit', label: 'Gửi Giám đốc duyệt', primary: true }) // prettier-ignore
+    expect(actionsFor('draft', own)[0]).toMatchObject({ id: 'submit', label: 'Gửi Giám đốc duyệt' }) // prettier-ignore
   })
 })

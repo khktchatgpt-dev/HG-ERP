@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Lock } from 'lucide-react'
+import { Lock, MessageSquare } from 'lucide-react'
 import {
   LOAI_PHIEU,
   kyNhanhDuoc,
@@ -10,6 +10,8 @@ import {
   type LoaiPhieu,
 } from '@/lib/loai-phieu-duyet'
 import { materialSummary } from '@/lib/po-list-labels'
+import { ngayGioVn } from '@/lib/date-vn'
+import { choBaoLau, chuaXem, type TruongPhongXem } from '@/lib/po-review'
 import type { SignItem } from '@/modules/core/exec/exec.service'
 import { money } from '../approval-helpers'
 import { LOP_MAU, dm } from './hop-ky.shared'
@@ -25,6 +27,9 @@ import { LOP_MAU, dm } from './hop-ky.shared'
  *    trước mã phiếu; lệnh + người trình xuống DÒNG HAI của ô Nội dung (không mất
  *    thông tin, chỉ đổi chỗ).
  *  · HẸP (< 840px): danh sách nhóm (`hop-ky-hep.tsx`), không dùng lưới.
+ *
+ * Cột "Trưởng phòng" (0293 · B3, bản vẽ RcqWLU7F1z33btAR97gZBo) chỉ có khi
+ * lưới có đơn mua mà trưởng phòng CƯ phải xem — chưa ai giữ vai thì không cột.
  */
 export type CotKey =
   | 'chon'
@@ -34,6 +39,7 @@ export type CotKey =
   | 'noiDung'
   | 'boiCanh'
   | 'hen'
+  | 'tp'
   | 'nguoi'
   | 'giaTri'
   | 'cho'
@@ -48,6 +54,7 @@ const COT_RONG: Cot[] = [
   { key: 'noiDung', nhan: 'Nội dung' },
   { key: 'boiCanh', w: 160, nhan: 'Lệnh / ngữ cảnh' },
   { key: 'hen', w: 92, r: true, nhan: 'Hẹn' },
+  { key: 'tp', w: 136, nhan: 'Trưởng phòng' },
   { key: 'nguoi', w: 140, nhan: 'Người trình' },
   { key: 'giaTri', w: 146, r: true, nhan: 'Giá trị' },
   { key: 'cho', w: 76, r: true, nhan: 'Chờ' },
@@ -63,8 +70,12 @@ const COT_VUA: Cot[] = COT_RONG.filter(
  * một loại) → tiêu đề cột là cột THẬT của loại đó (Nhà cung cấp, Mua gì…), bỏ cột
  * "Loại" thừa và cột ngữ cảnh khi loại không có (lệnh SX, báo giá).
  */
-export function cotHopKy(rong: boolean, loai?: LoaiPhieu | null): Cot[] {
-  const goc = rong ? COT_RONG : COT_VUA
+export function cotHopKy(rong: boolean, loai?: LoaiPhieu | null, coTp = false): Cot[] {
+  /* Có cột Trưởng phòng thì cột Hẹn co lại (ngày "16/11" chỉ cần ~60px) — trả chỗ
+     cho Nội dung ở khung vừa (laptop 125%: khung ~1.000px). */
+  const goc = (rong ? COT_RONG : COT_VUA)
+    .filter((c) => coTp || c.key !== 'tp')
+    .map((c) => (coTp && c.key === 'hen' ? { ...c, w: 80 } : c))
   if (!loai) return goc
   const khai = LOAI_PHIEU[loai]
   return goc
@@ -89,6 +100,8 @@ function nhanTheoLoai(k: CotKey, khai: KhaiLoai): string {
       return c.boiCanh
     case 'hen':
       return c.hen
+    case 'tp':
+      return khai === LOAI_PHIEU.po ? 'Trưởng phòng' : ''
     case 'nguoi':
       return 'Người trình'
     case 'giaTri':
@@ -135,9 +148,11 @@ export function SignRow({
   const nhanh = kyNhanhDuoc(i)
   const khoaVi = i.late_sign
     ? 'Đơn gửi gấp — mở ra đọc lý do rồi ký bù'
-    : i.big
-      ? 'Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt'
-      : `${khai.ten} — mở ra đọc rồi ký riêng`
+    : chuaXem(i.po?.tp)
+      ? 'Trưởng phòng chưa xem — mở ra đọc rồi ký riêng'
+      : i.big
+        ? 'Giá trị lớn — mở ra đọc rồi ký riêng, không ký hàng loạt'
+        : `${khai.ten} — mở ra đọc rồi ký riêng`
   const ngCanh =
     i.kind === 'po' ? (i.po?.lsx_code ?? i.po?.ngoai_lenh ?? 'Ngoài lệnh') : (i.boi_canh ?? null) // prettier-ignore
   const choCls =
@@ -218,6 +233,7 @@ export function SignRow({
       <td className="r hk-num">
         <Hen i={i} today={today} />
       </td>
+      {co('tp') && <TruongPhong tp={i.po?.tp} />}
       {coNguoi && (
         <td className="hk-mut hk-xuong" title={i.owner_name ?? undefined}>
           {i.owner_name ?? '—'}
@@ -305,6 +321,53 @@ function Hen({ i, today }: { i: SignItem; today: string }) {
       </span>
     )
   return <>{dm(i.po.expected_at, today)}</>
+}
+
+/** "09:15" nếu cùng ngày (giờ VN), không thì "04/11". */
+function gioHoacNgay(iso: string): string {
+  const a = ngayGioVn(iso)
+  return a.slice(0, 10) === ngayGioVn(new Date()).slice(0, 10)
+    ? a.slice(11)
+    : a.slice(0, 5)
+}
+
+/**
+ * Ô "Trưởng phòng" (bản vẽ khung 3): ✓ giờ xem + biểu tượng nếu có ghi chú (rê
+ * chuột đọc ai · lúc · ghi chú) / "chưa xem · 25′" màu cảnh báo. Phiếu không phải
+ * đơn mua, hoặc đơn chờ ký bù (`tp` null): ô trống.
+ */
+function TruongPhong({ tp }: { tp: TruongPhongXem | null | undefined }) {
+  if (!tp) return <td />
+  const d = tp.da_xem
+  if (d) {
+    const ai = d.by_name ?? tp.ten ?? 'Trưởng phòng'
+    return (
+      <td
+        className="hk-ok"
+        title={[ai, ngayGioVn(d.at).slice(0, 16), d.note && `“${d.note}”`]
+          .filter(Boolean)
+          .join(' · ')}
+      >
+        ✓ <span className="hk-num">{gioHoacNgay(d.at)}</span>
+        {d.note && (
+          <MessageSquare
+            size={12}
+            role="img"
+            aria-label={`Ghi chú: ${d.note}`}
+            style={{ display: 'inline-block', marginLeft: 5, verticalAlign: -1 }}
+          />
+        )}
+      </td>
+    )
+  }
+  return (
+    <td
+      className="hk-warn"
+      title={`${tp.ten ?? 'Trưởng phòng'} chưa xem — gửi duyệt ${choBaoLau(tp.cho_phut)} trước`}
+    >
+      chưa xem · <span className="hk-num">{choBaoLau(tp.cho_phut)}</span>
+    </td>
+  )
 }
 
 /** Hàng tiêu đề RIÊNG của một khối — mỗi khối nói lại cột nghĩa là gì với loại của mình. */

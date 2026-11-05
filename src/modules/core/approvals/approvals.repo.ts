@@ -18,6 +18,9 @@ export type ApprovalAction =
   // 0218 — thu hồi chữ ký (đơn đã duyệt, chưa gửi) và gửi NCC trước khi ký.
   | 'unapproved'
   | 'urgent_sent'
+  // 0293 (05/11/2026) — trưởng phòng Cung ứng đã xem / trả lại để sửa (lib/po-review).
+  | 'reviewed'
+  | 'returned'
 // 'quote' từ 0149 — báo giá trình GĐ (tuỳ chọn) cũng để lại vết ký.
 export type ApprovalEntityType = 'po' | 'lsx' | 'quote'
 
@@ -123,6 +126,38 @@ export const approvalEventsRepo = {
       for (const r of data ?? []) {
         const cur = out.get(r.entity_id)
         if (!cur || r.created_at > cur) out.set(r.entity_id, r.created_at)
+      }
+    }
+    return out
+  },
+
+  /**
+   * Sổ vết của NHIỀU hồ sơ một lượt, chỉ các hành động cần cho một câu hỏi —
+   * cho dấu "trưởng phòng đã xem" trên danh sách (lib/po-review `reviewMarks`:
+   * cần `submitted` + `reviewed` + các mốc về nháp). Chia 150 id một lượt như
+   * `lastSubmittedAt` để URL không quá dài.
+   */
+  async listForEntities(
+    entity_type: ApprovalEntityType,
+    ids: string[],
+    actions: ApprovalAction[],
+  ): Promise<(ApprovalEvent & { entity_id: string })[]> {
+    const out: (ApprovalEvent & { entity_id: string })[] = []
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await db()
+        .from('approval_events')
+        .select(
+          'id, entity_type, entity_id, entity_code, action, actor_id, reason, created_at, actor:users(name, email)',
+        )
+        .eq('entity_type', entity_type)
+        .in('action', actions)
+        .in('entity_id', ids.slice(i, i + 150))
+        .order('created_at', { ascending: true })
+      if (error) throw new Error(error.message)
+      type Raw = Omit<ApprovalEvent, 'actor_name'> & { actor: ActorEmbed | ActorEmbed[] }
+      for (const r of (data ?? []) as unknown as Raw[]) {
+        const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
+        out.push({ ...r, actor_name: a?.name || a?.email || null })
       }
     }
     return out

@@ -62,3 +62,11 @@ it('kyNhanhDuoc — lệnh SX luôn mở ra đọc; đơn mua lớn / ký bù ch
   expect(kyNhanhDuoc(p('dnm'))).toBe(true)
   expect(kyNhanhDuoc(p('lsx'))).toBe(false)
 })
+
+it('kyNhanhDuoc — đơn mua trưởng phòng CHƯA xem không ký nhanh (Q1, 05/11/2026)', () => {
+  const po = (tp: { da_xem: unknown } | null) => ({ kind: 'po' as const, big: false, late_sign: null, po: { tp } }) // prettier-ignore
+  expect(kyNhanhDuoc(po({ da_xem: { at: 'x' } }))).toBe(true)
+  expect(kyNhanhDuoc(po({ da_xem: null }))).toBe(false)
+  // Chưa ai giữ vai trưởng phòng → không áp, ký nhanh như trước.
+  expect(kyNhanhDuoc(po(null))).toBe(true)
+})

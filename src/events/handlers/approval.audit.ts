@@ -45,6 +45,19 @@ export function registerApprovalAuditHandlers(): void {
     })
   })
 
+  // 0293 — trưởng phòng trả lại để sửa. (Dòng `reviewed` do service ghi trực
+  // tiếp vì nó là trạng thái của đơn, không qua handler nuốt lỗi.)
+  on('po.returned', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'po',
+      entity_id: e.po_id,
+      entity_code: e.code,
+      action: 'returned',
+      actor_id: e.returned_by,
+      reason: e.reason,
+    })
+  })
+
   on('po.reassigned', async (e) => {
     await approvalEventsRepo.log({
       entity_type: 'po',

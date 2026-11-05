@@ -37,6 +37,47 @@ describe('poHolder — ai đang giữ bóng', () => {
     expect(h.who).toBe('Giám đốc')
   })
 
+  it('chờ trưởng phòng xem (0293): bóng ở trưởng phòng; với anh ấy là "đến lượt bạn"', () => {
+    const review = { lead_ids: ['u-hieu'], lead_name: 'Đỗ Ngọc Hiếu', reviewed_at: null }
+    const cho = { ...NHAP, status: 'pending_approval', submitted_at: '2026-11-04T08:37:00Z', review } // prettier-ignore
+    const nguoiLap = poHolder(cho, 'u-nga')
+    expect(nguoiLap).toMatchObject({ who: 'Trưởng phòng Cung ứng · Đỗ Ngọc Hiếu', mine: false }) // prettier-ignore
+    expect(nguoiLap.what).toBe('Xem rồi trình Giám đốc')
+    expect(nguoiLap.since).toBe('2026-11-04T08:37:00Z')
+    expect(poHolder(cho, 'u-hieu')).toMatchObject({ who: 'Đỗ Ngọc Hiếu', mine: true })
+  })
+
+  it('trưởng phòng xem rồi: bóng sang Giám đốc, đếm từ lúc xem (giờ VN)', () => {
+    const review = { lead_ids: ['u-hieu'], lead_name: 'Đỗ Ngọc Hiếu', reviewed_at: '2026-11-05T02:15:00Z' } // prettier-ignore
+    const h = poHolder({ ...NHAP, status: 'pending_approval', review }, 'u-hieu')
+    expect(h).toMatchObject({
+      who: 'Giám đốc',
+      mine: false,
+      since: '2026-11-05T02:15:00Z',
+    })
+    expect(h.what).toBe('Trưởng phòng đã xem 05/11 09:15 — chờ Giám đốc duyệt')
+  })
+
+  it('nháp đủ điều kiện (05/11 chiều): bóng ở trưởng phòng — với anh ấy là "đến lượt bạn"', () => {
+    const review = { lead_ids: ['u-hieu'], lead_name: 'Đỗ Ngọc Hiếu', reviewed_at: null, tra_lai_at: null, thieu: null } // prettier-ignore
+    expect(poHolder({ ...NHAP, review }, 'u-nga')).toMatchObject({ who: 'Trưởng phòng Cung ứng · Đỗ Ngọc Hiếu', what: 'Xem rồi trình Giám đốc', mine: false }) // prettier-ignore
+    expect(poHolder({ ...NHAP, review }, 'u-hieu').mine).toBe(true)
+  })
+
+  it('nháp còn thiếu / vừa bị trả lại: bóng ở người soạn, nói phải làm gì', () => {
+    const base = { lead_ids: ['u-hieu'], lead_name: 'Đỗ Ngọc Hiếu', reviewed_at: null } // prettier-ignore
+    const thieu = poHolder({ ...NHAP, review: { ...base, thieu: 'Chưa có hẹn giao' } }, 'u-nga') // prettier-ignore
+    expect(thieu).toMatchObject({ who: 'Cung ứng', mine: true })
+    expect(thieu.what).toBe('Soạn tiếp (chưa có hẹn giao) — đủ thì trưởng phòng xem, trình Giám đốc') // prettier-ignore
+    const tra = poHolder({ ...NHAP, review: { ...base, tra_lai_at: '2026-11-05T02:00:00Z' } }, 'u-nga') // prettier-ignore
+    expect(tra).toMatchObject({
+      who: 'Cung ứng',
+      mine: true,
+      since: '2026-11-05T02:00:00Z',
+    })
+    expect(tra.what).toMatch(/^Sửa theo lý do trưởng phòng trả lại/)
+  })
+
   it('đã duyệt thì bóng quay lại Cung ứng để gửi NCC', () => {
     const h = poHolder(
       { ...NHAP, status: 'approved', approved_at: '2026-09-05T02:00:00Z' },

@@ -99,6 +99,10 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
 vi.mock('@/modules/core/rbac/rbac.repo', () => ({
   rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
 }))
+// 05/11/2026 — dấu "trưởng phòng đã xem" đọc / ghi ở sổ vết ký.
+vi.mock('@/modules/core/approvals/approvals.repo', () => ({
+  approvalEventsRepo: { log: vi.fn(), listByEntity: vi.fn(async () => []) },
+}))
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
@@ -118,12 +122,18 @@ import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
+import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { DUYET_KHI_CHUA_XEM } from '@/lib/po-review'
 import { makeFakeAssertAction, makeFakeCanAction, type DeptInfo } from '@/test-utils/rbac'
 import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 /** Ghi chú Trao đổi vừa ghi (vết lý do). */
 const lastTrace = () => vi.mocked(docNotesRepo.create).mock.calls.at(-1)![0]
+
+/** Ai có permission nào — `userIdsWithPermission` trả theo đúng khoá được hỏi. */
+const quyen = (m: Record<string, string[]>) =>
+  vi.mocked(rbacRepo.userIdsWithPermission).mockImplementation(async (k) => m[k] ?? [])
 
 const staff = { id: 'u-sup', role: 'employee', department_id: 'd-sup' } as unknown as User
 /** NV Cung ứng KHÁC (0128) — cùng phòng nhưng không phụ trách PO fixture. */
@@ -300,8 +310,8 @@ describe('posService.submit — 0116: gửi GĐ duyệt mới notify', () => {
       status: 'pending_approval',
     } as never)
     // 0128: người duyệt lấy theo QUYỀN supply.po.approve thật (∪ admin) — không
-    // còn "mọi manager toàn công ty".
-    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-boss'])
+    // còn "mọi manager toàn công ty". Phòng CHƯA có trưởng phòng → báo thẳng GĐ.
+    quyen({ 'supply.po.approve': ['u-boss'] })
     vi.mocked(usersRepo.list).mockResolvedValue([
       { id: 'u-boss', role: 'manager' },
       { id: 'u-sup', role: 'employee' },
@@ -314,11 +324,57 @@ describe('posService.submit — 0116: gửi GĐ duyệt mới notify', () => {
     const evt = vi.mocked(emit).mock.calls[0][0] as {
       name: string
       approver_ids: string[]
+      lead_ids: string[]
       lsx_code: string | null
     }
     expect(evt.name).toBe('po.submitted')
     expect(evt.approver_ids).toEqual(['u-boss'])
+    expect(evt.lead_ids).toEqual([])
     expect(evt.lsx_code).toBe('LSX-2026-0001')
+    expect(approvalEventsRepo.log).not.toHaveBeenCalled()
+  })
+
+  describe('05/11/2026 — trưởng phòng Cung ứng xem trước Giám đốc', () => {
+    const setup = () => {
+      vi.mocked(posRepo.findById).mockResolvedValue(DRAFT as never)
+      vi.mocked(posRepo.listLines).mockResolvedValue([{ id: 'l1' }] as never)
+      vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'pending_approval' } as never) // prettier-ignore
+      quyen({ 'supply.po.approve': ['u-boss'], 'supply.lead': ['u-lead', 'u-it'] })
+      vi.mocked(usersRepo.list).mockResolvedValue([
+        { id: 'u-boss', role: 'manager' },
+        { id: 'u-lead', role: 'employee' },
+        // Vai admin được seed ĐỦ mọi quyền — không phải trưởng phòng thật.
+        { id: 'u-it', role: 'admin' },
+        { id: 'u-sup', role: 'employee' },
+      ] as never)
+    }
+    const evt = () =>
+      vi.mocked(emit).mock.calls[0][0] as { approver_ids: string[]; lead_ids: string[] }
+
+    it('NV gửi thẳng GĐ (0294): báo GĐ ngay + báo trưởng phòng biết (không gồm admin), chưa có dấu xem', async () => {
+      setup()
+      await posService.submit(staff, 'po1')
+      expect(evt().lead_ids).toEqual(['u-lead'])
+      expect(evt().approver_ids).toContain('u-boss')
+      expect(approvalEventsRepo.log).not.toHaveBeenCalled()
+    })
+
+    it('trưởng phòng tự gửi → tính luôn đã xem: báo GĐ + ghi vết reviewed SAU emit', async () => {
+      setup()
+      await posService.submit(lead, 'po1')
+      expect(evt().lead_ids).toEqual([])
+      expect(evt().approver_ids).toContain('u-boss')
+      expect(approvalEventsRepo.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'reviewed',
+          actor_id: 'u-lead',
+          entity_id: 'po1',
+        }),
+      )
+      const emitAt = vi.mocked(emit).mock.invocationCallOrder[0]
+      const logAt = vi.mocked(approvalEventsRepo.log).mock.invocationCallOrder[0]
+      expect(logAt).toBeGreaterThan(emitAt)
+    })
   })
 
   it('đơn không còn là nháp → chặn', async () => {
@@ -417,6 +473,66 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
     vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'approved' } as never)
     await expect(posService.decide(boss, 'po1', 'approve')).rejects.toMatchObject({
       status: 400,
+    })
+  })
+
+  describe('05/11/2026 — duyệt khi trưởng phòng chưa xem', () => {
+    const decided = () =>
+      vi.mocked(emit).mock.calls.at(-1)![0] as {
+        reason?: string
+        unreviewed_lead_ids?: string[]
+      }
+    const coTruongPhong = () => {
+      vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+      vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'approved' } as never)
+      quyen({ 'supply.lead': ['u-lead'] })
+      vi.mocked(usersRepo.list).mockResolvedValue([{ id: 'u-lead', role: 'employee' }] as never) // prettier-ignore
+    }
+
+    it('chưa xem → VẪN duyệt được; vết ký mang dấu + báo trưởng phòng', async () => {
+      coTruongPhong()
+      vi.mocked(approvalEventsRepo.listByEntity).mockResolvedValue([
+        {
+          action: 'submitted',
+          actor_id: 'u-sup',
+          reason: null,
+          created_at: '2026-11-05T08:00:00Z',
+        },
+      ] as never)
+      await posService.decide(boss, 'po1', 'approve')
+      const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+      expect(patch.status).toBe('approved')
+      expect(decided().reason).toBe(DUYET_KHI_CHUA_XEM)
+      expect(decided().unreviewed_lead_ids).toEqual(['u-lead'])
+    })
+
+    it('trưởng phòng đã xem → duyệt bình thường, không dấu, không báo thêm', async () => {
+      coTruongPhong()
+      vi.mocked(approvalEventsRepo.listByEntity).mockResolvedValue([
+        {
+          action: 'submitted',
+          actor_id: 'u-sup',
+          reason: null,
+          created_at: '2026-11-05T08:00:00Z',
+        },
+        {
+          action: 'reviewed',
+          actor_id: 'u-lead',
+          reason: null,
+          created_at: '2026-11-05T09:00:00Z',
+        },
+      ] as never)
+      await posService.decide(boss, 'po1', 'approve')
+      expect(decided().reason).toBeUndefined()
+      expect(decided().unreviewed_lead_ids).toEqual([])
+    })
+
+    it('phòng không có trưởng phòng nào → không có bước xem, không đánh dấu', async () => {
+      vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+      vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'approved' } as never)
+      await posService.decide(boss, 'po1', 'approve')
+      expect(decided().reason).toBeUndefined()
+      expect(approvalEventsRepo.listByEntity).not.toHaveBeenCalled()
     })
   })
 })

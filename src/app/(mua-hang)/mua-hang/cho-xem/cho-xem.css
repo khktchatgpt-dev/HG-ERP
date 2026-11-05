@@ -1,0 +1,197 @@
+/*
+ * HỘP "CHỜ TÔI XEM" — phần thêm trên nền hop-ky.css (cùng lưới với hộp ký Giám
+ * đốc, bản vẽ RcqWLU7F1z33btAR97gZBo). Luật mở đầu `.hk.hk` để thắng CSS kit
+ * ngoài @layer (layout Mua hàng gắn `.kit`), như hop-ky.css.
+ */
+.hk.hk.cx {
+  --cx-done: #166534;
+  --cx-done-wash: #e8f4ec;
+  --cx-done-line: #b9dcc4;
+  --cx-stop-wash: #fbebe8;
+  --cx-stop-line: #efc2bc;
+}
+
+/* ── Xem nhanh dưới dòng: dòng hàng + giá đơn trước + ghi chú cho GĐ ── */
+.hk.hk .hk-tb.hk-tb tbody td.cx-ud {
+  padding: 8px 12px 10px 42px;
+  background: #f7f9fd;
+  white-space: normal;
+  overflow: visible;
+  border-bottom: 1px solid var(--hk-line);
+}
+.hk.hk .cx-udw {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+/* Hộp bọc bảng dòng hàng: co theo khung, đơn quá nhiều cột thì cuộn TRONG hộp —
+   không đẩy cả lưới tràn ngang (đo 05/11: 7px tràn ở 1280 khi chưa bọc). */
+.hk.hk .cx-mini-box {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+.hk.hk .cx-mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.hk.hk .hk-tb.hk-tb .cx-mini tbody td.cx-truoc {
+  white-space: normal;
+  min-width: 180px;
+}
+.hk.hk .cx-mini th {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hk-ink3);
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--hk-line);
+  white-space: nowrap;
+}
+.hk.hk .cx-mini td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--hk-hair);
+  white-space: nowrap;
+}
+.hk.hk .cx-mini .r {
+  text-align: right;
+}
+/* Bảng lồng trong ô của lưới hộp ký: chặn luật đầu cột SẪM + DÍNH và ô nền trắng
+   của `.hk-tb thead th` / `.hk-tb tbody td` (hop-ky.css) rơi xuống bảng con. */
+.hk.hk .hk-tb.hk-tb .cx-mini thead th {
+  position: static;
+  background: transparent;
+  color: var(--hk-ink3);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--hk-line);
+}
+.hk.hk .hk-tb.hk-tb .cx-mini thead th.r {
+  text-align: right;
+}
+.hk.hk .hk-tb.hk-tb .cx-mini tbody td {
+  padding: 3px 6px;
+  background: transparent;
+  border-bottom: 1px solid var(--hk-hair);
+  vertical-align: baseline;
+}
+.hk.hk .cx-facts {
+  width: 230px;
+  flex: none;
+  border-left: 1px solid var(--hk-line);
+  padding-left: 12px;
+  font-size: 12px;
+}
+.hk.hk .cx-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+}
+.hk.hk .cx-kv dt {
+  color: var(--hk-ink3);
+  white-space: nowrap;
+}
+.hk.hk .cx-kv dd {
+  margin: 0;
+  text-align: right;
+}
+.hk.hk .cx-ghi {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.hk.hk .cx-ghi label {
+  font-size: 12px;
+  color: var(--hk-ink3);
+  white-space: nowrap;
+}
+.hk.hk .cx-inp {
+  flex: 1;
+  height: 26px;
+  border: 1px solid var(--hk-line);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--hk-ink);
+  background: #fff;
+}
+.hk.hk .cx-inp:focus {
+  outline: 2px solid var(--hk-act);
+  outline-offset: -1px;
+}
+.hk.hk .cx-ok {
+  color: var(--cx-done);
+  font-weight: 600;
+}
+
+/* ── Dải tại chỗ dưới thanh hành động: kết quả / chặn / lý do trả lại ── */
+.hk.hk .cx-dai {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--hk-line);
+}
+.hk.hk .cx-band {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid;
+  font-size: 12.5px;
+}
+.hk.hk .cx-band .k {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hk.hk .cx-band.ok {
+  background: var(--cx-done-wash);
+  border-color: var(--cx-done-line);
+}
+.hk.hk .cx-band.ok .k {
+  color: var(--cx-done);
+}
+.hk.hk .cx-band.st {
+  background: var(--cx-stop-wash);
+  border-color: var(--cx-stop-line);
+}
+.hk.hk .cx-band.st .k {
+  color: var(--hk-stop);
+}
+.hk.hk .cx-band.wn {
+  background: var(--hk-warn-wash);
+  border-color: var(--hk-warn-line);
+}
+.hk.hk .cx-band.wn .k {
+  color: var(--hk-warn);
+}
+.hk.hk .cx-band .x {
+  margin-left: auto;
+}
+.hk.hk .cx-tra {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--hk-line);
+  background: var(--hk-warn-wash);
+  font-size: 12.5px;
+}
+.hk.hk .cx-tra .cx-inp {
+  flex: 0 1 420px;
+}
+.hk.hk .hk-btn.cx-khoa {
+  background: #e4e7ec;
+  color: #4b5363;
+  cursor: not-allowed;
+}
+.hk.hk .hk-btn.cx-vien {
+  border: 1px solid var(--hk-line);
+  background: #fff;
+}

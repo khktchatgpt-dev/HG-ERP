@@ -9,23 +9,70 @@ import { notificationsService } from '@/modules/core/notifications/notifications
  */
 export function registerPoNotificationHandlers(): void {
   on('po.submitted', async (e) => {
-    await Promise.all(
-      e.approver_ids.map((rid) =>
+    const title = `${e.code} — ${e.supplier_name} ${e.lsx_code ? `(LSX ${e.lsx_code})` : '(ngoài LSX)'}`
+    await Promise.all([
+      ...e.approver_ids.map((rid) =>
         notificationsService.notify({
           recipientId: rid,
           actorId: e.submitted_by,
           type: 'po_submitted',
+          payload: { title },
+        }),
+      ),
+      // 0294: NV gửi thẳng GĐ (bỏ qua bước xem trên nháp) — trưởng phòng biết.
+      ...e.lead_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.submitted_by,
+          type: 'po_sent_direct',
+          payload: { title },
+        }),
+      ),
+    ])
+  })
+
+  // Trưởng phòng đã xem → người duyệt, kèm ghi chú trưởng phòng để lại.
+  on('po.reviewed', async (e) => {
+    await Promise.all(
+      e.approver_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.reviewed_by,
+          type: 'po_reviewed',
           payload: {
-            title: `${e.code} — ${e.supplier_name} ${e.lsx_code ? `(LSX ${e.lsx_code})` : '(ngoài LSX)'}`,
+            title: `${e.code} — ${e.supplier_name}`,
+            reason: e.note ?? undefined,
           },
         }),
       ),
     )
   })
 
+  // Trưởng phòng trả lại → người phụ trách đơn, kèm lý do.
+  on('po.returned', async (e) => {
+    if (!e.owner_id || e.owner_id === e.returned_by) return
+    await notificationsService.notify({
+      recipientId: e.owner_id,
+      actorId: e.returned_by,
+      type: 'po_returned',
+      payload: { title: e.code, reason: e.reason },
+    })
+  })
+
   // Báo kết quả cho NGƯỜI PHỤ TRÁCH đơn (0128), không phải người tạo: đơn đã
   // bàn giao thì người tạo cũ chẳng còn làm gì với nó nữa.
   on('po.decided', async (e) => {
+    // 05/11/2026: GĐ duyệt khi trưởng phòng chưa xem → trưởng phòng biết để xem lại.
+    await Promise.all(
+      (e.unreviewed_lead_ids ?? []).map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.decided_by,
+          type: 'po_approved_unreviewed',
+          payload: { title: e.code },
+        }),
+      ),
+    )
     if (!e.owner_id || e.owner_id === e.decided_by) return
     await notificationsService.notify({
       recipientId: e.owner_id,

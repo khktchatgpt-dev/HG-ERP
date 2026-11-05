@@ -42,6 +42,8 @@ import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote, shiftPlannedShipments } from '@/lib/po-reschedule'
 import { canReopenForEdit, reopenNote } from '@/lib/po-reopen'
 import { reasonLine } from '@/lib/po-note'
+import { DUYET_KHI_CHUA_XEM, reviewMark } from '@/lib/po-review'
+import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import type { PoLsxSplitPatch } from './pos.schema'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
@@ -98,6 +100,40 @@ export function assertCoViec(po: {
   if (thieuViec(po)) {
     throw BadRequest(
       'Đơn ngoài lệnh chưa chọn hạng mục — bấm Sửa, chọn ở ô "Cho việc" (vd. Dự trữ kho, Xây dựng văn phòng) rồi mới gửi được',
+    )
+  }
+}
+
+/**
+ * HÀNG RÀO GỬI DUYỆT — một nguồn cho "Gửi duyệt" (`submit`) và "Gửi trưởng phòng
+ * xem" (`poReviewService.requestReview`, 0294): nháp phải đủ để trưởng phòng
+ * bấm trình là lên được bàn GĐ, không để anh ấy gặp lỗi thay người soạn.
+ */
+export async function assertGuiDuyetDuoc(before: Po): Promise<void> {
+  if (before.status !== 'draft') {
+    throw BadRequest('Chỉ đơn nháp mới gửi duyệt được')
+  }
+  if ((await posRepo.listLines(before.id)).length === 0) {
+    throw BadRequest('Đơn chưa có dòng vật tư nào — thêm hàng rồi hãy gửi duyệt')
+  }
+  // NCC bị khoá SAU khi đơn đã soạn: chặn ở cửa gửi duyệt, không để lên bàn GĐ.
+  const sup = await assertSupplierCanOrder(before.supplier_id)
+  // Đơn sàn (0279): GĐ phải biết mua của shop nào.
+  if (sup.is_marketplace) {
+    const why = guiDuyetSanLoi(before)
+    if (why) throw BadRequest(why)
+  }
+  assertCoViec(before)
+  /**
+   * BẮT BUỘC HẸN GIAO. Không có `expected_at` thì `assessPoLate` và
+   * `assessPoFit` đều trả null: đơn không bao giờ đỏ "quá hẹn", không lên đèn
+   * "Trễ SX", không vào ô đếm nào — im lặng tuyệt đối đúng lúc cần kêu nhất.
+   * Chặn ở cửa gửi duyệt (không phải lúc lưu nháp) để người soạn vẫn ghi dở
+   * được, nhưng thứ đặt lên bàn Giám đốc thì luôn có mốc để đối chiếu.
+   */
+  if (!before.expected_at) {
+    throw BadRequest(
+      'Đơn chưa có hẹn giao — điền "Thời gian giao hàng" rồi mới gửi duyệt được (thiếu mốc thì cảnh báo trễ hàng bỏ qua đơn này)',
     )
   }
 }
@@ -326,6 +362,22 @@ export async function approverIds(excludeUserId: string): Promise<string[]> {
   return [...ids]
 }
 
+/**
+ * TRƯỞNG PHÒNG CUNG ỨNG (05/11/2026 — bước "đã xem" trước Giám đốc): người có
+ * permission `supply.lead` THẬT. Loại admin (vai admin được seed đủ mọi quyền —
+ * không lọc là IT / Giám đốc lọt vào) và tài khoản đã xoá / khoá.
+ */
+export async function leadIds(): Promise<string[]> {
+  const [withPerm, users] = await Promise.all([
+    rbacRepo.userIdsWithPermission('supply.lead'),
+    usersRepo.list(),
+  ])
+  const ok = new Set(
+    users.filter((u) => u.role !== 'admin' && u.is_active !== false).map((u) => u.id),
+  )
+  return withPerm.filter((id) => ok.has(id))
+}
+
 /** Điều khoản/chữ ký bỏ trống → lấy mặc định của mẫu, để phiếu in không rỗng. */
 function withTemplateDefaults(input: PoInput, template: PoTemplate) {
   const meta = poTemplateMeta(template)
@@ -401,7 +453,11 @@ async function saveDraftShipments(
  * thao tác đã báo người cần biết. Không nuốt lỗi: với huỷ đơn, đây là nơi DUY
  * NHẤT còn giữ lý do.
  */
-async function traceReason(user: User, poId: string, body: string | null): Promise<void> {
+export async function traceReason(
+  user: User,
+  poId: string,
+  body: string | null,
+): Promise<void> {
   if (!body) return
   await docNotesRepo.create(
     { doc_type: 'po', doc_id: poId, author_id: user.id, audience: 'internal', body },
@@ -584,45 +640,31 @@ export const posService = {
    * GỬI GĐ DUYỆT (0116): draft → pending_approval, và CHỈ lúc này mới notify
    * người duyệt — emit `po.submitted` chuyển từ create() sang đây.
    */
-  async submit(user: User, id: string): Promise<Po> {
+  async submit(user: User, id: string, opts: { note?: string | null } = {}): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     await assertPoOwner(user, before)
-    if (before.status !== 'draft') {
-      throw BadRequest('Chỉ đơn nháp mới gửi duyệt được')
-    }
-    if ((await posRepo.listLines(id)).length === 0) {
-      throw BadRequest('Đơn chưa có dòng vật tư nào — thêm hàng rồi hãy gửi duyệt')
-    }
-    // NCC bị khoá SAU khi đơn đã soạn: chặn ở cửa gửi duyệt, không để lên bàn GĐ.
-    const sup = await assertSupplierCanOrder(before.supplier_id)
-    // Đơn sàn (0279): GĐ phải biết mua của shop nào.
-    if (sup.is_marketplace) {
-      const why = guiDuyetSanLoi(before)
-      if (why) throw BadRequest(why)
-    }
-    assertCoViec(before)
-    /**
-     * BẮT BUỘC HẸN GIAO. Không có `expected_at` thì `assessPoLate` và
-     * `assessPoFit` đều trả null: đơn không bao giờ đỏ "quá hẹn", không lên đèn
-     * "Trễ SX", không vào ô đếm nào — im lặng tuyệt đối đúng lúc cần kêu nhất.
-     * Chặn ở cửa gửi duyệt (không phải lúc lưu nháp) để người soạn vẫn ghi dở
-     * được, nhưng thứ đặt lên bàn Giám đốc thì luôn có mốc để đối chiếu.
-     */
-    if (!before.expected_at) {
-      throw BadRequest(
-        'Đơn chưa có hẹn giao — điền "Thời gian giao hàng" rồi mới gửi duyệt được (thiếu mốc thì cảnh báo trễ hàng bỏ qua đơn này)',
-      )
-    }
-    const [supplier, lsx] = await Promise.all([
+    await assertGuiDuyetDuoc(before)
+    const [supplier, lsx, leads, approvers] = await Promise.all([
       suppliersRepo.findById(before.supplier_id),
       before.production_order_id
         ? productionRepo.findById(before.production_order_id)
         : Promise.resolve(null),
+      leadIds(),
+      approverIds(user.id),
     ])
     const po = await posRepo.patch(id, { status: 'pending_approval' })
 
+    /*
+     * TRƯỞNG PHÒNG XEM TRÊN NHÁP (luồng chốt 05/11/2026 chiều, 0294): đường
+     * thường là NV "Gửi trưởng phòng xem" (`poReviewService.requestReview`) rồi
+     * trưởng phòng "Đã xem — trình GĐ" — tức chính hàm này do trưởng phòng gọi,
+     * kèm ghi chú. Trưởng phòng / quản trị gửi thì tính luôn là đã xem.
+     * NV gọi thẳng hàm này = "Gửi thẳng GĐ" (khi cần, không bắt lý do): Giám đốc
+     * được báo ngay, trưởng phòng được báo để biết (`po_sent_direct`).
+     */
+    const tuXem = user.role === 'admin' || leads.includes(user.id)
     await emit({
       name: 'po.submitted',
       po_id: po.id,
@@ -630,8 +672,21 @@ export const posService = {
       supplier_name: supplier?.name ?? '—',
       lsx_code: lsx?.code ?? null,
       submitted_by: user.id,
-      approver_ids: await approverIds(user.id),
+      approver_ids: approvers,
+      lead_ids: tuXem ? [] : leads,
     })
+    // Ghi SAU emit: handler audit vừa ghi dòng `submitted`, dấu "đã xem" phải
+    // đứng sau nó mới có hiệu lực (lib/po-review `reviewMark`).
+    if (tuXem) {
+      await approvalEventsRepo.log({
+        entity_type: 'po',
+        entity_id: po.id,
+        entity_code: po.code,
+        action: 'reviewed',
+        actor_id: user.id,
+        reason: opts.note?.trim() || null,
+      })
+    }
     return po
   },
 
@@ -649,12 +704,14 @@ export const posService = {
       throw BadRequest('Chỉ đơn đang chờ duyệt mới rút về nháp được')
     }
     const po = await posRepo.patch(id, { status: 'draft' })
+    // 05/11/2026: báo cả trưởng phòng — đơn có thể đang nằm trong "Chờ tôi xem".
+    const [approvers, leads] = await Promise.all([approverIds(user.id), leadIds()])
     await emit({
       name: 'po.withdrawn',
       po_id: po.id,
       code: po.code,
       withdrawn_by: user.id,
-      approver_ids: await approverIds(user.id),
+      approver_ids: [...new Set([...approvers, ...leads])].filter((x) => x !== user.id),
     })
     return po
   },
@@ -877,6 +934,14 @@ export const posService = {
      * Chặn duyệt vì Kế toán chưa nhập tỷ giá là bắt Cung ứng chờ một việc
      * không phải của họ.
      */
+    /*
+     * DUYỆT KHI TRƯỞNG PHÒNG CHƯA XEM (05/11/2026, chủ dự án chốt): vẫn duyệt
+     * được, nhưng dòng vết ký mang dấu tường minh và trưởng phòng được báo. Phòng
+     * không có trưởng phòng nào thì không có bước xem — không đánh dấu.
+     */
+    const leads = decision === 'approve' ? await leadIds() : []
+    const chuaXem =
+      leads.length > 0 && !reviewMark(await approvalEventsRepo.listByEntity('po', id))
     const fxDate = todayVn()
     const fxRate = decision === 'approve' ? await fxRatesRepo.rateAt(before.currency, fxDate) : null // prettier-ignore
     const po = await posRepo.patch(
@@ -904,7 +969,8 @@ export const posService = {
       decision: decision === 'approve' ? 'approved' : 'rejected',
       decided_by: user.id,
       owner_id: before.assigned_to ?? before.created_by,
-      reason,
+      reason: chuaXem ? [DUYET_KHI_CHUA_XEM, reason?.trim()].filter(Boolean).join(' · ') : reason, // prettier-ignore
+      unreviewed_lead_ids: chuaXem ? leads.filter((x) => x !== user.id) : [],
     })
     return po
   },

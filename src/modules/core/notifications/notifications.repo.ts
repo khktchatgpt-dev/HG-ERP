@@ -33,6 +33,12 @@ export type NotificationType =
   | 'po_answered'
   | 'po_urgent_sent'
   | 'po_issue'
+  // 0293 — trưởng phòng Cung ứng xem đơn trước Giám đốc (lib/po-review).
+  | 'po_review_requested'
+  | 'po_sent_direct'
+  | 'po_reviewed'
+  | 'po_returned'
+  | 'po_approved_unreviewed'
   // 0251 — hàng sắp về cho Kho (B8b): NCC xác nhận hẹn ≤ 3 ngày · dời hẹn.
   | 'po_inbound_soon'
   | 'po_inbound_moved'

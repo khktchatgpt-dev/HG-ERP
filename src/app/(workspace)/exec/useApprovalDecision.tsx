@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
+import { canhBaoChuaXem, chuaXem } from '@/lib/po-review'
 import { Button } from '@/components/shadcn/button'
 import { Textarea } from '@/components/shadcn/textarea'
 import {
@@ -37,6 +38,11 @@ export type DecideTarget = {
   id: string
   code: string
   label: string
+  /**
+   * Câu cần đọc TRƯỚC khi bấm Duyệt — bày màu cảnh báo trong hộp xác nhận. Hiện
+   * dùng cho đơn mua trưởng phòng CƯ chưa xem (0293): ký được, nhưng nói trước.
+   */
+  canhBao?: string
 }
 
 /** Tên loại phiếu trong tiêu đề dialog. */
@@ -86,13 +92,16 @@ export function targetQuote(
   return { kind: 'quote', id: q.id, code: q.code, label: q.customer_name }
 }
 export function targetPo(
-  p: Pick<PendingPo, 'id' | 'code' | 'supplier_name' | 'lsx_code'>,
+  p: Pick<PendingPo, 'id' | 'code' | 'supplier_name' | 'lsx_code' | 'truong_phong'>,
 ): DecideTarget {
   return {
     kind: 'po',
     id: p.id,
     code: p.code,
     label: `${p.supplier_name} · ${p.lsx_code ? `LSX ${p.lsx_code}` : 'ngoài LSX'}`,
+    canhBao: chuaXem(p.truong_phong)
+      ? canhBaoChuaXem(p.truong_phong?.ten ?? null)
+      : undefined,
   }
 }
 
@@ -272,6 +281,11 @@ export function useApprovalDecision(onSettled?: () => void) {
               {approveTarget?.label}.{' '}
               {approveTarget ? APPROVE_UNLOCKS[approveTarget.kind] : ''}
             </AlertDialogDescription>
+            {approveTarget?.canhBao && (
+              <p className="text-sm font-semibold text-[var(--warn)]">
+                {approveTarget.canhBao}
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Huỷ</AlertDialogCancel>
@@ -289,8 +303,8 @@ export function useApprovalDecision(onSettled?: () => void) {
               Ký {manyTargets?.length ?? 0} phiếu một lượt?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {manyTargets?.map((t) => t.code).join(', ')}. Phiếu giá trị lớn không nằm
-              trong danh sách này — loại đó phải mở ra ký riêng.
+              {manyTargets?.map((t) => t.code).join(', ')}. Phiếu giá trị lớn và đơn
+              trưởng phòng chưa xem không nằm trong danh sách này — phải mở ra ký riêng.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

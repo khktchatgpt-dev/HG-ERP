@@ -19,6 +19,7 @@ import {
   Circle,
   CircleDollarSign,
   ClipboardCheck,
+  Eye,
   ClipboardList,
   Container,
   Factory,
@@ -122,6 +123,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   table: Table,
   'tower-control': TowerControl,
   stamp: Stamp,
+  // "Chờ tôi xem" — trưởng phòng Cung ứng xem đơn trước Giám đốc (05/11/2026).
+  eye: Eye,
   'building-2': Building2,
   'key-round': KeyRound,
   library: Library,

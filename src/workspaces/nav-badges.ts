@@ -18,6 +18,7 @@ import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
 import { demLenhChoSoatKhongCho } from '@/modules/dept/supply/lenh-doi.service'
+import { poReviewService } from '@/modules/dept/supply/po-review.service'
 import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import type { User } from '@/modules/core/users/users.repo'
 import type { NavBadge, WorkspaceId } from './workspaces.config'
@@ -220,6 +221,16 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
     ])
     const n = pend.total + dnm
     if (n > 0) out['/mua-hang/cho-ky'] = n
+  }
+  /*
+    "CHỜ TÔI XEM" (05/11/2026) — trưởng phòng Cung ứng: mọi nháp (trừ nháp vừa bị
+    trả lại chưa sửa) + đơn NV gửi thẳng GĐ mà anh CHƯA xem.
+    Cùng người thấy mục menu (capability `supply.review`: supply.lead, không
+    admin) và cùng phép đếm với hộp (`choXemCount` ↔ `choXem`).
+  */
+  if (user.role !== 'admin' && (await canAction(user, 'supply.po.manage_any'))) {
+    const n = await poReviewService.choXemCount()
+    if (n > 0) out['/mua-hang/cho-xem'] = n
   }
   if (todo > 0) out['/mua-hang/hop-thu'] = todo
   if (ganVe > 0) out['/mua-hang/theo-doi'] = ganVe

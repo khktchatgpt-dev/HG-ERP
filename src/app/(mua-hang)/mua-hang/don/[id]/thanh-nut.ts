@@ -13,6 +13,29 @@
  * ánh xạ khoá → nhãn, icon, hành động và lý do khoá.
  */
 
+import type { IcoName } from '@/components/kit'
+
+/** Icon của từng việc `actionsFor` trên thanh — dời khỏi useDonChungTu (trần cỡ file). */
+export const DOC_ICON: Record<string, IcoName> = {
+  submit: 'gui',
+  review: 'duyet',
+  return_review: 'traLai',
+  submit_direct: 'gui',
+  approve: 'duyet',
+  send: 'gui',
+  withdraw: 'traLai',
+  reject: 'traLai',
+  nudge: 'ghiChu',
+  reschedule: 'lich',
+  edit_terms: 'sua',
+  reopen: 'mo',
+  urgent_send: 'gui',
+  reassign: 'gui',
+  duplicate: 'saoChep',
+  cancel: 'huy',
+  delete: 'xoa',
+}
+
 /** `doc:<id>` = việc từ `actionsFor` (actions.ts); còn lại là việc của màn. */
 export type BarKey =
   | `doc:${string}`
@@ -54,9 +77,11 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
 
   const primary: BarKey | null =
     status === 'draft'
-      ? doc('submit')
+      ? // trưởng phòng trình nháp → gửi duyệt; NV (chỉ có "gửi thẳng") thì KHÔNG có bước kế
+        (doc('review') ?? doc('submit'))
       : status === 'pending_approval'
-        ? (doc('approve') ?? doc('withdraw')) // người soạn không có quyền duyệt: rút về nháp để sửa
+        ? // trưởng phòng CƯ chưa xem (0293) → người duyệt → người soạn: rút về nháp để sửa
+          (doc('review') ?? doc('approve') ?? doc('withdraw'))
         : status === 'approved'
           ? doc('send')
           : // Đơn đã gửi NCC: bước kế là "Xử lý giao nhận" — mở hộp Giao nhận
@@ -72,9 +97,9 @@ export function barLayout(status: string, docIds: readonly string[]): BarLayout 
   */
   const quickWanted: (BarKey | null)[] =
     status === 'draft'
-      ? [canEdit ? 'edit' : null, 'print']
+      ? [canEdit ? 'edit' : null, doc('return_review'), 'print']
       : status === 'pending_approval'
-        ? [doc('withdraw'), doc('reject'), 'print']
+        ? [doc('return_review'), doc('withdraw'), doc('reject'), 'print']
         : status === 'approved'
           ? [doc('edit_terms'), 'print']
           : status === 'ordered'
@@ -135,6 +160,8 @@ export type MoveGroup = 'Đi tiếp' | 'Quay lại' | 'Dừng'
 
 const MOVES: Partial<Record<BarKey, MoveGroup>> = {
   'doc:submit': 'Đi tiếp',
+  'doc:submit_direct': 'Đi tiếp',
+  'doc:review': 'Đi tiếp',
   'doc:approve': 'Đi tiếp',
   'doc:send': 'Đi tiếp',
   'doc:urgent_send': 'Đi tiếp',
@@ -143,6 +170,7 @@ const MOVES: Partial<Record<BarKey, MoveGroup>> = {
   closeShort: 'Đi tiếp',
   'doc:withdraw': 'Quay lại',
   'doc:reject': 'Quay lại',
+  'doc:return_review': 'Quay lại',
   'doc:reopen': 'Quay lại',
   'doc:cancel': 'Dừng',
   'doc:delete': 'Dừng',

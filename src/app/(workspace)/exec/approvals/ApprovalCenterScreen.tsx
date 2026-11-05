@@ -2,7 +2,7 @@
 
 import './hop-ky.css'
 import Link from 'next/link'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ExternalLink, History, Info, Undo2 } from 'lucide-react'
 import { useBeRong } from '@/lib/use-be-rong'
@@ -20,6 +20,7 @@ import {
   type PhongTrinh,
 } from '@/lib/loai-phieu-duyet'
 import { searchMatcher } from '@/lib/search-text'
+import { canhBaoChuaXem, chuaXem } from '@/lib/po-review'
 // `money` dùng CHUNG với trang chi tiết duyệt — hai màn nói cùng một con số.
 import { money } from '../approval-helpers'
 import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
@@ -60,7 +61,8 @@ import { HopKyHep } from './hop-ky-hep'
  * Thêm loại phiếu: khai ở `LOAI_PHIEU`, màn tự có ô đếm + khối.
  *
  * BA LUẬT GIỮ NGUYÊN:
- *  · phiếu GIÁ TRỊ LỚN / lệnh SX / chờ ký bù không có ô tích — mở ra đọc, ký riêng;
+ *  · phiếu GIÁ TRỊ LỚN / lệnh SX / chờ ký bù / đơn TRƯỞNG PHÒNG CHƯA XEM (0293 ·
+ *    Q1) không có ô tích — mở ra đọc, ký riêng;
  *  · ký nhiều phiếu gọi tuần tự, phiếu lỗi nằm lại trong hộp;
  *  · màn rỗng phải nói THẬT vì sao rỗng (đã ký hết ↔ chưa ai lập phiếu).
  */
@@ -196,13 +198,17 @@ export function ApprovalCenterScreen({
   /* Lưới chỉ có ĐÚNG MỘT loại → cột thật của loại đó (sign-row · cotHopKy). */
   const cacLoai = [...new Set(items.map((i) => i.kind))]
   const loaiDon = cacLoai.length === 1 ? cacLoai[0] : null
-  const cot = cotHopKy(rong, loaiDon)
+  /* Cột + nhóm "Trưởng phòng" chỉ khi có đơn mua phải qua trưởng phòng CƯ xem
+     (0293 · B3) — chưa ai giữ vai thì hộp y như trước. */
+  const coTp = items.some((i) => !!i.po?.tp)
+  const cot = cotHopKy(rong, loaiDon, coTp)
 
   const target = (i: SignItem): DecideTarget => ({
     kind: i.kind,
     id: i.id,
     code: i.code,
     label: `${i.party} · ${i.facts[0] ?? ''}`,
+    canhBao: chuaXem(i.po?.tp) ? canhBaoChuaXem(i.po?.tp?.ten ?? null) : undefined,
   })
   const pickedKeys = new Set(picked.map(itemKey))
   const sel = items.find((i) => itemKey(i) === pick) ?? null
@@ -555,19 +561,36 @@ export function ApprovalCenterScreen({
                     </th>
                   </tr>
                   {g.loai && !loaiDon && <KhoiDauCot loai={g.loai} cot={cot} />}
-                  {g.rows.map((i) => (
-                    <SignRow
-                      cot={cot}
-                      key={itemKey(i)}
-                      i={i}
-                      today={today}
-                      trongGap={g.key === 'gap'}
-                      selected={itemKey(i) === pick}
-                      checked={pickedKeys.has(itemKey(i))}
-                      onPick={() => setPick(itemKey(i))}
-                      onToggle={() => toggle(i)}
-                    />
-                  ))}
+                  {(g.loai === 'po' && coTp
+                    ? chiaTheoTp(g.rows)
+                    : [{ key: 'all', dau: null, rows: g.rows }]
+                  ).map((d) =>
+                    // prettier-ignore
+                    <Fragment key={d.key}>
+                      {d.dau && (
+                        <tr className={`grp con ${d.dau.lop}`}>
+                          <th scope="rowgroup" colSpan={cot.length}>
+                            <span className="ten">{d.dau.ten}</span> ·{' '}
+                            <b className="hk-num">{d.rows.length}</b>
+                            {d.dau.them}
+                          </th>
+                        </tr>
+                      )}
+                      {d.rows.map((i) => (
+                        <SignRow
+                          cot={cot}
+                          key={itemKey(i)}
+                          i={i}
+                          today={today}
+                          trongGap={g.key === 'gap'}
+                          selected={itemKey(i) === pick}
+                          checked={pickedKeys.has(itemKey(i))}
+                          onPick={() => setPick(itemKey(i))}
+                          onToggle={() => toggle(i)}
+                        />
+                      ))}
+                    </Fragment>,
+                  )}
                 </tbody>
               )
             })}
@@ -596,7 +619,16 @@ export function ApprovalCenterScreen({
           {' · '}
           {gom === 'loai' ? 'gom theo loại phiếu' : 'gom theo người trình'}
         </span>
-        <span>khoá = giá trị lớn / lệnh SX / ký bù — mở ra đọc, ký riêng</span>
+        <span>
+          khoá = giá trị lớn / lệnh SX / ký bù
+          {coTp && (
+            <>
+              {' / '}
+              <b className="hk-warn">trưởng phòng chưa xem</b>
+            </>
+          )}{' '}
+          — mở ra đọc, ký riêng
+        </span>
         <span style={{ marginLeft: 'auto' }}>
           {items.length} / {box.stats.total} phiếu
         </span>
@@ -605,6 +637,27 @@ export function ApprovalCenterScreen({
       {dialogs}
     </div>
   )
+}
+
+/**
+ * Khối đơn mua chia nhóm con theo bước trưởng phòng (bản vẽ khung 3): đơn không
+ * qua bước xem (chờ ký bù) đứng đầu không tiêu đề, rồi "đã xem", rồi "chưa xem".
+ * Giữ thứ tự sẵn có trong từng nhóm (phiếu gấp đã được xếp lên đầu).
+ */
+function chiaTheoTp(rows: SignItem[]) {
+  return [
+    { key: 'khong', dau: null, rows: rows.filter((i) => !i.po?.tp) },
+    {
+      key: 'da',
+      dau: { lop: 'lp-tp-ok', ten: 'Trưởng phòng đã xem', them: '' },
+      rows: rows.filter((i) => !!i.po?.tp?.da_xem),
+    },
+    {
+      key: 'chua',
+      dau: { lop: 'lp-tp-wn', ten: 'Trưởng phòng chưa xem', them: ' · mở ra đọc, ký riêng' }, // prettier-ignore
+      rows: rows.filter((i) => chuaXem(i.po?.tp)),
+    },
+  ].filter((d) => d.rows.length > 0)
 }
 
 /**

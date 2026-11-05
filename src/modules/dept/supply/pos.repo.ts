@@ -746,6 +746,62 @@ export const posRepo = {
   },
 
   /**
+   * GIÁ CÁC LẦN MUA TRƯỚC của một nhóm vật tư ở một nhóm NCC — cho cột "Giá đơn
+   * trước · cùng NCC" trong ô xem nhanh của trưởng phòng (05/11/2026, Q6). Cùng
+   * ranh giới với `priceHistoryByMaterial` (Tra giá): chỉ đơn từ 'ordered' trở
+   * đi — giá trên đơn nháp / chờ duyệt chưa phải giá chốt. Chọn lần gần nhất ở
+   * lib/po-review `giaTruocCungNcc`.
+   */
+  async pricesForSuppliers(
+    supplierIds: string[],
+    materialIds: string[],
+  ): Promise<
+    {
+      supplier_id: string
+      material_id: string
+      po_id: string
+      po_code: string
+      unit_price: number
+      at: string
+    }[]
+  > {
+    if (supplierIds.length === 0 || materialIds.length === 0) return []
+    const { data, error } = await db()
+      .from('supply_purchase_order_lines')
+      .select(
+        'material_id, unit_price, po:supply_purchase_orders!inner(id, code, supplier_id, status, ordered_at, created_at)',
+      )
+      .in('material_id', materialIds)
+      .in('po.supplier_id', supplierIds)
+      .in('po.status', ['ordered', 'confirmed', 'in_transit', 'partial', 'received'])
+      .not('unit_price', 'is', null)
+      .limit(3000)
+    if (error) throw new Error(error.message)
+    type P = {
+      id: string
+      code: string
+      supplier_id: string
+      ordered_at: string | null
+      created_at: string
+    }
+    type Raw = { material_id: string; unit_price: number; po: P | P[] | null }
+    return ((data ?? []) as unknown as Raw[]).flatMap((r) => {
+      const po = Array.isArray(r.po) ? r.po[0] : r.po
+      if (!po) return []
+      return [
+        {
+          supplier_id: po.supplier_id,
+          material_id: r.material_id,
+          po_id: po.id,
+          po_code: po.code,
+          unit_price: Number(r.unit_price),
+          at: po.ordered_at ?? po.created_at,
+        },
+      ]
+    })
+  },
+
+  /**
    * Vật tư đã mua từ 1 NCC — gộp theo vật tư: tổng SL đã đặt + GIÁ MUA GẦN NHẤT.
    * Loại đơn đã huỷ. Dùng cho tab "Vật tư đã mua" ở chi tiết NCC (phân tích mua).
    */
@@ -1360,6 +1416,27 @@ export const posRepo = {
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Update PO failed')
     return data as Po
+  },
+
+  /**
+   * Sửa CÓ ĐIỀU KIỆN trạng thái (05/11/2026): chỉ ghi khi đơn còn ở một trong
+   * `from` — hai người bấm cùng lúc (trưởng phòng trả lại đúng lúc Giám đốc
+   * duyệt) thì người sau nhận null thay vì ghi đè. `patch` thường không kiểm.
+   */
+  async patchFrom(
+    id: string,
+    from: Po['status'][],
+    patch: Partial<Po>,
+  ): Promise<Po | null> {
+    const { data, error } = await db()
+      .from('supply_purchase_orders')
+      .update(patch)
+      .eq('id', id)
+      .in('status', from)
+      .select(COLS)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return (data as Po | null) ?? null
   },
 
   async delete(id: string): Promise<void> {

@@ -182,11 +182,18 @@ export function demTheoPhong<T extends { kind: LoaiPhieu }>(
   }))
 }
 
-/** Ký nhanh được phiếu này không — luật của LOẠI + giá trị lớn + ký bù. */
+/**
+ * Ký nhanh được phiếu này không — luật của LOẠI + giá trị lớn + ký bù + đơn mua
+ * mà TRƯỞNG PHÒNG CHƯA XEM (Q1, 05/11/2026: mở ra đọc, ký riêng — như đơn lớn).
+ * `po.tp` null/thiếu = không áp (chưa ai giữ vai trưởng phòng).
+ */
 export function kyNhanhDuoc(i: {
   kind: LoaiPhieu
   big: boolean
   late_sign?: unknown | null
+  // Chỉ đọc `tp`; chữ ký chỉ mục để mọi hình `po` khác (eta_late_days…) lọt vào.
+  po?: ({ tp?: { da_xem: unknown } | null } & Record<string, unknown>) | null
 }) {
-  return LOAI_PHIEU[i.kind].kyNhanh && !i.big && !i.late_sign
+  const chuaXem = !!i.po?.tp && !i.po.tp.da_xem
+  return LOAI_PHIEU[i.kind].kyNhanh && !i.big && !i.late_sign && !chuaXem
 }

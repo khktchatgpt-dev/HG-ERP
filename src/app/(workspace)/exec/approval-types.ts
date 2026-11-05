@@ -1,5 +1,6 @@
 import { type PoLine } from '@/app/(mua-hang)/mua-hang/don/_lib/po-types'
 import type { PoQuestionThread } from '@/lib/po-signature'
+import type { TruongPhongXem } from '@/lib/po-review'
 import type { PoLineTemplateFields } from '@/modules/dept/supply/pos.repo'
 
 /**
@@ -104,6 +105,11 @@ export type PendingPo = {
   owner_name?: string | null
   /** Lần gửi duyệt CUỐI (approval_events) — "chờ n ngày" tính từ đây. */
   submitted_at?: string | null
+  /**
+   * Trưởng phòng CƯ đã xem chưa (0293 · B3). Chỉ có khi đơn CHỜ DUYỆT và có
+   * người giữ vai trưởng phòng; null/thiếu = không áp (không dải, không dòng).
+   */
+  truong_phong?: TruongPhongXem | null
   terms?: {
     payment: string | null
     lead_time: string | null

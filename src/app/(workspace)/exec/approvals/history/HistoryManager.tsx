@@ -20,6 +20,8 @@ type EvAction =
   | 'reopened'
   | 'unapproved'
   | 'urgent_sent'
+  | 'reviewed'
+  | 'returned'
 
 /** Đơn mua hiện đang ở đâu (0218) — nhãn đã dịch sẵn ở server. */
 export type PoNow = Record<string, string>
@@ -73,6 +75,9 @@ const ACTION_META: Record<
   // 0218 — gỡ chữ ký (đơn chưa gửi NCC) và đi tắt qua chữ ký (gửi gấp).
   unapproved: { label: 'Thu hồi chữ ký', tone: 'amber' },
   urgent_sent: { label: 'Gửi gấp chưa ký', tone: 'red' },
+  // 0293 (05/11/2026) — trưởng phòng Cung ứng xem trước Giám đốc.
+  reviewed: { label: 'Trưởng phòng đã xem', tone: 'blue' },
+  returned: { label: 'Trưởng phòng trả lại', tone: 'amber' },
 }
 
 const fmtDateTime = (d: string) =>

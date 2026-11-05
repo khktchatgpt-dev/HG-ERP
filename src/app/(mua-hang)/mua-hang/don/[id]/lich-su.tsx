@@ -2,11 +2,13 @@
 
 import { FastTab, Timeline } from '@/components/kit'
 import { PoDocuments } from './PoDocuments'
+import { LichSuKy } from './lich-su-ky'
 import type { DonCtx } from './useDonChungTu'
 
 /** Khối `blkTimeline` của màn chứng từ đơn mua. */
 export function DongThoiGian({ d }: { d: DonCtx }) {
-  const { po, viewMode, marks } = d
+  const { po, viewMode, marks, p } = d
+  const vet = p.signEvents ?? []
   return (
     <>
       {po && (
@@ -24,6 +26,17 @@ export function DongThoiGian({ d }: { d: DonCtx }) {
           ]}
         >
           <Timeline marks={marks} />
+        </FastTab>
+      )}
+      {/* Lịch sử ký (0293 · B4): ai gửi, trưởng phòng xem / trả lại, ai duyệt. */}
+      {po && (
+        <FastTab
+          id="lich-su-ky"
+          fixed={viewMode}
+          title="Lịch sử ký"
+          summary={[['Mốc', <span key="v" className="num">{vet.length}</span>]]} // prettier-ignore
+        >
+          <LichSuKy events={vet} />
         </FastTab>
       )}
     </>

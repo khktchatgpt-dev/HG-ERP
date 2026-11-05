@@ -1,4 +1,5 @@
 import { hadSendStep, type PoStatus } from '@/lib/po-status'
+import { ngayGioVn } from '@/lib/date-vn'
 
 export { hadSendStep }
 
@@ -50,6 +51,36 @@ export type PoLike = {
    * duyệt. Thiếu thì lùi về `updated_at`, vốn bị MỌI lượt sửa đặt lại đồng hồ.
    */
   submitted_at?: string | null
+  /**
+   * Bước TRƯỞNG PHÒNG CƯ XEM khi đơn chờ duyệt (0293, 05/11/2026). null/thiếu =
+   * không áp (chưa ai giữ vai). `reviewed_at` có = bóng đã sang Giám đốc.
+   */
+  review?: {
+    lead_ids: string[]
+    lead_name: string | null
+    reviewed_at: string | null
+    /** Nháp bị trả lại mà NV chưa sửa — bóng ở NV (lib/po-review `traLaiNhap`). */
+    tra_lai_at?: string | null
+    /** Nháp còn thiếu điều kiện trình (lib/po-review `lyDoChuaTrinh`) — bóng ở NV. */
+    thieu?: string | null
+  } | null
+}
+
+/** Bóng ở TRƯỞNG PHÒNG CƯ (0293/0294) — với chính anh ấy là "đến lượt bạn". */
+function choTruongPhongGiu(
+  r: NonNullable<PoLike['review']>,
+  since: string | null,
+  meId: string | null,
+): Holder {
+  const mine = !!meId && r.lead_ids.includes(meId)
+  return {
+    who: mine
+      ? (r.lead_name ?? 'Trưởng phòng Cung ứng')
+      : `Trưởng phòng Cung ứng${r.lead_name ? ` · ${r.lead_name}` : ''}`,
+    what: 'Xem rồi trình Giám đốc',
+    since,
+    mine,
+  }
 }
 
 /**
@@ -60,22 +91,57 @@ export type PoLike = {
  */
 export function poHolder(po: PoLike, meId: string | null): Holder {
   switch (po.status) {
-    case 'draft':
+    case 'draft': {
+      /*
+        LUỒNG CHỐT 05/11/2026 chiều (không có mốc "gửi trưởng phòng"): nháp đủ
+        điều kiện là nằm ở bàn trưởng phòng; còn thiếu / vừa bị trả lại thì bóng
+        ở người soạn, câu việc nói rõ phải làm gì.
+      */
+      const r = po.review
+      const nv = !!meId && (po.assigned_to === meId || po.created_by === meId)
+      if (r?.tra_lai_at)
+        return {
+          who: 'Cung ứng',
+          what: 'Sửa theo lý do trưởng phòng trả lại — lưu xong đơn quay lại bàn trưởng phòng',
+          since: r.tra_lai_at,
+          mine: nv,
+        }
+      if (r?.thieu)
+        return {
+          who: 'Cung ứng',
+          what: `Soạn tiếp (${r.thieu.split(' — ')[0].split('. ')[0].toLowerCase()}) — đủ thì trưởng phòng xem, trình Giám đốc`,
+          since: po.updated_at ?? po.created_at ?? null,
+          mine: nv,
+        }
+      if (r) return choTruongPhongGiu(r, po.updated_at ?? po.created_at ?? null, meId)
       return {
         who: 'Cung ứng',
         what: 'Soạn xong thì gửi Giám đốc duyệt',
         since: po.updated_at ?? po.created_at ?? null,
-        mine: !!meId && (po.assigned_to === meId || po.created_by === meId),
+        mine: nv,
       }
-    case 'pending_approval':
+    }
+    case 'pending_approval': {
+      /*
+        TRƯỞNG PHÒNG XEM TRƯỚC (0293): chưa xem thì bóng ở trưởng phòng CƯ — với
+        chính anh ấy là "đến lượt bạn". Xem rồi thì bóng sang Giám đốc, đếm giờ
+        từ lúc xem. Giám đốc vẫn duyệt được khi chưa xem — "đang giữ" chỉ nói
+        ai nên động vào trước.
+      */
+      const r = po.review
+      if (r && !r.reviewed_at)
+        return choTruongPhongGiu(r, po.submitted_at ?? po.updated_at ?? null, meId)
       return {
         who: 'Giám đốc',
-        what: 'Chờ Giám đốc duyệt hoặc từ chối',
-        since: po.submitted_at ?? po.updated_at ?? null,
+        what: r?.reviewed_at
+          ? `Trưởng phòng đã xem ${ngayGioVn(r.reviewed_at).slice(0, 5)} ${ngayGioVn(r.reviewed_at).slice(11)} — chờ Giám đốc duyệt`
+          : 'Chờ Giám đốc duyệt hoặc từ chối',
+        since: r?.reviewed_at ?? po.submitted_at ?? po.updated_at ?? null,
         // Người soạn KHÔNG phải người giữ bóng ở bước này — nói "đến lượt
         // bạn" với họ là đẩy họ đi giục nhầm chỗ.
         mine: false,
       }
+    }
     case 'approved':
       return {
         who: 'Cung ứng',

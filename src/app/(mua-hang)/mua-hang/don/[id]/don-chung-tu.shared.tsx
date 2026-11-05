@@ -60,6 +60,8 @@ export type PoDoc = {
   code: string
   /** Lần gửi duyệt cuối — dải "ai giữ" đếm ngày chờ duyệt từ đây. */
   submitted_at?: string | null
+  /** Bước trưởng phòng CƯ xem (0293) khi đơn chờ duyệt — `poHolder` đọc. */
+  review?: { lead_ids: string[]; lead_name: string | null; reviewed_at: string | null; tra_lai_at?: string | null; thieu?: string | null } | null // prettier-ignore
   status: string
   template: PoTemplate
   supplier_id: string
@@ -216,7 +218,11 @@ export type Props = {
     lead?: boolean
     /** Ghi / huỷ phiếu chi phí mua hàng (0211) — Cung ứng + Kế toán. */
     canRecordCost?: boolean
+    /** Bước trưởng phòng CƯ (0293/0294) — xem `Perm.tp` ở actions.ts. */
+    tp?: { toi: boolean; minh: boolean; daXem: boolean }
   }
+  /** Lịch sử ký của đơn (approval_events), cũ nhất trước — khối "Lịch sử ký". */
+  signEvents?: { action: string; actor_name: string | null; created_at: string; reason: string | null }[] // prettier-ignore
   me: { id: string; name: string }
   seed?: { supplierId?: string; lsxId?: string; projectId?: string }
   /** NHÂN BẢN: đầu đơn của đơn gốc (lines truyền qua `lines`, đã bỏ id). */

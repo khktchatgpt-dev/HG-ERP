@@ -189,7 +189,45 @@ export type DomainEvent =
       supplier_name: string
       lsx_code: string | null // null = PO ngoài LSX (0076)
       submitted_by: string
+      /**
+       * Người duyệt báo NGAY (`po_submitted`). Từ 05/11/2026 rỗng khi đơn còn
+       * phải qua trưởng phòng Cung ứng — Giám đốc được báo lúc trưởng phòng đã
+       * xem (`po.reviewed`).
+       */
       approver_ids: string[]
+      /**
+       * NV GỬI THẲNG GĐ (bỏ qua trưởng phòng xem trên nháp, 0294) → báo
+       * trưởng phòng để biết (`po_sent_direct`). Rỗng khi trưởng phòng / quản trị
+       * tự gửi (tính luôn là đã xem).
+       */
+      lead_ids: string[]
+    }
+
+  /**
+   * TRƯỞNG PHÒNG ĐÃ XEM — TRÌNH GĐ (05/11/2026). Dòng vết `reviewed` do service
+   * ghi trực tiếp (nó là trạng thái, không được nuốt lỗi); sự kiện này chỉ báo
+   * người duyệt.
+   */
+  | {
+      name: 'po.reviewed'
+      po_id: string
+      code: string
+      supplier_name: string
+      reviewed_by: string
+      note: string | null
+      approver_ids: string[]
+    }
+  /**
+   * TRƯỞNG PHÒNG TRẢ LẠI ĐỂ SỬA (05/11/2026): chờ duyệt → nháp, lý do bắt buộc.
+   * Vết `returned` (khác `rejected` của Giám đốc) + báo người phụ trách đơn.
+   */
+  | {
+      name: 'po.returned'
+      po_id: string
+      code: string
+      returned_by: string
+      reason: string
+      owner_id: string | null
     }
   | {
       name: 'po.decided'
@@ -204,6 +242,11 @@ export type DomainEvent =
        */
       owner_id: string | null
       reason?: string
+      /**
+       * Giám đốc DUYỆT khi trưởng phòng Cung ứng CHƯA xem (05/11/2026) — báo
+       * những người này (`po_approved_unreviewed`). Rỗng / thiếu = không báo.
+       */
+      unreviewed_lead_ids?: string[]
     }
   // Rút đơn CHỜ DUYỆT về nháp để sửa (0128 — 6.2b): báo người duyệt khỏi
   // duyệt nhầm bản cũ trong thông báo.

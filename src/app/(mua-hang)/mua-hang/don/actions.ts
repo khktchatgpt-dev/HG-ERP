@@ -2,6 +2,7 @@ import { canReschedule } from '@/lib/po-reschedule'
 import { cancelBlock } from '@/lib/po-guards'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 import { guiDuyetSanLoi } from '@/lib/mua-san'
+import { LY_DO_TRA_LAI_TOI_THIEU } from '@/lib/po-review'
 
 /**
  * HÀNH ĐỘNG THEO BƯỚC — chép Action Pane của Dynamics 365: bày ĐỦ hành động của
@@ -52,6 +53,18 @@ export type Perm = {
    * Xem `sanCua`.
    */
   san?: { shop: string | null }
+  /**
+   * BƯỚC TRƯỞNG PHÒNG CƯ XEM (0293 + luồng 0294). Thiếu = không áp: chưa ai giữ
+   * vai trưởng phòng, hoặc người xem là admin / GĐ (đi đường cũ).
+   */
+  tp?: {
+    /** Người xem CHÍNH LÀ trưởng phòng CƯ. */
+    toi: boolean
+    /** Đơn của chính người xem (phụ trách / người lập) — trưởng phòng tự lập thì gửi như cũ. */
+    minh: boolean
+    /** Đơn chờ duyệt đã có dấu "trưởng phòng đã xem". */
+    daXem: boolean
+  }
 }
 
 export type ActionId =
@@ -79,6 +92,11 @@ export type ActionId =
   | 'close_short'
   /** Đơn sàn (0279): ghi mã đơn sàn + tiền đã trả — hộp riêng ở màn chứng từ. */
   | 'place_san'
+  /** Trưởng phòng CƯ (0293): đã xem — trình GĐ / trả lại để sửa. */
+  | 'review'
+  | 'return_review'
+  /** NV (0294): gửi thẳng GĐ, bỏ qua trưởng phòng xem — cùng route `submit`. */
+  | 'submit_direct'
 
 export type Action = {
   id: ActionId
@@ -93,6 +111,8 @@ export type Action = {
   danger?: boolean
   href?: (id: string) => string
   needReason?: boolean
+  /** Ô chữ KHÔNG bắt buộc (ghi chú) — bày như ô lý do nhưng để trống vẫn bấm được. */
+  optReason?: boolean
   /** Độ dài lý do tối thiểu (mặc định 1) — khớp hàng rào zod ở server, chặn
    *  ngay ở nút thay vì để server dội lỗi về sau khi người dùng đã bấm. */
   minReason?: number
@@ -131,6 +151,44 @@ export type Action = {
  * rồi mới gọi `confirm`. Không chạy hàng loạt — mỗi đơn một mã, một số tiền.
  */
 const DAT_TREN_SAN = (blocked?: string): Action => ({ id: 'place_san', label: 'Đặt trên sàn', primary: true, ui: 'sheet', stakes: 'vua', blocked }) // prettier-ignore
+
+/**
+ * TRƯỞNG PHÒNG CƯ XEM ĐƠN (0293) — đường ghi ở `po-review.service`. Ghi chú cho
+ * Giám đốc KHÔNG bắt buộc (Q3); trả lại thì bắt lý do ≥ 5 ký tự.
+ */
+const REVIEW = (tu: 'draft' | 'pending_approval'): Action => ({
+  id: 'review',
+  label: 'Đã xem — trình GĐ',
+  primary: true,
+  ui: 'sheet',
+  stakes: 'nhe',
+  optReason: true,
+  reasonLabel: 'Ghi chú cho Giám đốc (không bắt buộc)',
+  reasonHint: 'Ví dụ: giá giữ như đơn trước cùng NCC. Để trống cũng được.',
+  consequence:
+    'Đơn vẫn Chờ duyệt. Giám đốc nhận thông báo và thấy dấu "trưởng phòng đã xem" kèm ghi chú.',
+  confirmLabel: 'Đã xem — trình GĐ',
+  done: 'Đã trình GĐ',
+  build: ({ id, reason }) => [
+    { path: `/api/dept/supply/pos/${id}/review`, method: 'POST', body: { note: reason || null, tu } }, // prettier-ignore
+  ],
+})
+const RETURN_REVIEW = (tu: 'draft' | 'pending_approval'): Action => ({
+  id: 'return_review',
+  label: 'Trả lại để sửa',
+  ui: 'sheet',
+  stakes: 'vua',
+  needReason: true,
+  minReason: LY_DO_TRA_LAI_TOI_THIEU,
+  reasonLabel: 'Cần sửa gì',
+  reasonHint: 'Người lập đọc câu này để sửa — nói rõ thiếu gì, sai gì.',
+  consequence:
+    'Đơn về nháp kèm lý do, giữ nguyên số phiếu — không lên bàn Giám đốc. Người lập sửa rồi gửi lại.',
+  done: 'Đã trả lại để sửa',
+  build: ({ id, reason }) => [
+    { path: `/api/dept/supply/pos/${id}/return`, method: 'POST', body: { reason, tu } },
+  ],
+})
 
 const OPEN: Action = { id: 'open', label: 'Mở đơn đầy đủ', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}` } // prettier-ignore
 const EDIT = (blocked?: string): Action => ({ id: 'edit', label: 'Sửa đơn', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}?sua=1`, blocked }) // prettier-ignore
@@ -333,22 +391,40 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
   const notCancel = (perm.hasReceipts ? cancelBlock(status, 1) : null) ?? notOwn
 
   switch (status) {
-    case 'draft':
+    case 'draft': {
+      /*
+        LUỒNG CHỐT 05/11/2026 chiều: NV lập NHÁP, KHÔNG có nút gửi chính — trưởng
+        phòng xem mọi nháp rồi "Đã xem — trình GĐ" / "Trả lại để sửa". "Gửi thẳng
+        Giám đốc" (không bắt lý do) nằm trong Chuyển trạng thái cho lúc cần.
+        Trưởng phòng tự lập, hoặc không áp bước (`tp` thiếu: admin, chưa ai giữ
+        vai trưởng phòng) → như cũ.
+      */
+      const tp = perm.tp
+      const nv = !!tp && !tp.toi
+      const tpTrinh = !!tp && tp.toi && !tp.minh
+      const sanLoi = perm.san ? (guiDuyetSanLoi({ marketplace_shop: perm.san.shop }) ?? undefined) : undefined // prettier-ignore
       return [
-        {
-          id: 'submit',
-          label: 'Gửi Giám đốc duyệt',
-          primary: true,
-          ui: 'sheet',
-          stakes: 'vua',
-          blocked: notOwn ?? (perm.san ? (guiDuyetSanLoi({ marketplace_shop: perm.san.shop }) ?? undefined) : undefined), // prettier-ignore
-          consequence: 'Gửi rồi thì không sửa được cho tới khi Giám đốc quyết, hoặc bạn rút về nháp. Đơn còn thiếu thông tin sẽ bị chặn và báo tên.', // prettier-ignore
-          done: 'Đã gửi duyệt',
-          bulk: true,
-          build: ({ id }) => [
-            { path: `/api/dept/supply/pos/${id}/submit`, method: 'POST' },
-          ],
-        },
+        ...(tpTrinh ? [REVIEW('draft'), RETURN_REVIEW('draft')] : []),
+        ...(tpTrinh
+          ? []
+          : [
+              {
+                id: nv ? ('submit_direct' as const) : ('submit' as const),
+                label: nv ? 'Gửi thẳng Giám đốc' : 'Gửi Giám đốc duyệt',
+                primary: nv ? undefined : true,
+                ui: 'sheet',
+                stakes: 'vua',
+                blocked: notOwn ?? sanLoi,
+                consequence: nv
+            ? 'Đơn lên bàn Giám đốc ngay, CHƯA qua trưởng phòng xem — Giám đốc thấy "trưởng phòng chưa xem", trưởng phòng được báo. Gửi rồi thì không sửa được cho tới khi Giám đốc quyết, hoặc bạn rút về nháp.' // prettier-ignore
+            : 'Gửi rồi thì không sửa được cho tới khi Giám đốc quyết, hoặc bạn rút về nháp. Đơn còn thiếu thông tin sẽ bị chặn và báo tên.', // prettier-ignore
+                done: 'Đã gửi duyệt',
+                bulk: !nv,
+                build: ({ id }: { id: string }) => [
+                  { path: `/api/dept/supply/pos/${id}/submit`, method: 'POST' as const },
+                ],
+              } satisfies Action,
+            ]),
         EDIT(notOwn),
         URGENT_SEND(perm),
         DUP,
@@ -358,6 +434,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         CANCEL('Đơn nháp thì xoá hẳn, không cần huỷ'),
         OPEN,
       ]
+    }
 
     case 'pending_approval': {
       /*
@@ -371,7 +448,14 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         như cũ. Luật server không đổi (withdraw: người phụ trách / quản lý mọi đơn).
       */
       const chiRut = perm.own && !perm.approve
+      /*
+        TRƯỞNG PHÒNG CƯ CHƯA XEM (0293, bản vẽ khung 5·B): với anh ấy nút chính
+        là "Đã xem — trình GĐ", cạnh đó "Trả lại để sửa". Anh ấy không có quyền
+        duyệt nên `chiRut` cũng đúng — "Rút về nháp" lùi vào Chuyển trạng thái.
+      */
+      const xem = !!perm.tp?.toi && !perm.tp.daXem
       return [
+        ...(xem ? [REVIEW('pending_approval'), RETURN_REVIEW('pending_approval')] : []),
         ...(chiRut
           ? []
           : [
@@ -403,7 +487,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         {
           id: 'withdraw',
           label: 'Rút về nháp để sửa',
-          primary: chiRut || undefined,
+          primary: (chiRut && !xem) || undefined,
           ui: 'sheet',
           stakes: 'vua',
           blocked: notOwn,

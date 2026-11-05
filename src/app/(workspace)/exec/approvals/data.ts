@@ -18,6 +18,8 @@ import { poAdjustmentsRepo } from '@/modules/dept/supply/po-adjustments.repo'
 import { threadsOf } from '@/modules/dept/supply/po-signature.service'
 import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { poReviewService } from '@/modules/dept/supply/po-review.service'
+import { truongPhongXem } from '@/lib/po-review'
 import { poLineAmount, poMoneyOf } from '@/lib/po-line'
 import { isBigApprovalWith } from '@/lib/exec-ops'
 import { properName } from '@/lib/po-list-labels'
@@ -60,6 +62,7 @@ export async function loadPoApprovalDetail(
     extraLsx,
     files,
     pj,
+    tpCtx,
   ] = await Promise.all([
     posRepo.listLines(id),
     po.created_by
@@ -84,6 +87,10 @@ export async function loadPoApprovalDetail(
     filesRepo.listByParent('purchase_order_id', id),
     // Hạng mục (0230): số của nó TRỪ chính đơn này — lib/hang-muc, cùng hàm trang Hạng mục.
     po.project_id ? projectsService.summary(po.project_id) : Promise.resolve(null),
+    // Trưởng phòng CƯ xem (0293 · B3) — chỉ đơn còn chờ duyệt; cùng hàm với hộp ký.
+    po.status === 'pending_approval'
+      ? poReviewService.truongPhongCho([id])
+      : Promise.resolve(null),
   ])
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
   const pjTruoc = pj
@@ -167,6 +174,12 @@ export async function loadPoApprovalDetail(
     // Tên gõ tay trong danh mục người dùng có khi viết thường ("nguyễn đình huy").
     owner_name: properName(po.assignee_name) || null,
     submitted_at: submitted?.created_at ?? null,
+    truong_phong: truongPhongXem(
+      tpCtx,
+      id,
+      submitted?.created_at ?? po.created_at,
+      Date.now(),
+    ),
     terms: {
       payment: blank(po.terms_payment),
       lead_time: blank(po.terms_lead_time),

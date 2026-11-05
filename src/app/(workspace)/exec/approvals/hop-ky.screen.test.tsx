@@ -122,3 +122,55 @@ describe('Hộp ký — tab ngang theo phòng', () => {
     expect(screen.getByText(/Còn 5 phiếu ở phòng khác/)).toBeTruthy()
   })
 })
+
+describe('Hộp ký — trưởng phòng đã xem / chưa xem (0293 · B3)', () => {
+  const tp = (daXem: boolean) => ({
+    ten: 'Đỗ Ngọc Hiếu',
+    cho_phut: 25,
+    da_xem: daXem
+      ? { by: 'u-lead', by_name: 'Đỗ Ngọc Hiếu', at: '2026-11-05T02:15:00Z', note: 'Giá giữ như 0228' } // prettier-ignore
+      : null,
+  })
+  const coTp = (x: Partial<SignItem>, daXem: boolean) =>
+    po({ ...x, po: { supplier_short: 'NCC', loai: null, materials: ['Xốp'], lsx_code: null, expected_at: '2026-11-16', eta_late_days: 0, lsx_done: false, tp: tp(daXem) } }) // prettier-ignore
+  const ds: SignItem[] = [
+    coTp({ id: 'a', code: 'PO-2026-0240' }, true),
+    coTp({ id: 'b', code: 'PO-2026-0236' }, false),
+  ]
+  const dungTp = () =>
+    render(
+      <ToastProvider>
+        <ApprovalCenterScreen
+          box={{ ...box, items: ds, stats: { ...box.stats, total: ds.length } }}
+          initialKind="all"
+        />
+      </ToastProvider>,
+    )
+
+  it('khối đơn mua chia "đã xem" rồi "chưa xem"; có cột Trưởng phòng', () => {
+    dungTp()
+    expect(nhom()).toEqual([
+      'Đơn mua NCC',
+      'Trưởng phòng đã xem',
+      'Trưởng phòng chưa xem',
+    ])
+    expect(screen.getByRole('columnheader', { name: 'Trưởng phòng' })).toBeTruthy()
+    expect(screen.getByText('chưa xem ·', { exact: false }).textContent).toBe(
+      'chưa xem · 25′',
+    )
+    expect(screen.getByRole('img', { name: 'Ghi chú: Giá giữ như 0228' })).toBeTruthy()
+  })
+
+  it('đơn chưa xem không có ô ký nhanh (Q1) — khoá nói vì sao', () => {
+    dungTp()
+    expect(screen.getByRole('checkbox', { name: 'Chọn phiếu PO-2026-0240 để ký nhanh' })).toBeTruthy() // prettier-ignore
+    expect(screen.queryByRole('checkbox', { name: /PO-2026-0236/ })).toBeNull()
+    expect(screen.getByLabelText('Trưởng phòng chưa xem — mở ra đọc rồi ký riêng')).toBeTruthy() // prettier-ignore
+  })
+
+  it('chưa có trưởng phòng (tp null) → không cột, không nhóm con', () => {
+    dung()
+    expect(screen.queryByRole('columnheader', { name: 'Trưởng phòng' })).toBeNull()
+    expect(nhom()).toEqual(['Đơn mua NCC'])
+  })
+})

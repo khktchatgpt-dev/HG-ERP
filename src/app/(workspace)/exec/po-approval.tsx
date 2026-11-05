@@ -25,6 +25,8 @@ import {
 import { PoLineGrid } from './po-approval-lines'
 import { ShipmentPlan, shipmentsAfterShip } from './po-approval-giao'
 import { poTemplateMeta, isPoTemplate } from '@/lib/po-template'
+import { vetKyDong } from '@/lib/po-review'
+import { TruongPhongBand, TruongPhongKv } from './po-approval-tp'
 import type { ApprovalNav, PendingPo } from './approval-types'
 import {
   QuestionThreads,
@@ -321,6 +323,13 @@ export function PoApprovalBody({
         )}
       </div>
 
+      {/* ── DẢI 2a: TRƯỞNG PHÒNG ĐÃ XEM / CHƯA XEM (0293 · B3) ─────────────
+          Chưa xem KHÔNG khoá nút Phê duyệt (chủ dự án 05/11) — chỉ nói trước
+          chuyện gì xảy ra nếu ký bây giờ. */}
+      {deciding && p.truong_phong && (
+        <TruongPhongBand tp={p.truong_phong} submittedAt={p.submitted_at ?? null} />
+      )}
+
       {/* ── DẢI 2b: CHỮ KÝ — đơn đã ký / đã gửi / gửi gấp chờ ký bù (0218) ─ */}
       <SignatureBand p={p} dec={dec} mode={mode} />
 
@@ -349,6 +358,9 @@ export function PoApprovalBody({
               rows={[
                 ['Người lập', p.created_by_name ?? <Muted key="l">không ghi (đơn nạp từ file)</Muted>], // prettier-ignore
                 ['Phụ trách', p.owner_name ?? <Muted key="o">chưa giao</Muted>],
+                ...(p.truong_phong
+                  ? [['Trưởng phòng', <TruongPhongKv key="tp" tp={p.truong_phong} />] as [string, React.ReactNode]] // prettier-ignore
+                  : []),
                 [
                   'Lập ngày',
                   <span key="d" className="num">
@@ -681,18 +693,6 @@ function lsxPoSummary(l: NonNullable<PendingPo['lsx']>): string {
   return `${l.pos_total} đơn: ${parts.join(', ')}`
 }
 
-const EVENT_LABEL: Record<string, { label: string; tone?: 'done' | 'warn' | 'stop' }> = {
-  submitted: { label: 'Gửi duyệt' },
-  approved: { label: 'Giám đốc duyệt', tone: 'done' },
-  rejected: { label: 'Trả lại để sửa', tone: 'stop' },
-  withdrawn: { label: 'Rút về nháp', tone: 'warn' },
-  reassigned: { label: 'Đổi người phụ trách' },
-  reopened: { label: 'Mở lại đơn đã duyệt', tone: 'warn' },
-  // 0218
-  unapproved: { label: 'Thu hồi chữ ký', tone: 'warn' },
-  urgent_sent: { label: 'Gửi NCC gấp, chưa ký', tone: 'stop' },
-}
-
 /**
  * Đường đi của đơn: lập → các mốc duyệt đã có (kể cả lần trả lại + lý do) →
  * các mốc CHƯA tới theo chỗ đơn đang đứng. Bày cả phần chưa tới thì người ký
@@ -701,9 +701,11 @@ const EVENT_LABEL: Record<string, { label: string; tone?: 'done' | 'warn' | 'sto
 function trackMarks(p: PendingPo, mode: SignMode) {
   // Chữ ký đứng SAU mốc gửi gấp là chữ ký bù — gọi đúng tên việc đã xảy ra.
   const urgentAt = (p.events ?? []).find((e) => e.action === 'urgent_sent')?.created_at
+  const chuaXemTp = !!p.truong_phong && !p.truong_phong.da_xem
   const future =
     mode === 'decide'
       ? [
+          ...(chuaXemTp ? [{ key: 'review', at: null, label: 'Trưởng phòng xem' }] : []),
           { key: 'sign', at: null, label: 'Giám đốc ký' },
           { key: 'send', at: null, label: 'Cung ứng gửi đơn cho NCC' },
         ]
@@ -720,17 +722,21 @@ function trackMarks(p: PendingPo, mode: SignMode) {
       // Không mượn tên người phụ trách: đơn nạp từ file KHÔNG có người lập thật.
       actor: p.created_by_name ?? null,
     },
-    ...(p.events ?? []).map((e, i) => ({
-      key: `e${i}`,
-      at: e.created_at,
-      label:
-        e.action === 'approved' && urgentAt && e.created_at > urgentAt
-          ? 'Giám đốc ký bù'
-          : (EVENT_LABEL[e.action]?.label ?? e.action),
-      actor: e.actor_name,
-      detail: e.reason,
-      tone: EVENT_LABEL[e.action]?.tone,
-    })),
+    ...(p.events ?? []).map((e, i) => {
+      // Nhãn dùng chung với Lịch sử ký ở trang đơn Cung ứng (lib/po-review).
+      const v = vetKyDong(e)
+      return {
+        key: `e${i}`,
+        at: e.created_at,
+        label:
+          e.action === 'approved' && urgentAt && e.created_at > urgentAt
+            ? 'Giám đốc ký bù'
+            : v.label,
+        actor: e.actor_name,
+        detail: v.detail,
+        tone: v.tone,
+      }
+    }),
     ...future,
   ]
 }

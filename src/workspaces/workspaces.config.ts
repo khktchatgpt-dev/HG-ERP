@@ -29,6 +29,11 @@ export type NavCapability =
   | 'production.team'
   /** Có quyền DUYỆT ĐƠN MUA (`supply.po.approve`) — thấy "Chờ tôi ký" bên Mua hàng. */
   | 'supply.approve'
+  /**
+   * TRƯỞNG PHÒNG CUNG ỨNG (`supply.lead`, không tính admin) — thấy "Chờ tôi xem":
+   * xem đơn trước khi lên bàn Giám đốc (05/11/2026).
+   */
+  | 'supply.review'
   /** Giao được việc (`tasksService.canGive`) — thấy "Việc tôi giao" ở nhóm VIỆC (B2, 05/11/2026). */
   | 'tasks.give'
   /** Có nhận việc (`tasksService.canReceive`) — khối BGĐ không, nên không có "Việc của tôi". */
@@ -562,6 +567,17 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Nghiệp vụ',
         items: [
           { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home' },
+          /*
+            CHỜ TÔI XEM (05/11/2026, bản vẽ RcqWLU7F1z33btAR97gZBo) — trưởng
+            phòng Cung ứng xem nháp NV lập rồi trình Giám đốc. Số đếm = đúng số
+            dòng của hộp (`poReviewService.choXemCount`).
+          */
+          {
+            href: '/mua-hang/cho-xem',
+            label: 'Chờ tôi xem',
+            icon: 'eye',
+            capability: 'supply.review',
+          },
           /*
             CHỜ TÔI KÝ (27/09/2026) — MỘT hộp ký chung với Ban Giám đốc
             (execService.signBox), chỉ hiện cho người có quyền duyệt đơn mua

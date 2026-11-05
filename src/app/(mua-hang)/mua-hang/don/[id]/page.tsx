@@ -19,6 +19,9 @@ import { poFinanceForPo } from '@/modules/dept/accounting/supplier-invoices.serv
 import { poTrackingService } from '@/modules/dept/supply/po-tracking.service'
 import { todayIso } from '@/app/(mua-hang)/mua-hang/_data/watch'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { poReviewService } from '@/modules/dept/supply/po-review.service'
+import { properName } from '@/lib/po-list-labels'
+import { lyDoChuaTrinh, traLaiNhap } from '@/lib/po-review'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { toCostRow } from '../../van-chuyen/van-chuyen.shared'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
@@ -99,7 +102,7 @@ export default async function Page({
 
   const [
     [supplyStaff, canManageAny, canApprove, canRecordCost, canInvoice, canIssue, { rows: suppliers }, lsxs, company, tpl, lastTemplates, taxes, users, shops], // prettier-ignore
-    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, submittedAt, lsxLastChange, hmOpts], // prettier-ignore
+    [position, supplier, facts, stockRows, shipments, shipmentReceipts, receiptBatches, adjustments, costs, finance, tracking, links, signEvents, lsxLastChange, hmOpts, tpCtx], // prettier-ignore
   ] = await Promise.all([
     indep,
     Promise.all([
@@ -126,12 +129,9 @@ export default async function Page({
       poTrackingService.forPo(user, po.id),
       // Đơn bổ sung ↔ đơn gốc (0213).
       posRepo.supplementLinks(po),
-      // Mốc gửi duyệt cuối — dải "ai giữ" đếm ngày chờ duyệt từ đây (27/09/2026).
-      po.status === 'pending_approval'
-        ? approvalEventsRepo
-            .lastSubmittedAt('po', [po.id])
-            .then((m) => m.get(po.id) ?? null)
-        : Promise.resolve(null),
+      // Sổ vết ký của đơn: khối "Lịch sử ký" + mốc gửi duyệt cuối (dải "ai giữ"
+      // đếm ngày chờ duyệt từ đây, 27/09/2026).
+      approvalEventsRepo.listByEntity('po', po.id),
       // Lần đổi dòng SP gần nhất của đơn khách theo lệnh đơn đang gắn — hộp
       // "Nguyên nhân" khi điều chỉnh bày để đối chiếu (0227). Hỏng thì bỏ qua.
       ordersRepo
@@ -152,8 +152,28 @@ export default async function Page({
       po.status === 'draft'
         ? projectsService.options(po.project_id)
         : Promise.resolve(undefined),
+      // Trưởng phòng CƯ xem — nháp (0294: đang chờ anh?) + chờ duyệt (0293: đã xem?).
+      po.status === 'pending_approval' || po.status === 'draft'
+        ? poReviewService.truongPhongCho([po.id])
+        : Promise.resolve(null),
     ]),
   ])
+  const submittedAt =
+    po.status === 'pending_approval'
+      ? (signEvents.filter((e) => e.action === 'submitted').at(-1)?.created_at ?? null)
+      : null
+  const review = tpCtx
+    ? {
+        lead_ids: tpCtx.ids,
+        lead_name: tpCtx.ten,
+        reviewed_at: po.status === 'pending_approval' ? (tpCtx.marks.get(po.id)?.at ?? null) : null, // prettier-ignore
+        // Nháp (luồng chốt 05/11 chiều — không có mốc gửi trưởng phòng): bị trả lại mà
+        // chưa sửa thì bóng ở NV; còn thiếu điều kiện trình thì bóng ở NV; đủ thì ở
+        // trưởng phòng. Cùng hai hàm thuần hộp "Chờ tôi xem" dùng.
+        tra_lai_at: po.status === 'draft' ? ((t) => (t && !t.da_sua ? t.at : null))(traLaiNhap(signEvents, po.updated_at)) : null, // prettier-ignore
+        thieu: po.status === 'draft' ? lyDoChuaTrinh({ so_dong: lines.length, expected_at: po.expected_at ?? null, production_order_id: po.production_order_id, project_id: po.project_id ?? null, marketplace_shop: po.marketplace_shop ?? null, ncc: supplier }) : null, // prettier-ignore
+      }
+    : null
   const stock: Record<string, number> = {}
   for (const r of stockRows) stock[r.material_id] = r.on_hand
 
@@ -197,7 +217,8 @@ export default async function Page({
       payers={users.map((u) => ({ id: u.id, name: u.name ?? u.email }))}
       mode={sp.sua === '1' && canEdit && po.status === 'draft' ? 'edit' : 'view'}
       today={todayIso()}
-      po={{ ...po, submitted_at: submittedAt }}
+      po={{ ...po, submitted_at: submittedAt, review }}
+      signEvents={signEvents.map((e) => ({ action: e.action, actor_name: properName(e.actor_name) || null, created_at: e.created_at, reason: e.reason }))} // prettier-ignore
       lines={lines}
       statusLines={status_lines}
       extraLsx={extra_lsx}
@@ -225,6 +246,8 @@ export default async function Page({
         privileged: manageAny || canApprove,
         lead: user.role === 'admin' || manageAny,
         canRecordCost: user.role === 'admin' || canRecordCost,
+        // Bước trưởng phòng (0293/0294) — admin / GĐ đi đường cũ, không áp.
+        tp: user.role !== 'admin' && review ? { toi: review.lead_ids.includes(user.id), minh: (po.assigned_to ?? po.created_by) === user.id, daXem: !!review.reviewed_at } : undefined, // prettier-ignore
       }}
       me={{ id: user.id, name: user.name ?? user.email }}
     />

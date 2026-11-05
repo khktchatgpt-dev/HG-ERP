@@ -145,6 +145,21 @@ describe('splitForStatusBar — chuyển trạng thái về thanh trạng thái 
     expect(s.moves.map((m) => m.key)).not.toContain('doc:withdraw')
   })
 
+  it('trưởng phòng CƯ chưa xem (0293): bước kế tiếp "Đã xem — trình GĐ"; trả lại / rút về ở Quay lại', () => {
+    const s = splitForStatusBar(barLayout('pending_approval', ['review', 'return_review', 'withdraw', 'duplicate', 'reassign'])) // prettier-ignore
+    expect(s.next).toBe('doc:review')
+    expect(s.moves.filter((m) => m.group === 'Quay lại').map((m) => m.key)).toEqual(['doc:return_review', 'doc:withdraw']) // prettier-ignore
+  })
+
+  it('nháp (05/11 chiều): NV không có bước kế, "Gửi thẳng Giám đốc" vào Đi tiếp; trưởng phòng → "Đã xem — trình GĐ"', () => {
+    const nv = splitForStatusBar(barLayout('draft', ['submit_direct', 'edit', 'duplicate'])) // prettier-ignore
+    expect(nv.next).toBeNull()
+    expect(nv.moves.filter((m) => m.group === 'Đi tiếp').map((m) => m.key)).toContain('doc:submit_direct') // prettier-ignore
+    const tp = splitForStatusBar(barLayout('draft', ['review', 'return_review', 'edit'])) // prettier-ignore
+    expect(tp.next).toBe('doc:review')
+    expect(tp.moves.map((m) => m.key)).toContain('doc:return_review')
+  })
+
   it('đơn đã về đủ: không bước kế tiếp; mọi mục của thanh cũ vẫn còn ở một trong ba chỗ', () => {
     const l = barLayout('received', ['duplicate', 'cancel'])
     const s = splitForStatusBar(l)

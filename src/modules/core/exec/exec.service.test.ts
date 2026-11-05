@@ -47,11 +47,16 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   canAction: vi.fn(),
 }))
+// 0293 · B3 — trưởng phòng CƯ xem đơn; mặc định chưa ai giữ vai (không áp).
+vi.mock('@/modules/dept/supply/po-review.service', () => ({
+  poReviewService: { truongPhongCho: vi.fn().mockResolvedValue(null) },
+}))
 vi.mock('@/modules/core/settings/settings.service', () => ({
   settingsService: { approvalThresholds: vi.fn() },
 }))
 
 import { execService } from './exec.service'
+import { poReviewService } from '@/modules/dept/supply/po-review.service'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
@@ -155,6 +160,35 @@ function mockLists(opts: {
     } as never)
     .mockResolvedValueOnce({ rows: [], total: opts.lsxTotal ?? 0 } as never)
 }
+
+describe('execService.signBox — trưởng phòng đã xem (0293 · B3)', () => {
+  it('chưa ai giữ vai trưởng phòng → tp null (không cột, không khoá ký nhanh)', async () => {
+    mockLists({ pos: [PO({ id: 'a', code: 'PO-A', created_at: daysAgo(0) })] })
+    const box = await execService.signBox(gd)
+    expect(box.items[0].po?.tp).toBeNull()
+  })
+
+  it('đơn chờ duyệt mang dấu đã xem / chưa xem; chỉ hỏi dấu của đơn CHỜ DUYỆT', async () => {
+    mockLists({
+      pos: [
+        PO({ id: 'xem', code: 'PO-XEM', created_at: daysAgo(1) }),
+        PO({ id: 'chua', code: 'PO-CHUA', created_at: daysAgo(1) }),
+      ],
+    })
+    const dau = { by: 'u-lead', by_name: 'Đỗ Ngọc Hiếu', at: daysAgo(0), note: 'Giá giữ' }
+    vi.mocked(poReviewService.truongPhongCho).mockResolvedValueOnce({
+      ten: 'Đỗ Ngọc Hiếu',
+      ids: ['u-lead'],
+      marks: new Map([['xem', dau]]),
+    })
+    const box = await execService.signBox(gd)
+    const by = new Map(box.items.map((i) => [i.code, i.po?.tp]))
+    expect(by.get('PO-XEM')).toMatchObject({ ten: 'Đỗ Ngọc Hiếu', da_xem: dau })
+    expect(by.get('PO-CHUA')).toMatchObject({ ten: 'Đỗ Ngọc Hiếu', da_xem: null })
+    expect(by.get('PO-CHUA')?.cho_phut).toBeGreaterThan(60 * 23)
+    expect(poReviewService.truongPhongCho).toHaveBeenCalledWith(['xem', 'chua'])
+  })
+})
 
 describe('execService.signBox — xếp phiếu', () => {
   it('CHỜ LÂU NHẤT đứng trước, không phải phiếu to nhất', async () => {

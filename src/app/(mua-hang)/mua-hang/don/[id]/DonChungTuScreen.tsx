@@ -901,7 +901,7 @@ export function DonChungTuScreen(p: Props) {
               <DateInput value={date} onChange={setDate} label="Ngày giao mới" />
             </label>
           )}
-          {sheet.action.needReason && (
+          {(sheet.action.needReason || sheet.action.optReason) && (
             <label className="block">
               <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
                 {sheet.action.reasonLabel}

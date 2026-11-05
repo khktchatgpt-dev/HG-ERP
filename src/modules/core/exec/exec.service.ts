@@ -22,6 +22,8 @@ import { docNotesRepo } from '@/modules/core/doc-notes/doc-notes.repo'
 import { properName, supplierShortName } from '@/lib/po-list-labels'
 import { isPoOfDoneLsx } from '@/lib/po-lsx-done'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { poReviewService } from '@/modules/dept/supply/po-review.service'
+import { truongPhongXem, type TruongPhongXem } from '@/lib/po-review'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 
 /**
@@ -236,6 +238,12 @@ export type SignItem = {
     lsx_done: boolean
     /** Đơn ngoài lệnh (0229): "Ngoài lệnh · Khuôn mẫu · QM-5858"; đơn theo lệnh: null. */
     ngoai_lenh?: string | null
+    /**
+     * Trưởng phòng CƯ đã xem chưa (0293 · B3). null = không áp: chưa ai giữ vai
+     * trưởng phòng, hoặc đơn chờ ký bù (đã đi trước chữ ký, không qua bước xem).
+     * Chưa xem → không có ô ký nhanh (Q1), GĐ vẫn mở ra ký riêng được.
+     */
+    tp?: TruongPhongXem | null
   }
 }
 
@@ -325,6 +333,7 @@ export const execService = {
       poMaterials,
       poExtraLsx,
       openQuestions,
+      tpCtx,
     ] = await Promise.all([
       posRepo.totalsByPoIds(poIds),
       ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
@@ -345,7 +354,10 @@ export const execService = {
       posRepo.materialNamesByPoIds(poIds),
       posRepo.extraLsxByPoIds(poIds),
       docNotesRepo.openQuestionsByDocs('po', poIds),
+      // Chỉ đơn CHỜ DUYỆT qua bước trưởng phòng xem; đơn chờ ký bù thì không.
+      poReviewService.truongPhongCho(pendingPos.rows.map((p) => p.id)),
     ])
+    const nowMs = Date.now()
 
     const items: SignItem[] = []
 
@@ -414,6 +426,9 @@ export const execService = {
           eta_late_days: lateDays != null && lateDays > 0 ? lateDays : 0,
           lsx_done: isPoOfDoneLsx({ ...p, extra_lsx: poExtraLsx.get(p.id) ?? [] }),
           ngoai_lenh: p.lsx_code ? null : nhanNgoaiLenh(p),
+          tp: lateSign
+            ? null
+            : truongPhongXem(tpCtx, p.id, poSubmitted.get(p.id) ?? p.created_at, nowMs),
         },
       })
     }

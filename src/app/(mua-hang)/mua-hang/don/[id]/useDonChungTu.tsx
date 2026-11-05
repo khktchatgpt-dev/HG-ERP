@@ -85,7 +85,7 @@ import {
 } from './soan-don'
 import { draftKeyFor, type SavedDraft } from './nhap-an-toan'
 import { useNhapAnToan } from './useNhapAnToan'
-import { barLayout, splitForStatusBar, type BarKey } from './thanh-nut'
+import { DOC_ICON, barLayout, splitForStatusBar, type BarKey } from './thanh-nut'
 import { phieuNhapCuoi, vuongPhieuKho } from './tong-quan'
 import { adjHeader, chenChietKhau } from './o-chiet-khau'
 
@@ -666,6 +666,7 @@ export function useDonChungTu(p: Props) {
         noEta: !po.expected_at,
         san: sanCua(po, p.suppliers),
         lead: perms.lead,
+        tp: perms.tp,
       })
     : []
   // prettier-ignore
@@ -804,23 +805,6 @@ export function useDonChungTu(p: Props) {
       )
     : null
 
-  const DOC_ICON: Record<string, IcoName> = {
-    submit: 'gui',
-    approve: 'duyet',
-    send: 'gui',
-    withdraw: 'traLai',
-    reject: 'traLai',
-    nudge: 'ghiChu',
-    reschedule: 'lich',
-    edit_terms: 'sua',
-    reopen: 'mo',
-    urgent_send: 'gui',
-    reassign: 'gui',
-    duplicate: 'saoChep',
-    cancel: 'huy',
-    delete: 'xoa',
-  }
-
   type BarItem = {
     label: string
     icon?: IcoName
@@ -834,7 +818,7 @@ export function useDonChungTu(p: Props) {
     if (k.startsWith('doc:')) {
       const a = docActions.find((x) => x.id === k.slice(4))
       if (!a) return null
-      const loi = a.id === 'submit' && blockers.length > 0 ? `Còn ${blockers.length} lỗi chặn — xem danh sách kiểm dưới đầu đơn` : undefined // prettier-ignore
+      const loi = (a.id === 'submit' || a.id === 'submit_direct' || (a.id === 'review' && po.status === 'draft')) && blockers.length > 0 ? `Còn ${blockers.length} lỗi chặn — xem danh sách kiểm dưới đầu đơn` : undefined // prettier-ignore
       return { label: a.label, icon: DOC_ICON[a.id], run: () => start(a), blocked: a.blocked ?? loi, danger: a.id === 'cancel' || a.id === 'delete' } // prettier-ignore
     }
     const lyDo = (x: { ok: boolean; why?: string }) => (x.ok ? undefined : x.why)
