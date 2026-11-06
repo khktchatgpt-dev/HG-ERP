@@ -667,8 +667,13 @@ là `production_transfers` (+`doc_id`, `received_qty`, `diff_reason`) với
 gốc — cảnh báo WIP cũ (0090) không đổi nghĩa. Năm con số xong · đã giao · đã nhận
 · tồn · khả dụng qua `wipNumbers` + `transferTotals` (lib/wip-numbers): phiếu
 đảo là số ÂM của phiếu gốc. Không bắt lập phiếu; ghi sổ chỉ cảnh báo vượt khả
-dụng. Cụm mặc nhiên chưa ghi sổ thì chưa có id để giao (lượt ghi đầu vật chất
-hoá nó).
+dụng. **Cụm mặc nhiên chưa ghi sổ VẪN giao được** (06/11/2026 — trước đó phải
+ghi sổ hàn trước mới có id, trong khi xưởng là hàng đi trước sổ): nguồn lập phiếu
+bày nó với id ảo `default-asm:<line>` + "xong" SUY từ sổ chi tiết (cùng
+`defaultAssemblyOutputs` với Ghi sản lượng), schema nhận id ảo, `create` vật chất
+hoá qua `default-assembly.materialize.ts` — MỘT hàm dùng chung với lượt ghi đầu
+của `entriesService.record`, đừng chép khối đó về lại service nào. Chi tiết bị
+gộp giao từ phôi có "đến" = mốc ghép (hàn), không phải trống.
 
 **Hồ sơ lệnh (B5, 03/11/2026)**: `/thongke/lsx/[id]` không kit, số từ
 `lsx-dossier.service.ts` — ba tầng (SP → thành phẩm / cụm → chi tiết) × công

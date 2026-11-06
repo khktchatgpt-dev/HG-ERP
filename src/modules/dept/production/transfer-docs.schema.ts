@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { defaultAssemblyLineId } from '@/lib/default-assembly'
 
 /**
  * PHIẾU GIAO TỔ (PGT, 0289) — B4 của docs/san-xuat-cau-hinh-thiet-ke.md.
@@ -8,6 +9,23 @@ import { z } from 'zod'
  */
 
 const stageCode = z.string().trim().min(1).max(50)
+
+/**
+ * id dòng giao: dòng thật (uuid) HOẶC cụm mặc nhiên chưa vật chất hoá
+ * (`default-asm:<uuid dòng SP>`, lib/default-assembly) — service sinh dòng
+ * thật lúc lập phiếu (06/11/2026), như Ghi sản lượng làm ở lượt ghi đầu.
+ */
+const lineComponentId = z
+  .string()
+  .trim()
+  .refine(
+    (v) =>
+      z
+        .string()
+        .uuid()
+        .safeParse(defaultAssemblyLineId(v) ?? v).success,
+    'id dòng giao không hợp lệ',
+  )
 
 export const transferDocCreateSchema = z
   .object({
@@ -21,7 +39,7 @@ export const transferDocCreateSchema = z
     lines: z
       .array(
         z.object({
-          component_id: z.string().uuid(),
+          component_id: lineComponentId,
           qty: z.coerce.number().positive('SL giao phải > 0'),
         }),
       )

@@ -122,8 +122,8 @@ export function LapPhieu({ d }: { d: GiaoNhanCtx }) {
         <div className="sx-fine">Đang tải dòng của lệnh…</div>
       ) : d.nguon.length === 0 ? (
         <div className="sx-fine">
-          Lệnh này không có dòng nào đi qua <b>{d.stageLabel(d.fromStage)}</b> — hoặc cụm
-          mặc nhiên chưa được ghi sổ lần nào (lượt ghi đầu mới sinh dòng để giao).
+          Lệnh này không có dòng nào đi qua <b>{d.stageLabel(d.fromStage)}</b> — chọn công
+          đoạn khác ở ô “Từ”, hoặc xem lộ trình của lệnh ở Lộ trình công đoạn.
         </div>
       ) : (
         <table className="sx-tb" style={{ tableLayout: 'fixed' }}>

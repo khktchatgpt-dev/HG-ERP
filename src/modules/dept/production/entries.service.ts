@@ -37,6 +37,7 @@ import {
   isFinishRow,
   isFinishRowId,
 } from '@/lib/finish-stages'
+import { materializeDefaultAssembly } from './default-assembly.materialize'
 import { fieldsForStage, stageFieldsRepo, type StageField } from './stage-fields.repo'
 import { transfersRepo } from './transfers.repo'
 import { outsourceRepo } from './outsource.repo'
@@ -299,65 +300,16 @@ export const entriesService = {
       const line = orderLines.find((l) => l.id === lineId)
       if (!line) throw BadRequest('Có dòng sổ gắn cụm mặc nhiên không thuộc lệnh này')
       const lineComps = components.filter((c) => c.production_order_line_id === lineId)
-      // Đã vật chất hoá (lượt ghi trước / màn khác vừa ghi) → dùng lại dòng
-      // thật. Loại dòng THÀNH PHẨM ra: nó cũng là assembly/cluster null nhưng
-      // bắt đầu ở lắp ráp — vớ nhầm nó thì sổ hàn ghi vào dòng đóng gói.
-      let real = lineComps.find(
-        (c) =>
-          c.kind === 'assembly' && c.cluster == null && !isFinishRow(c, counting.finish),
-      )
-      if (!real) {
-        const plan = resolveCountingPlan(lineComps, routeByLine.get(lineId), counting)
-        if (plan.virtual_stages.length === 0) {
-          throw BadRequest(
-            'Dòng SP này không (còn) cụm mặc nhiên — tải lại màn ghi sổ rồi ghi lại',
-          )
-        }
-        const absorbed = lineComps.filter((c) => plan.own_route.has(c.id))
-        const fields = {
-          production_order_id: lsxId,
-          production_order_line_id: lineId,
-          kind: 'assembly' as const,
-          cluster: null,
-          name: DEFAULT_ASSEMBLY_NAME,
-          // Kế thừa nhóm vật tư của chi tiết bị gộp (FRAME) — nhờ đó lộ trình
-          // của cụm suy được cả khi dòng chưa lên kế hoạch SX.
-          group_code: absorbed.find((c) => c.group_code)?.group_code ?? null,
-          unit: lineUnit(orderLines.find((l) => l.id === lineId)?.unit),
-          qty_per_unit: 1,
-          first_stage: plan.virtual_stages[0],
-          final_stage: plan.virtual_stages[plan.virtual_stages.length - 1],
-          note: null,
-        }
-        const newId = await componentsRepo.insertOne(fields)
-        await componentsRepo.setFinalStages(
-          absorbed.map((c) => ({
-            id: c.id,
-            final_stage: plan.own_route.get(c.id)![plan.own_route.get(c.id)!.length - 1],
-          })),
-        )
-        // Cập nhật ngữ cảnh đang cầm trên tay cho phần còn lại của lượt ghi.
-        for (const c of absorbed) {
-          c.final_stage = plan.own_route.get(c.id)![plan.own_route.get(c.id)!.length - 1]
-        }
-        real = {
-          ...fields,
-          id: newId,
-          stages: null,
-          material_id: null,
-          material_type: null,
-          spec_thickness_mm: null,
-          spec_width_mm: null,
-          spec_length_mm: null,
-          wall_thickness_mm: null,
-          dm_kg: null,
-          pcs_per_bar: null,
-          qty_per_assembly: null,
-          sort_order: 9999,
-          material_code: null,
-          material_name: null,
-          material_unit: null,
-        }
+      // Một hàm cho cả Ghi sản lượng lẫn Phiếu giao tổ (06/11/2026) — sửa tại
+      // chỗ final_stage của chi tiết bị gộp trong `components` đang cầm.
+      const { real, created } = await materializeDefaultAssembly({
+        lsxId,
+        line,
+        lineComps,
+        plannedRoute: routeByLine.get(lineId),
+        counting,
+      })
+      if (created) {
         components.push(real)
         byId.set(real.id, real)
         // Cụm 1/SP → tổng cần = SL đặt của dòng.

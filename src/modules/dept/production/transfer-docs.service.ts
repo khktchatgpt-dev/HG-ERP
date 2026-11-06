@@ -1,16 +1,25 @@
 import { transferDocsRepo, type TransferDoc } from './transfer-docs.repo'
 import { transfersRepo, type Transfer } from './transfers.repo'
-import { componentsRepo } from './components.repo'
+import { componentsRepo, type ComponentRow } from './components.repo'
 import { productionRepo } from './production.repo'
 import { entriesRepo } from './entries.repo'
 import { jobsRepo } from './jobs.repo'
-import { lsxLinesRepo } from './lsx-lines.repo'
+import { lsxLinesRepo, type LsxLine } from './lsx-lines.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
-import { countingOf } from '@/lib/stage-config'
+import { countingOf, type Counting } from '@/lib/stage-config'
 import { componentRoute } from '@/lib/stage-route'
-import { finishRouteOverride } from '@/lib/finish-stages'
-import { resolveCountingPlan } from '@/lib/default-assembly'
+import { finishRouteOverride, lineUnit } from '@/lib/finish-stages'
+import {
+  DEFAULT_ASSEMBLY_NAME,
+  defaultAssemblyId,
+  defaultAssemblyLineId,
+  defaultAssemblyOutputs,
+  isDefaultAssemblyId,
+  resolveCountingPlan,
+} from '@/lib/default-assembly'
+import { calcComponent } from '@/lib/component-needs'
+import { materializeDefaultAssembly } from './default-assembly.materialize'
 import { countsAsOfficial, type EntryDocStatus } from '@/lib/entry-doc-flow'
 import { totalKey, transferTotals, wipNumbers } from '@/lib/wip-numbers'
 import { vnTodayIso } from '@/lib/local-date'
@@ -93,6 +102,8 @@ export type TransferSourceRow = {
   on_hand: number
   /** Công đoạn kế tiếp trên lộ trình của dòng — gợi ý "đến". */
   next_stage: string | null
+  /** Cụm mặc nhiên chưa vật chất hoá (id ảo) — lập phiếu sẽ sinh dòng thật. */
+  virtual?: boolean
 }
 
 const isMgmt = (u: User) => u.role === 'admin' || u.role === 'manager'
@@ -104,6 +115,120 @@ async function loadLsx(lsxId: string) {
     throw BadRequest('Chỉ lập phiếu giao cho lệnh đã duyệt / đang sản xuất')
   }
   return lsx
+}
+
+/**
+ * Nguồn lập phiếu + ngữ cảnh đã tải (để `create` vật chất hoá cụm mặc nhiên
+ * mà không đọc lệnh lần hai). Thuật toán số: cùng `wipNumbers` với Ghi sản
+ * lượng và Hồ sơ lệnh — ba màn một số.
+ */
+async function loadSource(
+  _user: User,
+  lsxId: string,
+  stage: string,
+): Promise<{
+  rows: TransferSourceRow[]
+  ctx: {
+    components: ComponentRow[]
+    lines: LsxLine[]
+    planned: Map<string, string[]>
+    counting: Counting
+  }
+}> {
+  await loadLsx(lsxId)
+  const [components, lines, jobs, entries, docs, rawLines, stagesCat] = await Promise.all(
+    [
+      componentsRepo.listByLsx(lsxId),
+      lsxLinesRepo.listLines(lsxId),
+      jobsRepo.listByLsx(lsxId),
+      entriesRepo.listByLsxWithStatusBulk([lsxId]),
+      transferDocsRepo.listByLsxBulk([lsxId]),
+      transfersRepo.listRawByLsx(lsxId),
+      productionRepo.listStages(),
+    ],
+  )
+  const counting = countingOf(stagesCat)
+  const planned = new Map<string, string[]>()
+  for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
+    const arr = planned.get(j.production_order_line_id) ?? []
+    arr.push(j.stage)
+    planned.set(j.production_order_line_id, arr)
+  }
+  const done = new Map<string, number>()
+  for (const e of entries) {
+    if (e.stage !== stage || !countsAsOfficial(e.doc_status as EntryDocStatus)) continue
+    done.set(e.component_id, (done.get(e.component_id) ?? 0) + Number(e.qty))
+  }
+  const totals = transferTotals(docs, rawLines)
+  const rows: TransferSourceRow[] = []
+  for (const line of lines) {
+    const lineComps = components.filter((c) => c.production_order_line_id === line.id)
+    const plan = resolveCountingPlan(lineComps, planned.get(line.id), counting)
+    for (const c of lineComps) {
+      const route =
+        finishRouteOverride(c, counting.finish) ??
+        plan.own_route.get(c.id) ??
+        componentRoute(planned.get(line.id), c)
+      const i = route.indexOf(stage)
+      if (i < 0) continue
+      const t = totals.get(totalKey(c.id, stage))
+      const n = wipNumbers({
+        done: done.get(c.id) ?? 0,
+        shipped: t?.shipped ?? 0,
+        received: null,
+        used: 0,
+      })
+      // Chi tiết bị gộp: lộ trình riêng bị cắt trước mốc ghép, nên bước kế
+      // tiếp của nó là chính mốc ghép (tổ Phôi giao cho tổ Hàn) — không phải
+      // "không còn gì".
+      const absorbed = plan.own_route.has(c.id)
+      const next =
+        route[i + 1] ?? (absorbed && i === route.length - 1 ? counting.join : null)
+      rows.push({
+        component_id: c.id,
+        name: c.name,
+        cluster: c.cluster,
+        product_code: line.product_code,
+        unit: c.unit,
+        kind: c.kind,
+        done: n.done,
+        shipped: n.shipped,
+        on_hand: n.on_hand,
+        next_stage: next,
+      })
+    }
+    // Cụm mặc nhiên chưa vật chất hoá: xong = SUY từ sổ chi tiết bị gộp tại
+    // công đoạn này (min chi tiết chậm nhất, cùng `defaultAssemblyOutputs` với
+    // Ghi sản lượng); chưa có id thật nên "đã giao" = 0.
+    const vi = plan.virtual_stages.indexOf(stage)
+    if (vi >= 0) {
+      const absorbed = lineComps
+        .filter((c) => plan.own_route.has(c.id))
+        .map((c) => ({
+          total_needed: calcComponent(
+            { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
+            line.qty,
+          ).total_needed,
+          outputs: [{ stage, done: done.get(c.id) ?? 0, defect: 0 }],
+        }))
+      const out = defaultAssemblyOutputs([stage], line.qty, absorbed)[0]
+      const n = wipNumbers({ done: out.done, shipped: 0, received: null, used: 0 })
+      rows.push({
+        component_id: defaultAssemblyId(line.id),
+        name: DEFAULT_ASSEMBLY_NAME,
+        cluster: null,
+        product_code: line.product_code,
+        unit: lineUnit(line.unit),
+        kind: 'assembly',
+        done: n.done,
+        shipped: n.shipped,
+        on_hand: n.on_hand,
+        next_stage: plan.virtual_stages[vi + 1] ?? null,
+        virtual: true,
+      })
+    }
+  }
+  return { rows, ctx: { components, lines, planned, counting } }
 }
 
 export const transferDocsService = {
@@ -198,68 +323,16 @@ export const transferDocsService = {
 
   /**
    * Nguồn để LẬP PHIẾU: dòng của lệnh có đi qua `stage`, kèm xong · đã giao ·
-   * tồn tại công đoạn đó. Chỉ dòng THẬT (cụm mặc nhiên chưa ghi sổ chưa có
-   * id để giao — lượt ghi sổ đầu sẽ vật chất hoá nó).
+   * tồn tại công đoạn đó.
+   *
+   * Cụm mặc nhiên (BOM phẳng, lib/default-assembly) CHƯA vật chất hoá cũng
+   * được bày — với id ảo `default-asm:<line>` và "xong" SUY từ sổ chi tiết,
+   * y như Ghi sản lượng. Trước 06/11/2026 chỉ dòng thật được bày, nên tổ Hàn
+   * không giao được cụm cho Nguội trước lượt ghi sổ đầu — trong khi xưởng
+   * thật là hàng đi trước sổ. `create` vật chất hoá nó lúc lập phiếu.
    */
-  async source(_user: User, lsxId: string, stage: string): Promise<TransferSourceRow[]> {
-    await loadLsx(lsxId)
-    const [components, lines, jobs, entries, docs, rawLines, stagesCat] =
-      await Promise.all([
-        componentsRepo.listByLsx(lsxId),
-        lsxLinesRepo.listLines(lsxId),
-        jobsRepo.listByLsx(lsxId),
-        entriesRepo.listByLsxWithStatusBulk([lsxId]),
-        transferDocsRepo.listByLsxBulk([lsxId]),
-        transfersRepo.listRawByLsx(lsxId),
-        productionRepo.listStages(),
-      ])
-    const counting = countingOf(stagesCat)
-    const planned = new Map<string, string[]>()
-    for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
-      const arr = planned.get(j.production_order_line_id) ?? []
-      arr.push(j.stage)
-      planned.set(j.production_order_line_id, arr)
-    }
-    const done = new Map<string, number>()
-    for (const e of entries) {
-      if (e.stage !== stage || !countsAsOfficial(e.doc_status as EntryDocStatus)) continue
-      done.set(e.component_id, (done.get(e.component_id) ?? 0) + Number(e.qty))
-    }
-    const totals = transferTotals(docs, rawLines)
-    const productCode = new Map(lines.map((l) => [l.id, l.product_code]))
-    const out: TransferSourceRow[] = []
-    for (const line of lines) {
-      const lineComps = components.filter((c) => c.production_order_line_id === line.id)
-      const plan = resolveCountingPlan(lineComps, planned.get(line.id), counting)
-      for (const c of lineComps) {
-        const route =
-          finishRouteOverride(c, counting.finish) ??
-          plan.own_route.get(c.id) ??
-          componentRoute(planned.get(line.id), c)
-        const i = route.indexOf(stage)
-        if (i < 0) continue
-        const t = totals.get(totalKey(c.id, stage))
-        const n = wipNumbers({
-          done: done.get(c.id) ?? 0,
-          shipped: t?.shipped ?? 0,
-          received: null,
-          used: 0,
-        })
-        out.push({
-          component_id: c.id,
-          name: c.name,
-          cluster: c.cluster,
-          product_code: productCode.get(line.id) ?? '',
-          unit: c.unit,
-          kind: c.kind,
-          done: n.done,
-          shipped: n.shipped,
-          on_hand: n.on_hand,
-          next_stage: route[i + 1] ?? null,
-        })
-      }
-    }
-    return out
+  async source(user: User, lsxId: string, stage: string): Promise<TransferSourceRow[]> {
+    return (await loadSource(user, lsxId, stage)).rows
   },
 
   /** Tổ giao lập phiếu → da_giao. Giao vượt tồn: cảnh báo, không chặn. */
@@ -269,8 +342,7 @@ export const transferDocsService = {
   ): Promise<{ doc_no: string; id: string; warnings: string[] }> {
     await assertAction(user, 'production.transfers.record')
     const lsx = await loadLsx(input.production_order_id)
-    const [components, depts, stagesCat] = await Promise.all([
-      componentsRepo.listByLsx(lsx.id),
+    const [depts, stagesCat] = await Promise.all([
       departmentsRepo.list(),
       productionRepo.listStages(),
     ])
@@ -286,19 +358,22 @@ export const transferDocsService = {
     if (!teamOk(input.from_team_id) || !teamOk(input.to_team_id)) {
       throw BadRequest('Tổ giao / tổ nhận phải là tổ xưởng')
     }
-    const byId = new Map(components.map((c) => [c.id, c]))
-    for (const l of input.lines) {
-      if (!byId.has(l.component_id)) throw BadRequest('Có dòng không thuộc lệnh này')
-    }
-    // Cảnh báo giao vượt tồn tại công đoạn (xong − đã giao) — không chặn.
-    const src = await this.source(user, lsx.id, input.from_stage)
+    // Nguồn đọc TRƯỚC khi vật chất hoá: hàng cụm mặc nhiên còn mang "xong" suy
+    // từ sổ chi tiết; sau khi thành dòng thật nó chưa có sổ riêng (= 0) và
+    // cảnh báo vượt tồn sẽ kêu oan.
+    const { rows: src, ctx } = await loadSource(user, lsx.id, input.from_stage)
+    const byId = new Map(ctx.components.map((c) => [c.id, c]))
     const onHand = new Map(src.map((r) => [r.component_id, r]))
     const warnings: string[] = []
     for (const l of input.lines) {
       const r = onHand.get(l.component_id)
       if (!r) {
+        const known = byId.get(l.component_id)
+        if (!known && !isDefaultAssemblyId(l.component_id)) {
+          throw BadRequest('Có dòng không thuộc lệnh này')
+        }
         throw BadRequest(
-          `"${byId.get(l.component_id)!.name}" không đi qua công đoạn ${stageLabel(input.from_stage)} — không giao từ đó được`,
+          `"${known?.name ?? DEFAULT_ASSEMBLY_NAME}" không đi qua công đoạn ${stageLabel(input.from_stage)} — không giao từ đó được`,
         )
       }
       if (l.qty - r.on_hand > 0.001) {
@@ -306,6 +381,25 @@ export const transferDocsService = {
           `${r.name}: giao ${l.qty} nhưng tồn tại ${stageLabel(input.from_stage)} chỉ ${r.on_hand} (xong ${r.done} − đã giao ${r.shipped})`,
         )
       }
+    }
+    // Cụm mặc nhiên → dòng thật (cùng hàm với Ghi sản lượng), rồi trỏ phiếu
+    // vào id thật. Hai dòng cùng dòng SP trong một phiếu thì schema đã chặn.
+    const idRemap = new Map<string, string>()
+    for (const vid of input.lines
+      .map((l) => l.component_id)
+      .filter(isDefaultAssemblyId)) {
+      const lineId = defaultAssemblyLineId(vid)!
+      const line = ctx.lines.find((l) => l.id === lineId)
+      if (!line) throw BadRequest('Có dòng gắn cụm mặc nhiên không thuộc lệnh này')
+      const { real, created } = await materializeDefaultAssembly({
+        lsxId: lsx.id,
+        line,
+        lineComps: ctx.components.filter((c) => c.production_order_line_id === lineId),
+        plannedRoute: ctx.planned.get(lineId),
+        counting: ctx.counting,
+      })
+      if (created) ctx.components.push(real)
+      idRemap.set(vid, real.id)
     }
     const doc = await transferDocsRepo.insert({
       doc_no: await transferDocsRepo.nextDocNo(),
@@ -323,7 +417,7 @@ export const transferDocsService = {
     await transferDocsRepo.insertLines(
       input.lines.map((l) => ({
         production_order_id: lsx.id,
-        component_id: l.component_id,
+        component_id: idRemap.get(l.component_id) ?? l.component_id,
         stage: input.to_stage,
         team_department_id: input.to_team_id,
         direction: 'issue' as const,
