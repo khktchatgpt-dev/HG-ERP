@@ -188,6 +188,14 @@ export const reportsQuerySchema = z
   })
 export type ReportsQuery = z.infer<typeof reportsQuerySchema>
 
+/** Excel hai bảng mới của Báo cáo sản xuất (B6): sửa lại còn treo · tồn công đoạn. */
+export const baoCaoExcelQuerySchema = z.object({
+  bang: z.enum(['treo', 'ton']),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  team: z.preprocess(emptyToUndef, z.string().uuid().optional()),
+})
+
 /** Chỉ tiêu ngày (0168): PUT ghi đè trọn ngày — ô trống KHÔNG gửi lên. */
 export const dailyTargetsSaveSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

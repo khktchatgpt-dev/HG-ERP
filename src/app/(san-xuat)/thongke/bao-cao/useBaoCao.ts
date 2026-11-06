@@ -67,8 +67,14 @@ export function useBaoCao(p: Payload, initialTab: TabKey | null) {
     void taiDinhMuc(id)
   }
 
-  const excelHref = (type: 'san-luong' | 'phe' | 'nang-suat') =>
-    `/api/dept/production/reports?type=${type}&from=${p.from}&to=${p.to}${team ? `&team=${team}` : ''}&format=xlsx`
+  // Bốn bảng cũ đi `reports` (reports.service); hai bảng mới đi `bao-cao`
+  // (cùng payload màn đang bày). Cùng kỳ + tổ với URL.
+  const excelHref = (type: 'san-luong' | 'phe' | 'nang-suat' | 'treo' | 'ton') => {
+    const ky = `from=${p.from}&to=${p.to}${team ? `&team=${team}` : ''}`
+    return type === 'treo' || type === 'ton'
+      ? `/api/dept/production/bao-cao?bang=${type}&${ky}`
+      : `/api/dept/production/reports?type=${type}&${ky}&format=xlsx`
+  }
 
   return {
     p,

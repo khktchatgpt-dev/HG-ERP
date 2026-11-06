@@ -45,7 +45,9 @@ export function BaoCaoScreen({
         ? 'phe'
         : d.tab === 'nang_suat'
           ? 'nang-suat'
-          : null
+          : d.tab === 'treo' || d.tab === 'ton'
+            ? d.tab
+            : null
   const n: Partial<Record<TabKey, number>> = {
     loi: p.loi.length,
     treo: p.sua_lai_treo.length,
@@ -153,7 +155,7 @@ export function BaoCaoScreen({
 
         <ThanhTT
           left="Nguồn: sổ sản lượng (mọi phiếu trong kỳ) · tồn công đoạn chỉ đếm phiếu chính thức · cùng hàm với Hồ sơ lệnh và Giao nhận"
-          right={`Kỳ tự do, trần 92 ngày · Excel: sản lượng · phế · năng suất · định mức`}
+          right={`Kỳ tự do, trần 92 ngày · Excel: sản lượng · phế · sửa lại treo · tồn công đoạn · năng suất · định mức`}
         />
       </div>
     </SxKhung>

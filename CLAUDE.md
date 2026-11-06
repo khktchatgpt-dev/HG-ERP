@@ -690,8 +690,10 @@ ngày). Không có dòng "tổng toàn xưởng": chi tiết / cụm / bộ là 
 dọc là số vô nghĩa. "Sửa lại còn treo" = Σ sửa − đạt ghi SAU theo thứ tự
 `created_at` (bù trước, cộng sau); "Tồn công đoạn" = xong chính thức − đã giao
 qua `wipNumbers` + `transferTotals` — đổi công thức thì đổi ở lib, không ở màn.
-Excel vẫn qua `api/dept/production/reports` (4 bảng cũ); hai bảng mới chưa có
-Excel. `/production` (Tình hình xưởng) cũng không kit: ô việc là LINK sang
+Excel: 4 bảng cũ qua `api/dept/production/reports` (reports.service); hai bảng
+mới qua `api/dept/production/bao-cao?bang=treo|ton` (06/11/2026,
+`bao-cao-excel.ts`) — đổ từ CÙNG `BaoCaoPayload` màn đang bày, không tính lại,
+chân file nói "không cộng dọc" như màn. `/production` (Tình hình xưởng) cũng không kit: ô việc là LINK sang
 `/thongke/lenh?view=` — bấm vào phải ra đúng số dòng ô vừa đếm. Khu Sản xuất
 sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
 
