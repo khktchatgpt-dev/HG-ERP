@@ -3,11 +3,13 @@ import { jobsService } from '@/modules/dept/production/jobs.service'
 import { isProductionStaff } from '@/modules/dept/production/perms'
 import { LenhScreen } from './LenhScreen'
 import { resolveView } from './views'
+import { vnTodayIso } from '@/lib/local-date'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * M2 — LỆNH SẢN XUẤT (Khuôn C, danh sách).
+ * M2 — LỆNH SẢN XUẤT (Khuôn C, danh sách). Dựng lại KHÔNG kit 06/11/2026 theo
+ * bản vẽ https://claude.ai/artifact/1p2dxqkXRUpg5cZU4AaSjy.
  *
  * Trả lời: "trong các lệnh đang chạy, cái nào cần tôi động vào?".
  *
@@ -37,6 +39,12 @@ export default async function LenhPage({
   const view = resolveView(sp.view)
 
   return (
-    <LenhScreen rows={rows} stages={stages} canRecord={canRecord} initialView={view} />
+    <LenhScreen
+      rows={rows}
+      stages={stages}
+      canRecord={canRecord}
+      initialView={view}
+      today={vnTodayIso()}
+    />
   )
 }

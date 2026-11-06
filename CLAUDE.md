@@ -695,7 +695,12 @@ mới qua `api/dept/production/bao-cao?bang=treo|ton` (06/11/2026,
 `bao-cao-excel.ts`) — đổ từ CÙNG `BaoCaoPayload` màn đang bày, không tính lại,
 chân file nói "không cộng dọc" như màn. `/production` (Tình hình xưởng) cũng không kit: ô việc là LINK sang
 `/thongke/lenh?view=` — bấm vào phải ra đúng số dòng ô vừa đếm. Khu Sản xuất
-sau B1–B6 chỉ còn `/thongke/lenh` và `/thongke/ngay` dùng kit.
+sau B1–B6 chỉ còn `/thongke/ngay` dùng kit — `/thongke/lenh` dựng lại không kit 06/11/2026
+(bản vẽ `1p2dxqkXRUpg5cZU4AaSjy`, duyệt Q1–Q6: cột "Vướng gì" kèm link màn gỡ qua `snagOf`
+ở `lenh.shared.ts`; một lệnh một hàng, mã đơn chỉ ở tooltip + ô tìm; dải 12 ô + thanh %
+là CSS `.sx-strip`/`.sx-pct`, cột Lệnh ghim trái bằng `td.pin`; bảng 1.480px, ở 1280 cuộn
+ngang có chủ ý; `today` truyền từ server, client không đọc đồng hồ). Thiếu vật tư trỏ Hồ
+sơ lệnh vì khu SX chưa có màn vật tư theo lệnh.
 
 **Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
 "1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem", tên nhóm nói

@@ -31,7 +31,8 @@ export const VIEWS: { id: string; label: string; test: (r: OverviewRow) => boole
   // "Chưa định hình" = chưa có chi tiết nào nên KHÔNG CÓ GÌ để ghi sổ. Đây là
   // nút thắt đầu chuỗi: 6/14 lệnh đang chạy nằm ở đây (đo 18/09/2026).
   { id: 'noshape', label: 'Chưa định hình', test: (r) => r.component_count === 0 },
-  { id: 'noplan', label: 'Chưa lên kế hoạch', test: (r) => r.jobs_total === 0 },
+  // Tên theo mục menu "Giao tổ & hạn" (04/11) — Q4 bản vẽ 06/11; vị từ giữ nguyên.
+  { id: 'noplan', label: 'Chưa giao tổ & hạn', test: (r) => r.jobs_total === 0 },
   // Bóng nằm im quá ngưỡng — thứ KHÔNG màn nào của app từng nói ra, trong khi
   // phần lớn lệnh đứng ở "đã duyệt" mà không ai biết đã bao lâu.
   { id: 'stale', label: `Nằm im ≥${STALE_DAYS} ngày`, test: (r) => isStale(r.holder) },

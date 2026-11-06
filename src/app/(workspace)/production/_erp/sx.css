@@ -33,6 +33,8 @@
   --sx-done: #1f6b3d;
   --sx-done-wash: #e4f3ea;
   --sx-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  /* Màu DỮ LIỆU (ô tiến độ, thanh %) — không phải màu hành động, không bấm được. */
+  --sx-fill: #8ea3cf;
 
   display: flex;
   flex-direction: column;
@@ -1124,4 +1126,83 @@
 .sx.sx .sx-tb.sx-tb > tbody > tr.sum > td {
   background: var(--sx-raised);
   color: var(--sx-ink2);
+}
+
+/* ── 12. Lệnh sản xuất (khuôn C, bản vẽ 1 06/11/2026 duyệt) ──────────────────
+   https://claude.ai/artifact/1p2dxqkXRUpg5cZU4AaSjy — cột Lệnh ghim trái khi
+   lưới cuộn ngang (Q5), dải 12 ô công đoạn (Q3), thanh % bộ xong. */
+.sx.sx .sx-tb.sx-tb > thead > tr > th.pin,
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.pin,
+.sx.sx .sx-tb.sx-tb > tfoot > tr > td.pin {
+  position: sticky;
+  left: 0;
+  box-shadow: inset -1px 0 0 var(--sx-hair);
+}
+.sx.sx .sx-tb.sx-tb > thead > tr > th.pin {
+  z-index: 3;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.pin {
+  z-index: 1;
+}
+.sx.sx .sx-tb.sx-tb > tfoot > tr > td.pin {
+  z-index: 2;
+}
+/* Dải công đoạn: ô sọc = không trong lộ trình; ô xám = trong lộ trình, chưa
+   có sổ; tô dần theo % đạt (màu --sx-act nhạt = dữ liệu, không bấm được);
+   đủ 100% = --sx-done. Thứ tự ô cố định theo danh mục để đọc theo cột. */
+.sx.sx .sx-strip {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+}
+.sx.sx .sx-strip i {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  overflow: hidden;
+  background: var(--sx-hair);
+}
+.sx.sx .sx-strip i.x {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--sx-hair),
+    var(--sx-hair) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+}
+.sx.sx .sx-strip i b {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--sx-fill);
+}
+.sx.sx .sx-strip i b.f {
+  background: var(--sx-done);
+}
+.sx.sx .sx-pct {
+  display: inline-block;
+  width: 44px;
+  height: 8px;
+  margin-right: 6px;
+  position: relative;
+  vertical-align: middle;
+  background: var(--sx-hair);
+}
+.sx.sx .sx-pct b {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sx-fill);
+}
+.sx.sx .sx-pct b.f {
+  background: var(--sx-done);
+}
+.sx.sx .sx-hc .c.srch {
+  width: 240px;
+}
+.sx.sx .sx-hc .c.srch input {
+  width: 100%;
+  font-weight: 500;
 }
