@@ -1,7 +1,11 @@
 /*
- * HỘP "CHỜ TÔI XEM" — phần thêm trên nền hop-ky.css (cùng lưới với hộp ký Giám
- * đốc, bản vẽ RcqWLU7F1z33btAR97gZBo). Luật mở đầu `.hk.hk` để thắng CSS kit
- * ngoài @layer (layout Mua hàng gắn `.kit`), như hop-ky.css.
+ * HỘP "CHỜ TÔI XEM" bản 2 — phần thêm trên nền hop-ky.css (cùng đầu trang, tab,
+ * thanh lọc, lưới với hộp ký Giám đốc). Bản vẽ RcqWLU7F1z33btAR97gZBo khung 6+7.
+ * Luật mở đầu `.hk.hk` để thắng CSS kit ngoài @layer (layout Mua hàng gắn
+ * `.kit`), như hop-ky.css.
+ *
+ * Bố cục dọc: đầu trang · tab · dải tại chỗ · thanh lọc · LƯỚI (cao tối đa ~55%,
+ * tự cuộn, đầu + chân dính) · KHUNG CHI TIẾT (phần còn lại) · thanh trạng thái.
  */
 .hk.hk.cx {
   --cx-done: #166534;
@@ -9,36 +13,180 @@
   --cx-done-line: #b9dcc4;
   --cx-stop-wash: #fbebe8;
   --cx-stop-line: #efc2bc;
+  --cx-mu: #5d6675;
+  --cx-mu-wash: #eef0f3;
+}
+.hk.hk .cx-ok {
+  color: var(--cx-done);
+  font-weight: 600;
+}
+.hk.hk .cx-sub {
+  font-size: 12.5px;
+  color: var(--hk-ink3);
+}
+/* nhóm "Bị trả lại" — xám, không phải màu vòng đời: đơn không chờ anh */
+.hk.hk .lp-cx-mu {
+  --c: var(--cx-mu);
+  --w: var(--cx-mu-wash);
 }
 
-/* ── Xem nhanh dưới dòng: dòng hàng + giá đơn trước + ghi chú cho GĐ ── */
-.hk.hk .hk-tb.hk-tb tbody td.cx-ud {
-  padding: 8px 12px 10px 42px;
-  background: #f7f9fd;
-  white-space: normal;
-  overflow: visible;
-  border-bottom: 1px solid var(--hk-line);
+/* ── LƯỚI ĐƠN — lấy phần còn lại sau khung chi tiết, tự cuộn (đầu + chân dính).
+   Đo 06/11 ở 1280×800: chia "lưới tối đa 55%" ép khung chi tiết còn 200px trong
+   khi nội dung cần ~250px — nên khung chi tiết cao theo nội dung, lưới co. ── */
+.hk.hk .cx-luoi {
+  flex: 1 1 auto;
+  min-height: 132px;
+  overflow: auto;
 }
-.hk.hk .cx-udw {
+/* ô hai tầng: mỗi tầng tự cắt "…", tầng dưới chữ nhỏ nhạt */
+.hk.hk .cx-tt,
+.hk.hk .cx-1d,
+.hk.hk .cx-l2 {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hk.hk .cx-tt {
+  font-weight: 600;
+}
+.hk.hk .cx-l2 {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--hk-ink3);
+  margin-top: 1px;
+}
+.hk.hk .cx-l2.hk-warn {
+  color: var(--hk-warn);
+}
+/* nháp còn thiếu / bị trả lại: chữ nhạt hơn — chưa phải việc của anh */
+.hk.hk .hk-tb.hk-tb tbody tr.d.cx-mo > td {
+  color: var(--hk-ink2);
+}
+.hk.hk .cx-caret {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.hk.hk .cx-caret:focus-visible {
+  outline: 2px solid var(--hk-act);
+  outline-offset: 2px;
+}
+
+/* ── KHUNG CHI TIẾT dưới lưới (Q8) ── */
+.hk.hk .cx-ct {
+  /* cao theo nội dung, trần 58% — đơn nhiều dòng hàng thì cuộn TRONG thân khung */
+  flex: 0 0 auto;
+  max-height: 58%;
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
+  flex-direction: column;
+  border-top: 2px solid var(--hk-line);
+  overflow: hidden;
 }
-/* Hộp bọc bảng dòng hàng: co theo khung, đơn quá nhiều cột thì cuộn TRONG hộp —
-   không đẩy cả lưới tràn ngang (đo 05/11: 7px tràn ở 1280 khi chưa bọc). */
-.hk.hk .cx-mini-box {
+.hk.hk .cx-cth {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 14px;
+  background: var(--hk-raised);
+  border-bottom: 1px solid var(--hk-line);
+  font-size: 12.5px;
+  min-width: 0;
+}
+.hk.hk .cx-code {
+  font-family: var(--hk-mono);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hk.hk .cx-cth .cx-tt {
+  flex: none;
+}
+.hk.hk .cx-cut {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hk.hk .cx-rt {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.hk.hk .cx-ctb {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+}
+.hk.hk .cx-ctl {
   flex: 1;
   min-width: 0;
   overflow-x: auto;
+  padding: 6px 14px 8px;
 }
-.hk.hk .cx-mini {
-  width: 100%;
-  border-collapse: collapse;
+.hk.hk .cx-ctc {
+  flex: none;
+  border-left: 1px solid var(--hk-line);
+  padding: 6px 12px 8px;
   font-size: 12px;
 }
-.hk.hk .hk-tb.hk-tb .cx-mini tbody td.cx-truoc {
-  white-space: normal;
-  min-width: 180px;
+.hk.hk .cx-ctc h4 {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hk-ink3);
+}
+.hk.hk .cx-kv2 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+  margin: 0;
+}
+.hk.hk .cx-kv2 dt {
+  color: var(--hk-ink3);
+  white-space: nowrap;
+}
+.hk.hk .cx-kv2 dt.hk-b {
+  color: var(--hk-ink);
+}
+.hk.hk .cx-kv2 dd {
+  margin: 0;
+  text-align: right;
+}
+.hk.hk .cx-ck {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hk.hk .cx-ck li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.hk.hk .cx-ck .i {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* bảng dòng hàng trong khung chi tiết */
+.hk.hk .cx-mini {
+  width: 100%;
+  min-width: 520px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
 }
 .hk.hk .cx-mini th {
   font-size: 10.5px;
@@ -55,56 +203,22 @@
   padding: 3px 6px;
   border-bottom: 1px solid var(--hk-hair);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .hk.hk .cx-mini .r {
   text-align: right;
 }
-/* Bảng lồng trong ô của lưới hộp ký: chặn luật đầu cột SẪM + DÍNH và ô nền trắng
-   của `.hk-tb thead th` / `.hk-tb tbody td` (hop-ky.css) rơi xuống bảng con. */
-.hk.hk .hk-tb.hk-tb .cx-mini thead th {
-  position: static;
-  background: transparent;
-  color: var(--hk-ink3);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  padding: 3px 6px;
-  border-bottom: 1px solid var(--hk-line);
-}
-.hk.hk .hk-tb.hk-tb .cx-mini thead th.r {
-  text-align: right;
-}
-.hk.hk .hk-tb.hk-tb .cx-mini tbody td {
-  padding: 3px 6px;
-  background: transparent;
-  border-bottom: 1px solid var(--hk-hair);
-  vertical-align: baseline;
-}
-.hk.hk .cx-facts {
-  width: 230px;
-  flex: none;
-  border-left: 1px solid var(--hk-line);
-  padding-left: 12px;
-  font-size: 12px;
-}
-.hk.hk .cx-kv {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 3px 10px;
-  margin: 0;
-}
-.hk.hk .cx-kv dt {
-  color: var(--hk-ink3);
-  white-space: nowrap;
-}
-.hk.hk .cx-kv dd {
-  margin: 0;
-  text-align: right;
-}
+
+/* chân khung: ghi chú cho GĐ / dấu đã xem / lý do trả lại */
 .hk.hk .cx-ghi {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-top: 8px;
+  padding: 5px 14px;
+  border-top: 1px solid var(--hk-line);
+  background: var(--hk-raised);
+  font-size: 12.5px;
 }
 .hk.hk .cx-ghi label {
   font-size: 12px;
@@ -125,12 +239,22 @@
   outline: 2px solid var(--hk-act);
   outline-offset: -1px;
 }
-.hk.hk .cx-ok {
-  color: var(--cx-done);
-  font-weight: 600;
-}
 
-/* ── Dải tại chỗ dưới thanh hành động: kết quả / chặn / lý do trả lại ── */
+/* ── Dải TẠI CHỖ dưới tab: vì sao chưa trình / kết quả / chặn / lý do trả lại ── */
+.hk.hk .cx-why {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--hk-warn-line);
+  background: var(--hk-warn-wash);
+  font-size: 12.5px;
+}
+.hk.hk .cx-why .k {
+  font-weight: 700;
+  color: var(--hk-warn);
+  white-space: nowrap;
+}
 .hk.hk .cx-dai {
   display: flex;
   flex-direction: column;

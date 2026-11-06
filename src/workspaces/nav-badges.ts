@@ -223,10 +223,11 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
     if (n > 0) out['/mua-hang/cho-ky'] = n
   }
   /*
-    "CHỜ TÔI XEM" (05/11/2026) — trưởng phòng Cung ứng: mọi nháp (trừ nháp vừa bị
-    trả lại chưa sửa) + đơn NV gửi thẳng GĐ mà anh CHƯA xem.
+    "CHỜ TÔI XEM" (bản 2, 06/11/2026 · Q7) — trưởng phòng Cung ứng: chỉ việc làm
+    được NGAY = nháp trình được + đơn NV gửi thẳng GĐ mà anh CHƯA xem. Nháp còn
+    thiếu và nháp bị trả lại chưa sửa vẫn bày trong hộp nhưng không lên số.
     Cùng người thấy mục menu (capability `supply.review`: supply.lead, không
-    admin) và cùng phép đếm với hộp (`choXemCount` ↔ `choXem`).
+    admin) và cùng phép đếm với số trên tab của hộp (`lamDuocNgay`).
   */
   if (user.role !== 'admin' && (await canAction(user, 'supply.po.manage_any'))) {
     const n = await poReviewService.choXemCount()

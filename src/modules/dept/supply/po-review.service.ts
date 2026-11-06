@@ -4,6 +4,7 @@ import { ngayGioVn } from '@/lib/date-vn'
 import {
   GIU_DUYET_THAY_NGAY,
   giaTruocCungNcc,
+  lamDuocNgay,
   type DuyetThay,
   type HopXem,
   type XemDon,
@@ -39,6 +40,7 @@ import { Conflict, NotFound } from '@/server/http'
 import { posRepo, type Po, type PoWithRefs } from './pos.repo'
 import { approverIds, leadIds, posService, traceReason } from './pos.service'
 import { suppliersRepo } from './supply.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
 
 /**
  * TRƯỞNG PHÒNG CUNG ỨNG XEM ĐƠN MUA TRƯỚC KHI LÊN BÀN GIÁM ĐỐC (05/11/2026,
@@ -103,33 +105,79 @@ function daDoi(
   )
 }
 
+/** Phân loại một đơn trong hộp — đủ để `trangThaiXem` (lib/cho-xem) chia nhóm. */
+type PhanLoai = {
+  mark: DauDaXem | null
+  chan: string | null
+  traLai: TraLaiNhap | null
+}
+
 /**
- * NHÁP TRONG HỘP TRƯỞNG PHÒNG: MỌI nháp, trừ nháp vừa bị trả lại mà NV chưa
- * sửa (lib/po-review `traLaiNhap`). Nháp còn thiếu vẫn bày — khoá nút trình ở
- * màn (`lyDoChuaTrinh`). 05/11/2026 đo: 6 nháp của 3 người.
+ * TẬP ĐƠN CỦA HỘP "CHỜ TÔI XEM" + PHÂN LOẠI — `box()` và `choXemCount()` dùng
+ * CHUNG (Q7, bản 2 duyệt 06/11/2026): số đỏ trên menu phải đúng bằng số dòng của
+ * nhóm "Trình được ngay" + "NV gửi thẳng GĐ" trong hộp.
+ *
+ * Nháp: MỌI nháp (05/11/2026 đo 6 nháp của 3 người) — kể cả nháp còn thiếu
+ * (`lyDoChuaTrinh`) và nháp bị trả lại chưa sửa (`traLaiNhap`), bày ở nhóm riêng.
+ * Chờ duyệt: dấu "đã xem" (`reviewMark`) — chưa có = NV gửi thẳng GĐ.
  */
-async function nhapTrongHop(): Promise<{
-  pos: PoWithRefs[]
-  traLai: Map<string, TraLaiNhap>
+async function tapXem(): Promise<{
+  rows: PoWithRefs[]
+  phanLoai: Map<string, PhanLoai>
 }> {
-  const nhap = await posRepo.list({ status: 'draft', page: 1, page_size: 300 })
-  if (nhap.rows.length === 0) return { pos: [], traLai: new Map() }
-  const ev = await approvalEventsRepo.listForEntities(
-    'po',
-    nhap.rows.map((p) => p.id),
-    VET_XEM,
-  )
+  const [nhap, pend] = await Promise.all([
+    posRepo.list({ status: 'draft', page: 1, page_size: 300 }),
+    posRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }),
+  ])
+  // Nháp (đường thường) đứng trước đơn NV đã gửi thẳng GĐ.
+  const rows = [...nhap.rows, ...pend.rows]
+  const phanLoai = new Map<string, PhanLoai>()
+  if (rows.length === 0) return { rows, phanLoai }
+  const nccIds = [...new Set(nhap.rows.map((p) => p.supplier_id))]
+  const [ev, soDong, nccs] = await Promise.all([
+    approvalEventsRepo.listForEntities(
+      'po',
+      rows.map((p) => p.id),
+      VET_XEM,
+    ),
+    posRepo.lineCountsByPoIds(nhap.rows.map((p) => p.id)),
+    // NCC của nháp — để nói trước "NCC đang khoá đặt hàng" thay vì để anh bấm rồi lỗi.
+    Promise.all(nccIds.map((id) => suppliersRepo.findById(id))),
+  ])
+  const nccOf = new Map(nccs.filter((x) => !!x).map((x) => [x!.id, x!]))
   const theoDon = new Map<string, VetKy[]>()
   for (const e of ev) theoDon.set(e.entity_id, [...(theoDon.get(e.entity_id) ?? []), e])
-  const traLai = new Map<string, TraLaiNhap>()
-  const pos: PoWithRefs[] = []
-  for (const p of nhap.rows) {
-    const t = traLaiNhap(theoDon.get(p.id) ?? [], p.updated_at)
-    if (t) traLai.set(p.id, t)
-    if (!t || t.da_sua) pos.push(p)
+  for (const p of rows) {
+    const vet = theoDon.get(p.id) ?? []
+    if (p.status === 'draft') {
+      phanLoai.set(p.id, {
+        mark: null,
+        traLai: traLaiNhap(vet, p.updated_at),
+        chan: lyDoChuaTrinh({
+          so_dong: soDong.get(p.id) ?? 0,
+          expected_at: p.expected_at ?? null,
+          production_order_id: p.production_order_id,
+          project_id: p.project_id ?? null,
+          marketplace_shop: p.marketplace_shop ?? null,
+          ncc: nccOf.get(p.supplier_id) ?? null,
+        }),
+      })
+    } else {
+      const m = reviewMark(vet)
+      if (m) m.by_name = properName(m.by_name) || m.by_name
+      phanLoai.set(p.id, { mark: m, chan: null, traLai: null })
+    }
   }
-  return { pos, traLai }
+  return { rows, phanLoai }
 }
+
+/** Hình tối thiểu cho `trangThaiXem` / `lamDuocNgay`. */
+const choPhanLoai = (p: { status: string }, l: PhanLoai | undefined) => ({
+  nhap: p.status === 'draft',
+  mark: l?.mark ?? null,
+  chan: l?.chan ?? null,
+  tra_lai: l?.traLai ?? null,
+})
 
 export const poReviewService = {
   /** Dấu "đã xem" còn hiệu lực của nhiều đơn — cho hộp "Chờ tôi xem" + hộp ký. */
@@ -166,17 +214,13 @@ export const poReviewService = {
   },
 
   /**
-   * SỐ TRÊN MENU "Chờ tôi xem" — nháp trong hộp + đơn chờ duyệt trưởng phòng
-   * CHƯA xem. Cùng tập đơn và cùng vị từ với hộp (`box`): số hứa bao nhiêu, mở
-   * ra đúng bấy nhiêu dòng.
+   * SỐ ĐỎ TRÊN MENU "Chờ tôi xem" (Q7) — chỉ việc anh làm được ngay: nháp trình
+   * được + đơn NV gửi thẳng GĐ mà anh chưa xem. Cùng tập đơn (`tapXem`) và cùng
+   * vị từ (`lamDuocNgay`) với số trên tab của hộp.
    */
   async choXemCount(): Promise<number> {
-    const [pend, nhap] = await Promise.all([
-      posRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }),
-      nhapTrongHop(),
-    ])
-    const marks = await this.marksFor(pend.rows.map((p) => p.id))
-    return pend.rows.filter((p) => !marks.has(p.id)).length + nhap.pos.length
+    const { rows, phanLoai } = await tapXem()
+    return lamDuocNgay(rows.map((p) => choPhanLoai(p, phanLoai.get(p.id)))).length
   },
 
   /**
@@ -188,35 +232,39 @@ export const poReviewService = {
   async box(user: User): Promise<HopXem> {
     await assertAction(user, 'supply.po.manage_any')
     const now = new Date()
-    const [pend, thresholds, recent, nhap] = await Promise.all([
-      posRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }),
+    const [{ rows, phanLoai }, thresholds, recent] = await Promise.all([
+      tapXem(),
       settingsService.approvalThresholds(),
       approvalEventsRepo.listRecent({
         entity_type: 'po',
         action: 'approved',
         limit: 300,
       }),
-      nhapTrongHop(),
     ])
-    // Nháp (đường thường) đứng trước đơn NV đã gửi thẳng GĐ.
-    const rows = [...nhap.pos, ...pend.rows]
     const ids = rows.map((p) => p.id)
     const tu = now.getTime() - GIU_DUYET_THAY_NGAY * 86_400_000
     const thay = recent.filter((e) => laDuyetKhiChuaXem(e) && Date.parse(e.created_at) >= tu) // prettier-ignore
     const thayIds = [...new Set(thay.map((e) => e.entity_id))]
 
-    const [marks, totals, mats, submitted, lines, thayPos] = await Promise.all([
-      this.marksFor(ids),
+    const lsxIds = [
+      ...new Set(rows.map((p) => p.production_order_id).filter((x): x is string => !!x)),
+    ]
+    const [totals, mats, submitted, lines, thayPos, lenhs, daDat] = await Promise.all([
       posRepo.totalsByPoIds([...ids, ...thayIds]),
       posRepo.materialNamesByPoIds([...ids, ...thayIds]),
       approvalEventsRepo.lastSubmittedAt('po', [...ids, ...thayIds]),
       Promise.all(ids.map((id) => posRepo.listLines(id))),
       Promise.all(thayIds.map((id) => posRepo.findById(id))),
+      // Ngày xuất của lệnh — khung chi tiết nói "lệnh xuất 17/03/2027 · còn 131 ngày".
+      Promise.all(lsxIds.map((id) => productionRepo.findById(id))),
+      posRepo.orderedCountBySuppliers([...new Set(rows.map((p) => p.supplier_id))]),
     ])
+    const xuatOf = new Map(
+      lenhs.filter((l) => !!l).map((l) => [l!.id, l!.ship_date ?? null]),
+    )
     const ownerOf = (p: { assigned_to: string | null; created_by: string | null }) =>
       p.assigned_to ?? p.created_by ?? null
-    const nccIds = [...new Set(nhap.pos.map((p) => p.supplier_id))]
-    const [names, prices, nccs] = await Promise.all([
+    const [names, prices] = await Promise.all([
       usersRepo.displayNamesByIds(rows.map(ownerOf).filter((x): x is string => !!x)),
       posRepo.pricesForSuppliers(
         [...new Set(rows.map((p) => p.supplier_id))],
@@ -229,14 +277,12 @@ export const poReviewService = {
           ),
         ],
       ),
-      // NCC của nháp — để nói trước "NCC đang khoá đặt hàng" thay vì để anh bấm rồi lỗi.
-      Promise.all(nccIds.map((id) => suppliersRepo.findById(id))),
     ])
-    const nccOf = new Map(nccs.filter((x) => !!x).map((x) => [x!.id, x!]))
 
     const items: XemDon[] = rows.map((p, i) => {
       const money = poMoneyOf(p, totals[p.id] ?? 0)
       const owner = ownerOf(p)
+      const l = choPhanLoai(p, phanLoai.get(p.id))
       return {
         id: p.id,
         code: p.code,
@@ -246,10 +292,18 @@ export const poReviewService = {
         loai: poTemplateShort(p.template),
         materials: [...new Set(mats.get(p.id) ?? [])],
         lsx: p.lsx_code ?? null,
+        lenh_xuat: p.production_order_id
+          ? (xuatOf.get(p.production_order_id) ?? null)
+          : null,
         ngoai_lenh: p.lsx_code ? null : nhanNgoaiLenh(p),
         expected_at: p.expected_at ?? null,
         owner_id: owner,
         owner_name: owner ? properName(names.get(owner)) || null : null,
+        lap_at: p.created_at,
+        sua_at: p.updated_at,
+        hop_dong: p.contract_no?.trim() || null,
+        ghi_chu: p.note?.trim() || null,
+        ncc_da_dat: daDat.get(p.supplier_id) ?? 0,
         currency: p.currency,
         tien_hang: money.subtotal,
         vat_rate: Number(p.vat_rate ?? 0) || 0,
@@ -260,20 +314,10 @@ export const poReviewService = {
         submitted_at:
           p.status === 'draft' ? p.updated_at : (submitted.get(p.id) ?? p.created_at),
         thanh_toan: p.terms_payment?.trim() || null,
-        mark: p.status === 'draft' ? null : (marks.get(p.id) ?? null),
-        nhap: p.status === 'draft',
-        chan:
-          p.status === 'draft'
-            ? lyDoChuaTrinh({
-                so_dong: lines[i].length,
-                expected_at: p.expected_at ?? null,
-                production_order_id: p.production_order_id,
-                project_id: p.project_id ?? null,
-                marketplace_shop: p.marketplace_shop ?? null,
-                ncc: nccOf.get(p.supplier_id) ?? null,
-              })
-            : null,
-        tra_lai: nhap.traLai.get(p.id) ?? null,
+        mark: l.mark as DauDaXem | null,
+        nhap: l.nhap,
+        chan: l.chan,
+        tra_lai: l.tra_lai,
         dong: lines[i].map((l) => ({
           id: l.id,
           ma: l.material_id ? l.material_code : null,

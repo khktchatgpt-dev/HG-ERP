@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./pos.repo', () => ({
-  posRepo: { findById: vi.fn(), patchFrom: vi.fn() },
+  posRepo: {
+    findById: vi.fn(),
+    patchFrom: vi.fn(),
+    list: vi.fn(),
+    lineCountsByPoIds: vi.fn(),
+  },
 }))
 vi.mock('./supply.repo', () => ({
   suppliersRepo: { findById: vi.fn(async () => ({ id: 's1', name: 'Tân Hoàng Long' })) },
@@ -31,6 +36,7 @@ vi.mock('@/events/register', () => ({}))
 
 import { poReviewService } from './po-review.service'
 import { posRepo } from './pos.repo'
+import { suppliersRepo } from './supply.repo'
 import { assertGuiDuyetDuoc, leadIds, posService, traceReason } from './pos.service'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -215,5 +221,58 @@ describe('nháp — trưởng phòng xem rồi trình GĐ (05/11/2026 chiều, k
     expect(posRepo.patchFrom).not.toHaveBeenCalled()
     expect(vi.mocked(traceReason).mock.calls[0][2]).toBe('[Trả lại để sửa] Thiếu khổ xốp 670×110') // prettier-ignore
     expect(vi.mocked(emit).mock.calls[0][0]).toMatchObject({ name: 'po.returned', owner_id: 'u-sup' }) // prettier-ignore
+  })
+})
+
+describe('poReviewService.choXemCount — số đỏ menu = việc làm được ngay (Q7, bản 2)', () => {
+  const don = (id: string, status: string, them: Record<string, unknown> = {}) => ({
+    id,
+    code: `PO-2026-${id}`,
+    status,
+    supplier_id: 's1',
+    production_order_id: 'lsx1',
+    expected_at: '2026-11-20',
+    updated_at: '2026-11-03T02:00:00Z',
+    ...them,
+  })
+  const tra = (id: string, at: string) => ({ entity_id: id, action: 'returned', actor_id: 'u-lead', actor_name: 'Đỗ Ngọc Hiếu', reason: 'Thiếu khổ', created_at: at }) // prettier-ignore
+
+  it('đếm nháp trình được + nháp đã sửa sau trả lại + đơn NV gửi thẳng chưa xem; bỏ nháp thiếu, bị trả lại chưa sửa, đơn đã xem', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ id: 's1', name: 'Sơn Nam Việt', is_active: true, can_order: true } as never) // prettier-ignore
+    vi.mocked(posRepo.list)
+      .mockResolvedValueOnce({
+        rows: [
+          don('A', 'draft'), // trình được
+          don('B', 'draft', { expected_at: null }), // thiếu hẹn giao
+          don('C', 'draft'), // trả lại SAU lần sửa cuối → chờ người lập
+          don('D', 'draft', { updated_at: '2026-11-05T03:00:00Z' }), // sửa sau trả lại
+          don('G', 'draft'), // chưa có dòng hàng
+        ],
+      } as never)
+      .mockResolvedValueOnce({
+        rows: [don('E', 'pending_approval'), don('F', 'pending_approval')],
+      } as never)
+    vi.mocked(posRepo.lineCountsByPoIds).mockResolvedValue(
+      new Map([
+        ['A', 2],
+        ['B', 1],
+        ['C', 1],
+        ['D', 3],
+      ]),
+    )
+    vi.mocked(approvalEventsRepo.listForEntities).mockResolvedValue([
+      tra('C', '2026-11-04T02:00:00Z'),
+      tra('D', '2026-11-04T02:00:00Z'),
+      { ...gui, entity_id: 'E' },
+      { ...gui, entity_id: 'F' },
+      { ...xem, entity_id: 'F' },
+    ] as never)
+    expect(await poReviewService.choXemCount()).toBe(3) // A · D · E
+  })
+
+  it('không có nháp, không có đơn chờ duyệt → 0, không đọc sổ vết', async () => {
+    vi.mocked(posRepo.list).mockResolvedValue({ rows: [] } as never)
+    expect(await poReviewService.choXemCount()).toBe(0)
+    expect(approvalEventsRepo.listForEntities).not.toHaveBeenCalled()
   })
 })

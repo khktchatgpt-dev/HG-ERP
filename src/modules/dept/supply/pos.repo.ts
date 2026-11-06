@@ -516,6 +516,44 @@ export const posRepo = {
   },
 
   /**
+   * SỐ DÒNG của từng đơn — hộp "Chờ tôi xem" khoá nháp chưa có dòng nào và số đỏ
+   * trên menu đếm theo đó. Một truy vấn cho cả hộp (nháp ~ vài chục dòng).
+   */
+  async lineCountsByPoIds(ids: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    if (ids.length === 0) return out
+    const { data, error } = await db()
+      .from('supply_purchase_order_lines')
+      .select('po_id')
+      .in('po_id', ids)
+    if (error) throw new Error(error.message)
+    for (const r of (data ?? []) as { po_id: string }[])
+      out.set(r.po_id, (out.get(r.po_id) ?? 0) + 1)
+    return out
+  },
+
+  /**
+   * Số đơn ĐÃ ĐẶT (đã gửi NCC trở đi) theo từng NCC — "NCC mới" / "đã đặt NCC
+   * này n đơn" ở khung chi tiết hộp "Chờ tôi xem". Đếm `head` từng NCC (vài NCC
+   * mỗi lượt) — không kéo dòng nên không vướng trần 1.000 dòng của PostgREST.
+   */
+  async orderedCountBySuppliers(supplierIds: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    await Promise.all(
+      supplierIds.map(async (id) => {
+        const { count, error } = await db()
+          .from('supply_purchase_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('supplier_id', id)
+          .in('status', ['ordered', 'confirmed', 'in_transit', 'partial', 'received'])
+        if (error) throw new Error(error.message)
+        out.set(id, count ?? 0)
+      }),
+    )
+    return out
+  },
+
+  /**
    * LSX PHỤ của NHIỀU đơn một lượt (0125) — cho màn danh sách.
    *
    * `list()` chỉ trả về lệnh CHÍNH của mỗi đơn, nên một đơn "LSX 01+2+3" chỉ

@@ -1,6 +1,8 @@
 /**
  * HỘP "CHỜ TÔI XEM" CỦA TRƯỞNG PHÒNG CUNG ỨNG (05/11/2026, bản vẽ
- * https://claude.ai/artifact/RcqWLU7F1z33btAR97gZBo — khung 1 và 2).
+ * https://claude.ai/artifact/RcqWLU7F1z33btAR97gZBo — bản 2 = khung 6 + 7,
+ * duyệt 06/11 cùng Q7–Q11: lưới gom theo TRẠNG THÁI + khung chi tiết dưới lưới,
+ * số đỏ chỉ đếm việc làm được ngay, bỏ ổ khoá).
  *
  * Hình dữ liệu server → màn + các phép thuần màn dùng. Thuần, client import được.
  * Dấu "đã xem" suy ở lib/po-review; file này chỉ chia hộp, so giá, gom nhóm.
@@ -36,10 +38,21 @@ export type XemDon = {
   loai: string | null
   materials: string[]
   lsx: string | null
+  /** Ngày xuất của lệnh (YYYY-MM-DD) — "lệnh xuất 17/03/2027 · còn 131 ngày". */
+  lenh_xuat: string | null
+  /** Đơn ngoài lệnh: "HM-2026-0007 · Sửa lại văn phòng" (`nhanNgoaiLenh`). */
   ngoai_lenh: string | null
   expected_at: string | null
   owner_id: string | null
   owner_name: string | null
+  /** Lập lúc / sửa lần cuối (ISO) — "lập 05/11 09:35", "im 25 ngày". */
+  lap_at: string
+  sua_at: string
+  hop_dong: string | null
+  /** Ghi chú trên đơn (in lên phiếu) — người nhận, điều kiện đổi hàng… */
+  ghi_chu: string | null
+  /** Số đơn ĐÃ ĐẶT (đã gửi NCC trở đi) với NCC này, trừ đơn đang xem. 0 = NCC mới. */
+  ncc_da_dat: number
   currency: string
   tien_hang: number
   vat_rate: number
@@ -59,8 +72,16 @@ export type XemDon = {
   nhap: boolean
   /** Nháp chưa trình được vì sao (`lyDoChuaTrinh`) — khoá nút trình. null = trình được. */
   chan: string | null
-  /** Nháp từng bị trả lại và NV đã sửa lại — nhãn "đã sửa sau khi trả lại". */
-  tra_lai: { at: string; by_name: string | null; reason: string | null } | null
+  /**
+   * Lần trả lại còn ảnh hưởng nháp (lib/po-review `traLaiNhap`). `da_sua` false =
+   * nhóm "Bị trả lại — chờ người lập sửa" (Q11); true = nhãn "đã sửa sau khi trả lại".
+   */
+  tra_lai: {
+    at: string
+    by_name: string | null
+    reason: string | null
+    da_sua: boolean
+  } | null
   dong: XemDong[]
 }
 
@@ -91,14 +112,145 @@ export type HopXem = {
 /** Số ngày giữ đơn trong tab "GĐ duyệt khi tôi chưa xem" (Q4). */
 export const GIU_DUYET_THAY_NGAY = 7
 
-/** Tab 1: chưa xem. Badge menu đếm ĐÚNG hàm này. */
-export const choXem = (items: XemDon[]) => items.filter((d) => !d.mark)
-/** Tab 2: đã xem, đang chờ Giám đốc. */
-export const daXemChoGd = (items: XemDon[]) => items.filter((d) => !!d.mark)
+/**
+ * TRẠNG THÁI MỘT DÒNG trong hộp (bản 2): nháp trình được · NV gửi thẳng GĐ mà anh
+ * chưa xem · nháp còn thiếu · nháp bị trả lại chưa sửa · đã trình (chờ GĐ).
+ */
+export type TrangThaiXem = 'trinh_duoc' | 'gui_thang' | 'thieu' | 'tra_lai' | 'da_xem'
 
-/** Q2 — xác nhận hàng loạt chỉ với đơn DƯỚI ngưỡng giá trị lớn; đơn lớn mở ra đọc. */
-export const tichDuoc = (d: Pick<XemDon, 'big'> & Partial<Pick<XemDon, 'chan'>>) =>
-  !d.big && !d.chan
+/** Đủ trường để phân loại — server (số trên menu) và màn dùng CHUNG hàm này. */
+export type PhanLoaiXem = {
+  nhap: boolean
+  mark: unknown | null
+  chan: string | null
+  tra_lai: { da_sua: boolean } | null
+}
+
+export function trangThaiXem(d: PhanLoaiXem): TrangThaiXem {
+  if (!d.nhap) return d.mark ? 'da_xem' : 'gui_thang'
+  if (d.tra_lai && !d.tra_lai.da_sua) return 'tra_lai'
+  return d.chan ? 'thieu' : 'trinh_duoc'
+}
+
+/**
+ * Q7 — VIỆC ANH LÀM ĐƯỢC NGAY: nháp trình được + đơn NV gửi thẳng GĐ mà anh chưa
+ * xem. Số đỏ trên menu và số trên tab "Chờ tôi xem" đếm ĐÚNG hàm này.
+ */
+export const lamDuocNgay = <T extends PhanLoaiXem>(items: readonly T[]): T[] =>
+  items.filter((d) => {
+    const t = trangThaiXem(d)
+    return t === 'trinh_duoc' || t === 'gui_thang'
+  })
+
+/** Tab 1: mọi dòng chưa trình (gồm cả nháp còn thiếu, bị trả lại — bày, không đếm). */
+export const choXem = (items: XemDon[]) =>
+  items.filter((d) => trangThaiXem(d) !== 'da_xem')
+/** Tab 2: đã trình (đã xem), đang chờ Giám đốc. */
+export const daXemChoGd = (items: XemDon[]) =>
+  items.filter((d) => trangThaiXem(d) === 'da_xem')
+
+/**
+ * Tích hàng loạt được không: chỉ việc làm được ngay, và DƯỚI ngưỡng giá trị lớn
+ * (Q2 — đơn lớn mở ra đọc rồi trình riêng; Q10 bỏ ổ khoá, cột trạng thái nói thay).
+ */
+export const tichDuoc = (d: PhanLoaiXem & { big: boolean }) => {
+  const t = trangThaiXem(d)
+  return (t === 'trinh_duoc' || t === 'gui_thang') && !d.big
+}
+
+/** Câu ngắn cho cột Trạng thái từ lý do chưa trình được (`lyDoChuaTrinh`). */
+export function chanNgan(chan: string): string {
+  if (chan === 'Chưa có hẹn giao') return 'Thiếu hẹn giao'
+  if (chan === 'Chưa có dòng hàng') return 'Chưa có dòng hàng'
+  if (chan.startsWith('Đơn ngoài lệnh chưa chọn hạng mục')) return 'Chưa chọn hạng mục'
+  if (chan.startsWith('NCC đã ngừng')) return 'NCC ngừng giao dịch'
+  if (chan.startsWith('NCC đang bị khoá')) return 'NCC đang khoá'
+  return chan.split(' — ')[0].split('. ')[0]
+}
+
+/** Thứ tự + nhãn nhóm khi gom theo trạng thái (Q9). `tinhSo` = có ăn số đỏ (Q7). */
+export const NHOM_TRANG_THAI: {
+  key: Exclude<TrangThaiXem, 'da_xem'>
+  ten: string
+  tinhSo: boolean
+  /** Thu gọn sẵn (Q11 — nhóm bị trả lại). */
+  gon: boolean
+}[] = [
+  { key: 'trinh_duoc', ten: 'Trình được ngay', tinhSo: true, gon: false },
+  { key: 'gui_thang', ten: 'NV gửi thẳng GĐ — anh chưa xem', tinhSo: true, gon: false },
+  { key: 'thieu', ten: 'Còn thiếu — người lập đang soạn', tinhSo: false, gon: false },
+  { key: 'tra_lai', ten: 'Bị trả lại — chờ người lập sửa', tinhSo: false, gon: true },
+]
+
+/** Số ngày từ `iso` tới `now` (làm tròn xuống) — "im 25 ngày". */
+export function soNgayTu(iso: string, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - Date.parse(iso)) / 86_400_000))
+}
+
+/** Hẹn về so với hôm nay (YYYY-MM-DD): "hôm nay" · "còn 3 ngày" · "đã qua 2 ngày". */
+export function henVe(
+  expected: string | null,
+  today: string,
+): { chu: string; gap: boolean } | null {
+  if (!expected) return null
+  const n = Math.round(
+    (Date.parse(expected.slice(0, 10)) - Date.parse(today)) / 86_400_000,
+  )
+  if (n === 0) return { chu: 'hôm nay', gap: true }
+  if (n < 0) return { chu: `đã qua ${-n} ngày`, gap: true }
+  return { chu: `còn ${n} ngày`, gap: n <= 2 }
+}
+
+/** Một dòng của mục "Kiểm trước khi trình" ở khung chi tiết. */
+export type DongKiem = { kieu: 'ok' | 'wn' | 'st'; chu: string }
+
+/**
+ * KIỂM TRƯỚC KHI TRÌNH (bản vẽ khung 6, 7·A) — đủ để anh quyết trình hay trả lại
+ * mà không phải mở đơn: thiếu gì (chặn), giá so đơn trước, NCC mới, nằm im lâu.
+ * Thứ tự: chặn trước, rồi lưu ý, rồi điều đã ổn.
+ */
+export function kiemTruocTrinh(d: XemDon, now: Date, today: string): DongKiem[] {
+  const out: DongKiem[] = []
+  if (d.chan) out.push({ kieu: 'st', chu: d.chan })
+  const thieuGia = d.dong.filter((l) => l.don_gia == null).length
+  if (thieuGia > 0) out.push({ kieu: 'wn', chu: `${thieuGia} dòng chưa có đơn giá` })
+  else if (d.dong.length > 0)
+    out.push({ kieu: 'ok', chu: `${d.dong.length} dòng, đủ đơn giá` })
+  const so = d.dong.map((l) => ({ l, s: soGia(l.don_gia, l.truoc) }))
+  const giu = so.filter((x) => x.s?.kieu === 'bang')
+  const tang = so.filter((x) => x.s?.kieu === 'tang')
+  const moi = d.dong.filter((l) => !l.truoc).length
+  if (tang.length > 0) {
+    const cao = Math.max(...tang.map((x) => x.s!.pct))
+    out.push({
+      kieu: 'wn',
+      chu: `${tang.length} dòng tăng giá (cao nhất +${soVn(cao, 1)}%)`,
+    })
+  }
+  if (giu.length > 0)
+    out.push({
+      kieu: 'ok',
+      chu: `${giu.length}/${d.dong.length} dòng giữ giá ${giu[0].l.truoc!.po_code}`,
+    })
+  if (moi > 0 && moi < d.dong.length)
+    out.push({ kieu: 'wn', chu: `${moi} dòng mua lần đầu ở NCC này` })
+  const hen = henVe(d.expected_at, today)
+  if (hen && hen.chu.startsWith('đã qua'))
+    out.push({ kieu: 'wn', chu: `Hẹn về ${hen.chu}` })
+  if (!d.thanh_toan) out.push({ kieu: 'wn', chu: 'Chưa ghi điều khoản thanh toán' })
+  else if (d.expected_at) out.push({ kieu: 'ok', chu: 'Có hẹn về, có thanh toán' })
+  if (d.big) out.push({ kieu: 'wn', chu: 'Giá trị lớn — GĐ đọc từng dòng' })
+  if (d.ncc_da_dat === 0) out.push({ kieu: 'wn', chu: 'NCC mới — chưa đơn nào đã đặt' })
+  else out.push({ kieu: 'ok', chu: `Đã đặt NCC này ${d.ncc_da_dat} đơn` })
+  const im = soNgayTu(d.sua_at, now)
+  if (d.nhap && im > 7)
+    out.push({
+      kieu: 'wn',
+      chu: `Nằm im ${im} ngày (sửa lần cuối ${d.sua_at.slice(8, 10)}/${d.sua_at.slice(5, 7)})`,
+    })
+  const thu = { st: 0, wn: 1, ok: 2 } as const
+  return out.sort((a, b) => thu[a.kieu] - thu[b.kieu])
+}
 
 /**
  * Giá lần mua GẦN NHẤT cùng NCC của một vật tư, bỏ chính đơn đang xem.
@@ -143,12 +295,22 @@ export function soGia(
   return { kieu: lech > 0 ? 'tang' : 'giam', pct }
 }
 
-/** Gom theo người lập (mặc định) hoặc theo lệnh — khối nhiều đơn nhất lên trước. */
+/**
+ * Gom: theo TRẠNG THÁI (mặc định — Q9, thứ tự `NHOM_TRANG_THAI`, nhóm rỗng bỏ),
+ * theo người lập, theo lệnh (khối nhiều đơn nhất lên trước).
+ */
 export function gomDon(
   items: XemDon[],
-  theo: 'nguoi' | 'lenh' | 'khong',
-): { key: string; ten: string; rows: XemDon[] }[] {
-  if (theo === 'khong') return [{ key: 'all', ten: '', rows: items }]
+  theo: 'trang_thai' | 'nguoi' | 'lenh',
+): { key: string; ten: string; rows: XemDon[]; tinhSo: boolean; gon: boolean }[] {
+  if (theo === 'trang_thai')
+    return NHOM_TRANG_THAI.map((n) => ({
+      key: n.key,
+      ten: n.ten,
+      tinhSo: n.tinhSo,
+      gon: n.gon,
+      rows: items.filter((d) => trangThaiXem(d) === n.key),
+    })).filter((g) => g.rows.length > 0)
   const m = new Map<string, { ten: string; rows: XemDon[] }>()
   for (const d of items) {
     const key = theo === 'nguoi' ? (d.owner_id ?? '@') : (d.lsx ?? d.ngoai_lenh ?? '@')
@@ -161,7 +323,7 @@ export function gomDon(
     else m.set(key, { ten, rows: [d] })
   }
   return [...m.entries()]
-    .map(([key, g]) => ({ key, ...g }))
+    .map(([key, g]) => ({ key, ...g, tinhSo: true, gon: false }))
     .sort((a, b) => b.rows.length - a.rows.length || a.ten.localeCompare(b.ten, 'vi'))
 }
 
