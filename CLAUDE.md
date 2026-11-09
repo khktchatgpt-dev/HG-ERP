@@ -693,7 +693,14 @@ của việc giao tổ, chỉ tiêu suy, tiến độ tổ): phôi đếm CHI TI
 `final_stage` trong DB nên hàn của BOM phẳng (7/8 lệnh có bảng) mang hàng trăm
 nghìn chi tiết. `by_unit` tách bậc đếm vì một công đoạn có thể mang HAI đơn vị
 thật (sơn: cụm khung + tấm gỗ) — `total` cộng dồn chỉ để vẽ %, màn kế hoạch phải
-bày theo `by_unit`, không cộng dọc.
+bày theo `by_unit`, không cộng dọc. **Bước 2 (09/11, bản vẽ
+`2u4QXWAx6hsn8Gha4ari6d`, duyệt Q1–Q7)**: khối "Khối lượng theo công đoạn" dưới
+dải 5 ô của tab Đồng bộ ở Hồ sơ lệnh (`khoi-luong.tsx`, số từ `lib/khoi-luong`
+= `tallyLineStages` cộng dọc dòng SP theo bậc đếm; một ô một công đoạn lệnh ĐI
+QUA, hai đơn vị bày hai dòng, tổ & hạn gộp từ jobs, chi tiết chưa gán cụm bày
+vàng không tự gộp, bấm ô → bảng Đồng bộ tô cột `colsel`, bung "theo dòng SP");
+editor `/kehoach-sx/[id]` (kit) chỉ thêm cột "Cần" từ `PlanLine.needs` + nhịp/ngày
+theo đơn vị chính. Tổng toàn xưởng theo tuần CHƯA làm (Đợt 2–3).
 
 **Báo cáo + Tình hình xưởng (B6, 03/11/2026)**: `/thongke/bao-cao` không kit,
 sáu bảng từ MỘT payload `bao-cao.service.ts` (kỳ + tổ + tab trên URL, trần 92

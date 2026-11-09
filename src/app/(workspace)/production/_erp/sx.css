@@ -1206,3 +1206,164 @@
   width: 100%;
   font-weight: 500;
 }
+
+/* ── 13 · Khối lượng theo công đoạn (Hồ sơ lệnh, bước 2 09/11/2026 —
+   bản vẽ 2u4QXWAx6hsn8Gha4ari6d). Một ô một công đoạn lệnh đi qua, số + đơn vị,
+   vạch đạt, tổ & hạn. Ô là <button>: bấm → bảng Đồng bộ tô cột (td/th.colsel). ── */
+.sx.sx .sx-kl {
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-card);
+}
+.sx.sx .sx-kl-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--sx-hair);
+}
+.sx.sx .sx-kl-h b {
+  font-weight: 600;
+}
+.sx.sx .sx-kl-h .sp {
+  margin-left: auto;
+  color: var(--sx-ink3);
+  font-size: 11.5px;
+}
+.sx.sx .sx-kl-h button.lnk {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--sx-act);
+  cursor: pointer;
+}
+.sx.sx .sx-kl-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(120px, 1fr);
+  overflow-x: auto;
+}
+.sx.sx .sx-kc {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px 7px;
+  border: 0;
+  border-right: 1px solid var(--sx-hair);
+  background: var(--sx-card);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sx.sx .sx-kc:last-child {
+  border-right: 0;
+}
+.sx.sx .sx-kc:hover {
+  background: var(--sx-zebra);
+}
+.sx.sx .sx-kc:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+}
+.sx.sx .sx-kc.sel {
+  background: var(--sx-act-wash);
+  box-shadow: inset 0 -2px 0 var(--sx-act);
+}
+.sx.sx .sx-kc .st {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-kc .st i {
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: var(--sx-mono);
+  color: var(--sx-empty);
+}
+.sx.sx .sx-kc .n {
+  font-family: var(--sx-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.sx.sx .sx-kc .n small {
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  margin-left: 3px;
+}
+.sx.sx .sx-kc .n.sec {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--sx-ink2);
+}
+.sx.sx .sx-kc .n.sec.warn,
+.sx.sx .sx-kc .n.sec.warn small {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-kc .pb {
+  height: 4px;
+  margin: 3px 0 1px;
+  position: relative;
+  background: var(--sx-hair);
+}
+.sx.sx .sx-kc .pb b {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sx-fill);
+}
+.sx.sx .sx-kc .pb b.f {
+  background: var(--sx-done);
+}
+.sx.sx .sx-kc .dt {
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-kc .dt .num {
+  color: var(--sx-ink2);
+}
+.sx.sx .sx-kc .dt.w {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-kl-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  padding: 4px 14px;
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  background: var(--sx-raised);
+  border-top: 1px solid var(--sx-hair);
+}
+.sx.sx .sx-kl-note b {
+  font-family: var(--sx-mono);
+  color: var(--sx-ink2);
+  font-weight: 600;
+}
+.sx.sx .sx-kl-note .w,
+.sx.sx .sx-kl-note .w b {
+  color: var(--sx-warn);
+}
+/* Cột công đoạn đang chọn ở bảng Đồng bộ (từ khối trên). */
+.sx.sx .sx-tb th.colsel {
+  box-shadow: inset 0 -3px 0 var(--sx-act);
+}
+.sx.sx .sx-tb td.colsel {
+  background: var(--sx-act-wash);
+}

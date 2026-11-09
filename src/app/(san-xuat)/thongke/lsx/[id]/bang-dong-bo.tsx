@@ -44,7 +44,8 @@ export function BangDongBo({ d }: { d: HoSoLenhCtx }) {
             {stages.map((s) => (
               <th
                 key={s.code}
-                className="r"
+                data-stage-col={s.code}
+                className={cx('r', d.congDoanChon === s.code && 'colsel')}
                 title={`${s.label} — đếm bằng ${levelLabel[s.count_level]}`}
               >
                 {s.label}
@@ -128,7 +129,12 @@ function DongSp({ d, l, stages }: { d: HoSoLenhCtx; l: Line; stages: Stage[] }) 
           return (
             <td
               key={s.code}
-              className={cx('r num', v == null && 'out', v === '0%' && 'empty')}
+              className={cx(
+                'r num',
+                v == null && 'out',
+                v === '0%' && 'empty',
+                d.congDoanChon === s.code && 'colsel',
+              )}
             >
               {v == null ? '–' : v}
             </td>
@@ -263,6 +269,7 @@ function ChiTietTrongCum({
             className={cx(
               'r num',
               v == null ? 'out' : v === '100%' ? 'ok' : v === '0%' && 'empty',
+              d.congDoanChon === s.code && 'colsel',
             )}
           >
             {v ?? '–'}
@@ -284,7 +291,8 @@ function ChiTietTrongCum({
 
 function O({ d, l, r, stage }: { d: HoSoLenhCtx; l: Line; r: Row; stage: string }) {
   const c = r.cells[stage]
-  if (!c) return <td className="out">–</td>
+  const colsel = d.congDoanChon === stage
+  if (!c) return <td className={cx('out', colsel && 'colsel')}>–</td>
   const sel = d.pick?.row_id === r.id && d.pick.stage === stage
   const du = r.total_needed > 0 && c.done >= r.total_needed
   return (
@@ -292,6 +300,7 @@ function O({ d, l, r, stage }: { d: HoSoLenhCtx; l: Line; r: Row; stage: string 
       className={cx(
         'r num cell',
         sel && 'sel',
+        colsel && 'colsel',
         du && 'ok',
         c.done === 0 && !du && 'empty',
       )}

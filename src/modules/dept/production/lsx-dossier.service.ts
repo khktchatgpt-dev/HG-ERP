@@ -3,6 +3,7 @@ import { productionRepo } from './production.repo'
 import { componentsRepo } from './components.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { jobsRepo, type Job } from './jobs.repo'
+import { entriesRepo } from './entries.repo'
 import { transfersRepo } from './transfers.repo'
 import { transferDocsRepo } from './transfer-docs.repo'
 import { transferDocsService, type PgtDocView } from './transfer-docs.service'
@@ -13,6 +14,7 @@ import { countingOf, resolveStageConfigs, type CountLevel } from '@/lib/stage-co
 import { resolveCountingPlan, defaultAssemblyId } from '@/lib/default-assembly'
 import { finishRowId, isFinishRow } from '@/lib/finish-stages'
 import { resolveHolder, type Holder } from '@/lib/lsx-holder'
+import { khoiLuongOf, type KhoiLuong } from '@/lib/khoi-luong'
 import {
   receivedOrFallback,
   totalKey,
@@ -97,6 +99,8 @@ export type DossierPayload = {
   teams: { id: string; name: string; stage_code: string | null }[]
   pbs: Awaited<ReturnType<typeof entriesService.docsOfLsx>>
   pgt: PgtDocView[]
+  /** Khối "Khối lượng theo công đoạn" (bước 2, 09/11/2026) — lib/khoi-luong. */
+  khoi_luong: KhoiLuong
   unshaped: number
   today: string
 }
@@ -116,6 +120,7 @@ export const lsxDossierService = {
       docs,
       pbs,
       pgtAll,
+      entries,
     ] = await Promise.all([
       entriesService.summary(user, lsxId),
       componentsRepo.listByLsx(lsxId),
@@ -127,6 +132,7 @@ export const lsxDossierService = {
       transferDocsRepo.listByLsxBulk([lsxId]),
       entriesService.docsOfLsx(user, lsxId),
       transferDocsService.inbox(user, { lsxId }),
+      entriesRepo.listByLsx(lsxId),
     ])
     const counting = countingOf(stagesCat)
     const cfg = resolveStageConfigs(stagesCat)
@@ -261,6 +267,34 @@ export const lsxDossierService = {
       }
     })
 
+    // KHỐI LƯỢNG THEO CÔNG ĐOẠN (bước 2, 09/11/2026): cùng `tallyLineStages`
+    // với dải công đoạn ở Lệnh sản xuất và "cần" của việc giao tổ — sổ lấy từ
+    // entries như jobs.service (không qua summary, vì summary đã cắt lộ trình
+    // chi tiết bị gộp nên không còn số hàn của chúng để suy cụm mặc nhiên).
+    const doneByCompStage = new Map<string, number>()
+    for (const e of entries) {
+      const k = `${e.component_id}|${e.stage}`
+      doneByCompStage.set(k, (doneByCompStage.get(k) ?? 0) + Number(e.qty))
+    }
+    const khoiLuong = khoiLuongOf(
+      lines.map((l) => ({
+        id: l.id,
+        product_id: l.product_id,
+        product_code: l.product_code,
+        product_name: l.name_vi ?? l.product_code,
+        qty: l.qty,
+        unit: l.unit,
+        comps: components
+          .filter((c) => c.production_order_line_id === l.id)
+          .map((c) => ({ ...c, line_qty: l.qty })),
+      })),
+      plannedByLine,
+      stagesCat,
+      doneByCompStage,
+      jobs,
+      counting,
+    )
+
     // Cột = công đoạn có mặt trên lộ trình của ít nhất một dòng, theo thứ tự danh mục.
     const present = new Set<string>()
     for (const ln of linesOut)
@@ -295,6 +329,7 @@ export const lsxDossierService = {
         })),
       pbs,
       pgt: pgtAll.docs,
+      khoi_luong: khoiLuong,
       unshaped: linesOut.filter((l) => !l.has_components).length,
       today: vnTodayIso(),
     }

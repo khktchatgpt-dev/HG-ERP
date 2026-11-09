@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { paceForWindow } from '@/lib/production-summary'
+import { byUnitText, principalUnit } from '@/lib/khoi-luong'
+import type { UnitTally } from '@/lib/line-stage-tally'
 import { useToast } from '@/components/ui/Toast'
 import type { PlanView } from '@/modules/dept/production/plan.service'
 
@@ -28,6 +30,39 @@ type StageDraft = {
 
 const STATUS_TONE = { todo: 'gray', doing: 'amber', done: 'green' } as const
 const STATUS_LABEL = { todo: 'Chưa làm', doing: 'Đang làm', done: 'Đã xong' } as const
+
+/**
+ * CẦN đúng đơn vị theo công đoạn (bước 2, 09/11/2026 — bản vẽ
+ * 2u4QXWAx6hsn8Gha4ari6d, Q6): cột cũ "SL" = số SP đúng cho hàn trở đi nhưng
+ * sai cho phôi (phôi cắt chi tiết). Số từ `line.needs` (lib/line-stage-tally,
+ * cùng Hồ sơ lệnh). Nhịp/ngày tính theo đơn vị CHÍNH (bộ → cụm → chi tiết).
+ */
+function needText(us: UnitTally[] | undefined): string {
+  return us && us.length ? byUnitText(us) : '—'
+}
+function paceText(
+  us: UnitTally[] | undefined,
+  start: string | null,
+  end: string | null,
+): string | null {
+  const m = principalUnit(us ?? [])
+  if (!m) return null
+  const pace = paceForWindow(m.needed, start, end)
+  return pace == null ? null : `≈ ${pace.toLocaleString('vi-VN')} ${m.unit}/ngày`
+}
+/** Cộng DỌC các dòng theo bậc đếm — không cộng hai đơn vị vào một số. */
+function sumNeeds(all: (UnitTally[] | undefined)[]): UnitTally[] {
+  const out: UnitTally[] = []
+  for (const us of all)
+    for (const u of us ?? []) {
+      const m = out.find((x) => x.level === u.level && x.unit === u.unit)
+      if (m) {
+        m.needed += u.needed
+        m.done += u.done
+      } else out.push({ ...u })
+    }
+  return out
+}
 
 function LinePlanBlock({
   lsxId,
@@ -171,6 +206,7 @@ function LinePlanBlock({
                 <tr className="text-muted-foreground border-b text-left text-xs">
                   <th className="py-1.5 pr-2">#</th>
                   <th className="py-1.5 pr-2">Công đoạn</th>
+                  <th className="py-1.5 pr-2 text-right">Cần</th>
                   <th className="py-1.5 pr-2">Tổ phụ trách</th>
                   <th className="py-1.5 pr-2">Bắt đầu</th>
                   <th className="py-1.5 pr-2">Kết thúc</th>
@@ -182,6 +218,9 @@ function LinePlanBlock({
                   <tr key={j.id} className="border-b">
                     <td className="text-muted-foreground py-1.5 pr-2 text-xs">{i + 1}</td>
                     <td className="py-1.5 pr-2 font-medium">{labelOf(j.stage)}</td>
+                    <td className="py-1.5 pr-2 text-right font-mono text-xs whitespace-nowrap tabular-nums">
+                      {needText(line.needs[j.stage])}
+                    </td>
                     <td className="py-1.5 pr-2">{j.team_name ?? '—'}</td>
                     <td className="py-1.5 pr-2 text-xs">{j.planned_start ?? '—'}</td>
                     <td className="py-1.5 pr-2 text-xs">{j.planned_end ?? '—'}</td>
@@ -228,12 +267,13 @@ function LinePlanBlock({
                   <tr className="text-muted-foreground border-b text-left text-xs">
                     <th className="py-1.5 pr-2">#</th>
                     <th className="py-1.5 pr-2">Công đoạn</th>
+                    <th className="py-1.5 pr-2 text-right">Cần</th>
                     <th className="py-1.5 pr-2">Tổ phụ trách</th>
                     <th className="py-1.5 pr-2">Bắt đầu KH</th>
                     <th className="py-1.5 pr-2">Kết thúc KH</th>
                     <th
                       className="py-1.5"
-                      title="SL dòng ÷ số ngày trong khung — nhịp tối thiểu để kịp hạn"
+                      title="Cần (đơn vị chính) ÷ số ngày làm việc trong khung — nhịp tối thiểu để kịp hạn"
                     >
                       Nhịp suy
                     </th>
@@ -246,6 +286,9 @@ function LinePlanBlock({
                         {i + 1}
                       </td>
                       <td className="py-1.5 pr-2 font-medium">{labelOf(d.stage)}</td>
+                      <td className="py-1.5 pr-2 text-right font-mono text-xs whitespace-nowrap tabular-nums">
+                        {needText(line.needs[d.stage])}
+                      </td>
                       <td className="py-1.5 pr-2">
                         <select
                           value={d.team_department_id}
@@ -286,14 +329,14 @@ function LinePlanBlock({
                       ))}
                       <td className="py-1.5">
                         {(() => {
-                          const pace = paceForWindow(
-                            line.qty,
+                          const pace = paceText(
+                            line.needs[d.stage],
                             d.planned_start || null,
                             d.planned_end || null,
                           )
                           return pace != null ? (
                             <span className="font-mono text-xs whitespace-nowrap tabular-nums">
-                              ≈ {pace.toLocaleString('vi-VN')} SP/ngày
+                              {pace}
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
@@ -380,11 +423,9 @@ function LsxPlanBlock({
   const plannedLines = lines.filter((l) => l.jobs.length > 0).length
   const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
 
-  /** Σ SL các dòng SẼ nhận công đoạn này (lọc theo lộ trình riêng của SP). */
-  function qtyForStage(code: string): number {
-    return lines
-      .filter((l) => !l.default_route || l.default_route.includes(code))
-      .reduce((s, l) => s + l.qty, 0)
+  /** Σ CẦN (đúng đơn vị) của các dòng đi qua công đoạn này — dòng không đi qua không có số. */
+  function needsForStage(code: string): UnitTally[] {
+    return sumNeeds(lines.map((l) => l.needs[code]))
   }
 
   function startEdit() {
@@ -513,11 +554,14 @@ function LsxPlanBlock({
                   <tr className="text-muted-foreground border-b text-left text-xs">
                     <th className="py-1.5 pr-2">#</th>
                     <th className="py-1.5 pr-2">Công đoạn</th>
-                    <th className="py-1.5 pr-2">SL (các dòng áp)</th>
+                    <th className="py-1.5 pr-2 text-right">Cần (các dòng áp)</th>
                     <th className="py-1.5 pr-2">Tổ phụ trách</th>
                     <th className="py-1.5 pr-2">Bắt đầu KH</th>
                     <th className="py-1.5 pr-2">Kết thúc KH</th>
-                    <th className="py-1.5" title="Σ SL các dòng áp ÷ số ngày trong khung">
+                    <th
+                      className="py-1.5"
+                      title="Σ cần (đơn vị chính) các dòng áp ÷ số ngày làm việc trong khung"
+                    >
                       Nhịp suy
                     </th>
                   </tr>
@@ -529,8 +573,8 @@ function LsxPlanBlock({
                         {i + 1}
                       </td>
                       <td className="py-1.5 pr-2 font-medium">{labelOf(d.stage)}</td>
-                      <td className="py-1.5 pr-2 font-mono text-xs tabular-nums">
-                        {qtyForStage(d.stage).toLocaleString('vi-VN')} SP
+                      <td className="py-1.5 pr-2 text-right font-mono text-xs whitespace-nowrap tabular-nums">
+                        {needText(needsForStage(d.stage))}
                       </td>
                       <td className="py-1.5 pr-2">
                         <select
@@ -572,14 +616,14 @@ function LsxPlanBlock({
                       ))}
                       <td className="py-1.5">
                         {(() => {
-                          const pace = paceForWindow(
-                            qtyForStage(d.stage),
+                          const pace = paceText(
+                            needsForStage(d.stage),
                             d.planned_start || null,
                             d.planned_end || null,
                           )
                           return pace != null ? (
                             <span className="font-mono text-xs whitespace-nowrap tabular-nums">
-                              ≈ {pace.toLocaleString('vi-VN')} SP/ngày
+                              {pace}
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>

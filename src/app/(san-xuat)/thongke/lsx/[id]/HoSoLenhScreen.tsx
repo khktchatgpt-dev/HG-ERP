@@ -12,6 +12,7 @@ import { DocNotesPanel } from '@/components/doc/DocNotesPanel'
 import { isStale } from '@/lib/lsx-holder'
 import { cx, dmy, fmt, STATUS_LABEL, TAB_LABEL, TABS } from './ho-so-lenh.shared'
 import { BangDongBo, DaiNamSo } from './bang-dong-bo'
+import { KhoiLuong } from './khoi-luong'
 import { TabKeHoach } from './tab-ke-hoach'
 import { TabPhieu } from './tab-phieu'
 import { useHoSoLenh, type HoSoLenhProps } from './useHoSoLenh'
@@ -211,6 +212,7 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
                 </span>
               </div>
             </div>
+            <KhoiLuong d={d} />
             <div className="sx-hc">
               <label className="c">
                 <input

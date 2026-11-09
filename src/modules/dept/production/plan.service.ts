@@ -8,6 +8,9 @@ import { componentsRepo } from './components.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { componentRoute } from '@/lib/stage-route'
+import { countingOf } from '@/lib/stage-config'
+import { tallyLineStages, type UnitTally } from '@/lib/line-stage-tally'
+import { sortByUnit } from '@/lib/khoi-luong'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
@@ -35,6 +38,12 @@ export type PlanLine = {
    */
   default_route: string[] | null
   jobs: Job[]
+  /**
+   * CẦN theo công đoạn, ĐÚNG ĐƠN VỊ (bước 2, 09/11/2026): phôi chi tiết, hàn
+   * cụm / cái, lắp ráp bộ — `lib/line-stage-tally`, cùng số với Hồ sơ lệnh.
+   * Cột "SL (các dòng áp)" cũ = số SP đúng cho hàn trở đi nhưng sai cho phôi.
+   */
+  needs: Record<string, UnitTally[]>
 }
 
 export type PlanView = {
@@ -109,15 +118,36 @@ export const planService = {
       departmentsRepo.list(),
       planRepo.listChanges(lsxId),
     ])
-    const defaults = await routesByLineFromShaping(lsxId, stages)
-    const groupTitle = new Map(
-      (await lsxLinesRepo.listGroups(lsxId)).map((g) => [g.id, g.title ?? '']),
-    )
+    const [defaults, groups, comps] = await Promise.all([
+      routesByLineFromShaping(lsxId, stages),
+      lsxLinesRepo.listGroups(lsxId),
+      componentsRepo.listByLsx(lsxId),
+    ])
+    const groupTitle = new Map(groups.map((g) => [g.id, g.title ?? '']))
     const jobsByLine = new Map<string, Job[]>()
     for (const j of jobs) {
       const arr = jobsByLine.get(j.production_order_line_id) ?? []
       arr.push(j)
       jobsByLine.set(j.production_order_line_id, arr)
+    }
+    const counting = countingOf(stages)
+    const needsOf = (l: { id: string; qty: number; unit: string | null }) => {
+      const planned = (jobsByLine.get(l.id) ?? [])
+        .slice()
+        .sort((a, b) => a.seq - b.seq)
+        .map((j) => j.stage)
+      const t = tallyLineStages(
+        comps
+          .filter((c) => c.production_order_line_id === l.id)
+          .map((c) => ({ ...c, line_qty: l.qty })),
+        planned,
+        new Map(),
+        counting,
+        l.unit,
+      )
+      return Object.fromEntries(
+        [...t].map(([stage, x]) => [stage, sortByUnit(x.by_unit)]),
+      )
     }
     return {
       lsx: {
@@ -138,6 +168,7 @@ export const planService = {
         qty: l.qty,
         default_route: defaults.get(l.id) ?? null,
         jobs: jobsByLine.get(l.id) ?? [],
+        needs: needsOf(l),
       })),
       stages,
       teams: depts

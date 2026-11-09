@@ -49,6 +49,8 @@ export type TallyComponent = {
   /** Thiếu = 'part' (fixture cũ). */
   kind?: 'part' | 'assembly' | null
   name: string
+  /** Tên cụm chi tiết thuộc về (0088) — khớp `name` của dòng cụm thật. */
+  cluster?: string | null
   group_code?: string | null
   /** Lộ trình khai / chụp (0288). */
   stages?: readonly string[] | null

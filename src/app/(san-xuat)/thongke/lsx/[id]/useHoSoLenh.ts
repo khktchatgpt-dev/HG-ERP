@@ -29,6 +29,19 @@ export function useHoSoLenh(p: HoSoLenhProps) {
   /** Cụm đang BUNG chi tiết (mặc định gấp — 104 chi tiết là không đọc nổi). */
   const [bung, setBung] = useState<Set<string>>(() => new Set())
   const [pick, setPick] = useState<Pick | null>(null)
+  /** Khối "Khối lượng theo công đoạn" (bước 2, 09/11): ô đang chọn → bảng
+   *  Đồng bộ tô cột đó; `klBung` = đang bày bảng theo dòng SP thay cho dải ô. */
+  const [congDoanChon, setCongDoanChon] = useState<string | null>(null)
+  const [klBung, setKlBung] = useState(false)
+  const chonCongDoan = (code: string) => {
+    const next = congDoanChon === code ? null : code
+    setCongDoanChon(next)
+    if (next && typeof document !== 'undefined') {
+      document
+        .querySelector(`[data-stage-col="${next}"]`)
+        ?.scrollIntoView({ inline: 'center', block: 'nearest' })
+    }
+  }
   const [busy, setBusy] = useState(false)
   const [loi, setLoi] = useState<string | null>(null)
   const [thongBao, setThongBao] = useState<string | null>(null)
@@ -223,6 +236,10 @@ export function useHoSoLenh(p: HoSoLenhProps) {
     toggleBung,
     pick,
     setPick,
+    congDoanChon,
+    chonCongDoan,
+    klBung,
+    setKlBung,
     busy,
     loi,
     setLoi,
