@@ -177,7 +177,9 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
     expect(p.shortfalls).toEqual([])
   })
 
-  it('thiếu số → not ready + liệt kê thiếu', () => {
+  it('thiếu số → not ready + liệt kê thiếu (BOM phẳng: hàn đếm BỘ qua cụm mặc nhiên)', () => {
+    // 09/11/2026: lộ trình qua hàn mà không có cụm thật → chi tiết dừng ở
+    // phôi, hàn đếm theo BỘ = SL dòng (50). 30/100 chi tiết hàn → 15 bộ.
     const p = assessJobProgress(
       { production_order_line_id: 'line1', stage: 'han' },
       ['phoi', 'han', 'son'],
@@ -185,7 +187,20 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
       new Map([['c1|han', 30]]),
     )
     expect(p.ready).toBe(false)
-    expect(p.shortfalls[0]).toMatchObject({ name: 'TAY+TỰA', missing: 70 })
+    expect(p).toMatchObject({ needed: 50, done: 15 })
+    expect(p.shortfalls[0]).toMatchObject({ name: 'Cụm khung (mặc nhiên)', missing: 35 })
+    // Ở PHÔI vẫn đếm CHI TIẾT: 2 CT/SP × 50 = 100.
+    const atPhoi = assessJobProgress(
+      { production_order_line_id: 'line1', stage: 'phoi' },
+      ['phoi', 'han', 'son'],
+      [COMP],
+      new Map([['c1|phoi', 30]]),
+    )
+    expect(atPhoi.shortfalls[0]).toMatchObject({
+      name: 'TAY+TỰA',
+      needed: 100,
+      missing: 70,
+    })
   })
 
   it('chi tiết dừng ở final_stage không tính vào công đoạn SAU đó', () => {
@@ -205,6 +220,7 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
       ...COMP,
       id: 'asm',
       name: 'CỤM TỰA',
+      kind: 'assembly' as const,
       first_stage: 'han',
       final_stage: 'son',
     }

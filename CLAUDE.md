@@ -684,6 +684,17 @@ phải ra MỘT số cho một ô; màn nào tự cộng lại là lỗi. Kế h
 "KH-xxx". Trao đổi vẫn dùng `DocNotesPanel` (kit) — file riêng, không trộn hệ
 trong một file.
 
+**Cần / đạt theo (dòng SP × công đoạn) ĐÚNG ĐƠN VỊ (09/11/2026)**:
+`src/lib/line-stage-tally.ts` (`tallyLineStages`, thuần, có test) là MỘT cách đếm
+cho `jobs.service` (dải công đoạn Lệnh SX, Tình hình xưởng, `assessJobProgress`
+của việc giao tổ, chỉ tiêu suy, tiến độ tổ): phôi đếm CHI TIẾT, từ công đoạn ghép
+đếm CỤM (cụm thật 0088 hoặc cụm mặc nhiên khi BOM phẳng), chặng thành phẩm đếm BỘ
+— cùng kế hoạch đếm với Ghi sản lượng. Trước đó `jobs.service` đếm thẳng theo
+`final_stage` trong DB nên hàn của BOM phẳng (7/8 lệnh có bảng) mang hàng trăm
+nghìn chi tiết. `by_unit` tách bậc đếm vì một công đoạn có thể mang HAI đơn vị
+thật (sơn: cụm khung + tấm gỗ) — `total` cộng dồn chỉ để vẽ %, màn kế hoạch phải
+bày theo `by_unit`, không cộng dọc.
+
 **Báo cáo + Tình hình xưởng (B6, 03/11/2026)**: `/thongke/bao-cao` không kit,
 sáu bảng từ MỘT payload `bao-cao.service.ts` (kỳ + tổ + tab trên URL, trần 92
 ngày). Không có dòng "tổng toàn xưởng": chi tiết / cụm / bộ là ba đơn vị, cộng

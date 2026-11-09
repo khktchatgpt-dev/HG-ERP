@@ -18,10 +18,8 @@ import {
 } from '@/lib/production-summary'
 import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
 import { emit } from '@/events/bus'
-import { calcComponent } from '@/lib/component-needs'
-import { componentRoute } from '@/lib/stage-route'
-import { finishRouteOverride } from '@/lib/finish-stages'
-import { countingOf } from '@/lib/stage-config'
+import { countingOf, type Counting } from '@/lib/stage-config'
+import { groupByLine, tallyLineStages, type TallyComponent } from '@/lib/line-stage-tally'
 import { LATE_RISK_HORIZON_DAYS } from '@/lib/late-risk'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -35,8 +33,6 @@ import { vnTodayIso } from '@/lib/local-date'
  *  - Quản đốc/GĐ: toàn cảnh xưởng, tải việc theo tổ, ép xác nhận kèm lý do.
  * Xác nhận xong → event production.stage.done → notify tổ công đoạn kế tiếp.
  */
-
-const EPS = 1e-9
 
 /** Trễ theo NGÀY XUẤT của lệnh (ship_date): quá hạn / sát hạn (≤7 ngày). */
 export function lateByShipDate(
@@ -227,75 +223,38 @@ async function coordinatorIds(excludeId: string): Promise<string[]> {
     .map((u) => u.id)
 }
 
-type ComponentWithQty = Awaited<ReturnType<typeof componentsRepo.listByLsxBulk>>[number]
-
 /**
- * Đối chiếu số của 1 job: các chi tiết dòng SP có đi qua công đoạn (theo lộ
- * trình jobs của dòng, cắt tại final_stage của chi tiết) — needed vs done từ sổ.
- * Thuần — có test.
+ * Đối chiếu số của 1 job — needed vs done tại (dòng SP × công đoạn), ĐÚNG ĐƠN
+ * VỊ của công đoạn (09/11/2026): phôi đếm chi tiết, từ công đoạn ghép đếm cụm
+ * (cụm thật 0088 hoặc cụm mặc nhiên khi BOM phẳng), chặng thành phẩm đếm bộ.
+ * Toàn bộ phép đếm ở `lib/line-stage-tally` — CÙNG hàm với dải công đoạn và
+ * cùng cách đếm với Ghi sản lượng; trước đó chỗ này đếm thẳng theo
+ * `final_stage` trong DB nên hàn của BOM phẳng mang hàng trăm nghìn CHI TIẾT.
+ *
+ * `plannedRoute` = lộ trình kế hoạch của dòng (jobs theo seq); rỗng → suy theo
+ * nhóm vật tư. Thuần — có test.
  */
 export function assessJobProgress(
   job: Pick<Job, 'production_order_line_id' | 'stage'>,
-  lineStages: string[],
-  components: Pick<
-    ComponentWithQty,
-    | 'id'
-    | 'production_order_line_id'
-    | 'name'
-    | 'qty_per_unit'
-    | 'dm_kg'
-    | 'pcs_per_bar'
-    | 'first_stage'
-    | 'final_stage'
-    | 'line_qty'
-  >[],
+  plannedRoute: string[],
+  components: TallyComponent[],
   doneByCompStage: Map<string, number>,
+  counting?: Counting,
 ): JobProgress {
-  const mine = components.filter((c) => {
-    if (c.production_order_line_id !== job.production_order_line_id) return false
-    if (lineStages.length) {
-      const idx = lineStages.indexOf(job.stage)
-      // Chi tiết dừng ở final_stage: công đoạn SAU final_stage không tính nó.
-      if (c.final_stage) {
-        const cut = lineStages.indexOf(c.final_stage)
-        if (cut >= 0 && idx > cut) return false
-      }
-      // Cụm bắt đầu ở first_stage: công đoạn TRƯỚC first_stage không tính nó
-      // (0088 — cụm không có mặt ở phôi).
-      if (c.first_stage) {
-        const startCut = lineStages.indexOf(c.first_stage)
-        if (startCut >= 0 && idx >= 0 && idx < startCut) return false
-      }
-    }
-    return true
-  })
-  let needed = 0
-  let done = 0
-  const shortfalls: JobShortfall[] = []
-  for (const c of mine) {
-    const n = calcComponent(
-      { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
-      c.line_qty,
-    ).total_needed
-    const d = doneByCompStage.get(`${c.id}|${job.stage}`) ?? 0
-    needed += n
-    done += d
-    if (n - d > EPS) {
-      shortfalls.push({
-        component_id: c.id,
-        name: c.name,
-        needed: n,
-        done: d,
-        missing: Math.round((n - d) * 100) / 100,
-      })
-    }
-  }
+  const lineComps = components.filter(
+    (c) => c.production_order_line_id === job.production_order_line_id,
+  )
+  const t = tallyLineStages(lineComps, plannedRoute, doneByCompStage, counting).get(
+    job.stage,
+  )
+  if (!t)
+    return { needed: 0, done: 0, ready: false, shortfalls: [], has_components: false }
   return {
-    needed,
-    done,
-    ready: mine.length > 0 && shortfalls.length === 0,
-    shortfalls,
-    has_components: mine.length > 0,
+    needed: t.needed,
+    done: t.done,
+    ready: t.shortfalls.length === 0,
+    shortfalls: t.shortfalls,
+    has_components: true,
   }
 }
 
@@ -338,67 +297,6 @@ function lineStagesOf(jobs: Job[]): Map<string, string[]> {
     map.set(key, arr)
   }
   return map
-}
-
-/**
- * LỘ TRÌNH CỦA DÒNG SP — suy từ CHI TIẾT khi chưa ai lên kế hoạch.
- *
- * VÌ SAO PHẢI CÓ (bug đo 23/09/2026). `lineStagesOf` đọc `production_jobs`, mà
- * cả DB chỉ có **4 dòng jobs**, đều của một lệnh. Nên dải công đoạn ở màn danh
- * sách RỖNG ở 13/14 lệnh, và `qty_needed` bằng 0 ở cả 14 ⇒ cột "Bộ xong" hiện
- * `—` khắp nơi. Trong khi mở đúng lệnh đó ra `/thongke/lsx/[id]` thì có 8 công
- * đoạn × 150 bộ: **một lệnh, hai màn, hai câu trả lời ngược nhau.**
- *
- * Màn chi tiết (`worklist.service`) không đọc jobs — nó suy lộ trình từ
- * `group_code` của chi tiết qua `lib/stage-route`. Hàm này dùng ĐÚNG module đó,
- * nên hai màn có chung MỘT nguồn lộ trình thay vì hai.
- *
- * Kế hoạch vẫn thắng khi có: `resolveComponentRoute` nhận `planned` làm đối số
- * đầu. Suy theo nhóm chỉ là đường lùi cho lệnh chưa lên kế hoạch.
- *
- * GIỚI HẠN CÓ CHỦ ĐÍCH: bốn chặng sau sơn chỉ vào lộ trình khi dòng thành phẩm
- * ĐÃ vật chất hoá (`finishRouteOverride`). `worklist` thì thêm cả bốn cho mọi
- * dòng SP kể cả khi chưa ghi gì. Ở đây không bịa: chip vẽ theo `needed` lấy từ
- * chi tiết có thật, nên thêm một công đoạn không có chi tiết nào chỉ tạo ra ô
- * 0/0 — vô nghĩa hơn là không vẽ. Hệ quả: dải ở màn danh sách có thể NGẮN hơn
- * danh sách công đoạn ở màn chi tiết cho tới khi thống kê ghi mẻ đầu.
- */
-function lineStagesFromComponents(
-  components: Pick<
-    ComponentWithQty,
-    | 'production_order_id'
-    | 'production_order_line_id'
-    | 'group_code'
-    | 'kind'
-    | 'first_stage'
-    | 'final_stage'
-    | 'stages'
-  >[],
-  planned: Map<string, string[]>,
-  stageOrder: Map<string, number>,
-  /** Chặng thành phẩm theo cấu hình công đoạn (0287) — `countingOf(stages).finish`. */
-  finish: readonly string[],
-): Map<string, string[]> {
-  const byLine = new Map<string, Set<string>>()
-  for (const c of components) {
-    if (!c.production_order_line_id) continue
-    const key = `${c.production_order_id}|${c.production_order_line_id}`
-    const route =
-      finishRouteOverride(c, finish) ??
-      componentRoute(planned.get(key), c)
-    if (route.length === 0) continue
-    const set = byLine.get(key) ?? new Set<string>()
-    for (const s of route) set.add(s)
-    byLine.set(key, set)
-  }
-  const out = new Map<string, string[]>()
-  for (const [key, set] of byLine) {
-    out.set(
-      key,
-      [...set].sort((a, b) => (stageOrder.get(a) ?? 99) - (stageOrder.get(b) ?? 99)),
-    )
-  }
-  return out
 }
 
 export const jobsService = {
@@ -490,7 +388,13 @@ export const jobsService = {
           line_qty: info?.qty ?? 0,
           image_file_id: info?.image_file_id ?? null,
           spec: info?.spec ?? {},
-          progress: assessJobProgress(j, lineStages, components, doneByCompStage),
+          progress: assessJobProgress(
+            j,
+            lineStages,
+            components,
+            doneByCompStage,
+            countingOf(stages),
+          ),
         }
       })
       // Ưu tiên lệnh trước, việc chưa xong trước.
@@ -552,29 +456,29 @@ export const jobsService = {
 
     // ── %SL + dự kiến xong per lệnh (plan-hoan-thien-ke-hoach-sx #4/#9) ────
     //
-    // ĐẾM THEO (DÒNG SP × CÔNG ĐOẠN) SUY TỪ CHI TIẾT, không theo `production_jobs`.
-    // Lý do đầy đủ ở `lineStagesFromComponents` — tóm tắt: DB có 4 dòng jobs,
-    // nên bản cũ trả 0 cho gần như mọi lệnh và cột "Bộ xong" hiện `—` ở 14/14.
-    const stageOrder = new Map(stages.map((s, i) => [s.code, i]))
-    const stagesByLine = lineStagesFromComponents(
-      components,
-      lineStagesOf(jobs),
-      stageOrder,
-      countingOf(stages).finish,
-    )
+    // ĐẾM THEO (DÒNG SP × CÔNG ĐOẠN) SUY TỪ CHI TIẾT, không theo `production_jobs`
+    // (DB từng chỉ có 4 dòng jobs → bản đếm theo jobs trả 0 ở 14/14 lệnh). Kế
+    // hoạch vẫn thắng khi có: lộ trình jobs của dòng là đối số đầu của tally.
+    //
+    // ĐÚNG ĐƠN VỊ TỪNG CÔNG ĐOẠN (09/11/2026, `lib/line-stage-tally`): phôi
+    // đếm chi tiết, từ công đoạn ghép đếm cụm (cụm mặc nhiên khi BOM phẳng),
+    // chặng thành phẩm đếm bộ — cùng cách đếm với Ghi sản lượng / Hồ sơ lệnh.
+    // Chặng thành phẩm nay CÓ MẶT ngay từ đầu (cần = SL dòng, đạt 0) như hai
+    // màn kia, nên "Bộ xong" của lệnh tính cả bốn bước sau sơn.
+    const counting = countingOf(stages)
+    const plannedByLine = lineStagesOf(jobs)
     const lsxQty = new Map<string, { needed: number; done: number }>()
-    /** (lệnh → công đoạn → cần/đạt), đơn vị chi tiết — nguồn của dải chip. */
+    /** (lệnh → công đoạn → cần/đạt) — nguồn của dải chip; đơn vị theo công đoạn. */
     const stageQty = new Map<string, Map<string, { needed: number; done: number }>>()
-    for (const [key, lineStages] of stagesByLine) {
-      const [lsxId, lineId] = key.split('|')
-      for (const stage of lineStages) {
-        const p = assessJobProgress(
-          { production_order_line_id: lineId, stage },
-          lineStages,
-          components,
-          doneByCompStage,
-        )
-        if (!p.has_components) continue
+    for (const [key, lineComps] of groupByLine(components)) {
+      const [lsxId] = key.split('|')
+      const tally = tallyLineStages(
+        lineComps,
+        plannedByLine.get(key),
+        doneByCompStage,
+        counting,
+      )
+      for (const [stage, p] of tally) {
         const acc = lsxQty.get(lsxId) ?? { needed: 0, done: 0 }
         acc.needed += p.needed
         acc.done += Math.min(p.done, p.needed) // làm dư không kéo % lệnh quá 100
@@ -703,8 +607,8 @@ export const jobsService = {
     for (const j of jobs) {
       if (j.status === 'done') continue
       const lineStages =
-        stagesByLine.get(`${j.production_order_id}|${j.production_order_line_id}`) ?? []
-      const p = assessJobProgress(j, lineStages, components, doneBeforeToday)
+        plannedByLine.get(`${j.production_order_id}|${j.production_order_line_id}`) ?? []
+      const p = assessJobProgress(j, lineStages, components, doneBeforeToday, counting)
       const t = deriveDailyTarget({
         needQty: p.needed,
         doneQty: p.done,
@@ -832,8 +736,12 @@ export const jobsService = {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async teamProgress(_user: User): Promise<{ rows: TeamProgressRow[] }> {
     const today = vnTodayIso()
-    const { jobs, components, entries, doneByCompStage } = await loadActiveContext()
+    const [{ jobs, components, entries, doneByCompStage }, stageCat] = await Promise.all([
+      loadActiveContext(),
+      productionRepo.listStages(),
+    ])
     const stagesByLine = lineStagesOf(jobs)
+    const counting = countingOf(stageCat)
 
     type Acc = TeamProgressRow & { daily: Map<string, number> }
     const byTeam = new Map<string, Acc>()
@@ -867,6 +775,7 @@ export const jobsService = {
         stagesByLine.get(`${j.production_order_id}|${j.production_order_line_id}`) ?? [],
         components,
         doneByCompStage,
+        counting,
       )
       acc.needed += p.needed
       acc.done_qty += Math.min(p.done, p.needed)
