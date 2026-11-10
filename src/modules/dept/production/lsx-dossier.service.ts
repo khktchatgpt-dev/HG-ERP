@@ -17,6 +17,7 @@ import { finishRowId, isFinishRow } from '@/lib/finish-stages'
 import { resolveHolder, type Holder } from '@/lib/lsx-holder'
 import { khoiLuongOf, type KhoiLuong } from '@/lib/khoi-luong'
 import {
+  headReceived,
   receivedOrFallback,
   totalKey,
   transferTotals,
@@ -170,6 +171,7 @@ export const lsxDossierService = {
       parentId: string | null,
       qtyPerUnit: number,
       tailNext: number | null = null,
+      headRecv: number | null = null,
     ): DossierRow => {
       const route = v.summary.stages.map((s) => s.stage)
       const cells: Record<string, DossierCell> = {}
@@ -180,7 +182,8 @@ export const lsxDossierService = {
         const n = wipNumbers({
           done: s.done,
           shipped: t?.shipped ?? 0,
-          received: receivedOrFallback(t, prev ? prev.done : null),
+          // Đầu lộ trình của dòng gộp: "đã nhận" suy từ dòng con (headRecv).
+          received: receivedOrFallback(t, prev ? prev.done : headRecv),
           used: s.done + s.defect + s.rework,
           // Công đoạn kế đã ghi sổ = hàng đã đi dù không lập PGT (10/11/2026).
           next_used: next ? next.done + next.defect + next.rework : tailNext,
@@ -189,7 +192,8 @@ export const lsxDossierService = {
           ...n,
           defect: s.defect,
           rework: s.rework,
-          received_estimated: !t?.has_inbound && prev != null,
+          received_estimated:
+            !t?.has_inbound && (prev != null || (i === 0 && headRecv != null)),
         }
       })
       return {
@@ -233,8 +237,47 @@ export const lsxDossierService = {
       // Cụm kết lộ trình → bộ đã bắt đầu lắp (bước đầu chặng thành phẩm).
       const clusterTail = (qtyPerUnit: number) =>
         fv && fv.summary.stages.length ? usedAtFirst(fv) * qtyPerUnit : null
+      // "Đã nhận" ở ĐẦU lộ trình cụm = chi tiết con đã về công đoạn ghép (phiếu
+      // tới đó, không phiếu thì xong ở chặng cuối của chi tiết), quy ra cụm theo
+      // chi tiết chậm nhất — cùng `headReceived` với Ghi sản lượng (10/11/2026).
+      const doneAt = (
+        pv: { summary: { stages: { stage: string; done: number }[] } },
+        stage: string | undefined,
+      ) => (stage ? (pv.summary.stages.find((s) => s.stage === stage)?.done ?? 0) : 0)
+      const clusterHead = (
+        cv: { summary: { stages: { stage: string }[] } },
+        parts: typeof comps,
+        qtyPerUnit: number,
+      ): number | null => {
+        const first = cv.summary.stages[0]?.stage
+        if (!first) return null
+        const inputs = parts.flatMap((p) => {
+          const pv = viewById.get(p.id)
+          if (!pv) return []
+          const t = totals.get(totalKey(p.id, first))
+          const last = pv.summary.stages.at(-1)?.stage
+          return [
+            {
+              received: receivedOrFallback(t, last ? doneAt(pv, last) : null),
+              total: pv.total_needed,
+            },
+          ]
+        })
+        const sets = headReceived(inputs, l.qty)
+        return sets == null ? null : sets * qtyPerUnit
+      }
       if (fv) {
-        rows.push(toRow(fv, 'finish', null, 1, shippedOfLine))
+        // Bộ thành phẩm: đầu vào = số bộ đủ bộ phận = đồng bộ của dòng.
+        rows.push(
+          toRow(
+            fv,
+            'finish',
+            null,
+            1,
+            shippedOfLine,
+            syncedByLine.get(l.id)?.synced_sets ?? null,
+          ),
+        )
         used.add(finishId)
       }
       // 2 · Cụm thật + chi tiết trong cụm.
@@ -244,7 +287,18 @@ export const lsxDossierService = {
         const av = viewById.get(asm.id)
         if (!av) continue
         rows.push(
-          toRow(av, 'cluster', null, asm.qty_per_unit, clusterTail(asm.qty_per_unit)),
+          toRow(
+            av,
+            'cluster',
+            null,
+            asm.qty_per_unit,
+            clusterTail(asm.qty_per_unit),
+            clusterHead(
+              av,
+              comps.filter((c) => c.kind === 'part' && c.cluster === asm.cluster),
+              asm.qty_per_unit,
+            ),
+          ),
         )
         used.add(asm.id)
         if (asm.cluster) {
@@ -261,7 +315,20 @@ export const lsxDossierService = {
       // 3 · Cụm mặc nhiên (ảo) + chi tiết bị gộp vào nó.
       const dv = viewById.get(defaultAssemblyId(l.id))
       if (dv) {
-        rows.push(toRow(dv, 'cluster', null, 1, clusterTail(1)))
+        rows.push(
+          toRow(
+            dv,
+            'cluster',
+            null,
+            1,
+            clusterTail(1),
+            clusterHead(
+              dv,
+              comps.filter((c) => plan.own_route.has(c.id)),
+              1,
+            ),
+          ),
+        )
         used.add(dv.id)
         for (const p of comps.filter(
           (c) => plan.own_route.has(c.id) && !used.has(c.id),

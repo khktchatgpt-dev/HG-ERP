@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { overAvailableWarning, totalKey, transferTotals, wipNumbers } from './wip-numbers'
+import {
+  headReceived,
+  overAvailableWarning,
+  totalKey,
+  transferTotals,
+  wipNumbers,
+} from './wip-numbers'
 
 describe('wipNumbers — năm con số của một dòng × công đoạn', () => {
   it('tồn = xong − đã giao; khả dụng = đã nhận − đã ghi (đạt + phế + sửa)', () => {
@@ -56,6 +62,47 @@ describe('wipNumbers — năm con số của một dòng × công đoạn', () =
       on_hand: 0.3,
       available: 0.7,
     })
+  })
+})
+
+describe('headReceived — đã nhận ở đầu lộ trình dòng gộp (10/11/2026)', () => {
+  it('cụm mặc nhiên ở hàn: 14 chi tiết nhận đủ → 20 cụm; chi tiết chậm nhất quyết định', () => {
+    // 20 SP · chân trước 2/SP nhận 40, ắc 6/SP nhận 120 → 20 bộ.
+    expect(
+      headReceived(
+        [
+          { received: 40, total: 40 },
+          { received: 120, total: 120 },
+        ],
+        20,
+      ),
+    ).toBe(20)
+    // Ắc mới nhận 60/120 → chỉ ghép được 10 cụm.
+    expect(
+      headReceived(
+        [
+          { received: 40, total: 40 },
+          { received: 60, total: 120 },
+        ],
+        20,
+      ),
+    ).toBe(10)
+  })
+
+  it('kẹp trần SL dòng; con không có số nhận bị bỏ qua; không con nào hợp lệ → null', () => {
+    expect(headReceived([{ received: 500, total: 40 }], 20)).toBe(20)
+    expect(
+      headReceived(
+        [
+          { received: null, total: 40 },
+          { received: 20, total: 40 },
+        ],
+        20,
+      ),
+    ).toBe(10)
+    expect(headReceived([{ received: null, total: 40 }], 20)).toBeNull()
+    expect(headReceived([], 20)).toBeNull()
+    expect(headReceived([{ received: 10, total: 0 }], 20)).toBeNull()
   })
 })
 

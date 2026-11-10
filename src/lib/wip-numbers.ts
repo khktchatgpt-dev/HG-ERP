@@ -163,3 +163,30 @@ export function receivedOrFallback(
   if (total?.has_inbound) return total.received
   return prevDone
 }
+
+export type HeadInput = {
+  /** Đã nhận (hoặc xong ở chặng cuối của nó) của MỘT dòng con, đơn vị của con. */
+  received: number | null
+  /** Tổng cần của dòng con cho cả dòng SP (calcComponent().total_needed). */
+  total: number
+}
+
+/**
+ * "ĐÃ NHẬN" ở ĐẦU lộ trình của một dòng GỘP — cụm (thật / mặc nhiên) ở công
+ * đoạn ghép, thành phẩm ở bước đầu chặng thành phẩm (10/11/2026). Dòng gộp
+ * không có công đoạn trước trên lộ trình của CHÍNH nó, nên `receivedOrFallback`
+ * trả null và màn bày "—" dù tổ hàn vừa nhận đủ 600 chi tiết. Đầu vào của nó
+ * là các dòng CON: mỗi con góp floor(nhận_con × SL dòng / tổng cần con) bộ,
+ * lấy MIN (con chậm nhất quyết định — cùng công thức đồng bộ SP), kẹp trần SL
+ * dòng. Trả số BỘ; cụm thật n/SP thì nhân thêm ở chỗ gọi. Không con nào hợp lệ
+ * → null (không bịa).
+ */
+export function headReceived(inputs: HeadInput[], lineQty: number): number | null {
+  let m: number | null = null
+  for (const x of inputs) {
+    if (x.total <= 0 || x.received == null) continue
+    const sets = Math.floor((x.received * lineQty) / x.total)
+    m = m == null ? sets : Math.min(m, sets)
+  }
+  return m == null ? null : Math.min(m, lineQty)
+}

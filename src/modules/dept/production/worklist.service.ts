@@ -14,7 +14,13 @@ import {
   resolveCountingPlan,
 } from '@/lib/default-assembly'
 import { countingOf, resolveStageConfigs, type StageMeta } from '@/lib/stage-config'
-import { receivedOrFallback, totalKey, transferTotals, wipNumbers } from '@/lib/wip-numbers'
+import {
+  headReceived,
+  receivedOrFallback,
+  totalKey,
+  transferTotals,
+  wipNumbers,
+} from '@/lib/wip-numbers'
 import {
   FINISH_ROW_NAME,
   finishRouteOverride,
@@ -768,6 +774,11 @@ export async function loadEntrySheet(
     // Dòng CỤM MẶC NHIÊN: đơn vị BỘ, cần = SL đặt; sản lượng SUY từ sổ chi
     // tiết bị gộp (min chi tiết chậm nhất) vì cụm ảo chưa có sổ riêng.
     if (plan.virtual_stages.includes(stage)) {
+      // Khả dụng của cụm ảo = đầu vào từ CHI TIẾT bị gộp (10/11/2026): ở công
+      // đoạn ghép, mỗi chi tiết "đã nhận" = phiếu giao tới đây, không phiếu thì
+      // xong ở chặng cuối của nó (phôi); ở công đoạn ảo sau, = số đã ghi ở công
+      // đoạn ảo liền trước. Quy ra cụm theo chi tiết chậm nhất (lib/wip-numbers).
+      const vi = plan.virtual_stages.indexOf(stage)
       const absorbed = lineComps
         .filter((c) => plan.own_route.has(c.id))
         .map((c) => {
@@ -776,7 +787,20 @@ export async function loadEntrySheet(
             line.qty,
           ).total_needed
           const t = tally.get(c.id)
-          return { total, confirmed: t?.confirmed.qty ?? 0, pending: t?.pending.qty ?? 0 }
+          const prevStage =
+            vi > 0
+              ? plan.virtual_stages[vi - 1]
+              : (plan.own_route.get(c.id)?.at(-1) ?? null)
+          const received = receivedOrFallback(
+            pgt.get(totalKey(c.id, stage)),
+            prevStage ? (doneByCompStage.get(`${c.id}|${prevStage}`) ?? 0) : null,
+          )
+          return {
+            total,
+            received,
+            confirmed: t?.confirmed.qty ?? 0,
+            pending: t?.pending.qty ?? 0,
+          }
         })
       const minSets = (pick: (a: (typeof absorbed)[number]) => number) => {
         let m: number | null = null
@@ -804,7 +828,7 @@ export async function loadEntrySheet(
         today_qty: 0,
         // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
         days: [],
-        available: null,
+        available: headReceived(absorbed, line.qty),
       })
     }
 
@@ -814,6 +838,59 @@ export async function loadEntrySheet(
       isFinishStage(stage, counting.finish) &&
       !lineComps.some((c) => isFinishRow(c, counting.finish))
     ) {
+      // Khả dụng của bộ thành phẩm chưa có sổ (10/11/2026): ở bước đầu chặng
+      // thành phẩm = số bộ ĐỦ bộ phận — mỗi đầu vào top-level (cụm thật, chi
+      // tiết rời có lộ trình, cụm mặc nhiên qua chi tiết gộp) góp số xong ở
+      // chặng cuối của nó, lấy MIN (đúng phép "đồng bộ SP"). Bước sau mà dòng
+      // vẫn ảo = bước đầu chưa ghi gì → 0.
+      const fi = counting.finish.indexOf(stage)
+      let finishAvail: number | null = 0
+      if (fi === 0) {
+        const assemblyClusters = new Set(
+          lineComps
+            .filter((c) => c.kind === 'assembly' && c.cluster)
+            .map((c) => c.cluster),
+        )
+        const inputs = lineComps
+          .filter(
+            (c) =>
+              !plan.own_route.has(c.id) &&
+              (c.kind === 'assembly' ||
+                !(c.cluster != null && assemblyClusters.has(c.cluster))),
+          )
+          .map((c) => {
+            const r = routeOf.get(c.id) ?? []
+            const last = r.at(-1)
+            return {
+              received: last ? (doneByCompStage.get(`${c.id}|${last}`) ?? 0) : null,
+              total: calcComponent(
+                {
+                  qty_per_unit: c.qty_per_unit,
+                  dm_kg: c.dm_kg,
+                  pcs_per_bar: c.pcs_per_bar,
+                },
+                line.qty,
+              ).total_needed,
+            }
+          })
+        const lastVirtual = plan.virtual_stages.at(-1)
+        if (lastVirtual) {
+          for (const c of lineComps.filter((c) => plan.own_route.has(c.id))) {
+            inputs.push({
+              received: doneByCompStage.get(`${c.id}|${lastVirtual}`) ?? 0,
+              total: calcComponent(
+                {
+                  qty_per_unit: c.qty_per_unit,
+                  dm_kg: c.dm_kg,
+                  pcs_per_bar: c.pcs_per_bar,
+                },
+                line.qty,
+              ).total_needed,
+            })
+          }
+        }
+        finishAvail = headReceived(inputs, line.qty)
+      }
       out.push({
         component_id: finishRowId(line.id),
         kind: 'assembly',
@@ -829,7 +906,7 @@ export async function loadEntrySheet(
         today_qty: 0,
         // Dòng ảo chưa có sổ riêng — không có nhịp nào để bày.
         days: [],
-        available: null,
+        available: finishAvail,
       })
     }
 
