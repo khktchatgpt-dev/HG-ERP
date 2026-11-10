@@ -1,6 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { resolveNavCapabilities } from '@/workspaces/access'
+import { listAccessibleWorkspaces, resolveNavCapabilities } from '@/workspaces/access'
 import { resolveNavBadges } from '@/workspaces/nav-badges'
 import {
   ACCENT_CLASSES,
@@ -17,6 +17,10 @@ export async function MobileNav({ workspace }: { workspace: WorkspaceConfig }) {
   const head = user.department_id ? await departmentsRepo.findHeadedBy(user.id) : null
   const capabilities = await resolveNavCapabilities(user)
   const badges = await resolveNavBadges(user, workspace.id)
+  const switchable = (await listAccessibleWorkspaces(user)).map((w) => ({
+    id: w.workspace.id,
+    readonly: w.readonly,
+  }))
   const sections = withNavBadges(
     resolveNavSections(workspace, {
       role: user.role,
@@ -37,6 +41,7 @@ export async function MobileNav({ workspace }: { workspace: WorkspaceConfig }) {
         logoText: workspace.logoText,
       }}
       sections={sections}
+      switchable={switchable}
       accentBg={accent.bg}
       accentShadow={accent.bg.replace('bg-', 'shadow-')}
       accentSoftBg={accent.bgSoft}

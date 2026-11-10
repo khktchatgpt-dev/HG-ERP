@@ -76,10 +76,7 @@ export function VaoViecScreen({
           }
         />
 
-        <div className="sx-sec">
-          Đường đi của lệnh — mỗi ô là số lệnh đang CHỜ ở bước đó
-          <span className="sp">bấm số = danh sách đúng chừng ấy lệnh</span>
-        </div>
+        <div className="sx-sec">Đường đi của lệnh — số lệnh đang chờ ở từng bước</div>
         <div className="sx-duong" role="list">
           {buoc.map((b) => (
             <div
@@ -126,7 +123,7 @@ export function VaoViecScreen({
         {viecKH && (
           <BangViec
             tieuDe="Việc của bạn hôm nay — Kế hoạch sản xuất"
-            ghiChu="xếp theo hạn xuất gần nhất · mỗi dòng một nút"
+            ghiChu="hạn xuất gần nhất trước"
             items={viecKH}
             cot3="Hạn xuất"
           />
@@ -134,7 +131,7 @@ export function VaoViecScreen({
         {viecQD && (
           <BangViec
             tieuDe="Việc của bạn hôm nay — Quản đốc"
-            ghiChu={coSo ? 'xưởng đang ghi sổ' : 'xưởng chưa ghi sổ trên hệ thống'}
+            ghiChu={coSo ? '' : 'xưởng chưa ghi sổ'}
             items={viecQD}
             cot3="Mốc"
           />
@@ -153,11 +150,7 @@ export function VaoViecScreen({
           <button type="button" className="lnk" onClick={() => setMoXuong(!moXuong)}>
             {moXuong ? '▾' : '▸'} <b>Khi xưởng chạy</b>
           </button>
-          <span className="mut">
-            {coSo
-              ? 'cảnh báo · nhịp hôm nay · tổ hôm nay · lệnh cần chú ý'
-              : 'cảnh báo + nhịp hôm nay + tổ hôm nay — gập vì chưa có sổ nào'}
-          </span>
+          {!coSo && <span className="mut">chưa có sổ hôm nay</span>}
         </div>
         {moXuong && (
           <div className="sx-grid" style={{ flex: '0 1 auto' }}>
@@ -170,7 +163,7 @@ export function VaoViecScreen({
           </div>
         )}
 
-        <ThanhTT left="Số bước lấy từ cùng hàm với Lệnh sản xuất và Lộ trình công đoạn · việc hôm nay tính theo quyền của bạn" />
+        <ThanhTT left="Việc hôm nay tính theo quyền của bạn" />
       </div>
     </SxKhung>
   )

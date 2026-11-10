@@ -4,7 +4,12 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { NavSection } from '@/workspaces/workspaces.config'
+import {
+  ACCENT_CLASSES,
+  WORKSPACES,
+  type NavSection,
+  type WorkspaceId,
+} from '@/workspaces/workspaces.config'
 import { NavLink } from './NavLink'
 import { useNhomGap } from './nav-gap'
 
@@ -15,6 +20,7 @@ import { useNhomGap } from './nav-gap'
 export function MobileDrawer({
   workspace,
   sections,
+  switchable = [],
   accentBg,
   accentShadow,
   accentSoftBg,
@@ -22,14 +28,21 @@ export function MobileDrawer({
 }: {
   workspace: { route: string; home: string; short: string; logoText: string }
   sections: NavSection[]
+  /** Khu người này vào được (cùng nguồn với WorkspaceSwitcher ở desktop). */
+  switchable?: { id: WorkspaceId; readonly: boolean }[]
   accentBg: string
   accentShadow: string
   accentSoftBg: string
   accentText: string
 }) {
   const [open, setOpen] = useState(false)
+  const [khuMo, setKhuMo] = useState(false)
   const pathname = usePathname()
   const { mo, lat, dangO, tongSo } = useNhomGap()
+  // Khu khác khu đang đứng — trước 10/11/2026 điện thoại không có chỗ chuyển
+  // khu (switcher chỉ nằm ở sidebar desktop), thống kê tổ dùng điện thoại kẹt
+  // trong khu đầu tiên đăng nhập rơi vào.
+  const khuKhac = switchable.filter((s) => WORKSPACES[s.id].route !== workspace.route)
 
   // Đóng drawer khi điều hướng sang trang khác.
   useEffect(() => {
@@ -108,6 +121,45 @@ export function MobileDrawer({
                   ✕
                 </button>
               </div>
+
+              {khuKhac.length > 0 && (
+                <div className="mb-2 border-b pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setKhuMo((v) => !v)}
+                    aria-expanded={khuMo}
+                    className="text-muted-foreground/70 flex w-full items-center gap-1.5 px-3 pt-1 pb-1 text-[10px] font-semibold tracking-wider uppercase"
+                  >
+                    <span aria-hidden className="w-2 text-[9px]">
+                      {khuMo ? '▾' : '▸'}
+                    </span>
+                    Chuyển khu
+                    <span className="bg-muted text-foreground ml-auto rounded-[3px] px-1 font-mono text-[10px] tracking-normal">
+                      {khuKhac.length}
+                    </span>
+                  </button>
+                  {khuMo &&
+                    khuKhac.map(({ id, readonly }) => {
+                      const ws = WORKSPACES[id]
+                      const a = ACCENT_CLASSES[ws.accent]
+                      return (
+                        <Link
+                          key={id}
+                          href={`${ws.home ?? ws.route}/`}
+                          className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2 rounded-md px-3 py-2 text-[13px]"
+                        >
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${a.bg}`} />
+                          <span className="flex-1 truncate">{ws.label}</span>
+                          {readonly && (
+                            <span className="bg-muted text-muted-foreground rounded px-1 py-px text-[9px] tracking-wide uppercase">
+                              chỉ xem
+                            </span>
+                          )}
+                        </Link>
+                      )
+                    })}
+                </div>
+              )}
 
               <div className="flex flex-col gap-1">
                 {sections.map((sec) => (

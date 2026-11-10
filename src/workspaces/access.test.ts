@@ -68,6 +68,12 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
     }
   })
 
+  it('nhà là thongke (thống kê tổ, 10/11/2026) cũng mở cửa cả gia đình SX', () => {
+    for (const id of ['production', 'team', 'thongke'] as const) {
+      expect(canEnterWorkspaceSync(employee, id, 'thongke'), id).toBe(true)
+    }
+  })
+
   it('workspace chưa ready (qc) chặn mọi người trừ admin', () => {
     expect(canEnterWorkspaceSync(employee, 'qc', 'qc')).toBe(false)
     expect(canEnterWorkspaceSync(manager, 'qc', null)).toBe(false)

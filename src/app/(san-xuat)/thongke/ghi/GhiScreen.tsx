@@ -34,19 +34,6 @@ export function GhiScreen(p: GhiProps) {
   const can = sheet.can_record
   const go = d.goBlocked()
   const core = sheet.stage_cfg.core
-  const loiCot = [
-    'SL đạt bắt buộc',
-    core.defect !== 'off' && `Phế${core.defect === 'required' ? ' bắt buộc' : ''}`,
-    core.rework !== 'off' && `Sửa lại${core.rework === 'required' ? ' bắt buộc' : ''}`,
-    core.worker !== 'off' && `Người làm${core.worker === 'required' ? ' bắt buộc' : ''}`,
-    core.kg !== 'off' && `Kg${core.kg === 'required' ? ' bắt buộc' : ' (cột chi tiết)'}`,
-  ].filter(Boolean)
-  const tat = [
-    core.defect === 'off' && 'Phế',
-    core.rework === 'off' && 'Sửa lại',
-    core.kg === 'off' && 'Kg',
-    core.worker === 'off' && 'Người làm',
-  ].filter(Boolean)
   const goiY = sheet.suggested.filter((s) => s.team_id === d.teamId).length
 
   return (
@@ -84,7 +71,11 @@ export function GhiScreen(p: GhiProps) {
                 <ApNut onClick={d.toggleMore}>
                   {d.more ? 'Ẩn cột chi tiết' : 'Cột chi tiết'}
                 </ApNut>
-                <ApNut onClick={() => d.save(false)} why={d.blocked} busy={d.busy}>
+                <ApNut
+                  onClick={() => d.save(false)}
+                  why={d.blocked ? 'chưa có gì để lưu' : null}
+                  busy={d.busy}
+                >
                   Lưu nháp
                 </ApNut>
               </ApNhom>
@@ -165,25 +156,6 @@ export function GhiScreen(p: GhiProps) {
             onClick: () => d.doiCongDoan(s.code),
           }))}
         />
-
-        <div className="sx-leg">
-          <span>
-            Cột theo cấu hình <b>{sheet.stage_label}</b> (C1): {loiCot.join(' · ')}
-            {sheet.stage_fields.length > 0 && (
-              <>
-                {' '}
-                · ô riêng <b>{sheet.stage_fields.map((f) => f.label).join(', ')}</b>
-              </>
-            )}
-            {tat.length > 0 && <> — không có {tat.join(', ')}</>}
-          </span>
-          <span>
-            <i className="w" /> vượt còn / khả dụng (cảnh báo)
-          </span>
-          <span>
-            <i className="r" /> thiếu ô bắt buộc (chặn)
-          </span>
-        </div>
 
         {d.saved && !d.draftHidden && d.typed.length === 0 && (
           <div className="sx-note">
@@ -316,10 +288,7 @@ export function GhiScreen(p: GhiProps) {
           </span>
         </div>
 
-        <ThanhTT
-          left="Enter ↓ · Shift+Enter ↑ · ← → sang ô · Ctrl+V dán vùng từ Excel · bấm số ở cột Còn để điền đủ"
-          right={`1 phiếu = 1 lệnh × 1 công đoạn × 1 tổ × 1 ngày · production_entry_docs`}
-        />
+        <ThanhTT left="Enter ↓ · Ctrl+V dán từ Excel · bấm số ở cột Còn để điền đủ" />
       </div>
     </SxKhung>
   )

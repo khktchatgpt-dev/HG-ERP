@@ -59,7 +59,8 @@ export function canEnterWorkspaceSync(
   if (!ws.ready) return false
   if (id === homeId) return true
   // Nhà xưởng mở cửa cả gia đình SX (nội bộ xưởng xem lẫn nhau).
-  if (PRODUCTION_FAMILY.has(id) && homeId === 'production') return true
+  if (PRODUCTION_FAMILY.has(id) && homeId != null && PRODUCTION_FAMILY.has(homeId))
+    return true
   if (SENSITIVE.has(id)) return false
   return 'need-permission'
 }
@@ -190,12 +191,16 @@ async function visibleProductionFamily(
   user: User,
   homeId: WorkspaceId | null,
 ): Promise<ReadonlySet<WorkspaceId>> {
+  // 10/11/2026: khu `thongke` tách ra mà danh sách này quên nó → nút Chuyển
+  // khu không bao giờ bày Thống kê, kể cả cho admin (lộ ở test E2E).
   if (user.role === 'admin' || user.role === 'manager') {
-    return new Set(['production', 'team'])
+    return new Set(['production', 'team', 'thongke'])
   }
-  if (homeId === 'production') {
+  if (homeId != null && PRODUCTION_FAMILY.has(homeId)) {
+    // Thống kê tổ: nhà là `thongke`, xem thêm Sản xuất để tra lệnh / hồ sơ.
+    // Tổ trưởng / công nhân: chỉ bề mặt Tổ.
     return (await isProductionStat(user))
-      ? new Set(['production', 'team'])
+      ? new Set(['thongke', 'production'])
       : new Set(['team'])
   }
   if ((await isPlannerStaff(user)) || (await canManagePlan(user))) {
@@ -235,7 +240,8 @@ export async function listAccessibleWorkspaces(
       if (!ok) return null
       // Nhà: workspace của phòng, và với NV xưởng là CẢ gia đình SX (0087).
       const isHome =
-        id === homeId || (homeId === 'production' && PRODUCTION_FAMILY.has(id))
+        id === homeId ||
+        (homeId != null && PRODUCTION_FAMILY.has(homeId) && PRODUCTION_FAMILY.has(id))
       return {
         workspace: WORKSPACES[id],
         // Badge "Chỉ xem": không phải nhà + không có vai tác nghiệp chéo.

@@ -84,14 +84,7 @@ export function LuoiGhi({ d }: { d: GhiCtx }) {
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={6}>
-              Sắp ghi {d.typed.length} dòng
-              <span className="mut" style={{ fontWeight: 400 }}>
-                {' '}
-                · chỉ cộng dòng đang gõ · khả dụng ≠ còn: khả dụng là hàng đã NHẬN vào tổ,
-                vượt là cảnh báo không chặn
-              </span>
-            </td>
+            <td colSpan={6}>Sắp ghi {d.typed.length} dòng</td>
             {cols.map((c) => (
               <td key={c.key} className={c.kind === 'num' ? 'r num' : undefined}>
                 {c.key === 'qty'

@@ -172,10 +172,7 @@ export function KhiXuongChay({
         </div>
       </div>
 
-      <div className="sx-sec">
-        Tổ hôm nay
-        <span className="sp">chỉ nói HÔM NAY — luỹ kế theo tổ ở màn riêng</span>
-      </div>
+      <div className="sx-sec">Tổ hôm nay</div>
       <table className="sx-tb" style={{ width: '100%' }}>
         <colgroup>
           <col style={{ width: 180 }} />
