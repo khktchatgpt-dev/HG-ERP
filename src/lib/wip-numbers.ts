@@ -8,8 +8,14 @@
  *   xong      = Σ đạt (sổ công đoạn này)
  *   đã giao   = Σ phiếu giao đi từ công đoạn này (cả chờ nhận lẫn đã nhận)
  *   đã nhận   = Σ số NHẬN của phiếu đã xác nhận TỚI công đoạn này
- *   tồn       = xong − đã giao          (hàng xong còn nằm ở tổ)
+ *   tồn       = xong − max(đã giao, đã ghi ở công đoạn KẾ)   (hàng xong còn nằm ở tổ)
  *   khả dụng  = đã nhận − đã ghi ở đây  (đầu vào còn trong tay để làm tiếp)
+ *
+ * "Đã ghi ở công đoạn kế" (`next_used`, 10/11/2026): hệ KHÔNG bắt lập phiếu
+ * giao, nên khi công đoạn sau đã ghi sổ mà không ai lập PGT thì hàng rõ ràng đã
+ * đi — đối xứng với `receivedOrFallback` ("đã nhận" xấp xỉ bằng xong công đoạn
+ * trước). Lệnh TEST 10/11 đóng xong, xuất đủ mà Hồ sơ lệnh vẫn báo "tồn tại
+ * công đoạn 140" (7 × 20) vì tồn chỉ trừ phiếu. Không truyền → như cũ.
  *
  * "Đã ghi ở đây" gồm đạt + phế + sửa lại: phế cũng ăn đầu vào.
  *
@@ -29,6 +35,13 @@ export type WipInput = {
   received: number | null
   /** Đạt + phế + sửa lại đã ghi ở công đoạn này (mọi trạng thái phiếu). */
   used: number
+  /**
+   * Đạt + phế + sửa lại đã ghi ở công đoạn KẾ TIẾP của chính dòng này — xấp xỉ
+   * "đã giao" khi xưởng không lập phiếu. null/thiếu = không có công đoạn kế
+   * hoặc không muốn suy (màn lập phiếu giao: phần "có thể giao" vẫn là xong −
+   * phiếu, vì phiếu lập sau sổ là chuyện thật).
+   */
+  next_used?: number | null
 }
 
 export type WipNumbers = {
@@ -46,7 +59,7 @@ export function wipNumbers(x: WipInput): WipNumbers {
     done: r2(x.done),
     shipped: r2(x.shipped),
     received: x.received == null ? null : r2(x.received),
-    on_hand: r2(x.done - x.shipped),
+    on_hand: r2(x.done - Math.max(x.shipped, x.next_used ?? 0)),
     available: x.received == null ? null : r2(x.received - x.used),
   }
 }

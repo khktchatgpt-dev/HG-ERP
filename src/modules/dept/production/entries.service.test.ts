@@ -1076,4 +1076,27 @@ describe('entriesService.summary — chặng thành phẩm (18/09, lib/finish-st
     const s = await entriesService.summary(admin, 'lsx1')
     expect(s.synced_by_line[0].synced_sets).toBe(50)
   })
+
+  it('hàng MUA (ngũ kim, lộ trình rỗng) không vào đồng bộ — không thì lệnh xong 100% vẫn 0 bộ', async () => {
+    // Lệnh TEST 10/11/2026: 23 dòng vít · bulon không qua công đoạn nào kéo
+    // "Đồng bộ 0 / 20" dù mọi công đoạn 100%.
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      { ...flat('p1', 'CHÂN', 4), final_stage: 'son' },
+      { ...flat('vit', 'Vít 4x15', 8), group_code: 'NGU_KIM' },
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'p1',
+        stage: 'son',
+        entry_date: '2026-07-24',
+        qty: 200,
+        defect_qty: 0,
+        kg: null,
+      },
+    ] as never)
+
+    const s = await entriesService.summary(admin, 'lsx1')
+    expect(s.synced_by_line[0].synced_sets).toBe(50)
+  })
 })

@@ -13,6 +13,29 @@ describe('wipNumbers — năm con số của một dòng × công đoạn', () =
     })
   })
 
+  it('tồn trừ cả số đã ghi ở công đoạn kế khi chưa lập phiếu (10/11/2026)', () => {
+    // Nguội xong 20, không PGT, sơn đã ghi 20 → tồn 0 (hàng đã đi), không phải 20.
+    expect(
+      wipNumbers({ done: 20, shipped: 0, received: 20, used: 20, next_used: 20 }).on_hand,
+    ).toBe(0)
+    // Phiếu giao 12 nhưng công đoạn kế mới ghi 8 → phiếu thắng (max).
+    expect(
+      wipNumbers({ done: 20, shipped: 12, received: null, used: 0, next_used: 8 })
+        .on_hand,
+    ).toBe(8)
+    // Công đoạn kế ghi 15 mà phiếu mới 12 (sổ đi trước phiếu) → 5.
+    expect(
+      wipNumbers({ done: 20, shipped: 12, received: null, used: 0, next_used: 15 })
+        .on_hand,
+    ).toBe(5)
+    // Không truyền → như cũ.
+    expect(wipNumbers({ done: 20, shipped: 0, received: null, used: 0 }).on_hand).toBe(20)
+    expect(
+      wipNumbers({ done: 20, shipped: 0, received: null, used: 0, next_used: null })
+        .on_hand,
+    ).toBe(20)
+  })
+
   it('đầu chuỗi (received null) → khả dụng null, tồn vẫn tính', () => {
     const n = wipNumbers({ done: 120, shipped: 0, received: null, used: 125 })
     expect(n.available).toBeNull()

@@ -195,7 +195,14 @@ function DongCum({
         <O key={s.code} d={d} l={l} r={r} stage={s.code} />
       ))}
       <td className="r num">
-        {r.tier === 'part' ? (
+        {r.route.length === 0 ? (
+          <span
+            className="mut"
+            title="hàng mua — không qua công đoạn nào, không vào đồng bộ"
+          >
+            –
+          </span>
+        ) : r.tier === 'part' ? (
           <span className="mut">
             {r.qty_per_unit > 0 ? fmt(Math.floor(r.done_final / r.qty_per_unit)) : '—'}
           </span>

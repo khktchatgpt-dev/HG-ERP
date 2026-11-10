@@ -908,6 +908,10 @@ export const entriesService = {
         // thiện vào đó là trộn hai câu hỏi làm một, và đồng bộ sẽ đứng 0 suốt
         // cho tới khi tổ lắp ráp bắt đầu.
         .filter((c) => !isFinishRow(c, counting.finish))
+        // Hàng MUA (ngũ kim: lộ trình rỗng, không qua công đoạn nào) không vào
+        // đồng bộ — nó không bao giờ có sổ nên MIN đứng 0 mãi dù lệnh đã xong
+        // 100% (lệnh TEST 10/11/2026: 23 dòng vít kéo "Đồng bộ 0 / 20").
+        .filter((c) => (views.find((v) => v.id === c.id)?.summary.stages.length ?? 0) > 0)
         .map((c) => ({
           qty_per_unit: c.qty_per_unit,
           done_final: views.find((v) => v.id === c.id)?.summary.done_final ?? 0,

@@ -658,6 +658,23 @@ export const ordersRepo = {
     })
   },
 
+  /**
+   * Σ đã xuất theo DÒNG ĐƠN — Hồ sơ lệnh dùng để biết thành phẩm ở công đoạn
+   * cuối đã rời xưởng bao nhiêu (tồn công đoạn cuối = hoàn thiện − đã xuất).
+   */
+  async shippedByLineIds(lineIds: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    if (!lineIds.length) return out
+    const { data } = await db()
+      .from('sales_order_shipments')
+      .select('order_line_id, qty')
+      .in('order_line_id', lineIds)
+    for (const r of (data ?? []) as { order_line_id: string; qty: number }[]) {
+      out.set(r.order_line_id, (out.get(r.order_line_id) ?? 0) + Number(r.qty))
+    }
+    return out
+  },
+
   async findShipment(id: string): Promise<OrderShipment | null> {
     const { data } = await db()
       .from('sales_order_shipments')

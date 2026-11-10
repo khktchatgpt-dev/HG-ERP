@@ -348,12 +348,34 @@ export const baoCaoService = {
       })
       .sort((a, b) => b.treo - a.treo)
 
-    // Tồn công đoạn = xong (chính thức) − đã giao; chờ nhận = phiếu da_giao đi từ đó.
+    // Tồn công đoạn = xong (chính thức) − max(đã giao, đã ghi ở công đoạn kế);
+    // chờ nhận = phiếu da_giao đi từ đó. Cùng `wipNumbers` với Hồ sơ lệnh:
+    // công đoạn sau đã ghi sổ thì hàng đã đi dù không ai lập PGT (10/11/2026).
     const doneAt = new Map<string, number>()
+    const usedAt = new Map<string, number>()
+    const stagesOfComp = new Map<string, Set<string>>()
     for (const e of allEntries) {
-      if (!countsAsOfficial(e.doc_status as EntryDocStatus)) continue
       const k = totalKey(e.component_id, e.stage)
+      usedAt.set(k, (usedAt.get(k) ?? 0) + e.qty + e.defect_qty + e.rework_qty)
+      const set = stagesOfComp.get(e.component_id) ?? new Set<string>()
+      set.add(e.stage)
+      stagesOfComp.set(e.component_id, set)
+      if (!countsAsOfficial(e.doc_status as EntryDocStatus)) continue
       doneAt.set(k, (doneAt.get(k) ?? 0) + e.qty)
+    }
+    // Công đoạn KẾ của một dòng = công đoạn gần nhất SAU nó (theo danh mục) mà
+    // dòng đó có sổ — không cần lộ trình đầy đủ, chỉ cần biết hàng đã sang đâu.
+    const nextUsedOf = (compId: string, stage: string): number | null => {
+      const cur = stageOrder.get(stage) ?? 99
+      let best: { ord: number; used: number } | null = null
+      for (const s of stagesOfComp.get(compId) ?? []) {
+        const ord = stageOrder.get(s) ?? 99
+        if (ord <= cur) continue
+        if (!best || ord < best.ord) {
+          best = { ord, used: usedAt.get(totalKey(compId, s)) ?? 0 }
+        }
+      }
+      return best ? best.used : null
     }
     const totals = transferTotals(docs, rawTransfers)
     const docById = new Map(docs.map((d) => [d.id, d]))
@@ -368,7 +390,13 @@ export const baoCaoService = {
     for (const [k, done] of doneAt) {
       const [compId, stage] = k.split('|')
       const t = totals.get(k)
-      const n = wipNumbers({ done, shipped: t?.shipped ?? 0, received: null, used: 0 })
+      const n = wipNumbers({
+        done,
+        shipped: t?.shipped ?? 0,
+        received: null,
+        used: 0,
+        next_used: nextUsedOf(compId, stage),
+      })
       const cn = choNhan.get(k) ?? 0
       if (n.on_hand <= 0.001 && cn <= 0) continue
       const c = compById.get(compId)

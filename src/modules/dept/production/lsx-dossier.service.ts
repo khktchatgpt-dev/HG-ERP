@@ -9,6 +9,7 @@ import { transferDocsRepo } from './transfer-docs.repo'
 import { transferDocsService, type PgtDocView } from './transfer-docs.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
+import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { countingOf, resolveStageConfigs, type CountLevel } from '@/lib/stage-config'
 import { resolveCountingPlan, defaultAssemblyId } from '@/lib/default-assembly'
@@ -153,22 +154,36 @@ export const lsxDossierService = {
       ).map((p) => [p.id, p.image_file_id]),
     )
 
+    // "Đã ghi ở công đoạn kế" cho ô CUỐI lộ trình của một dòng (10/11/2026):
+    // cụm (thật / mặc nhiên) kết ở sơn → kế là bước đầu chặng thành phẩm, mỗi
+    // bộ ăn `qty_per_unit` cụm; thành phẩm kết ở hoàn thiện → kế là XUẤT HÀNG
+    // của dòng đơn. Không có thì tồn cuối lộ trình = xong − phiếu, như cũ.
+    const usedAtFirst = (v: {
+      summary: { stages: { done: number; defect: number; rework: number }[] }
+    }) => {
+      const s0 = v.summary.stages[0]
+      return s0 ? s0.done + s0.defect + s0.rework : 0
+    }
     const toRow = (
       v: NonNullable<ReturnType<typeof viewById.get>>,
       tier: DossierRow['tier'],
       parentId: string | null,
       qtyPerUnit: number,
+      tailNext: number | null = null,
     ): DossierRow => {
       const route = v.summary.stages.map((s) => s.stage)
       const cells: Record<string, DossierCell> = {}
       v.summary.stages.forEach((s, i) => {
         const prev = i > 0 ? v.summary.stages[i - 1] : null
+        const next = v.summary.stages[i + 1] ?? null
         const t = totals.get(totalKey(v.id, s.stage))
         const n = wipNumbers({
           done: s.done,
           shipped: t?.shipped ?? 0,
           received: receivedOrFallback(t, prev ? prev.done : null),
           used: s.done + s.defect + s.rework,
+          // Công đoạn kế đã ghi sổ = hàng đã đi dù không lập PGT (10/11/2026).
+          next_used: next ? next.done + next.defect + next.rework : tailNext,
         })
         cells[s.stage] = {
           ...n,
@@ -200,6 +215,9 @@ export const lsxDossierService = {
       arr.push(j.stage)
       plannedByLine.set(j.production_order_line_id, arr)
     }
+    const shippedByLine = await ordersRepo.shippedByLineIds(
+      lines.map((l) => l.sales_order_line_id).filter((x): x is string => !!x),
+    )
     const used = new Set<string>()
     const linesOut: DossierLine[] = lines.map((l) => {
       const comps = components.filter((c) => c.production_order_line_id === l.id)
@@ -209,8 +227,14 @@ export const lsxDossierService = {
       const finishReal = comps.find((c) => isFinishRow(c, counting.finish))
       const finishId = finishReal ? finishReal.id : finishRowId(l.id)
       const fv = viewById.get(finishId)
+      const shippedOfLine = l.sales_order_line_id
+        ? (shippedByLine.get(l.sales_order_line_id) ?? 0)
+        : null
+      // Cụm kết lộ trình → bộ đã bắt đầu lắp (bước đầu chặng thành phẩm).
+      const clusterTail = (qtyPerUnit: number) =>
+        fv && fv.summary.stages.length ? usedAtFirst(fv) * qtyPerUnit : null
       if (fv) {
-        rows.push(toRow(fv, 'finish', null, 1))
+        rows.push(toRow(fv, 'finish', null, 1, shippedOfLine))
         used.add(finishId)
       }
       // 2 · Cụm thật + chi tiết trong cụm.
@@ -219,7 +243,9 @@ export const lsxDossierService = {
       )) {
         const av = viewById.get(asm.id)
         if (!av) continue
-        rows.push(toRow(av, 'cluster', null, asm.qty_per_unit))
+        rows.push(
+          toRow(av, 'cluster', null, asm.qty_per_unit, clusterTail(asm.qty_per_unit)),
+        )
         used.add(asm.id)
         if (asm.cluster) {
           for (const p of comps.filter(
@@ -235,7 +261,7 @@ export const lsxDossierService = {
       // 3 · Cụm mặc nhiên (ảo) + chi tiết bị gộp vào nó.
       const dv = viewById.get(defaultAssemblyId(l.id))
       if (dv) {
-        rows.push(toRow(dv, 'cluster', null, 1))
+        rows.push(toRow(dv, 'cluster', null, 1, clusterTail(1)))
         used.add(dv.id)
         for (const p of comps.filter(
           (c) => plan.own_route.has(c.id) && !used.has(c.id),
