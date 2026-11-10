@@ -126,9 +126,27 @@ describe('tallyLineStages — cụm thật (0088, JAWOLL) và hai đơn vị tr�
     expect(t.get('han')?.shortfalls.map((s) => s.name)).toEqual(['Cụm khung'])
   })
 
-  it('kế hoạch SX (jobs) thắng lộ trình suy theo nhóm', () => {
+  it('kế hoạch SX (jobs) chỉ là đường lùi cho chi tiết CHƯA phân nhóm (10/11/2026)', () => {
+    // Nhóm đã biết: kế hoạch không đổi được lộ trình (khung vẫn qua nguội).
+    const khung = tallyLineStages(
+      [part({ id: 'k', name: 'K', qty_per_unit: 1 })],
+      ['phoi', 'han', 'son'],
+      new Map(),
+    )
+    expect(khung.get('nguoi')?.needed).toBe(100)
+    // Ngũ kim (hàng mua) không lên sổ dù dòng SP có kế hoạch.
+    const vit = tallyLineStages(
+      [
+        part({ id: 'k', name: 'K', qty_per_unit: 1 }),
+        part({ id: 'v', name: 'Vít', qty_per_unit: 8, group_code: 'NGU_KIM' }),
+      ],
+      ['phoi', 'han', 'nguoi', 'son'],
+      new Map(),
+    )
+    expect(vit.get('phoi')?.needed).toBe(100)
+    // Chưa phân nhóm → đi theo kế hoạch.
     const t = tallyLineStages(
-      [part({ id: 'a', name: 'A', qty_per_unit: 1 })],
+      [part({ id: 'a', name: 'A', qty_per_unit: 1, group_code: null })],
       ['phoi', 'han', 'son'],
       new Map(),
     )

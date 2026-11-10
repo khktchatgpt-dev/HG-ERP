@@ -57,16 +57,30 @@ describe('resolveCountingPlan — thang ưu tiên', () => {
     expect(plan.virtual_stages).toEqual(['han', 'nguoi', 'son'])
   })
 
-  it('kế hoạch SX thắng lộ trình suy theo nhóm', () => {
+  it('nhóm đã biết thắng kế hoạch SX (10/11/2026) — khung vẫn phôi → hàn → nguội → sơn', () => {
     const plan = resolveCountingPlan([part('a', 'FRAME')], ['phoi', 'han', 'son'])
+    expect(plan.own_route.get('a')).toEqual(['phoi'])
+    expect(plan.virtual_stages).toEqual(['han', 'nguoi', 'son'])
+  })
+
+  it('chi tiết chưa phân nhóm lùi về kế hoạch SX của dòng', () => {
+    const plan = resolveCountingPlan([part('a', null)], ['phoi', 'han', 'son'])
     expect(plan.own_route.get('a')).toEqual(['phoi'])
     expect(plan.virtual_stages).toEqual(['han', 'son'])
   })
 
   it('lộ trình BẮT ĐẦU ngay ở hàn → không cắt (cắt là chi tiết mất khỏi sổ)', () => {
-    const plan = resolveCountingPlan([part('a', 'FRAME')], ['han', 'son'])
+    const plan = resolveCountingPlan([part('a', null)], ['han', 'son'])
     expect(plan.own_route.size).toBe(0)
     expect(plan.virtual_stages).toEqual([])
+  })
+
+  it('ngũ kim là hàng mua: kế hoạch dòng SP không kéo nó lên sổ', () => {
+    const plan = resolveCountingPlan(
+      [part('a', 'FRAME'), part('vit', 'NGU_KIM')],
+      ['phoi', 'han', 'nguoi', 'son'],
+    )
+    expect([...plan.own_route.keys()]).toEqual(['a'])
   })
 })
 

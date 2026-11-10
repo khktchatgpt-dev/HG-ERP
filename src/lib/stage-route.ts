@@ -7,10 +7,12 @@
  * dòng, kể cả chân ghế sắt nằm trong tab May. Bảng dưới đây thay chỗ đoán mù đó
  * bằng suy luận theo nhóm vật tư (`production_components.group_code`, 0174).
  *
- * THỨ TỰ ƯU TIÊN khi hệ hỏi "chi tiết này đi qua công đoạn nào":
- *   1. Kế hoạch SX đã lên lộ trình cho dòng SP  → dùng kế hoạch (người thắng máy)
- *   2. Chưa lên kế hoạch                        → dùng bảng này
- *   3. Chi tiết chưa phân nhóm                  → không suy, trả rỗng
+ * THỨ TỰ ƯU TIÊN khi hệ hỏi "chi tiết này đi qua công đoạn nào" (xem
+ * `resolveComponentRoute` bên dưới):
+ *   1. Lộ trình KHAI trên chi tiết / cụm        → dùng (người thắng máy)
+ *   2. Nhóm vật tư đã biết                      → dùng bảng này
+ *   3. Chưa phân nhóm, dòng SP có kế hoạch      → đường lùi: lộ trình kế hoạch
+ *   4. Chưa phân nhóm, không kế hoạch           → không suy, trả rỗng
  *
  * Trả RỖNG cố ý cho hàng mua (ngũ kim: vít, bulong, ốc) — tổ không gia công
  * chúng, nên chúng không bao giờ được xuất hiện trên sổ sản lượng.
@@ -41,7 +43,8 @@ const ROUTE_BY_GROUP: Record<string, string[]> = {
   // riêng, nó nằm trong công việc của tổ nguội. Để nó trong lộ trình thì màn
   // ghi sổ mở một tab vĩnh viễn 0 và không tổ nào nhận — đúng thứ làm người
   // dùng hết tin vào con số. Mã `mai` VẪN CÒN trong danh mục công đoạn, nên
-  // lệnh nào thật sự cần thì Kế hoạch lên lộ trình tay là có ngay.
+  // lệnh nào thật sự cần thì KHAI ở màn Lộ trình công đoạn ("mở từng dòng") —
+  // kế hoạch tổ & hạn không còn đè được lộ trình nhóm (10/11/2026).
   FRAME: [PHOI, HAN, NGUOI, SON],
   // Gỗ / tấm / polywood: chỉ còn SƠN.
   //
@@ -108,14 +111,19 @@ export function clipRoute(
 /**
  * Chọn lộ trình cho MỘT chi tiết — gom một chỗ để mọi nơi hỏi cùng một câu
  * trả lời. Thứ tự ưu tiên (đổi 04/11/2026, chủ dự án chốt "kế hoạch tổ & hạn
- * không phải lộ trình"):
+ * không phải lộ trình"; siết lần hai 10/11/2026):
  *   1. `ownStages` — lộ trình KHAI theo cụm: bản chụp trên lệnh (kế hoạch sửa
  *      ở màn Định hình) / cụm / dòng định mức ở hồ sơ SP;
- *   2. kế hoạch của dòng SP (production_jobs) — chỉ là đường lùi khi cụm chưa
- *      khai: job phẳng theo dòng SP không diễn tả được "cụm nhôm không hàn",
- *      nên không được đè lên lộ trình cụm (trước 04/11 nó đè — tab Lộ trình
- *      theo cụm bị vô hiệu ngay khi ai đó bấm Lên kế hoạch);
- *   3. suy theo nhóm vật tư.
+ *   2. suy theo NHÓM VẬT TƯ khi nhóm đã biết — kể cả nhóm cố ý RỖNG (ngũ kim
+ *      là hàng mua, không qua công đoạn nào);
+ *   3. kế hoạch của dòng SP (production_jobs) — CHỈ là đường lùi khi chi tiết
+ *      chưa phân nhóm (nhóm trống / lạ). Kế hoạch là "tổ nào, hạn nào" gắn lên
+ *      công đoạn có mặt, không phải lộ trình: để nó đè nhóm thì lệnh TEST
+ *      10/11/2026 vừa Lưu kế hoạch xong là tổ Phôi thấy 23 dòng vít · bulon
+ *      phải "cắt", gỗ chỉ qua sơn bỗng đi phôi → hàn → nguội, Phôi 600 thành
+ *      1.840 chi tiết — và cụm mặc nhiên ở hàn không bao giờ đạt vì con vít
+ *      không ai ghi. Muốn thêm công đoạn cho một chi tiết (vd Mài cho khung)
+ *      thì KHAI ở Lộ trình công đoạn ("mở từng dòng"), không đi đường kế hoạch.
  */
 export function resolveComponentRoute(
   plannedRoute: string[] | null | undefined,
@@ -123,8 +131,15 @@ export function resolveComponentRoute(
   ownStages?: readonly string[] | null,
 ): string[] {
   if (ownStages && ownStages.length > 0) return [...ownStages]
+  if (isKnownGroup(groupCode)) return routeForGroup(groupCode)
   if (plannedRoute && plannedRoute.length > 0) return plannedRoute
-  return routeForGroup(groupCode)
+  return []
+}
+
+/** Nhóm có trong bảng lộ trình (kể cả nhóm hàng mua, lộ trình rỗng cố ý). */
+export function isKnownGroup(groupCode: string | null | undefined): boolean {
+  if (!groupCode) return false
+  return groupCode.trim().toUpperCase() in ROUTE_BY_GROUP
 }
 
 /** Những gì một component cần mang để tự trả lời "tôi đi qua công đoạn nào". */

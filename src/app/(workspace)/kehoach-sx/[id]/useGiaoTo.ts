@@ -181,7 +181,10 @@ export function useGiaoTo(p: GiaoToProps) {
       setThongBao(
         `Đã lưu kế hoạch: ${diff.receiving} dòng nhận từ Cả lệnh · ${diff.lines.length} dòng tinh chỉnh`,
       )
-      setDraft(initialDraft(data))
+      // KHÔNG `setDraft(initialDraft(data))` ở đây: `data` lúc này là bản CŨ
+      // (trước khi lưu) nên lưới trắng tới khi router.refresh() trả bản mới
+      // (dính 10/11/2026 — người dùng tưởng mất và nhập lại). Giữ nháp đang
+      // bày, khối "điều chỉnh state theo prop" bên dưới sẽ thay bằng DB.
       setOverwrite(false)
       setReason('')
       router.refresh()

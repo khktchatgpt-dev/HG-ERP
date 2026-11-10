@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { productionRepo } from './production.repo'
+import { productionRepo, type StageCatalogRow } from './production.repo'
 import { jobsRepo, type Job } from './jobs.repo'
 import { planRepo, type PlanChangeDiff, type PlanChangeRow } from './plan.repo'
 import type { linePlanSchema, lsxPlanSchema } from './plan.schema'
@@ -78,20 +78,28 @@ async function lsxOrThrow(lsxId: string) {
 
 /**
  * Lộ trình gợi ý per DÒNG SP = hợp các công đoạn mà chi tiết / cụm đã định hình
- * của dòng đó đi qua (cùng `componentRoute` sổ sản lượng dùng), sắp theo danh
- * mục. Kế hoạch tổ & hạn chỉ gắn tổ/hạn lên những công đoạn này; dòng chưa
- * định hình → null (nhận đủ danh sách lệnh, như trước).
+ * của dòng đó đi qua (cùng `componentRoute` sổ sản lượng dùng) CỘNG chặng
+ * thành phẩm (`counting.finish`: lắp ráp → … → hoàn thiện — dòng SP nào cũng
+ * đi qua, cùng luật với `tallyLineStages` mục 4b), sắp theo danh mục. Kế hoạch
+ * tổ & hạn chỉ gắn tổ/hạn lên những công đoạn này; dòng chưa định hình → null
+ * (nhận đủ danh sách lệnh, như trước).
+ *
+ * Thiếu chặng thành phẩm (lỗi lộ ở test lệnh TEST 10/11/2026): màn bày 8 cột
+ * từ tally, người tick 8, server lọc theo hợp lộ trình CHI TIẾT còn 4 và toast
+ * vẫn báo thành công — lắp ráp · bao bì · đóng gói · hoàn thiện rớt im lặng.
  */
 async function routesByLineFromShaping(
   lsxId: string,
-  stages: { code: string }[],
+  stages: StageCatalogRow[],
 ): Promise<Map<string, string[]>> {
   const comps = await componentsRepo.listByLsx(lsxId)
   const order = new Map(stages.map((s, i) => [s.code, i]))
+  const finish = countingOf(stages).finish
   const sets = new Map<string, Set<string>>()
   for (const c of comps) {
     const set = sets.get(c.production_order_line_id) ?? new Set<string>()
     for (const s of componentRoute(undefined, c)) set.add(s)
+    for (const s of finish) set.add(s)
     sets.set(c.production_order_line_id, set)
   }
   const out = new Map<string, string[]>()
