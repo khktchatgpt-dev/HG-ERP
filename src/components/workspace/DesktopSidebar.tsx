@@ -95,7 +95,7 @@ export function DesktopSidebar({
 
       {/* min-h-0 BẮT BUỘC: thiếu nó thì flex con không co được, danh sách dài
           đẩy thẻ người dùng ở đáy ra ngoài màn — đúng lỗi cắt chữ của v3. */}
-      <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-[2px] overflow-y-auto">
+      <nav className="mt-2 flex min-h-0 flex-1 [scrollbar-width:thin] flex-col gap-[2px] overflow-y-auto">
         {sections.map((sec, si) => (
           <div key={sec.heading} className="mb-1.5">
             {compact ? (

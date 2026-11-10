@@ -1652,3 +1652,34 @@
 .sx.sx .sx-kl.gap .sx-kl-row {
   display: none;
 }
+
+/* 14c · chủ dự án 10/11 (ảnh 1245px): lưới phải CO theo bề rộng, không cuộn ngang; bớt chữ;
+   thanh cuộn kín đáo. Nhãn ô khối trên không xuống dòng ("BAO BÌ & TEM NHÃN"). */
+.sx.sx .sx-grid,
+.sx.sx .sx-kl-row,
+.sx.sx .sx-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sx-line) transparent;
+}
+.sx.sx .sx-kc .st {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-kc .st i {
+  margin-left: 4px;
+}
+.sx.sx .sx-tb.sx-pl {
+  table-layout: fixed;
+}
+.sx.sx .sx-kl-h .lnk {
+  white-space: nowrap;
+}
+.sx.sx .sx-pl th {
+  white-space: normal;
+  line-height: 1.2;
+}
+.sx.sx .sx-tb.sx-pl thead th {
+  white-space: normal;
+  line-height: 1.2;
+}

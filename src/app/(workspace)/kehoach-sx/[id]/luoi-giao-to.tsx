@@ -45,14 +45,18 @@ export function LuoiGiaoTo({
       <table
         ref={tb}
         className="sx-tb sx-pl"
-        style={{ minWidth: 230 + 56 + cols.length * 97 }}
+        // Co theo bề rộng màn (10/11, chủ dự án: không cuộn ngang); > 9 công đoạn mới cho cuộn.
+        style={{
+          width: '100%',
+          minWidth: cols.length > 9 ? 200 + 48 + cols.length * 86 : undefined,
+        }}
         onKeyDown={(e) => d.onKey(e, focusEditor)}
       >
         <colgroup>
-          <col style={{ width: 230 }} />
-          <col style={{ width: 56 }} />
+          <col style={{ width: '19%' }} />
+          <col style={{ width: 60 }} />
           {cols.map((c) => (
-            <col key={c.code} style={{ width: 97 }} />
+            <col key={c.code} />
           ))}
         </colgroup>
         <thead>
@@ -113,7 +117,7 @@ export function LuoiGiaoTo({
                       {cell.on ? (team ?? (nTeams > 1 ? 'chọn tổ' : 'tự theo CĐ')) : ''}
                     </span>
                     <span className="l2">
-                      {cell.on ? spanText(cell.start, cell.end) || 'chưa hạn' : '—'}
+                      {cell.on ? spanText(cell.start, cell.end) || 'chưa hạn' : ''}
                     </span>
                     <span className="l3">{totals(c.code)}</span>
                   </button>

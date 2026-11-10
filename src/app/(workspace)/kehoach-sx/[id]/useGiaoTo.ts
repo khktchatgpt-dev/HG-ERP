@@ -34,7 +34,7 @@ export function useGiaoTo(p: GiaoToProps) {
   const [extraCols, setExtraCols] = useState<string[]>([])
   const [tab, setTab] = useState<'ke_hoach' | 'nhat_ky'>('ke_hoach')
   /** Gập khối Khối lượng theo công đoạn để lưới 8 dòng vừa một màn 1280×800. */
-  const [klGap, setKlGap] = useState(false)
+  const [klGap, setKlGap] = useState(true)
   const [busy, setBusy] = useState(false)
   const [loi, setLoi] = useState<string | null>(null)
   const [thongBao, setThongBao] = useState<string | null>(null)

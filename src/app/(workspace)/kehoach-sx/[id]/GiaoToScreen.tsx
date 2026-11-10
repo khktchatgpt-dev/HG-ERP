@@ -129,14 +129,9 @@ export function GiaoToScreen(props: GiaoToProps) {
               <LuoiGiaoTo d={d} editorRef={editorRef} />
             )}
 
-            {/* Thanh sửa ô */}
-            <div className="sx-ed" role="region" aria-label="Ô đang sửa">
-              {!d.sel || !selCell ? (
-                <span className="mut">
-                  Bấm một ô để sửa tổ &amp; hạn · bấm đúp hoặc Space để tick / bỏ công
-                  đoạn · ←↑→↓ đi ô
-                </span>
-              ) : (
+            {/* Thanh sửa ô — chỉ hiện khi có ô đang chọn (10/11: bớt chữ hướng dẫn) */}
+            {d.sel && selCell && (
+              <div className="sx-ed" role="region" aria-label="Ô đang sửa">
                 <>
                   <span className="k">Ô đang sửa</span>
                   <b>
@@ -256,24 +251,39 @@ export function GiaoToScreen(props: GiaoToProps) {
                     </>
                   )}
                 </>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Thanh chốt đáy */}
             <div className="sx-cb">
               <span className="cnt">
-                Nháp: <b>{fmt(d.diff.receiving)}</b> dòng nhận từ Cả lệnh ·{' '}
-                <b>{fmt(d.diff.lines.length)}</b> dòng tinh chỉnh ·{' '}
-                <b>{fmt(d.diff.changedCells)}</b> ô
-                {d.diff.activeTouched > 0 && (
+                {!d.dirty ? (
+                  <span className="mut">Chưa có thay đổi</span>
+                ) : (
                   <>
-                    {' '}
-                    · <b className="warn">{fmt(d.diff.activeTouched)}</b> việc đã chạy bị
-                    đổi
+                    {d.diff.receiving > 0 && (
+                      <>
+                        <b>{fmt(d.diff.receiving)}</b> dòng nhận từ Cả lệnh
+                      </>
+                    )}
+                    {d.diff.receiving > 0 && d.diff.lines.length > 0 && ' · '}
+                    {d.diff.lines.length > 0 && (
+                      <>
+                        <b>{fmt(d.diff.lines.length)}</b> dòng sửa riêng ·{' '}
+                        <b>{fmt(d.diff.changedCells)}</b> ô
+                      </>
+                    )}
+                    {d.diff.activeTouched > 0 && (
+                      <>
+                        {' '}
+                        · <b className="warn">{fmt(d.diff.activeTouched)}</b> việc đã chạy
+                        bị đổi
+                      </>
+                    )}
                   </>
                 )}
               </span>
-              {d.chan.length > 0 && (
+              {d.dirty && d.chan.length > 0 && (
                 <span className={d.chan[0].kind === 'stop' ? 'blk' : 'mut'}>
                   {d.chan[0].kind === 'stop' ? 'Chưa lưu được — ' : ''}
                   {d.chan[0].cell ? (
@@ -336,12 +346,8 @@ export function GiaoToScreen(props: GiaoToProps) {
 
         <ThanhTT
           left={
-            <>
-              Cần cùng hàm với Hồ sơ lệnh (lib/line-stage-tally) · lưu ghi{' '}
-              <b>production_jobs</b> · đổi việc đã chạy ghi nhật ký
-            </>
+            <>Bấm ô để sửa · bấm đúp hoặc Space để tick · ←↑→↓ đi ô · Ctrl+Enter lưu</>
           }
-          right="←↑→↓ đi ô · Space tick · Enter sửa · Esc bỏ chọn"
         />
       </div>
     </SxKhung>
@@ -367,17 +373,21 @@ function KhoiLuongDau({ d }: { d: GiaoToCtx }) {
   return (
     <div className={cx('sx-kl', d.klGap && 'gap')}>
       <div className="sx-kl-h">
-        <b>Khối lượng theo công đoạn</b>
-        <span className="mut">
-          cần · tổ &amp; hạn theo nháp đang gõ (chữ xanh = chưa lưu)
-        </span>
-        <button type="button" className="lnk" onClick={() => d.setKlGap(!d.klGap)}>
-          {d.klGap ? '▸ mở' : '▾ gập'}
+        <button
+          type="button"
+          className="lnk"
+          onClick={() => d.setKlGap(!d.klGap)}
+          title={
+            k.not_traversed.length > 0
+              ? `Không đi qua: ${k.not_traversed.join(' · ')}`
+              : undefined
+          }
+        >
+          {d.klGap ? '▸' : '▾'} <b>Khối lượng theo công đoạn</b>
         </button>
-        <span className="sp">
-          {fmt(k.stages.length)} công đoạn lệnh đi qua
-          {k.not_traversed.length > 0 && ` · không qua: ${k.not_traversed.join(' · ')}`}
-        </span>
+        {!d.klGap && (
+          <span className="mut">tổ &amp; hạn theo nháp — chữ xanh là chưa lưu</span>
+        )}
       </div>
       <div className="sx-kl-row" role="list">
         {k.stages.map((s) => {
