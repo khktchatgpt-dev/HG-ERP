@@ -167,8 +167,8 @@ function O({ d, s }: { d: HoSoLenhCtx; s: KlStage }) {
       </span>
       <span className="dt">
         đạt <span className="num">{fmt(s.done)}</span> · {pct}%
-        {isDefault && ' · mặc nhiên'}
-        {units.length > 1 && ' · 2 đơn vị'}
+        {/* Ô 154px chứa một ghi chú thôi: hai đơn vị nói trước, "mặc nhiên" khi còn chỗ. */}
+        {units.length > 1 ? ' · 2 đơn vị' : isDefault && ' · mặc nhiên'}
       </span>
       {s.unassigned_qty > 0 && <span className="dt w">chưa gán cụm ›</span>}
       <span className={cx('dt', team.tone === 'warn' && 'w')}>{team.text}</span>
