@@ -104,26 +104,49 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
                 )}
                 <ApNut href={`/api/dept/production/lsx/${lsx.id}/export`}>Excel</ApNut>
               </ApNhom>
-              <ApNhom>
-                {d.dongWhy &&
-                d.closable &&
-                p.canForceComplete &&
-                d.viecDo > 0 &&
-                !d.epMo ? (
-                  <ApNut onClick={() => d.setEpMo(true)}>Ép đóng lệnh…</ApNut>
-                ) : null}
-                <ApNut
-                  primary
-                  onClick={() => d.dongLenh(false)}
-                  why={d.dongWhy}
-                  busy={d.busy}
-                >
-                  Đóng lệnh
-                </ApNut>
-              </ApNhom>
+              {d.closable && (
+                <ApNhom>
+                  {d.dongWhy && p.canForceComplete && d.viecDo > 0 && !d.epMo ? (
+                    <ApNut onClick={() => d.setEpMo(true)}>Ép đóng lệnh…</ApNut>
+                  ) : null}
+                  <ApNut primary onClick={d.hoiDong} why={d.dongWhy} busy={d.busy}>
+                    Đóng lệnh…
+                  </ApNut>
+                </ApNhom>
+              )}
             </>
           }
         />
+
+        {d.xacNhanMo && (
+          <div className={cx('sx-note', d.hoanThien < d.tongDat && 'stop')}>
+            <b>Đóng lệnh {lsx.code}?</b>
+            <span>
+              Hoàn thiện {fmt(d.hoanThien)} / {fmt(d.tongDat)} bộ
+              {d.hoanThien < d.tongDat
+                ? ' — CHƯA ĐỦ, đóng là chốt số này, sổ không ghi thêm được'
+                : ' — đủ'}
+              . Sau khi đóng: kế hoạch tổ & hạn khoá, đơn hàng chuyển sang “Sẵn sàng
+              xuất”, không mở lại được.
+            </span>
+            <button
+              type="button"
+              className="lnk"
+              onClick={() => d.dongLenh(false)}
+              disabled={d.busy}
+            >
+              {d.busy ? 'Đang đóng…' : 'Đóng lệnh'}
+            </button>
+            <button
+              type="button"
+              className="lnk mut"
+              onClick={() => d.setXacNhanMo(false)}
+              disabled={d.busy}
+            >
+              Thôi
+            </button>
+          </div>
+        )}
 
         {d.epMo && (
           <div className="sx-note stop">

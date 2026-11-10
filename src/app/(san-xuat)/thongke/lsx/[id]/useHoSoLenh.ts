@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
+import { lsxStatusLabel } from '@/lib/lsx-status'
 import { daysLeft, type Payload, type Pick, type TabKey } from './ho-so-lenh.shared'
 
 export type HoSoLenhProps = {
@@ -106,7 +107,9 @@ export function useHoSoLenh(p: HoSoLenhProps) {
   const dongWhy = !p.canComplete
     ? 'Quản đốc / Giám đốc mới đóng được lệnh'
     : !closable
-      ? `Lệnh đang ${data.lsx.status}`
+      ? data.lsx.status === 'completed' || data.lsx.status === 'cancelled'
+        ? `Lệnh đã ${lsxStatusLabel(data.lsx.status).toLowerCase()} — không đóng lại được`
+        : `Lệnh đang ${lsxStatusLabel(data.lsx.status).toLowerCase()}`
       : noPlan
         ? 'Chưa có công việc nào — định hình + lên kế hoạch trước'
         : viecDo > 0
@@ -114,6 +117,15 @@ export function useHoSoLenh(p: HoSoLenhProps) {
           : null
   const [epMo, setEpMo] = useState(false)
   const [epLyDo, setEpLyDo] = useState('')
+  // Hộp xác nhận TRƯỚC khi đóng (10/11/2026): đóng lệnh khép vòng đời + đổi
+  // trạng thái đơn hàng, trước đó một cú bấm là xong, không hỏi, không kiểm
+  // hoàn thiện đủ chưa (lệnh TEST bấm nhầm là đóng ngay).
+  const [xacNhanMo, setXacNhanMo] = useState(false)
+  const hoiDong = () => {
+    if (busy || dongWhy) return
+    setLoi(null)
+    setXacNhanMo(true)
+  }
   const dongLenh = async (override: boolean) => {
     if (busy) return
     if (override && !epLyDo.trim()) {
@@ -128,6 +140,7 @@ export function useHoSoLenh(p: HoSoLenhProps) {
         body: { override, note: override ? epLyDo.trim() : null },
       })
       setEpMo(false)
+      setXacNhanMo(false)
       setEpLyDo('')
       setThongBao(`Đã đóng lệnh ${data.lsx.code} — đơn hàng chuyển sang hoàn thành`)
       router.refresh()
@@ -261,6 +274,9 @@ export function useHoSoLenh(p: HoSoLenhProps) {
     setEpMo,
     epLyDo,
     setEpLyDo,
+    xacNhanMo,
+    setXacNhanMo,
+    hoiDong,
     dongLenh,
     xoaHoi,
     pbsChinhThuc,
