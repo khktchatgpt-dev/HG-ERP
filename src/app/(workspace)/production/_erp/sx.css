@@ -1367,3 +1367,288 @@
 .sx.sx .sx-tb td.colsel {
   background: var(--sx-act-wash);
 }
+
+/* ── 14 · Giao tổ & hạn — lưới dòng SP × công đoạn (bản vẽ 3m3pok6LKJ96dyZncUAqYV,
+   10/11/2026). Ô 52px ba dòng: tick + tổ · hạn · cần. Hàng đầu "Cả lệnh" dính
+   dưới tiêu đề; ô là <button> để đi bằng bàn phím. ── */
+.sx.sx .sx-pl td {
+  height: 52px;
+  padding: 0;
+  vertical-align: middle;
+}
+.sx.sx .sx-pl td.sp {
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-pl td.sp .ten {
+  font-size: 11px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-pl .o {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  height: 52px;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  line-height: 1.3;
+  cursor: pointer;
+  overflow: hidden;
+}
+.sx.sx .sx-pl .o:disabled {
+  cursor: default;
+}
+.sx.sx .sx-pl .o:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+}
+.sx.sx .sx-pl .o .l1 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-pl .o .l2,
+.sx.sx .sx-pl .o .l3 {
+  font-family: var(--sx-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-pl .o .l3 {
+  color: var(--sx-ink2);
+}
+.sx.sx .sx-pl .o .l2.w {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-pl .o .l2.s {
+  color: var(--sx-stop);
+}
+.sx.sx .sx-pl .o .l1.w {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-pl .tick {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--sx-line);
+  position: relative;
+}
+.sx.sx .sx-pl .tick.on {
+  background: var(--sx-act);
+  border-color: var(--sx-act);
+}
+.sx.sx .sx-pl .tick.on::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 3px;
+  height: 7px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.sx.sx .sx-pl .tick.lock {
+  background: var(--sx-ink2);
+  border-color: var(--sx-ink2);
+}
+.sx.sx .sx-pl td.x {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--sx-raised),
+    var(--sx-raised) 3px,
+    var(--sx-card) 3px,
+    var(--sx-card) 7px
+  );
+}
+.sx.sx .sx-pl td.x .o {
+  color: var(--sx-empty);
+}
+.sx.sx .sx-pl td.pre {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-pl td.pre .o .l1,
+.sx.sx .sx-pl td.pre .o .l2,
+.sx.sx .sx-pl td.pre .o .l3 {
+  color: var(--sx-act);
+  font-style: italic;
+}
+.sx.sx .sx-pl td.sel {
+  box-shadow: inset 0 0 0 2px var(--sx-act);
+}
+.sx.sx .sx-pl td.err {
+  box-shadow: inset 0 0 0 2px var(--sx-stop);
+}
+.sx.sx .sx-pl tr.all td {
+  position: sticky;
+  top: 40px;
+  z-index: 1;
+  background: var(--sx-raised);
+  border-bottom: 2px solid var(--sx-line);
+}
+.sx.sx .sx-pl tr.all td.pin {
+  z-index: 2;
+}
+.sx.sx .sx-pl tr.all .o .l1 {
+  font-weight: 600;
+}
+.sx.sx .sx-pl th .u {
+  display: block;
+  font-family: var(--sx-mono);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.75;
+}
+.sx.sx .sx-pl tfoot td {
+  height: 26px;
+  padding: 0 8px;
+}
+.sx.sx .sx-pl .dotj {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sx-warn);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.sx.sx .sx-pl .dotj.g {
+  background: var(--sx-done);
+}
+/* thanh sửa ô */
+.sx.sx .sx-ed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-act-wash);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.sx.sx .sx-ed .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sx-ink3);
+  font-weight: 600;
+}
+.sx.sx .sx-ed select,
+.sx.sx .sx-ed input {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.sx.sx .sx-ed input[type='date'] {
+  font-family: var(--sx-mono);
+  font-size: 12px;
+}
+.sx.sx .sx-ed input.err,
+.sx.sx .sx-ed select.err {
+  border-color: var(--sx-stop);
+}
+.sx.sx .sx-ed .sep {
+  width: 1px;
+  height: 18px;
+  background: var(--sx-line);
+}
+/* thanh chốt đáy (khuôn F — ngoại lệ duy nhất được đặt ở đáy) */
+.sx.sx .sx-cb {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.sx.sx .sx-cb .cnt b {
+  font-family: var(--sx-mono);
+}
+.sx.sx .sx-cb .blk {
+  color: var(--sx-stop);
+}
+.sx.sx .sx-cb .blk button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--sx-stop);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.sx.sx .sx-cb .r {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sx.sx .sx-cb label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--sx-ink3);
+  font-size: 12px;
+}
+.sx.sx .sx-cb input.ly-do {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-warn);
+  background: var(--sx-warn-wash);
+  color: var(--sx-ink);
+  min-width: 320px;
+  font: inherit;
+  font-size: 12px;
+}
+.sx.sx .sx-btn.off {
+  background: var(--sx-raised);
+  color: var(--sx-ink3);
+  border-color: var(--sx-hair);
+  cursor: not-allowed;
+}
+
+/* 14b · đo màn thật 10/11: `.sx-tb td` (padding 4px) thắng `.sx-pl td` cùng đặc hiệu → hàng 61px.
+   Thêm lớp để thắng; ba dòng trong ô luôn giữ chỗ dù rỗng (l2 từng cao 0 → chữ nhảy). */
+.sx.sx .sx-tb.sx-pl tbody td,
+.sx.sx .sx-tb.sx-pl tbody tr.d td {
+  padding: 0;
+  height: 52px;
+}
+.sx.sx .sx-tb.sx-pl tbody td.sp,
+.sx.sx .sx-tb.sx-pl tbody tr.d td.sp {
+  padding: 2px 8px;
+}
+.sx.sx .sx-pl .o .l1 {
+  min-height: 16px;
+}
+.sx.sx .sx-pl .o .l2,
+.sx.sx .sx-pl .o .l3 {
+  min-height: 14px;
+}
+.sx.sx .sx-kl.gap .sx-kl-row {
+  display: none;
+}

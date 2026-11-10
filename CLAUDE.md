@@ -702,6 +702,26 @@ vàng không tự gộp, bấm ô → bảng Đồng bộ tô cột `colsel`, bu
 editor `/kehoach-sx/[id]` (kit) chỉ thêm cột "Cần" từ `PlanLine.needs` + nhịp/ngày
 theo đơn vị chính. Tổng toàn xưởng theo tuần CHƯA làm (Đợt 2–3).
 
+**Giao tổ & hạn dựng lại KHÔNG kit (10/11/2026, chủ dự án xem editor kit: "sao
+UI trông kỳ vậy"; bản vẽ `3m3pok6LKJ96dyZncUAqYV`, duyệt Q1–Q7)**: `/kehoach-sx/[id]`
+= `GiaoToScreen · useGiaoTo · luoi-giao-to · giao-to.shared` (khuôn F, khung
+`production/_erp`, CSS mục 14 sx.css). MỘT lưới dòng SP × công đoạn thay 8–37 thẻ:
+ô `<button>` 52px ba dòng (tick + tổ bỏ chữ "Tổ" · hạn · cần, đơn vị ở tiêu đề cột);
+hàng đầu **"Cả lệnh"** dính dưới tiêu đề, áp xuống dòng CHƯA có KH (ô xem trước
+nghiêng xanh `.pre`), dòng đã có KH chỉ nhận khi tick "Ghi đè"; ô sửa riêng thắng
+hàng Cả lệnh; thanh sửa ô dưới lưới (tổ · bắt đầu · kết thúc · nhịp theo đơn vị
+chính · áp cả cột / hạn cho cả dòng · Bỏ); thanh chốt đáy (ngoại lệ khuôn F) với
+câu chặn BẤM ĐƯỢC nhảy tới ô (`blockers`: hạn ngược, >1 tổ cùng công đoạn chưa chọn
+— Q4 không đoán tổ sơn nhôm/sắt, việc đã chạy bị đổi thì bắt lý do 0169, chưa đổi
+gì); khối Khối lượng theo công đoạn làm đầu trang, dòng tổ & hạn theo NHÁP
+(`stageDraftSummary`), có nút gập; nhật ký là tab. API KHÔNG đổi: lưu gọi
+`lsxPlanSchema` (Cả lệnh, overwrite + reason) trước rồi `linePlanSchema` TRỌN dòng
+cho dòng có ô sửa riêng (`diffDraft`, thuần có test). Bảng "Tiến độ theo công đoạn"
+của trang cũ BỎ. **BẪY CSS**: `.sx.sx .sx-tb td` (padding 4px) cùng đặc hiệu với
+`.sx.sx .sx-pl td` và đứng trước → hàng 61px thay vì 52; phải thêm lớp
+(`.sx-tb.sx-pl tbody td`) để thắng. Dòng chưa định hình vẫn giao tổ được, ô cần
+ghi "?" và chân cột "+ ?" (Q5).
+
 **Báo cáo + Tình hình xưởng (B6, 03/11/2026)**: `/thongke/bao-cao` không kit,
 sáu bảng từ MỘT payload `bao-cao.service.ts` (kỳ + tổ + tab trên URL, trần 92
 ngày). Không có dòng "tổng toàn xưởng": chi tiết / cụm / bộ là ba đơn vị, cộng

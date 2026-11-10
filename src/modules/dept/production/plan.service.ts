@@ -10,7 +10,9 @@ import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { componentRoute } from '@/lib/stage-route'
 import { countingOf } from '@/lib/stage-config'
 import { tallyLineStages, type UnitTally } from '@/lib/line-stage-tally'
-import { sortByUnit } from '@/lib/khoi-luong'
+import { khoiLuongOf, sortByUnit, type KhoiLuong } from '@/lib/khoi-luong'
+import { entriesRepo } from './entries.repo'
+import { vnTodayIso } from '@/lib/local-date'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
@@ -62,6 +64,10 @@ export type PlanView = {
   teams: { id: string; name: string; stage_code: string | null }[]
   /** Nhật ký điều chỉnh kế hoạch (0169) — mới nhất trước. */
   history: PlanChangeRow[]
+  /** Khối "Khối lượng theo công đoạn" (bản vẽ Giao tổ & hạn 10/11/2026) — cùng lib với Hồ sơ lệnh. */
+  khoi_luong: KhoiLuong
+  /** yyyy-mm-dd theo giờ VN — client không đọc đồng hồ máy. */
+  today: string
 }
 
 async function lsxOrThrow(lsxId: string) {
@@ -118,11 +124,17 @@ export const planService = {
       departmentsRepo.list(),
       planRepo.listChanges(lsxId),
     ])
-    const [defaults, groups, comps] = await Promise.all([
+    const [defaults, groups, comps, entries] = await Promise.all([
       routesByLineFromShaping(lsxId, stages),
       lsxLinesRepo.listGroups(lsxId),
       componentsRepo.listByLsx(lsxId),
+      entriesRepo.listByLsx(lsxId),
     ])
+    const doneByCompStage = new Map<string, number>()
+    for (const e of entries) {
+      const k = `${e.component_id}|${e.stage}`
+      doneByCompStage.set(k, (doneByCompStage.get(k) ?? 0) + Number(e.qty))
+    }
     const groupTitle = new Map(groups.map((g) => [g.id, g.title ?? '']))
     const jobsByLine = new Map<string, Job[]>()
     for (const j of jobs) {
@@ -149,6 +161,34 @@ export const planService = {
         [...t].map(([stage, x]) => [stage, sortByUnit(x.by_unit)]),
       )
     }
+    const plannedByLine = new Map<string, string[]>()
+    for (const [lineId, js] of jobsByLine) {
+      plannedByLine.set(
+        lineId,
+        js
+          .slice()
+          .sort((a, b) => a.seq - b.seq)
+          .map((j) => j.stage),
+      )
+    }
+    const khoiLuong = khoiLuongOf(
+      orderLines.map((l) => ({
+        id: l.id,
+        product_id: l.product_id,
+        product_code: l.product_code,
+        product_name: l.name_vi ?? l.product_code,
+        qty: l.qty,
+        unit: l.unit,
+        comps: comps
+          .filter((c) => c.production_order_line_id === l.id)
+          .map((c) => ({ ...c, line_qty: l.qty })),
+      })),
+      plannedByLine,
+      stages,
+      doneByCompStage,
+      jobs,
+      counting,
+    )
     return {
       lsx: {
         id: lsx.id,
@@ -179,6 +219,8 @@ export const planService = {
           stage_code: resolveTeamStage(d, stages),
         })),
       history,
+      khoi_luong: khoiLuong,
+      today: vnTodayIso(),
     }
   },
 
