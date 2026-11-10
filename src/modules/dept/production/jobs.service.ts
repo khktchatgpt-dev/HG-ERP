@@ -145,6 +145,8 @@ export type OverviewRow = {
   jobs_done: number
   /** Hạn kế hoạch trễ nhất đã quá mà job chưa xong (planned_end < hôm nay). */
   plan_overdue: number
+  /** Việc đã giao tổ nhưng CHƯA có hạn kết thúc (Vào việc 10/11: "đặt hạn cho n việc"). */
+  jobs_no_end: number
   materials: OverviewMaterials | null
 }
 
@@ -567,6 +569,7 @@ export const jobsService = {
         plan_overdue: js.filter(
           (j) => j.status !== 'done' && j.planned_end && j.planned_end < today,
         ).length,
+        jobs_no_end: js.filter((j) => j.status !== 'done' && !j.planned_end).length,
         materials: lsx.materials_received_at
           ? null
           : {

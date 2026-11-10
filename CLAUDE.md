@@ -756,6 +756,21 @@ khoản "Thống kê Tổ …") đăng nhập rơi vào `thongke`; quản đốc
 NHẤT (`/thongke/ghi` → thongke, `/thongke/lenh` → production). Badge nav của
 hai khu cùng `productionBadges`.
 
+**Trang đầu khu Sản xuất = "Vào việc" (khuôn A, 10/11/2026, chủ dự án: "nhìn
+vào phần sản xuất không biết bắt đầu từ đâu"; bản vẽ `AMZpLvxJAaZKCDimF93qJL`,
+duyệt Q1–Q6)**: `/production` → `VaoViecScreen` + `khi-xuong-chay.tsx`
+(Tình hình xưởng cũ nguyên hàm đếm, thành khối gập khi 0 sổ), số từ
+`src/lib/vao-viec-sx.ts` (thuần, có test): dải SÁU BƯỚC đường đi của lệnh
+(Lệnh duyệt · Bảng chi tiết · Lộ trình cụm · Giao tổ & hạn · Ghi sổ · Xuất
+hàng) — mỗi ô = ai làm · số lệnh đang CHỜ (cùng vị từ với chip Lệnh SX `views.ts`
+và Lộ trình `shaping-status`) · nút sang màn; bảng "Việc của bạn hôm nay" ≤ 5
+dòng theo năng lực nav (`production.plan` → `viecKeHoach`, `production.overview`
+→ `viecQuanDoc`), lệnh trễ trước, gom lệnh cùng hạn, nhắc Kỹ thuật qua
+`/phan-cong-viec?muc=giao` (chưa điền sẵn nội dung). `OverviewRow.jobs_no_end`
+thêm cho "đặt hạn cho n việc". Mô tả XUỐNG DÒNG, không cắt (`.sx-buoc .d`,
+`.sx-viec td` — cần lớp `.sx-tb.sx-viec tbody tr.d td` mới thắng nowrap của
+`.sx-tb tr.d td`). Mục menu "Tình hình xưởng" đổi tên "Vào việc".
+
 **Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
 "1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem" (từ 10/11 nhóm 3
 rời sang khu Thống kê, còn ba nhóm), tên nhóm nói

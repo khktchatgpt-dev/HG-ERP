@@ -24,6 +24,7 @@ const row = (over: Partial<OverviewRow> = {}): OverviewRow =>
     jobs_total: 2,
     jobs_done: 0,
     plan_overdue: 0,
+    jobs_no_end: 0,
     materials: null,
     ...over,
   }) as OverviewRow

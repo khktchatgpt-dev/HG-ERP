@@ -713,7 +713,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           {
             href: '/production',
-            label: 'Tình hình xưởng',
+            // 10/11/2026: trang đầu thành 'Vào việc' (khuôn A) — Tình hình xưởng là khối dưới.
+            label: 'Vào việc',
             icon: 'factory',
             capability: 'production.overview',
           },

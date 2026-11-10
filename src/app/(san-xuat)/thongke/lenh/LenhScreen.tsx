@@ -108,7 +108,7 @@ export function LenhScreen({
           actions={
             <>
               <ApNhom>
-                <ApNut href="/production">Tình hình xưởng</ApNut>
+                <ApNut href="/production">Vào việc</ApNut>
                 <ApNut href="/thongke/lo-trinh">Lộ trình công đoạn</ApNut>
                 <ApNut href="/kehoach-sx">Giao tổ &amp; hạn</ApNut>
               </ApNhom>
