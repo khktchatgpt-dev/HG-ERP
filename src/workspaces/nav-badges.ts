@@ -51,7 +51,8 @@ async function khuBadges(
   if (workspaceId === 'exec') return await execBadges(user)
   if (workspaceId === 'planning') return await supplyBadges(user)
   if (workspaceId === 'warehouse') return await warehouseBadges()
-  if (workspaceId === 'production') return await productionBadges(user)
+  if (workspaceId === 'production' || workspaceId === 'thongke')
+    return await productionBadges(user)
   return {}
 }
 

@@ -102,6 +102,11 @@ export type WorkspaceId =
   // docs/san-xuat-thiet-ke-giao-dien.md §4 — bốn hệ ERP lớn đều chia theo TƯ
   // THẾ LÀM VIỆC chứ không theo phòng ban.
   | 'team'
+  // TÁCH 10/11/2026 (chủ dự án: "tách riêng phần thống kê ra làm khu làm việc
+  // riêng, không thể gộp chung được"): `thongke` = bề mặt GHI SỔ của thống kê
+  // tổ (ghi sản lượng · giao nhận · chốt sổ), rời khỏi `production` (điều hành
+  // + kế hoạch). Cùng gia đình SX: vào lẫn nhau, chung một quyền xem chéo.
+  | 'thongke'
   | 'hr'
   | 'exec'
   | 'system'
@@ -742,8 +747,53 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           },
         ],
       },
+      // Nhóm "3 · Thống kê ghi sổ" (Ghi sản lượng · Giao nhận · Sổ ngày) RỜI
+      // sang khu `thongke` 10/11/2026 — thống kê tổ có khu riêng, quản đốc
+      // kiêm ghi sổ thì chuyển khu (cùng gia đình SX, không cần quyền thêm).
       {
-        heading: '3 · Thống kê ghi sổ',
+        // B6 (03/11/2026): sáu bảng báo cáo trên một màn, kỳ tự do.
+        heading: '3 · Xem',
+        items: [{ href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' }],
+      },
+      {
+        // Gập sẵn: không nằm trên đường đi của lệnh, mở khi cần.
+        heading: 'Công cụ & cấu hình',
+        gap: true,
+        items: [
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+          // Khu (may-moc) — Tổ Cơ Điện nhận báo hỏng, ghi bảo trì (0270).
+          { href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' },
+          // B1 (03/11/2026): một màn cho bốn thứ đang nằm ở bốn bảng — bậc
+          // đếm, tổ, ô riêng, mã lỗi. Chỉ quản đốc/manager/admin thấy.
+          {
+            href: '/production/cau-hinh/cong-doan',
+            label: 'Công đoạn',
+            icon: 'settings',
+            capability: 'production.configure',
+          },
+        ],
+      },
+    ],
+  },
+
+  thongke: {
+    id: 'thongke',
+    label: 'Thống kê sản xuất',
+    short: 'Thống kê SX',
+    // Khu của THỐNG KÊ TỔ (10/11/2026, tách khỏi `production`): việc hằng ngày
+    // là ghi sản lượng, lập / nhận phiếu giao, chốt sổ — ba mục đứng đầu, còn
+    // lại là tra cứu. Trang dùng chung với khu Sản xuất (Lệnh, Hồ sơ lệnh, Báo
+    // cáo) giữ nguyên URL `/thongke/*`; layout chọn sidebar theo khu người xem
+    // đang đứng (`khuChoTrangChung`), nên `route`/`altRoutes` ở đây chỉ nhận
+    // các trang RIÊNG của ghi sổ — `khuTheoDuongDan` chọn tiền tố DÀI nhất.
+    route: '/thongke/ghi',
+    altRoutes: ['/thongke/giao-nhan', '/thongke/ngay'],
+    accent: 'violet',
+    logoText: 'TK',
+    ready: true,
+    sections: [
+      {
+        heading: 'Ghi sổ hằng ngày',
         items: [
           {
             href: '/thongke/ghi',
@@ -766,26 +816,18 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         ],
       },
       {
-        // B6 (03/11/2026): sáu bảng báo cáo trên một màn, kỳ tự do.
-        heading: '4 · Xem',
-        items: [{ href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' }],
+        heading: 'Theo dõi',
+        items: [
+          { href: '/thongke/lenh', label: 'Lệnh sản xuất', icon: 'factory', exact: true },
+          { href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' },
+        ],
       },
       {
-        // Gập sẵn: không nằm trên đường đi của lệnh, mở khi cần.
-        heading: 'Công cụ & cấu hình',
+        heading: 'Công cụ',
         gap: true,
         items: [
           { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
-          // Khu (may-moc) — Tổ Cơ Điện nhận báo hỏng, ghi bảo trì (0270).
           { href: '/may-moc', label: 'Máy móc & bảo trì', icon: 'wrench' },
-          // B1 (03/11/2026): một màn cho bốn thứ đang nằm ở bốn bảng — bậc
-          // đếm, tổ, ô riêng, mã lỗi. Chỉ quản đốc/manager/admin thấy.
-          {
-            href: '/production/cau-hinh/cong-doan',
-            label: 'Công đoạn',
-            icon: 'settings',
-            capability: 'production.configure',
-          },
         ],
       },
     ],

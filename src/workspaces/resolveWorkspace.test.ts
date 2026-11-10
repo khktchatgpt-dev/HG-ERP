@@ -34,7 +34,10 @@ describe('resolveWorkspaceFromPath', () => {
 
     it('sub-path của altRoute cũng thuộc khu đó', () => {
       // Nếu hỏng, mọi trang ghi sổ mất sidebar và mất luôn màu khu.
-      expect(resolveWorkspaceFromPath('/thongke/ghi')?.id).toBe('production')
+      // 10/11/2026: trang ghi sổ thuộc khu Thống kê (tiền tố dài hơn thắng).
+      expect(resolveWorkspaceFromPath('/thongke/ghi')?.id).toBe('thongke')
+      expect(resolveWorkspaceFromPath('/thongke/giao-nhan/x')?.id).toBe('thongke')
+      expect(resolveWorkspaceFromPath('/thongke/lenh')?.id).toBe('production')
       expect(resolveWorkspaceFromPath('/thongke/lsx/abc/dinh-hinh')?.id).toBe(
         'production',
       )

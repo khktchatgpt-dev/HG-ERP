@@ -12,6 +12,7 @@ import {
   isProductionStaff,
   isProductionStat,
 } from '@/modules/dept/production/perms'
+import { GIA_DINH_SX } from './khu-dang-dung'
 import {
   WORKSPACE_IDS,
   WORKSPACES,
@@ -43,7 +44,9 @@ const SENSITIVE: ReadonlySet<WorkspaceId> = new Set(['hr', 'finance', 'system'])
  * (dept.workspace_id='production') mở cửa CẢ hai — nội bộ xưởng xem lẫn nhau
  * (đã chốt); người ngoài cần 'workspace.view.production'.
  */
-const PRODUCTION_FAMILY: ReadonlySet<WorkspaceId> = new Set(['production', 'team'])
+// 10/11/2026: thêm bề mặt thứ ba `thongke` (ghi sổ của thống kê tổ, tách khỏi
+// `production` theo yêu cầu chủ dự án) — vẫn một gia đình, một quyền xem chéo.
+const PRODUCTION_FAMILY: ReadonlySet<WorkspaceId> = GIA_DINH_SX
 
 /** Phần quyết định ĐƯỢC bằng dữ liệu sync (admin / nhà / khu nhạy cảm). */
 export function canEnterWorkspaceSync(

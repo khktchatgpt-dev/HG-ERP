@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canEnterWorkspace } from '@/workspaces/access'
+import { khuChoTrangChung } from '@/workspaces/resolveWorkspace'
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
-import { WORKSPACES } from '@/workspaces/workspaces.config'
+import { WORKSPACES, type WorkspaceConfig } from '@/workspaces/workspaces.config'
 import { KitFrame } from './_shell/KitFrame'
 
 /**
@@ -17,20 +18,28 @@ import { KitFrame } from './_shell/KitFrame'
  * trên chính màn Ghi sản lượng: thanh chốt nằm ở 709px trong khung nhìn 694px
  * — không bấm nổi nút Ghi sổ.
  *
- * Nhóm route KHÔNG đổi URL: `/thongke/ghi` vẫn là `/thongke/ghi`. Các trang
- * `/thongke/*` còn lại vẫn ở `(workspace)` với vỏ có đệm cho tới khi chúng
- * được chuyển sang kit — mỗi màn dọn xong thì dời sang đây.
+ * Nhóm route KHÔNG đổi URL: `/thongke/ghi` vẫn là `/thongke/ghi`.
  *
- * Quyền vào: dùng lại `canEnterWorkspace(user, 'production')` — CÙNG một luật
- * với các trang còn lại của khu (ba khu đã gộp 18/09/2026).
+ * HAI KHU DÙNG CHUNG CÁC TRANG NÀY (10/11/2026, tách khu Thống kê khỏi Sản
+ * xuất): Ghi sản lượng / Giao nhận là của khu `thongke`, còn Lệnh, Hồ sơ lệnh,
+ * Lộ trình, Báo cáo thì cả hai khu đều mở. Sidebar đi theo khu người xem đang
+ * đứng (`khuChoTrangChung`, cookie proxy ghi), không theo URL — thống kê mở
+ * Hồ sơ lệnh vẫn giữ menu Thống kê, quản đốc mở vẫn giữ menu Sản xuất.
+ *
+ * Quyền vào: `canEnterWorkspace(user, 'production')` — cả gia đình SX dùng
+ * chung một quyền xem chéo (access.ts).
  */
+const GIA_DINH = (ws: WorkspaceConfig) => ws.id === 'production' || ws.id === 'thongke'
+
 export default async function SanXuatLayout({ children }: { children: React.ReactNode }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
   if (!(await canEnterWorkspace(user, 'production'))) redirect('/')
+  const dang = await khuChoTrangChung(user, GIA_DINH)
+  const ws = dang && GIA_DINH(dang) ? dang : WORKSPACES.production
 
   return (
-    <WorkspaceShell workspace={WORKSPACES.production} bare>
+    <WorkspaceShell workspace={ws} bare>
       <KitFrame>{children}</KitFrame>
     </WorkspaceShell>
   )

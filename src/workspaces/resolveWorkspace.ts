@@ -43,7 +43,8 @@ export async function resolveDefaultWorkspace(
   // PHÒNG `production`; tổ trưởng/tổ viên đứng máy → bề mặt XƯỞNG `team`.
   if (workspaceId === 'production') {
     if (user.role === 'manager' || user.role === 'admin') return WORKSPACES.production
-    if (await hasRoleTag(user, 'production_stat')) return WORKSPACES.production
+    // 10/11/2026: thống kê tổ về khu GHI SỔ riêng (tách khỏi điều hành + kế hoạch).
+    if (await hasRoleTag(user, 'production_stat')) return WORKSPACES.thongke
     return WORKSPACES.team
   }
   // Planner thuần (phòng Kế Hoạch Sản Xuất tách) cũng ngồi bề mặt văn phòng.

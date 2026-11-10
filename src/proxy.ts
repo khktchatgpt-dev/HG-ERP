@@ -1,6 +1,6 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { verifySessionToken } from '@/modules/core/auth/session'
-import { COOKIE_KHU, khuTheoDuongDan } from '@/workspaces/khu-dang-dung'
+import { COOKIE_KHU, khuGhiCookie } from '@/workspaces/khu-dang-dung'
 
 // `/design-lab` (sổ thiết kế public) đã XOÁ 07/10/2026 — không còn đường public nào ngoài đăng nhập.
 const PUBLIC_PATHS = ['/login', '/register', '/api/login', '/api/register', '/api/logout']
@@ -158,9 +158,10 @@ function ghiKhuDangDung(request: NextRequest, res: NextResponse): NextResponse {
     h.get('sec-purpose')?.includes('prefetch')
   )
     return res
-  const ws = khuTheoDuongDan(pathname)
-  if (ws && request.cookies.get(COOKIE_KHU)?.value !== ws.id)
-    res.cookies.set(COOKIE_KHU, ws.id, {
+  // Trang dùng chung của gia đình SX giữ khu đang đứng (10/11/2026) — xem khuGhiCookie.
+  const ghi = khuGhiCookie(pathname, request.cookies.get(COOKIE_KHU)?.value)
+  if (ghi)
+    res.cookies.set(COOKIE_KHU, ghi, {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',

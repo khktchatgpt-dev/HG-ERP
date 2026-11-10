@@ -740,8 +740,25 @@ là CSS `.sx-strip`/`.sx-pct`, cột Lệnh ghim trái bằng `td.pin`; bảng 1
 ngang có chủ ý; `today` truyền từ server, client không đọc đồng hồ). Thiếu vật tư trỏ Hồ
 sơ lệnh vì khu SX chưa có màn vật tư theo lệnh.
 
+**Khu THỐNG KÊ tách khỏi Sản xuất (10/11/2026, chủ dự án: "tách riêng phần
+thống kê ra làm khu làm việc riêng, không thể gộp chung được")**: workspace
+`thongke` ("Thống kê sản xuất", logo TK, `route: /thongke/ghi`, altRoutes
+`/thongke/giao-nhan` · `/thongke/ngay`) giữ nhóm "Ghi sổ hằng ngày" (Ghi sản
+lượng · Giao nhận · Sổ ngày & chốt sổ) + "Theo dõi" (Lệnh SX · Báo cáo); khu
+`production` còn 1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Xem. Cùng GIA ĐÌNH SX với
+`team` (`PRODUCTION_FAMILY` ở access.ts): nhà xưởng vào cả ba, chung quyền xem
+chéo `workspace.view.production`. Người có role tag `production_stat` (7 tài
+khoản "Thống kê Tổ …") đăng nhập rơi vào `thongke`; quản đốc/manager vẫn
+`production`; tổ trưởng `team`. Trang DÙNG CHUNG hai khu (`/thongke/lenh`,
+`/thongke/lsx/[id]`, `/thongke/lo-trinh`, `/thongke/bao-cao`) giữ URL, layout
+`(san-xuat)` và `(workspace)/thongke` chọn sidebar theo khu người xem đang đứng
+(`khuChoTrangChung`), không theo URL. `khuTheoDuongDan` nay chọn TIỀN TỐ DÀI
+NHẤT (`/thongke/ghi` → thongke, `/thongke/lenh` → production). Badge nav của
+hai khu cùng `productionBadges`.
+
 **Menu khu Sản xuất xếp theo ĐƯỜNG ĐI CỦA LỆNH (04/11/2026)**: bốn nhóm đánh số
-"1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem", tên nhóm nói
+"1 · Lệnh → 2 · Kế hoạch chuẩn bị → 3 · Thống kê ghi sổ → 4 · Xem" (từ 10/11 nhóm 3
+rời sang khu Thống kê, còn ba nhóm), tên nhóm nói
 luôn ai làm; "Công cụ & cấu hình" gập sẵn (`gap`). Mục mới **Lộ trình công đoạn**
 (`/thongke/lo-trinh`, bản vẽ 4 `QMcpzoEfCob2J55PKbZdTZ`, chủ dự án 04/11 sau
 ba vòng: "gộp một phần" → "khó nhìn, không khung cuộn trái phải" → "chọn lệnh
