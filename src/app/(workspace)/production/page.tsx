@@ -6,7 +6,13 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { isProductionStaff } from '@/modules/dept/production/perms'
 import { resolveNavCapabilities } from '@/workspaces/access'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
-import { duongDiCuaLenh, toChuaChot, viecKeHoach, viecQuanDoc } from '@/lib/vao-viec-sx'
+import {
+  datHomNayText,
+  duongDiCuaLenh,
+  toChuaChot,
+  viecKeHoach,
+  viecQuanDoc,
+} from '@/lib/vao-viec-sx'
 import { vnTodayIso } from '@/lib/local-date'
 import { VaoViecScreen } from './VaoViecScreen'
 
@@ -42,7 +48,7 @@ export default async function ProductionEntryPage() {
   )
   const congDoanChuaTo = stages.filter((s) => !coTo.has(s.code)).map((s) => s.label)
 
-  const buoc = duongDiCuaLenh(rows, shaping, today, pulse.qty)
+  const buoc = duongDiCuaLenh(rows, shaping, today, datHomNayText(pulse.by_unit))
   const viecKH = caps.has('production.plan') ? viecKeHoach(rows, shaping, today) : null
   const viecQD = caps.has('production.overview')
     ? viecQuanDoc(rows, {

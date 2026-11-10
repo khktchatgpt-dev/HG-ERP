@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { STALE_DAYS, isStale } from '@/lib/lsx-holder'
-import { toChuaChot } from '@/lib/vao-viec-sx'
+import { datHomNayText, pulseChinh, toChuaChot } from '@/lib/vao-viec-sx'
 import type {
   OverviewRow,
   TeamWorkloadRow,
@@ -72,7 +72,10 @@ export function KhiXuongChay({
       return (b.holder.days ?? 0) - (a.holder.days ?? 0)
     })
     .slice(0, 5)
-  const pctNgay = pulse.target > 0 ? pulse.qty / pulse.target : null
+  // % ngày theo bậc đếm CHÍNH (bộ → cụm → chi tiết), không chia tổng ba đơn vị.
+  const chinh = pulseChinh(pulse.by_unit)
+  const pctNgay = chinh && chinh.target > 0 ? chinh.qty / chinh.target : null
+  const khac = pulse.by_unit.filter((u) => u !== chinh && u.qty > 0)
 
   return (
     <>
@@ -129,17 +132,20 @@ export function KhiXuongChay({
             pctNgay != null && pctNgay < 0.8 ? 'w' : pulse.qty === 0 && 'zero',
           )}
         >
-          <span className="d">Sản lượng đạt</span>
-          <span className="v">{fmt(pulse.qty)}</span>
+          <span className="d">Sản lượng đạt{chinh ? ` · ${chinh.unit}` : ''}</span>
+          <span className="v">{fmt(chinh?.qty ?? 0)}</span>
           <span className="s">
-            {pulse.target > 0 ? `/ ${fmt(pulse.target)} chỉ tiêu` : 'chưa có chỉ tiêu'}
+            {chinh && chinh.target > 0
+              ? `/ ${fmt(chinh.target)} chỉ tiêu ${chinh.unit}`
+              : 'chưa có chỉ tiêu'}
+            {khac.length > 0 && ` · còn ${datHomNayText(khac)}`}
           </span>
         </div>
         <div className={cx('sx-tile', pulse.defect > 0 ? 'w' : 'zero')}>
           <span className="d">Phế hôm nay</span>
           <span className="v">{fmt(pulse.defect)}</span>
           <span className="s">
-            {pulse.qty > 0 ? `trên ${fmt(pulse.qty)} đạt` : 'chưa có sổ'}
+            {pulse.qty > 0 ? `đạt ${datHomNayText(pulse.by_unit)}` : 'chưa có sổ'}
           </span>
         </div>
         {pulse.rework > 0 && (

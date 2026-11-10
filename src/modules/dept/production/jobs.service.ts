@@ -18,7 +18,12 @@ import {
 } from '@/lib/production-summary'
 import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
 import { emit } from '@/events/bus'
-import { countingOf, type Counting } from '@/lib/stage-config'
+import {
+  countingOf,
+  resolveStageConfigs,
+  type Counting,
+  type CountLevel,
+} from '@/lib/stage-config'
 import { groupByLine, tallyLineStages, type TallyComponent } from '@/lib/line-stage-tally'
 import { LATE_RISK_HORIZON_DAYS } from '@/lib/late-risk'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -204,7 +209,30 @@ export type TodayPulse = {
   teams_active: number
   /** Trong số đó, đã chốt sổ hôm nay. */
   teams_locked: number
+  /**
+   * Đạt / chỉ tiêu hôm nay TÁCH THEO BẬC ĐẾM của công đoạn (10/11/2026): phôi
+   * đếm chi tiết, hàn → sơn đếm cụm, lắp ráp → hoàn thiện đếm bộ. `qty` và
+   * `target` ở trên là tổng cộng dồn ba đơn vị — giữ để so "có sổ hay chưa",
+   * KHÔNG bày thành một con số (lệnh TEST 10/11: "800 đạt hôm nay" = 600 ct +
+   * 40 cụm + 160 bộ). Chỉ bậc có số (đạt hoặc chỉ tiêu > 0) mới có mặt.
+   */
+  by_unit: PulseUnit[]
 }
+
+export type PulseUnit = {
+  level: CountLevel
+  /** 'chi tiết' · 'cụm' · 'bộ'. */
+  unit: string
+  qty: number
+  target: number
+}
+
+const PULSE_UNIT_LABEL: Record<CountLevel, string> = {
+  part: 'chi tiết',
+  cluster: 'cụm',
+  unit: 'bộ',
+}
+const PULSE_LEVEL_ORDER: CountLevel[] = ['unit', 'cluster', 'part']
 
 /**
  * Số ngày ĐÃ QUÁ mốc hẹn, so theo NGÀY (dương = trễ) — null khi chưa quá hạn
@@ -582,12 +610,25 @@ export const jobsService = {
 
     // Nhịp hôm nay từ sổ thống kê — gom toàn xưởng + per tổ.
     const todayByTeam = new Map<string, { qty: number; defect: number }>()
+    const levelOfStage = new Map(
+      resolveStageConfigs(stages).map((c) => [c.code, c.meta.count_level]),
+    )
+    const qtyByLevel = new Map<CountLevel, number>()
     let pulseQty = 0
     let pulseKg = 0
     let pulseDefect = 0
     let pulseRework = 0
+    // Bậc đếm của MỘT dòng sổ = bậc của công đoạn, trừ chi tiết RỜI đi qua công
+    // đoạn đếm cụm (tấm gỗ chỉ qua sơn) — nó vẫn là chi tiết, không phải cụm.
+    const kindById = new Map(components.map((c) => [c.id, c.kind]))
     for (const e of todayEntries) {
       pulseQty += e.qty
+      let lv: CountLevel = levelOfStage.get(e.stage) ?? 'part'
+      // Loại dòng đọc từ chính sổ (join) — `components` chỉ nạp lệnh đang chạy,
+      // lệnh vừa đóng hôm nay vẫn có sổ hôm nay.
+      const kind = e.component_kind ?? kindById.get(e.component_id) ?? null
+      if (lv === 'cluster' && kind === 'part') lv = 'part'
+      qtyByLevel.set(lv, (qtyByLevel.get(lv) ?? 0) + e.qty)
       pulseKg += e.kg ?? 0
       pulseDefect += e.defect_qty
       pulseRework += e.rework_qty ?? 0
@@ -636,6 +677,17 @@ export const jobsService = {
     )
     const planTarget = resolvedTargets.total
     const targetByTeam = resolvedTargets.by_team
+    const targetByLevel = new Map<CountLevel, number>()
+    for (const [stage, qty] of resolvedTargets.by_stage) {
+      const lv = levelOfStage.get(stage) ?? 'part'
+      targetByLevel.set(lv, (targetByLevel.get(lv) ?? 0) + qty)
+    }
+    const pulseByUnit: PulseUnit[] = PULSE_LEVEL_ORDER.map((level) => ({
+      level,
+      unit: PULSE_UNIT_LABEL[level],
+      qty: Math.round((qtyByLevel.get(level) ?? 0) * 100) / 100,
+      target: Math.round(targetByLevel.get(level) ?? 0),
+    })).filter((u) => u.qty > 0 || u.target > 0)
 
     // ── Tồn WIP + nghẽn per (tổ × công đoạn) từ sổ bàn giao (GĐ3) ──────────
     const usedByTS = new Map<string, number>()
@@ -726,6 +778,7 @@ export const jobsService = {
       target: Math.round(planTarget),
       teams_active: activeTeamIds.size,
       teams_locked: [...activeTeamIds].filter((id) => lockedTeams.has(id)).length,
+      by_unit: pulseByUnit,
     }
 
     return { rows, workload, stages, pulse }

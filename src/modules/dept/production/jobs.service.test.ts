@@ -297,6 +297,9 @@ describe('jobsService.overview — nhịp hôm nay + vật tư thiếu (GĐ1)', 
     const { rows, workload, pulse } = await jobsService.overview(admin)
 
     expect(pulse).toMatchObject({ qty: 35, kg: 7.5, defect: 1 })
+    // Đạt hôm nay tách theo bậc đếm — tổng 35 không được bày thành một số.
+    expect(pulse.by_unit.reduce((a, u) => a + u.qty, 0)).toBe(35)
+    for (const u of pulse.by_unit) expect(['chi tiết', 'cụm', 'bộ']).toContain(u.unit)
     // dept-han (1 doing) + dept-son (1 todo) đều đang hoạt động; chỉ han đã chốt.
     expect(pulse.teams_active).toBe(2)
     expect(pulse.teams_locked).toBe(1)

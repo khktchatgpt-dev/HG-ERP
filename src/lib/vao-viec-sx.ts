@@ -1,4 +1,4 @@
-import type { OverviewRow } from '@/modules/dept/production/jobs.service'
+import type { OverviewRow, PulseUnit } from '@/modules/dept/production/jobs.service'
 import { isUnshaped, needsRoute, type ShapingRow } from './shaping-status'
 import { isStale } from './lsx-holder'
 
@@ -45,6 +45,21 @@ export type Viec = {
 }
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
+
+/**
+ * "Đạt hôm nay" bày THEO ĐƠN VỊ — "600 chi tiết · 40 cụm · 160 bộ", không cộng
+ * dọc thành một số (10/11/2026: "800 đạt hôm nay" là số vô nghĩa). Thứ tự
+ * bộ → cụm → chi tiết như Khối lượng theo công đoạn. Không có gì → "0".
+ */
+export function datHomNayText(byUnit: PulseUnit[]): string {
+  const parts = byUnit.filter((u) => u.qty > 0).map((u) => `${fmt(u.qty)} ${u.unit}`)
+  return parts.length ? parts.join(' · ') : '0'
+}
+
+/** Bậc đếm CHÍNH để vẽ % ngày: bộ nếu có số, rồi cụm, rồi chi tiết. */
+export function pulseChinh(byUnit: PulseUnit[]): PulseUnit | null {
+  return byUnit.find((u) => u.qty > 0 || u.target > 0) ?? null
+}
 const dm = (iso: string) => iso.slice(5, 10).split('-').reverse().join('/')
 const dmy2 = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`
 
@@ -84,7 +99,7 @@ export function duongDiCuaLenh(
   rows: Row[],
   shaping: Shaping[],
   today: string,
-  pulseQty: number,
+  datHomNay: string,
 ): Buoc[] {
   const late = rows.filter((r) => r.lsx.late === 'overdue')
   const dueSoon = rows.filter((r) => {
@@ -167,7 +182,7 @@ export function duongDiCuaLenh(
       n: coSo.length,
       donVi: 'lệnh có sổ',
       tone: coSo.length > 0 ? null : 'zero',
-      moTa: coSo.length > 0 ? `hôm nay ${fmt(pulseQty)} đạt` : 'chỉ ghi được sau bước 4',
+      moTa: coSo.length > 0 ? `hôm nay đạt ${datHomNay}` : 'chỉ ghi được sau bước 4',
       href: '/thongke/bao-cao',
       nut: 'Báo cáo ›',
     },

@@ -415,7 +415,7 @@ export type TeamStageQty = {
 export function resolveDailyTargets(
   derived: TeamStageQty[],
   real: { team_department_id: string; stage: string; qty: number }[],
-): { total: number; by_team: Map<string, number> } {
+): { total: number; by_team: Map<string, number>; by_stage: Map<string, number> } {
   const realByTS = new Map(real.map((r) => [`${r.team_department_id}|${r.stage}`, r.qty]))
   const derivedByTS = new Map<string, number>()
   let noTeam = 0
@@ -429,14 +429,17 @@ export function resolveDailyTargets(
   }
   const keys = new Set([...derivedByTS.keys(), ...realByTS.keys()])
   const byTeam = new Map<string, number>()
+  const byStage = new Map<string, number>()
   let total = noTeam
   for (const k of keys) {
     const qty = realByTS.has(k) ? realByTS.get(k)! : (derivedByTS.get(k) ?? 0)
     total += qty
     const team = k.slice(0, k.indexOf('|'))
+    const stage = k.slice(k.indexOf('|') + 1)
     byTeam.set(team, r2((byTeam.get(team) ?? 0) + qty))
+    byStage.set(stage, r2((byStage.get(stage) ?? 0) + qty))
   }
-  return { total: r2(total), by_team: byTeam }
+  return { total: r2(total), by_team: byTeam, by_stage: byStage }
 }
 
 /**

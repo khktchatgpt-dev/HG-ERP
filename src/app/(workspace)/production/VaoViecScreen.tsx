@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { ApNhom, ApNut, DauTrang, SxKhung, ThanhTT } from './_erp/khung'
 import { KhiXuongChay } from './khi-xuong-chay'
-import type { Buoc, Viec } from '@/lib/vao-viec-sx'
+import { datHomNayText, type Buoc, type Viec } from '@/lib/vao-viec-sx'
 import type {
   OverviewRow,
   TeamWorkloadRow,
@@ -63,7 +63,9 @@ export function VaoViecScreen({
           ctx={
             <>
               hôm nay <b>{dmy(today)}</b> · <b>{fmt(rows.length)}</b> lệnh đang chạy ·{' '}
-              {coSo ? `${fmt(pulse.qty)} đạt hôm nay` : 'chưa có sổ hôm nay'}
+              {coSo
+                ? `đạt hôm nay ${datHomNayText(pulse.by_unit)}`
+                : 'chưa có sổ hôm nay'}
             </>
           }
           actions={

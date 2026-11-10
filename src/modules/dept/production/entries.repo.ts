@@ -41,13 +41,14 @@ export type ProductionEntryJoined = ProductionEntry & {
   created_by_name: string | null
   component_name: string | null
   component_cluster: string | null
+  component_kind: 'part' | 'assembly' | null
   component_line_id: string | null
   lsx_code: string | null
 }
 
 const COLS =
   'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, rework_qty, defect_code, defect_reason, machine_note, stage_meta, worker_name, finish_state, note, created_by, created_at'
-const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, cluster, production_order_line_id), lsx:production_orders(code)`
+const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, kind, cluster, production_order_line_id), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
 type Raw = ProductionEntry & {
@@ -55,6 +56,7 @@ type Raw = ProductionEntry & {
   actor: One<{ name: string | null }>
   component: One<{
     name: string
+    kind: 'part' | 'assembly' | null
     cluster: string | null
     production_order_line_id: string | null
   }>
@@ -79,6 +81,7 @@ function unwrap(rows: Raw[] | null): ProductionEntryJoined[] {
       team_name: first(r.team)?.name ?? null,
       created_by_name: first(r.actor)?.name ?? null,
       component_name: comp?.name ?? null,
+      component_kind: comp?.kind ?? null,
       component_cluster: comp?.cluster ?? null,
       component_line_id: comp?.production_order_line_id ?? null,
       lsx_code: first(r.lsx)?.code ?? null,

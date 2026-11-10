@@ -89,7 +89,7 @@ describe('mocHan · maGon', () => {
 
 describe('duongDiCuaLenh — sáu bước, số = lệnh đang CHỜ', () => {
   it('đếm bằng vị từ của chip Lệnh SX / Lộ trình', () => {
-    const b = duongDiCuaLenh(rows, shaping, TODAY, 0)
+    const b = duongDiCuaLenh(rows, shaping, TODAY, '0')
     expect(b.map((x) => [x.so, x.n])).toEqual([
       [1, 7],
       [2, 2], // mx07 chờ KT + laura chưa nạp bảng
