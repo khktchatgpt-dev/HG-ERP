@@ -10,9 +10,11 @@ import {
   henVe,
   kiemTruocTrinh,
   lamDuocNgay,
+  nguongChu,
   soGia,
   tichDuoc,
   trangThaiXem,
+  trinhRieng,
   type XemDon,
 } from './cho-xem'
 
@@ -66,6 +68,30 @@ describe('trạng thái dòng — bản 2 (06/11/2026)', () => {
     expect(tichDuoc(don({ big: true }))).toBe(false)
     expect(tichDuoc(don({ chan: 'Chưa có hẹn giao' }))).toBe(false)
     expect(tichDuoc(don({ nhap: false }))).toBe(true)
+  })
+  it('đơn lớn làm được ngay = trình riêng (ô tích thay bằng nút "xem"), bù đúng phần tichDuoc bỏ', () => {
+    const items = [
+      don({ id: 'nho' }),
+      don({ id: 'lon', big: true }),
+      don({ id: 'lon-gd', big: true, nhap: false }),
+      don({ id: 'lon-thieu', big: true, chan: 'Chưa có hẹn giao' }),
+      don({ id: 'lon-da-xem', big: true, nhap: false, mark: dau }),
+    ]
+    expect(items.filter(trinhRieng).map((d) => d.id)).toEqual(['lon', 'lon-gd'])
+    // tích được + trình riêng = đúng tập làm được ngay, không sót, không trùng
+    const ca = [...items.filter(tichDuoc), ...items.filter(trinhRieng)].map((d) => d.id)
+    expect(ca.sort()).toEqual(
+      lamDuocNgay(items)
+        .map((d) => d.id)
+        .sort(),
+    )
+  })
+  it('ngưỡng giá trị lớn đọc được', () => {
+    expect(nguongChu({ VND: 50_000_000 }, 'VND')).toBe('50 triệu')
+    expect(nguongChu({ VND: 1_500_000_000 }, 'VND')).toBe('1.500 triệu')
+    expect(nguongChu({ VND: 12_345_678 }, 'VND')).toBe('12.345.678 VND')
+    expect(nguongChu({ USD: 2000 }, 'USD')).toBe('2.000 USD')
+    expect(nguongChu({ VND: 50_000_000 }, 'USD')).toBeNull()
   })
   it('câu ngắn cho cột trạng thái', () => {
     expect(chanNgan('Chưa có hẹn giao')).toBe('Thiếu hẹn giao')

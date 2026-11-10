@@ -75,6 +75,29 @@
   outline: 2px solid var(--hk-act);
   outline-offset: 2px;
 }
+/* Đơn giá trị lớn (Q2): nút chữ "xem" ở chỗ ô tích — viền, không nền đặc (không
+   phải hành động chính; nút chính vẫn là "Đã xem — trình GĐ" ở góc trên). */
+.hk.hk .cx-xem {
+  border: 1px solid var(--hk-line);
+  background: #fff;
+  color: var(--hk-act);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 3px;
+  cursor: pointer;
+}
+.hk.hk .cx-xem[aria-pressed='true'] {
+  border-color: var(--hk-act);
+}
+.hk.hk .cx-xem:focus-visible {
+  outline: 2px solid var(--hk-act);
+  outline-offset: 1px;
+}
+/* câu trên đầu nhóm: vì sao có đơn không có ô tích */
+.hk.hk .cx-rieng-n {
+  color: var(--hk-ink2);
+}
 
 /* ── KHUNG CHI TIẾT dưới lưới (Q8) ── */
 .hk.hk .cx-ct {

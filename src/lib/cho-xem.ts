@@ -105,6 +105,11 @@ export type DuyetThay = {
 export type HopXem = {
   items: XemDon[]
   duyet_thay: DuyetThay[]
+  /**
+   * Ngưỡng "giá trị lớn" theo mã tiền (settings `approval_thresholds`, cùng ngưỡng
+   * hộp ký GĐ) — để màn nói ra con số khi đơn lớn không có ô tích (`trinhRieng`).
+   */
+  nguong: Record<string, number>
   /** Mốc dựng dữ liệu — "cập nhật 09:12" ở thanh trạng thái. */
   at: string
 }
@@ -156,6 +161,32 @@ export const daXemChoGd = (items: XemDon[]) =>
 export const tichDuoc = (d: PhanLoaiXem & { big: boolean }) => {
   const t = trangThaiXem(d)
   return (t === 'trinh_duoc' || t === 'gui_thang') && !d.big
+}
+
+/**
+ * Làm được ngay nhưng TỪ NGƯỠNG giá trị lớn trở lên — không có ô tích (Q2), trình
+ * riêng từng đơn: bấm dòng rồi "Đã xem — trình GĐ". Trước 10/11/2026 ô tích của
+ * những đơn này để trống không một chữ, người dùng tưởng màn lỗi (PO-2026-0254).
+ */
+export const trinhRieng = (d: PhanLoaiXem & { big: boolean }) => {
+  const t = trangThaiXem(d)
+  return (t === 'trinh_duoc' || t === 'gui_thang') && d.big
+}
+
+/**
+ * Ngưỡng giá trị lớn đọc được: 50.000.000 VND → "50 triệu". Không có ngưỡng cho
+ * mã tiền đó thì null — `isBigApprovalWith` coi MỌI đơn tiền ấy là lớn, không có
+ * con số nào để nói.
+ */
+export function nguongChu(
+  nguong: Record<string, number>,
+  currency: string,
+): string | null {
+  const n = nguong[currency]
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null
+  if (currency === 'VND' && n >= 1_000_000 && n % 1_000_000 === 0)
+    return `${soVn(n / 1_000_000, 0)} triệu`
+  return tienVn(n, currency)
 }
 
 /** Câu ngắn cho cột Trạng thái từ lý do chưa trình được (`lyDoChuaTrinh`). */

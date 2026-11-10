@@ -358,7 +358,7 @@ export const poReviewService = {
         value: poMoneyOf(p, totals[p.id] ?? 0).grandTotal,
       })
     }
-    return { items, duyet_thay, at: now.toISOString() }
+    return { items, duyet_thay, nguong: thresholds, at: now.toISOString() }
   },
 
   /**

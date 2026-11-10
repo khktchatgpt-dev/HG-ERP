@@ -6,12 +6,14 @@ import {
   congTheoTien,
   henVe,
   lamDuocNgay,
+  nguongChu,
   soGia,
   soNgayTu,
   soVn,
   tichDuoc,
   tienVn,
   trangThaiXem,
+  trinhRieng,
   type XemDon,
 } from '@/lib/cho-xem'
 import { ngayGioVn } from '@/lib/date-vn'
@@ -37,7 +39,8 @@ const LOP_NHOM: Record<string, string> = {
 }
 
 const COT = [
-  { w: 34, nhan: '' },
+  // 44 chứ không 34: đơn giá trị lớn có nút chữ "xem" thay ô tích (28px nội dung).
+  { w: 44, nhan: '' },
   { w: 132, nhan: 'Trạng thái' },
   { w: 122, nhan: 'Mã đơn' },
   { w: 146, nhan: 'Người lập' },
@@ -67,12 +70,9 @@ export function LuoiDon({ d }: { d: ChoXemCtx }) {
         <thead>
           <tr>
             {COT.map((c, i) => (
-              <th
-                key={i}
-                className={'r' in c ? 'r' : undefined}
-                aria-label={i === 0 ? 'Tích' : undefined}
-              >
-                {c.nhan}
+              <th key={i} className={'r' in c ? 'r' : undefined}>
+                {/* cột tích không có chữ hiện — vẫn phải có tên cho trình đọc màn hình */}
+                {i === 0 ? <span className="sr-only">Tích</span> : c.nhan}
               </th>
             ))}
           </tr>
@@ -80,6 +80,10 @@ export function LuoiDon({ d }: { d: ChoXemCtx }) {
         {d.khoi.map((g) => {
           const gon = g.gon && !d.moNhom.has(g.key)
           const tichDuocKhoi = d.tab === 'cho' ? g.rows.filter(tichDuoc) : []
+          const rieng = d.tab === 'cho' ? g.rows.filter(trinhRieng) : []
+          const tienRieng = [...new Set(rieng.map((x) => x.currency))]
+          const mocRieng =
+            tienRieng.length === 1 ? nguongChu(d.box.nguong, tienRieng[0]) : null
           const caKhoi =
             tichDuocKhoi.length > 0 && tichDuocKhoi.every((x) => d.tich.has(x.id))
           const lop = d.gom === 'trang_thai' ? (LOP_NHOM[g.key] ?? 'lp-all') : 'lp-all'
@@ -107,6 +111,13 @@ export function LuoiDon({ d }: { d: ChoXemCtx }) {
                         .join(' · ')}`
                     : ' · không tính vào số chờ'}
                   {gon && ' · bấm để mở'}
+                  {!gon && rieng.length > 0 && (
+                    <span className="cx-rieng-n">
+                      {' · '}
+                      {rieng.length} đơn {mocRieng ? `từ ${mocRieng}` : 'giá trị lớn'}{' '}
+                      không tích được — bấm dòng rồi “Đã xem — trình GĐ”
+                    </span>
+                  )}
                   {tichDuocKhoi.length > 1 && (
                     <span className="rr">
                       <label>
@@ -207,16 +218,34 @@ function DongDon({ d, x }: { d: ChoXemCtx; x: XemDon }) {
       onClick={() => d.chonDong(x.id)}
       aria-selected={chon}
     >
-      <td onClick={(e) => e.stopPropagation()}>
-        {d.tab === 'cho' && tichDuoc(x) ? (
+      {d.tab === 'cho' && tichDuoc(x) ? (
+        <td onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={d.tich.has(x.id)}
             onChange={() => d.batTich(x)}
             aria-label={`Tích ${x.code}`}
           />
-        ) : null}
-      </td>
+        </td>
+      ) : d.tab === 'cho' && trinhRieng(x) ? (
+        /* Đơn lớn (Q2): không ô tích, nhưng ô KHÔNG được câm — nút chữ chọn đơn,
+           title nói bước kế. Bấm cả dòng cũng chọn; nút này để Tab tới được. */
+        <td onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="cx-xem"
+            onClick={() => d.chonDong(x.id)}
+            aria-pressed={chon}
+            aria-label={`${x.code}: giá trị lớn, không tích được — bấm để xem rồi bấm Đã xem — trình GĐ`}
+            title="Giá trị lớn — không tích hàng loạt. Bấm để xem đơn, rồi bấm “Đã xem — trình GĐ” ở góc trên."
+          >
+            xem
+          </button>
+        </td>
+      ) : (
+        // Ô trống không chặn cú bấm: bấm vào đây cũng chọn dòng như mọi ô khác.
+        <td />
+      )}
       <td title={x.chan ?? undefined}>
         <span className={`cx-tt ${tt.cls}`}>{tt.chu}</span>
         {tt.l2 && <span className="cx-l2">{tt.l2}</span>}
