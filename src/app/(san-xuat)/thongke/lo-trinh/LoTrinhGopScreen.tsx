@@ -47,7 +47,7 @@ export function LoTrinhGopScreen(props: LoTrinhGopProps) {
       <SxKhung bare label="Lộ trình công đoạn">
         <div className="sx-body">
           <DauTrang
-            crumb="Sản xuất › 2 · Kế hoạch chuẩn bị"
+            crumb="Sản xuất › Kế hoạch chuẩn bị"
             title="Lộ trình công đoạn"
             ctx={
               <>
@@ -68,10 +68,7 @@ export function LoTrinhGopScreen(props: LoTrinhGopProps) {
           ) : (
             <BangLenh rows={props.rows} canEdit={props.canEdit} />
           )}
-          <ThanhTT
-            left="Chỉ lệnh đã duyệt / đang chạy"
-            right="production_components.stages"
-          />
+          <ThanhTT left="Chỉ lệnh đã duyệt / đang chạy" />
         </div>
       </SxKhung>
     )
@@ -496,7 +493,7 @@ function MotLenh({
                 ? `Khoá vì đã có ${p.pbsCount} phiếu PBS`
                 : 'Lệnh chưa có sổ — còn sửa được; có phiếu PBS đầu tiên là khoá'
           }
-          right="production_components.stages · bước 3: Giao tổ & hạn"
+          right="Bước tiếp: Giao tổ & hạn"
         />
       </div>
     </SxKhung>

@@ -123,7 +123,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
       width: '190px',
       cell: (r) =>
         r.jobs_total === 0 ? (
-          <Badge tone="amber">Chưa lên lộ trình</Badge>
+          <Badge tone="amber">Chưa giao tổ & hạn</Badge>
         ) : (
           <span className="text-sm">
             {r.jobs_done}/{r.jobs_total} công đoạn xong
@@ -135,7 +135,9 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
     },
     {
       key: 'qty',
-      header: 'SL đạt / cần',
+      // Bộ XONG (hoàn thiện) / bộ ĐẶT — đúng đơn vị (11/11/2026); trước là
+      // Σ chi tiết + cụm + bộ của mọi công đoạn (MX 13 bày 0/98.950).
+      header: 'Bộ xong / đặt',
       width: '160px',
       align: 'right',
       sortValue: (r) => (r.qty_needed > 0 ? r.qty_done / r.qty_needed : -1),
@@ -148,9 +150,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
         ) : (
           // needed tính từ JOBS: chưa lên lộ trình thì chưa có gì để đo;
           // có lộ trình mà vẫn 0 nghĩa là dòng SP chưa định hình chi tiết.
-          <span className="text-muted-foreground text-xs">
-            {r.jobs_total === 0 ? '—' : 'chưa định hình'}
-          </span>
+          <span className="text-muted-foreground text-xs">chưa định hình</span>
         ),
     },
     {
@@ -216,14 +216,14 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[{ label: 'Kế hoạch sản xuất' }]}
-        title="Kế hoạch sản xuất"
-        description="Lệnh đã duyệt chờ lên lộ trình công đoạn + giao tổ + hạn. Số ưu tiên lớn = xưởng làm trước."
+        breadcrumbs={[{ label: 'Sản xuất', href: '/production' }]}
+        title="Giao tổ & hạn"
+        description="Lệnh đã duyệt chờ giao tổ và hạn từng công đoạn. Ưu tiên lớn = xưởng làm trước."
       />
       <StatsBar
         stats={[
           { label: 'Đang chạy', value: rows.length, tone: 'blue' },
-          { label: 'Chưa lên lộ trình', value: noPlan, tone: noPlan ? 'amber' : 'gray' },
+          { label: 'Chưa giao tổ & hạn', value: noPlan, tone: noPlan ? 'amber' : 'gray' },
           { label: 'Trễ hạn kế hoạch', value: overdue, tone: overdue ? 'red' : 'gray' },
           {
             label: 'Sát hạn xuất',
@@ -254,7 +254,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
               onChange={(v) => setFilter(v)}
               options={[
                 { value: 'all' as const, label: 'Tất cả' },
-                { value: 'no_plan' as const, label: 'Chưa lên lộ trình' },
+                { value: 'no_plan' as const, label: 'Chưa giao tổ & hạn' },
                 { value: 'plan_overdue' as const, label: 'Trễ hạn kế hoạch' },
               ]}
             />

@@ -109,9 +109,17 @@ export type OverviewMaterials = {
 }
 
 export type OverviewRow = {
-  /** Σ cần / đã làm (lũy kế, cap theo cần) của MỌI công đoạn — %SL của lệnh. */
+  /** Σ cần / đã làm (lũy kế, cap theo cần) của MỌI công đoạn — %SL của lệnh.
+   *  Cộng dồn ba đơn vị (chi tiết + cụm + bộ) nên CHỈ dùng để biết "có sổ
+   *  chưa" và tính nhịp; KHÔNG bày thành "bộ xong" (11/11/2026 — danh sách
+   *  Giao tổ & hạn từng bày 0/98.950 cho lệnh 2.000 bộ). */
   qty_needed: number
   qty_done: number
+  /** Bộ ĐẶT = Σ SL dòng SP đã định hình; bộ XONG = đạt ở công đoạn cuối chặng
+   *  thành phẩm (hoàn thiện) — cùng số với ô "Hoàn thiện" của Hồ sơ lệnh.
+   *  Dòng chưa định hình không vào mẫu số (không biết gì để đếm). */
+  sets_needed: number
+  sets_done: number
   /** Ngày DỰ KIẾN xong = còn lại ÷ nhịp 7 ngày có sổ của lệnh; null = chưa có
    *  nhịp hoặc đã đủ số. */
   forecast_date: string | null
@@ -498,6 +506,8 @@ export const jobsService = {
     const counting = countingOf(stages)
     const plannedByLine = lineStagesOf(jobs)
     const lsxQty = new Map<string, { needed: number; done: number }>()
+    const lsxSets = new Map<string, { needed: number; done: number }>()
+    const lastFinish = counting.finish.at(-1) ?? null
     /** (lệnh → công đoạn → cần/đạt) — nguồn của dải chip; đơn vị theo công đoạn. */
     const stageQty = new Map<string, Map<string, { needed: number; done: number }>>()
     for (const [key, lineComps] of groupByLine(components)) {
@@ -513,6 +523,15 @@ export const jobsService = {
         acc.needed += p.needed
         acc.done += Math.min(p.done, p.needed) // làm dư không kéo % lệnh quá 100
         lsxQty.set(lsxId, acc)
+        if (stage === lastFinish) {
+          const u = p.by_unit.find((x) => x.level === 'unit')
+          if (u) {
+            const st = lsxSets.get(lsxId) ?? { needed: 0, done: 0 }
+            st.needed += u.needed
+            st.done += Math.min(u.done, u.needed)
+            lsxSets.set(lsxId, st)
+          }
+        }
 
         const byStage = stageQty.get(lsxId) ?? new Map()
         const s = byStage.get(stage) ?? { needed: 0, done: 0 }
@@ -566,9 +585,12 @@ export const jobsService = {
         })
       }
       const qty = lsxQty.get(lsx.id) ?? { needed: 0, done: 0 }
+      const sets = lsxSets.get(lsx.id) ?? { needed: 0, done: 0 }
       return {
         qty_needed: Math.round(qty.needed * 100) / 100,
         qty_done: Math.round(qty.done * 100) / 100,
+        sets_needed: Math.round(sets.needed * 100) / 100,
+        sets_done: Math.round(sets.done * 100) / 100,
         forecast_date: forecastFinishDate(
           qty.needed - qty.done,
           recentOf(lsxDaily.get(lsx.id)),

@@ -95,7 +95,7 @@ export function TargetsGrid({
         days.length > 1
           ? `Đã giao chỉ tiêu cho ${days.length} ngày (${new Date(days[0]).toLocaleDateString('vi-VN')} → ${new Date(days[days.length - 1]).toLocaleDateString('vi-VN')})`
           : 'Đã lưu chỉ tiêu ngày',
-        `${rows.length} ô/ngày — Toàn cảnh xưởng dùng ngay số này`,
+        `${rows.length} ô/ngày — Vào việc và Báo cáo dùng ngay số này`,
       )
       setDirty(false)
       setApplyTo('')
@@ -112,11 +112,11 @@ export function TargetsGrid({
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Kế hoạch sản xuất', href: '/kehoach-sx' },
+          { label: 'Giao tổ & hạn', href: '/kehoach-sx' },
           { label: 'Chỉ tiêu ngày' },
         ]}
         title="Chỉ tiêu sản lượng ngày"
-        description="Giao chỉ tiêu per tổ × công đoạn. Ô TRỐNG = không giao → Toàn cảnh dùng số suy từ lộ trình; ô 0 là chỉ tiêu thật (tổ làm việc khác)."
+        description="Chỉ tiêu theo tổ × công đoạn. Ô trống = không giao (dùng số suy từ kế hoạch); ô 0 = chỉ tiêu thật."
       />
 
       <div className="flex flex-wrap items-end gap-3">

@@ -6,6 +6,8 @@ const row = (over: Partial<OverviewRow> = {}): OverviewRow =>
   ({
     qty_needed: 100,
     qty_done: 10,
+    sets_needed: 100,
+    sets_done: 10,
     forecast_date: null,
     lsx: {
       id: 'l1',
@@ -82,8 +84,8 @@ describe('VIEWS — khung nhìn của màn Lệnh sản xuất', () => {
   it('"Đã đủ số" không nhận lệnh chưa có mẫu số (qty_needed = 0)', () => {
     // 0/0 không phải là "đã đủ" — nó là "chưa biết".
     const test = VIEWS.find((v) => v.id === 'done')!.test
-    expect(test(row({ qty_needed: 0, qty_done: 0 }))).toBe(false)
-    expect(test(row({ qty_needed: 100, qty_done: 100 }))).toBe(true)
+    expect(test(row({ sets_needed: 0, sets_done: 0 }))).toBe(false)
+    expect(test(row({ sets_needed: 100, sets_done: 100 }))).toBe(true)
   })
 })
 

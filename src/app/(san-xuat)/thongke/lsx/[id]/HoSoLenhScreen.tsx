@@ -263,9 +263,7 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
               <span className="mut">
                 ▸ bung chi tiết trong cụm · ô gạch chéo = ngoài lộ trình
               </span>
-              <span className="sp mut">
-                Ô = đạt luỹ kế · (tồn chưa giao) · bấm ô để xem năm con số
-              </span>
+              <span className="sp mut">bấm ô để xem năm con số</span>
             </div>
             <BangDongBo d={d} />
             <DaiNamSo d={d} />
@@ -308,7 +306,7 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
               </>
             )
           }
-          right="Số lấy từ cùng hàm với Ghi sản lượng và Giao nhận · lib/wip-numbers"
+          right="Cùng số với Ghi sản lượng và Giao nhận"
         />
       </div>
     </SxKhung>

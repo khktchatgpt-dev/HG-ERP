@@ -6,6 +6,8 @@ const row = (over: Partial<OverviewRow> = {}): OverviewRow =>
   ({
     qty_needed: 100,
     qty_done: 10,
+    sets_needed: 100,
+    sets_done: 10,
     forecast_date: null,
     lsx: {
       id: 'l1',

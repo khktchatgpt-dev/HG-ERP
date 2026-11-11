@@ -166,7 +166,7 @@ export function GiaoNhanScreen({ data }: { data: Payload }) {
               nhận <b>{daGiao}</b> phiếu
             </>
           }
-          right="Không bắt lập phiếu — ghi sổ vẫn được, chỉ cảnh báo vượt khả dụng · production_transfer_docs"
+          right="Không bắt lập phiếu — ghi sổ vẫn được, chỉ cảnh báo vượt khả dụng"
         />
       </div>
     </SxKhung>

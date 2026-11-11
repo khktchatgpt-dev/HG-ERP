@@ -140,7 +140,7 @@ export function NgayScreen({
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Thống kê xưởng', href: '/thongke' },
+          { label: 'Thống kê sản xuất', href: '/thongke/ghi' },
           { label: 'Sổ ngày' },
         ]}
         title="Sổ ngày & chốt sổ"
@@ -304,7 +304,12 @@ export function NgayScreen({
         <EmptyState
           icon="▦"
           title={`Ngày ${fmtDate(date)} chưa có phiếu nào`}
-          description="Ghi sổ từ màn Tiến độ theo lệnh — phiếu sẽ tự gom về đây theo tổ."
+          description="Ghi sổ ở màn Ghi sản lượng — phiếu tự gom về đây theo tổ."
+          action={
+            <Link href="/thongke/ghi" className="text-sm text-[var(--primary)] underline">
+              Mở Ghi sản lượng ›
+            </Link>
+          }
         />
       ) : (
         teams.map(([teamId, t]) => {

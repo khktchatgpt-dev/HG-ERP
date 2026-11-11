@@ -229,7 +229,7 @@ export function DinhHinhScreen(props: DinhHinhProps) {
                 ? `Khoá vì đã có ${fmt(p.pbsCount)} phiếu PBS`
                 : 'Lệnh chưa có sổ — còn sửa được; có phiếu PBS đầu tiên là bảng khoá'
           }
-          right="production_components · ghi đè trọn bộ mỗi lần Lưu · lộ trình công đoạn: màn Lộ trình công đoạn (Kế hoạch)"
+          right="Lưu là ghi đè trọn bảng · lộ trình công đoạn khai ở màn Lộ trình công đoạn"
         />
       </div>
     </SxKhung>

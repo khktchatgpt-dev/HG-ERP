@@ -8,7 +8,8 @@ import { useCongDoan } from './useCongDoan'
 import { BangCauHinh } from './bang-cau-hinh'
 
 /** Ghép lớp — không template string có khoảng trắng đầu (hook format lột mất, bẫy 03/11). */
-const cx = (...xs: (string | false | null | undefined | 0)[]) => xs.filter(Boolean).join(' ')
+const cx = (...xs: (string | false | null | undefined | 0)[]) =>
+  xs.filter(Boolean).join(' ')
 
 /**
  * CẤU HÌNH CÔNG ĐOẠN — màn C1 của bản vẽ 03/11/2026 (không kit).
@@ -74,9 +75,7 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
               </ApNut>
             </ApNhom>
             <ApNhom>
-              <ApNut onClick={d.huy} why={dirty ? null : 'Chưa đổi gì'}>
-                Huỷ
-              </ApNut>
+              {dirty && <ApNut onClick={d.huy}>Huỷ</ApNut>}
               <ApNut primary onClick={d.luu} why={luuWhy} busy={busy}>
                 Lưu {nhap ? nhap.label : ''}
               </ApNut>
@@ -196,7 +195,7 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
           dirty ? (
             <span className="warn">Đang sửa {nhap?.label} — chưa lưu</span>
           ) : (
-            'catalog production_stage · meta'
+            'Danh mục dùng chung mọi SP'
           )
         }
       />

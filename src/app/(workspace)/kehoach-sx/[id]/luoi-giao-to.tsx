@@ -145,9 +145,7 @@ export function LuoiGiaoTo({
                     )}
                   </div>
                   <div className={cx('ten', !l.default_route && 'warn')}>
-                    {l.default_route
-                      ? l.product_name
-                      : 'chưa định hình — không biết số chi tiết'}
+                    {l.default_route ? l.product_name : 'chưa định hình'}
                   </div>
                 </td>
                 <td className="r num" style={{ padding: '0 8px' }}>

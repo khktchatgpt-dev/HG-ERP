@@ -154,8 +154,8 @@ export function BaoCaoScreen({
         {d.tab === 'dinh_muc' && <BangDinhMuc d={d} />}
 
         <ThanhTT
-          left="Nguồn: sổ sản lượng (mọi phiếu trong kỳ) · tồn công đoạn chỉ đếm phiếu chính thức · cùng hàm với Hồ sơ lệnh và Giao nhận"
-          right={`Kỳ tự do, trần 92 ngày · Excel: sản lượng · phế · sửa lại treo · tồn công đoạn · năng suất · định mức`}
+          left="Sản lượng tính mọi phiếu trong kỳ · tồn công đoạn chỉ đếm phiếu chính thức"
+          right="Kỳ tối đa 92 ngày"
         />
       </div>
     </SxKhung>

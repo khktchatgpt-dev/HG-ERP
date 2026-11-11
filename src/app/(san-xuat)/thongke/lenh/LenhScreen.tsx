@@ -91,8 +91,8 @@ export function LenhScreen({
     )
   }, [rows, q, view])
 
-  const totalSets = shown.reduce((a, r) => a + r.qty_needed, 0)
-  const doneSets = shown.reduce((a, r) => a + r.qty_done, 0)
+  const totalSets = shown.reduce((a, r) => a + r.sets_needed, 0)
+  const doneSets = shown.reduce((a, r) => a + r.sets_done, 0)
   const pctAll = totalSets > 0 ? Math.round((doneSets / totalSets) * 100) : null
 
   return (
@@ -145,9 +145,6 @@ export function LenhScreen({
               {v.label} <b>{fmt(counts[v.id] ?? 0)}</b>
             </button>
           ))}
-          <span className="sp">
-            chip đếm bằng đúng hàm lọc · cùng số với ô việc ở Tình hình xưởng
-          </span>
         </div>
 
         {shown.length === 0 ? (
@@ -215,8 +212,7 @@ export function LenhScreen({
                   <td colSpan={3}></td>
                   <td className="r num">{pctAll == null ? '—' : `${pctAll}%`}</td>
                   <td colSpan={4} className="mut" style={{ fontWeight: 400 }}>
-                    “Bộ xong” = Σ đã làm / Σ cần của mọi công đoạn (chính thức) — không
-                    phải số bộ đã đóng gói
+                    “Bộ xong” = bộ đã qua công đoạn cuối / SL đặt của dòng đã định hình
                   </td>
                 </tr>
               </tfoot>
@@ -224,20 +220,7 @@ export function LenhScreen({
           </div>
         )}
 
-        <ThanhTT
-          left={
-            <>
-              Dải công đoạn: ô sọc = không trong lộ trình · ô xám = có trong lộ trình,
-              chưa có sổ · tô dần theo % đạt · <b>{stages.length}</b> ô theo danh mục, thứ
-              tự cố định
-            </>
-          }
-          right={
-            <>
-              nguồn <b>jobsService.overview</b> — cùng hàm với Tình hình xưởng
-            </>
-          }
-        />
+        <ThanhTT left="Dải công đoạn: ô sọc = không trong lộ trình · ô xám = chưa có sổ · tô dần theo % đạt" />
       </div>
     </SxKhung>
   )
@@ -258,7 +241,7 @@ function DongLenh({
   const due = d == null ? null : dueText(d)
   const s = snagOf(r, canRecord)
   const strip = stripOf(r.chips, stages)
-  const pct = r.qty_needed > 0 ? Math.round((r.qty_done / r.qty_needed) * 100) : null
+  const pct = r.sets_needed > 0 ? Math.round((r.sets_done / r.sets_needed) * 100) : null
   const stale = r.holder.days != null && !r.holder.closed && isStale(r.holder)
   const orders = r.lsx.order_codes
   return (

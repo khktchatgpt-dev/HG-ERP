@@ -39,7 +39,7 @@ export const VIEWS: { id: string; label: string; test: (r: OverviewRow) => boole
   {
     id: 'done',
     label: 'Đã đủ số',
-    test: (r) => r.qty_needed > 0 && r.qty_done >= r.qty_needed,
+    test: (r) => r.sets_needed > 0 && r.sets_done >= r.sets_needed,
   },
 ]
 
