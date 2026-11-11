@@ -1,0 +1,20 @@
+import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+const env = Object.fromEntries(fs.readFileSync('D:/HG-ERP/.env.local','utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(), l.slice(i+1).trim().replace(/^"|"$/g,'')]}))
+const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY)
+const { data: t } = await sb.from('production_daily_targets').select('target_date, team_department_id, stage, qty, note, created_at, created_by').order('target_date').limit(5000)
+console.log('targets rows:', t.length)
+const byDate = {}; for (const r of t) byDate[r.target_date] = (byDate[r.target_date]||0)+1
+console.log('dates:', JSON.stringify(byDate))
+console.log('sample:', JSON.stringify(t.slice(0,5)))
+const { data: d } = await sb.from('departments').select('id,name,workspace_id').eq('workspace_id','production')
+console.log('teams:', d.length, d.map(x=>x.name).join(' | '))
+const { data: s } = await sb.from('catalog_items').select('code,label,sort_order,meta,is_active').eq('type','production_stage').order('sort_order')
+console.log('stages:', s.map(x=>`${x.code}:${x.label}:${x.meta?.count_level||''}:${x.is_active}`).join(' | '))
+const { count: e } = await sb.from('production_entries').select('*',{count:'exact',head:true})
+console.log('entries:', e)
+const { data: j } = await sb.from('production_jobs').select('stage, team_department_id, planned_start, planned_end, status').limit(2000)
+console.log('jobs:', j.length, 'with team:', j.filter(x=>x.team_department_id).length, 'with end:', j.filter(x=>x.planned_end).length)
+const { data: u } = await sb.from('users').select('id,name,department_id,role').limit(500)
+const { data: perm } = await sb.from('role_permissions').select('role,action').eq('action','production.plan.manage')
+console.log('plan.manage roles:', JSON.stringify(perm))

@@ -151,11 +151,11 @@ trạng thái), phẳng, mỗi dòng một hàng, ít chữ. **Không import kit
 với nút bo góc + chip tròn + token `.theme-v3` vẫn ra dáng kit (bài học Phân công việc).
 Mẫu chép: `warehouse/_erp/kho.css` + `khung.tsx`.
 
-|           | Lối ERP không kit (MỚI)              | Bộ kit ERP                                 | Theme v3 + ERP kit cũ                         |
-| --------- | ------------------------------------ | ------------------------------------------ | --------------------------------------------- |
-| Import từ | CSS riêng của khu                    | `@/components/kit`                         | `@/components/erp/*`, `@/components/shadcn/*` |
-| Lớp token | biến trong lớp gốc khu (`.kh.kh`…)   | `.kit` (`src/components/kit/tokens.css`)   | `.theme-v3` (`src/app/globals.css`)           |
-| Dùng khi  | **mọi màn MỚI + màn dựng lại**       | màn đang chạy bằng kit, sửa nhỏ tại chỗ    | màn CŨ, sửa nhỏ tại chỗ                       |
+|           | Lối ERP không kit (MỚI)            | Bộ kit ERP                               | Theme v3 + ERP kit cũ                         |
+| --------- | ---------------------------------- | ---------------------------------------- | --------------------------------------------- |
+| Import từ | CSS riêng của khu                  | `@/components/kit`                       | `@/components/erp/*`, `@/components/shadcn/*` |
+| Lớp token | biến trong lớp gốc khu (`.kh.kh`…) | `.kit` (`src/components/kit/tokens.css`) | `.theme-v3` (`src/app/globals.css`)           |
+| Dùng khi  | **mọi màn MỚI + màn dựng lại**     | màn đang chạy bằng kit, sửa nhỏ tại chỗ  | màn CŨ, sửa nhỏ tại chỗ                       |
 
 **Đừng viết lại hàng loạt** — màn cũ chuyển sang lối ERP khi có việc nghiệp vụ chạm vào nó.
 Trong một file thì **chỉ dùng một hệ**; trộn hệ là các bộ token đánh nhau.
@@ -599,8 +599,8 @@ xuất, Tổ, BGĐ; Kho thấy `/may-moc/dung-cu`; Kế toán thấy `/may-moc/c
   người đăng nhập), "nhân viên nghỉ việc" (ghi ở Hồ sơ nhân viên), chuông "cần chú ý"
   tính sẵn (ERP dùng chuông theo sự kiện + ô đếm), thư viện phụ tùng gợi ý theo nhóm
   (PART_LIB — dữ liệu mẫu, chủ dự án bảo bỏ), thanh tab đáy trên điện thoại (dải tab khu
-  + nút Quét QR đã đủ). CHẶT HƠN demo có chủ ý: "Sửa xong" bắt ghi nguyên nhân ≥ 5 ký tự,
-  thuê ngoài bắt ghi tên đơn vị (demo để trống thành "Thuê ngoài").
+  - nút Quét QR đã đủ). CHẶT HƠN demo có chủ ý: "Sửa xong" bắt ghi nguyên nhân ≥ 5 ký tự,
+    thuê ngoài bắt ghi tên đơn vị (demo để trống thành "Thuê ngoài").
 - **Ai giao / thu hồi dụng cụ** (`assets.tools`): Kho + GĐ (0270) + **Nhân sự**
   (`hr_staff`, 0276 — chủ dự án chốt 23/10/2026 "thêm Nhân sự, giữ Kho", như demo). Nhân
   sự biết ai vào / ai nghỉ (ngày nghỉ đọc từ Hồ sơ NV), Kho là người đưa / nhận đồ thật.

@@ -1,0 +1,232 @@
+<title>Nguyên nhân điều chỉnh đơn mua</title>
+<style>
+/* Bố cục: bản vẽ dọc, mỗi artboard một khung phẳng kiểu Dynamics — vạch mảnh, chữ 13px, lưới sát mép */
+:root {
+  --surface: #eef0f4; --card: #ffffff; --raised: #f3f5f8;
+  --ink: #12161f; --ink-2: #3f4756; --ink-3: #5d6675; --line: #c9d0db; --line-soft: #e1e5ec;
+  --act: #1f4bb8; --act-ink: #ffffff; --act-wash: #e8eefb; --act-line: #b3c5ee; --act-text: #173b91;
+  --stop: #b0241a; --stop-wash: #fceceb; --warn: #8a5200; --warn-wash: #fbf2e2; --warn-line: #e8d5b0;
+  --done: #15653d; --done-wash: #e5f3ea; --new: #6a3fb0; --new-wash: #f1ebfa;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --sans: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --surface: #14171d; --card: #1b1f27; --raised: #222733; --ink: #e8ebf1; --ink-2: #c3c9d4; --ink-3: #9aa3b2;
+  --line: #3a4150; --line-soft: #2b313d; --act: #6d93f0; --act-ink: #0e1420; --act-wash: #1f2a44; --act-line: #34477a; --act-text: #a9c0f7;
+  --stop: #f08a80; --stop-wash: #3a1d1b; --warn: #e3b25e; --warn-wash: #33291a; --warn-line: #5a4625;
+  --done: #6fcf98; --done-wash: #18301f; --new: #b79cf0; --new-wash: #2a2240; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --surface: #14171d; --card: #1b1f27; --raised: #222733; --ink: #e8ebf1; --ink-2: #c3c9d4; --ink-3: #9aa3b2;
+  --line: #3a4150; --line-soft: #2b313d; --act: #6d93f0; --act-ink: #0e1420; --act-wash: #1f2a44; --act-line: #34477a; --act-text: #a9c0f7;
+  --stop: #f08a80; --stop-wash: #3a1d1b; --warn: #e3b25e; --warn-wash: #33291a; --warn-line: #5a4625;
+  --done: #6fcf98; --done-wash: #18301f; --new: #b79cf0; --new-wash: #2a2240; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--surface); color: var(--ink); font: 13px/1.5 var(--sans); padding: 24px 16px 48px }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px }
+h1 { font-size: 22px; margin: 0; text-wrap: balance }
+h2 { font-size: 15px; margin: 0 0 4px }
+.sub { color: var(--ink-3) }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.board { background: var(--card); border: 1px solid var(--line); min-width: 0 }
+.bhead { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline }
+.btag { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3) }
+.bbody { padding: 16px }
+.measure { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); border: 1px solid var(--line); background: var(--card) }
+.measure > div { padding: 12px 14px; border-right: 1px solid var(--line-soft) }
+.measure b { display: block; font: 600 20px var(--mono) }
+.measure span { color: var(--ink-2) }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; min-width: 760px }
+th { text-align: left; font-weight: 600; font-size: 12px; color: var(--ink-2); background: var(--raised); border-bottom: 1px solid var(--line); padding: 6px 10px; white-space: nowrap }
+td { border-bottom: 1px solid var(--line-soft); padding: 6px 10px; vertical-align: top }
+td.r, th.r { text-align: right }
+tfoot td { background: var(--raised); font-weight: 600; border-top: 1px solid var(--line) }
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); padding: 0 7px; font-size: 12px; white-space: nowrap; background: var(--card) }
+.chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block }
+.c-khach i { background: var(--act) } .c-ncc i { background: var(--warn) } .c-kt i { background: var(--new) } .c-sai i { background: var(--stop) } .c-khac i { background: var(--ink-3) } .c-chua i { background: transparent; border: 1px dashed var(--ink-3) }
+a { color: var(--act-text) }
+.ref { font-family: var(--mono); color: var(--act-text); text-decoration: underline; text-underline-offset: 2px }
+.warn { color: var(--warn) } .stop { color: var(--stop) }
+.sheet { max-width: 660px; border: 1px solid var(--line); background: var(--card); margin-left: auto }
+.sheet header { padding: 12px 16px; border-bottom: 1px solid var(--line) }
+.sheet header b { font-size: 15px }
+.sheet .in { padding: 14px 16px; display: grid; gap: 14px }
+.sheet footer { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; background: var(--raised) }
+.btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 5px 12px }
+.btn.p { background: var(--act); border-color: var(--act); color: var(--act-ink); font-weight: 600 }
+.btn.off { background: #8a919e; border-color: #8a919e; color: #fff }
+.lbl { font-weight: 600; color: var(--ink-2); margin-bottom: 6px; display: block }
+.req { color: var(--stop) }
+.causes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px }
+.cause { border: 1px solid var(--line); padding: 7px 10px; display: flex; gap: 8px; align-items: flex-start; cursor: pointer }
+.cause small { display: block; color: var(--ink-3); font-size: 12px }
+.cause.on { border-color: var(--act); background: var(--act-wash) }
+.radio { width: 14px; height: 14px; border: 1.5px solid var(--ink-3); border-radius: 50%; margin-top: 3px; flex: none }
+.cause.on .radio { border: 4px solid var(--act) }
+.pick { border: 1px solid var(--line) }
+.pick > div { padding: 7px 10px; display: flex; gap: 8px; border-bottom: 1px solid var(--line-soft) }
+.pick > div:last-child { border-bottom: 0 }
+.pick .on { background: var(--act-wash) }
+.box { border: 1px solid var(--line); padding: 7px 10px; min-height: 56px; background: var(--card) }
+.kv { display: grid; grid-template-columns: 150px 1fr; gap: 2px 12px }
+.kv dt { color: var(--ink-3) }
+.kv dd { margin: 0 }
+.note { border-left: 3px solid var(--warn-line); background: var(--warn-wash); padding: 8px 12px; color: var(--ink) }
+.blocked { border-left: 3px solid var(--stop); background: var(--stop-wash); padding: 8px 12px }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px }
+.tl { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); margin-left: 6px }
+.tl li { position: relative; padding: 0 0 12px 16px }
+.tl li::before { content: ""; position: absolute; left: -5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--card); border: 2px solid var(--ink-3) }
+.tl li.k::before { border-color: var(--act) }
+.tl time { color: var(--ink-3); font-family: var(--mono); font-size: 12px }
+.qs { display: grid; gap: 8px; counter-reset: q }
+.qs > div { background: var(--card); border: 1px solid var(--line); padding: 10px 14px }
+.qs b.q { font-family: var(--mono); color: var(--act-text); margin-right: 6px }
+.ex { font-size: 11px; color: var(--ink-3); border: 1px dashed var(--line); padding: 0 6px; margin-left: 6px }
+:focus-visible { outline: 2px solid var(--act); outline-offset: 2px }
+</style>
+
+<div class="wrap">
+  <div>
+    <div class="btag">Mua hàng · Đơn mua · Điều chỉnh sau duyệt</div>
+    <h1>Ghi nguyên nhân khi điều chỉnh đơn mua</h1>
+    <p class="sub">Bản vẽ để duyệt trước khi code. Mỗi lần sửa đơn đã duyệt phải chọn <b>nguyên nhân</b> (một danh sách cố định) và, nếu là khách đổi đơn, chỉ ra <b>đơn khách / lệnh</b> nào. Lịch sử nhờ đó lọc và tra ngược được, thay vì chỉ có một dòng chữ gõ tay.</p>
+  </div>
+
+  <div class="measure" aria-label="Số đo trên dữ liệu thật ngày 07/10">
+    <div><b>2</b><span>lần điều chỉnh đã ghi, lý do là chữ gõ tự do ("khách thay đổi sản phẩm khác.", "giá 135đ… 158đ")</span></div>
+    <div><b>35/37</b><span>đơn mua đang mở (đã duyệt → về một phần) có gắn lệnh SX</span></div>
+    <div><b>49</b><span>lần đơn khách đổi dòng SP; mới nhất 05/10 ROSCO IBIZA "về đúng ORDERED QTY", dư 36 bộ ăn + 86 bộ sofa</span></div>
+    <div><b>29</b><span>đơn mua gắn lệnh 02/26-27 ROSCO; 17 còn sửa được. Hiện không cách nào biết đơn nào đã sửa theo thay đổi 05/10</span></div>
+  </div>
+
+  <!-- ═════ ARTBOARD 1 ═════ -->
+  <section class="board">
+    <div class="bhead"><h2>1 · Hộp "Áp dụng điều chỉnh": thêm ô Nguyên nhân</h2><span class="btag">Trang đơn → Sửa → Lưu</span></div>
+    <div class="bbody cols">
+      <div>
+        <p>Giữ nguyên hộp hiện có (danh sách dòng đổi, tổng cũ/mới, phát sinh, người được báo). Thêm hai thứ <b>phía trên</b> ô lý do:</p>
+        <ol>
+          <li><b>Nguyên nhân</b>: chọn đúng một trong năm. Bắt buộc.</li>
+          <li>Chọn <b>Khách đổi đơn</b> thì hiện thêm danh sách <b>đơn khách · lệnh</b> mà đơn mua này đang phục vụ. Đơn chỉ gắn một lệnh thì chọn sẵn. Mỗi dòng bày luôn lần đổi gần nhất của đơn khách để người mua đối chiếu.</li>
+          <li>Ô "Vì sao điều chỉnh" đổi tên thành <b>Ghi chú</b>, vẫn bắt buộc ≥ 5 ký tự: ghi khách đổi gì, NCC báo qua đâu.</li>
+        </ol>
+        <p class="sub">Ví dụ bên phải là PO-2026-0054 (nệm Phương Vy, lệnh 02/26-27 ROSCO) với số giảm minh hoạ<span class="ex">ví dụ</span>.</p>
+      </div>
+      <div class="sheet" role="dialog" aria-label="Áp dụng điều chỉnh lần 1">
+        <header><b>Áp dụng điều chỉnh lần 1 · PO-2026-0054</b><div class="sub">Không cần duyệt lại. Phần chênh ghi thành phát sinh riêng để kế toán theo dõi.</div></header>
+        <div class="in">
+          <div class="scroll"><table style="min-width:0">
+            <tbody>
+              <tr><td class="num">Dòng 1</td><td>PKN0395 Nệm mê Ghế xoay — SL <span class="num">8.960 → 8.272</span></td><td class="r num">−48.160.000</td></tr>
+              <tr><td class="num">Dòng 2</td><td>PKN0396 Nệm tựa Ghế xoay — SL <span class="num">8.960 → 8.272</span></td><td class="r num">−41.280.000</td></tr>
+            </tbody></table></div>
+          <dl class="kv">
+            <dt>Phát sinh lần 1</dt><dd class="num"><b>−98.384.000</b></dd>
+            <dt>Báo cho</dt><dd>Người đã duyệt đơn</dd>
+          </dl>
+          <div>
+            <span class="lbl">Nguyên nhân <span class="req">*</span></span>
+            <div class="causes" role="radiogroup" aria-label="Nguyên nhân">
+              <div class="cause on" role="radio" aria-checked="true" tabindex="0"><span class="radio"></span><div>Khách đổi đơn<small>SL, mẫu, hạn giao của đơn khách thay đổi</small></div></div>
+              <div class="cause" role="radio" aria-checked="false" tabindex="-1"><span class="radio"></span><div>NCC đổi giá / điều kiện<small>Tăng giá, đổi quy cách, hết hàng</small></div></div>
+              <div class="cause" role="radio" aria-checked="false" tabindex="-1"><span class="radio"></span><div>Kỹ thuật đổi định mức<small>Lệnh ra bản chỉnh sửa, đổi vật tư</small></div></div>
+              <div class="cause" role="radio" aria-checked="false" tabindex="-1"><span class="radio"></span><div>Nhập sai, sửa cho đúng<small>Đơn gốc gõ nhầm số, giá, mã</small></div></div>
+              <div class="cause" role="radio" aria-checked="false" tabindex="-1"><span class="radio"></span><div>Khác<small>Ghi rõ ở ghi chú</small></div></div>
+            </div>
+          </div>
+          <div>
+            <span class="lbl">Theo thay đổi của đơn khách · lệnh <span class="req">*</span></span>
+            <div class="pick" role="radiogroup" aria-label="Đơn khách và lệnh">
+              <div class="on" role="radio" aria-checked="true"><span class="radio" style="border:4px solid var(--act)"></span><div><span class="num"><b>02/26-27 - ROSCO</b></span> · ROSCO IBIZA 02/26-27<br><span class="sub">Đổi gần nhất <span class="num">05/10</span>: "Bản 2: về đúng ORDERED QTY file khách… Bản 1 dư 36 bộ ăn + 86 bộ sofa."</span></div></div>
+            </div>
+            <div class="sub" style="margin-top:4px">Chỉ bày lệnh mà đơn mua này đang gắn (dòng chia lệnh + lệnh của đơn).</div>
+          </div>
+          <div>
+            <span class="lbl">Ghi chú <span class="req">*</span></span>
+            <div class="box">Khách chốt lại SL theo file 02/10, giảm 86 bộ sofa → bớt nệm ghế xoay. Đã báo NCC qua Zalo chị Vy.</div>
+          </div>
+        </div>
+        <footer><button class="btn">Quay lại sửa</button><button class="btn p">Áp dụng</button></footer>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════ ARTBOARD 1b — bị chặn ═════ -->
+  <section class="board">
+    <div class="bhead"><h2>1b · Khi chưa đủ để áp dụng</h2><span class="btag">Trạng thái bị chặn</span></div>
+    <div class="bbody cols">
+      <div class="blocked"><b>Chưa chọn nguyên nhân.</b> Nút Áp dụng khoá (nền xám đặc), dưới nút có câu: <i>"Chọn nguyên nhân để kế toán và Bán hàng biết vì sao đơn đổi."</i> Bấm câu đó thì nhảy tới ô Nguyên nhân.</div>
+      <div class="blocked"><b>Khách đổi đơn, nhưng đơn mua không gắn lệnh nào</b> (2/37 đơn đang mở). Danh sách trống thì hiện ô tìm đơn khách theo mã, kèm câu: <i>"Đơn mua này chưa gắn lệnh. Tìm đơn khách theo mã, hoặc chọn Khác nếu không thuộc đơn khách nào."</i></div>
+      <div class="note"><b>Đơn gắn nhiều lệnh</b> (2/37): bày đủ, không chọn sẵn, chọn được một hoặc nhiều lệnh.</div>
+    </div>
+  </section>
+
+  <!-- ═════ ARTBOARD 2 ═════ -->
+  <section class="board">
+    <div class="bhead"><h2>2 · Lịch sử trên đơn mua: nhìn là biết vì sao đổi</h2><span class="btag">Trang đơn → Tài chính → Tiền của đơn</span></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Khoản</th><th>Ngày · người</th><th>Nguyên nhân</th><th>Theo đơn khách · lệnh</th><th class="r">Tổng thanh toán</th><th>Ghi chú · gửi NCC</th></tr></thead>
+        <tbody>
+          <tr><td><b>Bản duyệt</b></td><td class="num">01/10 · Lê Văn Điền</td><td class="sub">—</td><td class="sub">—</td><td class="r num">3.896.008.600</td><td>Tiền đã ký duyệt</td></tr>
+          <tr><td><b>Phát sinh lần 1</b></td><td class="num">07/10 · Đặng Thị Thanh Nga</td><td><span class="chip c-khach"><i></i>Khách đổi đơn</span></td><td><a class="ref" href="#">02/26-27 - ROSCO</a><div class="sub">thay đổi 05/10 của ROSCO IBIZA</div></td><td class="r num">−98.384.000</td><td>Khách chốt lại SL theo file 02/10… · <span class="warn">chưa gửi NCC</span></td></tr>
+          <tr><td><b>Phát sinh lần 2</b></td><td class="num">09/10 · Đặng Thị Thanh Nga</td><td><span class="chip c-ncc"><i></i>NCC đổi giá / điều kiện</span></td><td class="sub">—</td><td class="r num">+12.420.000</td><td>NCC báo tăng giá mút 10/10 · đã gửi NCC 09/10</td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="4">Hiện hành: đối chiếu hoá đơn NCC theo dòng này (gồm VAT)</td><td class="r num">3.810.044.600</td><td></td></tr></tfoot>
+      </table>
+    </div>
+    <div class="bbody cols">
+      <div>
+        <span class="lbl">Dòng thời gian của đơn</span>
+        <ul class="tl">
+          <li class="k"><time>07/10 14:20</time> · <b>Điều chỉnh lần 1</b> — <span class="chip c-khach"><i></i>Khách đổi đơn</span> theo <a class="ref" href="#">02/26-27 - ROSCO</a>. 2 dòng đổi SL, −98.384.000.</li>
+          <li><time>02/10 16:37</time> · NCC xác nhận — Chờ giao</li>
+          <li><time>01/10 12:55</time> · Giám đốc duyệt</li>
+        </ul>
+      </div>
+      <div>
+        <span class="lbl">Bản ghi cũ (2 lần, trước khi có ô này)</span>
+        <p>Phân loại một lần theo lý do đã ghi, rồi hiện như bình thường:</p>
+        <ul>
+          <li><span class="num">2/2026-HG/STP</span> "khách thay đổi sản phẩm khác." → <span class="chip c-khach"><i></i>Khách đổi đơn</span>, gắn lệnh duy nhất của đơn</li>
+          <li><span class="num">PO-2026-0143</span> "giá 135đ… 158đ" → <span class="chip c-ncc"><i></i>NCC đổi giá / điều kiện</span></li>
+        </ul>
+        <p class="sub">Lần sau gặp bản ghi không phân loại được thì hiện <span class="chip c-chua"><i></i>Chưa phân loại</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════ ARTBOARD 3 ═════ -->
+  <section class="board">
+    <div class="bhead"><h2>3 · Tra ngược từ lệnh: đơn mua nào đã sửa theo thay đổi của khách</h2><span class="btag">Mua hàng → Hồ sơ lệnh 02/26-27 ROSCO · bước sau, chờ chốt Q5</span></div>
+    <div class="bbody" style="padding-bottom:6px">
+      <div class="note">Đơn khách đổi <span class="num">05/10</span> (Bản 2: về đúng ORDERED QTY). <b>2/17</b> đơn mua đang mở đã điều chỉnh theo. 15 đơn chưa có điều chỉnh nào. Có thể là không cần đổi; bấm từng đơn để soát.</div>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Đơn mua</th><th>NCC</th><th>Trạng thái</th><th>Điều chỉnh theo thay đổi này</th><th class="r">Phát sinh</th><th>Gửi NCC</th></tr></thead>
+        <tbody>
+          <tr><td class="num"><a href="#">PO-2026-0054</a></td><td>Phương Vy</td><td>Chờ giao</td><td>Lần 1 · 07/10 · Nga</td><td class="r num">−98.384.000</td><td class="warn">chưa gửi</td></tr>
+          <tr><td class="num"><a href="#">PO-2026-0091</a></td><td>An Thành Phát</td><td>Về một phần</td><td>Lần 1 · 08/10 · Nga</td><td class="r num">−1.203.000</td><td>08/10</td></tr>
+          <tr><td class="num"><a href="#">PO-2026-0125</a></td><td>Hiệp Hưng</td><td>Chờ giao</td><td class="sub">chưa điều chỉnh</td><td class="r sub">—</td><td class="sub">—</td></tr>
+          <tr><td class="num"><a href="#">PO-2026-0090</a></td><td>Gia Hưng Phúc</td><td>Chờ giao</td><td class="sub">chưa điều chỉnh</td><td class="r sub">—</td><td class="sub">—</td></tr>
+          <tr><td colspan="6" class="sub">… 13 đơn nữa</td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="4">17 đơn mua đang mở gắn lệnh · không gồm 12 đơn đã về đủ (không điều chỉnh được nữa)</td><td class="r num">−99.587.000</td><td></td></tr></tfoot>
+      </table>
+    </div>
+    <p class="bbody sub" style="margin:0">Các số và đơn ở bảng này là ví dụ minh hoạ<span class="ex">ví dụ</span>, trừ phần đếm 17/29 đơn đã đo thật.</p>
+  </section>
+
+  <div>
+    <h2>Cần anh chốt</h2>
+    <div class="qs">
+      <div><b class="q">Q1</b>Năm nguyên nhân: <b>Khách đổi đơn · NCC đổi giá/điều kiện · Kỹ thuật đổi định mức · Nhập sai, sửa cho đúng · Khác</b>. <i>Đề xuất: dùng đúng năm mục này, thiếu thì thêm sau.</i></div>
+      <div><b class="q">Q2</b>Chọn "Khách đổi đơn" thì <b>bắt buộc</b> chỉ ra lệnh / đơn khách? <i>Đề xuất: bắt buộc, chọn sẵn khi đơn chỉ gắn một lệnh. Không bắt buộc thì tra ngược ở bảng 3 sẽ hổng.</i></div>
+      <div><b class="q">Q3</b>Ghi chú vẫn bắt buộc ≥ 5 ký tự? <i>Đề xuất: vẫn bắt buộc. Nguyên nhân nói "vì sao", ghi chú nói "đổi gì, báo NCC qua đâu".</i></div>
+      <div><b class="q">Q4</b>Hai bản ghi cũ phân loại như artboard 2? <i>Đề xuất: đồng ý.</i></div>
+      <div><b class="q">Q5</b>Bảng tra ngược ở Hồ sơ lệnh (artboard 3) làm <b>bước 2</b>, sau khi bước 1 (hộp + lịch sử trên đơn) chạy thật vài ngày? <i>Đề xuất: đúng vậy, bước 1 làm trước.</i></div>
+    </div>
+  </div>
+</div>
