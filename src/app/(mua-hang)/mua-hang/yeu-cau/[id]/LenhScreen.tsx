@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type CSSProperties } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import type { LsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 import { useLocalPref } from '@/lib/use-local-pref'
@@ -298,7 +298,7 @@ export function LenhScreen({
   /** Chỉ nạp khi `xem = vat-tu` — bảng kê nặng, không bắt màn lệnh thường chờ nó. */
   bangKe: LsxBangKe | null
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const moc = lsx.materials_due_at ?? lsx.ship_date
   const con = conLai(moc, today)
 

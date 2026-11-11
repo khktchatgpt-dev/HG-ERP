@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   Btn,
   Chip,
@@ -195,7 +195,7 @@ export function DonViScreen({
   canRecord: boolean
   openAdd: boolean
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const [q, setQ] = useState('')
   const [chip, setChip] = useState('all')
   const [them, setThem] = useState(openAdd)

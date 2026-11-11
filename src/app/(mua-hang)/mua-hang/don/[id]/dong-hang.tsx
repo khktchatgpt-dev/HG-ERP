@@ -93,6 +93,7 @@ export function DongHang({ d }: { d: DonCtx }) {
     meta,
     setEditMaterial,
     saveToCatalog,
+    dangLuuDm,
   } = d
   // Mẫu có hai cột giá (ĐVT + kg/m³/m²) — xem `HAI_GIA`.
   const haiCot = HAI_GIA[template]
@@ -674,18 +675,21 @@ export function DongHang({ d }: { d: DonCtx }) {
                     </GridBtn>
                     {
                       cur.weight_per_m !== '' && cur.catalog_kg_m == null &&
-                        <GridBtn onClick={() => void saveToCatalog(cur.material_id, 'kgm', Number(cur.weight_per_m))}>Lưu kg/m vào danh mục</GridBtn> // prettier-ignore
+                        <GridBtn disabled={dangLuuDm(cur.material_id, 'kgm')} onClick={() => void saveToCatalog(cur.material_id, 'kgm', Number(cur.weight_per_m))}>{dangLuuDm(cur.material_id, 'kgm') ? 'Đang lưu…' : 'Lưu kg/m vào danh mục'}</GridBtn> // prettier-ignore
                     }
                     {
                       cur.weight_per_unit !== '' && cur.catalog_kg_unit == null &&
-                        <GridBtn onClick={() => void saveToCatalog(cur.material_id, 'kgunit', Number(cur.weight_per_unit))}>Lưu kg/đv vào danh mục</GridBtn> // prettier-ignore
+                        <GridBtn disabled={dangLuuDm(cur.material_id, 'kgunit')} onClick={() => void saveToCatalog(cur.material_id, 'kgunit', Number(cur.weight_per_unit))}>{dangLuuDm(cur.material_id, 'kgunit') ? 'Đang lưu…' : 'Lưu kg/đv vào danh mục'}</GridBtn> // prettier-ignore
                     }
                     {cur.spec.trim() !== '' && (
                       <GridBtn
                         title="Ghi quy cách đang gõ vào hồ sơ vật tư — lần đặt sau tự điền"
+                        disabled={dangLuuDm(cur.material_id, 'spec')}
                         onClick={() => void saveToCatalog(cur.material_id, 'spec', cur.spec.trim(), rowKey(cur))} // prettier-ignore
                       >
-                        Lưu quy cách vào danh mục
+                        {dangLuuDm(cur.material_id, 'spec')
+                          ? 'Đang lưu…'
+                          : 'Lưu quy cách vào danh mục'}
                       </GridBtn>
                     )}
                   </span>

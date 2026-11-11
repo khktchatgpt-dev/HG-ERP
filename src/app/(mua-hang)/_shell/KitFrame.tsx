@@ -1,7 +1,6 @@
 'use client'
 
 import { useLocalPref } from '@/lib/use-local-pref'
-import { ThanhTaiTrang } from './ThanhTaiTrang'
 
 /**
  * LỚP TOKEN CỦA KIT, đặt ngay trong vùng nội dung của vỏ chung.
@@ -35,8 +34,6 @@ export function KitFrame({ children }: { children: React.ReactNode }) {
         dense === '1' ? 'kit kit-dense flex h-full flex-col' : 'kit flex h-full flex-col'
       }
     >
-      {/* Trong `.kit` để vạch lấy đúng `--act` của kit. */}
-      <ThanhTaiTrang />
       {children}
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Btn,
   Combobox,
@@ -28,6 +28,7 @@ import {
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { todayVn } from '@/lib/date-vn'
+import { useDangChay } from '@/lib/use-dang-chay'
 import {
   allocateCost,
   costMoney,
@@ -105,6 +106,9 @@ export function GhiPhiSheet({
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<Map<string, CostCandidate>>(new Map())
   const [loadErr, setLoadErr] = useState<string | null>(null)
+  // Lúc mở hộp, danh sách nhà xe còn đang tải mà ô chọn đã ghi "chưa có đơn vị nào —
+  // thêm mới" → người dùng thêm trùng một nhà xe đã có (11/11/2026). Nói "đang tải".
+  const [napXong, setNapXong] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -121,6 +125,7 @@ export function GhiPhiSheet({
         setCarriers(k.carriers)
       })
       .catch((e) => live && setLoadErr(apiErrorText(e)))
+      .finally(() => live && setNapXong(true))
     return () => {
       live = false
     }
@@ -133,37 +138,52 @@ export function GhiPhiSheet({
     setPay(v === 'ship_le' ? 'tai_cho' : 'ke_toan')
   }
 
+  /* TÌM ĐƠN (11/11/2026): ô tìm thì không chặn gõ tiếp — chỉ lượt MỚI NHẤT được
+     ghi kết quả (Enter hai lần với hai từ khác nhau, trả lời về lệch thứ tự thì
+     từ cũ từng đè từ mới), và có chữ "đang tìm…" trong lúc chờ. */
+  const lanTim = useRef(0)
+  const [dangTim, setDangTim] = useState(false)
   async function search(v: string) {
     setQ(v)
-    if (!v.trim()) return setFound([])
+    const lan = ++lanTim.current
+    if (!v.trim()) {
+      setDangTim(false)
+      return setFound([])
+    }
+    setDangTim(true)
     try {
       const r = await api<{ found: CostCandidate[] }>(
         `/api/dept/supply/po-costs/candidates?${po ? `po_id=${po.id}&` : ''}q=${encodeURIComponent(v.trim())}`,
       )
-      setFound(r.found)
+      if (lan === lanTim.current) setFound(r.found)
     } catch (e) {
-      setLoadErr(apiErrorText(e))
+      if (lan === lanTim.current) setLoadErr(apiErrorText(e))
+    } finally {
+      if (lan === lanTim.current) setDangTim(false)
     }
   }
 
-  async function addCarrier() {
-    setAddErr(null)
-    try {
-      const r = await api<{ carrier: Carrier }>('/api/dept/supply/po-costs/carriers', {
-        method: 'POST',
-        body: { name: newName, phone: newPhone || null, carrier_kind: 'nha_xe' },
-      })
-      setCarriers((cs) =>
-        cs.some((c) => c.id === r.carrier.id) ? cs : [...cs, r.carrier],
-      )
-      setCarrierId(r.carrier.id)
-      setAdding(false)
-      setNewName('')
-      setNewPhone('')
-    } catch (e) {
-      setAddErr(apiErrorText(e))
-    }
-  }
+  // Bấm đôi "Thêm" từng tạo hai nhà xe trùng tên — chặn + vòng quay (11/11/2026).
+  const { chay, dangChay } = useDangChay()
+  const addCarrier = () =>
+    chay('them-nha-xe', async () => {
+      setAddErr(null)
+      try {
+        const r = await api<{ carrier: Carrier }>('/api/dept/supply/po-costs/carriers', {
+          method: 'POST',
+          body: { name: newName, phone: newPhone || null, carrier_kind: 'nha_xe' },
+        })
+        setCarriers((cs) =>
+          cs.some((c) => c.id === r.carrier.id) ? cs : [...cs, r.carrier],
+        )
+        setCarrierId(r.carrier.id)
+        setAdding(false)
+        setNewName('')
+        setNewPhone('')
+      } catch (e) {
+        setAddErr(apiErrorText(e))
+      }
+    })
 
   const toggle = (c: CostCandidate, on: boolean) =>
     setPicked((s) => {
@@ -313,7 +333,11 @@ export function GhiPhiSheet({
                 value={carrierId}
                 onChange={setCarrierId}
                 emptyLabel={
-                  carriers.length ? '— chọn đơn vị —' : 'chưa có đơn vị nào — thêm mới'
+                  !napXong
+                    ? 'đang tải danh sách nhà xe…'
+                    : carriers.length
+                      ? '— chọn đơn vị —'
+                      : 'chưa có đơn vị nào — thêm mới'
                 }
                 placeholder="Gõ tên nhà xe…"
                 options={carriers.map((c) => ({ value: c.id, label: c.name, hint: c.phone ?? undefined }))} // prettier-ignore
@@ -346,6 +370,7 @@ export function GhiPhiSheet({
                 icon="them"
                 primary
                 disabled={newName.trim().length < 2}
+                busy={dangChay('them-nha-xe')}
                 onClick={() => void addCarrier()}
               >
                 {' '}
@@ -509,8 +534,10 @@ export function GhiPhiSheet({
             {!mine && picked.size === 0 && found.length === 0 && (
               <GridRow>
                 <Td colSpan={5}>
-                  <span className="text-k-sm k-t-mut">
-                    Gõ mã đơn hoặc tên NCC ở ô dưới để chọn đơn của chuyến này.
+                  <span className="text-k-sm k-t-mut" role="status">
+                    {napXong
+                      ? 'Gõ mã đơn hoặc tên NCC ở ô dưới để chọn đơn của chuyến này.'
+                      : 'Đang tải đơn của chuyến…'}
                   </span>
                 </Td>
               </GridRow>
@@ -524,7 +551,9 @@ export function GhiPhiSheet({
             onCommit={(v) => void search(v)}
             placeholder="Gõ mã đơn hoặc tên NCC rồi Enter"
           />
-          <span className="text-k-sm k-t-mut">đơn nháp / chờ duyệt / huỷ không hiện</span>
+          <span className="text-k-sm k-t-mut" role="status">
+            {dangTim ? 'đang tìm…' : 'đơn nháp / chờ duyệt / huỷ không hiện'}
+          </span>
         </div>
       </FieldGroup>
 

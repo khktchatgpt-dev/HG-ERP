@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { isoToVn } from '@/lib/date-vn'
 import { ketQuaPhieu } from '@/lib/da-ve'
 import {
@@ -58,7 +58,7 @@ export function PhieuNhapChiTietScreen({
   /** Ghi phiếu kho được (`warehouse.stock.write`). */
   canWrite: boolean
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const { row, dao, nhap_cho: nc, dong, khac } = ct
   const [sua, setSua] = useState<Kieu | null>(null)
   const daDao = row.phieu.reversed

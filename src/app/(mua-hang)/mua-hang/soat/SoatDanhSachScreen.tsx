@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { ngayGioVn } from '@/lib/date-vn'
 import { normalizeSearch } from '@/lib/search-text'
 import type { BangKeLsxRow } from '@/modules/dept/supply/lsx-bang-ke-list.service'
@@ -59,7 +59,7 @@ export function SoatDanhSachScreen({
   loiTrangThai: string | null
   today: string
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const nhom = useMemo(() => {
     const moc = Date.parse(`${today}T00:00:00+07:00`) - GAN_DAY_MS
     return {

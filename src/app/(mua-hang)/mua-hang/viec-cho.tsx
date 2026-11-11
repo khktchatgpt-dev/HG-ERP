@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { Cell, Code, GroupRow, Num, Row, THead, Table } from '@/components/kit'
 import { SUPPLY_TODO, SUPPLY_TODO_KINDS, type SupplyTodoKind } from '@/lib/supply-watch'
 import { henGiaoText } from '@/lib/hen-giao-text'
@@ -31,7 +31,7 @@ export function ViecChoBang({
   mine: boolean
   today: string
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const nhom = SUPPLY_TODO_KINDS.map((k) => ({
     k,
     rows: todos

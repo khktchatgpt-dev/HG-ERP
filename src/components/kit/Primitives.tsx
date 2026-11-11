@@ -4,6 +4,7 @@ import { useId, useRef, useState, type ReactNode } from 'react'
 import { cva } from 'class-variance-authority'
 import Link from 'next/link'
 import { Ico, type IcoName } from './Icon'
+import { laTaiFile } from './link-tai-file'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
 
@@ -386,22 +387,20 @@ export function Btn({
 
   if (href && !locked) {
     /*
-      `next/link` chứ không `<a>`: trong App Router thẻ `<a>` là tải lại cả
-      tài liệu — trắng màn một nhịp, mất trạng thái vỏ, và `loading.tsx` không
-      bao giờ được chạy. Link ngoài miền (http…) thì Link tự trả về điều hướng
-      thường, nên không phải tách nhánh.
+      `next/link` chứ không `<a>`: `<a>` là tải lại cả tài liệu, mất trạng thái
+      vỏ, `loading.tsx` không chạy. TRỪ link tải file `/api/…` → `<a>` thường
+      (`laTaiFile`: qua Link máy chủ dựng file HAI lần, lần đầu không báo gì).
 
-      Chuyển MỌI prop xuống liên kết trừ thứ chỉ nút mới có. Trước B7½ nhánh
-      này chỉ chuyển `title`: `aria-label` của nút chỉ có icon, `onClick` (ghi
-      vết, đóng khay), `target="_blank"`, `id`, `data-*` đều rơi mất — liên kết
-      icon thành liên kết câm. Link gọi `onClick` trước rồi mới điều hướng, và
-      bỏ điều hướng nếu `onClick` đã `preventDefault`.
+      Chuyển MỌI prop xuống liên kết trừ thứ chỉ nút mới có (trước B7½ chỉ chuyển
+      `title`: `aria-label`, `onClick`, `target`, `id`, `data-*` rơi mất — link
+      icon câm). Link gọi `onClick` trước, bỏ điều hướng nếu đã `preventDefault`.
     */
     const anchor = Object.fromEntries(
       Object.entries(rest).filter(([k]) => !BUTTON_ONLY.has(k)),
     ) as React.AnchorHTMLAttributes<HTMLAnchorElement>
+    const L = (laTaiFile(href) ? 'a' : Link) as typeof Link
     return (
-      <Link
+      <L
         href={href}
         {...anchor}
         target={target}
@@ -411,7 +410,7 @@ export function Btn({
       >
         {lead}
         {children}
-      </Link>
+      </L>
     )
   }
   const why = blockedBy ? `Việc này do ${blockedBy} quản lý` : undefined

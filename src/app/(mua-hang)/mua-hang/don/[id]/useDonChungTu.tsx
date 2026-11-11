@@ -37,6 +37,7 @@ import {
   invalidateMaterialPickCache,
 } from '@/components/supply/MaterialPicker'
 import { ApiError, api, apiErrorText } from '@/lib/api'
+import { useDangChay } from '@/lib/use-dang-chay'
 import { planAdjustment, theoBuocDon, type AdjBeforeLine } from '@/lib/po-adjust'
 import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { canCarryCost } from '@/lib/po-cost'
@@ -49,7 +50,7 @@ import { deriveLine, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { moqHint } from '@/lib/po-tracking'
 import { useLocalPref } from '@/lib/use-local-pref'
 import type { PoIssue } from '@/modules/dept/supply/po-tracking.repo'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { DENSE_DEFAULT, DENSE_KEY } from '../../../_shell/KitFrame'
 import { actionsFor, sanCua, type Action as DocAction } from '../actions'
@@ -96,7 +97,7 @@ import { adjHeader, chenChietKhau } from './o-chiet-khau'
  * các khối giao diện (`dau-don.tsx`, `dong-hang.tsx`…) lấy đúng thứ mình dùng.
  */
 export function useDonChungTu(p: Props) {
-  const router = useRouter()
+  const router = useRouterBao()
 
   /*
     MỤC ĐANG MỞ của menu đơn (27/09/2026) — ghi vào đường dẫn (?muc=tai-chinh)
@@ -212,6 +213,7 @@ export function useDonChungTu(p: Props) {
   const [pick, setPick] = useState<number>(0)
 
   const [busy, setBusy] = useState(false)
+  const { chay: chayDm, dangChay: dangDm } = useDangChay() // "Lưu … vào danh mục" trên dòng
 
   const [sheet, setSheet] = useState<null | { action: DocAction }>(null)
 
@@ -1026,27 +1028,29 @@ export function useDonChungTu(p: Props) {
     addMaterials([{ m: { ...m, vat_rate: null, default_supplier_id: null, last_purchase_price: null, on_hand: null, last_line: null } as PoMaterial }]) // prettier-ignore
   }
 
-  /** Ghi số cân / quy cách về danh mục ngay từ dòng — khai một lần, mọi đơn sau tự điền. */
-  async function saveToCatalog(
+  /** Ghi số cân / quy cách về danh mục ngay từ dòng — khai một lần, mọi đơn sau tự điền.
+   *  Một cờ mỗi (vật tư × ô): bấm đôi nút "Lưu … vào danh mục" không PATCH hai lần (11/11/2026). */
+  const saveToCatalog = (
     materialId: string,
     field: 'kgm' | 'kgunit' | 'spec',
     value: number | string,
     lineKey?: string, // dòng bấm lưu: quy cách chỉ ghi về ĐÚNG dòng này (07/10/2026)
-  ) {
-    // prettier-ignore
-    const col = field === 'kgm' ? 'kg_per_m' : field === 'kgunit' ? 'kg_per_unit' : 'spec'
-    try {
-      await api(`/api/dept/warehouse/materials/${materialId}`, {
-        method: 'PATCH',
-        body: { [col]: value },
-      })
-      setLines((ls) => ls.map((l) => l.material_id !== materialId ? l : field === 'kgm' ? { ...l, catalog_kg_m: Number(value) } : field === 'kgunit' ? { ...l, catalog_kg_unit: Number(value) } : lineKey == null || rowKey(l) === lineKey ? { ...l, spec: String(value) } : l)) // prettier-ignore
-      invalidateMaterialPickCache()
-      toast.success('Đã lưu vào danh mục', `${col} = ${value}`)
-    } catch (e) {
-      toast.error('Không lưu được vào danh mục', apiErrorText(e))
-    }
-  }
+  ) =>
+    chayDm(`${materialId}:${field}`, async () => {
+      // prettier-ignore
+      const col = field === 'kgm' ? 'kg_per_m' : field === 'kgunit' ? 'kg_per_unit' : 'spec'
+      try {
+        await api(`/api/dept/warehouse/materials/${materialId}`, {
+          method: 'PATCH',
+          body: { [col]: value },
+        })
+        setLines((ls) => ls.map((l) => l.material_id !== materialId ? l : field === 'kgm' ? { ...l, catalog_kg_m: Number(value) } : field === 'kgunit' ? { ...l, catalog_kg_unit: Number(value) } : lineKey == null || rowKey(l) === lineKey ? { ...l, spec: String(value) } : l)) // prettier-ignore
+        invalidateMaterialPickCache()
+        toast.success('Đã lưu vào danh mục', `${col} = ${value}`)
+      } catch (e) {
+        toast.error('Không lưu được vào danh mục', apiErrorText(e))
+      }
+    })
 
   function toggleExtraLsx(id: string, on: boolean) {
     setHeader((h) => ({ ...h, extraLsxIds: on ? [...h.extraLsxIds.filter((e) => e !== id), id] : h.extraLsxIds.filter((e) => e !== id) })) // prettier-ignore
@@ -1526,6 +1530,7 @@ export function useDonChungTu(p: Props) {
     addFromNeeds,
     onCreatedMaterial,
     saveToCatalog,
+    dangLuuDm: (materialId: string, field: 'kgm' | 'kgunit' | 'spec') => dangDm(`${materialId}:${field}`), // prettier-ignore
     toggleExtraLsx,
     seeded,
     confirmEnrich,

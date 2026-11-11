@@ -23,7 +23,7 @@ export function SuaTaiChoNut({ d, as = 'btn' }: { d: DonCtx; as?: 'btn' | 'actio
         >
           {' '}
           {/* prettier-ignore */}
-          Lưu
+          {busy ? 'Đang lưu…' : 'Lưu'}
         </Action>
         <Action icon="huy" disabled={busy} onClick={cancelTermsEdit}>
           Thôi
@@ -36,7 +36,8 @@ export function SuaTaiChoNut({ d, as = 'btn' }: { d: DonCtx; as?: 'btn' | 'actio
       <Btn
         primary
         icon="luuNhap"
-        disabled={busy || noteOver > 0}
+        disabled={noteOver > 0}
+        busy={busy}
         title={title}
         onClick={() => void saveTerms()}
       >

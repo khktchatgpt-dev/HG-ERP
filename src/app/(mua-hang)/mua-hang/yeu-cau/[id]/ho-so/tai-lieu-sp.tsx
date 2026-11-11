@@ -2,6 +2,7 @@
 
 import { api, ApiError } from '@/lib/api'
 import type { TaiLieuRow } from '@/lib/lsx-tai-lieu'
+import { useDangChay } from '@/lib/use-dang-chay'
 import { Btn, Cell, Code, Empty, Row, Table, Tag, THead, showNum } from '@/components/kit'
 import { useToast } from '@/components/ui/Toast'
 
@@ -18,14 +19,17 @@ const mb = (b: number) => (b / 1048576).toFixed(1).replace('.', ',')
  */
 export function TaiLieuSp({ lsxId, rows }: { lsxId: string; rows: TaiLieuRow[] }) {
   const toast = useToast()
-  async function taiVe(id: string, name: string) {
-    try {
-      const r = await api<{ url: string }>(`/api/files/${id}?download=1`)
-      window.open(r.url, '_blank', 'noopener')
-    } catch (e) {
-      toast.error('Không tải được file', e instanceof ApiError ? e.message : name)
-    }
-  }
+  // Bấm đôi tên file = mở hai tab tải cùng một file (11/11/2026) — mỗi file một cờ.
+  const { chay, dangChay } = useDangChay()
+  const taiVe = (id: string, name: string) =>
+    chay(id, async () => {
+      try {
+        const r = await api<{ url: string }>(`/api/files/${id}?download=1`)
+        window.open(r.url, '_blank', 'noopener')
+      } catch (e) {
+        toast.error('Không tải được file', e instanceof ApiError ? e.message : name)
+      }
+    })
 
   if (rows.length === 0)
     return (
@@ -110,10 +114,12 @@ export function TaiLieuSp({ lsxId, rows }: { lsxId: string; rows: TaiLieuRow[] }
                       <button
                         type="button"
                         className="block max-w-[280px] cursor-pointer truncate text-left text-[var(--act)] underline underline-offset-2"
-                        onClick={() => taiVe(r.bom!.id, r.bom!.filename)}
+                        onClick={() => void taiVe(r.bom!.id, r.bom!.filename)}
                         title={`Tải ${r.bom.filename}`}
+                        disabled={dangChay(r.bom.id)}
+                        aria-busy={dangChay(r.bom.id)}
                       >
-                        {r.bom.filename}
+                        {dangChay(r.bom.id) ? 'Đang mở file…' : r.bom.filename}
                       </button>
                       {r.bomVersions > 1 && (
                         <Tag tone="warn">

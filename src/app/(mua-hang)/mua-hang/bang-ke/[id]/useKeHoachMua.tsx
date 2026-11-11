@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { groupForBangKe } from '@/lib/lsx-bang-ke'
@@ -41,7 +41,7 @@ export function useKeHoachMua({
   /** Gợi ý NCC + lựa chọn đã lưu cho các mã còn phải đặt (bước 2). */
   nguon: NguonNccLenh
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const toast = useToast()
   const [buoc, setBuocState] = useState<Buoc>(buocDau)
   const [loc, setLoc] = useState<LocNhuCau>(null)

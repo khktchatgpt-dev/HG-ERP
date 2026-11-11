@@ -1,7 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { isoToVn } from '@/lib/date-vn'
 import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { dotCuaPhieu } from '@/lib/phieu-nhap-cho'
@@ -132,7 +132,7 @@ export function NhanHangScreen({
   suaLai?: { id: string; code: string; daoBoi: string; docDate: string; supplierDocNo: string; counterparty: string } | null // prettier-ignore
 }) {
   const duong = DUONG[noi]
-  const router = useRouter()
+  const router = useRouterBao()
   const toast = useToast()
   const [rows, setRows] = useState(initialRows)
   const [docDate, setDocDate] = useState(suaLai?.docDate ?? today)

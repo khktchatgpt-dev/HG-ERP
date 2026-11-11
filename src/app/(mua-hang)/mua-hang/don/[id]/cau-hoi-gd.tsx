@@ -112,7 +112,8 @@ export function CauHoiGd({
               <Btn
                 primary
                 icon="gui"
-                disabled={busy === q.id || !(draft[q.id] ?? '').trim()}
+                disabled={!(draft[q.id] ?? '').trim()}
+                busy={busy === q.id}
                 onClick={() => void answer(q)}
               >
                 Trả lời

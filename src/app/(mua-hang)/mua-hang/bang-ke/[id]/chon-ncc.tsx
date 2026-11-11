@@ -276,7 +276,7 @@ function DongChon({ d, x }: { d: KeHoachCtx; x: DongKH }) {
                 <button
                   type="button"
                   disabled={n.busy}
-                  className="shrink-0 text-[11px] text-[var(--act-text)] hover:underline"
+                  className="shrink-0 text-[11px] text-[var(--act-text)] hover:underline disabled:cursor-wait disabled:text-[var(--ink-3)] disabled:no-underline"
                   onClick={() => void n.boChon(r.material_id)}
                   title="Bỏ lựa chọn đã lưu — quay về gợi ý của máy"
                 >

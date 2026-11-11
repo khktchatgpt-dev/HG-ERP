@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { TINH_TRANG_MUA } from '@/lib/lsx-bang-ke-mua'
 import { parsePasteNumber } from '@/lib/po-paste'
+import { useDangChay } from '@/lib/use-dang-chay'
 import type { BangKeRow } from '@/lib/lsx-bang-ke'
 import { NUM, Nhan, Nut, TD, TF, TH } from '../../_erp/ui'
 import { dmy, lechPct, so, so0, type DongKH } from './ke-hoach.shared'
@@ -418,7 +419,7 @@ function NguonSo({ d, r }: { d: KeHoachCtx; r: BangKeRow }) {
             type="button"
             disabled={d.busy}
             onClick={() => void d.boSoTay(r.material_id)}
-            className="justify-self-start text-[11px] text-[var(--act-text)] hover:underline"
+            className="justify-self-start text-[11px] text-[var(--act-text)] hover:underline disabled:cursor-wait disabled:text-[var(--ink-3)] disabled:no-underline"
           >
             bỏ số tay
           </button>
@@ -461,17 +462,23 @@ function SuaSoCan({ d, r, hienTai }: { d: KeHoachCtx; r: BangKeRow; hienTai: num
   const [v, setV] = useState(hienTai > 0 ? String(hienTai).replace('.', ',') : '')
   const n = parsePasteNumber(v)
   const hong = v.trim() !== '' && (n == null || n < 0)
-  async function luu() {
-    if (n == null || n < 0) return
-    if (await d.ghiSoTay([{ material_id: r.material_id, qty_needed: n }]))
-      d.setDangSua(null)
-  }
+  // Enter hai lần nhanh từng gửi hai PUT: cờ `d.busy` chỉ bật sau một nhịp vẽ (11/11/2026).
+  const { chay, dangChay } = useDangChay()
+  const dangLuu = dangChay('luu')
+  const luu = () =>
+    chay('luu', async () => {
+      if (n == null || n < 0 || d.busy) return
+      if (await d.ghiSoTay([{ material_id: r.material_id, qty_needed: n }]))
+        d.setDangSua(null)
+    })
   return (
     <span className="inline-flex items-center gap-1">
       <input
         autoFocus
         aria-label={`Số cần ${r.material_code} (${r.unit})`}
         value={v}
+        readOnly={dangLuu}
+        aria-busy={dangLuu}
         onChange={(e) => setV(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') void luu()
@@ -484,11 +491,11 @@ function SuaSoCan({ d, r, hienTai }: { d: KeHoachCtx; r: BangKeRow; hienTai: num
       />
       <button
         type="button"
-        disabled={hong || n == null || d.busy}
+        disabled={hong || n == null || d.busy || dangLuu}
         onClick={() => void luu()}
         className="text-[11.5px] font-semibold text-[var(--act-text)] disabled:text-[var(--ink-3)]"
       >
-        Lưu
+        {dangLuu ? 'Đang lưu…' : 'Lưu'}
       </button>
       <button
         type="button"

@@ -10,6 +10,7 @@ import { isoToVn, todayVn } from '@/lib/date-vn'
 import { NGUONG_DU_TOAN } from '@/lib/hang-muc'
 import { poStatusLabel, poStatusTone } from '@/lib/po-status'
 import { goiYMucDich } from '@/lib/po-muc-dich'
+import { useDangChay } from '@/lib/use-dang-chay'
 import type { ProjectPo, ProjectRow } from '@/modules/dept/supply/projects.service'
 import { DaiSo, DauTrang, HangLoc, MenuBa, Nhan, NUM, Nut, OSo, TD, TF, TH, ThanhDuoi, Trang, type Tone } from '../../_erp/ui' // prettier-ignore
 import { HangMucSheet } from '../hang-muc-sheet'
@@ -52,15 +53,19 @@ export function HoSoHangMucScreen({
   const vuot = h.budget != null ? so.ordered - h.budget : 0
   const khoa = !canManage ? 'Chỉ phòng Cung ứng' : undefined
 
-  async function doiTrangThai() {
-    try {
-      await api(`/api/dept/supply/projects/${h.id}`, { method: 'PATCH', body: { status: mo ? 'closed' : 'open' } }) // prettier-ignore
-      toast.success(mo ? `Đã đóng ${h.code}` : `Đã mở lại ${h.code}`, mo ? 'Không chọn được cho đơn mới; đơn cũ giữ nguyên.' : undefined) // prettier-ignore
-      router.refresh()
-    } catch (e) {
-      toast.error('Không đổi được', apiErrorText(e))
-    }
-  }
+  // Đóng / mở lại: bấm hai lần là đóng rồi mở ngay lại — chặn bằng cờ (11/11/2026).
+  const { chay, dangChay } = useDangChay()
+  const doiTrangThai = () =>
+    chay('trang-thai', async () => {
+      try {
+        await api(`/api/dept/supply/projects/${h.id}`, { method: 'PATCH', body: { status: mo ? 'closed' : 'open' } }) // prettier-ignore
+        toast.success(mo ? `Đã đóng ${h.code}` : `Đã mở lại ${h.code}`, mo ? 'Không chọn được cho đơn mới; đơn cũ giữ nguyên.' : undefined) // prettier-ignore
+        router.refresh()
+      } catch (e) {
+        toast.error('Không đổi được', apiErrorText(e))
+      }
+    })
+  const dangDoi = dangChay('trang-thai')
   const xuat = () =>
     downloadCsv(`${h.code}.csv`, pos, [
       { key: 'code', header: 'Đơn' },
@@ -84,7 +89,10 @@ export function HoSoHangMucScreen({
           </span>
         }
         status={
-          mo ? (
+          // Menu ⋯ đóng ngay khi bấm — nhãn này là chỗ duy nhất nói "đã nhận cú bấm".
+          dangDoi ? (
+            <Nhan>{mo ? 'Đang đóng…' : 'Đang mở lại…'}</Nhan>
+          ) : mo ? (
             <Nhan tone="run">Đang mở</Nhan>
           ) : (
             <Nhan>Đã đóng {h.closed_at ? ngay(h.closed_at) : ''}</Nhan>
@@ -108,8 +116,14 @@ export function HoSoHangMucScreen({
             <MenuBa
               items={[
                 {
-                  label: mo ? 'Đóng hạng mục' : 'Mở lại hạng mục',
-                  khoa,
+                  label: dangDoi
+                    ? mo
+                      ? 'Đang đóng hạng mục…'
+                      : 'Đang mở lại…'
+                    : mo
+                      ? 'Đóng hạng mục'
+                      : 'Mở lại hạng mục',
+                  khoa: khoa ?? (dangDoi ? 'Đang ghi — chờ một chút' : undefined),
                   onClick: () => void doiTrangThai(),
                 },
                 { label: 'Xuất Excel đơn của hạng mục', onClick: xuat },

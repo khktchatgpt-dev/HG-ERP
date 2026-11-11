@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
-import { TOI_DA_MS, TRE_HIEN_MS, ThanhTaiTrang, diTrangToi } from './ThanhTaiTrang'
+import { baoDangTai } from '@/lib/tai-trang'
+import { TOI_DA_MS, TRE_HIEN_MS, LopTaiTrang, diTrangToi } from './LopTaiTrang'
 
 /**
- * THANH TẢI TRANG (11/11/2026, chủ dự án: "chuyển trang hầu hết không có
- * loading, người dùng nhấn nhiều lần").
+ * LỚP CHỜ TẢI TRANG (11/11/2026, chủ dự án: "cần hiệu ứng loading chứ không phải
+ * thanh tiến trình, vì thanh tiến trình người dùng vẫn nhấn tiếp được").
  */
 
 const nav = { pathname: '/mua-hang/don', search: '' }
@@ -39,7 +40,7 @@ describe('diTrangToi — cú bấm nào là đi trang', () => {
   })
 })
 
-/** Bấm một link thật trong DOM — chặn điều hướng mặc định của happy-dom sau khi thanh đã nghe. */
+/** Bấm một link thật trong DOM — chặn điều hướng mặc định của happy-dom sau khi lớp chờ đã nghe. */
 function bam(href: string, init: MouseEventInit = {}) {
   const a = document.createElement('a')
   a.setAttribute('href', href)
@@ -50,7 +51,7 @@ function bam(href: string, init: MouseEventInit = {}) {
   })
   a.remove()
 }
-const pha = () => document.querySelector<HTMLElement>('.hg-ttt')!.dataset.pha
+const pha = () => document.querySelector<HTMLElement>('.hg-ltt')!.dataset.pha
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -63,46 +64,60 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('ThanhTaiTrang', () => {
-  it('bấm link → sau một nhịp ngắn thanh chạy; URL đổi → vụt tới đích rồi tắt', () => {
-    const { rerender } = render(<ThanhTaiTrang />)
+describe('LopTaiTrang', () => {
+  it('bấm link → CHẶN BẤM NGAY (cho), sau một nhịp mờ màn + vòng quay (chay); URL đổi → gỡ ngay', () => {
+    const { rerender } = render(<LopTaiTrang />)
     expect(pha()).toBe('tat')
     bam('/mua-hang/yeu-cau')
-    expect(pha()).toBe('tat') // chưa đủ TRE_HIEN_MS — điều hướng tức thì không nháy
+    expect(pha()).toBe('cho') // lớp trong suốt đã phủ — cú bấm thứ hai không tới link
     act(() => vi.advanceTimersByTime(TRE_HIEN_MS + 1))
     expect(pha()).toBe('chay')
     expect(document.querySelector('[role="status"]')!.textContent).toBe('Đang tải trang…')
 
     nav.pathname = '/mua-hang/yeu-cau'
-    rerender(<ThanhTaiTrang />)
-    expect(pha()).toBe('xong')
-    act(() => vi.advanceTimersByTime(500))
+    rerender(<LopTaiTrang />)
     expect(pha()).toBe('tat')
     expect(document.querySelector('[role="status"]')!.textContent).toBe('')
   })
 
-  it('điều hướng xong trước nhịp chờ thì thanh không hiện chút nào', () => {
-    const { rerender } = render(<ThanhTaiTrang />)
+  it('điều hướng xong trước nhịp chờ thì không mờ màn chút nào', () => {
+    const { rerender } = render(<LopTaiTrang />)
     bam('/mua-hang/ncc')
     nav.pathname = '/mua-hang/ncc'
-    rerender(<ThanhTaiTrang />)
+    rerender(<LopTaiTrang />)
     act(() => vi.advanceTimersByTime(TRE_HIEN_MS + 1))
     expect(pha()).toBe('tat')
   })
 
-  it('nút tải file (/api/…) không làm thanh chạy — URL không đổi, thanh sẽ treo', () => {
-    render(<ThanhTaiTrang />)
+  it('nút tải file (/api/…) không phủ lớp chờ — URL không đổi, lớp chờ sẽ treo', () => {
+    render(<LopTaiTrang />)
     bam('/api/dept/supply/hop-report')
-    act(() => vi.advanceTimersByTime(TRE_HIEN_MS + 1))
     expect(pha()).toBe('tat')
   })
 
-  it('URL không bao giờ đổi (điều hướng hỏng) → chốt an toàn tự tắt', () => {
-    render(<ThanhTaiTrang />)
+  it('URL không bao giờ đổi (điều hướng hỏng) → chốt an toàn tự gỡ, không giam người dùng', () => {
+    render(<LopTaiTrang />)
     bam('/mua-hang/vat-tu')
     act(() => vi.advanceTimersByTime(TRE_HIEN_MS + 1))
     expect(pha()).toBe('chay')
-    act(() => vi.advanceTimersByTime(TOI_DA_MS + 500))
+    act(() => vi.advanceTimersByTime(TOI_DA_MS))
+    expect(pha()).toBe('tat')
+  })
+
+  it('router.push trong mã (useRouterBao → baoDangTai) cũng phủ lớp chờ, đổi ?… cũng tính', () => {
+    const { rerender } = render(<LopTaiTrang />)
+    act(() => baoDangTai('/mua-hang/don?trang=2'))
+    expect(pha()).toBe('cho')
+    act(() => vi.advanceTimersByTime(TRE_HIEN_MS + 1))
+    expect(pha()).toBe('chay')
+    nav.search = 'trang=2'
+    rerender(<LopTaiTrang />)
+    expect(pha()).toBe('tat')
+  })
+
+  it('báo đi tới đúng URL đang đứng: không phủ (không có gì để chờ)', () => {
+    render(<LopTaiTrang />)
+    act(() => baoDangTai('/mua-hang/don'))
     expect(pha()).toBe('tat')
   })
 })

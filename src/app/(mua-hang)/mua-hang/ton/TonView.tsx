@@ -1,7 +1,8 @@
 'use client'
 
 import { useTransition } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import type {
   SupplyStockCounts,
   SupplyStockFilter,
@@ -58,7 +59,7 @@ export function TonView({
   groups: string[]
   filters: { q: string; nhom: string; loc: SupplyStockFilter }
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const pathname = usePathname()
   const params = useSearchParams()
   const [dangChay, batDau] = useTransition()

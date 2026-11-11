@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   Affected,
   Btn,
@@ -121,7 +121,7 @@ export function ViecScreen({
   urlScope: SupplyScope | null
   truncatedAt: number | null
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const toast = useToast()
 
   // Nhớ theo tài khoản (27/09/2026) — trước đây useState, tắt trang là mất.

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { nhomTheoHangMuc } from '@/lib/po-muc-dich'
 import { NgoaiLenhCell } from './ngoai-lenh-cell'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   Btn,
   Cell,
@@ -228,7 +228,7 @@ export function DonScreen({
   /** Phạm vi do địa chỉ trang quyết (link mang ?pham_vi=, ?mo=, bộ lọc…). */
   urlScope: SupplyScope | null
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
 
   const [view, setViewState] = useState<ViewState>(initial)
   /*

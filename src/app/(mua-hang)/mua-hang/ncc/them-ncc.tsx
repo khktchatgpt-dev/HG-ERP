@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   Chip,
   Field,
@@ -55,7 +55,7 @@ export function ThemNccSheet({
   meId: string
   onClose: () => void
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [f, setF] = useState({

@@ -17,6 +17,7 @@ import {
 import { FileUploader } from '@/components/FileUploader'
 import { api, apiErrorText } from '@/lib/api'
 import { DOC_TYPE_LABEL, PO_DOC_TYPES, type DocType } from '@/lib/file-limits'
+import { useDangChay } from '@/lib/use-dang-chay'
 
 /**
  * CHỨNG TỪ NCC CỦA ĐƠN MUA (0213) — báo giá, xác nhận đơn, hợp đồng, phiếu giao,
@@ -57,24 +58,28 @@ export function PoDocuments({ poId, canEdit }: { poId: string; canEdit: boolean 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- load() đặt state trong callback đã resolve
   useEffect(() => void load(), [load])
 
-  async function download(f: DocFile) {
-    try {
-      const { url } = await api<{ url: string }>(`/api/files/${f.id}?download=1`)
-      window.open(url, '_blank', 'noopener')
-    } catch (e) {
-      toast.error('Không tải được file', apiErrorText(e))
-    }
-  }
-  async function remove(f: DocFile) {
-    if (!window.confirm(`Gỡ "${f.filename}" khỏi đơn?`)) return
-    try {
-      await api(`/api/files/${f.id}`, { method: 'DELETE' })
-      toast.success('Đã gỡ file', f.filename)
-      void load()
-    } catch (e) {
-      toast.error('Gỡ file thất bại', apiErrorText(e))
-    }
-  }
+  // Mỗi dòng một cờ: bấm đôi tên file / "Gỡ" không gọi API hai lần (11/11/2026).
+  const { chay, dangChay } = useDangChay()
+  const download = (f: DocFile) =>
+    chay(`mo:${f.id}`, async () => {
+      try {
+        const { url } = await api<{ url: string }>(`/api/files/${f.id}?download=1`)
+        window.open(url, '_blank', 'noopener')
+      } catch (e) {
+        toast.error('Không tải được file', apiErrorText(e))
+      }
+    })
+  const remove = (f: DocFile) =>
+    chay(`go:${f.id}`, async () => {
+      if (!window.confirm(`Gỡ "${f.filename}" khỏi đơn?`)) return
+      try {
+        await api(`/api/files/${f.id}`, { method: 'DELETE' })
+        toast.success('Đã gỡ file', f.filename)
+        await load()
+      } catch (e) {
+        toast.error('Gỡ file thất bại', apiErrorText(e))
+      }
+    })
 
   const sorted = [...(files ?? [])].sort((a, b) => order(a.doc_type) - order(b.doc_type) || a.created_at.localeCompare(b.created_at)) // prettier-ignore
 
@@ -98,7 +103,14 @@ export function PoDocuments({ poId, canEdit }: { poId: string; canEdit: boolean 
           />
         </div>
       )}
-      {files == null ? null : sorted.length === 0 ? (
+      {files == null ? (
+        <div
+          className="text-k-sm px-[var(--gutter)] pb-3 text-[var(--ink-3)]"
+          role="status"
+        >
+          Đang tải chứng từ của đơn…
+        </div>
+      ) : sorted.length === 0 ? (
         <div className="px-[var(--gutter)] pb-3">
           <Empty
             headline="Chưa có chứng từ nào của đơn"
@@ -128,7 +140,13 @@ export function PoDocuments({ poId, canEdit }: { poId: string; canEdit: boolean 
                   </Tag>
                 </Td>
                 <Td>
-                  <GridBtn onClick={() => void download(f)}>{f.filename}</GridBtn>
+                  <GridBtn
+                    onClick={() => void download(f)}
+                    disabled={dangChay(`mo:${f.id}`)}
+                    title={dangChay(`mo:${f.id}`) ? 'Đang mở file…' : undefined}
+                  >
+                    {dangChay(`mo:${f.id}`) ? 'Đang mở…' : f.filename}
+                  </GridBtn>
                 </Td>
                 <Td num>{size(f.size_bytes)}</Td>
                 <Td>
@@ -140,8 +158,10 @@ export function PoDocuments({ poId, canEdit }: { poId: string; canEdit: boolean 
                     <GridBtn
                       aria-label={`Gỡ ${f.filename}`}
                       onClick={() => void remove(f)}
+                      disabled={dangChay(`go:${f.id}`)}
+                      title={dangChay(`go:${f.id}`) ? 'Đang gỡ file…' : undefined}
                     >
-                      Gỡ
+                      {dangChay(`go:${f.id}`) ? 'Đang gỡ…' : 'Gỡ'}
                     </GridBtn>
                   </Td>
                 )}

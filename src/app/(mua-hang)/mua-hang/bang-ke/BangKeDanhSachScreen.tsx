@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { normalizeSearch } from '@/lib/search-text'
 import type { BangKeLsxRow } from '@/modules/dept/supply/lsx-bang-ke-list.service'
 import { ChipLoc, DauTrang, HangLoc, NUM, Nhan, Nut, TD, TF, TH, Trang } from '../_erp/ui' // prettier-ignore
@@ -34,7 +34,7 @@ export function BangKeDanhSachScreen({
   rows: BangKeLsxRow[]
   today: string
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const tinhDuoc = useMemo(() => rows.filter((r) => r.coded_lines > 0), [rows])
   const chuaMa = useMemo(() => rows.filter((r) => r.coded_lines === 0), [rows])
   const [loc, setLoc] = useState<Loc>(null)

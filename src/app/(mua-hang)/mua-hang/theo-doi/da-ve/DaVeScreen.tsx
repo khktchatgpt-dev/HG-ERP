@@ -2,7 +2,8 @@
 
 import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { canXuLy, ketQuaPhieu } from '@/lib/da-ve'
 import type { SupplyScope } from '@/lib/supply-scope'
 import { useScopePref } from '@/lib/use-scope-pref'
@@ -84,7 +85,7 @@ export function DaVeScreen({
   defaultScope: SupplyScope
   urlScope: SupplyScope | null
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const pathname = usePathname()
   const params = useSearchParams()
   const dongHop = () => {

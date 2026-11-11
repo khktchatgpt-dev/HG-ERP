@@ -1,0 +1,57 @@
+/*
+ * LỚP CHỜ TẢI TRANG (`LopTaiTrang.tsx`). Ba pha qua `data-pha`:
+ *  tat  — không có gì;
+ *  cho  — phủ cả màn, TRONG SUỐT, nuốt cú bấm (ngay khi bấm chuyển trang);
+ *  chay — sau 150 ms: màn mờ + hộp vòng quay "Đang tải trang…" ở giữa.
+ * Gắn ở vỏ chung (ngoài `.kit`) → màu theo token theme-v3, có giá trị dự phòng.
+ */
+.hg-ltt {
+  position: fixed;
+  inset: 0;
+  z-index: 90; /* trên khay toast (--z-toast 80) và hộp thoại */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: progress;
+}
+.hg-ltt[data-pha='cho'],
+.hg-ltt[data-pha='chay'] {
+  display: flex;
+}
+.hg-ltt[data-pha='chay'] {
+  background: rgba(244, 246, 249, 0.6);
+}
+.hg-ltt-o {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid var(--border, #d6dbe3);
+  background: var(--card, #fff);
+  color: var(--foreground, #1d2433);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(15, 20, 28, 0.12);
+}
+.hg-ltt[data-pha='chay'] .hg-ltt-o {
+  display: inline-flex;
+}
+.hg-ltt-q {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--primary, #2743c4);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: hg-ltt-quay 0.8s linear infinite;
+}
+@keyframes hg-ltt-quay {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Giảm chuyển động: vòng đứng yên, hở một góc — vẫn đọc ra "đang chờ". */
+@media (prefers-reduced-motion: reduce) {
+  .hg-ltt-q {
+    animation: none;
+  }
+}

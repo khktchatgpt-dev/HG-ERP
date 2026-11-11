@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   Btn,
   Chip,
@@ -72,7 +72,7 @@ export function SoChuyenScreen({
   me: Payer
   payers: Payer[]
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const toast = useToast()
   const [q, setQ] = useState('')
   const [chip, setChip] = useState<'all' | CostMoneyState>('all')

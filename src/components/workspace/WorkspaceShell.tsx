@@ -2,6 +2,7 @@ import { WorkspaceSidebar } from './WorkspaceSidebar'
 import { WorkspaceTopbar } from './WorkspaceTopbar'
 import { CommandPalette } from '@/components/erp/CommandPalette'
 import { NumberWheelGuard } from './NumberWheelGuard'
+import { LopTaiTrang } from './LopTaiTrang'
 import type { WorkspaceConfig } from '@/workspaces/workspaces.config'
 
 /**
@@ -82,6 +83,9 @@ export async function WorkspaceShell({
       </div>
       <CommandPalette />
       <NumberWheelGuard />
+      {/* Lớp chờ chuyển trang, chặn bấm tiếp — phòng Cung ứng (11/11/2026), cả ở
+          trang dùng chung hiện bằng sidebar Cung ứng. Phòng khác: chưa bật. */}
+      {workspace.id === 'planning' && <LopTaiTrang />}
     </div>
   )
 }

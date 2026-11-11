@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
 import { useUrlSearch } from '@/lib/use-url-search'
 import {
@@ -79,7 +80,7 @@ export function VatTuScreen({
   /** NCC cho ô "NCC mặc định". */
   suppliers: { value: string; label: string; hint?: string }[]
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const pathname = usePathname()
   const params = useSearchParams()
   const [dangChay, batDau] = useTransition()

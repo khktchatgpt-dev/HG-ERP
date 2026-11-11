@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { DAU_SUA_PHIEU } from '@/lib/da-ve'
 import {
@@ -53,7 +53,7 @@ export function SuaPhieuSheet({
   /** Mở thẳng cách sửa nào (trang chi tiết phiếu có ba nút riêng — 04/10/2026). */
   kieuBanDau?: Kieu
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const toast = useToast()
   const [kieu, setKieu] = useState<Kieu>(kieuBanDau)
   const [soNcc, setSoNcc] = useState(row.supplier_doc_no ?? '')

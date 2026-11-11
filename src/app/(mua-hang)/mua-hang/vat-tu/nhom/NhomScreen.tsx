@@ -22,6 +22,7 @@ import {
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
 import { suspectSubs } from '@/lib/material-subgroup'
+import { useDangChay } from '@/lib/use-dang-chay'
 import type {
   GroupRow,
   GroupsOverview,
@@ -65,24 +66,34 @@ export function NhomScreen({
   const tongTrong = dang.reduce((s, g) => s + g.no_sub, 0)
   const tongNghi = [...nghi.values()].reduce((s, m) => s + m.size, 0)
 
-  async function patch(g: GroupRow, body: Record<string, unknown>, ok: string) {
-    try {
-      await api(`/api/dept/warehouse/material-groups/${g.id}`, { method: 'PATCH', body })
-      toast.success(ok, g.label)
-      router.refresh()
-    } catch (e) {
-      toast.error('Không lưu được', apiErrorText(e))
-    }
-  }
-  async function xoa(g: GroupRow) {
-    try {
-      await api(`/api/dept/warehouse/material-groups/${g.id}`, { method: 'DELETE' })
-      toast.success('Đã xoá nhóm', g.label)
-      router.refresh()
-    } catch (e) {
-      toast.error('Không xoá được', apiErrorText(e))
-    }
-  }
+  // Một cờ mỗi nhóm (11/11/2026): menu ⋯ đóng ngay khi bấm nên dòng phải tự nói
+  // "đang ghi", và bấm lại trong lúc chờ không gửi thêm lần nữa.
+  const { chay, dangChay } = useDangChay()
+  const khoaNhom = (g: GroupRow) => `nhom:${g.id}`
+  const patch = (g: GroupRow, body: Record<string, unknown>, ok: string) =>
+    chay(khoaNhom(g), async () => {
+      try {
+        await api(`/api/dept/warehouse/material-groups/${g.id}`, {
+          method: 'PATCH',
+          body,
+        })
+        toast.success(ok, g.label)
+        router.refresh()
+      } catch (e) {
+        toast.error('Không lưu được', apiErrorText(e))
+      }
+    })
+  const xoa = (g: GroupRow) =>
+    chay(khoaNhom(g), async () => {
+      try {
+        await api(`/api/dept/warehouse/material-groups/${g.id}`, { method: 'DELETE' })
+        toast.success('Đã xoá nhóm', g.label)
+        router.refresh()
+      } catch (e) {
+        toast.error('Không xoá được', apiErrorText(e))
+      }
+    })
+  const dangGhi = (g: GroupRow) => dangChay(khoaNhom(g))
 
   const conMa = (g: GroupRow) =>
     g.total > 0 ? `Còn ${n(g.total)} mã — chuyển hết sang nhóm khác trước` : undefined
@@ -162,6 +173,11 @@ export function NhomScreen({
                   >
                     {g.label}
                   </TextLink>
+                  {dangGhi(g) && (
+                    <span className="text-k-label ml-2 text-[var(--ink-3)]" role="status">
+                      đang ghi…
+                    </span>
+                  )}
                 </Cell>
                 <Cell num>
                   <Num value={n(g.total)} />
@@ -206,6 +222,7 @@ export function NhomScreen({
                       }
                       options={[{ value: '', label: '— chưa đặt —' }, ...templates]}
                       width={200}
+                      disabled={dangGhi(g)}
                     />
                   ) : (
                     (templates.find((t) => t.value === g.meta.po_template)?.label ?? '—')
@@ -217,12 +234,12 @@ export function NhomScreen({
                       ariaLabel={`Thao tác nhóm ${g.label}`}
                       items={[
                         { label: 'Đổi tên', onClick: () => setMo({ k: 'ten', g }) },
-                        { label: 'Ngừng dùng', onClick: () => void patch(g, { is_active: false }, 'Đã ngừng nhóm'), why: conMa(g) }, // prettier-ignore
+                        { label: 'Ngừng dùng', onClick: () => void patch(g, { is_active: false }, 'Đã ngừng nhóm'), why: dangGhi(g) ? 'Đang ghi — chờ một chút' : conMa(g) }, // prettier-ignore
                         {
                           label: 'Xoá nhóm',
                           danger: true,
                           onClick: () => void xoa(g),
-                          why: conMa(g),
+                          why: dangGhi(g) ? 'Đang ghi — chờ một chút' : conMa(g),
                         },
                       ]}
                     />
@@ -248,7 +265,7 @@ export function NhomScreen({
                   canEdit && void patch(g, { is_active: true }, 'Đã bật lại nhóm')
                 }
               >
-                {g.label}
+                {dangGhi(g) ? `${g.label} · đang bật lại…` : g.label}
               </Chip>
             ))}
           </span>

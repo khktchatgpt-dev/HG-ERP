@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { goiYMucDich } from '@/lib/po-muc-dich'
 import { NGUONG_DU_TOAN } from '@/lib/hang-muc'
 import { downloadCsv } from '@/lib/csv'
@@ -48,7 +48,7 @@ export function HangMucScreen({
   rows: ProjectRow[]
   canManage: boolean
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const [chip, setChip] = useState<Chip>('mo')
   const [loai, setLoai] = useState(TAT_CA)
   const [phuTrach, setPhuTrach] = useState(TAT_CA)

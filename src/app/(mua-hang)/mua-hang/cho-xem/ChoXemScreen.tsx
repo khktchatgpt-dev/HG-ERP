@@ -68,13 +68,17 @@ export function ChoXemScreen({ box }: { box: HopXem }) {
               type="button"
               className={khoaTrinh ? 'hk-btn cx-khoa' : 'hk-btn p'}
               aria-disabled={khoaTrinh || d.busy}
+              aria-busy={d.busy}
               disabled={d.busy || d.tab !== 'cho'}
               onClick={d.daXem}
             >
               <Check size={15} aria-hidden />
-              {d.daTich.length > 0
-                ? `Đã xem — trình GĐ (${d.daTich.length})`
-                : 'Đã xem — trình GĐ'}
+              {/* trình nhiều đơn là vòng lặp từng đơn — phải nói đang chạy (11/11/2026) */}
+              {d.busy
+                ? 'Đang trình GĐ…'
+                : d.daTich.length > 0
+                  ? `Đã xem — trình GĐ (${d.daTich.length})`
+                  : 'Đã xem — trình GĐ'}
             </button>
             <button
               type="button"
@@ -244,9 +248,10 @@ function DaiTaiCho({ d }: { d: ChoXemCtx }) {
             type="button"
             className={d.lyDoDu ? 'hk-btn p' : 'hk-btn cx-khoa'}
             aria-disabled={!d.lyDoDu || d.busy}
+            aria-busy={d.busy}
             onClick={() => d.lyDoDu && !d.busy && d.guiTraLai()}
           >
-            Gửi trả lại
+            {d.busy ? 'Đang gửi…' : 'Gửi trả lại'}
           </button>
           <button
             type="button"

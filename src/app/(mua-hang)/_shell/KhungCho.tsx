@@ -19,7 +19,7 @@ import { Loading, ScreenFrame } from '@/components/kit'
  * `src/app/khung-cho.test.ts` canh (cho MỌI khu, không riêng Mua hàng): thêm
  * trang con mà quên thì đỏ. Đổi bộ lọc (`?…`)
  * KHÔNG làm khung chờ hiện lại (khoá bỏ phần `?…`), nên gõ ô tìm không nháy cả
- * màn — chỗ đó do thanh tiến trình `ThanhTaiTrang` lo.
+ * màn — chỗ đó do lớp chờ `components/workspace/LopTaiTrang` lo.
  */
 export function KhungCho() {
   return (

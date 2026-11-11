@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { isoToVn } from '@/lib/date-vn'
 import type { lichDot } from '@/lib/kho-dot-giao'
 import { GHI_CHU_TOI_DA } from '@/lib/phieu-nhap-dau'
@@ -86,7 +86,7 @@ export function DauPhieu({
   lyDoLui: string
   setLyDoLui: (v: string) => void
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const lenh = po.lsx_codes
   const luiXa = !giuNgayCu && ngay.muc !== 'chan' && ngay.lui > LUI_TU_DO
   const chuaSo = !supplierDocNo.trim()

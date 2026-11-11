@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useRef, useState, type ComponentProps } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { DaGhiSoBar } from './da-ghi-so-bar'
 import {
   INCOMING_BUCKET,
@@ -164,7 +165,7 @@ export function DangVeScreen({
   /** `?nhom=` — một mốc, hoặc 'tuan' = hôm nay + 7 ngày tới (link từ Bàn làm việc). */
   initialNhom: string | null
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const pathname = usePathname()
   const params = useSearchParams()
   const dongHop = () => {
