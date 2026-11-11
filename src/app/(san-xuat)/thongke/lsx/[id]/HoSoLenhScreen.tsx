@@ -221,9 +221,7 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
               <div className={cx('sx-tile', d.tonCongDoan === 0 && 'zero')}>
                 <span className="d">Tồn tại công đoạn</span>
                 <span className="v">{fmt(d.tonCongDoan)}</span>
-                <span className="s">
-                  cụm / bộ chưa giao đi · {d.pgtChoNhan} phiếu chờ nhận
-                </span>
+                <span className="s">chưa giao đi · {d.pgtChoNhan} chờ nhận</span>
               </div>
               <div className={cx('sx-tile', d.jobsTre > 0 ? 's' : 'zero')}>
                 <span className="d">Việc trễ hạn tổ</span>

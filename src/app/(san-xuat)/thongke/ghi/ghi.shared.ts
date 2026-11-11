@@ -68,7 +68,7 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: 'Lý do lỗi',
       kind: 'text',
       required: false,
-      width: 150,
+      width: 130,
     })
   }
   for (const f of sheet.stage_fields) {
@@ -77,7 +77,7 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: f.label,
       kind: f.kind === 'select' ? 'select' : f.kind === 'number' ? 'num' : 'text',
       required: f.required,
-      width: f.kind === 'number' ? 70 : 110,
+      width: f.kind === 'number' ? 70 : 96,
       options: f.kind === 'select' ? (f.options ?? []) : undefined,
     })
   }
@@ -87,7 +87,7 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: CORE_FIELD_LABEL.worker,
       kind: 'text',
       required: core.worker === 'required',
-      width: 120,
+      width: 104,
     })
   }
   if (core.kg !== 'off') {

@@ -38,10 +38,10 @@ export function BangPhieu({ d }: { d: GiaoNhanCtx }) {
           <col style={{ width: 118 }} />
           <col style={{ width: 54 }} />
           <col style={{ width: 150 }} />
-          <col style={{ width: 230 }} />
+          <col style={{ width: 220 }} />
           <col style={{ width: 62 }} />
           <col style={{ width: 70 }} />
-          <col style={{ width: 56 }} />
+          <col style={{ width: 66 }} />
           <col style={{ width: 170 }} />
           <col />
         </colgroup>

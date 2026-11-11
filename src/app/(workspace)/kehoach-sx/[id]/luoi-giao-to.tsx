@@ -234,7 +234,7 @@ export function LuoiGiaoTo({
         </tbody>
         <tfoot>
           <tr>
-            <td className="pin">
+            <td className="pin" style={{ whiteSpace: 'normal', lineHeight: 1.25 }}>
               {fmt(data.lines.length)} dòng · {fmt(data.lines.length - chuaKh)} có kế
               hoạch
               {data.khoi_luong.unshaped > 0 &&

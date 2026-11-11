@@ -13,7 +13,7 @@ import type { DinhHinhCtx } from './useDinhHinh'
  */
 export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
   const { p, cols, lines, byLine, editable } = d
-  const fixedTail = 170 // cột Lộ trình
+  const fixedTail = 196 // cột Lộ trình
   const minW = cols.reduce((a, c) => a + (c.width || 160), 0) + fixedTail + 28
   const nCols = cols.length + 1 + (editable ? 1 : 0)
   const tongCt = d.rows.reduce((a, r) => a + (num(r.qty_per_unit) ?? 0), 0)
@@ -132,16 +132,24 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
               SP chưa định hình
             </td>
             {cols.slice(4).map((c) => (
-              <td key={c.key} className={c.kind === 'num' ? 'r num' : undefined}>
+              <td
+                key={c.key}
+                className={c.kind === 'num' ? 'r num' : undefined}
+                title={c.key === 'dm_kg' ? 'Σ kg trên một bộ' : undefined}
+              >
                 {c.key === 'qty_per_unit'
                   ? `Σ ${fmt(tongCt)}`
                   : c.key === 'dm_kg'
-                    ? `${fmt(Math.round(tongKg * 100) / 100)} kg/bộ`
+                    ? fmt(Math.round(tongKg * 100) / 100)
                     : ''}
               </td>
             ))}
-            <td colSpan={editable ? 2 : 1} className="mut" style={{ fontWeight: 400 }}>
-              Σ kg = ĐM kg × CT/SP, chỉ dòng có ĐM · cụm mang CT/SP = số cụm trên một SP
+            <td
+              colSpan={editable ? 2 : 1}
+              className="mut"
+              style={{ fontWeight: 400, whiteSpace: 'normal' }}
+            >
+              Σ kg = ĐM kg × CT/SP, chỉ dòng có ĐM
             </td>
           </tr>
         </tfoot>
@@ -198,6 +206,7 @@ function Dong({ d, r, route }: { d: DinhHinhCtx; r: Draft; route: string | null 
       })}
       <td
         className={cx(route == null ? 'out' : 'mut')}
+        style={{ whiteSpace: 'normal', lineHeight: 1.25 }}
         title={route ?? 'hàng mua, không qua công đoạn'}
       >
         {route ?? 'hàng mua'}

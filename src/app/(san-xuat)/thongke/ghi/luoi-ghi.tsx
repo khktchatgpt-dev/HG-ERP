@@ -27,7 +27,9 @@ export function LuoiGhi({ d }: { d: GhiCtx }) {
   const level = sheet.stage_cfg.count_level
   const tenCot1 =
     level === 'part' ? 'Chi tiết' : level === 'cluster' ? 'Cụm' : 'Thành phẩm'
-  const fixedW = [200, 118, 58, 78, 62, 58]
+  // 11/11/2026: cột "Đã <công đoạn>" 62 → 70 (tiêu đề "Đã phôi" bị cắt); các cột
+  // chữ tự do bên ghi.shared co lại để Phôi (nhiều ô riêng nhất) vừa 1.200px.
+  const fixedW = [196, 112, 58, 78, 70, 58]
   const minW = fixedW.reduce((a, b) => a + b, 0) + cols.reduce((a, c) => a + c.width, 0)
   const nCols = fixedW.length + cols.length
 

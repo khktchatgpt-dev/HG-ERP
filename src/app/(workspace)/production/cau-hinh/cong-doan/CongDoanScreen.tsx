@@ -97,13 +97,13 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
         <div className="sx-grid">
           <table className="sx-tb" aria-label="Danh mục công đoạn">
             <colgroup>
-              <col style={{ width: 30 }} />
-              <col style={{ width: 90 }} />
-              <col style={{ width: 124 }} />
+              <col style={{ width: 36 }} />
+              <col style={{ width: 98 }} />
+              <col style={{ width: 142 }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 170 }} />
               <col style={{ width: 66 }} />
-              <col style={{ width: 168 }} />
-              <col style={{ width: 54 }} />
-              <col style={{ width: 54 }} />
+              <col style={{ width: 66 }} />
               <col />
             </colgroup>
             <thead>
@@ -137,6 +137,7 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
                     <td>{COUNT_LEVEL_LABEL[s.meta.count_level].replace(' (cái)', '')}</td>
                     <td
                       className={s.is_active && tos.length === 0 ? 'warn' : undefined}
+                      style={{ whiteSpace: 'normal', lineHeight: 1.25 }}
                       title={tos.join(' · ')}
                     >
                       {tos.length
@@ -153,6 +154,7 @@ export function CongDoanScreen({ data }: { data: StageConfigPayload }) {
                     </td>
                     <td
                       className="mut"
+                      style={{ whiteSpace: 'normal', lineHeight: 1.3 }}
                       title={s.is_active ? ghiChu(s.code) : 'đã ngừng dùng'}
                     >
                       {s.is_active ? ghiChu(s.code) : 'đã ngừng dùng'}

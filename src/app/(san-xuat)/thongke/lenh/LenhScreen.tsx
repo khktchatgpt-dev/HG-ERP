@@ -170,17 +170,18 @@ export function LenhScreen({
           />
         ) : (
           <div className="sx-grid">
-            <table className="sx-tb" style={{ minWidth: 1480 }}>
+            {/* 1.200px = vừa 1280 trừ sidebar; cột "Mở ›" bỏ 11/11/2026 vì ở 1280
+                nó nằm ngoài màn mà mã lệnh đã là link. */}
+            <table className="sx-tb" style={{ minWidth: 1200 }}>
               <colgroup>
-                <col style={{ width: 168 }} />
                 <col style={{ width: 160 }} />
-                <col style={{ width: 156 }} />
-                <col style={{ width: 220 }} />
-                <col style={{ width: 92 }} />
-                <col style={{ width: 104 }} />
-                <col style={{ width: 132 }} />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 112 }} />
+                <col style={{ width: 124 }} />
                 <col />
-                <col style={{ width: 76 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -191,8 +192,7 @@ export function LenhScreen({
                   <th className="r">Bộ xong</th>
                   <th>Dự kiến xong</th>
                   <th>Ai đang giữ</th>
-                  <th>Vướng gì → gỡ ở đâu</th>
-                  <th></th>
+                  <th>Vướng gì → gỡ</th>
                 </tr>
               </thead>
               <tbody>
@@ -334,11 +334,6 @@ function DongLenh({
         {s.text} ·{' '}
         <Link href={goHref(s.go, r.lsx.id)} className="lnk">
           {s.goLabel} ›
-        </Link>
-      </td>
-      <td>
-        <Link href={`/thongke/lsx/${r.lsx.id}`} className="lnk">
-          Mở ›
         </Link>
       </td>
     </tr>
