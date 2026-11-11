@@ -370,6 +370,53 @@ function lineStagesOf(jobs: Job[]): Map<string, string[]> {
 
 export const jobsService = {
   /**
+   * SỐ SUY theo từng ngày trong `days` (màn Chỉ tiêu ngày bày làm placeholder,
+   * bản vẽ 11/11/2026): cùng `deriveDailyTarget` với chỉ tiêu hôm nay của
+   * overview — đã làm luỹ kế ĐẾN HẾT HÔM QUA cho mọi ngày (không đoán sổ của
+   * ngày chưa tới), ngày đã qua không suy (null). Việc chưa có hạn → không có số.
+   */
+  async derivedTargetsByDay(days: string[]): Promise<Map<string, TeamStageQty[]>> {
+    const today = vnTodayIso()
+    const [{ jobs, components, entries }, stages] = await Promise.all([
+      loadActiveContext(),
+      productionRepo.listStages(),
+    ])
+    const counting = countingOf(stages)
+    const plannedByLine = lineStagesOf(jobs)
+    const doneBeforeToday = aggregateDone(entries.filter((e) => e.entry_date < today))
+    const live = jobs
+      .filter((j) => j.status !== 'done' && j.planned_end)
+      .map((j) => ({
+        j,
+        p: assessJobProgress(
+          j,
+          plannedByLine.get(`${j.production_order_id}|${j.production_order_line_id}`) ?? [],
+          components,
+          doneBeforeToday,
+          counting,
+        ),
+      }))
+    const out = new Map<string, TeamStageQty[]>()
+    for (const d of days) {
+      if (d < today) continue
+      const list: TeamStageQty[] = []
+      for (const { j, p } of live) {
+        const t = deriveDailyTarget({
+          needQty: p.needed,
+          doneQty: p.done,
+          plannedStart: j.planned_start,
+          plannedEnd: j.planned_end,
+          todayIso: d,
+        })
+        if (t == null || t <= 0) continue
+        list.push({ team_department_id: j.team_department_id, stage: j.stage, qty: t })
+      }
+      out.set(d, list)
+    }
+    return out
+  },
+
+  /**
    * Việc của TỔ (màn tổ trưởng — mobile). NV xưởng bị khoá tổ mình;
    * admin/manager (quản đốc) chọn tổ qua opts.team.
    */

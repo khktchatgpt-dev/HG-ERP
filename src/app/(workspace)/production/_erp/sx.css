@@ -1903,3 +1903,56 @@
   padding-top: 3px;
   padding-bottom: 3px;
 }
+
+/* ── 17 · Chỉ tiêu ngày theo tuần (khuôn F, bản vẽ 1 11/11/2026 duyệt,
+   https://claude.ai/artifact/Y5UN1RKu11M9aMHW1hdCL1): cột hôm nay, ô gõ thắng
+   số suy (placeholder nghiêng), ngày đã qua chỉ đọc đạt / chỉ tiêu. ── */
+.sx.sx .sx-tb.sx-tb > thead > tr > th.today {
+  box-shadow: inset 0 -3px 0 var(--sx-act);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ed.today,
+.sx.sx .sx-tb.sx-ct > tbody > tr.d:nth-child(even) > td.ed.today {
+  background: color-mix(in srgb, var(--sx-act-wash) 45%, var(--sx-card));
+}
+.sx.sx .sx-cell.suy::placeholder {
+  font-style: italic;
+  font-family: var(--sx-mono);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ed.go .sx-cell {
+  font-family: var(--sx-mono);
+  font-weight: 600;
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ed.nghi .sx-cell {
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ed.err .sx-cell {
+  color: var(--sx-stop);
+}
+/* ngày đã qua: chỉ đọc, đạt đậm / chỉ tiêu mờ */
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ro,
+.sx.sx .sx-tb.sx-ct > tbody > tr.d:nth-child(even) > td.ro {
+  text-align: right;
+  font-family: var(--sx-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sx-ink3);
+  background: var(--sx-raised);
+  border-right: 1px solid var(--sx-hair);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ro b {
+  color: var(--sx-ink2);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ro .m {
+  color: var(--sx-empty);
+}
+.sx.sx .sx-tb.sx-ct > tbody > tr > td.ed {
+  border-right: 1px solid var(--sx-hair);
+}
+/* nút tuần trên dải chip là <button> — bỏ dáng nút mặc định */
+.sx.sx .sx-hc button.c {
+  cursor: pointer;
+  font: inherit;
+}
+.sx.sx .sx-hc button.c:hover {
+  color: var(--sx-act);
+}
