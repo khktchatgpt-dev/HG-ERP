@@ -160,7 +160,22 @@ export type OverviewRow = {
   plan_overdue: number
   /** Việc đã giao tổ nhưng CHƯA có hạn kết thúc (Vào việc 10/11: "đặt hạn cho n việc"). */
   jobs_no_end: number
+  /** Việc đã lên kế hoạch nhưng CHƯA chọn tổ (danh sách Giao tổ & hạn 11/11: chip "Dở"). */
+  jobs_no_team: number
+  /**
+   * Kế hoạch theo CÔNG ĐOẠN (chỉ công đoạn có việc): dải "Tổ & hạn" của danh
+   * sách Giao tổ & hạn đọc ô này — ✓ khi mọi việc có tổ và hạn, ◐ khi thiếu
+   * một trong hai. Việc đã xong vẫn đếm là có tổ/hạn (đã qua rồi).
+   */
+  plan_stages: PlanStage[]
   materials: OverviewMaterials | null
+}
+
+export type PlanStage = {
+  stage: string
+  jobs: number
+  no_team: number
+  no_end: number
 }
 
 export type TeamWorkloadRow = {
@@ -324,6 +339,22 @@ async function loadActiveContext(lsxIds?: string[]) {
     entries,
     doneByCompStage: aggregateDone(entries),
   }
+}
+
+/** Kế hoạch gom theo công đoạn, thứ tự danh mục; chỉ công đoạn có việc. */
+function planStagesOf(js: Job[], stages: { code: string }[]): PlanStage[] {
+  const out: PlanStage[] = []
+  for (const s of stages) {
+    const mine = js.filter((j) => j.stage === s.code)
+    if (mine.length === 0) continue
+    out.push({
+      stage: s.code,
+      jobs: mine.length,
+      no_team: mine.filter((j) => j.status !== 'done' && !j.team_department_id).length,
+      no_end: mine.filter((j) => j.status !== 'done' && !j.planned_end).length,
+    })
+  }
+  return out
 }
 
 function lineStagesOf(jobs: Job[]): Map<string, string[]> {
@@ -620,6 +651,8 @@ export const jobsService = {
           (j) => j.status !== 'done' && j.planned_end && j.planned_end < today,
         ).length,
         jobs_no_end: js.filter((j) => j.status !== 'done' && !j.planned_end).length,
+        jobs_no_team: js.filter((j) => j.status !== 'done' && !j.team_department_id).length,
+        plan_stages: planStagesOf(js, stages),
         materials: lsx.materials_received_at
           ? null
           : {

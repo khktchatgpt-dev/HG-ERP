@@ -1840,3 +1840,66 @@
 .sx.sx .sx-tb.sx-viec tbody tr.d td.r {
   white-space: nowrap;
 }
+
+/* ── 16 · Danh sách Giao tổ & hạn (khuôn C, bản vẽ 1 11/11/2026 duyệt,
+   https://claude.ai/artifact/CAmsvjowophhfMkNmANiu9): dải ô "Tổ & hạn" theo
+   công đoạn, hàng chờ Kỹ thuật mờ, chữ phụ trên chip. ── */
+.sx.sx .sx-tz {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.sx.sx .sx-tz i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--sx-line);
+  font: 600 10px/12px var(--sx-mono);
+  font-style: normal;
+  text-align: center;
+  color: var(--sx-ink3);
+  background: var(--sx-card);
+}
+.sx.sx .sx-tz i.ok {
+  border-color: var(--sx-done);
+  background: var(--sx-done-wash);
+  color: var(--sx-done);
+}
+.sx.sx .sx-tz i.half {
+  border-color: var(--sx-warn);
+  background: var(--sx-warn-wash);
+  color: var(--sx-warn);
+}
+.sx.sx .sx-tz i.na {
+  border-style: dashed;
+  color: transparent;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 3px,
+    var(--sx-hair) 3px,
+    var(--sx-hair) 4px
+  );
+}
+/* hàng chờ Kỹ thuật: mờ — người đứng ở màn này không làm gì được với nó */
+.sx.sx .sx-tb.sx-tb > tbody > tr.d.dim > td,
+.sx.sx .sx-tb.sx-tb > tbody > tr.d.dim > td .lnk.ma {
+  color: var(--sx-ink3);
+}
+/* chip: chữ phụ nhỏ sau số; chip đếm 0 thì số mờ */
+.sx.sx .sx-hc .c .u {
+  font-size: 11px;
+  color: var(--sx-ink3);
+  font-weight: 400;
+}
+.sx.sx .sx-hc .c.z b {
+  color: var(--sx-empty);
+}
+/* cột "Việc kế tiếp" được xuống dòng — câu dở có thể ba vế */
+.sx.sx .sx-tb.sx-tb > tbody > tr.d > td.wrap {
+  white-space: normal;
+  line-height: 1.25;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}

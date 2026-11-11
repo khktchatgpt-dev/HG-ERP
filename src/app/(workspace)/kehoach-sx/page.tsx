@@ -1,46 +1,48 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { jobsService } from '@/modules/dept/production/jobs.service'
+import { componentsService } from '@/modules/dept/production/components.service'
 import { canManagePlan, isProductionStaff } from '@/modules/dept/production/perms'
-import { PlanList } from './PlanList'
+import { vnTodayIso } from '@/lib/local-date'
+import { GiaoToDanhSachScreen } from './GiaoToDanhSachScreen'
+import { resolveChip, toDsRow } from './danh-sach.shared'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * KẾ HOẠCH SẢN XUẤT (vai Trưởng phòng Kế hoạch — 0084): hàng đợi lệnh đã
- * duyệt — lệnh chưa lên lộ trình nổi lên đầu; vào từng lệnh để lên lộ trình +
- * giao tổ + hạn; đặt ưu tiên ngay trên bảng.
+ * GIAO TỔ & HẠN — danh sách lệnh (khuôn C), dựng lại KHÔNG kit 11/11/2026
+ * theo bản vẽ https://claude.ai/artifact/CAmsvjowophhfMkNmANiu9. Hai nguồn
+ * song song: `jobsService.overview` (cùng Lệnh SX / Vào việc) và
+ * `componentsService.shapingOverview` (cùng Lộ trình công đoạn) — ghép ở
+ * `toDsRow`, chỉ đẩy xuống client thứ màn bày. `?lsx=` (từ cột "Vướng gì" của
+ * Lệnh SX) mở thẳng màn một lệnh; `?chip=` mở sẵn một trạng thái.
  */
-export default async function PlanPage() {
-  const user = await authService.requirePageUser()
+export default async function PlanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lsx?: string; chip?: string }>
+}) {
+  const [{ lsx, chip }, user] = await Promise.all([
+    searchParams,
+    authService.requirePageUser(),
+  ])
+  if (lsx) redirect(`/kehoach-sx/${lsx}`)
   // Màn ĐIỀU PHỐI (0086): thành viên xưởng thường không xem — về màn của vai.
   const canEditPlan = await canManagePlan(user)
   if (user.role === 'employee' && !canEditPlan && (await isProductionStaff(user))) {
     redirect('/to')
   }
-  const [{ rows }, canEdit] = await Promise.all([
+  const [{ rows, stages }, shaping] = await Promise.all([
     jobsService.overview(user),
-    canManagePlan(user),
+    componentsService.shapingOverview(),
   ])
+  const shapingById = new Map(shaping.map((s) => [s.lsx.id, s]))
   return (
-    <PlanList
-      rows={rows.map((r) => ({
-        id: r.lsx.id,
-        code: r.lsx.code,
-        order_codes: r.lsx.order_codes,
-        customer_name: r.lsx.customer_name,
-        status: r.lsx.status,
-        priority: r.lsx.priority,
-        ship_date: r.lsx.ship_date,
-        late: r.lsx.late,
-        jobs_total: r.jobs_total,
-        jobs_done: r.jobs_done,
-        plan_overdue: r.plan_overdue,
-        qty_needed: r.sets_needed,
-        qty_done: r.sets_done,
-        forecast_date: r.forecast_date,
-      }))}
-      canEdit={canEdit}
+    <GiaoToDanhSachScreen
+      rows={rows.map((r) => toDsRow(r, shapingById.get(r.lsx.id)))}
+      stages={stages}
+      initialChip={resolveChip(chip)}
+      today={vnTodayIso()}
     />
   )
 }
