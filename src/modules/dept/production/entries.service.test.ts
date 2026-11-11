@@ -32,6 +32,8 @@ vi.mock('./day-locks.repo', () => ({
     listByDate: vi.fn(),
     insert: vi.fn(),
     deleteByTeamDate: vi.fn(),
+    log: vi.fn(),
+    lastUnlocks: vi.fn().mockResolvedValue([]),
   },
 }))
 vi.mock('./transfers.repo', () => ({
@@ -679,6 +681,24 @@ describe('entriesService.lockDay / unlockDay', () => {
     })
     expect(dayLocksRepo.insert).toHaveBeenCalledWith(
       expect.objectContaining({ team_department_id: 'd-han', locked_by: 'u-tk' }),
+    )
+    // 0295: mỗi lần chốt ghi một dòng nhật ký (không lý do).
+    expect(dayLocksRepo.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'lock', reason: null, actor_id: 'u-tk' }),
+    )
+  })
+
+  it('mở khoá BẮT lý do ≥ 5 ký tự và ghi nhật ký (0295)', async () => {
+    await expect(
+      entriesService.unlockDay(admin, 'd-han', '2026-07-24', 'nhầm'),
+    ).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(dayLocksRepo.deleteByTeamDate).not.toHaveBeenCalled()
+    await entriesService.unlockDay(admin, 'd-han', '2026-07-24', 'ghi nhầm 40 thành 400')
+    expect(dayLocksRepo.deleteByTeamDate).toHaveBeenCalledWith('d-han', '2026-07-24')
+    expect(dayLocksRepo.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'unlock', reason: 'ghi nhầm 40 thành 400' }),
     )
   })
 

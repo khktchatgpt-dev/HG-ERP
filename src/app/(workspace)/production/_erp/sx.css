@@ -1956,3 +1956,76 @@
 .sx.sx .sx-hc button.c:hover {
   color: var(--sx-act);
 }
+
+/* ── 18 · Sổ ngày & chốt sổ (khuôn C, bản vẽ 1 11/11/2026 duyệt,
+   https://claude.ai/artifact/QSwyPC46SM81EEQfJiAycT): hàng tổ gập mở phiếu,
+   ô xác nhận chốt / mở khoá ngay dưới hàng, ma trận 7 ngày có dấu. ── */
+.sx.sx .sx-tb.sx-sn > tbody > tr.d.nil > td {
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-tb.sx-sn > tbody > tr.d.nil > td.pin {
+  color: var(--sx-ink2);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-sn > tbody > tr.cf > td {
+  padding: 0;
+  border-bottom: 1px solid var(--sx-line);
+}
+.sx.sx .sx-cf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 7px 14px 7px 26px;
+  background: var(--sx-act-wash);
+  font-size: 12.5px;
+  white-space: normal;
+}
+.sx.sx .sx-cf .w {
+  color: var(--sx-warn);
+  font-weight: 600;
+}
+.sx.sx .sx-cf .sp {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+.sx.sx .sx-cf-in {
+  min-width: 280px;
+  height: 24px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.sx.sx .sx-cf-in:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -1px;
+}
+.sx.sx .sx-tb.sx-sn .lnk.mut {
+  color: var(--sx-ink3);
+  font-weight: 500;
+}
+/* ma trận 7 ngày: cả ô là link, dấu màu theo vòng đời */
+.sx.sx .sx-wk {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.sx.sx .sx-wk:hover {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-wk .dau.ok {
+  color: var(--sx-done);
+}
+.sx.sx .sx-wk .dau.warn {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-wk .dau.stop {
+  color: var(--sx-stop);
+}
+.sx.sx .sx-tb.sx-sn > tbody > tr > td.today,
+.sx.sx .sx-tb.sx-sn > tbody > tr.d:nth-child(even) > td.today {
+  background: color-mix(in srgb, var(--sx-act-wash) 45%, var(--sx-card));
+}

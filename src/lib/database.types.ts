@@ -3811,6 +3811,51 @@ export type Database = {
           },
         ]
       }
+      production_day_lock_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entry_date: string
+          id: string
+          reason: string | null
+          team_department_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entry_date: string
+          id?: string
+          reason?: string | null
+          team_department_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entry_date?: string
+          id?: string
+          reason?: string | null
+          team_department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_day_lock_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_day_lock_log_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_day_locks: {
         Row: {
           entry_date: string

@@ -18,7 +18,7 @@ export const POST = handle(async (req: Request) => {
 /** Mở khoá sổ đã chốt (?date=&team=) — chỉ admin/manager. */
 export const DELETE = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const { date, team } = parseQuery(new URL(req.url), dayUnlockQuerySchema)
-  await entriesService.unlockDay(user, team, date)
+  const { date, team, reason } = parseQuery(new URL(req.url), dayUnlockQuerySchema)
+  await entriesService.unlockDay(user, team, date, reason)
   return NextResponse.json({ ok: true })
 })

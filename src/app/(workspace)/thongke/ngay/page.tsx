@@ -1,39 +1,41 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { entriesService } from '@/modules/dept/production/entries.service'
-import { productionRepo } from '@/modules/dept/production/production.repo'
 import { isProductionStaff } from '@/modules/dept/production/perms'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { vnTodayIso } from '@/lib/local-date'
-import { NgayScreen } from './NgayScreen'
+import { SoNgayScreen } from './SoNgayScreen'
+import type { DocRow } from './so-ngay.shared'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * SỔ NGÀY (B3 Sổ Sản Lượng v2): mọi phiếu của MỘT ngày gom theo TỔ + chốt sổ
- * cuối ngày per tổ. Chốt xong thì ghi/sửa/xoá phiếu của (tổ × ngày) đó bị khoá
- * — mở lại do Ban quản lý, có lưu vết.
+ * SỔ NGÀY & CHỐT SỔ — dựng lại KHÔNG kit 11/11/2026 (bản vẽ
+ * https://claude.ai/artifact/QSwyPC46SM81EEQfJiAycT). Một hàng một tổ kỳ vọng
+ * ghi sổ (`listDay.teams`), phiếu của ngày gom dưới tổ, chốt sổ / mở khoá tại
+ * chỗ (mở khoá bắt lý do — 0295). `?date=` chọn ngày; mặc định hôm nay.
  */
 export default async function NgayPage({
   searchParams,
 }: {
   searchParams: Promise<{ date?: string }>
 }) {
-  const user = await authService.requirePageUser()
-  const sp = await searchParams
+  const [sp, user] = await Promise.all([searchParams, authService.requirePageUser()])
   const today = vnTodayIso()
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? (sp.date as string) : today
-
-  const [day, stages, depts, matrix] = await Promise.all([
+  const [data, matrix, depts, staff] = await Promise.all([
     entriesService.listDay(user, date),
-    productionRepo.listStages(),
-    departmentsRepo.list(),
     entriesService.dayMatrix(user, date, 7),
+    departmentsRepo.list(),
+    isProductionStaff(user),
   ])
   const teamName = new Map(depts.map((d) => [d.id, d.name]))
 
-  // Σ đạt/phế per phiếu từ dòng sổ của ngày.
-  const sums = new Map<string, { qty: number; defect: number; rework: number; lines: number }>()
-  for (const e of day.entries) {
+  // Σ đạt / phế / sửa per phiếu từ dòng sổ của ngày.
+  const sums = new Map<
+    string,
+    { qty: number; defect: number; rework: number; lines: number }
+  >()
+  for (const e of data.entries) {
     if (!e.doc_id) continue
     const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, rework: 0, lines: 0 }
     s.qty += Number(e.qty)
@@ -42,46 +44,54 @@ export default async function NgayPage({
     s.lines++
     sums.set(e.doc_id, s)
   }
+  const docs: DocRow[] = data.docs.map((x) => {
+    const s = sums.get(x.id)
+    return {
+      id: x.id,
+      doc_no: x.doc_no,
+      lsx_id: x.production_order_id,
+      lsx_code: x.lsx_code,
+      stage: x.stage,
+      status: x.status,
+      team_id: x.team_department_id,
+      created_by_name: x.created_by_name,
+      created_at: x.created_at,
+      total_qty: Math.round((s?.qty ?? 0) * 100) / 100,
+      total_defect: Math.round((s?.defect ?? 0) * 100) / 100,
+      total_rework: Math.round((s?.rework ?? 0) * 100) / 100,
+      line_count: s?.lines ?? 0,
+    }
+  })
 
-  const canLock = user.role === 'admin' || (await isProductionStaff(user))
+  const canLock = user.role === 'admin' || staff
   const canUnlock = user.role === 'admin' || user.role === 'manager'
+  const myTeamId =
+    user.department_id && data.teams.some((t) => t.id === user.department_id)
+      ? user.department_id
+      : null
 
   return (
-    <NgayScreen
+    <SoNgayScreen
       date={date}
       today={today}
-      stages={Object.fromEntries(stages.map((s) => [s.code, s.label]))}
-      docs={day.docs.map((d) => {
-        const s = sums.get(d.id)
-        return {
-          id: d.id,
-          doc_no: d.doc_no,
-          lsx_id: d.production_order_id,
-          lsx_code: d.lsx_code,
-          stage: d.stage,
-          status: d.status,
-          team_id: d.team_department_id,
-          team_name: d.team_name,
-          created_by_name: d.created_by_name,
-          total_qty: Math.round((s?.qty ?? 0) * 100) / 100,
-          total_defect: Math.round((s?.defect ?? 0) * 100) / 100,
-          total_rework: Math.round((s?.rework ?? 0) * 100) / 100,
-          line_count: s?.lines ?? 0,
-        }
-      })}
-      locks={day.locks.map((l) => ({
+      teams={data.teams}
+      docs={docs}
+      locks={data.locks.map((l) => ({
         team_id: l.team_department_id,
         team_name: l.team_name,
         locked_by_name: l.locked_by_name,
+        locked_at: l.locked_at,
       }))}
-      unlockedPast={day.unlocked_past.map((p) => ({
-        entry_date: p.entry_date,
-        team_id: p.team_department_id,
-        team_name: teamName.get(p.team_department_id) ?? '?',
+      unlocks={data.unlocks}
+      unlockedPast={data.unlocked_past.map((u) => ({
+        entry_date: u.entry_date,
+        team_id: u.team_department_id,
+        team_name: teamName.get(u.team_department_id) ?? '?',
       }))}
+      matrix={matrix}
       canLock={canLock}
       canUnlock={canUnlock}
-      matrix={matrix}
+      myTeamId={myTeamId}
     />
   )
 }

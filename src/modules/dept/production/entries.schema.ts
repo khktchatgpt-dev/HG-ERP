@@ -122,10 +122,11 @@ export const dayLockSchema = z.object({
   team_department_id: z.string().uuid().optional().nullable(),
 })
 
-/** Mở khoá (chỉ admin/manager) — DELETE qua query string. */
+/** Mở khoá (chỉ admin/manager) — DELETE qua query string; BẮT lý do (0295). */
 export const dayUnlockQuerySchema = z.object({
   date: z.string().date(),
   team: z.string().uuid(),
+  reason: z.string().trim().min(5, 'Lý do mở khoá ít nhất 5 ký tự').max(300),
 })
 
 // ── Gia công ngoài ───────────────────────────────────────────────────────────

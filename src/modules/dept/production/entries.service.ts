@@ -6,6 +6,7 @@ import { dayLocksRepo } from './day-locks.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { calcComponent } from '@/lib/component-needs'
+import { resolveTeamStage } from '@/lib/stage-for-dept'
 import {
   assemblyWipWarning,
   backflushKg,
@@ -1094,20 +1095,59 @@ export const entriesService = {
    */
   async listDay(_user: User, date: string) {
     const today = vnTodayIso()
-    const [entries, locks, docs, pastPairs, pastLocks] = await Promise.all([
-      entriesRepo.listByDate(date),
-      dayLocksRepo.listByDate(date),
-      entryDocsRepo.listByDate(date),
-      entriesRepo.listDayTeamPairs(shiftIso(today, -7), shiftIso(today, -1)),
-      dayLocksRepo.listRange(shiftIso(today, -7), shiftIso(today, -1)),
-    ])
+    const [entries, locks, docs, pastPairs, pastLocks, depts, stages, active, unlocks] =
+      await Promise.all([
+        entriesRepo.listByDate(date),
+        dayLocksRepo.listByDate(date),
+        entryDocsRepo.listByDate(date),
+        entriesRepo.listDayTeamPairs(shiftIso(today, -7), shiftIso(today, -1)),
+        dayLocksRepo.listRange(shiftIso(today, -7), shiftIso(today, -1)),
+        departmentsRepo.list(),
+        productionRepo.listStages(),
+        productionRepo.listActive(),
+        dayLocksRepo.lastUnlocks(date, date),
+      ])
     const lockedPast = new Set(
       pastLocks.map((l) => `${l.entry_date}|${l.team_department_id}`),
     )
     const unlocked_past = pastPairs
       .filter((p) => !lockedPast.has(`${p.entry_date}|${p.team_department_id}`))
       .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-    return { entries, locks, docs, unlocked_past }
+
+    // TỔ KỲ VỌNG GHI SỔ (Sổ ngày 11/11/2026, Q1): tổ SX đã gắn công đoạn — kể cả
+    // chưa ghi, để "tổ nào chưa chốt" không chỉ là "có phiếu mà chưa chốt".
+    // Tổ có việc đang chạy đánh dấu để câu "chưa có sổ" nói thêm.
+    const jobs = await jobsRepo.listByLsxBulk(active.map((l) => l.id))
+    const busyTeams = new Set(
+      jobs
+        .filter((j) => j.status !== 'done' && j.team_department_id)
+        .map((j) => j.team_department_id as string),
+    )
+    const levelOf = new Map(
+      resolveStageConfigs(stages).map((c) => [c.code, c.meta.count_level] as const),
+    )
+    const UNIT: Record<string, string> = { part: 'chi tiết', cluster: 'cụm', unit: 'bộ' }
+    const stageIdx = new Map(stages.map((s, i) => [s.code, i]))
+    const teams: DayTeam[] = []
+    for (const d of depts) {
+      if (d.workspace_id !== 'production') continue
+      const stage = resolveTeamStage(d, stages)
+      if (!stage) continue
+      teams.push({
+        id: d.id,
+        name: d.name,
+        stage,
+        stage_label: stages.find((s) => s.code === stage)?.label ?? stage,
+        unit: UNIT[levelOf.get(stage) ?? 'part'],
+        has_jobs: busyTeams.has(d.id),
+      })
+    }
+    teams.sort(
+      (a, b) =>
+        (stageIdx.get(a.stage) ?? 99) - (stageIdx.get(b.stage) ?? 99) ||
+        a.name.localeCompare(b.name, 'vi'),
+    )
+    return { today, entries, locks, docs, unlocked_past, teams, unlocks }
   },
 
   /**
@@ -1316,13 +1356,47 @@ export const entriesService = {
       locked_by: user.id,
     })
     if (duplicate) throw Conflict('Tổ đã chốt sổ ngày này', 'DAY_LOCKED')
+    await dayLocksRepo.log({
+      team_department_id: team,
+      entry_date: input.entry_date,
+      action: 'lock',
+      reason: null,
+      actor_id: user.id,
+    })
   },
 
-  /** Mở lại sổ ngày (GĐ/QL) — để sửa nhầm lẫn có kiểm soát. */
-  async unlockDay(user: User, teamId: string, date: string): Promise<void> {
+  /**
+   * Mở lại sổ ngày (GĐ/QL) — để sửa nhầm lẫn có kiểm soát. BẮT LÝ DO và ghi
+   * nhật ký (0295): xoá dòng khoá thì vết "ai chốt" mất, nhật ký giữ hộ.
+   */
+  async unlockDay(
+    user: User,
+    teamId: string,
+    date: string,
+    reason: string,
+  ): Promise<void> {
     await assertAction(user, 'production.daylock.unlock')
+    if (reason.trim().length < 5) throw BadRequest('Lý do mở khoá ít nhất 5 ký tự')
     await dayLocksRepo.deleteByTeamDate(teamId, date)
+    await dayLocksRepo.log({
+      team_department_id: teamId,
+      entry_date: date,
+      action: 'unlock',
+      reason: reason.trim(),
+      actor_id: user.id,
+    })
   },
 }
 
 export type { ProductionEntry, Job }
+
+/** Một tổ được kỳ vọng ghi sổ trong ngày (Sổ ngày & chốt sổ). */
+export type DayTeam = {
+  id: string
+  name: string
+  stage: string
+  stage_label: string
+  unit: string
+  /** Tổ còn việc chưa xong trên lệnh đang chạy. */
+  has_jobs: boolean
+}
