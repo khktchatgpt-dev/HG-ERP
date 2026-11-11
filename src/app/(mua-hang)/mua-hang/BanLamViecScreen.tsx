@@ -493,7 +493,7 @@ export function BanLamViecScreen({
 
             {tab === 'lenh' &&
               (d.issues.length === 0 ? (
-                <Empty headline={mine ? `Lệnh của ${who} không có nguy cơ` : 'Không lệnh nào có nguy cơ'} reason={mine ? `${d.lsxCount} lệnh có đơn của ${who} đều đã về hết đơn hoặc hàng đang về.` : 'Mọi lệnh đang chạy đều đã về hết đơn hoặc hàng đang về.'} next={<Btn icon="lenh" href={`/mua-hang/yeu-cau?${q}`}>Xem yêu cầu mua</Btn>} /> // prettier-ignore
+                <Empty headline={mine ? `Lệnh của ${who} không có nguy cơ` : 'Không lệnh nào có nguy cơ'} reason={mine ? `${d.lsxCount} lệnh có đơn của ${who} đều đã về hết đơn hoặc hàng đang về.` : 'Mọi lệnh đang chạy đều đã về hết đơn hoặc hàng đang về.'} next={<Btn icon="lenh" href={`/mua-hang/yeu-cau?${q}`}>Xem lệnh sản xuất</Btn>} /> // prettier-ignore
               ) : (
                 <Table>
                   <THead>

@@ -327,8 +327,9 @@ export function LenhScreen({
       <Crumb
         path={[
           'Mua hàng',
-          { label: 'Vật tư theo lệnh', href: '/mua-hang/yeu-cau' },
-          lsx.code,
+          { label: 'Lệnh sản xuất', href: '/mua-hang/yeu-cau' },
+          { label: lsx.code, href: `/mua-hang/yeu-cau/${lsx.id}/ho-so` },
+          'Vật tư của lệnh',
         ]}
       />
       <ScreenHeader

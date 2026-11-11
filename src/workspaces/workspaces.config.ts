@@ -612,7 +612,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Hộp thư đơn mua',
             icon: 'clipboard-check',
           },
-          { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
+          // LỆNH SẢN XUẤT (đổi tên 11/11/2026, chủ dự án: "trang xem và lấy thông tin
+          // lsx nhưng tên đặt sai"). Trước đó menu ghi "Yêu cầu mua" mà đầu trang ghi
+          // "Vật tư theo lệnh" — hai tên một màn. URL giữ `/yeu-cau` cho link cũ.
+          { href: '/mua-hang/yeu-cau', label: 'Lệnh sản xuất', icon: 'factory' },
           // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
           // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
           // 22/10/2026 đổi tên KẾ HOẠCH MUA: bảng kê → chọn NCC → lên đơn trên một màn.

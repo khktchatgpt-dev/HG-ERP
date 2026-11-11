@@ -99,10 +99,11 @@ export function HoSoLenhScreen({
     <ScreenFrame>
       <Crumb
         path={[
+          // Từ 11/11/2026 đây là màn CHÍNH của một lệnh (danh sách mở thẳng vào
+          // đây); màn tình hình mua là lớp con "Vật tư của lệnh".
           'Mua hàng',
-          { label: 'Vật tư theo lệnh', href: '/mua-hang/yeu-cau' },
-          { label: lsx.code, href: `/mua-hang/yeu-cau/${lsx.id}` },
-          'Hồ sơ lệnh',
+          { label: 'Lệnh sản xuất', href: '/mua-hang/yeu-cau' },
+          lsx.code,
         ]}
       />
       <ScreenHeader

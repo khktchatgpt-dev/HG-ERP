@@ -23,7 +23,7 @@ const CUA_CU: { cu: string; nhan: string; moi: string; vi_sao: string }[] = [
   { cu: '/planning/materials', nhan: 'Vật tư & giá mua', moi: '/mua-hang/vat-tu', vi_sao: 'Danh mục Vật tư; phần giá tách sang Bảng giá' }, // prettier-ignore
   { cu: '/planning/suppliers', nhan: 'Nhà cung cấp', moi: '/mua-hang/ncc', vi_sao: 'Danh sách NCC kèm lịch sử mua' }, // prettier-ignore
   { cu: '/planning/stock', nhan: 'Kho & tồn', moi: '/mua-hang/ton', vi_sao: 'Tồn & cân đối — trục là vị thế, không phải tồn kho' }, // prettier-ignore
-  { cu: '/planning/lsx', nhan: 'Vật tư theo lệnh', moi: '/mua-hang/yeu-cau', vi_sao: 'Yêu cầu mua — lệnh nào còn thiếu đồ' }, // prettier-ignore
+  { cu: '/planning/lsx', nhan: 'Vật tư theo lệnh', moi: '/mua-hang/yeu-cau', vi_sao: 'Lệnh sản xuất (tên cũ "Yêu cầu mua") — xem thông tin lệnh + tình hình mua' }, // prettier-ignore
   { cu: '/planning/viec-cua-toi', nhan: 'Chờ tôi xử lý', moi: '/mua-hang/hop-thu', vi_sao: 'Hộp thư việc' }, // prettier-ignore
   { cu: '/planning/hang-sap-ve', nhan: 'Hàng sắp về', moi: '/mua-hang/theo-doi', vi_sao: 'Theo dõi đơn hàng (01/10/2026) — trục là thời gian' }, // prettier-ignore
   { cu: '/planning/van-de', nhan: 'Vấn đề cần xử lý', moi: '/mua-hang', vi_sao: 'một khối của Bàn làm việc' }, // prettier-ignore

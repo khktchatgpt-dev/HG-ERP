@@ -8,7 +8,7 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { defaultScope, myLsxIds, parseScope } from '@/lib/supply-scope'
 
-export const metadata = { title: 'Mua hàng · Vật tư theo lệnh' }
+export const metadata = { title: 'Mua hàng · Lệnh sản xuất' }
 export const dynamic = 'force-dynamic'
 
 /**
@@ -67,7 +67,9 @@ export default async function Page({
           mine: mine.has(r.id),
           // Người đảm nhận = người phụ trách các đơn trên lệnh (0128) — màn
           // /planning/lsx đã bày, màn mới làm rơi (đo 27/09/2026).
-          buyers: [...new Set(r.pos.map((p) => p.assignee_name).filter((x): x is string => !!x))],
+          buyers: [
+            ...new Set(r.pos.map((p) => p.assignee_name).filter((x): x is string => !!x)),
+          ],
         }
       })}
       canEdit={user.role === 'admin' || supplyStaff}

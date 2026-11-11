@@ -570,7 +570,7 @@ export function DonScreen({
         actions={
           <>
             <Btn icon="lenh" href="/mua-hang/yeu-cau">
-              Vật tư theo lệnh
+              Lệnh sản xuất
             </Btn>
             {/*
               XUẤT ĐÚNG CÁI ĐANG NHÌN. Chuyển nguyên bộ lọc hiện hành sang
@@ -819,7 +819,7 @@ export function DonScreen({
           tone="warn"
           tag="Lệnh trống"
           action={{
-            label: 'Vật tư theo lệnh',
+            label: 'Lệnh sản xuất',
             onClick: () => router.push('/mua-hang/yeu-cau'),
           }}
         >

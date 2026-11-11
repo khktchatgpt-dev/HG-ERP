@@ -151,7 +151,7 @@ export function YeuCauScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng"
-        title="Vật tư theo lệnh"
+        title="Lệnh sản xuất"
         facts={[
           {
             label: scope === 'toi' ? 'Lệnh của tôi' : 'Lệnh đang chạy',
@@ -282,11 +282,15 @@ export function YeuCauScreen({
                         `/planning/lsx/[id]` — người mua đang đi một mạch trong
                         khu Mua hàng thì bị đá về vỏ cũ, mất cả thanh điều hướng
                         lẫn mạch việc. Chủ dự án báo đúng chỗ này.
+                        11/11/2026: mở thẳng HỒ SƠ LỆNH (phiếu lệnh đủ cột, thông
+                        số, ghi chú, bản sửa) — màn tình hình mua chỉ có mã·tên·SL
+                        nên chủ dự án thấy "không hiện đủ thông tin"; nó cách một
+                        nút "Vật tư của lệnh".
                       */}
                       <Code
                         as="a"
-                        href={`/mua-hang/yeu-cau/${r.id}`}
-                        title={`Mở lệnh ${r.code}`}
+                        href={`/mua-hang/yeu-cau/${r.id}/ho-so`}
+                        title={`Mở hồ sơ lệnh ${r.code}`}
                       >
                         {r.code}
                       </Code>
