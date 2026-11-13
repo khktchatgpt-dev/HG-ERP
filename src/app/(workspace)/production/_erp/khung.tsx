@@ -137,6 +137,8 @@ export type TabMuc = {
   on: boolean
   n?: number
   onClick: () => void
+  /** Tab chưa dùng được — lý do hiện ở tooltip, tab mờ, không bấm được. */
+  off?: string
 }
 
 /** Tầng 2 — tab ngang có số (số = đúng số dòng bấm vào thấy). */
@@ -149,11 +151,14 @@ export function TabNgang({ tabs, label }: { tabs: TabMuc[]; label: string }) {
           type="button"
           role="tab"
           aria-selected={t.on}
-          className="sx-tab"
-          onClick={t.onClick}
+          aria-disabled={t.off ? true : undefined}
+          title={t.off}
+          className={t.off ? 'sx-tab off' : 'sx-tab'}
+          onClick={t.off ? undefined : t.onClick}
         >
           {t.label}
           {t.n !== undefined && <span className="n">{t.n.toLocaleString('vi-VN')}</span>}
+          {t.off && <span className="n">–</span>}
         </button>
       ))}
     </div>

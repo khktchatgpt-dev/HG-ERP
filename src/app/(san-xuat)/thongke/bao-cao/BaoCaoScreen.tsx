@@ -12,7 +12,6 @@ import { dmy, TAB_LABEL, TABS, type Payload, type TabKey } from './bao-cao.share
 import {
   BangDinhMuc,
   BangLoi,
-  BangNangSuat,
   BangSanLuongTo,
   BangSuaLaiTreo,
   BangTonCongDoan,
@@ -43,16 +42,13 @@ export function BaoCaoScreen({
       ? 'san-luong'
       : d.tab === 'loi'
         ? 'phe'
-        : d.tab === 'nang_suat'
-          ? 'nang-suat'
-          : d.tab === 'treo' || d.tab === 'ton'
-            ? d.tab
-            : null
+        : d.tab === 'treo' || d.tab === 'ton'
+          ? d.tab
+          : null
   const n: Partial<Record<TabKey, number>> = {
     loi: p.loi.length,
     treo: p.sua_lai_treo.length,
     ton: p.ton_cong_doan.length,
-    nang_suat: p.nang_suat_to.length,
   }
 
   return (
@@ -150,7 +146,6 @@ export function BaoCaoScreen({
         {d.tab === 'loi' && <BangLoi d={d} />}
         {d.tab === 'treo' && <BangSuaLaiTreo d={d} />}
         {d.tab === 'ton' && <BangTonCongDoan d={d} />}
-        {d.tab === 'nang_suat' && <BangNangSuat d={d} />}
         {d.tab === 'dinh_muc' && <BangDinhMuc d={d} />}
 
         <ThanhTT

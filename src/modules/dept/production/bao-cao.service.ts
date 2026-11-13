@@ -7,7 +7,7 @@ import { transferDocsRepo } from './transfer-docs.repo'
 import { targetsRepo } from './targets.repo'
 import { dayLocksRepo } from './day-locks.repo'
 import { defectCodesRepo } from './defect-codes.repo'
-import { reportsService, REPORT_MAX_DAYS, type NangSuatRow } from './reports.service'
+import { REPORT_MAX_DAYS } from './reports.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { resolveStageConfigs, type CountLevel } from '@/lib/stage-config'
@@ -93,17 +93,6 @@ export type TonCongDoanRow = {
   cho_nhan: number
 }
 
-export type NangSuatToRow = {
-  team_name: string
-  qty: number
-  defect: number
-  rework: number
-  kg: number
-  days: number
-  per_day: number
-  workers: number
-}
-
 export type BaoCaoPayload = {
   from: string
   to: string
@@ -117,8 +106,6 @@ export type BaoCaoPayload = {
   loi_tong: { defect: number; rework: number; free_text: number; codes_total: number }
   sua_lai_treo: SuaLaiTreoRow[]
   ton_cong_doan: TonCongDoanRow[]
-  nang_suat_to: NangSuatToRow[]
-  nang_suat_nguoi: NangSuatRow[]
 }
 
 export const baoCaoService = {
@@ -134,7 +121,7 @@ export const baoCaoService = {
     const days = Array.from({ length: nDays }, (_, i) => shiftIso(from, i))
     const today = vnTodayIso()
 
-    const [entriesAll, stagesCat, depts, targets, locks, codes, active, nangSuat] =
+    const [entriesAll, stagesCat, depts, targets, locks, codes, active] =
       await Promise.all([
         entriesRepo.listRange(from, to),
         productionRepo.listStages(),
@@ -143,7 +130,6 @@ export const baoCaoService = {
         dayLocksRepo.listRange(from, to),
         defectCodesRepo.listActive(),
         productionRepo.listActive(),
-        reportsService.nangSuat(user, { from, to, team: opts.team }),
       ])
     const cfg = resolveStageConfigs(stagesCat)
     const levelOf = (s: string) =>
@@ -421,47 +407,8 @@ export const baoCaoService = {
         b.on_hand - a.on_hand,
     )
 
-    // ── 5 · Năng suất theo tổ (kỳ) ─────────────────────────────────────────
-    type NsAcc = NangSuatToRow & { day_set: Set<string>; worker_set: Set<string> }
-    const ns = new Map<string, NsAcc>()
-    for (const e of entries) {
-      const k = e.team_department_id ?? ''
-      let row = ns.get(k)
-      if (!row) {
-        row = {
-          team_name: teamName(e.team_department_id),
-          qty: 0,
-          defect: 0,
-          rework: 0,
-          kg: 0,
-          days: 0,
-          per_day: 0,
-          workers: 0,
-          day_set: new Set(),
-          worker_set: new Set(),
-        }
-        ns.set(k, row)
-      }
-      row.qty += e.qty
-      row.defect += e.defect_qty
-      row.rework += e.rework_qty
-      row.kg += e.kg == null ? 0 : Number(e.kg)
-      row.day_set.add(e.entry_date)
-      if (e.worker_name?.trim())
-        row.worker_set.add(e.worker_name.trim().toLocaleLowerCase('vi'))
-    }
-    const nang_suat_to: NangSuatToRow[] = [...ns.values()]
-      .map(({ day_set, worker_set, ...r }) => ({
-        ...r,
-        qty: r2(r.qty),
-        defect: r2(r.defect),
-        rework: r2(r.rework),
-        kg: r2(r.kg),
-        days: day_set.size,
-        per_day: day_set.size > 0 ? r2(r.qty / day_set.size) : 0,
-        workers: worker_set.size,
-      }))
-      .sort((a, b) => b.qty - a.qty)
+    // Bảng "Năng suất theo tổ" cũ GỠ 12/11/2026 — chủ dự án chọn màn riêng
+    // /thongke/nang-suat (kg / giờ công đầu phiếu, lib/nang-suat).
 
     return {
       from,
@@ -489,8 +436,6 @@ export const baoCaoService = {
       },
       sua_lai_treo,
       ton_cong_doan,
-      nang_suat_to,
-      nang_suat_nguoi: nangSuat.rows,
     }
   },
 }

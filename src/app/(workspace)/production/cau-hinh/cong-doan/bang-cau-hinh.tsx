@@ -104,6 +104,28 @@ export function BangCauHinh({ d }: { d: CongDoanCtx }) {
             ))}
           </select>
         </div>
+        {/* Q5 bản vẽ Năng suất 11/11: ĐM theo công đoạn, để trống được. Chốt lúc rời
+            ô (gõ "1," dở dang không bị nắn thành "1"). */}
+        <div className="sx-row mut" style={{ fontSize: 12 }}>
+          ĐM năng suất
+          <input
+            key={nhap.code}
+            id="cd-dm-ns"
+            className="sx-in num"
+            style={{ width: 80, textAlign: 'right' }}
+            inputMode="decimal"
+            defaultValue={
+              nhap.meta.dm_ns == null ? '' : String(nhap.meta.dm_ns).replace('.', ',')
+            }
+            aria-label="Định mức năng suất, kg mỗi giờ-người"
+            onBlur={(e) => {
+              const s = e.target.value.trim().replace(',', '.')
+              const n = Number(s)
+              d.doiMeta({ dm_ns: s && Number.isFinite(n) && n > 0 ? n : null })
+            }}
+          />
+          kg / giờ-người · để trống = chưa đặt, màn Năng suất không so
+        </div>
         <div className="sx-fine" style={{ padding: '4px 0 0', border: 0 }}>
           Sau khi lưu: ghép ở <b>{sauKhiLuu.join ? labelOf(sauKhiLuu.join) : '—'}</b> ·
           thành phẩm{' '}

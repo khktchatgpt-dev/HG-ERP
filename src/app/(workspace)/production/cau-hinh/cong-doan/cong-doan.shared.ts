@@ -78,6 +78,7 @@ export function fromView(v: StageConfigView): BanNhap {
       count_level: v.meta.count_level,
       core: { ...v.meta.core },
       input_from: v.meta.input_from,
+      dm_ns: v.meta.dm_ns,
     },
     team_ids: [...v.team_ids],
     fields: v.fields.map((f) => ({

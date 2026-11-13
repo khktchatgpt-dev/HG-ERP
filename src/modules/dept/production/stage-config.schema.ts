@@ -24,6 +24,13 @@ export const stageMetaSchema = z.object({
   }),
   /** Mã công đoạn cấp đầu vào; null = đầu chuỗi / để máy suy. */
   input_from: z.string().trim().max(50).nullable(),
+  /** ĐM năng suất kg / giờ-người; null = chưa đặt (Q5 bản vẽ 11/11). */
+  dm_ns: z
+    .number()
+    .positive('ĐM năng suất phải lớn hơn 0')
+    .max(100000)
+    .nullable()
+    .optional(),
 })
 export type StageMetaInput = z.infer<typeof stageMetaSchema>
 

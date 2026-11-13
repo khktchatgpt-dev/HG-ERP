@@ -62,6 +62,8 @@ const TRANG_CHUNG_SX = [
   '/thongke/lsx',
   '/thongke/lo-trinh',
   '/thongke/bao-cao',
+  // 12/11/2026: Năng suất — cùng chỗ đứng với Báo cáo trong cả hai khu.
+  '/thongke/nang-suat',
 ]
 
 /**

@@ -69,7 +69,7 @@ export function useBaoCao(p: Payload, initialTab: TabKey | null) {
 
   // Bốn bảng cũ đi `reports` (reports.service); hai bảng mới đi `bao-cao`
   // (cùng payload màn đang bày). Cùng kỳ + tổ với URL.
-  const excelHref = (type: 'san-luong' | 'phe' | 'nang-suat' | 'treo' | 'ton') => {
+  const excelHref = (type: 'san-luong' | 'phe' | 'treo' | 'ton') => {
     const ky = `from=${p.from}&to=${p.to}${team ? `&team=${team}` : ''}`
     return type === 'treo' || type === 'ton'
       ? `/api/dept/production/bao-cao?bang=${type}&${ky}`

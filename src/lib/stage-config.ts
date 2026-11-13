@@ -32,7 +32,8 @@ export const CORE_FIELDS = ['defect', 'rework', 'kg', 'worker'] as const
 export type CoreField = (typeof CORE_FIELDS)[number]
 
 export const CORE_FIELD_LABEL: Record<CoreField, string> = {
-  defect: 'Phế (bỏ hẳn)',
+  // 12/11/2026: màn ghi gọi là "Lỗi" (hỏng, bỏ) — hàng sửa xong tính đạt.
+  defect: 'Lỗi (hỏng, bỏ)',
   rework: 'Sửa lại (cứu được)',
   kg: 'Kg',
   worker: 'Người làm',
@@ -46,6 +47,12 @@ export type StageMeta = {
   core: Record<CoreField, CoreMode>
   /** Mã công đoạn cấp đầu vào; null = đầu chuỗi hoặc để máy suy theo lộ trình. */
   input_from: string | null
+  /**
+   * ĐỊNH MỨC NĂNG SUẤT (kg / giờ-người) — màn Năng suất so với số này (bản vẽ
+   * 11/11/2026, Q5: đặt theo công đoạn, để trống được). null = chưa đặt: cột
+   * "% ĐM" và màu dưới định mức tắt, phần còn lại vẫn chạy.
+   */
+  dm_ns: number | null
 }
 
 export type StageConfig = {
@@ -82,6 +89,7 @@ export function defaultStageMeta(code: string): StageMeta {
     count_level: DEFAULT_LEVEL_BY_CODE[code] ?? 'part',
     core: { ...DEFAULT_CORE },
     input_from: null,
+    dm_ns: null,
   }
 }
 
@@ -113,6 +121,10 @@ export function parseStageMeta(code: string, raw: unknown): StageMeta {
     input_from:
       typeof r.input_from === 'string' && r.input_from.trim()
         ? r.input_from.trim()
+        : null,
+    dm_ns:
+      typeof r.dm_ns === 'number' && Number.isFinite(r.dm_ns) && r.dm_ns > 0
+        ? r.dm_ns
         : null,
   }
 }

@@ -757,7 +757,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         // B6 (03/11/2026): sáu bảng báo cáo trên một màn, kỳ tự do.
         heading: '3 · Xem',
-        items: [{ href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' }],
+        items: [
+          // 12/11/2026 (bản vẽ 11/11 tab 3): kg / giờ-người theo công đoạn, tổ, ngày.
+          { href: '/thongke/nang-suat', label: 'Năng suất', icon: 'scale' },
+          { href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' },
+        ],
       },
       {
         // Gập sẵn: không nằm trên đường đi của lệnh, mở khi cần.
@@ -823,6 +827,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Theo dõi',
         items: [
           { href: '/thongke/lenh', label: 'Lệnh sản xuất', icon: 'factory', exact: true },
+          { href: '/thongke/nang-suat', label: 'Năng suất', icon: 'scale' },
           { href: '/thongke/bao-cao', label: 'Báo cáo', icon: 'chart-column' },
         ],
       },

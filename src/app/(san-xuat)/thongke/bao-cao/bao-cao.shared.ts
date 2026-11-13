@@ -4,14 +4,14 @@ import type { DinhMucReport } from '@/modules/dept/production/reports.service'
 export type Payload = BaoCaoPayload
 export type DinhMuc = DinhMucReport
 
-export const TABS = ['to', 'loi', 'treo', 'ton', 'nang_suat', 'dinh_muc'] as const
+// Tab "Năng suất" gỡ 12/11/2026 — sang màn riêng /thongke/nang-suat.
+export const TABS = ['to', 'loi', 'treo', 'ton', 'dinh_muc'] as const
 export type TabKey = (typeof TABS)[number]
 export const TAB_LABEL: Record<TabKey, string> = {
   to: 'Sản lượng theo tổ',
   loi: 'Lỗi (Pareto)',
   treo: 'Sửa lại còn treo',
   ton: 'Tồn công đoạn',
-  nang_suat: 'Năng suất',
   dinh_muc: 'Định mức vs thực dùng',
 }
 
