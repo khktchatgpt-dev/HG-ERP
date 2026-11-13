@@ -110,6 +110,17 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
               <Fragment key={l.id}>
                 <tr className="grp">
                   <td colSpan={Math.min(5, cols.length)} title={l.product_name}>
+                    {editable && (
+                      <button
+                        type="button"
+                        className="sx-btn sm vien"
+                        style={{ marginRight: 8 }}
+                        onClick={() => d.addRow(l.id)}
+                        title={`Thêm một dòng chi tiết vào ${l.product_code}`}
+                      >
+                        + Thêm dòng
+                      </button>
+                    )}
                     <span className="ma">{l.product_code}</span>
                     <span className="mut" style={{ fontWeight: 400 }}>
                       {' '}
@@ -133,17 +144,6 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
                         {trongCum - ngoai.filter((r) => r.cluster.trim()).length} trong
                         cụm · {roi} rời · {mua} ngoài khung
                       </span>
-                    )}
-                    {editable && (
-                      <button
-                        type="button"
-                        className="sx-btn sm vien"
-                        style={{ marginLeft: 10 }}
-                        onClick={() => d.addRow(l.id)}
-                        title={`Thêm một dòng chi tiết vào ${l.product_code}`}
-                      >
-                        + Thêm dòng
-                      </button>
                     )}
                   </td>
                 </tr>
