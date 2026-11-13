@@ -6,9 +6,21 @@ import { api, apiErrorText } from '@/lib/api'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { parsePasteNumber } from '@/lib/po-paste'
 import {
+  crewProblem,
+  laborHours,
+  linesKg,
+  parseCrew,
+  productivity,
+  type CrewInput,
+} from '@/lib/gio-cong'
+import { dongBo, maMacDinh, TAT_CA_MA, xepTheoCum, type DongBo } from '@/lib/ghi-nhom'
+import { khoaCum } from '@/lib/khoa-cum'
+import { chiaDot, chiaText } from '@/lib/ghi-gom-dot'
+import {
   buildEditCols,
   cellId,
   dmy,
+  draftKg,
   draftKey,
   FIELD_PREFIX,
   hasAnyValue,
@@ -16,11 +28,14 @@ import {
   num,
   readDraftRaw,
   readMore,
+  readSp,
   rowProblems,
   subscribeDraft,
   subscribeMore,
+  subscribeSp,
   writeDraftRaw,
   writeMore,
+  writeSp,
   type Drafts,
   type LineDraft,
   type SavedDraft,
@@ -53,11 +68,15 @@ export function useGhi(p: GhiProps) {
     return ''
   })
   const [docNote, setDocNote] = useState('')
+  // GIỜ CÔNG đầu phiếu (0296): một lần cho cả phiếu, không phải mỗi dòng.
+  const [crew, setCrewState] = useState<CrewInput>(CREW_EMPTY)
   const [drafts, setDrafts] = useState<Drafts>({})
   const [warnings, setWarnings] = useState<string[]>([])
   const [loi, setLoi] = useState<string | null>(null)
   const [thongBao, setThongBao] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** Đã bấm Ghi sổ chính thức ít nhất một lần — câu đỏ chỉ hiện từ lúc đó (Q5). */
+  const [daBam, setDaBam] = useState(false)
   const [chiGoiY, setChiGoiY] = useState(false)
   const more = useSyncExternalStore(subscribeMore, readMore, () => false)
   const toggleMore = () => writeMore(!more)
@@ -92,11 +111,19 @@ export function useGhi(p: GhiProps) {
     }
   }, [savedRaw])
   const [draftHidden, setDraftHidden] = useState(false)
-  const persist = (lines: Drafts) =>
+  const persist = (lines: Drafts, c: CrewInput = crew) =>
     writeDraftRaw(
       dKey,
-      hasAnyValue(lines) ? { date, team_id: teamId, note: docNote, lines } : null,
+      hasAnyValue(lines)
+        ? { date, team_id: teamId, note: docNote, crew: c, lines }
+        : null,
     )
+  const setCrew = (k: keyof CrewInput, v: string) => {
+    const next = { ...crew, [k]: v }
+    setCrewState(next)
+    persist(drafts, next)
+    setLoi(null)
+  }
 
   const draftOf = (id: string): LineDraft => drafts[id] ?? {}
   const patch = (id: string, k: string, v: string) => {
@@ -111,6 +138,7 @@ export function useGhi(p: GhiProps) {
     setDate(saved.date)
     setTeamId(saved.team_id)
     setDocNote(saved.note)
+    setCrewState(saved.crew ?? CREW_EMPTY)
     setDraftHidden(true)
     setThongBao('Đã khôi phục bản gõ dở — kiểm lại ngày và tổ trước khi ghi sổ')
   }
@@ -126,28 +154,70 @@ export function useGhi(p: GhiProps) {
   }
 
   // ── Dòng ───────────────────────────────────────────────────────────────
-  const suggestedSet = useMemo(
-    () =>
-      new Set(
-        sheet.suggested.filter((s) => s.team_id === teamId).map((s) => s.component_id),
-      ),
-    [sheet.suggested, teamId],
-  )
+  // Gợi ý trả theo component THẬT; dòng đã gom đợt sáng khi bất kỳ đợt nào được gợi ý.
+  const suggestedSet = useMemo(() => {
+    const real = new Set(
+      sheet.suggested.filter((s) => s.team_id === teamId).map((s) => s.component_id),
+    )
+    const out = new Set<string>()
+    for (const g of sheet.groups)
+      for (const l of g.lines)
+        if (l.parts.some((p) => real.has(p.component_id))) out.add(l.component_id)
+    return out
+  }, [sheet.suggested, sheet.groups, teamId])
+  // Mã hàng → cụm → chi tiết (bản vẽ 11/11): xếp chi tiết theo cụm để mỗi cụm
+  // một đầu nhóm, không rải rác.
   const allRows = useMemo(
-    () => sheet.groups.flatMap((g) => g.lines.map((l) => ({ g, l }))),
+    () => sheet.groups.flatMap((g) => xepTheoCum(g.lines).map((l) => ({ g, l }))),
     [sheet.groups],
   )
-  /** Dòng đang BÀY: lọc "dòng gợi ý" khi bật; dòng đã gõ luôn giữ lại. */
-  const rows = useMemo(
-    () =>
-      chiGoiY
-        ? allRows.filter(
-            ({ l }) =>
-              suggestedSet.has(l.component_id) || isTyped(drafts[l.component_id]),
-          )
-        : allRows,
-    [allRows, chiGoiY, suggestedSet, drafts],
+
+  // ── Chọn MÃ HÀNG (Q11–Q13 bản vẽ 12/11) ────────────────────────────────
+  // Nhớ theo máy × lệnh; mã lạ / chưa nhớ → mã đầu còn việc (lib/ghi-nhom).
+  const spKey = sheet.lsx?.id ?? 'all'
+  const spNho = useSyncExternalStore(
+    subscribeSp,
+    () => readSp(spKey),
+    () => null,
   )
+  const spChon = maMacDinh(sheet.groups, spNho)
+  const chonSp = (code: string) => writeSp(spKey, code)
+  /** Thanh chọn mã chỉ có nghĩa khi lệnh có ≥ 2 mã hàng ở công đoạn này. */
+  const nhieuMa = sheet.groups.length > 1
+  const motMa = nhieuMa && spChon !== TAT_CA_MA
+  const nhomChon = motMa
+    ? (sheet.groups.find((g) => g.product_code === spChon) ?? null)
+    : null
+  /** Bộ đồng bộ ở công đoạn đang ghi — theo mã hàng và theo từng cụm (MỌI dòng, không theo lọc). */
+  const nhom = useMemo(() => {
+    const sp = new Map<string, DongBo>()
+    const cum = new Map<string, { sets: number | null; n: number }>()
+    for (const g of sheet.groups) {
+      const ls = g.lines.map((l) => ({
+        name: l.name,
+        cluster: l.cluster,
+        needed: l.needed,
+        done: l.done,
+      }))
+      sp.set(g.order_line_id, dongBo(ls, g.qty))
+      // Khoá cụm không phân biệt hoa thường (Q20) — "cụm tựa" là "Cụm tựa".
+      for (const c of new Set(ls.map((l) => khoaCum(l.cluster)))) {
+        if (!c) continue
+        const of = ls.filter((l) => khoaCum(l.cluster) === c)
+        cum.set(`${g.order_line_id}|${c}`, { sets: dongBo(of, g.qty).sets, n: of.length })
+      }
+    }
+    return { sp, cum }
+  }, [sheet.groups])
+  /** Dòng đang BÀY: theo mã đang chọn; lọc "dòng gợi ý" khi bật (dòng đã gõ luôn giữ). */
+  const rows = useMemo(() => {
+    const cuaMa = motMa ? allRows.filter(({ g }) => g.product_code === spChon) : allRows
+    return chiGoiY
+      ? cuaMa.filter(
+          ({ l }) => suggestedSet.has(l.component_id) || isTyped(drafts[l.component_id]),
+        )
+      : cuaMa
+  }, [allRows, motMa, spChon, chiGoiY, suggestedSet, drafts])
   const order = useMemo(() => rows.map((r) => r.l.component_id), [rows])
   const lsxOfComponent = useMemo(() => {
     const m = new Map<string, string>()
@@ -162,6 +232,8 @@ export function useGhi(p: GhiProps) {
         .map(({ l }) => ({
           component_id: l.component_id,
           name: l.name,
+          dm_kg: l.dm_kg,
+          parts: l.parts,
           d: drafts[l.component_id],
         })),
     [drafts, allRows],
@@ -169,6 +241,14 @@ export function useGhi(p: GhiProps) {
   const typedQty = typed.reduce((a, t) => a + num(t.d.qty), 0)
   const typedDefect = typed.reduce((a, t) => a + num(t.d.defect), 0)
   const typedRework = typed.reduce((a, t) => a + num(t.d.rework), 0)
+  // Kg + năng suất của phiếu — cùng hàm với báo cáo (lib/gio-cong).
+  const typedKg = linesKg(
+    typed.map((t) => ({ qty: num(t.d.qty), kg: draftKg(t.d), dm_kg: t.dm_kg })),
+  )
+  const crewParsed = useMemo(() => parseCrew(crew), [crew])
+  const crewBad = crewProblem(crewParsed)
+  const gioCong = laborHours(crewParsed)
+  const nangSuat = productivity(typedKg.kg, gioCong)
 
   /** Mọi ô còn thiếu trên các dòng ĐÃ GÕ — phần tử đầu là thứ thanh chốt chỉ tới. */
   const problems = useMemo(
@@ -220,14 +300,44 @@ export function useGhi(p: GhiProps) {
         : lockedNow
           ? `sổ ngày ${dmy(date)} của tổ này đã chốt`
           : typed.length === 0
-            ? 'chưa gõ số nào — điền SL đạt, phế hoặc sửa lại vào ít nhất một dòng'
+            ? 'chưa gõ số nào — điền số đạt hoặc lỗi vào ít nhất một dòng'
             : firstProblem
               ? `"${firstProblem.name}" ${firstProblem.msg}`
               : null
 
-  /** Nhãn của liên kết gỡ chặn + việc nó làm. */
+  /**
+   * Hai mức chặn (Q1 bản vẽ 11/11): giờ công TRỐNG chỉ chặn Ghi sổ chính thức —
+   * lưu nháp vẫn được; giờ công gõ SAI thì chặn cả hai (server cũng đá).
+   */
+  const blockedNhap =
+    blocked ?? (crewBad && !crewBad.missing ? `giờ công: ${crewBad.msg}` : null)
+  const blockedGhi = blockedNhap ?? (crewBad ? crewBad.msg : null)
+
+  // Cột trống CẢ CỘT thì ẩn (Q3): Khả dụng ở công đoạn đầu (mọi dòng null), 14
+  // ngày khi chưa ai ghi trong 14 ngày. Có số thì cột tự hiện lại.
+  const cotKhaDung = allRows.some(({ l }) => l.available != null)
+  const cot14 = allRows.some(({ l }) => l.days.some((x) => x.qty > 0))
+  // Nhóm cột ĐỊNH MỨC (Q10): ẩn cột nào cả cột trống ở mã đang bày (SL / SP luôn có).
+  const cotQuyCach = rows.some(({ l }) => l.spec != null)
+  const cotKgCt = rows.some(({ l }) => l.dm_kg != null)
+  /** Chỉ tiêu hôm nay của tổ đang chọn (0168 — giao theo tổ × công đoạn × ngày). */
+  const chiTieu =
+    date === sheet.today
+      ? (sheet.targets.find((t) => t.team_id === teamId)?.qty ?? null)
+      : null
+  /** Nhãn "đợt 1: 108 · đợt 2: 12" cho dòng gom đang gõ — rỗng khi một đợt. */
+  const chiaCua = (l: (typeof allRows)[number]['l']): string => {
+    if (l.parts.length < 2) return ''
+    const d = drafts[l.component_id]
+    if (!d || num(d.qty) <= 0) return ''
+    return chiaText(chiaDot(l.parts, { qty: num(d.qty), defect: 0, rework: 0, kg: null }))
+  }
+
+  /** Nhãn của liên kết gỡ chặn + việc nó làm (theo mức chặn của nút Ghi sổ). */
   const goBlocked = (): { label: string; run: () => void } | null => {
-    if (!blocked || !sheet.can_record || dateFuture) return null
+    if (!blockedGhi || !sheet.can_record || dateFuture) return null
+    if (!blocked && crewBad)
+      return { label: 'Ghi giờ công', run: () => focusEl(`crew-${crewBad.field}`) }
     if (!teamId) return { label: 'Chọn tổ', run: () => focusEl('sheet-team') }
     if (lockedNow)
       return {
@@ -250,7 +360,12 @@ export function useGhi(p: GhiProps) {
   }
 
   // ── Ghi sổ ─────────────────────────────────────────────────────────────
-  const toPayload = ({ component_id, d }: (typeof typed)[number]) => {
+  /**
+   * Một dòng gõ → MỘT HAY NHIỀU dòng sổ: dòng đã gom đợt chia số đạt cho đợt
+   * xuất sớm trước (lib/ghi-gom-dot, Q1). Lý do, ô riêng, người làm, ghi chú đi
+   * theo mọi phần; phế / sửa lại vào đợt đầu nhận số.
+   */
+  const toPayload = ({ parts, d }: (typeof typed)[number]) => {
     const r = (d.reason ?? '').trim()
     const code = codeByLabel.get(r.toLowerCase()) ?? null
     const meta: Record<string, string> = {}
@@ -259,23 +374,33 @@ export function useGhi(p: GhiProps) {
       const v = (d[c.key] ?? '').trim()
       if (v) meta[c.key.slice(FIELD_PREFIX.length)] = v
     }
-    return {
-      component_id,
+    const chia = chiaDot(parts, {
       qty: num(d.qty),
+      defect: num(d.defect),
+      rework: num(d.rework),
       kg: (d.kg ?? '').trim() ? num(d.kg) : null,
-      defect_qty: num(d.defect),
-      rework_qty: num(d.rework),
-      defect_code: code,
-      defect_reason: code ? null : r || null,
-      stage_meta: Object.keys(meta).length ? meta : null,
-      worker_name: (d.worker ?? '').trim() || null,
-      note: (d.note ?? '').trim() || null,
-    }
+    })
+    return chia.map((x) => {
+      const bad = x.defect > 0 || x.rework > 0
+      return {
+        component_id: x.component_id,
+        qty: x.qty,
+        kg: x.kg,
+        defect_qty: x.defect,
+        rework_qty: x.rework,
+        defect_code: bad ? code : null,
+        defect_reason: bad ? (code ? null : r || null) : null,
+        stage_meta: Object.keys(meta).length ? meta : null,
+        worker_name: (d.worker ?? '').trim() || null,
+        note: (d.note ?? '').trim() || null,
+      }
+    })
   }
 
   /** Một lượt gõ có thể trải nhiều lệnh → mỗi lệnh một phiếu. Gọi TUẦN TỰ (số phiếu). */
   const save = async (submit: boolean) => {
-    if (busy || blocked) return
+    if (submit) setDaBam(true)
+    if (busy || (submit ? blockedGhi : blockedNhap)) return
     setBusy(true)
     setLoi(null)
     try {
@@ -297,7 +422,10 @@ export function useGhi(p: GhiProps) {
               team_department_id: teamId || null,
               submit,
               note: docNote.trim() || null,
-              entries: rowsOf.map(toPayload),
+              shift: crewParsed.shift,
+              worker_count: crewParsed.worker_count,
+              hours_per_worker: crewParsed.hours_per_worker,
+              entries: rowsOf.flatMap(toPayload),
             },
           },
         )
@@ -305,8 +433,12 @@ export function useGhi(p: GhiProps) {
         all.push(...res.warnings)
       }
       setWarnings(all)
+      setDaBam(false)
       setDrafts({})
       setDocNote('')
+      // Xoá số người + giờ sau mỗi phiếu (giữ ca): phiếu kế — lệnh khác cùng ca —
+      // phải tự ghi phần giờ của nó, không mang nguyên ca sang (lỗi chép lặp).
+      setCrewState((c) => ({ ...CREW_EMPTY, shift: c.shift }))
       writeDraftRaw(dKey, null)
       setDraftHidden(true)
       const what = submit ? 'ghi chính thức' : 'lưu nháp'
@@ -430,6 +562,16 @@ export function useGhi(p: GhiProps) {
     teamName,
     docNote,
     setDocNote,
+    crew,
+    setCrew,
+    gioCong,
+    crewBad,
+    /** Ô giờ công nào tô đỏ: gõ sai thì luôn, còn trống thì chỉ khi đã có dòng gõ. */
+    crewRed: (field: 'workers' | 'hours' | 'shift') =>
+      crewBad?.field === field && (!crewBad.missing || typed.length > 0),
+    nangSuat,
+    typedKg,
+    nhom,
     drafts,
     draftOf,
     patch,
@@ -454,7 +596,22 @@ export function useGhi(p: GhiProps) {
     dateFuture,
     datePast,
     blocked,
+    blockedNhap,
+    blockedGhi,
+    daBam,
+    setDaBam,
     goBlocked,
+    cotKhaDung,
+    cot14,
+    cotQuyCach,
+    cotKgCt,
+    spChon,
+    chonSp,
+    nhieuMa,
+    motMa,
+    nhomChon,
+    chiTieu,
+    chiaCua,
     warnings,
     setWarnings,
     loi,
@@ -472,6 +629,8 @@ export function useGhi(p: GhiProps) {
 }
 
 export type GhiCtx = ReturnType<typeof useGhi>
+
+const CREW_EMPTY: CrewInput = { shift: '1', workers: '', hours: '' }
 
 function focusEl(id: string) {
   const el = document.getElementById(id)

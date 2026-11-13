@@ -64,7 +64,23 @@ export function TabPhieu({ d }: { d: HoSoLenhCtx }) {
                 <td className="ma">{x.doc_no}</td>
                 <td className="num">{dmy(x.entry_date)}</td>
                 <td>{d.stageLabel(x.stage)}</td>
-                <td>{x.team_name ?? <span className="empty">—</span>}</td>
+                <td
+                  title={
+                    x.labor_hours
+                      ? `Ca ${x.shift ?? '—'} · ${x.worker_count} CN × ${fmt(x.hours_per_worker ?? 0)} giờ = ${fmt(x.labor_hours)} giờ công`
+                      : 'Chưa ghi giờ công'
+                  }
+                >
+                  {x.team_name ?? <span className="empty">—</span>}
+                  {x.labor_hours ? (
+                    <span className="mut num">
+                      {' '}
+                      · {x.worker_count}×{fmt(x.hours_per_worker ?? 0)}h
+                    </span>
+                  ) : (
+                    nhap && <span className="warn"> · chưa giờ công</span>
+                  )}
+                </td>
                 <td className="r num">{fmt(x.total_qty)}</td>
                 <td className={cx('r num', x.total_defect > 0 ? 'warn' : 'empty')}>
                   {fmt(x.total_defect)}
@@ -91,15 +107,48 @@ export function TabPhieu({ d }: { d: HoSoLenhCtx }) {
                   </a>
                   {p.canRecord && nhap && (
                     <>
+                      {d.gioPhieu?.id === x.id && (
+                        // Giờ công TẠI CHỖ (0296): số chính thức phải có giờ.
+                        <span className="sx-gio" style={{ marginLeft: 8 }}>
+                          <input
+                            className="sx-in num"
+                            value={d.gioPhieu.cn}
+                            onChange={(e) =>
+                              d.setGioPhieu({ ...d.gioPhieu!, cn: e.target.value })
+                            }
+                            placeholder="số CN"
+                            aria-label={`Số công nhân phiếu ${x.doc_no}`}
+                            inputMode="numeric"
+                            style={{ width: 58 }}
+                          />
+                          {' × '}
+                          <input
+                            className="sx-in num"
+                            value={d.gioPhieu.gio}
+                            onChange={(e) =>
+                              d.setGioPhieu({ ...d.gioPhieu!, gio: e.target.value })
+                            }
+                            placeholder="giờ"
+                            aria-label={`Giờ mỗi người phiếu ${x.doc_no}`}
+                            inputMode="decimal"
+                            style={{ width: 48 }}
+                          />
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="lnk"
                         style={{ marginLeft: 8 }}
-                        onClick={() => d.pbsChinhThuc(x.id, x.doc_no)}
+                        onClick={() => d.pbsChinhThuc(x)}
                         disabled={d.busy}
                       >
                         Ghi chính thức
                       </button>
+                      {d.gioPhieu?.id === x.id && d.gioPhieuLoi && (
+                        <span className="warn" style={{ marginLeft: 6 }}>
+                          {d.gioPhieuLoi}
+                        </span>
+                      )}
                       <button
                         type="button"
                         className={cx('lnk', d.xoaHoi === x.id ? 'stop' : 'mut')}

@@ -837,12 +837,111 @@ describe('entriesService — PHIẾU BÁO SẢN LƯỢNG (0172)', () => {
       team_department_id: 'd-han',
       entry_date: '2026-07-24',
       production_order_id: 'lsx1',
+      worker_count: 6,
+      hours_per_worker: 8,
     } as never)
     await entriesService.submitDoc(thongKe, 'doc1')
     expect(entryDocsRepo.patch).toHaveBeenCalledWith(
       'doc1',
       expect.objectContaining({ status: 'da_xac_nhan', confirmed_by: 'u-tk' }),
     )
+  })
+
+  it('submitDoc: nháp chưa có giờ công → 400; gửi kèm giờ công thì ghi cả hai (0296)', async () => {
+    vi.mocked(entryDocsRepo.findById).mockResolvedValue({
+      id: 'doc1',
+      status: 'nhap',
+      created_by: 'u-tk',
+      team_department_id: 'd-han',
+      entry_date: '2026-07-24',
+      production_order_id: 'lsx1',
+      shift: null,
+      worker_count: null,
+      hours_per_worker: null,
+    } as never)
+    await expect(entriesService.submitDoc(thongKe, 'doc1')).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('giờ công'),
+    })
+    expect(entryDocsRepo.patch).not.toHaveBeenCalled()
+
+    await entriesService.submitDoc(thongKe, 'doc1', {
+      shift: 1,
+      worker_count: 4,
+      hours_per_worker: 7,
+    })
+    expect(entryDocsRepo.patch).toHaveBeenCalledWith(
+      'doc1',
+      expect.objectContaining({
+        status: 'da_xac_nhan',
+        shift: 1,
+        worker_count: 4,
+        hours_per_worker: 7,
+      }),
+    )
+  })
+
+  it('record: ghi CHÍNH THỨC mà thiếu giờ công → 400, không lập phiếu; nháp thì được', async () => {
+    await expect(
+      entriesService.record(thongKe, 'lsx1', record({ submit: true })),
+    ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('giờ công') })
+    expect(entryDocsRepo.insert).not.toHaveBeenCalled()
+
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ submit: false, worker_count: 6 }),
+    )
+    expect(entryDocsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'nhap',
+        worker_count: 6,
+        hours_per_worker: null,
+      }),
+    )
+  })
+
+  it('record: giờ công ghi một lần trên ĐẦU PHIẾU, không lên dòng', async () => {
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ submit: true, shift: 2, worker_count: 4, hours_per_worker: 7 }),
+    )
+    expect(entryDocsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'da_xac_nhan',
+        shift: 2,
+        worker_count: 4,
+        hours_per_worker: 7,
+      }),
+    )
+    const lines = vi.mocked(entriesRepo.insertMany).mock.calls[0][0]
+    expect(lines[0]).not.toHaveProperty('worker_count')
+  })
+
+  it('record: tổ đã có phiếu cùng ngày · ca · công đoạn mang giờ công → cảnh báo, vẫn ghi', async () => {
+    vi.mocked(entryDocsRepo.listByDate).mockResolvedValue([
+      {
+        doc_no: 'PBS-2026-0007',
+        team_department_id: 'd-han',
+        stage: 'han',
+        shift: 1,
+        labor_hours: 48,
+      },
+    ] as never)
+    const res = await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ submit: true, shift: 1, worker_count: 6, hours_per_worker: 8 }),
+    )
+    expect(res.warnings.join(' ')).toContain('PBS-2026-0007 (48 giờ công)')
+    expect(entryDocsRepo.insert).toHaveBeenCalled()
+  })
+
+  it('record: giờ công gõ sai (số người lẻ) → 400 ngay cả khi lưu nháp', async () => {
+    await expect(
+      entriesService.record(thongKe, 'lsx1', record({ worker_count: 2.5 })),
+    ).rejects.toMatchObject({ status: 400 })
   })
 
   it('submitDoc: phiếu đã chính thức → 400; người ngoài → 403', async () => {

@@ -35,10 +35,13 @@ import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { transfersRepo } from './transfers.repo'
 import { transferDocsRepo } from './transfer-docs.repo'
 import { dayLocksRepo } from './day-locks.repo'
+import { targetsRepo } from './targets.repo'
+import { gomTheoMaHang, khoaGom, type NhomGom } from '@/lib/ghi-gom-dot'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { fileImageSrc } from '@/server/file-image'
-import { productsRepo } from '@/modules/dept/technical/technical.repo'
+import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
+import { khoaCum } from '@/lib/khoa-cum'
 import type { User } from '@/modules/core/users/users.repo'
 
 /**
@@ -445,6 +448,22 @@ export type EntrySheetLine = {
   unit: string | null
   /** ĐM kg/đơn vị — gợi ý kg = ĐM × SL, không bắt gõ. */
   dm_kg: number | null
+  /** ĐỊNH MỨC bày trên dòng (bản vẽ 12/11/2026, Q10): số chi tiết (cụm) / 1 SP. */
+  qty_per_unit: number | null
+  /** Quy cách phôi (mm): dày × rộng × dài · độ dày thành; null = không khai. */
+  spec: {
+    t: number | null
+    w: number | null
+    l: number | null
+    wall: number | null
+  } | null
+  /** Dòng CỤM: số chi tiết trong cụm ("×1 · 17 chi tiết"); null ở dòng chi tiết. */
+  cum_ct: number | null
+  /**
+   * Dòng CỤM thật: Kỹ thuật đã khai SL cụm / SP ở hồ sơ chưa — chưa khai thì
+   * máy tạm tính 1 (cột SL / SP nói ở tooltip). null = không phải dòng cụm thật.
+   */
+  cum_khai: boolean | null
   needed: number
   /** Đã đạt — chỉ phiếu đã xác nhận. */
   done: number
@@ -486,7 +505,20 @@ export type EntrySheetGroup = {
   unit: string
   /** Ảnh SP (URL ký HMAC ổn định) — thống kê đối chiếu với sổ giấy bằng mắt. */
   image_src: string | null
+  /** Đợt của dòng lệnh (production_order_groups) — null khi không rõ. */
+  dot: string | null
+  ship_date: string | null
+  dot_sort: number
   lines: EntrySheetLine[]
+}
+
+/**
+ * Nhóm MÃ HÀNG đã gom qua các đợt (bản vẽ 12/11/2026, Q1): một dòng mỗi chi
+ * tiết cho cả lệnh, `parts` giữ từng component thật của từng đợt để chia số lúc
+ * ghi (lib/ghi-gom-dot). `han` = việc giao tổ của công đoạn đang mở (Q9).
+ */
+export type EntrySheetMergedGroup = NhomGom<EntrySheetLine, EntrySheetGroup> & {
+  han: { end: string | null; teams: string[]; missing_end: boolean } | null
 }
 
 export type EntrySheet = {
@@ -511,7 +543,13 @@ export type EntrySheet = {
    * Công đoạn CÓ VIỆC trong phạm vi, đúng thứ tự danh mục — dải tab. `n` = số
    * dòng ghi sẽ thấy khi bấm sang tab đó (đếm bằng cùng luật dựng dòng bên dưới).
    */
-  stages: { code: string; label: string; n: number }[]
+  stages: {
+    code: string
+    label: string
+    n: number
+    /** Số dòng theo MÃ HÀNG (Q12) — tab nói đúng số dòng của mã đang chọn. */
+    n_by_sp: Record<string, number>
+  }[]
   /**
    * Cấu hình công đoạn đang mở (0287, B1): đếm bằng gì, ô lõi nào hiện / bắt
    * buộc. Cột của lưới ghi đổi theo đây, không theo mã.
@@ -519,7 +557,9 @@ export type EntrySheet = {
   stage_cfg: StageMeta
   /** Tổ xưởng + công đoạn phụ trách — mặc định chọn tổ khớp công đoạn. */
   teams: { id: string; name: string; stage_code: string | null }[]
-  groups: EntrySheetGroup[]
+  /** Chỉ tiêu HÔM NAY của công đoạn đang mở, theo tổ (0168 — giao theo tổ, không theo chi tiết). */
+  targets: { team_id: string; qty: number }[]
+  groups: EntrySheetMergedGroup[]
   /** (chi tiết × tổ) hệ đề xuất: tổ đang cầm hàng được giao / ghi 7 ngày qua. */
   suggested: { component_id: string; team_id: string }[]
   /** Lý do phế dùng 30 ngày gần đây — gợi ý gõ nhanh. */
@@ -585,6 +625,8 @@ export async function loadEntrySheet(
     allDefectCodes,
     allStageFields,
     transferDocs,
+    orderGroups,
+    todayTargets,
   ] = await Promise.all([
     componentsRepo.listByLsxBulk(ids),
     lsxLinesRepo.listLinesBulk(ids),
@@ -596,7 +638,10 @@ export async function loadEntrySheet(
     defectCodesRepo.listActive(),
     stageFieldsRepo.listActive(),
     transferDocsRepo.listByLsxBulk(ids),
+    lsxLinesRepo.listGroupsBulk(ids),
+    targetsRepo.listByDate(vnTodayIso()),
   ])
+  const groupById = new Map(orderGroups.map((g) => [g.id, g]))
   // Phiếu giao tổ (0289): "đã giao" / "đã nhận" per (dòng × công đoạn).
   const pgt = transferTotals(transferDocs, transfers)
   if (lines.length === 0) return null
@@ -617,8 +662,13 @@ export async function loadEntrySheet(
   // Số dòng ghi MỖI công đoạn — số trên tab phải bằng đúng số dòng bấm vào thấy,
   // nên đếm bằng cùng luật dựng dòng ở dưới: chi tiết có lộ trình qua đó + cụm
   // mặc nhiên + dòng thành phẩm chưa vật chất hoá.
-  const nByStage = new Map<string, number>()
-  const bump = (s: string) => nByStage.set(s, (nByStage.get(s) ?? 0) + 1)
+  // Đếm theo KHOÁ GOM (12/11/2026): tab phải nói đúng số dòng sau khi gom đợt.
+  const keysByStage = new Map<string, Set<string>>()
+  const bumpKey = (s: string, key: string) => {
+    let set = keysByStage.get(s)
+    if (!set) keysByStage.set(s, (set = new Set()))
+    set.add(key)
+  }
   for (const line of lines) {
     const lineComps = components.filter((c) => c.production_order_line_id === line.id)
     const plan = resolveCountingPlan(lineComps, plannedByLine.get(line.id), counting)
@@ -629,36 +679,74 @@ export async function loadEntrySheet(
         plan.own_route.get(c.id) ??
         componentRoute(plannedByLine.get(line.id), c)
       routeOf.set(c.id, r)
-      for (const s of r) bump(s)
+      const key = khoaGom({
+        lsx_id: line.production_order_id,
+        product_code: line.product_code,
+        kind: c.kind,
+        cluster: c.cluster,
+        name: c.name,
+      })
+      for (const s of r) bumpKey(s, key)
     }
-    for (const s of plan.virtual_stages) bump(s)
+    const keyOf = (name: string) =>
+      khoaGom({
+        lsx_id: line.production_order_id,
+        product_code: line.product_code,
+        kind: 'assembly',
+        cluster: null,
+        name,
+      })
+    for (const s of plan.virtual_stages) bumpKey(s, keyOf(DEFAULT_ASSEMBLY_NAME))
     // Chặng thành phẩm có mặt trên mọi dòng SP đã định hình — tab bốn bước sau
     // sơn phải mở được ngay cả khi chưa ai ghi số nào.
     if (lineComps.length > 0 && !lineComps.some((c) => isFinishRow(c, counting.finish))) {
-      for (const s of counting.finish) bump(s)
+      for (const s of counting.finish) bumpKey(s, keyOf(FINISH_ROW_NAME))
     }
   }
   const stageCfgs = resolveStageConfigs(stagesCat)
+  const nOf = (code: string) => keysByStage.get(code)?.size ?? 0
+  // Khoá gom = 'g|lệnh|mã hàng|…' → đếm theo mã hàng bằng chính tập khoá đó.
+  const nBySp = (code: string) => {
+    const out: Record<string, number> = {}
+    for (const k of keysByStage.get(code) ?? []) {
+      const sp = k.split('|')[2]
+      out[sp] = (out[sp] ?? 0) + 1
+    }
+    return out
+  }
   const stages = stagesCat
-    .filter((s) => (nByStage.get(s.code) ?? 0) > 0)
-    .map((s) => ({ code: s.code, label: s.label, n: nByStage.get(s.code) ?? 0 }))
+    .filter((s) => nOf(s.code) > 0)
+    .map((s) => ({
+      code: s.code,
+      label: s.label,
+      n: nOf(s.code),
+      n_by_sp: nBySp(s.code),
+    }))
   if (stages.length === 0) return null
   const stage = stages.some((s) => s.code === stageWanted)
     ? (stageWanted as string)
     : stages[0].code
   const stageCfg = stageCfgs.find((s) => s.code === stage)!.meta
 
-  // Ảnh SP: ảnh dòng lệnh thắng, thiếu thì rơi về ảnh hồ sơ SP.
-  const productImgs = new Map(
-    (
-      await productsRepo.listPickByIds([
-        ...new Set(
-          lines
-            .filter((l) => !l.image_file_id && l.product_id)
-            .map((l) => l.product_id as string),
-        ),
-      ])
-    ).map((p) => [p.id, p.image_file_id]),
+  // Ảnh SP: ảnh dòng lệnh thắng, thiếu thì rơi về ảnh hồ sơ SP. Cùng lượt: cụm
+  // nào Kỹ thuật đã khai SL cụm / SP (Q19 — chưa khai thì màn nói "chưa khai").
+  const [imgRows, hoSoCum] = await Promise.all([
+    productsRepo.listPickByIds([
+      ...new Set(
+        lines
+          .filter((l) => !l.image_file_id && l.product_id)
+          .map((l) => l.product_id as string),
+      ),
+    ]),
+    productProfileRepo.clustersByProducts([
+      ...new Set(lines.map((l) => l.product_id).filter((x): x is string => !!x)),
+    ]),
+  ])
+  const productImgs = new Map(imgRows.map((p) => [p.id, p.image_file_id]))
+  const cumDaKhai = new Set(
+    hoSoCum
+      .filter((c) => c.qty_per_product != null)
+      .map((c) => `${c.product_id}|${khoaCum(c.name)}`),
   )
   const imageOf = (line: (typeof lines)[number]): string | null => {
     const fid =
@@ -728,6 +816,8 @@ export async function loadEntrySheet(
   for (const line of lines) {
     const lineComps = components.filter((c) => c.production_order_line_id === line.id)
     const plan = planByLine.get(line.id)!
+    const daKhai = (name: string) =>
+      !!line.product_id && cumDaKhai.has(`${line.product_id}|${khoaCum(name)}`)
     const out: EntrySheetLine[] = lineComps
       .filter((c) => routeOf.get(c.id)?.includes(stage))
       .map((c) => {
@@ -761,6 +851,19 @@ export async function loadEntrySheet(
           name: c.name,
           unit: c.unit,
           dm_kg: c.dm_kg,
+          qty_per_unit: Number(c.qty_per_unit) || null,
+          spec: specOf(c),
+          // Tên cụm so bằng khoaCum: "cụm tựa" là "Cụm tựa" (12/11/2026).
+          cum_ct:
+            c.kind === 'assembly' && c.cluster
+              ? lineComps.filter(
+                  (x) => x.kind === 'part' && khoaCum(x.cluster) === khoaCum(c.cluster),
+                ).length
+              : null,
+          cum_khai:
+            c.kind === 'assembly' && c.cluster && !isFinishRow(c, counting.finish)
+              ? daKhai(c.cluster)
+              : null,
           needed,
           done,
           pending: t?.pending.qty ?? 0,
@@ -821,6 +924,10 @@ export async function loadEntrySheet(
         name: DEFAULT_ASSEMBLY_NAME,
         unit: lineUnit(line.unit),
         dm_kg: null,
+        qty_per_unit: 1,
+        spec: null,
+        cum_ct: absorbed.length,
+        cum_khai: null,
         needed: line.qty,
         done: vDone,
         pending: Math.max(0, vAll - vDone),
@@ -899,6 +1006,10 @@ export async function loadEntrySheet(
         name: FINISH_ROW_NAME,
         unit: lineUnit(line.unit),
         dm_kg: null,
+        qty_per_unit: 1,
+        spec: null,
+        cum_ct: null,
+        cum_khai: null,
         needed: line.qty,
         done: 0,
         pending: 0,
@@ -912,7 +1023,11 @@ export async function loadEntrySheet(
 
     if (out.length > 0) {
       const own = lsxById.get(line.production_order_id)
+      const og = groupById.get(line.group_id)
       groups.push({
+        dot: og?.title?.trim() || null,
+        ship_date: og?.ship_date ?? line.ship_date ?? null,
+        dot_sort: og?.sort_order ?? 0,
         order_line_id: line.id,
         lsx_id: line.production_order_id,
         lsx_code: own?.code ?? '',
@@ -989,11 +1104,39 @@ export async function loadEntrySheet(
     Cắt theo NHÓM nguyên vẹn, không cắt giữa một dòng SP — nửa bảng chi tiết
     của một SP là thứ không ai đối chiếu được với sổ giấy.
   */
+  // Gom đợt TRƯỚC khi cắt trần (Q1): lệnh GIGA Phôi 603 dòng → 140, bày hết.
+  const teamNameById = new Map(depts.map((d) => [d.id, d.name]))
+  const merged: EntrySheetMergedGroup[] = gomTheoMaHang<EntrySheetLine, EntrySheetGroup>(
+    groups,
+  ).map((g) => {
+    const js = jobs.filter(
+      (j) => j.stage === stage && g.order_line_ids.includes(j.production_order_line_id),
+    )
+    if (js.length === 0) return { ...g, han: null }
+    const ends = js
+      .map((j) => j.planned_end?.slice(0, 10) ?? null)
+      .filter((x): x is string => !!x)
+      .sort()
+    const teams = [
+      ...new Set(
+        js
+          .map((j) =>
+            j.team_department_id ? teamNameById.get(j.team_department_id) : null,
+          )
+          .filter((x): x is string => !!x),
+      ),
+    ]
+    return {
+      ...g,
+      han: { end: ends[0] ?? null, teams, missing_end: ends.length < js.length },
+    }
+  })
+
   const MAX_LINES = 200
   let shown = 0
   let truncated = 0
-  const capped: EntrySheetGroup[] = []
-  for (const g of groups) {
+  const capped: EntrySheetMergedGroup[] = []
+  for (const g of merged) {
     if (shown >= MAX_LINES) {
       truncated += g.lines.length
       continue
@@ -1023,6 +1166,9 @@ export async function loadEntrySheet(
         name: d.name,
         stage_code: resolveTeamStage(d, stagesCat),
       })),
+    targets: todayTargets
+      .filter((t) => t.stage === stage)
+      .map((t) => ({ team_id: t.team_department_id, qty: t.qty })),
     groups: capped,
     suggested,
     recent_defect_reasons: reasons.slice(0, 15).map((r) => r.reason),
@@ -1041,4 +1187,21 @@ export async function loadEntrySheet(
       locked_by_name: l.locked_by_name,
     })),
   }
+}
+
+/** Quy cách phôi của một chi tiết; không khai số nào thì null. */
+function specOf(c: {
+  spec_thickness_mm: number | null
+  spec_width_mm: number | null
+  spec_length_mm: number | null
+  wall_thickness_mm: number | null
+}): EntrySheetLine['spec'] {
+  const n = (v: number | null) => (v == null || !(Number(v) > 0) ? null : Number(v))
+  const spec = {
+    t: n(c.spec_thickness_mm),
+    w: n(c.spec_width_mm),
+    l: n(c.spec_length_mm),
+    wall: n(c.wall_thickness_mm),
+  }
+  return spec.t || spec.w || spec.l || spec.wall ? spec : null
 }

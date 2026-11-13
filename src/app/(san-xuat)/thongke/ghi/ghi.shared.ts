@@ -1,4 +1,5 @@
 import type { EntrySheet } from '@/modules/dept/production/worklist.service'
+import type { CrewInput } from '@/lib/gio-cong'
 import { CORE_FIELD_LABEL } from '@/lib/stage-config'
 
 /**
@@ -36,19 +37,39 @@ export type EditCol = {
 
 export const FIELD_PREFIX = 'f:'
 
+/**
+ * Bề rộng cột vừa NHÃN IN HOA (11px, đậm, giãn chữ) + 16 đệm. Đo thật 12/11/2026:
+ * chữ thường-rộng ≈ 8,8px, M / W ≈ 10,5, I / J ≈ 4,5, khoảng trắng ≈ 3 — "QUY CÁCH"
+ * 64, "QUY CÁCH ĐÓNG" 103, "LOẠI MÁY HÀN" 87, "MÀU SƠN" 56. Đếm theo ký tự trơn
+ * thì "QUY CÁCH" thiếu 1px còn "LOẠI MÁY HÀN" thừa 10px.
+ */
+export function rongNhan(label: string): number {
+  let w = 0
+  for (const ch of label.normalize('NFC').toLocaleUpperCase('vi')) {
+    if (/\s/.test(ch)) w += 3
+    else if ('MW'.includes(ch)) w += 10.5
+    else if ('IÍÌỈĨỊJ1'.includes(ch)) w += 4.5
+    else w += 8.8
+  }
+  return Math.ceil(w) + 16
+}
+
 export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
   const core = sheet.stage_cfg.core
   const cols: EditCol[] = [
-    { key: 'qty', label: 'SL đạt', kind: 'num', required: true, width: 68 },
+    // Bản 5: số đạt tối đa 5–6 chữ số ("1.114") — 62 đủ, nhường chỗ nhóm định mức.
+    { key: 'qty', label: 'Đạt', kind: 'num', required: true, width: 62 },
   ]
   if (core.defect !== 'off') {
     cols.push({
       key: 'defect',
-      label: 'Phế',
+      // 12/11/2026 chủ dự án: "không cần sửa lại vì tự hiểu là đạt" — hàng sửa xong
+      // tính đạt, nên ô này là HÀNG LỖI (hỏng, bỏ). Khoá vẫn là defect (phế).
+      label: 'Lỗi',
       kind: 'num',
       required: core.defect === 'required',
-      width: 56,
-      hint: 'bỏ hẳn',
+      width: 46,
+      hint: 'hỏng',
     })
   }
   if (core.rework !== 'off') {
@@ -57,7 +78,7 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: 'Sửa lại',
       kind: 'num',
       required: core.rework === 'required',
-      width: 60,
+      width: 64,
       hint: 'cứu được',
     })
   }
@@ -68,7 +89,8 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: 'Lý do lỗi',
       kind: 'text',
       required: false,
-      width: 130,
+      // Chữ tiêu đề "LÝ DO LỖI" đo 59 + 16 đệm (12/11, bản 5) — nhường chỗ cột định mức.
+      width: 75,
     })
   }
   for (const f of sheet.stage_fields) {
@@ -77,7 +99,7 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: f.label,
       kind: f.kind === 'select' ? 'select' : f.kind === 'number' ? 'num' : 'text',
       required: f.required,
-      width: f.kind === 'number' ? 70 : 96,
+      width: Math.max(70, rongNhan(f.label)),
       options: f.kind === 'select' ? (f.options ?? []) : undefined,
     })
   }
@@ -87,18 +109,22 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
       label: CORE_FIELD_LABEL.worker,
       kind: 'text',
       required: core.worker === 'required',
-      width: 104,
+      // "NGƯỜI LÀM" đo 69 + 16 đệm.
+      width: 85,
     })
   }
   if (core.kg !== 'off') {
+    // Bản 3 (12/11, Q10): kg của dòng = ĐM kg/chi tiết × số đạt, nói ở tooltip ô
+    // Đạt và tổng ở thanh chốt; ô gõ đè kg cân thật chỉ hiện ở "Cột chi tiết" —
+    // trừ khi công đoạn bắt buộc kg.
     cols.push({
       key: 'kg',
       label: 'Kg',
       kind: 'num',
       required: core.kg === 'required',
-      width: 64,
+      width: 66,
       detail: core.kg !== 'required',
-      hint: 'trống = ĐM × SL',
+      hint: 'ĐM × SL',
     })
   }
   cols.push({
@@ -135,7 +161,7 @@ export function rowProblems(
   for (const c of cols) {
     const v = (d[c.key] ?? '').trim()
     if (c.key === 'reason') {
-      if (bad && !v) out.push({ key: c.key, msg: 'có phế/sửa lại mà chưa ghi vì sao' })
+      if (bad && !v) out.push({ key: c.key, msg: 'có hàng lỗi mà chưa ghi vì sao' })
       continue
     }
     if (c.key === 'qty') continue
@@ -181,6 +207,8 @@ export type SavedDraft = {
   date: string
   team_id: string
   note: string
+  /** Giờ công đầu phiếu lúc gõ (0296) — bản nháp trước 11/11 không có. */
+  crew?: CrewInput
   lines: Drafts
 }
 export const draftKey = (lsxId: string, stage: string) =>
@@ -208,6 +236,35 @@ export function writeDraftRaw(key: string, value: Omit<SavedDraft, 'at'> | null)
   }
   for (const cb of draftListeners) cb()
 }
+/** Kg của một dòng gõ: ô Kg gõ tay thắng, trống thì để `linesKg` lấy ĐM × SL. */
+export const draftKg = (d: LineDraft | undefined): number | null =>
+  (d?.kg ?? '').trim() ? num(d?.kg) : null
+
 export function hasAnyValue(lines: Drafts): boolean {
   return Object.values(lines).some((d) => Object.values(d).some((v) => v.trim() !== ''))
+}
+
+// ── Mã hàng đang chọn — nhớ theo MÁY × lệnh (Q11 bản vẽ 12/11/2026) ──────────
+const SP_PREFIX = 'hg:thongke-ma-hang:'
+const spListeners = new Set<() => void>()
+export function subscribeSp(cb: () => void) {
+  spListeners.add(cb)
+  return () => {
+    spListeners.delete(cb)
+  }
+}
+export function readSp(lsxId: string): string | null {
+  try {
+    return localStorage.getItem(SP_PREFIX + lsxId)
+  } catch {
+    return null
+  }
+}
+export function writeSp(lsxId: string, code: string) {
+  try {
+    localStorage.setItem(SP_PREFIX + lsxId, code)
+  } catch {
+    /* chế độ riêng tư chặn storage — phiên này vẫn đổi */
+  }
+  for (const cb of spListeners) cb()
 }

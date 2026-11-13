@@ -70,6 +70,8 @@ export type DossierRow = {
 
 export type DossierLine = {
   order_line_id: string
+  /** Đợt (production_order_groups) — bảng gom theo đợt (bản vẽ gọn 12/11/2026). */
+  group_id: string
   product_code: string
   product_name: string
   qty: number
@@ -95,6 +97,8 @@ export type DossierPayload = {
     completed_at: string | null
   }
   holder: Holder
+  /** Đợt của lệnh, đúng thứ tự soạn — mỗi đợt một hạn xuất. */
+  groups: { id: string; title: string; ship_date: string | null }[]
   stages: DossierStage[]
   lines: DossierLine[]
   jobs: Job[]
@@ -123,6 +127,7 @@ export const lsxDossierService = {
       pbs,
       pgtAll,
       entries,
+      groups,
     ] = await Promise.all([
       entriesService.summary(user, lsxId),
       componentsRepo.listByLsx(lsxId),
@@ -135,6 +140,7 @@ export const lsxDossierService = {
       entriesService.docsOfLsx(user, lsxId),
       transferDocsService.inbox(user, { lsxId }),
       entriesRepo.listByLsx(lsxId),
+      lsxLinesRepo.listGroups(lsxId),
     ])
     const counting = countingOf(stagesCat)
     const cfg = resolveStageConfigs(stagesCat)
@@ -349,6 +355,7 @@ export const lsxDossierService = {
       const fid = l.image_file_id ?? (l.product_id ? productImgs.get(l.product_id) : null)
       return {
         order_line_id: l.id,
+        group_id: l.group_id,
         product_code: l.product_code,
         product_name: l.name_vi ?? l.product_code,
         qty: l.qty,
@@ -410,6 +417,18 @@ export const lsxDossierService = {
         completed_at: lsx.completed_at,
       },
       holder: resolveHolder(lsx),
+      groups: groups.map((g, i) => ({
+        id: g.id,
+        title: g.title?.trim() || `Đợt ${i + 1}`,
+        // Đợt không ghi ngày → ngày xuất sớm nhất của các dòng trong đợt.
+        ship_date:
+          g.ship_date ??
+          lines
+            .filter((l) => l.group_id === g.id && l.ship_date)
+            .map((l) => l.ship_date as string)
+            .sort()[0] ??
+          null,
+      })),
       stages,
       lines: linesOut,
       jobs,

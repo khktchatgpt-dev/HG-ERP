@@ -30,6 +30,12 @@ export type EntryDoc = {
   note: string | null
   created_by: string | null
   created_at: string
+  /** GIỜ CÔNG đầu phiếu (0296) — trống ở nháp và ở phiếu trước 11/11/2026. */
+  shift: number | null
+  worker_count: number | null
+  hours_per_worker: number | null
+  /** Cột sinh = worker_count × hours_per_worker. */
+  labor_hours: number | null
 }
 
 export type EntryDocJoined = EntryDoc & {
@@ -39,7 +45,17 @@ export type EntryDocJoined = EntryDoc & {
 }
 
 const COLS =
-  'id, doc_no, production_order_id, stage, team_department_id, entry_date, status, confirmed_by, confirmed_at, reject_reason, note, created_by, created_at'
+  'id, doc_no, production_order_id, stage, team_department_id, entry_date, status, confirmed_by, confirmed_at, reject_reason, note, created_by, created_at, shift, worker_count, hours_per_worker, labor_hours'
+
+/** numeric của Postgres có thể về dạng chuỗi — ép về số một chỗ. */
+function nums<T extends Partial<EntryDoc>>(r: T): T {
+  const n = (v: unknown) => (v == null ? null : Number(v))
+  return {
+    ...r,
+    hours_per_worker: n(r.hours_per_worker),
+    labor_hours: n(r.labor_hours),
+  }
+}
 // BẪY embed: bảng có HAI FK sang users (created_by + confirmed_by từ 0176) —
 // `users(name)` trần là PostgREST báo "more than one relationship" và supabase-js
 // nuốt lỗi thành data null → mọi list phiếu RỖNG âm thầm. Phải chỉ đích danh FK.
@@ -58,7 +74,7 @@ function unwrap(rows: Raw[] | null): EntryDocJoined[] {
   return (rows ?? []).map(
     (r) =>
       ({
-        ...r,
+        ...nums(r),
         team: undefined,
         actor: undefined,
         lsx: undefined,
@@ -85,7 +101,13 @@ export const entryDocsRepo = {
   async insert(
     row: Omit<
       EntryDoc,
-      'id' | 'created_at' | 'status' | 'confirmed_by' | 'confirmed_at' | 'reject_reason'
+      | 'id'
+      | 'created_at'
+      | 'status'
+      | 'confirmed_by'
+      | 'confirmed_at'
+      | 'reject_reason'
+      | 'labor_hours'
     > &
       // confirmed_* khai được ngay lúc tạo: chế độ "không cần tổ trưởng xác
       // nhận" (27/08) ghi thẳng da_xac_nhan, và check DB 0176 bắt phiếu chính
@@ -98,7 +120,7 @@ export const entryDocsRepo = {
       .select(COLS)
       .single()
     if (error) throw new Error(error.message)
-    return data as EntryDoc
+    return nums(data as EntryDoc)
   },
 
   /** Phiếu của MỘT lệnh — tab Phiếu ở màn tiến độ lệnh, mới nhất trước. */
@@ -116,7 +138,16 @@ export const entryDocsRepo = {
   async patch(
     id: string,
     fields: Partial<
-      Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at' | 'reject_reason'>
+      Pick<
+        EntryDoc,
+        | 'status'
+        | 'confirmed_by'
+        | 'confirmed_at'
+        | 'reject_reason'
+        | 'shift'
+        | 'worker_count'
+        | 'hours_per_worker'
+      >
     >,
   ): Promise<void> {
     const { error } = await db().from('production_entry_docs').update(fields).eq('id', id)
@@ -149,6 +180,59 @@ export const entryDocsRepo = {
       entry_date: string
       team_department_id: string | null
       status: EntryDocStatus
+    }[]
+  },
+
+  /**
+   * Phiếu trong khoảng ngày KÈM giờ công (0296) — màn Năng suất (11/11/2026).
+   * Giờ công thuộc phiếu: mỗi phiếu cộng giờ đúng một lần (lib/nang-suat).
+   */
+  async listGioCongRange(
+    fromDate: string,
+    toDate: string,
+  ): Promise<
+    {
+      id: string
+      entry_date: string
+      stage: string
+      team_department_id: string | null
+      status: EntryDocStatus
+      labor_hours: number | null
+    }[]
+  > {
+    const { data, error } = await db()
+      .from('production_entry_docs')
+      .select('id, entry_date, stage, team_department_id, status, labor_hours')
+      .gte('entry_date', fromDate)
+      .lte('entry_date', toDate)
+      .limit(20000)
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => ({
+      id: r.id as string,
+      entry_date: r.entry_date as string,
+      stage: r.stage as string,
+      team_department_id: (r.team_department_id as string | null) ?? null,
+      status: r.status as EntryDocStatus,
+      labor_hours: r.labor_hours == null ? null : Number(r.labor_hours),
+    }))
+  },
+
+  /** Phiếu CHÍNH THỨC gần nhất trước một ngày — "lần ghi cuối dd/mm" của dòng trống kỳ. */
+  async lastOfficialBefore(
+    beforeDate: string,
+  ): Promise<{ stage: string; team_department_id: string | null; entry_date: string }[]> {
+    const { data, error } = await db()
+      .from('production_entry_docs')
+      .select('stage, team_department_id, entry_date')
+      .eq('status', 'da_xac_nhan')
+      .lt('entry_date', beforeDate)
+      .order('entry_date', { ascending: false })
+      .limit(2000)
+    if (error) throw new Error(error.message)
+    return (data ?? []) as {
+      stage: string
+      team_department_id: string | null
+      entry_date: string
     }[]
   },
 

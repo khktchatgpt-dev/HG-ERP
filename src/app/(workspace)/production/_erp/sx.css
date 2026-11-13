@@ -2029,3 +2029,411 @@
 .sx.sx .sx-tb.sx-sn > tbody > tr.d:nth-child(even) > td.today {
   background: color-mix(in srgb, var(--sx-act-wash) 45%, var(--sx-card));
 }
+
+/* ── Ghi sản lượng — giờ công đầu phiếu · nhóm mã hàng → cụm · dải 14 ngày ────────
+   Bản vẽ Thống kê & SX https://claude.ai/artifact/LocfQfiJSjv6Sxc8a9KQ6N (11/11/2026). */
+.sx.sx .sx-hc .c input.so {
+  width: 38px;
+  text-align: right;
+  font-family: var(--sx-mono);
+  border-bottom: 1px solid var(--sx-ink3);
+}
+.sx.sx .sx-hc .c.bad {
+  border-color: var(--sx-stop);
+  background: var(--sx-stop-wash);
+}
+.sx.sx .sx-hc .gc {
+  color: var(--sx-ink2);
+  white-space: nowrap;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.grp2 > td {
+  padding-left: 14px;
+  background: #f8f9fb;
+  color: var(--sx-ink2);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr.grp2 > td .mut {
+  font-weight: 400;
+}
+.sx.sx .sx-d14 {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 16px;
+  vertical-align: middle;
+}
+.sx.sx .sx-d14 > i {
+  display: block;
+  width: 6px;
+  background: var(--sx-fill);
+}
+.sx.sx .sx-d14 > i.z {
+  background: var(--sx-line);
+}
+.sx.sx .sx-d14 > i.t {
+  outline: 1px solid var(--sx-ink);
+}
+.sx.sx .sx-tb.sx-tb > tbody > tr > td.ed.nodm .sx-cell::placeholder {
+  color: var(--sx-warn);
+  font-weight: 600;
+}
+.sx.sx .sx-hc .c select.lenh {
+  max-width: 190px;
+}
+.sx.sx .sx-d14 > i {
+  width: 5px;
+}
+
+/* ── Hồ sơ lệnh bản gọn — dải công đoạn · menu ⋯ · bảng đợt → mã hàng → cụm ─────
+   Bản vẽ https://claude.ai/artifact/T2otDmrhZce8LZSmow3itu (12/11/2026). */
+.sx.sx .sx-vpl {
+  gap: 4px 22px;
+}
+.sx.sx .sx-dcd {
+  display: grid;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-card);
+}
+.sx.sx .sx-dcd > .c {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 10px 7px;
+  border: 0;
+  border-right: 1px solid var(--sx-hair);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+.sx.sx .sx-dcd > .c:last-child {
+  border-right: 0;
+}
+.sx.sx .sx-dcd > .c:hover {
+  background: #f0f4fc;
+}
+.sx.sx .sx-dcd > .c.sel {
+  background: var(--sx-act-wash);
+  box-shadow: inset 0 -2px 0 var(--sx-act);
+}
+.sx.sx .sx-dcd > .c:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+}
+.sx.sx .sx-dcd .h {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sx.sx .sx-dcd .h b {
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-dcd .h .p {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.sx.sx .sx-dcd .n {
+  text-align: left;
+  font-size: 12px;
+  color: var(--sx-ink2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-dcd .n small {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-dcd .bar {
+  position: relative;
+  height: 4px;
+  margin-top: 2px;
+  background: var(--sx-hair);
+}
+.sx.sx .sx-dcd .bar s {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sx-fill);
+}
+.sx.sx .sx-dcd .bar s.f {
+  background: var(--sx-done);
+}
+.sx.sx .sx-dcd .t {
+  font-size: 11.5px;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-dcd .t.warn {
+  color: var(--sx-warn);
+}
+.sx.sx .sx-more {
+  position: relative;
+}
+.sx.sx .sx-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.sx.sx .sx-more > summary::-webkit-details-marker {
+  display: none;
+}
+.sx.sx .sx-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 3px);
+  z-index: 30;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-card);
+}
+.sx.sx .sx-menu > a {
+  padding: 7px 12px;
+  color: var(--sx-ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sx.sx .sx-menu > a:hover,
+.sx.sx .sx-menu > a:focus-visible {
+  background: var(--sx-act-wash);
+  outline: none;
+}
+.sx.sx .sx-td .tg {
+  display: inline-block;
+  width: 16px;
+  padding: 0;
+  text-align: left;
+}
+.sx.sx .sx-tb.sx-td > thead > tr > th.stg {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+  padding-left: 5px;
+  padding-right: 6px;
+}
+.sx.sx .sx-tb.sx-td > tbody > tr.dot > td {
+  background: #eef1f6;
+  font-weight: 600;
+  border-top: 1px solid var(--sx-line);
+}
+.sx.sx .sx-tb.sx-td > tbody > tr.dot > td .mut {
+  font-weight: 400;
+}
+.sx.sx .sx-tb.sx-td > tbody > tr.spr > td:first-child {
+  padding-left: 14px;
+}
+.sx.sx .sx-tb.sx-td > tbody > tr.spr.mo > td {
+  background: var(--sx-raised);
+}
+.sx.sx .sx-tb.sx-td > tbody > tr.l2 > td:first-child {
+  padding-left: 32px;
+}
+.sx.sx .sx-tb.sx-td > tbody > tr.l3 > td:first-child {
+  padding-left: 50px;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-tb.sx-td > tbody > tr > td.pb {
+  position: relative;
+}
+.sx.sx .sx-tb.sx-td > tbody > tr > td.pb > i {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 2px;
+  height: 3px;
+  background: var(--sx-hair);
+}
+.sx.sx .sx-tb.sx-td > tbody > tr > td.pb > i > s {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sx-fill);
+}
+.sx.sx .sx-tb.sx-td > tbody > tr > td.pb.ok > i > s {
+  background: var(--sx-done);
+}
+.sx.sx .sx-dcd .n small.u2 {
+  font-family: var(--sx-mono);
+  font-size: 10.5px;
+}
+
+/* ── Ghi sản lượng bản gọn — ô GÕ nền vàng + hai nhóm cột (bản vẽ
+   https://claude.ai/artifact/6j48VVVcNEvMie7iNnbd3v, 12/11/2026). "Vàng = nhập
+   tay" là quy ước màu của chính file Excel thống kê; trước đó ô gõ và ô xem cùng
+   nền, viền 0px — không nhìn ra chỗ nhập. ── */
+.sx.sx .sx-tb.sx-gh > thead > tr.gh > th {
+  height: 22px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #3a4660;
+}
+.sx.sx .sx-tb.sx-gh > thead > tr.gh > th.lenh {
+  background: var(--sx-head);
+  color: #c9d3e6;
+}
+.sx.sx .sx-tb.sx-gh > thead > tr.gh > th.hom {
+  background: #6b5a14;
+  color: #fff6d6;
+}
+.sx.sx .sx-tb.sx-gh > thead > tr.cl > th {
+  top: 22px;
+}
+.sx.sx .sx-tb.sx-gh > thead > tr.cl > th.hn {
+  background: #4a4020;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed {
+  padding: 2px 3px;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed .sx-cell {
+  height: 22px;
+  border: 1px solid #e3cf86;
+  background: #fff6d6;
+  padding: 0 6px;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed .sx-cell.has {
+  background: #fff0b8;
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed:focus-within .sx-cell {
+  background: #fff;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed.warn .sx-cell {
+  background: var(--sx-warn-wash);
+  border-color: var(--sx-warn);
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed.err .sx-cell {
+  background: var(--sx-stop-wash);
+  border-color: var(--sx-stop);
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.ed.off,
+.sx.sx .sx-tb.sx-gh > tbody > tr.d:nth-child(even) > td.ed.off {
+  background: transparent;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.con .lnk {
+  font-weight: 700;
+}
+
+/* ── Ghi sản lượng bản 3 — định mức trên dòng + thanh chọn mã hàng (12/11/2026) ── */
+.sx.sx .sx-tb.sx-gh > thead > tr.gh > th.dm {
+  background: #2f3d58;
+  color: #c9d3e6;
+}
+.sx.sx .sx-tb.sx-gh > tbody > tr > td.qc {
+  font-size: 12px;
+  color: var(--sx-ink2);
+}
+.sx.sx .dmb {
+  margin-left: 5px;
+  font-family: var(--sx-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-spbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  font-size: 12.5px;
+  white-space: nowrap;
+  min-width: 0;
+}
+.sx.sx .sx-spbar .lbl {
+  color: var(--sx-ink3);
+}
+.sx.sx .sx-spbar .nav {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  color: var(--sx-ink2);
+  font: inherit;
+  cursor: pointer;
+}
+.sx.sx .sx-spbar .nav:disabled {
+  color: var(--sx-empty);
+  cursor: default;
+}
+.sx.sx .sx-spbar .pick {
+  height: 26px;
+  max-width: 340px;
+  border: 1px solid var(--sx-line);
+  border-radius: 0;
+  background: var(--sx-card);
+  padding: 0 6px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--sx-ink);
+}
+.sx.sx .sx-spbar .pick.on {
+  border-color: var(--sx-act);
+  box-shadow: inset 0 0 0 1px var(--sx-act);
+}
+.sx.sx .sx-spbar .nav:focus-visible,
+.sx.sx .sx-spbar .pick:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -1px;
+}
+.sx.sx .sx-spbar .sep {
+  width: 1px;
+  height: 20px;
+  background: var(--sx-line);
+}
+.sx.sx .sx-spbar .info {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-spbar .dg {
+  margin-left: auto;
+  color: var(--sx-act);
+  font-weight: 600;
+}
+
+
+/* ── Tab chưa dùng được (Năng suất · Theo người, 12/11/2026) ── */
+.sx.sx .sx-tab.off {
+  color: var(--sx-empty);
+  font-weight: 500;
+  cursor: default;
+}
+
+/* ── Năng suất (/thongke/nang-suat, bản vẽ 11/11/2026 tab 3) ── */
+.sx.sx .sx-btn.on {
+  background: var(--sx-act-wash);
+  font-weight: 600;
+  cursor: default;
+}
+.sx.sx .sx-d14.ns > i.lo {
+  background: var(--sx-warn);
+}
+.sx.sx .sx-tb.sx-nsd > thead > tr > th.cn {
+  background: #3a4660;
+}
+.sx.sx .sx-tb.sx-nsd > tbody > tr > td.thap {
+  background: var(--sx-warn-wash);
+  color: var(--sx-warn);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-nsd > tbody > tr > td.dat {
+  color: var(--sx-done);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-nsd > tbody > tr > td > a {
+  color: inherit;
+  text-decoration: none;
+}
+.sx.sx .sx-tb.sx-nsd > tbody > tr > td > a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

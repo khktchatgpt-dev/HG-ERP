@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { customerLabelFrom } from '@/lib/customer-label'
 import { searchTokens } from '@/lib/search-text'
+import { khoaCum } from '@/lib/khoa-cum'
 import type { Lifecycle } from '@/lib/product-lifecycle'
 import type { BomStatus } from './technical.schema'
 
@@ -1173,6 +1174,26 @@ export const productProfileRepo = {
 
   // ── CỤM ────────────────────────────────────────────────────────────────────
 
+  /**
+   * Tên cụm + SL cụm / SP của nhiều SP một lượt — màn Ghi sản lượng hỏi "cụm
+   * này Kỹ thuật đã khai SL cụm / SP chưa" (bản vẽ 12/11 bản 5, Q19).
+   */
+  async clustersByProducts(
+    productIds: string[],
+  ): Promise<{ product_id: string; name: string; qty_per_product: number | null }[]> {
+    if (productIds.length === 0) return []
+    const { data, error } = await db()
+      .from('technical_product_clusters')
+      .select('product_id, name, qty_per_product')
+      .in('product_id', productIds)
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => ({
+      product_id: r.product_id as string,
+      name: r.name as string,
+      qty_per_product: r.qty_per_product != null ? Number(r.qty_per_product) : null,
+    }))
+  },
+
   async clusters(productId: string): Promise<ProductCluster[]> {
     const { data } = await db()
       .from('technical_product_clusters')
@@ -1188,14 +1209,13 @@ export const productProfileRepo = {
    * Excel, nhưng lưu bằng khoá chứ không bằng chuỗi nên đổi tên không drift.
    */
   async ensureCluster(productId: string, name: string): Promise<ProductCluster> {
-    const clean = name.trim()
-    const { data: found } = await db()
-      .from('technical_product_clusters')
-      .select(CLUSTER_COLS)
-      .eq('product_id', productId)
-      .eq('name', clean)
-      .maybeSingle()
-    if (found) return found as ProductCluster
+    const clean = name.trim().replace(/\s+/g, ' ')
+    // So tên KHÔNG phân biệt hoa thường (12/11/2026, Q20): gõ "cụm tựa" khi đã
+    // có "Cụm tựa" từng tạo cụm thứ hai, hai chi tiết gỗ rơi khỏi cụm (BN0228).
+    const found = (await this.clusters(productId)).find(
+      (c) => khoaCum(c.name) === khoaCum(clean),
+    )
+    if (found) return found
 
     const { data, error } = await db()
       .from('technical_product_clusters')

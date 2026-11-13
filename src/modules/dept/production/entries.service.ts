@@ -44,6 +44,8 @@ import { transfersRepo } from './transfers.repo'
 import { outsourceRepo } from './outsource.repo'
 import { entryDocsRepo, type EntryDocJoined } from './entry-docs.repo'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
+import { crewProblem, laborHours } from '@/lib/gio-cong'
+import { CREW_REQUIRED_MSG } from './entries.schema'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
@@ -68,6 +70,13 @@ type RecordInput = {
   submit?: boolean
   /** Ghi chú CẢ PHIẾU (khác note của từng dòng chi tiết). */
   note?: string | null
+  /**
+   * GIỜ CÔNG đầu phiếu (0296): bắt buộc khi `submit` (kiểm cả ở zod lẫn ở đây
+   * cho caller nội bộ), nháp thì tuỳ.
+   */
+  shift?: number | null
+  worker_count?: number | null
+  hours_per_worker?: number | null
   entries: {
     component_id: string
     qty: number
@@ -258,6 +267,15 @@ export const entriesService = {
     } = await loadLsxContext(lsxId)
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
+    }
+    const crew = {
+      shift: input.shift ?? null,
+      worker_count: input.worker_count ?? null,
+      hours_per_worker: input.hours_per_worker ?? null,
+    }
+    const crewBad = crewProblem(crew)
+    if (crewBad && (!crewBad.missing || input.submit)) {
+      throw BadRequest(crewBad.missing ? CREW_REQUIRED_MSG : `Giờ công: ${crewBad.msg}`)
     }
     const byId = new Map(components.map((c) => [c.id, c]))
     // Ô riêng của công đoạn đang ghi (0207) — dùng để lọc khoá lạ và bắt ô
@@ -485,6 +503,27 @@ export const entriesService = {
       )
     }
     const warnings: string[] = []
+    // GIỜ CÔNG GHI TRÙNG (0296): giờ công là của RIÊNG phiếu này. Tổ làm nhiều
+    // lệnh trong một ca thì mỗi phiếu chỉ mang phần giờ của lệnh đó — chép cả
+    // ca lên mỗi phiếu là đúng lỗi 2.716 giờ/ngày của sổ Excel. Không chặn.
+    if (laborHours(crew) != null) {
+      const same = ((await entryDocsRepo.listByDate(input.entry_date)) ?? []).filter(
+        (d) =>
+          d.team_department_id === team &&
+          d.stage === input.stage &&
+          (d.shift ?? null) === crew.shift &&
+          (d.labor_hours ?? 0) > 0,
+      )
+      if (same.length > 0) {
+        warnings.push(
+          `Tổ này ngày ${input.entry_date} ca ${crew.shift ?? '—'} đã có ${same
+            .map((d) => `${d.doc_no} (${d.labor_hours} giờ công)`)
+            .join(
+              ', ',
+            )} — làm nhiều lệnh trong ca thì chia giờ theo lệnh, đừng ghi cả ca hai lần`,
+        )
+      }
+    }
     for (const e of recEntries) {
       const comp = byId.get(e.component_id)
       if (!comp) continue
@@ -605,6 +644,7 @@ export const entriesService = {
       confirmed_at: input.submit ? new Date().toISOString() : null,
       note: input.note?.trim() || null,
       created_by: user.id,
+      ...crew,
     })
 
     await entriesRepo.insertMany(
@@ -1199,7 +1239,15 @@ export const entriesService = {
    * người lập hoặc GĐ/QL; tổ đã chốt ngày thì mở khoá trước; lệnh kết thúc thì
    * sổ khoá. Người chốt (confirmed_by) là người bấm — số chính thức có chủ.
    */
-  async submitDoc(user: User, docId: string): Promise<void> {
+  async submitDoc(
+    user: User,
+    docId: string,
+    crewIn: {
+      shift?: number | null
+      worker_count?: number | null
+      hours_per_worker?: number | null
+    } = {},
+  ): Promise<void> {
     const doc = await entryDocsRepo.findById(docId)
     if (!doc) throw NotFound('Phiếu báo sản lượng không tồn tại')
     const allowed =
@@ -1219,10 +1267,22 @@ export const entriesService = {
     if (lsx && (lsx.status === 'completed' || lsx.status === 'cancelled')) {
       throw BadRequest('LSX đã kết thúc — sổ khoá')
     }
+    // Giờ công (0296): số gửi kèm thắng số đã lưu trên nháp; thiếu cả hai thì
+    // chưa ghi chính thức được — số chính thức phải có giờ để ra năng suất.
+    const crew = {
+      shift: crewIn.shift ?? doc.shift ?? null,
+      worker_count: crewIn.worker_count ?? doc.worker_count ?? null,
+      hours_per_worker: crewIn.hours_per_worker ?? doc.hours_per_worker ?? null,
+    }
+    const crewBad = crewProblem(crew)
+    if (crewBad) {
+      throw BadRequest(crewBad.missing ? CREW_REQUIRED_MSG : `Giờ công: ${crewBad.msg}`)
+    }
     await entryDocsRepo.patch(docId, {
       status: 'da_xac_nhan',
       confirmed_by: user.id,
       confirmed_at: new Date().toISOString(),
+      ...crew,
     })
   },
 

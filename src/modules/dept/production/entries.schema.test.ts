@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { entryLineSchema } from './entries.schema'
+import {
+  entriesRecordSchema,
+  entryDocSubmitSchema,
+  entryLineSchema,
+} from './entries.schema'
 
 /**
  * Luật dòng sổ (0173): dòng phải có SL đạt HOẶC phế (không dòng rỗng);
@@ -134,5 +138,47 @@ describe('entryLineSchema', () => {
       })
       expect(r.success).toBe(false)
     })
+  })
+})
+
+describe('entriesRecordSchema — giờ công đầu phiếu (0296)', () => {
+  const base = {
+    stage: 'son',
+    entry_date: '2026-10-16',
+    team_department_id: null,
+    entries: [{ component_id: '11111111-1111-1111-1111-111111111111', qty: 416 }],
+  }
+  it('ghi chính thức phải có số CN và giờ mỗi người', () => {
+    const r = entriesRecordSchema.safeParse({ ...base, submit: true })
+    expect(r.success).toBe(false)
+    expect(r.error?.issues[0].path).toEqual(['worker_count'])
+    expect(
+      entriesRecordSchema.safeParse({
+        ...base,
+        submit: true,
+        worker_count: 6,
+        hours_per_worker: 8,
+      }).success,
+    ).toBe(true)
+  })
+  it('lưu nháp không bắt giờ công; null không bị ép thành 0', () => {
+    expect(entriesRecordSchema.safeParse({ ...base, worker_count: null }).success).toBe(
+      true,
+    )
+  })
+  it('chặn số người lẻ, giờ quá 24, ca ngoài 1–3', () => {
+    expect(entriesRecordSchema.safeParse({ ...base, worker_count: 2.5 }).success).toBe(
+      false,
+    )
+    expect(entriesRecordSchema.safeParse({ ...base, hours_per_worker: 25 }).success).toBe(
+      false,
+    )
+    expect(entriesRecordSchema.safeParse({ ...base, shift: 4 }).success).toBe(false)
+  })
+  it('PATCH ghi chính thức nhận body rỗng hoặc giờ công', () => {
+    expect(entryDocSubmitSchema.safeParse({}).success).toBe(true)
+    expect(
+      entryDocSubmitSchema.safeParse({ worker_count: 4, hours_per_worker: 3.5 }).success,
+    ).toBe(true)
   })
 })

@@ -15,7 +15,7 @@ export type Stage = DossierStage
 export const TABS = ['dong_bo', 'ke_hoach', 'phieu', 'trao_doi'] as const
 export type TabKey = (typeof TABS)[number]
 export const TAB_LABEL: Record<TabKey, string> = {
-  dong_bo: 'Đồng bộ',
+  dong_bo: 'Tiến độ',
   ke_hoach: 'Kế hoạch tổ & hạn',
   phieu: 'Phiếu',
   trao_doi: 'Trao đổi',

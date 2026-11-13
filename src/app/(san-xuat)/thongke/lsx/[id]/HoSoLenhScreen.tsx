@@ -1,24 +1,29 @@
 'use client'
 
+import Link from 'next/link'
 import {
   ApNhom,
   ApNut,
   DauTrang,
   SxKhung,
   TabNgang,
-  ThanhTT,
 } from '@/app/(workspace)/production/_erp/khung'
 import { DocNotesPanel } from '@/components/doc/DocNotesPanel'
 import { isStale } from '@/lib/lsx-holder'
 import { cx, dmy, fmt, STATUS_LABEL, TAB_LABEL, TABS } from './ho-so-lenh.shared'
 import { BangDongBo, DaiNamSo } from './bang-dong-bo'
-import { KhoiLuong } from './khoi-luong'
+import { DaiCongDoan } from './khoi-luong'
 import { TabKeHoach } from './tab-ke-hoach'
 import { TabPhieu } from './tab-phieu'
 import { useHoSoLenh, type HoSoLenhProps } from './useHoSoLenh'
 
 /**
- * HỒ SƠ LỆNH — màn S3 của bản vẽ 03/11/2026
+ * HỒ SƠ LỆNH — màn S3 của bản vẽ 03/11/2026; tab Tiến độ dựng lại GỌN 12/11/2026
+ * theo bản vẽ https://claude.ai/artifact/T2otDmrhZce8LZSmow3itu (chủ dự án: "rối
+ * và nhiều nội dung thừa"; duyệt Q1–Q7). Phần trên bảng 437px → ~200px, bảng
+ * 537 dòng → 41 dòng mặc định.
+ *
+ * Gốc:
  * (https://claude.ai/artifact/4VNmsX9hoLFmgic9AGrCci), B5 của
  * docs/san-xuat-cau-hinh-thiet-ke.md. KHÔNG kit — khung `_erp` của Sản xuất.
  *
@@ -46,44 +51,46 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
           title={lsx.code}
           ctx={
             <>
-              {lsx.customer_name}
-              {lsx.order_codes.length > 0 && (
-                <>
-                  {' '}
-                  · Đơn <b>{lsx.order_codes.join(' · ')}</b>
-                </>
-              )}
-              {lsx.ship_date && (
-                <>
-                  {' '}
-                  · hạn xuất <b>{dmy(lsx.ship_date)}</b>
-                  {d.shipLeft != null && (
-                    <span
-                      className={cx(
-                        d.shipLeft < 0 ? 'stop' : d.shipLeft <= 7 ? 'warn' : undefined,
-                      )}
-                    >
-                      {' '}
-                      (
-                      {d.shipLeft < 0
-                        ? `trễ ${-d.shipLeft} ngày`
-                        : d.shipLeft === 0
-                          ? 'hôm nay'
-                          : `còn ${d.shipLeft} ngày`}
-                      )
-                    </span>
-                  )}
-                </>
-              )}
-              {lsx.approved_at && <> · duyệt {dmy(lsx.approved_at)}</>}
-              {' · '}
+              {/* Một dòng (Q bản vẽ gọn): khách · số đợt · SL · khoảng ngày xuất.
+                  Mã đơn + ngày duyệt sang tooltip / tab Trao đổi. */}
+              <span
+                title={[
+                  lsx.order_codes.length ? `Đơn ${lsx.order_codes.join(' · ')}` : null,
+                  lsx.approved_at ? `duyệt ${dmy(lsx.approved_at)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              >
+                {lsx.customer_name}
+                {data.groups.length > 1 && (
+                  <>
+                    {' '}
+                    · <b>{data.groups.length}</b> đợt
+                  </>
+                )}{' '}
+                · <b>{fmt(d.tongDat)}</b> {data.lines[0]?.unit ?? 'cái'}
+                {d.shipDates.length > 0 && (
+                  <>
+                    {' '}
+                    · xuất <b>{dmy(d.shipDates[0])}</b>
+                    {d.shipDates.at(-1) !== d.shipDates[0] && (
+                      <>
+                        {' '}
+                        → <b>{dmy(d.shipDates.at(-1)!)}</b>
+                      </>
+                    )}
+                  </>
+                )}
+              </span>{' '}
               <span
                 className={cx('pill', holder.closed ? 'd' : isStale(holder) ? 'w' : 'm')}
+                title={`${STATUS_LABEL[lsx.status] ?? lsx.status} — ${holder.what}`}
               >
-                {STATUS_LABEL[lsx.status] ?? lsx.status}
-                {!holder.closed &&
-                  holder.days != null &&
-                  ` · ${holder.who} giữ ${holder.days} ngày${isStale(holder) ? ' · nằm im' : ''}`}
+                {holder.closed
+                  ? (STATUS_LABEL[lsx.status] ?? lsx.status)
+                  : holder.days != null
+                    ? `${holder.who} giữ ${holder.days} ngày${isStale(holder) ? ' · nằm im' : ''}`
+                    : (STATUS_LABEL[lsx.status] ?? lsx.status)}
               </span>
             </>
           }
@@ -98,13 +105,28 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
                 )}
               </ApNhom>
               <ApNhom>
-                <ApNut href={`/thongke/lo-trinh?lsx=${lsx.id}`}>Lộ trình công đoạn</ApNut>
-                {p.canRecord && (
-                  <ApNut href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>Bảng chi tiết</ApNut>
-                )}
-                <ApNut href={`/api/dept/production/lsx/${lsx.id}/export`}>Excel</ApNut>
+                <details className="sx-more">
+                  <summary className="sx-btn" aria-label="Thêm thao tác">
+                    ⋯
+                  </summary>
+                  <div className="sx-menu" role="menu">
+                    <Link role="menuitem" href={`/thongke/lo-trinh?lsx=${lsx.id}`}>
+                      Lộ trình công đoạn
+                    </Link>
+                    {p.canRecord && (
+                      <Link role="menuitem" href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>
+                        Bảng chi tiết
+                      </Link>
+                    )}
+                    <a role="menuitem" href={`/api/dept/production/lsx/${lsx.id}/export`}>
+                      Tải Excel
+                    </a>
+                  </div>
+                </details>
               </ApNhom>
-              {d.closable && (
+              {/* Q6: Đóng lệnh chỉ hiện khi lệnh đã có số hoàn thiện — lệnh chưa
+                  làm gì thì nút + câu chặn dài nhất đầu trang là thừa. */}
+              {d.closable && d.hoanThien > 0 && (
                 <ApNhom>
                   {d.dongWhy && p.canForceComplete && d.viecDo > 0 && !d.epMo ? (
                     <ApNut onClick={() => d.setEpMo(true)}>Ép đóng lệnh…</ApNut>
@@ -197,71 +219,56 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
 
         {d.tab === 'dong_bo' && (
           <>
-            <div className="sx-tiles">
-              <div className="sx-tile">
-                <span className="d">SL đặt</span>
-                <span className="v">{fmt(d.tongDat)}</span>
-                <span className="s">{data.lines.length} dòng SP</span>
-              </div>
-              <div className={cx('sx-tile', d.soDinhHinh < data.lines.length && 'w')}>
-                <span className="d">Đã định hình</span>
-                <span className="v">
-                  {d.soDinhHinh} / {data.lines.length}
-                </span>
-                <span className="s">
-                  {fmt(d.soChiTiet)} chi tiết
-                  {data.unshaped > 0 && ` · ${data.unshaped} dòng chờ định mức`}
-                </span>
-              </div>
-              <div className={cx('sx-tile', d.hoanThien === 0 && 'zero')}>
-                <span className="d">Hoàn thiện</span>
-                <span className="v">{fmt(d.hoanThien)}</span>
-                <span className="s">/ {fmt(d.tongDat)} bộ · đếm ở công đoạn cuối</span>
-              </div>
-              <div className={cx('sx-tile', d.tonCongDoan === 0 && 'zero')}>
-                <span className="d">Tồn tại công đoạn</span>
-                <span className="v">{fmt(d.tonCongDoan)}</span>
-                <span className="s">chưa giao đi · {d.pgtChoNhan} chờ nhận</span>
-              </div>
-              <div className={cx('sx-tile', d.jobsTre > 0 ? 's' : 'zero')}>
-                <span className="d">Việc trễ hạn tổ</span>
-                <span className="v">{fmt(d.jobsTre)}</span>
-                <span className="s">
-                  {data.jobs.length === 0
-                    ? 'chưa có kế hoạch để trễ'
-                    : `/ ${data.jobs.length} việc`}
-                </span>
-              </div>
-            </div>
-            <KhoiLuong d={d} />
+            <ViecPhaiLam d={d} />
+            <DaiCongDoan d={d} />
             <div className="sx-hc">
-              <label className="c">
-                <input
-                  type="checkbox"
-                  checked={d.chiDinhHinh}
-                  onChange={(e) => d.setChiDinhHinh(e.target.checked)}
-                />
-                Chỉ dòng đã định hình <b>{d.soDinhHinh}</b>
-              </label>
-              <label className="c">
-                SP
-                <select
-                  value={d.spLoc}
-                  onChange={(e) => d.setSpLoc(e.target.value)}
-                  aria-label="Lọc SP"
+              <input
+                className="sx-in"
+                value={d.tim}
+                onChange={(e) => d.setTim(e.target.value)}
+                placeholder="Tìm mã hàng, cụm, chi tiết"
+                aria-label="Tìm mã hàng, cụm, chi tiết"
+                style={{ width: 260 }}
+              />
+              {data.groups.length > 1 && (
+                <label className="c">
+                  Đợt
+                  <select
+                    value={d.dotLoc}
+                    onChange={(e) => d.setDotLoc(e.target.value)}
+                    aria-label="Lọc đợt"
+                  >
+                    <option value="">tất cả</option>
+                    {data.groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.title}
+                        {g.ship_date ? ` · xuất ${dmy(g.ship_date)}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {(d.tim || d.dotLoc) && (
+                <button
+                  type="button"
+                  className="lnk"
+                  onClick={() => {
+                    d.setTim('')
+                    d.setDotLoc('')
+                  }}
                 >
-                  <option value="">tất cả</option>
-                  {data.lines.map((l) => (
-                    <option key={l.order_line_id} value={l.order_line_id}>
-                      {l.product_code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="mut">
-                ▸ bung chi tiết trong cụm · ô gạch chéo = ngoài lộ trình
+                  Bỏ lọc
+                </button>
+              )}
+              <span className="sp">
+                <button type="button" className="lnk" onClick={d.moHet}>
+                  Mở hết
+                </button>
+                {' · '}
+                <button type="button" className="lnk" onClick={d.gapHet}>
+                  Gập hết
+                </button>
               </span>
-              <span className="sp mut">bấm ô để xem năm con số</span>
             </div>
             <BangDongBo d={d} />
             <DaiNamSo d={d} />
@@ -293,20 +300,94 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
           </div>
         )}
 
-        <ThanhTT
-          left={
-            holder.closed ? (
-              <>Lệnh đã khép — {holder.what}</>
-            ) : (
-              <>
-                Đang chờ <b>{holder.who}</b>
-                {holder.days != null && ` · ${holder.days} ngày`} — {holder.what}
-              </>
-            )
-          }
-          right="Cùng số với Ghi sản lượng và Giao nhận"
-        />
       </div>
     </SxKhung>
   )
+}
+
+/**
+ * DÒNG VIỆC PHẢI LÀM — một dòng vàng, chỉ hiện khi có việc (Q3 bản vẽ gọn):
+ * thay 5 ô số + "chưa giao tổ & hạn" lặp ở từng ô công đoạn. Mỗi mục kèm chỗ gỡ.
+ */
+function ViecPhaiLam({ d }: { d: ReturnType<typeof useHoSoLenh> }) {
+  const { data, p } = d
+  const k = data.khoi_luong
+  const chuaGiao = k.stages.filter((s) => s.jobs === 0).length
+  const items: React.ReactNode[] = []
+  if (k.stages.length > 0 && chuaGiao > 0)
+    items.push(
+      <span key="giao">
+        <b className="num">
+          {chuaGiao} / {k.stages.length}
+        </b>{' '}
+        công đoạn chưa giao tổ &amp; hạn
+        {p.canPlan && (
+          <Link className="lnk" href={`/kehoach-sx/${data.lsx.id}`} style={{ marginLeft: 6 }}>
+            Giao tổ &amp; hạn
+          </Link>
+        )}
+      </span>,
+    )
+  if (d.unshapedLines.length > 0)
+    items.push(
+      <span key="dinh-hinh">
+        {d.unshapedLines.slice(0, 2).map((l, i) => (
+          <span key={l.order_line_id}>
+            {i > 0 && ', '}
+            <span className="ma">{l.product_code}</span>
+            {l.dot && <> {l.dot.toLowerCase()}</>}
+          </span>
+        ))}
+        {d.unshapedLines.length > 2 && ` và ${d.unshapedLines.length - 2} dòng`} chưa định
+        hình
+        {p.canRecord && (
+          <Link
+            className="lnk"
+            href={`/thongke/lsx/${data.lsx.id}/dinh-hinh`}
+            style={{ marginLeft: 6 }}
+          >
+            Bảng chi tiết
+          </Link>
+        )}
+      </span>,
+    )
+  if (k.unassigned.parts > 0)
+    items.push(
+      <span key="cum">
+        <b className="num">{fmt(k.unassigned.qty)}</b> chi tiết đi qua công đoạn ghép mà chưa
+        gán cụm — Kỹ thuật gán ở hồ sơ SP
+      </span>,
+    )
+  if (d.jobsTre > 0)
+    items.push(
+      <span key="tre" className="stop">
+        <b className="num">{d.jobsTre}</b> việc trễ hạn tổ
+        <button
+          type="button"
+          className="lnk"
+          onClick={() => d.setTab('ke_hoach')}
+          style={{ marginLeft: 6 }}
+        >
+          Kế hoạch tổ &amp; hạn
+        </button>
+      </span>,
+    )
+  if (d.tonCongDoan > 0)
+    items.push(
+      <span key="ton">
+        <b className="num">{fmt(d.tonCongDoan)}</b> tồn tại công đoạn chưa giao đi
+        {d.pgtChoNhan > 0 && ` · ${d.pgtChoNhan} phiếu chờ nhận`}
+        {p.canRecord && (
+          <Link
+            className="lnk"
+            href={`/thongke/giao-nhan?lsx=${data.lsx.id}`}
+            style={{ marginLeft: 6 }}
+          >
+            Giao nhận
+          </Link>
+        )}
+      </span>,
+    )
+  if (items.length === 0) return null
+  return <div className="sx-note sx-vpl">{items}</div>
 }

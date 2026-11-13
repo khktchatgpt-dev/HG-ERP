@@ -101,6 +101,21 @@ export const lsxLinesRepo = {
     return ((data ?? []) as Record<string, unknown>[]).map(unwrapLine)
   },
 
+  /** Đợt của nhiều lệnh — màn Ghi sản lượng gom dòng theo mã hàng qua các đợt. */
+  async listGroupsBulk(lsxIds: string[]): Promise<LsxGroup[]> {
+    if (!lsxIds.length) return []
+    const { data } = await db()
+      .from('production_order_groups')
+      .select(GROUP_COLS)
+      .in('production_order_id', lsxIds)
+      .order('sort_order')
+      .limit(5000)
+    return ((data ?? []) as unknown as LsxGroup[]).map((g) => ({
+      ...g,
+      sort_order: num(g.sort_order),
+    }))
+  },
+
   /** Dòng của nhiều lệnh — màn toàn cảnh/việc của tổ đọc một phát. */
   async listLinesBulk(lsxIds: string[]): Promise<LsxLine[]> {
     if (!lsxIds.length) return []

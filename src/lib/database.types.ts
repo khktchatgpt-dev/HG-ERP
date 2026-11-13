@@ -4055,13 +4055,17 @@ export type Database = {
           created_by: string | null
           doc_no: string
           entry_date: string
+          hours_per_worker: number | null
           id: string
+          labor_hours: number | null
           note: string | null
           production_order_id: string
           reject_reason: string | null
+          shift: number | null
           stage: string
           status: string
           team_department_id: string | null
+          worker_count: number | null
         }
         Insert: {
           confirmed_at?: string | null
@@ -4070,13 +4074,17 @@ export type Database = {
           created_by?: string | null
           doc_no: string
           entry_date: string
+          hours_per_worker?: number | null
           id?: string
+          labor_hours?: never
           note?: string | null
           production_order_id: string
           reject_reason?: string | null
+          shift?: number | null
           stage: string
           status?: string
           team_department_id?: string | null
+          worker_count?: number | null
         }
         Update: {
           confirmed_at?: string | null
@@ -4085,13 +4093,17 @@ export type Database = {
           created_by?: string | null
           doc_no?: string
           entry_date?: string
+          hours_per_worker?: number | null
           id?: string
+          labor_hours?: never
           note?: string | null
           production_order_id?: string
           reject_reason?: string | null
+          shift?: number | null
           stage?: string
           status?: string
           team_department_id?: string | null
+          worker_count?: number | null
         }
         Relationships: [
           {

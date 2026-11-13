@@ -80,6 +80,12 @@ export default async function PhieuSxPrintPage({
           ['Khách hàng:', lsx?.customer_name ?? '—'],
           ['Công đoạn:', stageLabel],
           ['Tổ:', doc.team_name ?? '—'],
+          [
+            'Giờ công:',
+            doc.labor_hours
+              ? `Ca ${doc.shift ?? '—'} · ${doc.worker_count} CN × ${Number(doc.hours_per_worker).toLocaleString('vi-VN')} giờ = ${Number(doc.labor_hours).toLocaleString('vi-VN')} giờ công`
+              : '—',
+          ],
         ]}
         refs={[
           ['Số:', doc.doc_no],

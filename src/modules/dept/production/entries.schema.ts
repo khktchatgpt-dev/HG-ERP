@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CREW_MAX_HOURS, CREW_MAX_WORKERS } from '@/lib/gio-cong'
 
 /**
  * Sổ số liệu sản xuất (thống kê xưởng nhập TẬP TRUNG — 0084). POST theo LÔ:
@@ -93,16 +94,51 @@ export const entryLineSchema = z
     }
   })
 
-export const entriesRecordSchema = z.object({
-  stage: z.string().trim().min(1).max(50), // code catalog production_stage
-  entry_date: z.string().date(),
-  team_department_id: z.string().uuid().optional().nullable(),
-  /** true = gửi tổ trưởng luôn; bỏ trống = lưu nháp (xem entry-doc-flow). */
-  submit: z.boolean().default(false),
-  /** Ghi chú cả phiếu. */
-  note: z.string().trim().max(500).optional().nullable(),
-  entries: z.array(entryLineSchema).min(1).max(200),
+/**
+ * GIỜ CÔNG ĐẦU PHIẾU (0296): ca · số CN · giờ/người — một lần cho cả phiếu
+ * (tổ × ngày × ca × công đoạn), không phải mỗi dòng (lỗi chép lặp của sổ
+ * Excel). Số JSON trần, KHÔNG `coerce`: coerce biến null thành 0 rồi đá oan.
+ */
+export const entryCrewSchema = z.object({
+  shift: z.number().int().min(1).max(3).optional().nullable(),
+  worker_count: z
+    .number()
+    .int('Số công nhân phải là số nguyên')
+    .min(1, 'Số công nhân ít nhất 1')
+    .max(CREW_MAX_WORKERS)
+    .optional()
+    .nullable(),
+  hours_per_worker: z
+    .number()
+    .gt(0, 'Giờ mỗi người phải lớn hơn 0')
+    .max(CREW_MAX_HOURS, `Giờ mỗi người tối đa ${CREW_MAX_HOURS}`)
+    .optional()
+    .nullable(),
 })
+
+export const CREW_REQUIRED_MSG =
+  'Ghi sổ chính thức phải có giờ công — ghi số công nhân và giờ mỗi người của tổ'
+
+export const entriesRecordSchema = entryCrewSchema
+  .extend({
+    stage: z.string().trim().min(1).max(50), // code catalog production_stage
+    entry_date: z.string().date(),
+    team_department_id: z.string().uuid().optional().nullable(),
+    /** true = gửi tổ trưởng luôn; bỏ trống = lưu nháp (xem entry-doc-flow). */
+    submit: z.boolean().default(false),
+    /** Ghi chú cả phiếu. */
+    note: z.string().trim().max(500).optional().nullable(),
+    entries: z.array(entryLineSchema).min(1).max(200),
+  })
+  .superRefine((v, ctx) => {
+    // Nháp thì chưa cần (Q1 bản vẽ 11/11); chính thức thì số phải có chủ giờ.
+    if (v.submit && (v.worker_count == null || v.hours_per_worker == null)) {
+      ctx.addIssue({ code: 'custom', path: ['worker_count'], message: CREW_REQUIRED_MSG })
+    }
+  })
+
+/** PATCH ghi chính thức phiếu nháp — kèm giờ công khi phiếu nháp chưa có. */
+export const entryDocSubmitSchema = entryCrewSchema
 
 // ── Sổ toàn xưởng + chốt sổ ngày ─────────────────────────────────────────────
 

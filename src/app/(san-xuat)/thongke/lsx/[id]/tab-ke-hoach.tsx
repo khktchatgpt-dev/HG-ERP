@@ -29,7 +29,7 @@ export function TabKeHoach({ d }: { d: HoSoLenhCtx }) {
       <div className="sx-rong">
         <b>Lệnh chưa lên kế hoạch công đoạn</b>
         <p>
-          Kế hoạch = lộ trình công đoạn per dòng SP + tổ + hạn. Chưa có thì tab Đồng bộ
+          Kế hoạch = lộ trình công đoạn per dòng SP + tổ + hạn. Chưa có thì tab Tiến độ
           vẫn đếm được theo lộ trình suy từ hồ sơ SP, nhưng không ai biết việc trễ hạn hay
           chưa.
         </p>
