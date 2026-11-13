@@ -280,3 +280,27 @@
   font-size: 12px;
   color: var(--kh-ink3);
 }
+
+/* B2 — ô tích từng lưu ý (Q3), chỉ người chốt thấy. Vuông, không bo góc như ô
+   tích của gợi ý vật tư (.kh-tich); dấu tích là ảnh nền để giữ <input> thật
+   (Space bật / tắt, đọc được bằng trình đọc màn hình). */
+.kh.kh .nx-kk .nx-kk-tich {
+  appearance: none;
+  align-self: start;
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  border: 1px solid #9aa3b2;
+  border-radius: 0;
+  background: var(--kh-card) center / 10px 10px no-repeat;
+  cursor: pointer;
+}
+.kh.kh .nx-kk .nx-kk-tich:checked {
+  border-color: var(--kh-act);
+  background-color: var(--kh-act);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5.2 4 7.6 8.6 2.4' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3C/svg%3E");
+}
+.kh.kh .nx-kk .nx-kk-tich:focus {
+  outline: 2px solid var(--kh-act);
+  outline-offset: 1px;
+}

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { KiemKyHien, KiemThangHien } from '@/modules/dept/warehouse/nxt.service'
+import { ApiError } from '@/lib/api'
 import { DongChuaChot, KiemKyHop } from './kiem-ky'
 
 /**
@@ -62,7 +63,7 @@ const thang10: KiemKyHien = {
 describe('Dòng "Chưa chốt" trên Báo cáo tháng', () => {
   it('đếm bằng chính số của hộp kiểm và mở hộp', () => {
     const onMo = vi.fn()
-    render(<DongChuaChot kk={thang10} onMo={onMo} />)
+    render(<DongChuaChot kk={thang10} chotDen={null} onMo={onMo} />)
     const dong = screen.getByRole('status')
     expect(dong.textContent).toContain('13 lệnh nhận hàng chưa có phiếu xuất')
     expect(dong.textContent).toContain('5 mã chưa có giá')
@@ -75,6 +76,7 @@ describe('Dòng "Chưa chốt" trên Báo cáo tháng', () => {
     render(
       <DongChuaChot
         kk={{ ...thang10, tong: { lenhChuaXuat: 0, maThieuGia: 0, dongThieuTyGia: 0 } }}
+        chotDen={null}
         onMo={() => {}}
       />,
     )
@@ -149,5 +151,72 @@ describe('Hộp danh sách kiểm (B1 — chỉ đọc)', () => {
       within(dong[1]).getByRole('link', { name: 'Mở đợt' }).getAttribute('href'),
     ).toBe('/warehouse/kiem-ke/kk9')
     expect(screen.queryByText(/0 mã tồn âm/)).toBeNull()
+  })
+})
+
+describe('Hộp chốt (B2 — Kế toán trưởng)', () => {
+  it('người không có quyền: không ô tích, không nút Chốt, nói ai chốt', () => {
+    render(<KiemKyHop kk={thang10} onClose={() => {}} />)
+    const hop = screen.getByRole('dialog')
+    expect(within(hop).queryAllByRole('checkbox')).toHaveLength(0)
+    expect(hop.textContent).toContain('Kế toán trưởng chốt kỳ')
+  })
+
+  it('Q3: tích đủ từng lưu ý mới chốt; câu chặn bấm được nhảy tới ô chưa tích', async () => {
+    const onChot = vi.fn().mockResolvedValue(undefined)
+    render(<KiemKyHop kk={thang10} onClose={() => {}} onChot={onChot} />)
+    const o = screen.getAllByRole('checkbox')
+    // lệnh tháng 10 · mã thiếu giá tháng 09 · mã thiếu giá tháng 10
+    expect(o.map((x) => x.getAttribute('aria-label'))).toEqual([
+      'Đã soát — Tháng 10/2026: 2 / 15 lệnh nhận hàng chưa có phiếu xuất',
+      'Đã soát — Tháng 09/2026: 4 mã chưa lần nhập nào có giá',
+      'Đã soát — Tháng 10/2026: 1 mã chưa lần nhập nào có giá',
+    ])
+    const nut = screen.getByRole('button', { name: 'Chốt sổ đến 31/10/2026' })
+    expect(nut.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Chưa chốt được: còn 3 lưu ý chưa tích' })) // prettier-ignore
+    expect(document.activeElement).toBe(o[0])
+    fireEvent.click(nut)
+    expect(onChot).not.toHaveBeenCalled()
+
+    fireEvent.click(o[0])
+    fireEvent.click(o[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Chưa chốt được: còn 1 lưu ý chưa tích' })) // prettier-ignore
+    expect(document.activeElement).toBe(o[2])
+    fireEvent.click(o[2])
+    expect(nut.getAttribute('aria-disabled')).toBe('false')
+    fireEvent.click(nut)
+    await vi.waitFor(() => expect(onChot).toHaveBeenCalledTimes(1))
+    expect([...onChot.mock.calls[0][0]].sort()).toEqual(['gia:2026-09', 'gia:2026-10', 'lenh:2026-10']) // prettier-ignore
+  })
+
+  it('có điều kiện chặn: nút khoá, câu chặn nói vướng gì và nhảy tới đường gỡ', () => {
+    const onChot = vi.fn()
+    const kk: KiemKyHien = {
+      ...thang10,
+      soChan: 1,
+      thangs: [thang('2026-10', { den: '2026-10-31', tonAm: [vt('BUL0085'), vt('BUL0089')] })],
+    }
+    render(<KiemKyHop kk={kk} onClose={() => {}} onChot={onChot} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Chưa chốt được: 2 mã tồn âm' }))
+    expect(document.activeElement?.textContent).toBe('Mở Tồn kho')
+    fireEvent.click(screen.getByRole('button', { name: 'Chốt sổ đến 31/10/2026' }))
+    expect(onChot).not.toHaveBeenCalled()
+  })
+
+  it('máy chủ từ chối thì nói lý do tại chỗ, không đóng hộp', async () => {
+    const onChot = vi.fn().mockRejectedValue(new ApiError(409, 'Sổ kho đã chốt đến hết 31/10/2026'))
+    const kk: KiemKyHien = { ...thang10, thangs: [thang('2026-10', { den: '2026-10-31' })] }
+    render(<KiemKyHop kk={kk} onClose={() => {}} onChot={onChot} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Chốt sổ đến 31/10/2026' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Sổ kho đã chốt')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('đã chốt một phần: dòng lưu ý nói ngày khoá hiện tại', () => {
+    render(<DongChuaChot kk={thang10} chotDen="2026-09-30" onMo={() => {}} />)
+    expect(screen.getByRole('status').textContent).toContain(
+      'Sổ kho đã chốt đến hết 30/09/2026, các tháng sau còn mở.',
+    )
   })
 })

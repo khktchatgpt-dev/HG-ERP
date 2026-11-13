@@ -10331,6 +10331,137 @@ export type Database = {
           },
         ]
       }
+      warehouse_period_costs: {
+        Row: {
+          bq: Json | null
+          created_at: string
+          don_gia: number | null
+          gt_cuoi: number | null
+          gt_dau: number | null
+          gt_nhap: number | null
+          gt_xuat: number | null
+          id: string
+          lan_mua: number
+          material_id: string
+          nhap: Json
+          period_id: string
+          phat_sinh: boolean
+          thieu_gia: number
+          thieu_ty_gia: number
+          ton_cuoi: number
+          ton_dau: number
+          xuat: Json
+        }
+        Insert: {
+          bq?: Json | null
+          created_at?: string
+          don_gia?: number | null
+          gt_cuoi?: number | null
+          gt_dau?: number | null
+          gt_nhap?: number | null
+          gt_xuat?: number | null
+          id?: string
+          lan_mua?: number
+          material_id: string
+          nhap: Json
+          period_id: string
+          phat_sinh?: boolean
+          thieu_gia?: number
+          thieu_ty_gia?: number
+          ton_cuoi: number
+          ton_dau: number
+          xuat: Json
+        }
+        Update: {
+          bq?: Json | null
+          created_at?: string
+          don_gia?: number | null
+          gt_cuoi?: number | null
+          gt_dau?: number | null
+          gt_nhap?: number | null
+          gt_xuat?: number | null
+          id?: string
+          lan_mua?: number
+          material_id?: string
+          nhap?: Json
+          period_id?: string
+          phat_sinh?: boolean
+          thieu_gia?: number
+          thieu_ty_gia?: number
+          ton_cuoi?: number
+          ton_dau?: number
+          xuat?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_period_costs_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_period_costs_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_periods: {
+        Row: {
+          closed_at: string
+          closed_by: string | null
+          created_at: string
+          den: string
+          dong_kk_thua: number
+          dong_xuat: number
+          gt_ton_cuoi: number | null
+          gt_xuat: number | null
+          id: string
+          luu_y: Json
+          thang: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string
+          closed_by?: string | null
+          created_at?: string
+          den: string
+          dong_kk_thua?: number
+          dong_xuat?: number
+          gt_ton_cuoi?: number | null
+          gt_xuat?: number | null
+          id?: string
+          luu_y?: Json
+          thang: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string
+          closed_by?: string | null
+          created_at?: string
+          den?: string
+          dong_kk_thua?: number
+          dong_xuat?: number
+          gt_ton_cuoi?: number | null
+          gt_xuat?: number | null
+          id?: string
+          luu_y?: Json
+          thang?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouse_purchase_request_lines: {
         Row: {
           approved_qty: number | null
@@ -11194,6 +11325,10 @@ export type Database = {
           material_id: string
           qty: number
         }[]
+      }
+      warehouse_close_periods: {
+        Args: { p_actor: string; p_months: Json }
+        Returns: number
       }
     }
     Enums: {

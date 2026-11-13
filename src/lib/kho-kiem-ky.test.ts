@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { DongSo } from './kho-nxt'
-import { dsThangKiem, kiemKy, thangDaQua, type DotKiemKeMo } from './kho-kiem-ky'
+import {
+  banChot,
+  dsThangKiem,
+  kiemKy,
+  luuYPhaiTich,
+  luuYThang,
+  thangDaQua,
+  thangSau,
+  tuBanChot,
+  type DotKiemKeMo,
+} from './kho-kiem-ky'
+import { dungNxt } from './kho-nxt'
 
 let seq = 0
 const d = (o: Partial<DongSo>): DongSo => ({
@@ -211,5 +222,81 @@ describe('kiemKy — tóm tắt bản chốt', () => {
     // B: (3000 + 2000) / 20 = 250 → xuất 4 × 250; A không phát sinh tháng 10 vẫn vào tồn cuối.
     expect(t10.gtXuat).toBe(1000)
     expect(t10.gtTonCuoi).toBe(1000 + 16 * 250)
+  })
+})
+
+describe('B2 — lưu ý phải tích', () => {
+  it('thangSau qua năm mới', () => {
+    expect(thangSau('2026-10')).toBe('2026-11')
+    expect(thangSau('2026-12')).toBe('2027-01')
+  })
+
+  it('mỗi tháng tối đa ba lưu ý, đúng thứ tự hộp bày, khoá ổn định', () => {
+    expect(
+      luuYThang({ thang: '2026-10', lenhChuaXuat: 13, lenhNhan: 15, maThieuGia: 1, dongThieuTyGia: 2 }), // prettier-ignore
+    ).toEqual([
+      { key: 'lenh:2026-10', text: 'Tháng 10/2026: 13 / 15 lệnh nhận hàng chưa có phiếu xuất' },
+      { key: 'gia:2026-10', text: 'Tháng 10/2026: 1 mã chưa lần nhập nào có giá' },
+      { key: 'tygia:2026-10', text: 'Tháng 10/2026: 2 dòng nhập ngoại tệ thiếu tỷ giá' },
+    ])
+    expect(
+      luuYThang({ thang: '2026-09', lenhChuaXuat: 0, lenhNhan: 4, maThieuGia: 0, dongThieuTyGia: 0 }), // prettier-ignore
+    ).toEqual([])
+  })
+
+  it('máy chủ đếm lưu ý của cả lượt từ kiemKy (Q6: mọi tháng còn mở)', () => {
+    const lenh = new Map([['PL1', ['LSX-1']]])
+    const kk = kiem(
+      [
+        mua(10, null, { material_id: 'X', ngay: '2026-09-03' }),
+        mua(10, 100, { po_line_id: 'PL1', ngay: '2026-10-02' }),
+      ],
+      { thangDau: '2026-09', lenh },
+    )
+    expect(luuYPhaiTich(kk).map((l) => l.key)).toEqual(['gia:2026-09', 'lenh:2026-10'])
+  })
+})
+
+describe('B2 — bản chốt', () => {
+  it('mỗi tháng một bản; hàng theo mã đúng dungNxt; lưu ý chia đúng tháng', () => {
+    const dong = [
+      mua(10, 100, { ngay: '2026-09-03' }),
+      mua(10, 300, { ngay: '2026-10-02' }),
+      cap(5, { ngay: '2026-10-20' }),
+    ]
+    const kk = kiem(dong, { thangDau: '2026-09' })
+    const tich = [
+      { key: 'gia:2026-09', text: 'a' },
+      { key: 'lenh:2026-10', text: 'b' },
+    ]
+    const ban = banChot(dong, kk, tich)
+    expect(ban.map((b) => [b.thang, b.den])).toEqual([
+      ['2026-09-01', '2026-09-30'],
+      ['2026-10-01', '2026-10-31'],
+    ])
+    expect(ban[0].luu_y.map((l) => l.key)).toEqual(['gia:2026-09'])
+    expect(ban[1].luu_y.map((l) => l.key)).toEqual(['lenh:2026-10'])
+    expect(ban[1].rows).toEqual(dungNxt(dong, '2026-10-01', '2026-10-31'))
+    // BQ tháng 10 = (10×100 + 10×300) / 20 = 200; xuất 5 → 1.000.
+    expect(ban[1].rows[0].don_gia).toBe(200)
+    expect(ban[1].gt_xuat).toBe(1000)
+  })
+
+  it('đọc lại hàng bản chốt ra đúng hàng Báo cáo tháng (numeric về dạng chuỗi vẫn đúng)', () => {
+    const dong = [mua(10, 100, { ngay: '2026-10-02' }), cap(4, { ngay: '2026-10-20' })]
+    const goc = dungNxt(dong, '2026-10-01', '2026-10-31')[0]
+    const hang = {
+      ...goc,
+      ton_dau: String(goc.ton_dau),
+      ton_cuoi: String(goc.ton_cuoi),
+      don_gia: String(goc.don_gia),
+      gt_cuoi: String(goc.gt_cuoi),
+    }
+    expect(tuBanChot(hang)).toEqual(goc)
+    expect(tuBanChot({ ...hang, nhap: null, xuat: { choLenh: 4 } })).toMatchObject({
+      nhap: { mua: 0, hoan: 0, kkThua: 0, nhapKhac: 0 },
+      cong_nhap: 0,
+      cong_xuat: 4,
+    })
   })
 })

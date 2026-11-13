@@ -14,6 +14,7 @@ import {
   totalRow,
 } from '@/modules/dept/supply/excel-kit'
 import { NHAN_COT } from '@/lib/kho-nxt'
+import { ngayGioVn } from '@/lib/date-vn'
 import type { NxtBaoCao, NxtDong } from './nxt.service'
 
 /**
@@ -81,6 +82,8 @@ export async function buildNxtExcel(
   const ws = wb.addWorksheet('Tổng hợp N–X–T')
   titleRow(ws, `BÁO CÁO NHẬP – XUẤT – TỒN KHO · ${dmy(bc.tu)} – ${dmy(bc.den)}`)
   if (tam) noteRow(ws, `TẠM TÍNH đến ${dmy(bc.homNay)} — kỳ chưa kết thúc, đơn giá bình quân còn đổi khi có phiếu nhập mới.`, 'warn') // prettier-ignore
+  if (bc.kyChot) noteRow(ws, `ĐÃ CHỐT ${ngayGioVn(bc.kyChot.closed_at)}${bc.kyChot.closed_by ? ` · ${bc.kyChot.closed_by}` : ''} — số đọc từ bản chốt, không tính lại.`) // prettier-ignore
+  else if (!tam && bc.kiemKy) noteRow(ws, 'CHƯA CHỐT — đơn giá bình quân còn đổi nếu có phiếu ghi lùi hoặc đổi tỷ giá trước khi Kế toán trưởng chốt kỳ.', 'warn') // prettier-ignore
   noteRow(ws, 'Kỳ theo NGÀY CHỨNG TỪ. Đơn giá xuất = bình quân gia quyền cả kỳ: (giá trị tồn đầu + giá trị nhập có giá) ÷ (SL tồn đầu + SL nhập có giá).') // prettier-ignore
   noteRow(ws, 'Đảo phiếu trừ vào cột của phiếu gốc. Nhập chưa có giá không tính là 0 (để trống). Dòng đơn USD quy VND theo tỷ giá chốt trên đơn.') // prettier-ignore
   ws.addRow([])

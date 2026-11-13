@@ -12,6 +12,8 @@ import {
 } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { BookOpen, Download, Lock } from 'lucide-react'
+import { api } from '@/lib/api'
+import { ngayGioVn } from '@/lib/date-vn'
 import { kyThang } from '@/lib/kho-nxt'
 import { searchTokens } from '@/lib/search-text'
 import { useBeRong } from '@/lib/use-be-rong'
@@ -64,6 +66,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const [chon, setChon] = useState<string | null>(null)
   const [mo, setMo] = useState<string | null>(null)
   const [moKiem, setMoKiem] = useState(false)
+  const [bao, setBao] = useState<string | null>(null)
   const khung = useRef<HTMLDivElement>(null)
   const beRong = useBeRong(khung)
 
@@ -117,8 +120,22 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
     setChon(null)
     setMo(null)
     setMoKiem(false)
+    setBao(null)
     batDau(() => router.push(`${pathname}?tu=${p.tu}&den=${p.den}`, { scroll: false }))
   }
+  // B2: chốt xong thì đóng hộp, nói kết quả tại chỗ và tải lại — kỳ giờ đọc bản chốt.
+  const chotKy = async (luuY: string[]) => {
+    const kq = await api<{ den: string; thangs: string[] }>(
+      '/api/dept/warehouse/bao-cao/chot',
+      { method: 'POST', body: { thang: bc.tu.slice(0, 7), luu_y: luuY } },
+    )
+    setMoKiem(false)
+    setBao(
+      `Sổ kho đã chốt đến hết ${dmy(kq.den)}${kq.thangs.length > 1 ? ` — ${kq.thangs.length} tháng, mỗi tháng một bản chốt` : ''}.`, // prettier-ignore
+    )
+    batDau(() => router.refresh())
+  }
+  const daChot = new Set(bc.thangDaChot)
   const thang = kyThang(bc.tu)
   const laThang = thang.tu === bc.tu && thang.den === bc.den ? bc.tu.slice(0, 7) : ''
   const thangDs = dsThang(bc.thangDau ?? bc.homNay.slice(0, 7), bc.homNay.slice(0, 7))
@@ -158,7 +175,15 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
           dangTinh ? (
             'Đang tính lại kỳ…'
           ) : laThang ? (
-            bc.kiemKy ? (
+            bc.kyChot ? (
+              <>
+                {nhanThang(laThang)} ·{' '}
+                <span className="kh-ok">
+                  đã chốt {ngayGioVn(bc.kyChot.closed_at)}
+                  {bc.kyChot.closed_by && ` · ${bc.kyChot.closed_by}`}
+                </span>
+              </>
+            ) : bc.kiemKy ? (
               <>{nhanThang(laThang)} · <span className="kh-warn">chưa chốt</span></> // prettier-ignore
             ) : (
               nhanThang(laThang)
@@ -210,6 +235,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
           {thangDs.map((m) => (
             <option key={m} value={m}>
               {nhanThang(m)}
+              {daChot.has(m) && ' · đã chốt'}
             </option>
           ))}
         </select>
@@ -278,9 +304,21 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
         )}
       </ThanhLoc>
 
-      {bc.kiemKy && <DongChuaChot kk={bc.kiemKy} onMo={() => setMoKiem(true)} />}
+      {bao && (
+        <div className="kh-note ok" role="status">
+          <span className="tag">Đã chốt</span>
+          <span>{bao}</span>
+        </div>
+      )}
+      {bc.kiemKy && (
+        <DongChuaChot kk={bc.kiemKy} chotDen={bc.chotDen} onMo={() => setMoKiem(true)} />
+      )}
       {bc.kiemKy && moKiem && (
-        <KiemKyHop kk={bc.kiemKy} onClose={() => setMoKiem(false)} />
+        <KiemKyHop
+          kk={bc.kiemKy}
+          onClose={() => setMoKiem(false)}
+          onChot={bc.coTheChot ? chotKy : undefined}
+        />
       )}
 
       {tamTinh && (
@@ -485,7 +523,10 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
       <ThanhTT
         left={
           <>
-            Kỳ theo ngày chứng từ · bình quân gia quyền cả kỳ · &quot;·&quot; = 0
+            {bc.kyChot
+              ? `Đọc từ bản chốt ${ngayGioVn(bc.kyChot.closed_at).slice(0, 10)}`
+              : 'Kỳ theo ngày chứng từ'}{' '}
+            · bình quân gia quyền cả kỳ · &quot;·&quot; = 0
             {tien && (thieuGia > 0 || am > 0 || tyGia > 0) && (
               <>
                 {' · '}giá trị KHÔNG gồm: {thieuGia > 0 && `${thieuGia} mã thiếu giá`}

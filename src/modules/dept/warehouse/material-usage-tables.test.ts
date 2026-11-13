@@ -20,6 +20,8 @@ const NOT_USAGE: Record<string, string> = {
   production_order_components: 'đã bỏ ở 0084',
   // Có trong 0045 nhưng không có trong DB thật (đo 05/10/2026).
   stock_cost_layers: 'không có trong DB',
+  // Bản chốt kỳ (0297) chỉ có hàng cho mã ĐÃ có dòng sổ — warehouse_movements đã đếm.
+  warehouse_period_costs: 'bản chốt kỳ — mã đã có dòng sổ',
 }
 
 function fkTables(): Set<string> {

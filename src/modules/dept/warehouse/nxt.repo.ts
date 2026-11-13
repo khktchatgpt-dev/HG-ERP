@@ -2,6 +2,16 @@ import { db } from '@/server/db'
 import { theoLo } from '@/server/theo-lo'
 import { todayVn } from '@/lib/date-vn'
 import type { DongSo } from '@/lib/kho-nxt'
+import type { HangBanChot, ThangChot } from '@/lib/kho-kiem-ky'
+
+/** Một tháng đã chốt — `thang` dạng `YYYY-MM`, `closed_by` là TÊN người chốt. */
+export type KyDaChot = {
+  id: string
+  thang: string
+  den: string
+  closed_at: string
+  closed_by: string | null
+}
 
 /**
  * Đọc sổ kho cho Báo cáo Nhập–Xuất–Tồn (B6). Chỉ đọc.
@@ -141,6 +151,64 @@ export const nxtRepo = {
       if (code) ma.set(po.production_order_id, code)
     }
     return { lenh, ma }
+  },
+
+  /**
+   * Các tháng ĐÃ CHỐT (0297), cũ → mới. Bảng chưa có (mã lên trước migration)
+   * thì coi như chưa chốt tháng nào — Báo cáo tháng vẫn chạy như B1.
+   */
+  async kyDaChot(): Promise<KyDaChot[]> {
+    const { data, error } = await db()
+      .from('warehouse_periods')
+      .select(
+        'id, thang, den, closed_at, closer:users!warehouse_periods_closed_by_fkey(name)',
+      )
+      .order('thang')
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return []
+      throw new Error(error.message)
+    }
+    return (data ?? []).map((r) => ({
+      id: r.id as string,
+      thang: (r.thang as string).slice(0, 7),
+      den: r.den as string,
+      closed_at: r.closed_at as string,
+      closed_by:
+        one(r.closer as { name: string } | { name: string }[] | null)?.name ?? null,
+    }))
+  },
+
+  /** Bản chốt theo mã của một tháng — chia trang 1000 (PostgREST cắt im lặng). */
+  async banChot(periodId: string): Promise<HangBanChot[]> {
+    const out: HangBanChot[] = []
+    for (let tu = 0; ; tu += 1000) {
+      const { data, error } = await db()
+        .from('warehouse_period_costs')
+        .select(
+          'material_id, ton_dau, nhap, xuat, ton_cuoi, don_gia, gt_dau, gt_nhap, gt_xuat, gt_cuoi, bq, thieu_gia, lan_mua, thieu_ty_gia, phat_sinh',
+        )
+        .eq('period_id', periodId)
+        .order('material_id')
+        .range(tu, tu + 999)
+      if (error) throw new Error(error.message)
+      const rows = (data ?? []) as unknown as HangBanChot[]
+      out.push(...rows)
+      if (rows.length < 1000) break
+    }
+    return out
+  },
+
+  /**
+   * Ghi cả lượt chốt trong MỘT giao dịch (`warehouse_close_periods`, 0297).
+   * Tháng đã chốt → lỗi `KHO_CHOT: …` (service đổi thành 409).
+   */
+  async ghiChot(actor: string, months: ThangChot[]): Promise<number> {
+    const { data, error } = await db().rpc('warehouse_close_periods', {
+      p_actor: actor,
+      p_months: months,
+    })
+    if (error) throw new Error(error.message)
+    return Number(data ?? 0)
   },
 
   async maLenh(ids: string[]): Promise<Map<string, string>> {

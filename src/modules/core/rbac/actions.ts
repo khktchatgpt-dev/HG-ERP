@@ -506,6 +506,15 @@ export const ACTIONS: Action[] = [
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
   {
+    // 0297 — chốt kỳ sổ kho (B2, Q2 duyệt 13/11/2026): Kế toán trưởng (vai
+    // `chief_accountant`). Ai vào khu Kho cũng XEM được danh sách kiểm (B1); chỉ
+    // người có quyền này thấy ô tích + nút Chốt.
+    key: 'warehouse.period.close',
+    label: 'Chốt kỳ sổ kho',
+    domain: 'warehouse',
+    rule: perm('warehouse.period.close'),
+  },
+  {
     // 0236 — "Giấy đề nghị mua vật tư" của Kho: lập, sửa nháp, gửi / rút / huỷ.
     // Duyệt là việc của lãnh đạo (Đ2, action riêng).
     key: 'warehouse.request.manage',
