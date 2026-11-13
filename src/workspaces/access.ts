@@ -157,12 +157,15 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   }
   // Nhóm VIỆC (B2) — cùng luật trang Phân công việc dùng: "Việc tôi giao" = `canGive`;
   // "Việc của tôi" = `canReceive` (khối BGĐ không nhận việc, 05/11/2026).
-  const [give, receive] = await Promise.all([
+  const [give, receive, kho] = await Promise.all([
     tasksService.canGive(user),
     tasksService.canReceive(user),
+    // "Báo cáo kho tháng" ở menu Tài chính (13/11/2026) — cùng cửa layout Kho gác.
+    canEnterWorkspace(user, 'warehouse'),
   ])
   if (give) caps.add('tasks.give')
   if (receive) caps.add('tasks.receive')
+  if (kho) caps.add('warehouse.view')
   return caps
 }
 

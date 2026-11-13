@@ -42,6 +42,8 @@ export type NavCapability =
   | 'hr.payroll'
   /** Cấu hình công đoạn (0287) — quản đốc / manager / admin. */
   | 'production.configure'
+  /** Vào được khu Kho (`canEnterWorkspace`) — mục "Báo cáo kho tháng" ở menu Tài chính (13/11/2026). */
+  | 'warehouse.view'
 
 export type NavItem = {
   href: string
@@ -391,6 +393,18 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Báo cáo mua hàng',
             icon: 'chart-pie',
           },
+          /*
+           * Q5 rà phân bổ chức năng Kho (13/11/2026): Kế toán trưởng chốt kỳ sổ kho
+           * (0297) nhưng làm việc ở khu này — thiếu mục này thì phải đổi khu mới tới.
+           * Bấm vào là sang sidebar Kho (Báo cáo tháng nằm dưới layout Kho). Chỉ
+           * hiện với người vào được khu Kho, không thì link dội về trang đầu.
+           */
+          {
+            href: '/warehouse/bao-cao',
+            label: 'Báo cáo kho tháng',
+            icon: 'boxes',
+            capability: 'warehouse.view',
+          },
         ],
       },
       {
@@ -472,14 +486,25 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Kiểm kê định kỳ',
             icon: 'clipboard-check',
           },
+          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — Kho hỏi ĐVT · kệ · ngưỡng.
+          { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
+        ],
+      },
+      /*
+       * Q6 rà phân bổ chức năng (13/11/2026, báo cáo L6Ue1fNS7sDC8Faj7SWC9C): hai mục
+       * chưa ai dùng (Đề nghị mua 0 phiếu, Dụng cụ 0 đang giao) gập riêng để Sổ sách chỉ
+       * còn sổ. Đưa Đề nghị mua về "Việc" khi Kho khai ngưỡng và có phiếu đầu tiên.
+       */
+      {
+        heading: 'Ít dùng',
+        gap: true,
+        items: [
           // 0236 (13/10/2026): "Giấy đề nghị mua vật tư" — Kho lập thay tờ giấy
           // chụp gửi Zalo; lãnh đạo duyệt, Cung ứng lập đơn mua từ phiếu.
           { href: '/warehouse/de-nghi', label: 'Đề nghị mua', icon: 'clipboard-list' },
-          // Kho giữ kho dụng cụ cầm tay: giao / thu hồi (0270). B2 để ở Sổ sách —
-          // "Việc hằng ngày" giữ đúng 5 mục của bản vẽ A.
+          // Kho giữ kho dụng cụ cầm tay: giao / thu hồi (0270). Bấm vào là sang khu
+          // Máy móc (dải tab + hệ giao diện khác) — chấp nhận vì nằm ở nhóm ít dùng.
           { href: '/may-moc/dung-cu', label: 'Dụng cụ theo người', icon: 'wrench' },
-          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — Kho hỏi ĐVT · kệ · ngưỡng.
-          { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
     ],
