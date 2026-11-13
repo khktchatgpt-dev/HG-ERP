@@ -46,6 +46,22 @@ export const componentsSaveSchema = z.object({
    *  kế hoạch định hình trên lệnh là đường chính, hồ sơ SP đi theo). Mặc định
    *  bật; tắt khi lệnh là ngoại lệ một lần. */
   sync_profile_routes: z.boolean().default(true),
+  /**
+   * SỐ CỤM / SP thống kê khai trên lệnh (13/11/2026, chủ dự án: "chưa có định
+   * mức từ BOM thì thống kê có tự tạo để nhập liệu được không"). Đi cùng cờ
+   * `sync_profile_routes`: ghi ngược lên `technical_product_clusters.qty_per_product`
+   * để màn Ghi sản lượng hết báo "chưa có" và lệnh sau khỏi khai lại.
+   */
+  cluster_qty: z
+    .array(
+      z.object({
+        production_order_line_id: z.string().uuid(),
+        cluster: z.string().trim().min(1).max(200),
+        qty: z.number().positive('Số cụm / SP phải > 0').max(1000),
+      }),
+    )
+    .max(500)
+    .default([]),
 })
 
 export const componentsSuggestQuerySchema = z.object({

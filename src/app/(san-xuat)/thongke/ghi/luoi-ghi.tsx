@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Fragment, useState, type ReactNode } from 'react'
 import { COUNT_LEVEL_LABEL } from '@/lib/stage-config'
 import { isFinishRowId } from '@/lib/finish-stages'
@@ -42,7 +43,11 @@ export function LuoiGhi({ d }: { d: GhiCtx }) {
   // Sơn chỉ "5×555×865"; tối thiểu 80 cho chữ tiêu đề "QUY CÁCH".
   const qcLen = rows.reduce((m, { l }) => Math.max(m, quyCachDong(l.spec).length), 0)
   const qcW = Math.min(134, Math.max(80, Math.ceil(qcLen * 7.2) + 16))
-  const dmW = [SL_SP_W, ...(d.cotQuyCach ? [qcW] : []), ...(d.cotKgCt ? [52] : [])]
+  // "chưa có" (11px) cần 54px; cột số thường 48.
+  const slW = rows.some(({ l }) => l.cum_khai === false || l.qty_per_unit == null)
+    ? 56
+    : SL_SP_W
+  const dmW = [slW, ...(d.cotQuyCach ? [qcW] : []), ...(d.cotKgCt ? [52] : [])]
   // Tiêu đề đo thật 12/11: "KHẢ DỤNG" 64 + 16 đệm, "ĐÃ LÀM" 48 + 16 — bảng ở đúng
   // bề rộng tối thiểu (không giãn) thì 78 / 62 cắt mất 1px.
   const xemW = [74, ...(d.cotKhaDung ? [80] : []), 64, 66, ...(d.cot14 ? [100] : [])]
@@ -339,6 +344,8 @@ function Dong({
   const overRemaining = l.remaining > 0 && qty + defect > l.remaining
   const overAvail = l.available != null && adding > 0 && adding > l.available
   const isSet = l.kind === 'assembly'
+  /** Định mức chưa có số / SP: cụm Kỹ thuật chưa khai SL cụm / SP, hoặc dòng không có số. */
+  const chuaCoDm = l.cum_khai === false || l.qty_per_unit == null
   const kgHint =
     l.dm_kg != null && qty > 0 ? String(Math.round(l.dm_kg * qty * 100) / 100) : ''
   // Có SL mà không có ĐM kg → ô Kg nói thẳng: phiếu sẽ thiếu đúng dòng này ở kg.
@@ -384,16 +391,27 @@ function Dong({
         {l.pending > 0 && <span className="pill m">chờ +{fmt(l.pending)}</span>}
       </td>
       <td
-        className={cx('r num', l.cum_khai === false && 'warn')}
+        className="r num"
         title={
-          l.cum_khai === false
-            ? 'Kỹ thuật chưa khai SL cụm / SP — máy tạm tính 1 (khai ở Hồ sơ SP › Định mức › Khai cụm)'
+          chuaCoDm
+            ? isSet
+              ? 'Kỹ thuật chưa khai SL cụm / SP — số Phải làm đang tạm tính 1 cụm / SP (khai ở Hồ sơ SP › Định mức › Khai cụm)'
+              : 'Định mức chưa có số lượng trên 1 SP'
             : isSet
               ? 'Số cụm trên 1 SP'
               : 'Số chi tiết trên 1 SP'
         }
       >
-        {l.qty_per_unit != null ? fmt(l.qty_per_unit) : ''}
+        {/* 13/11 chủ dự án: chưa có định mức thì nói "chưa có", không bày số mặc định. */}
+        {chuaCoDm ? (
+          // Bấm sang Bảng chi tiết của lệnh: thống kê gõ số cụm / SP ở đó, lưu là
+          // ghi ngược hồ sơ SP (13/11/2026) — màn này hết báo "chưa có".
+          <Link className="chua-co" href={`/thongke/lsx/${g.lsx_id}/dinh-hinh`}>
+            chưa có
+          </Link>
+        ) : (
+          fmt(l.qty_per_unit!)
+        )}
       </td>
       {d.cotQuyCach && (
         <td className="num qc" title={quyCachDong(l.spec) || undefined}>
@@ -408,9 +426,11 @@ function Dong({
       <td
         className="r num"
         title={
-          l.qty_per_unit != null
-            ? `${fmt(g.qty)} SP × ${fmt(l.qty_per_unit)} = ${fmt(l.needed)}`
-            : undefined
+          l.qty_per_unit == null
+            ? undefined
+            : chuaCoDm
+              ? `SL cụm / SP chưa có — tạm tính ${fmt(g.qty)} SP × 1 = ${fmt(l.needed)}`
+              : `${fmt(g.qty)} SP × ${fmt(l.qty_per_unit)} = ${fmt(l.needed)}`
         }
       >
         {fmt(l.needed)}

@@ -62,7 +62,9 @@ describe('khoiLuongOf — BOM phẳng hai dòng SP (như 13/26-27 - MX)', () => 
   const lines = [
     line('L1', 'CH0119', 300, [
       part('L1', 300, { id: 'a', name: 'Chân', qty_per_unit: 30 }),
-      part('L1', 300, { id: 'g', name: 'Ván', group_code: 'WOOD', qty_per_unit: 3 }),
+      // Gỗ không vào sổ theo nhóm nữa (13/11) — dòng này KHAI lộ trình sơn riêng
+      // để giữ phép thử hai đơn vị trên một công đoạn.
+      part('L1', 300, { id: 'g', name: 'Ván', group_code: 'WOOD', qty_per_unit: 3, stages: ['son'] }),
     ]),
     line('L2', 'CH0292', 250, [
       part('L2', 250, { id: 'b', name: 'Chân', qty_per_unit: 17 }),
@@ -177,7 +179,7 @@ describe('khoiLuongOf — cụm thật (JAWOLL) với chi tiết chưa gán cụ
     part('L1', 557, { id: 'giang', name: 'Thanh giằng', qty_per_unit: 3 }),
     part('L1', 557, { id: 'pat', name: 'Pát', qty_per_unit: 2 }),
     // Ván gỗ chỉ qua sơn — không phải "chưa gán cụm".
-    part('L1', 557, { id: 'van', name: 'Ván', group_code: 'WOOD', qty_per_unit: 1 }),
+    part('L1', 557, { id: 'van', name: 'Ván', group_code: 'WOOD', qty_per_unit: 1, stages: ['son'] }),
   ]
   const lines = [line('L1', 'BN0228', 557, comps)]
 

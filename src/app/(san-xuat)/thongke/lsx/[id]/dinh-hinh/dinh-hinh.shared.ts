@@ -26,6 +26,8 @@ export type InitialRow = {
   final_stage: string | null
   stages?: string[] | null
   note: string | null
+  /** Dòng CỤM mà hồ sơ SP chưa khai SL cụm / SP — ô CT/SP để trống, ghi "chưa có". */
+  cum_chua_khai?: boolean
 }
 
 /** Một dòng đang gõ. Ô số giữ CHUỖI để gõ "0,53" không bị nhảy. */
@@ -51,6 +53,8 @@ export type Draft = {
   final_stage: string | null
   stages: string[] | null
   note: string
+  /** Xem `InitialRow.cum_chua_khai`. Gõ số vào thì lưu kèm ghi ngược hồ sơ SP. */
+  cum_chua_khai: boolean
 }
 
 export type OrderLine = {
@@ -132,7 +136,8 @@ export function toDraft(r: InitialRow): Draft {
     spec_length_mm: s(r.spec_length_mm),
     wall_thickness_mm: s(r.wall_thickness_mm),
     unit: r.unit ?? '',
-    qty_per_unit: s(r.qty_per_unit),
+    // Cụm chưa khai: ô TRỐNG (không bày số 1 máy tạm tính) — 13/11/2026.
+    qty_per_unit: r.cum_chua_khai ? '' : s(r.qty_per_unit),
     dm_kg: s(r.dm_kg),
     pcs_per_bar: r.pcs_per_bar ?? null,
     qty_per_assembly: r.qty_per_assembly ?? null,
@@ -140,6 +145,7 @@ export function toDraft(r: InitialRow): Draft {
     final_stage: r.final_stage ?? null,
     stages: r.stages ?? null,
     note: r.note ?? '',
+    cum_chua_khai: !!r.cum_chua_khai,
   }
 }
 
@@ -172,7 +178,10 @@ export function emptyDraft(lineId: string): Draft {
 export function rowProblems(d: Draft): { key: EditCol['key']; msg: string }[] {
   const out: { key: EditCol['key']; msg: string }[] = []
   if (!d.name.trim()) out.push({ key: 'name', msg: 'chưa có tên' })
-  if (!((num(d.qty_per_unit) ?? 0) > 0))
+  // Cụm chưa khai được để trống ("chưa có" — máy tạm tính 1 trên lệnh, không ghi
+  // ngược hồ sơ); đã gõ thì phải > 0 như mọi dòng.
+  const choTrong = d.kind === 'assembly' && d.cum_chua_khai && !d.qty_per_unit.trim()
+  if (!choTrong && !((num(d.qty_per_unit) ?? 0) > 0))
     out.push({ key: 'qty_per_unit', msg: 'CT/SP phải > 0' })
   return out
 }

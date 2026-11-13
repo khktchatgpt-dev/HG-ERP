@@ -13,8 +13,19 @@ import type { DinhHinhCtx } from './useDinhHinh'
  */
 export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
   const { p, cols, lines, byLine, editable } = d
+  // NGOÀI KHUNG gập sẵn theo từng SP (13/11/2026, "Chỉ khung vào sổ"): gỗ, tấm,
+  // nệm, bao bì, ngũ kim là hàng mua — không qua công đoạn nào. Dòng KHAI lộ
+  // trình riêng thì vẫn bày (nó vào sổ).
+  const [moNgoai, setMoNgoai] = useState<ReadonlySet<string>>(new Set())
+  const laNgoai = (r: Draft) =>
+    r.kind === 'part' &&
+    isPurchasedGroup(r.group_code || null) &&
+    !(r.stages && r.stages.length > 0)
+  const nhomLabel = new Map(p.groups.map((g) => [g.code, g.label]))
   const fixedTail = 196 // cột Lộ trình
-  const minW = cols.reduce((a, c) => a + (c.width || 160), 0) + fixedTail + 28
+  const xoaW = 52 // cột Xoá — "Xoá?" lúc hỏi lại; lưới chỉ có ~1.100px khi sidebar mở
+  const minW =
+    cols.reduce((a, c) => a + (c.width || 160), 0) + fixedTail + (editable ? xoaW : 0)
   const nCols = cols.length + 1 + (editable ? 1 : 0)
   const tongCt = d.rows.reduce((a, r) => a + (num(r.qty_per_unit) ?? 0), 0)
   const tongKg = d.rows.reduce(
@@ -36,13 +47,13 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
 
   return (
     <div className="sx-grid">
-      <table className="sx-tb" style={{ minWidth: minW }}>
+      <table className={cx('sx-tb', editable && 'sx-dh')} style={{ minWidth: minW }}>
         <colgroup>
           {cols.map((c) => (
             <col key={c.key} style={c.width ? { width: c.width } : undefined} />
           ))}
           <col style={{ width: fixedTail }} />
-          {editable && <col style={{ width: 28 }} />}
+          {editable && <col style={{ width: xoaW }} />}
         </colgroup>
         <thead>
           <tr>
@@ -55,7 +66,7 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
             <th>
               Lộ trình<span className="u">tab bên · chỉ đọc</span>
             </th>
-            {editable && <th></th>}
+            {editable && <th className="c">Xoá</th>}
           </tr>
         </thead>
         <tbody>
@@ -76,8 +87,25 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
             const trongCum = rs.filter(
               (r) => r.kind === 'part' && r.cluster.trim(),
             ).length
-            const mua = rs.filter((r) => isPurchasedGroup(r.group_code || null)).length
-            const roi = rs.length - nCum - trongCum - mua
+            const ngoai = rs.filter(laNgoai)
+            const mua = ngoai.length
+            const roi =
+              rs.length -
+              nCum -
+              rs.filter((r) => r.kind === 'part' && r.cluster.trim() && !laNgoai(r))
+                .length -
+              mua
+            const mo = moNgoai.has(l.id)
+            const tomTat = [
+              ...ngoai
+                .reduce((m, r) => {
+                  const k = nhomLabel.get(r.group_code) ?? (r.group_code || 'khác')
+                  return m.set(k, (m.get(k) ?? 0) + 1)
+                }, new Map<string, number>())
+                .entries(),
+            ]
+              .map(([k, n]) => `${k} ${n}`)
+              .join(' · ')
             return (
               <Fragment key={l.id}>
                 <tr className="grp">
@@ -101,25 +129,56 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
                       </span>
                     ) : (
                       <span className="mut" style={{ fontWeight: 400 }}>
-                        {rs.length} dòng · {nCum} cụm · {trongCum} trong cụm · {roi} rời ·{' '}
-                        {mua} ngũ kim
+                        {rs.length} dòng · {nCum} cụm ·{' '}
+                        {trongCum - ngoai.filter((r) => r.cluster.trim()).length} trong
+                        cụm · {roi} rời · {mua} ngoài khung
                       </span>
                     )}
                     {editable && (
                       <button
                         type="button"
-                        className="lnk"
+                        className="sx-btn sm vien"
                         style={{ marginLeft: 10 }}
                         onClick={() => d.addRow(l.id)}
+                        title={`Thêm một dòng chi tiết vào ${l.product_code}`}
                       >
                         + Thêm dòng
                       </button>
                     )}
                   </td>
                 </tr>
-                {rs.map((r) => (
-                  <Dong key={r.key} d={d} r={r} route={routeText(r)} />
-                ))}
+                {rs
+                  .filter((r) => !laNgoai(r))
+                  .map((r) => (
+                    <Dong key={r.key} d={d} r={r} route={routeText(r)} />
+                  ))}
+                {ngoai.length > 0 && (
+                  <tr className="grp2">
+                    <td colSpan={nCols}>
+                      <button
+                        type="button"
+                        className="lnk"
+                        aria-expanded={mo}
+                        onClick={() =>
+                          setMoNgoai((s) => {
+                            const n = new Set(s)
+                            if (n.has(l.id)) n.delete(l.id)
+                            else n.add(l.id)
+                            return n
+                          })
+                        }
+                      >
+                        {mo ? '▾' : '▸'} Ngoài khung · {ngoai.length} dòng
+                      </button>
+                      <span className="mut" style={{ fontWeight: 400 }}>
+                        {' '}
+                        ({tomTat}) — hàng mua, không ghi sổ
+                      </span>
+                    </td>
+                  </tr>
+                )}
+                {mo &&
+                  ngoai.map((r) => <Dong key={r.key} d={d} r={r} route={routeText(r)} />)}
               </Fragment>
             )
           })}
@@ -162,8 +221,9 @@ function Dong({ d, r, route }: { d: DinhHinhCtx; r: Draft; route: string | null 
   const { cols, editable, p } = d
   const rIdx = d.rowIdx.get(r.key) ?? 0
   const frameNoKg = r.group_code === 'FRAME' && !r.dm_kg.trim()
+  const hoi = d.xoaCho === r.key
   return (
-    <tr className="d">
+    <tr className={cx('d', hoi && 'xoa')}>
       {cols.map((c, cIdx) => {
         const id = cellId(r.key, c.key)
         const err = d.errCells.has(id)
@@ -198,7 +258,15 @@ function Dong({ d, r, route }: { d: DinhHinhCtx; r: Draft; route: string | null 
                 onKeyDown={d.onCellKey(rIdx, cIdx)}
                 onPaste={d.onCellPaste(rIdx, cIdx)}
                 ariaLabel={`${c.label} dòng ${rIdx + 1}`}
-                placeholder={err ? (c.key === 'name' ? 'tên?' : '> 0') : undefined}
+                placeholder={
+                  err
+                    ? c.key === 'name'
+                      ? 'tên?'
+                      : '> 0'
+                    : c.key === 'qty_per_unit' && r.cum_chua_khai
+                      ? 'chưa có'
+                      : undefined
+                }
               />
             )}
           </td>
@@ -212,15 +280,23 @@ function Dong({ d, r, route }: { d: DinhHinhCtx; r: Draft; route: string | null 
         {route ?? 'hàng mua'}
       </td>
       {editable && (
-        <td style={{ padding: 0, textAlign: 'center' }}>
+        <td className="xo">
           <button
             type="button"
-            className="tg"
-            onClick={() => d.removeRow(r.key)}
-            aria-label={`Xoá dòng ${r.name || rIdx + 1}`}
-            title="Xoá dòng"
+            className={cx('sx-xo', hoi && 'hoi')}
+            onClick={() => d.xinXoa(r.key)}
+            aria-label={
+              hoi
+                ? `Bấm lần nữa để xoá hẳn dòng ${r.name || rIdx + 1}`
+                : `Xoá dòng ${r.name || rIdx + 1}`
+            }
+            title={
+              hoi
+                ? 'Bấm lần nữa để bỏ dòng khỏi bản nháp (vẫn Hoàn tác được tới khi Lưu)'
+                : 'Xoá dòng — sẽ hỏi lại'
+            }
           >
-            ⌫
+            {hoi ? 'Xoá?' : 'Xoá'}
           </button>
         </td>
       )}

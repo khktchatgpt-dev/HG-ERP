@@ -22,6 +22,7 @@ vi.mock('@/modules/dept/technical/technical.service', () => ({
   productsService: {
     seedPartsFromShaping: vi.fn(),
     syncClusterRoutesFromShaping: vi.fn(),
+    syncClusterQtyFromShaping: vi.fn(),
   },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
@@ -427,5 +428,57 @@ describe('componentsService.suggest("bom") — lộ trình KHAI theo cụm (0288
     expect(cum.first_stage).toBe('han')
     expect(cum.stages).toBeNull()
     expect(out.find((r) => r.name === 'Chân')!.stages).toBeNull()
+  })
+})
+
+describe('componentsService.save — ghi ngược SỐ CỤM / SP lên hồ sơ SP (13/11/2026)', () => {
+  const cum = {
+    production_order_line_id: 'line1',
+    kind: 'assembly' as const,
+    cluster: 'Cụm chân',
+    name: 'CỤM CHÂN',
+    qty_per_unit: 2,
+    stages: null,
+  }
+
+  beforeEach(() => {
+    vi.mocked(entriesRepo.existsForLsx).mockResolvedValue(false)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(productsService.syncClusterQtyFromShaping).mockReset()
+  })
+
+  it('chỉ cụm thống kê KHAI (clusterQty) đi lên hồ sơ, theo SP của dòng lệnh', async () => {
+    vi.mocked(productsService.syncClusterQtyFromShaping).mockResolvedValue({
+      updated: 1,
+      missing: [],
+    })
+    const r = await componentsService.save(thongKe, 'lsx1', [cum] as never, {
+      clusterQty: [{ production_order_line_id: 'line1', cluster: 'Cụm chân', qty: 2 }],
+    })
+    expect(productsService.syncClusterQtyFromShaping).toHaveBeenCalledWith('p1', [
+      { name: 'Cụm chân', qty: 2 },
+    ])
+    expect(r.qty_synced).toEqual([{ product_code: 'SP1', updated: 1 }])
+  })
+
+  it('không khai (ô "chưa có" để trống) → không đụng hồ sơ; số tạm 1 không thành số đã khai', async () => {
+    const r = await componentsService.save(thongKe, 'lsx1', [{ ...cum, qty_per_unit: 1 }] as never)
+    expect(productsService.syncClusterQtyFromShaping).not.toHaveBeenCalled()
+    expect(r.qty_synced).toEqual([])
+  })
+
+  it('bỏ tick ghi ngược hồ sơ → không đụng; hồ sơ khoá → routes_skipped', async () => {
+    const q = [{ production_order_line_id: 'line1', cluster: 'Cụm chân', qty: 2 }]
+    await componentsService.save(thongKe, 'lsx1', [cum] as never, {
+      clusterQty: q,
+      syncProfileRoutes: false,
+    })
+    expect(productsService.syncClusterQtyFromShaping).not.toHaveBeenCalled()
+
+    vi.mocked(productsService.syncClusterQtyFromShaping).mockResolvedValueOnce({
+      skipped: 'locked',
+    })
+    const r = await componentsService.save(thongKe, 'lsx1', [cum] as never, { clusterQty: q })
+    expect(r.routes_skipped).toContainEqual({ product_code: 'SP1', reason: 'locked' })
   })
 })

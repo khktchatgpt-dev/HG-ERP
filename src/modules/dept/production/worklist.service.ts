@@ -857,7 +857,11 @@ export async function loadEntrySheet(
           cum_ct:
             c.kind === 'assembly' && c.cluster
               ? lineComps.filter(
-                  (x) => x.kind === 'part' && khoaCum(x.cluster) === khoaCum(c.cluster),
+                  (x) =>
+                    x.kind === 'part' &&
+                    khoaCum(x.cluster) === khoaCum(c.cluster) &&
+                    // Chỉ khung vào sổ (13/11/2026): nan gỗ trong cụm không đếm.
+                    !isPurchasedGroup(x.group_code),
                 ).length
               : null,
           cum_khai:

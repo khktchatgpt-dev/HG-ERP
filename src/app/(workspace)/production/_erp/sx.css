@@ -2437,3 +2437,94 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* ── Ghi sản lượng: định mức "chưa có" thay số mặc định (13/11/2026) ── */
+.sx.sx .chua-co {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sx-warn);
+  white-space: nowrap;
+}
+.sx.sx a.chua-co {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Bảng chi tiết (định hình) — sửa / thêm / xoá thấy được (13/11/2026) ──
+   Chủ dự án: "thêm sửa xoá ở đâu tôi không thấy, xoá không có cảnh báo". Ô gõ
+   được tô VÀNG như Ghi sản lượng (.sx-gh) — chỉ khi bảng sửa được (lớp .sx-dh
+   chỉ gắn lúc editable). Xoá bấm hai lần: lần một dòng tô đỏ nhạt + nút đổi
+   "Xoá?", lần hai mới bỏ; dải trên lưới cho Hoàn tác tới khi Lưu. */
+.sx.sx .sx-tb.sx-dh > tbody > tr > td.ed {
+  padding: 2px 3px;
+}
+.sx.sx .sx-tb.sx-dh > tbody > tr > td.ed .sx-cell {
+  height: 22px;
+  border: 1px solid #e3cf86;
+  background: #fff6d6;
+  padding: 0 6px;
+}
+.sx.sx .sx-tb.sx-dh > tbody > tr > td.ed:focus-within .sx-cell {
+  background: #fff;
+}
+.sx.sx .sx-tb.sx-dh > tbody > tr > td.ed.warn .sx-cell {
+  background: var(--sx-warn-wash);
+  border-color: var(--sx-warn);
+}
+.sx.sx .sx-tb.sx-dh > tbody > tr > td.ed.err .sx-cell {
+  background: var(--sx-stop-wash);
+  border-color: var(--sx-stop);
+}
+.sx.sx .sx-tb.sx-dh th.c,
+.sx.sx .sx-tb.sx-dh td.xo {
+  text-align: center;
+}
+.sx.sx .sx-tb.sx-dh td.xo {
+  padding: 0 4px;
+}
+.sx.sx .sx-xo {
+  height: 22px;
+  min-width: 40px;
+  padding: 0 6px;
+  border: 1px solid var(--sx-line);
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: var(--sx-ink2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sx.sx .sx-xo:hover {
+  border-color: var(--sx-stop);
+  color: var(--sx-stop);
+}
+.sx.sx .sx-xo.hoi {
+  border-color: var(--sx-stop);
+  background: var(--sx-stop-wash);
+  color: var(--sx-stop);
+  font-weight: 600;
+}
+.sx.sx .sx-xo:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: 1px;
+}
+/* .xoa lặp ba lần để thắng luật hover + sọc (tr.d:nth-child(even):hover > td.ed) */
+.sx.sx .sx-tb.sx-dh > tbody > tr.d.xoa.xoa.xoa > td {
+  background: var(--sx-stop-wash);
+}
+.sx.sx .sx-tb.sx-dh > tbody > tr.d.xoa.xoa.xoa > td.ed .sx-cell {
+  background: transparent;
+  border-color: transparent;
+  color: var(--sx-stop);
+  text-decoration: line-through;
+}
+.sx.sx .sx-btn.sm.vien {
+  border: 1px solid var(--sx-act);
+  background: #fff;
+  color: var(--sx-act);
+  font-weight: 600;
+}
+.sx.sx .sx-btn.sm.vien:hover {
+  background: var(--sx-act-wash);
+}

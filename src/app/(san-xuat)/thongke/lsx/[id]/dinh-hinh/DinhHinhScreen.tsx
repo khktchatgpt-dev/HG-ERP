@@ -66,6 +66,14 @@ export function DinhHinhScreen(props: DinhHinhProps) {
                     Chép từ lệnh trước
                   </ApNut>
                 )}
+                {editable && (
+                  <ApNut
+                    onClick={() => d.lineThem && d.addRow(d.lineThem)}
+                    why={d.lineThem ? null : 'chọn SP ở ô lọc'}
+                  >
+                    + Thêm dòng
+                  </ApNut>
+                )}
               </ApNhom>
               <ApNhom>
                 <ApNut onClick={d.toggleMore}>
@@ -110,11 +118,22 @@ export function DinhHinhScreen(props: DinhHinhProps) {
             </span>
           </span>
           <span className="sp mut">
-            Ctrl+V dán vùng từ Excel · Enter xuống dòng · ⌫ ở cột cuối xoá dòng · lộ trình
-            công đoạn khai ở màn riêng
+            Ô vàng gõ được · Ctrl+V dán vùng từ Excel · Enter xuống dòng · Xoá hỏi lại một
+            lần · lộ trình công đoạn khai ở màn riêng
           </span>
         </div>
 
+        {d.boVua && (
+          <div className="sx-note">
+            <span>
+              Đã bỏ dòng <b>{d.boVua.row.name || '(chưa tên)'}</b> khỏi bản nháp — chưa
+              mất hẳn, bấm <b>Lưu bảng định hình</b> mới ghi vào lệnh.
+            </span>
+            <button type="button" className="lnk" onClick={d.hoanTac}>
+              Hoàn tác
+            </button>
+          </div>
+        )}
         {p.lockedByEntries && !p.lsxClosed && (
           <div className="sx-note stop">
             <b>Bảng chỉ để tra cứu.</b> Lệnh đã có {p.pbsCount} phiếu sản lượng — xoá

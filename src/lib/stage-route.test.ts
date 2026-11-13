@@ -49,10 +49,12 @@ describe('resolveComponentRoute/routeForGroup — nhóm đã biết thắng kế
     ])
     // Ngũ kim là hàng mua: kế hoạch dòng SP không kéo con vít lên sổ tổ Phôi.
     expect(resolveComponentRoute(['phoi', 'han', 'nguoi', 'son'], 'NGU_KIM')).toEqual([])
-    // Gỗ chỉ qua sơn dù kế hoạch dòng SP có phôi → hàn.
-    expect(resolveComponentRoute(['phoi', 'han', 'nguoi', 'son'], 'WOOD')).toEqual([
-      'son',
-    ])
+    // Chỉ khung vào sổ (13/11/2026): gỗ như ngũ kim — kế hoạch không kéo lên sổ.
+    expect(resolveComponentRoute(['phoi', 'han', 'nguoi', 'son'], 'WOOD')).toEqual([])
+    expect(routeForGroup('CUSHION')).toEqual([])
+    expect(routeForGroup('PACKAGING')).toEqual([])
+    // ...nhưng dòng KHAI lộ trình riêng thì vẫn vào sổ (khai thắng nhóm).
+    expect(resolveComponentRoute(null, 'WOOD', ['son'])).toEqual(['son'])
     // Chưa phân nhóm → kế hoạch là đường lùi; không kế hoạch → rỗng (không đoán).
     expect(resolveComponentRoute(['phoi', 'son'], null)).toEqual(['phoi', 'son'])
     expect(resolveComponentRoute(['phoi', 'son'], 'NHOM_LA')).toEqual(['phoi', 'son'])

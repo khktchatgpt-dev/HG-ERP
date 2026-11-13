@@ -32,6 +32,7 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
+import { khoaCum } from '@/lib/khoa-cum'
 import {
   calcPartDerived,
   derivedOnEdit,
@@ -1128,6 +1129,39 @@ export const productsService = {
       )
     }
     return { updated: writes.length, missing }
+  },
+
+  /**
+   * Ghi ngược SỐ CỤM / SP từ bảng chi tiết của lệnh lên hồ sơ SP (13/11/2026) —
+   * cùng nguyên tắc lộ trình cụm ở trên: định hình trên lệnh là đường chính, hồ
+   * sơ đi theo. Khớp tên cụm bằng `khoaCum` (không phân biệt hoa thường); cụm
+   * chỉ có trên lệnh thì báo, không tự đẻ ở hồ sơ; hồ sơ khoá thì bỏ qua. Không
+   * cần quyền Kỹ thuật: người gọi đã qua `production.shaping.manage`.
+   */
+  async syncClusterQtyFromShaping(
+    productId: string,
+    rows: { name: string; qty: number }[],
+  ): Promise<
+    { updated: number; missing: string[] } | { skipped: 'locked' | 'not_found' }
+  > {
+    const product = await productsRepo.findById(productId)
+    if (!product) return { skipped: 'not_found' }
+    if (product.locked_at) return { skipped: 'locked' }
+    const clusters = await productProfileRepo.clusters(productId)
+    const byName = new Map(clusters.map((c) => [khoaCum(c.name), c]))
+    let updated = 0
+    const missing: string[] = []
+    for (const r of rows) {
+      const c = byName.get(khoaCum(r.name))
+      if (!c) {
+        missing.push(r.name)
+        continue
+      }
+      if (c.qty_per_product != null && Number(c.qty_per_product) === r.qty) continue
+      await productProfileRepo.patchCluster(productId, c.id, { qty_per_product: r.qty })
+      updated++
+    }
+    return { updated, missing }
   },
 
   async addCluster(user: User, productId: string, input: ClusterInput) {

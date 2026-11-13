@@ -11,6 +11,7 @@ import {
 } from '@/modules/dept/technical/technical.repo'
 import { resolveStageConfigs } from '@/lib/stage-config'
 import { lineUnit } from '@/lib/finish-stages'
+import { khoaCum } from '@/lib/khoa-cum'
 import type { User } from '@/modules/core/users/users.repo'
 import type { DinhHinhProps } from './dinh-hinh.shared'
 
@@ -43,10 +44,19 @@ export async function loadDinhHinhProps(
   const productIds = [
     ...new Set(rawLines.map((l) => l.product_id).filter((x): x is string => !!x)),
   ]
-  const [products, coDinhMuc] = await Promise.all([
+  const [products, coDinhMuc, hoSoCum] = await Promise.all([
     productsRepo.listPickByIds(productIds),
     productProfileRepo.productsWithParts(productIds),
+    productProfileRepo.clustersByProducts(productIds),
   ])
+  // Cụm Kỹ thuật ĐÃ khai SL cụm / SP — còn lại ô CT/SP của dòng cụm để trống,
+  // ghi "chưa có" (13/11/2026: chưa có định mức thì nói chưa có, không bày 1).
+  const cumDaKhai = new Set(
+    hoSoCum
+      .filter((c) => c.qty_per_product != null)
+      .map((c) => `${c.product_id}|${khoaCum(c.name)}`),
+  )
+  const productOfLine = new Map(rawLines.map((l) => [l.id, l.product_id]))
   const bomDone = new Set(
     products.filter((p) => p.bom_status === 'done').map((p) => p.id),
   )
@@ -90,6 +100,12 @@ export async function loadDinhHinhProps(
       final_stage: r.final_stage,
       stages: r.stages ?? null,
       note: r.note,
+      cum_chua_khai:
+        r.kind === 'assembly' &&
+        !!r.cluster &&
+        !cumDaKhai.has(
+          `${productOfLine.get(r.production_order_line_id)}|${khoaCum(r.cluster)}`,
+        ),
     })),
     groups: partGroups.map((g) => ({ code: g.code, label: g.label })),
     stageCfg: resolveStageConfigs(catalog.filter((s) => s.is_active)),

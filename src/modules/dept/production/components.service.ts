@@ -313,7 +313,12 @@ export const componentsService = {
     user: User,
     lsxId: string,
     input: ComponentInput[],
-    opts: { seedProfile?: boolean; syncProfileRoutes?: boolean } = {},
+    opts: {
+      seedProfile?: boolean
+      syncProfileRoutes?: boolean
+      /** Số cụm / SP thống kê khai trên lệnh — ghi ngược hồ sơ (13/11/2026). */
+      clusterQty?: { production_order_line_id: string; cluster: string; qty: number }[]
+    } = {},
   ): Promise<{
     seeded: { product_code: string; added: number }[]
     seed_skipped: { product_code: string; reason: string }[]
@@ -322,6 +327,8 @@ export const componentsService = {
     routes_skipped: { product_code: string; reason: string }[]
     /** Cụm có trên lệnh nhưng hồ sơ SP không có cụm cùng tên — chỉ ghi trên lệnh. */
     routes_missing: { product_code: string; cluster: string }[]
+    /** Hồ sơ SP đã nhận SỐ CỤM / SP từ bảng này (13/11/2026). */
+    qty_synced: { product_code: string; updated: number }[]
   }> {
     await assertAction(user, 'production.shaping.manage')
     const { lsx, orderLines } = await lsxWithLines(lsxId)
@@ -388,6 +395,40 @@ export const componentsService = {
       }
     }
 
+    // ── Ghi ngược SỐ CỤM / SP lên hồ sơ SP (13/11/2026) ─────────────────────
+    // Chỉ những cụm thống kê KHAI (client gửi `clusterQty` cho ô có số — ô để
+    // trống "chưa có" thì không gửi, máy tạm tính 1 trên lệnh nhưng không biến
+    // số tạm thành số đã khai). Cùng cờ với lộ trình: bỏ tick = ngoại lệ một lần.
+    const qtySynced: { product_code: string; updated: number }[] = []
+    if (opts.syncProfileRoutes !== false && opts.clusterQty?.length) {
+      const seenProducts = new Set<string>()
+      for (const line of orderLines) {
+        if (!line.product_id || seenProducts.has(line.product_id)) continue
+        seenProducts.add(line.product_id)
+        const lineIds = new Set(
+          orderLines.filter((l) => l.product_id === line.product_id).map((l) => l.id),
+        )
+        const rows = opts.clusterQty
+          .filter((q) => lineIds.has(q.production_order_line_id))
+          .map((q) => ({ name: q.cluster, qty: q.qty }))
+        if (!rows.length) continue
+        const r = await productsService.syncClusterQtyFromShaping(line.product_id, rows)
+        if ('skipped' in r) {
+          routesSkipped.push({ product_code: line.product_code, reason: r.skipped })
+          continue
+        }
+        if (r.updated > 0)
+          qtySynced.push({ product_code: line.product_code, updated: r.updated })
+        for (const name of r.missing)
+          if (
+            !routesMissing.some(
+              (m) => m.product_code === line.product_code && m.cluster === name,
+            )
+          )
+            routesMissing.push({ product_code: line.product_code, cluster: name })
+      }
+    }
+
     // ── Nhập ngược lên hồ sơ SP (chỉ SP chưa có định mức) ──────────────────
     const seeded: { product_code: string; added: number }[] = []
     const seedSkipped: { product_code: string; reason: string }[] = []
@@ -433,6 +474,7 @@ export const componentsService = {
       routes_synced: routesSynced,
       routes_skipped: routesSkipped,
       routes_missing: routesMissing,
+      qty_synced: qtySynced,
     }
   },
 

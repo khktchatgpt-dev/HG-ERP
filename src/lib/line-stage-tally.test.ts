@@ -107,6 +107,8 @@ describe('tallyLineStages — cụm thật (0088, JAWOLL) và hai đơn vị tr�
       id: 'van',
       name: 'Ván ngồi',
       group_code: 'WOOD',
+      // Khai lộ trình sơn riêng (gỗ không vào sổ theo nhóm nữa, 13/11/2026).
+      stages: ['son'],
       qty_per_unit: 1,
       line_qty: 557,
     }),

@@ -27,10 +27,6 @@ const PHOI = 'phoi'
 const HAN = 'han'
 const NGUOI = 'nguoi'
 const SON = 'son'
-const DAN = 'dan'
-const MAY = 'may'
-const BAO_BI = 'bao_bi'
-const DONG_GOI = 'dong_goi'
 
 /**
  * Nhóm → chuỗi công đoạn, ĐÚNG THỨ TỰ chạy. Nguồn nhóm là hồ sơ SP bên Kỹ
@@ -46,25 +42,24 @@ const ROUTE_BY_GROUP: Record<string, string[]> = {
   // lệnh nào thật sự cần thì KHAI ở màn Lộ trình công đoạn ("mở từng dòng") —
   // kế hoạch tổ & hạn không còn đè được lộ trình nhóm (10/11/2026).
   FRAME: [PHOI, HAN, NGUOI, SON],
-  // Gỗ / tấm / polywood: chỉ còn SƠN.
+  // CHỈ KHUNG VÀO SỔ (13/11/2026, chủ dự án: "phần sản lượng sao lại có phần
+  // gỗ hay ngũ kim, chỉ cần phần khung là chính" — chọn "Chỉ khung vào sổ").
+  // Gỗ, tấm, polywood, nệm, vải, mây, bao bì, tem = như ngũ kim: không qua
+  // công đoạn nào, sổ không bày dòng chi tiết của chúng. Chúng vẫn có mặt ở
+  // Bảng chi tiết (gập sẵn) và trong "1 bộ" ở chặng thành phẩm.
   //
-  // Cũng theo quyết định trên — xưởng không tách "mộc" ra đếm riêng. Hệ quả
-  // phải biết: 117 dòng gỗ nay chỉ có MỘT công đoạn trên sổ. Nếu thật ra
-  // xưởng có làm mộc và muốn đếm, cách đúng là gán `stage_code` cho tổ làm
-  // việc đó rồi trả `moc` về đây, KHÔNG phải nhét tạm vào công đoạn khác.
-  WOOD: [SON],
-  // KHÔNG để rỗng: rỗng ≡ "hàng mua" (xem `isPurchasedGroup`), và tấm/polywood
-  // bị coi là hàng mua thì chúng biến mất khỏi sổ mà không ai biết.
-  PANEL: [SON],
-  POLYWOOD: [SON],
-  // Nệm và vải: cắt vải rồi may.
-  CUSHION: [MAY],
-  FABRIC: [MAY],
-  // Mây/nhựa đan.
-  RATTAN: [DAN],
-  // Bao bì và tem nhãn chỉ xuất hiện ở khâu đóng gói.
-  PACKAGING: [BAO_BI, DONG_GOI],
-  LABEL: [BAO_BI],
+  // Trước đó (18/09) gỗ / tấm đi SƠN, nệm đi MAY, bao bì đi BAO BÌ → ĐÓNG GÓI
+  // — đo 13/11 trên 9 lệnh đang chạy: 47 gỗ · 9 tấm · 63 nệm · 1 thùng, so với
+  // 972 dòng khung. Muốn đếm lại một nhóm thì trả công đoạn về đây, hoặc KHAI
+  // lộ trình riêng cho dòng đó ở màn Lộ trình công đoạn (khai thắng nhóm).
+  WOOD: [],
+  PANEL: [],
+  POLYWOOD: [],
+  CUSHION: [],
+  FABRIC: [],
+  RATTAN: [],
+  PACKAGING: [],
+  LABEL: [],
   // Ngũ kim = hàng MUA. Tổ phôi không cắt con vít.
   NGU_KIM: [],
 }

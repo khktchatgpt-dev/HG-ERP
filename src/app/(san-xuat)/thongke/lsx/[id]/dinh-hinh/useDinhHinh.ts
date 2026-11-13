@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { parsePasteNumber } from '@/lib/po-paste'
+import { khoaCum } from '@/lib/khoa-cum'
 import {
   cellId,
   emptyDraft,
@@ -58,14 +59,54 @@ export function useDinhHinh(p: DinhHinhProps) {
     setDirty(true)
     setLoi(null)
   }
+  // Dòng mới nằm cuối nhóm SP — có khi ngoài màn. Cuộn tới + đặt con trỏ vào
+  // ô tên để người dùng thấy ngay dòng vừa thêm nằm đâu.
+  const [moiKey, setMoiKey] = useState<string | null>(null)
   const addRow = (lineId: string) => {
-    setRows((rs) => [...rs, emptyDraft(lineId)])
+    const dr = emptyDraft(lineId)
+    setRows((rs) => [...rs, dr])
+    setMoiKey(dr.key)
     setDirty(true)
   }
+  useEffect(() => {
+    if (!moiKey) return
+    const el = document.getElementById(cellId(moiKey, 'name'))
+    el?.scrollIntoView({ block: 'center' })
+    el?.focus()
+  }, [moiKey])
   const removeRow = (k: string) => {
     setRows((rs) => rs.filter((r) => r.key !== k))
     setDirty(true)
   }
+  // ── XOÁ DÒNG phải hỏi lại + hoàn tác được (13/11/2026, chủ dự án: "xoá không
+  // có cảnh báo"). Bấm "Xoá" lần một: dòng tô đỏ, nút thành "Xoá?"; bấm lần
+  // hai mới bỏ. Bỏ xong vẫn chỉ là bản nháp — dải trên lưới cho Hoàn tác tới khi Lưu.
+  const [xoaCho, setXoaCho] = useState<string | null>(null)
+  const [boVua, setBoVua] = useState<{ row: Draft; index: number } | null>(null)
+  useEffect(() => {
+    if (!xoaCho) return
+    const t = setTimeout(() => setXoaCho(null), 4000)
+    return () => clearTimeout(t)
+  }, [xoaCho])
+  const xinXoa = (k: string) => {
+    if (xoaCho !== k) {
+      setXoaCho(k)
+      return
+    }
+    const index = rows.findIndex((r) => r.key === k)
+    if (index >= 0) setBoVua({ row: rows[index], index })
+    setXoaCho(null)
+    removeRow(k)
+  }
+  const hoanTac = () => {
+    if (!boVua) return
+    setRows((rs) => [...rs.slice(0, boVua.index), boVua.row, ...rs.slice(boVua.index)])
+    setBoVua(null)
+    setDirty(true)
+  }
+  /** Dòng SP nhận "Thêm dòng" ở Action Pane: SP đang lọc, hoặc lệnh chỉ có một SP. */
+  const lineThem =
+    spLoc || (p.orderLines.length === 1 ? p.orderLines[0].id : null) || null
   /**
    * Lộ trình RIÊNG LỆNH cho MỘT dòng (cụm hoặc chi tiết rời). Cụm chỉ mang nửa
    * "cụm"; chi tiết trong cụm giữ nửa của nó — không kéo theo (kéo theo đã ghi
@@ -194,6 +235,7 @@ export function useDinhHinh(p: DinhHinhProps) {
         return
       }
       setRows(got.map(toDraft))
+      setBoVua(null)
       setDirty(true)
       setThongBao(
         `Đã nạp ${got.length} dòng${source === 'bom' ? ' từ BOM kỹ thuật' : ' từ lệnh trước'} — bản nháp trên màn, soát rồi Lưu mới ghi vào lệnh`,
@@ -209,6 +251,21 @@ export function useDinhHinh(p: DinhHinhProps) {
     if (busy || luuWhy) return
     setBusy(true)
     setLoi(null)
+    // Số chi tiết / CỤM của chi tiết trong cụm (dùng khi ghi sổ cụm trừ chi
+    // tiết, entries.service) phải theo số cụm / SP vừa khai: 4 chân / SP mà cụm
+    // chân ×2 thì 2 chân / cụm.
+    const cumQty = new Map<string, number>()
+    for (const r of rows) {
+      const q = num(r.qty_per_unit)
+      if (r.kind === 'assembly' && r.cluster.trim() && q && q > 0)
+        cumQty.set(`${r.production_order_line_id}|${khoaCum(r.cluster)}`, q)
+    }
+    const soMoiCum = (r: Draft): number | null => {
+      if (r.kind !== 'part' || !r.cluster.trim()) return r.qty_per_assembly
+      const q = cumQty.get(`${r.production_order_line_id}|${khoaCum(r.cluster)}`)
+      const perSp = num(r.qty_per_unit)
+      return q && perSp ? Math.round((perSp / q) * 10000) / 10000 : r.qty_per_assembly
+    }
     try {
       const res = await api<{
         seeded: { product_code: string; added: number }[]
@@ -216,11 +273,26 @@ export function useDinhHinh(p: DinhHinhProps) {
         routes_synced: { product_code: string; updated: number }[]
         routes_skipped: { product_code: string; reason: string }[]
         routes_missing: { product_code: string; cluster: string }[]
+        qty_synced?: { product_code: string; updated: number }[]
       }>(`/api/dept/production/lsx/${p.lsx.id}/components`, {
         method: 'PUT',
         body: {
           seed_profile: seedProfile,
           sync_profile_routes: syncProfile,
+          // Số cụm / SP thống kê đã GÕ (ô "chưa có" để trống thì không gửi) —
+          // server ghi ngược hồ sơ SP để màn ghi hết báo "chưa có" (13/11/2026).
+          cluster_qty: rows
+            .filter(
+              (r) =>
+                r.kind === 'assembly' &&
+                r.cluster.trim() &&
+                (num(r.qty_per_unit) ?? 0) > 0,
+            )
+            .map((r) => ({
+              production_order_line_id: r.production_order_line_id,
+              cluster: r.cluster.trim(),
+              qty: num(r.qty_per_unit)!,
+            })),
           lines: rows.map((r) => ({
             production_order_line_id: r.production_order_line_id,
             kind: r.kind,
@@ -234,10 +306,11 @@ export function useDinhHinh(p: DinhHinhProps) {
             spec_length_mm: num(r.spec_length_mm),
             wall_thickness_mm: num(r.wall_thickness_mm),
             unit: r.unit.trim() || null,
-            qty_per_unit: num(r.qty_per_unit),
+            // Cụm "chưa có" để trống → lệnh tạm tính 1 (số Phải làm vẫn ra).
+            qty_per_unit: num(r.qty_per_unit) ?? (r.kind === 'assembly' ? 1 : null),
             dm_kg: num(r.dm_kg),
             pcs_per_bar: r.pcs_per_bar,
-            qty_per_assembly: r.qty_per_assembly,
+            qty_per_assembly: soMoiCum(r),
             first_stage: r.first_stage,
             final_stage: r.final_stage,
             // Bản chụp lộ trình PHẢI đi kèm, không thì mỗi lần Lưu xoá sạch.
@@ -266,13 +339,17 @@ export function useDinhHinh(p: DinhHinhProps) {
       const syncSkipped = (res.routes_skipped ?? []).length
         ? ` · hồ sơ SP không cập nhật: ${res.routes_skipped.map((x) => `${x.product_code} (${lyDoBoQua[x.reason] ?? x.reason})`).join(', ')}`
         : ''
+      const qtySynced = (res.qty_synced ?? []).length
+        ? ` · hồ sơ SP nhận số cụm / SP: ${res.qty_synced!.map((x) => `${x.product_code} (${x.updated} cụm)`).join(', ')}`
+        : ''
       const syncMissing = (res.routes_missing ?? []).length
         ? ` · chỉ ghi trên lệnh (hồ sơ SP chưa có cụm): ${res.routes_missing.map((x) => `${x.cluster} của ${x.product_code}`).join(', ')}`
         : ''
       setThongBao(
-        `Đã lưu bảng định hình ${rows.length} dòng lúc ${gio}${seeded}${skipped}${synced}${syncSkipped}${syncMissing}`,
+        `Đã lưu bảng định hình ${rows.length} dòng lúc ${gio}${seeded}${skipped}${synced}${qtySynced}${syncSkipped}${syncMissing}`,
       )
       setDirty(false)
+      setBoVua(null)
       router.refresh()
     } catch (e) {
       setLoi(apiErrorText(e, 'Không lưu được bảng'))
@@ -394,6 +471,11 @@ export function useDinhHinh(p: DinhHinhProps) {
     patch,
     addRow,
     removeRow,
+    xoaCho,
+    xinXoa,
+    boVua,
+    hoanTac,
+    lineThem,
     setStages,
     anhEmCum,
     apChoCumCungTen,
