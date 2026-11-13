@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, Download } from 'lucide-react'
+import { BookOpen, Download, Lock } from 'lucide-react'
 import { kyThang } from '@/lib/kho-nxt'
 import { searchTokens } from '@/lib/search-text'
 import { useBeRong } from '@/lib/use-be-rong'
@@ -29,6 +29,7 @@ import {
   type CotSo,
 } from './bao-cao.shared'
 import { TheKho } from './the-kho'
+import { DongChuaChot, KiemKyHop } from './kiem-ky'
 
 const KHONG_NHOM = '(chưa phân nhóm)'
 
@@ -62,6 +63,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   )
   const [chon, setChon] = useState<string | null>(null)
   const [mo, setMo] = useState<string | null>(null)
+  const [moKiem, setMoKiem] = useState(false)
   const khung = useRef<HTMLDivElement>(null)
   const beRong = useBeRong(khung)
 
@@ -114,6 +116,7 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const dat = (p: { tu: string; den: string }) => {
     setChon(null)
     setMo(null)
+    setMoKiem(false)
     batDau(() => router.push(`${pathname}?tu=${p.tu}&den=${p.den}`, { scroll: false }))
   }
   const thang = kyThang(bc.tu)
@@ -152,11 +155,17 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
       <DauTrang
         title="Báo cáo tháng"
         ctx={
-          dangTinh
-            ? 'Đang tính lại kỳ…'
-            : laThang
-              ? nhanThang(laThang)
-              : `${dmy(bc.tu)} – ${dmy(bc.den)}`
+          dangTinh ? (
+            'Đang tính lại kỳ…'
+          ) : laThang ? (
+            bc.kiemKy ? (
+              <>{nhanThang(laThang)} · <span className="kh-warn">chưa chốt</span></> // prettier-ignore
+            ) : (
+              nhanThang(laThang)
+            )
+          ) : (
+            `${dmy(bc.tu)} – ${dmy(bc.den)}`
+          )
         }
         actions={
           <>
@@ -171,6 +180,16 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
                 Xuất Excel
               </ApNut>
             </ApNhom>
+            {bc.kiemKy && (
+              <ApNhom>
+                <ApNut
+                  icon={<Lock size={15} aria-hidden />}
+                  onClick={() => setMoKiem(true)}
+                >
+                  Chốt kỳ…
+                </ApNut>
+              </ApNhom>
+            )}
             <ApNhom>
               <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
                 Phiếu đã ghi
@@ -258,6 +277,11 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
           </button>
         )}
       </ThanhLoc>
+
+      {bc.kiemKy && <DongChuaChot kk={bc.kiemKy} onMo={() => setMoKiem(true)} />}
+      {bc.kiemKy && moKiem && (
+        <KiemKyHop kk={bc.kiemKy} onClose={() => setMoKiem(false)} />
+      )}
 
       {tamTinh && (
         <div className="kh-note" role="status">

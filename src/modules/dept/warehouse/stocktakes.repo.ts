@@ -179,6 +179,24 @@ export const stocktakesRepo = {
     return count ?? 0
   },
 
+  /** Đợt CHƯA xong (open · counting · review) — cho kiểm trước khi chốt kỳ. */
+  async listOpen(): Promise<
+    { id: string; code: string; status: StocktakeStatus; freeze_at: string | null }[]
+  > {
+    const { data, error } = await db()
+      .from('warehouse_stocktakes')
+      .select('id, code, status, freeze_at')
+      .in('status', ['open', 'counting', 'review'])
+      .order('code')
+    if (error) throw new Error(error.message)
+    return (data ?? []) as {
+      id: string
+      code: string
+      status: StocktakeStatus
+      freeze_at: string | null
+    }[]
+  },
+
   async insertLines(
     rows: {
       stocktake_id: string

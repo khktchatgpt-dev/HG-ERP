@@ -96,6 +96,60 @@ export const nxtRepo = {
     return out
   },
 
+  /**
+   * Dòng đơn mua → các lệnh có phần trên dòng đó (cùng luật `hangLenhRepo.
+   * dongCacLenh`): dòng CÓ chia (0185) → các lệnh được chia; dòng không chia →
+   * lệnh chính của đơn. Dòng của đơn không gắn lệnh → không có trong map.
+   * Kèm mã lệnh (nhúng cùng lượt — đỡ một vòng đi-về, đo 13/11/2026: 0,8 s → ~0,3 s).
+   */
+  async lenhCuaDongDon(
+    lineIds: string[],
+  ): Promise<{ lenh: Map<string, string[]>; ma: Map<string, string> }> {
+    type Ma = { code: string } | { code: string }[] | null
+    const [lines, chia] = await Promise.all([
+      theoLo<{ id: string; po: { production_order_id: string | null; lsx: Ma } | { production_order_id: string | null; lsx: Ma }[] | null }> // prettier-ignore
+      (lineIds, (lo) =>
+        db()
+          .from('supply_purchase_order_lines')
+          .select(
+            'id, po:supply_purchase_orders(production_order_id, lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code))',
+          )
+          .in('id', lo)
+          .order('id'),
+      ),
+      theoLo<{ line_id: string; production_order_id: string; lsx: Ma }>(lineIds, (lo) =>
+        db()
+          .from('supply_po_line_lsx')
+          .select('line_id, production_order_id, lsx:production_orders(code)')
+          .in('line_id', lo)
+          .order('line_id'),
+      ),
+    ])
+    const lenh = new Map<string, string[]>()
+    const ma = new Map<string, string>()
+    for (const c of chia) {
+      lenh.set(c.line_id, [...(lenh.get(c.line_id) ?? []), c.production_order_id])
+      const code = one(c.lsx)?.code
+      if (code) ma.set(c.production_order_id, code)
+    }
+    for (const l of lines) {
+      if (lenh.has(l.id)) continue
+      const po = one(l.po)
+      if (!po?.production_order_id) continue
+      lenh.set(l.id, [po.production_order_id])
+      const code = one(po.lsx)?.code
+      if (code) ma.set(po.production_order_id, code)
+    }
+    return { lenh, ma }
+  },
+
+  async maLenh(ids: string[]): Promise<Map<string, string>> {
+    const rows = await theoLo<{ id: string; code: string }>(ids, (lo) =>
+      db().from('production_orders').select('id, code').in('id', lo).order('id'),
+    )
+    return new Map(rows.map((r) => [r.id, r.code]))
+  },
+
   async vatTu(
     ids: string[],
   ): Promise<

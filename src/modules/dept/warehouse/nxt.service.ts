@@ -3,7 +3,9 @@ import { canEnterWorkspace } from '@/workspaces/access'
 import { Forbidden } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 import { chieuDong, doiChieuSo, dungNxt, giaVnd, laCotNhap, type Cot, type DongNxt } from '@/lib/kho-nxt' // prettier-ignore
+import { kiemKy, thangDaQua, type DotKiemKeMo, type KiemKy, type KiemThang } from '@/lib/kho-kiem-ky' // prettier-ignore
 import { nxtRepo } from './nxt.repo'
+import { stocktakesRepo } from './stocktakes.repo'
 
 /**
  * BÁO CÁO NHẬP–XUẤT–TỒN (Kho đợt 2 · B6) — luật ở `lib/kho-nxt.ts`.
@@ -49,7 +51,26 @@ export type NxtBaoCao = {
   kyGanNhat: string | null
   /** Tháng `YYYY-MM` của dòng sổ đầu tiên — mốc đầu của ô chọn kỳ. */
   thangDau: string | null
+  /**
+   * Kiểm trước khi chốt (B1, chỉ đọc) — chỉ khi kỳ là MỘT tháng trọn đã qua.
+   * Null với tháng đang chạy hoặc kỳ tuỳ chọn ngày.
+   */
+  kiemKy: KiemKyHien | null
 }
+
+type VtHien = { id: string; code: string; name: string }
+
+/** `KiemKy` đã gắn mã/tên để bày — client chỉ nhận phần này. */
+export type KiemThangHien = Omit<
+  KiemThang,
+  'tonAm' | 'lenhNhan' | 'lenhChuaXuat' | 'maThieuGia'
+> & {
+  tonAm: VtHien[]
+  lenhNhan: number
+  lenhChuaXuat: { id: string; code: string }[]
+  maThieuGia: VtHien[]
+}
+export type KiemKyHien = Omit<KiemKy, 'thangs'> & { thangs: KiemThangHien[] }
 
 export const nxtService = {
   async baoCao(user: User, ky: { tu: string; den: string }): Promise<NxtBaoCao> {
@@ -58,9 +79,19 @@ export const nxtService = {
         'Báo cáo nhập–xuất–tồn thuộc khu Kho. Nhờ quản trị cấp quyền xem khu Kho.',
       )
     }
+    const homNay = todayVn()
     const dong = await nxtRepo.dongSoDen(ky.den)
     const tinh = dungNxt(dong, ky.tu, ky.den)
-    const vt = await nxtRepo.vatTu(tinh.map((r) => r.material_id))
+    const thangKiem = thangDaQua(ky, homNay)
+    const [vt, lenhDon, dotKiemKe] = await Promise.all([
+      nxtRepo.vatTu(tinh.map((r) => r.material_id)),
+      thangKiem
+        ? nxtRepo.lenhCuaDongDon(
+            dong.flatMap((d) => (d.direction === 'in' && d.po_line_id && !d.la_dao ? [d.po_line_id] : [])), // prettier-ignore
+          )
+        : null,
+      thangKiem ? stocktakesRepo.listOpen() : null,
+    ])
     const rows: NxtDong[] = tinh.map((r) => {
       const m = vt.get(r.material_id)
       return {
@@ -109,16 +140,57 @@ export const nxtService = {
       ds.sort((a, b) => a.ngay.localeCompare(b.ngay) || (a.doc_code ?? '').localeCompare(b.doc_code ?? '')) // prettier-ignore
     }
 
+    let kiem: KiemKyHien | null = null
+    if (thangKiem && lenhDon && dotKiemKe) {
+      const k = kiemKy({
+        dong,
+        thangDau: thangDau ? thangDau.slice(0, 7) : thangKiem,
+        thang: thangKiem,
+        lenhCuaDong: lenhDon.lenh,
+        dotKiemKe: dotKiemKe.map((t): DotKiemKeMo => ({
+          id: t.id,
+          code: t.code,
+          status: t.status,
+          freeze_ngay: t.freeze_at ? todayVn(new Date(t.freeze_at)) : null,
+        })),
+      })
+      // Mã lệnh đã nhúng cùng lượt đọc dòng đơn; chỉ đọc thêm cho lệnh gắn thẳng trên dòng sổ (hiếm).
+      const maLenh = lenhDon.ma
+      const thieuMa = k.thangs
+        .flatMap((t) => t.lenhChuaXuat)
+        .filter((id) => !maLenh.has(id))
+      if (thieuMa.length > 0) for (const [id, code] of await nxtRepo.maLenh(thieuMa)) maLenh.set(id, code) // prettier-ignore
+      const hienVt = (id: string): VtHien => {
+        const m = vt.get(id)
+        return { id, code: m?.code ?? '?', name: m?.name ?? '(vật tư không còn trong danh mục)' } // prettier-ignore
+      }
+      kiem = {
+        ...k,
+        thangs: k.thangs.map((t) => ({
+          ...t,
+          tonAm: t.tonAm.map(hienVt),
+          lenhNhan: t.lenhNhan.length,
+          lenhChuaXuat: t.lenhChuaXuat
+            .map((id) => ({ id, code: maLenh.get(id) ?? id }))
+            .sort((a, b) => a.code.localeCompare(b.code, 'vi')),
+          maThieuGia: t.maThieuGia
+            .map(hienVt)
+            .sort((a, b) => a.code.localeCompare(b.code, 'vi')),
+        })),
+      }
+    }
+
     return {
       tu: ky.tu,
       den: ky.den,
-      homNay: todayVn(),
+      homNay,
       rows,
       chiTiet,
       doiChieu: doiChieuSo(tinh, dong, ky.tu, ky.den),
       soDong,
       kyGanNhat: kyGanNhat ? kyGanNhat.slice(0, 7) : null,
       thangDau: thangDau ? thangDau.slice(0, 7) : null,
+      kiemKy: kiem,
     }
   },
 }

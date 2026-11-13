@@ -1,6 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as PhimReact,
+  type ReactNode,
+} from 'react'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 
 /**
@@ -206,9 +212,34 @@ export function GoiY({
   )
 }
 
+const BAM_DUOC =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Tab ở nút cuối (Shift+Tab ở nút đầu) quay vòng trong hộp. Thiếu nó, Tab từ
+ * nút Đóng rơi ra dòng bảng sau nền mờ — con trỏ biến mất (soi 13/11/2026 ở hộp
+ * Chốt kỳ). Chỉ xử lý hai mép; giữa hộp để trình duyệt tự đi.
+ */
+function giuTabTrongHop(e: PhimReact<HTMLElement>, hop: HTMLElement | null) {
+  if (!hop) return
+  const ds = [...hop.querySelectorAll<HTMLElement>(BAM_DUOC)].filter(
+    (el) => el.getClientRects().length > 0,
+  )
+  if (!ds.length) return
+  const dau = ds[0]
+  const cuoi = ds[ds.length - 1]
+  const dang = document.activeElement
+  const ngoai = !hop.contains(dang)
+  if (e.shiftKey ? dang === dau || ngoai : dang === cuoi || ngoai) {
+    e.preventDefault()
+    ;(e.shiftKey ? cuoi : dau).focus()
+  }
+}
+
 /**
  * HỘP THOẠI của Kho — nổi giữa màn, nền mờ, Esc / ✕ đóng, con trỏ vào ô đầu
- * tiên (hoặc nút đầu tiên) khi mở. Phẳng, viền mảnh, không bo góc.
+ * tiên (hoặc nút đầu tiên) khi mở, Tab quay vòng trong hộp. Phẳng, viền mảnh,
+ * không bo góc.
  */
 export function HopThoai({
   title,
@@ -253,6 +284,7 @@ export function HopThoai({
       */
       onKeyDown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') e.stopPropagation()
+        if (e.key === 'Tab') giuTabTrongHop(e, hop.current)
       }}
     >
       <div

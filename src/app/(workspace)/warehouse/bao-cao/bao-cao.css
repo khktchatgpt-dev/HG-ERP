@@ -196,3 +196,87 @@
   scroll-margin-top: 56px;
   scroll-margin-bottom: 36px;
 }
+
+/*
+ * KIỂM TRƯỚC KHI CHỐT KỲ (B1, 13/11/2026) — hộp danh sách kiểm + dòng "Chưa chốt".
+ * Bản vẽ: https://claude.ai/artifact/6mgaRUw38AvLwCS1199P73 (khung 1 + 2).
+ */
+.kh.kh .kh-note .nx-kk-mo {
+  font-family: inherit;
+}
+.kh.kh .nx-kk-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+}
+.kh.kh .nx-kk {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--kh-line);
+}
+.kh.kh .nx-kk > li {
+  display: grid;
+  grid-template-columns: 16px 84px minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--kh-hair);
+  font-size: 12.5px;
+}
+.kh.kh .nx-kk > li:last-child {
+  border-bottom: 0;
+}
+.kh.kh .nx-kk .kq {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.kh.kh .nx-kk .tiep {
+  white-space: nowrap;
+}
+.kh.kh .nx-kk .tiep .kh-lnk {
+  font-family: inherit;
+}
+.kh.kh .nx-kk .phu {
+  grid-column: 3 / -1;
+  font-size: 11.5px;
+  color: var(--kh-ink3);
+}
+.kh.kh .nx-kk-tb {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--kh-line);
+  font-size: 12.5px;
+}
+.kh.kh .nx-kk-tb th {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--kh-line);
+  background: var(--kh-raised);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--kh-ink3);
+  white-space: nowrap;
+}
+.kh.kh .nx-kk-tb td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--kh-hair);
+  white-space: nowrap;
+}
+.kh.kh .nx-kk-tb tr:last-child td {
+  border-bottom: 0;
+}
+.kh.kh .nx-kk-tb .r {
+  text-align: right;
+}
+.kh.kh .kh-hop .than p.nx-kk-sau {
+  font-size: 12px;
+  color: var(--kh-ink3);
+}
