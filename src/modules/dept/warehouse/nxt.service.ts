@@ -5,7 +5,7 @@ import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { todayVn } from '@/lib/date-vn'
 import { chieuDong, doiChieuSo, dungNxt, giaVnd, kyThang, laCotNhap, type Cot, type DongNxt, type DongSo } from '@/lib/kho-nxt' // prettier-ignore
 import { banChot, kiemKy, luuYPhaiTich, thangDaQua, thangSau, tuBanChot, type DotKiemKeMo, type KiemKy, type KiemThang } from '@/lib/kho-kiem-ky' // prettier-ignore
-import { nxtRepo, type KyDaChot } from './nxt.repo'
+import { nxtRepo, type KyDaChot, type NhatKyKy } from './nxt.repo'
 import { stocktakesRepo } from './stocktakes.repo'
 
 /**
@@ -68,6 +68,13 @@ export type NxtBaoCao = {
   thangDaChot: string[]
   /** Người xem có quyền `warehouse.period.close` (Kế toán trưởng) — thấy ô tích + nút Chốt. */
   coTheChot: boolean
+  /**
+   * Tháng mở lại được (B3) = tháng chốt MỚI NHẤT (Q6: mở từ mới nhất lùi về);
+   * null = chưa chốt tháng nào. Quyền mở lại = quyền chốt (Q2).
+   */
+  thangMoLai: string | null
+  /** Nhật ký chốt / mở lại kỳ, mới → cũ (0300). Ai xem Báo cáo tháng cũng xem được. */
+  nhatKy: NhatKyKy[]
 }
 
 type VtHien = { id: string; code: string; name: string }
@@ -92,10 +99,11 @@ export const nxtService = {
       )
     }
     const homNay = todayVn()
-    const [dong, daChot, coTheChot] = await Promise.all([
+    const [dong, daChot, coTheChot, nhatKy] = await Promise.all([
       nxtRepo.dongSoDen(ky.den),
       nxtRepo.kyDaChot(),
       canAction(user, 'warehouse.period.close'),
+      nxtRepo.nhatKy(),
     ])
     const chotCuoi = daChot.at(-1) ?? null
     // Kỳ đang xem đúng một tháng đã chốt → đọc bản chốt (khung 3), không tính lại.
@@ -212,6 +220,8 @@ export const nxtService = {
       chotDen: chotCuoi?.den ?? null,
       thangDaChot: daChot.map((k) => k.thang),
       coTheChot,
+      thangMoLai: chotCuoi?.thang ?? null,
+      nhatKy,
     }
   },
 
@@ -267,6 +277,34 @@ export const nxtService = {
       throw e
     }
     return { den: k.den, thangs: k.thangs.map((t) => t.thang) }
+  },
+
+  /**
+   * MỞ LẠI THÁNG `thang` (B3, bản vẽ khung 6). Q2: Kế toán trưởng (cùng quyền chốt).
+   * Q6: chỉ tháng chốt MỚI NHẤT — mở từng tháng, từ mới nhất lùi về. Bắt lý do
+   * ≥ 10 ký tự (zod + DB). Xoá bản chốt của tháng đó, ngày khoá lùi về cuối tháng
+   * trước; một dòng nhật ký. Trả ngày khoá mới (null = hết khoá).
+   */
+  async moLai(
+    user: User,
+    input: { thang: string; ly_do: string },
+  ): Promise<{ khoa: string | null }> {
+    await assertAction(user, 'warehouse.period.close')
+    const nhan = `${input.thang.slice(5, 7)}/${input.thang.slice(0, 4)}`
+    const daChot = await nxtRepo.kyDaChot()
+    const cuoi = daChot.at(-1)
+    if (!cuoi) throw Conflict('Sổ kho chưa chốt tháng nào — không có gì để mở lại.')
+    if (cuoi.thang !== input.thang) {
+      throw Conflict(`Chỉ mở lại được tháng chốt mới nhất (${cuoi.thang.slice(5, 7)}/${cuoi.thang.slice(0, 4)}) — mở lại tháng đó trước rồi mới tới tháng ${nhan}.`) // prettier-ignore
+    }
+    try {
+      await nxtRepo.moLai(user.id, input.thang, input.ly_do.trim())
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('KHO_CHOT:')) throw Conflict(msg.replace(/^.*KHO_CHOT:s*/, ''))
+      throw e
+    }
+    return { khoa: daChot.at(-2)?.den ?? null }
   },
 }
 

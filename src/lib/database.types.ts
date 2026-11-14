@@ -10415,6 +10415,44 @@ export type Database = {
           },
         ]
       }
+      warehouse_period_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          gt_ton_cuoi: number | null
+          id: string
+          reason: string | null
+          thang: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          gt_ton_cuoi?: number | null
+          id?: string
+          reason?: string | null
+          thang: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          gt_ton_cuoi?: number | null
+          id?: string
+          reason?: string | null
+          thang?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_period_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouse_periods: {
         Row: {
           closed_at: string
@@ -11335,6 +11373,10 @@ export type Database = {
       warehouse_close_periods: {
         Args: { p_actor: string; p_months: Json }
         Returns: number
+      }
+      warehouse_reopen_period: {
+        Args: { p_actor: string; p_reason: string; p_thang: string }
+        Returns: undefined
       }
     }
     Enums: {

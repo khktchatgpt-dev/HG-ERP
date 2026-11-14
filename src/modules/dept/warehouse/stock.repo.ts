@@ -1,4 +1,6 @@
 import { db } from '@/server/db'
+import { Conflict } from '@/server/http'
+import { cauKhoaSo, docLoiKhoa } from '@/lib/kho-kiem-ky'
 import { searchTokens } from '@/lib/search-text'
 import { summariseDoc, type DocSummary } from '@/lib/warehouse-doc-summary'
 import { dieuChinhCua } from '@/lib/da-ve'
@@ -724,6 +726,17 @@ export async function giaVonNhap(): Promise<
   return out
 }
 
+/**
+ * Lỗi ghi phiếu kho → lỗi người đọc được. Phiếu rơi vào kỳ đã chốt bị trigger
+ * `warehouse_docs_khoa_so` (0300) chặn với `KHO_KHOA|…`: đổi thành 409 nói khoá
+ * đến đâu và cách gỡ. Mọi đường ghi phiếu (nhận, xuất, đảo, kiểm kê, nhập đề nghị)
+ * đi qua `docsRepo.insert` / `patchStatus` nên dịch MỘT chỗ là phủ hết.
+ */
+function loiGhiPhieu(msg: string): Error {
+  const k = docLoiKhoa(msg)
+  return k ? Conflict(cauKhoaSo(k), 'KHO_KHOA') : new Error(msg)
+}
+
 export const docsRepo = {
   /** Số phiếu lập HÔM NAY theo loại — nuôi ô "Nhập/Xuất hôm nay" của dashboard. */
   async countTodayByKind(): Promise<Record<string, number>> {
@@ -775,7 +788,7 @@ export const docsRepo = {
       .insert(row)
       .select('id, code')
       .single()
-    if (error || !data) throw new Error(error?.message ?? 'Insert doc failed')
+    if (error || !data) throw loiGhiPhieu(error?.message ?? 'Insert doc failed')
     return data as { id: string; code: string }
   },
 
@@ -790,7 +803,7 @@ export const docsRepo = {
     },
   ): Promise<void> {
     const { error } = await db().from('warehouse_docs').update(patch).eq('id', id)
-    if (error) throw new Error(error.message)
+    if (error) throw loiGhiPhieu(error.message)
   },
 
   /** shipment_id của phiếu (0153) — không nằm trong DOC_COLS, chỉ K1 cần khi đảo. */

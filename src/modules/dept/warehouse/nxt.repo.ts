@@ -4,6 +4,17 @@ import { todayVn } from '@/lib/date-vn'
 import type { DongSo } from '@/lib/kho-nxt'
 import type { HangBanChot, ThangChot } from '@/lib/kho-kiem-ky'
 
+/** Một dòng nhật ký chốt / mở lại kỳ (0300) — `ai` là TÊN người làm. */
+export type NhatKyKy = {
+  id: string
+  thang: string
+  action: 'close' | 'reopen'
+  reason: string | null
+  ai: string | null
+  gt_ton_cuoi: number | null
+  created_at: string
+}
+
 /** Một tháng đã chốt — `thang` dạng `YYYY-MM`, `closed_by` là TÊN người chốt. */
 export type KyDaChot = {
   id: string
@@ -209,6 +220,46 @@ export const nxtRepo = {
     })
     if (error) throw new Error(error.message)
     return Number(data ?? 0)
+  },
+
+  /**
+   * MỞ LẠI tháng chốt mới nhất (B3, 0300) — một giao dịch: ghi nhật ký rồi xoá
+   * bản chốt. Không phải tháng mới nhất / lý do ngắn → `KHO_CHOT: …` (service → 409).
+   */
+  async moLai(actor: string, thang: string, lyDo: string): Promise<void> {
+    const { error } = await db().rpc('warehouse_reopen_period', {
+      p_actor: actor,
+      p_thang: `${thang}-01`,
+      p_reason: lyDo,
+    })
+    if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Nhật ký chốt / mở lại kỳ, mới → cũ (0300). Bảng chưa có (mã lên trước
+   * migration) thì rỗng — Báo cáo tháng vẫn chạy.
+   */
+  async nhatKy(limit = 50): Promise<NhatKyKy[]> {
+    const { data, error } = await db()
+      .from('warehouse_period_log')
+      .select(
+        'id, thang, action, reason, gt_ton_cuoi, created_at, actor:users!warehouse_period_log_actor_id_fkey(name)',
+      )
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return []
+      throw new Error(error.message)
+    }
+    return (data ?? []).map((r) => ({
+      id: r.id as string,
+      thang: (r.thang as string).slice(0, 7),
+      action: r.action as 'close' | 'reopen',
+      reason: (r.reason as string | null) ?? null,
+      ai: one(r.actor as { name: string } | { name: string }[] | null)?.name ?? null,
+      gt_ton_cuoi: r.gt_ton_cuoi == null ? null : Number(r.gt_ton_cuoi),
+      created_at: r.created_at as string,
+    }))
   },
 
   async maLenh(ids: string[]): Promise<Map<string, string>> {

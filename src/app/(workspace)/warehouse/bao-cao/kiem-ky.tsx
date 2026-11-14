@@ -469,9 +469,9 @@ export function KiemKyHop({
         </tbody>
       </table>
       <p className="nx-kk-sau">
-        Sau khi chốt: Báo cáo tháng đọc bản chốt, không tính lại. Chặn ghi phiếu ngày ≤{' '}
-        {dmy(kk.den)} và mở lại tháng là bước sau — phiếu ghi lùi lúc này vẫn vào sổ và
-        làm dòng “Đối chiếu sổ kỳ” báo lệch.
+        Sau khi chốt: Báo cáo tháng đọc bản chốt, không tính lại; không ghi được phiếu
+        ngày ≤ {dmy(kk.den)}. Đảo hoặc điều chỉnh phiếu cũ vẫn được — phiếu mới mang ngày
+        hôm nay. Cần ghi bù thì Kế toán trưởng mở lại tháng (Khác ▾ › Mở lại).
       </p>
     </HopThoai>
   )

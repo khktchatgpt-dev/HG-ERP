@@ -18,7 +18,16 @@ import { kyThang } from '@/lib/kho-nxt'
 import { searchTokens } from '@/lib/search-text'
 import { useBeRong } from '@/lib/use-be-rong'
 import type { NxtBaoCao, NxtDong } from '@/modules/dept/warehouse/nxt.service'
-import { ApNhom, ApNut, DauTrang, KhoKhung, Rong, ThanhLoc, ThanhTT } from '../_erp/khung'
+import {
+  ApNhom,
+  ApNut,
+  DauTrang,
+  KhoKhung,
+  MenuNut,
+  Rong,
+  ThanhLoc,
+  ThanhTT,
+} from '../_erp/khung'
 import { ONgay } from '../_erp/o-nhap'
 import {
   dmy,
@@ -32,6 +41,7 @@ import {
 } from './bao-cao.shared'
 import { TheKho } from './the-kho'
 import { DongChuaChot, KiemKyHop } from './kiem-ky'
+import { MoLaiHop, NhatKyHop } from './mo-lai'
 
 const KHONG_NHOM = '(chưa phân nhóm)'
 
@@ -66,7 +76,10 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
   const [chon, setChon] = useState<string | null>(null)
   const [mo, setMo] = useState<string | null>(null)
   const [moKiem, setMoKiem] = useState(false)
-  const [bao, setBao] = useState<string | null>(null)
+  /** Câu kết quả tại chỗ sau khi chốt / mở lại kỳ. */
+  const [bao, setBao] = useState<{ tag: string; text: string; ok: boolean } | null>(null)
+  const [moLai, setMoLai] = useState(false)
+  const [moNhatKy, setMoNhatKy] = useState(false)
   const khung = useRef<HTMLDivElement>(null)
   const beRong = useBeRong(khung)
 
@@ -120,6 +133,8 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
     setChon(null)
     setMo(null)
     setMoKiem(false)
+    setMoLai(false)
+    setMoNhatKy(false)
     setBao(null)
     batDau(() => router.push(`${pathname}?tu=${p.tu}&den=${p.den}`, { scroll: false }))
   }
@@ -130,9 +145,25 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
       { method: 'POST', body: { thang: bc.tu.slice(0, 7), luu_y: luuY } },
     )
     setMoKiem(false)
-    setBao(
-      `Sổ kho đã chốt đến hết ${dmy(kq.den)}${kq.thangs.length > 1 ? ` — ${kq.thangs.length} tháng, mỗi tháng một bản chốt` : ''}.`, // prettier-ignore
-    )
+    setBao({
+      tag: 'Đã chốt',
+      ok: true,
+      text: `Sổ kho đã chốt đến hết ${dmy(kq.den)}${kq.thangs.length > 1 ? ` — ${kq.thangs.length} tháng, mỗi tháng một bản chốt` : ''}.`, // prettier-ignore
+    })
+    batDau(() => router.refresh())
+  }
+  // B3: mở lại tháng chốt mới nhất — đóng hộp, nói ngày khoá mới tại chỗ, tải lại (kỳ tính lại từ sổ).
+  const moLaiKy = async (lyDo: string) => {
+    const kq = await api<{ khoa: string | null }>('/api/dept/warehouse/bao-cao/mo-lai', {
+      method: 'POST',
+      body: { thang: bc.tu.slice(0, 7), ly_do: lyDo },
+    })
+    setMoLai(false)
+    setBao({
+      tag: 'Đã mở lại',
+      ok: false,
+      text: `${nhanThang(bc.tu.slice(0, 7))} đã mở lại — ${kq.khoa ? `sổ kho nay chốt đến hết ${dmy(kq.khoa)}` : 'sổ kho không còn tháng nào chốt'}. Ghi bù xong thì chốt lại.`, // prettier-ignore
+    })
     batDau(() => router.refresh())
   }
   const daChot = new Set(bc.thangDaChot)
@@ -220,6 +251,33 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
                 Phiếu đã ghi
               </ApNut>
             </ApNhom>
+            {/* B3 (bản vẽ khung 3 + 6): mở lại và nhật ký là việc hiếm — gom vào Khác ▾. */}
+            {(bc.kyChot || bc.nhatKy.length > 0) && (
+              <ApNhom>
+                <MenuNut
+                  label="Khác"
+                  items={[
+                    ...(bc.kyChot && laThang
+                      ? [
+                          {
+                            label: `Mở lại ${nhanThang(laThang).toLowerCase()}…`,
+                            onClick: () => setMoLai(true),
+                            why: !bc.coTheChot
+                              ? 'Kế toán trưởng mở lại kỳ'
+                              : bc.thangMoLai !== laThang && bc.thangMoLai
+                                ? `Mở lại ${nhanThang(bc.thangMoLai).toLowerCase()} trước — mở từ tháng mới nhất lùi về`
+                                : null,
+                          },
+                        ]
+                      : []),
+                    {
+                      label: `Nhật ký chốt kỳ${bc.nhatKy.length ? ` (${bc.nhatKy.length})` : ''}`,
+                      onClick: () => setMoNhatKy(true),
+                    },
+                  ]}
+                />
+              </ApNhom>
+            )}
           </>
         }
       />
@@ -305,11 +363,23 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
       </ThanhLoc>
 
       {bao && (
-        <div className="kh-note ok" role="status">
-          <span className="tag">Đã chốt</span>
-          <span>{bao}</span>
+        <div className={bao.ok ? 'kh-note ok' : 'kh-note'} role="status">
+          <span className="tag">{bao.tag}</span>
+          <span>{bao.text}</span>
         </div>
       )}
+      {moLai && bc.kyChot && bc.chotDen && (
+        <MoLaiHop
+          thang={bc.kyChot.thang}
+          den={bc.chotDen}
+          chot={bc.kyChot}
+          thangDaChot={bc.thangDaChot}
+          nhatKy={bc.nhatKy}
+          onClose={() => setMoLai(false)}
+          onMoLai={moLaiKy}
+        />
+      )}
+      {moNhatKy && <NhatKyHop ds={bc.nhatKy} onClose={() => setMoNhatKy(false)} />}
       {bc.kiemKy && (
         <DongChuaChot kk={bc.kiemKy} chotDen={bc.chotDen} onMo={() => setMoKiem(true)} />
       )}

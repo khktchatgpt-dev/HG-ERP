@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { DongSo } from './kho-nxt'
 import {
   banChot,
+  cauKhoaSo,
+  docLoiKhoa,
+  khoaSauMoLai,
+  ngaySau,
+  thangTruoc,
   dsThangKiem,
   kiemKy,
   luuYPhaiTich,
@@ -298,5 +303,34 @@ describe('B2 — bản chốt', () => {
       cong_nhap: 0,
       cong_xuat: 4,
     })
+  })
+})
+
+describe('B3 — khoá sổ theo kỳ đã chốt (0300)', () => {
+  it('đọc lỗi trigger: ngày khoá, lúc chốt, người chốt', () => {
+    const msg = 'KHO_KHOA|2026-10-31|13/11/2026|Vũ Phương Thảo'
+    expect(docLoiKhoa(msg)).toEqual({ den: '2026-10-31', luc: '13/11/2026', ten: 'Vũ Phương Thảo' })
+    // supabase-js gói lỗi trong câu dài hơn — vẫn đọc được; người chốt đã xoá thì tên rỗng.
+    expect(docLoiKhoa('error: KHO_KHOA|2026-09-30|02/10/2026|')).toEqual({ den: '2026-09-30', luc: '02/10/2026', ten: null }) // prettier-ignore
+    expect(docLoiKhoa('duplicate key value')).toBeNull()
+  })
+
+  it('câu chặn nói khoá đến đâu, ai khoá, và hai cách gỡ (bản vẽ khung 5)', () => {
+    expect(cauKhoaSo({ den: '2026-10-31', luc: '13/11/2026', ten: 'Vũ Phương Thảo' })).toBe(
+      'Sổ kho đã chốt đến hết 31/10/2026 (Vũ Phương Thảo, 13/11/2026). Chọn ngày chứng từ từ 01/11/2026, hoặc nhờ Kế toán trưởng mở lại tháng 10/2026.',
+    )
+    expect(cauKhoaSo({ den: '2026-12-31', luc: null, ten: null })).toContain('từ 01/01/2027')
+  })
+
+  it('ngày sau / tháng trước qua ranh năm', () => {
+    expect(ngaySau('2026-12-31')).toBe('2027-01-01')
+    expect(ngaySau('2028-02-28')).toBe('2028-02-29')
+    expect(thangTruoc('2027-01')).toBe('2026-12')
+  })
+
+  it('mở lại tháng 10: khoá lùi về 30/09 nếu tháng 9 cũng chốt; tháng đầu tiên thì hết khoá', () => {
+    expect(khoaSauMoLai('2026-10', ['2026-09', '2026-10'])).toBe('2026-09-30')
+    expect(khoaSauMoLai('2026-10', ['2026-10'])).toBeNull()
+    expect(khoaSauMoLai('2027-03', ['2027-02', '2027-03'])).toBe('2027-02-28')
   })
 })

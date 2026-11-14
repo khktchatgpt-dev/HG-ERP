@@ -338,3 +338,59 @@ export function tuBanChot(h: HangBanChot): DongNxt {
     phat_sinh: h.phat_sinh,
   }
 }
+
+/* ── B3 · khoá sổ theo kỳ đã chốt + mở lại (0300, 14/11/2026) ───────────────── */
+
+/** Tháng trước của `YYYY-MM`. */
+export function thangTruoc(thang: string): string {
+  const [y, m] = thang.split('-').map(Number)
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
+}
+
+const dmyIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+const nhanThangIso = (thang: string) => `${thang.slice(5, 7)}/${thang.slice(0, 4)}`
+
+/** Ngày kế tiếp của ngày `YYYY-MM-DD` (theo lịch, không theo múi giờ). */
+export function ngaySau(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Ngày khoá đọc từ lỗi trigger `warehouse_docs_khoa_so` (0300). */
+export type LoiKhoa = { den: string; luc: string | null; ten: string | null }
+
+/**
+ * Đọc lỗi `KHO_KHOA|<ngày khoá>|<dd/mm/yyyy chốt>|<tên người chốt>` mà trigger
+ * ném khi phiếu rơi vào kỳ đã chốt. Không phải lỗi đó → null.
+ */
+export function docLoiKhoa(msg: string): LoiKhoa | null {
+  const m = /KHO_KHOA\|(\d{4}-\d{2}-\d{2})\|([^|]*)\|([^|\n]*)/.exec(msg)
+  if (!m) return null
+  return { den: m[1], luc: m[2].trim() || null, ten: m[3].trim() || null }
+}
+
+/**
+ * Câu chặn khi phiếu rơi vào kỳ đã chốt (bản vẽ khung 5): nói khoá đến đâu, ai
+ * khoá, và hai cách gỡ — đổi ngày, hoặc nhờ Kế toán trưởng mở lại tháng đó.
+ */
+export function cauKhoaSo(k: LoiKhoa): string {
+  const ai = [k.ten, k.luc].filter(Boolean).join(', ')
+  return (
+    `Sổ kho đã chốt đến hết ${dmyIso(k.den)}${ai ? ` (${ai})` : ''}. ` +
+    `Chọn ngày chứng từ từ ${dmyIso(ngaySau(k.den))}, hoặc nhờ Kế toán trưởng mở lại tháng ${nhanThangIso(k.den)}.`
+  )
+}
+
+/**
+ * Ngày khoá SAU KHI mở lại tháng `thang` (Q6: mở từng tháng từ mới nhất lùi về).
+ * Các tháng đã chốt liền nhau (chốt tháng M chốt luôn tháng trước còn mở), nên
+ * tháng trước còn chốt thì khoá lùi về cuối tháng đó; không thì hết khoá (null).
+ */
+export function khoaSauMoLai(thang: string, thangDaChot: readonly string[]): string | null {
+  const truoc = thangTruoc(thang)
+  if (!thangDaChot.includes(truoc)) return null
+  const [y, m] = truoc.split('-').map(Number)
+  const cuoi = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  return `${truoc}-${String(cuoi).padStart(2, '0')}`
+}
