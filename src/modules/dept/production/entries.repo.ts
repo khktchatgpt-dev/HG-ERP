@@ -1,10 +1,13 @@
 import { db } from '@/server/db'
 
 /**
- * production_entries (0084) — sổ số liệu APPEND-ONLY của thống kê xưởng:
+ * production_entries (0084) — sổ số liệu của thống kê xưởng:
  * 1 bản ghi = 1 lần báo sản lượng cho 1 chi tiết ở 1 công đoạn trong 1 ngày.
- * Ghi nhầm → xoá rồi nhập lại, không sửa đè. Đây là NGUỒN SỐ duy nhất —
- * trạng thái nằm ở production_jobs.
+ * Đây là NGUỒN SỐ duy nhất — trạng thái nằm ở production_jobs.
+ *
+ * Từ 13/11/2026 (Sổ đã ghi, Q3–Q4) sổ SỬA ĐƯỢC tại chỗ — Đạt · Lỗi · Người làm
+ * · Lý do/Ghi chú — tới khi chốt sổ ngày của tổ (`update`, service gác). Ghi
+ * nhầm chi tiết / lệnh / công đoạn / ngày vẫn là xoá rồi nhập lại.
  */
 
 export type ProductionEntry = {
@@ -32,6 +35,11 @@ export type ProductionEntry = {
   /** 'tran' (hàng trần) | 'dang_may' (hàng đang mây) — 0090. */
   finish_state: string | null
   note: string | null
+  /**
+   * Dòng của phiếu SỐ ĐẦU KỲ (0298) — chép cờ của phiếu xuống để truy vấn THEO
+   * NGÀY lọc thẳng. Vào luỹ kế (listByLsx*), không vào các hàm theo ngày ở đây.
+   */
+  dau_ky: boolean
   created_by: string | null
   created_at: string
 }
@@ -46,8 +54,15 @@ export type ProductionEntryJoined = ProductionEntry & {
   lsx_code: string | null
 }
 
+/** Dòng sổ cho Sổ đã ghi — thêm số/SP, ĐM kg và trạng thái lệnh. */
+export type ReviewEntry = ProductionEntryJoined & {
+  component_qty_per_unit: number | null
+  component_dm_kg: number | null
+  lsx_status: string | null
+}
+
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, rework_qty, defect_code, defect_reason, machine_note, stage_meta, worker_name, finish_state, note, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, rework_qty, defect_code, defect_reason, machine_note, stage_meta, worker_name, finish_state, note, dau_ky, created_by, created_at'
 const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, kind, cluster, production_order_line_id), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
@@ -194,11 +209,12 @@ export const entriesRepo = {
     }))
   },
 
-  /** Sổ trong khoảng ngày [from, to] — báo cáo tuần/chất lượng khu GĐ. */
+  /** Sổ trong khoảng ngày [from, to] — báo cáo tuần/chất lượng khu GĐ. KHÔNG gồm số đầu kỳ (0298). */
   async listRange(fromDate: string, toDate: string): Promise<ProductionEntry[]> {
     const { data } = await db()
       .from('production_entries')
       .select(COLS)
+      .eq('dau_ky', false)
       .gte('entry_date', fromDate)
       .lte('entry_date', toDate)
       .limit(50000)
@@ -220,6 +236,7 @@ export const entriesRepo = {
       .from('production_entries')
       .select(SELECT_JOINED)
       .eq('team_department_id', teamDepartmentId)
+      .eq('dau_ky', false)
       .gte('entry_date', sinceDate)
       .order('entry_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -237,6 +254,7 @@ export const entriesRepo = {
     const { data } = await db()
       .from('production_entries')
       .select('entry_date, team_department_id, team:departments(name)')
+      .eq('dau_ky', false)
       .gte('entry_date', fromDate)
       .lte('entry_date', toDate)
       .not('team_department_id', 'is', null)
@@ -269,12 +287,15 @@ export const entriesRepo = {
       .from('production_entries')
       .select(SELECT_JOINED)
       .eq('entry_date', date)
+      .eq('dau_ky', false)
       .order('created_at', { ascending: false })
       .limit(2000)
     return unwrap(data as unknown as Raw[] | null)
   },
 
-  async insertMany(rows: Omit<ProductionEntry, 'id' | 'created_at'>[]): Promise<void> {
+  async insertMany(
+    rows: (Omit<ProductionEntry, 'id' | 'created_at' | 'dau_ky'> & { dau_ky?: boolean })[],
+  ): Promise<void> {
     if (!rows.length) return
     const { error } = await db().from('production_entries').insert(rows)
     if (error) throw new Error(error.message)
@@ -283,6 +304,93 @@ export const entriesRepo = {
   async delete(id: string): Promise<void> {
     const { error } = await db().from('production_entries').delete().eq('id', id)
     if (error) throw new Error(error.message)
+  },
+
+  /** Sửa số trên MỘT dòng sổ (Sổ đã ghi) — service gác chốt sổ / lệnh đóng / người ghi. */
+  async update(
+    id: string,
+    fields: Partial<
+      Pick<
+        ProductionEntry,
+        | 'qty'
+        | 'kg'
+        | 'defect_qty'
+        | 'defect_code'
+        | 'defect_reason'
+        | 'worker_name'
+        | 'note'
+      >
+    >,
+  ): Promise<void> {
+    const { error } = await db().from('production_entries').update(fields).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Nhiều dòng theo id, kèm ĐM kg của chi tiết — lượt Lưu thay đổi của Sổ đã ghi. */
+  async listByIdsWithDm(
+    ids: string[],
+  ): Promise<(ProductionEntry & { dm_kg: number | null })[]> {
+    if (!ids.length) return []
+    const { data } = await db()
+      .from('production_entries')
+      .select(`${COLS}, component:production_components(dm_kg)`)
+      .in('id', ids)
+      .limit(2000)
+    type Row = ProductionEntry & { component: One<{ dm_kg: number | string | null }> }
+    return ((data ?? []) as unknown as Row[]).map((r) => {
+      const dm = first(r.component)?.dm_kg
+      return {
+        ...r,
+        component: undefined,
+        qty: Number(r.qty),
+        kg: r.kg == null ? null : Number(r.kg),
+        defect_qty: Number(r.defect_qty),
+        rework_qty: Number(r.rework_qty ?? 0),
+        dm_kg: dm == null ? null : Number(dm),
+      } as unknown as ProductionEntry & { dm_kg: number | null }
+    })
+  },
+
+  /**
+   * SỔ ĐÃ GHI: dòng sổ trong khoảng ngày, lọc theo tổ hoặc một phiếu, kèm tên
+   * chi tiết / số mỗi SP / lệnh. Số phải làm · luỹ kế · khả dụng KHÔNG tính ở
+   * đây — service lấy từ Hồ sơ lệnh để một ô ra một số.
+   */
+  async listForReview(f: {
+    from: string
+    to: string
+    teamId?: string | null
+    docId?: string | null
+  }): Promise<ReviewEntry[]> {
+    let q = db()
+      .from('production_entries')
+      .select(
+        `${COLS}, team:departments(name), actor:users(name), component:production_components(name, kind, cluster, production_order_line_id, qty_per_unit, dm_kg), lsx:production_orders(code, status)`,
+      )
+      .gte('entry_date', f.from)
+      .lte('entry_date', f.to)
+    if (f.teamId) q = q.eq('team_department_id', f.teamId)
+    if (f.docId) q = q.eq('doc_id', f.docId)
+    const { data } = await q
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(5000)
+    type Extra = {
+      component: One<{ qty_per_unit: number | string | null; dm_kg: number | string | null }>
+      lsx: One<{ status: string }>
+    }
+    const raw = (data ?? []) as unknown as (Raw & Extra)[]
+    const base = unwrap(raw)
+    const num = (v: number | string | null | undefined) => (v == null ? null : Number(v))
+    return base.map((b, i) => {
+      const c = first(raw[i].component)
+      return {
+        ...b,
+        component_qty_per_unit: num(c?.qty_per_unit),
+        component_dm_kg: num(c?.dm_kg),
+        lsx_status: first(raw[i].lsx)?.status ?? null,
+      }
+    })
   },
 
   /** Dòng của MỘT phiếu (0172) — trang in PBS. */

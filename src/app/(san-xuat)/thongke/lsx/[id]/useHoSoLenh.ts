@@ -16,6 +16,8 @@ export type HoSoLenhProps = {
   canPlan: boolean
   meId: string
   meName: string
+  /** `?tab=` trên URL — Sổ đã ghi mở thẳng tab Phiếu. */
+  initialTab?: TabKey
 }
 
 /**
@@ -26,7 +28,7 @@ export type HoSoLenhProps = {
 export function useHoSoLenh(p: HoSoLenhProps) {
   const { data } = p
   const router = useRouter()
-  const [tab, setTab] = useState<TabKey>('dong_bo')
+  const [tab, setTab] = useState<TabKey>(p.initialTab ?? 'dong_bo')
   // Bản gọn 12/11 (Q1, Q8 bản vẽ T2otDmrh…): lọc = ô tìm + đợt; bảng gom theo
   // ĐỢT, đợt mở sẵn, MÃ HÀNG gập — 41 dòng thay 537.
   const [tim, setTim] = useState('')

@@ -56,6 +56,7 @@ vi.mock('./entry-docs.repo', () => ({
     findById: vi.fn(),
     listByDate: vi.fn(),
     listByLsx: vi.fn(),
+    listDauKyByLsx: vi.fn().mockResolvedValue([]),
     patch: vi.fn(),
     delete: vi.fn(),
   },
@@ -254,6 +255,55 @@ describe('entriesService.record', () => {
     await expect(entriesService.record(thongKe, 'lsx1', record())).rejects.toMatchObject({
       status: 400,
     })
+  })
+
+  // ── SỐ ĐẦU KỲ (0298, bản vẽ 14/11/2026 Q1–Q4) ──────────────────────────────
+  it('đầu kỳ: không giờ công, sổ ngày đã chốt vẫn ghi; phiếu + dòng mang cờ đầu kỳ', async () => {
+    vi.mocked(dayLocksRepo.find).mockResolvedValue({ id: 'lock1' } as never)
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ kind: 'dau_ky', submit: true, entries: [{ component_id: 'c1', qty: 60 }] }),
+    )
+    expect(entryDocsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'dau_ky',
+        status: 'da_xac_nhan',
+        worker_count: null,
+        hours_per_worker: null,
+      }),
+    )
+    expect(entriesRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ component_id: 'c1', qty: 60, dau_ky: true }),
+    ])
+  })
+
+  it('đầu kỳ: lệnh × công đoạn × tổ đã có phiếu đầu kỳ → 409, không ghi lần hai', async () => {
+    vi.mocked(entryDocsRepo.listDauKyByLsx).mockResolvedValueOnce([
+      { stage: 'han', team_department_id: 'd-han', doc_no: 'PBS-2026-0020' } as never,
+    ])
+    await expect(
+      entriesService.record(thongKe, 'lsx1', record({ kind: 'dau_ky', submit: true })),
+    ).rejects.toMatchObject({ status: 409 })
+    expect(entriesRepo.insertMany).not.toHaveBeenCalled()
+  })
+
+  it('đầu kỳ: mang số lỗi → 400; lưu nháp → 400', async () => {
+    await expect(
+      entriesService.record(
+        thongKe,
+        'lsx1',
+        record({
+          kind: 'dau_ky',
+          submit: true,
+          entries: [{ component_id: 'c1', qty: 60, defect_qty: 2, defect_reason: 'x' }],
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 400 })
+    await expect(
+      entriesService.record(thongKe, 'lsx1', record({ kind: 'dau_ky', submit: false })),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(entriesRepo.insertMany).not.toHaveBeenCalled()
   })
 
   it('nhập vượt tổng cần → KHÔNG chặn, trả warning', async () => {

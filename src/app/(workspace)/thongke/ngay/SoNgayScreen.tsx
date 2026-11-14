@@ -381,9 +381,22 @@ function HangTo({ d, r }: { d: SoNgayCtx; r: ToRow }) {
               )}
             </td>
             <td>
-              <Link href={`/thongke/lsx/${x.lsx_id}`} className="lnk">
-                {isDraft(x.status) ? 'Ghi chính thức ›' : 'Mở ›'}
+              {/* Q7 bản vẽ Sổ đã ghi (13/11/2026): xem DÒNG của phiếu ở Sổ đã ghi;
+                  nháp sang tab Phiếu của Hồ sơ lệnh — chỗ ghi giờ công. */}
+              <Link
+                href={`/thongke/da-ghi?phieu=${encodeURIComponent(x.doc_no)}`}
+                className="lnk"
+              >
+                Xem dòng ›
               </Link>
+              {isDraft(x.status) && (
+                <>
+                  {' '}
+                  <Link href={`/thongke/lsx/${x.lsx_id}?tab=phieu`} className="lnk mut">
+                    Ghi chính thức
+                  </Link>
+                </>
+              )}
             </td>
           </tr>
         ))}

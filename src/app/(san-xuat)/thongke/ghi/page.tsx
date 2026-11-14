@@ -7,6 +7,12 @@ import {
   worklistService,
 } from '@/modules/dept/production/worklist.service'
 import { isProductionStaff } from '@/modules/dept/production/perms'
+import { entriesRepo } from '@/modules/dept/production/entries.repo'
+import { entryDocsRepo } from '@/modules/dept/production/entry-docs.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { resolveTeamStage } from '@/lib/stage-for-dept'
+import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { Rong, SxKhung } from '@/app/(workspace)/production/_erp/khung'
 import { GhiScreen } from './GhiScreen'
 
@@ -38,7 +44,14 @@ export const GHI_LSX_COOKIE = 'sx_ghi_lsx'
 export default async function GhiSanLuongPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lsx?: string; stage?: string }>
+  searchParams: Promise<{
+    lsx?: string
+    stage?: string
+    date?: string
+    team?: string
+    /** `dau_ky` = chế độ SỐ ĐẦU KỲ (0298, bản vẽ 14/11 Q1). */
+    loai?: string
+  }>
 }) {
   const user = await authService.requirePageUser()
   const sp = await searchParams
@@ -46,8 +59,44 @@ export default async function GhiSanLuongPage({
   if (!canRecord) redirect('/thongke/lenh')
 
   // Danh sách lệnh phải có TRƯỚC để chọn lệnh mặc định, nên hai lượt tải này
-  // không song song được.
-  const data = await worklistService.list(user, {})
+  // không song song được. Tổ + danh mục công đoạn + "đã ghi" 14 ngày đi cùng lượt.
+  const today = vnTodayIso()
+  const from14 = shiftIso(today, -13)
+  const [data, depts, stagesCat, entries14, docs14] = await Promise.all([
+    worklistService.list(user, {}),
+    departmentsRepo.list(),
+    productionRepo.listStages(),
+    entriesRepo.listRange(from14, today),
+    entryDocsRepo.listStatusRange(from14, today),
+  ])
+
+  // Mở ĐÚNG chỗ (bản vẽ 14/11/2026, Q5): `?team=` / `?date=` từ Sổ ngày và Sổ
+  // đã ghi; không có `?stage=` thì công đoạn của tổ (tổ trên đường dẫn, không có
+  // thì tổ của tài khoản) — Thống kê Tổ Hàn mở ra là tab Hàn, không phải Phôi.
+  const teamParam = sp.team && depts.some((d) => d.id === sp.team) ? sp.team : null
+  const teamDept = depts.find((d) => d.id === (teamParam ?? user.department_id))
+  const stageOfTeam =
+    teamDept && teamDept.workspace_id === 'production'
+      ? resolveTeamStage(teamDept, stagesCat)
+      : null
+  const initialDate =
+    sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : null
+
+  // "Đã ghi" theo tổ|ngày — dòng xanh trên đầu lưới (Q6).
+  const daGhi: Record<string, { lines: number; docs: number; drafts: number }> = {}
+  for (const e of entries14) {
+    if (!e.team_department_id) continue
+    const k = `${e.team_department_id}|${e.entry_date}`
+    daGhi[k] = { ...(daGhi[k] ?? { lines: 0, docs: 0, drafts: 0 }) }
+    daGhi[k].lines++
+  }
+  for (const x of docs14) {
+    if (!x.team_department_id) continue
+    const k = `${x.team_department_id}|${x.entry_date}`
+    if (!daGhi[k]) continue
+    daGhi[k].docs++
+    if (x.status === 'nhap' || x.status === 'tu_choi') daGhi[k].drafts++
+  }
   const remembered = (await cookies()).get(GHI_LSX_COOKIE)?.value ?? null
   const openable = data.lsx_cards
   const pick =
@@ -56,7 +105,11 @@ export default async function GhiSanLuongPage({
     [...openable].sort((a, b) => b.open_count - a.open_count)[0]?.lsx_id ??
     null
 
-  const sheet = await loadEntrySheet({ stage: sp.stage ?? null, lsxId: pick })
+  const dauKy = sp.loai === 'dau_ky'
+  const [sheet, dauKyDocs] = await Promise.all([
+    loadEntrySheet({ stage: sp.stage ?? stageOfTeam ?? null, lsxId: pick }),
+    dauKy && pick ? entryDocsRepo.listDauKyByLsx(pick) : Promise.resolve([]),
+  ])
 
   if (!sheet) {
     return (
@@ -76,9 +129,18 @@ export default async function GhiSanLuongPage({
 
   return (
     <GhiScreen
-      key={`${sp.lsx ?? 'all'}|${sheet.stage}`}
+      key={`${sp.lsx ?? 'all'}|${sheet.stage}|${initialDate ?? ''}|${teamParam ?? ''}|${dauKy ? 'dk' : ''}`}
       sheet={sheet}
       userTeamId={user.department_id ?? null}
+      initialDate={initialDate}
+      initialTeamId={teamParam}
+      daGhi={daGhi}
+      dauKy={dauKy}
+      dauKyDocs={dauKyDocs.map((x) => ({
+        stage: x.stage,
+        team_id: x.team_department_id,
+        doc_no: x.doc_no,
+      }))}
       lsxOptions={data.lsx_cards.map((c) => ({
         id: c.lsx_id,
         code: c.lsx_code,

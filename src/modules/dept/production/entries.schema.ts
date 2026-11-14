@@ -129,10 +129,17 @@ export const entriesRecordSchema = entryCrewSchema
     /** Ghi chú cả phiếu. */
     note: z.string().trim().max(500).optional().nullable(),
     entries: z.array(entryLineSchema).min(1).max(200),
+    /**
+     * 'dau_ky' = SỐ ĐẦU KỲ (0298, bản vẽ 14/11/2026 Q1–Q4): luỹ kế tới hết
+     * ngày `entry_date`, không ca / giờ công / lỗi, luôn chính thức, một phiếu cho mỗi
+     * lệnh × công đoạn × tổ (service gác).
+     */
+    kind: z.enum(['ngay', 'dau_ky']).default('ngay'),
   })
   .superRefine((v, ctx) => {
     // Nháp thì chưa cần (Q1 bản vẽ 11/11); chính thức thì số phải có chủ giờ.
-    if (v.submit && (v.worker_count == null || v.hours_per_worker == null)) {
+    // Số đầu kỳ không có giờ công (Q4 bản vẽ 14/11).
+    if (v.kind !== 'dau_ky' && v.submit && (v.worker_count == null || v.hours_per_worker == null)) {
       ctx.addIssue({ code: 'custom', path: ['worker_count'], message: CREW_REQUIRED_MSG })
     }
   })
@@ -164,6 +171,29 @@ export const dayUnlockQuerySchema = z.object({
   team: z.string().uuid(),
   reason: z.string().trim().min(5, 'Lý do mở khoá ít nhất 5 ký tự').max(300),
 })
+
+/**
+ * SỔ ĐÃ GHI — một lượt "Lưu thay đổi": sửa số trên dòng đã có + xoá dòng
+ * (bản vẽ 13/11/2026, Q3–Q4). `text` là lý do lỗi khi dòng còn lỗi sau sửa,
+ * ngược lại là ghi chú — service quyết theo số lỗi mới. Số JSON trần.
+ */
+export const soDaGhiSaveSchema = z
+  .object({
+    edits: z
+      .array(
+        z.object({
+          id: z.string().uuid(),
+          qty: z.number().min(0, 'Đạt không âm').optional(),
+          defect_qty: z.number().min(0, 'Lỗi không âm').optional(),
+          worker_name: z.string().trim().max(100).optional(),
+          text: z.string().trim().max(500).optional(),
+        }),
+      )
+      .max(500)
+      .default([]),
+    deletes: z.array(z.string().uuid()).max(500).default([]),
+  })
+  .refine((v) => v.edits.length + v.deletes.length > 0, 'Không có thay đổi nào để lưu')
 
 // ── Gia công ngoài ───────────────────────────────────────────────────────────
 

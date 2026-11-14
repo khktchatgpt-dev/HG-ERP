@@ -2528,3 +2528,78 @@
 .sx.sx .sx-btn.sm.vien:hover {
   background: var(--sx-act-wash);
 }
+
+/* ── Sổ đã ghi (13/11/2026, bản vẽ 4ub2By9o…) — lớp .sx-sdg đi cùng .sx-dh ──
+   Dòng "cần soát" tô nền đỏ / vàng nhạt + vạch trái; lớp lặp bốn lần để thắng
+   luật sọc + hover (tr.d:nth-child(even):hover > td.ed, 8 lớp). */
+.sx.sx .sx-tb.sx-sdg > tbody > tr.d.soat.soat.soat.soat > td {
+  background: var(--sx-stop-wash);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.d.soat.soat.soat.soat > td:first-child {
+  box-shadow: inset 3px 0 0 var(--sx-stop);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.d.soatw.soatw.soatw.soatw > td {
+  background: var(--sx-warn-wash);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.d.soatw.soatw.soatw.soatw > td:first-child {
+  box-shadow: inset 3px 0 0 var(--sx-warn);
+}
+/* ô vừa sửa (chưa lưu): nền trắng, viền màu hành động, chữ đậm */
+.sx.sx .sx-tb.sx-dh.sx-sdg > tbody > tr > td.ed.chg .sx-cell {
+  background: #fff;
+  border-color: var(--sx-act);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp.ngay > td {
+  background: #e9edf3;
+  font-weight: 700;
+  border-top: 2px solid var(--sx-line);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp > td.rt {
+  text-align: right;
+  white-space: nowrap;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp > td .lnk {
+  margin-left: 10px;
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp > td button.lnk {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp > td .lnk.stop {
+  color: var(--sx-stop);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp > td .sx-dot {
+  margin-right: 4px;
+}
+.sx.sx .sx-note.sx-soat {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.sx.sx .sx-note.sx-soat .lnk {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+/* Nhãn phiếu SỐ ĐẦU KỲ (0298, bản vẽ 14/11) — chữ hoa nhỏ trên nền xám, không màu
+   vòng đời: đầu kỳ không phải trạng thái, là loại phiếu. */
+.sx.sx .sx-dk {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--sx-line);
+  background: #e9edf3;
+  color: var(--sx-ink2);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  vertical-align: 1px;
+}

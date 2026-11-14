@@ -6,6 +6,7 @@ import { isProductionStaff } from '@/modules/dept/production/perms'
 import { HttpError } from '@/server/http'
 import { Rong, SxKhung } from '@/app/(workspace)/production/_erp/khung'
 import { HoSoLenhScreen } from './HoSoLenhScreen'
+import { TABS, type TabKey } from './ho-so-lenh.shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,11 +19,17 @@ export const dynamic = 'force-dynamic'
  */
 export default async function LsxDocPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ tab?: string }>
 }) {
   const user = await authService.requirePageUser()
-  const { id } = await params
+  const [{ id }, sp] = await Promise.all([params, searchParams])
+  // `?tab=phieu` — Sổ đã ghi gửi phiếu nháp sang đây để ghi chính thức (giờ công).
+  const initialTab = (TABS as readonly string[]).includes(sp.tab ?? '')
+    ? (sp.tab as TabKey)
+    : undefined
   let data
   try {
     data = await lsxDossierService.get(user, id)
@@ -61,6 +68,7 @@ export default async function LsxDocPage({
       canPlan={canPlan}
       meId={user.id}
       meName={user.name ?? user.email}
+      initialTab={initialTab}
     />
   )
 }
