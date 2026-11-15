@@ -8,13 +8,13 @@ import { buildSoDaGhiExcel } from '@/modules/dept/production/so-da-ghi-excel'
 
 const querySchema = z.object({
   date: z.string().optional(),
-  xem: z.string().optional(),
   to: z.string().optional(),
   phieu: z.string().optional(),
+  cd: z.string().optional(),
 })
 
 /**
- * EXCEL Sổ đã ghi — cùng tham số URL với màn `/thongke/da-ghi`, đổ từ CÙNG
+ * EXCEL Sổ theo ngày (tên cũ Sổ đã ghi) — cùng tham số URL với màn `/thongke/da-ghi`, đổ từ CÙNG
  * payload `soDaGhiService.load`. Đọc: mọi NV đã đăng nhập (như Năng suất).
  */
 export const GET = handle(async (req: Request) => {
@@ -22,7 +22,7 @@ export const GET = handle(async (req: Request) => {
   const q = parseQuery(new URL(req.url), querySchema)
   const p = await soDaGhiService.load(user, q)
   const buf = await buildSoDaGhiExcel(p)
-  const filename = `so-da-ghi_${p.from}_${p.to}.xlsx`
+  const filename = `so-theo-ngay_${p.date}.xlsx`
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

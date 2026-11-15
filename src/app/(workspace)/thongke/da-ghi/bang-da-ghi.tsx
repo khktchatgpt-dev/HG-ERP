@@ -4,19 +4,24 @@ import { Fragment } from 'react'
 import Link from 'next/link'
 import { isDraftStatus, parseSo, scaleKg, type SdgLine } from '@/lib/so-da-ghi'
 import { productivity } from '@/lib/gio-cong'
-import { oId, type NhomPhieu, type SoDaGhiCtx } from './useSoDaGhi'
-import { cx, dm, fmt, fmtIn, gio, kgTxt, thuDai } from './so-da-ghi.shared'
+import { oId, type NhomMa, type NhomPhieu, type SoDaGhiCtx } from './useSoDaGhi'
+import { cx, fmt, fmtIn, gio, kgTxt } from './so-da-ghi.shared'
 
 /**
- * LƯỚI SỔ ĐÃ GHI — hàng NGÀY (chỉ ở xem 7 ngày) → hàng PHIẾU → dòng sổ. Ô vàng
- * (lớp .sx-dh như Bảng chi tiết) chỉ ở dòng còn sửa được; dòng khoá là chữ
- * thường, tooltip nói vì sao. 10 cột vừa 1.100px (bề rộng thật).
+ * LƯỚI SỔ ĐÃ GHI — hàng NGÀY (chỉ ở xem 7 ngày) → hàng PHIẾU → hàng MÃ HÀNG →
+ * dòng sổ. Ô vàng (lớp .sx-dh như Bảng chi tiết) chỉ ở dòng còn sửa được; dòng
+ * khoá là chữ thường, tooltip nói vì sao. 9 cột vừa 1.100px (bề rộng thật).
+ *
+ * Bản vẽ 14/11/2026 https://claude.ai/artifact/CUUfVcZxHQTmXXQqn3bfZ3 (duyệt
+ * Q1–Q6; bước 1 = Q1·Q2·Q4·Q5): ngày đông nhất của xưởng 126 dòng / 4 công đoạn /
+ * 5 phiếu — phiếu GẬP sẵn, đầu phiếu đủ nói công đoạn · lệnh · tổ · mã hàng · giờ
+ * công · tổng để khỏi phải mở (chép Dynamics Route card journal); dòng gom dưới
+ * hàng mã hàng nên bỏ cột Mã hàng.
  */
-const COLS = 10
+const COLS = 9
 
 export function BangDaGhi({ d }: { d: SoDaGhiCtx }) {
   const { p, nhom } = d
-  const tuan = p.xem === 'tuan'
   const officialLines = d.shown.filter((l) => !d.isDraftLine(l))
   const stages = new Set(officialLines.map((l) => l.stage))
   const motDonVi = stages.size <= 1
@@ -27,19 +32,17 @@ export function BangDaGhi({ d }: { d: SoDaGhiCtx }) {
   const gioCong = p.docs
     .filter((x) => docIds.has(x.id))
     .reduce((a, x) => a + (x.labor_hours ?? 0), 0)
-  // Năng suất chỉ tính phiếu NGÀY — kg đầu kỳ là luỹ kế, không có giờ công (Q4 bản vẽ 14/11).
-  const kgNgay = officialLines.filter((l) => !l.dau_ky).reduce((a, l) => a + (l.kg ?? 0), 0)
-  const ns = productivity(kgNgay, gioCong || null)
+  const ns = productivity(sumKg, gioCong || null)
   const nNhap = d.shown.length - officialLines.length
-  const nDauKy = officialLines.filter((l) => l.dau_ky).length
 
   return (
     <div className="sx-grid">
       <table className="sx-tb sx-dh sx-sdg">
         <colgroup>
-          <col style={{ width: 112 }} />
-          <col style={{ width: 172 }} />
-          <col style={{ width: 66 }} />
+          {/* Chi tiết 260 = ba cột đầu 402px chứa hai dòng đầu phiếu (công đoạn · lệnh · tổ). */}
+          <col style={{ width: 260 }} />
+          {/* Phải làm 76: chữ hoa "PHẢI LÀM" ở 66px bị cắt "PHẢI L…" (soi lệnh TEST 14/11). */}
+          <col style={{ width: 76 }} />
           <col style={{ width: 66 }} />
           <col style={{ width: 70 }} />
           <col style={{ width: 54 }} />
@@ -50,7 +53,6 @@ export function BangDaGhi({ d }: { d: SoDaGhiCtx }) {
         </colgroup>
         <thead>
           <tr>
-            <th>Mã hàng</th>
             <th>Chi tiết</th>
             <th className="r" title="SL SP × số chi tiết / SP — cùng số Hồ sơ lệnh">
               Phải làm
@@ -69,43 +71,35 @@ export function BangDaGhi({ d }: { d: SoDaGhiCtx }) {
           </tr>
         </thead>
         <tbody>
-          {nhom.map((g) => {
-            const mo = !tuan || d.ngayMo.has(g.date)
-            return (
-              <Fragment key={g.date}>
-                {tuan && <HangNgay d={d} date={g.date} phieu={g.phieu} mo={mo} />}
-                {mo &&
-                  g.phieu.map((ph) => (
-                    <Fragment key={ph.key}>
-                      <HangPhieu d={d} ph={ph} />
-                      {!d.phieuGap.has(ph.key) &&
-                        ph.lines.map((l, i) => (
-                          <Dong
-                            key={l.id}
-                            d={d}
-                            l={l}
-                            maHien={i === 0 || ph.lines[i - 1].product_code !== l.product_code}
-                          />
-                        ))}
+          {/* Xem 7 ngày: hàng NGÀY nay là bảng 7 ngày phía trên (Q6) — lưới chỉ bày
+              ngày đang chọn, nên `nhom` có đúng một ngày. */}
+          {nhom.map((g) =>
+            g.phieu.map((ph) => (
+              <Fragment key={ph.key}>
+                <HangPhieu d={d} ph={ph} />
+                {d.moPhieu(ph) &&
+                  ph.ma.map((m) => (
+                    <Fragment key={m.code ?? '—'}>
+                      <HangMa m={m} chon={d.maDangChon(ph, m.code)} />
+                      {m.lines.map((l) => (
+                        <Dong key={l.id} d={d} l={l} />
+                      ))}
                     </Fragment>
                   ))}
               </Fragment>
-            )
-          })}
+            )),
+          )}
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={4}>
+            <td colSpan={3}>
               {fmt(d.shown.length)} dòng · chính thức {fmt(officialLines.length)}
               {nNhap > 0 && <span className="mut"> · nháp {fmt(nNhap)} không tính</span>}
-              {nDauKy > 0 && (
-                <span className="mut"> · đầu kỳ {fmt(nDauKy)} không tính năng suất</span>
-              )}
             </td>
             <td className="r num">{motDonVi ? fmt(sumQty) : '—'}</td>
             <td className="r num">{sumDefect ? fmt(sumDefect) : ''}</td>
             <td className="r num">{kgTxt(sumKg)}</td>
-            <td colSpan={COLS - 7}>
+            <td colSpan={COLS - 6}>
               {gioCong > 0 ? (
                 <>
                   {fmt(gioCong)} giờ công
@@ -115,7 +109,10 @@ export function BangDaGhi({ d }: { d: SoDaGhiCtx }) {
                 <span className="mut">chưa có giờ công</span>
               )}
               {!motDonVi && (
-                <span className="mut"> · nhiều công đoạn: đạt không cộng dọc, kg cộng được</span>
+                <span className="mut">
+                  {' '}
+                  · nhiều công đoạn: đạt không cộng dọc, kg cộng được
+                </span>
               )}
             </td>
           </tr>
@@ -125,113 +122,81 @@ export function BangDaGhi({ d }: { d: SoDaGhiCtx }) {
   )
 }
 
-function HangNgay({
-  d,
-  date,
-  phieu,
-  mo,
-}: {
-  d: SoDaGhiCtx
-  date: string
-  phieu: NhomPhieu[]
-  mo: boolean
-}) {
-  const lock = d.lockOf(d.p.team_id, date)
-  const lines = phieu.flatMap((x) => x.lines)
-  const kg = lines.filter((l) => !d.isDraftLine(l)).reduce((a, l) => a + (l.kg ?? 0), 0)
-  // Ngày chỉ có phiếu ĐẦU KỲ: không thuộc sổ ngày nào — không nhắc chốt, không "ghi thêm".
-  const chiDauKy = lines.length > 0 && lines.every((l) => l.dau_ky)
-  return (
-    <tr className="grp ngay">
-      <td colSpan={6}>
-        <button
-          type="button"
-          className="tg"
-          onClick={() => d.doiNgay(date)}
-          aria-expanded={mo}
-          aria-label={`${mo ? 'Gập' : 'Mở'} ngày ${dm(date)}`}
-        >
-          {mo ? '▾' : '▸'}
-        </button>
-        {thuDai(date)} {dm(date)}
-        {chiDauKy ? (
-          <span className="mut"> · đầu kỳ, không cần chốt</span>
-        ) : (
-          d.p.team_id && (
-            <span className="mut">
-              {' '}
-              · <i className={cx('sx-dot', lock ? 'b' : 'w')} />
-              {lock ? `đã chốt ${gio(lock.at)}${lock.by ? ` · ${lock.by}` : ''}` : 'chưa chốt'}
-            </span>
-          )
-        )}
-      </td>
-      <td colSpan={4} className="rt">
-        {fmt(phieu.length)} phiếu · {fmt(lines.length)} dòng · {kgTxt(kg)} kg
-        {d.p.team_id && !chiDauKy && !lock && (
-          <Link href={`/thongke/ghi?date=${date}&team=${d.p.team_id}`} className="lnk">
-            Ghi thêm ngày này ›
-          </Link>
-        )}
-        {d.p.team_id && !chiDauKy && (
-          <Link href={`/thongke/ngay?date=${date}`} className="lnk">
-            {lock ? 'Sửa: mở khoá ở Sổ ngày ›' : 'Chốt ở Sổ ngày ›'}
-          </Link>
-        )}
-      </td>
-    </tr>
-  )
-}
+/** Tổng đạt / lỗi / kg của một nhóm dòng — số SAU khi đã sửa thì chờ Lưu mới đổi. */
+const tong = (lines: SdgLine[]) => ({
+  qty: lines.reduce((a, l) => a + l.qty, 0),
+  defect: lines.reduce((a, l) => a + l.defect, 0),
+  kg: lines.reduce((a, l) => a + (l.kg ?? 0), 0),
+})
 
+/**
+ * Đầu phiếu HAI dòng (Q1 + Q5): dòng 1 đậm "công đoạn · Lệnh … · tổ"; dòng 2 mờ
+ * "mã hàng · n dòng · số phiếu · ca · giờ công". Tổng đạt / lỗi / kg đứng đúng cột.
+ * Một phiếu = một lệnh × một công đoạn × một tổ, nên đạt cộng được (cùng đơn vị).
+ */
 function HangPhieu({ d, ph }: { d: SoDaGhiCtx; ph: NhomPhieu }) {
   const x = ph.doc
-  const gap = d.phieuGap.has(ph.key)
-  const kg = ph.lines.reduce((a, l) => a + (l.kg ?? 0), 0)
+  const mo = d.moPhieu(ph)
+  const t = tong(ph.lines)
   const nhap = x ? isDraftStatus(x.status) : false
   const khoa = ph.lines[0] ? d.why(ph.lines[0]) : null
   const hoi = x && d.phieuXoaCho === x.id
-  const dauKy = x?.kind === 'dau_ky'
+  const soat = ph.lines.filter((l) => d.flagOf(l.id).length > 0).length
+  const stageLabel =
+    x?.stage_label ?? d.p.stages.find((s) => s.code === ph.stage)?.label ?? ph.stage
+  const maTxt =
+    ph.ma.length === 1
+      ? [ph.ma[0].code ?? '—', ph.ma[0].name].filter(Boolean).join(' ')
+      : `${fmt(ph.ma.length)} mã hàng: ${ph.ma.map((m) => m.code ?? '—').join(' · ')}`
+  const gioTxt = x
+    ? [
+        x.doc_no,
+        x.shift ? `ca ${x.shift}` : null,
+        x.labor_hours
+          ? `${x.worker_count} CN × ${fmt(x.hours_per_worker ?? 0)} giờ`
+          : 'chưa giờ công',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null
+  // Dòng 2 bên TRÁI chỉ mã hàng + số dòng; số phiếu · ca · giờ công là dòng 2 bên
+  // PHẢI — gộp một chỗ thì 402px cắt mất giờ công (soi lệnh TEST 14/11).
+  const dong2 = `${maTxt} · ${fmt(ph.lines.length)} dòng`
   return (
-    <tr className="grp">
-      <td colSpan={6}>
+    <tr className={cx('grp', 'ph', soat > 0 && 'soatp')}>
+      <td colSpan={3} title={[dong2, gioTxt].filter(Boolean).join(' · ')}>
         <button
           type="button"
           className="tg"
-          onClick={() => d.doiPhieu(ph.key)}
-          aria-expanded={!gap}
-          aria-label={`${gap ? 'Mở' : 'Gập'} ${x?.doc_no ?? 'dòng lẻ'}`}
+          onClick={() => d.doiPhieu(ph)}
+          aria-expanded={mo}
+          aria-label={`${mo ? 'Gập' : 'Mở'} ${x?.doc_no ?? 'dòng lẻ'}`}
         >
-          {gap ? '▸' : '▾'}
+          {mo ? '▾' : '▸'}
         </button>
         {x ? (
           <>
-            <span className="ma">{x.doc_no}</span>
-            {dauKy && <span className="sx-dk">ĐẦU KỲ</span>}
-            <span className="mut" style={{ fontWeight: 400 }}>
-              {' '}
-              · <span className="ma">{x.lsx_code}</span> · {x.stage_label}
-              {!d.p.team_id && x.team_name && ` · ${x.team_name}`}
-              {dauKy
-                ? ` · tới hết ${dm(x.entry_date)} · không giờ công`
-                : `${x.shift ? ` · ca ${x.shift}` : ''}${
-                    x.labor_hours
-                      ? ` · ${x.worker_count} CN × ${fmt(x.hours_per_worker ?? 0)} giờ = ${fmt(x.labor_hours)} giờ công`
-                      : ' · chưa giờ công'
-                  }`}
-            </span>
+            {stageLabel} · Lệnh <span className="ma">{x.lsx_code}</span>
+            {x.team_name && ` · ${x.team_name}`}
           </>
         ) : (
-          <span className="mut">Dòng lẻ trước khi có phiếu</span>
+          <>
+            {stageLabel} · <span className="mut">dòng lẻ trước khi có phiếu</span>
+          </>
         )}
+        <span className="l2">{dong2}</span>
       </td>
-      <td colSpan={4} className="rt">
+      <td className="r num">{fmt(t.qty)}</td>
+      <td className="r num">{t.defect ? fmt(t.defect) : ''}</td>
+      <td className="r num">{kgTxt(t.kg)}</td>
+      <td colSpan={3} className="rt">
+        {soat > 0 && <span className="warn">{fmt(soat)} cần soát · </span>}
         {x && (
           <>
             <i className={cx('sx-dot', nhap ? 'w' : 'g')} />
             {nhap ? 'NHÁP' : 'chính thức'}
             <span className="mut" style={{ fontWeight: 400 }}>
-              {nhap && ' — chưa vào số'} · {gio(x.created_at)} · {fmt(ph.lines.length)} dòng
-              {kg > 0 && ` · ${kgTxt(kg)} kg`}
+              {nhap && ' — chưa vào số'} · {gio(x.created_at)}
             </span>
             {nhap && !khoa && (
               <Link href={`/thongke/lsx/${x.lsx_id}?tab=phieu`} className="lnk">
@@ -239,7 +204,7 @@ function HangPhieu({ d, ph }: { d: SoDaGhiCtx; ph: NhomPhieu }) {
               </Link>
             )}
             {/* Bản vẽ 14/11 (S1): ghi lại sau khi xoá dòng nhầm — đúng ngày, tổ, lệnh, công đoạn. */}
-            {!dauKy && !x.lsx_closed && !(x.team_id && d.lockOf(x.team_id, x.entry_date)) && (
+            {!x.lsx_closed && !(x.team_id && d.lockOf(x.team_id, x.entry_date)) && (
               <Link
                 href={`/thongke/ghi?${new URLSearchParams({
                   lsx: x.lsx_id,
@@ -271,6 +236,7 @@ function HangPhieu({ d, ph }: { d: SoDaGhiCtx; ph: NhomPhieu }) {
               </button>
             )}
             {x.lsx_closed && <span className="mut"> · lệnh đã đóng — sổ khoá</span>}
+            <span className="l2">{gioTxt}</span>
           </>
         )}
       </td>
@@ -278,7 +244,26 @@ function HangPhieu({ d, ph }: { d: SoDaGhiCtx; ph: NhomPhieu }) {
   )
 }
 
-function Dong({ d, l, maHien }: { d: SoDaGhiCtx; l: SdgLine; maHien: boolean }) {
+/** Hàng MÃ HÀNG trong phiếu (Q4): mã + tên SP + số dòng; tổng đứng đúng cột. */
+function HangMa({ m, chon }: { m: NhomMa; chon: boolean }) {
+  const t = tong(m.lines)
+  const ten = [m.code ?? '—', m.name].filter(Boolean).join(' ')
+  return (
+    <tr className={cx('mh', chon && 'chon')}>
+      <td colSpan={3} title={ten}>
+        <span className="ma">{m.code ?? '—'}</span>
+        {m.name && <> {m.name}</>}
+        <span className="mut"> · {fmt(m.lines.length)} dòng</span>
+      </td>
+      <td className="r num">{fmt(t.qty)}</td>
+      <td className="r num">{t.defect ? fmt(t.defect) : ''}</td>
+      <td className="r num">{kgTxt(t.kg)}</td>
+      <td colSpan={COLS - 6} />
+    </tr>
+  )
+}
+
+function Dong({ d, l }: { d: SoDaGhiCtx; l: SdgLine }) {
   const khoa = d.why(l)
   const f = d.flagOf(l.id)
   const nang = f.some((x) => x.kind === 'vuot_phai_lam' || x.kind === 'vuot_kha_dung')
@@ -288,10 +273,12 @@ function Dong({ d, l, maHien }: { d: SoDaGhiCtx; l: SdgLine; maHien: boolean }) 
   const chu = d.chu(l)
   const chan = d.chanO?.id === l.id ? d.chanO.field : null
   const qtyMoi = dr.qty != null ? parseSo(dr.qty) : l.qty
-  const kg = qtyMoi != null && qtyMoi !== l.qty ? scaleKg(l.kg, l.qty, qtyMoi, l.dm_kg) : l.kg
+  const kg =
+    qtyMoi != null && qtyMoi !== l.qty ? scaleKg(l.kg, l.qty, qtyMoi, l.dm_kg) : l.kg
   const doi = (k: 'qty' | 'defect' | 'worker' | 'text', goc: string) =>
     dr[k] != null && dr[k]!.trim() !== goc.trim()
-  const tip = [...f.map((x) => `⚠ ${x.text}`), khoa].filter(Boolean).join('\n') || undefined
+  const tip =
+    [...f.map((x) => `⚠ ${x.text}`), khoa].filter(Boolean).join('\n') || undefined
 
   const o = (
     k: 'qty' | 'defect' | 'worker' | 'text',
@@ -316,7 +303,7 @@ function Dong({ d, l, maHien }: { d: SoDaGhiCtx; l: SdgLine; maHien: boolean }) 
           aria-label={`${opt.label} · ${l.name}`}
           aria-invalid={chan === k || undefined}
           onChange={(e) => d.setO(l.id, k, e.target.value)}
-          disabled={xoa}
+          disabled={xoa || d.taiLai}
         />
       </td>
     )
@@ -327,14 +314,19 @@ function Dong({ d, l, maHien }: { d: SoDaGhiCtx; l: SdgLine; maHien: boolean }) 
       id={`sdg-${l.id}`}
       className={cx(
         'd',
-        xoa || hoi ? 'xoa xoa xoa' : f.length > 0 && (nang ? 'soat soat soat soat' : 'soatw soatw soatw soatw'),
+        xoa || hoi
+          ? 'xoa xoa xoa'
+          : f.length > 0 && (nang ? 'soat soat soat soat' : 'soatw soatw soatw soatw'),
       )}
       title={tip}
     >
-      <td>{maHien ? <span className="ma">{l.product_code ?? '—'}</span> : null}</td>
       <td title={l.cluster ? `${l.cluster} · ${l.name}` : l.name}>
+        {/* Dòng CỤM mang cluster = chính tên nó ("Cụm khung · Cụm khung") — khỏi lặp. */}
+        {l.cluster && l.cluster !== l.name && <span className="mut">{l.cluster} · </span>}
         {l.name}
-        {l.qty_per_unit != null && <span className="mut num"> ×{fmt(l.qty_per_unit)}</span>}
+        {l.qty_per_unit != null && (
+          <span className="mut num"> ×{fmt(l.qty_per_unit)}</span>
+        )}
       </td>
       <td className={cx('r num', l.needed == null && 'empty')}>
         {l.needed == null ? '—' : fmt(l.needed)}
@@ -355,7 +347,9 @@ function Dong({ d, l, maHien }: { d: SoDaGhiCtx; l: SdgLine; maHien: boolean }) 
       </td>
       {o('qty', fmtIn(l.qty), { num: true, label: 'Đạt' })}
       {o('defect', l.defect ? fmtIn(l.defect) : '', { num: true, label: 'Lỗi' })}
-      <td className={cx('r num', kg == null && 'empty')}>{kg == null ? '—' : kgTxt(kg)}</td>
+      <td className={cx('r num', kg == null && 'empty')}>
+        {kg == null ? '—' : kgTxt(kg)}
+      </td>
       {o('worker', l.worker, { label: 'Người làm', max: 100 })}
       {o('text', chu.goc, {
         label: chu.mode === 'ly_do' ? 'Lý do lỗi' : 'Ghi chú',
@@ -368,6 +362,7 @@ function Dong({ d, l, maHien }: { d: SoDaGhiCtx; l: SdgLine; maHien: boolean }) 
             type="button"
             className={cx('sx-xo', (hoi || xoa) && 'hoi')}
             onClick={() => d.xinXoa(l.id)}
+            disabled={d.taiLai}
             aria-label={
               xoa
                 ? `Bỏ xoá dòng ${l.name}`

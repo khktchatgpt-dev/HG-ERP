@@ -6,8 +6,10 @@ import { api, apiErrorText } from '@/lib/api'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { parsePasteNumber } from '@/lib/po-paste'
 import { khoaCum } from '@/lib/khoa-cum'
+import { nhanTheoDot, nhomGomTheoMa } from '@/lib/gom-dot-ma'
 import {
   cellId,
+  chuKyDong,
   emptyDraft,
   num,
   readMore,
@@ -33,7 +35,14 @@ export function useDinhHinh(p: DinhHinhProps) {
   // `tab` chỉ còn màn gộp Lộ trình công đoạn dùng ngầm (ma trận); màn Bảng chi
   // tiết không có tab nữa (04/11/2026) — giữ để `goFirst` đưa về lưới.
   const [tab, setTab] = useState<TabKey>('chi_tiet')
-  const [spLoc, setSpLoc] = useState(p.initialSp ?? '')
+  // `initialSp` là id dòng lệnh (Lộ trình công đoạn) hoặc MÃ HÀNG (`?sp=` từ Ghi sản
+  // lượng, 15/11) — mã thì lấy dòng ĐẦU của mã, đúng đại diện khi gom theo mã.
+  const [spLoc, setSpLoc] = useState(
+    () =>
+      p.orderLines.find((l) => l.id === p.initialSp)?.id ??
+      p.orderLines.find((l) => l.product_code === p.initialSp)?.id ??
+      '',
+  )
   const [seedProfile, setSeedProfile] = useState(false)
   // Ghi ngược lộ trình cụm lên hồ sơ SP — mặc định BẬT (chủ dự án 04/11/2026:
   // kế hoạch định hình trên lệnh là đường chính, hồ sơ SP đi theo). Bỏ tick khi
@@ -48,6 +57,38 @@ export function useDinhHinh(p: DinhHinhProps) {
   const cols = useMemo(() => visibleCols(more), [more])
 
   const editable = p.canEdit && !p.lockedByEntries && !p.lsxClosed
+
+  // ── GOM ĐỢT THEO MÃ (bản vẽ 15/11/2026 SNZSog1E…, Q2) ───────────────────
+  // Quyết MỘT LẦN theo bảng lúc mở màn (gõ dở không làm nhóm tự tách / nhập).
+  // Đợt đi theo bị ẩn; mọi sửa nằm trên đại diện; Lưu chép sang các đợt.
+  const gom = useMemo(() => {
+    if (!p.gomTheoMa) return new Map<string, string[]>()
+    const by = new Map<string, InitialRow[]>()
+    for (const r of p.initialRows)
+      by.set(r.production_order_line_id, [
+        ...(by.get(r.production_order_line_id) ?? []),
+        r,
+      ])
+    return nhomGomTheoMa(p.orderLines, (id) => by.get(id) ?? [], chuKyDong)
+  }, [p.gomTheoMa, p.initialRows, p.orderLines])
+  const diTheo = useMemo(() => new Set([...gom.values()].flat()), [gom])
+  /** Dòng lệnh BÀY (đại diện + mã một đợt + đợt không gom được). */
+  const linesHien = useMemo(
+    () => p.orderLines.filter((l) => !diTheo.has(l.id)),
+    [p.orderLines, diTheo],
+  )
+  /** Số đợt + tổng SL một nhóm bày (đại diện gồm cả đợt đi theo). */
+  const dotCua = (lineId: string) => {
+    const ids = new Set([lineId, ...(gom.get(lineId) ?? [])])
+    const ls = p.orderLines.filter((l) => ids.has(l.id))
+    return { dot: ls.length, sl: ls.reduce((a, l) => a + l.qty, 0) }
+  }
+  const rowsHien = useMemo(
+    () => rows.filter((r) => !diTheo.has(r.production_order_line_id)),
+    [rows, diTheo],
+  )
+  /** Bộ dòng đem lưu — đại diện nhân ra mọi đợt của mã. */
+  const rowsLuu = useMemo(() => nhanTheoDot(rowsHien, gom), [rowsHien, gom])
 
   useEffect(() => {
     if (!editable) return
@@ -105,8 +146,7 @@ export function useDinhHinh(p: DinhHinhProps) {
     setDirty(true)
   }
   /** Dòng SP nhận "Thêm dòng" ở Action Pane: SP đang lọc, hoặc lệnh chỉ có một SP. */
-  const lineThem =
-    spLoc || (p.orderLines.length === 1 ? p.orderLines[0].id : null) || null
+  const lineThem = spLoc || (linesHien.length === 1 ? linesHien[0].id : null) || null
   /**
    * Lộ trình RIÊNG LỆNH cho MỘT dòng (cụm hoặc chi tiết rời). Cụm chỉ mang nửa
    * "cụm"; chi tiết trong cụm giữ nửa của nó — không kéo theo (kéo theo đã ghi
@@ -165,8 +205,8 @@ export function useDinhHinh(p: DinhHinhProps) {
 
   // ── Dòng đang bày + thứ tự phẳng cho bàn phím ───────────────────────────
   const lines = useMemo(
-    () => p.orderLines.filter((l) => !spLoc || l.id === spLoc),
-    [p.orderLines, spLoc],
+    () => linesHien.filter((l) => !spLoc || l.id === spLoc),
+    [linesHien, spLoc],
   )
   const byLine = useMemo(() => {
     const m = new Map<string, Draft[]>()
@@ -183,17 +223,17 @@ export function useDinhHinh(p: DinhHinhProps) {
   // ── Kiểm tại chỗ ────────────────────────────────────────────────────────
   const problems = useMemo(
     () =>
-      rows.flatMap((r, i) =>
+      rowsHien.flatMap((r, i) =>
         rowProblems(r).map((pb) => ({ ...pb, rowKey: r.key, line: i + 1, name: r.name })),
       ),
-    [rows],
+    [rowsHien],
   )
   const errCells = useMemo(
     () => new Set(problems.map((pb) => cellId(pb.rowKey, pb.key))),
     [problems],
   )
   const first = problems[0] ?? null
-  const nCum = rows.filter((r) => r.kind === 'assembly').length
+  const nCum = rowsHien.filter((r) => r.kind === 'assembly').length
   const chuaDinhMuc = p.orderLines.filter((l) => !l.has_profile)
 
   const luuWhy = !p.canEdit
@@ -202,7 +242,7 @@ export function useDinhHinh(p: DinhHinhProps) {
       ? 'Lệnh đã kết thúc — bảng chỉ để tra cứu'
       : p.lockedByEntries
         ? `lệnh đã có ${p.pbsCount} phiếu sản lượng — xoá phiếu ở Hồ sơ lệnh › Phiếu rồi mới sửa được`
-        : rows.length === 0
+        : rowsLuu.length === 0
           ? 'chưa có dòng nào'
           : first
             ? `dòng ${first.line}${first.name ? ` (${first.name})` : ''} ${first.msg}`
@@ -255,7 +295,7 @@ export function useDinhHinh(p: DinhHinhProps) {
     // tiết, entries.service) phải theo số cụm / SP vừa khai: 4 chân / SP mà cụm
     // chân ×2 thì 2 chân / cụm.
     const cumQty = new Map<string, number>()
-    for (const r of rows) {
+    for (const r of rowsLuu) {
       const q = num(r.qty_per_unit)
       if (r.kind === 'assembly' && r.cluster.trim() && q && q > 0)
         cumQty.set(`${r.production_order_line_id}|${khoaCum(r.cluster)}`, q)
@@ -281,7 +321,7 @@ export function useDinhHinh(p: DinhHinhProps) {
           sync_profile_routes: syncProfile,
           // Số cụm / SP thống kê đã GÕ (ô "chưa có" để trống thì không gửi) —
           // server ghi ngược hồ sơ SP để màn ghi hết báo "chưa có" (13/11/2026).
-          cluster_qty: rows
+          cluster_qty: rowsLuu
             .filter(
               (r) =>
                 r.kind === 'assembly' &&
@@ -293,7 +333,7 @@ export function useDinhHinh(p: DinhHinhProps) {
               cluster: r.cluster.trim(),
               qty: num(r.qty_per_unit)!,
             })),
-          lines: rows.map((r) => ({
+          lines: rowsLuu.map((r) => ({
             production_order_line_id: r.production_order_line_id,
             kind: r.kind,
             cluster: r.cluster.trim() || null,
@@ -346,7 +386,7 @@ export function useDinhHinh(p: DinhHinhProps) {
         ? ` · chỉ ghi trên lệnh (hồ sơ SP chưa có cụm): ${res.routes_missing.map((x) => `${x.cluster} của ${x.product_code}`).join(', ')}`
         : ''
       setThongBao(
-        `Đã lưu bảng định hình ${rows.length} dòng lúc ${gio}${seeded}${skipped}${synced}${qtySynced}${syncSkipped}${syncMissing}`,
+        `Đã lưu bảng định hình ${rowsLuu.length} dòng lúc ${gio}${seeded}${skipped}${synced}${qtySynced}${syncSkipped}${syncMissing}`,
       )
       setDirty(false)
       setBoVua(null)
@@ -446,6 +486,11 @@ export function useDinhHinh(p: DinhHinhProps) {
   return {
     p,
     rows,
+    rowsHien,
+    rowsLuu,
+    linesHien,
+    dotCua,
+    gomDuoc: gom.size > 0,
     tab,
     setTab,
     spLoc,

@@ -35,11 +35,6 @@ export type ProductionEntry = {
   /** 'tran' (hàng trần) | 'dang_may' (hàng đang mây) — 0090. */
   finish_state: string | null
   note: string | null
-  /**
-   * Dòng của phiếu SỐ ĐẦU KỲ (0298) — chép cờ của phiếu xuống để truy vấn THEO
-   * NGÀY lọc thẳng. Vào luỹ kế (listByLsx*), không vào các hàm theo ngày ở đây.
-   */
-  dau_ky: boolean
   created_by: string | null
   created_at: string
 }
@@ -58,11 +53,16 @@ export type ProductionEntryJoined = ProductionEntry & {
 export type ReviewEntry = ProductionEntryJoined & {
   component_qty_per_unit: number | null
   component_dm_kg: number | null
+  /** Thứ tự trong Bảng chi tiết — Sổ đã ghi xếp dòng theo đây (cùng giờ ghi thì DB trả lộn xộn). */
+  component_sort: number | null
   lsx_status: string | null
 }
 
+/** Cỡ trang khi đọc nhiều dòng — bằng max-rows mặc định của PostgREST. */
+const TRANG = 1000
+
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, rework_qty, defect_code, defect_reason, machine_note, stage_meta, worker_name, finish_state, note, dau_ky, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, rework_qty, defect_code, defect_reason, machine_note, stage_meta, worker_name, finish_state, note, created_by, created_at'
 const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, kind, cluster, production_order_line_id), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
@@ -209,12 +209,11 @@ export const entriesRepo = {
     }))
   },
 
-  /** Sổ trong khoảng ngày [from, to] — báo cáo tuần/chất lượng khu GĐ. KHÔNG gồm số đầu kỳ (0298). */
+  /** Sổ trong khoảng ngày [from, to] — báo cáo tuần/chất lượng khu GĐ. */
   async listRange(fromDate: string, toDate: string): Promise<ProductionEntry[]> {
     const { data } = await db()
       .from('production_entries')
       .select(COLS)
-      .eq('dau_ky', false)
       .gte('entry_date', fromDate)
       .lte('entry_date', toDate)
       .limit(50000)
@@ -236,7 +235,6 @@ export const entriesRepo = {
       .from('production_entries')
       .select(SELECT_JOINED)
       .eq('team_department_id', teamDepartmentId)
-      .eq('dau_ky', false)
       .gte('entry_date', sinceDate)
       .order('entry_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -254,7 +252,6 @@ export const entriesRepo = {
     const { data } = await db()
       .from('production_entries')
       .select('entry_date, team_department_id, team:departments(name)')
-      .eq('dau_ky', false)
       .gte('entry_date', fromDate)
       .lte('entry_date', toDate)
       .not('team_department_id', 'is', null)
@@ -287,15 +284,12 @@ export const entriesRepo = {
       .from('production_entries')
       .select(SELECT_JOINED)
       .eq('entry_date', date)
-      .eq('dau_ky', false)
       .order('created_at', { ascending: false })
       .limit(2000)
     return unwrap(data as unknown as Raw[] | null)
   },
 
-  async insertMany(
-    rows: (Omit<ProductionEntry, 'id' | 'created_at' | 'dau_ky'> & { dau_ky?: boolean })[],
-  ): Promise<void> {
+  async insertMany(rows: Omit<ProductionEntry, 'id' | 'created_at'>[]): Promise<void> {
     if (!rows.length) return
     const { error } = await db().from('production_entries').insert(rows)
     if (error) throw new Error(error.message)
@@ -361,22 +355,40 @@ export const entriesRepo = {
     to: string
     teamId?: string | null
     docId?: string | null
+    /** Một công đoạn (Sổ công đoạn, 14/11/2026). */
+    stage?: string | null
   }): Promise<ReviewEntry[]> {
-    let q = db()
-      .from('production_entries')
-      .select(
-        `${COLS}, team:departments(name), actor:users(name), component:production_components(name, kind, cluster, production_order_line_id, qty_per_unit, dm_kg), lsx:production_orders(code, status)`,
-      )
-      .gte('entry_date', f.from)
-      .lte('entry_date', f.to)
-    if (f.teamId) q = q.eq('team_department_id', f.teamId)
-    if (f.docId) q = q.eq('doc_id', f.docId)
-    const { data } = await q
-      .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(5000)
+    const trang = (from: number) => {
+      let q = db()
+        .from('production_entries')
+        .select(
+          `${COLS}, team:departments(name), actor:users(name), component:production_components(name, kind, cluster, production_order_line_id, qty_per_unit, dm_kg, sort_order), lsx:production_orders(code, status)`,
+        )
+        .gte('entry_date', f.from)
+        .lte('entry_date', f.to)
+      if (f.teamId) q = q.eq('team_department_id', f.teamId)
+      if (f.docId) q = q.eq('doc_id', f.docId)
+      if (f.stage) q = q.eq('stage', f.stage)
+      return q
+        .order('entry_date', { ascending: false })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + TRANG - 1)
+    }
+    // Đọc từng trang 1.000 dòng: PostgREST cắt ở max-rows, `.limit(5000)` cũ vẫn chỉ
+    // ra 1.000 — một tháng của Sổ công đoạn vượt được mức đó (sổ wicker: ~800/tháng).
+    const data: unknown[] = []
+    for (let i = 0; i < 20; i++) {
+      const { data: page } = await trang(i * TRANG)
+      data.push(...(page ?? []))
+      if (!page || page.length < TRANG) break
+    }
     type Extra = {
-      component: One<{ qty_per_unit: number | string | null; dm_kg: number | string | null }>
+      component: One<{
+        qty_per_unit: number | string | null
+        dm_kg: number | string | null
+        sort_order: number | null
+      }>
       lsx: One<{ status: string }>
     }
     const raw = (data ?? []) as unknown as (Raw & Extra)[]
@@ -388,6 +400,7 @@ export const entriesRepo = {
         ...b,
         component_qty_per_unit: num(c?.qty_per_unit),
         component_dm_kg: num(c?.dm_kg),
+        component_sort: c?.sort_order ?? null,
         lsx_status: first(raw[i].lsx)?.status ?? null,
       }
     })

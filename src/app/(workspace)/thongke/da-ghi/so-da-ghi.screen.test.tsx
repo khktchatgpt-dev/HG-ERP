@@ -52,7 +52,6 @@ const doc = (p: Partial<SdgDoc>): SdgDoc => ({
   worker_count: 6,
   hours_per_worker: 6,
   labor_hours: 36,
-  kind: 'ngay',
   created_by: ME,
   created_at: '2026-11-13T07:05:00Z',
   ...p,
@@ -66,10 +65,12 @@ const line = (p: Partial<SdgLine>): SdgLine => ({
   stage: 'phoi',
   component_id: 'c',
   product_code: 'TB0299HG-AL',
+  product_name: 'Bàn tròn GIGA',
   name: 'Chân',
   cluster: null,
   qty_per_unit: 4,
   dm_kg: 0.3758,
+  sort: 0,
   needed: 108,
   done: 0,
   available: null,
@@ -80,7 +81,6 @@ const line = (p: Partial<SdgLine>): SdgLine => ({
   note: '',
   defect_code: null,
   defect_reason: '',
-  dau_ky: false,
   created_by: ME,
   created_at: '2026-11-13T07:05:00Z',
   ...p,
@@ -91,12 +91,15 @@ const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 function payload(over: Partial<SoDaGhiPayload> = {}): SoDaGhiPayload {
   return {
     today: '2026-11-13',
-    xem: 'ngay',
     date: '2026-11-13',
-    from: '2026-11-13',
-    to: '2026-11-13',
     team_id: T,
     teams: [{ id: T, name: 'Tổ Phôi', stage_label: 'Phôi' }],
+    stages: [
+      { code: 'phoi', label: 'Phôi' },
+      { code: 'han', label: 'Hàn' },
+      { code: 'son', label: 'Sơn' },
+    ],
+    cd: null,
     phieu: null,
     docs: [
       doc({
@@ -160,8 +163,9 @@ const dongCua = (name: string, i = 0) =>
 describe('Sổ đã ghi', () => {
   it('bày phiếu + dòng; tab Cần soát đếm đúng số dòng bị tô (vượt phải làm + trùng hai phiếu)', () => {
     render(<SoDaGhiScreen p={payload()} />)
-    expect(screen.getByText('PBS-2026-0015')).toBeTruthy()
-    expect(screen.getByText('PBS-2026-0016')).toBeTruthy()
+    // Cả hai phiếu có dòng cần soát nên mở sẵn (Q1 bản vẽ 14/11).
+    expect(screen.getByRole('button', { name: 'Gập PBS-2026-0015' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Gập PBS-2026-0016' })).toBeTruthy()
     const soat = screen.getByRole('tab', { name: /Cần soát/ })
     expect(soat.textContent).toContain('3')
     expect(screen.getByText(/Cần soát 3 dòng/)).toBeTruthy()
@@ -171,6 +175,13 @@ describe('Sổ đã ghi', () => {
     expect(dongCua('Tay vịn', 1).className).toContain('soatw')
     // Nháp không cộng vào chân bảng: 1.080 + 54 + 12 chính thức.
     expect(screen.getByText(/nháp 1 không tính/)).toBeTruthy()
+  })
+
+  it('biết ghi cho lệnh nào, SP nào: đầu phiếu nói công đoạn · lệnh · tổ, mã hàng kèm tên SP', () => {
+    render(<SoDaGhiScreen p={payload()} />)
+    const phieu = screen.getByRole('button', { name: 'Gập PBS-2026-0016' }).closest('tr')!
+    expect(phieu.textContent).toMatch(/^▾Phôi · Lệnh 01\/26-27 - GIGA · Tổ Phôi/)
+    expect(screen.getAllByText('Bàn tròn GIGA').length).toBeGreaterThan(0)
   })
 
   it('sửa Đạt 1.080 → 108 rồi Lưu: gửi đúng một thay đổi', async () => {
@@ -272,36 +283,172 @@ describe('Sổ đã ghi', () => {
     expect(screen.queryByRole('link', { name: 'Ghi thêm ›' })).toBeNull()
   })
 
-  it('phiếu ĐẦU KỲ: có nhãn, chốt sổ ngày không khoá, không "Ghi thêm", không tính năng suất', () => {
+  it('dòng trong phiếu xếp theo Bảng chi tiết, không theo thứ tự DB trả (thử lệnh TEST 14/11)', () => {
     const p = payload({
+      lines: [
+        line({ id: UUID(21), name: 'Khung bàn', component_id: 'kb', sort: 2, qty: 8 }),
+        line({ id: UUID(22), name: 'Giằng chân', component_id: 'gc', sort: 1, qty: 18 }),
+        line({ id: UUID(23), name: 'Chân', component_id: 'ch', sort: 0, qty: 30 }),
+      ],
+    })
+    render(<SoDaGhiScreen p={p} />)
+    const ten = screen
+      .getAllByRole('row')
+      .map((r) => within(r).queryAllByRole('cell')[0]?.textContent ?? '')
+      .filter((x) => /Chân|Giằng|Khung/.test(x))
+    expect(ten.map((x) => x.replace(/\s*×.*/, ''))).toEqual([
+      'Chân',
+      'Giằng chân',
+      'Khung bàn',
+    ])
+  })
+
+  // ── Bản vẽ 14/11 CUUfVcZx… bước 1 (Q1·Q2·Q4·Q5): một ngày nhiều công đoạn ──
+  /** Phôi 08:05 có dòng vượt phải làm; Hàn 07:00 (ghi TRƯỚC) hai mã, không dòng nào cần soát. */
+  const haiCongDoan = () =>
+    payload({
+      team_id: null,
       docs: [
+        doc({}),
         doc({
           id: 'd20',
           doc_no: 'PBS-2026-0020',
-          kind: 'dau_ky',
-          shift: null,
-          worker_count: null,
-          hours_per_worker: null,
-          labor_hours: null,
+          stage: 'han',
+          stage_label: 'Hàn',
+          team_name: 'Tổ Hàn',
+          created_at: '2026-11-13T00:00:00Z',
         }),
       ],
-      lines: [line({ id: UUID(9), doc_id: 'd20', qty: 600, done: 600, kg: 225.6, dau_ky: true })],
-      locks: [{ team_id: T, date: '2026-11-13', by: null, at: '2026-11-13T10:32:00Z' }],
+      lines: [
+        line({ id: UUID(31), component_id: 'chan', qty: 1080, done: 1080 }),
+        line({
+          id: UUID(32),
+          component_id: 'giang',
+          name: 'Giằng chân',
+          needed: 54,
+          done: 20,
+          qty: 20,
+        }),
+        ...[
+          ['khung', 'Cụm khung', 'TB0299HG-AL', 'Bàn tròn GIGA'],
+          ['tua', 'Cụm tựa', 'BN0230HG-AL', 'Ghế JAWOLL'],
+          ['tay', 'Cụm tay', 'BN0230HG-AL', 'Ghế JAWOLL'],
+        ].map(([c, name, code, sp], i) =>
+          line({
+            id: UUID(40 + i),
+            doc_id: 'd20',
+            stage: 'han',
+            component_id: c,
+            name,
+            product_code: code,
+            product_name: sp,
+            needed: 20,
+            done: 5,
+            qty: 5,
+          }),
+        ),
+      ],
     })
-    render(<SoDaGhiScreen p={p} />)
-    expect(screen.getByText('ĐẦU KỲ')).toBeTruthy()
-    expect(screen.getByText(/tới hết 13\/11 · không giờ công/)).toBeTruthy()
-    // Sổ ngày 13/11 đã chốt nhưng dòng đầu kỳ vẫn sửa được (Q3).
+
+  it('Q5: phiếu xếp theo lộ trình công đoạn, không theo giờ ghi; đầu phiếu hai dòng', () => {
+    render(<SoDaGhiScreen p={haiCongDoan()} />)
+    const dau = screen.getAllByRole('button', { name: /^(Mở|Gập) PBS/ })
+    expect(dau.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Gập PBS-2026-0016',
+      'Mở PBS-2026-0020',
+    ])
+    const han = dau[1].closest('tr')!
+    expect(han.textContent).toContain('Hàn · Lệnh 01/26-27 - GIGA · Tổ Hàn')
+    expect(han.textContent).toContain('2 mã hàng: BN0230HG-AL · TB0299HG-AL · 3 dòng')
+    expect(han.textContent).toContain('PBS-2026-0020 · ca 1 · 6 CN × 6 giờ')
+  })
+
+  it('Q1: phiếu gập sẵn, trừ phiếu có dòng cần soát; "Mở hết" mở cả', () => {
+    render(<SoDaGhiScreen p={haiCongDoan()} />)
     expect(screen.getByLabelText('Đạt · Chân')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Ghi thêm ›' })).toBeNull()
-    expect(screen.getByText(/đầu kỳ 1 không tính năng suất/)).toBeTruthy()
-    expect(screen.getByText('chưa có giờ công')).toBeTruthy()
+    expect(screen.queryByLabelText('Đạt · Cụm khung')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Mở hết' }))
+    expect(screen.getByLabelText('Đạt · Cụm khung')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Gập hết' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Gập PBS-2026-0016' }))
+    expect(screen.queryByLabelText('Đạt · Chân')).toBeNull()
+  })
+
+  it('Q2: chip công đoạn đếm đúng số dòng bảng bày; bấm Hàn chỉ còn phiếu Hàn', () => {
+    render(<SoDaGhiScreen p={haiCongDoan()} />)
+    const nhom = screen.getByRole('group', { name: 'Lọc theo công đoạn' })
+    expect(
+      within(nhom)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Tất cả 5', 'Phôi 2', 'Hàn 3'])
+    fireEvent.click(within(nhom).getByRole('button', { name: 'Hàn 3' }))
+    expect(screen.queryByRole('button', { name: /PBS-2026-0016/ })).toBeNull()
+    // Còn một phiếu thì mở sẵn — 3 dòng đúng số chip.
+    expect(screen.getAllByLabelText(/^Đạt · /)).toHaveLength(3)
+    expect(screen.getByText('3 dòng · chính thức 3')).toBeTruthy()
+  })
+
+  it('Q4: dòng gom dưới hàng mã hàng (mã + tên + số dòng), không còn cột Mã hàng', () => {
+    render(<SoDaGhiScreen p={haiCongDoan()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Mở PBS-2026-0020' }))
+    expect(screen.queryByRole('columnheader', { name: 'Mã hàng' })).toBeNull()
+    const ma = screen.getAllByRole('row').filter((r) => r.className === 'mh')
+    expect(ma.map((r) => (r as HTMLTableRowElement).cells[0].textContent)).toEqual([
+      'TB0299HG-AL Bàn tròn GIGA · 2 dòng',
+      'BN0230HG-AL Ghế JAWOLL · 2 dòng',
+      'TB0299HG-AL Bàn tròn GIGA · 1 dòng',
+    ])
+  })
+
+  // ── Bước 2 bản vẽ 14/11 (Q3 Tổng ngày · Q6 bảng 7 ngày) ──
+  it('Q3: Tổng ngày lệnh → mã hàng × công đoạn; bấm ô lọc đúng công đoạn, mở đúng phiếu, tô hàng mã', () => {
+    render(<SoDaGhiScreen p={haiCongDoan()} />)
+    const tong = screen.getByRole('region', { name: 'Tổng ngày' })
+    expect(
+      within(tong)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Lệnh · mã hàng', 'Phôi', 'Hàn', 'Dòng'])
+    expect(within(tong).getByText('01/26-27 - GIGA')).toBeTruthy()
+    // TB0299: Phôi 1.080 + 20 (2 dòng), Hàn 5 (1 dòng); BN0230: Hàn 10 (2 dòng).
+    expect(
+      within(tong).getByRole('button', { name: 'Phôi · TB0299HG-AL: đạt 1.100, 2 dòng' }),
+    ).toBeTruthy()
+    const o = within(tong).getByRole('button', {
+      name: 'Hàn · BN0230HG-AL: đạt 10, 2 dòng',
+    })
+    fireEvent.click(o)
+    expect(o.getAttribute('aria-pressed')).toBe('true')
+    expect(
+      within(screen.getByRole('group', { name: 'Lọc theo công đoạn' }))
+        .getByRole('button', { name: 'Hàn 3' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(screen.getByRole('button', { name: 'Gập PBS-2026-0020' })).toBeTruthy()
+    const chon = screen.getAllByRole('row').filter((r) => r.className === 'mh chon')
+    expect(chon.map((r) => (r as HTMLTableRowElement).cells[0].textContent)).toEqual([
+      'BN0230HG-AL Ghế JAWOLL · 2 dòng',
+    ])
+    // Bấm lại = bỏ chọn, bỏ lọc.
+    fireEvent.click(o)
+    expect(o.getAttribute('aria-pressed')).toBe('false')
+    // Chip về Tất cả: phiếu Phôi (có dòng cần soát) hiện lại.
+    expect(screen.getByRole('button', { name: 'Gập PBS-2026-0016' })).toBeTruthy()
+  })
+
+  it('Q3: một mã × một công đoạn thì không bày Tổng ngày (đầu phiếu đã nói hết)', () => {
+    const p = payload({ lines: [line({ id: UUID(60), qty: 5, done: 5 })] })
+    render(<SoDaGhiScreen p={p} />)
+    expect(screen.queryByRole('region', { name: 'Tổng ngày' })).toBeNull()
   })
 
   it('rỗng: nói lý do và việc tiếp', () => {
     render(<SoDaGhiScreen p={payload({ docs: [], lines: [] })} />)
     expect(screen.getByText(/Tổ Phôi chưa ghi dòng nào ngày 13\/11\/2026/)).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Xem 7 ngày' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Xem cả tháng' }).getAttribute('href')).toBe(
+      '/thongke/so-cong-doan?thang=2026-11',
+    )
   })
 
   it('không lỗi a11y', async () => {

@@ -16,11 +16,14 @@ export const dynamic = 'force-dynamic'
  */
 export default async function DinhHinhPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  /** `sp` = mã hàng mở sẵn (lối "Tự khai ›" từ Ghi sản lượng, 15/11/2026). */
+  searchParams: Promise<{ sp?: string }>
 }) {
   const user = await authService.requirePageUser()
-  const { id } = await params
+  const [{ id }, sp] = await Promise.all([params, searchParams])
   const props = await loadDinhHinhProps(user, id)
   if (!props) notFound()
 
@@ -40,5 +43,7 @@ export default async function DinhHinhPage({
     )
   }
 
-  return <DinhHinhScreen {...props} />
+  // Gom đợt cùng mã (bản vẽ 15/11 SNZSog1E… Q2) chỉ ở màn này — màn Lộ trình công
+  // đoạn dùng chung hook nhưng làm việc theo từng dòng lệnh.
+  return <DinhHinhScreen {...props} gomTheoMa initialSp={sp.sp ?? props.initialSp} />
 }

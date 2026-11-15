@@ -9,7 +9,7 @@ import type { soDaGhiSaveSchema } from './entries.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
-import { shiftIso, vnTodayIso } from '@/lib/local-date'
+import { vnTodayIso } from '@/lib/local-date'
 import {
   scaleKg,
   type SdgDoc,
@@ -29,17 +29,20 @@ import { BadRequest, Forbidden, NotFound } from '@/server/http'
  * lượng và Giao nhận. Sổ đã ghi của một tổ thường chạm 1–3 lệnh trong 7 ngày.
  */
 
-export type SoDaGhiXem = 'ngay' | 'tuan'
-
+/**
+ * SỔ THEO NGÀY (tên mới 14/11/2026, bản vẽ https://claude.ai/artifact/CpB5jKcS9Swtx6cHqKUyXx
+ * Q5): MỘT ngày. Chế độ 7 ngày đã bỏ — trùng lưới tổ × 7 ngày của Sổ ngày & chốt
+ * sổ; nhiều ngày của một công đoạn thì xem Sổ công đoạn (`so-cong-doan.service`).
+ */
 export type SoDaGhiPayload = {
   today: string
-  xem: SoDaGhiXem
-  /** Ngày neo: xem Ngày = ngày đó; xem 7 ngày = ngày cuối của khoảng. */
   date: string
-  from: string
-  to: string
   team_id: string | null
   teams: { id: string; name: string; stage_label: string }[]
+  /** Công đoạn theo LỘ TRÌNH (sort_order) — xếp phiếu + chip lọc (bản vẽ 14/11 Q2, Q5). */
+  stages: { code: string; label: string }[]
+  /** Chip công đoạn chọn sẵn (`?cd=`, tới từ ô ngày của Sổ công đoạn). */
+  cd: string | null
   /** Đang mở MỘT phiếu (`?phieu=`) — thanh lọc nói và cho bỏ. */
   phieu: { id: string; doc_no: string } | null
   docs: SdgDoc[]
@@ -58,11 +61,10 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/
 export const soDaGhiService = {
   async load(
     user: User,
-    q: { date?: string; xem?: string; to?: string; phieu?: string },
+    q: { date?: string; to?: string; phieu?: string; cd?: string },
   ): Promise<SoDaGhiPayload> {
     const today = vnTodayIso()
     let date = q.date && ISO.test(q.date) && q.date <= today ? q.date : today
-    const xem: SoDaGhiXem = q.xem === 'tuan' ? 'tuan' : 'ngay'
 
     const [depts, stagesCat, codes] = await Promise.all([
       departmentsRepo.list(),
@@ -101,7 +103,7 @@ export const soDaGhiService = {
         teamId = doc.team_department_id
       }
     }
-    const from = phieu || xem === 'ngay' ? date : shiftIso(date, -6)
+    const from = date
     const to = date
 
     const [entries, locksRaw] = await Promise.all([
@@ -118,14 +120,21 @@ export const soDaGhiService = {
     ])
 
     // Ô Hồ sơ lệnh theo id chi tiết (dòng ảo đã vật chất hoá lúc ghi → id thật).
-    const rowById = new Map<string, { row: DossierRow; product_code: string }>()
+    const rowById = new Map<
+      string,
+      { row: DossierRow; product_code: string; product_name: string }
+    >()
     const lsxClosed = new Map<string, boolean>()
     for (const d of dossiers) {
       if (!d) continue
       lsxClosed.set(d.lsx.id, CLOSED.has(d.lsx.status))
       for (const l of d.lines)
         for (const r of l.rows)
-          rowById.set(r.id, { row: r, product_code: l.product_code })
+          rowById.set(r.id, {
+            row: r,
+            product_code: l.product_code,
+            product_name: l.product_name,
+          })
     }
 
     const docs: SdgDoc[] = docsRaw.map((x) => ({
@@ -146,7 +155,6 @@ export const soDaGhiService = {
       worker_count: x.worker_count,
       hours_per_worker: x.hours_per_worker,
       labor_hours: x.labor_hours,
-      kind: x.kind === 'dau_ky' ? 'dau_ky' : 'ngay',
       created_by: x.created_by,
       created_at: x.created_at,
     }))
@@ -163,10 +171,14 @@ export const soDaGhiService = {
         stage: e.stage,
         component_id: e.component_id,
         product_code: hit?.product_code ?? null,
+        // Hồ sơ lệnh lùi về mã khi SP không có tên — trùng mã thì khỏi bày lặp.
+        product_name:
+          hit && hit.product_name !== hit.product_code ? hit.product_name : null,
         name: e.component_name ?? '?',
         cluster: e.component_cluster,
         qty_per_unit: e.component_qty_per_unit,
         dm_kg: e.component_dm_kg,
+        sort: e.component_sort ?? 9999,
         needed: hit ? hit.row.total_needed : null,
         done: cell ? cell.done : null,
         available: cell ? cell.available : null,
@@ -177,7 +189,6 @@ export const soDaGhiService = {
         note: e.note ?? '',
         defect_code: e.defect_code,
         defect_reason: e.defect_reason ?? '',
-        dau_ky: !!e.dau_ky,
         created_by: e.created_by,
         created_at: e.created_at,
       }
@@ -185,12 +196,11 @@ export const soDaGhiService = {
 
     return {
       today,
-      xem: phieu ? 'ngay' : xem,
       date,
-      from,
-      to,
       team_id: teamId,
       teams,
+      stages: stagesCat.map((s) => ({ code: s.code, label: s.label })),
+      cd: q.cd && stagesCat.some((s) => s.code === q.cd) ? q.cd : null,
       phieu,
       docs,
       lines,
@@ -233,8 +243,7 @@ export const soDaGhiService = {
     for (const r of rows) {
       if (!canAll(user) && r.created_by !== user.id)
         throw Forbidden('Chỉ người ghi dòng hoặc quản đốc sửa / xoá được')
-      // Dòng đầu kỳ (0298) không thuộc sổ ngày nào — chỉ khoá khi lệnh đóng (Q3).
-      if (r.team_department_id && !r.dau_ky) {
+      if (r.team_department_id) {
         const k = `${r.team_department_id}|${r.entry_date}`
         if (!lockCache.has(k))
           lockCache.set(

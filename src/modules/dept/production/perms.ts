@@ -25,6 +25,20 @@ export async function canEditComponents(user: User): Promise<boolean> {
   return hasPermission(user, 'production.components.edit')
 }
 
+/**
+ * Được ghi ngược bảng chi tiết của lệnh lên ĐỊNH MỨC hồ sơ SP ("Khởi tạo hồ sơ SP")
+ * — Kỹ thuật / Kế hoạch / GĐ (bản vẽ 15/11/2026 SNZSog1E…, Q5). Thống kê có quyền
+ * sửa bảng chi tiết nhưng KHÔNG ghi định mức: bảng thống kê khai nhanh (tên + số /
+ * SP) chỉ thuộc lệnh; Cung ứng mua vật tư theo định mức hồ sơ.
+ */
+export async function canSeedProfile(user: User): Promise<boolean> {
+  const [kt, kh] = await Promise.all([
+    hasPermission(user, 'technical.edit'),
+    hasPermission(user, 'production.plan.manage'),
+  ])
+  return kt || kh
+}
+
 /** Quyền lên KẾ HOẠCH SX (lộ trình + giao tổ + hạn + ưu tiên) — 0085. */
 export async function canManagePlan(user: User): Promise<boolean> {
   return hasPermission(user, 'production.plan.manage')

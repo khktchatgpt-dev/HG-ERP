@@ -12,6 +12,7 @@ import {
 import { dmy, fmt } from './ghi.shared'
 import { LuoiGhi } from './luoi-ghi'
 import { ThanhMaHang } from './thanh-ma-hang'
+import { ChonLenh, DaiLenhKhongChay, DaiMaChuaGhi } from './ma-chua-ghi'
 import { useGhi, type GhiProps } from './useGhi'
 
 /**
@@ -57,6 +58,8 @@ export function GhiScreen(p: GhiProps) {
           }
         }}
       >
+        {/* Bản vẽ 15/11 Q5: `?lsx=` của lệnh không còn chạy — nói thẳng, không lặng lẽ đổi. */}
+        {p.lenhKhongChay && <DaiLenhKhongChay {...p.lenhKhongChay} />}
         <DauTrang
           crumb="Ghi sổ"
           title="Ghi sản lượng"
@@ -81,7 +84,7 @@ export function GhiScreen(p: GhiProps) {
           actions={
             <>
               {/* Q6: nút gợi ý chỉ hiện khi CÓ gợi ý — "Dòng gợi ý 0" là chữ thừa. */}
-              {!d.dauKy && (goiY > 0 || d.chiGoiY) && (
+              {(goiY > 0 || d.chiGoiY) && (
                 <ApNhom>
                   <ApNut onClick={() => d.setChiGoiY(!d.chiGoiY)}>
                     {d.chiGoiY ? 'Mọi dòng' : 'Dòng gợi ý'} <b className="num">{goiY}</b>
@@ -90,70 +93,45 @@ export function GhiScreen(p: GhiProps) {
               )}
               {/* Q6 bản vẽ 14/11: xem lại / sửa dòng đã ghi — đúng ngày + tổ đang chọn. */}
               <ApNhom>
-                <ApNut href={d.soDaGhiHref}>Sổ đã ghi</ApNut>
+                <ApNut href={d.soDaGhiHref}>Sổ theo ngày</ApNut>
               </ApNhom>
-              {/* Đầu kỳ chỉ có MỘT cột số và luôn chính thức — không cột chi tiết, không nháp. */}
-              {!d.dauKy && (
-                <ApNhom>
-                  <ApNut onClick={d.toggleMore}>
-                    {d.more ? 'Ẩn cột chi tiết' : 'Cột chi tiết'}
-                  </ApNut>
-                  <ApNut
-                    onClick={() => d.save(false)}
-                    why={
-                      d.blockedNhap && d.typed.length > 0
-                        ? 'xem câu đỏ ở thanh dưới'
-                        : null
-                    }
-                    busy={d.busy}
-                  >
-                    Lưu nháp
-                  </ApNut>
-                </ApNhom>
-              )}
+              <ApNhom>
+                <ApNut onClick={d.toggleMore}>
+                  {d.more ? 'Ẩn cột chi tiết' : 'Cột chi tiết'}
+                </ApNut>
+                <ApNut
+                  onClick={() => d.save(false)}
+                  why={
+                    d.blockedNhap && d.typed.length > 0 ? 'xem câu đỏ ở thanh dưới' : null
+                  }
+                  busy={d.busy}
+                >
+                  Lưu nháp
+                </ApNut>
+              </ApNhom>
             </>
           }
         />
 
         {/* DẢI CHIP ĐẦU PHIẾU — một hàng, mỗi hàng đầu trang thừa là một hàng lưới mất */}
         <div className="sx-hc">
-          {/* Q1 bản vẽ 14/11: Loại phiếu — Sản lượng ngày | Số đầu kỳ (0298). */}
-          <label className={d.dauKy ? 'c on' : 'c'}>
-            Loại
-            <select
-              value={d.dauKy ? 'dau_ky' : 'ngay'}
-              onChange={(e) => d.doiLoai(e.target.value === 'dau_ky')}
-              aria-label="Loại phiếu"
-            >
-              <option value="ngay">Sản lượng ngày</option>
-              <option value="dau_ky">Số đầu kỳ</option>
-            </select>
-          </label>
           <label className="c">
-            {d.dauKy ? 'Tính tới hết ngày' : 'Ngày'}
+            Ngày
             <input
               type="date"
               value={d.date}
               max={sheet.today}
               onChange={(e) => d.setDate(e.target.value)}
-              aria-label={d.dauKy ? 'Số đầu kỳ tính tới hết ngày' : 'Ngày ghi sổ'}
+              aria-label="Ngày ghi sổ"
             />
           </label>
           <label className="c">
             Lệnh
-            <select
-              className="lenh"
+            <ChonLenh
+              options={d.lsxOptions}
               value={sheet.lsx?.id ?? ''}
-              onChange={(e) => d.doiLenh(e.target.value)}
-              aria-label="Lệnh sản xuất"
-            >
-              {d.lsxOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.code}
-                  {o.open_count > 0 ? ` · còn ${o.open_count} việc` : ' · đủ số'}
-                </option>
-              ))}
-            </select>
+              onChange={d.doiLenh}
+            />
           </label>
           {/* Công đoạn + bậc đếm gộp một chip (12/11): dải tab ngay dưới đã nói
               công đoạn nào đang mở — hai chip là một hàng đầu phiếu bị mất. */}
@@ -192,61 +170,56 @@ export function GhiScreen(p: GhiProps) {
               Chỉ tiêu hôm nay <b className="num">{fmt(d.chiTieu)}</b>
             </span>
           )}
-          {/* GIỜ CÔNG đầu phiếu (0296) — một lần cho cả phiếu, không phải mỗi dòng.
-              Số đầu kỳ không có giờ công (Q4 bản vẽ 14/11). */}
-          {!d.dauKy && (
-            <>
-              <span className="sep" aria-hidden="true" />
-              <label className="c" htmlFor="crew-shift">
-                Ca
-                <select
-                  id="crew-shift"
-                  value={d.crew.shift}
-                  onChange={(e) => d.setCrew('shift', e.target.value)}
-                  disabled={!can}
-                >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select>
-              </label>
-              <label
-                className={d.crewRed('workers') ? 'c bad' : 'c'}
-                htmlFor="crew-workers"
-                title="Số công nhân làm phiếu này"
-              >
-                CN
-                <input
-                  id="crew-workers"
-                  className="so"
-                  inputMode="numeric"
-                  value={d.crew.workers}
-                  onChange={(e) => d.setCrew('workers', e.target.value)}
-                  disabled={!can}
-                  aria-label="Số công nhân"
-                />
-              </label>
-              <label
-                className={d.crewRed('hours') ? 'c bad' : 'c'}
-                htmlFor="crew-hours"
-                title="Giờ mỗi người làm cho phiếu này — làm nhiều lệnh trong ca thì chia giờ theo lệnh"
-              >
-                Giờ
-                <input
-                  id="crew-hours"
-                  className="so"
-                  inputMode="decimal"
-                  value={d.crew.hours}
-                  onChange={(e) => d.setCrew('hours', e.target.value)}
-                  disabled={!can}
-                  aria-label="Giờ mỗi người"
-                />
-              </label>
-              <span className="gc">
-                = <b className="num">{crewOk ? fmt(d.gioCong!) : '?'}</b> giờ công
-              </span>
-            </>
-          )}
+          {/* GIỜ CÔNG đầu phiếu (0296) — một lần cho cả phiếu, không phải mỗi dòng */}
+          <span className="sep" aria-hidden="true" />
+          <label className="c" htmlFor="crew-shift">
+            Ca
+            <select
+              id="crew-shift"
+              value={d.crew.shift}
+              onChange={(e) => d.setCrew('shift', e.target.value)}
+              disabled={!can}
+            >
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+          <label
+            className={d.crewRed('workers') ? 'c bad' : 'c'}
+            htmlFor="crew-workers"
+            title="Số công nhân làm phiếu này"
+          >
+            CN
+            <input
+              id="crew-workers"
+              className="so"
+              inputMode="numeric"
+              value={d.crew.workers}
+              onChange={(e) => d.setCrew('workers', e.target.value)}
+              disabled={!can}
+              aria-label="Số công nhân"
+            />
+          </label>
+          <label
+            className={d.crewRed('hours') ? 'c bad' : 'c'}
+            htmlFor="crew-hours"
+            title="Giờ mỗi người làm cho phiếu này — làm nhiều lệnh trong ca thì chia giờ theo lệnh"
+          >
+            Giờ
+            <input
+              id="crew-hours"
+              className="so"
+              inputMode="decimal"
+              value={d.crew.hours}
+              onChange={(e) => d.setCrew('hours', e.target.value)}
+              disabled={!can}
+              aria-label="Giờ mỗi người"
+            />
+          </label>
+          <span className="gc">
+            = <b className="num">{crewOk ? fmt(d.gioCong!) : '?'}</b> giờ công
+          </span>
           {/* Chỉ nói khi ĐÃ chốt — "chưa chốt" là trạng thái thường, không phải việc. */}
           {d.lockedNow && <span className="sp stop">sổ ngày đã chốt</span>}
         </div>
@@ -262,6 +235,9 @@ export function GhiScreen(p: GhiProps) {
             onClick: () => d.doiCongDoan(s.code),
           }))}
         />
+
+        {/* Bản vẽ 15/11 Q3: mã hàng của lệnh chưa có bảng chi tiết — nói ra, không giấu. */}
+        {p.chuaGhi && <DaiMaChuaGhi lenh={p.chuaGhi} canKhai={p.canKhai} />}
 
         <ThanhMaHang d={d} />
 
@@ -302,33 +278,11 @@ export function GhiScreen(p: GhiProps) {
             </button>
           </div>
         )}
-        {d.dauKy ? (
-          d.daCoDauKy ? (
-            <div className="sx-note stop">
-              <b>Đã có đầu kỳ</b> Tổ này đã có phiếu đầu kỳ {d.daCoDauKy.doc_no} ở công
-              đoạn {sheet.stage_label} của lệnh — mỗi lệnh × công đoạn × tổ một phiếu.
-              <Link
-                className="lnk"
-                href={`/thongke/da-ghi?phieu=${encodeURIComponent(d.daCoDauKy.doc_no)}`}
-              >
-                Sửa ở Sổ đã ghi ›
-              </Link>
-            </div>
-          ) : (
-            <div className="sx-note">
-              <b>Số đầu kỳ</b> = tổng tổ đã làm TỚI HẾT {dmy(d.date)}, trước khi ghi sổ
-              trên ERP. Một phiếu cho mỗi lệnh × công đoạn × tổ; không giờ công, không
-              tính Năng suất. Gõ nhầm thì sửa ở Sổ đã ghi.
-            </div>
-          )
-        ) : (
-          d.datePast &&
-          !d.dateFuture && (
-            <div className="sx-note">
-              <b>Ghi lùi ngày</b> Phiếu sẽ mang ngày {dmy(d.date)}. Sổ cộng dồn — ngày đó
-              đã ghi rồi thì gõ thêm là cộng vào, không thay thế.
-            </div>
-          )
+        {d.datePast && !d.dateFuture && (
+          <div className="sx-note">
+            <b>Ghi lùi ngày</b> Phiếu sẽ mang ngày {dmy(d.date)}. Sổ cộng dồn — ngày đó đã
+            ghi rồi thì gõ thêm là cộng vào, không thay thế.
+          </div>
         )}
         {sheet.truncated > 0 && (
           <div className="sx-note">
@@ -348,6 +302,7 @@ export function GhiScreen(p: GhiProps) {
         {d.thongBao && !d.loi && (
           <div className="sx-note ok">
             {d.thongBao}
+            {d.taiLai && <span className="mut"> · đang cập nhật Đã làm / Còn lại…</span>}
             {d.vuaGhi && (
               <Link href={d.vuaGhi} className="lnk">
                 Xem dòng vừa ghi ›
@@ -360,7 +315,7 @@ export function GhiScreen(p: GhiProps) {
         )}
         {/* Q6 bản vẽ 14/11: tổ này đã ghi gì ở ngày đang chọn — chống ghi đúp,
             và là lối sang Sổ đã ghi để soát. Chỉ hiện khi đã có. */}
-        {!d.dauKy && d.daGhiNay && !d.thongBao && (
+        {d.daGhiNay && !d.thongBao && (
           <div className="sx-note ok">
             <span>
               {d.date === sheet.today ? 'Hôm nay' : `Ngày ${dmy(d.date)}`} {d.teamName} đã
@@ -369,7 +324,7 @@ export function GhiScreen(p: GhiProps) {
               {d.daGhiNay.drafts > 0 && ` (${fmt(d.daGhiNay.drafts)} nháp)`}
             </span>
             <Link href={d.soDaGhiHref} className="lnk">
-              Xem ở Sổ đã ghi ›
+              Xem ở Sổ theo ngày ›
             </Link>
           </div>
         )}
@@ -379,15 +334,14 @@ export function GhiScreen(p: GhiProps) {
         {/* THANH CHỐT — ngoại lệ thanh đáy của khuôn nhập liệu */}
         <div className="sx-cb">
           <span className="sum">
-            Sắp ghi{d.dauKy && ' đầu kỳ'} <b>{d.typed.length}</b> dòng ·{' '}
-            <b>{fmt(d.typedQty)}</b> {d.dauKy ? `đã làm tới hết ${dmy(d.date)}` : 'đạt'}
-            {!d.dauKy && core.defect !== 'off' && (
+            Sắp ghi <b>{d.typed.length}</b> dòng · <b>{fmt(d.typedQty)}</b> đạt
+            {core.defect !== 'off' && (
               <>
                 {' '}
                 · <b>{fmt(d.typedDefect)}</b> lỗi
               </>
             )}
-            {!d.dauKy && core.rework !== 'off' && (
+            {core.rework !== 'off' && (
               <>
                 {' '}
                 · <b>{fmt(d.typedRework)}</b> sửa lại
@@ -460,10 +414,10 @@ export function GhiScreen(p: GhiProps) {
                 void d.save(true)
               }}
               aria-disabled={d.blockedGhi ? true : undefined}
-              disabled={d.busy}
+              disabled={d.busy || d.taiLai}
               aria-busy={d.busy || undefined}
             >
-              {d.busy ? 'Đang ghi…' : d.dauKy ? 'Ghi số đầu kỳ' : 'Ghi sổ chính thức'}
+              {d.busy ? 'Đang ghi…' : d.taiLai ? 'Đang cập nhật…' : 'Ghi sổ chính thức'}
             </button>
           </span>
         </div>

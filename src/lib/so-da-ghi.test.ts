@@ -18,10 +18,12 @@ const line = (p: Partial<SdgLine>): SdgLine => ({
   stage: 'phoi',
   component_id: 'c1',
   product_code: 'TB0299HG-AL',
+  product_name: 'Bàn tròn GIGA',
   name: 'Chân',
   cluster: null,
   qty_per_unit: 4,
   dm_kg: 0.3758,
+  sort: 0,
   needed: 108,
   done: 0,
   available: null,
@@ -32,7 +34,6 @@ const line = (p: Partial<SdgLine>): SdgLine => ({
   note: '',
   defect_code: null,
   defect_reason: '',
-  dau_ky: false,
   created_by: 'u1',
   created_at: '2026-11-13T07:05:00Z',
   ...p,
@@ -116,11 +117,6 @@ describe('khoaVi', () => {
     expect(khoaVi(line({}), { lsx_closed: false }, { ...ctx, locked: () => true })).toContain(
       'mở khoá ở Sổ ngày',
     )
-  })
-  it('dòng đầu kỳ: chốt sổ ngày không khoá, lệnh đóng vẫn khoá', () => {
-    const locked = { ...ctx, locked: () => true }
-    expect(khoaVi(line({ dau_ky: true }), { lsx_closed: false }, locked)).toBeNull()
-    expect(khoaVi(line({ dau_ky: true }), { lsx_closed: true }, locked)).toContain('Lệnh đã đóng')
   })
   it('chỉ người ghi, trừ quản lý', () => {
     expect(khoaVi(line({ created_by: 'u2' }), null, ctx)).toContain('Chỉ người ghi')

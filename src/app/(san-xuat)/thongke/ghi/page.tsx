@@ -6,15 +6,18 @@ import {
   loadEntrySheet,
   worklistService,
 } from '@/modules/dept/production/worklist.service'
-import { isProductionStaff } from '@/modules/dept/production/perms'
+import { canEditComponents, isProductionStaff } from '@/modules/dept/production/perms'
 import { entriesRepo } from '@/modules/dept/production/entries.repo'
 import { entryDocsRepo } from '@/modules/dept/production/entry-docs.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { maChuaGhiService } from '@/modules/dept/production/ma-chua-ghi.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { Rong, SxKhung } from '@/app/(workspace)/production/_erp/khung'
 import { GhiScreen } from './GhiScreen'
+import { ChuaGhiScreen } from './ChuaGhiScreen'
+import { lenhOptions } from '@/lib/ma-chua-ghi'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +41,11 @@ export const dynamic = 'force-dynamic'
  *
  * 03/11/2026 (B3): dựng lại KHÔNG kit theo cấu hình công đoạn — xem
  * `GhiScreen.tsx`.
+ *
+ * 15/11/2026 (bản vẽ MRFoxWgh…, Q1–Q5): ô chọn lệnh có MỌI lệnh đang chạy (nhóm
+ * "Chưa ghi được" cho lệnh chưa có bảng chi tiết); `?lsx=` của lệnh như vậy mở
+ * màn nói lý do (`ChuaGhiScreen`); lệnh không còn chạy thì dải đỏ nói thẳng —
+ * trước đó cả hai trường hợp đều LẶNG LẼ mở lệnh khác (GIGA), thống kê gõ nhầm.
  */
 export const GHI_LSX_COOKIE = 'sx_ghi_lsx'
 
@@ -49,8 +57,6 @@ export default async function GhiSanLuongPage({
     stage?: string
     date?: string
     team?: string
-    /** `dau_ky` = chế độ SỐ ĐẦU KỲ (0298, bản vẽ 14/11 Q1). */
-    loai?: string
   }>
 }) {
   const user = await authService.requirePageUser()
@@ -62,13 +68,18 @@ export default async function GhiSanLuongPage({
   // không song song được. Tổ + danh mục công đoạn + "đã ghi" 14 ngày đi cùng lượt.
   const today = vnTodayIso()
   const from14 = shiftIso(today, -13)
-  const [data, depts, stagesCat, entries14, docs14] = await Promise.all([
-    worklistService.list(user, {}),
-    departmentsRepo.list(),
-    productionRepo.listStages(),
-    entriesRepo.listRange(from14, today),
-    entryDocsRepo.listStatusRange(from14, today),
-  ])
+  const [data, depts, stagesCat, entries14, docs14, tinhTrang, canKhai] =
+    await Promise.all([
+      worklistService.list(user, {}),
+      departmentsRepo.list(),
+      productionRepo.listStages(),
+      entriesRepo.listRange(from14, today),
+      entryDocsRepo.listStatusRange(from14, today),
+      maChuaGhiService.load(),
+      canEditComponents(user),
+    ])
+  const options = lenhOptions(tinhTrang, data.lsx_cards)
+  const ttById = new Map(tinhTrang.map((t) => [t.lsx_id, t]))
 
   // Mở ĐÚNG chỗ (bản vẽ 14/11/2026, Q5): `?team=` / `?date=` từ Sổ ngày và Sổ
   // đã ghi; không có `?stage=` thì công đoạn của tổ (tổ trên đường dẫn, không có
@@ -99,17 +110,26 @@ export default async function GhiSanLuongPage({
   }
   const remembered = (await cookies()).get(GHI_LSX_COOKIE)?.value ?? null
   const openable = data.lsx_cards
+
+  // Q2: lệnh đang chạy nhưng chưa có dòng việc (chưa có bảng chi tiết) → màn lý do.
+  if (sp.lsx && ttById.has(sp.lsx) && !openable.some((c) => c.lsx_id === sp.lsx)) {
+    return (
+      <ChuaGhiScreen lenh={ttById.get(sp.lsx)!} options={options} canKhai={canKhai} />
+    )
+  }
+  // Q5: lệnh trong đường dẫn không còn chạy → nói thẳng, rồi mới mở lệnh khác.
+  const lenhKhongChay =
+    sp.lsx && !ttById.has(sp.lsx) ? await maChuaGhiService.lenhKhongChay(sp.lsx) : null
   const pick =
     openable.find((c) => c.lsx_id === sp.lsx)?.lsx_id ??
     openable.find((c) => c.lsx_id === remembered)?.lsx_id ??
     [...openable].sort((a, b) => b.open_count - a.open_count)[0]?.lsx_id ??
     null
 
-  const dauKy = sp.loai === 'dau_ky'
-  const [sheet, dauKyDocs] = await Promise.all([
-    loadEntrySheet({ stage: sp.stage ?? stageOfTeam ?? null, lsxId: pick }),
-    dauKy && pick ? entryDocsRepo.listDauKyByLsx(pick) : Promise.resolve([]),
-  ])
+  const sheet = await loadEntrySheet({
+    stage: sp.stage ?? stageOfTeam ?? null,
+    lsxId: pick,
+  })
 
   if (!sheet) {
     return (
@@ -129,23 +149,16 @@ export default async function GhiSanLuongPage({
 
   return (
     <GhiScreen
-      key={`${sp.lsx ?? 'all'}|${sheet.stage}|${initialDate ?? ''}|${teamParam ?? ''}|${dauKy ? 'dk' : ''}`}
+      key={`${sp.lsx ?? 'all'}|${sheet.stage}|${initialDate ?? ''}|${teamParam ?? ''}`}
       sheet={sheet}
       userTeamId={user.department_id ?? null}
       initialDate={initialDate}
       initialTeamId={teamParam}
       daGhi={daGhi}
-      dauKy={dauKy}
-      dauKyDocs={dauKyDocs.map((x) => ({
-        stage: x.stage,
-        team_id: x.team_department_id,
-        doc_no: x.doc_no,
-      }))}
-      lsxOptions={data.lsx_cards.map((c) => ({
-        id: c.lsx_id,
-        code: c.lsx_code,
-        open_count: c.open_count,
-      }))}
+      lsxOptions={options}
+      chuaGhi={sheet.lsx ? (ttById.get(sheet.lsx.id) ?? null) : null}
+      lenhKhongChay={lenhKhongChay}
+      canKhai={canKhai}
     />
   )
 }

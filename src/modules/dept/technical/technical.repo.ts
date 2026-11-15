@@ -1034,6 +1034,27 @@ export const productProfileRepo = {
     return new Set(((data ?? []) as { product_id: string }[]).map((r) => r.product_id))
   },
 
+  /**
+   * Số dòng định mức của TỪNG SP — Ghi sản lượng nói "có định mức (25 dòng), chưa
+   * nạp vào lệnh" (15/11/2026). Đọc theo trang 1.000 (max-rows PostgREST).
+   */
+  async partsCountByProducts(productIds: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    if (!productIds.length) return out
+    for (let i = 0; i < 50; i++) {
+      const { data } = await db()
+        .from('technical_product_parts')
+        .select('product_id')
+        .in('product_id', productIds)
+        .order('id')
+        .range(i * 1000, i * 1000 + 999)
+      const rows = (data ?? []) as { product_id: string }[]
+      for (const r of rows) out.set(r.product_id, (out.get(r.product_id) ?? 0) + 1)
+      if (rows.length < 1000) break
+    }
+    return out
+  },
+
   /** Đếm dòng định mức — cho nhãn số trên tab, không cần kéo cả bảng. */
   async partsCount(productId: string): Promise<number> {
     const { count } = await db()

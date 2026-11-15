@@ -1,6 +1,6 @@
 import { componentsService } from '@/modules/dept/production/components.service'
 import { entriesService } from '@/modules/dept/production/entries.service'
-import { canEditComponents } from '@/modules/dept/production/perms'
+import { canEditComponents, canSeedProfile } from '@/modules/dept/production/perms'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
@@ -29,15 +29,17 @@ export async function loadDinhHinhProps(
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) return null
 
-  const [data, groups, rawLines, canEdit, catalog, partGroups, pbs] = await Promise.all([
-    componentsService.list(user, lsxId),
-    lsxLinesRepo.listGroups(lsxId),
-    lsxLinesRepo.listLines(lsxId),
-    canEditComponents(user),
-    catalogsService.list(user, 'production_stage'),
-    partGroupsRepo.list(),
-    entriesService.docsOfLsx(user, lsxId),
-  ])
+  const [data, groups, rawLines, canEdit, catalog, partGroups, pbs, seedOk] =
+    await Promise.all([
+      componentsService.list(user, lsxId),
+      lsxLinesRepo.listGroups(lsxId),
+      lsxLinesRepo.listLines(lsxId),
+      canEditComponents(user),
+      catalogsService.list(user, 'production_stage'),
+      partGroupsRepo.list(),
+      entriesService.docsOfLsx(user, lsxId),
+      canSeedProfile(user),
+    ])
   // SP đã có định mức ở hồ sơ chưa — quyết định ô "Khởi tạo hồ sơ SP" và câu
   // "chờ Kỹ thuật". Đọc "có dòng định mức" HOẶC bom_status 'done' (04/11/2026:
   // chỉ đọc bom_status thì SP có 55 dòng vẫn bị gọi là chờ Kỹ thuật).
@@ -113,5 +115,6 @@ export async function loadDinhHinhProps(
     pbsCount: pbs.length,
     lsxClosed: data.lsx_status === 'completed' || data.lsx_status === 'cancelled',
     canEdit,
+    canSeedProfile: seedOk,
   }
 }

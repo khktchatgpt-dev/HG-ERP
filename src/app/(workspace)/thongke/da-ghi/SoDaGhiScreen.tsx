@@ -14,11 +14,14 @@ import { shiftIso } from '@/lib/local-date'
 import type { SoDaGhiPayload } from '@/modules/dept/production/so-da-ghi.service'
 import { useSoDaGhi, type SoDaGhiCtx, type TabSdg } from './useSoDaGhi'
 import { BangDaGhi } from './bang-da-ghi'
-import { cx, dm, dmy, fmt, gio } from './so-da-ghi.shared'
+import { TongNgay } from './khoi-tong'
+import { cx, dm, dmy, fmt, gio, thuDai } from './so-da-ghi.shared'
 
 /**
- * SỔ ĐÃ GHI — khuôn C, KHÔNG kit (bản vẽ 13/11/2026
- * https://claude.ai/artifact/4ub2By9o62SJN4wCcXGrFe, duyệt Q1–Q7).
+ * SỔ THEO NGÀY (tên cũ Sổ đã ghi) — khuôn C, KHÔNG kit (bản vẽ 13/11/2026
+ * https://claude.ai/artifact/4ub2By9o62SJN4wCcXGrFe, duyệt Q1–Q7; 14/11
+ * CpB5jKcS… Q5: chỉ một ngày, nhiều ngày thì Sổ công đoạn — như sổ Excel thật
+ * tách mỗi công đoạn một tờ).
  *
  * Trả lời: "tổ tôi đã ghi những gì, dòng nào có thể sai, và sửa ở đâu trước
  * khi chốt sổ?". Trước màn này thống kê ghi xong là lưới xoá trắng, không chỗ
@@ -29,19 +32,24 @@ export function SoDaGhiScreen({ p }: { p: SoDaGhiPayload }) {
   const d = useSoDaGhi(p)
   const team = p.team_id ? p.teams.find((t) => t.id === p.team_id) : null
   const lockHom = d.lockOf(p.team_id, p.date)
+  // "Xem cả tháng ›" (Q6): tờ công đoạn đang chọn chip, không thì công đoạn đầu có dòng.
+  const cdThang = d.cd ?? d.cdCounts[0]?.code ?? null
+  const thangHref = `/thongke/so-cong-doan?${new URLSearchParams({
+    thang: p.date.slice(0, 7),
+    ...(cdThang ? { cd: cdThang } : {}),
+  }).toString()}`
   const excel = `/api/dept/production/so-da-ghi?${new URLSearchParams({
     date: p.date,
-    xem: p.xem,
     to: p.team_id ?? 'all',
     ...(p.phieu ? { phieu: p.phieu.doc_no } : {}),
   }).toString()}`
 
   return (
-    <SxKhung label="Sổ đã ghi">
+    <SxKhung label="Sổ theo ngày">
       <div className="sx-body">
         <DauTrang
           crumb="Thống kê sản xuất › Ghi sổ hằng ngày"
-          title="Sổ đã ghi"
+          title="Sổ theo ngày"
           ctx={
             <>
               {team?.name ?? 'Mọi tổ'} ·{' '}
@@ -49,25 +57,27 @@ export function SoDaGhiScreen({ p }: { p: SoDaGhiPayload }) {
                 <>
                   phiếu <b>{p.phieu.doc_no}</b> · {dmy(p.date)}
                 </>
-              ) : p.xem === 'tuan' ? (
-                <b>
-                  {dm(p.from)} → {dm(p.to)}
-                </b>
               ) : (
                 <b>{dmy(p.date)}</b>
               )}{' '}
               · {fmt(p.docs.length)} phiếu · <b>{fmt(p.lines.length)}</b> dòng
-              {team &&
-                p.xem === 'ngay' &&
-                (lockHom ? ' · sổ ngày đã chốt' : ' · sổ ngày chưa chốt')}
+              {team && (lockHom ? ' · sổ ngày đã chốt' : ' · sổ ngày chưa chốt')}
             </>
           }
           actions={
             <>
+              {d.nPhieuBay > 1 && (
+                <ApNhom>
+                  <ApNut onClick={() => d.moHet(!d.tatCaMo)}>
+                    {d.tatCaMo ? 'Gập hết' : 'Mở hết'}
+                  </ApNut>
+                </ApNhom>
+              )}
               <ApNhom>
                 <a className="sx-btn" href={excel}>
                   Xuất Excel
                 </a>
+                <ApNut href={thangHref}>Xem cả tháng</ApNut>
                 <ApNut href={`/thongke/ngay?date=${p.date}`}>Sổ ngày &amp; chốt sổ</ApNut>
               </ApNhom>
               <ApNhom>
@@ -110,7 +120,10 @@ export function SoDaGhiScreen({ p }: { p: SoDaGhiPayload }) {
         )}
         {d.thongBao && !d.loi && (
           <div className="sx-note ok">
-            <span>{d.thongBao}</span>
+            <span>
+              {d.thongBao}
+              {d.taiLai && <span className="mut"> · đang tải lại số mới…</span>}
+            </span>
             <button type="button" className="lnk mut" onClick={() => d.setThongBao(null)}>
               Đóng
             </button>
@@ -122,7 +135,7 @@ export function SoDaGhiScreen({ p }: { p: SoDaGhiPayload }) {
             tieuDe={
               p.phieu
                 ? `Phiếu ${p.phieu.doc_no} không còn dòng nào`
-                : `${team?.name ?? 'Xưởng'} chưa ghi dòng nào ${p.xem === 'tuan' ? `từ ${dm(p.from)} tới ${dm(p.to)}` : `ngày ${dmy(p.date)}`}`
+                : `${team?.name ?? 'Xưởng'} chưa ghi dòng nào ngày ${dmy(p.date)}`
             }
             lyDo="Sổ chỉ bày dòng đã Lưu nháp hoặc Ghi sổ ở màn Ghi sản lượng."
             tiep={
@@ -130,44 +143,22 @@ export function SoDaGhiScreen({ p }: { p: SoDaGhiPayload }) {
                 <Link href="/thongke/ghi" className="sx-btn p">
                   Ghi sản lượng
                 </Link>
-                {p.xem === 'ngay' && !p.phieu && (
-                  <Link href={d.href({ xem: 'tuan' })} className="sx-btn">
-                    Xem 7 ngày
-                  </Link>
-                )}
               </span>
             }
           />
-        ) : d.shown.length === 0 ? (
-          <Rong
-            tieuDe="Không dòng nào khớp"
-            lyDo={
-              d.tim.trim()
-                ? `Không dòng nào có “${d.tim.trim()}” ở tab đang chọn.`
-                : 'Con số trên tab là 0 nên bảng trống đúng, không phải hỏng.'
-            }
-            tiep={
-              <button
-                type="button"
-                className="sx-btn"
-                onClick={() => {
-                  d.setTab('all')
-                  d.setTim('')
-                }}
-              >
-                Xem tất cả dòng
-              </button>
-            }
-          />
         ) : (
-          <BangDaGhi d={d} />
+          <>
+            {/* Khối Tổng ngày đứng ngoài vùng cuộn của lưới (bản vẽ 14/11 CUUfVcZx… Q3). */}
+            <TongNgay d={d} />
+            <LuoiDong d={d} />
+          </>
         )}
 
         {d.nThayDoi > 0 && <ThanhLuu d={d} />}
 
         <ThanhTT
           left={
-            team && p.xem === 'ngay' ? (
+            team ? (
               <>
                 Sổ ngày {team.name} {dm(p.date)}:{' '}
                 <b>{lockHom ? `đã chốt ${gio(lockHom.at)}` : 'chưa chốt'}</b> ·{' '}
@@ -186,6 +177,37 @@ export function SoDaGhiScreen({ p }: { p: SoDaGhiPayload }) {
   )
 }
 
+/**
+ * Lưới dòng, hoặc câu rỗng khi tab / chip / ô tìm lọc hết (ngày không có dòng
+ * nào thì màn đã nói ở trên, không tới đây).
+ */
+function LuoiDong({ d }: { d: SoDaGhiCtx }) {
+  if (d.shown.length > 0) return <BangDaGhi d={d} />
+  return (
+    <Rong
+      tieuDe="Không dòng nào khớp"
+      lyDo={
+        d.tim.trim()
+          ? `Không dòng nào có “${d.tim.trim()}” ở tab và công đoạn đang chọn.`
+          : 'Con số trên tab / chip công đoạn là 0 nên bảng trống đúng, không phải hỏng.'
+      }
+      tiep={
+        <button
+          type="button"
+          className="sx-btn"
+          onClick={() => {
+            d.setTab('all')
+            d.setTim('')
+            d.chonCd(null)
+          }}
+        >
+          Xem tất cả dòng
+        </button>
+      }
+    />
+  )
+}
+
 function ThanhLoc({ d }: { d: SoDaGhiCtx }) {
   const { p } = d
   if (p.phieu)
@@ -200,24 +222,23 @@ function ThanhLoc({ d }: { d: SoDaGhiCtx }) {
         <TimO d={d} />
       </div>
     )
-  const buoc = p.xem === 'tuan' ? 7 : 1
-  const truoc = shiftIso(p.date, -buoc)
-  const sau = shiftIso(p.date, buoc)
+  const truoc = shiftIso(p.date, -1)
+  const sau = shiftIso(p.date, 1)
   return (
     <div className="sx-hc">
       <Link href={d.href({ date: truoc })} className="c">
-        ‹ {p.xem === 'tuan' ? 'tuần trước' : 'hôm trước'}
+        ‹ hôm trước
       </Link>
       <span className="c on">
-        <b>{p.xem === 'tuan' ? `${dm(p.from)} → ${dm(p.to)}` : dmy(p.date)}</b>
+        <b>{dmy(p.date)}</b>
       </span>
       {p.date < p.today ? (
         <Link href={d.href({ date: sau > p.today ? p.today : sau })} className="c">
-          {p.xem === 'tuan' ? 'tuần sau' : 'hôm sau'} ›
+          hôm sau ›
         </Link>
       ) : (
         <span className="c" style={{ color: 'var(--sx-empty)' }}>
-          {p.xem === 'tuan' ? 'tuần sau' : 'hôm sau'} ›
+          hôm sau ›
         </span>
       )}
       {p.date !== p.today && (
@@ -225,13 +246,6 @@ function ThanhLoc({ d }: { d: SoDaGhiCtx }) {
           Hôm nay
         </Link>
       )}
-      <span className="sep" />
-      <Link href={d.href({ xem: 'ngay' })} className={cx('c', p.xem === 'ngay' && 'on')}>
-        Ngày
-      </Link>
-      <Link href={d.href({ xem: 'tuan' })} className={cx('c', p.xem === 'tuan' && 'on')}>
-        7 ngày
-      </Link>
       <span className="sep" />
       <label className="c">
         Tổ
@@ -250,8 +264,42 @@ function ThanhLoc({ d }: { d: SoDaGhiCtx }) {
           ))}
         </select>
       </label>
+      <ChipCongDoan d={d} />
       <TimO d={d} />
     </div>
+  )
+}
+
+/**
+ * Chip công đoạn (bản vẽ 14/11 Q2) — chỉ công đoạn CÓ dòng trong kỳ, theo lộ
+ * trình; số = số dòng bảng bày khi bấm (đã qua tab + ô tìm). Một công đoạn thì
+ * không có gì để lọc — không bày.
+ */
+function ChipCongDoan({ d }: { d: SoDaGhiCtx }) {
+  if (d.cdCounts.length < 2) return null
+  const tatCa = d.cdCounts.reduce((a, c) => a + c.n, 0)
+  return (
+    <>
+      <span className="sep" />
+      <span role="group" aria-label="Lọc theo công đoạn" style={{ display: 'contents' }}>
+        {[{ code: null as string | null, label: 'Tất cả', n: tatCa }, ...d.cdCounts].map(
+          (c) => {
+            const on = d.cd === c.code
+            return (
+              <button
+                key={c.code ?? 'all'}
+                type="button"
+                className={cx('c', on && 'on', c.n === 0 && 'z')}
+                aria-pressed={on}
+                onClick={() => d.chonCd(on && c.code ? null : c.code)}
+              >
+                {c.label} <b className="num">{fmt(c.n)}</b>
+              </button>
+            )
+          },
+        )}
+      </span>
+    </>
   )
 }
 

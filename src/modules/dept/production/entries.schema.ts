@@ -129,17 +129,10 @@ export const entriesRecordSchema = entryCrewSchema
     /** Ghi chú cả phiếu. */
     note: z.string().trim().max(500).optional().nullable(),
     entries: z.array(entryLineSchema).min(1).max(200),
-    /**
-     * 'dau_ky' = SỐ ĐẦU KỲ (0298, bản vẽ 14/11/2026 Q1–Q4): luỹ kế tới hết
-     * ngày `entry_date`, không ca / giờ công / lỗi, luôn chính thức, một phiếu cho mỗi
-     * lệnh × công đoạn × tổ (service gác).
-     */
-    kind: z.enum(['ngay', 'dau_ky']).default('ngay'),
   })
   .superRefine((v, ctx) => {
     // Nháp thì chưa cần (Q1 bản vẽ 11/11); chính thức thì số phải có chủ giờ.
-    // Số đầu kỳ không có giờ công (Q4 bản vẽ 14/11).
-    if (v.kind !== 'dau_ky' && v.submit && (v.worker_count == null || v.hours_per_worker == null)) {
+    if (v.submit && (v.worker_count == null || v.hours_per_worker == null)) {
       ctx.addIssue({ code: 'custom', path: ['worker_count'], message: CREW_REQUIRED_MSG })
     }
   })

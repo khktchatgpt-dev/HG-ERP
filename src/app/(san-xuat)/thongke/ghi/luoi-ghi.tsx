@@ -94,8 +94,7 @@ export function LuoiGhi({ d }: { d: GhiCtx }) {
               colSpan={cols.length}
               title="Enter xuống dòng · Ctrl+V dán vùng từ Excel · bấm số ở cột Còn lại để điền đủ"
             >
-              {/* Đầu kỳ chỉ một cột hẹp — câu dài không vừa (bản vẽ 14/11). */}
-              {d.dauKy ? 'Gõ số' : 'Hôm nay tổ làm được — gõ vào ô vàng'}
+              Hôm nay tổ làm được — gõ vào ô vàng
             </th>
           </tr>
           <tr className="cl">

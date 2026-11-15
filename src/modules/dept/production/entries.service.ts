@@ -77,8 +77,6 @@ type RecordInput = {
   shift?: number | null
   worker_count?: number | null
   hours_per_worker?: number | null
-  /** 'dau_ky' = số đầu kỳ (0298) — xem nhánh `dauKy` trong `record`. */
-  kind?: 'ngay' | 'dau_ky'
   entries: {
     component_id: string
     qty: number
@@ -270,24 +268,14 @@ export const entriesService = {
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
     }
-    // SỐ ĐẦU KỲ (0298, bản vẽ 14/11/2026 Q1–Q4): luỹ kế tới hết `entry_date`
-    // trước khi ghi sổ trên ERP. Không ca / giờ công / lỗi, luôn chính thức,
-    // không khoá theo sổ ngày, một phiếu cho mỗi lệnh × công đoạn × tổ. Vào
-    // luỹ kế; các truy vấn THEO NGÀY (Năng suất, Báo cáo, 14 ngày, Sổ ngày) bỏ qua.
-    const dauKy = input.kind === 'dau_ky'
-    const crew = dauKy
-      ? { shift: null, worker_count: null, hours_per_worker: null }
-      : {
-          shift: input.shift ?? null,
-          worker_count: input.worker_count ?? null,
-          hours_per_worker: input.hours_per_worker ?? null,
-        }
-    const crewBad = dauKy ? null : crewProblem(crew)
+    const crew = {
+      shift: input.shift ?? null,
+      worker_count: input.worker_count ?? null,
+      hours_per_worker: input.hours_per_worker ?? null,
+    }
+    const crewBad = crewProblem(crew)
     if (crewBad && (!crewBad.missing || input.submit)) {
       throw BadRequest(crewBad.missing ? CREW_REQUIRED_MSG : `Giờ công: ${crewBad.msg}`)
-    }
-    if (dauKy && input.entries.some((e) => (e.defect_qty ?? 0) > 0 || (e.rework_qty ?? 0) > 0)) {
-      throw BadRequest('Số đầu kỳ chỉ ghi số đã làm — không ghi lỗi hay sửa lại')
     }
     const byId = new Map(components.map((c) => [c.id, c]))
     // Ô riêng của công đoạn đang ghi (0207) — dùng để lọc khoá lạ và bắt ô
@@ -307,8 +295,7 @@ export const entriesService = {
         .map((f) => f.label)
       if (core.worker === 'required' && !e.worker_name?.trim()) thieu.push('Người làm')
       if (core.kg === 'required' && e.kg == null) thieu.push('Kg')
-      // Đầu kỳ là MỘT con số luỹ kế — ô riêng / người làm của từng ngày không có.
-      if (thieu.length && !dauKy) {
+      if (thieu.length) {
         throw BadRequest(`${tenDong(e.component_id)} chưa khai: ${thieu.join(' · ')}`)
       }
       if (core.defect === 'off' && (e.defect_qty ?? 0) > 0) {
@@ -430,20 +417,7 @@ export const entriesService = {
     if (!team) {
       throw BadRequest('Chọn tổ trước khi ghi sổ — chốt sổ cuối ngày khoá theo tổ')
     }
-    // Đầu kỳ không thuộc sổ ngày nào (Q3–Q4) — không xét chốt sổ; thay vào đó
-    // mỗi lệnh × công đoạn × tổ chỉ một phiếu (DB cũng khoá bằng chỉ mục 0298).
-    if (dauKy) {
-      if (!input.submit) throw BadRequest('Số đầu kỳ ghi chính thức luôn, không lưu nháp')
-      const da = (await entryDocsRepo.listDauKyByLsx(lsxId)).find(
-        (d) => d.stage === input.stage && d.team_department_id === team,
-      )
-      if (da) {
-        throw Conflict(
-          `Lệnh này ở công đoạn ${stageLabel(input.stage)} của tổ đã có phiếu đầu kỳ ${da.doc_no} — sửa ở Sổ đã ghi, đừng ghi lần hai`,
-        )
-      }
-    }
-    const lock = dauKy ? null : await dayLocksRepo.find(team, input.entry_date)
+    const lock = await dayLocksRepo.find(team, input.entry_date)
     if (lock) {
       // KHÔNG bảo "nhờ quản lý": từ 0205 (18/09/2026) chính thống kê có
       // `production.daylock.unlock`, tự mở được ở màn Sổ ngày. Câu cũ đẩy họ đi
@@ -670,7 +644,6 @@ export const entriesService = {
       confirmed_at: input.submit ? new Date().toISOString() : null,
       note: input.note?.trim() || null,
       created_by: user.id,
-      kind: dauKy ? 'dau_ky' : 'ngay',
       ...crew,
     })
 
@@ -701,7 +674,6 @@ export const entriesService = {
         worker_name: e.worker_name ?? null,
         finish_state: e.finish_state ?? null,
         note: e.note ?? null,
-        dau_ky: dauKy,
         created_by: user.id,
       })),
     )
@@ -1388,8 +1360,7 @@ export const entriesService = {
     const allowed =
       user.role === 'admin' || user.role === 'manager' || doc.created_by === user.id
     if (!allowed) throw Forbidden('Chỉ người lập phiếu hoặc Ban quản lý xoá được phiếu')
-    // Phiếu đầu kỳ (0298) không thuộc sổ ngày nào — chỉ khoá khi lệnh đóng (Q3).
-    if (doc.team_department_id && doc.kind !== 'dau_ky') {
+    if (doc.team_department_id) {
       const lock = await dayLocksRepo.find(doc.team_department_id, doc.entry_date)
       if (lock) {
         throw BadRequest('Sổ ngày của tổ đã chốt — mở khoá trước khi xoá phiếu')
@@ -1411,8 +1382,7 @@ export const entriesService = {
       user.role === 'admin' || user.role === 'manager' || entry.created_by === user.id
     if (!allowed) throw Forbidden('Chỉ người nhập hoặc Ban quản lý xoá được bản ghi')
     // Ngày đã chốt thì cấm xoá KỂ CẢ admin — mở khoá trước (giữ vết ai mở).
-    // Dòng đầu kỳ (0298) không thuộc sổ ngày nào — chỉ khoá khi lệnh đóng (Q3).
-    if (entry.team_department_id && !entry.dau_ky) {
+    if (entry.team_department_id) {
       const lock = await dayLocksRepo.find(entry.team_department_id, entry.entry_date)
       if (lock) {
         throw BadRequest('Sổ ngày của tổ đã chốt — mở khoá trước khi xoá bản ghi')

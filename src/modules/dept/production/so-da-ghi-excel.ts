@@ -21,7 +21,7 @@ export async function buildSoDaGhiExcel(p: SoDaGhiPayload): Promise<Buffer> {
 
   const team = p.team_id ? p.teams.find((t) => t.id === p.team_id)?.name : 'Mọi tổ'
   const t = ws.addRow([
-    `SỔ ĐÃ GHI — ${team ?? ''} — ${p.from === p.to ? fmtD(p.from) : `${fmtD(p.from)} – ${fmtD(p.to)}`}`,
+    `SỔ THEO NGÀY — ${team ?? ''} — ${fmtD(p.date)}`,
   ])
   t.font = { bold: true, size: 12 }
   const s = ws.addRow([
@@ -76,11 +76,7 @@ export async function buildSoDaGhiExcel(p: SoDaGhiPayload): Promise<Buffer> {
       l.defect || null,
       l.worker,
       d?.doc_no ?? '',
-      d?.kind === 'dau_ky'
-        ? 'Đầu kỳ — luỹ kế tới hết ngày'
-        : draft
-          ? 'Nháp — chưa vào số'
-          : 'Chính thức',
+      draft ? 'Nháp — chưa vào số' : 'Chính thức',
       d?.lsx_code ?? '',
       d?.team_name ?? '',
     ])

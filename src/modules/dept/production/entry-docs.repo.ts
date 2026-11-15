@@ -36,12 +36,6 @@ export type EntryDoc = {
   hours_per_worker: number | null
   /** Cột sinh = worker_count × hours_per_worker. */
   labor_hours: number | null
-  /**
-   * 'ngay' = phiếu sản lượng ngày; 'dau_ky' = SỐ ĐẦU KỲ (0298) — luỹ kế tới hết
-   * một ngày trước khi ghi sổ trên ERP. Mọi truy vấn THEO NGÀY ở repo này chỉ
-   * lấy phiếu ngày; phiếu đầu kỳ đi đường riêng (listDauKyByLsx / Sổ đã ghi).
-   */
-  kind: 'ngay' | 'dau_ky'
 }
 
 export type EntryDocJoined = EntryDoc & {
@@ -51,7 +45,7 @@ export type EntryDocJoined = EntryDoc & {
 }
 
 const COLS =
-  'id, doc_no, production_order_id, stage, team_department_id, entry_date, status, confirmed_by, confirmed_at, reject_reason, note, created_by, created_at, shift, worker_count, hours_per_worker, labor_hours, kind'
+  'id, doc_no, production_order_id, stage, team_department_id, entry_date, status, confirmed_by, confirmed_at, reject_reason, note, created_by, created_at, shift, worker_count, hours_per_worker, labor_hours'
 
 /** numeric của Postgres có thể về dạng chuỗi — ép về số một chỗ. */
 function nums<T extends Partial<EntryDoc>>(r: T): T {
@@ -114,12 +108,11 @@ export const entryDocsRepo = {
       | 'confirmed_at'
       | 'reject_reason'
       | 'labor_hours'
-      | 'kind'
     > &
       // confirmed_* khai được ngay lúc tạo: chế độ "không cần tổ trưởng xác
       // nhận" (27/08) ghi thẳng da_xac_nhan, và check DB 0176 bắt phiếu chính
       // thức phải có chủ + mốc giờ.
-      Partial<Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at' | 'kind'>>,
+      Partial<Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at'>>,
   ): Promise<EntryDoc> {
     const { data, error } = await db()
       .from('production_entry_docs')
@@ -201,7 +194,6 @@ export const entryDocsRepo = {
     const { data } = await db()
       .from('production_entry_docs')
       .select('entry_date, team_department_id, status')
-      .eq('kind', 'ngay')
       .gte('entry_date', fromDate)
       .lte('entry_date', toDate)
       .limit(5000)
@@ -232,7 +224,6 @@ export const entryDocsRepo = {
     const { data, error } = await db()
       .from('production_entry_docs')
       .select('id, entry_date, stage, team_department_id, status, labor_hours')
-      .eq('kind', 'ngay')
       .gte('entry_date', fromDate)
       .lte('entry_date', toDate)
       .limit(20000)
@@ -255,7 +246,6 @@ export const entryDocsRepo = {
       .from('production_entry_docs')
       .select('stage, team_department_id, entry_date')
       .eq('status', 'da_xac_nhan')
-      .eq('kind', 'ngay')
       .lt('entry_date', beforeDate)
       .order('entry_date', { ascending: false })
       .limit(2000)
@@ -273,20 +263,8 @@ export const entryDocsRepo = {
       .from('production_entry_docs')
       .select(SELECT_JOINED)
       .eq('entry_date', date)
-      .eq('kind', 'ngay')
       .order('created_at', { ascending: false })
       .limit(1000)
-    return unwrap(data as unknown as Raw[] | null)
-  },
-
-  /** Phiếu ĐẦU KỲ của một lệnh (0298) — Ghi sản lượng báo "đã có" trước khi gõ. */
-  async listDauKyByLsx(productionOrderId: string): Promise<EntryDocJoined[]> {
-    const { data } = await db()
-      .from('production_entry_docs')
-      .select(SELECT_JOINED)
-      .eq('production_order_id', productionOrderId)
-      .eq('kind', 'dau_ky')
-      .limit(200)
     return unwrap(data as unknown as Raw[] | null)
   },
 

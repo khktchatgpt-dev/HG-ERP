@@ -820,7 +820,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     // đang đứng (`khuChoTrangChung`), nên `route`/`altRoutes` ở đây chỉ nhận
     // các trang RIÊNG của ghi sổ — `khuTheoDuongDan` chọn tiền tố DÀI nhất.
     route: '/thongke/ghi',
-    altRoutes: ['/thongke/giao-nhan', '/thongke/ngay', '/thongke/da-ghi'],
+    altRoutes: ['/thongke/giao-nhan', '/thongke/ngay', '/thongke/da-ghi', '/thongke/so-cong-doan'],
     accent: 'violet',
     logoText: 'TK',
     ready: true,
@@ -835,10 +835,18 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             capability: 'production.record',
           },
           // 13/11/2026 (bản vẽ 4ub2By9o…): xem lại, soát, sửa dòng đã ghi trước chốt sổ.
+          // 14/11 (bản vẽ CpB5jKcS…): tách như sổ Excel thống kê — Sổ theo ngày (một ngày,
+          // sửa) + Sổ công đoạn (tờ mỗi công đoạn, cả tháng, chỉ xem).
           {
             href: '/thongke/da-ghi',
-            label: 'Sổ đã ghi',
+            label: 'Sổ theo ngày',
             icon: 'scroll-text',
+            capability: 'production.record',
+          },
+          {
+            href: '/thongke/so-cong-doan',
+            label: 'Sổ công đoạn',
+            icon: 'table',
             capability: 'production.record',
           },
           {

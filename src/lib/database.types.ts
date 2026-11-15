@@ -3933,7 +3933,6 @@ export type Database = {
           component_id: string
           created_at: string
           created_by: string | null
-          dau_ky: boolean
           defect_code: string | null
           defect_qty: number
           defect_reason: string | null
@@ -3956,7 +3955,6 @@ export type Database = {
           component_id: string
           created_at?: string
           created_by?: string | null
-          dau_ky?: boolean
           defect_code?: string | null
           defect_qty?: number
           defect_reason?: string | null
@@ -3979,7 +3977,6 @@ export type Database = {
           component_id?: string
           created_at?: string
           created_by?: string | null
-          dau_ky?: boolean
           defect_code?: string | null
           defect_qty?: number
           defect_reason?: string | null
@@ -4060,7 +4057,6 @@ export type Database = {
           entry_date: string
           hours_per_worker: number | null
           id: string
-          kind: string
           labor_hours: number | null
           note: string | null
           production_order_id: string
@@ -4080,7 +4076,6 @@ export type Database = {
           entry_date: string
           hours_per_worker?: number | null
           id?: string
-          kind?: string
           labor_hours?: never
           note?: string | null
           production_order_id: string
@@ -4100,7 +4095,6 @@ export type Database = {
           entry_date?: string
           hours_per_worker?: number | null
           id?: string
-          kind?: string
           labor_hours?: never
           note?: string | null
           production_order_id?: string

@@ -783,8 +783,7 @@ export async function loadEntrySheet(
         Number(e.defect_qty ?? 0) +
         Number(e.rework_qty ?? 0),
     )
-    // Số đầu kỳ (0298) là luỹ kế, không phải sản lượng của một ngày — không lên dải.
-    if (!e.dau_ky && e.entry_date >= from14 && e.entry_date <= todayIso) {
+    if (e.entry_date >= from14 && e.entry_date <= todayIso) {
       const m = dayMap.get(e.component_id) ?? new Map()
       const x = m.get(e.entry_date) ?? { qty: 0, docs: new Set<string>() }
       x.qty += Number(e.qty)
@@ -800,7 +799,7 @@ export async function loadEntrySheet(
     if (countsAsOfficial(st)) t.confirmed.qty += Number(e.qty)
     else if (countsAsPending(st)) t.pending.qty += Number(e.qty)
     tally.set(e.component_id, t)
-    if (!e.dau_ky && e.entry_date === todayIso) {
+    if (e.entry_date === todayIso) {
       todayQty.set(e.component_id, (todayQty.get(e.component_id) ?? 0) + Number(e.qty))
     }
   }

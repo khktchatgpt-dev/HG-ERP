@@ -3,6 +3,7 @@ import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { componentsService } from '@/modules/dept/production/components.service'
 import { componentsSaveSchema } from '@/modules/dept/production/components.schema'
+import { canSeedProfile } from '@/modules/dept/production/perms'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -23,8 +24,11 @@ export const PUT = handle(async (req: Request, { params }: Params) => {
     req,
     componentsSaveSchema,
   )
+  // Q5 (15/11/2026): ô "Khởi tạo hồ sơ SP" ẩn với thống kê — máy chủ cũng không
+  // nhận cờ này từ người không được ghi định mức (gửi tay thì lặng lẽ bỏ qua).
+  const seed = seed_profile ? await canSeedProfile(user) : false
   const result = await componentsService.save(user, id, lines, {
-    seedProfile: seed_profile,
+    seedProfile: seed,
     syncProfileRoutes: sync_profile_routes,
     clusterQty: cluster_qty,
   })

@@ -28,8 +28,6 @@ export type SdgDoc = {
   worker_count: number | null
   hours_per_worker: number | null
   labor_hours: number | null
-  /** 'dau_ky' = phiếu SỐ ĐẦU KỲ (0298): luỹ kế tới hết ngày, không giờ công. */
-  kind: 'ngay' | 'dau_ky'
   created_by: string | null
   created_at: string
 }
@@ -44,11 +42,15 @@ export type SdgLine = {
   stage: string
   component_id: string
   product_code: string | null
+  /** Tên SP (name_vi) — thống kê ở xưởng nhớ SP theo tên hơn theo mã HG. */
+  product_name: string | null
   name: string
   cluster: string | null
   qty_per_unit: number | null
   /** ĐM kg / cái — cột "ĐM kg" của file Excel đối chiếu. */
   dm_kg: number | null
+  /** Thứ tự trong Bảng chi tiết — lưới xếp theo đây, không theo giờ ghi. */
+  sort: number
   /** Phải làm của chi tiết (Hồ sơ lệnh: total_needed). null = không tra được. */
   needed: number | null
   /** Đã làm luỹ kế CHÍNH THỨC ở công đoạn này — cùng số ô Hồ sơ lệnh. */
@@ -62,8 +64,6 @@ export type SdgLine = {
   note: string
   defect_code: string | null
   defect_reason: string
-  /** Dòng của phiếu đầu kỳ (0298) — không thuộc sổ ngày nào, chốt sổ không khoá. */
-  dau_ky: boolean
   created_by: string | null
   created_at: string
 }
@@ -145,7 +145,7 @@ export function flagsOf(
  * Người ghi, quản đốc (manager) và admin sửa được; như `deleteEntry`.
  */
 export function khoaVi(
-  l: Pick<SdgLine, 'team_id' | 'entry_date' | 'created_by'> & { dau_ky?: boolean },
+  l: Pick<SdgLine, 'team_id' | 'entry_date' | 'created_by'>,
   doc: Pick<SdgDoc, 'lsx_closed'> | null,
   ctx: {
     locked: (teamId: string, date: string) => boolean
@@ -154,8 +154,7 @@ export function khoaVi(
   },
 ): string | null {
   if (doc?.lsx_closed) return 'Lệnh đã đóng — sổ khoá hẳn'
-  // Đầu kỳ (0298) không thuộc sổ ngày nào — chỉ khoá khi lệnh đóng (Q3 bản vẽ 14/11).
-  if (!l.dau_ky && l.team_id && ctx.locked(l.team_id, l.entry_date))
+  if (l.team_id && ctx.locked(l.team_id, l.entry_date))
     return 'Sổ ngày đã chốt — sửa phải mở khoá ở Sổ ngày'
   if (!ctx.canAll && l.created_by !== ctx.meId) return 'Chỉ người ghi dòng này sửa được'
   return null

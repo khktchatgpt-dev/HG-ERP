@@ -26,10 +26,20 @@ import { useDinhHinh } from './useDinhHinh'
 export function DinhHinhScreen(props: DinhHinhProps) {
   const d = useDinhHinh(props)
   const { p, editable } = d
-  const chuaDinhHinh = p.orderLines.filter((l) => (d.byLine.get(l.id) ?? []).length === 0)
-  const thieuDinhMuc = chuaDinhHinh.filter((l) => !l.has_profile)
-  const coDinhMuc = p.orderLines.filter((l) => l.has_profile).length
-  const khaiRieng = d.rows.filter((r) => r.stages != null).length
+  // Đếm theo MÃ HÀNG, không theo dòng lệnh (bản vẽ 15/11 SNZSog1E… Q3): LAURA 26 mã
+  // từng bày thành danh sách 87 dòng lệnh, chiếm 168px đầu màn + 177px thanh lưu.
+  const maCua = (ls: { product_code: string }[]) => [
+    ...new Set(ls.map((l) => l.product_code)),
+  ]
+  const tatCaMa = maCua(p.orderLines)
+  const maChuaDinhHinh = maCua(
+    d.linesHien.filter((l) => (d.byLine.get(l.id) ?? []).length === 0),
+  )
+  const maCoDinhMuc = new Set(maCua(p.orderLines.filter((l) => l.has_profile)))
+  const nChuaDm = maChuaDinhHinh.filter((m) => !maCoDinhMuc.has(m)).length
+  const nChuaNap = maChuaDinhHinh.length - nChuaDm
+  const maSeed = maCua(d.chuaDinhMuc)
+  const khaiRieng = d.rowsHien.filter((r) => r.stages != null).length
 
   return (
     <SxKhung bare label={`Bảng chi tiết ${p.lsx.code}`}>
@@ -39,8 +49,9 @@ export function DinhHinhScreen(props: DinhHinhProps) {
           title="Bảng chi tiết (BOM Kỹ thuật)"
           ctx={
             <>
-              {p.lsx.customer_name} · <b>{p.orderLines.length}</b> dòng SP ·{' '}
-              <b>{d.rows.length}</b> dòng ·{' '}
+              {p.lsx.customer_name} · <b>{tatCaMa.length}</b> mã
+              {tatCaMa.length < p.orderLines.length && ` (${p.orderLines.length} dòng SP)`} ·{' '}
+              <b>{d.rowsHien.length}</b> dòng ·{' '}
               {p.lsxClosed ? (
                 <span className="pill m">lệnh đã kết thúc</span>
               ) : p.lockedByEntries ? (
@@ -102,11 +113,15 @@ export function DinhHinhScreen(props: DinhHinhProps) {
               aria-label="Lọc SP"
             >
               <option value="">tất cả</option>
-              {p.orderLines.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.product_code}
-                </option>
-              ))}
+              {d.linesHien.map((l) => {
+                const g = d.dotCua(l.id)
+                return (
+                  <option key={l.id} value={l.id}>
+                    {l.product_code}
+                    {g.dot > 1 ? ` · ${g.dot} đợt` : ''}
+                  </option>
+                )
+              })}
             </select>
           </label>
           <span className="sx-leg" style={{ padding: 0, border: 0 }}>
@@ -146,20 +161,24 @@ export function DinhHinhScreen(props: DinhHinhProps) {
             <b>Lệnh đã kết thúc</b> — bảng chỉ để tra cứu.
           </div>
         )}
-        {editable && d.rows.length === 0 && (
+        {editable && maChuaDinhHinh.length > 0 && (
           <div className="sx-note">
-            <b>Lệnh chưa có bảng chi tiết.</b> Bảng này tự nạp từ định mức Kỹ thuật lúc
-            duyệt lệnh; lệnh này chưa có vì {coDinhMuc}/{p.orderLines.length} SP có định
-            mức
-            {thieuDinhMuc.length > 0 && (
-              <>
-                {' '}
-                — {thieuDinhMuc.map((l) => l.product_code).join(', ')} Kỹ thuật chưa nạp,
-                chờ họ xong rồi bấm Nạp từ BOM
-              </>
+            <b>
+              {nChuaDm > 0
+                ? `${nChuaDm}/${tatCaMa.length} mã chưa có định mức`
+                : `${nChuaNap}/${tatCaMa.length} mã chưa có bảng`}
+            </b>
+            <span>
+              {nChuaNap > 0 &&
+                `· ${nChuaDm > 0 ? `${nChuaNap} mã ` : ''}có định mức — bấm Nạp từ BOM kỹ thuật `}
+              {nChuaDm > 0 &&
+                '· khai phần khung ở đây để ghi sổ được; định mức đầy đủ vẫn chờ Kỹ thuật'}
+            </span>
+            {nChuaDm > 0 && (
+              <a href="/phan-cong-viec?muc=giao" className="lnk">
+                Nhắc Kỹ thuật ›
+              </a>
             )}
-            {thieuDinhMuc.length === 0 && ' — bấm Nạp từ BOM kỹ thuật để nạp ngay'}. Không
-            có bảng chi tiết thì Ghi sản lượng không có dòng để ghi.
           </div>
         )}
         {d.loi && <div className="sx-err">{d.loi}</div>}
@@ -177,7 +196,21 @@ export function DinhHinhScreen(props: DinhHinhProps) {
         {editable && (
           <div className="sx-cb">
             <span className="sum">
-              Sắp lưu <b>{d.rows.length}</b> dòng · ghi đè trọn bảng cũ của lệnh
+              Sắp lưu <b>{d.rowsHien.length}</b> dòng
+              {d.rowsLuu.length !== d.rowsHien.length && (
+                <>
+                  {' '}
+                  → <b>{d.rowsLuu.length}</b> dòng vào lệnh (nhân theo đợt)
+                </>
+              )}{' '}
+              · ghi đè trọn bảng cũ của lệnh
+              {/* Q6: nói trước — ghi số xong bảng khoá, định mức Kỹ thuật sau dùng cho lệnh sau. */}
+              {nChuaDm > 0 && (
+                <span className="mut">
+                  {' '}
+                  · ghi số xong bảng khoá; định mức Kỹ thuật khai sau dùng cho lệnh sau
+                </span>
+              )}
               {khaiRieng > 0 && (
                 <>
                   {' '}
@@ -213,18 +246,18 @@ export function DinhHinhScreen(props: DinhHinhProps) {
                   Cập nhật lộ trình cụm vào hồ sơ SP
                 </label>
               )}
-              {d.chuaDinhMuc.length > 0 && (
+              {/* Q5 (15/11): thống kê không thấy ô này — bảng khai chỉ thuộc lệnh. */}
+              {p.canSeedProfile && maSeed.length > 0 && (
                 <label
                   className="sx-ck"
-                  title="Chỉ SP chưa có định mức ở hồ sơ mới được khởi tạo"
+                  title={`Chỉ SP chưa có định mức ở hồ sơ mới được khởi tạo: ${maSeed.join(', ')}`}
                 >
                   <input
                     type="checkbox"
                     checked={d.seedProfile}
                     onChange={(e) => d.setSeedProfile(e.target.checked)}
                   />
-                  Khởi tạo hồ sơ SP ({d.chuaDinhMuc.map((l) => l.product_code).join(', ')}
-                  )
+                  Khởi tạo hồ sơ SP ({maSeed.length} mã chưa có định mức)
                 </label>
               )}
               <button

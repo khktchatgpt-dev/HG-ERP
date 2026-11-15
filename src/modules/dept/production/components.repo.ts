@@ -98,6 +98,27 @@ export const componentsRepo = {
   },
 
   /**
+   * Dòng lệnh nào ĐÃ CÓ bảng chi tiết — Ghi sản lượng báo mã chưa ghi được
+   * (15/11/2026). Chỉ kéo một cột, đọc theo trang 1.000 (max-rows PostgREST).
+   */
+  async lineIdsCoBang(productionOrderIds: string[]): Promise<Set<string>> {
+    const out = new Set<string>()
+    if (!productionOrderIds.length) return out
+    for (let i = 0; i < 50; i++) {
+      const { data } = await db()
+        .from('production_components')
+        .select('production_order_line_id')
+        .in('production_order_id', productionOrderIds)
+        .order('id')
+        .range(i * 1000, i * 1000 + 999)
+      const rows = (data ?? []) as { production_order_line_id: string }[]
+      for (const r of rows) out.add(r.production_order_line_id)
+      if (rows.length < 1000) break
+    }
+    return out
+  },
+
+  /**
    * Chi tiết của NHIỀU lệnh kèm SL của DÒNG LỆNH (join production_order_lines)
    * — gate xác nhận công đoạn + màn toàn cảnh tính needed/done không N query.
    */

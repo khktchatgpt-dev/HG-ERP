@@ -27,8 +27,8 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
   const minW =
     cols.reduce((a, c) => a + (c.width || 160), 0) + fixedTail + (editable ? xoaW : 0)
   const nCols = cols.length + 1 + (editable ? 1 : 0)
-  const tongCt = d.rows.reduce((a, r) => a + (num(r.qty_per_unit) ?? 0), 0)
-  const tongKg = d.rows.reduce(
+  const tongCt = d.rowsHien.reduce((a, r) => a + (num(r.qty_per_unit) ?? 0), 0)
+  const tongKg = d.rowsHien.reduce(
     (a, r) => a + (num(r.dm_kg) ?? 0) * (num(r.qty_per_unit) ?? 0),
     0,
   )
@@ -126,7 +126,23 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
                       {' '}
                       · {l.product_name}
                     </span>{' '}
-                    · × {fmt(l.qty)} {l.unit}
+                    {/* Gom theo mã (bản vẽ 15/11 SNZSog1E… Q2): nói số đợt + tổng SL, khai một lần. */}
+                    {(() => {
+                      const g = d.dotCua(l.id)
+                      return g.dot > 1 ? (
+                        <>
+                          · {fmt(g.dot)} đợt · {fmt(g.sl)} {l.unit}
+                          <span className="mut" style={{ fontWeight: 400 }}>
+                            {' '}
+                            — khai một lần, áp cho cả {fmt(g.dot)} đợt
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          · × {fmt(l.qty)} {l.unit}
+                        </>
+                      )
+                    })()}
                   </td>
                   <td
                     colSpan={nCols - Math.min(5, cols.length)}
@@ -186,9 +202,9 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
         <tfoot>
           <tr>
             <td colSpan={Math.min(4, cols.length)}>
-              {d.rows.length} dòng · {p.orderLines.length} SP ·{' '}
-              {p.orderLines.filter((l) => (byLine.get(l.id) ?? []).length === 0).length}{' '}
-              SP chưa định hình
+              {d.rowsHien.length} dòng · {d.linesHien.length} {d.gomDuoc ? 'nhóm' : 'SP'} ·{' '}
+              {d.linesHien.filter((l) => (byLine.get(l.id) ?? []).length === 0).length}{' '}
+              chưa định hình
             </td>
             {cols.slice(4).map((c) => (
               <td

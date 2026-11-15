@@ -79,9 +79,41 @@ export type DinhHinhProps = {
   pbsCount: number
   lsxClosed: boolean
   canEdit: boolean
-  /** SP mở sẵn (id dòng lệnh) — màn Lộ trình công đoạn bản 4 chọn Lệnh → SP. */
+  /** SP mở sẵn — id dòng lệnh (Lộ trình công đoạn) hoặc MÃ HÀNG (`?sp=` từ Ghi sản lượng). */
   initialSp?: string
+  /**
+   * Gom các đợt cùng mã hàng có bộ chi tiết giống nhau thành MỘT nhóm, lưu thì chép
+   * cho mọi đợt (bản vẽ 15/11 SNZSog1E… Q2). Chỉ màn Bảng chi tiết bật.
+   */
+  gomTheoMa?: boolean
+  /**
+   * Được bày ô "Khởi tạo hồ sơ SP" (ghi ngược định mức Kỹ thuật) — Kỹ thuật / Kế
+   * hoạch / GĐ; thống kê KHÔNG (Q5): bảng thống kê khai chỉ thuộc lệnh.
+   */
+  canSeedProfile?: boolean
 }
+
+/** Chữ ký nội dung một dòng chi tiết — so hai đợt cùng mã có cùng bộ không. */
+export const chuKyDong = (r: InitialRow): string =>
+  JSON.stringify([
+    r.kind,
+    r.cluster,
+    r.name,
+    r.group_code,
+    r.material_id,
+    r.spec_thickness_mm,
+    r.spec_width_mm,
+    r.spec_length_mm,
+    r.wall_thickness_mm,
+    r.unit,
+    r.qty_per_unit,
+    r.dm_kg,
+    r.qty_per_assembly,
+    r.first_stage,
+    r.final_stage,
+    r.stages ?? null,
+    r.note,
+  ])
 
 /** Cột GÕ ĐƯỢC theo thứ tự trên lưới — trục ngang của bàn phím và vùng dán. */
 export type EditCol = {
@@ -155,7 +187,9 @@ export function emptyDraft(lineId: string): Draft {
     kind: 'part',
     cluster: null,
     name: '',
-    group_code: '',
+    // Khung mặc định (bản vẽ 15/11 SNZSog1E… Q4): chi tiết KHÔNG có nhóm vật tư thì
+    // không có công đoạn nào để ghi sổ (resolveComponentRoute trả []). Đổi được.
+    group_code: 'FRAME',
     material_id: null,
     material_type: null,
     spec_thickness_mm: null,

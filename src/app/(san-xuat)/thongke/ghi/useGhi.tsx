@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
+import type { LenhOption, LenhTinhTrang } from '@/lib/ma-chua-ghi'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { parsePasteNumber } from '@/lib/po-paste'
 import {
@@ -16,7 +17,6 @@ import {
 import { dongBo, maMacDinh, TAT_CA_MA, xepTheoCum, type DongBo } from '@/lib/ghi-nhom'
 import { khoaCum } from '@/lib/khoa-cum'
 import { chiaDot, chiaText } from '@/lib/ghi-gom-dot'
-import { shiftIso } from '@/lib/local-date'
 import {
   buildEditCols,
   cellId,
@@ -46,8 +46,17 @@ import {
 export type GhiProps = {
   sheet: Sheet
   userTeamId: string | null
-  /** Mọi lệnh đang có việc — đổi lệnh ngay trên đầu phiếu. */
-  lsxOptions: { id: string; code: string; open_count: number }[]
+  /**
+   * MỌI lệnh đang chạy — đổi lệnh ngay trên đầu phiếu. Hai nhóm (bản vẽ 15/11
+   * MRFoxWgh… Q1): ghi được · chưa ghi được (chưa có bảng chi tiết).
+   */
+  lsxOptions: LenhOption[]
+  /** Tình trạng định mức của lệnh đang mở — dải "n mã chưa ghi được" (Q3). */
+  chuaGhi?: LenhTinhTrang | null
+  /** `?lsx=` trỏ tới lệnh không còn chạy (Q5) — màn nói thẳng thay vì lặng lẽ đổi. */
+  lenhKhongChay?: { code: string | null; status: string | null } | null
+  /** Người nhập sửa được bảng chi tiết → dải "mã chưa ghi được" có lối Tự khai (15/11). */
+  canKhai?: boolean
   /**
    * `?date=` / `?team=` trên đường dẫn (bản vẽ 14/11/2026, Q5): Sổ ngày "Ghi sổ ›"
    * và Sổ đã ghi "Ghi thêm" mở ĐÚNG ngày + tổ. Trước đó trang bỏ qua hai tham
@@ -57,13 +66,6 @@ export type GhiProps = {
   initialTeamId?: string | null
   /** Đã ghi theo `tổ|ngày` (14 ngày gần nhất) — dòng "đã ghi n dòng" (Q6). */
   daGhi?: Record<string, { lines: number; docs: number; drafts: number }>
-  /**
-   * Chế độ SỐ ĐẦU KỲ (`?loai=dau_ky`, 0298, bản vẽ 14/11 Q1–Q4): một cột "Đầu
-   * kỳ", không ca / giờ công / lỗi, ngày = "tính tới hết", luôn chính thức.
-   */
-  dauKy?: boolean
-  /** Phiếu đầu kỳ đã có của lệnh đang mở — chặn ghi lần hai (Q3). */
-  dauKyDocs?: { stage: string; team_id: string | null; doc_no: string }[]
 }
 
 /**
@@ -75,10 +77,7 @@ export type GhiProps = {
 export function useGhi(p: GhiProps) {
   const { sheet } = p
   const router = useRouter()
-  // Đầu kỳ mặc định "tính tới hết HÔM QUA" — ngày ghi sổ thường bắt đầu từ hôm nay (Q2).
-  const [date, setDate] = useState(
-    p.initialDate ?? (p.dauKy ? shiftIso(sheet.today, -1) : sheet.today),
-  )
+  const [date, setDate] = useState(p.initialDate ?? sheet.today)
   // Tổ mặc định: tổ trên đường dẫn → tổ của người nhập NẾU tổ đó làm công đoạn
   // đang mở (Sơn Nhôm / Sơn Sắt cùng công đoạn — đừng lấy tổ đầu danh sách) →
   // tổ phụ trách công đoạn → tổ của người nhập → trống.
@@ -103,19 +102,16 @@ export function useGhi(p: GhiProps) {
   /** Lối sang Sổ đã ghi sau một lượt ghi (Q7 bản vẽ 13/11/2026). */
   const [vuaGhi, setVuaGhi] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Lượt tải lại sau Lưu / Ghi sổ mất 5–8 s (thử lệnh TEST 14/11): trong lúc đó
+  // màn còn số cũ cạnh câu "Đã lưu" — giữ cờ chờ tới khi số mới về, khoá nút.
+  const [taiLai, startTaiLai] = useTransition()
   /** Đã bấm Ghi sổ chính thức ít nhất một lần — câu đỏ chỉ hiện từ lúc đó (Q5). */
   const [daBam, setDaBam] = useState(false)
   const [chiGoiY, setChiGoiY] = useState(false)
   const more = useSyncExternalStore(subscribeMore, readMore, () => false)
   const toggleMore = () => writeMore(!more)
 
-  // Đầu kỳ: MỘT cột số (luỹ kế) — lỗi, lý do, người làm, ô riêng là chuyện từng ngày.
-  const cols = useMemo(() => {
-    const all = buildEditCols(sheet, more)
-    return p.dauKy
-      ? all.filter((c) => c.key === 'qty').map((c) => ({ ...c, label: 'Đầu kỳ' }))
-      : all
-  }, [sheet, more, p.dauKy])
+  const cols = useMemo(() => buildEditCols(sheet, more), [sheet, more])
   // Đặt con trỏ vào ô đầu MỘT LẦN lúc mở màn — không dùng `autoFocus` trên ô,
   // vì ô chốt giá trị bằng cách thay `key`, mỗi lần chốt là một lần mount lại
   // và `autoFocus` sẽ giật con trỏ về ô đầu (dính 03/11: Tab không đi đâu được).
@@ -129,11 +125,7 @@ export function useGhi(p: GhiProps) {
   const colIdx = useMemo(() => new Map(cols.map((c, i) => [c.key, i])), [cols])
 
   // ── Bản gõ dở ──────────────────────────────────────────────────────────
-  // Bản gõ dở của đầu kỳ tách khỏi phiếu ngày — khôi phục nhầm chế độ là ghi sai loại.
-  const dKey = draftKey(
-    sheet.lsx?.id ?? 'all',
-    p.dauKy ? `${sheet.stage}#dau-ky` : sheet.stage,
-  )
+  const dKey = draftKey(sheet.lsx?.id ?? 'all', sheet.stage)
   const savedRaw = useSyncExternalStore(
     subscribeDraft,
     () => readDraftRaw(dKey),
@@ -284,7 +276,7 @@ export function useGhi(p: GhiProps) {
     typed.map((t) => ({ qty: num(t.d.qty), kg: draftKg(t.d), dm_kg: t.dm_kg })),
   )
   const crewParsed = useMemo(() => parseCrew(crew), [crew])
-  const crewBad = p.dauKy ? null : crewProblem(crewParsed)
+  const crewBad = crewProblem(crewParsed)
   const gioCong = laborHours(crewParsed)
   const nangSuat = productivity(typedKg.kg, gioCong)
 
@@ -321,13 +313,7 @@ export function useGhi(p: GhiProps) {
     () => new Set(sheet.locks.filter((l) => l.entry_date === date).map((l) => l.team_id)),
     [sheet.locks, date],
   )
-  // Đầu kỳ không thuộc sổ ngày nào — chốt sổ không chặn (Q3).
-  const lockedNow = !p.dauKy && teamId ? lockedTeamIds.has(teamId) : false
-  /** Phiếu đầu kỳ đã có ở lệnh × công đoạn × tổ đang chọn — chỉ một lần (Q3). */
-  const daCoDauKy = p.dauKy
-    ? ((p.dauKyDocs ?? []).find((x) => x.stage === sheet.stage && x.team_id === teamId) ??
-      null)
-    : null
+  const lockedNow = teamId ? lockedTeamIds.has(teamId) : false
   const lockedBy =
     sheet.locks.find((l) => l.entry_date === date && l.team_id === teamId)
       ?.locked_by_name ?? null
@@ -341,17 +327,13 @@ export function useGhi(p: GhiProps) {
       ? `ngày ${dmy(date)} chưa tới — sổ chỉ ghi cho hôm nay hoặc ngày đã qua`
       : !teamId
         ? 'chưa chọn tổ — sổ ngày khoá theo tổ nên bản ghi phải có chủ'
-        : daCoDauKy
-          ? `tổ này đã có phiếu đầu kỳ ${daCoDauKy.doc_no} ở công đoạn này — sửa ở Sổ đã ghi`
-          : lockedNow
-            ? `sổ ngày ${dmy(date)} của tổ này đã chốt`
-            : typed.length === 0
-              ? p.dauKy
-                ? 'chưa gõ số nào — điền số đầu kỳ vào ít nhất một dòng'
-                : 'chưa gõ số nào — điền số đạt hoặc lỗi vào ít nhất một dòng'
-              : firstProblem
-                ? `"${firstProblem.name}" ${firstProblem.msg}`
-                : null
+        : lockedNow
+          ? `sổ ngày ${dmy(date)} của tổ này đã chốt`
+          : typed.length === 0
+            ? 'chưa gõ số nào — điền số đạt hoặc lỗi vào ít nhất một dòng'
+            : firstProblem
+              ? `"${firstProblem.name}" ${firstProblem.msg}`
+              : null
 
   /**
    * Hai mức chặn (Q1 bản vẽ 11/11): giờ công TRỐNG chỉ chặn Ghi sổ chính thức —
@@ -363,15 +345,14 @@ export function useGhi(p: GhiProps) {
 
   // Cột trống CẢ CỘT thì ẩn (Q3): Khả dụng ở công đoạn đầu (mọi dòng null), 14
   // ngày khi chưa ai ghi trong 14 ngày. Có số thì cột tự hiện lại.
-  // Đầu kỳ là MỘT con số luỹ kế: khả dụng và nhịp 14 ngày không nói gì với nó.
-  const cotKhaDung = !p.dauKy && allRows.some(({ l }) => l.available != null)
-  const cot14 = !p.dauKy && allRows.some(({ l }) => l.days.some((x) => x.qty > 0))
+  const cotKhaDung = allRows.some(({ l }) => l.available != null)
+  const cot14 = allRows.some(({ l }) => l.days.some((x) => x.qty > 0))
   // Nhóm cột ĐỊNH MỨC (Q10): ẩn cột nào cả cột trống ở mã đang bày (SL / SP luôn có).
   const cotQuyCach = rows.some(({ l }) => l.spec != null)
   const cotKgCt = rows.some(({ l }) => l.dm_kg != null)
   /** Chỉ tiêu hôm nay của tổ đang chọn (0168 — giao theo tổ × công đoạn × ngày). */
   const chiTieu =
-    !p.dauKy && date === sheet.today
+    date === sheet.today
       ? (sheet.targets.find((t) => t.team_id === teamId)?.qty ?? null)
       : null
   /** Nhãn "đợt 1: 108 · đợt 2: 12" cho dòng gom đang gõ — rỗng khi một đợt. */
@@ -388,12 +369,6 @@ export function useGhi(p: GhiProps) {
     if (!blocked && crewBad)
       return { label: 'Ghi giờ công', run: () => focusEl(`crew-${crewBad.field}`) }
     if (!teamId) return { label: 'Chọn tổ', run: () => focusEl('sheet-team') }
-    if (daCoDauKy)
-      return {
-        label: 'Sửa ở Sổ đã ghi',
-        run: () =>
-          router.push(`/thongke/da-ghi?phieu=${encodeURIComponent(daCoDauKy.doc_no)}`),
-      }
     if (lockedNow)
       return {
         label: 'Mở khoá ở Sổ ngày',
@@ -475,16 +450,11 @@ export function useGhi(p: GhiProps) {
               stage: sheet.stage,
               entry_date: date,
               team_department_id: teamId || null,
-              // Đầu kỳ luôn chính thức, không giờ công (Q3–Q4 bản vẽ 14/11).
-              submit: p.dauKy ? true : submit,
+              submit,
               note: docNote.trim() || null,
-              ...(p.dauKy
-                ? { kind: 'dau_ky' }
-                : {
-                    shift: crewParsed.shift,
-                    worker_count: crewParsed.worker_count,
-                    hours_per_worker: crewParsed.hours_per_worker,
-                  }),
+              shift: crewParsed.shift,
+              worker_count: crewParsed.worker_count,
+              hours_per_worker: crewParsed.hours_per_worker,
               entries: rowsOf.flatMap(toPayload),
             },
           },
@@ -501,7 +471,7 @@ export function useGhi(p: GhiProps) {
       setCrewState((c) => ({ ...CREW_EMPTY, shift: c.shift }))
       writeDraftRaw(dKey, null)
       setDraftHidden(true)
-      const what = p.dauKy ? 'ghi số đầu kỳ' : submit ? 'ghi chính thức' : 'lưu nháp'
+      const what = submit ? 'ghi chính thức' : 'lưu nháp'
       const gio = new Date().toLocaleTimeString('vi-VN', {
         hour: '2-digit',
         minute: '2-digit',
@@ -516,12 +486,12 @@ export function useGhi(p: GhiProps) {
           ? `/thongke/da-ghi?phieu=${encodeURIComponent(docNos[0])}`
           : `/thongke/da-ghi?date=${date}&to=${teamId || 'all'}`,
       )
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       // Trải nhiều lệnh mà hỏng giữa chừng: phiếu đã ghi vẫn còn — nói rõ để
       // người dùng không gõ lại từ đầu rồi ghi đúp.
       setLoi(apiErrorText(e, 'Không lưu được phiếu'))
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } finally {
       setBusy(false)
     }
@@ -602,22 +572,16 @@ export function useGhi(p: GhiProps) {
     }
 
   /**
-   * Đường dẫn của màn — mang theo NGÀY đang chọn và chế độ đầu kỳ (14/11/2026):
+   * Đường dẫn của màn — mang theo NGÀY đang chọn (14/11/2026):
    * trước đó đổi tab công đoạn là ngày ghi lùi nhảy về hôm nay. Tổ chỉ mang khi
    * công đoạn không đổi (đổi công đoạn thì tổ theo công đoạn mới).
    */
-  const ghiHref = (o: {
-    lsx?: string | null
-    stage: string
-    team?: string | null
-    dk?: boolean
-  }) =>
+  const ghiHref = (o: { lsx?: string | null; stage: string; team?: string | null }) =>
     `/thongke/ghi?${new URLSearchParams({
       ...(o.lsx ? { lsx: o.lsx } : {}),
       stage: o.stage,
       ...(o.team ? { team: o.team } : {}),
-      ...(date !== sheet.today && (o.dk ?? !!p.dauKy) === !!p.dauKy ? { date } : {}),
-      ...((o.dk ?? p.dauKy) ? { loai: 'dau_ky' } : {}),
+      ...(date !== sheet.today ? { date } : {}),
     }).toString()}`
   const doiLenh = (id: string) => {
     if (!id) return
@@ -626,9 +590,6 @@ export function useGhi(p: GhiProps) {
   }
   const doiCongDoan = (code: string) =>
     router.push(ghiHref({ lsx: sheet.lsx?.id, stage: code }))
-  /** Đổi Loại phiếu: Sản lượng ngày ↔ Số đầu kỳ (Q1 bản vẽ 14/11) — lưới mới, ngày mặc định của chế độ. */
-  const loaiHref = (dk: boolean) =>
-    ghiHref({ lsx: sheet.lsx?.id, stage: sheet.stage, team: teamId, dk })
 
   return {
     sheet,
@@ -705,12 +666,9 @@ export function useGhi(p: GhiProps) {
       ...(date !== sheet.today ? { date } : {}),
       to: teamId || 'all',
     }).toString()}`,
-    /** Chế độ SỐ ĐẦU KỲ (`?loai=dau_ky`) + phiếu đầu kỳ đã có ở tổ × công đoạn này. */
-    dauKy: !!p.dauKy,
-    daCoDauKy,
-    doiLoai: (dk: boolean) => router.push(loaiHref(dk)),
     setThongBao,
     busy,
+    taiLai,
     save,
     onCellKey,
     onCellPaste,

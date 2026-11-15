@@ -2400,7 +2400,6 @@
   font-weight: 600;
 }
 
-
 /* ── Tab chưa dùng được (Năng suất · Theo người, 12/11/2026) ── */
 .sx.sx .sx-tab.off {
   color: var(--sx-empty);
@@ -2576,6 +2575,146 @@
 .sx.sx .sx-tb.sx-sdg > tbody > tr.grp > td .sx-dot {
   margin-right: 4px;
 }
+/* Đầu phiếu HAI dòng (bản vẽ 14/11 CUUfVcZx…, Q1+Q5): dòng 2 mờ, cắt "…" theo
+   ba cột đầu, tooltip có đủ. Tổng đạt / lỗi / kg đứng đúng cột. */
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp.ph > td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp.ph > td .l2 {
+  display: block;
+  overflow: hidden;
+  padding-left: 18px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--sx-ink3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp.ph > td.rt .l2 {
+  padding-left: 0;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.grp.ph.soatp > td:first-child {
+  box-shadow: inset 3px 0 0 var(--sx-warn);
+}
+/* Hàng MÃ HÀNG trong phiếu (Q4): nền trắng, thụt một bậc; dòng chi tiết thụt theo */
+.sx.sx .sx-tb.sx-sdg > tbody > tr.mh > td {
+  background: var(--sx-card);
+  border-bottom: 1px solid var(--sx-line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sx-ink2);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.mh > td:first-child {
+  padding-left: 22px;
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.mh > td .ma {
+  color: var(--sx-ink);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.d > td:first-child {
+  padding-left: 22px;
+}
+/* hàng mã đang chọn từ ô Tổng ngày — màu hành động = thứ đang chọn */
+.sx.sx .sx-tb.sx-sdg > tbody > tr.mh.chon > td {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-tb.sx-sdg > tbody > tr.mh.chon > td:first-child {
+  box-shadow: inset 3px 0 0 var(--sx-act);
+}
+
+/* Sổ theo ngày (bản vẽ 14/11 CUUfVcZx… Q3): khối Tổng ngày (lệnh → mã hàng × công
+   đoạn) trên lưới, NGOÀI vùng cuộn. Bảng 7 ngày đã bỏ (CpB5jKcS… Q5). */
+.sx.sx .sx-tong {
+  flex: none;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-card);
+}
+.sx.sx .sx-tong .hd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+}
+.sx.sx .sx-tong .tg {
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  color: var(--sx-ink2);
+  cursor: pointer;
+}
+.sx.sx .sx-mx {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.sx.sx .sx-mx th,
+.sx.sx .sx-mx td {
+  height: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--sx-hair);
+  white-space: nowrap;
+}
+.sx.sx .sx-mx thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--sx-raised);
+  color: var(--sx-ink2);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+}
+.sx.sx .sx-mx th.r,
+.sx.sx .sx-mx td.r {
+  text-align: right;
+}
+.sx.sx .sx-mx tr.lenh td {
+  background: var(--sx-zebra);
+  color: var(--sx-ink2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sx.sx .sx-mx td.sp {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx.sx .sx-mx td.o {
+  min-width: 104px;
+  padding: 0;
+}
+.sx.sx .sx-mx .cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 100%;
+  height: 25px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+.sx.sx .sx-mx .cell .mut {
+  font-size: 11px;
+}
+.sx.sx .sx-mx .cell:hover {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-mx .cell.on {
+  background: var(--sx-act-wash);
+  box-shadow: inset 0 0 0 1px var(--sx-act);
+}
+.sx.sx .sx-mx .cell:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+}
 .sx.sx .sx-note.sx-soat {
   flex-wrap: wrap;
   row-gap: 2px;
@@ -2588,18 +2727,166 @@
   cursor: pointer;
   text-align: left;
 }
-/* Nhãn phiếu SỐ ĐẦU KỲ (0298, bản vẽ 14/11) — chữ hoa nhỏ trên nền xám, không màu
-   vòng đời: đầu kỳ không phải trạng thái, là loại phiếu. */
-.sx.sx .sx-dk {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--sx-line);
-  background: #e9edf3;
+
+/* ── Sổ công đoạn (bản vẽ 14/11/2026 CpB5jKcS…, duyệt Q1–Q6): tờ công đoạn của sổ
+   Excel — bốn cột trái (.f) dính khi cuộn ngang như "cố định cột", đầu cột ngày dính
+   khi cuộn dọc; chủ nhật nền nhạt, cột hôm nay gạch xanh. ── */
+.sx.sx .sx-tb.sx-scd > thead > tr > th,
+.sx.sx .sx-tb.sx-scd > tbody > tr > td,
+.sx.sx .sx-tb.sx-scd > tfoot > tr > td {
+  border-right: 1px solid var(--sx-hair);
+}
+.sx.sx .sx-tb.sx-scd .f {
+  position: sticky;
+  z-index: 1;
+  background: var(--sx-card);
+}
+.sx.sx .sx-tb.sx-scd > thead > tr > th.f {
+  z-index: 3;
+  background: var(--sx-head);
+}
+.sx.sx .sx-tb.sx-scd .c1 {
+  left: 0;
+}
+.sx.sx .sx-tb.sx-scd .c2 {
+  left: 240px;
+}
+.sx.sx .sx-tb.sx-scd .c3 {
+  left: 304px;
+}
+.sx.sx .sx-tb.sx-scd .c4 {
+  left: 368px;
+  box-shadow: inset -2px 0 0 var(--sx-line);
+}
+.sx.sx .sx-tb.sx-scd > thead > tr > th.dh {
+  padding: 3px 0;
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: none;
+}
+.sx.sx .sx-tb.sx-scd > thead > tr > th.dh span {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+.sx.sx .sx-tb.sx-scd > thead > tr > th.cn {
+  background: #4a3d27;
+}
+.sx.sx .sx-tb.sx-scd > thead > tr > th.hn {
+  box-shadow: inset 0 -3px 0 #8fb0ff;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr > td.d,
+.sx.sx .sx-tb.sx-scd > tfoot > tr > td.d {
+  padding: 0 3px;
+  font-family: var(--sx-mono);
+  font-size: 12px;
+  text-align: right;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr > td.d.cn,
+.sx.sx .sx-tb.sx-scd > tfoot > tr > td.d.cn {
+  background: #f7f2e6;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr > td.d.hn,
+.sx.sx .sx-tb.sx-scd > tfoot > tr > td.d.hn {
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr > td.cl {
+  padding: 0;
+}
+.sx.sx .sx-tb.sx-scd td.cl a {
+  display: block;
+  height: 25px;
+  padding: 0 3px;
+  line-height: 25px;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+.sx.sx .sx-tb.sx-scd td.cl a:hover {
+  background: var(--sx-act-wash);
+  color: var(--sx-act);
+}
+.sx.sx .sx-tb.sx-scd td.cl a:focus-visible,
+.sx.sx .sx-tb.sx-scd .tg:focus-visible {
+  outline: 2px solid var(--sx-act);
+  outline-offset: -2px;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr.lenh > td {
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-zebra);
   color: var(--sx-ink2);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 16px;
-  vertical-align: 1px;
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr.mh > td {
+  background: var(--sx-raised);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr.mh > td.d,
+.sx.sx .sx-tb.sx-scd > tbody > tr.mh > td.c4 {
+  font-size: 11px;
+  font-weight: 400;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr.r > td.c1 {
+  padding-left: 24px;
+}
+.sx.sx .sx-tb.sx-scd > tbody > tr.r > td.tong {
+  background: var(--sx-raised);
+  font-weight: 600;
+}
+.sx.sx .sx-tb.sx-scd .tg {
+  padding: 0 4px 0 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--sx-ink2);
+  cursor: pointer;
+}
+.sx.sx .sx-tb.sx-scd > tfoot > tr > td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-raised);
+  font-size: 11px;
+}
+.sx.sx .sx-tb.sx-scd > tfoot > tr > td.f {
+  z-index: 3;
+}
+
+/* ── Ghi sản lượng: mã hàng chưa ghi được (bản vẽ 15/11/2026 MRFoxWgh…, Q1–Q5) —
+   dải vàng bung bảng (cao tối đa 300px); màn lệnh chưa ghi được: câu lý do giữa
+   màn + bảng chiếm phần còn lại. ── */
+.sx.sx .sx-mcg {
+  flex: none;
+  max-height: 300px;
+  overflow: auto;
+  border-bottom: 1px solid var(--sx-line);
+}
+.sx.sx .sx-mcg.full {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.sx.sx .sx-mcg .sx-tb td b {
+  color: var(--sx-ink2);
+  font-weight: 600;
+}
+.sx.sx .sx-cgd {
+  flex: none;
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid var(--sx-line);
+  text-align: center;
+}
+.sx.sx .sx-cgd h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.sx.sx .sx-cgd p {
+  margin: 0 0 12px;
+  color: var(--sx-ink2);
+}
+.sx.sx .sx-cgd .tiep {
+  display: inline-flex;
+  gap: 6px;
 }
