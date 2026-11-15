@@ -24,9 +24,15 @@ export type LedgerEntry = {
   supplier_id: string
   supplier_name: string
   currency: string
-  /** YYYY-MM-DD — ngày GHI SỔ (ngày hoá đơn / ngày chi), không phải ngày nhập máy. */
+  /** YYYY-MM-DD — ngày GHI SỔ (ngày hoá đơn / ngày phiếu nhập / ngày chi), không phải ngày nhập máy. */
   date: string
-  kind: 'invoice' | 'payment'
+  /**
+   * `invoice` = phát sinh TĂNG (hoá đơn, hoặc phiếu nhập khi sổ tính theo hàng
+   * nhận) · `return` = giảm do TRẢ HÀNG / ĐẢO PHIẾU · `payment` = giảm do trả
+   * tiền. Tách `return` khỏi `payment` vì kế toán đọc hai thứ đó ở hai cột:
+   * gộp lại thì "đã trả" bị phồng bằng tiền hàng trả về.
+   */
+  kind: 'invoice' | 'payment' | 'return'
   doc_no: string
   /** Dương. Chiều do `kind` quyết định — không dùng số âm để biểu diễn chiều. */
   amount: number
@@ -36,11 +42,45 @@ export type LedgerEntry = {
    * phí nhà xe, bút toán huỷ phiếu. Chiều tiền vẫn do `kind` quyết định.
    */
   label?: string
+  /** Tiền hàng CHƯA VAT — chỉ bút toán phiếu nhập có (sổ chi tiết tách hai cột). */
+  net?: number
+  /** Tiền VAT của bút toán, cùng nguồn với `net`. `amount = net + vat`. */
+  vat?: number
+  /** Mã đơn mua của phiếu nhập — để từ dòng sổ đi ngược về đơn. */
+  po_code?: string | null
+  /** Số hoá đơn / phiếu giao của NCC ghi trên phiếu nhập — khoá đối chiếu với NCC. */
+  party_doc_no?: string | null
+  /** Hạn thanh toán (YYYY-MM-DD) theo điều khoản thừa kế đơn → NCC → mặc định. */
+  due?: string | null
+  /** Mã lệnh sản xuất của đơn mua — cột "Đơn hàng / LSX" của sổ Kế toán. */
+  lsx_code?: string | null
+  /**
+   * Từng DÒNG HÀNG của phiếu (chỉ bút toán phiếu nhập có). Sổ Kế toán đọc và
+   * đối chiếu theo dòng hàng chứ không theo phiếu: chênh một đơn giá hay một số
+   * lượng chỉ lộ ra ở mức này (đo 31/10/2026 với sổ Excel của Kế toán).
+   */
+  items?: LedgerItem[]
+}
+
+/** Một dòng hàng của bút toán phiếu nhập. Tiền dương; chiều theo `kind` của bút toán. */
+export type LedgerItem = {
+  name: string
+  unit: string | null
+  qty: number
+  price: number
+  net: number
+  vat: number
+  amount: number
 }
 
 /** Nhãn cột "Loại" của sổ chi tiết — một chỗ cho cả màn hình lẫn Excel. */
 export const entryLabel = (e: Pick<LedgerEntry, 'kind' | 'label'>): string =>
-  e.label ?? (e.kind === 'invoice' ? 'Hoá đơn NCC' : 'Thanh toán')
+  e.label ??
+  (e.kind === 'invoice'
+    ? 'Hoá đơn NCC'
+    : e.kind === 'return'
+      ? 'Trả hàng / đảo phiếu'
+      : 'Thanh toán')
 
 export type LedgerRow = {
   supplier_id: string
@@ -48,6 +88,9 @@ export type LedgerRow = {
   currency: string
   opening: number
   increase: number
+  /** Giảm do trả hàng / đảo phiếu nhập — tách khỏi `decrease` (tiền đã trả). */
+  returned: number
+  /** Giảm do THANH TOÁN. */
   decrease: number
   closing: number
   entry_count: number
@@ -55,6 +98,12 @@ export type LedgerRow = {
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 const signed = (e: LedgerEntry) => (e.kind === 'invoice' ? e.amount : -e.amount)
+/** Trong cùng một ngày: phát sinh tăng → trả hàng → thanh toán (số dư không âm giả giữa sổ). */
+const KIND_ORDER: Record<LedgerEntry['kind'], number> = {
+  invoice: 0,
+  return: 1,
+  payment: 2,
+}
 
 /**
  * Sổ tổng hợp theo NCC × tiền tệ cho một kỳ `[from, to]` (bao gồm hai đầu).
@@ -81,6 +130,7 @@ export function buildLedger(
       currency: e.currency,
       opening: 0,
       increase: 0,
+      returned: 0,
       decrease: 0,
       closing: 0,
       entry_count: 0,
@@ -97,6 +147,7 @@ export function buildLedger(
     }
     if (e.date > to) continue
     if (e.kind === 'invoice') row.increase += e.amount
+    else if (e.kind === 'return') row.returned += e.amount
     else row.decrease += e.amount
     row.entry_count += 1
   }
@@ -106,8 +157,9 @@ export function buildLedger(
       ...r,
       opening: r2(r.opening),
       increase: r2(r.increase),
+      returned: r2(r.returned),
       decrease: r2(r.decrease),
-      closing: r2(r.opening + r.increase - r.decrease),
+      closing: r2(r.opening + r.increase - r.returned - r.decrease),
     }))
     // Dòng không dư đầu, không phát sinh, không dư cuối thì không phải dòng sổ.
     .filter((r) => r.opening !== 0 || r.entry_count > 0 || r.closing !== 0)
@@ -148,7 +200,7 @@ export function ledgerDetail(
     .sort(
       (a, b) =>
         a.date.localeCompare(b.date) ||
-        (a.kind === b.kind ? 0 : a.kind === 'invoice' ? -1 : 1) ||
+        KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
         a.doc_no.localeCompare(b.doc_no),
     )
   let run = opening
@@ -166,15 +218,17 @@ export function ledgerTotals(rows: LedgerRow[]): {
   currency: string
   opening: number
   increase: number
+  returned: number
   decrease: number
   closing: number
   supplier_count: number
 }[] {
-  const by = new Map<string, { opening: number; increase: number; decrease: number; closing: number; supplier_count: number }>() // prettier-ignore
+  const by = new Map<string, { opening: number; increase: number; returned: number; decrease: number; closing: number; supplier_count: number }>() // prettier-ignore
   for (const r of rows) {
-    const cur = by.get(r.currency) ?? { opening: 0, increase: 0, decrease: 0, closing: 0, supplier_count: 0 } // prettier-ignore
+    const cur = by.get(r.currency) ?? { opening: 0, increase: 0, returned: 0, decrease: 0, closing: 0, supplier_count: 0 } // prettier-ignore
     cur.opening += r.opening
     cur.increase += r.increase
+    cur.returned += r.returned
     cur.decrease += r.decrease
     cur.closing += r.closing
     cur.supplier_count += 1
@@ -184,6 +238,7 @@ export function ledgerTotals(rows: LedgerRow[]): {
     currency,
     opening: r2(v.opening),
     increase: r2(v.increase),
+    returned: r2(v.returned),
     decrease: r2(v.decrease),
     closing: r2(v.closing),
     supplier_count: v.supplier_count,

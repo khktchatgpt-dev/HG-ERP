@@ -1,0 +1,271 @@
+/*
+ * CÔNG NỢ NCC — kiểu SỔ BẢNG TÍNH (bản vẽ Ht7MpqcutpTUyG4r4DvymN bản 3, duyệt
+ * 31/10/2026). Chủ dự án: "không dùng bộ kit", "chia đôi màn chật", "nhiều số
+ * thừa", "muốn xem theo từng NCC" → mẫu sổ Excel của Kế toán: ô kẻ đủ, chữ
+ * thường, dòng chốt tháng tô vàng, một màu hành động xanh lá. Bản RIÊNG của màn
+ * này — không dùng kit, không dùng chung với phòng khác.
+ *
+ * ĐỘ ƯU TIÊN: mọi luật mở đầu bằng `.bt.bt` — thắng tiện ích Tailwind và CSS kit
+ * ngoài @layer nếu một lớp cha còn gắn `.kit`.
+ */
+.bt.bt {
+  --bt-paper: #ffffff;
+  --bt-ink: #1b1f24;
+  --bt-ink2: #47505c;
+  --bt-ink3: #6b7480;
+  --bt-faint: #b0b6bf;
+  --bt-grid: #d5d9df;
+  --bt-head: #f2f3f5;
+  --bt-band: #e8ecf1;
+  --bt-total: #fff3c4;
+  --bt-total-line: #e2cf7a;
+  --bt-act: #1d6f42;
+  --bt-act-hover: #165a35;
+  --bt-act-wash: #e6f2ea;
+  --bt-neg: #9a3412;
+  --bt-warn: #8a5200;
+  --bt-warn-wash: #fbf0dc;
+  --bt-warn-line: #e8d5b0;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bt-paper);
+  color: var(--bt-ink);
+  font-family: 'Segoe UI', Arial, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ── Thanh công cụ + dòng thông tin ───────────────────────────────────── */
+.bt.bt .bt-tool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--bt-grid);
+  flex-wrap: wrap;
+}
+.bt.bt .bt-right {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.bt.bt .bt-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--bt-grid);
+  background: var(--bt-paper);
+  color: var(--bt-ink);
+  font: inherit;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 2px;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+.bt.bt .bt-btn:hover:not(:disabled) {
+  border-color: var(--bt-ink3);
+}
+.bt.bt .bt-btn:disabled {
+  color: var(--bt-faint);
+  cursor: default;
+}
+.bt.bt .bt-btn.p {
+  background: var(--bt-act);
+  border-color: var(--bt-act);
+  color: #fff;
+}
+.bt.bt .bt-btn.p:hover {
+  background: var(--bt-act-hover);
+}
+.bt.bt .bt-btn.sq {
+  width: 28px;
+  justify-content: center;
+  padding: 0;
+}
+.bt.bt select.bt-btn {
+  padding-right: 4px;
+}
+.bt.bt .bt-input {
+  height: 28px;
+  width: 240px;
+  border: 1px solid var(--bt-grid);
+  border-radius: 2px;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--bt-ink);
+  background: var(--bt-paper);
+}
+.bt.bt .bt-lbl {
+  color: var(--bt-ink3);
+  font-size: 12px;
+}
+.bt.bt .bt-info {
+  padding: 6px 14px;
+  color: var(--bt-ink2);
+  font-size: 12px;
+  border-bottom: 1px solid var(--bt-grid);
+  background: #fafbfc;
+}
+
+/* ── Bảng tính ────────────────────────────────────────────────────────── */
+.bt.bt .bt-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+.bt.bt table.xl {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+.bt.bt .xl th,
+.bt.bt .xl td {
+  border-right: 1px solid var(--bt-grid);
+  border-bottom: 1px solid var(--bt-grid);
+  padding: 4px 7px;
+  height: 26px;
+  vertical-align: middle;
+}
+.bt.bt .xl tr > :first-child {
+  border-left: 1px solid var(--bt-grid);
+}
+.bt.bt .xl th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bt-head);
+  font-weight: 600;
+  font-size: 12px;
+  text-align: center;
+  color: var(--bt-ink2);
+  white-space: nowrap;
+  border-top: 1px solid var(--bt-grid);
+}
+.bt.bt .xl .r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bt.bt .xl .c {
+  text-align: center;
+  color: var(--bt-ink3);
+}
+.bt.bt .xl .nw {
+  white-space: nowrap;
+}
+.bt.bt .xl .mut {
+  color: var(--bt-ink3);
+}
+.bt.bt .xl .rep {
+  color: var(--bt-faint);
+}
+.bt.bt .xl tr.band td {
+  background: var(--bt-band);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.bt.bt .xl tr.tot td {
+  background: var(--bt-total);
+  font-weight: 700;
+  border-top: 1.5px solid var(--bt-total-line);
+}
+.bt.bt .xl tr.neg td {
+  color: var(--bt-neg);
+  font-style: italic;
+}
+.bt.bt .xl tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--bt-head);
+  font-weight: 700;
+  border-top: 1px solid var(--bt-grid);
+}
+.bt.bt .xl tbody tr:hover td {
+  background-color: #f7faf8;
+}
+.bt.bt .xl tbody tr.band:hover td {
+  background: var(--bt-band);
+}
+.bt.bt .xl tbody tr.tot:hover td {
+  background: var(--bt-total);
+}
+.bt.bt .link {
+  color: var(--bt-act);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bt.bt .more {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--bt-act);
+  cursor: pointer;
+  font-weight: inherit;
+}
+.bt.bt .more:hover {
+  text-decoration: underline;
+}
+.bt.bt .tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  border: 1px solid var(--bt-warn-line);
+  background: var(--bt-warn-wash);
+  color: var(--bt-warn);
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.bt.bt .nogia {
+  color: var(--bt-warn);
+  font-size: 12px;
+}
+/* Tên hàng dài cắt "…" (đủ tên ở tooltip) — một dòng một hàng như ô Excel. */
+.bt.bt .xl td.ten {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bt.bt .cut {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bt.bt .hgma {
+  color: var(--bt-warn);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* ── Rỗng ─────────────────────────────────────────────────────────────── */
+.bt.bt .bt-empty {
+  padding: 32px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  color: var(--bt-ink2);
+}
+.bt.bt .bt-empty b {
+  color: var(--bt-ink);
+  font-size: 14px;
+}
+
+.bt.bt :focus-visible {
+  outline: 2px solid var(--bt-act);
+  outline-offset: 1px;
+}
