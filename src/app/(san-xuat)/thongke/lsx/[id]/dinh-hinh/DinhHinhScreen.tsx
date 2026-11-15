@@ -7,7 +7,8 @@ import {
   SxKhung,
   ThanhTT,
 } from '@/app/(workspace)/production/_erp/khung'
-import { fmt, type DinhHinhProps } from './dinh-hinh.shared'
+import type { DinhHinhProps } from './dinh-hinh.shared'
+import { KhoaGiao, nhanKhoa, PhieuKhoa } from './phieu-khoa'
 import { LuoiChiTiet } from './luoi-chi-tiet'
 import { useDinhHinh } from './useDinhHinh'
 
@@ -55,7 +56,9 @@ export function DinhHinhScreen(props: DinhHinhProps) {
               {p.lsxClosed ? (
                 <span className="pill m">lệnh đã kết thúc</span>
               ) : p.lockedByEntries ? (
-                <span className="pill r">khoá — đã có {p.pbsCount} phiếu PBS</span>
+                <span className="pill r">
+                  khoá — đã có {nhanKhoa(p.pbsCount, p.pgtNos?.length ?? 0)}
+                </span>
               ) : (
                 'chưa có sổ — sửa được'
               )}
@@ -151,9 +154,20 @@ export function DinhHinhScreen(props: DinhHinhProps) {
         )}
         {p.lockedByEntries && !p.lsxClosed && (
           <div className="sx-note stop">
-            <b>Bảng chỉ để tra cứu.</b> Lệnh đã có {p.pbsCount} phiếu sản lượng — xoá
-            phiếu ở Hồ sơ lệnh › Phiếu rồi mới sửa được. Cố ý không đi tắt: sửa bảng khi
-            đã có số là sổ mất chỗ bám.
+            {/* MỘT span: .sx-note là flex, mỗi mảnh chữ / link thành một ô riêng. */}
+            <span>
+              <b>Bảng chỉ để tra cứu.</b>{' '}
+              {p.pbsCount > 0 && (
+                <>
+                  Lệnh đã có {p.pbsCount} phiếu sản lượng
+                  <PhieuKhoa nos={p.pbsNos ?? []} /> — xoá các phiếu đó ở Sổ theo ngày
+                  (bấm mã phiếu; sổ ngày đã chốt thì mở chốt ở Sổ ngày trước) rồi mới sửa
+                  được.{' '}
+                </>
+              )}
+              <KhoaGiao nos={p.pgtNos ?? []} />
+              Cố ý không đi tắt: sửa bảng khi đã có số là sổ mất chỗ bám.
+            </span>
           </div>
         )}
         {p.lsxClosed && (
@@ -278,7 +292,7 @@ export function DinhHinhScreen(props: DinhHinhProps) {
             p.lsxClosed
               ? 'Lệnh đã kết thúc'
               : p.lockedByEntries
-                ? `Khoá vì đã có ${fmt(p.pbsCount)} phiếu PBS`
+                ? `Khoá vì đã có ${nhanKhoa(p.pbsCount, p.pgtNos?.length ?? 0)}`
                 : 'Lệnh chưa có sổ — còn sửa được; có phiếu PBS đầu tiên là bảng khoá'
           }
           right="Lưu là ghi đè trọn bảng · lộ trình công đoạn khai ở màn Lộ trình công đoạn"

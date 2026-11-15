@@ -300,7 +300,9 @@ export function useDinhHinh(p: DinhHinhProps) {
     : p.lsxClosed
       ? 'Lệnh đã kết thúc — bảng chỉ để tra cứu'
       : p.lockedByEntries
-        ? `lệnh đã có ${p.pbsCount} phiếu sản lượng — xoá phiếu ở Hồ sơ lệnh › Phiếu rồi mới sửa được`
+        ? p.pbsCount > 0
+          ? `lệnh đã có ${p.pbsCount} phiếu sản lượng — xoá phiếu ở Sổ theo ngày rồi mới sửa được`
+          : `lệnh đã có phiếu giao nhận — huỷ phiếu chưa nhận ở Giao nhận rồi mới sửa được`
         : rowsLuu.length === 0
           ? 'chưa có dòng nào'
           : first

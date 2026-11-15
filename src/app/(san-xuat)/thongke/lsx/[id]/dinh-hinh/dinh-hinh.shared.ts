@@ -78,6 +78,10 @@ export type DinhHinhProps = {
   lockedByEntries: boolean
   /** Số phiếu PBS đang khoá bảng — để câu chặn nói đúng số. */
   pbsCount: number
+  /** Mã các phiếu đó — câu chặn bày link tới từng phiếu ở Sổ theo ngày (15/11/2026). */
+  pbsNos?: string[]
+  /** Mã phiếu giao nhận còn hiệu lực đang khoá bảng (dòng giao cascade theo chi tiết). */
+  pgtNos?: string[]
   lsxClosed: boolean
   canEdit: boolean
   /** SP mở sẵn — id dòng lệnh (Lộ trình công đoạn) hoặc MÃ HÀNG (`?sp=` từ Ghi sản lượng). */

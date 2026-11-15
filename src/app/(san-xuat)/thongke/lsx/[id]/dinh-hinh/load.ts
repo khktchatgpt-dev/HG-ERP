@@ -113,6 +113,8 @@ export async function loadDinhHinhProps(
     stageCfg: resolveStageConfigs(catalog.filter((s) => s.is_active)),
     lockedByEntries: data.locked_by_entries,
     pbsCount: pbs.length,
+    pbsNos: pbs.map((x) => x.doc_no),
+    pgtNos: data.locked_pgt,
     lsxClosed: data.lsx_status === 'completed' || data.lsx_status === 'cancelled',
     canEdit,
     canSeedProfile: seedOk,

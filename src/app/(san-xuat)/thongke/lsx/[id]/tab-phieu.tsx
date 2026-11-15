@@ -1,6 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { STATUS_LABEL as PBS_STATUS, type EntryDocStatus } from '@/lib/entry-doc-flow'
+import { phieuHref } from './dinh-hinh/phieu-khoa'
 import { cx, dmy, fmt } from './ho-so-lenh.shared'
 import type { HoSoLenhCtx } from './useHoSoLenh'
 
@@ -105,6 +107,18 @@ export function TabPhieu({ d }: { d: HoSoLenhCtx }) {
                   >
                     In
                   </a>
+                  {/* Phiếu CHÍNH THỨC sửa / xoá ở Sổ theo ngày (khi sổ ngày chưa chốt) —
+                      15/11/2026: câu khoá bảng chi tiết từng chỉ về đây mà không có nút. */}
+                  {p.canRecord && !nhap && (
+                    <Link
+                      className="lnk"
+                      style={{ marginLeft: 8 }}
+                      href={phieuHref(x.doc_no)}
+                      title="Sửa dòng hoặc xoá phiếu ở Sổ theo ngày — sổ ngày đã chốt thì mở chốt ở Sổ ngày trước"
+                    >
+                      Sửa / xoá ›
+                    </Link>
+                  )}
                   {p.canRecord && nhap && (
                     <>
                       {d.gioPhieu?.id === x.id && (
@@ -238,7 +252,7 @@ export function TabPhieu({ d }: { d: HoSoLenhCtx }) {
               {data.pbs.length} PBS · {data.pgt.length} PGT
               <span className="mut" style={{ fontWeight: 400 }}>
                 {' '}
-                · xoá chỉ với PBS nháp; PGT không xoá, chỉ huỷ / đảo ở màn Giao nhận
+                · PBS nháp xoá tại đây, PBS chính thức sửa / xoá ở Sổ theo ngày; PGT không xoá, chỉ huỷ / đảo ở màn Giao nhận
               </span>
             </td>
           </tr>

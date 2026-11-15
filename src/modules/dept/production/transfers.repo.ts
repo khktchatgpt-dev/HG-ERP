@@ -90,6 +90,37 @@ export const transfersRepo = {
     return unwrap(data as unknown as Raw[] | null)
   },
 
+  /**
+   * Phiếu giao nhận CÒN HIỆU LỰC của lệnh — khoá ghi đè bảng chi tiết (15/11/2026).
+   * Dòng giao trỏ thẳng vào từng chi tiết với khoá ngoại ON DELETE CASCADE, mà Lưu
+   * Bảng chi tiết / Lộ trình xoá rồi tạo lại TRỌN bảng: thử trên lệnh TEST, phiếu
+   * PGT-2026-0002 (đã nhận 56 cái) mất sạch dòng, chỉ còn vỏ. Phiếu đã huỷ không
+   * tính; dòng giao đời cũ không có phiếu (0090) thì có tính. Lỗi đọc thì NÉM —
+   * trả rỗng là mở khoá nhầm.
+   */
+  async phieuKhoaBang(productionOrderId: string): Promise<string[]> {
+    const { data, error } = await db()
+      .from('production_transfers')
+      .select('doc_id')
+      .eq('production_order_id', productionOrderId)
+      .limit(1000)
+    if (error) throw new Error(error.message)
+    const rows = (data ?? []) as { doc_id: string | null }[]
+    const out = new Set<string>()
+    if (rows.some((r) => !r.doc_id)) out.add('dòng giao không phiếu')
+    const ids = [...new Set(rows.map((r) => r.doc_id).filter((x): x is string => !!x))]
+    if (ids.length > 0) {
+      const { data: docs, error: e2 } = await db()
+        .from('production_transfer_docs')
+        .select('doc_no, status')
+        .in('id', ids)
+      if (e2) throw new Error(e2.message)
+      for (const d of (docs ?? []) as { doc_no: string; status: string }[])
+        if (d.status !== 'da_huy') out.add(d.doc_no)
+    }
+    return [...out].sort()
+  },
+
   /** Bàn giao của 1 LSX dạng thô (không join) — tính WIP khi ghi sổ sản lượng. */
   async listRawByLsx(productionOrderId: string): Promise<Transfer[]> {
     const { data } = await db()

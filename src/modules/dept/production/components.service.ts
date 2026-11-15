@@ -1,5 +1,6 @@
 import { componentsRepo, type ComponentInput, type ComponentRow } from './components.repo'
 import { entriesRepo } from './entries.repo'
+import { transfersRepo } from './transfers.repo'
 import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
@@ -289,15 +290,22 @@ export const componentsService = {
   /** Đọc: mọi NV đã đăng nhập (xưởng xem việc phải làm, kho/GĐ tra cứu). */
   async list(_user: User, lsxId: string) {
     const { lsx, orderLines } = await lsxWithLines(lsxId)
-    const [lines, lockedByEntries] = await Promise.all([
+    const [lines, coSo, pgt] = await Promise.all([
       componentsRepo.listByLsx(lsxId),
       // Báo TRƯỚC cho UI khoá bảng (banner) thay vì để người nhập bấm Lưu rồi
       // mới ăn 400 — save vẫn chặn ở dưới làm lớp cuối.
       entriesRepo.existsForLsx(lsxId),
+      transfersRepo.phieuKhoaBang(lsxId),
     ])
     return {
       lsx_status: lsx.status,
-      locked_by_entries: lockedByEntries,
+      /**
+       * Bảng KHOÁ vì đã có số: sổ sản lượng HOẶC phiếu giao nhận còn hiệu lực
+       * (15/11/2026 — dòng giao cascade theo chi tiết, ghi đè bảng là mất dòng giao).
+       */
+      locked_by_entries: coSo || pgt.length > 0,
+      /** Mã phiếu giao đang khoá bảng — câu khoá nói đúng phiếu. */
+      locked_pgt: pgt,
       order_lines: orderLines,
       lines,
     }
@@ -339,7 +347,15 @@ export const componentsService = {
     // nhập sổ; sai thì xoá hết bản ghi sổ trước.
     if (await entriesRepo.existsForLsx(lsxId)) {
       throw BadRequest(
-        'LSX đã có sổ số liệu — không ghi đè bảng định hình được (xoá sổ trước nếu thật sự cần sửa)',
+        'LSX đã có sổ số liệu — không ghi đè bảng định hình được (xoá phiếu ở Sổ theo ngày trước nếu thật sự cần sửa)',
+      )
+    }
+    // Phiếu giao nhận còn hiệu lực: dòng giao cascade theo chi tiết — ghi đè bảng
+    // là xoá sạch dòng giao, chỉ còn vỏ phiếu (đo 15/11/2026 trên lệnh TEST).
+    const pgt = await transfersRepo.phieuKhoaBang(lsxId)
+    if (pgt.length > 0) {
+      throw BadRequest(
+        `Lệnh đã có phiếu giao nhận (${pgt.slice(0, 3).join(', ')}${pgt.length > 3 ? '…' : ''}) — ghi đè bảng sẽ xoá mất dòng giao. Huỷ phiếu chưa nhận ở Giao nhận trước nếu thật sự cần sửa`,
       )
     }
     const validLineIds = new Set(orderLines.map((l) => l.id))

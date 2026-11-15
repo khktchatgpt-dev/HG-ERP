@@ -21,6 +21,7 @@ import { isUnshaped, needsRoute, type ShapingRow } from '@/lib/shaping-status'
 import type { DinhHinhProps, OrderLine } from '../lsx/[id]/dinh-hinh/dinh-hinh.shared'
 import { cx, fmt } from '../lsx/[id]/dinh-hinh/dinh-hinh.shared'
 import { LoTrinhLenh } from '../lsx/[id]/dinh-hinh/lo-trinh-lenh'
+import { KhoaGiao, nhanKhoa, PhieuKhoa } from '../lsx/[id]/dinh-hinh/phieu-khoa'
 import { useDinhHinh } from '../lsx/[id]/dinh-hinh/useDinhHinh'
 import { BangLenh } from './bang-lenh'
 
@@ -430,9 +431,20 @@ function MotLenh({
         )}
         {p.lockedByEntries && !p.lsxClosed && (
           <div className="sx-note stop">
-            <b>Lệnh đã có {p.pbsCount} phiếu sản lượng — lộ trình khoá.</b> Đổi lộ trình
-            khi đã có số là sổ mất chỗ bám: xoá phiếu ở Hồ sơ lệnh › Phiếu rồi mới sửa. Ma
-            trận chỉ để tra cứu.
+            {/* MỘT span: .sx-note là flex, mỗi mảnh chữ / link thành một ô riêng. */}
+            <span>
+              <b>Lộ trình khoá.</b>{' '}
+              {p.pbsCount > 0 && (
+                <>
+                  Lệnh đã có {p.pbsCount} phiếu sản lượng
+                  <PhieuKhoa nos={p.pbsNos ?? []} /> — đổi lộ trình khi đã có số là sổ mất
+                  chỗ bám: xoá các phiếu đó ở Sổ theo ngày (bấm mã phiếu; sổ ngày đã chốt
+                  thì mở chốt ở Sổ ngày trước) rồi mới sửa.{' '}
+                </>
+              )}
+              <KhoaGiao nos={p.pgtNos ?? []} />
+              Ma trận chỉ để tra cứu.
+            </span>
           </div>
         )}
         {p.lsxClosed && (
@@ -533,7 +545,7 @@ function MotLenh({
             p.lsxClosed
               ? 'Lệnh đã kết thúc'
               : p.lockedByEntries
-                ? `Khoá vì đã có ${p.pbsCount} phiếu PBS`
+                ? `Khoá vì đã có ${nhanKhoa(p.pbsCount, p.pgtNos?.length ?? 0)}`
                 : 'Lệnh chưa có sổ — còn sửa được; có phiếu PBS đầu tiên là khoá'
           }
           right="Bước tiếp: Giao tổ & hạn"

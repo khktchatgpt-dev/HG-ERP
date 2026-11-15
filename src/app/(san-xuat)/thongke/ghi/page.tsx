@@ -9,6 +9,7 @@ import {
 import { canEditComponents, isProductionStaff } from '@/modules/dept/production/perms'
 import { entriesRepo } from '@/modules/dept/production/entries.repo'
 import { entryDocsRepo } from '@/modules/dept/production/entry-docs.repo'
+import { transfersRepo } from '@/modules/dept/production/transfers.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { maChuaGhiService } from '@/modules/dept/production/ma-chua-ghi.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
@@ -133,12 +134,16 @@ export default async function GhiSanLuongPage({
 
   // Nút "Bảng chi tiết" (15/11/2026): lệnh đã có sổ thì bảng KHOÁ (lưu là ghi đè
   // trọn bảng) — nút nói trước, không để người bấm sang rồi mới thấy.
-  const [khoaBang, nPhieu] = sheet?.lsx
+  // Phiếu giao nhận còn hiệu lực cũng khoá (dòng giao cascade theo chi tiết).
+  const [coSo, nPbs, pgt] = sheet?.lsx
     ? await Promise.all([
         entriesRepo.existsForLsx(sheet.lsx.id),
         entryDocsRepo.countByLsx(sheet.lsx.id),
+        transfersRepo.phieuKhoaBang(sheet.lsx.id),
       ])
-    : [false, 0]
+    : [false, 0, [] as string[]]
+  const khoaBang = coSo || pgt.length > 0
+  const nPhieu = nPbs + pgt.length
 
   if (!sheet) {
     return (

@@ -6,6 +6,9 @@ vi.mock('./components.repo', () => ({
 vi.mock('./entries.repo', () => ({
   entriesRepo: { existsForLsx: vi.fn() },
 }))
+vi.mock('./transfers.repo', () => ({
+  transfersRepo: { phieuKhoaBang: vi.fn().mockResolvedValue([]) },
+}))
 vi.mock('./jobs.repo', () => ({
   jobsRepo: { listByLsx: vi.fn() },
 }))
@@ -45,6 +48,8 @@ import { lsxLinesRepo } from './lsx-lines.repo'
 import { componentsService } from './components.service'
 import { productionRepo } from './production.repo'
 import { entriesRepo } from './entries.repo'
+import { transfersRepo } from './transfers.repo'
+import { componentsRepo } from './components.repo'
 import { jobsRepo } from './jobs.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
 import { productsService } from '@/modules/dept/technical/technical.service'
@@ -73,6 +78,7 @@ const LINE = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(transfersRepo.phieuKhoaBang).mockResolvedValue([])
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
   vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([LINE] as never)
   vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([{ id: 'g1' }] as never)
@@ -480,5 +486,37 @@ describe('componentsService.save — ghi ngược SỐ CỤM / SP lên hồ sơ 
     })
     const r = await componentsService.save(thongKe, 'lsx1', [cum] as never, { clusterQty: q })
     expect(r.routes_skipped).toContainEqual({ product_code: 'SP1', reason: 'locked' })
+  })
+})
+
+describe('khoá bảng khi lệnh có phiếu giao nhận (15/11/2026)', () => {
+  // Dòng giao cascade theo chi tiết: ghi đè bảng từng xoá sạch dòng của PGT-2026-0002.
+  const thongKe = { id: 'u1', role: 'admin' } as User
+
+  it('list: có phiếu giao còn hiệu lực → bảng khoá, kèm mã phiếu', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.existsForLsx).mockResolvedValue(false)
+    vi.mocked(transfersRepo.phieuKhoaBang).mockResolvedValue(['PGT-2026-0003'])
+    const r = await componentsService.list(thongKe, 'lsx1')
+    expect(r.locked_by_entries).toBe(true)
+    expect(r.locked_pgt).toEqual(['PGT-2026-0003'])
+  })
+
+  it('list: không sổ, không phiếu giao → không khoá', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.existsForLsx).mockResolvedValue(false)
+    const r = await componentsService.list(thongKe, 'lsx1')
+    expect(r.locked_by_entries).toBe(false)
+  })
+
+  it('save: có phiếu giao → chặn, KHÔNG ghi đè bảng', async () => {
+    vi.mocked(entriesRepo.existsForLsx).mockResolvedValue(false)
+    vi.mocked(transfersRepo.phieuKhoaBang).mockResolvedValue(['PGT-2026-0003'])
+    await expect(
+      componentsService.save(thongKe, 'lsx1', [
+        { production_order_line_id: 'line1', name: 'Chân', qty_per_unit: 4 },
+      ] as never),
+    ).rejects.toThrow('phiếu giao nhận (PGT-2026-0003)')
+    expect(componentsRepo.replaceAll).not.toHaveBeenCalled()
   })
 })
