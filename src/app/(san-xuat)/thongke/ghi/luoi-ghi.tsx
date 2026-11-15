@@ -7,6 +7,7 @@ import { isFinishRowId } from '@/lib/finish-stages'
 import { quyCachDong } from '@/lib/ghi-nhom'
 import { tenCum } from '@/lib/ho-so-lenh'
 import { khoaCum } from '@/lib/khoa-cum'
+import { chuanHoaO, hienSo } from '@/lib/so-o-luoi'
 import { cellId, dmy, fmt, num, type EditCol, type Line } from './ghi.shared'
 import type { GhiCtx } from './useGhi'
 
@@ -346,8 +347,9 @@ function Dong({
   const isSet = l.kind === 'assembly'
   /** Định mức chưa có số / SP: cụm Kỹ thuật chưa khai SL cụm / SP, hoặc dòng không có số. */
   const chuaCoDm = l.cum_khai === false || l.qty_per_unit == null
-  const kgHint =
-    l.dm_kg != null && qty > 0 ? String(Math.round(l.dm_kg * qty * 100) / 100) : ''
+  const kgN = l.dm_kg != null && qty > 0 ? Math.round(l.dm_kg * qty * 100) / 100 : null
+  // Gợi ý trong ô Kg viết cùng lối với số người gõ (phẩy thập phân, lib/so-o-luoi).
+  const kgHint = kgN == null ? '' : hienSo(kgN)
   // Có SL mà không có ĐM kg → ô Kg nói thẳng: phiếu sẽ thiếu đúng dòng này ở kg.
   const noDm = l.dm_kg == null && qty > 0 && !(draft.kg ?? '').trim()
   const sug = d.suggestedSet.has(l.component_id)
@@ -481,20 +483,20 @@ function Dong({
         if (c.key === 'reason' && !coLoi) {
           return <td key={c.key} className="ed off" />
         }
-        const title =
-          c.key === 'qty' && overAvail
+        // Ô đỏ nói đúng vì sao trước mọi gợi ý khác (15/11/2026: "abc" / số âm).
+        const title = err
+          ? (d.errMsg.get(id) ?? 'Ô bắt buộc trên dòng đã gõ')
+          : c.key === 'qty' && overAvail
             ? `Vượt khả dụng (${fmt(l.available ?? 0)}) — vẫn ghi được, có thể xưởng chưa lập phiếu giao`
             : c.key === 'qty' && overRemaining
               ? `Vượt phần còn thiếu (${fmt(l.remaining)}) — vẫn ghi được, kiểm lại cho chắc`
-              : c.key === 'qty' && kgHint
-                ? `= ${fmt(Number(kgHint))} kg (ĐM × SL)`
+              : c.key === 'qty' && kgN != null
+                ? `= ${fmt(kgN)} kg (ĐM × SL)`
                 : c.key === 'kg' && kgHint
                   ? `Bỏ trống = tự tính ${kgHint} kg (ĐM × SL)`
                   : c.key === 'kg' && noDm
                     ? 'Chi tiết chưa có ĐM kg — gõ kg cân thật, hoặc để trống (dòng không vào kg)'
-                    : err
-                      ? 'Ô bắt buộc trên dòng đã gõ'
-                      : undefined
+                    : undefined
         const placeholder =
           c.key === 'kg'
             ? noDm
@@ -587,7 +589,11 @@ function OInner(p: Parameters<typeof O>[0]) {
       value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={() => {
-        if (v !== p.value) p.onCommit(v)
+        // Ô số viết lại theo cách máy hiểu ("1.390" → 1390) — đọc nhầm thì người gõ
+        // thấy ngay, không đợi số sai lên sổ (15/11/2026, cùng luật Bảng chi tiết).
+        const out = c.kind === 'num' ? chuanHoaO(v) : v
+        if (out !== p.value) p.onCommit(out)
+        else if (out !== v) setV(out)
       }}
       disabled={p.disabled}
       placeholder={p.placeholder}

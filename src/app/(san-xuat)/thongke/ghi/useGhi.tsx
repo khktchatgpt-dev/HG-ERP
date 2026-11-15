@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import type { LenhOption, LenhTinhTrang } from '@/lib/ma-chua-ghi'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
-import { parsePasteNumber } from '@/lib/po-paste'
+import { chuanHoaO } from '@/lib/so-o-luoi'
 import {
   crewProblem,
   laborHours,
@@ -297,6 +297,11 @@ export function useGhi(p: GhiProps) {
     () => new Set(problems.map((pb) => cellId(pb.component_id, pb.key))),
     [problems],
   )
+  /** Câu lỗi theo ô — tooltip ô đỏ nói đúng vì sao. */
+  const errMsg = useMemo(
+    () => new Map(problems.map((pb) => [cellId(pb.component_id, pb.key), pb.msg])),
+    [problems],
+  )
 
   // ── Mã lý do: gõ trúng nhãn danh mục → lưu MÃ ─────────────────────────
   const pickableCodes = useMemo(
@@ -555,12 +560,9 @@ export function useGhi(p: GhiProps) {
           const colDef = cols[col + c]
           if (!colDef) continue
           const raw = grid[r][c]
-          cur[colDef.key] =
-            colDef.kind === 'num'
-              ? raw === ''
-                ? ''
-                : (parsePasteNumber(raw)?.toString() ?? '')
-              : raw
+          // Cùng luật với gõ tay (lib/so-o-luoi); ô không đọc được GIỮ chữ để tô
+          // đỏ — trước 15/11/2026 nó thành ô trống, dòng rơi khỏi phiếu.
+          cur[colDef.key] = colDef.kind === 'num' ? chuanHoaO(raw) : raw
         }
         next[id] = cur
       }
@@ -623,6 +625,7 @@ export function useGhi(p: GhiProps) {
     typedDefect,
     typedRework,
     errCells,
+    errMsg,
     suggestedSet,
     chiGoiY,
     setChiGoiY,

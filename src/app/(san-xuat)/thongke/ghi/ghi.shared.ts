@@ -1,5 +1,6 @@
 import type { EntrySheet } from '@/modules/dept/production/worklist.service'
 import type { CrewInput } from '@/lib/gio-cong'
+import { docSo, laSoSai } from '@/lib/so-o-luoi'
 import { CORE_FIELD_LABEL } from '@/lib/stage-config'
 
 /**
@@ -138,17 +139,23 @@ export function buildEditCols(sheet: Sheet, more: boolean): EditCol[] {
   return cols.filter((c) => more || !c.detail)
 }
 
-export const num = (s: string | undefined) => {
-  if (!s) return 0
-  const n = Number(s.replace(',', '.'))
-  return Number.isFinite(n) ? n : 0
-}
+/**
+ * Số trong ô — cùng luật với Bảng chi tiết và với lúc dán (lib/so-o-luoi,
+ * 15/11/2026): "1.390" = 1390 (trước đó gõ tay ra 1,39), "2,5" = 2,5. Trống hoặc
+ * không đọc được → 0; ô không đọc được bị `rowProblems` tô đỏ chứ không bỏ qua.
+ */
+export const num = (s: string | undefined) => docSo(s) ?? 0
 export const fmt = (n: number) => n.toLocaleString('vi-VN')
 export const dmy = (iso: string) => iso.split('-').reverse().join('/')
 
-/** Dòng có số để vào phiếu: đạt, phế hoặc sửa lại > 0. */
+/**
+ * Dòng có số để vào phiếu: đạt, phế hoặc sửa lại > 0 — HOẶC gõ sai (chữ, số âm):
+ * dòng đó vào danh sách để bị chặn tại chỗ. Trước 15/11/2026 "abc" ở ô Đạt làm
+ * dòng biến khỏi phiếu không một lời báo.
+ */
 export function isTyped(d: LineDraft | undefined): boolean {
-  return !!d && (num(d.qty) > 0 || num(d.defect) > 0 || num(d.rework) > 0)
+  const co = (v: string | undefined) => num(v) !== 0 || laSoSai(v)
+  return !!d && (co(d.qty) || co(d.defect) || co(d.rework))
 }
 
 /** Dòng ĐÃ GÕ còn thiếu gì — mỗi phần tử trỏ đúng cột để nhảy tới. */
@@ -160,6 +167,14 @@ export function rowProblems(
   const bad = num(d.defect) > 0 || num(d.rework) > 0
   for (const c of cols) {
     const v = (d[c.key] ?? '').trim()
+    if (c.kind === 'num' && laSoSai(v)) {
+      out.push({ key: c.key, msg: `${c.label} "${v}" không phải số` })
+      continue
+    }
+    if (c.kind === 'num' && num(v) < 0) {
+      out.push({ key: c.key, msg: `${c.label} không được âm` })
+      continue
+    }
     if (c.key === 'reason') {
       if (bad && !v) out.push({ key: c.key, msg: 'có hàng lỗi mà chưa ghi vì sao' })
       continue
