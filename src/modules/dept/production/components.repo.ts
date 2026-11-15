@@ -87,14 +87,43 @@ function unwrap(rows: Raw[] | null): ComponentRow[] {
   })
 }
 
+/**
+ * Đọc HẾT theo trang 1.000 dòng — PostgREST chặn mỗi lần đọc ở max-rows = 1.000,
+ * `.limit(20000)` không vượt được. Đo 15/11/2026: lệnh 01/26-27 - GIGA có 1.053
+ * dòng bảng chi tiết, `listByLsx` trả 1.000 — đợt 5 của BN0231HG-AL hiện "chưa
+ * nạp bảng", và Lưu ở Bảng chi tiết / Lộ trình (ghi đè TRỌN bảng) sẽ xoá luôn 53
+ * dòng không đọc được. Lỗi một trang thì NÉM, không trả nửa bảng: nửa bảng đem
+ * lưu lại là mất dữ liệu.
+ */
+async function docHet<T>(
+  trang: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; i < 200; i++) {
+    const { data, error } = await trang(i * 1000, i * 1000 + 999)
+    if (error) throw new Error(error.message)
+    const rows = (data ?? []) as T[]
+    out.push(...rows)
+    if (rows.length < 1000) break
+  }
+  return out
+}
+
 export const componentsRepo = {
   async listByLsx(productionOrderId: string): Promise<ComponentRow[]> {
-    const { data } = await db()
-      .from('production_components')
-      .select(`${COLS}, material:warehouse_materials(code, name, unit)`)
-      .eq('production_order_id', productionOrderId)
-      .order('sort_order')
-    return unwrap(data as Raw[] | null)
+    const rows = await docHet<Raw>((from, to) =>
+      db()
+        .from('production_components')
+        .select(`${COLS}, material:warehouse_materials(code, name, unit)`)
+        .eq('production_order_id', productionOrderId)
+        .order('sort_order')
+        .order('id')
+        .range(from, to),
+    )
+    return unwrap(rows)
   },
 
   /**
@@ -126,15 +155,18 @@ export const componentsRepo = {
     productionOrderIds: string[],
   ): Promise<(ComponentRow & { line_qty: number })[]> {
     if (!productionOrderIds.length) return []
-    const { data } = await db()
-      .from('production_components')
-      .select(`${COLS}, line:production_order_lines(qty)`)
-      .in('production_order_id', productionOrderIds)
-      .order('sort_order')
-      .limit(20000)
     type BulkRaw = Raw & { line: { qty: number } | { qty: number }[] | null }
-    return (unwrap(data as Raw[] | null) as ComponentRow[]).map((r, i) => {
-      const raw = (data as BulkRaw[] | null)?.[i]
+    const data = await docHet<BulkRaw>((from, to) =>
+      db()
+        .from('production_components')
+        .select(`${COLS}, line:production_order_lines(qty)`)
+        .in('production_order_id', productionOrderIds)
+        .order('sort_order')
+        .order('id')
+        .range(from, to),
+    )
+    return (unwrap(data) as ComponentRow[]).map((r, i) => {
+      const raw = data[i]
       const line = raw ? (Array.isArray(raw.line) ? raw.line[0] : raw.line) : null
       return { ...r, line_qty: Number(line?.qty) || 0 }
     })
@@ -284,13 +316,6 @@ export const componentsRepo = {
     }[]
   > {
     if (productionOrderIds.length === 0) return []
-    const { data } = await db()
-      .from('production_components')
-      .select(
-        'production_order_id, material_id, qty_per_unit, dm_kg, pcs_per_bar, line:production_order_lines(qty)',
-      )
-      .in('production_order_id', productionOrderIds)
-      .limit(20000)
     type Row = {
       production_order_id: string
       material_id: string | null
@@ -299,7 +324,17 @@ export const componentsRepo = {
       pcs_per_bar: number | null
       line: { qty: number } | { qty: number }[] | null
     }
-    return ((data as Row[] | null) ?? []).map((r) => {
+    const data = await docHet<Row>((from, to) =>
+      db()
+        .from('production_components')
+        .select(
+          'production_order_id, material_id, qty_per_unit, dm_kg, pcs_per_bar, line:production_order_lines(qty)',
+        )
+        .in('production_order_id', productionOrderIds)
+        .order('id')
+        .range(from, to),
+    )
+    return data.map((r) => {
       const line = Array.isArray(r.line) ? r.line[0] : r.line
       return {
         production_order_id: r.production_order_id,
@@ -330,12 +365,15 @@ export const componentsRepo = {
 
   /** Số dòng chi tiết theo LSX — cờ "Chưa nhập bảng chi tiết" ở bảng điều phối. */
   async countsByLsx(): Promise<Map<string, number>> {
-    const { data } = await db()
-      .from('production_components')
-      .select('production_order_id')
-      .limit(20000)
+    const data = await docHet<{ production_order_id: string }>((from, to) =>
+      db()
+        .from('production_components')
+        .select('production_order_id')
+        .order('id')
+        .range(from, to),
+    )
     const map = new Map<string, number>()
-    for (const r of (data ?? []) as { production_order_id: string }[]) {
+    for (const r of data) {
       map.set(r.production_order_id, (map.get(r.production_order_id) ?? 0) + 1)
     }
     return map
