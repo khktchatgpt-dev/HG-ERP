@@ -131,6 +131,15 @@ export default async function GhiSanLuongPage({
     lsxId: pick,
   })
 
+  // Nút "Bảng chi tiết" (15/11/2026): lệnh đã có sổ thì bảng KHOÁ (lưu là ghi đè
+  // trọn bảng) — nút nói trước, không để người bấm sang rồi mới thấy.
+  const [khoaBang, nPhieu] = sheet?.lsx
+    ? await Promise.all([
+        entriesRepo.existsForLsx(sheet.lsx.id),
+        entryDocsRepo.countByLsx(sheet.lsx.id),
+      ])
+    : [false, 0]
+
   if (!sheet) {
     return (
       <SxKhung bare label="Ghi sản lượng">
@@ -159,6 +168,7 @@ export default async function GhiSanLuongPage({
       chuaGhi={sheet.lsx ? (ttById.get(sheet.lsx.id) ?? null) : null}
       lenhKhongChay={lenhKhongChay}
       canKhai={canKhai}
+      bangChiTiet={{ khoa: khoaBang, nPhieu }}
     />
   )
 }

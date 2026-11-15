@@ -94,6 +94,19 @@ export function GhiScreen(p: GhiProps) {
               {/* Q6 bản vẽ 14/11: xem lại / sửa dòng đã ghi — đúng ngày + tổ đang chọn. */}
               <ApNhom>
                 <ApNut href={d.soDaGhiHref}>Sổ theo ngày</ApNut>
+                {/* 15/11/2026: sửa bảng chi tiết đi từ đây. Lệnh đã có sổ thì bảng khoá
+                    (lưu là ghi đè trọn bảng) — nút nói trước. */}
+                {d.bangChiTietHref && (
+                  <ApNut href={d.bangChiTietHref}>
+                    Bảng chi tiết
+                    {p.bangChiTiet?.khoa && (
+                      <span className="mut">
+                        {' '}
+                        · khoá, {p.bangChiTiet.nPhieu} phiếu
+                      </span>
+                    )}
+                  </ApNut>
+                )}
               </ApNhom>
               <ApNhom>
                 <ApNut onClick={d.toggleMore}>

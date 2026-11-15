@@ -134,6 +134,15 @@ export const entryDocsRepo = {
     return unwrap(data as unknown as Raw[] | null)
   },
 
+  /** Số phiếu của MỘT lệnh — nút "Bảng chi tiết" ở Ghi sản lượng nói "khoá, n phiếu". */
+  async countByLsx(productionOrderId: string): Promise<number> {
+    const { count } = await db()
+      .from('production_entry_docs')
+      .select('id', { count: 'exact', head: true })
+      .eq('production_order_id', productionOrderId)
+    return count ?? 0
+  },
+
   /** Sửa header phiếu — đường chuyển trạng thái (service gác luật). */
   async patch(
     id: string,

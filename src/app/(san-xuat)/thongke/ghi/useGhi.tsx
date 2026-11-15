@@ -6,6 +6,7 @@ import { api, apiErrorText } from '@/lib/api'
 import type { LenhOption, LenhTinhTrang } from '@/lib/ma-chua-ghi'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { chuanHoaO } from '@/lib/so-o-luoi'
+import { khaiHref } from './ma-chua-ghi'
 import {
   crewProblem,
   laborHours,
@@ -57,6 +58,8 @@ export type GhiProps = {
   lenhKhongChay?: { code: string | null; status: string | null } | null
   /** Người nhập sửa được bảng chi tiết → dải "mã chưa ghi được" có lối Tự khai (15/11). */
   canKhai?: boolean
+  /** Bảng chi tiết của lệnh đang mở đã khoá chưa (lệnh có sổ) + số phiếu — nút đầu màn. */
+  bangChiTiet?: { khoa: boolean; nPhieu: number }
   /**
    * `?date=` / `?team=` trên đường dẫn (bản vẽ 14/11/2026, Q5): Sổ ngày "Ghi sổ ›"
    * và Sổ đã ghi "Ghi thêm" mở ĐÚNG ngày + tổ. Trước đó trang bỏ qua hai tham
@@ -665,6 +668,8 @@ export function useGhi(p: GhiProps) {
     vuaGhi,
     /** Tổ đang chọn đã ghi gì ở ngày đang chọn (Q6) — null = chưa có dòng nào. */
     daGhiNay: teamId ? (p.daGhi?.[`${teamId}|${date}`] ?? null) : null,
+    /** Bảng chi tiết của lệnh, mở đúng mã hàng đang xem (15/11/2026). */
+    bangChiTietHref: sheet.lsx ? khaiHref(sheet.lsx.id, motMa ? spChon : undefined) : null,
     soDaGhiHref: `/thongke/da-ghi?${new URLSearchParams({
       ...(date !== sheet.today ? { date } : {}),
       to: teamId || 'all',
