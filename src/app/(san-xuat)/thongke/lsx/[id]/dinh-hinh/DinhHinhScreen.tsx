@@ -126,15 +126,15 @@ export function DinhHinhScreen(props: DinhHinhProps) {
           </label>
           <span className="sx-leg" style={{ padding: 0, border: 0 }}>
             <span>
-              <i className="r" /> thiếu bắt buộc (chặn)
+              <i className="r" /> thiếu bắt buộc / sai số (chặn)
             </span>
             <span>
               <i className="w" /> ĐM kg trống ở nhóm khung (nghi ngờ)
             </span>
           </span>
           <span className="sp mut">
-            Ô vàng gõ được · Ctrl+V dán vùng từ Excel · Enter xuống dòng · Xoá hỏi lại một
-            lần · lộ trình công đoạn khai ở màn riêng
+            Ô vàng gõ được · số lẻ gõ phẩy (1,25), chấm là nghìn (1.390 = 1390) · Ctrl+V
+            dán vùng từ Excel · Enter xuống dòng · Xoá hỏi lại một lần
           </span>
         </div>
 

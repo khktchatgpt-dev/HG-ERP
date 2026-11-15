@@ -1,3 +1,4 @@
+import { docSo, hienSo, laSoSai } from '@/lib/so-o-luoi'
 import type { StageConfig } from '@/lib/stage-config'
 
 /**
@@ -142,13 +143,10 @@ export const visibleCols = (more: boolean) => EDIT_COLS.filter((c) => more || !c
 
 let seq = 0
 export const newKey = () => `r${++seq}`
-const s = (v: number | null | undefined) => (v == null ? '' : String(v))
-export const num = (v: string): number | null => {
-  const t = v.trim().replace(',', '.')
-  if (!t) return null
-  const n = Number(t)
-  return Number.isFinite(n) ? n : null
-}
+// Số trong ô: MỘT luật cho gõ tay, dán và số đã lưu (lib/so-o-luoi, 15/11/2026) —
+// trước đó gõ "1.390" ra 1,39 còn dán ra 1390. Bày phẩy thập phân ("1,125").
+const s = hienSo
+export const num = (v: string): number | null => docSo(v)
 export const fmt = (n: number) => n.toLocaleString('vi-VN')
 export const cx = (...xs: (string | false | null | undefined | 0)[]) =>
   xs.filter(Boolean).join(' ')
@@ -212,11 +210,26 @@ export function emptyDraft(lineId: string): Draft {
 export function rowProblems(d: Draft): { key: EditCol['key']; msg: string }[] {
   const out: { key: EditCol['key']; msg: string }[] = []
   if (!d.name.trim()) out.push({ key: 'name', msg: 'chưa có tên' })
+  // Ô số gõ chữ / số âm: tô đỏ + chặn Lưu TẠI CHỖ (15/11/2026). Trước đó "abc" ở
+  // ĐM kg lưu thành trống không một lời báo, số âm thì máy chủ từ chối SAU khi bấm.
+  for (const c of EDIT_COLS) {
+    if (c.kind !== 'num' || c.key === 'qty_per_unit') continue
+    const raw = String(d[c.key] ?? '')
+    if (laSoSai(raw))
+      out.push({ key: c.key, msg: `${c.label} "${raw.trim()}" không phải số` })
+    else if ((docSo(raw) ?? 0) < 0)
+      out.push({ key: c.key, msg: `${c.label} không được âm` })
+  }
   // Cụm chưa khai được để trống ("chưa có" — máy tạm tính 1 trên lệnh, không ghi
   // ngược hồ sơ); đã gõ thì phải > 0 như mọi dòng.
   const choTrong = d.kind === 'assembly' && d.cum_chua_khai && !d.qty_per_unit.trim()
   if (!choTrong && !((num(d.qty_per_unit) ?? 0) > 0))
-    out.push({ key: 'qty_per_unit', msg: 'CT/SP phải > 0' })
+    out.push({
+      key: 'qty_per_unit',
+      msg: laSoSai(d.qty_per_unit)
+        ? `CT/SP "${d.qty_per_unit.trim()}" không phải số`
+        : 'CT/SP phải > 0',
+    })
   return out
 }
 

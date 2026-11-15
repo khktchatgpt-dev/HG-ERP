@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
-import { parsePasteNumber } from '@/lib/po-paste'
+import { chuanHoaO } from '@/lib/so-o-luoi'
 import { khoaCum } from '@/lib/khoa-cum'
 import { nhanTheoDot, nhomGomTheoMa } from '@/lib/gom-dot-ma'
 import {
+  EDIT_COLS,
   cellId,
   chuKyDong,
   emptyDraft,
@@ -232,6 +233,11 @@ export function useDinhHinh(p: DinhHinhProps) {
     () => new Set(problems.map((pb) => cellId(pb.rowKey, pb.key))),
     [problems],
   )
+  /** Câu lỗi theo ô — tooltip nói đúng vì sao đỏ, không chỉ "Ô bắt buộc". */
+  const errMsg = useMemo(
+    () => new Map(problems.map((pb) => [cellId(pb.rowKey, pb.key), pb.msg])),
+    [problems],
+  )
   const first = problems[0] ?? null
   const nCum = rowsHien.filter((r) => r.kind === 'assembly').length
   const chuaDinhMuc = p.orderLines.filter((l) => !l.has_profile)
@@ -252,9 +258,16 @@ export function useDinhHinh(p: DinhHinhProps) {
   const goFirst = () => {
     if (!first) return
     setTab('chi_tiet')
-    const el = document.getElementById(cellId(first.rowKey, first.key))
-    el?.scrollIntoView({ block: 'center' })
-    ;(el as HTMLElement | null)?.focus()
+    // Lỗi nằm ở cột quy cách đang ẩn → bật cột lên rồi mới tìm được ô.
+    const an = !more && EDIT_COLS.some((c) => c.key === first.key && c.spec)
+    if (an) writeMore(true)
+    const toi = () => {
+      const el = document.getElementById(cellId(first.rowKey, first.key))
+      el?.scrollIntoView({ block: 'center' })
+      ;(el as HTMLElement | null)?.focus()
+    }
+    if (an) requestAnimationFrame(toi)
+    else toi()
   }
 
   // ── Nạp / lưu ───────────────────────────────────────────────────────────
@@ -461,8 +474,9 @@ export function useDinhHinh(p: DinhHinhProps) {
             if (!colDef) continue
             const raw = grid[r][c]
             if (colDef.kind === 'num') {
-              ;(cur as Record<string, unknown>)[colDef.key] =
-                raw === '' ? '' : (parsePasteNumber(raw)?.toString() ?? '')
+              // Cùng luật với gõ tay (lib/so-o-luoi); ô không đọc được GIỮ chữ để tô
+              // đỏ — trước 15/11 nó thành ô trống không một lời báo.
+              ;(cur as Record<string, unknown>)[colDef.key] = chuanHoaO(raw)
             } else if (colDef.kind === 'select') {
               const code = raw.trim().toUpperCase()
               ;(cur as Record<string, unknown>)[colDef.key] = p.groups.some(
@@ -525,6 +539,7 @@ export function useDinhHinh(p: DinhHinhProps) {
     anhEmCum,
     apChoCumCungTen,
     errCells,
+    errMsg,
     problems,
     first,
     nCum,

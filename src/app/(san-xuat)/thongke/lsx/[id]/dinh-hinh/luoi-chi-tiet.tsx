@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react'
 import { componentRoute, isPurchasedGroup } from '@/lib/stage-route'
 import { shortStageLabel } from '@/lib/stage-config'
+import { chuanHoaO } from '@/lib/so-o-luoi'
 import { cellId, cx, fmt, num, type Draft, type EditCol } from './dinh-hinh.shared'
 import type { DinhHinhCtx } from './useDinhHinh'
 
@@ -251,7 +252,7 @@ function Dong({ d, r, route }: { d: DinhHinhCtx; r: Draft; route: string | null 
             className={cx('ed', c.kind === 'num' && 'r', err ? 'err' : warn && 'warn')}
             title={
               err
-                ? 'Ô bắt buộc'
+                ? (d.errMsg.get(id) ?? 'Ô bắt buộc')
                 : warn
                   ? 'Nhóm khung sắt/nhôm thường có ĐM kg — trống thì sổ không tính được khối lượng'
                   : undefined
@@ -376,7 +377,11 @@ function OInner(p: Parameters<typeof O>[0]) {
         value={v}
         onChange={(e) => setV(e.target.value)}
         onBlur={() => {
-          if (v !== p.value) p.onCommit(v)
+          // Ô số viết lại theo cách máy hiểu (gõ "1.390" thấy ngay 1390) — đọc nhầm
+          // thì người gõ thấy liền, không đợi tới số sai trên sổ (15/11/2026).
+          const out = p.col.kind === 'num' ? chuanHoaO(v) : v
+          if (out !== p.value) p.onCommit(out)
+          else if (out !== v) setV(out)
         }}
         disabled={p.disabled}
         placeholder={p.placeholder}
