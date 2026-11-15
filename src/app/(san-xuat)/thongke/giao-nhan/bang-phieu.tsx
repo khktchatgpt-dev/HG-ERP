@@ -205,6 +205,7 @@ function Phieu({ d, x, choNhan }: { d: GiaoNhanCtx; x: Doc; choNhan: boolean }) 
                   onChange={(e) => d.patchNhan(l.id, { reason: e.target.value })}
                   placeholder={diff !== 0 ? 'bắt buộc khi chênh' : ''}
                   aria-label={`Lý do chênh ${l.name}`}
+                  id={`ly-do-chenh-${l.id}`}
                 />
               ) : (
                 (l.diff_reason ??
@@ -231,11 +232,22 @@ function Phieu({ d, x, choNhan }: { d: GiaoNhanCtx; x: Doc; choNhan: boolean }) 
                         className="lnk"
                         onClick={() => d.xacNhan(x)}
                         disabled={d.busy || !!thieu}
-                        title={
-                          thieu ? `"${thieu.name}" chênh mà chưa ghi lý do` : undefined
-                        }
                       >
                         Xác nhận
+                      </button>
+                    )}
+                    {/* Lý do chặn nói TẠI CHỖ, bấm được — nhảy tới ô lý do (15/11/2026;
+                        trước đó chỉ nằm trong tooltip của nút xám). */}
+                    {chenh && thieu && (
+                      <button
+                        type="button"
+                        className="lnk warn"
+                        style={{ display: 'block', fontWeight: 400, whiteSpace: 'normal' }}
+                        onClick={() =>
+                          document.getElementById(`ly-do-chenh-${thieu.id}`)?.focus()
+                        }
+                      >
+                        &quot;{thieu.name}&quot; chênh — ghi lý do ›
                       </button>
                     )}
                   </>
