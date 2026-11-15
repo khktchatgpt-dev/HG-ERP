@@ -1,7 +1,13 @@
 'use client'
 
 import { Fragment, useState } from 'react'
-import { componentRoute, isPurchasedGroup } from '@/lib/stage-route'
+import { bamCaNhom, demQua } from '@/lib/lo-trinh-nhom'
+import {
+  componentRoute,
+  isNgoaiKhung,
+  isPurchasedGroup,
+  routeForGroup,
+} from '@/lib/stage-route'
 import { COUNT_LEVEL_SHORT, shortStageLabel } from '@/lib/stage-config'
 import { cx, fmt, num, type Draft } from './dinh-hinh.shared'
 import type { DinhHinhCtx } from './useDinhHinh'
@@ -42,15 +48,176 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
       first_stage: r.first_stage,
       final_stage: r.final_stage,
     })
-  // Dòng SP nào đang mở từng chi tiết rời (mặc định gập).
+  // Nhóm chi tiết rời nào đang mở từng dòng (mặc định gập) — khoá `dòng SP|nhóm`.
   const [moRoi, setMoRoi] = useState<Set<string>>(() => new Set())
-  const toggleRoi = (lineId: string) =>
+  const toggleRoi = (k: string) =>
     setMoRoi((s) => {
       const n = new Set(s)
-      if (n.has(lineId)) n.delete(lineId)
-      else n.add(lineId)
+      if (n.has(k)) n.delete(k)
+      else n.add(k)
       return n
     })
+  const nhomLabel = new Map(p.groups.map((g) => [g.code, g.label]))
+  const macDinhOf = (r: Draft) => routeForGroup(r.group_code || null)
+  const giongNhau = (a: readonly string[], b: readonly string[]) =>
+    a.length === b.length && a.every((x) => b.includes(x))
+
+  /**
+   * MỘT NHÓM CHI TIẾT RỜI (bản vẽ 15/11/2026 QR43i6tr…): dòng tóm tắt bấm được —
+   * ô công đoạn tick / bỏ cho cả nhóm (Q2), "mở từng dòng" để sửa riêng; nhóm có
+   * dòng khai riêng thì có "áp cho n đợt khác cùng mã" (Q4). Dùng cho khung rời và
+   * ngoài khung (gỗ, nệm, tấm… — trước đó bị gộp vào "Ngũ kim", không ô tick).
+   */
+  const nhomRoi = (lineId: string, loai: 'khung' | 'ngoai', ds: Draft[]) => {
+    if (ds.length === 0) return null
+    const k = `${lineId}|${loai}`
+    const mo = moRoi.has(k)
+    const dongs = ds.map((r) => ({
+      key: r.key,
+      route: routeOf(r),
+      macDinh: macDinhOf(r),
+    }))
+    const nKhai = ds.filter((r) => r.stages != null).length
+    const nhoms = [...new Set(ds.map((r) => r.group_code || ''))]
+    const tenNhom = (c: string) => (nhomLabel.get(c) ?? c).toLocaleLowerCase('vi')
+    const tieuDe =
+      loai === 'khung'
+        ? `${ds.length} chi tiết ${nhoms.length === 1 && nhoms[0] === 'FRAME' ? 'khung' : 'rời'}`
+        : nhoms.length === 1
+          ? `${ds.length} chi tiết ${tenNhom(nhoms[0])}`
+          : `${ds.length} chi tiết ngoài khung`
+    const phu =
+      nKhai > 0
+        ? `${nKhai}/${ds.length} khai riêng`
+        : loai === 'khung'
+          ? 'theo nhóm vật tư'
+          : nhoms.length === 1
+            ? 'ngoài khung · chưa qua công đoạn nào'
+            : `${nhoms.map((c) => `${tenNhom(c)} ${ds.filter((r) => (r.group_code || '') === c).length}`).join(' · ')} · chưa qua công đoạn nào`
+    const dot = editable && nKhai > 0 ? d.capDotKhac(ds.map((r) => r.key)) : null
+    const dongBo =
+      dot != null && dot.cap.every(([s, t]) => giongNhau(routeOf(s), routeOf(t)))
+    return (
+      <Fragment key={k}>
+        <tr className="sum">
+          <td title={ds.map((r) => `${r.name} ×${r.qty_per_unit}`).join(' · ')}>
+            <b>{tieuDe}</b>
+            {nKhai > 0 && <i className="sx-dot b" style={{ marginLeft: 8 }} />}
+            <span className="mut"> · {phu}</span>
+            <button
+              type="button"
+              className="lnk"
+              style={{ marginLeft: 8 }}
+              onClick={() => toggleRoi(k)}
+              aria-expanded={mo}
+            >
+              {mo ? 'gập' : 'mở từng dòng'}
+            </button>
+          </td>
+          <td className="r num"></td>
+          <td className="r num">{ds.length}</td>
+          {stageCfg.map((s) => {
+            const qua = demQua(dongs, s.code)
+            const doi = ds.some(
+              (r) => routeOf(r).includes(s.code) !== gocRoute(r).includes(s.code),
+            )
+            const txt = qua === 0 ? '' : qua === ds.length ? '✓' : `${qua}/${ds.length}`
+            const cls = cx(
+              qua === 0 && 'o',
+              qua === ds.length && nKhai === 0 && 'xs',
+              qua > 0 && qua < ds.length && 'part',
+              doi && 'n',
+            )
+            if (!editable)
+              return (
+                <td key={s.code} className="c">
+                  {txt && (
+                    <span className={cx('sym-ro', nKhai === 0 && 'xs')}>{txt}</span>
+                  )}
+                </td>
+              )
+            return (
+              <td key={s.code} className="c">
+                <button
+                  type="button"
+                  className={cx('tg', 'sym', cls)}
+                  aria-label={`${tieuDe} · ${s.label}: ${qua}/${ds.length} chi tiết đi qua — bấm để ${qua === ds.length ? 'bỏ' : 'thêm'} cho cả nhóm`}
+                  title={`Bấm để ${qua === ds.length ? 'bỏ' : 'thêm'} ${s.label} cho cả ${ds.length} chi tiết`}
+                  onClick={() => d.setStagesMany(bamCaNhom(dongs, s.code, sortStages))}
+                >
+                  {txt}
+                </button>
+              </td>
+            )
+          })}
+        </tr>
+        {mo &&
+          ds.map((r) => {
+            const st = routeOf(r)
+            const khai = r.stages != null
+            const gocSt = gocRoute(r)
+            return (
+              <tr key={r.key} className="t2">
+                <td title={r.name}>
+                  {r.name}
+                  <span className="mut">
+                    {' '}
+                    · {loai === 'khung' ? 'rời' : tenNhom(r.group_code || '')}
+                    {khai ? ' · khai riêng' : ''}
+                  </span>
+                  {khai && editable && (
+                    <button
+                      type="button"
+                      className="lnk"
+                      style={{ marginLeft: 8 }}
+                      onClick={() => d.setStages(r.key, null)}
+                    >
+                      về mặc định
+                    </button>
+                  )}
+                </td>
+                <td className="r num">{num(r.qty_per_unit) ?? '—'}</td>
+                <td className="r num"></td>
+                {stageCfg.map((s) => (
+                  <O
+                    key={s.code}
+                    on={st.includes(s.code)}
+                    khai={khai}
+                    doi={st.includes(s.code) !== gocSt.includes(s.code)}
+                    editable={editable}
+                    label={`${r.name} · ${s.label}`}
+                    onToggle={() => toggle(r, s.code)}
+                  />
+                ))}
+              </tr>
+            )
+          })}
+        {dot && dot.dot > 0 && (
+          <tr className="sum">
+            <td colSpan={nCols} style={{ paddingLeft: 22 }}>
+              {dongBo ? (
+                <span className="mut">✓ {dot.dot} đợt khác cùng mã đã giống đợt này</span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="lnk"
+                    onClick={() => d.apChoDotCungMa(ds.map((r) => r.key))}
+                  >
+                    áp cho {dot.dot} đợt khác cùng mã
+                  </button>
+                  <span className="mut">
+                    {' '}
+                    · chép lộ trình nhóm này sang các đợt còn lại
+                  </span>
+                </>
+              )}
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
 
   const toggle = (r: Draft, code: string) => {
     const st = routeOf(r)
@@ -92,17 +259,13 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
           {lines.map((l) => {
             const rs = byLine.get(l.id) ?? []
             const cum = rs.filter((r) => r.kind === 'assembly')
-            const roi = rs.filter(
-              (r) =>
-                r.kind !== 'assembly' &&
-                !r.cluster.trim() &&
-                !isPurchasedGroup(r.group_code || null),
+            const roiTatCa = rs.filter((r) => r.kind !== 'assembly' && !r.cluster.trim())
+            const roi = roiTatCa.filter((r) => !isPurchasedGroup(r.group_code || null))
+            // Gỗ, nệm, tấm… rời: nhóm riêng có ô tick (Q1); chỉ ngũ kim / bao bì / tem là hàng mua.
+            const ngoai = roiTatCa.filter((r) => isNgoaiKhung(r.group_code || null))
+            const mua = rs.filter(
+              (r) => isPurchasedGroup(r.group_code || null) && !ngoai.includes(r),
             )
-            const roiKhai = roi.filter((r) => r.stages != null)
-            const roiNhom = roi.filter((r) => r.stages == null)
-            const mua = rs.filter((r) => isPurchasedGroup(r.group_code || null))
-            const mo = moRoi.has(l.id)
-            const hopRoi = new Set(roiNhom.flatMap((r) => routeOf(r)))
             return (
               <Fragment key={l.id}>
                 {lines.length > 1 && (
@@ -226,88 +389,12 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
                     </Fragment>
                   )
                 })}
-                {roiNhom.length > 0 && !mo && (
-                  <tr className="sum">
-                    <td
-                      title={roiNhom
-                        .map((r) => `${r.name} ×${r.qty_per_unit}`)
-                        .join(' · ')}
-                    >
-                      <b>{roiNhom.length} chi tiết rời</b>
-                      <span className="mut"> · theo nhóm vật tư</span>
-                      {editable && (
-                        <button
-                          type="button"
-                          className="lnk"
-                          style={{ marginLeft: 8 }}
-                          onClick={() => toggleRoi(l.id)}
-                        >
-                          mở từng dòng
-                        </button>
-                      )}
-                    </td>
-                    <td className="r num"></td>
-                    <td className="r num">{roiNhom.length}</td>
-                    {stageCfg.map((s) => (
-                      <td key={s.code} className="c">
-                        {hopRoi.has(s.code) && <span className="sym-ro xs">✓</span>}
-                      </td>
-                    ))}
-                  </tr>
-                )}
-                {(mo ? roi : roiKhai).map((r) => {
-                  const st = routeOf(r)
-                  const khai = r.stages != null
-                  const gocSt = gocRoute(r)
-                  return (
-                    <tr key={r.key} className="t2">
-                      <td title={r.name}>
-                        {r.name}
-                        <span className="mut"> · rời{khai ? ' · khai riêng' : ''}</span>
-                        {khai && editable && (
-                          <button
-                            type="button"
-                            className="lnk"
-                            style={{ marginLeft: 8 }}
-                            onClick={() => d.setStages(r.key, null)}
-                          >
-                            về mặc định
-                          </button>
-                        )}
-                      </td>
-                      <td className="r num">{num(r.qty_per_unit) ?? '—'}</td>
-                      <td className="r num"></td>
-                      {stageCfg.map((s) => (
-                        <O
-                          key={s.code}
-                          on={st.includes(s.code)}
-                          khai={khai}
-                          doi={st.includes(s.code) !== gocSt.includes(s.code)}
-                          editable={editable}
-                          label={`${r.name} · ${s.label}`}
-                          onToggle={() => toggle(r, s.code)}
-                        />
-                      ))}
-                    </tr>
-                  )
-                })}
-                {mo && roiNhom.length > 0 && (
-                  <tr className="sum">
-                    <td colSpan={nCols}>
-                      <button
-                        type="button"
-                        className="lnk"
-                        onClick={() => toggleRoi(l.id)}
-                      >
-                        gập chi tiết rời theo nhóm
-                      </button>
-                    </td>
-                  </tr>
-                )}
+                {nhomRoi(l.id, 'khung', roi)}
+                {nhomRoi(l.id, 'ngoai', ngoai)}
                 {mua.length > 0 && (
                   <tr className="sum">
                     <td className="mut" title={mua.map((m) => m.name).join(' · ')}>
-                      Ngũ kim ({mua.length}) · hàng mua, không qua công đoạn
+                      Hàng mua ({mua.length}) · ngũ kim, bao bì, tem — không qua công đoạn
                     </td>
                     <td></td>
                     <td className="r num">{mua.length}</td>
@@ -333,8 +420,8 @@ export function LoTrinhLenh({ d }: { d: DinhHinhCtx }) {
               {finish.map((s) => shortStageLabel(s.label)).join(' → ')} theo cấu hình
             </td>
             <td colSpan={stageCfg.length} className="mut" style={{ fontWeight: 400 }}>
-              thứ tự chạy = thứ tự danh mục · hồ sơ SP cập nhật theo khi Lưu · lệnh khác
-              không đổi
+              thứ tự chạy = thứ tự danh mục · cụm ghi ngược hồ sơ SP khi Lưu · chi tiết
+              rời chỉ áp cho lệnh này
             </td>
           </tr>
         </tfoot>

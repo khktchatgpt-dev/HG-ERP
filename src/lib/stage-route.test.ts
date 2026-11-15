@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   clipRoute,
   componentRoute,
+  isHangMua,
+  isNgoaiKhung,
   resolveComponentRoute,
   routeForGroup,
 } from './stage-route'
@@ -110,5 +112,30 @@ describe('resolveComponentRoute / componentRoute — bậc "lộ trình khai" (0
     expect(componentRoute(null, { group_code: 'FRAME', final_stage: 'phoi' })).toEqual([
       'phoi',
     ])
+  })
+})
+
+describe('ngoài khung ≠ hàng mua (bản vẽ 15/11/2026 QR43i6tr…, Q1)', () => {
+  it('gỗ, tấm, polywood, nệm, vải, mây là NGOÀI KHUNG — bật công đoạn được theo lệnh', () => {
+    for (const g of ['WOOD', 'PANEL', 'POLYWOOD', 'CUSHION', 'FABRIC', 'RATTAN', ' wood ']) {
+      expect(isNgoaiKhung(g)).toBe(true)
+      expect(isHangMua(g)).toBe(false)
+    }
+  })
+  it('ngũ kim, bao bì, tem là HÀNG MUA thật', () => {
+    for (const g of ['NGU_KIM', 'PACKAGING', 'LABEL']) {
+      expect(isHangMua(g)).toBe(true)
+      expect(isNgoaiKhung(g)).toBe(false)
+    }
+  })
+  it('khung và nhóm trống không thuộc nhóm nào trong hai', () => {
+    for (const g of ['FRAME', null, '', 'LA_LUNG']) {
+      expect(isNgoaiKhung(g)).toBe(false)
+      expect(isHangMua(g)).toBe(false)
+    }
+  })
+  it('nệm khai riêng đi May thì lộ trình hiệu lực là May (khai thắng nhóm)', () => {
+    expect(componentRoute(null, { group_code: 'CUSHION', stages: ['may'] })).toEqual(['may'])
+    expect(componentRoute(null, { group_code: 'CUSHION', stages: null })).toEqual([])
   })
 })

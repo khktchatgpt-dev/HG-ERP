@@ -1014,6 +1014,12 @@
 .sx.sx .sx-tb .tg.sym:hover {
   background: var(--sx-act-wash);
 }
+/* Dòng tóm tắt nhóm chi tiết rời: chỉ một phần nhóm đi qua công đoạn → "3/9"
+   (bản vẽ 15/11/2026 QR43i6tr…, Q2). */
+.sx.sx .sx-tb .tg.sym.part {
+  font: 600 11px var(--sx-mono);
+  color: var(--sx-act);
+}
 .sx.sx .sx-tb .tg.sym.o:hover::after {
   content: '+';
   color: var(--sx-act);

@@ -7,6 +7,7 @@ import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
 import { chuanHoaO } from '@/lib/so-o-luoi'
 import { khoaCum } from '@/lib/khoa-cum'
 import { nhanTheoDot, nhomGomTheoMa } from '@/lib/gom-dot-ma'
+import { khoaChiTiet } from '@/lib/lo-trinh-nhom'
 import {
   EDIT_COLS,
   cellId,
@@ -166,6 +167,58 @@ export function useDinhHinh(p: DinhHinhProps) {
       }),
     )
     setDirty(true)
+  }
+  /**
+   * Đổi lộ trình NHIỀU dòng một lượt — bấm ô trên dòng tóm tắt một nhóm chi tiết
+   * rời (bản vẽ 15/11/2026 QR43i6tr…, Q2). `null` / rỗng = về mặc định nhóm.
+   */
+  const setStagesMany = (m: ReadonlyMap<string, string[] | null>) => {
+    if (!m.size) return
+    setRows((rs) =>
+      rs.map((r) => {
+        if (!m.has(r.key)) return r
+        const st = m.get(r.key)
+        if (!st || st.length === 0) return { ...r, stages: null }
+        return { ...r, stages: st, first_stage: st[0], final_stage: st[st.length - 1] }
+      }),
+    )
+    setDirty(true)
+  }
+  /**
+   * Chi tiết CÙNG TÊN + NHÓM ở các đợt khác cùng mã hàng (Q4): GIGA BN0231HG-AL có
+   * 5 đợt, mỗi đợt một SP trên màn Lộ trình — không có cặp này thì bật May 5 lần.
+   * Trả [nguồn, đích] + số đợt nhận.
+   */
+  const capDotKhac = (keys: readonly string[]) => {
+    const src = rows.filter((r) => keys.includes(r.key))
+    const lineId = src[0]?.production_order_line_id
+    const ma = p.orderLines.find((l) => l.id === lineId)?.product_code
+    const khac = new Set(
+      p.orderLines.filter((l) => l.id !== lineId && l.product_code === ma).map((l) => l.id),
+    )
+    const theoKhoa = new Map(src.map((r) => [khoaChiTiet(r.name, r.group_code), r]))
+    const cap: [Draft, Draft][] = []
+    for (const r of rows) {
+      if (r.kind !== 'part' || !khac.has(r.production_order_line_id)) continue
+      const s = theoKhoa.get(khoaChiTiet(r.name, r.group_code))
+      if (s) cap.push([s, r])
+    }
+    return { dot: new Set(cap.map(([, t]) => t.production_order_line_id)).size, cap }
+  }
+  const apChoDotCungMa = (keys: readonly string[]) => {
+    const { dot, cap } = capDotKhac(keys)
+    if (!cap.length) return 0
+    const nguon = new Map(cap.map(([s, t]) => [t.key, s]))
+    setRows((rs) =>
+      rs.map((r) => {
+        const s = nguon.get(r.key)
+        return s
+          ? { ...r, stages: s.stages, first_stage: s.first_stage, final_stage: s.final_stage }
+          : r
+      }),
+    )
+    setDirty(true)
+    return dot
   }
   // Cụm cùng tên ở các SP KHÁC của lệnh (bản vẽ 4, 04/11/2026): khai một lần,
   // áp cho cả nhóm — lệnh 5 SP nhôm cùng "Cụm khung" không phải đánh 5 lần.
@@ -536,6 +589,9 @@ export function useDinhHinh(p: DinhHinhProps) {
     hoanTac,
     lineThem,
     setStages,
+    setStagesMany,
+    capDotKhac,
+    apChoDotCungMa,
     anhEmCum,
     apChoCumCungTen,
     errCells,

@@ -36,7 +36,9 @@ export function LuoiChiTiet({ d }: { d: DinhHinhCtx }) {
   const labelOf = (c: string) =>
     shortStageLabel(p.stageCfg.find((s) => s.code === c)?.label ?? c)
   const routeText = (r: Draft) => {
-    if (isPurchasedGroup(r.group_code || null)) return null
+    // Ngoài khung KHAI riêng (gỗ đi Gỗ, nệm đi May — 15/11/2026) thì có lộ trình thật.
+    if (isPurchasedGroup(r.group_code || null) && !(r.stages && r.stages.length > 0))
+      return null
     const st = componentRoute(undefined, {
       group_code: r.group_code || null,
       stages: r.stages,

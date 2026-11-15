@@ -10,7 +10,12 @@ import {
   SxKhung,
   ThanhTT,
 } from '@/app/(workspace)/production/_erp/khung'
-import { componentRoute, isPurchasedGroup } from '@/lib/stage-route'
+import {
+  componentRoute,
+  isNgoaiKhung,
+  isPurchasedGroup,
+  routeForGroup,
+} from '@/lib/stage-route'
 import { shortStageLabel } from '@/lib/stage-config'
 import { isUnshaped, needsRoute, type ShapingRow } from '@/lib/shaping-status'
 import type { DinhHinhProps, OrderLine } from '../lsx/[id]/dinh-hinh/dinh-hinh.shared'
@@ -141,15 +146,18 @@ function MotLenh({
   const cum = rs.filter((r) => r.kind === 'assembly')
   const cumChua = cum.filter((r) => r.stages == null).length
   const trongCum = rs.filter((r) => r.kind === 'part' && r.cluster.trim()).length
-  const mua = rs.filter((r) => isPurchasedGroup(r.group_code || null)).length
-  const roi = rs.length - cum.length - trongCum - mua
+  // Ngoài khung (gỗ, nệm…) tách khỏi hàng mua (bản vẽ 15/11 QR43i6tr…, Q1): TB0182HG-AL
+  // từng ghi "33 ngũ kim" trong khi 9 dòng là chi tiết gỗ.
+  const ngoai = rs.filter(
+    (r) => r.kind === 'part' && !r.cluster.trim() && isNgoaiKhung(r.group_code || null),
+  ).length
+  const mua = rs.filter((r) => isPurchasedGroup(r.group_code || null)).length - ngoai
+  const roi = rs.length - cum.length - trongCum - mua - ngoai
   const tt = sp ? trangThai(sp) : null
   const order = new Map(p.stageCfg.map((s, i) => [s.code, i]))
   const hieuLuc = [
     ...new Set(
-      rs
-        .filter((r) => !isPurchasedGroup(r.group_code || null))
-        .flatMap((r) =>
+      rs.flatMap((r) =>
           componentRoute(undefined, {
             group_code: r.group_code || null,
             stages: r.stages,
@@ -172,7 +180,19 @@ function MotLenh({
   const cumDoi = d.rows.filter(
     (r) => r.kind === 'assembly' && !same(r.stages, gocStages.get(r.key) ?? null),
   )
-  const spDoi = new Set(cumDoi.map((r) => r.production_order_line_id)).size
+  // Chi tiết rời đổi lộ trình (khung rời + ngoài khung, 15/11/2026): so lộ trình
+  // HIỆU LỰC — bỏ tick rồi tick lại không tính là đổi.
+  const hieuLucCua = (r: (typeof d.rows)[number], st: string[] | null) =>
+    st && st.length ? st : routeForGroup(r.group_code || null)
+  const ctDoi = d.rows.filter((r) => {
+    if (r.kind !== 'part') return false
+    const a = hieuLucCua(r, r.stages)
+    const b = hieuLucCua(r, gocStages.get(r.key) ?? null)
+    return a.length !== b.length || a.some((x) => !b.includes(x))
+  })
+  const spDoi = new Set(
+    [...cumDoi, ...ctDoi].map((r) => r.production_order_line_id),
+  ).size
   const luuWhy = d.luuWhy
 
   return (
@@ -358,7 +378,16 @@ function MotLenh({
               <span className="d">Chi tiết</span>
               <span className="v">{rs.length}</span>
               <span className="s">
-                {rs.length ? `${trongCum} trong cụm · ${roi} rời · ${mua} ngũ kim` : '—'}
+                {rs.length
+                  ? [
+                      trongCum > 0 && `${trongCum} trong cụm`,
+                      roi > 0 && `${roi} rời`,
+                      ngoai > 0 && `${ngoai} ngoài khung`,
+                      mua > 0 && `${mua} hàng mua`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : '—'}
               </span>
             </div>
             <div>
@@ -438,10 +467,24 @@ function MotLenh({
         {editable && d.rows.length > 0 && (
           <div className="sx-cb">
             <span className="sum">
-              {cumDoi.length > 0 ? (
+              {cumDoi.length + ctDoi.length > 0 ? (
                 <>
-                  Sắp lưu <b>{cumDoi.length}</b> cụm đổi ở <b>{spDoi}</b> SP
-                  {cumDoi.length <= 3 && (
+                  Sắp lưu{' '}
+                  {cumDoi.length > 0 && (
+                    <>
+                      <b>{cumDoi.length}</b> cụm{ctDoi.length > 0 && ' + '}
+                    </>
+                  )}
+                  {ctDoi.length > 0 && (
+                    <>
+                      <b>{ctDoi.length}</b> chi tiết rời
+                    </>
+                  )}{' '}
+                  đổi ở <b>{spDoi}</b> SP
+                  {ctDoi.length > 0 && (
+                    <span className="mut"> · chi tiết rời chỉ áp cho lệnh này</span>
+                  )}
+                  {cumDoi.length > 0 && cumDoi.length <= 3 && (
                     <span className="mut">
                       {' '}
                       ({cumDoi.map((r) => r.cluster || r.name).join(', ')})
@@ -451,7 +494,7 @@ function MotLenh({
               ) : d.dirty ? (
                 'Có thay đổi chưa lưu'
               ) : cum.length === 0 && rs.length > 0 ? (
-                'BOM phẳng — không có cụm để khai, cụm mặc nhiên lo'
+                'BOM phẳng — cụm mặc nhiên lo; bấm ô trên dòng nhóm để thêm công đoạn cho cả nhóm'
               ) : (
                 'Chưa đổi gì — cụm theo nhóm vật tư vẫn ghi sổ được; chỉ khai khi khác mặc định'
               )}

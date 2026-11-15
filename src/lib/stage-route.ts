@@ -86,6 +86,27 @@ export function isPurchasedGroup(groupCode: string | null | undefined): boolean 
 }
 
 /**
+ * HÀNG MUA THẬT — vít, thùng, tem: không tổ nào gia công, không bao giờ qua công
+ * đoạn. Khác với nhóm NGOÀI KHUNG dưới đây (bản vẽ 15/11/2026
+ * https://claude.ai/artifact/QR43i6trT8zJBgnrhyRst1, Q1).
+ */
+const HANG_MUA = new Set(['NGU_KIM', 'PACKAGING', 'LABEL'])
+
+export function isHangMua(groupCode: string | null | undefined): boolean {
+  return !!groupCode && HANG_MUA.has(groupCode.trim().toUpperCase())
+}
+
+/**
+ * NGOÀI KHUNG — gỗ, tấm, polywood, nệm, vải, mây: xưởng CÓ THỂ làm (Tổ May có
+ * thống kê riêng) nhưng mặc định không vào sổ ("chỉ khung vào sổ", 13/11/2026).
+ * Màn Lộ trình công đoạn cho bật công đoạn theo LỆNH; trước 15/11 chúng bị gộp
+ * vào dòng "Ngũ kim · hàng mua" không có ô tick nào.
+ */
+export function isNgoaiKhung(groupCode: string | null | undefined): boolean {
+  return isPurchasedGroup(groupCode) && !isHangMua(groupCode)
+}
+
+/**
  * Cắt lộ trình về khoảng [first_stage..final_stage] của component (0088) —
  * CÙNG quy ước với summarizeComponent: mốc null/không thuộc lộ trình thì lấy
  * đầu/cuối lộ trình; khoảng ngược (first sau final) → trả nguyên lộ trình.
