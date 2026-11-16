@@ -968,6 +968,56 @@
   background: var(--kh-raised);
   color: var(--kh-ink3);
 }
+
+/* Ô ngày + nút lịch (16/11/2026). Nút nằm TRONG ô ở mép phải, nền trong suốt để
+   nền đỏ nhạt của ô thiếu / xám của ô khoá vẫn lộ ra. Input type=date ẩn chỉ là
+   chỗ neo bộ chọn của trình duyệt — 1px, không được display:none. */
+.kh.kh .kh-ngay {
+  position: relative;
+  display: block;
+}
+.kh.kh .kh-ngay .kh-o {
+  padding-right: 26px;
+}
+.kh.kh .kh-ngay .an {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.kh.kh .kh-ngay .nut {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--kh-hair);
+  background: transparent;
+  color: var(--kh-ink2);
+  cursor: pointer;
+}
+.kh.kh .kh-ngay .nut:hover {
+  color: var(--kh-act);
+  background: var(--kh-act-wash);
+}
+.kh.kh .kh-ngay .nut:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: -2px;
+}
+.kh.kh .kh-ngay .nut:disabled {
+  color: var(--kh-ink3);
+  background: transparent;
+  cursor: default;
+}
 .kh.kh .kh-o.need {
   border-color: var(--kh-stop);
   background: var(--kh-stop-wash);

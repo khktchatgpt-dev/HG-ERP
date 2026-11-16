@@ -174,8 +174,12 @@
   align-items: center;
   gap: 5px;
 }
+.kh.kh .nx-ky .kh-ngay {
+  display: inline-block;
+}
+/* 96px chữ + 26px nút lịch (16/11/2026). */
 .kh.kh .nx-ky .kh-o {
-  width: 96px;
+  width: 122px;
 }
 
 /* Đang tính lại kỳ (đổi kỳ ~1–1,5 s): mờ lưới cũ để không ai đọc nhầm số kỳ trước. */

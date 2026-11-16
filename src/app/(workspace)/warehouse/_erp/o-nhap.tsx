@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as PhimReact,
   type ReactNode,
 } from 'react'
+import { CalendarDays } from 'lucide-react'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 
 /**
@@ -151,32 +152,73 @@ export function ONgay({
 }) {
   const [text, setText] = useState(() => isoToVn(value))
   const [seen, setSeen] = useState(value)
+  const lich = useRef<HTMLInputElement>(null)
   if (seen !== value) {
     setSeen(value)
     if (vnToIso(text) !== (value || null)) setText(isoToVn(value))
   }
+  /* Nút lịch (16/11/2026, chủ dự án: "phần ngày tháng vẫn nhập tay"): mở bộ
+     chọn của trình duyệt qua `showPicker` trên một input type=date trong suốt —
+     chữ trong ô vẫn dd/mm/yyyy, không theo ngôn ngữ trình duyệt. Input ẩn KHÔNG
+     được `display:none`: showPicker từ chối phần tử không được vẽ. */
+  const moLich = () => {
+    const o = lich.current
+    if (!o) return
+    try {
+      o.showPicker()
+    } catch {
+      o.focus()
+    }
+  }
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      maxLength={10}
-      placeholder="dd/mm/yyyy"
-      className={['kh-o num', tone].filter(Boolean).join(' ')}
-      aria-label={label}
-      disabled={disabled}
-      value={text}
-      onChange={(e) => {
-        const next = maskVnDate(e.target.value)
-        setText(next)
-        const iso = vnToIso(next)
-        if (iso) onChange(iso)
-        else if (next === '') onChange('')
-      }}
-      onBlur={() => {
-        if (!vnToIso(text) && text !== '') setText(isoToVn(value))
-      }}
-    />
+    <span className="kh-ngay">
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={10}
+        placeholder="dd/mm/yyyy"
+        className={['kh-o num', tone].filter(Boolean).join(' ')}
+        aria-label={label}
+        disabled={disabled}
+        value={text}
+        onChange={(e) => {
+          const next = maskVnDate(e.target.value)
+          setText(next)
+          const iso = vnToIso(next)
+          if (iso) onChange(iso)
+          else if (next === '') onChange('')
+        }}
+        onBlur={() => {
+          if (!vnToIso(text) && text !== '') setText(isoToVn(value))
+        }}
+      />
+      <input
+        ref={lich}
+        type="date"
+        className="an"
+        tabIndex={-1}
+        aria-hidden
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          const iso = e.target.value
+          if (!iso) return
+          setText(isoToVn(iso))
+          onChange(iso)
+        }}
+      />
+      <button
+        type="button"
+        className="nut"
+        aria-label={`Chọn ${label.toLowerCase()} trên lịch`}
+        title="Chọn trên lịch"
+        disabled={disabled}
+        onClick={moLich}
+      >
+        <CalendarDays size={14} strokeWidth={1.8} aria-hidden />
+      </button>
+    </span>
   )
 }
 
