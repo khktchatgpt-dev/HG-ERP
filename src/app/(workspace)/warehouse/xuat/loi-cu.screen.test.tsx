@@ -43,7 +43,7 @@ describe('Xuất hàng · lỗi máy chủ lần trước không che câu chặn
     )
     render(
       <XuatScreen
-        lsx={[{ id: 'l-mx9', code: '09/26-27 - MX', customer_name: 'MERXX', order_codes: [], status: 'approved', ship_date: null }]} // prettier-ignore
+        lsx={[{ id: 'l-mx9', code: '09/26-27 - MX', customer_name: 'MERXX', status: 'approved', ship_date: null }]} // prettier-ignore
         to={['Tổ Hàn']}
         phong={['Kho']}
         tonSan={TON}

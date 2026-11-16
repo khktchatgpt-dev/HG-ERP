@@ -74,7 +74,6 @@ export default async function WarehouseIssuePage() {
           id: l.id,
           code: l.code,
           customer_name: l.customer_name,
-          order_codes: l.order_codes,
           status: l.status,
           ship_date: l.ship_date ?? null,
         }))}

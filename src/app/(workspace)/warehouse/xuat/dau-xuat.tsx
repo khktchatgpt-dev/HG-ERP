@@ -15,7 +15,6 @@ export type LsxOpt = {
   id: string
   code: string
   customer_name: string
-  order_codes: string[]
   status: string
   /** Hạn xuất hàng — nhắc ghi bù khi lệnh quá hạn mà còn hàng trên máy (B4). */
   ship_date: string | null
@@ -50,7 +49,8 @@ export function DauXuat({
   thieu: (o: 'lenh' | 'ly_do' | 'to') => boolean
 }) {
   const lsxChon = lsx.find((l) => l.id === head.lsx_id) ?? null
-  const khopLenh = (l: LsxOpt, q: string) => searchMatcher(q)([l.code, l.customer_name, ...l.order_codes]) // prettier-ignore
+  // Kho tìm lệnh theo số lệnh / tên khách — mã đơn hàng khách không bày, không tìm (16/11/2026).
+  const khopLenh = (l: LsxOpt, q: string) => searchMatcher(q)([l.code, l.customer_name])
   const k = (need: boolean) => (need ? 'k need' : 'k')
 
   return (
@@ -102,10 +102,7 @@ export function DauXuat({
                 className="kh-mut"
                 style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}
               >
-                {lsxChon.customer_name}
-                {lsxChon.order_codes.length > 0 &&
-                  ` · ${lsxChon.order_codes.join(', ')}`}{' '}
-                · {nhanTrangThaiLenh(lsxChon.status)}
+                {lsxChon.customer_name} · {nhanTrangThaiLenh(lsxChon.status)}
               </span>
             )}
           </span>
@@ -123,7 +120,7 @@ export function DauXuat({
                 <b className="kh-ma">{l.code}</b>
                 <span>{l.customer_name}</span>
                 <span className="kh-mut" style={{ marginLeft: 'auto' }}>
-                  {l.order_codes.join(', ')} · {nhanTrangThaiLenh(l.status)}
+                  {nhanTrangThaiLenh(l.status)}
                 </span>
               </span>
             )}
