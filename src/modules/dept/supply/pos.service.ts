@@ -842,12 +842,22 @@ export const posService = {
           : 'Chỉ đơn nháp mới sửa được',
       )
     }
-    // LSX chính của đơn không đổi khi sửa (patch không đụng production_order_id)
-    // — LSX phụ thì đổi được, kiểm tra theo LSX chính ĐANG có của đơn.
-    const extraLsxIds = await checkedExtraLsxIds(
-      before.production_order_id,
-      input.extra_lsx_ids,
-    )
+    // Nháp đổi được "cho việc" (16/11/2026): lệnh SX ↔ hạng mục, hoặc sang lệnh khác.
+    // Client luôn gửi production_order_id (null = ngoài lệnh); form cũ không gửi
+    // (undefined) thì giữ nguyên lệnh đang có.
+    const lsxId =
+      input.production_order_id === undefined
+        ? before.production_order_id
+        : input.production_order_id
+    if (lsxId && lsxId !== before.production_order_id) {
+      const lsx = await productionRepo.findById(lsxId)
+      if (!lsx) throw NotFound('LSX không tồn tại')
+      if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+        throw BadRequest('LSX chưa được Giám đốc duyệt — chưa đặt vật tư được')
+      }
+    }
+    // LSX phụ kiểm tra theo LSX chính MỚI của đơn.
+    const extraLsxIds = await checkedExtraLsxIds(lsxId, input.extra_lsx_ids)
     // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
     // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
     const template = input.template ?? before.template ?? 'simple'
@@ -875,11 +885,8 @@ export const posService = {
       terms: input.terms ?? null,
       ...withTemplateDefaults(input, template),
       note: input.note ?? null,
-      ...(await hangMucCua(
-        before.production_order_id,
-        input.project_id,
-        before.project_id,
-      )),
+      production_order_id: lsxId,
+      ...(await hangMucCua(lsxId, input.project_id, before.project_id)),
       // Đổi NCC từ sàn sang NCC thường lúc sửa nháp → tên shop/mã vận đơn về null.
       // Client không GỬI ô nào (form cũ chưa có ô) thì giữ giá trị đang có.
       ...truongSan(!!supplier?.is_marketplace, {
@@ -891,7 +898,7 @@ export const posService = {
         before.invoice_waived_reason,
       ),
     })
-    assertSplits(input.lines, [before.production_order_id, ...extraLsxIds])
+    assertSplits(input.lines, [lsxId, ...extraLsxIds])
     await posRepo.replaceLines(id, withDerived(template, input.lines))
     await posRepo.replaceExtraLsx(id, extraLsxIds)
     /*

@@ -38,8 +38,8 @@ const tienHm = (h: ProjectOption) =>
  * hạng mục …" mang luôn chữ đang gõ làm tên. Chọn hạng mục thì cạnh ô bày "đã
  * đặt / dự toán".
  *
- * Chỉ ĐƠN MỚI đổi được giữa lệnh và hạng mục: sửa nháp thì server giữ nguyên
- * lệnh chính (pos.service `update`); nháp ngoài lệnh vẫn đổi hạng mục được.
+ * Nháp đang sửa cũng đổi được giữa lệnh và hạng mục (16/11/2026): server ghi lại
+ * `production_order_id` ở pos.service `update`.
  */
 export function OChoViec({
   header,

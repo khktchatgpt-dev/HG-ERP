@@ -188,7 +188,7 @@ export function DauDonSoan({ d }: { d: DonCtx }) {
           lsxOptions={d.lsxOptions}
           hangMuc={d.hangMuc}
           onHangMucMoi={d.themHangMuc}
-          doiDuoc={!p.po}
+          doiDuoc
           toi={p.me.name}
         />
         {gopHien ? (
