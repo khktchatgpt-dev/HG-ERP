@@ -1,4 +1,5 @@
 import { componentsRepo } from './components.repo'
+import { cumChuaKhai, khoaSpCum } from '@/lib/cum-khai'
 import { codesForStage, defectCodesRepo, type DefectCode } from './defect-codes.repo'
 import { fieldsForStage, stageFieldsRepo, type StageField } from './stage-fields.repo'
 import { entriesRepo } from './entries.repo'
@@ -743,11 +744,8 @@ export async function loadEntrySheet(
     ]),
   ])
   const productImgs = new Map(imgRows.map((p) => [p.id, p.image_file_id]))
-  const cumDaKhai = new Set(
-    hoSoCum
-      .filter((c) => c.qty_per_product != null)
-      .map((c) => `${c.product_id}|${khoaCum(c.name)}`),
-  )
+  // Cụm chỉ có trên lệnh lấy số trên lệnh (16/11/2026, lib/cum-khai).
+  const chuaKhai = cumChuaKhai(hoSoCum)
   const imageOf = (line: (typeof lines)[number]): string | null => {
     const fid =
       line.image_file_id ?? (line.product_id ? productImgs.get(line.product_id) : null)
@@ -817,7 +815,7 @@ export async function loadEntrySheet(
     const lineComps = components.filter((c) => c.production_order_line_id === line.id)
     const plan = planByLine.get(line.id)!
     const daKhai = (name: string) =>
-      !!line.product_id && cumDaKhai.has(`${line.product_id}|${khoaCum(name)}`)
+      !!line.product_id && !chuaKhai.has(khoaSpCum(line.product_id, name))
     const out: EntrySheetLine[] = lineComps
       .filter((c) => routeOf.get(c.id)?.includes(stage))
       .map((c) => {
