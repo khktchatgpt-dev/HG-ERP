@@ -471,6 +471,18 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           },
         ],
       },
+      /*
+       * 16/11/2026 (chủ dự án: "nên làm phần riêng, không nằm trong sổ sách"):
+       * danh mục là DỮ LIỆU GỐC Kho giữ (ĐVT · kệ · ngưỡng, thêm mã mới), không phải
+       * sổ ghi chép — nhóm riêng, để mở (không gập như Sổ sách).
+       */
+      {
+        heading: 'Danh mục',
+        items: [
+          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — Kho hỏi ĐVT · kệ · ngưỡng.
+          { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
+        ],
+      },
       {
         heading: 'Sổ sách',
         gap: true,
@@ -486,8 +498,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             label: 'Kiểm kê định kỳ',
             icon: 'clipboard-check',
           },
-          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — Kho hỏi ĐVT · kệ · ngưỡng.
-          { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
       /*
@@ -820,7 +830,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     // đang đứng (`khuChoTrangChung`), nên `route`/`altRoutes` ở đây chỉ nhận
     // các trang RIÊNG của ghi sổ — `khuTheoDuongDan` chọn tiền tố DÀI nhất.
     route: '/thongke/ghi',
-    altRoutes: ['/thongke/giao-nhan', '/thongke/ngay', '/thongke/da-ghi', '/thongke/so-cong-doan'],
+    altRoutes: [
+      '/thongke/giao-nhan',
+      '/thongke/ngay',
+      '/thongke/da-ghi',
+      '/thongke/so-cong-doan',
+    ],
     accent: 'violet',
     logoText: 'TK',
     ready: true,

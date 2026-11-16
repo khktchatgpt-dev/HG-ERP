@@ -512,6 +512,16 @@ export const stockService = {
     return { ke, bienDong }
   },
 
+  /**
+   * TỒN CỦA MỘT TRANG MÃ cho cột "Tồn" của Danh mục vật tư (16/11/2026). Cùng view
+   * `warehouse_stock` với màn Tồn kho: `qty_ok` là đúng số cột "Dùng được" bên đó
+   * (bấm số là sang đó), `on_hand` là số view so với ngưỡng (`is_low`). Đọc thuần.
+   */
+  async tonCuaMa(user: User, materialIds: string[]) {
+    if (!(await canViewWarehouse(user))) throw Forbidden()
+    return stockRepo.byIds(materialIds)
+  },
+
   // ── Phiếu kho nhiều dòng (0017) ──
 
   /**

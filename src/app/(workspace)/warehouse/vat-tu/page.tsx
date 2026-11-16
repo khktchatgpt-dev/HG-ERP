@@ -2,7 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
-import { binsService } from '@/modules/dept/warehouse/stock.service'
+import { binsService, stockService } from '@/modules/dept/warehouse/stock.service'
 import { VatTuKhoScreen } from './VatTuKhoScreen'
 import { RO_VT, type RoVatTu } from './ro-vat-tu'
 
@@ -69,8 +69,15 @@ export default async function VatTuKhoPage({
     binsService.list(user).catch(() => []),
   ])
 
-  // Ngày · người · lý do ngừng — chỉ cần khi đang xem rổ Ngừng dùng.
-  const ngungBy = ro === 'off' ? await materialsService.lastRetire(user, res.rows.map((m) => m.id)) : null // prettier-ignore
+  const ids = res.rows.map((m) => m.id)
+  const [ngungBy, tonRows] = await Promise.all([
+    // Ngày · người · lý do ngừng — chỉ cần khi đang xem rổ Ngừng dùng.
+    ro === 'off' ? materialsService.lastRetire(user, ids) : null,
+    // Tồn của trang này (≤ 50 mã) — cùng view với màn Tồn kho. Hỏng thì cột để
+    // trống, danh mục vẫn sửa được.
+    stockService.tonCuaMa(user, ids).catch(() => null),
+  ])
+  const ton = tonRows ? new Map(tonRows.map((t) => [t.material_id, t])) : null
 
   return (
     <VatTuKhoScreen
@@ -85,6 +92,8 @@ export default async function VatTuKhoPage({
         min_stock: m.min_stock,
         is_active: m.is_active,
         ngung: ngungBy?.get(m.id) ?? null,
+        // View có đủ mọi mã (chưa có dòng sổ = 0); thiếu nghĩa là đọc hỏng → null.
+        ton: ton ? { ok: ton.get(m.id)?.qty_ok ?? 0, on_hand: ton.get(m.id)?.on_hand ?? 0 } : null, // prettier-ignore
       }))}
       counts={{
         no_min: counts.noMinStock,

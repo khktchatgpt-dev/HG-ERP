@@ -35,7 +35,16 @@ export type VatTuRow = {
   is_active: boolean
   /** Lần ngừng dùng gần nhất — chỉ nạp ở rổ "Ngừng dùng". */
   ngung?: { at: string; by: string | null; reason: string | null } | null
+  /**
+   * Tồn (view `warehouse_stock`, 16/11/2026): `ok` = cột "Dùng được" của Tồn kho,
+   * `on_hand` = cả kho kể chờ kiểm / khoá. null = đọc tồn hỏng → cột để trống.
+   */
+  ton?: { ok: number; on_hand: number } | null
 }
+
+/** Dưới ngưỡng — đúng luật cột `is_low` của view (0160): min > 0 và on_hand < min. */
+const duoiNguong = (r: VatTuRow) =>
+  !!r.ton && r.min_stock > 0 && r.ton.on_hand < r.min_stock
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 /** Thứ tự tab theo VIỆC: chưa kệ → chưa ngưỡng → tất cả (rổ "Chờ Kho rà" bỏ 14/10). */
@@ -414,7 +423,7 @@ export function VatTuKhoScreen({
               {!hep && <col style={{ width: 210 }} />}
               <col style={{ width: 108 }} />
               <col style={{ width: 134 }} />
-              {!hep && <col style={{ width: 64 }} />}
+              {!hep && <col style={{ width: 92 }} />}
             </colgroup>
             <thead>
               <tr>
@@ -425,7 +434,14 @@ export function VatTuKhoScreen({
                 {!hep && <th>Nhóm</th>}
                 <th>Kệ gợi ý</th>
                 <th className="r">Ngưỡng tối thiểu</th>
-                {!hep && <th>Tồn</th>}
+                {!hep && (
+                  <th
+                    className="r"
+                    title="Dùng được — không gồm chờ kiểm, khoá (như Tồn kho)"
+                  >
+                    Tồn
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -557,13 +573,33 @@ export function VatTuKhoScreen({
                       )}
                     </td>
                     {!hep && (
-                      <td>
+                      <td className="r kh-num">
                         <Link
                           href={`/warehouse/ton?ro=all&q=${encodeURIComponent(r.code)}`}
-                          className="kh-mut"
-                          style={{ fontSize: 11.5 }}
+                          className={
+                            !r.ton
+                              ? 'kh-mut'
+                              : duoiNguong(r)
+                                ? 'kh-stop'
+                                : r.ton.ok > 0
+                                  ? undefined
+                                  : 'kh-mut'
+                          }
+                          title={
+                            !r.ton
+                              ? 'Chưa đọc được tồn — mở Tồn kho'
+                              : [
+                                  `Dùng được ${fmt(r.ton.ok)} ${r.unit}`,
+                                  r.ton.on_hand !== r.ton.ok &&
+                                    `cả kho ${fmt(r.ton.on_hand)} (kể chờ kiểm, khoá)`,
+                                  duoiNguong(r) && `dưới ngưỡng ${fmt(r.min_stock)}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')
+                          }
+                          aria-label={`Tồn ${r.code}`}
                         >
-                          tồn ›
+                          {r.ton ? fmt(r.ton.ok) : 'tồn ›'}
                         </Link>
                       </td>
                     )}

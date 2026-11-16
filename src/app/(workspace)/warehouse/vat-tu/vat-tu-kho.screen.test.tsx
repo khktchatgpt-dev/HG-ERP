@@ -304,4 +304,36 @@ describe('VatTuKhoScreen (khung Kho lối ERP)', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled())
     expect(api).toHaveBeenCalledWith('/api/dept/warehouse/materials/x/active', { method: 'POST', body: { active: true } }) // prettier-ignore
   })
+
+  it('cột Tồn bày số "Dùng được" (bấm sang Tồn kho); dưới ngưỡng thì đỏ; đọc tồn hỏng thì về link cũ', () => {
+    render(
+      <VatTuKhoScreen
+        rows={[
+          row('a', 'BAO0687', { ton: { ok: 1250, on_hand: 1250 } }),
+          row('b', 'BAO0688', { min_stock: 50, ton: { ok: 20, on_hand: 30 } }),
+          row('c', 'BAO0689', { ton: null }),
+        ]}
+        counts={{ no_min: 3, no_shelf: 3, all: 3, off: 0 }}
+        total={3}
+        trang={1}
+        soTrang={1}
+        ro="all"
+        q=""
+        nhom=""
+        nhomOptions={[]}
+        dvtOptions={['Cái']}
+        canEdit
+      />,
+    )
+    const a = screen.getByRole('link', { name: 'Tồn BAO0687' })
+    expect(a.textContent).toBe('1.250')
+    expect(a.getAttribute('href')).toBe('/warehouse/ton?ro=all&q=BAO0687')
+    const b = screen.getByRole('link', { name: 'Tồn BAO0688' })
+    expect(b.textContent).toBe('20')
+    expect(b.className).toBe('kh-stop')
+    expect(b.getAttribute('title')).toBe(
+      'Dùng được 20 Cái · cả kho 30 (kể chờ kiểm, khoá) · dưới ngưỡng 50',
+    )
+    expect(screen.getByRole('link', { name: 'Tồn BAO0689' }).textContent).toBe('tồn ›')
+  })
 })
