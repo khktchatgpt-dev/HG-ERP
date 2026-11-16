@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { api, apiErrorText } from '@/lib/api'
 import { TABS, type DinhMuc, type Payload, type TabKey } from './bao-cao.shared'
 
@@ -11,7 +11,7 @@ import { TABS, type DinhMuc, type Payload, type TabKey } from './bao-cao.shared'
  * khi mở tab.
  */
 export function useBaoCao(p: Payload, initialTab: TabKey | null) {
-  const router = useRouter()
+  const router = useRouterBao()
   const [tab, setTab] = useState<TabKey>(
     initialTab && TABS.includes(initialTab) ? initialTab : 'to',
   )

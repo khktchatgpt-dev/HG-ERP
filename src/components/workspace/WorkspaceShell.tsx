@@ -3,7 +3,13 @@ import { WorkspaceTopbar } from './WorkspaceTopbar'
 import { CommandPalette } from '@/components/erp/CommandPalette'
 import { NumberWheelGuard } from './NumberWheelGuard'
 import { LopTaiTrang } from './LopTaiTrang'
-import type { WorkspaceConfig } from '@/workspaces/workspaces.config'
+import type { WorkspaceConfig, WorkspaceId } from '@/workspaces/workspaces.config'
+
+/** Khu có lớp chờ chuyển trang (`LopTaiTrang`) — màn trong khu đổi trang bằng mã phải qua `useRouterBao`. */
+const KHU_LOP_CHO: ReadonlySet<WorkspaceId> = new Set<WorkspaceId>([
+  'planning',
+  'thongke',
+])
 
 /**
  * Khung workspace: sidebar + topbar + vùng nội dung.
@@ -83,9 +89,11 @@ export async function WorkspaceShell({
       </div>
       <CommandPalette />
       <NumberWheelGuard />
-      {/* Lớp chờ chuyển trang, chặn bấm tiếp — phòng Cung ứng (11/11/2026), cả ở
-          trang dùng chung hiện bằng sidebar Cung ứng. Phòng khác: chưa bật. */}
-      {workspace.id === 'planning' && <LopTaiTrang />}
+      {/* Lớp chờ chuyển trang, chặn bấm tiếp — phòng Cung ứng (11/11/2026) và khu
+          Thống kê (16/11/2026, chủ dự án: "chuyển đổi hay call api không thấy
+          loading rất dễ gây hiểu nhầm"), cả ở trang dùng chung hiện bằng sidebar
+          hai khu đó. Phòng khác: chưa bật. */}
+      {KHU_LOP_CHO.has(workspace.id) && <LopTaiTrang />}
     </div>
   )
 }

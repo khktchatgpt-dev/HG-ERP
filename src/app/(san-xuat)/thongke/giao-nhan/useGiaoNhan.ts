@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import {
@@ -33,6 +33,11 @@ export function useGiaoNhan(p: Payload) {
   const teamName = (id: string | null) => p.teams.find((t) => t.id === id)?.name ?? '—'
 
   const [busy, setBusy] = useState(false)
+  // Lưu xong còn chờ máy chủ dựng lại danh sách (router.refresh) — giữ nút khoá +
+  // báo "đang cập nhật" tới khi số mới về, không thì phiếu vừa gửi chưa hiện mà
+  // người dùng tưởng chưa gửi, bấm lại (16/11/2026).
+  const [taiLai, startTaiLai] = useTransition()
+  const ban = busy || taiLai
   const [loi, setLoi] = useState<string | null>(null)
   const [thongBao, setThongBao] = useState<string | null>(null)
   const [nhap, setNhap] = useState<Record<string, NhanDraft>>({})
@@ -77,7 +82,7 @@ export function useGiaoNhan(p: Payload) {
     d.lines.some((l) => num(draftOf(l.id, l.qty).received) !== l.qty)
 
   const run = async (label: string, fn: () => Promise<{ doc_no: string }>) => {
-    if (busy) return
+    if (ban) return
     setBusy(true)
     setLoi(null)
     try {
@@ -88,7 +93,7 @@ export function useGiaoNhan(p: Payload) {
       })
       setThongBao(`${label} ${r.doc_no} lúc ${gio}`)
       setHoi(null)
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setLoi(apiErrorText(e, 'Không thực hiện được'))
     } finally {
@@ -215,7 +220,7 @@ export function useGiaoNhan(p: Payload) {
                   : null
 
   const guiPhieu = async () => {
-    if (guiWhy || busy) return
+    if (guiWhy || ban) return
     setBusy(true)
     setLoi(null)
     try {
@@ -245,7 +250,7 @@ export function useGiaoNhan(p: Payload) {
       setNote('')
       setMoForm(false)
       setTab('da_giao')
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setLoi(apiErrorText(e, 'Không gửi được phiếu'))
     } finally {
@@ -266,7 +271,8 @@ export function useGiaoNhan(p: Payload) {
     doiTeam,
     stageLabel,
     teamName,
-    busy,
+    busy: ban,
+    taiLai,
     loi,
     setLoi,
     thongBao,

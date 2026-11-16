@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMemo, useState, useTransition } from 'react'
+import { useRouterBao } from '@/lib/tai-trang'
 import { api, apiErrorText } from '@/lib/api'
 import { shiftIso } from '@/lib/local-date'
 import {
@@ -41,7 +41,7 @@ export type XacNhan = { teamId: string; kind: 'chot' | 'mo_khoa' }
  * gọi chốt / mở khoá (API cũ; mở khoá nay kèm lý do), kết quả bày tại chỗ.
  */
 export function useSoNgay(p: SoNgayInput) {
-  const router = useRouter()
+  const router = useRouterBao()
   const rows = useMemo(
     () => buildRows(p.teams, p.docs, p.locks, p.unlocks, p.myTeamId),
     [p.teams, p.docs, p.locks, p.unlocks, p.myTeamId],
@@ -54,6 +54,10 @@ export function useSoNgay(p: SoNgayInput) {
   const [xacNhan, setXacNhan] = useState<XacNhan | null>(null)
   const [lyDo, setLyDo] = useState('')
   const [busy, setBusy] = useState(false)
+  // Chốt / mở khoá xong còn chờ máy chủ dựng lại bảng (router.refresh) — giữ nút
+  // khoá + báo "đang cập nhật" tới khi trạng thái mới về (16/11/2026).
+  const [taiLai, startTaiLai] = useTransition()
+  const ban = busy || taiLai
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   const counts = useMemo(
@@ -80,7 +84,7 @@ export function useSoNgay(p: SoNgayInput) {
   const go = (d: string) => router.push(`/thongke/ngay?date=${d}`)
 
   async function chot(teamId: string, teamName: string) {
-    if (busy) return
+    if (ban) return
     setBusy(true)
     try {
       await api('/api/dept/production/logbook/lock', {
@@ -92,7 +96,7 @@ export function useSoNgay(p: SoNgayInput) {
         text: `Đã chốt sổ ${teamName} ngày ${p.date.split('-').reverse().join('/')}`,
       })
       setXacNhan(null)
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setMsg({ ok: false, text: `Không chốt được sổ ${teamName}: ${apiErrorText(e)}` })
     } finally {
@@ -101,14 +105,14 @@ export function useSoNgay(p: SoNgayInput) {
   }
 
   async function moKhoa(teamId: string, teamName: string) {
-    if (busy || lyDo.trim().length < 5) return
+    if (ban || lyDo.trim().length < 5) return
     setBusy(true)
     try {
       const q = new URLSearchParams({ date: p.date, team: teamId, reason: lyDo.trim() })
       await api(`/api/dept/production/logbook/lock?${q}`, { method: 'DELETE' })
       setMsg({ ok: true, text: `Đã mở khoá sổ ${teamName} — lý do đã ghi nhật ký` })
       setXacNhan(null)
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setMsg({ ok: false, text: `Không mở khoá được ${teamName}: ${apiErrorText(e)}` })
     } finally {
@@ -131,7 +135,8 @@ export function useSoNgay(p: SoNgayInput) {
     hoi,
     lyDo,
     setLyDo,
-    busy,
+    busy: ban,
+    taiLai,
     msg,
     chot,
     moKhoa,

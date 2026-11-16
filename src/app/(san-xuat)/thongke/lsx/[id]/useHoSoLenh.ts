@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { lsxStatusLabel } from '@/lib/lsx-status'
@@ -52,6 +52,10 @@ export function useHoSoLenh(p: HoSoLenhProps) {
     }
   }
   const [busy, setBusy] = useState(false)
+  // Đóng lệnh / ghi / xoá phiếu xong còn chờ máy chủ dựng lại hồ sơ (router.refresh)
+  // — giữ nút khoá + báo "đang cập nhật" tới khi số mới về (16/11/2026).
+  const [taiLai, startTaiLai] = useTransition()
+  const ban = busy || taiLai
   const [loi, setLoi] = useState<string | null>(null)
   const [thongBao, setThongBao] = useState<string | null>(null)
 
@@ -157,12 +161,12 @@ export function useHoSoLenh(p: HoSoLenhProps) {
   // hoàn thiện đủ chưa (lệnh TEST bấm nhầm là đóng ngay).
   const [xacNhanMo, setXacNhanMo] = useState(false)
   const hoiDong = () => {
-    if (busy || dongWhy) return
+    if (ban || dongWhy) return
     setLoi(null)
     setXacNhanMo(true)
   }
   const dongLenh = async (override: boolean) => {
-    if (busy) return
+    if (ban) return
     if (override && !epLyDo.trim()) {
       setLoi('Ép đóng lệnh phải ghi lý do')
       return
@@ -178,7 +182,7 @@ export function useHoSoLenh(p: HoSoLenhProps) {
       setXacNhanMo(false)
       setEpLyDo('')
       setThongBao(`Đã đóng lệnh ${data.lsx.code} — đơn hàng chuyển sang hoàn thành`)
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setLoi(apiErrorText(e, 'Không đóng được lệnh'))
     } finally {
@@ -189,13 +193,13 @@ export function useHoSoLenh(p: HoSoLenhProps) {
   // ── Phiếu PBS ──────────────────────────────────────────────────────────
   const [xoaHoi, setXoaHoi] = useState<string | null>(null)
   const run = async (label: string, fn: () => Promise<unknown>) => {
-    if (busy) return
+    if (ban) return
     setBusy(true)
     setLoi(null)
     try {
       await fn()
       setThongBao(label)
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setLoi(apiErrorText(e, 'Không thực hiện được'))
     } finally {
@@ -320,7 +324,8 @@ export function useHoSoLenh(p: HoSoLenhProps) {
     setPick,
     congDoanChon,
     chonCongDoan,
-    busy,
+    busy: ban,
+    taiLai,
     loi,
     setLoi,
     thongBao,

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   ApNhom,
   ApNut,
@@ -27,7 +27,7 @@ import { cx, fmt } from '../da-ghi/so-da-ghi.shared'
  * trái. Chỉ để XEM — bấm ô ngày sang Sổ theo ngày để sửa (một chỗ sửa, có chốt sổ).
  */
 export function SoCongDoanScreen({ p }: { p: SoCongDoanPayload }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const [dangTai, startTai] = useTransition()
   const [tim, setTim] = useState('')
   /** Mã hàng đang gập — khoá `lsx|mã`. Mặc định mở hết, như tờ Excel. */

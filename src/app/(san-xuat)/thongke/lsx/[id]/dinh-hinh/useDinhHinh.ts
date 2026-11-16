@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
@@ -51,6 +51,11 @@ export function useDinhHinh(p: DinhHinhProps) {
   // lệnh này là ngoại lệ một lần.
   const [syncProfile, setSyncProfile] = useState(true)
   const [busy, setBusy] = useState(false)
+  // Lưu xong còn chờ máy chủ dựng lại bảng (router.refresh) — giữ nút khoá + báo
+  // "đang cập nhật" tới khi bảng mới về (16/11/2026): lưu lần hai lúc bảng cũ
+  // còn trên màn là ghi đè bằng bản cũ.
+  const [taiLai, startTaiLai] = useTransition()
+  const ban = busy || taiLai
   const [dirty, setDirty] = useState(false)
   const [loi, setLoi] = useState<string | null>(null)
   const [thongBao, setThongBao] = useState<string | null>(null)
@@ -327,7 +332,7 @@ export function useDinhHinh(p: DinhHinhProps) {
 
   // ── Nạp / lưu ───────────────────────────────────────────────────────────
   const suggest = async (source: 'bom' | 'previous') => {
-    if (busy) return
+    if (ban) return
     setBusy(true)
     setLoi(null)
     try {
@@ -356,7 +361,7 @@ export function useDinhHinh(p: DinhHinhProps) {
   }
 
   const save = async () => {
-    if (busy || luuWhy) return
+    if (ban || luuWhy) return
     setBusy(true)
     setLoi(null)
     // Số chi tiết / CỤM của chi tiết trong cụm (dùng khi ghi sổ cụm trừ chi
@@ -458,7 +463,7 @@ export function useDinhHinh(p: DinhHinhProps) {
       )
       setDirty(false)
       setBoVua(null)
-      router.refresh()
+      startTaiLai(() => router.refresh())
     } catch (e) {
       setLoi(apiErrorText(e, 'Không lưu được bảng'))
     } finally {
@@ -576,7 +581,8 @@ export function useDinhHinh(p: DinhHinhProps) {
     syncProfile,
     setSyncProfile,
     chuaDinhMuc,
-    busy,
+    busy: ban,
+    taiLai,
     dirty,
     loi,
     setLoi,

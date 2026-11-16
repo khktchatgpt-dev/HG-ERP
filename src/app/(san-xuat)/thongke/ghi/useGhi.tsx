@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { api, apiErrorText } from '@/lib/api'
 import type { LenhOption, LenhTinhTrang } from '@/lib/ma-chua-ghi'
 import { isSingleCell, parsePasteGrid, pasteFootprint } from '@/lib/entry-paste'
@@ -79,7 +79,7 @@ export type GhiProps = {
  */
 export function useGhi(p: GhiProps) {
   const { sheet } = p
-  const router = useRouter()
+  const router = useRouterBao()
   const [date, setDate] = useState(p.initialDate ?? sheet.today)
   // Tổ mặc định: tổ trên đường dẫn → tổ của người nhập NẾU tổ đó làm công đoạn
   // đang mở (Sơn Nhôm / Sơn Sắt cùng công đoạn — đừng lấy tổ đầu danh sách) →

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { useTransition } from 'react'
 import { ApNhom, ApNut, DauTrang, SxKhung } from '@/app/(workspace)/production/_erp/khung'
 import type { LenhOption, LenhTinhTrang } from '@/lib/ma-chua-ghi'
@@ -29,7 +29,7 @@ export function ChuaGhiScreen({
   /** Người xem sửa được bảng chi tiết (7 tài khoản thống kê có) → lối "Tự khai" (Q1). */
   canKhai?: boolean
 }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const [dangTai, startTai] = useTransition()
   const chuaDm = lenh.n_chua_dm
   const chuaNap = lenh.n_chua_nap

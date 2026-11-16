@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import {
   ApNhom,
   ApNut,
@@ -92,7 +92,7 @@ function MotLenh({
   daXong,
   today,
 }: Omit<LoTrinhGopProps, 'lenh'> & { lenh: DinhHinhProps }) {
-  const router = useRouter()
+  const router = useRouterBao()
   const d = useDinhHinh(lenh)
   const { p, editable } = d
   const row = rows.find((r) => r.lsx.id === p.lsx.id)
@@ -159,13 +159,13 @@ function MotLenh({
   const hieuLuc = [
     ...new Set(
       rs.flatMap((r) =>
-          componentRoute(undefined, {
-            group_code: r.group_code || null,
-            stages: r.stages,
-            first_stage: r.first_stage,
-            final_stage: r.final_stage,
-          }),
-        ),
+        componentRoute(undefined, {
+          group_code: r.group_code || null,
+          stages: r.stages,
+          first_stage: r.first_stage,
+          final_stage: r.final_stage,
+        }),
+      ),
     ),
   ]
     .filter((c) => order.has(c))
@@ -191,9 +191,7 @@ function MotLenh({
     const b = hieuLucCua(r, gocStages.get(r.key) ?? null)
     return a.length !== b.length || a.some((x) => !b.includes(x))
   })
-  const spDoi = new Set(
-    [...cumDoi, ...ctDoi].map((r) => r.production_order_line_id),
-  ).size
+  const spDoi = new Set([...cumDoi, ...ctDoi].map((r) => r.production_order_line_id)).size
   const luuWhy = d.luuWhy
 
   return (
@@ -455,7 +453,10 @@ function MotLenh({
         {d.loi && <div className="sx-err">{d.loi}</div>}
         {d.thongBao && !d.loi && (
           <div className="sx-note ok">
-            {d.thongBao}
+            <span>
+              {d.thongBao}
+              {d.taiLai && <span className="mut"> · đang cập nhật lộ trình…</span>}
+            </span>
             <button type="button" className="lnk mut" onClick={() => d.setThongBao(null)}>
               Đóng
             </button>
@@ -535,7 +536,7 @@ function MotLenh({
                 disabled={!!luuWhy || d.busy}
                 aria-busy={d.busy || undefined}
               >
-                {d.busy ? 'Đang lưu…' : 'Lưu lộ trình'}
+                {d.taiLai ? 'Đang cập nhật…' : d.busy ? 'Đang lưu…' : 'Lưu lộ trình'}
               </button>
             </span>
           </div>

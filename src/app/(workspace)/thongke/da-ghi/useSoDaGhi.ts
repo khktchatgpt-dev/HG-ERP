@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouterBao } from '@/lib/tai-trang'
 import { api, apiErrorText } from '@/lib/api'
 import {
   chuCuaDong,
@@ -41,7 +41,7 @@ export type NhomNgay = { date: string; phieu: NhomPhieu[] }
  * lượt "Lưu thay đổi".
  */
 export function useSoDaGhi(p: SoDaGhiPayload) {
-  const router = useRouter()
+  const router = useRouterBao()
   const [tab, setTab] = useState<TabSdg>('all')
   const [tim, setTim] = useState('')
   const [drafts, setDrafts] = useState<Record<string, SdgDraft>>({})

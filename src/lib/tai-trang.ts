@@ -24,19 +24,23 @@ export function baoDangTai(href: string): void {
   window.dispatchEvent(new CustomEvent<string>(SU_KIEN_TAI_TRANG, { detail: href }))
 }
 
-/** `useRouter()` mà `push` / `replace` báo lớp chờ trước khi đi. */
+/**
+ * `useRouter()` mà `push` / `replace` báo lớp chờ trước khi đi. Chuyển tiếp ĐÚNG
+ * các tham số bên gọi đưa vào (16/11/2026): trước đó luôn gửi thêm `undefined` làm
+ * tham số thứ hai — Next không phân biệt, nhưng test màn kiểm `push('/…')` thì đỏ.
+ */
 export function useRouterBao() {
   const r = useRouter()
   return useMemo(
     () => ({
       ...r,
-      push: (href: string, o?: Parameters<typeof r.push>[1]) => {
-        baoDangTai(href)
-        r.push(href, o)
+      push: (...a: Parameters<typeof r.push>) => {
+        baoDangTai(a[0])
+        r.push(...a)
       },
-      replace: (href: string, o?: Parameters<typeof r.replace>[1]) => {
-        baoDangTai(href)
-        r.replace(href, o)
+      replace: (...a: Parameters<typeof r.replace>) => {
+        baoDangTai(a[0])
+        r.replace(...a)
       },
     }),
     [r],

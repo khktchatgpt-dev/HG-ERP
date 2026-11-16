@@ -113,7 +113,10 @@ export function GiaoNhanScreen({ data }: { data: Payload }) {
         {d.loi && <div className="sx-err">{d.loi}</div>}
         {d.thongBao && !d.loi && (
           <div className="sx-note ok">
-            {d.thongBao}
+            <span>
+              {d.thongBao}
+              {d.taiLai && <span className="mut"> · đang cập nhật danh sách phiếu…</span>}
+            </span>
             <button type="button" className="lnk mut" onClick={() => d.setThongBao(null)}>
               Đóng
             </button>

@@ -51,8 +51,9 @@ export function DinhHinhScreen(props: DinhHinhProps) {
           ctx={
             <>
               {p.lsx.customer_name} · <b>{tatCaMa.length}</b> mã
-              {tatCaMa.length < p.orderLines.length && ` (${p.orderLines.length} dòng SP)`} ·{' '}
-              <b>{d.rowsHien.length}</b> dòng ·{' '}
+              {tatCaMa.length < p.orderLines.length &&
+                ` (${p.orderLines.length} dòng SP)`}{' '}
+              · <b>{d.rowsHien.length}</b> dòng ·{' '}
               {p.lsxClosed ? (
                 <span className="pill m">lệnh đã kết thúc</span>
               ) : p.lockedByEntries ? (
@@ -198,7 +199,10 @@ export function DinhHinhScreen(props: DinhHinhProps) {
         {d.loi && <div className="sx-err">{d.loi}</div>}
         {d.thongBao && !d.loi && (
           <div className="sx-note ok">
-            {d.thongBao}
+            <span>
+              {d.thongBao}
+              {d.taiLai && <span className="mut"> · đang cập nhật bảng…</span>}
+            </span>
             <button type="button" className="lnk mut" onClick={() => d.setThongBao(null)}>
               Đóng
             </button>
@@ -281,7 +285,11 @@ export function DinhHinhScreen(props: DinhHinhProps) {
                 disabled={!!d.luuWhy || d.busy}
                 aria-busy={d.busy || undefined}
               >
-                {d.busy ? 'Đang lưu…' : 'Lưu bảng định hình'}
+                {d.taiLai
+                  ? 'Đang cập nhật…'
+                  : d.busy
+                    ? 'Đang lưu…'
+                    : 'Lưu bảng định hình'}
               </button>
             </span>
           </div>

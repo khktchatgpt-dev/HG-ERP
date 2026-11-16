@@ -157,7 +157,7 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
               onClick={() => d.dongLenh(false)}
               disabled={d.busy}
             >
-              {d.busy ? 'Đang đóng…' : 'Đóng lệnh'}
+              {d.taiLai ? 'Đang cập nhật…' : d.busy ? 'Đang đóng…' : 'Đóng lệnh'}
             </button>
             <button
               type="button"
@@ -210,7 +210,10 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
         {d.loi && <div className="sx-err">{d.loi}</div>}
         {d.thongBao && !d.loi && (
           <div className="sx-note ok">
-            {d.thongBao}
+            <span>
+              {d.thongBao}
+              {d.taiLai && <span className="mut"> · đang cập nhật hồ sơ lệnh…</span>}
+            </span>
             <button type="button" className="lnk mut" onClick={() => d.setThongBao(null)}>
               Đóng
             </button>
@@ -299,7 +302,6 @@ export function HoSoLenhScreen(props: HoSoLenhProps) {
             />
           </div>
         )}
-
       </div>
     </SxKhung>
   )
@@ -322,7 +324,11 @@ function ViecPhaiLam({ d }: { d: ReturnType<typeof useHoSoLenh> }) {
         </b>{' '}
         công đoạn chưa giao tổ &amp; hạn
         {p.canPlan && (
-          <Link className="lnk" href={`/kehoach-sx/${data.lsx.id}`} style={{ marginLeft: 6 }}>
+          <Link
+            className="lnk"
+            href={`/kehoach-sx/${data.lsx.id}`}
+            style={{ marginLeft: 6 }}
+          >
             Giao tổ &amp; hạn
           </Link>
         )}
@@ -354,8 +360,8 @@ function ViecPhaiLam({ d }: { d: ReturnType<typeof useHoSoLenh> }) {
   if (k.unassigned.parts > 0)
     items.push(
       <span key="cum">
-        <b className="num">{fmt(k.unassigned.qty)}</b> chi tiết đi qua công đoạn ghép mà chưa
-        gán cụm — Kỹ thuật gán ở hồ sơ SP
+        <b className="num">{fmt(k.unassigned.qty)}</b> chi tiết đi qua công đoạn ghép mà
+        chưa gán cụm — Kỹ thuật gán ở hồ sơ SP
       </span>,
     )
   if (d.jobsTre > 0)

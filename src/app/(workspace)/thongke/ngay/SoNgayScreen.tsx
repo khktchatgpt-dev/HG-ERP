@@ -177,7 +177,10 @@ function TabNgay({ d }: { d: SoNgayCtx }) {
 
       {d.msg && (
         <div className={cx('sx-note', d.msg.ok ? 'ok' : 'stop')}>
-          <span>{d.msg.text}</span>
+          <span>
+            {d.msg.text}
+            {d.taiLai && <span className="mut"> · đang cập nhật bảng…</span>}
+          </span>
         </div>
       )}
 
