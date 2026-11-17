@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Printer } from 'lucide-react'
 import {
@@ -34,6 +35,8 @@ const ngayDu = (iso: string) =>
  * tiền · giao · trả, mục "Kiểm trước khi trình", ghi chú cho GĐ.
  */
 export function ChiTiet({ d }: { d: ChoXemCtx }) {
+  // Gập khung (17/11/2026): màn thấp thì nhường chỗ cho lưới, chỉ còn dòng tên.
+  const [gap, setGap] = useState(false)
   const x = d.dangXem
   if (!x) return null
   const t = trangThaiXem(x)
@@ -55,6 +58,14 @@ export function ChiTiet({ d }: { d: ChoXemCtx }) {
             ` · sửa ${gioPhut(x.sua_at)}`}
         </span>
         <span className="cx-rt">
+          <button
+            type="button"
+            className="cx-gap"
+            aria-expanded={!gap}
+            onClick={() => setGap(!gap)}
+          >
+            {gap ? '▸ Mở chi tiết' : '▾ Thu gọn'}
+          </button>
           <Link href={x.href} className="hk-btn cx-vien">
             <ExternalLink size={14} aria-hidden />
             Mở đơn đầy đủ
@@ -70,34 +81,36 @@ export function ChiTiet({ d }: { d: ChoXemCtx }) {
           </a>
         </span>
       </div>
-      <div className="cx-ctb">
-        <div className="cx-ctl">
-          <DongHang x={x} />
+      {!gap && (
+        <div className="cx-ctb">
+          <div className="cx-ctl">
+            <DongHang x={x} />
+          </div>
+          <TienGiaoTra x={x} homNay={d.homNay} />
+          <div className="cx-ctc" style={{ width: 236 }}>
+            <h4>Kiểm trước khi trình</h4>
+            <ul className="cx-ck">
+              {kiemTruocTrinh(x, now, d.homNay).map((k, i) => (
+                <li key={i}>
+                  <span
+                    className={
+                      k.kieu === 'ok'
+                        ? 'i cx-ok'
+                        : k.kieu === 'st'
+                          ? 'i hk-late'
+                          : 'i hk-warn'
+                    }
+                  >
+                    {k.kieu === 'ok' ? '✓' : k.kieu === 'st' ? '✗' : '!'}
+                  </span>
+                  <span className={k.kieu === 'st' ? 'hk-b' : undefined}>{k.chu}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <TienGiaoTra x={x} homNay={d.homNay} />
-        <div className="cx-ctc" style={{ width: 236 }}>
-          <h4>Kiểm trước khi trình</h4>
-          <ul className="cx-ck">
-            {kiemTruocTrinh(x, now, d.homNay).map((k, i) => (
-              <li key={i}>
-                <span
-                  className={
-                    k.kieu === 'ok'
-                      ? 'i cx-ok'
-                      : k.kieu === 'st'
-                        ? 'i hk-late'
-                        : 'i hk-warn'
-                  }
-                >
-                  {k.kieu === 'ok' ? '✓' : k.kieu === 'st' ? '✗' : '!'}
-                </span>
-                <span className={k.kieu === 'st' ? 'hk-b' : undefined}>{k.chu}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <ChanChiTiet d={d} x={x} t={t} now={now} />
+      )}
+      {!gap && <ChanChiTiet d={d} x={x} t={t} now={now} />}
     </section>
   )
 }

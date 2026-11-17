@@ -56,7 +56,17 @@ export function ChoXemScreen({ box }: { box: HopXem }) {
       <div className="hk-ph">
         <span className="hk-crumb">Mua hàng ›</span>
         <h1>Chờ tôi xem</h1>
-        <span className="cx-sub">
+        <span
+          className="cx-sub"
+          title={[
+            `${d.soCho} đơn làm được ngay`,
+            dem('thieu') > 0 && `${dem('thieu')} nháp đang soạn`,
+            dem('tra_lai') > 0 && `${dem('tra_lai')} bị trả lại`,
+            d.da.length > 0 && `${d.da.length} đã trình, chờ GĐ`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        >
           <b className="cx-ok">{d.soCho} đơn làm được ngay</b>
           {dem('thieu') > 0 && ` · ${dem('thieu')} nháp đang soạn`}
           {dem('tra_lai') > 0 && ` · ${dem('tra_lai')} bị trả lại`}

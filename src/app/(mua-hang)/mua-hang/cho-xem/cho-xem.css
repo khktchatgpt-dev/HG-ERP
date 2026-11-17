@@ -20,7 +20,25 @@
   color: var(--cx-done);
   font-weight: 600;
 }
+/* Đầu trang MỘT hàng (17/11/2026, anh Hiếu: "che mất thông tin"): câu đếm dài
+   từng đẩy thanh hành động xuống hàng thứ hai, ăn thêm ~45px của lưới. Nay câu
+   đếm co lại "…" (rê chuột đọc đủ), nút đứng yên trên dòng tên. */
+.hk.hk.cx .hk-ph {
+  flex-wrap: nowrap;
+}
+.hk.hk.cx .hk-ph h1,
+.hk.hk.cx .hk-crumb {
+  white-space: nowrap;
+}
+.hk.hk.cx .hk-ap {
+  flex: none;
+}
 .hk.hk .cx-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12.5px;
   color: var(--hk-ink3);
 }
@@ -33,9 +51,12 @@
 /* ── LƯỚI ĐƠN — lấy phần còn lại sau khung chi tiết, tự cuộn (đầu + chân dính).
    Đo 06/11 ở 1280×800: chia "lưới tối đa 55%" ép khung chi tiết còn 200px trong
    khi nội dung cần ~250px — nên khung chi tiết cao theo nội dung, lưới co. ── */
+/* 17/11/2026: ở màn thấp (laptop phóng to chữ) lưới từng chỉ còn MỘT dòng giữa
+   tiêu đề dính và chân tổng — khung chi tiết lấy hết. Nay lưới giữ tối thiểu
+   ~3 dòng hai tầng; khung chi tiết là bên co (thân cuộn trong) và gập được. */
 .hk.hk .cx-luoi {
-  flex: 1 1 auto;
-  min-height: 132px;
+  flex: 1 1 0;
+  min-height: 240px;
   overflow: auto;
 }
 /* ô hai tầng: mỗi tầng tự cắt "…", tầng dưới chữ nhỏ nhạt */
@@ -102,12 +123,17 @@
 /* ── KHUNG CHI TIẾT dưới lưới (Q8) ── */
 .hk.hk .cx-ct {
   /* cao theo nội dung, trần 58% — đơn nhiều dòng hàng thì cuộn TRONG thân khung */
-  flex: 0 0 auto;
-  max-height: 58%;
+  flex: 0 1 auto;
+  max-height: 50%;
+  min-height: 36px;
   display: flex;
   flex-direction: column;
   border-top: 2px solid var(--hk-line);
   overflow: hidden;
+}
+.hk.hk .cx-cth,
+.hk.hk .cx-ghi {
+  flex: none;
 }
 .hk.hk .cx-cth {
   display: flex;
@@ -139,6 +165,20 @@
   display: flex;
   gap: 4px;
   flex: none;
+}
+.hk.hk .cx-gap {
+  border: 0;
+  padding: 0 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--hk-act);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hk.hk .cx-gap:focus-visible {
+  outline: 2px solid var(--hk-act);
+  outline-offset: 1px;
 }
 .hk.hk .cx-ctb {
   flex: 1;
