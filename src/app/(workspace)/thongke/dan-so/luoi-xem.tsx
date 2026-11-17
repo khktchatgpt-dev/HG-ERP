@@ -46,6 +46,8 @@ export function LuoiXem({ d }: { d: DanSoCtx }) {
                 <td className="tt">
                   {!x ? (
                     <span className="mut">…</span>
+                  ) : x.kieu === 'ngoai' ? (
+                    <span className="mut">Lệnh khác — bỏ qua</span>
                   ) : x.kieu === 'moi' && !loi ? (
                     <span className="act">Thêm mới</span>
                   ) : x.kieu === 'gan' ? (

@@ -122,7 +122,7 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
                   <option value="">Theo cột Mã SP của file</option>
                   {dongSP.map((x) => (
                     <option key={x.id} value={x.id}>
-                      {x.ma} {x.ten}
+                      {x.ma} {x.ten}{x.dot ? ` · ${x.dot}` : ''} · SL {fmt(x.qty)}
                     </option>
                   ))}
                 </select>
@@ -285,6 +285,12 @@ function BuocXem({ d }: { d: DanSoCtx }) {
               bù
               {x.tom_tat.moi > 0 && <>, thêm {x.tom_tat.moi} chi tiết vào bảng chi tiết</>}.
             </>
+          )}
+          {x.tom_tat.ngoai > 0 && (
+            <span className="mut">
+              {' '}
+              {x.tom_tat.ngoai} dòng có mã SP không thuộc lệnh này — bỏ qua (số của lệnh khác).
+            </span>
           )}
           {(x.tom_tat.trung > 0 || x.tom_tat.khac > 0 || x.tom_tat.chot > 0) && (
             <span className="mut">

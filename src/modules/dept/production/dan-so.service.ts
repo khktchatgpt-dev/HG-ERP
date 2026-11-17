@@ -38,8 +38,8 @@ export type TtO = 'ghi' | 'trung' | 'khac' | 'chot'
 
 export type DongXem = {
   hang: number
-  /** khop · moi (sẽ thêm vào bảng chi tiết) · gan (gợi ý) · trung (nhiều cụm) · sai (ô chữ / chặn) */
-  kieu: 'khop' | 'moi' | 'gan' | 'trung' | 'sai'
+  /** khop · moi (sẽ thêm vào bảng chi tiết) · gan (gợi ý) · trung (nhiều cụm) · sai (ô chữ / chặn) · ngoai (mã SP không thuộc lệnh này — bỏ qua, không ghi) */
+  kieu: 'khop' | 'moi' | 'gan' | 'trung' | 'sai' | 'ngoai'
   comp_id: string | null
   /** Tên gợi ý khi `kieu = 'gan'`. */
   gan: string | null
@@ -61,6 +61,7 @@ export type XemDanSo = {
     o_ghi: number
     ngay_ghi: number
     moi: number
+    ngoai: number
     trung: number
     khac: number
     chot: number
@@ -81,7 +82,11 @@ export type TuyChonDanSo = {
   can_khai: boolean
   stages: { code: string; label: string }[]
   teams: { id: string; name: string; stage: string | null }[]
-  lenh: { id: string; code: string; dong: { id: string; ma: string; ten: string }[] }[]
+  lenh: {
+    id: string
+    code: string
+    dong: { id: string; ma: string; ten: string; dot: string; qty: number }[]
+  }[]
   mac_dinh: { team: string | null; stage: string | null }
 }
 
@@ -156,7 +161,13 @@ async function tinh(input: DanSoInput, user: User) {
   const today = vnTodayIso()
   const canKhai = await canEditComponents(user)
 
-  const lineByCode = new Map(lines.map((l) => [chuan(l.product_code), l]))
+  // Một mã SP có thể nằm trên NHIỀU dòng (tách đợt giao — mỗi đợt một dòng, mỗi dòng một
+  // bản bảng chi tiết). Số của file là theo mã, nên mã nhiều đợt buộc chọn đợt ở thanh trên.
+  const dongTheoMa = new Map<string, typeof lines>()
+  for (const l of lines) {
+    const k = chuan(l.product_code)
+    dongTheoMa.set(k, [...(dongTheoMa.get(k) ?? []), l])
+  }
   const macDinhLine =
     (input.line_id && lines.find((l) => l.id === input.line_id)) ||
     (lines.length === 1 ? lines[0] : null)
@@ -195,19 +206,46 @@ async function tinh(input: DanSoInput, user: User) {
       qtyByLine.get(c.production_order_line_id) ?? 0,
     ).total_needed
 
-  const tomTat = { o_ghi: 0, ngay_ghi: 0, moi: 0, trung: 0, khac: 0, chot: 0, chan: 0 }
+  const tomTat = { o_ghi: 0, ngay_ghi: 0, moi: 0, ngoai: 0, trung: 0, khac: 0, chot: 0, chan: 0 }
   const ngayGhi = new Set<string>()
   const canhBao: string[] = []
   const moiCuaDong = new Map<string, number>() // khoá thêm mới → số lần (báo trùng trong file)
 
   const dong = input.rows.map((r): DongXem => {
     const vanDe: string[] = []
-    const line = (r.ma_sp ? lineByCode.get(chuan(r.ma_sp)) : null) ?? macDinhLine ?? null
-    if (r.ma_sp && !lineByCode.has(chuan(r.ma_sp)) && !macDinhLine) {
-      vanDe.push(`Mã SP "${r.ma_sp}" không có trên lệnh — chọn mã hàng ở thanh trên`)
+    let line: (typeof lines)[number] | null = null
+    let ngoaiLenh = false
+    if (r.ma_sp) {
+      const ung = dongTheoMa.get(chuan(r.ma_sp)) ?? []
+      if (ung.length === 0) {
+        // Sổ Excel gộp NHIỀU lệnh một tờ: mã không thuộc lệnh này thì để nguyên cho lệnh kia.
+        ngoaiLenh = true
+      } else if (ung.length === 1) {
+        line = ung[0]
+      } else if (macDinhLine && ung.some((x) => x.id === macDinhLine.id)) {
+        line = macDinhLine
+      } else {
+        vanDe.push(
+          `Mã SP "${r.ma_sp}" có ở ${ung.length} đợt trên lệnh — chọn đợt ở ô "Mã hàng" trên thanh`,
+        )
+      }
+    } else {
+      line = macDinhLine ?? null
+      if (!line) vanDe.push('Lệnh có nhiều mã hàng — chọn mã hàng ở thanh trên')
     }
-    if (!line && vanDe.length === 0) {
-      vanDe.push('Lệnh có nhiều mã hàng — chọn mã hàng ở thanh trên')
+    if (ngoaiLenh) {
+      tomTat.ngoai++
+      return {
+        hang: r.hang,
+        kieu: 'ngoai' as const,
+        comp_id: null,
+        gan: null,
+        van_de: [],
+        o: {},
+        tong_ghi: 0,
+        can: null,
+        da_lam: null,
+      }
     }
     for (const s of r.sai) {
       vanDe.push(
@@ -337,6 +375,8 @@ export const danSoService = {
             id: x.id,
             ma: x.product_code,
             ten: x.name_vi ?? x.name_foreign ?? '',
+            dot: x.ship_label ?? x.ship_date ?? '',
+            qty: x.qty,
           })),
       })),
       mac_dinh: { team: myTeam?.id ?? null, stage: myTeam?.stage ?? null },
@@ -369,7 +409,7 @@ export const danSoService = {
         .filter((c) => c.production_order_line_id === l.id && !luotDi(c))
         .sort((a, b) => a.sort_order - b.sort_order)
       to.push({
-        ten: l.product_code,
+        ten: [l.product_code, l.ship_label ?? l.ship_date ?? ''].join(' ').trim(),
         ma: l.product_code,
         cot,
         dong: cs.map((c) => ({

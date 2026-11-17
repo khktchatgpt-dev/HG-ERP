@@ -33,7 +33,7 @@ const opt: TuyChonDanSo = {
   stages: [{ code: 'han', label: 'Hàn' }],
   teams: [{ id: 't1', name: 'Tổ Hàn', stage: 'han' }],
   lenh: [
-    { id: 'l1', code: '1/26-27', dong: [{ id: 'd1', ma: 'FDA50089N', ten: 'Ghế' }] },
+    { id: 'l1', code: '1/26-27', dong: [{ id: 'd1', ma: 'FDA50089N', ten: 'Ghế', dot: '', qty: 10 }] },
   ],
   mac_dinh: { team: 't1', stage: 'han' },
 }
@@ -65,7 +65,7 @@ const xemGia = (rows: { hang: number; ten: string }[]): XemDanSo => {
   return {
     dong,
     cot_loi: [],
-    tom_tat: { o_ghi: 3, ngay_ghi: 2, moi: 0, trung: 0, khac: 0, chot: 0, chan },
+    tom_tat: { o_ghi: 3, ngay_ghi: 2, moi: 0, ngoai: 0, trung: 0, khac: 0, chot: 0, chan },
     canh_bao: [],
   }
 }
