@@ -3030,6 +3030,14 @@
 .sx.sx .sx-ds-tb td.dsO.khac {
   box-shadow: inset 0 0 0 2px var(--sx-warn);
 }
+.sx.sx .sx-ds-gap {
+  margin: 10px 0;
+}
+.sx.sx .sx-ds-gap > summary {
+  cursor: pointer;
+  color: var(--sx-mut, #5b6472);
+  padding: 4px 0;
+}
 .sx.sx .sx-ds-xong {
   padding: 10px 14px;
   overflow: auto;

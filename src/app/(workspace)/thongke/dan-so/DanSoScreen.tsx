@@ -347,19 +347,23 @@ function BuocXong({ d }: { d: DanSoCtx }) {
   if (!k) return null
   const ok = k.phieu.filter((p) => p.doc_no)
   const hong = k.phieu.filter((p) => p.loi)
-  const soO = ok.reduce((a, p) => a + p.so_o, 0)
+  const soDong = ok.reduce((a, p) => a + p.so_o, 0)
+  const dmy = (iso: string) => `${iso.slice(8)}/${iso.slice(5, 7)}`
+  const tu = ok.length > 0 ? dmy(ok[0].iso) : ''
+  const den = ok.length > 0 ? dmy(ok[ok.length - 1].iso) : ''
+  const luc = new Date(k.luc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+  const nhan = d.opt.stages.find((x) => x.code === d.stage)?.label ?? d.stage
+  const to = d.opt.teams.find((x) => x.id === d.teamId)?.name ?? ''
   return (
     <div className="sx-ds-xong">
       <p>
-        {ok.length > 0 && (
-          <>
-            <b className="done">Đã ghi</b> · <span className="num">{ok.length}</span> phiếu nhập bù ·{' '}
-            <span className="num">{fmt(soO)}</span> ô.{' '}
-          </>
-        )}
-        {k.moi_tao > 0 && (
-          <span className="act">Đã thêm {k.moi_tao} chi tiết vào bảng chi tiết của lệnh. </span>
-        )}
+        <b className="done">Đã ghi</b> bởi <b>{k.ghi_boi}</b> lúc {luc} — lệnh{' '}
+        <b>{d.lenh?.code}</b> · công đoạn <b>{nhan}</b> · <b>{to}</b>
+      </p>
+      <p className="mut">
+        {ok.length} phiếu nhập bù ({tu}
+        {tu !== den ? ` → ${den}` : ''}) · {fmt(soDong)} dòng sổ
+        {k.moi_tao > 0 ? ` · thêm ${fmt(k.moi_tao)} chi tiết vào bảng chi tiết` : ''}
       </p>
       {hong.length > 0 && (
         <div className="sx-note stop" role="alert">
@@ -367,7 +371,7 @@ function BuocXong({ d }: { d: DanSoCtx }) {
           <ul className="sx-ds-loi">
             {hong.map((p) => (
               <li key={p.iso}>
-                {p.iso.slice(8)}/{p.iso.slice(5, 7)}: {p.loi}
+                {dmy(p.iso)}: {p.loi}
               </li>
             ))}
           </ul>
@@ -376,41 +380,65 @@ function BuocXong({ d }: { d: DanSoCtx }) {
       <table className="sx-tb">
         <thead>
           <tr>
-            <th>Ngày</th>
-            <th>Phiếu</th>
-            <th className="r">Số ô</th>
-            <th>Kết quả</th>
+            <th>Mã SP</th>
+            <th>Tên</th>
+            <th>Đợt</th>
+            <th className="r">Chi tiết</th>
+            <th className="r">Số lượng ghi</th>
+            <th className="r">Thêm mới</th>
           </tr>
         </thead>
         <tbody>
-          {k.phieu.map((p) => (
-            <tr key={p.iso}>
-              <td className="num">
-                {p.iso.slice(8)}/{p.iso.slice(5, 7)}/{p.iso.slice(0, 4)}
-              </td>
-              <td className="num">
-                {p.doc_no ? (
-                  <Link className="lnk" href={`/thongke/da-ghi?date=${p.iso}&phieu=${p.doc_no}`}>
-                    {p.doc_no}
-                  </Link>
-                ) : (
-                  '—'
-                )}
-              </td>
-              <td className="r num">{p.so_o}</td>
-              <td>{p.loi ? <span className="stop">{p.loi}</span> : <span className="done">Đã ghi</span>}</td>
+          {k.theo_ma.map((m, i) => (
+            <tr key={i}>
+              <td className="num">{m.ma}</td>
+              <td>{m.ten}</td>
+              <td>{m.dot || '—'}</td>
+              <td className="r num">{m.so_ct}</td>
+              <td className="r num">{fmt(m.tong)}</td>
+              <td className="r num">{m.moi > 0 ? m.moi : ''}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <details className="sx-ds-gap">
+        <summary>
+          {ok.length} phiếu theo ngày ({tu} → {den})
+        </summary>
+        <table className="sx-tb">
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Phiếu</th>
+              <th className="r">Dòng sổ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ok.map((p) => (
+              <tr key={p.iso}>
+                <td className="num">
+                  {dmy(p.iso)}/{p.iso.slice(0, 4)}
+                </td>
+                <td className="num">
+                  <Link className="lnk" href={`/thongke/da-ghi?date=${p.iso}&phieu=${p.doc_no}`}>
+                    {p.doc_no}
+                  </Link>
+                </td>
+                <td className="r num">{p.so_o}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
       {k.canh_bao.length > 0 && (
-        <div className="sx-note">
+        <details className="sx-ds-gap">
+          <summary>{k.canh_bao.length} chi tiết ghi vượt số cần (vẫn ghi được)</summary>
           <ul className="sx-ds-loi">
-            {k.canh_bao.slice(0, 8).map((w) => (
+            {k.canh_bao.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
     </div>
   )

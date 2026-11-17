@@ -75,6 +75,11 @@ export type XemDanSo = {
 }
 
 export type KetQuaGhi = {
+  /** Ai ghi, lúc nào (ISO) — để người xem biết số này của ai. */
+  ghi_boi: string
+  luc: string
+  /** Theo từng mã SP × đợt: chi tiết nào, bao nhiêu, thêm mới bao nhiêu. */
+  theo_ma: { ma: string; ten: string; dot: string; so_ct: number; tong: number; moi: number }[]
   phieu: { iso: string; doc_no: string | null; so_o: number; loi: string | null }[]
   moi_tao: number
   canh_bao: string[]
@@ -483,7 +488,8 @@ async function tinh(input: DanSoInput, user: User) {
     }
   })
   tomTat.ngay_ghi = ngayGhi.size
-  return { dong, cotLoi, tomTat, canhBao, today, lines, macDinhLine, label }
+  const lineCuaComp = new Map(components.map((c) => [c.id, c.production_order_line_id]))
+  return { dong, cotLoi, tomTat, canhBao, today, lines, macDinhLine, label, lineCuaComp }
 }
 
 export const danSoService = {
@@ -613,6 +619,7 @@ export const danSoService = {
         dm_kg: row.dm ?? null,
       })
       moiId.set(i, id)
+      r.lineCuaComp.set(id, line.id)
     }
 
     // 1b) Chi tiết mới của dòng nhiều đợt: mỗi đợt một bản, id tạm → id thật.
@@ -637,6 +644,7 @@ export const danSoService = {
           dm_kg: row.dm ?? null,
         })
         moiDot.set(pp.comp_id, id)
+        r.lineCuaComp.set(id, lineId)
       }
     }
 
@@ -663,6 +671,7 @@ export const danSoService = {
       }
     })
     const phieu: KetQuaGhi['phieu'] = []
+    const tong = new Map<string, { cts: Set<string>; q: number }>()
     const canhBao: string[] = [...r.canhBao]
     for (const [iso, entries] of [...theoNgay].sort((a, b) => a[0].localeCompare(b[0]))) {
       try {
@@ -680,7 +689,16 @@ export const danSoService = {
           { nhapBu: true },
         )
         phieu.push({ iso, doc_no: res.doc_no, so_o: entries.length, loi: null })
-        canhBao.push(...res.warnings)
+        // Cảnh báo "vượt" của từng chi tiết × đợt đã có ở bước xem trước — bỏ bản trùng.
+        canhBao.push(...res.warnings.filter((w) => !/VƯỢT/.test(w)))
+        for (const e of entries) {
+          const lid = r.lineCuaComp.get(e.component_id)
+          if (!lid) continue
+          const t = tong.get(lid) ?? { cts: new Set<string>(), q: 0 }
+          t.cts.add(e.component_id)
+          t.q += e.qty
+          tong.set(lid, t)
+        }
       } catch (e) {
         phieu.push({
           iso,
@@ -690,6 +708,28 @@ export const danSoService = {
         })
       }
     }
-    return { phieu, moi_tao: moiId.size + moiDot.size, canh_bao: [...new Set(canhBao)] }
+    const moiTheoDong = new Map<string, number>()
+    for (const id of [...moiDot.values(), ...moiId.values()]) {
+      const lid = r.lineCuaComp.get(id)
+      if (lid) moiTheoDong.set(lid, (moiTheoDong.get(lid) ?? 0) + 1)
+    }
+    const theoMa = r.lines
+      .filter((l) => tong.has(l.id) || moiTheoDong.has(l.id))
+      .map((l) => ({
+        ma: l.product_code,
+        ten: l.name_vi ?? l.name_foreign ?? '',
+        dot: l.ship_label ?? l.ship_date ?? '',
+        so_ct: tong.get(l.id)?.cts.size ?? 0,
+        tong: tong.get(l.id)?.q ?? 0,
+        moi: moiTheoDong.get(l.id) ?? 0,
+      }))
+    return {
+      ghi_boi: user.name ?? user.email,
+      luc: new Date().toISOString(),
+      theo_ma: theoMa,
+      phieu,
+      moi_tao: moiId.size + moiDot.size,
+      canh_bao: [...new Set(canhBao)],
+    }
   },
 }
