@@ -835,6 +835,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       '/thongke/ngay',
       '/thongke/da-ghi',
       '/thongke/so-cong-doan',
+      '/thongke/dan-so',
     ],
     accent: 'violet',
     logoText: 'TK',
@@ -862,6 +863,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             href: '/thongke/so-cong-doan',
             label: 'Sổ công đoạn',
             icon: 'table',
+            capability: 'production.record',
+          },
+          // 17/11/2026 (bản vẽ TN9FdcN5…): nhập số cũ / số hôm nay bằng một lần dán tờ Excel.
+          {
+            href: '/thongke/dan-so',
+            label: 'Dán sổ Excel',
+            icon: 'clipboard-list',
             capability: 'production.record',
           },
           {

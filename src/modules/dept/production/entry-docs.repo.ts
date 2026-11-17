@@ -112,11 +112,16 @@ export const entryDocsRepo = {
       // confirmed_* khai được ngay lúc tạo: chế độ "không cần tổ trưởng xác
       // nhận" (27/08) ghi thẳng da_xac_nhan, và check DB 0176 bắt phiếu chính
       // thức phải có chủ + mốc giờ.
-      Partial<Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at'>>,
+      Partial<Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at'>> & {
+        /** Phiếu NHẬP BÙ số cũ (0301) — chỉ đường Dán sổ Excel ghi; cột có mặc định false. */
+        nhap_bu?: boolean
+      },
   ): Promise<EntryDoc> {
     const { data, error } = await db()
       .from('production_entry_docs')
-      .insert(row)
+      // `nhap_bu` (0301) chưa có trong database.types.ts tới khi áp migration +
+      // "sync types"; bỏ cast này khi đó.
+      .insert(row as never)
       .select(COLS)
       .single()
     if (error) throw new Error(error.message)

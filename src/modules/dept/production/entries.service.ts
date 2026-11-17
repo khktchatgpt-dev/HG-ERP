@@ -254,6 +254,12 @@ export const entriesService = {
     user: User,
     lsxId: string,
     input: RecordInput,
+    /**
+     * Chỉ đường NỘI BỘ (màn Dán sổ Excel) — KHÔNG đi qua zod của route nên
+     * người dùng không tự bật được. `nhapBu` = nạp lại số cũ từ sổ Excel: phiếu
+     * miễn giờ công, gắn cờ `nhap_bu` (0301), không vào Năng suất.
+     */
+    opts?: { nhapBu?: boolean },
   ): Promise<{ warnings: string[]; doc_no: string }> {
     await assertAction(user, 'production.entries.record')
     const {
@@ -274,7 +280,7 @@ export const entriesService = {
       hours_per_worker: input.hours_per_worker ?? null,
     }
     const crewBad = crewProblem(crew)
-    if (crewBad && (!crewBad.missing || input.submit)) {
+    if (crewBad && !opts?.nhapBu && (!crewBad.missing || input.submit)) {
       throw BadRequest(crewBad.missing ? CREW_REQUIRED_MSG : `Giờ công: ${crewBad.msg}`)
     }
     const byId = new Map(components.map((c) => [c.id, c]))
@@ -645,6 +651,7 @@ export const entriesService = {
       note: input.note?.trim() || null,
       created_by: user.id,
       ...crew,
+      ...(opts?.nhapBu ? { nhap_bu: true } : {}),
     })
 
     await entriesRepo.insertMany(

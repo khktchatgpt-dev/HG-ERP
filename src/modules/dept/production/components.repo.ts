@@ -242,6 +242,8 @@ export const componentsRepo = {
     first_stage: string | null
     final_stage: string | null
     note: string | null
+    /** Định mức kg / chi tiết — màn Dán sổ Excel mang theo cột ĐM của file. */
+    dm_kg?: number | null
   }): Promise<string> {
     const { data, error } = await db()
       .from('production_components')
