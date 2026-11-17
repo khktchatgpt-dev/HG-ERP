@@ -22,6 +22,12 @@ import { emit } from '@/events/bus'
 // này thì `emit` chạy vào hư không, vết không ai ghi mà cũng không ai báo lỗi.
 import '@/events/register'
 
+/** Khoá so quy cách khi chặn trùng — trống/null = '' (hai bên trống là bằng nhau). */
+function specKey(spec: string | null | undefined): string {
+  const s = spec?.trim() ?? ''
+  return s ? sureKey(s) || s.toLowerCase() : ''
+}
+
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
   return hasPermission(user, 'warehouse.member')
@@ -373,13 +379,24 @@ export const materialsService = {
      * Mức "nghi ngờ" vẫn chỉ cảnh báo trên form: "LĐN 6x16x2 đen" và "… xám" là
      * hai mặt hàng thật, chặn nhầm thì không khai được hàng mới.
      */
+    /*
+     * CÙNG TÊN KHÁC QUY CÁCH thì KHÔNG trùng (17/11/2026, chị Nga lên đơn Cường
+     * Vĩnh Phát: "Thanh V - Bàn Tròn 70" có hai quy cách 50x50x300 và 50x50x95 —
+     * hai mặt hàng thật, đơn giá khác nhau). Chặn chỉ khi tên VÀ quy cách cùng
+     * khoá chắc chắn; quy cách trống hai bên cũng tính là bằng nhau.
+     */
     const key = sureKey(input.name)
     if (key.length >= MIN_KEY_LEN) {
-      const same = siblings.find((m) => sureKey(m.name) === key)
+      const spec = specKey(input.spec)
+      const same = siblings.find(
+        (m) => sureKey(m.name) === key && specKey(m.spec) === spec,
+      )
       if (same) {
         throw Conflict(
-          `Vật tư này đã có trong danh mục: ${same.code} — ${same.name}. ` +
-            `Dùng lại mã đó thay vì tạo mã mới (khác nhau mỗi dấu câu/khoảng trắng).`,
+          `Vật tư này đã có trong danh mục: ${same.code} — ${same.name}` +
+            `${same.spec ? ` · ${same.spec}` : ''}. ` +
+            `Dùng lại mã đó thay vì tạo mã mới (khác nhau mỗi dấu câu/khoảng trắng)` +
+            `${spec ? '' : ' — hoặc ghi quy cách nếu là mặt hàng khác cỡ'}.`,
         )
       }
     }

@@ -302,12 +302,13 @@ export const materialsRepo = {
    */
   async namesInGroup(
     groupName: string | null,
-  ): Promise<{ code: string; name: string }[]> {
-    let q = db().from('warehouse_materials').select('code, name').limit(2000)
+  ): Promise<{ code: string; name: string; spec?: string | null }[]> {
+    // `spec` (17/11/2026): cùng tên khác quy cách là hai mặt hàng — chặn trùng so cả hai.
+    let q = db().from('warehouse_materials').select('code, name, spec').limit(2000)
     q = groupName ? q.eq('group_name', groupName) : q.is('group_name', null)
     const { data, error } = await q
     if (error) throw new Error(error.message)
-    return (data as { code: string; name: string }[] | null) ?? []
+    return (data as { code: string; name: string; spec: string | null }[] | null) ?? []
   },
 
   /**

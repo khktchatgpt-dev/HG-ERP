@@ -396,6 +396,27 @@ describe('materialsService.create — chặn cứng trùng tên mức "chắc ch
     expect(materialsRepo.insert).toHaveBeenCalled()
   })
 
+  it('CÙNG TÊN KHÁC QUY CÁCH vẫn tạo được; cùng cả quy cách thì 409', async () => {
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
+      { code: 'NK-0100', name: 'Thanh V - Bàn Tròn 70', spec: '50x50x300' },
+    ] as never)
+    await materialsService.create(cungUng, {
+      name: 'Thanh V - Bàn Tròn 70',
+      spec: '50x50x95',
+      unit: 'cây',
+      group_name: 'Ngũ kim - phụ kiện',
+    })
+    expect(materialsRepo.insert).toHaveBeenCalledTimes(1)
+    await expect(
+      materialsService.create(cungUng, {
+        name: 'Thanh V - Bàn Tròn 70',
+        spec: '50x50x300 ',
+        unit: 'cây',
+        group_name: 'Ngũ kim - phụ kiện',
+      }),
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
   it('so trùng TRONG NHÓM, không so chéo vật liệu', async () => {
     // namesInGroup đã lọc theo nhóm — nhóm khác thì không thấy nhau.
     vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([] as never)
