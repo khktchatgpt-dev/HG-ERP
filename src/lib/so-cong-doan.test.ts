@@ -3,6 +3,7 @@ import {
   doiThang,
   gomSoCongDoan,
   ngayTrongThang,
+  tongTheoMa,
   type ScdGhi,
   type ScdNguon,
 } from './so-cong-doan'
@@ -125,5 +126,27 @@ describe('ngày trong tháng', () => {
   it('đổi tháng qua năm', () => {
     expect(doiThang('2026-01', -1)).toBe('2025-12')
     expect(doiThang('2026-12', 1)).toBe('2027-01')
+  })
+})
+
+describe('tongTheoMa', () => {
+  it('cộng Cần / Đã làm / Σ tháng theo mã; hàng không còn trên Hồ sơ lệnh đếm riêng', () => {
+    const lenh = gomSoCongDoan(
+      [
+        nguon({ row_id: 'a', ten: 'Chân', can: 100, da_lam: 40 }),
+        nguon({ row_id: 'b', ten: 'Giằng', can: 50, da_lam: 50 }),
+      ],
+      [
+        ghi({ component_id: 'a', ten: 'Chân', ngay: '2026-09-08', qty: 30 }),
+        ghi({ component_id: 'b', ten: 'Giằng', ngay: '2026-09-09', qty: 20 }),
+        ghi({ component_id: 'zz', ten: 'Mồ côi', ngay: '2026-09-09', qty: 5 }),
+      ],
+      { ca: false },
+    )
+    const t = tongTheoMa(lenh)
+    const m = t.find((x) => x.code === '992852')!
+    expect(m).toMatchObject({ so_ct: 2, can: 150, da_lam: 90, con: 60, thang: 50, xong: 1, khong_so: 0 })
+    const co = t.find((x) => x.code === null)!
+    expect(co).toMatchObject({ so_ct: 1, can: 0, thang: 5, khong_so: 1 })
   })
 })

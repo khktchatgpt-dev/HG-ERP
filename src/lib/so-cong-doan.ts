@@ -197,3 +197,49 @@ export function doiThang(thang: string, buoc: number): string {
   const d = new Date(Date.UTC(y, m - 1 + buoc, 1))
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
+
+/** Một hàng của bảng TỔNG THEO MÃ SP (Sổ công đoạn). */
+export type ScdTongMa = {
+  lsx_id: string
+  lsx_code: string
+  code: string | null
+  ten: string | null
+  /** Số chi tiết (hàng) của mã trong tờ này. */
+  so_ct: number
+  /** Cộng Cần / Đã làm của các hàng có số (hàng sổ cũ không còn trên Hồ sơ lệnh bỏ ra). */
+  can: number
+  da_lam: number
+  con: number
+  /** Σ đạt chính thức trong tháng. */
+  thang: number
+  xong: number
+  /** Số hàng sổ cũ không có số Cần để so — nói rõ ở màn thay vì lẳng lặng bỏ. */
+  khong_so: number
+}
+
+/**
+ * Tổng theo mã SP: mỗi (lệnh × mã) một hàng. Cộng được vì một tờ công đoạn chỉ có các
+ * hàng cùng bậc đếm; số Cần/Đã làm lấy từ ô Hồ sơ lệnh y như lưới chi tiết.
+ */
+export function tongTheoMa(lenh: ScdLenh[]): ScdTongMa[] {
+  return lenh.flatMap((L) =>
+    L.ma.map((m) => {
+      const co = m.dong.filter((d) => d.can != null)
+      const can = co.reduce((a, d) => a + (d.can ?? 0), 0)
+      const da = co.reduce((a, d) => a + (d.da_lam ?? 0), 0)
+      return {
+        lsx_id: L.lsx_id,
+        lsx_code: L.lsx_code,
+        code: m.code,
+        ten: m.ten,
+        so_ct: m.dong.length,
+        can,
+        da_lam: da,
+        con: can - da,
+        thang: m.dong.reduce((a, d) => a + d.thang, 0),
+        xong: m.xong,
+        khong_so: m.dong.length - co.length,
+      }
+    }),
+  )
+}

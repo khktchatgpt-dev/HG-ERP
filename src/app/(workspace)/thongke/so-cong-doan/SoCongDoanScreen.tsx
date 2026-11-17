@@ -12,9 +12,10 @@ import {
   TabNgang,
   ThanhTT,
 } from '@/app/(workspace)/production/_erp/khung'
-import { doiThang, type ScdLenh } from '@/lib/so-cong-doan'
+import { doiThang, tongTheoMa, type ScdLenh } from '@/lib/so-cong-doan'
 import type { SoCongDoanPayload } from '@/modules/dept/production/so-cong-doan.service'
 import { BangThang } from './bang-thang'
+import { TongMa } from './tong-ma'
 import { cx, fmt } from '../da-ghi/so-da-ghi.shared'
 
 /**
@@ -30,6 +31,8 @@ export function SoCongDoanScreen({ p }: { p: SoCongDoanPayload }) {
   const router = useRouterBao()
   const [dangTai, startTai] = useTransition()
   const [tim, setTim] = useState('')
+  /** 'ct' = lưới chi tiết × ngày · 'ma' = tổng theo mã SP. */
+  const [xem, setXem] = useState<'ct' | 'ma'>('ct')
   /** Mã hàng đang gập — khoá `lsx|mã`. Mặc định mở hết, như tờ Excel. */
   const [gap, setGap] = useState<Set<string>>(() => new Set())
 
@@ -70,6 +73,7 @@ export function SoCongDoanScreen({ p }: { p: SoCongDoanPayload }) {
       .filter((L) => L.ma.length > 0)
   }, [p.lenh, q])
 
+  const tong = useMemo(() => tongTheoMa(lenh), [lenh])
   const khoaMa = lenh.flatMap((L) => L.ma.map((m) => `${L.lsx_id}|${m.code ?? ''}`))
   const tatCaMo = khoaMa.every((k) => !gap.has(k))
   const soDong = lenh.reduce((a, L) => a + L.ma.reduce((b, m) => b + m.dong.length, 0), 0)
@@ -92,7 +96,7 @@ export function SoCongDoanScreen({ p }: { p: SoCongDoanPayload }) {
           }
           actions={
             <>
-              {khoaMa.length > 1 && (
+              {xem === 'ct' && khoaMa.length > 1 && (
                 <ApNhom>
                   <ApNut onClick={() => setGap(tatCaMo ? new Set(khoaMa) : new Set())}>
                     {tatCaMo ? 'Gập hết' : 'Mở hết'}
@@ -146,6 +150,25 @@ export function SoCongDoanScreen({ p }: { p: SoCongDoanPayload }) {
               tháng sau ›
             </span>
           )}
+          <span className="sep" />
+          <span role="group" aria-label="Cách xem" style={{ display: 'contents' }}>
+            <button
+              type="button"
+              className={cx('c', xem === 'ct' && 'on')}
+              aria-pressed={xem === 'ct'}
+              onClick={() => setXem('ct')}
+            >
+              Chi tiết theo ngày
+            </button>
+            <button
+              type="button"
+              className={cx('c', xem === 'ma' && 'on')}
+              aria-pressed={xem === 'ma'}
+              onClick={() => setXem('ma')}
+            >
+              Tổng theo mã SP
+            </button>
+          </span>
           <span className="sep" />
           <span role="group" aria-label="Chi tiết bày" style={{ display: 'contents' }}>
             <button
@@ -224,6 +247,15 @@ export function SoCongDoanScreen({ p }: { p: SoCongDoanPayload }) {
                 Bỏ tìm
               </button>
             }
+          />
+        ) : xem === 'ma' ? (
+          <TongMa
+            rows={tong}
+            tenThang={`T${Number(m)}/${y}`}
+            moChiTiet={(code) => {
+              setTim(code ?? '')
+              setXem('ct')
+            }}
           />
         ) : (
           <BangThang
