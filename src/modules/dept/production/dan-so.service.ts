@@ -48,6 +48,8 @@ export type DongXem = {
   /** Từng ô ngày: sẽ ghi / trùng số đã có / khác số đã có / ngày đã chốt. */
   o: Record<string, { tt: TtO; co?: number }>
   tong_ghi: number
+  /** Mã SP nhiều đợt: số được LẤP theo thứ tự đợt — từng đợt nhận bao nhiêu (theo ngày). */
+  phan?: { comp_id: string; dot: string; theo_ngay: Record<string, number> }[]
   /** Cần (tính từ lệnh) và đã làm ở công đoạn này — null khi chi tiết mới. */
   can: number | null
   da_lam: number | null
@@ -209,12 +211,14 @@ async function tinh(input: DanSoInput, user: User) {
   const tomTat = { o_ghi: 0, ngay_ghi: 0, moi: 0, ngoai: 0, trung: 0, khac: 0, chot: 0, chan: 0 }
   const ngayGhi = new Set<string>()
   const canhBao: string[] = []
+  const conLai = new Map<string, number>() // chỗ còn trống của từng chi tiết khi lấp đợt
   const moiCuaDong = new Map<string, number>() // khoá thêm mới → số lần (báo trùng trong file)
 
   const dong = input.rows.map((r): DongXem => {
     const vanDe: string[] = []
     let line: (typeof lines)[number] | null = null
     let ngoaiLenh = false
+    let nhieuDot: typeof lines | null = null
     if (r.ma_sp) {
       const ung = dongTheoMa.get(chuan(r.ma_sp)) ?? []
       if (ung.length === 0) {
@@ -225,9 +229,7 @@ async function tinh(input: DanSoInput, user: User) {
       } else if (macDinhLine && ung.some((x) => x.id === macDinhLine.id)) {
         line = macDinhLine
       } else {
-        vanDe.push(
-          `Mã SP "${r.ma_sp}" có ở ${ung.length} đợt trên lệnh — chọn đợt ở ô "Mã hàng" trên thanh`,
-        )
+        nhieuDot = [...ung].sort((a, b) => a.sort_order - b.sort_order)
       }
     } else {
       line = macDinhLine ?? null
@@ -245,6 +247,96 @@ async function tinh(input: DanSoInput, user: User) {
         tong_ghi: 0,
         can: null,
         da_lam: null,
+      }
+    }
+    if (nhieuDot) {
+      // Mã SP tách nhiều đợt: số của file là theo MÃ → LẤP theo thứ tự đợt (đợt 1 tới khi
+      // đủ số cần, rồi đợt 2…; đợt cuối nhận phần dư và bị cảnh báo vượt).
+      const dotTen = (l: (typeof lines)[number]) => l.ship_label ?? l.ship_date ?? `#${l.sort_order + 1}`
+      const cs: { line: (typeof lines)[number]; comp: ComponentRow }[] = []
+      for (const l of nhieuDot) {
+        const ds: CtLenh[] = components
+          .filter((c) => c.production_order_line_id === l.id)
+          .map((c) => ({ id: c.id, ten: c.name, cum: c.cluster, kind: c.kind }))
+        const kk = khopChiTiet(r, ds)
+        if (kk.kieu !== 'khop') {
+          vanDe.push(
+            `Đợt ${dotTen(l)} chưa có chi tiết "${r.ten}" (${kk.kieu === 'gan' ? `gần giống "${kk.ten}"` : kk.kieu === 'trung' ? 'có ở nhiều cụm' : 'không có'}) — chọn riêng đợt đó ở ô "Mã hàng" để xử lý`,
+          )
+          break
+        }
+        const c = components.find((x) => x.id === kk.id)
+        if (c) cs.push({ line: l, comp: c })
+      }
+      for (const sa of r.sai) {
+        vanDe.push(
+          `Ô ${sa.iso.slice(8)}/${sa.iso.slice(5, 7)} "${sa.raw}" không phải số — sửa trong Excel hoặc bỏ ô`,
+        )
+      }
+      if (vanDe.length === 0 && cs.length > 0) {
+        const loi = luotDi(cs[0].comp)
+        if (loi) vanDe.push(`"${cs[0].comp.name}": ${loi}`)
+      }
+      const o: DongXem['o'] = {}
+      let tongGhi = 0
+      const phan = new Map<string, { comp_id: string; dot: string; theo_ngay: Record<string, number> }>()
+      const dauKy = (c: ComponentRow) => conLai.get(c.id) ?? need(c) - (daLam.get(c.id) ?? 0)
+      if (vanDe.length === 0) {
+        for (const iso of Object.keys(r.o).sort()) {
+          const qty = r.o[iso]
+          if (iso > today) continue
+          if (chot.has(iso)) {
+            o[iso] = { tt: 'chot' }
+            tomTat.chot++
+            continue
+          }
+          const co = cs.reduce((t, x) => t + (coTheoNgay.get(`${x.comp.id}|${iso}`) ?? 0), 0)
+          if (co > 0) {
+            const trung = Math.abs(co - qty) < 1e-9
+            o[iso] = { tt: trung ? 'trung' : 'khac', co }
+            if (trung) tomTat.trung++
+            else tomTat.khac++
+            continue
+          }
+          let con = qty
+          cs.forEach(({ line: l, comp }, i) => {
+            if (con <= 0) return
+            const cuoi = i === cs.length - 1
+            const take = cuoi ? con : Math.min(con, Math.max(0, dauKy(comp)))
+            if (take <= 0) return
+            conLai.set(comp.id, dauKy(comp) - take)
+            con -= take
+            const pp = phan.get(comp.id) ?? { comp_id: comp.id, dot: dotTen(l), theo_ngay: {} }
+            pp.theo_ngay[iso] = (pp.theo_ngay[iso] ?? 0) + take
+            phan.set(comp.id, pp)
+          })
+          o[iso] = { tt: 'ghi' }
+          tongGhi += qty
+          tomTat.o_ghi++
+          ngayGhi.add(iso)
+        }
+        for (const pp of phan.values()) {
+          const c = cs.find((x) => x.comp.id === pp.comp_id)!.comp
+          const them = Object.values(pp.theo_ngay).reduce((a, b) => a + b, 0)
+          if (need(c) > 0 && (daLam.get(c.id) ?? 0) + them > need(c)) {
+            canhBao.push(
+              `${c.name} (đợt ${pp.dot}): sẽ có ${(daLam.get(c.id) ?? 0) + them} so với cần ${need(c)} — vượt (vẫn ghi được)`,
+            )
+          }
+        }
+      }
+      if (vanDe.length) tomTat.chan++
+      return {
+        hang: r.hang,
+        kieu: vanDe.length ? 'sai' : 'khop',
+        comp_id: null,
+        gan: null,
+        van_de: vanDe,
+        o,
+        tong_ghi: tongGhi,
+        phan: [...phan.values()],
+        can: cs.reduce((t, x) => t + need(x.comp), 0),
+        da_lam: cs.reduce((t, x) => t + (daLam.get(x.comp.id) ?? 0), 0),
       }
     }
     for (const s of r.sai) {
@@ -480,6 +572,16 @@ export const danSoService = {
     // 2) Mỗi ngày một phiếu nhập bù — đi qua đúng đường ghi sổ chính.
     const theoNgay = new Map<string, { component_id: string; qty: number }[]>()
     r.dong.forEach((d, i) => {
+      if (d.phan) {
+        for (const pp of d.phan) {
+          for (const [iso, qty] of Object.entries(pp.theo_ngay)) {
+            const arr = theoNgay.get(iso) ?? []
+            arr.push({ component_id: pp.comp_id, qty })
+            theoNgay.set(iso, arr)
+          }
+        }
+        return
+      }
       const id = d.comp_id ?? moiId.get(i)
       if (!id) return
       for (const [iso, o] of Object.entries(d.o)) {

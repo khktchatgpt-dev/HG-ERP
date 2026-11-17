@@ -66,7 +66,22 @@ export function LuoiXem({ d }: { d: DanSoCtx }) {
                       {x.van_de[0]}
                     </span>
                   ) : (
-                    <span className="done">Khớp</span>
+                    <span
+                      className="done"
+                      title={
+                        x.phan && x.phan.length > 0
+                          ? 'Lấp theo thứ tự đợt: ' +
+                            x.phan
+                              .map(
+                                (p) =>
+                                  `đợt ${p.dot} +${fmt(Object.values(p.theo_ngay).reduce((t, v) => t + v, 0))}`,
+                              )
+                              .join(' · ')
+                          : undefined
+                      }
+                    >
+                      Khớp{x.phan && x.phan.length > 1 ? ` · chia ${x.phan.length} đợt` : ''}
+                    </span>
                   )}
                 </td>
                 <td className="r num">{r.ct_sp ?? ''}</td>
