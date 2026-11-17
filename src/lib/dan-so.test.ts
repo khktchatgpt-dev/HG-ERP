@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chuan, docDan, docNgay, khopChiTiet, tachBang, type CtLenh } from './dan-so'
+import { chuan, cotNgayMau, docDan, docNgay, khopChiTiet, tachBang, type CtLenh } from './dan-so'
 
 const T = '\t'
 const dong = (...c: string[]) => c.join(T)
@@ -169,5 +169,24 @@ describe('khopChiTiet', () => {
 describe('chuan', () => {
   it('bỏ dấu, đ → d', () => {
     expect(chuan('Đầu  Tay-Ghế')).toBe('dau tay ghe')
+  })
+})
+
+describe('cotNgayMau', () => {
+  it('không có sổ: 14 ngày tới hôm nay', () => {
+    const c = cotNgayMau([], '2026-11-17')
+    expect(c).toHaveLength(14)
+    expect(c[0]).toBe('2026-11-04')
+    expect(c.at(-1)).toBe('2026-11-17')
+  })
+  it('có sổ cũ hơn: kéo dài tới ngày đó', () => {
+    const c = cotNgayMau(['2026-10-30', '2026-11-10'], '2026-11-17')
+    expect(c[0]).toBe('2026-10-30')
+    expect(c).toHaveLength(19)
+  })
+  it('trần 92 cột, giữ phần mới', () => {
+    const c = cotNgayMau(['2026-01-01'], '2026-11-17')
+    expect(c).toHaveLength(92)
+    expect(c.at(-1)).toBe('2026-11-17')
   })
 })

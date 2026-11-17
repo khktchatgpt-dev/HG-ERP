@@ -56,6 +56,22 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
                   </ApNut>
                 </ApNhom>
               )}
+              {d.buoc === 'dan' && d.lsxId && d.teamId && d.stage && (
+                <ApNhom>
+                  <a
+                    className="sx-btn"
+                    href={`/api/dept/production/dan-so/mau?${new URLSearchParams({
+                      lsx_id: d.lsxId,
+                      stage: d.stage,
+                      team_id: d.teamId,
+                      ...(d.lineId ? { line_id: d.lineId } : {}),
+                    })}`}
+                    title="Tờ Excel có sẵn chi tiết của lệnh + số đã ghi của tổ này"
+                  >
+                    Tải Excel mẫu
+                  </a>
+                </ApNhom>
+              )}
               {d.buoc === 'xem' && (
                 <ApNhom>
                   <ApNut

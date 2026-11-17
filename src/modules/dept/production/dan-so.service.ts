@@ -11,7 +11,7 @@ import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
 import { calcComponent } from '@/lib/component-needs'
-import { chuan, khopChiTiet, type CtLenh } from '@/lib/dan-so'
+import { chuan, cotNgayMau, khopChiTiet, type CtLenh, type MauTo } from '@/lib/dan-so'
 import { componentRoute, routeForGroup } from '@/lib/stage-route'
 import { countingOf } from '@/lib/stage-config'
 import { resolveCountingPlan } from '@/lib/default-assembly'
@@ -104,6 +104,43 @@ async function tai(lsxId: string) {
   return { lsx, components, lines, stagesCat, existing, routeByLine }
 }
 
+/** Chi tiết có đi qua công đoạn này không — cùng luật với `entriesService.record`. */
+function taoLuotDi(
+  components: ComponentRow[],
+  routeByLine: Map<string, string[]>,
+  counting: ReturnType<typeof countingOf>,
+  stagesCat: { code: string; label: string }[],
+  stage: string,
+) {
+  const label = stagesCat.find((s) => s.code === stage)?.label ?? stage
+  const planCache = new Map<string, ReturnType<typeof resolveCountingPlan>>()
+  const planOf = (lineId: string) => {
+    let p = planCache.get(lineId)
+    if (!p) {
+      p = resolveCountingPlan(
+        components.filter((c) => c.production_order_line_id === lineId),
+        routeByLine.get(lineId),
+        counting,
+      )
+      planCache.set(lineId, p)
+    }
+    return p
+  }
+  return (c: ComponentRow): string | null => {
+    const eff =
+      finishRouteOverride(c, counting.finish) ??
+      planOf(c.production_order_line_id).own_route.get(c.id) ??
+      componentRoute(routeByLine.get(c.production_order_line_id), c)
+    if (eff.length > 0 && !eff.includes(stage)) {
+      const ten = (s: string) => stagesCat.find((x) => x.code === s)?.label ?? s
+      return `Không đếm ở công đoạn ${label} — khoảng ghi của nó là ${eff
+        .map(ten)
+        .join(' → ')}; số sau khi ghép cụm thì ghi trên dòng cụm/bộ`
+    }
+    return null
+  }
+}
+
 /** Tính xem trước. Không ghi gì. */
 async function tinh(input: DanSoInput, user: User) {
   const { lsx, components, lines, stagesCat, existing, routeByLine } = await tai(
@@ -124,33 +161,7 @@ async function tinh(input: DanSoInput, user: User) {
     (input.line_id && lines.find((l) => l.id === input.line_id)) ||
     (lines.length === 1 ? lines[0] : null)
 
-  const planCache = new Map<string, ReturnType<typeof resolveCountingPlan>>()
-  const planOf = (lineId: string) => {
-    let p = planCache.get(lineId)
-    if (!p) {
-      p = resolveCountingPlan(
-        components.filter((c) => c.production_order_line_id === lineId),
-        routeByLine.get(lineId),
-        counting,
-      )
-      planCache.set(lineId, p)
-    }
-    return p
-  }
-  /** Chi tiết có đi qua công đoạn này không — cùng luật với `entriesService.record`. */
-  const luotDi = (c: ComponentRow): string | null => {
-    const eff =
-      finishRouteOverride(c, counting.finish) ??
-      planOf(c.production_order_line_id).own_route.get(c.id) ??
-      componentRoute(routeByLine.get(c.production_order_line_id), c)
-    if (eff.length > 0 && !eff.includes(input.stage)) {
-      const ten = (s: string) => stagesCat.find((x) => x.code === s)?.label ?? s
-      return `Không đếm ở công đoạn ${label} — khoảng ghi của nó là ${eff
-        .map(ten)
-        .join(' → ')}; số sau khi ghép cụm thì ghi trên dòng cụm/bộ`
-    }
-    return null
-  }
+  const luotDi = taoLuotDi(components, routeByLine, counting, stagesCat, input.stage)
 
   // Số đã có theo (chi tiết × ngày) của đúng tổ + công đoạn; đã làm theo công đoạn.
   const coTheoNgay = new Map<string, number>()
@@ -330,6 +341,55 @@ export const danSoService = {
       })),
       mac_dinh: { team: myTeam?.id ?? null, stage: myTeam?.stage ?? null },
     }
+  },
+
+  /**
+   * Dữ liệu TỜ MẪU (B3): đúng chi tiết lệnh sẽ đếm ở công đoạn này, mỗi mã hàng một
+   * tờ; các cột ngày điền sẵn số ĐÃ CÓ của tổ — dán lại không tạo gì thừa.
+   */
+  async mau(user: User, q: { lsx_id: string; stage: string; team_id: string; line_id?: string }) {
+    await assertAction(user, 'production.entries.record')
+    const { lsx, components, lines, stagesCat, existing, routeByLine } = await tai(q.lsx_id)
+    const stage = stagesCat.find((s) => s.code === q.stage)
+    if (!stage) throw BadRequest('Công đoạn không có trong danh mục')
+    const luotDi = taoLuotDi(components, routeByLine, countingOf(stagesCat), stagesCat, q.stage)
+    const today = vnTodayIso()
+    const co = new Map<string, number>()
+    const ngay = new Set<string>()
+    for (const e of existing) {
+      if (e.stage !== q.stage || e.team_department_id !== q.team_id) continue
+      const k = `${e.component_id}|${e.entry_date}`
+      co.set(k, (co.get(k) ?? 0) + Number(e.qty))
+      ngay.add(e.entry_date)
+    }
+    const cot = cotNgayMau([...ngay], today)
+    const to: MauTo[] = []
+    for (const l of lines.filter((x) => !q.line_id || x.id === q.line_id)) {
+      const cs = components
+        .filter((c) => c.production_order_line_id === l.id && !luotDi(c))
+        .sort((a, b) => a.sort_order - b.sort_order)
+      to.push({
+        ten: l.product_code,
+        ma: l.product_code,
+        cot,
+        dong: cs.map((c) => ({
+          cum: c.cluster ?? '',
+          ten: c.name,
+          ct_sp: Number(c.qty_per_unit),
+          can: calcComponent(
+            { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
+            l.qty,
+          ).total_needed,
+          o: Object.fromEntries(
+            cot.flatMap((iso) => {
+              const v = co.get(`${c.id}|${iso}`)
+              return v ? [[iso, v]] : []
+            }),
+          ),
+        })),
+      })
+    }
+    return { lsx_code: lsx.code, stage_label: stage.label, to }
   },
 
   async xem(user: User, input: DanSoInput): Promise<XemDanSo> {

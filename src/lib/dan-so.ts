@@ -317,3 +317,28 @@ export function khopChiTiet(d: { cum: string; ten: string }, ds: CtLenh[]): Khop
   }
   return { kieu: 'moi' }
 }
+
+/** Một tờ mẫu tải về (B3): một mã hàng × một công đoạn. */
+export type MauTo = {
+  ten: string
+  ma: string
+  cot: string[]
+  dong: { cum: string; ten: string; ct_sp: number; can: number; o: Record<string, number> }[]
+}
+
+const ngayDich = (iso: string, d: number) => {
+  const t = new Date(`${iso}T00:00:00Z`)
+  t.setUTCDate(t.getUTCDate() + d)
+  return t.toISOString().slice(0, 10)
+}
+
+/**
+ * Các cột ngày của tờ mẫu: từ ngày đã có sổ SỚM NHẤT (hoặc 13 ngày trước hôm nay,
+ * lấy ngày nào sớm hơn) tới hôm nay, tối đa 92 cột (chừa phần cũ nhất).
+ */
+export function cotNgayMau(daCo: string[], today: string): string[] {
+  const dau = [...daCo.filter((d) => d <= today), ngayDich(today, -13)].sort()[0]
+  const out: string[] = []
+  for (let d = dau; d <= today; d = ngayDich(d, 1)) out.push(d)
+  return out.slice(-92)
+}
